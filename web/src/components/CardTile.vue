@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { RouterLink } from "vue-router";
 import { compact, hueFrom } from "@/lib/format";
+import { useLocalePath } from "@/lib/use-locale";
 import type { CommunityCard } from "@/lib/types";
 
 const props = defineProps<{
@@ -12,6 +13,7 @@ const props = defineProps<{
 }>();
 
 // 沒封面的卡用角色名決定色相：同一張卡永遠同一個顏色，一排佔位卡也彼此可辨。
+const { lp } = useLocalePath();
 const hue = computed(() => hueFrom(props.card.name));
 const initial = computed(() => [...props.card.name][0] ?? "?");
 
@@ -21,7 +23,7 @@ const delay = computed(() => `${Math.min(props.index ?? 0, 11) * 45}ms`);
 
 <template>
   <RouterLink
-    :to="`/cards/${card.roleId}`"
+    :to="lp(`/cards/${card.roleId}`)"
     class="tile rise"
     :style="{ animationDelay: delay }"
   >

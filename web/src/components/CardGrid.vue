@@ -21,8 +21,8 @@ defineProps<{
   </div>
 
   <div v-else-if="!cards.length" class="empty">
-    <p class="empty__title display">{{ emptyTitle ?? "這裡還是空的" }}</p>
-    <p class="empty__hint muted">{{ emptyHint ?? "第一張卡還沒被登記。" }}</p>
+    <p class="empty__title display">{{ emptyTitle ?? $t("board.empty.title") }}</p>
+    <p class="empty__hint muted">{{ emptyHint ?? $t("board.empty.hint") }}</p>
   </div>
 
   <div v-else class="wall">
