@@ -74,6 +74,6 @@ async function submit() {
 </template>
 
 <style scoped>
-h1 { margin: var(--s-1) 0 var(--s-3); font-size: clamp(30px, 5vw, 42px); }
+h1 { margin: 2px 0 var(--s-2); font-size: 24px; }
 h1 + .muted { margin: 0 0 var(--s-6); max-width: 52ch; }
 </style>
