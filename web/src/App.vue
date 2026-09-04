@@ -31,7 +31,8 @@ function onSlash(e: KeyboardEvent) {
   if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey || e.isComposing) return;
   if ((e.target as HTMLElement)?.closest("input, textarea, select, [contenteditable]")) return;
   e.preventDefault();
-  if (box.value && box.value.offsetParent) box.value.focus();
+  if (box.value?.offsetParent) box.value.focus();
+  else if (onSearchPage.value) document.querySelector<HTMLInputElement>("main input[type=search]")?.focus();
   else router.push(lp("/search"));
 }
 onMounted(() => document.addEventListener("keydown", onSlash));
@@ -156,7 +157,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
 .account { display: flex; align-items: center; justify-content: flex-end; gap: var(--s-1); min-width: 150px; }
 .account > .btn { margin-left: var(--s-1); }
 .search-go {
-  display: none; align-items: center; justify-content: center;
+  display: none; align-items: center; justify-content: center; flex: none;
   width: 34px; height: 34px; border-radius: var(--r-pill); color: var(--text-2);
 }
 .search-go:hover { background: var(--surface-2); color: var(--text); }
@@ -172,5 +173,10 @@ onMounted(() => document.addEventListener("keydown", onSlash));
   .nav, .search { display: none; }
   .search-go { display: inline-flex; }
   .account { min-width: 0; }
+  .account > * { flex: none; }
+}
+/* 最窄的手機：餘額讓位給搜尋圖示；帳號選單與錢包頁都還看得到它 */
+@media (max-width: 400px) {
+  .account :deep(.acct__credits) { display: none; }
 }
 </style>

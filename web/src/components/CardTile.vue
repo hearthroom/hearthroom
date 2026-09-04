@@ -54,7 +54,7 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
         <span>{{ initial }}</span>
       </div>
       <!-- 名次是個小徽章，前三名用慣例的金銀銅；不搶立繪的戲 -->
-      <span v-if="rank" class="medal card__rank" :class="rank <= 3 && `medal--${rank}`" :aria-label="$t('board.rank', { n: rank })">{{ rank }}</span>
+      <span v-if="rank" class="medal card__rank" :class="rank <= 3 && `medal--${rank}`" role="img" :aria-label="$t('board.rank', { n: rank })">{{ rank }}</span>
     </div>
 
     <div class="card__body">
@@ -74,17 +74,12 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
           <img v-if="card.author.avatar" :src="card.author.avatar" alt="" class="card__face" />
           <span class="card__author">{{ card.author.name }}</span>
         </RouterLink>
-        <span
-          class="card__num"
-          :class="{ 'card__num--up': showTrending && card.trending > 0 }"
-          :aria-label="$t('card.talkCount', { n: compact(card.talkNum) })"
-          :title="$t('card.talkCount', { n: compact(card.talkNum) })"
-        >
+        <span class="card__num" :class="{ 'card__num--up': showTrending && card.trending > 0 }" :title="$t('card.talkCount', { n: compact(card.talkNum) })">
+          <span class="sr-only">{{ $t("card.talkCount", { n: compact(card.talkNum) }) }}</span>
           <svg viewBox="0 0 16 16" aria-hidden="true">
             <path d="M3 3.5h10a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 1-1.5 1.5H7.5L4.5 14v-2.5H3A1.5 1.5 0 0 1 1.5 10V5A1.5 1.5 0 0 1 3 3.5z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
           </svg>
-          <template v-if="showTrending && card.trending > 0">+{{ compact(card.trending) }}</template>
-          <template v-else>{{ compact(card.talkNum) }}</template>
+          <span aria-hidden="true">{{ showTrending && card.trending > 0 ? `+${compact(card.trending)}` : compact(card.talkNum) }}</span>
         </span>
       </div>
     </div>

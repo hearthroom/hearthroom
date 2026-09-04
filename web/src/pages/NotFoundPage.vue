@@ -6,10 +6,10 @@ import { pageTitle } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
 
 /** 也給卡片頁、作者頁在 404 時直接掛：文案可以換，回榜單的路一樣。 */
-defineProps<{ title?: string; hint?: string }>();
+const props = defineProps<{ title?: string; hint?: string }>();
 const { lp } = useLocalePath();
 const { t } = useI18n();
-onMounted(() => { document.title = pageTitle(t("notFound.title")); });
+onMounted(() => { document.title = pageTitle(props.title ?? t("notFound.title")); });
 </script>
 
 <template>

@@ -172,7 +172,7 @@ watch(zone, loadTags, { immediate: true });
   transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .sorts__item:hover { color: var(--text); }
-.sorts__item--on { color: var(--accent-text); background: var(--accent-soft); }
+.sorts__item--on { color: var(--accent-text); background: var(--accent-tint); }
 
 /* 右緣一道漸隱：告訴人還有更多，捲到底就消失 */
 .rail { position: relative; margin: 0 calc(-1 * var(--s-5)) var(--s-4); overflow-x: auto; scrollbar-width: none; mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent); -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent); }

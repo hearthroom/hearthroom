@@ -170,12 +170,12 @@
   "card.opensNew": "새 탭에서 열립니다",
   "card.notFound.title": "이 카드를 찾을 수 없습니다",
   "card.notFound.hint": "등록이 해제되었거나 링크가 잘못되었을 수 있습니다.",
-  "author.notFound.title": "작성자를 찾을 수 없습니다",
+  "author.notFound.title": "작가를 찾을 수 없습니다",
   "search.popular": "인기 유형",
   "search.alsoHot": "인기 캐릭터",
   "edit.chars": "{n}/{max}",
   "appearance.title": "모양",
-  "appearance.mode.system": "시스템 설정 따르기",
+  "appearance.mode.system": "시스템",
   "appearance.mode.light": "라이트",
   "appearance.mode.dark": "다크",
   "appearance.theme": "테마",
@@ -185,5 +185,6 @@
   "appearance.theme.ocean": "오션",
   "appearance.theme.forest": "포레스트",
   "appearance.theme.sepia": "페이퍼",
-  "appearance.theme.ink": "잉크"
+  "appearance.theme.ink": "잉크",
+  "author.notFound.hint": "이 작가는 아직 작품을 등록하지 않았거나 링크가 잘못되었습니다."
 }

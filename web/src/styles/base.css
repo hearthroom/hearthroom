@@ -169,7 +169,8 @@ select.input { height: var(--h-md); }
 .mono {
   display: inline-grid; place-items: center; flex: none;
   border-radius: var(--r-pill);
-  background: hsl(var(--h, 220) 60% 88%); color: hsl(var(--h, 220) 45% 32%);
+  /* 前景亮度 28%：黃橙那段色相在 32% 時對比掉到 4.2:1 */
+  background: hsl(var(--h, 220) 60% 88%); color: hsl(var(--h, 220) 45% 28%);
   font-weight: 600; line-height: 1;
 }
 :root[data-mode="dark"] .mono { background: hsl(var(--h, 220) 40% 26%); color: hsl(var(--h, 220) 70% 85%); }
@@ -233,8 +234,8 @@ select.input { height: var(--h-md); }
   background: var(--text); color: var(--surface);
   font-size: 13.5px; font-weight: 500;
   box-shadow: var(--shadow-md);
-  animation: toast var(--dur-slow) var(--ease) both;
 }
+.toast:not([hidden]) { animation: toast var(--dur-slow) var(--ease) both; }
 @keyframes toast { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
 @media (prefers-reduced-motion: reduce) {

@@ -185,5 +185,6 @@
   "appearance.theme.ocean": "海藍",
   "appearance.theme.forest": "森林",
   "appearance.theme.sepia": "紙",
-  "appearance.theme.ink": "墨"
+  "appearance.theme.ink": "墨",
+  "author.notFound.hint": "這位作者還沒有登記任何作品，或連結有誤。"
 }

@@ -50,7 +50,7 @@ watch([() => route.query.offset, locale], load);
 </script>
 
 <template>
-  <NotFoundPage v-if="missing" :title="$t('author.notFound.title')" />
+  <NotFoundPage v-if="missing" :title="$t('author.notFound.title')" :hint="$t('author.notFound.hint')" />
 
   <div v-else class="page">
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>

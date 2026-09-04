@@ -58,10 +58,14 @@ export function renderHead(page: Response, meta: PageMeta): Response {
     meta.image ? `<meta name="twitter:image" content="${esc(meta.image)}">` : "",
   ].filter(Boolean).join("");
 
-  return new HTMLRewriter()
+  const res = new HTMLRewriter()
     .on("html", { element: (e) => { e.setAttribute("lang", meta.lang); } })
     .on("title", { element: (e) => { e.setInnerContent(meta.title); } })
     .on('meta[name="description"]', { element: (e) => { e.setAttribute("content", description); } })
     .on("head", { element: (e) => { e.append(tags, { html: true }); } })
     .transform(page);
+  // 殼的 ETag／Last-Modified 代表的是 index.html，不是改寫後這一份；留著會讓下游用錯的驗證器重驗
+  res.headers.delete("etag");
+  res.headers.delete("last-modified");
+  return res;
 }
