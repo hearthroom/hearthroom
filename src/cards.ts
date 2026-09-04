@@ -281,6 +281,20 @@ export function syncStatement(db: D1Database, id: string, prevTalkNum: number, r
 }
 
 
+/**
+ * 這位作者一共登記了幾張。
+ *
+ * 「已登記」不能靠掃上游那一頁來數：作者可能有一百多張卡，一頁只看得到二十幾張，
+ * 數出來的是「這一頁裡有幾張」而不是「一共有幾張」。本站的 D1 才是登記這件事的權威。
+ */
+export async function countByAuthor(db: D1Database, authorNumId: number): Promise<number> {
+  const row = await db
+    .prepare("SELECT COUNT(*) AS n FROM cards WHERE author_num_id = ?")
+    .bind(authorNumId)
+    .first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
 /** 這批 roleId 裡，哪些已經登記在本站。永遠直接查庫，不快取——見 src/mine.ts 的說明。 */
 export async function registeredAmong(db: D1Database, roleIds: string[]): Promise<Set<string>> {
   if (!roleIds.length) return new Set();

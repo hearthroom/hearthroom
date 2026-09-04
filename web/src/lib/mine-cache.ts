@@ -18,11 +18,12 @@ interface Entry {
   page: MyCardPage;
 }
 
-const key = (accountNumId: number, page: number) => `mine:${accountNumId}:${page}`;
+/** 鍵要帶 filter：三個篩選各是一組不同的結果，共用一個鍵就會互相讀到對方的。 */
+const key = (accountNumId: number, page: number, filter: string) => `mine:${accountNumId}:${filter}:${page}`;
 
-export function read(accountNumId: number, page: number): { page: MyCardPage; stale: boolean } | null {
+export function read(accountNumId: number, page: number, filter: string): { page: MyCardPage; stale: boolean } | null {
   try {
-    const raw = sessionStorage.getItem(key(accountNumId, page));
+    const raw = sessionStorage.getItem(key(accountNumId, page, filter));
     if (!raw) return null;
     const entry = JSON.parse(raw) as Entry;
     return { page: entry.page, stale: Date.now() - entry.at > TTL_MS };
@@ -32,9 +33,9 @@ export function read(accountNumId: number, page: number): { page: MyCardPage; st
   }
 }
 
-export function write(accountNumId: number, page: number, value: MyCardPage): void {
+export function write(accountNumId: number, page: number, filter: string, value: MyCardPage): void {
   try {
-    sessionStorage.setItem(key(accountNumId, page), JSON.stringify({ at: Date.now(), page: value } satisfies Entry));
+    sessionStorage.setItem(key(accountNumId, page, filter), JSON.stringify({ at: Date.now(), page: value } satisfies Entry));
   } catch {
     /* 寫不進去就算了 */
   }
