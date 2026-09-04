@@ -100,7 +100,11 @@ function go(patch: Record<string, string | undefined>, replace = false) {
   router[replace ? "replace" : "push"]({ query });
 }
 
-watch(() => [session.me?.accountNumId, page.value, filter.value], () => load(), { immediate: true });
+watch(() => [session.me?.accountNumId, page.value, filter.value], () => {
+  // 帶著 fresh=1 進來的那一次交給下面那個 watcher，不然會先打一次舊快取再打一次 fresh
+  if (route.query.fresh === "1") return;
+  load();
+}, { immediate: true });
 // 從建立／編輯頁回來時帶著 ?fresh=1：剛寫過的資料要繞過所有快取。
 watch(() => route.query.fresh, (f) => {
   if (f !== "1") return;
