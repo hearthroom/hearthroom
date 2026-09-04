@@ -1,0 +1,58 @@
+/*
+ * 社群站的設計語彙：editorial dark。
+ *
+ * 內容是角色立繪與名字，所以版面照著「印刷刊物的海報牆」走而不是 SaaS 儀表板：
+ * 暖調近黑的紙、奶油色字、髮絲級分隔線、名次用大號襯線數字當版面元素。
+ * 立繪在暖黑底上最跳，所以刻意只做深色一套——不做淺色分支，維持一致的語氣。
+ *
+ * 品牌只保留一個金色 accent。多一個顏色，畫面就開始跟立繪搶注意力。
+ */
+:root {
+  color-scheme: dark;
+
+  /* 紙 —— 三階暖黑，不用純黑（純黑會讓立繪邊緣看起來髒） */
+  --paper: #100e0b;
+  --paper-raised: #191612;
+  --paper-sunken: #0a0908;
+
+  /* 髮絲線。這套版面靠線分隔，不靠色塊 */
+  --rule: #2a251e;
+  --rule-strong: #3d362c;
+
+  --text: #f2ece1;
+  --text-dim: #a49b8c;
+  --text-faint: #6b6357;
+
+  --gold: #f5c542;
+  --gold-deep: #c9992c;
+  --gold-wash: rgba(245, 197, 66, 0.12);
+
+  --danger: #e0685c;
+
+  /*
+   * 襯線給名字與標題——角色卡是「有名有姓的人物」，襯線讀起來像人物誌而不是商品列表。
+   * Instrument Serif 只含拉丁字母，CJK 落到 Noto Serif TC；兩者的縱向重心接近，混排不會跳。
+   */
+  --font-display: "Instrument Serif", "Noto Serif TC", "Noto Serif JP", "Songti TC", serif;
+  --font-ui: "Sora", "Noto Sans TC", "Noto Sans JP", -apple-system, BlinkMacSystemFont, sans-serif;
+
+  --r-sm: 3px;
+  --r-md: 6px;
+  --r-lg: 10px;
+  --r-pill: 999px;
+
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 36px;
+  --s-7: 56px;
+  --s-8: 88px;
+
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --dur: 200ms;
+  --dur-slow: 420ms;
+
+  --page: 1240px;
+}
