@@ -35,3 +35,19 @@ export function hueFrom(seed: string): number {
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) % 360;
   return h;
 }
+
+/** 完整的整數（餘額這種要看準確值的地方），照語言加千分位。 */
+export function whole(n: number): string {
+  return new Intl.NumberFormat(locale(), { maximumFractionDigits: 0 }).format(n);
+}
+
+/** 日期加時間，給流水用。 */
+export function dateTime(input: string | number): string {
+  const ms = typeof input === "number" ? (input > 1e12 ? input : input * 1000) : Date.parse(input);
+  return new Intl.DateTimeFormat(locale(), { dateStyle: "medium", timeStyle: "short" }).format(ms);
+}
+
+/** 只有日期，給到期日用。 */
+export function dateOnly(seconds: number): string {
+  return new Intl.DateTimeFormat(locale(), { dateStyle: "medium" }).format(seconds * 1000);
+}
