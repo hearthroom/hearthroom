@@ -7,9 +7,8 @@
   "nav.language": "語言",
   "footer.blurb": "作品由作者自己登記，排序只看讀者實際聊了多少。",
   "footer.source": "原始碼",
-  "board.eyebrow": "開源角色卡社群",
-  "board.title": "角色卡榜單",
-  "board.lede": "作者親自登記的作品。排序只看讀者實際聊了多少，不做人工推薦。",
+  "board.zones": "語區",
+  "board.sorts": "排序",
   "board.search.placeholder": "搜尋角色名、簡介或標籤",
   "board.search.submit": "搜尋",
   "board.sort.hot": "熱門",
@@ -19,8 +18,8 @@
   "board.sort.new.blurb": "剛登記到社群的卡",
   "board.sort.top.blurb": "歷來對話總量最高的卡",
   "board.count": "{n} 張",
-  "board.empty.title": "榜單還是空的",
-  "board.empty.hint": "第一張卡等著被登記——如果你有作品，去「我的卡片」把它放上來。",
+  "board.empty.title": "這一區還沒有作品",
+  "board.empty.hint": "換一區看看，或到「我的卡片」把你的作品放上來。",
   "board.empty.search.title": "沒有符合的卡片",
   "board.empty.search.hint": "換個關鍵字試試。",
   "pager.prev": "上一頁",
@@ -102,5 +101,6 @@
   "time.justNow": "剛剛",
   "state.requestFailed": "請求失敗（{status}）",
   "site.tagline": "角色卡榜單",
-  "site.description": "一個開源的角色卡社群：榜單、搜尋與作者主頁。"
+  "site.description": "一個開源的角色卡社群：榜單、搜尋與作者主頁。",
+  "zone.all": "不分語言"
 }

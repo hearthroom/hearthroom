@@ -7,10 +7,8 @@
   "nav.language": "言語",
   "footer.blurb": "作品は作者自身が登録したものです。順位は読者が実際に会話した量だけで決まり、人手による推薦はありません。",
   "footer.source": "ソース",
-
-  "board.eyebrow": "オープンなキャラクターカード・コミュニティ",
-  "board.title": "キャラクターカード ランキング",
-  "board.lede": "作者自身が登録した作品。順位は読者が実際に会話した量だけで決まり、人手による推薦はありません。",
+  "board.zones": "言語",
+  "board.sorts": "並び替え",
   "board.search.placeholder": "キャラクター名・紹介文・タグで検索",
   "board.search.submit": "検索",
   "board.sort.hot": "人気",
@@ -20,16 +18,14 @@
   "board.sort.new.blurb": "登録されたばかりのカード",
   "board.sort.top.blurb": "累計会話数が最も多いカード",
   "board.count": "{n} 件",
-  "board.empty.title": "まだ何もありません",
-  "board.empty.hint": "最初の一枚を待っています。作品があれば「マイカード」から登録してください。",
+  "board.empty.title": "このエリアにはまだ作品がありません",
+  "board.empty.hint": "他の言語を見るか、「マイカード」から自分の作品を登録してください。",
   "board.empty.search.title": "該当するカードがありません",
   "board.empty.search.hint": "別のキーワードでお試しください。",
-
   "pager.prev": "前へ",
   "pager.next": "次へ",
   "pager.page": "{n} ページ",
   "pager.pageOf": "{n} / {total} ページ",
-
   "card.eyebrow": "キャラクターカード",
   "card.stat.talk": "会話",
   "card.stat.follow": "お気に入り",
@@ -39,14 +35,12 @@
   "card.meta": "{registered}に登録 · データ更新 {synced}",
   "card.talkCount": "{n} 回の会話",
   "card.noSummary": "紹介文はまだありません",
-
   "author.eyebrow": "作者",
   "author.stat.cards": "登録したカード",
   "author.stat.talk": "累計会話数",
   "author.stat.joined": "参加",
   "author.empty.title": "まだ作品がありません",
   "author.empty.hint": "この作者はまだカードを登録していません。",
-
   "mine.eyebrow": "作者ワークスペース",
   "mine.title": "マイキャラクターカード",
   "mine.create": "新規作成",
@@ -64,7 +58,6 @@
   "mine.empty": "キャラクターカードがまだありません。",
   "mine.empty.cta": "まず一枚つくる",
   "mine.emptyFilter": "この絞り込みに該当するカードはありません。",
-
   "create.title": "キャラクターカードを作成",
   "create.lede": "まず名前だけ決めて、紹介文と設定は作成後に。新しいカードは非公開で、あなたにしか見えません。ランキングに載せるかどうかは、あなた自身が決めます。",
   "create.name": "キャラクター名",
@@ -72,7 +65,6 @@
   "create.language": "主な言語",
   "create.submit": "作成して編集へ",
   "create.submitting": "作成中…",
-
   "edit.title": "キャラクターカードを編集",
   "edit.lede": "変更はカードに直接反映されます。すでに登録済みなら、ランキングの内容も少し後に追いつきます。",
   "edit.name": "キャラクター名",
@@ -87,7 +79,6 @@
   "edit.saving": "保存中…",
   "edit.saved": "保存しました。",
   "edit.back": "マイカードに戻る",
-
   "auth.completing": "ログインを完了しています…",
   "auth.retry": "ログインし直す",
   "auth.expired": "ログインの有効期限が切れました。もう一度ログインしてください",
@@ -99,20 +90,17 @@
   "auth.noCode": "コールバックに認可コードがありません",
   "auth.badState": "認可の状態が一致しません。もう一度ログインしてください",
   "auth.noVerifier": "今回のログインの検証コードが見つかりません。もう一度ログインしてください",
-
   "notFound.title": "ページが見つかりません",
   "notFound.hint": "リンクの有効期限が切れたか、そのカードの登録が取り消された可能性があります。",
   "notFound.back": "ランキングへ戻る",
-
   "state.loading": "読み込み中…",
   "state.loadFailed": "読み込めませんでした",
   "state.actionFailed": "操作に失敗しました",
   "state.saveFailed": "保存できませんでした",
   "state.createFailed": "作成できませんでした",
   "state.requestFailed": "リクエストに失敗しました（{status}）",
-
   "time.justNow": "たった今",
-
   "site.tagline": "キャラクターカード ランキング",
-  "site.description": "オープンなキャラクターカード・コミュニティ：ランキング、検索、作者ページ。"
+  "site.description": "オープンなキャラクターカード・コミュニティ：ランキング、検索、作者ページ。",
+  "zone.all": "言語不問"
 }

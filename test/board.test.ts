@@ -10,6 +10,7 @@ import { mainSiteDown, resetDb, restoreUpstream, role, rolesOnMainSite } from ".
 async function seed(f: {
   id: string;
   roleId?: string;
+  zone?: "zh" | "en" | "ja" | "ko" | "all";
   authorNumId?: number;
   name?: string;
   nameEn?: string;
@@ -23,6 +24,7 @@ async function seed(f: {
 }) {
   const r = role({
     roleId: f.roleId ?? `role-${f.id}`,
+    zone: f.zone,
     authorNumId: f.authorNumId,
     name: f.name,
     nameEn: f.nameEn,
@@ -33,13 +35,13 @@ async function seed(f: {
     followNum: f.followNum,
   });
   await env.DB.prepare(
-    `INSERT INTO cards (id, source_role_id, author_num_id, author_name, author_avatar, names, summaries,
+    `INSERT INTO cards (id, source_role_id, zone, author_num_id, author_name, author_avatar, names, summaries,
        avatar_url, background_url, slug, tags, talk_num, follow_num, talk_num_prev, search_text,
        registered_at, last_synced_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
   )
     .bind(
-      f.id, r.roleId, r.authorNumId, r.authorName, r.authorAvatar,
+      f.id, r.roleId, r.zone, r.authorNumId, r.authorName, r.authorAvatar,
       JSON.stringify(r.names), JSON.stringify(r.summaries), r.avatarUrl, r.backgroundUrl, r.slug,
       JSON.stringify(r.tags), r.talkNum, r.followNum, f.talkPrev ?? r.talkNum,
       buildSearchText(r), f.registeredAt ?? Date.now(), 0,
@@ -362,5 +364,46 @@ describe("同步並發", () => {
     const state = trackingUpstream();
     await runSync();
     expect(state.peak).toBe(1);
+  });
+});
+
+describe("語區", () => {
+  beforeEach(async () => {
+    await seed({ id: "zh1", zone: "zh", talkNum: 10, talkPrev: 0 });
+    await seed({ id: "en1", zone: "en", talkNum: 99, talkPrev: 0 });
+    await seed({ id: "ja1", zone: "ja" });
+    await seed({ id: "any", zone: "all", talkNum: 5, talkPrev: 0 });
+  });
+
+  it("不帶 zone 就是中文區，不做混語言總榜", async () => {
+    const { body } = await list();
+    expect(ids(body).sort()).toEqual(["any", "zh1"]);
+    expect(body.total).toBe(2);
+  });
+
+  it("每區只列自己的卡，all 的卡每區都有", async () => {
+    expect(ids((await list("?zone=en")).body)).toEqual(["en1", "any"]);
+    expect(ids((await list("?zone=ja")).body).sort()).toEqual(["any", "ja1"]);
+    expect(ids((await list("?zone=ko")).body)).toEqual(["any"]);
+  });
+
+  it("不認得的 zone 退回中文區", async () => {
+    expect(ids((await list("?zone=fr")).body).sort()).toEqual(["any", "zh1"]);
+  });
+
+  it("搜尋也限定在語區內", async () => {
+    await seed({ id: "en2", zone: "en", name: "霧港偵探" });
+    await seed({ id: "zh2", zone: "zh", name: "霧港偵探" });
+    expect(ids((await list("?zone=en&q=霧港偵探")).body)).toEqual(["en2"]);
+  });
+
+  it("作者主頁跨語區列全部作品", async () => {
+    const { body } = await list("?author=10001&zone=ko");
+    expect(body.items).toHaveLength(4);
+  });
+
+  it("回應帶 zone，前端才能在跨語區的清單上標語言", async () => {
+    const { body } = await list("?zone=en");
+    expect(body.items.map((i) => i.zone)).toEqual(["en", "all"]);
   });
 });

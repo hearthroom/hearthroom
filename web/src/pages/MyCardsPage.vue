@@ -113,26 +113,24 @@ watch(() => route.query.fresh, (f) => {
 <template>
   <div class="page">
     <header class="head">
-      <div>
-        <p class="eyebrow">{{ $t("mine.eyebrow") }}</p>
+      <div class="head__text">
         <h1 class="head__title display">{{ $t("mine.title") }}</h1>
+        <!-- 數字跟標題排同一行：這是工作區，不是刊物封面，不需要一整塊 hero -->
+        <dl v-if="data" class="tally">
+          <div><dt>{{ $t("mine.tally.all") }}</dt><dd>{{ data.total }}</dd></div>
+          <div><dt>{{ $t("mine.tally.listed") }}</dt><dd>{{ listedCount }}</dd></div>
+          <span v-if="revalidating" class="subtle">{{ $t("mine.syncing") }}</span>
+        </dl>
       </div>
       <RouterLink :to="lp('/create')" class="btn btn--primary">{{ $t("mine.create") }}</RouterLink>
     </header>
 
-    <div v-if="data" class="tally">
-      <div><dt>{{ $t("mine.tally.all") }}</dt><dd>{{ data.total }}</dd></div>
-      <div><dt>{{ $t("mine.tally.listed") }}</dt><dd>{{ listedCount }}</dd></div>
-      <div><dt>{{ $t("mine.tally.page") }}</dt><dd>{{ data.items.length }}</dd></div>
-      <span v-if="revalidating" class="tally__sync subtle">{{ $t("mine.syncing") }}</span>
-    </div>
-
-    <nav class="filters">
+    <nav class="tabs filters">
       <button
         v-for="f in ['all', 'listed', 'unlisted']"
         :key="f"
-        class="filters__item"
-        :class="{ 'filters__item--on': filter === f }"
+        class="tabs__item"
+        :class="{ 'tabs__item--on': filter === f }"
         @click="go({ filter: f, page: undefined })"
       >
         {{ $t(`mine.filter.${f}`) }}
@@ -173,25 +171,18 @@ watch(() => route.query.fresh, (f) => {
 <style scoped>
 .head {
   display: flex; flex-wrap: wrap; gap: var(--s-4);
-  align-items: flex-end; justify-content: space-between;
-  margin-bottom: var(--s-5);
+  align-items: center; justify-content: space-between;
+  margin-bottom: var(--s-3);
 }
-.head__title { margin: var(--s-1) 0 0; font-size: clamp(30px, 4.6vw, 42px); }
+.head__text { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-6); min-width: 0; }
+.head__title { margin: 0; font-size: clamp(26px, 3.6vw, 34px); }
 
-.tally { display: flex; align-items: baseline; gap: var(--s-6); margin: 0 0 var(--s-4); padding-bottom: var(--s-4); border-bottom: 1px solid var(--rule); }
-.tally dt { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-faint); }
-.tally dd { margin: 2px 0 0; font-family: var(--font-display); font-size: 24px; font-variant-numeric: tabular-nums; }
-.tally__sync { margin-left: auto; }
+.tally { display: flex; align-items: baseline; gap: var(--s-5); margin: 0; }
+.tally > div { display: flex; align-items: baseline; gap: var(--s-2); }
+.tally dt { font-size: 12px; color: var(--text-faint); }
+.tally dd { margin: 0; font-family: var(--font-display); font-size: 20px; font-variant-numeric: tabular-nums; }
 
-.filters { display: flex; gap: var(--s-5); margin-bottom: var(--s-5); }
-.filters__item {
-  padding: 0 0 var(--s-2); margin-bottom: -1px;
-  background: none; border: 0; border-bottom: 1px solid transparent; cursor: pointer;
-  font-size: 14px; color: var(--text-faint);
-  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
-}
-.filters__item:hover { color: var(--text-dim); }
-.filters__item--on { color: var(--text); border-bottom-color: var(--gold); }
+.filters { margin-bottom: var(--s-5); border-bottom: 1px solid var(--rule); }
 
 /* 跟榜單同一套卡片牆語言。工作區的格子略寬一點，因為每張底下多兩顆按鈕。 */
 .wall {

@@ -13,12 +13,12 @@ import { SITE } from "./site";
  */
 
 const STORE = {
-  client: "lt.oauth.client",
-  verifier: "lt.oauth.verifier",
-  state: "lt.oauth.state",
-  refresh: "lt.oauth.refresh",
-  access: "lt.oauth.access",
-  returnTo: "lt.oauth.return_to",
+  client: "taproom.oauth.client",
+  verifier: "taproom.oauth.verifier",
+  state: "taproom.oauth.state",
+  refresh: "taproom.oauth.refresh",
+  access: "taproom.oauth.access",
+  returnTo: "taproom.oauth.return_to",
 } as const;
 
 const redirectUri = () => `${location.origin}/auth/callback`;

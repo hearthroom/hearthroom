@@ -1,6 +1,6 @@
 import { COMMUNITY_API, UPSTREAM_API } from "./config";
 import { i18n } from "./i18n";
-import type { Author, CardPage, CommunityCard, MyRole, Sort } from "./types";
+import type { Author, CardPage, CommunityCard, MyRole, Sort, Zone } from "./types";
 
 export class ApiError extends Error {
   constructor(readonly status: number, message: string) {
@@ -21,7 +21,7 @@ const authHeaders = (token?: string): Record<string, string> =>
 
 // ---- 社群 API（同源）------------------------------------------------------
 
-export interface BoardQuery { q?: string; tag?: string; sort?: Sort; author?: number; limit?: number; offset?: number; lang?: string }
+export interface BoardQuery { zone?: Zone; q?: string; tag?: string; sort?: Sort; author?: number; limit?: number; offset?: number; lang?: string }
 
 export async function fetchBoard(query: BoardQuery = {}): Promise<CardPage> {
   const params = new URLSearchParams();
@@ -63,6 +63,7 @@ export interface Me { accountNumId: number; nickName: string; avatar: string }
 
 export interface MyCard {
   roleId: string;
+  zone: Zone | "all";
   name: string;
   summary: string;
   avatarUrl: string | null;

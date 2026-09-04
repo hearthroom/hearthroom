@@ -1,4 +1,4 @@
-# 人物誌 · Personae
+# Taproom
 
 一個開源的角色卡社群：榜單、搜尋、作者主頁，以及讓作者把自己的作品登記上榜。
 
@@ -57,7 +57,14 @@ API 存取範圍，跟這個服務拿到的一模一樣。
 | POST | `/v1/cards` | 作者 token | 登記，body 只收 `{roleId}` |
 | DELETE | `/v1/cards/:id` | 作者 token | 作者自己撤銷登記 |
 
-`GET /v1/cards` 參數：`q` `tag` `author` `sort=hot|new|top` `lang` `limit`(≤100) `offset`。
+`GET /v1/cards` 參數：`zone=zh|en|ja|ko` `q` `tag` `author` `sort=hot|new|top` `lang` `limit`(≤100) `offset`。
+
+### 語區
+
+榜單按卡片的語言分開列（`zone=zh|en|ja|ko`，不帶就是 zh），沒有跨語言的總榜——
+四種語言混在一起，對每個讀者來說都有四分之三是雜訊。簡繁體併成一區，同一批讀者兩種都
+看得懂，拆開只會讓每區更空。來源標成「不分語言」（或沒標）的卡歸為 `all`，每一區都列。
+作者主頁是唯一不分區的清單。
 
 ### 排名
 

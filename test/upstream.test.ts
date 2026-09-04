@@ -32,6 +32,23 @@ const mainSiteRole = {
 
 afterEach(() => vi.unstubAllGlobals());
 
+describe("語區判定", () => {
+  it("簡繁體併成 zh，其餘三種各自一區", () => {
+    expect(projectRole({ ...mainSiteRole, language: "zh-Hans" }).zone).toBe("zh");
+    expect(projectRole({ ...mainSiteRole, language: "zh-Hant" }).zone).toBe("zh");
+    expect(projectRole({ ...mainSiteRole, language: "en" }).zone).toBe("en");
+    expect(projectRole({ ...mainSiteRole, language: "ja" }).zone).toBe("ja");
+    expect(projectRole({ ...mainSiteRole, language: "ko" }).zone).toBe("ko");
+  });
+
+  it("沒標或標了不認得的值 → all：寧可每區都看得到，不要憑空消失", () => {
+    expect(projectRole({ ...mainSiteRole, language: "all" }).zone).toBe("all");
+    expect(projectRole({ ...mainSiteRole, language: "" }).zone).toBe("all");
+    expect(projectRole({ ...mainSiteRole, language: undefined }).zone).toBe("all");
+    expect(projectRole({ ...mainSiteRole, language: "fr" }).zone).toBe("all");
+  });
+});
+
 describe("白名單投影", () => {
   it("只取列出的欄位，其餘一律不帶走", () => {
     const projected = projectRole({ ...mainSiteRole, someFieldAddedLater: "leak-me" });

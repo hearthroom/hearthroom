@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { RouterLink } from "vue-router";
 import { compact, hueFrom } from "@/lib/format";
+import { zoneLabel } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
 import type { MyCard } from "@/lib/api";
 
@@ -36,7 +37,10 @@ const delay = computed(() => `${Math.min(props.index ?? 0, 11) * 40}ms`);
     </RouterLink>
 
     <div class="mine-tile__foot">
-      <span class="mine-tile__num">{{ $t("card.talkCount", { n: compact(card.talkNum) }) }}</span>
+      <span class="mine-tile__num">
+        <span :lang="card.zone === 'all' ? undefined : card.zone">{{ zoneLabel(card.zone) }}</span>
+        · {{ $t("card.talkCount", { n: compact(card.talkNum) }) }}
+      </span>
       <!-- 工作區的操作不能藏在 hover 底下：觸控裝置根本碰不到 -->
       <div class="mine-tile__actions">
         <RouterLink class="btn btn--sm btn--ghost" :to="lp(`/cards/${card.roleId}/edit`)">{{ $t("mine.action.edit") }}</RouterLink>

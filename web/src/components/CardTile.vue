@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { RouterLink } from "vue-router";
 import { compact, hueFrom } from "@/lib/format";
+import { zoneLabel } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
 import type { CommunityCard } from "@/lib/types";
 
@@ -9,6 +10,9 @@ const props = defineProps<{
   card: CommunityCard;
   rank?: number;
   showTrending?: boolean;
+  /** 封面：佔 2×2 格，名字與簡介都放大。榜單第一頁的第一名才是。 */
+  cover?: boolean;
+  showZone?: boolean;
   index?: number;
 }>();
 
@@ -25,6 +29,7 @@ const delay = computed(() => `${Math.min(props.index ?? 0, 11) * 45}ms`);
   <RouterLink
     :to="lp(`/cards/${card.roleId}`)"
     class="tile rise"
+    :class="{ 'tile--cover': cover }"
     :style="{ animationDelay: delay }"
   >
     <div class="tile__frame">
@@ -49,7 +54,7 @@ const delay = computed(() => `${Math.min(props.index ?? 0, 11) * 45}ms`);
     </div>
 
     <footer class="tile__meta">
-      <span class="tile__author">{{ card.author.name }}</span>
+      <span class="tile__author">{{ showZone ? zoneLabel(card.zone) : card.author.name }}</span>
       <span class="tile__num">
         <template v-if="showTrending && card.trending > 0">↑{{ compact(card.trending) }}</template>
         <template v-else>{{ compact(card.talkNum) }}</template>
@@ -60,73 +65,92 @@ const delay = computed(() => `${Math.min(props.index ?? 0, 11) * 45}ms`);
 
 <style scoped>
 /*
- * min-width: 0 不能省。grid item 預設是 min-width: auto——不允許縮到內容寬度以下，
- * 於是裡面的 text-overflow: ellipsis 永遠不會觸發，一段長簡介就能把整格頂爆、
- * 讓整頁出現橫向捲軸。實測 600px 的容器會被撐到 1261px。
+ * min-width: 0 不能省。grid item 預設是 min-width: auto，會被最長的一行字撐開，
+ * 名字再長也不會折行或截斷——實測 600px 的容器會被撐到 1261px。
  */
-.tile { display: block; min-width: 0; }
+.tile { display: flex; flex-direction: column; min-width: 0; }
 
 .tile__frame {
-  position: relative;
+  position: relative; overflow: hidden;
   aspect-ratio: 3 / 4;
-  overflow: hidden;
   border-radius: var(--r-md);
   background: var(--paper-sunken);
-  /* 髮絲內框讓立繪跟紙分開，不用陰影——陰影在暗底上只會糊掉 */
   box-shadow: inset 0 0 0 1px var(--rule);
+  transition: box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.tile:hover .tile__frame {
+  box-shadow: inset 0 0 0 1px var(--rule-strong), 0 14px 32px rgba(0, 0, 0, 0.45);
+  transform: translateY(-2px);
 }
 
 .tile__img {
   width: 100%; height: 100%; object-fit: cover;
+  /* 微降飽和，讓一牆五顏六色的立繪先安靜下來；hover 才給它全彩 */
+  filter: saturate(0.85) brightness(0.92);
   transition: transform var(--dur-slow) var(--ease), filter var(--dur) var(--ease);
-  /* 預設稍微壓一點飽和，hover 才回到全彩：整面牆不會吵，滑過的那張才跳出來 */
-  filter: saturate(0.82) brightness(0.9);
 }
-.tile:hover .tile__img { transform: scale(1.045); filter: none; }
+.tile:hover .tile__img { transform: scale(1.04); filter: none; }
 
-.tile__void { width: 100%; height: 100%; display: grid; place-items: center; }
-.tile__void span { font-size: 64px; color: rgba(255, 255, 255, 0.16); }
-
-.tile__rank {
-  position: absolute; top: -2px; left: 8px;
-  font-size: 54px; line-height: 1;
-  color: transparent;
-  -webkit-text-stroke: 1px rgba(242, 236, 225, 0.55);
+/* 頂端一小段暗化：名次數字壓在亮色立繪上才讀得出來，也讓一牆卡片的上緣安靜一致 */
+.tile__frame::before {
+  content: ""; position: absolute; inset: 0 0 auto 0; height: 36%; z-index: 1;
+  background: linear-gradient(to bottom, rgba(10, 9, 8, 0.62), transparent);
   pointer-events: none;
 }
-.tile__rank--top { color: var(--gold); -webkit-text-stroke: 0; }
+
+.tile__void { display: grid; place-items: center; width: 100%; height: 100%; }
+.tile__void span { font-size: 56px; color: rgba(255, 255, 255, 0.16); }
+
+.tile__rank {
+  position: absolute; top: 2px; left: var(--s-3); z-index: 2;
+  font-size: 44px; line-height: 1;
+  color: transparent;
+  -webkit-text-stroke: 1px rgba(242, 236, 225, 0.55);
+  letter-spacing: -0.02em;
+}
+.tile__rank--top { color: var(--gold); -webkit-text-stroke: 0; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6); }
 
 .tile__scrim {
-  position: absolute; inset: auto 0 0 0;
+  position: absolute; inset: auto 0 0 0; z-index: 1;
   padding: var(--s-6) var(--s-3) var(--s-3);
   background: linear-gradient(to top, rgba(10, 9, 8, 0.94) 22%, rgba(10, 9, 8, 0.55) 58%, transparent);
 }
 .tile__name {
-  margin: 0;
-  font-size: 19px;
+  margin: 0; font-size: 19px; line-height: 1.15;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .tile__hook {
-  margin: 2px 0 0;
-  font-size: 12.5px; line-height: 1.45; color: var(--text-dim);
-  /* 簡介平時收起，hover 才展開——整面牆保持整齊，想看的那張才給資訊 */
-  max-height: 0; opacity: 0; overflow: hidden;
-  transition: max-height var(--dur-slow) var(--ease), opacity var(--dur) var(--ease);
-  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical;
+  margin: 3px 0 0; font-size: 12px; line-height: 1.45; color: var(--text-dim);
+  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
-.tile:hover .tile__hook { max-height: 3.2em; opacity: 1; }
 
 .tile__meta {
-  display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-2);
-  padding-top: var(--s-2);
+  display: flex; justify-content: space-between; gap: var(--s-3);
+  padding: var(--s-2) 2px 0;
   font-size: 12px; color: var(--text-faint);
 }
 .tile__author { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tile__num { font-variant-numeric: tabular-nums; flex: none; }
+.tile__num { flex: none; font-variant-numeric: tabular-nums; }
 
-@media (hover: none) {
-  /* 觸控裝置沒有 hover，資訊不能藏起來 */
-  .tile__img { filter: none; }
-  .tile__hook { max-height: 3.2em; opacity: 1; }
+/* ---- 封面：一區的第一名佔 2×2 格，圖填滿格子（比 3:4 高一點，object-fit 裁掉） ---- */
+.tile--cover { grid-column: span 2; grid-row: span 2; }
+.tile--cover .tile__frame { flex: 1 1 auto; min-height: 0; }
+.tile--cover .tile__rank { font-size: 76px; top: 4px; left: var(--s-4); }
+.tile--cover .tile__scrim { padding: var(--s-8) var(--s-5) var(--s-5); }
+.tile--cover .tile__name { font-size: clamp(24px, 2.6vw, 34px); white-space: normal; line-height: 1.1; }
+.tile--cover .tile__hook { margin-top: var(--s-2); font-size: 13.5px; line-height: 1.55; -webkit-line-clamp: 3; line-clamp: 3; }
+.tile--cover .tile__meta { font-size: 13px; }
+</style>
+
+<style scoped>
+/* 手機只有兩欄：封面佔滿寬度會變成一整屏的一張卡。退回普通格子，金色的 01 已經夠醒目。 */
+@media (max-width: 640px) {
+  .tile--cover { grid-column: auto; grid-row: auto; }
+  .tile--cover .tile__frame { aspect-ratio: 3 / 4; flex: none; }
+  .tile--cover .tile__rank { font-size: 44px; top: 2px; left: var(--s-3); }
+  .tile--cover .tile__scrim { padding: var(--s-6) var(--s-3) var(--s-3); }
+  .tile--cover .tile__name { font-size: 19px; white-space: nowrap; }
+  .tile--cover .tile__hook { margin-top: 3px; font-size: 12px; line-height: 1.45; -webkit-line-clamp: 2; line-clamp: 2; }
+  .tile--cover .tile__meta { font-size: 12px; }
 }
 </style>
