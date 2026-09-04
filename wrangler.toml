@@ -1,0 +1,39 @@
+name = "lunatalk-community"
+main = "src/index.ts"
+compatibility_date = "2026-08-22"
+
+# 自訂網域。workers.dev 在部分地區被 DNS 污染（實測解析到非 Cloudflare 的 IP），
+# 綁自己的 zone 才連得上。OAuth 的 redirect_uri 取自 location.origin，會自動跟著換。
+routes = [
+  { pattern = "community.johnny.moe", custom_domain = true }
+]
+
+# 同一個 Worker 服務 API 與前端：/v1/* 走 Hono，其餘落到打包好的 SPA。
+# 同源 = 前端不用處理 CORS，也只有一個部署目標。
+[assets]
+directory = "./web/dist"
+binding = "ASSETS"
+# 找不到對應檔案時回 index.html，前端路由自己接手（/cards/xxx 這種深連結才進得去）。
+not_found_handling = "single-page-application"
+# 但 /v1/* 要先給 Worker，否則 SPA fallback 會把 API 請求也變成 index.html。
+run_worker_first = ["/v1/*"]
+
+[vars]
+# 上游的開放 API。這裡對它只有兩種呼叫：轉發作者 token 問身分、以游客讀卡片公開資訊。
+LUNATALK_API_BASE = "https://api.lunatalk.ai"
+# 每輪排程同步幾張卡。D1 單次請求有時間預算，別一次拉太多。
+SYNC_BATCH_SIZE = "50"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "lunatalk-community"
+database_id = "d75ecd5d-335a-42b9-8fee-db391a1cdf19"
+migrations_dir = "migrations"
+
+[[kv_namespaces]]
+binding = "CACHE"
+id = "179537be15bb4fbc8d42b99728142d25"
+
+# 每小時同步一批卡片的名稱、封面與熱度信號。
+[triggers]
+crons = ["17 * * * *"]
