@@ -105,6 +105,56 @@ export function projectRole(raw: Record<string, unknown>): UpstreamRole {
   };
 }
 
+export interface MyRole {
+  roleId: string;
+  name: string;
+  summary: string;
+  avatarUrl: string | null;
+  visibility: string;
+  talkNum: number;
+}
+
+export interface MyRolePage {
+  items: MyRole[];
+  total: number;
+  hasNext: boolean;
+}
+
+/**
+ * 呼叫者自己的角色卡，一次一頁。
+ *
+ * 上游回的是整個角色物件（四語文案、給模型看的詳細設定、輸出契約⋯⋯），一頁 100 筆
+ * 是好幾百 KB。這裡只取畫面真的會用到的六個欄位再往下傳——省的是使用者的下載流量，
+ * 不是我們的。
+ */
+export async function fetchMyRoles(
+  env: Env,
+  bearer: string,
+  page: number,
+  pageSize: number,
+): Promise<MyRolePage> {
+  const res = await fetch(
+    apiUrl(env, `/open/v1/role/mine?pageNum=${page}&pageSize=${pageSize}`),
+    { headers: { Authorization: `Bearer ${bearer}`, language: "zh-Hans", "User-Agent": UA } },
+  );
+  const body = await readJson(res, "role list");
+  const rows = Array.isArray(body.roleList) ? (body.roleList as Record<string, unknown>[]) : [];
+  return {
+    items: rows
+      .map((r) => ({
+        roleId: str(r.characterRoleId),
+        name: str(r.roleName),
+        summary: str(r.roleDesc),
+        avatarUrl: str(r.roleAvatar) || null,
+        visibility: str(r.roleVisibility),
+        talkNum: num(r.talkNum),
+      }))
+      .filter((r) => r.roleId),
+    total: num(body.total),
+    hasNext: Boolean(body.hasNextPage),
+  };
+}
+
 /** 匿名讀一張卡。同步跑在排程裡，那時沒有使用者在線，手上不會有任何人的 token。 */
 async function fetchRole(env: Env, roleId: string): Promise<UpstreamRole> {
   const res = await fetch(apiUrl(env, `/open/v1/role/detail?roleId=${encodeURIComponent(roleId)}`), {
@@ -129,5 +179,5 @@ export function buildSearchText(role: UpstreamRole): string {
  * 也不綁在測試框架某個版本的 undici 內部。上游呼叫的 HTTP 形狀（路徑、標頭、
  * 錯誤碼對應）由 upstream.test.ts 直接測這兩個函式。
  */
-export const upstream = { fetchMe, fetchRole };
+export const upstream = { fetchMe, fetchRole, fetchMyRoles };
 export type Upstream = typeof upstream;
