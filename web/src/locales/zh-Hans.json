@@ -135,5 +135,12 @@
   "comment.empty": "还没有评论，来说第一句。",
   "comment.login": "登录后留言",
   "comment.submitted": "已发送，通过审核后会显示。",
-  "comment.count": "{n} 条评论"
+  "comment.count": "{n} 条评论",
+  "card.authorPage": "作者主页",
+  "card.moreBy": "{name} 的其他作品",
+  "time.today": "今天",
+  "time.yesterday": "昨天",
+  "wallet.records.income": "收入",
+  "wallet.records.expense": "支出",
+  "wallet.records.all": "全部"
 }

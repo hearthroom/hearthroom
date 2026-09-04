@@ -9,10 +9,38 @@ body {
   font-size: 14px;
   line-height: 1.6;
   color: var(--text);
-  background: var(--bg);
+  /* 底色畫在 html 上：body 保持透明，下面那層氛圍才露得出來 */
+  background: transparent;
   -webkit-font-smoothing: antialiased;
   /* 最後一道防線：內容再怎麼寬也不該讓整頁橫向捲動 */
   overflow-x: hidden;
+}
+
+/*
+ * 氛圍層：三團很淡的色暈，一分鐘漂一個來回。
+ * 只動 transform（合成層，不重排）；不接受動效的人看到的是靜止的一幀。
+ * 濃度壓在 10% 以下——它是紙的質地，不是背景圖。
+ */
+body::before {
+  content: ""; position: fixed; inset: -25%; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(38% 34% at 18% 22%, rgba(239, 79, 111, 0.11), transparent 70%),
+    radial-gradient(34% 34% at 82% 26%, rgba(109, 63, 209, 0.09), transparent 70%),
+    radial-gradient(44% 40% at 58% 88%, rgba(31, 143, 168, 0.09), transparent 70%);
+  animation: ambient 64s ease-in-out infinite alternate;
+  will-change: transform;
+}
+@keyframes ambient {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(-3%, 2.5%, 0) scale(1.07); }
+}
+@media (prefers-color-scheme: dark) {
+  body::before {
+    background:
+      radial-gradient(38% 34% at 18% 22%, rgba(239, 79, 111, 0.14), transparent 70%),
+      radial-gradient(34% 34% at 82% 26%, rgba(139, 92, 246, 0.12), transparent 70%),
+      radial-gradient(44% 40% at 58% 88%, rgba(56, 189, 248, 0.10), transparent 70%);
+  }
 }
 
 a { color: inherit; text-decoration: none; }
@@ -62,7 +90,8 @@ h1, h2, h3, p, dl, dd { margin: 0; }
   transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 .btn:hover { background: var(--surface-2); }
-.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 
 .btn--primary {
   background: var(--accent-grad); border-color: transparent; color: var(--on-accent);

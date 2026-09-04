@@ -135,5 +135,12 @@
   "comment.empty": "No comments yet. Be the first.",
   "comment.login": "Log in to comment",
   "comment.submitted": "Posted. It will appear once reviewed.",
-  "comment.count": "{n} comments"
+  "comment.count": "{n} comments",
+  "card.authorPage": "Author page",
+  "card.moreBy": "More from {name}",
+  "time.today": "Today",
+  "time.yesterday": "Yesterday",
+  "wallet.records.income": "Earned",
+  "wallet.records.expense": "Spent",
+  "wallet.records.all": "All"
 }

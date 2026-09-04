@@ -56,14 +56,25 @@ const initial = computed(() => [...props.card.name][0] ?? "?");
   border-radius: var(--r-md);
   box-shadow: 0 0 0 1px var(--line), var(--shadow-sm);
   overflow: hidden;
+  transition: box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
+.card:hover { box-shadow: 0 0 0 1px var(--line-strong), var(--shadow-md); transform: translateY(-3px); }
 .card__art { position: relative; display: block; aspect-ratio: 3 / 4; background: var(--surface-2); overflow: hidden; }
-.card__art img { width: 100%; height: 100%; object-fit: cover; }
+.card__art img { width: 100%; height: 100%; object-fit: cover; transition: transform var(--dur-slow) var(--ease); }
+.card:hover .card__art img { transform: scale(1.04); }
+.card__art::after { content: ""; position: absolute; inset: 0; box-shadow: inset 0 0 0 1px rgba(16, 16, 24, 0.05); pointer-events: none; }
+/* 圖上壓一個「編輯」提示，只在 hover 出現——動作按鈕在下面，這只是告訴人圖也能點 */
+.card__art::before {
+  content: ""; position: absolute; inset: 0; z-index: 1;
+  background: linear-gradient(to top, rgba(16, 16, 24, 0.35), transparent 40%);
+  opacity: 0; transition: opacity var(--dur) var(--ease);
+}
+.card:hover .card__art::before { opacity: 1; }
 .card__void { display: grid; place-items: center; width: 100%; height: 100%; }
 .card__void span { font-size: 40px; font-weight: 600; color: rgba(255, 255, 255, 0.9); }
 
 .card__badge {
-  position: absolute; top: 8px; left: 8px;
+  position: absolute; top: 8px; left: 8px; z-index: 2;
   height: 22px; padding: 0 8px; display: inline-flex; align-items: center;
   border-radius: var(--r-pill);
   background: var(--accent); color: var(--on-accent);
@@ -80,4 +91,8 @@ const initial = computed(() => [...props.card.name][0] ?? "?");
 .card__meta { font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .card__actions { display: flex; gap: var(--s-2); margin-top: var(--s-2); }
 .card__actions > * { flex: 1; }
+/* 動作列平常收斂成灰階，hover 才給主色——一牆的紅色按鈕會讓人不知道該看哪 */
+.card__actions .btn--primary { filter: saturate(0.25) brightness(1.05); transition: filter var(--dur) var(--ease); }
+.card:hover .card__actions .btn--primary, .card__actions .btn--primary:focus-visible { filter: none; }
+@media (hover: none) { .card__actions .btn--primary { filter: none; } }
 </style>

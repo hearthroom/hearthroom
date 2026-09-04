@@ -2,10 +2,11 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute } from "vue-router";
+import CardTile from "@/components/CardTile.vue";
 import CommentPanel from "@/components/CommentPanel.vue";
 import PreviewDoc from "@/components/preview/PreviewDoc.vue";
 import { UPSTREAM_API } from "@/lib/config";
-import { fetchCard, fetchPreviewPage, fetchRoleDetail } from "@/lib/api";
+import { fetchBoard, fetchCard, fetchPreviewPage, fetchRoleDetail } from "@/lib/api";
 import { contentLang, pageTitle, zoneLabel } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
 import { compact, hueFrom, plainText, relativeTime } from "@/lib/format";
@@ -25,6 +26,7 @@ const showComments = ref(true);
 const previewDoc = ref<unknown>(null);
 const previewSkin = ref("");
 const commentCount = ref<number | null>(null);
+const moreByAuthor = ref<CommunityCard[]>([]);
 
 type Tab = "home" | "comments";
 const tab = ref<Tab>("home");
@@ -51,6 +53,10 @@ async function load() {
 
   // 主頁的其餘資料在卡片之後補上：讀不到只是少一塊，不擋整頁。
   const roleId = card.value.roleId;
+  moreByAuthor.value = [];
+  void fetchBoard({ author: card.value.author.accountNumId, sort: "top", limit: 7, lang })
+    .then((p) => { moreByAuthor.value = p.items.filter((c) => c.roleId !== roleId).slice(0, 6); })
+    .catch(() => {});
   void fetchRoleDetail(roleId, undefined, lang)
     .then((raw) => {
       welcome.value = plainText(String(raw.roleWelcome ?? ""), card.value?.name ?? "", t("card.you"));
@@ -87,9 +93,15 @@ watch([() => route.params.id, locale], load, { immediate: true });
 
           <div class="role__id">
             <h1 class="role__name display">{{ card.name }}</h1>
+            <!-- 作者是一張可點的名片，不只是一行灰字 -->
             <RouterLink :to="lp(`/authors/${card.author.accountNumId}`)" class="role__by">
               <img v-if="card.author.avatar" :src="card.author.avatar" alt="" />
-              <span>{{ card.author.name }}</span>
+              <span v-else class="role__by-void">{{ [...card.author.name][0] }}</span>
+              <span class="role__by-text">
+                <strong>{{ card.author.name }}</strong>
+                <span class="subtle">{{ $t("card.authorPage") }}</span>
+              </span>
+              <span class="role__by-arrow" aria-hidden="true">→</span>
             </RouterLink>
           </div>
 
@@ -136,6 +148,16 @@ watch([() => route.params.id, locale], load, { immediate: true });
             </template>
           </div>
 
+          <section v-if="moreByAuthor.length && tab === 'home'" class="more rise">
+            <div class="more__head">
+              <h2 class="more__title">{{ $t("card.moreBy", { name: card.author.name }) }}</h2>
+              <RouterLink :to="lp(`/authors/${card.author.accountNumId}`)" class="more__all">{{ $t("card.authorPage") }} →</RouterLink>
+            </div>
+            <div class="more__grid">
+              <CardTile v-for="c in moreByAuthor" :key="c.id" :card="c" />
+            </div>
+          </section>
+
           <!-- 評論面板常駐（v-show），切回來不必重載；作者關掉評論就整個不掛 -->
           <div v-if="showComments" v-show="tab === 'comments'" class="panel role__comments">
             <CommentPanel :role-id="card.roleId" @count="commentCount = $event" />
@@ -179,9 +201,19 @@ watch([() => route.params.id, locale], load, { immediate: true });
 
 .role__id { display: grid; gap: 6px; }
 .role__name { font-size: 22px; line-height: 1.25; }
-.role__by { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 500; color: var(--text-2); }
-.role__by img { width: 20px; height: 20px; border-radius: 999px; object-fit: cover; }
-.role__by:hover { color: var(--text); }
+.role__by {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 4px; padding: 8px 10px; border-radius: var(--r-md);
+  background: var(--surface-2);
+  transition: background var(--dur) var(--ease);
+}
+.role__by:hover { background: var(--accent-soft); }
+.role__by img, .role__by-void { width: 32px; height: 32px; border-radius: 999px; object-fit: cover; flex: none; }
+.role__by-void { display: grid; place-items: center; background: var(--surface); font-size: 13px; font-weight: 600; color: var(--text-2); }
+.role__by-text { display: grid; line-height: 1.3; min-width: 0; }
+.role__by-text strong { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.role__by-arrow { margin-left: auto; color: var(--text-3); transition: transform var(--dur) var(--ease), color var(--dur) var(--ease); }
+.role__by:hover .role__by-arrow { transform: translateX(3px); color: var(--accent); }
 
 .role__stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-2); padding: var(--s-3) 0; box-shadow: 0 1px 0 var(--line), 0 -1px 0 var(--line); }
 .role__stats .stat dd { font-size: 16px; }
@@ -204,6 +236,13 @@ watch([() => route.params.id, locale], load, { immediate: true });
   font-size: 14.5px; line-height: 1.8; white-space: pre-wrap;
 }
 .role__comments { padding: var(--s-5); }
+
+.more { display: grid; gap: var(--s-3); margin-top: var(--s-2); }
+.more__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-3); }
+.more__title { font-size: 14px; font-weight: 600; color: var(--text-2); }
+.more__all { font-size: 12.5px; font-weight: 500; color: var(--text-3); }
+.more__all:hover { color: var(--accent); }
+.more__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: var(--s-3); }
 
 @media (max-width: 820px) {
   .role__layout { grid-template-columns: 1fr; }
