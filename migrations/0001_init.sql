@@ -27,6 +27,11 @@ CREATE TABLE cards (
   follow_num     INTEGER NOT NULL DEFAULT 0,
   talk_num_prev  INTEGER NOT NULL DEFAULT 0,
 
+  -- 熱度用 generated column 而不是自己維護的欄位：SQLite 保證它跟來源永遠一致，
+  -- 不可能因為漏掉某條寫入路徑而漂移。STORED 才建得了索引，排序因此走索引掃描，
+  -- 不是每行現算。
+  hot_score      INTEGER GENERATED ALWAYS AS (talk_num - talk_num_prev) STORED,
+
   -- 沒有狀態欄位，也沒有下架機制：能不能真的使用一張卡，是上游決定的事，
   -- 這裡做第二套判斷既無必要也做不到。卡片離開榜單只有一種方式——作者自己撤銷登記。
   search_text    TEXT    NOT NULL DEFAULT '',        -- 四語名稱+簡介+標籤，餵 FTS 用
@@ -35,7 +40,9 @@ CREATE TABLE cards (
 );
 
 CREATE INDEX idx_cards_registered ON cards (registered_at DESC);
-CREATE INDEX idx_cards_talk       ON cards (talk_num DESC);
+-- 兩個排序鍵都進索引，否則 SQLite 得為第二個鍵開臨時 B-tree。
+CREATE INDEX idx_cards_talk       ON cards (talk_num DESC, follow_num DESC);
+CREATE INDEX idx_cards_hot        ON cards (hot_score DESC, registered_at DESC);
 CREATE INDEX idx_cards_author            ON cards (author_num_id, registered_at DESC);
 CREATE INDEX idx_cards_sync_cursor       ON cards (last_synced_at);
 

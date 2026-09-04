@@ -17,6 +17,7 @@ export interface CardRow {
   talk_num: number;
   follow_num: number;
   talk_num_prev: number;
+  hot_score: number;
   registered_at: number;
   last_synced_at: number;
 }
@@ -43,7 +44,7 @@ export function toCard(row: CardRow, lang: string) {
     },
     talkNum: row.talk_num,
     followNum: row.follow_num,
-    trending: Math.max(0, row.talk_num - row.talk_num_prev),
+    trending: Math.max(0, row.hot_score),
     registeredAt: row.registered_at,
     syncedAt: row.last_synced_at,
   };
@@ -62,6 +63,19 @@ export interface ListOptions {
   sort: "hot" | "new" | "top";
   limit: number;
   offset: number;
+}
+
+export interface ListResult {
+  rows: CardRow[];
+  hasNext: boolean;
+  /**
+   * 未篩選時才給精確總數。
+   *
+   * 有篩選時 COUNT(*) 得把整組結果算出來才知道有幾筆——FTS MATCH 與 json_each 的
+   * tag 過濾尤其貴，常常比排序本身還慢，而使用者其實只需要知道「還有沒有下一頁」。
+   * 未篩選的那次是掃一個小索引，便宜，而那也正是「共 N 張」最有意義的場合。
+   */
+  total: number | null;
 }
 
 export async function listCards(db: D1Database, opts: ListOptions) {
@@ -90,22 +104,35 @@ export async function listCards(db: D1Database, opts: ListOptions) {
 
   const whereSql = where.length ? where.join(" AND ") : "1=1";
   // hot 用「這個同步窗口的對話增量」，不是累積數——累積數等於 top，排出來永遠是老卡。
+  // 三種排序都對應一個索引，沒有一種需要現算。
   const orderBy =
     opts.sort === "new"
       ? "c.registered_at DESC, c.id DESC"
       : opts.sort === "top"
         ? "c.talk_num DESC, c.follow_num DESC"
-        : "(c.talk_num - c.talk_num_prev) DESC, c.registered_at DESC";
+        : "c.hot_score DESC, c.registered_at DESC";
 
-  const [items, total] = await Promise.all([
-    db
-      .prepare(`SELECT c.* FROM ${from} WHERE ${whereSql} ORDER BY ${orderBy} LIMIT ? OFFSET ?`)
-      .bind(...binds, opts.limit, opts.offset)
-      .all<CardRow>(),
-    db.prepare(`SELECT COUNT(*) AS n FROM ${from} WHERE ${whereSql}`).bind(...binds).first<{ n: number }>(),
-  ]);
+  const filtered = Boolean(opts.q || opts.tag || opts.authorNumId !== undefined);
 
-  return { rows: items.results, total: total?.n ?? 0 };
+  // 多撈一筆就知道還有沒有下一頁，不必數完整組結果。
+  const probe = await db
+    .prepare(`SELECT c.* FROM ${from} WHERE ${whereSql} ORDER BY ${orderBy} LIMIT ? OFFSET ?`)
+    .bind(...binds, opts.limit + 1, opts.offset)
+    .all<CardRow>();
+
+  const hasNext = probe.results.length > opts.limit;
+  const rows = hasNext ? probe.results.slice(0, opts.limit) : probe.results;
+
+  let total: number | null = null;
+  if (!filtered) {
+    const counted = await db.prepare("SELECT COUNT(*) AS n FROM cards").first<{ n: number }>();
+    total = counted?.n ?? 0;
+  } else if (!hasNext) {
+    // 已經翻到最後一頁，總數就是走過的量，不必再問一次資料庫。
+    total = opts.offset + rows.length;
+  }
+
+  return { rows, hasNext, total };
 }
 
 /**

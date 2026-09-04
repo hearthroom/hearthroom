@@ -233,3 +233,65 @@ describe("榜單邊緣快取", () => {
     expect(res.headers.get("Cache-Control")).toContain("public");
   });
 });
+
+describe("查詢成本", () => {
+  beforeEach(async () => {
+    for (let i = 0; i < 30; i++) {
+      await seed({ id: `c${i}`, name: `卡 ${i}`, tags: i < 5 ? ["推理"] : ["其他"], talkNum: 100 - i, talkPrev: 90 - i });
+    }
+  });
+
+  it("未篩選時給精確總數", async () => {
+    const { body } = await list("");
+    expect(body.total).toBe(30);
+    expect(body.hasNext).toBe(true);
+  });
+
+  /** 有篩選又還有下一頁時不數總數：那種 COUNT 常常比排序本身還貴，而使用者只需要知道還有沒有。 */
+  it("有篩選且還有下一頁時不給總數，但 hasNext 準確", async () => {
+    const { body } = await list("?tag=其他&limit=5");
+    expect(body.total).toBeNull();
+    expect(body.hasNext).toBe(true);
+    expect(body.items).toHaveLength(5);
+  });
+
+  it("翻到最後一頁時總數免費算得出來", async () => {
+    const { body } = await list("?tag=推理");
+    expect(body.hasNext).toBe(false);
+    expect(body.total).toBe(5);
+  });
+
+  it("hasNext 在剛好整除時不會多報一頁", async () => {
+    const exact = await list("?tag=推理&limit=5");
+    expect(exact.body.items).toHaveLength(5);
+    expect(exact.body.hasNext).toBe(false);
+  });
+});
+
+describe("hot_score 衍生欄位", () => {
+  it("由資料庫維護，寫入時不必自己算", async () => {
+    await seed({ id: "a", talkNum: 900, talkPrev: 400 });
+    const row = (await env.DB.prepare("SELECT hot_score FROM cards WHERE id='a'").first()) as any;
+    expect(row.hot_score).toBe(500);
+  });
+
+  it("同步更新 talk_num 之後自動跟著變，不可能漂移", async () => {
+    await seed({ id: "a", roleId: "role-a", talkNum: 100, talkPrev: 100 });
+    rolesOnMainSite({ roleId: "role-a", talkNum: 350 });
+
+    const ctx = createExecutionContext();
+    await worker.scheduled(createScheduledController(), env, ctx);
+    await waitOnExecutionContext(ctx);
+
+    const row = (await env.DB.prepare("SELECT hot_score, talk_num, talk_num_prev FROM cards WHERE id='a'").first()) as any;
+    expect(row.talk_num).toBe(350);
+    expect(row.talk_num_prev).toBe(100);
+    expect(row.hot_score).toBe(250);
+  });
+
+  it("排序用的是這個欄位，結果跟預期一致", async () => {
+    await seed({ id: "cold", talkNum: 50_000, talkPrev: 50_000 });
+    await seed({ id: "rising", talkNum: 900, talkPrev: 400 });
+    expect((await list("?sort=hot")).body.items.map((i: any) => i.id)).toEqual(["rising", "cold"]);
+  });
+});

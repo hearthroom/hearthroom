@@ -71,7 +71,7 @@ app.get("/v1/cards", async (c) => {
   const limit = Math.max(1, clamp(c.req.query("limit"), 24, 100));
   const author = c.req.query("author");
 
-  const { rows, total } = await listCards(c.env.DB, {
+  const { rows, total, hasNext } = await listCards(c.env.DB, {
     q: c.req.query("q")?.trim() || undefined,
     tag: c.req.query("tag")?.trim() || undefined,
     authorNumId: author ? Number(author) : undefined,
@@ -80,7 +80,7 @@ app.get("/v1/cards", async (c) => {
     offset,
   });
   const l = lang(c);
-  const res = c.json({ items: rows.map((r) => toCard(r, l)), total, limit, offset, sort });
+  const res = c.json({ items: rows.map((r) => toCard(r, l)), total, hasNext, limit, offset, sort });
   res.headers.set("Cache-Control", `public, max-age=${BOARD_TTL}`);
   res.headers.set("X-Cache", "miss");
   // 放進快取的副本不能帶 X-Cache: miss，否則下一個人會看到錯的標記。
