@@ -7,6 +7,7 @@ import { hueFrom, relativeTime } from "@/lib/format";
 import { contentLang } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
+import { confirmDialog } from "@/lib/confirm";
 
 const props = defineProps<{ roleId: string }>();
 const emit = defineEmits<{ count: [n: number] }>();
@@ -103,7 +104,7 @@ async function toggleLike(c: Comment) {
 }
 
 async function remove(c: Comment) {
-  if (!window.confirm(t("comment.confirmDelete"))) return;
+  if (!(await confirmDialog({ message: t("comment.confirmDelete"), confirmText: t("dialog.delete"), danger: true }))) return;
   const token = await session.accessToken();
   if (!token) return;
   try { await deleteComment(c.commentId, props.roleId, token); await load(true); }

@@ -108,6 +108,9 @@ h1, h2, h3, p, dl, dd { margin: 0; }
 .btn--ghost { background: transparent; border-color: transparent; color: var(--text-2); }
 .btn--ghost:hover { background: var(--surface-2); color: var(--text); }
 .btn--danger:hover { border-color: var(--danger); color: var(--danger); background: transparent; }
+/* 破壞性動作的確認鍵：實心警示色，只在確認彈窗裡用 */
+.btn--danger-solid { background: var(--danger); border-color: transparent; color: #fff; }
+.btn--danger-solid:hover { filter: brightness(0.92); }
 .btn--sm { height: var(--h-sm); padding: 0 var(--s-3); font-size: 13px; }
 .btn--lg { height: var(--h-lg); padding: 0 var(--s-5); font-size: 15px; }
 /* 只有 icon 的圓鈕 */

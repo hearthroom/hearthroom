@@ -5,6 +5,7 @@ import { useI18n } from "vue-i18n";
 import { fetchRoleDetail, patchRole, type RoleDraft } from "@/lib/api";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
+import { confirmDialog } from "@/lib/confirm";
 
 const route = useRoute();
 const session = useSession();
@@ -46,7 +47,7 @@ onMounted(async () => {
 
 /* 改到一半離開要問一聲：站內換頁與關分頁都攔 */
 /* 儲存中不放行：鍵盤也走得到返回連結，這時彈「放棄修改？」文不對題 */
-onBeforeRouteLeave(() => !saving.value && (!dirty.value || window.confirm(t("edit.discard"))));
+onBeforeRouteLeave(async () => !saving.value && (!dirty.value || await confirmDialog({ message: t("edit.discard"), confirmText: t("dialog.leave"), danger: true })));
 const guard = (e: BeforeUnloadEvent) => { if (dirty.value) e.preventDefault(); };
 onMounted(() => window.addEventListener("beforeunload", guard));
 onBeforeUnmount(() => window.removeEventListener("beforeunload", guard));
