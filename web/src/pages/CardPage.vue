@@ -11,6 +11,7 @@ import { ApiError, fetchBoard, fetchCard, fetchPreviewPage, fetchRoleDetail } fr
 import { contentLang, pageTitle, zoneLabel } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
 import { compact, hueFrom, plainText, relativeTime } from "@/lib/format";
+import { confirmDialog } from "@/lib/confirm";
 import type { CommunityCard } from "@/lib/types";
 
 const route = useRoute();
@@ -107,7 +108,7 @@ async function share() {
     setTimeout(() => { copied.value = false; }, 1800);
   } catch {
     // 拿不到剪貼簿：把網址攤在使用者面前讓他自己複製，總比按了沒反應好
-    window.prompt(t("card.share"), url);
+    await confirmDialog({ title: t("card.share"), message: t("card.copyLink"), detail: url, single: true });
   }
 }
 

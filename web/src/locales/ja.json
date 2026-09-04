@@ -186,5 +186,10 @@
   "appearance.theme.forest": "フォレスト",
   "appearance.theme.sepia": "ペーパー",
   "appearance.theme.ink": "インク",
-  "author.notFound.hint": "この作者はまだ作品を登録していないか、リンクが正しくありません。"
+  "author.notFound.hint": "この作者はまだ作品を登録していないか、リンクが正しくありません。",
+  "dialog.cancel": "キャンセル",
+  "dialog.confirm": "OK",
+  "dialog.delete": "削除",
+  "dialog.leave": "移動する",
+  "card.copyLink": "このリンクをコピー"
 }

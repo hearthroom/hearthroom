@@ -186,5 +186,10 @@
   "appearance.theme.forest": "森林",
   "appearance.theme.sepia": "纸",
   "appearance.theme.ink": "墨",
-  "author.notFound.hint": "这位作者还没有登记任何作品，或链接有误。"
+  "author.notFound.hint": "这位作者还没有登记任何作品，或链接有误。",
+  "dialog.cancel": "取消",
+  "dialog.confirm": "确定",
+  "dialog.delete": "删除",
+  "dialog.leave": "离开",
+  "card.copyLink": "复制这个链接"
 }

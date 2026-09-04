@@ -186,5 +186,10 @@
   "appearance.theme.forest": "Forest",
   "appearance.theme.sepia": "Paper",
   "appearance.theme.ink": "Ink",
-  "author.notFound.hint": "This creator hasn’t listed any cards yet, or the link is wrong."
+  "author.notFound.hint": "This creator hasn’t listed any cards yet, or the link is wrong.",
+  "dialog.cancel": "Cancel",
+  "dialog.confirm": "OK",
+  "dialog.delete": "Delete",
+  "dialog.leave": "Leave",
+  "card.copyLink": "Copy this link"
 }

@@ -186,5 +186,10 @@
   "appearance.theme.forest": "포레스트",
   "appearance.theme.sepia": "페이퍼",
   "appearance.theme.ink": "잉크",
-  "author.notFound.hint": "이 작가는 아직 작품을 등록하지 않았거나 링크가 잘못되었습니다."
+  "author.notFound.hint": "이 작가는 아직 작품을 등록하지 않았거나 링크가 잘못되었습니다.",
+  "dialog.cancel": "취소",
+  "dialog.confirm": "확인",
+  "dialog.delete": "삭제",
+  "dialog.leave": "나가기",
+  "card.copyLink": "이 링크를 복사하세요"
 }
