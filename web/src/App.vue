@@ -13,39 +13,35 @@ const router = useRouter();
 
 onMounted(() => session.restore());
 
-/**
- * 搜尋放在頁首，全站都搜得到；結果一律落在榜單。
- * 在榜單上搜時保留目前的語區——搜尋不該把人從自己看得懂的那一區踢出去。
- */
+/** 搜尋放在頁首，全站都搜得到；結果一律落在榜單。 */
 const q = ref((route.query.q as string) ?? "");
 watch(() => route.query.q, (v) => { q.value = (v as string) ?? ""; });
 
 function search() {
-  const query: Record<string, string> = {};
   const term = q.value.trim();
-  if (term) query.q = term;
-  if (typeof route.query.zone === "string") query.zone = route.query.zone;
-  router.push({ path: lp("/"), query });
+  router.push({ path: lp("/"), query: term ? { q: term } : {} });
 }
 </script>
 
 <template>
-  <header class="masthead">
-    <div class="masthead__inner">
-      <RouterLink :to="lp('/')" class="wordmark">
-        <span class="wordmark__mark">✦</span>
-        <span class="wordmark__text display">{{ SITE.name }}</span>
+  <header class="header">
+    <div class="header__inner">
+      <RouterLink :to="lp('/')" class="brand" :aria-label="SITE.name">
+        <svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 3h14a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3h-7.5L7 21.5V18H5a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3z" />
+        </svg>
+        <span class="brand__name">{{ SITE.name }}</span>
       </RouterLink>
 
       <nav class="nav">
-        <RouterLink :to="lp('/')" :class="{ 'router-link-active': route.path === lp('/') }">{{ $t("nav.board") }}</RouterLink>
-        <RouterLink v-if="session.me" :to="lp('/mine')">{{ $t("nav.mine") }}</RouterLink>
+        <RouterLink :to="lp('/')" class="nav__item" :class="{ 'nav__item--on': route.path === lp('/') }">{{ $t("nav.board") }}</RouterLink>
+        <RouterLink v-if="session.me" :to="lp('/mine')" class="nav__item" active-class="nav__item--on">{{ $t("nav.mine") }}</RouterLink>
       </nav>
 
       <form class="search" role="search" @submit.prevent="search">
         <svg class="search__icon" viewBox="0 0 20 20" aria-hidden="true">
-          <circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.6" />
-          <path d="M12.8 12.8 17 17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          <circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.7" />
+          <path d="M12.8 12.8 17 17" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
         </svg>
         <input
           v-model="q"
@@ -59,17 +55,13 @@ function search() {
       <div class="account">
         <LocaleSwitch />
         <template v-if="session.me">
-          <RouterLink :to="lp(`/authors/${session.me.accountNumId}`)" class="account__me">
-            <img v-if="session.me.avatar" :src="session.me.avatar" alt="" />
-            <span>{{ session.me.nickName }}</span>
+          <RouterLink :to="lp(`/authors/${session.me.accountNumId}`)" class="me">
+            <img v-if="session.me.avatar" :src="session.me.avatar" alt="" class="me__face" />
+            <span class="me__name">{{ session.me.nickName }}</span>
           </RouterLink>
           <button class="btn btn--ghost btn--sm" @click="session.logout()">{{ $t("nav.logout") }}</button>
         </template>
-        <button
-          v-else-if="session.ready"
-          class="btn btn--primary btn--sm"
-          @click="session.login(route.fullPath)"
-        >
+        <button v-else-if="session.ready" class="btn btn--primary btn--sm" @click="session.login(route.fullPath)">
           {{ $t("nav.login") }}
         </button>
       </div>
@@ -78,8 +70,8 @@ function search() {
 
   <main><RouterView /></main>
 
-  <footer class="colophon">
-    <div class="colophon__inner">
+  <footer class="footer">
+    <div class="footer__inner">
       <p>{{ $t("footer.blurb") }}</p>
       <a v-if="SITE.repoUrl" :href="SITE.repoUrl" target="_blank" rel="noopener">{{ $t("footer.source") }} ↗</a>
     </div>
@@ -87,75 +79,70 @@ function search() {
 </template>
 
 <style scoped>
-.masthead {
+.header {
   position: sticky; top: 0; z-index: 30;
-  border-bottom: 1px solid var(--rule);
-  background: rgba(16, 14, 11, 0.86);
-  backdrop-filter: blur(16px) saturate(1.4);
-  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
 }
-.masthead__inner {
-  max-width: var(--page); margin: 0 auto; min-height: var(--masthead-h);
+.header__inner {
+  max-width: var(--page); margin: 0 auto; min-height: var(--header-h);
   padding: 0 var(--s-5);
   display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto;
-  align-items: center; gap: var(--s-6);
+  align-items: center; gap: var(--s-5);
 }
 
-.wordmark { display: inline-flex; align-items: baseline; gap: var(--s-2); }
-.wordmark__mark { color: var(--gold); font-size: 12px; transform: translateY(-2px); }
-.wordmark__text { font-size: 23px; letter-spacing: 0.01em; }
+.brand { display: inline-flex; align-items: center; gap: 8px; }
+.brand__mark { width: 24px; height: 24px; fill: var(--accent); }
+.brand__name { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
 
-.nav { display: flex; gap: var(--s-5); font-size: 14px; }
-.nav a { color: var(--text-faint); transition: color var(--dur) var(--ease); }
-.nav a:hover { color: var(--text-dim); }
-.nav a.router-link-active {
-  color: var(--text);
-  box-shadow: inset 0 -1px 0 0 var(--gold);
+.nav { display: flex; gap: 2px; }
+.nav__item {
+  display: inline-flex; align-items: center; height: 34px; padding: 0 12px;
+  border-radius: var(--r-pill);
+  font-size: 14px; font-weight: 500; color: var(--text-2);
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
+.nav__item:hover { color: var(--text); background: var(--surface-2); }
+.nav__item--on { color: var(--text); background: var(--surface-2); }
 
-/* 搜尋框置中、有上限：太寬會變成一條橫貫全頁的槽，視覺上把左右兩組東西隔開 */
-.search {
-  position: relative; justify-self: center; width: 100%; max-width: 420px;
-}
+.search { position: relative; justify-self: center; width: 100%; max-width: 440px; }
 .search__icon {
-  position: absolute; left: 14px; top: 50%; width: 15px; height: 15px;
-  transform: translateY(-50%); color: var(--text-faint); pointer-events: none;
+  position: absolute; left: 12px; top: 50%; width: 16px; height: 16px;
+  transform: translateY(-50%); color: var(--text-3); pointer-events: none;
 }
 .search__input {
-  width: 100%; height: 36px; padding: 0 var(--s-4) 0 38px;
-  font: inherit; font-size: 13.5px; color: var(--text);
-  background: var(--paper-sunken);
-  border: 1px solid var(--rule); border-radius: var(--r-pill);
-  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+  width: 100%; height: 38px; padding: 0 var(--s-4) 0 36px;
+  font: inherit; font-size: 14px; color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid transparent; border-radius: var(--r-pill);
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
-.search__input::placeholder { color: var(--text-faint); }
-.search__input:focus { outline: none; border-color: var(--gold-deep); background: var(--paper-raised); }
+.search__input::placeholder { color: var(--text-3); }
+.search__input:focus { outline: none; background: var(--surface); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .search__input::-webkit-search-cancel-button { -webkit-appearance: none; }
 
-.account { display: flex; align-items: center; gap: var(--s-3); }
-.account__me { display: inline-flex; align-items: center; gap: var(--s-2); font-size: 13px; color: var(--text-dim); }
-.account__me img { width: 26px; height: 26px; border-radius: var(--r-pill); }
-.account__me:hover { color: var(--text); }
+.account { display: flex; align-items: center; gap: var(--s-2); }
+.me { display: inline-flex; align-items: center; gap: 8px; padding: 4px 8px 4px 4px; border-radius: var(--r-pill); }
+.me:hover { background: var(--surface-2); }
+.me__face { width: 28px; height: 28px; border-radius: var(--r-pill); object-fit: cover; }
+.me__name { font-size: 13.5px; font-weight: 500; max-width: 10em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.colophon { border-top: 1px solid var(--rule); margin-top: var(--s-7); }
-.colophon__inner {
+.footer { border-top: 1px solid var(--border); margin-top: var(--s-7); }
+.footer__inner {
   max-width: var(--page); margin: 0 auto; padding: var(--s-5);
-  display: flex; flex-wrap: wrap; gap: var(--s-3); justify-content: space-between; align-items: baseline;
-  font-size: 12.5px; color: var(--text-faint);
+  display: flex; flex-wrap: wrap; gap: var(--s-3); justify-content: space-between;
+  font-size: 12.5px; color: var(--text-3);
 }
-.colophon__inner p { margin: 0; max-width: 62ch; }
-.colophon__inner a:hover { color: var(--text-dim); }
+.footer__inner a:hover { color: var(--text-2); }
 
 @media (max-width: 860px) {
-  /* 小螢幕：搜尋框退到第二行、佔滿；其餘三組擠在第一行 */
-  .masthead__inner {
-    grid-template-columns: auto 1fr auto; row-gap: 0; column-gap: var(--s-4);
-    padding-top: var(--s-2); padding-bottom: var(--s-2);
+  .header__inner {
+    grid-template-columns: auto 1fr auto; column-gap: var(--s-3);
+    padding: var(--s-2) var(--s-4);
   }
-  /* 明確指定行列：不指定的話搜尋框在 DOM 裡排在帳號區前面，會把它擠到第三行 */
   .account { grid-row: 1; grid-column: 3; }
   .search { grid-row: 2; grid-column: 1 / -1; max-width: none; margin-top: var(--s-2); }
-  .wordmark__text { font-size: 19px; }
-  .account__me span { display: none; }
+  .me__name { display: none; }
+  .nav__item { padding: 0 10px; }
 }
 </style>

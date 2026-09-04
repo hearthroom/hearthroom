@@ -9,8 +9,6 @@ defineProps<{
   /** 榜單模式：卡片帶名次。作者主頁這種非排名場景不給。 */
   ranked?: boolean;
   rankOffset?: number;
-  /** 第一張放大成封面（佔 2×2 格）。只在榜單第一頁——那才是「這一區的第一名」。 */
-  cover?: boolean;
   /** 跨語區的清單（作者主頁）在卡片上標語言而不是作者。 */
   showZone?: boolean;
   emptyTitle?: string;
@@ -20,29 +18,21 @@ defineProps<{
 
 <template>
   <!-- 骨架屏而不是遮罩 spinner：版面不跳動，也看得出接下來會出現什麼 -->
-  <div v-if="loading" class="wall">
-    <div
-      v-for="i in 12"
-      :key="i"
-      class="ghost"
-      :class="{ 'ghost--cover': cover && i === 1 }"
-      :style="{ animationDelay: `${i * 60}ms` }"
-    />
+  <div v-if="loading" class="grid">
+    <div v-for="i in 12" :key="i" class="ghost ghost--card" />
   </div>
 
-  <div v-else-if="!cards.length" class="empty">
-    <p class="empty__title display">{{ emptyTitle ?? $t("board.empty.title") }}</p>
+  <div v-else-if="!cards.length" class="empty panel">
+    <p class="empty__title">{{ emptyTitle ?? $t("board.empty.title") }}</p>
     <p class="empty__hint muted">{{ emptyHint ?? $t("board.empty.hint") }}</p>
   </div>
 
-  <div v-else class="wall">
+  <div v-else class="grid">
     <CardTile
       v-for="(card, i) in cards"
       :key="card.id"
       :card="card"
-      :index="i"
       :rank="ranked ? (rankOffset ?? 0) + i + 1 : undefined"
-      :cover="cover && i === 0"
       :show-zone="showZone"
       :show-trending="showTrending"
     />
@@ -50,31 +40,18 @@ defineProps<{
 </template>
 
 <style scoped>
-.wall {
+.grid {
   display: grid;
-  gap: var(--s-5) var(--s-4);
+  gap: var(--s-4);
   /*
-   * clamp 讓最小欄寬跟著視窗縮：手機上維持兩欄（單欄的巨型卡片在內容社群裡是反模式，
-   * 一屏只看得到一張就沒有「牆」的感覺了），桌機上是 172px 的海報密度。
+   * 手機兩欄、桌機 5～6 欄。184px 是海報＋兩行字讀起來舒服的最小寬度；
+   * 再窄，名字就得截斷，簡介一行放不下幾個字。
    */
-  grid-template-columns: repeat(auto-fill, minmax(clamp(140px, 22vw, 172px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(clamp(140px, 40vw, 184px), 1fr));
 }
+.ghost--card { aspect-ratio: 3 / 5; }
 
-.ghost {
-  aspect-ratio: 3 / 4.35;
-  border-radius: var(--r-md);
-  background: linear-gradient(100deg, var(--paper-raised) 30%, var(--rule) 48%, var(--paper-raised) 66%);
-  background-size: 300% 100%;
-  animation: sweep 1.5s var(--ease) infinite;
-}
-.ghost--cover { grid-column: span 2; grid-row: span 2; aspect-ratio: auto; }
-@keyframes sweep { from { background-position: 130% 0; } to { background-position: -30% 0; } }
-
-.empty {
-  padding: var(--s-8) 0;
-  border-top: 1px solid var(--rule);
-  text-align: center;
-}
-.empty__title { margin: 0 0 var(--s-2); font-size: 34px; color: var(--text-dim); }
-.empty__hint { margin: 0; font-size: 14px; }
+.empty { padding: var(--s-8) var(--s-5); text-align: center; }
+.empty__title { font-size: 16px; font-weight: 600; margin-bottom: var(--s-2); }
+.empty__hint { font-size: 13.5px; max-width: 40ch; margin: 0 auto; }
 </style>
