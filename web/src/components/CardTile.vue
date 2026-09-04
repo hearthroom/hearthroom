@@ -57,7 +57,12 @@ const delay = computed(() => `${Math.min(props.index ?? 0, 11) * 45}ms`);
 </template>
 
 <style scoped>
-.tile { display: block; }
+/*
+ * min-width: 0 不能省。grid item 預設是 min-width: auto——不允許縮到內容寬度以下，
+ * 於是裡面的 text-overflow: ellipsis 永遠不會觸發，一段長簡介就能把整格頂爆、
+ * 讓整頁出現橫向捲軸。實測 600px 的容器會被撐到 1261px。
+ */
+.tile { display: block; min-width: 0; }
 
 .tile__frame {
   position: relative;
@@ -114,7 +119,7 @@ const delay = computed(() => `${Math.min(props.index ?? 0, 11) * 45}ms`);
   padding-top: var(--s-2);
   font-size: 12px; color: var(--text-faint);
 }
-.tile__author { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile__author { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tile__num { font-variant-numeric: tabular-nums; flex: none; }
 
 @media (hover: none) {
