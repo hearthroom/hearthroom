@@ -17,10 +17,20 @@ const props = defineProps<{
 const { lp } = useLocalePath();
 const hue = computed(() => hueFrom(props.card.name));
 const initial = computed(() => [...props.card.name][0] ?? "?");
+const href = computed(() => lp(`/cards/${props.card.roleId}`));
+
+/** 卡片上只放兩個標籤，多的用 +N 帶過——標籤是給人掃的，不是給人讀的。 */
+const TAGS_SHOWN = 2;
+const tags = computed(() => props.card.tags.slice(0, TAGS_SHOWN));
+const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN));
 </script>
 
 <template>
-  <RouterLink :to="lp(`/cards/${card.roleId}`)" class="card rise">
+  <!--
+    整張卡都可以點，但標籤各自是連結——所以外層不是 <a>（連結不能套連結）。
+    名字的連結用 ::after 撐滿整張卡，標籤疊在它上面。
+  -->
+  <article class="card rise">
     <div class="card__art">
       <img v-if="card.avatarUrl" :src="card.avatarUrl" :alt="card.name" loading="lazy" />
       <div
@@ -35,8 +45,16 @@ const initial = computed(() => [...props.card.name][0] ?? "?");
     </div>
 
     <div class="card__body">
-      <h3 class="card__name">{{ card.name }}</h3>
+      <h3 class="card__name"><RouterLink :to="href" class="card__link">{{ card.name }}</RouterLink></h3>
       <p class="card__hook">{{ card.summary || $t("card.noSummary") }}</p>
+
+      <ul v-if="tags.length" class="card__tags">
+        <li v-for="tag in tags" :key="tag">
+          <RouterLink :to="{ path: lp('/'), query: { tag } }" class="tag">{{ tag }}</RouterLink>
+        </li>
+        <li v-if="moreTags" class="tag tag--more">+{{ moreTags }}</li>
+      </ul>
+
       <div class="card__meta">
         <span class="card__by">
           <template v-if="showZone">{{ zoneLabel(card.zone) }}</template>
@@ -54,50 +72,75 @@ const initial = computed(() => [...props.card.name][0] ?? "?");
         </span>
       </div>
     </div>
-  </RouterLink>
+  </article>
 </template>
 
 <style scoped>
 /* min-width: 0 不能省：grid item 預設 min-width: auto，名字一長就把整欄撐開 */
 .card {
+  position: relative;
   display: flex; flex-direction: column; min-width: 0;
   background: var(--surface);
-  border: 1px solid var(--border); border-radius: var(--r-md);
+  border-radius: var(--r-md);
+  /* 髮絲線用 box-shadow 而不是 border：不佔版面、圓角處也不會出現 1px 的斷差 */
+  box-shadow: 0 0 0 1px var(--line), var(--shadow-sm);
   overflow: hidden;
-  transition: box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease), border-color var(--dur) var(--ease);
+  transition: box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
-.card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); border-color: var(--border-strong); }
+.card:hover { box-shadow: 0 0 0 1px var(--line-strong), var(--shadow-md); transform: translateY(-3px); }
 
 .card__art { position: relative; aspect-ratio: 3 / 4; background: var(--surface-2); overflow: hidden; }
 .card__art img { width: 100%; height: 100%; object-fit: cover; transition: transform var(--dur-slow) var(--ease); }
-.card:hover .card__art img { transform: scale(1.03); }
+.card:hover .card__art img { transform: scale(1.04); }
+/* 圖片內緣一道極淡的線：淺色立繪的邊緣才不會跟白卡糊在一起 */
+.card__art::after { content: ""; position: absolute; inset: 0; box-shadow: inset 0 0 0 1px rgba(16, 16, 24, 0.05); pointer-events: none; }
 .card__void { display: grid; place-items: center; width: 100%; height: 100%; }
 .card__void span { font-size: 40px; font-weight: 600; color: rgba(255, 255, 255, 0.9); }
 
 .card__rank {
-  position: absolute; top: 8px; left: 8px;
+  position: absolute; top: 8px; left: 8px; z-index: 1;
   min-width: 22px; height: 22px; padding: 0 7px;
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: var(--r-pill);
-  background: rgba(20, 20, 28, 0.6); color: #fff;
+  background: rgba(20, 20, 28, 0.55); color: #fff;
   font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums;
-  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
 }
-.card__rank--1 { background: var(--gold); color: #3b2a00; }
-.card__rank--2 { background: var(--silver); color: #1f2429; }
-.card__rank--3 { background: var(--bronze); color: #3a2208; }
+.card__rank--1 { background: linear-gradient(180deg, #ffd35c, #f0a91a); color: #3b2a00; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 3px rgba(120, 80, 0, 0.35); }
+.card__rank--2 { background: linear-gradient(180deg, #d8dde3, #a6adb6); color: #1f2429; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 1px 3px rgba(40, 50, 60, 0.3); }
+.card__rank--3 { background: linear-gradient(180deg, #e2a878, #c27f45); color: #3a2208; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 3px rgba(90, 50, 10, 0.35); }
 
-.card__body { display: grid; gap: 4px; padding: 10px 12px 12px; }
-.card__name { font-size: 14.5px; font-weight: 600; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card__body { display: grid; gap: 5px; padding: 10px 12px 11px; }
+.card__name { font-size: 15px; font-weight: 600; line-height: 1.35; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 名字的連結撐滿整張卡；沒有 z-index 的東西都在它底下，標籤有 z-index 所以在它上面 */
+.card__link::after { content: ""; position: absolute; inset: 0; }
+.card__link:hover { color: var(--accent); }
 .card__hook {
   font-size: 12.5px; line-height: 1.5; color: var(--text-2);
   display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   /* 固定兩行高：一張沒簡介的卡不該讓整排的底線參差 */
   min-height: calc(12.5px * 1.5 * 2);
 }
+
+.card__tags { display: flex; gap: 4px; margin: 1px 0 0; padding: 0; list-style: none; overflow: hidden; }
+.tag {
+  position: relative; z-index: 1;
+  display: inline-flex; align-items: center; height: 20px; padding: 0 7px;
+  border-radius: 6px;
+  font-size: 11px; font-weight: 500; color: var(--text-2);
+  background: var(--surface-2);
+  max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+a.tag:hover { background: var(--accent-soft); color: var(--accent); }
+.tag--more { color: var(--text-3); padding: 0 5px; }
+
 .card__meta {
   display: flex; align-items: center; justify-content: space-between; gap: var(--s-2);
-  margin-top: 4px; font-size: 12px; color: var(--text-3);
+  margin-top: 3px; padding-top: 8px;
+  box-shadow: 0 -1px 0 var(--line);
+  font-size: 12px; color: var(--text-3);
 }
 .card__by { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
 .card__face { width: 16px; height: 16px; border-radius: var(--r-pill); object-fit: cover; flex: none; }

@@ -70,10 +70,9 @@ function search() {
 
   <main><RouterView /></main>
 
-  <footer class="footer">
+  <footer v-if="SITE.repoUrl" class="footer">
     <div class="footer__inner">
-      <p>{{ $t("footer.blurb") }}</p>
-      <a v-if="SITE.repoUrl" :href="SITE.repoUrl" target="_blank" rel="noopener">{{ $t("footer.source") }} ↗</a>
+      <a :href="SITE.repoUrl" target="_blank" rel="noopener">{{ $t("footer.source") }} ↗</a>
     </div>
   </footer>
 </template>
@@ -81,8 +80,11 @@ function search() {
 <style scoped>
 .header {
   position: sticky; top: 0; z-index: 30;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  /* 半透明加模糊：捲動時內容從底下滑過去，頁首有厚度而不是一條實心的橫桿 */
+  background: color-mix(in srgb, var(--surface) 84%, transparent);
+  backdrop-filter: blur(14px) saturate(1.5);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5);
+  box-shadow: 0 1px 0 var(--line);
 }
 .header__inner {
   max-width: var(--page); margin: 0 auto; min-height: var(--header-h);
@@ -128,11 +130,7 @@ function search() {
 .me__name { font-size: 13.5px; font-weight: 500; max-width: 10em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .footer { border-top: 1px solid var(--border); margin-top: var(--s-7); }
-.footer__inner {
-  max-width: var(--page); margin: 0 auto; padding: var(--s-5);
-  display: flex; flex-wrap: wrap; gap: var(--s-3); justify-content: space-between;
-  font-size: 12.5px; color: var(--text-3);
-}
+.footer__inner { max-width: var(--page); margin: 0 auto; padding: var(--s-5); font-size: 12.5px; color: var(--text-3); }
 .footer__inner a:hover { color: var(--text-2); }
 
 @media (max-width: 860px) {

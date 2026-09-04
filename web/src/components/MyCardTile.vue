@@ -53,7 +53,8 @@ const initial = computed(() => [...props.card.name][0] ?? "?");
 .card {
   display: flex; flex-direction: column; min-width: 0;
   background: var(--surface);
-  border: 1px solid var(--border); border-radius: var(--r-md);
+  border-radius: var(--r-md);
+  box-shadow: 0 0 0 1px var(--line), var(--shadow-sm);
   overflow: hidden;
 }
 .card__art { position: relative; display: block; aspect-ratio: 3 / 4; background: var(--surface-2); overflow: hidden; }
