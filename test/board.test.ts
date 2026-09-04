@@ -11,6 +11,8 @@ async function seed(f: {
   id: string;
   roleId?: string;
   zone?: "zh" | "en" | "ja" | "ko" | "all";
+  welcome?: string;
+  authorName?: string;
   authorNumId?: number;
   name?: string;
   nameEn?: string;
@@ -25,7 +27,9 @@ async function seed(f: {
   const r = role({
     roleId: f.roleId ?? `role-${f.id}`,
     zone: f.zone,
+    welcome: f.welcome,
     authorNumId: f.authorNumId,
+    authorName: f.authorName,
     name: f.name,
     nameEn: f.nameEn,
     nameJa: f.nameJa,
@@ -405,5 +409,75 @@ describe("語區", () => {
   it("回應帶 zone，前端才能在跨語區的清單上標語言", async () => {
     const { body } = await list("?zone=en");
     expect(body.items.map((i) => i.zone)).toEqual(["en", "all"]);
+  });
+});
+
+describe("搜尋：相關度與全文", () => {
+  beforeEach(async () => {
+    await seed({ id: "hot", name: "無關的熱門卡", talkNum: 9999, talkPrev: 0 });
+    await seed({ id: "once", name: "霧港", desc: "霧港偵探的故事", talkNum: 1 });
+    await seed({ id: "many", name: "霧港偵探", desc: "霧港偵探 霧港偵探 霧港偵探", tags: ["霧港偵探"], talkNum: 1 });
+    await seed({ id: "welcome", name: "別的名字", desc: "別的簡介", welcome: "你走進了霧港偵探事務所。", talkNum: 1 });
+  });
+
+  it("relevance 把最相關的排最前，熱門但無關的卡不會霸榜", async () => {
+    const { body } = await list("?q=霧港偵探&sort=relevance");
+    expect(ids(body)[0]).toBe("many");
+    expect(ids(body)).not.toContain("hot");
+  });
+
+  it("開場白也搜得到", async () => {
+    const { body } = await list("?q=偵探事務所");
+    expect(ids(body)).toEqual(["welcome"]);
+  });
+
+  it("zone=all 跨語區搜", async () => {
+    await seed({ id: "en", zone: "en", name: "霧港偵探 EN" });
+    expect(ids((await list("?q=霧港偵探&zone=zh")).body)).not.toContain("en");
+    expect(ids((await list("?q=霧港偵探&zone=all")).body)).toContain("en");
+  });
+});
+
+describe("熱門標籤", () => {
+  it("按出現次數排，只算這一區", async () => {
+    await seed({ id: "a", tags: ["推理", "民國"] });
+    await seed({ id: "b", tags: ["推理"] });
+    await seed({ id: "c", zone: "en", tags: ["mystery"] });
+    const res = await SELF.fetch("https://c.test/v1/tags?zone=zh");
+    const body = (await res.json()) as { items: { tag: string; n: number }[] };
+    expect(body.items).toEqual([{ tag: "推理", n: 2 }, { tag: "民國", n: 1 }]);
+  });
+});
+
+describe("作者榜", () => {
+  beforeEach(async () => {
+    await seed({ id: "a1", authorNumId: 1, authorName: "甲", talkNum: 100, talkPrev: 50 });
+    await seed({ id: "a2", authorNumId: 1, authorName: "甲", talkNum: 50, talkPrev: 50 });
+    await seed({ id: "b1", authorNumId: 2, authorName: "乙", talkNum: 500, talkPrev: 500 });
+    await seed({ id: "c1", authorNumId: 3, authorName: "丙", zone: "en", talkNum: 9999 });
+  });
+  const authors = async (q = "") => {
+    const res = await SELF.fetch(`https://c.test/v1/authors${q}`);
+    return ((await res.json()) as { items: { accountNumId: number; cardCount: number; talkTotal: number; trending: number }[] }).items;
+  };
+
+  it("預設按累積對話排，數字是登記在本站的作品加總", async () => {
+    const items = await authors();
+    expect(items.map((a) => [a.accountNumId, a.cardCount, a.talkTotal])).toEqual([[2, 1, 500], [1, 2, 150]]);
+  });
+
+  it("hot 按這個窗口的增量排", async () => {
+    const items = await authors("?sort=hot");
+    expect(items[0]!.accountNumId).toBe(1);
+    expect(items[0]!.trending).toBe(50);
+  });
+
+  it("只算這一區；zone=all 才把英文區的作者算進來", async () => {
+    expect((await authors()).map((a) => a.accountNumId)).not.toContain(3);
+    expect((await authors("?zone=all"))[0]!.accountNumId).toBe(3);
+  });
+
+  it("可以按名字搜", async () => {
+    expect((await authors("?q=乙")).map((a) => a.accountNumId)).toEqual([2]);
   });
 });

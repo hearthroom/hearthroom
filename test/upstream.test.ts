@@ -58,7 +58,11 @@ describe("白名單投影", () => {
     expect(serialized).not.toContain("internal-uuid");
     expect(serialized).not.toContain("作者的詳細設定");
     expect(serialized).not.toContain("破限詞");
-    expect(serialized).not.toContain("開場白");
+  });
+
+  it("開場白是公開的（訪客在角色頁就看得到），拿來當搜尋線索", () => {
+    expect(projectRole(mainSiteRole).welcome).toBe("開場白");
+    expect(buildSearchText(projectRole(mainSiteRole))).toContain("開場白");
   });
 
   it("四個語言版本各自保留", () => {

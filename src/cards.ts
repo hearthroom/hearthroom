@@ -64,7 +64,8 @@ export interface ListOptions {
   q?: string;
   tag?: string;
   authorNumId?: number;
-  sort: "hot" | "new" | "top";
+  /** relevance 只在有搜尋字時有意義；沒有搜尋字或走 LIKE 時退回 hot。 */
+  sort: "hot" | "new" | "top" | "relevance";
   limit: number;
   offset: number;
 }
@@ -86,6 +87,7 @@ export async function listCards(db: D1Database, opts: ListOptions) {
   const where: string[] = [];
   const binds: unknown[] = [];
   let from = "cards c";
+  let usingFts = false;
 
   if (opts.zone) {
     where.push("c.zone IN (?, 'all')");
@@ -93,6 +95,7 @@ export async function listCards(db: D1Database, opts: ListOptions) {
   }
   if (opts.q) {
     if ([...opts.q].length >= FTS_MIN_CHARS) {
+      usingFts = true;
       from = "cards_fts JOIN cards c ON c.rowid = cards_fts.rowid";
       where.push("cards_fts MATCH ?");
       binds.push(ftsPhrase(opts.q));
@@ -113,12 +116,15 @@ export async function listCards(db: D1Database, opts: ListOptions) {
   const whereSql = where.length ? where.join(" AND ") : "1=1";
   // hot 用「這個同步窗口的對話增量」，不是累積數——累積數等於 top，排出來永遠是老卡。
   // 三種排序都對應一個索引，沒有一種需要現算。
+  // 相關度是 FTS 的 bm25（越小越相關），再用熱度打破平手。LIKE 那條路沒有相關度可言。
   const orderBy =
     opts.sort === "new"
       ? "c.registered_at DESC, c.id DESC"
       : opts.sort === "top"
         ? "c.talk_num DESC, c.follow_num DESC"
-        : "c.hot_score DESC, c.registered_at DESC";
+        : opts.sort === "relevance" && usingFts
+          ? "bm25(cards_fts), c.talk_num DESC"
+          : "c.hot_score DESC, c.registered_at DESC";
 
   const filtered = Boolean(opts.q || opts.tag || opts.authorNumId !== undefined);
 
@@ -305,3 +311,68 @@ export async function registeredAmong(db: D1Database, roleIds: string[]): Promis
     .all<{ source_role_id: string }>();
   return new Set(rows.results.map((r) => r.source_role_id));
 }
+
+/**
+ * 這一區最常見的標籤。榜單用它做「按類型看」的篩選列——標籤是作者自己打的，
+ * 沒有固定分類表，所以「類型」就是大家實際在用的那些詞。
+ */
+export async function topTags(db: D1Database, zone: Zone | undefined, limit: number) {
+  const where = zone ? "WHERE c.zone IN (?, 'all')" : "";
+  const binds: unknown[] = zone ? [zone, limit] : [limit];
+  const rows = await db
+    .prepare(
+      `SELECT j.value AS tag, COUNT(*) AS n FROM cards c, json_each(c.tags) j ${where}
+       GROUP BY j.value ORDER BY n DESC, tag LIMIT ?`,
+    )
+    .bind(...binds)
+    .all<{ tag: string; n: number }>();
+  return rows.results;
+}
+
+export interface AuthorRow {
+  author_num_id: number;
+  author_name: string;
+  author_avatar: string;
+  card_count: number;
+  talk_total: number;
+  trending: number;
+  joined_at: number;
+}
+
+/**
+ * 作者榜：把這一區的卡按作者彙總。
+ * 數字都是他登記在本站的作品加總，不是他在來源那邊的全部——本站看不到、也不該看到其他的。
+ */
+export async function listAuthors(
+  db: D1Database,
+  opts: { zone?: Zone; q?: string; sort: "talk" | "cards" | "hot"; limit: number; offset: number },
+) {
+  const where: string[] = [];
+  const binds: unknown[] = [];
+  if (opts.zone) { where.push("zone IN (?, 'all')"); binds.push(opts.zone); }
+  if (opts.q) { where.push(`author_name LIKE ? ESCAPE '\\'`); binds.push(likeTerm(opts.q)); }
+  const orderBy =
+    opts.sort === "cards" ? "card_count DESC, talk_total DESC" : opts.sort === "hot" ? "trending DESC, talk_total DESC" : "talk_total DESC, card_count DESC";
+  const rows = await db
+    .prepare(
+      `SELECT author_num_id, MAX(author_name) AS author_name, MAX(author_avatar) AS author_avatar,
+              COUNT(*) AS card_count, SUM(talk_num) AS talk_total, SUM(MAX(hot_score, 0)) AS trending,
+              MIN(registered_at) AS joined_at
+       FROM cards ${where.length ? "WHERE " + where.join(" AND ") : ""}
+       GROUP BY author_num_id ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
+    )
+    .bind(...binds, opts.limit + 1, opts.offset)
+    .all<AuthorRow>();
+  const hasNext = rows.results.length > opts.limit;
+  return { rows: hasNext ? rows.results.slice(0, opts.limit) : rows.results, hasNext };
+}
+
+export const toAuthor = (a: AuthorRow) => ({
+  accountNumId: a.author_num_id,
+  name: a.author_name,
+  avatar: a.author_avatar,
+  cardCount: a.card_count,
+  talkTotal: a.talk_total ?? 0,
+  trending: a.trending ?? 0,
+  joinedAt: a.joined_at,
+});
