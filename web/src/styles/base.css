@@ -44,8 +44,8 @@ h1, h2, h3, p, dl, dd { margin: 0; }
 
 .panel {
   background: var(--surface);
-  border: 1px solid var(--border);
   border-radius: var(--r-lg);
+  box-shadow: 0 0 0 1px var(--line), var(--shadow-sm);
 }
 
 /* ---- 控件 ---------------------------------------------------------------- */
@@ -64,8 +64,12 @@ h1, h2, h3, p, dl, dd { margin: 0; }
 .btn:hover { background: var(--surface-2); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
-.btn--primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-.btn--primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn--primary {
+  background: var(--accent-grad); border-color: transparent; color: var(--on-accent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 2px rgba(233, 64, 95, 0.35);
+}
+.btn--primary:hover { filter: brightness(0.95); }
+.btn--primary:active { filter: brightness(0.9); }
 .btn--ghost { background: transparent; border-color: transparent; color: var(--text-2); }
 .btn--ghost:hover { background: var(--surface-2); color: var(--text); }
 .btn--danger:hover { border-color: var(--danger); color: var(--danger); background: transparent; }
@@ -101,7 +105,7 @@ select.input { height: 40px; }
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
 .seg__item:hover { color: var(--text); }
-.seg__item--on { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+.seg__item--on { background: var(--surface); color: var(--text); box-shadow: 0 0 0 1px var(--line), var(--shadow-sm); }
 
 .chip {
   display: inline-flex; align-items: center; gap: 4px;
