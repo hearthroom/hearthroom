@@ -19,7 +19,15 @@ export interface CommunityCard {
   syncedAt: number;
 }
 
-export interface CardPage { items: CommunityCard[]; total: number; limit: number; offset: number; sort: Sort }
+export interface CardPage {
+  items: CommunityCard[];
+  /** 有篩選且還有下一頁時為 null——精確總數在那種查詢下太貴，見服務端 listCards 的說明。 */
+  total: number | null;
+  hasNext: boolean;
+  limit: number;
+  offset: number;
+  sort: Sort;
+}
 export type Sort = "hot" | "new" | "top";
 
 export interface Author {
