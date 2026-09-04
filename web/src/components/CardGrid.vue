@@ -4,7 +4,9 @@ import type { CommunityCard } from "@/lib/types";
 
 defineProps<{
   cards: CommunityCard[];
+  /** 完全沒東西可畫時才是 loading（骨架屏）；手上有舊資料時用 busy，舊卡留在原地變淡 */
   loading?: boolean;
+  busy?: boolean;
   showTrending?: boolean;
   /** 榜單模式：卡片帶名次。作者主頁這種非排名場景不給。 */
   ranked?: boolean;
@@ -14,11 +16,14 @@ defineProps<{
   emptyTitle?: string;
   emptyHint?: string;
 }>();
+
+/** 首屏一排的張數上限：這幾張立刻載，其餘懶載入 */
+const EAGER = 6;
 </script>
 
 <template>
   <!-- 骨架屏而不是遮罩 spinner：版面不跳動，也看得出接下來會出現什麼 -->
-  <div v-if="loading" class="grid">
+  <div v-if="loading" class="grid" aria-hidden="true">
     <div v-for="i in 12" :key="i" class="ghost ghost--card" />
   </div>
 
@@ -27,7 +32,7 @@ defineProps<{
     <p class="empty__hint muted">{{ emptyHint ?? $t("board.empty.hint") }}</p>
   </div>
 
-  <div v-else class="grid">
+  <div v-else class="grid" :aria-busy="busy || undefined">
     <CardTile
       v-for="(card, i) in cards"
       :key="card.id"
@@ -35,6 +40,7 @@ defineProps<{
       :rank="ranked ? (rankOffset ?? 0) + i + 1 : undefined"
       :show-zone="showZone"
       :show-trending="showTrending"
+      :eager="i < EAGER"
     />
   </div>
 </template>

@@ -3,7 +3,7 @@ import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute } from "vue-router";
 import { createComment, deleteComment, fetchComments, fetchReplies, likeComment, type Comment } from "@/lib/api";
-import { relativeTime } from "@/lib/format";
+import { hueFrom, relativeTime } from "@/lib/format";
 import { contentLang } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
@@ -28,7 +28,8 @@ const submittedHidden = ref(false);
 /** 正在回覆哪一則（根評論或它底下的回覆）。 */
 const replyTo = ref<{ root: Comment; target: Comment } | null>(null);
 const replyDraft = ref("");
-const expanded = ref<Record<string, Comment[]>>({});
+/** 展開的回覆串：一頁一頁往下接，不是整包覆蓋 */
+const expanded = ref<Record<string, { replies: Comment[]; page: number; hasMore: boolean }>>({});
 
 const MAX = 500;
 
@@ -98,10 +99,14 @@ async function remove(c: Comment) {
 }
 
 async function showAllReplies(root: Comment) {
-  const res = await fetchReplies(props.roleId, root.commentId, 1, lang.value, (await tokenOrNull()) ?? undefined);
-  expanded.value[root.commentId] = res.replies;
+  const cur = expanded.value[root.commentId];
+  const page = cur ? cur.page + 1 : 1;
+  const res = await fetchReplies(props.roleId, root.commentId, page, lang.value, (await tokenOrNull()) ?? undefined);
+  const replies = cur ? [...cur.replies, ...res.replies] : res.replies;
+  expanded.value[root.commentId] = { replies, page, hasMore: replies.length < root.replyCount && res.replies.length > 0 };
 }
-const repliesOf = (root: Comment) => expanded.value[root.commentId] ?? root.replies ?? [];
+const repliesOf = (root: Comment) => expanded.value[root.commentId]?.replies ?? root.replies ?? [];
+const moreReplies = (root: Comment) => (expanded.value[root.commentId] ? expanded.value[root.commentId]!.hasMore : root.replyCount > repliesOf(root).length);
 
 watch([() => props.roleId, lang, () => session.me?.accountNumId], () => load(true), { immediate: true });
 </script>
@@ -121,8 +126,8 @@ watch([() => props.roleId, lang, () => session.me?.accountNumId], () => load(tru
     </div>
     <button v-else-if="session.ready" class="btn cmt__login" @click="session.login(route.fullPath)">{{ $t("comment.login") }}</button>
 
-    <p v-if="submittedHidden" class="notice">{{ $t("comment.submitted") }}</p>
-    <p v-if="error" class="notice notice--error">{{ error }}</p>
+    <p v-if="submittedHidden" class="notice" role="status">{{ $t("comment.submitted") }}</p>
+    <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
 
     <div v-if="loading && !comments.length" class="cmt__ghosts"><div v-for="i in 4" :key="i" class="ghost" /></div>
     <p v-else-if="!comments.length" class="cmt__empty muted">{{ $t("comment.empty") }}</p>
@@ -130,7 +135,7 @@ watch([() => props.roleId, lang, () => session.me?.accountNumId], () => load(tru
     <ul v-else class="cmt__list">
       <li v-for="c in comments" :key="c.commentId" class="cmt__item">
         <img v-if="c.accountAvatar" :src="c.accountAvatar" alt="" class="cmt__face" />
-        <span v-else class="cmt__face cmt__face--void">{{ [...(c.accountNickName || '?')][0] }}</span>
+        <span v-else class="cmt__face mono" :style="{ '--h': hueFrom(c.accountNickName || '') }">{{ [...(c.accountNickName || '?')][0] }}</span>
         <div class="cmt__body">
           <div class="cmt__head">
             <RouterLink v-if="c.accountNumId" :to="lp(`/authors/${c.accountNumId}`)" class="cmt__name">{{ c.accountNickName }}</RouterLink>
@@ -152,7 +157,7 @@ watch([() => props.roleId, lang, () => session.me?.accountNumId], () => load(tru
           <ul v-if="repliesOf(c).length" class="cmt__replies">
             <li v-for="r in repliesOf(c)" :key="r.commentId" class="cmt__reply">
               <img v-if="r.accountAvatar" :src="r.accountAvatar" alt="" class="cmt__face cmt__face--sm" />
-              <span v-else class="cmt__face cmt__face--sm cmt__face--void">{{ [...(r.accountNickName || '?')][0] }}</span>
+              <span v-else class="cmt__face cmt__face--sm mono" :style="{ '--h': hueFrom(r.accountNickName || '') }">{{ [...(r.accountNickName || '?')][0] }}</span>
               <div class="cmt__body">
                 <div class="cmt__head">
                   <span class="cmt__name">{{ r.accountNickName }}</span>
@@ -171,7 +176,7 @@ watch([() => props.roleId, lang, () => session.me?.accountNumId], () => load(tru
               </div>
             </li>
           </ul>
-          <button v-if="c.replyCount > repliesOf(c).length" class="cmt__more" @click="showAllReplies(c)">{{ $t("comment.viewReplies", { n: c.replyCount }) }}</button>
+          <button v-if="moreReplies(c)" class="cmt__more" @click="showAllReplies(c)">{{ expanded[c.commentId] ? $t("comment.loadMore") : $t("comment.viewReplies", { n: c.replyCount }) }}</button>
 
           <div v-if="replyTo?.root.commentId === c.commentId" class="cmt__box cmt__box--reply">
             <textarea v-model="replyDraft" class="input cmt__input" :maxlength="MAX" :placeholder="$t('comment.replyTo', { name: replyTo!.target.accountNickName })" rows="2" autofocus />
@@ -193,7 +198,8 @@ watch([() => props.roleId, lang, () => session.me?.accountNumId], () => load(tru
 .cmt__composer { display: flex; gap: var(--s-3); }
 .cmt__face { width: 36px; height: 36px; border-radius: 999px; object-fit: cover; flex: none; }
 .cmt__face--sm { width: 28px; height: 28px; }
-.cmt__face--void { display: grid; place-items: center; background: var(--surface-2); color: var(--text-2); font-size: 14px; font-weight: 600; }
+.cmt__face.mono { font-size: 14px; }
+.cmt__face--sm.mono { font-size: 12px; }
 .cmt__box { flex: 1; min-width: 0; display: grid; gap: var(--s-2); }
 .cmt__box--reply { margin-top: var(--s-3); }
 .cmt__input { resize: vertical; min-height: 64px; line-height: 1.6; padding: 10px 12px; }
@@ -210,20 +216,20 @@ watch([() => props.roleId, lang, () => session.me?.accountNumId], () => load(tru
 .cmt__body { flex: 1; min-width: 0; display: grid; gap: 4px; }
 .cmt__head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .cmt__name { font-size: 13.5px; font-weight: 600; }
-a.cmt__name:hover { color: var(--accent); }
-.cmt__badge { padding: 1px 6px; border-radius: 5px; font-size: 11px; font-weight: 600; background: var(--accent-soft); color: var(--accent); }
+a.cmt__name:hover { color: var(--accent-text); }
+.cmt__badge { padding: 1px 6px; border-radius: 5px; font-size: 11px; font-weight: 600; background: var(--accent-soft); color: var(--accent-text); }
 .cmt__badge--pin { background: var(--surface-2); color: var(--text-2); }
 .cmt__text { margin: 0; font-size: 14px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
-.cmt__to { color: var(--accent); }
+.cmt__to { color: var(--accent-text); }
 .cmt__actions { display: flex; gap: var(--s-3); margin-top: 2px; }
 .cmt__act { display: inline-flex; align-items: center; gap: 4px; padding: 2px 0; background: none; border: 0; font-size: 12.5px; color: var(--text-3); cursor: pointer; }
 .cmt__act svg { width: 14px; height: 14px; }
 .cmt__act:hover { color: var(--text); }
-.cmt__act.is-on { color: var(--accent); }
-.cmt__act.is-on svg path { fill: var(--accent); stroke: var(--accent); }
+.cmt__act.is-on { color: var(--accent-text); }
+.cmt__act.is-on svg path { fill: var(--accent-text); stroke: var(--accent-text); }
 .cmt__act--danger:hover { color: var(--danger); }
 .cmt__replies { margin-top: var(--s-2); gap: var(--s-3); }
 .cmt__reply { display: flex; gap: var(--s-2); }
-.cmt__more { width: fit-content; margin-top: 4px; padding: 0; background: none; border: 0; font-size: 12.5px; font-weight: 500; color: var(--accent); cursor: pointer; }
+.cmt__more { width: fit-content; margin-top: 4px; padding: 0; background: none; border: 0; font-size: 12.5px; font-weight: 500; color: var(--accent-text); cursor: pointer; }
 .cmt__load { justify-self: center; }
 </style>

@@ -91,13 +91,13 @@ async function toggle(card: MyCard) {
   }
 }
 
-function go(patch: Record<string, string | undefined>) {
+function go(patch: Record<string, string | undefined>, replace = false) {
   const query: Record<string, string> = { ...(route.query as Record<string, string>) };
   for (const [k, v] of Object.entries(patch)) {
     if (v === undefined || v === "all") delete query[k];
     else query[k] = v;
   }
-  router.push({ query });
+  router[replace ? "replace" : "push"]({ query });
 }
 
 watch(() => [session.me?.accountNumId, page.value, filter.value], () => load(), { immediate: true });
@@ -106,7 +106,8 @@ watch(() => route.query.fresh, (f) => {
   if (f !== "1") return;
   if (session.me) cache.invalidate(session.me.accountNumId);
   load({ fresh: true });
-  go({ fresh: undefined });
+  // replace 而不是 push：不然按返回會落回 ?fresh=1，又被推回來，永遠回不到編輯頁
+  go({ fresh: undefined }, true);
 });
 </script>
 
@@ -124,23 +125,22 @@ watch(() => route.query.fresh, (f) => {
       <RouterLink :to="lp('/create')" class="btn btn--primary">{{ $t("mine.create") }}</RouterLink>
     </header>
 
-    <div class="seg filters" role="tablist">
+    <div class="seg filters">
       <button
         v-for="f in ['all', 'listed', 'unlisted']"
         :key="f"
         class="seg__item"
         :class="{ 'seg__item--on': filter === f }"
-        role="tab"
-        :aria-selected="filter === f"
+        :aria-pressed="filter === f"
         @click="go({ filter: f, page: undefined })"
       >
         {{ $t(`mine.filter.${f}`) }}
       </button>
     </div>
 
-    <p v-if="error" class="notice notice--error">{{ error }}</p>
+    <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
 
-    <div v-if="loading" class="wall">
+    <div v-if="loading" class="wall" aria-hidden="true">
       <div v-for="i in 12" :key="i" class="ghost ghost--card" />
     </div>
 
@@ -151,7 +151,7 @@ watch(() => route.query.fresh, (f) => {
 
     <div v-else-if="!visible.length" class="empty panel"><p class="empty__title">{{ $t("mine.emptyFilter") }}</p></div>
 
-    <div v-else class="wall">
+    <div v-else class="wall" :aria-busy="revalidating || undefined">
       <MyCardTile
         v-for="card in visible"
         :key="card.roleId"
