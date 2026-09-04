@@ -143,3 +143,65 @@ describe("快取", () => {
     expect(res.headers.get("Cache-Control")).toContain("no-store");
   });
 });
+
+describe("篩選", () => {
+  /** 作者有 30 張卡、一頁 24 張；已登記的 3 張裡有 2 張落在第二頁。 */
+  beforeEach(async () => {
+    myRolesOnUpstream({
+      "alice-token": Array.from({ length: 30 }, (_, i) => ({ roleId: `a${i + 1}`, name: `卡 ${i + 1}` })),
+    });
+    for (const [id, roleId] of [["r1", "a1"], ["r2", "a25"], ["r3", "a26"]] as const) {
+      await env.DB.prepare(
+        `INSERT INTO cards (id, source_role_id, author_num_id, names, summaries, tags, search_text, registered_at, last_synced_at)
+         VALUES (?, ?, 10001, '{"zh":"登記過的"}', '{"zh":""}', '[]', '', 1, 1)`,
+      ).bind(id, roleId).run();
+    }
+  });
+
+  it("已登記列的是全部，不是這一頁裡的那幾張", async () => {
+    const { body } = await mine("?filter=listed");
+    expect(body.items.map((i: any) => i.roleId).sort()).toEqual(["a1", "a25", "a26"]);
+    expect(body.items.every((i: any) => i.registered)).toBe(true);
+  });
+
+  it("已登記那組不知道作者一共有幾張——那個數字只有上游有，這條路不問它", async () => {
+    const { body } = await mine("?filter=listed");
+    expect(body.total).toBeNull();
+    expect(body.registeredTotal).toBe(3);
+  });
+
+  it("已登記那組不必問上游", async () => {
+    upstreamCalls.length = 0;
+    await mine("?filter=listed");
+    expect(upstreamCalls).toHaveLength(0);
+  });
+
+  it("已登記的數字是全域的，翻到哪一頁都一樣", async () => {
+    const first = await mine();
+    const second = await mine("?page=2");
+    expect(first.body.registeredTotal).toBe(3);
+    expect(second.body.registeredTotal).toBe(3);
+    // 上游說作者一共有幾張，照樣是上游那個數字
+    expect(first.body.total).toBe(30);
+  });
+
+  it("未登記把這一頁裡已登記的挑掉", async () => {
+    const { body } = await mine("?filter=unlisted");
+    expect(body.items.map((i: any) => i.roleId)).not.toContain("a1");
+    expect(body.items).toHaveLength(23);
+  });
+
+  it("已登記可以翻頁", async () => {
+    const { body } = await mine("?filter=listed&pageSize=2");
+    expect(body.items).toHaveLength(2);
+    expect(body.hasNext).toBe(true);
+    const { body: p2 } = await mine("?filter=listed&pageSize=2&page=2");
+    expect(p2.items).toHaveLength(1);
+    expect(p2.hasNext).toBe(false);
+  });
+
+  it("認不得的 filter 當成全部", async () => {
+    const { body } = await mine("?filter=nonsense");
+    expect(body.items).toHaveLength(24);
+  });
+});

@@ -27,13 +27,13 @@ const filter = computed<Filter>(() => {
 });
 const page = computed(() => Math.max(1, Number(route.query.page ?? 1) || 1));
 
-const visible = computed<MyCard[]>(() => {
-  const items = data.value?.items ?? [];
-  if (filter.value === "listed") return items.filter((c) => c.registered);
-  if (filter.value === "unlisted") return items.filter((c) => !c.registered);
-  return items;
-});
-const listedCount = computed(() => (data.value?.items ?? []).filter((c) => c.registered).length);
+/**
+ * 篩選交給服務端做，不在這裡挑。
+ *
+ * 在手上這一頁挑，挑出來的是「這一頁裡已登記的」——作者有一百多張卡、一頁只抓
+ * 二十幾張時，那個結果跟「我登記了哪些」差很多，而畫面上看不出差在哪。
+ */
+const visible = computed<MyCard[]>(() => data.value?.items ?? []);
 
 /**
  * 先畫快取、同時在背景重抓。
@@ -46,7 +46,7 @@ async function load(opts: { fresh?: boolean } = {}) {
   const me = session.me;
   if (!me) return;
 
-  const cached = opts.fresh ? null : cache.read(me.accountNumId, page.value);
+  const cached = opts.fresh ? null : cache.read(me.accountNumId, page.value, filter.value);
   if (cached) {
     data.value = cached.page;
     loading.value = false;
@@ -59,9 +59,9 @@ async function load(opts: { fresh?: boolean } = {}) {
   try {
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
-    const fresh = await fetchMyCards(token, { page: page.value, fresh: opts.fresh });
+    const fresh = await fetchMyCards(token, { page: page.value, fresh: opts.fresh, filter: filter.value });
     data.value = fresh;
-    cache.write(me.accountNumId, page.value, fresh);
+    cache.write(me.accountNumId, page.value, filter.value, fresh);
   } catch (err) {
     // 有舊資料時，重抓失敗不該把畫面清空——顯示錯誤，但讓使用者繼續看得到東西。
     error.value = err instanceof Error ? err.message : t("state.loadFailed");
@@ -82,7 +82,7 @@ async function toggle(card: MyCard) {
     if (!token) throw new Error(t("auth.expired"));
     if (before) await unregisterCard(card.roleId, token);
     else await registerCard(card.roleId, token);
-    if (session.me) cache.write(session.me.accountNumId, page.value, data.value!);
+    if (session.me) cache.write(session.me.accountNumId, page.value, filter.value, data.value!);
   } catch (err) {
     card.registered = before;
     error.value = err instanceof Error ? err.message : t("state.actionFailed");
@@ -100,7 +100,7 @@ function go(patch: Record<string, string | undefined>) {
   router.push({ query });
 }
 
-watch(() => [session.me?.accountNumId, page.value], () => load(), { immediate: true });
+watch(() => [session.me?.accountNumId, page.value, filter.value], () => load(), { immediate: true });
 // 從建立／編輯頁回來時帶著 ?fresh=1：剛寫過的資料要繞過所有快取。
 watch(() => route.query.fresh, (f) => {
   if (f !== "1") return;
@@ -116,7 +116,8 @@ watch(() => route.query.fresh, (f) => {
       <div class="head__text">
         <h1 class="head__title display">{{ $t("mine.title") }}</h1>
         <p v-if="data" class="subtle">
-          {{ $t("mine.tally.all") }} {{ data.total }} · {{ $t("mine.tally.listed") }} {{ listedCount }}
+          <template v-if="data.total !== null">{{ $t("mine.tally.all") }} {{ data.total }} · </template>
+          {{ $t("mine.tally.listed") }} {{ data.registeredTotal }}
           <template v-if="revalidating"> · {{ $t("mine.syncing") }}</template>
         </p>
       </div>

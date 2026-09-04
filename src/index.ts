@@ -9,7 +9,7 @@ import {
   unregister,
   upsertCard,
 } from "./cards";
-import { loadMine } from "./mine";
+import { loadMine, type MineFilter } from "./mine";
 import { type Env, HttpError } from "./types";
 import { upstream, ZONES, type Zone } from "./upstream";
 
@@ -115,9 +115,11 @@ app.get("/v1/me/cards", async (c) => {
   const pageSize = Math.max(1, clamp(c.req.query("pageSize"), 24, 100));
   // 前端改過卡之後會帶 fresh=1：它知道自己剛寫過，比任何 TTL 都準。
   const fresh = c.req.query("fresh") === "1";
+  const filterParam = c.req.query("filter");
+  const filter: MineFilter = filterParam === "listed" || filterParam === "unlisted" ? filterParam : "all";
 
   const me = await upstream.fetchMe(c.env, bearer);
-  const { body, source } = await loadMine(c.env, bearer, me.accountNumId, { page, pageSize, fresh });
+  const { body, source } = await loadMine(c.env, bearer, me.accountNumId, { page, pageSize, fresh, filter });
 
   c.header("X-Cache", source);
   // 這是私人資料：可以放進使用者自己的瀏覽器，但任何共用快取都不准碰。

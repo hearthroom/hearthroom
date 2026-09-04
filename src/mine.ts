@@ -1,4 +1,4 @@
-import { registeredAmong } from "./cards";
+import { countByAuthor, listCards, toCard, registeredAmong } from "./cards";
 import type { Env } from "./types";
 import { type MyRole, upstream } from "./upstream";
 
@@ -37,11 +37,17 @@ const cacheKey = (accountNumId: number, page: number, pageSize: number) =>
 
 export interface MinePage {
   items: (MyRole & { registered: boolean })[];
-  total: number;
+  /** 作者一共有幾張卡。這個數字只有上游知道，「已登記」那條路不問上游，所以是 null。 */
+  total: number | null;
+  /** 已登記幾張。**全域**的數字，不是這一頁數出來的——見 countByAuthor。 */
+  registeredTotal: number;
   page: number;
   pageSize: number;
   hasNext: boolean;
 }
+
+/** 要看哪一組：全部、已登記、還沒登記。 */
+export type MineFilter = "all" | "listed" | "unlisted";
 
 export interface MineResult {
   body: MinePage;
@@ -53,8 +59,45 @@ export async function loadMine(
   env: Env,
   bearer: string,
   accountNumId: number,
-  opts: { page: number; pageSize: number; fresh: boolean },
+  opts: { page: number; pageSize: number; fresh: boolean; filter: MineFilter },
 ): Promise<MineResult> {
+  const registeredTotal = await countByAuthor(env.DB, accountNumId);
+
+  // 「已登記」整組直接從本站的庫出：那是完整的一組，翻頁也對，而且不必問上游。
+  // 走上游那條路的話，篩的只會是「這一頁裡已登記的」——作者卡多的時候差很多。
+  if (opts.filter === "listed") {
+    const { rows, hasNext } = await listCards(env.DB, {
+      authorNumId: accountNumId,
+      sort: "new",
+      limit: opts.pageSize,
+      offset: (opts.page - 1) * opts.pageSize,
+    });
+    return {
+      source: "bypass",
+      body: {
+        items: rows.map((row) => {
+          const card = toCard(row, "zh");
+          return {
+            roleId: card.roleId,
+            zone: card.zone as MyRole["zone"],
+            name: card.name,
+            summary: card.summary,
+            avatarUrl: card.avatarUrl,
+            // 上游的可見性不在本站的庫裡，而畫面上也不顯示它。
+            visibility: "",
+            talkNum: card.talkNum,
+            registered: true,
+          };
+        }),
+        total: null,
+        registeredTotal,
+        page: opts.page,
+        pageSize: opts.pageSize,
+        hasNext,
+      },
+    };
+  }
+
   const key = cacheKey(accountNumId, opts.page, opts.pageSize);
   const cache = await caches.open(mineCache.namespace);
 
@@ -83,12 +126,18 @@ export async function loadMine(
   }
 
   const registered = await registeredAmong(env.DB, roles.items.map((r) => r.roleId));
+  const items = roles.items
+    .map((r) => ({ ...r, registered: registered.has(r.roleId) }))
+    // 「還沒登記」是把這一頁裡已登記的挑掉。已登記的那組另有完整來源（見上面），
+    // 這一組沒有——要全域篩就得把作者所有的頁都抓回來，每次看一頁都付那個代價不值得。
+    .filter((r) => (opts.filter === "unlisted" ? !r.registered : true));
 
   return {
     source,
     body: {
-      items: roles.items.map((r) => ({ ...r, registered: registered.has(r.roleId) })),
+      items,
       total: roles.total,
+      registeredTotal,
       page: opts.page,
       pageSize: opts.pageSize,
       hasNext: roles.hasNext,
