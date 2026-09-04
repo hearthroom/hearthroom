@@ -1,0 +1,144 @@
+import { Hono } from "hono";
+import {
+  applySync,
+  dueForSync,
+  getAuthor,
+  getCard,
+  listCards,
+  toCard,
+  unregister,
+  upsertCard,
+} from "./cards";
+import { type Env, HttpError } from "./types";
+import { upstream } from "./upstream";
+
+const app = new Hono<{ Bindings: Env }>();
+
+app.onError((err, c) => {
+  if (err instanceof HttpError) return c.json({ error: err.message }, err.status);
+  console.error("unhandled error", err);
+  return c.json({ error: "internal error" }, 500);
+});
+
+const lang = (c: { req: { query: (k: string) => string | undefined; header: (k: string) => string | undefined } }) =>
+  c.req.query("lang") || c.req.header("Accept-Language")?.split(",")[0] || "zh";
+
+const clamp = (raw: string | undefined, fallback: number, max: number) => {
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? Math.min(Math.floor(n), max) : fallback;
+};
+
+/** 轉發作者自己的 token 問上游「你是誰」。用完即棄：不落庫、不進日誌、不進快取。 */
+async function requireAuthor(c: { env: Env; req: { header: (k: string) => string | undefined } }) {
+  const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1];
+  if (!bearer) throw new HttpError(401, "missing bearer token");
+  return await upstream.fetchMe(c.env, bearer);
+}
+
+app.get("/v1/health", (c) => c.json({ ok: true }));
+
+/** 榜單與搜尋。匿名可讀，只回 listed。 */
+app.get("/v1/cards", async (c) => {
+  const sortParam = c.req.query("sort");
+  const sort = sortParam === "new" || sortParam === "top" ? sortParam : "hot";
+  const offset = clamp(c.req.query("offset"), 0, 10_000);
+  const limit = Math.max(1, clamp(c.req.query("limit"), 24, 100));
+  const author = c.req.query("author");
+
+  const { rows, total } = await listCards(c.env.DB, {
+    q: c.req.query("q")?.trim() || undefined,
+    tag: c.req.query("tag")?.trim() || undefined,
+    authorNumId: author ? Number(author) : undefined,
+    sort,
+    limit,
+    offset,
+  });
+  const l = lang(c);
+  return c.json({ items: rows.map((r) => toCard(r, l)), total, limit, offset, sort });
+});
+
+app.get("/v1/cards/:id", async (c) => {
+  const row = await getCard(c.env.DB, c.req.param("id"));
+  if (!row) throw new HttpError(404, "card not found");
+  return c.json(toCard(row, lang(c)));
+});
+
+/** 作者主頁。這裡只認得他登記過的卡——本站看不到、也不該看到他的其他作品。 */
+app.get("/v1/authors/:accountNumId", async (c) => {
+  const id = Number(c.req.param("accountNumId"));
+  if (!Number.isSafeInteger(id) || id <= 0) throw new HttpError(400, "invalid author id");
+  const author = await getAuthor(c.env.DB, id);
+  if (!author) throw new HttpError(404, "author has no registered cards");
+  return c.json({
+    accountNumId: author.author_num_id,
+    name: author.author_name,
+    avatar: author.author_avatar,
+    cardCount: author.card_count,
+    talkTotal: author.talk_total ?? 0,
+    joinedAt: author.joined_at,
+  });
+});
+
+/**
+ * 登記一張卡。
+ *
+ * 作者只送 roleId，內容一概不收——先確認這張卡真是他的，再由公開資料填滿所有欄位。
+ *
+ * 為什麼非得問上游一次：「這張卡是我寫的」這個事實只存在於上游，本地怎麼算都變不
+ * 出來，任何在客戶端推導的方案都可偽造。但這不需要特權，轉發使用者自己授權的
+ * token 就夠。
+ */
+app.post("/v1/cards", async (c) => {
+  const me = await requireAuthor(c);
+  const body = (await c.req.json().catch(() => ({}))) as { roleId?: unknown };
+  const roleId = typeof body.roleId === "string" ? body.roleId.trim() : "";
+  if (!roleId) throw new HttpError(400, "roleId is required");
+
+  const role = await upstream.fetchRole(c.env, roleId);
+  if (role.authorNumId !== me.accountNumId) throw new HttpError(403, "not the author of this card");
+
+  const { id, created } = await upsertCard(c.env.DB, role, Date.now());
+  const row = await getCard(c.env.DB, id);
+  return c.json(row ? toCard(row, lang(c)) : { id }, created ? 201 : 200);
+});
+
+/** 作者自己撤銷登記。這是作品離開榜單的唯一途徑。 */
+app.delete("/v1/cards/:id", async (c) => {
+  const me = await requireAuthor(c);
+  await unregister(c.env.DB, c.req.param("id"), me.accountNumId);
+  return c.body(null, 204);
+});
+
+/**
+ * 每小時同步一批：名稱、封面、作者資料與熱度信號都重新拉一次。
+ * 作者在上游改了卡或換了圖，這裡下一輪自動跟上，不必回來重新登記。
+ */
+async function syncBatch(env: Env): Promise<{ ok: number; failed: number }> {
+  const batch = await dueForSync(env.DB, Math.max(1, Number(env.SYNC_BATCH_SIZE) || 50));
+  let ok = 0;
+  let failed = 0;
+  const now = Date.now();
+  for (const row of batch) {
+    try {
+      const role = await upstream.fetchRole(env, row.source_role_id);
+      await applySync(env.DB, row.id, row.talk_num, role, now);
+      ok++;
+    } catch (err) {
+      // 單張卡失敗不能拖垮整批（上游可能剛好在重啟）。下一輪它仍排在最前面。
+      // 讀不到一律當成暫時性的（服務重啟、網路抖動都會這樣）：保留，下一輪重試。
+      // 不因為一次讀不到就刪掉作者的登記——那個代價遠大於榜單短暫顯示舊資料。
+      failed++;
+      console.error("sync failed", { roleId: row.source_role_id, error: String(err) });
+    }
+  }
+  return { ok, failed };
+}
+
+export default {
+  fetch: app.fetch,
+  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(
+      syncBatch(env).then((r) => console.log("sync done", r)),
+    );
+  },
+};
