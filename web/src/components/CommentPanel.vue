@@ -72,9 +72,16 @@ async function submit(root?: Comment, target?: Comment) {
     // 審核中的留言列表裡看不到——說一聲，不然像是沒送出去
     let visible = comments.value.some((c) => c.commentId === created.commentId || c.replies?.some((r) => r.commentId === created.commentId));
     if (root && !visible) {
-      // 列表裡的回覆預覽只放讚數前幾則；新回覆零讚擠不進去，不代表沒過審，翻回覆串本身再判
+      // 列表裡的回覆預覽只放讚數前幾則；新回覆零讚擠不進去，不代表沒過審，翻回覆串本身再判。
+      // 根評論已經不在第一頁的話，判不出來——那就不下「審核中」的結論
       const fresh = comments.value.find((c) => c.commentId === root.commentId);
-      if (fresh) { await showAllReplies(fresh); visible = repliesOf(fresh).some((r) => r.commentId === created.commentId); }
+      if (!fresh) visible = true;
+      else {
+        do {
+          await showAllReplies(fresh);
+          visible = repliesOf(fresh).some((r) => r.commentId === created.commentId);
+        } while (!visible && expanded.value[fresh.commentId]?.hasMore);
+      }
     }
     submittedHidden.value = !visible;
   } catch (err) {
