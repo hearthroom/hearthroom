@@ -149,6 +149,19 @@ Workers Analytics Engine + Workers Logs + 內建 request analytics。
 `result`（ok/not_found/upstream_error）、`route` 與 `cache`（hit/miss/bypass）；
 **roleId、accountNumId、查詢字串一律不准進標籤或日誌**。
 
+## 同步
+
+每小時一輪，每輪最多 `SYNC_BATCH_SIZE`（50）張，抓取並發上限 `SYNC_CONCURRENCY`（6）。
+
+兩個都不是隨手設的：串行抓取的總時間隨卡量線性成長，撞到 Worker 的執行時間上限之後，
+那一批後面的卡整輪都不會同步——而且不會報錯，只是榜單悄悄停在舊值。並發上限壓在
+個位數是因為目標是「明顯更快」，不是把上游打滿。
+
+寫入是整批一次 `db.batch()` 而不是邊抓邊寫：D1 是單寫者，一筆一個往返的話寫入會蓋掉
+並發抓取的收益。本地實測 30 張 × 20ms 延遲：串行下限 600ms、只並發抓取 381ms、
+再把寫入批起來 124ms（4.8x）。代價是整批一起成功或一起失敗，對同步可以接受——
+下一輪本來就會重跑。
+
 ## 已知天花板
 
 - 分頁是 `LIMIT/OFFSET`，深分頁會變慢。

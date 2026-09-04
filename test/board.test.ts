@@ -2,6 +2,8 @@ import { SELF, createScheduledController, createExecutionContext, env, waitOnExe
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import worker from "../src/index";
 import { buildSearchText } from "../src/upstream";
+import { HttpError } from "../src/types";
+import { upstream } from "../src/upstream";
 import { mainSiteDown, resetDb, restoreUpstream, role, rolesOnMainSite } from "./helpers";
 
 /** 直接寫庫，才能精確控制註冊時間與趨勢窗口。 */
@@ -47,7 +49,7 @@ async function seed(f: {
 
 const list = async (query = "") => {
   const res = await SELF.fetch(`https://c.test/v1/cards${query}`);
-  return { status: res.status, body: (await res.json()) as { items: any[]; total: number } };
+  return { status: res.status, body: (await res.json()) as { items: any[]; total: number | null; hasNext: boolean } };
 };
 const ids = (b: { items: any[] }) => b.items.map((i) => i.id);
 
@@ -293,5 +295,72 @@ describe("hot_score 衍生欄位", () => {
     await seed({ id: "cold", talkNum: 50_000, talkPrev: 50_000 });
     await seed({ id: "rising", talkNum: 900, talkPrev: 400 });
     expect((await list("?sort=hot")).body.items.map((i: any) => i.id)).toEqual(["rising", "cold"]);
+  });
+});
+
+describe("同步並發", () => {
+  /** 換掉上游讀取，讓它可以觀測同時有幾個請求在飛，並且慢到看得出串／並行的差別。 */
+  function trackingUpstream(delayMs = 5) {
+    const state = { inFlight: 0, peak: 0, done: 0 };
+    upstream.fetchRole = async (_env, roleId) => {
+      state.inFlight++;
+      state.peak = Math.max(state.peak, state.inFlight);
+      await new Promise((r) => setTimeout(r, delayMs));
+      state.inFlight--;
+      state.done++;
+      if (roleId === "role-bad") throw new HttpError(502, "upstream boom");
+      return role({ roleId, name: `同步過的 ${roleId}` });
+    };
+    return state;
+  }
+
+  async function runSync() {
+    const ctx = createExecutionContext();
+    await worker.scheduled(createScheduledController(), env, ctx);
+    await waitOnExecutionContext(ctx);
+  }
+
+  it("同時飛在天上的請求不只一個，也不超過上限", async () => {
+    for (let i = 0; i < 20; i++) await seed({ id: `s${i}`, roleId: `role-${i}` });
+    const state = trackingUpstream();
+
+    await runSync();
+
+    expect(state.done).toBe(20);
+    expect(state.peak).toBeGreaterThan(1);
+    // 上限來自 wrangler.toml 的 SYNC_CONCURRENCY，刻意壓在個位數：不是把上游打滿。
+    expect(state.peak).toBeLessThanOrEqual(Number(env.SYNC_CONCURRENCY));
+  });
+
+  it("每一筆都會被處理到，不會因為並發而漏掉", async () => {
+    for (let i = 0; i < 15; i++) await seed({ id: `s${i}`, roleId: `role-${i}`, name: "舊名字" });
+    trackingUpstream(1);
+
+    await runSync();
+
+    const rows = await env.DB.prepare("SELECT names FROM cards").all();
+    expect(rows.results).toHaveLength(15);
+    expect(rows.results.every((r: any) => r.names.includes("同步過的"))).toBe(true);
+  });
+
+  it("中間有一筆失敗，其餘照樣完成", async () => {
+    await seed({ id: "good1", roleId: "role-1" });
+    await seed({ id: "bad", roleId: "role-bad", name: "讀不到" });
+    await seed({ id: "good2", roleId: "role-2" });
+    trackingUpstream(1);
+
+    await runSync();
+
+    const names = (await list()).body.items.map((i: any) => i.name).sort();
+    expect(names.filter((n: string) => n.startsWith("同步過的"))).toHaveLength(2);
+    // 失敗的那張維持原樣留在榜上，下一輪重試。
+    expect(names).toContain("讀不到");
+  });
+
+  it("批次比並發上限小時不會開多餘的工作者", async () => {
+    await seed({ id: "only", roleId: "role-1" });
+    const state = trackingUpstream();
+    await runSync();
+    expect(state.peak).toBe(1);
   });
 });
