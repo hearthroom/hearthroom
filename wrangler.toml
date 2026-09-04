@@ -23,6 +23,8 @@ run_worker_first = ["/v1/*"]
 LUNATALK_API_BASE = "https://api.lunatalk.ai"
 # 每輪排程同步幾張卡。D1 單次請求有時間預算，別一次拉太多。
 SYNC_BATCH_SIZE = "50"
+# 同步的並發上限。目標是明顯更快，不是把上游打滿——個位數就夠。
+SYNC_CONCURRENCY = "6"
 
 [[d1_databases]]
 binding = "DB"

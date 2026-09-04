@@ -236,9 +236,14 @@ export async function dueForSync(db: D1Database, limit: number) {
   return rows.results;
 }
 
-/** 同步回寫：把上一輪的 talk_num 挪進 prev，趨勢窗口因此等於一個同步周期。 */
-export async function applySync(db: D1Database, id: string, prevTalkNum: number, role: UpstreamRole, now: number) {
-  await db
+/**
+ * 同步回寫的語句：把上一輪的 talk_num 挪進 prev，趨勢窗口因此等於一個同步周期。
+ *
+ * 回傳語句而不是直接執行，呼叫端才能把整批塞進一次 db.batch()——D1 是單寫者，
+ * 一筆一個往返的話寫入會變成整個同步的瓶頸（並發抓取反而幫不上忙）。
+ */
+export function syncStatement(db: D1Database, id: string, prevTalkNum: number, role: UpstreamRole, now: number) {
+  return db
     .prepare(
       `UPDATE cards SET author_name=?, author_avatar=?, names=?, summaries=?, avatar_url=?, background_url=?,
          slug=?, tags=?, talk_num=?, follow_num=?, search_text=?, talk_num_prev=?, last_synced_at=?
@@ -259,8 +264,7 @@ export async function applySync(db: D1Database, id: string, prevTalkNum: number,
       prevTalkNum,
       now,
       id,
-    )
-    .run();
+    );
 }
 
 

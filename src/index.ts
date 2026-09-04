@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import {
-  applySync,
+  syncStatement,
   dueForSync,
   getAuthor,
   getCard,
@@ -167,18 +167,46 @@ app.delete("/v1/cards/:id", async (c) => {
 });
 
 /**
+ * 有界並發。
+ *
+ * 開 limit 個工作者共用一個游標，各自取下一筆做完再取——所以慢的那幾筆不會拖住
+ * 其他人，總時間趨近「總量 ÷ 並發數」而不是總量的線性和。
+ *
+ * 游標的 cursor++ 在 JS 的單執行緒事件迴圈裡是原子的，不需要鎖。
+ */
+async function pooled<T>(items: T[], limit: number, work: (item: T) => Promise<void>): Promise<void> {
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      await work(items[cursor++]!);
+    }
+  });
+  await Promise.all(workers);
+}
+
+/**
  * 每小時同步一批：名稱、封面、作者資料與熱度信號都重新拉一次。
  * 作者在上游改了卡或換了圖，這裡下一輪自動跟上，不必回來重新登記。
+ *
+ * 並發而不是串行：每張卡要一次跨網域往返，串起來跑的話總時間隨卡量線性成長，
+ * 撞到 Worker 的執行時間上限之後，那一批後面的卡整輪都不會同步——而且不會報錯，
+ * 只是榜單悄悄停在舊值。並發上限刻意壓在個位數：目標是「明顯更快」，
+ * 不是把上游打滿。
  */
-async function syncBatch(env: Env): Promise<{ ok: number; failed: number }> {
+async function syncBatch(env: Env): Promise<{ ok: number; failed: number; ms: number }> {
+  const started = Date.now();
   const batch = await dueForSync(env.DB, Math.max(1, Number(env.SYNC_BATCH_SIZE) || 50));
+  const concurrency = Math.max(1, Number(env.SYNC_CONCURRENCY) || 6);
   let ok = 0;
   let failed = 0;
   const now = Date.now();
-  for (const row of batch) {
+
+  const writes: D1PreparedStatement[] = [];
+
+  await pooled(batch, concurrency, async (row) => {
     try {
       const role = await upstream.fetchRole(env, row.source_role_id);
-      await applySync(env.DB, row.id, row.talk_num, role, now);
+      writes.push(syncStatement(env.DB, row.id, row.talk_num, role, now));
       ok++;
     } catch (err) {
       // 單張卡失敗不能拖垮整批（上游可能剛好在重啟）。下一輪它仍排在最前面。
@@ -187,8 +215,13 @@ async function syncBatch(env: Env): Promise<{ ok: number; failed: number }> {
       failed++;
       console.error("sync failed", { roleId: row.source_role_id, error: String(err) });
     }
-  }
-  return { ok, failed };
+  });
+
+  // 一次寫完而不是邊抓邊寫：D1 是單寫者，一筆一個往返的話寫入會蓋掉並發抓取的收益。
+  // 代價是整批一起成功或一起失敗——對同步來說可以接受，下一輪本來就會重跑。
+  if (writes.length) await env.DB.batch(writes);
+
+  return { ok, failed, ms: Date.now() - started };
 }
 
 export default {
