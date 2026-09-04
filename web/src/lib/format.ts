@@ -51,3 +51,16 @@ export function dateTime(input: string | number): string {
 export function dateOnly(seconds: number): string {
   return new Intl.DateTimeFormat(locale(), { dateStyle: "medium" }).format(seconds * 1000);
 }
+
+/**
+ * 開場白這類文案原本是給對話用的：帶標記語法與 {{char}} / {{user}} 佔位符。
+ * 主頁只展示，所以剝掉標記、把佔位符換成名字。
+ */
+export function plainText(raw: string, charName: string, userName: string): string {
+  return raw
+    .replace(/<[^>]+>/g, "")
+    .replace(/\{\{\s*char\s*\}\}/gi, charName)
+    .replace(/\{\{\s*user\s*\}\}/gi, userName)
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
