@@ -13,6 +13,6 @@ import { RouterLink } from "vue-router";
 
 <style scoped>
 .lost { padding-top: var(--s-8); }
-h1 { margin: var(--s-2) 0 var(--s-3); font-size: clamp(34px, 6vw, 52px); }
+h1 { margin: 2px 0 var(--s-2); font-size: 24px; }
 h1 + .muted { margin: 0 0 var(--s-6); }
 </style>

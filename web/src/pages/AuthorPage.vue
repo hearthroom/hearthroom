@@ -7,7 +7,6 @@ import { fetchAuthor, fetchBoard } from "@/lib/api";
 import { compact, relativeTime } from "@/lib/format";
 import { contentLang, pageTitle } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
-
 import type { Author, CommunityCard } from "@/lib/types";
 
 const route = useRoute();
@@ -43,17 +42,18 @@ watch([() => route.params.accountNumId, locale], load, { immediate: true });
   <div class="page">
     <p v-if="error" class="notice notice--error">{{ error }}</p>
 
-    <header v-else-if="author" class="who rise">
+    <header v-else-if="author" class="who panel rise">
       <img v-if="author.avatar" :src="author.avatar" :alt="author.name" class="who__face" />
+      <div v-else class="who__face who__face--void">{{ [...author.name][0] }}</div>
       <div class="who__text">
         <p class="eyebrow">{{ $t("author.eyebrow") }}</p>
         <h1 class="who__name display">{{ author.name }}</h1>
-        <dl class="who__stats">
-          <div><dt>{{ $t("author.stat.cards") }}</dt><dd>{{ author.cardCount }}</dd></div>
-          <div><dt>{{ $t("author.stat.talk") }}</dt><dd>{{ compact(author.talkTotal) }}</dd></div>
-          <div><dt>{{ $t("author.stat.joined") }}</dt><dd>{{ relativeTime(author.joinedAt) }}</dd></div>
-        </dl>
       </div>
+      <dl class="who__stats">
+        <div class="stat"><dt>{{ $t("author.stat.cards") }}</dt><dd>{{ author.cardCount }}</dd></div>
+        <div class="stat"><dt>{{ $t("author.stat.talk") }}</dt><dd>{{ compact(author.talkTotal) }}</dd></div>
+        <div class="stat"><dt>{{ $t("author.stat.joined") }}</dt><dd>{{ relativeTime(author.joinedAt) }}</dd></div>
+      </dl>
     </header>
 
     <CardGrid
@@ -69,20 +69,11 @@ watch([() => route.params.accountNumId, locale], load, { immediate: true });
 <style scoped>
 .who {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-5);
-  padding-bottom: var(--s-5); margin-bottom: var(--s-5);
-  border-bottom: 1px solid var(--rule);
+  padding: var(--s-5); margin-bottom: var(--s-5);
 }
-.who__face {
-  width: 72px; height: 72px; border-radius: var(--r-pill); flex: none;
-  box-shadow: 0 0 0 1px var(--rule);
-}
-.who__text { min-width: 0; }
-.who__name { margin: 2px 0 var(--s-2); font-size: clamp(28px, 4vw, 38px); }
-
-.who__stats { display: flex; flex-wrap: wrap; gap: var(--s-6); margin: 0; }
-.who__stats dt { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-faint); }
-.who__stats dd {
-  margin: 2px 0 0; font-family: var(--font-display); font-size: 22px;
-  font-variant-numeric: tabular-nums;
-}
+.who__face { width: 64px; height: 64px; border-radius: var(--r-pill); object-fit: cover; flex: none; }
+.who__face--void { display: grid; place-items: center; background: var(--surface-2); font-size: 24px; font-weight: 600; color: var(--text-2); }
+.who__text { min-width: 0; margin-right: auto; }
+.who__name { font-size: clamp(20px, 2.6vw, 26px); }
+.who__stats { display: flex; gap: var(--s-6); }
 </style>

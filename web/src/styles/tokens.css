@@ -1,60 +1,79 @@
 /*
- * 社群站的設計語彙：editorial dark。
+ * 設計語彙。
  *
- * 內容是角色立繪與名字，所以版面照著「印刷刊物的海報牆」走而不是 SaaS 儀表板：
- * 暖調近黑的紙、奶油色字、髮絲級分隔線、名次用大號襯線數字當版面元素。
- * 立繪在暖黑底上最跳，所以刻意只做深色一套——不做淺色分支，維持一致的語氣。
+ * 內容是立繪加名字，讀者是來挑人聊天的。版面照著成熟的內容社群走：淺底、系統字、
+ * 卡片是白色的一塊、文字放在圖下面而不是壓在圖上——圖歸圖、字歸字，兩邊都乾淨。
  *
- * 品牌只保留一個金色 accent。多一個顏色，畫面就開始跟立繪搶注意力。
+ * 色彩只有一個強調色（珊瑚紅），用在主要動作與「現在選的是這個」。名次的金銀銅
+ * 是慣例色，不算品牌色。其餘一律灰階。
+ *
+ * 字體用系統字：中日韓各平台自己的字最協調，網頁字體反而在混排時露餡。
+ * 深色模式跟著系統偏好，token 換一組就好。
  */
 :root {
-  color-scheme: dark;
+  color-scheme: light dark;
 
-  /* 紙 —— 三階暖黑，不用純黑（純黑會讓立繪邊緣看起來髒） */
-  --paper: #100e0b;
-  --paper-raised: #191612;
-  --paper-sunken: #0a0908;
+  --bg: #f5f5f7;
+  --surface: #ffffff;
+  --surface-2: #f0f0f3;
+  --border: #e6e6eb;
+  --border-strong: #d2d2da;
 
-  /* 髮絲線。這套版面靠線分隔，不靠色塊 */
-  --rule: #2a251e;
-  --rule-strong: #3d362c;
+  --text: #17171c;
+  --text-2: #62626d;
+  --text-3: #9a9aa4;
 
-  --text: #f2ece1;
-  --text-dim: #a49b8c;
-  --text-faint: #6b6357;
+  --accent: #ef4f6f;
+  --accent-hover: #dc3f60;
+  --accent-soft: #fdecf0;
+  --on-accent: #ffffff;
 
-  --gold: #f5c542;
-  --gold-deep: #c9992c;
-  --gold-wash: rgba(245, 197, 66, 0.12);
+  --gold: #f2b01e;
+  --silver: #a6adb6;
+  --bronze: #cf8d55;
+  --danger: #d9433f;
 
-  --danger: #e0685c;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "PingFang TC", "Hiragino Sans GB",
+    "Hiragino Sans", "Apple SD Gothic Neo", "Microsoft YaHei", "Yu Gothic UI", "Malgun Gothic",
+    "Noto Sans CJK SC", "Noto Sans", "Helvetica Neue", Arial, sans-serif;
 
-  /*
-   * 襯線給名字與標題——角色卡是「有名有姓的人物」，襯線讀起來像人物誌而不是商品列表。
-   * Instrument Serif 只含拉丁字母，CJK 落到 Noto Serif TC；兩者的縱向重心接近，混排不會跳。
-   */
-  --font-display: "Instrument Serif", "Noto Serif TC", "Noto Serif JP", "Songti TC", serif;
-  --font-ui: "Sora", "Noto Sans TC", "Noto Sans JP", -apple-system, BlinkMacSystemFont, sans-serif;
-
-  --r-sm: 3px;
-  --r-md: 6px;
-  --r-lg: 10px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
   --r-pill: 999px;
+
+  --shadow-sm: 0 1px 2px rgba(16, 16, 24, 0.05), 0 1px 1px rgba(16, 16, 24, 0.03);
+  --shadow-md: 0 10px 28px rgba(16, 16, 24, 0.12), 0 2px 6px rgba(16, 16, 24, 0.06);
 
   --s-1: 4px;
   --s-2: 8px;
   --s-3: 12px;
   --s-4: 16px;
   --s-5: 24px;
-  --s-6: 36px;
-  --s-7: 56px;
-  --s-8: 88px;
+  --s-6: 32px;
+  --s-7: 48px;
+  --s-8: 72px;
 
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
-  --dur: 200ms;
-  --dur-slow: 420ms;
+  --dur: 160ms;
+  --dur-slow: 360ms;
 
-  /* 版心。內容是海報牆，寬一點才有「牆」的密度；再寬字行就太長了。 */
-  --page: 1440px;
-  --masthead-h: 56px;
+  --page: 1200px;
+  --header-h: 60px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #101013;
+    --surface: #1a1a1f;
+    --surface-2: #24242b;
+    --border: #2b2b33;
+    --border-strong: #3b3b45;
+    --text: #f2f2f5;
+    --text-2: #a3a3ae;
+    --text-3: #70707b;
+    --accent-soft: rgba(239, 79, 111, 0.16);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 10px 28px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.3);
+  }
 }

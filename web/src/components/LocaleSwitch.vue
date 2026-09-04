@@ -6,7 +6,7 @@ import { localeOf, withLocale } from "@/router";
 const route = useRoute();
 const router = useRouter();
 
-/** 換語言就是換網址：連結可以分享，上一頁也回得去。 */
+/** 換語言就是換網址：連結可以分享，上一頁也回得去。榜單的語區也跟著這裡走。 */
 function switchTo(code: string) {
   const current = localeOf(route);
   if (code === current) return;
@@ -17,6 +17,10 @@ function switchTo(code: string) {
 
 <template>
   <div class="lang">
+    <svg class="lang__icon" viewBox="0 0 20 20" aria-hidden="true">
+      <circle cx="10" cy="10" r="7.25" fill="none" stroke="currentColor" stroke-width="1.5" />
+      <path d="M2.75 10h14.5M10 2.75c2.2 2.3 2.2 12.2 0 14.5M10 2.75c-2.2 2.3-2.2 12.2 0 14.5" fill="none" stroke="currentColor" stroke-width="1.5" />
+    </svg>
     <!-- 原生 select：小螢幕上有系統原生的選單，也不必自己處理鍵盤與焦點 -->
     <select
       class="lang__select"
@@ -31,14 +35,15 @@ function switchTo(code: string) {
 </template>
 
 <style scoped>
-.lang { display: inline-flex; }
+.lang { position: relative; display: inline-flex; align-items: center; border-radius: var(--r-pill); }
+.lang:hover { background: var(--surface-2); }
+.lang__icon { position: absolute; left: 10px; width: 16px; height: 16px; color: var(--text-2); pointer-events: none; }
 .lang__select {
-  height: 30px; padding: 0 var(--s-2);
-  font: inherit; font-size: 13px; color: var(--text-dim);
-  background: transparent; border: 1px solid transparent; border-radius: var(--r-pill);
-  cursor: pointer;
-  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+  height: 34px; padding: 0 8px 0 32px;
+  font: inherit; font-size: 13.5px; font-weight: 500; color: var(--text-2);
+  background: transparent; border: 0; border-radius: var(--r-pill);
+  cursor: pointer; appearance: none; -webkit-appearance: none;
 }
-.lang__select:hover { color: var(--text); border-color: var(--rule-strong); }
-.lang__select option { background: var(--paper-raised); color: var(--text); }
+.lang__select:hover { color: var(--text); }
+.lang__select option { background: var(--surface); color: var(--text); }
 </style>

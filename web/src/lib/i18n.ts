@@ -118,7 +118,8 @@ export function detectLocale(): string {
 }
 
 /**
- * 語區：榜單按卡片的語言分開列。名字用該語言自己寫，跟 LOCALES 一樣不翻譯。
+ * 語區：榜單按卡片的語言分開列，跟著介面語言走，沒有獨立的開關。
+ * 名字用該語言自己寫（作者主頁這種跨語區的清單會標在卡片上），跟 LOCALES 一樣不翻譯。
  * 簡繁體併成一區——同一批讀者兩種都看得懂，拆開只會讓每區都更空。
  */
 export const ZONES: { code: Zone; label: string }[] = [
@@ -127,8 +128,6 @@ export const ZONES: { code: Zone; label: string }[] = [
   { code: "ja", label: "日本語" },
   { code: "ko", label: "한국어" },
 ];
-
-export const isZone = (v: unknown): v is Zone => ZONES.some((z) => z.code === v);
 
 /** 介面語言對應的預設語區：看日文介面的人，先看到日文卡。 */
 export const defaultZone = (uiLocale: string): Zone => contentLang(uiLocale) as Zone;

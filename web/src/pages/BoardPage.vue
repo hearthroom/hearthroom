@@ -4,9 +4,9 @@ import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import CardGrid from "@/components/CardGrid.vue";
 import { fetchBoard } from "@/lib/api";
-import { ZONES, contentLang, defaultZone, isZone } from "@/lib/i18n";
+import { contentLang, defaultZone } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
-import type { CardPage, Sort, Zone } from "@/lib/types";
+import type { CardPage, Sort } from "@/lib/types";
 
 const route = useRoute();
 const router = useRouter();
@@ -24,22 +24,22 @@ const sort = computed<Sort>(() => {
   return s === "new" || s === "top" ? s : "hot";
 });
 
-/** 語區跟著網址走；沒指定就是介面語言那一區。 */
-const zone = computed<Zone>(() => (isZone(route.query.zone) ? route.query.zone : defaultZone(locale.value)));
-
 const searching = computed(() => Boolean(route.query.q || route.query.tag));
 
+/**
+ * 語區跟著介面語言走，不另設開關：看日文介面的人要的就是日文卡。
+ * 想看別的語言的卡，換介面語言即可——頁首那個選單同時就是語區選單。
+ */
 async function load() {
   loading.value = true;
   error.value = "";
   try {
     page.value = await fetchBoard({
-      zone: zone.value,
+      zone: defaultZone(locale.value),
       q: (route.query.q as string) || undefined,
       tag: (route.query.tag as string) || undefined,
       sort: sort.value,
       offset: Number(route.query.offset ?? 0) || 0,
-      // UI 語言要跟著傳，否則介面是英文、卡名還是中文
       lang: contentLang(locale.value),
     });
   } catch (err) {
@@ -64,48 +64,37 @@ watch([() => route.query, locale], load, { immediate: true });
 </script>
 
 <template>
-  <div class="page board">
+  <div class="page">
     <h1 class="sr-only">{{ $t("site.tagline") }}</h1>
 
-    <!-- 工具列貼在頁首下方：語區是主分區，排序是次要的，兩組都不該離開視線 -->
-    <div class="toolbar">
-      <nav class="tabs tabs--primary" :aria-label="$t('board.zones')">
-        <button
-          v-for="z in ZONES"
-          :key="z.code"
-          class="tabs__item"
-          :class="{ 'tabs__item--on': zone === z.code }"
-          :lang="z.code"
-          @click="navigate({ zone: z.code })"
-        >
-          {{ z.label }}
-        </button>
-      </nav>
-
-      <nav class="tabs toolbar__sorts" :aria-label="$t('board.sorts')">
+    <div class="bar">
+      <div class="seg" role="tablist" :aria-label="$t('board.sorts')">
         <button
           v-for="s in SORTS"
           :key="s"
-          class="tabs__item"
-          :class="{ 'tabs__item--on': sort === s }"
+          class="seg__item"
+          :class="{ 'seg__item--on': sort === s }"
+          role="tab"
+          :aria-selected="sort === s"
           @click="navigate({ sort: s })"
         >
           {{ $t(`board.sort.${s}`) }}
         </button>
-      </nav>
-    </div>
+      </div>
 
-    <div class="status">
-      <p class="subtle status__blurb">{{ $t(`board.sort.${sort}.blurb`) }}</p>
       <div v-if="searching" class="chips">
         <button v-if="route.query.q" class="chip" @click="navigate({ q: undefined })">
-          「{{ route.query.q }}」<span aria-hidden="true">×</span>
+          {{ route.query.q }}<span aria-hidden="true">×</span>
         </button>
         <button v-if="route.query.tag" class="chip" @click="navigate({ tag: undefined })">
-          #{{ route.query.tag }} <span aria-hidden="true">×</span>
+          #{{ route.query.tag }}<span aria-hidden="true">×</span>
         </button>
       </div>
-      <p v-if="page && !loading && page.total !== null" class="subtle status__count">{{ $t("board.count", { n: page.total }) }}</p>
+
+      <p class="subtle bar__note">
+        <span>{{ $t(`board.sort.${sort}.blurb`) }}</span>
+        <template v-if="page && !loading && page.total !== null"> · {{ $t("board.count", { n: page.total }) }}</template>
+      </p>
     </div>
 
     <p v-if="error" class="notice notice--error">{{ error }}</p>
@@ -114,7 +103,6 @@ watch([() => route.query, locale], load, { immediate: true });
       :cards="page?.items ?? []"
       :loading="loading"
       :ranked="!searching"
-      :cover="!searching && (page?.offset ?? 0) === 0"
       :rank-offset="page?.offset ?? 0"
       :show-trending="sort === 'hot'"
       :empty-title="$t(searching ? 'board.empty.search.title' : 'board.empty.title')"
@@ -122,11 +110,7 @@ watch([() => route.query, locale], load, { immediate: true });
     />
 
     <nav v-if="page && (page.offset > 0 || page.hasNext)" class="pager">
-      <button
-        class="btn btn--sm"
-        :disabled="page.offset === 0"
-        @click="navigate({ offset: String(Math.max(0, page.offset - page.limit)) })"
-      >
+      <button class="btn btn--sm" :disabled="page.offset === 0" @click="navigate({ offset: String(Math.max(0, page.offset - page.limit)) })">
         ← {{ $t("pager.prev") }}
       </button>
       <span class="subtle">
@@ -134,11 +118,7 @@ watch([() => route.query, locale], load, { immediate: true });
           ? $t("pager.page", { n: Math.floor(page.offset / page.limit) + 1 })
           : $t("pager.pageOf", { n: Math.floor(page.offset / page.limit) + 1, total: Math.ceil(page.total / page.limit) }) }}
       </span>
-      <button
-        class="btn btn--sm"
-        :disabled="!page.hasNext"
-        @click="navigate({ offset: String(page.offset + page.limit) })"
-      >
+      <button class="btn btn--sm" :disabled="!page.hasNext" @click="navigate({ offset: String(page.offset + page.limit) })">
         {{ $t("pager.next") }} →
       </button>
     </nav>
@@ -146,42 +126,15 @@ watch([() => route.query, locale], load, { immediate: true });
 </template>
 
 <style scoped>
-.board { padding-top: 0; }
-
-.toolbar {
-  position: sticky; top: var(--masthead-h); z-index: 20;
-  display: flex; align-items: stretch; justify-content: space-between; gap: var(--s-5);
-  border-bottom: 1px solid var(--rule);
-  background: rgba(16, 14, 11, 0.92);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-/* 語區列可以橫向捲，手機上四個語言名擠不下時不要折行 */
-.tabs--primary { overflow-x: auto; scrollbar-width: none; }
-.tabs--primary::-webkit-scrollbar { display: none; }
-.toolbar__sorts { flex: none; }
-
-.status {
+.bar {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3);
-  padding: var(--s-4) 0 var(--s-4);
+  margin-bottom: var(--s-4);
 }
-.status__blurb { margin: 0; }
-.status__count { margin: 0 0 0 auto; font-variant-numeric: tabular-nums; }
-
 .chips { display: flex; flex-wrap: wrap; gap: var(--s-2); }
-.chip {
-  height: 26px; padding: 0 var(--s-3);
-  font-size: 12.5px; color: var(--text-dim);
-  background: var(--gold-wash); border: 0; border-radius: var(--r-pill);
-  cursor: pointer;
-}
-.chip:hover { color: var(--text); }
+.chip span { margin-left: 2px; color: var(--text-3); }
+.bar__note { margin-left: auto; font-variant-numeric: tabular-nums; }
 
 @media (max-width: 640px) {
-  /* 小螢幕：頁首有兩行，工具列不再吸頂；語區與排序各佔一行，排序縮小靠左 */
-  .toolbar { position: static; flex-direction: column; gap: 0; }
-  .tabs { gap: var(--s-4); }
-  .toolbar__sorts { border-top: 1px solid var(--rule); }
-  .toolbar__sorts .tabs__item { font-size: 13px; padding: var(--s-2) 0; }
+  .bar__note { margin-left: 0; width: 100%; }
 }
 </style>

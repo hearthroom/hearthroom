@@ -115,46 +115,46 @@ watch(() => route.query.fresh, (f) => {
     <header class="head">
       <div class="head__text">
         <h1 class="head__title display">{{ $t("mine.title") }}</h1>
-        <!-- 數字跟標題排同一行：這是工作區，不是刊物封面，不需要一整塊 hero -->
-        <dl v-if="data" class="tally">
-          <div><dt>{{ $t("mine.tally.all") }}</dt><dd>{{ data.total }}</dd></div>
-          <div><dt>{{ $t("mine.tally.listed") }}</dt><dd>{{ listedCount }}</dd></div>
-          <span v-if="revalidating" class="subtle">{{ $t("mine.syncing") }}</span>
-        </dl>
+        <p v-if="data" class="subtle">
+          {{ $t("mine.tally.all") }} {{ data.total }} · {{ $t("mine.tally.listed") }} {{ listedCount }}
+          <template v-if="revalidating"> · {{ $t("mine.syncing") }}</template>
+        </p>
       </div>
       <RouterLink :to="lp('/create')" class="btn btn--primary">{{ $t("mine.create") }}</RouterLink>
     </header>
 
-    <nav class="tabs filters">
+    <div class="seg filters" role="tablist">
       <button
         v-for="f in ['all', 'listed', 'unlisted']"
         :key="f"
-        class="tabs__item"
-        :class="{ 'tabs__item--on': filter === f }"
+        class="seg__item"
+        :class="{ 'seg__item--on': filter === f }"
+        role="tab"
+        :aria-selected="filter === f"
         @click="go({ filter: f, page: undefined })"
       >
         {{ $t(`mine.filter.${f}`) }}
       </button>
-    </nav>
+    </div>
 
     <p v-if="error" class="notice notice--error">{{ error }}</p>
 
     <div v-if="loading" class="wall">
-      <div v-for="i in 12" :key="i" class="ghost" :style="{ animationDelay: `${i * 55}ms` }" />
+      <div v-for="i in 12" :key="i" class="ghost ghost--card" />
     </div>
 
-    <p v-else-if="!data?.items.length" class="notice">
-      {{ $t("mine.empty") }}<RouterLink :to="lp('/create')">{{ $t("mine.empty.cta") }}</RouterLink>
-    </p>
+    <div v-else-if="!data?.items.length" class="empty panel">
+      <p class="empty__title">{{ $t("mine.empty") }}</p>
+      <RouterLink :to="lp('/create')" class="btn btn--primary">{{ $t("mine.empty.cta") }}</RouterLink>
+    </div>
 
-    <p v-else-if="!visible.length" class="notice">{{ $t("mine.emptyFilter") }}</p>
+    <div v-else-if="!visible.length" class="empty panel"><p class="empty__title">{{ $t("mine.emptyFilter") }}</p></div>
 
     <div v-else class="wall">
       <MyCardTile
-        v-for="(card, i) in visible"
+        v-for="card in visible"
         :key="card.roleId"
         :card="card"
-        :index="i"
         :busy="busy === card.roleId"
         @toggle="toggle(card)"
       />
@@ -172,33 +172,17 @@ watch(() => route.query.fresh, (f) => {
 .head {
   display: flex; flex-wrap: wrap; gap: var(--s-4);
   align-items: center; justify-content: space-between;
-  margin-bottom: var(--s-3);
+  margin-bottom: var(--s-4);
 }
-.head__text { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-6); min-width: 0; }
-.head__title { margin: 0; font-size: clamp(26px, 3.6vw, 34px); }
+.head__title { font-size: clamp(20px, 2.6vw, 24px); margin-bottom: 2px; }
+.filters { margin-bottom: var(--s-4); }
 
-.tally { display: flex; align-items: baseline; gap: var(--s-5); margin: 0; }
-.tally > div { display: flex; align-items: baseline; gap: var(--s-2); }
-.tally dt { font-size: 12px; color: var(--text-faint); }
-.tally dd { margin: 0; font-family: var(--font-display); font-size: 20px; font-variant-numeric: tabular-nums; }
-
-.filters { margin-bottom: var(--s-5); border-bottom: 1px solid var(--rule); }
-
-/* 跟榜單同一套卡片牆語言。工作區的格子略寬一點，因為每張底下多兩顆按鈕。 */
 .wall {
-  display: grid;
-  gap: var(--s-5) var(--s-4);
-  grid-template-columns: repeat(auto-fill, minmax(clamp(150px, 24vw, 196px), 1fr));
+  display: grid; gap: var(--s-4);
+  grid-template-columns: repeat(auto-fill, minmax(clamp(140px, 40vw, 184px), 1fr));
 }
+.ghost--card { aspect-ratio: 3 / 5.4; }
 
-.ghost {
-  aspect-ratio: 3 / 4.9;
-  border-radius: var(--r-md);
-  background: linear-gradient(100deg, var(--paper-raised) 30%, var(--rule) 48%, var(--paper-raised) 66%);
-  background-size: 300% 100%;
-  animation: sweep 1.5s var(--ease) infinite;
-}
-@keyframes sweep { from { background-position: 130% 0; } to { background-position: -30% 0; } }
-
-.pager { display: flex; align-items: center; justify-content: center; gap: var(--s-5); margin-top: var(--s-7); }
+.empty { padding: var(--s-8) var(--s-5); text-align: center; display: grid; gap: var(--s-4); justify-items: center; }
+.empty__title { font-size: 16px; font-weight: 600; }
 </style>
