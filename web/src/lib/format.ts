@@ -64,3 +64,18 @@ export function plainText(raw: string, charName: string, userName: string): stri
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
+
+/** 流水按日分組用的標籤：今天、昨天，再之前就是日期。 */
+export function dayLabel(input: string | number): string {
+  const ms = typeof input === "number" ? (input > 1e12 ? input : input * 1000) : Date.parse(input);
+  const d = new Date(ms); const now = new Date();
+  const days = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() - new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()) / DAY);
+  if (days === 0) return i18n.global.t("time.today");
+  if (days === 1) return i18n.global.t("time.yesterday");
+  return new Intl.DateTimeFormat(locale(), { dateStyle: "medium" }).format(ms);
+}
+
+/** 只有時分，給已經按日分組的流水用。 */
+export function clock(input: string): string {
+  return new Intl.DateTimeFormat(locale(), { timeStyle: "short" }).format(Date.parse(input));
+}

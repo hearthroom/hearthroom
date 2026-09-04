@@ -135,5 +135,12 @@
   "comment.empty": "還沒有評論，來說第一句。",
   "comment.login": "登入後留言",
   "comment.submitted": "已送出，通過審核後會顯示。",
-  "comment.count": "{n} 則評論"
+  "comment.count": "{n} 則評論",
+  "card.authorPage": "作者主頁",
+  "card.moreBy": "{name} 的其他作品",
+  "time.today": "今天",
+  "time.yesterday": "昨天",
+  "wallet.records.income": "收入",
+  "wallet.records.expense": "支出",
+  "wallet.records.all": "全部"
 }
