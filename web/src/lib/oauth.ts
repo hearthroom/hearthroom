@@ -1,4 +1,5 @@
 import { UPSTREAM_API, OAUTH_RESOURCE } from "./config";
+import { i18n } from "./i18n";
 import { SITE } from "./site";
 
 /**
@@ -21,6 +22,10 @@ const STORE = {
 } as const;
 
 const redirectUri = () => `${location.origin}/auth/callback`;
+
+/** 這些錯誤會直接顯示給使用者。檔案在 Vue 元件外，所以用 global 而不是 useI18n()。 */
+const t = (key: string, named?: Record<string, unknown>) =>
+  named ? i18n.global.t(key, named) : i18n.global.t(key);
 
 function randomString(bytes = 32): string {
   const raw = crypto.getRandomValues(new Uint8Array(bytes));
@@ -49,9 +54,9 @@ async function clientId(): Promise<string> {
       token_endpoint_auth_method: "none",
     }),
   });
-  if (!res.ok) throw new Error(`動態註冊失敗（${res.status}）`);
+  if (!res.ok) throw new Error(t("auth.registerFailed", { status: res.status }));
   const id = ((await res.json()) as { client_id?: string }).client_id;
-  if (!id) throw new Error("動態註冊沒有回傳 client_id");
+  if (!id) throw new Error(t("auth.noClientId"));
   localStorage.setItem(STORE.client, id);
   return id;
 }
@@ -93,8 +98,8 @@ async function exchange(body: Record<string, string>): Promise<TokenPair> {
   if (!res.ok) {
     // 4xx 是「這張憑證不算數」，5xx 與斷網是「現在問不到」。只有前者該把人登出——
     // 把兩者混為一談，會讓一次網路抖動變成強制重新登入。
-    if (res.status >= 400 && res.status < 500) throw new AuthExpired(`憑證已失效（${res.status}）`);
-    throw new Error(`換取 token 失敗（${res.status}）`);
+    if (res.status >= 400 && res.status < 500) throw new AuthExpired(t("auth.credentialExpired", { status: res.status }));
+    throw new Error(t("auth.exchangeFailed", { status: res.status }));
   }
   const data = (await res.json()) as { access_token: string; refresh_token?: string; expires_in?: number };
   if (data.refresh_token) localStorage.setItem(STORE.refresh, data.refresh_token);
@@ -107,7 +112,7 @@ async function exchange(body: Record<string, string>): Promise<TokenPair> {
 
 export async function completeLogin(query: URLSearchParams): Promise<{ token: TokenPair; returnTo: string }> {
   const error = query.get("error");
-  if (error) throw new Error(`授權被拒（${error}）`);
+  if (error) throw new Error(t("auth.denied", { error }));
 
   const code = query.get("code");
   const state = query.get("state");
@@ -116,10 +121,10 @@ export async function completeLogin(query: URLSearchParams): Promise<{ token: To
   sessionStorage.removeItem(STORE.state);
   sessionStorage.removeItem(STORE.verifier);
 
-  if (!code) throw new Error("回調沒有帶授權碼");
+  if (!code) throw new Error(t("auth.noCode"));
   // state 對不上代表這次回調不是本頁發起的，直接丟掉。
-  if (!state || state !== expectedState) throw new Error("授權狀態不符，請重新登入");
-  if (!verifier) throw new Error("找不到本次登入的驗證碼，請重新登入");
+  if (!state || state !== expectedState) throw new Error(t("auth.badState"));
+  if (!verifier) throw new Error(t("auth.noVerifier"));
 
   const token = await exchange({
     grant_type: "authorization_code",

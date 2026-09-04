@@ -1,29 +1,30 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import CardGrid from "@/components/CardGrid.vue";
 import { fetchBoard } from "@/lib/api";
+import { contentLang } from "@/lib/i18n";
+import { useLocalePath } from "@/lib/use-locale";
 import type { CardPage, Sort } from "@/lib/types";
 
 const route = useRoute();
 const router = useRouter();
+const { locale, lp } = useLocalePath();
+const { t } = useI18n();
 
 const page = ref<CardPage | null>(null);
 const loading = ref(true);
 const error = ref("");
 const draft = ref((route.query.q as string) ?? "");
 
-const SORTS: { key: Sort; label: string; blurb: string }[] = [
-  { key: "hot", label: "熱門", blurb: "最近一小時對話成長最多的卡" },
-  { key: "new", label: "最新", blurb: "剛登記到社群的卡" },
-  { key: "top", label: "累積", blurb: "歷來對話總量最高的卡" },
-];
+const SORTS: Sort[] = ["hot", "new", "top"];
 
 const sort = computed<Sort>(() => {
   const s = route.query.sort;
   return s === "new" || s === "top" ? s : "hot";
 });
-const blurb = computed(() => SORTS.find((s) => s.key === sort.value)?.blurb ?? "");
+
 const searching = computed(() => Boolean(route.query.q || route.query.tag));
 
 async function load() {
@@ -35,9 +36,11 @@ async function load() {
       tag: (route.query.tag as string) || undefined,
       sort: sort.value,
       offset: Number(route.query.offset ?? 0) || 0,
+      // UI 語言要跟著傳，否則介面是英文、卡名還是中文
+      lang: contentLang(locale.value),
     });
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "載入失敗";
+    error.value = err instanceof Error ? err.message : t("state.loadFailed");
   } finally {
     loading.value = false;
   }
@@ -54,30 +57,28 @@ function navigate(patch: Record<string, string | undefined>) {
   router.push({ query });
 }
 
-watch(() => route.query, load, { immediate: true });
+watch([() => route.query, locale], load, { immediate: true });
 watch(() => route.query.q, (q) => { draft.value = (q as string) ?? ""; });
 </script>
 
 <template>
   <div class="page">
     <header class="lede">
-      <p class="eyebrow">開源角色卡社群</p>
-      <h1 class="lede__title display">角色卡榜單</h1>
-      <p class="lede__sub muted">
-        作者親自登記的作品。排序只看讀者實際聊了多少，不做人工推薦。
-      </p>
+      <p class="eyebrow">{{ $t("board.eyebrow") }}</p>
+      <h1 class="lede__title display">{{ $t("board.title") }}</h1>
+      <p class="lede__sub muted">{{ $t("board.lede") }}</p>
     </header>
 
     <div class="bar">
       <nav class="sorts">
         <button
           v-for="s in SORTS"
-          :key="s.key"
+          :key="s"
           class="sorts__item"
-          :class="{ 'sorts__item--on': sort === s.key }"
-          @click="navigate({ sort: s.key })"
+          :class="{ 'sorts__item--on': sort === s }"
+          @click="navigate({ sort: s })"
         >
-          {{ s.label }}
+          {{ $t(`board.sort.${s}`) }}
         </button>
       </nav>
 
@@ -86,15 +87,15 @@ watch(() => route.query.q, (q) => { draft.value = (q as string) ?? ""; });
           v-model="draft"
           class="input search__input"
           type="search"
-          placeholder="搜尋角色名、簡介或標籤"
-          aria-label="搜尋"
+          :placeholder="$t('board.search.placeholder')"
+          :aria-label="$t('board.search.submit')"
         />
-        <button class="btn btn--sm search__go" type="submit">搜尋</button>
+        <button class="btn btn--sm search__go" type="submit">{{ $t("board.search.submit") }}</button>
       </form>
     </div>
 
     <div class="status">
-      <p class="subtle status__blurb">{{ blurb }}</p>
+      <p class="subtle status__blurb">{{ $t(`board.sort.${sort}.blurb`) }}</p>
       <div v-if="searching" class="chips">
         <button v-if="route.query.q" class="chip" @click="navigate({ q: undefined })">
           「{{ route.query.q }}」<span aria-hidden="true">×</span>
@@ -103,7 +104,7 @@ watch(() => route.query.q, (q) => { draft.value = (q as string) ?? ""; });
           #{{ route.query.tag }} <span aria-hidden="true">×</span>
         </button>
       </div>
-      <p v-if="page && !loading && page.total !== null" class="subtle status__count">{{ page.total }} 張</p>
+      <p v-if="page && !loading && page.total !== null" class="subtle status__count">{{ $t("board.count", { n: page.total }) }}</p>
     </div>
 
     <p v-if="error" class="notice notice--error">{{ error }}</p>
@@ -114,8 +115,8 @@ watch(() => route.query.q, (q) => { draft.value = (q as string) ?? ""; });
       :ranked="!searching"
       :rank-offset="page?.offset ?? 0"
       :show-trending="sort === 'hot'"
-      :empty-title="searching ? '沒有符合的卡片' : '榜單還是空的'"
-      :empty-hint="searching ? '換個關鍵字試試。' : '第一張卡等著被登記——如果你有作品，去「我的卡片」把它放上來。'"
+      :empty-title="$t(searching ? 'board.empty.search.title' : 'board.empty.title')"
+      :empty-hint="$t(searching ? 'board.empty.search.hint' : 'board.empty.hint')"
     />
 
     <nav v-if="page && (page.offset > 0 || page.hasNext)" class="pager">
@@ -124,17 +125,19 @@ watch(() => route.query.q, (q) => { draft.value = (q as string) ?? ""; });
         :disabled="page.offset === 0"
         @click="navigate({ offset: String(Math.max(0, page.offset - page.limit)) })"
       >
-        ← 上一頁
+        ← {{ $t("pager.prev") }}
       </button>
       <span class="subtle">
-        第 {{ Math.floor(page.offset / page.limit) + 1 }} 頁<template v-if="page.total !== null"> / 共 {{ Math.ceil(page.total / page.limit) }} 頁</template>
+        {{ page.total === null
+          ? $t("pager.page", { n: Math.floor(page.offset / page.limit) + 1 })
+          : $t("pager.pageOf", { n: Math.floor(page.offset / page.limit) + 1, total: Math.ceil(page.total / page.limit) }) }}
       </span>
       <button
         class="btn btn--sm"
         :disabled="!page.hasNext"
         @click="navigate({ offset: String(page.offset + page.limit) })"
       >
-        下一頁 →
+        {{ $t("pager.next") }} →
       </button>
     </nav>
   </div>

@@ -2,11 +2,13 @@
 import { computed } from "vue";
 import { RouterLink } from "vue-router";
 import { compact, hueFrom } from "@/lib/format";
+import { useLocalePath } from "@/lib/use-locale";
 import type { MyCard } from "@/lib/api";
 
 const props = defineProps<{ card: MyCard; busy: boolean; index?: number }>();
 defineEmits<{ toggle: [] }>();
 
+const { lp } = useLocalePath();
 const hue = computed(() => hueFrom(props.card.name));
 const initial = computed(() => [...props.card.name][0] ?? "?");
 const delay = computed(() => `${Math.min(props.index ?? 0, 11) * 40}ms`);
@@ -14,7 +16,7 @@ const delay = computed(() => `${Math.min(props.index ?? 0, 11) * 40}ms`);
 
 <template>
   <article class="mine-tile rise" :style="{ animationDelay: delay }">
-    <RouterLink :to="`/cards/${card.roleId}/edit`" class="mine-tile__frame">
+    <RouterLink :to="lp(`/cards/${card.roleId}/edit`)" class="mine-tile__frame">
       <img v-if="card.avatarUrl" :src="card.avatarUrl" :alt="card.name" loading="lazy" class="mine-tile__img" />
       <div
         v-else
@@ -25,26 +27,26 @@ const delay = computed(() => `${Math.min(props.index ?? 0, 11) * 40}ms`);
       </div>
 
       <!-- 在榜上是這頁最重要的一個位元，所以用金色標在圖上，不是塞在文字裡 -->
-      <span v-if="card.registered" class="mine-tile__badge">在榜上</span>
+      <span v-if="card.registered" class="mine-tile__badge">{{ $t("mine.badge.listed") }}</span>
 
       <div class="mine-tile__scrim">
         <h3 class="mine-tile__name display">{{ card.name }}</h3>
-        <p class="mine-tile__hook">{{ card.summary || "還沒有簡介" }}</p>
+        <p class="mine-tile__hook">{{ card.summary || $t("card.noSummary") }}</p>
       </div>
     </RouterLink>
 
     <div class="mine-tile__foot">
-      <span class="mine-tile__num">{{ compact(card.talkNum) }} 次對話</span>
+      <span class="mine-tile__num">{{ $t("card.talkCount", { n: compact(card.talkNum) }) }}</span>
       <!-- 工作區的操作不能藏在 hover 底下：觸控裝置根本碰不到 -->
       <div class="mine-tile__actions">
-        <RouterLink class="btn btn--sm btn--ghost" :to="`/cards/${card.roleId}/edit`">編輯</RouterLink>
+        <RouterLink class="btn btn--sm btn--ghost" :to="lp(`/cards/${card.roleId}/edit`)">{{ $t("mine.action.edit") }}</RouterLink>
         <button
           class="btn btn--sm"
           :class="card.registered ? 'btn--danger' : 'btn--primary'"
           :disabled="busy"
           @click="$emit('toggle')"
         >
-          {{ busy ? "…" : card.registered ? "取消" : "登記" }}
+          {{ busy ? "…" : card.registered ? $t("mine.action.unregister") : $t("mine.action.register") }}
         </button>
       </div>
     </div>

@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 import { completeLogin } from "@/lib/oauth";
 import { useSession } from "@/lib/session";
 
 const router = useRouter();
 const session = useSession();
+const { t } = useI18n();
 const error = ref("");
 
 onMounted(async () => {
@@ -15,7 +17,7 @@ onMounted(async () => {
     // 用 replace：回上一頁不該再回到帶著授權碼的網址。
     await router.replace(returnTo);
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "登入失敗";
+    error.value = err instanceof Error ? err.message : t("state.loadFailed");
   }
 });
 </script>
@@ -24,8 +26,8 @@ onMounted(async () => {
   <div class="page page--narrow">
     <template v-if="error">
       <p class="notice notice--error">{{ error }}</p>
-      <button class="btn" @click="session.login('/')">重新登入</button>
+      <button class="btn" @click="session.login('/')">{{ $t("auth.retry") }}</button>
     </template>
-    <p v-else class="muted">正在完成登入…</p>
+    <p v-else class="muted">{{ $t("auth.completing") }}</p>
   </div>
 </template>

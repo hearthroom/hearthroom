@@ -5,9 +5,9 @@ import { RouterLink } from "vue-router";
 <template>
   <div class="page lost">
     <p class="eyebrow">404</p>
-    <h1 class="display">找不到這個頁面</h1>
-    <p class="muted">連結可能過期了，或是那張卡已經取消登記。</p>
-    <RouterLink to="/" class="btn">← 回到榜單</RouterLink>
+    <h1 class="display">{{ $t("notFound.title") }}</h1>
+    <p class="muted">{{ $t("notFound.hint") }}</p>
+    <RouterLink to="/" class="btn">← {{ $t("notFound.back") }}</RouterLink>
   </div>
 </template>
 
