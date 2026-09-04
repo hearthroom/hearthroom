@@ -8,10 +8,19 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * 錯誤訊息給人看，不給狀態碼。伺服器回的原文是英文的內部字串（card not found），
+ * 對五種語言的使用者都沒有意義；按狀態碼翻成他的語言，原文只在開發時附在後面。
+ */
+const ERROR_KEY: Record<number, string> = { 401: "auth.expired", 403: "state.forbidden", 404: "state.notFound" };
+
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
-    throw new ApiError(res.status, body.error ?? body.message ?? i18n.global.t("state.requestFailed", { status: res.status }));
+    const key = ERROR_KEY[res.status] ?? (res.status >= 500 ? "state.serverBusy" : "state.requestFailed");
+    const msg = i18n.global.t(key);
+    const raw = body.error ?? body.message;
+    throw new ApiError(res.status, import.meta.env.DEV && raw ? `${msg} (${raw})` : msg);
   }
   return (await res.json()) as T;
 }

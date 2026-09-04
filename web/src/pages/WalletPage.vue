@@ -79,7 +79,7 @@ watch(() => session.me?.accountNumId, () => load(true), { immediate: true });
             <span v-else class="ghost balance__ghost" />
           </p>
           <p v-if="session.wallet?.tempScore" class="subtle">{{ $t("wallet.temp", { n: whole(session.wallet.tempScore) }) }}</p>
-          <a class="btn btn--primary balance__cta" :href="TOP_UP_URL" target="_blank" rel="noopener">{{ $t("wallet.topUp") }} ↗</a>
+          <a class="btn btn--primary btn--lg balance__cta" :href="TOP_UP_URL" target="_blank" rel="noopener">{{ $t("wallet.topUp") }} ↗</a>
         </section>
 
         <section class="panel plans">
@@ -97,14 +97,14 @@ watch(() => session.me?.accountNumId, () => load(true), { immediate: true });
       <section class="panel history">
         <div class="history__head">
           <h2 class="history__title">{{ $t("wallet.records") }}<span v-if="total" class="history__n">{{ total }}</span></h2>
-          <div class="seg" role="tablist">
-            <button v-for="k in (['all', 'add', 'sub'] as Kind[])" :key="k" class="seg__item" :class="{ 'seg__item--on': kind === k }" role="tab" :aria-selected="kind === k" @click="kind = k">
+          <div class="seg">
+            <button v-for="k in (['all', 'add', 'sub'] as Kind[])" :key="k" class="seg__item" :class="{ 'seg__item--on': kind === k }" :aria-pressed="kind === k" @click="kind = k">
               {{ $t(k === 'all' ? 'wallet.records.all' : k === 'add' ? 'wallet.records.income' : 'wallet.records.expense') }}
             </button>
           </div>
         </div>
 
-        <p v-if="error" class="notice notice--error">{{ error }}</p>
+        <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
         <div v-else-if="loading && !records.length" class="history__ghosts"><div v-for="i in 8" :key="i" class="ghost" /></div>
         <p v-else-if="!shown.length" class="muted history__empty">{{ $t("wallet.records.empty") }}</p>
 
@@ -141,14 +141,14 @@ watch(() => session.me?.accountNumId, () => load(true), { immediate: true });
 .balance__num { display: inline-flex; align-items: center; gap: 8px; margin: 2px 0; font-size: 36px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
 .balance__num svg { width: 22px; height: 22px; fill: var(--gold); filter: drop-shadow(0 1px 2px rgba(242, 176, 30, 0.4)); }
 .balance__ghost { display: inline-block; width: 120px; height: 36px; }
-.balance__cta { margin-top: var(--s-3); height: 42px; font-size: 15px; }
+.balance__cta { margin-top: var(--s-3); }
 
 .plans { padding: var(--s-4) var(--s-5); }
 .plans__list { list-style: none; margin: var(--s-2) 0 0; padding: 0; display: grid; gap: var(--s-2); }
 .plan { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); }
 .plan__tier { padding: 2px 9px; border-radius: 6px; font-size: 12.5px; font-weight: 600; background: var(--surface-2); }
-.plan__tier--unlimited { background: var(--accent-soft); color: var(--accent); }
-.plan__tier--member { background: #fff4d6; color: #8a5a00; }
+.plan__tier--unlimited { background: var(--accent-soft); color: var(--accent-text); }
+.plan__tier--member { background: var(--gold-soft); color: var(--gold-dark); }
 .plans__none { margin-top: 4px; font-size: 13.5px; }
 
 .history { padding: var(--s-4) var(--s-5) var(--s-5); display: grid; gap: var(--s-3); }
@@ -171,12 +171,12 @@ watch(() => session.me?.accountNumId, () => load(true), { immediate: true });
 }
 .row:hover { background: var(--surface-2); }
 .row__dot { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 999px; font-size: 14px; font-weight: 700; }
-.row__dot--add { background: #e3f6ea; color: #1f9d55; }
+.row__dot--add { background: var(--success-soft); color: var(--success); }
 .row__dot--sub { background: var(--surface-2); color: var(--text-3); }
 .row__item { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row__time { font-variant-numeric: tabular-nums; }
 .row__num { min-width: 5em; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
-.row__num--add { color: #1f9d55; }
+.row__num--add { color: var(--success); }
 
 @media (max-width: 820px) {
   .wallet__grid { grid-template-columns: 1fr; }

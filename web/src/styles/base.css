@@ -1,4 +1,5 @@
 @import "./tokens.css";
+@import "./themes.css";
 
 *, *::before, *::after { box-sizing: border-box; }
 
@@ -12,35 +13,31 @@ body {
   /* 底色畫在 html 上：body 保持透明，下面那層氛圍才露得出來 */
   background: transparent;
   -webkit-font-smoothing: antialiased;
-  /* 最後一道防線：內容再怎麼寬也不該讓整頁橫向捲動 */
-  overflow-x: hidden;
 }
+/*
+ * 橫向溢出在 main 這一層剪掉。clip 不會建立捲動容器，所以 sticky 側欄照常；
+ * 放在 body 上的 overflow-x: hidden 只藏捲軸不縮文件寬，iOS 還是拖得動。
+ */
+main { display: block; overflow-x: clip; }
+main:focus { outline: none; }
 
 /*
  * 氛圍層：三團很淡的色暈，一分鐘漂一個來回。
  * 只動 transform（合成層，不重排）；不接受動效的人看到的是靜止的一幀。
- * 濃度壓在 10% 以下——它是紙的質地，不是背景圖。
+ * 濃度壓在 10% 左右——它是紙的質地，不是背景圖。顏色跟著主題走。
  */
 body::before {
   content: ""; position: fixed; inset: -25%; z-index: -1; pointer-events: none;
   background:
-    radial-gradient(38% 34% at 18% 22%, rgba(239, 79, 111, 0.11), transparent 70%),
-    radial-gradient(34% 34% at 82% 26%, rgba(109, 63, 209, 0.09), transparent 70%),
-    radial-gradient(44% 40% at 58% 88%, rgba(31, 143, 168, 0.09), transparent 70%);
+    radial-gradient(38% 34% at 18% 22%, var(--ambient-1), transparent 70%),
+    radial-gradient(34% 34% at 82% 26%, var(--ambient-2), transparent 70%),
+    radial-gradient(44% 40% at 58% 88%, var(--ambient-3), transparent 70%);
   animation: ambient 64s ease-in-out infinite alternate;
   will-change: transform;
 }
 @keyframes ambient {
   from { transform: translate3d(0, 0, 0) scale(1); }
   to { transform: translate3d(-3%, 2.5%, 0) scale(1.07); }
-}
-@media (prefers-color-scheme: dark) {
-  body::before {
-    background:
-      radial-gradient(38% 34% at 18% 22%, rgba(239, 79, 111, 0.14), transparent 70%),
-      radial-gradient(34% 34% at 82% 26%, rgba(139, 92, 246, 0.12), transparent 70%),
-      radial-gradient(44% 40% at 58% 88%, rgba(56, 189, 248, 0.10), transparent 70%);
-  }
 }
 
 a { color: inherit; text-decoration: none; }
@@ -60,6 +57,14 @@ h1, h2, h3, p, dl, dd { margin: 0; }
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
 }
+/* 跳到內容：平常藏著，鍵盤 Tab 到它才浮出來 */
+.skip {
+  position: fixed; top: 8px; left: 8px; z-index: 100;
+  padding: 8px 14px; border-radius: var(--r-pill);
+  background: var(--text); color: var(--surface); font-weight: 600;
+  transform: translateY(-200%); transition: transform var(--dur) var(--ease);
+}
+.skip:focus { transform: none; }
 
 /* ---- 文字 ---------------------------------------------------------------- */
 
@@ -80,7 +85,7 @@ h1, h2, h3, p, dl, dd { margin: 0; }
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--s-2);
-  height: 36px; padding: 0 var(--s-4);
+  height: var(--h-md); padding: 0 var(--s-4);
   white-space: nowrap;
   font-size: 14px; font-weight: 500;
   color: var(--text);
@@ -92,20 +97,25 @@ h1, h2, h3, p, dl, dd { margin: 0; }
 .btn:hover { background: var(--surface-2); }
 .btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+.btn svg { width: 16px; height: 16px; flex: none; }
 
 .btn--primary {
   background: var(--accent-grad); border-color: transparent; color: var(--on-accent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 2px rgba(233, 64, 95, 0.35);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 2px color-mix(in srgb, var(--accent-deep) 40%, transparent);
 }
 .btn--primary:hover { filter: brightness(0.95); }
 .btn--primary:active { filter: brightness(0.9); }
 .btn--ghost { background: transparent; border-color: transparent; color: var(--text-2); }
 .btn--ghost:hover { background: var(--surface-2); color: var(--text); }
 .btn--danger:hover { border-color: var(--danger); color: var(--danger); background: transparent; }
-.btn--sm { height: 30px; padding: 0 var(--s-3); font-size: 13px; }
+.btn--sm { height: var(--h-sm); padding: 0 var(--s-3); font-size: 13px; }
+.btn--lg { height: var(--h-lg); padding: 0 var(--s-5); font-size: 15px; }
+/* 只有 icon 的圓鈕 */
+.btn--icon { width: var(--h-md); padding: 0; }
+.btn--icon.btn--sm { width: var(--h-sm); }
 
 .input {
-  width: 100%; height: 40px; padding: 0 var(--s-3);
+  width: 100%; height: var(--h-md); padding: 0 var(--s-3);
   font: inherit; font-size: 14px;
   color: var(--text);
   background: var(--surface);
@@ -116,10 +126,11 @@ h1, h2, h3, p, dl, dd { margin: 0; }
 .input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 textarea.input, select.input { height: auto; }
 textarea.input { min-height: 140px; padding: var(--s-3); resize: vertical; line-height: 1.7; }
-select.input { height: 40px; }
+select.input { height: var(--h-md); }
 
 .field { display: grid; gap: var(--s-2); margin-bottom: var(--s-5); }
 .field > label { font-size: 13px; font-weight: 600; }
+.field__foot { display: flex; justify-content: space-between; gap: var(--s-3); }
 
 /* 分段控制：同一組互斥的選項（排序、篩選）。選中的那格浮起來 */
 .seg {
@@ -127,7 +138,7 @@ select.input { height: 40px; }
   background: var(--surface-2); border-radius: var(--r-pill);
 }
 .seg__item {
-  height: 30px; padding: 0 14px;
+  height: var(--h-sm); padding: 0 14px;
   background: transparent; border: 0; border-radius: var(--r-pill);
   font-size: 13px; font-weight: 500; color: var(--text-2);
   white-space: nowrap; cursor: pointer;
@@ -151,7 +162,32 @@ select.input { height: 40px; }
   background: var(--surface-2); border-radius: var(--r-sm);
   color: var(--text-2); font-size: 13.5px;
 }
-.notice--error { background: var(--accent-soft); color: var(--danger); }
+.notice--error { background: color-mix(in srgb, var(--danger) 10%, var(--surface)); color: var(--danger); }
+
+/* ---- 單字頭像：沒有圖的人／角色，用名字算一個穩定的色相，彼此才分得開 ---------- */
+
+.mono {
+  display: inline-grid; place-items: center; flex: none;
+  border-radius: var(--r-pill);
+  background: hsl(var(--h, 220) 60% 88%); color: hsl(var(--h, 220) 45% 32%);
+  font-weight: 600; line-height: 1;
+}
+:root[data-mode="dark"] .mono { background: hsl(var(--h, 220) 40% 26%); color: hsl(var(--h, 220) 70% 85%); }
+
+/* ---- 名次徽章：前三名用慣例的金銀銅，其餘是深色小圓 -------------------------- */
+
+.medal {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 22px; height: 22px; padding: 0 7px;
+  border-radius: var(--r-pill);
+  background: rgba(20, 20, 28, 0.55); color: #fff;
+  font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+.medal--1 { background: linear-gradient(180deg, var(--gold-light), var(--gold-dark)); color: #3b2a00; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 3px rgba(120, 80, 0, 0.35); }
+.medal--2 { background: linear-gradient(180deg, #d8dde3, var(--silver)); color: #1f2429; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 1px 3px rgba(40, 50, 60, 0.3); }
+.medal--3 { background: linear-gradient(180deg, #e2a878, #c27f45); color: #3a2208; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 3px rgba(90, 50, 10, 0.35); }
 
 /* ---- 統計：小標在上、數字在下 --------------------------------------------- */
 
@@ -165,21 +201,48 @@ select.input { height: 40px; }
   margin-top: var(--s-6);
 }
 
-/* ---- 骨架屏 -------------------------------------------------------------- */
+/* ---- 骨架屏：光帶只動 transform，十幾張一起跑也不重繪 ----------------------- */
 
 .ghost {
+  position: relative; overflow: hidden;
   border-radius: var(--r-md);
-  background: linear-gradient(100deg, var(--surface-2) 30%, var(--border) 48%, var(--surface-2) 66%);
-  background-size: 300% 100%;
+  background: var(--surface-2);
+}
+.ghost::after {
+  content: ""; position: absolute; inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent 20%, var(--border) 50%, transparent 80%);
   animation: sweep 1.4s var(--ease) infinite;
 }
-@keyframes sweep { from { background-position: 130% 0; } to { background-position: -30% 0; } }
+@keyframes sweep { to { transform: translateX(100%); } }
 
 /* ---- 進場：一次淡入，不做錯落——內容社群的列表要的是「馬上可用」不是「表演」 ---- */
 
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 .rise { animation: fade var(--dur-slow) var(--ease) backwards; }
 
+/* 換頁時舊內容留在原地變淡，新內容到了再換——不退回骨架，版面不跳 */
+[aria-busy="true"] { opacity: 0.55; transition: opacity var(--dur) var(--ease); pointer-events: none; }
+
+/* ---- 提示：右下角一小條，說完就走 ------------------------------------------- */
+
+.toast {
+  position: fixed; left: 50%; bottom: calc(var(--s-5) + env(safe-area-inset-bottom)); z-index: 90;
+  transform: translateX(-50%);
+  padding: 10px 16px; border-radius: var(--r-pill);
+  background: var(--text); color: var(--surface);
+  font-size: 13.5px; font-weight: 500;
+  box-shadow: var(--shadow-md);
+  animation: toast var(--dur-slow) var(--ease) both;
+}
+@keyframes toast { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+  /* 無限循環的動畫縮到 1ms 會變成每幀閃一下，那正是這群人最受不了的——直接關掉 */
+  body::before, .ghost::after { animation: none !important; }
 }

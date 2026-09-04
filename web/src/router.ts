@@ -1,3 +1,4 @@
+import { nextTick } from "vue";
 import { createRouter, createWebHistory } from "vue-router";
 import { LOCALE_CODES, SOURCE_LOCALE, applyLocale, detectLocale, pageTitle, updateHreflang } from "./lib/i18n";
 import { useSession } from "./lib/session";
@@ -24,6 +25,8 @@ const pages = [
   { path: "create", component: () => import("./pages/CreateCardPage.vue"), meta: { auth: true } },
   { path: "wallet", component: () => import("./pages/WalletPage.vue"), meta: { auth: true } },
   { path: "auth/callback", component: () => import("./pages/CallbackPage.vue") },
+  // 404 也在語言前綴底下：/en/nope 要看到英文的 404，而不是被換回預設語言
+  { path: ":pathMatch(.*)*", component: () => import("./pages/NotFoundPage.vue") },
 ];
 
 export const router = createRouter({
@@ -34,7 +37,6 @@ export const router = createRouter({
       path: `/:locale(${PREFIXED.join("|")})?`,
       children: pages,
     },
-    { path: "/:pathMatch(.*)*", component: () => import("./pages/NotFoundPage.vue") },
   ],
   scrollBehavior: (_to, _from, saved) => saved ?? { top: 0 },
 });
@@ -79,4 +81,13 @@ router.beforeEach(async (to) => {
   if (session.me) return true;
   await session.login(to.fullPath);
   return false;
+});
+
+/**
+ * 換頁後把焦點放到主內容上。鍵盤與讀屏使用者點了連結，焦點不該留在上一頁那顆
+ * 已經不存在的按鈕上；main 有 tabindex=-1，能接焦點但不進 Tab 順序。
+ */
+router.afterEach((to, from) => {
+  if (to.path === from.path) return;
+  void nextTick(() => document.querySelector<HTMLElement>("main")?.focus({ preventScroll: true }));
 });

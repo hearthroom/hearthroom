@@ -16,7 +16,7 @@ binding = "ASSETS"
 # 找不到對應檔案時回 index.html，前端路由自己接手（/cards/xxx 這種深連結才進得去）。
 not_found_handling = "single-page-application"
 # 但 /v1/* 要先給 Worker，否則 SPA fallback 會把 API 請求也變成 index.html。
-run_worker_first = ["/v1/*"]
+run_worker_first = ["/v1/*", "/cards/*", "/authors/*", "/zh-Hans/cards/*", "/zh-Hans/authors/*", "/en/cards/*", "/en/authors/*", "/ja/cards/*", "/ja/authors/*", "/ko/cards/*", "/ko/authors/*"]
 
 [vars]
 # 上游的開放 API。這裡對它只有兩種呼叫：轉發作者 token 問身分、以游客讀卡片公開資訊。
