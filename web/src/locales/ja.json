@@ -142,5 +142,21 @@
   "time.yesterday": "昨日",
   "wallet.records.income": "獲得",
   "wallet.records.expense": "消費",
-  "wallet.records.all": "すべて"
+  "wallet.records.all": "すべて",
+  "board.mode.cards": "キャラクター",
+  "board.mode.authors": "作者",
+  "board.tags": "タイプ",
+  "board.tag.all": "すべて",
+  "author.sort.talk": "累計会話",
+  "author.sort.cards": "作品数",
+  "author.sort.hot": "急上昇",
+  "author.cards": "{n} 作品",
+  "search.title": "検索",
+  "search.placeholder": "名前、紹介、タグ、最初のひとこと…",
+  "search.zone.current": "現在の言語",
+  "search.zone.all": "すべての言語",
+  "search.cards": "キャラクター",
+  "search.authors": "作者",
+  "search.empty": "「{q}」に一致する結果はありません",
+  "search.hint": "キーワードを入力"
 }

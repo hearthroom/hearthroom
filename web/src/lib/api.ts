@@ -1,6 +1,6 @@
 import { COMMUNITY_API, UPSTREAM_API } from "./config";
 import { i18n } from "./i18n";
-import type { Author, CardPage, CommunityCard, MyRole, Sort, Zone } from "./types";
+import type { Author, AuthorSort, CardPage, CommunityCard, MyRole, Sort, Zone } from "./types";
 
 export class ApiError extends Error {
   constructor(readonly status: number, message: string) {
@@ -21,7 +21,7 @@ const authHeaders = (token?: string): Record<string, string> =>
 
 // ---- 社群 API（同源）------------------------------------------------------
 
-export interface BoardQuery { zone?: Zone; q?: string; tag?: string; sort?: Sort; author?: number; limit?: number; offset?: number; lang?: string }
+export interface BoardQuery { zone?: Zone | "all"; q?: string; tag?: string; sort?: Sort; author?: number; limit?: number; offset?: number; lang?: string }
 
 export async function fetchBoard(query: BoardQuery = {}): Promise<CardPage> {
   const params = new URLSearchParams();
@@ -32,6 +32,20 @@ export async function fetchBoard(query: BoardQuery = {}): Promise<CardPage> {
 export async function fetchCard(id: string, lang?: string): Promise<CommunityCard> {
   const q = lang ? `?lang=${encodeURIComponent(lang)}` : "";
   return json<CommunityCard>(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(id)}${q}`));
+}
+
+/** 這一區最常見的標籤，給榜單的類型篩選列。 */
+export async function fetchTags(zone: Zone | "all"): Promise<{ tag: string; n: number }[]> {
+  const res = await json<{ items: { tag: string; n: number }[] }>(await fetch(`${COMMUNITY_API}/tags?zone=${zone}`));
+  return res.items;
+}
+
+export interface AuthorPage { items: Author[]; hasNext: boolean; limit: number; offset: number; sort: AuthorSort }
+
+export async function fetchAuthors(query: { zone?: Zone | "all"; q?: string; sort?: AuthorSort; limit?: number; offset?: number } = {}): Promise<AuthorPage> {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== "") params.set(k, String(v));
+  return json<AuthorPage>(await fetch(`${COMMUNITY_API}/authors?${params}`));
 }
 
 export async function fetchAuthor(accountNumId: number): Promise<Author> {

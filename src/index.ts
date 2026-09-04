@@ -1,11 +1,14 @@
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import {
   syncStatement,
   dueForSync,
   getAuthor,
   getCard,
+  listAuthors,
   listCards,
+  toAuthor,
   toCard,
+  topTags,
   unregister,
   upsertCard,
 } from "./cards";
@@ -55,6 +58,30 @@ const BOARD_TTL = 60;
 /** 同 mineCache：Cache API 沒有「全部清掉」，測試靠換命名空間拿乾淨起點。 */
 export const boardCache = { namespace: "board" };
 
+/** zone 參數：四區之一、all（不分區）、或沒帶（中文）。 */
+function parseZone(raw: string | undefined): Zone | undefined {
+  if (raw === "all") return undefined;
+  return (ZONES as readonly string[]).includes(raw ?? "") ? (raw as Zone) : "zh";
+}
+
+/** 公開、只讀、對所有人一樣的回應，都走這個邊緣快取。 */
+async function cachedJson(c: Context<{ Bindings: Env }>, ttl: number, compute: () => Promise<unknown>) {
+  const cache = await caches.open(boardCache.namespace);
+  const hit = await cache.match(c.req.raw);
+  if (hit) {
+    const res = new Response(hit.body, hit);
+    res.headers.set("X-Cache", "hit");
+    return res;
+  }
+  const res = c.json(await compute());
+  res.headers.set("Cache-Control", `public, max-age=${ttl}`);
+  res.headers.set("X-Cache", "miss");
+  const stored = res.clone();
+  stored.headers.set("X-Cache", "hit");
+  c.executionCtx.waitUntil(cache.put(c.req.raw, stored));
+  return res;
+}
+
 /** 榜單與搜尋。匿名可讀。 */
 app.get("/v1/cards", async (c) => {
   // 只有 GET 而且完全公開，所以整個 URL 就是快取鍵，不必自己組。
@@ -66,14 +93,13 @@ app.get("/v1/cards", async (c) => {
     return res;
   }
   const sortParam = c.req.query("sort");
-  const sort = sortParam === "new" || sortParam === "top" ? sortParam : "hot";
+  const sort = sortParam === "new" || sortParam === "top" || sortParam === "relevance" ? sortParam : "hot";
   const offset = clamp(c.req.query("offset"), 0, 10_000);
   const limit = Math.max(1, clamp(c.req.query("limit"), 24, 100));
   const author = c.req.query("author");
   // 語區是榜單的必要條件，不帶就給中文——不做「全部語言混在一起」的總榜。
-  // 作者主頁是唯一例外：看一個人的作品時，語言不是篩選條件。
-  const zoneParam = c.req.query("zone");
-  const zone: Zone | undefined = author ? undefined : (ZONES as readonly string[]).includes(zoneParam ?? "") ? (zoneParam as Zone) : "zh";
+  // 兩個例外：作者主頁（看一個人的作品時語言不是篩選條件）、搜尋頁明說 zone=all。
+  const zone = author ? undefined : parseZone(c.req.query("zone"));
 
   const { rows, total, hasNext } = await listCards(c.env.DB, {
     zone,
@@ -94,6 +120,29 @@ app.get("/v1/cards", async (c) => {
   c.executionCtx.waitUntil(cache.put(c.req.raw, stored));
   return res;
 });
+
+/** 這一區最常見的標籤，給榜單的類型篩選列。標籤分佈變得慢，快取久一點。 */
+app.get("/v1/tags", (c) =>
+  cachedJson(c, 300, async () => ({
+    items: await topTags(c.env.DB, parseZone(c.req.query("zone")), Math.max(1, clamp(c.req.query("limit"), 24, 60))),
+  })),
+);
+
+/** 作者榜：按作品在本站的合計排。 */
+app.get("/v1/authors", (c) =>
+  cachedJson(c, BOARD_TTL, async () => {
+    const sortParam = c.req.query("sort");
+    const sort = sortParam === "cards" || sortParam === "hot" ? sortParam : "talk";
+    const limit = Math.max(1, clamp(c.req.query("limit"), 24, 100));
+    const offset = clamp(c.req.query("offset"), 0, 10_000);
+    const { rows, hasNext } = await listAuthors(c.env.DB, {
+      zone: parseZone(c.req.query("zone")),
+      q: c.req.query("q")?.trim() || undefined,
+      sort, limit, offset,
+    });
+    return { items: rows.map(toAuthor), hasNext, limit, offset, sort };
+  }),
+);
 
 app.get("/v1/cards/:id", async (c) => {
   const row = await getCard(c.env.DB, c.req.param("id"));

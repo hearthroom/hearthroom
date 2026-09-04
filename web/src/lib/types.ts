@@ -32,7 +32,7 @@ export interface CardPage {
   offset: number;
   sort: Sort;
 }
-export type Sort = "hot" | "new" | "top";
+export type Sort = "hot" | "new" | "top" | "relevance";
 
 export interface Author {
   accountNumId: number;
@@ -40,8 +40,11 @@ export interface Author {
   avatar: string;
   cardCount: number;
   talkTotal: number;
+  /** 這個同步窗口的對話增量加總。只有榜單／搜尋列表帶，單人主頁沒有。 */
+  trending?: number;
   joinedAt: number;
 }
+export type AuthorSort = "talk" | "cards" | "hot";
 
 /** 上游的角色卡（作者自己的視角）。 */
 export interface MyRole {

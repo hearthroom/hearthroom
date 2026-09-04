@@ -16,6 +16,7 @@ const PREFIXED = LOCALE_CODES.filter((c) => c !== SOURCE_LOCALE);
 
 const pages = [
   { path: "", component: () => import("./pages/BoardPage.vue") },
+  { path: "search", component: () => import("./pages/SearchPage.vue") },
   { path: "cards/:id", component: () => import("./pages/CardPage.vue") },
   { path: "cards/:roleId/edit", component: () => import("./pages/EditCardPage.vue"), meta: { auth: true } },
   { path: "authors/:accountNumId", component: () => import("./pages/AuthorPage.vue") },

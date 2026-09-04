@@ -142,5 +142,21 @@
   "time.yesterday": "어제",
   "wallet.records.income": "적립",
   "wallet.records.expense": "사용",
-  "wallet.records.all": "전체"
+  "wallet.records.all": "전체",
+  "board.mode.cards": "캐릭터",
+  "board.mode.authors": "작가",
+  "board.tags": "유형",
+  "board.tag.all": "전체",
+  "author.sort.talk": "누적 대화",
+  "author.sort.cards": "작품 수",
+  "author.sort.hot": "급상승",
+  "author.cards": "작품 {n}개",
+  "search.title": "검색",
+  "search.placeholder": "이름, 소개, 태그, 첫 인사…",
+  "search.zone.current": "현재 언어",
+  "search.zone.all": "모든 언어",
+  "search.cards": "캐릭터",
+  "search.authors": "작가",
+  "search.empty": "‘{q}’에 맞는 결과가 없어요",
+  "search.hint": "검색어를 입력하세요"
 }
