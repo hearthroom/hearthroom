@@ -103,7 +103,7 @@ watch(() => route.query.q, (q) => { draft.value = (q as string) ?? ""; });
           #{{ route.query.tag }} <span aria-hidden="true">×</span>
         </button>
       </div>
-      <p v-if="page && !loading" class="subtle status__count">{{ page.total }} 張</p>
+      <p v-if="page && !loading && page.total !== null" class="subtle status__count">{{ page.total }} 張</p>
     </div>
 
     <p v-if="error" class="notice notice--error">{{ error }}</p>
@@ -118,7 +118,7 @@ watch(() => route.query.q, (q) => { draft.value = (q as string) ?? ""; });
       :empty-hint="searching ? '換個關鍵字試試。' : '第一張卡等著被登記——如果你有作品，去「我的卡片」把它放上來。'"
     />
 
-    <nav v-if="page && page.total > page.limit" class="pager">
+    <nav v-if="page && (page.offset > 0 || page.hasNext)" class="pager">
       <button
         class="btn btn--sm"
         :disabled="page.offset === 0"
@@ -126,10 +126,12 @@ watch(() => route.query.q, (q) => { draft.value = (q as string) ?? ""; });
       >
         ← 上一頁
       </button>
-      <span class="subtle">{{ Math.floor(page.offset / page.limit) + 1 }} / {{ Math.ceil(page.total / page.limit) }}</span>
+      <span class="subtle">
+        第 {{ Math.floor(page.offset / page.limit) + 1 }} 頁<template v-if="page.total !== null"> / 共 {{ Math.ceil(page.total / page.limit) }} 頁</template>
+      </span>
       <button
         class="btn btn--sm"
-        :disabled="page.offset + page.limit >= page.total"
+        :disabled="!page.hasNext"
         @click="navigate({ offset: String(page.offset + page.limit) })"
       >
         下一頁 →
