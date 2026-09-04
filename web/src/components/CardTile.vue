@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 import { compact, hueFrom } from "@/lib/format";
 import { zoneLabel } from "@/lib/i18n";
@@ -11,6 +11,8 @@ const props = defineProps<{
   rank?: number;
   showTrending?: boolean;
   showZone?: boolean;
+  /** 首屏那幾張不要懶載入：它們就是最大內容繪製 */
+  eager?: boolean;
 }>();
 
 // 沒封面的卡用角色名決定色相：同一張卡永遠同一個顏色，一排佔位卡也彼此可辨。
@@ -18,6 +20,10 @@ const { lp } = useLocalePath();
 const hue = computed(() => hueFrom(props.card.name));
 const initial = computed(() => [...props.card.name][0] ?? "?");
 const href = computed(() => lp(`/cards/${props.card.roleId}`));
+/* 圖掛了（上游換圖、刪圖）就當沒圖：退回單字佔位，不留一個破圖 */
+const broken = ref(false);
+watch(() => props.card.avatarUrl, () => { broken.value = false; });
+const hasArt = computed(() => !!props.card.avatarUrl && !broken.value);
 
 /** 卡片上只放兩個標籤，多的用 +N 帶過——標籤是給人掃的，不是給人讀的。 */
 const TAGS_SHOWN = 2;
@@ -27,12 +33,19 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
 
 <template>
   <!--
-    整張卡都可以點，但標籤各自是連結——所以外層不是 <a>（連結不能套連結）。
-    名字的連結用 ::after 撐滿整張卡，標籤疊在它上面。
+    整張卡都可以點，但標籤與作者各自是連結——所以外層不是 <a>（連結不能套連結）。
+    名字的連結用 ::after 撐滿整張卡，標籤與作者疊在它上面。
   -->
   <article class="card rise">
     <div class="card__art">
-      <img v-if="card.avatarUrl" :src="card.avatarUrl" :alt="card.name" loading="lazy" />
+      <img
+        v-if="hasArt"
+        :src="card.avatarUrl!"
+        alt=""
+        :loading="eager ? 'eager' : 'lazy'"
+        :fetchpriority="eager ? 'high' : undefined"
+        @error="broken = true"
+      />
       <div
         v-else
         class="card__void"
@@ -41,11 +54,11 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
         <span>{{ initial }}</span>
       </div>
       <!-- 名次是個小徽章，前三名用慣例的金銀銅；不搶立繪的戲 -->
-      <span v-if="rank" class="card__rank" :class="rank <= 3 && `card__rank--${rank}`">{{ rank }}</span>
+      <span v-if="rank" class="medal card__rank" :class="rank <= 3 && `medal--${rank}`" :aria-label="$t('board.rank', { n: rank })">{{ rank }}</span>
     </div>
 
     <div class="card__body">
-      <h3 class="card__name"><RouterLink :to="href" class="card__link">{{ card.name }}</RouterLink></h3>
+      <h2 class="card__name"><RouterLink :to="href" class="card__link">{{ card.name }}</RouterLink></h2>
       <p class="card__hook">{{ card.summary || $t("card.noSummary") }}</p>
 
       <ul v-if="tags.length" class="card__tags">
@@ -56,14 +69,17 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
       </ul>
 
       <div class="card__meta">
-        <span class="card__by">
-          <template v-if="showZone">{{ zoneLabel(card.zone) }}</template>
-          <template v-else>
-            <img v-if="card.author.avatar" :src="card.author.avatar" alt="" class="card__face" />
-            <span class="card__author">{{ card.author.name }}</span>
-          </template>
-        </span>
-        <span class="card__num" :class="{ 'card__num--up': showTrending && card.trending > 0 }">
+        <span v-if="showZone" class="card__by">{{ zoneLabel(card.zone) }}</span>
+        <RouterLink v-else :to="lp(`/authors/${card.author.accountNumId}`)" class="card__by card__by--link">
+          <img v-if="card.author.avatar" :src="card.author.avatar" alt="" class="card__face" />
+          <span class="card__author">{{ card.author.name }}</span>
+        </RouterLink>
+        <span
+          class="card__num"
+          :class="{ 'card__num--up': showTrending && card.trending > 0 }"
+          :aria-label="$t('card.talkCount', { n: compact(card.talkNum) })"
+          :title="$t('card.talkCount', { n: compact(card.talkNum) })"
+        >
           <svg viewBox="0 0 16 16" aria-hidden="true">
             <path d="M3 3.5h10a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 1-1.5 1.5H7.5L4.5 14v-2.5H3A1.5 1.5 0 0 1 1.5 10V5A1.5 1.5 0 0 1 3 3.5z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
           </svg>
@@ -97,25 +113,13 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
 .card__void { display: grid; place-items: center; width: 100%; height: 100%; }
 .card__void span { font-size: 40px; font-weight: 600; color: rgba(255, 255, 255, 0.9); }
 
-.card__rank {
-  position: absolute; top: 8px; left: 8px; z-index: 1;
-  min-width: 22px; height: 22px; padding: 0 7px;
-  display: inline-flex; align-items: center; justify-content: center;
-  border-radius: var(--r-pill);
-  background: rgba(20, 20, 28, 0.55); color: #fff;
-  font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
-  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-}
-.card__rank--1 { background: linear-gradient(180deg, #ffd35c, #f0a91a); color: #3b2a00; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 3px rgba(120, 80, 0, 0.35); }
-.card__rank--2 { background: linear-gradient(180deg, #d8dde3, #a6adb6); color: #1f2429; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 1px 3px rgba(40, 50, 60, 0.3); }
-.card__rank--3 { background: linear-gradient(180deg, #e2a878, #c27f45); color: #3a2208; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 3px rgba(90, 50, 10, 0.35); }
+.card__rank { position: absolute; top: 8px; left: 8px; z-index: 1; }
 
 .card__body { display: grid; gap: 5px; padding: 10px 12px 11px; }
 .card__name { font-size: 15px; font-weight: 600; line-height: 1.35; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* 名字的連結撐滿整張卡；沒有 z-index 的東西都在它底下，標籤有 z-index 所以在它上面 */
+/* 名字的連結撐滿整張卡；沒有 z-index 的東西都在它底下，標籤與作者有 z-index 所以在它上面 */
 .card__link::after { content: ""; position: absolute; inset: 0; }
-.card__link:hover { color: var(--accent); }
+.card__link:hover { color: var(--accent-text); }
 .card__hook {
   font-size: 12.5px; line-height: 1.5; color: var(--text-2);
   display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
@@ -133,7 +137,7 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
   max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
-a.tag:hover { background: var(--accent-soft); color: var(--accent); }
+a.tag:hover { background: var(--accent-soft); color: var(--accent-text); }
 .tag--more { color: var(--text-3); padding: 0 5px; }
 
 .card__meta {
@@ -143,9 +147,11 @@ a.tag:hover { background: var(--accent-soft); color: var(--accent); }
   font-size: 12px; color: var(--text-3);
 }
 .card__by { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.card__by--link { position: relative; z-index: 1; transition: color var(--dur) var(--ease); }
+.card__by--link:hover { color: var(--accent-text); }
 .card__face { width: 16px; height: 16px; border-radius: var(--r-pill); object-fit: cover; flex: none; }
 .card__author { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card__num { display: inline-flex; align-items: center; gap: 3px; flex: none; font-variant-numeric: tabular-nums; }
 .card__num svg { width: 13px; height: 13px; }
-.card__num--up { color: var(--accent); font-weight: 600; }
+.card__num--up { color: var(--accent-text); font-weight: 600; }
 </style>

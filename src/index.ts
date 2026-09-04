@@ -12,6 +12,7 @@ import {
   unregister,
   upsertCard,
 } from "./cards";
+import { authorLine, renderHead } from "./head";
 import { loadMine, type MineFilter } from "./mine";
 import { type Env, HttpError } from "./types";
 import { upstream, ZONES, type Zone } from "./upstream";
@@ -279,6 +280,47 @@ async function syncBatch(env: Env): Promise<{ ok: number; failed: number; ms: nu
 
   return { ok, failed, ms: Date.now() - started };
 }
+
+/**
+ * 卡片頁與作者頁的 HTML：把分享預覽寫進 <head>，其餘照 SPA 的 index.html。
+ *
+ * 只有 wrangler.toml 裡 run_worker_first 列出的路徑會進到這裡；其他路徑直接由
+ * 靜態資源層回應，不經過 Worker。找不到的卡回 404 狀態，但內容仍是 index.html——
+ * 前端會畫自己的 404 頁，而抓取器與搜尋引擎得到正確的狀態碼。
+ */
+const PAGE = /^(?:\/(zh-Hans|en|ja|ko))?\/(cards|authors)\/([^/]+)$/;
+const SITE_NAME = "Taproom";
+const PAGE_TTL = 60;
+
+app.get("*", async (c) => {
+  const url = new URL(c.req.url);
+  // 用 "/" 而不是 "/index.html"：資源層預設會把後者 301 到前者
+  const shell = await c.env.ASSETS.fetch(new Request(new URL("/", url).toString(), { headers: c.req.raw.headers }));
+  const m = url.pathname.match(PAGE);
+  if (!m || !shell.ok) return shell;
+  const locale = m[1] ?? "zh-Hant";
+  const l = locale.startsWith("zh") ? "zh" : locale;
+  const self = url.origin + url.pathname;
+
+  if (m[2] === "cards") {
+    const row = await getCard(c.env.DB, decodeURIComponent(m[3]!));
+    if (!row) return new Response(shell.body, { status: 404, headers: shell.headers });
+    const card = toCard(row, l);
+    const res = renderHead(shell, {
+      lang: locale, title: `${card.name} · ${SITE_NAME}`, description: card.summary, image: card.avatarUrl, url: self, type: "profile",
+    });
+    res.headers.set("Cache-Control", `public, max-age=${PAGE_TTL}`);
+    return res;
+  }
+  const author = await getAuthor(c.env.DB, Number(m[3]));
+  if (!author) return new Response(shell.body, { status: 404, headers: shell.headers });
+  const a = toAuthor({ ...author, trending: 0 });
+  const res = renderHead(shell, {
+    lang: locale, title: `${a.name} · ${SITE_NAME}`, description: authorLine(locale, a.cardCount, a.talkTotal), image: a.avatar || null, url: self, type: "profile",
+  });
+  res.headers.set("Cache-Control", `public, max-age=${PAGE_TTL}`);
+  return res;
+});
 
 export default {
   fetch: app.fetch,

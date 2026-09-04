@@ -8,11 +8,12 @@ import { useSession } from "@/lib/session";
 
 const router = useRouter();
 const session = useSession();
-const { lp } = useLocalePath();
+const { lp, locale } = useLocalePath();
 const { t } = useI18n();
 
 const roleName = ref("");
-const language = ref("zh-Hant");
+// 預設跟介面語言：看英文介面的人，第一張卡多半也是英文的
+const language = ref(locale.value);
 const saving = ref(false);
 const error = ref("");
 
@@ -64,7 +65,7 @@ async function submit() {
         </select>
       </div>
 
-      <p v-if="error" class="notice notice--error">{{ error }}</p>
+      <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
 
       <button class="btn btn--primary" type="submit" :disabled="saving || !roleName.trim()">
         {{ saving ? $t("create.submitting") : $t("create.submit") }}

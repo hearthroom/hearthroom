@@ -92,18 +92,18 @@ watch(zone, loadTags, { immediate: true });
 
     <div class="bar">
       <!-- 左邊選看哪個榜，右邊選怎麼排 -->
-      <div class="seg seg--mode" role="tablist">
-        <button class="seg__item" :class="{ 'seg__item--on': mode === 'cards' }" role="tab" :aria-selected="mode === 'cards'" @click="switchMode('cards')">{{ $t("board.mode.cards") }}</button>
-        <button class="seg__item" :class="{ 'seg__item--on': mode === 'authors' }" role="tab" :aria-selected="mode === 'authors'" @click="switchMode('authors')">{{ $t("board.mode.authors") }}</button>
+      <div class="seg seg--mode">
+        <button class="seg__item" :class="{ 'seg__item--on': mode === 'cards' }" :aria-pressed="mode === 'cards'" @click="switchMode('cards')">{{ $t("board.mode.cards") }}</button>
+        <button class="seg__item" :class="{ 'seg__item--on': mode === 'authors' }" :aria-pressed="mode === 'authors'" @click="switchMode('authors')">{{ $t("board.mode.authors") }}</button>
       </div>
 
-      <div v-if="mode === 'cards'" class="sorts" role="tablist" :aria-label="$t('board.sorts')">
-        <button v-for="s in SORTS" :key="s" class="sorts__item" :class="{ 'sorts__item--on': sort === s }" role="tab" :aria-selected="sort === s" @click="navigate({ sort: s })">
+      <div v-if="mode === 'cards'" class="sorts" role="group" :aria-label="$t('board.sorts')">
+        <button v-for="s in SORTS" :key="s" class="sorts__item" :class="{ 'sorts__item--on': sort === s }" :aria-pressed="sort === s" @click="navigate({ sort: s })">
           {{ $t(`board.sort.${s}`) }}
         </button>
       </div>
-      <div v-else class="sorts" role="tablist" :aria-label="$t('board.sorts')">
-        <button v-for="s in AUTHOR_SORTS" :key="s" class="sorts__item" :class="{ 'sorts__item--on': authorSort === s }" role="tab" :aria-selected="authorSort === s" @click="navigate({ sort: s })">
+      <div v-else class="sorts" role="group" :aria-label="$t('board.sorts')">
+        <button v-for="s in AUTHOR_SORTS" :key="s" class="sorts__item" :class="{ 'sorts__item--on': authorSort === s }" :aria-pressed="authorSort === s" @click="navigate({ sort: s })">
           {{ $t(`author.sort.${s}`) }}
         </button>
       </div>
@@ -112,20 +112,21 @@ watch(zone, loadTags, { immediate: true });
     <!-- 類型列：作者自己打的標籤裡最常見的那些。橫向捲，手機上不折行 -->
     <nav v-if="mode === 'cards' && tags.length" class="rail" :aria-label="$t('board.tags')">
       <div class="rail__inner">
-        <button class="tagchip" :class="{ 'is-on': !tag }" @click="navigate({ tag: undefined })">{{ $t("board.tag.all") }}</button>
-        <button v-for="x in tags" :key="x.tag" class="tagchip" :class="{ 'is-on': tag === x.tag }" @click="navigate({ tag: tag === x.tag ? undefined : x.tag })">
+        <button class="tagchip" :class="{ 'is-on': !tag }" :aria-pressed="!tag" @click="navigate({ tag: undefined })">{{ $t("board.tag.all") }}</button>
+        <button v-for="x in tags" :key="x.tag" class="tagchip" :class="{ 'is-on': tag === x.tag }" :aria-pressed="tag === x.tag" @click="navigate({ tag: tag === x.tag ? undefined : x.tag })">
           {{ x.tag }}<span class="tagchip__n">{{ x.n }}</span>
         </button>
       </div>
     </nav>
 
-    <p v-if="error" class="notice notice--error">{{ error }}</p>
+    <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
 
     <template v-if="mode === 'cards'">
-      <p v-if="page && !loading && page.total !== null" class="subtle count">{{ $t("board.count", { n: page.total }) }}</p>
+      <p v-if="page && page.total !== null" class="subtle count">{{ $t("board.count", { n: page.total }) }}</p>
       <CardGrid
         :cards="page?.items ?? []"
-        :loading="loading"
+        :loading="loading && !page"
+        :busy="loading"
         :ranked="!tag"
         :rank-offset="page?.offset ?? 0"
         :show-trending="sort === 'hot'"
@@ -149,7 +150,7 @@ watch(zone, loadTags, { immediate: true });
         <p class="empty__title">{{ $t("board.empty.title") }}</p>
         <p class="empty__hint muted">{{ $t("board.empty.hint") }}</p>
       </div>
-      <AuthorList v-else :authors="authors.items" ranked :rank-offset="authors.offset" :show-trending="authorSort === 'hot'" />
+      <div v-else :aria-busy="loading || undefined"><AuthorList :authors="authors.items" ranked :rank-offset="authors.offset" :show-trending="authorSort === 'hot'" /></div>
       <nav v-if="authors && (authors.offset > 0 || authors.hasNext)" class="pager">
         <button class="btn btn--sm" :disabled="authors.offset === 0" @click="navigate({ offset: String(Math.max(0, authors.offset - authors.limit)) })">← {{ $t("pager.prev") }}</button>
         <span class="subtle">{{ $t("pager.page", { n: Math.floor(authors.offset / authors.limit) + 1 }) }}</span>
@@ -166,19 +167,20 @@ watch(zone, loadTags, { immediate: true });
 /* 排序做成細字頁籤，跟左邊的分段控制拉開層級：一個是「看哪個榜」，一個是「怎麼排」 */
 .sorts { display: flex; gap: 2px; }
 .sorts__item {
-  height: 30px; padding: 0 10px; border: 0; border-radius: var(--r-pill);
+  height: var(--h-sm); padding: 0 10px; border: 0; border-radius: var(--r-pill);
   background: transparent; font-size: 13px; font-weight: 500; color: var(--text-3); cursor: pointer;
   transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .sorts__item:hover { color: var(--text); }
-.sorts__item--on { color: var(--accent); background: var(--accent-soft); }
+.sorts__item--on { color: var(--accent-text); background: var(--accent-soft); }
 
-.rail { margin: 0 calc(-1 * var(--s-5)) var(--s-4); overflow-x: auto; scrollbar-width: none; }
+/* 右緣一道漸隱：告訴人還有更多，捲到底就消失 */
+.rail { position: relative; margin: 0 calc(-1 * var(--s-5)) var(--s-4); overflow-x: auto; scrollbar-width: none; mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent); -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent); }
 .rail::-webkit-scrollbar { display: none; }
 .rail__inner { display: inline-flex; gap: 6px; padding: 2px var(--s-5); }
 .tagchip {
   display: inline-flex; align-items: center; gap: 5px;
-  height: 30px; padding: 0 12px; white-space: nowrap;
+  height: var(--h-sm); padding: 0 12px; white-space: nowrap;
   background: var(--surface); border: 0; border-radius: var(--r-pill);
   box-shadow: 0 0 0 1px var(--line);
   font-size: 13px; font-weight: 500; color: var(--text-2); cursor: pointer;

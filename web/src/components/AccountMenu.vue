@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
-import { whole } from "@/lib/format";
+import { hueFrom, whole } from "@/lib/format";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
 
@@ -33,7 +33,7 @@ const PLAN_LABEL: Record<string, string> = { unlimited: "wallet.plan.unlimited",
 
     <button class="acct__btn" :aria-label="$t('nav.menu')" aria-haspopup="menu" :aria-expanded="open" @click="open = !open">
       <img v-if="session.me.avatar" :src="session.me.avatar" alt="" class="acct__face" />
-      <span v-else class="acct__face acct__face--void">{{ [...session.me.nickName][0] }}</span>
+      <span v-else class="acct__face mono" :style="{ '--h': hueFrom(session.me.nickName) }">{{ [...session.me.nickName][0] }}</span>
     </button>
 
     <div v-if="open" class="menu panel" role="menu" @click="open = false">
@@ -62,12 +62,11 @@ const PLAN_LABEL: Record<string, string> = { unlimited: "wallet.plan.unlimited",
   transition: background var(--dur) var(--ease);
 }
 .acct__credits:hover { background: var(--border); }
-.acct__credits svg { width: 13px; height: 13px; fill: var(--gold); }
+.acct__credits svg { width: 13px; height: 13px; fill: var(--gold); filter: drop-shadow(0 1px 1px rgba(242, 176, 30, 0.35)); }
 
 .acct__btn { padding: 2px; background: none; border: 0; border-radius: var(--r-pill); cursor: pointer; display: inline-flex; }
 .acct__btn:hover { background: var(--surface-2); }
-.acct__face { width: 30px; height: 30px; border-radius: var(--r-pill); object-fit: cover; }
-.acct__face--void { display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-size: 13px; font-weight: 600; }
+.acct__face { width: 30px; height: 30px; border-radius: var(--r-pill); object-fit: cover; font-size: 13px; }
 
 .menu {
   position: absolute; top: calc(100% + 8px); right: 0; z-index: 40;
@@ -77,7 +76,7 @@ const PLAN_LABEL: Record<string, string> = { unlimited: "wallet.plan.unlimited",
 }
 .menu__head { display: grid; gap: 2px; padding: 8px 10px 10px; }
 .menu__name { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.menu__plan { width: fit-content; padding: 1px 7px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 600; }
+.menu__plan { width: fit-content; padding: 1px 7px; border-radius: 6px; background: var(--accent-soft); color: var(--accent-text); font-size: 11px; font-weight: 600; }
 .menu__item {
   display: block; width: 100%; padding: 8px 10px; text-align: left;
   background: none; border: 0; border-radius: var(--r-sm);

@@ -31,7 +31,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
 
 <template>
   <div ref="root" class="lang">
-    <button class="lang__btn" :aria-label="$t('nav.language')" aria-haspopup="listbox" :aria-expanded="open" @click="open = !open">
+    <button class="lang__btn" :aria-label="$t('nav.language')" aria-haspopup="menu" :aria-expanded="open" @click="open = !open">
       <svg class="lang__icon" viewBox="0 0 20 20" aria-hidden="true">
         <circle cx="10" cy="10" r="7.25" fill="none" stroke="currentColor" stroke-width="1.5" />
         <path d="M2.75 10h14.5M10 2.75c2.2 2.3 2.2 12.2 0 14.5M10 2.75c-2.2 2.3-2.2 12.2 0 14.5" fill="none" stroke="currentColor" stroke-width="1.5" />
@@ -40,10 +40,10 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
       <svg class="lang__chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
     </button>
 
-    <ul v-if="open" class="lang__menu panel" role="listbox" :aria-activedescendant="`lang-${current}`">
+    <ul v-if="open" class="lang__menu panel" role="menu">
       <!-- 語言名用它自己的語言寫，不翻譯：各語言的使用者都認得自己的 -->
-      <li v-for="l in LOCALES" :id="`lang-${l.code}`" :key="l.code" role="option" :aria-selected="l.code === current">
-        <button class="lang__item" :class="{ 'is-on': l.code === current }" :lang="l.code" @click="switchTo(l.code)">
+      <li v-for="l in LOCALES" :key="l.code" role="none">
+        <button class="lang__item" :class="{ 'is-on': l.code === current }" :lang="l.code" role="menuitemradio" :aria-checked="l.code === current" @click="switchTo(l.code)">
           <span>{{ l.label }}</span>
           <svg v-if="l.code === current" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
         </button>
@@ -80,7 +80,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
   font: inherit; font-size: 13.5px; color: var(--text); text-align: left; cursor: pointer;
 }
 .lang__item:hover { background: var(--surface-2); }
-.lang__item.is-on { font-weight: 600; color: var(--accent); }
+.lang__item.is-on { font-weight: 600; color: var(--accent-text); }
 .lang__item svg { width: 14px; height: 14px; flex: none; }
 @keyframes pop { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: none; } }
 

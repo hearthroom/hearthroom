@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 import { compact, hueFrom } from "@/lib/format";
 import { zoneLabel } from "@/lib/i18n";
@@ -12,12 +12,15 @@ defineEmits<{ toggle: [] }>();
 const { lp } = useLocalePath();
 const hue = computed(() => hueFrom(props.card.name));
 const initial = computed(() => [...props.card.name][0] ?? "?");
+const broken = ref(false);
+watch(() => props.card.avatarUrl, () => { broken.value = false; });
+const hasArt = computed(() => !!props.card.avatarUrl && !broken.value);
 </script>
 
 <template>
   <article class="card rise">
     <RouterLink :to="lp(`/cards/${card.roleId}/edit`)" class="card__art">
-      <img v-if="card.avatarUrl" :src="card.avatarUrl" :alt="card.name" loading="lazy" />
+      <img v-if="hasArt" :src="card.avatarUrl!" alt="" loading="lazy" @error="broken = true" />
       <div
         v-else
         class="card__void"

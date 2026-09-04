@@ -1,0 +1,82 @@
+/*
+ * 主題：換的是強調色與氛圍，不是版面。
+ *
+ * 每套主題只覆寫 tokens.css 標了 [theme] 的變數，深淺兩種模式各給一組——同一個色相在
+ * 白紙上要壓深才有 4.5:1 的對比當文字用，在深底上則要提亮。只有「紙」那套連中性色
+ * 一起換（暖紙色），因為它要的就是整張紙的質地不同；「墨」是單色主題，強調色就是
+ * 文字色，所以按鈕上的字要反過來。
+ *
+ * 名單在 lib/appearance.ts 的 THEMES；新增一套 = 這裡一段 + 那裡一行。
+ */
+
+/* 琥珀 */
+:root[data-theme="amber"] {
+  --accent: #b9711a; --accent-deep: #9a5a0e; --accent-text: #9a5a0e;
+  --ambient-1: rgba(217, 138, 26, 0.13); --ambient-2: rgba(239, 79, 111, 0.06); --ambient-3: rgba(31, 143, 168, 0.07);
+}
+:root[data-theme="amber"][data-mode="dark"] {
+  --accent: #d48a2a; --accent-deep: #b06f18; --accent-text: #f2b054;
+  --ambient-1: rgba(217, 138, 26, 0.16); --ambient-2: rgba(239, 79, 111, 0.08); --ambient-3: rgba(56, 189, 248, 0.08);
+}
+
+/* 紫 */
+:root[data-theme="violet"] {
+  --accent: #7048e8; --accent-deep: #5a35c9; --accent-text: #5a35c9;
+  --ambient-1: rgba(112, 72, 232, 0.12); --ambient-2: rgba(31, 143, 168, 0.08); --ambient-3: rgba(239, 79, 111, 0.06);
+}
+:root[data-theme="violet"][data-mode="dark"] {
+  --accent: #8b6cf0; --accent-deep: #6d4fd6; --accent-text: #b39cff;
+  --ambient-1: rgba(139, 92, 246, 0.16); --ambient-2: rgba(56, 189, 248, 0.10); --ambient-3: rgba(239, 79, 111, 0.08);
+}
+
+/* 海 */
+:root[data-theme="ocean"] {
+  --accent: #147f96; --accent-deep: #0f6a80; --accent-text: #0f6a80;
+  --ambient-1: rgba(20, 127, 150, 0.13); --ambient-2: rgba(112, 72, 232, 0.07); --ambient-3: rgba(31, 157, 85, 0.07);
+}
+:root[data-theme="ocean"][data-mode="dark"] {
+  --accent: #2aa5c0; --accent-deep: #1a879f; --accent-text: #5ccde3;
+  --ambient-1: rgba(56, 189, 248, 0.15); --ambient-2: rgba(139, 92, 246, 0.09); --ambient-3: rgba(61, 220, 132, 0.08);
+}
+
+/* 林 */
+:root[data-theme="forest"] {
+  --accent: #23875f; --accent-deep: #1b6f4d; --accent-text: #1b6f4d;
+  --ambient-1: rgba(35, 135, 95, 0.13); --ambient-2: rgba(217, 138, 26, 0.07); --ambient-3: rgba(31, 143, 168, 0.07);
+}
+:root[data-theme="forest"][data-mode="dark"] {
+  --accent: #35a878; --accent-deep: #268a60; --accent-text: #4fd39a;
+  --ambient-1: rgba(61, 220, 132, 0.14); --ambient-2: rgba(242, 176, 30, 0.08); --ambient-3: rgba(56, 189, 248, 0.08);
+}
+
+/* 紙：連中性色一起換成暖紙 */
+:root[data-theme="sepia"] {
+  --bg: #f4efe6; --surface: #fffcf6; --surface-2: #efe8dc; --border: #e4dccd; --border-strong: #cfc4b0;
+  --line: rgba(60, 40, 20, 0.09); --line-strong: rgba(60, 40, 20, 0.16);
+  --text: #2a2420; --text-2: #655a50; --text-3: #7d7166;
+  --accent: #b0512c; --accent-deep: #8f3f21; --accent-text: #8f3f21;
+  --ambient-1: rgba(176, 81, 44, 0.12); --ambient-2: rgba(217, 138, 26, 0.10); --ambient-3: rgba(35, 135, 95, 0.06);
+  --shadow-sm: 0 1px 2px rgba(60, 40, 20, 0.07);
+  --shadow-md: 0 12px 32px -8px rgba(60, 40, 20, 0.24), 0 2px 6px rgba(60, 40, 20, 0.06);
+}
+:root[data-theme="sepia"][data-mode="dark"] {
+  --bg: #17130f; --surface: #211c17; --surface-2: #2b2520; --border: #332c26; --border-strong: #463d35;
+  --line: rgba(255, 240, 220, 0.08); --line-strong: rgba(255, 240, 220, 0.14);
+  --text: #f3ece2; --text-2: #b3a798; --text-3: #94897c;
+  --accent: #cf6a42; --accent-deep: #ad532f; --accent-text: #f0a37f;
+  --ambient-1: rgba(207, 106, 66, 0.15); --ambient-2: rgba(242, 176, 30, 0.10); --ambient-3: rgba(61, 220, 132, 0.06);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 12px 32px -8px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* 墨：單色。強調色就是文字色，按鈕上的字反白／反黑 */
+:root[data-theme="ink"] {
+  --accent: #17171c; --accent-deep: #000000; --accent-text: #17171c; --on-accent: #ffffff;
+  --accent-soft: rgba(16, 16, 24, 0.08);
+  --ambient-1: rgba(16, 16, 24, 0.05); --ambient-2: rgba(16, 16, 24, 0.04); --ambient-3: rgba(16, 16, 24, 0.04);
+}
+:root[data-theme="ink"][data-mode="dark"] {
+  --accent: #f2f2f5; --accent-deep: #d9d9df; --accent-text: #f2f2f5; --on-accent: #101013;
+  --accent-soft: rgba(255, 255, 255, 0.10);
+  --ambient-1: rgba(255, 255, 255, 0.05); --ambient-2: rgba(255, 255, 255, 0.04); --ambient-3: rgba(255, 255, 255, 0.03);
+}

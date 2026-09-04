@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
-import { RouterLink, useRoute } from "vue-router";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { RouterLink, onBeforeRouteLeave, useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { fetchRoleDetail, patchRole, type RoleDraft } from "@/lib/api";
 import { useLocalePath } from "@/lib/use-locale";
@@ -18,6 +18,10 @@ const loading = ref(true);
 const saving = ref(false);
 const error = ref("");
 const saved = ref(false);
+
+const SUMMARY_MAX = 500;
+/** 有沒有改過：儲存鈕只在有東西可存時才亮，離開前也靠它判斷要不要攔 */
+const dirty = computed(() => JSON.stringify(form.value) !== JSON.stringify(original.value));
 
 onMounted(async () => {
   try {
@@ -40,7 +44,14 @@ onMounted(async () => {
   }
 });
 
+/* 改到一半離開要問一聲：站內換頁與關分頁都攔 */
+onBeforeRouteLeave(() => !dirty.value || saving.value || window.confirm(t("edit.discard")));
+const guard = (e: BeforeUnloadEvent) => { if (dirty.value) e.preventDefault(); };
+onMounted(() => window.addEventListener("beforeunload", guard));
+onBeforeUnmount(() => window.removeEventListener("beforeunload", guard));
+
 async function submit() {
+  if (!dirty.value) return;
   saving.value = true;
   error.value = "";
   saved.value = false;
@@ -54,11 +65,8 @@ async function submit() {
     if (form.value.roleDesc !== original.value.roleDesc) patch.roleDesc = form.value.roleDesc;
     if (form.value.roleDetailDesc !== original.value.roleDetailDesc) patch.roleDetailDesc = form.value.roleDetailDesc;
     if (form.value.roleTag !== original.value.roleTag) {
-      patch.roleTag = form.value.roleTag.split(/[、,，\s]+/).map((t) => t.trim()).filter(Boolean);
-    }
-    if (!Object.keys(patch).length) {
-      saved.value = true;
-      return;
+      // 只認頓號與逗號：英文標籤裡有空白（slice of life），拆了就變三個沒意義的字
+      patch.roleTag = form.value.roleTag.split(/[、,，]+/).map((t) => t.trim()).filter(Boolean);
     }
 
     await patchRole(roleId, patch, token);
@@ -80,7 +88,12 @@ async function submit() {
       {{ $t("edit.lede") }}
     </p>
 
-    <p v-if="loading" class="muted">{{ $t("state.loading") }}</p>
+    <div v-if="loading" class="ghosts" aria-hidden="true">
+      <div class="ghost" style="height: 36px" />
+      <div class="ghost" style="height: 96px" />
+      <div class="ghost" style="height: 36px" />
+      <div class="ghost" style="height: 240px" />
+    </div>
 
     <form v-else @submit.prevent="submit">
       <div class="field">
@@ -90,8 +103,11 @@ async function submit() {
 
       <div class="field">
         <label for="desc">{{ $t("edit.summary") }}</label>
-        <textarea id="desc" v-model="form.roleDesc" class="input" maxlength="500" rows="3" />
-        <span class="subtle">{{ $t("edit.summary.hint") }}</span>
+        <textarea id="desc" v-model="form.roleDesc" class="input" :maxlength="SUMMARY_MAX" rows="3" />
+        <span class="field__foot">
+          <span class="subtle">{{ $t("edit.summary.hint") }}</span>
+          <span class="subtle" :class="{ over: form.roleDesc.length >= SUMMARY_MAX }">{{ $t("edit.chars", { n: form.roleDesc.length, max: SUMMARY_MAX }) }}</span>
+        </span>
       </div>
 
       <div class="field">
@@ -106,11 +122,11 @@ async function submit() {
         <span class="subtle">{{ $t("edit.detail.hint") }}</span>
       </div>
 
-      <p v-if="error" class="notice notice--error">{{ error }}</p>
-      <p v-else-if="saved" class="notice">{{ $t("edit.saved") }}</p>
+      <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
+      <p v-else-if="saved && !dirty" class="notice" role="status">{{ $t("edit.saved") }}</p>
 
       <div class="actions">
-        <button class="btn btn--primary" type="submit" :disabled="saving">
+        <button class="btn btn--primary" type="submit" :disabled="saving || !dirty">
           {{ saving ? $t("edit.saving") : $t("edit.save") }}
         </button>
         <RouterLink class="btn" :to="{ path: lp('/mine'), query: { fresh: '1' } }">{{ $t("edit.back") }}</RouterLink>
@@ -122,5 +138,7 @@ async function submit() {
 <style scoped>
 h1 { margin: 2px 0 var(--s-2); font-size: 24px; }
 h1 + .muted { margin: 0 0 var(--s-6); max-width: 52ch; }
+.ghosts { display: grid; gap: var(--s-4); }
 .actions { display: flex; gap: var(--s-3); margin-top: var(--s-5); }
+.over { color: var(--danger); }
 </style>
