@@ -1,13 +1,18 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute } from "vue-router";
 import { UPSTREAM_API } from "@/lib/config";
 import { fetchCard } from "@/lib/api";
-import { pageTitle } from "@/lib/site";
+import { contentLang, pageTitle } from "@/lib/i18n";
+import { useLocalePath } from "@/lib/use-locale";
+
 import { compact, hueFrom, relativeTime } from "@/lib/format";
 import type { CommunityCard } from "@/lib/types";
 
 const route = useRoute();
+const { locale, lp } = useLocalePath();
+const { t } = useI18n();
 const card = ref<CommunityCard | null>(null);
 const loading = ref(true);
 const error = ref("");
@@ -21,15 +26,15 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    card.value = await fetchCard(route.params.id as string);
+    card.value = await fetchCard(route.params.id as string, contentLang(locale.value));
     if (card.value) document.title = pageTitle(card.value.name);
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "載入失敗";
+    error.value = err instanceof Error ? err.message : t("state.loadFailed");
   } finally {
     loading.value = false;
   }
 }
-watch(() => route.params.id, load, { immediate: true });
+watch([() => route.params.id, locale], load, { immediate: true });
 </script>
 
 <template>
@@ -43,7 +48,7 @@ watch(() => route.params.id, load, { immediate: true });
     />
 
     <div class="page">
-      <p v-if="loading" class="muted">載入中…</p>
+      <p v-if="loading" class="muted">{{ $t("state.loading") }}</p>
       <p v-else-if="error" class="notice notice--error">{{ error }}</p>
 
       <article v-else-if="card" class="dossier rise">
@@ -59,37 +64,37 @@ watch(() => route.params.id, load, { immediate: true });
         </div>
 
         <div class="dossier__body">
-          <p class="eyebrow">角色卡</p>
+          <p class="eyebrow">{{ $t("card.eyebrow") }}</p>
           <h1 class="dossier__name display">{{ card.name }}</h1>
           <p v-if="card.summary" class="dossier__hook">{{ card.summary }}</p>
 
           <ul v-if="card.tags.length" class="tags">
             <li v-for="tag in card.tags" :key="tag">
-              <RouterLink :to="{ path: '/', query: { tag } }">{{ tag }}</RouterLink>
+              <RouterLink :to="{ path: lp('/'), query: { tag } }">{{ tag }}</RouterLink>
             </li>
           </ul>
 
           <dl class="stats">
-            <div><dt>對話</dt><dd>{{ compact(card.talkNum) }}</dd></div>
-            <div><dt>收藏</dt><dd>{{ compact(card.followNum) }}</dd></div>
-            <div><dt>近期成長</dt><dd>{{ card.trending > 0 ? `↑${compact(card.trending)}` : "—" }}</dd></div>
+            <div><dt>{{ $t("card.stat.talk") }}</dt><dd>{{ compact(card.talkNum) }}</dd></div>
+            <div><dt>{{ $t("card.stat.follow") }}</dt><dd>{{ compact(card.followNum) }}</dd></div>
+            <div><dt>{{ $t("card.stat.trending") }}</dt><dd>{{ card.trending > 0 ? `↑${compact(card.trending)}` : "—" }}</dd></div>
           </dl>
 
-          <RouterLink :to="`/authors/${card.author.accountNumId}`" class="byline">
+          <RouterLink :to="lp(`/authors/${card.author.accountNumId}`)" class="byline">
             <img v-if="card.author.avatar" :src="card.author.avatar" alt="" />
             <span>
-              <span class="subtle">作者</span>
+              <span class="subtle">{{ $t("card.author") }}</span>
               <strong>{{ card.author.name }}</strong>
             </span>
           </RouterLink>
 
           <!-- 對話目前發生在作品所在的服務上；chat-core 接進來之後換成站內入口。 -->
           <a class="btn btn--primary dossier__cta" :href="playUrl" target="_blank" rel="noopener">
-            開始對話 ↗
+            {{ $t("card.play") }} ↗
           </a>
 
           <p class="subtle dossier__foot">
-            {{ relativeTime(card.registeredAt) }}登記 · 資料更新於 {{ relativeTime(card.syncedAt) }}
+            {{ $t("card.meta", { registered: relativeTime(card.registeredAt), synced: relativeTime(card.syncedAt) }) }}
           </p>
         </div>
       </article>

@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
+import { useI18n } from "vue-i18n";
 import { fetchMyCards, registerCard, unregisterCard, type MyCard, type MyCardPage } from "@/lib/api";
+import { useLocalePath } from "@/lib/use-locale";
 import MyCardTile from "@/components/MyCardTile.vue";
 import * as cache from "@/lib/mine-cache";
 import { useSession } from "@/lib/session";
@@ -9,6 +11,8 @@ import { useSession } from "@/lib/session";
 const route = useRoute();
 const router = useRouter();
 const session = useSession();
+const { lp } = useLocalePath();
+const { t } = useI18n();
 
 const data = ref<MyCardPage | null>(null);
 const loading = ref(true);
@@ -54,13 +58,13 @@ async function load(opts: { fresh?: boolean } = {}) {
   revalidating.value = true;
   try {
     const token = await session.accessToken();
-    if (!token) throw new Error("登入已失效，請重新登入");
+    if (!token) throw new Error(t("auth.expired"));
     const fresh = await fetchMyCards(token, { page: page.value, fresh: opts.fresh });
     data.value = fresh;
     cache.write(me.accountNumId, page.value, fresh);
   } catch (err) {
     // 有舊資料時，重抓失敗不該把畫面清空——顯示錯誤，但讓使用者繼續看得到東西。
-    error.value = err instanceof Error ? err.message : "載入失敗";
+    error.value = err instanceof Error ? err.message : t("state.loadFailed");
   } finally {
     loading.value = false;
     revalidating.value = false;
@@ -75,13 +79,13 @@ async function toggle(card: MyCard) {
   card.registered = !before;
   try {
     const token = await session.accessToken();
-    if (!token) throw new Error("登入已失效，請重新登入");
+    if (!token) throw new Error(t("auth.expired"));
     if (before) await unregisterCard(card.roleId, token);
     else await registerCard(card.roleId, token);
     if (session.me) cache.write(session.me.accountNumId, page.value, data.value!);
   } catch (err) {
     card.registered = before;
-    error.value = err instanceof Error ? err.message : "操作失敗";
+    error.value = err instanceof Error ? err.message : t("state.actionFailed");
   } finally {
     busy.value = null;
   }
@@ -110,32 +114,28 @@ watch(() => route.query.fresh, (f) => {
   <div class="page">
     <header class="head">
       <div>
-        <p class="eyebrow">作者工作區</p>
-        <h1 class="head__title display">我的角色卡</h1>
+        <p class="eyebrow">{{ $t("mine.eyebrow") }}</p>
+        <h1 class="head__title display">{{ $t("mine.title") }}</h1>
       </div>
-      <RouterLink to="/create" class="btn btn--primary">建立新卡</RouterLink>
+      <RouterLink :to="lp('/create')" class="btn btn--primary">{{ $t("mine.create") }}</RouterLink>
     </header>
 
     <div v-if="data" class="tally">
-      <div><dt>全部</dt><dd>{{ data.total }}</dd></div>
-      <div><dt>已登記</dt><dd>{{ listedCount }}</dd></div>
-      <div><dt>本頁</dt><dd>{{ data.items.length }}</dd></div>
-      <span v-if="revalidating" class="tally__sync subtle">更新中…</span>
+      <div><dt>{{ $t("mine.tally.all") }}</dt><dd>{{ data.total }}</dd></div>
+      <div><dt>{{ $t("mine.tally.listed") }}</dt><dd>{{ listedCount }}</dd></div>
+      <div><dt>{{ $t("mine.tally.page") }}</dt><dd>{{ data.items.length }}</dd></div>
+      <span v-if="revalidating" class="tally__sync subtle">{{ $t("mine.syncing") }}</span>
     </div>
 
     <nav class="filters">
       <button
-        v-for="f in [
-          { key: 'all', label: '全部' },
-          { key: 'listed', label: '已登記' },
-          { key: 'unlisted', label: '未登記' },
-        ]"
-        :key="f.key"
+        v-for="f in ['all', 'listed', 'unlisted']"
+        :key="f"
         class="filters__item"
-        :class="{ 'filters__item--on': filter === f.key }"
-        @click="go({ filter: f.key, page: undefined })"
+        :class="{ 'filters__item--on': filter === f }"
+        @click="go({ filter: f, page: undefined })"
       >
-        {{ f.label }}
+        {{ $t(`mine.filter.${f}`) }}
       </button>
     </nav>
 
@@ -146,10 +146,10 @@ watch(() => route.query.fresh, (f) => {
     </div>
 
     <p v-else-if="!data?.items.length" class="notice">
-      你還沒有任何角色卡。<RouterLink to="/create">先建立一張</RouterLink>。
+      {{ $t("mine.empty") }}<RouterLink :to="lp('/create')">{{ $t("mine.empty.cta") }}</RouterLink>
     </p>
 
-    <p v-else-if="!visible.length" class="notice">這個篩選下沒有卡片。</p>
+    <p v-else-if="!visible.length" class="notice">{{ $t("mine.emptyFilter") }}</p>
 
     <div v-else class="wall">
       <MyCardTile
@@ -163,9 +163,9 @@ watch(() => route.query.fresh, (f) => {
     </div>
 
     <nav v-if="data && (page > 1 || data.hasNext)" class="pager">
-      <button class="btn btn--sm" :disabled="page === 1" @click="go({ page: String(page - 1) })">← 上一頁</button>
-      <span class="subtle">第 {{ page }} 頁</span>
-      <button class="btn btn--sm" :disabled="!data.hasNext" @click="go({ page: String(page + 1) })">下一頁 →</button>
+      <button class="btn btn--sm" :disabled="page === 1" @click="go({ page: String(page - 1) })">← {{ $t("pager.prev") }}</button>
+      <span class="subtle">{{ $t("pager.page", { n: page }) }}</span>
+      <button class="btn btn--sm" :disabled="!data.hasNext" @click="go({ page: String(page + 1) })">{{ $t("pager.next") }} →</button>
     </nav>
   </div>
 </template>

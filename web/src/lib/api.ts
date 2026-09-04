@@ -1,4 +1,5 @@
 import { COMMUNITY_API, UPSTREAM_API } from "./config";
+import { i18n } from "./i18n";
 import type { Author, CardPage, CommunityCard, MyRole, Sort } from "./types";
 
 export class ApiError extends Error {
@@ -10,7 +11,7 @@ export class ApiError extends Error {
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
-    throw new ApiError(res.status, body.error ?? body.message ?? `請求失敗（${res.status}）`);
+    throw new ApiError(res.status, body.error ?? body.message ?? i18n.global.t("state.requestFailed", { status: res.status }));
   }
   return (await res.json()) as T;
 }

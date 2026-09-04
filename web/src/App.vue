@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import { onMounted } from "vue";
 import { RouterLink, RouterView, useRoute } from "vue-router";
+import LocaleSwitch from "@/components/LocaleSwitch.vue";
+import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
 import { SITE } from "@/lib/site";
+
+const { lp } = useLocalePath();
 
 const session = useSession();
 const route = useRoute();
@@ -13,30 +17,31 @@ onMounted(() => session.restore());
 <template>
   <header class="masthead">
     <div class="masthead__inner">
-      <RouterLink to="/" class="wordmark">
+      <RouterLink :to="lp('/')" class="wordmark">
         <span class="wordmark__mark">✦</span>
         <span class="wordmark__text display">{{ SITE.name }}</span>
       </RouterLink>
 
       <nav class="nav">
-        <RouterLink to="/">榜單</RouterLink>
-        <RouterLink v-if="session.me" to="/mine">我的卡片</RouterLink>
+        <RouterLink :to="lp('/')">{{ $t("nav.board") }}</RouterLink>
+        <RouterLink v-if="session.me" :to="lp('/mine')">{{ $t("nav.mine") }}</RouterLink>
       </nav>
 
       <div class="account">
+        <LocaleSwitch />
         <template v-if="session.me">
-          <RouterLink :to="`/authors/${session.me.accountNumId}`" class="account__me">
+          <RouterLink :to="lp(`/authors/${session.me.accountNumId}`)" class="account__me">
             <img v-if="session.me.avatar" :src="session.me.avatar" alt="" />
             <span>{{ session.me.nickName }}</span>
           </RouterLink>
-          <button class="btn btn--ghost btn--sm" @click="session.logout()">登出</button>
+          <button class="btn btn--ghost btn--sm" @click="session.logout()">{{ $t("nav.logout") }}</button>
         </template>
         <button
           v-else-if="session.ready"
           class="btn btn--primary btn--sm"
           @click="session.login(route.fullPath)"
         >
-          登入
+          {{ $t("nav.login") }}
         </button>
       </div>
     </div>
@@ -46,10 +51,8 @@ onMounted(() => session.restore());
 
   <footer class="colophon">
     <div class="colophon__inner">
-      <p>
-        {{ SITE.description }}作品由作者自己登記，排序只看讀者實際聊了多少。
-      </p>
-      <a v-if="SITE.repoUrl" :href="SITE.repoUrl" target="_blank" rel="noopener">原始碼 ↗</a>
+      <p>{{ $t("footer.blurb") }}</p>
+      <a v-if="SITE.repoUrl" :href="SITE.repoUrl" target="_blank" rel="noopener">{{ $t("footer.source") }} ↗</a>
     </div>
   </footer>
 </template>

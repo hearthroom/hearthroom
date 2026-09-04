@@ -1,13 +1,18 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { useRoute } from "vue-router";
 import CardGrid from "@/components/CardGrid.vue";
 import { fetchAuthor, fetchBoard } from "@/lib/api";
 import { compact, relativeTime } from "@/lib/format";
-import { pageTitle } from "@/lib/site";
+import { contentLang, pageTitle } from "@/lib/i18n";
+import { useLocalePath } from "@/lib/use-locale";
+
 import type { Author, CommunityCard } from "@/lib/types";
 
 const route = useRoute();
+const { locale } = useLocalePath();
+const { t } = useI18n();
 const author = ref<Author | null>(null);
 const cards = ref<CommunityCard[]>([]);
 const loading = ref(true);
@@ -20,18 +25,18 @@ async function load() {
   try {
     const [profile, board] = await Promise.all([
       fetchAuthor(id),
-      fetchBoard({ author: id, sort: "new", limit: 100 }),
+      fetchBoard({ author: id, sort: "new", limit: 100, lang: contentLang(locale.value) }),
     ]);
     author.value = profile;
     cards.value = board.items;
     document.title = pageTitle(profile.name);
   } catch (err) {
-    error.value = err instanceof Error ? err.message : "載入失敗";
+    error.value = err instanceof Error ? err.message : t("state.loadFailed");
   } finally {
     loading.value = false;
   }
 }
-watch(() => route.params.accountNumId, load, { immediate: true });
+watch([() => route.params.accountNumId, locale], load, { immediate: true });
 </script>
 
 <template>
@@ -41,12 +46,12 @@ watch(() => route.params.accountNumId, load, { immediate: true });
     <header v-else-if="author" class="who rise">
       <img v-if="author.avatar" :src="author.avatar" :alt="author.name" class="who__face" />
       <div class="who__text">
-        <p class="eyebrow">作者</p>
+        <p class="eyebrow">{{ $t("author.eyebrow") }}</p>
         <h1 class="who__name display">{{ author.name }}</h1>
         <dl class="who__stats">
-          <div><dt>登記的卡</dt><dd>{{ author.cardCount }}</dd></div>
-          <div><dt>累積對話</dt><dd>{{ compact(author.talkTotal) }}</dd></div>
-          <div><dt>加入社群</dt><dd>{{ relativeTime(author.joinedAt) }}</dd></div>
+          <div><dt>{{ $t("author.stat.cards") }}</dt><dd>{{ author.cardCount }}</dd></div>
+          <div><dt>{{ $t("author.stat.talk") }}</dt><dd>{{ compact(author.talkTotal) }}</dd></div>
+          <div><dt>{{ $t("author.stat.joined") }}</dt><dd>{{ relativeTime(author.joinedAt) }}</dd></div>
         </dl>
       </div>
     </header>
@@ -54,8 +59,8 @@ watch(() => route.params.accountNumId, load, { immediate: true });
     <CardGrid
       :cards="cards"
       :loading="loading"
-      empty-title="還沒有作品在社群上"
-      empty-hint="這位作者尚未登記任何卡片。"
+      :empty-title="$t('author.empty.title')"
+      :empty-hint="$t('author.empty.hint')"
     />
   </div>
 </template>
