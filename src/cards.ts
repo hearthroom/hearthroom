@@ -236,3 +236,14 @@ export async function applySync(db: D1Database, id: string, prevTalkNum: number,
     .run();
 }
 
+
+/** 這批 roleId 裡，哪些已經登記在本站。永遠直接查庫，不快取——見 src/mine.ts 的說明。 */
+export async function registeredAmong(db: D1Database, roleIds: string[]): Promise<Set<string>> {
+  if (!roleIds.length) return new Set();
+  const holes = roleIds.map(() => "?").join(",");
+  const rows = await db
+    .prepare(`SELECT source_role_id FROM cards WHERE source_role_id IN (${holes})`)
+    .bind(...roleIds)
+    .all<{ source_role_id: string }>();
+  return new Set(rows.results.map((r) => r.source_role_id));
+}

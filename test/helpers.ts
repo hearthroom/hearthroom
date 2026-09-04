@@ -1,10 +1,17 @@
 import { env } from "cloudflare:test";
 import { type UpstreamRole, upstream } from "../src/upstream";
 import { HttpError } from "../src/types";
+import { mineCache } from "../src/mine";
 
-/** vitest-pool-workers v0.22 拿掉了 isolatedStorage，測試之間要自己清乾淨。 */
+let cacheGeneration = 0;
+
+/**
+ * vitest-pool-workers v0.22 拿掉了 isolatedStorage，測試之間要自己清乾淨。
+ * 邊緣快取也一樣——不換命名空間的話，後面的測試會讀到前一個測試留下的結果。
+ */
 export async function resetDb(): Promise<void> {
   await env.DB.prepare("DELETE FROM cards").run();
+  mineCache.namespace = `mine-test-${++cacheGeneration}`;
 }
 
 const real = { ...upstream };
@@ -67,3 +74,44 @@ export function mainSiteDown(): void {
 }
 
 export const bearer = (t = "author-token") => ({ Authorization: `Bearer ${t}` });
+
+/** token → 公開數字 ID 的對照，用來模擬「不同的人拿著不同的 token」。 */
+export function identities(map: Record<string, number>): void {
+  upstream.fetchMe = async (_env, token) => {
+    const id = map[token];
+    if (!id) throw new HttpError(401, "upstream rejected the token");
+    return { accountNumId: id };
+  };
+}
+
+export interface MyRoleFixture {
+  roleId: string;
+  name?: string;
+  visibility?: string;
+  talkNum?: number;
+}
+
+/** 記錄每次上游清單呼叫，測試才驗得出快取到底有沒有省掉請求。 */
+export const upstreamCalls: { token: string; page: number; pageSize: number }[] = [];
+
+export function myRolesOnUpstream(byToken: Record<string, MyRoleFixture[]>): void {
+  upstreamCalls.length = 0;
+  upstream.fetchMyRoles = async (_env, token, page, pageSize) => {
+    upstreamCalls.push({ token, page, pageSize });
+    const all = byToken[token] ?? [];
+    const start = (page - 1) * pageSize;
+    const slice = all.slice(start, start + pageSize);
+    return {
+      items: slice.map((r) => ({
+        roleId: r.roleId,
+        name: r.name ?? r.roleId,
+        summary: "",
+        avatarUrl: null,
+        visibility: r.visibility ?? "private",
+        talkNum: r.talkNum ?? 0,
+      })),
+      total: all.length,
+      hasNext: start + pageSize < all.length,
+    };
+  };
+}

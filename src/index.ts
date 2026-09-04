@@ -9,6 +9,7 @@ import {
   unregister,
   upsertCard,
 } from "./cards";
+import { loadMine } from "./mine";
 import { type Env, HttpError } from "./types";
 import { upstream } from "./upstream";
 
@@ -61,6 +62,30 @@ app.get("/v1/cards/:id", async (c) => {
   const row = await getCard(c.env.DB, c.req.param("id"));
   if (!row) throw new HttpError(404, "card not found");
   return c.json(toCard(row, lang(c)));
+});
+
+/**
+ * 作者自己的卡片清單（含尚未登記的）。
+ *
+ * 這條路刻意收到伺服器端而不是讓前端直接打上游：只有在這裡才有地方放邊緣快取，
+ * 也才能把回應裁成畫面真的需要的欄位。細節見 src/mine.ts。
+ */
+app.get("/v1/me/cards", async (c) => {
+  const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1];
+  if (!bearer) throw new HttpError(401, "missing bearer token");
+
+  const page = Math.max(1, clamp(c.req.query("page"), 1, 500));
+  const pageSize = Math.max(1, clamp(c.req.query("pageSize"), 24, 100));
+  // 前端改過卡之後會帶 fresh=1：它知道自己剛寫過，比任何 TTL 都準。
+  const fresh = c.req.query("fresh") === "1";
+
+  const me = await upstream.fetchMe(c.env, bearer);
+  const { body, source } = await loadMine(c.env, bearer, me.accountNumId, { page, pageSize, fresh });
+
+  c.header("X-Cache", source);
+  // 這是私人資料：可以放進使用者自己的瀏覽器，但任何共用快取都不准碰。
+  c.header("Cache-Control", "private, no-store");
+  return c.json(body);
 });
 
 /** 作者主頁。這裡只認得他登記過的卡——本站看不到、也不該看到他的其他作品。 */
