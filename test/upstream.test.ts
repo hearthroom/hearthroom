@@ -74,6 +74,8 @@ describe("白名單投影", () => {
   it("標籤同時吃字串陣列與物件陣列", () => {
     expect(projectRole(mainSiteRole).tags).toEqual(["推理", "民國"]);
     expect(projectRole({ ...mainSiteRole, roleTag: [{ tagName: "科幻" }] }).tags).toEqual(["科幻"]);
+    // 線上實際回的是這個形狀；漏認它等於整站沒有標籤
+    expect(projectRole({ ...mainSiteRole, roleTag: [{ icon: "", text: "修仙", type: 2 }, { text: " 養成 " }] }).tags).toEqual(["修仙", "養成"]);
     expect(projectRole({ ...mainSiteRole, roleTag: null }).tags).toEqual([]);
   });
 

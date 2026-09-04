@@ -92,9 +92,13 @@ const num = (v: unknown): number => {
  * 悄悄流進這裡——這是本站對使用者資料的最小蒐集原則，不是對上游的不信任。
  */
 export function projectRole(raw: Record<string, unknown>): UpstreamRole {
+  // 標籤的形狀不只一種：純字串、{tagName}、{text,type} 都見過。認得的都收，認不得的丟。
   const tagsRaw = raw.roleTag;
   const tags = Array.isArray(tagsRaw)
-    ? tagsRaw.map((t) => (typeof t === "string" ? t : str((t as Record<string, unknown>)?.tagName))).filter(Boolean)
+    ? tagsRaw
+        .map((t) => (typeof t === "string" ? t : str((t as Record<string, unknown>)?.text) || str((t as Record<string, unknown>)?.tagName)))
+        .map((t) => t.trim())
+        .filter(Boolean)
     : [];
 
   return {
