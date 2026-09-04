@@ -36,6 +36,12 @@ button { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 
 .page { max-width: var(--page); margin: 0 auto; padding: var(--s-7) var(--s-5) var(--s-8); }
+
+/*
+ * 最後一道防線：內容再怎麼寬也不該讓整頁橫向捲動。
+ * 該做的還是在各處補 min-width: 0，這裡只是避免漏掉一處就整站歪掉。
+ */
+body { overflow-x: hidden; }
 .page--narrow { max-width: 660px; }
 
 /* ---- 標題 ---------------------------------------------------------------- */
