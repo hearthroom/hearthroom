@@ -7,7 +7,7 @@ import { upsertCard } from "../src/cards";
 
 /** 前端的殼：測試裡不建 web/dist，用一個假的資源層回同一份 index.html */
 const SHELL = `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>Taproom</title><meta name="description" content="site"></head><body><div id="app"></div></body></html>`;
-const assets = { fetch: async () => new Response(SHELL, { headers: { "content-type": "text/html; charset=utf-8" } }) };
+const assets = { fetch: async () => new Response(SHELL, { headers: { "content-type": "text/html; charset=utf-8", etag: '"shell-v1"', "last-modified": "Mon, 01 Sep 2025 00:00:00 GMT" } }) };
 const testEnv = { ...env, ASSETS: assets as unknown as Fetcher };
 
 async function page(path: string) {
@@ -34,6 +34,9 @@ describe("分享預覽", () => {
     expect(html).toContain('<link rel="canonical" href="https://c.test/cards/r-1">');
     expect(html).toContain('<html lang="zh-Hant">');
     expect(headers.get("cache-control")).toContain("max-age=60");
+    // 改寫過的內容不能沿用殼的驗證器：帶著它去重驗會拿到 304，卡改了也看不到
+    expect(headers.get("etag")).toBeNull();
+    expect(headers.get("last-modified")).toBeNull();
     // 殼的其餘部分原封不動
     expect(html).toContain('<div id="app"></div>');
   });
@@ -50,6 +53,12 @@ describe("分享預覽", () => {
     expect(status).toBe(404);
     expect(html).toContain('<div id="app"></div>');
     expect(html).not.toContain("og:title");
+  });
+
+  it("壞掉的百分號編碼是 404，不是 500", async () => {
+    const { status, html } = await page("/cards/100%");
+    expect(status).toBe(404);
+    expect(html).toContain('<div id="app"></div>');
   });
 
   it("作者頁也有預覽", async () => {

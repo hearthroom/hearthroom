@@ -147,7 +147,7 @@ watch(() => session.me?.accountNumId, () => load(true), { immediate: true });
 .plans__list { list-style: none; margin: var(--s-2) 0 0; padding: 0; display: grid; gap: var(--s-2); }
 .plan { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); }
 .plan__tier { padding: 2px 9px; border-radius: 6px; font-size: 12.5px; font-weight: 600; background: var(--surface-2); }
-.plan__tier--unlimited { background: var(--accent-soft); color: var(--accent-text); }
+.plan__tier--unlimited { background: var(--accent-tint); color: var(--accent-text); }
 .plan__tier--member { background: var(--gold-soft); color: var(--gold-dark); }
 .plans__none { margin-top: 4px; font-size: 13.5px; }
 

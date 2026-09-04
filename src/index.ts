@@ -294,8 +294,10 @@ const PAGE_TTL = 60;
 
 app.get("*", async (c) => {
   const url = new URL(c.req.url);
-  // 用 "/" 而不是 "/index.html"：資源層預設會把後者 301 到前者
-  const shell = await c.env.ASSETS.fetch(new Request(new URL("/", url).toString(), { headers: c.req.raw.headers }));
+  // 用 "/" 而不是 "/index.html"：資源層預設會把後者 301 到前者。
+  // 不轉發原請求的 headers：If-None-Match 是對 /cards/x 那份內容的驗證器，拿去驗殼會拿到 304，
+  // 卡改了名字也永遠回「沒變」。
+  const shell = await c.env.ASSETS.fetch(new Request(new URL("/", url).toString()));
   const m = url.pathname.match(PAGE);
   if (!m || !shell.ok) return shell;
   const locale = m[1] ?? "zh-Hant";
@@ -303,7 +305,9 @@ app.get("*", async (c) => {
   const self = url.origin + url.pathname;
 
   if (m[2] === "cards") {
-    const row = await getCard(c.env.DB, decodeURIComponent(m[3]!));
+    let id: string;
+    try { id = decodeURIComponent(m[3]!); } catch { return new Response(shell.body, { status: 404, headers: shell.headers }); }
+    const row = await getCard(c.env.DB, id);
     if (!row) return new Response(shell.body, { status: 404, headers: shell.headers });
     const card = toCard(row, l);
     const res = renderHead(shell, {

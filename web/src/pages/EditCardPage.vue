@@ -45,7 +45,7 @@ onMounted(async () => {
 });
 
 /* 改到一半離開要問一聲：站內換頁與關分頁都攔 */
-onBeforeRouteLeave(() => !dirty.value || saving.value || window.confirm(t("edit.discard")));
+onBeforeRouteLeave(() => !dirty.value || window.confirm(t("edit.discard")));
 const guard = (e: BeforeUnloadEvent) => { if (dirty.value) e.preventDefault(); };
 onMounted(() => window.addEventListener("beforeunload", guard));
 onBeforeUnmount(() => window.removeEventListener("beforeunload", guard));
@@ -129,7 +129,7 @@ async function submit() {
         <button class="btn btn--primary" type="submit" :disabled="saving || !dirty">
           {{ saving ? $t("edit.saving") : $t("edit.save") }}
         </button>
-        <RouterLink class="btn" :to="{ path: lp('/mine'), query: { fresh: '1' } }">{{ $t("edit.back") }}</RouterLink>
+        <RouterLink class="btn" :class="{ 'is-off': saving }" :aria-disabled="saving || undefined" :to="{ path: lp('/mine'), query: { fresh: '1' } }">{{ $t("edit.back") }}</RouterLink>
       </div>
     </form>
   </div>
@@ -141,4 +141,5 @@ h1 + .muted { margin: 0 0 var(--s-6); max-width: 52ch; }
 .ghosts { display: grid; gap: var(--s-4); }
 .actions { display: flex; gap: var(--s-3); margin-top: var(--s-5); }
 .over { color: var(--danger); }
+.is-off { pointer-events: none; opacity: 0.45; }
 </style>

@@ -108,7 +108,8 @@ watch(() => route.query.fresh, (f) => {
   load({ fresh: true });
   // replace 而不是 push：不然按返回會落回 ?fresh=1，又被推回來，永遠回不到編輯頁
   go({ fresh: undefined }, true);
-});
+  // immediate：從編輯頁回來是一次新的導航，這個元件掛載時 fresh 就已經是 1，沒有「變化」可等
+}, { immediate: true });
 </script>
 
 <template>

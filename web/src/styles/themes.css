@@ -11,41 +11,41 @@
 
 /* 琥珀 */
 :root[data-theme="amber"] {
-  --accent: #b9711a; --accent-deep: #9a5a0e; --accent-text: #9a5a0e;
+  --accent: #b9711a; --accent-btn: #b9711a; --accent-deep: #9a5a0e; --accent-text: #8a4f0a;
   --ambient-1: rgba(217, 138, 26, 0.13); --ambient-2: rgba(239, 79, 111, 0.06); --ambient-3: rgba(31, 143, 168, 0.07);
 }
 :root[data-theme="amber"][data-mode="dark"] {
-  --accent: #d48a2a; --accent-deep: #b06f18; --accent-text: #f2b054;
+  --accent: #d48a2a; --accent-btn: #96621e; --accent-deep: #b06f18; --accent-text: #f2b054;
   --ambient-1: rgba(217, 138, 26, 0.16); --ambient-2: rgba(239, 79, 111, 0.08); --ambient-3: rgba(56, 189, 248, 0.08);
 }
 
 /* 紫 */
 :root[data-theme="violet"] {
-  --accent: #7048e8; --accent-deep: #5a35c9; --accent-text: #5a35c9;
+  --accent: #7048e8; --accent-btn: #7048e8; --accent-deep: #5a35c9; --accent-text: #5a35c9;
   --ambient-1: rgba(112, 72, 232, 0.12); --ambient-2: rgba(31, 143, 168, 0.08); --ambient-3: rgba(239, 79, 111, 0.06);
 }
 :root[data-theme="violet"][data-mode="dark"] {
-  --accent: #8b6cf0; --accent-deep: #6d4fd6; --accent-text: #b39cff;
+  --accent: #8b6cf0; --accent-btn: #7a58e6; --accent-deep: #6d4fd6; --accent-text: #b39cff;
   --ambient-1: rgba(139, 92, 246, 0.16); --ambient-2: rgba(56, 189, 248, 0.10); --ambient-3: rgba(239, 79, 111, 0.08);
 }
 
 /* 海 */
 :root[data-theme="ocean"] {
-  --accent: #147f96; --accent-deep: #0f6a80; --accent-text: #0f6a80;
+  --accent: #147f96; --accent-btn: #147f96; --accent-deep: #0f6a80; --accent-text: #0f6a80;
   --ambient-1: rgba(20, 127, 150, 0.13); --ambient-2: rgba(112, 72, 232, 0.07); --ambient-3: rgba(31, 157, 85, 0.07);
 }
 :root[data-theme="ocean"][data-mode="dark"] {
-  --accent: #2aa5c0; --accent-deep: #1a879f; --accent-text: #5ccde3;
+  --accent: #2aa5c0; --accent-btn: #1e778b; --accent-deep: #1a879f; --accent-text: #5ccde3;
   --ambient-1: rgba(56, 189, 248, 0.15); --ambient-2: rgba(139, 92, 246, 0.09); --ambient-3: rgba(61, 220, 132, 0.08);
 }
 
 /* 林 */
 :root[data-theme="forest"] {
-  --accent: #23875f; --accent-deep: #1b6f4d; --accent-text: #1b6f4d;
+  --accent: #23875f; --accent-btn: #23875f; --accent-deep: #1b6f4d; --accent-text: #1b6f4d;
   --ambient-1: rgba(35, 135, 95, 0.13); --ambient-2: rgba(217, 138, 26, 0.07); --ambient-3: rgba(31, 143, 168, 0.07);
 }
 :root[data-theme="forest"][data-mode="dark"] {
-  --accent: #35a878; --accent-deep: #268a60; --accent-text: #4fd39a;
+  --accent: #35a878; --accent-btn: #287f5b; --accent-deep: #268a60; --accent-text: #4fd39a;
   --ambient-1: rgba(61, 220, 132, 0.14); --ambient-2: rgba(242, 176, 30, 0.08); --ambient-3: rgba(56, 189, 248, 0.08);
 }
 
@@ -53,8 +53,8 @@
 :root[data-theme="sepia"] {
   --bg: #f4efe6; --surface: #fffcf6; --surface-2: #efe8dc; --border: #e4dccd; --border-strong: #cfc4b0;
   --line: rgba(60, 40, 20, 0.09); --line-strong: rgba(60, 40, 20, 0.16);
-  --text: #2a2420; --text-2: #655a50; --text-3: #7d7166;
-  --accent: #b0512c; --accent-deep: #8f3f21; --accent-text: #8f3f21;
+  --text: #2a2420; --text-2: #655a50; --text-3: #6f645a;
+  --accent: #b0512c; --accent-btn: #b0512c; --accent-deep: #8f3f21; --accent-text: #8f3f21;
   --ambient-1: rgba(176, 81, 44, 0.12); --ambient-2: rgba(217, 138, 26, 0.10); --ambient-3: rgba(35, 135, 95, 0.06);
   --shadow-sm: 0 1px 2px rgba(60, 40, 20, 0.07);
   --shadow-md: 0 12px 32px -8px rgba(60, 40, 20, 0.24), 0 2px 6px rgba(60, 40, 20, 0.06);
@@ -62,8 +62,8 @@
 :root[data-theme="sepia"][data-mode="dark"] {
   --bg: #17130f; --surface: #211c17; --surface-2: #2b2520; --border: #332c26; --border-strong: #463d35;
   --line: rgba(255, 240, 220, 0.08); --line-strong: rgba(255, 240, 220, 0.14);
-  --text: #f3ece2; --text-2: #b3a798; --text-3: #94897c;
-  --accent: #cf6a42; --accent-deep: #ad532f; --accent-text: #f0a37f;
+  --text: #f3ece2; --text-2: #b3a798; --text-3: #9d9285;
+  --accent: #cf6a42; --accent-btn: #bc5730; --accent-deep: #ad532f; --accent-text: #f0a37f;
   --ambient-1: rgba(207, 106, 66, 0.15); --ambient-2: rgba(242, 176, 30, 0.10); --ambient-3: rgba(61, 220, 132, 0.06);
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 12px 32px -8px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.3);
@@ -71,12 +71,32 @@
 
 /* 墨：單色。強調色就是文字色，按鈕上的字反白／反黑 */
 :root[data-theme="ink"] {
-  --accent: #17171c; --accent-deep: #000000; --accent-text: #17171c; --on-accent: #ffffff;
-  --accent-soft: rgba(16, 16, 24, 0.08);
+  --accent: #17171c; --accent-btn: #17171c; --accent-deep: #000000; --accent-text: #17171c; --on-accent: #ffffff;
+  --accent-soft: rgba(16, 16, 24, 0.14);
   --ambient-1: rgba(16, 16, 24, 0.05); --ambient-2: rgba(16, 16, 24, 0.04); --ambient-3: rgba(16, 16, 24, 0.04);
 }
 :root[data-theme="ink"][data-mode="dark"] {
-  --accent: #f2f2f5; --accent-deep: #d9d9df; --accent-text: #f2f2f5; --on-accent: #101013;
-  --accent-soft: rgba(255, 255, 255, 0.10);
+  --accent: #f2f2f5; --accent-btn: #f2f2f5; --accent-deep: #d9d9df; --accent-text: #f2f2f5; --on-accent: #101013;
+  --accent-soft: rgba(255, 255, 255, 0.16);
   --ambient-1: rgba(255, 255, 255, 0.05); --ambient-2: rgba(255, 255, 255, 0.04); --ambient-3: rgba(255, 255, 255, 0.03);
 }
+
+/*
+ * 主題例外。
+ * 紙：銀牌原本是冷灰，疊在暖紙上會發藍，換成暖灰。
+ * 墨：整套只有明度沒有色相，金銀銅退成灰階三階；主要按鈕本來就是純黑／純白，
+ * brightness 幾乎看不出 hover，改用透明度；已選的類型 chip 不能跟主要按鈕長得一樣，改描邊。
+ */
+:root[data-theme="sepia"] .medal--2 {
+  background: linear-gradient(180deg, #e6ddce, #b8ac99); color: #2a2420;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 3px rgba(60, 40, 20, 0.3);
+}
+:root[data-theme="ink"] .medal--1 { background: linear-gradient(180deg, #3a3a44, #17171c); color: #fff; box-shadow: none; }
+:root[data-theme="ink"] .medal--2 { background: linear-gradient(180deg, #6c6c78, #47474f); color: #fff; box-shadow: none; }
+:root[data-theme="ink"] .medal--3 { background: linear-gradient(180deg, #97979f, #74747c); color: #17171c; box-shadow: none; }
+:root[data-theme="ink"][data-mode="dark"] .medal--1 { background: linear-gradient(180deg, #ffffff, #d9d9df); color: #101013; }
+:root[data-theme="ink"][data-mode="dark"] .medal--2 { background: linear-gradient(180deg, #b8b8c2, #8c8c97); color: #101013; }
+:root[data-theme="ink"][data-mode="dark"] .medal--3 { background: linear-gradient(180deg, #74747c, #55555e); color: #fff; }
+:root[data-theme="ink"] .btn--primary:hover { filter: none; opacity: 0.82; }
+:root[data-theme="ink"] .btn--primary:active { filter: none; opacity: 0.7; }
+:root[data-theme="ink"] .tagchip.is-on { background: var(--surface-2); color: var(--text); box-shadow: inset 0 0 0 1.5px var(--text); }
