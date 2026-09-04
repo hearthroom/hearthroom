@@ -51,6 +51,7 @@ API 存取範圍，跟這個服務拿到的一模一樣。
 | Method | Path | 需要 | 說明 |
 |---|---|---|---|
 | GET | `/v1/cards` | — | 榜單與搜尋 |
+| GET | `/v1/me/cards` | 作者 token | 自己的卡（含未登記的），分頁 |
 | GET | `/v1/cards/:id` | — | 卡片詳情（吃 id 或 roleId） |
 | GET | `/v1/authors/:accountNumId` | — | 作者在本站的彙總 |
 | POST | `/v1/cards` | 作者 token | 登記，body 只收 `{roleId}` |
@@ -99,14 +100,40 @@ npm run deploy              # predeploy 會先跑 typecheck + 測試 + 前端 bu
 自架時要改的只有 `wrangler.toml` 的 `routes`（換成你的網域）與 `LUNATALK_API_BASE`，
 以及 `web/src/lib/site.ts` 的站台名稱。
 
+## 快取
+
+`/v1/me/cards` 要拼兩份資料，而它們的新鮮度要求完全相反，所以分開處理：
+
+| 層 | 存什麼 | 存活 |
+|---|---|---|
+| 瀏覽器 `sessionStorage` | 整頁結果，stale-while-revalidate | 60s |
+| 邊緣 Cache API | 上游回的角色清單 | 60s |
+| D1 | **登記狀態，永不快取** | — |
+
+**沒有用 KV。** KV 是全域但最終一致的，寫入傳播最長要 ~60 秒且無法得知何時收斂；
+Cache API 雖然只在單一節點，但寫入立即可見，而同一個使用者的連續請求本來就落在
+同一個節點。對「使用者讀自己的私人資料」這個場景，後者的實際一致性更好。
+
+真正保證一致性的不是層數，是把資料按變動頻率切開：慢而穩的（有哪些卡）快取，
+快而使用者正在操作的（哪些已登記）永遠即時查。所以就算命中快取，按下登記之後
+看到的狀態一定是對的。
+
+快取鍵只用**驗證過的**數字 ID，絕不用 token 或任何請求帶進來的值——鍵裡混進可偽造
+的輸入，就會把一個人的清單送給另一個人。前端在自己剛改過卡之後會帶 `?fresh=1`
+繞過所有層：它知道自己寫過，比任何 TTL 都準。
+
+回應帶 `X-Cache: hit|miss|bypass`，部署後用 curl 就驗得出快取有沒有生效。
+
 ## 可觀測性
 
 Prometheus `/metrics` 不適用：Workers 沒有常駐進程可以被抓取。Cloudflare 原生的等價物是
 Workers Analytics Engine + Workers Logs + 內建 request analytics。
 
-目前先不接 Analytics Engine——沒有流量，加了也沒東西可看。接的時候落點是
-`src/index.ts` 的 `onError` 與 `syncBatch`，低基數標籤只放 `result`（ok/not_found/upstream_error）
-與 `route`；**roleId、accountNumId、查詢字串一律不准進標籤或日誌**。
+目前先不接 Analytics Engine——沒有流量，加了也沒東西可看。快取命中率先用回應的
+`X-Cache` 標頭觀察，那個不需要任何額外基礎設施就驗得出來。接 Analytics Engine 時
+落點是 `src/index.ts` 的 `onError`、`syncBatch` 與 `/v1/me/cards`，低基數標籤只放
+`result`（ok/not_found/upstream_error）、`route` 與 `cache`（hit/miss/bypass）；
+**roleId、accountNumId、查詢字串一律不准進標籤或日誌**。
 
 ## 已知天花板
 

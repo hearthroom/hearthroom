@@ -109,7 +109,7 @@ async function submit() {
         <button class="btn btn--primary" type="submit" :disabled="saving">
           {{ saving ? "儲存中…" : "儲存" }}
         </button>
-        <RouterLink class="btn" to="/mine">回到我的卡片</RouterLink>
+        <RouterLink class="btn" :to="{ path: '/mine', query: { fresh: '1' } }">回到我的卡片</RouterLink>
       </div>
     </form>
   </div>

@@ -30,7 +30,7 @@ async function submit() {
     const created = await createRole({ roleName: roleName.value.trim(), language: language.value }, token);
     // 建立後直接進編輯頁把設定寫完——只有名字的卡沒辦法對話。
     if (created.roleId) await router.push(`/cards/${created.roleId}/edit`);
-    else await router.push("/mine");
+    else await router.push({ path: "/mine", query: { fresh: "1" } });
   } catch (err) {
     error.value = err instanceof Error ? err.message : "建立失敗";
   } finally {

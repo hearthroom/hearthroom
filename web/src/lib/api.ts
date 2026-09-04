@@ -60,25 +60,45 @@ export async function unregisterCard(roleId: string, token: string): Promise<voi
 
 export interface Me { accountNumId: number; nickName: string; avatar: string }
 
-export async function fetchMe(token: string): Promise<Me> {
-  return json<Me>(await fetch(`${UPSTREAM_API}/open/v1/me`, { headers: authHeaders(token) }));
+export interface MyCard {
+  roleId: string;
+  name: string;
+  summary: string;
+  avatarUrl: string | null;
+  visibility: string;
+  talkNum: number;
+  registered: boolean;
 }
 
-/** 作者自己的角色卡。身分來自 token，不接受任何「看別人的」參數。 */
-export async function fetchMyRoles(token: string, page = 1): Promise<MyRole[]> {
-  const body = await json<{ roleList?: Record<string, unknown>[] }>(
-    await fetch(`${UPSTREAM_API}/open/v1/role/mine?pageNum=${page}&pageSize=100`, {
-      headers: { language: "zh-Hans", ...authHeaders(token) },
-    }),
+export interface MyCardPage {
+  items: MyCard[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasNext: boolean;
+}
+
+/**
+ * 作者自己的卡片。走本站的 API 而不是直接打上游——伺服器端才有地方放邊緣快取，
+ * 也才能把回應裁到只剩畫面需要的欄位。
+ *
+ * fresh：剛改過卡之後帶上，繞過快取。前端知道自己寫過，比任何 TTL 都準。
+ */
+export async function fetchMyCards(
+  token: string,
+  opts: { page?: number; pageSize?: number; fresh?: boolean } = {},
+): Promise<MyCardPage> {
+  const params = new URLSearchParams();
+  if (opts.page) params.set("page", String(opts.page));
+  if (opts.pageSize) params.set("pageSize", String(opts.pageSize));
+  if (opts.fresh) params.set("fresh", "1");
+  return json<MyCardPage>(
+    await fetch(`${COMMUNITY_API}/me/cards?${params}`, { headers: authHeaders(token) }),
   );
-  return (body.roleList ?? []).map((r) => ({
-    roleId: String(r.characterRoleId ?? ""),
-    name: String(r.roleName ?? ""),
-    summary: String(r.roleDesc ?? ""),
-    avatarUrl: (r.roleAvatar as string) || null,
-    visibility: String(r.roleVisibility ?? ""),
-    talkNum: Number(r.talkNum ?? 0) || 0,
-  })).filter((r) => r.roleId);
+}
+
+export async function fetchMe(token: string): Promise<Me> {
+  return json<Me>(await fetch(`${UPSTREAM_API}/open/v1/me`, { headers: authHeaders(token) }));
 }
 
 /** 角色卡詳情。未登入的訪客也讀得到，所以 token 是選填的。 */
