@@ -145,6 +145,34 @@ Cache API 雖然只在單一節點，但寫入立即可見，而同一個使用�
 
 回應帶 `X-Cache: hit|miss|bypass`，部署後用 curl 就驗得出快取有沒有生效。
 
+## 分享預覽
+
+這是個 SPA，但 Discord、LINE、X 的抓取器不跑 JS：它們看到的只有 `index.html` 裡那幾行
+寫死的 meta，於是每張卡分享出去都長得一樣。所以 `/cards/:id` 與 `/authors/:id`（含語言
+前綴）在 `wrangler.toml` 的 `run_worker_first` 裡，由 Worker 接手：拿靜態資源層的殼，用
+`HTMLRewriter` 把標題、簡介、圖、canonical 與 `<html lang>` 換掉（`src/head.ts`），其餘一個
+位元組都不動。沒有 SSR，前端接手之後照常渲染。
+
+找不到的卡回 **404 狀態碼但內容仍是殼**——前端畫自己的 404 頁，抓取器與搜尋引擎拿到
+正確的狀態。改寫後的回應會清掉殼的 `ETag`／`Last-Modified`：那是 `index.html` 的驗證器，
+留著的話下游拿它去重驗會得到 304，卡改了名字也永遠看不到。
+
+其他路徑不經 Worker，直接由資源層回應，不多付一次 Worker 調用。
+
+## 外觀與主題
+
+深淺色由 `<html data-mode>` 決定，不直接讀 `prefers-color-scheme`：使用者可以自己選，也可以
+「跟著系統」。`index.html` 的 inline script 在第一次繪製前讀 `localStorage` 把屬性寫好，所以
+不會先閃一下另一種顏色；`lib/appearance.ts` 掛載後接手系統切換與 `theme-color`。
+
+主題（`styles/themes.css`）只覆寫 `tokens.css` 標了 `[theme]` 的變數：強調色三階、按鈕填色、
+氛圍層三團色暈；「紙」連中性色一起換，「墨」是單色。每套主題深淺兩版都算過對比：
+`--accent-text` 對 `--surface`、按鈕上的白字對漸層，全部 ≥ 4.5:1。新增一套主題 = `themes.css`
+一段 + `lib/appearance.ts` 的 `THEMES` 一行 + 五個 locale 各一個名字。
+
+偏好存本機而不是進網址：外觀是「我的螢幕」的事，分享連結不該把我的深色模式一起塞給
+別人（語言則相反，見 `web/src/router.ts`）。
+
 ## 可觀測性
 
 Prometheus `/metrics` 不適用：Workers 沒有常駐進程可以被抓取。Cloudflare 原生的等價物是

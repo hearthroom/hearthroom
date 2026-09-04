@@ -9,7 +9,7 @@ const panel = ref<HTMLElement | null>(null);
 
 function toggle() {
   open.value = !open.value;
-  if (open.value) void nextTick(() => panel.value?.querySelector<HTMLElement>("[aria-pressed='true']")?.focus());
+  if (open.value) void nextTick(() => panel.value?.querySelector<HTMLElement>("[aria-checked='true']")?.focus());
 }
 function onDocClick(e: MouseEvent) {
   if (root.value && !root.value.contains(e.target as Node)) open.value = false;
@@ -24,7 +24,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
 <template>
   <div ref="root" class="ap">
     <!-- 圖示畫的是現在生效的那一種：白天是太陽、晚上是月亮 -->
-    <button class="ap__btn" :aria-label="$t('appearance.title')" aria-haspopup="dialog" :aria-expanded="open" @click="toggle">
+    <button class="ap__btn" :aria-label="$t('appearance.title')" aria-haspopup="true" :aria-expanded="open" @click="toggle">
       <svg v-if="resolvedMode === 'dark'" viewBox="0 0 20 20" aria-hidden="true">
         <path d="M15.5 12.6A6.5 6.5 0 0 1 7.4 4.5a6.5 6.5 0 1 0 8.1 8.1z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
       </svg>
@@ -34,24 +34,25 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
       </svg>
     </button>
 
-    <div v-if="open" ref="panel" class="ap__panel panel" role="dialog" :aria-label="$t('appearance.title')">
-      <p class="ap__label">{{ $t("appearance.title") }}</p>
-      <div class="seg ap__modes">
-        <button v-for="m in MODES" :key="m" class="seg__item" :class="{ 'seg__item--on': mode === m }" :aria-pressed="mode === m" @click="setMode(m)">
+    <!-- 非模態的設定面板：Tab 走得出去、點外面就收，不裝成對話框 -->
+    <div v-if="open" ref="panel" class="ap__panel panel" role="group" :aria-label="$t('appearance.title')">
+      <p id="ap-mode-label" class="ap__label">{{ $t("appearance.title") }}</p>
+      <div class="seg ap__modes" role="radiogroup" aria-labelledby="ap-mode-label">
+        <button v-for="m in MODES" :key="m" class="seg__item" :class="{ 'seg__item--on': mode === m }" role="radio" :aria-checked="mode === m" @click="setMode(m)">
           {{ $t(`appearance.mode.${m}`) }}
         </button>
       </div>
 
-      <p class="ap__label">{{ $t("appearance.theme") }}</p>
-      <div class="ap__themes">
+      <p id="ap-theme-label" class="ap__label">{{ $t("appearance.theme") }}</p>
+      <div class="ap__themes" role="radiogroup" aria-labelledby="ap-theme-label">
         <button
           v-for="t in THEMES"
           :key="t.id"
           class="ap__swatch"
           :class="{ 'is-on': theme === t.id }"
           :style="{ '--sw': resolvedMode === 'dark' ? t.swatchDark : t.swatch }"
-          :aria-pressed="theme === t.id"
-          :title="$t(`appearance.theme.${t.id}`)"
+          role="radio"
+          :aria-checked="theme === t.id"
           @click="setTheme(t.id)"
         >
           <span class="ap__dot" aria-hidden="true" />
@@ -104,7 +105,19 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
 .ap__swatch:hover .ap__dot { transform: scale(1.08); }
 /* 選中的那顆：外圈一道跟底色同色的縫，再一圈自己的顏色 */
 .ap__swatch.is-on .ap__dot { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--sw); }
-.ap__name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap__name { max-width: 100%; text-align: center; line-height: 1.2; overflow-wrap: anywhere; }
 
 @keyframes pop { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: none; } }
+
+/* 手機：錨在圖示右緣會被左邊切掉；改成貼著頁首橫跨整寬 */
+@media (max-width: 860px) {
+  .ap__panel { position: fixed; top: 60px; right: 12px; left: 12px; width: auto; }
+}
+/* 觸控目標放大 */
+@media (max-width: 480px) {
+  .ap__panel { padding: 14px; }
+  .ap__modes .seg__item { height: 40px; }
+  .ap__swatch { padding: 10px 4px 8px; font-size: 12px; }
+  .ap__dot { width: 28px; height: 28px; }
+}
 </style>

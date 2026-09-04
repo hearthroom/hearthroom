@@ -175,7 +175,7 @@
   "search.alsoHot": "人気のキャラクター",
   "edit.chars": "{n}/{max}",
   "appearance.title": "外観",
-  "appearance.mode.system": "システムに合わせる",
+  "appearance.mode.system": "システム",
   "appearance.mode.light": "ライト",
   "appearance.mode.dark": "ダーク",
   "appearance.theme": "テーマ",
@@ -185,5 +185,6 @@
   "appearance.theme.ocean": "オーシャン",
   "appearance.theme.forest": "フォレスト",
   "appearance.theme.sepia": "ペーパー",
-  "appearance.theme.ink": "インク"
+  "appearance.theme.ink": "インク",
+  "author.notFound.hint": "この作者はまだ作品を登録していないか、リンクが正しくありません。"
 }

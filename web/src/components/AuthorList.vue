@@ -13,7 +13,7 @@ const { lp } = useLocalePath();
     <li v-for="(a, i) in authors" :key="a.accountNumId">
       <RouterLink :to="lp(`/authors/${a.accountNumId}`)" class="al__row">
         <!-- 前三名用跟卡片牆同一款徽章；其餘只是個數字，不必每一列都戴勳章 -->
-        <span v-if="ranked" class="al__rank" :aria-label="$t('board.rank', { n: (rankOffset ?? 0) + i + 1 })">
+        <span v-if="ranked" class="al__rank" role="img" :aria-label="$t('board.rank', { n: (rankOffset ?? 0) + i + 1 })">
           <span v-if="(rankOffset ?? 0) + i < 3" class="medal" :class="`medal--${(rankOffset ?? 0) + i + 1}`">{{ (rankOffset ?? 0) + i + 1 }}</span>
           <template v-else>{{ (rankOffset ?? 0) + i + 1 }}</template>
         </span>

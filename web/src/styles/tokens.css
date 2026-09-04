@@ -29,16 +29,20 @@
   --text: #17171c;
   --text-2: #5c5c67;
   /* 最淡的一階也要過 4.5:1——它承載的是時間、數量這些小字，不是裝飾 */
-  --text-3: #72727d;
+  --text-3: #6b6b76;
 
   /* [theme] 強調色三階：底色、深一階（hover 與漸層下緣）、當文字用的那一階 */
   --accent: #ef4f6f;
   --accent-deep: #cf2f52;
-  --accent-text: #d6335a;
+  --accent-text: #c9224d;
+  /* 主要按鈕的填色：--accent 還要撐邊框、焦點環與氛圍，亮到壓不住白字；按鈕用深一點的這階 */
+  --accent-btn: #e6153f;
   --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+  /* 強調色文字要壓在上面的淡底：跟白紙混而不是跟透明混，才夠淡 */
+  --accent-tint: color-mix(in srgb, var(--accent) 10%, var(--surface));
   --on-accent: #ffffff;
   /* 主要按鈕用一點縱向漸層加頂部高光，平塗的色塊看起來像預設樣式 */
-  --accent-grad: linear-gradient(180deg, var(--accent) 0%, var(--accent-deep) 100%);
+  --accent-grad: linear-gradient(180deg, var(--accent-btn) 0%, var(--accent-deep) 100%);
 
   /* [theme] 氛圍層的三團色暈 */
   --ambient-1: rgba(239, 79, 111, 0.11);

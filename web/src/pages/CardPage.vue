@@ -19,6 +19,8 @@ const { t } = useI18n();
 
 const card = ref<CommunityCard | null>(null);
 const loading = ref(true);
+/** 手上有卡、在背景換語言重抓：舊卡留著變淡，不退回骨架 */
+const revalidating = ref(false);
 const missing = ref(false);
 const error = ref("");
 
@@ -34,6 +36,13 @@ const copied = ref(false);
 
 type Tab = "home" | "comments";
 const tab = ref<Tab>("home");
+/** tab 的鍵盤慣例：左右鍵切換並把焦點帶過去 */
+function onTabKey(e: KeyboardEvent) {
+  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+  e.preventDefault();
+  tab.value = tab.value === "home" && showComments.value ? "comments" : "home";
+  (e.currentTarget as HTMLElement).querySelector<HTMLElement>(`#tab-${tab.value}`)?.focus();
+}
 
 const hue = computed(() => hueFrom(card.value?.name ?? ""));
 const broken = ref(false);
@@ -42,6 +51,7 @@ const playUrl = computed(() => (card.value ? `${UPSTREAM_API.replace("api.", "")
 
 async function load() {
   // 換語言時手上還有卡：留著，資料到了再換，不退回骨架
+  revalidating.value = !!card.value;
   loading.value = !card.value;
   missing.value = false;
   error.value = "";
@@ -53,9 +63,11 @@ async function load() {
     if (err instanceof ApiError && err.status === 404) missing.value = true;
     else error.value = err instanceof Error ? err.message : t("state.loadFailed");
     loading.value = false;
+    revalidating.value = false;
     return;
   }
   loading.value = false;
+  revalidating.value = false;
   document.title = pageTitle(card.value.name);
   document.querySelector<HTMLMetaElement>('meta[name="description"]')?.setAttribute("content", card.value.summary);
 
@@ -83,17 +95,25 @@ async function share() {
   const url = location.href;
   const title = card.value?.name ?? "";
   if (typeof navigator.share === "function") {
-    try { await navigator.share({ title, url }); return; } catch { /* 使用者取消，退回複製 */ }
+    try { await navigator.share({ title, url }); return; }
+    catch (e) {
+      // 使用者按了取消：什麼都不做。其他錯誤（這個環境其實不能分享）才退回複製
+      if ((e as DOMException).name === "AbortError") return;
+    }
   }
   try {
     await navigator.clipboard.writeText(url);
     copied.value = true;
     setTimeout(() => { copied.value = false; }, 1800);
-  } catch { /* 沒有剪貼簿權限：網址列還在 */ }
+  } catch {
+    // 拿不到剪貼簿：把網址攤在使用者面前讓他自己複製，總比按了沒反應好
+    window.prompt(t("card.share"), url);
+  }
 }
 
 watch(() => route.params.id, () => {
   card.value = null; welcome.value = ""; previewDoc.value = null; more.value = []; broken.value = false; tab.value = "home";
+  commentCount.value = null; showComments.value = true;
   load();
 }, { immediate: true });
 watch(locale, load);
@@ -122,7 +142,7 @@ watch(locale, load);
       <!-- 背景圖只當氛圍：糊掉、壓淡，讓整頁有這張卡自己的色調 -->
       <div class="role__ambient" :style="{ backgroundImage: `url(${card.backgroundUrl || card.avatarUrl || ''})` }" aria-hidden="true" />
 
-      <div class="role__layout" :aria-busy="loading || undefined">
+      <div class="role__layout" :aria-busy="revalidating || undefined">
         <aside class="role__side panel rise">
           <div class="role__art">
             <img v-if="hasArt" :src="card.avatarUrl!" alt="" fetchpriority="high" @error="broken = true" />
@@ -175,9 +195,9 @@ watch(locale, load);
         </aside>
 
         <section class="role__main">
-          <div class="seg role__tabs" role="tablist">
-            <button id="tab-home" class="seg__item" :class="{ 'seg__item--on': tab === 'home' }" role="tab" aria-controls="panel-home" :aria-selected="tab === 'home'" @click="tab = 'home'">{{ $t("card.tab.home") }}</button>
-            <button v-if="showComments" id="tab-comments" class="seg__item" :class="{ 'seg__item--on': tab === 'comments' }" role="tab" aria-controls="panel-comments" :aria-selected="tab === 'comments'" @click="tab = 'comments'">
+          <div class="seg role__tabs" role="tablist" @keydown="onTabKey">
+            <button id="tab-home" class="seg__item" :class="{ 'seg__item--on': tab === 'home' }" role="tab" aria-controls="panel-home" :aria-selected="tab === 'home'" :tabindex="tab === 'home' ? 0 : -1" @click="tab = 'home'">{{ $t("card.tab.home") }}</button>
+            <button v-if="showComments" id="tab-comments" class="seg__item" :class="{ 'seg__item--on': tab === 'comments' }" role="tab" aria-controls="panel-comments" :aria-selected="tab === 'comments'" :tabindex="tab === 'comments' ? 0 : -1" @click="tab = 'comments'">
               {{ $t("card.tab.comments") }}<span v-if="commentCount" class="role__tab-n">{{ commentCount }}</span>
             </button>
           </div>
@@ -217,7 +237,8 @@ watch(locale, load);
       </div>
     </template>
 
-    <div v-if="copied" class="toast" role="status">{{ $t("card.copied") }}</div>
+    <!-- live region 要先存在再改內容，讀屏器才會唸；所以常駐、用 hidden 切 -->
+    <div class="toast" role="status" :hidden="!copied">{{ copied ? $t("card.copied") : "" }}</div>
   </div>
 </template>
 

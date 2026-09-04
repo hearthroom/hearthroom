@@ -70,7 +70,12 @@ async function submit(root?: Comment, target?: Comment) {
     if (root) { replyDraft.value = ""; replyTo.value = null; delete expanded.value[root.commentId]; } else draft.value = "";
     await load(true);
     // 審核中的留言列表裡看不到——說一聲，不然像是沒送出去
-    const visible = comments.value.some((c) => c.commentId === created.commentId || c.replies?.some((r) => r.commentId === created.commentId));
+    let visible = comments.value.some((c) => c.commentId === created.commentId || c.replies?.some((r) => r.commentId === created.commentId));
+    if (root && !visible) {
+      // 列表裡的回覆預覽只放讚數前幾則；新回覆零讚擠不進去，不代表沒過審，翻回覆串本身再判
+      const fresh = comments.value.find((c) => c.commentId === root.commentId);
+      if (fresh) { await showAllReplies(fresh); visible = repliesOf(fresh).some((r) => r.commentId === created.commentId); }
+    }
     submittedHidden.value = !visible;
   } catch (err) {
     error.value = err instanceof Error ? err.message : t("state.actionFailed");
@@ -217,7 +222,7 @@ watch([() => props.roleId, lang, () => session.me?.accountNumId], () => load(tru
 .cmt__head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .cmt__name { font-size: 13.5px; font-weight: 600; }
 a.cmt__name:hover { color: var(--accent-text); }
-.cmt__badge { padding: 1px 6px; border-radius: 5px; font-size: 11px; font-weight: 600; background: var(--accent-soft); color: var(--accent-text); }
+.cmt__badge { padding: 1px 6px; border-radius: 5px; font-size: 11px; font-weight: 600; background: var(--accent-tint); color: var(--accent-text); }
 .cmt__badge--pin { background: var(--surface-2); color: var(--text-2); }
 .cmt__text { margin: 0; font-size: 14px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
 .cmt__to { color: var(--accent-text); }

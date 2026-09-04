@@ -60,7 +60,6 @@
 :root[data-mode="dark"] .pv-panel[data-tone="amber"]  { background: rgba(255, 192, 103, 0.14); border-color: rgba(255, 192, 103, 0.3); }
 :root[data-mode="dark"] .pv-panel[data-tone="silver"] { background: rgba(199, 205, 214, 0.12); border-color: rgba(199, 205, 214, 0.25); }
 :root[data-mode="dark"] .pv-panel[data-tone="ink"]    { background: #0b0b0e; border-color: #24242c; }
-}
 
 .pv-list { margin: 0; padding-left: 22px; display: grid; gap: 4px; }
 .pv-list li { display: grid; gap: 6px; }

@@ -15,7 +15,7 @@ function onDocClick(e: MouseEvent) {
   if (root.value && !root.value.contains(e.target as Node)) open.value = false;
 }
 function onKey(e: KeyboardEvent) {
-  if (e.key === "Escape") open.value = false;
+  if (e.key === "Escape" && open.value) { open.value = false; root.value?.querySelector<HTMLElement>("button")?.focus(); }
 }
 onMounted(() => { document.addEventListener("click", onDocClick); document.addEventListener("keydown", onKey); });
 onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); document.removeEventListener("keydown", onKey); });
@@ -76,7 +76,7 @@ const PLAN_LABEL: Record<string, string> = { unlimited: "wallet.plan.unlimited",
 }
 .menu__head { display: grid; gap: 2px; padding: 8px 10px 10px; }
 .menu__name { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.menu__plan { width: fit-content; padding: 1px 7px; border-radius: 6px; background: var(--accent-soft); color: var(--accent-text); font-size: 11px; font-weight: 600; }
+.menu__plan { width: fit-content; padding: 1px 7px; border-radius: 6px; background: var(--accent-tint); color: var(--accent-text); font-size: 11px; font-weight: 600; }
 .menu__item {
   display: block; width: 100%; padding: 8px 10px; text-align: left;
   background: none; border: 0; border-radius: var(--r-sm);

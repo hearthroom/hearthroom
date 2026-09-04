@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import AuthorList from "@/components/AuthorList.vue";
@@ -12,11 +12,14 @@ import type { CardPage, CommunityCard } from "@/lib/types";
 
 const route = useRoute();
 const router = useRouter();
-const { locale } = useLocalePath();
+const { locale, lp } = useLocalePath();
 const { t } = useI18n();
 
 const q = computed(() => (typeof route.query.q === "string" ? route.query.q.trim() : ""));
 const draft = ref(q.value);
+/* 焦點自己接：換頁後 router 會先把焦點放到 main，瀏覽器的 autofocus 就不生效了 */
+const box = ref<HTMLInputElement | null>(null);
+onMounted(() => { void nextTick(() => box.value?.focus()); });
 /** 預設搜目前語言那一區；明說 all 才跨語區。 */
 const allZones = computed(() => route.query.zone === "all");
 const kind = computed(() => (route.query.kind === "authors" ? "authors" : "cards"));
@@ -76,8 +79,7 @@ function navigate(patch: Record<string, string | undefined>) {
   router.push({ query });
 }
 function submit() { navigate({ q: draft.value.trim() }); }
-function searchTag(tag: string) { router.push({ path: withLocaleRoot(), query: { tag } }); }
-const withLocaleRoot = () => route.path.replace(/\/search$/, "") || "/";
+function searchTag(tag: string) { router.push({ path: lp("/"), query: { tag } }); }
 
 /** 結果數不確定（有篩選又還有下一頁）時只說「這一頁以上」，不假裝知道總數 */
 const countLabel = (page: { total: number | null; hasNext: boolean; limit: number; items: unknown[] } | null | undefined) => {
@@ -98,7 +100,7 @@ watch(q, (v) => { draft.value = v; });
         <circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.7" />
         <path d="M12.8 12.8 17 17" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
       </svg>
-      <input v-model="draft" class="search__input" type="search" :placeholder="$t('search.placeholder')" :aria-label="$t('search.title')" autofocus enterkeyhint="search" />
+      <input ref="box" v-model="draft" class="search__input" type="search" :placeholder="$t('search.placeholder')" :aria-label="$t('search.title')" enterkeyhint="search" />
       <button class="btn btn--primary btn--lg search__go" type="submit">{{ $t("board.search.submit") }}</button>
     </form>
 
