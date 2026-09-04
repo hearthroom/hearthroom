@@ -1,6 +1,7 @@
 import { createI18n } from "vue-i18n";
 import zhHant from "../locales/zh-Hant.json";
 import { SITE } from "./site";
+import type { Zone } from "./types";
 
 /**
  * 多語系。
@@ -114,6 +115,27 @@ export function detectLocale(): string {
     if (base) return base;
   }
   return SOURCE_LOCALE;
+}
+
+/**
+ * 語區：榜單按卡片的語言分開列。名字用該語言自己寫，跟 LOCALES 一樣不翻譯。
+ * 簡繁體併成一區——同一批讀者兩種都看得懂，拆開只會讓每區都更空。
+ */
+export const ZONES: { code: Zone; label: string }[] = [
+  { code: "zh", label: "中文" },
+  { code: "en", label: "English" },
+  { code: "ja", label: "日本語" },
+  { code: "ko", label: "한국어" },
+];
+
+export const isZone = (v: unknown): v is Zone => ZONES.some((z) => z.code === v);
+
+/** 介面語言對應的預設語區：看日文介面的人，先看到日文卡。 */
+export const defaultZone = (uiLocale: string): Zone => contentLang(uiLocale) as Zone;
+
+/** 語區的顯示名。不分語言的卡沒有自己的語言名，那個才需要翻譯。 */
+export function zoneLabel(zone: string): string {
+  return ZONES.find((z) => z.code === zone)?.label ?? i18n.global.t("zone.all");
 }
 
 /**

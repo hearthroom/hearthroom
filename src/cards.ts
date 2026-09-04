@@ -1,10 +1,11 @@
-import type { UpstreamRole } from "./upstream";
+import type { UpstreamRole, Zone } from "./upstream";
 import { buildSearchText } from "./upstream";
 import { HttpError, type Localized, pickLocale } from "./types";
 
 export interface CardRow {
   id: string;
   source_role_id: string;
+  zone: string;
   author_num_id: number;
   author_name: string;
   author_avatar: string;
@@ -29,6 +30,7 @@ export function toCard(row: CardRow, lang: string) {
   return {
     id: row.id,
     roleId: row.source_role_id,
+    zone: row.zone,
     name: pickLocale(names, lang),
     summary: pickLocale(summaries, lang),
     names,
@@ -57,6 +59,8 @@ const ftsPhrase = (q: string) => `"${q.replace(/"/g, '""')}"`;
 const likeTerm = (q: string) => `%${q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
 
 export interface ListOptions {
+  /** 語區。榜單永遠帶著；作者主頁不帶，列他所有語言的作品。 */
+  zone?: Zone;
   q?: string;
   tag?: string;
   authorNumId?: number;
@@ -83,6 +87,10 @@ export async function listCards(db: D1Database, opts: ListOptions) {
   const binds: unknown[] = [];
   let from = "cards c";
 
+  if (opts.zone) {
+    where.push("c.zone IN (?, 'all')");
+    binds.push(opts.zone);
+  }
   if (opts.q) {
     if ([...opts.q].length >= FTS_MIN_CHARS) {
       from = "cards_fts JOIN cards c ON c.rowid = cards_fts.rowid";
@@ -125,7 +133,10 @@ export async function listCards(db: D1Database, opts: ListOptions) {
 
   let total: number | null = null;
   if (!filtered) {
-    const counted = await db.prepare("SELECT COUNT(*) AS n FROM cards").first<{ n: number }>();
+    // 語區條件走索引，數起來便宜；只有搜尋與標籤過濾才貴到不值得數。
+    const counted = opts.zone
+      ? await db.prepare("SELECT COUNT(*) AS n FROM cards WHERE zone IN (?, 'all')").bind(opts.zone).first<{ n: number }>()
+      : await db.prepare("SELECT COUNT(*) AS n FROM cards").first<{ n: number }>();
     total = counted?.n ?? 0;
   } else if (!hasNext) {
     // 已經翻到最後一頁，總數就是走過的量，不必再問一次資料庫。
@@ -148,6 +159,7 @@ export async function upsertCard(db: D1Database, role: UpstreamRole, now: number
     .first<{ id: string; talk_num: number }>();
 
   const shared = [
+    role.zone,
     role.authorNumId,
     role.authorName,
     role.authorAvatar,
@@ -166,7 +178,7 @@ export async function upsertCard(db: D1Database, role: UpstreamRole, now: number
   if (existing) {
     await db
       .prepare(
-        `UPDATE cards SET author_num_id=?, author_name=?, author_avatar=?, names=?, summaries=?,
+        `UPDATE cards SET zone=?, author_num_id=?, author_name=?, author_avatar=?, names=?, summaries=?,
            avatar_url=?, background_url=?, slug=?, tags=?, talk_num=?, follow_num=?, search_text=?,
            last_synced_at=?, talk_num_prev=?
          WHERE id=?`,
@@ -179,10 +191,10 @@ export async function upsertCard(db: D1Database, role: UpstreamRole, now: number
   const id = crypto.randomUUID();
   await db
     .prepare(
-      `INSERT INTO cards (id, source_role_id, author_num_id, author_name, author_avatar, names, summaries,
+      `INSERT INTO cards (id, source_role_id, zone, author_num_id, author_name, author_avatar, names, summaries,
          avatar_url, background_url, slug, tags, talk_num, follow_num, search_text, last_synced_at,
          talk_num_prev, registered_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     // 首次登記把 prev 設成當前值 → trending 從 0 起算。
     // 不這樣的話一張老熱卡剛登記就會用累積總量霸榜。
@@ -245,11 +257,12 @@ export async function dueForSync(db: D1Database, limit: number) {
 export function syncStatement(db: D1Database, id: string, prevTalkNum: number, role: UpstreamRole, now: number) {
   return db
     .prepare(
-      `UPDATE cards SET author_name=?, author_avatar=?, names=?, summaries=?, avatar_url=?, background_url=?,
+      `UPDATE cards SET zone=?, author_name=?, author_avatar=?, names=?, summaries=?, avatar_url=?, background_url=?,
          slug=?, tags=?, talk_num=?, follow_num=?, search_text=?, talk_num_prev=?, last_synced_at=?
        WHERE id=?`,
     )
     .bind(
+      role.zone,
       role.authorName,
       role.authorAvatar,
       JSON.stringify(role.names),

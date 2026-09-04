@@ -4,7 +4,7 @@ import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute } from "vue-router";
 import { UPSTREAM_API } from "@/lib/config";
 import { fetchCard } from "@/lib/api";
-import { contentLang, pageTitle } from "@/lib/i18n";
+import { contentLang, pageTitle, zoneLabel } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
 
 import { compact, hueFrom, relativeTime } from "@/lib/format";
@@ -64,7 +64,7 @@ watch([() => route.params.id, locale], load, { immediate: true });
         </div>
 
         <div class="dossier__body">
-          <p class="eyebrow">{{ $t("card.eyebrow") }}</p>
+          <p class="eyebrow">{{ $t("card.eyebrow") }} · <span :lang="card.zone === 'all' ? undefined : card.zone">{{ zoneLabel(card.zone) }}</span></p>
           <h1 class="dossier__name display">{{ card.name }}</h1>
           <p v-if="card.summary" class="dossier__hook">{{ card.summary }}</p>
 

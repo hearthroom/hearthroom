@@ -4,19 +4,18 @@ import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import CardGrid from "@/components/CardGrid.vue";
 import { fetchBoard } from "@/lib/api";
-import { contentLang } from "@/lib/i18n";
+import { ZONES, contentLang, defaultZone, isZone } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
-import type { CardPage, Sort } from "@/lib/types";
+import type { CardPage, Sort, Zone } from "@/lib/types";
 
 const route = useRoute();
 const router = useRouter();
-const { locale, lp } = useLocalePath();
+const { locale } = useLocalePath();
 const { t } = useI18n();
 
 const page = ref<CardPage | null>(null);
 const loading = ref(true);
 const error = ref("");
-const draft = ref((route.query.q as string) ?? "");
 
 const SORTS: Sort[] = ["hot", "new", "top"];
 
@@ -25,6 +24,9 @@ const sort = computed<Sort>(() => {
   return s === "new" || s === "top" ? s : "hot";
 });
 
+/** 語區跟著網址走；沒指定就是介面語言那一區。 */
+const zone = computed<Zone>(() => (isZone(route.query.zone) ? route.query.zone : defaultZone(locale.value)));
+
 const searching = computed(() => Boolean(route.query.q || route.query.tag));
 
 async function load() {
@@ -32,6 +34,7 @@ async function load() {
   error.value = "";
   try {
     page.value = await fetchBoard({
+      zone: zone.value,
       q: (route.query.q as string) || undefined,
       tag: (route.query.tag as string) || undefined,
       sort: sort.value,
@@ -58,40 +61,38 @@ function navigate(patch: Record<string, string | undefined>) {
 }
 
 watch([() => route.query, locale], load, { immediate: true });
-watch(() => route.query.q, (q) => { draft.value = (q as string) ?? ""; });
 </script>
 
 <template>
-  <div class="page">
-    <header class="lede">
-      <p class="eyebrow">{{ $t("board.eyebrow") }}</p>
-      <h1 class="lede__title display">{{ $t("board.title") }}</h1>
-      <p class="lede__sub muted">{{ $t("board.lede") }}</p>
-    </header>
+  <div class="page board">
+    <h1 class="sr-only">{{ $t("site.tagline") }}</h1>
 
-    <div class="bar">
-      <nav class="sorts">
+    <!-- 工具列貼在頁首下方：語區是主分區，排序是次要的，兩組都不該離開視線 -->
+    <div class="toolbar">
+      <nav class="tabs tabs--primary" :aria-label="$t('board.zones')">
+        <button
+          v-for="z in ZONES"
+          :key="z.code"
+          class="tabs__item"
+          :class="{ 'tabs__item--on': zone === z.code }"
+          :lang="z.code"
+          @click="navigate({ zone: z.code })"
+        >
+          {{ z.label }}
+        </button>
+      </nav>
+
+      <nav class="tabs toolbar__sorts" :aria-label="$t('board.sorts')">
         <button
           v-for="s in SORTS"
           :key="s"
-          class="sorts__item"
-          :class="{ 'sorts__item--on': sort === s }"
+          class="tabs__item"
+          :class="{ 'tabs__item--on': sort === s }"
           @click="navigate({ sort: s })"
         >
           {{ $t(`board.sort.${s}`) }}
         </button>
       </nav>
-
-      <form class="search" @submit.prevent="navigate({ q: draft.trim() || undefined })">
-        <input
-          v-model="draft"
-          class="input search__input"
-          type="search"
-          :placeholder="$t('board.search.placeholder')"
-          :aria-label="$t('board.search.submit')"
-        />
-        <button class="btn btn--sm search__go" type="submit">{{ $t("board.search.submit") }}</button>
-      </form>
     </div>
 
     <div class="status">
@@ -113,6 +114,7 @@ watch(() => route.query.q, (q) => { draft.value = (q as string) ?? ""; });
       :cards="page?.items ?? []"
       :loading="loading"
       :ranked="!searching"
+      :cover="!searching && (page?.offset ?? 0) === 0"
       :rank-offset="page?.offset ?? 0"
       :show-trending="sort === 'hot'"
       :empty-title="$t(searching ? 'board.empty.search.title' : 'board.empty.title')"
@@ -144,38 +146,24 @@ watch(() => route.query.q, (q) => { draft.value = (q as string) ?? ""; });
 </template>
 
 <style scoped>
-.lede { margin-bottom: var(--s-6); }
-.lede__title { margin: var(--s-2) 0 var(--s-2); font-size: clamp(38px, 6vw, 58px); }
-.lede__sub { margin: 0; font-size: 14.5px; max-width: 52ch; }
+.board { padding-top: 0; }
 
-.bar {
-  display: flex; flex-wrap: wrap; gap: var(--s-4);
-  align-items: center; justify-content: space-between;
-  padding-bottom: var(--s-3);
+.toolbar {
+  position: sticky; top: var(--masthead-h); z-index: 20;
+  display: flex; align-items: stretch; justify-content: space-between; gap: var(--s-5);
   border-bottom: 1px solid var(--rule);
+  background: rgba(16, 14, 11, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
-
-/* 排序做成排版式的頁籤，不做膠囊按鈕——膠囊會跟卡片的圓角語言打架 */
-.sorts { display: flex; gap: var(--s-5); }
-.sorts__item {
-  padding: 0 0 var(--s-2);
-  background: none; border: 0; cursor: pointer;
-  font-size: 14px; color: var(--text-faint);
-  border-bottom: 1px solid transparent;
-  margin-bottom: -13px;
-  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
-}
-.sorts__item:hover { color: var(--text-dim); }
-.sorts__item--on { color: var(--text); border-bottom-color: var(--gold); }
-
-.search { display: flex; gap: var(--s-2); flex: 1 1 300px; max-width: 400px; }
-.search__input { flex: 1; min-width: 0; }
-/* flex: none 是這裡的重點：不加的話按鈕會被壓到「搜／尋」直排 */
-.search__go { flex: none; }
+/* 語區列可以橫向捲，手機上四個語言名擠不下時不要折行 */
+.tabs--primary { overflow-x: auto; scrollbar-width: none; }
+.tabs--primary::-webkit-scrollbar { display: none; }
+.toolbar__sorts { flex: none; }
 
 .status {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3);
-  padding: var(--s-3) 0 var(--s-5);
+  padding: var(--s-4) 0 var(--s-4);
 }
 .status__blurb { margin: 0; }
 .status__count { margin: 0 0 0 auto; font-variant-numeric: tabular-nums; }
@@ -189,14 +177,11 @@ watch(() => route.query.q, (q) => { draft.value = (q as string) ?? ""; });
 }
 .chip:hover { color: var(--text); }
 
-.pager {
-  display: flex; align-items: center; justify-content: center; gap: var(--s-5);
-  margin-top: var(--s-7); padding-top: var(--s-5);
-  border-top: 1px solid var(--rule);
-}
-
-@media (max-width: 560px) {
-  .bar { align-items: stretch; }
-  .search { max-width: none; }
+@media (max-width: 640px) {
+  /* 小螢幕：頁首有兩行，工具列不再吸頂；語區與排序各佔一行，排序縮小靠左 */
+  .toolbar { position: static; flex-direction: column; gap: 0; }
+  .tabs { gap: var(--s-4); }
+  .toolbar__sorts { border-top: 1px solid var(--rule); }
+  .toolbar__sorts .tabs__item { font-size: 13px; padding: var(--s-2) 0; }
 }
 </style>

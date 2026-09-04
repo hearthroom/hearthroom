@@ -23,6 +23,7 @@ export function restoreUpstream(): void {
 
 export interface RoleFixture {
   roleId: string;
+  zone?: UpstreamRole["zone"];
   authorNumId?: number;
   authorName?: string;
   name?: string;
@@ -37,6 +38,7 @@ export interface RoleFixture {
 export function role(f: RoleFixture): UpstreamRole {
   return {
     roleId: f.roleId,
+    zone: f.zone ?? "zh",
     authorNumId: f.authorNumId ?? 10001,
     authorName: f.authorName ?? "月光",
     authorAvatar: "https://cdn.lunatalk.ai/author.png",
@@ -88,6 +90,7 @@ export function identities(map: Record<string, number>): void {
 
 export interface MyRoleFixture {
   roleId: string;
+  zone?: UpstreamRole["zone"];
   name?: string;
   visibility?: string;
   talkNum?: number;
@@ -106,6 +109,7 @@ export function myRolesOnUpstream(byToken: Record<string, MyRoleFixture[]>): voi
     return {
       items: slice.map((r) => ({
         roleId: r.roleId,
+        zone: r.zone ?? "zh",
         name: r.name ?? r.roleId,
         summary: "",
         avatarUrl: null,

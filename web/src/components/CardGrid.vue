@@ -9,6 +9,10 @@ defineProps<{
   /** 榜單模式：卡片帶名次。作者主頁這種非排名場景不給。 */
   ranked?: boolean;
   rankOffset?: number;
+  /** 第一張放大成封面（佔 2×2 格）。只在榜單第一頁——那才是「這一區的第一名」。 */
+  cover?: boolean;
+  /** 跨語區的清單（作者主頁）在卡片上標語言而不是作者。 */
+  showZone?: boolean;
   emptyTitle?: string;
   emptyHint?: string;
 }>();
@@ -17,7 +21,13 @@ defineProps<{
 <template>
   <!-- 骨架屏而不是遮罩 spinner：版面不跳動，也看得出接下來會出現什麼 -->
   <div v-if="loading" class="wall">
-    <div v-for="i in 12" :key="i" class="ghost" :style="{ animationDelay: `${i * 60}ms` }" />
+    <div
+      v-for="i in 12"
+      :key="i"
+      class="ghost"
+      :class="{ 'ghost--cover': cover && i === 1 }"
+      :style="{ animationDelay: `${i * 60}ms` }"
+    />
   </div>
 
   <div v-else-if="!cards.length" class="empty">
@@ -32,6 +42,8 @@ defineProps<{
       :card="card"
       :index="i"
       :rank="ranked ? (rankOffset ?? 0) + i + 1 : undefined"
+      :cover="cover && i === 0"
+      :show-zone="showZone"
       :show-trending="showTrending"
     />
   </div>
@@ -43,9 +55,9 @@ defineProps<{
   gap: var(--s-5) var(--s-4);
   /*
    * clamp 讓最小欄寬跟著視窗縮：手機上維持兩欄（單欄的巨型卡片在內容社群裡是反模式，
-   * 一屏只看得到一張就沒有「牆」的感覺了），桌機上回到 178px 的舒適密度。
+   * 一屏只看得到一張就沒有「牆」的感覺了），桌機上是 172px 的海報密度。
    */
-  grid-template-columns: repeat(auto-fill, minmax(clamp(136px, 22vw, 178px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(clamp(140px, 22vw, 172px), 1fr));
 }
 
 .ghost {
@@ -55,6 +67,7 @@ defineProps<{
   background-size: 300% 100%;
   animation: sweep 1.5s var(--ease) infinite;
 }
+.ghost--cover { grid-column: span 2; grid-row: span 2; aspect-ratio: auto; }
 @keyframes sweep { from { background-position: 130% 0; } to { background-position: -30% 0; } }
 
 .empty {

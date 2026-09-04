@@ -7,10 +7,8 @@
   "nav.language": "언어",
   "footer.blurb": "모든 작품은 작가가 직접 등록합니다. 순위는 독자가 실제로 나눈 대화량만으로 정해지며, 임의 추천은 없습니다.",
   "footer.source": "소스",
-
-  "board.eyebrow": "오픈소스 캐릭터 카드 커뮤니티",
-  "board.title": "캐릭터 카드 랭킹",
-  "board.lede": "작가가 직접 등록한 작품입니다. 순위는 독자가 실제로 나눈 대화량만으로 정해지며, 임의 추천은 없습니다.",
+  "board.zones": "언어",
+  "board.sorts": "정렬",
   "board.search.placeholder": "캐릭터 이름·소개·태그 검색",
   "board.search.submit": "검색",
   "board.sort.hot": "인기",
@@ -20,16 +18,14 @@
   "board.sort.new.blurb": "가장 최근에 등록된 카드",
   "board.sort.top.blurb": "누적 대화량이 가장 많은 카드",
   "board.count": "{n}개",
-  "board.empty.title": "아직 비어 있습니다",
-  "board.empty.hint": "첫 카드를 기다리는 중입니다. 작품이 있다면 ‘내 카드’에서 등록해 주세요.",
+  "board.empty.title": "아직 등록된 작품이 없어요",
+  "board.empty.hint": "다른 언어를 둘러보거나 ‘내 카드’에서 작품을 등록해 보세요.",
   "board.empty.search.title": "일치하는 카드가 없습니다",
   "board.empty.search.hint": "다른 검색어로 시도해 보세요.",
-
   "pager.prev": "이전",
   "pager.next": "다음",
   "pager.page": "{n} 페이지",
   "pager.pageOf": "{n} / {total} 페이지",
-
   "card.eyebrow": "캐릭터 카드",
   "card.stat.talk": "대화",
   "card.stat.follow": "즐겨찾기",
@@ -39,14 +35,12 @@
   "card.meta": "{registered} 등록 · 데이터 갱신 {synced}",
   "card.talkCount": "대화 {n}회",
   "card.noSummary": "아직 소개가 없습니다",
-
   "author.eyebrow": "작가",
   "author.stat.cards": "등록한 카드",
   "author.stat.talk": "누적 대화",
   "author.stat.joined": "가입",
   "author.empty.title": "아직 등록된 작품이 없습니다",
   "author.empty.hint": "이 작가는 아직 카드를 등록하지 않았습니다.",
-
   "mine.eyebrow": "작가 작업 공간",
   "mine.title": "내 캐릭터 카드",
   "mine.create": "새 카드",
@@ -64,7 +58,6 @@
   "mine.empty": "아직 캐릭터 카드가 없습니다. ",
   "mine.empty.cta": "하나 만들기",
   "mine.emptyFilter": "이 필터에 해당하는 카드가 없습니다.",
-
   "create.title": "캐릭터 카드 만들기",
   "create.lede": "먼저 이름만 정하고, 소개와 설정은 만든 뒤에 채우면 됩니다. 새 카드는 비공개라 본인만 볼 수 있습니다. 랭킹에 올릴지는 직접 결정합니다.",
   "create.name": "캐릭터 이름",
@@ -72,7 +65,6 @@
   "create.language": "주 언어",
   "create.submit": "만들고 편집 계속",
   "create.submitting": "만드는 중…",
-
   "edit.title": "캐릭터 카드 편집",
   "edit.lede": "변경은 카드에 바로 적용됩니다. 이미 등록되어 있다면 랭킹의 내용도 잠시 뒤 따라옵니다.",
   "edit.name": "캐릭터 이름",
@@ -87,7 +79,6 @@
   "edit.saving": "저장 중…",
   "edit.saved": "저장했습니다.",
   "edit.back": "내 카드로 돌아가기",
-
   "auth.completing": "로그인을 완료하는 중…",
   "auth.retry": "다시 로그인",
   "auth.expired": "로그인이 만료되었습니다. 다시 로그인해 주세요",
@@ -99,20 +90,17 @@
   "auth.noCode": "콜백에 인가 코드가 없습니다",
   "auth.badState": "인가 상태가 일치하지 않습니다. 다시 로그인해 주세요",
   "auth.noVerifier": "이번 로그인의 검증 코드를 찾을 수 없습니다. 다시 로그인해 주세요",
-
   "notFound.title": "페이지를 찾을 수 없습니다",
   "notFound.hint": "링크가 만료되었거나, 그 카드의 등록이 해제되었을 수 있습니다.",
   "notFound.back": "랭킹으로 돌아가기",
-
   "state.loading": "불러오는 중…",
   "state.loadFailed": "불러오지 못했습니다",
   "state.actionFailed": "작업에 실패했습니다",
   "state.saveFailed": "저장하지 못했습니다",
   "state.createFailed": "만들지 못했습니다",
   "state.requestFailed": "요청에 실패했습니다({status})",
-
   "time.justNow": "방금",
-
   "site.tagline": "캐릭터 카드 랭킹",
-  "site.description": "오픈소스 캐릭터 카드 커뮤니티: 랭킹, 검색, 작가 페이지."
+  "site.description": "오픈소스 캐릭터 카드 커뮤니티: 랭킹, 검색, 작가 페이지.",
+  "zone.all": "모든 언어"
 }
