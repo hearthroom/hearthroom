@@ -45,7 +45,8 @@ onMounted(async () => {
 });
 
 /* 改到一半離開要問一聲：站內換頁與關分頁都攔 */
-onBeforeRouteLeave(() => !dirty.value || window.confirm(t("edit.discard")));
+/* 儲存中不放行：鍵盤也走得到返回連結，這時彈「放棄修改？」文不對題 */
+onBeforeRouteLeave(() => !saving.value && (!dirty.value || window.confirm(t("edit.discard"))));
 const guard = (e: BeforeUnloadEvent) => { if (dirty.value) e.preventDefault(); };
 onMounted(() => window.addEventListener("beforeunload", guard));
 onBeforeUnmount(() => window.removeEventListener("beforeunload", guard));

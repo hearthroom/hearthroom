@@ -24,7 +24,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
 <template>
   <div ref="root" class="ap">
     <!-- 圖示畫的是現在生效的那一種：白天是太陽、晚上是月亮 -->
-    <button class="ap__btn" :aria-label="$t('appearance.title')" aria-haspopup="true" :aria-expanded="open" @click="toggle">
+    <button class="ap__btn" :aria-label="$t('appearance.title')" :aria-expanded="open" @click="toggle">
       <svg v-if="resolvedMode === 'dark'" viewBox="0 0 20 20" aria-hidden="true">
         <path d="M15.5 12.6A6.5 6.5 0 0 1 7.4 4.5a6.5 6.5 0 1 0 8.1 8.1z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
       </svg>
