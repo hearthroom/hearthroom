@@ -24,6 +24,7 @@ export function restoreUpstream(): void {
 export interface RoleFixture {
   roleId: string;
   zone?: UpstreamRole["zone"];
+  welcome?: string;
   authorNumId?: number;
   authorName?: string;
   name?: string;
@@ -48,6 +49,7 @@ export function role(f: RoleFixture): UpstreamRole {
     backgroundUrl: "https://cdn.lunatalk.ai/bg.png",
     slug: null,
     tags: f.tags ?? ["推理"],
+    welcome: f.welcome ?? "",
     talkNum: f.talkNum ?? 0,
     followNum: f.followNum ?? 0,
   };

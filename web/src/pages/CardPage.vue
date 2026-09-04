@@ -2,11 +2,10 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute } from "vue-router";
-import CardTile from "@/components/CardTile.vue";
 import CommentPanel from "@/components/CommentPanel.vue";
 import PreviewDoc from "@/components/preview/PreviewDoc.vue";
 import { UPSTREAM_API } from "@/lib/config";
-import { fetchBoard, fetchCard, fetchPreviewPage, fetchRoleDetail } from "@/lib/api";
+import { fetchCard, fetchPreviewPage, fetchRoleDetail } from "@/lib/api";
 import { contentLang, pageTitle, zoneLabel } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
 import { compact, hueFrom, plainText, relativeTime } from "@/lib/format";
@@ -26,7 +25,6 @@ const showComments = ref(true);
 const previewDoc = ref<unknown>(null);
 const previewSkin = ref("");
 const commentCount = ref<number | null>(null);
-const moreByAuthor = ref<CommunityCard[]>([]);
 
 type Tab = "home" | "comments";
 const tab = ref<Tab>("home");
@@ -53,10 +51,6 @@ async function load() {
 
   // 主頁的其餘資料在卡片之後補上：讀不到只是少一塊，不擋整頁。
   const roleId = card.value.roleId;
-  moreByAuthor.value = [];
-  void fetchBoard({ author: card.value.author.accountNumId, sort: "top", limit: 7, lang })
-    .then((p) => { moreByAuthor.value = p.items.filter((c) => c.roleId !== roleId).slice(0, 6); })
-    .catch(() => {});
   void fetchRoleDetail(roleId, undefined, lang)
     .then((raw) => {
       welcome.value = plainText(String(raw.roleWelcome ?? ""), card.value?.name ?? "", t("card.you"));
@@ -148,15 +142,6 @@ watch([() => route.params.id, locale], load, { immediate: true });
             </template>
           </div>
 
-          <section v-if="moreByAuthor.length && tab === 'home'" class="more rise">
-            <div class="more__head">
-              <h2 class="more__title">{{ $t("card.moreBy", { name: card.author.name }) }}</h2>
-              <RouterLink :to="lp(`/authors/${card.author.accountNumId}`)" class="more__all">{{ $t("card.authorPage") }} →</RouterLink>
-            </div>
-            <div class="more__grid">
-              <CardTile v-for="c in moreByAuthor" :key="c.id" :card="c" />
-            </div>
-          </section>
 
           <!-- 評論面板常駐（v-show），切回來不必重載；作者關掉評論就整個不掛 -->
           <div v-if="showComments" v-show="tab === 'comments'" class="panel role__comments">
@@ -237,12 +222,6 @@ watch([() => route.params.id, locale], load, { immediate: true });
 }
 .role__comments { padding: var(--s-5); }
 
-.more { display: grid; gap: var(--s-3); margin-top: var(--s-2); }
-.more__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-3); }
-.more__title { font-size: 14px; font-weight: 600; color: var(--text-2); }
-.more__all { font-size: 12.5px; font-weight: 500; color: var(--text-3); }
-.more__all:hover { color: var(--accent); }
-.more__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: var(--s-3); }
 
 @media (max-width: 820px) {
   .role__layout { grid-template-columns: 1fr; }

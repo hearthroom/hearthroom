@@ -72,6 +72,8 @@ export interface UpstreamRole {
   backgroundUrl: string | null;
   slug: string | null;
   tags: string[];
+  /** 開場白。公開的（訪客在角色頁就看得到），只進搜尋索引，不另存欄位。 */
+  welcome: string;
   talkNum: number;
   followNum: number;
 }
@@ -117,6 +119,7 @@ export function projectRole(raw: Record<string, unknown>): UpstreamRole {
     backgroundUrl: str(raw.roleBackground) || null,
     slug: str(raw.slug) || null,
     tags: tags.slice(0, 20),
+    welcome: str(raw.roleWelcome),
     talkNum: num(raw.talkNum),
     followNum: num(raw.followNum),
   };
@@ -184,9 +187,12 @@ async function fetchRole(env: Env, roleId: string): Promise<UpstreamRole> {
   return role;
 }
 
-/** 餵給 FTS 的一團字：四語名稱 + 四語簡介 + 標籤，一個索引覆蓋所有語言。 */
+/**
+ * 餵給 FTS 的一團字：四語名稱 + 四語簡介 + 標籤 + 開場白，一個索引覆蓋所有語言。
+ * 開場白截在四千字：它是搜尋的線索，不是要被整段索引的正文。
+ */
 export function buildSearchText(role: UpstreamRole): string {
-  return [...Object.values(role.names), ...Object.values(role.summaries), ...role.tags]
+  return [...Object.values(role.names), ...Object.values(role.summaries), ...role.tags, role.welcome.slice(0, 4000)]
     .filter(Boolean)
     .join(" ");
 }

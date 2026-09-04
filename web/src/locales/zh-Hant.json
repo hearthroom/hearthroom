@@ -142,5 +142,21 @@
   "time.yesterday": "昨天",
   "wallet.records.income": "收入",
   "wallet.records.expense": "支出",
-  "wallet.records.all": "全部"
+  "wallet.records.all": "全部",
+  "board.mode.cards": "角色卡",
+  "board.mode.authors": "作者",
+  "board.tags": "類型",
+  "board.tag.all": "全部",
+  "author.sort.talk": "累積對話",
+  "author.sort.cards": "作品數",
+  "author.sort.hot": "近期成長",
+  "author.cards": "{n} 張作品",
+  "search.title": "搜尋",
+  "search.placeholder": "角色名、簡介、標籤、開場白…",
+  "search.zone.current": "目前語言",
+  "search.zone.all": "全部語言",
+  "search.cards": "角色卡",
+  "search.authors": "作者",
+  "search.empty": "沒有符合「{q}」的結果",
+  "search.hint": "輸入關鍵字開始搜尋"
 }

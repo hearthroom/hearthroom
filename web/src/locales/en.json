@@ -142,5 +142,21 @@
   "time.yesterday": "Yesterday",
   "wallet.records.income": "Earned",
   "wallet.records.expense": "Spent",
-  "wallet.records.all": "All"
+  "wallet.records.all": "All",
+  "board.mode.cards": "Characters",
+  "board.mode.authors": "Authors",
+  "board.tags": "Type",
+  "board.tag.all": "All",
+  "author.sort.talk": "Total chats",
+  "author.sort.cards": "Cards",
+  "author.sort.hot": "Trending",
+  "author.cards": "{n} cards",
+  "search.title": "Search",
+  "search.placeholder": "Name, description, tags, opening line…",
+  "search.zone.current": "Current language",
+  "search.zone.all": "All languages",
+  "search.cards": "Characters",
+  "search.authors": "Authors",
+  "search.empty": "Nothing matched “{q}”",
+  "search.hint": "Type to search"
 }

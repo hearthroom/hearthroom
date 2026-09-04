@@ -14,14 +14,21 @@ const router = useRouter();
 
 onMounted(() => session.restore());
 
-/** 搜尋放在頁首，全站都搜得到；結果一律落在榜單。 */
+/** 搜尋放在頁首，全站都搜得到；結果落在搜尋頁。按 / 直接聚焦。 */
 const q = ref((route.query.q as string) ?? "");
+const box = ref<HTMLInputElement | null>(null);
 watch(() => route.query.q, (v) => { q.value = (v as string) ?? ""; });
 
 function search() {
   const term = q.value.trim();
-  router.push({ path: lp("/"), query: term ? { q: term } : {} });
+  if (!term) return;
+  router.push({ path: lp("/search"), query: { q: term } });
 }
+function onSlash(e: KeyboardEvent) {
+  const tag = (e.target as HTMLElement)?.tagName;
+  if (e.key === "/" && tag !== "INPUT" && tag !== "TEXTAREA") { e.preventDefault(); box.value?.focus(); }
+}
+onMounted(() => document.addEventListener("keydown", onSlash));
 </script>
 
 <template>
@@ -45,12 +52,14 @@ function search() {
           <path d="M12.8 12.8 17 17" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
         </svg>
         <input
+          ref="box"
           v-model="q"
           class="search__input"
           type="search"
           :placeholder="$t('board.search.placeholder')"
           :aria-label="$t('board.search.submit')"
         />
+        <kbd class="search__kbd" aria-hidden="true">/</kbd>
       </form>
 
       <div class="account">
@@ -117,6 +126,14 @@ function search() {
 .search__input::placeholder { color: var(--text-3); }
 .search__input:focus { outline: none; background: var(--surface); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .search__input::-webkit-search-cancel-button { -webkit-appearance: none; }
+.search__kbd {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  padding: 1px 6px; border-radius: 5px;
+  font: 500 11px/1.5 var(--font); color: var(--text-3);
+  background: var(--surface); box-shadow: 0 0 0 1px var(--line);
+  pointer-events: none;
+}
+.search:focus-within .search__kbd { display: none; }
 
 .account { display: flex; align-items: center; gap: var(--s-2); }
 
