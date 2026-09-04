@@ -197,3 +197,39 @@ describe("每小時同步", () => {
     expect(names).toContain("上游已刪");
   });
 });
+
+describe("榜單邊緣快取", () => {
+  const hdr = async (query = "") => {
+    const res = await SELF.fetch(`https://c.test/v1/cards${query}`);
+    return { cache: res.headers.get("X-Cache"), body: (await res.json()) as any };
+  };
+
+  beforeEach(() => seed({ id: "a", name: "被快取的卡", talkNum: 100, talkPrev: 50 }));
+
+  it("第二次同樣的請求命中快取", async () => {
+    expect((await hdr()).cache).toBe("miss");
+    expect((await hdr()).cache).toBe("hit");
+  });
+
+  it("命中時回的內容跟第一次一樣", async () => {
+    const first = await hdr();
+    const second = await hdr();
+    expect(second.body.items.map((i: any) => i.id)).toEqual(first.body.items.map((i: any) => i.id));
+  });
+
+  it("不同查詢條件各自快取，不會互相汙染", async () => {
+    await seed({ id: "b", name: "另一張", talkNum: 10, talkPrev: 5 });
+    const hot = await hdr("?sort=hot");
+    const nw = await hdr("?sort=new");
+    expect(hot.cache).toBe("miss");
+    expect(nw.cache).toBe("miss");
+    // 兩個排序各自獨立命中，證明鍵有涵蓋查詢字串
+    expect((await hdr("?sort=hot")).cache).toBe("hit");
+    expect((await hdr("?sort=new")).cache).toBe("hit");
+  });
+
+  it("榜單是公開資料，可以進共用快取", async () => {
+    const res = await SELF.fetch("https://c.test/v1/cards");
+    expect(res.headers.get("Cache-Control")).toContain("public");
+  });
+});

@@ -38,8 +38,33 @@ async function requireAuthor(c: { env: Env; req: { header: (k: string) => string
 
 app.get("/v1/health", (c) => c.json({ ok: true }));
 
-/** 榜單與搜尋。匿名可讀，只回 listed。 */
+/**
+ * 榜單邊緣快取。
+ *
+ * 榜單對所有人完全一樣，而底層資料每小時才同步一次——同一份 SQL 重算幾千次沒有意義。
+ * 命中就是零 DB 查詢。
+ *
+ * 代價是登記一張卡之後，榜單最多晚 BOARD_TTL 秒才看得到它。可以接受的理由是作者在
+ * 自己的工作區立刻就看得到狀態變化（那條路不快取），所以不會覺得操作沒生效。
+ *
+ * 要做到「登記完榜單立刻更新」，得在寫入時遞增一個代際號並拼進快取鍵——那需要一個
+ * 全域強一致的計數器（Durable Object）。等榜單真的大到值得為此加一個元件再說。
+ */
+const BOARD_TTL = 60;
+
+/** 同 mineCache：Cache API 沒有「全部清掉」，測試靠換命名空間拿乾淨起點。 */
+export const boardCache = { namespace: "board" };
+
+/** 榜單與搜尋。匿名可讀。 */
 app.get("/v1/cards", async (c) => {
+  // 只有 GET 而且完全公開，所以整個 URL 就是快取鍵，不必自己組。
+  const cache = await caches.open(boardCache.namespace);
+  const hit = await cache.match(c.req.raw);
+  if (hit) {
+    const res = new Response(hit.body, hit);
+    res.headers.set("X-Cache", "hit");
+    return res;
+  }
   const sortParam = c.req.query("sort");
   const sort = sortParam === "new" || sortParam === "top" ? sortParam : "hot";
   const offset = clamp(c.req.query("offset"), 0, 10_000);
@@ -55,7 +80,14 @@ app.get("/v1/cards", async (c) => {
     offset,
   });
   const l = lang(c);
-  return c.json({ items: rows.map((r) => toCard(r, l)), total, limit, offset, sort });
+  const res = c.json({ items: rows.map((r) => toCard(r, l)), total, limit, offset, sort });
+  res.headers.set("Cache-Control", `public, max-age=${BOARD_TTL}`);
+  res.headers.set("X-Cache", "miss");
+  // 放進快取的副本不能帶 X-Cache: miss，否則下一個人會看到錯的標記。
+  const stored = res.clone();
+  stored.headers.set("X-Cache", "hit");
+  c.executionCtx.waitUntil(cache.put(c.req.raw, stored));
+  return res;
 });
 
 app.get("/v1/cards/:id", async (c) => {

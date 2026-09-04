@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { type UpstreamRole, upstream } from "../src/upstream";
 import { HttpError } from "../src/types";
 import { mineCache } from "../src/mine";
+import { boardCache } from "../src/index";
 
 let cacheGeneration = 0;
 
@@ -12,6 +13,7 @@ let cacheGeneration = 0;
 export async function resetDb(): Promise<void> {
   await env.DB.prepare("DELETE FROM cards").run();
   mineCache.namespace = `mine-test-${++cacheGeneration}`;
+  boardCache.namespace = `board-test-${cacheGeneration}`;
 }
 
 const real = { ...upstream };
