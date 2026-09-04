@@ -141,3 +141,41 @@ export async function patchRole(roleId: string, patch: RoleDraft, token: string)
     }),
   );
 }
+
+// ---- 錢包：積分、會員、流水（都是呼叫者自己的；充值在原站完成）------------------
+
+export type PlanTier = "unlimited" | "member" | "trial";
+export interface Wallet {
+  score: number;
+  tempScore: number;
+  plans: { tier: PlanTier; expiresAt: number }[];
+}
+
+export async function fetchWallet(token: string): Promise<Wallet> {
+  return json<Wallet>(await fetch(`${UPSTREAM_API}/open/v1/me/wallet`, { headers: authHeaders(token) }));
+}
+
+export interface ScoreRecord {
+  id: number;
+  record: string;
+  recordType: "add" | "sub" | string;
+  score: number;
+  createTime: string;
+}
+export interface ScoreRecordPage {
+  total: number;
+  pages: number;
+  hasNextPage: boolean;
+  records: ScoreRecord[];
+}
+
+export async function fetchScoreRecords(token: string, page = 1, pageSize = 20): Promise<ScoreRecordPage> {
+  return json<ScoreRecordPage>(
+    await fetch(`${UPSTREAM_API}/open/v1/me/score/records?pageNum=${page}&pageSize=${pageSize}`, {
+      headers: authHeaders(token),
+    }),
+  );
+}
+
+/** 原站的充值頁。本站不碰付款，只把人送過去。 */
+export const TOP_UP_URL = `${UPSTREAM_API.replace("api.", "")}/pages/mine/vippay`;

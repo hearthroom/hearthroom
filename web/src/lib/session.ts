@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import { fetchMe } from "./api";
-import type { Me } from "./api";
+import { fetchMe, fetchWallet } from "./api";
+import type { Me, Wallet } from "./api";
 import {
   beginLogin,
   persist,
@@ -25,7 +25,17 @@ import {
 export const useSession = defineStore("session", () => {
   const token = ref<TokenPair | null>(null);
   const me = ref<Me | null>(null);
+  /** 積分與會員。頁首要顯示餘額，所以跟身分一起載；讀不到不影響登入。 */
+  const wallet = ref<Wallet | null>(null);
   const ready = ref(false);
+
+  async function loadWallet(accessToken: string) {
+    try {
+      wallet.value = await fetchWallet(accessToken);
+    } catch {
+      wallet.value = null;
+    }
+  }
 
   let restoring: Promise<void> | null = null;
 
@@ -33,6 +43,7 @@ export const useSession = defineStore("session", () => {
     token.value = pair;
     persist(pair);
     me.value = await fetchMe(pair.accessToken);
+    void loadWallet(pair.accessToken);
   }
 
   function restore(): Promise<void> {
@@ -48,6 +59,7 @@ export const useSession = defineStore("session", () => {
         if (saved) {
           token.value = saved;
           me.value = await fetchMe(saved.accessToken);
+          void loadWallet(saved.accessToken);
           return;
         }
         const pair = await refresh();
@@ -80,8 +92,15 @@ export const useSession = defineStore("session", () => {
   async function logout() {
     token.value = null;
     me.value = null;
+    wallet.value = null;
     await revokeSession();
   }
 
-  return { token, me, ready, adopt, restore, accessToken, logout, login: beginLogin };
+  /** 剛充完值回來、或想看最新餘額時呼叫。 */
+  async function refreshWallet() {
+    const t = await accessToken();
+    if (t) await loadWallet(t);
+  }
+
+  return { token, me, wallet, ready, adopt, restore, accessToken, refreshWallet, logout, login: beginLogin };
 });

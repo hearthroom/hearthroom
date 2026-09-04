@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
+import AccountMenu from "@/components/AccountMenu.vue";
 import LocaleSwitch from "@/components/LocaleSwitch.vue";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
@@ -54,13 +55,7 @@ function search() {
 
       <div class="account">
         <LocaleSwitch />
-        <template v-if="session.me">
-          <RouterLink :to="lp(`/authors/${session.me.accountNumId}`)" class="me">
-            <img v-if="session.me.avatar" :src="session.me.avatar" alt="" class="me__face" />
-            <span class="me__name">{{ session.me.nickName }}</span>
-          </RouterLink>
-          <button class="btn btn--ghost btn--sm" @click="session.logout()">{{ $t("nav.logout") }}</button>
-        </template>
+        <AccountMenu v-if="session.me" />
         <button v-else-if="session.ready" class="btn btn--primary btn--sm" @click="session.login(route.fullPath)">
           {{ $t("nav.login") }}
         </button>
@@ -124,10 +119,6 @@ function search() {
 .search__input::-webkit-search-cancel-button { -webkit-appearance: none; }
 
 .account { display: flex; align-items: center; gap: var(--s-2); }
-.me { display: inline-flex; align-items: center; gap: 8px; padding: 4px 8px 4px 4px; border-radius: var(--r-pill); }
-.me:hover { background: var(--surface-2); }
-.me__face { width: 28px; height: 28px; border-radius: var(--r-pill); object-fit: cover; }
-.me__name { font-size: 13.5px; font-weight: 500; max-width: 10em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .footer { border-top: 1px solid var(--border); margin-top: var(--s-7); }
 .footer__inner { max-width: var(--page); margin: 0 auto; padding: var(--s-5); font-size: 12.5px; color: var(--text-3); }
@@ -140,7 +131,6 @@ function search() {
   }
   .account { grid-row: 1; grid-column: 3; }
   .search { grid-row: 2; grid-column: 1 / -1; max-width: none; margin-top: var(--s-2); }
-  .me__name { display: none; }
   .nav__item { padding: 0 10px; }
 }
 </style>

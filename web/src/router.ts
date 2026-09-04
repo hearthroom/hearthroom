@@ -21,6 +21,7 @@ const pages = [
   { path: "authors/:accountNumId", component: () => import("./pages/AuthorPage.vue") },
   { path: "mine", component: () => import("./pages/MyCardsPage.vue"), meta: { auth: true } },
   { path: "create", component: () => import("./pages/CreateCardPage.vue"), meta: { auth: true } },
+  { path: "wallet", component: () => import("./pages/WalletPage.vue"), meta: { auth: true } },
   { path: "auth/callback", component: () => import("./pages/CallbackPage.vue") },
 ];
 
