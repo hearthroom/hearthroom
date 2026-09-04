@@ -173,6 +173,15 @@ Cache API 雖然只在單一節點，但寫入立即可見，而同一個使用�
 偏好存本機而不是進網址：外觀是「我的螢幕」的事，分享連結不該把我的深色模式一起塞給
 別人（語言則相反，見 `web/src/router.ts`）。
 
+## 介面慣例
+
+- **不用瀏覽器原生的 `confirm`／`prompt`／`alert`。** 它們不跟深淺色、不跟主題、不跟字體，一跳出來就是
+  另一個世界。要問「確定嗎」一律走 `web/src/lib/confirm.ts` 的 `confirmDialog()`，畫面是
+  `components/ConfirmDialog.vue`（掛在 App.vue，一次只有一個）。破壞性動作給 `danger: true`，焦點先落在
+  取消鍵。唯一的例外是關分頁前的 `beforeunload`：那是瀏覽器強制的，換不掉。
+- 圖示一律自繪 SVG（stroke 1.5～1.7），不用 emoji；箭頭類的 `→`／`↗` 是排版符號，可以用。
+- 淡入一次、不做錯落；動效只有 `--dur`／`--dur-slow` 兩個時長。
+
 ## 可觀測性
 
 Prometheus `/metrics` 不適用：Workers 沒有常駐進程可以被抓取。Cloudflare 原生的等價物是

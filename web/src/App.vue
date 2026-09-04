@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import AccountMenu from "@/components/AccountMenu.vue";
 import AppearanceMenu from "@/components/AppearanceMenu.vue";
+import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import LocaleSwitch from "@/components/LocaleSwitch.vue";
 import { useAppearance } from "@/lib/appearance";
 import { useLocalePath } from "@/lib/use-locale";
@@ -90,6 +91,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
   </header>
 
   <main id="main" tabindex="-1"><RouterView /></main>
+  <ConfirmDialog />
 
   <footer v-if="SITE.repoUrl" class="footer">
     <div class="footer__inner">
