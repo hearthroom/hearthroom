@@ -135,5 +135,12 @@
   "comment.empty": "아직 댓글이 없어요. 첫 댓글을 남겨 보세요.",
   "comment.login": "로그인 후 댓글 남기기",
   "comment.submitted": "등록됐어요. 검토 후 표시됩니다.",
-  "comment.count": "댓글 {n}개"
+  "comment.count": "댓글 {n}개",
+  "card.authorPage": "작가 페이지",
+  "card.moreBy": "{name}의 다른 작품",
+  "time.today": "오늘",
+  "time.yesterday": "어제",
+  "wallet.records.income": "적립",
+  "wallet.records.expense": "사용",
+  "wallet.records.all": "전체"
 }

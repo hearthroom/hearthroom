@@ -135,5 +135,12 @@
   "comment.empty": "まだコメントはありません。最初のひとことをどうぞ。",
   "comment.login": "ログインしてコメント",
   "comment.submitted": "投稿しました。審査後に表示されます。",
-  "comment.count": "{n} 件のコメント"
+  "comment.count": "{n} 件のコメント",
+  "card.authorPage": "作者ページ",
+  "card.moreBy": "{name} の他の作品",
+  "time.today": "今日",
+  "time.yesterday": "昨日",
+  "wallet.records.income": "獲得",
+  "wallet.records.expense": "消費",
+  "wallet.records.all": "すべて"
 }
