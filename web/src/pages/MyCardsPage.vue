@@ -2,7 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import { fetchMyCards, registerCard, unregisterCard, type MyCard, type MyCardPage } from "@/lib/api";
-import { compact, hueFrom } from "@/lib/format";
+import MyCardTile from "@/components/MyCardTile.vue";
 import * as cache from "@/lib/mine-cache";
 import { useSession } from "@/lib/session";
 
@@ -141,53 +141,26 @@ watch(() => route.query.fresh, (f) => {
 
     <p v-if="error" class="notice notice--error">{{ error }}</p>
 
-    <ul v-if="loading" class="list">
-      <li v-for="i in 6" :key="i" class="row row--ghost" :style="{ animationDelay: `${i * 60}ms` }" />
-    </ul>
+    <div v-if="loading" class="wall">
+      <div v-for="i in 12" :key="i" class="ghost" :style="{ animationDelay: `${i * 55}ms` }" />
+    </div>
 
     <p v-else-if="!data?.items.length" class="notice">
       你還沒有任何角色卡。<RouterLink to="/create">先建立一張</RouterLink>。
     </p>
 
-    <p v-else-if="!visible.length" class="notice">
-      這個篩選下沒有卡片。
-    </p>
+    <p v-else-if="!visible.length" class="notice">這個篩選下沒有卡片。</p>
 
-    <ul v-else class="list">
-      <li v-for="(card, i) in visible" :key="card.roleId" class="row rise" :style="{ animationDelay: `${Math.min(i, 9) * 35}ms` }">
-        <img v-if="card.avatarUrl" :src="card.avatarUrl" alt="" class="row__art" />
-        <div
-          v-else
-          class="row__art row__art--void"
-          :style="{ background: `linear-gradient(150deg, hsl(${hueFrom(card.name)} 22% 24%), hsl(${(hueFrom(card.name) + 45) % 360} 18% 13%))` }"
-        >
-          {{ [...card.name][0] }}
-        </div>
-
-        <div class="row__body">
-          <RouterLink :to="`/cards/${card.roleId}/edit`" class="row__name display">{{ card.name }}</RouterLink>
-          <p class="row__hook subtle">{{ card.summary || "還沒有簡介" }}</p>
-        </div>
-
-        <span class="row__num subtle">{{ compact(card.talkNum) }} 次對話</span>
-
-        <span class="tag" :class="card.registered ? 'tag--on' : ''">
-          {{ card.registered ? "在榜上" : "未登記" }}
-        </span>
-
-        <div class="row__actions">
-          <RouterLink class="btn btn--sm btn--ghost" :to="`/cards/${card.roleId}/edit`">編輯</RouterLink>
-          <button
-            class="btn btn--sm"
-            :class="card.registered ? 'btn--danger' : 'btn--primary'"
-            :disabled="busy === card.roleId"
-            @click="toggle(card)"
-          >
-            {{ card.registered ? "取消登記" : "登記上榜" }}
-          </button>
-        </div>
-      </li>
-    </ul>
+    <div v-else class="wall">
+      <MyCardTile
+        v-for="(card, i) in visible"
+        :key="card.roleId"
+        :card="card"
+        :index="i"
+        :busy="busy === card.roleId"
+        @toggle="toggle(card)"
+      />
+    </div>
 
     <nav v-if="data && (page > 1 || data.hasNext)" class="pager">
       <button class="btn btn--sm" :disabled="page === 1" @click="go({ page: String(page - 1) })">← 上一頁</button>
@@ -210,7 +183,7 @@ watch(() => route.query.fresh, (f) => {
 .tally dd { margin: 2px 0 0; font-family: var(--font-display); font-size: 24px; font-variant-numeric: tabular-nums; }
 .tally__sync { margin-left: auto; }
 
-.filters { display: flex; gap: var(--s-5); margin-bottom: var(--s-2); }
+.filters { display: flex; gap: var(--s-5); margin-bottom: var(--s-5); }
 .filters__item {
   padding: 0 0 var(--s-2); margin-bottom: -1px;
   background: none; border: 0; border-bottom: 1px solid transparent; cursor: pointer;
@@ -220,46 +193,21 @@ watch(() => route.query.fresh, (f) => {
 .filters__item:hover { color: var(--text-dim); }
 .filters__item--on { color: var(--text); border-bottom-color: var(--gold); }
 
-.list { display: grid; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--rule); }
-
-.row {
-  display: flex; align-items: center; gap: var(--s-4);
-  padding: var(--s-3) 0;
-  border-bottom: 1px solid var(--rule);
+/* 跟榜單同一套卡片牆語言。工作區的格子略寬一點，因為每張底下多兩顆按鈕。 */
+.wall {
+  display: grid;
+  gap: var(--s-5) var(--s-4);
+  grid-template-columns: repeat(auto-fill, minmax(clamp(150px, 24vw, 196px), 1fr));
 }
-.row--ghost {
-  height: 78px;
-  background: linear-gradient(100deg, transparent 30%, var(--paper-raised) 48%, transparent 66%);
+
+.ghost {
+  aspect-ratio: 3 / 4.9;
+  border-radius: var(--r-md);
+  background: linear-gradient(100deg, var(--paper-raised) 30%, var(--rule) 48%, var(--paper-raised) 66%);
   background-size: 300% 100%;
   animation: sweep 1.5s var(--ease) infinite;
 }
 @keyframes sweep { from { background-position: 130% 0; } to { background-position: -30% 0; } }
 
-.row__art { width: 44px; height: 58px; border-radius: var(--r-sm); object-fit: cover; flex: none; }
-.row__art--void {
-  display: grid; place-items: center;
-  font-family: var(--font-display); font-size: 22px; color: rgba(255, 255, 255, 0.22);
-}
-.row__body { flex: 1; min-width: 0; }
-.row__name { font-size: 18px; }
-.row__name:hover { color: var(--gold); }
-.row__hook { margin: 1px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.row__num { flex: none; font-variant-numeric: tabular-nums; }
-
-.tag {
-  flex: none; padding: 2px var(--s-3);
-  font-size: 12px; color: var(--text-faint);
-  border: 1px solid var(--rule); border-radius: var(--r-pill);
-}
-.tag--on { color: var(--gold); border-color: var(--gold-deep); background: var(--gold-wash); }
-
-.row__actions { display: flex; gap: var(--s-2); flex: none; }
-
-.pager { display: flex; align-items: center; justify-content: center; gap: var(--s-5); margin-top: var(--s-6); }
-
-@media (max-width: 760px) {
-  .row { flex-wrap: wrap; }
-  .row__num { display: none; }
-  .row__actions { width: 100%; justify-content: flex-end; }
-}
+.pager { display: flex; align-items: center; justify-content: center; gap: var(--s-5); margin-top: var(--s-7); }
 </style>
