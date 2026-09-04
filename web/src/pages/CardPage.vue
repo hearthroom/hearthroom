@@ -37,7 +37,14 @@ watch([() => route.params.id, locale], load, { immediate: true });
 </script>
 
 <template>
-  <div class="page">
+  <div class="page sheet-page">
+    <!-- 背景圖化成一層很淡的氛圍，不直接展示：它是給對話用的，不是給列表看的 -->
+    <div
+      v-if="card?.backgroundUrl || card?.avatarUrl"
+      class="ambient"
+      :style="{ backgroundImage: `url(${card.backgroundUrl || card.avatarUrl})` }"
+      aria-hidden="true"
+    />
     <div v-if="loading" class="ghost sheet-ghost" />
     <p v-else-if="error" class="notice notice--error">{{ error }}</p>
 
@@ -90,14 +97,29 @@ watch([() => route.params.id, locale], load, { immediate: true });
 </template>
 
 <style scoped>
+/* 氛圍層放在頁面容器裡而不是 fixed 到視窗：z-index 負值的 fixed 層會被 body 的背景蓋掉 */
+.sheet-page { position: relative; }
+.ambient {
+  position: absolute; inset: 0 -50vw auto -50vw; height: 56vh; z-index: 0;
+  background-size: cover; background-position: center 30%;
+  opacity: 0.32;
+  filter: blur(64px) saturate(1.2);
+  mask-image: linear-gradient(to bottom, #000 20%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, #000 20%, transparent);
+}
+
 .sheet-ghost { height: 480px; border-radius: var(--r-lg); }
 
 .sheet {
+  position: relative; z-index: 1;
   display: grid; grid-template-columns: 320px minmax(0, 1fr);
   gap: var(--s-6); padding: var(--s-5);
   align-items: start;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
-.sheet__art { aspect-ratio: 3 / 4; border-radius: var(--r-md); overflow: hidden; background: var(--surface-2); }
+.sheet__art { position: relative; aspect-ratio: 3 / 4; border-radius: var(--r-md); overflow: hidden; background: var(--surface-2); box-shadow: 0 0 0 1px var(--line), var(--shadow-md); }
 .sheet__art img { width: 100%; height: 100%; object-fit: cover; }
 .sheet__void { display: grid; place-items: center; height: 100%; }
 .sheet__void span { font-size: 96px; font-weight: 600; color: rgba(255, 255, 255, 0.9); }

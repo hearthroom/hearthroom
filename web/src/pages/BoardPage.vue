@@ -91,10 +91,7 @@ watch([() => route.query, locale], load, { immediate: true });
         </button>
       </div>
 
-      <p class="subtle bar__note">
-        <span>{{ $t(`board.sort.${sort}.blurb`) }}</span>
-        <template v-if="page && !loading && page.total !== null"> · {{ $t("board.count", { n: page.total }) }}</template>
-      </p>
+      <p v-if="page && !loading && page.total !== null" class="subtle bar__note">{{ $t("board.count", { n: page.total }) }}</p>
     </div>
 
     <p v-if="error" class="notice notice--error">{{ error }}</p>

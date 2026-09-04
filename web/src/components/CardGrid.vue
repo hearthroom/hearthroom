@@ -42,14 +42,14 @@ defineProps<{
 <style scoped>
 .grid {
   display: grid;
-  gap: var(--s-4);
+  gap: var(--s-5) var(--s-4);
   /*
    * 手機兩欄、桌機 5～6 欄。184px 是海報＋兩行字讀起來舒服的最小寬度；
    * 再窄，名字就得截斷，簡介一行放不下幾個字。
    */
   grid-template-columns: repeat(auto-fill, minmax(clamp(140px, 40vw, 184px), 1fr));
 }
-.ghost--card { aspect-ratio: 3 / 5; }
+.ghost--card { aspect-ratio: 3 / 5.3; }
 
 .empty { padding: var(--s-8) var(--s-5); text-align: center; }
 .empty__title { font-size: 16px; font-weight: 600; margin-bottom: var(--s-2); }
