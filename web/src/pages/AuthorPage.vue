@@ -59,6 +59,7 @@ watch([() => route.params.accountNumId, locale], load, { immediate: true });
     <CardGrid
       :cards="cards"
       :loading="loading"
+      show-zone
       :empty-title="$t('author.empty.title')"
       :empty-hint="$t('author.empty.hint')"
     />
@@ -68,15 +69,15 @@ watch([() => route.params.accountNumId, locale], load, { immediate: true });
 <style scoped>
 .who {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-5);
-  padding-bottom: var(--s-5); margin-bottom: var(--s-6);
+  padding-bottom: var(--s-5); margin-bottom: var(--s-5);
   border-bottom: 1px solid var(--rule);
 }
 .who__face {
-  width: 84px; height: 84px; border-radius: var(--r-pill); flex: none;
+  width: 72px; height: 72px; border-radius: var(--r-pill); flex: none;
   box-shadow: 0 0 0 1px var(--rule);
 }
 .who__text { min-width: 0; }
-.who__name { margin: var(--s-1) 0 var(--s-3); font-size: clamp(30px, 4.6vw, 44px); }
+.who__name { margin: 2px 0 var(--s-2); font-size: clamp(28px, 4vw, 38px); }
 
 .who__stats { display: flex; flex-wrap: wrap; gap: var(--s-6); margin: 0; }
 .who__stats dt { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-faint); }

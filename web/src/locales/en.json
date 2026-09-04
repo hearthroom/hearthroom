@@ -7,10 +7,8 @@
   "nav.language": "Language",
   "footer.blurb": "Every card here was listed by its own author. Ranking follows what readers actually talk to — nothing is hand-picked.",
   "footer.source": "Source",
-
-  "board.eyebrow": "An open character-card community",
-  "board.title": "Character Board",
-  "board.lede": "Cards listed by their authors. Ranking follows what readers actually talk to — nothing is hand-picked.",
+  "board.zones": "Language",
+  "board.sorts": "Sort",
   "board.search.placeholder": "Search names, blurbs or tags",
   "board.search.submit": "Search",
   "board.sort.hot": "Trending",
@@ -20,16 +18,14 @@
   "board.sort.new.blurb": "Most recently listed",
   "board.sort.top.blurb": "Most conversations ever",
   "board.count": "{n} cards",
-  "board.empty.title": "The board is still empty",
-  "board.empty.hint": "Nobody has listed a card yet. If you have one, put it up from “My cards”.",
+  "board.empty.title": "Nothing here yet",
+  "board.empty.hint": "Try another language, or list your own from “My cards”.",
   "board.empty.search.title": "Nothing matched",
   "board.empty.search.hint": "Try a different keyword.",
-
   "pager.prev": "Previous",
   "pager.next": "Next",
   "pager.page": "Page {n}",
   "pager.pageOf": "Page {n} of {total}",
-
   "card.eyebrow": "Character card",
   "card.stat.talk": "Conversations",
   "card.stat.follow": "Saves",
@@ -39,14 +35,12 @@
   "card.meta": "Listed {registered} · Data refreshed {synced}",
   "card.talkCount": "{n} conversations",
   "card.noSummary": "No blurb yet",
-
   "author.eyebrow": "Author",
   "author.stat.cards": "Cards listed",
   "author.stat.talk": "Total conversations",
   "author.stat.joined": "Joined",
   "author.empty.title": "Nothing listed yet",
   "author.empty.hint": "This author hasn’t listed any cards.",
-
   "mine.eyebrow": "Author workspace",
   "mine.title": "My character cards",
   "mine.create": "New card",
@@ -64,7 +58,6 @@
   "mine.empty": "You don’t have any character cards yet. ",
   "mine.empty.cta": "Create one",
   "mine.emptyFilter": "No cards under this filter.",
-
   "create.title": "Create a character card",
   "create.lede": "Start with a name; add the blurb and the setup afterwards. New cards are private — only you can see them. To appear on the board, you list it yourself.",
   "create.name": "Character name",
@@ -72,7 +65,6 @@
   "create.language": "Primary language",
   "create.submit": "Create and keep editing",
   "create.submitting": "Creating…",
-
   "edit.title": "Edit character card",
   "edit.lede": "Changes apply to the card directly. If it is already listed, the board catches up shortly after.",
   "edit.name": "Character name",
@@ -87,7 +79,6 @@
   "edit.saving": "Saving…",
   "edit.saved": "Saved.",
   "edit.back": "Back to my cards",
-
   "auth.completing": "Finishing sign-in…",
   "auth.retry": "Sign in again",
   "auth.expired": "Your session expired — please sign in again",
@@ -99,20 +90,17 @@
   "auth.noCode": "The callback carried no authorization code",
   "auth.badState": "Authorization state did not match — please sign in again",
   "auth.noVerifier": "Could not find this sign-in’s verifier — please sign in again",
-
   "notFound.title": "Page not found",
   "notFound.hint": "The link may have expired, or that card was removed from the board.",
   "notFound.back": "Back to the board",
-
   "state.loading": "Loading…",
   "state.loadFailed": "Could not load",
   "state.actionFailed": "That didn’t work",
   "state.saveFailed": "Could not save",
   "state.createFailed": "Could not create",
   "state.requestFailed": "Request failed ({status})",
-
   "time.justNow": "Just now",
-
   "site.tagline": "Character Board",
-  "site.description": "An open character-card community: board, search and author pages."
+  "site.description": "An open character-card community: board, search and author pages.",
+  "zone.all": "All languages"
 }

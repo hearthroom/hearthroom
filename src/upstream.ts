@@ -45,8 +45,24 @@ async function fetchMe(env: Env, bearer: string): Promise<{ accountNumId: number
   return { accountNumId };
 }
 
+/** 語區：榜單按這個分開列。all 是來源標成「不分語言」的卡，每區都出現。 */
+export type Zone = "zh" | "en" | "ja" | "ko";
+export const ZONES: readonly Zone[] = ["zh", "en", "ja", "ko"];
+
+/**
+ * 來源的語言標記 → 語區。簡繁體併成 zh；沒標或標了不認得的值一律當 all，
+ * 讓它在每一區都看得到——一張放錯區的卡，比一張從所有榜單消失的卡好處理。
+ */
+export function zoneOf(language: unknown): Zone | "all" {
+  const l = str(language).toLowerCase();
+  if (l.startsWith("zh")) return "zh";
+  if (l === "en" || l === "ja" || l === "ko") return l;
+  return "all";
+}
+
 export interface UpstreamRole {
   roleId: string;
+  zone: Zone | "all";
   authorNumId: number;
   authorName: string;
   authorAvatar: string;
@@ -81,6 +97,7 @@ export function projectRole(raw: Record<string, unknown>): UpstreamRole {
 
   return {
     roleId: str(raw.characterRoleId),
+    zone: zoneOf(raw.language),
     authorNumId: num(raw.accountNumId),
     authorName: str(raw.authorName),
     authorAvatar: str(raw.authorAvatar),
@@ -107,6 +124,7 @@ export function projectRole(raw: Record<string, unknown>): UpstreamRole {
 
 export interface MyRole {
   roleId: string;
+  zone: Zone | "all";
   name: string;
   summary: string;
   avatarUrl: string | null;
@@ -143,6 +161,7 @@ export async function fetchMyRoles(
     items: rows
       .map((r) => ({
         roleId: str(r.characterRoleId),
+        zone: zoneOf(r.language),
         name: str(r.roleName),
         summary: str(r.roleDesc),
         avatarUrl: str(r.roleAvatar) || null,

@@ -11,7 +11,7 @@ import {
 } from "./cards";
 import { loadMine } from "./mine";
 import { type Env, HttpError } from "./types";
-import { upstream } from "./upstream";
+import { upstream, ZONES, type Zone } from "./upstream";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -70,8 +70,13 @@ app.get("/v1/cards", async (c) => {
   const offset = clamp(c.req.query("offset"), 0, 10_000);
   const limit = Math.max(1, clamp(c.req.query("limit"), 24, 100));
   const author = c.req.query("author");
+  // 語區是榜單的必要條件，不帶就給中文——不做「全部語言混在一起」的總榜。
+  // 作者主頁是唯一例外：看一個人的作品時，語言不是篩選條件。
+  const zoneParam = c.req.query("zone");
+  const zone: Zone | undefined = author ? undefined : (ZONES as readonly string[]).includes(zoneParam ?? "") ? (zoneParam as Zone) : "zh";
 
   const { rows, total, hasNext } = await listCards(c.env.DB, {
+    zone,
     q: c.req.query("q")?.trim() || undefined,
     tag: c.req.query("tag")?.trim() || undefined,
     authorNumId: author ? Number(author) : undefined,
