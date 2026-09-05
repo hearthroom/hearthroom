@@ -142,8 +142,8 @@ export const BEACON_EVENTS = new Set([
   "login_start", "login_done", "login_fail", "logout",
   // 评论（互动的核心，全部打上游）
   "comment_tab", "comment_post", "comment_like", "comment_delete",
-  // 作者供给侧（建立与编辑都打上游）
-  "card_create", "card_edit",
+  // 作者供给侧（建立、编辑、匯入匯出都打上游或纯客户端）
+  "card_create", "card_edit", "card_import", "card_export",
   // 钱包与变现
   "wallet_view", "topup_click",
   // 偏好（纯客户端，没有请求）
@@ -160,6 +160,8 @@ export const BEACON_DETAILS = new Set([
   "comment_root", "comment_reply", "like_on", "like_off",
   // 外观分两类，实际选了哪一个放 subject——不然每加一套主题都要回来改白名单，忘了就静默变空
   "mode", "theme",
+  // 卡片檔案格式：匯入匯出的載體，看得出作者手上的卡多半長什麼樣
+  "png", "json",
 ]);
 
 /**

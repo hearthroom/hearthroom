@@ -20,10 +20,11 @@ const pages = [
   { path: "", component: () => import("./pages/BoardPage.vue") },
   { path: "search", component: () => import("./pages/SearchPage.vue") },
   { path: "cards/:id", component: () => import("./pages/CardPage.vue") },
-  { path: "cards/:roleId/edit", component: () => import("./pages/EditCardPage.vue"), meta: { auth: true } },
+  { path: "cards/:roleId/edit", component: () => import("./pages/CardEditorPage.vue"), meta: { auth: true } },
   { path: "authors/:accountNumId", component: () => import("./pages/AuthorPage.vue") },
   { path: "mine", component: () => import("./pages/MyCardsPage.vue"), meta: { auth: true } },
-  { path: "create", component: () => import("./pages/CreateCardPage.vue"), meta: { auth: true } },
+  // 建立與編輯是同一頁：差別只有有沒有 roleId。
+  { path: "create", component: () => import("./pages/CardEditorPage.vue"), meta: { auth: true } },
   { path: "wallet", component: () => import("./pages/WalletPage.vue"), meta: { auth: true } },
   { path: "auth/callback", component: () => import("./pages/CallbackPage.vue") },
   // 404 也在語言前綴底下：/en/nope 要看到英文的 404，而不是被換回預設語言
