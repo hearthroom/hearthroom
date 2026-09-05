@@ -18,6 +18,12 @@ not_found_handling = "single-page-application"
 # 但 /v1/* 要先給 Worker，否則 SPA fallback 會把 API 請求也變成 index.html。
 run_worker_first = ["/v1/*", "/cards/*", "/authors/*", "/zh-Hans/cards/*", "/zh-Hans/authors/*", "/en/cards/*", "/en/authors/*", "/ja/cards/*", "/ja/authors/*", "/ko/cards/*", "/ko/authors/*"]
 
+# 行為埋點。CF Web Analytics 管「有多少人來」，這個資料集管「他們做了什麼」。
+# 分叉的人沒配這一段也能跑：程式碼判空後靜默跳過，不是錯誤。
+[[analytics_engine_datasets]]
+binding = "EVENTS"
+dataset = "taproom_events"
+
 [vars]
 # 上游的開放 API。這裡對它只有兩種呼叫：轉發作者 token 問身分、以游客讀卡片公開資訊。
 LUNATALK_API_BASE = "https://api.lunatalk.ai"
@@ -25,6 +31,8 @@ LUNATALK_API_BASE = "https://api.lunatalk.ai"
 SYNC_BATCH_SIZE = "50"
 # 同步的並發上限。目標是明顯更快，不是把上游打滿——個位數就夠。
 SYNC_CONCURRENCY = "6"
+# 埋點總開關。設成 "false" 就一行事件都不發，分叉或本機除錯時用。
+ANALYTICS_ENABLED = "true"
 
 [[d1_databases]]
 binding = "DB"

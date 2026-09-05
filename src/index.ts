@@ -12,15 +12,54 @@ import {
   unregister,
   upsertCard,
 } from "./cards";
+import {
+  BEACON_DETAILS, BEACON_EVENTS, clientKind, emit, note, refHostOf, shapeTerm, surfaceOf,
+  type EventFields, type Pending,
+} from "./analytics";
 import { authorLine, renderHead } from "./head";
 import { loadMine, type MineFilter } from "./mine";
 import { type Env, HttpError } from "./types";
 import { upstream, ZONES, type Zone } from "./upstream";
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<{ Bindings: Env; Variables: { ev: Pending } }>();
+
+/**
+ * 埋點：一個請求發一個數據點。
+ *
+ * 中間件先掛一份空的在 context 上，handler 往裡填只有它知道的東西（結果數、排序鍵、卡片 id），
+ * 回來之後補上路由、狀態、耗時、快取命中再發出去。這樣不會重複計數，也拿得到 handler 手上的語義；
+ * handler 拋例外時 onError 已經把回應寫好了，這裡照樣發得出去。
+ */
+app.use("*", async (c, next) => {
+  const started = Date.now();
+  const ev: Pending = {};
+  c.set("ev", ev);
+  await next();
+  // beacon 端點自己發事件；健康檢查沒有分析價值
+  const path = new URL(c.req.url).pathname;
+  if (path === "/v1/e" || path === "/v1/health") return;
+  emit(c.env, c.executionCtx, {
+    event: ev.event ?? "api",
+    from: surfaceOf(c.req.header("X-From")),
+    route: c.req.routePath,
+    locale: c.req.query("lang") ?? "",
+    country: (c.req.raw.cf?.country as string) ?? "",
+    client: clientKind(c.req.header("User-Agent")),
+    cache: c.res.headers.get("X-Cache") ?? "",
+    status: c.res.status,
+    durationMs: Date.now() - started,
+    outcome: ev.outcome ?? (c.res.status < 400 ? "ok" : "error"),
+    ...ev,
+  } as EventFields);
+});
 
 app.onError((err, c) => {
-  if (err instanceof HttpError) return c.json({ error: err.message }, err.status);
+  const ev = c.get("ev") as Pending | undefined;
+  if (err instanceof HttpError) {
+    if (ev) ev.outcome = err.status === 404 ? "not_found" : err.status === 403 ? "forbidden" : err.status === 502 ? "upstream_error" : "rejected";
+    return c.json({ error: err.message }, err.status);
+  }
+  if (ev) ev.outcome = "internal";
   console.error("unhandled error", err);
   return c.json({ error: "internal error" }, 500);
 });
@@ -66,7 +105,7 @@ function parseZone(raw: string | undefined): Zone | undefined {
 }
 
 /** 公開、只讀、對所有人一樣的回應，都走這個邊緣快取。 */
-async function cachedJson(c: Context<{ Bindings: Env }>, ttl: number, compute: () => Promise<unknown>) {
+async function cachedJson(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, ttl: number, compute: () => Promise<unknown>) {
   const cache = await caches.open(boardCache.namespace);
   const hit = await cache.match(c.req.raw);
   if (hit) {
@@ -89,6 +128,17 @@ app.get("/v1/cards", async (c) => {
   const cache = await caches.open(boardCache.namespace);
   const hit = await cache.match(c.req.raw);
   if (hit) {
+    // 快取命中一樣是一次瀏覽行為，只是結果數這種東西這條路上沒有
+    const q0 = c.req.query("q")?.trim();
+    note(c, {
+      event: q0 ? "search" : "list",
+      sortKey: c.req.query("sort") ?? "hot",
+      tag: c.req.query("tag")?.trim() ?? "",
+      term: q0 ? shapeTerm(q0) : "",
+      subject: c.req.query("author") ?? "",
+      zoneScope: c.req.query("zone") === "all" ? "all" : "current",
+      offset: clamp(c.req.query("offset"), 0, 10_000),
+    });
     const res = new Response(hit.body, hit);
     res.headers.set("X-Cache", "hit");
     return res;
@@ -112,6 +162,19 @@ app.get("/v1/cards", async (c) => {
     offset,
   });
   const l = lang(c);
+  const q = c.req.query("q")?.trim();
+  // 搜尋與榜單是兩種行為，分開記；結果數只有這裡拿得到（total 有篩選時是 null，中間件讀不到）
+  note(c, {
+    event: q ? "search" : "list",
+    sortKey: sort,
+    tag: c.req.query("tag")?.trim() ?? "",
+    term: q ? shapeTerm(q) : "",
+    subject: author ?? "",
+    zoneScope: c.req.query("zone") === "all" ? "all" : "current",
+    resultCount: total ?? rows.length,
+    offset,
+    outcome: rows.length ? "ok" : "empty",
+  });
   const res = c.json({ items: rows.map((r) => toCard(r, l)), total, hasNext, limit, offset, sort });
   res.headers.set("Cache-Control", `public, max-age=${BOARD_TTL}`);
   res.headers.set("X-Cache", "miss");
@@ -148,6 +211,9 @@ app.get("/v1/authors", (c) =>
 app.get("/v1/cards/:id", async (c) => {
   const row = await getCard(c.env.DB, c.req.param("id"));
   if (!row) throw new HttpError(404, "card not found");
+  // 卡片瀏覽只在這裡記一次。HTML 殼那條路（page_html）多半是抓取器，卡片頁替作者發的
+  // 「其他作品」副請求則是 /v1/cards?author=，兩者都不算一次瀏覽，否則分母會被灌水三倍。
+  note(c, { event: "card_view", subject: row.source_role_id, zoneScope: "current" });
   return c.json(toCard(row, lang(c)));
 });
 
@@ -171,6 +237,7 @@ app.get("/v1/me/cards", async (c) => {
   const me = await upstream.fetchMe(c.env, bearer);
   const { body, source } = await loadMine(c.env, bearer, me.accountNumId, { page, pageSize, fresh, filter });
 
+  note(c, { event: "mine_view", resultCount: body.items.length, offset: (page - 1) * pageSize, detail: filter });
   c.header("X-Cache", source);
   // 這是私人資料：可以放進使用者自己的瀏覽器，但任何共用快取都不准碰。
   c.header("Cache-Control", "private, no-store");
@@ -183,6 +250,7 @@ app.get("/v1/authors/:accountNumId", async (c) => {
   if (!Number.isSafeInteger(id) || id <= 0) throw new HttpError(400, "invalid author id");
   const author = await getAuthor(c.env.DB, id);
   if (!author) throw new HttpError(404, "author has no registered cards");
+  note(c, { event: "author_view", subject: String(id), resultCount: author.card_count });
   return c.json({
     accountNumId: author.author_num_id,
     name: author.author_name,
@@ -213,6 +281,7 @@ app.post("/v1/cards", async (c) => {
 
   const { id, created } = await upsertCard(c.env.DB, role, Date.now());
   const row = await getCard(c.env.DB, id);
+  note(c, { event: "register", subject: roleId, detail: created ? "new" : "again" });
   return c.json(row ? toCard(row, lang(c)) : { id }, created ? 201 : 200);
 });
 
@@ -220,6 +289,52 @@ app.post("/v1/cards", async (c) => {
 app.delete("/v1/cards/:id", async (c) => {
   const me = await requireAuthor(c);
   await unregister(c.env.DB, c.req.param("id"), me.accountNumId);
+  note(c, { event: "unregister", subject: c.req.param("id") });
+  return c.body(null, 204);
+});
+
+/**
+ * 前端的事件回報。
+ *
+ * 只收服務端看不到的那幾件事：外連 CTA 點擊、分享走了哪條路、登入流程、前端錯誤。
+ * 頁面瀏覽不走這裡——看榜單就會打 /v1/cards、看卡片就會打 /v1/cards/:id，那才是行為信號。
+ *
+ * 這是全站唯一不需要登入就能寫入的端點，所以三道門：同源、事件白名單、批量上限。
+ * 任何一道沒過都靜默回 204——不給刷的人任何「我被擋了」的回饋，也不佔回應體頻寬。
+ * 這裡的數字天生可偽造，只能看趨勢，永遠不進排序、榜單或結算。
+ */
+const BEACON_MAX = 20;
+
+app.post("/v1/e", async (c) => {
+  const origin = c.req.header("Origin");
+  if (origin) {
+    try {
+      if (new URL(origin).host !== new URL(c.req.url).host) return c.body(null, 204);
+    } catch {
+      return c.body(null, 204);
+    }
+  }
+  const body = (await c.req.json().catch(() => null)) as unknown;
+  if (!Array.isArray(body)) return c.body(null, 204);
+  const country = (c.req.raw.cf?.country as string) ?? "";
+  const client = clientKind(c.req.header("User-Agent"));
+  for (const raw of body.slice(0, BEACON_MAX)) {
+    const item = (raw ?? {}) as Record<string, unknown>;
+    const event = String(item.event ?? "");
+    if (!BEACON_EVENTS.has(event)) continue;
+    const detail = String(item.detail ?? "");
+    emit(c.env, c.executionCtx, {
+      event,
+      from: surfaceOf(typeof item.from === "string" ? item.from : undefined),
+      route: typeof item.route === "string" ? item.route : "",
+      locale: typeof item.locale === "string" ? item.locale.slice(0, 16) : "",
+      country,
+      subject: typeof item.subject === "string" ? item.subject : "",
+      detail: BEACON_DETAILS.has(detail) ? detail : "",
+      outcome: item.ok === false ? "error" : "ok",
+      client: client === "bot" ? "bot" : "beacon",
+    });
+  }
   return c.body(null, 204);
 });
 
@@ -304,6 +419,13 @@ app.get("*", async (c) => {
   const l = locale.startsWith("zh") ? "zh" : locale;
   const self = url.origin + url.pathname;
 
+  note(c, {
+    event: "page_html",
+    refHost: refHostOf(c.req.header("Referer"), url.host),
+    locale,
+    subject: m[3] ?? "",
+    detail: m[2],
+  });
   if (m[2] === "cards") {
     let id: string;
     try { id = decodeURIComponent(m[3]!); } catch { return new Response(shell.body, { status: 404, headers: shell.headers }); }
@@ -330,7 +452,10 @@ export default {
   fetch: app.fetch,
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil(
-      syncBatch(env).then((r) => console.log("sync done", r)),
+      syncBatch(env).then((r) => {
+        console.log("sync done", r);
+        emit(env, ctx, { event: "sync", resultCount: r.ok, status: r.failed, durationMs: r.ms, client: "server", outcome: r.failed ? "partial" : "ok" });
+      }),
     );
   },
 };
