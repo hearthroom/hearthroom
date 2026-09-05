@@ -2,6 +2,7 @@ import { COMMUNITY_API, UPSTREAM_API } from "./config";
 import { currentSurface } from "./track";
 import { i18n } from "./i18n";
 import type { Author, AuthorSort, CardPage, CommunityCard, MyRole, Sort, Zone } from "./types";
+import type { RoleDocumentFields, TalkExampleEntry, WorldbookEntryDraft } from "./role-draft";
 
 export class ApiError extends Error {
   constructor(readonly status: number, message: string) {
@@ -293,3 +294,212 @@ export async function fetchScoreRecords(token: string, page = 1, pageSize = 20):
 
 /** 原站的充值頁。本站不碰付款，只把人送過去。 */
 export const TOP_UP_URL = `${UPSTREAM_API.replace("api.", "")}/pages/mine/vippay`;
+
+// ---- 建卡工作台：上游的寫入面 ------------------------------------------------
+
+/** 上游回的欄位上限與阻斷項。前端拿它畫字數計數與送審前的檢查清單。 */
+export interface ValidationReport {
+  status: string;
+  blockers: string[];
+  warnings: string[];
+  tokenBudget?: {
+    limits?: {
+      roleDescMaxChars?: number;
+      roleDetailDescMaxChars?: number;
+      roleWelcomeMaxChars?: number;
+      roleOutputContractMaxChars?: number;
+      jailbreakMaxChars?: number;
+    };
+  };
+}
+
+const writeHeaders = (token: string): Record<string, string> => ({
+  "Content-Type": "application/json",
+  ...authHeaders(token),
+});
+
+/** 一次寫入表單上的所有欄位。沒送的欄位上游完全不碰。 */
+export async function patchRoleDocument(roleId: string, fields: RoleDocumentFields, token: string): Promise<unknown> {
+  return json<unknown>(
+    await fetch(`${UPSTREAM_API}/open/v1/role/${encodeURIComponent(roleId)}/document`, {
+      method: "POST",
+      headers: writeHeaders(token),
+      body: JSON.stringify({ fields }),
+    }),
+  );
+}
+
+/**
+ * 開場白正文 + 備選開場白 + 開場選項。
+ *
+ * 後兩者是全量覆寫：不傳＝不動，傳空陣列＝清空。所以呼叫端一定要把當前的完整清單送上，
+ * 只送正文的話上游不會動它們，但只送一半就會少掉。
+ */
+export async function patchRoleWelcome(
+  roleId: string,
+  patch: { roleWelcome: string; alternates: string[]; prologue: string[] },
+  token: string,
+): Promise<unknown> {
+  return json<unknown>(
+    await fetch(`${UPSTREAM_API}/open/v1/role/${encodeURIComponent(roleId)}/welcome`, {
+      method: "PATCH",
+      headers: writeHeaders(token),
+      body: JSON.stringify(patch),
+    }),
+  );
+}
+
+export async function fetchRoleValidation(roleId: string, token: string): Promise<ValidationReport> {
+  return json<ValidationReport>(
+    await fetch(`${UPSTREAM_API}/open/v1/role/validate?roleId=${encodeURIComponent(roleId)}`, {
+      headers: authHeaders(token),
+    }),
+  );
+}
+
+/** 送審。確認摘要是給審核方看的，上游要求至少 8 個字，所以不能送空字串。 */
+export async function submitRoleForReview(
+  roleId: string,
+  confirmationSummary: string,
+  token: string,
+): Promise<{ reviewStatus?: string }> {
+  return json<{ reviewStatus?: string }>(
+    await fetch(`${UPSTREAM_API}/open/v1/role/${encodeURIComponent(roleId)}/publish`, {
+      method: "POST",
+      headers: writeHeaders(token),
+      body: JSON.stringify({ userConfirmed: true, confirmationSummary }),
+    }),
+  );
+}
+
+/** 已公開的卡收回私有，好讓作者能再編輯。轉公開只能走送審，上游會擋。 */
+export async function unpublishRole(roleId: string, token: string): Promise<unknown> {
+  return json<unknown>(
+    await fetch(`${UPSTREAM_API}/open/v1/role/${encodeURIComponent(roleId)}/visibility`, {
+      method: "POST",
+      headers: writeHeaders(token),
+      body: JSON.stringify({ visibility: "private" }),
+    }),
+  );
+}
+
+/**
+ * 上傳圖片，拿回一個網址。
+ *
+ * 送的是 bytes 不是網址：型別與大小上限只有服務端擋得住，前端校驗繞得過去，而且
+ * 客戶端塞任意外部網址進圖庫等於開一個盜連面。roleId 是選填的——建立中的卡還沒有 id。
+ */
+export async function uploadImage(file: File, token: string, roleId?: string): Promise<string> {
+  const form = new FormData();
+  form.append("file", file);
+  if (roleId) form.append("roleId", roleId);
+  const res = await fetch(`${UPSTREAM_API}/open/v1/image/upload`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: form,
+  });
+  const body = await json<{ data?: { imageUrl?: string; url?: string } }>(res);
+  const url = body.data?.imageUrl ?? body.data?.url ?? "";
+  if (!url) throw new ApiError(res.status, i18n.global.t("state.uploadFailed"));
+  return url;
+}
+
+// ---- 世界書 ------------------------------------------------------------------
+
+export interface WorldbookSummary {
+  worldbookId: string;
+  name: string;
+  description: string;
+  entryCount: number;
+}
+
+export async function fetchMyWorldbooks(token: string, q = ""): Promise<WorldbookSummary[]> {
+  const params = new URLSearchParams({ pageSize: "50" });
+  if (q) params.set("q", q);
+  const body = await json<{ worldbooks?: WorldbookSummary[] }>(
+    await fetch(`${UPSTREAM_API}/open/v1/worldbook/mine?${params}`, { headers: authHeaders(token) }),
+  );
+  return body.worldbooks ?? [];
+}
+
+/**
+ * 這張卡綁了哪些世界書。
+ *
+ * 綁定關係只有上游知道。拿世界書的名字去跟角色名比對是猜的：會綁錯本，或一本都找不到，
+ * 而且錯得無聲無息——作者編了半天存下去，發現改的是另一張卡的設定。
+ */
+export async function fetchRoleWorldbooks(roleId: string, token: string): Promise<WorldbookSummary[]> {
+  const body = await json<{ bindings?: { worldbookId: string; name?: string; entryCount?: number }[] }>(
+    await fetch(`${UPSTREAM_API}/open/v1/worldbook/bindings?roleId=${encodeURIComponent(roleId)}`, {
+      headers: authHeaders(token),
+    }),
+  );
+  return (body.bindings ?? []).map((b) => ({
+    worldbookId: b.worldbookId,
+    name: b.name ?? "",
+    description: "",
+    entryCount: b.entryCount ?? 0,
+  }));
+}
+
+export async function fetchWorldbookEntries(worldbookId: string, token: string): Promise<WorldbookEntryDraft[]> {
+  const body = await json<{ entries?: (WorldbookEntryDraft & { keywords?: string[] })[] }>(
+    await fetch(`${UPSTREAM_API}/open/v1/worldbook/entry/list?worldbookId=${encodeURIComponent(worldbookId)}`, {
+      headers: authHeaders(token),
+    }),
+  );
+  return (body.entries ?? []).map((entry) => ({
+    entryId: entry.entryId,
+    name: entry.name ?? "",
+    content: entry.content ?? "",
+    keywords: Array.isArray(entry.keywords) ? entry.keywords : [],
+    isEnabled: entry.isEnabled !== false,
+    isConstant: entry.isConstant === true,
+  }));
+}
+
+export async function createWorldbook(
+  book: { name: string; description?: string; language?: string },
+  token: string,
+): Promise<string> {
+  const body = await json<{ worldbookId?: string }>(
+    await fetch(`${UPSTREAM_API}/open/v1/worldbook`, {
+      method: "POST",
+      headers: writeHeaders(token),
+      body: JSON.stringify(book),
+    }),
+  );
+  if (!body.worldbookId) throw new ApiError(500, i18n.global.t("state.saveFailed"));
+  return body.worldbookId;
+}
+
+export interface WorldbookDocumentEntry {
+  op: "create" | "update" | "delete";
+  entryId?: string;
+  name?: string;
+  content?: string;
+  keywords?: string[];
+  isEnabled?: boolean;
+  isConstant?: boolean;
+}
+
+/**
+ * 一次寫入條目的增刪改與角色綁定。
+ *
+ * 逐條建立的話，中途失敗會留下一本只有一半條目的世界書，而作者看不出少了哪幾條。
+ */
+export async function patchWorldbookDocument(
+  worldbookId: string,
+  document: { entries?: WorldbookDocumentEntry[]; binding?: { roleId: string } },
+  token: string,
+): Promise<unknown> {
+  return json<unknown>(
+    await fetch(`${UPSTREAM_API}/open/v1/worldbook/${encodeURIComponent(worldbookId)}/document`, {
+      method: "POST",
+      headers: writeHeaders(token),
+      body: JSON.stringify(document),
+    }),
+  );
+}
+
+export type { TalkExampleEntry };
