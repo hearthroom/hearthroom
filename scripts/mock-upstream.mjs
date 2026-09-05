@@ -51,7 +51,7 @@ http.createServer(async (req, res) => {
     if (body.binding?.roleId) bindings.set(body.binding.roleId, [...(bindings.get(body.binding.roleId) ?? []), mm[1]]);
     return json(res, 200, { ok: true });
   }
-  if (path === "/open/v1/worldbook/entry/list") return json(res, 200, { entries: entries.get(url.searchParams.get("worldbookId")) ?? [] });
+  if (path === "/open/v1/worldbook/entry/list") return json(res, 200, { list: (entries.get(url.searchParams.get("worldbookId")) ?? []).map((e) => ({ ...e, keywords: JSON.stringify(e.keywords ?? []) })) });
   if (path.startsWith("/img/")) { res.writeHead(200, { "content-type": "image/png", "access-control-allow-origin": "*" }); return res.end(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64")); }
   json(res, 404, { error: "not_found", path });
 }).listen(PORT, () => console.log("mock upstream on", PORT));
