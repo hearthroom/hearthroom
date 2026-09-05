@@ -5,6 +5,7 @@ import { fetchScoreRecords, TOP_UP_URL, type ScoreRecord } from "@/lib/api";
 import { clock, dateOnly, dayLabel, whole } from "@/lib/format";
 import { pageTitle } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
+import { track } from "@/lib/track";
 
 const session = useSession();
 const { t } = useI18n();
@@ -56,6 +57,7 @@ const groups = computed(() => {
 const refresh = () => session.refreshWallet();
 onMounted(() => {
   document.title = pageTitle(t("wallet.title"));
+  track("wallet_view");
   refresh();
   // 在別的分頁充完值切回來：視窗一取得焦點就更新餘額與流水
   window.addEventListener("focus", refresh);
@@ -79,7 +81,7 @@ watch(() => session.me?.accountNumId, () => load(true), { immediate: true });
             <span v-else class="ghost balance__ghost" />
           </p>
           <p v-if="session.wallet?.tempScore" class="subtle">{{ $t("wallet.temp", { n: whole(session.wallet.tempScore) }) }}</p>
-          <a class="btn btn--primary btn--lg balance__cta" :href="TOP_UP_URL" target="_blank" rel="noopener">{{ $t("wallet.topUp") }} ↗</a>
+          <a class="btn btn--primary btn--lg balance__cta" :href="TOP_UP_URL" target="_blank" rel="noopener" @click="track('topup_click')">{{ $t("wallet.topUp") }} ↗</a>
         </section>
 
         <section class="panel plans">

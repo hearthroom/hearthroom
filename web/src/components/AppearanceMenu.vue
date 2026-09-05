@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { MODES, THEMES, useAppearance } from "@/lib/appearance";
+import { track } from "@/lib/track";
 
 const { mode, theme, resolvedMode, setMode, setTheme } = useAppearance();
 const open = ref(false);
@@ -38,7 +39,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
     <div v-if="open" ref="panel" class="ap__panel panel" role="group" :aria-label="$t('appearance.title')">
       <p id="ap-mode-label" class="ap__label">{{ $t("appearance.title") }}</p>
       <div class="seg ap__modes" role="radiogroup" aria-labelledby="ap-mode-label">
-        <button v-for="m in MODES" :key="m" class="seg__item" :class="{ 'seg__item--on': mode === m }" role="radio" :aria-checked="mode === m" @click="setMode(m)">
+        <button v-for="m in MODES" :key="m" class="seg__item" :class="{ 'seg__item--on': mode === m }" role="radio" :aria-checked="mode === m" @click="setMode(m); track('appearance', { detail: 'mode', subject: m })">
           {{ $t(`appearance.mode.${m}`) }}
         </button>
       </div>
@@ -53,7 +54,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
           :style="{ '--sw': resolvedMode === 'dark' ? t.swatchDark : t.swatch }"
           role="radio"
           :aria-checked="theme === t.id"
-          @click="setTheme(t.id)"
+          @click="setTheme(t.id); track('appearance', { detail: 'theme', subject: t.id })"
         >
           <span class="ap__dot" aria-hidden="true" />
           <span class="ap__name">{{ $t(`appearance.theme.${t.id}`) }}</span>

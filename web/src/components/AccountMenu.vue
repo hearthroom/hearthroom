@@ -4,6 +4,7 @@ import { RouterLink } from "vue-router";
 import { hueFrom, whole } from "@/lib/format";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
+import { track } from "@/lib/track";
 
 const session = useSession();
 const { lp } = useLocalePath();
@@ -45,7 +46,7 @@ const PLAN_LABEL: Record<string, string> = { unlimited: "wallet.plan.unlimited",
       <RouterLink :to="lp('/mine')" class="menu__item" role="menuitem">{{ $t("nav.mine") }}</RouterLink>
       <RouterLink :to="lp('/wallet')" class="menu__item" role="menuitem">{{ $t("nav.wallet") }}</RouterLink>
       <div class="menu__rule" />
-      <button class="menu__item" role="menuitem" @click="session.logout()">{{ $t("nav.logout") }}</button>
+      <button class="menu__item" role="menuitem" @click="track('logout'); session.logout()">{{ $t("nav.logout") }}</button>
     </div>
   </div>
 </template>

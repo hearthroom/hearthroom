@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { LOCALES, SOURCE_LOCALE } from "@/lib/i18n";
 import { localeOf, withLocale } from "@/router";
+import { track } from "@/lib/track";
 
 const route = useRoute();
 const router = useRouter();
@@ -15,6 +16,7 @@ const label = computed(() => LOCALES.find((l) => l.code === current.value)?.labe
 function switchTo(code: string) {
   open.value = false;
   if (code === current.value) return;
+  track("locale_switch", { subject: code });
   const bare = current.value === SOURCE_LOCALE ? route.path : route.path.replace(`/${current.value}`, "") || "/";
   router.push({ path: withLocale(bare, code), query: route.query });
 }

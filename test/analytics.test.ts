@@ -1,7 +1,7 @@
 import { SELF, createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
-import { clientKind, refHostOf, shapeTerm, surfaceOf } from "../src/analytics";
+import { BEACON_EVENTS, clientKind, refHostOf, safeSubject, shapeTerm, surfaceOf } from "../src/analytics";
 import { upsertCard } from "../src/cards";
 import { resetDb, restoreUpstream, role } from "./helpers";
 
@@ -156,6 +156,34 @@ describe("beacon 端點", () => {
     expect(points).toHaveLength(0);
   });
 
+  it("收得下打上游那些服務端看不到的事件", async () => {
+    // 評論、建卡、編輯、錢包、外觀、語言都是跨域或純前端，服務端那條路記不到
+    const events = ["comment_tab", "comment_post", "comment_like", "comment_delete",
+      "card_create", "card_edit", "wallet_view", "topup_click", "appearance", "locale_switch",
+      "logout", "page_404"];
+    await post(events.map((event) => ({ event })));
+    expect(points).toHaveLength(events.length);
+    for (const e of events) expect(seen(e)).toHaveLength(1);
+  });
+
+  it("外觀記的是哪一套：類別進 detail，實際選擇進 subject", async () => {
+    await post([{ event: "appearance", detail: "theme", subject: "violet" }]);
+    const [ev] = seen("appearance");
+    expect(ev!.detail).toBe("theme");
+    expect(ev!.subject).toBe("violet");
+  });
+
+  it("subject 只收安全字元，擋掉塞進來的任意字串", async () => {
+    await post([{ event: "cta", subject: "<script>x</script>" }]);
+    expect(seen("cta")[0]!.subject).toBe("scriptxscript");
+  });
+
+  it("失敗的建卡記成 error，成功的記成 ok", async () => {
+    await post([{ event: "card_create", ok: false }, { event: "card_edit", subject: "r-1" }]);
+    expect(seen("card_create")[0]!.outcome).toBe("error");
+    expect(seen("card_edit")[0]!.outcome).toBe("ok");
+  });
+
   it("beacon 端點本身不記 api 事件", async () => {
     await post([{ event: "share", detail: "share_web" }]);
     expect(seen("api")).toHaveLength(0);
@@ -184,6 +212,22 @@ describe("欄位過濾", () => {
     expect(surfaceOf("board")).toBe("board");
     expect(surfaceOf("<script>")).toBe("direct");
     expect(surfaceOf(undefined)).toBe("direct");
+  });
+
+  it("subject 淨化：只留安全字元、截到 64", () => {
+    expect(safeSubject("46bb0c4b-b19a-4e62-911f-935a71813ee1")).toBe("46bb0c4b-b19a-4e62-911f-935a71813ee1");
+    expect(safeSubject("zh-Hant")).toBe("zh-Hant");
+    expect(safeSubject("a b<>'\"c")).toBe("abc");
+    expect(safeSubject("x".repeat(200))).toHaveLength(64);
+    expect(safeSubject(123)).toBe("");
+  });
+
+  it("白名單涵蓋所有打上游或純前端的功能", () => {
+    for (const e of ["comment_post", "comment_like", "comment_delete", "comment_tab",
+      "card_create", "card_edit", "wallet_view", "topup_click",
+      "appearance", "locale_switch", "logout", "page_404"]) {
+      expect(BEACON_EVENTS.has(e)).toBe(true);
+    }
   });
 
   it("認得抓取器", () => {
