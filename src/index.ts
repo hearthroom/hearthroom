@@ -100,6 +100,49 @@ async function requireAuthor(c: { env: Env; req: { header: (k: string) => string
 app.get("/v1/health", (c) => c.json({ ok: true }));
 
 /**
+ * 圖片代抓，只給「匯出成 PNG 卡」用。
+ *
+ * 匯出要把設定寫進頭像那張 PNG 的 tEXt，所以前端得拿到圖的位元組；而上游的圖片主機沒開
+ * CORS，瀏覽器直接 fetch 會被擋，前端只能退回存 JSON。走同源的這條路就沒有 CORS 問題。
+ *
+ * 只放行上游的圖片主機，不然這就是一個開放代理。回應用 Cache API 快取一天：同一張頭像
+ * 被反覆匯出時不必每次都回上游拿。
+ */
+export const IMAGE_PROXY_HOSTS = new Set(["objects.lunatalk.ai", "cdn.lunatalk.ai"]);
+export const imageCache = { namespace: "image" };
+
+app.get("/v1/image", async (c) => {
+  const raw = c.req.query("u") ?? "";
+  let target: URL;
+  try {
+    target = new URL(raw);
+  } catch {
+    throw new HttpError(400, "invalid image url");
+  }
+  if (target.protocol !== "https:" || !IMAGE_PROXY_HOSTS.has(target.hostname)) throw new HttpError(403, "image host not allowed");
+
+  const cache = await caches.open(imageCache.namespace);
+  const key = new Request(target.toString());
+  const hit = await cache.match(key);
+  if (hit) return hit;
+
+  const res = await fetch(target.toString(), { headers: { "User-Agent": "Hearthroom/0.1 (image export)" } });
+  if (!res.ok) throw new HttpError(502, `image fetch failed with ${res.status}`);
+  const type = res.headers.get("content-type") ?? "";
+  if (!type.startsWith("image/")) throw new HttpError(502, "not an image");
+  const out = new Response(res.body, {
+    status: 200,
+    headers: {
+      "content-type": type,
+      "cache-control": "public, max-age=86400",
+      "x-content-type-options": "nosniff",
+    },
+  });
+  c.executionCtx.waitUntil(cache.put(key, out.clone()));
+  return out;
+});
+
+/**
  * 榜單邊緣快取。
  *
  * 榜單對所有人完全一樣，而底層資料每小時才同步一次——同一份 SQL 重算幾千次沒有意義。

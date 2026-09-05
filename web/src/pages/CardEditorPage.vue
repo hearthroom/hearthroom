@@ -47,7 +47,7 @@ import {
   type RoleDraft,
   type WorldbookEntryDraft,
 } from "@/lib/role-draft";
-import { draftToTavern, embedIntoPng, type ImportResult } from "@/lib/tavern";
+import { draftToTavern, embedIntoPng, imageFetchUrl, type ImportResult } from "@/lib/tavern";
 import type { CommunityCard } from "@/lib/types";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
@@ -555,9 +555,8 @@ const safeName = () => (draft.value.roleName || "card").replace(/[/\\?%*:|"<>]/g
 /**
  * 匯出成酒館卡。
  *
- * 優先走 PNG：那是這個生態的通用載體，拖進任何客戶端都認得。頭像取不到（跨網域沒開
- * CORS、或作者根本沒設頭像）就退回 JSON，而不是報錯——作者要的是那份設定，
- * 不是那張圖。
+ * 優先走 PNG：那是這個生態的通用載體，拖進任何客戶端都認得。頭像取不到（作者根本沒設、
+ * 或代抓失敗）就退回 JSON，而不是報錯——作者要的是那份設定，不是那張圖。
  */
 async function exportCard(format: "png" | "json") {
   error.value = "";
@@ -569,7 +568,8 @@ async function exportCard(format: "png" | "json") {
   }
   try {
     if (!draft.value.roleAvatar) throw new Error("no_avatar");
-    const res = await fetch(draft.value.roleAvatar);
+    // 頭像在上游的圖片主機上、沒開 CORS：經本站代抓，不然這裡永遠退回 JSON
+    const res = await fetch(imageFetchUrl(draft.value.roleAvatar, window.location.origin));
     if (!res.ok) throw new Error("fetch_failed");
     const png = embedIntoPng(new Uint8Array(await res.arrayBuffer()), card);
     // slice() 是為了拿到一塊剛好這麼大、型別上也確定是 ArrayBuffer 的緩衝區：

@@ -442,17 +442,34 @@ export async function fetchRoleWorldbooks(roleId: string, token: string): Promis
   }));
 }
 
+/** 上游把關鍵詞存成 JSON 字串（`'["a","b"]'`），也可能已經是陣列。兩種都要吃得下。 */
+export function readKeywordList(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.map((k) => String(k).trim()).filter(Boolean);
+  if (typeof raw !== "string" || !raw.trim()) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.map((k) => String(k).trim()).filter(Boolean) : [];
+  } catch {
+    return raw.split(/[,，、\n]+/).map((k) => k.trim()).filter(Boolean);
+  }
+}
+
+/**
+ * 條目清單。上游這條路回的是 `{ list: [...] }`，關鍵詞是 JSON 字串——
+ * 第一版讀的是 `entries` 與陣列，於是編輯頁永遠看到零條（線上實測 2026-09-06 抓到的）。
+ */
 export async function fetchWorldbookEntries(worldbookId: string, token: string): Promise<WorldbookEntryDraft[]> {
-  const body = await json<{ entries?: (WorldbookEntryDraft & { keywords?: string[] })[] }>(
+  type Row = Omit<WorldbookEntryDraft, "keywords"> & { keywords?: unknown };
+  const body = await json<{ list?: Row[]; entries?: Row[] }>(
     await fetch(`${UPSTREAM_API}/open/v1/worldbook/entry/list?worldbookId=${encodeURIComponent(worldbookId)}`, {
       headers: authHeaders(token),
     }),
   );
-  return (body.entries ?? []).map((entry) => ({
+  return (body.list ?? body.entries ?? []).map((entry) => ({
     entryId: entry.entryId,
     name: entry.name ?? "",
     content: entry.content ?? "",
-    keywords: Array.isArray(entry.keywords) ? entry.keywords : [],
+    keywords: readKeywordList(entry.keywords),
     isEnabled: entry.isEnabled !== false,
     isConstant: entry.isConstant === true,
   }));
