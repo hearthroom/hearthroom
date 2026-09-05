@@ -459,7 +459,7 @@ export function readKeywordList(raw: unknown): string[] {
  * 第一版讀的是 `entries` 與陣列，於是編輯頁永遠看到零條（線上實測 2026-09-06 抓到的）。
  */
 export async function fetchWorldbookEntries(worldbookId: string, token: string): Promise<WorldbookEntryDraft[]> {
-  type Row = Omit<WorldbookEntryDraft, "keywords"> & { keywords?: unknown };
+  type Row = Omit<WorldbookEntryDraft, "keywords" | "secondaryKeywords"> & { keywords?: unknown; secondaryKeywords?: unknown };
   const body = await json<{ list?: Row[]; entries?: Row[] }>(
     await fetch(`${UPSTREAM_API}/open/v1/worldbook/entry/list?worldbookId=${encodeURIComponent(worldbookId)}`, {
       headers: authHeaders(token),
@@ -470,9 +470,20 @@ export async function fetchWorldbookEntries(worldbookId: string, token: string):
     name: entry.name ?? "",
     content: entry.content ?? "",
     keywords: readKeywordList(entry.keywords),
+    secondaryKeywords: readKeywordList(entry.secondaryKeywords),
     isEnabled: entry.isEnabled !== false,
     isConstant: entry.isConstant === true,
+    ...(typeof entry.activationCount === "number" ? { activationCount: entry.activationCount } : {}),
   }));
+}
+
+/** 站內榜單認得的分類詞表，依維度分組。給標籤選擇器用；一律不含成人維度。 */
+export interface CanonicalTag { slug: string; name: string; dimension: string; visibility: string }
+export async function fetchCanonicalTags(token: string, language: string): Promise<{ dimension: string; tags: CanonicalTag[] }[]> {
+  const body = await json<{ dimensions?: { dimension: string; tags: CanonicalTag[] }[] }>(
+    await fetch(`${UPSTREAM_API}/open/v1/tag/canonical?language=${encodeURIComponent(language)}`, { headers: authHeaders(token) }),
+  );
+  return body.dimensions ?? [];
 }
 
 export async function createWorldbook(
@@ -496,6 +507,7 @@ export interface WorldbookDocumentEntry {
   name?: string;
   content?: string;
   keywords?: string[];
+  secondaryKeywords?: string[];
   isEnabled?: boolean;
   isConstant?: boolean;
 }

@@ -15,7 +15,7 @@ describe("fetchWorldbookEntries", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ list: [UPSTREAM_ROW] }), { status: 200 })));
     const entries = await fetchWorldbookEntries("wb-1", "tok");
     expect(entries).toEqual([
-      { entryId: "e-1", name: "eldoria", content: "A forest.", keywords: ["eldoria", "wood", "forest"], isEnabled: true, isConstant: false },
+      { entryId: "e-1", name: "eldoria", content: "A forest.", keywords: ["eldoria", "wood", "forest"], secondaryKeywords: [], isEnabled: true, isConstant: false, activationCount: 0 },
     ]);
   });
 
