@@ -182,16 +182,109 @@ Cache API 雖然只在單一節點，但寫入立即可見，而同一個使用�
 - 圖示一律自繪 SVG（stroke 1.5～1.7），不用 emoji；箭頭類的 `→`／`↗` 是排版符號，可以用。
 - 淡入一次、不做錯落；動效只有 `--dur`／`--dur-slow` 兩個時長。
 
+## 統計與埋點
+
+分工：**Cloudflare Web Analytics 管「有多少人來」**（頁面瀏覽、訪客、來源、Core Web Vitals，
+面板一鍵開、免費、無 cookie），**Analytics Engine 管「他們做了什麼」**。兩邊不重複建設。
+
+### 為什麼頁面瀏覽不由 Worker 記
+
+前端是 SPA。榜單→卡片→作者的跳轉由 vue-router 接管，**連一次 HTTP 請求都不產生**；而
+`run_worker_first` 只列了卡片頁與作者頁，首頁與搜尋頁的文件請求根本不進 Worker。所以「服務端
+中間件記頁面瀏覽」在這個站上是結構性的零覆蓋。真正的行為信號是 API 呼叫本身——看榜單就會打
+`/v1/cards`、看卡片就會打 `/v1/cards/:id`。
+
+同源 fetch 帶的 `Referer` 是當前頁自己的網址，服務端問不出「從哪來」。所以每個站內 API 請求顯式
+帶一個 `X-From` 頭（`web/src/lib/track.ts` 的 surface，由 router 在換頁時設）。分享連結的歸因則靠
+HTML 首次載入那條路的 `Referer` 網域。快取不受影響：鍵是 URL，而存進去的回應沒有設 `Vary`。
+
+### 事件
+
+一個請求發**恰好一個**數據點：中間件先掛一份空的在 context 上，handler 往裡填只有它知道的東西
+（結果數、排序鍵、卡片 id），回來之後補上路由、狀態、耗時、快取命中再發出去。
+
+| 事件 | 來源 | 記什麼 |
+|---|---|---|
+| `list` / `search` | `/v1/cards` | 排序鍵、標籤、搜尋詞、結果數、翻頁深度、語言範圍 |
+| `card_view` | `/v1/cards/:id` | roleId。**只有這一處**——HTML 殼多半是抓取器，卡片頁替作者發的「其他作品」副請求是 `/v1/cards?author=`，兩者都不算一次瀏覽，否則分母灌水三倍 |
+| `author_view` | `/v1/authors/:id` | 作者 id、作品數 |
+| `mine_view` | `/v1/me/cards` | 篩選、結果數 |
+| `register` / `unregister` | `POST`/`DELETE /v1/cards` | roleId；失敗時 `outcome` 是 `forbidden`/`upstream_error` |
+| `page_html` | `app.get("*")` | 站外來源網域、語言、卡片或作者 id |
+| `cta` / `share` / `login_*` / `error` | beacon | 服務端看不到的那幾件 |
+| `sync` | cron | 成功數、失敗數、耗時 |
+| `api` | 其餘請求 | 路由、狀態、耗時 |
+
+blob 的順序（查詢時 `blob1..blob15`）：`event` `from` `route` `locale` `zoneScope` `country`
+`refHost` `sortKey` `tag` `term` `subject` `outcome` `cache` `detail` `client`；
+double 是 `durationMs` `resultCount` `offset` `status`。順序寫死在 `src/analytics.ts` 的 `BLOBS`，
+改動要同步既有查詢。
+
+### 採了什麼、沒採什麼
+
+**不採**：原始 IP、完整 User-Agent、任何持久標識、cookie、accountNumId、token、電子信箱、
+真實網址（搜尋詞在 query 裡，所以路由記模板）。`cf-connecting-ip` 只在記憶體裡用來判斷國家與
+機器人，用完即棄、不落盤、不進任何欄位。
+
+**搜尋詞採原詞**，但過三道形態過濾：截斷到 64 字元、含 `@` 或 `://` 丟棄、連續 9 位以上數字丟棄。
+頻次門檻放在報表側（`HAVING n >= 5`）而不是採集側——零結果查詢的價值全部在長尾，只出現過一次的
+詞才是內容缺口，在採集端按頻次砍等於把要找的東西先扔掉。加上 AE 90 天自動過期、沒有任何能把詞
+關聯到人的鍵，殘留風險是「知道有人搜過什麼」而不是「知道某人搜了什麼」。
+
+**卡片級瀏覽量採，但它永遠不可能進排序**——這不是靠註解約束，是物理上做不到：Worker 對
+Analytics Engine **只有寫綁定，沒有讀介面**，`listCards()` 拿不到它。想接進排序得先申請一個
+Cloudflare API token、寫一條跨服務的讀回路，那是要過 review 的重構。熱度仍然只吃上游的真實對話數。
+
+**不做獨立訪客去重**。每日輪換鹽雜湊 IP 得到的是假名化資料，仍是個人資料，會推翻「無同意橫幅」
+的前提。要看訪客數去 Cloudflare Web Analytics 的面板。
+
+尊重 `DNT` 與 `globalPrivacyControl`：任一打開，前端一條事件都不發。
+
+### 防濫用
+
+`/v1/e` 是全站唯一不需要登入就能寫入的端點，三道門：同源 `Origin`、事件白名單（名單外**丟棄**
+而不是記成 `unknown`）、單次批量上限 20 條。任何一道沒過都靜默回 204，不給刷的人「我被擋了」的
+回饋。**beacon 的數字天生可偽造，只能看趨勢，永遠不進排序、榜單或結算。**
+
+### 查詢
+
+計數一律 `SUM(_sample_interval)`，**絕不寫 `COUNT(*)`**。今天兩者相等，但 AE 在高流量下會自動
+採樣，那一天所有歷史報表會同時說謊而且沒有任何報錯。採樣按 index 值分桶，而 index 是事件名，
+所以 `register` 這種低頻事件有自己的預算，不會被 `list` 淹掉。哨兵查詢：
+
+```sql
+SELECT index1, MAX(_sample_interval) AS max_interval, SUM(_sample_interval) AS est
+FROM taproom_events WHERE timestamp > NOW() - INTERVAL '1' DAY
+GROUP BY index1 ORDER BY est DESC FORMAT JSON
+```
+
+任何一行 `max_interval > 1` 就是採樣開始了。發現路徑 → 卡片瀏覽 → 外連點擊：
+
+```sql
+SELECT blob2 AS surface,
+       SUM(IF(blob1 = 'card_view', _sample_interval, 0)) AS views,
+       SUM(IF(blob1 = 'cta', _sample_interval, 0)) AS cta
+FROM taproom_events
+WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 IN ('card_view', 'cta') AND blob15 != 'bot'
+GROUP BY surface ORDER BY views DESC FORMAT JSON
+```
+
+這是比值不是轉化率：分子來自不可信的 beacon，也無法確認哪次瀏覽產生了哪次點擊。用法是看趨勢與
+橫向對比（搜尋來的人比榜單來的人更愛點嗎），不是看絕對值。同理，排序鍵分布因為
+`Cache-Control: max-age=60` 會被瀏覽器快取截斷，它是「會話首次選擇分布」不是「點擊分布」。
+
+### 自架
+
+沒有 `[[analytics_engine_datasets]]` 綁定也能跑：程式碼判空後靜默跳過，不是錯誤。要整個關掉就把
+`ANALYTICS_ENABLED` 設成 `"false"`。綁定是按帳號的，分叉寫進自己的資料集，結構上不會回傳給任何人。
+
 ## 可觀測性
 
 Prometheus `/metrics` 不適用：Workers 沒有常駐進程可以被抓取。Cloudflare 原生的等價物是
-Workers Analytics Engine + Workers Logs + 內建 request analytics。
+Analytics Engine（見上一節）+ Workers Logs + 內建 request analytics。
 
-目前先不接 Analytics Engine——沒有流量，加了也沒東西可看。快取命中率先用回應的
-`X-Cache` 標頭觀察，那個不需要任何額外基礎設施就驗得出來。接 Analytics Engine 時
-落點是 `src/index.ts` 的 `onError`、`syncBatch` 與 `/v1/me/cards`，低基數標籤只放
-`result`（ok/not_found/upstream_error）、`route` 與 `cache`（hit/miss/bypass）；
-**roleId、accountNumId、查詢字串一律不准進標籤或日誌**。
+延遲、狀態碼與快取命中率都在 `taproom_events` 裡（`durationMs`、`status`、`cache`），
+不需要另一套指標系統。快取命中率也可以用回應的 `X-Cache` 標頭直接 curl 驗，不必等報表。
 
 ## 同步
 

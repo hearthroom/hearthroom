@@ -12,6 +12,7 @@ import { contentLang, pageTitle, zoneLabel } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
 import { compact, hueFrom, plainText, relativeTime } from "@/lib/format";
 import { confirmDialog } from "@/lib/confirm";
+import { track } from "@/lib/track";
 import type { CommunityCard } from "@/lib/types";
 
 const route = useRoute();
@@ -95,19 +96,23 @@ async function load() {
 async function share() {
   const url = location.href;
   const title = card.value?.name ?? "";
+  const subject = card.value?.roleId ?? "";
   if (typeof navigator.share === "function") {
-    try { await navigator.share({ title, url }); return; }
+    try { await navigator.share({ title, url }); track("share", { detail: "share_web", subject }); return; }
     catch (e) {
       // 使用者按了取消：什麼都不做。其他錯誤（這個環境其實不能分享）才退回複製
-      if ((e as DOMException).name === "AbortError") return;
+      if ((e as DOMException).name === "AbortError") { track("share", { detail: "share_abort", subject }); return; }
     }
   }
   try {
     await navigator.clipboard.writeText(url);
     copied.value = true;
+    track("share", { detail: "share_clipboard", subject });
     setTimeout(() => { copied.value = false; }, 1800);
   } catch {
     // 拿不到剪貼簿：把網址攤在使用者面前讓他自己複製，總比按了沒反應好
+    // 這條分支的出現頻率就是「分享按鈕在多少環境下是壞的」，值得單獨記一個值
+    track("share", { detail: "share_manual", subject, ok: false });
     await confirmDialog({ title: t("card.share"), message: t("card.copyLink"), detail: url, single: true });
   }
 }
@@ -180,7 +185,7 @@ watch(locale, load);
 
           <div class="role__actions">
             <!-- 對話目前發生在作品所在的服務上；chat-core 接進來之後換成站內入口。 -->
-            <a class="btn btn--primary btn--lg role__cta" :href="playUrl" target="_blank" rel="noopener" :title="$t('card.opensNew')">
+            <a class="btn btn--primary btn--lg role__cta" :href="playUrl" target="_blank" rel="noopener" :title="$t('card.opensNew')" @click="track('cta', { subject: card.roleId })">
               {{ $t("card.play") }} ↗<span class="sr-only">（{{ $t("card.opensNew") }}）</span>
             </a>
             <button class="btn btn--lg btn--icon role__share" :aria-label="$t('card.share')" :title="$t('card.share')" @click="share">

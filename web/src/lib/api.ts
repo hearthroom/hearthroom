@@ -1,4 +1,5 @@
 import { COMMUNITY_API, UPSTREAM_API } from "./config";
+import { currentSurface } from "./track";
 import { i18n } from "./i18n";
 import type { Author, AuthorSort, CardPage, CommunityCard, MyRole, Sort, Zone } from "./types";
 
@@ -28,6 +29,16 @@ async function json<T>(res: Response): Promise<T> {
 const authHeaders = (token?: string): Record<string, string> =>
   token ? { Authorization: `Bearer ${token}` } : {};
 
+/**
+ * 「這個請求是從哪一頁發的」。
+ *
+ * SPA 的站內跳轉不產生文件請求，而同源 fetch 帶的 Referer 是當前頁自己的網址——所以服務端
+ * 沒有任何辦法知道使用者是從榜單、搜尋還是分享連結走到這張卡的。顯式送一個頭是唯一的解法。
+ *
+ * 不影響邊緣快取：快取鍵是 URL，而存進去的回應沒有設 Vary，所以請求頭不參與比對。
+ */
+const from = (): Record<string, string> => ({ "X-From": currentSurface() });
+
 // ---- 社群 API（同源）------------------------------------------------------
 
 export interface BoardQuery { zone?: Zone | "all"; q?: string; tag?: string; sort?: Sort; author?: number; limit?: number; offset?: number; lang?: string }
@@ -35,17 +46,17 @@ export interface BoardQuery { zone?: Zone | "all"; q?: string; tag?: string; sor
 export async function fetchBoard(query: BoardQuery = {}): Promise<CardPage> {
   const params = new URLSearchParams();
   for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== "") params.set(k, String(v));
-  return json<CardPage>(await fetch(`${COMMUNITY_API}/cards?${params}`));
+  return json<CardPage>(await fetch(`${COMMUNITY_API}/cards?${params}`, { headers: from() }));
 }
 
 export async function fetchCard(id: string, lang?: string): Promise<CommunityCard> {
   const q = lang ? `?lang=${encodeURIComponent(lang)}` : "";
-  return json<CommunityCard>(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(id)}${q}`));
+  return json<CommunityCard>(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(id)}${q}`, { headers: from() }));
 }
 
 /** 這一區最常見的標籤，給榜單的類型篩選列。 */
 export async function fetchTags(zone: Zone | "all"): Promise<{ tag: string; n: number }[]> {
-  const res = await json<{ items: { tag: string; n: number }[] }>(await fetch(`${COMMUNITY_API}/tags?zone=${zone}`));
+  const res = await json<{ items: { tag: string; n: number }[] }>(await fetch(`${COMMUNITY_API}/tags?zone=${zone}`, { headers: from() }));
   return res.items;
 }
 
@@ -54,11 +65,11 @@ export interface AuthorPage { items: Author[]; hasNext: boolean; limit: number; 
 export async function fetchAuthors(query: { zone?: Zone | "all"; q?: string; sort?: AuthorSort; limit?: number; offset?: number } = {}): Promise<AuthorPage> {
   const params = new URLSearchParams();
   for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== "") params.set(k, String(v));
-  return json<AuthorPage>(await fetch(`${COMMUNITY_API}/authors?${params}`));
+  return json<AuthorPage>(await fetch(`${COMMUNITY_API}/authors?${params}`, { headers: from() }));
 }
 
 export async function fetchAuthor(accountNumId: number): Promise<Author> {
-  return json<Author>(await fetch(`${COMMUNITY_API}/authors/${accountNumId}`));
+  return json<Author>(await fetch(`${COMMUNITY_API}/authors/${accountNumId}`, { headers: from() }));
 }
 
 /** 登記只送 roleId：內容由服務端自己去上游取，作者塞不進任何欄位。 */
@@ -66,7 +77,7 @@ export async function registerCard(roleId: string, token: string): Promise<Commu
   return json<CommunityCard>(
     await fetch(`${COMMUNITY_API}/cards`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders(token) },
+      headers: { "Content-Type": "application/json", ...from(), ...authHeaders(token) },
       body: JSON.stringify({ roleId }),
     }),
   );
@@ -75,7 +86,7 @@ export async function registerCard(roleId: string, token: string): Promise<Commu
 export async function unregisterCard(roleId: string, token: string): Promise<void> {
   const res = await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(roleId)}`, {
     method: "DELETE",
-    headers: authHeaders(token),
+    headers: { ...from(), ...authHeaders(token) },
   });
   if (!res.ok && res.status !== 204) await json(res);
 }
@@ -122,7 +133,7 @@ export async function fetchMyCards(
   if (opts.fresh) params.set("fresh", "1");
   if (opts.filter && opts.filter !== "all") params.set("filter", opts.filter);
   return json<MyCardPage>(
-    await fetch(`${COMMUNITY_API}/me/cards?${params}`, { headers: authHeaders(token) }),
+    await fetch(`${COMMUNITY_API}/me/cards?${params}`, { headers: { ...from(), ...authHeaders(token) } }),
   );
 }
 

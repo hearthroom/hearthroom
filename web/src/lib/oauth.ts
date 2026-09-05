@@ -1,4 +1,5 @@
 import { UPSTREAM_API, OAUTH_RESOURCE } from "./config";
+import { track } from "./track";
 import { i18n } from "./i18n";
 import { SITE } from "./site";
 
@@ -62,6 +63,7 @@ async function clientId(): Promise<string> {
 }
 
 export async function beginLogin(returnTo: string): Promise<void> {
+  track("login_start");
   const verifier = randomString();
   const state = randomString(16);
   sessionStorage.setItem(STORE.verifier, verifier);
