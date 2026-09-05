@@ -8,6 +8,7 @@ import { contentLang } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
 import { confirmDialog } from "@/lib/confirm";
+import { track } from "@/lib/track";
 
 const props = defineProps<{ roleId: string }>();
 const emit = defineEmits<{ count: [n: number] }>();
@@ -85,7 +86,9 @@ async function submit(root?: Comment, target?: Comment) {
       }
     }
     submittedHidden.value = !visible;
+    track("comment_post", { detail: root ? "comment_reply" : "comment_root", subject: props.roleId, ok: visible });
   } catch (err) {
+    track("comment_post", { detail: root ? "comment_reply" : "comment_root", subject: props.roleId, ok: false });
     error.value = err instanceof Error ? err.message : t("state.actionFailed");
   } finally {
     sending.value = false;
@@ -99,16 +102,24 @@ async function toggleLike(c: Comment) {
   // 樂觀更新：失敗再翻回來
   c.isLiked = !c.isLiked;
   c.likeCount += c.isLiked ? 1 : -1;
-  try { await likeComment(c.commentId, c.isLiked, token); }
-  catch { c.isLiked = !c.isLiked; c.likeCount += c.isLiked ? 1 : -1; }
+  try {
+    await likeComment(c.commentId, c.isLiked, token);
+    track("comment_like", { detail: c.isLiked ? "like_on" : "like_off", subject: props.roleId });
+  } catch { c.isLiked = !c.isLiked; c.likeCount += c.isLiked ? 1 : -1; }
 }
 
 async function remove(c: Comment) {
   if (!(await confirmDialog({ message: t("comment.confirmDelete"), confirmText: t("dialog.delete"), danger: true }))) return;
   const token = await session.accessToken();
   if (!token) return;
-  try { await deleteComment(c.commentId, props.roleId, token); await load(true); }
-  catch (err) { error.value = err instanceof Error ? err.message : t("state.actionFailed"); }
+  try {
+    await deleteComment(c.commentId, props.roleId, token);
+    track("comment_delete", { subject: props.roleId });
+    await load(true);
+  } catch (err) {
+    track("comment_delete", { subject: props.roleId, ok: false });
+    error.value = err instanceof Error ? err.message : t("state.actionFailed");
+  }
 }
 
 async function showAllReplies(root: Comment) {

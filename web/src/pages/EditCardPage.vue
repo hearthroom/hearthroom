@@ -6,6 +6,7 @@ import { fetchRoleDetail, patchRole, type RoleDraft } from "@/lib/api";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
 import { confirmDialog } from "@/lib/confirm";
+import { track } from "@/lib/track";
 
 const route = useRoute();
 const session = useSession();
@@ -74,7 +75,9 @@ async function submit() {
     await patchRole(roleId, patch, token);
     original.value = { ...form.value };
     saved.value = true;
+    track("card_edit", { subject: roleId });
   } catch (err) {
+    track("card_edit", { subject: roleId, ok: false });
     error.value = err instanceof Error ? err.message : t("state.saveFailed");
   } finally {
     saving.value = false;

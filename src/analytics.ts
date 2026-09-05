@@ -127,14 +127,43 @@ export const surfaceOf = (raw: string | undefined) => (raw && SURFACES.has(raw) 
 /**
  * beacon 收得下的事件。白名单之外一律丢弃而不是记成 unknown——这是全站唯一不需要登入就能写入的
  * 端点，任何来路不明的值都不该在报表里占一行。
+ *
+ * 为什么这些非得走 beacon：评论、建立／编辑卡片、钱包都是直接打上游的跨域请求，本站的 Worker
+ * 完全看不到；外观与语言切换更是连一次请求都不产生。服务端那条路记不到它们。
  */
-export const BEACON_EVENTS = new Set(["cta", "share", "login_start", "login_done", "login_fail", "error"]);
+export const BEACON_EVENTS = new Set([
+  // 转化与分享
+  "cta", "share",
+  // 帐号
+  "login_start", "login_done", "login_fail", "logout",
+  // 评论（互动的核心，全部打上游）
+  "comment_tab", "comment_post", "comment_like", "comment_delete",
+  // 作者供给侧（建立与编辑都打上游）
+  "card_create", "card_edit",
+  // 钱包与变现
+  "wallet_view", "topup_click",
+  // 偏好（纯客户端，没有请求）
+  "appearance", "locale_switch",
+  // 其他
+  "page_404", "error",
+]);
 
 /** beacon 事件的 detail 小分类。同样白名单，避免自由字串进 blob。 */
 export const BEACON_DETAILS = new Set([
   "share_web", "share_clipboard", "share_manual", "share_abort",
-  "api_error", "js_error", "unhandled_rejection", "oauth_denied", "oauth_state", "oauth_exchange", "oauth_other",
+  "api_error", "js_error", "unhandled_rejection",
+  "oauth_denied", "oauth_state", "oauth_exchange", "oauth_other",
+  "comment_root", "comment_reply", "like_on", "like_off",
+  // 外观分两类，实际选了哪一个放 subject——不然每加一套主题都要回来改白名单，忘了就静默变空
+  "mode", "theme",
 ]);
+
+/**
+ * beacon 送来的 subject。roleId 是 UUID、主题是小写词、语言像 zh-Hant，都落在这个字元集里。
+ * 收窄成这一套是为了让这个无鉴权端点不可能把任意字串塞进报表。
+ */
+export const safeSubject = (raw: unknown): string =>
+  typeof raw === "string" ? raw.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64) : "";
 
 /** Hono context 上挂的那份 pending event。 */
 export type Pending = Partial<EventFields>;
