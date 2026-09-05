@@ -203,7 +203,7 @@ watch(locale, load);
         <section class="role__main">
           <div class="seg role__tabs" role="tablist" @keydown="onTabKey">
             <button id="tab-home" class="seg__item" :class="{ 'seg__item--on': tab === 'home' }" role="tab" aria-controls="panel-home" :aria-selected="tab === 'home'" :tabindex="tab === 'home' ? 0 : -1" @click="tab = 'home'">{{ $t("card.tab.home") }}</button>
-            <button v-if="showComments" id="tab-comments" class="seg__item" :class="{ 'seg__item--on': tab === 'comments' }" role="tab" aria-controls="panel-comments" :aria-selected="tab === 'comments'" :tabindex="tab === 'comments' ? 0 : -1" @click="tab = 'comments'">
+            <button v-if="showComments" id="tab-comments" class="seg__item" :class="{ 'seg__item--on': tab === 'comments' }" role="tab" aria-controls="panel-comments" :aria-selected="tab === 'comments'" :tabindex="tab === 'comments' ? 0 : -1" @click="tab = 'comments'; track('comment_tab', { subject: card.roleId })">
               {{ $t("card.tab.comments") }}<span v-if="commentCount" class="role__tab-n">{{ commentCount }}</span>
             </button>
           </div>

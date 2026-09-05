@@ -5,6 +5,7 @@ import { useI18n } from "vue-i18n";
 import { createRole } from "@/lib/api";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
+import { track } from "@/lib/track";
 
 const router = useRouter();
 const session = useSession();
@@ -33,10 +34,13 @@ async function submit() {
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
     const created = await createRole({ roleName: roleName.value.trim(), language: language.value }, token);
+    // 建立走的是上游的跨域介面，服务端那条路看不到——作者供给侧的漏斗断在这里，所以从前端记
+    track("card_create", { subject: created.roleId ?? "" });
     // 建立後直接進編輯頁把設定寫完——只有名字的卡沒辦法對話。
     if (created.roleId) await router.push(lp(`/cards/${created.roleId}/edit`));
     else await router.push({ path: lp("/mine"), query: { fresh: "1" } });
   } catch (err) {
+    track("card_create", { ok: false });
     error.value = err instanceof Error ? err.message : t("state.createFailed");
   } finally {
     saving.value = false;

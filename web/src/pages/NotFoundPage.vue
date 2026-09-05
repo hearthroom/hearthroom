@@ -4,12 +4,16 @@ import { useI18n } from "vue-i18n";
 import { RouterLink } from "vue-router";
 import { pageTitle } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
+import { track } from "@/lib/track";
 
 /** 也給卡片頁、作者頁在 404 時直接掛：文案可以換，回榜單的路一樣。 */
 const props = defineProps<{ title?: string; hint?: string }>();
 const { lp } = useLocalePath();
 const { t } = useI18n();
-onMounted(() => { document.title = pageTitle(props.title ?? t("notFound.title")); });
+onMounted(() => {
+  document.title = pageTitle(props.title ?? t("notFound.title"));
+  track("page_404");
+});
 </script>
 
 <template>

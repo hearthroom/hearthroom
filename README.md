@@ -211,9 +211,25 @@ HTML 首次載入那條路的 `Referer` 網域。快取不受影響：鍵是 URL
 | `mine_view` | `/v1/me/cards` | 篩選、結果數 |
 | `register` / `unregister` | `POST`/`DELETE /v1/cards` | roleId；失敗時 `outcome` 是 `forbidden`/`upstream_error` |
 | `page_html` | `app.get("*")` | 站外來源網域、語言、卡片或作者 id |
-| `cta` / `share` / `login_*` / `error` | beacon | 服務端看不到的那幾件 |
 | `sync` | cron | 成功數、失敗數、耗時 |
 | `api` | 其餘請求 | 路由、狀態、耗時 |
+
+服務端只看得到打本站 `/v1/*` 的那些。**評論、建立與編輯卡片、錢包全部是直接打上游的跨域請求，
+外觀與語言切換更是連一次請求都不產生**——這些只能從前端回報：
+
+| 事件 | 何時 | 記什麼 |
+|---|---|---|
+| `cta` | 點「開始對話」外連 | roleId、從哪一頁來 |
+| `share` | 分享 | 走了 Web Share／剪貼簿／手動兜底／取消 |
+| `login_start` `login_done` `login_fail` `logout` | 帳號流程 | 失敗時分得出是拒絕授權、狀態不符還是換 token 失敗 |
+| `comment_tab` | 切到評論頁籤 | 面板一掛載就載入，所以真正的信號是切過去看 |
+| `comment_post` | 發表或回覆 | 根評論還是回覆、成功或失敗 |
+| `comment_like` / `comment_delete` | 按讚／刪除 | 讚是開還是關 |
+| `card_create` / `card_edit` | 建立／編輯卡片 | 成功或失敗。作者供給側的漏斗斷在這裡，所以非記不可 |
+| `wallet_view` / `topup_click` | 進錢包／點充值 | 變現信號 |
+| `appearance` | 切外觀 | `detail` 是 `mode` 或 `theme`，實際選了哪一個放 `subject`——不然每加一套主題都要回來改白名單，忘了就靜默變空 |
+| `locale_switch` | 切語言 | 目標語言 |
+| `page_404` | 落到 404 | 斷鏈信號 |
 
 blob 的順序（查詢時 `blob1..blob15`）：`event` `from` `route` `locale` `zoneScope` `country`
 `refHost` `sortKey` `tag` `term` `subject` `outcome` `cache` `detail` `client`；
@@ -242,8 +258,9 @@ Cloudflare API token、寫一條跨服務的讀回路，那是要過 review 的�
 
 ### 防濫用
 
-`/v1/e` 是全站唯一不需要登入就能寫入的端點，三道門：同源 `Origin`、事件白名單（名單外**丟棄**
-而不是記成 `unknown`）、單次批量上限 20 條。任何一道沒過都靜默回 204，不給刷的人「我被擋了」的
+`/v1/e` 是全站唯一不需要登入就能寫入的端點，四道門：同源 `Origin`、事件白名單（名單外**丟棄**
+而不是記成 `unknown`）、`detail` 白名單、`subject` 收窄成 `[A-Za-z0-9_-]` 且截到 64 字元
+（roleId 是 UUID、主題是小寫詞、語言像 `zh-Hant`，都落在這個字元集裡）。單次批量上限 20 條。任何一道沒過都靜默回 204，不給刷的人「我被擋了」的
 回饋。**beacon 的數字天生可偽造，只能看趨勢，永遠不進排序、榜單或結算。**
 
 ### 查詢

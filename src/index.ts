@@ -13,7 +13,7 @@ import {
   upsertCard,
 } from "./cards";
 import {
-  BEACON_DETAILS, BEACON_EVENTS, clientKind, emit, note, refHostOf, shapeTerm, surfaceOf,
+  BEACON_DETAILS, BEACON_EVENTS, clientKind, emit, note, refHostOf, safeSubject, shapeTerm, surfaceOf,
   type EventFields, type Pending,
 } from "./analytics";
 import { authorLine, renderHead } from "./head";
@@ -329,7 +329,7 @@ app.post("/v1/e", async (c) => {
       route: typeof item.route === "string" ? item.route : "",
       locale: typeof item.locale === "string" ? item.locale.slice(0, 16) : "",
       country,
-      subject: typeof item.subject === "string" ? item.subject : "",
+      subject: safeSubject(item.subject),
       detail: BEACON_DETAILS.has(detail) ? detail : "",
       outcome: item.ok === false ? "error" : "ok",
       client: client === "bot" ? "bot" : "beacon",
