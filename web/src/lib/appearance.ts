@@ -27,8 +27,8 @@ export const THEMES: { id: string; swatch: string; swatchDark: string }[] = [
 ];
 export const DEFAULT_THEME = "coral";
 
-const MODE_KEY = "taproom.mode";
-const THEME_KEY = "taproom.theme";
+const MODE_KEY = "hearthroom.mode";
+const THEME_KEY = "hearthroom.theme";
 
 const read = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
 const write = (k: string, v: string | null) => {

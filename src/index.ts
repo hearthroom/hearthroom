@@ -422,7 +422,7 @@ async function syncBatch(env: Env): Promise<{ ok: number; failed: number; ms: nu
  * 前端會畫自己的 404 頁，而抓取器與搜尋引擎得到正確的狀態碼。
  */
 const PAGE = /^(?:\/(zh-Hans|en|ja|ko))?\/(cards|authors)\/([^/]+)$/;
-const SITE_NAME = "Taproom";
+const SITE_NAME = "Hearthroom";
 const PAGE_TTL = 60;
 
 app.get("*", async (c) => {

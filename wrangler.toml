@@ -37,7 +37,7 @@ run_worker_first = [
 # 分叉的人沒配這一段也能跑：emit() 判空後靜默跳過，端點、X-From、beacon 照常運作。
 [[analytics_engine_datasets]]
 binding = "EVENTS"
-dataset = "taproom_events"
+dataset = "hearthroom_events"
 
 [vars]
 # 上游的開放 API。這裡對它只有兩種呼叫：轉發作者 token 問身分、以游客讀卡片公開資訊。

@@ -1,4 +1,4 @@
-# Taproom
+# Hearthroom
 
 一個開源的角色卡社群：榜單、搜尋、作者主頁，以及讓作者把自己的作品登記上榜。
 
@@ -128,7 +128,7 @@ npm run deploy              # predeploy 會先跑 typecheck + 測試 + 前端 bu
 轉址本身也記一筆 `legacy_redirect`，所以報表看得出還有多少人走舊網址進來：
 
 ```sql
-SELECT blob14 AS old_host, SUM(_sample_interval) AS n FROM taproom_events
+SELECT blob14 AS old_host, SUM(_sample_interval) AS n FROM hearthroom_events
 WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'legacy_redirect'
 GROUP BY old_host FORMAT JSON
 ```
@@ -294,7 +294,7 @@ Cloudflare API token、寫一條跨服務的讀回路，那是要過 review 的�
 
 ```sql
 SELECT index1, MAX(_sample_interval) AS max_interval, SUM(_sample_interval) AS est
-FROM taproom_events WHERE timestamp > NOW() - INTERVAL '1' DAY
+FROM hearthroom_events WHERE timestamp > NOW() - INTERVAL '1' DAY
 GROUP BY index1 ORDER BY est DESC FORMAT JSON
 ```
 
@@ -304,7 +304,7 @@ GROUP BY index1 ORDER BY est DESC FORMAT JSON
 SELECT blob2 AS surface,
        SUM(IF(blob1 = 'card_view', _sample_interval, 0)) AS views,
        SUM(IF(blob1 = 'cta', _sample_interval, 0)) AS cta
-FROM taproom_events
+FROM hearthroom_events
 WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 IN ('card_view', 'cta') AND blob15 != 'bot'
 GROUP BY surface ORDER BY views DESC FORMAT JSON
 ```
@@ -328,7 +328,7 @@ Analytics Engine 要在 Cloudflare 面板上一次性啟用（Workers → Analyt
 Prometheus `/metrics` 不適用：Workers 沒有常駐進程可以被抓取。Cloudflare 原生的等價物是
 Analytics Engine（見上一節）+ Workers Logs + 內建 request analytics。
 
-延遲、狀態碼與快取命中率都在 `taproom_events` 裡（`durationMs`、`status`、`cache`），
+延遲、狀態碼與快取命中率都在 `hearthroom_events` 裡（`durationMs`、`status`、`cache`），
 不需要另一套指標系統。快取命中率也可以用回應的 `X-Cache` 標頭直接 curl 驗，不必等報表。
 
 ## 同步
