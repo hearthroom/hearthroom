@@ -63,6 +63,19 @@ API 存取範圍，跟這個服務拿到的一模一樣。
 **為什麼不是分步精靈**：作者手上多半已經有一張想搬過來的卡。分步會逼他按我們的順序
 重走一遍，而匯入本來就該一次把每一區都填好。
 
+**版面是三欄**：左邊分區導覽（紅點＝缺必填、勾＝已有內容）、中間表單、右邊是這張卡在
+榜單上會長的樣子（就是 `CardTile`，套 `inert` 讓它只能看不能點）加儲存動作。表單刻意
+只佔中間一欄——多行文字一行超過七十幾個字就難讀，空出來的寬度給預覽，作者邊填邊看。
+1100px 以下右欄收掉、動作回到底部黏著的那條；760px 以下導覽變成頂部一排可橫滑的膠囊。
+
+新卡的草稿存在 `localStorage`（`hearthroom.draft.create`）：關掉分頁再回來原樣還原，
+畫面上說一聲並給「清空重來」。只給新卡——既有的卡有上游那份當底，而且兩張卡的草稿
+混在同一個鍵底下會互相覆蓋。存成功就刪。Ctrl／⌘+S 直接儲存。
+
+建立成功之後網址換成編輯頁用的是 `history.replaceState`，不是 `router.replace`：換路由會
+把整個元件重掛（骨架閃一下、剛出現的「已儲存」消失、再向上游讀一次），而且離開守衛在
+儲存中一律不放行，`router.replace` 在那個時間點會被它擋掉、什麼都不發生。
+
 儲存是一次動作、多個請求，順序不能換（後面每一步都要前一步產生的 id）：
 
 ```
@@ -110,6 +123,15 @@ CHARX 沒做：它要一整套 zip 讀取，而野生的卡絕大多數是前兩
 | `position` / `scan_depth` / `case_sensitive` / `token_budget` | 沒有對應，進報告 |
 
 `{{char}}` 與 `{{user}}` 兩邊都認，原樣帶過去就會動。
+
+PNG 卡自帶的立繪會上傳成頭像（匯入面板先給看縮圖）。標籤超過 10 個只留前 10 個，多的
+進報告。`extensions.regex_scripts`（狀態欄、美化面板那一類）單獨點名：本站不執行正則，
+對話樣式由主題決定，這是刻意的取捨，不是漏做。
+
+世界書那一區另外可以匯入酒館的**世界書檔**（World Info 匯出的 JSON，`entries` 是以 uid 為鍵
+的物件、欄位叫 `key` / `keysecondary` / `disable`）或一張卡（只取它的 `character_book`），
+條目接在現有的後面，沒綁書就順手建一本。轉換在 `worldInfoToBook`，統一成卡片規格那一種
+形狀之後跟卡片匯入走同一套條目轉換與報告。
 
 **次要關鍵詞是唯一真正的語義損失**：酒館是「主關鍵詞 AND 次關鍵詞」才觸發，這裡的條目
 只有一組關鍵詞。併過去就變成 OR，條目會比作者本意更常被觸發。這是一個取捨而不是一個
@@ -175,6 +197,18 @@ npm test                    # 兩邊的測試
 
 `.npmrc` 裡的 `legacy-peer-deps` 不要拿掉：npm 11 的 arborist 解析 vitest 4 的
 optional peer 圖會崩（`TypeError: reading 'edgesOut'`）。
+
+**建卡頁在 OAuth 後面，本機沒辦法真的登入。** 要在瀏覽器裡開編輯器，用 `scripts/mock-upstream.mjs`
+把上游頂起來（記憶體存卡、任何 Bearer token 都算登入）：
+
+```
+node scripts/mock-upstream.mjs                              # :8899
+VITE_LUNATALK_API_BASE=http://127.0.0.1:8899 npm run dev:web
+```
+
+再在瀏覽器 console 塞一組假 token：
+`localStorage.setItem("hearthroom.oauth.access", JSON.stringify({ accessToken: "tok", expiresAt: Date.now() + 3600e3 }))`。
+`/__log` 看收到的請求，`/fixtures/<檔名>` 提供 `scripts/fixtures/`（不入庫）裡的酒館卡，拿來在頁面上測匯入。
 
 ## 部署
 

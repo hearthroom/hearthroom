@@ -6,11 +6,16 @@
  * 草稿、或一張酒館卡），分步會逼他按我們的順序重走一遍。整份表單加上分區導覽，
  * 想從哪裡填就從哪裡填，匯入也才能一次把每一區都填好。
  *
+ * 版面是三欄：左邊是分區導覽（哪一區缺必填、哪一區已經有內容一眼看得到），中間是表單，
+ * 右邊是這張卡在榜單上會長的樣子與儲存動作。寬螢幕上表單只佔中間一欄，因為多行文字
+ * 超過七十幾個字元一行就難讀；空出來的右邊拿來放預覽，作者邊填邊看，不必存了再去榜單找。
+ * 窄螢幕退成一欄：導覽變成頂部一排，預覽收掉，動作落到底部黏著的那條。
+ *
  * 儲存是一次動作、多個請求：建卡 → 寫欄位 → 寫開場白 → 寫世界書。順序不能換，
  * 後面每一步都需要前一步產生的 id。任何一步失敗就停下並保留草稿，不做局部回滾——
  * 上游沒有跨資源的交易，硬回滾只會在失敗之上再疊一次失敗。
  */
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import {
@@ -43,10 +48,12 @@ import {
   type WorldbookEntryDraft,
 } from "@/lib/role-draft";
 import { draftToTavern, embedIntoPng, type ImportResult } from "@/lib/tavern";
+import type { CommunityCard } from "@/lib/types";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
 import { confirmDialog } from "@/lib/confirm";
 import { track } from "@/lib/track";
+import CardTile from "@/components/CardTile.vue";
 import FieldText from "@/components/editor/FieldText.vue";
 import ListEditor from "@/components/editor/ListEditor.vue";
 import ImageField from "@/components/editor/ImageField.vue";
@@ -74,6 +81,7 @@ const draft = ref<RoleDraft>(makeDraft(locale.value));
 const original = ref<RoleDraft | null>(null);
 const pristine = ref<RoleDraft>(makeDraft(locale.value));
 const tagsText = ref("");
+const TAGS_MAX = 10;
 
 const worldbookId = ref("");
 const worldbookName = ref("");
@@ -88,10 +96,27 @@ const loading = ref(!!roleId.value);
 const saving = ref(false);
 const error = ref("");
 const saved = ref(false);
+/** 右下角那一條「已儲存」。說完就走，不佔版面。 */
+const toast = ref("");
+let toastTimer: ReturnType<typeof setTimeout> | undefined;
+function flash(message: string) {
+  toast.value = message;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toast.value = ""; }, 2600);
+}
 
 const SECTIONS = ["basic", "persona", "dialogue", "media", "worldbook", "publish"] as const;
 type Section = (typeof SECTIONS)[number];
 const section = ref<Section>("basic");
+const body = ref<HTMLElement | null>(null);
+
+/** 換分區時把表單捲回頂端：分區之間長短差很多，停在上一區的深處會看到一片空白。 */
+function goto(next: Section) {
+  if (section.value === next) return;
+  section.value = next;
+  const top = body.value?.getBoundingClientRect().top ?? 0;
+  if (top < 0) body.value?.scrollIntoView({ block: "start" });
+}
 
 const dirty = computed(
   () =>
@@ -103,8 +128,120 @@ const dirty = computed(
 const missing = computed(() => missingRequired(draft.value));
 const canPublish = computed(() => !isNew.value && !missing.value.length && !dirty.value);
 
+/** 各分區缺哪個必填。導覽上的紅點與發布前的清單都看這個。 */
+const REQUIRED_OF: Partial<Record<Section, string>> = {
+  basic: "roleName",
+  persona: "roleDetailDesc",
+  dialogue: "roleWelcome",
+};
+const lacks = (key: Section) => Boolean(REQUIRED_OF[key] && missing.value.includes(REQUIRED_OF[key] as string));
+/** 這一區已經有東西了。給導覽畫一個勾，作者才知道自己走到哪。 */
+const filled = computed<Record<Section, boolean>>(() => ({
+  basic: Boolean(draft.value.roleName.trim()),
+  persona: Boolean(draft.value.roleDetailDesc.trim()),
+  dialogue: Boolean(draft.value.roleWelcome.trim()),
+  media: Boolean(draft.value.roleAvatar || draft.value.roleBackground),
+  worldbook: worldbookEntries.value.some((e) => e.content.trim()),
+  publish: false,
+}));
+
 watch(tagsText, (raw) => {
   draft.value.roleTag = parseTags(raw);
+});
+
+/**
+ * 新卡的草稿存在本機。
+ *
+ * 建卡多半要寫上千字，中途關掉分頁、瀏覽器當掉、或不小心點到別處，全部重來是最傷人的事。
+ * 存的是整份草稿加世界書條目，回來時原樣還原並說一聲；作者不要就按「清空重來」。
+ * 只給新卡：既有的卡有上游那份當底，而且兩張卡的草稿混在一個鍵底下會互相覆蓋。
+ * 存成功之後就刪——那份已經在上游了。
+ */
+const DRAFT_KEY = "hearthroom.draft.create";
+const restoredDraft = ref(false);
+interface StoredDraft { draft: RoleDraft; tagsText: string; worldbook: { name: string; entries: WorldbookEntryDraft[] } | null; savedAt: number }
+function storeDraft() {
+  if (!isNew.value) return;
+  try {
+    if (!dirty.value) {
+      localStorage.removeItem(DRAFT_KEY);
+      return;
+    }
+    const stored: StoredDraft = {
+      draft: draft.value,
+      tagsText: tagsText.value,
+      worldbook: worldbookPending.value ? { name: worldbookName.value, entries: worldbookEntries.value } : null,
+      savedAt: Date.now(),
+    };
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(stored));
+  } catch {
+    /* 隱私模式寫不進去：那就沒有這層保護，功能照常 */
+  }
+}
+function restoreDraft() {
+  if (!isNew.value) return;
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return;
+    const stored = JSON.parse(raw) as StoredDraft;
+    if (!stored?.draft?.roleName && !stored?.draft?.roleDetailDesc && !stored?.draft?.roleWelcome) return;
+    draft.value = { ...makeDraft(stored.draft.language || locale.value), ...stored.draft };
+    tagsText.value = stored.tagsText ?? formatTags(draft.value.roleTag);
+    if (stored.worldbook?.entries?.length) {
+      worldbookPending.value = true;
+      worldbookName.value = stored.worldbook.name;
+      worldbookEntries.value = stored.worldbook.entries;
+    }
+    restoredDraft.value = true;
+  } catch {
+    localStorage.removeItem(DRAFT_KEY);
+  }
+}
+function discardDraft() {
+  draft.value = makeDraft(locale.value);
+  tagsText.value = "";
+  worldbookPending.value = false;
+  worldbookName.value = "";
+  worldbookEntries.value = [];
+  restoredDraft.value = false;
+  localStorage.removeItem(DRAFT_KEY);
+}
+let draftTimer: ReturnType<typeof setTimeout> | undefined;
+watch([draft, worldbookEntries, worldbookName, worldbookPending], () => {
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(storeDraft, 400);
+}, { deep: true });
+
+/** 剛從 PNG 卡帶進來、還在上傳的立繪。預覽先用本機那份，上傳完換成正式網址。 */
+const pendingAvatar = ref("");
+
+/** 右欄那張卡：榜單上會長的樣子。作者是登入的自己，數字全是零——那是別人看到之後才有的事。 */
+const previewCard = computed<CommunityCard>(() => {
+  const empty = { zh: "", en: "", ja: "", ko: "" };
+  const lang = draft.value.language;
+  return {
+    id: roleId.value || "draft",
+    roleId: roleId.value || "draft",
+    zone: lang.startsWith("zh") ? "zh" : lang === "en" || lang === "ja" || lang === "ko" ? lang : "all",
+    name: draft.value.roleName.trim() || t("import.review.unnamed"),
+    summary: draft.value.roleDesc,
+    names: empty,
+    summaries: empty,
+    avatarUrl: draft.value.roleAvatar || pendingAvatar.value || null,
+    backgroundUrl: null,
+    slug: null,
+    tags: draft.value.roleTag,
+    author: {
+      accountNumId: session.me?.accountNumId ?? 0,
+      name: session.me?.nickName ?? "",
+      avatar: session.me?.avatar ?? "",
+    },
+    talkNum: 0,
+    followNum: 0,
+    trending: 0,
+    registeredAt: 0,
+    syncedAt: 0,
+  };
 });
 
 async function loadValidation() {
@@ -134,7 +271,10 @@ async function loadWorldbook(token: string) {
 }
 
 onMounted(async () => {
-  if (!roleId.value) return;
+  if (!roleId.value) {
+    restoreDraft();
+    return;
+  }
   try {
     const token = await session.accessToken();
     const raw = await fetchRoleDetail(roleId.value, token ?? undefined);
@@ -160,8 +300,32 @@ onBeforeRouteLeave(
 const guard = (e: BeforeUnloadEvent) => {
   if (dirty.value) e.preventDefault();
 };
-onMounted(() => window.addEventListener("beforeunload", guard));
-onBeforeUnmount(() => window.removeEventListener("beforeunload", guard));
+/* Ctrl/⌘+S 存檔：寫長文的人手已經在鍵盤上，不該為了存一次去找按鈕。攔下瀏覽器的「另存網頁」。 */
+const onKey = (e: KeyboardEvent) => {
+  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "s") {
+    e.preventDefault();
+    void save();
+  }
+};
+onMounted(() => {
+  window.addEventListener("beforeunload", guard);
+  window.addEventListener("keydown", onKey);
+});
+onBeforeUnmount(() => {
+  window.removeEventListener("beforeunload", guard);
+  window.removeEventListener("keydown", onKey);
+  clearTimeout(toastTimer);
+  clearTimeout(draftTimer);
+  storeDraft();
+  if (pendingAvatar.value) URL.revokeObjectURL(pendingAvatar.value);
+});
+
+/** 錯誤訊息放在表單頂端。作者多半在某一區的深處按下儲存，訊息要自己走到他眼前。 */
+watch(error, async (message) => {
+  if (!message) return;
+  await nextTick();
+  body.value?.querySelector<HTMLElement>("[role=alert]")?.scrollIntoView({ block: "center", behavior: "smooth" });
+});
 
 // ── 圖片 ──────────────────────────────────────────────────────────
 
@@ -183,6 +347,15 @@ function createWorldbookDraft() {
   if (!worldbookEntries.value.length) {
     worldbookEntries.value = [{ name: "", content: "", keywords: [], isEnabled: true, isConstant: false }];
   }
+}
+
+/** 從酒館世界書檔匯入的條目。還沒綁書就先把書建起來，名字用檔裡的、沒有就用角色名。 */
+function onWorldbookImported(payload: { name: string; entries: WorldbookEntryDraft[] }) {
+  if (!worldbookId.value && !worldbookPending.value) {
+    worldbookPending.value = true;
+    worldbookName.value = payload.name || draft.value.roleName || "";
+  }
+  worldbookEntries.value = payload.entries.map((entry) => ({ ...entry }));
 }
 
 /** 草稿與上次存下的樣子比對，算出要 create / update / delete 哪些條目。 */
@@ -241,6 +414,7 @@ async function saveWorldbook(token: string, targetRoleId: string) {
 // ── 儲存 ──────────────────────────────────────────────────────────
 
 async function save() {
+  if (saving.value || loading.value) return;
   if (!dirty.value && !isNew.value) return;
   if (!draft.value.roleName.trim()) {
     section.value = "basic";
@@ -286,11 +460,18 @@ async function save() {
 
     original.value = cloneDraft(draft.value);
     saved.value = true;
+    restoredDraft.value = false;
+    if (wasNew) localStorage.removeItem(DRAFT_KEY);
+    flash(t("edit.saved"));
     track("card_edit", { subject: targetRoleId });
     void loadValidation();
 
     // 建立完成後把網址換成編輯頁：重新整理不該回到一張空表單。
-    if (wasNew) await router.replace(lp(`/cards/${targetRoleId}/edit`));
+    //
+    // 只改網址、不走 router.replace：換路由會把這個元件整個重掛，畫面閃一下骨架、剛出現的
+    // 「已儲存」也跟著消失，還要再向上游讀一次剛寫進去的東西。而且 replace 在 saving 期間
+    // 會被上面那個離開守衛擋掉（它在儲存中一律不放行），等於什麼都沒發生——之前就是這樣。
+    if (wasNew) window.history.replaceState(window.history.state, "", lp(`/cards/${targetRoleId}/edit`));
   } catch (err) {
     track(wasNew ? "card_create" : "card_edit", { ok: false });
     error.value = err instanceof Error ? err.message : t("state.saveFailed");
@@ -322,6 +503,29 @@ async function publish() {
 
 // ── 匯入 / 匯出 ────────────────────────────────────────────────────
 
+/**
+ * PNG 卡自帶的立繪拿去當頭像。
+ *
+ * 上傳與套用表單是分開的兩步：套用是同步的、立刻看得到；上傳要等網路。中間預覽先用本機
+ * 那張，傳好了換成正式網址。傳失敗不算匯入失敗——設定都進來了，只是圖要作者自己再選一次。
+ */
+async function adoptImage(image: Blob) {
+  if (pendingAvatar.value) URL.revokeObjectURL(pendingAvatar.value);
+  pendingAvatar.value = URL.createObjectURL(image);
+  try {
+    const token = await session.accessToken();
+    if (!token) throw new Error(t("auth.expired"));
+    const file = new File([image], "card.png", { type: image.type || "image/png" });
+    const url = await uploadImage(file, token, roleId.value || undefined);
+    if (!draft.value.roleAvatar) draft.value.roleAvatar = url;
+  } catch {
+    error.value = t("import.avatarFailed");
+  } finally {
+    URL.revokeObjectURL(pendingAvatar.value);
+    pendingAvatar.value = "";
+  }
+}
+
 function applyImport(result: ImportResult) {
   const language = draft.value.language;
   draft.value = { ...result.draft, language };
@@ -333,6 +537,7 @@ function applyImport(result: ImportResult) {
     // 匯入的條目一律沒有 entryId：它們在上游還不存在，儲存時要走 create。
     worldbookEntries.value = result.worldbook.entries.map((entry) => ({ ...entry, entryId: undefined }));
   }
+  if (result.image) void adoptImage(result.image);
   section.value = "basic";
 }
 
@@ -380,10 +585,12 @@ async function exportCard(format: "png" | "json") {
 </script>
 
 <template>
-  <div class="page">
-    <p class="eyebrow">{{ $t("mine.eyebrow") }}</p>
-    <h1 class="display">{{ isNew ? $t("editor.title.new") : $t("editor.title.edit") }}</h1>
-    <p class="muted lede">{{ isNew ? $t("editor.lede.new") : $t("editor.lede.edit") }}</p>
+  <div class="page editor">
+    <header class="head">
+      <p class="eyebrow">{{ $t("mine.eyebrow") }}</p>
+      <h1 class="display">{{ isNew ? $t("editor.title.new") : $t("editor.title.edit") }}</h1>
+      <p class="muted lede">{{ isNew ? $t("editor.lede.new") : $t("editor.lede.edit") }}</p>
+    </header>
 
     <div v-if="loading" class="ghosts" aria-hidden="true">
       <div class="ghost" style="height: 40px" />
@@ -391,25 +598,36 @@ async function exportCard(format: "png" | "json") {
       <div class="ghost" style="height: 260px" />
     </div>
 
-    <template v-else>
-      <nav class="seg sections" :aria-label="$t('editor.sections')">
+    <div v-else class="layout">
+      <!-- 左：分區導覽。紅點＝缺必填；勾＝已經有內容 -->
+      <nav class="side" :aria-label="$t('editor.sections')">
         <button
           v-for="key in SECTIONS"
           :key="key"
           type="button"
-          class="seg__item"
-          :class="{ 'seg__item--on': section === key }"
+          class="side__item"
+          :class="{ 'side__item--on': section === key }"
           :aria-current="section === key ? 'true' : undefined"
-          @click="section = key"
+          @click="goto(key)"
         >
-          {{ $t(`editor.section.${key}`) }}
-          <span v-if="key === 'basic' && missing.includes('roleName')" class="dot" aria-hidden="true" />
-          <span v-if="key === 'persona' && missing.includes('roleDetailDesc')" class="dot" aria-hidden="true" />
-          <span v-if="key === 'dialogue' && missing.includes('roleWelcome')" class="dot" aria-hidden="true" />
+          <span class="side__label">{{ $t(`editor.section.${key}`) }}</span>
+          <span v-if="lacks(key)" class="side__dot" role="img" :aria-label="$t('editor.section.missing')" />
+          <svg v-else-if="filled[key]" class="side__check" viewBox="0 0 16 16" role="img"
+               :aria-label="$t('editor.section.filled')" fill="none" stroke="currentColor" stroke-width="1.8"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3.5 8.5l3 3 6-7" />
+          </svg>
         </button>
       </nav>
 
-      <form class="body" @submit.prevent="save">
+      <!-- 中：表單 -->
+      <form ref="body" class="body" @submit.prevent="save">
+        <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
+        <p v-else-if="restoredDraft" class="notice restored" role="status">
+          <span>{{ $t("editor.draftRestored") }}</span>
+          <button type="button" class="btn btn--sm btn--ghost" @click="discardDraft">{{ $t("editor.draftDiscard") }}</button>
+        </p>
+
         <!-- 基础 -->
         <section v-show="section === 'basic'" class="pane">
           <ImportPanel v-if="isNew" :language="draft.language" @apply="applyImport" />
@@ -431,7 +649,16 @@ async function exportCard(format: "png" | "json") {
           <div class="field">
             <label for="f-tags">{{ $t("edit.tags") }}</label>
             <input id="f-tags" v-model="tagsText" class="input" :placeholder="$t('edit.tags.placeholder')" />
-            <span class="subtle">{{ $t("edit.tags.hint") }}</span>
+            <span class="field__foot">
+              <span class="subtle">{{ $t("edit.tags.hint") }}</span>
+              <span class="subtle count" :class="{ over: draft.roleTag.length > TAGS_MAX }">
+                {{ draft.roleTag.length }} / {{ TAGS_MAX }}
+              </span>
+            </span>
+            <!-- 拆好的標籤：作者一眼確認分隔符有沒有被認出來 -->
+            <ul v-if="draft.roleTag.length" class="tags" aria-hidden="true">
+              <li v-for="(tag, i) in draft.roleTag" :key="i" class="chip" :class="{ 'chip--over': i >= TAGS_MAX }">{{ tag }}</li>
+            </ul>
           </div>
 
           <FieldText id="f-user" v-model="draft.userName" :label="$t('editor.userName')"
@@ -509,7 +736,8 @@ async function exportCard(format: "png" | "json") {
         <section v-show="section === 'worldbook'" class="pane">
           <p class="muted">{{ $t("wb.lede") }}</p>
           <WorldbookEditor v-model="worldbookEntries" v-model:book-name="worldbookName"
-                           :bound="Boolean(worldbookId) || worldbookPending" @create="createWorldbookDraft" />
+                           :bound="Boolean(worldbookId) || worldbookPending" @create="createWorldbookDraft"
+                           @imported="onWorldbookImported" />
         </section>
 
         <!-- 发布 -->
@@ -545,9 +773,7 @@ async function exportCard(format: "png" | "json") {
           </div>
         </section>
 
-        <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
-        <p v-else-if="saved && !dirty" class="notice" role="status">{{ $t("edit.saved") }}</p>
-
+        <!-- 窄螢幕的動作條：右欄收掉時由它接手 -->
         <div class="bar">
           <button class="btn btn--primary" type="submit" :disabled="saving || (!dirty && !isNew)">
             {{ saving ? $t("edit.saving") : isNew ? $t("editor.saveDraft") : $t("edit.save") }}
@@ -559,24 +785,98 @@ async function exportCard(format: "png" | "json") {
           <span v-if="dirty" class="subtle">{{ $t("editor.unsaved") }}</span>
         </div>
       </form>
-    </template>
+
+      <!-- 右：預覽與動作 -->
+      <aside class="rail">
+        <p class="eyebrow rail__eyebrow">{{ $t("editor.preview") }}</p>
+        <div class="rail__tile" inert>
+          <CardTile :card="previewCard" />
+        </div>
+
+        <ul class="rail__check">
+          <li v-for="key in ['roleName', 'roleDetailDesc', 'roleWelcome']" :key="key"
+              :class="{ ok: !missing.includes(key) }">
+            <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path v-if="!missing.includes(key)" d="M3.5 8.5l3 3 6-7" />
+              <circle v-else cx="8" cy="8" r="5.5" />
+            </svg>
+            {{ $t(`editor.required.${key}`) }}
+          </li>
+        </ul>
+
+        <div class="rail__acts">
+          <button class="btn btn--primary" type="button" :disabled="saving || (!dirty && !isNew)" title="⌘/Ctrl + S"
+                  @click="save">
+            {{ saving ? $t("edit.saving") : isNew ? $t("editor.saveDraft") : $t("edit.save") }}
+          </button>
+          <button v-if="!isNew" type="button" class="btn" :disabled="!canPublish || saving" @click="publish">
+            {{ $t("editor.publish.submit") }}
+          </button>
+          <RouterLink class="btn btn--ghost" :class="{ 'is-off': saving }" :aria-disabled="saving || undefined"
+                      :to="{ path: lp('/mine'), query: { fresh: '1' } }">
+            {{ $t("edit.back") }}
+          </RouterLink>
+        </div>
+        <p class="subtle rail__state">
+          <template v-if="dirty">{{ $t("editor.unsaved") }}</template>
+          <template v-else-if="saved">{{ $t("edit.saved") }}</template>
+        </p>
+      </aside>
+    </div>
+
+    <div class="toast" role="status" :hidden="!toast">{{ toast }}</div>
   </div>
 </template>
 
 <style scoped>
+/* 這一頁比別頁寬一點：三欄要站得開。1200 是給榜單的，卡片網格在那個寬度剛好；編輯器多要 120px 給右欄。 */
+.editor { max-width: 1320px; }
+.head { margin-bottom: var(--s-5); }
 h1 { margin: 2px 0 var(--s-2); font-size: 24px; }
-.lede { margin: 0 0 var(--s-5); max-width: 52ch; }
+.lede { margin: 0; max-width: 52ch; }
 .ghosts { display: grid; gap: var(--s-4); }
-.sections { margin-bottom: var(--s-5); flex-wrap: wrap; }
-.seg__item { position: relative; }
-.dot {
-  display: inline-block; width: 5px; height: 5px; border-radius: 50%;
-  background: var(--danger); vertical-align: 3px; margin-left: 5px;
+
+.layout {
+  display: grid; grid-template-columns: 176px minmax(0, 1fr) 240px;
+  gap: var(--s-6); align-items: start;
 }
-/* 底部那條是 sticky 的，內容要留出它的高度，不然最後一顆按鈕會被壓在下面點不到 */
-.body { max-width: 760px; padding-bottom: 72px; }
+
+/* ---- 左欄 ---------------------------------------------------------------- */
+.side {
+  position: sticky; top: calc(var(--header-h) + var(--s-4));
+  display: grid; gap: 2px;
+}
+.side__item {
+  display: flex; align-items: center; gap: var(--s-2);
+  height: var(--h-md); padding: 0 var(--s-3);
+  border: 0; border-radius: var(--r-sm);
+  background: transparent; color: var(--text-2);
+  font-size: 14px; font-weight: 500; text-align: left; cursor: pointer;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.side__item:hover { background: var(--surface-2); color: var(--text); }
+.side__item--on { background: var(--surface); color: var(--text); box-shadow: 0 0 0 1px var(--line), var(--shadow-sm); }
+/* 選中那一格左邊一道強調色：跟主要按鈕同一個顏色，是「你在這裡」的唯一標記 */
+.side__item--on::before {
+  content: ""; width: 3px; height: 16px; margin-left: -6px; border-radius: 2px;
+  background: var(--accent);
+}
+.side__label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--danger); flex: none; }
+.side__check { width: 14px; height: 14px; color: var(--success); flex: none; }
+
+/* ---- 中欄 ---------------------------------------------------------------- */
+.body { min-width: 0; }
+.body > [role="alert"], .body > .restored { margin-bottom: var(--s-4); }
+.restored { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
 .pane { display: grid; gap: var(--s-5); }
 .hint { margin: 0 0 var(--s-2); }
+.count { font-variant-numeric: tabular-nums; }
+.over { color: var(--danger); }
+.tags { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { cursor: default; }
+.chip--over { color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger); }
 .turns { list-style: none; margin: 0 0 var(--s-2); padding: 0; display: grid; gap: var(--s-2); }
 .turn { display: flex; gap: var(--s-2); align-items: flex-start; }
 .turn .input { flex: 1; resize: vertical; }
@@ -588,10 +888,50 @@ h1 { margin: 2px 0 var(--s-2); font-size: 24px; }
 .panel .btn { justify-self: start; }
 .checklist ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 14px; color: var(--text-3); }
 .checklist li.ok { color: var(--success); }
-.bar {
-  position: sticky; bottom: 0; display: flex; gap: var(--s-3); align-items: center; flex-wrap: wrap;
-  margin: var(--s-6) 0 calc(var(--s-3) * -1); padding: var(--s-3) 0;
-  background: linear-gradient(to top, var(--page) 70%, transparent);
-}
+/* 寬螢幕時動作在右欄；這條只給窄螢幕 */
+.bar { display: none; }
 .is-off { pointer-events: none; opacity: 0.45; }
+
+/* ---- 右欄 ---------------------------------------------------------------- */
+.rail {
+  position: sticky; top: calc(var(--header-h) + var(--s-4));
+  display: grid; gap: var(--s-4);
+}
+.rail__eyebrow { margin: 0 0 calc(var(--s-2) * -1); }
+/* 預覽只是看的：inert 擋掉點擊與焦點，hover 的浮起也一起沒了，它就安靜地待在那 */
+.rail__tile { pointer-events: none; }
+.rail__check { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; color: var(--text-3); }
+.rail__check li { display: flex; align-items: center; gap: 8px; }
+.rail__check li.ok { color: var(--success); }
+.rail__check svg { width: 14px; height: 14px; flex: none; }
+.rail__acts { display: grid; gap: var(--s-2); }
+.rail__acts .btn { width: 100%; }
+.rail__state { margin: 0; min-height: 1.6em; }
+
+/* ---- 窄一點：右欄收掉，動作回到底部黏著的那條 ---------------------------------- */
+@media (max-width: 1100px) {
+  .layout { grid-template-columns: 160px minmax(0, 1fr); }
+  .rail { display: none; }
+  .body { padding-bottom: 72px; }
+  .bar {
+    position: sticky; bottom: 0; display: flex; gap: var(--s-3); align-items: center; flex-wrap: wrap;
+    margin: var(--s-6) 0 calc(var(--s-3) * -1); padding: var(--s-3) 0;
+    background: linear-gradient(to top, var(--bg) 70%, transparent);
+  }
+}
+
+/* ---- 再窄：導覽變成頂部一排，一欄到底 -------------------------------------------- */
+@media (max-width: 760px) {
+  .layout { grid-template-columns: minmax(0, 1fr); gap: var(--s-4); }
+  .side {
+    position: sticky; top: var(--header-h); z-index: 5;
+    display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none;
+    margin: 0 calc(var(--s-4) * -1); padding: var(--s-2) var(--s-4);
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  }
+  .side::-webkit-scrollbar { display: none; }
+  .side__item { flex: none; height: var(--h-sm); border-radius: var(--r-pill); font-size: 13px; }
+  .side__item--on::before { display: none; }
+}
 </style>

@@ -9,7 +9,7 @@
  * 併過去就變成 OR，條目會比作者本意更常被觸發。這是一個取捨而不是一個轉換，
  * 所以擺在畫面上讓他決定，預設不併。
  */
-import { ref } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { parseTavernFile, tavernToDraft, type ImportResult, type TavernBookEntry, type TavernCard } from "@/lib/tavern";
 
@@ -94,8 +94,17 @@ const cancel = () => {
   rawImage.value = null;
 };
 
-const hasSecondary = () =>
-  ((raw.value?.data?.character_book?.entries ?? []) as TavernBookEntry[]).some((e) => (e.secondary_keys ?? []).length);
+/** PNG 卡自帶的立繪：先在報告裡給作者看一眼，套用時會拿去當頭像。 */
+const thumb = ref("");
+watch(rawImage, (image) => {
+  if (thumb.value) URL.revokeObjectURL(thumb.value);
+  thumb.value = image ? URL.createObjectURL(image) : "";
+});
+onBeforeUnmount(() => { if (thumb.value) URL.revokeObjectURL(thumb.value); });
+
+const hasSecondary = computed(() =>
+  ((raw.value?.data?.character_book?.entries ?? []) as TavernBookEntry[]).some((e) => (e.secondary_keys ?? []).length),
+);
 </script>
 
 <template>
@@ -121,8 +130,13 @@ const hasSecondary = () =>
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
 
     <div v-if="preview" class="review panel">
-      <h3>{{ $t("import.review.title", { name: preview.draft.roleName || $t("import.review.unnamed") }) }}</h3>
-      <p class="subtle">{{ $t("import.review.spec", { spec: preview.spec }) }}</p>
+      <div class="review__head">
+        <img v-if="thumb" :src="thumb" alt="" class="review__thumb" />
+        <div>
+          <h3>{{ $t("import.review.title", { name: preview.draft.roleName || $t("import.review.unnamed") }) }}</h3>
+          <p class="subtle">{{ $t("import.review.spec", { spec: preview.spec }) }}</p>
+        </div>
+      </div>
 
       <ul class="landed">
         <li>{{ $t("import.landed.persona", { n: [...preview.draft.roleDetailDesc].length }) }}</li>
@@ -130,9 +144,10 @@ const hasSecondary = () =>
         <li>{{ $t("import.landed.examples", { n: preview.draft.talkExample.length }) }}</li>
         <li>{{ $t("import.landed.tags", { n: preview.draft.roleTag.length }) }}</li>
         <li v-if="preview.worldbook">{{ $t("import.landed.worldbook", { n: preview.worldbook.entries.length }) }}</li>
+        <li v-if="preview.image">{{ $t("import.landed.image") }}</li>
       </ul>
 
-      <label v-if="hasSecondary()" class="toggle">
+      <label v-if="hasSecondary" class="toggle">
         <input v-model="mergeSecondary" type="checkbox" @change="build" />
         <span>
           {{ $t("import.mergeSecondary") }}
@@ -167,8 +182,9 @@ const hasSecondary = () =>
 .drop--on { border-color: var(--accent); background: var(--accent-tint); }
 .drop p { margin: 0; }
 .review { margin-top: var(--s-4); padding: var(--s-4); display: grid; gap: var(--s-3); }
+.review__head { display: flex; gap: var(--s-3); align-items: center; }
+.review__thumb { width: 48px; height: 64px; object-fit: cover; border-radius: var(--r-sm); flex: none; box-shadow: 0 0 0 1px var(--line); }
 .review h3 { margin: 0; font-size: 16px; }
-.review h3 + .subtle { margin-top: -8px; }
 .landed { margin: 0; padding-left: 1.1em; display: grid; gap: 4px; color: var(--text-2); font-size: 13px; }
 .dropped ul { margin: var(--s-1) 0 0; padding-left: 1.1em; display: grid; gap: 4px; }
 .strong { font-weight: 600; color: var(--text-2); }
