@@ -23,7 +23,7 @@ const F = (p: Point) => ({
 });
 const seen = (event: string) => points.map(F).filter((p) => p.event === event);
 
-const SHELL = `<!doctype html><html lang="zh-Hant"><head><title>Taproom</title><meta name="description" content="s"></head><body><div id="app"></div></body></html>`;
+const SHELL = `<!doctype html><html lang="zh-Hant"><head><title>Hearthroom</title><meta name="description" content="s"></head><body><div id="app"></div></body></html>`;
 
 beforeEach(async () => {
   await resetDb();

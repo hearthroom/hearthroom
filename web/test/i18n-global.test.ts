@@ -18,6 +18,6 @@ describe("元件外的翻譯（錯誤訊息、分頁標題都靠它）", () => {
 
   it("帶了頁面名稱時直接用它", async () => {
     await applyLocale("en");
-    expect(pageTitle("Night Detective")).toBe("Night Detective · Taproom");
+    expect(pageTitle("Night Detective")).toBe("Night Detective · Hearthroom");
   });
 });

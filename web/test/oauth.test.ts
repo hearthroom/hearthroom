@@ -38,8 +38,8 @@ describe("換發憑證", () => {
    */
   it("並發呼叫只換發一次", async () => {
     const state = upstreamWithRotatingRefresh();
-    localStorage.setItem("taproom.oauth.refresh", "R0");
-    localStorage.setItem("taproom.oauth.client", "client-1");
+    localStorage.setItem("hearthroom.oauth.refresh", "R0");
+    localStorage.setItem("hearthroom.oauth.client", "client-1");
 
     const [a, b, c] = await Promise.all([refresh(), refresh(), refresh()]);
 
@@ -54,23 +54,23 @@ describe("換發憑證", () => {
 
   it("換發成功會把輪替後的新 refresh token 存起來", async () => {
     upstreamWithRotatingRefresh();
-    localStorage.setItem("taproom.oauth.refresh", "R0");
-    localStorage.setItem("taproom.oauth.client", "client-1");
+    localStorage.setItem("hearthroom.oauth.refresh", "R0");
+    localStorage.setItem("hearthroom.oauth.client", "client-1");
 
     await refresh();
-    expect(localStorage.getItem("taproom.oauth.refresh")).toBe("R1");
+    expect(localStorage.getItem("hearthroom.oauth.refresh")).toBe("R1");
     // 存了新的之後還能再換一次，證明沒有把自己鎖死
     await refresh();
-    expect(localStorage.getItem("taproom.oauth.refresh")).toBe("R2");
+    expect(localStorage.getItem("hearthroom.oauth.refresh")).toBe("R2");
   });
 
   it("伺服器明確拒絕才清掉憑證", async () => {
     upstreamWithRotatingRefresh();
-    localStorage.setItem("taproom.oauth.refresh", "WRONG");
-    localStorage.setItem("taproom.oauth.client", "client-1");
+    localStorage.setItem("hearthroom.oauth.refresh", "WRONG");
+    localStorage.setItem("hearthroom.oauth.client", "client-1");
 
     expect(await refresh()).toBeNull();
-    expect(localStorage.getItem("taproom.oauth.refresh")).toBeNull();
+    expect(localStorage.getItem("hearthroom.oauth.refresh")).toBeNull();
   });
 
   /** 一次網路抖動不該變成強制重新登入。 */
@@ -81,11 +81,11 @@ describe("換發憑證", () => {
       }
       return new Response("upstream down", { status: 503 });
     });
-    localStorage.setItem("taproom.oauth.refresh", "R0");
-    localStorage.setItem("taproom.oauth.client", "client-1");
+    localStorage.setItem("hearthroom.oauth.refresh", "R0");
+    localStorage.setItem("hearthroom.oauth.client", "client-1");
 
     expect(await refresh()).toBeNull();
-    expect(localStorage.getItem("taproom.oauth.refresh")).toBe("R0");
+    expect(localStorage.getItem("hearthroom.oauth.refresh")).toBe("R0");
   });
 });
 
@@ -102,14 +102,14 @@ describe("憑證落地", () => {
 
   it("登出把兩顆都清掉", () => {
     persist({ accessToken: "A1", expiresAt: Date.now() + 60_000 });
-    localStorage.setItem("taproom.oauth.refresh", "R0");
+    localStorage.setItem("hearthroom.oauth.refresh", "R0");
     forgetSession();
     expect(restorePersisted()).toBeNull();
-    expect(localStorage.getItem("taproom.oauth.refresh")).toBeNull();
+    expect(localStorage.getItem("hearthroom.oauth.refresh")).toBeNull();
   });
 
   it("壞掉的內容不會讓頁面掛掉", () => {
-    localStorage.setItem("taproom.oauth.access", "not json");
+    localStorage.setItem("hearthroom.oauth.access", "not json");
     expect(restorePersisted()).toBeNull();
   });
 });
