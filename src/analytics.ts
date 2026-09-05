@@ -1,3 +1,4 @@
+import { isSelfHost } from "./site";
 import type { Env } from "./types";
 
 /**
@@ -102,12 +103,15 @@ export function shapeTerm(raw: string | undefined): string {
   return q.slice(0, 64);
 }
 
-/** 只留站外来源的网域。站内跳转的 referer 是自己，对归因没有意义。 */
+/**
+ * 只留站外来源的网域。站内跳转的 referer 是自己，对归因没有意义。
+ * 搬家前用过的主机也算自己人——不然从旧网域 301 过来的人会被记成「来自旧网域的外部流量」。
+ */
 export function refHostOf(referer: string | undefined, selfHost: string): string {
   if (!referer) return "";
   try {
     const host = new URL(referer).host;
-    return host && host !== selfHost ? host : "";
+    return host && host !== selfHost && !isSelfHost(host) ? host : "";
   } catch {
     return "";
   }

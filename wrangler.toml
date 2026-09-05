@@ -4,7 +4,11 @@ compatibility_date = "2026-08-22"
 
 # 自訂網域。workers.dev 在部分地區被 DNS 污染（實測解析到非 Cloudflare 的 IP），
 # 綁自己的 zone 才連得上。OAuth 的 redirect_uri 取自 location.origin，會自動跟著換。
+#
+# 第二條是搬家前的舊家。它留著只為了把已經分享出去的連結 301 到新家（見 src/site.ts）；
+# 等報表裡的 legacy_redirect 降到零，再把這一行連同 LEGACY_HOSTS 一起拔掉。
 routes = [
+  { pattern = "hearthroom.club", custom_domain = true },
   { pattern = "community.johnny.moe", custom_domain = true }
 ]
 
