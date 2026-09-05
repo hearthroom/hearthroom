@@ -21,8 +21,8 @@ const api = vi.hoisted(() => ({
   createWorldbook: vi.fn(async () => "wb1"),
   patchWorldbookDocument: vi.fn(async () => ({})),
   fetchWorldbookEntries: vi.fn(async () => [
-    { entryId: "e1", name: "黑麥鎮", content: "北境小鎮。", keywords: ["黑麥鎮"], isEnabled: true, isConstant: true },
-    { entryId: "e2", name: "採石場", content: "廢棄了。", keywords: ["採石場", "排水渠"], isEnabled: true, isConstant: false },
+    { entryId: "e1", name: "黑麥鎮", content: "北境小鎮。", keywords: ["黑麥鎮"], secondaryKeywords: [], isEnabled: true, isConstant: true },
+    { entryId: "e2", name: "採石場", content: "廢棄了。", keywords: ["採石場"], secondaryKeywords: ["排水渠"], isEnabled: true, isConstant: false },
   ]),
   fetchRoleValidation: vi.fn(async () => ({ status: "ok", blockers: [], warnings: [] })),
   fetchRoleDetail: vi.fn(async () => ({})),
@@ -179,9 +179,9 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     expect(bookId).toBe("wb1");
     expect(doc.binding).toEqual({ roleId: "r1" });
     expect(doc.entries).toEqual([
-      { op: "create", name: "黑麥鎮", content: "北境小鎮。", keywords: ["黑麥鎮"], isEnabled: true, isConstant: true },
-      // 次要關鍵詞預設不併：keywords 只有主關鍵詞
-      { op: "create", name: "採石場", content: "廢棄了。", keywords: ["採石場"], isEnabled: true, isConstant: false },
+      { op: "create", name: "黑麥鎮", content: "北境小鎮。", keywords: ["黑麥鎮"], secondaryKeywords: [], isEnabled: true, isConstant: true },
+      // 酒館的 secondary_keys 直接落到條目的 AND 門，不再併進 keywords
+      { op: "create", name: "採石場", content: "廢棄了。", keywords: ["採石場"], secondaryKeywords: ["排水渠"], isEnabled: true, isConstant: false },
     ]);
     // 建立完成 → 網址換成編輯頁，本機草稿清掉
     expect(window.location.pathname).toBe("/cards/r1/edit");
@@ -219,7 +219,7 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     expect(doc.binding).toBeUndefined();
     expect(doc.entries).toEqual([
       { op: "delete", entryId: "e2" },
-      { op: "update", entryId: "e1", name: "黑麥鎮", content: "北境小鎮，三條商路交會。", keywords: ["黑麥鎮"], isEnabled: true, isConstant: true },
+      { op: "update", entryId: "e1", name: "黑麥鎮", content: "北境小鎮，三條商路交會。", keywords: ["黑麥鎮"], secondaryKeywords: [], isEnabled: true, isConstant: true },
     ]);
   });
 
@@ -252,7 +252,6 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     const inputs = root.querySelectorAll<HTMLInputElement>("input[type=file]");
     await pickFile(inputs[inputs.length - 1], new File([JSON.stringify(info)], "eldoria.json"));
     expect(root.textContent).toContain("匯入了 2 條");
-    expect(root.textContent).toContain("次要關鍵詞");
     expect(root.querySelectorAll("textarea[id^=wb-c-]")).toHaveLength(2);
     await submit();
     expect(api.createWorldbook).toHaveBeenCalledWith({ name: "測試", language: "zh-Hant" }, "tok");

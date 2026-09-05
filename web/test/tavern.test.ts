@@ -133,8 +133,7 @@ describe("tavern → draft", () => {
   it("沒地方放的東西全部進報告", () => {
     const { dropped } = tavernToDraft(card, { language: "zh-Hant", labels: LABELS });
     const keys = dropped.map((d) => d.key);
-    expect(keys).toContain("import.drop.secondaryKeys");
-    expect(keys).toContain("import.drop.position");
+        expect(keys).toContain("import.drop.position");
     expect(keys).toContain("import.drop.creator");
     expect(keys).toContain("import.drop.nickname");
     expect(keys).toContain("import.drop.extensions");
@@ -242,12 +241,14 @@ describe("世界書檔", () => {
     const file = (name: string, body: string | Uint8Array) => new File([body as BlobPart], name);
     const fromInfo = await parseWorldbookFile(file("eldoria.json", JSON.stringify(worldInfo)));
     expect(fromInfo.entries).toHaveLength(2);
-    expect(fromInfo.dropped).toContainEqual({ key: "import.drop.secondaryKeys", params: { n: 1 } });
+    // 次要關鍵詞現在有落點：進條目，不進報告
+    expect(fromInfo.entries[1].secondaryKeywords).toEqual(["safe"]);
+    expect(fromInfo.dropped.map((d) => d.key)).not.toContain("import.drop.secondaryKeys");
 
     const cardWithBook = { spec: "chara_card_v2", spec_version: "2.0", data: { name: "S", character_book: { name: "Eldoria", entries: [{ keys: ["a"], content: "x" }] } } };
     const fromCard = await parseWorldbookFile(file("card.json", JSON.stringify(cardWithBook)));
     expect(fromCard.name).toBe("Eldoria");
-    expect(fromCard.entries).toEqual([{ name: "a", content: "x", keywords: ["a"], isEnabled: true, isConstant: false }]);
+    expect(fromCard.entries).toEqual([{ name: "a", content: "x", keywords: ["a"], secondaryKeywords: [], isEnabled: true, isConstant: false }]);
 
     const png = embedIntoPng(barePng(), cardWithBook as TavernCard);
     expect((await parseWorldbookFile(file("card.png", png))).entries).toHaveLength(1);

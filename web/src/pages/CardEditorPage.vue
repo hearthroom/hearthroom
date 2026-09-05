@@ -59,6 +59,7 @@ import ListEditor from "@/components/editor/ListEditor.vue";
 import ImageField from "@/components/editor/ImageField.vue";
 import ImportPanel from "@/components/editor/ImportPanel.vue";
 import WorldbookEditor from "@/components/editor/WorldbookEditor.vue";
+import TagPicker from "@/components/editor/TagPicker.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -212,6 +213,16 @@ watch([draft, worldbookEntries, worldbookName, worldbookPending], () => {
   draftTimer = setTimeout(storeDraft, 400);
 }, { deep: true });
 
+const SEXES = ["", "man", "women", "other"] as const;
+
+/** 從分類詞表點一個標籤：加進去或拿掉，走同一條標籤文字，計數與 chip 預覽都跟著動。 */
+function toggleTag(name: string) {
+  const tags = draft.value.roleTag.includes(name)
+    ? draft.value.roleTag.filter((tag) => tag !== name)
+    : [...draft.value.roleTag, name];
+  tagsText.value = formatTags(tags);
+}
+
 /** 剛從 PNG 卡帶進來、還在上傳的立繪。預覽先用本機那份，上傳完換成正式網址。 */
 const pendingAvatar = ref("");
 
@@ -345,7 +356,7 @@ function createWorldbookDraft() {
   worldbookPending.value = true;
   worldbookName.value = draft.value.roleName || "";
   if (!worldbookEntries.value.length) {
-    worldbookEntries.value = [{ name: "", content: "", keywords: [], isEnabled: true, isConstant: false }];
+    worldbookEntries.value = [{ name: "", content: "", keywords: [], secondaryKeywords: [], isEnabled: true, isConstant: false }];
   }
 }
 
@@ -372,6 +383,7 @@ function worldbookOps(): WorldbookDocumentEntry[] {
       name: entry.name.trim() || entry.keywords[0] || t("wb.entry.untitled"),
       content: entry.content,
       keywords: entry.keywords,
+      secondaryKeywords: entry.secondaryKeywords ?? [],
       isEnabled: entry.isEnabled,
       isConstant: entry.isConstant,
     };
@@ -643,6 +655,13 @@ async function exportCard(format: "png" | "json") {
             <span class="subtle">{{ $t("editor.language.hint") }}</span>
           </div>
 
+          <div class="field">
+            <label for="f-sex">{{ $t("editor.sex") }}</label>
+            <select id="f-sex" v-model="draft.roleSex" class="input">
+              <option v-for="value in SEXES" :key="value" :value="value">{{ $t(`editor.sex.${value || "none"}`) }}</option>
+            </select>
+          </div>
+
           <FieldText id="f-desc" v-model="draft.roleDesc" :label="$t('editor.summary')" :rows="3"
                      :max="limits.roleDesc" :hint="$t('edit.summary.hint')" />
 
@@ -659,6 +678,8 @@ async function exportCard(format: "png" | "json") {
             <ul v-if="draft.roleTag.length" class="tags" aria-hidden="true">
               <li v-for="(tag, i) in draft.roleTag" :key="i" class="chip" :class="{ 'chip--over': i >= TAGS_MAX }">{{ tag }}</li>
             </ul>
+            <!-- 站內榜單認得的分類：點了就加進標籤，跟手打的是同一條 -->
+            <TagPicker :selected="draft.roleTag" :language="draft.language" :max="TAGS_MAX" @toggle="toggleTag" />
           </div>
 
           <FieldText id="f-user" v-model="draft.userName" :label="$t('editor.userName')"

@@ -6,9 +6,9 @@
  * 不是卡的一個欄位。沒綁書時只給一顆建立鈕；建立與綁定都在整份表單儲存時一起做，
  * 因為建立中的卡還沒有 id，綁不上去。
  *
- * 條目怎麼觸發：關鍵詞命中就把內容送進上下文；勾了「常駐」就每輪都送，不看關鍵詞。
- * 這兩個是上游真的會執行的語意，其餘（酒館卡的次要關鍵詞、插入位置、掃描深度）
- * 上游沒有對應機制，匯入時會列在報告裡而不是偷偷塞進某個欄位。
+ * 條目怎麼觸發：關鍵詞命中就把內容送進上下文；寫了次要關鍵詞就要兩邊都出現（AND）；
+ * 勾了「常駐」就每輪都送，不看關鍵詞。這三個是上游真的會執行的語意，其餘（插入位置、
+ * 掃描深度）上游沒有對應機制，匯入時會列在報告裡而不是偷偷塞進某個欄位。
  */
 import { ref } from "vue";
 import { useI18n } from "vue-i18n";
@@ -44,7 +44,7 @@ function patch(index: number, changes: Partial<WorldbookEntryDraft>) {
 }
 
 const add = () =>
-  commit([...props.modelValue, { name: "", content: "", keywords: [], isEnabled: true, isConstant: false }]);
+  commit([...props.modelValue, { name: "", content: "", keywords: [], secondaryKeywords: [], isEnabled: true, isConstant: false }]);
 
 async function remove(index: number) {
   const entry = props.modelValue[index];
@@ -89,9 +89,11 @@ async function onImportFile(event: Event) {
   }
 }
 
+const splitKeywords = (raw: string) => raw.split(/[、,，]+/).map((k) => k.trim()).filter(Boolean);
 const keywordsText = (entry: WorldbookEntryDraft) => entry.keywords.join("、");
-const setKeywords = (index: number, raw: string) =>
-  patch(index, { keywords: raw.split(/[、,，]+/).map((k) => k.trim()).filter(Boolean) });
+const setKeywords = (index: number, raw: string) => patch(index, { keywords: splitKeywords(raw) });
+const secondaryText = (entry: WorldbookEntryDraft) => (entry.secondaryKeywords ?? []).join("、");
+const setSecondary = (index: number, raw: string) => patch(index, { secondaryKeywords: splitKeywords(raw) });
 </script>
 
 <template>
@@ -120,6 +122,14 @@ const setKeywords = (index: number, raw: string) =>
             <input class="input input--name" :value="entry.name" :maxlength="NAME_MAX"
                    :placeholder="$t('wb.entry.name.placeholder')" :aria-label="$t('wb.entry.name')"
                    @input="patch(index, { name: ($event.target as HTMLInputElement).value })" />
+            <!-- 上游統計：這條被帶進對話幾次。作者看哪些條目真的在用、哪些從沒觸發 -->
+            <span v-if="typeof entry.activationCount === 'number'" class="chip hits" :title="$t('wb.entry.activations', { n: entry.activationCount })">
+              <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 3.5h10a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 1-1.5 1.5H7.5L4.5 14v-2.5H3A1.5 1.5 0 0 1 1.5 10V5A1.5 1.5 0 0 1 3 3.5z" />
+              </svg>
+              <span class="sr-only">{{ $t("wb.entry.activations", { n: entry.activationCount }) }}</span>
+              <span aria-hidden="true">{{ entry.activationCount }}</span>
+            </span>
             <button type="button" class="btn btn--icon btn--sm btn--danger" :aria-label="$t('wb.entry.delete')"
                     :title="$t('wb.entry.delete')" @click="remove(index)">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7"
@@ -135,6 +145,14 @@ const setKeywords = (index: number, raw: string) =>
                    :placeholder="$t('wb.entry.keywords.placeholder')" :disabled="entry.isConstant"
                    @input="setKeywords(index, ($event.target as HTMLInputElement).value)" />
             <span class="subtle">{{ entry.isConstant ? $t("wb.entry.keywords.constantHint") : $t("wb.entry.keywords.hint") }}</span>
+          </div>
+
+          <div v-if="!entry.isConstant" class="field">
+            <label :for="`wb-sk-${index}`">{{ $t("wb.entry.secondary") }}</label>
+            <input :id="`wb-sk-${index}`" class="input" :value="secondaryText(entry)"
+                   :placeholder="$t('wb.entry.secondary.placeholder')"
+                   @input="setSecondary(index, ($event.target as HTMLInputElement).value)" />
+            <span class="subtle">{{ $t("wb.entry.secondary.hint") }}</span>
           </div>
 
           <div class="field">
@@ -187,6 +205,7 @@ const setKeywords = (index: number, raw: string) =>
 .entry { padding: var(--s-3); display: grid; gap: var(--s-3); }
 .entry__head { display: flex; gap: var(--s-2); align-items: center; }
 .input--name { flex: 1; font-weight: 600; }
+.hits { cursor: default; gap: 4px; font-variant-numeric: tabular-nums; }
 .toggles { display: flex; gap: var(--s-4); flex-wrap: wrap; }
 .toggle { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--text-2); }
 </style>

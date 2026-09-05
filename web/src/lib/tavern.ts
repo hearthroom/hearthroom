@@ -179,6 +179,7 @@ export function bookEntriesToDrafts(entries: TavernBookEntry[]): WorldbookEntryD
       name: (text(entry.name) || text(entry.comment) || list(entry.keys)[0] || `#${index + 1}`).slice(0, 20),
       content: text(entry.content),
       keywords: list(entry.keys),
+      secondaryKeywords: list(entry.secondary_keys),
       isEnabled: entry.enabled !== false,
       isConstant: entry.constant === true,
     }))
@@ -247,14 +248,13 @@ export async function parseWorldbookFile(
 
 /** 條目層面沒地方放的欄位。每一個都要出現在報告裡。 */
 function bookEntryDrops(entries: TavernBookEntry[]): DropNote[] {
-  const counts = { secondary: 0, position: 0, caseSensitive: 0 };
+  // 次要關鍵詞現在有對應的落點（本站條目的 AND 門），不再進報告。
+  const counts = { position: 0, caseSensitive: 0 };
   for (const entry of entries) {
-    if (list(entry.secondary_keys).length) counts.secondary++;
     if (text(entry.position)) counts.position++;
     if (entry.case_sensitive) counts.caseSensitive++;
   }
   const notes: DropNote[] = [];
-  if (counts.secondary) notes.push({ key: "import.drop.secondaryKeys", params: { n: counts.secondary } });
   if (counts.position) notes.push({ key: "import.drop.position", params: { n: counts.position } });
   if (counts.caseSensitive) notes.push({ key: "import.drop.caseSensitive", params: { n: counts.caseSensitive } });
   return notes;
@@ -358,6 +358,9 @@ export function draftToTavern(
       name: draft.roleName,
       entries: worldbookEntries.map((entry, index) => ({
         keys: entry.keywords,
+        // 酒館的 AND 門要同時寫 secondary_keys 與 selective；只寫前者的話客戶端當成沒有次要詞
+        secondary_keys: entry.secondaryKeywords ?? [],
+        selective: (entry.secondaryKeywords ?? []).length > 0,
         content: entry.content,
         name: entry.name,
         enabled: entry.isEnabled,

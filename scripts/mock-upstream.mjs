@@ -33,6 +33,10 @@ http.createServer(async (req, res) => {
   const auth = req.headers.authorization || "";
   if (!auth.startsWith("Bearer ")) return json(res, 401, { error: "unauthorized", message: "A valid bearer token is required." });
   if (path === "/open/v1/me") return json(res, 200, { accountNumId: 424242, nickName: "測試作者", avatar: "" });
+  if (path === "/open/v1/tag/canonical") return json(res, 200, { language: url.searchParams.get("language"), dimensions: [
+    { dimension: "genre", tags: [{ slug: "romance", name: "戀愛", dimension: "genre", visibility: "public" }, { slug: "mystery", name: "推理", dimension: "genre", visibility: "public" }, { slug: "fantasy", name: "西幻", dimension: "genre", visibility: "public" }] },
+    { dimension: "setting", tags: [{ slug: "campus", name: "校園", dimension: "setting", visibility: "public" }, { slug: "frontier", name: "邊境", dimension: "setting", visibility: "public" }] },
+  ] });
   if (path === "/open/v1/me/wallet") return json(res, 200, { score: 999596, tempScore: 0, plans: [{ tier: "member", expiresAt: Date.now() + 86400e3 * 30 }] });
   if (m === "POST" && path === "/open/v1/role") { const roleId = id("role"); roles.set(roleId, { roleId, roleName: body.roleName, language: body.language, visibility: "private" }); return json(res, 200, { roleId }); }
   let mm;
@@ -51,7 +55,7 @@ http.createServer(async (req, res) => {
     if (body.binding?.roleId) bindings.set(body.binding.roleId, [...(bindings.get(body.binding.roleId) ?? []), mm[1]]);
     return json(res, 200, { ok: true });
   }
-  if (path === "/open/v1/worldbook/entry/list") return json(res, 200, { list: (entries.get(url.searchParams.get("worldbookId")) ?? []).map((e) => ({ ...e, keywords: JSON.stringify(e.keywords ?? []) })) });
+  if (path === "/open/v1/worldbook/entry/list") return json(res, 200, { list: (entries.get(url.searchParams.get("worldbookId")) ?? []).map((e, i) => ({ ...e, keywords: JSON.stringify(e.keywords ?? []), secondaryKeywords: JSON.stringify(e.secondaryKeywords ?? []), activationCount: i * 3 })) });
   if (path.startsWith("/img/")) { res.writeHead(200, { "content-type": "image/png", "access-control-allow-origin": "*" }); return res.end(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64")); }
   json(res, 404, { error: "not_found", path });
 }).listen(PORT, () => console.log("mock upstream on", PORT));
