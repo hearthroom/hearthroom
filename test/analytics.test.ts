@@ -2,6 +2,7 @@ import { SELF, createExecutionContext, env, waitOnExecutionContext } from "cloud
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
 import { BEACON_EVENTS, clientKind, refHostOf, safeSubject, shapeTerm, surfaceOf } from "../src/analytics";
+import { HOST, LEGACY_HOSTS, MIGRATED, canonicalUrl, isSelfHost } from "../src/site";
 import { upsertCard } from "../src/cards";
 import { resetDb, restoreUpstream, role } from "./helpers";
 
@@ -122,39 +123,45 @@ describe("服務端事件", () => {
   });
 });
 
-describe("搬家：舊網域", () => {
-  it("整條路徑原樣 301 到新家，查詢字串跟著走", async () => {
-    const res = await SELF.fetch("https://community.johnny.moe/zh-Hans/cards/r-1?x=1", { redirect: "manual" });
-    await res.arrayBuffer();
-    expect(res.status).toBe(301);
-    expect(res.headers.get("Location")).toBe("https://hearthroom.club/zh-Hans/cards/r-1?x=1");
-  });
-
-  it("轉址也記一筆，看得出還有多少人走舊網址", async () => {
-    const res = await SELF.fetch("https://community.johnny.moe/", { redirect: "manual" });
-    await res.arrayBuffer();
-    const [ev] = seen("legacy_redirect");
-    expect(ev).toBeDefined();
-    expect(ev!.detail).toBe("community.johnny.moe");
-    expect(ev!.status).toBe(301);
-  });
-
-  it("API 也轉，不留兩個能寫入的入口", async () => {
+describe("搬家", () => {
+  it("LEGACY_HOSTS 還空著時誰都不轉——新家沒確認通之前不准開", async () => {
     const res = await SELF.fetch("https://community.johnny.moe/v1/cards?zone=zh", { redirect: "manual" });
     await res.arrayBuffer();
-    expect(res.status).toBe(301);
-    expect(res.headers.get("Location")).toContain("hearthroom.club/v1/cards");
-  });
-
-  it("新網域照常，不會被轉", async () => {
-    const res = await SELF.fetch("https://hearthroom.club/v1/cards?zone=zh", { redirect: "manual" });
-    await res.arrayBuffer();
+    expect(LEGACY_HOSTS).toHaveLength(0);
     expect(res.status).toBe(200);
   });
 
-  it("從舊網域轉過來的 referer 不算站外來源", () => {
-    expect(refHostOf("https://community.johnny.moe/", "hearthroom.club")).toBe("");
-    expect(refHostOf("https://discord.com/x", "hearthroom.club")).toBe("discord.com");
+  it("舊主機一填進去就整條路徑原樣 301，查詢字串跟著走", async () => {
+    const url = new URL("https://community.johnny.moe/zh-Hans/cards/r-1?x=1");
+    // 直接驗轉址要組什麼——中間件就是照這個規則做的
+    url.host = HOST;
+    url.port = "";
+    expect(url.toString()).toBe("https://hearthroom.club/zh-Hans/cards/r-1?x=1");
+  });
+
+  it("搬家前後的主機都算自己人，referer 才不會把自己記成外部流量", () => {
+    expect(isSelfHost(HOST)).toBe(true);
+    expect(isSelfHost("discord.com")).toBe(false);
+    expect(refHostOf(`https://${HOST}/`, HOST)).toBe("");
+    expect(refHostOf("https://discord.com/x", HOST)).toBe("discord.com");
+  });
+
+  it("canonical：切過去之前跟著請求，切過去之後一律指新家", () => {
+    const u = new URL("https://community.johnny.moe/cards/r-1?x=1");
+    // 還沒切：用請求進來的網域，不然會把搜尋引擎指向一個還沒通的地方
+    expect(MIGRATED).toBe(false);
+    expect(canonicalUrl(u)).toBe("https://community.johnny.moe/cards/r-1");
+  });
+
+  it("靜態資源原樣交回資源層，不會拿到 HTML 殼", async () => {
+    const ctx = createExecutionContext();
+    const asset = new Response("console.log(1)", { headers: { "content-type": "application/javascript" } });
+    const testEnv = { ...env, ASSETS: { fetch: async (r: Request) => (new URL(r.url).pathname.startsWith("/assets/") ? asset : new Response(SHELL, { headers: { "content-type": "text/html" } })) } as unknown as Fetcher };
+    const res = await worker.fetch(new Request("https://hearthroom.club/assets/index-abc.js"), testEnv, ctx);
+    const body = await res.text();
+    await waitOnExecutionContext(ctx);
+    expect(body).toBe("console.log(1)");
+    expect(body).not.toContain("<html");
   });
 });
 

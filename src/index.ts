@@ -17,7 +17,7 @@ import {
   type EventFields, type Pending,
 } from "./analytics";
 import { authorLine, renderHead } from "./head";
-import { HOST, LEGACY_HOSTS } from "./site";
+import { HOST, LEGACY_HOSTS, canonicalUrl } from "./site";
 import { loadMine, type MineFilter } from "./mine";
 import { type Env, HttpError } from "./types";
 import { upstream, ZONES, type Zone } from "./upstream";
@@ -427,15 +427,22 @@ const PAGE_TTL = 60;
 
 app.get("*", async (c) => {
   const url = new URL(c.req.url);
+  const m = url.pathname.match(PAGE);
+  // 不是要注入的頁面就原樣交回資源層——靜態檔給檔案本身，其餘走它的 SPA 回退。
+  // 一律回殼的話，/assets/x.js 會拿到一份 HTML，整站直接掛。
+  if (!m) {
+    const passthrough = await c.env.ASSETS.fetch(c.req.raw);
+    note(c, { event: "page_html", refHost: refHostOf(c.req.header("Referer"), url.host), detail: "page" });
+    return passthrough;
+  }
   // 用 "/" 而不是 "/index.html"：資源層預設會把後者 301 到前者。
   // 不轉發原請求的 headers：If-None-Match 是對 /cards/x 那份內容的驗證器，拿去驗殼會拿到 304，
   // 卡改了名字也永遠回「沒變」。
   const shell = await c.env.ASSETS.fetch(new Request(new URL("/", url).toString()));
-  const m = url.pathname.match(PAGE);
-  if (!m || !shell.ok) return shell;
+  if (!shell.ok) return shell;
   const locale = m[1] ?? "zh-Hant";
   const l = locale.startsWith("zh") ? "zh" : locale;
-  const self = url.origin + url.pathname;
+  const self = canonicalUrl(url);
 
   note(c, {
     event: "page_html",

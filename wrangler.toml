@@ -20,7 +20,15 @@ binding = "ASSETS"
 # 找不到對應檔案時回 index.html，前端路由自己接手（/cards/xxx 這種深連結才進得去）。
 not_found_handling = "single-page-application"
 # 但 /v1/* 要先給 Worker，否則 SPA fallback 會把 API 請求也變成 index.html。
-run_worker_first = ["/v1/*", "/cards/*", "/authors/*", "/zh-Hans/cards/*", "/zh-Hans/authors/*", "/en/cards/*", "/en/authors/*", "/ja/cards/*", "/ja/authors/*", "/ko/cards/*", "/ko/authors/*"]
+# 頁面路徑全部先過 Worker：卡片與作者頁要注入分享預覽，其餘只是原樣交回資源層。
+# 為什麼連 / 和 /search 也列進來：搬家時舊網域要能把每一條路徑都轉走，而這個清單是
+# 「Worker 跑不跑得到」的唯一開關；漏掉的路徑在舊網域上會變成一個還能用的鏡像站。
+# 靜態檔在 /assets/ 底下，不在這個清單裡，所以不會多付一次 Worker 呼叫。
+run_worker_first = [
+  "/", "/v1/*", "/search*", "/mine*", "/wallet*", "/create*", "/auth/*",
+  "/cards/*", "/authors/*",
+  "/zh-Hans/*", "/en/*", "/ja/*", "/ko/*",
+]
 
 # 行為埋點。CF Web Analytics 管「有多少人來」，這個資料集管「他們做了什麼」。
 #
