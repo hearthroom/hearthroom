@@ -31,7 +31,8 @@ describe("分享預覽", () => {
     expect(html).toContain('<meta name="description" content="民國二十四年的上海，租界的雨從不停。">');
     expect(html).toContain('<meta property="og:title" content="夜行偵探 沈墨 · Hearthroom">');
     expect(html).toContain('<meta property="og:image" content="https://cdn.lunatalk.ai/cover.png">');
-    expect(html).toContain('<link rel="canonical" href="https://c.test/cards/r-1">');
+    // canonical 一律指向正牌主機：搬家期間兩個網域並存，搜尋引擎要知道哪個才算數
+    expect(html).toContain('<link rel="canonical" href="https://hearthroom.club/cards/r-1">');
     expect(html).toContain('<html lang="zh-Hant">');
     expect(headers.get("cache-control")).toContain("max-age=60");
     // 改寫過的內容不能沿用殼的驗證器：帶著它去重驗會拿到 304，卡改了也看不到
