@@ -84,6 +84,9 @@ export interface ImportResult {
   spec: string;
 }
 
+/** 本站一張卡最多幾個標籤。多的丟掉並進報告，不靜默截斷。 */
+export const TAGS_MAX = 10;
+
 const text = (value: unknown): string => (typeof value === "string" ? value.trim() : "");
 const list = (value: unknown): string[] =>
   Array.isArray(value) ? value.map((v) => text(v)).filter(Boolean) : [];
@@ -168,6 +171,80 @@ function joinPersona(data: TavernCardData, labels: { personality: string; scenar
   return parts.join("\n\n");
 }
 
+/** 酒館的條目 → 本站的條目。 */
+export function bookEntriesToDrafts(entries: TavernBookEntry[]): WorldbookEntryDraft[] {
+  return entries
+    .map((entry, index) => ({
+      // 條目要有名字才找得回來。酒館這兩個欄位常常都空，那就用第一個關鍵詞。
+      name: (text(entry.name) || text(entry.comment) || list(entry.keys)[0] || `#${index + 1}`).slice(0, 20),
+      content: text(entry.content),
+      keywords: list(entry.keys),
+      isEnabled: entry.enabled !== false,
+      isConstant: entry.constant === true,
+    }))
+    .filter((e) => e.content);
+}
+
+/**
+ * 酒館「世界書檔」（World Info，匯出成獨立的 JSON）→ 卡片規格裡的 character_book 形狀。
+ *
+ * 兩種格式的欄位名不一樣：世界書檔用 `key` / `keysecondary` / `disable`，卡裡的 book 用
+ * `keys` / `secondary_keys` / `enabled`；entries 在世界書檔裡是以 uid 為鍵的物件，不是陣列。
+ * 統一成卡片那一種，後面的轉換與報告就只有一套。
+ */
+export function worldInfoToBook(raw: unknown): TavernBook | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  // 傳進來的是一張卡：直接拿它的世界書
+  if (obj.data && typeof obj.data === "object") {
+    const book = (obj.data as TavernCardData).character_book;
+    return book && Array.isArray(book.entries) ? book : null;
+  }
+  const entries = obj.entries;
+  if (!entries || typeof entries !== "object") return null;
+  const rows = (Array.isArray(entries) ? entries : Object.values(entries)) as Record<string, unknown>[];
+  return {
+    name: text(obj.name),
+    description: text(obj.description),
+    entries: rows
+      .filter((row) => row && typeof row === "object")
+      .map((row) => ({
+        keys: list(row.keys ?? row.key),
+        secondary_keys: list(row.secondary_keys ?? row.keysecondary),
+        content: text(row.content),
+        name: text(row.name),
+        comment: text(row.comment),
+        enabled: row.enabled === undefined ? row.disable !== true : row.enabled !== false,
+        constant: row.constant === true,
+        position: typeof row.position === "string" ? row.position : undefined,
+        case_sensitive: row.case_sensitive === true || row.caseSensitive === true,
+      })),
+  };
+}
+
+/** 從檔案讀一本世界書：酒館的世界書檔，或一張卡（只取它的 book）。 */
+export async function parseWorldbookFile(
+  file: File,
+): Promise<{ name: string; entries: WorldbookEntryDraft[]; dropped: DropNote[] }> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let raw: unknown;
+  if (isPng(bytes)) {
+    const chunk = readTextChunk(bytes, "ccv3") ?? readTextChunk(bytes, "chara");
+    if (!chunk) throw new Error("tavern_no_metadata");
+    raw = JSON.parse(utf8FromBase64(chunk));
+  } else {
+    try {
+      raw = JSON.parse(new TextDecoder().decode(bytes));
+    } catch {
+      throw new Error("tavern_invalid");
+    }
+  }
+  const book = worldInfoToBook(raw);
+  if (!book) throw new Error("worldbook_invalid");
+  const entries = book.entries ?? [];
+  return { name: text(book.name), entries: bookEntriesToDrafts(entries), dropped: bookEntryDrops(entries) };
+}
+
 /** 條目層面沒地方放的欄位。每一個都要出現在報告裡。 */
 function bookEntryDrops(entries: TavernBookEntry[]): DropNote[] {
   const counts = { secondary: 0, position: 0, caseSensitive: 0 };
@@ -208,7 +285,9 @@ export function tavernToDraft(
   draft.alternates = list(data.alternate_greetings);
   draft.roleOutputContract = text(data.system_prompt);
   draft.jailbreak = text(data.post_history_instructions);
-  draft.roleTag = list(data.tags).slice(0, 10);
+  const tags = list(data.tags);
+  draft.roleTag = tags.slice(0, TAGS_MAX);
+  if (tags.length > TAGS_MAX) dropped.push({ key: "import.drop.tags", params: { n: tags.length - TAGS_MAX } });
 
   const example = text(data.mes_example);
   if (example) {
@@ -222,9 +301,12 @@ export function tavernToDraft(
   if (text(data.character_version)) dropped.push({ key: "import.drop.version" });
   if (text(data.nickname)) dropped.push({ key: "import.drop.nickname", params: { name: text(data.nickname) } });
   if (list(data.group_only_greetings).length) dropped.push({ key: "import.drop.groupGreetings" });
-  if (data.extensions && Object.keys(data.extensions).length) {
-    dropped.push({ key: "import.drop.extensions", params: { n: Object.keys(data.extensions).length } });
-  }
+  // 正則腳本（狀態欄、美化面板）單獨點名：那是酒館卡最常見、也最容易被誤以為「壞了」的一種擴展。
+  const extensions = Object.keys(data.extensions ?? {});
+  const regex = Array.isArray(data.extensions?.regex_scripts) ? (data.extensions!.regex_scripts as unknown[]).length : 0;
+  if (regex) dropped.push({ key: "import.drop.regex", params: { n: regex } });
+  const rest = extensions.filter((k) => k !== "regex_scripts").length;
+  if (rest) dropped.push({ key: "import.drop.extensions", params: { n: rest } });
 
   let worldbook: ImportResult["worldbook"] = null;
   const book = data.character_book;
@@ -233,14 +315,7 @@ export function tavernToDraft(
     worldbook = {
       name: text(book?.name) || draft.roleName || "",
       description: text(book?.description),
-      entries: bookEntries.map((entry, index) => ({
-        // 條目要有名字才找得回來。酒館這兩個欄位常常都空，那就用第一個關鍵詞。
-        name: (text(entry.name) || text(entry.comment) || list(entry.keys)[0] || `#${index + 1}`).slice(0, 20),
-        content: text(entry.content),
-        keywords: list(entry.keys),
-        isEnabled: entry.enabled !== false,
-        isConstant: entry.constant === true,
-      })).filter((e) => e.content),
+      entries: bookEntriesToDrafts(bookEntries),
     };
     dropped.push(...bookEntryDrops(bookEntries));
     if (book?.scan_depth || book?.token_budget || book?.recursive_scanning) {

@@ -302,5 +302,17 @@
   "export.png": "Export PNG",
   "export.json": "Export JSON",
   "export.pngFallback": "Couldn't fetch the avatar, so it was saved as JSON.",
-  "state.uploadFailed": "Upload failed. Try another image or again later."
+  "state.uploadFailed": "Upload failed. Try another image or again later.",
+  "editor.section.missing": "Required field missing",
+  "editor.section.filled": "Filled in",
+  "editor.preview": "Preview",
+  "editor.draftRestored": "Restored the draft you didn't save last time.",
+  "editor.draftDiscard": "Start over",
+  "import.landed.image": "1 embedded portrait, used as the avatar",
+  "import.avatarFailed": "The portrait couldn't be uploaded. Pick an image again under Images.",
+  "import.drop.tags": "{n} extra tag(s). A card here holds at most 10, so only the first 10 were kept.",
+  "import.drop.regex": "{n} regex script(s) (status bars, styled panels). Regex isn't run here; chat styling comes from themes.",
+  "wb.import": "Import lorebook file",
+  "wb.import.error": "No lorebook entries in this file. Use a lorebook JSON exported from SillyTavern, or a card that carries one.",
+  "wb.import.done": "Imported {n} entries, appended after the existing ones."
 }

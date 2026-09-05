@@ -3,3 +3,6 @@ node_modules/
 dist/
 *.log
 .dev.vars
+
+# 本機測匯入用的第三方酒館卡，不入庫
+scripts/fixtures/

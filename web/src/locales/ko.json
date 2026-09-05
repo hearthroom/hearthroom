@@ -302,5 +302,17 @@
   "export.png": "PNG로 내보내기",
   "export.json": "JSON으로 내보내기",
   "export.pngFallback": "프로필 이미지를 가져오지 못해 JSON으로 저장했습니다.",
-  "state.uploadFailed": "업로드에 실패했습니다. 다른 이미지로 또는 잠시 후 다시 시도해 주세요."
+  "state.uploadFailed": "업로드에 실패했습니다. 다른 이미지로 또는 잠시 후 다시 시도해 주세요.",
+  "editor.section.missing": "필수 항목 미입력",
+  "editor.section.filled": "입력 완료",
+  "editor.preview": "미리보기",
+  "editor.draftRestored": "지난번에 저장하지 않은 초안을 복원했습니다.",
+  "editor.draftDiscard": "처음부터 다시",
+  "import.landed.image": "포함된 일러스트 1장을 프로필 이미지로 사용합니다",
+  "import.avatarFailed": "일러스트를 업로드하지 못했습니다. 「이미지」에서 다시 선택해 주세요.",
+  "import.drop.tags": "초과된 태그 {n}개. 이 사이트는 카드 하나에 최대 10개이므로 앞의 10개만 남겼습니다.",
+  "import.drop.regex": "정규식 스크립트 {n}개(상태 바, 장식 패널 등). 여기서는 정규식을 실행하지 않으며 대화 스타일은 테마가 정합니다.",
+  "wb.import": "세계관 파일 가져오기",
+  "wb.import.error": "이 파일에는 세계관 항목이 없습니다. SillyTavern에서 내보낸 세계관 JSON이나 세계관이 포함된 캐릭터 카드를 사용해 주세요.",
+  "wb.import.done": "{n}개를 가져와 기존 항목 뒤에 추가했습니다."
 }

@@ -302,5 +302,17 @@
   "export.png": "导出 PNG",
   "export.json": "导出 JSON",
   "export.pngFallback": "拿不到头像，已改存成 JSON。",
-  "state.uploadFailed": "图片上传失败，换一张或稍后再试。"
+  "state.uploadFailed": "图片上传失败，换一张或稍后再试。",
+  "editor.section.missing": "缺必填",
+  "editor.section.filled": "已填",
+  "editor.preview": "预览",
+  "editor.draftRestored": "已恢复上次没保存的草稿。",
+  "editor.draftDiscard": "清空重来",
+  "import.landed.image": "自带立绘 1 张，会当作头像",
+  "import.avatarFailed": "立绘没能上传，请到「形象」重新选图。",
+  "import.drop.tags": "多出来的 {n} 个标签。本站一张卡最多 10 个，只留了前 10 个。",
+  "import.drop.regex": "{n} 条正则脚本（状态栏、美化面板这类）。本站不执行正则，对话样式由主题决定。",
+  "wb.import": "导入世界书文件",
+  "wb.import.error": "这个文件里没有世界书条目。支持酒馆导出的世界书 JSON，或带世界书的角色卡。",
+  "wb.import.done": "导入了 {n} 条，接在原有条目后面。"
 }
