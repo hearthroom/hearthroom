@@ -113,8 +113,31 @@ npm run migrate:remote
 npm run deploy              # predeploy 會先跑 typecheck + 測試 + 前端 build
 ```
 
-自架時要改的只有 `wrangler.toml` 的 `routes`（換成你的網域）與 `LUNATALK_API_BASE`，
-以及 `web/src/lib/site.ts` 的站台名稱。
+自架時要改的只有 `wrangler.toml` 的 `routes`（換成你的網域）、`src/site.ts` 的 `HOST`、
+`LUNATALK_API_BASE`，以及 `web/src/lib/site.ts` 的站台名稱。
+
+### 換網域
+
+前端全部從 `location.origin` 推導（OAuth 的 redirect_uri、hreflang、分享連結），所以搬家只動
+三個地方：`src/site.ts` 的 `HOST`、`wrangler.toml` 的 `routes`、以及把舊主機加進 `LEGACY_HOSTS`。
+
+**舊網域不要直接拔掉。** 這個站的成長迴圈就是分享，已經散在 Discord、X 上的卡片連結全部指著
+舊主機，拔了就是一片 404，搜尋引擎累積的排名也一起歸零。做法是把舊主機留在 `routes` 上，
+由中間件把整條路徑（含查詢字串）原樣 **301** 到新家——301 而不是 302，搜尋引擎才會轉移排名。
+
+轉址本身也記一筆 `legacy_redirect`，所以報表看得出還有多少人走舊網址進來：
+
+```sql
+SELECT blob14 AS old_host, SUM(_sample_interval) AS n FROM taproom_events
+WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'legacy_redirect'
+GROUP BY old_host FORMAT JSON
+```
+
+那個數字降到零之前，舊網域不能拔。從舊網域轉過來的 referer 不算站外來源（`isSelfHost`），
+不然分享歸因會把自己記成外部流量。
+
+OAuth 用的是動態註冊，新網域第一次登入時會自己註冊一組 `client_id` 存進瀏覽器本機，
+不需要事先去哪裡登記。
 
 ## 快取
 

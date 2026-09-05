@@ -17,6 +17,7 @@ import {
   type EventFields, type Pending,
 } from "./analytics";
 import { authorLine, renderHead } from "./head";
+import { HOST, LEGACY_HOSTS } from "./site";
 import { loadMine, type MineFilter } from "./mine";
 import { type Env, HttpError } from "./types";
 import { upstream, ZONES, type Zone } from "./upstream";
@@ -51,6 +52,23 @@ app.use("*", async (c, next) => {
     outcome: ev.outcome ?? (c.res.status < 400 ? "ok" : "error"),
     ...ev,
   } as EventFields);
+});
+
+/**
+ * 搬家：舊主機來的一律 301 到新家，路徑、查詢字串、雜湊全部原樣帶過去。
+ *
+ * 掛在埋點中間件之後，所以這些請求照樣進報表（`legacy_redirect`），看得出還有多少人
+ * 走舊網址進來——那個數字降到零之前，舊網域不能拔。
+ *
+ * 用 301 而不是 302：搜尋引擎才會把累積的排名轉過來，瀏覽器與抓取器也才會記住。
+ */
+app.use("*", async (c, next) => {
+  const url = new URL(c.req.url);
+  if (!LEGACY_HOSTS.includes(url.host)) return next();
+  note(c, { event: "legacy_redirect", detail: url.host, refHost: c.req.header("Referer") ? new URL(c.req.header("Referer")!).host : "" });
+  url.host = HOST;
+  url.port = "";
+  return c.redirect(url.toString(), 301);
 });
 
 app.onError((err, c) => {
