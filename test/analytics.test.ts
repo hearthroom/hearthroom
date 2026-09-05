@@ -2,7 +2,7 @@ import { SELF, createExecutionContext, env, waitOnExecutionContext } from "cloud
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
 import { BEACON_EVENTS, clientKind, refHostOf, safeSubject, shapeTerm, surfaceOf } from "../src/analytics";
-import { HOST, MIGRATED, canonicalUrl, isSelfHost } from "../src/site";
+import { ALIAS_HOSTS, HOST, canonicalUrl, isSelfHost } from "../src/site";
 import { upsertCard } from "../src/cards";
 import { resetDb, restoreUpstream, role } from "./helpers";
 
@@ -138,12 +138,20 @@ describe("搬家", () => {
     expect(res.headers.get("Location")).toContain(`${HOST}/v1/cards`);
   });
 
-  it("轉址記一筆，看得出還有多少人走舊網址——降到零才能拔掉舊網域", async () => {
+  it("轉址記一筆並標出來源主機——舊網域那條降到零才能拔", async () => {
     const res = await SELF.fetch("https://community.johnny.moe/", { redirect: "manual" });
     await res.arrayBuffer();
-    const [ev] = seen("legacy_redirect");
+    const [ev] = seen("host_redirect");
     expect(ev!.detail).toBe("community.johnny.moe");
     expect(ev!.status).toBe(301);
+  });
+
+  it("www 也 301 到正本——一個站只該有一個正本網址", async () => {
+    const res = await SELF.fetch(`https://www.${HOST}/cards/r-1?x=1`, { redirect: "manual" });
+    await res.arrayBuffer();
+    expect(res.status).toBe(301);
+    expect(res.headers.get("Location")).toBe(`https://${HOST}/cards/r-1?x=1`);
+    expect(seen("host_redirect")[0]!.detail).toBe(`www.${HOST}`);
   });
 
   it("新網域不會被轉", async () => {
@@ -159,14 +167,16 @@ describe("搬家", () => {
     expect(refHostOf("https://discord.com/x", HOST)).toBe("discord.com");
   });
 
-  it("canonical 切過去之後一律指新家，不跟著請求走", () => {
-    expect(MIGRATED).toBe(true);
-    expect(canonicalUrl(new URL("https://community.johnny.moe/cards/r-1?x=1"))).toBe(`https://${HOST}/cards/r-1`);
+  it("canonical 永遠指正本，不跟著請求進來的主機走", () => {
+    for (const h of [`www.${HOST}`, "community.johnny.moe", HOST]) {
+      expect(canonicalUrl(new URL(`https://${h}/cards/r-1?x=1`))).toBe(`https://${HOST}/cards/r-1`);
+    }
   });
 
-  it("搬家前的主機也算自己人，referer 才不會把自己記成外部流量", () => {
-    expect(isSelfHost("community.johnny.moe")).toBe(true);
-    expect(refHostOf("https://community.johnny.moe/", HOST)).toBe("");
+  it("別名與搬家前的主機都算自己人，referer 才不會把自己記成外部流量", () => {
+    for (const h of [HOST, ...ALIAS_HOSTS]) expect(isSelfHost(h)).toBe(true);
+    expect(isSelfHost("discord.com")).toBe(false);
+    expect(refHostOf(`https://www.${HOST}/`, HOST)).toBe("");
     expect(refHostOf("https://discord.com/x", HOST)).toBe("discord.com");
   });
 

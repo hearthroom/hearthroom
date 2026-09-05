@@ -116,28 +116,39 @@ npm run deploy              # predeploy 會先跑 typecheck + 測試 + 前端 bu
 自架時要改的只有 `wrangler.toml` 的 `routes`（換成你的網域）、`src/site.ts` 的 `HOST`、
 `LUNATALK_API_BASE`，以及 `web/src/lib/site.ts` 的站台名稱。
 
+### 一個正本，其餘都轉過去
+
+`src/site.ts` 的 `HOST` 是正本網址，`ALIAS_HOSTS` 裡的一律 301 過去（路徑與查詢字串原樣帶著）。
+兩個主機都服務同一份內容，等於把排名、分享數、快取全部切成兩半，所以 `www` 也是轉不是服務。
+
+別名分兩類，機制一樣、壽命不同：`www` 永久留著；搬家前的舊網域留到沒人走為止。
+轉址記一筆 `host_redirect`，`detail` 是來源主機：
+
+```sql
+SELECT blob14 AS from_host, SUM(_sample_interval) AS n FROM hearthroom_events
+WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'host_redirect'
+GROUP BY from_host FORMAT JSON
+```
+
+舊網域那一行降到零，才把它從 `ALIAS_HOSTS`、`wrangler.toml` 的 `routes` 與 DNS 一起拔掉。
+別名主機轉過來的 referer 不算站外來源（`isSelfHost`），不然分享歸因會把自己記成外部流量。
+
 ### 換網域
 
 前端全部從 `location.origin` 推導（OAuth 的 redirect_uri、hreflang、分享連結），所以搬家只動
-三個地方：`src/site.ts` 的 `HOST`、`wrangler.toml` 的 `routes`、以及把舊主機加進 `LEGACY_HOSTS`。
+兩個地方：`src/site.ts` 的 `HOST`、`wrangler.toml` 的 `routes`。
+
+**順序不能顛倒**：先讓新網域跟舊網域**並存**，確認新家真的通了（憑證、頁面、API、分享預覽、
+靜態資源、404），才把舊主機填進 `ALIAS_HOSTS` 開轉址。倒過來做的話，新家萬一沒掛上
+（apex 上有註冊商的停放記錄、憑證還沒簽），舊家的 API 就轉向一個連不通的地方，等於把還在
+服務的站台弄掛——2026-09-05 實際踩過。
 
 **舊網域不要直接拔掉。** 這個站的成長迴圈就是分享，已經散在 Discord、X 上的卡片連結全部指著
-舊主機，拔了就是一片 404，搜尋引擎累積的排名也一起歸零。做法是把舊主機留在 `routes` 上，
-由中間件把整條路徑（含查詢字串）原樣 **301** 到新家——301 而不是 302，搜尋引擎才會轉移排名。
+舊主機，拔了就是一片 404，搜尋引擎累積的排名也一起歸零。
 
-轉址本身也記一筆 `legacy_redirect`，所以報表看得出還有多少人走舊網址進來：
-
-```sql
-SELECT blob14 AS old_host, SUM(_sample_interval) AS n FROM hearthroom_events
-WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'legacy_redirect'
-GROUP BY old_host FORMAT JSON
-```
-
-那個數字降到零之前，舊網域不能拔。從舊網域轉過來的 referer 不算站外來源（`isSelfHost`），
-不然分享歸因會把自己記成外部流量。
-
-OAuth 用的是動態註冊，新網域第一次登入時會自己註冊一組 `client_id` 存進瀏覽器本機，
-不需要事先去哪裡登記。
+Workers 的自訂網域**掛不上已有 DNS 記錄的主機名**（註冊商的停放 A 記錄最常見），要先在面板刪掉；
+`wrangler` 不會幫你刪。OAuth 用的是動態註冊，新網域第一次登入時會自己註冊一組 `client_id`
+存進瀏覽器本機，不需要事先去哪裡登記。
 
 ## 快取
 
