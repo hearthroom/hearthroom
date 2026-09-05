@@ -13,8 +13,13 @@
  */
 export const HOST = "hearthroom.club";
 
-/** 搬家前用過的主機。**填進來就等於宣告搬家完成**，見上面的兩步。 */
-export const LEGACY_HOSTS: readonly string[] = [];
+/**
+ * 搬家前用過的主機。**填進來就等於宣告搬家完成**，見上面的兩步。
+ *
+ * 2026-09-05 切過去：新家已驗過（憑證、頁面、API、分享預覽、靜態資源、404 全綠），
+ * 這時候才填。等報表裡的 legacy_redirect 降到零，再把這裡連同 wrangler.toml 的那條路由一起拔掉。
+ */
+export const LEGACY_HOSTS: readonly string[] = ["community.johnny.moe"];
 
 /** 搬家有沒有切過去。切過去之後 canonical 才改口，之前照請求進來的網域走。 */
 export const MIGRATED = LEGACY_HOSTS.length > 0;
