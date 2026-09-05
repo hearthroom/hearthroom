@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { base64FromUtf8, encodeText, isPng, readTextChunk, replaceTextChunks, utf8FromBase64, writeChunks } from "../src/lib/png-chunks";
-import { bookEntriesToDrafts, draftToTavern, embedIntoPng, formatMesExample, parseMesExample, parseTavernFile, parseWorldbookFile, tavernToDraft, worldInfoToBook, type TavernCard } from "../src/lib/tavern";
+import { bookEntriesToDrafts, draftToTavern, embedIntoPng, formatMesExample, imageFetchUrl, parseMesExample, parseTavernFile, parseWorldbookFile, tavernToDraft, worldInfoToBook, type TavernCard } from "../src/lib/tavern";
 import { makeDraft } from "../src/lib/role-draft";
 
 const LABELS = { personality: "【性格】", scenario: "【場景】" };
@@ -254,5 +254,16 @@ describe("世界書檔", () => {
 
     await expect(parseWorldbookFile(file("x.json", JSON.stringify({ spec: "chara_card_v2", data: { name: "S" } })))).rejects.toThrow("worldbook_invalid");
     await expect(parseWorldbookFile(file("x.json", "not json"))).rejects.toThrow("tavern_invalid");
+  });
+});
+
+describe("imageFetchUrl", () => {
+  const origin = "https://hearthroom.club";
+  it("同源、data:、blob: 直接抓；跨網域走同源代抓", () => {
+    expect(imageFetchUrl("https://hearthroom.club/a.png", origin)).toBe("https://hearthroom.club/a.png");
+    expect(imageFetchUrl("/local.png", origin)).toBe("/local.png");
+    expect(imageFetchUrl("blob:x", origin)).toBe("blob:x");
+    expect(imageFetchUrl("https://objects.lunatalk.ai/asset/a.png", origin)).toBe("/v1/image?u=https%3A%2F%2Fobjects.lunatalk.ai%2Fasset%2Fa.png");
+    expect(imageFetchUrl("", origin)).toBe("");
   });
 });

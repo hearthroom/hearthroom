@@ -370,6 +370,22 @@ export function draftToTavern(
   return { spec: "chara_card_v2", spec_version: "2.0", data };
 }
 
+/**
+ * 匯出時要抓頭像的位元組。同源（或 data:/blob:）直接抓；上游圖片主機沒開 CORS，
+ * 走本站 Worker 的同源代抓。
+ */
+export function imageFetchUrl(src: string, origin: string): string {
+  if (!src) return src;
+  if (src.startsWith("data:") || src.startsWith("blob:")) return src;
+  try {
+    const url = new URL(src, origin);
+    if (url.origin === origin) return src;
+    return `/v1/image?u=${encodeURIComponent(url.toString())}`;
+  } catch {
+    return src;
+  }
+}
+
 /** 把卡寫進一張 PNG 的 tEXt。圖是作者自己的頭像，所以匯出的卡看起來就是那張立繪。 */
 export function embedIntoPng(imageBytes: Uint8Array, card: TavernCard): Uint8Array {
   const encoded = base64FromUtf8(JSON.stringify(card));
