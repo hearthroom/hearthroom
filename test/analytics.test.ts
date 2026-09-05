@@ -122,6 +122,42 @@ describe("服務端事件", () => {
   });
 });
 
+describe("搬家：舊網域", () => {
+  it("整條路徑原樣 301 到新家，查詢字串跟著走", async () => {
+    const res = await SELF.fetch("https://community.johnny.moe/zh-Hans/cards/r-1?x=1", { redirect: "manual" });
+    await res.arrayBuffer();
+    expect(res.status).toBe(301);
+    expect(res.headers.get("Location")).toBe("https://hearthroom.club/zh-Hans/cards/r-1?x=1");
+  });
+
+  it("轉址也記一筆，看得出還有多少人走舊網址", async () => {
+    const res = await SELF.fetch("https://community.johnny.moe/", { redirect: "manual" });
+    await res.arrayBuffer();
+    const [ev] = seen("legacy_redirect");
+    expect(ev).toBeDefined();
+    expect(ev!.detail).toBe("community.johnny.moe");
+    expect(ev!.status).toBe(301);
+  });
+
+  it("API 也轉，不留兩個能寫入的入口", async () => {
+    const res = await SELF.fetch("https://community.johnny.moe/v1/cards?zone=zh", { redirect: "manual" });
+    await res.arrayBuffer();
+    expect(res.status).toBe(301);
+    expect(res.headers.get("Location")).toContain("hearthroom.club/v1/cards");
+  });
+
+  it("新網域照常，不會被轉", async () => {
+    const res = await SELF.fetch("https://hearthroom.club/v1/cards?zone=zh", { redirect: "manual" });
+    await res.arrayBuffer();
+    expect(res.status).toBe(200);
+  });
+
+  it("從舊網域轉過來的 referer 不算站外來源", () => {
+    expect(refHostOf("https://community.johnny.moe/", "hearthroom.club")).toBe("");
+    expect(refHostOf("https://discord.com/x", "hearthroom.club")).toBe("discord.com");
+  });
+});
+
 describe("beacon 端點", () => {
   const post = (body: unknown, headers: Record<string, string> = {}) =>
     hit("/v1/e", { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) });
