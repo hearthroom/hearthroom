@@ -20,15 +20,12 @@ run_worker_first = ["/v1/*", "/cards/*", "/authors/*", "/zh-Hans/cards/*", "/zh-
 
 # 行為埋點。CF Web Analytics 管「有多少人來」，這個資料集管「他們做了什麼」。
 #
-# 先註解掉：Analytics Engine 要在 Cloudflare 面板上一次性啟用（Workers → Analytics Engine），
-# 沒啟用時 wrangler 會拒絕整個 deploy——那會連帶擋住任何緊急修復，代價太大。
-# 啟用之後把下面三行的註解拿掉再部署，事件就開始流了；在那之前 emit() 判空靜默跳過，
-# 端點、X-From、beacon 全都照常運作，只是不寫任何資料點。
-# 分叉的人同理：沒配這一段也能跑。
-#
-# [[analytics_engine_datasets]]
-# binding = "EVENTS"
-# dataset = "taproom_events"
+# 帳號要先在面板啟用 Analytics Engine（Workers → Analytics Engine），否則 wrangler 會拒絕
+# 整個 deploy。資料集不必手動建，第一次寫入時自動出現。
+# 分叉的人沒配這一段也能跑：emit() 判空後靜默跳過，端點、X-From、beacon 照常運作。
+[[analytics_engine_datasets]]
+binding = "EVENTS"
+dataset = "taproom_events"
 
 [vars]
 # 上游的開放 API。這裡對它只有兩種呼叫：轉發作者 token 問身分、以游客讀卡片公開資訊。
