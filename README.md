@@ -273,10 +273,15 @@ GROUP BY surface ORDER BY views DESC FORMAT JSON
 橫向對比（搜尋來的人比榜單來的人更愛點嗎），不是看絕對值。同理，排序鍵分布因為
 `Cache-Control: max-age=60` 會被瀏覽器快取截斷，它是「會話首次選擇分布」不是「點擊分布」。
 
-### 自架
+### 啟用
 
-沒有 `[[analytics_engine_datasets]]` 綁定也能跑：程式碼判空後靜默跳過，不是錯誤。要整個關掉就把
-`ANALYTICS_ENABLED` 設成 `"false"`。綁定是按帳號的，分叉寫進自己的資料集，結構上不會回傳給任何人。
+Analytics Engine 要在 Cloudflare 面板上一次性啟用（Workers → Analytics Engine），**否則 wrangler 會
+拒絕整個 deploy**——所以 `wrangler.toml` 裡的綁定目前是註解掉的，免得連帶擋住緊急修復。啟用之後
+把那三行的註解拿掉再部署，事件就開始流了。
+
+在那之前一切照常運作：`/v1/e` 收得下請求、`X-From` 照送、程式碼跑完整條路徑，只是 `emit()` 判空後
+不寫任何資料點。這也是自架的預設狀態——沒配綁定不是錯誤。要連呼叫都省掉就把 `ANALYTICS_ENABLED`
+設成 `"false"`。綁定是按帳號的，分叉寫進自己的資料集，結構上不會回傳給任何人。
 
 ## 可觀測性
 
