@@ -1,32 +1,30 @@
 /**
- * 站台的主機身分，以及搬家用的那一個開關。
+ * 站台的主機身分。
  *
- * 搬家分兩步，順序不能顛倒：
+ * 一個站只該有一個正本網址。`HOST` 是那一個；其餘進得來的主機一律 301 過去，
+ * 兩個都服務等於把排名、分享數、快取全部切成兩半。
  *
- *   1. 新網域先跟舊網域並存。確認新家真的通了（憑證簽好、路由掛上、頁面打得開）。
- *   2. 把舊主機填進 LEGACY_HOSTS。這一步同時打開兩件事：舊網域整條路徑 301 到新家，
- *      以及 canonical 一律指向新家。
+ * 別名分兩類，機制一樣、壽命不同：
+ * - `www` 這種永久別名，一直留著。
+ * - 搬家前用過的舊網域，留到報表裡的 `host_redirect` 降到零再拔。
  *
- * 倒過來做會出事：新家萬一沒掛上（DNS 衝突、憑證還沒簽），舊家的 API 就轉向一個連不通的
- * 地方，等於把還在服務的站台弄掛，而 canonical 還會告訴搜尋引擎「正本在那個死掉的網域」。
- * 這是實際踩過的坑，不是假想。
+ * 搬家的順序不能顛倒：先讓新網域跟舊網域並存、確認新家真的通了（憑證、頁面、API、
+ * 分享預覽、靜態資源），才把舊主機填進 `ALIAS_HOSTS`。倒過來做的話，新家萬一沒掛上
+ * （DNS 衝突、憑證還沒簽），舊家的 API 就轉向一個連不通的地方，等於把還在服務的站台
+ * 弄掛。這是 2026-09-05 實際踩過的坑。
  */
 export const HOST = "hearthroom.club";
 
-/**
- * 搬家前用過的主機。**填進來就等於宣告搬家完成**，見上面的兩步。
- *
- * 2026-09-05 切過去：新家已驗過（憑證、頁面、API、分享預覽、靜態資源、404 全綠），
- * 這時候才填。等報表裡的 legacy_redirect 降到零，再把這裡連同 wrangler.toml 的那條路由一起拔掉。
- */
-export const LEGACY_HOSTS: readonly string[] = ["community.johnny.moe"];
+export const ALIAS_HOSTS: readonly string[] = [
+  // 永久別名
+  "www.hearthroom.club",
+  // 搬家前的家（2026-09-05 起只做轉址）。等 host_redirect 降到零，
+  // 連同 wrangler.toml 的那條路由與 johnny.moe 上的 DNS 記錄一起拔掉。
+  "community.johnny.moe",
+];
 
-/** 搬家有沒有切過去。切過去之後 canonical 才改口，之前照請求進來的網域走。 */
-export const MIGRATED = LEGACY_HOSTS.length > 0;
+/** 這個主機是不是我們自己（含別名與搬家前的）。用來判斷 referer 算不算站外來源。 */
+export const isSelfHost = (host: string): boolean => host === HOST || ALIAS_HOSTS.includes(host);
 
-/** 這個主機是不是我們自己（含搬家前的）。用來判斷 referer 算不算站外來源。 */
-export const isSelfHost = (host: string): boolean => host === HOST || LEGACY_HOSTS.includes(host);
-
-/** 這一頁的正本網址。搬家切過去之後永遠指向新家，不跟著請求的網域走。 */
-export const canonicalUrl = (url: URL): string =>
-  MIGRATED ? `https://${HOST}${url.pathname}` : url.origin + url.pathname;
+/** 這一頁的正本網址。永遠指向 `HOST`，不跟著請求進來的主機走。 */
+export const canonicalUrl = (url: URL): string => `https://${HOST}${url.pathname}`;

@@ -17,7 +17,7 @@ import {
   type EventFields, type Pending,
 } from "./analytics";
 import { authorLine, renderHead } from "./head";
-import { HOST, LEGACY_HOSTS, canonicalUrl } from "./site";
+import { ALIAS_HOSTS, HOST, canonicalUrl } from "./site";
 import { loadMine, type MineFilter } from "./mine";
 import { type Env, HttpError } from "./types";
 import { upstream, ZONES, type Zone } from "./upstream";
@@ -55,17 +55,17 @@ app.use("*", async (c, next) => {
 });
 
 /**
- * 搬家：舊主機來的一律 301 到新家，路徑、查詢字串、雜湊全部原樣帶過去。
+ * 別名主機（www、搬家前的舊網域）來的一律 301 到正本，路徑與查詢字串原樣帶過去。
  *
- * 掛在埋點中間件之後，所以這些請求照樣進報表（`legacy_redirect`），看得出還有多少人
- * 走舊網址進來——那個數字降到零之前，舊網域不能拔。
+ * 掛在埋點中間件之後，所以這些請求照樣進報表（`host_redirect`，`detail` 是來源主機），
+ * 看得出還有多少人走舊網址進來——那個數字降到零之前，舊網域不能拔。
  *
  * 用 301 而不是 302：搜尋引擎才會把累積的排名轉過來，瀏覽器與抓取器也才會記住。
  */
 app.use("*", async (c, next) => {
   const url = new URL(c.req.url);
-  if (!LEGACY_HOSTS.includes(url.host)) return next();
-  note(c, { event: "legacy_redirect", detail: url.host, refHost: c.req.header("Referer") ? new URL(c.req.header("Referer")!).host : "" });
+  if (!ALIAS_HOSTS.includes(url.host)) return next();
+  note(c, { event: "host_redirect", detail: url.host, refHost: c.req.header("Referer") ? new URL(c.req.header("Referer")!).host : "" });
   url.host = HOST;
   url.port = "";
   return c.redirect(url.toString(), 301);
