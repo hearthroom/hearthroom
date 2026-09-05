@@ -17,8 +17,12 @@ export interface WorldbookEntryDraft {
   name: string;
   content: string;
   keywords: string[];
+  /** AND 門：非空時，關鍵詞命中之外還要有其中一個出現才觸發。對應酒館卡的 secondary_keys。 */
+  secondaryKeywords: string[];
   isEnabled: boolean;
   isConstant: boolean;
+  /** 上游統計的「被帶進對話幾次」。只讀，新條目沒有。 */
+  activationCount?: number;
 }
 
 export interface RoleDraft {
@@ -27,6 +31,8 @@ export interface RoleDraft {
   language: string;
   /** 玩家在這張卡裡的稱呼，對應 {{user}}。 */
   userName: string;
+  /** 性別：man / women / other，空字串＝未設定。拼法是站內既有的，不能改。 */
+  roleSex: string;
   roleDesc: string;
   roleTag: string[];
   roleAvatar: string;
@@ -54,6 +60,7 @@ export const makeDraft = (language: string): RoleDraft => ({
   roleName: "",
   language,
   userName: "",
+  roleSex: "",
   roleDesc: "",
   roleTag: [],
   roleAvatar: "",
@@ -146,6 +153,7 @@ export function draftFromRoleDetail(raw: Record<string, unknown>, fallbackLangua
   const draft = makeDraft(str(raw.language) || fallbackLanguage);
   draft.roleName = str(raw.roleName);
   draft.userName = str(raw.userName);
+  draft.roleSex = str(raw.roleSex);
   draft.roleDesc = str(raw.roleDesc);
   draft.roleTag = readTags(raw.roleTag);
   draft.roleAvatar = str(raw.roleAvatar);
@@ -166,6 +174,7 @@ export interface RoleDocumentFields {
   roleDesc?: string;
   roleTag?: string[];
   userName?: string;
+  roleSex?: string;
   roleAvatar?: string;
   roleBackground?: string;
   roleDetailDesc?: string;
@@ -178,6 +187,7 @@ const TEXT_FIELDS = [
   "roleName",
   "roleDesc",
   "userName",
+  "roleSex",
   "roleAvatar",
   "roleBackground",
   "roleDetailDesc",

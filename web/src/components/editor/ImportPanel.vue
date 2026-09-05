@@ -5,13 +5,11 @@
  * 兩階段：先解析並列出「哪些東西沒能帶過來」，作者確認之後才蓋掉表單。中間不自動套用——
  * 匯入會覆寫整份草稿，而作者可能已經打了半天字。
  *
- * 次要關鍵詞給作者自己選：酒館是「主關鍵詞 AND 次關鍵詞」才觸發，本站只有一組關鍵詞，
- * 併過去就變成 OR，條目會比作者本意更常被觸發。這是一個取捨而不是一個轉換，
- * 所以擺在畫面上讓他決定，預設不併。
+ * 次要關鍵詞直接落到條目的 AND 門，跟酒館同一個語意，不再需要作者選要不要併。
  */
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { parseTavernFile, tavernToDraft, type ImportResult, type TavernBookEntry, type TavernCard } from "@/lib/tavern";
+import { parseTavernFile, tavernToDraft, type ImportResult, type TavernCard } from "@/lib/tavern";
 
 const props = defineProps<{ language: string }>();
 const emit = defineEmits<{ apply: [ImportResult] }>();
@@ -22,7 +20,6 @@ const input = ref<HTMLInputElement | null>(null);
 const dragging = ref(false);
 const error = ref("");
 const preview = ref<ImportResult | null>(null);
-const mergeSecondary = ref(false);
 const raw = ref<TavernCard | null>(null);
 const rawImage = ref<Blob | null>(null);
 
@@ -39,17 +36,6 @@ function build() {
     image: rawImage.value,
     labels: { personality: t("import.label.personality"), scenario: t("import.label.scenario") },
   });
-  if (mergeSecondary.value && result.worldbook) {
-    const entries = (raw.value.data?.character_book?.entries ?? []) as TavernBookEntry[];
-    // 條目經過 content 為空的過濾，所以不能用索引對位；照關鍵詞第一個字比對太脆弱，
-    // 改成走一次原始清單、只挑有內容的，順序與過濾規則跟 tavernToDraft 一致。
-    const withContent = entries.filter((e) => typeof e.content === "string" && e.content.trim());
-    result.worldbook.entries = result.worldbook.entries.map((entry, index) => {
-      const secondary = (withContent[index]?.secondary_keys ?? []).map((k) => String(k).trim()).filter(Boolean);
-      return secondary.length ? { ...entry, keywords: [...new Set([...entry.keywords, ...secondary])] } : entry;
-    });
-    result.dropped = result.dropped.filter((note) => note.key !== "import.drop.secondaryKeys");
-  }
   preview.value = result;
 }
 
@@ -102,9 +88,6 @@ watch(rawImage, (image) => {
 });
 onBeforeUnmount(() => { if (thumb.value) URL.revokeObjectURL(thumb.value); });
 
-const hasSecondary = computed(() =>
-  ((raw.value?.data?.character_book?.entries ?? []) as TavernBookEntry[]).some((e) => (e.secondary_keys ?? []).length),
-);
 </script>
 
 <template>
@@ -147,14 +130,6 @@ const hasSecondary = computed(() =>
         <li v-if="preview.image">{{ $t("import.landed.image") }}</li>
       </ul>
 
-      <label v-if="hasSecondary" class="toggle">
-        <input v-model="mergeSecondary" type="checkbox" @change="build" />
-        <span>
-          {{ $t("import.mergeSecondary") }}
-          <em class="subtle">{{ $t("import.mergeSecondary.hint") }}</em>
-        </span>
-      </label>
-
       <div v-if="preview.dropped.length" class="dropped">
         <p class="subtle strong">{{ $t("import.dropped.title") }}</p>
         <ul>
@@ -188,7 +163,5 @@ const hasSecondary = computed(() =>
 .landed { margin: 0; padding-left: 1.1em; display: grid; gap: 4px; color: var(--text-2); font-size: 13px; }
 .dropped ul { margin: var(--s-1) 0 0; padding-left: 1.1em; display: grid; gap: 4px; }
 .strong { font-weight: 600; color: var(--text-2); }
-.toggle { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--text-2); }
-.toggle em { display: block; font-style: normal; }
 .acts { display: flex; gap: var(--s-2); }
 </style>
