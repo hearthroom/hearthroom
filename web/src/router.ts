@@ -2,6 +2,7 @@ import { nextTick } from "vue";
 import { createRouter, createWebHistory } from "vue-router";
 import { LOCALE_CODES, SOURCE_LOCALE, applyLocale, detectLocale, pageTitle, updateHreflang } from "./lib/i18n";
 import { useSession } from "./lib/session";
+import { setSurface } from "./lib/track";
 
 /**
  * 語言放在網址路徑裡，不是 localStorage。
@@ -87,6 +88,22 @@ router.beforeEach(async (to) => {
  * 換頁後把焦點放到主內容上。鍵盤與讀屏使用者點了連結，焦點不該留在上一頁那顆
  * 已經不存在的按鈕上；main 有 tabindex=-1，能接焦點但不進 Tab 順序。
  */
+/** 路由 → 來源標記。API 請求帶著它，服務端才知道這次瀏覽是從哪一頁走過來的。 */
+function surfaceOf(path: string): string {
+  const bare = "/" + path.replace(/^\/(zh-Hans|en|ja|ko)(?=\/|$)/, "").replace(/^\//, "");
+  if (bare === "/") return "board";
+  if (bare.startsWith("/search")) return "search";
+  if (bare.startsWith("/cards")) return "card";
+  if (bare.startsWith("/authors")) return "author";
+  if (bare.startsWith("/mine")) return "mine";
+  if (bare.startsWith("/create")) return "create";
+  if (bare.startsWith("/wallet")) return "wallet";
+  return "404";
+}
+
+// 先於任何 API 請求設好：beforeEach 的下游就是頁面元件的 setup，那裡才開始 fetch
+router.beforeEach((to) => { setSurface(surfaceOf(to.path)); });
+
 router.afterEach((to, from) => {
   if (to.path === from.path) return;
   void nextTick(() => document.querySelector<HTMLElement>("main")?.focus({ preventScroll: true }));
