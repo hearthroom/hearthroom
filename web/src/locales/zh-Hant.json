@@ -302,5 +302,17 @@
   "export.png": "匯出 PNG",
   "export.json": "匯出 JSON",
   "export.pngFallback": "拿不到頭像，已改存成 JSON。",
-  "state.uploadFailed": "圖片上傳失敗，換一張或稍後再試。"
+  "state.uploadFailed": "圖片上傳失敗，換一張或稍後再試。",
+  "editor.section.missing": "缺必填",
+  "editor.section.filled": "已填",
+  "editor.preview": "預覽",
+  "editor.draftRestored": "已恢復上次沒儲存的草稿。",
+  "editor.draftDiscard": "清空重來",
+  "import.landed.image": "自帶立繪 1 張，會當作頭像",
+  "import.avatarFailed": "立繪沒能上傳，請到「形象」重新選圖。",
+  "import.drop.tags": "多出來的 {n} 個標籤。本站一張卡最多 10 個，只留了前 10 個。",
+  "import.drop.regex": "{n} 條正則腳本（狀態欄、美化面板這類）。本站不執行正則，對話樣式由主題決定。",
+  "wb.import": "匯入世界書檔",
+  "wb.import.error": "這個檔案裡沒有世界書條目。支援酒館匯出的世界書 JSON，或帶世界書的角色卡。",
+  "wb.import.done": "匯入了 {n} 條，接在原有條目後面。"
 }

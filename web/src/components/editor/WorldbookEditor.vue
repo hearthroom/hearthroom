@@ -10,9 +10,11 @@
  * 這兩個是上游真的會執行的語意，其餘（酒館卡的次要關鍵詞、插入位置、掃描深度）
  * 上游沒有對應機制，匯入時會列在報告裡而不是偷偷塞進某個欄位。
  */
+import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { confirmDialog } from "@/lib/confirm";
 import type { WorldbookEntryDraft } from "@/lib/role-draft";
+import { parseWorldbookFile, type DropNote } from "@/lib/tavern";
 
 const props = defineProps<{
   modelValue: WorldbookEntryDraft[];
@@ -25,6 +27,8 @@ const emit = defineEmits<{
   "update:modelValue": [WorldbookEntryDraft[]];
   "update:bookName": [string];
   create: [];
+  /** 從酒館世界書檔（或一張卡）匯入了幾條。沒綁書時由外面順手把書建起來。 */
+  imported: [{ name: string; entries: WorldbookEntryDraft[] }];
 }>();
 
 const { t } = useI18n();
@@ -49,6 +53,42 @@ async function remove(index: number) {
   commit(props.modelValue.filter((_, i) => i !== index));
 }
 
+/**
+ * 匯入酒館的世界書檔。條目接在現有條目後面，不覆蓋——作者可能已經手寫了幾條，
+ * 而世界書本來就是可以一本一本併起來的東西。丟掉的欄位跟卡片匯入一樣列出來。
+ */
+const fileInput = ref<HTMLInputElement | null>(null);
+const importError = ref("");
+const importReport = ref<DropNote[]>([]);
+const importedCount = ref(0);
+const IMPORT_ERRORS: Record<string, string> = {
+  tavern_invalid: "import.error.invalid",
+  tavern_no_metadata: "import.error.noMetadata",
+  worldbook_invalid: "wb.import.error",
+};
+async function onImportFile(event: Event) {
+  const target = event.target as HTMLInputElement;
+  const file = target.files?.[0];
+  target.value = "";
+  if (!file) return;
+  importError.value = "";
+  importReport.value = [];
+  importedCount.value = 0;
+  try {
+    const parsed = await parseWorldbookFile(file);
+    if (!parsed.entries.length) throw new Error("worldbook_invalid");
+    // 空條目（按了「加一條」還沒填的）讓位給匯入的，不然會夾一格空的在中間
+    const kept = props.modelValue.filter((e) => e.content.trim() || e.entryId);
+    const entries = [...kept, ...parsed.entries];
+    emit("imported", { name: parsed.name, entries });
+    importedCount.value = parsed.entries.length;
+    importReport.value = parsed.dropped;
+  } catch (err) {
+    const code = err instanceof Error ? err.message : "";
+    importError.value = t(IMPORT_ERRORS[code] ?? "wb.import.error");
+  }
+}
+
 const keywordsText = (entry: WorldbookEntryDraft) => entry.keywords.join("、");
 const setKeywords = (index: number, raw: string) =>
   patch(index, { keywords: raw.split(/[、,，]+/).map((k) => k.trim()).filter(Boolean) });
@@ -58,7 +98,10 @@ const setKeywords = (index: number, raw: string) =>
   <section class="wb">
     <div v-if="!bound" class="empty panel">
       <p class="muted">{{ $t("wb.empty") }}</p>
-      <button type="button" class="btn btn--sm" @click="emit('create')">{{ $t("wb.create") }}</button>
+      <div class="empty__acts">
+        <button type="button" class="btn btn--sm" @click="emit('create')">{{ $t("wb.create") }}</button>
+        <button type="button" class="btn btn--sm btn--ghost" @click="fileInput?.click()">{{ $t("wb.import") }}</button>
+      </div>
     </div>
 
     <template v-else>
@@ -116,14 +159,29 @@ const setKeywords = (index: number, raw: string) =>
         </li>
       </ul>
 
-      <button type="button" class="btn btn--sm" @click="add">{{ $t("wb.entry.add") }}</button>
+      <div class="acts">
+        <button type="button" class="btn btn--sm" @click="add">{{ $t("wb.entry.add") }}</button>
+        <button type="button" class="btn btn--sm btn--ghost" @click="fileInput?.click()">{{ $t("wb.import") }}</button>
+      </div>
     </template>
+
+    <input ref="fileInput" type="file" accept=".png,.json,image/png,application/json" class="sr-only" @change="onImportFile" />
+    <p v-if="importError" class="notice notice--error" role="alert">{{ importError }}</p>
+    <div v-else-if="importedCount" class="notice" role="status">
+      {{ $t("wb.import.done", { n: importedCount }) }}
+      <ul v-if="importReport.length" class="report">
+        <li v-for="(note, i) in importReport" :key="i">{{ $t(note.key, note.params ?? {}) }}</li>
+      </ul>
+    </div>
   </section>
 </template>
 
 <style scoped>
 .empty { display: flex; gap: var(--s-3); align-items: center; justify-content: space-between; padding: var(--s-4); }
 .empty .muted { margin: 0; }
+.empty__acts, .acts { display: flex; gap: var(--s-2); flex-wrap: wrap; }
+.wb > .notice { margin-top: var(--s-3); }
+.report { margin: var(--s-1) 0 0; padding-left: 1.1em; display: grid; gap: 2px; font-size: 12.5px; }
 .count { display: block; margin: 0 0 var(--s-2); }
 .entries { list-style: none; margin: 0 0 var(--s-3); padding: 0; display: grid; gap: var(--s-3); }
 .entry { padding: var(--s-3); display: grid; gap: var(--s-3); }

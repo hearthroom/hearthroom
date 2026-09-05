@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { base64FromUtf8, encodeText, isPng, readTextChunk, replaceTextChunks, utf8FromBase64, writeChunks } from "../src/lib/png-chunks";
-import { draftToTavern, embedIntoPng, formatMesExample, parseMesExample, parseTavernFile, tavernToDraft, type TavernCard } from "../src/lib/tavern";
+import { bookEntriesToDrafts, draftToTavern, embedIntoPng, formatMesExample, parseMesExample, parseTavernFile, parseWorldbookFile, tavernToDraft, worldInfoToBook, type TavernCard } from "../src/lib/tavern";
 import { makeDraft } from "../src/lib/role-draft";
 
 const LABELS = { personality: "【性格】", scenario: "【場景】" };
@@ -192,5 +192,67 @@ describe("draft → tavern", () => {
     await expect(parseTavernFile(new File([barePng().slice().buffer], "x.png", { type: "image/png" }))).rejects.toThrow(
       "tavern_no_metadata",
     );
+  });
+});
+
+describe("匯入報告：不靜默丟掉的東西", () => {
+  const card = (data: Record<string, unknown>): TavernCard => ({ spec: "chara_card_v2", spec_version: "2.0", data });
+
+  it("標籤超過十個：只留前十個，多的進報告", () => {
+    const tags = Array.from({ length: 16 }, (_, i) => `t${i}`);
+    const result = tavernToDraft(card({ name: "A", tags }), { language: "zh-Hans", labels: LABELS });
+    expect(result.draft.roleTag).toHaveLength(10);
+    expect(result.dropped).toContainEqual({ key: "import.drop.tags", params: { n: 6 } });
+  });
+
+  it("正則腳本單獨點名，其餘擴展另計", () => {
+    const result = tavernToDraft(
+      card({ name: "A", extensions: { regex_scripts: [{ id: "x" }, { id: "y" }], talkativeness: "0.5", fav: false } }),
+      { language: "zh-Hans", labels: LABELS },
+    );
+    expect(result.dropped).toContainEqual({ key: "import.drop.regex", params: { n: 2 } });
+    expect(result.dropped).toContainEqual({ key: "import.drop.extensions", params: { n: 2 } });
+  });
+});
+
+describe("世界書檔", () => {
+  /** 酒館匯出的世界書檔長這樣：entries 是以 uid 為鍵的物件，欄位名跟卡裡的 book 不同。 */
+  const worldInfo = {
+    entries: {
+      "0": { uid: 0, key: ["eldoria", "forest"], keysecondary: [], comment: "eldoria", content: "A forest.", constant: false, disable: false, position: 0 },
+      "1": { uid: 1, key: ["glade"], keysecondary: ["safe"], comment: "", content: "A glade.", constant: true, disable: true },
+      "2": { uid: 2, key: ["empty"], content: "" },
+    },
+  };
+
+  it("欄位名對回卡片規格：key→keys、keysecondary→secondary_keys、disable→enabled", () => {
+    const book = worldInfoToBook(worldInfo)!;
+    expect(book.entries).toHaveLength(3);
+    expect(book.entries![0]).toMatchObject({ keys: ["eldoria", "forest"], enabled: true, constant: false, comment: "eldoria" });
+    expect(book.entries![1]).toMatchObject({ keys: ["glade"], secondary_keys: ["safe"], enabled: false, constant: true });
+  });
+
+  it("條目轉成草稿：沒名字用註解、再沒有用第一個關鍵詞；空內容丟掉", () => {
+    const drafts = bookEntriesToDrafts(worldInfoToBook(worldInfo)!.entries!);
+    expect(drafts.map((d) => d.name)).toEqual(["eldoria", "glade"]);
+    expect(drafts[1]).toMatchObject({ isEnabled: false, isConstant: true, keywords: ["glade"] });
+  });
+
+  it("從檔案讀：世界書 JSON、帶 book 的卡、PNG 卡都行；沒有條目就報 worldbook_invalid", async () => {
+    const file = (name: string, body: string | Uint8Array) => new File([body as BlobPart], name);
+    const fromInfo = await parseWorldbookFile(file("eldoria.json", JSON.stringify(worldInfo)));
+    expect(fromInfo.entries).toHaveLength(2);
+    expect(fromInfo.dropped).toContainEqual({ key: "import.drop.secondaryKeys", params: { n: 1 } });
+
+    const cardWithBook = { spec: "chara_card_v2", spec_version: "2.0", data: { name: "S", character_book: { name: "Eldoria", entries: [{ keys: ["a"], content: "x" }] } } };
+    const fromCard = await parseWorldbookFile(file("card.json", JSON.stringify(cardWithBook)));
+    expect(fromCard.name).toBe("Eldoria");
+    expect(fromCard.entries).toEqual([{ name: "a", content: "x", keywords: ["a"], isEnabled: true, isConstant: false }]);
+
+    const png = embedIntoPng(barePng(), cardWithBook as TavernCard);
+    expect((await parseWorldbookFile(file("card.png", png))).entries).toHaveLength(1);
+
+    await expect(parseWorldbookFile(file("x.json", JSON.stringify({ spec: "chara_card_v2", data: { name: "S" } })))).rejects.toThrow("worldbook_invalid");
+    await expect(parseWorldbookFile(file("x.json", "not json"))).rejects.toThrow("tavern_invalid");
   });
 });

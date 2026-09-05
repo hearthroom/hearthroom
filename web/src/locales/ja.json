@@ -302,5 +302,17 @@
   "export.png": "PNG で書き出す",
   "export.json": "JSON で書き出す",
   "export.pngFallback": "アイコンを取得できなかったので JSON で保存しました。",
-  "state.uploadFailed": "アップロードに失敗しました。別の画像か、時間をおいて再試行を。"
+  "state.uploadFailed": "アップロードに失敗しました。別の画像か、時間をおいて再試行を。",
+  "editor.section.missing": "必須項目が未入力",
+  "editor.section.filled": "入力済み",
+  "editor.preview": "プレビュー",
+  "editor.draftRestored": "前回保存していなかった下書きを復元しました。",
+  "editor.draftDiscard": "最初からやり直す",
+  "import.landed.image": "同梱の立ち絵 1 枚をアイコンとして使います",
+  "import.avatarFailed": "立ち絵をアップロードできませんでした。「画像」で選び直してください。",
+  "import.drop.tags": "超過分のタグ {n} 個。このサイトでは 1 枚につき最大 10 個なので、先頭の 10 個だけ残しました。",
+  "import.drop.regex": "正規表現スクリプト {n} 件（ステータスバーや装飾パネルなど）。ここでは正規表現は実行されず、会話の見た目はテーマで決まります。",
+  "wb.import": "世界設定ファイルを読み込む",
+  "wb.import.error": "このファイルには世界設定の項目がありません。SillyTavern から書き出した世界設定 JSON か、世界設定付きのキャラクターカードを使ってください。",
+  "wb.import.done": "{n} 件を読み込み、既存の項目の後に追加しました。"
 }
