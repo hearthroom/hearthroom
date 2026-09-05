@@ -1,0 +1,196 @@
+import { describe, expect, it } from "vitest";
+import { base64FromUtf8, encodeText, isPng, readTextChunk, replaceTextChunks, utf8FromBase64, writeChunks } from "../src/lib/png-chunks";
+import { draftToTavern, embedIntoPng, formatMesExample, parseMesExample, parseTavernFile, tavernToDraft, type TavernCard } from "../src/lib/tavern";
+import { makeDraft } from "../src/lib/role-draft";
+
+const LABELS = { personality: "【性格】", scenario: "【場景】" };
+
+/** 最小可用的 PNG：只有 IHDR 與 IEND。夠讓 chunk 讀寫跑完整條路。 */
+function barePng(): Uint8Array {
+  const ihdr = new Uint8Array(13);
+  new DataView(ihdr.buffer).setUint32(0, 1); // width
+  new DataView(ihdr.buffer).setUint32(4, 1); // height
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  return writeChunks([
+    { type: "IHDR", data: ihdr },
+    { type: "IEND", data: new Uint8Array(0) },
+  ]);
+}
+
+describe("png chunks", () => {
+  it("寫出來的還是一張 PNG", () => {
+    expect(isPng(barePng())).toBe(true);
+  });
+
+  it("tEXt 往返後內容不變", () => {
+    const png = replaceTextChunks(barePng(), [{ keyword: "chara", text: "hello" }]);
+    expect(readTextChunk(png, "chara")).toBe("hello");
+    // 大小寫不敏感：野生的卡兩種寫法都有
+    expect(readTextChunk(png, "CHARA")).toBe("hello");
+  });
+
+  it("重寫同名 chunk 不會留下舊的那份", () => {
+    const once = replaceTextChunks(barePng(), [{ keyword: "chara", text: "old" }]);
+    const twice = replaceTextChunks(once, [{ keyword: "chara", text: "new" }]);
+    expect(readTextChunk(twice, "chara")).toBe("new");
+    // 舊值若還在，讀取端多半取第一個，於是匯出的卡帶著舊資料而且看起來完全正常
+    expect(new TextDecoder().decode(twice).includes("old")).toBe(false);
+  });
+
+  it("非 ASCII 經過 base64 往返不變", () => {
+    const value = '雨還在下。{{char}}說：「你來了。」🌧';
+    expect(utf8FromBase64(base64FromUtf8(value))).toBe(value);
+  });
+
+  it("沒有 tEXt 的 PNG 讀不到卡片資料", () => {
+    expect(readTextChunk(barePng(), "chara")).toBeNull();
+  });
+
+  it("長度欄位撒謊的 PNG 直接報錯而不是配一大塊記憶體", () => {
+    const png = barePng();
+    new DataView(png.buffer).setUint32(8, 0x7fffffff);
+    expect(() => readTextChunk(png, "chara")).toThrow("png_truncated");
+  });
+
+  it("encodeText 用 NUL 分隔關鍵字與內容", () => {
+    expect(encodeText("chara", "x").data).toEqual(Uint8Array.from([99, 104, 97, 114, 97, 0, 120]));
+  });
+});
+
+describe("mes_example", () => {
+  it("拆成一問一答，<START> 只當分隔", () => {
+    const turns = parseMesExample("<START>\n{{user}}: 你是誰\n{{char}}: 一個等雨停的人\n再等一會。");
+    expect(turns).toEqual([
+      { roleType: "user", content: "你是誰" },
+      { roleType: "ai", content: "一個等雨停的人\n再等一會。" },
+    ]);
+  });
+
+  it("拆不出任何一輪時回空陣列，讓呼叫端進報告", () => {
+    expect(parseMesExample("他站在雨裡，什麼也沒說。")).toEqual([]);
+  });
+
+  it("往返回酒館格式", () => {
+    const turns = parseMesExample("{{user}}: hi\n{{char}}: hey");
+    expect(parseMesExample(formatMesExample(turns))).toEqual(turns);
+  });
+});
+
+describe("tavern → draft", () => {
+  const card: TavernCard = {
+    spec: "chara_card_v2",
+    spec_version: "2.0",
+    data: {
+      name: "雨宮",
+      description: "在舊碼頭開店的人。",
+      personality: "話少，記性好。",
+      scenario: "連下了三天的雨。",
+      creator_notes: "適合慢節奏的對話。",
+      first_mes: "門鈴響了。",
+      alternate_greetings: ["你又來了。"],
+      mes_example: "{{user}}: 老樣子\n{{char}}: 知道了",
+      system_prompt: "回覆兩段以內。",
+      post_history_instructions: "別替玩家說話。",
+      tags: ["日常", "懸疑"],
+      creator: "someone",
+      nickname: "老闆",
+      extensions: { risu: { x: 1 } },
+      character_book: {
+        name: "碼頭",
+        entries: [
+          { keys: ["舊碼頭"], secondary_keys: ["夜裡"], content: "退潮時看得到沉船。", enabled: true, position: "before_char" },
+          { keys: ["雨"], content: "" },
+        ],
+      },
+    },
+  };
+
+  it("欄位落到對得上的地方", () => {
+    const { draft } = tavernToDraft(card, { language: "zh-Hant", labels: LABELS });
+    expect(draft.roleName).toBe("雨宮");
+    expect(draft.roleDesc).toBe("適合慢節奏的對話。");
+    expect(draft.roleWelcome).toBe("門鈴響了。");
+    expect(draft.alternates).toEqual(["你又來了。"]);
+    expect(draft.roleOutputContract).toBe("回覆兩段以內。");
+    expect(draft.jailbreak).toBe("別替玩家說話。");
+    expect(draft.roleTag).toEqual(["日常", "懸疑"]);
+    expect(draft.talkExample).toHaveLength(2);
+  });
+
+  it("三段人設合成一份，加小標題分開", () => {
+    const { draft } = tavernToDraft(card, { language: "zh-Hant", labels: LABELS });
+    expect(draft.roleDetailDesc).toBe("在舊碼頭開店的人。\n\n【性格】\n話少，記性好。\n\n【場景】\n連下了三天的雨。");
+  });
+
+  it("世界書另外成一本，沒內容的條目不留", () => {
+    const { worldbook } = tavernToDraft(card, { language: "zh-Hant", labels: LABELS });
+    expect(worldbook?.entries).toHaveLength(1);
+    expect(worldbook?.entries[0]).toMatchObject({ name: "舊碼頭", keywords: ["舊碼頭"], isEnabled: true });
+  });
+
+  // 靜默丟掉才是真正的傷害：作者會以為卡壞了，而不是知道少了什麼。
+  it("沒地方放的東西全部進報告", () => {
+    const { dropped } = tavernToDraft(card, { language: "zh-Hant", labels: LABELS });
+    const keys = dropped.map((d) => d.key);
+    expect(keys).toContain("import.drop.secondaryKeys");
+    expect(keys).toContain("import.drop.position");
+    expect(keys).toContain("import.drop.creator");
+    expect(keys).toContain("import.drop.nickname");
+    expect(keys).toContain("import.drop.extensions");
+  });
+
+  it("V1 的平卡（沒有 data 那一層）也讀得進來", async () => {
+    const flat = new File([JSON.stringify({ name: "阿墨", first_mes: "嗯。" })], "c.json", { type: "application/json" });
+    const { card: parsed } = await parseTavernFile(flat);
+    expect(parsed.data.name).toBe("阿墨");
+  });
+
+  it("不是角色卡的 JSON 報 tavern_invalid", async () => {
+    const junk = new File([JSON.stringify({ hello: 1 })], "c.json", { type: "application/json" });
+    await expect(parseTavernFile(junk)).rejects.toThrow("tavern_invalid");
+  });
+
+  it(".charx 明確說讀不了，不假裝是壞檔", async () => {
+    const charx = new File([new Uint8Array([0x50, 0x4b, 3, 4])], "c.charx");
+    await expect(parseTavernFile(charx)).rejects.toThrow("tavern_charx_unsupported");
+  });
+});
+
+describe("draft → tavern", () => {
+  it("匯出後再匯入，作者填的東西還在", () => {
+    const draft = makeDraft("zh-Hant");
+    draft.roleName = "雨宮";
+    draft.roleDesc = "慢節奏。";
+    draft.roleDetailDesc = "在舊碼頭開店的人。";
+    draft.roleWelcome = "門鈴響了。";
+    draft.alternates = ["你又來了。"];
+    draft.roleTag = ["日常"];
+    draft.talkExample = [{ roleType: "user", content: "老樣子" }, { roleType: "ai", content: "知道了" }];
+
+    const round = tavernToDraft(draftToTavern(draft), { language: "zh-Hant", labels: LABELS }).draft;
+    expect(round.roleName).toBe(draft.roleName);
+    expect(round.roleDesc).toBe(draft.roleDesc);
+    expect(round.roleDetailDesc).toBe(draft.roleDetailDesc);
+    expect(round.roleWelcome).toBe(draft.roleWelcome);
+    expect(round.alternates).toEqual(draft.alternates);
+    expect(round.roleTag).toEqual(draft.roleTag);
+    expect(round.talkExample).toEqual(draft.talkExample);
+  });
+
+  it("嵌進 PNG 之後仍讀得回同一張卡", async () => {
+    const draft = makeDraft("zh-Hant");
+    draft.roleName = "雨宮";
+    draft.roleWelcome = "門鈴響了。";
+    const png = embedIntoPng(barePng(), draftToTavern(draft));
+    const { card } = await parseTavernFile(new File([png.slice().buffer], "c.png", { type: "image/png" }));
+    expect(card.data.name).toBe("雨宮");
+    expect(card.data.first_mes).toBe("門鈴響了。");
+  });
+
+  it("PNG 裡沒有卡片資料時說清楚是「只是一張圖」", async () => {
+    await expect(parseTavernFile(new File([barePng().slice().buffer], "x.png", { type: "image/png" }))).rejects.toThrow(
+      "tavern_no_metadata",
+    );
+  });
+});
