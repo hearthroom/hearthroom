@@ -207,16 +207,15 @@ FTS5 + **trigram** tokenizer。`unicode61` 不切中日韓詞，整句會變成�
 ## 對話舞台（stage/）
 
 卡片頁的「開始對話」走站內 `/play/:roleId`，畫布是 [Moonstage](https://github.com/lunatalkai/moonstage)——
-LunaTalk 的開源對話舞台。它以子模組 `stage/` 掛進來，指向我們的 fork
-[hearthroom/moonstage](https://github.com/hearthroom/moonstage)。
+LunaTalk 的開源對話舞台。它以子模組 `stage/` 直接掛上游，釘在一個 commit；本站沒有自己的 fork。
 
-分工（2026-09 與 Moonstage 維護者對齊）：**上游永遠是主線**，程式碼改動一律往上游提；fork 跟上游的差別只有
-「當套件 build」這一層（`src/stage/`、`vite.stage.config.ts`），發版前把上游同步回 fork：
+舞台當套件用的那一層（`src/stage/`、`vite.stage.config.ts`、`npm run build:stage`）由上游提供，任何站台都能拿去嵌。
+程式碼改動一律往上游提；要跟上上游就更新指標：
 
 ```sh
 git submodule update --init stage     # 第一次
 npm run build:stage                   # 在 stage/ 裝依賴、打出 stage/dist-stage/
-npm run sync:stage                    # 發版前：併上游 main、跑測試、重新 build，之後推 fork、更新子模組指標
+npm run sync:stage                    # 拉上游 main、跑測試、重新 build，之後提交子模組指標
 ```
 
 本站不把它裝成 npm 依賴（它自己有六百多個依賴，沒必要進本站的 lock）：`web/vite.config.ts` 用 alias 把
