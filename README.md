@@ -253,6 +253,11 @@ VITE_LUNATALK_API_BASE=http://127.0.0.1:8899 npm run dev:web
 
 ## 部署
 
+push 到 `main` 就會部署：GitHub Actions（`.github/workflows/deploy.yml`）跑 typecheck、建置、
+測試，通過後套資料庫遷移再 `wrangler deploy`。倉庫要有兩個 secrets：`CLOUDFLARE_API_TOKEN`
+（Workers Scripts、D1、zone 的 DNS 與 Workers Routes 編輯）與 `CLOUDFLARE_ACCOUNT_ID`；
+沒設的話部署步驟會跳過，CI 仍照常驗證。手動部署仍然可以：
+
 ```bash
 npm run migrate:remote
 npm run deploy              # predeploy 會先跑 typecheck + 測試 + 前端 build
