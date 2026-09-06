@@ -31,19 +31,27 @@ export interface RegexRuleSet {
    * 魅魔島的作法相同：整頁只渲染一次，不是接在訊息後面。
    */
   statusbar: string;
-  /** 降低層級：勾了就放到輸入框之下（預設在頁面最上層）。對應魅魔島的 pageDepth。 */
+  /** 降低層級：勾了就放到輸入框之下（預設在頁面最上層）。對應魅魔島的 pageDepth、上游的 mountLayer=under。 */
   lowered: boolean;
+  /** 上游還有第三層 cover（蓋整個畫面）；本站編輯器不提供，但讀到了要原樣存回去。 */
+  mountLayer?: "cover";
+  /** 上游的頁面模式（classic / immersive）；同樣只是帶著走。 */
+  pageMode?: string;
 }
 
+/** 上限對齊上游作者資產：單條替換 32 KB、整份 1 MB，都以 UTF-8 位元組計。 */
 export const REGEX_LIMITS = {
   rules: 100,
   name: 40,
   find: 1000,
-  replace: 20000,
+  /** 單條替換內容（位元組）。 */
+  replaceBytes: 32 * 1024,
   statusbar: 4000,
   /** 整份 JSON 的上限（位元組）。 */
-  total: 600_000,
+  total: 1024 * 1024,
 } as const;
+
+export const utf8Bytes = (s: string): number => new TextEncoder().encode(s).length;
 
 export const emptyRuleSet = (): RegexRuleSet => ({ version: 1, rules: [], statusbar: "", lowered: false });
 
@@ -111,11 +119,11 @@ export function validateRuleSet(set: RegexRuleSet): RuleIssue[] {
     if (!rule.find.trim()) issues.push({ ruleId: rule.id, key: "regex.issue.emptyFind" });
     if ([...rule.name].length > REGEX_LIMITS.name) issues.push({ ruleId: rule.id, key: "regex.issue.nameLong", params: { max: REGEX_LIMITS.name } });
     if ([...rule.find].length > REGEX_LIMITS.find) issues.push({ ruleId: rule.id, key: "regex.issue.findLong", params: { max: REGEX_LIMITS.find } });
-    if ([...rule.replace].length > REGEX_LIMITS.replace) issues.push({ ruleId: rule.id, key: "regex.issue.replaceLong", params: { max: REGEX_LIMITS.replace } });
+    if (utf8Bytes(rule.replace) > REGEX_LIMITS.replaceBytes) issues.push({ ruleId: rule.id, key: "regex.issue.replaceLong", params: { max: REGEX_LIMITS.replaceBytes / 1024 } });
     if (parseFind(rule.find) instanceof Error) issues.push({ ruleId: rule.id, key: "regex.issue.badRegex" });
   }
   if ([...set.statusbar].length > REGEX_LIMITS.statusbar) issues.push({ ruleId: "", key: "regex.issue.statusbarLong", params: { max: REGEX_LIMITS.statusbar } });
-  if (new TextEncoder().encode(JSON.stringify(set)).length > REGEX_LIMITS.total) issues.push({ ruleId: "", key: "regex.issue.totalLong" });
+  if (utf8Bytes(JSON.stringify(set)) > REGEX_LIMITS.total) issues.push({ ruleId: "", key: "regex.issue.totalLong" });
   return issues;
 }
 
@@ -181,4 +189,34 @@ export function ruleSetFromImport(raw: unknown): { set: RegexRuleSet; welcome: s
 
 export function ruleSetToExport(set: RegexRuleSet, welcome: string): MeimoRegexFile {
   return { pageDepth: set.lowered ? 2 : 1, statusbar: set.statusbar, beginning: welcome, regex_scripts: rulesToTavern(set.rules) };
+}
+
+// ── 上游的「作者資產」形狀 ──────────────────────────────────────────────
+
+/** 上游存的形狀：規則同形，功能欄叫 mountTrigger，層級叫 mountLayer（under / over / cover）。 */
+export interface AuthorAssetLike {
+  rules?: unknown;
+  mountTrigger?: string;
+  mountLayer?: string;
+  pageMode?: string;
+}
+
+export function ruleSetFromAuthorAsset(asset: AuthorAssetLike): RegexRuleSet {
+  const native = ruleSetFromNative({ rules: Array.isArray(asset.rules) ? asset.rules : [] }) ?? emptyRuleSet();
+  const layer = text(asset.mountLayer);
+  const set: RegexRuleSet = { ...native, statusbar: text(asset.mountTrigger), lowered: layer === "under" };
+  if (layer === "cover") set.mountLayer = "cover";
+  if (text(asset.pageMode)) set.pageMode = text(asset.pageMode);
+  return set;
+}
+
+export function ruleSetToAuthorAsset(set: RegexRuleSet, version: number): Required<AuthorAssetLike> & { rules: RegexRule[]; version: number } {
+  const mountLayer = set.lowered ? "under" : set.mountLayer === "cover" ? "cover" : "over";
+  return {
+    rules: set.rules.map((r) => ({ id: r.id, name: r.name, find: r.find, replace: r.replace, enabled: r.enabled })),
+    mountTrigger: set.statusbar,
+    mountLayer,
+    pageMode: set.pageMode ?? "",
+    version,
+  };
 }

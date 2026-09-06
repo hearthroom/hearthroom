@@ -478,23 +478,42 @@ export async function fetchWorldbookEntries(worldbookId: string, token: string):
 }
 
 /** 角色的正則規則文件。沒有規則時 doc 是 null、version 是 0。 */
-export async function fetchRegexRules(roleId: string, token: string): Promise<{ doc: unknown; version: number }> {
-  const body = await json<{ doc?: unknown; version?: number }>(
-    await fetch(`${UPSTREAM_API}/open/v1/role/regex-rules?roleId=${encodeURIComponent(roleId)}`, { headers: authHeaders(token) }),
-  );
-  return { doc: body.doc ?? null, version: body.version ?? 0 };
+/**
+ * 作者資產：上游對「正則規則 + 功能欄」的稱呼。rules 是逐條「找到→換成」，
+ * mountTrigger 是功能欄那串標記，mountLayer 是它掛在哪一層（under = 輸入框之下）。
+ * 沒設過回 status=none、version=0。
+ */
+export interface AuthorAsset {
+  rules: unknown[];
+  mountTrigger: string;
+  mountLayer: string;
+  pageMode: string;
+  status: string;
+  version: number;
+}
+const asAuthorAsset = (b: Partial<AuthorAsset>): AuthorAsset => ({
+  rules: Array.isArray(b.rules) ? b.rules : [],
+  mountTrigger: b.mountTrigger ?? "",
+  mountLayer: b.mountLayer ?? "",
+  pageMode: b.pageMode ?? "",
+  status: b.status ?? "none",
+  version: b.version ?? 0,
+});
+export async function fetchAuthorAsset(roleId: string, token: string): Promise<AuthorAsset> {
+  return asAuthorAsset(await json<Partial<AuthorAsset>>(
+    await fetch(`${UPSTREAM_API}/open/v1/role/author-asset?roleId=${encodeURIComponent(roleId)}`, { headers: authHeaders(token) }),
+  ));
 }
 
-/** 整份覆寫，帶樂觀鎖。版本不符上游回 409。 */
-export async function saveRegexRules(roleId: string, doc: unknown, version: number, token: string): Promise<number> {
-  const body = await json<{ version?: number }>(
-    await fetch(`${UPSTREAM_API}/open/v1/role/${encodeURIComponent(roleId)}/regex-rules`, {
+/** 整份覆寫，帶樂觀鎖（body.version 是讀到的版本）。版本不符上游回 409。 */
+export async function saveAuthorAsset(roleId: string, body: Omit<AuthorAsset, "status">, token: string): Promise<AuthorAsset> {
+  return asAuthorAsset(await json<Partial<AuthorAsset>>(
+    await fetch(`${UPSTREAM_API}/open/v1/role/${encodeURIComponent(roleId)}/author-asset`, {
       method: "PUT",
       headers: writeHeaders(token),
-      body: JSON.stringify({ doc, version }),
+      body: JSON.stringify(body),
     }),
-  );
-  return body.version ?? version + 1;
+  ));
 }
 
 /** 站內榜單認得的分類詞表，依維度分組。給標籤選擇器用；一律不含成人維度。 */

@@ -373,7 +373,7 @@
   "regex.issue.emptyFind": "匹配是空的",
   "regex.issue.nameLong": "名称超过 {max} 字",
   "regex.issue.findLong": "匹配超过 {max} 字",
-  "regex.issue.replaceLong": "替换内容超过 {max} 字",
+  "regex.issue.replaceLong": "替换内容超过 {max} KB",
   "regex.issue.badRegex": "正则写错了，这条不会生效",
   "regex.issue.statusbarLong": "状态栏超过 {max} 字",
   "regex.issue.totalLong": "整份规则太大了"
