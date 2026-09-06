@@ -21,8 +21,16 @@ export interface WorldbookEntryDraft {
   secondaryKeywords: string[];
   isEnabled: boolean;
   isConstant: boolean;
+  /** 酒館格式的書才有：大小寫、整詞、次要關鍵詞邏輯（0 任一／1 不是全部／2 都不／3 全部）。 */
+  matchOptions?: WorldbookMatchOptions;
   /** 上游統計的「被帶進對話幾次」。只讀，新條目沒有。 */
   activationCount?: number;
+}
+
+export interface WorldbookMatchOptions {
+  caseSensitive: boolean;
+  matchWholeWords: boolean;
+  selectiveLogic: number;
 }
 
 export interface RoleDraft {

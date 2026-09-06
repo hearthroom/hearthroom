@@ -14,7 +14,7 @@
  */
 
 import { isPng, readTextChunk, replaceTextChunks, base64FromUtf8, utf8FromBase64 } from "./png-chunks";
-import type { RoleDraft, TalkExampleEntry, WorldbookEntryDraft } from "./role-draft";
+import type { RoleDraft, TalkExampleEntry, WorldbookEntryDraft, WorldbookMatchOptions } from "./role-draft";
 import { makeDraft } from "./role-draft";
 import { rulesFromTavern, rulesToTavern, type RegexRuleSet } from "./regex-rules";
 
@@ -31,6 +31,8 @@ export interface TavernBookEntry {
   position?: string;
   case_sensitive?: boolean;
   selective?: boolean;
+  match_whole_words?: boolean;
+  selective_logic?: number;
 }
 
 export interface TavernBook {
@@ -77,7 +79,7 @@ export interface DropNote {
 export interface ImportResult {
   draft: RoleDraft;
   /** 卡裡帶的世界書。要另外建一本再綁定，所以跟草稿分開。 */
-  worldbook: { name: string; description: string; entries: WorldbookEntryDraft[] } | null;
+  worldbook: { name: string; description: string; format: "tavern"; entries: WorldbookEntryDraft[] } | null;
   /** 沒能帶過來的東西。畫面必須原樣列給作者看。 */
   dropped: DropNote[];
   /** 卡片自帶的立繪（PNG 匯入時才有），拿去當頭像與背景的預設值。 */
@@ -131,6 +133,14 @@ const list = (value: unknown): string[] =>
  * 關鍵詞欄位三種寫法都收：陣列（酒館）、JSON 字串 `'["a","b"]'`（MMD 的世界書匯出就是
  * 這樣存的，用戶回報「匯入不帶關鍵詞」的原因）、逗號分隔的純字串（舊工具）。
  */
+/** 卡內 book 的條目把酒館專屬欄位放在 extensions 底下。 */
+const ext = (row: Record<string, unknown>): Record<string, unknown> =>
+  row.extensions && typeof row.extensions === "object" ? (row.extensions as Record<string, unknown>) : {};
+const numberOr = (value: unknown, fallback: number): number => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+};
+
 const keyList = (value: unknown): string[] => {
   if (Array.isArray(value)) return list(value);
   if (typeof value !== "string" || !value.trim()) return [];
@@ -242,10 +252,24 @@ export function bookEntriesToDrafts(entries: TavernBookEntry[]): WorldbookEntryD
         secondaryKeywords: keyList(entry.secondary_keys),
         isEnabled: entry.enabled !== false,
         isConstant: entry.constant === true,
+        matchOptions: entryMatchOptions(entry),
       });
     });
   });
   return drafts;
+}
+
+/**
+ * 酒館的匹配選項。上游會照這些規則做字面命中；缺省照酒館全域預設：不分大小寫、不整詞、
+ * 次要關鍵詞「任一出現」。
+ */
+export function entryMatchOptions(entry: TavernBookEntry): WorldbookMatchOptions {
+  const logic = Number(entry.selective_logic ?? 0);
+  return {
+    caseSensitive: entry.case_sensitive === true,
+    matchWholeWords: entry.match_whole_words === true,
+    selectiveLogic: Number.isInteger(logic) && logic >= 0 && logic <= 3 ? logic : 0,
+  };
 }
 
 /** 匯入報告用：有幾條因為太長被拆開。 */
@@ -285,7 +309,9 @@ export function worldInfoToBook(raw: unknown): TavernBook | null {
         enabled: row.enabled === undefined ? row.disable !== true : row.enabled !== false,
         constant: row.constant === true,
         position: typeof row.position === "string" ? row.position : undefined,
-        case_sensitive: row.case_sensitive === true || row.caseSensitive === true,
+        case_sensitive: row.case_sensitive === true || row.caseSensitive === true || ext(row).case_sensitive === true,
+        match_whole_words: row.matchWholeWords === true || ext(row).match_whole_words === true,
+        selective_logic: numberOr(row.selectiveLogic ?? ext(row).selectiveLogic ?? ext(row).selective_logic, 0),
       })),
   };
 }
@@ -293,7 +319,7 @@ export function worldInfoToBook(raw: unknown): TavernBook | null {
 /** 從檔案讀一本世界書：酒館的世界書檔，或一張卡（只取它的 book）。 */
 export async function parseWorldbookFile(
   file: File,
-): Promise<{ name: string; entries: WorldbookEntryDraft[]; dropped: DropNote[] }> {
+): Promise<{ name: string; format: "tavern"; entries: WorldbookEntryDraft[]; dropped: DropNote[] }> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   let raw: unknown;
   if (isPng(bytes)) {
@@ -313,20 +339,18 @@ export async function parseWorldbookFile(
   const dropped = bookEntryDrops(entries);
   const split = countSplitEntries(entries);
   if (split) dropped.push({ key: "import.split.entries", params: { n: split, max: ENTRY_CONTENT_MAX } });
-  return { name: text(book.name), entries: bookEntriesToDrafts(entries), dropped };
+  return { name: text(book.name), format: "tavern", entries: bookEntriesToDrafts(entries), dropped };
 }
 
 /** 條目層面沒地方放的欄位。每一個都要出現在報告裡。 */
 function bookEntryDrops(entries: TavernBookEntry[]): DropNote[] {
-  // 次要關鍵詞現在有對應的落點（本站條目的 AND 門），不再進報告。
-  const counts = { position: 0, caseSensitive: 0 };
+  // 次要關鍵詞、大小寫、整詞、次要邏輯現在都有落點（上游的酒館匹配規則），不再進報告。
+  const counts = { position: 0 };
   for (const entry of entries) {
     if (text(entry.position)) counts.position++;
-    if (entry.case_sensitive) counts.caseSensitive++;
   }
   const notes: DropNote[] = [];
   if (counts.position) notes.push({ key: "import.drop.position", params: { n: counts.position } });
-  if (counts.caseSensitive) notes.push({ key: "import.drop.caseSensitive", params: { n: counts.caseSensitive } });
   return notes;
 }
 
@@ -385,6 +409,7 @@ export function tavernToDraft(
     worldbook = {
       name: text(book?.name) || draft.roleName || "",
       description: text(book?.description),
+      format: "tavern",
       entries: bookEntriesToDrafts(bookEntries),
     };
     dropped.push(...bookEntryDrops(bookEntries));
