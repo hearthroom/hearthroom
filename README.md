@@ -204,6 +204,28 @@ FTS5 + **trigram** tokenizer。`unicode61` 不切中日韓詞，整句會變成�
 掃同一批資料。四個語言版本的名稱與簡介合併成一個 `search_text` 欄位，所以一個索引就
 涵蓋中英日韓。
 
+## 對話舞台（stage/）
+
+卡片頁的「開始對話」走站內 `/play/:roleId`，畫布是 [Moonstage](https://github.com/lunatalkai/moonstage)——
+LunaTalk 的開源對話舞台。它以子模組 `stage/` 掛進來，指向我們的 fork
+[hearthroom/moonstage](https://github.com/hearthroom/moonstage)。
+
+分工（2026-09 與 Moonstage 維護者對齊）：**上游永遠是主線**，程式碼改動一律往上游提；fork 跟上游的差別只有
+「當套件 build」這一層（`src/stage/`、`vite.stage.config.ts`），發版前把上游同步回 fork：
+
+```sh
+git submodule update --init stage     # 第一次
+npm run build:stage                   # 在 stage/ 裝依賴、打出 stage/dist-stage/
+npm run sync:stage                    # 發版前：併上游 main、跑測試、重新 build，之後推 fork、更新子模組指標
+```
+
+本站不把它裝成 npm 依賴（它自己有六百多個依賴，沒必要進本站的 lock）：`web/vite.config.ts` 用 alias 把
+`moonstage/stage` 指到 `stage/dist-stage/`，`npm run build` 會先 `build:stage`。套件把 vue／vue-i18n／pinia 留給本站
+（`resolve.dedupe`），其餘都打在裡面；樣式全部 scope 在 `.ms-stage`，不會染到站台其他頁。
+
+接線在 `web/src/lib/stage-host.ts`：token 從 session 拿、確認框走 ConfirmDialog、導頁走 vue-router、語系跟站台同步、
+文案只補站台沒有的 key。`/play` 是 `meta.bare` 的頁：不套站台頁首頁尾，因為魅魔島那類卡靠全頁樣式換背景與輸入框。
+
 ## 本地開發
 
 ```bash

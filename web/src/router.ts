@@ -26,6 +26,8 @@ const pages = [
   // 建立與編輯是同一頁：差別只有有沒有 roleId。
   { path: "create", component: () => import("./pages/CardEditorPage.vue"), meta: { auth: true } },
   { path: "wallet", component: () => import("./pages/WalletPage.vue"), meta: { auth: true } },
+  // 站內玩卡：舞台整頁接管（bare = 不套站台頁首頁尾），對話要登入
+  { path: "play/:roleId", component: () => import("./pages/PlayPage.vue"), meta: { auth: true, bare: true } },
   { path: "auth/callback", component: () => import("./pages/CallbackPage.vue") },
   // 404 也在語言前綴底下：/en/nope 要看到英文的 404，而不是被換回預設語言
   { path: ":pathMatch(.*)*", component: () => import("./pages/NotFoundPage.vue") },
@@ -99,6 +101,7 @@ function surfaceOf(path: string): string {
   if (bare.startsWith("/mine")) return "mine";
   if (bare.startsWith("/create")) return "create";
   if (bare.startsWith("/wallet")) return "wallet";
+  if (bare.startsWith("/play")) return "play";
   return "404";
 }
 

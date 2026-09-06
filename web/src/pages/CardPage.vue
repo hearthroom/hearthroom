@@ -6,7 +6,6 @@ import CardGrid from "@/components/CardGrid.vue";
 import CommentPanel from "@/components/CommentPanel.vue";
 import NotFoundPage from "@/pages/NotFoundPage.vue";
 import PreviewDoc from "@/components/preview/PreviewDoc.vue";
-import { UPSTREAM_API } from "@/lib/config";
 import { ApiError, fetchBoard, fetchCard, fetchPreviewPage, fetchRoleDetail } from "@/lib/api";
 import { contentLang, pageTitle, zoneLabel } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
@@ -49,7 +48,6 @@ function onTabKey(e: KeyboardEvent) {
 const hue = computed(() => hueFrom(card.value?.name ?? ""));
 const broken = ref(false);
 const hasArt = computed(() => !!card.value?.avatarUrl && !broken.value);
-const playUrl = computed(() => (card.value ? `${UPSTREAM_API.replace("api.", "")}/role/${card.value.roleId}` : "#"));
 
 async function load() {
   // 換語言時手上還有卡：留著，資料到了再換，不退回骨架
@@ -184,10 +182,10 @@ watch(locale, load);
           </ul>
 
           <div class="role__actions">
-            <!-- 對話目前發生在作品所在的服務上；chat-core 接進來之後換成站內入口。 -->
-            <a class="btn btn--primary btn--lg role__cta" :href="playUrl" target="_blank" rel="noopener" :title="$t('card.opensNew')" @click="track('cta', { subject: card.roleId })">
-              {{ $t("card.play") }} ↗<span class="sr-only">（{{ $t("card.opensNew") }}）</span>
-            </a>
+            <!-- 站內玩：/play/:roleId 由舞台（stage/）整頁接管 -->
+            <RouterLink class="btn btn--primary btn--lg role__cta" :to="lp(`/play/${card.roleId}`)" @click="track('cta', { subject: card.roleId })">
+              {{ $t("card.play") }}
+            </RouterLink>
             <button class="btn btn--lg btn--icon role__share" :aria-label="$t('card.share')" :title="$t('card.share')" @click="share">
               <svg viewBox="0 0 20 20" aria-hidden="true">
                 <path d="M10 12.5V3.5M6.5 7 10 3.5 13.5 7M4 11v4.5a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
