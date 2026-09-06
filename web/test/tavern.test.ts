@@ -243,6 +243,7 @@ describe("世界書檔", () => {
     const drafts = bookEntriesToDrafts(book.entries!);
     expect(drafts[0].keywords).toEqual(["【特别色色色色特化】", "色色"]);
     expect(drafts[0].secondaryKeywords).toEqual(["夜晚"]);
+    expect(drafts[0].matchOptions).toEqual({ caseSensitive: false, matchWholeWords: false, selectiveLogic: 0 });
   });
 
   it("欄位名對回卡片規格：key→keys、keysecondary→secondary_keys、disable→enabled", () => {
@@ -269,7 +270,8 @@ describe("世界書檔", () => {
     const cardWithBook = { spec: "chara_card_v2", spec_version: "2.0", data: { name: "S", character_book: { name: "Eldoria", entries: [{ keys: ["a"], content: "x" }] } } };
     const fromCard = await parseWorldbookFile(file("card.json", JSON.stringify(cardWithBook)));
     expect(fromCard.name).toBe("Eldoria");
-    expect(fromCard.entries).toEqual([{ name: "a", content: "x", keywords: ["a"], secondaryKeywords: [], isEnabled: true, isConstant: false }]);
+    expect(fromCard.format).toBe("tavern");
+    expect(fromCard.entries).toEqual([{ name: "a", content: "x", keywords: ["a"], secondaryKeywords: [], isEnabled: true, isConstant: false, matchOptions: { caseSensitive: false, matchWholeWords: false, selectiveLogic: 0 } }]);
 
     const png = embedIntoPng(barePng(), cardWithBook as TavernCard);
     expect((await parseWorldbookFile(file("card.png", png))).entries).toHaveLength(1);
@@ -322,5 +324,33 @@ describe("太長的條目", () => {
   it("短的原樣一條，名字不帶序號", () => {
     const [only] = bookEntriesToDrafts([{ keys: ["k"], content: "短", name: "短條" }]);
     expect(only.name).toBe("短條");
+  });
+});
+
+describe("酒館格式：匹配選項與 format 一路帶到上游", () => {
+  it("世界書檔的 caseSensitive／matchWholeWords／selectiveLogic 與卡內 extensions 的寫法都讀進 matchOptions", () => {
+    const wi = {
+      entries: {
+        "0": { key: ["/血祭|災星/"], keysecondary: ["劇透"], comment: "真相", content: "x", caseSensitive: true, matchWholeWords: true, selectiveLogic: 2 },
+        "1": { key: ["夜"], comment: "夜", content: "y", extensions: { match_whole_words: true, selective_logic: 3 } },
+      },
+    };
+    const book = worldInfoToBook(wi)!;
+    expect(book.entries![0]).toMatchObject({ case_sensitive: true, match_whole_words: true, selective_logic: 2 });
+    expect(book.entries![1]).toMatchObject({ case_sensitive: false, match_whole_words: true, selective_logic: 3 });
+    const drafts = bookEntriesToDrafts(book.entries!);
+    expect(drafts[0].keywords).toEqual(["/血祭|災星/"]);
+    expect(drafts[0].matchOptions).toEqual({ caseSensitive: true, matchWholeWords: true, selectiveLogic: 2 });
+    expect(drafts[1].matchOptions).toEqual({ caseSensitive: false, matchWholeWords: true, selectiveLogic: 3 });
+  });
+
+  it("卡片匯入：帶世界書就標 format=tavern，大小寫設定不再列為遺失", () => {
+    const { worldbook, dropped } = tavernToDraft(
+      { spec: "chara_card_v2", spec_version: "2.0", data: { name: "c", description: "d", character_book: { entries: [{ keys: ["Ra"], content: "z", case_sensitive: true }] } } } as never,
+      { language: "zh-Hant", labels: LABELS },
+    );
+    expect(worldbook?.format).toBe("tavern");
+    expect(worldbook?.entries[0].matchOptions).toEqual({ caseSensitive: true, matchWholeWords: false, selectiveLogic: 0 });
+    expect(dropped.find((d) => d.key === "import.drop.caseSensitive")).toBeUndefined();
   });
 });

@@ -464,7 +464,7 @@ export function readKeywordList(raw: unknown): string[] {
  * 第一版讀的是 `entries` 與陣列，於是編輯頁永遠看到零條（線上實測 2026-09-06 抓到的）。
  */
 export async function fetchWorldbookEntries(worldbookId: string, token: string): Promise<WorldbookEntryDraft[]> {
-  type Row = Omit<WorldbookEntryDraft, "keywords" | "secondaryKeywords"> & { keywords?: unknown; secondaryKeywords?: unknown };
+  type Row = Omit<WorldbookEntryDraft, "keywords" | "secondaryKeywords" | "matchOptions"> & { keywords?: unknown; secondaryKeywords?: unknown; matchOptions?: unknown };
   const body = await json<{ list?: Row[]; entries?: Row[] }>(
     await fetch(`${UPSTREAM_API}/open/v1/worldbook/entry/list?worldbookId=${encodeURIComponent(worldbookId)}`, {
       headers: authHeaders(token),
@@ -476,6 +476,10 @@ export async function fetchWorldbookEntries(worldbookId: string, token: string):
     content: entry.content ?? "",
     keywords: readKeywordList(entry.keywords),
     secondaryKeywords: readKeywordList(entry.secondaryKeywords),
+    // 原生條目是 null；酒館格式的條目帶作者的匹配選項，儲存時原樣送回。
+    ...(entry.matchOptions && typeof entry.matchOptions === "object"
+      ? { matchOptions: entry.matchOptions as WorldbookEntryDraft["matchOptions"] }
+      : {}),
     isEnabled: entry.isEnabled !== false,
     isConstant: entry.isConstant === true,
     ...(typeof entry.activationCount === "number" ? { activationCount: entry.activationCount } : {}),
@@ -531,7 +535,7 @@ export async function fetchCanonicalTags(token: string, language: string): Promi
 }
 
 export async function createWorldbook(
-  book: { name: string; description?: string; language?: string },
+  book: { name: string; description?: string; language?: string; format?: "tavern" },
   token: string,
 ): Promise<string> {
   const body = await json<{ worldbookId?: string }>(
@@ -552,6 +556,7 @@ export interface WorldbookDocumentEntry {
   content?: string;
   keywords?: string[];
   secondaryKeywords?: string[];
+  matchOptions?: WorldbookEntryDraft["matchOptions"];
   isEnabled?: boolean;
   isConstant?: boolean;
 }

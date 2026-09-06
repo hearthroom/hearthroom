@@ -90,6 +90,8 @@ const TAGS_MAX = 10;
 
 const worldbookId = ref("");
 const worldbookName = ref("");
+/** 匯入酒館／MMD 世界書時是 "tavern"：上游會讓這本書先走酒館自己的關鍵字規則。 */
+const worldbookFormat = ref<"tavern" | undefined>();
 const worldbookEntries = ref<WorldbookEntryDraft[]>([]);
 const worldbookOriginal = ref<WorldbookEntryDraft[]>([]);
 /** 剛匯入、還沒送出去的那本。儲存時要先建再寫。 */
@@ -173,7 +175,7 @@ watch(tagsText, (raw) => {
  */
 const DRAFT_KEY = "hearthroom.draft.create";
 const restoredDraft = ref(false);
-interface StoredDraft { draft: RoleDraft; tagsText: string; worldbook: { name: string; entries: WorldbookEntryDraft[] } | null; savedAt: number }
+interface StoredDraft { draft: RoleDraft; tagsText: string; worldbook: { name: string; format?: "tavern"; entries: WorldbookEntryDraft[] } | null; savedAt: number }
 function storeDraft() {
   if (!isNew.value) return;
   try {
@@ -184,7 +186,7 @@ function storeDraft() {
     const stored: StoredDraft = {
       draft: draft.value,
       tagsText: tagsText.value,
-      worldbook: worldbookPending.value ? { name: worldbookName.value, entries: worldbookEntries.value } : null,
+      worldbook: worldbookPending.value ? { name: worldbookName.value, format: worldbookFormat.value, entries: worldbookEntries.value } : null,
       savedAt: Date.now(),
     };
     localStorage.setItem(DRAFT_KEY, JSON.stringify(stored));
@@ -204,6 +206,7 @@ function restoreDraft() {
     if (stored.worldbook?.entries?.length) {
       worldbookPending.value = true;
       worldbookName.value = stored.worldbook.name;
+      worldbookFormat.value = stored.worldbook.format;
       worldbookEntries.value = stored.worldbook.entries;
     }
     restoredDraft.value = true;
@@ -216,6 +219,7 @@ function discardDraft() {
   tagsText.value = "";
   worldbookPending.value = false;
   worldbookName.value = "";
+  worldbookFormat.value = undefined;
   worldbookEntries.value = [];
   restoredDraft.value = false;
   localStorage.removeItem(DRAFT_KEY);
@@ -448,6 +452,7 @@ function worldbookOps(): WorldbookDocumentEntry[] {
       content: entry.content,
       keywords: entry.keywords,
       secondaryKeywords: entry.secondaryKeywords ?? [],
+      ...(entry.matchOptions ? { matchOptions: entry.matchOptions } : {}),
       isEnabled: entry.isEnabled,
       isConstant: entry.isConstant,
     };
@@ -474,7 +479,11 @@ async function saveWorldbook(token: string, targetRoleId: string) {
       return;
     }
     bookId = await createWorldbook(
-      { name: worldbookName.value.trim() || draft.value.roleName, language: draft.value.language },
+      {
+        name: worldbookName.value.trim() || draft.value.roleName,
+        language: draft.value.language,
+        ...(worldbookFormat.value ? { format: worldbookFormat.value } : {}),
+      },
       token,
     );
     firstBind = true;
@@ -616,6 +625,7 @@ function applyImport(result: ImportResult) {
   if (result.worldbook) {
     worldbookPending.value = true;
     worldbookName.value = result.worldbook.name || draft.value.roleName;
+    worldbookFormat.value = result.worldbook.format;
     // 匯入的條目一律沒有 entryId：它們在上游還不存在，儲存時要走 create。
     worldbookEntries.value = result.worldbook.entries.map((entry) => ({ ...entry, entryId: undefined }));
   }
