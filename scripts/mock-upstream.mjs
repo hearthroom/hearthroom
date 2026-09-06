@@ -40,6 +40,21 @@ http.createServer(async (req, res) => {
   // 作者資產（正則規則 + 功能欄）：形狀照 server 的 authorAssetResponse
   if (m === "GET" && path === "/open/v1/role/author-asset") { const a = regex.get(url.searchParams.get("roleId")); return json(res, 200, a ?? { rules: [], mountTrigger: "", mountLayer: "", pageMode: "classic", status: "none", version: 0 }); }
   if (m === "PUT" && (mm = path.match(/^\/open\/v1\/role\/([^/]+)\/author-asset$/))) { const cur = regex.get(mm[1]); const have = cur ? cur.version : 0; if ((body.version ?? 0) !== have) return json(res, 409, { error: "version_conflict" }); if (!["under", "over", "cover", ""].includes(body.mountLayer ?? "")) return json(res, 400, { error: "validate_reject" }); const a = { rules: body.rules ?? [], mountTrigger: body.mountTrigger ?? "", mountLayer: body.mountLayer || "over", pageMode: body.pageMode || "classic", status: "passed", version: have + 1 }; regex.set(mm[1], a); return json(res, 200, a); }
+  // ── 舞台（Moonstage）在本機也能開：模型清單讀 fixtures/models.json（從正式站抓一份裁過的），其餘給最小形狀 ──
+  if (path === "/open/v1/models") { const f = pathMod.join(CARDS, "models.json"); return fs.existsSync(f) ? (res.writeHead(200, { "content-type": "application/json", "access-control-allow-origin": "*" }), res.end(fs.readFileSync(f))) : json(res, 200, []); }
+  if (path === "/open/v1/player/role-settings") return json(res, 200, { roleId: url.searchParams.get("roleId"), context: 1, selectModel: "kiro-claude-sonnet-4-5-ripple", selectModelName: "kiro-claude-sonnet-4-5-ripple", thinkingDepth: "", userName: "", userSex: "", userDefine: "", sandboxLevel: "", autoCompactEnabled: true, permanentMemory: false, multiPassEnabled: false, showAll: false, backgroundUrl: "" });
+  if (m === "POST" && path === "/open/v1/player/role-settings/save") return json(res, 200, { ok: true });
+  if (path === "/open/v1/player/agent-mode") return json(res, 200, { roleId: url.searchParams.get("roleId"), runtimeEnabled: true, modelSupported: false, multiPassEnabled: false, costWarning: false });
+  if (path === "/open/v1/role/author-asset/serve") return json(res, 200, { rules: [], mountTrigger: "", mountLayer: "", pageMode: "classic", status: "none", version: 0, variants: {} });
+  if (m === "POST" && path === "/open/v1/conversation/start") { const r = roles.get(body.roleId) || {}; return json(res, 200, { conversationId: "conv-1", defaultRelay: r.roleWelcome || "你好，這是本機假上游的開場白。", isNew: true }); }
+  if (path === "/open/v1/conversation/messages") return json(res, 200, { list: [], hasMore: false });
+  if (path === "/open/v1/conversation/archives") return json(res, 200, { archives: [{ conversationId: "conv-1", title: "", lastMessage: "開場白", messageCount: 1, isCurrent: true, createTime: "2026-09-06T08:49:57Z", lastUpdateTime: "2026-09-06T08:49:57Z" }], count: 1, limit: 20 });
+  if (path === "/open/v1/conversation/directives") return json(res, 200, { list: [], max: 10 });
+  if (path === "/open/v1/conversation/notepad") return json(res, 200, { content: "", maxLength: 10000 });
+  if (path === "/open/v1/notepad/templates") return json(res, 200, { list: [], maxCount: 50, maxLength: 10000, maxTitle: 40 });
+  if (path === "/open/v1/conversation/ws-ticket") return json(res, 200, { ticket: "t-1", expiresIn: 60 });
+  if (path.startsWith("/open/v1/conversation/memory")) return json(res, 200, { atoms: [] });
+  if (path === "/open/v1/role/multiPassPreference" || path === "/open/v1/player/multi-pass") return json(res, 200, {});
   if (path === "/open/v1/me/wallet") return json(res, 200, { score: 999596, tempScore: 0, plans: [{ tier: "member", expiresAt: Date.now() + 86400e3 * 30 }] });
   if (m === "POST" && path === "/open/v1/role") { const roleId = id("role"); roles.set(roleId, { roleId, roleName: body.roleName, language: body.language, visibility: "private" }); return json(res, 200, { roleId }); }
   if (m === "POST" && (mm = path.match(/^\/open\/v1\/role\/([^/]+)\/document$/))) { Object.assign(roles.get(mm[1]) ?? roles.set(mm[1], {}).get(mm[1]), body.fields ?? body); return json(res, 200, { ok: true }); }
