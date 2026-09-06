@@ -204,13 +204,17 @@ describe("匯入報告：不靜默丟掉的東西", () => {
     expect(result.dropped).toContainEqual({ key: "import.drop.tags", params: { n: 6 } });
   });
 
-  it("正則腳本單獨點名，其餘擴展另計", () => {
+  it("正則腳本落成規則、不進報告；其餘擴展另計；匯出寫回 extensions.regex_scripts", () => {
     const result = tavernToDraft(
-      card({ name: "A", extensions: { regex_scripts: [{ id: "x" }, { id: "y" }], talkativeness: "0.5", fav: false } }),
+      card({ name: "A", extensions: { regex_scripts: [{ scriptName: "x", findRegex: "/a/g", replaceString: "b" }, { scriptName: "y", findRegex: "《y》", replaceString: "<b/>", disabled: true }], talkativeness: "0.5", fav: false } }),
       { language: "zh-Hans", labels: LABELS },
     );
-    expect(result.dropped).toContainEqual({ key: "import.drop.regex", params: { n: 2 } });
+    expect(result.dropped.map((d) => d.key)).not.toContain("import.drop.regex");
     expect(result.dropped).toContainEqual({ key: "import.drop.extensions", params: { n: 2 } });
+    expect(result.regex?.rules.map((r) => [r.name, r.find, r.enabled])).toEqual([["x", "/a/g", true], ["y", "《y》", false]]);
+    const back = draftToTavern(result.draft, [], { regex: result.regex });
+    expect((back.data.extensions as { regex_scripts: unknown[] }).regex_scripts).toHaveLength(2);
+    expect(draftToTavern(result.draft, [], { regex: null }).data.extensions).toEqual({});
   });
 });
 
@@ -276,5 +280,30 @@ describe("平鋪的卡", () => {
     expect(card.spec).toBe("chara_card_v3");
     expect(card.data.name).toBe("星");
     expect(card.data.character_book?.entries).toHaveLength(1);
+  });
+});
+
+describe("太長的條目", () => {
+  it("超過上限就拆成幾條同關鍵詞的條目，名字帶序號，字一個不少，並進報告", () => {
+    const long = Array.from({ length: 12 }, (_, i) => `第${i}段。` + "字".repeat(600)).join("\n");
+    const result = tavernToDraft(
+      { spec: "chara_card_v2", spec_version: "2.0", data: { name: "A", character_book: { entries: [{ keys: ["k"], secondary_keys: ["s"], content: long, name: "很長的一條設定" }] } } },
+      { language: "zh-Hant", labels: LABELS },
+    );
+    const entries = result.worldbook!.entries;
+    expect(entries.length).toBeGreaterThan(1);
+    for (const e of entries) {
+      expect([...e.content].length).toBeLessThanOrEqual(3000);
+      expect(e.keywords).toEqual(["k"]);
+      expect(e.secondaryKeywords).toEqual(["s"]);
+      expect(e.name).toMatch(/^很長的一條設定 \(\d+\/\d+\)$/);
+    }
+    expect(entries.map((e) => e.content).join("\n")).toBe(long);
+    expect(result.dropped).toContainEqual({ key: "import.split.entries", params: { n: 1, max: 3000 } });
+  });
+
+  it("短的原樣一條，名字不帶序號", () => {
+    const [only] = bookEntriesToDrafts([{ keys: ["k"], content: "短", name: "短條" }]);
+    expect(only.name).toBe("短條");
   });
 });

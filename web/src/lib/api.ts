@@ -477,6 +477,26 @@ export async function fetchWorldbookEntries(worldbookId: string, token: string):
   }));
 }
 
+/** 角色的正則規則文件。沒有規則時 doc 是 null、version 是 0。 */
+export async function fetchRegexRules(roleId: string, token: string): Promise<{ doc: unknown; version: number }> {
+  const body = await json<{ doc?: unknown; version?: number }>(
+    await fetch(`${UPSTREAM_API}/open/v1/role/regex-rules?roleId=${encodeURIComponent(roleId)}`, { headers: authHeaders(token) }),
+  );
+  return { doc: body.doc ?? null, version: body.version ?? 0 };
+}
+
+/** 整份覆寫，帶樂觀鎖。版本不符上游回 409。 */
+export async function saveRegexRules(roleId: string, doc: unknown, version: number, token: string): Promise<number> {
+  const body = await json<{ version?: number }>(
+    await fetch(`${UPSTREAM_API}/open/v1/role/${encodeURIComponent(roleId)}/regex-rules`, {
+      method: "PUT",
+      headers: writeHeaders(token),
+      body: JSON.stringify({ doc, version }),
+    }),
+  );
+  return body.version ?? version + 1;
+}
+
 /** 站內榜單認得的分類詞表，依維度分組。給標籤選擇器用；一律不含成人維度。 */
 export interface CanonicalTag { slug: string; name: string; dimension: string; visibility: string }
 export async function fetchCanonicalTags(token: string, language: string): Promise<{ dimension: string; tags: CanonicalTag[] }[]> {

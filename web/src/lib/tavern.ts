@@ -16,6 +16,7 @@
 import { isPng, readTextChunk, replaceTextChunks, base64FromUtf8, utf8FromBase64 } from "./png-chunks";
 import type { RoleDraft, TalkExampleEntry, WorldbookEntryDraft } from "./role-draft";
 import { makeDraft } from "./role-draft";
+import { rulesFromTavern, rulesToTavern, type RegexRuleSet } from "./regex-rules";
 
 export interface TavernBookEntry {
   keys?: string[];
@@ -82,10 +83,45 @@ export interface ImportResult {
   /** 卡片自帶的立繪（PNG 匯入時才有），拿去當頭像與背景的預設值。 */
   image: Blob | null;
   spec: string;
+  /** 酒館卡 extensions.regex_scripts 落成的正則規則。沒有就是 null。 */
+  regex: RegexRuleSet | null;
 }
 
 /** 本站一張卡最多幾個標籤。多的丟掉並進報告，不靜默截斷。 */
 export const TAGS_MAX = 10;
+/** 上游一條世界書條目的內容上限（字元）。超過的條目在匯入時拆成幾條，同一組關鍵詞，不丟字。 */
+export const ENTRY_CONTENT_MAX = 3000;
+
+/**
+ * 把一段太長的內容拆成幾段，儘量在換行處切，每段都在上限內。
+ * 拆成幾條同關鍵詞的條目，命中時一起進上下文，跟一條大的效果相同；不拆的話上游直接拒收整批。
+ */
+export function splitEntryContent(content: string, max = ENTRY_CONTENT_MAX): string[] {
+  const chars = [...content];
+  if (chars.length <= max) return [content];
+  // 留一點餘裕給名字後綴與換行
+  const budget = max - 40;
+  const out: string[] = [];
+  let current = "";
+  for (const para of content.split("\n")) {
+    let piece = para;
+    const candidate = current ? `${current}\n${piece}` : piece;
+    if ([...candidate].length <= budget) {
+      current = candidate;
+      continue;
+    }
+    if (current) out.push(current);
+    current = "";
+    while ([...piece].length > budget) {
+      const pieceChars = [...piece];
+      out.push(pieceChars.slice(0, budget).join(""));
+      piece = pieceChars.slice(budget).join("");
+    }
+    current = piece;
+  }
+  if (current) out.push(current);
+  return out;
+}
 
 const text = (value: unknown): string => (typeof value === "string" ? value.trim() : "");
 const list = (value: unknown): string[] =>
@@ -174,17 +210,31 @@ function joinPersona(data: TavernCardData, labels: { personality: string; scenar
 
 /** 酒館的條目 → 本站的條目。 */
 export function bookEntriesToDrafts(entries: TavernBookEntry[]): WorldbookEntryDraft[] {
-  return entries
-    .map((entry, index) => ({
-      // 條目要有名字才找得回來。酒館這兩個欄位常常都空，那就用第一個關鍵詞。
-      name: (text(entry.name) || text(entry.comment) || list(entry.keys)[0] || `#${index + 1}`).slice(0, 20),
-      content: text(entry.content),
-      keywords: list(entry.keys),
-      secondaryKeywords: list(entry.secondary_keys),
-      isEnabled: entry.enabled !== false,
-      isConstant: entry.constant === true,
-    }))
-    .filter((e) => e.content);
+  const drafts: WorldbookEntryDraft[] = [];
+  entries.forEach((entry, index) => {
+    const content = text(entry.content);
+    if (!content) return;
+    // 條目要有名字才找得回來。酒館這兩個欄位常常都空，那就用第一個關鍵詞。
+    const baseName = text(entry.name) || text(entry.comment) || list(entry.keys)[0] || `#${index + 1}`;
+    const parts = splitEntryContent(content);
+    parts.forEach((part, i) => {
+      const name = parts.length === 1 ? baseName.slice(0, 20) : `${[...baseName].slice(0, 14).join("")} (${i + 1}/${parts.length})`;
+      drafts.push({
+        name,
+        content: part,
+        keywords: list(entry.keys),
+        secondaryKeywords: list(entry.secondary_keys),
+        isEnabled: entry.enabled !== false,
+        isConstant: entry.constant === true,
+      });
+    });
+  });
+  return drafts;
+}
+
+/** 匯入報告用：有幾條因為太長被拆開。 */
+export function countSplitEntries(entries: TavernBookEntry[]): number {
+  return entries.filter((entry) => [...text(entry.content)].length > ENTRY_CONTENT_MAX).length;
 }
 
 /**
@@ -244,7 +294,10 @@ export async function parseWorldbookFile(
   const book = worldInfoToBook(raw);
   if (!book) throw new Error("worldbook_invalid");
   const entries = book.entries ?? [];
-  return { name: text(book.name), entries: bookEntriesToDrafts(entries), dropped: bookEntryDrops(entries) };
+  const dropped = bookEntryDrops(entries);
+  const split = countSplitEntries(entries);
+  if (split) dropped.push({ key: "import.split.entries", params: { n: split, max: ENTRY_CONTENT_MAX } });
+  return { name: text(book.name), entries: bookEntriesToDrafts(entries), dropped };
 }
 
 /** 條目層面沒地方放的欄位。每一個都要出現在報告裡。 */
@@ -302,10 +355,10 @@ export function tavernToDraft(
   if (text(data.character_version)) dropped.push({ key: "import.drop.version" });
   if (text(data.nickname)) dropped.push({ key: "import.drop.nickname", params: { name: text(data.nickname) } });
   if (list(data.group_only_greetings).length) dropped.push({ key: "import.drop.groupGreetings" });
-  // 正則腳本（狀態欄、美化面板）單獨點名：那是酒館卡最常見、也最容易被誤以為「壞了」的一種擴展。
+  // 正則腳本（狀態欄、美化面板）現在有落點：直接變成這張卡的正則規則，不進報告。
   const extensions = Object.keys(data.extensions ?? {});
-  const regex = Array.isArray(data.extensions?.regex_scripts) ? (data.extensions!.regex_scripts as unknown[]).length : 0;
-  if (regex) dropped.push({ key: "import.drop.regex", params: { n: regex } });
+  const regexRules = rulesFromTavern(data.extensions?.regex_scripts);
+  const regex: RegexRuleSet | null = regexRules.length ? { version: 1, rules: regexRules, statusbar: "", depth: 1 } : null;
   const rest = extensions.filter((k) => k !== "regex_scripts").length;
   if (rest) dropped.push({ key: "import.drop.extensions", params: { n: rest } });
 
@@ -319,12 +372,14 @@ export function tavernToDraft(
       entries: bookEntriesToDrafts(bookEntries),
     };
     dropped.push(...bookEntryDrops(bookEntries));
+    const split = countSplitEntries(bookEntries);
+    if (split) dropped.push({ key: "import.split.entries", params: { n: split, max: ENTRY_CONTENT_MAX } });
     if (book?.scan_depth || book?.token_budget || book?.recursive_scanning) {
       dropped.push({ key: "import.drop.bookSettings" });
     }
   }
 
-  return { draft, worldbook, dropped, image: options.image ?? null, spec: card.spec };
+  return { draft, worldbook, dropped, image: options.image ?? null, spec: card.spec, regex };
 }
 
 /**
@@ -336,7 +391,7 @@ export function tavernToDraft(
 export function draftToTavern(
   draft: RoleDraft,
   worldbookEntries: WorldbookEntryDraft[] = [],
-  meta: { creator?: string } = {},
+  meta: { creator?: string; regex?: RegexRuleSet | null } = {},
 ): TavernCard {
   const data: TavernCardData = {
     name: draft.roleName,
@@ -352,7 +407,8 @@ export function draftToTavern(
     tags: draft.roleTag,
     creator: meta.creator ?? "",
     character_version: "",
-    extensions: {},
+    // 正則規則寫回酒館認得的位置，別的客戶端拿到卡就能用同一套顯示規則
+    extensions: meta.regex?.rules.length ? { regex_scripts: rulesToTavern(meta.regex.rules) } : {},
   };
   if (worldbookEntries.length) {
     data.character_book = {
