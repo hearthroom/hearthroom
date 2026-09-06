@@ -373,7 +373,7 @@
   "regex.issue.emptyFind": "Find is empty",
   "regex.issue.nameLong": "Name over {max} characters",
   "regex.issue.findLong": "Find over {max} characters",
-  "regex.issue.replaceLong": "Replacement over {max} characters",
+  "regex.issue.replaceLong": "Replacement over {max} KB",
   "regex.issue.badRegex": "Invalid regex; this rule won't run",
   "regex.issue.statusbarLong": "Status bar over {max} characters",
   "regex.issue.totalLong": "The rule set is too large"

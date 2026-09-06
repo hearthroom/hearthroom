@@ -373,7 +373,7 @@
   "regex.issue.emptyFind": "찾기가 비었습니다",
   "regex.issue.nameLong": "이름이 {max}자를 넘습니다",
   "regex.issue.findLong": "찾기가 {max}자를 넘습니다",
-  "regex.issue.replaceLong": "치환 내용이 {max}자를 넘습니다",
+  "regex.issue.replaceLong": "치환 내용이 {max} KB를 넘습니다",
   "regex.issue.badRegex": "정규식이 잘못되어 이 규칙은 동작하지 않습니다",
   "regex.issue.statusbarLong": "상태 바가 {max}자를 넘습니다",
   "regex.issue.totalLong": "규칙 전체가 너무 큽니다"

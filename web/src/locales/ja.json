@@ -373,7 +373,7 @@
   "regex.issue.emptyFind": "検索が空です",
   "regex.issue.nameLong": "名前が {max} 文字を超えています",
   "regex.issue.findLong": "検索が {max} 文字を超えています",
-  "regex.issue.replaceLong": "置換内容が {max} 文字を超えています",
+  "regex.issue.replaceLong": "置換内容が {max} KB を超えています",
   "regex.issue.badRegex": "正規表現が不正です。このルールは動きません",
   "regex.issue.statusbarLong": "ステータスバーが {max} 文字を超えています",
   "regex.issue.totalLong": "ルール全体が大きすぎます"

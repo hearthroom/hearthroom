@@ -29,8 +29,8 @@ const api = vi.hoisted(() => ({
   fetchRoleWorldbooks: vi.fn(async () => []),
   submitRoleForReview: vi.fn(async () => ({})),
   uploadImage: vi.fn(async () => "https://img.test/avatar.png"),
-  fetchRegexRules: vi.fn(async () => ({ doc: null, version: 0 })),
-  saveRegexRules: vi.fn(async () => 1),
+  fetchAuthorAsset: vi.fn(async () => ({ rules: [], mountTrigger: "", mountLayer: "", pageMode: "classic", status: "none", version: 0 })),
+  saveAuthorAsset: vi.fn(async (_roleId: string, body: { version: number }) => ({ ...body, status: "passed", version: body.version + 1 })),
 }));
 vi.mock("../src/lib/api", () => api);
 vi.mock("../src/lib/session", () => ({
@@ -188,12 +188,13 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
       // 酒館的 secondary_keys 直接落到條目的 AND 門，不再併進 keywords
       { op: "create", name: "採石場", content: "廢棄了。", keywords: ["採石場"], secondaryKeywords: ["排水渠"], isEnabled: true, isConstant: false },
     ]);
-    // 卡片存完才存正則：匯入帶進來的那條規則，帶著版本 0 整份送出
-    expect(api.saveRegexRules).toHaveBeenCalledTimes(1);
-    const [regexRole, regexDoc, regexVersion] = api.saveRegexRules.mock.calls[0] as unknown as [string, { rules: { name: string; find: string }[] }, number];
+    // 卡片存完才存正則：匯入帶進來的那條規則，帶著版本 0 整份送到上游的作者資產
+    expect(api.saveAuthorAsset).toHaveBeenCalledTimes(1);
+    const [regexRole, asset] = api.saveAuthorAsset.mock.calls[0] as unknown as [string, { rules: { name: string; find: string }[]; version: number; mountLayer: string; mountTrigger: string }];
     expect(regexRole).toBe("r1");
-    expect(regexVersion).toBe(0);
-    expect(regexDoc.rules.map((r) => r.name)).toEqual(["status"]);
+    expect(asset.version).toBe(0);
+    expect(asset.mountLayer).toBe("over");
+    expect(asset.rules.map((r) => r.name)).toEqual(["status"]);
     // 建立完成 → 網址換成編輯頁，本機草稿清掉
     expect(window.location.pathname).toBe("/cards/r1/edit");
     expect(localStorage.getItem("hearthroom.draft.create")).toBeNull();
@@ -205,7 +206,7 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     expect(api.patchRoleDocument.mock.calls[1][1]).toEqual({ roleDesc: "改過的簡介" });
     expect(api.patchRoleWelcome).toHaveBeenCalledTimes(1);
     expect(api.patchWorldbookDocument).toHaveBeenCalledTimes(1);
-    expect(api.saveRegexRules).toHaveBeenCalledTimes(1);
+    expect(api.saveAuthorAsset).toHaveBeenCalledTimes(1);
   });
 
   it("改世界書條目再存：只送那一條的 update，刪掉的送 delete", async () => {

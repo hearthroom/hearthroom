@@ -13,6 +13,7 @@ import { useI18n } from "vue-i18n";
 import { confirmDialog } from "@/lib/confirm";
 import {
   REGEX_LIMITS,
+  utf8Bytes,
   applyRules,
   makeRule,
   parseFind,
@@ -162,7 +163,7 @@ watch(selectedId, () => { testScope.value = testScope.value; });
             <textarea id="rx-replace" v-model="selected.replace" class="input mono-input" spellcheck="false" :placeholder="$t('regex.rule.replace.placeholder')" />
             <span class="field__foot">
               <span class="subtle">{{ $t("regex.rule.replace.hint") }}</span>
-              <span class="subtle count" :class="{ over: length(selected.replace) > REGEX_LIMITS.replace }">{{ length(selected.replace) }} / {{ REGEX_LIMITS.replace }}</span>
+              <span class="subtle count" :class="{ over: utf8Bytes(selected.replace) > REGEX_LIMITS.replaceBytes }">{{ (utf8Bytes(selected.replace) / 1024).toFixed(1) }} / {{ REGEX_LIMITS.replaceBytes / 1024 }} KB</span>
             </span>
           </div>
         </section>
