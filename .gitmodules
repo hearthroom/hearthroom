@@ -1,4 +1,4 @@
 [submodule "stage"]
 	path = stage
 	url = https://github.com/hearthroom/moonstage.git
-	branch = stage-package
+	branch = main
