@@ -21,6 +21,7 @@ import { useI18n } from "vue-i18n";
 import {
   createRole,
   createWorldbook,
+  fetchRegexRules,
   fetchRoleDetail,
   fetchRoleWorldbooks,
   fetchRoleValidation,
@@ -28,10 +29,13 @@ import {
   patchRoleDocument,
   patchRoleWelcome,
   patchWorldbookDocument,
+  saveRegexRules,
   submitRoleForReview,
   uploadImage,
   type WorldbookDocumentEntry,
 } from "@/lib/api";
+import { emptyRuleSet, ruleSetFromImport, ruleSetToExport, type RegexRuleSet } from "@/lib/regex-rules";
+import RegexRulesEditor from "@/components/editor/RegexRulesEditor.vue";
 import {
   LANGUAGES,
   cloneDraft,
@@ -91,6 +95,14 @@ const worldbookOriginal = ref<WorldbookEntryDraft[]>([]);
 /** 剛匯入、還沒送出去的那本。儲存時要先建再寫。 */
 const worldbookPending = ref(false);
 
+/** 正則規則：整份存、整份換。version 是上游的樂觀鎖，沒規則時是 0。 */
+const regexSet = ref<RegexRuleSet>(emptyRuleSet());
+const regexOriginal = ref<RegexRuleSet>(emptyRuleSet());
+const regexVersion = ref(0);
+const regexOpen = ref(false);
+const regexFile = ref<HTMLInputElement | null>(null);
+const regexDirty = computed(() => JSON.stringify(regexSet.value) !== JSON.stringify(regexOriginal.value));
+
 const limits = ref(resolveLimits(null));
 const blockers = ref<string[]>([]);
 const loading = ref(!!roleId.value);
@@ -123,7 +135,8 @@ const dirty = computed(
   () =>
     JSON.stringify(draft.value) !== JSON.stringify(original.value ?? pristine.value) ||
     JSON.stringify(worldbookEntries.value) !== JSON.stringify(worldbookOriginal.value) ||
-    worldbookPending.value,
+    worldbookPending.value ||
+    regexDirty.value,
 );
 
 const missing = computed(() => missingRequired(draft.value));
@@ -292,7 +305,10 @@ onMounted(async () => {
     draft.value = draftFromRoleDetail(raw, locale.value);
     tagsText.value = formatTags(draft.value.roleTag);
     original.value = cloneDraft(draft.value);
-    if (token) await loadWorldbook(token);
+    if (token) {
+      await loadWorldbook(token);
+      await loadRegexRules(token);
+    }
     void loadValidation();
   } catch (err) {
     error.value = err instanceof Error ? err.message : t("state.loadFailed");
@@ -348,6 +364,53 @@ async function onPickImage(file: File, ok: (url: string) => void, fail: (message
   } catch (err) {
     fail(err instanceof Error ? err.message : t("state.uploadFailed"));
   }
+}
+
+// ── 正則規則 ──────────────────────────────────────────────────────
+
+async function loadRegexRules(token: string) {
+  try {
+    const { doc, version } = await fetchRegexRules(roleId.value, token);
+    const imported = doc ? ruleSetFromImport(doc) : null;
+    regexSet.value = imported?.set ?? emptyRuleSet();
+    regexOriginal.value = JSON.parse(JSON.stringify(regexSet.value));
+    regexVersion.value = version;
+  } catch {
+    // 讀不到就當沒有：舊上游沒這條路，不擋編輯
+  }
+}
+
+/** 卡片存完才存規則：新卡要先有 roleId。沒改就不送。 */
+async function saveRegex(token: string, targetRoleId: string) {
+  if (!regexDirty.value) return;
+  regexVersion.value = await saveRegexRules(targetRoleId, regexSet.value, regexVersion.value, token);
+  regexOriginal.value = JSON.parse(JSON.stringify(regexSet.value));
+}
+
+function onRegexFile(event: Event) {
+  const target = event.target as HTMLInputElement;
+  const file = target.files?.[0];
+  target.value = "";
+  if (!file) return;
+  void (async () => {
+    try {
+      const imported = ruleSetFromImport(JSON.parse(await file.text()));
+      if (!imported) throw new Error("regex_invalid");
+      regexSet.value = imported.set;
+      // 魅魔島的檔帶著「第一句話」：開場白還是空的才幫他填，不蓋掉已經寫好的
+      if (imported.welcome && !draft.value.roleWelcome.trim()) draft.value.roleWelcome = imported.welcome;
+      flash(t("regex.imported", { n: imported.set.rules.length }));
+      track("card_import", { detail: "regex" });
+    } catch {
+      error.value = t("regex.importFailed");
+    }
+  })();
+}
+
+function exportRegex() {
+  const file = ruleSetToExport(regexSet.value, draft.value.roleWelcome);
+  download(new Blob([JSON.stringify(file, null, 2)], { type: "application/json" }), `${safeName()}-regex.json`);
+  track("card_export", { detail: "regex" });
 }
 
 // ── 世界書 ────────────────────────────────────────────────────────
@@ -469,6 +532,7 @@ async function save() {
     }
 
     await saveWorldbook(token, targetRoleId);
+    await saveRegex(token, targetRoleId);
 
     original.value = cloneDraft(draft.value);
     saved.value = true;
@@ -483,7 +547,12 @@ async function save() {
     // 只改網址、不走 router.replace：換路由會把這個元件整個重掛，畫面閃一下骨架、剛出現的
     // 「已儲存」也跟著消失，還要再向上游讀一次剛寫進去的東西。而且 replace 在 saving 期間
     // 會被上面那個離開守衛擋掉（它在儲存中一律不放行），等於什麼都沒發生——之前就是這樣。
-    if (wasNew) window.history.replaceState(window.history.state, "", lp(`/cards/${targetRoleId}/edit`));
+    //
+    // 判斷用「網址還停在 /create」而不是 wasNew：上一次儲存若在建卡之後、寫世界書時失敗，roleId 已經有了，
+    // 重試時 wasNew 是 false，網址卻還是 /create，不換的話重新整理照樣回到空表單。
+    if (wasNew || route.path.endsWith("/create")) {
+      window.history.replaceState(window.history.state, "", lp(`/cards/${targetRoleId}/edit`));
+    }
   } catch (err) {
     track(wasNew ? "card_create" : "card_edit", { ok: false });
     error.value = err instanceof Error ? err.message : t("state.saveFailed");
@@ -550,6 +619,7 @@ function applyImport(result: ImportResult) {
     worldbookEntries.value = result.worldbook.entries.map((entry) => ({ ...entry, entryId: undefined }));
   }
   if (result.image) void adoptImage(result.image);
+  if (result.regex) regexSet.value = result.regex;
   section.value = "basic";
 }
 
@@ -572,7 +642,7 @@ const safeName = () => (draft.value.roleName || "card").replace(/[/\\?%*:|"<>]/g
  */
 async function exportCard(format: "png" | "json") {
   error.value = "";
-  const card = draftToTavern(draft.value, worldbookEntries.value.filter((e) => e.content.trim()));
+  const card = draftToTavern(draft.value, worldbookEntries.value.filter((e) => e.content.trim()), { regex: regexSet.value });
   if (format === "json") {
     download(new Blob([JSON.stringify(card, null, 2)], { type: "application/json" }), `${safeName()}.json`);
     track("card_export", { detail: "json" });
@@ -698,6 +768,18 @@ async function exportCard(format: "png" | "json") {
 
         <!-- 对话 -->
         <section v-show="section === 'dialogue'" class="pane">
+          <!-- 正則規則：AI 回覆在玩家瀏覽器裡先過一遍「找到→換成」再顯示 -->
+          <div class="rxbar">
+            <button type="button" class="btn btn--sm" @click="regexOpen = true">
+              {{ $t("regex.open") }}
+              <span v-if="regexSet.rules.length" class="chip">{{ regexSet.rules.length }}</span>
+            </button>
+            <button type="button" class="btn btn--sm btn--ghost" @click="regexFile?.click()">{{ $t("regex.import") }}</button>
+            <button type="button" class="btn btn--sm btn--ghost" :disabled="!regexSet.rules.length" @click="exportRegex">{{ $t("regex.export") }}</button>
+            <input ref="regexFile" type="file" accept=".json,application/json" class="sr-only" @change="onRegexFile" />
+            <span class="subtle">{{ $t("regex.bar.hint") }}</span>
+          </div>
+
           <FieldText id="f-welcome" v-model="draft.roleWelcome" :label="$t('editor.welcome')" required :rows="8"
                      :max="limits.roleWelcome" :hint="$t('editor.welcome.hint')" />
 
@@ -847,6 +929,7 @@ async function exportCard(format: "png" | "json") {
     </div>
 
     <div class="toast" role="status" :hidden="!toast">{{ toast }}</div>
+    <RegexRulesEditor v-if="regexOpen" v-model="regexSet" @close="regexOpen = false" />
   </div>
 </template>
 
@@ -908,6 +991,8 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .turn .input { flex: 1; resize: vertical; }
 .input--who { flex: none; width: 96px; }
 .acts { display: flex; gap: var(--s-2); flex-wrap: wrap; }
+.rxbar { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }
+.rxbar .chip { margin-left: 4px; height: 20px; padding: 0 7px; font-variant-numeric: tabular-nums; }
 .panel { padding: var(--s-4); display: grid; gap: var(--s-2); }
 .panel h2 { margin: 0; font-size: 15px; }
 .panel .muted { margin: 0; }
