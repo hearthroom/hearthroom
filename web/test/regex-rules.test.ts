@@ -31,12 +31,37 @@ describe("applyRules", () => {
 });
 
 describe("匯入匯出", () => {
-  const meimo = { pageDepth: 2, statusbar: "《美1》《状1》", beginning: "<开局面板>", regex_scripts: [
+  const meimo = { pageDepth: 1, statusbar: "《美1》《状1》", beginning: "<开局面板>", regex_scripts: [
     { id: -1, scriptName: "替换颜色『』", findRegex: "/『([\\s\\S]*?)』/g", replaceString: '<span style="color:#AB47BC">『$1』</span>' },
     { id: -1, scriptName: "《美1》", findRegex: "《美1》", replaceString: "<style>…</style>" },
   ] };
 
-  it("魅魔島檔：規則、功能欄、pageDepth→降低層級 都進來，beginning 另外回", () => {
+  it("魅魔島檔：pageDepth 2（沒勾降低層級）與缺欄位都是頁面最上層", () => {
+    expect(ruleSetFromImport({ ...meimo, pageDepth: 2 })!.set.lowered).toBe(false);
+    const { pageDepth: _omit, ...noDepth } = meimo;
+    expect(ruleSetFromImport(noDepth)!.set.lowered).toBe(false);
+    expect(ruleSetToExport(ruleSetFromImport(meimo)!.set, "").pageDepth).toBe(1);
+    expect(ruleSetToExport({ version: 1, rules: [], statusbar: "", lowered: false }, "").pageDepth).toBe(2);
+  });
+
+  it("酒館規則只收作用於 AI 輸出的：placement 沒有 2 的丟掉，沒寫 placement 的全收", () => {
+    const scripts = [
+      { scriptName: "in", findRegex: "/a/", replaceString: "", placement: [1] },
+      { scriptName: "out", findRegex: "/b/", replaceString: "", placement: [1, 2] },
+      { scriptName: "any", findRegex: "/c/", replaceString: "" },
+    ];
+    expect(ruleSetFromImport(scripts)!.set.rules.map((r) => r.name)).toEqual(["out", "any"]);
+  });
+
+  it("魅魔島匯入酬載：rules + statusbar + welcome + pageDepth", () => {
+    const payload = { rules: [{ find: "《x》", replace: "<b/>" }], statusbar: "《x》", welcome: "hi", pageDepth: 1 };
+    const got = ruleSetFromImport(payload)!;
+    expect(got.set.rules).toHaveLength(1);
+    expect(got.set.lowered).toBe(true);
+    expect(got.welcome).toBe("hi");
+  });
+
+  it("魅魔島檔：規則、功能欄、pageDepth 1→降低層級 都進來，beginning 另外回", () => {
     const got = ruleSetFromImport(meimo)!;
     expect(got.set.rules.map((r) => r.name)).toEqual(["替换颜色『』", "《美1》"]);
     expect(got.set.statusbar).toBe("《美1》《状1》");
