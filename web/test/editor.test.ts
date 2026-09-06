@@ -205,6 +205,9 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     // 存完之後條目帶著上游給的 id（fetchWorldbookEntries 的假回應）
     byText("世界書").click();
     await flush();
+    // 有內容的條目預設收合：先全部展開，欄位才在 DOM 裡
+    for (const btn of root.querySelectorAll<HTMLButtonElement>("button[aria-label='展開']")) btn.click();
+    await flush();
     const contents = root.querySelectorAll<HTMLTextAreaElement>("textarea[id^=wb-c-]");
     expect(contents).toHaveLength(2);
     await type(contents[0], "北境小鎮，三條商路交會。");
@@ -252,7 +255,9 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     const inputs = root.querySelectorAll<HTMLInputElement>("input[type=file]");
     await pickFile(inputs[inputs.length - 1], new File([JSON.stringify(info)], "eldoria.json"));
     expect(root.textContent).toContain("匯入了 2 條");
-    expect(root.querySelectorAll("textarea[id^=wb-c-]")).toHaveLength(2);
+    // 匯入的條目有內容，預設收合成一行摘要；摘要裡看得到次要關鍵詞
+    expect(root.querySelectorAll(".entry")).toHaveLength(2);
+    expect(root.querySelectorAll(".entry__summary")[1].textContent).toContain("+ safe");
     await submit();
     expect(api.createWorldbook).toHaveBeenCalledWith({ name: "測試", language: "zh-Hant" }, "tok");
   });

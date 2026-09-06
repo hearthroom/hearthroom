@@ -326,5 +326,9 @@
   "editor.tags.dimension.mechanic": "ギミック",
   "editor.tags.dimension.mood": "雰囲気",
   "editor.tags.dimension.relationship": "関係",
-  "editor.tags.dimension.setting": "舞台"
+  "editor.tags.dimension.setting": "舞台",
+  "wb.entry.expand": "開く",
+  "wb.entry.collapse": "閉じる",
+  "wb.entry.constantShort": "常時",
+  "wb.entry.disabled": "無効"
 }

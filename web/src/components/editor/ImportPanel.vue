@@ -150,13 +150,13 @@ onBeforeUnmount(() => { if (thumb.value) URL.revokeObjectURL(thumb.value); });
 <style scoped>
 .drop {
   display: grid; justify-items: center; gap: var(--s-2);
-  padding: var(--s-6) var(--s-4); text-align: center;
+  padding: var(--s-5) var(--s-4); text-align: center;
   border: 1px dashed var(--line-strong); border-radius: var(--r-lg);
   color: var(--text-3); transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .drop--on { border-color: var(--accent); background: var(--accent-tint); }
 .drop p { margin: 0; }
-.review { margin-top: var(--s-4); padding: var(--s-4); display: grid; gap: var(--s-3); }
+.review { margin-top: var(--s-3); padding: var(--s-4); display: grid; gap: var(--s-2); }
 .review__head { display: flex; gap: var(--s-3); align-items: center; }
 .review__thumb { width: 48px; height: 64px; object-fit: cover; border-radius: var(--r-sm); flex: none; box-shadow: 0 0 0 1px var(--line); }
 .review h3 { margin: 0; font-size: 16px; }
