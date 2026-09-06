@@ -268,3 +268,13 @@ describe("imageFetchUrl", () => {
     expect(imageFetchUrl("", origin)).toBe("");
   });
 });
+
+describe("平鋪的卡", () => {
+  it("沒包 data 但標了 spec 的 V3 卡：欄位照平鋪讀，spec 照它自己說的", async () => {
+    const flat = { spec: "chara_card_v3", spec_version: "3.0", name: "星", first_mes: "hi", description: "d", character_book: { entries: [{ keys: ["a"], content: "x" }] } };
+    const { card } = await parseTavernFile(new File([JSON.stringify(flat)], "flat.json"));
+    expect(card.spec).toBe("chara_card_v3");
+    expect(card.data.name).toBe("星");
+    expect(card.data.character_book?.entries).toHaveLength(1);
+  });
+});

@@ -326,5 +326,9 @@
   "editor.tags.dimension.mechanic": "玩法",
   "editor.tags.dimension.mood": "氛围",
   "editor.tags.dimension.relationship": "关系",
-  "editor.tags.dimension.setting": "背景"
+  "editor.tags.dimension.setting": "背景",
+  "wb.entry.expand": "展开",
+  "wb.entry.collapse": "收起",
+  "wb.entry.constantShort": "常驻",
+  "wb.entry.disabled": "已停用"
 }

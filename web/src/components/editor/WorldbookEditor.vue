@@ -6,11 +6,14 @@
  * 不是卡的一個欄位。沒綁書時只給一顆建立鈕；建立與綁定都在整份表單儲存時一起做，
  * 因為建立中的卡還沒有 id，綁不上去。
  *
+ * 條目預設收合，只露名字、關鍵詞摘要與命中次數：一本六十條的世界書全部攤開是兩萬多像素高，
+ * 找一條要捲半天。新加的與匯入後還沒填內容的條目自動展開，作者一眼看到該填什麼。
+ *
  * 條目怎麼觸發：關鍵詞命中就把內容送進上下文；寫了次要關鍵詞就要兩邊都出現（AND）；
  * 勾了「常駐」就每輪都送，不看關鍵詞。這三個是上游真的會執行的語意，其餘（插入位置、
  * 掃描深度）上游沒有對應機制，匯入時會列在報告裡而不是偷偷塞進某個欄位。
  */
-import { ref } from "vue";
+import { ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { confirmDialog } from "@/lib/confirm";
 import type { WorldbookEntryDraft } from "@/lib/role-draft";
@@ -34,6 +37,34 @@ const emit = defineEmits<{
 const { t } = useI18n();
 
 const NAME_MAX = 20;
+
+/** 展開的條目。鍵是 entryId，沒 id 的新條目用 `new-<index>`（跟 v-for 的 key 同一個）。 */
+const expanded = ref(new Set<string>());
+const keyOf = (entry: WorldbookEntryDraft, index: number) => entry.entryId ?? `new-${index}`;
+const isOpen = (entry: WorldbookEntryDraft, index: number) => expanded.value.has(keyOf(entry, index));
+function toggle(entry: WorldbookEntryDraft, index: number) {
+  const key = keyOf(entry, index);
+  const next = new Set(expanded.value);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  expanded.value = next;
+}
+// 沒內容的條目（剛加的、匯入後空的）自動展開；其餘維持作者的選擇
+watch(
+  () => props.modelValue.map((e, i) => (e.content.trim() ? "" : keyOf(e, i))).filter(Boolean),
+  (empties) => {
+    if (!empties.length) return;
+    const next = new Set(expanded.value);
+    for (const key of empties) next.add(key);
+    expanded.value = next;
+  },
+  { immediate: true },
+);
+const summary = (entry: WorldbookEntryDraft) => {
+  const parts = [entry.keywords.join("、")];
+  if (entry.secondaryKeywords?.length) parts.push(`+ ${entry.secondaryKeywords.join("、")}`);
+  return parts.filter(Boolean).join("  ");
+};
 
 const commit = (next: WorldbookEntryDraft[]) => emit("update:modelValue", next);
 
@@ -117,8 +148,17 @@ const setSecondary = (index: number, raw: string) => patch(index, { secondaryKey
       <p class="subtle count">{{ $t("wb.count", { n: modelValue.length }) }}</p>
 
       <ul class="entries">
-        <li v-for="(entry, index) in modelValue" :key="entry.entryId ?? `new-${index}`" class="entry panel">
+        <li v-for="(entry, index) in modelValue" :key="entry.entryId ?? `new-${index}`" class="entry panel"
+            :class="{ 'entry--open': isOpen(entry, index) }">
           <div class="entry__head">
+            <button type="button" class="btn btn--icon btn--sm btn--ghost" :aria-expanded="isOpen(entry, index)"
+                    :aria-label="isOpen(entry, index) ? $t('wb.entry.collapse') : $t('wb.entry.expand')"
+                    :title="isOpen(entry, index) ? $t('wb.entry.collapse') : $t('wb.entry.expand')" @click="toggle(entry, index)">
+              <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="chev" :class="{ flip: isOpen(entry, index) }">
+                <path d="M6 4l4 4-4 4" />
+              </svg>
+            </button>
             <input class="input input--name" :value="entry.name" :maxlength="NAME_MAX"
                    :placeholder="$t('wb.entry.name.placeholder')" :aria-label="$t('wb.entry.name')"
                    @input="patch(index, { name: ($event.target as HTMLInputElement).value })" />
@@ -130,6 +170,8 @@ const setSecondary = (index: number, raw: string) => patch(index, { secondaryKey
               <span class="sr-only">{{ $t("wb.entry.activations", { n: entry.activationCount }) }}</span>
               <span aria-hidden="true">{{ entry.activationCount }}</span>
             </span>
+            <span v-if="entry.isConstant" class="chip" :title="$t('wb.entry.constant')">{{ $t("wb.entry.constantShort") }}</span>
+            <span v-if="!entry.isEnabled" class="chip chip--off">{{ $t("wb.entry.disabled") }}</span>
             <button type="button" class="btn btn--icon btn--sm btn--danger" :aria-label="$t('wb.entry.delete')"
                     :title="$t('wb.entry.delete')" @click="remove(index)">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7"
@@ -139,6 +181,12 @@ const setSecondary = (index: number, raw: string) => patch(index, { secondaryKey
             </button>
           </div>
 
+          <!-- 收合時一行摘要：關鍵詞，加號後面是次要關鍵詞 -->
+          <p v-if="!isOpen(entry, index)" class="subtle entry__summary" @click="toggle(entry, index)">
+            {{ summary(entry) || $t("wb.entry.keywords.placeholder") }}
+          </p>
+
+          <template v-if="isOpen(entry, index)">
           <div class="field">
             <label :for="`wb-kw-${index}`">{{ $t("wb.entry.keywords") }}</label>
             <input :id="`wb-kw-${index}`" class="input" :value="keywordsText(entry)"
@@ -174,6 +222,7 @@ const setSecondary = (index: number, raw: string) => patch(index, { secondaryKey
               <span>{{ $t("wb.entry.constant") }}</span>
             </label>
           </div>
+          </template>
         </li>
       </ul>
 
@@ -202,7 +251,13 @@ const setSecondary = (index: number, raw: string) => patch(index, { secondaryKey
 .report { margin: var(--s-1) 0 0; padding-left: 1.1em; display: grid; gap: 2px; font-size: 12.5px; }
 .count { display: block; margin: 0 0 var(--s-2); }
 .entries { list-style: none; margin: 0 0 var(--s-3); padding: 0; display: grid; gap: var(--s-3); }
-.entry { padding: var(--s-3); display: grid; gap: var(--s-3); }
+.entry { padding: var(--s-2) var(--s-3); display: grid; gap: var(--s-2); }
+.entry--open { padding: var(--s-3); }
+.entry__summary { margin: 0 0 0 calc(var(--h-sm) + var(--s-2)); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chev { transition: transform var(--dur) var(--ease); }
+.chev.flip { transform: rotate(90deg); }
+.chip--off { color: var(--danger); }
+.entry .field { margin-bottom: 0; gap: 6px; }
 .entry__head { display: flex; gap: var(--s-2); align-items: center; }
 .input--name { flex: 1; font-weight: 600; }
 .hits { cursor: default; gap: 4px; font-variant-numeric: tabular-nums; }
