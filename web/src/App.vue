@@ -117,9 +117,9 @@ onMounted(() => document.addEventListener("keydown", onSlash));
 }
 .header__inner--nosearch { grid-template-columns: auto minmax(0, 1fr) auto; }
 
-.brand { display: inline-flex; align-items: center; gap: 8px; }
-.brand__mark { width: 24px; height: 24px; fill: var(--accent); }
-.brand__name { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+.brand { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.brand__mark { width: 24px; height: 24px; flex: none; fill: var(--accent); }
+.brand__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
 
 .nav { display: flex; gap: 2px; }
 .nav__item {
@@ -169,16 +169,19 @@ onMounted(() => document.addEventListener("keydown", onSlash));
 .footer__inner { max-width: var(--page); margin: 0 auto; padding: var(--s-5); font-size: 12.5px; color: var(--text-3); }
 .footer__inner a:hover { color: var(--text-2); }
 
-/* 手機：一排收完。品牌與榜單同一個目的地，榜單那顆省掉；搜尋收成圖示 */
+/* 手機：一排收完。品牌與榜單同一個目的地，榜單那顆省掉；搜尋收成圖示。
+   右邊那排（搜尋、外觀、語言、餘額、頭像）寬度由內容決定、不能疊；擠不下時讓位的是字標——
+   品牌欄用 minmax(0, 1fr) 才會真的縮（grid 的 auto 欄不會低於內容寬），字標以省略號收尾，圖標永遠在。 */
 @media (max-width: 860px) {
-  .header__inner { grid-template-columns: auto 1fr; column-gap: var(--s-3); padding: 0 var(--s-3); min-height: 52px; }
+  .header__inner { grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--s-3); padding: 0 var(--s-3); min-height: 52px; }
   .nav, .search { display: none; }
   .search-go { display: inline-flex; }
   .account { min-width: 0; }
   .account > * { flex: none; }
 }
-/* 最窄的手機：餘額讓位給搜尋圖示；帳號選單與錢包頁都還看得到它 */
-@media (max-width: 400px) {
+/* 窄手機：餘額讓位（九位數的餘額會把字標擠成省略號）；帳號選單與錢包頁都還看得到它。
+   門檻由實測定：字標＋搜尋、外觀、語言、餘額、頭像一排要 490px 左右才放得下。 */
+@media (max-width: 500px) {
   .account :deep(.acct__credits) { display: none; }
 }
 </style>
