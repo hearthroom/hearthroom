@@ -187,9 +187,9 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     expect(bookId).toBe("wb1");
     expect(doc.binding).toEqual({ roleId: "r1" });
     expect(doc.entries).toEqual([
-      { op: "create", name: "黑麥鎮", content: "北境小鎮。", keywords: ["黑麥鎮"], secondaryKeywords: [], isEnabled: true, isConstant: true },
+      { op: "create", name: "黑麥鎮", content: "北境小鎮。", keywords: ["黑麥鎮"], secondaryKeywords: [], isEnabled: true, isConstant: true, matchOptions: { caseSensitive: false, matchWholeWords: false, selectiveLogic: 0 } },
       // 酒館的 secondary_keys 直接落到條目的 AND 門，不再併進 keywords
-      { op: "create", name: "採石場", content: "廢棄了。", keywords: ["採石場"], secondaryKeywords: ["排水渠"], isEnabled: true, isConstant: false },
+      { op: "create", name: "採石場", content: "廢棄了。", keywords: ["採石場"], secondaryKeywords: ["排水渠"], isEnabled: true, isConstant: false, matchOptions: { caseSensitive: false, matchWholeWords: false, selectiveLogic: 0 } },
     ]);
     // 卡片存完才存正則：匯入帶進來的那條規則，帶著版本 0 整份送到上游的作者資產
     expect(api.saveAuthorAsset).toHaveBeenCalledTimes(1);
