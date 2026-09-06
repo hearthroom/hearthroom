@@ -568,12 +568,17 @@ export interface WorldbookDocumentEntry {
  *
  * 逐條建立的話，中途失敗會留下一本只有一半條目的世界書，而作者看不出少了哪幾條。
  */
+export interface WorldbookPatchResult {
+  /** 這次 create 的條目拿到的 id，照送出的順序。 */
+  createdEntryIds?: string[];
+}
+
 export async function patchWorldbookDocument(
   worldbookId: string,
   document: { entries?: WorldbookDocumentEntry[]; binding?: { roleId: string } },
   token: string,
-): Promise<unknown> {
-  return json<unknown>(
+): Promise<WorldbookPatchResult> {
+  return json<WorldbookPatchResult>(
     await fetch(`${UPSTREAM_API}/open/v1/worldbook/${encodeURIComponent(worldbookId)}/document`, {
       method: "POST",
       headers: writeHeaders(token),

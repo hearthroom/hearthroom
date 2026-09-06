@@ -105,10 +105,16 @@ const regexOpen = ref(false);
 const regexFile = ref<HTMLInputElement | null>(null);
 const regexDirty = computed(() => JSON.stringify(regexSet.value) !== JSON.stringify(regexOriginal.value));
 
+const saveLabel = computed(() => {
+  if (!saving.value) return isNew.value ? t("editor.saveDraft") : t("edit.save");
+  return saveProgress.value ? t("edit.savingProgress", saveProgress.value) : t("edit.saving");
+});
 const limits = ref(resolveLimits(null));
 const blockers = ref<string[]>([]);
 const loading = ref(!!roleId.value);
 const saving = ref(false);
+/** 世界書分段送出時的進度；沒在送就是 null。 */
+const saveProgress = ref<{ done: number; total: number } | null>(null);
 const error = ref("");
 const saved = ref(false);
 /** 右下角那一條「已儲存」。說完就走，不佔版面。 */
@@ -438,11 +444,14 @@ function onWorldbookImported(payload: { name: string; entries: WorldbookEntryDra
 }
 
 /** 草稿與上次存下的樣子比對，算出要 create / update / delete 哪些條目。 */
-function worldbookOps(): WorldbookDocumentEntry[] {
-  const ops: WorldbookDocumentEntry[] = [];
+/** 一個要送出去的操作，連同它對應的本地條目（delete 沒有），送成功後拿來對齊本地狀態。 */
+interface WorldbookOp { op: WorldbookDocumentEntry; entry?: WorldbookEntryDraft }
+
+function worldbookOps(): WorldbookOp[] {
+  const ops: WorldbookOp[] = [];
   const keptIds = new Set(worldbookEntries.value.map((e) => e.entryId).filter(Boolean) as string[]);
   for (const before of worldbookOriginal.value) {
-    if (before.entryId && !keptIds.has(before.entryId)) ops.push({ op: "delete", entryId: before.entryId });
+    if (before.entryId && !keptIds.has(before.entryId)) ops.push({ op: { op: "delete", entryId: before.entryId } });
   }
   for (const entry of worldbookEntries.value) {
     // 空條目不送：作者按了「新增」又沒填，那不是一條要存的資料。
@@ -456,12 +465,35 @@ function worldbookOps(): WorldbookDocumentEntry[] {
       isEnabled: entry.isEnabled,
       isConstant: entry.isConstant,
     };
-    if (!entry.entryId) ops.push({ op: "create", ...payload });
+    if (!entry.entryId) ops.push({ op: { op: "create", ...payload }, entry });
     else if (JSON.stringify(entry) !== JSON.stringify(worldbookOriginal.value.find((e) => e.entryId === entry.entryId))) {
-      ops.push({ op: "update", entryId: entry.entryId, ...payload });
+      ops.push({ op: { op: "update", entryId: entry.entryId, ...payload }, entry });
     }
   }
   return ops;
+}
+
+/**
+ * 一次送多少個操作。幾百條的匯入切成幾段送：每段幾秒內完成，不會撞到反向代理的逾時；
+ * 每段成功就把本地狀態對齊伺服器，中途斷線再按一次儲存只會送剩下的，不會重建已經建好的條目。
+ */
+const WORLDBOOK_OPS_PER_REQUEST = 100;
+
+/** 一段送成功之後：刪掉的從原始清單移除、改過的更新原始清單、新建的拿到 id 並加進原始清單。 */
+function reconcileWorldbookChunk(chunk: WorldbookOp[], createdIds: string[]) {
+  let k = 0;
+  for (const { op, entry } of chunk) {
+    if (op.op === "delete") {
+      worldbookOriginal.value = worldbookOriginal.value.filter((e) => e.entryId !== op.entryId);
+    } else if (op.op === "update" && entry) {
+      worldbookOriginal.value = worldbookOriginal.value.map((e) => (e.entryId === entry.entryId ? JSON.parse(JSON.stringify(entry)) : e));
+    } else if (op.op === "create" && entry) {
+      const id = createdIds[k++];
+      if (!id) continue;
+      entry.entryId = id;
+      worldbookOriginal.value.push(JSON.parse(JSON.stringify(entry)));
+    }
+  }
 }
 
 async function saveWorldbook(token: string, targetRoleId: string) {
@@ -486,12 +518,29 @@ async function saveWorldbook(token: string, targetRoleId: string) {
       },
       token,
     );
+    // 書建好就記住：之後任何一段失敗，重試都寫同一本，不會每按一次就多一本孤兒書。
+    worldbookId.value = bookId;
+    worldbookPending.value = false;
     firstBind = true;
   }
-  await patchWorldbookDocument(bookId, { entries: ops, ...(firstBind ? { binding: { roleId: targetRoleId } } : {}) }, token);
-  worldbookId.value = bookId;
-  worldbookPending.value = false;
-  // 條目 id 只有重新讀一次才拿得到，不然下一次儲存會把剛建的條目再建一遍。
+  saveProgress.value = { done: 0, total: ops.length };
+  try {
+    for (let i = 0; i < ops.length; i += WORLDBOOK_OPS_PER_REQUEST) {
+      const chunk = ops.slice(i, i + WORLDBOOK_OPS_PER_REQUEST);
+      // 綁定跟第一段一起送；上游的綁定是覆蓋式的，重送也不會出事
+      const result = await patchWorldbookDocument(
+        bookId,
+        { entries: chunk.map((c) => c.op), ...(firstBind ? { binding: { roleId: targetRoleId } } : {}) },
+        token,
+      );
+      firstBind = false;
+      reconcileWorldbookChunk(chunk, result?.createdEntryIds ?? []);
+      saveProgress.value = { done: Math.min(i + chunk.length, ops.length), total: ops.length };
+    }
+  } finally {
+    saveProgress.value = null;
+  }
+  // 全部送完再讀一次：順序與 id 以伺服器為準（舊版伺服器不回 createdEntryIds 時也靠這一步補上）。
   worldbookEntries.value = await fetchWorldbookEntries(bookId, token).catch(() => worldbookEntries.value);
   worldbookOriginal.value = JSON.parse(JSON.stringify(worldbookEntries.value));
 }
@@ -895,7 +944,7 @@ async function exportCard(format: "png" | "json") {
         <!-- 窄螢幕的動作條：右欄收掉時由它接手 -->
         <div class="bar">
           <button class="btn btn--primary" type="submit" :disabled="saving || (!dirty && !isNew)">
-            {{ saving ? $t("edit.saving") : isNew ? $t("editor.saveDraft") : $t("edit.save") }}
+            {{ saveLabel }}
           </button>
           <RouterLink class="btn" :class="{ 'is-off': saving }" :aria-disabled="saving || undefined"
                       :to="{ path: lp('/mine'), query: { fresh: '1' } }">
@@ -927,7 +976,7 @@ async function exportCard(format: "png" | "json") {
         <div class="rail__acts">
           <button class="btn btn--primary" type="button" :disabled="saving || (!dirty && !isNew)" title="⌘/Ctrl + S"
                   @click="save">
-            {{ saving ? $t("edit.saving") : isNew ? $t("editor.saveDraft") : $t("edit.save") }}
+            {{ saveLabel }}
           </button>
           <button v-if="!isNew" type="button" class="btn" :disabled="!canPublish || saving" @click="publish">
             {{ $t("editor.publish.submit") }}

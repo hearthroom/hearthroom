@@ -278,6 +278,49 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     expect(api.createWorldbook).toHaveBeenCalledWith({ name: "測試", language: "zh-Hant" }, "tok");
   });
 
+  it("大本世界書分段送：每段最多 100 個操作、綁定只跟第一段；中途失敗再存只送剩下的", async () => {
+    await mount("/create");
+    await type($("#f-name"), "大本");
+    byText("世界書").click();
+    await flush();
+    const entries: Record<string, unknown> = {};
+    for (let i = 0; i < 250; i++) entries[String(i)] = { key: [`k${i}`], content: `entry ${i}`, comment: `e${i}` };
+    const inputs = root.querySelectorAll<HTMLInputElement>("input[type=file]");
+    await pickFile(inputs[inputs.length - 1], new File([JSON.stringify({ entries })], "big.json"));
+    expect(root.textContent).toContain("匯入了 250 條");
+
+    // 伺服器：每段回這段新建條目的 id；第二段故意失敗一次（模擬連線被切）
+    let call = 0;
+    api.patchWorldbookDocument.mockImplementation(async (_id: string, doc: { entries: { op: string }[] }) => {
+      call++;
+      if (call === 2) throw new Error("boom");
+      return { createdEntryIds: doc.entries.filter((e) => e.op === "create").map((_e, i) => `id-${call}-${i}`) };
+    });
+    try {
+      await submit();
+      for (let i = 0; i < 6; i++) await flush();
+      expect(api.createWorldbook).toHaveBeenCalledTimes(1);
+      expect(api.patchWorldbookDocument).toHaveBeenCalledTimes(2);
+      const first = api.patchWorldbookDocument.mock.calls[0][1] as { entries: unknown[]; binding?: unknown };
+      expect(first.entries).toHaveLength(100);
+      expect(first.binding).toEqual({ roleId: "r1" });
+      expect(root.textContent).toContain("boom");
+
+      // 再按一次儲存：書已經有了不再建，第一段的 100 條已拿到 id 不再送，只送剩下的 150，也不再綁
+      await submit();
+      for (let i = 0; i < 6; i++) await flush();
+      expect(api.createWorldbook).toHaveBeenCalledTimes(1);
+      expect(api.patchWorldbookDocument).toHaveBeenCalledTimes(4);
+      const third = api.patchWorldbookDocument.mock.calls[2][1] as { entries: unknown[]; binding?: unknown };
+      const fourth = api.patchWorldbookDocument.mock.calls[3][1] as { entries: unknown[] };
+      expect(third.entries).toHaveLength(100);
+      expect(third.binding).toBeUndefined();
+      expect(fourth.entries).toHaveLength(50);
+    } finally {
+      api.patchWorldbookDocument.mockImplementation(async () => ({}));
+    }
+  });
+
   it("新卡草稿存在本機：關掉再回來原樣還原，清空重來就沒了", async () => {
     await mount("/create");
     await type($("#f-name"), "半路離開的卡");
