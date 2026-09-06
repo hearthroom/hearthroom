@@ -376,5 +376,9 @@
   "regex.issue.replaceLong": "替换内容超过 {max} KB",
   "regex.issue.badRegex": "正则写错了，这条不会生效",
   "regex.issue.statusbarLong": "状态栏超过 {max} 字",
-  "regex.issue.totalLong": "整份规则太大了"
+  "regex.issue.totalLong": "整份规则太大了",
+  "play.title": "对话",
+  "play.loading": "舞台加载中⋯",
+  "play.loadFailed": "舞台加载不进来，请稍后再试。",
+  "play.backToCard": "回到卡片"
 }

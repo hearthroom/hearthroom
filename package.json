@@ -11,11 +11,13 @@
     "typecheck": "wrangler types && tsc --noEmit && npm run typecheck -w web",
     "test": "vitest run && npm run test -w web",
     "test:api": "vitest run",
-    "build": "npm run build -w web",
+    "build": "npm run build:stage && npm run build -w web",
     "migrate:local": "wrangler d1 migrations apply lunatalk-community --local",
     "migrate:remote": "wrangler d1 migrations apply lunatalk-community --remote",
     "predeploy": "npm run typecheck && npm run test && npm run build",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "build:stage": "npm --prefix stage ci --no-audit --no-fund && npm --prefix stage run build:stage",
+    "sync:stage": "node scripts/sync-stage.mjs"
   },
   "dependencies": {
     "hono": "^4.13.5",
