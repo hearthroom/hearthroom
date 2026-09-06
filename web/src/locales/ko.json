@@ -318,16 +318,13 @@
   "editor.sex.women": "여성",
   "editor.sex.other": "기타",
   "editor.tags.pick": "분류에서 고르기",
-  "editor.tags.dimension.genre": "장르",
-  "editor.tags.dimension.setting": "배경",
-  "editor.tags.dimension.relationship": "관계",
-  "editor.tags.dimension.personality": "성격",
-  "editor.tags.dimension.style": "스타일",
-  "editor.tags.dimension.audience": "대상",
-  "editor.tags.dimension.theme": "테마",
-  "editor.tags.dimension.other": "기타",
   "wb.entry.secondary": "보조 키워드",
   "wb.entry.secondary.placeholder": "비워 두면 키워드만으로 발동",
   "wb.entry.secondary.hint": "설정하면 둘 다 나와야 발동합니다: 키워드 중 하나와 여기 중 하나.",
-  "wb.entry.activations": "대화에 {n}번 포함됨"
+  "wb.entry.activations": "대화에 {n}번 포함됨",
+  "editor.tags.dimension.archetype": "유형",
+  "editor.tags.dimension.mechanic": "플레이 방식",
+  "editor.tags.dimension.mood": "분위기",
+  "editor.tags.dimension.relationship": "관계",
+  "editor.tags.dimension.setting": "배경"
 }

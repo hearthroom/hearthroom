@@ -318,16 +318,13 @@
   "editor.sex.women": "女",
   "editor.sex.other": "其他",
   "editor.tags.pick": "從分類裡挑",
-  "editor.tags.dimension.genre": "類型",
-  "editor.tags.dimension.setting": "背景",
-  "editor.tags.dimension.relationship": "關係",
-  "editor.tags.dimension.personality": "性格",
-  "editor.tags.dimension.style": "風格",
-  "editor.tags.dimension.audience": "受眾",
-  "editor.tags.dimension.theme": "主題",
-  "editor.tags.dimension.other": "其他",
   "wb.entry.secondary": "次要關鍵詞",
   "wb.entry.secondary.placeholder": "留空就只看關鍵詞",
   "wb.entry.secondary.hint": "填了就要兩邊同時出現才觸發：關鍵詞任一個，加上這裡任一個。",
-  "wb.entry.activations": "被帶進對話 {n} 次"
+  "wb.entry.activations": "被帶進對話 {n} 次",
+  "editor.tags.dimension.archetype": "原型",
+  "editor.tags.dimension.mechanic": "玩法",
+  "editor.tags.dimension.mood": "氛圍",
+  "editor.tags.dimension.relationship": "關係",
+  "editor.tags.dimension.setting": "背景"
 }
