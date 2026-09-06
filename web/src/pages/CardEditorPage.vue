@@ -774,6 +774,18 @@ async function exportCard(format: "png" | "json") {
           <FieldText id="f-welcome" v-model="draft.roleWelcome" :label="$t('editor.welcome')" required :rows="8"
                      :max="limits.roleWelcome" :hint="$t('editor.welcome.hint')" />
 
+          <!-- 正則規則跟開場白待在一起（對齊魅魔島）：AI 回覆在玩家瀏覽器裡先過一遍「找到→換成」再顯示 -->
+          <div class="rxbar">
+            <button type="button" class="btn btn--sm" @click="regexOpen = true">
+              {{ $t("regex.open") }}
+              <span v-if="regexSet.rules.length" class="chip">{{ regexSet.rules.length }}</span>
+            </button>
+            <button type="button" class="btn btn--sm btn--ghost" @click="regexFile?.click()">{{ $t("regex.import") }}</button>
+            <button type="button" class="btn btn--sm btn--ghost" :disabled="!regexSet.rules.length" @click="exportRegex">{{ $t("regex.export") }}</button>
+            <input ref="regexFile" type="file" accept=".json,application/json" class="sr-only" @change="onRegexFile" />
+            <span class="subtle">{{ $t("regex.bar.hint") }}</span>
+          </div>
+
           <ListEditor v-model="draft.alternates" :label="$t('editor.alternates')" :hint="$t('editor.alternates.hint')"
                       :rows="4" :add-label="$t('editor.alternates.add')" :remove-label="$t('list.remove')"
                       :up-label="$t('list.up')" :down-label="$t('list.down')" />
@@ -816,17 +828,6 @@ async function exportCard(format: "png" | "json") {
             </div>
           </div>
 
-          <!-- 正則規則是進階項，放在分區最後：AI 回覆在玩家瀏覽器裡先過一遍「找到→換成」再顯示 -->
-          <div class="rxbar">
-            <button type="button" class="btn btn--sm" @click="regexOpen = true">
-              {{ $t("regex.open") }}
-              <span v-if="regexSet.rules.length" class="chip">{{ regexSet.rules.length }}</span>
-            </button>
-            <button type="button" class="btn btn--sm btn--ghost" @click="regexFile?.click()">{{ $t("regex.import") }}</button>
-            <button type="button" class="btn btn--sm btn--ghost" :disabled="!regexSet.rules.length" @click="exportRegex">{{ $t("regex.export") }}</button>
-            <input ref="regexFile" type="file" accept=".json,application/json" class="sr-only" @change="onRegexFile" />
-            <span class="subtle">{{ $t("regex.bar.hint") }}</span>
-          </div>
         </section>
 
         <!-- 形象 -->
@@ -1004,8 +1005,7 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .turn .input { flex: 1; resize: vertical; }
 .input--who { flex: none; width: 96px; }
 .acts { display: flex; gap: var(--s-2); flex-wrap: wrap; }
-/* 進階項：一條髮絲線隔在分區底部，跟必填的開場白拉開身分 */
-.rxbar { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; padding-top: var(--s-4); border-top: 1px solid var(--line); }
+.rxbar { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }
 .rxbar .chip { margin-left: 4px; height: 20px; padding: 0 7px; font-variant-numeric: tabular-nums; }
 .panel { padding: var(--s-4); display: grid; gap: var(--s-2); }
 .panel h2 { margin: 0; font-size: 15px; }
