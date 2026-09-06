@@ -31,7 +31,11 @@ declare module "moonstage/stage" {
     app: App,
     options: {
       host: StageHost;
-      auth: { getAccessToken(): Promise<string | null>; onUnauthorized(): void };
+      auth: {
+        getAccessToken(): Promise<string | null>;
+        onUnauthorized(): void;
+        user?: { id: string; nickName?: string; avatar?: string };
+      };
       api: { base: string };
       i18n?: StageI18n;
     },
