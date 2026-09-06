@@ -127,6 +127,22 @@ const text = (value: unknown): string => (typeof value === "string" ? value.trim
 const list = (value: unknown): string[] =>
   Array.isArray(value) ? value.map((v) => text(v)).filter(Boolean) : [];
 
+/**
+ * 關鍵詞欄位三種寫法都收：陣列（酒館）、JSON 字串 `'["a","b"]'`（MMD 的世界書匯出就是
+ * 這樣存的，用戶回報「匯入不帶關鍵詞」的原因）、逗號分隔的純字串（舊工具）。
+ */
+const keyList = (value: unknown): string[] => {
+  if (Array.isArray(value)) return list(value);
+  if (typeof value !== "string" || !value.trim()) return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (Array.isArray(parsed)) return list(parsed);
+  } catch {
+    /* 不是 JSON：當逗號分隔 */
+  }
+  return value.split(/[,，]/).map((k) => k.trim()).filter(Boolean);
+};
+
 /** V2 之前的卡是平的（沒有 data 包一層），還在野外流通，所以兩種都收。 */
 function unwrap(raw: unknown): TavernCard {
   if (!raw || typeof raw !== "object") throw new Error("tavern_invalid");
@@ -215,15 +231,15 @@ export function bookEntriesToDrafts(entries: TavernBookEntry[]): WorldbookEntryD
     const content = text(entry.content);
     if (!content) return;
     // 條目要有名字才找得回來。酒館這兩個欄位常常都空，那就用第一個關鍵詞。
-    const baseName = text(entry.name) || text(entry.comment) || list(entry.keys)[0] || `#${index + 1}`;
+    const baseName = text(entry.name) || text(entry.comment) || keyList(entry.keys)[0] || `#${index + 1}`;
     const parts = splitEntryContent(content);
     parts.forEach((part, i) => {
       const name = parts.length === 1 ? baseName.slice(0, 20) : `${[...baseName].slice(0, 14).join("")} (${i + 1}/${parts.length})`;
       drafts.push({
         name,
         content: part,
-        keywords: list(entry.keys),
-        secondaryKeywords: list(entry.secondary_keys),
+        keywords: keyList(entry.keys),
+        secondaryKeywords: keyList(entry.secondary_keys),
         isEnabled: entry.enabled !== false,
         isConstant: entry.constant === true,
       });
@@ -261,8 +277,8 @@ export function worldInfoToBook(raw: unknown): TavernBook | null {
     entries: rows
       .filter((row) => row && typeof row === "object")
       .map((row) => ({
-        keys: list(row.keys ?? row.key),
-        secondary_keys: list(row.secondary_keys ?? row.keysecondary),
+        keys: keyList(row.keys ?? row.key),
+        secondary_keys: keyList(row.secondary_keys ?? row.keysecondary),
         content: text(row.content),
         name: text(row.name),
         comment: text(row.comment),
