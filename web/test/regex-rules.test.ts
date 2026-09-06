@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyRules, makeRule, parseFind, renderStatusbar, renderWithRules, ruleSetFromImport, ruleSetToExport, rulesFromTavern, validateRuleSet } from "../src/lib/regex-rules";
+import { applyRules, makeRule, parseFind, renderStatusbar, renderWithRules, ruleSetFromAuthorAsset, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, rulesFromTavern, validateRuleSet } from "../src/lib/regex-rules";
 
 describe("parseFind", () => {
   it("/pat/flags 是正則，其他是字面", () => {
@@ -75,9 +75,27 @@ describe("匯入匯出", () => {
 describe("validateRuleSet", () => {
   it("空 find、壞正則、超長都有對應的 key", () => {
     const set = { version: 1 as const, lowered: false, statusbar: "", rules: [
-      makeRule({ id: "a", find: "" }), makeRule({ id: "b", find: "/[/g" }), makeRule({ id: "c", find: "x", replace: "y".repeat(20001) }),
+      makeRule({ id: "a", find: "" }), makeRule({ id: "b", find: "/[/g" }), makeRule({ id: "c", find: "x", replace: "y".repeat(32 * 1024 + 1) }),
     ] };
     const keys = validateRuleSet(set).map((i) => i.ruleId + ":" + i.key);
     expect(keys).toEqual(expect.arrayContaining(["a:regex.issue.emptyFind", "b:regex.issue.badRegex", "c:regex.issue.replaceLong"]));
+  });
+});
+
+describe("上游作者資產 ↔ 本站規則組", () => {
+  it("mountTrigger→功能欄、under→降低層級；cover 與 pageMode 帶著走不丟", () => {
+    const set = ruleSetFromAuthorAsset({ rules: [{ id: "a", name: "n", find: "x", replace: "y", enabled: true }], mountTrigger: "《美1》", mountLayer: "under", pageMode: "immersive" });
+    expect(set.statusbar).toBe("《美1》");
+    expect(set.lowered).toBe(true);
+    expect(set.pageMode).toBe("immersive");
+    const back = ruleSetToAuthorAsset(set, 3);
+    expect(back).toMatchObject({ mountTrigger: "《美1》", mountLayer: "under", pageMode: "immersive", version: 3 });
+    expect(back.rules).toEqual([{ id: "a", name: "n", find: "x", replace: "y", enabled: true }]);
+
+    const cover = ruleSetFromAuthorAsset({ rules: [], mountTrigger: "", mountLayer: "cover" });
+    expect(cover.lowered).toBe(false);
+    expect(ruleSetToAuthorAsset(cover, 0).mountLayer).toBe("cover");
+    // 沒設過：status none、mountLayer 空 → 最上層
+    expect(ruleSetToAuthorAsset(ruleSetFromAuthorAsset({}), 0).mountLayer).toBe("over");
   });
 });

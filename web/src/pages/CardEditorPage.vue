@@ -21,7 +21,7 @@ import { useI18n } from "vue-i18n";
 import {
   createRole,
   createWorldbook,
-  fetchRegexRules,
+  fetchAuthorAsset,
   fetchRoleDetail,
   fetchRoleWorldbooks,
   fetchRoleValidation,
@@ -29,12 +29,12 @@ import {
   patchRoleDocument,
   patchRoleWelcome,
   patchWorldbookDocument,
-  saveRegexRules,
+  saveAuthorAsset,
   submitRoleForReview,
   uploadImage,
   type WorldbookDocumentEntry,
 } from "@/lib/api";
-import { emptyRuleSet, ruleSetFromImport, ruleSetToExport, type RegexRuleSet } from "@/lib/regex-rules";
+import { emptyRuleSet, ruleSetFromAuthorAsset, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, type RegexRuleSet } from "@/lib/regex-rules";
 import RegexRulesEditor from "@/components/editor/RegexRulesEditor.vue";
 import {
   LANGUAGES,
@@ -368,13 +368,13 @@ async function onPickImage(file: File, ok: (url: string) => void, fail: (message
 
 // ── 正則規則 ──────────────────────────────────────────────────────
 
+// 上游把「正則規則 + 功能欄」叫作者資產（author asset）；本站只是換個說法，存的是同一份。
 async function loadRegexRules(token: string) {
   try {
-    const { doc, version } = await fetchRegexRules(roleId.value, token);
-    const imported = doc ? ruleSetFromImport(doc) : null;
-    regexSet.value = imported?.set ?? emptyRuleSet();
+    const asset = await fetchAuthorAsset(roleId.value, token);
+    regexSet.value = ruleSetFromAuthorAsset(asset);
     regexOriginal.value = JSON.parse(JSON.stringify(regexSet.value));
-    regexVersion.value = version;
+    regexVersion.value = asset.version;
   } catch {
     // 讀不到就當沒有：舊上游沒這條路，不擋編輯
   }
@@ -383,7 +383,8 @@ async function loadRegexRules(token: string) {
 /** 卡片存完才存規則：新卡要先有 roleId。沒改就不送。 */
 async function saveRegex(token: string, targetRoleId: string) {
   if (!regexDirty.value) return;
-  regexVersion.value = await saveRegexRules(targetRoleId, regexSet.value, regexVersion.value, token);
+  const saved = await saveAuthorAsset(targetRoleId, ruleSetToAuthorAsset(regexSet.value, regexVersion.value), token);
+  regexVersion.value = saved.version;
   regexOriginal.value = JSON.parse(JSON.stringify(regexSet.value));
 }
 
