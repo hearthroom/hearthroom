@@ -182,7 +182,7 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
       { roleWelcome: CARD.data.first_mes, alternates: ["雷雨夜，酒館只剩你一個客人。"], prologue: [] },
       "tok",
     );
-    expect(api.createWorldbook).toHaveBeenCalledWith({ name: "黑麥鎮", language: "zh-Hant" }, "tok");
+    expect(api.createWorldbook).toHaveBeenCalledWith({ name: "黑麥鎮", language: "zh-Hant", format: "tavern" }, "tok");
     const [bookId, doc] = api.patchWorldbookDocument.mock.calls[0] as unknown as [string, { entries: unknown[]; binding?: unknown }];
     expect(bookId).toBe("wb1");
     expect(doc.binding).toEqual({ roleId: "r1" });
