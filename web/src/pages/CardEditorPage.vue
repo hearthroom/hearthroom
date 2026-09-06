@@ -621,7 +621,7 @@ function applyImport(result: ImportResult) {
   const language = draft.value.language;
   draft.value = { ...result.draft, language };
   tagsText.value = formatTags(draft.value.roleTag);
-  track("card_import", { detail: result.image ? "png" : "json" });
+  track("card_import", { detail: result.spec === "mmd" ? "mmd" : result.image ? "png" : "json" });
   if (result.worldbook) {
     worldbookPending.value = true;
     worldbookName.value = result.worldbook.name || draft.value.roleName;
@@ -725,7 +725,7 @@ async function exportCard(format: "png" | "json") {
 
         <!-- 基础 -->
         <section v-show="section === 'basic'" class="pane">
-          <ImportPanel v-if="isNew" :language="draft.language" @apply="applyImport" />
+          <ImportPanel v-if="isNew" :language="draft.language" :detail-max="limits.roleDetailDesc" @apply="applyImport" />
 
           <FieldText id="f-name" v-model="draft.roleName" :label="$t('editor.name')" required :max="60"
                      :placeholder="$t('create.name.placeholder')" />

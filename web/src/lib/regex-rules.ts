@@ -141,11 +141,40 @@ export interface TavernRegexScript {
 
 const text = (v: unknown): string => (typeof v === "string" ? v : "");
 
+/**
+ * 酒館的 placement：1 = 使用者輸入、2 = AI 輸出、3 = 斜線指令、5 = 世界書。
+ * 本站的規則只作用在畫面上的 AI 回覆，所以只收作用於 AI 輸出的；沒寫 placement 的當成全部。
+ */
+function actsOnAiOutput(s: TavernRegexScript): boolean {
+  const placement = Array.isArray(s.placement) ? s.placement.map(Number) : null;
+  return !placement || !placement.length || placement.includes(2);
+}
+
 export function rulesFromTavern(scripts: unknown): RegexRule[] {
   if (!Array.isArray(scripts)) return [];
   return (scripts as TavernRegexScript[])
-    .filter((s) => s && typeof s === "object" && text(s.findRegex))
+    .filter((s) => s && typeof s === "object" && text(s.findRegex) && actsOnAiOutput(s))
     .map((s, i) => makeRule({ name: text(s.scriptName) || `#${i + 1}`, find: text(s.findRegex), replace: text(s.replaceString), enabled: s.disabled !== true }));
+}
+
+/** 魅魔島自家「導出正則」列表（或 API 回包的 data）：條目是 { regex, content, name }。 */
+export interface MeimoRegexItem {
+  id?: unknown;
+  name?: string;
+  regex?: string;
+  content?: string;
+  [key: string]: unknown;
+}
+
+export const isMeimoRegexItem = (v: unknown): v is MeimoRegexItem =>
+  !!v && typeof v === "object" && typeof (v as MeimoRegexItem).regex === "string" && ("content" in v || "name" in v);
+
+export function rulesFromMeimoList(items: unknown): RegexRule[] {
+  if (!Array.isArray(items)) return [];
+  return items
+    .filter(isMeimoRegexItem)
+    .filter((it) => text(it.regex))
+    .map((it, i) => makeRule({ name: text(it.name) || `#${i + 1}`, find: text(it.regex), replace: text(it.content) }));
 }
 
 export function rulesToTavern(rules: RegexRule[]): TavernRegexScript[] {
@@ -172,10 +201,13 @@ function ruleSetFromNative(obj: Record<string, unknown>): RegexRuleSet | null {
 export function ruleSetFromImport(raw: unknown): { set: RegexRuleSet; welcome: string } | null {
   if (!raw || typeof raw !== "object") return null;
   const obj = raw as Record<string, unknown>;
-  // 自己存的形狀：rules 陣列直接讀，不需要走酒館欄位名的對映
+  // 自己存的形狀：rules 陣列直接讀，不需要走酒館欄位名的對映。
+  // 魅魔島的「匯入酬載」也是 rules 陣列，旁邊多 statusbar / welcome / pageDepth。
   if (Array.isArray(obj.rules)) {
     const native = ruleSetFromNative(obj);
-    return native && native.rules.length ? { set: native, welcome: "" } : null;
+    if (!native || !native.rules.length) return null;
+    if ("pageDepth" in obj) native.lowered = loweredFromPageDepth(obj.pageDepth);
+    return { set: native, welcome: text(obj.welcome) };
   }
   // 三種來源：魅魔島檔、酒館卡（extensions.regex_scripts）、裸陣列
   let scripts: unknown = obj.regex_scripts;
@@ -183,12 +215,21 @@ export function ruleSetFromImport(raw: unknown): { set: RegexRuleSet; welcome: s
   if (!scripts && Array.isArray(raw)) scripts = raw;
   const rules = rulesFromTavern(scripts);
   if (!rules.length) return null;
-  // 魅魔島 pageDepth：1 = 頁面最上層（預設），2 = 勾了「降低層級」放輸入框之下。樣例檔就是 2。
-  return { set: { version: 1, rules, statusbar: text(obj.statusbar), lowered: Number(obj.pageDepth) >= 2 }, welcome: text(obj.beginning) };
+  return { set: { version: 1, rules, statusbar: text(obj.statusbar), lowered: loweredFromPageDepth(obj.pageDepth) }, welcome: text(obj.beginning) };
+}
+
+/**
+ * 魅魔島功能欄的「降低層級，勾選後層級位於輸入框下方」對應匯出檔的 pageDepth：
+ * 勾了是 1，沒勾是 2（拿兩張已知卡對照確認：勾了降低層級的那張是 1、HUD 蓋在最上面的那張是 2）。
+ * 早先這裡寫反了（>= 2 當降低），2026-09 修正；缺欄位就是預設的頁面最上層。
+ */
+export function loweredFromPageDepth(v: unknown): boolean {
+  const s = String(v ?? "").trim().toLowerCase();
+  return s === "0" || s === "1" || s === "under" || s === "below";
 }
 
 export function ruleSetToExport(set: RegexRuleSet, welcome: string): MeimoRegexFile {
-  return { pageDepth: set.lowered ? 2 : 1, statusbar: set.statusbar, beginning: welcome, regex_scripts: rulesToTavern(set.rules) };
+  return { pageDepth: set.lowered ? 1 : 2, statusbar: set.statusbar, beginning: welcome, regex_scripts: rulesToTavern(set.rules) };
 }
 
 // ── 上游的「作者資產」形狀 ──────────────────────────────────────────────
