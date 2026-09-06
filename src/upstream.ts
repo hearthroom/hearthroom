@@ -76,7 +76,15 @@ export interface UpstreamRole {
   welcome: string;
   talkNum: number;
   followNum: number;
+  /**
+   * 上游記的建卡來源。本站建的卡是 "hearthroom"（建卡時自報、上游白名單認可）；
+   * 作者在主站建的是 manual／空字串。只有本站建的能登記上榜、能出現在「我的卡片」。
+   */
+  creationMethod: string;
 }
+
+/** 本站在上游登記的來源名。建卡時送出、讀回時比對，兩邊要同一個字。 */
+export const CREATION_METHOD = "hearthroom";
 
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 const num = (v: unknown): number => {
@@ -126,6 +134,7 @@ export function projectRole(raw: Record<string, unknown>): UpstreamRole {
     welcome: str(raw.roleWelcome),
     talkNum: num(raw.talkNum),
     followNum: num(raw.followNum),
+    creationMethod: str(raw.creationMethod),
   };
 }
 
@@ -159,7 +168,8 @@ export async function fetchMyRoles(
   pageSize: number,
 ): Promise<MyRolePage> {
   const res = await fetch(
-    apiUrl(env, `/open/v1/role/mine?pageNum=${page}&pageSize=${pageSize}`),
+    // 只要本站建的那一組：作者在主站建的卡不進這裡，也登記不上榜。
+    apiUrl(env, `/open/v1/role/mine?pageNum=${page}&pageSize=${pageSize}&creationMethod=${CREATION_METHOD}`),
     { headers: { Authorization: `Bearer ${bearer}`, language: "zh-Hans", "User-Agent": UA } },
   );
   const body = await readJson(res, "role list");

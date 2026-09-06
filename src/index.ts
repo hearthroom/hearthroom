@@ -20,7 +20,7 @@ import { authorLine, renderHead } from "./head";
 import { ALIAS_HOSTS, HOST, canonicalUrl } from "./site";
 import { loadMine, type MineFilter } from "./mine";
 import { type Env, HttpError } from "./types";
-import { upstream, ZONES, type Zone } from "./upstream";
+import { upstream, ZONES, type Zone, CREATION_METHOD } from "./upstream";
 
 const app = new Hono<{ Bindings: Env; Variables: { ev: Pending } }>();
 
@@ -339,6 +339,9 @@ app.post("/v1/cards", async (c) => {
 
   const role = await upstream.fetchRole(c.env, roleId);
   if (role.authorNumId !== me.accountNumId) throw new HttpError(403, "not the author of this card");
+  // 榜單只收在本站建的卡。作者在主站建的卡不是這裡的東西——「我的卡片」也不會列它，
+  // 這條是防直接打 API 的那一手。
+  if (role.creationMethod !== CREATION_METHOD) throw new HttpError(403, "only cards created on this site can be listed");
 
   const { id, created } = await upsertCard(c.env.DB, role, Date.now());
   const row = await getCard(c.env.DB, id);

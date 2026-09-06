@@ -114,6 +114,21 @@ describe("上游呼叫的 HTTP 形狀", () => {
     for (const call of calls) expect(call.headers["User-Agent"]).toContain("Personae");
   });
 
+  it("我的卡片只向上游要本站建的那一組（creationMethod=hearthroom）", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string) => {
+      calls.push(String(url));
+      return new Response(JSON.stringify({ roleList: [], total: 0, hasNextPage: false }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    await upstream.fetchMyRoles(env, "tok", 1, 24);
+    expect(calls[0]).toBe(`${env.LUNATALK_API_BASE}/open/v1/role/mine?pageNum=1&pageSize=24&creationMethod=hearthroom`);
+  });
+
+  it("角色詳情帶出建卡來源，登記時靠它分本站與主站", () => {
+    expect(projectRole({ ...mainSiteRole, creationMethod: "hearthroom" }).creationMethod).toBe("hearthroom");
+    expect(projectRole(mainSiteRole).creationMethod).toBe("");
+  });
+
   it("roleId 有特殊字元也不會拼壞 URL", async () => {
     const seen: string[] = [];
     vi.stubGlobal("fetch", async (url: string) => {

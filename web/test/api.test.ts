@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchWorldbookEntries, readKeywordList } from "../src/lib/api";
+import { createRole, fetchWorldbookEntries, readKeywordList } from "../src/lib/api";
 
 /** 上游真實回應的形狀（2026-09-06 線上抓的）：`list` 而不是 `entries`，關鍵詞是 JSON 字串。 */
 const UPSTREAM_ROW = {
@@ -32,5 +32,15 @@ describe("readKeywordList", () => {
     expect(readKeywordList("甲、乙, 丙")).toEqual(["甲", "乙", "丙"]);
     expect(readKeywordList("")).toEqual([]);
     expect(readKeywordList(null)).toEqual([]);
+  });
+});
+
+describe("createRole", () => {
+  it("建卡自報 origin=hearthroom：上游記在卡上，本站只認這種卡", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ roleId: "r1" }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await createRole({ roleName: "阿芙拉", language: "zh-Hant" }, "tok");
+    const init = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1];
+    expect(JSON.parse(String(init.body))).toEqual({ roleName: "阿芙拉", language: "zh-Hant", origin: "hearthroom" });
   });
 });

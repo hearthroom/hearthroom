@@ -34,6 +34,8 @@ export interface RoleFixture {
   tags?: string[];
   talkNum?: number;
   followNum?: number;
+  /** 上游記的建卡來源。沒給就當社群站建的——大多數登記測試關心的不是這件事。 */
+  creationMethod?: string;
 }
 
 export function role(f: RoleFixture): UpstreamRole {
@@ -52,6 +54,7 @@ export function role(f: RoleFixture): UpstreamRole {
     welcome: f.welcome ?? "",
     talkNum: f.talkNum ?? 0,
     followNum: f.followNum ?? 0,
+    creationMethod: f.creationMethod ?? "hearthroom",
   };
 }
 
