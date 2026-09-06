@@ -79,6 +79,8 @@ describe("/play/:roleId", () => {
     const [, options] = installMoonStage.mock.calls[0] as unknown as [unknown, { auth: { getAccessToken(): Promise<string | null> }; api: { base: string }; host: { ui: { toast(t: string): void } } }];
     expect(options.api.base).toMatch(/^https?:\/\//);
     await expect(options.auth.getAccessToken()).resolves.toBe("tok-1");
+    // 畫布送訊息前看的是登入的人：宿主要把 session 裡的人交出去
+    expect((options.auth as { user?: { id: string } }).user).toEqual({ id: "1", nickName: "測試", avatar: "" });
     const stub = root.querySelector<HTMLElement>(".stage-stub");
     expect(stub?.dataset.role).toBe("role-9");
     // 舞台丟出來的提示畫在頁面上

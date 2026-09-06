@@ -66,6 +66,10 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
       auth: {
         getAccessToken: () => deps.session.accessToken(),
         onUnauthorized: () => { void deps.session.login(deps.currentPath()); },
+        // 畫布送訊息前看的是「有沒有登入的人」；這頁本來就要登入才進得來（meta.auth）
+        user: deps.session.me
+          ? { id: String(deps.session.me.accountNumId), nickName: deps.session.me.nickName, avatar: deps.session.me.avatar }
+          : undefined,
       },
       api: { base: UPSTREAM_API },
       i18n: i18n.global,
