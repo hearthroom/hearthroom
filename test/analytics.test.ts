@@ -124,25 +124,25 @@ describe("服務端事件", () => {
 });
 
 describe("搬家", () => {
-  it("舊網域整條路徑原樣 301 到新家，查詢字串跟著走", async () => {
-    const res = await SELF.fetch("https://community.johnny.moe/zh-Hans/cards/r-1?x=1", { redirect: "manual" });
+  it("別名主機整條路徑原樣 301 到正本，查詢字串跟著走", async () => {
+    const res = await SELF.fetch(`https://www.${HOST}/zh-Hans/cards/r-1?x=1`, { redirect: "manual" });
     await res.arrayBuffer();
     expect(res.status).toBe(301);
     expect(res.headers.get("Location")).toBe(`https://${HOST}/zh-Hans/cards/r-1?x=1`);
   });
 
   it("API 也轉，不留兩個能寫入的入口", async () => {
-    const res = await SELF.fetch("https://community.johnny.moe/v1/cards?zone=zh", { redirect: "manual" });
+    const res = await SELF.fetch(`https://www.${HOST}/v1/cards?zone=zh`, { redirect: "manual" });
     await res.arrayBuffer();
     expect(res.status).toBe(301);
     expect(res.headers.get("Location")).toContain(`${HOST}/v1/cards`);
   });
 
-  it("轉址記一筆並標出來源主機——舊網域那條降到零才能拔", async () => {
-    const res = await SELF.fetch("https://community.johnny.moe/", { redirect: "manual" });
+  it("轉址記一筆並標出來源主機", async () => {
+    const res = await SELF.fetch(`https://www.${HOST}/`, { redirect: "manual" });
     await res.arrayBuffer();
     const [ev] = seen("host_redirect");
-    expect(ev!.detail).toBe("community.johnny.moe");
+    expect(ev!.detail).toBe(`www.${HOST}`);
     expect(ev!.status).toBe(301);
   });
 
@@ -160,15 +160,17 @@ describe("搬家", () => {
     expect(res.status).toBe(200);
   });
 
-  it("搬家前後的主機都算自己人，referer 才不會把自己記成外部流量", () => {
+  it("正本與別名都算自己人，referer 才不會把自己記成外部流量；別的主機不算", () => {
     expect(isSelfHost(HOST)).toBe(true);
+    expect(isSelfHost(`www.${HOST}`)).toBe(true);
+    expect(isSelfHost("community.example.net")).toBe(false);
     expect(isSelfHost("discord.com")).toBe(false);
     expect(refHostOf(`https://${HOST}/`, HOST)).toBe("");
     expect(refHostOf("https://discord.com/x", HOST)).toBe("discord.com");
   });
 
   it("canonical 永遠指正本，不跟著請求進來的主機走", () => {
-    for (const h of [`www.${HOST}`, "community.johnny.moe", HOST]) {
+    for (const h of [`www.${HOST}`, HOST]) {
       expect(canonicalUrl(new URL(`https://${h}/cards/r-1?x=1`))).toBe(`https://${HOST}/cards/r-1`);
     }
   });

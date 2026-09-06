@@ -18,9 +18,7 @@ export const HOST = "hearthroom.club";
 export const ALIAS_HOSTS: readonly string[] = [
   // 永久別名
   "www.hearthroom.club",
-  // 搬家前的家（2026-09-05 起只做轉址）。等 host_redirect 降到零，
-  // 連同 wrangler.toml 的那條路由與 johnny.moe 上的 DNS 記錄一起拔掉。
-  "community.johnny.moe",
+  // 搬家前的舊主機已於 2026-09-06 連同路由一起拔掉；本站只掛自己的網域。
 ];
 
 /** 這個主機是不是我們自己（含別名與搬家前的）。用來判斷 referer 算不算站外來源。 */
