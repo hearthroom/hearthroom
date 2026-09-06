@@ -43,6 +43,17 @@ describe("登記", () => {
     expect(results).toHaveLength(0);
   });
 
+  it("不是在本站建的卡（主站建的、或上游沒記來源）→ 403，且不落庫", async () => {
+    rolesOnMainSite(
+      { roleId: "main-1", authorNumId: 10001, creationMethod: "manual" },
+      { roleId: "old-1", authorNumId: 10001, creationMethod: "" },
+    );
+    expect((await register({ roleId: "main-1" })).status).toBe(403);
+    expect((await register({ roleId: "old-1" })).status).toBe(403);
+    const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM cards").first<{ n: number }>();
+    expect(row?.n).toBe(0);
+  });
+
   it("沒帶 token → 401，且不打上游", async () => {
     expect((await register({ roleId: "role-1" }, {})).status).toBe(401);
   });
