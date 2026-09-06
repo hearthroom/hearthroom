@@ -94,6 +94,21 @@ API 存取範圍，跟這個服務拿到的一模一樣。
 標籤欄，跟手打的走同一條。詞表拿不到（舊上游、沒登入）就整塊不顯示，不擋建卡。
 世界書條目旁的小數字是上游統計的「被帶進對話幾次」（`activationCount`），作者看哪些條目真的在用。
 
+## 正則規則
+
+「對話」區的**設定正則**：作者替 AI 回覆寫一組「找到 → 換成」，在看的人的瀏覽器裡跑——把 AI 吐出的標記
+（『台詞』、`<status>…</status>`、`《美1》` 這類佔位）換成有樣式、有互動的 HTML。替換內容裡的 script / style
+會執行，跟 AI 生成的 HTML 卡是同一個信任模型。`find` 寫成 `/pattern/flags` 是 JS 正則（替換裡 `$1` 可用），
+其他一律字面字串、全部出現處都換。
+
+編輯器（`components/editor/RegexRulesEditor.vue`）：左欄清單（搜尋、新建、上下移、啟用、刪除），右欄名字／匹配／
+替換內容，底下狀態欄與「接在最近幾則」，還有一個測試台——貼一段回覆看套用結果。編的是本地副本，按「完成」
+才回到表單；存檔跟卡片一起（`PUT /open/v1/role/:roleId/regex-rules`，帶版本樂觀鎖）。
+
+匯入／匯出吃三種形狀：魅魔島匯出檔（`{pageDepth, statusbar, beginning, regex_scripts}`，`beginning` 只在開場白
+空著時填進去）、酒館卡的 `extensions.regex_scripts`（匯入卡時直接落成規則，匯出卡寫回）、裸 `regex_scripts` 陣列。
+轉換全在 `lib/regex-rules.ts`。設計：`docs/technical-design/RoleRegexRules_TechnicalDesign_20260906_V1.0.md`。
+
 ## 酒館角色卡
 
 支援匯入與匯出 Character Card **V2 / V3**，兩種載體：

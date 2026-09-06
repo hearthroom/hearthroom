@@ -17,19 +17,19 @@ import fs from "node:fs";
 import pathMod from "node:path";
 const CARDS = process.env.FIXTURES_DIR || new URL("./fixtures/", import.meta.url).pathname;
 const PORT = Number(process.env.PORT || 8899);
-const roles = new Map(); const books = new Map(); const bindings = new Map(); const entries = new Map();
+const roles = new Map(); const regex = new Map(); const books = new Map(); const bindings = new Map(); const entries = new Map();
 let seq = 1; const id = (p) => `${p}-${seq++}`;
 const log = [];
 const json = (res, code, body) => { res.writeHead(code, { "content-type": "application/json", "access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "*" }); res.end(JSON.stringify(body)); };
 const readBody = (req) => new Promise((r) => { const c = []; req.on("data", (d) => c.push(d)); req.on("end", () => r(Buffer.concat(c))); });
 http.createServer(async (req, res) => {
-  const url = new URL(req.url, `http://x`); const path = url.pathname; const m = req.method;
+  const url = new URL(req.url, `http://x`); const path = url.pathname; const m = req.method; let mm;
   if (m === "OPTIONS") return json(res, 204, {});
   const raw = await readBody(req); let body = {}; try { body = raw.length && !path.includes("/image/upload") ? JSON.parse(raw.toString()) : {}; } catch {}
   log.push({ m, path, body }); if (path !== "/__log") console.log(m, path, JSON.stringify(body).slice(0, 160));
   if (path === "/__log") return json(res, 200, log);
   if (path.startsWith("/fixtures/")) { const f = pathMod.join(CARDS, path.slice(10)); if (!fs.existsSync(f)) return json(res, 404, {}); res.writeHead(200, { "content-type": f.endsWith(".png") ? "image/png" : "application/json", "access-control-allow-origin": "*" }); return res.end(fs.readFileSync(f)); }
-  if (path === "/__reset") { roles.clear(); books.clear(); bindings.clear(); entries.clear(); log.length = 0; return json(res, 200, { ok: true }); }
+  if (path === "/__reset") { roles.clear(); regex.clear(); books.clear(); bindings.clear(); entries.clear(); log.length = 0; return json(res, 200, { ok: true }); }
   const auth = req.headers.authorization || "";
   if (!auth.startsWith("Bearer ")) return json(res, 401, { error: "unauthorized", message: "A valid bearer token is required." });
   if (path === "/open/v1/me") return json(res, 200, { accountNumId: 424242, nickName: "測試作者", avatar: "" });
@@ -37,9 +37,10 @@ http.createServer(async (req, res) => {
     { dimension: "genre", tags: [{ slug: "romance", name: "戀愛", dimension: "genre", visibility: "public" }, { slug: "mystery", name: "推理", dimension: "genre", visibility: "public" }, { slug: "fantasy", name: "西幻", dimension: "genre", visibility: "public" }] },
     { dimension: "setting", tags: [{ slug: "campus", name: "校園", dimension: "setting", visibility: "public" }, { slug: "frontier", name: "邊境", dimension: "setting", visibility: "public" }] },
   ] });
+  if (m === "GET" && path === "/open/v1/role/regex-rules") { const r = regex.get(url.searchParams.get("roleId")); return json(res, 200, { roleId: url.searchParams.get("roleId"), doc: r ? r.doc : null, version: r ? r.version : 0 }); }
+  if (m === "PUT" && (mm = path.match(/^\/open\/v1\/role\/([^/]+)\/regex-rules$/))) { const cur = regex.get(mm[1]); const have = cur ? cur.version : 0; if ((body.version ?? 0) !== have) return json(res, 409, { error: "version_conflict" }); regex.set(mm[1], { doc: body.doc, version: have + 1 }); return json(res, 200, { roleId: mm[1], version: have + 1 }); }
   if (path === "/open/v1/me/wallet") return json(res, 200, { score: 999596, tempScore: 0, plans: [{ tier: "member", expiresAt: Date.now() + 86400e3 * 30 }] });
   if (m === "POST" && path === "/open/v1/role") { const roleId = id("role"); roles.set(roleId, { roleId, roleName: body.roleName, language: body.language, visibility: "private" }); return json(res, 200, { roleId }); }
-  let mm;
   if (m === "POST" && (mm = path.match(/^\/open\/v1\/role\/([^/]+)\/document$/))) { Object.assign(roles.get(mm[1]) ?? roles.set(mm[1], {}).get(mm[1]), body.fields ?? body); return json(res, 200, { ok: true }); }
   if (m === "PATCH" && (mm = path.match(/^\/open\/v1\/role\/([^/]+)\/welcome$/))) { const r = roles.get(mm[1]); Object.assign(r, { roleWelcome: body.roleWelcome, roleWelcomeAlternates: body.alternates, rolePrologue: body.prologue }); return json(res, 200, { ok: true }); }
   if (m === "POST" && (mm = path.match(/^\/open\/v1\/role\/([^/]+)\/publish$/))) return json(res, 200, { status: "pending" });

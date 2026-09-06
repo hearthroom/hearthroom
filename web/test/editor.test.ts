@@ -29,6 +29,8 @@ const api = vi.hoisted(() => ({
   fetchRoleWorldbooks: vi.fn(async () => []),
   submitRoleForReview: vi.fn(async () => ({})),
   uploadImage: vi.fn(async () => "https://img.test/avatar.png"),
+  fetchRegexRules: vi.fn(async () => ({ doc: null, version: 0 })),
+  saveRegexRules: vi.fn(async () => 1),
 }));
 vi.mock("../src/lib/api", () => api);
 vi.mock("../src/lib/session", () => ({
@@ -60,7 +62,7 @@ const CARD: TavernCard = {
         { keys: ["採石場"], secondary_keys: ["排水渠"], content: "廢棄了。", comment: "採石場" },
       ],
     },
-    extensions: { regex_scripts: [{ id: "status" }] },
+    extensions: { regex_scripts: [{ id: 1, scriptName: "status", findRegex: "/<status>([\\s\\S]*?)<\\/status>/g", replaceString: "<div class=\"hp\">$1</div>" }] },
   },
 };
 
@@ -136,7 +138,8 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     const report = root.textContent ?? "";
     expect(report).toContain("讀到了：阿芙拉");
     expect(report).toContain("多出來的 2 個標籤");
-    expect(report).toContain("1 條正則腳本");
+    // 正則腳本不再是「沒能帶過來」：套用後變成這張卡的規則，對話區的按鈕上會帶著數量
+    expect(report).not.toContain("正則腳本");
     expect(report).toContain("someone");
 
     byText("套用到表單").click();
@@ -149,6 +152,8 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     expect($<HTMLTextAreaElement>("#f-contract").value).toBe("回覆用第三人稱。");
     expect($<HTMLTextAreaElement>("#f-jb").value).toBe("不要替玩家做決定。");
     expect($<HTMLInputElement>("#f-tags").value.split("、")).toHaveLength(10);
+    const regexButton = [...root.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.includes("設定正則"))!;
+    expect(regexButton.querySelector(".chip")?.textContent?.trim()).toBe("1");
     // 左欄：三個必填都有了，不該再有紅點
     expect(root.querySelectorAll(".side__dot")).toHaveLength(0);
     // 右欄預覽跟著名字
@@ -183,6 +188,12 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
       // 酒館的 secondary_keys 直接落到條目的 AND 門，不再併進 keywords
       { op: "create", name: "採石場", content: "廢棄了。", keywords: ["採石場"], secondaryKeywords: ["排水渠"], isEnabled: true, isConstant: false },
     ]);
+    // 卡片存完才存正則：匯入帶進來的那條規則，帶著版本 0 整份送出
+    expect(api.saveRegexRules).toHaveBeenCalledTimes(1);
+    const [regexRole, regexDoc, regexVersion] = api.saveRegexRules.mock.calls[0] as unknown as [string, { rules: { name: string; find: string }[] }, number];
+    expect(regexRole).toBe("r1");
+    expect(regexVersion).toBe(0);
+    expect(regexDoc.rules.map((r) => r.name)).toEqual(["status"]);
     // 建立完成 → 網址換成編輯頁，本機草稿清掉
     expect(window.location.pathname).toBe("/cards/r1/edit");
     expect(localStorage.getItem("hearthroom.draft.create")).toBeNull();
@@ -194,6 +205,7 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     expect(api.patchRoleDocument.mock.calls[1][1]).toEqual({ roleDesc: "改過的簡介" });
     expect(api.patchRoleWelcome).toHaveBeenCalledTimes(1);
     expect(api.patchWorldbookDocument).toHaveBeenCalledTimes(1);
+    expect(api.saveRegexRules).toHaveBeenCalledTimes(1);
   });
 
   it("改世界書條目再存：只送那一條的 update，刪掉的送 delete", async () => {

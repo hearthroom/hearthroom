@@ -17,7 +17,7 @@ import { ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { confirmDialog } from "@/lib/confirm";
 import type { WorldbookEntryDraft } from "@/lib/role-draft";
-import { parseWorldbookFile, type DropNote } from "@/lib/tavern";
+import { ENTRY_CONTENT_MAX, parseWorldbookFile, type DropNote } from "@/lib/tavern";
 
 const props = defineProps<{
   modelValue: WorldbookEntryDraft[];
@@ -208,6 +208,10 @@ const setSecondary = (index: number, raw: string) => patch(index, { secondaryKey
             <textarea :id="`wb-c-${index}`" class="input" rows="4" :value="entry.content"
                       :placeholder="$t('wb.entry.content.placeholder')"
                       @input="patch(index, { content: ($event.target as HTMLTextAreaElement).value })" />
+            <span class="field__foot">
+              <span class="subtle">{{ [...entry.content].length > ENTRY_CONTENT_MAX ? $t("wb.entry.content.over", { max: ENTRY_CONTENT_MAX }) : "" }}</span>
+              <span class="subtle count" :class="{ over: [...entry.content].length > ENTRY_CONTENT_MAX }">{{ [...entry.content].length }} / {{ ENTRY_CONTENT_MAX }}</span>
+            </span>
           </div>
 
           <div class="toggles">
@@ -257,6 +261,8 @@ const setSecondary = (index: number, raw: string) => patch(index, { secondaryKey
 .chev { transition: transform var(--dur) var(--ease); }
 .chev.flip { transform: rotate(90deg); }
 .chip--off { color: var(--danger); }
+.count { font-variant-numeric: tabular-nums; }
+.over { color: var(--danger); }
 .entry .field { margin-bottom: 0; gap: 6px; }
 .entry__head { display: flex; gap: var(--s-2); align-items: center; }
 .input--name { flex: 1; font-weight: 600; }
