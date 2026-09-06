@@ -38,7 +38,7 @@ app.use("*", async (c, next) => {
   await next();
   // beacon 端點自己發事件；健康檢查沒有分析價值
   const path = new URL(c.req.url).pathname;
-  if (path === "/v1/e" || path === "/v1/health") return;
+  if (path === "/v1/e" || path === "/v1/health" || path === "/v1/region") return;
   emit(c.env, c.executionCtx, {
     event: ev.event ?? "api",
     from: surfaceOf(c.req.header("X-From")),
@@ -98,6 +98,18 @@ async function requireAuthor(c: { env: Env; req: { header: (k: string) => string
 }
 
 app.get("/v1/health", (c) => c.json({ ok: true }));
+
+/**
+ * 前端開頁時問一次「上游該打哪個網域」。主網域在中國被擋，那邊的人改走備用網域；
+ * 國別是 Cloudflare 邊緣看連線來源判的（`cf.country`；沒有就看它塞的標頭，測試環境走這條）。
+ * 回應依來源而異，不能被任何一層快取。
+ */
+app.get("/v1/region", (c) => {
+  const country = ((c.req.raw.cf?.country as string) || c.req.header("cf-ipcountry") || "").toUpperCase();
+  const alt = c.env.LUNATALK_API_BASE_CN;
+  const apiBase = country === "CN" && alt ? alt : c.env.LUNATALK_API_BASE;
+  return c.json({ country, apiBase }, 200, { "Cache-Control": "no-store" });
+});
 
 /**
  * 圖片代抓，只給「匯出成 PNG 卡」用。
