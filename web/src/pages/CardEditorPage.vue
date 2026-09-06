@@ -853,14 +853,14 @@ async function exportCard(format: "png" | "json") {
 <style scoped>
 /* 這一頁比別頁寬一點：三欄要站得開。1200 是給榜單的，卡片網格在那個寬度剛好；編輯器多要 120px 給右欄。 */
 .editor { max-width: 1320px; }
-.head { margin-bottom: var(--s-5); }
-h1 { margin: 2px 0 var(--s-2); font-size: 24px; }
+.head { margin-bottom: var(--s-4); }
+h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .lede { margin: 0; max-width: 52ch; }
 .ghosts { display: grid; gap: var(--s-4); }
 
 .layout {
   display: grid; grid-template-columns: 176px minmax(0, 1fr) 240px;
-  gap: var(--s-6); align-items: start;
+  gap: var(--s-5); align-items: start;
 }
 
 /* ---- 左欄 ---------------------------------------------------------------- */
@@ -870,7 +870,7 @@ h1 { margin: 2px 0 var(--s-2); font-size: 24px; }
 }
 .side__item {
   display: flex; align-items: center; gap: var(--s-2);
-  height: var(--h-md); padding: 0 var(--s-3);
+  height: 34px; padding: 0 var(--s-3);
   border: 0; border-radius: var(--r-sm);
   background: transparent; color: var(--text-2);
   font-size: 14px; font-weight: 500; text-align: left; cursor: pointer;
@@ -891,7 +891,12 @@ h1 { margin: 2px 0 var(--s-2); font-size: 24px; }
 .body { min-width: 0; }
 .body > [role="alert"], .body > .restored { margin-bottom: var(--s-4); }
 .restored { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
-.pane { display: grid; gap: var(--s-5); }
+/* 欄位之間只留 pane 的 gap：.field 自己還有 24px 下邊距，兩個疊起來就是 48px 的空洞 */
+.pane { display: grid; gap: var(--s-4); }
+.pane > .field, .pane :deep(.field) { margin-bottom: 0; }
+.pane :deep(.field) { gap: 6px; }
+.pane :deep(.field > label) { line-height: 1.3; }
+.pane :deep(.field__foot) { margin-top: -2px; }
 .hint { margin: 0 0 var(--s-2); }
 .count { font-variant-numeric: tabular-nums; }
 .over { color: var(--danger); }
@@ -903,7 +908,7 @@ h1 { margin: 2px 0 var(--s-2); font-size: 24px; }
 .turn .input { flex: 1; resize: vertical; }
 .input--who { flex: none; width: 96px; }
 .acts { display: flex; gap: var(--s-2); flex-wrap: wrap; }
-.panel { padding: var(--s-4); display: grid; gap: var(--s-3); }
+.panel { padding: var(--s-4); display: grid; gap: var(--s-2); }
 .panel h2 { margin: 0; font-size: 15px; }
 .panel .muted { margin: 0; }
 .panel .btn { justify-self: start; }

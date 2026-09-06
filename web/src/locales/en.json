@@ -326,5 +326,9 @@
   "editor.tags.dimension.mechanic": "Mechanic",
   "editor.tags.dimension.mood": "Mood",
   "editor.tags.dimension.relationship": "Relationship",
-  "editor.tags.dimension.setting": "Setting"
+  "editor.tags.dimension.setting": "Setting",
+  "wb.entry.expand": "Expand",
+  "wb.entry.collapse": "Collapse",
+  "wb.entry.constantShort": "Always",
+  "wb.entry.disabled": "Disabled"
 }

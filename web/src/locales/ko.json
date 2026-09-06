@@ -326,5 +326,9 @@
   "editor.tags.dimension.mechanic": "플레이 방식",
   "editor.tags.dimension.mood": "분위기",
   "editor.tags.dimension.relationship": "관계",
-  "editor.tags.dimension.setting": "배경"
+  "editor.tags.dimension.setting": "배경",
+  "wb.entry.expand": "펼치기",
+  "wb.entry.collapse": "접기",
+  "wb.entry.constantShort": "상시",
+  "wb.entry.disabled": "비활성"
 }

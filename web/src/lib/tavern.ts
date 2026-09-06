@@ -103,7 +103,8 @@ function unwrap(raw: unknown): TavernCard {
     };
   }
   if (typeof obj.name === "string" || typeof obj.first_mes === "string") {
-    return { spec: "chara_card_v1", spec_version: "1.0", data: obj as TavernCardData };
+    // 野外也有「標了 spec 卻沒包 data」的平鋪 V3 卡：欄位照 V1 的位置讀，spec 照它自己說的報
+    return { spec: text(obj.spec) || "chara_card_v1", spec_version: text(obj.spec_version) || "1.0", data: obj as TavernCardData };
   }
   throw new Error("tavern_invalid");
 }
