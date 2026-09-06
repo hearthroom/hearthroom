@@ -318,16 +318,13 @@
   "editor.sex.women": "女性",
   "editor.sex.other": "その他",
   "editor.tags.pick": "カテゴリから選ぶ",
-  "editor.tags.dimension.genre": "ジャンル",
-  "editor.tags.dimension.setting": "舞台",
-  "editor.tags.dimension.relationship": "関係",
-  "editor.tags.dimension.personality": "性格",
-  "editor.tags.dimension.style": "スタイル",
-  "editor.tags.dimension.audience": "対象",
-  "editor.tags.dimension.theme": "テーマ",
-  "editor.tags.dimension.other": "その他",
   "wb.entry.secondary": "副キーワード",
   "wb.entry.secondary.placeholder": "空ならキーワードだけで発動",
   "wb.entry.secondary.hint": "設定すると両方が必要：キーワードのいずれかと、ここにあるいずれか。",
-  "wb.entry.activations": "会話に {n} 回取り込まれました"
+  "wb.entry.activations": "会話に {n} 回取り込まれました",
+  "editor.tags.dimension.archetype": "タイプ",
+  "editor.tags.dimension.mechanic": "ギミック",
+  "editor.tags.dimension.mood": "雰囲気",
+  "editor.tags.dimension.relationship": "関係",
+  "editor.tags.dimension.setting": "舞台"
 }

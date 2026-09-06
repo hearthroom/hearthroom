@@ -318,16 +318,13 @@
   "editor.sex.women": "Female",
   "editor.sex.other": "Other",
   "editor.tags.pick": "Pick from categories",
-  "editor.tags.dimension.genre": "Genre",
-  "editor.tags.dimension.setting": "Setting",
-  "editor.tags.dimension.relationship": "Relationship",
-  "editor.tags.dimension.personality": "Personality",
-  "editor.tags.dimension.style": "Style",
-  "editor.tags.dimension.audience": "Audience",
-  "editor.tags.dimension.theme": "Theme",
-  "editor.tags.dimension.other": "Other",
   "wb.entry.secondary": "Secondary keywords",
   "wb.entry.secondary.placeholder": "Leave empty to trigger on keywords alone",
   "wb.entry.secondary.hint": "When set, both must appear: any keyword plus any of these.",
-  "wb.entry.activations": "Brought into chat {n} times"
+  "wb.entry.activations": "Brought into chat {n} times",
+  "editor.tags.dimension.archetype": "Archetype",
+  "editor.tags.dimension.mechanic": "Mechanic",
+  "editor.tags.dimension.mood": "Mood",
+  "editor.tags.dimension.relationship": "Relationship",
+  "editor.tags.dimension.setting": "Setting"
 }
