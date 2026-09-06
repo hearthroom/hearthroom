@@ -39,13 +39,17 @@ export interface RegexRuleSet {
   pageMode?: string;
 }
 
-/** 上限對齊上游作者資產：單條替換 32 KB、整份 1 MB，都以 UTF-8 位元組計。 */
+/**
+ * 上限對齊上游作者資產：單條替換 128 KB、整份 1 MB，都以 UTF-8 位元組計。
+ * 單條之前寫成 32 KB，比上游嚴：圖片集那種一條塞十幾張圖的規則會在這裡被擋，作者只好拔掉，
+ * 功能欄裡的觸發字串就原樣印在畫面上（2026-09-07 一張卡的「[圖片集02]」就是這樣）。
+ */
 export const REGEX_LIMITS = {
   rules: 100,
   name: 40,
   find: 1000,
   /** 單條替換內容（位元組）。 */
-  replaceBytes: 32 * 1024,
+  replaceBytes: 128 * 1024,
   statusbar: 4000,
   /** 整份 JSON 的上限（位元組）。 */
   total: 1024 * 1024,

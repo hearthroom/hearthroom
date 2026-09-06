@@ -79,6 +79,8 @@ export async function beginLogin(returnTo: string): Promise<void> {
     code_challenge_method: "S256",
     resource: OAUTH_RESOURCE,
   });
+  // 走備用網域時，登入頁也要換成備用網域的（邊緣代理會把 Host 改寫，伺服器光看 Host 判不出來）
+  if (/\/\/api\.lunatalk\.pro(?::\d+)?$/i.test(UPSTREAM_API)) params.set("login_site", "pro");
   location.assign(`${UPSTREAM_API}/oauth/authorize?${params}`);
 }
 
