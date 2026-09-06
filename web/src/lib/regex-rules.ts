@@ -25,10 +25,14 @@ export interface RegexRule {
 export interface RegexRuleSet {
   version: 1;
   rules: RegexRule[];
-  /** 接在最近幾則 AI 回覆後面的一段固定文字（多半是一排佔位標記，由規則展開成面板）。 */
+  /**
+   * 功能欄：對話頁最上層的一個固定區塊，只在看的人畫面上顯示、不進 AI 的上下文。
+   * 內容一樣過規則，多半是一排佔位標記（《美1》《狀1》…），由規則展開成全局樣式與側邊工具。
+   * 魅魔島的作法相同：整頁只渲染一次，不是接在訊息後面。
+   */
   statusbar: string;
-  /** statusbar 接在最近幾則回覆後面。1 = 只有最新那則。 */
-  depth: number;
+  /** 降低層級：勾了就放到輸入框之下（預設在頁面最上層）。對應魅魔島的 pageDepth。 */
+  lowered: boolean;
 }
 
 export const REGEX_LIMITS = {
@@ -41,7 +45,7 @@ export const REGEX_LIMITS = {
   total: 600_000,
 } as const;
 
-export const emptyRuleSet = (): RegexRuleSet => ({ version: 1, rules: [], statusbar: "", depth: 1 });
+export const emptyRuleSet = (): RegexRuleSet => ({ version: 1, rules: [], statusbar: "", lowered: false });
 
 export const newRuleId = (): string =>
   typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `r-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -88,10 +92,14 @@ export function applyRules(text: string, rules: RegexRule[]): string {
   return out;
 }
 
-/** 套用一整組到一則 AI 回覆。`isRecent` 決定要不要接 statusbar。 */
-export function renderWithRules(text: string, set: RegexRuleSet, isRecent: boolean): string {
-  const base = isRecent && set.statusbar ? `${text}\n${set.statusbar}` : text;
-  return applyRules(base, set.rules);
+/** 套用一整組到一則 AI 回覆。 */
+export function renderWithRules(text: string, set: RegexRuleSet): string {
+  return applyRules(text, set.rules);
+}
+
+/** 功能欄展開後的 HTML；沒填就是空字串（畫面不渲染那一層）。 */
+export function renderStatusbar(set: RegexRuleSet): string {
+  return set.statusbar ? applyRules(set.statusbar, set.rules) : "";
 }
 
 /** 哪些規則有問題。key 是 i18n key，畫面翻譯。 */
@@ -150,8 +158,7 @@ function ruleSetFromNative(obj: Record<string, unknown>): RegexRuleSet | null {
   const rules: RegexRule[] = (obj.rules as Partial<RegexRule>[])
     .filter((r) => r && typeof r === "object" && text(r.find))
     .map((r) => ({ id: text(r.id) || newRuleId(), name: text(r.name), find: text(r.find), replace: text(r.replace), enabled: r.enabled !== false }));
-  const depth = typeof obj.depth === "number" && obj.depth > 0 ? Math.min(Math.floor(obj.depth), 50) : 1;
-  return { version: 1, rules, statusbar: text(obj.statusbar), depth };
+  return { version: 1, rules, statusbar: text(obj.statusbar), lowered: obj.lowered === true };
 }
 
 export function ruleSetFromImport(raw: unknown): { set: RegexRuleSet; welcome: string } | null {
@@ -168,10 +175,10 @@ export function ruleSetFromImport(raw: unknown): { set: RegexRuleSet; welcome: s
   if (!scripts && Array.isArray(raw)) scripts = raw;
   const rules = rulesFromTavern(scripts);
   if (!rules.length) return null;
-  const depth = typeof obj.pageDepth === "number" && obj.pageDepth > 0 ? Math.min(Math.floor(obj.pageDepth), 50) : 1;
-  return { set: { version: 1, rules, statusbar: text(obj.statusbar), depth }, welcome: text(obj.beginning) };
+  // 魅魔島 pageDepth：1 = 頁面最上層（預設），2 = 勾了「降低層級」放輸入框之下。樣例檔就是 2。
+  return { set: { version: 1, rules, statusbar: text(obj.statusbar), lowered: Number(obj.pageDepth) >= 2 }, welcome: text(obj.beginning) };
 }
 
 export function ruleSetToExport(set: RegexRuleSet, welcome: string): MeimoRegexFile {
-  return { pageDepth: set.depth, statusbar: set.statusbar, beginning: welcome, regex_scripts: rulesToTavern(set.rules) };
+  return { pageDepth: set.lowered ? 2 : 1, statusbar: set.statusbar, beginning: welcome, regex_scripts: rulesToTavern(set.rules) };
 }

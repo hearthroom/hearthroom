@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyRules, makeRule, parseFind, renderWithRules, ruleSetFromImport, ruleSetToExport, rulesFromTavern, validateRuleSet } from "../src/lib/regex-rules";
+import { applyRules, makeRule, parseFind, renderStatusbar, renderWithRules, ruleSetFromImport, ruleSetToExport, rulesFromTavern, validateRuleSet } from "../src/lib/regex-rules";
 
 describe("parseFind", () => {
   it("/pat/flags 是正則，其他是字面", () => {
@@ -22,10 +22,11 @@ describe("applyRules", () => {
     expect(out).toBe('她說<span class="q">『你來了』</span>。<style>.q{color:red}</style><style>.q{color:red}</style>');
   });
 
-  it("statusbar 只接在最近的回覆後面，再套規則", () => {
-    const set = { version: 1 as const, rules: [makeRule({ find: "《状1》", replace: "<div>HP</div>" })], statusbar: "《状1》", depth: 1 };
-    expect(renderWithRules("正文", set, true)).toBe("正文\n<div>HP</div>");
-    expect(renderWithRules("正文", set, false)).toBe("正文");
+  it("功能欄自己過規則、跟訊息分開；訊息渲染不再接功能欄", () => {
+    const set = { version: 1 as const, rules: [makeRule({ find: "《状1》", replace: "<div>HP</div>" })], statusbar: "《状1》", lowered: false };
+    expect(renderStatusbar(set)).toBe("<div>HP</div>");
+    expect(renderWithRules("正文《状1》", set)).toBe("正文<div>HP</div>");
+    expect(renderStatusbar({ ...set, statusbar: "" })).toBe("");
   });
 });
 
@@ -35,11 +36,11 @@ describe("匯入匯出", () => {
     { id: -1, scriptName: "《美1》", findRegex: "《美1》", replaceString: "<style>…</style>" },
   ] };
 
-  it("魅魔島檔：規則、statusbar、depth 都進來，beginning 另外回", () => {
+  it("魅魔島檔：規則、功能欄、pageDepth→降低層級 都進來，beginning 另外回", () => {
     const got = ruleSetFromImport(meimo)!;
     expect(got.set.rules.map((r) => r.name)).toEqual(["替换颜色『』", "《美1》"]);
     expect(got.set.statusbar).toBe("《美1》《状1》");
-    expect(got.set.depth).toBe(2);
+    expect(got.set.lowered).toBe(true);
     expect(got.welcome).toBe("<开局面板>");
     expect(got.set.rules.every((r) => r.enabled && r.id)).toBe(true);
   });
@@ -51,10 +52,10 @@ describe("匯入匯出", () => {
     expect(ruleSetFromImport({ foo: 1 })).toBeNull();
   });
 
-  it("本站自己存的文件讀得回來：rules 陣列、depth、statusbar 原樣，缺 id 補一個", () => {
-    const doc = { version: 1, depth: 3, statusbar: "《s》", rules: [{ id: "k", name: "n", find: "x", replace: "y", enabled: false }, { find: "/a/g", replace: "b" }] };
+  it("本站自己存的文件讀得回來：rules 陣列、lowered、statusbar 原樣，缺 id 補一個", () => {
+    const doc = { version: 1, lowered: true, statusbar: "《s》", rules: [{ id: "k", name: "n", find: "x", replace: "y", enabled: false }, { find: "/a/g", replace: "b" }] };
     const got = ruleSetFromImport(doc)!;
-    expect(got.set.depth).toBe(3);
+    expect(got.set.lowered).toBe(true);
     expect(got.set.statusbar).toBe("《s》");
     expect(got.set.rules[0]).toEqual({ id: "k", name: "n", find: "x", replace: "y", enabled: false });
     expect(got.set.rules[1]).toMatchObject({ find: "/a/g", replace: "b", enabled: true });
@@ -67,13 +68,13 @@ describe("匯入匯出", () => {
     const back = ruleSetFromImport(ruleSetToExport(got.set, got.welcome))!;
     expect(back.set.rules.map((r) => [r.name, r.find, r.replace, r.enabled])).toEqual(got.set.rules.map((r) => [r.name, r.find, r.replace, r.enabled]));
     expect(back.welcome).toBe("<开局面板>");
-    expect(back.set.depth).toBe(2);
+    expect(back.set.lowered).toBe(true);
   });
 });
 
 describe("validateRuleSet", () => {
   it("空 find、壞正則、超長都有對應的 key", () => {
-    const set = { version: 1 as const, depth: 1, statusbar: "", rules: [
+    const set = { version: 1 as const, lowered: false, statusbar: "", rules: [
       makeRule({ id: "a", find: "" }), makeRule({ id: "b", find: "/[/g" }), makeRule({ id: "c", find: "x", replace: "y".repeat(20001) }),
     ] };
     const keys = validateRuleSet(set).map((i) => i.ruleId + ":" + i.key);
