@@ -44,6 +44,7 @@ const PLAN_LABEL: Record<string, string> = { unlimited: "wallet.plan.unlimited",
       </div>
       <RouterLink :to="lp(`/authors/${session.me.accountNumId}`)" class="menu__item" role="menuitem">{{ $t("nav.authorPage") }}</RouterLink>
       <RouterLink :to="lp('/mine')" class="menu__item" role="menuitem">{{ $t("nav.mine") }}</RouterLink>
+      <RouterLink :to="lp('/resources')" class="menu__item" role="menuitem">{{ $t("nav.resources") }}</RouterLink>
       <RouterLink :to="lp('/wallet')" class="menu__item" role="menuitem">{{ $t("nav.wallet") }}</RouterLink>
       <div class="menu__rule" />
       <button class="menu__item" role="menuitem" @click="track('logout'); session.logout()">{{ $t("nav.logout") }}</button>

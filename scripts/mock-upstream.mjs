@@ -17,6 +17,7 @@ import fs from "node:fs";
 import pathMod from "node:path";
 const CARDS = process.env.FIXTURES_DIR || new URL("./fixtures/", import.meta.url).pathname;
 const PORT = Number(process.env.PORT || 8899);
+const images = new Map(); const folders = new Map(); let imgSeq = 1;
 const roles = new Map(); const regex = new Map(); const books = new Map(); const bindings = new Map(); const entries = new Map();
 let seq = 1; const id = (p) => `${p}-${seq++}`;
 const log = [];
@@ -30,6 +31,8 @@ http.createServer(async (req, res) => {
   if (path === "/__log") return json(res, 200, log);
   if (path.startsWith("/fixtures/")) { const f = pathMod.join(CARDS, path.slice(10)); if (!fs.existsSync(f)) return json(res, 404, {}); res.writeHead(200, { "content-type": f.endsWith(".png") ? "image/png" : "application/json", "access-control-allow-origin": "*" }); return res.end(fs.readFileSync(f)); }
   if (path === "/__reset") { roles.clear(); regex.clear(); books.clear(); bindings.clear(); entries.clear(); log.length = 0; return json(res, 200, { ok: true }); }
+  // 圖片本體是公開網址，<img> 不會帶 Bearer：放在鑑權前面
+  if (path.startsWith("/img/")) { res.writeHead(200, { "content-type": "image/svg+xml", "access-control-allow-origin": "*" }); return res.end(`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="768"><rect width="100%" height="100%" fill="hsl(${(Number(path.slice(5)) * 47) % 360} 60% 70%)"/><text x="50%" y="50%" font-size="64" text-anchor="middle" fill="#fff">${path.slice(5, -4)}</text></svg>`); }
   const auth = req.headers.authorization || "";
   if (!auth.startsWith("Bearer ")) return json(res, 401, { error: "unauthorized", message: "A valid bearer token is required." });
   if (path === "/open/v1/me") return json(res, 200, { accountNumId: 424242, nickName: "測試作者", avatar: "" });
@@ -62,7 +65,16 @@ http.createServer(async (req, res) => {
   if (m === "POST" && (mm = path.match(/^\/open\/v1\/role\/([^/]+)\/publish$/))) return json(res, 200, { status: "pending" });
   if (path === "/open/v1/role/detail") { const r = roles.get(url.searchParams.get("roleId")); return r ? json(res, 200, { ...r, talkExample: JSON.stringify(r.talkExample ?? []) }) : json(res, 404, { error: "not_found" }); }
   if (path === "/open/v1/role/validate") return json(res, 200, { status: "ok", blockers: [], warnings: [], tokenBudget: { limits: { roleDescMaxChars: 300, roleDetailDescMaxChars: 6000, roleWelcomeMaxChars: 2000, roleOutputContractMaxChars: 2000, jailbreakMaxChars: 1200 } } });
-  if (path === "/open/v1/image/upload") return json(res, 200, { data: { imageUrl: `http://127.0.0.1:${PORT}/img/${id("img")}.png` } });
+  if (path === "/open/v1/image/upload") { const imageId = imgSeq++; const url = `http://127.0.0.1:${PORT}/img/${imageId}.png`; const folderIds = [...raw.toString("latin1").matchAll(/name="folderIds"\r\n\r\n([^\r]+)/g)].map((x) => x[1]); images.set(imageId, { id: imageId, imageUrl: url, moderationState: "pending", pixelWidth: 512, pixelHeight: 768, createTime: new Date().toISOString(), folders: new Set(folderIds) }); return json(res, 200, { data: { imageId, imageUrl: url, moderationState: "pending" } }); }
+  // ── 素材圖庫：記憶體裡的圖與資料夾，形狀照 server 的 creatorImageOK({code, data}) ──
+  if (path === "/open/v1/image/list") { const scope = url.searchParams.get("scope") || "all"; const fid = url.searchParams.get("folderId"); let all = [...images.values()].sort((a, b) => b.id - a.id); if (scope === "unfiled") all = all.filter((i) => !i.folders.size); if (scope === "folder") all = all.filter((i) => i.folders.has(fid)); const n = Number(url.searchParams.get("pageNum") || 1), sz = Number(url.searchParams.get("pageSize") || 50); return json(res, 200, { code: 0, data: { total: all.length, quota: 10000, imageList: all.slice((n - 1) * sz, n * sz).map(({ folders: _f, ...i }) => i) } }); }
+  if (path === "/open/v1/image/folder/list") return json(res, 200, { code: 0, data: { folders: [...folders.values()].map((f) => ({ ...f, imageCount: [...images.values()].filter((i) => i.folders.has(f.folderId)).length })) } });
+  if (m === "POST" && path === "/open/v1/image/folder/create") { if ([...folders.values()].some((f) => f.name === body.name)) return json(res, 400, { error: "duplicate_name" }); const folderId = id("folder"); folders.set(folderId, { folderId, name: body.name, sortOrder: folders.size }); return json(res, 200, { code: 0, data: { folderId, name: body.name } }); }
+  if (m === "POST" && path === "/open/v1/image/folder/rename") { const f = folders.get(body.folderId); if (!f) return json(res, 404, { error: "not_found" }); f.name = body.name; return json(res, 200, { code: 0, data: {} }); }
+  if (m === "POST" && path === "/open/v1/image/folder/delete") { folders.delete(body.folderId); for (const i of images.values()) i.folders.delete(body.folderId); return json(res, 200, { code: 0, data: {} }); }
+  if (m === "POST" && path === "/open/v1/image/folder/addItems") { for (const iid of body.imageIds ?? []) images.get(iid)?.folders.add(body.folderId); return json(res, 200, { code: 0, data: {} }); }
+  if (m === "POST" && path === "/open/v1/image/folder/removeItems") { for (const iid of body.imageIds ?? []) images.get(iid)?.folders.delete(body.folderId); return json(res, 200, { code: 0, data: {} }); }
+  if (m === "POST" && path === "/open/v1/image/delete") { if ((body.imageIds ?? []).includes(1)) return json(res, 400, { error: "image_in_use", imageUrls: [] }); for (const iid of body.imageIds ?? []) images.delete(iid); return json(res, 200, { code: 0, data: {} }); }
   if (path === "/open/v1/worldbook/bindings") { const ids = bindings.get(url.searchParams.get("roleId")) ?? []; return json(res, 200, { bindings: ids.map((b) => books.get(b)) }); }
   if (path === "/open/v1/worldbook/mine") return json(res, 200, { worldbooks: [...books.values()] });
   if (m === "POST" && path === "/open/v1/worldbook") { const worldbookId = id("wb"); books.set(worldbookId, { worldbookId, name: body.name, language: body.language }); entries.set(worldbookId, []); return json(res, 200, { worldbookId }); }
@@ -73,6 +85,5 @@ http.createServer(async (req, res) => {
     return json(res, 200, { ok: true });
   }
   if (path === "/open/v1/worldbook/entry/list") return json(res, 200, { list: (entries.get(url.searchParams.get("worldbookId")) ?? []).map((e, i) => ({ ...e, keywords: JSON.stringify(e.keywords ?? []), secondaryKeywords: JSON.stringify(e.secondaryKeywords ?? []), activationCount: i * 3 })) });
-  if (path.startsWith("/img/")) { res.writeHead(200, { "content-type": "image/png", "access-control-allow-origin": "*" }); return res.end(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64")); }
   json(res, 404, { error: "not_found", path });
 }).listen(PORT, () => console.log("mock upstream on", PORT));
