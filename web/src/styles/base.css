@@ -103,14 +103,19 @@ h1, h2, h3, p, dl, dd { margin: 0; }
   background: var(--accent-grad); border-color: transparent; color: var(--on-accent);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 2px color-mix(in srgb, var(--accent-deep) 40%, transparent);
 }
-.btn--primary:hover { filter: brightness(0.95); }
-.btn--primary:active { filter: brightness(0.9); }
+/*
+ * 實心變體的 hover 要把自己的底色再說一次：上面的 .btn:hover 是兩個選擇器，壓得過只有一個
+ * 選擇器的 .btn--primary，不重述的話懸浮時漸層底會被換成灰色的 --surface-2，白字留在上面就看不見了。
+ * 七套主題、深淺兩模都一樣，因為換的是那條規則，不是顏色。
+ */
+.btn--primary:hover { background: var(--accent-grad); filter: brightness(0.95); }
+.btn--primary:active { background: var(--accent-grad); filter: brightness(0.9); }
 .btn--ghost { background: transparent; border-color: transparent; color: var(--text-2); }
 .btn--ghost:hover { background: var(--surface-2); color: var(--text); }
 .btn--danger:hover { border-color: var(--danger); color: var(--danger); background: transparent; }
 /* 破壞性動作的確認鍵：實心警示色，只在確認彈窗裡用 */
 .btn--danger-solid { background: var(--danger); border-color: transparent; color: #fff; }
-.btn--danger-solid:hover { filter: brightness(0.92); }
+.btn--danger-solid:hover { background: var(--danger); filter: brightness(0.92); }
 .btn--sm { height: var(--h-sm); padding: 0 var(--s-3); font-size: 13px; }
 .btn--lg { height: var(--h-lg); padding: 0 var(--s-5); font-size: 15px; }
 /* 只有 icon 的圓鈕 */
