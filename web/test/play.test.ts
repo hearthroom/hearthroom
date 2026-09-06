@@ -59,8 +59,16 @@ async function mount(path: string) {
   document.body.appendChild(root);
   app = createApp({ template: "<RouterView />" }).use(pinia).use(i18n).use(router);
   app.mount(root);
+  // 套件是動態載入的（三個 import 串起來），冷的 CI 主機上固定等幾個 tick 不夠，等到畫布真的掛上為止
+  await waitForStage();
   await flush();
 }
+
+const waitForStage = (role?: string) =>
+  vi.waitFor(() => {
+    const stub = root.querySelector<HTMLElement>(".stage-stub");
+    if (!stub || (role && stub.dataset.role !== role)) throw new Error("stage not mounted yet");
+  }, { timeout: 10_000, interval: 20 });
 
 beforeEach(() => {
   installMoonStage.mockClear();
@@ -93,7 +101,7 @@ describe("/play/:roleId", () => {
     await mount("/play/role-1");
     const installs = installMoonStage.mock.calls.length;
     await router.push("/play/role-2");
-    await flush();
+    await waitForStage("role-2");
     expect(installMoonStage.mock.calls.length).toBe(installs);
     expect(root.querySelector<HTMLElement>(".stage-stub")?.dataset.role).toBe("role-2");
   });
