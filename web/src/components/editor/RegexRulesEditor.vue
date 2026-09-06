@@ -182,11 +182,11 @@ watch(selectedId, () => { testScope.value = testScope.value; });
               <span class="subtle count" :class="{ over: length(set.statusbar) > REGEX_LIMITS.statusbar }">{{ length(set.statusbar) }} / {{ REGEX_LIMITS.statusbar }}</span>
             </span>
           </div>
-          <div class="field rx__depth">
-            <label for="rx-depth">{{ $t("regex.depth") }}</label>
-            <input id="rx-depth" v-model.number="set.depth" class="input" type="number" min="1" max="50" />
-            <span class="subtle">{{ $t("regex.depth.hint") }}</span>
-          </div>
+          <label class="check rx__lowered">
+            <input v-model="set.lowered" type="checkbox" />
+            <span>{{ $t("regex.lowered") }}</span>
+            <span class="subtle">{{ $t("regex.lowered.hint") }}</span>
+          </label>
         </div>
         <div class="rx__test">
           <div class="rx__test-head">
@@ -245,7 +245,7 @@ watch(selectedId, () => { testScope.value = testScope.value; });
 .rx__foot { display: grid; grid-template-columns: 300px minmax(0, 1fr); box-shadow: 0 -1px 0 var(--line); }
 .rx__globals { padding: var(--s-3); display: grid; gap: 0; box-shadow: 1px 0 0 var(--line); }
 .rx__globals .field { margin-bottom: var(--s-2); gap: 6px; }
-.rx__depth input { width: 96px; }
+.rx__lowered { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
 .rx__test { padding: var(--s-3) var(--s-4); display: grid; gap: var(--s-2); }
 .rx__test-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
 .rx__test-head label { font-size: 13px; font-weight: 600; }

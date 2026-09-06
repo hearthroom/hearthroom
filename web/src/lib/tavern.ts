@@ -358,7 +358,7 @@ export function tavernToDraft(
   // 正則腳本（狀態欄、美化面板）現在有落點：直接變成這張卡的正則規則，不進報告。
   const extensions = Object.keys(data.extensions ?? {});
   const regexRules = rulesFromTavern(data.extensions?.regex_scripts);
-  const regex: RegexRuleSet | null = regexRules.length ? { version: 1, rules: regexRules, statusbar: "", depth: 1 } : null;
+  const regex: RegexRuleSet | null = regexRules.length ? { version: 1, rules: regexRules, statusbar: "", lowered: false } : null;
   const rest = extensions.filter((k) => k !== "regex_scripts").length;
   if (rest) dropped.push({ key: "import.drop.extensions", params: { n: rest } });
 
