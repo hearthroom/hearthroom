@@ -26,12 +26,23 @@ const emit = defineEmits<{
 const input = ref<HTMLInputElement | null>(null);
 const busy = ref(false);
 const error = ref("");
+const dragging = ref(false);
 
 function choose(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0];
   // input 的 value 要清掉，不然選同一個檔第二次不會觸發 change
   (event.target as HTMLInputElement).value = "";
-  if (!file) return;
+  if (file) pick(file);
+}
+
+/** 圖片框本身也收拖放：作者手上的圖多半在桌面或另一個視窗，拖過來比開檔案對話框快 */
+function onDrop(event: DragEvent) {
+  dragging.value = false;
+  const file = event.dataTransfer?.files?.[0];
+  if (file && file.type.startsWith("image/")) pick(file);
+}
+
+function pick(file: File) {
   busy.value = true;
   error.value = "";
   emit(
@@ -53,7 +64,10 @@ function choose(event: Event) {
   <div class="field">
     <label>{{ label }}</label>
     <div class="shell">
-      <div class="frame" :class="`frame--${ratio ?? 'square'}`">
+      <!-- 框本身就是選圖的按鈕：點一下開檔、拖一張進來也行；旁邊那顆文字鈕給不知道能點框的人 -->
+      <button type="button" class="frame" :class="[`frame--${ratio ?? 'square'}`, { 'frame--on': dragging, 'frame--busy': busy }]"
+              :aria-label="pickLabel" :disabled="busy"
+              @click="input?.click()" @dragover.prevent="dragging = true" @dragleave="dragging = false" @drop.prevent="onDrop">
         <img v-if="modelValue" :src="modelValue" alt="" />
         <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="ph">
@@ -61,7 +75,7 @@ function choose(event: Event) {
           <circle cx="9" cy="10" r="1.6" />
           <path d="M4 17l4.5-4.5 3 3L15 12l5 5" />
         </svg>
-      </div>
+      </button>
       <div class="side">
         <p v-if="hint" class="subtle">{{ hint }}</p>
         <div class="acts">
@@ -83,9 +97,16 @@ function choose(event: Event) {
 <style scoped>
 .shell { display: flex; gap: var(--s-3); align-items: flex-start; }
 .frame {
-  flex: none; border: 1px solid var(--line); border-radius: var(--r-md);
+  flex: none; padding: 0; border: 1px dashed var(--line-strong); border-radius: var(--r-md);
   background: var(--surface-2); overflow: hidden; display: grid; place-items: center; color: var(--text-3);
+  cursor: pointer; transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
+.frame:hover, .frame--on { border-color: var(--accent); color: var(--accent-text); background: var(--accent-tint); }
+/* 有圖之後框線改實線：那是一張圖，不再是一個等著被填的洞 */
+.frame:has(img) { border-style: solid; border-color: var(--line); }
+.frame:has(img):hover img, .frame--on img { opacity: 0.7; }
+.frame--busy { cursor: progress; }
+.frame img { transition: opacity var(--dur) var(--ease); }
 .frame--square { width: 96px; height: 96px; }
 .frame--wide { width: 160px; height: 96px; }
 .frame img { width: 100%; height: 100%; object-fit: cover; display: block; }

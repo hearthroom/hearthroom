@@ -694,6 +694,8 @@ async function exportCard(format: "png" | "json") {
           @click="goto(key)"
         >
           <span class="side__label">{{ $t(`editor.section.${key}`) }}</span>
+          <!-- 世界書條目數：一本六十條跟一本三條在導覽上就看得出來 -->
+          <span v-if="key === 'worldbook' && worldbookEntries.length" class="side__n">{{ worldbookEntries.length }}</span>
           <span v-if="lacks(key)" class="side__dot" role="img" :aria-label="$t('editor.section.missing')" />
           <svg v-else-if="filled[key]" class="side__check" viewBox="0 0 16 16" role="img"
                :aria-label="$t('editor.section.filled')" fill="none" stroke="currentColor" stroke-width="1.8"
@@ -769,18 +771,6 @@ async function exportCard(format: "png" | "json") {
 
         <!-- 对话 -->
         <section v-show="section === 'dialogue'" class="pane">
-          <!-- 正則規則：AI 回覆在玩家瀏覽器裡先過一遍「找到→換成」再顯示 -->
-          <div class="rxbar">
-            <button type="button" class="btn btn--sm" @click="regexOpen = true">
-              {{ $t("regex.open") }}
-              <span v-if="regexSet.rules.length" class="chip">{{ regexSet.rules.length }}</span>
-            </button>
-            <button type="button" class="btn btn--sm btn--ghost" @click="regexFile?.click()">{{ $t("regex.import") }}</button>
-            <button type="button" class="btn btn--sm btn--ghost" :disabled="!regexSet.rules.length" @click="exportRegex">{{ $t("regex.export") }}</button>
-            <input ref="regexFile" type="file" accept=".json,application/json" class="sr-only" @change="onRegexFile" />
-            <span class="subtle">{{ $t("regex.bar.hint") }}</span>
-          </div>
-
           <FieldText id="f-welcome" v-model="draft.roleWelcome" :label="$t('editor.welcome')" required :rows="8"
                      :max="limits.roleWelcome" :hint="$t('editor.welcome.hint')" />
 
@@ -801,7 +791,7 @@ async function exportCard(format: "png" | "json") {
                   <option value="user">{{ $t("editor.talkExample.user") }}</option>
                   <option value="ai">{{ $t("editor.talkExample.ai") }}</option>
                 </select>
-                <textarea v-model="turn.content" class="input" rows="2"
+                <textarea v-model="turn.content" class="input" rows="2" style="min-height: calc(2 * 1.7em + 26px)"
                           :aria-label="$t('editor.talkExample.content')" />
                 <button type="button" class="btn btn--icon btn--sm btn--danger" :aria-label="$t('list.remove')"
                         :title="$t('list.remove')" @click="draft.talkExample.splice(i, 1)">
@@ -815,13 +805,27 @@ async function exportCard(format: "png" | "json") {
             <div class="acts">
               <button type="button" class="btn btn--sm"
                       @click="draft.talkExample.push({ roleType: 'user', content: '' })">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
                 {{ $t("editor.talkExample.addUser") }}
               </button>
               <button type="button" class="btn btn--sm"
                       @click="draft.talkExample.push({ roleType: 'ai', content: '' })">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
                 {{ $t("editor.talkExample.addAi") }}
               </button>
             </div>
+          </div>
+
+          <!-- 正則規則是進階項，放在分區最後：AI 回覆在玩家瀏覽器裡先過一遍「找到→換成」再顯示 -->
+          <div class="rxbar">
+            <button type="button" class="btn btn--sm" @click="regexOpen = true">
+              {{ $t("regex.open") }}
+              <span v-if="regexSet.rules.length" class="chip">{{ regexSet.rules.length }}</span>
+            </button>
+            <button type="button" class="btn btn--sm btn--ghost" @click="regexFile?.click()">{{ $t("regex.import") }}</button>
+            <button type="button" class="btn btn--sm btn--ghost" :disabled="!regexSet.rules.length" @click="exportRegex">{{ $t("regex.export") }}</button>
+            <input ref="regexFile" type="file" accept=".json,application/json" class="sr-only" @change="onRegexFile" />
+            <span class="subtle">{{ $t("regex.bar.hint") }}</span>
           </div>
         </section>
 
@@ -861,7 +865,7 @@ async function exportCard(format: "png" | "json") {
           <div class="panel">
             <h2>{{ $t("editor.publish") }}</h2>
             <p class="muted">{{ $t("editor.publish.hint") }}</p>
-            <p v-if="dirty" class="subtle">{{ $t("editor.publish.saveFirst") }}</p>
+            <p v-if="dirty || isNew" class="subtle">{{ $t("editor.publish.saveFirst") }}</p>
             <button type="button" class="btn btn--primary" :disabled="!canPublish || saving" @click="publish">
               {{ $t("editor.publish.submit") }}
             </button>
@@ -968,6 +972,7 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
   background: var(--accent);
 }
 .side__label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side__n { font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .side__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--danger); flex: none; }
 .side__check { width: 14px; height: 14px; color: var(--success); flex: none; }
 
@@ -976,8 +981,15 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .body > [role="alert"], .body > .restored { margin-bottom: var(--s-4); }
 .restored { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
 /* 欄位之間只留 pane 的 gap：.field 自己還有 24px 下邊距，兩個疊起來就是 48px 的空洞 */
-.pane { display: grid; gap: var(--s-4); }
+/* 換分區時淡入：v-show 從 display:none 回來會重新起一次動畫，不用另外觸發 */
+.pane { display: grid; gap: var(--s-4); animation: fade var(--dur) var(--ease) both; }
 .pane > .field, .pane :deep(.field) { margin-bottom: 0; }
+/*
+ * 多行欄位跟著內容長高（原生 field-sizing，不用 JS 量高）：寫上千字的人設不該在一個小框裡捲。
+ * rows 在 field-sizing: content 下不算數，所以最小高度由各欄位自己用 min-height 給；
+ * 最高七成螢幕，再長就框內捲，不然頁面會被一段兩萬字的人設撐到找不到儲存鈕。
+ */
+.pane :deep(textarea.input) { field-sizing: content; max-height: 70vh; }
 .pane :deep(.field) { gap: 6px; }
 .pane :deep(.field > label) { line-height: 1.3; }
 .pane :deep(.field__foot) { margin-top: -2px; }
@@ -992,7 +1004,8 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .turn .input { flex: 1; resize: vertical; }
 .input--who { flex: none; width: 96px; }
 .acts { display: flex; gap: var(--s-2); flex-wrap: wrap; }
-.rxbar { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }
+/* 進階項：一條髮絲線隔在分區底部，跟必填的開場白拉開身分 */
+.rxbar { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; padding-top: var(--s-4); border-top: 1px solid var(--line); }
 .rxbar .chip { margin-left: 4px; height: 20px; padding: 0 7px; font-variant-numeric: tabular-nums; }
 .panel { padding: var(--s-4); display: grid; gap: var(--s-2); }
 .panel h2 { margin: 0; font-size: 15px; }
@@ -1041,6 +1054,9 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
     margin: 0 calc(var(--s-4) * -1); padding: var(--s-2) var(--s-4);
     background: color-mix(in srgb, var(--bg) 88%, transparent);
     backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    /* 右緣淡出：提示還有分區在後面，不然「發布」剛好被切在邊上像是沒了 */
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
   }
   .side::-webkit-scrollbar { display: none; }
   .side__item { flex: none; height: var(--h-sm); border-radius: var(--r-pill); font-size: 13px; }
