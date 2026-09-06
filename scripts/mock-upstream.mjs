@@ -46,7 +46,7 @@ http.createServer(async (req, res) => {
   if (m === "POST" && path === "/open/v1/player/role-settings/save") return json(res, 200, { ok: true });
   if (path === "/open/v1/player/agent-mode") return json(res, 200, { roleId: url.searchParams.get("roleId"), runtimeEnabled: true, modelSupported: false, multiPassEnabled: false, costWarning: false });
   if (path === "/open/v1/role/author-asset/serve") return json(res, 200, { rules: [], mountTrigger: "", mountLayer: "", pageMode: "classic", status: "none", version: 0, variants: {} });
-  if (m === "POST" && path === "/open/v1/conversation/start") { const r = roles.get(body.roleId) || {}; return json(res, 200, { conversationId: "conv-1", defaultRelay: r.roleWelcome || "你好，這是本機假上游的開場白。", isNew: true }); }
+  if (m === "POST" && path === "/open/v1/conversation/start") { const r = roles.get(body.roleId) || {}; return json(res, 200, { conversationId: "conv-1", defaultRelay: r.roleWelcome || "你好，這是本機假上游的開場白。", isNew: true, roleInfo: { roleId: r.roleId, roleName: r.roleName, roleAvatar: r.roleAvatar || "" }, historyConversation: null }); }
   if (path === "/open/v1/conversation/messages") return json(res, 200, { list: [], hasMore: false });
   if (path === "/open/v1/conversation/archives") return json(res, 200, { archives: [{ conversationId: "conv-1", title: "", lastMessage: "開場白", messageCount: 1, isCurrent: true, createTime: "2026-09-06T08:49:57Z", lastUpdateTime: "2026-09-06T08:49:57Z" }], count: 1, limit: 20 });
   if (path === "/open/v1/conversation/directives") return json(res, 200, { list: [], max: 10 });

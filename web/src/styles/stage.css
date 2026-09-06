@@ -1,0 +1,62 @@
+/*
+ * 舞台跟著站台的外觀走。
+ *
+ * 畫布（stage/）的每一處取值都是 --lt-canvas-* 變數，預設是一套固定的深色——那是套件
+ * 自己「卡片還沒接手時不至於難看」的底。掛在站內時，底應該是站台的紙：深淺模式、
+ * 主題換了，畫布跟著換，玩家不會覺得按下「開始對話」就進了另一個網站。
+ *
+ * 所以這裡只做一件事：把畫布的變數接到 tokens.css 的變數上。沒有一個顏色寫死在這裡，
+ * 新主題不用來改這份。
+ *
+ * 作者的卡永遠在這條之上：畫布從卡量到的主色與塊的外觀寫在根元素的 inline style，
+ * 卡的 CSS 也不在任何 layer 裡，兩者都贏得過這條規則。狀態色（危險）跟站台，
+ * 其餘凡是卡沒動到的，才是這裡的值。
+ */
+.play .ms-stage {
+  --lt-canvas-bg: var(--bg);
+  --lt-canvas-fg: var(--text);
+  --lt-canvas-muted: var(--text-2);
+  --lt-canvas-line: var(--line);
+  --lt-canvas-font: var(--font);
+  --lt-canvas-radius: var(--r-lg);
+
+  /* 頂欄：紙色的玻璃 */
+  --lt-canvas-header-bg: color-mix(in srgb, var(--bg) 78%, transparent);
+
+  /* 訊息：AI 是白色的一塊（跟卡片一樣），自己的那句用強調色的淡底 */
+  --lt-canvas-name-color: var(--text-3);
+  --lt-canvas-bubble-ai-bg: var(--surface);
+  --lt-canvas-bubble-user-bg: var(--accent-tint);
+  --lt-canvas-bubble-radius: var(--r-lg);
+
+  /* 輸入區 */
+  --lt-canvas-composer-bg: color-mix(in srgb, var(--bg) 86%, transparent);
+  --lt-canvas-composer-field-bg: var(--surface);
+  --lt-canvas-composer-border: var(--line);
+  --lt-canvas-composer-radius: var(--r-lg);
+  --lt-canvas-placeholder-color: var(--text-3);
+  --lt-canvas-send-bg: var(--accent-btn);
+  --lt-canvas-send-fg: var(--on-accent);
+
+  /* 選單、停止鍵、面板、彈層：都是站台的面 */
+  --lt-canvas-menu-bg: var(--surface);
+  --lt-canvas-menu-radius: var(--r-md);
+  --lt-canvas-stop-bg: var(--surface);
+  --lt-canvas-stop-fg: var(--text);
+  --lt-canvas-stop-border: var(--line-strong);
+  --lt-canvas-panel-bg: var(--surface);
+  --lt-canvas-panel-item-bg: var(--surface-2);
+  --lt-canvas-sheet-bg: var(--surface);
+  --lt-canvas-sheet-radius: var(--r-lg);
+  --lt-canvas-sheet-item-bg: var(--surface-2);
+  --lt-canvas-sheet-item-bg-hover: var(--border);
+  --lt-canvas-sheet-item-bg-on: var(--accent-soft);
+  --lt-canvas-sheet-line: var(--line);
+  --lt-canvas-sheet-faint: var(--text-3);
+  --lt-canvas-sheet-pop-bg: var(--surface);
+
+  --lt-canvas-accent: var(--accent);
+  --lt-canvas-accent-bg: var(--accent-soft);
+  --lt-canvas-accent-fg: var(--on-accent);
+  --lt-canvas-danger: var(--danger);
+}
