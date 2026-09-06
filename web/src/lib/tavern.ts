@@ -343,7 +343,7 @@ export async function parseWorldbookFile(
 }
 
 /** 條目層面沒地方放的欄位。每一個都要出現在報告裡。 */
-function bookEntryDrops(entries: TavernBookEntry[]): DropNote[] {
+export function bookEntryDrops(entries: TavernBookEntry[]): DropNote[] {
   // 次要關鍵詞、大小寫、整詞、次要邏輯現在都有落點（上游的酒館匹配規則），不再進報告。
   const counts = { position: 0 };
   for (const entry of entries) {
