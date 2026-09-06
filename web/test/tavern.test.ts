@@ -228,6 +228,23 @@ describe("世界書檔", () => {
     },
   };
 
+  it("MMD 匯出的世界書把 key／keysecondary 存成 JSON 字串：一樣要讀成關鍵詞（用戶回報：匯入不帶關鍵詞）", () => {
+    const mmd = {
+      entries: {
+        "10": { uid: 10, key: '["【特别色色色色特化】","色色"]', keysecondary: '["夜晚"]', comment: "特别色色特化", content: "……", constant: false, disable: false },
+        "11": { uid: 11, key: "[]", keysecondary: "[]", comment: "骰子系统", content: "d20", constant: true, disable: false },
+        "12": { uid: 12, key: "甲, 乙，丙", content: "逗號分隔的舊寫法" },
+      },
+    };
+    const book = worldInfoToBook(mmd)!;
+    expect(book.entries![0]).toMatchObject({ keys: ["【特别色色色色特化】", "色色"], secondary_keys: ["夜晚"] });
+    expect(book.entries![1]).toMatchObject({ keys: [], secondary_keys: [], constant: true });
+    expect(book.entries![2]).toMatchObject({ keys: ["甲", "乙", "丙"] });
+    const drafts = bookEntriesToDrafts(book.entries!);
+    expect(drafts[0].keywords).toEqual(["【特别色色色色特化】", "色色"]);
+    expect(drafts[0].secondaryKeywords).toEqual(["夜晚"]);
+  });
+
   it("欄位名對回卡片規格：key→keys、keysecondary→secondary_keys、disable→enabled", () => {
     const book = worldInfoToBook(worldInfo)!;
     expect(book.entries).toHaveLength(3);
