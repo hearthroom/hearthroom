@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyRules, makeRule, parseFind, renderStatusbar, renderWithRules, ruleSetFromAuthorAsset, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, rulesFromTavern, validateRuleSet } from "../src/lib/regex-rules";
+import { applyRules, makeRule, parseFind, renderStatusbar, renderWithRules, ruleSetFromAuthorAsset, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, rulesFromTavern, validateRuleSet, REGEX_LIMITS } from "../src/lib/regex-rules";
 
 describe("parseFind", () => {
   it("/pat/flags 是正則，其他是字面", () => {
@@ -100,7 +100,7 @@ describe("匯入匯出", () => {
 describe("validateRuleSet", () => {
   it("空 find、壞正則、超長都有對應的 key", () => {
     const set = { version: 1 as const, lowered: false, statusbar: "", rules: [
-      makeRule({ id: "a", find: "" }), makeRule({ id: "b", find: "/[/g" }), makeRule({ id: "c", find: "x", replace: "y".repeat(32 * 1024 + 1) }),
+      makeRule({ id: "a", find: "" }), makeRule({ id: "b", find: "/[/g" }), makeRule({ id: "c", find: "x", replace: "y".repeat(REGEX_LIMITS.replaceBytes + 1) }),
     ] };
     const keys = validateRuleSet(set).map((i) => i.ruleId + ":" + i.key);
     expect(keys).toEqual(expect.arrayContaining(["a:regex.issue.emptyFind", "b:regex.issue.badRegex", "c:regex.issue.replaceLong"]));
