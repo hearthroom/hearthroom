@@ -44,7 +44,8 @@ let stagePromise: Promise<Component> | null = null;
 export function ensureStage(deps: StageDeps): Promise<Component> {
   if (stagePromise) return stagePromise;
   stagePromise = (async () => {
-    const [stage] = await Promise.all([import("moonstage/stage"), import("moonstage/stage.css")]);
+    // 套件的 CSS 之後再蓋站台的接線（styles/stage.css）：畫布的變數改接站台的 token，深淺與主題才跟得上
+    const [stage] = await Promise.all([import("moonstage/stage"), import("moonstage/stage.css"), import("@/styles/stage.css")]);
     const host = stage.browserHost({
       ui: {
         toast: (text, kind) => pushStageToast(text, kind),
