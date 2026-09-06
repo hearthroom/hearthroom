@@ -26,6 +26,8 @@ const pages = [
   // 建立與編輯是同一頁：差別只有有沒有 roleId。
   { path: "create", component: () => import("./pages/CardEditorPage.vue"), meta: { auth: true } },
   { path: "wallet", component: () => import("./pages/WalletPage.vue"), meta: { auth: true } },
+  // 我的資源：作者的素材圖庫（上游圖床），拿網址寫進正則規則用
+  { path: "resources", component: () => import("./pages/ResourcesPage.vue"), meta: { auth: true } },
   // 站內玩卡：舞台整頁接管（bare = 不套站台頁首頁尾），對話要登入
   { path: "play/:roleId", component: () => import("./pages/PlayPage.vue"), meta: { auth: true, bare: true } },
   { path: "auth/callback", component: () => import("./pages/CallbackPage.vue") },
