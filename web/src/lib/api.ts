@@ -5,7 +5,8 @@ import type { Author, AuthorSort, CardPage, CommunityCard, MyRole, Sort, Zone } 
 import type { RoleDocumentFields, TalkExampleEntry, WorldbookEntryDraft } from "./role-draft";
 
 export class ApiError extends Error {
-  constructor(readonly status: number, message: string) {
+  /** 上游回的穩定錯誤碼（例如 image_in_use）。畫面要分情況說話時看它，不看訊息文字。 */
+  constructor(readonly status: number, message: string, readonly code = "") {
     super(message);
   }
 }
@@ -22,7 +23,7 @@ async function json<T>(res: Response): Promise<T> {
     const key = ERROR_KEY[res.status] ?? (res.status >= 500 ? "state.serverBusy" : "state.requestFailed");
     const msg = i18n.global.t(key);
     const raw = body.error ?? body.message;
-    throw new ApiError(res.status, import.meta.env.DEV && raw ? `${msg} (${raw})` : msg);
+    throw new ApiError(res.status, import.meta.env.DEV && raw ? `${msg} (${raw})` : msg, body.error ?? "");
   }
   return (await res.json()) as T;
 }
@@ -394,10 +395,11 @@ export async function unpublishRole(roleId: string, token: string): Promise<unkn
  * 送的是 bytes 不是網址：型別與大小上限只有服務端擋得住，前端校驗繞得過去，而且
  * 客戶端塞任意外部網址進圖庫等於開一個盜連面。roleId 是選填的——建立中的卡還沒有 id。
  */
-export async function uploadImage(file: File, token: string, roleId?: string): Promise<string> {
+export async function uploadImage(file: File, token: string, roleId?: string, folderIds: string[] = []): Promise<string> {
   const form = new FormData();
   form.append("file", file);
   if (roleId) form.append("roleId", roleId);
+  for (const id of folderIds) form.append("folderIds", id);
   const res = await fetch(`${UPSTREAM_API}/open/v1/image/upload`, {
     method: "POST",
     headers: authHeaders(token),
@@ -581,3 +583,86 @@ export async function patchWorldbookDocument(
 }
 
 export type { TalkExampleEntry };
+
+// ── 素材圖庫（「我的資源」）────────────────────────────────────────
+//
+// 上游的圖床：作者上傳的圖片與自訂資料夾。網址是公開的 CDN 位址，作者拿去寫進正則規則的
+// HTML 裡（狀態欄、頭像框、背景）。回應包在 {code, data} 裡，這裡拆掉。
+
+export interface LibraryImage {
+  id: number;
+  imageUrl: string;
+  /** pending＝審核中、pass＝通過、reject＝被駁回；舊圖是 legacy，當通過看。 */
+  moderationState: string;
+  pixelWidth: number;
+  pixelHeight: number;
+  createTime: string;
+}
+
+export interface LibraryFolder {
+  folderId: string;
+  name: string;
+  imageCount: number;
+}
+
+export interface LibraryPage {
+  items: LibraryImage[];
+  total: number;
+  /** 帳號的張數上限。 */
+  quota: number;
+}
+
+/** 看哪一組：全部、沒歸進任何資料夾的、某個資料夾。 */
+export type LibraryScope = { kind: "all" } | { kind: "unfiled" } | { kind: "folder"; folderId: string };
+
+async function libraryJson<T>(res: Response): Promise<T> {
+  const body = await json<{ data?: T }>(res);
+  return (body.data ?? {}) as T;
+}
+
+function libraryPost(path: string, payload: unknown, token: string): Promise<Response> {
+  return fetch(`${UPSTREAM_API}/open/v1/image/${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders(token) },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchLibraryImages(scope: LibraryScope, page: number, pageSize: number, token: string): Promise<LibraryPage> {
+  const q = new URLSearchParams({ scope: scope.kind, pageNum: String(page), pageSize: String(pageSize) });
+  if (scope.kind === "folder") q.set("folderId", scope.folderId);
+  const res = await fetch(`${UPSTREAM_API}/open/v1/image/list?${q}`, { headers: authHeaders(token) });
+  const data = await libraryJson<{ imageList?: LibraryImage[]; total?: number; quota?: number }>(res);
+  return { items: data.imageList ?? [], total: Number(data.total ?? 0), quota: Number(data.quota ?? 0) };
+}
+
+export async function fetchLibraryFolders(token: string): Promise<LibraryFolder[]> {
+  const res = await fetch(`${UPSTREAM_API}/open/v1/image/folder/list`, { headers: authHeaders(token) });
+  return (await libraryJson<{ folders?: LibraryFolder[] }>(res)).folders ?? [];
+}
+
+export async function createLibraryFolder(name: string, token: string): Promise<LibraryFolder> {
+  return libraryJson<LibraryFolder>(await libraryPost("folder/create", { name }, token));
+}
+
+export async function renameLibraryFolder(folderId: string, name: string, token: string): Promise<void> {
+  await libraryJson(await libraryPost("folder/rename", { folderId, name }, token));
+}
+
+/** 刪資料夾不刪圖：圖回到「未歸檔」。 */
+export async function deleteLibraryFolder(folderId: string, token: string): Promise<void> {
+  await libraryJson(await libraryPost("folder/delete", { folderId }, token));
+}
+
+export async function addImagesToFolder(folderId: string, imageIds: number[], token: string): Promise<void> {
+  await libraryJson(await libraryPost("folder/addItems", { folderId, imageIds }, token));
+}
+
+export async function removeImagesFromFolder(folderId: string, imageIds: number[], token: string): Promise<void> {
+  await libraryJson(await libraryPost("folder/removeItems", { folderId, imageIds }, token));
+}
+
+/** 正被某張卡當頭像／背景的圖刪不掉：上游回 image_in_use，畫面照碼說話。 */
+export async function deleteLibraryImages(imageIds: number[], token: string): Promise<void> {
+  await libraryJson(await libraryPost("delete", { imageIds }, token));
+}
