@@ -37,8 +37,9 @@ jobs:
 
       - run: npm ci
       - run: npm run typecheck
-      - run: npm test
+      # 先建置再測：前端測試的 moonstage/stage 別名指向 stage/ 的建置產物，沒建過會解析失敗
       - run: npm run build
+      - run: npm test
 
       - name: Deploy skipped (secrets not set)
         if: github.event_name != 'pull_request' && env.CAN_DEPLOY != 'true'
