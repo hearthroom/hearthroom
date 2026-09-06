@@ -205,7 +205,7 @@ const setSecondary = (index: number, raw: string) => patch(index, { secondaryKey
 
           <div class="field">
             <label :for="`wb-c-${index}`">{{ $t("wb.entry.content") }}</label>
-            <textarea :id="`wb-c-${index}`" class="input" rows="4" :value="entry.content"
+            <textarea :id="`wb-c-${index}`" class="input" rows="4" style="min-height: calc(4 * 1.7em + 26px)" :value="entry.content"
                       :placeholder="$t('wb.entry.content.placeholder')"
                       @input="patch(index, { content: ($event.target as HTMLTextAreaElement).value })" />
             <span class="field__foot">
@@ -231,7 +231,10 @@ const setSecondary = (index: number, raw: string) => patch(index, { secondaryKey
       </ul>
 
       <div class="acts">
-        <button type="button" class="btn btn--sm" @click="add">{{ $t("wb.entry.add") }}</button>
+        <button type="button" class="btn btn--sm" @click="add">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+          {{ $t("wb.entry.add") }}
+        </button>
         <button type="button" class="btn btn--sm btn--ghost" @click="fileInput?.click()">{{ $t("wb.import") }}</button>
       </div>
     </template>

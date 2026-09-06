@@ -49,6 +49,7 @@ const move = (index: number, delta: number) => {
         <textarea
           class="input"
           :rows="rows ?? 2"
+          :style="{ minHeight: `calc(${rows ?? 2} * 1.7em + 26px)` }"
           :value="item"
           :placeholder="placeholder"
           :aria-label="`${label} ${index + 1}`"
@@ -79,12 +80,17 @@ const move = (index: number, delta: number) => {
         </div>
       </li>
     </ul>
-    <button type="button" class="btn btn--sm" @click="add">{{ addLabel }}</button>
+    <button type="button" class="btn btn--sm add" @click="add">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+      {{ addLabel }}
+    </button>
   </div>
 </template>
 
 <style scoped>
 .hint { margin: 0 0 var(--s-2); }
+/* .field 是 grid，按鈕預設會被拉成整欄寬；動作鈕該只有自己那麼寬，跟對話示例那組一致 */
+.add { justify-self: start; }
 .rows { list-style: none; margin: 0 0 var(--s-2); padding: 0; display: grid; gap: var(--s-2); }
 .row { display: flex; gap: var(--s-2); align-items: flex-start; }
 .row .input { flex: 1; resize: vertical; }

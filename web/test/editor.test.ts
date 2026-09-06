@@ -94,8 +94,11 @@ async function mount(path: string) {
 }
 
 const $ = <T extends Element>(sel: string) => root.querySelector<T>(sel)!;
+// 導覽鈕的文字之外還可能帶條數徽章（世界書 12），只比標籤那一段
 const byText = (text: string) =>
-  [...root.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.trim() === text)!;
+  [...root.querySelectorAll<HTMLButtonElement>("button")].find(
+    (b) => (b.querySelector(".side__label") ?? b).textContent?.trim() === text,
+  )!;
 
 async function pickFile(input: HTMLInputElement, file: File) {
   Object.defineProperty(input, "files", { value: [file], configurable: true });
