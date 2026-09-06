@@ -42,7 +42,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
 <template>
   <a class="skip" href="#main">{{ $t("nav.skip") }}</a>
 
-  <header class="header">
+  <header v-if="!route.meta.bare" class="header">
     <div class="header__inner" :class="{ 'header__inner--nosearch': onSearchPage }">
       <RouterLink :to="lp('/')" class="brand" :aria-label="SITE.name">
         <svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true">
@@ -90,10 +90,10 @@ onMounted(() => document.addEventListener("keydown", onSlash));
     </div>
   </header>
 
-  <main id="main" tabindex="-1"><RouterView /></main>
+  <main id="main" tabindex="-1" :class="{ 'main--bare': route.meta.bare }"><RouterView /></main>
   <ConfirmDialog />
 
-  <footer v-if="SITE.repoUrl" class="footer">
+  <footer v-if="SITE.repoUrl && !route.meta.bare" class="footer">
     <div class="footer__inner">
       <a :href="SITE.repoUrl" target="_blank" rel="noopener">{{ $t("footer.source") }} ↗</a>
     </div>

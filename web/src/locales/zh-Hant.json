@@ -376,5 +376,9 @@
   "regex.issue.replaceLong": "替換內容超過 {max} KB",
   "regex.issue.badRegex": "正則寫錯了，這條不會生效",
   "regex.issue.statusbarLong": "狀態欄超過 {max} 字",
-  "regex.issue.totalLong": "整份規則太大了"
+  "regex.issue.totalLong": "整份規則太大了",
+  "play.title": "對話",
+  "play.loading": "舞台載入中⋯",
+  "play.loadFailed": "舞台載不進來，請稍後再試。",
+  "play.backToCard": "回到卡片"
 }

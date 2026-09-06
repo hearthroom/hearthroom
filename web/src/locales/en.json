@@ -376,5 +376,9 @@
   "regex.issue.replaceLong": "Replacement over {max} KB",
   "regex.issue.badRegex": "Invalid regex; this rule won't run",
   "regex.issue.statusbarLong": "Status bar over {max} characters",
-  "regex.issue.totalLong": "The rule set is too large"
+  "regex.issue.totalLong": "The rule set is too large",
+  "play.title": "Play",
+  "play.loading": "Loading the stage…",
+  "play.loadFailed": "The stage failed to load. Please try again later.",
+  "play.backToCard": "Back to the card"
 }

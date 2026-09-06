@@ -376,5 +376,9 @@
   "regex.issue.replaceLong": "치환 내용이 {max} KB를 넘습니다",
   "regex.issue.badRegex": "정규식이 잘못되어 이 규칙은 동작하지 않습니다",
   "regex.issue.statusbarLong": "상태 바가 {max}자를 넘습니다",
-  "regex.issue.totalLong": "규칙 전체가 너무 큽니다"
+  "regex.issue.totalLong": "규칙 전체가 너무 큽니다",
+  "play.title": "플레이",
+  "play.loading": "무대를 불러오는 중…",
+  "play.loadFailed": "무대를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+  "play.backToCard": "카드로 돌아가기"
 }
