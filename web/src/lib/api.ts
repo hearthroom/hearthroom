@@ -235,13 +235,18 @@ export interface RoleDraft {
   userName?: string;
 }
 
-/** 建立一張私有卡。建好之後仍要作者自己決定要不要登記上榜。 */
+/**
+ * 建立一張私有卡。建好之後仍要作者自己決定要不要登記上榜。
+ *
+ * origin 自報「在本站建的」：上游把它記在卡上，本站的「我的卡片」與登記榜單只認這一種，
+ * 作者在主站建的卡不會混進來。
+ */
 export async function createRole(draft: { roleName: string; language?: string }, token: string): Promise<{ roleId?: string }> {
   return json<{ roleId?: string }>(
     await fetch(`${UPSTREAM_API}/open/v1/role`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders(token) },
-      body: JSON.stringify(draft),
+      body: JSON.stringify({ ...draft, origin: "hearthroom" }),
     }),
   );
 }
