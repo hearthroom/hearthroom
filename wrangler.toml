@@ -40,6 +40,9 @@ dataset = "hearthroom_events"
 [vars]
 # 上游的開放 API。這裡對它只有兩種呼叫：轉發作者 token 問身分、以游客讀卡片公開資訊。
 LUNATALK_API_BASE = "https://api.lunatalk.ai"
+# 中國連不上主網域，那邊的瀏覽器改打這個；由 /v1/region 依 Cloudflare 判斷的國別回給前端。
+# 本站 Worker 自己打上游仍固定用上面那個（Worker 在邊緣跑，不在中國）。
+LUNATALK_API_BASE_CN = "https://api.lunatalk.pro"
 # 每輪排程同步幾張卡。D1 單次請求有時間預算，別一次拉太多。
 SYNC_BATCH_SIZE = "50"
 # 同步的並發上限。目標是明顯更快，不是把上游打滿——個位數就夠。
