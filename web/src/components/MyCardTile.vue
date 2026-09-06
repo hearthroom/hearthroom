@@ -94,8 +94,10 @@ const hasArt = computed(() => !!props.card.avatarUrl && !broken.value);
   min-height: calc(12.5px * 1.5 * 2);
 }
 .card__meta { font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
-.card__actions { display: flex; gap: var(--s-2); margin-top: var(--s-2); }
-.card__actions > * { flex: 1; }
+/* 卡片最窄 140px：三顆一排放不下會被圓角裁掉。試玩、編輯一列平分；登記（或取消登記）獨占一列。 */
+.card__actions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-2); margin-top: var(--s-2); }
+.card__actions > .btn { min-width: 0; padding-left: var(--s-2); padding-right: var(--s-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card__actions > .btn--primary, .card__actions > .btn--danger { grid-column: 1 / -1; }
 /* 動作列平常收斂成灰階，hover 才給主色——一牆的紅色按鈕會讓人不知道該看哪 */
 .card__actions .btn--primary { filter: saturate(0.25) brightness(1.05); transition: filter var(--dur) var(--ease); }
 .card:hover .card__actions .btn--primary, .card__actions .btn--primary:focus-visible { filter: none; }
