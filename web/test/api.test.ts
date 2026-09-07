@@ -55,3 +55,15 @@ describe("fetchLibraryImages", () => {
     expect(page.byteQuota).toBe(500 << 20);
   });
 });
+
+describe("錯誤訊息給人看", () => {
+  it("認得的錯誤碼各有一句人話；不認得的碼附在後面；伺服器寫給人看的句子原樣講", async () => {
+    const { describeApiError } = await import("../src/lib/api");
+    const { i18n } = await import("../src/lib/i18n");
+    expect(describeApiError(400, "role_in_review")).toBe(i18n.global.t("error.roleInReview"));
+    expect(describeApiError(400, "invalid_arguments")).toBe(i18n.global.t("error.invalidArguments"));
+    expect(describeApiError(400, "weird_code")).toBe(`${i18n.global.t("state.requestFailed")} (weird_code)`);
+    expect(describeApiError(400, "內容包含不適當字詞")).toBe("內容包含不適當字詞");
+    expect(describeApiError(502, "")).toBe(i18n.global.t("state.serverBusy"));
+  });
+});
