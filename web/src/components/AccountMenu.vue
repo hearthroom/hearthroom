@@ -50,6 +50,7 @@ const PLAN_LABEL: Record<string, string> = { unlimited: "wallet.plan.unlimited",
       <RouterLink v-if="reviewerStore.reviewer" :to="lp('/review')" class="menu__item" role="menuitem">{{ $t("nav.review") }}</RouterLink>
       <RouterLink :to="lp('/resources')" class="menu__item" role="menuitem">{{ $t("nav.resources") }}</RouterLink>
       <RouterLink :to="lp('/wallet')" class="menu__item" role="menuitem">{{ $t("nav.wallet") }}</RouterLink>
+      <RouterLink :to="lp('/settings')" class="menu__item" role="menuitem">{{ $t("nav.settings") }}</RouterLink>
       <div class="menu__rule" />
       <button class="menu__item" role="menuitem" @click="track('logout'); session.logout()">{{ $t("nav.logout") }}</button>
     </div>

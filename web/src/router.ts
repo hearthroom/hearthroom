@@ -28,6 +28,7 @@ const pages = [
   { path: "wallet", component: () => import("./pages/WalletPage.vue"), meta: { auth: true } },
   // 我的資源：作者的素材圖庫（上游圖床），拿網址寫進正則規則用
   { path: "resources", component: () => import("./pages/ResourcesPage.vue"), meta: { auth: true } },
+  { path: "settings", component: () => import("./pages/SettingsPage.vue"), meta: { auth: true } },
   // 站內玩卡：舞台整頁接管（bare = 不套站台頁首頁尾），對話要登入
   { path: "play/:roleId", component: () => import("./pages/PlayPage.vue"), meta: { auth: true, bare: true } },
   // 社群審核：共享佇列與唯讀審核頁。誰能審由服務端決定（不是審核人會看到「你不是審核人」）。

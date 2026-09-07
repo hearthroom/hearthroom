@@ -67,3 +67,21 @@ describe("錯誤訊息給人看", () => {
     expect(describeApiError(502, "")).toBe(i18n.global.t("state.serverBusy"));
   });
 });
+
+describe("使用者設定（全局人設）", () => {
+  it("讀回上游的人設與暱稱；存檔只送動到的欄位", async () => {
+    const { fetchPlayerPersona, savePlayerPersona } = await import("../src/lib/api");
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url).endsWith("/player/persona")) return new Response(JSON.stringify({ userName: "小明", userSex: "man", userDefine: "", nickName: "阿強", exists: true }), { status: 200 });
+      expect(init?.method).toBe("POST");
+      expect(JSON.parse(String(init?.body))).toEqual({ userDefine: "高二學生" });
+      return new Response(JSON.stringify({ userName: "小明", userSex: "man", userDefine: "高二學生" }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const p = await fetchPlayerPersona("tok");
+    expect(p).toEqual({ userName: "小明", userSex: "man", userDefine: "", nickName: "阿強", exists: true });
+    const saved = await savePlayerPersona({ userDefine: "高二學生" }, "tok");
+    expect(saved.userDefine).toBe("高二學生");
+    vi.unstubAllGlobals();
+  });
+});
