@@ -683,10 +683,14 @@ const PAGE_TTL = 60;
  */
 app.get("/assets/*", async (c) => {
   const current = await c.env.ASSETS.fetch(c.req.raw);
-  if (current.status !== 404) return current;
+  // 資源層配了 single-page-application：找不到檔不是 404，是 200 的 index.html。對 /assets/* 來說
+  // 那就是「找不到」——一份 HTML 冒充 JS 正是瀏覽器報 dynamically imported module 失敗的原因。
+  const missing = current.status === 404 || (current.headers.get("content-type") ?? "").includes("text/html");
+  if (!missing) return current;
   const key = new URL(c.req.url).pathname;
   const archived = await c.env.ASSET_ARCHIVE.getWithMetadata<{ contentType?: string }>(key, "arrayBuffer");
-  if (!archived.value) return current;
+  // 兩邊都沒有：回真正的 404，別再把 index.html 當 JS 交出去
+  if (!archived.value) return new Response("not found", { status: 404 });
   note(c, { event: "asset_archive_hit" });
   return new Response(archived.value, {
     headers: {

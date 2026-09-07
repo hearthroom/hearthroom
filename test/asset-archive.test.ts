@@ -6,10 +6,13 @@ import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:
 import { describe, expect, it } from "vitest";
 import worker from "../src/index";
 
+/** 照真實資源層的行為：配了 single-page-application，找不到檔回的是 200 的 index.html，不是 404。 */
 const assets = (present: Record<string, string>) => ({
   fetch: async (req: Request) => {
     const path = new URL(req.url).pathname;
-    return path in present ? new Response(present[path], { headers: { "content-type": "text/javascript" } }) : new Response("nope", { status: 404 });
+    return path in present
+      ? new Response(present[path], { headers: { "content-type": "text/javascript" } })
+      : new Response("<!doctype html><title>shell</title>", { status: 200, headers: { "content-type": "text/html" } });
   },
 });
 
@@ -36,8 +39,9 @@ describe("/assets/* 回退到舊版歸檔", () => {
     expect(res.headers.get("cache-control")).toContain("immutable");
   });
 
-  it("兩邊都沒有 → 404，不是 index.html", async () => {
+  it("兩邊都沒有 → 真正的 404，不是 200 的 index.html", async () => {
     const res = await get("/assets/Nope-xyz.js", {});
     expect(res.status).toBe(404);
+    expect(res.headers.get("content-type") ?? "").not.toContain("text/html");
   });
 });
