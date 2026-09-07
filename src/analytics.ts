@@ -125,7 +125,7 @@ const BOT = /bot|crawler|spider|crawling|facebookexternalhit|slurp|bingpreview|d
 export const clientKind = (ua: string | undefined): "bot" | "server" => (ua && BOT.test(ua) ? "bot" : "server");
 
 /** 前端送来的来源标记。白名单挡住随手塞进来的任意字串。 */
-const SURFACES = new Set(["board", "search", "card", "author", "mine", "create", "wallet", "direct", "404"]);
+const SURFACES = new Set(["board", "search", "card", "author", "mine", "create", "wallet", "play", "review", "direct", "404"]);
 export const surfaceOf = (raw: string | undefined) => (raw && SURFACES.has(raw) ? raw : "direct");
 
 /**

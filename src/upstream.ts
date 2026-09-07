@@ -3,12 +3,14 @@ import { type Env, HttpError, type Localized } from "./types";
 /**
  * 上游開放 API 的客戶端。
  *
- * 這個服務對上游只做兩件事，沒有第三件：
- *   1. 登記時轉發作者自己的 token 問「你是誰」——唯一需要憑證的呼叫，用完即棄，不落庫
+ * 這個服務對上游做三類事：
+ *   1. 轉發作者自己的 token：問「你是誰」、替他把卡授權給審核機器人——用完即棄，不落庫
  *   2. 同步時以匿名身分讀卡片的公開資訊——不需要任何憑證
+ *   3. 審核：以本站的審核機器人（主站上的服務帳號）讀作者授權過的卡片設定與內容雜湊
  *
- * 沒有服務帳號、沒有特殊金鑰、沒有私有介面：這裡拿到的 API 存取範圍，跟任何第三方
- * 客戶端拿到的一模一樣。所以任何人都能 fork 一份自己架。
+ * 沒有私有介面：這裡打的每一條路都是公開契約，任何第三方站台都能照樣接。唯一的秘密是
+ * 審核機器人的金鑰，而它只讀得到作者主動授權過的卡；不配機器人也能跑（登記即上榜），
+ * 所以任何人都能 fork 一份自己架。
  */
 
 const apiUrl = (env: Env, path: string) => `${env.LUNATALK_API_BASE}${path}`;
@@ -218,5 +220,46 @@ export function buildSearchText(role: UpstreamRole): string {
  * 也不綁在測試框架某個版本的 undici 內部。上游呼叫的 HTTP 形狀（路徑、標頭、
  * 錯誤碼對應）由 upstream.test.ts 直接測這兩個函式。
  */
-export const upstream = { fetchMe, fetchRole, fetchMyRoles };
+// ---- 審核契約（完整級供應商）------------------------------------------------
+//
+// 作者提交審核時，本站以作者自己的 token 替他把這張卡授權給本站的審核機器人（主站上的
+// 服務帳號）；之後審核人員讀設定、排程比對內容版本，都是機器人拿自己的金鑰去讀。
+// 機器人金鑰是本站持有的唯一秘密：它只讀得到作者主動授權過的卡，主站那邊把它擋在
+// 聊天、點數、建卡之外。這是對檔頭「沒有服務帳號」那句話的有意識翻轉（2026-09-07）。
+
+/** 作者把一張卡的「可閱讀詳情」授權給某個帳號。作者自己的 token，用完即棄。 */
+async function grantShare(env: Env, bearer: string, roleId: string, granteeAccountNumId: number): Promise<void> {
+  const res = await fetch(apiUrl(env, "/open/v1/share/role/grant"), {
+    method: "POST",
+    headers: { Authorization: `Bearer ${bearer}`, "Content-Type": "application/json", "User-Agent": UA },
+    body: JSON.stringify({ roleId, granteeAccountNumId }),
+  });
+  await readJson(res, "share grant");
+}
+
+/** 內容雜湊：card / welcome / worldbook / authorAsset 四段加一個合成的 content。 */
+export interface ContentHashes { card: string; welcome: string; worldbook: string; authorAsset: string; content: string }
+
+const botHeaders = (key: string) => ({ Authorization: `Bearer ${key}`, "User-Agent": UA });
+
+/** 機器人讀一張卡的內容雜湊。授權被收回時上游回 401/403，readJson 統一成 401。 */
+async function fetchContentHash(env: Env, botKey: string, roleId: string): Promise<ContentHashes> {
+  const res = await fetch(apiUrl(env, `/open/v1/share/role/content-hash?roleId=${encodeURIComponent(roleId)}`), { headers: botHeaders(botKey) });
+  const body = await readJson(res, "content hash");
+  const h = (body.hashes ?? {}) as Record<string, unknown>;
+  return { card: str(h.card), welcome: str(h.welcome), worldbook: str(h.worldbook), authorAsset: str(h.authorAsset), content: str(h.content) };
+}
+
+/**
+ * 機器人讀整份設定。回上游原樣（審核頁要看的就是原始碼），但作者的公開 ID 在這裡就拿掉——
+ * 盲審：審核人不該從回應裡看到是誰寫的。
+ */
+async function fetchSharedDetail(env: Env, botKey: string, roleId: string): Promise<Record<string, unknown>> {
+  const res = await fetch(apiUrl(env, `/open/v1/share/role/detail?roleId=${encodeURIComponent(roleId)}`), { headers: botHeaders(botKey) });
+  const body = await readJson(res, "shared detail");
+  const { authorNumId: _dropped, ...rest } = body;
+  return rest;
+}
+
+export const upstream = { fetchMe, fetchRole, fetchMyRoles, grantShare, fetchContentHash, fetchSharedDetail };
 export type Upstream = typeof upstream;

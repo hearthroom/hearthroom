@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { ApiError, fetchMyCards, registerCard, unregisterCard, type MyCard, type MyCardPage } from "@/lib/api";
+import { confirmDialog } from "@/lib/confirm";
 import { daysUntilReset, remaining, weekRange } from "@/lib/quota";
 import { useLocalePath } from "@/lib/use-locale";
 import MyCardTile from "@/components/MyCardTile.vue";
@@ -19,6 +20,7 @@ const data = ref<MyCardPage | null>(null);
 const loading = ref(true);
 const revalidating = ref(false);
 const error = ref("");
+const notice = ref("");
 const busy = ref<string | null>(null);
 
 type Filter = "all" | "listed" | "unlisted";
@@ -86,30 +88,64 @@ async function load(opts: { fresh?: boolean } = {}) {
   }
 }
 
-async function toggle(card: MyCard) {
-  const before = card.registered;
-  if (!before && quotaFull.value) {
+/**
+ * 提交審核（登記）。
+ *
+ * 按下去之前先把話說清楚：提交等於把這張卡的完整設定授權給本站的審核帳號唯讀。
+ * 這是作者的意思表示，服務端用他自己的 token 去主站授權，所以確認框不能省。
+ */
+async function submit(card: MyCard) {
+  if (!card.registered && quotaFull.value) {
     error.value = t("mine.quota.exceeded");
     return;
   }
+  const ok = await confirmDialog({
+    title: t("mine.consent.title"),
+    message: t("mine.consent.message"),
+    confirmText: t("mine.consent.confirm"),
+  });
+  if (!ok) return;
+  const wasRegistered = card.registered;
   busy.value = card.roleId;
   error.value = "";
-  // 樂觀更新：登記是本站自己的資料，往返很快，失敗再翻回來。
-  card.registered = !before;
+  notice.value = "";
   try {
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
-    if (before) await unregisterCard(card.roleId, token);
-    else await registerCard(card.roleId, token);
+    const res = (await registerCard(card.roleId, token)) as { status?: MyCard["status"] };
+    card.registered = true;
+    card.status = res.status ?? "approved";
+    card.note = "";
     if (session.me) cache.write(session.me.accountNumId, page.value, filter.value, data.value!);
     // 登記成功就多用掉一格；撤銷不還——額度數的是「這週登記過幾張不同的卡」
-    if (!before && data.value) data.value.quota.used = Math.min(data.value.quota.limit, data.value.quota.used + 1);
+    if (!wasRegistered && data.value) data.value.quota.used = Math.min(data.value.quota.limit, data.value.quota.used + 1);
+    notice.value = card.status === "approved" ? "" : t("mine.submitted");
   } catch (err) {
-    card.registered = before;
     error.value =
       err instanceof ApiError && err.code === "weekly_quota_exceeded"
         ? t("mine.quota.exceeded")
         : err instanceof Error ? err.message : t("state.actionFailed");
+  } finally {
+    busy.value = null;
+  }
+}
+
+async function toggle(card: MyCard) {
+  if (!card.registered) return submit(card);
+  busy.value = card.roleId;
+  error.value = "";
+  // 樂觀更新：撤銷是本站自己的資料，往返很快，失敗再翻回來。
+  card.registered = false;
+  try {
+    const token = await session.accessToken();
+    if (!token) throw new Error(t("auth.expired"));
+    await unregisterCard(card.roleId, token);
+    card.status = undefined;
+    card.note = "";
+    if (session.me) cache.write(session.me.accountNumId, page.value, filter.value, data.value!);
+  } catch (err) {
+    card.registered = true;
+    error.value = err instanceof Error ? err.message : t("state.actionFailed");
   } finally {
     busy.value = null;
   }
@@ -188,6 +224,7 @@ watch(() => route.query.fresh, (f) => {
     </div>
 
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
+    <p v-else-if="notice" class="notice" role="status">{{ notice }}</p>
 
     <div v-if="loading" class="wall" aria-hidden="true">
       <div v-for="i in 12" :key="i" class="ghost ghost--card" />
@@ -208,6 +245,7 @@ watch(() => route.query.fresh, (f) => {
         :locked="quotaFull"
         :busy="busy === card.roleId"
         @toggle="toggle(card)"
+        @resubmit="submit(card)"
       />
     </div>
 

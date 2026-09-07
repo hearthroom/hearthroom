@@ -21,7 +21,16 @@ export interface CardRow {
   hot_score: number;
   registered_at: number;
   last_synced_at: number;
+  /** 供應商代號（0004 起）。現在只有 lunatalk。 */
+  provider: string;
+  /** 審核狀態（0004 起）：pending / approved / rejected / needs_review / unshared。榜單只算 approved。 */
+  status: string;
+  /** 過審時綁上的內容雜湊；空字串＝過審前登記的舊卡，同步時第一次看到就綁上。 */
+  reviewed_hash: string;
 }
+
+/** 對外露出的卡片只有在榜的。榜單、標籤、作者榜、卡片頁都走這個條件。 */
+const LISTED = "status = 'approved'";
 
 /** 回應按請求語言解析好名稱與簡介，同時附上原始多語，讓客戶端能自己切換。 */
 export function toCard(row: CardRow, lang: string) {
@@ -68,6 +77,8 @@ export interface ListOptions {
   sort: "hot" | "new" | "top" | "relevance";
   limit: number;
   offset: number;
+  /** 不論審核狀態全列。只有作者看自己的「已登記」那一組用；對外的榜單永遠只列在榜的。 */
+  anyStatus?: boolean;
 }
 
 export interface ListResult {
@@ -84,7 +95,7 @@ export interface ListResult {
 }
 
 export async function listCards(db: D1Database, opts: ListOptions) {
-  const where: string[] = [];
+  const where: string[] = opts.anyStatus ? ["1=1"] : [`c.${LISTED}`];
   const binds: unknown[] = [];
   let from = "cards c";
   let usingFts = false;
@@ -113,7 +124,7 @@ export async function listCards(db: D1Database, opts: ListOptions) {
     binds.push(opts.authorNumId);
   }
 
-  const whereSql = where.length ? where.join(" AND ") : "1=1";
+  const whereSql = where.join(" AND ");
   // hot 用「這個同步窗口的對話增量」，不是累積數——累積數等於 top，排出來永遠是老卡。
   // 三種排序都對應一個索引，沒有一種需要現算。
   // 相關度是 FTS 的 bm25（越小越相關），再用熱度打破平手。LIKE 那條路沒有相關度可言。
@@ -141,8 +152,8 @@ export async function listCards(db: D1Database, opts: ListOptions) {
   if (!filtered) {
     // 語區條件走索引，數起來便宜；只有搜尋與標籤過濾才貴到不值得數。
     const counted = opts.zone
-      ? await db.prepare("SELECT COUNT(*) AS n FROM cards WHERE zone IN (?, 'all')").bind(opts.zone).first<{ n: number }>()
-      : await db.prepare("SELECT COUNT(*) AS n FROM cards").first<{ n: number }>();
+      ? await db.prepare(`SELECT COUNT(*) AS n FROM cards WHERE ${LISTED} AND zone IN (?, 'all')`).bind(opts.zone).first<{ n: number }>()
+      : await db.prepare(`SELECT COUNT(*) AS n FROM cards WHERE ${LISTED}`).first<{ n: number }>();
     total = counted?.n ?? 0;
   } else if (!hasNext) {
     // 已經翻到最後一頁，總數就是走過的量，不必再問一次資料庫。
@@ -158,7 +169,7 @@ export async function listCards(db: D1Database, opts: ListOptions) {
  * 內容全部來自同步結果，作者送不進任何欄位——這是「登記完再偷換成別的東西」
  * 在結構上不可能發生的原因。
  */
-export async function upsertCard(db: D1Database, role: UpstreamRole, now: number) {
+export async function upsertCard(db: D1Database, role: UpstreamRole, now: number, opts: { status?: string; provider?: string } = {}) {
   const existing = await db
     .prepare("SELECT id, talk_num FROM cards WHERE source_role_id = ?")
     .bind(role.roleId)
@@ -199,14 +210,19 @@ export async function upsertCard(db: D1Database, role: UpstreamRole, now: number
     .prepare(
       `INSERT INTO cards (id, source_role_id, zone, author_num_id, author_name, author_avatar, names, summaries,
          avatar_url, background_url, slug, tags, talk_num, follow_num, search_text, last_synced_at,
-         talk_num_prev, registered_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         talk_num_prev, registered_at, provider, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     // 首次登記把 prev 設成當前值 → trending 從 0 起算。
     // 不這樣的話一張老熱卡剛登記就會用累積總量霸榜。
-    .bind(id, role.roleId, ...shared, role.talkNum, now)
+    .bind(id, role.roleId, ...shared, role.talkNum, now, opts.provider ?? "lunatalk", opts.status ?? "approved")
     .run();
   return { id, created: true };
+}
+
+/** 改審核狀態。只有審核流程（index.ts 的提交、review.ts 的蓋章、同步的比對）會叫它。 */
+export async function setCardStatus(db: D1Database, id: string, status: string): Promise<void> {
+  await db.prepare("UPDATE cards SET status = ? WHERE id = ?").bind(status, id).run();
 }
 
 export async function getCard(db: D1Database, id: string) {
@@ -221,7 +237,7 @@ export async function getAuthor(db: D1Database, authorNumId: number) {
     .prepare(
       `SELECT author_num_id, author_name, author_avatar, COUNT(*) AS card_count,
               SUM(talk_num) AS talk_total, MIN(registered_at) AS joined_at
-       FROM cards WHERE author_num_id = ?
+       FROM cards WHERE author_num_id = ? AND ${LISTED}
        GROUP BY author_num_id, author_name, author_avatar`,
     )
     .bind(authorNumId)
@@ -242,15 +258,19 @@ export async function unregister(db: D1Database, roleId: string, authorNumId: nu
     .first<{ id: string; author_num_id: number }>();
   if (!row) throw new HttpError(404, "card not registered");
   if (row.author_num_id !== authorNumId) throw new HttpError(403, "not the author of this card");
-  await db.prepare("DELETE FROM cards WHERE id = ?").bind(row.id).run();
+  // 還在排隊的審核單一併作廢；蓋過章的紀錄留著（那是審核人做過的事，不隨卡片消失）。
+  await db.batch([
+    db.prepare("DELETE FROM review_submissions WHERE card_id = ? AND status = 'pending'").bind(row.id),
+    db.prepare("DELETE FROM cards WHERE id = ?").bind(row.id),
+  ]);
 }
 
-/** 排程同步挑最久沒更新的一批。 */
+/** 排程同步挑最久沒更新的一批。帶著審核狀態與已過審的內容版本，同步順手比對內容有沒有變。 */
 export async function dueForSync(db: D1Database, limit: number) {
   const rows = await db
-    .prepare("SELECT id, source_role_id, talk_num FROM cards ORDER BY last_synced_at ASC LIMIT ?")
+    .prepare("SELECT id, source_role_id, talk_num, provider, status, reviewed_hash FROM cards ORDER BY last_synced_at ASC LIMIT ?")
     .bind(limit)
-    .all<{ id: string; source_role_id: string; talk_num: number }>();
+    .all<{ id: string; source_role_id: string; talk_num: number; provider: string; status: string; reviewed_hash: string }>();
   return rows.results;
 }
 
@@ -317,7 +337,7 @@ export async function registeredAmong(db: D1Database, roleIds: string[]): Promis
  * 沒有固定分類表，所以「類型」就是大家實際在用的那些詞。
  */
 export async function topTags(db: D1Database, zone: Zone | undefined, limit: number) {
-  const where = zone ? "WHERE c.zone IN (?, 'all')" : "";
+  const where = zone ? `WHERE c.${LISTED} AND c.zone IN (?, 'all')` : `WHERE c.${LISTED}`;
   const binds: unknown[] = zone ? [zone, limit] : [limit];
   const rows = await db
     .prepare(
@@ -347,7 +367,7 @@ export async function listAuthors(
   db: D1Database,
   opts: { zone?: Zone; q?: string; sort: "talk" | "cards" | "hot"; limit: number; offset: number },
 ) {
-  const where: string[] = [];
+  const where: string[] = [LISTED];
   const binds: unknown[] = [];
   if (opts.zone) { where.push("zone IN (?, 'all')"); binds.push(opts.zone); }
   if (opts.q) { where.push(`author_name LIKE ? ESCAPE '\\'`); binds.push(likeTerm(opts.q)); }
@@ -358,7 +378,7 @@ export async function listAuthors(
       `SELECT author_num_id, MAX(author_name) AS author_name, MAX(author_avatar) AS author_avatar,
               COUNT(*) AS card_count, SUM(talk_num) AS talk_total, SUM(MAX(hot_score, 0)) AS trending,
               MIN(registered_at) AS joined_at
-       FROM cards ${where.length ? "WHERE " + where.join(" AND ") : ""}
+       FROM cards WHERE ${where.join(" AND ")}
        GROUP BY author_num_id ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
     )
     .bind(...binds, opts.limit + 1, opts.offset)

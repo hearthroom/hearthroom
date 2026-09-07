@@ -11,8 +11,9 @@ let cacheGeneration = 0;
  * 邊緣快取也一樣——不換命名空間的話，後面的測試會讀到前一個測試留下的結果。
  */
 export async function resetDb(): Promise<void> {
-  await env.DB.prepare("DELETE FROM cards").run();
-  await env.DB.prepare("DELETE FROM card_registrations").run();
+  for (const table of ["cards", "card_registrations", "review_stamps", "review_submissions", "reviewers", "member_identities", "members"]) {
+    await env.DB.prepare(`DELETE FROM ${table}`).run();
+  }
   mineCache.namespace = `mine-test-${++cacheGeneration}`;
   boardCache.namespace = `board-test-${cacheGeneration}`;
 }
@@ -20,6 +21,42 @@ export async function resetDb(): Promise<void> {
 const real = { ...upstream };
 export function restoreUpstream(): void {
   Object.assign(upstream, real);
+}
+
+// ---- 審核契約的假上游 ------------------------------------------------------------
+
+/** 記錄每次授權呼叫：測試才驗得出提交真的替作者授權給了機器人。 */
+export const grantCalls: { token: string; roleId: string; granteeAccountNumId: number }[] = [];
+
+/** 每張卡目前的內容雜湊（測試改這個模擬作者改了卡）；設成 "revoked" 模擬作者收回授權。 */
+export const upstreamHashes = new Map<string, string>();
+
+export function reviewUpstream(detailFor: (roleId: string) => Record<string, unknown> = (roleId) => ({ roleId, document: { roleName: roleId } })): void {
+  grantCalls.length = 0;
+  upstream.grantShare = async (_env, token, roleId, granteeAccountNumId) => {
+    grantCalls.push({ token, roleId, granteeAccountNumId });
+  };
+  upstream.fetchContentHash = async (_env, _key, roleId) => {
+    const h = upstreamHashes.get(roleId) ?? `sha256:${roleId}-v1`;
+    if (h === "revoked") throw new HttpError(401, "upstream rejected the token");
+    return { card: h, welcome: h, worldbook: h, authorAsset: h, content: h };
+  };
+  upstream.fetchSharedDetail = async (_env, _key, roleId) => {
+    if (upstreamHashes.get(roleId) === "revoked") throw new HttpError(401, "upstream rejected the token");
+    return detailFor(roleId);
+  };
+}
+
+/** 把某個供應商公開 ID 登記成審核人（建成員、綁身分、標記）。 */
+export async function makeReviewer(accountNumId: number): Promise<string> {
+  const id = `member-${accountNumId}`;
+  const now = Date.now();
+  await env.DB.batch([
+    env.DB.prepare("INSERT OR IGNORE INTO members (id, created_at) VALUES (?, ?)").bind(id, now),
+    env.DB.prepare("INSERT OR IGNORE INTO member_identities (provider, external_id, member_id, linked_at) VALUES ('lunatalk', ?, ?, ?)").bind(String(accountNumId), id, now),
+    env.DB.prepare("INSERT OR IGNORE INTO reviewers (member_id, granted_at, granted_by) VALUES (?, ?, 'test')").bind(id, now),
+  ]);
+  return id;
 }
 
 export interface RoleFixture {
