@@ -462,6 +462,26 @@ async function onWorldbookPick(book: { worldbookId: string; name: string }) {
   }
 }
 
+/**
+ * 放掉手上這本，回到空狀態重挑。
+ *
+ * 上游的綁定是覆蓋式的（一張卡只留一本），所以「換一本」就是綁新的那一本，舊的自己會退下來；
+ * 沒有「這張卡不要世界書了」這條路——上游那邊沒有對應的動作，這裡也就不假裝有。
+ *
+ * worldbookOriginal 一定要一起清空：留著的話，下一本書的差分會拿舊書的條目去算，
+ * 送出去就是往新書裡刪一批根本不存在的條目。
+ */
+async function onWorldbookRelease() {
+  if (!(await confirmDialog({ message: t("wb.switch.confirm"), confirmText: t("wb.switch") }))) return;
+  worldbookId.value = "";
+  worldbookName.value = "";
+  worldbookFormat.value = undefined;
+  worldbookEntries.value = [];
+  worldbookOriginal.value = [];
+  worldbookPending.value = false;
+  worldbookBindPending.value = false;
+}
+
 /** 從酒館世界書檔匯入的條目。還沒綁書就先把書建起來，名字用檔裡的、沒有就用角色名。 */
 function onWorldbookImported(payload: { name: string; entries: WorldbookEntryDraft[] }) {
   if (!worldbookId.value && !worldbookPending.value) {
@@ -944,7 +964,8 @@ async function exportCard(format: "png" | "json") {
           <p class="muted">{{ $t("wb.lede") }}</p>
           <WorldbookEditor v-model="worldbookEntries" v-model:book-name="worldbookName"
                            :bound="Boolean(worldbookId) || worldbookPending" @create="createWorldbookDraft"
-                           @imported="onWorldbookImported" @pick="onWorldbookPick" />
+                           @imported="onWorldbookImported" @pick="onWorldbookPick"
+                           @release="onWorldbookRelease" />
         </section>
 
         <!-- 发布 -->

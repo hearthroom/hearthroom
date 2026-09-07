@@ -459,5 +459,7 @@
   "wb.entry.match.logic.0": "하나라도 나오면",
   "wb.entry.match.logic.1": "전부 나오지는 않으면",
   "wb.entry.match.logic.2": "하나도 안 나오면",
-  "wb.entry.match.logic.3": "전부 나오면"
+  "wb.entry.match.logic.3": "전부 나오면",
+  "wb.switch": "다른 책으로",
+  "wb.switch.confirm": "다른 책으로 바꿀까요? 이 카드는 다음에 고른 책을 사용합니다. 지금 책은 지워지지 않고 그대로 남아요."
 }
