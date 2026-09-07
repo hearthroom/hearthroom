@@ -674,6 +674,28 @@ const PAGE = /^(?:\/(zh-Hans|en|ja|ko))?\/(cards|authors)\/([^/]+)$/;
 const SITE_NAME = "Hearthroom";
 const PAGE_TTL = 60;
 
+/**
+ * 靜態檔：先問資源層（當前版），找不到才回退到 ASSET_ARCHIVE（舊部署的 hash 檔，deploy 時歸檔、30 天到期）。
+ *
+ * 為什麼要有這一層：頁面按路由懶載入，每次部署 hash 都變，資源層只留當前版。部署前就開著的分頁
+ * 點到還沒載入的頁面就拿到 404，路由靜默失敗，使用者看到的是「按鈕沒反應」。hash 檔的內容永遠不變，
+ * 把舊的給舊頁面是安全的；index.html 不進歸檔，新開與重新整理永遠是當前版。
+ */
+app.get("/assets/*", async (c) => {
+  const current = await c.env.ASSETS.fetch(c.req.raw);
+  if (current.status !== 404) return current;
+  const key = new URL(c.req.url).pathname;
+  const archived = await c.env.ASSET_ARCHIVE.getWithMetadata<{ contentType?: string }>(key, "arrayBuffer");
+  if (!archived.value) return current;
+  note(c, { event: "asset_archive_hit" });
+  return new Response(archived.value, {
+    headers: {
+      "content-type": archived.metadata?.contentType ?? "application/octet-stream",
+      "cache-control": "public, max-age=31536000, immutable",
+    },
+  });
+});
+
 app.get("*", async (c) => {
   const url = new URL(c.req.url);
   const m = url.pathname.match(PAGE);
