@@ -432,7 +432,7 @@
   "res.state.rejected": "審査不通過",
   "res.error.inUse": "キャラクターカードのアバターや背景に使われているファイルがあります。先にカード側で差し替えてください。",
   "res.error.quota": "ファイル数の上限に達しました。",
-  "res.error.tooLarge": "1 ファイルは 500 MB までです。",
+  "res.error.tooLarge": "1 ファイルは 100 MB までです。",
   "res.error.type": "対応形式：PNG／JPEG／WebP、MP4／WebM、MP3／WAV／OGG、WOFF2／WOFF／TTF／OTF。",
   "res.error.duplicateName": "同じ名前のフォルダがあります。",
   "res.error.folderLimit": "フォルダの上限に達しました。",

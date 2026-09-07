@@ -432,7 +432,7 @@
   "res.state.rejected": "심사 미통과",
   "res.error.inUse": "캐릭터 카드의 아바타나 배경으로 쓰이는 파일이 있습니다. 카드에서 먼저 교체하세요.",
   "res.error.quota": "파일 수 상한에 도달했습니다.",
-  "res.error.tooLarge": "파일 하나는 500 MB를 넘을 수 없습니다.",
+  "res.error.tooLarge": "파일 하나는 100 MB를 넘을 수 없습니다.",
   "res.error.type": "지원 형식: PNG/JPEG/WebP, MP4/WebM, MP3/WAV/OGG, WOFF2/WOFF/TTF/OTF.",
   "res.error.duplicateName": "같은 이름의 폴더가 이미 있습니다.",
   "res.error.folderLimit": "폴더 수 상한에 도달했습니다.",

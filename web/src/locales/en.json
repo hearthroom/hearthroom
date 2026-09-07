@@ -432,7 +432,7 @@
   "res.state.rejected": "Rejected",
   "res.error.inUse": "Some files are in use as a card’s avatar or background. Replace them on the card first.",
   "res.error.quota": "You’ve reached the file limit.",
-  "res.error.tooLarge": "A single file can’t exceed 500 MB.",
+  "res.error.tooLarge": "A single file can’t exceed 100 MB.",
   "res.error.type": "Accepted: PNG/JPEG/WebP, MP4/WebM, MP3/WAV/OGG, WOFF2/WOFF/TTF/OTF.",
   "res.error.duplicateName": "A folder with that name already exists.",
   "res.error.folderLimit": "You’ve reached the folder limit.",
