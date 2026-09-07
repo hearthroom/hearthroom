@@ -4,9 +4,12 @@ import { RouterLink } from "vue-router";
 import { hueFrom, whole } from "@/lib/format";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
+import { useReviewer } from "@/lib/review";
 import { track } from "@/lib/track";
 
 const session = useSession();
+// 窄螢幕把頁首那排導覽整排藏起來，這個選單就是手機上唯一的路——審核入口也得在這裡有一份。
+const reviewerStore = useReviewer();
 const { lp } = useLocalePath();
 const open = ref(false);
 const root = ref<HTMLElement | null>(null);
@@ -44,6 +47,7 @@ const PLAN_LABEL: Record<string, string> = { unlimited: "wallet.plan.unlimited",
       </div>
       <RouterLink :to="lp(`/authors/${session.me.accountNumId}`)" class="menu__item" role="menuitem">{{ $t("nav.authorPage") }}</RouterLink>
       <RouterLink :to="lp('/mine')" class="menu__item" role="menuitem">{{ $t("nav.mine") }}</RouterLink>
+      <RouterLink v-if="reviewerStore.reviewer" :to="lp('/review')" class="menu__item" role="menuitem">{{ $t("nav.review") }}</RouterLink>
       <RouterLink :to="lp('/resources')" class="menu__item" role="menuitem">{{ $t("nav.resources") }}</RouterLink>
       <RouterLink :to="lp('/wallet')" class="menu__item" role="menuitem">{{ $t("nav.wallet") }}</RouterLink>
       <div class="menu__rule" />
