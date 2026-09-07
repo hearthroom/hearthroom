@@ -9,8 +9,16 @@ import { assess } from "./deploy-preflight-rules.mjs";
 const git = (...args) => execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 const tryGit = (...args) => { try { return git(...args); } catch { return ""; } };
 
-let fetchOk = true;
-try { execFileSync("git", ["fetch", "origin", "--quiet"], { stdio: "ignore", timeout: 60_000 }); } catch { fetchOk = false; }
+// GitHub 的 SSH 在這台機器上會間歇性失敗（publickey denied／connection closed），多試幾次再判定。
+let fetchOk = false;
+for (let attempt = 1; attempt <= 4 && !fetchOk; attempt++) {
+  try {
+    execFileSync("git", ["fetch", "origin", "--quiet"], { stdio: "ignore", timeout: 60_000 });
+    fetchOk = true;
+  } catch {
+    if (attempt < 4) execFileSync("sleep", ["2"]);
+  }
+}
 
 const result = assess({
   porcelain: tryGit("status", "--porcelain"),
