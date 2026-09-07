@@ -594,9 +594,16 @@ export type { TalkExampleEntry };
 // 上游的圖床：作者上傳的圖片與自訂資料夾。網址是公開的 CDN 位址，作者拿去寫進正則規則的
 // HTML 裡（狀態欄、頭像框、背景）。回應包在 {code, data} 裡，這裡拆掉。
 
+/** 素材的種類：表名還叫 image，但四種檔都住那裡。 */
+export type LibraryKind = "image" | "video" | "audio" | "font";
+
 export interface LibraryImage {
   id: number;
   imageUrl: string;
+  kind: LibraryKind;
+  mimeType?: string;
+  /** 上傳時的位元組數；2026-09 前的存量圖是 0。 */
+  byteSize: number;
   /** pending＝審核中、pass＝通過、reject＝被駁回；舊圖是 legacy，當通過看。 */
   moderationState: string;
   pixelWidth: number;
@@ -615,6 +622,9 @@ export interface LibraryPage {
   total: number;
   /** 帳號的張數上限。 */
   quota: number;
+  /** 已用容量與容量上限（位元組）。已用只算有記體積的檔。 */
+  usedBytes: number;
+  byteQuota: number;
 }
 
 /** 看哪一組：全部、沒歸進任何資料夾的、某個資料夾。 */
@@ -633,12 +643,19 @@ function libraryPost(path: string, payload: unknown, token: string): Promise<Res
   });
 }
 
-export async function fetchLibraryImages(scope: LibraryScope, page: number, pageSize: number, token: string): Promise<LibraryPage> {
-  const q = new URLSearchParams({ scope: scope.kind, pageNum: String(page), pageSize: String(pageSize) });
+/** kind 不給就是全部種類；上游那邊不給才是「只看圖片」，所以這裡一律明說。 */
+export async function fetchLibraryImages(scope: LibraryScope, page: number, pageSize: number, token: string, kind: LibraryKind | "all" = "all"): Promise<LibraryPage> {
+  const q = new URLSearchParams({ scope: scope.kind, kind, pageNum: String(page), pageSize: String(pageSize) });
   if (scope.kind === "folder") q.set("folderId", scope.folderId);
   const res = await fetch(`${UPSTREAM_API}/open/v1/image/list?${q}`, { headers: authHeaders(token) });
-  const data = await libraryJson<{ imageList?: LibraryImage[]; total?: number; quota?: number }>(res);
-  return { items: data.imageList ?? [], total: Number(data.total ?? 0), quota: Number(data.quota ?? 0) };
+  const data = await libraryJson<{ imageList?: LibraryImage[]; total?: number; quota?: number; usedBytes?: number; byteQuota?: number }>(res);
+  return {
+    items: (data.imageList ?? []).map((i) => ({ ...i, kind: i.kind || "image", byteSize: Number(i.byteSize ?? 0) })),
+    total: Number(data.total ?? 0),
+    quota: Number(data.quota ?? 0),
+    usedBytes: Number(data.usedBytes ?? 0),
+    byteQuota: Number(data.byteQuota ?? 0),
+  };
 }
 
 export async function fetchLibraryFolders(token: string): Promise<LibraryFolder[]> {

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createRole, fetchWorldbookEntries, readKeywordList } from "../src/lib/api";
+import { createRole, fetchLibraryImages, fetchWorldbookEntries, readKeywordList } from "../src/lib/api";
 
 /** 上游真實回應的形狀（2026-09-06 線上抓的）：`list` 而不是 `entries`，關鍵詞是 JSON 字串。 */
 const UPSTREAM_ROW = {
@@ -42,5 +42,16 @@ describe("createRole", () => {
     await createRole({ roleName: "阿芙拉", language: "zh-Hant" }, "tok");
     const init = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1];
     expect(JSON.parse(String(init.body))).toEqual({ roleName: "阿芙拉", language: "zh-Hant", origin: "hearthroom" });
+  });
+});
+
+describe("fetchLibraryImages", () => {
+  it("明說 kind（上游不給就只看圖片），拆 {code,data} 殼，存量圖沒 kind 當圖片", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ code: 0, data: { total: 1, quota: 10000, usedBytes: 5, byteQuota: 200 << 20, imageList: [{ id: 9, imageUrl: "https://cdn.test/9.png", moderationState: "legacy" }] } }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const page = await fetchLibraryImages({ kind: "unfiled" }, 2, 24, "tok", "font");
+    expect(String((fetchMock.mock.calls[0] as unknown as [string])[0])).toContain("/open/v1/image/list?scope=unfiled&kind=font&pageNum=2&pageSize=24");
+    expect(page.items[0]).toMatchObject({ id: 9, kind: "image", byteSize: 0 });
+    expect(page.byteQuota).toBe(200 << 20);
   });
 });

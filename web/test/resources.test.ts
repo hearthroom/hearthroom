@@ -15,10 +15,10 @@ const api = vi.hoisted(() => {
   class ApiError extends Error {
     constructor(readonly status: number, message: string, readonly code = "") { super(message); }
   }
-  const image = (id: number, extra: Record<string, unknown> = {}) => ({ id, imageUrl: `https://cdn.test/${id}.png`, moderationState: "pass", pixelWidth: 512, pixelHeight: 768, createTime: "", ...extra });
+  const image = (id: number, extra: Record<string, unknown> = {}) => ({ id, imageUrl: `https://cdn.test/${id}.png`, kind: "image", byteSize: 1 << 20, moderationState: "pass", pixelWidth: 512, pixelHeight: 768, createTime: "", ...extra });
   return {
     ApiError,
-    fetchLibraryImages: vi.fn(async () => ({ items: [image(1), image(2, { moderationState: "pending" }), image(3)], total: 3, quota: 10000 })),
+    fetchLibraryImages: vi.fn(async () => ({ items: [image(1), image(2, { moderationState: "pending" }), image(3, { kind: "font", imageUrl: "https://cdn.test/3.woff2", moderationState: "unreviewed" })], total: 3, quota: 10000, usedBytes: 3 << 20, byteQuota: 200 << 20 })),
     fetchLibraryFolders: vi.fn(async () => [{ folderId: "f-1", name: "頭像框", imageCount: 1 }]),
     createLibraryFolder: vi.fn(async (name: string) => ({ folderId: "f-2", name, imageCount: 0 })),
     renameLibraryFolder: vi.fn(async () => {}),
@@ -69,12 +69,15 @@ afterEach(() => {
 describe("我的資源", () => {
   it("進頁面載一次列表與資料夾；審核中的圖有標記；配額照上游的張數", async () => {
     await mount();
-    expect(api.fetchLibraryImages).toHaveBeenCalledWith({ kind: "all" }, 1, 48, "tok");
+    expect(api.fetchLibraryImages).toHaveBeenCalledWith({ kind: "all" }, 1, 48, "tok", "all");
     expect(api.fetchLibraryFolders).toHaveBeenCalledTimes(1);
     expect(root.querySelectorAll(".tile").length).toBe(3);
     expect(root.querySelector(".tile__state")?.textContent).toBe("審核中");
-    expect(root.querySelector(".quota__num")?.textContent).toContain("3");
-    expect(root.querySelector(".quota__num")?.textContent).toContain("10000");
+    expect(root.querySelector(".quota__num")?.textContent).toContain("3.0 MB");
+    expect(root.querySelector(".quota__num")?.textContent).toContain("200 MB");
+    // 字型沒有審核狀態徽章，圖塊上是副檔名
+    expect(root.querySelectorAll(".tile__state").length).toBe(1);
+    expect(root.querySelector(".tile__ext")?.textContent).toBe("WOFF2");
   });
 
   it("管理模式勾兩張刪掉：送的是那兩個 id，刪完重抓", async () => {
@@ -95,7 +98,7 @@ describe("我的資源", () => {
     await mount();
     byText("頭像框 1").click();
     await flush();
-    expect(api.fetchLibraryImages).toHaveBeenLastCalledWith({ kind: "folder", folderId: "f-1" }, 1, 48, "tok");
+    expect(api.fetchLibraryImages).toHaveBeenLastCalledWith({ kind: "folder", folderId: "f-1" }, 1, 48, "tok", "all");
     const input = root.querySelector<HTMLInputElement>("input[type=file]")!;
     const file = new File([new Uint8Array([1, 2, 3])], "a.png", { type: "image/png" });
     Object.defineProperty(input, "files", { value: [file], configurable: true });
@@ -114,7 +117,15 @@ describe("我的資源", () => {
     root.querySelector("form.folders__edit")!.dispatchEvent(new Event("submit", { cancelable: true }));
     await flush();
     expect(api.createLibraryFolder).toHaveBeenCalledWith("背景", "tok");
-    expect(api.fetchLibraryImages).toHaveBeenLastCalledWith({ kind: "folder", folderId: "f-2" }, 1, 48, "tok");
+    expect(api.fetchLibraryImages).toHaveBeenLastCalledWith({ kind: "folder", folderId: "f-2" }, 1, 48, "tok", "all");
+  });
+
+  it("切種類籤：只要那一種，檔案挑選器也跟著收窄", async () => {
+    await mount();
+    byText("影片").click();
+    await flush();
+    expect(api.fetchLibraryImages).toHaveBeenLastCalledWith({ kind: "all" }, 1, 48, "tok", "video");
+    expect(root.querySelector<HTMLInputElement>("input[type=file]")!.accept).toBe("video/mp4,video/webm");
   });
 
   it("上游說圖片被卡片用著：畫面照錯誤碼說話", async () => {
