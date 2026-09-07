@@ -8,7 +8,7 @@ import type { MyCard } from "@/lib/api";
 
 /** locked：這週的登記額度用完了。只鎖「登記」，撤銷登記照常——撤掉不佔額度。 */
 const props = defineProps<{ card: MyCard; busy: boolean; locked?: boolean }>();
-defineEmits<{ toggle: [] }>();
+defineEmits<{ toggle: []; resubmit: [] }>();
 
 const { lp } = useLocalePath();
 const hue = computed(() => hueFrom(props.card.name));
@@ -29,19 +29,30 @@ const hasArt = computed(() => !!props.card.avatarUrl && !broken.value);
       >
         <span>{{ initial }}</span>
       </div>
-      <!-- 在榜上是這頁最重要的一個位元，標在圖上 -->
-      <span v-if="card.registered" class="card__badge">{{ $t("mine.badge.listed") }}</span>
+      <!-- 在榜上是這頁最重要的一個位元，標在圖上；還沒過審、被駁回、要重審的也在這裡說 -->
+      <span v-if="card.registered && (!card.status || card.status === 'approved')" class="card__badge">{{ $t("mine.badge.listed") }}</span>
+      <span v-else-if="card.registered && card.status" class="card__badge card__badge--muted">{{ $t(`mine.badge.${card.status}`) }}</span>
     </RouterLink>
 
     <div class="card__body">
       <h3 class="card__name">{{ card.name }}</h3>
       <p class="card__hook">{{ card.summary || $t("card.noSummary") }}</p>
       <p class="card__meta">{{ zoneLabel(card.zone) }} · {{ $t("card.talkCount", { n: compact(card.talkNum) }) }}</p>
+      <p v-if="card.status === 'rejected' && card.note" class="card__note">{{ $t("mine.note.rejected", { note: card.note }) }}</p>
       <!-- 工作區的操作不能藏在 hover 底下：觸控裝置根本碰不到 -->
       <div class="card__actions">
         <!-- 自己的卡不用登記也能玩：登記是上榜，不是能不能對話的門檻 -->
         <RouterLink class="btn btn--sm" :to="lp(`/play/${card.roleId}`)">{{ $t("mine.action.play") }}</RouterLink>
         <RouterLink class="btn btn--sm" :to="lp(`/cards/${card.roleId}/edit`)">{{ $t("mine.action.edit") }}</RouterLink>
+        <!-- 被駁回、離榜重審、被收回授權的卡：主鍵是「重新提交」，取消登記退到次要 -->
+        <button
+          v-if="card.registered && (card.status === 'rejected' || card.status === 'needs_review' || card.status === 'unshared')"
+          class="btn btn--sm btn--primary"
+          :disabled="busy"
+          @click="$emit('resubmit')"
+        >
+          {{ busy ? "…" : $t("mine.action.submit") }}
+        </button>
         <button
           class="btn btn--sm"
           :class="card.registered ? 'btn--danger' : 'btn--primary'"
@@ -49,7 +60,7 @@ const hasArt = computed(() => !!props.card.avatarUrl && !broken.value);
           :title="locked && !card.registered ? $t('mine.quota.full') : undefined"
           @click="$emit('toggle')"
         >
-          {{ busy ? "…" : card.registered ? $t("mine.action.unregister") : $t("mine.action.register") }}
+          {{ busy ? "…" : card.registered ? $t("mine.action.unregister") : $t("mine.action.submit") }}
         </button>
       </div>
     </div>
@@ -87,6 +98,9 @@ const hasArt = computed(() => !!props.card.avatarUrl && !broken.value);
   background: var(--accent); color: var(--on-accent);
   font-size: 11.5px; font-weight: 600;
 }
+/* 還沒上榜的狀態用灰底：跟「在榜上」一眼分得開 */
+.card__badge--muted { background: rgba(16, 16, 24, 0.7); color: #fff; }
+.card__note { font-size: 12px; color: var(--danger); line-height: 1.5; }
 
 .card__body { display: grid; gap: 4px; padding: 10px 12px 12px; }
 .card__name { font-size: 14.5px; font-weight: 600; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

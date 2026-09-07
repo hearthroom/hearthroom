@@ -93,6 +93,84 @@ export async function unregisterCard(roleId: string, token: string): Promise<voi
   if (!res.ok && res.status !== 204) await json(res);
 }
 
+// ---- 社群審核（同源）--------------------------------------------------------
+
+/** 卡片在本站的審核狀態。approved 才在榜上；其餘只有作者自己在「我的卡片」看得到。 */
+export type CardStatus = "pending" | "approved" | "rejected" | "needs_review" | "unshared";
+
+export interface ReviewQueueItem {
+  id: string;
+  kind: "first" | "re";
+  submittedAt: number;
+  card: { id: string; roleId: string; name: string; summary: string; avatarUrl: string | null; zone: Zone | "all"; tags: string[] };
+  stamps: { approve: number; required: number };
+  claim: "free" | "mine" | "other";
+  stampedByMe: boolean;
+}
+
+/** 主站的分享讀取回的整份設定（見主站 /open/v1/share/role/detail）。作者身分已在服務端拿掉。 */
+export interface ReviewDetail {
+  submission: {
+    id: string; kind: "first" | "re"; status: string; contentHash: string; submittedAt: number;
+    claimedByMe: boolean; required: number;
+    stamps: { verdict: "approve" | "reject"; note: string; at: number }[];
+  };
+  card: { id: string; roleId: string };
+  detail: {
+    document: {
+      roleName: string; userName: string; roleDesc: string; roleAvatar: string; roleBackground: string;
+      roleDetailDesc: string; roleTag: string; roleType: string; roleSex: string; roleSpeech: string;
+      language: string; isR18: boolean; jailbreak: string; talkExample: string; roleOutputContract: string;
+    };
+    greetings: { welcome: string; alternates: string[]; prologue: string[] };
+    worldbook: {
+      worldbookId: string; name: string; description: string; format: string;
+      entries: {
+        entryId: string; name: string; content: string; keywords: string[]; secondaryKeywords: string[];
+        category: string; isEnabled: boolean; isConstant: boolean; triggerRegion: string;
+      }[];
+    } | null;
+    worldbookAvailable: boolean;
+    authorAsset: {
+      rules: { id: string; name: string; find: string; replace: string; enabled: boolean }[];
+      mountTrigger: string; mountLayer: string; pageMode: string; status: string; version: number;
+    };
+    hashes: { card: string; welcome: string; worldbook: string; authorAsset: string; content: string };
+    costProfile: {
+      personaChars: number; worldbookEntryCount: number; worldbookEnabledCount: number; worldbookConstantCount: number;
+      worldbookChars: number; worldbookConstantChars: number; estimatedConstantTokens: number; estimatedMaxTokens: number;
+    };
+  };
+}
+
+export async function fetchReviewMe(token: string): Promise<{ reviewer: boolean }> {
+  return json(await fetch(`${COMMUNITY_API}/review/me`, { headers: { ...from(), ...authHeaders(token) } }));
+}
+
+export async function fetchReviewQueue(token: string, lang?: string): Promise<{ items: ReviewQueueItem[]; claimTtlMs: number }> {
+  const q = lang ? `?lang=${encodeURIComponent(lang)}` : "";
+  return json(await fetch(`${COMMUNITY_API}/review/queue${q}`, { headers: { ...from(), ...authHeaders(token) } }));
+}
+
+async function reviewAction<T>(id: string, action: string, token: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${COMMUNITY_API}/review/${encodeURIComponent(id)}/${action}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...from(), ...authHeaders(token) },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (res.status === 204) return undefined as T;
+  return json<T>(res);
+}
+
+export const claimReview = (id: string, token: string) => reviewAction<{ id: string; claimedAt: number }>(id, "claim", token);
+export const releaseReview = (id: string, token: string) => reviewAction<void>(id, "release", token);
+export const stampReview = (id: string, token: string, body: { verdict: "approve" | "reject"; note?: string }) =>
+  reviewAction<{ id: string; status: string; cardStatus: CardStatus; stamps: { approve: number; required: number } }>(id, "stamp", token, body);
+
+export async function fetchReviewDetail(id: string, token: string): Promise<ReviewDetail> {
+  return json(await fetch(`${COMMUNITY_API}/review/${encodeURIComponent(id)}/detail`, { headers: { ...from(), ...authHeaders(token) } }));
+}
+
 // ---- 上游開放 API（跨網域）---------------------------------------------------
 
 export interface Me { accountNumId: number; nickName: string; avatar: string }
@@ -106,6 +184,10 @@ export interface MyCard {
   visibility: string;
   talkNum: number;
   registered: boolean;
+  /** 本站的審核狀態；只有 registered 時才有。 */
+  status?: CardStatus;
+  /** 最近一次駁回給作者的說明。 */
+  note?: string;
 }
 
 export interface ListingQuota {
