@@ -271,7 +271,6 @@ watch([draft, worldbookEntries, worldbookName, worldbookPending], () => {
   draftTimer = setTimeout(storeDraft, 400);
 }, { deep: true });
 
-const SEXES = ["", "man", "women", "other"] as const;
 
 /** 從分類詞表點一個標籤：加進去或拿掉，走同一條標籤文字，計數與 chip 預覽都跟著動。 */
 function toggleTag(name: string) {
@@ -967,13 +966,6 @@ async function exportCard(format: "png" | "json") {
             <span class="subtle">{{ $t("editor.language.hint") }}</span>
           </div>
 
-          <div class="field">
-            <label for="f-sex">{{ $t("editor.sex") }}</label>
-            <select id="f-sex" v-model="draft.roleSex" class="input">
-              <option v-for="value in SEXES" :key="value" :value="value">{{ $t(`editor.sex.${value || "none"}`) }}</option>
-            </select>
-          </div>
-
           <FieldText id="f-desc" v-model="draft.roleDesc" :label="$t('editor.summary')" :rows="3"
                      :max="limits.roleDesc" :hint="$t('edit.summary.hint')" />
 
@@ -994,8 +986,6 @@ async function exportCard(format: "png" | "json") {
             <TagPicker :selected="draft.roleTag" :language="draft.language" :max="TAGS_MAX" @toggle="toggleTag" />
           </div>
 
-          <FieldText id="f-user" v-model="draft.userName" :label="$t('editor.userName')"
-                     :hint="$t('editor.userName.hint')" :placeholder="$t('editor.userName.placeholder')" />
         </section>
 
         <!-- 人设 -->
