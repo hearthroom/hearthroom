@@ -420,7 +420,7 @@
   "settings.persona.sex.other": "Other",
   "settings.persona.define": "What the character should know about you",
   "settings.persona.definePlaceholder": "Who you are, your personality, your relationship with the character… anything goes.",
-  "settings.persona.priority": "A persona set on a card's play page overrides this.",
+  "settings.persona.priority": "A persona set while playing a card overrides this.",
   "settings.save": "Save",
   "settings.saved": "Saved",
   "res.title": "My resources",
@@ -564,5 +564,8 @@
   "wb.entries.pick": "Pick one on the left to edit.",
   "wb.entries.empty": "This book has no entries yet.",
   "wb.entries.more": "and {n} more",
-  "editor.userName": "What the character calls the player"
+  "editor.userName": "What the character calls the player",
+  "footer.developers": "Developers",
+  "developers.title": "Developers: Provider Protocol",
+  "developers.source": "This document lives in the repository alongside the code. View the source on GitHub"
 }
