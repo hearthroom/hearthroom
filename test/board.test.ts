@@ -99,6 +99,13 @@ describe("搜尋", () => {
     }
   });
 
+  it("標籤鍵展開成五語名稱：繁體卡標的「調教&強迫」用 key=training 也找得到；不是鍵的字照字面過濾", async () => {
+    await seed({ id: "t1", name: "調教卡", tags: ["調教&強迫"] });
+    await seed({ id: "t2", name: "训练卡", tags: ["调教&强迫"] });
+    expect(ids((await list("?tag=training")).body).sort()).toEqual(["t1", "t2"]);
+    expect(ids((await list("?tag=%E4%BF%AE%E4%BB%99")).body)).toEqual(["b"]);
+  });
+
   it("可以用標籤過濾", async () => {
     expect(ids((await list("?tag=修仙")).body)).toEqual(["b"]);
   });
@@ -112,25 +119,38 @@ describe("排名", () => {
     // 老神卡累積量大但這個窗口沒動靜；新卡累積量小但正在被聊。
     await seed({ id: "old", talkNum: 50_000, talkPrev: 50_000, registeredAt: now - 300 * DAY });
     await seed({ id: "rising", talkNum: 900, talkPrev: 400, registeredAt: now - 10 * DAY });
-    await seed({ id: "fresh", talkNum: 20, talkPrev: 18, registeredAt: now - 1 * DAY });
+    // 半天前上榜：正好壓在 24h 邊界上會因為請求時的 now 比 seed 時晚而掉出日榜
+    await seed({ id: "fresh", talkNum: 20, talkPrev: 18, registeredAt: now - 0.5 * DAY });
   });
 
-  it("hot 看的是這個同步窗口的對話增量，不是累積量", async () => {
-    expect(ids((await list("?sort=hot")).body)).toEqual(["rising", "fresh", "old"]);
-  });
-
-  it("top 看累積量", async () => {
+  // 榜的口徑照魅魔島（owner 2026-09-07）：日／週／月榜只看上榜時間在窗口內的卡、按累積對話數排；
+  // 最熱是全部卡的累積對話數；最新按上榜時間；推薦隨機。舊的「同步窗口增量」不再當排序鍵，只給前端顯示。
+  it("hot 是累積對話數（最熱）；top 是舊名字，當同義詞", async () => {
+    expect(ids((await list("?sort=hot")).body)).toEqual(["old", "rising", "fresh"]);
     expect(ids((await list("?sort=top")).body)).toEqual(["old", "rising", "fresh"]);
+  });
+
+  it("day／week／month 只列上榜時間在窗口內的卡，窗口內按累積對話數排", async () => {
+    expect(ids((await list("?sort=day")).body)).toEqual(["fresh"]);
+    expect(ids((await list("?sort=week")).body)).toEqual(["fresh"]);
+    expect(ids((await list("?sort=month")).body)).toEqual(["rising", "fresh"]);
+  });
+
+  it("random 回全部的卡、順序不固定，而且不進快取（每次來都重抽）", async () => {
+    const a = await SELF.fetch("https://c.test/v1/cards?sort=random");
+    const b = await SELF.fetch("https://c.test/v1/cards?sort=random");
+    expect(a.headers.get("X-Cache")).toBe("miss");
+    expect(b.headers.get("X-Cache")).toBe("miss");
+    expect(ids((await a.json()) as { items: any[] }).sort()).toEqual(["fresh", "old", "rising"]);
   });
 
   it("new 看登記時間", async () => {
     expect(ids((await list("?sort=new")).body)).toEqual(["fresh", "rising", "old"]);
   });
 
-  it("回應帶出 trending 數字供前端顯示", async () => {
-    const { body } = await list("?sort=hot");
-    expect(body.items[0].trending).toBe(500);
-    expect(body.items[2].trending).toBe(0);
+  it("回應帶出 trending（同步窗口增量）供前端顯示，跟排序鍵無關", async () => {
+    const { body } = await list("?sort=month");
+    expect(body.items.map((i: any) => [i.id, i.trending])).toEqual([["rising", 500], ["fresh", 2]]);
   });
 
   it("分頁", async () => {
@@ -297,10 +317,12 @@ describe("hot_score 衍生欄位", () => {
     expect(row.hot_score).toBe(250);
   });
 
-  it("排序用的是這個欄位，結果跟預期一致", async () => {
+  it("欄位算出來的增量會帶到回應的 trending；排序鍵已改成累積量（owner 2026-09-07），不再看它", async () => {
     await seed({ id: "cold", talkNum: 50_000, talkPrev: 50_000 });
     await seed({ id: "rising", talkNum: 900, talkPrev: 400 });
-    expect((await list("?sort=hot")).body.items.map((i: any) => i.id)).toEqual(["rising", "cold"]);
+    const items = (await list("?sort=hot")).body.items;
+    expect(items.map((i: any) => i.id)).toEqual(["cold", "rising"]);
+    expect(items.find((i: any) => i.id === "rising").trending).toBe(500);
   });
 });
 

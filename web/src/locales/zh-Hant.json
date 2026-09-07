@@ -13,9 +13,8 @@
   "board.sorts": "排序",
   "board.search.placeholder": "搜尋角色名、簡介或標籤",
   "board.search.submit": "搜尋",
-  "board.sort.hot": "熱門",
+  "board.sort.hot": "最熱",
   "board.sort.new": "最新",
-  "board.sort.top": "累積",
   "board.count": "{n} 張",
   "board.empty.title": "這一區還沒有作品",
   "board.empty.hint": "換一區看看，或到「我的卡片」把你的作品放上來。",
@@ -567,5 +566,9 @@
   "editor.userName": "玩家稱呼",
   "footer.developers": "開發者",
   "developers.title": "開發者：相容供應商協議",
-  "developers.source": "這份文件與程式碼同倉庫維護，在 GitHub 上查看原始檔"
+  "developers.source": "這份文件與程式碼同倉庫維護，在 GitHub 上查看原始檔",
+  "board.sort.day": "日榜",
+  "board.sort.week": "週榜",
+  "board.sort.month": "月榜",
+  "board.sort.random": "推薦"
 }
