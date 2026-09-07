@@ -254,11 +254,27 @@ watch(selectedId, () => { testScope.value = testScope.value; });
 .rx__test-panes textarea { resize: none; min-height: 120px; }
 .rx__out { margin: 0; min-height: 120px; max-height: 160px; overflow: auto; white-space: pre-wrap; word-break: break-all; color: var(--text-2); }
 
+/*
+  窄螢幕：整面板變成一條會捲的欄，標題列釘在頂上。
+
+  桌機的三段式（頭／清單＋編輯／功能欄＋測試）各佔固定高度；手機上底段的功能欄加兩個
+  測試框就有五百多像素，中段被擠到剩一點，清單與編輯表單疊在一起（owner 2026-09-07
+  截圖）。改成清單、編輯、功能欄、測試由上而下自然排開，整塊一起捲；清單自己最多
+  240px 內捲，其餘照內容長。
+*/
 @media (max-width: 900px) {
   .rx { padding: 0; }
-  .rx__panel { height: 100vh; width: 100%; border-radius: 0; }
-  .rx__body, .rx__foot { grid-template-columns: 1fr; }
-  .rx__list { box-shadow: 0 1px 0 var(--line); grid-template-rows: auto auto 200px; }
+  .rx__panel { display: block; height: 100dvh; width: 100%; border-radius: 0; overflow-y: auto; }
+  .rx__head { position: sticky; top: 0; z-index: 1; background: var(--surface); }
+  .rx__body, .rx__foot { display: block; }
+  .rx__list { display: block; box-shadow: 0 1px 0 var(--line); }
+  .rx__list > * + * { margin-top: var(--s-2); }
+  .rx__rules { max-height: 240px; }
+  .rx__edit { display: block; overflow: visible; }
+  .rx__edit--empty { display: grid; min-height: 160px; }
+  .rx__replace { display: block; }
+  .rx__replace textarea { height: auto; min-height: 160px; }
+  .rx__globals { box-shadow: 0 1px 0 var(--line); }
   .rx__test-panes { grid-template-columns: 1fr; }
 }
 </style>
