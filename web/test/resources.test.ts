@@ -18,7 +18,7 @@ const api = vi.hoisted(() => {
   const image = (id: number, extra: Record<string, unknown> = {}) => ({ id, imageUrl: `https://cdn.test/${id}.png`, kind: "image", byteSize: 1 << 20, moderationState: "pass", pixelWidth: 512, pixelHeight: 768, createTime: "", ...extra });
   return {
     ApiError,
-    fetchLibraryImages: vi.fn(async () => ({ items: [image(1), image(2, { moderationState: "pending" }), image(3, { kind: "font", imageUrl: "https://cdn.test/3.woff2", moderationState: "unreviewed" })], total: 3, quota: 10000, usedBytes: 3 << 20, byteQuota: 200 << 20 })),
+    fetchLibraryImages: vi.fn(async () => ({ items: [image(1), image(2, { moderationState: "pending" }), image(3, { kind: "font", imageUrl: "https://cdn.test/3.woff2", moderationState: "unreviewed" })], total: 3, quota: 10000, usedBytes: 3 << 20, byteQuota: 500 << 20 })),
     fetchLibraryFolders: vi.fn(async () => [{ folderId: "f-1", name: "頭像框", imageCount: 1 }]),
     createLibraryFolder: vi.fn(async (name: string) => ({ folderId: "f-2", name, imageCount: 0 })),
     renameLibraryFolder: vi.fn(async () => {}),
@@ -74,7 +74,7 @@ describe("我的資源", () => {
     expect(root.querySelectorAll(".tile").length).toBe(3);
     expect(root.querySelector(".tile__state")?.textContent).toBe("審核中");
     expect(root.querySelector(".quota__num")?.textContent).toContain("3.0 MB");
-    expect(root.querySelector(".quota__num")?.textContent).toContain("200 MB");
+    expect(root.querySelector(".quota__num")?.textContent).toContain("500 MB");
     // 字型沒有審核狀態徽章，圖塊上是副檔名
     expect(root.querySelectorAll(".tile__state").length).toBe(1);
     expect(root.querySelector(".tile__ext")?.textContent).toBe("WOFF2");
