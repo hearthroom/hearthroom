@@ -15,9 +15,8 @@ export const SITE = {
   name: "Hearthroom",
   /** OAuth 授權頁上顯示給使用者的應用名稱。 */
   clientName: "Hearthroom",
-  /**
-   * 原始碼位置。留空時頁尾就不顯示這個連結——寧可不放，也不要指向一個會暴露
-   * 從屬關係的組織帳號。等倉庫落到獨立位置再填。
-   */
-  repoUrl: "",
+  /** 原始碼位置。頁尾的 GitHub 連結與授權連結都從這裡長出來；留空就整個頁尾不顯示。 */
+  repoUrl: "https://github.com/hearthroom/hearthroom",
+  /** 授權條款名稱與檔案位置；條款本文就在倉庫裡。 */
+  license: "MIT",
 } as const;
