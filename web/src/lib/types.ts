@@ -32,7 +32,8 @@ export interface CardPage {
   offset: number;
   sort: Sort;
 }
-export type Sort = "hot" | "new" | "top" | "relevance";
+/** 榜的種類（照魅魔島）：日／週／月榜開窗、最熱、最新、推薦（隨機）；relevance 只給搜尋。 */
+export type Sort = "day" | "week" | "month" | "hot" | "new" | "random" | "relevance";
 
 export interface Author {
   accountNumId: number;
