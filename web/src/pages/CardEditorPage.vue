@@ -30,6 +30,7 @@ import {
   patchRoleDocument,
   patchRoleWelcome,
   patchWorldbookDocument,
+  reorderWorldbookEntries,
   saveAuthorAsset,
   submitRoleForReview,
   uploadImage,
@@ -160,6 +161,17 @@ const dirty = computed(
     metadataChanged() ||
     regexDirty.value,
 );
+
+/**
+ * 條目順序跟上游存的不一樣。dirty 不必再問一次——換序本來就讓兩份陣列的 JSON 不同，
+ * 那邊的比較已經算得到。這裡是給 saveWorldbook 用的：只換序時沒有任何條目操作，
+ * 少了這個判斷會在「沒事可做」那一關直接 return，順序永遠送不出去。
+ */
+function orderChanged() {
+  const now = worldbookEntries.value.map((entry) => entry.entryId).filter(Boolean).join(",");
+  const before = worldbookOriginal.value.map((entry) => entry.entryId).filter(Boolean).join(",");
+  return now !== before;
+}
 
 /** 書名或描述跟上游現在的值不一樣。拿不到上游那份就一律當沒改——沒有基準就沒有差分。 */
 function metadataChanged() {
@@ -577,6 +589,20 @@ function worldbookOps(): WorldbookOp[] {
  */
 const WORLDBOOK_OPS_PER_REQUEST = 100;
 
+/**
+ * 條目順序。上游那邊常駐條目每輪有上限，擠不下時留的是排在前面的幾條——
+ * 不送這一趟，順序在上游全是 0，實際留誰退到按條目 id 比大小。
+ *
+ * 排在條目增刪改之後：剛建的條目要先拿到 id 才排得進去。順序沒動就不送。
+ */
+async function saveWorldbookOrder(bookId: string, token: string) {
+  const ids = worldbookEntries.value.map((entry) => entry.entryId).filter(Boolean) as string[];
+  if (ids.length < 2) return;
+  const before = worldbookOriginal.value.map((entry) => entry.entryId).filter(Boolean) as string[];
+  if (before.join(",") === ids.join(",")) return;
+  await reorderWorldbookEntries(bookId, ids, token);
+}
+
 /** 一段送成功之後：刪掉的從原始清單移除、改過的更新原始清單、新建的拿到 id 並加進原始清單。 */
 function reconcileWorldbookChunk(chunk: WorldbookOp[], createdIds: string[]) {
   let k = 0;
@@ -621,7 +647,8 @@ async function saveWorldbook(token: string, targetRoleId: string) {
   const ops = worldbookOps();
   const needsBook = worldbookPending.value || Boolean(worldbookId.value);
   const metaDirty = metadataChanged();
-  if (!needsBook || (!ops.length && worldbookId.value && !worldbookBindPending.value && !metaDirty)) return;
+  const orderDirty = orderChanged();
+  if (!needsBook || (!ops.length && worldbookId.value && !worldbookBindPending.value && !metaDirty && !orderDirty)) return;
 
   let bookId = worldbookId.value;
   let firstBind = worldbookBindPending.value;
@@ -664,6 +691,8 @@ async function saveWorldbook(token: string, targetRoleId: string) {
       worldbookBindPending.value = false;
       if (metadata) acceptMetadata(metadata);
     }
+    await saveWorldbookOrder(bookId, token);
+    worldbookOriginal.value = JSON.parse(JSON.stringify(worldbookEntries.value));
     return;
   }
   const metadata = metaDirty ? metadataPatch() : undefined;
@@ -690,6 +719,7 @@ async function saveWorldbook(token: string, targetRoleId: string) {
   } finally {
     saveProgress.value = null;
   }
+  await saveWorldbookOrder(bookId, token);
   // 全部送完再讀一次：順序與 id 以伺服器為準（舊版伺服器不回 createdEntryIds 時也靠這一步補上）。
   worldbookEntries.value = await fetchWorldbookEntries(bookId, token).catch(() => worldbookEntries.value);
   worldbookOriginal.value = JSON.parse(JSON.stringify(worldbookEntries.value));

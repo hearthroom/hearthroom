@@ -489,5 +489,8 @@
   "wb.entry.trigger.hint": "Set it to the player's side for things only they would bring up, and to the character's side for what only they would know.",
   "wb.trigger.both": "Either side",
   "wb.trigger.user_only": "Only what the player says",
-  "wb.trigger.ai_only": "Only what the character says"
+  "wb.trigger.ai_only": "Only what the character says",
+  "wb.zoom": "Fill the page",
+  "wb.zoom.exit": "Back to the form",
+  "wb.order.hint": "Drag to reorder. When the always-on entries don't all fit in a turn, the ones nearer the top go in first."
 }

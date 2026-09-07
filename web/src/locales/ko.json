@@ -489,5 +489,8 @@
   "wb.entry.trigger.hint": "플레이어만 꺼낼 법한 건 플레이어 쪽으로, 캐릭터만 아는 건 캐릭터 쪽으로 두세요.",
   "wb.trigger.both": "양쪽 다",
   "wb.trigger.user_only": "플레이어 말만",
-  "wb.trigger.ai_only": "캐릭터 말만"
+  "wb.trigger.ai_only": "캐릭터 말만",
+  "wb.zoom": "전체 화면으로",
+  "wb.zoom.exit": "원래대로",
+  "wb.order.hint": "끌어서 순서를 바꿉니다. 항상 넣는 항목이 한 턴에 다 안 들어가면 위쪽부터 들어갑니다."
 }
