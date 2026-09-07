@@ -18,5 +18,5 @@ export const SITE = {
   /** 原始碼位置。頁尾的 GitHub 連結與授權連結都從這裡長出來；留空就整個頁尾不顯示。 */
   repoUrl: "https://github.com/hearthroom/hearthroom",
   /** 授權條款名稱與檔案位置；條款本文就在倉庫裡。 */
-  license: "MIT",
+  license: "AGPL-3.0",
 } as const;
