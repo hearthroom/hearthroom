@@ -14,6 +14,7 @@ import { dateTime } from "@/lib/format";
 import { pageTitle } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
+import { readTalkExample } from "@/lib/role-draft";
 
 const route = useRoute();
 const { t } = useI18n();
@@ -31,6 +32,8 @@ const section = ref<"basic" | "persona" | "dialogue" | "worldbook" | "display" |
 const SECTIONS = ["basic", "persona", "dialogue", "worldbook", "display", "cost"] as const;
 
 const doc = computed(() => data.value?.detail.document);
+// 對話示例入庫是一串 JSON，作者在編輯頁看到的是一輪一輪的「誰說、說什麼」；審核頁照編輯頁的樣子畫，不倒原始字串。
+const talkTurns = computed(() => readTalkExample(doc.value?.talkExample));
 const claimedByMe = computed(() => !!data.value?.submission.claimedByMe);
 const tags = computed(() => (doc.value?.roleTag ?? "").split(/[,，、]/).map((s) => s.trim()).filter(Boolean));
 const decided = computed(() => !!data.value && data.value.submission.status !== "pending");
@@ -162,7 +165,18 @@ onMounted(() => { void load(); });
           <label>{{ $t("editor.prologue") }}</label>
           <ul class="tags"><li v-for="(p, i) in data.detail.greetings.prologue" :key="i" class="chip">{{ p }}</li></ul>
         </div>
-        <div class="field"><label>{{ $t("editor.talkExample") }}</label><pre class="text mono">{{ doc.talkExample }}</pre></div>
+        <div class="field">
+          <label>{{ $t("editor.talkExample") }}</label>
+          <ol v-if="talkTurns.length" class="turns">
+            <li v-for="(turn, i) in talkTurns" :key="i" class="turn" :class="`turn--${turn.roleType}`">
+              <span class="turn__who">{{ $t(turn.roleType === "user" ? "editor.talkExample.user" : "editor.talkExample.ai") }}</span>
+              <pre class="text">{{ turn.content }}</pre>
+            </li>
+          </ol>
+          <!-- 解不開的才原樣給看：那代表資料本身有問題，審核人該看到 -->
+          <pre v-else-if="doc.talkExample" class="text mono">{{ doc.talkExample }}</pre>
+          <p v-else class="subtle">—</p>
+        </div>
       </section>
 
       <section v-show="section === 'worldbook'" class="pane panel">
@@ -248,6 +262,10 @@ onMounted(() => { void load(); });
 .tags { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s-2); }
 .text { margin: 0; padding: var(--s-3); border-radius: var(--r-sm); background: var(--surface-2); font-size: 14px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
 .text + .text { margin-top: var(--s-2); }
+.turns { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); }
+.turn { display: grid; gap: 4px; }
+.turn__who { font-size: 12px; font-weight: 600; color: var(--text-3); }
+.turn--ai .turn__who { color: var(--accent-text); }
 .book__sum { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; cursor: pointer; padding: var(--s-2) 0; }
 .book[open] > .book__sum { margin-bottom: var(--s-2); border-bottom: 1px solid var(--line); }
 .entry { padding: var(--s-3) 0; border-top: 1px solid var(--line); }

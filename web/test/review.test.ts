@@ -117,3 +117,15 @@ describe("帳號選單", () => {
     unmount();
   });
 });
+
+describe("對話示例的入庫格式", () => {
+  it("上游存的是 JSON 字串，審核頁拆成一輪一輪；解不開就回空讓頁面原樣呈現", async () => {
+    const { readTalkExample } = await import("../src/lib/role-draft");
+    expect(readTalkExample('[{"roleType":"user","content":"你好"},{"roleType":"ai","content":"嗯。"}]')).toEqual([
+      { roleType: "user", content: "你好" },
+      { roleType: "ai", content: "嗯。" },
+    ]);
+    expect(readTalkExample("not json")).toEqual([]);
+    expect(readTalkExample("")).toEqual([]);
+  });
+});
