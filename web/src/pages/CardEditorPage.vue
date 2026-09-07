@@ -473,7 +473,7 @@ function createWorldbookDraft() {
   worldbookPending.value = true;
   worldbookName.value = draft.value.roleName || "";
   if (!worldbookEntries.value.length) {
-    worldbookEntries.value = [{ name: "", content: "", keywords: [], secondaryKeywords: [], isEnabled: true, isConstant: false }];
+    worldbookEntries.value = [{ name: "", content: "", keywords: [], secondaryKeywords: [], isEnabled: true, isConstant: false, category: "custom" }];
   }
 }
 
@@ -554,6 +554,7 @@ function worldbookOps(): WorldbookOp[] {
       ...(entry.matchOptions ? { matchOptions: entry.matchOptions } : {}),
       isEnabled: entry.isEnabled,
       isConstant: entry.isConstant,
+      ...(entry.category ? { category: entry.category } : {}),
     };
     if (!entry.entryId) ops.push({ op: { op: "create", ...payload }, entry });
     else if (JSON.stringify(entry) !== JSON.stringify(worldbookOriginal.value.find((e) => e.entryId === entry.entryId))) {

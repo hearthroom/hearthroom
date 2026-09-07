@@ -115,6 +115,8 @@ function patchMatch(index: number, changes: Partial<WorldbookMatchOptions>) {
 }
 
 const SELECTIVE_LOGIC = [0, 1, 2, 3];
+/** 上游認得的分類，順序照站內 App。留空的舊條目上游當「自訂」看。 */
+const CATEGORIES = ["character", "location", "item", "event", "rule", "custom"];
 
 /**
  * 作者自己已經有的世界書。一本書可以綁給好幾張卡，重建一本一樣的等於之後每張卡各改一次。
@@ -144,7 +146,7 @@ function pickExisting() {
 }
 
 const add = () =>
-  commit([...props.modelValue, { name: "", content: "", keywords: [], secondaryKeywords: [], isEnabled: true, isConstant: false }]);
+  commit([...props.modelValue, { name: "", content: "", keywords: [], secondaryKeywords: [], isEnabled: true, isConstant: false, category: "custom" }]);
 
 async function remove(index: number) {
   const entry = props.modelValue[index];
@@ -310,6 +312,16 @@ const setSecondary = (index: number, raw: string) => patch(index, { secondaryKey
                    :placeholder="$t('wb.entry.secondary.placeholder')"
                    @input="setSecondary(index, ($event.target as HTMLInputElement).value)" />
             <span class="subtle">{{ $t("wb.entry.secondary.hint") }}</span>
+          </div>
+
+          <div class="field">
+            <label :for="`wb-cat-${index}`">{{ $t("wb.entry.category") }}</label>
+            <select :id="`wb-cat-${index}`" class="input" :value="entry.category ?? ''"
+                    @change="patch(index, { category: ($event.target as HTMLSelectElement).value })">
+              <option v-if="!entry.category" value="">{{ $t("wb.entry.category.none") }}</option>
+              <option v-for="value in CATEGORIES" :key="value" :value="value">{{ $t(`wb.category.${value}`) }}</option>
+            </select>
+            <span class="subtle">{{ $t("wb.entry.category.hint") }}</span>
           </div>
 
           <div class="field">
