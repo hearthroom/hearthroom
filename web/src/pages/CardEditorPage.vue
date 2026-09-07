@@ -23,6 +23,7 @@ import {
   createWorldbook,
   fetchAuthorAsset,
   fetchRoleDetail,
+  fetchMyWorldbooks,
   fetchRoleWorldbooks,
   fetchRoleValidation,
   fetchWorldbookEntries,
@@ -33,6 +34,8 @@ import {
   submitRoleForReview,
   uploadImage,
   type WorldbookDocumentEntry,
+  type WorldbookMetadataPatch,
+  type WorldbookSummary,
 } from "@/lib/api";
 import { emptyRuleSet, ruleSetFromAuthorAsset, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, type RegexRuleSet } from "@/lib/regex-rules";
 import RegexRulesEditor from "@/components/editor/RegexRulesEditor.vue";
@@ -90,6 +93,13 @@ const TAGS_MAX = 10;
 
 const worldbookId = ref("");
 const worldbookName = ref("");
+const worldbookDesc = ref("");
+/**
+ * 這本書在上游現在長什麼樣。改書名或描述時，其餘欄位要照這份原樣送回去——
+ * 上游的更新是整份覆蓋。拿不到就不送 metadata：寧可改名沒生效，也不要把別處
+ * （站內 App、寫卡助手）填好的圖示、標籤、可見性清成空的。
+ */
+const worldbookMeta = ref<WorldbookSummary | null>(null);
 /** 匯入酒館／MMD 世界書時是 "tavern"：上游會讓這本書先走酒館自己的關鍵字規則。 */
 const worldbookFormat = ref<"tavern" | undefined>();
 const worldbookEntries = ref<WorldbookEntryDraft[]>([]);
@@ -147,8 +157,16 @@ const dirty = computed(
     JSON.stringify(worldbookEntries.value) !== JSON.stringify(worldbookOriginal.value) ||
     worldbookPending.value ||
     worldbookBindPending.value ||
+    metadataChanged() ||
     regexDirty.value,
 );
+
+/** 書名或描述跟上游現在的值不一樣。拿不到上游那份就一律當沒改——沒有基準就沒有差分。 */
+function metadataChanged() {
+  const meta = worldbookMeta.value;
+  if (!meta || !meta.visibility) return false;
+  return worldbookName.value.trim() !== meta.name || worldbookDesc.value !== meta.description;
+}
 
 const missing = computed(() => missingRequired(draft.value));
 const canPublish = computed(() => !isNew.value && !missing.value.length && !dirty.value);
@@ -307,6 +325,26 @@ async function loadWorldbook(token: string) {
   worldbookName.value = book.name;
   worldbookEntries.value = await fetchWorldbookEntries(book.worldbookId, token).catch(() => []);
   worldbookOriginal.value = JSON.parse(JSON.stringify(worldbookEntries.value));
+  await loadWorldbookMeta(token, book.worldbookId);
+}
+
+/**
+ * 這本書在上游的元資訊。綁定那條路只回名字與條數，描述、圖示、標籤、可見性得從
+ * 「我的世界書」那份清單裡撈。撈不到（書多到翻頁之外、請求失敗）就留 null，
+ * 書名與描述那兩格跟著變成看得到、改不動——改了也送不出去，不如別讓人白填。
+ */
+async function loadWorldbookMeta(token: string, bookId: string) {
+  try {
+    const mine = await fetchMyWorldbooks(token);
+    const meta = mine.find((b) => b.worldbookId === bookId) ?? null;
+    worldbookMeta.value = meta;
+    if (meta) {
+      worldbookName.value = meta.name;
+      worldbookDesc.value = meta.description ?? "";
+    }
+  } catch {
+    worldbookMeta.value = null;
+  }
 }
 
 onMounted(async () => {
@@ -445,7 +483,7 @@ function createWorldbookDraft() {
  * 讀不出來就整個放掉，不留一個「已綁定但看起來是空的」狀態——作者會照著那個空清單重打一遍，
  * 存下去就在原本那本書裡多出一整份重複的條目。
  */
-async function onWorldbookPick(book: { worldbookId: string; name: string }) {
+async function onWorldbookPick(book: WorldbookSummary) {
   try {
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
@@ -456,6 +494,8 @@ async function onWorldbookPick(book: { worldbookId: string; name: string }) {
     worldbookOriginal.value = JSON.parse(JSON.stringify(entries));
     worldbookBindPending.value = true;
     worldbookFormat.value = undefined;
+    worldbookMeta.value = book;
+    worldbookDesc.value = book.description ?? "";
     error.value = "";
   } catch {
     error.value = t("wb.reuse.failed");
@@ -480,6 +520,8 @@ async function onWorldbookRelease() {
   worldbookOriginal.value = [];
   worldbookPending.value = false;
   worldbookBindPending.value = false;
+  worldbookMeta.value = null;
+  worldbookDesc.value = "";
 }
 
 /** 從酒館世界書檔匯入的條目。還沒綁書就先把書建起來，名字用檔裡的、沒有就用角色名。 */
@@ -544,10 +586,34 @@ function reconcileWorldbookChunk(chunk: WorldbookOp[], createdIds: string[]) {
   }
 }
 
+/**
+ * 改書名／描述要送的那一份。上游是整份覆蓋，所以圖示、標籤、可見性照上游現況原樣帶回去。
+ * 可見性缺值時上游會把它正規化成 private——那等於偷偷把一本公開的書收起來，所以
+ * 讀不到現況就不送（metadataChanged 那邊已經擋掉，這裡是第二道）。
+ */
+function metadataPatch(): WorldbookMetadataPatch | undefined {
+  const base = worldbookMeta.value;
+  if (!base || !base.visibility) return undefined;
+  return {
+    name: worldbookName.value.trim() || base.name,
+    description: worldbookDesc.value,
+    iconUrl: base.iconUrl ?? "",
+    visibility: base.visibility,
+    tags: (base.tags ?? "").split(",").map((tag) => tag.trim()).filter(Boolean),
+  };
+}
+
+/** 送成功了：基準跟著往前走，同一份不會在下次儲存又送一遍。 */
+function acceptMetadata(metadata: WorldbookMetadataPatch) {
+  if (!worldbookMeta.value) return;
+  worldbookMeta.value = { ...worldbookMeta.value, name: metadata.name, description: metadata.description };
+}
+
 async function saveWorldbook(token: string, targetRoleId: string) {
   const ops = worldbookOps();
   const needsBook = worldbookPending.value || Boolean(worldbookId.value);
-  if (!needsBook || (!ops.length && worldbookId.value && !worldbookBindPending.value)) return;
+  const metaDirty = metadataChanged();
+  if (!needsBook || (!ops.length && worldbookId.value && !worldbookBindPending.value && !metaDirty)) return;
 
   let bookId = worldbookId.value;
   let firstBind = worldbookBindPending.value;
@@ -558,37 +624,56 @@ async function saveWorldbook(token: string, targetRoleId: string) {
       worldbookPending.value = false;
       return;
     }
+    const createdName = worldbookName.value.trim() || draft.value.roleName;
     bookId = await createWorldbook(
       {
-        name: worldbookName.value.trim() || draft.value.roleName,
+        name: createdName,
+        ...(worldbookDesc.value.trim() ? { description: worldbookDesc.value.trim() } : {}),
         language: draft.value.language,
         ...(worldbookFormat.value ? { format: worldbookFormat.value } : {}),
       },
       token,
     );
+    // 新建的書上游一律落成 private；寫進基準，作者剛建完就能改名，不必先重新整理
+    worldbookMeta.value = {
+      worldbookId: bookId, name: createdName, description: worldbookDesc.value.trim(),
+      entryCount: 0, iconUrl: "", visibility: "private", tags: "",
+    };
     // 書建好就記住：之後任何一段失敗，重試都寫同一本，不會每按一次就多一本孤兒書。
     worldbookId.value = bookId;
     worldbookPending.value = false;
     firstBind = true;
   }
-  // 挑了一本現成的、條目一個字都沒改：還是得送一次，不然綁定根本沒發出去
+  // 挑了一本現成的、或只改了書名：條目一個字沒動也還是得送一次
   if (!ops.length) {
-    if (firstBind) {
-      await patchWorldbookDocument(bookId, { binding: { roleId: targetRoleId } }, token);
+    const metadata = metaDirty ? metadataPatch() : undefined;
+    if (firstBind || metadata) {
+      await patchWorldbookDocument(
+        bookId,
+        { ...(metadata ? { metadata } : {}), ...(firstBind ? { binding: { roleId: targetRoleId } } : {}) },
+        token,
+      );
       worldbookBindPending.value = false;
+      if (metadata) acceptMetadata(metadata);
     }
     return;
   }
+  const metadata = metaDirty ? metadataPatch() : undefined;
   saveProgress.value = { done: 0, total: ops.length };
   try {
     for (let i = 0; i < ops.length; i += WORLDBOOK_OPS_PER_REQUEST) {
       const chunk = ops.slice(i, i + WORLDBOOK_OPS_PER_REQUEST);
-      // 綁定跟第一段一起送；上游的綁定是覆蓋式的，重送也不會出事
+      // 綁定與書名跟第一段一起送；上游的綁定是覆蓋式的，重送也不會出事
       const result = await patchWorldbookDocument(
         bookId,
-        { entries: chunk.map((c) => c.op), ...(firstBind ? { binding: { roleId: targetRoleId } } : {}) },
+        {
+          ...(i === 0 && metadata ? { metadata } : {}),
+          entries: chunk.map((c) => c.op),
+          ...(firstBind ? { binding: { roleId: targetRoleId } } : {}),
+        },
         token,
       );
+      if (i === 0 && metadata) acceptMetadata(metadata);
       firstBind = false;
       worldbookBindPending.value = false;
       reconcileWorldbookChunk(chunk, result?.createdEntryIds ?? []);
@@ -963,6 +1048,8 @@ async function exportCard(format: "png" | "json") {
         <section v-show="section === 'worldbook'" class="pane">
           <p class="muted">{{ $t("wb.lede") }}</p>
           <WorldbookEditor v-model="worldbookEntries" v-model:book-name="worldbookName"
+                           v-model:book-desc="worldbookDesc"
+                           :meta-locked="Boolean(worldbookId) && !worldbookMeta?.visibility"
                            :bound="Boolean(worldbookId) || worldbookPending" @create="createWorldbookDraft"
                            @imported="onWorldbookImported" @pick="onWorldbookPick"
                            @release="onWorldbookRelease" />

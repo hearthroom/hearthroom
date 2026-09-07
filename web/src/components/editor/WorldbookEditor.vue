@@ -29,12 +29,16 @@ const props = defineProps<{
   modelValue: WorldbookEntryDraft[];
   /** 已經綁了哪一本。空的代表還沒有，儲存時才會建。 */
   bookName: string;
+  bookDesc: string;
   bound: boolean;
+  /** 上游那份元資訊讀不到：書名與描述看得到、改不動。改了也送不出去，不讓人白填。 */
+  metaLocked: boolean;
 }>();
 
 const emit = defineEmits<{
   "update:modelValue": [WorldbookEntryDraft[]];
   "update:bookName": [string];
+  "update:bookDesc": [string];
   create: [];
   /** 從酒館世界書檔（或一張卡）匯入了幾條。沒綁書時由外面順手把書建起來。 */
   imported: [{ name: string; entries: WorldbookEntryDraft[] }];
@@ -221,11 +225,20 @@ const setSecondary = (index: number, raw: string) => patch(index, { secondaryKey
       <div class="field">
         <label for="wb-name">{{ $t("wb.name") }}</label>
         <div class="reuse__row">
-          <input id="wb-name" class="input" :value="bookName" maxlength="60"
+          <input id="wb-name" class="input" :value="bookName" maxlength="60" :readonly="metaLocked"
                  :placeholder="$t('wb.name.placeholder')"
                  @input="emit('update:bookName', ($event.target as HTMLInputElement).value)" />
           <button type="button" class="btn btn--sm btn--ghost" @click="emit('release')">{{ $t("wb.switch") }}</button>
         </div>
+        <span v-if="metaLocked" class="subtle">{{ $t("wb.meta.locked") }}</span>
+      </div>
+
+      <div v-if="!metaLocked" class="field">
+        <label for="wb-desc">{{ $t("wb.desc") }}</label>
+        <input id="wb-desc" class="input" :value="bookDesc" maxlength="200"
+               :placeholder="$t('wb.desc.placeholder')"
+               @input="emit('update:bookDesc', ($event.target as HTMLInputElement).value)" />
+        <span class="subtle">{{ $t("wb.desc.hint") }}</span>
       </div>
 
       <div class="listbar">
