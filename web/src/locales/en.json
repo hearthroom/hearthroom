@@ -527,6 +527,8 @@
   "review.entry.constant": "Constant",
   "review.rules.none": "No regex rules.",
   "review.wb.none": "No worldbook bound.",
+  "review.wb.book": "{n} entries, expand to spot-check",
+  "review.rules.count": "{n} regex rules. Their bodies are not shown here; play the card to check the effect.",
   "review.mount": "Mounted block",
   "review.contentHash": "Content version",
   "review.stampsList": "Review history",

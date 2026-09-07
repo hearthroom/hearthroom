@@ -527,6 +527,8 @@
   "review.entry.constant": "常驻",
   "review.rules.none": "没有正则表达式规则。",
   "review.wb.none": "没有绑定世界书。",
+  "review.wb.book": "{n} 条，点开抽查",
+  "review.rules.count": "{n} 条正则表达式规则。内容不在这里看，要验效果请直接试玩。",
   "review.mount": "常驻区块",
   "review.contentHash": "内容版本",
   "review.stampsList": "审核记录",

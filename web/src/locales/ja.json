@@ -527,6 +527,8 @@
   "review.entry.constant": "常駐",
   "review.rules.none": "正規表現ルールはありません。",
   "review.wb.none": "ワールドブックは未設定です。",
+  "review.wb.book": "{n} 件、開いて抜き取り確認",
+  "review.rules.count": "正規表現ルール {n} 件。内容はここでは表示しません。効果はプレイで確認してください。",
   "review.mount": "常駐ブロック",
   "review.contentHash": "コンテンツバージョン",
   "review.stampsList": "審査履歴",
