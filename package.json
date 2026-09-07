@@ -1,6 +1,7 @@
 {
   "name": "hearthroom",
   "version": "0.1.0",
+  "license": "AGPL-3.0-only",
   "private": true,
   "description": "Open role-card community: registry, search and ranking (Cloudflare Workers + D1)",
   "type": "module",
