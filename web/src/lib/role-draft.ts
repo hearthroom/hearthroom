@@ -26,6 +26,11 @@ export interface WorldbookEntryDraft {
    * 也照分類算每輪能帶進去幾條。留空的話上游建立時一律當成「自訂」——那是加成最低的一檔。
    */
   category?: string;
+  /**
+   * 這條要掃哪一邊的對話：both（都掃，預設）／user_only（只掃玩家說的）／
+   * ai_only（只掃角色說的）。空字串當 both。
+   */
+  triggerRegion?: string;
   /** 酒館格式的書才有：大小寫、整詞、次要關鍵詞邏輯（0 任一／1 不是全部／2 都不／3 全部）。 */
   matchOptions?: WorldbookMatchOptions;
   /** 上游統計的「被帶進對話幾次」。只讀，新條目沒有。 */

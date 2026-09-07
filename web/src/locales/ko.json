@@ -484,5 +484,10 @@
   "wb.category.event": "사건",
   "wb.category.rule": "규칙",
   "wb.category.custom": "기타",
-  "wb.export": "파일로 저장"
+  "wb.export": "파일로 저장",
+  "wb.entry.trigger": "누구의 말로 셀지",
+  "wb.entry.trigger.hint": "플레이어만 꺼낼 법한 건 플레이어 쪽으로, 캐릭터만 아는 건 캐릭터 쪽으로 두세요.",
+  "wb.trigger.both": "양쪽 다",
+  "wb.trigger.user_only": "플레이어 말만",
+  "wb.trigger.ai_only": "캐릭터 말만"
 }
