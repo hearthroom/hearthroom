@@ -465,5 +465,14 @@
   "wb.desc": "这本书是讲什么的",
   "wb.desc.placeholder": "例如：雨城的地名、黑话与几个常出现的人",
   "wb.desc.hint": "只给你自己看：之后要把这本套到别张卡时，靠这一句认出它。",
-  "wb.meta.locked": "这本的名字现在改不了。过一下刷新再试。"
+  "wb.meta.locked": "这本的名字现在改不了。过一下刷新再试。",
+  "wb.entry.category": "这条在讲什么",
+  "wb.entry.category.none": "还没选",
+  "wb.entry.category.hint": "讲规矩的、讲人的，被带进对话的机会比杂项高一些。",
+  "wb.category.character": "人物",
+  "wb.category.location": "地方",
+  "wb.category.item": "东西",
+  "wb.category.event": "事件",
+  "wb.category.rule": "规矩",
+  "wb.category.custom": "其他"
 }

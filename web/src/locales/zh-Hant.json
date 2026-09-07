@@ -465,5 +465,14 @@
   "wb.desc": "這本書是講什麼的",
   "wb.desc.placeholder": "例如：雨城的地名、黑話與幾個常出現的人",
   "wb.desc.hint": "只給你自己看：之後要把這本套到別張卡時，靠這一句認出它。",
-  "wb.meta.locked": "這本的名字現在改不了。過一下重新整理再試。"
+  "wb.meta.locked": "這本的名字現在改不了。過一下重新整理再試。",
+  "wb.entry.category": "這條在講什麼",
+  "wb.entry.category.none": "還沒選",
+  "wb.entry.category.hint": "講規矩的、講人的，被帶進對話的機會比雜項高一些。",
+  "wb.category.character": "人物",
+  "wb.category.location": "地方",
+  "wb.category.item": "東西",
+  "wb.category.event": "事件",
+  "wb.category.rule": "規矩",
+  "wb.category.custom": "其他"
 }
