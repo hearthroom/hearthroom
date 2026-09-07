@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { base64FromUtf8, encodeText, isPng, readTextChunk, replaceTextChunks, utf8FromBase64, writeChunks } from "../src/lib/png-chunks";
-import { bookEntriesToDrafts, draftToTavern, embedIntoPng, formatMesExample, imageFetchUrl, parseMesExample, parseTavernFile, parseWorldbookFile, tavernToDraft, worldInfoToBook, type TavernCard } from "../src/lib/tavern";
+import { bookEntriesToDrafts, draftToTavern, embedIntoPng, formatMesExample, imageFetchUrl, parseMesExample, parseTavernFile, parseWorldbookFile, tavernToDraft, worldbookToExport, worldInfoToBook, type TavernCard } from "../src/lib/tavern";
 import { makeDraft } from "../src/lib/role-draft";
 
 const LABELS = { personality: "【性格】", scenario: "【場景】" };
@@ -352,5 +352,27 @@ describe("酒館格式：匹配選項與 format 一路帶到上游", () => {
     expect(worldbook?.format).toBe("tavern");
     expect(worldbook?.entries[0].matchOptions).toEqual({ caseSensitive: true, matchWholeWords: false, selectiveLogic: 0 });
     expect(dropped.find((d) => d.key === "import.drop.caseSensitive")).toBeUndefined();
+  });
+});
+
+describe("worldbookToExport", () => {
+  it("存成檔案再讀回來，條目一樣——關鍵詞、常駐、停用、酒館匹配選項都在", async () => {
+    const entries = [
+      { name: "黑麥鎮", content: "北境小鎮。", keywords: ["黑麥鎮", "小鎮"], secondaryKeywords: [], isEnabled: true, isConstant: true },
+      {
+        name: "採石場", content: "廢棄了。", keywords: ["採石場"], secondaryKeywords: ["排水渠", "夜班"],
+        isEnabled: false, isConstant: false,
+        matchOptions: { caseSensitive: true, matchWholeWords: true, selectiveLogic: 3 },
+      },
+    ];
+    const file = worldbookToExport("北境設定", entries);
+    const back = await parseWorldbookFile(
+      new File([JSON.stringify(file)], "wb.json", { type: "application/json" }),
+    );
+    expect(back.name).toBe("北境設定");
+    expect(back.entries).toEqual([
+      { name: "黑麥鎮", content: "北境小鎮。", keywords: ["黑麥鎮", "小鎮"], secondaryKeywords: [], isEnabled: true, isConstant: true, matchOptions: { caseSensitive: false, matchWholeWords: false, selectiveLogic: 0 } },
+      { name: "採石場", content: "廢棄了。", keywords: ["採石場"], secondaryKeywords: ["排水渠", "夜班"], isEnabled: false, isConstant: false, matchOptions: { caseSensitive: true, matchWholeWords: true, selectiveLogic: 3 } },
+    ]);
   });
 });

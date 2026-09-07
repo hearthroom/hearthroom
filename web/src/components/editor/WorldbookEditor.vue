@@ -44,6 +44,8 @@ const emit = defineEmits<{
   imported: [{ name: string; entries: WorldbookEntryDraft[] }];
   /** 挑了自己已經有的一本。條目與綁定由外面處理——條目住在頁面上。 */
   pick: [WorldbookSummary];
+  /** 把這本存成檔案。下載那一步在頁面上，跟角色卡與正則規則共用同一支。 */
+  exportBook: [];
   /** 放掉手上這本，回到空狀態重挑。上游的綁定是覆蓋式的，存下去新的就取代舊的。 */
   release: [];
 }>();
@@ -378,6 +380,7 @@ const setSecondary = (index: number, raw: string) => patch(index, { secondaryKey
           {{ $t("wb.entry.add") }}
         </button>
         <button type="button" class="btn btn--sm btn--ghost" @click="fileInput?.click()">{{ $t("wb.import") }}</button>
+        <button type="button" class="btn btn--sm btn--ghost" :disabled="!modelValue.length" @click="emit('exportBook')">{{ $t("wb.export") }}</button>
       </div>
     </template>
 

@@ -474,5 +474,6 @@
   "wb.category.item": "東西",
   "wb.category.event": "事件",
   "wb.category.rule": "規矩",
-  "wb.category.custom": "其他"
+  "wb.category.custom": "其他",
+  "wb.export": "存成檔案"
 }
