@@ -253,8 +253,16 @@ watch(() => route.query.fresh, (f) => {
 
 .wall {
   display: grid; gap: var(--s-4);
-  grid-template-columns: repeat(auto-fill, minmax(clamp(140px, 40vw, 184px), 1fr));
+  /*
+   * 欄數釘死，不讓它隨寬度自動算：一頁 24 張，欄數必須整除 24，最後一列才不會缺角
+   * （owner 2026-09-07：桌機自動算出 5 欄，最後一列只剩 4 張）。2／3／4／6 都整除 24；
+   * 手機兩欄、平板三到四欄、桌機六欄——1080px 以上六欄每張仍有 158px 以上，名字放得下。
+   */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+@media (min-width: 600px) { .wall { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 820px) { .wall { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (min-width: 1080px) { .wall { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
 .ghost--card { aspect-ratio: 3 / 5.4; }
 
 .empty { padding: var(--s-8) var(--s-5); text-align: center; display: grid; gap: var(--s-4); justify-items: center; }
