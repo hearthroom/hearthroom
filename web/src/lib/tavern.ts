@@ -342,6 +342,40 @@ export async function parseWorldbookFile(
   return { name: text(book.name), format: "tavern", entries: bookEntriesToDrafts(entries), dropped };
 }
 
+/**
+ * 一本世界書 → 酒館的「世界書檔」（World Info）。
+ *
+ * 為什麼是這個形狀而不是卡裡的 character_book：獨立的世界書檔在酒館那邊才是可以直接匯入的
+ * 東西，欄位名也不一樣（key／keysecondary／disable，entries 是以 uid 為鍵的物件）。
+ * parseWorldbookFile 兩種都吃得下，所以匯出的檔案自己也讀得回來。
+ *
+ * 只寫我們真的有的欄位。插入位置、掃描深度、機率那些酒館欄位這裡沒有對應的東西，
+ * 與其填一個假的預設值讓對方以為作者設過，不如不寫。
+ */
+export function worldbookToExport(name: string, entries: WorldbookEntryDraft[]) {
+  const rows: Record<string, unknown> = {};
+  entries.forEach((entry, index) => {
+    const secondary = entry.secondaryKeywords ?? [];
+    rows[String(index)] = {
+      uid: index,
+      key: entry.keywords,
+      keysecondary: secondary,
+      comment: entry.name,
+      content: entry.content,
+      constant: entry.isConstant,
+      // 酒館的 AND 門要同時寫 keysecondary 與 selective；只寫前者的話對方當成沒有次要詞
+      selective: secondary.length > 0,
+      selectiveLogic: entry.matchOptions?.selectiveLogic ?? 0,
+      caseSensitive: entry.matchOptions?.caseSensitive ?? false,
+      matchWholeWords: entry.matchOptions?.matchWholeWords ?? false,
+      disable: !entry.isEnabled,
+      order: index,
+      extensions: {},
+    };
+  });
+  return { name, entries: rows };
+}
+
 /** 條目層面沒地方放的欄位。每一個都要出現在報告裡。 */
 export function bookEntryDrops(entries: TavernBookEntry[]): DropNote[] {
   // 次要關鍵詞、大小寫、整詞、次要邏輯現在都有落點（上游的酒館匹配規則），不再進報告。

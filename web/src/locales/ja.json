@@ -474,5 +474,6 @@
   "wb.category.item": "もの",
   "wb.category.event": "できごと",
   "wb.category.rule": "決まりごと",
-  "wb.category.custom": "その他"
+  "wb.category.custom": "その他",
+  "wb.export": "ファイルに保存"
 }

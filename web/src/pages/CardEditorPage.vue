@@ -54,7 +54,7 @@ import {
   type RoleDraft,
   type WorldbookEntryDraft,
 } from "@/lib/role-draft";
-import { draftToTavern, embedIntoPng, imageFetchUrl, type ImportResult } from "@/lib/tavern";
+import { draftToTavern, embedIntoPng, imageFetchUrl, worldbookToExport, type ImportResult } from "@/lib/tavern";
 import type { CommunityCard } from "@/lib/types";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
@@ -522,6 +522,12 @@ async function onWorldbookRelease() {
   worldbookBindPending.value = false;
   worldbookMeta.value = null;
   worldbookDesc.value = "";
+}
+
+function exportWorldbook() {
+  const file = worldbookToExport(worldbookName.value.trim() || draft.value.roleName, worldbookEntries.value);
+  download(new Blob([JSON.stringify(file, null, 2)], { type: "application/json" }), `${safeName()}-worldbook.json`);
+  track("card_export", { detail: "worldbook" });
 }
 
 /** 從酒館世界書檔匯入的條目。還沒綁書就先把書建起來，名字用檔裡的、沒有就用角色名。 */
@@ -1053,7 +1059,7 @@ async function exportCard(format: "png" | "json") {
                            :meta-locked="Boolean(worldbookId) && !worldbookMeta?.visibility"
                            :bound="Boolean(worldbookId) || worldbookPending" @create="createWorldbookDraft"
                            @imported="onWorldbookImported" @pick="onWorldbookPick"
-                           @release="onWorldbookRelease" />
+                           @release="onWorldbookRelease" @export-book="exportWorldbook" />
         </section>
 
         <!-- 发布 -->

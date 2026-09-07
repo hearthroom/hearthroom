@@ -474,5 +474,6 @@
   "wb.category.item": "물건",
   "wb.category.event": "사건",
   "wb.category.rule": "규칙",
-  "wb.category.custom": "기타"
+  "wb.category.custom": "기타",
+  "wb.export": "파일로 저장"
 }
