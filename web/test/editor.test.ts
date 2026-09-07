@@ -27,6 +27,7 @@ const api = vi.hoisted(() => ({
   fetchRoleValidation: vi.fn(async () => ({ status: "ok", blockers: [], warnings: [] })),
   fetchRoleDetail: vi.fn(async () => ({})),
   fetchRoleWorldbooks: vi.fn(async () => []),
+  fetchMyWorldbooks: vi.fn(async () => [{ worldbookId: "wb9", name: "北境設定", description: "", entryCount: 2 }]),
   submitRoleForReview: vi.fn(async () => ({})),
   uploadImage: vi.fn(async () => "https://img.test/avatar.png"),
   fetchAuthorAsset: vi.fn(async () => ({ rules: [], mountTrigger: "", mountLayer: "", pageMode: "classic", status: "none", version: 0 })),
@@ -276,6 +277,29 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     expect(root.querySelectorAll(".entry__summary")[1].textContent).toContain("+ safe");
     await submit();
     expect(api.createWorldbook).toHaveBeenCalledWith({ name: "測試", language: "zh-Hant" }, "tok");
+  });
+
+  it("挑一本自己已經有的世界書：不建新書，只送一次綁定，條目不重建", async () => {
+    await mount("/create");
+    await type($("#f-name"), "測試");
+    byText("世界書").click();
+    await flush();
+
+    const select = $<HTMLSelectElement>("#wb-reuse");
+    select.value = "wb9";
+    select.dispatchEvent(new Event("change"));
+    await flush();
+    [...root.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.trim() === "用這一本")!.click();
+    await flush();
+
+    // 讀回來的兩條就照原樣顯示，作者不必重打
+    expect(root.querySelectorAll(".entry")).toHaveLength(2);
+
+    await submit();
+    expect(api.createWorldbook).not.toHaveBeenCalled();
+    // 一條都沒改，但綁定還是得送出去——只送綁定，不帶任何條目操作
+    expect(api.patchWorldbookDocument).toHaveBeenCalledTimes(1);
+    expect(api.patchWorldbookDocument).toHaveBeenCalledWith("wb9", { binding: { roleId: "r1" } }, "tok");
   });
 
   it("大本世界書分段送：每段最多 100 個操作、綁定只跟第一段；中途失敗再存只送剩下的", async () => {

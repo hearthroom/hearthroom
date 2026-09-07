@@ -442,5 +442,22 @@
   "res.kind.audio": "音声",
   "res.kind.font": "フォント",
   "res.error.quotaBytes": "容量がいっぱいです（500 MB）。先にいくつか削除してください。",
-  "res.fontSample": "Aa あいう永"
+  "res.fontSample": "Aa あいう永",
+  "wb.reuse": "すでにある一冊を使う",
+  "wb.reuse.none": "選んでください",
+  "wb.reuse.option": "{name}（{n} 件）",
+  "wb.reuse.pick": "これを使う",
+  "wb.reuse.hint": "同じ一冊を複数のカードに付けられます。直すと全部のカードに反映されます。",
+  "wb.reuse.failed": "この一冊の項目を読み込めなかったので、付けていません。少ししてからもう一度お試しください。",
+  "wb.search.placeholder": "項目を探す：名前・キーワード・本文",
+  "wb.search.none": "該当する項目がありません。",
+  "wb.entry.match": "何をヒットとみなすか",
+  "wb.entry.match.case": "大文字と小文字を区別",
+  "wb.entry.match.whole": "単語まるごとで一致",
+  "wb.entry.match.hint": "Tavern から取り込んだ項目は、ここのルールで文字どおり照合します。",
+  "wb.entry.match.logic": "補助キーワードの数え方",
+  "wb.entry.match.logic.0": "どれか一つが出てくる",
+  "wb.entry.match.logic.1": "全部は出てこない",
+  "wb.entry.match.logic.2": "一つも出てこない",
+  "wb.entry.match.logic.3": "全部が出てくる"
 }

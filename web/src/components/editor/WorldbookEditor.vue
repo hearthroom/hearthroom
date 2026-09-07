@@ -12,11 +12,17 @@
  * 條目怎麼觸發：關鍵詞命中就把內容送進上下文；寫了次要關鍵詞就要兩邊都出現（AND）；
  * 勾了「常駐」就每輪都送，不看關鍵詞。這三個是上游真的會執行的語意，其餘（插入位置、
  * 掃描深度）上游沒有對應機制，匯入時會列在報告裡而不是偷偷塞進某個欄位。
+ *
+ * 匹配選項（大小寫、整詞、次要關鍵詞邏輯）只對酒館格式的條目出現。上游看到條目帶
+ * matchOptions 就把它切成字面比對，原生條目走的是語意召回——給原生條目開這組選項等於
+ * 靜靜換掉它的召回方式，所以這裡只讓已經有這組值的條目改，不提供「轉成酒館匹配」。
  */
-import { ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { fetchMyWorldbooks, type WorldbookSummary } from "@/lib/api";
 import { confirmDialog } from "@/lib/confirm";
-import type { WorldbookEntryDraft } from "@/lib/role-draft";
+import { useSession } from "@/lib/session";
+import type { WorldbookEntryDraft, WorldbookMatchOptions } from "@/lib/role-draft";
 import { ENTRY_CONTENT_MAX, parseWorldbookFile, type DropNote } from "@/lib/tavern";
 
 const props = defineProps<{
@@ -32,11 +38,16 @@ const emit = defineEmits<{
   create: [];
   /** 從酒館世界書檔（或一張卡）匯入了幾條。沒綁書時由外面順手把書建起來。 */
   imported: [{ name: string; entries: WorldbookEntryDraft[] }];
+  /** 挑了自己已經有的一本。條目與綁定由外面處理——條目住在頁面上。 */
+  pick: [WorldbookSummary];
 }>();
 
 const { t } = useI18n();
+const session = useSession();
 
 const NAME_MAX = 20;
+/** 條目少的時候搜尋框只是噪音；一本書到這個量級才開始要找。 */
+const SEARCH_FROM = 5;
 
 /** 展開的條目。鍵是 entryId，沒 id 的新條目用 `new-<index>`（跟 v-for 的 key 同一個）。 */
 const expanded = ref(new Set<string>());
@@ -66,12 +77,58 @@ const summary = (entry: WorldbookEntryDraft) => {
   return parts.filter(Boolean).join("  ");
 };
 
+/**
+ * 搜尋只過濾畫面，不動資料：底下每一條都帶著它在 modelValue 裡的真實 index，
+ * 改動照樣落在正確的那一條。過濾後用 index 當 key 去 patch 會改到別條。
+ */
+const query = ref("");
+const visible = computed(() => {
+  const q = query.value.trim().toLowerCase();
+  const rows = props.modelValue.map((entry, index) => ({ entry, index }));
+  if (!q) return rows;
+  return rows.filter(({ entry }) =>
+    [entry.name, entry.content, entry.keywords.join(" "), (entry.secondaryKeywords ?? []).join(" ")]
+      .join(" ")
+      .toLowerCase()
+      .includes(q),
+  );
+});
+
 const commit = (next: WorldbookEntryDraft[]) => emit("update:modelValue", next);
 
 function patch(index: number, changes: Partial<WorldbookEntryDraft>) {
   const next = props.modelValue.slice();
   next[index] = { ...next[index], ...changes };
   commit(next);
+}
+
+function patchMatch(index: number, changes: Partial<WorldbookMatchOptions>) {
+  const current = props.modelValue[index].matchOptions;
+  if (!current) return;
+  patch(index, { matchOptions: { ...current, ...changes } });
+}
+
+const SELECTIVE_LOGIC = [0, 1, 2, 3];
+
+/**
+ * 作者自己已經有的世界書。一本書可以綁給好幾張卡，重建一本一樣的等於之後每張卡各改一次。
+ * 拿不到（沒登入、舊版上游）就整塊不出現，不擋建卡。
+ */
+const mine = ref<WorldbookSummary[]>([]);
+const reuseId = ref("");
+onMounted(async () => {
+  if (props.bound) return;
+  try {
+    const token = await session.accessToken();
+    if (!token) return;
+    mine.value = await fetchMyWorldbooks(token);
+  } catch {
+    mine.value = [];
+  }
+});
+function pickExisting() {
+  const book = mine.value.find((b) => b.worldbookId === reuseId.value);
+  if (book) emit("pick", book);
 }
 
 const add = () =>
@@ -137,6 +194,21 @@ const setSecondary = (index: number, raw: string) => patch(index, { secondaryKey
       </div>
     </div>
 
+    <!-- 已經有的書直接綁過來：同一本可以給好幾張卡用，改一次全部跟著變 -->
+    <div v-if="!bound && mine.length" class="field reuse">
+      <label for="wb-reuse">{{ $t("wb.reuse") }}</label>
+      <div class="reuse__row">
+        <select id="wb-reuse" v-model="reuseId" class="input">
+          <option value="">{{ $t("wb.reuse.none") }}</option>
+          <option v-for="book in mine" :key="book.worldbookId" :value="book.worldbookId">
+            {{ $t("wb.reuse.option", { name: book.name, n: book.entryCount }) }}
+          </option>
+        </select>
+        <button type="button" class="btn btn--sm" :disabled="!reuseId" @click="pickExisting">{{ $t("wb.reuse.pick") }}</button>
+      </div>
+      <span class="subtle">{{ $t("wb.reuse.hint") }}</span>
+    </div>
+
     <template v-else>
       <div class="field">
         <label for="wb-name">{{ $t("wb.name") }}</label>
@@ -145,10 +217,16 @@ const setSecondary = (index: number, raw: string) => patch(index, { secondaryKey
                @input="emit('update:bookName', ($event.target as HTMLInputElement).value)" />
       </div>
 
-      <p class="subtle count">{{ $t("wb.count", { n: modelValue.length }) }}</p>
+      <div class="listbar">
+        <p class="subtle count">{{ $t("wb.count", { n: modelValue.length }) }}</p>
+        <input v-if="modelValue.length >= SEARCH_FROM" v-model="query" type="search" class="input input--search"
+               :placeholder="$t('wb.search.placeholder')" :aria-label="$t('wb.search.placeholder')" />
+      </div>
+
+      <p v-if="query.trim() && !visible.length" class="subtle">{{ $t("wb.search.none") }}</p>
 
       <ul class="entries">
-        <li v-for="(entry, index) in modelValue" :key="entry.entryId ?? `new-${index}`" class="entry panel"
+        <li v-for="{ entry, index } in visible" :key="entry.entryId ?? `new-${index}`" class="entry panel"
             :class="{ 'entry--open': isOpen(entry, index) }">
           <div class="entry__head">
             <button type="button" class="btn btn--icon btn--sm btn--ghost" :aria-expanded="isOpen(entry, index)"
@@ -171,7 +249,14 @@ const setSecondary = (index: number, raw: string) => patch(index, { secondaryKey
               <span aria-hidden="true">{{ entry.activationCount }}</span>
             </span>
             <span v-if="entry.isConstant" class="chip" :title="$t('wb.entry.constant')">{{ $t("wb.entry.constantShort") }}</span>
-            <span v-if="!entry.isEnabled" class="chip chip--off">{{ $t("wb.entry.disabled") }}</span>
+            <!-- 停用不必展開才切：一本書裡臨時關掉幾條是常事 -->
+            <label class="toggle toggle--head" :title="entry.isEnabled ? $t('wb.entry.enabled') : $t('wb.entry.disabled')">
+              <input type="checkbox" :checked="entry.isEnabled"
+                     :aria-label="$t('wb.entry.enabled')"
+                     @change="patch(index, { isEnabled: ($event.target as HTMLInputElement).checked })" />
+              <span class="sr-only">{{ $t("wb.entry.enabled") }}</span>
+              <span v-if="!entry.isEnabled" class="toggle__text" aria-hidden="true">{{ $t("wb.entry.disabled") }}</span>
+            </label>
             <button type="button" class="btn btn--icon btn--sm btn--danger" :aria-label="$t('wb.entry.delete')"
                     :title="$t('wb.entry.delete')" @click="remove(index)">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7"
@@ -216,15 +301,36 @@ const setSecondary = (index: number, raw: string) => patch(index, { secondaryKey
 
           <div class="toggles">
             <label class="toggle">
-              <input type="checkbox" :checked="entry.isEnabled"
-                     @change="patch(index, { isEnabled: ($event.target as HTMLInputElement).checked })" />
-              <span>{{ $t("wb.entry.enabled") }}</span>
-            </label>
-            <label class="toggle">
               <input type="checkbox" :checked="entry.isConstant"
                      @change="patch(index, { isConstant: ($event.target as HTMLInputElement).checked })" />
               <span>{{ $t("wb.entry.constant") }}</span>
             </label>
+          </div>
+
+          <!-- 酒館格式的條目才有：上游照這幾個值做字面比對 -->
+          <div v-if="entry.matchOptions" class="field">
+            <label>{{ $t("wb.entry.match") }}</label>
+            <div class="toggles">
+              <label class="toggle">
+                <input type="checkbox" :checked="entry.matchOptions.caseSensitive"
+                       @change="patchMatch(index, { caseSensitive: ($event.target as HTMLInputElement).checked })" />
+                <span>{{ $t("wb.entry.match.case") }}</span>
+              </label>
+              <label class="toggle">
+                <input type="checkbox" :checked="entry.matchOptions.matchWholeWords"
+                       @change="patchMatch(index, { matchWholeWords: ($event.target as HTMLInputElement).checked })" />
+                <span>{{ $t("wb.entry.match.whole") }}</span>
+              </label>
+            </div>
+            <span class="subtle">{{ $t("wb.entry.match.hint") }}</span>
+          </div>
+
+          <div v-if="entry.matchOptions && !entry.isConstant && (entry.secondaryKeywords ?? []).length" class="field">
+            <label :for="`wb-sl-${index}`">{{ $t("wb.entry.match.logic") }}</label>
+            <select :id="`wb-sl-${index}`" class="input" :value="entry.matchOptions.selectiveLogic"
+                    @change="patchMatch(index, { selectiveLogic: Number(($event.target as HTMLSelectElement).value) })">
+              <option v-for="value in SELECTIVE_LOGIC" :key="value" :value="value">{{ $t(`wb.entry.match.logic.${value}`) }}</option>
+            </select>
           </div>
           </template>
         </li>
@@ -263,11 +369,17 @@ const setSecondary = (index: number, raw: string) => patch(index, { secondaryKey
 .entry__summary { margin: 0 0 0 calc(var(--h-sm) + var(--s-2)); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chev { transition: transform var(--dur) var(--ease); }
 .chev.flip { transform: rotate(90deg); }
-.chip--off { color: var(--danger); }
+.reuse { margin-bottom: var(--s-3); }
+.reuse__row { display: flex; gap: var(--s-2); align-items: center; }
+.reuse__row .input { flex: 1; min-width: 0; }
+.listbar { display: flex; gap: var(--s-3); align-items: baseline; justify-content: space-between; flex-wrap: wrap; }
+.input--search { width: min(260px, 100%); height: var(--h-sm); font-size: 13px; }
+.toggle--head { flex: none; gap: 4px; font-size: 12px; }
+.toggle--head .toggle__text { color: var(--text-3); }
 .count { font-variant-numeric: tabular-nums; }
 .over { color: var(--danger); }
 .entry .field { margin-bottom: 0; gap: 6px; }
-.entry__head { display: flex; gap: var(--s-2); align-items: center; }
+.entry__head { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }
 .input--name { flex: 1; font-weight: 600; }
 .hits { cursor: default; gap: 4px; font-variant-numeric: tabular-nums; }
 .toggles { display: flex; gap: var(--s-4); flex-wrap: wrap; }
