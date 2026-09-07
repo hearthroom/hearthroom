@@ -420,7 +420,7 @@
   "settings.persona.sex.other": "その他",
   "settings.persona.define": "キャラクターに知っておいてほしいこと",
   "settings.persona.definePlaceholder": "あなたの身分、性格、キャラクターとの関係など、自由に。",
-  "settings.persona.priority": "カードのプレイ画面で個別に設定した人物設定が、こちらより優先されます。",
+  "settings.persona.priority": "カードのプレイ中に個別に設定した人物設定が、こちらより優先されます。",
   "settings.save": "保存",
   "settings.saved": "保存しました",
   "res.title": "マイリソース",
@@ -564,5 +564,8 @@
   "wb.entries.pick": "左から一つ選んで編集します。",
   "wb.entries.empty": "この一冊にはまだ項目がありません。",
   "wb.entries.more": "ほか {n} 件",
-  "editor.userName": "プレイヤーの呼び方"
+  "editor.userName": "プレイヤーの呼び方",
+  "footer.developers": "開発者向け",
+  "developers.title": "開発者向け：互換プロバイダー仕様",
+  "developers.source": "この文書はコードと同じリポジトリで管理されています。GitHub で原文を見る"
 }

@@ -420,7 +420,7 @@
   "settings.persona.sex.other": "기타",
   "settings.persona.define": "캐릭터가 알아 두었으면 하는 것",
   "settings.persona.definePlaceholder": "당신의 신분, 성격, 캐릭터와의 관계… 무엇이든 좋습니다.",
-  "settings.persona.priority": "카드의 플레이 화면에서 따로 설정한 페르소나가 여기보다 우선합니다.",
+  "settings.persona.priority": "카드를 플레이하며 따로 설정한 페르소나가 여기보다 우선합니다.",
   "settings.save": "저장",
   "settings.saved": "저장됨",
   "res.title": "내 리소스",
@@ -564,5 +564,8 @@
   "wb.entries.pick": "왼쪽에서 하나 골라 편집하세요.",
   "wb.entries.empty": "이 책에는 아직 항목이 없어요.",
   "wb.entries.more": "외 {n}개",
-  "editor.userName": "플레이어 호칭"
+  "editor.userName": "플레이어 호칭",
+  "footer.developers": "개발자",
+  "developers.title": "개발자: 호환 제공자 프로토콜",
+  "developers.source": "이 문서는 코드와 같은 저장소에서 관리됩니다. GitHub에서 원문 보기"
 }

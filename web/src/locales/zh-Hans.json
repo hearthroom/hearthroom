@@ -420,7 +420,7 @@
   "settings.persona.sex.other": "其他",
   "settings.persona.define": "你想让角色知道的事",
   "settings.persona.definePlaceholder": "你的身份、性格、跟角色的关系……想写什么都可以。",
-  "settings.persona.priority": "在某张卡的试玩页里另外设置的人设，会优先于这里。",
+  "settings.persona.priority": "在卡片游玩中另外设置的人设，会优先于这里。",
   "settings.save": "保存",
   "settings.saved": "已保存",
   "res.title": "我的资源",
@@ -564,5 +564,8 @@
   "wb.entries.pick": "从左边挑一条来编。",
   "wb.entries.empty": "这本书还没有条目。",
   "wb.entries.more": "还有 {n} 条",
-  "editor.userName": "玩家称呼"
+  "editor.userName": "玩家称呼",
+  "footer.developers": "开发者",
+  "developers.title": "开发者：兼容供应商协议",
+  "developers.source": "这份文档与代码同仓库维护，在 GitHub 上查看源文件"
 }

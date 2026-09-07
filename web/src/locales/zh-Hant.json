@@ -420,7 +420,7 @@
   "settings.persona.sex.other": "其他",
   "settings.persona.define": "你想讓角色知道的事",
   "settings.persona.definePlaceholder": "你的身分、性格、跟角色的關係……想寫什麼都可以。",
-  "settings.persona.priority": "在某張卡的試玩頁裡另外設定的人設，會優先於這裡。",
+  "settings.persona.priority": "在卡片遊玩中另外設定的人設，會優先於這裡。",
   "settings.save": "儲存",
   "settings.saved": "已儲存",
   "res.title": "我的資源",
@@ -564,5 +564,8 @@
   "wb.entries.pick": "從左邊挑一條來編。",
   "wb.entries.empty": "這本書還沒有條目。",
   "wb.entries.more": "還有 {n} 條",
-  "editor.userName": "玩家稱呼"
+  "editor.userName": "玩家稱呼",
+  "footer.developers": "開發者",
+  "developers.title": "開發者：相容供應商協議",
+  "developers.source": "這份文件與程式碼同倉庫維護，在 GitHub 上查看原始檔"
 }
