@@ -150,6 +150,8 @@ export const BEACON_EVENTS = new Set([
   "appearance", "locale_switch",
   // 其他
   "page_404", "error",
+  // 舊分頁向歸檔要舊版區塊的次數：持續為 0 代表沒人撞到部署，可以評估要不要縮短 30 天
+  "asset_archive_hit",
 ]);
 
 /** beacon 事件的 detail 小分类。同样白名单，避免自由字串进 blob。 */
