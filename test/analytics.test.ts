@@ -4,7 +4,7 @@ import worker from "../src/index";
 import { BEACON_EVENTS, clientKind, refHostOf, safeSubject, shapeTerm, surfaceOf } from "../src/analytics";
 import { ALIAS_HOSTS, HOST, canonicalUrl, isSelfHost } from "../src/site";
 import { upsertCard } from "../src/cards";
-import { resetDb, restoreUpstream, role } from "./helpers";
+import { envWithAssets, resetDb, restoreUpstream, role } from "./helpers";
 
 /**
  * 埋點測的是「呼叫契約」：事件名、欄位、hit/miss。
@@ -23,7 +23,6 @@ const F = (p: Point) => ({
 });
 const seen = (event: string) => points.map(F).filter((p) => p.event === event);
 
-const SHELL = `<!doctype html><html lang="zh-Hant"><head><title>Hearthroom</title><meta name="description" content="s"></head><body><div id="app"></div></body></html>`;
 
 beforeEach(async () => {
   await resetDb();
@@ -92,7 +91,7 @@ describe("服務端事件", () => {
 
   it("HTML 殼記成 page_html，帶站外來源網域", async () => {
     const ctx = createExecutionContext();
-    const testEnv = { ...env, ASSETS: { fetch: async () => new Response(SHELL, { headers: { "content-type": "text/html" } }) } as unknown as Fetcher };
+    const testEnv = envWithAssets();
     const res = await worker.fetch(new Request("https://c.test/cards/r-1", { headers: { Referer: "https://discord.com/channels/1" } }), testEnv, ctx);
     await res.text();
     await waitOnExecutionContext(ctx);
@@ -184,8 +183,7 @@ describe("搬家", () => {
 
   it("靜態資源原樣交回資源層，不會拿到 HTML 殼", async () => {
     const ctx = createExecutionContext();
-    const asset = new Response("console.log(1)", { headers: { "content-type": "application/javascript" } });
-    const testEnv = { ...env, ASSETS: { fetch: async (r: Request) => (new URL(r.url).pathname.startsWith("/assets/") ? asset : new Response(SHELL, { headers: { "content-type": "text/html" } })) } as unknown as Fetcher };
+    const testEnv = envWithAssets({ "/assets/index-abc.js": "console.log(1)" });
     const res = await worker.fetch(new Request("https://hearthroom.club/assets/index-abc.js"), testEnv, ctx);
     const body = await res.text();
     await waitOnExecutionContext(ctx);

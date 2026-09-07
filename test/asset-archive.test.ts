@@ -5,23 +5,23 @@
 import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import worker from "../src/index";
-
-/** 照真實資源層的行為：配了 single-page-application，找不到檔回的是 200 的 index.html，不是 404。 */
-const assets = (present: Record<string, string>) => ({
-  fetch: async (req: Request) => {
-    const path = new URL(req.url).pathname;
-    return path in present
-      ? new Response(present[path], { headers: { "content-type": "text/javascript" } })
-      : new Response("<!doctype html><title>shell</title>", { status: 200, headers: { "content-type": "text/html" } });
-  },
-});
+import { envWithAssets, fakeAssets } from "./helpers";
 
 async function get(path: string, present: Record<string, string>) {
   const ctx = createExecutionContext();
-  const res = await worker.fetch(new Request(`https://c.test${path}`), { ...env, ASSETS: assets(present) as unknown as Fetcher }, ctx);
+  const res = await worker.fetch(new Request(`https://c.test${path}`), envWithAssets(present), ctx);
   await waitOnExecutionContext(ctx);
   return res;
 }
+
+// 假資源層的契約本身也要釘住：缺檔是 200 + HTML。這條紅了代表 helper 被改回 404，上面的回退測試就會變成自欺。
+describe("fakeAssets 契約", () => {
+  it("缺檔回 200 的 index.html，不是 404", async () => {
+    const res = await fakeAssets().fetch("https://c.test/assets/missing.js");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/html");
+  });
+});
 
 describe("/assets/* 回退到舊版歸檔", () => {
   it("當前版有的檔照資源層回，不碰 KV", async () => {
