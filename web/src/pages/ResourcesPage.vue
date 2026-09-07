@@ -35,6 +35,8 @@ const session = useSession();
 const { t } = useI18n();
 
 const PAGE = 48;
+/** 單檔上限，跟上游同一個數字：上游掛在 Cloudflare 後面，邊緣對上傳 body 就是 100 MB，超過會在邊緣被 413。先在這裡擋，錯誤才說得清。 */
+const FILE_MAX = 100 << 20;
 const KINDS = ["all", "image", "video", "audio", "font"] as const;
 type KindKey = (typeof KINDS)[number];
 /** 種類籤。上傳時的檔案挑選器也照它收窄。 */
@@ -151,6 +153,11 @@ async function onPick(event: Event) {
     // 傳進正在看的那個資料夾；看「全部」或「未歸檔」就不歸檔
     const folderIds = scope.value.kind === "folder" ? [scope.value.folderId] : [];
     for (const file of files) {
+      if (file.size > FILE_MAX) {
+        failed.push(`${file.name}：${t("res.error.tooLarge")}`);
+        uploading.value = { ...uploading.value, done: uploading.value.done + 1 };
+        continue;
+      }
       try {
         await uploadImage(file, bearer, undefined, folderIds);
       } catch (err) {

@@ -128,6 +128,19 @@ describe("我的資源", () => {
     expect(root.querySelector<HTMLInputElement>("input[type=file]")!.accept).toBe("video/mp4,video/webm");
   });
 
+  it("超過 100 MB 的檔不送上游：先在頁面擋下並點名是哪個檔", async () => {
+    await mount();
+    const input = root.querySelector<HTMLInputElement>("input[type=file]")!;
+    const big = new File([new Uint8Array(1)], "movie.mp4", { type: "video/mp4" });
+    Object.defineProperty(big, "size", { value: 100 * 1024 * 1024 + 1 });
+    Object.defineProperty(input, "files", { value: [big], configurable: true });
+    input.dispatchEvent(new Event("change"));
+    await flush();
+    expect(api.uploadImage).not.toHaveBeenCalled();
+    expect(root.querySelector("[role=alert]")?.textContent).toContain("movie.mp4");
+    expect(root.querySelector("[role=alert]")?.textContent).toContain("100 MB");
+  });
+
   it("上游說圖片被卡片用著：畫面照錯誤碼說話", async () => {
     api.deleteLibraryImages.mockRejectedValueOnce(new api.ApiError(400, "請求失敗", "image_in_use"));
     await mount();
