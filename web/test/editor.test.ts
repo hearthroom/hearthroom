@@ -156,7 +156,7 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     expect($<HTMLTextAreaElement>("#f-contract").value).toBe("回覆用第三人稱。");
     expect($<HTMLTextAreaElement>("#f-jb").value).toBe("不要替玩家做決定。");
     expect($<HTMLInputElement>("#f-tags").value.split("、")).toHaveLength(10);
-    const regexButton = [...root.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.includes("設定正則"))!;
+    const regexButton = [...root.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.includes(i18n.global.t("regex.open")))!;
     expect(regexButton.querySelector(".chip")?.textContent?.trim()).toBe("1");
     // 左欄：三個必填都有了，不該再有紅點
     expect(root.querySelectorAll(".side__dot")).toHaveLength(0);
