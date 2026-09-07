@@ -14,7 +14,9 @@
     "build": "npm run build:stage && npm run build -w web",
     "migrate:local": "wrangler d1 migrations apply DB --local",
     "migrate:remote": "wrangler d1 migrations apply DB --remote",
-    "predeploy": "npm run typecheck && npm run test && npm run build",
+    "preflight": "node scripts/deploy-preflight.mjs",
+    "build:web": "npm run build -w web",
+    "predeploy": "npm run preflight && npm run typecheck && npm run build:stage && npm run test && npm run build:web",
     "deploy": "wrangler deploy",
     "build:stage": "npm --prefix stage ci --no-audit --no-fund && npm --prefix stage run build:stage",
     "sync:stage": "node scripts/sync-stage.mjs"
