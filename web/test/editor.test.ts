@@ -13,6 +13,7 @@ import { i18n } from "../src/lib/i18n";
 import { embedIntoPng, type TavernCard } from "../src/lib/tavern";
 import { writeChunks } from "../src/lib/png-chunks";
 import CardEditorPage from "../src/pages/CardEditorPage.vue";
+import { confirmState, settleConfirm } from "../src/lib/confirm";
 
 const api = vi.hoisted(() => ({
   createRole: vi.fn(async () => ({ roleId: "r1" })),
@@ -32,6 +33,8 @@ const api = vi.hoisted(() => ({
     { worldbookId: "wb9", name: "北境設定", description: "舊描述", entryCount: 2, iconUrl: "https://img.test/wb.png", visibility: "private", tags: "北境,懸疑" },
   ]),
   submitRoleForReview: vi.fn(async () => ({})),
+  deleteRole: vi.fn(async () => {}),
+  unregisterCard: vi.fn(async () => {}),
   uploadImage: vi.fn(async () => "https://img.test/avatar.png"),
   fetchAuthorAsset: vi.fn(async () => ({ rules: [], mountTrigger: "", mountLayer: "", pageMode: "classic", status: "none", version: 0 })),
   saveAuthorAsset: vi.fn(async (_roleId: string, body: { version: number }) => ({ ...body, status: "passed", version: body.version + 1 })),
@@ -499,5 +502,36 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     await flush();
     expect($<HTMLInputElement>("#f-name").value).toBe("");
     expect(localStorage.getItem("hearthroom.draft.create")).toBeNull();
+  });
+
+  it("刪卡：要照打角色名稱才准；先撤榜單登記再刪上游，然後回到我的卡片", async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "阿芙拉", roleDesc: "老闆娘" });
+    await mount("/cards/r1/edit");
+    byText("發布").click();
+    await flush();
+    btnIn(root, "刪除這張卡").click();
+    await flush();
+    expect(confirmState.current?.requireText).toBe("阿芙拉");
+    expect(confirmState.current?.danger).toBe(true);
+    // 打錯：什麼都不會發生
+    settleConfirm(true, "阿芙");
+    await flush();
+    expect(api.deleteRole).not.toHaveBeenCalled();
+    expect(confirmState.current).not.toBeNull();
+    // 打對：先撤登記、再刪卡、回到 /mine?fresh=1
+    settleConfirm(true, "阿芙拉");
+    await flush(); await flush();
+    expect(api.unregisterCard).toHaveBeenCalledWith("r1", "tok");
+    expect(api.deleteRole).toHaveBeenCalledWith("r1", "tok");
+    expect(api.unregisterCard.mock.invocationCallOrder[0]).toBeLessThan(api.deleteRole.mock.invocationCallOrder[0]);
+    expect(router.currentRoute.value.path).toBe("/mine");
+    expect(router.currentRoute.value.query.fresh).toBe("1");
+  });
+
+  it("新卡（還沒建立）沒有刪除鍵", async () => {
+    await mount("/create");
+    byText("發布").click();
+    await flush();
+    expect([...root.querySelectorAll("button")].some((b) => b.textContent?.trim() === "刪除這張卡")).toBe(false);
   });
 });

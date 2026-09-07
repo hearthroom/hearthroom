@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { confirmDialog, confirmState, settleConfirm } from "../src/lib/confirm";
+import { confirmDialog, confirmState, confirmTextMatches, settleConfirm } from "../src/lib/confirm";
 
 describe("confirmDialog", () => {
   it("回答之後 promise 才落定，並且清掉狀態", async () => {
@@ -21,5 +21,22 @@ describe("confirmDialog", () => {
 
   it("沒有彈窗時 settle 是 no-op", () => {
     expect(() => settleConfirm(true)).not.toThrow();
+  });
+
+  it("requireText：沒照打就當沒按，彈窗留著；打對（前後空白不算）才落定", async () => {
+    const p = confirmDialog({ message: "刪除？", requireText: "夜行偵探" });
+    settleConfirm(true, "夜行");
+    expect(confirmState.current?.message).toBe("刪除？");
+    settleConfirm(true, "  夜行偵探 ");
+    expect(await p).toBe(true);
+    expect(confirmState.current).toBeNull();
+    expect(confirmTextMatches({ requireText: "a" }, "b")).toBe(false);
+    expect(confirmTextMatches({}, "")).toBe(true);
+  });
+
+  it("requireText 的彈窗取消不用打字", async () => {
+    const p = confirmDialog({ message: "刪除？", requireText: "夜行偵探" });
+    settleConfirm(false);
+    expect(await p).toBe(false);
   });
 });
