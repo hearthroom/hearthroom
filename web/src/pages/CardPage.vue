@@ -104,7 +104,7 @@ async function load() {
       }
     })
     .catch(() => { /* 預設版面照樣能看 */ });
-  void fetchBoard({ author: authorId, sort: "top", limit: 9, lang })
+  void fetchBoard({ author: authorId, sort: "hot", limit: 9, lang })
     .then((b) => { more.value = b.items.filter((c) => c.roleId !== roleId).slice(0, 8); })
     .catch(() => { more.value = []; });
 }

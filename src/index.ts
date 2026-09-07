@@ -20,6 +20,7 @@ import {
 import { authorLine, renderHead } from "./head";
 import { ALIAS_HOSTS, HOST, canonicalUrl } from "./site";
 import { loadMine, type MineFilter } from "./mine";
+import { tagNamesFor } from "../shared/tag-catalog";
 import { isReviewer, requireMember, requireReviewer } from "./members";
 import { DEFAULT_PROVIDER, reviewBotOf } from "./providers";
 import { WEEKLY_LIMIT, recordRegistration, registeredThisWeek } from "./quota";
@@ -205,10 +206,18 @@ async function cachedJson(c: Context<{ Bindings: Env; Variables: { ev: Pending }
 }
 
 /** 榜單與搜尋。匿名可讀。 */
+/** 榜的種類與各自的窗口。day／week／month 是「上榜時間在窗口內」，hot／new／random 不開窗。top 是 hot 的舊名字。 */
+const BOARD_WINDOW: Record<string, number> = { day: 86_400_000, week: 7 * 86_400_000, month: 30 * 86_400_000 };
+function parseBoardSort(raw: string | undefined): { sort: "hot" | "new" | "random" | "relevance"; since?: number; key: string } {
+  if (raw && raw in BOARD_WINDOW) return { sort: "hot", since: Date.now() - BOARD_WINDOW[raw], key: raw };
+  if (raw === "new" || raw === "random" || raw === "relevance") return { sort: raw, key: raw };
+  return { sort: "hot", key: "hot" };
+}
+
 app.get("/v1/cards", async (c) => {
-  // 只有 GET 而且完全公開，所以整個 URL 就是快取鍵，不必自己組。
+  // 只有 GET 而且完全公開，所以整個 URL 就是快取鍵，不必自己組。推薦是隨機的，快取住就不隨機了。
   const cache = await caches.open(boardCache.namespace);
-  const hit = await cache.match(c.req.raw);
+  const hit = c.req.query("sort") === "random" ? undefined : await cache.match(c.req.raw);
   if (hit) {
     // 快取命中一樣是一次瀏覽行為，只是結果數這種東西這條路上沒有
     const q0 = c.req.query("q")?.trim();
@@ -225,8 +234,7 @@ app.get("/v1/cards", async (c) => {
     res.headers.set("X-Cache", "hit");
     return res;
   }
-  const sortParam = c.req.query("sort");
-  const sort = sortParam === "new" || sortParam === "top" || sortParam === "relevance" ? sortParam : "hot";
+  const { sort, since, key: sortKey } = parseBoardSort(c.req.query("sort"));
   const offset = clamp(c.req.query("offset"), 0, 10_000);
   const limit = Math.max(1, clamp(c.req.query("limit"), 24, 100));
   const author = c.req.query("author");
@@ -237,9 +245,10 @@ app.get("/v1/cards", async (c) => {
   const { rows, total, hasNext } = await listCards(c.env.DB, {
     zone,
     q: c.req.query("q")?.trim() || undefined,
-    tag: c.req.query("tag")?.trim() || undefined,
+    tags: (() => { const raw = c.req.query("tag")?.trim(); return raw ? (tagNamesFor(raw) ?? [raw]) : undefined; })(),
     authorNumId: author ? Number(author) : undefined,
     sort,
+    since,
     limit,
     offset,
   });
@@ -248,7 +257,7 @@ app.get("/v1/cards", async (c) => {
   // 搜尋與榜單是兩種行為，分開記；結果數只有這裡拿得到（total 有篩選時是 null，中間件讀不到）
   note(c, {
     event: q ? "search" : "list",
-    sortKey: sort,
+    sortKey,
     tag: c.req.query("tag")?.trim() ?? "",
     term: q ? shapeTerm(q) : "",
     subject: author ?? "",
@@ -257,13 +266,15 @@ app.get("/v1/cards", async (c) => {
     offset,
     outcome: rows.length ? "ok" : "empty",
   });
-  const res = c.json({ items: rows.map((r) => toCard(r, l)), total, hasNext, limit, offset, sort });
+  const res = c.json({ items: rows.map((r) => toCard(r, l)), total, hasNext, limit, offset, sort: sortKey });
   res.headers.set("Cache-Control", `public, max-age=${BOARD_TTL}`);
   res.headers.set("X-Cache", "miss");
   // 放進快取的副本不能帶 X-Cache: miss，否則下一個人會看到錯的標記。
-  const stored = res.clone();
-  stored.headers.set("X-Cache", "hit");
-  c.executionCtx.waitUntil(cache.put(c.req.raw, stored));
+  if (sort !== "random") {
+    const stored = res.clone();
+    stored.headers.set("X-Cache", "hit");
+    c.executionCtx.waitUntil(cache.put(c.req.raw, stored));
+  }
   return res;
 });
 

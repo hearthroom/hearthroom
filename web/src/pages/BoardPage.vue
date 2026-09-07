@@ -4,8 +4,9 @@ import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import AuthorList from "@/components/AuthorList.vue";
 import CardGrid from "@/components/CardGrid.vue";
-import { fetchAuthors, fetchBoard, fetchTags } from "@/lib/api";
+import { fetchAuthors, fetchBoard } from "@/lib/api";
 import { contentLang, defaultZone } from "@/lib/i18n";
+import { TAG_CATALOG, tagLabel } from "../../../shared/tag-catalog";
 import { useLocalePath } from "@/lib/use-locale";
 import type { AuthorPage } from "@/lib/api";
 import type { AuthorSort, CardPage, Sort } from "@/lib/types";
@@ -17,18 +18,20 @@ const { t } = useI18n();
 
 const page = ref<CardPage | null>(null);
 const authors = ref<AuthorPage | null>(null);
-const tags = ref<{ tag: string; n: number }[]>([]);
 const loading = ref(true);
 const error = ref("");
 
-const SORTS: Sort[] = ["hot", "new", "top"];
+/** 榜的種類照魅魔島：日榜（24h）、週榜（7 天）、月榜（30 天）、最熱、最新、推薦（隨機）。窗口看的是上榜時間。 */
+const SORTS: Sort[] = ["day", "week", "month", "hot", "new", "random"];
+/** 三個開窗的榜才顯示「正在被聊」的增量：最熱是累積量，增量在那裡沒意義。 */
+const WINDOWED = new Set<Sort>(["day", "week", "month"]);
 const AUTHOR_SORTS: AuthorSort[] = ["talk", "cards", "hot"];
 
 /** 角色卡榜或作者榜。 */
 const mode = computed(() => (route.query.mode === "authors" ? "authors" : "cards"));
 const sort = computed<Sort>(() => {
   const s = route.query.sort;
-  return s === "new" || s === "top" ? s : "hot";
+  return typeof s === "string" && (SORTS as string[]).includes(s) ? (s as Sort) : "day";
 });
 const authorSort = computed<AuthorSort>(() => {
   const s = route.query.sort;
@@ -64,10 +67,6 @@ async function load() {
     loading.value = false;
   }
 }
-/** 類型列跟語區走，跟排序、分頁無關，所以分開抓、抓一次。 */
-async function loadTags() {
-  try { tags.value = await fetchTags(zone.value); } catch { tags.value = []; }
-}
 
 /** 狀態放進網址：篩選結果可以直接分享，上一頁也回得去。 */
 function navigate(patch: Record<string, string | undefined>) {
@@ -83,7 +82,6 @@ function navigate(patch: Record<string, string | undefined>) {
 const switchMode = (m: "cards" | "authors") => navigate({ mode: m === "authors" ? "authors" : undefined, sort: undefined, tag: undefined });
 
 watch([() => route.query, locale], load, { immediate: true });
-watch(zone, loadTags, { immediate: true });
 </script>
 
 <template>
@@ -109,12 +107,12 @@ watch(zone, loadTags, { immediate: true });
       </div>
     </div>
 
-    <!-- 類型列：作者自己打的標籤裡最常見的那些。橫向捲，手機上不折行 -->
-    <nav v-if="mode === 'cards' && tags.length" class="rail" :aria-label="$t('board.tags')">
+    <!-- 類型列：固定的一排（照魅魔島），鍵進網址、名字跟介面語言走。摺成幾行，全部看得到 -->
+    <nav v-if="mode === 'cards'" class="rail" :aria-label="$t('board.tags')">
       <div class="rail__inner">
         <button class="tagchip" :class="{ 'is-on': !tag }" :aria-pressed="!tag" @click="navigate({ tag: undefined })">{{ $t("board.tag.all") }}</button>
-        <button v-for="x in tags" :key="x.tag" class="tagchip" :class="{ 'is-on': tag === x.tag }" :aria-pressed="tag === x.tag" @click="navigate({ tag: tag === x.tag ? undefined : x.tag })">
-          {{ x.tag }}<span class="tagchip__n">{{ x.n }}</span>
+        <button v-for="x in TAG_CATALOG" :key="x.key" class="tagchip" :class="{ 'is-on': tag === x.key }" :aria-pressed="tag === x.key" @click="navigate({ tag: tag === x.key ? undefined : x.key })">
+          {{ tagLabel(x, locale) }}
         </button>
       </div>
     </nav>
@@ -129,7 +127,7 @@ watch(zone, loadTags, { immediate: true });
         :busy="loading"
         :ranked="!tag"
         :rank-offset="page?.offset ?? 0"
-        :show-trending="sort === 'hot'"
+        :show-trending="WINDOWED.has(sort)"
         :empty-title="$t(tag ? 'board.empty.search.title' : 'board.empty.title')"
         :empty-hint="$t(tag ? 'board.empty.search.hint' : 'board.empty.hint')"
       />
@@ -174,10 +172,15 @@ watch(zone, loadTags, { immediate: true });
 .sorts__item:hover { color: var(--text); }
 .sorts__item--on { color: var(--accent-text); background: var(--accent-tint); }
 
-/* 右緣一道漸隱：告訴人還有更多，捲到底就消失 */
-.rail { position: relative; margin: 0 calc(-1 * var(--s-5)) var(--s-4); overflow-x: auto; scrollbar-width: none; mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent); -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent); }
-.rail::-webkit-scrollbar { display: none; }
-.rail__inner { display: inline-flex; gap: 6px; padding: 2px var(--s-5); }
+/* 固定的類型清單有五十來個，摺行全部露出來（照魅魔島）；手機上還是橫向捲，省高度 */
+.rail { position: relative; margin: 0 0 var(--s-4); }
+.rail__inner { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0; }
+.tagchip__n { display: none; }
+@media (max-width: 640px) {
+  .rail { margin: 0 calc(-1 * var(--s-4)) var(--s-4); overflow-x: auto; scrollbar-width: none; mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent); -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent); }
+  .rail::-webkit-scrollbar { display: none; }
+  .rail__inner { display: inline-flex; flex-wrap: nowrap; padding: 2px var(--s-4); }
+}
 .tagchip {
   display: inline-flex; align-items: center; gap: 5px;
   height: var(--h-sm); padding: 0 12px; white-space: nowrap;

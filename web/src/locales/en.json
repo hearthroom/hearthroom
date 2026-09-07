@@ -13,9 +13,8 @@
   "board.sorts": "Sort",
   "board.search.placeholder": "Search names, blurbs or tags",
   "board.search.submit": "Search",
-  "board.sort.hot": "Trending",
+  "board.sort.hot": "Top",
   "board.sort.new": "Newest",
-  "board.sort.top": "All-time",
   "board.count": "{n} cards",
   "board.empty.title": "Nothing here yet",
   "board.empty.hint": "Try another language, or list your own from “My cards”.",
@@ -567,5 +566,9 @@
   "editor.userName": "What the character calls the player",
   "footer.developers": "Developers",
   "developers.title": "Developers: Provider Protocol",
-  "developers.source": "This document lives in the repository alongside the code. View the source on GitHub"
+  "developers.source": "This document lives in the repository alongside the code. View the source on GitHub",
+  "board.sort.day": "Today",
+  "board.sort.week": "This week",
+  "board.sort.month": "This month",
+  "board.sort.random": "Discover"
 }

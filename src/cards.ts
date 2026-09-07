@@ -71,10 +71,13 @@ export interface ListOptions {
   /** 語區。榜單永遠帶著；作者主頁不帶，列他所有語言的作品。 */
   zone?: Zone;
   q?: string;
-  tag?: string;
+  /** 標籤名字們（類型鍵展開後）；任一命中都算。 */
+  tags?: string[];
   authorNumId?: number;
   /** relevance 只在有搜尋字時有意義；沒有搜尋字或走 LIKE 時退回 hot。 */
-  sort: "hot" | "new" | "top" | "relevance";
+  /** 上榜時間下限（毫秒），日／週／月榜用。 */
+  since?: number;
+  sort: "hot" | "new" | "random" | "relevance";
   limit: number;
   offset: number;
   /** 不論審核狀態全列。只有作者看自己的「已登記」那一組用；對外的榜單永遠只列在榜的。 */
@@ -115,9 +118,15 @@ export async function listCards(db: D1Database, opts: ListOptions) {
       binds.push(likeTerm(opts.q));
     }
   }
-  if (opts.tag) {
-    where.push("EXISTS (SELECT 1 FROM json_each(c.tags) WHERE json_each.value = ?)");
-    binds.push(opts.tag);
+  if (opts.tags?.length) {
+    // 類型鍵展開成幾種語言的名字，任一命中都算；字面標籤就是一個名字
+    where.push(`EXISTS (SELECT 1 FROM json_each(c.tags) WHERE json_each.value IN (${opts.tags.map(() => "?").join(",")}))`);
+    binds.push(...opts.tags);
+  }
+  if (opts.since !== undefined) {
+    // 日／週／月榜：只看上榜時間在窗口內的卡（owner 2026-09-07：時間是卡片上榜的那一刻）
+    where.push("c.registered_at >= ?");
+    binds.push(opts.since);
   }
   if (opts.authorNumId !== undefined) {
     where.push("c.author_num_id = ?");
@@ -128,16 +137,18 @@ export async function listCards(db: D1Database, opts: ListOptions) {
   // hot 用「這個同步窗口的對話增量」，不是累積數——累積數等於 top，排出來永遠是老卡。
   // 三種排序都對應一個索引，沒有一種需要現算。
   // 相關度是 FTS 的 bm25（越小越相關），再用熱度打破平手。LIKE 那條路沒有相關度可言。
+  // 榜的口徑照魅魔島：日／週／月榜與最熱都按累積對話數（窗口由 since 決定），最新按上榜時間，推薦隨機。
+  // 舊的 hot_score（同步窗口增量）不再當排序鍵，只留給前端顯示「正在被聊」。
   const orderBy =
     opts.sort === "new"
       ? "c.registered_at DESC, c.id DESC"
-      : opts.sort === "top"
-        ? "c.talk_num DESC, c.follow_num DESC"
+      : opts.sort === "random"
+        ? "RANDOM()"
         : opts.sort === "relevance" && usingFts
           ? "bm25(cards_fts), c.talk_num DESC"
-          : "c.hot_score DESC, c.registered_at DESC";
+          : "c.talk_num DESC, c.follow_num DESC, c.registered_at DESC";
 
-  const filtered = Boolean(opts.q || opts.tag || opts.authorNumId !== undefined);
+  const filtered = Boolean(opts.q || opts.tags?.length || opts.authorNumId !== undefined || opts.since !== undefined);
 
   // 多撈一筆就知道還有沒有下一頁，不必數完整組結果。
   const probe = await db

@@ -11,5 +11,5 @@
     "esModuleInterop": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "*.ts", "worker-configuration.d.ts"]
+  "include": ["src/**/*.ts", "shared/**/*.ts", "test/**/*.ts", "*.ts", "worker-configuration.d.ts"]
 }

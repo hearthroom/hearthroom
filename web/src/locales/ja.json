@@ -15,7 +15,6 @@
   "board.search.submit": "検索",
   "board.sort.hot": "人気",
   "board.sort.new": "新着",
-  "board.sort.top": "累計",
   "board.count": "{n} 件",
   "board.empty.title": "このエリアにはまだ作品がありません",
   "board.empty.hint": "他の言語を見るか、「マイカード」から自分の作品を登録してください。",
@@ -567,5 +566,9 @@
   "editor.userName": "プレイヤーの呼び方",
   "footer.developers": "開発者向け",
   "developers.title": "開発者向け：互換プロバイダー仕様",
-  "developers.source": "この文書はコードと同じリポジトリで管理されています。GitHub で原文を見る"
+  "developers.source": "この文書はコードと同じリポジトリで管理されています。GitHub で原文を見る",
+  "board.sort.day": "日間",
+  "board.sort.week": "週間",
+  "board.sort.month": "月間",
+  "board.sort.random": "おすすめ"
 }

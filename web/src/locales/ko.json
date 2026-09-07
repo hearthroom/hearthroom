@@ -15,7 +15,6 @@
   "board.search.submit": "검색",
   "board.sort.hot": "인기",
   "board.sort.new": "최신",
-  "board.sort.top": "누적",
   "board.count": "{n}개",
   "board.empty.title": "아직 등록된 작품이 없어요",
   "board.empty.hint": "다른 언어를 둘러보거나 ‘내 카드’에서 작품을 등록해 보세요.",
@@ -567,5 +566,9 @@
   "editor.userName": "플레이어 호칭",
   "footer.developers": "개발자",
   "developers.title": "개발자: 호환 제공자 프로토콜",
-  "developers.source": "이 문서는 코드와 같은 저장소에서 관리됩니다. GitHub에서 원문 보기"
+  "developers.source": "이 문서는 코드와 같은 저장소에서 관리됩니다. GitHub에서 원문 보기",
+  "board.sort.day": "일간",
+  "board.sort.week": "주간",
+  "board.sort.month": "월간",
+  "board.sort.random": "추천"
 }
