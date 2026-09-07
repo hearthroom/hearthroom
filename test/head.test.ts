@@ -2,13 +2,11 @@ import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import worker from "../src/index";
 import { authorLine, oneLine } from "../src/head";
-import { resetDb, restoreUpstream, role } from "./helpers";
+import { envWithAssets, resetDb, restoreUpstream, role } from "./helpers";
 import { upsertCard } from "../src/cards";
 
-/** 前端的殼：測試裡不建 web/dist，用一個假的資源層回同一份 index.html */
-const SHELL = `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>Hearthroom</title><meta name="description" content="site"></head><body><div id="app"></div></body></html>`;
-const assets = { fetch: async () => new Response(SHELL, { headers: { "content-type": "text/html; charset=utf-8", etag: '"shell-v1"', "last-modified": "Mon, 01 Sep 2025 00:00:00 GMT" } }) };
-const testEnv = { ...env, ASSETS: assets as unknown as Fetcher };
+// 殼帶驗證器：測「改寫後要清 ETag／Last-Modified」那幾條
+const testEnv = envWithAssets({}, { etag: '"shell-v1"', "last-modified": "Mon, 01 Sep 2025 00:00:00 GMT" });
 
 async function page(path: string) {
   const ctx = createExecutionContext();
