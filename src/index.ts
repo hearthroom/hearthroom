@@ -11,6 +11,7 @@ import {
   topTags,
   unregister,
   upsertCard,
+  registeredAmong,
 } from "./cards";
 import {
   BEACON_DETAILS, BEACON_EVENTS, clientKind, emit, note, refHostOf, safeSubject, shapeTerm, surfaceOf,
@@ -19,6 +20,7 @@ import {
 import { authorLine, renderHead } from "./head";
 import { ALIAS_HOSTS, HOST, canonicalUrl } from "./site";
 import { loadMine, type MineFilter } from "./mine";
+import { WEEKLY_LIMIT, recordRegistration, registeredThisWeek } from "./quota";
 import { type Env, HttpError } from "./types";
 import { upstream, ZONES, type Zone, CREATION_METHOD } from "./upstream";
 
@@ -355,7 +357,20 @@ app.post("/v1/cards", async (c) => {
   // 這條是防直接打 API 的那一手。
   if (role.creationMethod !== CREATION_METHOD) throw new HttpError(403, "only cards created on this site can be listed");
 
-  const { id, created } = await upsertCard(c.env.DB, role, Date.now());
+  // 每週額度（見 quota.ts）。已經在榜上的卡再送一次是「刷新」，不佔額度；
+  // 這週登記過又撤掉的同一張卡再登也不佔——它已經算過了。
+  const now = Date.now();
+  const alreadyListed = (await registeredAmong(c.env.DB, [roleId])).has(roleId);
+  if (!alreadyListed) {
+    const thisWeek = await registeredThisWeek(c.env.DB, me.accountNumId, now);
+    if (!thisWeek.has(roleId) && thisWeek.size >= WEEKLY_LIMIT) {
+      note(c, { event: "register", subject: roleId, detail: "quota" });
+      throw new HttpError(403, "weekly_quota_exceeded");
+    }
+  }
+
+  const { id, created } = await upsertCard(c.env.DB, role, now);
+  if (created) await recordRegistration(c.env.DB, me.accountNumId, roleId, now);
   const row = await getCard(c.env.DB, id);
   note(c, { event: "register", subject: roleId, detail: created ? "new" : "again" });
   return c.json(row ? toCard(row, lang(c)) : { id }, created ? 201 : 200);

@@ -33,6 +33,8 @@ http.createServer(async (req, res) => {
   if (path === "/__reset") { roles.clear(); regex.clear(); books.clear(); bindings.clear(); entries.clear(); log.length = 0; return json(res, 200, { ok: true }); }
   // 圖片本體是公開網址，<img> 不會帶 Bearer：放在鑑權前面
   if (path.startsWith("/img/")) { const n = parseInt(path.slice(5), 10); if (!path.endsWith(".png")) { res.writeHead(200, { "content-type": "application/octet-stream", "access-control-allow-origin": "*" }); return res.end(Buffer.alloc(16)); } res.writeHead(200, { "content-type": "image/svg+xml", "access-control-allow-origin": "*" }); return res.end(`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="768"><rect width="100%" height="100%" fill="hsl(${(n * 47) % 360} 60% 70%)"/><text x="50%" y="50%" font-size="64" text-anchor="middle" fill="#fff">${n}</text></svg>`); }
+  // 角色詳情是公開讀接口：Worker 登記時不帶 token 去讀它，放在鑑權前面
+  if (path === "/open/v1/role/detail") { const r = roles.get(url.searchParams.get("roleId")); return r ? json(res, 200, { ...r, talkExample: JSON.stringify(r.talkExample ?? []) }) : json(res, 404, { error: "not_found" }); }
   const auth = req.headers.authorization || "";
   if (!auth.startsWith("Bearer ")) return json(res, 401, { error: "unauthorized", message: "A valid bearer token is required." });
   if (path === "/open/v1/me") return json(res, 200, { accountNumId: 424242, nickName: "測試作者", avatar: "" });
@@ -59,7 +61,11 @@ http.createServer(async (req, res) => {
   if (path.startsWith("/open/v1/conversation/memory")) return json(res, 200, { atoms: [] });
   if (path === "/open/v1/role/multiPassPreference" || path === "/open/v1/player/multi-pass") return json(res, 200, {});
   if (path === "/open/v1/me/wallet") return json(res, 200, { score: 999596, tempScore: 0, plans: [{ tier: "member", expiresAt: Date.now() + 86400e3 * 30 }] });
-  if (m === "POST" && path === "/open/v1/role") { const roleId = id("role"); roles.set(roleId, { roleId, roleName: body.roleName, language: body.language, visibility: "private" }); return json(res, 200, { roleId }); }
+  // 建卡：連同「我的卡片」與登記那條路會讀的欄位一起存（characterRoleId／accountNumId／creationMethod），
+  // 本機的 /mine 與登記額度才走得通。
+  if (m === "POST" && path === "/open/v1/role") { const roleId = id("role"); roles.set(roleId, { roleId, characterRoleId: roleId, roleName: body.roleName, roleDesc: body.roleDesc || "", roleWelcome: body.roleWelcome || "", language: body.language, visibility: "private", roleVisibility: "private", accountNumId: 424242, authorName: "測試作者", creationMethod: "hearthroom", roleTag: [], talkNum: 0, followNum: 0 }); return json(res, 200, { roleId }); }
+  // Worker 的「我的卡片」：上游分頁形狀 roleList／total／hasNextPage
+  if (path === "/open/v1/role/mine") { const all = [...roles.values()]; const n = Number(url.searchParams.get("pageNum") || 1), sz = Number(url.searchParams.get("pageSize") || 24); const pageRows = all.slice((n - 1) * sz, n * sz); return json(res, 200, { roleList: pageRows, total: all.length, hasNextPage: n * sz < all.length }); }
   if (m === "POST" && (mm = path.match(/^\/open\/v1\/role\/([^/]+)\/document$/))) { Object.assign(roles.get(mm[1]) ?? roles.set(mm[1], {}).get(mm[1]), body.fields ?? body); return json(res, 200, { ok: true }); }
   if (m === "PATCH" && (mm = path.match(/^\/open\/v1\/role\/([^/]+)\/welcome$/))) { const r = roles.get(mm[1]); Object.assign(r, { roleWelcome: body.roleWelcome, roleWelcomeAlternates: body.alternates, rolePrologue: body.prologue }); return json(res, 200, { ok: true }); }
   if (m === "POST" && (mm = path.match(/^\/open\/v1\/role\/([^/]+)\/publish$/))) return json(res, 200, { status: "pending" });

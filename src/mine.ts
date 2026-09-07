@@ -1,4 +1,5 @@
 import { countByAuthor, listCards, toCard, registeredAmong } from "./cards";
+import { quotaFor, type Quota } from "./quota";
 import type { Env } from "./types";
 import { type MyRole, upstream } from "./upstream";
 
@@ -41,6 +42,8 @@ export interface MinePage {
   total: number | null;
   /** 已登記幾張。**全域**的數字，不是這一頁數出來的——見 countByAuthor。 */
   registeredTotal: number;
+  /** 這週的登記額度：上限、已用、週的起訖（UTC 週一到下週一）。見 quota.ts。 */
+  quota: Quota;
   page: number;
   pageSize: number;
   hasNext: boolean;
@@ -62,6 +65,7 @@ export async function loadMine(
   opts: { page: number; pageSize: number; fresh: boolean; filter: MineFilter },
 ): Promise<MineResult> {
   const registeredTotal = await countByAuthor(env.DB, accountNumId);
+  const quota = await quotaFor(env.DB, accountNumId, Date.now());
 
   // 「已登記」整組直接從本站的庫出：那是完整的一組，翻頁也對，而且不必問上游。
   // 走上游那條路的話，篩的只會是「這一頁裡已登記的」——作者卡多的時候差很多。
@@ -91,6 +95,7 @@ export async function loadMine(
         }),
         total: null,
         registeredTotal,
+        quota,
         page: opts.page,
         pageSize: opts.pageSize,
         hasNext,
@@ -138,6 +143,7 @@ export async function loadMine(
       items,
       total: roles.total,
       registeredTotal,
+      quota,
       page: opts.page,
       pageSize: opts.pageSize,
       hasNext: roles.hasNext,
