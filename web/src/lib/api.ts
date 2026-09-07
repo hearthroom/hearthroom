@@ -388,6 +388,32 @@ export interface Wallet {
   plans: { tier: PlanTier; expiresAt: number }[];
 }
 
+// ---- 使用者設定：遊玩時的人設（上游帳號層級，所有卡共用）-------------------------
+
+export interface PlayerPersona { userName: string; userSex: string; userDefine: string }
+
+export async function fetchPlayerPersona(token: string): Promise<PlayerPersona & { nickName: string; exists: boolean }> {
+  const raw = await json<Partial<PlayerPersona> & { nickName?: string; exists?: boolean }>(
+    await fetch(`${UPSTREAM_API}/open/v1/player/persona`, { headers: authHeaders(token) }),
+  );
+  return {
+    userName: String(raw.userName || ""), userSex: String(raw.userSex || ""), userDefine: String(raw.userDefine || ""),
+    nickName: String(raw.nickName || ""), exists: !!raw.exists,
+  };
+}
+
+/** 只送動到的欄位：上游每個欄位都是指標，沒送＝不動；空字串是有意義的值（清掉）。 */
+export async function savePlayerPersona(patch: Partial<PlayerPersona>, token: string): Promise<PlayerPersona> {
+  const raw = await json<Partial<PlayerPersona>>(
+    await fetch(`${UPSTREAM_API}/open/v1/player/persona/save`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders(token) },
+      body: JSON.stringify(patch),
+    }),
+  );
+  return { userName: String(raw.userName || ""), userSex: String(raw.userSex || ""), userDefine: String(raw.userDefine || "") };
+}
+
 export async function fetchWallet(token: string): Promise<Wallet> {
   return json<Wallet>(await fetch(`${UPSTREAM_API}/open/v1/me/wallet`, { headers: authHeaders(token) }));
 }
