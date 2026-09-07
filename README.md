@@ -54,7 +54,7 @@ API 存取範圍，跟這個服務拿到的一模一樣。
 
 前兩者是**這個服務自己**發出的呼叫。建卡編輯器另外會用作者的 token 直接打上游
 （跨域，不經過本站的 Worker）：`/open/v1/role`、`/role/:id/document`、`/role/:id/welcome`、
-`/role/:id/publish`、`/role/validate`、`/image/upload`、`/worldbook*`。那些請求裡沒有本站的
+`/role/:id/publish`、`DELETE /role/:id`（刪卡，先撤本站登記再打）、`/role/validate`、`/image/upload`、`/worldbook*`。那些請求裡沒有本站的
 任何憑證，權限範圍就是作者自己授予的那些。
 
 **沒有服務帳號、沒有特殊金鑰、沒有私有介面。** 轉發的 token 只在那一個呼叫裡出現，
