@@ -432,7 +432,7 @@
   "res.state.rejected": "未通過審核",
   "res.error.inUse": "有檔案正被角色卡當頭像或背景用，先在卡片裡換掉再刪。",
   "res.error.quota": "檔案數量已達上限。",
-  "res.error.tooLarge": "檔案太大：圖片最多 10 MB，影片 50 MB，音訊與字型 20 MB。",
+  "res.error.tooLarge": "單個檔案不能超過 500 MB。",
   "res.error.type": "只能上傳 PNG／JPEG／WebP、MP4／WebM、MP3／WAV／OGG、WOFF2／WOFF／TTF／OTF。",
   "res.error.duplicateName": "已經有同名的資料夾。",
   "res.error.folderLimit": "資料夾數量已達上限。",
@@ -441,6 +441,6 @@
   "res.kind.video": "影片",
   "res.kind.audio": "音訊",
   "res.kind.font": "字型",
-  "res.error.quotaBytes": "容量已滿（200 MB），先刪掉一些再傳。",
+  "res.error.quotaBytes": "容量已滿（500 MB），先刪掉一些再傳。",
   "res.fontSample": "Aa 永字八法"
 }

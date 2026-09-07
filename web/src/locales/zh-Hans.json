@@ -432,7 +432,7 @@
   "res.state.rejected": "未通过审核",
   "res.error.inUse": "有文件正被角色卡当头像或背景用，先在卡片里换掉再删。",
   "res.error.quota": "文件数量已达上限。",
-  "res.error.tooLarge": "文件太大：图片最多 10 MB，视频 50 MB，音频与字体 20 MB。",
+  "res.error.tooLarge": "单个文件不能超过 500 MB。",
   "res.error.type": "只能上传 PNG／JPEG／WebP、MP4／WebM、MP3／WAV／OGG、WOFF2／WOFF／TTF／OTF。",
   "res.error.duplicateName": "已经有同名的文件夹。",
   "res.error.folderLimit": "文件夹数量已达上限。",
@@ -441,6 +441,6 @@
   "res.kind.video": "视频",
   "res.kind.audio": "音频",
   "res.kind.font": "字体",
-  "res.error.quotaBytes": "容量已满（200 MB），先删掉一些再传。",
+  "res.error.quotaBytes": "容量已满（500 MB），先删掉一些再传。",
   "res.fontSample": "Aa 永字八法"
 }
