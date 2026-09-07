@@ -484,5 +484,10 @@
   "wb.category.event": "事件",
   "wb.category.rule": "规矩",
   "wb.category.custom": "其他",
-  "wb.export": "存成文件"
+  "wb.export": "存成文件",
+  "wb.entry.trigger": "看谁讲到才算",
+  "wb.entry.trigger.hint": "只有玩家会提起的事，设成只看玩家；角色自己才知道的，设成只看角色。",
+  "wb.trigger.both": "两边都算",
+  "wb.trigger.user_only": "只看玩家讲的",
+  "wb.trigger.ai_only": "只看角色讲的"
 }

@@ -561,6 +561,7 @@ function worldbookOps(): WorldbookOp[] {
       isEnabled: entry.isEnabled,
       isConstant: entry.isConstant,
       ...(entry.category ? { category: entry.category } : {}),
+      ...(entry.triggerRegion ? { triggerRegion: entry.triggerRegion } : {}),
     };
     if (!entry.entryId) ops.push({ op: { op: "create", ...payload }, entry });
     else if (JSON.stringify(entry) !== JSON.stringify(worldbookOriginal.value.find((e) => e.entryId === entry.entryId))) {

@@ -484,5 +484,10 @@
   "wb.category.event": "Something that happened",
   "wb.category.rule": "A rule",
   "wb.category.custom": "Other",
-  "wb.export": "Save to a file"
+  "wb.export": "Save to a file",
+  "wb.entry.trigger": "Whose words count",
+  "wb.entry.trigger.hint": "Set it to the player's side for things only they would bring up, and to the character's side for what only they would know.",
+  "wb.trigger.both": "Either side",
+  "wb.trigger.user_only": "Only what the player says",
+  "wb.trigger.ai_only": "Only what the character says"
 }

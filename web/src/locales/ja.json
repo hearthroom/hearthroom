@@ -484,5 +484,10 @@
   "wb.category.event": "できごと",
   "wb.category.rule": "決まりごと",
   "wb.category.custom": "その他",
-  "wb.export": "ファイルに保存"
+  "wb.export": "ファイルに保存",
+  "wb.entry.trigger": "誰の発言で数えるか",
+  "wb.entry.trigger.hint": "プレイヤーしか言い出さないことはプレイヤー側に、キャラクターだけが知っていることはキャラクター側にします。",
+  "wb.trigger.both": "どちらでも",
+  "wb.trigger.user_only": "プレイヤーの発言だけ",
+  "wb.trigger.ai_only": "キャラクターの発言だけ"
 }
