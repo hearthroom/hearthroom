@@ -5,9 +5,9 @@
  * 作者來這裡是為了拿網址——上傳一張圖，把公開網址貼進正則規則的 HTML（狀態欄、頭像框、
  * 背景）。所以每張圖第一順位的動作是「複製網址」，不是看大圖。
  *
- * 資料住在上游的圖床：資料夾、列表、刪除全是上游的事，本站只是介面。一張圖可以同時在
- * 好幾個資料夾裡（上游的資料夾是標籤，不是目錄），刪資料夾不會刪圖。配額是張數不是位元組，
- * 因為上游只數張數。影片／音訊／字型上游沒有對應的儲存與審核路徑，這一頁只有圖片。
+ * 資料住在上游的素材庫：資料夾、列表、刪除全是上游的事，本站只是介面。一個檔可以同時在
+ * 好幾個資料夾裡（上游的資料夾是標籤，不是目錄），刪資料夾不會刪檔。四種檔（圖片／影片／音訊／字型）
+ * 住同一個庫，用種類籤分；帳號總容量 200 MB，只算 2026-09 之後上傳的檔（存量圖沒記體積）。
  */
 import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -24,6 +24,7 @@ import {
   uploadImage,
   type LibraryFolder,
   type LibraryImage,
+  type LibraryKind,
   type LibraryScope,
 } from "@/lib/api";
 import { confirmDialog } from "@/lib/confirm";
@@ -34,10 +35,23 @@ const session = useSession();
 const { t } = useI18n();
 
 const PAGE = 48;
+const KINDS = ["all", "image", "video", "audio", "font"] as const;
+type KindKey = (typeof KINDS)[number];
+/** 種類籤。上傳時的檔案挑選器也照它收窄。 */
+const kind = ref<KindKey>("all");
+const ACCEPT: Record<KindKey, string> = {
+  all: "image/png,image/jpeg,image/webp,video/mp4,video/webm,audio/mpeg,audio/wav,audio/ogg,.woff2,.woff,.ttf,.otf",
+  image: "image/png,image/jpeg,image/webp",
+  video: "video/mp4,video/webm",
+  audio: "audio/mpeg,audio/wav,audio/ogg",
+  font: ".woff2,.woff,.ttf,.otf",
+};
 const folders = ref<LibraryFolder[]>([]);
 const images = ref<LibraryImage[]>([]);
 const total = ref(0);
 const quota = ref(0);
+const usedBytes = ref(0);
+const byteQuota = ref(0);
 const page = ref(1);
 const loading = ref(true);
 const error = ref("");
@@ -52,6 +66,7 @@ const activeFolder = computed(() => folders.value.find((f) => f.folderId === sco
 const CODE_MESSAGE: Record<string, string> = {
   image_in_use: "res.error.inUse",
   quota_image_exceeded: "res.error.quota",
+  quota_bytes_exceeded: "res.error.quotaBytes",
   file_too_large: "res.error.tooLarge",
   invalid_file_type: "res.error.type",
   duplicate_name: "res.error.duplicateName",
@@ -80,10 +95,12 @@ async function loadImages(reset = false) {
   loading.value = true;
   error.value = "";
   try {
-    const res = await fetchLibraryImages(scope.value, page.value, PAGE, await token());
+    const res = await fetchLibraryImages(scope.value, page.value, PAGE, await token(), kind.value);
     images.value = reset || page.value === 1 ? res.items : [...images.value, ...res.items];
     total.value = res.total;
     if (res.quota) quota.value = res.quota;
+    usedBytes.value = res.usedBytes;
+    if (res.byteQuota) byteQuota.value = res.byteQuota;
   } catch (err) {
     error.value = describe(err, "state.loadFailed");
   } finally {
@@ -101,16 +118,20 @@ async function refresh() {
   await Promise.all([loadFolders().catch(() => {}), loadImages(true)]);
 }
 
-/** 帳號總張數只在「全部」那一組的 total 裡；換到資料夾看時要另外記住，配額條才不會跟著變。 */
-const used = ref(0);
-watch([total, scopeKey], ([n, key]) => { if (key === "all") used.value = n; });
-const usedRatio = computed(() => (quota.value ? Math.min(1, used.value / quota.value) : 0));
+/** 容量條照位元組；上游每次列表都回帳號的總已用，跟看哪一組無關。 */
+const usedRatio = computed(() => (byteQuota.value ? Math.min(1, usedBytes.value / byteQuota.value) : 0));
+/** 12.3 MB 這種寫法：小於 1 MB 用 KB，小數只留到看得出差別。 */
+function fileSize(bytes: number): string {
+  if (bytes >= 1 << 20) return `${(bytes / (1 << 20)).toFixed(bytes >= 100 << 20 ? 0 : 1)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
+}
 
 onMounted(async () => {
   document.title = pageTitle(t("res.title"));
   await refresh();
 });
-watch(scopeKey, () => { selected.value = new Set(); void loadImages(true); });
+watch([scopeKey, kind], () => { selected.value = new Set(); void loadImages(true); });
 
 // ── 上傳 ──────────────────────────────────────────────────────────
 
@@ -291,6 +312,28 @@ async function copyLink(image: LibraryImage) {
 }
 const copyFallback = ref("");
 
+/**
+ * 字型的預覽：把檔載成 FontFace，圖塊用它排一行字。載不進來（多半是 CORS 沒開）就退回圖示。
+ * 名字用 id 避免同名互蓋；只載一次，切籤回來不重載。
+ */
+const fontFaces = ref<Record<number, "ready" | "failed">>({});
+const fontFamily = (image: LibraryImage) => `lib-font-${image.id}`;
+async function loadFont(image: LibraryImage) {
+  if (image.kind !== "font" || fontFaces.value[image.id] || typeof FontFace === "undefined") return;
+  try {
+    const face = new FontFace(fontFamily(image), `url(${image.imageUrl})`);
+    await face.load();
+    document.fonts.add(face);
+    fontFaces.value = { ...fontFaces.value, [image.id]: "ready" };
+  } catch {
+    fontFaces.value = { ...fontFaces.value, [image.id]: "failed" };
+  }
+}
+watch(images, (list) => { for (const image of list) void loadFont(image); });
+
+/** 檔名尾巴當標籤：網址最後一段的副檔名，沒有就用種類。 */
+const extOf = (image: LibraryImage) => (image.imageUrl.match(/\.([a-z0-9]{2,5})(?:[?#]|$)/i)?.[1] ?? image.kind).toUpperCase();
+
 const stateLabel = (image: LibraryImage) =>
   image.moderationState === "pending" ? t("res.state.pending") : image.moderationState === "reject" ? t("res.state.rejected") : "";
 </script>
@@ -307,22 +350,29 @@ const stateLabel = (image: LibraryImage) =>
           <template v-if="uploading.count">{{ $t("res.uploading", { done: uploading.done, count: uploading.count }) }}</template>
           <template v-else>{{ $t("res.add") }}</template>
         </button>
-        <input ref="fileInput" type="file" accept="image/png,image/jpeg,image/webp" multiple class="sr-only" @change="onPick" />
+        <input ref="fileInput" type="file" :accept="ACCEPT[kind]" multiple class="sr-only" @change="onPick" />
       </div>
     </header>
 
-    <!-- 配額：上游數的是張數 -->
+    <!-- 配額：帳號總容量，位元組 -->
     <section class="quota panel" :aria-label="$t('res.quota.label')">
       <p class="eyebrow">{{ $t("res.quota.label") }}</p>
       <p class="quota__num">
-        <strong>{{ used }}</strong>
-        <span v-if="quota" class="subtle"> / {{ quota }}</span>
-        <span class="subtle"> {{ $t("res.quota.unit") }}</span>
+        <strong>{{ fileSize(usedBytes) }}</strong>
+        <span v-if="byteQuota" class="subtle"> / {{ fileSize(byteQuota) }}</span>
       </p>
-      <div class="quota__bar" role="progressbar" :aria-valuenow="used" aria-valuemin="0" :aria-valuemax="quota || undefined">
+      <div class="quota__bar" role="progressbar" :aria-valuenow="usedBytes" aria-valuemin="0" :aria-valuemax="byteQuota || undefined">
         <span :style="{ width: `${usedRatio * 100}%` }" />
       </div>
     </section>
+
+    <!-- 種類籤：全部／圖片／影片／音訊／字型 -->
+    <div class="seg kinds" role="tablist">
+      <button v-for="k in KINDS" :key="k" type="button" class="seg__item" :class="{ 'seg__item--on': kind === k }" role="tab"
+              :aria-selected="kind === k" @click="kind = k">
+        {{ $t(`res.kind.${k}`) }}
+      </button>
+    </div>
 
     <!-- 資料夾：一排膠囊，最後一顆是新建 -->
     <section class="folders">
@@ -396,13 +446,23 @@ const stateLabel = (image: LibraryImage) =>
       <li v-for="image in images" :key="image.id" class="tile" :class="{ 'tile--on': selected.has(image.id) }">
         <!-- 管理模式整張是勾選；平常是動作浮層 -->
         <button v-if="managing" type="button" class="tile__pick" :aria-pressed="selected.has(image.id)" @click="toggleSelect(image)">
-          <img :src="image.imageUrl" alt="" loading="lazy" />
+          <img v-if="image.kind === 'image'" :src="image.imageUrl" alt="" loading="lazy" />
+          <span v-else class="tile__file" :data-kind="image.kind"><span class="tile__ext">{{ extOf(image) }}</span></span>
           <span class="tile__check" aria-hidden="true">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7" /></svg>
           </span>
         </button>
         <template v-else>
-          <img :src="image.imageUrl" alt="" loading="lazy" />
+          <img v-if="image.kind === 'image'" :src="image.imageUrl" alt="" loading="lazy" />
+          <!-- 影片：靜音、只載第一格當縮圖；滑進來才播 -->
+          <video v-else-if="image.kind === 'video'" :src="image.imageUrl" muted playsinline preload="metadata" loop
+                 @mouseenter="($event.target as HTMLVideoElement).play().catch(() => {})" @mouseleave="($event.target as HTMLVideoElement).pause()" />
+          <!-- 字型：載得進來就用它排一行字，載不進來（CORS）退回副檔名 -->
+          <span v-else-if="image.kind === 'font' && fontFaces[image.id] === 'ready'" class="tile__file tile__file--font" :style="{ fontFamily: fontFamily(image) }">{{ $t("res.fontSample") }}</span>
+          <span v-else class="tile__file" :data-kind="image.kind">
+            <svg v-if="image.kind === 'audio'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V6l11-2v12" /><circle cx="6" cy="18" r="3" /><circle cx="17" cy="16" r="3" /></svg>
+            <span class="tile__ext">{{ extOf(image) }}</span>
+          </span>
           <div class="tile__acts">
             <button type="button" class="btn btn--sm tile__copy" @click="copyLink(image)">{{ $t("res.copy") }}</button>
             <a :href="image.imageUrl" target="_blank" rel="noopener" class="btn btn--sm btn--icon" :aria-label="$t('res.open')" :title="$t('res.open')">
@@ -411,7 +471,7 @@ const stateLabel = (image: LibraryImage) =>
           </div>
         </template>
         <span v-if="stateLabel(image)" class="tile__state" :class="{ 'tile__state--bad': image.moderationState === 'reject' }">{{ stateLabel(image) }}</span>
-        <span class="tile__meta subtle">{{ image.pixelWidth }}×{{ image.pixelHeight }}</span>
+        <span class="tile__meta subtle">{{ image.kind === "image" && image.pixelWidth ? `${image.pixelWidth}×${image.pixelHeight}` : fileSize(image.byteSize) }}</span>
       </li>
     </ul>
 
@@ -455,7 +515,15 @@ const stateLabel = (image: LibraryImage) =>
   border-radius: var(--r-md); background: var(--surface-2);
   box-shadow: 0 0 0 1px var(--line);
 }
-.tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tile img, .tile video { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* 非圖片的檔：置中的圖示或副檔名，底色照種類微微不同，一眼分得出影片、音訊、字型 */
+.tile__file { display: grid; place-items: center; gap: 6px; width: 100%; height: 100%; color: var(--text-2); }
+.tile__file svg { width: 32px; height: 32px; }
+.tile__file[data-kind="video"] { background: color-mix(in srgb, var(--accent) 8%, var(--surface-2)); }
+.tile__file[data-kind="audio"] { background: color-mix(in srgb, var(--ambient-3) 60%, var(--surface-2)); }
+.tile__file--font { font-size: 26px; line-height: 1.2; color: var(--text); padding: 8px; text-align: center; }
+.tile__ext { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; }
+.kinds { margin-bottom: var(--s-4); }
 .tile__pick { display: block; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: pointer; }
 /* 勾選框永遠在：管理模式下作者要一眼看出哪些已選 */
 .tile__check {
