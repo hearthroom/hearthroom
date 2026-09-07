@@ -123,6 +123,46 @@ const CATEGORIES = ["character", "location", "item", "event", "rule", "custom"];
 const TRIGGER_REGIONS = ["both", "user_only", "ai_only"];
 
 /**
+ * 拖著換順序。用瀏覽器原生的拖放，不拉套件。
+ *
+ * 這個順序不只是整理：常駐條目每輪有上限，擠不下時上游留的是排在前面的那幾條。
+ * 過濾中不給拖——畫面上看得到的只是一部分，放下去要落在哪一格沒有一個誠實的答案。
+ */
+const dragFrom = ref<number | null>(null);
+const dragOver = ref<number | null>(null);
+const canDrag = computed(() => !query.value.trim() && props.modelValue.length > 1);
+function onDragStart(index: number, event: DragEvent) {
+  dragFrom.value = index;
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+}
+function onDragOver(index: number, event: DragEvent) {
+  if (dragFrom.value === null) return;
+  event.preventDefault();
+  dragOver.value = index;
+}
+function onDrop(index: number) {
+  const from = dragFrom.value;
+  dragFrom.value = null;
+  dragOver.value = null;
+  if (from === null || from === index) return;
+  const next = props.modelValue.slice();
+  const [moved] = next.splice(from, 1);
+  next.splice(index, 0, moved);
+  commit(next);
+}
+/** 鍵盤也要能換：拖放對只用鍵盤的人等於沒有這個功能。 */
+function move(index: number, delta: number) {
+  const target = index + delta;
+  if (target < 0 || target >= props.modelValue.length) return;
+  const next = props.modelValue.slice();
+  [next[index], next[target]] = [next[target], next[index]];
+  commit(next);
+}
+
+/** 整頁鋪滿。一本幾十條的書在窄欄裡編，看得到的永遠只有兩三條。 */
+const zoomed = ref(false);
+
+/**
  * 作者自己已經有的世界書。一本書可以綁給好幾張卡，重建一本一樣的等於之後每張卡各改一次。
  * 拿不到（沒登入、舊版上游）就整塊不出現，不擋建卡。
  */
@@ -203,7 +243,7 @@ const setSecondary = (index: number, raw: string) => patch(index, { secondaryKey
 </script>
 
 <template>
-  <section class="wb">
+  <section class="wb" :class="{ 'wb--zoomed': zoomed }">
     <div v-if="!bound" class="empty panel">
       <p class="muted">{{ $t("wb.empty") }}</p>
       <div class="empty__acts">
@@ -249,16 +289,31 @@ const setSecondary = (index: number, raw: string) => patch(index, { secondaryKey
 
       <div class="listbar">
         <p class="subtle count">{{ $t("wb.count", { n: modelValue.length }) }}</p>
-        <input v-if="modelValue.length >= SEARCH_FROM" v-model="query" type="search" class="input input--search"
-               :placeholder="$t('wb.search.placeholder')" :aria-label="$t('wb.search.placeholder')" />
+        <span class="listbar__acts">
+          <input v-if="modelValue.length >= SEARCH_FROM" v-model="query" type="search" class="input input--search"
+                 :placeholder="$t('wb.search.placeholder')" :aria-label="$t('wb.search.placeholder')" />
+          <button type="button" class="btn btn--sm btn--ghost" :aria-pressed="zoomed" @click="zoomed = !zoomed">
+            {{ zoomed ? $t("wb.zoom.exit") : $t("wb.zoom") }}
+          </button>
+        </span>
       </div>
+      <p v-if="canDrag" class="subtle">{{ $t("wb.order.hint") }}</p>
 
       <p v-if="query.trim() && !visible.length" class="subtle">{{ $t("wb.search.none") }}</p>
 
       <ul class="entries">
         <li v-for="{ entry, index } in visible" :key="entry.entryId ?? `new-${index}`" class="entry panel"
-            :class="{ 'entry--open': isOpen(entry, index) }">
+            :class="{ 'entry--open': isOpen(entry, index), 'entry--over': dragOver === index }"
+            :draggable="canDrag" @dragstart="onDragStart(index, $event)" @dragover="onDragOver(index, $event)"
+            @drop="onDrop(index)" @dragend="dragFrom = null; dragOver = null">
           <div class="entry__head">
+            <span v-if="canDrag" class="grip" aria-hidden="true">
+              <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+                <circle cx="6" cy="4" r="1.3" /><circle cx="10" cy="4" r="1.3" />
+                <circle cx="6" cy="8" r="1.3" /><circle cx="10" cy="8" r="1.3" />
+                <circle cx="6" cy="12" r="1.3" /><circle cx="10" cy="12" r="1.3" />
+              </svg>
+            </span>
             <button type="button" class="btn btn--icon btn--sm btn--ghost" :aria-expanded="isOpen(entry, index)"
                     :aria-label="isOpen(entry, index) ? $t('wb.entry.collapse') : $t('wb.entry.expand')"
                     :title="isOpen(entry, index) ? $t('wb.entry.collapse') : $t('wb.entry.expand')" @click="toggle(entry, index)">
@@ -287,6 +342,17 @@ const setSecondary = (index: number, raw: string) => patch(index, { secondaryKey
               <span class="sr-only">{{ $t("wb.entry.enabled") }}</span>
               <span v-if="!entry.isEnabled" class="toggle__text" aria-hidden="true">{{ $t("wb.entry.disabled") }}</span>
             </label>
+            <button v-if="canDrag" type="button" class="btn btn--icon btn--sm btn--ghost" :disabled="index === 0"
+                    :aria-label="$t('list.up')" :title="$t('list.up')" @click="move(index, -1)">
+              <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10l4-4 4 4" /></svg>
+            </button>
+            <button v-if="canDrag" type="button" class="btn btn--icon btn--sm btn--ghost"
+                    :disabled="index === modelValue.length - 1"
+                    :aria-label="$t('list.down')" :title="$t('list.down')" @click="move(index, 1)">
+              <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6l4 4 4-4" /></svg>
+            </button>
             <button type="button" class="btn btn--icon btn--sm btn--danger" :aria-label="$t('wb.entry.delete')"
                     :title="$t('wb.entry.delete')" @click="remove(index)">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7"
@@ -424,6 +490,16 @@ const setSecondary = (index: number, raw: string) => patch(index, { secondaryKey
 .reuse__row .input { flex: 1; min-width: 0; }
 .listbar { display: flex; gap: var(--s-3); align-items: baseline; justify-content: space-between; flex-wrap: wrap; }
 .input--search { width: min(260px, 100%); height: var(--h-sm); font-size: 13px; }
+.listbar__acts { display: flex; gap: var(--s-2); align-items: center; }
+.grip { display: inline-flex; color: var(--text-3); cursor: grab; flex: none; }
+.entry[draggable="true"] { cursor: default; }
+.entry--over { box-shadow: 0 0 0 2px var(--accent), var(--shadow-sm); }
+/* 鋪滿整頁：一本幾十條的書在中欄裡編，看得到的永遠只有兩三條 */
+.wb--zoomed {
+  position: fixed; inset: 0; z-index: 100;
+  padding: var(--s-4); overflow-y: auto;
+  background: var(--bg);
+}
 .toggle--head { flex: none; gap: 4px; font-size: 12px; }
 .toggle--head .toggle__text { color: var(--text-3); }
 .count { font-variant-numeric: tabular-nums; }

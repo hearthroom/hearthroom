@@ -489,5 +489,8 @@
   "wb.entry.trigger.hint": "只有玩家会提起的事，设成只看玩家；角色自己才知道的，设成只看角色。",
   "wb.trigger.both": "两边都算",
   "wb.trigger.user_only": "只看玩家讲的",
-  "wb.trigger.ai_only": "只看角色讲的"
+  "wb.trigger.ai_only": "只看角色讲的",
+  "wb.zoom": "铺满整页",
+  "wb.zoom.exit": "收回去",
+  "wb.order.hint": "拖着换顺序。常驻的条目一轮塞不下时，排在前面的先进去。"
 }

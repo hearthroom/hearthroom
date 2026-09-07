@@ -489,5 +489,8 @@
   "wb.entry.trigger.hint": "プレイヤーしか言い出さないことはプレイヤー側に、キャラクターだけが知っていることはキャラクター側にします。",
   "wb.trigger.both": "どちらでも",
   "wb.trigger.user_only": "プレイヤーの発言だけ",
-  "wb.trigger.ai_only": "キャラクターの発言だけ"
+  "wb.trigger.ai_only": "キャラクターの発言だけ",
+  "wb.zoom": "全画面で編集",
+  "wb.zoom.exit": "元に戻す",
+  "wb.order.hint": "ドラッグで並べ替えられます。常に持ち込む項目が一度に入りきらないときは、上にあるものから入ります。"
 }

@@ -20,13 +20,14 @@ const api = vi.hoisted(() => ({
   patchRoleWelcome: vi.fn(async () => ({})),
   createWorldbook: vi.fn(async () => "wb1"),
   patchWorldbookDocument: vi.fn(async () => ({})),
+  reorderWorldbookEntries: vi.fn(async () => {}),
   fetchWorldbookEntries: vi.fn(async () => [
     { entryId: "e1", name: "黑麥鎮", content: "北境小鎮。", keywords: ["黑麥鎮"], secondaryKeywords: [], isEnabled: true, isConstant: true, category: "location" },
     { entryId: "e2", name: "採石場", content: "廢棄了。", keywords: ["採石場"], secondaryKeywords: ["排水渠"], isEnabled: true, isConstant: false },
   ]),
   fetchRoleValidation: vi.fn(async () => ({ status: "ok", blockers: [], warnings: [] })),
   fetchRoleDetail: vi.fn(async () => ({})),
-  fetchRoleWorldbooks: vi.fn(async () => []),
+  fetchRoleWorldbooks: vi.fn(async () => [{ worldbookId: "wb-bound", name: "北境設定", description: "", entryCount: 2 }]),
   fetchMyWorldbooks: vi.fn(async () => [
     { worldbookId: "wb9", name: "北境設定", description: "舊描述", entryCount: 2, iconUrl: "https://img.test/wb.png", visibility: "private", tags: "北境,懸疑" },
   ]),
@@ -393,6 +394,25 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
 
     const [, doc] = api.patchWorldbookDocument.mock.calls[0] as unknown as [string, { entries: { triggerRegion?: string }[] }];
     expect(doc.entries[0].triggerRegion).toBe("user_only");
+  });
+
+  it("只調順序也存得下來：不送任何條目操作，只送新的順序", async () => {
+    // 角色本身一個字都不動：只把條目換個位置，儲存鍵也得是活的
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "北境", roleWelcome: "雨還在下。" });
+    await mount("/cards/r1/edit");
+    byText("世界書").click();
+    await flush();
+    api.patchWorldbookDocument.mockClear();
+
+    // 讀回來是 e1、e2；把第二條往上搬
+    const up = [...root.querySelectorAll<HTMLButtonElement>("button[aria-label='往上移']")];
+    expect(up).toHaveLength(2);
+    up[1].click();
+    await flush();
+    await submit();
+
+    expect(api.patchWorldbookDocument).not.toHaveBeenCalled();
+    expect(api.reorderWorldbookEntries).toHaveBeenCalledWith("wb-bound", ["e2", "e1"], "tok");
   });
 
   it("大本世界書分段送：每段最多 100 個操作、綁定只跟第一段；中途失敗再存只送剩下的", async () => {
