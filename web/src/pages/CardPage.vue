@@ -6,10 +6,11 @@ import CardGrid from "@/components/CardGrid.vue";
 import CommentPanel from "@/components/CommentPanel.vue";
 import NotFoundPage from "@/pages/NotFoundPage.vue";
 import PreviewDoc from "@/components/preview/PreviewDoc.vue";
+import HtmlCardFrame from "@/components/HtmlCardFrame.vue";
 import { ApiError, fetchBoard, fetchCard, fetchPreviewPage, fetchRoleDetail } from "@/lib/api";
 import { contentLang, pageTitle, zoneLabel } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
-import { compact, hueFrom, plainText, relativeTime } from "@/lib/format";
+import { compact, hueFrom, isHtmlCard, plainText, relativeTime, substituteNames } from "@/lib/format";
 import { confirmDialog } from "@/lib/confirm";
 import { track } from "@/lib/track";
 import type { CommunityCard } from "@/lib/types";
@@ -27,6 +28,8 @@ const error = ref("");
 
 /** 來源端的公開詳情：開場白、有沒有裝修主頁、作者有沒有關掉評論。 */
 const welcome = ref("");
+/** 開場白是 HTML 卡時的原文（保留標籤，只換 {{char}}／{{user}}）；純文字的開場白這裡是空字串。 */
+const welcomeHtml = ref("");
 const showComments = ref(true);
 const previewDoc = ref<unknown>(null);
 const previewSkin = ref("");
@@ -76,7 +79,11 @@ async function load() {
   // 主頁的其餘資料在卡片之後補上：讀不到只是少一塊，不擋整頁。
   void fetchRoleDetail(roleId, undefined, lang)
     .then((raw) => {
-      welcome.value = plainText(String(raw.roleWelcome ?? ""), card.value?.name ?? "", t("card.you"));
+      const rawWelcome = String(raw.roleWelcome ?? "");
+      welcome.value = plainText(rawWelcome, card.value?.name ?? "", t("card.you"));
+      // 帶標籤的開場白是作者用 HTML 卡寫的：剝掉標籤只剩一堆字，狀態欄、標籤、進度條全沒了。
+      // 交給沙盒 iframe 用對話頁同一套元件畫（HtmlCardFrame）。
+      welcomeHtml.value = isHtmlCard(rawWelcome) ? substituteNames(rawWelcome, card.value?.name ?? "", t("card.you")) : "";
       showComments.value = raw.previewShowComments !== false;
       if (raw.hasPreviewPage === true) {
         return fetchPreviewPage(roleId).then((p) => {
@@ -116,7 +123,7 @@ async function share() {
 }
 
 watch(() => route.params.id, () => {
-  card.value = null; welcome.value = ""; previewDoc.value = null; more.value = []; broken.value = false; tab.value = "home";
+  card.value = null; welcome.value = ""; welcomeHtml.value = ""; previewDoc.value = null; more.value = []; broken.value = false; tab.value = "home";
   commentCount.value = null; showComments.value = true;
   load();
 }, { immediate: true });
@@ -220,7 +227,8 @@ watch(locale, load);
                 <div class="role__welcome">
                   <img v-if="hasArt" :src="card.avatarUrl!" alt="" class="role__welcome-face" />
                   <span v-else class="role__welcome-face mono" :style="{ '--h': hue }">{{ [...card.name][0] }}</span>
-                  <blockquote class="role__bubble">{{ welcome }}</blockquote>
+                  <HtmlCardFrame v-if="welcomeHtml" class="role__bubble role__bubble--card" :html="welcomeHtml" :title="$t('card.welcome')" />
+                  <blockquote v-else class="role__bubble">{{ welcome }}</blockquote>
                 </div>
               </section>
             </template>
@@ -317,6 +325,8 @@ watch(locale, load);
   border-radius: 4px 16px 16px 16px; background: var(--surface-2);
   font-size: 14.5px; line-height: 1.8; white-space: pre-wrap;
 }
+/* HTML 卡自己帶底色與內距，氣泡只留形狀 */
+.role__bubble--card { padding: 0; background: transparent; white-space: normal; overflow: hidden; }
 .role__comments { padding: var(--s-5); }
 
 .role__more { display: grid; gap: var(--s-3); margin-top: var(--s-3); }
