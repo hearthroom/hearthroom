@@ -619,6 +619,20 @@ export async function patchWorldbookDocument(
   );
 }
 
+/**
+ * 條目順序。常駐條目每輪有上限，擠不下時上游留的是排在前面的那幾條——
+ * 不送這一趟的話順序在上游是全 0，實際留誰退到按條目 id 比大小。
+ */
+export async function reorderWorldbookEntries(worldbookId: string, entryIds: string[], token: string): Promise<void> {
+  await json(
+    await fetch(`${UPSTREAM_API}/open/v1/worldbook/${encodeURIComponent(worldbookId)}/entries/reorder`, {
+      method: "POST",
+      headers: writeHeaders(token),
+      body: JSON.stringify({ entryIds }),
+    }),
+  );
+}
+
 export type { TalkExampleEntry };
 
 // ── 素材圖庫（「我的資源」）────────────────────────────────────────
