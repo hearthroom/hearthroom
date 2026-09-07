@@ -19,7 +19,7 @@ API 參考，而是本站實際依賴的那個子集，按能力分級：實作�
 | 語言 | 請求可帶 `language` 標頭（`zh-Hant`、`zh-Hans`、`en`、`ja`、`ko`），供應商據此回傳人看的文字 |
 | 游客可讀 | 這幾條不需要 Bearer：`GET /open/v1/role/detail`、`GET /open/v1/role/preview-page`、`GET /open/v1/comment/list`、`GET /open/v1/comment/replies`、`GET /open/v1/comment/count` |
 | 錯誤封包 | 非 2xx 一律回 JSON `{ "error": "<snake_case_code>", "message": "<給人看的句子>", "retryable": <bool> }`；HTTP 狀態碼照語意（400／401／403／404／409／429／5xx） |
-| 錯誤碼 | 本站會辨認並翻譯這些：`invalid_arguments`、`role_in_review`、`visibility_requires_review`、`public_role_requires_clone`、`permission_denied`、`not_found`、`conversation_limit_reached`、`service_account_forbidden`、`unauthorized`。其餘 `message` 若不是錯誤碼格式，會原樣呈現給使用者（例如內容審核的原因） |
+| 錯誤碼 | 站台前端會辨認並翻譯這六個：`invalid_arguments`、`role_in_review`、`visibility_requires_review`、`public_role_requires_clone`、`permission_denied`、`not_found`。另外三個是供應商該回、由舞台或站台伺服器處理的：`conversation_limit_reached`（存檔滿）、`service_account_forbidden`（服務帳號打了白名單外的路徑）、`unauthorized`。其餘 `message` 若不是錯誤碼格式，會原樣呈現給使用者（例如內容審核的原因） |
 | 服務自報 | 本站的排程與伺服器端請求帶固定的 `User-Agent`，供應商不應把它當成瀏覽器流量擋掉 |
 
 `{{user}}`／`{{char}}`：卡片文本裡的這兩個標記由供應商在送進模型前替換，並且**不分大小寫**
@@ -59,7 +59,7 @@ token 的作用範圍就是使用者自己授權給站台的那些；本站不�
 | `GET /open/v1/role/detail?roleId=` | 無 | 登記時、每小時同步時讀公開欄位 |
 | `GET /open/v1/role/preview-page?roleId=` | 無 | 卡片頁顯示作者設計的預覽頁 |
 | `GET /open/v1/role/mine?pageNum=&pageSize=&creationMethod=` | 使用者 token | 「我的卡片」：列出作者自己的卡；`creationMethod` 篩出本站建的 |
-| `GET /open/v1/role/author-asset/serve?roleId=` | 無或使用者 token | 玩家面的作者資產（正則規則、美化）；卡片頁畫開場白時用 |
+| `GET /open/v1/role/author-asset/serve?roleId=` | 使用者 token | 玩家面的作者資產（正則規則、美化）；卡片頁畫開場白與舞台都用，游客拿不到就只畫純文字 |
 | `GET /open/v1/comment/list`、`/comment/replies`、`/comment/count` | 無 | 卡片頁的留言 |
 | `POST /open/v1/comment`、`/comment/like`、`/comment/delete` | 使用者 token | 留言、按讚、刪自己的留言 |
 | `GET /open/v1/me/wallet`、`GET /open/v1/me/score/records?pageNum=&pageSize=` | 使用者 token | 錢包頁：餘額、方案、點數紀錄（供應商沒有計費概念時可回空） |
@@ -82,7 +82,7 @@ token 的作用範圍就是使用者自己授權給站台的那些；本站不�
 | `talkNum`、`followNum` | number | 熱度：對話數與追蹤數，榜單用 |
 | `creationMethod` | string | 建卡來源；本站建的卡自報固定字串，供應商原樣存回 |
 
-`role/mine` 每筆另外帶 `roleVisibility`（可見性），「我的卡片」據此顯示狀態；不是公開的卡登記不了。
+`role/mine` 每筆另外帶 `roleVisibility`（可見性），「我的卡片」據此顯示狀態。登記時站台以匿名身分讀 `role/detail`，讀不到的卡（非公開）登記不了；另外只有 `creationMethod` 是本站的卡能登記與上榜。
 
 ## 3. 第 2 級：審核
 
@@ -179,7 +179,7 @@ token 直接打供應商**（跨域，不經過站台伺服器），權限就是
 | 手帳 | `GET /open/v1/conversation/notepad`、`POST /open/v1/conversation/notepad/save`；範本：`GET /open/v1/notepad/templates`、`GET /open/v1/notepad/template`、`POST /open/v1/notepad/template/save`、`/notepad/template/delete`、`/notepad/template/share`、`/notepad/template/share/revoke` |
 | 玩家設定 | `GET /open/v1/player/preference`、`POST /open/v1/player/preference/save`（外觀）；`GET /open/v1/player/role-settings`、`POST /open/v1/player/role-settings/save`（這張卡的稱呼、自我介紹、模型、上下文檔位、`personaMode`）；`GET /open/v1/player/persona`、`POST /open/v1/player/persona/save`（全局人設，見 §6）；`GET /open/v1/player/agent-mode`、`POST /open/v1/player/compact-preference` |
 | 模型 | `GET /open/v1/models`、`GET /open/v1/models/uptime-history` |
-| 試玩卡 | `PUT`／`GET`／`DELETE /open/v1/trial-cards/:clientKey`（把本機的酒館卡建成會自動到期的私有卡） |
+| 試玩卡 | `GET /open/v1/trial-cards`（列自己的）；`PUT`／`GET`／`DELETE /open/v1/trial-cards/:clientKey`（把本機的酒館卡建成會自動到期的私有卡） |
 | 分享碼 | `GET /open/v1/share/preview`、`POST /open/v1/share/import` |
 | 讀路徑 | `GET /open/v1/role/detail`、`GET /open/v1/role/author-asset/serve`、`GET /open/v1/worldbook/detail`、`GET /open/v1/worldbook/entry/list` |
 
