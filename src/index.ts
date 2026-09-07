@@ -470,7 +470,13 @@ app.get("/v1/review/:id/detail", async (c) => {
     detail = await upstream.fetchSharedDetail(c.env, bot.key, s.source_role_id);
   } catch (err) {
     // 作者收回了授權：卡片離榜、單子作廢，審核人看到的是「作者已收回」而不是一個 401。
+    // 但先確認是這張卡讀不到、不是機器人的金鑰壞了——金鑰壞了每張卡都 401，那不能拿來下架。
     if (err instanceof HttpError && err.status === 401) {
+      try {
+        await upstream.fetchMe(c.env, bot.key);
+      } catch {
+        throw new HttpError(503, "review bot key rejected by upstream");
+      }
       await c.env.DB.batch([
         c.env.DB.prepare("UPDATE cards SET status = 'unshared' WHERE id = ?").bind(s.card_id),
         c.env.DB.prepare("UPDATE review_submissions SET status = 'rejected', decided_at = ?, note = 'unshared' WHERE id = ? AND status = 'pending'").bind(Date.now(), s.id),
@@ -586,11 +592,22 @@ const SUBREQUEST_BUDGET = 48;
 
 export async function syncBatch(env: Env): Promise<{ ok: number; failed: number; delisted: number; ms: number }> {
   const started = Date.now();
-  const bot = reviewBotOf(env);
+  let bot = reviewBotOf(env);
+  // 先確認機器人的金鑰還活著（一個子請求）。金鑰被撤、換錯、帳號被停用時，上游對每張卡都回 401，
+  // 不擋的話整輪會把所有綁了版本的卡當成「作者收回授權」全部下架——這一輪就不比對，只記一行。
+  if (bot) {
+    try {
+      await upstream.fetchMe(env, bot.key);
+    } catch (err) {
+      console.error("review bot key rejected by upstream; skipping content checks this run", { error: String(err) });
+      bot = null;
+    }
+  }
   // 有審核機器人時每張卡要打兩次上游（公開資料＋內容雜湊），一輪能處理的卡就減半，
   // 否則後半批全部撞到子請求上限、整輪靜默失敗。
   const perCard = bot ? 2 : 1;
-  const limit = Math.max(1, Math.min(Number(env.SYNC_BATCH_SIZE) || 50, Math.floor(SUBREQUEST_BUDGET / perCard)));
+  const budget = SUBREQUEST_BUDGET - (bot ? 1 : 0);
+  const limit = Math.max(1, Math.min(Number(env.SYNC_BATCH_SIZE) || 50, Math.floor(budget / perCard)));
   const batch = await dueForSync(env.DB, limit);
   const concurrency = Math.max(1, Number(env.SYNC_CONCURRENCY) || 6);
   let ok = 0;
