@@ -170,3 +170,32 @@ export function myRolesOnUpstream(byToken: Record<string, MyRoleFixture[]>): voi
     };
   };
 }
+
+// ── 假的資源層 ───────────────────────────────────────────────
+//
+// 唯一的一份，所有測試共用。契約照 wrangler.toml 的 `not_found_handling = "single-page-application"`：
+// 列出的檔回它本身，其餘**一律 200 + index.html，不是 404**。2026-09-07 的 /assets/* KV 回退曾因為各測試
+// 自己手寫的假物件回 404 而全綠、線上卻從沒觸發——假物件的契約錯，測試就只是在測自己。
+
+/** 前端的殼：測試裡不建 web/dist，資源層回同一份 index.html。 */
+export const SHELL = `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>Hearthroom</title><meta name="description" content="site"></head><body><div id="app"></div></body></html>`;
+
+/**
+ * @param files 有的靜態檔：路徑 → 內容（字串當 JS）或整個 Response
+ * @param shellHeaders 殼的額外回應頭（例如 etag／last-modified，測快取驗證器用）
+ */
+export function fakeAssets(files: Record<string, string | Response> = {}, shellHeaders: Record<string, string> = {}): Fetcher {
+  return {
+    fetch: async (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      const file = files[new URL(url).pathname];
+      if (file instanceof Response) return file.clone();
+      if (typeof file === "string") return new Response(file, { headers: { "content-type": "text/javascript" } });
+      return new Response(SHELL, { headers: { "content-type": "text/html; charset=utf-8", ...shellHeaders } });
+    },
+  } as unknown as Fetcher;
+}
+
+/** 帶假資源層的 env，直接餵 worker.fetch。 */
+export const envWithAssets = (files?: Record<string, string | Response>, shellHeaders?: Record<string, string>): typeof env =>
+  ({ ...env, ASSETS: fakeAssets(files, shellHeaders) });
