@@ -20,10 +20,10 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { fetchMyWorldbooks, type WorldbookSummary } from "@/lib/api";
-import { confirmDialog } from "@/lib/confirm";
 import { useSession } from "@/lib/session";
-import type { WorldbookEntryDraft, WorldbookMatchOptions } from "@/lib/role-draft";
-import { ENTRY_CONTENT_MAX, parseWorldbookFile, type DropNote } from "@/lib/tavern";
+import type { WorldbookEntryDraft } from "@/lib/role-draft";
+import { parseWorldbookFile, type DropNote } from "@/lib/tavern";
+import WorldbookEntriesDialog from "./WorldbookEntriesDialog.vue";
 
 const props = defineProps<{
   modelValue: WorldbookEntryDraft[];
@@ -44,160 +44,17 @@ const emit = defineEmits<{
   imported: [{ name: string; entries: WorldbookEntryDraft[] }];
   /** 挑了自己已經有的一本。條目與綁定由外面處理——條目住在頁面上。 */
   pick: [WorldbookSummary];
-  /** 把這本存成檔案。下載那一步在頁面上，跟角色卡與正則規則共用同一支。 */
-  exportBook: [];
   /** 放掉手上這本，回到空狀態重挑。上游的綁定是覆蓋式的，存下去新的就取代舊的。 */
   release: [];
+  /** 把這本存成檔案。下載那一步在頁面上，跟角色卡與正則規則共用同一支。 */
+  exportBook: [];
 }>();
 
 const { t } = useI18n();
 const session = useSession();
 
-const NAME_MAX = 20;
-/** 條目少的時候搜尋框只是噪音；一本書到這個量級才開始要找。 */
-const SEARCH_FROM = 5;
-
-/** 展開的條目。鍵是 entryId，沒 id 的新條目用 `new-<index>`（跟 v-for 的 key 同一個）。 */
-const expanded = ref(new Set<string>());
-const keyOf = (entry: WorldbookEntryDraft, index: number) => entry.entryId ?? `new-${index}`;
-const isOpen = (entry: WorldbookEntryDraft, index: number) => expanded.value.has(keyOf(entry, index));
-function toggle(entry: WorldbookEntryDraft, index: number) {
-  const key = keyOf(entry, index);
-  const next = new Set(expanded.value);
-  if (next.has(key)) next.delete(key);
-  else next.add(key);
-  expanded.value = next;
-}
-// 沒內容的條目（剛加的、匯入後空的）自動展開；其餘維持作者的選擇
-watch(
-  () => props.modelValue.map((e, i) => (e.content.trim() ? "" : keyOf(e, i))).filter(Boolean),
-  (empties) => {
-    if (!empties.length) return;
-    const next = new Set(expanded.value);
-    for (const key of empties) next.add(key);
-    expanded.value = next;
-  },
-  { immediate: true },
-);
-const summary = (entry: WorldbookEntryDraft) => {
-  const parts = [entry.keywords.join("、")];
-  if (entry.secondaryKeywords?.length) parts.push(`+ ${entry.secondaryKeywords.join("、")}`);
-  return parts.filter(Boolean).join("  ");
-};
-
-/**
- * 搜尋只過濾畫面，不動資料：底下每一條都帶著它在 modelValue 裡的真實 index，
- * 改動照樣落在正確的那一條。過濾後用 index 當 key 去 patch 會改到別條。
- */
-const query = ref("");
-const visible = computed(() => {
-  const q = query.value.trim().toLowerCase();
-  const rows = props.modelValue.map((entry, index) => ({ entry, index }));
-  if (!q) return rows;
-  return rows.filter(({ entry }) =>
-    [entry.name, entry.content, entry.keywords.join(" "), (entry.secondaryKeywords ?? []).join(" ")]
-      .join(" ")
-      .toLowerCase()
-      .includes(q),
-  );
-});
-
-const commit = (next: WorldbookEntryDraft[]) => emit("update:modelValue", next);
-
-function patch(index: number, changes: Partial<WorldbookEntryDraft>) {
-  const next = props.modelValue.slice();
-  next[index] = { ...next[index], ...changes };
-  commit(next);
-}
-
-function patchMatch(index: number, changes: Partial<WorldbookMatchOptions>) {
-  const current = props.modelValue[index].matchOptions;
-  if (!current) return;
-  patch(index, { matchOptions: { ...current, ...changes } });
-}
-
-const SELECTIVE_LOGIC = [0, 1, 2, 3];
-/** 上游認得的分類，順序照站內 App。留空的舊條目上游當「自訂」看。 */
-const CATEGORIES = ["character", "location", "item", "event", "rule", "custom"];
-/** 掃哪一邊的對話。空字串跟 both 同義，舊條目都是空的。 */
-const TRIGGER_REGIONS = ["both", "user_only", "ai_only"];
-
-/**
- * 拖著換順序。用瀏覽器原生的拖放，不拉套件。
- *
- * 這個順序不只是整理：常駐條目每輪有上限，擠不下時上游留的是排在前面的那幾條。
- * 過濾中不給拖——畫面上看得到的只是一部分，放下去要落在哪一格沒有一個誠實的答案。
- */
-const dragFrom = ref<number | null>(null);
-const dragOver = ref<number | null>(null);
-const canDrag = computed(() => !query.value.trim() && props.modelValue.length > 1);
-function onDragStart(index: number, event: DragEvent) {
-  dragFrom.value = index;
-  if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
-}
-function onDragOver(index: number, event: DragEvent) {
-  if (dragFrom.value === null) return;
-  event.preventDefault();
-  dragOver.value = index;
-}
-function onDrop(index: number) {
-  const from = dragFrom.value;
-  dragFrom.value = null;
-  dragOver.value = null;
-  if (from === null || from === index) return;
-  const next = props.modelValue.slice();
-  const [moved] = next.splice(from, 1);
-  next.splice(index, 0, moved);
-  commit(next);
-}
-/** 鍵盤也要能換：拖放對只用鍵盤的人等於沒有這個功能。 */
-function move(index: number, delta: number) {
-  const target = index + delta;
-  if (target < 0 || target >= props.modelValue.length) return;
-  const next = props.modelValue.slice();
-  [next[index], next[target]] = [next[target], next[index]];
-  commit(next);
-}
-
-/** 整頁鋪滿。一本幾十條的書在窄欄裡編，看得到的永遠只有兩三條。 */
-const zoomed = ref(false);
-
-/**
- * 作者自己已經有的世界書。一本書可以綁給好幾張卡，重建一本一樣的等於之後每張卡各改一次。
- * 拿不到（沒登入、舊版上游）就整塊不出現，不擋建卡。
- */
-const mine = ref<WorldbookSummary[]>([]);
-const reuseId = ref("");
-// 掛載時抓一次，放掉手上那本之後再抓一次——中間可能在別的地方多了幾本
-watch(
-  () => props.bound,
-  async (bound) => {
-    if (bound) return;
-    reuseId.value = "";
-    try {
-      const token = await session.accessToken();
-      if (!token) return;
-      mine.value = await fetchMyWorldbooks(token);
-    } catch {
-      mine.value = [];
-    }
-  },
-  { immediate: true },
-);
-function pickExisting() {
-  const book = mine.value.find((b) => b.worldbookId === reuseId.value);
-  if (book) emit("pick", book);
-}
-
-const add = () =>
-  commit([...props.modelValue, { name: "", content: "", keywords: [], secondaryKeywords: [], isEnabled: true, isConstant: false, category: "custom" }]);
-
-async function remove(index: number) {
-  const entry = props.modelValue[index];
-  // 已經在上游存在的條目，刪掉是真的會消失；還沒存過的只是移出這份草稿，不必問。
-  if (entry.entryId && !(await confirmDialog({ message: t("wb.entry.deleteConfirm"), confirmText: t("wb.entry.delete"), danger: true }))) return;
-  commit(props.modelValue.filter((_, i) => i !== index));
-}
+/** 條目編輯在彈窗裡：一本書幾十條，攤在表單中欄裡找一條要捲半天。 */
+const open = ref(false);
 
 /**
  * 匯入酒館的世界書檔。條目接在現有條目後面，不覆蓋——作者可能已經手寫了幾條，
@@ -235,15 +92,44 @@ async function onImportFile(event: Event) {
   }
 }
 
-const splitKeywords = (raw: string) => raw.split(/[、,，]+/).map((k) => k.trim()).filter(Boolean);
-const keywordsText = (entry: WorldbookEntryDraft) => entry.keywords.join("、");
-const setKeywords = (index: number, raw: string) => patch(index, { keywords: splitKeywords(raw) });
-const secondaryText = (entry: WorldbookEntryDraft) => (entry.secondaryKeywords ?? []).join("、");
-const setSecondary = (index: number, raw: string) => patch(index, { secondaryKeywords: splitKeywords(raw) });
+/**
+ * 作者自己已經有的世界書。一本書可以綁給好幾張卡，重建一本一樣的等於之後每張卡各改一次。
+ * 拿不到（沒登入、舊版上游）就整塊不出現，不擋建卡。
+ */
+const mine = ref<WorldbookSummary[]>([]);
+const reuseId = ref("");
+// 掛載時抓一次，放掉手上那本之後再抓一次——中間可能在別的地方多了幾本
+watch(
+  () => props.bound,
+  async (bound) => {
+    if (bound) return;
+    reuseId.value = "";
+    try {
+      const token = await session.accessToken();
+      if (!token) return;
+      mine.value = await fetchMyWorldbooks(token);
+    } catch {
+      mine.value = [];
+    }
+  },
+  { immediate: true },
+);
+function pickExisting() {
+  const book = mine.value.find((b) => b.worldbookId === reuseId.value);
+  if (book) emit("pick", book);
+}
+
+/** 條目摘要：不進彈窗也看得出這本書裡有什麼。 */
+const preview = computed(() =>
+  props.modelValue
+    .map((entry) => entry.name.trim() || entry.keywords[0] || "")
+    .filter(Boolean)
+    .slice(0, 8),
+);
 </script>
 
 <template>
-  <section class="wb" :class="{ 'wb--zoomed': zoomed }">
+  <section class="wb">
     <div v-if="!bound" class="empty panel">
       <p class="muted">{{ $t("wb.empty") }}</p>
       <div class="empty__acts">
@@ -267,7 +153,7 @@ const setSecondary = (index: number, raw: string) => patch(index, { secondaryKey
       <span class="subtle">{{ $t("wb.reuse.hint") }}</span>
     </div>
 
-    <template v-else>
+    <template v-else-if="bound">
       <div class="field">
         <label for="wb-name">{{ $t("wb.name") }}</label>
         <div class="reuse__row">
@@ -287,175 +173,22 @@ const setSecondary = (index: number, raw: string) => patch(index, { secondaryKey
         <span class="subtle">{{ $t("wb.desc.hint") }}</span>
       </div>
 
-      <div class="listbar">
-        <p class="subtle count">{{ $t("wb.count", { n: modelValue.length }) }}</p>
-        <span class="listbar__acts">
-          <input v-if="modelValue.length >= SEARCH_FROM" v-model="query" type="search" class="input input--search"
-                 :placeholder="$t('wb.search.placeholder')" :aria-label="$t('wb.search.placeholder')" />
-          <button type="button" class="btn btn--sm btn--ghost" :aria-pressed="zoomed" @click="zoomed = !zoomed">
-            {{ zoomed ? $t("wb.zoom.exit") : $t("wb.zoom") }}
-          </button>
-        </span>
+      <!-- 條目本體在彈窗裡；這裡只留一眼看得完的摘要與入口 -->
+      <div class="wb__entries panel">
+        <div class="wb__entries-head">
+          <span class="subtle">{{ $t("wb.count", { n: modelValue.length }) }}</span>
+          <button type="button" class="btn btn--sm btn--primary" @click="open = true">{{ $t("wb.entries.manage") }}</button>
+        </div>
+        <ul v-if="preview.length" class="wb__names" aria-hidden="true">
+          <li v-for="(name, i) in preview" :key="i" class="chip">{{ name }}</li>
+          <li v-if="modelValue.length > preview.length" class="subtle wb__more">
+            {{ $t("wb.entries.more", { n: modelValue.length - preview.length }) }}
+          </li>
+        </ul>
+        <p v-else class="subtle">{{ $t("wb.entries.empty") }}</p>
       </div>
-      <p v-if="canDrag" class="subtle">{{ $t("wb.order.hint") }}</p>
-
-      <p v-if="query.trim() && !visible.length" class="subtle">{{ $t("wb.search.none") }}</p>
-
-      <ul class="entries">
-        <li v-for="{ entry, index } in visible" :key="entry.entryId ?? `new-${index}`" class="entry panel"
-            :class="{ 'entry--open': isOpen(entry, index), 'entry--over': dragOver === index }"
-            :draggable="canDrag" @dragstart="onDragStart(index, $event)" @dragover="onDragOver(index, $event)"
-            @drop="onDrop(index)" @dragend="dragFrom = null; dragOver = null">
-          <div class="entry__head">
-            <span v-if="canDrag" class="grip" aria-hidden="true">
-              <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
-                <circle cx="6" cy="4" r="1.3" /><circle cx="10" cy="4" r="1.3" />
-                <circle cx="6" cy="8" r="1.3" /><circle cx="10" cy="8" r="1.3" />
-                <circle cx="6" cy="12" r="1.3" /><circle cx="10" cy="12" r="1.3" />
-              </svg>
-            </span>
-            <button type="button" class="btn btn--icon btn--sm btn--ghost" :aria-expanded="isOpen(entry, index)"
-                    :aria-label="isOpen(entry, index) ? $t('wb.entry.collapse') : $t('wb.entry.expand')"
-                    :title="isOpen(entry, index) ? $t('wb.entry.collapse') : $t('wb.entry.expand')" @click="toggle(entry, index)">
-              <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"
-                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="chev" :class="{ flip: isOpen(entry, index) }">
-                <path d="M6 4l4 4-4 4" />
-              </svg>
-            </button>
-            <input class="input input--name" :value="entry.name" :maxlength="NAME_MAX"
-                   :placeholder="$t('wb.entry.name.placeholder')" :aria-label="$t('wb.entry.name')"
-                   @input="patch(index, { name: ($event.target as HTMLInputElement).value })" />
-            <!-- 上游統計：這條被帶進對話幾次。作者看哪些條目真的在用、哪些從沒觸發 -->
-            <span v-if="typeof entry.activationCount === 'number'" class="chip hits" :title="$t('wb.entry.activations', { n: entry.activationCount })">
-              <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M3 3.5h10a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 1-1.5 1.5H7.5L4.5 14v-2.5H3A1.5 1.5 0 0 1 1.5 10V5A1.5 1.5 0 0 1 3 3.5z" />
-              </svg>
-              <span class="sr-only">{{ $t("wb.entry.activations", { n: entry.activationCount }) }}</span>
-              <span aria-hidden="true">{{ entry.activationCount }}</span>
-            </span>
-            <span v-if="entry.isConstant" class="chip" :title="$t('wb.entry.constant')">{{ $t("wb.entry.constantShort") }}</span>
-            <!-- 停用不必展開才切：一本書裡臨時關掉幾條是常事 -->
-            <label class="toggle toggle--head" :title="entry.isEnabled ? $t('wb.entry.enabled') : $t('wb.entry.disabled')">
-              <input type="checkbox" :checked="entry.isEnabled"
-                     :aria-label="$t('wb.entry.enabled')"
-                     @change="patch(index, { isEnabled: ($event.target as HTMLInputElement).checked })" />
-              <span class="sr-only">{{ $t("wb.entry.enabled") }}</span>
-              <span v-if="!entry.isEnabled" class="toggle__text" aria-hidden="true">{{ $t("wb.entry.disabled") }}</span>
-            </label>
-            <button v-if="canDrag" type="button" class="btn btn--icon btn--sm btn--ghost" :disabled="index === 0"
-                    :aria-label="$t('list.up')" :title="$t('list.up')" @click="move(index, -1)">
-              <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"
-                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10l4-4 4 4" /></svg>
-            </button>
-            <button v-if="canDrag" type="button" class="btn btn--icon btn--sm btn--ghost"
-                    :disabled="index === modelValue.length - 1"
-                    :aria-label="$t('list.down')" :title="$t('list.down')" @click="move(index, 1)">
-              <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"
-                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6l4 4 4-4" /></svg>
-            </button>
-            <button type="button" class="btn btn--icon btn--sm btn--danger" :aria-label="$t('wb.entry.delete')"
-                    :title="$t('wb.entry.delete')" @click="remove(index)">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7"
-                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M5 7h14M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3" />
-              </svg>
-            </button>
-          </div>
-
-          <!-- 收合時一行摘要：關鍵詞，加號後面是次要關鍵詞 -->
-          <p v-if="!isOpen(entry, index)" class="subtle entry__summary" @click="toggle(entry, index)">
-            {{ summary(entry) || $t("wb.entry.keywords.placeholder") }}
-          </p>
-
-          <template v-if="isOpen(entry, index)">
-          <div class="field">
-            <label :for="`wb-kw-${index}`">{{ $t("wb.entry.keywords") }}</label>
-            <input :id="`wb-kw-${index}`" class="input" :value="keywordsText(entry)"
-                   :placeholder="$t('wb.entry.keywords.placeholder')" :disabled="entry.isConstant"
-                   @input="setKeywords(index, ($event.target as HTMLInputElement).value)" />
-            <span class="subtle">{{ entry.isConstant ? $t("wb.entry.keywords.constantHint") : $t("wb.entry.keywords.hint") }}</span>
-          </div>
-
-          <div v-if="!entry.isConstant" class="field">
-            <label :for="`wb-sk-${index}`">{{ $t("wb.entry.secondary") }}</label>
-            <input :id="`wb-sk-${index}`" class="input" :value="secondaryText(entry)"
-                   :placeholder="$t('wb.entry.secondary.placeholder')"
-                   @input="setSecondary(index, ($event.target as HTMLInputElement).value)" />
-            <span class="subtle">{{ $t("wb.entry.secondary.hint") }}</span>
-          </div>
-
-          <div class="field">
-            <label :for="`wb-cat-${index}`">{{ $t("wb.entry.category") }}</label>
-            <select :id="`wb-cat-${index}`" class="input" :value="entry.category ?? ''"
-                    @change="patch(index, { category: ($event.target as HTMLSelectElement).value })">
-              <option v-if="!entry.category" value="">{{ $t("wb.entry.category.none") }}</option>
-              <option v-for="value in CATEGORIES" :key="value" :value="value">{{ $t(`wb.category.${value}`) }}</option>
-            </select>
-            <span class="subtle">{{ $t("wb.entry.category.hint") }}</span>
-          </div>
-
-          <div class="field">
-            <label :for="`wb-c-${index}`">{{ $t("wb.entry.content") }}</label>
-            <textarea :id="`wb-c-${index}`" class="input" rows="4" style="min-height: calc(4 * 1.7em + 26px)" :value="entry.content"
-                      :placeholder="$t('wb.entry.content.placeholder')"
-                      @input="patch(index, { content: ($event.target as HTMLTextAreaElement).value })" />
-            <span class="field__foot">
-              <span class="subtle">{{ [...entry.content].length > ENTRY_CONTENT_MAX ? $t("wb.entry.content.over", { max: ENTRY_CONTENT_MAX }) : "" }}</span>
-              <span class="subtle count" :class="{ over: [...entry.content].length > ENTRY_CONTENT_MAX }">{{ [...entry.content].length }} / {{ ENTRY_CONTENT_MAX }}</span>
-            </span>
-          </div>
-
-          <div v-if="!entry.isConstant" class="field">
-            <label :for="`wb-tr-${index}`">{{ $t("wb.entry.trigger") }}</label>
-            <select :id="`wb-tr-${index}`" class="input" :value="entry.triggerRegion || 'both'"
-                    @change="patch(index, { triggerRegion: ($event.target as HTMLSelectElement).value })">
-              <option v-for="value in TRIGGER_REGIONS" :key="value" :value="value">{{ $t(`wb.trigger.${value}`) }}</option>
-            </select>
-            <span class="subtle">{{ $t("wb.entry.trigger.hint") }}</span>
-          </div>
-
-          <div class="toggles">
-            <label class="toggle">
-              <input type="checkbox" :checked="entry.isConstant"
-                     @change="patch(index, { isConstant: ($event.target as HTMLInputElement).checked })" />
-              <span>{{ $t("wb.entry.constant") }}</span>
-            </label>
-          </div>
-
-          <!-- 酒館格式的條目才有：上游照這幾個值做字面比對 -->
-          <div v-if="entry.matchOptions" class="field">
-            <label>{{ $t("wb.entry.match") }}</label>
-            <div class="toggles">
-              <label class="toggle">
-                <input type="checkbox" :checked="entry.matchOptions.caseSensitive"
-                       @change="patchMatch(index, { caseSensitive: ($event.target as HTMLInputElement).checked })" />
-                <span>{{ $t("wb.entry.match.case") }}</span>
-              </label>
-              <label class="toggle">
-                <input type="checkbox" :checked="entry.matchOptions.matchWholeWords"
-                       @change="patchMatch(index, { matchWholeWords: ($event.target as HTMLInputElement).checked })" />
-                <span>{{ $t("wb.entry.match.whole") }}</span>
-              </label>
-            </div>
-            <span class="subtle">{{ $t("wb.entry.match.hint") }}</span>
-          </div>
-
-          <div v-if="entry.matchOptions && !entry.isConstant && (entry.secondaryKeywords ?? []).length" class="field">
-            <label :for="`wb-sl-${index}`">{{ $t("wb.entry.match.logic") }}</label>
-            <select :id="`wb-sl-${index}`" class="input" :value="entry.matchOptions.selectiveLogic"
-                    @change="patchMatch(index, { selectiveLogic: Number(($event.target as HTMLSelectElement).value) })">
-              <option v-for="value in SELECTIVE_LOGIC" :key="value" :value="value">{{ $t(`wb.entry.match.logic.${value}`) }}</option>
-            </select>
-          </div>
-          </template>
-        </li>
-      </ul>
 
       <div class="acts">
-        <button type="button" class="btn btn--sm" @click="add">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
-          {{ $t("wb.entry.add") }}
-        </button>
         <button type="button" class="btn btn--sm btn--ghost" @click="fileInput?.click()">{{ $t("wb.import") }}</button>
         <button type="button" class="btn btn--sm btn--ghost" :disabled="!modelValue.length" @click="emit('exportBook')">{{ $t("wb.export") }}</button>
       </div>
@@ -469,6 +202,9 @@ const setSecondary = (index: number, raw: string) => patch(index, { secondaryKey
         <li v-for="(note, i) in importReport" :key="i">{{ $t(note.key, note.params ?? {}) }}</li>
       </ul>
     </div>
+
+    <WorldbookEntriesDialog v-if="open" :model-value="modelValue"
+                            @update:model-value="emit('update:modelValue', $event)" @close="open = false" />
   </section>
 </template>
 
@@ -478,36 +214,11 @@ const setSecondary = (index: number, raw: string) => patch(index, { secondaryKey
 .empty__acts, .acts { display: flex; gap: var(--s-2); flex-wrap: wrap; }
 .wb > .notice { margin-top: var(--s-3); }
 .report { margin: var(--s-1) 0 0; padding-left: 1.1em; display: grid; gap: 2px; font-size: 12.5px; }
-.count { display: block; margin: 0 0 var(--s-2); }
-.entries { list-style: none; margin: 0 0 var(--s-3); padding: 0; display: grid; gap: var(--s-3); }
-.entry { padding: var(--s-2) var(--s-3); display: grid; gap: var(--s-2); }
-.entry--open { padding: var(--s-3); }
-.entry__summary { margin: 0 0 0 calc(var(--h-sm) + var(--s-2)); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chev { transition: transform var(--dur) var(--ease); }
-.chev.flip { transform: rotate(90deg); }
 .reuse { margin-bottom: var(--s-3); }
 .reuse__row { display: flex; gap: var(--s-2); align-items: center; }
 .reuse__row .input { flex: 1; min-width: 0; }
-.listbar { display: flex; gap: var(--s-3); align-items: baseline; justify-content: space-between; flex-wrap: wrap; }
-.input--search { width: min(260px, 100%); height: var(--h-sm); font-size: 13px; }
-.listbar__acts { display: flex; gap: var(--s-2); align-items: center; }
-.grip { display: inline-flex; color: var(--text-3); cursor: grab; flex: none; }
-.entry[draggable="true"] { cursor: default; }
-.entry--over { box-shadow: 0 0 0 2px var(--accent), var(--shadow-sm); }
-/* 鋪滿整頁：一本幾十條的書在中欄裡編，看得到的永遠只有兩三條 */
-.wb--zoomed {
-  position: fixed; inset: 0; z-index: 100;
-  padding: var(--s-4); overflow-y: auto;
-  background: var(--bg);
-}
-.toggle--head { flex: none; gap: 4px; font-size: 12px; }
-.toggle--head .toggle__text { color: var(--text-3); }
-.count { font-variant-numeric: tabular-nums; }
-.over { color: var(--danger); }
-.entry .field { margin-bottom: 0; gap: 6px; }
-.entry__head { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }
-.input--name { flex: 1; font-weight: 600; }
-.hits { cursor: default; gap: 4px; font-variant-numeric: tabular-nums; }
-.toggles { display: flex; gap: var(--s-4); flex-wrap: wrap; }
-.toggle { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--text-2); }
+.wb__entries { padding: var(--s-3); display: grid; gap: var(--s-2); margin-bottom: var(--s-3); }
+.wb__entries-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
+.wb__names { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.wb__more { font-size: 12px; }
 </style>

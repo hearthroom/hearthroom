@@ -98,6 +98,22 @@ async function mount(path: string) {
 }
 
 const $ = <T extends Element>(sel: string) => root.querySelector<T>(sel)!;
+// 條目彈窗 Teleport 到 body，不在掛載的 root 裡面
+const $d = <T extends Element>(sel: string) => document.querySelector<T>(sel)!;
+const btnIn = (scope: ParentNode, text: string) =>
+  [...scope.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.trim() === text)!;
+/** 打開條目彈窗；沒開過就先按「管理條目」。 */
+async function openEntries() {
+  if (!document.querySelector(".wbd")) {
+    btnIn(root, "管理條目").click();
+    await flush();
+  }
+}
+/** 選中左邊清單的第 n 條。 */
+async function pickEntry(n: number) {
+  document.querySelectorAll<HTMLButtonElement>(".wbd__row-name")[n].click();
+  await flush();
+}
 // 導覽鈕的文字之外還可能帶條數徽章（世界書 12），只比標籤那一段
 const byText = (text: string) =>
   [...root.querySelectorAll<HTMLButtonElement>("button")].find(
@@ -132,6 +148,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   app?.unmount();
+  document.querySelectorAll(".wbd").forEach((el) => el.remove());
   app = null;
   root.remove();
 });
@@ -225,15 +242,13 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     // 存完之後條目帶著上游給的 id（fetchWorldbookEntries 的假回應）
     byText("世界書").click();
     await flush();
-    // 有內容的條目預設收合：先全部展開，欄位才在 DOM 裡
-    for (const btn of root.querySelectorAll<HTMLButtonElement>("button[aria-label='展開']")) btn.click();
-    await flush();
-    const contents = root.querySelectorAll<HTMLTextAreaElement>("textarea[id^=wb-c-]");
-    expect(contents).toHaveLength(2);
-    await type(contents[0], "北境小鎮，三條商路交會。");
+    await openEntries();
+    expect(document.querySelectorAll(".wbd__row")).toHaveLength(2);
+    await pickEntry(0);
+    await type($d<HTMLTextAreaElement>("#wbd-content"), "北境小鎮，三條商路交會。");
     // 第二條刪掉（已存在的條目會先問一聲：這裡直接走確認）
     const { settleConfirm } = await import("../src/lib/confirm");
-    root.querySelectorAll<HTMLButtonElement>("button[aria-label='刪除條目']")[1].click();
+    document.querySelectorAll<HTMLButtonElement>(".wbd button[aria-label='刪除條目']")[1].click();
     await flush();
     settleConfirm(true);
     await flush();
@@ -275,9 +290,10 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     const inputs = root.querySelectorAll<HTMLInputElement>("input[type=file]");
     await pickFile(inputs[inputs.length - 1], new File([JSON.stringify(info)], "eldoria.json"));
     expect(root.textContent).toContain("匯入了 2 條");
-    // 匯入的條目有內容，預設收合成一行摘要；摘要裡看得到次要關鍵詞
-    expect(root.querySelectorAll(".entry")).toHaveLength(2);
-    expect(root.querySelectorAll(".entry__summary")[1].textContent).toContain("+ safe");
+    await openEntries();
+    expect(document.querySelectorAll(".wbd__row")).toHaveLength(2);
+    // 清單那一行的摘要看得到次要關鍵詞
+    expect(document.querySelectorAll(".wbd__row-keys")[1].textContent).toContain("+ safe");
     await submit();
     expect(api.createWorldbook).toHaveBeenCalledWith({ name: "測試", language: "zh-Hant" }, "tok");
   });
@@ -289,8 +305,9 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     await flush();
     byText("建一本").click();
     await flush();
-    await type($<HTMLTextAreaElement>("textarea[id^=wb-c-]"), "北境的規矩：天黑不出城。");
-    const category = $<HTMLSelectElement>("select[id^=wb-cat-]");
+    await openEntries();
+    await type($d<HTMLTextAreaElement>("#wbd-content"), "北境的規矩：天黑不出城。");
+    const category = $d<HTMLSelectElement>("#wbd-cat");
     category.value = "rule";
     category.dispatchEvent(new Event("change"));
     await flush();
@@ -314,7 +331,8 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     await flush();
 
     // 讀回來的兩條就照原樣顯示，作者不必重打
-    expect(root.querySelectorAll(".entry")).toHaveLength(2);
+    await openEntries();
+    expect(document.querySelectorAll(".wbd__row")).toHaveLength(2);
 
     await submit();
     expect(api.createWorldbook).not.toHaveBeenCalled();
@@ -342,7 +360,10 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     // 換掉之後從頭建一本：舊書那兩條的 id 不能跟著跑進新書的差分
     byText("建一本").click();
     await flush();
-    await type($<HTMLTextAreaElement>("textarea[id^=wb-c-]"), "新的一條。");
+    await openEntries();
+    await type($d<HTMLTextAreaElement>("#wbd-content"), "新的一條。");
+    btnIn(document.querySelector(".wbd")!, "編好了").click();
+    await flush();
     await submit();
 
     expect(api.createWorldbook).toHaveBeenCalledTimes(2);
@@ -385,8 +406,9 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     await flush();
     byText("建一本").click();
     await flush();
-    await type($<HTMLTextAreaElement>("textarea[id^=wb-c-]"), "那句暗號只有玩家講得出來。");
-    const trigger = $<HTMLSelectElement>("select[id^=wb-tr-]");
+    await openEntries();
+    await type($d<HTMLTextAreaElement>("#wbd-content"), "那句暗號只有玩家講得出來。");
+    const trigger = $d<HTMLSelectElement>("#wbd-tr");
     trigger.value = "user_only";
     trigger.dispatchEvent(new Event("change"));
     await flush();
@@ -405,9 +427,12 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     api.patchWorldbookDocument.mockClear();
 
     // 讀回來是 e1、e2；把第二條往上搬
-    const up = [...root.querySelectorAll<HTMLButtonElement>("button[aria-label='往上移']")];
+    await openEntries();
+    const up = [...document.querySelectorAll<HTMLButtonElement>(".wbd button[aria-label='往上移']")];
     expect(up).toHaveLength(2);
     up[1].click();
+    await flush();
+    btnIn(document.querySelector(".wbd")!, "編好了").click();
     await flush();
     await submit();
 

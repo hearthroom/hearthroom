@@ -353,10 +353,7 @@
   "editor.tags.dimension.mood": "雰囲気",
   "editor.tags.dimension.relationship": "関係",
   "editor.tags.dimension.setting": "舞台",
-  "wb.entry.expand": "開く",
-  "wb.entry.collapse": "閉じる",
   "wb.entry.constantShort": "常時",
-  "wb.entry.disabled": "無効",
   "import.split.entries": "{n} 件が {max} 文字を超えていたため、同じキーワードで複数に分割しました。内容は失われていません。",
   "wb.entry.content.over": "{max} 文字を超えると保存できません。同じキーワードで 2 件に分けても効果は同じです。",
   "regex.title": "正規表現ルール",
@@ -490,8 +487,6 @@
   "wb.trigger.both": "どちらでも",
   "wb.trigger.user_only": "プレイヤーの発言だけ",
   "wb.trigger.ai_only": "キャラクターの発言だけ",
-  "wb.zoom": "全画面で編集",
-  "wb.zoom.exit": "元に戻す",
   "wb.order.hint": "ドラッグで並べ替えられます。常に持ち込む項目が一度に入りきらないときは、上にあるものから入ります。",
   "nav.review": "審査",
   "mine.action.submit": "審査に出す",
@@ -543,5 +538,11 @@
   "review.mount": "常駐ブロック",
   "review.contentHash": "コンテンツバージョン",
   "review.stampsList": "これまでの承認",
-  "review.tags": "タグ"
+  "review.tags": "タグ",
+  "wb.entries.title": "世界設定の項目",
+  "wb.entries.manage": "項目を編集",
+  "wb.entries.done": "完了",
+  "wb.entries.pick": "左から一つ選んで編集します。",
+  "wb.entries.empty": "この一冊にはまだ項目がありません。",
+  "wb.entries.more": "ほか {n} 件"
 }
