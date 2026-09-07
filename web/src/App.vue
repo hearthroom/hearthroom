@@ -173,7 +173,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
    右邊那排（搜尋、外觀、語言、餘額、頭像）寬度由內容決定、不能疊；擠不下時讓位的是字標——
    品牌欄用 minmax(0, 1fr) 才會真的縮（grid 的 auto 欄不會低於內容寬），字標以省略號收尾，圖標永遠在。 */
 @media (max-width: 860px) {
-  .header__inner { grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--s-3); padding: 0 var(--s-3); min-height: 52px; }
+  .header__inner { grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--s-3); padding: 0 var(--s-3); min-height: var(--header-h); }
   .nav, .search { display: none; }
   .search-go { display: inline-flex; }
   .account { min-width: 0; }

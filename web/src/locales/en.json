@@ -210,7 +210,7 @@
   "editor.welcome": "Opening message",
   "editor.welcome.hint": "The first thing a player reads. Set the scene and the relationship here, or the story never starts.",
   "editor.alternates": "Alternate openings",
-  "editor.alternates.hint": "A different way in, same story. Players get one at random when they start over.",
+  "editor.alternates.hint": "A different way in, same story. Before the first message, players can swipe between them and pick one; the main opening is the default.",
   "editor.alternates.add": "Add an alternate opening",
   "editor.prologue": "Opening choices",
   "editor.prologue.hint": "First lines the player can just tap. Much better than staring at an empty box.",
