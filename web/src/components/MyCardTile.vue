@@ -6,7 +6,8 @@ import { zoneLabel } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
 import type { MyCard } from "@/lib/api";
 
-const props = defineProps<{ card: MyCard; busy: boolean }>();
+/** locked：這週的登記額度用完了。只鎖「登記」，撤銷登記照常——撤掉不佔額度。 */
+const props = defineProps<{ card: MyCard; busy: boolean; locked?: boolean }>();
 defineEmits<{ toggle: [] }>();
 
 const { lp } = useLocalePath();
@@ -44,7 +45,8 @@ const hasArt = computed(() => !!props.card.avatarUrl && !broken.value);
         <button
           class="btn btn--sm"
           :class="card.registered ? 'btn--danger' : 'btn--primary'"
-          :disabled="busy"
+          :disabled="busy || (locked && !card.registered)"
+          :title="locked && !card.registered ? $t('mine.quota.full') : undefined"
           @click="$emit('toggle')"
         >
           {{ busy ? "…" : card.registered ? $t("mine.action.unregister") : $t("mine.action.register") }}
