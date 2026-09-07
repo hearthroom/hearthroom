@@ -41,14 +41,12 @@ const BREAKS_SCRIPT = `
   });
 })();`;
 
-export function buildSrcdoc(html: string, tokens: { color: string; font: string }, extra = ""): string {
+export function buildSrcdoc(html: string, tokens: { color: string; font: string }): string {
   return (
     `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">` +
     `<style>${hcCss}</style>` +
     `<style>html,body{margin:0;background:transparent;color:${tokens.color};font:14px/1.7 ${tokens.font};word-break:break-word}` +
     `img,video{max-width:100%}</style></head><body><div id="hc-welcome">${html}</div>` +
-    // 功能欄展開後的內容：作者把全域樣式與腳本放在這裡，樣式與腳本要生效、按鈕本身不用露出來
-    (extra ? `<div id="hc-mount" hidden>${extra}</div>` : "") +
     `<script>${BREAKS_SCRIPT}${END}<script type="module">${hcJs}${END}<script>${SIZE_SCRIPT}${END}</body></html>`
   );
 }

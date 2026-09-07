@@ -10,6 +10,8 @@
  * stash（開場白一次到位，用不著）。
  *
  * 規則來自玩家面的作者資產；沒有資產（遊客、或作者沒設）就只走 3、4。
+ * 功能欄（mountTrigger）刻意不放：那是整頁對話的美化與工具列（側邊按鈕、HUD、全頁背景），
+ * 塞進卡片頁的一個框裡只會蓋住文字（2026-09-07 正式站實測兩種變體）。
  */
 import MarkdownIt from "markdown-it";
 import { applyTavernRules } from "stage-canvas/rule-engine";
@@ -43,8 +45,6 @@ function markdown(): MarkdownIt {
 export interface RenderedWelcome {
   /** 要畫的 HTML；純文字開場白時是空字串（呼叫端走純文字那條路） */
   html: string;
-  /** 功能欄展開後的 HTML（作者常把全域樣式與腳本放在這裡）；沒有就是空字串 */
-  mountHtml: string;
 }
 
 export function renderWelcome(raw: string, opts: { charName: string; userName: string; asset: PlayerAsset | null }): RenderedWelcome {
@@ -60,12 +60,6 @@ export function renderWelcome(raw: string, opts: { charName: string; userName: s
   }
   text = stripUnknownTags(text);
 
-  let mountHtml = "";
-  if (rules.length && opts.asset?.mountTrigger) {
-    mountHtml = scopeCardHtml(applyTavernRules(opts.asset.mountTrigger, rules, ruleOptions).html, format);
-  }
-
-  if (!hasHtml(text) && !mountHtml) return { html: "", mountHtml: "" };
-  const html = isHeavyHtml(text) ? text : markdown().render(text);
-  return { html, mountHtml };
+  if (!hasHtml(text)) return { html: "" };
+  return { html: isHeavyHtml(text) ? text : markdown().render(text) };
 }
