@@ -830,20 +830,22 @@ async function exportCard(format: "png" | "json") {
 
         <!-- 对话 -->
         <section v-show="section === 'dialogue'" class="pane">
+          <!-- 正則規則放這一頁最上面（對齊魅魔島）：AI 回覆在玩家瀏覽器裡先過一遍「找到→換成」再顯示 -->
+          <div class="rxbar">
+            <p class="rxbar__hint">{{ $t("regex.bar.hint") }}</p>
+            <div class="rxbar__acts">
+              <button type="button" class="btn btn--sm btn--primary" @click="regexOpen = true">
+                {{ $t("regex.open") }}
+                <span v-if="regexSet.rules.length" class="chip">{{ regexSet.rules.length }}</span>
+              </button>
+              <button type="button" class="btn btn--sm" @click="regexFile?.click()">{{ $t("regex.import") }}</button>
+              <button type="button" class="btn btn--sm" :disabled="!regexSet.rules.length" @click="exportRegex">{{ $t("regex.export") }}</button>
+              <input ref="regexFile" type="file" accept=".json,application/json" class="sr-only" @change="onRegexFile" />
+            </div>
+          </div>
+
           <FieldText id="f-welcome" v-model="draft.roleWelcome" :label="$t('editor.welcome')" required :rows="8"
                      :max="limits.roleWelcome" :hint="$t('editor.welcome.hint')" />
-
-          <!-- 正則規則跟開場白待在一起（對齊魅魔島）：AI 回覆在玩家瀏覽器裡先過一遍「找到→換成」再顯示 -->
-          <div class="rxbar">
-            <button type="button" class="btn btn--sm" @click="regexOpen = true">
-              {{ $t("regex.open") }}
-              <span v-if="regexSet.rules.length" class="chip">{{ regexSet.rules.length }}</span>
-            </button>
-            <button type="button" class="btn btn--sm btn--ghost" @click="regexFile?.click()">{{ $t("regex.import") }}</button>
-            <button type="button" class="btn btn--sm btn--ghost" :disabled="!regexSet.rules.length" @click="exportRegex">{{ $t("regex.export") }}</button>
-            <input ref="regexFile" type="file" accept=".json,application/json" class="sr-only" @change="onRegexFile" />
-            <span class="subtle">{{ $t("regex.bar.hint") }}</span>
-          </div>
 
           <ListEditor v-model="draft.alternates" :label="$t('editor.alternates')" :hint="$t('editor.alternates.hint')"
                       :rows="4" :add-label="$t('editor.alternates.add')" :remove-label="$t('list.remove')"
@@ -1064,7 +1066,15 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .turn .input { flex: 1; resize: vertical; }
 .input--who { flex: none; width: 96px; }
 .acts { display: flex; gap: var(--s-2); flex-wrap: wrap; }
-.rxbar { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }
+/* 正則是這頁最容易被漏看的功能，給它一塊自己的底色撐住 */
+.rxbar {
+  display: grid; gap: var(--s-2);
+  padding: var(--s-3) var(--s-4);
+  background: var(--surface-2); border-radius: var(--r-md);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.rxbar__hint { margin: 0; font-size: 13px; color: var(--text-3); }
+.rxbar__acts { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }
 .rxbar .chip { margin-left: 4px; height: 20px; padding: 0 7px; font-variant-numeric: tabular-nums; }
 .panel { padding: var(--s-4); display: grid; gap: var(--s-2); }
 .panel h2 { margin: 0; font-size: 15px; }
