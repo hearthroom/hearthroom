@@ -461,5 +461,9 @@
   "wb.entry.match.logic.2": "None of them show up",
   "wb.entry.match.logic.3": "All of them show up",
   "wb.switch": "Use a different one",
-  "wb.switch.confirm": "Switch books? This card will use whichever one you pick next. The current book is not deleted — it stays in your library."
+  "wb.switch.confirm": "Switch books? This card will use whichever one you pick next. The current book is not deleted — it stays in your library.",
+  "wb.desc": "What this book covers",
+  "wb.desc.placeholder": "e.g. place names, slang and a few recurring faces in Rain City",
+  "wb.desc.hint": "Only you see this. It's how you'll recognise the book when attaching it to another card.",
+  "wb.meta.locked": "This book's name can't be changed right now. Reload in a moment and try again."
 }

@@ -461,5 +461,9 @@
   "wb.entry.match.logic.2": "一个都没出现",
   "wb.entry.match.logic.3": "每一个都出现",
   "wb.switch": "换一本",
-  "wb.switch.confirm": "换一本？这张卡会改成用新挑的那一本。原来那本不会被删掉，还留在你的世界书里。"
+  "wb.switch.confirm": "换一本？这张卡会改成用新挑的那一本。原来那本不会被删掉，还留在你的世界书里。",
+  "wb.desc": "这本书是讲什么的",
+  "wb.desc.placeholder": "例如：雨城的地名、黑话与几个常出现的人",
+  "wb.desc.hint": "只给你自己看：之后要把这本套到别张卡时，靠这一句认出它。",
+  "wb.meta.locked": "这本的名字现在改不了。过一下刷新再试。"
 }
