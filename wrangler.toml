@@ -43,8 +43,9 @@ LUNATALK_API_BASE = "https://api.lunatalk.ai"
 # 中國連不上主網域，那邊的瀏覽器改打這個；由 /v1/region 依 Cloudflare 判斷的國別回給前端。
 # 本站 Worker 自己打上游仍固定用上面那個（Worker 在邊緣跑，不在中國）。
 LUNATALK_API_BASE_CN = "https://api.lunatalk.pro"
-# 每輪排程同步幾張卡。D1 單次請求有時間預算，別一次拉太多。
-SYNC_BATCH_SIZE = "50"
+# 每輪排程同步幾張卡。榜上不到兩百張時一輪掃完，來源不對的卡下一個整點就下架；
+# 抓取是並發的（SYNC_CONCURRENCY），寫入一次 batch，兩百張離排程的時間預算還很遠。
+SYNC_BATCH_SIZE = "200"
 # 同步的並發上限。目標是明顯更快，不是把上游打滿——個位數就夠。
 SYNC_CONCURRENCY = "6"
 # 埋點總開關。設成 "false" 就一行事件都不發，分叉或本機除錯時用。
