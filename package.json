@@ -17,7 +17,8 @@
     "preflight": "node scripts/deploy-preflight.mjs",
     "build:web": "npm run build -w web",
     "predeploy": "npm run preflight && npm run typecheck && npm run build:stage && npm run test && npm run build:web",
-    "deploy": "wrangler deploy",
+    "archive:assets": "node scripts/archive-assets.mjs",
+    "deploy": "npm run archive:assets && wrangler deploy",
     "build:stage": "npm --prefix stage ci --no-audit --no-fund && npm --prefix stage run build:stage",
     "sync:stage": "node scripts/sync-stage.mjs"
   },

@@ -26,6 +26,9 @@ run_worker_first = [
   "/", "/v1/*", "/search*", "/mine*", "/wallet*", "/create*", "/auth/*",
   "/cards/*", "/authors/*", "/review*",
   "/zh-Hans/*", "/en/*", "/ja/*", "/ko/*",
+  # /assets/* 也過 Worker：資源層找不到（舊部署的 hash 檔）時回退到 ASSET_ARCHIVE。這些檔帶 immutable
+  # 快取頭，邊緣命中時不會真的進 Worker，只有 miss 才付一次呼叫。
+  "/assets/*",
 ]
 
 # 行為埋點。CF Web Analytics 管「有多少人來」，這個資料集管「他們做了什麼」。
@@ -63,6 +66,12 @@ migrations_dir = "migrations"
 [[kv_namespaces]]
 binding = "CACHE"
 id = "179537be15bb4fbc8d42b99728142d25"
+
+# 舊部署的 hash 檔。每次 deploy 把 web/dist/assets/* 寫進來（scripts/archive-assets.mjs，30 天到期），
+# 部署前就開著的分頁懶載入時才拿得到自己那一版的區塊，不會 404。index.html 不進來，永遠拿當前版。
+[[kv_namespaces]]
+binding = "ASSET_ARCHIVE"
+id = "cf47eb790d1f4f4a9d563a596b268c5a"
 
 # 每小時同步一批卡片的名稱、封面與熱度信號。
 [triggers]
