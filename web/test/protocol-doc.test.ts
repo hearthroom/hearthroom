@@ -15,9 +15,12 @@ const doc = readFileSync(at("../../docs/provider-protocol.md"), "utf8");
 /** 程式碼裡出現的上游路徑，正規化後去重。 */
 function pathsIn(source: string): string[] {
   const found = new Set<string>();
+  // 舞台端點表把前綴收成常數（`${V1}/conversation/start`）：先展開，否則只會撈到註解裡那個 /open/v1/...
+  const expanded = source.replace(/\$\{V1\}/g, "/open/v1");
   const re = /(\/(?:open\/v1|oauth)\/[A-Za-z0-9_\-/.${}():]+)/g;
-  for (const m of source.matchAll(re)) {
+  for (const m of expanded.matchAll(re)) {
     let p = m[1]!;
+    if (p.includes("...")) continue; // 註解裡的「/open/v1/...」不是端點
     p = p.replace(/\$\{encodeURIComponent\((\w+)\)\}/g, ":$1").replace(/\$\{(\w+)\}/g, ":$1").replace(/\{(\w+)\}/g, ":$1");
     p = p.replace(/[?#].*$/, "").replace(/[`'"),]+$/, "").replace(/\/+$/, "");
     found.add(p);
@@ -33,18 +36,19 @@ function docHas(path: string): boolean {
   return doc.includes(`\`${short}\``) || doc.includes(`\`${short}?`);
 }
 
-const SOURCES: Record<string, string> = {
-  "站台前端 api.ts": at("../src/lib/api.ts"),
-  "站台前端 oauth.ts": at("../src/lib/oauth.ts"),
-  "站台伺服器 upstream.ts": at("../../src/upstream.ts"),
-  "舞台端點表": at("../../stage/src/config/request-url.js"),
+/** 來源檔與「至少要撈到幾條」：撈到太少代表抽取壞了（例如常數前綴沒展開），不是程式碼真的只打那幾條。 */
+const SOURCES: Record<string, { file: string; atLeast: number }> = {
+  "站台前端 api.ts": { file: at("../src/lib/api.ts"), atLeast: 30 },
+  "站台前端 oauth.ts": { file: at("../src/lib/oauth.ts"), atLeast: 3 },
+  "站台伺服器 upstream.ts": { file: at("../../src/upstream.ts"), atLeast: 5 },
+  "舞台端點表": { file: at("../../stage/src/config/request-url.js"), atLeast: 40 },
 };
 
 describe("供應商協議文件涵蓋程式碼打的每一條上游路徑", () => {
-  for (const [label, file] of Object.entries(SOURCES)) {
+  for (const [label, { file, atLeast }] of Object.entries(SOURCES)) {
     it(label, () => {
       const paths = pathsIn(readFileSync(file, "utf8"));
-      expect(paths.length).toBeGreaterThan(0);
+      expect(paths.length).toBeGreaterThanOrEqual(atLeast);
       // /image/:path 是站台前端的共用小工具，實際子路徑在文件裡逐條列，這裡看那些子路徑
       const missing = paths.filter((p) => p !== "/open/v1/image/:path" && !docHas(p));
       expect(missing, `文件缺了這些路徑：\n${missing.join("\n")}`).toEqual([]);
@@ -52,14 +56,14 @@ describe("供應商協議文件涵蓋程式碼打的每一條上游路徑", () =
   }
 
   it("素材庫的子路徑逐條在文件裡", () => {
-    const api = readFileSync(SOURCES["站台前端 api.ts"]!, "utf8");
+    const api = readFileSync(SOURCES["站台前端 api.ts"]!.file, "utf8");
     const subs = [...api.matchAll(/libraryPost\("([a-zA-Z/]+)"/g)].map((m) => `/open/v1/image/${m[1]}`);
     expect(subs.length).toBeGreaterThan(0);
     expect(subs.filter((p) => !docHas(p))).toEqual([]);
   });
 
   it("文件寫的錯誤碼，前端翻譯表裡有的都在", () => {
-    const api = readFileSync(SOURCES["站台前端 api.ts"]!, "utf8");
+    const api = readFileSync(SOURCES["站台前端 api.ts"]!.file, "utf8");
     const codes = [...api.matchAll(/^\s+([a-z_]+): "(?:error|state)\.[a-zA-Z]+",$/gm)].map((m) => m[1]!);
     expect(codes.length).toBeGreaterThan(3);
     expect(codes.filter((c) => c !== "invalid_argument" && !doc.includes(`\`${c}\``))).toEqual([]);
