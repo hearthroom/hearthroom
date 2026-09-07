@@ -206,9 +206,6 @@
   "editor.section.publish": "發布",
   "editor.name": "角色名稱",
   "editor.summary": "簡介",
-  "editor.userName": "玩家稱呼",
-  "editor.userName.hint": "角色會這樣叫玩家。留空就用玩家自己的暱稱。",
-  "editor.userName.placeholder": "例如：偵探、學長",
   "editor.language.hint": "語區決定這張卡出現在哪一區的榜單。建立之後就不能改了。",
   "editor.detail": "角色設定",
   "editor.detail.hint": "這張卡的核心：他是誰、怎麼說話、在什麼處境裡。寫得越具體，回應越像同一個人。",
@@ -338,11 +335,6 @@
   "wb.import": "匯入世界書檔",
   "wb.import.error": "這個檔案裡沒有世界書條目。支援酒館匯出的世界書 JSON，或帶世界書的角色卡。",
   "wb.import.done": "匯入了 {n} 條，接在原有條目後面。",
-  "editor.sex": "性別",
-  "editor.sex.none": "未設定",
-  "editor.sex.man": "男",
-  "editor.sex.women": "女",
-  "editor.sex.other": "其他",
   "editor.tags.pick": "從分類裡挑",
   "wb.entry.secondary": "次要關鍵詞",
   "wb.entry.secondary.placeholder": "留空就只看關鍵詞",
@@ -544,5 +536,6 @@
   "wb.entries.done": "編好了",
   "wb.entries.pick": "從左邊挑一條來編。",
   "wb.entries.empty": "這本書還沒有條目。",
-  "wb.entries.more": "還有 {n} 條"
+  "wb.entries.more": "還有 {n} 條",
+  "editor.userName": "玩家稱呼"
 }

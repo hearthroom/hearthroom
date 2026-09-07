@@ -206,9 +206,6 @@
   "editor.section.publish": "Publish",
   "editor.name": "Character name",
   "editor.summary": "Summary",
-  "editor.userName": "What they call you",
-  "editor.userName.hint": "How the character addresses the player. Leave it empty to use the player's own nickname.",
-  "editor.userName.placeholder": "e.g. Detective, Captain",
   "editor.language.hint": "The language decides which board this card appears on. It can't be changed later.",
   "editor.detail": "Character definition",
   "editor.detail.hint": "The heart of the card: who they are, how they speak, what situation they're in. The more concrete, the more consistent the replies.",
@@ -338,11 +335,6 @@
   "wb.import": "Import lorebook file",
   "wb.import.error": "No lorebook entries in this file. Use a lorebook JSON exported from SillyTavern, or a card that carries one.",
   "wb.import.done": "Imported {n} entries, appended after the existing ones.",
-  "editor.sex": "Gender",
-  "editor.sex.none": "Not set",
-  "editor.sex.man": "Male",
-  "editor.sex.women": "Female",
-  "editor.sex.other": "Other",
   "editor.tags.pick": "Pick from categories",
   "wb.entry.secondary": "Secondary keywords",
   "wb.entry.secondary.placeholder": "Leave empty to trigger on keywords alone",
@@ -544,5 +536,6 @@
   "wb.entries.done": "Done",
   "wb.entries.pick": "Pick one on the left to edit.",
   "wb.entries.empty": "This book has no entries yet.",
-  "wb.entries.more": "and {n} more"
+  "wb.entries.more": "and {n} more",
+  "editor.userName": "What the character calls the player"
 }
