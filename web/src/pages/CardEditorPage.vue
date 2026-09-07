@@ -21,6 +21,7 @@ import { useI18n } from "vue-i18n";
 import {
   createRole,
   createWorldbook,
+  deleteRole,
   fetchAuthorAsset,
   fetchRoleDetail,
   fetchMyWorldbooks,
@@ -33,6 +34,7 @@ import {
   reorderWorldbookEntries,
   saveAuthorAsset,
   submitRoleForReview,
+  unregisterCard,
   uploadImage,
   type WorldbookDocumentEntry,
   type WorldbookMetadataPatch,
@@ -130,6 +132,8 @@ const saving = ref(false);
 const saveProgress = ref<{ done: number; total: number } | null>(null);
 const error = ref("");
 const saved = ref(false);
+/** 卡已經刪掉：離開時不再問「放棄修改？」，也不攔關分頁 */
+const deleted = ref(false);
 /** 右下角那一條「已儲存」。說完就走，不佔版面。 */
 const toast = ref("");
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
@@ -385,11 +389,12 @@ onMounted(async () => {
    那時彈「放棄修改？」文不對題。 */
 onBeforeRouteLeave(
   async () =>
-    saving.value === false &&
-    (!dirty.value || (await confirmDialog({ message: t("edit.discard"), confirmText: t("dialog.leave"), danger: true }))),
+    deleted.value ||
+    (saving.value === false &&
+      (!dirty.value || (await confirmDialog({ message: t("edit.discard"), confirmText: t("dialog.leave"), danger: true })))),
 );
 const guard = (e: BeforeUnloadEvent) => {
-  if (dirty.value) e.preventDefault();
+  if (dirty.value && !deleted.value) e.preventDefault();
 };
 /* Ctrl/⌘+S 存檔：寫長文的人手已經在鍵盤上，不該為了存一次去找按鈕。攔下瀏覽器的「另存網頁」。 */
 const onKey = (e: KeyboardEvent) => {
@@ -799,6 +804,43 @@ async function save() {
   }
 }
 
+// ── 刪除 ──────────────────────────────────────────────────────────
+
+/**
+ * 刪掉這張卡。不可逆，所以要作者把角色名稱照打一遍才准按。
+ * 先把它從本站的榜單撤下（沒登記過就當沒事），再刪上游的卡——順序反過來的話，
+ * 上游沒了、榜單那筆撤不掉（撤銷登記要向上游確認擁有權），會留一張點進去 404 的卡。
+ */
+async function remove() {
+  if (isNew.value) return;
+  const name = draft.value.roleName.trim() || roleId.value;
+  const ok = await confirmDialog({
+    title: t("editor.delete.confirmTitle", { name }),
+    message: t("editor.delete.confirmMessage"),
+    requireText: name,
+    confirmText: t("editor.delete.confirm"),
+    danger: true,
+  });
+  if (!ok) return;
+  saving.value = true;
+  error.value = "";
+  try {
+    const token = await session.accessToken();
+    if (!token) throw new Error(t("auth.expired"));
+    await unregisterCard(roleId.value, token).catch(() => { /* 沒登記過、或早就撤了：都不擋刪除 */ });
+    await deleteRole(roleId.value, token);
+    track("card_delete", { subject: roleId.value });
+    // 卡沒了：離開守衛放行（deleted），也別讓 saving 擋住換頁
+    deleted.value = true;
+    saving.value = false;
+    await router.push({ path: lp("/mine"), query: { fresh: "1" } });
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : t("state.actionFailed");
+  } finally {
+    saving.value = false;
+  }
+}
+
 // ── 送審 ──────────────────────────────────────────────────────────
 
 async function publish() {
@@ -1106,6 +1148,15 @@ async function exportCard(format: "png" | "json") {
             </button>
           </div>
 
+          <!-- 刪卡：放在最後、跟其他動作隔開，紅色只用在這一顆 -->
+          <div v-if="!isNew" class="panel panel--danger">
+            <h2>{{ $t("editor.delete") }}</h2>
+            <p class="muted">{{ $t("editor.delete.hint") }}</p>
+            <button type="button" class="btn btn--danger" :disabled="saving" @click="remove">
+              {{ $t("editor.delete.button") }}
+            </button>
+          </div>
+
           <div class="panel">
             <h2>{{ $t("export.title") }}</h2>
             <p class="muted">{{ $t("export.hint") }}</p>
@@ -1304,4 +1355,5 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
   .side__item { flex: none; height: var(--h-sm); border-radius: var(--r-pill); font-size: 13px; }
   .side__item--on::before { display: none; }
 }
+.panel--danger { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 40%, transparent); }
 </style>

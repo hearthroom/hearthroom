@@ -506,6 +506,16 @@ export async function fetchRoleValidation(roleId: string, token: string): Promis
 }
 
 /** 送審。確認摘要是給審核方看的，上游要求至少 8 個字，所以不能送空字串。 */
+/**
+ * 刪掉自己的一張卡。上游連同它的對話、世界書綁定、搜尋索引一起清，不可逆——
+ * 呼叫前一定要走過「輸入角色名稱」的確認（CardEditorPage.remove）。
+ */
+export async function deleteRole(roleId: string, token: string): Promise<void> {
+  await json<{ message?: string }>(
+    await fetch(`${UPSTREAM_API}/open/v1/role/${encodeURIComponent(roleId)}`, { method: "DELETE", headers: authHeaders(token) }),
+  );
+}
+
 export async function submitRoleForReview(
   roleId: string,
   confirmationSummary: string,
