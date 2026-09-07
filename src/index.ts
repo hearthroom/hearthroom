@@ -456,12 +456,13 @@ async function pooled<T>(items: T[], limit: number, work: (item: T) => Promise<v
  * 只是榜單悄悄停在舊值。並發上限刻意壓在個位數：目標是「明顯更快」，
  * 不是把上游打滿。
  */
-async function syncBatch(env: Env): Promise<{ ok: number; failed: number; ms: number }> {
+export async function syncBatch(env: Env): Promise<{ ok: number; failed: number; delisted: number; ms: number }> {
   const started = Date.now();
   const batch = await dueForSync(env.DB, Math.max(1, Number(env.SYNC_BATCH_SIZE) || 50));
   const concurrency = Math.max(1, Number(env.SYNC_CONCURRENCY) || 6);
   let ok = 0;
   let failed = 0;
+  let delisted = 0;
   const now = Date.now();
 
   const writes: D1PreparedStatement[] = [];
@@ -469,6 +470,15 @@ async function syncBatch(env: Env): Promise<{ ok: number; failed: number; ms: nu
   await pooled(batch, concurrency, async (row) => {
     try {
       const role = await upstream.fetchRole(env, row.source_role_id);
+      // 榜單只收在本站建的卡。登記那條路早就這樣擋，但規則之前登記進來的主站老卡還在榜上
+      // （owner 2026-09-07：189 張要下架）——同步時看到來源不對就撤掉，之後也不會再有漏網的。
+      // 讀得到但來源不對才撤；讀不到走下面的 catch，保留。
+      if (role.creationMethod !== CREATION_METHOD) {
+        writes.push(env.DB.prepare("DELETE FROM cards WHERE id = ?").bind(row.id));
+        delisted++;
+        console.log("delisted: not created on this site", { roleId: row.source_role_id, creationMethod: role.creationMethod });
+        return;
+      }
       writes.push(syncStatement(env.DB, row.id, row.talk_num, role, now));
       ok++;
     } catch (err) {
@@ -484,7 +494,7 @@ async function syncBatch(env: Env): Promise<{ ok: number; failed: number; ms: nu
   // 代價是整批一起成功或一起失敗——對同步來說可以接受，下一輪本來就會重跑。
   if (writes.length) await env.DB.batch(writes);
 
-  return { ok, failed, ms: Date.now() - started };
+  return { ok, failed, delisted, ms: Date.now() - started };
 }
 
 /**
