@@ -432,7 +432,7 @@
   "res.state.rejected": "審査不通過",
   "res.error.inUse": "キャラクターカードのアバターや背景に使われているファイルがあります。先にカード側で差し替えてください。",
   "res.error.quota": "ファイル数の上限に達しました。",
-  "res.error.tooLarge": "ファイルが大きすぎます：画像は 10 MB、動画は 50 MB、音声とフォントは 20 MB まで。",
+  "res.error.tooLarge": "1 ファイルは 500 MB までです。",
   "res.error.type": "対応形式：PNG／JPEG／WebP、MP4／WebM、MP3／WAV／OGG、WOFF2／WOFF／TTF／OTF。",
   "res.error.duplicateName": "同じ名前のフォルダがあります。",
   "res.error.folderLimit": "フォルダの上限に達しました。",
@@ -441,6 +441,6 @@
   "res.kind.video": "動画",
   "res.kind.audio": "音声",
   "res.kind.font": "フォント",
-  "res.error.quotaBytes": "容量がいっぱいです（200 MB）。先にいくつか削除してください。",
+  "res.error.quotaBytes": "容量がいっぱいです（500 MB）。先にいくつか削除してください。",
   "res.fontSample": "Aa あいう永"
 }
