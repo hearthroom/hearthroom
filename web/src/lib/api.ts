@@ -474,7 +474,7 @@ export function readKeywordList(raw: unknown): string[] {
  * 第一版讀的是 `entries` 與陣列，於是編輯頁永遠看到零條（線上實測 2026-09-06 抓到的）。
  */
 export async function fetchWorldbookEntries(worldbookId: string, token: string): Promise<WorldbookEntryDraft[]> {
-  type Row = Omit<WorldbookEntryDraft, "keywords" | "secondaryKeywords" | "matchOptions"> & { keywords?: unknown; secondaryKeywords?: unknown; matchOptions?: unknown };
+  type Row = Omit<WorldbookEntryDraft, "keywords" | "secondaryKeywords" | "matchOptions" | "category"> & { keywords?: unknown; secondaryKeywords?: unknown; matchOptions?: unknown; category?: unknown };
   const body = await json<{ list?: Row[]; entries?: Row[] }>(
     await fetch(`${UPSTREAM_API}/open/v1/worldbook/entry/list?worldbookId=${encodeURIComponent(worldbookId)}`, {
       headers: authHeaders(token),
@@ -492,6 +492,7 @@ export async function fetchWorldbookEntries(worldbookId: string, token: string):
       : {}),
     isEnabled: entry.isEnabled !== false,
     isConstant: entry.isConstant === true,
+    category: typeof entry.category === "string" ? entry.category : "",
     ...(typeof entry.activationCount === "number" ? { activationCount: entry.activationCount } : {}),
   }));
 }
@@ -578,6 +579,7 @@ export interface WorldbookDocumentEntry {
   matchOptions?: WorldbookEntryDraft["matchOptions"];
   isEnabled?: boolean;
   isConstant?: boolean;
+  category?: string;
 }
 
 /**

@@ -465,5 +465,14 @@
   "wb.desc": "이 책이 다루는 것",
   "wb.desc.placeholder": "예: 비의 도시 지명, 은어, 자주 나오는 사람들",
   "wb.desc.hint": "나만 봅니다. 다른 카드에 붙일 때 이 한 줄로 알아볼 수 있어요.",
-  "wb.meta.locked": "이 책의 이름은 지금 바꿀 수 없어요. 잠시 후 새로고침하고 다시 시도해 주세요."
+  "wb.meta.locked": "이 책의 이름은 지금 바꿀 수 없어요. 잠시 후 새로고침하고 다시 시도해 주세요.",
+  "wb.entry.category": "이 항목의 내용",
+  "wb.entry.category.none": "고르지 않음",
+  "wb.entry.category.hint": "규칙이나 인물에 대한 항목은 잡다한 것보다 대화에 조금 더 잘 불려 나옵니다.",
+  "wb.category.character": "인물",
+  "wb.category.location": "장소",
+  "wb.category.item": "물건",
+  "wb.category.event": "사건",
+  "wb.category.rule": "규칙",
+  "wb.category.custom": "기타"
 }

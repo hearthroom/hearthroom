@@ -465,5 +465,14 @@
   "wb.desc": "What this book covers",
   "wb.desc.placeholder": "e.g. place names, slang and a few recurring faces in Rain City",
   "wb.desc.hint": "Only you see this. It's how you'll recognise the book when attaching it to another card.",
-  "wb.meta.locked": "This book's name can't be changed right now. Reload in a moment and try again."
+  "wb.meta.locked": "This book's name can't be changed right now. Reload in a moment and try again.",
+  "wb.entry.category": "What this one is about",
+  "wb.entry.category.none": "Not set",
+  "wb.entry.category.hint": "Entries about rules or people get pulled into the conversation a little more readily than odds and ends.",
+  "wb.category.character": "A person",
+  "wb.category.location": "A place",
+  "wb.category.item": "A thing",
+  "wb.category.event": "Something that happened",
+  "wb.category.rule": "A rule",
+  "wb.category.custom": "Other"
 }

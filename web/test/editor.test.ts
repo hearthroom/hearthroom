@@ -21,7 +21,7 @@ const api = vi.hoisted(() => ({
   createWorldbook: vi.fn(async () => "wb1"),
   patchWorldbookDocument: vi.fn(async () => ({})),
   fetchWorldbookEntries: vi.fn(async () => [
-    { entryId: "e1", name: "黑麥鎮", content: "北境小鎮。", keywords: ["黑麥鎮"], secondaryKeywords: [], isEnabled: true, isConstant: true },
+    { entryId: "e1", name: "黑麥鎮", content: "北境小鎮。", keywords: ["黑麥鎮"], secondaryKeywords: [], isEnabled: true, isConstant: true, category: "location" },
     { entryId: "e2", name: "採石場", content: "廢棄了。", keywords: ["採石場"], secondaryKeywords: ["排水渠"], isEnabled: true, isConstant: false },
   ]),
   fetchRoleValidation: vi.fn(async () => ({ status: "ok", blockers: [], warnings: [] })),
@@ -241,7 +241,7 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     expect(doc.binding).toBeUndefined();
     expect(doc.entries).toEqual([
       { op: "delete", entryId: "e2" },
-      { op: "update", entryId: "e1", name: "黑麥鎮", content: "北境小鎮，三條商路交會。", keywords: ["黑麥鎮"], secondaryKeywords: [], isEnabled: true, isConstant: true },
+      { op: "update", entryId: "e1", name: "黑麥鎮", content: "北境小鎮，三條商路交會。", keywords: ["黑麥鎮"], secondaryKeywords: [], isEnabled: true, isConstant: true, category: "location" },
     ]);
   });
 
@@ -279,6 +279,24 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     expect(root.querySelectorAll(".entry__summary")[1].textContent).toContain("+ safe");
     await submit();
     expect(api.createWorldbook).toHaveBeenCalledWith({ name: "測試", language: "zh-Hant" }, "tok");
+  });
+
+  it("條目分類：選了就跟著送出去，上游讀回來的分類不會在下次儲存掉了", async () => {
+    await mount("/create");
+    await type($("#f-name"), "測試");
+    byText("世界書").click();
+    await flush();
+    byText("建一本").click();
+    await flush();
+    await type($<HTMLTextAreaElement>("textarea[id^=wb-c-]"), "北境的規矩：天黑不出城。");
+    const category = $<HTMLSelectElement>("select[id^=wb-cat-]");
+    category.value = "rule";
+    category.dispatchEvent(new Event("change"));
+    await flush();
+    await submit();
+
+    const [, doc] = api.patchWorldbookDocument.mock.calls[0] as unknown as [string, { entries: { category?: string }[] }];
+    expect(doc.entries[0].category).toBe("rule");
   });
 
   it("挑一本自己已經有的世界書：不建新書，只送一次綁定，條目不重建", async () => {
