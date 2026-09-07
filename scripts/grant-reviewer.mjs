@@ -18,12 +18,15 @@ if (!id) {
   console.error("用法：node scripts/grant-reviewer.mjs <accountNumId> [--revoke] [--local]");
   process.exit(2);
 }
-const memberId = `m-lunatalk-${id}`;
+// 成員 id 跟登入時一樣是隨機值，不把供應商的公開 ID 編進去——
+// 成員 id 會出現在領單、蓋章等紀錄裡，帶著它就等於把審核人是誰寫進每一筆紀錄。
+// 這個人已經登入過（身分列存在）就沿用原成員，不另建一個沒人指向的孤兒列。
+const memberId = crypto.randomUUID();
 const now = Date.now();
 const sql = revoke
   ? `UPDATE reviewers SET revoked_at = ${now} WHERE member_id IN (SELECT member_id FROM member_identities WHERE provider = 'lunatalk' AND external_id = '${id}') AND revoked_at IS NULL;`
   : [
-      `INSERT OR IGNORE INTO members (id, created_at) VALUES ('${memberId}', ${now});`,
+      `INSERT INTO members (id, created_at) SELECT '${memberId}', ${now} WHERE NOT EXISTS (SELECT 1 FROM member_identities WHERE provider = 'lunatalk' AND external_id = '${id}');`,
       `INSERT OR IGNORE INTO member_identities (provider, external_id, member_id, linked_at) VALUES ('lunatalk', '${id}', '${memberId}', ${now});`,
       `INSERT INTO reviewers (member_id, granted_at, granted_by) SELECT member_id, ${now}, 'manual' FROM member_identities WHERE provider = 'lunatalk' AND external_id = '${id}' ON CONFLICT(member_id) DO UPDATE SET revoked_at = NULL, granted_at = ${now};`,
     ].join(" ");
