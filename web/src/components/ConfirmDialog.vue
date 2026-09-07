@@ -1,17 +1,21 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { confirmDialog, confirmState, settleConfirm } from "@/lib/confirm";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { confirmDialog, confirmState, confirmTextMatches, settleConfirm } from "@/lib/confirm";
 
 const box = ref<HTMLElement | null>(null);
+/** 要照打的字：每次開新彈窗清空 */
+const typed = ref("");
+const typedOk = computed(() => !!confirmState.current && confirmTextMatches(confirmState.current, typed.value));
 /** 開啟前的焦點：關掉時還回去，鍵盤使用者不會掉到頁面開頭 */
 let restore: HTMLElement | null = null;
 
 watch(() => confirmState.current, async (cur) => {
   if (!cur) { restore?.focus?.(); restore = null; return; }
   restore = document.activeElement as HTMLElement | null;
+  typed.value = "";
   await nextTick();
-  // 破壞性動作先站在取消鍵上：按錯 Enter 也不會刪掉東西
-  const pick = cur.danger && !cur.single ? "[data-cancel]" : "[data-confirm]";
+  // 要照打的字：焦點直接進打字框。其他破壞性動作先站在取消鍵上：按錯 Enter 也不會刪掉東西
+  const pick = cur.requireText ? "[data-typed]" : cur.danger && !cur.single ? "[data-cancel]" : "[data-confirm]";
   box.value?.querySelector<HTMLElement>(pick)?.focus();
 });
 
@@ -20,7 +24,7 @@ function onKey(e: KeyboardEvent) {
   if (e.key === "Escape") { e.preventDefault(); settleConfirm(false); return; }
   // 焦點只在彈窗裡繞
   if (e.key === "Tab" && box.value) {
-    const items = [...box.value.querySelectorAll<HTMLElement>("button, [tabindex='0']")];
+    const items = [...box.value.querySelectorAll<HTMLElement>("button, input, [tabindex='0']")];
     if (!items.length) return;
     const first = items[0]!, last = items[items.length - 1]!;
     if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
@@ -42,11 +46,19 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
         <p v-if="confirmState.current.title" id="dlg-msg" class="dlg__msg">{{ confirmState.current.message }}</p>
         <!-- 要讓人複製的東西：一整塊可全選，點一下就選起來 -->
         <code v-if="confirmState.current.detail" class="dlg__detail" tabindex="0" @click="($event.target as HTMLElement).ownerDocument.getSelection()?.selectAllChildren($event.target as Node)">{{ confirmState.current.detail }}</code>
+        <!-- 要照打的字：打對了確認鍵才亮；Enter 也只在打對時算數 -->
+        <label v-if="confirmState.current.requireText" class="dlg__typed">
+          <span class="dlg__typed-hint">{{ $t("dialog.typeToConfirm", { text: confirmState.current.requireText }) }}</span>
+          <input v-model="typed" class="input" type="text" autocomplete="off" spellcheck="false" data-typed
+                 :placeholder="confirmState.current.placeholder ?? confirmState.current.requireText"
+                 @keydown.enter.prevent="settleConfirm(true, typed)" />
+        </label>
         <div class="dlg__actions">
           <button v-if="!confirmState.current.single" class="btn" data-cancel @click="settleConfirm(false)">
             {{ confirmState.current.cancelText ?? $t("dialog.cancel") }}
           </button>
-          <button class="btn" :class="confirmState.current.danger ? 'btn--danger-solid' : 'btn--primary'" data-confirm @click="settleConfirm(true)">
+          <button class="btn" :class="confirmState.current.danger ? 'btn--danger-solid' : 'btn--primary'" data-confirm
+                  :disabled="!typedOk" @click="settleConfirm(true, typed)">
             {{ confirmState.current.confirmText ?? $t("dialog.confirm") }}
           </button>
         </div>
@@ -78,6 +90,9 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
   font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text);
   overflow-wrap: anywhere; user-select: all; cursor: text;
 }
+.dlg__typed { display: grid; gap: 6px; }
+.dlg__typed-hint { font-size: 12.5px; color: var(--text-3); }
+.dlg__typed .input { width: 100%; }
 .dlg__actions { display: flex; justify-content: flex-end; gap: var(--s-2); margin-top: var(--s-1); }
 
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
