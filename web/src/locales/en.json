@@ -459,5 +459,7 @@
   "wb.entry.match.logic.0": "Any one of them shows up",
   "wb.entry.match.logic.1": "Not all of them show up",
   "wb.entry.match.logic.2": "None of them show up",
-  "wb.entry.match.logic.3": "All of them show up"
+  "wb.entry.match.logic.3": "All of them show up",
+  "wb.switch": "Use a different one",
+  "wb.switch.confirm": "Switch books? This card will use whichever one you pick next. The current book is not deleted — it stays in your library."
 }
