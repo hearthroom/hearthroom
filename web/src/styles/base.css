@@ -46,7 +46,10 @@ button { font: inherit; color: inherit; }
 h1, h2, h3, p, dl, dd { margin: 0; }
 
 ::selection { background: var(--accent-soft); }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* 舞台（/play）裡的東西不套站台的焦點框：畫布有自己的一套，而這條會打到它的輸入框——
+   2px 的框畫在輸入框盒子外面，比圓角容器還寬，看起來像輸入框變形（owner 2026-09-07 截圖）。
+   :where() 讓 :not 不加特異度，下面 .input:focus 那條照舊贏。 */
+:focus-visible:where(:not(.ms-stage *)) { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .page { max-width: var(--page); margin: 0 auto; padding: var(--s-5) var(--s-5) var(--s-8); }
 .page--narrow { max-width: 640px; }
