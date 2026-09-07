@@ -614,13 +614,12 @@ export async function syncBatch(env: Env): Promise<{ ok: number; failed: number;
       }
       writes.push(syncStatement(env.DB, row.id, row.talk_num, role, now));
       // 在榜的卡順手比對內容版本：作者過審後改了卡就要重審（owner 2026-09-07）。
-      // 過審前登記的舊卡 reviewed_hash 是空的，第一次看到就綁上現況，不追溯要求重審。
-      if (bot && row.status === "approved") {
+      // 過審前登記的舊卡 reviewed_hash 是空的，而且作者從沒授權過機器人——機器人讀不到它，
+      // 讀不到不是「作者收回了」。這些卡留在榜上不比對，等作者下次提交時才授權並綁上版本。
+      if (bot && row.status === "approved" && row.reviewed_hash) {
         try {
           const hashes = await upstream.fetchContentHash(env, bot.key, row.source_role_id);
-          if (!row.reviewed_hash) {
-            writes.push(env.DB.prepare("UPDATE cards SET reviewed_hash = ? WHERE id = ?").bind(hashes.content, row.id));
-          } else if (hashes.content !== row.reviewed_hash) {
+          if (hashes.content !== row.reviewed_hash) {
             writes.push(...needsReviewStatements(env.DB, { cardId: row.id, provider: row.provider, roleId: row.source_role_id, contentHash: hashes.content, now }));
           }
         } catch (err) {

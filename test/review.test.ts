@@ -227,13 +227,15 @@ describe("內容版本", () => {
     expect(n?.n).toBe(0);
   });
 
-  it("過審前登記的舊卡：留在榜上，同步第一次看到就綁上現況", async () => {
+  it("過審前登記的舊卡：留在榜上，同步不去問機器人（它沒被授權，讀不到不等於作者收回）", async () => {
     delete (env as { REVIEW_BOT_KEY?: string }).REVIEW_BOT_KEY;
     await submit("role-2");
     (env as { REVIEW_BOT_KEY?: string }).REVIEW_BOT_KEY = "lsk_test";
     expect(await cardStatus("role-2")).toEqual({ status: "approved", reviewed_hash: "" });
+    // 機器人真的讀不到這張卡
+    upstreamHashes.set("role-2", "revoked");
     await sync();
-    expect(await cardStatus("role-2")).toEqual({ status: "approved", reviewed_hash: "sha256:role-2-v1" });
+    expect(await cardStatus("role-2")).toEqual({ status: "approved", reviewed_hash: "" });
     expect(await board()).toHaveLength(1);
   });
 
