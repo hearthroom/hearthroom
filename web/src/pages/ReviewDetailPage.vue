@@ -14,7 +14,7 @@ import { dateTime } from "@/lib/format";
 import { pageTitle } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
-import { readTalkExample } from "@/lib/role-draft";
+import { readTags, readTalkExample } from "@/lib/role-draft";
 
 const route = useRoute();
 const { t } = useI18n();
@@ -35,7 +35,7 @@ const doc = computed(() => data.value?.detail.document);
 // 對話示例入庫是一串 JSON，作者在編輯頁看到的是一輪一輪的「誰說、說什麼」；審核頁照編輯頁的樣子畫，不倒原始字串。
 const talkTurns = computed(() => readTalkExample(doc.value?.talkExample));
 const claimedByMe = computed(() => !!data.value?.submission.claimedByMe);
-const tags = computed(() => (doc.value?.roleTag ?? "").split(/[,，、]/).map((s) => s.trim()).filter(Boolean));
+const tags = computed(() => readTags(doc.value?.roleTag));
 const decided = computed(() => !!data.value && data.value.submission.status !== "pending");
 
 async function token() {

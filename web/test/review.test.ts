@@ -129,3 +129,13 @@ describe("對話示例的入庫格式", () => {
     expect(readTalkExample("")).toEqual([]);
   });
 });
+
+describe("標籤的入庫格式", () => {
+  it("上游存的是物件陣列的 JSON 字串：拆出文字；純文字才按逗號切", async () => {
+    const { readTags } = await import("../src/lib/role-draft");
+    expect(readTags('[{"icon":"","text":"SAO","type":2},{"icon":"","text":"刀剑神域","type":2}]')).toEqual(["SAO", "刀剑神域"]);
+    expect(readTags([{ text: "a" }, "b", { tagName: "c" }])).toEqual(["a", "b", "c"]);
+    expect(readTags("推理, 民國")).toEqual(["推理", "民國"]);
+    expect(readTags("")).toEqual([]);
+  });
+});
