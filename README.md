@@ -42,6 +42,8 @@ API 存取範圍，跟這個服務拿到的一模一樣。
 
 ## 對上游的依賴
 
+完整的契約（一個供應商要實作哪些介面、分幾級、`{{user}}` 怎麼取值）在 [docs/provider-protocol.md](docs/provider-protocol.md)，站上 `/developers` 頁原樣渲染它；`web/test/protocol-doc.test.ts` 要求程式碼打的每條上游路徑都在文件裡。下表是站台伺服器自己會發的那幾條。
+
 | 呼叫 | 憑證 | 何時 |
 |---|---|---|
 | `GET /open/v1/me` | 轉發作者自己的 token | 登記時確認這張卡真是他的；每個需要身分的請求 |
