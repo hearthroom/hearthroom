@@ -145,7 +145,7 @@ function readTags(raw: unknown): string[] {
 }
 
 /** 對話示例在上游是一段 JSON 字串。解不開就當空的——半個示例比沒有更糟。 */
-function readTalkExample(raw: unknown): TalkExampleEntry[] {
+export function readTalkExample(raw: unknown): TalkExampleEntry[] {
   if (Array.isArray(raw)) return raw as TalkExampleEntry[];
   if (typeof raw !== "string" || !raw.trim()) return [];
   try {
