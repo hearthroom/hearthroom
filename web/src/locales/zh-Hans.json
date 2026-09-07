@@ -353,10 +353,7 @@
   "editor.tags.dimension.mood": "氛围",
   "editor.tags.dimension.relationship": "关系",
   "editor.tags.dimension.setting": "背景",
-  "wb.entry.expand": "展开",
-  "wb.entry.collapse": "收起",
   "wb.entry.constantShort": "常驻",
-  "wb.entry.disabled": "已停用",
   "import.split.entries": "{n} 条内容超过 {max} 字，已拆成几条、同一组关键词，没有丢字。",
   "wb.entry.content.over": "超过 {max} 字上游会拒收；拆成两条同关键词的条目效果相同。",
   "regex.title": "正则规则",
@@ -490,8 +487,6 @@
   "wb.trigger.both": "两边都算",
   "wb.trigger.user_only": "只看玩家讲的",
   "wb.trigger.ai_only": "只看角色讲的",
-  "wb.zoom": "铺满整页",
-  "wb.zoom.exit": "收回去",
   "wb.order.hint": "拖着换顺序。常驻的条目一轮塞不下时，排在前面的先进去。",
   "nav.review": "审核",
   "mine.action.submit": "提交审核",
@@ -543,5 +538,11 @@
   "review.mount": "常驻区块",
   "review.contentHash": "内容版本",
   "review.stampsList": "已盖的章",
-  "review.tags": "标签"
+  "review.tags": "标签",
+  "wb.entries.title": "世界书条目",
+  "wb.entries.manage": "管理条目",
+  "wb.entries.done": "编好了",
+  "wb.entries.pick": "从左边挑一条来编。",
+  "wb.entries.empty": "这本书还没有条目。",
+  "wb.entries.more": "还有 {n} 条"
 }

@@ -353,10 +353,7 @@
   "editor.tags.dimension.mood": "Mood",
   "editor.tags.dimension.relationship": "Relationship",
   "editor.tags.dimension.setting": "Setting",
-  "wb.entry.expand": "Expand",
-  "wb.entry.collapse": "Collapse",
   "wb.entry.constantShort": "Always",
-  "wb.entry.disabled": "Disabled",
   "import.split.entries": "{n} entries were longer than {max} characters and were split into parts sharing the same keywords; nothing was cut.",
   "wb.entry.content.over": "Over {max} characters won't be accepted; split it into two entries with the same keywords for the same effect.",
   "regex.title": "Regex rules",
@@ -490,8 +487,6 @@
   "wb.trigger.both": "Either side",
   "wb.trigger.user_only": "Only what the player says",
   "wb.trigger.ai_only": "Only what the character says",
-  "wb.zoom": "Fill the page",
-  "wb.zoom.exit": "Back to the form",
   "wb.order.hint": "Drag to reorder. When the always-on entries don't all fit in a turn, the ones nearer the top go in first.",
   "nav.review": "Review",
   "mine.action.submit": "Submit for review",
@@ -543,5 +538,11 @@
   "review.mount": "Mounted block",
   "review.contentHash": "Content version",
   "review.stampsList": "Stamps so far",
-  "review.tags": "Tags"
+  "review.tags": "Tags",
+  "wb.entries.title": "Worldbook entries",
+  "wb.entries.manage": "Manage entries",
+  "wb.entries.done": "Done",
+  "wb.entries.pick": "Pick one on the left to edit.",
+  "wb.entries.empty": "This book has no entries yet.",
+  "wb.entries.more": "and {n} more"
 }
