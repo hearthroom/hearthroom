@@ -168,9 +168,10 @@ async function onPick(event: Event) {
   } finally {
     uploading.value = { done: 0, count: 0 };
   }
+  // 先重抓再放錯誤：loadImages 一開始會把 error 清掉，順序反了訊息就沒了
+  await refresh();
   if (failed.length) error.value = failed.join("\n");
   else flash(t("res.uploaded", { n: files.length }));
-  await refresh();
 }
 
 // ── 選取與管理 ───────────────────────────────────────────────────
