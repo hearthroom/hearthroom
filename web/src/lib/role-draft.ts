@@ -135,8 +135,23 @@ export function resolveLimits(remote: FieldLimits | null): Record<string, number
   };
 }
 
-/** 上游把標籤存成物件陣列，也可能是純字串陣列（看是哪條路寫的）。兩種都要吃得下。 */
-function readTags(raw: unknown): string[] {
+/**
+ * 上游把標籤存成物件陣列，也可能是純字串陣列（看是哪條路寫的）；有些欄位拿到的是那個陣列
+ * 序列化後的字串。三種都要吃得下，最後才退到「逗號分隔的純文字」。
+ */
+export function readTags(raw: unknown): string[] {
+  if (typeof raw === "string") {
+    const text = raw.trim();
+    if (!text) return [];
+    if (text.startsWith("[")) {
+      try {
+        return readTags(JSON.parse(text));
+      } catch {
+        /* 不是 JSON，往下當純文字 */
+      }
+    }
+    return text.split(/[,，、]/).map((t) => t.trim()).filter(Boolean);
+  }
   if (!Array.isArray(raw)) return [];
   return raw
     .map((tag) => (typeof tag === "string" ? tag : String((tag as { text?: string; tagName?: string })?.text ?? (tag as { tagName?: string })?.tagName ?? "")))
