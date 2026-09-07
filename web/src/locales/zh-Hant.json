@@ -527,6 +527,8 @@
   "review.entry.constant": "常駐",
   "review.rules.none": "沒有正規表示式規則。",
   "review.wb.none": "沒有綁定世界書。",
+  "review.wb.book": "{n} 條，點開抽查",
+  "review.rules.count": "{n} 條正規表示式規則。內容不在這裡看，要驗效果請直接試玩。",
   "review.mount": "常駐區塊",
   "review.contentHash": "內容版本",
   "review.stampsList": "審核紀錄",

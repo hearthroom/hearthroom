@@ -527,6 +527,8 @@
   "review.entry.constant": "상시",
   "review.rules.none": "정규식 규칙이 없습니다.",
   "review.wb.none": "월드북이 연결되지 않았습니다.",
+  "review.wb.book": "{n}개, 펼쳐서 표본 확인",
+  "review.rules.count": "정규식 규칙 {n}개. 내용은 여기서 보지 않습니다. 효과는 직접 플레이해서 확인하세요.",
   "review.mount": "상시 블록",
   "review.contentHash": "콘텐츠 버전",
   "review.stampsList": "심사 기록",
