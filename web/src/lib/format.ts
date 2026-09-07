@@ -56,6 +56,16 @@ export function dateOnly(seconds: number): string {
  * 開場白這類文案原本是給對話用的：帶標記語法與 {{char}} / {{user}} 佔位符。
  * 主頁只展示，所以剝掉標記、把佔位符換成名字。
  */
+/** 開場白是不是作者用 HTML 寫的卡：有任何一個真正的標籤就算（<b>、<section>、<hc-stat>…）。 */
+export function isHtmlCard(raw: string): boolean {
+  return /<[a-z][a-z0-9-]*(\s[^>]*)?>/i.test(raw);
+}
+
+/** 只換掉 {{char}}／{{user}}，標籤原樣保留——給要照原樣渲染的地方用。 */
+export function substituteNames(raw: string, charName: string, userName: string): string {
+  return raw.replace(/\{\{\s*char\s*\}\}/gi, charName).replace(/\{\{\s*user\s*\}\}/gi, userName);
+}
+
 export function plainText(raw: string, charName: string, userName: string): string {
   return raw
     .replace(/<[^>]+>/g, "")
