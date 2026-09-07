@@ -31,8 +31,14 @@ export const grantCalls: { token: string; roleId: string; granteeAccountNumId: n
 /** 每張卡目前的內容雜湊（測試改這個模擬作者改了卡）；設成 "revoked" 模擬作者收回授權。 */
 export const upstreamHashes = new Map<string, string>();
 
+/** 測試裡機器人的金鑰；上游的「你是誰」要認得它，同步與審核頁才會把 401 當成「這張卡讀不到」而不是「金鑰壞了」。 */
+export const BOT_KEY = "lsk_test";
+export const BOT_ACCOUNT_NUM_ID = 330016;
+
 export function reviewUpstream(detailFor: (roleId: string) => Record<string, unknown> = (roleId) => ({ roleId, document: { roleName: roleId } })): void {
   grantCalls.length = 0;
+  const users = upstream.fetchMe;
+  upstream.fetchMe = async (env, token) => (token === BOT_KEY ? { accountNumId: BOT_ACCOUNT_NUM_ID } : users(env, token));
   upstream.grantShare = async (_env, token, roleId, granteeAccountNumId) => {
     grantCalls.push({ token, roleId, granteeAccountNumId });
   };

@@ -239,6 +239,27 @@ describe("內容版本", () => {
     expect(await board()).toHaveLength(1);
   });
 
+  it("機器人的金鑰壞了：同步不比對、審核頁回 503，一張卡都不下架", async () => {
+    await submit("role-1");
+    await approve("role-1");
+    const { upstream } = await import("../src/upstream");
+    const users = upstream.fetchMe;
+    upstream.fetchMe = async (env, token) => {
+      if (token === "lsk_test") throw new (await import("../src/types")).HttpError(401, "upstream rejected the token");
+      return users(env, token);
+    };
+    upstreamHashes.set("role-1", "revoked");
+    await sync();
+    expect((await cardStatus("role-1")).status).toBe("approved");
+    expect(await board()).toHaveLength(1);
+
+    await submit("role-2");
+    upstreamHashes.set("role-2", "revoked");
+    const id = (await queue("rev-a")).body.items[0].id as string;
+    expect((await SELF.fetch(`https://c.test/v1/review/${id}/detail`, { headers: bearer("rev-a") })).status).toBe(503);
+    expect((await cardStatus("role-2")).status).toBe("pending");
+  });
+
   it("作者在主站收回授權：同步把卡標成 unshared、離榜", async () => {
     await submit("role-1");
     await approve("role-1");
