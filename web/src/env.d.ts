@@ -45,6 +45,36 @@ declare module "moonstage/stage" {
 }
 declare module "moonstage/stage.css";
 
+/**
+ * 舞台的規則引擎（stage/src/pages/canvas/canvas-rule-engine.ts 等，vite alias 指過去）。
+ * 型別在這裡自己宣告、只宣告本站用到的表面：舞台的 tsconfig 沒開嚴格模式，讓 vue-tsc 讀它的原始檔會報不是本站的錯。
+ */
+declare module "stage-canvas/rule-engine" {
+  export function applyTavernRules(
+    text: string,
+    rules: unknown[],
+    options?: { macros?: { char?: string; user?: string }; variants?: unknown },
+  ): { html: string; rollbacks: { ruleId: string; reason: string }[] };
+}
+declare module "stage-canvas/style-scope" {
+  export type CardFormat = "mmd" | "tavern";
+  export function normalizeCardFormat(raw: unknown): CardFormat;
+  export function scopeCardHtml(html: string, format: CardFormat, scope?: string): string;
+}
+declare module "stage-canvas/platform-defaults" {
+  export function stripUnknownTags(html: string): string;
+}
+/** 舞台的顯示層替換引擎（stage/src/utils/display-rule-engine.js，純 JS）；只宣告本站經由 canvas-rule-engine 間接用到的表面。 */
+declare module "@/utils/display-rule-engine.js" {
+  export function applyDisplayRules(html: string, rules: unknown[], options?: unknown): { html: string; rollbacks: { ruleId: string; reason: string }[] };
+  export function classifyPattern(find: string): unknown;
+  export function hasCrossLineRule(rules: unknown[]): boolean;
+  export const DISPLAY_RULE_MIN_BUDGET: number;
+  export const ROLLBACK_BAD_REGEX: string;
+  export const ROLLBACK_EMPTY_MATCH: string;
+  export const ROLLBACK_VOLUME: string;
+}
+
 interface ImportMetaEnv {
   readonly VITE_LUNATALK_API_BASE?: string;
 }

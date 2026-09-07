@@ -7,10 +7,12 @@ import CommentPanel from "@/components/CommentPanel.vue";
 import NotFoundPage from "@/pages/NotFoundPage.vue";
 import PreviewDoc from "@/components/preview/PreviewDoc.vue";
 import HtmlCardFrame from "@/components/HtmlCardFrame.vue";
-import { ApiError, fetchBoard, fetchCard, fetchPreviewPage, fetchRoleDetail } from "@/lib/api";
+import { ApiError, fetchBoard, fetchCard, fetchPlayerAsset, fetchPreviewPage, fetchRoleDetail } from "@/lib/api";
+import { renderWelcome } from "@/lib/welcome-render";
+import { useSession } from "@/lib/session";
 import { contentLang, pageTitle, zoneLabel } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
-import { compact, hueFrom, isHtmlCard, plainText, relativeTime, substituteNames } from "@/lib/format";
+import { compact, hueFrom, plainText, relativeTime } from "@/lib/format";
 import { confirmDialog } from "@/lib/confirm";
 import { track } from "@/lib/track";
 import type { CommunityCard } from "@/lib/types";
@@ -28,8 +30,11 @@ const error = ref("");
 
 /** 來源端的公開詳情：開場白、有沒有裝修主頁、作者有沒有關掉評論。 */
 const welcome = ref("");
-/** 開場白是 HTML 卡時的原文（保留標籤，只換 {{char}}／{{user}}）；純文字的開場白這裡是空字串。 */
+/** 開場白照對話頁畫出來的 HTML（作者的正則規則 → HTML／markdown）；純文字的開場白這裡是空字串。 */
 const welcomeHtml = ref("");
+/** 功能欄展開後的 HTML：作者的全域樣式與腳本住在這裡，一起放進 iframe 才有作者的版面。 */
+const welcomeMount = ref("");
+const session = useSession();
 const showComments = ref(true);
 const previewDoc = ref<unknown>(null);
 const previewSkin = ref("");
@@ -80,10 +85,19 @@ async function load() {
   void fetchRoleDetail(roleId, undefined, lang)
     .then((raw) => {
       const rawWelcome = String(raw.roleWelcome ?? "");
-      welcome.value = plainText(rawWelcome, card.value?.name ?? "", t("card.you"));
-      // 帶標籤的開場白是作者用 HTML 卡寫的：剝掉標籤只剩一堆字，狀態欄、標籤、進度條全沒了。
-      // 交給沙盒 iframe 用對話頁同一套元件畫（HtmlCardFrame）。
-      welcomeHtml.value = isHtmlCard(rawWelcome) ? substituteNames(rawWelcome, card.value?.name ?? "", t("card.you")) : "";
+      const charName = card.value?.name ?? "";
+      welcome.value = plainText(rawWelcome, charName, t("card.you"));
+      // 開場白照對話頁的方式畫：先套作者的正則規則（酒館／MMD 卡靠它把標記換成版面），
+      // 再交給沙盒 iframe 用同一套元件庫畫（HtmlCardFrame）。規則要登入才拿得到，
+      // 遊客與沒規則的卡就只畫 HTML／markdown 本身；純文字的開場白照舊走氣泡。
+      void session.accessToken().catch(() => null)
+        .then((token) => fetchPlayerAsset(roleId, token || undefined).catch(() => null))
+        .then((asset) => {
+          if (card.value?.roleId !== roleId) return;
+          const out = renderWelcome(rawWelcome, { charName, userName: t("card.you"), asset });
+          welcomeHtml.value = out.html;
+          welcomeMount.value = out.mountHtml;
+        });
       showComments.value = raw.previewShowComments !== false;
       if (raw.hasPreviewPage === true) {
         return fetchPreviewPage(roleId).then((p) => {
@@ -123,7 +137,7 @@ async function share() {
 }
 
 watch(() => route.params.id, () => {
-  card.value = null; welcome.value = ""; welcomeHtml.value = ""; previewDoc.value = null; more.value = []; broken.value = false; tab.value = "home";
+  card.value = null; welcome.value = ""; welcomeHtml.value = ""; welcomeMount.value = ""; previewDoc.value = null; more.value = []; broken.value = false; tab.value = "home";
   commentCount.value = null; showComments.value = true;
   load();
 }, { immediate: true });
@@ -227,7 +241,7 @@ watch(locale, load);
                 <div class="role__welcome">
                   <img v-if="hasArt" :src="card.avatarUrl!" alt="" class="role__welcome-face" />
                   <span v-else class="role__welcome-face mono" :style="{ '--h': hue }">{{ [...card.name][0] }}</span>
-                  <HtmlCardFrame v-if="welcomeHtml" class="role__bubble role__bubble--card" :html="welcomeHtml" :title="$t('card.welcome')" />
+                  <HtmlCardFrame v-if="welcomeHtml" class="role__bubble role__bubble--card" :html="welcomeHtml" :extra="welcomeMount" :title="$t('card.welcome')" />
                   <blockquote v-else class="role__bubble">{{ welcome }}</blockquote>
                 </div>
               </section>

@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { createApp, h, nextTick } from "vue";
 import HtmlCardFrame from "../src/components/HtmlCardFrame.vue";
 import { buildSrcdoc } from "../src/lib/html-card-frame";
-import { isHtmlCard, substituteNames } from "../src/lib/format";
+import { hasHtml } from "../src/lib/welcome-render";
 
 function mountFrame(props: { html: string; title?: string }) {
   const el = document.createElement("div");
@@ -16,15 +16,11 @@ function mountFrame(props: { html: string; title?: string }) {
 }
 
 describe("HTML 卡開場白", () => {
-  it("認得 HTML 卡：有真正的標籤才算，純文字裡的 < 不算", () => {
-    expect(isHtmlCard('<section class="hc-c"><hc-stat label="x" value="1"></hc-stat></section>')).toBe(true);
-    expect(isHtmlCard("<b>粗</b>")).toBe(true);
-    expect(isHtmlCard("3 < 5，而且 a<b 也不是標籤")).toBe(false);
-    expect(isHtmlCard("")).toBe(false);
-  });
-
-  it("只換名字、不剝標籤", () => {
-    expect(substituteNames("<p>{{char}} 看著 {{ user }}</p>", "林鏡", "你")).toBe("<p>林鏡 看著 你</p>");
+  it("認得 HTML：有真正的標籤才算，純文字裡的 < 不算", () => {
+    expect(hasHtml('<section class="hc-c"><hc-stat label="x" value="1"></hc-stat></section>')).toBe(true);
+    expect(hasHtml("<b>粗</b>")).toBe(true);
+    expect(hasHtml("3 < 5，而且 a<b 也不是標籤")).toBe(false);
+    expect(hasHtml("")).toBe(false);
   });
 
   it("srcdoc 帶著元件庫、樣式與作者的 HTML；沙盒只有 allow-scripts", () => {

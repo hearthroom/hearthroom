@@ -11,7 +11,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { SIZE_MESSAGE, buildSrcdoc } from "@/lib/html-card-frame";
 
-const props = defineProps<{ html: string; title?: string }>();
+const props = defineProps<{ html: string; title?: string; extra?: string }>();
 
 const frame = ref<HTMLIFrameElement | null>(null);
 const height = ref(120);
@@ -23,7 +23,7 @@ function pageTokens(): { color: string; font: string } {
   return { color: cs.getPropertyValue("--text").trim() || "#f2f2f5", font: cs.getPropertyValue("--font").trim() || "system-ui, sans-serif" };
 }
 
-const srcdoc = computed(() => buildSrcdoc(props.html, pageTokens()));
+const srcdoc = computed(() => buildSrcdoc(props.html, pageTokens(), props.extra ?? ""));
 
 function onMessage(event: MessageEvent) {
   // 只認自己這個 iframe 送來的尺寸；其他來源的訊息一律不理。
