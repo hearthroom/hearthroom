@@ -206,9 +206,6 @@
   "editor.section.publish": "发布",
   "editor.name": "角色名称",
   "editor.summary": "简介",
-  "editor.userName": "玩家称呼",
-  "editor.userName.hint": "角色会这样叫玩家。留空就用玩家自己的昵称。",
-  "editor.userName.placeholder": "例如：侦探、学长",
   "editor.language.hint": "语区决定这张卡出现在哪一区的榜单。创建之后就不能改了。",
   "editor.detail": "角色设定",
   "editor.detail.hint": "这张卡的核心：他是谁、怎么说话、在什么处境里。写得越具体，回应越像同一个人。",
@@ -338,11 +335,6 @@
   "wb.import": "导入世界书文件",
   "wb.import.error": "这个文件里没有世界书条目。支持酒馆导出的世界书 JSON，或带世界书的角色卡。",
   "wb.import.done": "导入了 {n} 条，接在原有条目后面。",
-  "editor.sex": "性别",
-  "editor.sex.none": "未设置",
-  "editor.sex.man": "男",
-  "editor.sex.women": "女",
-  "editor.sex.other": "其他",
   "editor.tags.pick": "从分类里挑",
   "wb.entry.secondary": "次要关键词",
   "wb.entry.secondary.placeholder": "留空就只看关键词",
@@ -544,5 +536,6 @@
   "wb.entries.done": "编好了",
   "wb.entries.pick": "从左边挑一条来编。",
   "wb.entries.empty": "这本书还没有条目。",
-  "wb.entries.more": "还有 {n} 条"
+  "wb.entries.more": "还有 {n} 条",
+  "editor.userName": "玩家称呼"
 }
