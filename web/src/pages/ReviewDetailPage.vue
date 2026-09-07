@@ -137,7 +137,7 @@ onMounted(() => { void load(); });
 
       <section v-show="section === 'basic'" class="pane panel">
         <div class="field"><label>{{ $t("editor.name") }}</label><input class="input" :value="doc.roleName" readonly /></div>
-        <div class="field"><label>{{ $t("editor.summary") }}</label><textarea class="input" rows="3" :value="doc.roleDesc" readonly /></div>
+        <div class="field"><label>{{ $t("editor.summary") }}</label><pre class="text">{{ doc.roleDesc }}</pre></div>
         <div class="field">
           <label>{{ $t("review.tags") }}</label>
           <ul class="tags"><li v-for="tag in tags" :key="tag" class="chip">{{ tag }}</li></ul>
@@ -147,51 +147,56 @@ onMounted(() => { void load(); });
       </section>
 
       <section v-show="section === 'persona'" class="pane panel">
-        <div class="field"><label>{{ $t("editor.detail") }}</label><textarea class="input mono" rows="18" :value="doc.roleDetailDesc" readonly /></div>
-        <div class="field"><label>{{ $t("editor.contract") }}</label><textarea class="input mono" rows="6" :value="doc.roleOutputContract" readonly /></div>
-        <div class="field"><label>{{ $t("editor.jailbreak") }}</label><textarea class="input mono" rows="6" :value="doc.jailbreak" readonly /></div>
+        <div class="field"><label>{{ $t("editor.detail") }}</label><pre class="text mono">{{ doc.roleDetailDesc }}</pre></div>
+        <div class="field"><label>{{ $t("editor.contract") }}</label><pre class="text mono">{{ doc.roleOutputContract }}</pre></div>
+        <div class="field"><label>{{ $t("editor.jailbreak") }}</label><pre class="text mono">{{ doc.jailbreak }}</pre></div>
       </section>
 
       <section v-show="section === 'dialogue'" class="pane panel">
-        <div class="field"><label>{{ $t("editor.welcome") }}</label><textarea class="input mono" rows="10" :value="data.detail.greetings.welcome" readonly /></div>
+        <div class="field"><label>{{ $t("editor.welcome") }}</label><pre class="text mono">{{ data.detail.greetings.welcome }}</pre></div>
         <div v-if="data.detail.greetings.alternates.length" class="field">
           <label>{{ $t("editor.alternates") }}</label>
-          <textarea v-for="(a, i) in data.detail.greetings.alternates" :key="i" class="input mono" rows="5" :value="a" readonly />
+          <pre v-for="(a, i) in data.detail.greetings.alternates" :key="i" class="text mono">{{ a }}</pre>
         </div>
         <div v-if="data.detail.greetings.prologue.length" class="field">
           <label>{{ $t("editor.prologue") }}</label>
           <ul class="tags"><li v-for="(p, i) in data.detail.greetings.prologue" :key="i" class="chip">{{ p }}</li></ul>
         </div>
-        <div class="field"><label>{{ $t("editor.talkExample") }}</label><textarea class="input mono" rows="8" :value="doc.talkExample" readonly /></div>
+        <div class="field"><label>{{ $t("editor.talkExample") }}</label><pre class="text mono">{{ doc.talkExample }}</pre></div>
       </section>
 
       <section v-show="section === 'worldbook'" class="pane panel">
         <p v-if="!data.detail.worldbook" class="subtle">{{ $t("review.wb.none") }}</p>
         <template v-else>
-          <p class="subtle">{{ data.detail.worldbook.name }} · {{ data.detail.worldbook.entries.length }}</p>
-          <article v-for="e in data.detail.worldbook.entries" :key="e.entryId" class="entry" :class="{ 'entry--off': !e.isEnabled }">
-            <header class="entry__head">
-              <strong>{{ e.name || $t("wb.entry.untitled") }}</strong>
-              <span v-if="e.isConstant" class="chip">{{ $t("review.entry.constant") }}</span>
-              <span v-if="!e.isEnabled" class="chip">{{ $t("review.entry.disabled") }}</span>
-              <span v-if="e.keywords.length" class="subtle">{{ e.keywords.join("、") }}</span>
-              <span v-if="e.secondaryKeywords.length" class="subtle">+ {{ e.secondaryKeywords.join("、") }}</span>
-            </header>
-            <pre class="entry__body">{{ e.content }}</pre>
-          </article>
+          <!-- 整本預設收起：三百條世界書沒人看得完，審核人抽查幾條就夠；展開後每條也先只露標題與關鍵詞 -->
+          <details class="book">
+            <summary class="book__sum">
+              <strong>{{ data.detail.worldbook.name }}</strong>
+              <span class="subtle">{{ $t("review.wb.book", { n: data.detail.worldbook.entries.length }) }}</span>
+            </summary>
+            <details v-for="e in data.detail.worldbook.entries" :key="e.entryId" class="entry" :class="{ 'entry--off': !e.isEnabled }">
+              <summary class="entry__head">
+                <strong>{{ e.name || $t("wb.entry.untitled") }}</strong>
+                <span v-if="e.isConstant" class="chip">{{ $t("review.entry.constant") }}</span>
+                <span v-if="!e.isEnabled" class="chip">{{ $t("review.entry.disabled") }}</span>
+                <span v-if="e.keywords.length" class="subtle">{{ e.keywords.join("、") }}</span>
+                <span v-if="e.secondaryKeywords.length" class="subtle">+ {{ e.secondaryKeywords.join("、") }}</span>
+              </summary>
+              <pre class="entry__body">{{ e.content }}</pre>
+            </details>
+          </details>
         </template>
       </section>
 
       <section v-show="section === 'display'" class="pane panel">
         <p v-if="!data.detail.authorAsset.rules.length" class="subtle">{{ $t("review.rules.none") }}</p>
-        <article v-for="r in data.detail.authorAsset.rules" :key="r.id" class="entry" :class="{ 'entry--off': !r.enabled }">
-          <header class="entry__head">
-            <strong>{{ r.name || r.id }}</strong>
-            <span v-if="!r.enabled" class="chip">{{ $t("review.entry.disabled") }}</span>
-          </header>
-          <pre class="entry__body">{{ r.find }}</pre>
-          <pre class="entry__body entry__body--replace">{{ r.replace }}</pre>
-        </article>
+        <template v-else>
+          <!-- 只列數量與名字：規則內容是給機器讀的，又長又佔位；審核人要驗效果直接去試玩 -->
+          <p class="subtle">{{ $t("review.rules.count", { n: data.detail.authorAsset.rules.length }) }}</p>
+          <ul class="tags">
+            <li v-for="r in data.detail.authorAsset.rules" :key="r.id" class="chip" :class="{ 'chip--off': !r.enabled }">{{ r.name || r.id }}</li>
+          </ul>
+        </template>
         <div v-if="data.detail.authorAsset.mountTrigger" class="field">
           <label>{{ $t("review.mount") }}</label>
           <input class="input" :value="`${data.detail.authorAsset.mountTrigger} · ${data.detail.authorAsset.mountLayer} · ${data.detail.authorAsset.pageMode}`" readonly />
@@ -241,12 +246,17 @@ onMounted(() => { void load(); });
 .small { font-size: 12px; word-break: break-all; }
 .art { max-width: 200px; border-radius: var(--r-md); }
 .tags { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.text { margin: 0; padding: var(--s-3); border-radius: var(--r-sm); background: var(--surface-2); font-size: 14px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
+.text + .text { margin-top: var(--s-2); }
+.book__sum { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; cursor: pointer; padding: var(--s-2) 0; }
+.book[open] > .book__sum { margin-bottom: var(--s-2); border-bottom: 1px solid var(--line); }
 .entry { padding: var(--s-3) 0; border-top: 1px solid var(--line); }
 .entry:first-of-type { border-top: 0; }
+.entry > summary { cursor: pointer; }
+.chip--off { opacity: 0.55; text-decoration: line-through; }
 .entry--off { opacity: 0.6; }
 .entry__head { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; margin-bottom: var(--s-2); }
 .entry__body { margin: 0; padding: var(--s-3); border-radius: var(--r-sm); background: var(--surface-2); font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; overflow-x: auto; }
-.entry__body--replace { margin-top: var(--s-2); border-left: 3px solid var(--accent); }
 .cost { display: grid; grid-template-columns: auto 1fr; gap: var(--s-2) var(--s-4); margin: 0 0 var(--s-3); }
 .cost dt { color: var(--text-3); font-size: 13px; }
 .cost dd { margin: 0; font-variant-numeric: tabular-nums; }
