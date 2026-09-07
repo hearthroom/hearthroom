@@ -353,10 +353,7 @@
   "editor.tags.dimension.mood": "氛圍",
   "editor.tags.dimension.relationship": "關係",
   "editor.tags.dimension.setting": "背景",
-  "wb.entry.expand": "展開",
-  "wb.entry.collapse": "收合",
   "wb.entry.constantShort": "常駐",
-  "wb.entry.disabled": "已停用",
   "import.split.entries": "{n} 條內容超過 {max} 字，已拆成幾條、同一組關鍵詞，沒有丟字。",
   "wb.entry.content.over": "超過 {max} 字上游會拒收；拆成兩條同關鍵詞的條目效果相同。",
   "regex.title": "正規表示式規則",
@@ -490,8 +487,6 @@
   "wb.trigger.both": "兩邊都算",
   "wb.trigger.user_only": "只看玩家講的",
   "wb.trigger.ai_only": "只看角色講的",
-  "wb.zoom": "鋪滿整頁",
-  "wb.zoom.exit": "收回去",
   "wb.order.hint": "拖著換順序。常駐的條目一輪塞不下時，排在前面的先進去。",
   "nav.review": "審核",
   "mine.action.submit": "提交審核",
@@ -543,5 +538,11 @@
   "review.mount": "常駐區塊",
   "review.contentHash": "內容版本",
   "review.stampsList": "已蓋的章",
-  "review.tags": "標籤"
+  "review.tags": "標籤",
+  "wb.entries.title": "世界書條目",
+  "wb.entries.manage": "管理條目",
+  "wb.entries.done": "編好了",
+  "wb.entries.pick": "從左邊挑一條來編。",
+  "wb.entries.empty": "這本書還沒有條目。",
+  "wb.entries.more": "還有 {n} 條"
 }
