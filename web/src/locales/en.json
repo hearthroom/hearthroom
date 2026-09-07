@@ -474,5 +474,6 @@
   "wb.category.item": "A thing",
   "wb.category.event": "Something that happened",
   "wb.category.rule": "A rule",
-  "wb.category.custom": "Other"
+  "wb.category.custom": "Other",
+  "wb.export": "Save to a file"
 }
