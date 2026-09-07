@@ -459,5 +459,7 @@
   "wb.entry.match.logic.0": "どれか一つが出てくる",
   "wb.entry.match.logic.1": "全部は出てこない",
   "wb.entry.match.logic.2": "一つも出てこない",
-  "wb.entry.match.logic.3": "全部が出てくる"
+  "wb.entry.match.logic.3": "全部が出てくる",
+  "wb.switch": "別の一冊にする",
+  "wb.switch.confirm": "別の一冊にしますか？このカードは次に選んだものを使います。今の一冊は削除されず、そのまま残ります。"
 }

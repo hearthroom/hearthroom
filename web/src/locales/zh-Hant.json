@@ -459,5 +459,7 @@
   "wb.entry.match.logic.0": "出現任一個",
   "wb.entry.match.logic.1": "不是每一個都出現",
   "wb.entry.match.logic.2": "一個都沒出現",
-  "wb.entry.match.logic.3": "每一個都出現"
+  "wb.entry.match.logic.3": "每一個都出現",
+  "wb.switch": "換一本",
+  "wb.switch.confirm": "換一本？這張卡會改成用新挑的那一本。原來那本不會被刪掉，還留在你的世界書裡。"
 }

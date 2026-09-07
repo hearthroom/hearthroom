@@ -302,6 +302,33 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     expect(api.patchWorldbookDocument).toHaveBeenCalledWith("wb9", { binding: { roleId: "r1" } }, "tok");
   });
 
+  it("換一本再建新的：舊書的條目不會被當成要刪的送進新書", async () => {
+    await mount("/create");
+    await pickFile($("input[type=file]"), new File([JSON.stringify(CARD)], "avra.json"));
+    byText("套用到表單").click();
+    await flush();
+    await submit();
+    api.patchWorldbookDocument.mockClear();
+
+    byText("世界書").click();
+    await flush();
+    const { settleConfirm } = await import("../src/lib/confirm");
+    [...root.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.trim() === "換一本")!.click();
+    await flush();
+    settleConfirm(true);
+    await flush();
+
+    // 換掉之後從頭建一本：舊書那兩條的 id 不能跟著跑進新書的差分
+    byText("建一本").click();
+    await flush();
+    await type($<HTMLTextAreaElement>("textarea[id^=wb-c-]"), "新的一條。");
+    await submit();
+
+    expect(api.createWorldbook).toHaveBeenCalledTimes(2);
+    const [, doc] = api.patchWorldbookDocument.mock.calls[0] as unknown as [string, { entries: { op: string }[] }];
+    expect(doc.entries.map((e) => e.op)).toEqual(["create"]);
+  });
+
   it("大本世界書分段送：每段最多 100 個操作、綁定只跟第一段；中途失敗再存只送剩下的", async () => {
     await mount("/create");
     await type($("#f-name"), "大本");

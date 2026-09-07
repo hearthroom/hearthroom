@@ -17,7 +17,7 @@
  * matchOptions 就把它切成字面比對，原生條目走的是語意召回——給原生條目開這組選項等於
  * 靜靜換掉它的召回方式，所以這裡只讓已經有這組值的條目改，不提供「轉成酒館匹配」。
  */
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { fetchMyWorldbooks, type WorldbookSummary } from "@/lib/api";
 import { confirmDialog } from "@/lib/confirm";
@@ -40,6 +40,8 @@ const emit = defineEmits<{
   imported: [{ name: string; entries: WorldbookEntryDraft[] }];
   /** 挑了自己已經有的一本。條目與綁定由外面處理——條目住在頁面上。 */
   pick: [WorldbookSummary];
+  /** 放掉手上這本，回到空狀態重挑。上游的綁定是覆蓋式的，存下去新的就取代舊的。 */
+  release: [];
 }>();
 
 const { t } = useI18n();
@@ -116,16 +118,22 @@ const SELECTIVE_LOGIC = [0, 1, 2, 3];
  */
 const mine = ref<WorldbookSummary[]>([]);
 const reuseId = ref("");
-onMounted(async () => {
-  if (props.bound) return;
-  try {
-    const token = await session.accessToken();
-    if (!token) return;
-    mine.value = await fetchMyWorldbooks(token);
-  } catch {
-    mine.value = [];
-  }
-});
+// 掛載時抓一次，放掉手上那本之後再抓一次——中間可能在別的地方多了幾本
+watch(
+  () => props.bound,
+  async (bound) => {
+    if (bound) return;
+    reuseId.value = "";
+    try {
+      const token = await session.accessToken();
+      if (!token) return;
+      mine.value = await fetchMyWorldbooks(token);
+    } catch {
+      mine.value = [];
+    }
+  },
+  { immediate: true },
+);
 function pickExisting() {
   const book = mine.value.find((b) => b.worldbookId === reuseId.value);
   if (book) emit("pick", book);
@@ -212,9 +220,12 @@ const setSecondary = (index: number, raw: string) => patch(index, { secondaryKey
     <template v-else>
       <div class="field">
         <label for="wb-name">{{ $t("wb.name") }}</label>
-        <input id="wb-name" class="input" :value="bookName" maxlength="60"
-               :placeholder="$t('wb.name.placeholder')"
-               @input="emit('update:bookName', ($event.target as HTMLInputElement).value)" />
+        <div class="reuse__row">
+          <input id="wb-name" class="input" :value="bookName" maxlength="60"
+                 :placeholder="$t('wb.name.placeholder')"
+                 @input="emit('update:bookName', ($event.target as HTMLInputElement).value)" />
+          <button type="button" class="btn btn--sm btn--ghost" @click="emit('release')">{{ $t("wb.switch") }}</button>
+        </div>
       </div>
 
       <div class="listbar">
