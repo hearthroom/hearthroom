@@ -78,3 +78,42 @@ describe("審核佇列頁", () => {
     await vi.waitFor(() => expect(host.textContent).toContain(i18n.global.t("review.action.release")));
   });
 });
+
+/**
+ * 窄螢幕把頁首那排導覽整排藏起來，帳號選單是手機上唯一的路——「審核」入口在這裡也要有一份，
+ * 而且只給審核人看。
+ */
+import AccountMenu from "../src/components/AccountMenu.vue";
+
+async function mountMenu(): Promise<{ el: HTMLElement; unmount: () => void }> {
+  const el = document.createElement("div");
+  document.body.appendChild(el);
+  const r = createRouter({ history: createMemoryHistory(), routes: [{ path: "/:pathMatch(.*)*", component: { template: "<div />" } }] });
+  await r.push("/");
+  const a = createApp(AccountMenu).use(createPinia()).use(r).use(i18n);
+  a.mount(el);
+  await nextTick();
+  el.querySelector<HTMLButtonElement>("button.acct__btn")!.click();
+  await nextTick();
+  return { el, unmount: () => { a.unmount(); el.remove(); } };
+}
+
+describe("帳號選單", () => {
+  it("審核人看得到「審核」入口", async () => {
+    const { el, unmount } = await mountMenu();
+    // 假登入者的暱稱「審核人」本身就含「審核」兩字，看文字會誤判，看連結才準
+    await vi.waitFor(() => expect(el.querySelector('a[href*="/review"]')).not.toBeNull());
+    expect(el.querySelector('a[href*="/review"]')!.textContent?.trim()).toBe(i18n.global.t("nav.review"));
+    unmount();
+  });
+
+  it("不是審核人就沒有那一項", async () => {
+    api.fetchReviewMe.mockResolvedValueOnce({ reviewer: false });
+    const { el, unmount } = await mountMenu();
+    await vi.waitFor(() => expect(api.fetchReviewMe).toHaveBeenCalled());
+    await nextTick();
+    expect(el.querySelector('a[href*="/mine"]')).not.toBeNull();
+    expect(el.querySelector('a[href*="/review"]')).toBeNull();
+    unmount();
+  });
+});
