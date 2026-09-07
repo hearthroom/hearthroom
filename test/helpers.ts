@@ -12,6 +12,7 @@ let cacheGeneration = 0;
  */
 export async function resetDb(): Promise<void> {
   await env.DB.prepare("DELETE FROM cards").run();
+  await env.DB.prepare("DELETE FROM card_registrations").run();
   mineCache.namespace = `mine-test-${++cacheGeneration}`;
   boardCache.namespace = `board-test-${cacheGeneration}`;
 }

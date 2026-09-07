@@ -108,12 +108,23 @@ export interface MyCard {
   registered: boolean;
 }
 
+export interface ListingQuota {
+  limit: number;
+  used: number;
+  /** 週的起點，毫秒 */
+  weekStart: number;
+  /** 下週的起點，毫秒；額度在這一刻重置 */
+  weekEnd: number;
+}
+
 export interface MyCardPage {
   items: MyCard[];
   /** 一共有幾張。看「已登記」那組時是 null——那條路不問上游，也就不知道這個數字。 */
   total: number | null;
   /** 已登記幾張。全域的數字，不是這一頁數出來的。 */
   registeredTotal: number;
+  /** 這週的登記額度。週是 UTC 週一到下週一，畫面上換成本地日期顯示。 */
+  quota: ListingQuota;
   page: number;
   pageSize: number;
   hasNext: boolean;
