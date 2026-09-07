@@ -93,6 +93,11 @@
   --header-h: 60px;
 }
 
+/* 手機頁首矮一截；所有黏在頁首底下的東西（編輯頁的分區列等）都讀這個值，才不會留一道縫。 */
+@media (max-width: 860px) {
+  :root { --header-h: 52px; }
+}
+
 :root[data-mode="dark"] {
   color-scheme: dark;
 

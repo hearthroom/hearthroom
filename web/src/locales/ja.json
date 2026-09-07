@@ -210,7 +210,7 @@
   "editor.welcome": "最初のメッセージ",
   "editor.welcome.hint": "プレイヤーが最初に読む一段。場面と関係をここで示さないと物語が始まりません。",
   "editor.alternates": "別の書き出し",
-  "editor.alternates.hint": "入り口だけ変えて、物語は同じ。やり直したときにランダムで選ばれます。",
+  "editor.alternates.hint": "入り口だけ変えて、物語は同じ。最初のメッセージの前にプレイヤーが左右に切り替えて選べます。選ばなければメインの冒頭になります。",
   "editor.alternates.add": "別の書き出しを追加",
   "editor.prologue": "最初の選択肢",
   "editor.prologue.hint": "プレイヤーがそのまま押せる最初の一言。空欄を前に固まるよりずっといい。",

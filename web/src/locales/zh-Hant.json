@@ -210,7 +210,7 @@
   "editor.welcome": "開場白",
   "editor.welcome.hint": "玩家進來看到的第一段。把場景和關係一次交代清楚，故事才起得來。",
   "editor.alternates": "備選開場白",
-  "editor.alternates.hint": "換一個開頭，但仍是同一場故事。玩家重開時會隨機拿到其中一個。",
+  "editor.alternates.hint": "換一個開頭，但仍是同一場故事。玩家在對話開始前可以左右切換，選一個再開始；不選就是主開場白。",
   "editor.alternates.add": "加一個備選開場白",
   "editor.prologue": "開場選項",
   "editor.prologue.hint": "玩家可以直接點的第一句話。比讓他對著空輸入框發呆好得多。",

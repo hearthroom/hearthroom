@@ -210,7 +210,7 @@
   "editor.welcome": "첫 메시지",
   "editor.welcome.hint": "플레이어가 처음 읽는 대목. 장면과 관계를 여기서 정해야 이야기가 시작됩니다.",
   "editor.alternates": "대체 도입부",
-  "editor.alternates.hint": "들어가는 길만 다르고 같은 이야기. 다시 시작할 때 무작위로 하나가 나옵니다.",
+  "editor.alternates.hint": "들어가는 길만 다르고 같은 이야기. 첫 메시지 전에 플레이어가 좌우로 넘겨 하나를 고를 수 있고, 고르지 않으면 기본 오프닝이 됩니다.",
   "editor.alternates.add": "대체 도입부 추가",
   "editor.prologue": "첫 선택지",
   "editor.prologue.hint": "플레이어가 바로 누를 수 있는 첫마디. 빈 입력창을 보고 멈추는 것보다 훨씬 낫습니다.",
