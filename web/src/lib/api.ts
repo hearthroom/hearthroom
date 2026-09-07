@@ -418,6 +418,14 @@ export interface WorldbookSummary {
   name: string;
   description: string;
   entryCount: number;
+  /**
+   * 改書名時要原樣送回去的那幾個欄位。上游的更新是整份覆蓋——只送 name 會把
+   * 描述、圖示、標籤、可見性一起清成空的。這條路是唯一帶著 token 又拿得到它們的地方
+   * （/worldbook/detail 認的是 accountId 標頭，社群站帶的是 token，讀不到自己的私人書）。
+   */
+  iconUrl?: string;
+  visibility?: string;
+  tags?: string;
 }
 
 export async function fetchMyWorldbooks(token: string, q = ""): Promise<WorldbookSummary[]> {
@@ -551,6 +559,15 @@ export async function createWorldbook(
   return body.worldbookId;
 }
 
+/** 整份覆蓋：沒帶到的欄位會被清空，所以改一個欄位也要把其餘的原樣送回。 */
+export interface WorldbookMetadataPatch {
+  name: string;
+  description: string;
+  iconUrl: string;
+  visibility: string;
+  tags: string[];
+}
+
 export interface WorldbookDocumentEntry {
   op: "create" | "update" | "delete";
   entryId?: string;
@@ -575,7 +592,7 @@ export interface WorldbookPatchResult {
 
 export async function patchWorldbookDocument(
   worldbookId: string,
-  document: { entries?: WorldbookDocumentEntry[]; binding?: { roleId: string } },
+  document: { metadata?: WorldbookMetadataPatch; entries?: WorldbookDocumentEntry[]; binding?: { roleId: string } },
   token: string,
 ): Promise<WorldbookPatchResult> {
   return json<WorldbookPatchResult>(

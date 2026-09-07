@@ -27,7 +27,9 @@ const api = vi.hoisted(() => ({
   fetchRoleValidation: vi.fn(async () => ({ status: "ok", blockers: [], warnings: [] })),
   fetchRoleDetail: vi.fn(async () => ({})),
   fetchRoleWorldbooks: vi.fn(async () => []),
-  fetchMyWorldbooks: vi.fn(async () => [{ worldbookId: "wb9", name: "北境設定", description: "", entryCount: 2 }]),
+  fetchMyWorldbooks: vi.fn(async () => [
+    { worldbookId: "wb9", name: "北境設定", description: "舊描述", entryCount: 2, iconUrl: "https://img.test/wb.png", visibility: "private", tags: "北境,懸疑" },
+  ]),
   submitRoleForReview: vi.fn(async () => ({})),
   uploadImage: vi.fn(async () => "https://img.test/avatar.png"),
   fetchAuthorAsset: vi.fn(async () => ({ rules: [], mountTrigger: "", mountLayer: "", pageMode: "classic", status: "none", version: 0 })),
@@ -327,6 +329,34 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     expect(api.createWorldbook).toHaveBeenCalledTimes(2);
     const [, doc] = api.patchWorldbookDocument.mock.calls[0] as unknown as [string, { entries: { op: string }[] }];
     expect(doc.entries.map((e) => e.op)).toEqual(["create"]);
+  });
+
+  it("改書名：送 metadata，圖示標籤可見性原樣帶回去，不會被清成空的", async () => {
+    await mount("/create");
+    await type($("#f-name"), "測試");
+    byText("世界書").click();
+    await flush();
+    const select = $<HTMLSelectElement>("#wb-reuse");
+    select.value = "wb9";
+    select.dispatchEvent(new Event("change"));
+    await flush();
+    [...root.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.trim() === "用這一本")!.click();
+    await flush();
+
+    // 描述讀得回來，改得動
+    expect($<HTMLInputElement>("#wb-desc").value).toBe("舊描述");
+    await type($("#wb-name"), "北境設定 v2");
+    await type($("#wb-desc"), "新描述");
+    await submit();
+
+    const [, doc] = api.patchWorldbookDocument.mock.calls[0] as unknown as [string, { metadata?: unknown }];
+    expect(doc.metadata).toEqual({
+      name: "北境設定 v2",
+      description: "新描述",
+      iconUrl: "https://img.test/wb.png",
+      visibility: "private",
+      tags: ["北境", "懸疑"],
+    });
   });
 
   it("大本世界書分段送：每段最多 100 個操作、綁定只跟第一段；中途失敗再存只送剩下的", async () => {
