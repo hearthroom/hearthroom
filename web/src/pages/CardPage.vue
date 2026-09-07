@@ -32,8 +32,6 @@ const error = ref("");
 const welcome = ref("");
 /** 開場白照對話頁畫出來的 HTML（作者的正則規則 → HTML／markdown）；純文字的開場白這裡是空字串。 */
 const welcomeHtml = ref("");
-/** 功能欄展開後的 HTML：作者的全域樣式與腳本住在這裡，一起放進 iframe 才有作者的版面。 */
-const welcomeMount = ref("");
 const session = useSession();
 const showComments = ref(true);
 const previewDoc = ref<unknown>(null);
@@ -88,7 +86,7 @@ async function load() {
       const charName = card.value?.name ?? "";
       welcome.value = plainText(rawWelcome, charName, t("card.you"));
       // 開場白照對話頁的方式畫：先套作者的正則規則（酒館／MMD 卡靠它把標記換成版面），
-      // 再交給沙盒 iframe 用同一套元件庫畫（HtmlCardFrame）。規則要登入才拿得到，
+      // 再交給沙盒 iframe 用同一套元件庫畫（HtmlCardFrame）。功能欄那份整頁美化不放（見 welcome-render）。規則要登入才拿得到，
       // 遊客與沒規則的卡就只畫 HTML／markdown 本身；純文字的開場白照舊走氣泡。
       void session.accessToken().catch(() => null)
         .then((token) => fetchPlayerAsset(roleId, token || undefined).catch(() => null))
@@ -96,7 +94,6 @@ async function load() {
           if (card.value?.roleId !== roleId) return;
           const out = renderWelcome(rawWelcome, { charName, userName: t("card.you"), asset });
           welcomeHtml.value = out.html;
-          welcomeMount.value = out.mountHtml;
         });
       showComments.value = raw.previewShowComments !== false;
       if (raw.hasPreviewPage === true) {
@@ -137,7 +134,7 @@ async function share() {
 }
 
 watch(() => route.params.id, () => {
-  card.value = null; welcome.value = ""; welcomeHtml.value = ""; welcomeMount.value = ""; previewDoc.value = null; more.value = []; broken.value = false; tab.value = "home";
+  card.value = null; welcome.value = ""; welcomeHtml.value = ""; previewDoc.value = null; more.value = []; broken.value = false; tab.value = "home";
   commentCount.value = null; showComments.value = true;
   load();
 }, { immediate: true });
@@ -241,7 +238,7 @@ watch(locale, load);
                 <div class="role__welcome">
                   <img v-if="hasArt" :src="card.avatarUrl!" alt="" class="role__welcome-face" />
                   <span v-else class="role__welcome-face mono" :style="{ '--h': hue }">{{ [...card.name][0] }}</span>
-                  <HtmlCardFrame v-if="welcomeHtml" class="role__bubble role__bubble--card" :html="welcomeHtml" :extra="welcomeMount" :title="$t('card.welcome')" />
+                  <HtmlCardFrame v-if="welcomeHtml" class="role__bubble role__bubble--card" :html="welcomeHtml" :title="$t('card.welcome')" />
                   <blockquote v-else class="role__bubble">{{ welcome }}</blockquote>
                 </div>
               </section>

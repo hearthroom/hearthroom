@@ -14,16 +14,15 @@ describe("開場白渲染", () => {
     expect(out.html).toContain('<div class="zzt-title">导览|身份登记</div>');
     expect(out.html).not.toContain("<zzhud>");
     expect(out.html).toContain("名字=未登记");
-    expect(out.mountHtml).toBe("");
   });
 
-  it("功能欄也走同一組規則，作者放在那裡的樣式與腳本一起交出去", () => {
+  it("功能欄（整頁美化與工具列）不進卡片頁：那是整頁對話的版面，塞進一個框只會蓋住文字", () => {
     const rules = [{ id: "s", name: "美化", find: "《美1》", replace: "<style>.zzt-title{color:red}</style>", enabled: true }];
     const out = renderWelcome("<b>嗨</b>", { charName: "c", userName: "u", asset: asset(rules, "《美1》《工1》") });
-    expect(out.mountHtml).toContain("<style>.zzt-title{color:red}</style>");
-    expect(out.mountHtml).toContain("《工1》");
-    const doc = buildSrcdoc(out.html, { color: "#fff", font: "system-ui" }, out.mountHtml);
-    expect(doc).toContain('<div id="hc-mount" hidden>');
+    expect(out.html).not.toContain("《美1》");
+    expect(out.html).not.toContain("<style>");
+    const doc = buildSrcdoc(out.html, { color: "#fff", font: "system-ui" });
+    expect(doc).not.toContain("hc-mount");
     expect(doc).toContain('id="hc-welcome"');
   });
 
