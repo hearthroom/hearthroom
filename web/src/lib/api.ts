@@ -17,13 +17,36 @@ export class ApiError extends Error {
  */
 const ERROR_KEY: Record<number, string> = { 401: "auth.expired", 403: "state.forbidden", 404: "state.notFound" };
 
+/**
+ * 上游回的穩定錯誤碼裡，使用者做得了事的那幾個各給一句人話。沒列到的碼照狀態碼講，
+ * 但把碼附在後面——只講「請求失敗」的話，使用者連該改哪裡、該回報什麼都不知道
+ * （2026-09-07 一位作者存卡失敗，畫面只有「請求失敗」，他以為是名字太長）。
+ */
+const CODE_KEY: Record<string, string> = {
+  invalid_arguments: "error.invalidArguments",
+  invalid_argument: "error.invalidArguments",
+  role_in_review: "error.roleInReview",
+  visibility_requires_review: "error.visibilityRequiresReview",
+  public_role_requires_clone: "error.publicRoleRequiresClone",
+  permission_denied: "state.forbidden",
+  not_found: "state.notFound",
+};
+const looksLikeCode = (raw: string): boolean => /^[a-z][a-z0-9_]*$/.test(raw);
+
+export function describeApiError(status: number, raw: string): string {
+  const text = (raw || "").trim();
+  if (text && CODE_KEY[text]) return i18n.global.t(CODE_KEY[text]);
+  // 不是錯誤碼的就是伺服器寫給人看的句子（例如內容審核的原因），原樣講。
+  if (text && !looksLikeCode(text)) return text;
+  const msg = i18n.global.t(ERROR_KEY[status] ?? (status >= 500 ? "state.serverBusy" : "state.requestFailed"));
+  return text ? `${msg} (${text})` : msg;
+}
+
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
-    const key = ERROR_KEY[res.status] ?? (res.status >= 500 ? "state.serverBusy" : "state.requestFailed");
-    const msg = i18n.global.t(key);
-    const raw = body.error ?? body.message;
-    throw new ApiError(res.status, import.meta.env.DEV && raw ? `${msg} (${raw})` : msg, body.error ?? "");
+    const raw = body.error ?? body.message ?? "";
+    throw new ApiError(res.status, describeApiError(res.status, raw), body.error ?? "");
   }
   return (await res.json()) as T;
 }
