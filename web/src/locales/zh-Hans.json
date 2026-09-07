@@ -442,5 +442,22 @@
   "res.kind.audio": "音频",
   "res.kind.font": "字体",
   "res.error.quotaBytes": "容量已满（500 MB），先删掉一些再传。",
-  "res.fontSample": "Aa 永字八法"
+  "res.fontSample": "Aa 永字八法",
+  "wb.reuse": "用已经有的一本",
+  "wb.reuse.none": "选一本",
+  "wb.reuse.option": "{name}（{n} 条）",
+  "wb.reuse.pick": "用这一本",
+  "wb.reuse.hint": "同一本可以绑给好几张卡，改一次每张卡都跟着变。",
+  "wb.reuse.failed": "这本的条目读不出来，先没有绑上去。过一下再试。",
+  "wb.search.placeholder": "找条目：名称、关键词、内容",
+  "wb.search.none": "没有符合的条目。",
+  "wb.entry.match": "怎么算命中",
+  "wb.entry.match.case": "分大小写",
+  "wb.entry.match.whole": "整个词才算",
+  "wb.entry.match.hint": "从酒馆带进来的条目照这里的规则逐字比对。",
+  "wb.entry.match.logic": "次要关键词怎么算",
+  "wb.entry.match.logic.0": "出现任一个",
+  "wb.entry.match.logic.1": "不是每一个都出现",
+  "wb.entry.match.logic.2": "一个都没出现",
+  "wb.entry.match.logic.3": "每一个都出现"
 }

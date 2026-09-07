@@ -96,6 +96,8 @@ const worldbookEntries = ref<WorldbookEntryDraft[]>([]);
 const worldbookOriginal = ref<WorldbookEntryDraft[]>([]);
 /** 剛匯入、還沒送出去的那本。儲存時要先建再寫。 */
 const worldbookPending = ref(false);
+/** 挑了作者已經有的一本：書已存在，缺的只有「綁到這張卡」那一步。 */
+const worldbookBindPending = ref(false);
 
 /** 正則規則：整份存、整份換。version 是上游的樂觀鎖，沒規則時是 0。 */
 const regexSet = ref<RegexRuleSet>(emptyRuleSet());
@@ -144,6 +146,7 @@ const dirty = computed(
     JSON.stringify(draft.value) !== JSON.stringify(original.value ?? pristine.value) ||
     JSON.stringify(worldbookEntries.value) !== JSON.stringify(worldbookOriginal.value) ||
     worldbookPending.value ||
+    worldbookBindPending.value ||
     regexDirty.value,
 );
 
@@ -224,6 +227,8 @@ function discardDraft() {
   draft.value = makeDraft(locale.value);
   tagsText.value = "";
   worldbookPending.value = false;
+  worldbookBindPending.value = false;
+  worldbookId.value = "";
   worldbookName.value = "";
   worldbookFormat.value = undefined;
   worldbookEntries.value = [];
@@ -434,6 +439,29 @@ function createWorldbookDraft() {
   }
 }
 
+/**
+ * 挑了作者已經有的一本：先把條目讀進來再認這本書。
+ *
+ * 讀不出來就整個放掉，不留一個「已綁定但看起來是空的」狀態——作者會照著那個空清單重打一遍，
+ * 存下去就在原本那本書裡多出一整份重複的條目。
+ */
+async function onWorldbookPick(book: { worldbookId: string; name: string }) {
+  try {
+    const token = await session.accessToken();
+    if (!token) throw new Error(t("auth.expired"));
+    const entries = await fetchWorldbookEntries(book.worldbookId, token);
+    worldbookId.value = book.worldbookId;
+    worldbookName.value = book.name;
+    worldbookEntries.value = entries;
+    worldbookOriginal.value = JSON.parse(JSON.stringify(entries));
+    worldbookBindPending.value = true;
+    worldbookFormat.value = undefined;
+    error.value = "";
+  } catch {
+    error.value = t("wb.reuse.failed");
+  }
+}
+
 /** 從酒館世界書檔匯入的條目。還沒綁書就先把書建起來，名字用檔裡的、沒有就用角色名。 */
 function onWorldbookImported(payload: { name: string; entries: WorldbookEntryDraft[] }) {
   if (!worldbookId.value && !worldbookPending.value) {
@@ -499,10 +527,10 @@ function reconcileWorldbookChunk(chunk: WorldbookOp[], createdIds: string[]) {
 async function saveWorldbook(token: string, targetRoleId: string) {
   const ops = worldbookOps();
   const needsBook = worldbookPending.value || Boolean(worldbookId.value);
-  if (!needsBook || (!ops.length && worldbookId.value)) return;
+  if (!needsBook || (!ops.length && worldbookId.value && !worldbookBindPending.value)) return;
 
   let bookId = worldbookId.value;
-  let firstBind = false;
+  let firstBind = worldbookBindPending.value;
   if (!bookId) {
     if (!ops.length) {
       // 按了「建一本」卻一條都沒填：不建空書，也要把待建旗標放掉——
@@ -523,6 +551,14 @@ async function saveWorldbook(token: string, targetRoleId: string) {
     worldbookPending.value = false;
     firstBind = true;
   }
+  // 挑了一本現成的、條目一個字都沒改：還是得送一次，不然綁定根本沒發出去
+  if (!ops.length) {
+    if (firstBind) {
+      await patchWorldbookDocument(bookId, { binding: { roleId: targetRoleId } }, token);
+      worldbookBindPending.value = false;
+    }
+    return;
+  }
   saveProgress.value = { done: 0, total: ops.length };
   try {
     for (let i = 0; i < ops.length; i += WORLDBOOK_OPS_PER_REQUEST) {
@@ -534,6 +570,7 @@ async function saveWorldbook(token: string, targetRoleId: string) {
         token,
       );
       firstBind = false;
+      worldbookBindPending.value = false;
       reconcileWorldbookChunk(chunk, result?.createdEntryIds ?? []);
       saveProgress.value = { done: Math.min(i + chunk.length, ops.length), total: ops.length };
     }
@@ -907,7 +944,7 @@ async function exportCard(format: "png" | "json") {
           <p class="muted">{{ $t("wb.lede") }}</p>
           <WorldbookEditor v-model="worldbookEntries" v-model:book-name="worldbookName"
                            :bound="Boolean(worldbookId) || worldbookPending" @create="createWorldbookDraft"
-                           @imported="onWorldbookImported" />
+                           @imported="onWorldbookImported" @pick="onWorldbookPick" />
         </section>
 
         <!-- 发布 -->

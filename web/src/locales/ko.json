@@ -442,5 +442,22 @@
   "res.kind.audio": "오디오",
   "res.kind.font": "글꼴",
   "res.error.quotaBytes": "용량이 가득 찼습니다(500 MB). 먼저 일부를 삭제하세요.",
-  "res.fontSample": "Aa 가나다"
+  "res.fontSample": "Aa 가나다",
+  "wb.reuse": "이미 있는 책 사용",
+  "wb.reuse.none": "하나 고르기",
+  "wb.reuse.option": "{name}({n}개 항목)",
+  "wb.reuse.pick": "이걸로 사용",
+  "wb.reuse.hint": "한 권을 여러 카드에 붙일 수 있어요. 한 번 고치면 모든 카드에 반영됩니다.",
+  "wb.reuse.failed": "이 책의 항목을 읽지 못해 붙이지 않았어요. 잠시 후 다시 시도해 주세요.",
+  "wb.search.placeholder": "항목 찾기: 이름, 키워드, 내용",
+  "wb.search.none": "맞는 항목이 없어요.",
+  "wb.entry.match": "무엇을 적중으로 볼지",
+  "wb.entry.match.case": "대소문자 구분",
+  "wb.entry.match.whole": "단어 전체가 맞을 때만",
+  "wb.entry.match.hint": "Tavern에서 가져온 항목은 여기 규칙대로 글자 그대로 대조합니다.",
+  "wb.entry.match.logic": "보조 키워드를 세는 방법",
+  "wb.entry.match.logic.0": "하나라도 나오면",
+  "wb.entry.match.logic.1": "전부 나오지는 않으면",
+  "wb.entry.match.logic.2": "하나도 안 나오면",
+  "wb.entry.match.logic.3": "전부 나오면"
 }
