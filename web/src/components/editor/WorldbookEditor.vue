@@ -119,6 +119,8 @@ function patchMatch(index: number, changes: Partial<WorldbookMatchOptions>) {
 const SELECTIVE_LOGIC = [0, 1, 2, 3];
 /** 上游認得的分類，順序照站內 App。留空的舊條目上游當「自訂」看。 */
 const CATEGORIES = ["character", "location", "item", "event", "rule", "custom"];
+/** 掃哪一邊的對話。空字串跟 both 同義，舊條目都是空的。 */
+const TRIGGER_REGIONS = ["both", "user_only", "ai_only"];
 
 /**
  * 作者自己已經有的世界書。一本書可以綁給好幾張卡，重建一本一樣的等於之後每張卡各改一次。
@@ -335,6 +337,15 @@ const setSecondary = (index: number, raw: string) => patch(index, { secondaryKey
               <span class="subtle">{{ [...entry.content].length > ENTRY_CONTENT_MAX ? $t("wb.entry.content.over", { max: ENTRY_CONTENT_MAX }) : "" }}</span>
               <span class="subtle count" :class="{ over: [...entry.content].length > ENTRY_CONTENT_MAX }">{{ [...entry.content].length }} / {{ ENTRY_CONTENT_MAX }}</span>
             </span>
+          </div>
+
+          <div v-if="!entry.isConstant" class="field">
+            <label :for="`wb-tr-${index}`">{{ $t("wb.entry.trigger") }}</label>
+            <select :id="`wb-tr-${index}`" class="input" :value="entry.triggerRegion || 'both'"
+                    @change="patch(index, { triggerRegion: ($event.target as HTMLSelectElement).value })">
+              <option v-for="value in TRIGGER_REGIONS" :key="value" :value="value">{{ $t(`wb.trigger.${value}`) }}</option>
+            </select>
+            <span class="subtle">{{ $t("wb.entry.trigger.hint") }}</span>
           </div>
 
           <div class="toggles">

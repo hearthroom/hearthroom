@@ -377,6 +377,24 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     });
   });
 
+  it("觸發區域：選了跟著送，上游讀回來的值不會在下次儲存掉了", async () => {
+    await mount("/create");
+    await type($("#f-name"), "測試");
+    byText("世界書").click();
+    await flush();
+    byText("建一本").click();
+    await flush();
+    await type($<HTMLTextAreaElement>("textarea[id^=wb-c-]"), "那句暗號只有玩家講得出來。");
+    const trigger = $<HTMLSelectElement>("select[id^=wb-tr-]");
+    trigger.value = "user_only";
+    trigger.dispatchEvent(new Event("change"));
+    await flush();
+    await submit();
+
+    const [, doc] = api.patchWorldbookDocument.mock.calls[0] as unknown as [string, { entries: { triggerRegion?: string }[] }];
+    expect(doc.entries[0].triggerRegion).toBe("user_only");
+  });
+
   it("大本世界書分段送：每段最多 100 個操作、綁定只跟第一段；中途失敗再存只送剩下的", async () => {
     await mount("/create");
     await type($("#f-name"), "大本");
