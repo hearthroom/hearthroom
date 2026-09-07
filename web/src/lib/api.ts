@@ -521,6 +521,25 @@ export interface WorldbookSummary {
   tags?: string;
 }
 
+/** 玩家面的作者資產（正則規則、功能欄、簡繁對照）。目前上游要登入才給；沒 token 或被拒就當沒有資產。 */
+export interface PlayerAsset {
+  rules: unknown[];
+  mountTrigger: string;
+  mountLayer: string;
+  cardFormat?: string;
+  variants?: unknown;
+}
+
+export async function fetchPlayerAsset(roleId: string, token?: string): Promise<PlayerAsset | null> {
+  const res = await fetch(`${UPSTREAM_API}/open/v1/role/author-asset/serve?roleId=${encodeURIComponent(roleId)}`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) return null;
+  const body = (await res.json().catch(() => null)) as Partial<PlayerAsset> | null;
+  if (!body || !Array.isArray(body.rules)) return null;
+  return { rules: body.rules, mountTrigger: String(body.mountTrigger ?? ""), mountLayer: String(body.mountLayer ?? ""), cardFormat: body.cardFormat, variants: body.variants ?? null };
+}
+
 export async function fetchMyWorldbooks(token: string, q = ""): Promise<WorldbookSummary[]> {
   const params = new URLSearchParams({ pageSize: "50" });
   if (q) params.set("q", q);

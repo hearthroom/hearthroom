@@ -12,12 +12,14 @@
     "i18n": "node scripts/i18n-check.mjs"
   },
   "dependencies": {
+    "markdown-it": "^14.3.1",
     "pinia": "^3.0.0",
     "vue": "^3.5.0",
     "vue-i18n": "^11.4.10",
     "vue-router": "^4.5.0"
   },
   "devDependencies": {
+    "@types/markdown-it": "^14.2.0",
     "@vitejs/plugin-vue": "^5.2.4",
     "happy-dom": "^20.14.0",
     "typescript": "^5.9.0",
