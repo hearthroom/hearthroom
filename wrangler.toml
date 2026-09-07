@@ -24,7 +24,7 @@ not_found_handling = "single-page-application"
 # 靜態檔在 /assets/ 底下，不在這個清單裡，所以不會多付一次 Worker 呼叫。
 run_worker_first = [
   "/", "/v1/*", "/search*", "/mine*", "/wallet*", "/create*", "/auth/*",
-  "/cards/*", "/authors/*",
+  "/cards/*", "/authors/*", "/review*",
   "/zh-Hans/*", "/en/*", "/ja/*", "/ko/*",
 ]
 
@@ -50,6 +50,9 @@ SYNC_BATCH_SIZE = "45"
 SYNC_CONCURRENCY = "6"
 # 埋點總開關。設成 "false" 就一行事件都不發，分叉或本機除錯時用。
 ANALYTICS_ENABLED = "true"
+# 審核機器人在主站的公開數字 ID。作者提交審核時把卡授權給它，站方審核人員透過它讀設定。
+# 金鑰另外用 `wrangler secret put REVIEW_BOT_KEY` 放進去；兩個都缺就退回「登記即上榜」（src/providers.ts）。
+REVIEW_BOT_ACCOUNT_NUM_ID = "330016"
 
 [[d1_databases]]
 binding = "DB"

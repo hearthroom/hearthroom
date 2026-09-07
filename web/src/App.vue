@@ -7,11 +7,13 @@ import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import LocaleSwitch from "@/components/LocaleSwitch.vue";
 import { useAppearance } from "@/lib/appearance";
 import { useLocalePath } from "@/lib/use-locale";
+import { useReviewer } from "@/lib/review";
 import { useSession } from "@/lib/session";
 import { SITE } from "@/lib/site";
 
 const { lp } = useLocalePath();
 const session = useSession();
+const reviewerStore = useReviewer();
 const route = useRoute();
 const router = useRouter();
 
@@ -54,6 +56,8 @@ onMounted(() => document.addEventListener("keydown", onSlash));
       <nav class="nav">
         <RouterLink :to="lp('/')" class="nav__item" :class="{ 'nav__item--on': route.path === lp('/') }">{{ $t("nav.board") }}</RouterLink>
         <RouterLink v-if="session.me" :to="lp('/mine')" class="nav__item" active-class="nav__item--on">{{ $t("nav.mine") }}</RouterLink>
+        <!-- 只有審核人看得到這顆：是不是審核人由本站決定，登入後問一次 -->
+        <RouterLink v-if="reviewerStore.reviewer" :to="lp('/review')" class="nav__item" active-class="nav__item--on">{{ $t("nav.review") }}</RouterLink>
       </nav>
 
       <form v-if="!onSearchPage" class="search" role="search" @submit.prevent="search">

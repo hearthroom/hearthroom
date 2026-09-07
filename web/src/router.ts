@@ -30,6 +30,9 @@ const pages = [
   { path: "resources", component: () => import("./pages/ResourcesPage.vue"), meta: { auth: true } },
   // 站內玩卡：舞台整頁接管（bare = 不套站台頁首頁尾），對話要登入
   { path: "play/:roleId", component: () => import("./pages/PlayPage.vue"), meta: { auth: true, bare: true } },
+  // 社群審核：共享佇列與唯讀審核頁。誰能審由服務端決定（不是審核人會看到「你不是審核人」）。
+  { path: "review", component: () => import("./pages/ReviewQueuePage.vue"), meta: { auth: true } },
+  { path: "review/:id", component: () => import("./pages/ReviewDetailPage.vue"), meta: { auth: true } },
   { path: "auth/callback", component: () => import("./pages/CallbackPage.vue") },
   // 404 也在語言前綴底下：/en/nope 要看到英文的 404，而不是被換回預設語言
   { path: ":pathMatch(.*)*", component: () => import("./pages/NotFoundPage.vue") },
@@ -104,6 +107,7 @@ function surfaceOf(path: string): string {
   if (bare.startsWith("/create")) return "create";
   if (bare.startsWith("/wallet")) return "wallet";
   if (bare.startsWith("/play")) return "play";
+  if (bare.startsWith("/review")) return "review";
   return "404";
 }
 
