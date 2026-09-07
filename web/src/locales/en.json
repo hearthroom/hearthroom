@@ -442,5 +442,22 @@
   "res.kind.audio": "Audio",
   "res.kind.font": "Fonts",
   "res.error.quotaBytes": "Storage is full (500 MB). Delete some files first.",
-  "res.fontSample": "Aa Bb Cc"
+  "res.fontSample": "Aa Bb Cc",
+  "wb.reuse": "Use a book you already have",
+  "wb.reuse.none": "Pick one",
+  "wb.reuse.option": "{name} ({n} entries)",
+  "wb.reuse.pick": "Use this one",
+  "wb.reuse.hint": "One book can be attached to several cards. Edit it once and every card follows.",
+  "wb.reuse.failed": "Could not read that book's entries, so nothing was attached. Try again in a moment.",
+  "wb.search.placeholder": "Find an entry: name, keyword, text",
+  "wb.search.none": "No entry matches.",
+  "wb.entry.match": "What counts as a hit",
+  "wb.entry.match.case": "Case matters",
+  "wb.entry.match.whole": "Whole word only",
+  "wb.entry.match.hint": "Entries brought over from Tavern are matched literally by these rules.",
+  "wb.entry.match.logic": "How the extra keywords count",
+  "wb.entry.match.logic.0": "Any one of them shows up",
+  "wb.entry.match.logic.1": "Not all of them show up",
+  "wb.entry.match.logic.2": "None of them show up",
+  "wb.entry.match.logic.3": "All of them show up"
 }

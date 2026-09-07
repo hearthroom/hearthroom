@@ -442,5 +442,22 @@
   "res.kind.audio": "音訊",
   "res.kind.font": "字型",
   "res.error.quotaBytes": "容量已滿（500 MB），先刪掉一些再傳。",
-  "res.fontSample": "Aa 永字八法"
+  "res.fontSample": "Aa 永字八法",
+  "wb.reuse": "用已經有的一本",
+  "wb.reuse.none": "選一本",
+  "wb.reuse.option": "{name}（{n} 條）",
+  "wb.reuse.pick": "用這一本",
+  "wb.reuse.hint": "同一本可以綁給好幾張卡，改一次每張卡都跟著變。",
+  "wb.reuse.failed": "這本的條目讀不出來，先沒有綁上去。過一下再試。",
+  "wb.search.placeholder": "找條目：名稱、關鍵詞、內容",
+  "wb.search.none": "沒有符合的條目。",
+  "wb.entry.match": "怎麼算命中",
+  "wb.entry.match.case": "分大小寫",
+  "wb.entry.match.whole": "整個詞才算",
+  "wb.entry.match.hint": "從酒館帶進來的條目照這裡的規則逐字比對。",
+  "wb.entry.match.logic": "次要關鍵詞怎麼算",
+  "wb.entry.match.logic.0": "出現任一個",
+  "wb.entry.match.logic.1": "不是每一個都出現",
+  "wb.entry.match.logic.2": "一個都沒出現",
+  "wb.entry.match.logic.3": "每一個都出現"
 }
