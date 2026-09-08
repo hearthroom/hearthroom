@@ -701,5 +701,12 @@
   "editor.game.template": "Fill in the default template",
   "editor.game.clear": "Clear",
   "editor.game.play": "Play in a new tab",
-  "editor.game.invalid": "The game config has errors. Fix them per the hints below and save again."
+  "editor.game.invalid": "The game config has errors. Fix them per the hints below and save again.",
+  "game.regen": "Rewrite",
+  "game.regenHint": "Have them answer your last line differently",
+  "game.assist": "Suggest",
+  "game.assistHint": "Draft a line for you to edit before sending",
+  "game.newChat": "New game",
+  "game.newChatConfirm": "This run will be saved and the story restarts from the opening. Continue?",
+  "game.newChatDone": "A new run has started"
 }

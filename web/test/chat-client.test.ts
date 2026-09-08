@@ -52,6 +52,18 @@ describe("sendTurn", () => {
     expect(ws.readyState).toBe(3);
   });
 
+  it("marks a rewrite with the player message's chatId", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ticket: "T3" }), { status: 200 })));
+    vi.stubGlobal("WebSocket", FakeSocket);
+    sendTurn({ base: "https://api.example", token: "tok", conversationId: "c1", message: "再说一次", lang: "zh-Hans", rewriteChatId: "u-42" }, {
+      onDelta: () => {}, onDone: () => {}, onError: () => {},
+    });
+    await flush();
+    const ws = FakeSocket.last!;
+    ws.onopen?.(); ws.feed("event: ready\ndata: {}\n\n");
+    expect(JSON.parse(ws.sent[1])).toMatchObject({ rewrite: true, chatId: "u-42", contine: false, message: "再说一次" });
+  });
+
   it("reports the credits frame and server errors instead of hanging", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ticket: "T2" }), { status: 200 })));
     vi.stubGlobal("WebSocket", FakeSocket);

@@ -701,5 +701,12 @@
   "editor.game.template": "기본 템플릿 채우기",
   "editor.game.clear": "비우기",
   "editor.game.play": "새 탭에서 플레이",
-  "editor.game.invalid": "게임 설정에 오류가 있습니다. 아래 안내대로 고친 뒤 다시 저장하세요."
+  "editor.game.invalid": "게임 설정에 오류가 있습니다. 아래 안내대로 고친 뒤 다시 저장하세요.",
+  "game.regen": "다시 쓰기",
+  "game.regenHint": "방금 한 말에 다른 방식으로 답하게 합니다",
+  "game.assist": "제안",
+  "game.assistHint": "한 줄을 대신 써서 입력창에 넣어 드립니다. 고친 뒤 보내세요",
+  "game.newChat": "새로 시작",
+  "game.newChatConfirm": "이번 판은 저장되고 오프닝부터 다시 시작합니다. 계속할까요?",
+  "game.newChatDone": "새 판이 시작되었습니다"
 }
