@@ -214,5 +214,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
    門檻由實測定：字標＋搜尋、外觀、語言、餘額、頭像一排要 490px 左右才放得下。 */
 @media (max-width: 500px) {
   .account :deep(.acct__credits) { display: none; }
+  /* GitHub 圖示也讓位：頁尾每頁都有同一條連結，少它不少功能；留著字標會被擠成「Hearthro…」 */
+  .gh { display: none; }
 }
 </style>
