@@ -9,11 +9,12 @@ beforeEach(async () => {
 });
 afterEach(restoreUpstream);
 
+// 提交必須宣告是不是成人內容（0006 起）；這裡的測試不管分級，一律帶「一般內容」
 const register = (body: unknown, headers: Record<string, string> = bearer()) =>
   SELF.fetch("https://c.test/v1/cards", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headers },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ nsfw: false, ...(body as object) }),
   });
 
 const list = async (query = "") => {

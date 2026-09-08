@@ -40,3 +40,21 @@ describe("confirmDialog", () => {
     expect(await p).toBe(false);
   });
 });
+
+describe("confirmChoice：帶必選項的確認", () => {
+  it("沒選就按不了確認；選了才落定並回選到的值；取消回 null", async () => {
+    const { confirmChoice, confirmChoiceOk } = await import("../src/lib/confirm");
+    const opts = { message: "分級？", choices: [{ value: "sfw", label: "一般" }, { value: "nsfw", label: "成人" }] };
+    const p = confirmChoice(opts);
+    expect(confirmChoiceOk(opts, null)).toBe(false);
+    expect(confirmChoiceOk(opts, "other")).toBe(false);
+    settleConfirm(true, "", null);
+    expect(confirmState.current?.message).toBe("分級？");
+    settleConfirm(true, "", "nsfw");
+    expect(await p).toBe("nsfw");
+    const q = confirmChoice(opts);
+    settleConfirm(false);
+    expect(await q).toBeNull();
+  });
+});
+

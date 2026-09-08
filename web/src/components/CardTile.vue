@@ -58,7 +58,10 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
     </div>
 
     <div class="card__body">
-      <h2 class="card__name"><RouterLink :to="href" class="card__link">{{ card.name }}</RouterLink></h2>
+      <h2 class="card__name">
+        <span v-if="card.nsfw" class="nsfw-badge" :title="$t('card.nsfwHint')">{{ $t("card.nsfw") }}</span>
+        <RouterLink :to="href" class="card__link">{{ card.name }}</RouterLink>
+      </h2>
       <p class="card__hook">{{ card.summary || $t("card.noSummary") }}</p>
 
       <ul v-if="tags.length" class="card__tags">

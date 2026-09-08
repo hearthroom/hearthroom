@@ -8,12 +8,14 @@ import { fetchAuthors, fetchBoard } from "@/lib/api";
 import { contentLang, defaultZone } from "@/lib/i18n";
 import { TAG_CATALOG, tagLabel } from "../../../shared/tag-catalog";
 import { useLocalePath } from "@/lib/use-locale";
+import { useSession } from "@/lib/session";
 import type { AuthorPage } from "@/lib/api";
 import type { AuthorSort, CardPage, Sort } from "@/lib/types";
 
 const route = useRoute();
 const router = useRouter();
 const { locale, lp } = useLocalePath();
+const session = useSession();
 const { t } = useI18n();
 
 const page = ref<CardPage | null>(null);
@@ -82,6 +84,8 @@ function navigate(patch: Record<string, string | undefined>) {
 const switchMode = (m: "cards" | "authors") => navigate({ mode: m === "authors" ? "authors" : undefined, sort: undefined, tag: undefined });
 
 watch([() => route.query, locale], load, { immediate: true });
+// 成人內容開關載好（登入後才知道）或改了：重讀，否則第一屏永遠是沒開的版本
+watch(() => session.profile?.showNsfw, (now, before) => { if (before !== undefined && now !== before) load(); });
 </script>
 
 <template>

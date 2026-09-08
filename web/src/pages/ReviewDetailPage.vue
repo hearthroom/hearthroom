@@ -124,6 +124,12 @@ onMounted(() => { void load(); });
           </p>
           <h1 class="head__title display">{{ doc.roleName }}</h1>
           <p class="subtle">{{ doc.roleDesc }}</p>
+          <!-- 作者的分級宣告放最上面：審核人第一件事就是對照內容跟它符不符 -->
+          <p class="rating" :class="{ 'rating--nsfw': data.submission.nsfw }">
+            {{ $t("review.rating.declared") }}
+            <strong>{{ data.submission.nsfw ? $t("review.rating.nsfw") : $t("review.rating.sfw") }}</strong>
+            · {{ $t("review.rating.hint") }}
+          </p>
         </div>
         <div class="head__acts">
           <RouterLink class="btn btn--sm" :to="lp(`/play/${data.card.roleId}`)" target="_blank">{{ $t("review.action.play") }}</RouterLink>
@@ -237,6 +243,8 @@ onMounted(() => { void load(); });
         <div class="field">
           <label for="review-note">{{ $t("review.note.label") }}</label>
           <textarea id="review-note" v-model="note" class="input" rows="3" :disabled="decided" />
+          <!-- 常見的駁回理由一鍵填入；審核人不改作者的宣告，只駁回 -->
+          <button type="button" class="btn btn--sm btn--ghost" :disabled="decided" @click="note = $t('review.rating.mismatch')">{{ $t("review.rating.mismatchFill") }}</button>
         </div>
         <p v-if="!claimedByMe && !decided" class="subtle">{{ $t("review.claimFirst") }}</p>
         <div class="verdict__acts">
@@ -280,5 +288,7 @@ onMounted(() => { void load(); });
 .verdict { padding: var(--s-4); display: grid; gap: var(--s-3); }
 .verdict__acts { display: flex; justify-content: flex-end; gap: var(--s-2); }
 .chip--reject { background: color-mix(in srgb, var(--danger) 12%, var(--surface)); color: var(--danger); }
+.rating { margin: 6px 0 0; font-size: 13px; color: var(--text-2); }
+.rating--nsfw strong { color: var(--danger); }
 .detail-ghost { height: 60vh; border-radius: var(--r-md); }
 </style>

@@ -3,7 +3,7 @@ import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { ApiError, fetchMyCards, registerCard, unregisterCard, type MyCard, type MyCardPage } from "@/lib/api";
-import { confirmDialog } from "@/lib/confirm";
+import { confirmChoice } from "@/lib/confirm";
 import { daysUntilReset, remaining, weekRange } from "@/lib/quota";
 import { useLocalePath } from "@/lib/use-locale";
 import MyCardTile from "@/components/MyCardTile.vue";
@@ -99,12 +99,19 @@ async function submit(card: MyCard) {
     error.value = t("mine.quota.exceeded");
     return;
   }
-  const ok = await confirmDialog({
+  // 提交時必須宣告分級，而且刻意不預選：這是作者親手做的聲明，審核人會對照內容，不符會被駁回
+  const rating = await confirmChoice({
     title: t("mine.consent.title"),
     message: t("mine.consent.message"),
     confirmText: t("mine.consent.confirm"),
+    choiceLabel: t("mine.rating.label"),
+    choices: [
+      { value: "sfw", label: t("mine.rating.sfw"), hint: t("mine.rating.sfwHint") },
+      { value: "nsfw", label: t("mine.rating.nsfw"), hint: t("mine.rating.nsfwHint") },
+    ],
   });
-  if (!ok) return;
+  if (!rating) return;
+  const nsfw = rating === "nsfw";
   const wasRegistered = card.registered;
   busy.value = card.roleId;
   error.value = "";
@@ -112,10 +119,11 @@ async function submit(card: MyCard) {
   try {
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
-    const res = (await registerCard(card.roleId, token)) as { status?: MyCard["status"] };
+    const res = (await registerCard(card.roleId, token, nsfw)) as { status?: MyCard["status"] };
     card.registered = true;
     card.status = res.status ?? "approved";
     card.note = "";
+    card.nsfw = nsfw;
     if (session.me) cache.write(session.me.accountNumId, page.value, filter.value, data.value!);
     // 登記成功就多用掉一格；撤銷不還——額度數的是「這週登記過幾張不同的卡」
     if (!wasRegistered && data.value) data.value.quota.used = Math.min(data.value.quota.limit, data.value.quota.used + 1);

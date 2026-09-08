@@ -30,7 +30,7 @@ const submit = (roleId: string, token = "author-token") =>
   SELF.fetch("https://c.test/v1/cards", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...bearer(token) },
-    body: JSON.stringify({ roleId }),
+    body: JSON.stringify({ roleId, nsfw: false }),
   });
 // 榜單有邊緣快取（整個 URL 是鍵）：同一個測試裡多次看榜要換查詢字串，才不會讀到前一次的結果。
 let boardSeq = 0;

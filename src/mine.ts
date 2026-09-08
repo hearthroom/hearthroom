@@ -41,7 +41,7 @@ const cacheKey = (accountNumId: number, page: number, pageSize: number) =>
 
 export interface MinePage {
   /** registered＝本站有這張卡的登記（不論審到哪）；status 只在 registered 時有；note 是最近一次駁回的說明。 */
-  items: (MyRole & { registered: boolean; status?: CardStatus; note?: string })[];
+  items: (MyRole & { registered: boolean; status?: CardStatus; note?: string; nsfw?: boolean })[];
   /** 作者一共有幾張卡。這個數字只有上游知道，「已登記」那條路不問上游，所以是 null。 */
   total: number | null;
   /** 已登記幾張。**全域**的數字，不是這一頁數出來的——見 countByAuthor。 */
@@ -83,6 +83,7 @@ export async function loadMine(
       offset: (opts.page - 1) * opts.pageSize,
       // 作者要看到自己每一張登記過的卡，包括待審、被駁回、離榜重審中的。
       anyStatus: true,
+      allowNsfw: true,
     });
     const notes = await statusAmong(env.DB, rows.map((r) => r.source_role_id));
     return {
@@ -102,6 +103,7 @@ export async function loadMine(
             registered: true,
             status: row.status as CardStatus,
             note: notes.get(row.source_role_id)?.note ?? "",
+            nsfw: card.nsfw,
           };
         }),
         total: null,
@@ -146,7 +148,7 @@ export async function loadMine(
   const items = roles.items
     .map((r) => {
       const s = statuses.get(r.roleId);
-      return { ...r, registered: registered.has(r.roleId), ...(s ? { status: s.status, note: s.note } : {}) };
+      return { ...r, registered: registered.has(r.roleId), ...(s ? { status: s.status, note: s.note, nsfw: s.nsfw } : {}) };
     })
     // 「還沒登記」是把這一頁裡已登記的挑掉。已登記的那組另有完整來源（見上面），
     // 這一組沒有——要全域篩就得把作者所有的頁都抓回來，每次看一頁都付那個代價不值得。
