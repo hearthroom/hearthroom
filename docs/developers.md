@@ -74,6 +74,15 @@ Cards created through the site must **not** carry a player name at card level; t
 
 The embedded stage is the canonical consumer of this level; its endpoint table in the repository (`stage/src/config/request-url.js`) is checked against the spec by the drift test. Note that `POST /open/v1/conversation/start` only creates or resumes a conversation; sending a message, regenerating and continuing all happen over the WebSocket described under `POST /open/v1/conversation/ws-ticket` in the reference. Behaviour with a partially implemented level 4 is currently unspecified: the stage assumes the whole group exists.
 
+## How-to: choosing a model
+
+There is no "select model" endpoint. Selection is a value you store or send:
+
+1. **List the catalog.** `GET /open/v1/models` returns an array of *groups* → *families* → *variants*. A variant is one concrete model on one channel; its `value` is the identifier you use everywhere else. Each variant also tells you what it supports: `contextBudgetOptions` (context tiers), `thinkingDepthOptions` (only for reasoning models with selectable depth), `isMember` (requires a membership), `status` (health) and `costScore`.
+2. **Persist the choice for a card.** `POST /open/v1/player/role-settings/save` with `roleId` and `selectModel: <variant.value>`. Optionally add `context` (one of that variant's `contextBudgetOptions[].value`) and `thinkingDepth` (one of its `thinkingDepthOptions[].value`). This is what the stage reads for every later turn; `GET /open/v1/player/role-settings` shows the stored value and its display name.
+3. **Override for one turn (optional).** The WebSocket chat frame (see `POST /open/v1/conversation/ws-ticket` → *websocket* in the reference) accepts `model` and `thinkingDepth` per message. Empty `model` means the server default, not the stored setting — send the stored value if you want it honoured on that frame.
+4. **Health and uptime.** `GET /open/v1/models/uptime-history?model=<variant.value>` gives per-hour availability for the picker's status hints.
+
 ## Player persona and `{{user}}`
 
 The provider must resolve `{{user}}` (and how the character addresses the player) in this order:
