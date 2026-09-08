@@ -132,7 +132,7 @@ const stateLabel = (image: LibraryImage) =>
       <button type="button" class="btn btn--sm btn--primary" :disabled="busy" @click="fileInput?.click()">
         {{ busy ? $t("res.panel.uploading") : $t("res.panel.upload") }}
       </button>
-      <input ref="fileInput" type="file" accept="image/png,image/jpeg,image/webp" class="sr-only" @change="onFile" />
+      <input ref="fileInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" class="sr-only" @change="onFile" />
     </div>
 
     <div v-if="folders.length" class="rp__folders">

@@ -95,7 +95,7 @@ function pick(file: File) {
         <p v-if="error" class="subtle err" role="alert">{{ error }}</p>
       </div>
     </div>
-    <input ref="input" type="file" accept="image/png,image/jpeg,image/webp" class="sr-only" @change="choose" />
+    <input ref="input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" class="sr-only" @change="choose" />
     <LibraryPicker v-if="picking" @pick="emit('update:modelValue', $event)" @close="picking = false" />
   </div>
 </template>
