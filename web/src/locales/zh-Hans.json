@@ -566,11 +566,12 @@
   "wb.entries.empty": "这本书还没有条目。",
   "wb.entries.more": "还有 {n} 条",
   "editor.userName": "玩家称呼",
-  "footer.developers": "开发者",
+  "footer.developers": "开发者文档",
   "developers.title": "开发者：兼容供应商协议",
   "developers.source": "这份文档与代码同仓库维护，在 GitHub 上查看源文件",
   "board.sort.day": "日榜",
   "board.sort.week": "周榜",
   "board.sort.month": "月榜",
-  "board.sort.random": "推荐"
+  "board.sort.random": "推荐",
+  "developers.toc": "目录"
 }

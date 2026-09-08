@@ -566,11 +566,12 @@
   "wb.entries.empty": "This book has no entries yet.",
   "wb.entries.more": "and {n} more",
   "editor.userName": "What the character calls the player",
-  "footer.developers": "Developers",
+  "footer.developers": "Developer docs",
   "developers.title": "Developers: Provider Protocol",
   "developers.source": "This document lives in the repository alongside the code. View the source on GitHub",
   "board.sort.day": "Today",
   "board.sort.week": "This week",
   "board.sort.month": "This month",
-  "board.sort.random": "Discover"
+  "board.sort.random": "Discover",
+  "developers.toc": "On this page"
 }
