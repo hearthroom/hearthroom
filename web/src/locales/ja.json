@@ -603,7 +603,6 @@
   "res.panel.copyFailed": "コピーできませんでした。手動で選択してください。",
   "dialog.close": "閉じる",
   "nav.me": "マイページ",
-  "author.publishedOn": "{providers} で公開",
   "login.title": "Hearthroom にログイン",
   "login.lead": "お持ちのアカウントでログインできます。新しく登録する必要はありません。",
   "login.continueWith": "{provider} アカウントで続ける",
@@ -619,5 +618,7 @@
   "me.linked.at": "{date} に連携",
   "me.linked.active": "連携中",
   "me.reauthorize": "再認証",
-  "me.publicPage": "自分の公開作者ページを見る"
+  "me.publicPage": "自分の公開作者ページを見る",
+  "author.playableOn": "{providers} でプレイ可能",
+  "card.playableOn": "{provider} でプレイ可能"
 }

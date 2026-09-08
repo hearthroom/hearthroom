@@ -603,7 +603,6 @@
   "res.panel.copyFailed": "복사하지 못했어요. 직접 선택해 주세요.",
   "dialog.close": "닫기",
   "nav.me": "내 정보",
-  "author.publishedOn": "{providers}에 게시",
   "login.title": "Hearthroom 로그인",
   "login.lead": "이미 가진 계정으로 로그인하세요. 별도 가입은 필요 없습니다.",
   "login.continueWith": "{provider} 계정으로 계속",
@@ -619,5 +618,7 @@
   "me.linked.at": "{date} 연결",
   "me.linked.active": "연결됨",
   "me.reauthorize": "다시 인증",
-  "me.publicPage": "내 공개 작가 페이지 보기"
+  "me.publicPage": "내 공개 작가 페이지 보기",
+  "author.playableOn": "{providers}에서 플레이 가능",
+  "card.playableOn": "{provider}에서 플레이 가능"
 }

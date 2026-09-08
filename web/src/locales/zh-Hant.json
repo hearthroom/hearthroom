@@ -603,7 +603,6 @@
   "res.panel.copyFailed": "複製不了，手動選起來吧。",
   "dialog.close": "關閉",
   "nav.me": "我的",
-  "author.publishedOn": "發布於 {providers}",
   "login.title": "登入 Hearthroom",
   "login.lead": "使用你現有的帳號登入，不需要另外註冊。",
   "login.continueWith": "使用 {provider} 帳號繼續",
@@ -619,5 +618,7 @@
   "me.linked.at": "{date} 連結",
   "me.linked.active": "已連結",
   "me.reauthorize": "重新授權",
-  "me.publicPage": "查看我的公開作者頁"
+  "me.publicPage": "查看我的公開作者頁",
+  "author.playableOn": "可在 {providers} 遊玩",
+  "card.playableOn": "可在 {provider} 遊玩"
 }
