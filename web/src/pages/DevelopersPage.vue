@@ -18,11 +18,14 @@ const rendered = computed(() => renderDoc(doc));
 const sourceUrl = `${SITE.repoUrl}/blob/main/docs/provider-protocol.md`;
 
 const article = ref<HTMLElement | null>(null);
+/** 目錄預設展開；窄螢幕例外——三十多條目錄會把第一屏全占掉，讀者得先捲過目錄才看得到正文 */
+const tocOpen = ref(true);
 const activeId = ref("");
 let observer: IntersectionObserver | undefined;
 
 onMounted(() => {
   document.title = pageTitle(t("developers.title"));
+  if (window.matchMedia?.("(max-width: 900px)").matches) tocOpen.value = false;
   // 進到視窗上緣附近的那個標題就是「現在在讀的」：rootMargin 把觀察帶壓到上面一小段，
   // 不然一屏裡有三個標題時三條都亮
   const headings = [...(article.value?.querySelectorAll<HTMLElement>("h2[id], h3[id]") ?? [])];
@@ -44,7 +47,7 @@ onBeforeUnmount(() => observer?.disconnect());
     <div class="doc-layout">
       <!-- 目錄：寬螢幕黏在左邊；窄螢幕收成頂端一個可展開的區塊 -->
       <aside class="toc">
-        <details class="toc__fold" open>
+        <details class="toc__fold" :open="tocOpen">
           <summary class="toc__title eyebrow">{{ $t("developers.toc") }}</summary>
           <nav :aria-label="$t('developers.toc')">
             <ul class="toc__list">
@@ -118,7 +121,10 @@ onBeforeUnmount(() => observer?.disconnect());
   .doc-layout { grid-template-columns: minmax(0, 1fr); gap: var(--s-4); }
   .toc { position: static; max-height: none; }
   .toc__fold { padding: var(--s-3) var(--s-4); background: var(--surface); border-radius: var(--r-lg); box-shadow: 0 0 0 1px var(--line); }
-  .toc__fold > summary { cursor: pointer; padding-left: 0; }
+  .toc__fold > summary { cursor: pointer; padding-left: 0; display: flex; align-items: center; justify-content: space-between; }
+  /* 收起來的目錄看起來要像能點：右邊給個箭頭，展開時轉向 */
+  .toc__fold > summary::after { content: ""; width: 8px; height: 8px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform var(--dur) var(--ease); }
+  .toc__fold[open] > summary::after { transform: rotate(45deg); }
   .toc__fold:not([open]) .toc__title { margin-bottom: 0; }
   .toc__source { padding-left: 0; }
 }
