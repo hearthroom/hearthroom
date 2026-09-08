@@ -38,15 +38,24 @@ export const useSession = defineStore("session", () => {
       wallet.value = null;
     }
   }
-  async function loadProfile(bearerToken: string) {
-    try {
-      profile.value = await fetchSiteMe(bearerToken);
-    } catch {
-      profile.value = null;
-    }
-    // 開了成人內容（且驗過年齡）的人：公開讀取帶 token，伺服器才給成人內容
-    setNsfwViewer(async () => (profile.value?.showNsfw && profile.value.ageVerified ? await accessToken() : null));
+  /** 正在載的本站身分：公開讀取要等它到了再決定要不要帶成人內容，不然第一屏永遠是沒開的版本 */
+  let profilePromise: Promise<void> | null = null;
+  function loadProfile(bearerToken: string): Promise<void> {
+    profilePromise = (async () => {
+      try {
+        profile.value = await fetchSiteMe(bearerToken);
+      } catch {
+        profile.value = null;
+      }
+    })();
+    return profilePromise;
   }
+  // 開了成人內容（且驗過年齡）的人：公開讀取帶 token，伺服器才給成人內容。
+  // 身分還在載就先等它——卡片頁第一次讀常常比 /v1/me 早到，等一下比讀成 403 再重讀便宜。
+  setNsfwViewer(async () => {
+    if (profilePromise) await profilePromise;
+    return profile.value?.showNsfw && profile.value.ageVerified ? await accessToken() : null;
+  });
 
   let restoring: Promise<void> | null = null;
 
