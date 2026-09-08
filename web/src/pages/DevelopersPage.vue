@@ -103,6 +103,8 @@ onBeforeUnmount(() => observer?.disconnect());
 .doc :deep(table) { display: block; overflow-x: auto; border-collapse: collapse; width: 100%; font-size: 13.5px; margin: var(--s-2) 0 var(--s-4); }
 .doc :deep(th), .doc :deep(td) { padding: 8px 12px; border: 1px solid var(--line); text-align: left; vertical-align: top; line-height: 1.6; }
 .doc :deep(th) { background: var(--surface-2); font-weight: 600; }
+/* 第一欄是短標籤（項目／端點），別讓它被長的第二欄擠成一個字一行 */
+.doc :deep(td:first-child), .doc :deep(th:first-child) { white-space: nowrap; }
 .doc :deep(tr:nth-child(even) td) { background: color-mix(in srgb, var(--surface-2) 45%, transparent); }
 
 @media (max-width: 900px) {
