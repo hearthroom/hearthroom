@@ -85,7 +85,8 @@ const switchMode = (m: "cards" | "authors") => navigate({ mode: m === "authors" 
 
 watch([() => route.query, locale], load, { immediate: true });
 // 成人內容開關載好（登入後才知道）或改了：重讀，否則第一屏永遠是沒開的版本
-watch(() => session.profile?.showNsfw, (now, before) => { if (before !== undefined && now !== before) load(); });
+// 開關改了要重讀；身分剛載好、發現本來就開著（undefined → true）也要——第一次讀多半比身分早到
+watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && (now === true || before !== undefined)) load(); });
 </script>
 
 <template>
