@@ -1418,6 +1418,11 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
   .side::-webkit-scrollbar { display: none; }
   .side__item { flex: none; height: var(--h-sm); border-radius: var(--r-pill); font-size: 13px; }
   .side__item--on::before { display: none; }
+  /* 底部動作列一排收完：四顆鈕在手機上會折成兩行，蓋住表單尾端（.body 只留了一行的位置）。
+     「回到我的卡片」與「尚未儲存」讓位——頭像選單有我的卡片、分區籤上有未存的紅點。 */
+  .bar { flex-wrap: nowrap; gap: var(--s-2); }
+  .bar > .btn { flex: 1 1 0; min-width: 0; padding-inline: var(--s-2); white-space: nowrap; }
+  .bar > a.btn, .bar > .subtle { display: none; }
 }
 .panel--danger { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 40%, transparent); }
 </style>

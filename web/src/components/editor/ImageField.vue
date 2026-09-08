@@ -101,7 +101,8 @@ function pick(file: File) {
 </template>
 
 <style scoped>
-.shell { display: flex; gap: var(--s-3); align-items: flex-start; }
+/* 框是固定寬的，說明與按鈕擠不下時就掉到框下面；不然 grid 裡的最小內容寬會把整欄撐出手機螢幕 */
+.shell { display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: flex-start; }
 .frame {
   flex: none; padding: 0; border: 1px dashed var(--line-strong); border-radius: var(--r-md);
   background: var(--surface-2); overflow: hidden; display: grid; place-items: center; color: var(--text-3);
@@ -118,7 +119,7 @@ function pick(file: File) {
 .frame--wide { width: 256px; height: 144px; }
 .frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .ph { width: 28px; height: 28px; }
-.side { display: grid; gap: var(--s-2); align-content: start; }
-.acts { display: flex; gap: var(--s-2); }
+.side { flex: 1 1 180px; min-width: 0; display: grid; gap: var(--s-2); align-content: start; }
+.acts { display: flex; flex-wrap: wrap; gap: var(--s-2); }
 .err { color: var(--danger); }
 </style>
