@@ -566,11 +566,12 @@
   "wb.entries.empty": "이 책에는 아직 항목이 없어요.",
   "wb.entries.more": "외 {n}개",
   "editor.userName": "플레이어 호칭",
-  "footer.developers": "개발자",
+  "footer.developers": "개발자 문서",
   "developers.title": "개발자: 호환 제공자 프로토콜",
   "developers.source": "이 문서는 코드와 같은 저장소에서 관리됩니다. GitHub에서 원문 보기",
   "board.sort.day": "일간",
   "board.sort.week": "주간",
   "board.sort.month": "월간",
-  "board.sort.random": "추천"
+  "board.sort.random": "추천",
+  "developers.toc": "목차"
 }

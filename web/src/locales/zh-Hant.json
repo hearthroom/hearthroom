@@ -566,11 +566,12 @@
   "wb.entries.empty": "這本書還沒有條目。",
   "wb.entries.more": "還有 {n} 條",
   "editor.userName": "玩家稱呼",
-  "footer.developers": "開發者",
+  "footer.developers": "開發者文件",
   "developers.title": "開發者：相容供應商協議",
   "developers.source": "這份文件與程式碼同倉庫維護，在 GitHub 上查看原始檔",
   "board.sort.day": "日榜",
   "board.sort.week": "週榜",
   "board.sort.month": "月榜",
-  "board.sort.random": "推薦"
+  "board.sort.random": "推薦",
+  "developers.toc": "目錄"
 }
