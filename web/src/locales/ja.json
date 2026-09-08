@@ -573,5 +573,15 @@
   "board.sort.week": "週間",
   "board.sort.month": "月間",
   "board.sort.random": "おすすめ",
-  "developers.toc": "目次"
+  "developers.toc": "目次",
+  "editor.image.library": "素材から選ぶ",
+  "editor.media.lede": "どちらも後からで大丈夫です。「マイ素材」から直接選べるので、同じ画像を上げ直す必要はありません。",
+  "lib.pick.title": "マイ素材から選ぶ",
+  "lib.pick.count": "全 {n} 枚",
+  "lib.pick.folders": "フォルダ",
+  "lib.pick.all": "すべて",
+  "lib.pick.unfiled": "未整理",
+  "lib.pick.use": "これにする",
+  "lib.pick.empty": "素材にまだ画像がありません。一枚上げておくと、どのカードからでも選べます。",
+  "lib.pick.failed": "素材を読み込めませんでした。少ししてからお試しください。"
 }

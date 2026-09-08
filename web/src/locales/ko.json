@@ -573,5 +573,15 @@
   "board.sort.week": "주간",
   "board.sort.month": "월간",
   "board.sort.random": "추천",
-  "developers.toc": "목차"
+  "developers.toc": "목차",
+  "editor.image.library": "보관함에서 고르기",
+  "editor.media.lede": "둘 다 나중에 넣어도 됩니다. 「내 자료」에서 바로 고를 수 있어 같은 이미지를 다시 올릴 필요가 없어요.",
+  "lib.pick.title": "내 자료에서 고르기",
+  "lib.pick.count": "총 {n}장",
+  "lib.pick.folders": "폴더",
+  "lib.pick.all": "전체",
+  "lib.pick.unfiled": "미분류",
+  "lib.pick.use": "이걸로",
+  "lib.pick.empty": "보관함에 아직 이미지가 없어요. 하나 올려두면 어느 카드에서든 고를 수 있습니다.",
+  "lib.pick.failed": "보관함을 불러오지 못했어요. 잠시 후 다시 시도해 주세요."
 }

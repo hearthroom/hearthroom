@@ -7,6 +7,7 @@
  * 先傳完拿到網址，儲存就退回成一次單純的文字寫入。
  */
 import { ref } from "vue";
+import LibraryPicker from "./LibraryPicker.vue";
 
 const props = defineProps<{
   label: string;
@@ -16,6 +17,7 @@ const props = defineProps<{
   clearLabel: string;
   uploading: string;
   ratio?: "square" | "wide";
+  libraryLabel: string;
 }>();
 
 const emit = defineEmits<{
@@ -27,6 +29,8 @@ const input = ref<HTMLInputElement | null>(null);
 const busy = ref(false);
 const error = ref("");
 const dragging = ref(false);
+/** 從資源庫挑：作者的圖多半早就傳過一次了，不必為了換張卡再傳一份。 */
+const picking = ref(false);
 
 function choose(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0];
@@ -82,6 +86,7 @@ function pick(file: File) {
           <button type="button" class="btn btn--sm" :disabled="busy" @click="input?.click()">
             {{ busy ? uploading : pickLabel }}
           </button>
+          <button type="button" class="btn btn--sm" :disabled="busy" @click="picking = true">{{ libraryLabel }}</button>
           <button v-if="modelValue" type="button" class="btn btn--sm btn--ghost" :disabled="busy"
                   @click="emit('update:modelValue', '')">
             {{ clearLabel }}
@@ -91,6 +96,7 @@ function pick(file: File) {
       </div>
     </div>
     <input ref="input" type="file" accept="image/png,image/jpeg,image/webp" class="sr-only" @change="choose" />
+    <LibraryPicker v-if="picking" @pick="emit('update:modelValue', $event)" @close="picking = false" />
   </div>
 </template>
 
@@ -107,8 +113,9 @@ function pick(file: File) {
 .frame:has(img):hover img, .frame--on img { opacity: 0.7; }
 .frame--busy { cursor: progress; }
 .frame img { transition: opacity var(--dur) var(--ease); }
-.frame--square { width: 96px; height: 96px; }
-.frame--wide { width: 160px; height: 96px; }
+.frame--square { width: 128px; height: 128px; }
+/* 背景是整頁的底圖，16:9 才看得出實際會長怎樣；160×96 判斷不了亮不亮 */
+.frame--wide { width: 256px; height: 144px; }
 .frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .ph { width: 28px; height: 28px; }
 .side { display: grid; gap: var(--s-2); align-content: start; }

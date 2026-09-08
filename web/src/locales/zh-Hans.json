@@ -573,5 +573,15 @@
   "board.sort.week": "周榜",
   "board.sort.month": "月榜",
   "board.sort.random": "推荐",
-  "developers.toc": "目录"
+  "developers.toc": "目录",
+  "editor.image.library": "从资源库选",
+  "editor.media.lede": "两张都可以先空着，之后随时补。头像与背景都能从「我的资源」直接挑，不必重传一份。",
+  "lib.pick.title": "从我的资源挑一张",
+  "lib.pick.count": "共 {n} 张",
+  "lib.pick.folders": "文件夹",
+  "lib.pick.all": "全部",
+  "lib.pick.unfiled": "没归档的",
+  "lib.pick.use": "用这张",
+  "lib.pick.empty": "资源库里还没有图片。先上传一张，之后每张卡都挑得到。",
+  "lib.pick.failed": "资源库读不出来，过一下再试。"
 }
