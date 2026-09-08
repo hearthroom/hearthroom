@@ -30,6 +30,7 @@ import {
 } from "./review";
 import { setCardNsfw, setCardStatus } from "./cards";
 import { type Env, HttpError } from "./types";
+import { gameRoutes } from "./game";
 import { upstream, ZONES, type Zone, CREATION_METHOD } from "./upstream";
 
 const app = new Hono<{ Bindings: Env; Variables: { ev: Pending } }>();
@@ -108,6 +109,9 @@ async function requireAuthor(c: { env: Env; req: { header: (k: string) => string
 }
 
 app.get("/v1/health", (c) => c.json({ ok: true }));
+
+// 遊戲模式：作者替自己的卡存一份世界配置（src/game.ts）
+gameRoutes(app);
 
 /**
  * 前端開頁時問一次「上游該打哪個網域」。主網域在中國被擋，那邊的人改走備用網域；
