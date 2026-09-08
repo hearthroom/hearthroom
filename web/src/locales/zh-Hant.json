@@ -645,5 +645,10 @@
   "error.birthdateRequired": "請填寫出生日期。",
   "error.invalidBirthdate": "出生日期格式不對。",
   "error.underage": "未滿 18 歲無法開啟成人內容。",
-  "error.ageVerificationRequired": "這是成人內容的審核單，請先到「使用者設定」確認年齡。"
+  "error.ageVerificationRequired": "這是成人內容的審核單，請先到「使用者設定」確認年齡。",
+  "card.gate.title": "這是成人內容",
+  "card.gate.login": "這張卡片需要登入才能查看。",
+  "card.gate.verify": "查看前請先確認你已年滿 18 歲。只需要確認一次，之後會自動為你開啟成人內容。",
+  "card.gate.enable": "你已確認年齡，但目前沒有顯示成人內容。開啟後即可查看這張卡片。",
+  "card.gate.settingsHint": "之後隨時可以在「使用者設定」裡關閉。"
 }

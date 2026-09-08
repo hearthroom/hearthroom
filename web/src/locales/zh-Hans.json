@@ -645,5 +645,10 @@
   "error.birthdateRequired": "请填写出生日期。",
   "error.invalidBirthdate": "出生日期格式不对。",
   "error.underage": "未满 18 岁无法开启成人内容。",
-  "error.ageVerificationRequired": "这是成人内容的审核单，请先到“用户设置”确认年龄。"
+  "error.ageVerificationRequired": "这是成人内容的审核单，请先到“用户设置”确认年龄。",
+  "card.gate.title": "这是成人内容",
+  "card.gate.login": "这张卡片需要登录才能查看。",
+  "card.gate.verify": "查看前请先确认你已年满 18 岁。只需确认一次，之后会自动为你开启成人内容。",
+  "card.gate.enable": "你已确认年龄，但目前没有显示成人内容。开启后即可查看这张卡片。",
+  "card.gate.settingsHint": "之后随时可以在“用户设置”里关闭。"
 }
