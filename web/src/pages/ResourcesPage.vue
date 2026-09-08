@@ -42,8 +42,8 @@ type KindKey = (typeof KINDS)[number];
 /** 種類籤。上傳時的檔案挑選器也照它收窄。 */
 const kind = ref<KindKey>("all");
 const ACCEPT: Record<KindKey, string> = {
-  all: "image/png,image/jpeg,image/webp,video/mp4,video/webm,audio/mpeg,audio/wav,audio/ogg,.woff2,.woff,.ttf,.otf",
-  image: "image/png,image/jpeg,image/webp",
+  all: "image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,audio/mpeg,audio/wav,audio/ogg,.woff2,.woff,.ttf,.otf",
+  image: "image/png,image/jpeg,image/webp,image/gif",
   video: "video/mp4,video/webm",
   audio: "audio/mpeg,audio/wav,audio/ogg",
   font: ".woff2,.woff,.ttf,.otf",
