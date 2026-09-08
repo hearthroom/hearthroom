@@ -145,6 +145,8 @@ watch(() => route.params.id, () => {
   load();
 }, { immediate: true });
 watch(locale, load);
+// 開關剛載好（或改了）：成人內容的卡在那之前會是 404，重讀一次
+watch(() => session.profile?.showNsfw, (now, before) => { if (before !== undefined && now !== before) load(); });
 </script>
 
 <template>
@@ -180,7 +182,10 @@ watch(locale, load);
           </div>
 
           <div class="role__id">
-            <h1 class="role__name display">{{ card.name }}</h1>
+            <h1 class="role__name display">
+              <span v-if="card.nsfw" class="nsfw-badge" :title="$t('card.nsfwHint')">{{ $t("card.nsfw") }}</span>
+              {{ card.name }}
+            </h1>
             <!-- 作者是一張可點的名片，不只是一行灰字 -->
             <component :is="card.author.handle ? RouterLink : 'div'" :to="card.author.handle ? lp(`/authors/${card.author.handle}`) : undefined" class="role__by">
               <img v-if="card.author.avatar" :src="card.author.avatar" alt="" />

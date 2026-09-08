@@ -64,7 +64,9 @@ describe("供應商協議文件涵蓋程式碼打的每一條上游路徑", () =
 
   it("文件寫的錯誤碼，前端翻譯表裡有的都在", () => {
     const api = readFileSync(SOURCES["站台前端 api.ts"]!.file, "utf8");
-    const codes = [...api.matchAll(/^\s+([a-z_]+): "(?:error|state)\.[a-zA-Z]+",$/gm)].map((m) => m[1]!);
+    // 只看供應商的那張表（CODE_KEY）；本站自己 API 的碼（SITE_CODE_KEY）不是供應商契約
+    const block = api.slice(api.indexOf("const CODE_KEY"), api.indexOf("};", api.indexOf("const CODE_KEY")));
+    const codes = [...block.matchAll(/^\s+([a-z_]+): "(?:error|state)\.[a-zA-Z]+",$/gm)].map((m) => m[1]!);
     expect(codes.length).toBeGreaterThan(3);
     expect(codes.filter((c) => c !== "invalid_argument" && !doc.includes(`\`${c}\``))).toEqual([]);
   });

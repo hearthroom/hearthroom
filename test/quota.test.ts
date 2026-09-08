@@ -9,7 +9,7 @@ const register = (roleId: string, token = "alice-token") =>
   SELF.fetch("https://c.test/v1/cards", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...bearer(token) },
-    body: JSON.stringify({ roleId }),
+    body: JSON.stringify({ roleId, nsfw: false }),
   });
 const unregister = (roleId: string, token = "alice-token") =>
   SELF.fetch(`https://c.test/v1/cards/${roleId}`, { method: "DELETE", headers: bearer(token) });

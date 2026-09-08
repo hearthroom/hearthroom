@@ -7,12 +7,14 @@ import CardGrid from "@/components/CardGrid.vue";
 import { fetchAuthors, fetchBoard, fetchTags } from "@/lib/api";
 import { contentLang, defaultZone, pageTitle } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
+import { useSession } from "@/lib/session";
 import type { AuthorPage } from "@/lib/api";
 import type { CardPage, CommunityCard } from "@/lib/types";
 
 const route = useRoute();
 const router = useRouter();
 const { locale, lp } = useLocalePath();
+const session = useSession();
 const { t } = useI18n();
 
 const q = computed(() => (typeof route.query.q === "string" ? route.query.q.trim() : ""));
@@ -89,6 +91,7 @@ const countLabel = (page: { total: number | null; hasNext: boolean; limit: numbe
 };
 
 watch([() => route.query, locale], load, { immediate: true });
+watch(() => session.profile?.showNsfw, (now, before) => { if (before !== undefined && now !== before) load(); });
 watch(locale, loadSide, { immediate: true });
 watch(q, (v) => { draft.value = v; });
 </script>

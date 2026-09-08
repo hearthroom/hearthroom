@@ -5,10 +5,13 @@
  * 這份住在上游帳號層級（全局人設），所有卡片共用。卡片自己那份（試玩頁裡「用戶人設」
  * 選「單獨設置」）優先於這裡；稱呼留空時角色用你的暱稱（owner 2026-09-07）。
  * 建卡表單不再有「玩家稱呼」——那是卡片層級的舊欄位，酒館格式的卡不用它。
+ *
+ * 內容：成人內容開關（owner 2026-09-08）。這是本站自己的設定，住在成員上；第一次開要填出生日期，
+ * 伺服器只用它算滿不滿 18、不保存。原生 <input type="date"> 在手機上就是日期選擇器，不另外拉套件。
  */
-import { onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { ApiError, fetchPlayerPersona, savePlayerPersona, type PlayerPersona } from "@/lib/api";
+import { ApiError, fetchPlayerPersona, savePlayerPersona, updateSiteSettings, type PlayerPersona } from "@/lib/api";
 import { pageTitle } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
 
@@ -75,6 +78,33 @@ async function save() {
   }
 }
 
+// ---- 成人內容開關 ----
+const showNsfw = computed(() => !!session.profile?.showNsfw);
+const ageVerified = computed(() => !!session.profile?.ageVerified);
+const askingAge = ref(false);
+const birthdate = ref("");
+const nsfwBusy = ref(false);
+const nsfwError = ref("");
+const today = new Date().toISOString().slice(0, 10);
+
+async function setNsfw(on: boolean) {
+  nsfwError.value = "";
+  // 還沒驗過年齡：先要生日，按「確認並開啟」才真的送
+  if (on && !ageVerified.value && !askingAge.value) { askingAge.value = true; return; }
+  if (nsfwBusy.value) return;
+  nsfwBusy.value = true;
+  try {
+    const result = await updateSiteSettings({ showNsfw: on, ...(on && !ageVerified.value ? { birthdate: birthdate.value } : {}) }, await token());
+    if (session.profile) { session.profile.showNsfw = result.showNsfw; session.profile.ageVerified = result.ageVerified; }
+    askingAge.value = false;
+    birthdate.value = "";
+  } catch (err) {
+    nsfwError.value = err instanceof ApiError || err instanceof Error ? err.message : t("state.saveFailed");
+  } finally {
+    nsfwBusy.value = false;
+  }
+}
+
 onMounted(() => {
   document.title = pageTitle(t("settings.title"));
   void load();
@@ -124,6 +154,28 @@ onMounted(() => {
         </div>
       </form>
     </section>
+
+    <section class="panel content">
+      <p class="eyebrow">{{ $t("settings.content.title") }}</p>
+      <label class="content__row">
+        <span class="content__text">
+          <strong>{{ $t("settings.content.nsfw") }}</strong>
+          <span class="subtle">{{ $t("settings.content.nsfwDesc") }}</span>
+          <span v-if="ageVerified" class="subtle content__verified">{{ $t("settings.content.verified") }}</span>
+        </span>
+        <input type="checkbox" class="content__switch" :checked="showNsfw" :disabled="nsfwBusy" @change="setNsfw(($event.target as HTMLInputElement).checked)" />
+      </label>
+      <form v-if="askingAge && !ageVerified" class="content__age" @submit.prevent="setNsfw(true)">
+        <label for="birthdate">{{ $t("settings.content.birthdate") }}</label>
+        <input id="birthdate" v-model="birthdate" type="date" class="input" :max="today" required />
+        <p class="subtle">{{ $t("settings.content.birthdateHint") }}</p>
+        <div class="persona__acts">
+          <button type="button" class="btn btn--sm" @click="askingAge = false">{{ $t("dialog.cancel") }}</button>
+          <button type="submit" class="btn btn--sm btn--primary" :disabled="nsfwBusy || !birthdate">{{ $t("settings.content.confirmAge") }}</button>
+        </div>
+      </form>
+      <p v-if="nsfwError" class="notice notice--error" role="alert">{{ nsfwError }}</p>
+    </section>
   </div>
 </template>
 
@@ -137,4 +189,10 @@ onMounted(() => {
 .field__foot { display: flex; gap: var(--s-2); justify-content: space-between; }
 .persona__priority { margin: 0; }
 .persona__acts { display: flex; align-items: center; justify-content: flex-end; gap: var(--s-3); }
+.content { padding: var(--s-4); display: grid; gap: var(--s-3); margin-top: var(--s-4); }
+.content__row { display: flex; align-items: center; justify-content: space-between; gap: var(--s-4); cursor: pointer; }
+.content__text { display: grid; gap: 2px; }
+.content__verified { color: var(--accent-text); }
+.content__switch { width: 22px; height: 22px; flex: none; accent-color: var(--accent); }
+.content__age { display: grid; gap: var(--s-2); padding: var(--s-3); border: 1px solid var(--line); border-radius: var(--r-md); }
 </style>

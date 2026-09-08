@@ -102,11 +102,18 @@ export interface MemberProfile {
   handle: string;
   memberSince: number;
   identities: { provider: string; externalId: number; linkedAt: number }[];
+  /** 成人內容開關（要先驗過年齡才開得了） */
+  showNsfw: boolean;
+  /** 驗過年齡了（只記有沒有，不記生日） */
+  ageVerified: boolean;
 }
 
 /** 「我的」頁要的：公開 ID、加入時間、連結了哪些供應商帳號。沒有 token、沒有信箱。 */
 export async function memberProfile(db: D1Database, memberId: string): Promise<MemberProfile | null> {
-  const m = await db.prepare("SELECT handle, created_at FROM members WHERE id = ?").bind(memberId).first<{ handle: string; created_at: number }>();
+  const m = await db
+    .prepare("SELECT handle, created_at, show_nsfw, age_verified_at FROM members WHERE id = ?")
+    .bind(memberId)
+    .first<{ handle: string; created_at: number; show_nsfw: number; age_verified_at: number | null }>();
   if (!m) return null;
   const ids = await db
     .prepare("SELECT provider, external_id, linked_at FROM member_identities WHERE member_id = ? ORDER BY linked_at")
@@ -116,7 +123,80 @@ export async function memberProfile(db: D1Database, memberId: string): Promise<M
     handle: m.handle,
     memberSince: m.created_at,
     identities: ids.results.map((r) => ({ provider: r.provider, externalId: Number(r.external_id), linkedAt: r.linked_at })),
+    showNsfw: m.show_nsfw === 1,
+    ageVerified: m.age_verified_at !== null,
   };
+}
+
+/** 成人內容相關的設定：開關與年齡驗證時間。 */
+export async function memberNsfw(db: D1Database, memberId: string): Promise<{ showNsfw: boolean; ageVerifiedAt: number | null }> {
+  const m = await db
+    .prepare("SELECT show_nsfw, age_verified_at FROM members WHERE id = ?")
+    .bind(memberId)
+    .first<{ show_nsfw: number; age_verified_at: number | null }>();
+  return { showNsfw: m?.show_nsfw === 1, ageVerifiedAt: m?.age_verified_at ?? null };
+}
+
+const BIRTHDATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/**
+ * 生日 → 今天（UTC）滿 18 歲了沒。格式不對或日期不存在都算沒填；未來的日期也是。
+ * 生日只在這裡看一眼，不落庫。
+ */
+export function isAdultBirthdate(birthdate: string, now: number): boolean | null {
+  const m = BIRTHDATE_RE.exec(birthdate.trim());
+  if (!m) return null;
+  const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+  const date = new Date(Date.UTC(y, mo - 1, d));
+  if (date.getUTCFullYear() !== y || date.getUTCMonth() !== mo - 1 || date.getUTCDate() !== d) return null;
+  if (date.getTime() > now) return null;
+  const today = new Date(now);
+  let age = today.getUTCFullYear() - y;
+  const beforeBirthday = today.getUTCMonth() < mo - 1 || (today.getUTCMonth() === mo - 1 && today.getUTCDate() < d);
+  if (beforeBirthday) age--;
+  return age >= 18;
+}
+
+/**
+ * 改成人內容開關。開：要驗過年齡——已經驗過就直接開，沒驗過要帶生日且滿 18；未滿不存任何東西。
+ * 關：只關開關，驗證留著（下次開不必再填）。
+ */
+export async function updateMemberNsfw(
+  db: D1Database,
+  memberId: string,
+  input: { showNsfw: boolean; birthdate?: string },
+  now: number,
+): Promise<{ showNsfw: boolean; ageVerified: boolean }> {
+  const current = await memberNsfw(db, memberId);
+  if (!input.showNsfw) {
+    await db.prepare("UPDATE members SET show_nsfw = 0 WHERE id = ?").bind(memberId).run();
+    return { showNsfw: false, ageVerified: current.ageVerifiedAt !== null };
+  }
+  let verifiedAt = current.ageVerifiedAt;
+  if (verifiedAt === null) {
+    if (!input.birthdate) throw new HttpError(400, "birthdate_required");
+    const adult = isAdultBirthdate(input.birthdate, now);
+    if (adult === null) throw new HttpError(400, "invalid_birthdate");
+    if (!adult) throw new HttpError(403, "underage");
+    verifiedAt = now;
+  }
+  await db.prepare("UPDATE members SET show_nsfw = 1, age_verified_at = ? WHERE id = ?").bind(verifiedAt, memberId).run();
+  return { showNsfw: true, ageVerified: true };
+}
+
+/**
+ * 看的人開了成人內容嗎。前端想看時帶 ?nsfw=1 加 token；token 驗不過或沒開，一律當沒開——
+ * 不報錯、不洩漏。呼叫端要在查邊緣快取**之前**先問這個，開了的回應不進快取。
+ */
+export async function viewerAllowsNsfw(c: Ctx & { req: { query: (k: string) => string | undefined } }): Promise<boolean> {
+  if (c.req.query("nsfw") !== "1") return false;
+  try {
+    const member = await requireMember(c);
+    const { showNsfw, ageVerifiedAt } = await memberNsfw(c.env.DB, member.id);
+    return showNsfw && ageVerifiedAt !== null;
+  } catch {
+    return false;
+  }
 }
 
 export async function isReviewer(db: D1Database, memberId: string): Promise<boolean> {

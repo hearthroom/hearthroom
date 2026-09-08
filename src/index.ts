@@ -21,14 +21,14 @@ import { authorLine, renderHead } from "./head";
 import { ALIAS_HOSTS, HOST, canonicalUrl } from "./site";
 import { loadMine, type MineFilter } from "./mine";
 import { tagNamesFor } from "../shared/tag-catalog";
-import { isReviewer, memberByHandle, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember } from "./members";
+import { isReviewer, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw } from "./members";
 import { DEFAULT_PROVIDER, type ProviderId, reviewBotOf } from "./providers";
 import { WEEKLY_LIMIT, recordRegistration, registeredThisWeek } from "./quota";
 import {
   STAMPS_REQUIRED, claim as claimSubmission, createSubmission, getSubmission, listQueue, needsReviewStatements,
   release as releaseSubmission, stamp as stampSubmission,
 } from "./review";
-import { setCardStatus } from "./cards";
+import { setCardNsfw, setCardStatus } from "./cards";
 import { type Env, HttpError } from "./types";
 import { upstream, ZONES, type Zone, CREATION_METHOD } from "./upstream";
 
@@ -215,9 +215,12 @@ function parseBoardSort(raw: string | undefined): { sort: "hot" | "new" | "rando
 }
 
 app.get("/v1/cards", async (c) => {
+  // 開了成人內容的人：先驗身分再查資料，回應不進快取、也不從快取拿——
+  // 邊緣快取是公開的，一份帶成人內容的回應進了快取就會給下一個沒登入的人。
+  const allowNsfw = await viewerAllowsNsfw(c);
   // 只有 GET 而且完全公開，所以整個 URL 就是快取鍵，不必自己組。推薦是隨機的，快取住就不隨機了。
   const cache = await caches.open(boardCache.namespace);
-  const hit = c.req.query("sort") === "random" ? undefined : await cache.match(c.req.raw);
+  const hit = allowNsfw || c.req.query("sort") === "random" ? undefined : await cache.match(c.req.raw);
   if (hit) {
     // 快取命中一樣是一次瀏覽行為，只是結果數這種東西這條路上沒有
     const q0 = c.req.query("q")?.trim();
@@ -249,6 +252,7 @@ app.get("/v1/cards", async (c) => {
     q: c.req.query("q")?.trim() || undefined,
     tags: (() => { const raw = c.req.query("tag")?.trim(); return raw ? (tagNamesFor(raw) ?? [raw]) : undefined; })(),
     authorMemberId,
+    allowNsfw,
     sort,
     since,
     limit,
@@ -269,6 +273,11 @@ app.get("/v1/cards", async (c) => {
     outcome: rows.length ? "ok" : "empty",
   });
   const res = c.json({ items: rows.map((r) => toCard(r, l)), total, hasNext, limit, offset, sort: sortKey });
+  if (allowNsfw) {
+    res.headers.set("Cache-Control", "private, no-store");
+    res.headers.set("X-Cache", "bypass");
+    return res;
+  }
   res.headers.set("Cache-Control", `public, max-age=${BOARD_TTL}`);
   res.headers.set("X-Cache", "miss");
   // 放進快取的副本不能帶 X-Cache: miss，否則下一個人會看到錯的標記。
@@ -307,10 +316,13 @@ app.get("/v1/cards/:id", async (c) => {
   const row = await getCard(c.env.DB, c.req.param("id"));
   // 還沒過審、被駁回、離榜重審中的卡對外都不存在；作者在「我的卡片」看得到狀態。
   if (!row || row.status !== "approved") throw new HttpError(404, "card not found");
+  // 成人內容：沒開（或沒登入、沒驗年齡）的人看不到它存在——直接拿到連結也是 404（owner 2026-09-08）。
+  const allowNsfw = row.nsfw === 1 ? await viewerAllowsNsfw(c) : false;
+  if (row.nsfw === 1 && !allowNsfw) throw new HttpError(404, "card not found");
   // 卡片瀏覽只在這裡記一次。HTML 殼那條路（page_html）多半是抓取器，卡片頁替作者發的
   // 「其他作品」副請求則是 /v1/cards?author=，兩者都不算一次瀏覽，否則分母會被灌水三倍。
   note(c, { event: "card_view", subject: row.source_role_id, zoneScope: "current" });
-  return c.json(toCard(row, lang(c)));
+  return c.json(toCard(row, lang(c)), 200, allowNsfw ? { "Cache-Control": "private, no-store" } : {});
 });
 
 /**
@@ -349,9 +361,11 @@ app.get("/v1/me/cards", async (c) => {
 app.get("/v1/authors/:handle", async (c) => {
   const handle = c.req.param("handle");
   const memberId = await memberByHandle(c.env.DB, handle);
-  const author = memberId ? await getAuthor(c.env.DB, memberId) : null;
+  const allowNsfw = await viewerAllowsNsfw(c);
+  const author = memberId ? await getAuthor(c.env.DB, memberId, allowNsfw) : null;
   if (!author) throw new HttpError(404, "author has no registered cards");
   note(c, { event: "author_view", subject: handle, resultCount: author.card_count });
+  if (allowNsfw) c.header("Cache-Control", "private, no-store");
   return c.json({
     handle: author.handle,
     name: author.author_name,
@@ -375,6 +389,20 @@ app.get("/v1/me", async (c) => {
 });
 
 /**
+ * 成人內容開關。開要驗年齡：沒驗過要帶生日（YYYY-MM-DD）且滿 18；生日只看一眼、不落庫、不寫日誌。
+ * 未滿 18 回 403 underage，什麼都不存。關只關開關，驗證留著。
+ */
+app.post("/v1/me/settings", async (c) => {
+  const member = await requireMember(c);
+  const body = (await c.req.json().catch(() => ({}))) as { showNsfw?: unknown; birthdate?: unknown };
+  if (typeof body.showNsfw !== "boolean") throw new HttpError(400, "showNsfw_required");
+  const birthdate = typeof body.birthdate === "string" ? body.birthdate : undefined;
+  const result = await updateMemberNsfw(c.env.DB, member.id, { showNsfw: body.showNsfw, birthdate }, Date.now());
+  note(c, { event: "settings", detail: result.showNsfw ? "nsfw_on" : "nsfw_off" });
+  return c.json(result, 200, { "Cache-Control": "no-store" });
+});
+
+/**
  * 登記一張卡。
  *
  * 作者只送 roleId，內容一概不收——先確認這張卡真是他的，再由公開資料填滿所有欄位。
@@ -386,9 +414,12 @@ app.get("/v1/me", async (c) => {
 app.post("/v1/cards", async (c) => {
   const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1] ?? "";
   const me = await requireAuthor(c);
-  const body = (await c.req.json().catch(() => ({}))) as { roleId?: unknown };
+  const body = (await c.req.json().catch(() => ({}))) as { roleId?: unknown; nsfw?: unknown };
   const roleId = typeof body.roleId === "string" ? body.roleId.trim() : "";
   if (!roleId) throw new HttpError(400, "roleId is required");
+  // 作者提交時必須宣告是不是成人內容（owner 2026-09-08）；沒宣告不收
+  if (typeof body.nsfw !== "boolean") throw new HttpError(400, "nsfw_required");
+  const nsfw = body.nsfw;
 
   const role = await upstream.fetchRole(c.env, roleId);
   if (role.authorNumId !== me.accountNumId) throw new HttpError(403, "not the author of this card");
@@ -421,20 +452,26 @@ app.post("/v1/cards", async (c) => {
     contentHash = (await upstream.fetchContentHash(c.env, bot.key, roleId)).content;
   }
 
-  const { id, created } = await upsertCard(c.env.DB, role, now, { status: bot ? "pending" : "approved", provider: DEFAULT_PROVIDER });
+  const { id, created } = await upsertCard(c.env.DB, role, now, { status: bot ? "pending" : "approved", provider: DEFAULT_PROVIDER, nsfw });
   if (created) await recordRegistration(c.env.DB, me.accountNumId, roleId, now);
+  // 宣告跟著最新一次提交走；在榜的卡改了宣告視同內容變了（下面重審）
+  const declarationChanged = !!existing && (existing.nsfw === 1) !== nsfw;
+  if (existing && declarationChanged) await setCardNsfw(c.env.DB, id, nsfw);
 
   let detail = created ? "new" : "again";
   if (bot) {
     // 在榜的卡再送一次只是刷新；被駁回、離榜重審、被收回授權的卡再送＝重新排隊。
+    // 在榜但改了分級宣告：跟改內容一樣要重審，不能過審後把「成人」改成「一般」就直接生效。
     // 過過審的走重審（一章），從沒過過的走初審（兩章）。
     const current = existing?.status ?? "pending";
-    if (created || current === "rejected" || current === "needs_review" || current === "unshared") {
+    if (created || current === "rejected" || current === "needs_review" || current === "unshared" || (current === "approved" && declarationChanged)) {
       const kind = existing?.reviewed_hash ? "re" : "first";
       if (!created) await setCardStatus(c.env.DB, id, kind === "re" ? "needs_review" : "pending");
-      await createSubmission(c.env.DB, { cardId: id, provider: DEFAULT_PROVIDER, roleId, kind, contentHash, now });
+      await createSubmission(c.env.DB, { cardId: id, provider: DEFAULT_PROVIDER, roleId, kind, contentHash, now, nsfw });
       detail = created ? "submitted" : "resubmitted";
     } else if (current === "pending") {
+      // 還在排隊：單子照舊；改了宣告的話 createSubmission 會把單上的宣告更新成最新的
+      await createSubmission(c.env.DB, { cardId: id, provider: DEFAULT_PROVIDER, roleId, kind: existing?.reviewed_hash ? "re" : "first", contentHash, now, nsfw });
       detail = "queued";
     }
   }
@@ -463,6 +500,11 @@ app.get("/v1/review/queue", async (c) => {
 
 app.post("/v1/review/:id/claim", async (c) => {
   const member = await requireReviewer(c);
+  // 審核人也是人：宣告為成人內容的單，要驗過年齡才能領。看的是驗證，不是展示開關——審核是職責，不是偏好。
+  const pending = await getSubmission(c.env.DB, c.req.param("id"));
+  if (pending.nsfw === 1 && (await memberNsfw(c.env.DB, member.id)).ageVerifiedAt === null) {
+    throw new HttpError(403, "age_verification_required");
+  }
   const s = await claimSubmission(c.env.DB, c.req.param("id"), member.id, Date.now());
   note(c, { event: "review_claim", subject: s.source_role_id });
   return c.json({ id: s.id, claimedAt: s.claimed_at });
@@ -528,6 +570,7 @@ app.get("/v1/review/:id/detail", async (c) => {
     {
       submission: {
         id: s.id, kind: s.kind, status: s.status, contentHash: s.content_hash, submittedAt: s.submitted_at,
+        nsfw: s.nsfw === 1,
         claimedByMe: s.claimed_by === member.id, required: STAMPS_REQUIRED[s.kind],
         stamps: stamps.results.map((st) => ({ verdict: st.verdict, note: st.note, at: st.created_at })),
       },
@@ -769,7 +812,8 @@ app.get("*", async (c) => {
     let id: string;
     try { id = decodeURIComponent(m[3]!); } catch { return new Response(shell.body, { status: 404, headers: shell.headers }); }
     const row = await getCard(c.env.DB, id);
-    if (!row || row.status !== "approved") return new Response(shell.body, { status: 404, headers: shell.headers });
+    // 成人內容不做分享預覽：抓取器沒有身分，一律當不存在
+    if (!row || row.status !== "approved" || row.nsfw === 1) return new Response(shell.body, { status: 404, headers: shell.headers });
     const card = toCard(row, l);
     const res = renderHead(shell, {
       lang: locale, title: `${card.name} · ${SITE_NAME}`, description: card.summary, image: card.avatarUrl, url: self, type: "profile",
