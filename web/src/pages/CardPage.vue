@@ -151,7 +151,8 @@ watch(() => route.params.id, () => {
 }, { immediate: true });
 watch(locale, load);
 // 開關剛載好（或改了）：成人內容的卡在那之前會是 404，重讀一次
-watch(() => session.profile?.showNsfw, (now, before) => { if (before !== undefined && now !== before) load(); });
+// 開關改了要重讀；身分剛載好、發現本來就開著（undefined → true）也要——第一次讀多半比身分早到
+watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && (now === true || before !== undefined)) load(); });
 </script>
 
 <template>

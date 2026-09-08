@@ -29,6 +29,7 @@ vi.mock("../src/lib/api", () => ({
   fetchMe: vi.fn(async () => ({ accountNumId: 1, nickName: "測試", avatar: "" })),
   fetchWallet: vi.fn(async () => ({ score: 0, tempScore: 0, plans: [] })),
   fetchSiteMe: vi.fn(async () => ({ handle: "abcdefgh", memberSince: 0, reviewer: false, identities: [] })),
+  setNsfwViewer: () => {},
 }));
 
 let app: App | null = null;

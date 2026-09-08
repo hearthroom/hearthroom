@@ -91,7 +91,8 @@ const countLabel = (page: { total: number | null; hasNext: boolean; limit: numbe
 };
 
 watch([() => route.query, locale], load, { immediate: true });
-watch(() => session.profile?.showNsfw, (now, before) => { if (before !== undefined && now !== before) load(); });
+// 開關改了要重讀；身分剛載好、發現本來就開著（undefined → true）也要——第一次讀多半比身分早到
+watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && (now === true || before !== undefined)) load(); });
 watch(locale, loadSide, { immediate: true });
 watch(q, (v) => { draft.value = v; });
 </script>
