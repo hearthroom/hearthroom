@@ -619,6 +619,6 @@
   "me.linked.active": "已連結",
   "me.reauthorize": "重新授權",
   "me.publicPage": "查看我的公開作者頁",
-  "author.playableOn": "可在 {providers} 遊玩",
-  "card.playableOn": "可在 {provider} 遊玩"
+  "author.supports": "支援 {providers}",
+  "card.supports": "支援 {provider}"
 }

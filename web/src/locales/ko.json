@@ -619,6 +619,6 @@
   "me.linked.active": "연결됨",
   "me.reauthorize": "다시 인증",
   "me.publicPage": "내 공개 작가 페이지 보기",
-  "author.playableOn": "{providers}에서 플레이 가능",
-  "card.playableOn": "{provider}에서 플레이 가능"
+  "author.supports": "{providers} 지원",
+  "card.supports": "{provider} 지원"
 }

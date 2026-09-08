@@ -64,7 +64,7 @@ watch([() => route.query.offset, locale], load);
         <h1 class="who__name display">{{ author.name }}</h1>
         <p class="subtle who__id">
           <span class="mono">@{{ author.handle }}</span>
-          <span v-if="author.providers?.length"> · {{ $t("author.playableOn", { providers: author.providers.map(providerName).join("、") }) }}</span>
+          <span v-if="author.providers?.length"> · {{ $t("author.supports", { providers: author.providers.map(providerName).join("、") }) }}</span>
         </p>
       </div>
       <dl class="who__stats">

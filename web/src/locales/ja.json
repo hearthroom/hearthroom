@@ -619,6 +619,6 @@
   "me.linked.active": "連携中",
   "me.reauthorize": "再認証",
   "me.publicPage": "自分の公開作者ページを見る",
-  "author.playableOn": "{providers} でプレイ可能",
-  "card.playableOn": "{provider} でプレイ可能"
+  "author.supports": "{providers} 対応",
+  "card.supports": "{provider} 対応"
 }

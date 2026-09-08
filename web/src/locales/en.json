@@ -619,6 +619,6 @@
   "me.linked.active": "Linked",
   "me.reauthorize": "Re-authorize",
   "me.publicPage": "View my public author page",
-  "author.playableOn": "Playable on {providers}",
-  "card.playableOn": "Playable on {provider}"
+  "author.supports": "Supports {providers}",
+  "card.supports": "Supports {provider}"
 }

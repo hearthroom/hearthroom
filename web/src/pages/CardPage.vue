@@ -216,7 +216,7 @@ watch(locale, load);
               </svg>
             </button>
           </div>
-          <p v-if="card.provider" class="subtle role__via">{{ $t("card.playableOn", { provider: providerName(card.provider) }) }}</p>
+          <p v-if="card.provider" class="subtle role__via">{{ $t("card.supports", { provider: providerName(card.provider) }) }}</p>
 
           <p class="subtle role__foot">
             {{ zoneLabel(card.zone) }} · {{ $t("card.meta", { registered: relativeTime(card.registeredAt), synced: relativeTime(card.syncedAt) }) }}
