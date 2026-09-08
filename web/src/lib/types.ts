@@ -15,7 +15,8 @@ export interface CommunityCard {
   backgroundUrl: string | null;
   slug: string | null;
   tags: string[];
-  author: { accountNumId: number; name: string; avatar: string };
+  /** handle 是作者的本站公開 ID；作者還沒成為成員時是 null，畫成純文字。accountNumId 是上游的數字 ID，只給編輯器與快取鍵用。 */
+  author: { handle: string | null; accountNumId: number; name: string; avatar: string };
   talkNum: number;
   followNum: number;
   trending: number;
@@ -36,6 +37,8 @@ export interface CardPage {
 export type Sort = "day" | "week" | "month" | "hot" | "new" | "random" | "relevance";
 
 export interface Author {
+  /** 本站公開 ID（作者頁的網址）；null 表示還沒成為成員。 */
+  handle: string | null;
   accountNumId: number;
   name: string;
   avatar: string;
@@ -44,6 +47,8 @@ export interface Author {
   /** 這個同步窗口的對話增量加總。只有榜單／搜尋列表帶，單人主頁沒有。 */
   trending?: number;
   joinedAt: number;
+  /** 這位作者的卡發布在哪些供應商上；只有單人主頁帶。 */
+  providers?: string[];
 }
 export type AuthorSort = "talk" | "cards" | "hot";
 

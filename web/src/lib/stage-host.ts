@@ -13,6 +13,7 @@ import { reactive } from "vue";
 import type { Router } from "vue-router";
 import { UPSTREAM_API } from "@/lib/config";
 import { confirmDialog } from "@/lib/confirm";
+import { loginPath } from "@/lib/login-return";
 import { applyLocale, i18n } from "@/lib/i18n";
 import type { useSession } from "@/lib/session";
 
@@ -55,7 +56,7 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
       nav: {
         back: () => { if (window.history.length > 1) deps.router.back(); else deps.router.push(deps.lp("/")); },
         toEntry: () => { deps.router.push(deps.lp("/")); },
-        toLogin: (returnTo) => { void deps.session.login(returnTo || deps.currentPath()); },
+        toLogin: (returnTo) => { void deps.router.push(deps.lp(loginPath(returnTo || deps.currentPath()))); },
       },
       locale: {
         get: () => i18n.global.locale.value,
@@ -66,7 +67,7 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
       host,
       auth: {
         getAccessToken: () => deps.session.accessToken(),
-        onUnauthorized: () => { void deps.session.login(deps.currentPath()); },
+        onUnauthorized: () => { void deps.router.push(deps.lp(loginPath(deps.currentPath()))); },
         // 畫布送訊息前看的是「有沒有登入的人」；這頁本來就要登入才進得來（meta.auth）
         user: deps.session.me
           ? { id: String(deps.session.me.accountNumId), nickName: deps.session.me.nickName, avatar: deps.session.me.avatar }

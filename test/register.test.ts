@@ -129,18 +129,28 @@ describe("作者主頁", () => {
     await register({ roleId: "role-1" });
     await register({ roleId: "role-2" });
 
-    const res = await SELF.fetch("https://c.test/v1/authors/10001");
+    // 作者頁的網址是本站的公開 ID（登記時就建好成員），不是上游的數字 ID
+    const me = (await (await SELF.fetch("https://c.test/v1/me", { headers: bearer() })).json()) as { handle: string };
+    expect(me.handle).toMatch(/^[a-z]{8}$/);
+
+    const res = await SELF.fetch(`https://c.test/v1/authors/${me.handle}`);
     expect(res.status).toBe(200);
     const author = (await res.json()) as any;
+    expect(author.handle).toBe(me.handle);
     expect(author.cardCount).toBe(2);
     expect(author.talkTotal).toBe(42);
     expect(author.name).toBe("月光");
+    expect(author.providers).toEqual(["lunatalk"]);
 
-    const own = await list("?author=10001");
+    const own = await list(`?author=${me.handle}`);
     expect(own.body.items).toHaveLength(2);
+    expect(own.body.items[0].author.handle).toBe(me.handle);
   });
 
-  it("沒有登記過的作者 → 404", async () => {
-    expect((await SELF.fetch("https://c.test/v1/authors/99999")).status).toBe(404);
+  it("沒有登記過的作者、或拿上游數字 ID 來問 → 404", async () => {
+    expect((await SELF.fetch("https://c.test/v1/authors/zzzzzzzz")).status).toBe(404);
+    expect((await SELF.fetch("https://c.test/v1/authors/10001")).status).toBe(404);
+    // 不存在的公開 ID 當作者條件：空榜，不是錯誤
+    expect((await list("?author=zzzzzzzz")).body.items).toEqual([]);
   });
 });

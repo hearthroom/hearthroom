@@ -27,7 +27,17 @@ export interface CardRow {
   status: string;
   /** 過審時綁上的內容雜湊；空字串＝過審前登記的舊卡，同步時第一次看到就綁上。 */
   reviewed_hash: string;
+  /** 作者的本站公開 ID（members.handle，0005 起），從身分表接上來的；作者還沒成為成員時是 null。 */
+  author_handle?: string | null;
 }
+
+/**
+ * 卡片列表與單卡都把作者的本站公開 ID 接上來：對外的作者連結用它，不用上游的數字 ID。
+ * LEFT JOIN——作者還沒有成員列（只在很早期登記過、還沒再登入）時 handle 是 null，前端把名字畫成純文字。
+ */
+const AUTHOR_JOIN = `LEFT JOIN member_identities ai ON ai.provider = c.provider AND ai.external_id = CAST(c.author_num_id AS TEXT)
+  LEFT JOIN members am ON am.id = ai.member_id`;
+const CARD_COLUMNS = "c.*, am.handle AS author_handle";
 
 /** 對外露出的卡片只有在榜的。榜單、標籤、作者榜、卡片頁都走這個條件。 */
 const LISTED = "status = 'approved'";
@@ -49,6 +59,7 @@ export function toCard(row: CardRow, lang: string) {
     slug: row.slug,
     tags: JSON.parse(row.tags) as string[],
     author: {
+      handle: row.author_handle ?? null,
       accountNumId: row.author_num_id,
       name: row.author_name,
       avatar: row.author_avatar,
@@ -73,7 +84,8 @@ export interface ListOptions {
   q?: string;
   /** 標籤名字們（類型鍵展開後）；任一命中都算。 */
   tags?: string[];
-  authorNumId?: number;
+  /** 作者頁：這個成員（本站 id）的卡 */
+  authorMemberId?: string;
   /** relevance 只在有搜尋字時有意義；沒有搜尋字或走 LIKE 時退回 hot。 */
   /** 上榜時間下限（毫秒），日／週／月榜用。 */
   since?: number;
@@ -128,9 +140,10 @@ export async function listCards(db: D1Database, opts: ListOptions) {
     where.push("c.registered_at >= ?");
     binds.push(opts.since);
   }
-  if (opts.authorNumId !== undefined) {
-    where.push("c.author_num_id = ?");
-    binds.push(opts.authorNumId);
+  if (opts.authorMemberId !== undefined) {
+    // 作者＝這個成員在任一家供應商上的身分
+    where.push("ai.member_id = ?");
+    binds.push(opts.authorMemberId);
   }
 
   const whereSql = where.join(" AND ");
@@ -148,11 +161,11 @@ export async function listCards(db: D1Database, opts: ListOptions) {
           ? "bm25(cards_fts), c.talk_num DESC"
           : "c.talk_num DESC, c.follow_num DESC, c.registered_at DESC";
 
-  const filtered = Boolean(opts.q || opts.tags?.length || opts.authorNumId !== undefined || opts.since !== undefined);
+  const filtered = Boolean(opts.q || opts.tags?.length || opts.authorMemberId !== undefined || opts.since !== undefined);
 
   // 多撈一筆就知道還有沒有下一頁，不必數完整組結果。
   const probe = await db
-    .prepare(`SELECT c.* FROM ${from} WHERE ${whereSql} ORDER BY ${orderBy} LIMIT ? OFFSET ?`)
+    .prepare(`SELECT ${CARD_COLUMNS} FROM ${from} ${AUTHOR_JOIN} WHERE ${whereSql} ORDER BY ${orderBy} LIMIT ? OFFSET ?`)
     .bind(...binds, opts.limit + 1, opts.offset)
     .all<CardRow>();
 
@@ -238,28 +251,33 @@ export async function setCardStatus(db: D1Database, id: string, status: string):
 
 export async function getCard(db: D1Database, id: string) {
   return await db
-    .prepare("SELECT * FROM cards WHERE id = ? OR source_role_id = ?")
+    .prepare(`SELECT ${CARD_COLUMNS} FROM cards c ${AUTHOR_JOIN} WHERE c.id = ? OR c.source_role_id = ?`)
     .bind(id, id)
     .first<CardRow>();
 }
 
-export async function getAuthor(db: D1Database, authorNumId: number) {
-  return await db
+/** 一個成員的公開作者頁：把他在各家供應商上、登記在本站且在榜的卡彙總。沒有在榜的卡就是 null。 */
+export async function getAuthor(db: D1Database, memberId: string) {
+  const row = await db
     .prepare(
-      `SELECT author_num_id, author_name, author_avatar, COUNT(*) AS card_count,
-              SUM(talk_num) AS talk_total, MIN(registered_at) AS joined_at
-       FROM cards WHERE author_num_id = ? AND ${LISTED}
-       GROUP BY author_num_id, author_name, author_avatar`,
+      `SELECT am.handle AS handle, MAX(c.author_name) AS author_name, MAX(c.author_avatar) AS author_avatar,
+              COUNT(*) AS card_count, SUM(c.talk_num) AS talk_total, MIN(c.registered_at) AS joined_at,
+              GROUP_CONCAT(DISTINCT c.provider) AS providers
+       FROM cards c ${AUTHOR_JOIN}
+       WHERE ai.member_id = ? AND c.${LISTED}`,
     )
-    .bind(authorNumId)
+    .bind(memberId)
     .first<{
-      author_num_id: number;
+      handle: string | null;
       author_name: string;
       author_avatar: string;
       card_count: number;
       talk_total: number;
       joined_at: number;
+      providers: string | null;
     }>();
+  if (!row || !row.card_count) return null;
+  return { ...row, providers: (row.providers ?? "").split(",").filter(Boolean) };
 }
 
 export async function unregister(db: D1Database, roleId: string, authorNumId: number) {
@@ -361,6 +379,7 @@ export async function topTags(db: D1Database, zone: Zone | undefined, limit: num
 }
 
 export interface AuthorRow {
+  handle: string | null;
   author_num_id: number;
   author_name: string;
   author_avatar: string;
@@ -378,19 +397,19 @@ export async function listAuthors(
   db: D1Database,
   opts: { zone?: Zone; q?: string; sort: "talk" | "cards" | "hot"; limit: number; offset: number },
 ) {
-  const where: string[] = [LISTED];
+  const where: string[] = [`c.${LISTED}`];
   const binds: unknown[] = [];
-  if (opts.zone) { where.push("zone IN (?, 'all')"); binds.push(opts.zone); }
-  if (opts.q) { where.push(`author_name LIKE ? ESCAPE '\\'`); binds.push(likeTerm(opts.q)); }
+  if (opts.zone) { where.push("c.zone IN (?, 'all')"); binds.push(opts.zone); }
+  if (opts.q) { where.push(`c.author_name LIKE ? ESCAPE '\\'`); binds.push(likeTerm(opts.q)); }
   const orderBy =
     opts.sort === "cards" ? "card_count DESC, talk_total DESC" : opts.sort === "hot" ? "trending DESC, talk_total DESC" : "talk_total DESC, card_count DESC";
   const rows = await db
     .prepare(
-      `SELECT author_num_id, MAX(author_name) AS author_name, MAX(author_avatar) AS author_avatar,
-              COUNT(*) AS card_count, SUM(talk_num) AS talk_total, SUM(MAX(hot_score, 0)) AS trending,
-              MIN(registered_at) AS joined_at
-       FROM cards WHERE ${where.join(" AND ")}
-       GROUP BY author_num_id ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
+      `SELECT am.handle AS handle, c.author_num_id, MAX(c.author_name) AS author_name, MAX(c.author_avatar) AS author_avatar,
+              COUNT(*) AS card_count, SUM(c.talk_num) AS talk_total, SUM(MAX(c.hot_score, 0)) AS trending,
+              MIN(c.registered_at) AS joined_at
+       FROM cards c ${AUTHOR_JOIN} WHERE ${where.join(" AND ")}
+       GROUP BY c.provider, c.author_num_id ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
     )
     .bind(...binds, opts.limit + 1, opts.offset)
     .all<AuthorRow>();
@@ -399,6 +418,7 @@ export async function listAuthors(
 }
 
 export const toAuthor = (a: AuthorRow) => ({
+  handle: a.handle ?? null,
   accountNumId: a.author_num_id,
   name: a.author_name,
   avatar: a.author_avatar,

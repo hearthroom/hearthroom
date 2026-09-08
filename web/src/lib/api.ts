@@ -66,7 +66,7 @@ const from = (): Record<string, string> => ({ "X-From": currentSurface() });
 
 // ---- 社群 API（同源）------------------------------------------------------
 
-export interface BoardQuery { zone?: Zone | "all"; q?: string; tag?: string; sort?: Sort; author?: number; limit?: number; offset?: number; lang?: string }
+export interface BoardQuery { zone?: Zone | "all"; q?: string; tag?: string; sort?: Sort; /** 作者的本站公開 ID */ author?: string; limit?: number; offset?: number; lang?: string }
 
 export async function fetchBoard(query: BoardQuery = {}): Promise<CardPage> {
   const params = new URLSearchParams();
@@ -93,8 +93,8 @@ export async function fetchAuthors(query: { zone?: Zone | "all"; q?: string; sor
   return json<AuthorPage>(await fetch(`${COMMUNITY_API}/authors?${params}`, { headers: from() }));
 }
 
-export async function fetchAuthor(accountNumId: number): Promise<Author> {
-  return json<Author>(await fetch(`${COMMUNITY_API}/authors/${accountNumId}`, { headers: from() }));
+export async function fetchAuthor(handle: string): Promise<Author> {
+  return json<Author>(await fetch(`${COMMUNITY_API}/authors/${encodeURIComponent(handle)}`, { headers: from() }));
 }
 
 /** 登記只送 roleId：內容由服務端自己去上游取，作者塞不進任何欄位。 */
@@ -197,6 +197,18 @@ export async function fetchReviewDetail(id: string, token: string): Promise<Revi
 // ---- 上游開放 API（跨網域）---------------------------------------------------
 
 export interface Me { accountNumId: number; nickName: string; avatar: string }
+
+/** 登入者在本站的身分（不是供應商那邊的）：公開 ID、加入時間、連結了哪些供應商帳號。 */
+export interface SiteMe {
+  handle: string;
+  memberSince: number;
+  reviewer: boolean;
+  identities: { provider: string; externalId: number; linkedAt: number }[];
+}
+
+export async function fetchSiteMe(token: string): Promise<SiteMe> {
+  return json<SiteMe>(await fetch(`${COMMUNITY_API}/me`, { headers: { ...from(), ...authHeaders(token) } }));
+}
 
 export interface MyCard {
   roleId: string;

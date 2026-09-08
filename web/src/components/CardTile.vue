@@ -70,10 +70,14 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
 
       <div class="card__meta">
         <span v-if="showZone" class="card__by">{{ zoneLabel(card.zone) }}</span>
-        <RouterLink v-else :to="lp(`/authors/${card.author.accountNumId}`)" class="card__by card__by--link">
+        <RouterLink v-else-if="card.author.handle" :to="lp(`/authors/${card.author.handle}`)" class="card__by card__by--link">
           <img v-if="card.author.avatar" :src="card.author.avatar" alt="" class="card__face" />
           <span class="card__author">{{ card.author.name }}</span>
         </RouterLink>
+        <span v-else class="card__by">
+          <img v-if="card.author.avatar" :src="card.author.avatar" alt="" class="card__face" />
+          <span class="card__author">{{ card.author.name }}</span>
+        </span>
         <span class="card__num" :class="{ 'card__num--up': showTrending && card.trending > 0 }" :title="$t('card.talkCount', { n: compact(card.talkNum) })">
           <span class="sr-only">{{ $t("card.talkCount", { n: compact(card.talkNum) }) }}</span>
           <svg viewBox="0 0 16 16" aria-hidden="true">

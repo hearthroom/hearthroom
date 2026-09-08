@@ -20,29 +20,73 @@ export interface Member {
   externalId: number;
 }
 
+/** 公開 ID 的字元集與長度：8 個小寫字母（見 migrations/0005）。 */
+const HANDLE_ALPHABET = "abcdefghijklmnopqrstuvwxyz";
+export const HANDLE_RE = /^[a-z]{8}$/;
+
+export function newHandle(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  let out = "";
+  for (const b of bytes) out += HANDLE_ALPHABET[b % 26];
+  return out;
+}
+
+/**
+ * 某家供應商上的公開 ID → 本站成員 id；第一次見到就建成員（連同公開 handle）。
+ * 兩個請求同時第一次登入：身分表的主鍵擋住第二個，重讀就拿到第一個建的。
+ * handle 撞到唯一索引（機率極低）也會落到同一個 catch，所以重讀不到才換一個 handle 再試。
+ */
 export async function resolveMember(db: D1Database, provider: ProviderId, externalId: number, now: number): Promise<string> {
   const ext = String(externalId);
-  const found = await db
-    .prepare("SELECT member_id FROM member_identities WHERE provider = ? AND external_id = ?")
-    .bind(provider, ext)
-    .first<{ member_id: string }>();
-  if (found) return found.member_id;
-  const id = crypto.randomUUID();
-  // 兩個請求同時第一次登入：身分表的主鍵擋住第二個，重讀就拿到第一個建的。
-  try {
-    await db.batch([
-      db.prepare("INSERT INTO members (id, created_at) VALUES (?, ?)").bind(id, now),
-      db.prepare("INSERT INTO member_identities (provider, external_id, member_id, linked_at) VALUES (?, ?, ?, ?)").bind(provider, ext, id, now),
-    ]);
-    return id;
-  } catch {
-    const again = await db
+  const lookup = () =>
+    db
       .prepare("SELECT member_id FROM member_identities WHERE provider = ? AND external_id = ?")
       .bind(provider, ext)
       .first<{ member_id: string }>();
-    if (again) return again.member_id;
-    throw new HttpError(502, "could not create member");
+  const found = await lookup();
+  if (found) return found.member_id;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const id = crypto.randomUUID();
+    try {
+      await db.batch([
+        db.prepare("INSERT INTO members (id, handle, created_at) VALUES (?, ?, ?)").bind(id, newHandle(), now),
+        db.prepare("INSERT INTO member_identities (provider, external_id, member_id, linked_at) VALUES (?, ?, ?, ?)").bind(provider, ext, id, now),
+      ]);
+      return id;
+    } catch {
+      const again = await lookup();
+      if (again) return again.member_id;
+    }
   }
+  throw new HttpError(502, "could not create member");
+}
+
+/** 公開 ID → 成員 id；格式不對或沒這個人都是 null。 */
+export async function memberByHandle(db: D1Database, handle: string): Promise<string | null> {
+  if (!HANDLE_RE.test(handle)) return null;
+  const row = await db.prepare("SELECT id FROM members WHERE handle = ?").bind(handle).first<{ id: string }>();
+  return row?.id ?? null;
+}
+
+export interface MemberProfile {
+  handle: string;
+  memberSince: number;
+  identities: { provider: string; externalId: number; linkedAt: number }[];
+}
+
+/** 「我的」頁要的：公開 ID、加入時間、連結了哪些供應商帳號。沒有 token、沒有信箱。 */
+export async function memberProfile(db: D1Database, memberId: string): Promise<MemberProfile | null> {
+  const m = await db.prepare("SELECT handle, created_at FROM members WHERE id = ?").bind(memberId).first<{ handle: string; created_at: number }>();
+  if (!m) return null;
+  const ids = await db
+    .prepare("SELECT provider, external_id, linked_at FROM member_identities WHERE member_id = ? ORDER BY linked_at")
+    .bind(memberId)
+    .all<{ provider: string; external_id: string; linked_at: number }>();
+  return {
+    handle: m.handle,
+    memberSince: m.created_at,
+    identities: ids.results.map((r) => ({ provider: r.provider, externalId: Number(r.external_id), linkedAt: r.linked_at })),
+  };
 }
 
 export async function isReviewer(db: D1Database, memberId: string): Promise<boolean> {

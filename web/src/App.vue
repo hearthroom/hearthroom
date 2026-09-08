@@ -10,6 +10,7 @@ import { useLocalePath } from "@/lib/use-locale";
 import { useReviewer } from "@/lib/review";
 import { useSession } from "@/lib/session";
 import { SITE } from "@/lib/site";
+import { loginPath } from "@/lib/login-return";
 
 const { lp } = useLocalePath();
 const session = useSession();
@@ -91,9 +92,9 @@ onMounted(() => document.addEventListener("keydown", onSlash));
         <AppearanceMenu />
         <LocaleSwitch />
         <AccountMenu v-if="session.me" />
-        <button v-else-if="session.ready" class="btn btn--primary btn--sm" @click="session.login(route.fullPath)">
+        <RouterLink v-else-if="session.ready" class="btn btn--primary btn--sm" :to="lp(loginPath(route.fullPath))">
           {{ $t("nav.login") }}
-        </button>
+        </RouterLink>
       </div>
     </div>
   </header>
