@@ -26,6 +26,12 @@ describe("renderDoc", () => {
     expect(html).toContain('<h2 id="一開始-2">');
     expect(html).toContain('<h3 id="細節">');
   });
+  it("標題裡的行內標記不進目錄：`code` 拿掉反引號、粗體拿掉星號", () => {
+    const { toc } = renderDoc("## 2.1 `role/detail` 本站讀的欄位\n\n## 六、玩家人設與 **{{user}}**");
+    expect(toc.map((t) => t.text)).toEqual(["2.1 role/detail 本站讀的欄位", "六、玩家人設與 {{user}}"]);
+    expect(toc[0].id).toBe("21-roledetail-本站讀的欄位");
+  });
+
   it("不允許內嵌 HTML，連結自動加上", () => {
     const { html } = renderDoc("<b>x</b> https://example.com");
     expect(html).toContain("&lt;b&gt;");

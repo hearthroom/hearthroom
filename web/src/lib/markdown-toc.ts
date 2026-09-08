@@ -33,7 +33,12 @@ export function renderDoc(source: string): { html: string; toc: TocItem[] } {
     const open = tokens[i];
     if (open.type !== "heading_open") continue;
     const level = Number(open.tag.slice(1));
-    const text = tokens[i + 1]?.content ?? "";
+    // 目錄與 id 用的是看得見的字：`code` 的反引號、**粗體** 的星號不該出現在目錄裡
+    const text = (tokens[i + 1]?.children ?? [])
+      .filter((c) => c.type === "text" || c.type === "code_inline")
+      .map((c) => c.content)
+      .join("")
+      .trim() || (tokens[i + 1]?.content ?? "");
     const base = slugify(text) || "section";
     const n = (seen.get(base) ?? 0) + 1;
     seen.set(base, n);
