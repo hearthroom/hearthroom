@@ -3,7 +3,6 @@ import { createRouter, createWebHistory } from "vue-router";
 import { LOCALE_CODES, SOURCE_LOCALE, applyLocale, detectLocale, pageTitle, updateHreflang } from "./lib/i18n";
 import { useSession } from "./lib/session";
 import { setSurface } from "./lib/track";
-import { loginPath } from "./lib/login-return";
 
 /**
  * 語言放在網址路徑裡，不是 localStorage。
@@ -94,7 +93,8 @@ router.beforeEach(async (to) => {
   await session.restore();
   if (session.me) return true;
   // 先到本站的登入頁，不直接跳去供應商：登入方式是這個站的事，供應商只是其中一種。
-  return { path: withLocale(loginPath(to.fullPath), locale), replace: true };
+  // query 要分開給：物件位置的 path 不帶查詢字串（vue-router 只讀 path 本身），塞在 path 裡會被丟掉
+  return { path: withLocale("/login", locale), query: to.fullPath === "/" ? {} : { returnTo: to.fullPath }, replace: true };
 });
 
 /**

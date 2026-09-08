@@ -40,7 +40,7 @@ async function copyHandle() {
 }
 
 function reauthorize() {
-  track("login_start");
+  // session.login 自己會記 login_start
   void session.login(route.fullPath);
 }
 

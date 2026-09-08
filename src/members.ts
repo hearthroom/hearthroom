@@ -61,6 +61,36 @@ export async function resolveMember(db: D1Database, provider: ProviderId, extern
   throw new HttpError(502, "could not create member");
 }
 
+/**
+ * 這些供應商身分裡還沒有成員列的，回一組「建成員＋綁身分」的寫入語句，讓呼叫端併進自己的批次。
+ * 一次查詢、零個或多個寫入；同步用（迴圈裡逐張 resolveMember 會把 D1 呼叫算進子請求額度）。
+ * INSERT OR IGNORE：同一輪裡有人剛好登入建了同一個身分，主鍵擋住，不會壞批次。
+ */
+export async function missingMemberStatements(
+  db: D1Database,
+  identities: { provider: ProviderId; externalId: number }[],
+  now: number,
+): Promise<D1PreparedStatement[]> {
+  if (!identities.length) return [];
+  const keys = identities.map((i) => `${i.provider}:${i.externalId}`);
+  const holes = keys.map(() => "?").join(",");
+  const have = await db
+    .prepare(`SELECT provider || ':' || external_id AS k FROM member_identities WHERE provider || ':' || external_id IN (${holes})`)
+    .bind(...keys)
+    .all<{ k: string }>();
+  const existing = new Set(have.results.map((r) => r.k));
+  const out: D1PreparedStatement[] = [];
+  for (const i of identities) {
+    if (existing.has(`${i.provider}:${i.externalId}`)) continue;
+    const id = crypto.randomUUID();
+    out.push(
+      db.prepare("INSERT OR IGNORE INTO members (id, handle, created_at) VALUES (?, ?, ?)").bind(id, newHandle(), now),
+      db.prepare("INSERT OR IGNORE INTO member_identities (provider, external_id, member_id, linked_at) VALUES (?, ?, ?, ?)").bind(i.provider, String(i.externalId), id, now),
+    );
+  }
+  return out;
+}
+
 /** 公開 ID → 成員 id；格式不對或沒這個人都是 null。 */
 export async function memberByHandle(db: D1Database, handle: string): Promise<string | null> {
   if (!HANDLE_RE.test(handle)) return null;
