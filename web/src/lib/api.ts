@@ -947,3 +947,32 @@ export async function removeImagesFromFolder(folderId: string, imageIds: number[
 export async function deleteLibraryImages(imageIds: number[], token: string): Promise<void> {
   await libraryJson(await libraryPost("delete", { imageIds }, token));
 }
+
+// ---- 遊戲模式：作者替卡存的世界配置（本站 D1，形狀見 shared/game-spec.ts） ------------------
+
+import type { GameSpecJson } from "../../../shared/game-spec";
+
+export interface GameSpecRecord { roleId: string; spec: GameSpecJson; updatedAt: number }
+
+/** 沒存過回 null（404），不當錯誤。 */
+export async function fetchGameSpec(roleId: string): Promise<GameSpecRecord | null> {
+  const res = await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(roleId)}/game`, { headers: from() });
+  if (res.status === 404) return null;
+  return json<GameSpecRecord>(res);
+}
+
+export async function saveGameSpec(roleId: string, spec: GameSpecJson, token: string): Promise<GameSpecRecord> {
+  const res = await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(roleId)}/game`, {
+    method: "PUT", headers: { "content-type": "application/json", ...from(), ...authHeaders(token) }, body: JSON.stringify({ spec }),
+  });
+  if (res.status === 400) {
+    const body = (await res.json().catch(() => ({}))) as { errors?: string[] };
+    throw new ApiError(400, (body.errors || ["invalid spec"]).join("\n"));
+  }
+  return json<GameSpecRecord>(res);
+}
+
+export async function deleteGameSpec(roleId: string, token: string): Promise<void> {
+  const res = await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(roleId)}/game`, { method: "DELETE", headers: { ...from(), ...authHeaders(token) } });
+  if (!res.ok) throw new ApiError(res.status, describeApiError(res.status, await res.text().catch(() => "")));
+}
