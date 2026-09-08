@@ -701,5 +701,12 @@
   "editor.game.template": "填入默认模板",
   "editor.game.clear": "清空",
   "editor.game.play": "在新标签页试玩",
-  "editor.game.invalid": "游戏配置有误，请按下方提示修正后再保存。"
+  "editor.game.invalid": "游戏配置有误，请按下方提示修正后再保存。",
+  "game.regen": "重写",
+  "game.regenHint": "让对方换一种说法回应你刚才那句",
+  "game.assist": "帮答",
+  "game.assistHint": "替你拟一句，填进输入框再改",
+  "game.newChat": "新的一局",
+  "game.newChatConfirm": "这一局会存档，然后从开场重新开始。要继续吗？",
+  "game.newChatDone": "新的一局开始了"
 }

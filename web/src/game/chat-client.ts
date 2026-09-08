@@ -42,12 +42,37 @@ export async function startConversation(base: string, token: string, roleId: str
  * 這段對話最近的 AI 回覆（舊到新）。伺服器第一頁是最新的、由新到舊，所以反過來。
  * 重新整理後把它們照順序合併，舞台狀態就能接回上次的存檔。
  */
-export async function fetchRecentAiMessages(base: string, token: string, conversationId: string, lang: string, pageSize = 30): Promise<string[]> {
+export interface HistoryRow { chatId: string; role: "AI" | "USER"; text: string }
+
+/** 這段對話最近的訊息（舊到新，含雙方）。伺服器第一頁是最新的、由新到舊，所以反過來。 */
+export async function fetchRecentMessages(base: string, token: string, conversationId: string, lang: string, pageSize = 30): Promise<HistoryRow[]> {
   const q = new URLSearchParams({ conversationId, pageNum: "1", pageSize: String(pageSize) });
-  const body = await json<{ chats?: { chatRole?: string; chatMessage?: string }[] }>(
+  const body = await json<{ chats?: { chatId?: string | number; chatRole?: string; chatMessage?: string }[] }>(
     await fetch(`${base}/open/v1/conversation/messages?${q}`, { headers: headers(token, lang) }),
   );
-  return (body.chats || []).filter((m) => m.chatRole === "AI" && m.chatMessage).map((m) => String(m.chatMessage)).reverse();
+  return (body.chats || [])
+    .filter((m) => m.chatMessage && (m.chatRole === "AI" || m.chatRole === "USER"))
+    .map((m) => ({ chatId: String(m.chatId ?? ""), role: m.chatRole as "AI" | "USER", text: String(m.chatMessage) }))
+    .reverse();
+}
+
+export async function fetchRecentAiMessages(base: string, token: string, conversationId: string, lang: string, pageSize = 30): Promise<string[]> {
+  return (await fetchRecentMessages(base, token, conversationId, lang, pageSize)).filter((m) => m.role === "AI").map((m) => m.text);
+}
+
+/** 幫答：伺服器替玩家擬一句，填進輸入框由玩家決定送不送。點數不足時回空字串並帶 code。 */
+export async function suggestReply(base: string, token: string, conversationId: string, lang: string): Promise<{ reply: string; code?: string }> {
+  const res = await fetch(`${base}/open/v1/conversation/suggest-reply`, { method: "POST", headers: headers(token, lang), body: JSON.stringify({ conversationId, regenerate: false }) });
+  const body = (await res.json().catch(() => ({}))) as { reply?: string; error?: string };
+  return { reply: String(body.reply || ""), code: body.error ? String(body.error) : undefined };
+}
+
+/** 存下這一段、另起一段新的（同一張卡）。回新對話與開場白。 */
+export async function startNewConversation(base: string, token: string, conversationId: string, lang: string): Promise<ChatSession> {
+  const body = await json<{ conversationId: string; defaultRelay?: string }>(
+    await fetch(`${base}/open/v1/conversation/save-and-start-new`, { method: "POST", headers: headers(token, lang), body: JSON.stringify({ conversationId, save: true }) }),
+  );
+  return { conversationId: body.conversationId, welcome: body.defaultRelay || "", hasHistory: false };
 }
 
 async function fetchTicket(base: string, token: string, lang: string): Promise<string> {
@@ -93,7 +118,11 @@ function makeSseParser() {
 
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
 
-export interface TurnInput { base: string; token: string; conversationId: string; message: string; lang: string }
+export interface TurnInput {
+  base: string; token: string; conversationId: string; message: string; lang: string;
+  /** 重寫：指向要重跑的那一句「玩家訊息」的 chatId（伺服器契約），message 帶原句 */
+  rewriteChatId?: string;
+}
 
 /** 送一輪。回傳的函式可以中止（關 socket）。 */
 export function sendTurn(input: TurnInput, h: TurnHandlers): () => void {
@@ -132,7 +161,7 @@ export function sendTurn(input: TurnInput, h: TurnHandlers): () => void {
           heartbeat = window.setInterval(() => ws?.readyState === 1 && ws.send(JSON.stringify({ type: "ping", timestamp: Date.now() })), 10000);
           ws?.send(JSON.stringify({
             conversationId: input.conversationId, storyId: "", message: input.message, model: "", thinkingDepth: "",
-            rewrite: false, contine: false, presetCmd: "", language: input.lang, chatId: "",
+            rewrite: !!input.rewriteChatId, contine: false, presetCmd: "", language: input.lang, chatId: input.rewriteChatId || "",
             clientTurnId: uuid(), ackToken: "", supportsPassBlock: true,
           }));
         } else if (e.event === "answer") {

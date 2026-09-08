@@ -701,5 +701,12 @@
   "editor.game.template": "デフォルトのテンプレートを入れる",
   "editor.game.clear": "クリア",
   "editor.game.play": "新しいタブで試す",
-  "editor.game.invalid": "ゲーム設定にエラーがあります。下のヒントに従って直してから保存してください。"
+  "editor.game.invalid": "ゲーム設定にエラーがあります。下のヒントに従って直してから保存してください。",
+  "game.regen": "書き直し",
+  "game.regenHint": "直前のあなたの一言に別の返し方をさせる",
+  "game.assist": "提案",
+  "game.assistHint": "一言を下書きして入力欄に入れます。直してから送れます",
+  "game.newChat": "新しく始める",
+  "game.newChatConfirm": "この回はセーブされ、オープニングからやり直します。続けますか？",
+  "game.newChatDone": "新しい回が始まりました"
 }

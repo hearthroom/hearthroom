@@ -20,7 +20,8 @@ import { loginPath } from "@/lib/login-return";
 import { pageTitle } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
-import { fetchRecentAiMessages, sendTurn, startConversation } from "@/game/chat-client";
+import { fetchRecentMessages, sendTurn, startConversation, startNewConversation, suggestReply } from "@/game/chat-client";
+import { confirmDialog } from "@/lib/confirm";
 import { HERO_FIELDS, SCENE_FIELDS, WORLD_SPECS, defaultWorldFor, tintOf, worldFromSpec } from "@/game/specs";
 import { F, isUnset, mergeTurn, parseTurn, speakerOf, type GameTurn } from "@/game/zz-parse";
 import type { World } from "@/game/world";
@@ -58,6 +59,10 @@ const error = ref("");
 const draft = ref("");
 const conversationId = ref("");
 let abort: (() => void) | null = null;
+/** 最近一句玩家訊息的 chatId：重寫要指向它 */
+const lastUserChatId = ref("");
+const lastUserText = ref("");
+const assisting = ref(false);
 
 /** 靠近的 NPC（世界回報）與正在對話的 NPC */
 const near = ref<string | null>(null);
@@ -147,9 +152,12 @@ async function restore(token: string) {
   const s = await startConversation(UPSTREAM_API, token, roleId.value, locale.value);
   conversationId.value = s.conversationId;
   if (!s.hasHistory) return;
-  const msgs = await fetchRecentAiMessages(UPSTREAM_API, token, conversationId.value, locale.value).catch(() => [] as string[]);
-  if (!msgs.length) return;
-  for (const m of msgs) applyTurn(m, false);
+  const rows = await fetchRecentMessages(UPSTREAM_API, token, conversationId.value, locale.value).catch(() => []);
+  if (!rows.length) return;
+  for (const r of rows) {
+    if (r.role === "AI") applyTurn(r.text, false);
+    else { lastUserChatId.value = r.chatId; lastUserText.value = r.text; }
+  }
   say(t("game.resumed"));
 }
 
@@ -207,7 +215,7 @@ function closeTalk() {
 }
 function toLogin() { void router.push(lp(loginPath(route.fullPath))); }
 
-async function act(text: string) {
+async function act(text: string, rewriteChatId = "") {
   const message = text.trim();
   if (!message || streaming.value || !talking.value) return;
   error.value = "";
@@ -221,20 +229,24 @@ async function act(text: string) {
     return;
   }
   playerLine.value = message;
-  log.value.push({ kind: "you", title: heroName.value, text: message });
+  if (!rewriteChatId) log.value.push({ kind: "you", title: heroName.value, text: message });
   draft.value = "";
   live.value = "";
   streaming.value = true;
   world?.setSpeaking(talking.value);
   // 讓 AI 知道玩家是走到誰面前說的：這一句是舞台事實
-  const wire = t("game.wireApproach", { name: talking.value }) + message;
-  abort = sendTurn({ base: UPSTREAM_API, token, conversationId: conversationId.value, message: wire, lang: locale.value }, {
+  const wire = rewriteChatId ? message : t("game.wireApproach", { name: talking.value }) + message;
+  abort = sendTurn({ base: UPSTREAM_API, token, conversationId: conversationId.value, message: wire, lang: locale.value, rewriteChatId }, {
     onDelta: (full) => { live.value = full; },
     onDone: (full) => {
       streaming.value = false;
       abort = null;
       world?.setSpeaking(null);
       if (full.trim()) applyTurn(full, true);
+      // 這一輪落盤後記下玩家那句的 chatId，重寫才有目標
+      void fetchRecentMessages(UPSTREAM_API, token, conversationId.value, locale.value, 4)
+        .then((rows) => { const u = [...rows].reverse().find((r) => r.role === "USER"); if (u) { lastUserChatId.value = u.chatId; lastUserText.value = u.text; } })
+        .catch(() => {});
     },
     onError: (why) => {
       streaming.value = false;
@@ -247,6 +259,59 @@ async function act(text: string) {
 }
 
 function stop() { abort?.(); }
+
+/** 重寫：把最近一句玩家訊息重跑一次，AI 換一種回法 */
+function regenerate() {
+  if (!lastUserChatId.value || streaming.value || !talking.value) return;
+  void act(lastUserText.value, lastUserChatId.value);
+}
+
+/** 幫答：伺服器擬一句填進輸入框，送不送玩家決定 */
+async function assist() {
+  if (assisting.value || streaming.value) return;
+  const token = await session.accessToken();
+  if (!token) { toLogin(); return; }
+  assisting.value = true;
+  try {
+    if (!conversationId.value) await restore(token);
+    const r = await suggestReply(UPSTREAM_API, token, conversationId.value, locale.value);
+    if (r.reply) fill(r.reply);
+    else error.value = r.code === "insufficient_credits" ? t("game.credits") : t("game.error");
+  } catch (e) {
+    console.error("[game] assist failed", e);
+    error.value = t("game.error");
+  } finally {
+    assisting.value = false;
+  }
+}
+
+/** 新的一局：存下這一段、從開場白重來，世界狀態歸零 */
+async function restart() {
+  if (streaming.value) return;
+  const token = await session.accessToken();
+  if (!token) { toLogin(); return; }
+  const ok = await confirmDialog({ title: t("game.newChat"), message: t("game.newChatConfirm"), confirmText: t("game.newChat"), cancelText: t("dialog.cancel") });
+  if (!ok) return;
+  try {
+    if (!conversationId.value) await restore(token);
+    const s = await startNewConversation(UPSTREAM_API, token, conversationId.value, locale.value);
+    conversationId.value = s.conversationId;
+    lastUserChatId.value = ""; lastUserText.value = ""; playerLine.value = ""; live.value = ""; log.value = [];
+    turn.value = parseTurn(s.welcome);
+    syncWorld();
+    closeTalk();
+    say(t("game.newChatDone"));
+  } catch (e) {
+    console.error("[game] restart failed", e);
+    error.value = t("game.error");
+  }
+}
+
+/** 行動鍵只把模板填進輸入框，玩家改完自己送——行動是玩家的，不是按鈕的 */
+function fill(text: string) {
+  draft.value = text;
+  void nextTick(() => { const el = document.querySelector<HTMLInputElement>(".panel__input input"); el?.focus(); el?.setSelectionRange(el.value.length, el.value.length); });
+}
 
 /**
  * 開發用的檢查掛鉤（threejs 畫布檢查器的契約）：setState 把場景擺到指定狀態並回 {state}，
@@ -270,7 +335,7 @@ function installTestHooks() {
 </script>
 
 <template>
-  <div class="game" :class="{ 'game--talking': talking }">
+  <div class="game" :class="{ 'game--talking': talking, 'game--log': showLog }">
     <div class="game__view">
       <canvas ref="canvas" class="game__canvas"></canvas>
       <div ref="labels" class="game__labels" aria-hidden="true"></div>
@@ -351,7 +416,12 @@ function installTestHooks() {
     <footer v-if="talking" class="panel">
       <div class="panel__head">
         <b class="panel__who">{{ speaker }}</b>
-        <button type="button" class="btn btn--ghost btn--sm panel__close" :disabled="streaming" @click="closeTalk">{{ $t("game.close") }}</button>
+        <div class="panel__tools">
+          <button v-if="signedIn" type="button" class="btn btn--ghost btn--sm" :disabled="streaming || !lastUserChatId" :title="$t('game.regenHint')" @click="regenerate">{{ $t("game.regen") }}</button>
+          <button v-if="signedIn" type="button" class="btn btn--ghost btn--sm" :disabled="streaming || assisting" :title="$t('game.assistHint')" @click="assist">{{ assisting ? $t("game.thinking") : $t("game.assist") }}</button>
+          <button v-if="signedIn" type="button" class="btn btn--ghost btn--sm" :disabled="streaming" @click="restart">{{ $t("game.newChat") }}</button>
+          <button type="button" class="btn btn--ghost btn--sm panel__close" :disabled="streaming" @click="closeTalk">{{ $t("game.close") }}</button>
+        </div>
       </div>
       <div ref="narr" class="panel__narr">
         <p v-if="playerLine" class="panel__you"><span>{{ heroName }}</span>{{ playerLine }}</p>
@@ -366,7 +436,7 @@ function installTestHooks() {
       </div>
       <template v-else>
         <div class="panel__actions" v-if="turn.actions.length">
-          <button v-for="a in turn.actions" :key="a.full" type="button" class="btn act" :title="a.full" :disabled="streaming" @click="act(a.full)">
+          <button v-for="a in turn.actions" :key="a.full" type="button" class="btn act" :title="a.full" :disabled="streaming" @click="fill(a.full)">
             {{ a.short }}
           </button>
         </div>
@@ -438,7 +508,13 @@ function installTestHooks() {
 
 .minimap { position: absolute; right: var(--s-4); top: 76px; width: 150px; height: 150px; z-index: 3; filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.5)); }
 
-.logpanel { position: absolute; right: var(--s-4); top: 240px; width: min(320px, 40vw); max-height: 44vh; overflow-y: auto; z-index: 4; padding: var(--s-3) var(--s-4); font-size: 13px; }
+.logpanel { position: absolute; right: var(--s-4); top: 240px; width: min(320px, 40vw); max-height: calc(100vh - 264px); overflow-y: auto; z-index: 4; padding: var(--s-3) var(--s-4); font-size: 13px; }
+/* 日誌開著且在對話：對話框靠左、讓出右邊一欄給日誌，兩個面板不重疊 */
+@media (min-width: 861px) {
+  .game--log .panel { left: var(--s-4); transform: none; width: min(920px, calc(100% - 320px - 3 * var(--s-4))); }
+  .game--log.game--talking .logpanel { top: 76px; }
+  .game--log.game--talking .minimap { display: none; }
+}
 .logpanel__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--s-2); color: var(--cyan); letter-spacing: 0.1em; text-transform: uppercase; font-size: 11px; }
 .logpanel__empty { color: var(--ink-3); margin: 0; }
 .logpanel__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); }
@@ -467,6 +543,9 @@ function installTestHooks() {
 .panel__head { display: flex; align-items: center; justify-content: space-between; }
 .panel__who { font-size: 16px; letter-spacing: 0.04em; color: var(--cyan); }
 .panel__who::before { content: "▸ "; opacity: 0.7; }
+.panel__tools { display: flex; gap: 2px; flex-wrap: wrap; justify-content: flex-end; }
+.panel__tools .btn { color: var(--ink-2); }
+.panel__tools .btn:hover { color: var(--ink); background: rgba(255, 255, 255, 0.1); }
 .panel__close { color: var(--ink-2); }
 .panel__close:hover { color: var(--ink); background: rgba(255, 255, 255, 0.1); }
 .panel__narr { position: relative; max-height: 20vh; overflow-y: auto; font-size: 15px; line-height: 1.75; scroll-behavior: smooth; }

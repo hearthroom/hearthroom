@@ -127,6 +127,20 @@ interface Figure { group: THREE.Group; halo: THREE.Mesh | null; legs: THREE.Mesh
 
 /** 只把根骨的水平位移歸零：垂直分量是跳與起伏，保留（Tripo 的 in-place 選項會毀掉烘焙，這裡在匯入時處理） */
 function stripRootMotion(clip: THREE.AnimationClip) {
+  // Tripo 的走路 clip 把前進位移烘焙在 Hip（Root 底下第一根骨）的位置軌道上：一個循環網格在群組裡
+  // 往前漂兩個多單位，循環結束彈回原點——玩家看到的就是「滑步」與「停下來倒退」。
+  // 把那一軸的線性趨勢扣掉（保留同軸的上下起伏），角色就原地踏步、位移全交給群組。
+  for (const tr of clip.tracks) {
+    if (!/(^|\.|\|)(Hip|Hips|Pelvis)\.position$/.test(tr.name)) continue;
+    const v = tr.values as Float32Array; const times = tr.times as Float32Array; const n = times.length;
+    if (n < 2) continue;
+    const dur = times[n - 1] - times[0]; if (dur <= 0) continue;
+    let axis = 0, best = 0;
+    for (let a = 0; a < 3; a++) { const d = Math.abs(v[(n - 1) * 3 + a] - v[a]); if (d > best) { best = d; axis = a; } }
+    if (best < 1e-4) continue;
+    const slope = (v[(n - 1) * 3 + axis] - v[axis]) / dur;
+    for (let i = 0; i < n; i++) v[i * 3 + axis] -= slope * (times[i] - times[0]);
+  }
   // FBX 的 Armature（物件層）變換是 FBX 自己的座標慣例，套到 GLB 上會讓整個人轉向、縮放；
   // GLB 的 Armature 靜止變換才是對的，這些軌道直接丟掉
   for (const tr of clip.tracks) {

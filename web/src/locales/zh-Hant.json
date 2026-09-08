@@ -701,5 +701,12 @@
   "editor.game.template": "填入預設範本",
   "editor.game.clear": "清空",
   "editor.game.play": "在新分頁試玩",
-  "editor.game.invalid": "遊戲配置有錯，請照下方提示修正後再存。"
+  "editor.game.invalid": "遊戲配置有錯，請照下方提示修正後再存。",
+  "game.regen": "重寫",
+  "game.regenHint": "讓對方換一種說法回應你剛才那句",
+  "game.assist": "幫答",
+  "game.assistHint": "替你擬一句，填進輸入框再改",
+  "game.newChat": "新的一局",
+  "game.newChatConfirm": "這一局會存檔，然後從開場重新開始。要繼續嗎？",
+  "game.newChatDone": "新的一局開始了"
 }
