@@ -26,6 +26,7 @@ import { HERO_FIELDS, SCENE_FIELDS, WORLD_SPECS, defaultWorldFor, tintOf, worldF
 import { F, isUnset, mergeTurn, parseTurn, speakerOf, type GameTurn } from "@/game/zz-parse";
 import type { World } from "@/game/world";
 import { GameAudio } from "@/game/audio";
+import GameSettings from "@/game/GameSettings.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -63,6 +64,26 @@ let abort: (() => void) | null = null;
 const lastUserChatId = ref("");
 const lastUserText = ref("");
 const assisting = ref(false);
+/** 設定面板：模型／人設／長期指令。要 token 才開得起來（都是玩家自己的設定） */
+const showSettings = ref(false);
+const settingsToken = ref("");
+async function openSettings() {
+  const token = await session.accessToken();
+  if (!token) { toLogin(); return; }
+  settingsToken.value = token;
+  showSettings.value = true;
+  world?.lock(true, talking.value);
+}
+function closeSettings() {
+  showSettings.value = false;
+  if (!talking.value) world?.lock(false);
+}
+/** 長期指令要有對話才能掛：還沒開口就先把對話建起來 */
+async function ensureConversation() {
+  const token = await session.accessToken();
+  if (!token || conversationId.value) return;
+  try { await restore(token); } catch (e) { console.error("[game] ensure conversation failed", e); }
+}
 
 /** 靠近的 NPC（世界回報）與正在對話的 NPC */
 const near = ref<string | null>(null);
@@ -196,6 +217,7 @@ function onKey(e: KeyboardEvent) {
   if (e.key.toLowerCase() === "e" && near.value && !talking.value) { e.preventDefault(); openTalk(near.value); }
   if (e.key.toLowerCase() === "l") showLog.value = !showLog.value;
   if (e.key.toLowerCase() === "m") { muted.value = !muted.value; audio.setMuted(muted.value); }
+  if (e.key === "Escape" && showSettings.value) { closeSettings(); return; }
   if (e.key === "Escape" && talking.value && !streaming.value) closeTalk();
 }
 window.addEventListener("keydown", onKey);
@@ -359,6 +381,9 @@ function installTestHooks() {
         <span v-for="r in sceneRows" :key="r.key" class="game__scene-item"><small>{{ $t(r.label) }}</small>{{ r.value }}</span>
         <span v-if="round" class="game__scene-item game__scene-item--round">{{ $t("game.round", { n: round }) }}</span>
         <button type="button" class="btn btn--ghost btn--sm game__logbtn" :class="{ 'game__logbtn--on': showLog }" @click="showLog = !showLog">{{ $t("game.log") }}</button>
+        <button type="button" class="btn btn--ghost btn--sm btn--icon game__logbtn" :title="$t('game.settings.title')" :aria-label="$t('game.settings.title')" @click="openSettings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        </button>
         <button type="button" class="btn btn--ghost btn--sm btn--icon game__logbtn" :title="$t(muted ? 'game.unmute' : 'game.mute')" :aria-label="$t(muted ? 'game.unmute' : 'game.mute')" @click="muted = !muted; audio.setMuted(muted)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path v-if="!muted" d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14"/><path v-else d="m22 9-6 6M16 9l6 6"/></svg>
         </button>
@@ -402,6 +427,12 @@ function installTestHooks() {
       </ol>
     </aside>
 
+    <div v-if="showSettings" class="sheet" @click.self="closeSettings">
+      <div class="sheet__card">
+        <GameSettings :base="UPSTREAM_API" :token="settingsToken" :lang="locale" :role-id="roleId" :conversation-id="conversationId" @close="closeSettings" @need-conversation="ensureConversation" />
+      </div>
+    </div>
+
     <p v-if="loadError" class="game__fatal" role="alert">{{ loadError }}</p>
     <div v-if="toast" class="game__toast">{{ toast }}</div>
 
@@ -420,6 +451,7 @@ function installTestHooks() {
           <button v-if="signedIn" type="button" class="btn btn--ghost btn--sm" :disabled="streaming || !lastUserChatId" :title="$t('game.regenHint')" @click="regenerate">{{ $t("game.regen") }}</button>
           <button v-if="signedIn" type="button" class="btn btn--ghost btn--sm" :disabled="streaming || assisting" :title="$t('game.assistHint')" @click="assist">{{ assisting ? $t("game.thinking") : $t("game.assist") }}</button>
           <button v-if="signedIn" type="button" class="btn btn--ghost btn--sm" :disabled="streaming" @click="restart">{{ $t("game.newChat") }}</button>
+          <button type="button" class="btn btn--ghost btn--sm" :disabled="streaming" @click="openSettings">{{ $t("game.settings.title") }}</button>
           <button type="button" class="btn btn--ghost btn--sm panel__close" :disabled="streaming" @click="closeTalk">{{ $t("game.close") }}</button>
         </div>
       </div>
@@ -523,6 +555,9 @@ function installTestHooks() {
 .logpanel__item--you { border-left-color: var(--cyan); color: var(--ink-2); }
 .logpanel__item b { font-size: 12px; }
 
+.sheet { position: absolute; inset: 0; z-index: 8; background: rgba(5, 6, 14, 0.45); display: grid; place-items: center; padding: var(--s-4); }
+.sheet__card { width: min(720px, 100%); max-height: min(80vh, 720px); display: grid; background: var(--glass); border: 1px solid var(--glass-line); backdrop-filter: blur(16px); clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px)); padding: var(--s-4) var(--s-5); animation: rise 220ms var(--ease); }
+@media (max-width: 860px) { .sheet { padding: var(--s-2); align-items: end; } .sheet__card { max-height: 88vh; padding: var(--s-3) var(--s-4); } }
 .game__fatal { position: absolute; left: 50%; top: 40%; transform: translateX(-50%); z-index: 4; background: var(--glass); padding: var(--s-4) var(--s-5); border-radius: 4px; }
 .game__toast { position: absolute; left: 50%; top: 72px; transform: translateX(-50%); z-index: 4; padding: 6px 16px; font-size: 13px; letter-spacing: 0.04em; }
 
