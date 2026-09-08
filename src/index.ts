@@ -21,7 +21,7 @@ import { authorLine, renderHead } from "./head";
 import { ALIAS_HOSTS, HOST, canonicalUrl } from "./site";
 import { loadMine, type MineFilter } from "./mine";
 import { tagNamesFor } from "../shared/tag-catalog";
-import { isReviewer, memberByHandle, memberProfile, requireMember, requireReviewer, resolveMember } from "./members";
+import { isReviewer, memberByHandle, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember } from "./members";
 import { DEFAULT_PROVIDER, type ProviderId, reviewBotOf } from "./providers";
 import { WEEKLY_LIMIT, recordRegistration, registeredThisWeek } from "./quota";
 import {
@@ -647,6 +647,7 @@ export async function syncBatch(env: Env): Promise<{ ok: number; failed: number;
   const now = Date.now();
 
   const writes: D1PreparedStatement[] = [];
+  const authorsSeen = new Map<string, { provider: ProviderId; externalId: number }>();
 
   await pooled(batch, concurrency, async (row) => {
     try {
@@ -661,9 +662,9 @@ export async function syncBatch(env: Env): Promise<{ ok: number; failed: number;
         return;
       }
       writes.push(syncStatement(env.DB, row.id, row.talk_num, role, now));
-      // 作者一定要有成員列（公開 ID 從那裡來）。0005 之前登記、之後沒再登入過的作者會缺，
-      // 同步時補上；已經有的只是一次查詢。
-      await resolveMember(env.DB, row.provider as ProviderId, role.authorNumId, now);
+      // 作者一定要有成員列（公開 ID 從那裡來）。0005 之前登記、之後沒再登入過的作者會缺——
+      // 先記下來，迴圈外一次查、缺的併進同一批寫入（D1 呼叫也算子請求，迴圈裡逐張查會吃掉上游的額度）。
+      authorsSeen.set(`${row.provider}:${role.authorNumId}`, { provider: row.provider as ProviderId, externalId: role.authorNumId });
       // 在榜的卡順手比對內容版本：作者過審後改了卡就要重審（owner 2026-09-07）。
       // 過審前登記的舊卡 reviewed_hash 是空的，而且作者從沒授權過機器人——機器人讀不到它，
       // 讀不到不是「作者收回了」。這些卡留在榜上不比對，等作者下次提交時才授權並綁上版本。
@@ -689,6 +690,9 @@ export async function syncBatch(env: Env): Promise<{ ok: number; failed: number;
       console.error("sync failed", { roleId: row.source_role_id, error: String(err) });
     }
   });
+
+  // 缺成員列的作者補上（一次查詢；id 與公開 ID 在這裡產生，寫入併進下面那一批）。
+  writes.push(...(await missingMemberStatements(env.DB, [...authorsSeen.values()], now)));
 
   // 一次寫完而不是邊抓邊寫：D1 是單寫者，一筆一個往返的話寫入會蓋掉並發抓取的收益。
   // 代價是整批一起成功或一起失敗——對同步來說可以接受，下一輪本來就會重跑。
