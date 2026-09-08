@@ -183,8 +183,12 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     expect(regexButton.querySelector(".chip")?.textContent?.trim()).toBe("1");
     // 左欄：三個必填都有了，不該再有紅點
     expect(root.querySelectorAll(".side__dot")).toHaveLength(0);
-    // 右欄預覽跟著名字
-    expect($(".rail__tile").textContent).toContain("阿芙拉");
+    // 右欄不再是卡片預覽（它既不是對話測試也不是發布）：換成對話測試與我的資源兩塊面板
+    expect(root.querySelector(".rail__tile")).toBeNull();
+    expect($(".rail__tabs").textContent).toContain("對話測試");
+    // 還沒存過的卡沒有東西可以聊，面板要說清楚而不是給一個空的 iframe
+    expect(root.querySelector(".ct__frame")).toBeNull();
+    expect($(".ct__state").textContent).toContain("先存一次");
 
     await submit();
 
@@ -441,6 +445,60 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
 
     expect(api.patchWorldbookDocument).not.toHaveBeenCalled();
     expect(api.reorderWorldbookEntries).toHaveBeenCalledWith("wb-bound", ["e2", "e1"], "tok");
+  });
+
+  it("對話測試：存過的卡才載入舞台，載的是這張卡自己的 /play", async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "北境", roleWelcome: "雨還在下。" });
+    await mount("/cards/r1/edit");
+
+    const frame = $<HTMLIFrameElement>(".ct__frame");
+    expect(frame).toBeTruthy();
+    // 走的是站內既有的 /play/:roleId——那本來就是真 AI、真世界書、真正則，
+    // 不必另外建試玩卡（那套是給 playground 沒有卡的情境用的）
+    // 語系前綴由 lp() 決定，測試的 router 沒掛前綴；釘的是「指向這張卡的 /play」
+    expect(frame.getAttribute("src")).toMatch(/\/play\/r1$/);
+    expect(root.querySelector(".ct__state")).toBeNull();
+  });
+
+  it("按了「建一本」卻一條都沒填：存完不能永遠卡在「有未儲存的修改」", async () => {
+    await mount("/create");
+    await type($("#f-name"), "測試卡");
+    byText("世界書").click();
+    await flush();
+    // 建一本會塞一條空條目進去；作者沒填內容就直接存
+    byText("建一本").click();
+    await flush();
+    await submit();
+
+    // 不建空書是對的，但那條空條目要一起放掉——留著的話它跟原始清單永遠對不上，
+    // 儲存鍵永遠亮著，這張卡再也送不出審核，而畫面上完全看不出是為什麼
+    expect(api.createWorldbook).not.toHaveBeenCalled();
+    expect(root.querySelector(".rail__state")?.textContent?.trim()).not.toContain("未儲存");
+    const saveBtn = [...root.querySelectorAll<HTMLButtonElement>(".rail__acts button")]
+      .find((b) => /儲存|保存/.test(b.textContent || ""))!;
+    expect(saveBtn.disabled).toBe(true);
+  });
+
+  it("世界書沒取名時用角色名建：存完不能還是「有未儲存的修改」", async () => {
+    await mount("/create");
+    await type($("#f-name"), "測試卡");
+    byText("世界書").click();
+    await flush();
+    byText("建一本").click();
+    await flush();
+    await openEntries();
+    await type($d<HTMLTextAreaElement>("#wbd-content"), "北境的規矩。");
+    btnIn(document.querySelector(".wbd")!, "編好了").click();
+    await flush();
+    // 書名那格留空：上游會拿角色名去建，但畫面上那格還是空的
+    await submit();
+
+    // 存完之後基準要對得上，否則差分永遠成立、儲存鍵永遠亮著、
+    // 而且每按一次儲存都白送一次 metadata
+    expect(root.querySelector(".rail__state")?.textContent?.trim()).not.toContain("未儲存");
+    const saveBtn = [...root.querySelectorAll<HTMLButtonElement>(".rail__acts button")]
+      .find((b) => /儲存|保存/.test(b.textContent || ""))!;
+    expect(saveBtn.disabled).toBe(true);
   });
 
   it("大本世界書分段送：每段最多 100 個操作、綁定只跟第一段；中途失敗再存只送剩下的", async () => {
