@@ -42,6 +42,8 @@ import {
 } from "@/lib/api";
 import { emptyRuleSet, ruleSetFromAuthorAsset, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, type RegexRuleSet } from "@/lib/regex-rules";
 import RegexRulesEditor from "@/components/editor/RegexRulesEditor.vue";
+import ChatTestPanel from "@/components/editor/ChatTestPanel.vue";
+import ResourcePanel from "@/components/editor/ResourcePanel.vue";
 import {
   LANGUAGES,
   cloneDraft,
@@ -58,12 +60,10 @@ import {
   type WorldbookEntryDraft,
 } from "@/lib/role-draft";
 import { draftToTavern, embedIntoPng, imageFetchUrl, worldbookToExport, type ImportResult } from "@/lib/tavern";
-import type { CommunityCard } from "@/lib/types";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
 import { confirmDialog } from "@/lib/confirm";
 import { track } from "@/lib/track";
-import CardTile from "@/components/CardTile.vue";
 import FieldText from "@/components/editor/FieldText.vue";
 import ListEditor from "@/components/editor/ListEditor.vue";
 import ImageField from "@/components/editor/ImageField.vue";
@@ -117,6 +117,31 @@ const regexSet = ref<RegexRuleSet>(emptyRuleSet());
 const regexOriginal = ref<RegexRuleSet>(emptyRuleSet());
 const regexVersion = ref(0);
 const regexOpen = ref(false);
+
+/** 右欄那塊面板：對話測試或我的資源，收起來把版面讓回表單。 */
+type Panel = "test" | "res";
+const PANEL_KEY = "hearthroom.editor.panel";
+const panel = ref<Panel>("test");
+const panelOpen = ref(true);
+try {
+  const saved = localStorage.getItem(PANEL_KEY);
+  if (saved === "closed") panelOpen.value = false;
+  else if (saved === "test" || saved === "res") panel.value = saved;
+} catch { /* 隱私模式讀不到：用預設，功能照常 */ }
+/** 窄螢幕上右欄整條收起來，這兩塊改成鋪滿視窗的浮層，從底部動作列打開。 */
+const sheetOpen = ref(false);
+function openSheet(next: Panel) {
+  panel.value = next;
+  sheetOpen.value = true;
+}
+function openPanel(next: Panel) {
+  if (panelOpen.value && panel.value === next) return;
+  panel.value = next;
+  panelOpen.value = true;
+}
+watch([panel, panelOpen], () => {
+  try { localStorage.setItem(PANEL_KEY, panelOpen.value ? panel.value : "closed"); } catch { /* 同上 */ }
+});
 const regexFile = ref<HTMLInputElement | null>(null);
 const regexDirty = computed(() => JSON.stringify(regexSet.value) !== JSON.stringify(regexOriginal.value));
 
@@ -287,34 +312,6 @@ function toggleTag(name: string) {
 /** 剛從 PNG 卡帶進來、還在上傳的立繪。預覽先用本機那份，上傳完換成正式網址。 */
 const pendingAvatar = ref("");
 
-/** 右欄那張卡：榜單上會長的樣子。作者是登入的自己，數字全是零——那是別人看到之後才有的事。 */
-const previewCard = computed<CommunityCard>(() => {
-  const empty = { zh: "", en: "", ja: "", ko: "" };
-  const lang = draft.value.language;
-  return {
-    id: roleId.value || "draft",
-    roleId: roleId.value || "draft",
-    zone: lang.startsWith("zh") ? "zh" : lang === "en" || lang === "ja" || lang === "ko" ? lang : "all",
-    name: draft.value.roleName.trim() || t("import.review.unnamed"),
-    summary: draft.value.roleDesc,
-    names: empty,
-    summaries: empty,
-    avatarUrl: draft.value.roleAvatar || pendingAvatar.value || null,
-    backgroundUrl: null,
-    slug: null,
-    tags: draft.value.roleTag,
-    author: {
-      accountNumId: session.me?.accountNumId ?? 0,
-      name: session.me?.nickName ?? "",
-      avatar: session.me?.avatar ?? "",
-    },
-    talkNum: 0,
-    followNum: 0,
-    trending: 0,
-    registeredAt: 0,
-    syncedAt: 0,
-  };
-});
 
 async function loadValidation() {
   const token = await session.accessToken();
@@ -658,9 +655,15 @@ async function saveWorldbook(token: string, targetRoleId: string) {
   let firstBind = worldbookBindPending.value;
   if (!bookId) {
     if (!ops.length) {
-      // 按了「建一本」卻一條都沒填：不建空書，也要把待建旗標放掉——
-      // 留著的話這張卡會永遠算「有未儲存的修改」，再也送不出審核。
+      // 按了「建一本」卻一條都沒填：不建空書。
+      //
+      // 旗標與那幾條空條目要一起放掉。先前只清了旗標，空條目留在草稿裡跟原始清單
+      // （空的）永遠對不上，於是這張卡永遠算「有未儲存的修改」：儲存鍵一直亮著、
+      // 送不出審核，而畫面上完全看不出是為什麼——空條目在世界書那頁根本不顯示，
+      // 因為沒有書、那一區只畫得出「還沒有世界書」的空狀態。
       worldbookPending.value = false;
+      worldbookEntries.value = [];
+      worldbookOriginal.value = [];
       return;
     }
     const createdName = worldbookName.value.trim() || draft.value.roleName;
@@ -1174,6 +1177,8 @@ async function exportCard(format: "png" | "json") {
           <button class="btn btn--primary" type="submit" :disabled="saving || (!dirty && !isNew)">
             {{ saveLabel }}
           </button>
+          <button type="button" class="btn" @click="openSheet('test')">{{ $t("editor.test.title") }}</button>
+          <button type="button" class="btn" @click="openSheet('res')">{{ $t("editor.panel.resources") }}</button>
           <RouterLink class="btn" :class="{ 'is-off': saving }" :aria-disabled="saving || undefined"
                       :to="{ path: lp('/mine'), query: { fresh: '1' } }">
             {{ $t("edit.back") }}
@@ -1183,10 +1188,41 @@ async function exportCard(format: "png" | "json") {
       </form>
 
       <!-- 右：預覽與動作 -->
-      <aside class="rail">
-        <p class="eyebrow rail__eyebrow">{{ $t("editor.preview") }}</p>
-        <div class="rail__tile" inert>
-          <CardTile :card="previewCard" />
+      <aside class="rail" :class="{ 'rail--wide': panelOpen, 'rail--sheet': sheetOpen }">
+        <!--
+          先前這裡是一張卡片預覽。它既不是對話測試也不是發布，作者盯著它也判斷不了
+          「這張卡聊起來對不對」（owner 2026-09-08）。換成真的用得上的兩件事：
+          在旁邊直接聊這張卡，以及寫卡時要傳圖、要找上次那張圖。
+        -->
+        <div class="rail__tabs">
+          <div class="seg" role="tablist" :aria-label="$t('editor.panel.tabs')">
+            <button type="button" class="seg__item" :class="{ 'seg__item--on': panelOpen && panel === 'test' }"
+                    role="tab" :aria-selected="panelOpen && panel === 'test'" @click="openPanel('test')">
+              {{ $t("editor.test.title") }}
+            </button>
+            <button type="button" class="seg__item" :class="{ 'seg__item--on': panelOpen && panel === 'res' }"
+                    role="tab" :aria-selected="panelOpen && panel === 'res'" @click="openPanel('res')">
+              {{ $t("editor.panel.resources") }}
+            </button>
+          </div>
+          <button v-if="sheetOpen" type="button" class="btn btn--sm btn--ghost" @click="sheetOpen = false">
+            {{ $t("dialog.close") }}
+          </button>
+          <button v-else type="button" class="btn btn--icon btn--sm btn--ghost" :aria-expanded="panelOpen"
+                  :aria-label="panelOpen ? $t('editor.panel.collapse') : $t('editor.panel.expand')"
+                  :title="panelOpen ? $t('editor.panel.collapse') : $t('editor.panel.expand')"
+                  @click="panelOpen = !panelOpen">
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+                 :style="panelOpen ? undefined : { transform: 'scaleX(-1)' }">
+              <path d="M9 3l-4 5 4 5M13 3l-4 5 4 5" />
+            </svg>
+          </button>
+        </div>
+
+        <div v-if="panelOpen || sheetOpen" class="rail__panel">
+          <ChatTestPanel v-if="panel === 'test'" :role-id="roleId" :dirty="dirty" :saving="saving" @save="save" />
+          <ResourcePanel v-else />
         </div>
 
         <ul class="rail__check">
@@ -1235,7 +1271,7 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .ghosts { display: grid; gap: var(--s-4); }
 
 .layout {
-  display: grid; grid-template-columns: 176px minmax(0, 1fr) 240px;
+  display: grid; grid-template-columns: 176px minmax(0, 1fr) var(--rail-w, 240px);
   gap: var(--s-5); align-items: start;
 }
 
@@ -1313,13 +1349,27 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .is-off { pointer-events: none; opacity: 0.45; }
 
 /* ---- 右欄 ---------------------------------------------------------------- */
+/*
+   右欄要有確定的高度，面板裡的 iframe 才長得起來：沒有高度時 minmax(0,1fr)
+   解成內容高，對話畫布只剩自己的 min-height（實測 420px，裡面的訊息區塞成 150px）。
+   給它一個視窗高度的框，剩下的空間就全歸中間那格面板；順帶讓檢查清單與儲存鍵
+   一直留在視野裡，不必為了按儲存把整頁捲到底。
+*/
 .rail {
   position: sticky; top: calc(var(--header-h) + var(--s-4));
-  display: grid; gap: var(--s-4);
+  height: calc(100vh - var(--header-h) - var(--s-4) * 2);
+  display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto auto; gap: var(--s-4);
 }
-.rail__eyebrow { margin: 0 0 calc(var(--s-2) * -1); }
+/* 面板收起來時沒有東西要撐開，讓右欄縮回內容高，底下不留一長條空白 */
+.rail:not(.rail--wide) { height: auto; grid-template-rows: auto auto auto auto; }
+/* 面板打開時右欄要裝得下一個真的對話；收起來就把版面讓回表單 */
+.layout:has(.rail--wide) { --rail-w: 440px; }
+.rail__tabs { display: flex; gap: var(--s-2); align-items: center; }
+.rail__tabs .seg { flex: 1; min-width: 0; overflow-x: auto; }
+/* 明寫一條 1fr：隱式的 auto 行會讓面板縮成內容高，裡面靠 height:100% 的東西
+   （對話測試那個照手機比例的框）就失去基準，反被自己的比例撐開。 */
+.rail__panel { min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr); }
 /* 預覽只是看的：inert 擋掉點擊與焦點，hover 的浮起也一起沒了，它就安靜地待在那 */
-.rail__tile { pointer-events: none; }
 .rail__check { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; color: var(--text-3); }
 .rail__check li { display: flex; align-items: center; gap: 8px; }
 .rail__check li.ok { color: var(--success); }
@@ -1331,7 +1381,19 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 /* ---- 窄一點：右欄收掉，動作回到底部黏著的那條 ---------------------------------- */
 @media (max-width: 1100px) {
   .layout { grid-template-columns: 160px minmax(0, 1fr); }
+  /*
+     右欄在窄螢幕整條收起來，但對話測試與我的資源不能跟著消失——站上其他功能都適配
+     手機，這兩個也要有（owner 2026-09-08）。改成鋪滿整個視窗的浮層：從底部那條
+     動作列打開，關掉就回表單。檢查清單與儲存鍵本來就在 .bar 上，不受影響。
+  */
   .rail { display: none; }
+  .rail--sheet {
+    display: grid; position: fixed; inset: 0; z-index: 100;
+    height: auto; grid-template-rows: auto minmax(0, 1fr);
+    padding: var(--s-3); gap: var(--s-3);
+    background: var(--bg);
+  }
+  .rail--sheet .rail__check, .rail--sheet .rail__acts, .rail--sheet .rail__state { display: none; }
   .body { padding-bottom: 72px; }
   .bar {
     position: sticky; bottom: 0; display: flex; gap: var(--s-3); align-items: center; flex-wrap: wrap;
