@@ -94,7 +94,7 @@ watch(q, (v) => { draft.value = v; });
 </script>
 
 <template>
-  <div class="page search">
+  <div class="page page--search">
     <form class="search__form" role="search" @submit.prevent="submit">
       <svg class="search__icon" viewBox="0 0 20 20" aria-hidden="true">
         <circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.7" />
@@ -173,7 +173,8 @@ watch(q, (v) => { draft.value = v; });
 </template>
 
 <style scoped>
-.search { max-width: 1100px; }
+/* 根節點不能叫 .search：App.vue 為手機隱藏頁首搜尋框的 scoped 規則會打到子元件根節點，整頁消失 */
+.page--search { max-width: 1100px; }
 .search__form { position: relative; display: flex; gap: var(--s-2); margin-bottom: var(--s-4); }
 .search__icon { position: absolute; left: 16px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%); color: var(--text-3); pointer-events: none; }
 .search__input {
@@ -213,5 +214,5 @@ watch(q, (v) => { draft.value = v; });
 .also { display: grid; gap: var(--s-3); margin-top: var(--s-6); }
 .also__title { font-size: 14px; font-weight: 600; }
 .zero .also__title { margin: 0; }
-.search .zero + .also { margin-top: 0; }
+.page--search .zero + .also { margin-top: 0; }
 </style>
