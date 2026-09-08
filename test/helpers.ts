@@ -53,15 +53,27 @@ export function reviewUpstream(detailFor: (roleId: string) => Record<string, unk
   };
 }
 
-/** 把某個供應商公開 ID 登記成審核人（建成員、綁身分、標記）。 */
-export async function makeReviewer(accountNumId: number): Promise<string> {
+/** 測試用的公開 ID：8 個小寫字母，由數字 ID 決定，跑幾次都一樣（10001 → "aaabaaab" 之類）。 */
+export function testHandle(accountNumId: number): string {
+  const digits = String(accountNumId).padStart(8, "0").slice(-8);
+  return [...digits].map((d) => "abcdefghij"[Number(d)]).join("");
+}
+
+/** 把某個供應商公開 ID 建成成員（綁身分、給公開 ID）。回成員 id。 */
+export async function makeMember(accountNumId: number): Promise<string> {
   const id = `member-${accountNumId}`;
   const now = Date.now();
   await env.DB.batch([
-    env.DB.prepare("INSERT OR IGNORE INTO members (id, created_at) VALUES (?, ?)").bind(id, now),
+    env.DB.prepare("INSERT OR IGNORE INTO members (id, handle, created_at) VALUES (?, ?, ?)").bind(id, testHandle(accountNumId), now),
     env.DB.prepare("INSERT OR IGNORE INTO member_identities (provider, external_id, member_id, linked_at) VALUES ('lunatalk', ?, ?, ?)").bind(String(accountNumId), id, now),
-    env.DB.prepare("INSERT OR IGNORE INTO reviewers (member_id, granted_at, granted_by) VALUES (?, ?, 'test')").bind(id, now),
   ]);
+  return id;
+}
+
+/** 把某個供應商公開 ID 登記成審核人（建成員、綁身分、標記）。 */
+export async function makeReviewer(accountNumId: number): Promise<string> {
+  const id = await makeMember(accountNumId);
+  await env.DB.prepare("INSERT OR IGNORE INTO reviewers (member_id, granted_at, granted_by) VALUES (?, ?, 'test')").bind(id, Date.now()).run();
   return id;
 }
 

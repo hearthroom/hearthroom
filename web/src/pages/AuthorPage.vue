@@ -9,6 +9,7 @@ import { compact, hueFrom, relativeTime } from "@/lib/format";
 import { contentLang, pageTitle } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
 import type { Author, CardPage } from "@/lib/types";
+import { providerName } from "@/lib/providers";
 
 const route = useRoute();
 const router = useRouter();
@@ -26,11 +27,11 @@ async function load() {
   loading.value = !page.value;
   missing.value = false;
   error.value = "";
-  const id = Number(route.params.accountNumId);
+  const handle = String(route.params.handle ?? "");
   try {
     const [profile, board] = await Promise.all([
-      fetchAuthor(id),
-      fetchBoard({ author: id, sort: "new", limit: LIMIT, offset: offset.value, lang: contentLang(locale.value) }),
+      fetchAuthor(handle),
+      fetchBoard({ author: handle, sort: "new", limit: LIMIT, offset: offset.value, lang: contentLang(locale.value) }),
     ]);
     author.value = profile;
     page.value = board;
@@ -45,7 +46,7 @@ async function load() {
 function go(offset: number) {
   router.push({ query: offset > 0 ? { offset: String(offset) } : {} });
 }
-watch(() => route.params.accountNumId, () => { author.value = null; page.value = null; load(); }, { immediate: true });
+watch(() => route.params.handle, () => { author.value = null; page.value = null; load(); }, { immediate: true });
 watch([() => route.query.offset, locale], load);
 </script>
 
@@ -61,6 +62,10 @@ watch([() => route.query.offset, locale], load);
       <div class="who__text">
         <p class="eyebrow">{{ $t("author.eyebrow") }}</p>
         <h1 class="who__name display">{{ author.name }}</h1>
+        <p class="subtle who__id">
+          <span class="mono">@{{ author.handle }}</span>
+          <span v-if="author.providers?.length"> · {{ $t("author.publishedOn", { providers: author.providers.map(providerName).join("、") }) }}</span>
+        </p>
       </div>
       <dl class="who__stats">
         <div class="stat"><dt>{{ $t("author.stat.cards") }}</dt><dd>{{ author.cardCount }}</dd></div>
@@ -99,5 +104,6 @@ watch([() => route.query.offset, locale], load);
 .who__face { width: 64px; height: 64px; border-radius: var(--r-pill); object-fit: cover; flex: none; font-size: 24px; }
 .who__text { min-width: 0; margin-right: auto; }
 .who__name { font-size: clamp(20px, 2.6vw, 26px); }
+.who__id { margin: 4px 0 0; }
 .who__stats { display: flex; gap: var(--s-6); }
 </style>

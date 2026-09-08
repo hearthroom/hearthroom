@@ -80,7 +80,9 @@ token 的作用範圍就是使用者自己授權給站台的那些；本站不�
 |---|---|---|---|
 | `GET /open/v1/me` | 使用者 token 或服務帳號金鑰 | 瀏覽器、站台伺服器 | `{ accountNumId: number, nickName: string, avatar: string, accountType?: string }` |
 
-`accountNumId` 是使用者的**公開數字 ID**，本站以它識別成員；供應商內部的 UUID 不應出現在任何回應裡。
+登入的入口是本站自己的登入頁（`/login`），使用者在那裡選供應商，之後才跳去該供應商的 `/oauth/authorize`。
+
+`accountNumId` 是使用者在供應商上的**公開數字 ID**；供應商內部的 UUID 不應出現在任何回應裡。本站有自己的成員 ID（公開的是 8 個小寫字母的 handle，作者頁網址與「我的」頁顯示的都是它），`accountNumId` 只是身分表裡「這個成員在這家供應商上是誰」的映射鍵——接第二家供應商時，同一個成員可以再掛一筆身分。
 
 **最小實作清單**：`POST /oauth/register`、`GET /oauth/authorize`（PKCE S256）、`POST /oauth/token`（兩種 grant）、`GET /open/v1/me`。`/oauth/revoke` 與中繼資料可以晚點。
 

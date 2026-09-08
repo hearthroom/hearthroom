@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from "vue-router";
 import { LOCALE_CODES, SOURCE_LOCALE, applyLocale, detectLocale, pageTitle, updateHreflang } from "./lib/i18n";
 import { useSession } from "./lib/session";
 import { setSurface } from "./lib/track";
+import { loginPath } from "./lib/login-return";
 
 /**
  * 語言放在網址路徑裡，不是 localStorage。
@@ -21,7 +22,9 @@ const pages = [
   { path: "search", component: () => import("./pages/SearchPage.vue") },
   { path: "cards/:id", component: () => import("./pages/CardPage.vue") },
   { path: "cards/:roleId/edit", component: () => import("./pages/CardEditorPage.vue"), meta: { auth: true } },
-  { path: "authors/:accountNumId", component: () => import("./pages/AuthorPage.vue") },
+  { path: "authors/:handle", component: () => import("./pages/AuthorPage.vue") },
+  { path: "me", component: () => import("./pages/MePage.vue"), meta: { auth: true } },
+  { path: "login", component: () => import("./pages/LoginPage.vue") },
   { path: "mine", component: () => import("./pages/MyCardsPage.vue"), meta: { auth: true } },
   // 建立與編輯是同一頁：差別只有有沒有 roleId。
   { path: "create", component: () => import("./pages/CardEditorPage.vue"), meta: { auth: true } },
@@ -90,8 +93,8 @@ router.beforeEach(async (to) => {
   const session = useSession();
   await session.restore();
   if (session.me) return true;
-  await session.login(to.fullPath);
-  return false;
+  // 先到本站的登入頁，不直接跳去供應商：登入方式是這個站的事，供應商只是其中一種。
+  return { path: withLocale(loginPath(to.fullPath), locale), replace: true };
 });
 
 /**

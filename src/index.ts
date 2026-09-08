@@ -21,8 +21,8 @@ import { authorLine, renderHead } from "./head";
 import { ALIAS_HOSTS, HOST, canonicalUrl } from "./site";
 import { loadMine, type MineFilter } from "./mine";
 import { tagNamesFor } from "../shared/tag-catalog";
-import { isReviewer, requireMember, requireReviewer } from "./members";
-import { DEFAULT_PROVIDER, reviewBotOf } from "./providers";
+import { isReviewer, memberByHandle, memberProfile, requireMember, requireReviewer, resolveMember } from "./members";
+import { DEFAULT_PROVIDER, type ProviderId, reviewBotOf } from "./providers";
 import { WEEKLY_LIMIT, recordRegistration, registeredThisWeek } from "./quota";
 import {
   STAMPS_REQUIRED, claim as claimSubmission, createSubmission, getSubmission, listQueue, needsReviewStatements,
@@ -237,16 +237,18 @@ app.get("/v1/cards", async (c) => {
   const { sort, since, key: sortKey } = parseBoardSort(c.req.query("sort"));
   const offset = clamp(c.req.query("offset"), 0, 10_000);
   const limit = Math.max(1, clamp(c.req.query("limit"), 24, 100));
+  // author 是作者的本站公開 ID（members.handle），不是上游的數字 ID。沒這個人就是空榜。
   const author = c.req.query("author");
   // 語區是榜單的必要條件，不帶就給中文——不做「全部語言混在一起」的總榜。
   // 兩個例外：作者主頁（看一個人的作品時語言不是篩選條件）、搜尋頁明說 zone=all。
   const zone = author ? undefined : parseZone(c.req.query("zone"));
+  const authorMemberId = author ? ((await memberByHandle(c.env.DB, author)) ?? "") : undefined;
 
   const { rows, total, hasNext } = await listCards(c.env.DB, {
     zone,
     q: c.req.query("q")?.trim() || undefined,
     tags: (() => { const raw = c.req.query("tag")?.trim(); return raw ? (tagNamesFor(raw) ?? [raw]) : undefined; })(),
-    authorNumId: author ? Number(author) : undefined,
+    authorMemberId,
     sort,
     since,
     limit,
@@ -339,20 +341,36 @@ app.get("/v1/me/cards", async (c) => {
 });
 
 /** 作者主頁。這裡只認得他登記過的卡——本站看不到、也不該看到他的其他作品。 */
-app.get("/v1/authors/:accountNumId", async (c) => {
-  const id = Number(c.req.param("accountNumId"));
-  if (!Number.isSafeInteger(id) || id <= 0) throw new HttpError(400, "invalid author id");
-  const author = await getAuthor(c.env.DB, id);
+/**
+ * 公開作者頁：網址是本站的公開 ID，不是上游的數字 ID。
+ * 一個成員之後可能在多家供應商上發布，作者頁把各家的卡合在一起看，並說明發布在哪些供應商。
+ */
+app.get("/v1/authors/:handle", async (c) => {
+  const handle = c.req.param("handle");
+  const memberId = await memberByHandle(c.env.DB, handle);
+  const author = memberId ? await getAuthor(c.env.DB, memberId) : null;
   if (!author) throw new HttpError(404, "author has no registered cards");
-  note(c, { event: "author_view", subject: String(id), resultCount: author.card_count });
+  note(c, { event: "author_view", subject: handle, resultCount: author.card_count });
   return c.json({
-    accountNumId: author.author_num_id,
+    handle: author.handle,
     name: author.author_name,
     avatar: author.author_avatar,
     cardCount: author.card_count,
     talkTotal: author.talk_total ?? 0,
     joinedAt: author.joined_at,
+    providers: author.providers,
   });
+});
+
+/**
+ * 登入者在本站的身分：公開 ID、加入時間、連結了哪些供應商帳號、是不是審核人。
+ * 第一次呼叫就建成員——所以登入後前端立刻問一次，「我的」頁才有 ID 可顯示。
+ */
+app.get("/v1/me", async (c) => {
+  const member = await requireMember(c);
+  const profile = await memberProfile(c.env.DB, member.id);
+  if (!profile) throw new HttpError(404, "member not found");
+  return c.json({ ...profile, reviewer: await isReviewer(c.env.DB, member.id) }, 200, { "Cache-Control": "no-store" });
 });
 
 /**
@@ -373,6 +391,8 @@ app.post("/v1/cards", async (c) => {
 
   const role = await upstream.fetchRole(c.env, roleId);
   if (role.authorNumId !== me.accountNumId) throw new HttpError(403, "not the author of this card");
+  // 登記的人一定是成員：作者頁與卡片上的作者連結都靠成員的公開 ID
+  await resolveMember(c.env.DB, DEFAULT_PROVIDER, me.accountNumId, Date.now());
   // 榜單只收在本站建的卡。作者在主站建的卡不是這裡的東西——「我的卡片」也不會列它，
   // 這條是防直接打 API 的那一手。
   if (role.creationMethod !== CREATION_METHOD) throw new HttpError(403, "only cards created on this site can be listed");
@@ -641,6 +661,9 @@ export async function syncBatch(env: Env): Promise<{ ok: number; failed: number;
         return;
       }
       writes.push(syncStatement(env.DB, row.id, row.talk_num, role, now));
+      // 作者一定要有成員列（公開 ID 從那裡來）。0005 之前登記、之後沒再登入過的作者會缺，
+      // 同步時補上；已經有的只是一次查詢。
+      await resolveMember(env.DB, row.provider as ProviderId, role.authorNumId, now);
       // 在榜的卡順手比對內容版本：作者過審後改了卡就要重審（owner 2026-09-07）。
       // 過審前登記的舊卡 reviewed_hash 是空的，而且作者從沒授權過機器人——機器人讀不到它，
       // 讀不到不是「作者收回了」。這些卡留在榜上不比對，等作者下次提交時才授權並綁上版本。
@@ -749,11 +772,11 @@ app.get("*", async (c) => {
     res.headers.set("Cache-Control", `public, max-age=${PAGE_TTL}`);
     return res;
   }
-  const author = await getAuthor(c.env.DB, Number(m[3]));
+  const memberId = await memberByHandle(c.env.DB, m[3]!);
+  const author = memberId ? await getAuthor(c.env.DB, memberId) : null;
   if (!author) return new Response(shell.body, { status: 404, headers: shell.headers });
-  const a = toAuthor({ ...author, trending: 0 });
   const res = renderHead(shell, {
-    lang: locale, title: `${a.name} · ${SITE_NAME}`, description: authorLine(locale, a.cardCount, a.talkTotal), image: a.avatar || null, url: self, type: "profile",
+    lang: locale, title: `${author.author_name} · ${SITE_NAME}`, description: authorLine(locale, author.card_count, author.talk_total ?? 0), image: author.author_avatar || null, url: self, type: "profile",
   });
   res.headers.set("Cache-Control", `public, max-age=${PAGE_TTL}`);
   return res;

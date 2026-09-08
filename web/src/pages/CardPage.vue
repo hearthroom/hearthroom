@@ -78,7 +78,7 @@ async function load() {
   document.querySelector<HTMLMetaElement>('meta[name="description"]')?.setAttribute("content", card.value.summary);
 
   const roleId = card.value.roleId;
-  const authorId = card.value.author.accountNumId;
+  const authorHandle = card.value.author.handle;
   // 主頁的其餘資料在卡片之後補上：讀不到只是少一塊，不擋整頁。
   void fetchRoleDetail(roleId, undefined, lang)
     .then((raw) => {
@@ -104,9 +104,14 @@ async function load() {
       }
     })
     .catch(() => { /* 預設版面照樣能看 */ });
-  void fetchBoard({ author: authorId, sort: "hot", limit: 9, lang })
-    .then((b) => { more.value = b.items.filter((c) => c.roleId !== roleId).slice(0, 8); })
-    .catch(() => { more.value = []; });
+  // 「其他作品」要作者的本站公開 ID；作者還沒成為成員（很早期登記過、之後沒再登入）就不列
+  if (authorHandle) {
+    void fetchBoard({ author: authorHandle, sort: "hot", limit: 9, lang })
+      .then((b) => { more.value = b.items.filter((c) => c.roleId !== roleId).slice(0, 8); })
+      .catch(() => { more.value = []; });
+  } else {
+    more.value = [];
+  }
 }
 
 async function share() {
@@ -176,15 +181,15 @@ watch(locale, load);
           <div class="role__id">
             <h1 class="role__name display">{{ card.name }}</h1>
             <!-- 作者是一張可點的名片，不只是一行灰字 -->
-            <RouterLink :to="lp(`/authors/${card.author.accountNumId}`)" class="role__by">
+            <component :is="card.author.handle ? RouterLink : 'div'" :to="card.author.handle ? lp(`/authors/${card.author.handle}`) : undefined" class="role__by">
               <img v-if="card.author.avatar" :src="card.author.avatar" alt="" />
               <span v-else class="role__by-void mono" :style="{ '--h': hueFrom(card.author.name) }">{{ [...card.author.name][0] }}</span>
               <span class="role__by-text">
                 <strong>{{ card.author.name }}</strong>
-                <span class="subtle">{{ $t("card.authorPage") }}</span>
+                <span v-if="card.author.handle" class="subtle">{{ $t("card.authorPage") }}</span>
               </span>
-              <svg class="role__by-arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
-            </RouterLink>
+              <svg v-if="card.author.handle" class="role__by-arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
+            </component>
           </div>
 
           <dl class="role__stats">
@@ -252,7 +257,8 @@ watch(locale, load);
 
           <section v-if="more.length" class="role__more">
             <h2 class="role__more-title">
-              <RouterLink :to="lp(`/authors/${card.author.accountNumId}`)">{{ $t("card.moreBy", { name: card.author.name }) }}</RouterLink>
+              <RouterLink v-if="card.author.handle" :to="lp(`/authors/${card.author.handle}`)">{{ $t("card.moreBy", { name: card.author.name }) }}</RouterLink>
+              <template v-else>{{ $t("card.moreBy", { name: card.author.name }) }}</template>
             </h2>
             <CardGrid :cards="more" show-zone />
           </section>

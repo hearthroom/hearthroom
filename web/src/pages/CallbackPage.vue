@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { useRouter } from "vue-router";
+import { RouterLink, useRouter } from "vue-router";
 import { completeLogin } from "@/lib/oauth";
 import { useSession } from "@/lib/session";
 import { track } from "@/lib/track";
@@ -35,7 +35,7 @@ onMounted(async () => {
   <div class="page page--narrow">
     <template v-if="error">
       <p class="notice notice--error" role="alert">{{ error }}</p>
-      <button class="btn" @click="session.login(lp('/'))">{{ $t("auth.retry") }}</button>
+      <RouterLink class="btn" :to="lp('/login')">{{ $t("auth.retry") }}</RouterLink>
     </template>
     <p v-else class="muted">{{ $t("auth.completing") }}</p>
   </div>
