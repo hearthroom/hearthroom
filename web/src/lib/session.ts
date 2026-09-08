@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import { fetchMe, fetchSiteMe, fetchWallet } from "./api";
+import { fetchMe, fetchSiteMe, fetchWallet, setNsfwViewer } from "./api";
 import type { Me, SiteMe, Wallet } from "./api";
 import {
   beginLogin,
@@ -38,12 +38,14 @@ export const useSession = defineStore("session", () => {
       wallet.value = null;
     }
   }
-  async function loadProfile(accessToken: string) {
+  async function loadProfile(bearerToken: string) {
     try {
-      profile.value = await fetchSiteMe(accessToken);
+      profile.value = await fetchSiteMe(bearerToken);
     } catch {
       profile.value = null;
     }
+    // 開了成人內容（且驗過年齡）的人：公開讀取帶 token，伺服器才給成人內容
+    setNsfwViewer(async () => (profile.value?.showNsfw && profile.value.ageVerified ? await accessToken() : null));
   }
 
   let restoring: Promise<void> | null = null;
@@ -105,6 +107,7 @@ export const useSession = defineStore("session", () => {
     me.value = null;
     wallet.value = null;
     profile.value = null;
+    setNsfwViewer(null);
     await revokeSession();
   }
 

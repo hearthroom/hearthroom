@@ -31,11 +31,19 @@ const CODE_KEY: Record<string, string> = {
   permission_denied: "state.forbidden",
   not_found: "state.notFound",
 };
+/** 本站自己的 API 回的碼（不是供應商契約的一部分，所以不進 docs/provider-protocol.md）。 */
+const SITE_CODE_KEY: Record<string, string> = {
+  nsfw_required: "error.nsfwRequired",
+  birthdate_required: "error.birthdateRequired",
+  invalid_birthdate: "error.invalidBirthdate",
+  underage: "error.underage",
+  age_verification_required: "error.ageVerificationRequired",
+};
 const looksLikeCode = (raw: string): boolean => /^[a-z][a-z0-9_]*$/.test(raw);
 
 export function describeApiError(status: number, raw: string): string {
   const text = (raw || "").trim();
-  if (text && CODE_KEY[text]) return i18n.global.t(CODE_KEY[text]);
+  if (text && (CODE_KEY[text] || SITE_CODE_KEY[text])) return i18n.global.t((CODE_KEY[text] ?? SITE_CODE_KEY[text])!);
   // 不是錯誤碼的就是伺服器寫給人看的句子（例如內容審核的原因），原樣講。
   if (text && !looksLikeCode(text)) return text;
   const msg = i18n.global.t(ERROR_KEY[status] ?? (status >= 500 ? "state.serverBusy" : "state.requestFailed"));
@@ -64,6 +72,18 @@ const authHeaders = (token?: string): Record<string, string> =>
  */
 const from = (): Record<string, string> => ({ "X-From": currentSurface() });
 
+/**
+ * 「看的人開了成人內容嗎」。session 在載好本站身分後把它接上（開了才回 token），登出時拆掉；
+ * 這裡不直接 import session，避免 api ↔ session 互相引用。
+ * 開了的請求帶 ?nsfw=1 加 token，伺服器驗過才給成人內容，且回應不進邊緣快取。
+ */
+let nsfwViewer: (() => Promise<string | null>) | null = null;
+export function setNsfwViewer(fn: (() => Promise<string | null>) | null): void { nsfwViewer = fn; }
+async function viewerAccess(): Promise<{ param: string; headers: Record<string, string> }> {
+  const token = nsfwViewer ? await nsfwViewer().catch(() => null) : null;
+  return token ? { param: "nsfw=1", headers: authHeaders(token) } : { param: "", headers: {} };
+}
+
 // ---- 社群 API（同源）------------------------------------------------------
 
 export interface BoardQuery { zone?: Zone | "all"; q?: string; tag?: string; sort?: Sort; /** 作者的本站公開 ID */ author?: string; limit?: number; offset?: number; lang?: string }
@@ -71,12 +91,18 @@ export interface BoardQuery { zone?: Zone | "all"; q?: string; tag?: string; sor
 export async function fetchBoard(query: BoardQuery = {}): Promise<CardPage> {
   const params = new URLSearchParams();
   for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== "") params.set(k, String(v));
-  return json<CardPage>(await fetch(`${COMMUNITY_API}/cards?${params}`, { headers: from() }));
+  const viewer = await viewerAccess();
+  if (viewer.param) params.set("nsfw", "1");
+  return json<CardPage>(await fetch(`${COMMUNITY_API}/cards?${params}`, { headers: { ...from(), ...viewer.headers } }));
 }
 
 export async function fetchCard(id: string, lang?: string): Promise<CommunityCard> {
-  const q = lang ? `?lang=${encodeURIComponent(lang)}` : "";
-  return json<CommunityCard>(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(id)}${q}`, { headers: from() }));
+  const params = new URLSearchParams();
+  if (lang) params.set("lang", lang);
+  const viewer = await viewerAccess();
+  if (viewer.param) params.set("nsfw", "1");
+  const q = params.size ? `?${params}` : "";
+  return json<CommunityCard>(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(id)}${q}`, { headers: { ...from(), ...viewer.headers } }));
 }
 
 /** 這一區最常見的標籤，給榜單的類型篩選列。 */
@@ -94,16 +120,19 @@ export async function fetchAuthors(query: { zone?: Zone | "all"; q?: string; sor
 }
 
 export async function fetchAuthor(handle: string): Promise<Author> {
-  return json<Author>(await fetch(`${COMMUNITY_API}/authors/${encodeURIComponent(handle)}`, { headers: from() }));
+  const viewer = await viewerAccess();
+  const q = viewer.param ? `?${viewer.param}` : "";
+  return json<Author>(await fetch(`${COMMUNITY_API}/authors/${encodeURIComponent(handle)}${q}`, { headers: { ...from(), ...viewer.headers } }));
 }
 
 /** 登記只送 roleId：內容由服務端自己去上游取，作者塞不進任何欄位。 */
-export async function registerCard(roleId: string, token: string): Promise<CommunityCard> {
+/** 登記／提交。nsfw 是作者對這張卡的分級宣告，必填（沒宣告伺服器不收）。 */
+export async function registerCard(roleId: string, token: string, nsfw: boolean): Promise<CommunityCard> {
   return json<CommunityCard>(
     await fetch(`${COMMUNITY_API}/cards`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...from(), ...authHeaders(token) },
-      body: JSON.stringify({ roleId }),
+      body: JSON.stringify({ roleId, nsfw }),
     }),
   );
 }
@@ -127,6 +156,8 @@ export interface ReviewQueueItem {
   submittedAt: number;
   card: { id: string; roleId: string; name: string; summary: string; avatarUrl: string | null; zone: Zone | "all"; tags: string[] };
   stamps: { approve: number; required: number };
+  /** 作者宣告：成人內容 */
+  nsfw: boolean;
   claim: "free" | "mine" | "other";
   stampedByMe: boolean;
 }
@@ -135,6 +166,8 @@ export interface ReviewQueueItem {
 export interface ReviewDetail {
   submission: {
     id: string; kind: "first" | "re"; status: string; contentHash: string; submittedAt: number;
+    /** 作者宣告：成人內容 */
+    nsfw: boolean;
     claimedByMe: boolean; required: number;
     stamps: { verdict: "approve" | "reject"; note: string; at: number }[];
   };
@@ -204,6 +237,20 @@ export interface SiteMe {
   memberSince: number;
   reviewer: boolean;
   identities: { provider: string; externalId: number; linkedAt: number }[];
+  /** 成人內容開關（要先驗過年齡） */
+  showNsfw: boolean;
+  ageVerified: boolean;
+}
+
+/** 成人內容開關。第一次開要帶生日（YYYY-MM-DD），伺服器只看一眼、不存。 */
+export async function updateSiteSettings(input: { showNsfw: boolean; birthdate?: string }, token: string): Promise<{ showNsfw: boolean; ageVerified: boolean }> {
+  return json(
+    await fetch(`${COMMUNITY_API}/me/settings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...from(), ...authHeaders(token) },
+      body: JSON.stringify(input),
+    }),
+  );
 }
 
 export async function fetchSiteMe(token: string): Promise<SiteMe> {
@@ -223,6 +270,8 @@ export interface MyCard {
   status?: CardStatus;
   /** 最近一次駁回給作者的說明。 */
   note?: string;
+  /** 作者宣告的分級；只有 registered 時才有。 */
+  nsfw?: boolean;
 }
 
 export interface ListingQuota {

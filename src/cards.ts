@@ -29,6 +29,8 @@ export interface CardRow {
   reviewed_hash: string;
   /** 作者的本站公開 ID（members.handle，0005 起），從身分表接上來的；作者還沒成為成員時是 null。 */
   author_handle?: string | null;
+  /** 成人內容（0006 起）：作者提交時宣告、審核人對照過的本站分級。預設不展示。 */
+  nsfw: number;
 }
 
 /**
@@ -41,6 +43,11 @@ const CARD_COLUMNS = "c.*, am.handle AS author_handle";
 
 /** 對外露出的卡片只有在榜的。榜單、標籤、作者榜、卡片頁都走這個條件。 */
 const LISTED = "status = 'approved'";
+/**
+ * 加上成人內容的門：沒開啟（或沒登入）的人只看得到一般內容。
+ * 標籤列與作者榜永遠只算一般內容——它們走邊緣快取、對所有人一樣；只有榜單、卡片頁、單一作者頁有「開了才看得到」的版本。
+ */
+const listed = (allowNsfw: boolean) => (allowNsfw ? LISTED : `${LISTED} AND nsfw = 0`);
 
 /** 回應按請求語言解析好名稱與簡介，同時附上原始多語，讓客戶端能自己切換。 */
 export function toCard(row: CardRow, lang: string) {
@@ -52,6 +59,7 @@ export function toCard(row: CardRow, lang: string) {
     zone: row.zone,
     /** 這張卡支援哪家供應商（拿那家的帳號、用那家的 AI 服務在本站玩）。不是來源、不是由誰提供——卡是作者的。 */
     provider: row.provider,
+    nsfw: row.nsfw === 1,
     name: pickLocale(names, lang),
     summary: pickLocale(summaries, lang),
     names,
@@ -96,6 +104,8 @@ export interface ListOptions {
   offset: number;
   /** 不論審核狀態全列。只有作者看自己的「已登記」那一組用；對外的榜單永遠只列在榜的。 */
   anyStatus?: boolean;
+  /** 看的人開了成人內容（且驗過年齡）；沒開就只列一般內容 */
+  allowNsfw?: boolean;
 }
 
 export interface ListResult {
@@ -112,7 +122,7 @@ export interface ListResult {
 }
 
 export async function listCards(db: D1Database, opts: ListOptions) {
-  const where: string[] = opts.anyStatus ? ["1=1"] : [`c.${LISTED}`];
+  const where: string[] = opts.anyStatus ? ["1=1"] : [`c.${listed(!!opts.allowNsfw)}`];
   const binds: unknown[] = [];
   let from = "cards c";
   let usingFts = false;
@@ -178,8 +188,8 @@ export async function listCards(db: D1Database, opts: ListOptions) {
   if (!filtered) {
     // 語區條件走索引，數起來便宜；只有搜尋與標籤過濾才貴到不值得數。
     const counted = opts.zone
-      ? await db.prepare(`SELECT COUNT(*) AS n FROM cards WHERE ${LISTED} AND zone IN (?, 'all')`).bind(opts.zone).first<{ n: number }>()
-      : await db.prepare(`SELECT COUNT(*) AS n FROM cards WHERE ${LISTED}`).first<{ n: number }>();
+      ? await db.prepare(`SELECT COUNT(*) AS n FROM cards WHERE ${listed(!!opts.allowNsfw)} AND zone IN (?, 'all')`).bind(opts.zone).first<{ n: number }>()
+      : await db.prepare(`SELECT COUNT(*) AS n FROM cards WHERE ${listed(!!opts.allowNsfw)}`).first<{ n: number }>();
     total = counted?.n ?? 0;
   } else if (!hasNext) {
     // 已經翻到最後一頁，總數就是走過的量，不必再問一次資料庫。
@@ -195,7 +205,7 @@ export async function listCards(db: D1Database, opts: ListOptions) {
  * 內容全部來自同步結果，作者送不進任何欄位——這是「登記完再偷換成別的東西」
  * 在結構上不可能發生的原因。
  */
-export async function upsertCard(db: D1Database, role: UpstreamRole, now: number, opts: { status?: string; provider?: string } = {}) {
+export async function upsertCard(db: D1Database, role: UpstreamRole, now: number, opts: { status?: string; provider?: string; nsfw?: boolean } = {}) {
   const existing = await db
     .prepare("SELECT id, talk_num FROM cards WHERE source_role_id = ?")
     .bind(role.roleId)
@@ -236,17 +246,22 @@ export async function upsertCard(db: D1Database, role: UpstreamRole, now: number
     .prepare(
       `INSERT INTO cards (id, source_role_id, zone, author_num_id, author_name, author_avatar, names, summaries,
          avatar_url, background_url, slug, tags, talk_num, follow_num, search_text, last_synced_at,
-         talk_num_prev, registered_at, provider, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         talk_num_prev, registered_at, provider, status, nsfw)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     // 首次登記把 prev 設成當前值 → trending 從 0 起算。
     // 不這樣的話一張老熱卡剛登記就會用累積總量霸榜。
-    .bind(id, role.roleId, ...shared, role.talkNum, now, opts.provider ?? "lunatalk", opts.status ?? "approved")
+    .bind(id, role.roleId, ...shared, role.talkNum, now, opts.provider ?? "lunatalk", opts.status ?? "approved", opts.nsfw ? 1 : 0)
     .run();
   return { id, created: true };
 }
 
 /** 改審核狀態。只有審核流程（index.ts 的提交、review.ts 的蓋章、同步的比對）會叫它。 */
+/** 作者再次提交時改了宣告。同步不碰這個欄位——分級是本站的事，不跟著供應商的資料走。 */
+export async function setCardNsfw(db: D1Database, id: string, nsfw: boolean): Promise<void> {
+  await db.prepare("UPDATE cards SET nsfw = ? WHERE id = ?").bind(nsfw ? 1 : 0, id).run();
+}
+
 export async function setCardStatus(db: D1Database, id: string, status: string): Promise<void> {
   await db.prepare("UPDATE cards SET status = ? WHERE id = ?").bind(status, id).run();
 }
@@ -259,14 +274,14 @@ export async function getCard(db: D1Database, id: string) {
 }
 
 /** 一個成員的公開作者頁：把他在各家供應商上、登記在本站且在榜的卡彙總。沒有在榜的卡就是 null。 */
-export async function getAuthor(db: D1Database, memberId: string) {
+export async function getAuthor(db: D1Database, memberId: string, allowNsfw = false) {
   const row = await db
     .prepare(
       `SELECT am.handle AS handle, MAX(c.author_name) AS author_name, MAX(c.author_avatar) AS author_avatar,
               COUNT(*) AS card_count, SUM(c.talk_num) AS talk_total, MIN(c.registered_at) AS joined_at,
               GROUP_CONCAT(DISTINCT c.provider) AS providers
        FROM cards c ${AUTHOR_JOIN}
-       WHERE ai.member_id = ? AND c.${LISTED}`,
+       WHERE ai.member_id = ? AND c.${listed(allowNsfw)}`,
     )
     .bind(memberId)
     .first<{
@@ -368,7 +383,7 @@ export async function registeredAmong(db: D1Database, roleIds: string[]): Promis
  * 沒有固定分類表，所以「類型」就是大家實際在用的那些詞。
  */
 export async function topTags(db: D1Database, zone: Zone | undefined, limit: number) {
-  const where = zone ? `WHERE c.${LISTED} AND c.zone IN (?, 'all')` : `WHERE c.${LISTED}`;
+  const where = zone ? `WHERE c.${listed(false)} AND c.zone IN (?, 'all')` : `WHERE c.${listed(false)}`;
   const binds: unknown[] = zone ? [zone, limit] : [limit];
   const rows = await db
     .prepare(
@@ -399,7 +414,7 @@ export async function listAuthors(
   db: D1Database,
   opts: { zone?: Zone; q?: string; sort: "talk" | "cards" | "hot"; limit: number; offset: number },
 ) {
-  const where: string[] = [`c.${LISTED}`];
+  const where: string[] = [`c.${listed(false)}`];
   const binds: unknown[] = [];
   if (opts.zone) { where.push("c.zone IN (?, 'all')"); binds.push(opts.zone); }
   if (opts.q) { where.push(`c.author_name LIKE ? ESCAPE '\\'`); binds.push(likeTerm(opts.q)); }

@@ -32,6 +32,7 @@ const hasArt = computed(() => !!props.card.avatarUrl && !broken.value);
       <!-- 在榜上是這頁最重要的一個位元，標在圖上；還沒過審、被駁回、要重審的也在這裡說 -->
       <span v-if="card.registered && (!card.status || card.status === 'approved')" class="card__badge">{{ $t("mine.badge.listed") }}</span>
       <span v-else-if="card.registered && card.status" class="card__badge card__badge--muted">{{ $t(`mine.badge.${card.status}`) }}</span>
+      <span v-if="card.registered && card.nsfw" class="card__badge card__badge--nsfw">{{ $t("card.nsfw") }}</span>
     </RouterLink>
 
     <div class="card__body">

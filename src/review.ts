@@ -31,6 +31,8 @@ export interface SubmissionRow {
   claimed_at: number | null;
   decided_at: number | null;
   note: string;
+  /** 作者提交這一版時宣告的分級：1＝成人內容。審核人對照內容，不符就駁回。 */
+  nsfw: number;
 }
 
 /** 這張卡有沒有還在排隊的單；有就回它（提交是冪等的）。 */
@@ -43,17 +45,24 @@ export async function pendingSubmissionOf(db: D1Database, cardId: string): Promi
 
 export async function createSubmission(
   db: D1Database,
-  input: { cardId: string; provider: string; roleId: string; kind: SubmissionKind; contentHash: string; now: number },
+  input: { cardId: string; provider: string; roleId: string; kind: SubmissionKind; contentHash: string; now: number; nsfw: boolean },
 ): Promise<SubmissionRow> {
   const existing = await pendingSubmissionOf(db, input.cardId);
-  if (existing) return existing;
+  if (existing) {
+    // 還在排隊就再送一次、只是改了宣告：單子照舊，宣告跟著最新的走——審核人看到的要是作者現在說的
+    if ((existing.nsfw === 1) !== input.nsfw) {
+      await db.prepare("UPDATE review_submissions SET nsfw = ? WHERE id = ?").bind(input.nsfw ? 1 : 0, existing.id).run();
+      existing.nsfw = input.nsfw ? 1 : 0;
+    }
+    return existing;
+  }
   const id = crypto.randomUUID();
   await db
     .prepare(
-      `INSERT INTO review_submissions (id, card_id, provider, source_role_id, kind, status, content_hash, submitted_at)
-       VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)`,
+      `INSERT INTO review_submissions (id, card_id, provider, source_role_id, kind, status, content_hash, submitted_at, nsfw)
+       VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)`,
     )
-    .bind(id, input.cardId, input.provider, input.roleId, input.kind, input.contentHash, input.now)
+    .bind(id, input.cardId, input.provider, input.roleId, input.kind, input.contentHash, input.now, input.nsfw ? 1 : 0)
     .run();
   return (await db.prepare("SELECT * FROM review_submissions WHERE id = ?").bind(id).first<SubmissionRow>())!;
 }
@@ -67,6 +76,8 @@ export interface QueueItem {
   submittedAt: number;
   card: { id: string; roleId: string; name: string; summary: string; avatarUrl: string | null; zone: string; tags: string[] };
   stamps: { approve: number; required: number };
+  /** 作者宣告：成人內容 */
+  nsfw: boolean;
   /** free＝沒人在看；mine＝我領的；other＝別人領著（還沒逾時） */
   claim: "free" | "mine" | "other";
   /** 我已經蓋過章：不能再領、也不能再蓋 */
@@ -77,7 +88,7 @@ export interface QueueItem {
 export async function listQueue(db: D1Database, memberId: string, now: number, lang: string): Promise<QueueItem[]> {
   const rows = await db
     .prepare(
-      `SELECT s.id, s.kind, s.submitted_at, s.claimed_by, s.claimed_at,
+      `SELECT s.id, s.kind, s.submitted_at, s.claimed_by, s.claimed_at, s.nsfw,
               c.id AS card_id, c.source_role_id, c.names, c.summaries, c.avatar_url, c.zone, c.tags,
               (SELECT COUNT(*) FROM review_stamps st WHERE st.submission_id = s.id AND st.verdict = 'approve') AS approvals,
               (SELECT COUNT(*) FROM review_stamps st WHERE st.submission_id = s.id AND st.member_id = ?) AS mine
@@ -88,7 +99,7 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
     .all<{
       id: string; kind: SubmissionKind; submitted_at: number; claimed_by: string | null; claimed_at: number | null;
       card_id: string; source_role_id: string; names: string; summaries: string; avatar_url: string | null; zone: string; tags: string;
-      approvals: number; mine: number;
+      approvals: number; mine: number; nsfw: number;
     }>();
   return rows.results.map((r) => ({
     id: r.id,
@@ -104,6 +115,7 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
       tags: JSON.parse(r.tags) as string[],
     },
     stamps: { approve: r.approvals, required: STAMPS_REQUIRED[r.kind] },
+    nsfw: r.nsfw === 1,
     claim: claimIsLive(r, now) ? (r.claimed_by === memberId ? "mine" : "other") : "free",
     stampedByMe: r.mine > 0,
   }));
@@ -201,20 +213,20 @@ export async function stamp(
 export async function statusAmong(
   db: D1Database,
   roleIds: string[],
-): Promise<Map<string, { status: CardStatus; note: string }>> {
-  const out = new Map<string, { status: CardStatus; note: string }>();
+): Promise<Map<string, { status: CardStatus; note: string; nsfw: boolean }>> {
+  const out = new Map<string, { status: CardStatus; note: string; nsfw: boolean }>();
   if (!roleIds.length) return out;
   const holes = roleIds.map(() => "?").join(",");
   const rows = await db
     .prepare(
-      `SELECT c.source_role_id, c.status,
+      `SELECT c.source_role_id, c.status, c.nsfw,
               (SELECT note FROM review_submissions s WHERE s.card_id = c.id AND s.status = 'rejected'
                ORDER BY s.decided_at DESC LIMIT 1) AS note
        FROM cards c WHERE c.source_role_id IN (${holes})`,
     )
     .bind(...roleIds)
-    .all<{ source_role_id: string; status: CardStatus; note: string | null }>();
-  for (const r of rows.results) out.set(r.source_role_id, { status: r.status, note: r.note ?? "" });
+    .all<{ source_role_id: string; status: CardStatus; note: string | null; nsfw: number }>();
+  for (const r of rows.results) out.set(r.source_role_id, { status: r.status, note: r.note ?? "", nsfw: r.nsfw === 1 });
   return out;
 }
 

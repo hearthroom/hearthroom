@@ -9,6 +9,8 @@ export interface CommunityCard {
   zone: Zone | "all";
   /** 支援哪家供應商（供應商代號）：拿那家的帳號在本站玩。 */
   provider?: string;
+  /** 成人內容（本站的分級，作者宣告、審核人對照過） */
+  nsfw?: boolean;
   name: string;
   summary: string;
   names: Localized;

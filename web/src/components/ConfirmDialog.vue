@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { confirmDialog, confirmState, confirmTextMatches, settleConfirm } from "@/lib/confirm";
+import { confirmChoiceOk, confirmDialog, confirmState, confirmTextMatches, settleConfirm } from "@/lib/confirm";
 
 const box = ref<HTMLElement | null>(null);
 /** 要照打的字：每次開新彈窗清空 */
 const typed = ref("");
-const typedOk = computed(() => !!confirmState.current && confirmTextMatches(confirmState.current, typed.value));
+/** 必選項：每次開新彈窗清空，刻意不預選 */
+const choice = ref<string | null>(null);
+const typedOk = computed(() => !!confirmState.current && confirmTextMatches(confirmState.current, typed.value) && confirmChoiceOk(confirmState.current, choice.value));
 /** 開啟前的焦點：關掉時還回去，鍵盤使用者不會掉到頁面開頭 */
 let restore: HTMLElement | null = null;
 
@@ -13,6 +15,7 @@ watch(() => confirmState.current, async (cur) => {
   if (!cur) { restore?.focus?.(); restore = null; return; }
   restore = document.activeElement as HTMLElement | null;
   typed.value = "";
+  choice.value = null;
   await nextTick();
   // 要照打的字：焦點直接進打字框。其他破壞性動作先站在取消鍵上：按錯 Enter 也不會刪掉東西
   const pick = cur.requireText ? "[data-typed]" : cur.danger && !cur.single ? "[data-cancel]" : "[data-confirm]";
@@ -51,14 +54,25 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
           <span class="dlg__typed-hint">{{ $t("dialog.typeToConfirm", { text: confirmState.current.requireText }) }}</span>
           <input v-model="typed" class="input" type="text" autocomplete="off" spellcheck="false" data-typed
                  :placeholder="confirmState.current.placeholder ?? confirmState.current.requireText"
-                 @keydown.enter.prevent="settleConfirm(true, typed)" />
+                 @keydown.enter.prevent="settleConfirm(true, typed, choice)" />
         </label>
+        <!-- 必選項：沒選就按不了確認 -->
+        <fieldset v-if="confirmState.current.choices?.length" class="dlg__choices">
+          <legend v-if="confirmState.current.choiceLabel" class="dlg__choices-label">{{ confirmState.current.choiceLabel }}</legend>
+          <label v-for="opt in confirmState.current.choices" :key="opt.value" class="dlg__choice">
+            <input v-model="choice" type="radio" name="dlg-choice" :value="opt.value" data-choice />
+            <span class="dlg__choice-text">
+              <strong>{{ opt.label }}</strong>
+              <span v-if="opt.hint" class="subtle">{{ opt.hint }}</span>
+            </span>
+          </label>
+        </fieldset>
         <div class="dlg__actions">
           <button v-if="!confirmState.current.single" class="btn" data-cancel @click="settleConfirm(false)">
             {{ confirmState.current.cancelText ?? $t("dialog.cancel") }}
           </button>
           <button class="btn" :class="confirmState.current.danger ? 'btn--danger-solid' : 'btn--primary'" data-confirm
-                  :disabled="!typedOk" @click="settleConfirm(true, typed)">
+                  :disabled="!typedOk" @click="settleConfirm(true, typed, choice)">
             {{ confirmState.current.confirmText ?? $t("dialog.confirm") }}
           </button>
         </div>
@@ -104,4 +118,10 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
   .dlg__actions { flex-direction: column-reverse; }
   .dlg__actions .btn { width: 100%; height: var(--h-lg); }
 }
+.dlg__choices { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; text-align: left; }
+.dlg__choices-label { padding: 0; margin-bottom: 2px; font-size: 13px; color: var(--text-2); }
+.dlg__choice { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-md); cursor: pointer; }
+.dlg__choice:has(input:checked) { border-color: var(--accent); background: var(--accent-tint); }
+.dlg__choice input { margin-top: 3px; accent-color: var(--accent); }
+.dlg__choice-text { display: grid; gap: 2px; font-size: 14px; }
 </style>

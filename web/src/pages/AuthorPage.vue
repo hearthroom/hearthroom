@@ -8,12 +8,14 @@ import { ApiError, fetchAuthor, fetchBoard } from "@/lib/api";
 import { compact, hueFrom, relativeTime } from "@/lib/format";
 import { contentLang, pageTitle } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
+import { useSession } from "@/lib/session";
 import type { Author, CardPage } from "@/lib/types";
 import { providerName } from "@/lib/providers";
 
 const route = useRoute();
 const router = useRouter();
 const { locale } = useLocalePath();
+const session = useSession();
 const { t } = useI18n();
 const author = ref<Author | null>(null);
 const page = ref<CardPage | null>(null);
@@ -48,6 +50,7 @@ function go(offset: number) {
 }
 watch(() => route.params.handle, () => { author.value = null; page.value = null; load(); }, { immediate: true });
 watch([() => route.query.offset, locale], load);
+watch(() => session.profile?.showNsfw, (now, before) => { if (before !== undefined && now !== before) load(); });
 </script>
 
 <template>

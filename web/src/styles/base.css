@@ -277,3 +277,13 @@ select.input { height: var(--h-md); }
   /* 無限循環的動畫縮到 1ms 會變成每幀閃一下，那正是這群人最受不了的——直接關掉 */
   body::before, .ghost::after { animation: none !important; }
 }
+
+/* 成人內容標記：卡片牆、卡片頁、我的卡片、審核佇列共用。醒目但不喧賓奪主——它是資訊，不是警告 */
+.nsfw-badge {
+  display: inline-flex; align-items: center; vertical-align: middle;
+  height: 18px; padding: 0 6px; margin-right: 6px;
+  border-radius: 4px; border: 1px solid var(--danger);
+  color: var(--danger); font-size: 11px; font-weight: 700; letter-spacing: 0.02em; line-height: 1;
+}
+.chip--nsfw { color: var(--danger); border-color: var(--danger); }
+.card__badge--nsfw { left: auto; right: 8px; background: var(--danger); color: #fff; }
