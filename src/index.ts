@@ -316,9 +316,10 @@ app.get("/v1/cards/:id", async (c) => {
   const row = await getCard(c.env.DB, c.req.param("id"));
   // 還沒過審、被駁回、離榜重審中的卡對外都不存在；作者在「我的卡片」看得到狀態。
   if (!row || row.status !== "approved") throw new HttpError(404, "card not found");
-  // 成人內容：沒開（或沒登入、沒驗年齡）的人看不到它存在——直接拿到連結也是 404（owner 2026-09-08）。
+  // 成人內容：沒開（或沒登入、沒驗年齡）的人拿不到內容，但要知道「這是成人內容、要登入／驗年齡」
+  // 才能引導（owner 2026-09-08 改成 Steam 式的門，不是 404）。403 只透露這一件事，內容一個欄位都不給。
   const allowNsfw = row.nsfw === 1 ? await viewerAllowsNsfw(c) : false;
-  if (row.nsfw === 1 && !allowNsfw) throw new HttpError(404, "card not found");
+  if (row.nsfw === 1 && !allowNsfw) throw new HttpError(403, "adult_content");
   // 卡片瀏覽只在這裡記一次。HTML 殼那條路（page_html）多半是抓取器，卡片頁替作者發的
   // 「其他作品」副請求則是 /v1/cards?author=，兩者都不算一次瀏覽，否則分母會被灌水三倍。
   note(c, { event: "card_view", subject: row.source_role_id, zoneScope: "current" });
@@ -812,8 +813,9 @@ app.get("*", async (c) => {
     let id: string;
     try { id = decodeURIComponent(m[3]!); } catch { return new Response(shell.body, { status: 404, headers: shell.headers }); }
     const row = await getCard(c.env.DB, id);
-    // 成人內容不做分享預覽：抓取器沒有身分，一律當不存在
-    if (!row || row.status !== "approved" || row.nsfw === 1) return new Response(shell.body, { status: 404, headers: shell.headers });
+    if (!row || row.status !== "approved") return new Response(shell.body, { status: 404, headers: shell.headers });
+    // 成人內容不做分享預覽（抓取器沒有身分）：回沒有卡片資訊的殼，讓前端畫登入／驗年齡的門
+    if (row.nsfw === 1) return new Response(shell.body, { status: 200, headers: shell.headers });
     const card = toCard(row, l);
     const res = renderHead(shell, {
       lang: locale, title: `${card.name} · ${SITE_NAME}`, description: card.summary, image: card.avatarUrl, url: self, type: "profile",

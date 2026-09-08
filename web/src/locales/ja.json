@@ -645,5 +645,10 @@
   "error.birthdateRequired": "生年月日を入力してください。",
   "error.invalidBirthdate": "生年月日の形式が正しくありません。",
   "error.underage": "18 歳未満の方は成人向けコンテンツをオンにできません。",
-  "error.ageVerificationRequired": "これは成人向けの審査です。先に「ユーザー設定」で年齢を確認してください。"
+  "error.ageVerificationRequired": "これは成人向けの審査です。先に「ユーザー設定」で年齢を確認してください。",
+  "card.gate.title": "成人向けコンテンツです",
+  "card.gate.login": "このカードを見るにはログインが必要です。",
+  "card.gate.verify": "閲覧の前に 18 歳以上であることを確認してください。確認は一度だけで、その後は成人向けコンテンツの表示が自動的にオンになります。",
+  "card.gate.enable": "年齢確認は済んでいますが、成人向けコンテンツの表示がオフになっています。オンにするとこのカードを閲覧できます。",
+  "card.gate.settingsHint": "「ユーザー設定」でいつでもオフにできます。"
 }

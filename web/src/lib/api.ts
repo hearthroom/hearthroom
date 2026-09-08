@@ -33,6 +33,7 @@ const CODE_KEY: Record<string, string> = {
 };
 /** 本站自己的 API 回的碼（不是供應商契約的一部分，所以不進 docs/provider-protocol.md）。 */
 const SITE_CODE_KEY: Record<string, string> = {
+  adult_content: "card.gate.title",
   nsfw_required: "error.nsfwRequired",
   birthdate_required: "error.birthdateRequired",
   invalid_birthdate: "error.invalidBirthdate",

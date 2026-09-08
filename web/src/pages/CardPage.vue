@@ -5,6 +5,7 @@ import { RouterLink, useRoute } from "vue-router";
 import CardGrid from "@/components/CardGrid.vue";
 import CommentPanel from "@/components/CommentPanel.vue";
 import NotFoundPage from "@/pages/NotFoundPage.vue";
+import AdultGate from "@/components/AdultGate.vue";
 import PreviewDoc from "@/components/preview/PreviewDoc.vue";
 import HtmlCardFrame from "@/components/HtmlCardFrame.vue";
 import { ApiError, fetchBoard, fetchCard, fetchPlayerAsset, fetchPreviewPage, fetchRoleDetail } from "@/lib/api";
@@ -27,6 +28,8 @@ const loading = ref(true);
 /** 手上有卡、在背景換語言重抓：舊卡留著變淡，不退回骨架 */
 const revalidating = ref(false);
 const missing = ref(false);
+/** 成人內容、而看的人沒登入或沒開：畫門，不畫 404 */
+const gated = ref(false);
 const error = ref("");
 
 /** 來源端的公開詳情：開場白、有沒有裝修主頁、作者有沒有關掉評論。 */
@@ -61,6 +64,7 @@ async function load() {
   revalidating.value = !!card.value;
   loading.value = !card.value;
   missing.value = false;
+  gated.value = false;
   error.value = "";
   const id = route.params.id as string;
   const lang = contentLang(locale.value);
@@ -68,6 +72,7 @@ async function load() {
     card.value = await fetchCard(id, lang);
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) missing.value = true;
+    else if (err instanceof ApiError && err.status === 403 && err.code === "adult_content") { gated.value = true; card.value = null; }
     else error.value = err instanceof Error ? err.message : t("state.loadFailed");
     loading.value = false;
     revalidating.value = false;
@@ -151,6 +156,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (before !== undefin
 
 <template>
   <NotFoundPage v-if="missing" :title="$t('card.notFound.title')" :hint="$t('card.notFound.hint')" />
+  <div v-else-if="gated" class="page"><AdultGate /></div>
 
   <div v-else class="page role">
     <!-- 骨架照著真的版面畫：左邊一張身分證、右邊一塊面板，資料來了不跳版 -->

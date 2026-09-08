@@ -645,5 +645,10 @@
   "error.birthdateRequired": "Please enter your date of birth.",
   "error.invalidBirthdate": "That date of birth isn't valid.",
   "error.underage": "You must be 18 or older to turn on adult content.",
-  "error.ageVerificationRequired": "This submission is adult content. Confirm your age in Settings first."
+  "error.ageVerificationRequired": "This submission is adult content. Confirm your age in Settings first.",
+  "card.gate.title": "This is adult content",
+  "card.gate.login": "Sign in to view this card.",
+  "card.gate.verify": "Please confirm you are 18 or older before viewing. You only do this once; adult content will then be turned on for you.",
+  "card.gate.enable": "You have confirmed your age, but adult content is currently turned off. Turn it on to view this card.",
+  "card.gate.settingsHint": "You can turn it off again any time in Settings."
 }
