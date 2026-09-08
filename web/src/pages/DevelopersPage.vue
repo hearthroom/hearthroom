@@ -107,9 +107,11 @@ onBeforeUnmount(() => observer?.disconnect());
  * 欄寬：短欄（項目／憑證／誰呼叫）不能被長的說明欄擠成一個字一行，所以每格給個最小寬度；
  * 第一欄的文字標籤不換行，但裡面的路徑 code 要允許在任意處折行，不然四欄表的第一欄會撐到把別欄擠扁。
  */
-.doc :deep(td), .doc :deep(th) { min-width: 5.5em; }
 .doc :deep(td:first-child), .doc :deep(th:first-child) { white-space: nowrap; }
 .doc :deep(td:first-child code) { white-space: normal; overflow-wrap: anywhere; }
+/* 四欄的端點表：憑證與誰呼叫都是幾個字，不換行；min-width 在 display:block 的表上不作數，只能這樣 */
+.doc :deep(table:has(th:nth-child(4)) td:nth-child(2)), .doc :deep(table:has(th:nth-child(4)) th:nth-child(2)),
+.doc :deep(table:has(th:nth-child(4)) td:nth-child(3)), .doc :deep(table:has(th:nth-child(4)) th:nth-child(3)) { white-space: nowrap; }
 .doc :deep(tr:nth-child(even) td) { background: color-mix(in srgb, var(--surface-2) 45%, transparent); }
 
 @media (max-width: 900px) {
