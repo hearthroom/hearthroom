@@ -573,5 +573,15 @@
   "board.sort.week": "週榜",
   "board.sort.month": "月榜",
   "board.sort.random": "推薦",
-  "developers.toc": "目錄"
+  "developers.toc": "目錄",
+  "editor.image.library": "從資源庫選",
+  "editor.media.lede": "兩張都可以先空著，之後隨時補。頭像與背景都能從「我的資源」直接挑，不必重傳一份。",
+  "lib.pick.title": "從我的資源挑一張",
+  "lib.pick.count": "共 {n} 張",
+  "lib.pick.folders": "資料夾",
+  "lib.pick.all": "全部",
+  "lib.pick.unfiled": "沒歸檔的",
+  "lib.pick.use": "用這張",
+  "lib.pick.empty": "資源庫裡還沒有圖片。先上傳一張，之後每張卡都挑得到。",
+  "lib.pick.failed": "資源庫讀不出來，過一下再試。"
 }

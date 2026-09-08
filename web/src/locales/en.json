@@ -573,5 +573,15 @@
   "board.sort.week": "This week",
   "board.sort.month": "This month",
   "board.sort.random": "Discover",
-  "developers.toc": "On this page"
+  "developers.toc": "On this page",
+  "editor.image.library": "Pick from library",
+  "editor.media.lede": "Both can stay empty for now. You can pull either one straight from My resources instead of uploading it again.",
+  "lib.pick.title": "Pick from my resources",
+  "lib.pick.count": "{n} images",
+  "lib.pick.folders": "Folders",
+  "lib.pick.all": "All",
+  "lib.pick.unfiled": "Unfiled",
+  "lib.pick.use": "Use this one",
+  "lib.pick.empty": "No images in your library yet. Upload one and every card can reuse it.",
+  "lib.pick.failed": "Could not read your library. Try again in a moment."
 }

@@ -1105,13 +1105,15 @@ async function exportCard(format: "png" | "json") {
 
         <!-- 形象 -->
         <section v-show="section === 'media'" class="pane">
+          <p class="muted">{{ $t("editor.media.lede") }}</p>
           <ImageField v-model="draft.roleAvatar" :label="$t('editor.avatar')" :hint="$t('editor.avatar.hint')"
                       :pick-label="$t('editor.image.pick')" :clear-label="$t('editor.image.clear')"
+                      :library-label="$t('editor.image.library')"
                       :uploading="$t('editor.image.uploading')" ratio="square" @pick="onPickImage" />
           <ImageField v-model="draft.roleBackground" :label="$t('editor.background')"
                       :hint="$t('editor.background.hint')" :pick-label="$t('editor.image.pick')"
-                      :clear-label="$t('editor.image.clear')" :uploading="$t('editor.image.uploading')"
-                      ratio="wide" @pick="onPickImage" />
+                      :clear-label="$t('editor.image.clear')" :library-label="$t('editor.image.library')"
+                      :uploading="$t('editor.image.uploading')" ratio="wide" @pick="onPickImage" />
         </section>
 
         <!-- 世界书 -->
