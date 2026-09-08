@@ -42,7 +42,7 @@ API 存取範圍，跟這個服務拿到的一模一樣。
 
 ## 對上游的依賴
 
-本站有自己的成員 ID（`members.handle`，8 個小寫字母；作者頁網址、「我的」頁顯示的都是它），供應商帳號是掛在成員底下的身分（`member_identities`），上游的數字 ID 只在那張表裡當映射鍵。登入先到本站的 `/login` 選供應商，再跳去供應商的授權頁。完整的契約（一個供應商要實作哪些介面、分幾級、`{{user}}` 怎麼取值）在 [docs/provider-protocol.md](docs/provider-protocol.md)，站上 `/developers` 頁原樣渲染它；`web/test/protocol-doc.test.ts` 要求程式碼打的每條上游路徑都在文件裡。下表是站台伺服器自己會發的那幾條。
+本站有自己的成員 ID（`members.handle`，8 個小寫字母；作者頁網址、「我的」頁顯示的都是它），供應商帳號是掛在成員底下的身分（`member_identities`），上游的數字 ID 只在那張表裡當映射鍵。登入先到本站的 `/login` 選供應商，再跳去供應商的授權頁。完整的契約在 [docs/developers.md](docs/developers.md)（總覽，英文）與 [docs/openapi.json](docs/openapi.json)（每個端點的參數、請求、回應與錯誤碼，OpenAPI 3.1），站上 `/developers` 頁渲染這兩份；`web/test/protocol-doc.test.ts` 要求程式碼打的每條上游路徑都在規格檔裡。下表是站台伺服器自己會發的那幾條。
 
 | 呼叫 | 憑證 | 何時 |
 |---|---|---|
