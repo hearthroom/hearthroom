@@ -7,7 +7,7 @@ export interface CommunityCard {
   id: string;
   roleId: string;
   zone: Zone | "all";
-  /** 目前可以在哪家供應商遊玩（供應商代號）。 */
+  /** 支援哪家供應商（供應商代號）：拿那家的帳號在本站玩。 */
   provider?: string;
   name: string;
   summary: string;
