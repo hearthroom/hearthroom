@@ -55,17 +55,22 @@ describe("提交時的宣告", () => {
     expect(ids(await json(await SELF.fetch("https://c.test/v1/cards?zone=all&a=1")))).toEqual(["role-safe"]);
     const adult = await env.DB.prepare("SELECT id, nsfw FROM cards WHERE source_role_id = 'role-adult'").first<{ id: string; nsfw: number }>();
     expect(adult?.nsfw).toBe(1);
-    expect((await SELF.fetch(`https://c.test/v1/cards/${adult!.id}`)).status).toBe(404);
-    // 登入了但沒開開關：一樣 404
-    expect((await SELF.fetch(`https://c.test/v1/cards/${adult!.id}?nsfw=1`, { headers: bearer("viewer-token") })).status).toBe(404);
+    // 沒登入／沒開：403 adult_content，內容一個欄位都不給（前端據此畫登入或驗年齡的門）
+    const anon = await SELF.fetch(`https://c.test/v1/cards/${adult!.id}`);
+    expect(anon.status).toBe(403);
+    const anonBody = await json(anon);
+    expect(anonBody.error).toBe("adult_content");
+    expect(anonBody.name).toBeUndefined();
+    expect((await SELF.fetch(`https://c.test/v1/cards/${adult!.id}?nsfw=1`, { headers: bearer("viewer-token") })).status).toBe(403);
     // 作者頁只算一般內容
     const me = await json(await SELF.fetch("https://c.test/v1/me", { headers: bearer() }));
     expect((await json(await SELF.fetch(`https://c.test/v1/authors/${me.handle}`))).cardCount).toBe(1);
-    // 分享預覽：抓取器沒有身分，成人內容一律 404
+    // 分享預覽：抓取器沒有身分，成人內容回沒有卡片資訊的殼（200，前端畫門），不洩漏標題
     const ctx = createExecutionContext();
     const res = await worker.fetch(new Request(`https://c.test/cards/${adult!.id}`), envWithAssets(), ctx);
     await waitOnExecutionContext(ctx);
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
+    expect(await res.text()).not.toContain("深夜的卡");
   });
 });
 
