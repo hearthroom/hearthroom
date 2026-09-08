@@ -708,15 +708,6 @@ export async function saveAuthorAsset(roleId: string, body: Omit<AuthorAsset, "s
   ));
 }
 
-/** 站內榜單認得的分類詞表，依維度分組。給標籤選擇器用；一律不含成人維度。 */
-export interface CanonicalTag { slug: string; name: string; dimension: string; visibility: string }
-export async function fetchCanonicalTags(token: string, language: string): Promise<{ dimension: string; tags: CanonicalTag[] }[]> {
-  const body = await json<{ dimensions?: { dimension: string; tags: CanonicalTag[] }[] }>(
-    await fetch(`${UPSTREAM_API}/open/v1/tag/canonical?language=${encodeURIComponent(language)}`, { headers: authHeaders(token) }),
-  );
-  return body.dimensions ?? [];
-}
-
 export async function createWorldbook(
   book: { name: string; description?: string; language?: string; format?: "tavern" },
   token: string,
