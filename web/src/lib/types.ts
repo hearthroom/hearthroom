@@ -7,6 +7,8 @@ export interface CommunityCard {
   id: string;
   roleId: string;
   zone: Zone | "all";
+  /** 目前可以在哪家供應商遊玩（供應商代號）。 */
+  provider?: string;
   name: string;
   summary: string;
   names: Localized;

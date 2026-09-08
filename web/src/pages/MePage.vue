@@ -57,14 +57,14 @@ onMounted(() => {
       <div class="me__text">
         <p class="eyebrow">{{ $t("me.title") }}</p>
         <h1 class="me__name display">{{ session.me.nickName }}</h1>
-        <p class="me__id">
+        <div class="me__id">
           <span class="subtle">{{ $t("me.handle") }}</span>
-          <template v-if="handle">
+          <span v-if="handle" class="me__id-row">
             <code class="me__handle mono">{{ handle }}</code>
             <button type="button" class="btn btn--sm btn--ghost" @click="copyHandle">{{ copied ? $t("me.copied") : $t("me.copy") }}</button>
-          </template>
+          </span>
           <span v-else class="subtle">{{ $t("state.loading") }}</span>
-        </p>
+        </div>
         <p v-if="session.profile" class="subtle me__since">{{ $t("me.since", { date: dateOnly(Math.floor(session.profile.memberSince / 1000)) }) }}</p>
       </div>
     </header>
@@ -106,7 +106,9 @@ onMounted(() => {
 .me__face { width: 64px; height: 64px; border-radius: var(--r-pill); object-fit: cover; flex: none; font-size: 24px; }
 .me__text { min-width: 0; display: grid; gap: 4px; }
 .me__name { font-size: clamp(20px, 2.6vw, 26px); margin: 0; }
-.me__id { display: flex; align-items: center; gap: var(--s-2); margin: 0; flex-wrap: wrap; }
+/* 標籤一行、ID 與複製鈕一行且不拆開：手機上原本會把「複製」擠到下一行 */
+.me__id { display: grid; gap: 2px; margin: 0; }
+.me__id-row { display: inline-flex; align-items: center; gap: var(--s-2); white-space: nowrap; }
 .me__handle { font-size: 14px; padding: 2px 8px; border-radius: 6px; background: var(--surface-2); }
 .me__since { margin: 0; }
 .me__linked { padding: var(--s-4); display: grid; gap: var(--s-2); }

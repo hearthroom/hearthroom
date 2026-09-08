@@ -9,6 +9,7 @@ import PreviewDoc from "@/components/preview/PreviewDoc.vue";
 import HtmlCardFrame from "@/components/HtmlCardFrame.vue";
 import { ApiError, fetchBoard, fetchCard, fetchPlayerAsset, fetchPreviewPage, fetchRoleDetail } from "@/lib/api";
 import { renderWelcome } from "@/lib/welcome-render";
+import { providerName } from "@/lib/providers";
 import { useSession } from "@/lib/session";
 import { contentLang, pageTitle, zoneLabel } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
@@ -215,6 +216,7 @@ watch(locale, load);
               </svg>
             </button>
           </div>
+          <p v-if="card.provider" class="subtle role__via">{{ $t("card.playableOn", { provider: providerName(card.provider) }) }}</p>
 
           <p class="subtle role__foot">
             {{ zoneLabel(card.zone) }} · {{ $t("card.meta", { registered: relativeTime(card.registeredAt), synced: relativeTime(card.syncedAt) }) }}
@@ -324,6 +326,7 @@ watch(locale, load);
 .role__tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .role__actions { display: flex; gap: var(--s-2); }
 .role__cta { flex: 1; min-width: 0; }
+.role__via { margin: 6px 0 0; }
 .role__share { width: var(--h-lg); flex: none; }
 .role__share svg { width: 18px; height: 18px; }
 .role__foot { line-height: 1.5; }

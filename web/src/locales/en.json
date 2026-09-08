@@ -603,7 +603,6 @@
   "res.panel.copyFailed": "Could not copy. Select it by hand.",
   "dialog.close": "Close",
   "nav.me": "Me",
-  "author.publishedOn": "Published on {providers}",
   "login.title": "Sign in to Hearthroom",
   "login.lead": "Sign in with an account you already have. No separate registration needed.",
   "login.continueWith": "Continue with {provider}",
@@ -619,5 +618,7 @@
   "me.linked.at": "Linked {date}",
   "me.linked.active": "Linked",
   "me.reauthorize": "Re-authorize",
-  "me.publicPage": "View my public author page"
+  "me.publicPage": "View my public author page",
+  "author.playableOn": "Playable on {providers}",
+  "card.playableOn": "Playable on {provider}"
 }
