@@ -50,7 +50,7 @@ export function toCard(row: CardRow, lang: string) {
     id: row.id,
     roleId: row.source_role_id,
     zone: row.zone,
-    /** 這張卡目前可以在哪家供應商遊玩。不是來源、不是由誰提供——卡是作者的。 */
+    /** 這張卡支援哪家供應商（拿那家的帳號、用那家的 AI 服務在本站玩）。不是來源、不是由誰提供——卡是作者的。 */
     provider: row.provider,
     name: pickLocale(names, lang),
     summary: pickLocale(summaries, lang),
