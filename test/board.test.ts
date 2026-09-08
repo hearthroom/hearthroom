@@ -4,7 +4,7 @@ import worker from "../src/index";
 import { buildSearchText } from "../src/upstream";
 import { HttpError } from "../src/types";
 import { upstream } from "../src/upstream";
-import { mainSiteDown, resetDb, restoreUpstream, role, rolesOnMainSite } from "./helpers";
+import { mainSiteDown, makeMember, resetDb, restoreUpstream, role, rolesOnMainSite, testHandle } from "./helpers";
 
 /** 直接寫庫，才能精確控制註冊時間與趨勢窗口。 */
 async function seed(f: {
@@ -423,9 +423,13 @@ describe("語區", () => {
     expect(ids((await list("?zone=en&q=霧港偵探")).body)).toEqual(["en2"]);
   });
 
-  it("作者主頁跨語區列全部作品", async () => {
-    const { body } = await list("?author=10001&zone=ko");
+  it("作者主頁跨語區列全部作品；作者條件是本站的公開 ID", async () => {
+    await makeMember(10001);
+    const { body } = await list(`?author=${testHandle(10001)}&zone=ko`);
     expect(body.items).toHaveLength(4);
+    expect(body.items.every((i: any) => i.author.handle === testHandle(10001))).toBe(true);
+    // 拿上游數字 ID 來問：不是公開 ID，空榜
+    expect((await list("?author=10001")).body.items).toEqual([]);
   });
 
   it("回應帶 zone，前端才能在跨語區的清單上標語言", async () => {

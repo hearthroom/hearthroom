@@ -10,8 +10,8 @@ const { lp } = useLocalePath();
 
 <template>
   <ol class="al">
-    <li v-for="(a, i) in authors" :key="a.accountNumId">
-      <RouterLink :to="lp(`/authors/${a.accountNumId}`)" class="al__row">
+    <li v-for="(a, i) in authors" :key="a.handle ?? a.accountNumId">
+      <component :is="a.handle ? RouterLink : 'div'" :to="a.handle ? lp(`/authors/${a.handle}`) : undefined" class="al__row">
         <!-- 前三名用跟卡片牆同一款徽章；其餘只是個數字，不必每一列都戴勳章 -->
         <span v-if="ranked" class="al__rank" role="img" :aria-label="$t('board.rank', { n: (rankOffset ?? 0) + i + 1 })">
           <span v-if="(rankOffset ?? 0) + i < 3" class="medal" :class="`medal--${(rankOffset ?? 0) + i + 1}`">{{ (rankOffset ?? 0) + i + 1 }}</span>
@@ -32,7 +32,7 @@ const { lp } = useLocalePath();
           <span class="subtle">{{ $t("author.sort.hot") }}</span>
         </span>
         <svg class="al__arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
-      </RouterLink>
+      </component>
     </li>
   </ol>
 </template>

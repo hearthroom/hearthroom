@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { createComment, deleteComment, fetchComments, fetchReplies, likeComment, type Comment } from "@/lib/api";
 import { hueFrom, relativeTime } from "@/lib/format";
 import { contentLang } from "@/lib/i18n";
@@ -9,12 +9,14 @@ import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
 import { confirmDialog } from "@/lib/confirm";
 import { track } from "@/lib/track";
+import { loginPath } from "@/lib/login-return";
 
 const props = defineProps<{ roleId: string }>();
 const emit = defineEmits<{ count: [n: number] }>();
 
 const session = useSession();
 const route = useRoute();
+const router = useRouter();
 const { locale, lp } = useLocalePath();
 const { t } = useI18n();
 const lang = computed(() => contentLang(locale.value));
@@ -96,7 +98,7 @@ async function submit(root?: Comment, target?: Comment) {
 }
 
 async function toggleLike(c: Comment) {
-  if (!session.me) return session.login(route.fullPath);
+  if (!session.me) return router.push(lp(loginPath(route.fullPath)));
   const token = await session.accessToken();
   if (!token) return;
   // 樂觀更新：失敗再翻回來
@@ -148,7 +150,7 @@ watch([() => props.roleId, lang, () => session.me?.accountNumId], () => load(tru
         </div>
       </div>
     </div>
-    <button v-else-if="session.ready" class="btn cmt__login" @click="session.login(route.fullPath)">{{ $t("comment.login") }}</button>
+    <RouterLink v-else-if="session.ready" class="btn cmt__login" :to="lp(loginPath(route.fullPath))">{{ $t("comment.login") }}</RouterLink>
 
     <p v-if="submittedHidden" class="notice" role="status">{{ $t("comment.submitted") }}</p>
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
@@ -162,8 +164,8 @@ watch([() => props.roleId, lang, () => session.me?.accountNumId], () => load(tru
         <span v-else class="cmt__face mono" :style="{ '--h': hueFrom(c.accountNickName || '') }">{{ [...(c.accountNickName || '?')][0] }}</span>
         <div class="cmt__body">
           <div class="cmt__head">
-            <RouterLink v-if="c.accountNumId" :to="lp(`/authors/${c.accountNumId}`)" class="cmt__name">{{ c.accountNickName }}</RouterLink>
-            <span v-else class="cmt__name">{{ c.accountNickName }}</span>
+            <!-- 留言者是供應商那邊的使用者，不一定是本站成員；本站的作者頁網址是成員的公開 ID，這裡沒有，所以只放名字 -->
+            <span class="cmt__name">{{ c.accountNickName }}</span>
             <span v-if="c.isCreator" class="cmt__badge">{{ $t("comment.creator") }}</span>
             <span v-if="c.isPinned" class="cmt__badge cmt__badge--pin">{{ $t("comment.pinned") }}</span>
             <span class="subtle">{{ relativeTime(Date.parse(c.createTime)) }}</span>

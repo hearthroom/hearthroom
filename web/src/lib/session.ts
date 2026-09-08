@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import { fetchMe, fetchWallet } from "./api";
-import type { Me, Wallet } from "./api";
+import { fetchMe, fetchSiteMe, fetchWallet } from "./api";
+import type { Me, SiteMe, Wallet } from "./api";
 import {
   beginLogin,
   persist,
@@ -27,6 +27,8 @@ export const useSession = defineStore("session", () => {
   const me = ref<Me | null>(null);
   /** 積分與會員。頁首要顯示餘額，所以跟身分一起載；讀不到不影響登入。 */
   const wallet = ref<Wallet | null>(null);
+  /** 本站的身分（公開 ID、連結的帳號）。登入後問一次就建好成員；讀不到不影響登入。 */
+  const profile = ref<SiteMe | null>(null);
   const ready = ref(false);
 
   async function loadWallet(accessToken: string) {
@@ -34,6 +36,13 @@ export const useSession = defineStore("session", () => {
       wallet.value = await fetchWallet(accessToken);
     } catch {
       wallet.value = null;
+    }
+  }
+  async function loadProfile(accessToken: string) {
+    try {
+      profile.value = await fetchSiteMe(accessToken);
+    } catch {
+      profile.value = null;
     }
   }
 
@@ -44,6 +53,7 @@ export const useSession = defineStore("session", () => {
     persist(pair);
     me.value = await fetchMe(pair.accessToken);
     void loadWallet(pair.accessToken);
+    void loadProfile(pair.accessToken);
   }
 
   function restore(): Promise<void> {
@@ -60,6 +70,7 @@ export const useSession = defineStore("session", () => {
           token.value = saved;
           me.value = await fetchMe(saved.accessToken);
           void loadWallet(saved.accessToken);
+          void loadProfile(saved.accessToken);
           return;
         }
         const pair = await refresh();
@@ -93,6 +104,7 @@ export const useSession = defineStore("session", () => {
     token.value = null;
     me.value = null;
     wallet.value = null;
+    profile.value = null;
     await revokeSession();
   }
 
@@ -102,5 +114,6 @@ export const useSession = defineStore("session", () => {
     if (t) await loadWallet(t);
   }
 
-  return { token, me, wallet, ready, adopt, restore, accessToken, refreshWallet, logout, login: beginLogin };
+  /** 重新向供應商授權（真正開始 OAuth）。進站的「登入」一律先到本站的登入頁（/login），由那一頁呼叫這個。 */
+  return { token, me, wallet, profile, ready, adopt, restore, accessToken, refreshWallet, logout, login: beginLogin };
 });

@@ -2,7 +2,7 @@ import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import worker from "../src/index";
 import { authorLine, oneLine } from "../src/head";
-import { envWithAssets, resetDb, restoreUpstream, role } from "./helpers";
+import { envWithAssets, makeMember, resetDb, restoreUpstream, role, testHandle } from "./helpers";
 import { upsertCard } from "../src/cards";
 
 // 殼帶驗證器：測「改寫後要清 ETag／Last-Modified」那幾條
@@ -60,8 +60,9 @@ describe("分享預覽", () => {
     expect(html).toContain('<div id="app"></div>');
   });
 
-  it("作者頁也有預覽", async () => {
-    const { status, html } = await page("/ja/authors/7");
+  it("作者頁也有預覽（網址是本站的公開 ID）", async () => {
+    await makeMember(7);
+    const { status, html } = await page(`/ja/authors/${testHandle(7)}`);
     expect(status).toBe(200);
     expect(html).toContain("<title>月光 · Hearthroom</title>");
     expect(html).toContain('<meta property="og:description" content="作品 1 · 会話 0">');
