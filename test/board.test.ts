@@ -385,6 +385,29 @@ describe("同步並發", () => {
     expect(names).toContain("讀不到");
   });
 
+  it("同步順手補上還沒有成員列的作者（0005 之前登記、之後沒再登入的人）", async () => {
+    await seed({ id: "old1", roleId: "role-old1", authorNumId: 4242 });
+    await seed({ id: "old2", roleId: "role-old2", authorNumId: 4242 });
+    await makeMember(5151);
+    await seed({ id: "known", roleId: "role-known", authorNumId: 5151 });
+    rolesOnMainSite(
+      { roleId: "role-old1", authorNumId: 4242 },
+      { roleId: "role-old2", authorNumId: 4242 },
+      { roleId: "role-known", authorNumId: 5151 },
+    );
+    await runSync();
+    const ids = await env.DB.prepare("SELECT provider, external_id, member_id FROM member_identities ORDER BY external_id").all<{ provider: string; external_id: string; member_id: string }>();
+    expect(ids.results.map((r) => [r.provider, r.external_id])).toEqual([["lunatalk", "4242"], ["lunatalk", "5151"]]);
+    const members = await env.DB.prepare("SELECT handle FROM members").all<{ handle: string }>();
+    expect(members.results).toHaveLength(2);
+    expect(members.results.every((m) => /^[a-z]{8}$/.test(m.handle))).toBe(true);
+    // 兩張卡同一個作者只建一個成員；之後列表就帶得出公開 ID
+    const { body } = await list("?zone=all");
+    const byRole = Object.fromEntries(body.items.map((i: any) => [i.roleId, i.author.handle]));
+    expect(byRole["role-old1"]).toBe(byRole["role-old2"]);
+    expect(byRole["role-old1"]).toMatch(/^[a-z]{8}$/);
+  });
+
   it("批次比並發上限小時不會開多餘的工作者", async () => {
     await seed({ id: "only", roleId: "role-1" });
     const state = trackingUpstream();
