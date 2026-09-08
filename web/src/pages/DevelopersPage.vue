@@ -103,8 +103,13 @@ onBeforeUnmount(() => observer?.disconnect());
 .doc :deep(table) { display: block; overflow-x: auto; border-collapse: collapse; width: 100%; font-size: 13.5px; margin: var(--s-2) 0 var(--s-4); }
 .doc :deep(th), .doc :deep(td) { padding: 8px 12px; border: 1px solid var(--line); text-align: left; vertical-align: top; line-height: 1.6; }
 .doc :deep(th) { background: var(--surface-2); font-weight: 600; }
-/* 第一欄是短標籤（項目／端點），別讓它被長的第二欄擠成一個字一行 */
+/*
+ * 欄寬：短欄（項目／憑證／誰呼叫）不能被長的說明欄擠成一個字一行，所以每格給個最小寬度；
+ * 第一欄的文字標籤不換行，但裡面的路徑 code 要允許在任意處折行，不然四欄表的第一欄會撐到把別欄擠扁。
+ */
+.doc :deep(td), .doc :deep(th) { min-width: 5.5em; }
 .doc :deep(td:first-child), .doc :deep(th:first-child) { white-space: nowrap; }
+.doc :deep(td:first-child code) { white-space: normal; overflow-wrap: anywhere; }
 .doc :deep(tr:nth-child(even) td) { background: color-mix(in srgb, var(--surface-2) 45%, transparent); }
 
 @media (max-width: 900px) {
