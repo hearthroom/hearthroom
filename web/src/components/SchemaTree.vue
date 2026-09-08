@@ -93,7 +93,8 @@ const isObject = computed(() => fields.value.length > 0);
 <style scoped>
 .st { font-size: 13.5px; }
 .st__desc { margin: 0 0 8px; color: var(--text-2); }
-.st__table { width: 100%; border-collapse: collapse; }
+.st__table { width: 100%; border-collapse: collapse; table-layout: auto; }
+.st__table code { white-space: nowrap; }
 .st__table th { text-align: left; font-weight: 600; padding: 6px 10px; border-bottom: 1px solid var(--line); background: var(--surface-2); font-size: 12.5px; }
 .st__table td { padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: top; line-height: 1.55; }
 .st__name { white-space: nowrap; }

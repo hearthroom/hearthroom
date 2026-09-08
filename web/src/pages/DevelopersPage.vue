@@ -75,7 +75,7 @@ onBeforeUnmount(() => observer?.disconnect());
       </aside>
 
       <div ref="article" class="doc-body">
-        <article class="doc" v-html="rendered.html" />
+        <article class="doc doc--md" v-html="rendered.html" />
         <section class="doc doc--ref">
           <h2 id="api-reference">API reference</h2>
           <p class="subtle">{{ doc.info.title }} · version {{ doc.info.version }} · {{ Object.keys(doc.paths).length }} paths. Click an endpoint to expand it. <code>*</code> marks a required field.</p>
@@ -107,7 +107,7 @@ onBeforeUnmount(() => observer?.disconnect());
 .toc__item--on > .toc__link { color: var(--accent-text); border-left-color: var(--accent); font-weight: 600; }
 .toc__source { display: block; margin-top: var(--s-4); padding-left: 12px; }
 
-/* ---- 正文 ---- */
+/* ---- 正文（表格樣式只給 Markdown 總覽：參考區的欄位表自己排版，display:block 會把它壓成一字一行） ---- */
 .doc-body { min-width: 0; }
 .doc { max-width: 80ch; font-size: 15px; }
 .doc--ref { max-width: none; margin-top: var(--s-6); }
@@ -126,12 +126,12 @@ onBeforeUnmount(() => observer?.disconnect());
 .doc :deep(pre code) { padding: 0; background: none; box-shadow: none; font-size: inherit; }
 .doc :deep(blockquote) { margin: 0 0 var(--s-3); padding: var(--s-2) var(--s-4); border-left: 3px solid var(--accent); background: var(--accent-tint); border-radius: 0 var(--r-sm) var(--r-sm) 0; color: var(--text-2); }
 .doc :deep(hr) { border: 0; border-top: 1px solid var(--line); margin: var(--s-6) 0; }
-.doc :deep(table) { display: block; overflow-x: auto; border-collapse: collapse; width: 100%; font-size: 13.5px; margin: var(--s-2) 0 var(--s-4); }
-.doc :deep(th), .doc :deep(td) { padding: 8px 12px; border: 1px solid var(--line); text-align: left; vertical-align: top; line-height: 1.6; }
-.doc :deep(th) { background: var(--surface-2); font-weight: 600; }
-.doc :deep(td:first-child), .doc :deep(th:first-child) { white-space: nowrap; }
-.doc :deep(td:first-child code) { white-space: normal; overflow-wrap: anywhere; }
-.doc :deep(tr:nth-child(even) td) { background: color-mix(in srgb, var(--surface-2) 45%, transparent); }
+.doc--md :deep(table) { display: block; overflow-x: auto; border-collapse: collapse; width: 100%; font-size: 13.5px; margin: var(--s-2) 0 var(--s-4); }
+.doc--md :deep(th), .doc--md :deep(td) { padding: 8px 12px; border: 1px solid var(--line); text-align: left; vertical-align: top; line-height: 1.6; }
+.doc--md :deep(th) { background: var(--surface-2); font-weight: 600; }
+.doc--md :deep(td:first-child), .doc--md :deep(th:first-child) { white-space: nowrap; }
+.doc--md :deep(td:first-child code) { white-space: normal; overflow-wrap: anywhere; }
+.doc--md :deep(tr:nth-child(even) td) { background: color-mix(in srgb, var(--surface-2) 45%, transparent); }
 
 @media (max-width: 900px) {
   .doc-layout { grid-template-columns: minmax(0, 1fr); gap: var(--s-4); }
