@@ -51,6 +51,8 @@ const PLAN_LABEL: Record<string, string> = { unlimited: "wallet.plan.unlimited",
       <RouterLink :to="lp('/resources')" class="menu__item" role="menuitem">{{ $t("nav.resources") }}</RouterLink>
       <RouterLink :to="lp('/wallet')" class="menu__item" role="menuitem">{{ $t("nav.wallet") }}</RouterLink>
       <RouterLink :to="lp('/settings')" class="menu__item" role="menuitem">{{ $t("nav.settings") }}</RouterLink>
+      <!-- 開發者文件（相容供應商協議）：頁尾有，但登入的作者從頭像選單也走得到 -->
+      <RouterLink :to="lp('/developers')" class="menu__item" role="menuitem">{{ $t("footer.developers") }}</RouterLink>
       <div class="menu__rule" />
       <button class="menu__item" role="menuitem" @click="track('logout'); session.logout()">{{ $t("nav.logout") }}</button>
     </div>
