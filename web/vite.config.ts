@@ -16,6 +16,7 @@ export default defineConfig({
       { find: "stage-canvas/rule-engine", replacement: fileURLToPath(new URL("../stage/src/pages/canvas/canvas-rule-engine.ts", import.meta.url)) },
       { find: "stage-canvas/style-scope", replacement: fileURLToPath(new URL("../stage/src/pages/canvas/canvas-style-scope.ts", import.meta.url)) },
       { find: "stage-canvas/platform-defaults", replacement: fileURLToPath(new URL("../stage/src/pages/canvas/canvas-platform-defaults.ts", import.meta.url)) },
+      { find: "stage-canvas/memory", replacement: fileURLToPath(new URL("../stage/src/pages/canvas/canvas-memory.ts", import.meta.url)) },
       { find: "stage-canvas/components", replacement: fileURLToPath(new URL("../stage/src/pages/canvas/components", import.meta.url)) },
       {
         find: /^@\/(.*)$/,

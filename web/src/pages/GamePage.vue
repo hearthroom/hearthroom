@@ -33,6 +33,10 @@ import CanvasModelPanel from "stage-canvas/components/canvas-model-panel.vue";
 import CanvasPersona from "stage-canvas/components/canvas-persona.vue";
 import CanvasDirectives from "stage-canvas/components/canvas-directives.vue";
 import CanvasConversationList from "stage-canvas/components/canvas-conversation-list.vue";
+import CanvasNotepad from "stage-canvas/components/canvas-notepad.vue";
+import CanvasMemory from "stage-canvas/components/canvas-memory.vue";
+import { applyMemoryDeleteResponse, normalizeMemoryAtoms, type MemoryAtom } from "stage-canvas/memory";
+import * as np from "@/game/notepad-client";
 import { ensureStage, remergeStageMessages } from "@/lib/stage-host";
 import { addDirective, deleteDirective, fetchDirectives, fetchRoleSettings, saveRoleSettings, updateDirective, type Directive, type RoleSettings } from "@/game/settings-client";
 import { getCurrentInstance } from "vue";
@@ -83,7 +87,7 @@ const assisting = ref(false);
  * 舞台面板：模型／人設／長期指令／存檔。要 token 才開得起來（都是玩家自己的設定）。
  * 第一次開會把舞台套件裝進來（http、uni 替身、五語文案），跟 /play 同一條路。
  */
-type Sheet = "" | "model" | "persona" | "directives" | "archives";
+type Sheet = "" | "model" | "persona" | "directives" | "archives" | "notepad" | "memory";
 const sheet = ref<Sheet>("");
 const stageReady = ref(false);
 const instance = getCurrentInstance();
@@ -122,15 +126,138 @@ async function openSheet(which: Exclude<Sheet, "">) {
   }
   if (which === "directives") { if (!conversationId.value) await restore(token).catch(() => {}); void loadDirectives(); }
   if (which === "archives") void loadArchives(token);
+  if (which === "notepad") { if (!conversationId.value) await restore(token).catch(() => {}); void loadNotepad(); }
+  if (which === "memory") { if (!conversationId.value) await restore(token).catch(() => {}); void loadMemory(); }
   sheet.value = which;
   world?.lock(true, talking.value);
 }
-function closeSheet() {
+async function closeSheet() {
+  // 手帳有沒存的字：關掉前問一次（跟舞台同一句）
+  if (sheet.value === "notepad" && notepad.value.draft !== notepad.value.savedContent) {
+    const ok = await confirmDialog({ title: t("notepad.discardTitle"), message: "", confirmText: t("notepad.discardOk"), cancelText: t("notepad.keepEditing"), danger: true });
+    if (!ok) return;
+  }
   sheet.value = "";
   directivePendingDeleteId.value = "";
   if (!talking.value) world?.lock(false);
 }
 const openSettings = () => openSheet("model");
+
+// ── 手帳：只有玩家看得到的一份記錄，AI 每一輪都會讀。行為照舞台 canvas 那一份（載入失敗不給編輯入口、模板／分享碼／抄別段對話）
+const notepad = ref({
+  draft: "", savedContent: "", maxLength: 10000, discountThreshold: 2000, loading: false, loadFailed: false, saving: false,
+  templatesOpen: false, templates: [] as np.NotepadTemplate[], code: "", previewing: false, previewOpen: false, previewTitle: "", previewContent: "", pendingCode: "",
+  importing: false, shareOpen: false, shareCode: "", copyOpen: false, error: "",
+});
+const notepadSources = ref<np.NotepadSource[]>([]);
+const notepadCopyRows = computed(() => notepadSources.value.map((r) => ({ key: r.key, name: r.name })));
+const patchNotepad = (p: Partial<typeof notepad.value>) => { notepad.value = { ...notepad.value, ...p }; };
+const shareCodeError = (e: unknown) => (e instanceof np.ApiError && e.messageKey ? t(e.messageKey) : t("shareCode.errNotFound"));
+async function loadNotepad() {
+  const id = conversationId.value;
+  if (!id) { patchNotepad({ loading: false, loadFailed: false, draft: "" }); return; }
+  patchNotepad({ loading: true, loadFailed: false, error: "" });
+  try { const r = await np.fetchNotepad(UPSTREAM_API, sheetToken, locale.value, id); patchNotepad({ draft: r.content, savedContent: r.content, maxLength: r.maxLength, discountThreshold: r.discountThreshold, loading: false }); }
+  catch (e) { console.warn("[game] notepad load failed", e); patchNotepad({ loading: false, loadFailed: true }); }
+}
+async function onSaveNotepad() {
+  const id = conversationId.value; if (!id || notepad.value.saving) return;
+  patchNotepad({ saving: true, error: "" });
+  try { await np.saveNotepad(UPSTREAM_API, sheetToken, locale.value, id, notepad.value.draft); patchNotepad({ saving: false, savedContent: notepad.value.draft }); say(t("notepad.saved")); }
+  catch (e) { patchNotepad({ saving: false, error: e instanceof np.ApiError ? e.reason : t("notepad.saveFailed") }); }
+}
+async function loadNotepadTemplates() {
+  try { patchNotepad({ templates: await np.fetchTemplates(UPSTREAM_API, sheetToken, locale.value) }); }
+  catch { patchNotepad({ error: t("template.loadFailed") }); }
+}
+function onToggleNotepadTemplates() { const open = !notepad.value.templatesOpen; patchNotepad({ templatesOpen: open, copyOpen: false }); if (open) void loadNotepadTemplates(); }
+async function onApplyNotepadTemplate(templateId: string) {
+  try { patchNotepad({ draft: await np.fetchTemplate(UPSTREAM_API, sheetToken, locale.value, templateId), templatesOpen: false, error: "" }); }
+  catch { patchNotepad({ error: t("template.loadFailed") }); }
+}
+async function onSaveNotepadTemplate() {
+  const content = notepad.value.draft; if (!content.trim()) { patchNotepad({ error: t("template.titleInvalid") }); return; }
+  try { await np.saveTemplate(UPSTREAM_API, sheetToken, locale.value, role.value?.name || t("template.untitled"), content); patchNotepad({ error: "" }); say(t("template.saved")); void loadNotepadTemplates(); }
+  catch (e) { patchNotepad({ error: e instanceof np.ApiError ? e.reason : t("template.saveFailed") }); }
+}
+async function onDeleteNotepadTemplate(templateId: string) {
+  try { await np.deleteTemplate(UPSTREAM_API, sheetToken, locale.value, templateId); void loadNotepadTemplates(); }
+  catch { patchNotepad({ error: t("template.loadFailed") }); }
+}
+async function onShareNotepadTemplate(templateId: string) {
+  try { const code = await np.shareTemplate(UPSTREAM_API, sheetToken, locale.value, templateId); if (!code) throw new Error("no code"); patchNotepad({ shareOpen: true, previewOpen: false, shareCode: code, error: "" }); }
+  catch { patchNotepad({ error: t("template.shareFailed") }); }
+}
+async function onRevokeShare() {
+  const code = notepad.value.shareCode; if (!code) return;
+  try { await np.revokeShare(UPSTREAM_API, sheetToken, locale.value, code); patchNotepad({ shareOpen: false, shareCode: "" }); say(t("template.revoked")); }
+  catch { patchNotepad({ error: t("template.shareFailed") }); }
+}
+async function onCopyShareCode() {
+  const code = notepad.value.shareCode; if (!code) return;
+  try { await navigator.clipboard.writeText(code); say(t("template.copied")); } catch { /* 沒有剪貼簿權限：碼本身就顯示在面板上，玩家可以自己選取 */ }
+}
+async function onPreviewShareCode(canonical: string) {
+  if (!canonical || notepad.value.previewing) return;
+  patchNotepad({ previewing: true, error: "" });
+  try { const r = await np.previewShareCode(UPSTREAM_API, sheetToken, locale.value, canonical); patchNotepad({ previewing: false, previewOpen: true, shareOpen: false, previewTitle: r.title, previewContent: r.content, pendingCode: canonical }); }
+  catch (e) { patchNotepad({ previewing: false, error: shareCodeError(e) }); }
+}
+async function onConfirmShareImport() {
+  const code = notepad.value.pendingCode; if (!code || notepad.value.importing) return;
+  patchNotepad({ importing: true, error: "" });
+  try { await np.importShareCode(UPSTREAM_API, sheetToken, locale.value, code); patchNotepad({ importing: false, previewOpen: false, pendingCode: "", code: "" }); say(t("template.imported")); void loadNotepadTemplates(); }
+  catch (e) { patchNotepad({ importing: false, error: shareCodeError(e) }); }
+}
+function onToggleNotepadCopy() {
+  const open = !notepad.value.copyOpen; patchNotepad({ copyOpen: open, templatesOpen: false });
+  if (open && !notepadSources.value.length) np.fetchNotepadSources(UPSTREAM_API, sheetToken, locale.value, roleId.value).then((rows) => { notepadSources.value = rows; }).catch((e) => console.warn("[game] notepad sources failed", e));
+}
+async function onCopyNotepadFrom(key: string) {
+  const src = notepadSources.value.find((r) => r.key === key); if (!src) { patchNotepad({ error: t("notepad.loadFailed") }); return; }
+  try { const r = await np.fetchNotepad(UPSTREAM_API, sheetToken, locale.value, src.conversationId); patchNotepad({ draft: r.content, copyOpen: false, error: "" }); }
+  catch { patchNotepad({ error: t("notepad.loadFailed") }); }
+}
+const notepadLabels = computed(() => ({
+  title: t("notepad.title"), subtitle: t("notepad.subtitle"), close: t("main.cancel"), save: t("notepad.save"), loading: t("canvas.panel.loading"), loadFailed: t("notepad.loadFailed"), retry: t("notepad.retry"),
+  placeholder: t("notepad.placeholder"), waitingConversation: t("directive.waitingConversation"),
+  costNotice: t("notepad.costNotice", { threshold: notepad.value.discountThreshold }), overBy: t("notepad.overBy", { count: Math.max(0, notepad.value.draft.length - notepad.value.maxLength) }),
+  templateEntry: t("template.entry"), templateApply: t("template.apply"), templateEmpty: t("template.empty"), templateUntitled: t("template.untitled"), templateSaveCurrent: t("template.saveCurrent"),
+  templateShare: t("template.share"), templateDelete: t("template.delete"), templateDeleteConfirm: t("template.deleteConfirm"), codePlaceholder: t("template.codePlaceholder"), codePreview: t("template.preview"),
+  codeMalformed: t("shareCode.errMalformed"), codeChecksum: t("shareCode.errChecksum"), cancel: t("template.cancel"), importToLibrary: t("template.importToLibrary"), shareHint: t("template.shareHint"),
+  revoke: t("template.revoke"), copyCode: t("template.copyCode"), done: t("canvas.archive.done"), copyFrom: t("notepad.copyFrom"), copyEmpty: t("notepad.copyEmpty"), copyPick: t("template.apply"),
+  copyOverwrite: t("notepad.copyOverwriteContent"), copyOverwriteOk: t("notepad.copyOverwriteOk"), untitled: t("notepad.untitled"), discardTitle: t("notepad.discardTitle"), discardOk: t("notepad.discardOk"), keepEditing: t("notepad.keepEditing"),
+}));
+
+// ── 記憶：背景整理出來的永久記憶（這一局的），只能看與刪
+const memory = ref({ atoms: [] as MemoryAtom[], loading: false, loadFailed: false, expandedIds: {} as Record<string, boolean>, deletingId: "", conversationId: "" });
+async function loadMemory() {
+  const id = conversationId.value;
+  if (memory.value.conversationId !== id) memory.value = { ...memory.value, atoms: [], expandedIds: {}, deletingId: "", loadFailed: false, conversationId: id };
+  if (!id) { memory.value = { ...memory.value, loading: false }; return; }
+  memory.value = { ...memory.value, loading: true, loadFailed: false };
+  try { const data = await np.fetchMemoryAtoms(UPSTREAM_API, sheetToken, locale.value, id); if (conversationId.value !== id) return; memory.value = { ...memory.value, atoms: normalizeMemoryAtoms(data), loading: false }; }
+  catch (e) { console.warn("[game] memory load failed", e); memory.value = { ...memory.value, loading: false, loadFailed: true }; }
+}
+function onToggleMemoryExpand(atomId: string) { memory.value = { ...memory.value, expandedIds: { ...memory.value.expandedIds, [atomId]: !memory.value.expandedIds[atomId] } }; }
+async function onDeleteMemoryAtom(atomId: string) {
+  const id = conversationId.value; if (!id || !atomId || memory.value.deletingId) return;
+  const ok = await confirmDialog({ title: t("main.delete"), message: t("chat.memoryDeleteConfirm"), confirmText: t("main.delete"), cancelText: t("main.cancel"), danger: true });
+  if (!ok) return;
+  memory.value = { ...memory.value, deletingId: atomId };
+  try {
+    const data = await np.deleteMemoryAtom(UPSTREAM_API, sheetToken, locale.value, id, atomId);
+    const atoms = applyMemoryDeleteResponse(memory.value.atoms, atomId, { statusCode: 200, data });
+    const expandedIds = { ...memory.value.expandedIds }; delete expandedIds[atomId];
+    memory.value = { ...memory.value, atoms, expandedIds }; say(t("chat.memoryDeleted"));
+  } catch (e) { console.warn("[game] memory delete failed", e); say(t("chat.memoryDeleteFailed")); }
+  finally { memory.value = { ...memory.value, deletingId: "" }; }
+}
+const memoryLabels = computed(() => ({
+  title: t("chat.permanentMemory"), subtitle: t("chat.memoryTip"), close: t("main.cancel"), loading: t("canvas.panel.loading"), loadFailed: t("notepad.loadFailed"), retry: t("notepad.retry"),
+  empty: t("chat.memoryEmpty"), delete: t("main.delete"), expand: t("chat.memoryExpand"), collapse: t("chat.memoryCollapse"), sourceAgent: t("chat.memorySourceAgent"), sourceAuto: t("chat.memorySourceAuto"),
+  time: { now: t("chat.memoryTimeNow"), min: t("chat.memoryTimeMin"), hour: t("chat.memoryTimeHour"), day: t("chat.memoryTimeDay"), month: t("chat.memoryTimeMonth") },
+}));
 
 /** 模型選單按下確認：模型、線路、上下文檔位、思考深度一次交回來 */
 async function onApplyModel(payload: Record<string, unknown>) {
@@ -671,6 +798,21 @@ function installTestHooks() {
           <div class="btn" role="button" tabindex="0" @click="archiveBusy || archives.length >= archiveLimit || (closeSheet(), restart())">{{ $t("game.newChat") }}</div>
         </div>
       </CanvasPopup>
+      <CanvasPopup :open="sheet === 'notepad'" :title="$t('notepad.title')" :close-label="$t('main.cancel')" @close="closeSheet">
+        <CanvasNotepad v-if="sheet === 'notepad'" :draft="notepad.draft" :saved-content="notepad.savedContent" :max-length="notepad.maxLength" :discount-threshold="notepad.discountThreshold"
+                       :loading="notepad.loading" :load-failed="notepad.loadFailed" :saving="notepad.saving" :has-conversation="!!conversationId"
+                       :templates-open="notepad.templatesOpen" :templates="notepad.templates" :code="notepad.code" :previewing="notepad.previewing" :preview-open="notepad.previewOpen"
+                       :preview-title="notepad.previewTitle" :preview-content="notepad.previewContent" :importing="notepad.importing" :share-open="notepad.shareOpen" :share-code="notepad.shareCode"
+                       :copy-open="notepad.copyOpen" :conversations="notepadCopyRows" :error="notepad.error" :labels="notepadLabels"
+                       @save="onSaveNotepad" @retry="loadNotepad" @toggle-templates="onToggleNotepadTemplates" @apply-template="onApplyNotepadTemplate" @save-template="onSaveNotepadTemplate"
+                       @update:code="patchNotepad({ code: $event })" @preview-code="onPreviewShareCode" @cancel-preview="patchNotepad({ previewOpen: false, pendingCode: '' })" @confirm-import="onConfirmShareImport"
+                       @share-template="onShareNotepadTemplate" @delete-template="onDeleteNotepadTemplate" @copy-share-code="onCopyShareCode" @revoke-share="onRevokeShare" @close-share="patchNotepad({ shareOpen: false })"
+                       @toggle-copy="onToggleNotepadCopy" @copy-from="onCopyNotepadFrom" @close="closeSheet" @update:draft="patchNotepad({ draft: $event })" />
+      </CanvasPopup>
+      <CanvasPopup :open="sheet === 'memory'" :title="memoryLabels.title" :close-label="$t('main.cancel')" @close="closeSheet">
+        <CanvasMemory v-if="sheet === 'memory'" :atoms="memory.atoms" :loading="memory.loading" :load-failed="memory.loadFailed" :expanded-ids="memory.expandedIds" :deleting-id="memory.deletingId" :labels="memoryLabels"
+                      @toggle-expand="onToggleMemoryExpand" @delete="onDeleteMemoryAtom" @retry="loadMemory" @close="closeSheet" />
+      </CanvasPopup>
     </div>
 
     <p v-if="loadError" class="game__fatal" role="alert">{{ loadError }}</p>
@@ -696,6 +838,8 @@ function installTestHooks() {
           <button type="button" class="btn btn--ghost btn--sm" :disabled="streaming" @click="openSheet('model')">{{ $t("game.settings.model") }}</button>
           <button type="button" class="btn btn--ghost btn--sm" :disabled="streaming" @click="openSheet('persona')">{{ $t("game.settings.persona") }}</button>
           <button type="button" class="btn btn--ghost btn--sm" :disabled="streaming" @click="openSheet('directives')">{{ $t("game.settings.directives") }}</button>
+          <button v-if="signedIn" type="button" class="btn btn--ghost btn--sm" :disabled="streaming" @click="openSheet('notepad')">{{ $t("notepad.title") }}</button>
+          <button v-if="signedIn" type="button" class="btn btn--ghost btn--sm" :disabled="streaming" @click="openSheet('memory')">{{ $t("chat.permanentMemory") }}</button>
           <button type="button" class="btn btn--ghost btn--sm panel__close" :disabled="streaming" @click="closeTalk">{{ $t("game.close") }}</button>
         </div>
       </div>

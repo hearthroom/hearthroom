@@ -18,6 +18,7 @@
       "vite/client"
     ],
     "paths": {
+      "stage-canvas/memory": ["../stage/src/pages/canvas/canvas-memory.ts"],
       "@/*": [
         "./src/*"
       ]
