@@ -952,15 +952,22 @@ export async function deleteLibraryImages(imageIds: number[], token: string): Pr
 
 // ---- 遊戲模式：作者替卡存的世界配置（本站 D1，形狀見 shared/game-spec.ts） ------------------
 
-import type { GameSpecJson } from "../../../shared/game-spec";
+import { validateGameSpec, type GameSpecJson } from "../../../shared/game-spec";
 
 export interface GameSpecRecord { roleId: string; spec: GameSpecJson; updatedAt: number }
 
-/** 沒存過回 null（404），不當錯誤。 */
+/**
+ * 沒存過回 null（404），不當錯誤。
+ * 讀回來一律再過一次驗證器：庫裡存的可能是作者只寫了幾層的稀疏配置（遷移進來的那兩筆就是），
+ * 頁面要的是補滿預設的完整形狀；壞掉的配置當成沒有配置，不讓整個遊戲頁打不開。
+ */
 export async function fetchGameSpec(roleId: string): Promise<GameSpecRecord | null> {
   const res = await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(roleId)}/game`, { headers: from() });
   if (res.status === 404) return null;
-  return json<GameSpecRecord>(res);
+  const rec = await json<GameSpecRecord>(res);
+  const v = validateGameSpec(rec.spec);
+  if (!v.ok) { console.warn("[game] stored config rejected by validator", v.errors); return null; }
+  return { ...rec, spec: v.spec };
 }
 
 export async function saveGameSpec(roleId: string, spec: GameSpecJson, token: string): Promise<GameSpecRecord> {
