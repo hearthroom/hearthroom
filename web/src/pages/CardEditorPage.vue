@@ -45,6 +45,7 @@ import {
 } from "@/lib/api";
 import { emptyRuleSet, ruleSetFromAuthorAsset, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, type RegexRuleSet } from "@/lib/regex-rules";
 import RegexRulesEditor from "@/components/editor/RegexRulesEditor.vue";
+import GameWorldEditor from "@/components/editor/GameWorldEditor.vue";
 import ChatTestPanel from "@/components/editor/ChatTestPanel.vue";
 import ResourcePanel from "@/components/editor/ResourcePanel.vue";
 import {
@@ -68,7 +69,7 @@ import { useSession } from "@/lib/session";
 import { confirmDialog } from "@/lib/confirm";
 import { track } from "@/lib/track";
 import FieldText from "@/components/editor/FieldText.vue";
-import { validateGameSpec } from "../../../shared/game-spec";
+import { validateGameSpec, type GameSpecJson } from "../../../shared/game-spec";
 import { specTemplateFor } from "@/game/specs";
 import { parseTurn } from "@/game/zz-parse";
 import ListEditor from "@/components/editor/ListEditor.vue";
@@ -200,6 +201,12 @@ const gameDirty = computed(() => gameText.value !== gameOriginal.value || gameEn
 /** 開場白裡 zzroles 的角色名：範本要把他們都擺上台 */
 const gameNames = computed(() => parseTurn(draft.value.roleWelcome || "").roles.map((r) => r.name));
 const gameProtocolMissing = computed(() => !/<zzroles>/.test(draft.value.roleWelcome || ""));
+// 世界編輯器（表單）跟底下的 JSON 是同一份：開編輯器時把 JSON 解出來給它，按完成再寫回 JSON
+const gameOpen = ref(false);
+const gameShowJson = ref(false);
+const gameSpecParsed = computed(() => { if (!gameText.value.trim()) return null; const v = validateGameSpec(gameText.value); return v.ok ? v.spec : null; });
+const gameNpcCount = computed(() => gameSpecParsed.value?.npcs.length ?? 0);
+function onGameEdited(spec: GameSpecJson) { gameText.value = JSON.stringify({ ...spec, enabled: gameEnabled.value }, null, 2); gameErrors.value = []; }
 
 async function loadGameSpec() {
   try {
@@ -1203,20 +1210,25 @@ async function exportCard(format: "png" | "json") {
             <input v-model="gameEnabled" type="checkbox" />
             <span>{{ $t("editor.game.enable") }}</span>
           </label>
-          <div class="field">
-            <label for="f-game">{{ $t("editor.game.json") }}</label>
-            <textarea id="f-game" v-model="gameText" class="input mono" rows="18" spellcheck="false"
-                      style="min-height: calc(18 * 1.5em + 26px)" @blur="gameCheck" />
-            <span class="field__foot"><span class="subtle">{{ $t("editor.game.hint") }}</span></span>
+          <div class="rxbar">
+            <p class="rxbar__hint">{{ $t("editor.game.hint") }}</p>
+            <div class="rxbar__acts">
+              <button type="button" class="btn btn--sm btn--primary" :disabled="Boolean(gameText.trim()) && !gameSpecParsed" @click="gameOpen = true">
+                {{ $t("editor.game.open") }}
+                <span v-if="gameNpcCount" class="chip">{{ gameNpcCount }}</span>
+              </button>
+              <button type="button" class="btn btn--sm" @click="gameUseTemplate">{{ $t("editor.game.template") }}</button>
+              <button type="button" class="btn btn--sm" :disabled="!gameText.trim()" @click="gameText = ''; gameErrors = []">{{ $t("editor.game.clear") }}</button>
+              <a v-if="!isNew" class="btn btn--sm" :href="lp(`/game/${roleId}`)" target="_blank" rel="noopener">{{ $t("editor.game.play") }}</a>
+            </div>
           </div>
+          <details class="game-json" :open="gameShowJson || (Boolean(gameText.trim()) && !gameSpecParsed)" @toggle="gameShowJson = ($event.target as HTMLDetailsElement).open">
+            <summary class="subtle">{{ $t("editor.game.json") }}</summary>
+            <textarea id="f-game" v-model="gameText" class="input mono" rows="14" spellcheck="false" @blur="gameCheck" />
+          </details>
           <ul v-if="gameErrors.length" class="notice notice--error game-errors" role="alert">
             <li v-for="e in gameErrors" :key="e">{{ e }}</li>
           </ul>
-          <div class="game-actions">
-            <button type="button" class="btn" @click="gameUseTemplate">{{ $t("editor.game.template") }}</button>
-            <button type="button" class="btn" :disabled="!gameText.trim()" @click="gameText = ''; gameErrors = []">{{ $t("editor.game.clear") }}</button>
-            <a v-if="!isNew" class="btn" :href="lp(`/game/${roleId}`)" target="_blank" rel="noopener">{{ $t("editor.game.play") }}</a>
-          </div>
         </section>
 
         <section v-show="section === 'publish'" class="pane">
@@ -1347,6 +1359,7 @@ async function exportCard(format: "png" | "json") {
 
     <div class="toast" role="status" :hidden="!toast">{{ toast }}</div>
     <RegexRulesEditor v-if="regexOpen" v-model="regexSet" @close="regexOpen = false" />
+    <GameWorldEditor v-if="gameOpen" :model-value="gameSpecParsed" :names="gameNames" :role-id="roleId" @update:model-value="onGameEdited" @close="gameOpen = false" />
   </div>
 </template>
 
@@ -1404,7 +1417,8 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .pane :deep(textarea.input) { field-sizing: content; max-height: 70vh; }
 .pane textarea.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.5; }
 .game-toggle { display: inline-flex; align-items: center; gap: var(--s-2); font-size: 14px; }
-.game-actions { display: flex; gap: var(--s-2); flex-wrap: wrap; }
+.game-json summary { cursor: pointer; font-size: 13px; margin-bottom: var(--s-2); }
+.game-json .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.55; min-height: 220px; }
 .game-errors { margin: 0; padding-left: var(--s-5); display: grid; gap: 2px; font-size: 13px; }
 .pane :deep(.field) { gap: 6px; }
 .pane :deep(.field > label) { line-height: 1.3; }
