@@ -473,8 +473,9 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     // 不建空書是對的，但那條空條目要一起放掉——留著的話它跟原始清單永遠對不上，
     // 儲存鍵永遠亮著，這張卡再也送不出審核，而畫面上完全看不出是為什麼
     expect(api.createWorldbook).not.toHaveBeenCalled();
-    expect(root.querySelector(".rail__state")?.textContent?.trim()).not.toContain("未儲存");
-    const saveBtn = [...root.querySelectorAll<HTMLButtonElement>(".rail__acts button")]
+    // 未存提示與儲存鍵搬到表單底下那條動作列了（右欄整條讓給對話測試的手機框）
+    expect(root.querySelector(".bar .subtle")?.textContent?.trim() ?? "").not.toContain("未儲存");
+    const saveBtn = [...root.querySelectorAll<HTMLButtonElement>(".bar button")]
       .find((b) => /儲存|保存/.test(b.textContent || ""))!;
     expect(saveBtn.disabled).toBe(true);
   });
@@ -495,8 +496,9 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
 
     // 存完之後基準要對得上，否則差分永遠成立、儲存鍵永遠亮著、
     // 而且每按一次儲存都白送一次 metadata
-    expect(root.querySelector(".rail__state")?.textContent?.trim()).not.toContain("未儲存");
-    const saveBtn = [...root.querySelectorAll<HTMLButtonElement>(".rail__acts button")]
+    // 未存提示與儲存鍵搬到表單底下那條動作列了（右欄整條讓給對話測試的手機框）
+    expect(root.querySelector(".bar .subtle")?.textContent?.trim() ?? "").not.toContain("未儲存");
+    const saveBtn = [...root.querySelectorAll<HTMLButtonElement>(".bar button")]
       .find((b) => /儲存|保存/.test(b.textContent || ""))!;
     expect(saveBtn.disabled).toBe(true);
   });
