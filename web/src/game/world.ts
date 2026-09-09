@@ -1,15 +1,16 @@
 /**
- * 3D 世界：three.js 場景、可操作的玩家、會閒逛的 NPC、日夜光照、地點傳送、對話鏡頭、小地圖。
+ * 3D 世界：three.js 場景、可操作的玩家、會閒逛的 NPC、光照預設、地點傳送、對話鏡頭、小地圖。
  *
  * 畫面走「動畫遊戲」的路：卡通著色（MeshToonMaterial + 三階漸層）、角色描邊（背面法線外擴）、
- * 光環與霓虹走 Bloom。世界從一份 WorldSpec 生出來（建築、樹、路燈、NPC 出生點、地點對照表），
- * 沒有外部模型：角色是程序化的 Q 版人偶（幾種髮型、裙子、頭頂光環），建築是白牆藍邊的方塊。
- * 這樣作者的「遊戲」只是一份資料，不需要美術資產也能跑起來；有模型時再往 NpcSpec 加。
+ * 光環與霓虹走 Bloom。世界從一份 WorldSpec 生出來：光照預設、地面、天空、建築、樹、路燈、擺設、
+ * NPC 外觀與出生點、鏡頭與移動參數，全部是資料（shared/game-spec v2）。這裡沒有題材知識——
+ * 「校園」只是 environment.kit === "campus" 時多長出來的一組程序化零件（道路、廣場、樹籬、全息終端）；
+ * 酒館、飛船、地牢靠 kit "none" + props 擺出來，不改程式。
  *
- * 邊界：這裡只管畫面與操作，不知道 AI、對話或卡片協定。頁面把狀態（好感、心情、目標、
- * 時間、地點、誰在說話）翻譯成這裡的方法呼叫；這裡把「靠近了誰」丟回去。
+ * 邊界：這裡只管畫面與操作，不知道 AI、對話或卡片協定。頁面把狀態（主數值、心情、目標、
+ * 光照、地點、誰在說話）翻譯成這裡的方法呼叫；這裡把「靠近了誰」丟回去。
  *
- * ponytail: 碰撞只有圓對建築 AABB 的推出；沒有尋路、沒有物理引擎；要更多再接。
+ * ponytail: 碰撞只有圓對 AABB 的推出；沒有尋路、沒有物理引擎；要更多再接。
  */
 import * as THREE from "three";
 import { CSS2DObject, CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
@@ -20,67 +21,50 @@ import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { GLTFLoader, type GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
+import type { Accessory, BuildingJson, EnvironmentSpec, LightPresetJson, LookJson, ModelJson, NpcSpec, NpcState, PropJson, WorldEvents, WorldSpec, XZ } from "./world-types";
 
-export type HaloShape = "hex" | "ring" | "arc";
-export type HairStyle = "short" | "long" | "twin" | "bob";
-export type Tint = "day" | "dusk" | "night";
+export type { Accessory, BuildingJson, EnvironmentSpec, LightPresetJson, LookJson, ModelJson, NpcSpec, NpcState, PlaceSpec, PropJson, WorldEvents, WorldSpec, XZ } from "./world-types";
 
-/** 生成的角色模型：GLB（含或不含動畫）＋各動作的 clip 名。沒給就用程序化人偶。 */
-export interface ModelSpec {
-  /** 模型本體：GLB，或 Tripo v1.0 綁骨輸出的 FBX（含網格＋骨架＋一段動畫）。FBX 動畫只能配 FBX 自己的骨架，所以有 FBX 動畫時本體也用 FBX */
-  url: string;
-  /** 目標身高（世界單位，人偶約 2.2） */
-  height?: number;
-  clips?: { idle?: string; walk?: string; talk?: string };
+type HaloShape = "hex" | "ring" | "arc";
+/**
+ * 模型規格＝配置的 ModelJson，外加 FBX 綁骨流程才用得到的三個欄位（配置驗證不會放行它們，
+ * 但 Tripo v1.0 的 FBX 路徑仍靠它們：FBX 動畫只能配 FBX 自己的骨架，貼圖從同任務的 GLB 搬）。
+ */
+type ModelSpec = ModelJson & {
   /** 額外動畫檔（一檔一個 clip）；本體是 FBX 時這些也要是同一綁骨任務輸出的 FBX */
   extra?: { name: string; url: string }[];
-  /** 本體是 FBX 時，PBR 貼圖從這個 GLB（同一個綁骨任務的 GLB）搬過來——FBX 匯出的材質只有 Phong 且常缺貼圖 */
+  /** 本體是 FBX 時，PBR 貼圖從這個 GLB 搬過來——FBX 匯出的材質只有 Phong 且常缺貼圖 */
   texturesFrom?: string;
   /** 本體自帶那段動畫的名字（FBX 一檔一段） */
   ownClip?: string;
-  /** 模型原生朝向相對 +z 的偏轉（弧度）。Tripo v1.0 綁骨的 FBX 面朝 +x，預設補 -90° */
-  yaw?: number;
-}
-export interface NpcSpec { name: string; color: string; hair: string; hairStyle?: HairStyle; halo: HaloShape; pos: [number, number]; face?: number; /** 閒逛半徑；0 = 站著不動 */ wander?: number; model?: ModelSpec }
-export interface PlaceSpec { key: string; match: RegExp; pos: [number, number]; label: string }
-export interface BuildingSpec { pos: [number, number]; size: [number, number, number]; color?: string; label?: string }
-export interface WorldSpec {
-  npcs: NpcSpec[];
-  places: PlaceSpec[];
-  buildings: BuildingSpec[];
-  trees: [number, number][];
-  lamps: [number, number][];
-  /** 玩家出生點 */
-  spawn: [number, number];
-  /** 玩家的生成模型；沒給就用程序化人偶 */
-  player?: ModelSpec;
-  /** 地平線全景板的圖；沒給就只有漸層穹頂 */
-  sky?: string;
-  /** 音效網址表（鍵見 shared/game-spec.ts 的 AudioKey）；頁面交給音訊管理器，世界層不用 */
-  audio?: Partial<Record<string, string>>;
-}
-
-export interface WorldEvents {
-  /** 玩家走進／離開某個 NPC 的對話距離（null = 離開） */
-  onNear(name: string | null): void;
-  /** 玩家每走一步（配腳步聲） */
-  onFootstep?(): void;
-}
-
-export interface NpcState { affection?: number | null; mood?: string; quest?: boolean }
+};
 
 const TALK_RANGE = 2.6;
-const SPEED = 4;
 const NPC_SPEED = 1.4;
 /** 生成模型的走路 clip 在 timeScale=1 時大約前進 1.6 單位/秒（Tripo preset 步幅估值）；照實際速度縮放，腳才不會滑 */
 const WALK_CLIP_SPEED = 1.6;
 const PLAYER_R = 0.55;
+/** 太陽強度到這個值就當「全日光」：雲、地平線板、玩家補光都用它換算白天程度 */
+const DAYLIGHT_SUN = 2.6;
+const WHITE = new THREE.Color(0xffffff);
 
-const TINTS: Record<Tint, { skyTop: number; skyBottom: number; ground: number; sun: number; sunI: number; sunPos: [number, number, number]; hemi: number; fog: number; lamp: number; bloom: number }> = {
-  day: { skyTop: 0x2f6fe0, skyBottom: 0xd6e9ff, ground: 0xb3cbdf, sun: 0xfff1d6, sunI: 2.6, sunPos: [22, 34, 10], hemi: 0.95, fog: 0xc8dcf6, lamp: 0.1, bloom: 0.18 },
-  dusk: { skyTop: 0x3b2470, skyBottom: 0xff9e66, ground: 0xc4a494, sun: 0xff9a55, sunI: 1.7, sunPos: [-30, 9, 6], hemi: 0.5, fog: 0xe6a58a, lamp: 0.8, bloom: 0.32 },
-  night: { skyTop: 0x03061a, skyBottom: 0x1a2550, ground: 0x2a3350, sun: 0x8fa8ff, sunI: 0.5, sunPos: [-10, 26, -16], hemi: 0.22, fog: 0x0f1838, lamp: 1.1, bloom: 0.42 },
-};
+/** 配置裡的顏色是 CSS 字串；three 只認逗號版的 hsl()/rgb()，空白分隔的先轉一下 */
+function col(s: string | undefined, fallback: THREE.ColorRepresentation = 0xffffff): THREE.Color {
+  if (!s) return new THREE.Color(fallback);
+  const m = /^(hsla?|rgba?)\(([^)]*)\)$/i.exec(s.trim());
+  if (m && !m[2].includes(",")) return new THREE.Color(`${m[1]}(${m[2].trim().split("/")[0].trim().split(/\s+/).join(", ")})`);
+  return new THREE.Color(s);
+}
+/** 0（夜）..1（白天）：預設的太陽強度相對全日光 */
+const daylight = (p: LightPresetJson) => THREE.MathUtils.clamp(p.sunIntensity / DAYLIGHT_SUN, 0, 1);
+/** 雲與地平線板的色調：白天是白的，越暗越貼近天空底色 */
+const hazeColor = (p: LightPresetJson) => col(p.skyBottom).lerp(WHITE, daylight(p));
+/** 建築飾邊（窗帶、邊線、門、雨棚）從牆色推：淺牆壓深、深牆提亮，並加飽和；灰牆保持無彩 */
+function accentOf(c: THREE.Color): THREE.Color {
+  const hsl = { h: 0, s: 0, l: 0 }; c.getHSL(hsl);
+  const s = hsl.s < 0.05 ? 0 : Math.min(1, hsl.s + 0.4);
+  return new THREE.Color().setHSL(hsl.h, s, hsl.l > 0.5 ? Math.max(0.2, hsl.l - 0.3) : Math.min(0.8, hsl.l + 0.3));
+}
 
 // 三階漸層：卡通著色的明暗分界
 const TOON_GRADIENT = (() => {
@@ -154,7 +138,8 @@ function stripRootMotion(clip: THREE.AnimationClip) {
  * 載入生成的角色模型，包成跟人偶同介面的 Figure：縮到目標身高、腳踩 y=0、面向 +z、
  * 光環照舊程序化掛在頭頂。載入失敗回 null，呼叫端退回人偶。
  */
-async function loadModelFigure(spec: ModelSpec, color: string, halo: HaloShape | null): Promise<Figure | null> {
+async function loadModelFigure(spec: ModelSpec, color: string, accessory: Accessory): Promise<Figure | null> {
+  const halo = haloOf(accessory);
   try {
     const loader = new GLTFLoader();
     const fbxLoader = new FBXLoader();
@@ -255,35 +240,36 @@ const geo = <T extends THREE.BufferGeometry>(key: string, make: () => T): T => {
   return g;
 };
 
-function figure(color: string, hair: string, style: HairStyle, halo: HaloShape | null, uniform: boolean): Figure {
+const haloOf = (a: Accessory): HaloShape | null => (a === "none" ? null : (a.slice(5) as HaloShape));
+
+function figure(color: string, look: LookJson, accessory: Accessory): Figure {
   const g = new THREE.Group();
-  const skin = toon(0xffe6d6);
-  const cloth = toon(new THREE.Color(color));
-  const white = toon(0xf7f9ff);
-  const dark = toon(0x2a2f48);
-  const hairMat = toon(new THREE.Color(hair));
+  const halo = haloOf(accessory);
+  const skin = toon(col(look.skin, 0xffe6d6));
+  const top = toon(col(look.top, 0xf7f9ff));
+  // 沒指定下身：裙子用角色主色、腿露膚色（制服感）；指定了就腿與裙同色（褲裝／長袍）
+  const bottom = toon(look.bottom ? col(look.bottom) : col(color));
+  const legMat = look.bottom ? bottom : skin;
+  const accent = toon(col(look.accent, 0xc9223f));
+  const shoeMat = toon(0x2a2f48);
+  const hairMat = toon(col(look.hair, 0x3a2a22));
   const legs: THREE.Mesh[] = [];
   for (const x of [-0.16, 0.16]) {
-    const leg = plain(geo(`CapsuleGeometry:0.12, 0.38, 4, 10`, () => new THREE.CapsuleGeometry(0.12, 0.38, 4, 10)), uniform ? skin : dark);
+    const leg = plain(geo(`CapsuleGeometry:0.12, 0.38, 4, 10`, () => new THREE.CapsuleGeometry(0.12, 0.38, 4, 10)), legMat);
     leg.position.set(x, 0.34, 0); g.add(leg); legs.push(leg);
-    const shoe = plain(geo(`SphereGeometry:0.15, 10, 8`, () => new THREE.SphereGeometry(0.15, 10, 8)), dark);
+    const shoe = plain(geo(`SphereGeometry:0.15, 10, 8`, () => new THREE.SphereGeometry(0.15, 10, 8)), shoeMat);
     shoe.position.set(x, 0.1, 0.04); shoe.scale.set(1, 0.7, 1.3); g.add(shoe);
   }
-  // 身體：制服上衣（白）＋ 領巾／裙子（角色色）
-  const body = outlined(geo(`CapsuleGeometry:0.34, 0.46, 6, 14`, () => new THREE.CapsuleGeometry(0.34, 0.46, 6, 14)), uniform ? white : cloth);
+  // 身體：上衣 ＋ 裙襬 ＋ 領巾
+  const body = outlined(geo(`CapsuleGeometry:0.34, 0.46, 6, 14`, () => new THREE.CapsuleGeometry(0.34, 0.46, 6, 14)), top);
   body.position.y = 0.98; g.add(body);
-  if (uniform) {
-    const skirt = outlined(geo(`ConeGeometry:0.52, 0.46, 18, 1, false`, () => new THREE.ConeGeometry(0.52, 0.46, 18, 1, false)), cloth, 1.04);
-    skirt.position.y = 0.72; g.add(skirt);
-    const collar = plain(geo(`ConeGeometry:0.2, 0.28, 3`, () => new THREE.ConeGeometry(0.2, 0.28, 3)), cloth);
-    collar.position.set(0, 1.28, 0.3); collar.rotation.x = Math.PI; g.add(collar);
-  } else {
-    const tie = plain(geo(`BoxGeometry:0.08, 0.34, 0.04`, () => new THREE.BoxGeometry(0.08, 0.34, 0.04)), toon(0xc9223f));
-    tie.position.set(0, 1.12, 0.36); g.add(tie);
-  }
+  const skirt = outlined(geo(`ConeGeometry:0.52, 0.46, 18, 1, false`, () => new THREE.ConeGeometry(0.52, 0.46, 18, 1, false)), bottom, 1.04);
+  skirt.position.y = 0.72; g.add(skirt);
+  const collar = plain(geo(`ConeGeometry:0.2, 0.28, 3`, () => new THREE.ConeGeometry(0.2, 0.28, 3)), accent);
+  collar.position.set(0, 1.28, 0.3); collar.rotation.x = Math.PI; g.add(collar);
   const arms: THREE.Mesh[] = [];
   for (const x of [-0.42, 0.42]) {
-    const arm = plain(geo(`CapsuleGeometry:0.09, 0.44, 4, 8`, () => new THREE.CapsuleGeometry(0.09, 0.44, 4, 8)), uniform ? skin : cloth);
+    const arm = plain(geo(`CapsuleGeometry:0.09, 0.44, 4, 8`, () => new THREE.CapsuleGeometry(0.09, 0.44, 4, 8)), skin);
     arm.position.set(x, 1.02, 0); g.add(arm); arms.push(arm);
   }
   // 頭是一個子群組：點頭、看人都轉它。Q 版比例，頭大一點
@@ -296,6 +282,7 @@ function figure(color: string, hair: string, style: HairStyle, halo: HaloShape |
     const bang = plain(geo(`ConeGeometry:0.12, 0.34, 6`, () => new THREE.ConeGeometry(0.12, 0.34, 6)), hairMat);
     bang.position.set(x, 0.12, 0.4); bang.rotation.x = Math.PI + 0.35; bang.rotation.z = rz; head.add(bang);
   }
+  const style = look.hairStyle;
   if (style === "long") {
     const back = outlined(geo(`CapsuleGeometry:0.32, 0.8, 6, 12`, () => new THREE.CapsuleGeometry(0.32, 0.8, 6, 12)), hairMat);
     back.position.set(0, -0.5, -0.26); back.scale.set(1.15, 1, 0.55); head.add(back);
@@ -352,7 +339,7 @@ function plazaTexture(): THREE.Texture {
     for (let i = 0; i < 6; i++) { const a = (Math.PI / 3) * i; ctx.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a)); }
     ctx.closePath(); ctx.stroke();
   }
-  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2.2, 2.2); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
 }
 
 function gridTexture(): THREE.Texture {
@@ -362,7 +349,7 @@ function gridTexture(): THREE.Texture {
   ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, 256, 256);
   ctx.strokeStyle = "rgba(60,90,140,0.28)"; ctx.lineWidth = 2; ctx.strokeRect(1, 1, 254, 254);
   const t = new THREE.CanvasTexture(c);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(36, 36); t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
 
@@ -374,14 +361,14 @@ function skyDome(): THREE.Mesh {
   m.renderOrder = -1;
   return m;
 }
-function paintSky(sky: THREE.Mesh, top: number, bottom: number) {
-  const pos = sky.geometry.attributes.position; const col = sky.geometry.attributes.color as THREE.BufferAttribute;
-  const a = new THREE.Color(top), b = new THREE.Color(bottom), c = new THREE.Color();
+function paintSky(sky: THREE.Mesh, top: string, bottom: string) {
+  const pos = sky.geometry.attributes.position; const attr = sky.geometry.attributes.color as THREE.BufferAttribute;
+  const a = col(top), b = col(bottom), c = new THREE.Color();
   for (let i = 0; i < pos.count; i++) {
     c.copy(b).lerp(a, THREE.MathUtils.clamp((pos.getY(i) / 220) * 1.8, 0, 1));
-    col.setXYZ(i, c.r, c.g, c.b);
+    attr.setXYZ(i, c.r, c.g, c.b);
   }
-  col.needsUpdate = true;
+  attr.needsUpdate = true;
 }
 
 export class World {
@@ -397,8 +384,15 @@ export class World {
   /** 地平線全景帶：生成的天空板貼在大圓柱內側，鏡像重複免接縫；換色溫用顏色乘法 */
   private horizon: THREE.Mesh | null = null;
   private ground: THREE.Mesh;
+  /** 地面的基底色（environment.ground.color）；每次換光照乘上預設的 ground 色 */
+  private groundBase: THREE.Color;
+  /** 會隨光照預設 lamp 值一起亮暗的材質：路燈、窗帶、窗格、發光擺設 */
   private lampMats: THREE.MeshStandardMaterial[] = [];
-  private windowMat = new THREE.MeshStandardMaterial({ color: 0x9fd8ff, emissive: 0x5ec2f5, emissiveIntensity: 0.2, roughness: 0.25, metalness: 0.3 });
+  private presets = new Map<string, LightPresetJson>();
+  private preset: LightPresetJson;
+  private env: EnvironmentSpec;
+  /** 可走範圍半徑（也是小地圖的視野）：跟著地面大小走 */
+  private bound: number;
   private clouds: THREE.Sprite[] = [];
   private holo: THREE.Group | null = null;
   private talkRing: THREE.Mesh;
@@ -420,7 +414,7 @@ export class World {
   private raf = 0;
   private ray = new THREE.Raycaster();
   private yaw = 0;
-  private dist = 9.5;
+  private dist: number;
   private drag: { x: number; yaw: number; button: number; startX: number; startY: number; moved: boolean } | null = null;
   private minimap: HTMLCanvasElement | null = null;
   private disposed = false;
@@ -429,6 +423,12 @@ export class World {
   private ro: ResizeObserver;
 
   constructor(private canvas: HTMLCanvasElement, labelsEl: HTMLElement, private spec: WorldSpec, private events: WorldEvents) {
+    for (const p of spec.lighting.presets) this.presets.set(p.id, p);
+    this.preset = this.presetFor(spec.lighting.default);
+    const env = this.env = spec.environment;
+    const size = env.ground.size;
+    this.bound = size * 0.41;
+    this.dist = spec.camera.distance;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
     const lowEnd = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, lowEnd ? 1.5 : 2));
@@ -440,9 +440,9 @@ export class World {
     this.renderer.info.autoReset = false;
     this.labels = new CSS2DRenderer({ element: labelsEl });
     this.camera = new THREE.PerspectiveCamera(50, 1, 0.1, 600);
-    this.scene.fog = new THREE.Fog(0xc8dcf6, 80, 175);
+    this.scene.fog = new THREE.Fog(0xc8dcf6, this.preset.fogNear, this.preset.fogFar);
     this.sky = skyDome(); this.scene.add(this.sky);
-    if (spec.sky) new THREE.TextureLoader().load(spec.sky, (tex) => {
+    if (env.sky) new THREE.TextureLoader().load(env.sky, (tex) => {
       if (this.disposed) return;
       tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = THREE.MirroredRepeatWrapping; tex.repeat.x = 3; tex.anisotropy = 4;
       const geo = new THREE.CylinderGeometry(190, 190, 150, 64, 1, true);
@@ -459,42 +459,28 @@ export class World {
     this.sun.shadow.mapSize.set(2048, 2048);
     this.sun.shadow.bias = -0.0005;
     const sc = this.sun.shadow.camera;
-    sc.left = sc.bottom = -55; sc.right = sc.top = 55; sc.far = 160;
+    sc.left = sc.bottom = -size / 4; sc.right = sc.top = size / 4; sc.far = 160;
     this.scene.add(this.sun);
 
-    this.ground = new THREE.Mesh(new THREE.PlaneGeometry(220, 220), new THREE.MeshStandardMaterial({ map: gridTexture(), color: 0xb9cfe0, roughness: 0.95 }));
+    this.groundBase = col(env.ground.color, 0xb9cfe0);
+    const groundMat = new THREE.MeshStandardMaterial({ map: this.groundTexture(env.ground.texture, size), roughness: 0.95 });
+    this.ground = new THREE.Mesh(new THREE.PlaneGeometry(size, size), groundMat);
     this.ground.rotation.x = -Math.PI / 2; this.ground.receiveShadow = true;
     this.scene.add(this.ground);
-    // 草坪：路與建築之外鋪四塊
-    const grass = new THREE.MeshStandardMaterial({ color: 0x9fd39a, roughness: 1 });
-    for (const [x, z] of [[-30, 30], [30, 30], [-30, -34], [30, -34]] as [number, number][]) {
-      const g = new THREE.Mesh(new THREE.CircleGeometry(16, 28), grass);
-      g.rotation.x = -Math.PI / 2; g.position.set(x, 0.005, z); g.receiveShadow = true; this.scene.add(g);
-    }
-    // 主路：十字形的淺灰帶 + 中線
-    const pathM = new THREE.MeshStandardMaterial({ color: 0xe9eef7, roughness: 0.9 });
-    const lineM = new THREE.MeshBasicMaterial({ color: 0x8fd6ff, toneMapped: false });
-    for (const [w, d] of [[7, 160], [160, 7]] as [number, number][]) {
-      const p = new THREE.Mesh(new THREE.PlaneGeometry(w, d), pathM);
-      p.rotation.x = -Math.PI / 2; p.position.y = 0.01; p.receiveShadow = true; this.scene.add(p);
-      const l = new THREE.Mesh(new THREE.PlaneGeometry(w > d ? w : 0.12, w > d ? 0.12 : d), lineM);
-      l.rotation.x = -Math.PI / 2; l.position.y = 0.02; this.scene.add(l);
-    }
-    // 中央廣場：圓形地磚 + 發光環
-    const plaza = new THREE.Mesh(new THREE.CircleGeometry(9, 40), new THREE.MeshStandardMaterial({ map: plazaTexture(), roughness: 0.8 }));
-    plaza.rotation.x = -Math.PI / 2; plaza.position.y = 0.015; plaza.receiveShadow = true; this.scene.add(plaza);
-    const ring = new THREE.Mesh(new THREE.RingGeometry(8.6, 9, 48), lineM);
-    ring.rotation.x = -Math.PI / 2; ring.position.y = 0.025; this.scene.add(ring);
 
-    for (const b of spec.buildings) this.addBuilding(b);
-    this.addTrees(spec.trees);
-    this.addLamps(spec.lamps);
-    this.addBenches();
-    this.addBuildingBits();
-    this.addHedges();
-    this.addSkyline();
-    this.addClouds();
-    this.addTerminal(spec.npcs[0]?.pos ?? [0, -3]);
+    if (env.kit === "campus") this.addCampusGround();
+    for (const b of env.buildings) this.addBuilding(b);
+    this.addTrees(env.trees);
+    this.addLamps(env.lamps);
+    for (const p of env.props) this.addProp(p);
+    if (env.kit === "campus") {
+      this.addBenches();
+      this.addBuildingBits();
+      this.addHedges();
+      this.addTerminal(spec.npcs[0]?.pos ?? [0, -3]);
+    }
+    if (env.skyline) this.addSkyline();
+    if (env.clouds) this.addClouds();
     // 對話範圍：走進誰的範圍，誰腳下亮一圈
     this.talkRing = new THREE.Mesh(new THREE.RingGeometry(1.1, 1.3, 40), new THREE.MeshBasicMaterial({ color: 0x8fd6ff, transparent: true, opacity: 0.85, toneMapped: false, side: THREE.DoubleSide }));
     this.talkRing.rotation.x = -Math.PI / 2; this.talkRing.position.y = 0.03; this.talkRing.visible = false;
@@ -505,8 +491,8 @@ export class World {
       s.scale.setScalar(0.5); s.visible = false; this.scene.add(s); this.dust.push({ m: s, life: 0 });
     }
 
-    this.player = figure("#2b2f45", "#3a2a22", "short", null, false);
-    this.player.group.position.set(spec.spawn[0], 0, spec.spawn[1]);
+    this.player = figure(spec.player.look.top ?? "#2b2f45", spec.player.look, "none");
+    this.player.group.position.set(spec.player.spawn[0], 0, spec.player.spawn[1]);
     this.player.group.rotation.y = Math.PI;
     this.scene.add(this.player.group);
     this.playerLabel = document.createElement("div");
@@ -514,7 +500,7 @@ export class World {
     const pl = new CSS2DObject(this.playerLabel); pl.position.y = 3.1; this.player.group.add(pl);
 
     spec.npcs.forEach((n, i) => this.addNpc(n, i));
-    if (spec.player) void this.setPlayerModel(spec.player);
+    if (spec.player.model) void this.setPlayerModel(spec.player.model);
 
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
@@ -524,7 +510,7 @@ export class World {
     this.composer.addPass(new OutputPass());
 
     this.fill = new THREE.PointLight(0xffe2b8, 0, 9, 1.5); this.fill.position.set(0.6, 2.6, 1.2); this.player.group.add(this.fill);
-    this.setTint("day");
+    this.setTint(spec.lighting.default);
     this.camera.position.copy(this.player.group.position).add(this.camOffset());
     this.camera.lookAt(this.player.group.position);
 
@@ -539,27 +525,66 @@ export class World {
 
   // ---- 建造 ---------------------------------------------------------------
 
-  private addBuilding(b: BuildingSpec) {
-    const [x, z] = b.pos; const [w, h, d] = b.size;
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: new THREE.Color(b.color || "#f6f8fc"), roughness: 0.55, metalness: 0.05 }));
-    m.position.set(x, h / 2, z); m.castShadow = true; m.receiveShadow = true; this.scene.add(m);
-    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry), new THREE.LineBasicMaterial({ color: 0x8fd6ff, toneMapped: false }));
-    edges.position.copy(m.position); this.scene.add(edges);
-    // 玻璃帶：一層層的藍色窗，晚上會亮
-    const rows = Math.max(1, Math.floor(h / 2.6));
-    for (let r = 0; r < rows; r++) {
-      const band = new THREE.Mesh(new THREE.BoxGeometry(w + 0.06, 0.7, d + 0.06), new THREE.MeshStandardMaterial({ color: 0x7fc6f2, emissive: 0x5ec2f5, emissiveIntensity: 0.25, roughness: 0.2, metalness: 0.4 }));
-      band.position.set(x, 1.6 + r * 2.6, z); this.scene.add(band);
-      this.lampMats.push(band.material as THREE.MeshStandardMaterial);
+  private presetFor(id: string): LightPresetJson {
+    return this.presets.get(id) ?? this.presets.get(this.spec.lighting.default) ?? this.spec.lighting.presets[0];
+  }
+
+  /** 地面貼圖：內建兩種程序化（格線／六角地磚）、不貼、或作者的網址；重複次數跟著地面大小 */
+  private groundTexture(kind: string, size: number): THREE.Texture | null {
+    if (kind === "plain") return null;
+    if (kind === "grid") { const t = gridTexture(); t.repeat.set(size / 6, size / 6); return t; }
+    if (kind === "plaza") { const t = plazaTexture(); t.repeat.set(size / 8, size / 8); return t; }
+    return new THREE.TextureLoader().load(kind, (t) => { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(size / 8, size / 8); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; t.needsUpdate = true; });
+  }
+
+  /** 校園套件的地面層：草坪、十字主路、中央廣場與發光環 */
+  private addCampusGround() {
+    const grass = new THREE.MeshStandardMaterial({ color: 0x9fd39a, roughness: 1 });
+    for (const [x, z] of [[-30, 30], [30, 30], [-30, -34], [30, -34]] as XZ[]) {
+      const g = new THREE.Mesh(new THREE.CircleGeometry(16, 28), grass);
+      g.rotation.x = -Math.PI / 2; g.position.set(x, 0.005, z); g.receiveShadow = true; this.scene.add(g);
     }
-    // 屋頂飾條 + 屋頂設備（空調箱、天線）
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(w + 0.4, 0.25, d + 0.4), new THREE.MeshStandardMaterial({ color: 0x3f5f8f, roughness: 0.5 }));
+    const pathM = new THREE.MeshStandardMaterial({ color: 0xe9eef7, roughness: 0.9 });
+    const lineM = new THREE.MeshBasicMaterial({ color: 0x8fd6ff, toneMapped: false });
+    for (const [w, d] of [[7, 160], [160, 7]] as XZ[]) {
+      const p = new THREE.Mesh(new THREE.PlaneGeometry(w, d), pathM);
+      p.rotation.x = -Math.PI / 2; p.position.y = 0.01; p.receiveShadow = true; this.scene.add(p);
+      const l = new THREE.Mesh(new THREE.PlaneGeometry(w > d ? w : 0.12, w > d ? 0.12 : d), lineM);
+      l.rotation.x = -Math.PI / 2; l.position.y = 0.02; this.scene.add(l);
+    }
+    const plazaTex = plazaTexture(); plazaTex.repeat.set(2.2, 2.2);
+    const plaza = new THREE.Mesh(new THREE.CircleGeometry(9, 40), new THREE.MeshStandardMaterial({ map: plazaTex, roughness: 0.8 }));
+    plaza.rotation.x = -Math.PI / 2; plaza.position.y = 0.015; plaza.receiveShadow = true; this.scene.add(plaza);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(8.6, 9, 48), lineM);
+    ring.rotation.x = -Math.PI / 2; ring.position.y = 0.025; this.scene.add(ring);
+  }
+
+  private addBuilding(b: BuildingJson) {
+    const [x, z] = b.pos; const [w, h, d] = b.size;
+    const wall = col(b.color, 0xf6f8fc);
+    const accent = accentOf(wall);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: wall, roughness: 0.55, metalness: 0.05 }));
+    m.position.set(x, h / 2, z); m.castShadow = true; m.receiveShadow = true; this.scene.add(m);
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry), new THREE.LineBasicMaterial({ color: accent, toneMapped: false }));
+    edges.position.copy(m.position); this.scene.add(edges);
+    // 玻璃帶：一層層的窗，晚上會亮；顏色跟牆色同系
+    const rows = Math.max(1, Math.floor(h / 2.6));
+    const bandMat = new THREE.MeshStandardMaterial({ color: accent.clone().lerp(WHITE, 0.3), emissive: accent, emissiveIntensity: this.preset.lamp, roughness: 0.2, metalness: 0.4 });
+    this.lampMats.push(bandMat);
+    for (let r = 0; r < rows; r++) {
+      const band = new THREE.Mesh(new THREE.BoxGeometry(w + 0.06, 0.7, d + 0.06), bandMat);
+      band.position.set(x, 1.6 + r * 2.6, z); this.scene.add(band);
+    }
+    // 屋頂飾條；屋頂設備（空調箱、天線）只有校園套件會長
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(w + 0.4, 0.25, d + 0.4), new THREE.MeshStandardMaterial({ color: accent.clone().multiplyScalar(0.6), roughness: 0.5 }));
     roof.position.set(x, h + 0.12, z); this.scene.add(roof);
     this.roofBits.push({ x, z, w, h, d });
     // 窗格：四個立面各鋪一格網，實例化一次畫完
     const cols = Math.max(2, Math.floor(w / 1.6)), colsD = Math.max(2, Math.floor(d / 1.6)), floors = Math.max(1, Math.floor(h / 2.6));
     const count = (cols * 2 + colsD * 2) * floors;
-    const win = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.9, 1.2), this.windowMat, count);
+    const winMat = new THREE.MeshStandardMaterial({ color: accent.clone().lerp(WHITE, 0.45), emissive: accent, emissiveIntensity: this.preset.lamp, roughness: 0.25, metalness: 0.3 });
+    this.lampMats.push(winMat);
+    const win = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.9, 1.2), winMat, count);
     const mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), s1 = new THREE.Vector3(1, 1, 1);
     let k = 0;
     const place = (px: number, py: number, pz: number, ry: number) => { q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), ry); mtx.compose(new THREE.Vector3(px, py, pz), q, s1); win.setMatrixAt(k++, mtx); };
@@ -578,9 +603,9 @@ export class World {
 
     // 門廊：有名字的建築正面（+z）開一扇門加雨棚與踏階
     if (b.label) {
-      const door = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.6, 0.2), new THREE.MeshStandardMaterial({ color: 0x2f4f7f, emissive: 0x5ec2f5, emissiveIntensity: 0.15, roughness: 0.3 }));
+      const door = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.6, 0.2), new THREE.MeshStandardMaterial({ color: accent.clone().multiplyScalar(0.5), emissive: accent, emissiveIntensity: 0.15, roughness: 0.3 }));
       door.position.set(x, 1.3, z + d / 2 + 0.1); this.scene.add(door);
-      const canopy = new THREE.Mesh(new THREE.BoxGeometry(4, 0.16, 1.8), new THREE.MeshStandardMaterial({ color: 0x8fd6ff, transparent: true, opacity: 0.55, roughness: 0.1, metalness: 0.3 }));
+      const canopy = new THREE.Mesh(new THREE.BoxGeometry(4, 0.16, 1.8), new THREE.MeshStandardMaterial({ color: accent, transparent: true, opacity: 0.55, roughness: 0.1, metalness: 0.3 }));
       canopy.position.set(x, 3.1, z + d / 2 + 0.9); canopy.castShadow = true; this.scene.add(canopy);
       const stepM = new THREE.MeshStandardMaterial({ color: 0xd5dde9, roughness: 0.8 });
       for (let i = 0; i < 2; i++) { const st = new THREE.Mesh(new THREE.BoxGeometry(4.6 - i, 0.18, 1.2 - i * 0.4), stepM); st.position.set(x, 0.09 + i * 0.18, z + d / 2 + 1.2 - i * 0.4); st.receiveShadow = true; this.scene.add(st); }
@@ -592,8 +617,46 @@ export class World {
     this.blockers.push(new THREE.Box2(new THREE.Vector2(x - w / 2 - PLAYER_R, z - d / 2 - PLAYER_R), new THREE.Vector2(x + w / 2 + PLAYER_R, z + d / 2 + PLAYER_R)));
   }
 
+  /**
+   * 擺設：方塊／圓柱／球，或一個 GLB。尺寸 [w,h,d]，底部放在 y（預設地面），繞 y 轉 rotation。
+   * 有 emissive 的跟路燈一起隨光照預設亮暗；solid 預設擋路（旋轉後取外接 AABB，夠用）。
+   */
+  private addProp(p: PropJson) {
+    const [w, h, d] = p.size; const [x, z] = p.pos; const ry = p.rotation ?? 0;
+    const g = new THREE.Group(); g.position.set(x, p.y ?? 0, z); g.rotation.y = ry; this.scene.add(g);
+    const mat = new THREE.MeshStandardMaterial({ color: col(p.color, 0xc9ced8), emissive: p.emissive ? col(p.emissive) : 0x000000, emissiveIntensity: this.preset.lamp, roughness: 0.7 });
+    if (p.emissive) this.lampMats.push(mat);
+    const primitive = () => {
+      const geo = p.shape === "cylinder" ? new THREE.CylinderGeometry(w / 2, w / 2, h, 20) : p.shape === "sphere" ? new THREE.SphereGeometry(w / 2, 20, 14) : new THREE.BoxGeometry(w, h, d);
+      const m = new THREE.Mesh(geo, mat); m.position.y = h / 2; m.castShadow = m.receiveShadow = true; g.add(m);
+    };
+    if (p.shape === "model" && p.url) {
+      new GLTFLoader().load(p.url, (gltf) => {
+        if (this.disposed) return;
+        const root = gltf.scene;
+        root.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) m.castShadow = m.receiveShadow = true; });
+        // 縮到目標高度、底部貼地、水平置中——跟角色模型同一套正規化
+        const box = new THREE.Box3().setFromObject(root);
+        root.scale.setScalar(h / (box.getSize(new THREE.Vector3()).y || 1));
+        box.setFromObject(root);
+        root.position.set(-(box.min.x + box.max.x) / 2, -box.min.y, -(box.min.z + box.max.z) / 2);
+        g.add(root);
+      }, undefined, (e) => { console.warn("[world] prop model failed, using box:", p.url, e); if (!this.disposed) primitive(); });
+    } else primitive();
+    if (p.label) {
+      const el = document.createElement("div"); el.className = "w-label w-label--place"; el.textContent = p.label;
+      const o = new CSS2DObject(el); o.position.y = h + 0.6; g.add(o);
+    }
+    if (p.solid !== false) {
+      const fd = p.shape === "box" || p.shape === "model" ? d : w;
+      const c = Math.abs(Math.cos(ry)), s = Math.abs(Math.sin(ry));
+      const ex = (c * w + s * fd) / 2 + PLAYER_R, ez = (s * w + c * fd) / 2 + PLAYER_R;
+      this.blockers.push(new THREE.Box2(new THREE.Vector2(x - ex, z - ez), new THREE.Vector2(x + ex, z + ez)));
+    }
+  }
+
   /** 所有樹一起畫：樹幹、兩層樹冠各一個實例網格，外加描邊版 */
-  private addTrees(spots: [number, number][]) {
+  private addTrees(spots: XZ[]) {
     if (!spots.length) return;
     const parts: [THREE.BufferGeometry, THREE.Material, (x: number, z: number) => THREE.Vector3, number][] = [
       [new THREE.CylinderGeometry(0.16, 0.24, 1.7, 8), toon(0x8a6a4a), (x, z) => new THREE.Vector3(x, 0.85, z), 1.05],
@@ -615,7 +678,7 @@ export class World {
   }
 
   /** 所有燈柱一起畫：桿、燈、旗桿、旗、旗上白條各一個實例網格 */
-  private addLamps(spots: [number, number][]) {
+  private addLamps(spots: XZ[]) {
     if (!spots.length) return;
     const dark = new THREE.MeshStandardMaterial({ color: 0x3b4560 });
     const bulbMat = new THREE.MeshStandardMaterial({ color: 0xfff1c0, emissive: 0xffd77a, emissiveIntensity: 0.1 });
@@ -700,7 +763,7 @@ export class World {
   }
 
   /** 什亭之匣終端：阿羅娜旁邊的全息台——底座、旋轉的六角環、半透明面板 */
-  private addTerminal([nx, nz]: [number, number]) {
+  private addTerminal([nx, nz]: XZ) {
     const g = new THREE.Group();
     const base = outlined(new THREE.CylinderGeometry(0.9, 1.1, 0.5, 8), toon(0x2f3a5a), 1.03); base.position.y = 0.25; g.add(base);
     const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 1.2, 8), new THREE.MeshStandardMaterial({ color: 0xcfe0f5, roughness: 0.3, metalness: 0.4 })); stem.position.y = 1.1; g.add(stem);
@@ -727,11 +790,11 @@ export class World {
   }
 
   private addNpc(spec: NpcSpec, i: number) {
-    const fig = figure(spec.color, spec.hair, spec.hairStyle || "short", spec.halo, true);
+    const fig = figure(spec.color, spec.look, spec.accessory);
     fig.group.position.set(spec.pos[0], 0, spec.pos[1]);
-    fig.group.rotation.y = spec.face ?? 0;
+    fig.group.rotation.y = spec.face;
     this.scene.add(fig.group);
-    if (spec.model) void this.swapNpcModel(spec.name, spec.model, spec.color, spec.halo);
+    if (spec.model) void this.swapNpcModel(spec.name, spec.model, spec.color, spec.accessory);
     const label = document.createElement("div");
     label.className = "w-label w-label--npc";
     label.style.setProperty("--c", spec.color);
@@ -746,8 +809,8 @@ export class World {
   }
 
   /** 生成模型載好後換掉人偶：位置、朝向、標籤與心情泡泡原樣搬過去 */
-  private async swapNpcModel(name: string, model: ModelSpec, color: string, halo: HaloShape) {
-    const loaded = await loadModelFigure(model, color, halo);
+  private async swapNpcModel(name: string, model: ModelSpec, color: string, accessory: Accessory) {
+    const loaded = await loadModelFigure(model, color, accessory);
     const n = this.npcs.find((x) => x.spec.name === name);
     if (!loaded || !n || this.disposed) return;
     const old = n.fig.group;
@@ -760,8 +823,8 @@ export class World {
   }
 
   /** 玩家也可以換生成模型 */
-  async setPlayerModel(model: ModelSpec) {
-    const loaded = await loadModelFigure(model, "#2b2f45", null);
+  async setPlayerModel(model: ModelJson) {
+    const loaded = await loadModelFigure(model, this.spec.player.look.top ?? "#2b2f45", "none");
     if (!loaded || this.disposed) return;
     const old = this.player.group;
     loaded.group.position.copy(old.position); loaded.group.rotation.copy(old.rotation);
@@ -773,37 +836,38 @@ export class World {
 
   // ---- 外部狀態 -----------------------------------------------------------
 
-  private tint: Tint = "day";
   private applyHorizonTint() {
     if (!this.horizon) return;
     const m = this.horizon.material as THREE.MeshBasicMaterial;
-    m.color.set(this.tint === "day" ? 0xffffff : this.tint === "dusk" ? 0xffb489 : 0x2a3b7a);
-    m.opacity = this.tint === "night" ? 0.85 : 1;
+    m.color.copy(hazeColor(this.preset));
+    m.opacity = 0.85 + 0.15 * daylight(this.preset);
   }
 
-  setTint(t: Tint) {
-    this.tint = t;
+  /** 換光照預設（id 來自 spec.lighting.presets；不認識的退回 default） */
+  setTint(id: string) {
+    const p = this.preset = this.presetFor(id);
     this.applyHorizonTint();
-    const c = TINTS[t];
-    paintSky(this.sky, c.skyTop, c.skyBottom);
-    (this.scene.fog as THREE.Fog).color.set(c.fog);
-    (this.ground.material as THREE.MeshStandardMaterial).color.set(c.ground);
-    this.sun.color.set(c.sun); this.sun.intensity = c.sunI; this.sun.position.set(...c.sunPos);
-    this.hemi.intensity = c.hemi;
-    for (const m of this.lampMats) m.emissiveIntensity = c.lamp;
-    this.windowMat.emissiveIntensity = t === "day" ? 0.12 : t === "dusk" ? 0.5 : 0.7;
-    for (const cl of this.clouds) (cl.material as THREE.SpriteMaterial).color.set(t === "night" ? 0x2a3560 : t === "dusk" ? 0xffc9a8 : 0xffffff);
-    this.bloom.strength = c.bloom;
-    this.fill.intensity = t === "night" ? 2.2 : t === "dusk" ? 0.8 : 0;
+    paintSky(this.sky, p.skyTop, p.skyBottom);
+    const fog = this.scene.fog as THREE.Fog;
+    fog.color.copy(col(p.fog)); fog.near = p.fogNear; fog.far = p.fogFar;
+    (this.ground.material as THREE.MeshStandardMaterial).color.copy(this.groundBase).multiply(col(p.ground));
+    this.sun.color.copy(col(p.sun)); this.sun.intensity = p.sunIntensity; this.sun.position.set(...p.sunPos);
+    this.hemi.intensity = p.hemi;
+    for (const m of this.lampMats) m.emissiveIntensity = p.lamp;
+    const haze = hazeColor(p);
+    for (const cl of this.clouds) (cl.material as THREE.SpriteMaterial).color.copy(haze);
+    this.bloom.strength = p.bloom;
+    // 玩家補光：越暗越亮，讓臉在夜裡還看得到
+    this.fill.intensity = (1 - daylight(p)) * 2.2;
   }
 
   setNpcState(name: string, s: NpcState) {
     const n = this.npcs.find((x) => x.spec.name === name);
     if (!n) return;
-    if (s.affection !== undefined && s.affection !== null) {
-      const k = Math.max(0, Math.min(5, Math.round(s.affection / 20)));
+    if (s.meter !== undefined && s.meter !== null) {
+      const k = Math.max(0, Math.min(5, Math.round(s.meter * 5)));
       n.hearts.textContent = "♥".repeat(k) + "♡".repeat(5 - k);
-      n.hearts.title = String(s.affection);
+      n.hearts.title = `${Math.round(s.meter * 100)}%`;
     }
     if (s.mood !== undefined) { n.moodText = s.mood; n.mood.textContent = s.mood; }
     if (s.quest !== undefined) n.quest.hidden = !s.quest;
@@ -894,7 +958,7 @@ export class World {
     const d = this.drag; this.drag = null;
     if (d && !d.moved && d.button === 0) this.clickAt(e.clientX, e.clientY);
   };
-  private onWheel = (e: WheelEvent) => { e.preventDefault(); this.dist = THREE.MathUtils.clamp(this.dist + e.deltaY * 0.01, 5, 18); };
+  private onWheel = (e: WheelEvent) => { e.preventDefault(); this.dist = THREE.MathUtils.clamp(this.dist + e.deltaY * 0.01, this.spec.camera.minDistance, this.spec.camera.maxDistance); };
   private onContext = (e: Event) => e.preventDefault();
 
   private bind() {
@@ -920,7 +984,9 @@ export class World {
   private camOffset(): THREE.Vector3 {
     // 直式螢幕視野窄，鏡頭要拉遠一點才看得到路和人
     const d = this.dist * (this.camera.aspect < 0.8 ? 1.45 : 1);
-    return new THREE.Vector3(Math.sin(this.yaw) * d, d * 0.48, Math.cos(this.yaw) * d);
+    // 高度跟距離等比：作者給的 height 是在 distance 時的鏡頭高，滾輪拉近拉遠仍維持同一俯角
+    const { distance, height } = this.spec.camera;
+    return new THREE.Vector3(Math.sin(this.yaw) * d, d * (height / distance), Math.cos(this.yaw) * d);
   }
 
   /** 圓對 AABB：撞到就把那一軸的位移退掉 */
@@ -930,15 +996,15 @@ export class World {
       if (!b.containsPoint(p2)) continue;
       if (!b.containsPoint(new THREE.Vector2(next.x, from.z))) next.z = from.z; else next.x = from.x;
     }
-    next.x = THREE.MathUtils.clamp(next.x, -90, 90);
-    next.z = THREE.MathUtils.clamp(next.z, -90, 90);
+    next.x = THREE.MathUtils.clamp(next.x, -this.bound, this.bound);
+    next.z = THREE.MathUtils.clamp(next.z, -this.bound, this.bound);
   }
 
   private animateWalk(f: Figure, moving: boolean, t: number, rate = 14, talking = false) {
     if (f.anim) {
       const want = moving ? f.anim.walk || f.anim.idle : talking ? f.anim.talk || f.anim.idle : f.anim.idle;
       if (want && want !== f.anim.current) { f.anim.current?.fadeOut(0.2); want.reset().fadeIn(0.2).play(); f.anim.current = want; }
-      if (moving && f.anim.walk) f.anim.walk.timeScale = (rate === 14 ? SPEED : NPC_SPEED) / WALK_CLIP_SPEED;
+      if (moving && f.anim.walk) f.anim.walk.timeScale = (rate === 14 ? this.spec.player.speed : NPC_SPEED) / WALK_CLIP_SPEED;
       return;
     }
     const swing = moving ? Math.sin(t * rate) * 0.5 : 0;
@@ -964,7 +1030,7 @@ export class World {
     }
     const moving = move.lengthSq() > 0;
     if (moving) {
-      move.normalize().multiplyScalar(SPEED * dt);
+      move.normalize().multiplyScalar(this.spec.player.speed * dt);
       const next = pos.clone().add(move);
       this.slide(pos, next);
       pos.copy(next);
@@ -991,8 +1057,9 @@ export class World {
     if (this.holo) { const r = this.holo.getObjectByName("ring"); const r2 = this.holo.getObjectByName("ring2"); if (r) r.rotation.z += dt * 0.8; if (r2) r2.rotation.z -= dt * 1.3; this.holo.children[2].position.y = 2.3 + Math.sin(t * 1.5) * 0.06; }
     for (const c of this.clouds) { c.position.x += dt * 0.6; if (c.position.x > 130) c.position.x = -130; }
 
-    // 鏡頭：平時跟在後面；對話時過肩看著對方
-    if (this.focusNpc) {
+    // 鏡頭：平時跟在後面；對話時切側面雙人鏡頭（作者可設 camera.dialogue = follow 維持跟隨）
+    if (this.focusNpc) this.player.group.rotation.y = Math.atan2(this.focusNpc.fig.group.position.x - pos.x, this.focusNpc.fig.group.position.z - pos.z);
+    if (this.focusNpc && this.spec.camera.dialogue !== "follow") {
       const npc = this.focusNpc.fig.group.position;
       const back = new THREE.Vector3().subVectors(pos, npc).setY(0).normalize();
       const side = new THREE.Vector3(-back.z, 0, back.x);
@@ -1003,7 +1070,6 @@ export class World {
       const want = mid.clone().add(side.multiplyScalar(-far)).add(back.multiplyScalar(0.9)).setY(this.camera.aspect < 0.8 ? 2.4 : 2.1);
       this.camera.position.lerp(want, 1 - Math.pow(0.002, dt));
       this.camera.lookAt(mid.x, 1.25, mid.z);
-      this.player.group.rotation.y = Math.atan2(npc.x - pos.x, npc.z - pos.z);
     } else {
       const want = pos.clone().add(this.camOffset());
       this.camera.position.lerp(want, 1 - Math.pow(0.001, dt));
@@ -1019,10 +1085,10 @@ export class World {
       if (d < nd) { nd = d; nearest = n; }
       const engaged = d < 6 || this.focusNpc === n;
       let walking = false;
-      if (!engaged && (n.spec.wander ?? 2.5) > 0) {
+      if (!engaged && n.spec.wander > 0) {
         n.nextWander -= dt;
         if (!n.target && n.nextWander <= 0) {
-          const r = n.spec.wander ?? 2.5;
+          const r = n.spec.wander;
           n.target = n.home.clone().add(new THREE.Vector3((Math.random() * 2 - 1) * r, 0, (Math.random() * 2 - 1) * r));
           n.nextWander = 3 + Math.random() * 6;
         }
@@ -1059,17 +1125,19 @@ export class World {
   private drawMinimap() {
     const c = this.minimap; if (!c) return;
     const ctx = c.getContext("2d"); if (!ctx) return;
-    // 90 個世界單位 = 整張圖
-    const W = c.width, H = c.height, S = W / 90;
+    // 可走半徑那麼多世界單位 = 整張圖
+    const W = c.width, H = c.height, S = W / this.bound;
     const px = this.player.group.position;
     const sx = (x: number) => W / 2 + (x - px.x) * S, sz = (z: number) => H / 2 + (z - px.z) * S;
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = "rgba(10,12,22,0.55)"; ctx.beginPath(); ctx.arc(W / 2, H / 2, W / 2, 0, Math.PI * 2); ctx.fill();
     ctx.save(); ctx.beginPath(); ctx.arc(W / 2, H / 2, W / 2 - 1, 0, Math.PI * 2); ctx.clip();
-    ctx.fillStyle = "rgba(255,255,255,0.14)";
-    ctx.fillRect(sx(-3.5), sz(-80), 7 * S, 160 * S); ctx.fillRect(sx(-80), sz(-3.5), 160 * S, 7 * S);
+    if (this.env.kit === "campus") {
+      ctx.fillStyle = "rgba(255,255,255,0.14)";
+      ctx.fillRect(sx(-3.5), sz(-80), 7 * S, 160 * S); ctx.fillRect(sx(-80), sz(-3.5), 160 * S, 7 * S);
+    }
     ctx.fillStyle = "rgba(255,255,255,0.55)";
-    for (const b of this.spec.buildings) ctx.fillRect(sx(b.pos[0] - b.size[0] / 2), sz(b.pos[1] - b.size[2] / 2), b.size[0] * S, b.size[2] * S);
+    for (const b of this.env.buildings) ctx.fillRect(sx(b.pos[0] - b.size[0] / 2), sz(b.pos[1] - b.size[2] / 2), b.size[0] * S, b.size[2] * S);
     for (const n of this.npcs) {
       ctx.fillStyle = n.spec.color; ctx.beginPath(); ctx.arc(sx(n.fig.group.position.x), sz(n.fig.group.position.z), 3.2, 0, Math.PI * 2); ctx.fill();
       if (!n.quest.hidden) { ctx.fillStyle = "#ffd54a"; ctx.beginPath(); ctx.arc(sx(n.fig.group.position.x), sz(n.fig.group.position.z) - 6, 2.2, 0, Math.PI * 2); ctx.fill(); }

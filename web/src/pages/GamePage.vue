@@ -22,8 +22,9 @@ import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
 import { backwardTo, deleteConversation, fetchArchives, fetchRecentMessages, forkConversation, renameConversation, sendTurn, startConversation, startNewConversation, suggestReply, switchConversation, type Archive } from "@/game/chat-client";
 import { confirmDialog } from "@/lib/confirm";
-import { HERO_FIELDS, SCENE_FIELDS, WORLD_SPECS, defaultWorldFor, tintOf, worldFromSpec } from "@/game/specs";
-import { F, isUnset, mergeTurn, parseTurn, speakerOf, type GameTurn } from "@/game/zz-parse";
+import { defaultSpecFor, presetFor, worldFromSpec } from "@/game/specs";
+import { DEFAULT_PARSE, isUnset, mergeTurn, parseTurn, speakerOf, type GameRole, type GameTurn, type ParseOptions } from "@/game/zz-parse";
+import type { GameSpecJson } from "../../../shared/game-spec";
 import type { World } from "@/game/world";
 import { GameAudio } from "@/game/audio";
 // 舞台（Moonstage）的面板元件原樣複用：模型選單、人設、長期指令、存檔列表、彈層。它們是純 props／emit 的
@@ -58,14 +59,31 @@ if (import.meta.env.DEV) (window as unknown as { __audio?: GameAudio }).__audio 
 const muted = ref(false);
 /** 目前頭上掛著任務標記的角色：新出現才響一聲 */
 const questNames = new Set<string>();
+/**
+ * 作者配置（v2，全部資料驅動）：協定欄位名、面板要顯示什麼、光照預設、音效事件都從這裡來。
+ * 世界建好之前是 null；解析器在那之前用預設協定（跟預設配置一致）。
+ */
+const gameSpec = ref<GameSpecJson | null>(null);
+const parseOpts = computed<ParseOptions>(() => (gameSpec.value ? { protocol: gameSpec.value.protocol, meters: gameSpec.value.hud.meters } : DEFAULT_PARSE));
+/** 協定裡各語義對應的欄位名 */
+const PF = computed(() => parseOpts.value.protocol.fields);
+const timeText = () => (PF.value.time ? turn.value.scene[PF.value.time] || "" : "");
+/** 目前該用哪套光照：場景「時間」欄位對作者宣告的預設 match */
+const presetNow = () => (gameSpec.value ? presetFor(timeText(), gameSpec.value.lighting) : "day");
+const ambienceNow = () => (gameSpec.value ? gameSpec.value.audio.ambience[presetNow()] || "" : "");
+/** 事件音效：作者把事件對到 audio.sources 的鍵；沒對就不響 */
+function sfx(ev: keyof GameSpecJson["audio"]["events"], opts?: { volume?: number; rate?: number }) {
+  const k = gameSpec.value?.audio.events[ev];
+  if (k) void audio.play(k, opts);
+}
 /** 瀏覽器要先有互動才能出聲：第一次點擊／按鍵解鎖 */
-function unlockAudio() { audio.unlock(); void audio.setAmbience(tintOf(turn.value.scene[F.time] || "")); }
+function unlockAudio() { audio.unlock(); void audio.setAmbience(ambienceNow()); }
 window.addEventListener("pointerdown", unlockAudio, { once: true });
 window.addEventListener("keydown", unlockAudio, { once: true });
 
 const role = ref<{ name: string } | null>(null);
 const loadError = ref("");
-const turn = ref<GameTurn>(parseTurn(""));
+const turn = ref<GameTurn>(parseTurn("", DEFAULT_PARSE));
 const live = ref("");
 const streaming = ref(false);
 const playerLine = ref("");
@@ -342,17 +360,44 @@ const narr = ref<HTMLDivElement | null>(null);
 
 const signedIn = computed(() => !!session.me);
 const touch = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
-const prose = computed(() => (streaming.value ? parseTurn(live.value).prose : turn.value.prose));
+const prose = computed(() => (streaming.value ? parseTurn(live.value, parseOpts.value).prose : turn.value.prose));
 const paragraphs = computed(() => prose.value.split(/\n+/).map((s) => s.trim()).filter(Boolean));
 const speaker = computed(() => speakerOf(prose.value, turn.value.roles.map((r) => r.name)) || talking.value || "");
-const heroRows = computed(() => HERO_FIELDS.map((f) => ({ ...f, value: turn.value.hero[f.key] || "" })).filter((f) => f.value));
-const sceneRows = computed(() => SCENE_FIELDS.map((f) => ({ ...f, value: turn.value.scene[f.key] || "" })).filter((f) => f.value));
-const round = computed(() => Number(turn.value.scene[F.round]) || 0);
-const objective = computed(() => turn.value.scene[F.objective] || "");
+// i18n-ignore：這張表的 key 是預設協定的欄位名（資料）；作者沒給 label 時，預設欄位仍有翻譯
+const DEFAULT_LABELS: Record<string, string> = { 名字: "game.field.name", 身份: "game.field.identity", 外貌: "game.field.appearance", 能力: "game.field.ability", 时间: "game.field.time", 地点: "game.field.place" };
+const labelOf = (f: { key: string; label?: string }) => f.label || (DEFAULT_LABELS[f.key] ? t(DEFAULT_LABELS[f.key]) : f.key);
+const hud = computed(() => gameSpec.value?.hud ?? defaultSpecFor([]).hud);
+const heroRows = computed(() => hud.value.hero.map((f) => ({ key: f.key, label: labelOf(f), value: turn.value.hero[f.key] || "" })).filter((f) => f.value));
+const sceneRows = computed(() => hud.value.scene.map((f) => ({ key: f.key, label: labelOf(f), value: turn.value.scene[f.key] || "" })).filter((f) => f.value));
+const round = computed(() => (PF.value.round ? Number(turn.value.scene[PF.value.round]) || 0 : 0));
+const objective = computed(() => (PF.value.objective ? turn.value.scene[PF.value.objective] || "" : ""));
 const heroName = computed(() => {
-  const n = turn.value.hero[HERO_FIELDS[0].key];
-  return isUnset(n) ? t("game.you") : n;
+  const key = hud.value.hero[0]?.key || PF.value.name;
+  const n = turn.value.hero[key];
+  return isUnset(n, parseOpts.value.protocol) ? t("game.you") : n;
 });
+/** 角色卡上的數值條：每條照作者宣告的區間正規化 */
+function meterBars(r: GameRole) {
+  return hud.value.meters.flatMap((m) => {
+    const v = r.meters[m.key]; if (v === null || v === undefined) return [];
+    return [{ key: m.key, label: m.label || m.key, pct: Math.max(0, Math.min(100, ((v - m.min) / (m.max - m.min)) * 100)), color: m.color || "#ff5c8a", value: v }];
+  });
+}
+/** 角色其他要顯示的欄位（作者宣告） */
+const roleRows = (r: GameRole) => hud.value.role.map((f) => ({ key: f.key, label: labelOf(f), value: r.fields[f.key] || "" })).filter((f) => f.value && !isUnset(f.value, parseOpts.value.protocol));
+/** 這個角色跟當前目標有關嗎（作者宣告的規則） */
+function questOf(r: GameRole): boolean {
+  const rule = hud.value.questRule;
+  if (rule.mode === "none") return false;
+  if (rule.mode === "field-truthy") { const v = rule.field ? r.fields[rule.field] : ""; return !!v && !isUnset(v, parseOpts.value.protocol) && !/^(0|no|false|否|无|無)$/i.test(v); }
+  return !!objective.value && objective.value.includes(r.name);
+}
+/** 主數值（第一條）正規化到 0..1，給世界層畫頭頂標籤 */
+function primaryMeter(r: GameRole): number | null {
+  const m = hud.value.meters[0]; if (!m) return null;
+  const v = r.meters[m.key]; if (v === null || v === undefined) return null;
+  return Math.max(0, Math.min(1, (v - m.min) / (m.max - m.min)));
+}
 
 watch(role, (r) => { document.title = pageTitle(r ? r.name : t("game.title")); }, { immediate: true });
 watch(speaker, (s) => { if (streaming.value) world?.setSpeaking(s || talking.value); });
@@ -361,19 +406,17 @@ watch(paragraphs, () => { void nextTick(() => { if (narr.value) narr.value.scrol
 /** 狀態 → 世界 */
 function syncWorld() {
   if (!world) return;
-  const tint = tintOf(turn.value.scene[F.time] || "");
-  world.setTint(tint);
-  void audio.setAmbience(tint);
+  world.setTint(presetNow());
+  void audio.setAmbience(ambienceNow());
   world.setPlayerName(heroName.value);
-  const goal = objective.value;
   let newQuest = false;
   for (const r of turn.value.roles) {
-    const quest = !!goal && goal.includes(r.name);
+    const quest = questOf(r);
     if (quest && !questNames.has(r.name)) newQuest = true;
     if (quest) questNames.add(r.name); else questNames.delete(r.name);
-    world.setNpcState(r.name, { affection: r.affection, mood: r.fields[F.mood] || "", quest });
+    world.setNpcState(r.name, { meter: primaryMeter(r), mood: (PF.value.mood && r.fields[PF.value.mood]) || "", quest });
   }
-  if (newQuest) void audio.play("quest", { volume: 0.7 });
+  if (newQuest) sfx("quest", { volume: 0.7 });
 }
 
 function say(text: string) {
@@ -385,26 +428,31 @@ function say(text: string) {
 /** 一輪回覆進來：合併狀態、記日誌、把差異變成世界裡看得到的反饋 */
 function applyTurn(full: string, announce: boolean) {
   const before = turn.value;
-  const next = mergeTurn(before, parseTurn(full));
+  const next = mergeTurn(before, parseTurn(full, parseOpts.value));
   turn.value = next;
-  if (next.title.length || next.scene[F.objective]) {
-    log.value.push({ kind: "turn", title: next.title.join(" · "), text: next.scene[F.objective] || "" });
+  const goalKey = PF.value.objective;
+  if (next.title.length || (goalKey && next.scene[goalKey])) {
+    log.value.push({ kind: "turn", title: next.title.join(" · "), text: (goalKey && next.scene[goalKey]) || "" });
   }
   syncWorld();
   if (!announce) return;
-  for (const r of next.roles) {
+  // 主數值升降：作者宣告的第一條數值；飄字寫「標籤 ±差值」
+  const m0 = hud.value.meters[0];
+  if (m0) for (const r of next.roles) {
     const prev = before.roles.find((p) => p.name === r.name);
-    if (prev && prev.affection !== null && r.affection !== null && r.affection !== prev.affection) {
-      const d = r.affection - prev.affection;
-      void audio.play(d > 0 ? "affection-up" : "affection-down");
-      world?.floatText(r.name, d > 0 ? t("game.affUp", { n: d }) : t("game.affDown", { n: d }), d > 0 ? "w-float--up" : "w-float--down");
+    const a = prev?.meters[m0.key], b = r.meters[m0.key];
+    if (prev && a !== null && a !== undefined && b !== null && b !== undefined && a !== b) {
+      const d = b - a;
+      sfx(d > 0 ? "meterUp" : "meterDown");
+      world?.floatText(r.name, `${m0.label || m0.key} ${d > 0 ? "+" : ""}${d}`, d > 0 ? "w-float--up" : "w-float--down");
     }
   }
-  const from = before.scene[F.place] || "", to = next.scene[F.place] || "";
+  const placeKey = PF.value.place;
+  const from = (placeKey && before.scene[placeKey]) || "", to = (placeKey && next.scene[placeKey]) || "";
   if (to && to !== from) {
     const label = world?.travelTo(to) || "";
     if (label) {
-      void audio.play("travel");
+      sfx("travel");
       fading.value = true;
       setTimeout(() => { fading.value = false; }, 700);
       say(t("game.travel", { place: label }));
@@ -434,18 +482,14 @@ onMounted(async () => {
     const d = await fetchRoleDetail(roleId.value, token, locale.value);
     role.value = { name: String(d.roleName || "") };
     const welcome = String(d.roleWelcome || "");
-    turn.value = parseTurn(welcome);
-    if (!canvas.value || !labels.value) return;
-    // 作者存的配置優先；沒有就用站內精修的（示範卡）；再沒有就從角色名單生通用校園
-    const names = turn.value.roles.map((r) => r.name);
+    welcomeText = welcome;
+    // 作者存的配置決定協定，所以先拿配置再解析開場白；沒有配置就是預設協定＋通用校園
     const saved = await fetchGameSpec(roleId.value).catch(() => null);
-    const spec = saved?.spec && saved.spec.enabled !== false ? worldFromSpec(saved.spec, names) : (WORLD_SPECS[roleId.value] || defaultWorldFor(names));
-    audio.setSources(spec.audio);
-    const { World } = await import("@/game/world");
-    world = new World(canvas.value, labels.value, spec, { onNear: (name) => { near.value = name; }, onFootstep: () => audio.footstep() });
-    world.attachMinimap(minimap.value);
-    worldReady.value = true;
-    syncWorld();
+    const spec = saved?.spec && saved.spec.enabled !== false ? saved.spec : null;
+    turn.value = parseTurn(welcome, spec ? { protocol: spec.protocol, meters: spec.hud.meters } : DEFAULT_PARSE);
+    if (!canvas.value || !labels.value) return;
+    const names = turn.value.roles.map((r) => r.name);
+    await bootWorld(spec ?? defaultSpecFor(names), names);
     installTestHooks();
     if (token) await restore(token).catch((e) => console.error("[game] restore failed", e));
   } catch (e) {
@@ -453,6 +497,24 @@ onMounted(async () => {
     loadError.value = t("game.loadFailed");
   }
 });
+
+/** 開場白原文：換配置重建世界時要重新解析 */
+let welcomeText = "";
+/** 用一份配置把世界建起來（首次載入與開發時換配置都走這裡） */
+async function bootWorld(spec: GameSpecJson, names: string[]) {
+  if (!canvas.value || !labels.value) return;
+  world?.dispose(); world = null; worldReady.value = false;
+  // 換世界要把上一個世界留下的東西清乾淨：CSS2D 標籤掛在同一個容器裡，靠近提示與任務標記是頁面自己的狀態
+  labels.value.replaceChildren(); near.value = null; questNames.clear();
+  gameSpec.value = spec;
+  audio.setSources(spec.audio.sources);
+  audio.setFootstep(spec.audio.events.footstep || "");
+  const { World } = await import("@/game/world");
+  world = new World(canvas.value, labels.value, worldFromSpec(spec, names), { onNear: (name) => { near.value = name; }, onFootstep: () => audio.footstep() });
+  world.attachMinimap(minimap.value);
+  worldReady.value = true;
+  syncWorld();
+}
 
 onBeforeUnmount(() => { abort?.(); world?.dispose(); world = null; audio.dispose(); window.removeEventListener("pointerdown", unlockAudio); window.removeEventListener("keydown", unlockAudio); });
 
@@ -548,9 +610,9 @@ async function loadArchives(token: string) {
 async function adopt(newId: string, welcome: string, token: string) {
   conversationId.value = newId;
   lastUserChatId.value = ""; lastUserText.value = ""; lastAiChatId.value = ""; playerLine.value = ""; live.value = ""; log.value = [];
-  turn.value = parseTurn(welcome || turn.value.prose ? welcome : "");
+  turn.value = parseTurn(welcome || turn.value.prose ? welcome : "", parseOpts.value);
   const rows = await fetchRecentMessages(UPSTREAM_API, token, newId, locale.value).catch(() => []);
-  if (!rows.length && !welcome) { const s = await startConversation(UPSTREAM_API, token, roleId.value, locale.value).catch(() => null); if (s) turn.value = parseTurn(s.welcome); }
+  if (!rows.length && !welcome) { const s = await startConversation(UPSTREAM_API, token, roleId.value, locale.value).catch(() => null); if (s) turn.value = parseTurn(s.welcome, parseOpts.value); }
   for (const r of rows) {
     if (r.role === "AI") { applyTurn(r.text, false); lastAiChatId.value = r.chatId; }
     else { lastUserChatId.value = r.chatId; lastUserText.value = r.text; log.value.push({ kind: "you", title: heroName.value, text: r.text, chatId: r.chatId }); }
@@ -655,7 +717,7 @@ async function restart() {
     const s = await startNewConversation(UPSTREAM_API, token, conversationId.value, locale.value);
     conversationId.value = s.conversationId;
     lastUserChatId.value = ""; lastUserText.value = ""; playerLine.value = ""; live.value = ""; log.value = [];
-    turn.value = parseTurn(s.welcome);
+    turn.value = parseTurn(s.welcome, parseOpts.value);
     syncWorld();
     closeTalk();
     say(t("game.newChatDone"));
@@ -686,6 +748,16 @@ function installTestHooks() {
   };
   (window as unknown as { __THREE_GAME_TEST_HOOKS__: unknown }).__THREE_GAME_TEST_HOOKS__ = {
     setState: (name: string) => { const fn = states[name]; if (!fn) throw new Error(`unknown state ${name}`); fn(); return { state: name }; },
+    /** 用另一份配置重建世界（驗證「不改程式只改配置」用）：回驗證結果 */
+    loadSpec: async (json: unknown, welcome?: string) => {
+      const { validateGameSpec } = await import("../../../shared/game-spec");
+      const v = validateGameSpec(json); if (!v.ok) return { ok: false, errors: v.errors };
+      closeTalk();
+      if (typeof welcome === "string") welcomeText = welcome;
+      turn.value = parseTurn(welcomeText, { protocol: v.spec.protocol, meters: v.spec.hud.meters });
+      await bootWorld(v.spec, turn.value.roles.map((r) => r.name));
+      return { ok: true, npcs: world?.npcNames() ?? [] };
+    },
     setPausedForScreenshot: (v: boolean) => { w.paused = v; },
     seed: () => {},
   };
@@ -714,7 +786,7 @@ function installTestHooks() {
         <span v-for="(chip, i) in turn.title" :key="i" class="game__chip">{{ chip }}</span>
       </div>
       <div class="game__scene">
-        <span v-for="r in sceneRows" :key="r.key" class="game__scene-item"><small>{{ $t(r.label) }}</small>{{ r.value }}</span>
+        <span v-for="r in sceneRows" :key="r.key" class="game__scene-item"><small>{{ r.label }}</small>{{ r.value }}</span>
         <span v-if="round" class="game__scene-item game__scene-item--round">{{ $t("game.round", { n: round }) }}</span>
         <span v-if="session.wallet" class="game__scene-item game__scene-item--round" :title="$t('game.points')">{{ $t("game.pointsShort", { n: (session.wallet.score || 0) + (session.wallet.tempScore || 0) }) }}</span>
         <button type="button" class="btn btn--ghost btn--sm game__logbtn" :class="{ 'game__logbtn--on': showLog }" @click="showLog = !showLog">{{ $t("game.log") }}</button>
@@ -735,7 +807,7 @@ function installTestHooks() {
       <div v-if="heroRows.length" class="hud__block">
         <div class="hud__eyebrow">{{ $t("game.hero") }}</div>
         <dl class="hud__rows">
-          <template v-for="r in heroRows" :key="r.key"><dt>{{ $t(r.label) }}</dt><dd>{{ r.value }}</dd></template>
+          <template v-for="r in heroRows" :key="r.key"><dt>{{ r.label }}</dt><dd>{{ r.value }}</dd></template>
         </dl>
       </div>
       <div v-if="turn.roles.length" class="hud__block">
@@ -744,7 +816,8 @@ function installTestHooks() {
           <li v-for="r in turn.roles" :key="r.name">
             <button type="button" class="hud__npc" :title="$t('game.goTo', { name: r.name })" @click="world?.goTo(r.name)">
               <b>{{ r.name }}</b>
-              <span v-if="r.affection !== null" class="hud__aff"><i :style="{ width: Math.max(0, Math.min(100, r.affection)) + '%' }"></i></span>
+              <small v-for="f in roleRows(r)" :key="f.key" class="hud__role-field">{{ f.value }}</small>
+              <span v-for="m in meterBars(r)" :key="m.key" class="hud__aff" :title="`${m.label} ${m.value}`"><i :style="{ width: m.pct + '%', background: m.color }"></i></span>
             </button>
           </li>
         </ul>
@@ -924,7 +997,9 @@ function installTestHooks() {
 .hud__npc { all: unset; display: grid; grid-template-columns: 1fr 64px; align-items: center; gap: var(--s-2); cursor: pointer; padding: 4px 6px; margin: 0 -6px; border-radius: 4px; }
 .hud__npc:hover { background: rgba(143, 214, 255, 0.12); }
 .hud__aff { height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.18); overflow: hidden; }
-.hud__aff i { display: block; height: 100%; background: linear-gradient(90deg, #ff9ab5, #ff5c8a); transition: width var(--dur-slow) var(--ease); }
+.hud__aff i { display: block; height: 100%; background: #ff5c8a; transition: width var(--dur-slow) var(--ease); }
+.hud__aff + .hud__aff { margin-top: 3px; }
+.hud__role-field { display: block; font-size: 11px; color: rgba(255, 255, 255, 0.72); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .minimap { position: absolute; right: var(--s-4); top: 76px; width: 150px; height: 150px; z-index: 3; filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.5)); }
 
