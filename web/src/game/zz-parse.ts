@@ -151,3 +151,24 @@ export function speakerOf(prose: string, names: string[]): string {
   }
   return best;
 }
+
+/**
+ * 一段敘事切成台詞／心理／旁白三種片段，畫面用不同顏色區分。
+ * 台詞＝成對引號（“ ” " " 「 」『 』）；心理＝成對括號（（ ）( )）或 *…*；其餘是旁白。
+ * 只認成對的記號，落單的引號當普通文字，不會把後半段全吃進去。
+ */
+export type SpeechKind = "say" | "thought" | "narr";
+export interface SpeechSegment { kind: SpeechKind; text: string }
+const SPEECH = /(“[^”]{1,400}”|"[^"\n]{1,400}"|「[^」]{1,400}」|『[^』]{1,400}』)|(（[^）]{1,400}）|\([^)\n]{1,400}\)|\*[^*\n]{1,400}\*)/g;
+export function splitSpeech(text: string): SpeechSegment[] {
+  const out: SpeechSegment[] = [];
+  let last = 0;
+  for (const m of text.matchAll(SPEECH)) {
+    const at = m.index ?? 0;
+    if (at > last) out.push({ kind: "narr", text: text.slice(last, at) });
+    out.push({ kind: m[1] ? "say" : "thought", text: m[0] });
+    last = at + m[0].length;
+  }
+  if (last < text.length) out.push({ kind: "narr", text: text.slice(last) });
+  return out;
+}

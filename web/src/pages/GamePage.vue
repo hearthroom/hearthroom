@@ -23,7 +23,7 @@ import { useLocalePath } from "@/lib/use-locale";
 import { backwardTo, deleteConversation, fetchArchives, fetchRecentMessages, forkConversation, renameConversation, sendTurn, startConversation, startNewConversation, suggestReply, switchConversation, type Archive } from "@/game/chat-client";
 import { confirmDialog } from "@/lib/confirm";
 import { defaultSpecFor, presetFor, worldFromSpec } from "@/game/specs";
-import { DEFAULT_PARSE, isUnset, mergeTurn, parseTurn, speakerOf, type GameRole, type GameTurn, type ParseOptions } from "@/game/zz-parse";
+import { DEFAULT_PARSE, isUnset, mergeTurn, parseTurn, speakerOf, splitSpeech, type GameRole, type GameTurn, type ParseOptions } from "@/game/zz-parse";
 import type { GameSpecJson } from "../../../shared/game-spec";
 import type { World } from "@/game/world";
 import { GameAudio } from "@/game/audio";
@@ -362,6 +362,13 @@ const signedIn = computed(() => !!session.me);
 const touch = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
 const prose = computed(() => (streaming.value ? parseTurn(live.value, parseOpts.value).prose : turn.value.prose));
 const paragraphs = computed(() => prose.value.split(/\n+/).map((s) => s.trim()).filter(Boolean));
+/** 每段再切成台詞／心理／旁白，畫面用三種顏色區分（見 DESIGN.md §7：旁白弱化、台詞亮色） */
+const styledParagraphs = computed(() => paragraphs.value.map((p) => splitSpeech(p)));
+/** 工具列放不下十顆鍵：常用的三顆留在列上，其餘收進「更多」選單 */
+const moreOpen = ref(false);
+function onDocClick(e: MouseEvent) { if (moreOpen.value && !(e.target as HTMLElement).closest(".panel__more")) moreOpen.value = false; }
+watch(moreOpen, (v) => { if (v) document.addEventListener("click", onDocClick, true); else document.removeEventListener("click", onDocClick, true); });
+function pick(fn: () => void) { moreOpen.value = false; fn(); }
 const speaker = computed(() => speakerOf(prose.value, turn.value.roles.map((r) => r.name)) || talking.value || "");
 // i18n-ignore：這張表的 key 是預設協定的欄位名（資料）；作者沒給 label 時，預設欄位仍有翻譯
 const DEFAULT_LABELS: Record<string, string> = { 名字: "game.field.name", 身份: "game.field.identity", 外貌: "game.field.appearance", 能力: "game.field.ability", 时间: "game.field.time", 地点: "game.field.place" };
@@ -906,19 +913,27 @@ function installTestHooks() {
           <button v-if="signedIn" type="button" class="btn btn--ghost btn--sm" :disabled="streaming || !lastUserChatId" :title="$t('game.regenHint')" @click="regenerate">{{ $t("game.regen") }}</button>
           <button v-if="signedIn" type="button" class="btn btn--ghost btn--sm" :disabled="streaming || assisting" :title="$t('game.assistHint')" @click="assist">{{ assisting ? $t("game.thinking") : $t("game.assist") }}</button>
           <button v-if="signedIn" type="button" class="btn btn--ghost btn--sm" :disabled="streaming || !lastAiChatId" :title="$t('game.continueHint')" @click="continueTurn">{{ $t("game.continue") }}</button>
-          <button v-if="signedIn" type="button" class="btn btn--ghost btn--sm" :disabled="streaming" @click="openSheet('archives')">{{ $t("game.archive.title") }}</button>
-          <button v-if="signedIn" type="button" class="btn btn--ghost btn--sm" :disabled="streaming" @click="restart">{{ $t("game.newChat") }}</button>
-          <button type="button" class="btn btn--ghost btn--sm" :disabled="streaming" @click="openSheet('model')">{{ $t("game.settings.model") }}</button>
-          <button type="button" class="btn btn--ghost btn--sm" :disabled="streaming" @click="openSheet('persona')">{{ $t("game.settings.persona") }}</button>
-          <button type="button" class="btn btn--ghost btn--sm" :disabled="streaming" @click="openSheet('directives')">{{ $t("game.settings.directives") }}</button>
-          <button v-if="signedIn" type="button" class="btn btn--ghost btn--sm" :disabled="streaming" @click="openSheet('notepad')">{{ $t("notepad.title") }}</button>
-          <button v-if="signedIn" type="button" class="btn btn--ghost btn--sm" :disabled="streaming" @click="openSheet('memory')">{{ $t("chat.permanentMemory") }}</button>
+          <div class="panel__more">
+            <button type="button" class="btn btn--ghost btn--sm" :class="{ 'panel__morebtn--on': moreOpen }" :disabled="streaming" :aria-expanded="moreOpen" aria-haspopup="menu" @click="moreOpen = !moreOpen">{{ $t("game.more") }} ⋯</button>
+            <div v-if="moreOpen" class="panel__menu" role="menu">
+              <template v-if="signedIn">
+                <button type="button" role="menuitem" @click="pick(() => openSheet('archives'))">{{ $t("game.archive.title") }}</button>
+                <button type="button" role="menuitem" @click="pick(restart)">{{ $t("game.newChat") }}</button>
+                <button type="button" role="menuitem" @click="pick(() => openSheet('notepad'))">{{ $t("game.settings.notepad") }}</button>
+                <button type="button" role="menuitem" @click="pick(() => openSheet('memory'))">{{ $t("game.settings.memory") }}</button>
+                <hr />
+              </template>
+              <button type="button" role="menuitem" @click="pick(() => openSheet('model'))">{{ $t("game.settings.model") }}</button>
+              <button type="button" role="menuitem" @click="pick(() => openSheet('persona'))">{{ $t("game.settings.persona") }}</button>
+              <button type="button" role="menuitem" @click="pick(() => openSheet('directives'))">{{ $t("game.settings.directives") }}</button>
+            </div>
+          </div>
           <button type="button" class="btn btn--ghost btn--sm panel__close" :disabled="streaming" @click="closeTalk">{{ $t("game.close") }}</button>
         </div>
       </div>
       <div ref="narr" class="panel__narr">
         <p v-if="playerLine" class="panel__you"><span>{{ heroName }}</span>{{ playerLine }}</p>
-        <p v-for="(p, i) in paragraphs" :key="i" class="panel__p">{{ p }}</p>
+        <p v-for="(segs, i) in styledParagraphs" :key="i" class="panel__p"><span v-for="(sg, j) in segs" :key="j" :class="`sp sp--${sg.kind}`">{{ sg.text }}</span></p>
         <p v-if="streaming && !paragraphs.length" class="panel__p panel__p--wait">{{ $t("game.thinking") }}</p>
         <span v-if="streaming" class="panel__caret" aria-hidden="true"></span>
         <p v-if="error" class="panel__error" role="alert">{{ error }}</p>
@@ -1042,9 +1057,20 @@ function installTestHooks() {
 .panel::before { content: ""; position: absolute; left: 0; top: 14px; bottom: 14px; width: 3px; background: var(--cyan); }
 @keyframes rise { from { transform: translate(-50%, 12px); opacity: 0; } }
 .panel__head { display: flex; align-items: center; justify-content: space-between; }
-.panel__who { font-size: 16px; letter-spacing: 0.04em; color: var(--cyan); }
+.panel__who { font-size: 16px; letter-spacing: 0.04em; color: var(--cyan); white-space: nowrap; flex: 0 0 auto; }
 .panel__who::before { content: "▸ "; opacity: 0.7; }
-.panel__tools { display: flex; gap: 2px; flex-wrap: wrap; justify-content: flex-end; }
+.panel__tools { display: flex; gap: 2px; flex-wrap: nowrap; justify-content: flex-end; align-items: center; }
+.panel__more { position: relative; }
+.panel__morebtn--on { color: var(--ink) !important; background: rgba(255, 255, 255, 0.1); }
+/* 兩欄：面板本身不高（overflow hidden 裁得掉），七項排成一欄會掉出底邊 */
+.panel__menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 3; min-width: 280px; padding: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; max-height: 40vh; overflow-y: auto; border-radius: 12px; background: rgba(14, 18, 30, 0.96); border: 1px solid rgba(143, 214, 255, 0.25); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.panel__menu button { display: block; width: 100%; text-align: left; padding: 8px 12px; border: 0; border-radius: 8px; background: none; color: var(--ink); font: inherit; font-size: 13px; cursor: pointer; }
+.panel__menu button:hover { background: rgba(255, 255, 255, 0.1); }
+.panel__menu hr { grid-column: 1 / -1; border: 0; border-top: 1px solid rgba(255, 255, 255, 0.12); margin: 4px 6px; }
+/* 台詞亮、旁白弱化冷灰、心理斜體偏紫：三種一眼分得開，又不加框 */
+.sp--narr { color: rgba(222, 230, 245, 0.72); }
+.sp--say { color: #fff3dc; }
+.sp--thought { color: #c9b8ff; font-style: italic; }
 .panel__tools .btn { color: var(--ink-2); }
 .panel__tools .btn:hover { color: var(--ink); background: rgba(255, 255, 255, 0.1); }
 .panel__close { color: var(--ink-2); }
@@ -1077,6 +1103,8 @@ function installTestHooks() {
   .logpanel { top: 200px; width: calc(100% - 2 * var(--s-4)); }
   .panel { bottom: var(--s-3); width: calc(100% - 2 * var(--s-3)); padding: var(--s-3) var(--s-4) var(--s-3) calc(var(--s-4) + 6px); }
   .panel__narr { max-height: 28vh; font-size: 14px; }
+  .panel__head { flex-wrap: wrap; gap: 4px; }
+  .panel__tools { flex-wrap: wrap; }
   .game__hint small { white-space: normal; max-width: 80vw; }
 }
 </style>

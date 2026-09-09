@@ -900,5 +900,8 @@
   "gameEd.audio.ambience": "環境音（依光照）",
   "gameEd.none": "（無）",
   "gameEd.resources": "圖片與音訊可以放到「我的資源」再貼網址；3D 模型目前要用外部網址。",
-  "mine.action.game": "遊戲模式"
+  "mine.action.game": "遊戲模式",
+  "game.more": "更多",
+  "game.settings.notepad": "手帳",
+  "game.settings.memory": "永久記憶"
 }

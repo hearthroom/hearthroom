@@ -900,5 +900,8 @@
   "gameEd.audio.ambience": "環境音（ライティングごと）",
   "gameEd.none": "（なし）",
   "gameEd.resources": "画像と音声は「マイリソース」に置いて URL を貼れます。3D モデルは今のところ外部 URL が必要です。",
-  "mine.action.game": "ゲームモード"
+  "mine.action.game": "ゲームモード",
+  "game.more": "その他",
+  "game.settings.notepad": "手帳",
+  "game.settings.memory": "永久記憶"
 }
