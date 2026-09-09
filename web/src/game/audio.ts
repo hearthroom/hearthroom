@@ -6,8 +6,6 @@
  *
  * ponytail: 沒有音量設定面板；靜音鍵在頁面上（M 鍵）。
  */
-export type SfxName = "ui-open" | "ui-close" | "footstep" | "affection-up" | "affection-down" | "travel" | "quest";
-export type AmbienceName = "day" | "dusk" | "night";
 
 
 /** 峰值歸一化：把整段拉到目標峰值（太小的放大、爆音的壓下來），就地改 buffer */
@@ -26,7 +24,7 @@ export class GameAudio {
   private ambGain!: GainNode;
   private sfxGain!: GainNode;
   private buffers = new Map<string, Promise<AudioBuffer | null>>();
-  private ambience: { name: AmbienceName; src: AudioBufferSourceNode } | null = null;
+  private ambience: { name: string; src: AudioBufferSourceNode } | null = null;
   private lastStep = 0;
   muted = false;
   /** 每個聲音的網址；沒設的就沒有這個聲音 */
@@ -63,7 +61,11 @@ export class GameAudio {
     return p;
   }
 
-  async play(name: SfxName, opts: { volume?: number; rate?: number } = {}) {
+  /** 哪個來源鍵是腳步聲（作者在 audio.events.footstep 宣告） */
+  private footstepKey = "";
+  setFootstep(key: string) { this.footstepKey = key; }
+
+  async play(name: string, opts: { volume?: number; rate?: number } = {}) {
     if (!this.ctx || this.muted) return;
     const buf = await this.load(name);
     if (!buf || !this.ctx) return;
@@ -77,14 +79,14 @@ export class GameAudio {
     const now = performance.now();
     if (now - this.lastStep < 320) return;
     this.lastStep = now;
-    void this.play("footstep", { volume: 0.5, rate: 0.92 + Math.random() * 0.16 });
+    if (this.footstepKey) void this.play(this.footstepKey, { volume: 0.5, rate: 0.92 + Math.random() * 0.16 });
   }
 
-  /** 環境音跟著色溫換，交叉淡入淡出 */
-  async setAmbience(name: AmbienceName) {
+  /** 環境音跟著光照預設換（作者在 audio.ambience 把預設 id 對到來源鍵），交叉淡入淡出；空鍵＝停掉 */
+  async setAmbience(name: string) {
     if (!this.ctx) return;
-    if (this.ambience?.name === name) return;
-    const buf = await this.load(`ambience-${name}`);
+    if ((this.ambience?.name || "") === name) return;
+    const buf = name ? await this.load(name) : null;
     if (!this.ctx) return;
     const old = this.ambience;
     if (old) { try { old.src.stop(this.ctx.currentTime + 1.2); } catch { /* 已停 */ } }

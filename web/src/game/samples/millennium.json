@@ -1,0 +1,384 @@
+{
+  "version": 2,
+  "enabled": true,
+  "environment": {
+    "kit": "campus",
+    "sky": "/game/textures/sky-day.jpg",
+    "buildings": [
+      {
+        "pos": [
+          0,
+          -12
+        ],
+        "size": [
+          12,
+          7,
+          9
+        ],
+        "label": "夏莱办公室"
+      },
+      {
+        "pos": [
+          -18,
+          -12
+        ],
+        "size": [
+          14,
+          10,
+          10
+        ],
+        "color": "#eef3fb",
+        "label": "研讨会大楼"
+      },
+      {
+        "pos": [
+          18,
+          -12
+        ],
+        "size": [
+          18,
+          8,
+          9
+        ],
+        "label": "教学楼"
+      },
+      {
+        "pos": [
+          20,
+          12
+        ],
+        "size": [
+          5,
+          4,
+          5
+        ],
+        "color": "#fff4ea",
+        "label": "商业街"
+      },
+      {
+        "pos": [
+          26,
+          12
+        ],
+        "size": [
+          5,
+          5,
+          5
+        ],
+        "color": "#f6ecff"
+      },
+      {
+        "pos": [
+          20,
+          19
+        ],
+        "size": [
+          5,
+          4,
+          5
+        ],
+        "color": "#eafaf1"
+      },
+      {
+        "pos": [
+          -22,
+          10
+        ],
+        "size": [
+          8,
+          5,
+          8
+        ],
+        "color": "#f3f7ff",
+        "label": "图书馆"
+      },
+      {
+        "pos": [
+          -36,
+          -6
+        ],
+        "size": [
+          10,
+          14,
+          10
+        ],
+        "color": "#f6f8fc"
+      },
+      {
+        "pos": [
+          36,
+          -4
+        ],
+        "size": [
+          9,
+          12,
+          9
+        ],
+        "color": "#f6f8fc"
+      }
+    ],
+    "trees": [
+      [
+        -8,
+        12
+      ],
+      [
+        8,
+        12
+      ],
+      [
+        -8,
+        20
+      ],
+      [
+        8,
+        20
+      ],
+      [
+        -28,
+        -2
+      ],
+      [
+        -28,
+        4
+      ],
+      [
+        30,
+        -2
+      ],
+      [
+        30,
+        4
+      ],
+      [
+        -14,
+        16
+      ],
+      [
+        14,
+        24
+      ],
+      [
+        -30,
+        16
+      ],
+      [
+        32,
+        22
+      ],
+      [
+        -24,
+        24
+      ],
+      [
+        24,
+        28
+      ],
+      [
+        -40,
+        12
+      ],
+      [
+        40,
+        14
+      ]
+    ],
+    "lamps": [
+      [
+        -4,
+        6
+      ],
+      [
+        4,
+        6
+      ],
+      [
+        -4,
+        16
+      ],
+      [
+        4,
+        16
+      ],
+      [
+        -10,
+        -4
+      ],
+      [
+        10,
+        -4
+      ],
+      [
+        -4,
+        26
+      ],
+      [
+        4,
+        26
+      ],
+      [
+        -20,
+        2
+      ],
+      [
+        22,
+        4
+      ],
+      [
+        -4,
+        -20
+      ],
+      [
+        4,
+        -20
+      ]
+    ],
+    "places": [
+      {
+        "match": "研讨会|会计|书记",
+        "pos": [
+          -12,
+          3
+        ],
+        "label": "研讨会大楼"
+      },
+      {
+        "match": "教室|课堂|教学楼",
+        "pos": [
+          14,
+          -2
+        ],
+        "label": "教学楼"
+      },
+      {
+        "match": "商业街|商店|便利店|咖啡",
+        "pos": [
+          14,
+          12
+        ],
+        "label": "商业街"
+      },
+      {
+        "match": "图书馆",
+        "pos": [
+          -22,
+          16
+        ],
+        "label": "图书馆"
+      },
+      {
+        "match": "校门|入口|广场|大门",
+        "pos": [
+          0,
+          22
+        ],
+        "label": "中央广场"
+      },
+      {
+        "match": "什亭之匣|夏莱|办公室",
+        "pos": [
+          0,
+          4
+        ],
+        "label": "夏莱办公室"
+      }
+    ]
+  },
+  "characters": [
+    {
+      "name": "阿罗娜",
+      "color": "#5ec2f5",
+      "look": {
+        "hair": "#8fd3ff",
+        "hairStyle": "bob"
+      },
+      "accessory": "halo-arc",
+      "pos": [
+        0,
+        -3
+      ],
+      "face": 3.1416,
+      "wander": 1.5,
+      "model": {
+        "url": "/game/models/arona/character.glb",
+        "height": 2.2
+      }
+    },
+    {
+      "name": "早濑优香",
+      "color": "#4f7bea",
+      "look": {
+        "hair": "#2a4fc7",
+        "hairStyle": "twin"
+      },
+      "accessory": "halo-hex",
+      "pos": [
+        -15,
+        -2
+      ],
+      "face": 1.885,
+      "wander": 3,
+      "model": {
+        "url": "/game/models/yuuka/character.glb",
+        "height": 2.2
+      }
+    },
+    {
+      "name": "生盐诺亚",
+      "color": "#b39cf5",
+      "look": {
+        "hair": "#ece9f8",
+        "hairStyle": "long"
+      },
+      "accessory": "halo-ring",
+      "pos": [
+        -12,
+        0
+      ],
+      "face": 1.5708,
+      "wander": 3,
+      "model": {
+        "url": "/game/models/noa/character.glb",
+        "height": 2.2
+      }
+    }
+  ],
+  "player": {
+    "spawn": [
+      0,
+      8
+    ],
+    "model": {
+      "url": "/game/models/sensei/character.glb",
+      "height": 2.35
+    }
+  },
+  "audio": {
+    "sources": {
+      "ambience-day": "/game/audio/ambience-day.mp3",
+      "ambience-dusk": "/game/audio/ambience-dusk.mp3",
+      "ambience-night": "/game/audio/ambience-night.mp3",
+      "ui-open": "/game/audio/ui-open.mp3",
+      "ui-close": "/game/audio/ui-close.mp3",
+      "footstep": "/game/audio/footstep.mp3",
+      "affection-up": "/game/audio/affection-up.mp3",
+      "affection-down": "/game/audio/affection-down.mp3",
+      "travel": "/game/audio/travel.mp3",
+      "quest": "/game/audio/quest.mp3"
+    },
+    "events": {
+      "footstep": "footstep",
+      "uiOpen": "ui-open",
+      "uiClose": "ui-close",
+      "meterUp": "affection-up",
+      "meterDown": "affection-down",
+      "travel": "travel",
+      "quest": "quest"
+    },
+    "ambience": {
+      "day": "ambience-day",
+      "dusk": "ambience-dusk",
+      "night": "ambience-night"
+    }
+  }
+}

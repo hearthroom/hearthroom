@@ -70,7 +70,7 @@ import { confirmDialog } from "@/lib/confirm";
 import { track } from "@/lib/track";
 import FieldText from "@/components/editor/FieldText.vue";
 import { validateGameSpec, type GameSpecJson } from "../../../shared/game-spec";
-import { specTemplateFor } from "@/game/specs";
+import { canPlayAsGame, specTemplateFor } from "@/game/specs";
 import { parseTurn } from "@/game/zz-parse";
 import ListEditor from "@/components/editor/ListEditor.vue";
 import ImageField from "@/components/editor/ImageField.vue";
@@ -202,12 +202,12 @@ const gameErrors = ref<string[]>([]);
 const gameDirty = computed(() => gameText.value !== gameOriginal.value || gameEnabled.value !== gameEnabledOriginal.value);
 /** 開場白裡 zzroles 的角色名：範本要把他們都擺上台 */
 const gameNames = computed(() => parseTurn(draft.value.roleWelcome || "").roles.map((r) => r.name));
-const gameProtocolMissing = computed(() => !/<zzroles>/.test(draft.value.roleWelcome || ""));
+const gameProtocolMissing = computed(() => !canPlayAsGame(gameSpecParsed.value?.protocol, draft.value.roleWelcome || ""));
 // 世界編輯器（表單）跟底下的 JSON 是同一份：開編輯器時把 JSON 解出來給它，按完成再寫回 JSON
 const gameOpen = ref(false);
 const gameShowJson = ref(false);
 const gameSpecParsed = computed(() => { if (!gameText.value.trim()) return null; const v = validateGameSpec(gameText.value); return v.ok ? v.spec : null; });
-const gameNpcCount = computed(() => gameSpecParsed.value?.npcs.length ?? 0);
+const gameNpcCount = computed(() => gameSpecParsed.value?.characters.length ?? 0);
 function onGameEdited(spec: GameSpecJson) { gameText.value = JSON.stringify({ ...spec, enabled: gameEnabled.value }, null, 2); gameErrors.value = []; }
 
 async function loadGameSpec() {
@@ -224,7 +224,7 @@ async function loadGameSpec() {
   gameErrors.value = [];
 }
 function gameUseTemplate() {
-  gameText.value = JSON.stringify(specTemplateFor(roleId.value, gameNames.value), null, 2);
+  gameText.value = JSON.stringify(specTemplateFor(gameNames.value), null, 2);
   gameErrors.value = [];
 }
 function gameCheck(): boolean {
@@ -1379,7 +1379,7 @@ async function exportCard(format: "png" | "json") {
 
     <div class="toast" role="status" :hidden="!toast">{{ toast }}</div>
     <RegexRulesEditor v-if="regexOpen" v-model="regexSet" @close="regexOpen = false" />
-    <GameWorldEditor v-if="gameOpen" :model-value="gameSpecParsed" :names="gameNames" :role-id="roleId" @update:model-value="onGameEdited" @close="gameOpen = false" />
+    <GameWorldEditor v-if="gameOpen" :model-value="gameSpecParsed" :names="gameNames" @update:model-value="onGameEdited" @close="gameOpen = false" />
   </div>
 </template>
 
