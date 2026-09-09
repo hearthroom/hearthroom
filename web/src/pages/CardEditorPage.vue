@@ -129,6 +129,8 @@ const regexOpen = ref(false);
 type Panel = "test" | "res";
 const PANEL_KEY = "hearthroom.editor.panel";
 const panel = ref<Panel>("test");
+/** 分頁列上的重載鈕要按到面板裡的 iframe。 */
+const testPanel = ref<InstanceType<typeof ChatTestPanel> | null>(null);
 const panelOpen = ref(true);
 try {
   const saved = localStorage.getItem(PANEL_KEY);
@@ -1305,6 +1307,24 @@ async function exportCard(format: "png" | "json") {
               {{ $t("editor.panel.resources") }}
             </button>
           </div>
+          <template v-if="(panelOpen || sheetOpen) && panel === 'test' && roleId">
+            <button type="button" class="btn btn--icon btn--sm btn--ghost" :title="$t('editor.test.reload')"
+                    :aria-label="$t('editor.test.reload')" @click="testPanel?.reload()">
+              <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M13.5 8a5.5 5.5 0 1 1-1.61-3.89" />
+                <path d="M13.9 2.2v3.2h-3.2" />
+              </svg>
+            </button>
+            <a class="btn btn--icon btn--sm btn--ghost" :href="lp(`/play/${roleId}`)" target="_blank" rel="noopener"
+               :title="$t('editor.test.newTab')" :aria-label="$t('editor.test.newTab')">
+              <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M6.5 3H3.5A1.5 1.5 0 0 0 2 4.5v8A1.5 1.5 0 0 0 3.5 14h8a1.5 1.5 0 0 0 1.5-1.5v-3" />
+                <path d="M9.5 2.5h4v4M13.5 2.5l-6 6" />
+              </svg>
+            </a>
+          </template>
           <button v-if="sheetOpen" type="button" class="btn btn--sm btn--ghost" @click="sheetOpen = false">
             {{ $t("dialog.close") }}
           </button>
@@ -1321,7 +1341,7 @@ async function exportCard(format: "png" | "json") {
         </div>
 
         <div v-if="panelOpen || sheetOpen" class="rail__panel">
-          <ChatTestPanel v-if="panel === 'test'" :role-id="roleId" :dirty="dirty" :saving="saving" @save="save" />
+          <ChatTestPanel v-if="panel === 'test'" ref="testPanel" :role-id="roleId" :dirty="dirty" :saving="saving" @save="save" />
           <ResourcePanel v-else />
         </div>
 
@@ -1464,24 +1484,36 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .rail {
   position: sticky; top: calc(var(--header-h) + var(--s-4));
   height: calc(100vh - var(--header-h) - var(--s-4) * 2);
-  display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto auto; gap: var(--s-4);
+  display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto auto; gap: var(--s-3);
 }
 /* 面板收起來時沒有東西要撐開，讓右欄縮回內容高，底下不留一長條空白 */
 .rail:not(.rail--wide) { height: auto; grid-template-rows: auto auto auto auto; }
-/* 面板打開時右欄要裝得下一個真的對話；收起來就把版面讓回表單 */
-.layout:has(.rail--wide) { --rail-w: 440px; }
+/*
+   右欄的寬度跟著手機框走，不是一個寫死的數字。框的高度吃滿面板、寬度由 9:19.5 反推，
+   所以能有多寬完全看視窗有多高；固定 440px 在一般筆電上會在框旁邊留下兩百多像素的空白，
+   那條空白既放不下東西、又是從表單那邊借來的。下面這條就是把上面那串行高減完之後
+   乘上比例：可用高 ≈ 100vh − 60(頁首) − 32(上下留白) − 159(分頁列/檢查清單/按鈕/狀態與間距)，
+   乘 9/19.5 得 46vh − 116px，再加一點讓框不要貼著邊。上下限擋住極端視窗。
+   算不準也不會壞：框太窄就由 max-width 收，框太寬就維持置中留白。
+*/
+.layout:has(.rail--wide) { --rail-w: clamp(300px, calc(46vh - 92px), 520px); }
 .rail__tabs { display: flex; gap: var(--s-2); align-items: center; }
-.rail__tabs .seg { flex: 1; min-width: 0; overflow-x: auto; }
+.rail__tabs .seg { min-width: 0; overflow-x: auto; }
+/* 收合鈕永遠靠右，中間那幾顆工具鈕貼著分頁籤 */
+.rail__tabs > :last-child { margin-left: auto; }
 /* 明寫一條 1fr：隱式的 auto 行會讓面板縮成內容高，裡面靠 height:100% 的東西
    （對話測試那個照手機比例的框）就失去基準，反被自己的比例撐開。 */
 .rail__panel { min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr); }
 /* 預覽只是看的：inert 擋掉點擊與焦點，hover 的浮起也一起沒了，它就安靜地待在那 */
-.rail__check { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; color: var(--text-3); }
+/* 橫排：三條各佔一行等於從手機框身上拿走 40 多像素，而它們短到一行放得下 */
+.rail__check { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px var(--s-3); font-size: 13px; color: var(--text-3); }
 .rail__check li { display: flex; align-items: center; gap: 8px; }
 .rail__check li.ok { color: var(--success); }
 .rail__check svg { width: 14px; height: 14px; flex: none; }
-.rail__acts { display: grid; gap: var(--s-2); }
-.rail__acts .btn { width: 100%; }
+.rail__acts { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-2); }
+.rail__acts .btn { width: 100%; padding-inline: var(--s-3); }
+/* 「回到我的卡片」自己一行：它最長，跟儲存擠一排會被切掉 */
+.rail__acts > :last-child { grid-column: 1 / -1; }
 .rail__state { margin: 0; min-height: 1.6em; }
 
 /* ---- 窄一點：右欄收掉，動作回到底部黏著的那條 ---------------------------------- */
