@@ -122,9 +122,47 @@ export interface TurnInput {
   base: string; token: string; conversationId: string; message: string; lang: string;
   /** 重寫：指向要重跑的那一句「玩家訊息」的 chatId（伺服器契約），message 帶原句 */
   rewriteChatId?: string;
+  /** 繼續：指向要接著寫的那一則「AI 訊息」的 chatId，message 留空 */
+  continueChatId?: string;
 }
 
 /** 送一輪。回傳的函式可以中止（關 socket）。 */
+// ---- 存檔：這張卡的對話清單、改名、切換、分叉；劇情回溯 -------------------------------
+
+export interface Archive { conversationId: string; title: string; messageCount: number; isCurrent: boolean; updatedAt: number }
+export interface ArchiveList { archives: Archive[]; count: number; limit: number }
+
+export async function fetchArchives(base: string, token: string, roleId: string, lang: string): Promise<ArchiveList> {
+  const q = new URLSearchParams({ roleId });
+  const raw = await json<{ archives?: Record<string, unknown>[]; count?: number; limit?: number }>(await fetch(`${base}/open/v1/conversation/archives?${q}`, { headers: headers(token, lang) }));
+  const archives = (raw.archives || []).filter((a) => typeof a.conversationId === "string" && a.conversationId).map((a) => ({
+    conversationId: String(a.conversationId), title: String(a.title || "").trim(), messageCount: Number(a.messageCount || 0), isCurrent: a.isCurrent === true,
+    updatedAt: Number(new Date(String(a.updatedAt || a.lastActiveAt || a.createdAt || "")).getTime()) || 0,
+  }));
+  return { archives, count: Number(raw.count ?? archives.length), limit: Number(raw.limit || 20) };
+}
+
+async function archiveAction(base: string, token: string, lang: string, path: string, body: Record<string, unknown>): Promise<{ ok: true; conversationId: string; welcome: string } | { ok: false; code: string }> {
+  const res = await fetch(`${base}/open/v1/conversation/${path}`, { method: "POST", headers: headers(token, lang), body: JSON.stringify(body) });
+  const data = (await res.json().catch(() => ({}))) as { conversationId?: string; defaultRelay?: string; error?: string };
+  if (!res.ok) return { ok: false, code: String(data.error || res.status) };
+  return { ok: true, conversationId: String(data.conversationId || body.conversationId || ""), welcome: String(data.defaultRelay || "") };
+}
+export const switchConversation = (base: string, token: string, lang: string, conversationId: string) => archiveAction(base, token, lang, "switch", { conversationId });
+export const renameConversation = (base: string, token: string, lang: string, conversationId: string, title: string) => archiveAction(base, token, lang, "title", { conversationId, title });
+/** 分叉：不帶 chatId＝從最新節點分出去 */
+export const forkConversation = (base: string, token: string, lang: string, conversationId: string, chatId = "") => archiveAction(base, token, lang, "fork", chatId ? { conversationId, chatId } : { conversationId });
+
+export const deleteConversation = (base: string, token: string, lang: string, conversationId: string) => archiveAction(base, token, lang, "delete", { conversationId });
+
+/** 劇情回溯：把對話砍回到某一句玩家訊息（含）之前的狀態。伺服器可能非同步處理，呼叫端要等一下再重讀歷史。 */
+export async function backwardTo(base: string, token: string, lang: string, conversationId: string, targetChatId: string): Promise<{ ok: boolean; code?: string }> {
+  const res = await fetch(`${base}/open/v1/conversation/backward`, { method: "POST", headers: headers(token, lang), body: JSON.stringify({ conversationId, targetChatId }) });
+  if (res.ok) return { ok: true };
+  const data = (await res.json().catch(() => ({}))) as { error?: string };
+  return { ok: false, code: String(data.error || res.status) };
+}
+
 export function sendTurn(input: TurnInput, h: TurnHandlers): () => void {
   let ws: WebSocket | null = null;
   let closed = false;
@@ -161,7 +199,7 @@ export function sendTurn(input: TurnInput, h: TurnHandlers): () => void {
           heartbeat = window.setInterval(() => ws?.readyState === 1 && ws.send(JSON.stringify({ type: "ping", timestamp: Date.now() })), 10000);
           ws?.send(JSON.stringify({
             conversationId: input.conversationId, storyId: "", message: input.message, model: "", thinkingDepth: "",
-            rewrite: !!input.rewriteChatId, contine: false, presetCmd: "", language: input.lang, chatId: input.rewriteChatId || "",
+            rewrite: !!input.rewriteChatId, contine: !!input.continueChatId, presetCmd: "", language: input.lang, chatId: input.rewriteChatId || input.continueChatId || "",
             clientTurnId: uuid(), ackToken: "", supportsPassBlock: true,
           }));
         } else if (e.event === "answer") {
