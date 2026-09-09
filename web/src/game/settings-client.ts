@@ -9,23 +9,6 @@ const json = async <T>(res: Response): Promise<T> => {
   return (await res.json()) as T;
 };
 
-export interface ModelVariant {
-  name: string; value: string; description?: string; isMember?: boolean; costScore?: number; maxScore?: number;
-  channelLabel?: string; badges?: string[]; freeQuotaRemaining?: number;
-  status?: { level?: string; state?: string } | null;
-  thinkingDepthOptions?: { value: string; label?: string; labelKey?: string }[];
-  defaultThinkingDepth?: string;
-  contextBudgetOptions?: { text: string; value: number; tokens?: number }[];
-}
-export interface ModelFamily { family: string; description?: string; isMember?: boolean; bestStatus?: string; variants: ModelVariant[] }
-export interface ModelGroup { group: string; desc?: string; families: ModelFamily[] }
-
-export async function fetchModels(base: string, token: string, lang: string, roleId: string, contextLevel = 1): Promise<ModelGroup[]> {
-  const q = new URLSearchParams({ contextLevel: String(contextLevel), roleId });
-  const body = await json<ModelGroup[] | { data?: ModelGroup[] }>(await fetch(`${base}/open/v1/models?${q}`, { headers: headers(token, lang) }));
-  return Array.isArray(body) ? body : body.data || [];
-}
-
 export type PersonaMode = "name_only" | "global" | "custom";
 export interface RoleSettings {
   personaMode: PersonaMode | "";
@@ -35,6 +18,8 @@ export interface RoleSettings {
   selectModel: string;
   context: number;
   thinkingDepth: string;
+  sandboxLevel: string;
+  jailbreak: string;
 }
 export interface RoleSettingsBundle { settings: RoleSettings; globalPersona: { userName?: string; userSex?: string; userDefine?: string } }
 
@@ -50,6 +35,7 @@ export async function fetchRoleSettings(base: string, token: string, lang: strin
       personaMode: asText(raw.personaMode) as RoleSettings["personaMode"],
       userName: asText(raw.userName), userSex: asText(raw.userSex) as RoleSettings["userSex"], userDefine: asText(raw.userDefine),
       selectModel: asText(raw.selectModel), context: Number.isFinite(ctx) && ctx > 0 ? ctx : 1, thinkingDepth: asText(raw.thinkingDepth),
+      sandboxLevel: asText(raw.sandboxLevel), jailbreak: asText(raw.jailbreak),
     },
     globalPersona: { userName: asText(gp.userName), userSex: asText(gp.userSex), userDefine: asText(gp.userDefine) },
   };
@@ -86,6 +72,9 @@ export async function fetchDirectives(base: string, token: string, lang: string,
 }
 export async function addDirective(base: string, token: string, lang: string, conversationId: string, text: string): Promise<DirectiveList> {
   return readDirectives(await json<Record<string, unknown>>(await fetch(`${base}/open/v1/conversation/directive/add`, { method: "POST", headers: headers(token, lang), body: JSON.stringify({ conversationId, text }) })));
+}
+export async function updateDirective(base: string, token: string, lang: string, conversationId: string, sourceId: string, text: string): Promise<DirectiveList> {
+  return readDirectives(await json<Record<string, unknown>>(await fetch(`${base}/open/v1/conversation/directive/update`, { method: "POST", headers: headers(token, lang), body: JSON.stringify({ conversationId, sourceId, text }) })));
 }
 export async function deleteDirective(base: string, token: string, lang: string, conversationId: string, sourceId: string): Promise<DirectiveList> {
   return readDirectives(await json<Record<string, unknown>>(await fetch(`${base}/open/v1/conversation/directive/delete`, { method: "POST", headers: headers(token, lang), body: JSON.stringify({ conversationId, sourceId }) })));

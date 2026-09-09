@@ -20,13 +20,22 @@ import { loginPath } from "@/lib/login-return";
 import { pageTitle } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
-import { fetchRecentMessages, sendTurn, startConversation, startNewConversation, suggestReply } from "@/game/chat-client";
+import { backwardTo, deleteConversation, fetchArchives, fetchRecentMessages, forkConversation, renameConversation, sendTurn, startConversation, startNewConversation, suggestReply, switchConversation, type Archive } from "@/game/chat-client";
 import { confirmDialog } from "@/lib/confirm";
 import { HERO_FIELDS, SCENE_FIELDS, WORLD_SPECS, defaultWorldFor, tintOf, worldFromSpec } from "@/game/specs";
 import { F, isUnset, mergeTurn, parseTurn, speakerOf, type GameTurn } from "@/game/zz-parse";
 import type { World } from "@/game/world";
 import { GameAudio } from "@/game/audio";
-import GameSettings from "@/game/GameSettings.vue";
+// 舞台（Moonstage）的面板元件原樣複用：模型選單、人設、長期指令、存檔列表、彈層。它們是純 props／emit 的
+// 展示元件，資料與呼叫由這裡接；樣式跟 /play 同一套（.ms-stage 之下）。
+import CanvasPopup from "stage-canvas/components/canvas-popup.vue";
+import CanvasModelPanel from "stage-canvas/components/canvas-model-panel.vue";
+import CanvasPersona from "stage-canvas/components/canvas-persona.vue";
+import CanvasDirectives from "stage-canvas/components/canvas-directives.vue";
+import CanvasConversationList from "stage-canvas/components/canvas-conversation-list.vue";
+import { ensureStage, remergeStageMessages } from "@/lib/stage-host";
+import { addDirective, deleteDirective, fetchDirectives, fetchRoleSettings, saveRoleSettings, updateDirective, type Directive, type RoleSettings } from "@/game/settings-client";
+import { getCurrentInstance } from "vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -63,21 +72,129 @@ let abort: (() => void) | null = null;
 /** 最近一句玩家訊息的 chatId：重寫要指向它 */
 const lastUserChatId = ref("");
 const lastUserText = ref("");
+/** 最近一則 AI 訊息的 chatId：「繼續」要指向它 */
+const lastAiChatId = ref("");
+/** 存檔面板 */
+const archives = ref<Archive[]>([]);
+const archiveLimit = ref(20);
+const archiveBusy = ref(false);
 const assisting = ref(false);
-/** 設定面板：模型／人設／長期指令。要 token 才開得起來（都是玩家自己的設定） */
-const showSettings = ref(false);
-const settingsToken = ref("");
-async function openSettings() {
+/**
+ * 舞台面板：模型／人設／長期指令／存檔。要 token 才開得起來（都是玩家自己的設定）。
+ * 第一次開會把舞台套件裝進來（http、uni 替身、五語文案），跟 /play 同一條路。
+ */
+type Sheet = "" | "model" | "persona" | "directives" | "archives";
+const sheet = ref<Sheet>("");
+const stageReady = ref(false);
+const instance = getCurrentInstance();
+const roleSettings = ref<RoleSettings | null>(null);
+const globalPersona = ref<{ userName?: string; userSex?: string; userDefine?: string }>({});
+const personaSaving = ref(false);
+const personaError = ref("");
+const directives = ref<{ list: Directive[]; maxCount: number; maxLength: number; loading: boolean; loadFailed: boolean; draft: string; editingSourceId: string; editingText: string; error: string }>({ list: [], maxCount: 10, maxLength: 200, loading: false, loadFailed: false, draft: "", editingSourceId: "", editingText: "", error: "" });
+const directivePendingDeleteId = ref("");
+let sheetToken = "";
+
+async function ensureStageRuntime(): Promise<boolean> {
+  if (stageReady.value) return true;
+  const app = instance?.appContext.app;
+  if (!app) return false;
+  try {
+    await ensureStage({ app, router, session, currentPath: () => route.fullPath, lp });
+    stageReady.value = true;
+    return true;
+  } catch (e) {
+    console.error("[game] stage runtime failed", e);
+    error.value = t("game.error");
+    return false;
+  }
+}
+watch(locale, () => { if (stageReady.value) void remergeStageMessages(); });
+
+async function openSheet(which: Exclude<Sheet, "">) {
   const token = await session.accessToken();
   if (!token) { toLogin(); return; }
-  settingsToken.value = token;
-  showSettings.value = true;
+  sheetToken = token;
+  if (!(await ensureStageRuntime())) return;
+  if (which === "model" || which === "persona") {
+    try { const b = await fetchRoleSettings(UPSTREAM_API, token, locale.value, roleId.value); roleSettings.value = b.settings; globalPersona.value = b.globalPersona; }
+    catch (e) { console.error("[game] role settings failed", e); }
+  }
+  if (which === "directives") { if (!conversationId.value) await restore(token).catch(() => {}); void loadDirectives(); }
+  if (which === "archives") void loadArchives(token);
+  sheet.value = which;
   world?.lock(true, talking.value);
 }
-function closeSettings() {
-  showSettings.value = false;
+function closeSheet() {
+  sheet.value = "";
+  directivePendingDeleteId.value = "";
   if (!talking.value) world?.lock(false);
 }
+const openSettings = () => openSheet("model");
+
+/** 模型選單按下確認：模型、線路、上下文檔位、思考深度一次交回來 */
+async function onApplyModel(payload: Record<string, unknown>) {
+  const before = roleSettings.value; if (!before) { closeSheet(); return; }
+  const after: RoleSettings = { ...before };
+  if (typeof payload.selectModel === "string" && payload.selectModel) after.selectModel = payload.selectModel;
+  if (Number.isFinite(Number(payload.context))) after.context = Number(payload.context);
+  if (typeof payload.thinkingDepth === "string") after.thinkingDepth = payload.thinkingDepth;
+  const r = await saveRoleSettings(UPSTREAM_API, sheetToken, locale.value, roleId.value, before, after);
+  if (r.ok) { roleSettings.value = after; say(t("game.settings.saved")); } else error.value = r.reason || t("game.settings.saveFailed");
+  closeSheet();
+}
+async function onSavePersona(value: { personaMode: string; userName: string; userSex: string; userDefine: string; sandboxLevel: string; jailbreak: string }) {
+  const before = roleSettings.value; if (!before) return;
+  personaSaving.value = true; personaError.value = "";
+  const after: RoleSettings = { ...before, personaMode: value.personaMode as RoleSettings["personaMode"], userName: value.userName, userSex: value.userSex as RoleSettings["userSex"], userDefine: value.userDefine, sandboxLevel: value.sandboxLevel, jailbreak: value.jailbreak };
+  const r = await saveRoleSettings(UPSTREAM_API, sheetToken, locale.value, roleId.value, before, after);
+  personaSaving.value = false;
+  if (r.ok) { roleSettings.value = after; syncWorld(); say(t("game.settings.saved")); closeSheet(); } else personaError.value = r.reason || t("game.settings.saveFailed");
+}
+async function loadDirectives() {
+  if (!conversationId.value) return;
+  directives.value = { ...directives.value, loading: true, loadFailed: false };
+  try { const d = await fetchDirectives(UPSTREAM_API, sheetToken, locale.value, conversationId.value); directives.value = { ...directives.value, ...d, loading: false }; }
+  catch (e) { console.error("[game] directives failed", e); directives.value = { ...directives.value, loading: false, loadFailed: true }; }
+}
+async function onAddDirective() {
+  const text = directives.value.draft.trim(); if (!text || !conversationId.value) return;
+  try { const d = await addDirective(UPSTREAM_API, sheetToken, locale.value, conversationId.value, text); directives.value = { ...directives.value, ...d, draft: "", error: "" }; }
+  catch (e) { console.error("[game] directive add failed", e); directives.value.error = t("game.settings.saveFailed"); }
+}
+async function onSaveDirectiveEdit(sourceId: string) {
+  const text = directives.value.editingText.trim(); if (!text) return;
+  try { const d = await updateDirective(UPSTREAM_API, sheetToken, locale.value, conversationId.value, sourceId, text); directives.value = { ...directives.value, ...d, editingSourceId: "", editingText: "", error: "" }; }
+  catch (e) { console.error("[game] directive update failed", e); directives.value.error = t("game.settings.saveFailed"); }
+}
+async function onDeleteDirective(sourceId: string) {
+  directivePendingDeleteId.value = "";
+  try { const d = await deleteDirective(UPSTREAM_API, sheetToken, locale.value, conversationId.value, sourceId); directives.value = { ...directives.value, ...d, error: "" }; }
+  catch (e) { console.error("[game] directive delete failed", e); directives.value.error = t("game.settings.saveFailed"); }
+}
+const canAddDirective = computed(() => !!conversationId.value && directives.value.list.length < directives.value.maxCount && !!directives.value.draft.trim());
+
+// 文案沿用舞台的 key（ensureStage 把舞台的五語文案併進本站 i18n）
+const modelPanelLabels = computed(() => ({ close: t("main.cancel"), done: t("main.sure"), perTurn: t("canvas.panel.perTurn"), contextTitle: t("modelSelect.contextBudgetShort"), contextHint: t("canvas.panel.contextHint"), thinkingTitle: t("modelSelect.thinkingDepth"), thinkingHint: t("canvas.panel.thinkingHint") }));
+const personaSexOptions = computed(() => [{ value: "man", label: t("create.roleSex_man") }, { value: "women", label: t("create.roleSex_women") }, { value: "other", label: t("create.roleSex_other") }]);
+const personaSandboxOptions = computed(() => ["light", "standard", "immersive", "deep"].map((v) => ({ value: v, label: t(`chat.sandbox_${v}`), hint: t(`chat.sandboxHint_${v}`) })));
+const personaLabels = computed(() => ({
+  title: t("canvas.panel.persona"), cancel: t("main.cancel"), save: t("main.sure"), modeLabel: t("canvas.panel.personaMode"),
+  modeNameOnly: t("canvas.panel.personaModeNameOnly"), modeGlobal: t("canvas.panel.personaModeGlobal"), modeCustom: t("canvas.panel.personaModeCustom"),
+  modeNameOnlyHint: t("canvas.panel.personaModeNameOnlyHint"), modeGlobalHint: t("canvas.panel.personaModeGlobalHint"), modeCustomHint: t("canvas.panel.personaModeCustomHint"),
+  nickNameHint: session.me?.nickName ? t("canvas.panel.personaNickNameHint", { name: session.me.nickName }) : "",
+  nameLabel: t("canvas.panel.personaName"), namePlaceholder: t("canvas.panel.personaNamePlaceholder"), sexLabel: t("canvas.panel.personaSex"),
+  defineLabel: t("canvas.panel.personaDefine"), definePlaceholder: t("canvas.panel.personaDefinePlaceholder"), sandboxLabel: t("chat.sandboxLevel"), sandboxDesc: t("chat.sandboxLevelDesc"),
+  advanced: t("canvas.panel.personaAdvanced"), jailbreakLabel: t("chat.jailbreak"), jailbreakHint: t("chat.jailbreakTips"), jailbreakReset: t("chat.jailbreakResetDefault"),
+}));
+const directiveLabels = computed(() => ({
+  title: t("directive.title"), close: t("main.cancel"), add: t("directive.add"), edit: t("directive.edit"), delete: t("directive.delete"), deleteConfirmShort: t("directive.delete"),
+  save: t("directive.save"), cancel: t("directive.cancel"), empty: t("directive.empty"), loading: t("canvas.panel.loading"), loadFailed: t("directive.loadFailed"), retry: t("notepad.retry"),
+  placeholder: t("directive.placeholder"), waitingConversation: t("directive.waitingConversation"), originManual: t("directive.originManual"), originAi: t("directive.originAi"),
+}));
+const archiveActionLabels = computed(() => ({ rename: t("canvas.archive.rename"), delete: t("main.delete"), done: t("canvas.archive.done"), cancel: t("main.cancel") }));
+const archiveRows = computed(() => archives.value.map((a) => ({ key: a.conversationId, name: a.title || t("game.archive.untitled"), title: a.title, countText: t("canvas.archive.messages", { n: a.messageCount }), current: a.isCurrent })));
+
 /** 長期指令要有對話才能掛：還沒開口就先把對話建起來 */
 async function ensureConversation() {
   const token = await session.accessToken();
@@ -93,7 +210,7 @@ let toastTimer = 0;
 const fading = ref(false);
 const showLog = ref(false);
 /** 劇情日誌：每一輪的標題與目標，加上玩家說過的話 */
-const log = ref<{ kind: "turn" | "you"; title: string; text: string }[]>([]);
+const log = ref<{ kind: "turn" | "you"; title: string; text: string; chatId?: string }[]>([]);
 const narr = ref<HTMLDivElement | null>(null);
 
 const signedIn = computed(() => !!session.me);
@@ -175,9 +292,10 @@ async function restore(token: string) {
   if (!s.hasHistory) return;
   const rows = await fetchRecentMessages(UPSTREAM_API, token, conversationId.value, locale.value).catch(() => []);
   if (!rows.length) return;
+  log.value = [];
   for (const r of rows) {
-    if (r.role === "AI") applyTurn(r.text, false);
-    else { lastUserChatId.value = r.chatId; lastUserText.value = r.text; }
+    if (r.role === "AI") { applyTurn(r.text, false); lastAiChatId.value = r.chatId; }
+    else { lastUserChatId.value = r.chatId; lastUserText.value = r.text; log.value.push({ kind: "you", title: heroName.value, text: r.text, chatId: r.chatId }); }
   }
   say(t("game.resumed"));
 }
@@ -217,7 +335,7 @@ function onKey(e: KeyboardEvent) {
   if (e.key.toLowerCase() === "e" && near.value && !talking.value) { e.preventDefault(); openTalk(near.value); }
   if (e.key.toLowerCase() === "l") showLog.value = !showLog.value;
   if (e.key.toLowerCase() === "m") { muted.value = !muted.value; audio.setMuted(muted.value); }
-  if (e.key === "Escape" && showSettings.value) { closeSettings(); return; }
+  if (e.key === "Escape" && sheet.value) { closeSheet(); return; }
   if (e.key === "Escape" && talking.value && !streaming.value) closeTalk();
 }
 window.addEventListener("keydown", onKey);
@@ -237,9 +355,9 @@ function closeTalk() {
 }
 function toLogin() { void router.push(lp(loginPath(route.fullPath))); }
 
-async function act(text: string, rewriteChatId = "") {
+async function act(text: string, rewriteChatId = "", continueChatId = "") {
   const message = text.trim();
-  if (!message || streaming.value || !talking.value) return;
+  if ((!message && !continueChatId) || streaming.value || !talking.value) return;
   error.value = "";
   const token = await session.accessToken();
   if (!token) { toLogin(); return; }
@@ -250,16 +368,18 @@ async function act(text: string, rewriteChatId = "") {
     error.value = t("game.error");
     return;
   }
-  playerLine.value = message;
-  if (!rewriteChatId) log.value.push({ kind: "you", title: heroName.value, text: message });
+  if (!continueChatId) playerLine.value = message;
+  if (!rewriteChatId && !continueChatId) log.value.push({ kind: "you", title: heroName.value, text: message });
   draft.value = "";
   live.value = "";
   streaming.value = true;
   world?.setSpeaking(talking.value);
   // 讓 AI 知道玩家是走到誰面前說的：這一句是舞台事實
-  const wire = rewriteChatId ? message : t("game.wireApproach", { name: talking.value }) + message;
-  abort = sendTurn({ base: UPSTREAM_API, token, conversationId: conversationId.value, message: wire, lang: locale.value, rewriteChatId }, {
-    onDelta: (full) => { live.value = full; },
+  const wire = continueChatId ? "" : rewriteChatId ? message : t("game.wireApproach", { name: talking.value }) + message;
+  // 繼續：把上一段敘事留著，新的字接在後面
+  const prefix = continueChatId ? turn.value.prose + "\n" : "";
+  abort = sendTurn({ base: UPSTREAM_API, token, conversationId: conversationId.value, message: wire, lang: locale.value, rewriteChatId, continueChatId }, {
+    onDelta: (full) => { live.value = prefix + full; },
     onDone: (full) => {
       streaming.value = false;
       abort = null;
@@ -267,7 +387,10 @@ async function act(text: string, rewriteChatId = "") {
       if (full.trim()) applyTurn(full, true);
       // 這一輪落盤後記下玩家那句的 chatId，重寫才有目標
       void fetchRecentMessages(UPSTREAM_API, token, conversationId.value, locale.value, 4)
-        .then((rows) => { const u = [...rows].reverse().find((r) => r.role === "USER"); if (u) { lastUserChatId.value = u.chatId; lastUserText.value = u.text; } })
+        .then((rows) => {
+          const u = [...rows].reverse().find((r) => r.role === "USER"); if (u) { lastUserChatId.value = u.chatId; lastUserText.value = u.text; const entry = [...log.value].reverse().find((e) => e.kind === "you" && !e.chatId); if (entry) entry.chatId = u.chatId; }
+          const a = [...rows].reverse().find((r) => r.role === "AI"); if (a) lastAiChatId.value = a.chatId;
+        })
         .catch(() => {});
     },
     onError: (why) => {
@@ -281,6 +404,92 @@ async function act(text: string, rewriteChatId = "") {
 }
 
 function stop() { abort?.(); }
+
+/** 繼續：讓 AI 接著上一段往下寫 */
+function continueTurn() {
+  if (!lastAiChatId.value || streaming.value || !talking.value) return;
+  void act("", "", lastAiChatId.value);
+}
+
+async function loadArchives(token: string) {
+  archiveBusy.value = true;
+  try { const r = await fetchArchives(UPSTREAM_API, token, roleId.value, locale.value); archives.value = r.archives; archiveLimit.value = r.limit; }
+  catch (e) { console.error("[game] archives failed", e); error.value = t("game.error"); }
+  finally { archiveBusy.value = false; }
+}
+/** 換到另一段存檔：世界狀態從那一段的歷史重建 */
+async function adopt(newId: string, welcome: string, token: string) {
+  conversationId.value = newId;
+  lastUserChatId.value = ""; lastUserText.value = ""; lastAiChatId.value = ""; playerLine.value = ""; live.value = ""; log.value = [];
+  turn.value = parseTurn(welcome || turn.value.prose ? welcome : "");
+  const rows = await fetchRecentMessages(UPSTREAM_API, token, newId, locale.value).catch(() => []);
+  if (!rows.length && !welcome) { const s = await startConversation(UPSTREAM_API, token, roleId.value, locale.value).catch(() => null); if (s) turn.value = parseTurn(s.welcome); }
+  for (const r of rows) {
+    if (r.role === "AI") { applyTurn(r.text, false); lastAiChatId.value = r.chatId; }
+    else { lastUserChatId.value = r.chatId; lastUserText.value = r.text; log.value.push({ kind: "you", title: heroName.value, text: r.text, chatId: r.chatId }); }
+  }
+  syncWorld();
+}
+async function onPickArchive(key: string) {
+  const a = archives.value.find((x) => x.conversationId === key); if (!a) return;
+  await archiveSwitch(a);
+}
+async function onRenameArchive(key: string, title: string) {
+  const a = archives.value.find((x) => x.conversationId === key); const next = title.trim();
+  if (!a || !next || next === a.title) return;
+  const r = await renameConversation(UPSTREAM_API, sheetToken, locale.value, key, next);
+  if (r.ok) a.title = next; else error.value = t("game.error");
+}
+async function onDeleteArchive(key: string) {
+  if (archiveBusy.value) return;
+  archiveBusy.value = true;
+  try {
+    const wasCurrent = key === conversationId.value;
+    const r = await deleteConversation(UPSTREAM_API, sheetToken, locale.value, key);
+    if (!r.ok) { error.value = t("game.error"); return; }
+    await loadArchives(sheetToken);
+    if (wasCurrent) { const next = archives.value.find((x) => x.isCurrent) || archives.value[0]; if (next) await adopt(next.conversationId, "", sheetToken); }
+  } finally { archiveBusy.value = false; }
+}
+async function archiveSwitch(a: Archive) {
+  if (a.isCurrent || archiveBusy.value) return;
+  const token = await session.accessToken(); if (!token) return;
+  archiveBusy.value = true;
+  try {
+    const r = await switchConversation(UPSTREAM_API, token, locale.value, a.conversationId);
+    if (!r.ok) { error.value = t("game.error"); return; }
+    await adopt(r.conversationId || a.conversationId, r.welcome, token);
+    await loadArchives(token);
+    say(t("game.archive.switched", { name: a.title || t("game.archive.untitled") }));
+    closeSheet();
+  } finally { archiveBusy.value = false; }
+}
+async function archiveFork() {
+  const token = await session.accessToken(); if (!token || archiveBusy.value) return;
+  archiveBusy.value = true;
+  try {
+    if (!conversationId.value) await restore(token);
+    const r = await forkConversation(UPSTREAM_API, token, locale.value, conversationId.value);
+    if (!r.ok) { error.value = r.code === "conversation_limit_reached" ? t("game.archive.full", { n: archiveLimit.value }) : t("game.error"); return; }
+    await adopt(r.conversationId, r.welcome, token);
+    await loadArchives(token);
+    say(t("game.archive.forked"));
+  } finally { archiveBusy.value = false; }
+}
+
+/** 劇情回溯：回到某一句玩家訊息之前，之後的都不算 */
+async function rewindTo(chatId: string) {
+  if (!chatId || streaming.value) return;
+  const token = await session.accessToken(); if (!token) { toLogin(); return; }
+  const ok = await confirmDialog({ title: t("game.rewind"), message: t("game.rewindConfirm"), confirmText: t("game.rewind"), cancelText: t("dialog.cancel"), danger: true });
+  if (!ok) return;
+  const r = await backwardTo(UPSTREAM_API, token, locale.value, conversationId.value, chatId);
+  if (!r.ok) { error.value = t("game.error"); return; }
+  // 伺服器可能非同步收尾：等一下再從歷史重建世界
+  await new Promise((res) => setTimeout(res, 1200));
+  await adopt(conversationId.value, "", token);
+  say(t("game.rewound"));
+}
 
 /** 重寫：把最近一句玩家訊息重跑一次，AI 換一種回法 */
 function regenerate() {
@@ -380,6 +589,7 @@ function installTestHooks() {
       <div class="game__scene">
         <span v-for="r in sceneRows" :key="r.key" class="game__scene-item"><small>{{ $t(r.label) }}</small>{{ r.value }}</span>
         <span v-if="round" class="game__scene-item game__scene-item--round">{{ $t("game.round", { n: round }) }}</span>
+        <span v-if="session.wallet" class="game__scene-item game__scene-item--round" :title="$t('game.points')">{{ $t("game.pointsShort", { n: (session.wallet.score || 0) + (session.wallet.tempScore || 0) }) }}</span>
         <button type="button" class="btn btn--ghost btn--sm game__logbtn" :class="{ 'game__logbtn--on': showLog }" @click="showLog = !showLog">{{ $t("game.log") }}</button>
         <button type="button" class="btn btn--ghost btn--sm btn--icon game__logbtn" :title="$t('game.settings.title')" :aria-label="$t('game.settings.title')" @click="openSettings">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
@@ -423,14 +633,44 @@ function installTestHooks() {
         <li v-for="(e, i) in log" :key="i" :class="`logpanel__item logpanel__item--${e.kind}`">
           <b>{{ e.title }}</b>
           <span v-if="e.text">{{ e.text }}</span>
+          <button v-if="e.kind === 'you' && e.chatId && signedIn" type="button" class="logpanel__rewind" :disabled="streaming" @click="rewindTo(e.chatId)">{{ $t("game.rewind") }}</button>
         </li>
       </ol>
     </aside>
 
-    <div v-if="showSettings" class="sheet" @click.self="closeSettings">
-      <div class="sheet__card">
-        <GameSettings :base="UPSTREAM_API" :token="settingsToken" :lang="locale" :role-id="roleId" :conversation-id="conversationId" @close="closeSettings" @need-conversation="ensureConversation" />
-      </div>
+    <!-- 舞台的面板元件：跟 /play 同一套外觀與行為（.ms-stage 之下吃舞台的樣式） -->
+    <div v-if="stageReady" class="ms-stage game__sheets">
+      <CanvasPopup :open="sheet === 'model'" :title="$t('canvas.panel.model')" :close-label="$t('main.cancel')" @close="closeSheet">
+        <CanvasModelPanel v-if="sheet === 'model' && roleSettings" mode="model" :open="sheet === 'model'" :title="$t('canvas.panel.model')" :role-id="roleId"
+                          :selected-value="roleSettings.selectModel" :model-name="roleSettings.selectModel" :score-text="''" :context-value="roleSettings.context" :thinking-depth="roleSettings.thinkingDepth"
+                          :show-thinking-process="true" :labels="modelPanelLabels" @apply="onApplyModel" @close="closeSheet" />
+      </CanvasPopup>
+      <CanvasPopup :open="sheet === 'persona'" :title="$t('canvas.panel.persona')" :close-label="$t('main.cancel')" @close="closeSheet">
+        <CanvasPersona v-if="sheet === 'persona' && roleSettings" :persona-mode="roleSettings.personaMode || 'global'" :global-persona="globalPersona" :nick-name="session.me?.nickName || ''"
+                       :user-name="roleSettings.userName" :user-sex="roleSettings.userSex" :user-define="roleSettings.userDefine" :sandbox-level="roleSettings.sandboxLevel" :jailbreak="roleSettings.jailbreak"
+                       :default-jailbreak="''" :sex-options="personaSexOptions" :sandbox-options="personaSandboxOptions" :saving="personaSaving" :error="personaError" :labels="personaLabels"
+                       @save="onSavePersona" @close="closeSheet" />
+      </CanvasPopup>
+      <CanvasPopup :open="sheet === 'directives'" :title="$t('directive.title')" :close-label="$t('main.cancel')" @close="closeSheet">
+        <CanvasDirectives v-if="sheet === 'directives'" :list="directives.list" :count-text="`(${directives.list.length}/${directives.maxCount})`" :max-length="directives.maxLength"
+                          :loading="directives.loading" :load-failed="directives.loadFailed" :has-conversation="!!conversationId" :can-add="canAddDirective"
+                          :draft="directives.draft" :editing-source-id="directives.editingSourceId" :editing-text="directives.editingText" :pending-delete-id="directivePendingDeleteId" :error="directives.error" :labels="directiveLabels"
+                          @add="onAddDirective" @edit="(id: string) => { const d = directives.list.find((x) => x.sourceId === id); directives.editingSourceId = id; directives.editingText = d ? d.text : ''; }"
+                          @save-edit="onSaveDirectiveEdit" @cancel-edit="directives.editingSourceId = ''; directives.editingText = ''" @ask-delete="directivePendingDeleteId = $event"
+                          @confirm-delete="onDeleteDirective" @cancel-delete="directivePendingDeleteId = ''" @retry="loadDirectives" @close="closeSheet"
+                          @update:draft="directives.draft = $event" @update:editing-text="directives.editingText = $event" />
+      </CanvasPopup>
+      <CanvasPopup :open="sheet === 'archives'" :title="$t('canvas.archive.load')" :close-label="$t('main.cancel')" @close="closeSheet">
+        <CanvasConversationList v-if="sheet === 'archives'" :title="$t('canvas.archive.load')" :count-text="`${archives.length}/${archiveLimit}`" :items="archiveRows"
+                                :empty-text="$t('canvas.panel.historyEmpty')" :current-label="$t('canvas.panel.historyCurrent')" :close-text="$t('main.cancel')"
+                                :full="archives.length >= archiveLimit" :full-text="$t('canvas.archive.full', { count: archives.length, limit: archiveLimit })" :labels="archiveActionLabels"
+                                @pick="onPickArchive" @rename="onRenameArchive" @delete="onDeleteArchive" @close="closeSheet" />
+        <!-- 跟舞台彈層同一款底部按鈕（.bottom .btn），分叉／新的一局排在列表自己的「取消」旁 -->
+        <div class="bottom game__sheetfoot" :aria-disabled="archiveBusy || archives.length >= archiveLimit">
+          <div class="btn" role="button" tabindex="0" @click="archiveBusy || archives.length >= archiveLimit || archiveFork()">{{ $t("game.archive.fork") }}</div>
+          <div class="btn" role="button" tabindex="0" @click="archiveBusy || archives.length >= archiveLimit || (closeSheet(), restart())">{{ $t("game.newChat") }}</div>
+        </div>
+      </CanvasPopup>
     </div>
 
     <p v-if="loadError" class="game__fatal" role="alert">{{ loadError }}</p>
@@ -450,8 +690,12 @@ function installTestHooks() {
         <div class="panel__tools">
           <button v-if="signedIn" type="button" class="btn btn--ghost btn--sm" :disabled="streaming || !lastUserChatId" :title="$t('game.regenHint')" @click="regenerate">{{ $t("game.regen") }}</button>
           <button v-if="signedIn" type="button" class="btn btn--ghost btn--sm" :disabled="streaming || assisting" :title="$t('game.assistHint')" @click="assist">{{ assisting ? $t("game.thinking") : $t("game.assist") }}</button>
+          <button v-if="signedIn" type="button" class="btn btn--ghost btn--sm" :disabled="streaming || !lastAiChatId" :title="$t('game.continueHint')" @click="continueTurn">{{ $t("game.continue") }}</button>
+          <button v-if="signedIn" type="button" class="btn btn--ghost btn--sm" :disabled="streaming" @click="openSheet('archives')">{{ $t("game.archive.title") }}</button>
           <button v-if="signedIn" type="button" class="btn btn--ghost btn--sm" :disabled="streaming" @click="restart">{{ $t("game.newChat") }}</button>
-          <button type="button" class="btn btn--ghost btn--sm" :disabled="streaming" @click="openSettings">{{ $t("game.settings.title") }}</button>
+          <button type="button" class="btn btn--ghost btn--sm" :disabled="streaming" @click="openSheet('model')">{{ $t("game.settings.model") }}</button>
+          <button type="button" class="btn btn--ghost btn--sm" :disabled="streaming" @click="openSheet('persona')">{{ $t("game.settings.persona") }}</button>
+          <button type="button" class="btn btn--ghost btn--sm" :disabled="streaming" @click="openSheet('directives')">{{ $t("game.settings.directives") }}</button>
           <button type="button" class="btn btn--ghost btn--sm panel__close" :disabled="streaming" @click="closeTalk">{{ $t("game.close") }}</button>
         </div>
       </div>
@@ -555,9 +799,12 @@ function installTestHooks() {
 .logpanel__item--you { border-left-color: var(--cyan); color: var(--ink-2); }
 .logpanel__item b { font-size: 12px; }
 
-.sheet { position: absolute; inset: 0; z-index: 8; background: rgba(5, 6, 14, 0.45); display: grid; place-items: center; padding: var(--s-4); }
-.sheet__card { width: min(720px, 100%); max-height: min(80vh, 720px); display: grid; background: var(--glass); border: 1px solid var(--glass-line); backdrop-filter: blur(16px); clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px)); padding: var(--s-4) var(--s-5); animation: rise 220ms var(--ease); }
-@media (max-width: 860px) { .sheet { padding: var(--s-2); align-items: end; } .sheet__card { max-height: 88vh; padding: var(--s-3) var(--s-4); } }
+.game__sheets { position: absolute; inset: 0; z-index: 8; pointer-events: none; }
+.game__sheets > * { pointer-events: auto; }
+.game__sheetfoot { gap: 8px; margin-top: -4px; }
+.game__sheetfoot[aria-disabled="true"] { opacity: 0.5; pointer-events: none; }
+.logpanel__rewind { all: unset; cursor: pointer; font-size: 11px; color: var(--cyan); text-decoration: underline; text-underline-offset: 2px; }
+.logpanel__rewind:disabled { opacity: 0.4; cursor: default; }
 .game__fatal { position: absolute; left: 50%; top: 40%; transform: translateX(-50%); z-index: 4; background: var(--glass); padding: var(--s-4) var(--s-5); border-radius: 4px; }
 .game__toast { position: absolute; left: 50%; top: 72px; transform: translateX(-50%); z-index: 4; padding: 6px 16px; font-size: 13px; letter-spacing: 0.04em; }
 
