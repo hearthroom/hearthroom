@@ -899,5 +899,6 @@
   "gameEd.audio.event.quest": "新しい目標",
   "gameEd.audio.ambience": "環境音（ライティングごと）",
   "gameEd.none": "（なし）",
-  "gameEd.resources": "画像と音声は「マイリソース」に置いて URL を貼れます。3D モデルは今のところ外部 URL が必要です。"
+  "gameEd.resources": "画像と音声は「マイリソース」に置いて URL を貼れます。3D モデルは今のところ外部 URL が必要です。",
+  "mine.action.game": "ゲームモード"
 }

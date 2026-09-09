@@ -899,5 +899,6 @@
   "gameEd.audio.event.quest": "新目标",
   "gameEd.audio.ambience": "环境音（依光照）",
   "gameEd.none": "（无）",
-  "gameEd.resources": "图片与音频可以放到「我的资源」再贴网址；3D 模型目前要用外部网址。"
+  "gameEd.resources": "图片与音频可以放到「我的资源」再贴网址；3D 模型目前要用外部网址。",
+  "mine.action.game": "游戏模式"
 }

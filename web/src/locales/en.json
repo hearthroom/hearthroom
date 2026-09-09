@@ -899,5 +899,6 @@
   "gameEd.audio.event.quest": "New goal",
   "gameEd.audio.ambience": "Ambience (per lighting preset)",
   "gameEd.none": "(none)",
-  "gameEd.resources": "Images and audio can go in “My resources”, then paste the URL; 3D models need an external URL for now."
+  "gameEd.resources": "Images and audio can go in “My resources”, then paste the URL; 3D models need an external URL for now.",
+  "mine.action.game": "Game mode"
 }

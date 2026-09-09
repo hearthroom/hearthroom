@@ -44,6 +44,8 @@ const hasArt = computed(() => !!props.card.avatarUrl && !broken.value);
       <div class="card__actions">
         <!-- 自己的卡不用登記也能玩：登記是上榜，不是能不能對話的門檻 -->
         <RouterLink class="btn btn--sm" :to="lp(`/play/${card.roleId}`)">{{ $t("mine.action.play") }}</RouterLink>
+        <!-- 有遊戲配置的卡：對話頁之外另有 3D 遊戲頁，兩個入口都給（試玩＝對話頁，跟卡片頁的兩顆鍵一致） -->
+        <RouterLink v-if="card.game" class="btn btn--sm" :to="lp(`/game/${card.roleId}`)">{{ $t("mine.action.game") }}</RouterLink>
         <RouterLink class="btn btn--sm" :to="lp(`/cards/${card.roleId}/edit`)">{{ $t("mine.action.edit") }}</RouterLink>
         <!-- 被駁回、離榜重審、被收回授權的卡：主鍵是「重新提交」，取消登記退到次要 -->
         <button
