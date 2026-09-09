@@ -18,6 +18,7 @@ import { compact, hueFrom, plainText, relativeTime } from "@/lib/format";
 import { confirmDialog } from "@/lib/confirm";
 import { track } from "@/lib/track";
 import { canPlayAsGame } from "@/game/specs";
+import { fetchGameSpec } from "@/lib/api";
 import type { CommunityCard } from "@/lib/types";
 
 const route = useRoute();
@@ -92,7 +93,9 @@ async function load() {
   void fetchRoleDetail(roleId, undefined, lang)
     .then((raw) => {
       const rawWelcome = String(raw.roleWelcome ?? "");
-      gameReady.value = canPlayAsGame(roleId, rawWelcome);
+      // 作者配置裡的協定決定「開場白要有哪個區塊」；沒配置就用預設協定
+      gameReady.value = canPlayAsGame(undefined, rawWelcome);
+      void fetchGameSpec(roleId).then((saved) => { if (saved?.spec) gameReady.value = saved.spec.enabled !== false && canPlayAsGame(saved.spec.protocol, rawWelcome); }).catch(() => {});
       const charName = card.value?.name ?? "";
       welcome.value = plainText(rawWelcome, charName, t("card.you"));
       // 開場白照對話頁的方式畫：先套作者的正則規則（酒館／MMD 卡靠它把標記換成版面），

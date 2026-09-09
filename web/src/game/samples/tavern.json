@@ -1,0 +1,444 @@
+{
+  "version": 2,
+  "protocol": {
+    "blocks": {
+      "title": "tt",
+      "hud": "tstat",
+      "roles": "tfolk"
+    },
+    "sections": {
+      "hero": "旅人",
+      "scene": "酒馆",
+      "actions": "选择"
+    },
+    "fields": {
+      "name": "姓名",
+      "mood": "神色",
+      "time": "时辰",
+      "place": "位置",
+      "objective": "眼下",
+      "round": "夜数",
+      "note": "备忘",
+      "unset": "未知|—"
+    },
+    "actions": {
+      "full": "选择{n}",
+      "short": "选择{n}简"
+    },
+    "titleSeparator": "·",
+    "gate": "roles"
+  },
+  "hud": {
+    "hero": [
+      {
+        "key": "姓名",
+        "label": "姓名"
+      },
+      {
+        "key": "来历",
+        "label": "来历"
+      },
+      {
+        "key": "钱袋",
+        "label": "钱袋"
+      }
+    ],
+    "scene": [
+      {
+        "key": "时辰",
+        "label": "时辰"
+      },
+      {
+        "key": "位置",
+        "label": "位置"
+      }
+    ],
+    "role": [
+      {
+        "key": "身份",
+        "label": "身份"
+      }
+    ],
+    "meters": [
+      {
+        "key": "信任",
+        "label": "信任",
+        "min": 0,
+        "max": 10,
+        "color": "#e0a458"
+      },
+      {
+        "key": "醉意",
+        "label": "醉意",
+        "min": 0,
+        "max": 5,
+        "color": "#a678d8"
+      }
+    ],
+    "questRule": {
+      "mode": "field-truthy",
+      "field": "有事相求"
+    }
+  },
+  "lighting": {
+    "default": "candle",
+    "presets": [
+      {
+        "id": "candle",
+        "match": "夜|晚|烛",
+        "skyTop": "#0b0906",
+        "skyBottom": "#2a1a0e",
+        "ground": "#ffd9b0",
+        "sun": "#ffb35c",
+        "sunIntensity": 1.4,
+        "sunPos": [
+          4,
+          6,
+          2
+        ],
+        "hemi": 0.55,
+        "fog": "#1a120a",
+        "fogNear": 14,
+        "fogFar": 70,
+        "lamp": 1.4,
+        "bloom": 0.5
+      },
+      {
+        "id": "dawn",
+        "match": "清晨|黎明|早",
+        "skyTop": "#6d7fa8",
+        "skyBottom": "#f2d2b0",
+        "ground": "#ffffff",
+        "sun": "#ffe2c0",
+        "sunIntensity": 1.6,
+        "sunPos": [
+          -20,
+          12,
+          8
+        ],
+        "hemi": 0.6,
+        "fog": "#cbb8a2",
+        "fogNear": 12,
+        "fogFar": 60,
+        "lamp": 0.3,
+        "bloom": 0.25
+      }
+    ]
+  },
+  "environment": {
+    "kit": "none",
+    "ground": {
+      "color": "#6f4e31",
+      "texture": "plain",
+      "size": 40
+    },
+    "skyline": false,
+    "clouds": false,
+    "buildings": [],
+    "trees": [],
+    "lamps": [],
+    "places": [
+      {
+        "match": "吧台|柜台|酒保",
+        "pos": [
+          0,
+          -6
+        ],
+        "label": "吧台"
+      },
+      {
+        "match": "壁炉|火",
+        "pos": [
+          -8,
+          -2
+        ],
+        "label": "壁炉"
+      },
+      {
+        "match": "门|街|外",
+        "pos": [
+          0,
+          10
+        ],
+        "label": "门口"
+      },
+      {
+        "match": "角落|暗处|阴影",
+        "pos": [
+          8,
+          6
+        ],
+        "label": "角落桌"
+      }
+    ],
+    "props": [
+      {
+        "shape": "box",
+        "pos": [
+          0,
+          -8
+        ],
+        "size": [
+          10,
+          1.2,
+          1.4
+        ],
+        "color": "#3d2815",
+        "label": "吧台"
+      },
+      {
+        "shape": "box",
+        "pos": [
+          0,
+          -9.5
+        ],
+        "size": [
+          10,
+          4,
+          0.6
+        ],
+        "color": "#2a1a0e"
+      },
+      {
+        "shape": "box",
+        "pos": [
+          -12,
+          0
+        ],
+        "size": [
+          0.6,
+          5,
+          26
+        ],
+        "color": "#3a2718",
+        "solid": true
+      },
+      {
+        "shape": "box",
+        "pos": [
+          12,
+          0
+        ],
+        "size": [
+          0.6,
+          5,
+          26
+        ],
+        "color": "#3a2718",
+        "solid": true
+      },
+      {
+        "shape": "box",
+        "pos": [
+          0,
+          -13
+        ],
+        "size": [
+          24,
+          5,
+          0.6
+        ],
+        "color": "#3a2718",
+        "solid": true
+      },
+      {
+        "shape": "box",
+        "pos": [
+          -8,
+          -4
+        ],
+        "size": [
+          2.4,
+          2.2,
+          1.2
+        ],
+        "color": "#4a4a4a",
+        "emissive": "#ff7a2a",
+        "label": "壁炉"
+      },
+      {
+        "shape": "cylinder",
+        "pos": [
+          -5,
+          3
+        ],
+        "size": [
+          2.4,
+          1.0,
+          2.4
+        ],
+        "color": "#5a3b22"
+      },
+      {
+        "shape": "cylinder",
+        "pos": [
+          5,
+          3
+        ],
+        "size": [
+          2.4,
+          1.0,
+          2.4
+        ],
+        "color": "#5a3b22"
+      },
+      {
+        "shape": "cylinder",
+        "pos": [
+          8,
+          7
+        ],
+        "size": [
+          2.4,
+          1.0,
+          2.4
+        ],
+        "color": "#5a3b22"
+      },
+      {
+        "shape": "sphere",
+        "pos": [
+          -5,
+          3
+        ],
+        "y": 1.05,
+        "size": [
+          0.25,
+          0.25,
+          0.25
+        ],
+        "color": "#fff1c0",
+        "emissive": "#ffd27a",
+        "solid": false
+      },
+      {
+        "shape": "sphere",
+        "pos": [
+          5,
+          3
+        ],
+        "y": 1.05,
+        "size": [
+          0.25,
+          0.25,
+          0.25
+        ],
+        "color": "#fff1c0",
+        "emissive": "#ffd27a",
+        "solid": false
+      },
+      {
+        "shape": "sphere",
+        "pos": [
+          8,
+          7
+        ],
+        "y": 1.05,
+        "size": [
+          0.25,
+          0.25,
+          0.25
+        ],
+        "color": "#fff1c0",
+        "emissive": "#ffd27a",
+        "solid": false
+      },
+      {
+        "shape": "box",
+        "pos": [
+          0,
+          14
+        ],
+        "size": [
+          2.2,
+          3,
+          0.4
+        ],
+        "color": "#2a1a0e",
+        "label": "门口",
+        "solid": false
+      }
+    ]
+  },
+  "characters": [
+    {
+      "name": "老板娘玛尔",
+      "color": "#e0a458",
+      "look": {
+        "hair": "#8b2e2e",
+        "hairStyle": "long",
+        "top": "#7a3b1e",
+        "bottom": "#3a2416",
+        "accent": "#f2e6c8"
+      },
+      "accessory": "none",
+      "pos": [
+        0,
+        -6.5
+      ],
+      "face": 0,
+      "wander": 0
+    },
+    {
+      "name": "独眼佣兵",
+      "color": "#8b9dab",
+      "look": {
+        "hair": "#2b2b2b",
+        "hairStyle": "short",
+        "top": "#3b3f44",
+        "bottom": "#2a2a2a",
+        "accent": "#a33"
+      },
+      "accessory": "none",
+      "pos": [
+        8,
+        6
+      ],
+      "face": -2.2,
+      "wander": 0.5
+    },
+    {
+      "name": "游吟诗人",
+      "color": "#a678d8",
+      "look": {
+        "hair": "#e8d9a8",
+        "hairStyle": "bob",
+        "top": "#5b3d8a",
+        "bottom": "#2d2d4a",
+        "accent": "#ffd27a"
+      },
+      "accessory": "none",
+      "pos": [
+        -5,
+        4
+      ],
+      "face": 2.6,
+      "wander": 2
+    }
+  ],
+  "player": {
+    "spawn": [
+      0,
+      7
+    ],
+    "speed": 3,
+    "look": {
+      "hair": "#4a3324",
+      "hairStyle": "short",
+      "top": "#5b6b3a",
+      "bottom": "#3a2d22"
+    }
+  },
+  "camera": {
+    "distance": 7,
+    "minDistance": 4,
+    "maxDistance": 12,
+    "height": 4.5,
+    "dialogue": "two-shot"
+  },
+  "audio": {
+    "sources": {},
+    "events": {},
+    "ambience": {}
+  }
+}

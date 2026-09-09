@@ -1,0 +1,455 @@
+{
+  "version": 2,
+  "protocol": {
+    "blocks": {
+      "title": "hdr",
+      "hud": "panel",
+      "roles": "crew"
+    },
+    "sections": {
+      "hero": "舰长",
+      "scene": "舰况",
+      "actions": "指令"
+    },
+    "fields": {
+      "name": "称呼",
+      "mood": "状态",
+      "time": "舰时",
+      "place": "舱室",
+      "objective": "任务",
+      "round": "回合",
+      "unset": "^-$"
+    },
+    "actions": {
+      "full": "指令{n}",
+      "short": "键{n}"
+    },
+    "titleSeparator": "/",
+    "gate": "hud"
+  },
+  "hud": {
+    "hero": [
+      {
+        "key": "称呼",
+        "label": "Captain"
+      },
+      {
+        "key": "军衔",
+        "label": "Rank"
+      },
+      {
+        "key": "装备",
+        "label": "Gear"
+      }
+    ],
+    "scene": [
+      {
+        "key": "舰时",
+        "label": "Ship time"
+      },
+      {
+        "key": "舱室",
+        "label": "Deck"
+      },
+      {
+        "key": "警报",
+        "label": "Alert"
+      }
+    ],
+    "role": [
+      {
+        "key": "岗位",
+        "label": "Post"
+      }
+    ],
+    "meters": [
+      {
+        "key": "HP",
+        "label": "HP",
+        "min": 0,
+        "max": 200,
+        "color": "#ff4d4d"
+      },
+      {
+        "key": "信任",
+        "label": "Trust",
+        "min": -50,
+        "max": 50,
+        "color": "#4dd2ff"
+      }
+    ],
+    "questRule": {
+      "mode": "objective-mentions-name"
+    }
+  },
+  "lighting": {
+    "default": "cruise",
+    "presets": [
+      {
+        "id": "cruise",
+        "skyTop": "#02030a",
+        "skyBottom": "#0a1226",
+        "ground": "#ffffff",
+        "sun": "#8fd0ff",
+        "sunIntensity": 1.4,
+        "sunPos": [
+          0,
+          14,
+          6
+        ],
+        "hemi": 0.4,
+        "fog": "#05070f",
+        "fogNear": 10,
+        "fogFar": 70,
+        "lamp": 0.9,
+        "bloom": 0.45
+      },
+      {
+        "id": "alert",
+        "match": "警报|红色|战斗",
+        "skyTop": "#1a0205",
+        "skyBottom": "#3a0a10",
+        "ground": "#ffb0b8",
+        "sun": "#ff4a5a",
+        "sunIntensity": 1.8,
+        "sunPos": [
+          0,
+          14,
+          6
+        ],
+        "hemi": 0.3,
+        "fog": "#1a0508",
+        "fogNear": 8,
+        "fogFar": 50,
+        "lamp": 1.6,
+        "bloom": 0.7
+      },
+      {
+        "id": "rest",
+        "match": "休整|深夜|夜班",
+        "skyTop": "#020308",
+        "skyBottom": "#050a16",
+        "ground": "#8090b0",
+        "sun": "#5a7fb0",
+        "sunIntensity": 0.6,
+        "sunPos": [
+          0,
+          14,
+          -6
+        ],
+        "hemi": 0.2,
+        "fog": "#03050a",
+        "fogNear": 8,
+        "fogFar": 45,
+        "lamp": 0.5,
+        "bloom": 0.3
+      }
+    ]
+  },
+  "environment": {
+    "kit": "none",
+    "ground": {
+      "color": "#242b3a",
+      "texture": "grid",
+      "size": 80
+    },
+    "skyline": false,
+    "clouds": false,
+    "buildings": [],
+    "trees": [],
+    "lamps": [],
+    "places": [
+      {
+        "match": "舰桥|指挥",
+        "pos": [
+          0,
+          -14
+        ],
+        "label": "舰桥"
+      },
+      {
+        "match": "机库|甲板",
+        "pos": [
+          16,
+          4
+        ],
+        "label": "机库"
+      },
+      {
+        "match": "引擎|轮机|动力",
+        "pos": [
+          -16,
+          4
+        ],
+        "label": "引擎舱"
+      },
+      {
+        "match": "医务|病房",
+        "pos": [
+          0,
+          12
+        ],
+        "label": "医务室"
+      }
+    ],
+    "props": [
+      {
+        "shape": "box",
+        "pos": [
+          0,
+          -18
+        ],
+        "size": [
+          22,
+          6,
+          0.8
+        ],
+        "color": "#0d1b33",
+        "emissive": "#1b4d7a",
+        "label": "舰桥"
+      },
+      {
+        "shape": "box",
+        "pos": [
+          -6,
+          -14
+        ],
+        "size": [
+          2.4,
+          1.1,
+          1.2
+        ],
+        "color": "#3a4661",
+        "emissive": "#4dd2ff"
+      },
+      {
+        "shape": "box",
+        "pos": [
+          6,
+          -14
+        ],
+        "size": [
+          2.4,
+          1.1,
+          1.2
+        ],
+        "color": "#3a4661",
+        "emissive": "#4dd2ff"
+      },
+      {
+        "shape": "cylinder",
+        "pos": [
+          0,
+          -12
+        ],
+        "size": [
+          3,
+          0.3,
+          3
+        ],
+        "color": "#1f2738",
+        "emissive": "#3aa0ff",
+        "solid": false
+      },
+      {
+        "shape": "box",
+        "pos": [
+          -20,
+          4
+        ],
+        "size": [
+          8,
+          5,
+          8
+        ],
+        "color": "#3b3f4a",
+        "label": "引擎舱"
+      },
+      {
+        "shape": "cylinder",
+        "pos": [
+          -20,
+          4
+        ],
+        "y": 5,
+        "size": [
+          3,
+          1.5,
+          3
+        ],
+        "color": "#555b6a",
+        "emissive": "#ff9a3a",
+        "solid": false
+      },
+      {
+        "shape": "box",
+        "pos": [
+          20,
+          4
+        ],
+        "size": [
+          10,
+          5,
+          10
+        ],
+        "color": "#2f3542",
+        "label": "机库"
+      },
+      {
+        "shape": "box",
+        "pos": [
+          0,
+          14
+        ],
+        "size": [
+          6,
+          3.2,
+          5
+        ],
+        "color": "#dfe7f2",
+        "emissive": "#9fb4cc",
+        "label": "医务室"
+      },
+      {
+        "shape": "box",
+        "pos": [
+          -28,
+          0
+        ],
+        "size": [
+          0.6,
+          8,
+          60
+        ],
+        "color": "#1a1f2b"
+      },
+      {
+        "shape": "box",
+        "pos": [
+          28,
+          0
+        ],
+        "size": [
+          0.6,
+          8,
+          60
+        ],
+        "color": "#1a1f2b"
+      },
+      {
+        "shape": "sphere",
+        "pos": [
+          10,
+          -6
+        ],
+        "y": 3.5,
+        "size": [
+          0.4,
+          0.4,
+          0.4
+        ],
+        "color": "#ffffff",
+        "emissive": "#ff4d4d",
+        "solid": false
+      },
+      {
+        "shape": "sphere",
+        "pos": [
+          -10,
+          -6
+        ],
+        "y": 3.5,
+        "size": [
+          0.4,
+          0.4,
+          0.4
+        ],
+        "color": "#ffffff",
+        "emissive": "#ff4d4d",
+        "solid": false
+      }
+    ]
+  },
+  "characters": [
+    {
+      "name": "凯尔",
+      "color": "#4dd2ff",
+      "look": {
+        "hair": "#d8d8d8",
+        "hairStyle": "short",
+        "top": "#1f3a5c",
+        "bottom": "#14243a",
+        "accent": "#4dd2ff"
+      },
+      "accessory": "none",
+      "pos": [
+        -4,
+        -12
+      ],
+      "face": 0.3,
+      "wander": 1
+    },
+    {
+      "name": "薇拉",
+      "color": "#ff8ab8",
+      "look": {
+        "hair": "#a02050",
+        "hairStyle": "twin",
+        "top": "#f2f2f2",
+        "bottom": "#2a2f45",
+        "accent": "#ff4d4d"
+      },
+      "accessory": "none",
+      "pos": [
+        0,
+        11
+      ],
+      "face": 3.1,
+      "wander": 1.5
+    },
+    {
+      "name": "机修工博",
+      "color": "#ffb347",
+      "look": {
+        "hair": "#3a2a1a",
+        "hairStyle": "short",
+        "top": "#7a5a2a",
+        "bottom": "#3a3020",
+        "accent": "#ffb347"
+      },
+      "accessory": "halo-ring",
+      "pos": [
+        -16,
+        6
+      ],
+      "face": 1.4,
+      "wander": 2
+    }
+  ],
+  "player": {
+    "spawn": [
+      0,
+      0
+    ],
+    "speed": 5,
+    "look": {
+      "hair": "#1a1a1a",
+      "hairStyle": "short",
+      "top": "#243b63",
+      "bottom": "#14243a",
+      "accent": "#ffd27a"
+    }
+  },
+  "camera": {
+    "distance": 12,
+    "minDistance": 6,
+    "maxDistance": 24,
+    "height": 9,
+    "dialogue": "follow"
+  },
+  "audio": {
+    "sources": {},
+    "events": {},
+    "ambience": {}
+  }
+}
