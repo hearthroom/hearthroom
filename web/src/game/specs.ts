@@ -19,11 +19,11 @@ import type { GameSpecJson } from "../../../shared/game-spec";
  */
 const MILLENNIUM: WorldSpec = {
   spawn: [0, 8],
-  player: { url: "/game/models/sensei/idle.fbx", ownClip: "idle", texturesFrom: "/game/models/sensei/model.glb", height: 2.35, clips: { idle: "idle", walk: "walk" }, extra: [{ name: "walk", url: "/game/models/sensei/walk.fbx" }] },
+  player: { url: "/game/models/sensei/character.glb", height: 2.35 },
   npcs: [
-    { name: "阿罗娜", color: "#5ec2f5", hair: "#8fd3ff", hairStyle: "bob", halo: "arc", pos: [0, -3], face: Math.PI, wander: 1.5, model: { url: "/game/models/arona/idle.fbx", ownClip: "idle", texturesFrom: "/game/models/arona/model.glb", height: 2.2, clips: { idle: "idle", walk: "walk" }, extra: [{ name: "walk", url: "/game/models/arona/walk.fbx" }] } },
-    { name: "早濑优香", color: "#4f7bea", hair: "#2a4fc7", hairStyle: "twin", halo: "hex", pos: [-15, -2], face: Math.PI * 0.6, wander: 3, model: { url: "/game/models/yuuka/idle.fbx", ownClip: "idle", texturesFrom: "/game/models/yuuka/model.glb", height: 2.2, clips: { idle: "idle", walk: "walk" }, extra: [{ name: "walk", url: "/game/models/yuuka/walk.fbx" }] } },
-    { name: "生盐诺亚", color: "#b39cf5", hair: "#ece9f8", hairStyle: "long", halo: "ring", pos: [-12, 0], face: Math.PI * 0.5, wander: 3, model: { url: "/game/models/noa/idle.fbx", ownClip: "idle", texturesFrom: "/game/models/noa/model.glb", height: 2.2, clips: { idle: "idle", walk: "walk" }, extra: [{ name: "walk", url: "/game/models/noa/walk.fbx" }] } },
+    { name: "阿罗娜", color: "#5ec2f5", hair: "#8fd3ff", hairStyle: "bob", halo: "arc", pos: [0, -3], face: Math.PI, wander: 1.5, model: { url: "/game/models/arona/character.glb", height: 2.2 } },
+    { name: "早濑优香", color: "#4f7bea", hair: "#2a4fc7", hairStyle: "twin", halo: "hex", pos: [-15, -2], face: Math.PI * 0.6, wander: 3, model: { url: "/game/models/yuuka/character.glb", height: 2.2 } },
+    { name: "生盐诺亚", color: "#b39cf5", hair: "#ece9f8", hairStyle: "long", halo: "ring", pos: [-12, 0], face: Math.PI * 0.5, wander: 3, model: { url: "/game/models/noa/character.glb", height: 2.2 } },
   ],
   places: [
     { key: "seminar", match: /研讨会|会计|书记|千年科技学园|千年/, pos: [-12, 3], label: "研讨会大楼" },
