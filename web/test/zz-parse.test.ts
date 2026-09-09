@@ -168,3 +168,17 @@ describe("speakerOf", () => {
     expect(speakerOf("什么人都没有。", names)).toBe("");
   });
 });
+
+describe("splitSpeech", () => {
+  it("separates quoted lines, parenthesised thoughts and narration", async () => {
+    const { splitSpeech } = await import("@/game/zz-parse");
+    const segs = splitSpeech("她眨了眨眼，“研讨会那边在等你。”（真的会来吗？）阿罗娜歪了歪头。");
+    expect(segs.map((s) => s.kind)).toEqual(["narr", "say", "thought", "narr"]);
+    expect(segs[1].text).toBe("“研讨会那边在等你。”");
+    expect(segs[2].text).toBe("（真的会来吗？）");
+  });
+  it("leaves an unpaired quote as narration", async () => {
+    const { splitSpeech } = await import("@/game/zz-parse");
+    expect(splitSpeech("他说“别走").map((s) => s.kind)).toEqual(["narr"]);
+  });
+});
