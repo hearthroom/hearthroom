@@ -20,6 +20,17 @@ export async function getGameSpec(db: D1Database, roleId: string): Promise<{ spe
   return row ? { spec: row.spec, updatedAt: row.updated_at } : null;
 }
 
+/** 這幾張卡裡哪些有啟用中的遊戲配置（「我的卡片」要決定該不該露出「遊戲模式」鍵） */
+export async function gameEnabledAmong(db: D1Database, roleIds: string[]): Promise<Set<string>> {
+  if (!roleIds.length) return new Set();
+  const holes = roleIds.map(() => "?").join(",");
+  const rows = await db
+    .prepare(`SELECT role_id FROM game_worlds WHERE role_id IN (${holes}) AND json_extract(spec, '$.enabled') IS NOT 0`)
+    .bind(...roleIds)
+    .all<{ role_id: string }>();
+  return new Set(rows.results.map((r) => r.role_id));
+}
+
 export function gameRoutes(app: App): void {
   app.get("/v1/cards/:roleId/game", async (c) => {
     const roleId = c.req.param("roleId");

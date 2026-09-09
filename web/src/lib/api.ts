@@ -267,6 +267,8 @@ export interface MyCard {
   visibility: string;
   talkNum: number;
   registered: boolean;
+  /** 有啟用中的遊戲模式配置：多一顆「遊戲模式」鍵 */
+  game: boolean;
   /** 本站的審核狀態；只有 registered 時才有。 */
   status?: CardStatus;
   /** 最近一次駁回給作者的說明。 */

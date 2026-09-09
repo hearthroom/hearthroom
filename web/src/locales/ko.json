@@ -899,5 +899,6 @@
   "gameEd.audio.event.quest": "새 목표",
   "gameEd.audio.ambience": "환경음(조명별)",
   "gameEd.none": "(없음)",
-  "gameEd.resources": "이미지와 오디오는 “내 리소스”에 올린 뒤 URL을 붙여넣으세요. 3D 모델은 아직 외부 URL이 필요합니다."
+  "gameEd.resources": "이미지와 오디오는 “내 리소스”에 올린 뒤 URL을 붙여넣으세요. 3D 모델은 아직 외부 URL이 필요합니다.",
+  "mine.action.game": "게임 모드"
 }
