@@ -1024,7 +1024,7 @@ async function exportCard(format: "png" | "json") {
 </script>
 
 <template>
-  <div class="page editor">
+  <div class="page editor layout">
     <header class="head">
       <p class="eyebrow">{{ $t("mine.eyebrow") }}</p>
       <h1 class="display">{{ isNew ? $t("editor.title.new") : $t("editor.title.edit") }}</h1>
@@ -1037,7 +1037,7 @@ async function exportCard(format: "png" | "json") {
       <div class="ghost" style="height: 260px" />
     </div>
 
-    <div v-else class="layout">
+    <template v-else>
       <!-- 左：分區導覽。紅點＝缺必填；勾＝已經有內容 -->
       <nav class="side" :aria-label="$t('editor.sections')">
         <button
@@ -1364,7 +1364,7 @@ async function exportCard(format: "png" | "json") {
           <ResourcePanel v-else />
         </div>
       </aside>
-    </div>
+    </template>
 
     <div class="toast" role="status" :hidden="!toast">{{ toast }}</div>
     <RegexRulesEditor v-if="regexOpen" v-model="regexSet" @close="regexOpen = false" />
@@ -1374,16 +1374,27 @@ async function exportCard(format: "png" | "json") {
 
 <style scoped>
 /* 這一頁比別頁寬一點：三欄要站得開。1200 是給榜單的，卡片網格在那個寬度剛好；編輯器多要 120px 給右欄。 */
-.editor { max-width: 1320px; }
-.head { margin-bottom: var(--s-4); }
+/*
+   底部不留頁面留白：右欄是 sticky，它能走的距離是自己那格的高度減掉框高，
+   而頁面能捲的距離還多算了這塊留白。多出來的那段一到底，框就被推到頁首背後。
+   讓版面的底就是頁面的底，兩邊的行程才對得上；底下的呼吸由動作列自己的 padding 給。
+*/
+.editor { max-width: 1320px; padding-bottom: 0; }
+/* 頁首只佔左中兩欄：右欄要從頁面最上緣開始，不然手機框整條被壓到標題底下 */
+.head { grid-column: 1 / 3; }
 h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .lede { margin: 0; max-width: 52ch; }
-.ghosts { display: grid; gap: var(--s-4); }
+.ghosts { grid-column: 1 / -1; display: grid; gap: var(--s-4); }
 
 .layout {
   display: grid; grid-template-columns: 176px minmax(0, 1fr) var(--rail-w, 240px);
   gap: var(--s-5); align-items: start;
 }
+/*
+   表單撐滿整行的高度，底下那條動作列才黏得住視窗底部。不撐的話（align-items: start）
+   短的分頁一捲到底，sticky 的容器就到頭了，動作列會停在表單結尾浮在半空中。
+*/
+.body { align-self: stretch; }
 
 /* ---- 左欄 ---------------------------------------------------------------- */
 .side {
@@ -1466,7 +1477,7 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .bar {
   position: sticky; bottom: 0; z-index: 12;
   display: flex; gap: var(--s-3); align-items: center; flex-wrap: wrap;
-  margin: var(--s-6) 0 calc(var(--s-3) * -1); padding: var(--s-3) 0;
+  margin: var(--s-6) 0 0; padding: var(--s-3) 0;
   background: linear-gradient(to top, var(--bg) 78%, transparent);
 }
 /* 檢查清單推到最右邊：左邊是要按的，右邊是要看的 */
@@ -1490,8 +1501,9 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
    反推的，所以在這條欄上少放一行，框就同時長高又變寬。
 */
 .rail {
+  grid-column: 3; grid-row: 1 / span 2;
   position: sticky; top: calc(var(--header-h) + var(--s-4));
-  height: calc(100vh - var(--header-h) - var(--s-4));
+  height: calc(100vh - var(--header-h) - var(--s-5));
   display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--s-3);
 }
 /* 面板收起來時沒有東西要撐開，讓右欄縮回內容高，底下不留一長條空白 */
@@ -1500,11 +1512,11 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
    右欄的寬度跟著手機框走，不是一個寫死的數字。框的高度吃滿面板、寬度由 9:19.5 反推，
    所以能有多寬完全看視窗有多高；寫死一個數字要嘛在框旁邊留一條放不下東西的空白，
    要嘛把框壓窄。這條就是把面板的可用高乘上比例：
-   可用高 = 100vh − 60(頁首) − 16(上緣留白) − 48(分頁列與它下面那道間距)，
-   乘 9/19.5 得 46vh − 57px，再多給幾像素讓框不要貼著邊。上下限擋住極端視窗。
+   可用高 = 100vh − 60(頁首) − 24(上緣留白) − 48(分頁列與它下面那道間距)，
+   乘 9/19.5 得 46vh − 61px，再多給幾像素讓框不要貼著邊。上下限擋住極端視窗。
    算不準也不會壞：框太窄由 max-width 收，框太寬就維持置中留白。
 */
-.layout:has(.rail--wide) { --rail-w: clamp(320px, calc(46vh - 50px), 640px); }
+.layout:has(.rail--wide) { --rail-w: clamp(320px, calc(46vh - 54px), 640px); }
 .rail__tabs { display: flex; gap: var(--s-2); align-items: center; }
 .rail__tabs .seg { min-width: 0; overflow-x: auto; }
 /* 收合鈕永遠靠右，中間那幾顆工具鈕貼著分頁籤 */
@@ -1537,6 +1549,7 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 /* ---- 再窄：導覽變成頂部一排，一欄到底 -------------------------------------------- */
 @media (max-width: 760px) {
   .layout { grid-template-columns: minmax(0, 1fr); gap: var(--s-4); }
+  .head { grid-column: 1 / -1; }
   .side {
     position: sticky; top: var(--header-h); z-index: 5;
     display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none;
