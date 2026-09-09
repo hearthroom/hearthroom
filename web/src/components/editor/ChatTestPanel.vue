@@ -39,6 +39,10 @@ watch(
     if (before && !now && props.roleId) nonce.value += 1;
   },
 );
+
+/* 重載與「開新分頁」的鈕在編輯器的分頁列上，跟分頁籤同一排：面板高度全歸手機框，
+   多一排工具列就少一排對話。 */
+defineExpose({ reload: () => { nonce.value += 1; } });
 </script>
 
 <template>
@@ -57,10 +61,6 @@ watch(
         <button type="button" class="btn btn--sm" :disabled="saving" @click="emit('save')">
           {{ $t("editor.test.saveAndReload") }}
         </button>
-      </div>
-      <div class="ct__acts">
-        <button type="button" class="btn btn--sm btn--ghost" @click="nonce += 1">{{ $t("editor.test.reload") }}</button>
-        <a class="btn btn--sm btn--ghost" :href="src" target="_blank" rel="noopener">{{ $t("editor.test.newTab") }}</a>
       </div>
       <div class="ct__stage">
         <!-- key 換掉才會真的重載：只改 src 上的查詢字串，某些瀏覽器不重跑整個文件 -->
@@ -82,7 +82,6 @@ watch(
   padding: var(--s-2) var(--s-3); border-radius: var(--r-sm); background: var(--surface-2);
 }
 .ct__notice .subtle { flex: 1; min-width: 0; font-size: 12.5px; }
-.ct__acts { flex: none; display: flex; gap: var(--s-2); }
 /*
    手機比例，不是「剩下多寬就多寬」。
    卡片是照手機畫的——版面、字級、氣泡寬度、作者自己貼的 HUD 都按那個比例算。
