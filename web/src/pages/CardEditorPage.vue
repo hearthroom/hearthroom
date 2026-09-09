@@ -1274,17 +1274,36 @@ async function exportCard(format: "png" | "json") {
           </div>
         </section>
 
-        <!-- 窄螢幕的動作條：右欄收掉時由它接手 -->
+        <!--
+          底部黏著的動作條。以前只在窄螢幕出現，寬螢幕的儲存與檢查清單擺在右欄——
+          但那些東西每一條都是從對話測試那個手機框身上扣下來的高度，扣完框就只剩
+          面板的七成，卡片本來的版面全擠變形。它們黏在表單底下一樣一直在視野裡，
+          右欄就整條讓給手機框。
+        -->
         <div class="bar">
           <button class="btn btn--primary" type="submit" :disabled="saving || (!dirty && !isNew)">
             {{ saveLabel }}
           </button>
-          <button type="button" class="btn" @click="openSheet('test')">{{ $t("editor.test.title") }}</button>
-          <button type="button" class="btn" @click="openSheet('res')">{{ $t("editor.panel.resources") }}</button>
-          <RouterLink class="btn" :class="{ 'is-off': saving }" :aria-disabled="saving || undefined"
+          <button v-if="!isNew" type="button" class="btn" :disabled="!canPublish || saving" @click="publish">
+            {{ $t("editor.publish.submit") }}
+          </button>
+          <button type="button" class="btn bar__panel" @click="openSheet('test')">{{ $t("editor.test.title") }}</button>
+          <button type="button" class="btn bar__panel" @click="openSheet('res')">{{ $t("editor.panel.resources") }}</button>
+          <RouterLink class="btn btn--ghost" :class="{ 'is-off': saving }" :aria-disabled="saving || undefined"
                       :to="{ path: lp('/mine'), query: { fresh: '1' } }">
             {{ $t("edit.back") }}
           </RouterLink>
+          <ul class="bar__check">
+            <li v-for="key in ['roleName', 'roleDetailDesc', 'roleWelcome']" :key="key"
+                :class="{ ok: !missing.includes(key) }">
+              <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8"
+                   stroke-linecap="round" stroke-linejoin="round">
+                <path v-if="!missing.includes(key)" d="M3.5 8.5l3 3 6-7" />
+                <circle v-else cx="8" cy="8" r="5.5" />
+              </svg>
+              {{ $t(`editor.required.${key}`) }}
+            </li>
+          </ul>
           <span v-if="dirty" class="subtle">{{ $t("editor.unsaved") }}</span>
         </div>
       </form>
@@ -1344,36 +1363,6 @@ async function exportCard(format: "png" | "json") {
           <ChatTestPanel v-if="panel === 'test'" ref="testPanel" :role-id="roleId" :dirty="dirty" :saving="saving" @save="save" />
           <ResourcePanel v-else />
         </div>
-
-        <ul class="rail__check">
-          <li v-for="key in ['roleName', 'roleDetailDesc', 'roleWelcome']" :key="key"
-              :class="{ ok: !missing.includes(key) }">
-            <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8"
-                 stroke-linecap="round" stroke-linejoin="round">
-              <path v-if="!missing.includes(key)" d="M3.5 8.5l3 3 6-7" />
-              <circle v-else cx="8" cy="8" r="5.5" />
-            </svg>
-            {{ $t(`editor.required.${key}`) }}
-          </li>
-        </ul>
-
-        <div class="rail__acts">
-          <button class="btn btn--primary" type="button" :disabled="saving || (!dirty && !isNew)" title="⌘/Ctrl + S"
-                  @click="save">
-            {{ saveLabel }}
-          </button>
-          <button v-if="!isNew" type="button" class="btn" :disabled="!canPublish || saving" @click="publish">
-            {{ $t("editor.publish.submit") }}
-          </button>
-          <RouterLink class="btn btn--ghost" :class="{ 'is-off': saving }" :aria-disabled="saving || undefined"
-                      :to="{ path: lp('/mine'), query: { fresh: '1' } }">
-            {{ $t("edit.back") }}
-          </RouterLink>
-        </div>
-        <p class="subtle rail__state">
-          <template v-if="dirty">{{ $t("editor.unsaved") }}</template>
-          <template v-else-if="saved">{{ $t("edit.saved") }}</template>
-        </p>
       </aside>
     </div>
 
@@ -1470,33 +1459,52 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .panel .btn { justify-self: start; }
 .checklist ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 14px; color: var(--text-3); }
 .checklist li.ok { color: var(--success); }
-/* 寬螢幕時動作在右欄；這條只給窄螢幕 */
-.bar { display: none; }
+/*
+   動作條一直黏在表單底下：儲存、送審、檢查清單、未存提示都在這裡，不再佔右欄的高度。
+   z-index 壓過表單內容但低於浮層分層（§3.2 的 10–19 那一階）。
+*/
+.bar {
+  position: sticky; bottom: 0; z-index: 12;
+  display: flex; gap: var(--s-3); align-items: center; flex-wrap: wrap;
+  margin: var(--s-6) 0 calc(var(--s-3) * -1); padding: var(--s-3) 0;
+  background: linear-gradient(to top, var(--bg) 78%, transparent);
+}
+/* 檢查清單推到最右邊：左邊是要按的，右邊是要看的 */
+.bar__check {
+  list-style: none; margin: 0 0 0 auto; padding: 0;
+  display: flex; flex-wrap: wrap; gap: 4px var(--s-3); font-size: 13px; color: var(--text-3);
+}
+.bar__check li { display: flex; align-items: center; gap: 6px; }
+.bar__check li.ok { color: var(--success); }
+.bar__check svg { width: 14px; height: 14px; flex: none; }
+/* 開浮層的兩顆只有窄螢幕要：寬螢幕的面板就在旁邊 */
+.bar__panel { display: none; }
+.body { padding-bottom: var(--s-2); }
 .is-off { pointer-events: none; opacity: 0.45; }
 
 /* ---- 右欄 ---------------------------------------------------------------- */
 /*
    右欄要有確定的高度，面板裡的 iframe 才長得起來：沒有高度時 minmax(0,1fr)
    解成內容高，對話畫布只剩自己的 min-height（實測 420px，裡面的訊息區塞成 150px）。
-   給它一個視窗高度的框，剩下的空間就全歸中間那格面板；順帶讓檢查清單與儲存鍵
-   一直留在視野裡，不必為了按儲存把整頁捲到底。
+   高度一路吃到視窗底，除了分頁列以外不放別的東西——手機框的寬度是由高度乘比例
+   反推的，所以在這條欄上少放一行，框就同時長高又變寬。
 */
 .rail {
   position: sticky; top: calc(var(--header-h) + var(--s-4));
-  height: calc(100vh - var(--header-h) - var(--s-4) * 2);
-  display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto auto; gap: var(--s-3);
+  height: calc(100vh - var(--header-h) - var(--s-4));
+  display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--s-3);
 }
 /* 面板收起來時沒有東西要撐開，讓右欄縮回內容高，底下不留一長條空白 */
-.rail:not(.rail--wide) { height: auto; grid-template-rows: auto auto auto auto; }
+.rail:not(.rail--wide) { height: auto; grid-template-rows: auto; }
 /*
    右欄的寬度跟著手機框走，不是一個寫死的數字。框的高度吃滿面板、寬度由 9:19.5 反推，
-   所以能有多寬完全看視窗有多高；固定 440px 在一般筆電上會在框旁邊留下兩百多像素的空白，
-   那條空白既放不下東西、又是從表單那邊借來的。下面這條就是把上面那串行高減完之後
-   乘上比例：可用高 ≈ 100vh − 60(頁首) − 32(上下留白) − 159(分頁列/檢查清單/按鈕/狀態與間距)，
-   乘 9/19.5 得 46vh − 116px，再加一點讓框不要貼著邊。上下限擋住極端視窗。
-   算不準也不會壞：框太窄就由 max-width 收，框太寬就維持置中留白。
+   所以能有多寬完全看視窗有多高；寫死一個數字要嘛在框旁邊留一條放不下東西的空白，
+   要嘛把框壓窄。這條就是把面板的可用高乘上比例：
+   可用高 = 100vh − 60(頁首) − 16(上緣留白) − 48(分頁列與它下面那道間距)，
+   乘 9/19.5 得 46vh − 57px，再多給幾像素讓框不要貼著邊。上下限擋住極端視窗。
+   算不準也不會壞：框太窄由 max-width 收，框太寬就維持置中留白。
 */
-.layout:has(.rail--wide) { --rail-w: clamp(300px, calc(46vh - 92px), 520px); }
+.layout:has(.rail--wide) { --rail-w: clamp(320px, calc(46vh - 50px), 640px); }
 .rail__tabs { display: flex; gap: var(--s-2); align-items: center; }
 .rail__tabs .seg { min-width: 0; overflow-x: auto; }
 /* 收合鈕永遠靠右，中間那幾顆工具鈕貼著分頁籤 */
@@ -1504,17 +1512,6 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 /* 明寫一條 1fr：隱式的 auto 行會讓面板縮成內容高，裡面靠 height:100% 的東西
    （對話測試那個照手機比例的框）就失去基準，反被自己的比例撐開。 */
 .rail__panel { min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr); }
-/* 預覽只是看的：inert 擋掉點擊與焦點，hover 的浮起也一起沒了，它就安靜地待在那 */
-/* 橫排：三條各佔一行等於從手機框身上拿走 40 多像素，而它們短到一行放得下 */
-.rail__check { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px var(--s-3); font-size: 13px; color: var(--text-3); }
-.rail__check li { display: flex; align-items: center; gap: 8px; }
-.rail__check li.ok { color: var(--success); }
-.rail__check svg { width: 14px; height: 14px; flex: none; }
-.rail__acts { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-2); }
-.rail__acts .btn { width: 100%; padding-inline: var(--s-3); }
-/* 「回到我的卡片」自己一行：它最長，跟儲存擠一排會被切掉 */
-.rail__acts > :last-child { grid-column: 1 / -1; }
-.rail__state { margin: 0; min-height: 1.6em; }
 
 /* ---- 窄一點：右欄收掉，動作回到底部黏著的那條 ---------------------------------- */
 @media (max-width: 1100px) {
@@ -1522,7 +1519,7 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
   /*
      右欄在窄螢幕整條收起來，但對話測試與我的資源不能跟著消失——站上其他功能都適配
      手機，這兩個也要有（owner 2026-09-08）。改成鋪滿整個視窗的浮層：從底部那條
-     動作列打開，關掉就回表單。檢查清單與儲存鍵本來就在 .bar 上，不受影響。
+     動作列打開，關掉就回表單。
   */
   .rail { display: none; }
   .rail--sheet {
@@ -1531,13 +1528,10 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
     padding: var(--s-3); gap: var(--s-3);
     background: var(--bg);
   }
-  .rail--sheet .rail__check, .rail--sheet .rail__acts, .rail--sheet .rail__state { display: none; }
   .body { padding-bottom: 72px; }
-  .bar {
-    position: sticky; bottom: 0; display: flex; gap: var(--s-3); align-items: center; flex-wrap: wrap;
-    margin: var(--s-6) 0 calc(var(--s-3) * -1); padding: var(--s-3) 0;
-    background: linear-gradient(to top, var(--bg) 70%, transparent);
-  }
+  .bar__panel { display: inline-flex; }
+  /* 窄螢幕的動作條已經三顆鈕，清單再擠上去會折行蓋住表單尾端 */
+  .bar__check { display: none; }
 }
 
 /* ---- 再窄：導覽變成頂部一排，一欄到底 -------------------------------------------- */
