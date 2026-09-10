@@ -47,6 +47,11 @@ img { max-width: 100%; display: block; }
    顯示不全」）。作者的東西掛在 body 上、不一定落在 .ms-stage 裡，所以整頁關掉；舞台
    自己的圖都有明確寬度，本來就不靠這條。 */
 body:has(.play) img { max-width: none; }
+/* 上面那條例外只該放過「作者寫死了尺寸」的圖。訊息正文裡沒寫尺寸的裸 <img>（開場白／
+   AI 回覆直接貼一張圖）沒有人給它寬度，關掉上限就以原圖像素撐開氣泡，手機上只看得到
+   圖的一角（owner 2026-09-11 截圖）。舞台自己的 .mes_text img{max-width:100%} 在 @layer
+   裡，贏不了上面那條無 layer 規則，所以補回來也得寫在這裡。 */
+body:has(.play) .mes_text img:not([width]):not([height]):not([style*="width"]):not([style*="height"]) { max-width: 100%; }
 button { font: inherit; color: inherit; }
 h1, h2, h3, p, dl, dd { margin: 0; }
 
