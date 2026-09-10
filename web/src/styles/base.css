@@ -42,6 +42,11 @@ body::before {
 
 a { color: inherit; text-decoration: none; }
 img { max-width: 100%; display: block; }
+/* /play 例外：作者資產的圖常常把尺寸寫死，圖上的標記再用同一套座標定位。這條把圖壓成
+   容器寬之後，標記還留在原座標，地圖上的點就整批跑到圖外面（owner 2026-09-10「大地圖
+   顯示不全」）。作者的東西掛在 body 上、不一定落在 .ms-stage 裡，所以整頁關掉；舞台
+   自己的圖都有明確寬度，本來就不靠這條。 */
+body:has(.play) img { max-width: none; }
 button { font: inherit; color: inherit; }
 h1, h2, h3, p, dl, dd { margin: 0; }
 
