@@ -32,7 +32,17 @@ function crc32(bytes: Uint8Array): number {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
-const ascii = (bytes: Uint8Array): string => String.fromCharCode(...bytes);
+/**
+ * 位元組 → Latin-1 字串，逐段轉。`String.fromCharCode(...bytes)` 把整個 chunk 當引數展開，
+ * 引數數量有上限（Chrome 十幾萬、Node 更低）：一張帶正則與世界書的 V3 卡 chunk 動輒二十萬
+ * 位元組，一展開就是 RangeError: Maximum call stack size exceeded——用戶看到的只有「匯入失敗」
+ * （2026-09-11 兩張 MMD 匯出的 PNG 卡，chunk 242 KB 與 630 KB）。
+ */
+function ascii(bytes: Uint8Array): string {
+  let out = "";
+  for (let at = 0; at < bytes.length; at += 0x8000) out += String.fromCharCode(...bytes.subarray(at, at + 0x8000));
+  return out;
+}
 
 export function isPng(bytes: Uint8Array): boolean {
   return bytes.length >= 8 && SIGNATURE.every((b, i) => bytes[i] === b);
@@ -128,7 +138,7 @@ export function replaceTextChunks(bytes: Uint8Array, entries: { keyword: string;
  * 兩端必須用同一套轉換，否則非 ASCII 的卡在來回一趟之後會變成亂碼。
  */
 export function base64FromUtf8(value: string): string {
-  return btoa(String.fromCharCode(...new TextEncoder().encode(value)));
+  return btoa(ascii(new TextEncoder().encode(value)));
 }
 
 export function utf8FromBase64(value: string): string {

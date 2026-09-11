@@ -911,5 +911,6 @@
   "error.validateReject.rulesTotal": "整份正規表示式規則 {sizeMB} MB，超過上限 {maxMB} MB。刪掉用不到的規則再存。",
   "error.validateReject.ruleReplace": "第 {index} 條規則「{name}」的替換內容 {sizeKB} KB，超過上限 {maxKB} KB。把它拆成幾條或縮短。",
   "error.validateReject.emptyFind": "第 {index} 條規則「{name}」的匹配是空的，補上或刪掉這條。",
-  "error.payloadTooLarge": "送出的內容太大，伺服器沒有收。把規則或圖片縮小後再試一次。"
+  "error.payloadTooLarge": "送出的內容太大，伺服器沒有收。把規則或圖片縮小後再試一次。",
+  "import.note.mesExampleAsContract": "對話示例那一格寫的是創作要求而不是對話，已收成「輸出要求」。"
 }

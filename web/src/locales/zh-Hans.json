@@ -911,5 +911,6 @@
   "error.validateReject.rulesTotal": "整份正则规则 {sizeMB} MB，超过上限 {maxMB} MB。删掉用不到的规则再存。",
   "error.validateReject.ruleReplace": "第 {index} 条规则「{name}」的替换内容 {sizeKB} KB，超过上限 {maxKB} KB。把它拆成几条或缩短。",
   "error.validateReject.emptyFind": "第 {index} 条规则「{name}」的匹配是空的，补上或删掉这条。",
-  "error.payloadTooLarge": "发送的内容太大，服务器没有收。把规则或图片缩小后再试一次。"
+  "error.payloadTooLarge": "发送的内容太大，服务器没有收。把规则或图片缩小后再试一次。",
+  "import.note.mesExampleAsContract": "对话示例那一格写的是创作要求而不是对话，已收成「输出要求」。"
 }
