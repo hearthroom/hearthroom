@@ -5,12 +5,15 @@
  * 作者在寫卡的時候要傳圖、要看還剩多少容量、要把上次傳的那張找出來——先前這些只有
  * 獨立的資源頁做得到，於是寫到一半得離開表單，回來時草稿還在不在要看運氣。
  *
- * 這裡只做「傳進去、看得到、拿得走」：上傳、容量、分組、複製網址。整理（改名資料夾、
- * 批次搬移、刪除）留在資源頁——側欄一格窄成這樣，把管理也塞進來只會兩邊都難用。
+ * 這裡做「傳進去、看得到、拿得走、刪得掉」：多選上傳、容量、分組、複製網址、勾選刪除。
+ * 改名資料夾與批次搬移留在資源頁——側欄一格窄成這樣，整套管理塞進來只會兩邊都難用。
+ * 多選上傳與刪除是 2026-09-11 作者反映加的：作者在編輯頁傳圖一次只能挑一張、傳錯了
+ * 也得離開表單去資源頁刪，來回一趟草稿還在不在要看運氣。
  */
 import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import {
+  deleteLibraryImages,
   fetchLibraryFolders,
   fetchLibraryImages,
   uploadImage,
@@ -18,12 +21,15 @@ import {
   type LibraryImage,
   type LibraryScope,
 } from "@/lib/api";
+import { confirmDialog } from "@/lib/confirm";
 import { useSession } from "@/lib/session";
 
 const { t } = useI18n();
 const session = useSession();
 
 const PAGE = 40;
+/** 單檔上限，跟資源頁與上游一致（100 MB）。 */
+const FILE_MAX = 100 << 20;
 
 const folders = ref<LibraryFolder[]>([]);
 const images = ref<LibraryImage[]>([]);
@@ -82,24 +88,77 @@ onMounted(async () => {
 
 watch(scopeKey, () => load(true));
 
+/** 上傳進度：第幾張／共幾張。count 0 代表沒在傳。 */
+const uploading = ref({ done: 0, count: 0 });
 async function onFile(event: Event) {
   const input = event.target as HTMLInputElement;
-  const file = input.files?.[0];
+  const files = [...(input.files ?? [])];
   input.value = "";
-  if (!file) return;
+  if (!files.length) return;
+  busy.value = true;
+  uploading.value = { done: 0, count: files.length };
+  error.value = "";
+  note.value = "";
+  const failed: string[] = [];
+  try {
+    const token = await session.accessToken();
+    if (!token) throw new Error("auth");
+    // 正在看某個資料夾就傳進那個資料夾；看「全部」或「沒歸檔的」就不歸檔
+    const folderIds = scope.value.kind === "folder" ? [scope.value.folderId] : [];
+    for (const file of files) {
+      if (file.size > FILE_MAX) failed.push(`${file.name}：${t("res.error.tooLarge")}`);
+      else {
+        try {
+          await uploadImage(file, token, undefined, folderIds);
+        } catch (err) {
+          failed.push(`${file.name}：${err instanceof Error && err.message ? err.message : t("state.uploadFailed")}`);
+        }
+      }
+      uploading.value = { ...uploading.value, done: uploading.value.done + 1 };
+    }
+    await load(true);
+    if (failed.length) error.value = failed.join("\n");
+    else note.value = t("res.panel.uploaded");
+  } catch {
+    error.value = t("res.panel.uploadFailed");
+  } finally {
+    busy.value = false;
+    uploading.value = { done: 0, count: 0 };
+  }
+}
+
+// ── 勾選刪除 ────────────────────────────────────────────────────
+const managing = ref(false);
+const selected = ref(new Set<number>());
+function toggleSelect(image: LibraryImage) {
+  const next = new Set(selected.value);
+  if (next.has(image.id)) next.delete(image.id);
+  else next.add(image.id);
+  selected.value = next;
+}
+function endManage() {
+  managing.value = false;
+  selected.value = new Set();
+}
+watch(scopeKey, () => { selected.value = new Set(); });
+
+async function removeSelected() {
+  const ids = [...selected.value];
+  if (!ids.length) return;
+  if (!(await confirmDialog({ message: t("res.deleteConfirm", { n: ids.length }), confirmText: t("dialog.delete"), danger: true }))) return;
   busy.value = true;
   error.value = "";
   note.value = "";
   try {
     const token = await session.accessToken();
     if (!token) throw new Error("auth");
-    await uploadImage(file, token);
-    // 傳完回到「全部」再重讀：新檔還沒歸資料夾，留在某個分組上會看不到自己剛傳的東西
-    if (scopeKey.value !== "all") scopeKey.value = "all";
-    else await load(true);
-    note.value = t("res.panel.uploaded");
-  } catch {
-    error.value = t("res.panel.uploadFailed");
+    await deleteLibraryImages(ids, token);
+    note.value = t("res.deleted", { n: ids.length });
+    endManage();
+    await load(true);
+  } catch (err) {
+    // 正被卡片當頭像／背景的圖刪不掉：上游的說法照講
+    error.value = err instanceof Error && err.message ? err.message : t("state.actionFailed");
   } finally {
     busy.value = false;
   }
@@ -130,9 +189,15 @@ const stateLabel = (image: LibraryImage) =>
 
     <div class="rp__acts">
       <button type="button" class="btn btn--sm btn--primary" :disabled="busy" @click="fileInput?.click()">
-        {{ busy ? $t("res.panel.uploading") : $t("res.panel.upload") }}
+        {{ uploading.count ? $t("res.uploading", { done: uploading.done, count: uploading.count }) : $t("res.panel.upload") }}
       </button>
-      <input ref="fileInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" class="sr-only" @change="onFile" />
+      <input ref="fileInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple class="sr-only" @change="onFile" />
+      <button v-if="!managing" type="button" class="btn btn--sm" :disabled="busy || !images.length" @click="managing = true">{{ $t("res.panel.manage") }}</button>
+      <template v-else>
+        <span class="subtle rp__count">{{ $t("res.selected", { n: selected.size }) }}</span>
+        <button type="button" class="btn btn--sm btn--danger" :disabled="!selected.size || busy" @click="removeSelected">{{ $t("dialog.delete") }}</button>
+        <button type="button" class="btn btn--sm btn--ghost" :disabled="busy" @click="endManage">{{ $t("res.panel.manageDone") }}</button>
+      </template>
     </div>
 
     <div v-if="folders.length" class="rp__folders">
@@ -153,10 +218,14 @@ const stateLabel = (image: LibraryImage) =>
     <div class="rp__wrap">
       <p v-if="!loading && !images.length" class="subtle rp__empty">{{ $t("lib.pick.empty") }}</p>
       <ul v-else class="wall">
-        <li v-for="image in images" :key="image.id" class="tile">
+        <li v-for="image in images" :key="image.id" class="tile" :class="{ 'tile--on': selected.has(image.id) }">
           <img :src="image.imageUrl" alt="" loading="lazy" />
           <span v-if="stateLabel(image)" class="tile__state" :class="{ 'tile__state--bad': image.moderationState === 'reject' }">{{ stateLabel(image) }}</span>
-          <button type="button" class="tile__copy" :title="$t('res.panel.copy')" :aria-label="$t('res.panel.copy')"
+          <!-- 管理模式：整格是一個勾選；平常是複製鈕 -->
+          <label v-if="managing" class="tile__pick">
+            <input type="checkbox" :checked="selected.has(image.id)" :aria-label="$t('res.panel.pick')" @change="toggleSelect(image)" />
+          </label>
+          <button v-else type="button" class="tile__copy" :title="$t('res.panel.copy')" :aria-label="$t('res.panel.copy')"
                   @click="copyUrl(image)">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"
                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -204,4 +273,9 @@ const stateLabel = (image: LibraryImage) =>
   transition: opacity var(--dur) var(--ease);
 }
 .tile:hover .tile__copy, .tile__copy:focus-visible { opacity: 1; }
+.rp__count { align-self: center; white-space: nowrap; }
+/* 管理模式：整格可點，勾選框固定在左上；選中的格子描一圈主色 */
+.tile__pick { position: absolute; inset: 0; cursor: pointer; }
+.tile__pick input { position: absolute; top: 6px; left: 6px; width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+.tile--on { box-shadow: 0 0 0 2px var(--accent); }
 </style>

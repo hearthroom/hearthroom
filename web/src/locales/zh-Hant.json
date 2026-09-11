@@ -920,5 +920,8 @@
   "error.fieldTooLong.jailbreak": "額外指示 {actual} 字，超過上限 {max} 字。這一格每輪都會附在最後，只放最容易被忘掉的規則；其餘搬到角色設定。",
   "error.fieldTooLong.roleOutputContract": "輸出格式 {actual} 字，超過上限 {max} 字。",
   "editor.fieldTooLong": "「{label}」{n} 字，超過上限 {max} 字，存不進去。縮短後再存。",
-  "editor.createdButNotSaved": "卡片已經建立，但內容沒有存進去：{why} 修正後再按一次儲存，會存到同一張卡，不會再建一張新的。"
+  "editor.createdButNotSaved": "卡片已經建立，但內容沒有存進去：{why} 修正後再按一次儲存，會存到同一張卡，不會再建一張新的。",
+  "res.panel.manage": "管理",
+  "res.panel.manageDone": "完成",
+  "res.panel.pick": "選取這張"
 }
