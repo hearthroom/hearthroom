@@ -223,7 +223,7 @@ watch(selectedId, () => { testScope.value = testScope.value; });
   display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden;
   box-shadow: var(--shadow-md), 0 0 0 1px var(--line);
 }
-.rx__head { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-4); box-shadow: 0 1px 0 var(--line); }
+.rx__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); padding: var(--s-3) var(--s-4); box-shadow: 0 1px 0 var(--line); }
 .rx__head h2 { font-size: 16px; }
 .rx__head-acts { margin-left: auto; display: flex; gap: var(--s-2); }
 .rx__over, .rx__set-issue { color: var(--danger); }
