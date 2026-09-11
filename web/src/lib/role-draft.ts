@@ -103,17 +103,17 @@ export function missingRequired(draft: RoleDraft): string[] {
 }
 
 /**
- * 欄位上限。這份只是「還沒問過上游時的保守預設」——真正的上限跟著卡片語區走，
- * 由 GET /role/validate 的 tokenBudget.limits 回來覆蓋。寫死在前端會在某些語區給錯提示。
+ * 欄位上限。這份只是「還沒問過上游時的預設」——真正的上限由 GET /role/validate 的
+ * tokenBudget.limits 回來覆蓋。新卡還沒有 roleId、問不到上游，所以這張表要跟上游的
+ * 語區表一致（server LimitsForRoleLanguage）：英文卡預算大得多，中文卡的額外指示只有 500。
+ * 寫成一個數會在建卡頁顯示 4000、存成卡後變 500 這種前後矛盾。
  */
-export const FALLBACK_LIMITS: Record<string, number> = {
-  roleName: 60,
-  roleDesc: 500,
-  roleDetailDesc: 20000,
-  roleWelcome: 4000,
-  roleOutputContract: 4000,
-  jailbreak: 4000,
-};
+export function fallbackLimits(language = ""): Record<string, number> {
+  const lang = language.toLowerCase();
+  const base = { roleName: 60, roleOutputContract: 2000 };
+  if (lang.startsWith("en")) return { ...base, roleDesc: 2500, roleDetailDesc: 50000, roleWelcome: 10000, jailbreak: 1500 };
+  return { ...base, roleDesc: 500, roleDetailDesc: 10000, roleWelcome: 8000, jailbreak: lang.startsWith("zh") ? 500 : 1500 };
+}
 
 export interface FieldLimits {
   roleDescMaxChars?: number;
@@ -123,10 +123,11 @@ export interface FieldLimits {
   jailbreakMaxChars?: number;
 }
 
-export function resolveLimits(remote: FieldLimits | null): Record<string, number> {
-  if (!remote) return { ...FALLBACK_LIMITS };
+export function resolveLimits(remote: FieldLimits | null, language = ""): Record<string, number> {
+  const fallback = fallbackLimits(language);
+  if (!remote) return fallback;
   return {
-    ...FALLBACK_LIMITS,
+    ...fallback,
     ...(remote.roleDescMaxChars ? { roleDesc: remote.roleDescMaxChars } : {}),
     ...(remote.roleDetailDescMaxChars ? { roleDetailDesc: remote.roleDetailDescMaxChars } : {}),
     ...(remote.roleWelcomeMaxChars ? { roleWelcome: remote.roleWelcomeMaxChars } : {}),
