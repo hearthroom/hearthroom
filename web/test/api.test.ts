@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRole, fetchLibraryImages, fetchWorldbookEntries, readKeywordList } from "../src/lib/api";
 
 /** 上游真實回應的形狀（2026-09-06 線上抓的）：`list` 而不是 `entries`，關鍵詞是 JSON 字串。 */
@@ -112,5 +112,81 @@ describe("使用者設定（全局人設）", () => {
     const saved = await savePlayerPersona({ userDefine: "高二學生" }, "tok");
     expect(saved.userDefine).toBe("高二學生");
     vi.unstubAllGlobals();
+  });
+});
+
+// 2026-09-11 上傳走直傳：意向 → PUT 到儲存 → 完成。舊路只在上游沒有這條路、或儲存連不上時才用。
+describe("uploadImage", () => {
+  class FakeXHR {
+    static instances: FakeXHR[] = [];
+    static behave: "ok" | "unreachable" | "rejected" = "ok";
+    status = 0;
+    upload = { onprogress: null as null | ((e: { lengthComputable: boolean; loaded: number; total: number }) => void) };
+    onload: null | (() => void) = null;
+    onerror: null | (() => void) = null;
+    onabort: null | (() => void) = null;
+    url = "";
+    method = "";
+    body: unknown = null;
+    open(method: string, url: string) { this.method = method; this.url = url; }
+    send(body: unknown) {
+      this.body = body;
+      FakeXHR.instances.push(this);
+      queueMicrotask(() => {
+        if (FakeXHR.behave === "unreachable") { this.onerror?.(); return; }
+        this.upload.onprogress?.({ lengthComputable: true, loaded: 5, total: 10 });
+        this.status = FakeXHR.behave === "ok" ? 200 : 403;
+        this.onload?.();
+      });
+    }
+  }
+  const file = new File([new Uint8Array(10)], "a.wav");
+  const ok = (data: unknown) => new Response(JSON.stringify({ code: 0, data }), { status: 200 });
+  let calls: Array<{ url: string; body: unknown }>;
+  const stubFetch = (handler: (url: string, init?: RequestInit) => Response) => {
+    calls = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => { calls.push({ url, body: init?.body }); return handler(url, init); }));
+  };
+  beforeEach(() => { FakeXHR.instances = []; FakeXHR.behave = "ok"; vi.stubGlobal("XMLHttpRequest", FakeXHR); });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("直傳：意向、PUT 到簽名網址、完成；回登記後的網址並回報進度", async () => {
+    const { uploadImage } = await import("../src/lib/api");
+    stubFetch((url) => url.endsWith("/uploadIntent") ? ok({ uploadId: "cred", uploadUrl: "https://storage.test/put" }) : ok({ imageUrl: "https://cdn.test/a.wav" }));
+    const progress: number[] = [];
+    expect(await uploadImage(file, "tok", "role-1", ["f-1"], (f) => progress.push(f))).toBe("https://cdn.test/a.wav");
+    expect(FakeXHR.instances.map((x) => [x.method, x.url])).toEqual([["PUT", "https://storage.test/put"]]);
+    expect(calls.map((c) => c.url.split("/open/v1/image/")[1])).toEqual(["uploadIntent", "uploadComplete"]);
+    expect(JSON.parse(String(calls[1].body))).toEqual({ uploadId: "cred", roleId: "role-1", folderIds: ["f-1"] });
+    expect(progress).toEqual([0.5, 1]);
+  });
+
+  it("上游沒有這條路（404）就走舊的一次送上去", async () => {
+    const { uploadImage } = await import("../src/lib/api");
+    stubFetch((url) => url.endsWith("/uploadIntent") ? new Response("", { status: 404 }) : ok({ imageUrl: "https://cdn.test/legacy.wav" }));
+    expect(await uploadImage(file, "tok")).toBe("https://cdn.test/legacy.wav");
+    expect(FakeXHR.instances).toEqual([]);
+    expect(calls.map((c) => c.url.split("/open/v1/image/")[1])).toEqual(["uploadIntent", "upload"]);
+  });
+
+  it("儲存連不上（狀態 0）才備援；儲存拒收（有狀態碼）就報錯，不會傳第二次", async () => {
+    const { uploadImage } = await import("../src/lib/api");
+    stubFetch((url) => url.endsWith("/uploadIntent") ? ok({ uploadId: "cred", uploadUrl: "https://storage.test/put" }) : ok({ imageUrl: "https://cdn.test/legacy.wav" }));
+    FakeXHR.behave = "unreachable";
+    expect(await uploadImage(file, "tok")).toBe("https://cdn.test/legacy.wav");
+    expect(calls.map((c) => c.url.split("/open/v1/image/")[1])).toEqual(["uploadIntent", "upload"]);
+
+    FakeXHR.behave = "rejected";
+    stubFetch((url) => url.endsWith("/uploadIntent") ? ok({ uploadId: "cred", uploadUrl: "https://storage.test/put" }) : ok({ imageUrl: "x" }));
+    await expect(uploadImage(file, "tok")).rejects.toThrow();
+    expect(calls.map((c) => c.url.split("/open/v1/image/")[1])).toEqual(["uploadIntent"]);
+  });
+
+  it("意向就被配額擋下：錯誤說人話，不碰儲存", async () => {
+    const { uploadImage } = await import("../src/lib/api");
+    const { i18n } = await import("../src/lib/i18n");
+    stubFetch(() => new Response(JSON.stringify({ error: "quota_bytes_exceeded" }), { status: 400 }));
+    await expect(uploadImage(file, "tok")).rejects.toThrow(i18n.global.t("error.quotaBytesExceeded"));
+    expect(FakeXHR.instances).toEqual([]);
   });
 });

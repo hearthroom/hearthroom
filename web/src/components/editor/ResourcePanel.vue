@@ -89,14 +89,14 @@ onMounted(async () => {
 watch(scopeKey, () => load(true));
 
 /** 上傳進度：第幾張／共幾張。count 0 代表沒在傳。 */
-const uploading = ref({ done: 0, count: 0 });
+const uploading = ref({ done: 0, count: 0, percent: 0 });
 async function onFile(event: Event) {
   const input = event.target as HTMLInputElement;
   const files = [...(input.files ?? [])];
   input.value = "";
   if (!files.length) return;
   busy.value = true;
-  uploading.value = { done: 0, count: files.length };
+  uploading.value = { done: 0, count: files.length, percent: 0 };
   error.value = "";
   note.value = "";
   const failed: string[] = [];
@@ -109,12 +109,12 @@ async function onFile(event: Event) {
       if (file.size > FILE_MAX) failed.push(`${file.name}：${t("res.error.tooLarge")}`);
       else {
         try {
-          await uploadImage(file, token, undefined, folderIds);
+          await uploadImage(file, token, undefined, folderIds, (f) => { uploading.value = { ...uploading.value, percent: Math.round(f * 100) }; });
         } catch (err) {
           failed.push(`${file.name}：${err instanceof Error && err.message ? err.message : t("state.uploadFailed")}`);
         }
       }
-      uploading.value = { ...uploading.value, done: uploading.value.done + 1 };
+      uploading.value = { ...uploading.value, done: uploading.value.done + 1, percent: 0 };
     }
     await load(true);
     if (failed.length) error.value = failed.join("\n");
@@ -123,7 +123,7 @@ async function onFile(event: Event) {
     error.value = t("res.panel.uploadFailed");
   } finally {
     busy.value = false;
-    uploading.value = { done: 0, count: 0 };
+    uploading.value = { done: 0, count: 0, percent: 0 };
   }
 }
 
@@ -189,7 +189,7 @@ const stateLabel = (image: LibraryImage) =>
 
     <div class="rp__acts">
       <button type="button" class="btn btn--sm btn--primary" :disabled="busy" @click="fileInput?.click()">
-        {{ uploading.count ? $t("res.uploading", { done: uploading.done, count: uploading.count }) : $t("res.panel.upload") }}
+        {{ uploading.count ? $t("res.uploadingPercent", { done: uploading.done + 1, count: uploading.count, percent: uploading.percent }) : $t("res.panel.upload") }}
       </button>
       <input ref="fileInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple class="sr-only" @change="onFile" />
       <button v-if="!managing" type="button" class="btn btn--sm" :disabled="busy || !images.length" @click="managing = true">{{ $t("res.panel.manage") }}</button>

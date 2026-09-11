@@ -923,5 +923,10 @@
   "editor.createdButNotSaved": "카드는 만들어졌지만 내용은 저장되지 않았습니다: {why} 수정 후 다시 저장하면 새 카드가 아니라 같은 카드에 저장됩니다.",
   "res.panel.manage": "관리",
   "res.panel.manageDone": "완료",
-  "res.panel.pick": "이 이미지 선택"
+  "res.panel.pick": "이 이미지 선택",
+  "res.uploadingPercent": "업로드 중 {done}/{count} ({percent}%)",
+  "error.uploadRetry": "이번 업로드가 완료되지 않았습니다. 다시 시도해 주세요.",
+  "error.uploadExpired": "업로드에 시간이 너무 오래 걸려 완료되지 않았습니다. 다시 시도해 주세요.",
+  "error.quotaImageExceeded": "자료실의 파일 수가 상한에 도달했습니다. 몇 개 삭제한 뒤 다시 업로드하세요.",
+  "error.quotaBytesExceeded": "자료실 용량이 가득 찼습니다. 몇 개 삭제한 뒤 다시 업로드하세요."
 }

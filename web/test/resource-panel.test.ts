@@ -47,7 +47,8 @@ describe("我的資源（編輯頁側欄）", () => {
     input.dispatchEvent(new Event("change"));
     await flush();
     expect(api.uploadImage).toHaveBeenCalledTimes(3);
-    expect(api.uploadImage.mock.calls[0]).toEqual([files[0], "tok", undefined, ["f-1"]]);
+    expect(api.uploadImage.mock.calls[0].slice(0, 4)).toEqual([files[0], "tok", undefined, ["f-1"]]);
+    expect(typeof api.uploadImage.mock.calls[0][4]).toBe("function"); // 進度回呼
     expect(root.textContent).toContain(i18n.global.t("res.panel.uploaded"));
     expect(api.fetchLibraryImages.mock.calls.length).toBeGreaterThanOrEqual(3);
   });
