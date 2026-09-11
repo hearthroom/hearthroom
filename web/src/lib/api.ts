@@ -56,6 +56,8 @@ function describeLimit(code: string, detail: LimitDetail | undefined): string | 
   return i18n.global.t(key, {
     index: (detail.index ?? -1) + 1,
     name: detail.name ?? "",
+    actual: bytes,
+    max,
     sizeKB: Math.ceil(bytes / 1024),
     maxKB: Math.round(max / 1024),
     sizeMB: (bytes / 1024 / 1024).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1),
