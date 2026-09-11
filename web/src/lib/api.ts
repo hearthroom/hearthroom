@@ -31,18 +31,25 @@ const CODE_KEY: Record<string, string> = {
   permission_denied: "state.forbidden",
   not_found: "state.notFound",
   validate_reject: "error.validateReject",
+  role_desc_too_long: "error.fieldTooLong",
+  role_detail_too_long: "error.fieldTooLong",
+  role_welcome_too_long: "error.fieldTooLong",
+  jailbreak_too_long: "error.fieldTooLong",
+  role_output_contract_too_long: "error.fieldTooLong",
 };
 
 /** 上游驗證失敗附的明細（作者資產、試玩卡）：哪一條、多大、上限多少。 */
-export interface LimitDetail { reason?: string; index?: number; name?: string; max?: number; actual?: number; unit?: string }
+export interface LimitDetail { reason?: string; field?: string; index?: number; name?: string; max?: number; actual?: number; unit?: string }
 
 /**
  * 有明細就照明細講：整份多大、上限多少；或第幾條叫什麼、多大。沒有對應文案的 reason
  * 退回通用的那句。2026-09-11 一位作者存 1.18 MB 的規則只看到「請求失敗 (validate_reject)」。
  */
 function describeLimit(code: string, detail: LimitDetail | undefined): string | null {
-  if (!detail?.reason) return null;
-  const key = `${CODE_KEY[code] ?? "error.validateReject"}.${detail.reason}`;
+  // 作者資產的明細用 reason（哪一條規則）、角色欄位的用 field（哪個欄位）：同一條路翻。
+  const which = detail?.reason ?? detail?.field;
+  if (!detail || !which) return null;
+  const key = `${CODE_KEY[code] ?? "error.validateReject"}.${which}`;
   if (!i18n.global.te(key)) return null;
   const bytes = detail.actual ?? 0;
   const max = detail.max ?? 0;
