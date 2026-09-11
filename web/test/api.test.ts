@@ -128,7 +128,9 @@ describe("uploadImage", () => {
     url = "";
     method = "";
     body: unknown = null;
+    headers: Record<string, string> = {};
     open(method: string, url: string) { this.method = method; this.url = url; }
+    setRequestHeader(k: string, v: string) { this.headers[k] = v; }
     send(body: unknown) {
       this.body = body;
       FakeXHR.instances.push(this);
@@ -152,10 +154,12 @@ describe("uploadImage", () => {
 
   it("直傳：意向、PUT 到簽名網址、完成；回登記後的網址並回報進度", async () => {
     const { uploadImage } = await import("../src/lib/api");
-    stubFetch((url) => url.endsWith("/uploadIntent") ? ok({ uploadId: "cred", uploadUrl: "https://storage.test/put" }) : ok({ imageUrl: "https://cdn.test/a.wav" }));
+    stubFetch((url) => url.endsWith("/uploadIntent") ? ok({ uploadId: "cred", uploadUrl: "https://storage.test/put", contentType: "application/octet-stream" }) : ok({ imageUrl: "https://cdn.test/a.wav" }));
     const progress: number[] = [];
     expect(await uploadImage(file, "tok", "role-1", ["f-1"], (f) => progress.push(f))).toBe("https://cdn.test/a.wav");
     expect(FakeXHR.instances.map((x) => [x.method, x.url])).toEqual([["PUT", "https://storage.test/put"]]);
+    // 型別送上游指定的、不送 file.type：它和大小一起簽在網址裡
+    expect(FakeXHR.instances[0].headers["Content-Type"]).toBe("application/octet-stream");
     expect(calls.map((c) => c.url.split("/open/v1/image/")[1])).toEqual(["uploadIntent", "uploadComplete"]);
     expect(JSON.parse(String(calls[1].body))).toEqual({ uploadId: "cred", roleId: "role-1", folderIds: ["f-1"] });
     expect(progress).toEqual([0.5, 1]);

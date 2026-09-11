@@ -9363,7 +9363,7 @@
           "Media library"
         ],
         "summary": "Start a browser direct-to-storage upload",
-        "description": "Alternative to `/image/upload` for browsers: the bytes go straight to object storage through a short-lived signed URL instead of through the provider's API proxy, which cuts an upload off after a fixed time. Checks the per-account item and byte quotas against the declared size, then returns `uploadUrl` (HTTP `PUT` the raw file there; no `Content-Type` is required or signed) and `uploadId` (an opaque, account-bound, expiring credential to pass to `/image/uploadComplete`). Same 100 MiB per-file limit as `/image/upload`. Success body is the legacy wrapper `{code:0,data:{...}}`.",
+        "description": "Alternative to `/image/upload` for browsers: the bytes go straight to object storage through a short-lived signed URL instead of through the provider's API proxy, which cuts an upload off after a fixed time. Checks the per-account item and byte quotas against the declared size, then returns `uploadUrl` (HTTP `PUT` the raw file there with `Content-Type` set to the returned `contentType`; that header and the exact `byteSize` are part of the signature, so any other type or size is refused by storage) and `uploadId` (an opaque, account-bound, expiring credential to pass to `/image/uploadComplete`). Same 100 MiB per-file limit as `/image/upload`. Success body is the legacy wrapper `{code:0,data:{...}}`.",
         "security": [
           {
             "userToken": []
@@ -18532,6 +18532,7 @@
             "required": [
               "uploadId",
               "uploadUrl",
+              "contentType",
               "expiresAt",
               "maxBytes"
             ],
@@ -18552,6 +18553,10 @@
               "maxBytes": {
                 "type": "integer",
                 "description": "Per-file limit in bytes."
+              },
+              "contentType": {
+                "type": "string",
+                "description": "Send exactly this `Content-Type` on the PUT (always `application/octet-stream`); the real type is sniffed from the bytes at `uploadComplete`."
               }
             }
           }

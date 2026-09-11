@@ -665,10 +665,10 @@ export async function unpublishRole(roleId: string, token: string): Promise<unkn
 export async function uploadImage(file: File, token: string, roleId?: string, folderIds: string[] = [], onProgress?: (fraction: number) => void): Promise<string> {
   const intentRes = await libraryPost("uploadIntent", { byteSize: file.size }, token);
   if (intentRes.status === 404) return uploadImageLegacy(file, token, roleId, folderIds);
-  const intent = await libraryJson<{ uploadId?: string; uploadUrl?: string }>(intentRes);
+  const intent = await libraryJson<{ uploadId?: string; uploadUrl?: string; contentType?: string }>(intentRes);
   if (!intent.uploadId || !intent.uploadUrl) return uploadImageLegacy(file, token, roleId, folderIds);
   try {
-    await putToStorage(intent.uploadUrl, file, onProgress);
+    await putToStorage(intent.uploadUrl, file, intent.contentType || "application/octet-stream", onProgress);
   } catch (err) {
     if (err instanceof StorageUnreachable) return uploadImageLegacy(file, token, roleId, folderIds);
     throw err;
@@ -683,11 +683,16 @@ export async function uploadImage(file: File, token: string, roleId?: string, fo
 /** 連儲存都連不上（回應狀態 0）：還沒送出任何位元組，可以安全地改走舊路。 */
 class StorageUnreachable extends Error {}
 
-/** 用 XMLHttpRequest 而不是 fetch：只有它給得出上傳進度。 */
-function putToStorage(url: string, file: File, onProgress?: (fraction: number) => void): Promise<void> {
+/**
+ * 用 XMLHttpRequest 而不是 fetch：只有它給得出上傳進度。
+ * Content-Type 送上游指定的值，不送 file.type：那個型別連同檔案大小一起簽在網址裡，
+ * 送別的儲存端就拒收（真正的型別由上游在登記時從檔案內容判斷）。
+ */
+function putToStorage(url: string, file: File, contentType: string, onProgress?: (fraction: number) => void): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url);
+    xhr.setRequestHeader("Content-Type", contentType);
     xhr.upload.onprogress = (e) => { if (e.lengthComputable && e.total > 0) onProgress?.(e.loaded / e.total); };
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) resolve();
