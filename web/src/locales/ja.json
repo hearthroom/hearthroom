@@ -919,5 +919,6 @@
   "error.fieldTooLong.roleWelcome": "オープニングが {actual} 文字で、上限の {max} 文字を超えています。",
   "error.fieldTooLong.jailbreak": "追加指示が {actual} 文字で、上限の {max} 文字を超えています。この欄は毎ターン末尾に付きます。忘れられやすいルールだけ残し、残りはキャラクター設定へ移してください。",
   "error.fieldTooLong.roleOutputContract": "出力形式が {actual} 文字で、上限の {max} 文字を超えています。",
-  "editor.fieldTooLong": "「{label}」が {n} 文字で上限の {max} 文字を超えているため保存できません。短くしてから保存してください。"
+  "editor.fieldTooLong": "「{label}」が {n} 文字で上限の {max} 文字を超えているため保存できません。短くしてから保存してください。",
+  "editor.createdButNotSaved": "カードは作成されましたが、内容は保存されていません：{why} 修正してもう一度保存すると、新しいカードではなく同じカードに保存されます。"
 }

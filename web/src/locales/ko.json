@@ -919,5 +919,6 @@
   "error.fieldTooLong.roleWelcome": "오프닝이 {actual}자로 상한 {max}자를 넘습니다.",
   "error.fieldTooLong.jailbreak": "추가 지시가 {actual}자로 상한 {max}자를 넘습니다. 이 칸은 매 턴 끝에 붙습니다. 잊기 쉬운 규칙만 남기고 나머지는 캐릭터 설정으로 옮기세요.",
   "error.fieldTooLong.roleOutputContract": "출력 형식이 {actual}자로 상한 {max}자를 넘습니다.",
-  "editor.fieldTooLong": "「{label}」이(가) {n}자로 상한 {max}자를 넘어 저장할 수 없습니다. 줄인 뒤 다시 저장하세요."
+  "editor.fieldTooLong": "「{label}」이(가) {n}자로 상한 {max}자를 넘어 저장할 수 없습니다. 줄인 뒤 다시 저장하세요.",
+  "editor.createdButNotSaved": "카드는 만들어졌지만 내용은 저장되지 않았습니다: {why} 수정 후 다시 저장하면 새 카드가 아니라 같은 카드에 저장됩니다."
 }
