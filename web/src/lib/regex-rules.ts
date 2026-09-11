@@ -40,9 +40,12 @@ export interface RegexRuleSet {
 }
 
 /**
- * 上限對齊上游作者資產：單條替換 128 KB、整份 1 MB，都以 UTF-8 位元組計。
+ * 上限對齊上游作者資產：單條替換 128 KB、整份 32 MB，都以 UTF-8 位元組計。
  * 單條之前寫成 32 KB，比上游嚴：圖片集那種一條塞十幾張圖的規則會在這裡被擋，作者只好拔掉，
  * 功能欄裡的觸發字串就原樣印在畫面上（2026-09-07 一張卡的「[圖片集02]」就是這樣）。
+ * 整份之前是 1 MB：2026-09-11 一位作者匯入 66 條、1.18 MB 的規則檔，讀進來了卻存不了，
+ * 畫面上只有「完成」按鈕變灰，什麼都沒說——整份的問題沒有掛在任何一條規則上，編輯器只畫
+ * 逐條的提示。現在上游放寬到 32 MB，整份的問題也在標題列講出來（多大、上限多少）。
  */
 export const REGEX_LIMITS = {
   rules: 100,
@@ -51,11 +54,22 @@ export const REGEX_LIMITS = {
   /** 單條替換內容（位元組）。 */
   replaceBytes: 128 * 1024,
   statusbar: 4000,
-  /** 整份 JSON 的上限（位元組）。 */
-  total: 1024 * 1024,
+  /** 整份規則的上限（位元組）：每條 id+name+find+replace 加總，跟上游同一把尺。 */
+  total: 32 * 1024 * 1024,
 } as const;
 
 export const utf8Bytes = (s: string): number => new TextEncoder().encode(s).length;
+
+/**
+ * 整份規則多大，算法跟上游一模一樣：每條 id、name、find、replace 的 UTF-8 位元組加總。
+ * 之前量的是整份 JSON 的長度，比上游多算了鍵名與跳脫字元——這裡說太大而上游其實收得下，
+ * 或反過來，都會讓作者摸不著頭緒。同一把尺，這裡放行的上游就收。
+ */
+export const ruleSetBytes = (set: RegexRuleSet): number =>
+  set.rules.reduce((n, r) => n + utf8Bytes(r.id) + utf8Bytes(r.name) + utf8Bytes(r.find) + utf8Bytes(r.replace), 0);
+
+/** 給人看的 MB：小於 10 MB 留一位小數（1.2 MB），再大就取整。 */
+export const formatMB = (bytes: number): string => (bytes / 1024 / 1024).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1);
 
 export const emptyRuleSet = (): RegexRuleSet => ({ version: 1, rules: [], statusbar: "", lowered: false });
 
@@ -127,7 +141,8 @@ export function validateRuleSet(set: RegexRuleSet): RuleIssue[] {
     if (parseFind(rule.find) instanceof Error) issues.push({ ruleId: rule.id, key: "regex.issue.badRegex" });
   }
   if ([...set.statusbar].length > REGEX_LIMITS.statusbar) issues.push({ ruleId: "", key: "regex.issue.statusbarLong", params: { max: REGEX_LIMITS.statusbar } });
-  if (utf8Bytes(JSON.stringify(set)) > REGEX_LIMITS.total) issues.push({ ruleId: "", key: "regex.issue.totalLong" });
+  const bytes = ruleSetBytes(set);
+  if (bytes > REGEX_LIMITS.total) issues.push({ ruleId: "", key: "regex.issue.totalLong", params: { size: formatMB(bytes), max: REGEX_LIMITS.total / 1024 / 1024 } });
   return issues;
 }
 

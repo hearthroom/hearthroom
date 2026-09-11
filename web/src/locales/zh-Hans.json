@@ -400,7 +400,7 @@
   "regex.issue.replaceLong": "替换内容超过 {max} KB",
   "regex.issue.badRegex": "正则写错了，这条不会生效",
   "regex.issue.statusbarLong": "状态栏超过 {max} 字",
-  "regex.issue.totalLong": "整份规则太大了",
+  "regex.issue.totalLong": "整份规则 {size} MB，超过上限 {max} MB，删掉用不到的规则再存",
   "play.title": "对话",
   "play.loading": "舞台加载中⋯",
   "play.loadFailed": "舞台加载不进来，请稍后再试。",
@@ -904,5 +904,12 @@
   "mine.action.game": "游戏模式",
   "game.more": "更多",
   "game.settings.notepad": "手账",
-  "game.settings.memory": "永久记忆"
+  "game.settings.memory": "永久记忆",
+  "regex.size": "{size} / {max} MB",
+  "regex.importedButInvalid": "读进 {n} 条规则，但{why}。",
+  "error.validateReject": "版面规则有问题，请检查每条规则后再试一次。",
+  "error.validateReject.rulesTotal": "整份正则规则 {sizeMB} MB，超过上限 {maxMB} MB。删掉用不到的规则再存。",
+  "error.validateReject.ruleReplace": "第 {index} 条规则「{name}」的替换内容 {sizeKB} KB，超过上限 {maxKB} KB。把它拆成几条或缩短。",
+  "error.validateReject.emptyFind": "第 {index} 条规则「{name}」的匹配是空的，补上或删掉这条。",
+  "error.payloadTooLarge": "发送的内容太大，服务器没有收。把规则或图片缩小后再试一次。"
 }

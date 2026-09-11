@@ -66,6 +66,24 @@ describe("錯誤訊息給人看", () => {
     expect(describeApiError(400, "內容包含不適當字詞")).toBe("內容包含不適當字詞");
     expect(describeApiError(502, "")).toBe(i18n.global.t("state.serverBusy"));
   });
+
+  // 2026-09-11 一位作者存 1.18 MB 的規則只看到「請求失敗 (validate_reject)」。
+  // 上游現在附 detail：有就講出多大、上限多少、第幾條叫什麼；沒有就退回通用那句。
+  it("validate_reject 帶明細就照明細講", async () => {
+    const { describeApiError } = await import("../src/lib/api");
+    const { i18n } = await import("../src/lib/i18n");
+    const whole = describeApiError(400, "validate_reject", { reason: "rulesTotal", index: -1, name: "", max: 32 * 1024 * 1024, actual: 34 * 1024 * 1024, unit: "bytes" });
+    expect(whole).toBe(i18n.global.t("error.validateReject.rulesTotal", { sizeMB: "34", maxMB: 32, index: 0, name: "", sizeKB: 34816, maxKB: 32768 }));
+    expect(whole).toContain("34");
+    expect(whole).toContain("32");
+    const one = describeApiError(400, "validate_reject", { reason: "ruleReplace", index: 1, name: "特化庫", max: 131072, actual: 131073, unit: "bytes" });
+    expect(one).toContain("2");
+    expect(one).toContain("特化庫");
+    expect(one).toContain("129");
+    expect(describeApiError(400, "validate_reject")).toBe(i18n.global.t("error.validateReject"));
+    expect(describeApiError(400, "validate_reject", { reason: "mountLayer" })).toBe(i18n.global.t("error.validateReject"));
+    expect(describeApiError(413, "")).toBe(i18n.global.t("error.payloadTooLarge"));
+  });
 });
 
 describe("使用者設定（全局人設）", () => {
