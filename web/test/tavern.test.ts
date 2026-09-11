@@ -53,6 +53,15 @@ describe("png chunks", () => {
     expect(() => readTextChunk(png, "chara")).toThrow("png_truncated");
   });
 
+  // 2026-09-11 兩張 MMD 匯出的 PNG 卡（chunk 242 KB 與 630 KB）一拖進來就「匯入失敗」：
+  // 位元組轉字串用引數展開，引數數量超過引擎上限就 RangeError。
+  it("幾十萬位元組的 chunk 讀得出來、寫得回去", () => {
+    const big = "x".repeat(300_000);
+    const png = replaceTextChunks(barePng(), [{ keyword: "chara", text: big }]);
+    expect(readTextChunk(png, "chara")).toHaveLength(300_000);
+    expect(utf8FromBase64(base64FromUtf8("字".repeat(120_000)))).toHaveLength(120_000);
+  });
+
   it("encodeText 用 NUL 分隔關鍵字與內容", () => {
     expect(encodeText("chara", "x").data).toEqual(Uint8Array.from([99, 104, 97, 114, 97, 0, 120]));
   });
@@ -116,6 +125,24 @@ describe("tavern → draft", () => {
     expect(draft.jailbreak).toBe("別替玩家說話。");
     expect(draft.roleTag).toEqual(["日常", "懸疑"]);
     expect(draft.talkExample).toHaveLength(2);
+  });
+
+  // MMD 匯出的卡把同一段人設逐字寫進 description 與 personality；拼兩次會讓字數翻倍撞上限
+  it("description 與 personality 一模一樣時只算一次", () => {
+    const same = "她是……".repeat(100);
+    const out = tavernToDraft({ ...card, data: { ...card.data, description: same, personality: same, scenario: same } }, { language: "zh-Hant", labels: LABELS });
+    expect(out.draft.roleDetailDesc).toBe(same);
+  });
+
+  // MMD 的卡把「創作要求」寫在 mes_example：不是對話，但也不能整段丟掉
+  it("mes_example 拆不出對話、卡又沒有輸出要求時，收成輸出要求並進報告", () => {
+    const rules = "在创作前，还有以下几点要求需要注意：\n- 正文语言：简体中文";
+    const out = tavernToDraft({ ...card, data: { ...card.data, mes_example: rules, system_prompt: "" } }, { language: "zh-Hant", labels: LABELS });
+    expect(out.draft.roleOutputContract).toBe(rules);
+    expect(out.dropped.map((d) => d.key)).toContain("import.note.mesExampleAsContract");
+    const kept = tavernToDraft({ ...card, data: { ...card.data, mes_example: rules, system_prompt: "已有輸出要求" } }, { language: "zh-Hant", labels: LABELS });
+    expect(kept.draft.roleOutputContract).toBe("已有輸出要求");
+    expect(kept.dropped.map((d) => d.key)).toContain("import.drop.mesExample");
   });
 
   it("三段人設合成一份，加小標題分開", () => {

@@ -911,5 +911,6 @@
   "error.validateReject.rulesTotal": "The regex rules total {sizeMB} MB, over the {maxMB} MB limit. Remove unused rules and save again.",
   "error.validateReject.ruleReplace": "Rule #{index} “{name}” has a {sizeKB} KB replacement, over the {maxKB} KB limit. Split it up or shorten it.",
   "error.validateReject.emptyFind": "Rule #{index} “{name}” has an empty match pattern. Fill it in or delete the rule.",
-  "error.payloadTooLarge": "The upload is too large and the server refused it. Make the rules or images smaller and try again."
+  "error.payloadTooLarge": "The upload is too large and the server refused it. Make the rules or images smaller and try again.",
+  "import.note.mesExampleAsContract": "The example-dialogue field held writing rules rather than dialogue, so it was placed under Output rules."
 }
