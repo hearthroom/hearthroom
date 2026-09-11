@@ -354,6 +354,7 @@
   "wb.entry.activations": "会話に {n} 回取り込まれました",
   "wb.entry.constantShort": "常時",
   "import.split.entries": "{n} 件が {max} 文字を超えていたため、同じキーワードで複数に分割しました。内容は失われていません。",
+  "editor.worldbook.entryTooLong": "世界書の項目「{name}」が {max} 文字を超えているため保存できません。同じキーワードで 2 件に分けても効果は同じです。",
   "wb.entry.content.over": "{max} 文字を超えると保存できません。同じキーワードで 2 件に分けても効果は同じです。",
   "regex.title": "正規表現ルール",
   "regex.open": "正規表現を設定",

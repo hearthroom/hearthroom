@@ -60,10 +60,11 @@ import {
   parseTags,
   resolveLimits,
   welcomeChanged,
+  type FieldLimits,
   type RoleDraft,
   type WorldbookEntryDraft,
 } from "@/lib/role-draft";
-import { draftToTavern, embedIntoPng, imageFetchUrl, worldbookToExport, type ImportResult } from "@/lib/tavern";
+import { ENTRY_CONTENT_MAX, draftToTavern, embedIntoPng, imageFetchUrl, worldbookToExport, type ImportResult } from "@/lib/tavern";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
 import { confirmDialog } from "@/lib/confirm";
@@ -158,7 +159,9 @@ const saveLabel = computed(() => {
   if (!saving.value) return isNew.value ? t("editor.saveDraft") : t("edit.save");
   return saveProgress.value ? t("edit.savingProgress", saveProgress.value) : t("edit.saving");
 });
-const limits = ref(resolveLimits(null));
+/** 上游回的上限；還沒回來（新卡沒有 roleId）就照選的語區用預設表 */
+const remoteLimits = ref<FieldLimits | null>(null);
+const limits = computed(() => resolveLimits(remoteLimits.value, draft.value.language));
 const blockers = ref<string[]>([]);
 const loading = ref(!!roleId.value);
 const saving = ref(false);
@@ -389,7 +392,7 @@ async function loadValidation() {
   if (!token || !roleId.value) return;
   try {
     const report = await fetchRoleValidation(roleId.value, token);
-    limits.value = resolveLimits(report.tokenBudget?.limits ?? null);
+    remoteLimits.value = report.tokenBudget?.limits ?? null;
     blockers.value = report.blockers ?? [];
   } catch {
     // 上限拿不到就用保守預設。這只影響字數提示，不影響能不能存。
@@ -812,6 +815,14 @@ async function save() {
   if (!draft.value.roleName.trim()) {
     section.value = "basic";
     error.value = t("editor.needName");
+    return;
+  }
+  // 條目超長在送出前就攔下並點名：計數器只是變紅、不擋輸入，上游會整段拒收，
+  // 而拒收訊息是英文散句，作者看不懂就重新整理——那條沒存過的條目就這樣「蒸發」了。
+  const oversize = worldbookEntries.value.find((e) => [...e.content].length > ENTRY_CONTENT_MAX);
+  if (oversize) {
+    section.value = "worldbook";
+    error.value = t("editor.worldbook.entryTooLong", { name: oversize.name.trim() || oversize.keywords[0] || t("wb.entry.untitled"), max: ENTRY_CONTENT_MAX });
     return;
   }
   const wasNew = isNew.value;

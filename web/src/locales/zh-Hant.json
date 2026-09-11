@@ -354,6 +354,7 @@
   "wb.entry.activations": "被帶進對話 {n} 次",
   "wb.entry.constantShort": "常駐",
   "import.split.entries": "{n} 條內容超過 {max} 字，已拆成幾條、同一組關鍵詞，沒有丟字。",
+  "editor.worldbook.entryTooLong": "世界書條目「{name}」超過 {max} 字，存不進去。拆成兩條同關鍵詞的條目效果相同。",
   "wb.entry.content.over": "超過 {max} 字上游會拒收；拆成兩條同關鍵詞的條目效果相同。",
   "regex.title": "正規表示式規則",
   "regex.open": "設定正規表示式",

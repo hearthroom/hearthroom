@@ -354,6 +354,7 @@
   "wb.entry.activations": "Brought into chat {n} times",
   "wb.entry.constantShort": "Always",
   "import.split.entries": "{n} entries were longer than {max} characters and were split into parts sharing the same keywords; nothing was cut.",
+  "editor.worldbook.entryTooLong": "Worldbook entry \"{name}\" is over {max} characters and can't be saved. Split it into two entries with the same keywords for the same effect.",
   "wb.entry.content.over": "Over {max} characters won't be accepted; split it into two entries with the same keywords for the same effect.",
   "regex.title": "Regex rules",
   "regex.open": "Regex rules",
