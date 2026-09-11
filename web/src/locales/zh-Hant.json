@@ -923,5 +923,10 @@
   "editor.createdButNotSaved": "卡片已經建立，但內容沒有存進去：{why} 修正後再按一次儲存，會存到同一張卡，不會再建一張新的。",
   "res.panel.manage": "管理",
   "res.panel.manageDone": "完成",
-  "res.panel.pick": "選取這張"
+  "res.panel.pick": "選取這張",
+  "res.uploadingPercent": "上傳中 {done}/{count}（{percent}%）",
+  "error.uploadRetry": "這次上傳沒有完成，請再傳一次。",
+  "error.uploadExpired": "上傳花的時間太長，這次沒有完成。請再傳一次。",
+  "error.quotaImageExceeded": "資源庫的檔案數已達上限，先刪掉一些再上傳。",
+  "error.quotaBytesExceeded": "資源庫的容量已滿，先刪掉一些再上傳。"
 }

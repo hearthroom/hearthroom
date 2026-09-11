@@ -36,6 +36,12 @@ const CODE_KEY: Record<string, string> = {
   role_welcome_too_long: "error.fieldTooLong",
   jailbreak_too_long: "error.fieldTooLong",
   role_output_contract_too_long: "error.fieldTooLong",
+  upload_invalid: "error.uploadRetry",
+  upload_expired: "error.uploadExpired",
+  upload_missing: "error.uploadRetry",
+  upload_size_mismatch: "error.uploadRetry",
+  quota_image_exceeded: "error.quotaImageExceeded",
+  quota_bytes_exceeded: "error.quotaBytesExceeded",
 };
 
 /** 上游驗證失敗附的明細（作者資產、試玩卡）：哪一條、多大、上限多少。 */
@@ -646,7 +652,54 @@ export async function unpublishRole(roleId: string, token: string): Promise<unkn
  * 送的是 bytes 不是網址：型別與大小上限只有服務端擋得住，前端校驗繞得過去，而且
  * 客戶端塞任意外部網址進圖庫等於開一個盜連面。roleId 是選填的——建立中的卡還沒有 id。
  */
-export async function uploadImage(file: File, token: string, roleId?: string, folderIds: string[] = []): Promise<string> {
+/**
+ * 上傳一個檔到「我的資源」，回它的網址。
+ *
+ * 走三步：向上游要一個限時的上傳位址 → 瀏覽器把檔直接放進儲存 → 告訴上游「放好了」，
+ * 它核對大小與真實型別後登記。位元組不經過上游的代理，所以沒有代理那個 125 秒的上限——
+ * 之前慢一點的網路傳幾十 MB 的音檔就在那裡被切斷（2026-09-11）。
+ *
+ * 備援：上游還沒有這條路（404）、或直接放進儲存那一步根本連不上（跨站規則沒開、網路
+ * 擋掉）就改走舊的一次送上去。已經放進儲存但登記失敗**不**備援——那會傳兩次。
+ */
+export async function uploadImage(file: File, token: string, roleId?: string, folderIds: string[] = [], onProgress?: (fraction: number) => void): Promise<string> {
+  const intentRes = await libraryPost("uploadIntent", { byteSize: file.size }, token);
+  if (intentRes.status === 404) return uploadImageLegacy(file, token, roleId, folderIds);
+  const intent = await libraryJson<{ uploadId?: string; uploadUrl?: string }>(intentRes);
+  if (!intent.uploadId || !intent.uploadUrl) return uploadImageLegacy(file, token, roleId, folderIds);
+  try {
+    await putToStorage(intent.uploadUrl, file, onProgress);
+  } catch (err) {
+    if (err instanceof StorageUnreachable) return uploadImageLegacy(file, token, roleId, folderIds);
+    throw err;
+  }
+  const doneRes = await libraryPost("uploadComplete", { uploadId: intent.uploadId, roleId: roleId || undefined, folderIds }, token);
+  const done = await libraryJson<{ imageUrl?: string }>(doneRes);
+  if (!done.imageUrl) throw new ApiError(doneRes.status, i18n.global.t("state.uploadFailed"));
+  onProgress?.(1);
+  return done.imageUrl;
+}
+
+/** 連儲存都連不上（回應狀態 0）：還沒送出任何位元組，可以安全地改走舊路。 */
+class StorageUnreachable extends Error {}
+
+/** 用 XMLHttpRequest 而不是 fetch：只有它給得出上傳進度。 */
+function putToStorage(url: string, file: File, onProgress?: (fraction: number) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable && e.total > 0) onProgress?.(e.loaded / e.total); };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new ApiError(xhr.status, i18n.global.t("state.uploadFailed")));
+    };
+    xhr.onerror = () => reject(new StorageUnreachable("storage unreachable"));
+    xhr.onabort = () => reject(new StorageUnreachable("storage aborted"));
+    xhr.send(file);
+  });
+}
+
+async function uploadImageLegacy(file: File, token: string, roleId?: string, folderIds: string[] = []): Promise<string> {
   const form = new FormData();
   form.append("file", file);
   if (roleId) form.append("roleId", roleId);
