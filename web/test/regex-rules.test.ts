@@ -117,13 +117,14 @@ describe("validateRuleSet", () => {
     expect(ruleSetBytes(set)).toBeGreaterThan(1024 * 1024);
     expect(validateRuleSet(set).map((i) => i.key)).not.toContain("regex.issue.totalLong");
 
-    // 100 條 × 128 KB 加起來還不到 32 MB，整份上限在本站其實是保險絲；用超量的假資料證明它會響。
+    // 條數上限 500，300 條 × 128 KB 就超過整份 32 MB：整份的提示要響、條數的不響。
     const huge = { ...set, rules: Array.from({ length: 300 }, (_, i) => makeRule({ id: `h${i}`, find: "x", replace: "y".repeat(REGEX_LIMITS.replaceBytes) })) };
     const whole = validateRuleSet(huge).find((i) => i.key === "regex.issue.totalLong");
     expect(whole).toBeDefined();
     expect(whole!.ruleId).toBe("");
     expect(whole!.params?.max).toBe(32);
     expect(Number(whole!.params?.size)).toBeGreaterThan(32);
+    expect(validateRuleSet(huge).map((i) => i.key)).not.toContain("regex.issue.tooMany");
   });
 });
 
