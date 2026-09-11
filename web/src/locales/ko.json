@@ -911,5 +911,6 @@
   "error.validateReject.rulesTotal": "정규식 규칙 전체가 {sizeMB} MB로 상한 {maxMB} MB를 넘습니다. 쓰지 않는 규칙을 지우고 다시 저장하세요.",
   "error.validateReject.ruleReplace": "{index}번째 규칙 「{name}」의 치환 내용이 {sizeKB} KB로 상한 {maxKB} KB를 넘습니다. 나누거나 줄여 주세요.",
   "error.validateReject.emptyFind": "{index}번째 규칙 「{name}」의 일치 패턴이 비어 있습니다. 채우거나 규칙을 지워 주세요.",
-  "error.payloadTooLarge": "보낸 내용이 너무 커서 서버가 받지 않았습니다. 규칙이나 이미지를 줄이고 다시 시도해 주세요."
+  "error.payloadTooLarge": "보낸 내용이 너무 커서 서버가 받지 않았습니다. 규칙이나 이미지를 줄이고 다시 시도해 주세요.",
+  "import.note.mesExampleAsContract": "대화 예시 칸에 대화가 아닌 작성 규칙이 있어 「출력 규칙」에 넣었습니다."
 }

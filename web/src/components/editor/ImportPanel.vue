@@ -13,6 +13,7 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { parseTavernFile, tavernToDraft, type ImportResult, type TavernCard } from "@/lib/tavern";
+import { isPng } from "@/lib/png-chunks";
 import { classifyMmdFile, mergeMmdFiles, MMD_PARTS, type MmdFile, type MmdImportResult, type MmdPart } from "@/lib/mmd";
 
 const props = defineProps<{ language: string; detailMax?: number }>();
@@ -97,6 +98,13 @@ async function addMmd(files: File[]) {
   error.value = "";
   const problems: string[] = [];
   for (const file of files) {
+    // 三件套模式裡丟進一張 PNG 卡：它不是設定 TXT。讀成文字會把整張圖的位元組塞進
+    // 「角色設定」——幾萬個亂碼字（2026-09-11 用戶回報）。切到酒館卡那條路照常讀。
+    if (isPng(new Uint8Array(await file.slice(0, 8).arrayBuffer()))) {
+      kind.value = "tavern";
+      await read(file);
+      return;
+    }
     try {
       const classified = classifyMmdFile(file.name, await file.text());
       const previous = partFile(classified.part);

@@ -911,5 +911,6 @@
   "error.validateReject.rulesTotal": "正規表現ルール全体が {sizeMB} MB で、上限の {maxMB} MB を超えています。不要なルールを削除して保存し直してください。",
   "error.validateReject.ruleReplace": "{index} 番目のルール「{name}」の置換内容が {sizeKB} KB で、上限の {maxKB} KB を超えています。分割するか短くしてください。",
   "error.validateReject.emptyFind": "{index} 番目のルール「{name}」の一致パターンが空です。入力するかルールを削除してください。",
-  "error.payloadTooLarge": "送信内容が大きすぎてサーバーに受け付けられませんでした。ルールや画像を小さくしてもう一度お試しください。"
+  "error.payloadTooLarge": "送信内容が大きすぎてサーバーに受け付けられませんでした。ルールや画像を小さくしてもう一度お試しください。",
+  "import.note.mesExampleAsContract": "会話例の欄には会話ではなく執筆ルールが書かれていたため、「出力ルール」に入れました。"
 }

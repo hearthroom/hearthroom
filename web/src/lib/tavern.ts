@@ -229,8 +229,10 @@ function joinPersona(data: TavernCardData, labels: { personality: string; scenar
   const personality = text(data.personality);
   const scenario = text(data.scenario);
   if (description) parts.push(description);
-  if (personality) parts.push(`${labels.personality}\n${personality}`);
-  if (scenario) parts.push(`${labels.scenario}\n${scenario}`);
+  // MMD 匯出的卡把同一段人設逐字寫進 description 與 personality（2026-09-11 兩張用戶的卡都是）；
+  // 照三段拼會讓一萬字的人設變兩萬，直接撞上限——用戶說「字數全被算成角色字數」。
+  if (personality && personality !== description) parts.push(`${labels.personality}\n${personality}`);
+  if (scenario && scenario !== description && scenario !== personality) parts.push(`${labels.scenario}\n${scenario}`);
   return parts.join("\n\n");
 }
 
@@ -421,7 +423,13 @@ export function tavernToDraft(
   if (example) {
     const parsed = parseMesExample(example);
     if (parsed.length) draft.talkExample = parsed;
-    else dropped.push({ key: "import.drop.mesExample" });
+    else if (!draft.roleOutputContract && [...example].length <= 2000) {
+      // MMD 的卡把「創作要求／輸出協議」寫在 mes_example 裡（不是對話）；卡沒有自己的
+      // 輸出要求、又放得下（輸出要求上限 2000 字，見 role-draft）時就收到那一格，
+      // 不然作者的規則整段消失（2026-09-11 兩張用戶的卡，各 700／925 字）。
+      draft.roleOutputContract = example;
+      dropped.push({ key: "import.note.mesExampleAsContract" });
+    } else dropped.push({ key: "import.drop.mesExample" });
   }
 
   // 只有這幾個是「本站真的沒有對應概念」。有對應但形狀不同的（例如三段人設）不算丟。
