@@ -614,3 +614,32 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     expect([...root.querySelectorAll("button")].some((b) => b.textContent?.trim() === "刪除這張卡")).toBe(false);
   });
 });
+
+// 2026-09-11 一位作者：按儲存顯示失敗，上游卻多了一張只有名字的空卡；重試幾次就多幾張。
+// 建卡與寫內容是兩步，第一步成功第二步失敗時，卡已經有編號——要記住它、講清楚，下次存回同一張。
+describe("建卡成功、內容沒存進去", () => {
+  it("講清楚卡已建立；重開頁面草稿帶著卡號回來，再存是同一張卡，不再建新的", async () => {
+    api.patchRoleDocument.mockRejectedValueOnce(new Error("額外指示 812 字，超過上限 500 字。"));
+    await mount("/create");
+    await type($("#f-name"), "半路失敗的卡");
+    await type($("#f-detail"), "人設");
+    await submit();
+    expect(api.createRole).toHaveBeenCalledTimes(1);
+    const notice = root.textContent ?? "";
+    expect(notice).toContain("已經建立");
+    expect(notice).toContain("812");
+    expect(localStorage.getItem("hearthroom.draft.create")).toContain("r1");
+
+    // 關掉再開：草稿回來，而且知道它就是 r1
+    app!.unmount();
+    root.remove();
+    await mount("/create");
+    expect($<HTMLInputElement>("#f-name").value).toBe("半路失敗的卡");
+    await submit();
+    expect(api.createRole).toHaveBeenCalledTimes(1);
+    expect(api.patchRoleDocument).toHaveBeenLastCalledWith("r1", expect.objectContaining({ roleName: "半路失敗的卡" }), "tok");
+    expect(window.location.pathname).toBe("/cards/r1/edit");
+    expect(localStorage.getItem("hearthroom.draft.create")).toBeNull();
+  });
+});
+
