@@ -912,5 +912,12 @@
   "error.validateReject.ruleReplace": "第 {index} 條規則「{name}」的替換內容 {sizeKB} KB，超過上限 {maxKB} KB。把它拆成幾條或縮短。",
   "error.validateReject.emptyFind": "第 {index} 條規則「{name}」的匹配是空的，補上或刪掉這條。",
   "error.payloadTooLarge": "送出的內容太大，伺服器沒有收。把規則或圖片縮小後再試一次。",
-  "import.note.mesExampleAsContract": "對話示例那一格寫的是創作要求而不是對話，已收成「輸出要求」。"
+  "import.note.mesExampleAsContract": "對話示例那一格寫的是創作要求而不是對話，已收成「輸出要求」。",
+  "error.fieldTooLong": "有欄位超過這個語言的字數上限，請縮短後再存。",
+  "error.fieldTooLong.roleDesc": "簡介 {actual} 字，超過上限 {max} 字。",
+  "error.fieldTooLong.roleDetailDesc": "角色設定 {actual} 字，超過上限 {max} 字。",
+  "error.fieldTooLong.roleWelcome": "開場白 {actual} 字，超過上限 {max} 字。",
+  "error.fieldTooLong.jailbreak": "額外指示 {actual} 字，超過上限 {max} 字。這一格每輪都會附在最後，只放最容易被忘掉的規則；其餘搬到角色設定。",
+  "error.fieldTooLong.roleOutputContract": "輸出格式 {actual} 字，超過上限 {max} 字。",
+  "editor.fieldTooLong": "「{label}」{n} 字，超過上限 {max} 字，存不進去。縮短後再存。"
 }

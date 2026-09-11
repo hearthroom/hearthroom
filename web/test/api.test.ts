@@ -84,6 +84,17 @@ describe("錯誤訊息給人看", () => {
     expect(describeApiError(400, "validate_reject", { reason: "mountLayer" })).toBe(i18n.global.t("error.validateReject"));
     expect(describeApiError(413, "")).toBe(i18n.global.t("error.payloadTooLarge"));
   });
+
+  // 2026-09-11 作者的額外指示超過 500 字，畫面寫「服務暫時無法回應 (jailbreak_too_long)」。
+  it("角色欄位超長：帶 detail.field 就說哪個欄位、幾個字、上限多少", async () => {
+    const { describeApiError } = await import("../src/lib/api");
+    const { i18n } = await import("../src/lib/i18n");
+    const msg = describeApiError(400, "jailbreak_too_long", { field: "jailbreak", max: 500, actual: 812, unit: "chars" });
+    expect(msg).toContain("812");
+    expect(msg).toContain("500");
+    expect(msg).not.toContain("jailbreak_too_long");
+    expect(describeApiError(400, "role_welcome_too_long")).toBe(i18n.global.t("error.fieldTooLong"));
+  });
 });
 
 describe("使用者設定（全局人設）", () => {
