@@ -354,6 +354,7 @@
   "wb.entry.activations": "대화에 {n}번 포함됨",
   "wb.entry.constantShort": "상시",
   "import.split.entries": "{n}개 항목이 {max}자를 넘어 같은 키워드로 여러 개로 나눴습니다. 잘린 내용은 없습니다.",
+  "editor.worldbook.entryTooLong": "세계관 항목 \"{name}\"이(가) {max}자를 넘어 저장할 수 없습니다. 같은 키워드로 두 개로 나누면 효과는 같습니다.",
   "wb.entry.content.over": "{max}자를 넘으면 저장되지 않습니다. 같은 키워드로 두 개로 나누면 효과는 같습니다.",
   "regex.title": "정규식 규칙",
   "regex.open": "정규식 설정",

@@ -82,8 +82,10 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 </template>
 
 <style scoped>
+/* 110 而不是 100：確認框是從別的全頁浮層（世界書條目、正則規則、素材庫，都是 100）裡叫出來的。
+   同為 100 時誰後掛到 body 誰在上，而這個元件掛在 App 一開始，永遠輸給後開的浮層。 */
 .dlg-backdrop {
-  position: fixed; inset: 0; z-index: 100;
+  position: fixed; inset: 0; z-index: 110;
   display: grid; place-items: center; padding: var(--s-5);
   background: rgba(16, 16, 24, 0.45);
   backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
