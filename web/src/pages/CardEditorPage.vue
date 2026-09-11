@@ -88,6 +88,12 @@ const { t } = useI18n();
 /** 有 roleId 就是編輯既有的卡；沒有就是建立。 */
 const roleId = ref<string>((route.params.roleId as string) ?? "");
 const isNew = computed(() => !roleId.value);
+/**
+ * 網址還停在 /create。跟 isNew 不同：建卡成功、內容沒存進去時卡已經有編號（isNew 變 false），
+ * 但作者還在建卡頁——本機草稿要繼續存、要記住那個編號，重開頁面再存才是同一張卡。
+ * 2026-09-11 一位作者存了七八次、上游多了七八張只有名字的空卡，就是每次都重新建的。
+ */
+const onCreatePage = computed(() => route.path.endsWith("/create"));
 
 // 預設跟介面語言：看英文介面的人，第一張卡多半也是英文的
 const draft = ref<RoleDraft>(makeDraft(locale.value));
@@ -326,9 +332,9 @@ watch(tagsText, (raw) => {
  */
 const DRAFT_KEY = "hearthroom.draft.create";
 const restoredDraft = ref(false);
-interface StoredDraft { draft: RoleDraft; tagsText: string; worldbook: { name: string; format?: "tavern"; entries: WorldbookEntryDraft[] } | null; savedAt: number }
+interface StoredDraft { draft: RoleDraft; tagsText: string; worldbook: { name: string; format?: "tavern"; entries: WorldbookEntryDraft[] } | null; savedAt: number; roleId?: string }
 function storeDraft() {
-  if (!isNew.value) return;
+  if (!onCreatePage.value) return;
   try {
     if (!dirty.value) {
       localStorage.removeItem(DRAFT_KEY);
@@ -339,6 +345,8 @@ function storeDraft() {
       tagsText: tagsText.value,
       worldbook: worldbookPending.value ? { name: worldbookName.value, format: worldbookFormat.value, entries: worldbookEntries.value } : null,
       savedAt: Date.now(),
+      // 建好但沒存完的卡：把編號一起記下來，下一次存回同一張
+      ...(roleId.value ? { roleId: roleId.value } : {}),
     };
     localStorage.setItem(DRAFT_KEY, JSON.stringify(stored));
   } catch {
@@ -346,7 +354,7 @@ function storeDraft() {
   }
 }
 function restoreDraft() {
-  if (!isNew.value) return;
+  if (!onCreatePage.value) return;
   try {
     const raw = localStorage.getItem(DRAFT_KEY);
     if (!raw) return;
@@ -354,6 +362,7 @@ function restoreDraft() {
     if (!stored?.draft?.roleName && !stored?.draft?.roleDetailDesc && !stored?.draft?.roleWelcome) return;
     draft.value = { ...makeDraft(stored.draft.language || locale.value), ...stored.draft };
     tagsText.value = stored.tagsText ?? formatTags(draft.value.roleTag);
+    if (stored.roleId) roleId.value = stored.roleId;
     if (stored.worldbook?.entries?.length) {
       worldbookPending.value = true;
       worldbookName.value = stored.worldbook.name;
@@ -888,7 +897,7 @@ async function save() {
     original.value = cloneDraft(draft.value);
     saved.value = true;
     restoredDraft.value = false;
-    if (wasNew) localStorage.removeItem(DRAFT_KEY);
+    if (onCreatePage.value) localStorage.removeItem(DRAFT_KEY);
     flash(t("edit.saved"));
     track("card_edit", { subject: targetRoleId });
     void loadValidation();
@@ -906,7 +915,12 @@ async function save() {
     }
   } catch (err) {
     track(wasNew ? "card_create" : "card_edit", { ok: false });
-    error.value = err instanceof Error ? err.message : t("state.saveFailed");
+    const why = err instanceof Error ? err.message : t("state.saveFailed");
+    if (wasNew && roleId.value) {
+      // 卡建好了、內容沒存進去：講清楚，並把卡的編號記進本機草稿，重開頁面再存也是同一張。
+      storeDraft();
+      error.value = t("editor.createdButNotSaved", { why });
+    } else error.value = why;
   } finally {
     saving.value = false;
   }
