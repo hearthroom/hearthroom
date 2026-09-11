@@ -285,6 +285,15 @@ function metadataChanged() {
 const missing = computed(() => missingRequired(draft.value));
 const canPublish = computed(() => !isNew.value && !missing.value.length && !dirty.value);
 
+/** 有字數上限的欄位：欄位、標籤文案鍵、所在分區。存檔前逐一對上限，超過就點名。 */
+const FIELD_LIMIT_KEYS: Array<["roleDesc" | "roleDetailDesc" | "roleWelcome" | "roleOutputContract" | "jailbreak", string, Section]> = [
+  ["roleDesc", "editor.summary", "basic"],
+  ["roleDetailDesc", "editor.detail", "persona"],
+  ["roleWelcome", "editor.welcome", "dialogue"],
+  ["roleOutputContract", "editor.contract", "persona"],
+  ["jailbreak", "editor.jailbreak", "persona"],
+];
+
 /** 各分區缺哪個必填。導覽上的紅點與發布前的清單都看這個。 */
 const REQUIRED_OF: Partial<Record<Section, string>> = {
   basic: "roleName",
@@ -827,6 +836,14 @@ async function save() {
   if (oversize) {
     section.value = "worldbook";
     error.value = t("editor.worldbook.entryTooLong", { name: oversize.name.trim() || oversize.keywords[0] || t("wb.entry.untitled"), max: ENTRY_CONTENT_MAX });
+    return;
+  }
+  // 欄位超過語區上限也一樣先攔：計數器變紅不擋輸入，上游會拒收，而且之前拒收訊息是
+  // 「服務暫時無法回應 (jailbreak_too_long)」——作者以為伺服器壞了（2026-09-11）。
+  const overLimit = FIELD_LIMIT_KEYS.find(([field]) => [...draft.value[field]].length > limits.value[field]);
+  if (overLimit) {
+    section.value = overLimit[2];
+    error.value = t("editor.fieldTooLong", { label: t(overLimit[1]), n: [...draft.value[overLimit[0]]].length, max: limits.value[overLimit[0]] });
     return;
   }
   const wasNew = isNew.value;
