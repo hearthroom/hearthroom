@@ -43,7 +43,7 @@ import {
   type WorldbookMetadataPatch,
   type WorldbookSummary,
 } from "@/lib/api";
-import { emptyRuleSet, ruleSetFromAuthorAsset, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, type RegexRuleSet } from "@/lib/regex-rules";
+import { emptyRuleSet, ruleSetFromAuthorAsset, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, validateRuleSet, type RegexRuleSet } from "@/lib/regex-rules";
 import RegexRulesEditor from "@/components/editor/RegexRulesEditor.vue";
 import GameWorldEditor from "@/components/editor/GameWorldEditor.vue";
 import ChatTestPanel from "@/components/editor/ChatTestPanel.vue";
@@ -541,7 +541,11 @@ function onRegexFile(event: Event) {
       regexSet.value = imported.set;
       // 魅魔島的檔帶著「第一句話」：開場白還是空的才幫他填，不蓋掉已經寫好的
       if (imported.welcome && !draft.value.roleWelcome.trim()) draft.value.roleWelcome = imported.welcome;
-      flash(t("regex.imported", { n: imported.set.rules.length }));
+      // 整份太大這種掛在整份上的問題，匯入當下就講清楚多大、上限多少；
+      // 不然要等到存檔失敗才知道，而且不知道差多少（2026-09-11 一份 1.18 MB 的檔）。
+      const whole = validateRuleSet(imported.set).find((i) => !i.ruleId);
+      if (whole) error.value = t("regex.importedButInvalid", { n: imported.set.rules.length, why: t(whole.key, whole.params ?? {}) });
+      else flash(t("regex.imported", { n: imported.set.rules.length }));
       track("card_import", { detail: "regex" });
     } catch {
       error.value = t("regex.importFailed");

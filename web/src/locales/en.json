@@ -400,7 +400,7 @@
   "regex.issue.replaceLong": "Replacement over {max} KB",
   "regex.issue.badRegex": "Invalid regex; this rule won't run",
   "regex.issue.statusbarLong": "Status bar over {max} characters",
-  "regex.issue.totalLong": "The rule set is too large",
+  "regex.issue.totalLong": "The rule set is {size} MB, over the {max} MB limit. Remove unused rules before saving",
   "play.title": "Play",
   "play.loading": "Loading the stage…",
   "play.loadFailed": "The stage failed to load. Please try again later.",
@@ -904,5 +904,12 @@
   "mine.action.game": "Game mode",
   "game.more": "More",
   "game.settings.notepad": "Notebook",
-  "game.settings.memory": "Memory"
+  "game.settings.memory": "Memory",
+  "regex.size": "{size} / {max} MB",
+  "regex.importedButInvalid": "Read {n} rules, but {why}.",
+  "error.validateReject": "There is a problem with the display rules. Check each rule and try again.",
+  "error.validateReject.rulesTotal": "The regex rules total {sizeMB} MB, over the {maxMB} MB limit. Remove unused rules and save again.",
+  "error.validateReject.ruleReplace": "Rule #{index} “{name}” has a {sizeKB} KB replacement, over the {maxKB} KB limit. Split it up or shorten it.",
+  "error.validateReject.emptyFind": "Rule #{index} “{name}” has an empty match pattern. Fill it in or delete the rule.",
+  "error.payloadTooLarge": "The upload is too large and the server refused it. Make the rules or images smaller and try again."
 }

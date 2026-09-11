@@ -15,7 +15,7 @@ export class ApiError extends Error {
  * 錯誤訊息給人看，不給狀態碼。伺服器回的原文是英文的內部字串（card not found），
  * 對五種語言的使用者都沒有意義；按狀態碼翻成他的語言，原文只在開發時附在後面。
  */
-const ERROR_KEY: Record<number, string> = { 401: "auth.expired", 403: "state.forbidden", 404: "state.notFound" };
+const ERROR_KEY: Record<number, string> = { 401: "auth.expired", 403: "state.forbidden", 404: "state.notFound", 413: "error.payloadTooLarge" };
 
 /**
  * 上游回的穩定錯誤碼裡，使用者做得了事的那幾個各給一句人話。沒列到的碼照狀態碼講，
@@ -30,7 +30,31 @@ const CODE_KEY: Record<string, string> = {
   public_role_requires_clone: "error.publicRoleRequiresClone",
   permission_denied: "state.forbidden",
   not_found: "state.notFound",
+  validate_reject: "error.validateReject",
 };
+
+/** 上游驗證失敗附的明細（作者資產、試玩卡）：哪一條、多大、上限多少。 */
+export interface LimitDetail { reason?: string; index?: number; name?: string; max?: number; actual?: number; unit?: string }
+
+/**
+ * 有明細就照明細講：整份多大、上限多少；或第幾條叫什麼、多大。沒有對應文案的 reason
+ * 退回通用的那句。2026-09-11 一位作者存 1.18 MB 的規則只看到「請求失敗 (validate_reject)」。
+ */
+function describeLimit(code: string, detail: LimitDetail | undefined): string | null {
+  if (!detail?.reason) return null;
+  const key = `${CODE_KEY[code] ?? "error.validateReject"}.${detail.reason}`;
+  if (!i18n.global.te(key)) return null;
+  const bytes = detail.actual ?? 0;
+  const max = detail.max ?? 0;
+  return i18n.global.t(key, {
+    index: (detail.index ?? -1) + 1,
+    name: detail.name ?? "",
+    sizeKB: Math.ceil(bytes / 1024),
+    maxKB: Math.round(max / 1024),
+    sizeMB: (bytes / 1024 / 1024).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1),
+    maxMB: Math.round(max / 1024 / 1024),
+  });
+}
 /** 本站自己的 API 回的碼（不是供應商契約的一部分，所以不進 docs/provider-protocol.md）。 */
 const SITE_CODE_KEY: Record<string, string> = {
   adult_content: "card.gate.title",
@@ -42,8 +66,10 @@ const SITE_CODE_KEY: Record<string, string> = {
 };
 const looksLikeCode = (raw: string): boolean => /^[a-z][a-z0-9_]*$/.test(raw);
 
-export function describeApiError(status: number, raw: string): string {
+export function describeApiError(status: number, raw: string, detail?: LimitDetail): string {
   const text = (raw || "").trim();
+  const byDetail = text ? describeLimit(text, detail) : null;
+  if (byDetail) return byDetail;
   if (text && (CODE_KEY[text] || SITE_CODE_KEY[text])) return i18n.global.t((CODE_KEY[text] ?? SITE_CODE_KEY[text])!);
   // 不是錯誤碼的就是伺服器寫給人看的句子（例如內容審核的原因），原樣講。
   if (text && !looksLikeCode(text)) return text;
@@ -53,9 +79,9 @@ export function describeApiError(status: number, raw: string): string {
 
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+    const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string; detail?: LimitDetail };
     const raw = body.error ?? body.message ?? "";
-    throw new ApiError(res.status, describeApiError(res.status, raw), body.error ?? "");
+    throw new ApiError(res.status, describeApiError(res.status, raw, body.detail), body.error ?? "");
   }
   return (await res.json()) as T;
 }
