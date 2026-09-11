@@ -923,5 +923,10 @@
   "editor.createdButNotSaved": "カードは作成されましたが、内容は保存されていません：{why} 修正してもう一度保存すると、新しいカードではなく同じカードに保存されます。",
   "res.panel.manage": "管理",
   "res.panel.manageDone": "完了",
-  "res.panel.pick": "この画像を選択"
+  "res.panel.pick": "この画像を選択",
+  "res.uploadingPercent": "アップロード中 {done}/{count}（{percent}%）",
+  "error.uploadRetry": "アップロードが完了しませんでした。もう一度お試しください。",
+  "error.uploadExpired": "アップロードに時間がかかりすぎて完了しませんでした。もう一度お試しください。",
+  "error.quotaImageExceeded": "ライブラリのファイル数が上限に達しています。いくつか削除してからアップロードしてください。",
+  "error.quotaBytesExceeded": "ライブラリの容量がいっぱいです。いくつか削除してからアップロードしてください。"
 }

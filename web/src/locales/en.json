@@ -923,5 +923,10 @@
   "editor.createdButNotSaved": "The card was created, but its content was not saved: {why} Fix it and save again; it will go to the same card, not a new one.",
   "res.panel.manage": "Manage",
   "res.panel.manageDone": "Done",
-  "res.panel.pick": "Select this image"
+  "res.panel.pick": "Select this image",
+  "res.uploadingPercent": "Uploading {done}/{count} ({percent}%)",
+  "error.uploadRetry": "That upload didn't finish. Please try again.",
+  "error.uploadExpired": "The upload took too long and didn't finish. Please try again.",
+  "error.quotaImageExceeded": "Your library has reached its item limit. Delete some files before uploading more.",
+  "error.quotaBytesExceeded": "Your library is out of space. Delete some files before uploading more."
 }

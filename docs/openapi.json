@@ -9355,6 +9355,180 @@
           }
         }
       }
+    },
+    "/open/v1/image/uploadIntent": {
+      "post": {
+        "operationId": "createMediaUploadIntent",
+        "tags": [
+          "Media library"
+        ],
+        "summary": "Start a browser direct-to-storage upload",
+        "description": "Alternative to `/image/upload` for browsers: the bytes go straight to object storage through a short-lived signed URL instead of through the provider's API proxy, which cuts an upload off after a fixed time. Checks the per-account item and byte quotas against the declared size, then returns `uploadUrl` (HTTP `PUT` the raw file there; no `Content-Type` is required or signed) and `uploadId` (an opaque, account-bound, expiring credential to pass to `/image/uploadComplete`). Same 100 MiB per-file limit as `/image/upload`. Success body is the legacy wrapper `{code:0,data:{...}}`.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "byteSize"
+                ],
+                "properties": {
+                  "byteSize": {
+                    "type": "integer",
+                    "description": "Exact size of the file in bytes; `uploadComplete` rejects the upload if the stored object differs."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Signed upload target.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaUploadIntentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_param` (missing or non-positive `byteSize`); `quota_image_exceeded`; `quota_bytes_exceeded`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`file_too_large` (over 104857600 bytes).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/image/uploadComplete": {
+      "post": {
+        "operationId": "completeMediaUpload",
+        "tags": [
+          "Media library"
+        ],
+        "summary": "Register a file that was PUT to the signed URL",
+        "description": "Verifies the credential, checks the stored object's size against the declared `byteSize`, sniffs the real type from the bytes (same accepted list as `/image/upload`), reads image dimensions, moves the object to its permanent location and registers it exactly like `/image/upload` does (moderation state, quotas, `roleId` attribution rules, best-effort `folderIds` bindings). A rejected object is deleted. Response shape is identical to `/image/upload`.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "uploadId"
+                ],
+                "properties": {
+                  "uploadId": {
+                    "type": "string",
+                    "description": "From `/image/uploadIntent`."
+                  },
+                  "roleId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Optional card to attribute the file to (own card or any public card)."
+                  },
+                  "folderIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Optional folder ids to bind the new item to."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stored item.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaUploadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_param`; `upload_invalid` (credential not issued to this account, or tampered); `upload_expired` (credential older than its lifetime; start over); `upload_size_mismatch` (stored object is not `byteSize` bytes); `invalid_file_type`; `quota_image_exceeded`; `quota_bytes_exceeded`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`upload_missing` (nothing was PUT to the signed URL, or it was already consumed).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`file_too_large`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -18337,6 +18511,49 @@
           "latestFeatureLevel": {
             "type": "integer",
             "description": "Latest renderer level known to the server."
+          }
+        }
+      },
+      "MediaUploadIntentResponse": {
+        "type": "object",
+        "required": [
+          "code",
+          "data"
+        ],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "enum": [
+              0
+            ]
+          },
+          "data": {
+            "type": "object",
+            "required": [
+              "uploadId",
+              "uploadUrl",
+              "expiresAt",
+              "maxBytes"
+            ],
+            "properties": {
+              "uploadId": {
+                "type": "string",
+                "description": "Opaque credential for `/image/uploadComplete`."
+              },
+              "uploadUrl": {
+                "type": "string",
+                "format": "uri",
+                "description": "HTTP `PUT` the raw file body here before `expiresAt`."
+              },
+              "expiresAt": {
+                "type": "integer",
+                "description": "Unix seconds; both the URL and the credential stop working after this."
+              },
+              "maxBytes": {
+                "type": "integer",
+                "description": "Per-file limit in bytes."
+              }
+            }
           }
         }
       }
