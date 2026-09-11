@@ -400,7 +400,7 @@
   "regex.issue.replaceLong": "치환 내용이 {max} KB를 넘습니다",
   "regex.issue.badRegex": "정규식이 잘못되어 이 규칙은 동작하지 않습니다",
   "regex.issue.statusbarLong": "상태 바가 {max}자를 넘습니다",
-  "regex.issue.totalLong": "규칙 전체가 너무 큽니다",
+  "regex.issue.totalLong": "규칙 전체가 {size} MB로 상한 {max} MB를 넘습니다. 쓰지 않는 규칙을 지우고 저장하세요",
   "play.title": "플레이",
   "play.loading": "무대를 불러오는 중…",
   "play.loadFailed": "무대를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
@@ -904,5 +904,12 @@
   "mine.action.game": "게임 모드",
   "game.more": "더보기",
   "game.settings.notepad": "수첩",
-  "game.settings.memory": "영구 기억"
+  "game.settings.memory": "영구 기억",
+  "regex.size": "{size} / {max} MB",
+  "regex.importedButInvalid": "규칙 {n}개를 읽었지만 {why}.",
+  "error.validateReject": "표시 규칙에 문제가 있습니다. 각 규칙을 확인하고 다시 시도해 주세요.",
+  "error.validateReject.rulesTotal": "정규식 규칙 전체가 {sizeMB} MB로 상한 {maxMB} MB를 넘습니다. 쓰지 않는 규칙을 지우고 다시 저장하세요.",
+  "error.validateReject.ruleReplace": "{index}번째 규칙 「{name}」의 치환 내용이 {sizeKB} KB로 상한 {maxKB} KB를 넘습니다. 나누거나 줄여 주세요.",
+  "error.validateReject.emptyFind": "{index}번째 규칙 「{name}」의 일치 패턴이 비어 있습니다. 채우거나 규칙을 지워 주세요.",
+  "error.payloadTooLarge": "보낸 내용이 너무 커서 서버가 받지 않았습니다. 규칙이나 이미지를 줄이고 다시 시도해 주세요."
 }

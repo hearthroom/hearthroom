@@ -17,6 +17,8 @@ import {
   applyRules,
   makeRule,
   parseFind,
+  formatMB,
+  ruleSetBytes,
   validateRuleSet,
   type RegexRule,
   type RegexRuleSet,
@@ -41,6 +43,10 @@ const filtered = computed(() => {
 });
 const issues = computed(() => validateRuleSet(set.value));
 const issueOf = (id: string) => issues.value.find((i) => i.ruleId === id);
+// 掛在整份上的問題（太多條、整份太大、狀態欄太長）：沒有哪一條規則可以標紅，
+// 只灰掉「完成」的話作者看不出為什麼（2026-09-11 一份 1.18 MB 的匯入檔就是這樣卡住）。
+const setIssues = computed(() => issues.value.filter((i) => !i.ruleId));
+const sizeText = computed(() => t("regex.size", { size: formatMB(ruleSetBytes(set.value)), max: REGEX_LIMITS.total / 1024 / 1024 }));
 const findKind = computed(() => {
   if (!selected.value) return "";
   const parsed = parseFind(selected.value.find);
@@ -107,6 +113,8 @@ watch(selectedId, () => { testScope.value = testScope.value; });
       <header class="rx__head">
         <h2>{{ $t("regex.title") }}</h2>
         <span class="subtle">{{ $t("regex.count", { n: set.rules.length, max: REGEX_LIMITS.rules }) }}</span>
+        <span class="subtle" :class="{ 'rx__over': ruleSetBytes(set) > REGEX_LIMITS.total }">{{ sizeText }}</span>
+        <span v-for="issue in setIssues" :key="issue.key" class="rx__set-issue" role="alert">{{ $t(issue.key, issue.params ?? {}) }}</span>
         <div class="rx__head-acts">
           <button type="button" class="btn btn--sm btn--ghost" @click="cancel">{{ $t("dialog.cancel") }}</button>
           <button type="button" class="btn btn--sm btn--primary" :disabled="issues.length > 0" @click="done">{{ $t("regex.done") }}</button>
@@ -218,6 +226,8 @@ watch(selectedId, () => { testScope.value = testScope.value; });
 .rx__head { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-4); box-shadow: 0 1px 0 var(--line); }
 .rx__head h2 { font-size: 16px; }
 .rx__head-acts { margin-left: auto; display: flex; gap: var(--s-2); }
+.rx__over, .rx__set-issue { color: var(--danger); }
+.rx__set-issue { font-size: 13px; }
 
 .rx__body { display: grid; grid-template-columns: 300px minmax(0, 1fr); min-height: 0; }
 .rx__list { display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: var(--s-2); padding: var(--s-3); box-shadow: 1px 0 0 var(--line); min-height: 0; }

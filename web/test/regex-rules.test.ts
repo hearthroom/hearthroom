@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyRules, makeRule, parseFind, renderStatusbar, renderWithRules, ruleSetFromAuthorAsset, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, rulesFromTavern, validateRuleSet, REGEX_LIMITS } from "../src/lib/regex-rules";
+import { applyRules, makeRule, parseFind, renderStatusbar, renderWithRules, ruleSetFromAuthorAsset, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, rulesFromTavern, ruleSetBytes, validateRuleSet, REGEX_LIMITS } from "../src/lib/regex-rules";
 
 describe("parseFind", () => {
   it("/pat/flags 是正則，其他是字面", () => {
@@ -104,6 +104,26 @@ describe("validateRuleSet", () => {
     ] };
     const keys = validateRuleSet(set).map((i) => i.ruleId + ":" + i.key);
     expect(keys).toEqual(expect.arrayContaining(["a:regex.issue.emptyFind", "b:regex.issue.badRegex", "c:regex.issue.replaceLong"]));
+  });
+
+  // 2026-09-11 一位作者匯入 66 條、1.18 MB 的規則檔：上游放寬到 32 MB 後這裡也要放行，
+  // 而且量法要跟上游一樣（每條 id+name+find+replace 的位元組加總，不是整份 JSON 的長度）。
+  it("整份大小照上游的算法量；幾 MB 的真實規則檔過得了；超過時說多大、上限多少", () => {
+    const rules = Array.from({ length: 66 }, (_, i) => makeRule({ id: `r${i}`, name: "圖片集", find: "x", replace: "字".repeat(6000) }));
+    const set = { version: 1 as const, lowered: false, statusbar: "", rules };
+    const enc = (s: string) => new TextEncoder().encode(s).length;
+    expect(ruleSetBytes(set)).toBe(rules.reduce((n, r) => n + enc(r.id) + enc(r.name) + enc(r.find) + enc(r.replace), 0));
+    expect(ruleSetBytes(set)).toBeLessThan(enc(JSON.stringify(set)));
+    expect(ruleSetBytes(set)).toBeGreaterThan(1024 * 1024);
+    expect(validateRuleSet(set).map((i) => i.key)).not.toContain("regex.issue.totalLong");
+
+    // 100 條 × 128 KB 加起來還不到 32 MB，整份上限在本站其實是保險絲；用超量的假資料證明它會響。
+    const huge = { ...set, rules: Array.from({ length: 300 }, (_, i) => makeRule({ id: `h${i}`, find: "x", replace: "y".repeat(REGEX_LIMITS.replaceBytes) })) };
+    const whole = validateRuleSet(huge).find((i) => i.key === "regex.issue.totalLong");
+    expect(whole).toBeDefined();
+    expect(whole!.ruleId).toBe("");
+    expect(whole!.params?.max).toBe(32);
+    expect(Number(whole!.params?.size)).toBeGreaterThan(32);
   });
 });
 
