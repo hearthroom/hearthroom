@@ -41,16 +41,22 @@ body::before {
 }
 
 a { color: inherit; text-decoration: none; }
-img { max-width: 100%; display: block; }
-/* /play 例外：作者資產的圖常常把尺寸寫死，圖上的標記再用同一套座標定位。這條把圖壓成
-   容器寬之後，標記還留在原座標，地圖上的點就整批跑到圖外面（owner 2026-09-10「大地圖
-   顯示不全」）。作者的東西掛在 body 上、不一定落在 .ms-stage 裡，所以整頁關掉；舞台
-   自己的圖都有明確寬度，本來就不靠這條。 */
-body:has(.play) img { max-width: none; }
-/* 上面那條例外只該放過「作者寫死了尺寸」的圖。訊息正文裡沒寫尺寸的裸 <img>（開場白／
-   AI 回覆直接貼一張圖）沒有人給它寬度，關掉上限就以原圖像素撐開氣泡，手機上只看得到
-   圖的一角（owner 2026-09-11 截圖）。舞台自己的 .mes_text img{max-width:100%} 在 @layer
-   裡，贏不了上面那條無 layer 規則，所以補回來也得寫在這裡。 */
+img { display: block; }
+/* 圖片寬度上限只給站台自己的頁面。/play 裡的圖一律不碰：
+
+   - 作者資產的圖常常把尺寸寫死，圖上的標記再用同一套座標定位。壓成容器寬之後標記
+     還留在原座標，地圖上的點就整批跑到圖外面（owner 2026-09-10「大地圖顯示不全」）。
+   - 但「不碰」得用不套規則來做，不能用一條更強的 `max-width: none` 去蓋——那條的
+     特異性比作者自己的 class 規則高，會把作者寫的上限也一起蓋掉：分區地圖的
+     `.lsb-modal-img{max-width:min(90vw,80vh)}` 被蓋成 none，手機上圖以 80vh 撐開、
+     右半邊被切（owner 2026-09-12 截圖；桌機 80vh 比視窗窄所以看不出來）。
+
+   :where() 把選擇器的特異性歸零，站台其他頁面上任何 class 規則照舊贏過它，
+   跟原本那條裸 `img` 的行為一樣。 */
+:where(body:not(:has(.play))) img { max-width: 100%; }
+/* /play 不套站台的寬度上限之後，訊息正文裡沒寫尺寸的裸 <img>（開場白／AI 回覆直接貼
+   一張圖）就沒有人給它寬度，會以原圖像素撐開氣泡，手機上只看得到圖的一角（owner
+   2026-09-11 截圖）。舞台自己也有一條 .mes_text img{max-width:100%}，這裡再保一層。 */
 body:has(.play) .mes_text img:not([width]):not([height]):not([style*="width"]):not([style*="height"]) { max-width: 100%; }
 button { font: inherit; color: inherit; }
 h1, h2, h3, p, dl, dd { margin: 0; }
