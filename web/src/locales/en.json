@@ -928,5 +928,7 @@
   "error.uploadRetry": "That upload didn't finish. Please try again.",
   "error.uploadExpired": "The upload took too long and didn't finish. Please try again.",
   "error.quotaImageExceeded": "Your library has reached its item limit. Delete some files before uploading more.",
-  "error.quotaBytesExceeded": "Your library is out of space. Delete some files before uploading more."
+  "error.quotaBytesExceeded": "Your library is out of space. Delete some files before uploading more.",
+  "res.prefix.label": "Library URL prefix",
+  "res.prefix.hint": "Uploads keep their original file name, so the URL is prefix/filename. Uploading the same name again replaces the old file at the same URL. Card scripts can build URLs from the prefix and a file name."
 }

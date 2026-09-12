@@ -928,5 +928,7 @@
   "error.uploadRetry": "這次上傳沒有完成，請再傳一次。",
   "error.uploadExpired": "上傳花的時間太長，這次沒有完成。請再傳一次。",
   "error.quotaImageExceeded": "資源庫的檔案數已達上限，先刪掉一些再上傳。",
-  "error.quotaBytesExceeded": "資源庫的容量已滿，先刪掉一些再上傳。"
+  "error.quotaBytesExceeded": "資源庫的容量已滿，先刪掉一些再上傳。",
+  "res.prefix.label": "圖庫網址前綴",
+  "res.prefix.hint": "上傳會保留原始檔名，網址就是「前綴／檔名」；同名再傳會直接換掉舊的那張，網址不變。卡片程式碼裡可以用前綴加檔名直接組網址。"
 }
