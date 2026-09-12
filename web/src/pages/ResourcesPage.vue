@@ -54,6 +54,7 @@ const total = ref(0);
 const quota = ref(0);
 const usedBytes = ref(0);
 const byteQuota = ref(0);
+const libraryPrefix = ref("");
 const page = ref(1);
 const loading = ref(true);
 const error = ref("");
@@ -103,6 +104,7 @@ async function loadImages(reset = false) {
     if (res.quota) quota.value = res.quota;
     usedBytes.value = res.usedBytes;
     if (res.byteQuota) byteQuota.value = res.byteQuota;
+    if (res.libraryPrefix) libraryPrefix.value = res.libraryPrefix;
   } catch (err) {
     error.value = describe(err, "state.loadFailed");
   } finally {
@@ -310,12 +312,16 @@ function flash(message: string) {
 }
 
 async function copyLink(image: LibraryImage) {
+  await copyText(image.imageUrl);
+}
+
+async function copyText(text: string) {
   try {
-    await navigator.clipboard.writeText(image.imageUrl);
+    await navigator.clipboard.writeText(text);
     flash(t("res.copied"));
   } catch {
     // 沒有剪貼簿權限（iframe、舊瀏覽器）：把網址露在列表上方讓作者自己選來複製，不開原生彈窗
-    copyFallback.value = image.imageUrl;
+    copyFallback.value = text;
   }
 }
 const copyFallback = ref("");
@@ -372,6 +378,16 @@ const stateLabel = (image: LibraryImage) =>
       <div class="quota__bar" role="progressbar" :aria-valuenow="usedBytes" aria-valuemin="0" :aria-valuemax="byteQuota || undefined">
         <span :style="{ width: `${usedRatio * 100}%` }" />
       </div>
+    </section>
+
+    <!-- 圖庫前綴：作者的卡片程式碼用「前綴／檔名」組網址，上傳保留原檔名、同名覆蓋 -->
+    <section v-if="libraryPrefix" class="prefix panel" :aria-label="$t('res.prefix.label')">
+      <p class="eyebrow">{{ $t("res.prefix.label") }}</p>
+      <div class="prefix__row">
+        <code class="prefix__code">{{ libraryPrefix }}/</code>
+        <button type="button" class="btn btn--sm" @click="copyText(libraryPrefix)">{{ $t("res.copy") }}</button>
+      </div>
+      <p class="subtle prefix__hint">{{ $t("res.prefix.hint") }}</p>
     </section>
 
     <!-- 種類籤：全部／圖片／影片／音訊／字型 -->
@@ -479,6 +495,7 @@ const stateLabel = (image: LibraryImage) =>
           </div>
         </template>
         <span v-if="stateLabel(image)" class="tile__state" :class="{ 'tile__state--bad': image.moderationState === 'reject' }">{{ stateLabel(image) }}</span>
+        <span v-if="image.fileName" class="tile__name" :title="image.fileName">{{ image.fileName }}</span>
         <span class="tile__meta subtle">{{ image.kind === "image" && image.pixelWidth ? `${image.pixelWidth}×${image.pixelHeight}` : fileSize(image.byteSize) }}</span>
       </li>
     </ul>
@@ -499,6 +516,17 @@ const stateLabel = (image: LibraryImage) =>
 .quota { padding: var(--s-4); display: grid; gap: 6px; margin-bottom: var(--s-4); }
 .quota .eyebrow { margin: 0; }
 .quota__num { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; }
+.prefix { margin-top: 12px; }
+.prefix__row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
+.prefix__code { font-size: 13px; padding: 6px 10px; border-radius: 8px; background: var(--surface-2, rgba(0, 0, 0, 0.05)); overflow-wrap: anywhere; }
+.prefix__hint { margin-top: 8px; font-size: 13px; line-height: 1.6; }
+.tile__name {
+  position: absolute; left: 8px; right: 8px; bottom: 30px; font-size: 12px; line-height: 1.3;
+  color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  opacity: 0; transition: opacity var(--dur-fast, 150ms);
+}
+.tile:hover .tile__name, .tile:focus-within .tile__name { opacity: 1; }
+.wall--manage .tile__name { display: none; }
 .quota__num .subtle { font-size: 13px; font-weight: 500; }
 .quota__bar { height: 6px; border-radius: var(--r-pill); background: var(--surface-2); overflow: hidden; }
 .quota__bar span { display: block; height: 100%; border-radius: inherit; background: var(--accent-grad); transition: width var(--dur-slow) var(--ease); }

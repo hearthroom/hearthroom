@@ -673,7 +673,8 @@ export async function uploadImage(file: File, token: string, roleId?: string, fo
     if (err instanceof StorageUnreachable) return uploadImageLegacy(file, token, roleId, folderIds);
     throw err;
   }
-  const doneRes = await libraryPost("uploadComplete", { uploadId: intent.uploadId, roleId: roleId || undefined, folderIds }, token);
+  // 檔名跟著送：上游以「圖庫前綴／檔名」存放，作者的程式碼靠它組網址，同名再傳會覆蓋同一件。
+  const doneRes = await libraryPost("uploadComplete", { uploadId: intent.uploadId, fileName: file.name, roleId: roleId || undefined, folderIds }, token);
   const done = await libraryJson<{ imageUrl?: string }>(doneRes);
   if (!done.imageUrl) throw new ApiError(doneRes.status, i18n.global.t("state.uploadFailed"));
   onProgress?.(1);
@@ -954,6 +955,8 @@ export type LibraryKind = "image" | "video" | "audio" | "font";
 export interface LibraryImage {
   id: number;
   imageUrl: string;
+  /** 上傳時的檔名；網址是「圖庫前綴／檔名」，同名再傳會覆蓋。舊圖（隨機碼網址）沒有。 */
+  fileName?: string;
   kind: LibraryKind;
   mimeType?: string;
   /** 上傳時的位元組數；2026-09 前的存量圖是 0。 */
@@ -979,6 +982,8 @@ export interface LibraryPage {
   /** 已用容量與容量上限（位元組）。已用只算有記體積的檔。 */
   usedBytes: number;
   byteQuota: number;
+  /** 作者的圖庫前綴（不含結尾斜線）：卡片程式碼裡用「前綴／檔名」組網址。 */
+  libraryPrefix: string;
 }
 
 /** 看哪一組：全部、沒歸進任何資料夾的、某個資料夾。 */
@@ -1002,13 +1007,14 @@ export async function fetchLibraryImages(scope: LibraryScope, page: number, page
   const q = new URLSearchParams({ scope: scope.kind, kind, pageNum: String(page), pageSize: String(pageSize) });
   if (scope.kind === "folder") q.set("folderId", scope.folderId);
   const res = await fetch(`${UPSTREAM_API}/open/v1/image/list?${q}`, { headers: authHeaders(token) });
-  const data = await libraryJson<{ imageList?: LibraryImage[]; total?: number; quota?: number; usedBytes?: number; byteQuota?: number }>(res);
+  const data = await libraryJson<{ imageList?: LibraryImage[]; total?: number; quota?: number; usedBytes?: number; byteQuota?: number; libraryPrefix?: string }>(res);
   return {
     items: (data.imageList ?? []).map((i) => ({ ...i, kind: i.kind || "image", byteSize: Number(i.byteSize ?? 0) })),
     total: Number(data.total ?? 0),
     quota: Number(data.quota ?? 0),
     usedBytes: Number(data.usedBytes ?? 0),
     byteQuota: Number(data.byteQuota ?? 0),
+    libraryPrefix: String(data.libraryPrefix ?? ""),
   };
 }
 
