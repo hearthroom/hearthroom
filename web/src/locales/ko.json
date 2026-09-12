@@ -928,5 +928,7 @@
   "error.uploadRetry": "이번 업로드가 완료되지 않았습니다. 다시 시도해 주세요.",
   "error.uploadExpired": "업로드에 시간이 너무 오래 걸려 완료되지 않았습니다. 다시 시도해 주세요.",
   "error.quotaImageExceeded": "자료실의 파일 수가 상한에 도달했습니다. 몇 개 삭제한 뒤 다시 업로드하세요.",
-  "error.quotaBytesExceeded": "자료실 용량이 가득 찼습니다. 몇 개 삭제한 뒤 다시 업로드하세요."
+  "error.quotaBytesExceeded": "자료실 용량이 가득 찼습니다. 몇 개 삭제한 뒤 다시 업로드하세요.",
+  "res.prefix.label": "자료실 URL 접두사",
+  "res.prefix.hint": "업로드는 원래 파일 이름을 유지하며 URL은 「접두사／파일 이름」이 됩니다. 같은 이름으로 다시 올리면 같은 URL로 교체됩니다. 카드 스크립트에서 접두사와 파일 이름으로 URL을 조합할 수 있습니다."
 }

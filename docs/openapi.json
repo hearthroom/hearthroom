@@ -4576,7 +4576,7 @@
           "Media library"
         ],
         "summary": "Upload a media file to the caller's library",
-        "description": "Multipart upload of one file. The type is detected from the file bytes (client Content-Type is ignored). Images are stored as `moderationState=pending` and moderated asynchronously (rejected images are deleted from the library later); video/audio/font are stored as `unreviewed`. Limits: 100 MiB per file (checked on Content-Length and on the part), 10000 items per account, 500 MiB total per account (only counting files uploaded since byte accounting existed). `roleId` is silently dropped when the card does not exist or is someone else's private card; `folderIds` bindings are best-effort. Success body is the legacy wrapper `{code:0,data:{...}}`.",
+        "description": "Multipart upload of one file. The type is detected from the file bytes (client Content-Type is ignored). Through the open API nothing is moderated: every file is stored as `moderationState=unreviewed` (image-host semantics; these files are meant for author-asset HTML). The file keeps its original name: it is stored at `<libraryPrefix>/<fileName>` where `libraryPrefix` (see `/image/list`) is `https://<objects host>/u/<numeric user id>`, so card scripts can build URLs from a prefix and a name. Uploading the same file name again replaces the existing item in place (same id, same URL; `replaced: true`). Limits: 100 MiB per file (checked on Content-Length and on the part), 10000 items per account, 500 MiB total per account (only counting files uploaded since byte accounting existed). `roleId` is silently dropped when the card does not exist or is someone else's private card; `folderIds` bindings are best-effort. Success body is the legacy wrapper `{code:0,data:{...}}`.",
         "security": [
           {
             "userToken": []
@@ -9439,7 +9439,7 @@
           "Media library"
         ],
         "summary": "Register a file that was PUT to the signed URL",
-        "description": "Verifies the credential, checks the stored object's size against the declared `byteSize`, sniffs the real type from the bytes (same accepted list as `/image/upload`), reads image dimensions, moves the object to its permanent location and registers it exactly like `/image/upload` does (moderation state, quotas, `roleId` attribution rules, best-effort `folderIds` bindings). A rejected object is deleted. Response shape is identical to `/image/upload`.",
+        "description": "Verifies the credential, checks the stored object's size against the declared `byteSize`, sniffs the real type from the bytes (same accepted list as `/image/upload`), reads image dimensions, moves the object to its permanent location and registers it exactly like `/image/upload` does (moderation state, quotas, `roleId` attribution rules, best-effort `folderIds` bindings). A rejected object is deleted. Files uploaded through the open API are **not** moderated (`moderationState=unreviewed`); they are meant for author-asset HTML. Response shape is identical to `/image/upload`.",
         "security": [
           {
             "userToken": []
@@ -9470,6 +9470,10 @@
                       "type": "string"
                     },
                     "description": "Optional folder ids to bind the new item to."
+                  },
+                  "fileName": {
+                    "type": "string",
+                    "description": "Original file name. The object is stored as `u/<numeric user id>/<fileName>` (path, control characters and `#%?&<>:\"|*` are stripped or replaced; the extension is aligned to the sniffed type). Uploading the same name again replaces the existing item in place: same item id, same URL. Omitted → a generated name."
                   }
                 }
               }
@@ -12033,6 +12037,10 @@
             "type": "string",
             "format": "date-time",
             "description": "RFC3339; absent when unknown."
+          },
+          "fileName": {
+            "type": "string",
+            "description": "File name for items stored under the library prefix; absent for older items with generated URLs."
           }
         }
       },
@@ -12083,6 +12091,10 @@
                 "type": "integer",
                 "format": "int64",
                 "description": "Max bytes per account (524288000)."
+              },
+              "libraryPrefix": {
+                "type": "string",
+                "description": "The caller's library URL prefix without trailing slash (`https://<objects host>/u/<numeric user id>`). Files uploaded with a name live at `<libraryPrefix>/<fileName>`."
               }
             }
           }
@@ -12161,6 +12173,14 @@
               "unreviewed"
             ],
             "description": "`pending` for images (moderated asynchronously), `unreviewed` for other kinds."
+          },
+          "fileName": {
+            "type": "string",
+            "description": "Sanitized file name the object is stored under."
+          },
+          "replaced": {
+            "type": "boolean",
+            "description": "True when an existing item with the same file name was overwritten."
           }
         }
       },

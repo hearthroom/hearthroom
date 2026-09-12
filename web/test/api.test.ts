@@ -161,7 +161,7 @@ describe("uploadImage", () => {
     // 型別送上游指定的、不送 file.type：它和大小一起簽在網址裡
     expect(FakeXHR.instances[0].headers["Content-Type"]).toBe("application/octet-stream");
     expect(calls.map((c) => c.url.split("/open/v1/image/")[1])).toEqual(["uploadIntent", "uploadComplete"]);
-    expect(JSON.parse(String(calls[1].body))).toEqual({ uploadId: "cred", roleId: "role-1", folderIds: ["f-1"] });
+    expect(JSON.parse(String(calls[1].body))).toEqual({ uploadId: "cred", fileName: "a.wav", roleId: "role-1", folderIds: ["f-1"] });
     expect(progress).toEqual([0.5, 1]);
   });
 

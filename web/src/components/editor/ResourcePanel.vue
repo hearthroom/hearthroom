@@ -218,7 +218,7 @@ const stateLabel = (image: LibraryImage) =>
     <div class="rp__wrap">
       <p v-if="!loading && !images.length" class="subtle rp__empty">{{ $t("lib.pick.empty") }}</p>
       <ul v-else class="wall">
-        <li v-for="image in images" :key="image.id" class="tile" :class="{ 'tile--on': selected.has(image.id) }">
+        <li v-for="image in images" :key="image.id" class="tile" :class="{ 'tile--on': selected.has(image.id) }" :title="image.fileName || ''">
           <img :src="image.imageUrl" alt="" loading="lazy" />
           <span v-if="stateLabel(image)" class="tile__state" :class="{ 'tile__state--bad': image.moderationState === 'reject' }">{{ stateLabel(image) }}</span>
           <!-- 管理模式：整格是一個勾選；平常是複製鈕 -->

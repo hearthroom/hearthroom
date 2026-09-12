@@ -928,5 +928,7 @@
   "error.uploadRetry": "这次上传没有完成，请再传一次。",
   "error.uploadExpired": "上传花的时间太长，这次没有完成。请再传一次。",
   "error.quotaImageExceeded": "资源库的文件数已达上限，先删掉一些再上传。",
-  "error.quotaBytesExceeded": "资源库的容量已满，先删掉一些再上传。"
+  "error.quotaBytesExceeded": "资源库的容量已满，先删掉一些再上传。",
+  "res.prefix.label": "图库网址前缀",
+  "res.prefix.hint": "上传会保留原始文件名，网址就是「前缀／文件名」；同名再传会直接换掉旧的那张，网址不变。卡片代码里可以用前缀加文件名直接组网址。"
 }
