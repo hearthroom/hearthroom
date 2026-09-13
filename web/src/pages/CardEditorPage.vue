@@ -34,9 +34,6 @@ import {
   reorderWorldbookEntries,
   saveAuthorAsset,
   submitRoleForReview,
-  fetchGameSpec,
-  saveGameSpec,
-  deleteGameSpec,
   unregisterCard,
   uploadImage,
   type WorldbookDocumentEntry,
@@ -45,7 +42,6 @@ import {
 } from "@/lib/api";
 import { emptyRuleSet, ruleSetFromAuthorAsset, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, validateRuleSet, type RegexRuleSet } from "@/lib/regex-rules";
 import RegexRulesEditor from "@/components/editor/RegexRulesEditor.vue";
-import GameWorldEditor from "@/components/editor/GameWorldEditor.vue";
 import ChatTestPanel from "@/components/editor/ChatTestPanel.vue";
 import ResourcePanel from "@/components/editor/ResourcePanel.vue";
 import {
@@ -70,9 +66,6 @@ import { useSession } from "@/lib/session";
 import { confirmDialog } from "@/lib/confirm";
 import { track } from "@/lib/track";
 import FieldText from "@/components/editor/FieldText.vue";
-import { validateGameSpec, type GameSpecJson } from "../../../shared/game-spec";
-import { canPlayAsGame, specTemplateFor } from "@/game/specs";
-import { parseTurn } from "@/game/zz-parse";
 import ListEditor from "@/components/editor/ListEditor.vue";
 import ImageField from "@/components/editor/ImageField.vue";
 import ImportPanel from "@/components/editor/ImportPanel.vue";
@@ -186,7 +179,7 @@ function flash(message: string) {
   toastTimer = setTimeout(() => { toast.value = ""; }, 2600);
 }
 
-const SECTIONS = ["basic", "persona", "dialogue", "media", "worldbook", "game", "publish"] as const;
+const SECTIONS = ["basic", "persona", "dialogue", "media", "worldbook", "publish"] as const;
 type Section = (typeof SECTIONS)[number];
 const section = ref<Section>("basic");
 const body = ref<HTMLElement | null>(null);
@@ -227,66 +220,6 @@ function onScroll() {
   if (!spyFrame) spyFrame = requestAnimationFrame(spy);
 }
 
-// ---- 遊戲模式 ------------------------------------------------------------------
-// 作者存一份 JSON 配置（形狀見 shared/game-spec.ts）：NPC 模型與站位、地點對照、建築、天空、音效。
-// 沒存過就沒有：遊戲頁會用開場白裡的角色名生一座通用校園。這裡存的是本站 D1，不動上游。
-const gameText = ref("");
-const gameOriginal = ref("");
-const gameEnabled = ref(true);
-const gameEnabledOriginal = ref(true);
-const gameHad = ref(false);
-const gameErrors = ref<string[]>([]);
-const gameDirty = computed(() => gameText.value !== gameOriginal.value || gameEnabled.value !== gameEnabledOriginal.value);
-/** 開場白裡 zzroles 的角色名：範本要把他們都擺上台 */
-const gameNames = computed(() => parseTurn(draft.value.roleWelcome || "").roles.map((r) => r.name));
-const gameProtocolMissing = computed(() => !canPlayAsGame(gameSpecParsed.value?.protocol, draft.value.roleWelcome || ""));
-// 世界編輯器（表單）跟底下的 JSON 是同一份：開編輯器時把 JSON 解出來給它，按完成再寫回 JSON
-const gameOpen = ref(false);
-const gameShowJson = ref(false);
-const gameSpecParsed = computed(() => { if (!gameText.value.trim()) return null; const v = validateGameSpec(gameText.value); return v.ok ? v.spec : null; });
-const gameNpcCount = computed(() => gameSpecParsed.value?.characters.length ?? 0);
-function onGameEdited(spec: GameSpecJson) { gameText.value = JSON.stringify({ ...spec, enabled: gameEnabled.value }, null, 2); gameErrors.value = []; }
-
-async function loadGameSpec() {
-  try {
-    const saved = await fetchGameSpec(roleId.value);
-    gameHad.value = !!saved;
-    gameText.value = saved ? JSON.stringify(saved.spec, null, 2) : "";
-    gameEnabled.value = saved ? saved.spec.enabled !== false : true;
-  } catch {
-    gameText.value = "";
-  }
-  gameOriginal.value = gameText.value;
-  gameEnabledOriginal.value = gameEnabled.value;
-  gameErrors.value = [];
-}
-function gameUseTemplate() {
-  gameText.value = JSON.stringify(specTemplateFor(gameNames.value), null, 2);
-  gameErrors.value = [];
-}
-function gameCheck(): boolean {
-  if (!gameText.value.trim()) { gameErrors.value = []; return true; }
-  const v = validateGameSpec(gameText.value);
-  gameErrors.value = v.ok ? [] : v.errors;
-  return v.ok;
-}
-/** 卡片存完才存配置：新卡要先有 roleId。沒改就不送；清空就刪。 */
-async function saveGame(token: string, targetRoleId: string) {
-  if (!gameDirty.value) return;
-  if (!gameText.value.trim()) {
-    if (gameHad.value) await deleteGameSpec(targetRoleId, token);
-    gameHad.value = false;
-  } else {
-    const v = validateGameSpec(gameText.value);
-    if (!v.ok) { gameErrors.value = v.errors; section.value = "game"; throw new Error(t("editor.game.invalid")); }
-    const saved = await saveGameSpec(targetRoleId, { ...v.spec, enabled: gameEnabled.value }, token);
-    gameText.value = JSON.stringify(saved.spec, null, 2);
-    gameHad.value = true;
-  }
-  gameOriginal.value = gameText.value;
-  gameEnabledOriginal.value = gameEnabled.value;
-}
-
 const dirty = computed(
   () =>
     JSON.stringify(draft.value) !== JSON.stringify(original.value ?? pristine.value) ||
@@ -294,8 +227,7 @@ const dirty = computed(
     worldbookPending.value ||
     worldbookBindPending.value ||
     metadataChanged() ||
-    regexDirty.value ||
-    gameDirty.value,
+    regexDirty.value,
 );
 
 /**
@@ -341,7 +273,6 @@ const filled = computed<Record<Section, boolean>>(() => ({
   persona: Boolean(draft.value.roleDetailDesc.trim()),
   dialogue: Boolean(draft.value.roleWelcome.trim()),
   media: Boolean(draft.value.roleAvatar || draft.value.roleBackground),
-  game: Boolean(gameText.value.trim()),
   worldbook: worldbookEntries.value.some((e) => e.content.trim()),
   publish: false,
 }));
@@ -493,7 +424,6 @@ onMounted(async () => {
     if (token) {
       await loadWorldbook(token);
       await loadRegexRules(token);
-      await loadGameSpec();
     }
     void loadValidation();
   } catch (err) {
@@ -923,7 +853,6 @@ async function save() {
 
     await saveWorldbook(token, targetRoleId);
     await saveRegex(token, targetRoleId);
-    await saveGame(token, targetRoleId);
 
     original.value = cloneDraft(draft.value);
     saved.value = true;
@@ -1287,34 +1216,6 @@ async function exportCard(format: "png" | "json") {
 
         <!-- 发布 -->
         <!-- 遊戲模式：把這張卡當 3D 遊戲玩的世界配置 -->
-        <section data-section="game" class="pane">
-          <h2 class="pane__title">{{ $t("editor.section.game") }}</h2>
-          <p class="muted">{{ $t("editor.game.lede") }}</p>
-          <p v-if="gameProtocolMissing" class="notice">{{ $t("editor.game.protocol") }}</p>
-          <label class="game-toggle">
-            <input v-model="gameEnabled" type="checkbox" />
-            <span>{{ $t("editor.game.enable") }}</span>
-          </label>
-          <div class="rxbar">
-            <p class="rxbar__hint">{{ $t("editor.game.hint") }}</p>
-            <div class="rxbar__acts">
-              <button type="button" class="btn btn--sm btn--primary" :disabled="Boolean(gameText.trim()) && !gameSpecParsed" @click="gameOpen = true">
-                {{ $t("editor.game.open") }}
-                <span v-if="gameNpcCount" class="chip">{{ gameNpcCount }}</span>
-              </button>
-              <button type="button" class="btn btn--sm" @click="gameUseTemplate">{{ $t("editor.game.template") }}</button>
-              <button type="button" class="btn btn--sm" :disabled="!gameText.trim()" @click="gameText = ''; gameErrors = []">{{ $t("editor.game.clear") }}</button>
-              <a v-if="!isNew" class="btn btn--sm" :href="lp(`/game/${roleId}`)" target="_blank" rel="noopener">{{ $t("editor.game.play") }}</a>
-            </div>
-          </div>
-          <details class="game-json" :open="gameShowJson || (Boolean(gameText.trim()) && !gameSpecParsed)" @toggle="gameShowJson = ($event.target as HTMLDetailsElement).open">
-            <summary class="subtle">{{ $t("editor.game.json") }}</summary>
-            <textarea id="f-game" v-model="gameText" class="input mono" rows="14" spellcheck="false" @blur="gameCheck" />
-          </details>
-          <ul v-if="gameErrors.length" class="notice notice--error game-errors" role="alert">
-            <li v-for="e in gameErrors" :key="e">{{ e }}</li>
-          </ul>
-        </section>
 
         <section data-section="publish" class="pane">
           <h2 class="pane__title">{{ $t("editor.section.publish") }}</h2>
@@ -1452,7 +1353,6 @@ async function exportCard(format: "png" | "json") {
 
     <div class="toast" role="status" :hidden="!toast">{{ toast }}</div>
     <RegexRulesEditor v-if="regexOpen" v-model="regexSet" @close="regexOpen = false" />
-    <GameWorldEditor v-if="gameOpen" :model-value="gameSpecParsed" :names="gameNames" @update:model-value="onGameEdited" @close="gameOpen = false" />
   </div>
 </template>
 
@@ -1537,10 +1437,6 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
  */
 .pane :deep(textarea.input) { field-sizing: content; max-height: 70vh; }
 .pane textarea.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.5; }
-.game-toggle { display: inline-flex; align-items: center; gap: var(--s-2); font-size: 14px; }
-.game-json summary { cursor: pointer; font-size: 13px; margin-bottom: var(--s-2); }
-.game-json .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.55; min-height: 220px; }
-.game-errors { margin: 0; padding-left: var(--s-5); display: grid; gap: 2px; font-size: 13px; }
 .pane :deep(.field) { gap: 6px; }
 .pane :deep(.field > label) { line-height: 1.3; }
 .pane :deep(.field__foot) { margin-top: -2px; }

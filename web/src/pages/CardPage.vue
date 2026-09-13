@@ -17,8 +17,6 @@ import { useLocalePath } from "@/lib/use-locale";
 import { compact, hueFrom, plainText, relativeTime } from "@/lib/format";
 import { confirmDialog } from "@/lib/confirm";
 import { track } from "@/lib/track";
-import { canPlayAsGame } from "@/game/specs";
-import { fetchGameSpec } from "@/lib/api";
 import type { CommunityCard } from "@/lib/types";
 
 const route = useRoute();
@@ -39,7 +37,6 @@ const welcome = ref("");
 /** 開場白照對話頁畫出來的 HTML（作者的正則規則 → HTML／markdown）；純文字的開場白這裡是空字串。 */
 const welcomeHtml = ref("");
 /** 這張卡能不能用遊戲模式玩（有精修世界，或開場白照 zzroles 協定寫） */
-const gameReady = ref(false);
 const session = useSession();
 const showComments = ref(true);
 const previewDoc = ref<unknown>(null);
@@ -93,9 +90,6 @@ async function load() {
   void fetchRoleDetail(roleId, undefined, lang)
     .then((raw) => {
       const rawWelcome = String(raw.roleWelcome ?? "");
-      // 作者配置裡的協定決定「開場白要有哪個區塊」；沒配置就用預設協定
-      gameReady.value = canPlayAsGame(undefined, rawWelcome);
-      void fetchGameSpec(roleId).then((saved) => { if (saved?.spec) gameReady.value = saved.spec.enabled !== false && canPlayAsGame(saved.spec.protocol, rawWelcome); }).catch(() => {});
       const charName = card.value?.name ?? "";
       welcome.value = plainText(rawWelcome, charName, t("card.you"));
       // 開場白照對話頁的方式畫：先套作者的正則規則（酒館／MMD 卡靠它把標記換成版面），
@@ -152,7 +146,7 @@ async function share() {
 }
 
 watch(() => route.params.id, () => {
-  card.value = null; welcome.value = ""; welcomeHtml.value = ""; gameReady.value = false; previewDoc.value = null; more.value = []; broken.value = false; tab.value = "home";
+  card.value = null; welcome.value = ""; welcomeHtml.value = ""; previewDoc.value = null; more.value = []; broken.value = false; tab.value = "home";
   commentCount.value = null; showComments.value = true;
   load();
 }, { immediate: true });
@@ -228,10 +222,6 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
             <!-- 站內玩：/play/:roleId 由舞台（stage/）整頁接管 -->
             <RouterLink class="btn btn--primary btn--lg role__cta" :to="lp(`/play/${card.roleId}`)" @click="track('cta', { subject: card.roleId })">
               {{ $t("card.play") }}
-            </RouterLink>
-            <!-- 遊戲模式：只有配了舞台的卡才露出（game/specs） -->
-            <RouterLink v-if="gameReady" class="btn btn--lg role__cta" :to="lp(`/game/${card.roleId}`)">
-              {{ $t("game.play") }}
             </RouterLink>
             <button class="btn btn--lg btn--icon role__share" :aria-label="$t('card.share')" :title="$t('card.share')" @click="share">
               <svg viewBox="0 0 20 20" aria-hidden="true">
