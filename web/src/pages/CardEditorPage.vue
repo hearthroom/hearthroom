@@ -191,12 +191,40 @@ type Section = (typeof SECTIONS)[number];
 const section = ref<Section>("basic");
 const body = ref<HTMLElement | null>(null);
 
-/** 換分區時把表單捲回頂端：分區之間長短差很多，停在上一區的深處會看到一片空白。 */
+/**
+ * 七個分區排成一整頁（使用者回饋，2026-09-13）：導覽是錨點，點了捲到那一區；
+ * 捲動時由下面的 spy 反過來點亮目前所在的分區。程式捲動期間 spy 暫停，
+ * 不然平滑捲動一路經過的每一區都會閃一下。
+ */
+let spyHoldUntil = 0;
+function paneOf(key: Section): HTMLElement | null {
+  return body.value?.querySelector<HTMLElement>(`[data-section="${key}"]`) ?? null;
+}
 function goto(next: Section) {
-  if (section.value === next) return;
   section.value = next;
-  const top = body.value?.getBoundingClientRect().top ?? 0;
-  if (top < 0) body.value?.scrollIntoView({ block: "start" });
+  const el = paneOf(next);
+  if (!el) return;
+  spyHoldUntil = Date.now() + 1200;
+  el.scrollIntoView({ block: "start", behavior: "smooth" });
+}
+/** 黏住的導覽列底緣就是「目前在哪一區」的判斷線：最後一個頂端過了線的分區就是所在區。 */
+let spyFrame = 0;
+function spy() {
+  spyFrame = 0;
+  if (Date.now() < spyHoldUntil || !body.value) return;
+  const nav = body.value.parentElement?.querySelector(".side");
+  const line = (nav ? nav.getBoundingClientRect().bottom : 60) + 12;
+  let current: Section = SECTIONS[0];
+  for (const key of SECTIONS) {
+    const el = paneOf(key);
+    if (el && el.getBoundingClientRect().top <= line) current = key;
+  }
+  // 捲到頁底時最後一區未必過得了線（它可能比一屏短），到底就算它
+  if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) current = SECTIONS[SECTIONS.length - 1];
+  if (section.value !== current) section.value = current;
+}
+function onScroll() {
+  if (!spyFrame) spyFrame = requestAnimationFrame(spy);
 }
 
 // ---- 遊戲模式 ------------------------------------------------------------------
@@ -496,10 +524,13 @@ const onKey = (e: KeyboardEvent) => {
 onMounted(() => {
   window.addEventListener("beforeunload", guard);
   window.addEventListener("keydown", onKey);
+  window.addEventListener("scroll", onScroll, { passive: true });
 });
 onBeforeUnmount(() => {
   window.removeEventListener("beforeunload", guard);
   window.removeEventListener("keydown", onKey);
+  window.removeEventListener("scroll", onScroll);
+  if (spyFrame) cancelAnimationFrame(spyFrame);
   clearTimeout(toastTimer);
   clearTimeout(draftTimer);
   storeDraft();
@@ -1023,7 +1054,7 @@ function applyImport(result: ImportResult) {
   }
   if (result.image) void adoptImage(result.image);
   if (result.regex) regexSet.value = result.regex;
-  section.value = "basic";
+  goto("basic");
 }
 
 function download(blob: Blob, filename: string) {
@@ -1116,7 +1147,8 @@ async function exportCard(format: "png" | "json") {
         </p>
 
         <!-- 基础 -->
-        <section v-show="section === 'basic'" class="pane">
+        <section data-section="basic" class="pane">
+          <h2 class="pane__title">{{ $t("editor.section.basic") }}</h2>
           <ImportPanel v-if="isNew" :language="draft.language" :detail-max="limits.roleDetailDesc" @apply="applyImport" />
 
           <FieldText id="f-name" v-model="draft.roleName" :label="$t('editor.name')" required :max="60"
@@ -1153,7 +1185,8 @@ async function exportCard(format: "png" | "json") {
         </section>
 
         <!-- 人设 -->
-        <section v-show="section === 'persona'" class="pane">
+        <section data-section="persona" class="pane">
+          <h2 class="pane__title">{{ $t("editor.section.persona") }}</h2>
           <FieldText id="f-detail" v-model="draft.roleDetailDesc" :label="$t('editor.detail')" required :rows="16"
                      :max="limits.roleDetailDesc" :hint="$t('editor.detail.hint')" />
           <FieldText id="f-contract" v-model="draft.roleOutputContract" :label="$t('editor.contract')" :rows="6"
@@ -1163,7 +1196,8 @@ async function exportCard(format: "png" | "json") {
         </section>
 
         <!-- 对话 -->
-        <section v-show="section === 'dialogue'" class="pane">
+        <section data-section="dialogue" class="pane">
+          <h2 class="pane__title">{{ $t("editor.section.dialogue") }}</h2>
           <!-- 正則規則放這一頁最上面（對齊魅魔島）：AI 回覆在玩家瀏覽器裡先過一遍「找到→換成」再顯示 -->
           <div class="rxbar">
             <p class="rxbar__hint">{{ $t("regex.bar.hint") }}</p>
@@ -1226,7 +1260,8 @@ async function exportCard(format: "png" | "json") {
         </section>
 
         <!-- 形象 -->
-        <section v-show="section === 'media'" class="pane">
+        <section data-section="media" class="pane">
+          <h2 class="pane__title">{{ $t("editor.section.media") }}</h2>
           <p class="muted">{{ $t("editor.media.lede") }}</p>
           <ImageField v-model="draft.roleAvatar" :label="$t('editor.avatar')" :hint="$t('editor.avatar.hint')"
                       :pick-label="$t('editor.image.pick')" :clear-label="$t('editor.image.clear')"
@@ -1239,7 +1274,8 @@ async function exportCard(format: "png" | "json") {
         </section>
 
         <!-- 世界书 -->
-        <section v-show="section === 'worldbook'" class="pane">
+        <section data-section="worldbook" class="pane">
+          <h2 class="pane__title">{{ $t("editor.section.worldbook") }}</h2>
           <p class="muted">{{ $t("wb.lede") }}</p>
           <WorldbookEditor v-model="worldbookEntries" v-model:book-name="worldbookName"
                            v-model:book-desc="worldbookDesc"
@@ -1251,7 +1287,8 @@ async function exportCard(format: "png" | "json") {
 
         <!-- 发布 -->
         <!-- 遊戲模式：把這張卡當 3D 遊戲玩的世界配置 -->
-        <section v-show="section === 'game'" class="pane">
+        <section data-section="game" class="pane">
+          <h2 class="pane__title">{{ $t("editor.section.game") }}</h2>
           <p class="muted">{{ $t("editor.game.lede") }}</p>
           <p v-if="gameProtocolMissing" class="notice">{{ $t("editor.game.protocol") }}</p>
           <label class="game-toggle">
@@ -1279,7 +1316,8 @@ async function exportCard(format: "png" | "json") {
           </ul>
         </section>
 
-        <section v-show="section === 'publish'" class="pane">
+        <section data-section="publish" class="pane">
+          <h2 class="pane__title">{{ $t("editor.section.publish") }}</h2>
           <div class="panel checklist">
             <h2>{{ $t("editor.checklist") }}</h2>
             <ul>
@@ -1484,8 +1522,13 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .body > [role="alert"], .body > .restored { margin-bottom: var(--s-4); }
 .restored { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
 /* 欄位之間只留 pane 的 gap：.field 自己還有 24px 下邊距，兩個疊起來就是 48px 的空洞 */
-/* 換分區時淡入：v-show 從 display:none 回來會重新起一次動畫，不用另外觸發 */
-.pane { display: grid; gap: var(--s-4); animation: fade var(--dur) var(--ease) both; }
+/*
+   分區一整頁排下來：每區一個標題；錨點捲動要留出站台頁首與黏住的導覽列的高度，
+   不然標題會被導覽列蓋掉。區與區之間拉開一段，比欄位間距大，眼睛才分得出段落。
+*/
+.pane { display: grid; gap: var(--s-4); scroll-margin-top: calc(var(--header-h) + 62px); }
+.pane + .pane { margin-top: var(--s-7); }
+.pane__title { margin: 0; padding-bottom: var(--s-2); font-size: 17px; border-bottom: 1px solid var(--line); }
 .pane > .field, .pane :deep(.field) { margin-bottom: 0; }
 /*
  * 多行欄位跟著內容長高（原生 field-sizing，不用 JS 量高）：寫上千字的人設不該在一個小框裡捲。
