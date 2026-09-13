@@ -1419,21 +1419,27 @@ async function exportCard(format: "png" | "json") {
 </template>
 
 <style scoped>
-/* 這一頁比別頁寬一點：三欄要站得開。1200 是給榜單的，卡片網格在那個寬度剛好；編輯器多要 120px 給右欄。 */
+/*
+   這一頁比別頁寬得多。1200 是給榜單的，卡片網格在那個寬度剛好；編輯器是工作區，
+   表單與對話測試並排，2026-09 使用者回饋 2000px 的螢幕兩側各空三百多像素、表單只剩
+   688px。上限放到 1720：夠寬的螢幕表單能過千像素，超寬螢幕（3440）不至於把輸入框
+   拉成兩千多像素的一行。分區導覽改成頂部一列（跟手機一樣），不再佔一整欄。
+*/
 /*
    底部不留頁面留白：右欄是 sticky，它能走的距離是自己那格的高度減掉框高，
    而頁面能捲的距離還多算了這塊留白。多出來的那段一到底，框就被推到頁首背後。
    讓版面的底就是頁面的底，兩邊的行程才對得上；底下的呼吸由動作列自己的 padding 給。
 */
-.editor { max-width: 1320px; padding-bottom: 0; }
-/* 頁首只佔左中兩欄：右欄要從頁面最上緣開始，不然手機框整條被壓到標題底下 */
-.head { grid-column: 1 / 3; }
+.editor { max-width: 1720px; padding-bottom: 0; }
+/* 頁首只佔表單那一欄：右欄要從頁面最上緣開始，不然手機框整條被壓到標題底下 */
+.head { grid-column: 1; }
 h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .lede { margin: 0; max-width: 52ch; }
 .ghosts { grid-column: 1 / -1; display: grid; gap: var(--s-4); }
 
+/* 兩欄：表單（頁首、分區導覽、表單三列）＋右欄 */
 .layout {
-  display: grid; grid-template-columns: 176px minmax(0, 1fr) var(--rail-w, 240px);
+  display: grid; grid-template-columns: minmax(0, 1fr) var(--rail-w, 240px);
   gap: var(--s-5); align-items: start;
 }
 /*
@@ -1442,27 +1448,33 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 */
 .body { align-self: stretch; }
 
-/* ---- 左欄 ---------------------------------------------------------------- */
+/* ---- 分區導覽：頂部一列，捲動時黏在站台頁首底下 ---------------------------------- */
+/*
+   出血到頁面兩側（負邊距＝頁面的左右內距），黏住時底色才能整條蓋住捲過去的表單；
+   分區多到放不下就橫向捲，右緣淡出提示後面還有。
+*/
 .side {
-  position: sticky; top: calc(var(--header-h) + var(--s-4));
-  display: grid; gap: 2px;
+  grid-column: 1;
+  position: sticky; top: var(--header-h); z-index: 5;
+  display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none;
+  margin: 0 calc(var(--s-5) * -1); padding: var(--s-2) var(--s-5);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
 }
+.side::-webkit-scrollbar { display: none; }
 .side__item {
-  display: flex; align-items: center; gap: var(--s-2);
+  flex: none; display: flex; align-items: center; gap: var(--s-2);
   height: 34px; padding: 0 var(--s-3);
-  border: 0; border-radius: var(--r-sm);
+  border: 0; border-radius: var(--r-pill);
   background: transparent; color: var(--text-2);
   font-size: 14px; font-weight: 500; text-align: left; cursor: pointer;
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 .side__item:hover { background: var(--surface-2); color: var(--text); }
 .side__item--on { background: var(--surface); color: var(--text); box-shadow: 0 0 0 1px var(--line), var(--shadow-sm); }
-/* 選中那一格左邊一道強調色：跟主要按鈕同一個顏色，是「你在這裡」的唯一標記 */
-.side__item--on::before {
-  content: ""; width: 3px; height: 16px; margin-left: -6px; border-radius: 2px;
-  background: var(--accent);
-}
-.side__label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .side__n { font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .side__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--danger); flex: none; }
 .side__check { width: 14px; height: 14px; color: var(--success); flex: none; }
@@ -1547,7 +1559,7 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
    反推的，所以在這條欄上少放一行，框就同時長高又變寬。
 */
 .rail {
-  grid-column: 3; grid-row: 1 / span 2;
+  grid-column: 2; grid-row: 1 / span 3;
   position: sticky; top: calc(var(--header-h) + var(--s-4));
   height: calc(100vh - var(--header-h) - var(--s-5));
   display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--s-3);
@@ -1573,7 +1585,7 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 
 /* ---- 窄一點：右欄收掉，動作回到底部黏著的那條 ---------------------------------- */
 @media (max-width: 1100px) {
-  .layout { grid-template-columns: 160px minmax(0, 1fr); }
+  .layout { grid-template-columns: minmax(0, 1fr); }
   /*
      右欄在窄螢幕整條收起來，但對話測試與我的資源不能跟著消失——站上其他功能都適配
      手機，這兩個也要有（owner 2026-09-08）。改成鋪滿整個視窗的浮層：從底部那條
@@ -1592,28 +1604,19 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
   .bar__check { display: none; }
 }
 
-/* ---- 再窄：導覽變成頂部一排，一欄到底 -------------------------------------------- */
+/* ---- 再窄：手機 -------------------------------------------------------------- */
 @media (max-width: 760px) {
-  .layout { grid-template-columns: minmax(0, 1fr); gap: var(--s-4); }
-  .head { grid-column: 1 / -1; }
-  .side {
-    position: sticky; top: var(--header-h); z-index: 5;
-    display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none;
-    margin: 0 calc(var(--s-4) * -1); padding: var(--s-2) var(--s-4);
-    background: color-mix(in srgb, var(--bg) 88%, transparent);
-    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-    /* 右緣淡出：提示還有分區在後面，不然「發布」剛好被切在邊上像是沒了 */
-    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
-    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
-  }
-  .side::-webkit-scrollbar { display: none; }
-  .side__item { flex: none; height: var(--h-sm); border-radius: var(--r-pill); font-size: 13px; }
-  .side__item--on::before { display: none; }
+  .layout { gap: var(--s-4); }
+  .side__item { height: var(--h-sm); font-size: 13px; }
   /* 底部動作列一排收完：四顆鈕在手機上會折成兩行，蓋住表單尾端（.body 只留了一行的位置）。
      「回到我的卡片」與「尚未儲存」讓位——頭像選單有我的卡片、分區籤上有未存的紅點。 */
   .bar { flex-wrap: nowrap; gap: var(--s-2); }
   .bar > .btn { flex: 1 1 0; min-width: 0; padding-inline: var(--s-2); white-space: nowrap; }
   .bar > a.btn, .bar > .subtle { display: none; }
+}
+/* 640 以下頁面左右內距縮成 s-4（base.css），導覽的出血邊距跟著縮，不然兩邊各差 8px 露一條底 */
+@media (max-width: 640px) {
+  .side { margin: 0 calc(var(--s-4) * -1); padding: var(--s-2) var(--s-4); }
 }
 .panel--danger { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 40%, transparent); }
 </style>
