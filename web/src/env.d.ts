@@ -86,7 +86,7 @@ declare module "@/utils/display-rule-engine.js" {
 }
 
 interface ImportMetaEnv {
-  readonly VITE_LUNATALK_API_BASE?: string;
+  readonly VITE_PROVIDER_API_BASE?: string;
 }
 interface ImportMeta {
   readonly env: ImportMetaEnv;

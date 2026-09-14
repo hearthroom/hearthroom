@@ -111,7 +111,7 @@ npm run dev:web             # Vite，:8850，把 /v1 代理到 :8787
 
 ```bash
 node scripts/mock-upstream.mjs                                  # :8899
-VITE_LUNATALK_API_BASE=http://127.0.0.1:8899 npm run dev:web
+VITE_PROVIDER_API_BASE=http://127.0.0.1:8899 npm run dev:web
 ```
 
 再在浏览器控制台放一组 token：
@@ -128,7 +128,7 @@ localStorage.setItem("hearthroom.oauth.access", JSON.stringify({ accessToken: "t
 
 1. 建好资源，把 ID 填进 `wrangler.toml`：一个 **D1** 数据库（`DB`）、两个 **KV** 命名空间（`CACHE`、`ASSET_ARCHIVE`），可选一个 **Analytics Engine** 数据集（`EVENTS`；不用的话设 `ANALYTICS_ENABLED = "false"`）。
 2. 换成你的域名：`wrangler.toml` 的 `routes`、`src/site.ts` 的 `HOST`、`web/src/lib/site.ts` 的站名。自定义域名挂不上已有 DNS 记录的主机名，先把停放记录删掉。
-3. 配置提供方：`[vars]` 里的 `LUNATALK_API_BASE`（与区域备用 `LUNATALK_API_BASE_CN`）。变量名沿用第一家接入的提供方；站点把它当一般提供方看待。
+3. 配置提供方：`[vars]` 里的 `PROVIDER_API_BASE`。若某些国家连不上提供方的主域名，在 `PROVIDER_API_GATEWAYS` 列出各国的网关（`CC=网址,…`），`/v1/region` 会把对应的网址交给该国的浏览器。
 4. 可选审核机器人：`[vars]` 的 `REVIEW_BOT_ACCOUNT_NUM_ID` 加上 `wrangler secret put REVIEW_BOT_KEY`。两者缺一，提交就直接上榜、不经审核。审核人用 `node scripts/grant-reviewer.mjs <提供方账号 ID>` 授权。
 5. 部署：
 

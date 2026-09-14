@@ -111,7 +111,7 @@ npm run dev:web             # Vite、:8850、/v1 を :8787 にプロキシ
 
 ```bash
 node scripts/mock-upstream.mjs                                  # :8899
-VITE_LUNATALK_API_BASE=http://127.0.0.1:8899 npm run dev:web
+VITE_PROVIDER_API_BASE=http://127.0.0.1:8899 npm run dev:web
 ```
 
 続けてブラウザのコンソールでトークンを置きます：
@@ -128,7 +128,7 @@ localStorage.setItem("hearthroom.oauth.access", JSON.stringify({ accessToken: "t
 
 1. リソースを作成し、ID を `wrangler.toml` に記入：**D1** データベース（`DB`）、**KV** ネームスペース 2 つ（`CACHE`、`ASSET_ARCHIVE`）、任意で **Analytics Engine** データセット（`EVENTS`。使わない場合は `ANALYTICS_ENABLED = "false"`）。
 2. 自分のドメインに向ける：`wrangler.toml` の `routes`、`src/site.ts` の `HOST`、`web/src/lib/site.ts` のサイト名。カスタムドメインは既に DNS レコードがあるホスト名には付けられないので、パーキングレコードを先に削除します。
-3. プロバイダーの設定：`[vars]` の `LUNATALK_API_BASE`（と地域フォールバック `LUNATALK_API_BASE_CN`）。変数名は最初に接続したプロバイダーに由来しますが、サイトは汎用プロバイダーとして扱います。
+3. プロバイダーの設定：`[vars]` の `PROVIDER_API_BASE`。一部の国からプロバイダーのメインドメインに届かない場合は、`PROVIDER_API_GATEWAYS` に国別のゲートウェイ（`CC=URL,…`）を列挙します。`/v1/region` がその国のブラウザーに対応する URL を渡します。
 4. 任意の審査ボット：`[vars]` の `REVIEW_BOT_ACCOUNT_NUM_ID` と `wrangler secret put REVIEW_BOT_KEY`。両方がなければ申請は審査なしで即掲載になります。審査員は `node scripts/grant-reviewer.mjs <プロバイダーのアカウント ID>` で付与します。
 5. デプロイ：
 
