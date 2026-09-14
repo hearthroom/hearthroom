@@ -5,8 +5,8 @@
 <h1 align="center">Hearthroom</h1>
 
 <p align="center">
-An open tavern for AI character cards: a community board, a built-in chat to play them, and a way to distribute them.<br>
-  Rankings, search, author pages, a card editor, community review — on a single Cloudflare Worker.
+  Open platform for AI character cards: a community board, an in-browser chat to play them, and community-reviewed distribution.<br>
+  Runs as a single Cloudflare Worker.
 </p>
 
 <p align="center">
@@ -30,47 +30,47 @@ An open tavern for AI character cards: a community board, a built-in chat to pla
   <img src="docs/screenshots/board-dark.png" width="800" alt="Hearthroom board, dark mode">
 </p>
 
-## What is Hearthroom
+## Overview
 
-Hearthroom is an open platform for AI character cards. It is three things in one:
+Hearthroom is an open-source platform for AI character cards. It combines three parts:
 
-- **A board** — authors list their cards; readers find them through daily, weekly and monthly rankings, search, tags and author pages.
-- **A tavern** — every card can be played on the site. The chat stage (a separate open-source project, pulled in as the `stage/` submodule) renders the conversation, the card's status bars, panels and scripts, and runs card scripts in a sandbox.
-- **Distribution** — cards go through community review, then ship with their rules, lorebook and images to anyone who opens them; import from SillyTavern and other formats is built in.
+- **Board** — authors register cards; readers browse daily, weekly and monthly rankings, search by name, summary or tag, and view author pages.
+- **Chat** — every listed card can be played in the browser. The chat stage (a separate open-source project included as the `stage/` submodule) renders the conversation, the card's status bars and panels, and runs the card's scripts in a sandbox.
+- **Distribution** — cards are reviewed by the community before listing and are opened with their rules, lorebook and images. SillyTavern PNG/JSON cards can be imported.
 
-It is an open-source tavern, but not a SillyTavern clone: there is no local install and no API keys to manage. Cards and conversations live with a **card provider** — a chat service that exposes an open API for sign-in, card data and generation. Hearthroom owns the board, the review process, the search index and the play surface. Authors sign in through the provider, register a card by ID, and the site pulls the public fields from the provider on an hourly sync. Removing the site would not remove a single card.
+Hearthroom differs from SillyTavern in where things run. Nothing is installed locally and no API keys are configured by the user. Sign-in, card storage and text generation are handled by a **card provider**, a chat service with an open API. Hearthroom stores the registry (which cards are listed), the review state, the search index and site-level settings. Authors sign in through the provider and register a card by its ID; the site copies the card's public fields from the provider once an hour. Card content is never stored on the site.
 
-Listing goes through **community review**: reviewers claim submissions from a shared queue, two approvals are needed for a first review, one for a re-review, any rejection rejects, and the review page hides the author. An approval is tied to the card's content version; when the author changes the card, it leaves the board and queues again.
+Review works as follows: reviewers take submissions from a shared queue; a first review needs two approvals, a re-review needs one; a single rejection rejects; the review page does not show the author. An approval is bound to the card's content version. When the author edits the card, it is removed from the board and queued again.
 
 ## Features
 
-- **Board** — daily, weekly and monthly rankings, "hot" and "new" sorts, tag filters, author ranking, and language zones.
-- **Search** across names, summaries and tags.
-- **Author pages** with all of an author's listed cards.
-- **Card editor** — persona, openings, lorebook, regular-expression rules with a live test box, image fields, and a resizable chat test panel. Imports SillyTavern PNG/JSON cards.
-- **Two chat pages** — a sandboxed page that runs a card's styles and scripts in isolation (default), and a classic page for older cards. The author-facing contract is in the [card authoring guide](docs/guide/card-authoring.en.md).
-- **Community review** with blind, two-stamp approval and version-bound listings.
-- **Adult content gating** with an age gate and per-tag hiding.
-- **Installable** as a web app on desktop and mobile.
-- **Five languages** — Traditional Chinese, Simplified Chinese, English, Japanese, Korean.
+- Rankings by day, week and month; "top" and "newest" sorts; tag filters; author ranking; language zones.
+- Search over names, summaries and tags.
+- Author pages listing an author's cards.
+- Card editor: persona, openings, lorebook, regular-expression rules with a test box, image fields, and a resizable chat test panel. Imports SillyTavern PNG/JSON cards.
+- Two chat pages: a sandboxed page that isolates the card's styles and scripts (default), and a classic page for older cards. The author-facing contract is documented in the [card authoring guide](docs/guide/card-authoring.en.md).
+- Community review: blind, two approvals, version-bound listings.
+- Age gate and per-tag hiding for adult content.
+- Installable as a web app on desktop and mobile.
+- Five UI languages: Traditional Chinese, Simplified Chinese, English, Japanese, Korean.
 
 <p align="center">
   <img src="docs/screenshots/board-light.png" width="49%" alt="Board, light mode">
   <img src="docs/screenshots/guide.png" width="49%" alt="Card authoring guide">
 </p>
-<p align="center"><sub>Screenshots show demo cards.</sub></p>
+<p align="center"><sub>Screenshots use demo cards.</sub></p>
 
-## Using the site
+## Usage
 
-The public instance is at **[hearthroom.club](https://hearthroom.club)**.
+The public instance is at [hearthroom.club](https://hearthroom.club).
 
-1. **Browse** without an account: the board, search, card pages and author pages are public.
-2. **Sign in** with your card provider account from the *Sign in* button. Hearthroom never sees your password; the provider issues a token scoped to this site.
-3. **List a card** from *My cards*: your cards at the provider appear there; pick one and submit it for review, or create a new one in the editor. There is a weekly listing limit per author.
-4. **Write cards** with the [card authoring guide](https://hearthroom.club/guide): fields, rules, the sandbox author API, and importing from other platforms.
-5. **Integrate** with the [developer documentation](https://hearthroom.club/developers) and the [OpenAPI description](docs/openapi.json).
+1. The board, search, card pages and author pages are public.
+2. **Sign in** with a card provider account. The provider issues a token scoped to this site; the site does not receive the password.
+3. **My cards** lists the account's cards at the provider. Select one and submit it for review, or create a new card in the editor. Each author has a weekly listing limit.
+4. The [card authoring guide](https://hearthroom.club/guide) covers fields, rules, the sandbox author API and importing from other platforms.
+5. The [developer documentation](https://hearthroom.club/developers) and the [OpenAPI description](docs/openapi.json) cover the HTTP API.
 
-## How it works
+## Architecture
 
 ```
 src/          Cloudflare Worker (Hono): community API, review, hourly sync, share previews
@@ -78,64 +78,62 @@ web/          Vue 3 + Vite single-page app, five locales
 migrations/   D1 schema
 stage/        Chat stage (git submodule, pinned): the conversation UI used by /play
 docs/         Developer docs, OpenAPI description, card authoring guide, architecture notes
-scripts/      Deploy preflight, asset archive, reviewer grants, mock upstream for local dev
+scripts/      Deploy preflight, asset archive, reviewer grants, mock provider for local development
 ```
 
-The API and the front end run on **one Worker**: `/v1/*` is handled by Hono, everything else falls through to the built SPA. Storage is **D1** (registrations, members, review), **KV** (response cache and an archive of previous asset builds so stale tabs keep working after a deploy), and optionally **Analytics Engine** for usage events. A cron trigger syncs card names, covers and popularity signals from the provider every hour.
+The API and the web app are served by one Worker: `/v1/*` is handled by Hono, other paths fall through to the built SPA. Storage: D1 for registrations, members and review; KV for the response cache and for previous asset builds, so tabs opened before a deploy can still load their chunks; Analytics Engine (optional) for usage events. A cron trigger syncs card names, covers and popularity counters from the provider every hour.
 
-The chat stage is a separate open-source project pulled in as the `stage/` submodule and built into the SPA at build time. Changes to it go upstream; this repository only moves the pinned commit.
+The chat stage is built into the SPA at build time. Changes to the stage go to its own repository; this repository only updates the pinned commit.
 
-Design decisions and the reasoning behind them are collected in [docs/architecture.zh-Hant.md](docs/architecture.zh-Hant.md) (Traditional Chinese).
+Design notes and the reasoning behind individual decisions are in [docs/architecture.zh-Hant.md](docs/architecture.zh-Hant.md) (Traditional Chinese).
 
 ## Development
 
-Requirements: Node 22 and npm. The front-end tests fail on Node 26 because of its built-in `localStorage` global.
+Node 22 and npm are required. The web tests do not run on Node 26 because of its built-in `localStorage` global.
 
 ```bash
 git clone --recurse-submodules https://github.com/hearthroom/hearthroom.git
 cd hearthroom
-npm install                 # workspaces: Worker and web in one go
-npm run migrate:local       # apply D1 migrations to the local database
-npm run build:stage         # build the chat stage once (needed by the web build and tests)
+npm install                 # installs the Worker and the web workspace
+npm run migrate:local       # applies D1 migrations to the local database
+npm run build:stage         # builds the chat stage; required by the web build and tests
 npm run dev                 # Worker on :8787
 npm run dev:web             # Vite on :8850, proxies /v1 to :8787
 ```
 
-Useful commands:
-
-| Command | What it does |
+| Command | Description |
 |---|---|
-| `npm test` | Worker tests (Vitest with the Workers pool) and web tests |
-| `npm run typecheck` | Generates Worker types, then type-checks both packages |
+| `npm test` | Worker tests (Vitest, Workers pool) and web tests |
+| `npm run typecheck` | Generates Worker types and type-checks both packages |
 | `npm run build` | Builds the stage and the web app into `web/dist` |
-| `npm run i18n -w web` | Reports translation coverage per locale and flags untranslated strings in components |
-| `npm run sync:stage` | Pulls the stage's upstream `main`, runs its tests, rebuilds, and leaves the submodule pointer for you to commit |
+| `npm run i18n -w web` | Reports translation coverage per locale and lists untranslated strings in components |
+| `npm run sync:stage` | Pulls the stage's upstream `main`, runs its tests, rebuilds, and updates the submodule pointer (not committed) |
 
-### Working on the editor locally
+### Editor without a provider account
 
-The editor sits behind the provider's OAuth, which cannot complete against `localhost`. A mock provider keeps cards in memory and accepts any bearer token:
+The editor requires OAuth with the provider, which does not work against `localhost`. `scripts/mock-upstream.mjs` is an in-memory stand-in for the provider that accepts any bearer token:
 
 ```bash
 node scripts/mock-upstream.mjs                                  # :8899
 VITE_PROVIDER_API_BASE=http://127.0.0.1:8899 npm run dev:web
 ```
 
-Then, in the browser console, plant a token:
+Set a token in the browser console:
 
 ```js
 localStorage.setItem("hearthroom.oauth.access", JSON.stringify({ accessToken: "tok", expiresAt: Date.now() + 3600e3 }));
 ```
 
-`/__log` on the mock shows the requests it received; files placed in `scripts/fixtures/` (git-ignored) are served at `/fixtures/<name>` for testing imports.
+`/__log` on the mock lists received requests. Files under `scripts/fixtures/` (ignored by git) are served at `/fixtures/<name>` for import tests.
 
 ## Self-hosting
 
-Everything runs on a Cloudflare account; the free tier is enough for a small community.
+The site runs on a single Cloudflare account. The free tier is sufficient for a small community.
 
-1. Create the resources and put their IDs in `wrangler.toml`: a **D1** database (`DB`), two **KV** namespaces (`CACHE`, `ASSET_ARCHIVE`), and optionally an **Analytics Engine** dataset (`EVENTS`; set `ANALYTICS_ENABLED = "false"` to skip it).
-2. Point the site at your domain: `routes` in `wrangler.toml`, `HOST` in `src/site.ts`, and the site name in `web/src/lib/site.ts`. Custom domains cannot be attached to a hostname that already has a DNS record; delete the parking record first.
-3. Configure the provider: `PROVIDER_API_BASE` in `[vars]`. If some countries cannot reach the provider's main domain, list per-country gateways in `PROVIDER_API_GATEWAYS` (`CC=url,…`); `/v1/region` hands the matching one to browsers from that country.
-4. Optional review bot: `REVIEW_BOT_ACCOUNT_NUM_ID` in `[vars]` and `wrangler secret put REVIEW_BOT_KEY`. Without both, submissions list immediately instead of going through review. Grant reviewers with `node scripts/grant-reviewer.mjs <provider account id>`.
+1. Create the resources and enter their IDs in `wrangler.toml`: a D1 database (`DB`), two KV namespaces (`CACHE`, `ASSET_ARCHIVE`) and, optionally, an Analytics Engine dataset (`EVENTS`; set `ANALYTICS_ENABLED = "false"` to disable).
+2. Set the domain: `routes` in `wrangler.toml`, `HOST` in `src/site.ts`, and the site name in `web/src/lib/site.ts`. A custom domain cannot be attached to a hostname that already has a DNS record; delete any parking record first.
+3. Set the provider: `PROVIDER_API_BASE` in `[vars]`. If the provider's main domain is unreachable from some countries, list per-country gateways in `PROVIDER_API_GATEWAYS` (`CC=url,…`); `/v1/region` returns the matching gateway to browsers from that country.
+4. Optionally configure the review bot: `REVIEW_BOT_ACCOUNT_NUM_ID` in `[vars]` and `wrangler secret put REVIEW_BOT_KEY`. Without both, submissions are listed without review. Reviewers are granted with `node scripts/grant-reviewer.mjs <provider account id>`.
 5. Deploy:
 
 ```bash
@@ -143,22 +141,20 @@ npm run migrate:remote
 npm run deploy              # runs preflight, typecheck, tests and the build first
 ```
 
-**Continuous deployment.** The included workflow (`.github/workflows/deploy.yml`) type-checks, builds and tests every push and pull request. On `main`, if the repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` are set, it applies migrations and deploys; otherwise it reports that deployment was skipped and stays green.
+The workflow in `.github/workflows/deploy.yml` type-checks, builds and tests every push and pull request. On `main`, if the repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` are set, it also applies migrations and deploys. If they are not set, the deploy step is skipped and the run still passes.
 
 ## Community
 
-Players, card authors and developers meet on **[Discord](https://discord.gg/FCEYZCFtR)**: playing cards, writing cards, and building the tavern and the site. Bug reports and feature requests are also welcome as [GitHub issues](https://github.com/hearthroom/hearthroom/issues).
+Discussion, card sharing and development coordination take place on [Discord](https://discord.gg/FCEYZCFtR). Bug reports and feature requests go to [GitHub issues](https://github.com/hearthroom/hearthroom/issues).
 
 ## Contributing
 
-Issues and pull requests are welcome.
-
-- **Bugs and ideas** — open an [issue](https://github.com/hearthroom/hearthroom/issues). For bugs, include the page, the browser, and what you expected to see.
-- **Pull requests** — CI runs typecheck, build and tests on every PR. Please keep a PR to one change, add or update tests next to the code it touches (`test/` for the Worker, `web/test/` for the front end), and run `npm test` before pushing.
-- **Translations** — UI strings live in `web/src/locales/<locale>.json`, one file per language. `npm run i18n -w web` shows what each locale is missing. New strings must be added to all five files; the test step fails if a component contains untranslated text. The authoring guide has one file per language under `docs/guide/`.
-- **Chat stage** — changes to the conversation UI belong in the stage project, not here.
-- **License** — contributions are accepted under the same AGPL-3.0 license as the project.
+- **Issues** — for bugs, include the page, the browser and the expected behaviour.
+- **Pull requests** — CI runs typecheck, build and tests on every PR. Keep a PR to one change, add or update tests next to the code (`test/` for the Worker, `web/test/` for the web app), and run `npm test` before pushing.
+- **Translations** — UI strings are in `web/src/locales/<locale>.json`, one file per language. `npm run i18n -w web` reports missing keys per locale. New strings must be added to all five files; the test step fails if a component contains untranslated text. The authoring guide has one file per language under `docs/guide/`.
+- **Chat stage** — changes to the conversation UI go to the stage repository, not here.
+- **License** — contributions are accepted under AGPL-3.0, the same license as the project.
 
 ## License
 
-[GNU Affero General Public License v3.0](LICENSE). If you run a modified version as a network service, you must offer its source to your users.
+[GNU Affero General Public License v3.0](LICENSE). Anyone who runs a modified version as a network service must make the modified source available to its users.

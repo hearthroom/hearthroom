@@ -5,8 +5,8 @@
 <h1 align="center">Hearthroom</h1>
 
 <p align="center">
-开放式的 AI 角色卡酒馆：社区榜单、内置的对话游玩，以及角色卡的分发。<br>
-  榜单、搜索、作者页、建卡编辑器与社区审核，全部运行在一个 Cloudflare Worker 上。
+  AI 角色卡的开放平台：社区榜单、浏览器内直接游玩的对话，以及经社区审核的分发。<br>
+  以单一 Cloudflare Worker 部署。
 </p>
 
 <p align="center">
@@ -30,29 +30,29 @@
   <img src="docs/screenshots/board-dark.png" width="800" alt="Hearthroom 榜单（深色）">
 </p>
 
-## Hearthroom 是什么
+## 概述
 
-Hearthroom 是一个开放式的 AI 角色卡平台，三件事合在一起：
+Hearthroom 是 AI 角色卡的开源平台，由三个部分组成：
 
-- **榜单**——作者把卡登记上来，读者通过日榜、周榜、月榜、搜索、标签与作者页找卡。
-- **酒馆**——每张卡都能直接在站上开玩。对话舞台（另一个开源项目，以 `stage/` 子模块挂进来）负责画出对话、卡片的状态栏、面板与脚本，卡片脚本在沙箱里运行。
-- **分发**——卡片经过社区审核后，连同规则、世界书与图片一起送到每个打开它的人手上；内置从 SillyTavern 等格式导入。
+- **榜单**——作者登记卡片；读者浏览日榜、周榜、月榜，按名称、简介或标签搜索，查看作者页。
+- **对话**——每张上榜的卡都能在浏览器里直接游玩。对话舞台（另一个开源项目，以 `stage/` 子模块纳入）负责绘制对话、卡片的状态栏与面板，并在沙箱中运行卡片的脚本。
+- **分发**——卡片上榜前经社区审核，打开时连同规则、世界书与图片一并加载。可导入 SillyTavern 的 PNG／JSON 角色卡。
 
-它是一个开源酒馆，但不是 SillyTavern 的翻版：不用在本地安装，也不用自己管 API 密钥。卡片与对话住在**卡片提供方**那边——一个提供开放 API 的聊天服务，登录、卡片内容与生成都在那里。Hearthroom 拥有的是榜单、审核流程、搜索索引与游玩的画面。作者通过提供方登录，用卡片 ID 登记，站点每小时从提供方同步公开字段。把这个站关掉，作者的卡一个字都不会少。
+Hearthroom 与 SillyTavern 的差别在于运行位置。用户不需要在本地安装任何东西，也不需要配置 API 密钥。登录、卡片存储与文本生成由**卡片提供方**负责，也就是一个提供开放 API 的聊天服务。Hearthroom 存储的是登记数据（哪些卡上榜）、审核状态、搜索索引与站点设置。作者通过提供方登录，以卡片 ID 登记；站点每小时从提供方复制一次卡片的公开字段。卡片内容不存储在站点。
 
-上榜要经过**社区审核**：审核人从共享队列领单，初审要两个人通过、复审一个人，任何一票驳回即驳回，审核页不显示作者。通过绑定卡片的内容版本；作者之后改了卡，就会离榜重新排队。
+审核流程：审核人从共享队列领取提交；初审需要两位通过，复审需要一位；任一驳回即驳回；审核页不显示作者。通过与卡片的内容版本绑定，作者修改卡片后会离榜并重新排队。
 
 ## 功能
 
-- **榜单**——日榜、周榜、月榜，最热与最新排序，标签筛选，作者榜，语区。
-- **搜索**名称、简介与标签。
-- **作者页**，列出该作者上榜的所有卡。
-- **建卡编辑器**——人设、开场白、世界书、带即时测试栏的正则表达式规则、图片字段、可拖动调宽的对话测试面板。可导入 SillyTavern 的 PNG／JSON 角色卡。
-- **两种聊天页**——把卡片的样式与脚本隔离运行的沙箱页（默认），以及给旧卡的传统页。面向作者的约定见[写卡指南](docs/guide/card-authoring.zh-Hans.md)。
-- **社区审核**——盲审、双章、过审绑定内容版本。
-- **成人内容分级**——年龄确认与按标签隐藏。
-- **可安装**为桌面与手机上的 Web App。
-- **五种语言**——繁体中文、简体中文、英文、日文、韩文。
+- 日榜、周榜、月榜；最热与最新排序；标签筛选；作者榜；语区。
+- 按名称、简介与标签搜索。
+- 作者页，列出该作者的卡片。
+- 建卡编辑器：人设、开场白、世界书、带测试栏的正则表达式规则、图片字段、可调宽的对话测试面板。可导入 SillyTavern 的 PNG／JSON 角色卡。
+- 两种聊天页：隔离卡片样式与脚本的沙箱页（默认），以及供旧卡使用的传统页。面向作者的规范见[写卡指南](docs/guide/card-authoring.zh-Hans.md)。
+- 社区审核：盲审、两位通过、与内容版本绑定。
+- 成人内容的年龄确认与按标签隐藏。
+- 可安装为桌面与手机上的 Web App。
+- 五种界面语言：繁体中文、简体中文、英文、日文、韩文。
 
 <p align="center">
   <img src="docs/screenshots/board-light.png" width="49%" alt="榜单（浅色）">
@@ -62,103 +62,99 @@ Hearthroom 是一个开放式的 AI 角色卡平台，三件事合在一起：
 
 ## 使用
 
-公开站点在 **[hearthroom.club](https://hearthroom.club)**。
+公开站点：[hearthroom.club](https://hearthroom.club)。
 
-1. **浏览**不用账号：榜单、搜索、卡片页、作者页都是公开的。
-2. **登录**：点“登录”，用你在卡片提供方的账号授权。Hearthroom 不会看到你的密码，提供方签发的是只对本站有效的 token。
-3. **登记卡片**：到“我的卡片”，你在提供方那边的卡会列在这里，挑一张送审，或在编辑器新建一张。每位作者每周有登记上限。
-4. **写卡**看[写卡指南](https://hearthroom.club/guide)：字段、规则、沙箱作者 API、从其他平台导入。
-5. **对接**看[开发者文档](https://hearthroom.club/developers)与 [OpenAPI 描述](docs/openapi.json)。
+1. 榜单、搜索、卡片页与作者页为公开内容。
+2. 以卡片提供方的账号**登录**。提供方签发仅对本站有效的 token，本站不会收到密码。
+3. **我的卡片**列出该账号在提供方的卡片。选择一张送审，或在编辑器创建新卡。每位作者每周有登记上限。
+4. [写卡指南](https://hearthroom.club/guide)说明字段、规则、沙箱作者 API 与从其他平台导入。
+5. [开发者文档](https://hearthroom.club/developers)与 [OpenAPI 描述](docs/openapi.json)说明 HTTP API。
 
-## 运行方式
+## 架构
 
 ```
 src/          Cloudflare Worker（Hono）：社区 API、审核、每小时同步、分享预览
 web/          Vue 3 + Vite 单页应用，五种语言
 migrations/   D1 schema
-stage/        对话舞台（git 子模块，固定在一个 commit）：/play 用的对话界面
+stage/        对话舞台（git 子模块，固定在特定 commit）：/play 使用的对话界面
 docs/         开发者文档、OpenAPI 描述、写卡指南、架构笔记
-scripts/      部署前检查、资源归档、审核人授权、本地开发用的模拟上游
+scripts/      部署前检查、资源归档、审核人授权、本地开发用的模拟提供方
 ```
 
-API 与前端运行在**同一个 Worker** 上：`/v1/*` 由 Hono 处理，其余落到打包好的 SPA。存储用 **D1**（登记、成员、审核）、**KV**（响应缓存，以及前几版资源的归档，让部署后还开着的旧标签页不会坏），可选 **Analytics Engine** 记录使用事件。定时任务每小时从提供方同步卡片名称、封面与热度信号。
+API 与前端由同一个 Worker 提供：`/v1/*` 由 Hono 处理，其余路径交给打包后的 SPA。存储：D1 存登记、成员与审核；KV 存响应缓存与前几版的静态资源，让部署前打开的标签页仍能加载自己那一版的文件；Analytics Engine（可选）存使用事件。定时任务每小时从提供方同步卡片名称、封面与热度计数。
 
-对话舞台是另一个开源项目，以 `stage/` 子模块挂进来，构建时打进 SPA。它的改动一律往上游提，本仓库只移动固定的 commit。
+对话舞台在构建时打包进 SPA。舞台的修改提交到它自己的仓库，本仓库只更新固定的 commit。
 
-设计决策与背后的取舍收在 [docs/architecture.zh-Hant.md](docs/architecture.zh-Hant.md)（繁体中文）。
+各项设计决策与理由记录在 [docs/architecture.zh-Hant.md](docs/architecture.zh-Hant.md)（繁体中文）。
 
 ## 开发
 
-需要 Node 22 与 npm。前端测试在 Node 26 会因为内置的 `localStorage` 全局而失败。
+需要 Node 22 与 npm。前端测试无法在 Node 26 运行，因为它内置了 `localStorage` 全局对象。
 
 ```bash
 git clone --recurse-submodules https://github.com/hearthroom/hearthroom.git
 cd hearthroom
-npm install                 # workspaces，一次装完 Worker 与前端
-npm run migrate:local       # 把 D1 迁移应用到本地数据库
-npm run build:stage         # 构建一次对话舞台（前端构建与测试都需要）
+npm install                 # 安装 Worker 与前端 workspace
+npm run migrate:local       # 对本地数据库应用 D1 迁移
+npm run build:stage         # 构建对话舞台；前端构建与测试需要
 npm run dev                 # Worker，:8787
-npm run dev:web             # Vite，:8850，把 /v1 代理到 :8787
+npm run dev:web             # Vite，:8850，/v1 代理到 :8787
 ```
 
-常用命令：
-
-| 命令 | 做什么 |
+| 命令 | 说明 |
 |---|---|
 | `npm test` | Worker 测试（Vitest，Workers pool）与前端测试 |
-| `npm run typecheck` | 生成 Worker 类型，然后两边类型检查 |
-| `npm run build` | 构建舞台与前端，输出到 `web/dist` |
-| `npm run i18n -w web` | 报告每个语言的翻译覆盖率，并找出组件里没抽出来的字符串 |
-| `npm run sync:stage` | 拉舞台上游的 `main`、跑它的测试、重新构建，子模块指针留给你提交 |
+| `npm run typecheck` | 生成 Worker 类型并对两个包做类型检查 |
+| `npm run build` | 构建舞台与前端，输出至 `web/dist` |
+| `npm run i18n -w web` | 报告各语言的翻译覆盖率，列出组件中未翻译的字符串 |
+| `npm run sync:stage` | 拉取舞台上游的 `main`、运行其测试、重新构建，并更新子模块指针（不提交） |
 
-### 在本地改编辑器
+### 没有提供方账号时开发编辑器
 
-编辑器在提供方的 OAuth 后面，对着 `localhost` 走不完。用模拟提供方顶上：卡片存在内存，任何 bearer token 都算登录。
+编辑器需要与提供方完成 OAuth，在 `localhost` 上无法完成。`scripts/mock-upstream.mjs` 是提供方的内存替身，接受任何 bearer token：
 
 ```bash
 node scripts/mock-upstream.mjs                                  # :8899
 VITE_PROVIDER_API_BASE=http://127.0.0.1:8899 npm run dev:web
 ```
 
-再在浏览器控制台放一组 token：
+在浏览器控制台设置 token：
 
 ```js
 localStorage.setItem("hearthroom.oauth.access", JSON.stringify({ accessToken: "tok", expiresAt: Date.now() + 3600e3 }));
 ```
 
-模拟提供方的 `/__log` 显示它收到的请求；放在 `scripts/fixtures/`（不入库）的文件会由 `/fixtures/<文件名>` 提供，用来测导入。
+替身的 `/__log` 列出收到的请求。`scripts/fixtures/` 下的文件（git 忽略）会由 `/fixtures/<文件名>` 提供，用于测试导入。
 
 ## 自建
 
-全部运行在一个 Cloudflare 账号上，小型社区用免费方案就够。
+站点在单一 Cloudflare 账号上运行，小型社区使用免费方案即可。
 
-1. 建好资源，把 ID 填进 `wrangler.toml`：一个 **D1** 数据库（`DB`）、两个 **KV** 命名空间（`CACHE`、`ASSET_ARCHIVE`），可选一个 **Analytics Engine** 数据集（`EVENTS`；不用的话设 `ANALYTICS_ENABLED = "false"`）。
-2. 换成你的域名：`wrangler.toml` 的 `routes`、`src/site.ts` 的 `HOST`、`web/src/lib/site.ts` 的站名。自定义域名挂不上已有 DNS 记录的主机名，先把停放记录删掉。
-3. 配置提供方：`[vars]` 里的 `PROVIDER_API_BASE`。若某些国家连不上提供方的主域名，在 `PROVIDER_API_GATEWAYS` 列出各国的网关（`CC=网址,…`），`/v1/region` 会把对应的网址交给该国的浏览器。
-4. 可选审核机器人：`[vars]` 的 `REVIEW_BOT_ACCOUNT_NUM_ID` 加上 `wrangler secret put REVIEW_BOT_KEY`。两者缺一，提交就直接上榜、不经审核。审核人用 `node scripts/grant-reviewer.mjs <提供方账号 ID>` 授权。
+1. 创建资源并将 ID 填入 `wrangler.toml`：一个 D1 数据库（`DB`）、两个 KV 命名空间（`CACHE`、`ASSET_ARCHIVE`），以及可选的 Analytics Engine 数据集（`EVENTS`；设置 `ANALYTICS_ENABLED = "false"` 可停用）。
+2. 设置域名：`wrangler.toml` 的 `routes`、`src/site.ts` 的 `HOST`、`web/src/lib/site.ts` 的站名。已有 DNS 记录的主机名无法绑定自定义域名，须先删除停放记录。
+3. 设置提供方：`[vars]` 中的 `PROVIDER_API_BASE`。若部分国家无法连上提供方的主域名，在 `PROVIDER_API_GATEWAYS` 列出各国网关（`CC=网址,…`）；`/v1/region` 会把对应的网关返回给该国的浏览器。
+4. 可选的审核机器人：`[vars]` 中的 `REVIEW_BOT_ACCOUNT_NUM_ID` 与 `wrangler secret put REVIEW_BOT_KEY`。两者未齐备时，提交不经审核直接上榜。以 `node scripts/grant-reviewer.mjs <提供方账号 ID>` 授权审核人。
 5. 部署：
 
 ```bash
 npm run migrate:remote
-npm run deploy              # 会先跑部署前检查、类型检查、测试与构建
+npm run deploy              # 先运行部署前检查、类型检查、测试与构建
 ```
 
-**持续部署。** 附带的工作流（`.github/workflows/deploy.yml`）对每次 push 与 PR 做类型检查、构建与测试。在 `main` 上，若仓库 secrets `CLOUDFLARE_API_TOKEN` 与 `CLOUDFLARE_ACCOUNT_ID` 已设置，就应用迁移并部署；没设置则标注跳过部署，CI 仍是绿的。
+`.github/workflows/deploy.yml` 对每次 push 与 PR 运行类型检查、构建与测试。在 `main` 上，若仓库 secrets `CLOUDFLARE_API_TOKEN` 与 `CLOUDFLARE_ACCOUNT_ID` 已设置，会接着应用迁移并部署；未设置时跳过部署步骤，运行结果仍为通过。
 
 ## 社区
 
-玩家、写卡的作者与开发者都在 **[Discord](https://discord.gg/FCEYZCFtR)**：一起玩卡、写卡、做酒馆与站点。错误报告与功能建议也欢迎开 [GitHub issue](https://github.com/hearthroom/hearthroom/issues)。
+讨论、分享卡片与协调开发在 [Discord](https://discord.gg/FCEYZCFtR) 进行。错误报告与功能建议请开 [GitHub issue](https://github.com/hearthroom/hearthroom/issues)。
 
 ## 贡献
 
-欢迎提 issue 与 PR。
-
-- **问题与想法**——开一个 [issue](https://github.com/hearthroom/hearthroom/issues)。报告错误请附页面、浏览器与你预期看到的结果。
-- **Pull request**——每个 PR 都会跑类型检查、构建与测试。一个 PR 只做一件事，测试放在改到的代码旁边（Worker 在 `test/`，前端在 `web/test/`），推之前跑一次 `npm test`。
-- **翻译**——界面文案在 `web/src/locales/<语言>.json`，一个语言一个文件。`npm run i18n -w web` 列出每个语言缺什么。新增字符串要五个文件都补；组件里留有没翻的文字会让测试步骤失败。写卡指南在 `docs/guide/` 下每个语言一份。
-- **对话舞台**——对话界面的改动属于舞台项目，不在这里。
+- **Issue**——报告错误时附上页面、浏览器与预期行为。
+- **Pull request**——CI 对每个 PR 运行类型检查、构建与测试。一个 PR 只做一项修改，测试放在对应代码旁（Worker 在 `test/`，前端在 `web/test/`），推送前运行 `npm test`。
+- **翻译**——界面字符串在 `web/src/locales/<语言>.json`，每种语言一个文件。`npm run i18n -w web` 报告各语言缺少的 key。新增字符串须同时加入五个文件；组件中若有未翻译的文字，测试步骤会失败。写卡指南在 `docs/guide/` 下每种语言一份。
+- **对话舞台**——对话界面的修改提交到舞台的仓库，不在本仓库。
 - **许可**——贡献以与项目相同的 AGPL-3.0 许可接受。
 
 ## 许可
 
-[GNU Affero General Public License v3.0](LICENSE)。若你把修改过的版本作为网络服务提供，必须向用户提供源代码。
+[GNU Affero General Public License v3.0](LICENSE)。以修改后的版本提供网络服务者，须向其用户提供修改后的源代码。
