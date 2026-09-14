@@ -943,5 +943,11 @@
   "editor.chatPage.classic": "従来",
   "editor.chatPage.hint": "サンドボックスはカードの画面とスクリプトを隔離して実行します。通常のカードはそのまま表示されます。古いカードがサンドボックスでおかしいときだけ従来に戻してください。",
   "editor.chatPage.doc": "カード作成ガイド",
-  "editor.panel.resize": "ドラッグして幅を調整"
+  "editor.panel.resize": "ドラッグして幅を調整",
+  "pwa.install.title": "Hearthroom をホーム画面に追加",
+  "pwa.install.body": "アプリのようにホーム画面から全画面で開けます。",
+  "pwa.install.cta": "インストール",
+  "pwa.install.later": "あとで",
+  "pwa.install.ios": "Safari の「共有」をタップし、「ホーム画面に追加」を選んでください。",
+  "pwa.install.ok": "わかった"
 }
