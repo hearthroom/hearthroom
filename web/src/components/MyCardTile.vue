@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { FEATURES } from "@/lib/provider";
 import { computed, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 import { compact, hueFrom } from "@/lib/format";
@@ -43,7 +44,7 @@ const hasArt = computed(() => !!props.card.avatarUrl && !broken.value);
       <!-- 工作區的操作不能藏在 hover 底下：觸控裝置根本碰不到 -->
       <div class="card__actions">
         <!-- 自己的卡不用登記也能玩：登記是上榜，不是能不能對話的門檻 -->
-        <RouterLink class="btn btn--sm" :to="lp(`/play/${card.roleId}`)">{{ $t("mine.action.play") }}</RouterLink>
+        <RouterLink v-if="FEATURES.chatTest" class="btn btn--sm" :to="lp(`/play/${card.roleId}`)">{{ $t("mine.action.play") }}</RouterLink>
         <RouterLink class="btn btn--sm" :to="lp(`/cards/${card.roleId}/edit`)">{{ $t("mine.action.edit") }}</RouterLink>
         <!-- 被駁回、離榜重審、被收回授權的卡：主鍵是「重新提交」，取消登記退到次要 -->
         <button

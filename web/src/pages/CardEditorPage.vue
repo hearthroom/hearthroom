@@ -40,6 +40,7 @@ import {
   type WorldbookMetadataPatch,
   type WorldbookSummary,
 } from "@/lib/api";
+import { FEATURES, HARBOR } from "@/lib/provider";
 import { emptyRuleSet, ruleSetFromAuthorAsset, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, validateRuleSet, type RegexRuleSet } from "@/lib/regex-rules";
 import RegexRulesEditor from "@/components/editor/RegexRulesEditor.vue";
 import ChatTestPanel from "@/components/editor/ChatTestPanel.vue";
@@ -179,8 +180,10 @@ function flash(message: string) {
   toastTimer = setTimeout(() => { toast.value = ""; }, 2600);
 }
 
-const SECTIONS = ["basic", "persona", "dialogue", "media", "worldbook", "publish"] as const;
-type Section = (typeof SECTIONS)[number];
+const ALL_SECTIONS = ["basic", "persona", "dialogue", "media", "worldbook", "publish"] as const;
+type Section = (typeof ALL_SECTIONS)[number];
+/** 供應商沒有的分區不出現在導覽裡（Harbor 目前沒有世界書）。 */
+const SECTIONS = ALL_SECTIONS.filter((key) => key !== "worldbook" || FEATURES.worldbook);
 const section = ref<Section>("basic");
 const body = ref<HTMLElement | null>(null);
 
@@ -421,7 +424,7 @@ onMounted(async () => {
     draft.value = draftFromRoleDetail(raw, locale.value);
     tagsText.value = formatTags(draft.value.roleTag);
     original.value = cloneDraft(draft.value);
-    if (token) {
+    if (token && !HARBOR) {
       await loadWorldbook(token);
       await loadRegexRules(token);
     }
@@ -851,8 +854,10 @@ async function save() {
       );
     }
 
-    await saveWorldbook(token, targetRoleId);
-    await saveRegex(token, targetRoleId);
+    if (!HARBOR) {
+      await saveWorldbook(token, targetRoleId);
+      await saveRegex(token, targetRoleId);
+    }
 
     original.value = cloneDraft(draft.value);
     saved.value = true;
@@ -925,6 +930,9 @@ async function remove() {
 
 // ── 送審 ──────────────────────────────────────────────────────────
 
+/** Harbor 模式送審時由作者宣告是否為成人內容；平台審核人對照內容決定採不採信。 */
+const publishMature = ref(false);
+
 async function publish() {
   if (!canPublish.value) return;
   if (!(await confirmDialog({ message: t("editor.publish.confirm"), confirmText: t("editor.publish.submit") }))) return;
@@ -934,7 +942,7 @@ async function publish() {
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
     // 上游要求確認摘要至少 8 個字：那是給審核方看的一句話，不是一個旗標。
-    await submitRoleForReview(roleId.value, t("editor.publish.summary", { name: draft.value.roleName }), token);
+    await submitRoleForReview(roleId.value, t("editor.publish.summary", { name: draft.value.roleName }), token, publishMature.value);
     saved.value = true;
     await router.push({ path: lp("/mine"), query: { fresh: "1" } });
   } catch (err) {
@@ -1094,7 +1102,7 @@ async function exportCard(format: "png" | "json") {
           <FieldText id="f-desc" v-model="draft.roleDesc" :label="$t('editor.summary')" :rows="3"
                      :max="limits.roleDesc" :hint="$t('edit.summary.hint')" />
 
-          <div class="field">
+          <div v-if="FEATURES.tags" class="field">
             <label for="f-tags">{{ $t("edit.tags") }}</label>
             <input id="f-tags" v-model="tagsText" class="input" :placeholder="$t('edit.tags.placeholder')" />
             <span class="field__foot">
@@ -1118,9 +1126,9 @@ async function exportCard(format: "png" | "json") {
           <h2 class="pane__title">{{ $t("editor.section.persona") }}</h2>
           <FieldText id="f-detail" v-model="draft.roleDetailDesc" :label="$t('editor.detail')" required :rows="16"
                      :max="limits.roleDetailDesc" :hint="$t('editor.detail.hint')" />
-          <FieldText id="f-contract" v-model="draft.roleOutputContract" :label="$t('editor.contract')" :rows="6"
+          <FieldText v-if="FEATURES.outputContract" id="f-contract" v-model="draft.roleOutputContract" :label="$t('editor.contract')" :rows="6"
                      :max="limits.roleOutputContract" :hint="$t('editor.contract.hint')" />
-          <FieldText id="f-jb" v-model="draft.jailbreak" :label="$t('editor.jailbreak')" :rows="6"
+          <FieldText v-if="FEATURES.outputContract" id="f-jb" v-model="draft.jailbreak" :label="$t('editor.jailbreak')" :rows="6"
                      :max="limits.jailbreak" :hint="$t('editor.jailbreak.hint')" />
         </section>
 
@@ -1128,7 +1136,7 @@ async function exportCard(format: "png" | "json") {
         <section data-section="dialogue" class="pane">
           <h2 class="pane__title">{{ $t("editor.section.dialogue") }}</h2>
           <!-- 正則規則放這一頁最上面（對齊魅魔島）：AI 回覆在玩家瀏覽器裡先過一遍「找到→換成」再顯示 -->
-          <div class="rxbar">
+          <div v-if="FEATURES.regex" class="rxbar">
             <p class="rxbar__hint">{{ $t("regex.bar.hint") }}</p>
             <div class="rxbar__acts">
               <button type="button" class="btn btn--sm btn--primary" @click="regexOpen = true">
@@ -1144,15 +1152,15 @@ async function exportCard(format: "png" | "json") {
           <FieldText id="f-welcome" v-model="draft.roleWelcome" :label="$t('editor.welcome')" required :rows="8"
                      :max="limits.roleWelcome" :hint="$t('editor.welcome.hint')" />
 
-          <ListEditor v-model="draft.alternates" :label="$t('editor.alternates')" :hint="$t('editor.alternates.hint')"
+          <ListEditor v-if="FEATURES.welcomeExtras" v-model="draft.alternates" :label="$t('editor.alternates')" :hint="$t('editor.alternates.hint')"
                       :rows="4" :add-label="$t('editor.alternates.add')" :remove-label="$t('list.remove')"
                       :up-label="$t('list.up')" :down-label="$t('list.down')" />
 
-          <ListEditor v-model="draft.prologue" :label="$t('editor.prologue')" :hint="$t('editor.prologue.hint')"
+          <ListEditor v-if="FEATURES.welcomeExtras" v-model="draft.prologue" :label="$t('editor.prologue')" :hint="$t('editor.prologue.hint')"
                       :add-label="$t('editor.prologue.add')" :remove-label="$t('list.remove')"
                       :up-label="$t('list.up')" :down-label="$t('list.down')" />
 
-          <div class="field">
+          <div v-if="FEATURES.welcomeExtras" class="field">
             <label>{{ $t("editor.talkExample") }}</label>
             <p class="subtle hint">{{ $t("editor.talkExample.hint") }}</p>
             <ul class="turns">
@@ -1194,16 +1202,16 @@ async function exportCard(format: "png" | "json") {
           <p class="muted">{{ $t("editor.media.lede") }}</p>
           <ImageField v-model="draft.roleAvatar" :label="$t('editor.avatar')" :hint="$t('editor.avatar.hint')"
                       :pick-label="$t('editor.image.pick')" :clear-label="$t('editor.image.clear')"
-                      :library-label="$t('editor.image.library')"
+                      :library-label="FEATURES.library ? $t('editor.image.library') : ''"
                       :uploading="$t('editor.image.uploading')" ratio="square" @pick="onPickImage" />
           <ImageField v-model="draft.roleBackground" :label="$t('editor.background')"
                       :hint="$t('editor.background.hint')" :pick-label="$t('editor.image.pick')"
-                      :clear-label="$t('editor.image.clear')" :library-label="$t('editor.image.library')"
+                      :clear-label="$t('editor.image.clear')" :library-label="FEATURES.library ? $t('editor.image.library') : ''"
                       :uploading="$t('editor.image.uploading')" ratio="wide" @pick="onPickImage" />
         </section>
 
         <!-- 世界书 -->
-        <section data-section="worldbook" class="pane">
+        <section v-if="FEATURES.worldbook" data-section="worldbook" class="pane">
           <h2 class="pane__title">{{ $t("editor.section.worldbook") }}</h2>
           <p class="muted">{{ $t("wb.lede") }}</p>
           <WorldbookEditor v-model="worldbookEntries" v-model:book-name="worldbookName"
@@ -1235,13 +1243,17 @@ async function exportCard(format: "png" | "json") {
             <h2>{{ $t("editor.publish") }}</h2>
             <p class="muted">{{ $t("editor.publish.hint") }}</p>
             <p v-if="dirty || isNew" class="subtle">{{ $t("editor.publish.saveFirst") }}</p>
+            <label v-if="HARBOR" class="publish-mature">
+              <input v-model="publishMature" type="checkbox" />
+              <span>{{ $t("editor.publish.mature") }}</span>
+            </label>
             <button type="button" class="btn btn--primary" :disabled="!canPublish || saving" @click="publish">
               {{ $t("editor.publish.submit") }}
             </button>
           </div>
 
           <!-- 刪卡：放在最後、跟其他動作隔開，紅色只用在這一顆 -->
-          <div v-if="!isNew" class="panel panel--danger">
+          <div v-if="!isNew && FEATURES.deleteRole" class="panel panel--danger">
             <h2>{{ $t("editor.delete") }}</h2>
             <p class="muted">{{ $t("editor.delete.hint") }}</p>
             <button type="button" class="btn btn--danger" :disabled="saving" @click="remove">
@@ -1272,8 +1284,10 @@ async function exportCard(format: "png" | "json") {
           <button v-if="!isNew" type="button" class="btn" :disabled="!canPublish || saving" @click="publish">
             {{ $t("editor.publish.submit") }}
           </button>
-          <button type="button" class="btn bar__panel" @click="openSheet('test')">{{ $t("editor.test.title") }}</button>
-          <button type="button" class="btn bar__panel" @click="openSheet('res')">{{ $t("editor.panel.resources") }}</button>
+          <template v-if="FEATURES.chatTest">
+            <button type="button" class="btn bar__panel" @click="openSheet('test')">{{ $t("editor.test.title") }}</button>
+            <button type="button" class="btn bar__panel" @click="openSheet('res')">{{ $t("editor.panel.resources") }}</button>
+          </template>
           <RouterLink class="btn btn--ghost" :class="{ 'is-off': saving }" :aria-disabled="saving || undefined"
                       :to="{ path: lp('/mine'), query: { fresh: '1' } }">
             {{ $t("edit.back") }}
@@ -1294,7 +1308,7 @@ async function exportCard(format: "png" | "json") {
       </form>
 
       <!-- 右：預覽與動作 -->
-      <aside class="rail" :class="{ 'rail--wide': panelOpen, 'rail--sheet': sheetOpen }">
+      <aside v-if="FEATURES.chatTest" class="rail" :class="{ 'rail--wide': panelOpen, 'rail--sheet': sheetOpen }">
         <!--
           先前這裡是一張卡片預覽。它既不是對話測試也不是發布，作者盯著它也判斷不了
           「這張卡聊起來對不對」（owner 2026-09-08）。換成真的用得上的兩件事：
@@ -1558,4 +1572,5 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
   .side { margin: 0 calc(var(--s-4) * -1); padding: var(--s-2) var(--s-4); }
 }
 .panel--danger { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 40%, transparent); }
+.publish-mature { display: flex; align-items: center; gap: 8px; margin: 8px 0 12px; }
 </style>

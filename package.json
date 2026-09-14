@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "dev:web": "npm run dev -w web",
+    "dev:web:harbor": "npm run dev -w web -- --mode harbor",
     "types": "wrangler types",
     "typecheck": "wrangler types && tsc --noEmit && npm run typecheck -w web",
     "test": "vitest run && npm run test -w web",

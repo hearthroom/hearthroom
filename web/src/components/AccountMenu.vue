@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { FEATURES } from "@/lib/provider";
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 import { hueFrom, whole } from "@/lib/format";
@@ -48,9 +49,9 @@ const PLAN_LABEL: Record<string, string> = { unlimited: "wallet.plan.unlimited",
       <RouterLink :to="lp('/me')" class="menu__item" role="menuitem">{{ $t("nav.me") }}</RouterLink>
       <RouterLink :to="lp('/mine')" class="menu__item" role="menuitem">{{ $t("nav.mine") }}</RouterLink>
       <RouterLink v-if="reviewerStore.reviewer" :to="lp('/review')" class="menu__item" role="menuitem">{{ $t("nav.review") }}</RouterLink>
-      <RouterLink :to="lp('/resources')" class="menu__item" role="menuitem">{{ $t("nav.resources") }}</RouterLink>
+      <RouterLink v-if="FEATURES.library" :to="lp('/resources')" class="menu__item" role="menuitem">{{ $t("nav.resources") }}</RouterLink>
       <RouterLink :to="lp('/wallet')" class="menu__item" role="menuitem">{{ $t("nav.wallet") }}</RouterLink>
-      <RouterLink :to="lp('/settings')" class="menu__item" role="menuitem">{{ $t("nav.settings") }}</RouterLink>
+      <RouterLink v-if="FEATURES.persona" :to="lp('/settings')" class="menu__item" role="menuitem">{{ $t("nav.settings") }}</RouterLink>
       <!-- 開發者文件（相容供應商協議）：頁尾有，但登入的作者從頭像選單也走得到 -->
       <RouterLink :to="lp('/developers')" class="menu__item" role="menuitem">{{ $t("footer.developers") }}</RouterLink>
       <div class="menu__rule" />

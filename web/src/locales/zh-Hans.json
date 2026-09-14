@@ -252,6 +252,7 @@
   "editor.publish.hint": "送出后会先经过审核，通过才会出现在别人面前。",
   "editor.publish.saveFirst": "有还没保存的修改，先存一次再送审。",
   "editor.publish.submit": "送出审核",
+  "editor.publish.mature": "这张卡含成人内容",
   "editor.publish.confirm": "送出之后这张卡会进入审核，通过就对所有人可见。要送吗？",
   "editor.publish.summary": "作者确认送审：{name}",
   "dialog.typeToConfirm": "输入“{text}”以确认",

@@ -1,0 +1,6 @@
+# 本機接 HarperHarbor Provider（server/provider 的 ./dev.sh，port 8890）。
+# 複製成 .dev.vars 後 `npm run dev`。沒有 REVIEW_BOT_KEY：提交走「登記即上榜」。
+# 這個檔也會被測試讀到，別在這裡關埋點（ANALYTICS_ENABLED），埋點測試會跟著失敗。
+LUNATALK_API_BASE=http://localhost:8890
+# 本機的 cf.country 可能是 CN，備用網域也指回本機，否則會被導去線上的 lunatalk。
+LUNATALK_API_BASE_CN=http://localhost:8890

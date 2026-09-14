@@ -252,6 +252,7 @@
   "editor.publish.hint": "まず審査を通ってから、ほかの人に見えるようになります。",
   "editor.publish.saveFirst": "未保存の変更があります。一度保存してから審査に出してください。",
   "editor.publish.submit": "審査に出す",
+  "editor.publish.mature": "このカードには成人向けの内容が含まれます",
   "editor.publish.confirm": "審査に進み、通れば全員に見えるようになります。出しますか？",
   "editor.publish.summary": "作者が審査に提出：{name}",
   "dialog.typeToConfirm": "「{text}」と入力して確認",

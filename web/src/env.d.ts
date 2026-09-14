@@ -87,6 +87,10 @@ declare module "@/utils/display-rule-engine.js" {
 
 interface ImportMetaEnv {
   readonly VITE_LUNATALK_API_BASE?: string;
+  /** "harbor"：改接 HarperHarbor Provider（見 src/lib/harbor.ts）。 */
+  readonly VITE_PROVIDER?: string;
+  /** Harbor 模式的充值頁（Provider 的控制台）。 */
+  readonly VITE_HARBOR_CONSOLE_URL?: string;
 }
 interface ImportMeta {
   readonly env: ImportMetaEnv;

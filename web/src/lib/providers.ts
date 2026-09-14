@@ -1,3 +1,5 @@
+import { HARBOR } from "./provider";
+
 /**
  * 供應商的顯示名稱。
  *
@@ -6,7 +8,8 @@
  * 名稱是專有名詞，各語言都一樣，不進翻譯檔。
  */
 /* i18n-ignore */
-export const PROVIDERS: { id: string; name: string }[] = [{ id: "lunatalk", name: "LunaTalk" }];
+// Harbor 模式沿用 lunatalk 這個代號：它是成員身分表裡的資料鍵，換代號等於換一批帳號；只換顯示名稱。
+export const PROVIDERS: { id: string; name: string }[] = [{ id: "lunatalk", name: HARBOR ? "HarperHarbor" : "LunaTalk" }];
 
 export function providerName(id: string): string {
   return PROVIDERS.find((p) => p.id === id)?.name ?? id;
