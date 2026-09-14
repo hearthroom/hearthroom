@@ -1,4 +1,5 @@
 import { DEFAULT_PROVIDER, type ProviderId } from "./providers";
+import { tagNamesFor } from "../shared/tag-catalog";
 import { type Env, HttpError } from "./types";
 import { upstream } from "./upstream";
 
@@ -106,14 +107,37 @@ export interface MemberProfile {
   showNsfw: boolean;
   /** 驗過年齡了（只記有沒有，不記生日） */
   ageVerified: boolean;
+  /** 不想看的類型（目錄鍵，排序去重）：榜單與搜尋不列這些類型的卡 */
+  hiddenTags: string[];
+}
+
+/** 成員存的隱藏名單讀出來：壞掉的 JSON 當空；目錄裡已經拿掉的鍵不算（別顯示「已隱藏 N 類」卻找不到那一類）。 */
+export function parseHiddenTags(raw: string | null | undefined): string[] {
+  try {
+    const list = JSON.parse(raw || "[]");
+    return Array.isArray(list) ? list.filter((k): k is string => typeof k === "string" && tagNamesFor(k) !== null) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 整理客戶端送來的隱藏名單：必須是字串陣列，每個鍵都要在目錄裡（不然 400 unknown_tag），去重排序。
+ * 只認鍵不認名字：名字跟語言走，鍵才是跨語言同一個籤。
+ */
+export function normalizeHiddenTags(input: unknown): string[] {
+  if (!Array.isArray(input) || input.some((k) => typeof k !== "string")) throw new HttpError(400, "hiddenTags_invalid");
+  const keys = [...new Set(input as string[])].sort();
+  if (keys.some((k) => tagNamesFor(k) === null)) throw new HttpError(400, "unknown_tag");
+  return keys;
 }
 
 /** 「我的」頁要的：公開 ID、加入時間、連結了哪些供應商帳號。沒有 token、沒有信箱。 */
 export async function memberProfile(db: D1Database, memberId: string): Promise<MemberProfile | null> {
   const m = await db
-    .prepare("SELECT handle, created_at, show_nsfw, age_verified_at FROM members WHERE id = ?")
+    .prepare("SELECT handle, created_at, show_nsfw, age_verified_at, hidden_tags FROM members WHERE id = ?")
     .bind(memberId)
-    .first<{ handle: string; created_at: number; show_nsfw: number; age_verified_at: number | null }>();
+    .first<{ handle: string; created_at: number; show_nsfw: number; age_verified_at: number | null; hidden_tags: string }>();
   if (!m) return null;
   const ids = await db
     .prepare("SELECT provider, external_id, linked_at FROM member_identities WHERE member_id = ? ORDER BY linked_at")
@@ -125,7 +149,21 @@ export async function memberProfile(db: D1Database, memberId: string): Promise<M
     identities: ids.results.map((r) => ({ provider: r.provider, externalId: Number(r.external_id), linkedAt: r.linked_at })),
     showNsfw: m.show_nsfw === 1,
     ageVerified: m.age_verified_at !== null,
+    hiddenTags: parseHiddenTags(m.hidden_tags),
   };
+}
+
+/** 成員目前的隱藏名單。 */
+export async function memberHiddenTags(db: D1Database, memberId: string): Promise<string[]> {
+  const m = await db.prepare("SELECT hidden_tags FROM members WHERE id = ?").bind(memberId).first<{ hidden_tags: string }>();
+  return parseHiddenTags(m?.hidden_tags);
+}
+
+/** 整份換掉隱藏名單（客戶端送的是勾完的完整清單，不是增減）。 */
+export async function updateMemberHiddenTags(db: D1Database, memberId: string, input: unknown): Promise<string[]> {
+  const keys = normalizeHiddenTags(input);
+  await db.prepare("UPDATE members SET hidden_tags = ? WHERE id = ?").bind(JSON.stringify(keys), memberId).run();
+  return keys;
 }
 
 /** 成人內容相關的設定：開關與年齡驗證時間。 */

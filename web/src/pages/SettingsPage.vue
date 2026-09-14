@@ -8,15 +8,21 @@
  *
  * 內容：成人內容開關（owner 2026-09-08）。這是本站自己的設定，住在成員上；第一次開要填出生日期，
  * 伺服器只用它算滿不滿 18、不保存。原生 <input type="date"> 在手機上就是日期選擇器，不另外拉套件。
+ *
+ * 不想看的類型（owner 2026-09-14）：勾起來的類型不會出現在榜單和搜尋裡。不分頁不分區——首頁還是一個池子，
+ * 每個人自己拉窗簾。勾一下就存（跟成人開關一樣），存在成員上、換裝置跟著走；榜單排尾的「已隱藏 N 類」帶回這裡。
  */
 import { computed, onMounted, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { ApiError, fetchPlayerPersona, savePlayerPersona, updateSiteSettings, type PlayerPersona } from "@/lib/api";
 import { pageTitle } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
+import { useLocalePath } from "@/lib/use-locale";
+import { TAG_CATALOG, tagLabel } from "../../../shared/tag-catalog";
 
 const session = useSession();
 const { t } = useI18n();
+const { locale } = useLocalePath();
 
 const NAME_MAX = 20;
 const DEFINE_MAX = 1000;
@@ -105,9 +111,31 @@ async function setNsfw(on: boolean) {
   }
 }
 
+// ---- 不想看的類型 ----
+const hidden = computed(() => session.profile?.hiddenTags ?? []);
+const hiddenBusy = ref(false);
+const hiddenError = ref("");
+const isHidden = (key: string) => hidden.value.includes(key);
+async function toggleHidden(key: string) {
+  if (hiddenBusy.value) return;
+  hiddenError.value = "";
+  const next = isHidden(key) ? hidden.value.filter((k) => k !== key) : [...hidden.value, key];
+  hiddenBusy.value = true;
+  try {
+    const result = await updateSiteSettings({ hiddenTags: next }, await token());
+    if (session.profile) session.profile.hiddenTags = result.hiddenTags;
+  } catch (err) {
+    hiddenError.value = err instanceof ApiError || err instanceof Error ? err.message : t("state.saveFailed");
+  } finally {
+    hiddenBusy.value = false;
+  }
+}
+
 onMounted(() => {
   document.title = pageTitle(t("settings.title"));
   void load();
+  // 從榜單「已隱藏 N 類」來的：捲到那一區
+  if (location.hash === "#hidden") requestAnimationFrame(() => document.getElementById("hidden")?.scrollIntoView({ block: "start" }));
 });
 </script>
 
@@ -176,6 +204,18 @@ onMounted(() => {
       </form>
       <p v-if="nsfwError" class="notice notice--error" role="alert">{{ nsfwError }}</p>
     </section>
+
+    <section id="hidden" class="panel content hidden">
+      <p class="eyebrow">{{ $t("settings.hidden.title") }}</p>
+      <p class="subtle hidden__desc">{{ $t("settings.hidden.desc") }}</p>
+      <div class="hidden__chips" role="group" :aria-label="$t('settings.hidden.title')" :aria-busy="hiddenBusy">
+        <button v-for="x in TAG_CATALOG" :key="x.key" type="button" class="tagchip" :class="{ 'is-on': isHidden(x.key) }" :aria-pressed="isHidden(x.key)" :disabled="hiddenBusy" @click="toggleHidden(x.key)">
+          {{ tagLabel(x, locale) }}
+        </button>
+      </div>
+      <p class="subtle" role="status">{{ hidden.length ? $t("settings.hidden.count", { n: hidden.length }) : $t("settings.hidden.none") }}</p>
+      <p v-if="hiddenError" class="notice notice--error" role="alert">{{ hiddenError }}</p>
+    </section>
   </div>
 </template>
 
@@ -195,4 +235,19 @@ onMounted(() => {
 .content__verified { color: var(--accent-text); }
 .content__switch { width: 22px; height: 22px; flex: none; accent-color: var(--accent); }
 .content__age { display: grid; gap: var(--s-2); padding: var(--s-3); border: 1px solid var(--line); border-radius: var(--r-md); }
+.hidden { scroll-margin-top: calc(var(--header-h, 56px) + var(--s-3)); }
+.hidden__desc { margin: 0; }
+.hidden__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+/* 跟榜單那排長得一樣；勾起來＝反白 */
+.tagchip {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: var(--h-sm); padding: 0 12px; white-space: nowrap;
+  background: var(--surface); border: 0; border-radius: var(--r-pill);
+  box-shadow: 0 0 0 1px var(--line);
+  font-size: 13px; font-weight: 500; color: var(--text-2); cursor: pointer;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.tagchip:hover { color: var(--text); box-shadow: 0 0 0 1px var(--line-strong); }
+.tagchip.is-on { background: var(--text); color: var(--surface); box-shadow: none; }
+.tagchip:disabled { cursor: progress; opacity: 0.7; }
 </style>

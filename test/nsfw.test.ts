@@ -91,16 +91,36 @@ describe("成人內容開關與年齡驗證", () => {
 
     res = await settings({ showNsfw: true, birthdate: adultBirthdate() });
     expect(res.status).toBe(200);
-    expect(await json(res)).toEqual({ showNsfw: true, ageVerified: true });
+    expect(await json(res)).toEqual({ showNsfw: true, ageVerified: true, hiddenTags: [] });
     // 生日不落庫：成員表只有驗證時間
     const cols = await env.DB.prepare("SELECT * FROM members WHERE id = ?").bind(`member-${VIEWER}`).first<Record<string, unknown>>();
     expect(Object.keys(cols!)).not.toContain("birthdate");
     expect(cols!.age_verified_at).toBeGreaterThan(0);
 
-    expect(await json(await settings({ showNsfw: false }))).toEqual({ showNsfw: false, ageVerified: true });
-    expect(await json(await settings({ showNsfw: true }))).toEqual({ showNsfw: true, ageVerified: true });
+    expect(await json(await settings({ showNsfw: false }))).toEqual({ showNsfw: false, ageVerified: true, hiddenTags: [] });
+    expect(await json(await settings({ showNsfw: true }))).toEqual({ showNsfw: true, ageVerified: true, hiddenTags: [] });
     const me = await json(await SELF.fetch("https://c.test/v1/me", { headers: bearer("viewer-token") }));
-    expect(me).toMatchObject({ showNsfw: true, ageVerified: true });
+    expect(me).toMatchObject({ showNsfw: true, ageVerified: true, hiddenTags: [] });
+  });
+
+  it("不想看的類型：只收目錄裡的鍵、去重排序；存在成員上、/v1/me 帶回；不動成人開關；兩樣都沒給回 400", async () => {
+    await makeMember(VIEWER);
+    let res = await settings({ hiddenTags: ["womens-fiction", "r18g", "womens-fiction"] });
+    expect(res.status).toBe(200);
+    expect(await json(res)).toEqual({ showNsfw: false, ageVerified: false, hiddenTags: ["r18g", "womens-fiction"] });
+    const me = await json(await SELF.fetch("https://c.test/v1/me", { headers: bearer("viewer-token") }));
+    expect(me.hiddenTags).toEqual(["r18g", "womens-fiction"]);
+
+    res = await settings({ hiddenTags: ["no-such-key"] });
+    expect(res.status).toBe(400);
+    expect((await json(res)).error).toBe("unknown_tag");
+    expect((await settings({ hiddenTags: "r18g" })).status).toBe(400);
+    expect((await settings({})).status).toBe(400);
+    // 沒動成人開關；清空也行
+    expect(await json(await settings({ hiddenTags: [] }))).toEqual({ showNsfw: false, ageVerified: false, hiddenTags: [] });
+    // 開成人開關時隱藏名單留著
+    await settings({ hiddenTags: ["r18g"] });
+    expect(await json(await settings({ showNsfw: true, birthdate: adultBirthdate() }))).toEqual({ showNsfw: true, ageVerified: true, hiddenTags: ["r18g"] });
   });
 
   it("開了的人看得到：榜單、單卡、作者頁都帶成人內容，而且回應不進快取", async () => {
