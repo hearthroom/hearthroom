@@ -138,6 +138,16 @@ describe("不想看的類型（hide）", () => {
     expect(ids((await list("?zone=zh&tag=%E8%AA%BF%E6%95%99%26%E5%BC%B7%E8%BF%AB&hide=training")).body)).toEqual(["h1"]);
     expect(ids((await list("?zone=zh&hide=no-such-key")).body)).toContain("h1");
   });
+
+  it("把目錄裡所有類型都藏起來也查得動：名字展開後上百個，不能一個一個綁進 SQL（D1 上限 100 個變數）", async () => {
+    const { TAG_CATALOG } = await import("../shared/tag-catalog");
+    const all = TAG_CATALOG.map((t) => t.key).join(",");
+    const res = await list(`?zone=zh&hide=${all}`);
+    expect(res.status).toBe(200);
+    expect(ids(res.body)).toEqual(["h4"]);
+    const counted = await list(`?zone=zh&hide=${all}&tag=%E5%8A%87%E6%83%85`);
+    expect(counted.status).toBe(200);
+  });
 });
 
 describe("排名", () => {
