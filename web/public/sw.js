@@ -7,8 +7,9 @@
 
   fetch 處理器不能是空的：Chrome 會把空的處理器當成沒有，安裝性檢查照樣不過。
 */
-const VERSION = "hr-sw-1";
-const OFFLINE_URL = "/offline.html";
+const VERSION = "hr-sw-2";
+// 資源層會把 /offline.html 轉成 /offline（307）；導覽請求不能用轉址過的回應回，所以直接用乾淨網址
+const OFFLINE_URL = "/offline";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
