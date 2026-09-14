@@ -20,8 +20,6 @@ import {
   formatMB,
   ruleSetBytes,
   validateRuleSet,
-  chatPageOf,
-  type ChatPageChoice,
   type RegexRule,
   type RegexRuleSet,
 } from "@/lib/regex-rules";
@@ -35,13 +33,6 @@ const set = ref<RegexRuleSet>(JSON.parse(JSON.stringify(props.modelValue)) as Re
 
 // 聊天頁版本：舊版（規則直接套在畫面上）或新版沙箱。immersive 是上游另一種舊頁版面，
 // 本站不提供選項；讀到了就當舊版顯示、存回去時原樣保留，不因為作者打開編輯器就被抹掉。
-const chatPage = computed<ChatPageChoice>({
-  get: () => chatPageOf(set.value),
-  set: (v) => {
-    if (v === "sandbox") set.value.pageMode = "sandbox";
-    else if (set.value.pageMode === "sandbox") delete set.value.pageMode;
-  },
-});
 const selectedId = ref<string>(set.value.rules[0]?.id ?? "");
 const query = ref("");
 const testInput = ref("");
@@ -208,12 +199,6 @@ watch(selectedId, () => { testScope.value = testScope.value; });
             <span>{{ $t("regex.lowered") }}</span>
             <span class="subtle">{{ $t("regex.lowered.hint") }}</span>
           </label>
-          <fieldset class="rx__page">
-            <legend>{{ $t("regex.page") }}</legend>
-            <label class="check"><input v-model="chatPage" type="radio" value="classic" /><span>{{ $t("regex.page.classic") }}</span></label>
-            <label class="check"><input v-model="chatPage" type="radio" value="sandbox" /><span>{{ $t("regex.page.sandbox") }}</span></label>
-            <span class="subtle">{{ $t("regex.page.hint") }}</span>
-          </fieldset>
         </div>
         <div class="rx__test">
           <div class="rx__test-head">
@@ -275,9 +260,6 @@ watch(selectedId, () => { testScope.value = testScope.value; });
 .rx__globals { padding: var(--s-3); display: grid; gap: 0; box-shadow: 1px 0 0 var(--line); }
 .rx__globals .field { margin-bottom: var(--s-2); gap: 6px; }
 .rx__lowered { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
-.rx__page { margin: var(--s-2) 0 0; padding: 0; border: 0; display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
-.rx__page legend { padding: 0; margin-bottom: 6px; font-size: var(--fs-small); color: var(--muted); }
-.rx__page .subtle { flex-basis: 100%; }
 .rx__test { padding: var(--s-3) var(--s-4); display: grid; gap: var(--s-2); }
 .rx__test-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
 .rx__test-head label { font-size: 13px; font-weight: 600; }

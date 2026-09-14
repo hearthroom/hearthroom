@@ -302,7 +302,7 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     await flush();
     expect(api.uploadImage).toHaveBeenCalledTimes(1);
     expect((api.uploadImage.mock.calls[0] as unknown as [File])[0].name).toBe("card.png");
-    byText("形象").click();
+    // 頭像現在就在「基本」分區、名稱底下，不用切分區
     await flush();
     expect(root.querySelector("img[src='https://img.test/avatar.png']")).not.toBeNull();
   });
