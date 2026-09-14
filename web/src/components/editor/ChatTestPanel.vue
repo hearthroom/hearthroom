@@ -72,6 +72,16 @@ defineExpose({ reload: () => { nonce.value += 1; } });
 </template>
 
 <style scoped>
+/* flex 而不是固定行數的 grid：上面那條提示是 v-if，不脏的時候整個不存在，
+   照位置指定的 minmax(0,1fr) 會落到別的孩子身上，該撐滿的那格反而拿到 auto。 */
+.ct { display: flex; flex-direction: column; gap: var(--s-2); min-height: 0; }
+.ct__state { display: grid; gap: var(--s-3); place-content: center; text-align: center; padding: var(--s-5) var(--s-3); }
+.ct__state .subtle { margin: 0; }
+.ct__notice {
+  flex: none; display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap;
+  padding: var(--s-2) var(--s-3); border-radius: var(--r-sm); background: var(--surface-2);
+}
+.ct__notice .subtle { flex: 1; min-width: 0; font-size: 12.5px; }
 /*
    框把面板填滿：寬度跟著右欄走、高度吃到面板底。
    右欄的預設寬度（見編輯頁 --rail-w）是照手機比例由視窗高反推的，所以不拖的時候
