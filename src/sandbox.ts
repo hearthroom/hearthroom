@@ -45,9 +45,11 @@ export const SANDBOX_CSP = [
   `frame-ancestors https://${HOST} https://www.${HOST}`,
 ].join("; ");
 
+// 殼頁向資源層要的是 /sandbox/（目錄），不是 /sandbox/index.html：資源層預設會把後者 3xx 到前者，
+// 拿到的就不是 200。js/css 直接要檔名。
 const FILES: Record<string, string> = {
-  "": "index.html",
-  "index.html": "index.html",
+  "": "",
+  "index.html": "",
   "sandbox.js": "sandbox.js",
   "sandbox.css": "sandbox.css",
 };
@@ -62,18 +64,19 @@ export async function serveSandbox(c: { req: { url: string }; env: Env }): Promi
   if (!url.pathname.startsWith(SANDBOX_PATH)) return new Response("not found", { status: 404 });
   const rest = url.pathname.slice(SANDBOX_PATH.length);
   const file = FILES[rest];
-  if (!file) return new Response("not found", { status: 404 });
+  if (file === undefined) return new Response("not found", { status: 404 });
+  const isPage = file === "";
   const asset = await c.env.ASSETS.fetch(new Request(new URL(`${SANDBOX_PATH}${file}`, url).toString()));
   // 資源層配了 SPA 回退：殼沒建進去時拿到的是主站的 index.html。那份不能當殼出去。
   const html = (asset.headers.get("content-type") ?? "").includes("text/html");
-  if (!asset.ok || (file !== "index.html" && html) || (file === "index.html" && !(await peekIsSandboxShell(asset.clone())))) {
+  if (!asset.ok || (!isPage && html) || (isPage && !(await peekIsSandboxShell(asset.clone())))) {
     return new Response("sandbox shell not built", { status: 503 });
   }
   const headers = new Headers(asset.headers);
   headers.set("Content-Security-Policy", SANDBOX_CSP);
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("Referrer-Policy", "no-referrer");
-  headers.set("Cache-Control", file === "index.html" ? "no-cache" : "public, max-age=600");
+  headers.set("Cache-Control", isPage ? "no-cache" : "public, max-age=600");
   headers.delete("etag");
   headers.delete("last-modified");
   return new Response(asset.body, { status: 200, headers });
