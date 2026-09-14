@@ -82,8 +82,11 @@ defineExpose({ reload: () => { nonce.value += 1; } });
   flex: 1; min-height: 0; overflow: hidden;
   display: flex; align-items: stretch; justify-content: center;
 }
+/* 高度靠 flex 的 stretch 拿，不寫 height:100%：iframe 的百分比高度在這條
+   grid→flex→flex 的鏈上會解成 auto 而縮回 150px 的預設高；stretch 用的是
+   排完版的實際高，不經過百分比。 */
 .ct__frame {
-  width: 100%; height: 100%; border: 0;
+  width: 100%; height: auto; min-height: 0; align-self: stretch; border: 0;
   border-radius: var(--r-lg); background: var(--surface-2);
   box-shadow: 0 0 0 1px var(--line), var(--shadow-sm);
 }
