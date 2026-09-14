@@ -5,12 +5,13 @@
 <h1 align="center">Hearthroom</h1>
 
 <p align="center">
-  由社群維護的開放式 AI 角色卡榜單。<br>
+開放式的 AI 角色卡酒館：社群榜單、內建的對話遊玩，以及角色卡的分發。<br>
   榜單、搜尋、作者頁、建卡編輯器與社群審核，全部跑在一個 Cloudflare Worker 上。
 </p>
 
 <p align="center">
   <a href="https://hearthroom.club"><img src="https://img.shields.io/website?url=https%3A%2F%2Fhearthroom.club&label=hearthroom.club" alt="Website"></a>
+  <a href="https://discord.gg/FCEYZCFtR"><img src="https://img.shields.io/badge/Discord-join%20the%20community-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
   <a href="https://github.com/hearthroom/hearthroom/actions/workflows/deploy.yml"><img src="https://github.com/hearthroom/hearthroom/actions/workflows/deploy.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/hearthroom/hearthroom" alt="License: AGPL-3.0"></a>
   <a href="https://github.com/hearthroom/hearthroom/commits/main"><img src="https://img.shields.io/github/last-commit/hearthroom/hearthroom" alt="Last commit"></a>
@@ -31,9 +32,13 @@
 
 ## Hearthroom 是什麼
 
-Hearthroom 是一個公開的榜單：作者把自己的 AI 角色卡登記上來，讀者在這裡找卡。有日榜、週榜、月榜，可以依名稱、簡介或標籤搜尋，有作者頁，也有附對話測試面板的建卡編輯器。
+Hearthroom 是一個開放式的 AI 角色卡平台，三件事合在一起：
 
-卡片本身不存在這裡。卡片住在**卡片供應商**那邊——一個提供開放 API 的聊天服務，登入、卡片內容與對話都在那裡。Hearthroom 只擁有三件事：哪些卡上了榜、榜怎麼排、搜尋索引。作者透過供應商登入，用卡片 ID 登記，站台每小時從供應商同步公開欄位。把這個站關掉，作者的卡一個字都不會少。
+- **榜單**——作者把卡登記上來，讀者透過日榜、週榜、月榜、搜尋、標籤與作者頁找卡。
+- **酒館**——每張卡都能直接在站上開玩。對話舞台（另一個開源專案，以 `stage/` 子模組掛進來）負責畫出對話、卡片的狀態欄、面板與腳本，卡片腳本在沙箱裡執行。
+- **分發**——卡片經過社群審核後，連同規則、世界書與圖片一起送到每個打開它的人手上；內建從 SillyTavern 等格式匯入。
+
+它是一個開源酒館，但不是 SillyTavern 的翻版：不用在本機安裝，也不用自己管 API 金鑰。卡片與對話住在**卡片供應商**那邊——一個提供開放 API 的聊天服務，登入、卡片內容與生成都在那裡。Hearthroom 擁有的是榜單、審核流程、搜尋索引與遊玩的畫面。作者透過供應商登入，用卡片 ID 登記，站台每小時從供應商同步公開欄位。把這個站關掉，作者的卡一個字都不會少。
 
 上榜要經過**社群審核**：審核人從共享佇列領單，初審要兩個人通過、重審一個人，任何一票駁回即駁回，審核頁不顯示作者。通過綁著卡片的內容版本；作者之後改了卡，就會離榜重新排隊。
 
@@ -53,6 +58,7 @@ Hearthroom 是一個公開的榜單：作者把自己的 AI 角色卡登記上�
   <img src="docs/screenshots/board-light.png" width="49%" alt="榜單（淺色）">
   <img src="docs/screenshots/guide.png" width="49%" alt="寫卡指南">
 </p>
+<p align="center"><sub>截圖使用示範卡片。</sub></p>
 
 ## 使用
 
@@ -138,6 +144,10 @@ npm run deploy              # 會先跑部署前檢查、型別檢查、測試�
 ```
 
 **持續部署。** 附的工作流程（`.github/workflows/deploy.yml`）對每次 push 與 PR 做型別檢查、建置與測試。在 `main` 上，若倉庫 secrets `CLOUDFLARE_API_TOKEN` 與 `CLOUDFLARE_ACCOUNT_ID` 已設定，就套遷移並部署；沒設定則標示略過部署，CI 仍是綠的。
+
+## 社群
+
+玩家、寫卡的作者與開發者都在 **[Discord](https://discord.gg/FCEYZCFtR)**：一起玩卡、寫卡、做酒館與站台。錯誤回報與功能建議也歡迎開 [GitHub issue](https://github.com/hearthroom/hearthroom/issues)。
 
 ## 貢獻
 

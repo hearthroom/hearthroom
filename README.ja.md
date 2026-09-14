@@ -5,12 +5,13 @@
 <h1 align="center">Hearthroom</h1>
 
 <p align="center">
-  コミュニティが運営する、AI キャラクターカードのオープンなランキングサイト。<br>
+AI キャラクターカードのオープンな酒場：コミュニティのランキング、サイト内でそのまま遊べるチャット、そしてカードの配布。<br>
   ランキング、検索、作者ページ、カードエディター、コミュニティ審査を、1 つの Cloudflare Worker で。
 </p>
 
 <p align="center">
   <a href="https://hearthroom.club"><img src="https://img.shields.io/website?url=https%3A%2F%2Fhearthroom.club&label=hearthroom.club" alt="Website"></a>
+  <a href="https://discord.gg/FCEYZCFtR"><img src="https://img.shields.io/badge/Discord-join%20the%20community-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
   <a href="https://github.com/hearthroom/hearthroom/actions/workflows/deploy.yml"><img src="https://github.com/hearthroom/hearthroom/actions/workflows/deploy.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/hearthroom/hearthroom" alt="License: AGPL-3.0"></a>
   <a href="https://github.com/hearthroom/hearthroom/commits/main"><img src="https://img.shields.io/github/last-commit/hearthroom/hearthroom" alt="Last commit"></a>
@@ -31,9 +32,13 @@
 
 ## Hearthroom とは
 
-Hearthroom は公開ランキングサイトです。作者が自分の AI キャラクターカードを登録し、読者がそこからカードを探します。日間・週間・月間ランキング、名前・紹介文・タグでの検索、作者ページ、会話テストパネル付きのカードエディターがあります。
+Hearthroom は AI キャラクターカードのオープンなプラットフォームで、3 つの役割を 1 つにまとめています。
 
-カード自体はここには保存されません。カードは**カードプロバイダー**——サインイン、カードデータ、会話のためのオープン API を公開しているチャットサービス——側にあります。Hearthroom が持つのは 3 つだけ：どのカードが掲載されているか、どう並ぶか、検索インデックス。作者はプロバイダー経由でサインインし、カード ID で登録します。サイトは 1 時間ごとにプロバイダーから公開項目を同期します。このサイトを閉じても、カードは 1 文字も失われません。
+- **ランキング**——作者がカードを登録し、読者は日間・週間・月間ランキング、検索、タグ、作者ページからカードを探します。
+- **酒場**——どのカードもサイト上でそのまま遊べます。チャットステージ（別のオープンソースプロジェクトで、`stage/` サブモジュールとして取り込み）が会話、カードのステータスバー、パネル、スクリプトを描画し、カードのスクリプトはサンドボックスで実行されます。
+- **配布**——カードはコミュニティ審査を経て、ルール、世界設定、画像とともに開いた人全員に届きます。SillyTavern などの形式からのインポートも内蔵しています。
+
+オープンソースの酒場ですが、SillyTavern のクローンではありません。ローカルへのインストールも、API キーの管理も不要です。カードと会話は**カードプロバイダー**——サインイン、カードデータ、生成のためのオープン API を公開しているチャットサービス——側にあります。Hearthroom が持つのはランキング、審査プロセス、検索インデックス、そして遊ぶ画面です。作者はプロバイダー経由でサインインし、カード ID で登録します。サイトは 1 時間ごとにプロバイダーから公開項目を同期します。このサイトを閉じても、カードは 1 文字も失われません。
 
 掲載には**コミュニティ審査**があります。審査員は共有キューから申請を引き受け、初回審査は 2 人の承認、再審査は 1 人の承認が必要で、1 人でも却下すれば却下、審査ページには作者が表示されません。承認はカードの内容バージョンに紐づき、作者がカードを変更するとランキングから外れて再びキューに並びます。
 
@@ -53,6 +58,7 @@ Hearthroom は公開ランキングサイトです。作者が自分の AI キ�
   <img src="docs/screenshots/board-light.png" width="49%" alt="ランキング（ライト）">
   <img src="docs/screenshots/guide.png" width="49%" alt="カード作成ガイド">
 </p>
+<p align="center"><sub>スクリーンショットはデモ用カードです。</sub></p>
 
 ## 使い方
 
@@ -138,6 +144,10 @@ npm run deploy              # 事前チェック、型チェック、テスト�
 ```
 
 **継続的デプロイ。** 同梱のワークフロー（`.github/workflows/deploy.yml`）はすべての push と PR で型チェック、ビルド、テストを行います。`main` では、リポジトリの secrets `CLOUDFLARE_API_TOKEN` と `CLOUDFLARE_ACCOUNT_ID` が設定されていればマイグレーションを適用してデプロイし、未設定ならデプロイをスキップした旨を表示して緑のままにします。
+
+## コミュニティ
+
+プレイヤー、カード作者、開発者は **[Discord](https://discord.gg/FCEYZCFtR)** に集まっています。カードで遊ぶ、カードを書く、酒場とサイトを作る——どれでも歓迎です。バグ報告や機能要望は [GitHub issue](https://github.com/hearthroom/hearthroom/issues) でも受け付けています。
 
 ## コントリビュート
 

@@ -5,12 +5,13 @@
 <h1 align="center">Hearthroom</h1>
 
 <p align="center">
-  An open, community-run board for AI character cards.<br>
-  Rankings, search, author pages, a card editor, and community review — on a single Cloudflare Worker.
+An open tavern for AI character cards: a community board, a built-in chat to play them, and a way to distribute them.<br>
+  Rankings, search, author pages, a card editor, community review — on a single Cloudflare Worker.
 </p>
 
 <p align="center">
   <a href="https://hearthroom.club"><img src="https://img.shields.io/website?url=https%3A%2F%2Fhearthroom.club&label=hearthroom.club" alt="Website"></a>
+  <a href="https://discord.gg/FCEYZCFtR"><img src="https://img.shields.io/badge/Discord-join%20the%20community-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
   <a href="https://github.com/hearthroom/hearthroom/actions/workflows/deploy.yml"><img src="https://github.com/hearthroom/hearthroom/actions/workflows/deploy.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/hearthroom/hearthroom" alt="License: AGPL-3.0"></a>
   <a href="https://github.com/hearthroom/hearthroom/commits/main"><img src="https://img.shields.io/github/last-commit/hearthroom/hearthroom" alt="Last commit"></a>
@@ -31,9 +32,13 @@
 
 ## What is Hearthroom
 
-Hearthroom is a public board where authors list their AI character cards and readers find them: rankings by day, week and month, search by name, summary or tag, author pages, and a card editor with a chat test panel.
+Hearthroom is an open platform for AI character cards. It is three things in one:
 
-Cards themselves are not stored here. They live with a **card provider** — a chat service that exposes an open API for sign-in, card data and conversations. Hearthroom owns only three things: which cards are listed, how they rank, and the search index. Authors sign in through the provider, register a card by ID, and the site pulls the public fields from the provider on an hourly sync. Removing the site would not remove a single card.
+- **A board** — authors list their cards; readers find them through daily, weekly and monthly rankings, search, tags and author pages.
+- **A tavern** — every card can be played on the site. The chat stage (a separate open-source project, pulled in as the `stage/` submodule) renders the conversation, the card's status bars, panels and scripts, and runs card scripts in a sandbox.
+- **Distribution** — cards go through community review, then ship with their rules, lorebook and images to anyone who opens them; import from SillyTavern and other formats is built in.
+
+It is an open-source tavern, but not a SillyTavern clone: there is no local install and no API keys to manage. Cards and conversations live with a **card provider** — a chat service that exposes an open API for sign-in, card data and generation. Hearthroom owns the board, the review process, the search index and the play surface. Authors sign in through the provider, register a card by ID, and the site pulls the public fields from the provider on an hourly sync. Removing the site would not remove a single card.
 
 Listing goes through **community review**: reviewers claim submissions from a shared queue, two approvals are needed for a first review, one for a re-review, any rejection rejects, and the review page hides the author. An approval is tied to the card's content version; when the author changes the card, it leaves the board and queues again.
 
@@ -53,6 +58,7 @@ Listing goes through **community review**: reviewers claim submissions from a sh
   <img src="docs/screenshots/board-light.png" width="49%" alt="Board, light mode">
   <img src="docs/screenshots/guide.png" width="49%" alt="Card authoring guide">
 </p>
+<p align="center"><sub>Screenshots show demo cards.</sub></p>
 
 ## Using the site
 
@@ -138,6 +144,10 @@ npm run deploy              # runs preflight, typecheck, tests and the build fir
 ```
 
 **Continuous deployment.** The included workflow (`.github/workflows/deploy.yml`) type-checks, builds and tests every push and pull request. On `main`, if the repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` are set, it applies migrations and deploys; otherwise it reports that deployment was skipped and stays green.
+
+## Community
+
+Players, card authors and developers meet on **[Discord](https://discord.gg/FCEYZCFtR)**: playing cards, writing cards, and building the tavern and the site. Bug reports and feature requests are also welcome as [GitHub issues](https://github.com/hearthroom/hearthroom/issues).
 
 ## Contributing
 
