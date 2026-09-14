@@ -65,7 +65,7 @@ export function sandboxOptions(hostname: string, session: Session) {
     return production && /^[a-z0-9-]{1,62}$/.test(l) ? l : null;
   };
   return {
-    shellUrl: (roleId: string) => { const l = label(roleId); return l ? `https://c${l}.${SITE_HOST}/sandbox/` : "/sandbox/index.html"; },
+    shellUrl: (roleId: string) => { const l = label(roleId); return l ? `https://c${l}.${SITE_HOST}/sandbox/` : "/sandbox/"; },
     origin: (roleId: string) => { const l = label(roleId); return l ? `https://c${l}.${SITE_HOST}` : "null"; },
     saves: {
       load: (roleId: string) => withToken((t) => fetchCardSaves(roleId, t)),
