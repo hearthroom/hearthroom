@@ -113,6 +113,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
         </a>
         <a :href="`${SITE.repoUrl}/issues`" target="_blank" rel="noopener">{{ $t("footer.issues") }}</a>
         <a :href="`${SITE.repoUrl}/blob/main/LICENSE`" target="_blank" rel="noopener">{{ $t("footer.license", { name: SITE.license }) }}</a>
+        <RouterLink :to="lp('/guide')">{{ $t("footer.guide") }}</RouterLink>
         <RouterLink :to="lp('/developers')">{{ $t("footer.developers") }}</RouterLink>
       </nav>
     </div>
