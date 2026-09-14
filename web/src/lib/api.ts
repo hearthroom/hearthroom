@@ -315,6 +315,36 @@ export async function updateSiteSettings(input: { showNsfw?: boolean; birthdate?
   );
 }
 
+/**
+ * 沙箱卡的存檔（舞台代作者腳本讀寫）：每個成員每張卡最多 10 個 key、單值 64 KB。
+ * 錯誤碼 key_invalid／value_too_large／saves_full 由舞台那側翻成作者看得懂的 sdk 錯誤。
+ */
+export async function fetchCardSaves(roleId: string, token: string): Promise<Record<string, unknown>> {
+  const body = await json<{ saves: Record<string, unknown> }>(
+    await fetch(`${COMMUNITY_API}/me/cards/${encodeURIComponent(roleId)}/saves`, { headers: { ...from(), ...authHeaders(token) } }),
+  );
+  return body.saves ?? {};
+}
+
+export async function putCardSave(roleId: string, key: string, value: unknown, token: string): Promise<void> {
+  await json(
+    await fetch(`${COMMUNITY_API}/me/cards/${encodeURIComponent(roleId)}/saves/${encodeURIComponent(key)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...from(), ...authHeaders(token) },
+      body: JSON.stringify({ value }),
+    }),
+  );
+}
+
+export async function deleteCardSave(roleId: string, key: string, token: string): Promise<void> {
+  await json(
+    await fetch(`${COMMUNITY_API}/me/cards/${encodeURIComponent(roleId)}/saves/${encodeURIComponent(key)}`, {
+      method: "DELETE",
+      headers: { ...from(), ...authHeaders(token) },
+    }),
+  );
+}
+
 export async function fetchSiteMe(token: string): Promise<SiteMe> {
   return json<SiteMe>(await fetch(`${COMMUNITY_API}/me`, { headers: { ...from(), ...authHeaders(token) } }));
 }
