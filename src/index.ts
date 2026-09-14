@@ -21,7 +21,7 @@ import { authorLine, renderHead } from "./head";
 import { ALIAS_HOSTS, HOST, canonicalUrl } from "./site";
 import { loadMine, type MineFilter } from "./mine";
 import { tagNamesFor } from "../shared/tag-catalog";
-import { isReviewer, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw } from "./members";
+import { isReviewer, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
 import { DEFAULT_PROVIDER, type ProviderId, reviewBotOf } from "./providers";
 import { WEEKLY_LIMIT, recordRegistration, registeredThisWeek } from "./quota";
 import {
@@ -251,10 +251,22 @@ app.get("/v1/cards", async (c) => {
   const zone = author ? undefined : parseZone(c.req.query("zone"));
   const authorMemberId = author ? ((await memberByHandle(c.env.DB, author)) ?? "") : undefined;
 
+  const tags = (() => { const raw = c.req.query("tag")?.trim(); return raw ? (tagNamesFor(raw) ?? [raw]) : undefined; })();
+  // 看的人不想看的類型（?hide=鍵,鍵）：鍵展開成五語名字後排除；不是鍵的忽略。
+  // 明確點了要看的類型（?tag=）永遠贏——分享來的連結、榜單上點的籤，不能因為在隱藏名單裡就變成空榜。
+  // 這是查詢字串的一部分，所以回應照常進公開快取（同一組隱藏名單共用一份）。
+  const excludeTags = (() => {
+    const raw = c.req.query("hide")?.trim();
+    if (!raw) return undefined;
+    const names = new Set(raw.split(",").flatMap((k) => tagNamesFor(k.trim()) ?? []));
+    for (const name of tags ?? []) names.delete(name);
+    return names.size ? [...names] : undefined;
+  })();
   const { rows, total, hasNext } = await listCards(c.env.DB, {
     zone,
     q: c.req.query("q")?.trim() || undefined,
-    tags: (() => { const raw = c.req.query("tag")?.trim(); return raw ? (tagNamesFor(raw) ?? [raw]) : undefined; })(),
+    tags,
+    excludeTags,
     authorMemberId,
     allowNsfw,
     sort,
@@ -394,17 +406,33 @@ app.get("/v1/me", async (c) => {
 });
 
 /**
- * 成人內容開關。開要驗年齡：沒驗過要帶生日（YYYY-MM-DD）且滿 18；生日只看一眼、不落庫、不寫日誌。
- * 未滿 18 回 403 underage，什麼都不存。關只關開關，驗證留著。
+ * 本站的個人設定，兩樣，各自可單獨送：
+ *   - showNsfw 成人內容開關。開要驗年齡：沒驗過要帶生日（YYYY-MM-DD）且滿 18；生日只看一眼、不落庫、不寫日誌。
+ *     未滿 18 回 403 underage，什麼都不存。關只關開關，驗證留著。
+ *   - hiddenTags 不想看的類型：完整清單（目錄鍵），整份換掉。
+ * 兩樣都沒給回 400。已部署的舊客戶端只送 showNsfw，照樣能用。回應永遠是三樣齊的現況。
  */
 app.post("/v1/me/settings", async (c) => {
   const member = await requireMember(c);
-  const body = (await c.req.json().catch(() => ({}))) as { showNsfw?: unknown; birthdate?: unknown };
-  if (typeof body.showNsfw !== "boolean") throw new HttpError(400, "showNsfw_required");
-  const birthdate = typeof body.birthdate === "string" ? body.birthdate : undefined;
-  const result = await updateMemberNsfw(c.env.DB, member.id, { showNsfw: body.showNsfw, birthdate }, Date.now());
-  note(c, { event: "settings", detail: result.showNsfw ? "nsfw_on" : "nsfw_off" });
-  return c.json(result, 200, { "Cache-Control": "no-store" });
+  const body = (await c.req.json().catch(() => ({}))) as { showNsfw?: unknown; birthdate?: unknown; hiddenTags?: unknown };
+  if (typeof body.showNsfw !== "boolean" && body.hiddenTags === undefined) throw new HttpError(400, "showNsfw_required");
+  let hiddenTags: string[];
+  if (body.hiddenTags !== undefined) {
+    hiddenTags = await updateMemberHiddenTags(c.env.DB, member.id, body.hiddenTags);
+    note(c, { event: "settings", detail: "hidden_tags" });
+  } else {
+    hiddenTags = await memberHiddenTags(c.env.DB, member.id);
+  }
+  let nsfw: { showNsfw: boolean; ageVerified: boolean };
+  if (typeof body.showNsfw === "boolean") {
+    const birthdate = typeof body.birthdate === "string" ? body.birthdate : undefined;
+    nsfw = await updateMemberNsfw(c.env.DB, member.id, { showNsfw: body.showNsfw, birthdate }, Date.now());
+    note(c, { event: "settings", detail: nsfw.showNsfw ? "nsfw_on" : "nsfw_off" });
+  } else {
+    const current = await memberNsfw(c.env.DB, member.id);
+    nsfw = { showNsfw: current.showNsfw && current.ageVerifiedAt !== null, ageVerified: current.ageVerifiedAt !== null };
+  }
+  return c.json({ ...nsfw, hiddenTags }, 200, { "Cache-Control": "no-store" });
 });
 
 /**

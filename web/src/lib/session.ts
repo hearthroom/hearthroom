@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import { fetchMe, fetchSiteMe, fetchWallet, setNsfwViewer } from "./api";
+import { fetchMe, fetchSiteMe, fetchWallet, setNsfwViewer, setViewerHiddenTags } from "./api";
 import type { Me, SiteMe, Wallet } from "./api";
 import {
   beginLogin,
@@ -55,6 +55,11 @@ export const useSession = defineStore("session", () => {
   setNsfwViewer(async () => {
     if (profilePromise) await profilePromise;
     return profile.value?.showNsfw && profile.value.ageVerified ? await accessToken() : null;
+  });
+  // 不想看的類型：同樣等身分載好再答，第一屏就是過濾好的版本
+  setViewerHiddenTags(async () => {
+    if (profilePromise) await profilePromise;
+    return profile.value?.hiddenTags ?? [];
   });
 
   let restoring: Promise<void> | null = null;

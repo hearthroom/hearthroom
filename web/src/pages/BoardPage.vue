@@ -7,6 +7,7 @@ import CardGrid from "@/components/CardGrid.vue";
 import { fetchAuthors, fetchBoard } from "@/lib/api";
 import { contentLang, defaultZone } from "@/lib/i18n";
 import { TAG_CATALOG, tagLabel } from "../../../shared/tag-catalog";
+import { visibleCatalog } from "@/lib/hidden-tags";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
 import type { AuthorPage } from "@/lib/api";
@@ -41,6 +42,9 @@ const authorSort = computed<AuthorSort>(() => {
 });
 const tag = computed(() => (typeof route.query.tag === "string" ? route.query.tag : ""));
 const offset = computed(() => Number(route.query.offset ?? 0) || 0);
+/** 不想看的類型（設定頁勾的）：類型列少畫那幾顆，排尾一顆「已隱藏 N 類」帶去設定頁；清單本身由伺服器過濾。 */
+const hidden = computed(() => session.profile?.hiddenTags ?? []);
+const catalog = computed(() => visibleCatalog(TAG_CATALOG, hidden.value, tag.value));
 
 /**
  * 語區跟著介面語言走，不另設開關：看日文介面的人要的就是日文卡。
@@ -87,6 +91,8 @@ watch([() => route.query, locale], load, { immediate: true });
 // 成人內容開關載好（登入後才知道）或改了：重讀，否則第一屏永遠是沒開的版本
 // 開關改了要重讀；身分剛載好、發現本來就開著（undefined → true）也要——第一次讀多半比身分早到
 watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && (now === true || before !== undefined)) load(); });
+// 不想看的類型載好或改了（設定頁改完回來）：同樣重讀
+watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (now !== "" || before !== undefined)) load(); });
 </script>
 
 <template>
@@ -116,9 +122,10 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
     <nav v-if="mode === 'cards'" class="rail" :aria-label="$t('board.tags')">
       <div class="rail__inner">
         <button class="tagchip" :class="{ 'is-on': !tag }" :aria-pressed="!tag" @click="navigate({ tag: undefined })">{{ $t("board.tag.all") }}</button>
-        <button v-for="x in TAG_CATALOG" :key="x.key" class="tagchip" :class="{ 'is-on': tag === x.key }" :aria-pressed="tag === x.key" @click="navigate({ tag: tag === x.key ? undefined : x.key })">
+        <button v-for="x in catalog" :key="x.key" class="tagchip" :class="{ 'is-on': tag === x.key }" :aria-pressed="tag === x.key" @click="navigate({ tag: tag === x.key ? undefined : x.key })">
           {{ tagLabel(x, locale) }}
         </button>
+        <RouterLink v-if="hidden.length" :to="lp('/settings') + '#hidden'" class="tagchip tagchip--hidden">{{ $t("board.hidden", { n: hidden.length }) }}</RouterLink>
       </div>
     </nav>
 
@@ -198,6 +205,9 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 .tagchip.is-on { background: var(--text); color: var(--surface); box-shadow: none; }
 .tagchip__n { font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .tagchip.is-on .tagchip__n { color: inherit; opacity: 0.7; }
+/* 「已隱藏 N 類」：不是籤，是回設定頁的路；虛線框跟籤區分開 */
+.tagchip--hidden { text-decoration: none; color: var(--text-3); box-shadow: none; border: 1px dashed var(--line-strong); background: transparent; }
+.tagchip--hidden:hover { color: var(--text); border-color: var(--text-3); box-shadow: none; }
 
 .count { margin-bottom: var(--s-3); font-variant-numeric: tabular-nums; }
 .ghosts { display: grid; gap: 6px; }

@@ -94,6 +94,8 @@ export interface ListOptions {
   q?: string;
   /** 標籤名字們（類型鍵展開後）；任一命中都算。 */
   tags?: string[];
+  /** 看的人不想看的標籤名字們（類型鍵展開後）；任一命中就不列。 */
+  excludeTags?: string[];
   /** 作者頁：這個成員（本站 id）的卡 */
   authorMemberId?: string;
   /** relevance 只在有搜尋字時有意義；沒有搜尋字或走 LIKE 時退回 hot。 */
@@ -121,6 +123,10 @@ export interface ListResult {
   total: number | null;
 }
 
+/** 「卡片標籤裡沒有任何一個在名單裡」：跟 tags 的 EXISTS 同一個形狀，反過來。 */
+const excludeClause = (table: string, n: number) =>
+  `NOT EXISTS (SELECT 1 FROM json_each(${table}.tags) WHERE json_each.value IN (${Array.from({ length: n }, () => "?").join(",")}))`;
+
 export async function listCards(db: D1Database, opts: ListOptions) {
   const where: string[] = opts.anyStatus ? ["1=1"] : [`c.${listed(!!opts.allowNsfw)}`];
   const binds: unknown[] = [];
@@ -146,6 +152,10 @@ export async function listCards(db: D1Database, opts: ListOptions) {
     // 類型鍵展開成幾種語言的名字，任一命中都算；字面標籤就是一個名字
     where.push(`EXISTS (SELECT 1 FROM json_each(c.tags) WHERE json_each.value IN (${opts.tags.map(() => "?").join(",")}))`);
     binds.push(...opts.tags);
+  }
+  if (opts.excludeTags?.length) {
+    where.push(excludeClause("c", opts.excludeTags.length));
+    binds.push(...opts.excludeTags);
   }
   if (opts.since !== undefined) {
     // 日／週／月榜：只看上榜時間在窗口內的卡（owner 2026-09-07：時間是卡片上榜的那一刻）
@@ -187,9 +197,12 @@ export async function listCards(db: D1Database, opts: ListOptions) {
   let total: number | null = null;
   if (!filtered) {
     // 語區條件走索引，數起來便宜；只有搜尋與標籤過濾才貴到不值得數。
-    const counted = opts.zone
-      ? await db.prepare(`SELECT COUNT(*) AS n FROM cards WHERE ${listed(!!opts.allowNsfw)} AND zone IN (?, 'all')`).bind(opts.zone).first<{ n: number }>()
-      : await db.prepare(`SELECT COUNT(*) AS n FROM cards WHERE ${listed(!!opts.allowNsfw)}`).first<{ n: number }>();
+    // 「不想看的類型」不算篩選：它是這個人的常態視角，「共 N 張」要照他看得到的數，所以數的時候一起排除。
+    const countWhere = [listed(!!opts.allowNsfw)];
+    const countBinds: unknown[] = [];
+    if (opts.zone) { countWhere.push("zone IN (?, 'all')"); countBinds.push(opts.zone); }
+    if (opts.excludeTags?.length) { countWhere.push(excludeClause("cards", opts.excludeTags.length)); countBinds.push(...opts.excludeTags); }
+    const counted = await db.prepare(`SELECT COUNT(*) AS n FROM cards WHERE ${countWhere.join(" AND ")}`).bind(...countBinds).first<{ n: number }>();
     total = counted?.n ?? 0;
   } else if (!hasNext) {
     // 已經翻到最後一頁，總數就是走過的量，不必再問一次資料庫。

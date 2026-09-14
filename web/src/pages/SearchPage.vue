@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { useRoute, useRouter } from "vue-router";
+import { RouterLink, useRoute, useRouter } from "vue-router";
 import AuthorList from "@/components/AuthorList.vue";
 import CardGrid from "@/components/CardGrid.vue";
 import { fetchAuthors, fetchBoard, fetchTags } from "@/lib/api";
@@ -93,6 +93,9 @@ const countLabel = (page: { total: number | null; hasNext: boolean; limit: numbe
 watch([() => route.query, locale], load, { immediate: true });
 // 開關改了要重讀；身分剛載好、發現本來就開著（undefined → true）也要——第一次讀多半比身分早到
 watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && (now === true || before !== undefined)) load(); });
+/** 不想看的類型：結果由伺服器過濾；這裡只在結果上方提一句，人才知道為什麼少了卡 */
+const hidden = computed(() => session.profile?.hiddenTags ?? []);
+watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (now !== "" || before !== undefined)) { load(); loadSide(); } });
 watch(locale, loadSide, { immediate: true });
 watch(q, (v) => { draft.value = v; });
 </script>
@@ -125,6 +128,9 @@ watch(q, (v) => { draft.value = v; });
       </div>
 
       <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
+      <p v-if="kind === 'cards' && hidden.length" class="muted search__hidden">
+        <RouterLink :to="lp('/settings') + '#hidden'">{{ $t("board.hidden", { n: hidden.length }) }}</RouterLink>
+      </p>
 
       <template v-if="kind === 'cards'">
         <CardGrid
@@ -219,4 +225,6 @@ watch(q, (v) => { draft.value = v; });
 .also__title { font-size: 14px; font-weight: 600; }
 .zero .also__title { margin: 0; }
 .page--search .zero + .also { margin-top: 0; }
+.search__hidden { margin: 0 0 var(--s-3); font-size: 13px; }
+.search__hidden a { color: inherit; text-decoration: underline dashed; text-underline-offset: 3px; }
 </style>
