@@ -18,6 +18,8 @@ const props = defineProps<{
   uploading: string;
   ratio?: "square" | "wide";
   libraryLabel: string;
+  /** 供應商沒有圖庫時收起「從圖庫選」。預設 false，既有呼叫端行為不變。 */
+  hideLibrary?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -86,7 +88,7 @@ function pick(file: File) {
           <button type="button" class="btn btn--sm" :disabled="busy" @click="input?.click()">
             {{ busy ? uploading : pickLabel }}
           </button>
-          <button v-if="libraryLabel" type="button" class="btn btn--sm" :disabled="busy" @click="picking = true">{{ libraryLabel }}</button>
+          <button v-if="!hideLibrary" type="button" class="btn btn--sm" :disabled="busy" @click="picking = true">{{ libraryLabel }}</button>
           <button v-if="modelValue" type="button" class="btn btn--sm btn--ghost" :disabled="busy"
                   @click="emit('update:modelValue', '')">
             {{ clearLabel }}

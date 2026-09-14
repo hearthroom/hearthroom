@@ -2,6 +2,17 @@
 
 這個分支讓本站可以改接 HarperHarbor 的 Provider。預設仍是 LunaTalk；建置帶 `VITE_PROVIDER=harbor` 才切換。
 
+## 相容約束（owner 2026-09-14）
+
+這裡的改動只能是「多接一家」：不得改變目前接 LunaTalk 的行為，不得影響線上服務。落實方式：
+
+- 所有 Harbor 行為都在 `HARBOR` 旗標之後；旗標在建置時被替換成常數，預設建置裡整段 Harbor 程式碼被裁掉
+  （`web/dist` 裡找不到任何 Harbor 端點字串，適配層只在 `--mode harbor` 建置時才成為獨立分包）。
+- 本站伺服器（`src/`）、`wrangler.toml`、D1 遷移都沒有動；Harbor 本機設定放在 `.dev.vars` 與 `web/.env.harbor`，不進正式部署。
+- `web/test/lunatalk-default.test.ts` 釘住預設模式送出的每一種請求形狀（OAuth 不帶 scope、寫入面仍打 LunaTalk 原端點與原 body、
+  充值頁、供應商名稱）。Harbor 改動漏進預設模式時它會紅。
+- 共用元件只加預設值不變的選用屬性（例如 `ImageField` 的 `hideLibrary`，預設 false）。
+
 ## 本機跑起來
 
 1. 啟動 Provider：`server/provider/./dev.sh`（API 在 8890，登入與同意頁是控制台 8090，要先 `console/` 跑 `npm run dev`）。

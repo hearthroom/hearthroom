@@ -1202,11 +1202,11 @@ async function exportCard(format: "png" | "json") {
           <p class="muted">{{ $t("editor.media.lede") }}</p>
           <ImageField v-model="draft.roleAvatar" :label="$t('editor.avatar')" :hint="$t('editor.avatar.hint')"
                       :pick-label="$t('editor.image.pick')" :clear-label="$t('editor.image.clear')"
-                      :library-label="FEATURES.library ? $t('editor.image.library') : ''"
+                      :library-label="$t('editor.image.library')" :hide-library="!FEATURES.library"
                       :uploading="$t('editor.image.uploading')" ratio="square" @pick="onPickImage" />
           <ImageField v-model="draft.roleBackground" :label="$t('editor.background')"
                       :hint="$t('editor.background.hint')" :pick-label="$t('editor.image.pick')"
-                      :clear-label="$t('editor.image.clear')" :library-label="FEATURES.library ? $t('editor.image.library') : ''"
+                      :clear-label="$t('editor.image.clear')" :library-label="$t('editor.image.library')" :hide-library="!FEATURES.library"
                       :uploading="$t('editor.image.uploading')" ratio="wide" @pick="onPickImage" />
         </section>
 
