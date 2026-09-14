@@ -4,6 +4,7 @@ import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import AccountMenu from "@/components/AccountMenu.vue";
 import AppearanceMenu from "@/components/AppearanceMenu.vue";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
+import InstallToast from "@/components/InstallToast.vue";
 import LocaleSwitch from "@/components/LocaleSwitch.vue";
 import { useAppearance } from "@/lib/appearance";
 import { useLocalePath } from "@/lib/use-locale";
@@ -101,6 +102,8 @@ onMounted(() => document.addEventListener("keydown", onSlash));
 
   <main id="main" tabindex="-1" :class="{ 'main--bare': route.meta.bare }"><RouterView /></main>
   <ConfirmDialog />
+  <!-- 裝到主畫面的提示：對話與遊戲頁是全螢幕的，不在那裡打擾 -->
+  <InstallToast v-if="!route.meta.bare" />
 
   <!-- 社群維護的開源站：頁尾照開源專案的慣例，把人導去倉庫——回報問題、看原始碼、看授權都在那裡 -->
   <footer v-if="SITE.repoUrl && !route.meta.bare" class="footer">

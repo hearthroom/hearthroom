@@ -943,5 +943,11 @@
   "editor.chatPage.classic": "传统",
   "editor.chatPage.hint": "沙箱把卡片的画面与程序隔离运行，一般卡照常显示；旧卡在沙箱里不对劲时再改回传统。",
   "editor.chatPage.doc": "写卡指南",
-  "editor.panel.resize": "拖动调整宽度"
+  "editor.panel.resize": "拖动调整宽度",
+  "pwa.install.title": "把 Hearthroom 装到主屏幕",
+  "pwa.install.body": "像 App 一样从主屏幕打开，全屏、不用先开浏览器。",
+  "pwa.install.cta": "安装",
+  "pwa.install.later": "以后再说",
+  "pwa.install.ios": "在 Safari 点下方的“分享”，再选“添加到主屏幕”。",
+  "pwa.install.ok": "知道了"
 }
