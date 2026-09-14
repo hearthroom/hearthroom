@@ -1,4 +1,5 @@
 import { COMMUNITY_API, UPSTREAM_API } from "./config";
+import { hideParam } from "./hidden-tags";
 import { currentSurface } from "./track";
 import { i18n } from "./i18n";
 import type { Author, AuthorSort, CardPage, CommunityCard, MyRole, Sort, Zone } from "./types";
@@ -121,6 +122,16 @@ const from = (): Record<string, string> => ({ "X-From": currentSurface() });
  */
 let nsfwViewer: (() => Promise<string | null>) | null = null;
 export function setNsfwViewer(fn: (() => Promise<string | null>) | null): void { nsfwViewer = fn; }
+/**
+ * 「看的人不想看的類型」。同樣由 session 接上（等本站身分載好再回名單），登出時拆掉。
+ * 榜單與搜尋帶 ?hide=鍵,鍵 由伺服器過濾；不用 token——這不是權限，只是這個人的口味，回應照常進公開快取。
+ */
+let hiddenTagsViewer: (() => Promise<string[]>) | null = null;
+export function setViewerHiddenTags(fn: (() => Promise<string[]>) | null): void { hiddenTagsViewer = fn; }
+async function viewerHide(): Promise<string> {
+  const keys = hiddenTagsViewer ? await hiddenTagsViewer().catch(() => []) : [];
+  return hideParam(keys);
+}
 async function viewerAccess(): Promise<{ param: string; headers: Record<string, string> }> {
   const token = nsfwViewer ? await nsfwViewer().catch(() => null) : null;
   return token ? { param: "nsfw=1", headers: authHeaders(token) } : { param: "", headers: {} };
@@ -135,6 +146,8 @@ export async function fetchBoard(query: BoardQuery = {}): Promise<CardPage> {
   for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== "") params.set(k, String(v));
   const viewer = await viewerAccess();
   if (viewer.param) params.set("nsfw", "1");
+  // 作者頁不套：看一個人的作品時，口味不是篩選條件
+  if (!query.author) { const hide = await viewerHide(); if (hide) params.set("hide", hide); }
   return json<CardPage>(await fetch(`${COMMUNITY_API}/cards?${params}`, { headers: { ...from(), ...viewer.headers } }));
 }
 
@@ -282,10 +295,17 @@ export interface SiteMe {
   /** 成人內容開關（要先驗過年齡） */
   showNsfw: boolean;
   ageVerified: boolean;
+  /** 不想看的類型（目錄鍵）：榜單與搜尋不列這些類型的卡 */
+  hiddenTags: string[];
 }
 
-/** 成人內容開關。第一次開要帶生日（YYYY-MM-DD），伺服器只看一眼、不存。 */
-export async function updateSiteSettings(input: { showNsfw: boolean; birthdate?: string }, token: string): Promise<{ showNsfw: boolean; ageVerified: boolean }> {
+export interface SiteSettings { showNsfw: boolean; ageVerified: boolean; hiddenTags: string[] }
+
+/**
+ * 本站的個人設定，可以只送其中一樣：成人內容開關（第一次開要帶生日 YYYY-MM-DD，伺服器只看一眼、不存）、
+ * 不想看的類型（完整清單，整份換掉）。回應永遠是三樣齊的現況。
+ */
+export async function updateSiteSettings(input: { showNsfw?: boolean; birthdate?: string; hiddenTags?: string[] }, token: string): Promise<SiteSettings> {
   return json(
     await fetch(`${COMMUNITY_API}/me/settings`, {
       method: "POST",

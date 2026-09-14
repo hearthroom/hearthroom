@@ -111,6 +111,35 @@ describe("搜尋", () => {
   });
 });
 
+describe("不想看的類型（hide）", () => {
+  beforeEach(async () => {
+    await seed({ id: "h1", name: "調教卡", tags: ["調教&強迫", "劇情"], talkNum: 30 });
+    await seed({ id: "h2", name: "训练卡", tags: ["调教&强迫"], talkNum: 20 });
+    await seed({ id: "h3", name: "劇情卡", tags: ["劇情"], talkNum: 10 });
+    await seed({ id: "h4", name: "素卡", tags: [], talkNum: 5 });
+  });
+
+  it("hide 帶類型鍵：任一命中的卡不列；五語名字都算；總數跟著少；回應仍是公開快取", async () => {
+    const res = await SELF.fetch("https://c.test/v1/cards?zone=zh&hide=training");
+    expect(res.headers.get("Cache-Control")).toMatch(/^public/);
+    const body = (await res.json()) as { items: any[]; total: number | null };
+    expect(ids(body).sort()).toEqual(["h3", "h4"]);
+    expect(body.total).toBe(2);
+    const two = await list("?zone=zh&hide=training,story");
+    expect(ids(two.body)).not.toContain("h1");
+    expect(ids(two.body)).not.toContain("h3");
+    expect(ids(two.body)).toContain("h4");
+  });
+
+  it("點了明確要看的類型就算它在隱藏名單裡也列出來（分享連結不會變空榜）；其他隱藏的類型照常排除；不是鍵的字忽略", async () => {
+    expect(ids((await list("?zone=zh&tag=training&hide=training")).body).sort()).toEqual(["h1", "h2"]);
+    // 點了調教但隱藏了劇情：兩個籤都有的卡還是不看——隱藏的是「那一類」，不因為它同時也是別類就放行
+    expect(ids((await list("?zone=zh&tag=training&hide=training,story")).body)).toEqual(["h2"]);
+    expect(ids((await list("?zone=zh&tag=%E8%AA%BF%E6%95%99%26%E5%BC%B7%E8%BF%AB&hide=training")).body)).toEqual(["h1"]);
+    expect(ids((await list("?zone=zh&hide=no-such-key")).body)).toContain("h1");
+  });
+});
+
 describe("排名", () => {
   const now = Date.now();
   const DAY = 86400_000;
