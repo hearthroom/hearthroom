@@ -1,11 +1,11 @@
 /**
  * 角色卡來源服務的 API 位址。
  *
- * 預設是主網域；主網域在中國被擋，所以開頁時先問本站 `/v1/region`（Cloudflare 邊緣依連線來源
- * 判國別），中國來源改用備用網域。結果記在這個分頁的 sessionStorage，重新整理不用再問。
- * 自架時改 VITE_LUNATALK_API_BASE 就能指向別的部署。
+ * 預設是主網址；有些地區連不上供應商的主網域，所以開頁時先問本站 `/v1/region`（Cloudflare 邊緣依
+ * 連線來源判國別），那些地區改用對應的閘道。結果記在這個分頁的 sessionStorage，重新整理不用再問。
+ * 自架時改 VITE_PROVIDER_API_BASE 就能指向別的供應商部署。
  */
-const DEFAULT_API: string = import.meta.env.VITE_LUNATALK_API_BASE ?? "https://api.lunatalk.ai";
+const DEFAULT_API: string = import.meta.env.VITE_PROVIDER_API_BASE ?? "https://api.lunatalk.ai";
 
 export let UPSTREAM_API: string = DEFAULT_API;
 

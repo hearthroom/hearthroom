@@ -105,10 +105,10 @@ describe("上游呼叫的 HTTP 形狀", () => {
     await upstream.fetchMe(env, "secret-token");
     await upstream.fetchRole(env, "role-1");
 
-    expect(calls[0].url).toBe(`${env.LUNATALK_API_BASE}/open/v1/me`);
+    expect(calls[0].url).toBe(`${env.PROVIDER_API_BASE}/open/v1/me`);
     expect(calls[0].headers.Authorization).toBe("Bearer secret-token");
     // 同步跑在排程裡，那時沒有使用者在線——讀卡片這條路不該需要任何人的憑證。
-    expect(calls[1].url).toBe(`${env.LUNATALK_API_BASE}/open/v1/role/detail?roleId=role-1`);
+    expect(calls[1].url).toBe(`${env.PROVIDER_API_BASE}/open/v1/role/detail?roleId=role-1`);
     expect(calls[1].headers.Authorization).toBeUndefined();
     // 上游掛在 Cloudflare 後面，沒有 User-Agent 會被 bot 防護擋成 403。
     for (const call of calls) expect(call.headers["User-Agent"]).toContain("Personae");
@@ -121,7 +121,7 @@ describe("上游呼叫的 HTTP 形狀", () => {
       return new Response(JSON.stringify({ roleList: [], total: 0, hasNextPage: false }), { status: 200, headers: { "Content-Type": "application/json" } });
     });
     await upstream.fetchMyRoles(env, "tok", 1, 24);
-    expect(calls[0]).toBe(`${env.LUNATALK_API_BASE}/open/v1/role/mine?pageNum=1&pageSize=24&creationMethod=hearthroom`);
+    expect(calls[0]).toBe(`${env.PROVIDER_API_BASE}/open/v1/role/mine?pageNum=1&pageSize=24&creationMethod=hearthroom`);
   });
 
   it("角色詳情帶出建卡來源，登記時靠它分本站與主站", () => {

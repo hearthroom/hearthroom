@@ -23,6 +23,7 @@ import { loadMine, type MineFilter } from "./mine";
 import { tagNamesFor } from "../shared/tag-catalog";
 import { isReviewer, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
 import { DEFAULT_PROVIDER, type ProviderId, reviewBotOf } from "./providers";
+import { providerApiBaseFor } from "./providers";
 import { WEEKLY_LIMIT, recordRegistration, registeredThisWeek } from "./quota";
 import {
   STAMPS_REQUIRED, claim as claimSubmission, createSubmission, getSubmission, listQueue, needsReviewStatements,
@@ -129,14 +130,13 @@ app.get("/v1/health", (c) => c.json({ ok: true }));
 gameRoutes(app);
 
 /**
- * 前端開頁時問一次「上游該打哪個網域」。主網域在中國被擋，那邊的人改走備用網域；
- * 國別是 Cloudflare 邊緣看連線來源判的（`cf.country`；沒有就看它塞的標頭，測試環境走這條）。
- * 回應依來源而異，不能被任何一層快取。
+ * 前端開頁時問一次「供應商該打哪個網址」。有些地區連不上供應商的主網域，那邊的人改走
+ * 對應的閘道（PROVIDER_API_GATEWAYS）；國別是 Cloudflare 邊緣看連線來源判的（`cf.country`；
+ * 沒有就看它塞的標頭，測試環境走這條）。回應依來源而異，不能被任何一層快取。
  */
 app.get("/v1/region", (c) => {
   const country = ((c.req.raw.cf?.country as string) || c.req.header("cf-ipcountry") || "").toUpperCase();
-  const alt = c.env.LUNATALK_API_BASE_CN;
-  const apiBase = country === "CN" && alt ? alt : c.env.LUNATALK_API_BASE;
+  const apiBase = providerApiBaseFor(c.env, country);
   return c.json({ country, apiBase }, 200, { "Cache-Control": "no-store" });
 });
 

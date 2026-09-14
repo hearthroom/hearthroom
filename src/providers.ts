@@ -18,6 +18,26 @@ import type { Env } from "./types";
  */
 export type ProviderId = "lunatalk";
 
+/**
+ * 依來源國別挑供應商的 API 網址。`PROVIDER_API_GATEWAYS` 是 `CC=網址` 的逗號清單：某些地區連不上
+ * 供應商的主網域，那邊的瀏覽器改打對應的閘道。沒有對應項、或清單為空，就是主網址。
+ */
+export function parseGateways(spec: string | undefined): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const item of (spec ?? "").split(/[,\s]+/)) {
+    const eq = item.indexOf("=");
+    if (eq <= 0) continue;
+    const cc = item.slice(0, eq).trim().toUpperCase();
+    const url = item.slice(eq + 1).trim().replace(/\/+$/, "");
+    if (cc && /^https?:\/\//.test(url)) out.set(cc, url);
+  }
+  return out;
+}
+
+export function providerApiBaseFor(env: { PROVIDER_API_BASE: string; PROVIDER_API_GATEWAYS?: string }, country: string): string {
+  return parseGateways(env.PROVIDER_API_GATEWAYS).get(country.toUpperCase()) ?? env.PROVIDER_API_BASE;
+}
+
 export const DEFAULT_PROVIDER: ProviderId = "lunatalk";
 
 export interface ReviewBot {

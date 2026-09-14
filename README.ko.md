@@ -111,7 +111,7 @@ npm run dev:web             # Vite, :8850, /v1을 :8787로 프록시
 
 ```bash
 node scripts/mock-upstream.mjs                                  # :8899
-VITE_LUNATALK_API_BASE=http://127.0.0.1:8899 npm run dev:web
+VITE_PROVIDER_API_BASE=http://127.0.0.1:8899 npm run dev:web
 ```
 
 그다음 브라우저 콘솔에서 토큰을 넣습니다.
@@ -128,7 +128,7 @@ localStorage.setItem("hearthroom.oauth.access", JSON.stringify({ accessToken: "t
 
 1. 리소스를 만들고 ID를 `wrangler.toml`에 적습니다. **D1** 데이터베이스(`DB`), **KV** 네임스페이스 두 개(`CACHE`, `ASSET_ARCHIVE`), 선택적으로 **Analytics Engine** 데이터셋(`EVENTS`; 쓰지 않으면 `ANALYTICS_ENABLED = "false"`).
 2. 자신의 도메인으로 바꿉니다. `wrangler.toml`의 `routes`, `src/site.ts`의 `HOST`, `web/src/lib/site.ts`의 사이트 이름. 커스텀 도메인은 이미 DNS 레코드가 있는 호스트명에 붙일 수 없으니 파킹 레코드를 먼저 삭제하세요.
-3. 제공자 설정: `[vars]`의 `LUNATALK_API_BASE`(및 지역 대체 `LUNATALK_API_BASE_CN`). 변수 이름은 처음 연결한 제공자에서 왔지만, 사이트는 일반 제공자로 취급합니다.
+3. 제공자 설정: `[vars]`의 `PROVIDER_API_BASE`. 일부 국가에서 제공자의 주 도메인에 접속할 수 없다면 `PROVIDER_API_GATEWAYS`에 국가별 게이트웨이(`CC=URL,…`)를 나열하세요. `/v1/region`이 해당 국가의 브라우저에 맞는 URL을 전달합니다.
 4. 선택적 심사 봇: `[vars]`의 `REVIEW_BOT_ACCOUNT_NUM_ID`와 `wrangler secret put REVIEW_BOT_KEY`. 둘 중 하나라도 없으면 제출이 심사 없이 바로 등재됩니다. 심사자는 `node scripts/grant-reviewer.mjs <제공자 계정 ID>`로 부여합니다.
 5. 배포:
 
