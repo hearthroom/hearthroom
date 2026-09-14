@@ -25,9 +25,10 @@ describe("pwa install prompt", () => {
 
   it("treats no storage as a first visit", () => { expect(recordVisit(null)).toBe(1); });
 
-  it("offers only on a return visit, never in standalone, and respects a recent dismissal", () => {
+  it("offers from the first visit, never in standalone, and respects a recent dismissal", () => {
     const now = Date.UTC(2026, 8, 15);
-    expect(shouldOffer({ standalone: false, dismissedAt: null, visitDays: 1, now })).toBe(false);
+    expect(shouldOffer({ standalone: false, dismissedAt: null, visitDays: 0, now })).toBe(false);
+    expect(shouldOffer({ standalone: false, dismissedAt: null, visitDays: 1, now })).toBe(true);
     expect(shouldOffer({ standalone: false, dismissedAt: null, visitDays: 2, now })).toBe(true);
     expect(shouldOffer({ standalone: true, dismissedAt: null, visitDays: 5, now })).toBe(false);
     expect(shouldOffer({ standalone: false, dismissedAt: now - 10 * DAY, visitDays: 5, now })).toBe(false);

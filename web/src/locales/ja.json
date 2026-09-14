@@ -949,5 +949,6 @@
   "pwa.install.cta": "インストール",
   "pwa.install.later": "あとで",
   "pwa.install.ios": "Safari の「共有」をタップし、「ホーム画面に追加」を選んでください。",
-  "pwa.install.ok": "わかった"
+  "pwa.install.ok": "わかった",
+  "pwa.install.link": "アプリをインストール"
 }
