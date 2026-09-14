@@ -2,6 +2,10 @@ import { UPSTREAM_API, OAUTH_RESOURCE } from "./config";
 import { track } from "./track";
 import { i18n } from "./i18n";
 import { SITE } from "./site";
+import { HARBOR } from "./provider";
+
+/** Harbor 照 scope 發能力，不帶就只有唯讀；LunaTalk 不看這個參數。 */
+const HARBOR_SCOPE = "profile.read role.read role.write";
 
 /**
  * Authorization Code + PKCE。
@@ -14,7 +18,8 @@ import { SITE } from "./site";
  */
 
 const STORE = {
-  client: "hearthroom.oauth.client",
+  // Harbor 模式按上游分開存：同一個網域以前向別家註冊的 client_id，換了授權伺服器就是 invalid_client。
+  client: HARBOR ? `hearthroom.oauth.client:${UPSTREAM_API}` : "hearthroom.oauth.client",
   verifier: "hearthroom.oauth.verifier",
   state: "hearthroom.oauth.state",
   refresh: "hearthroom.oauth.refresh",
@@ -53,6 +58,7 @@ async function clientId(): Promise<string> {
       redirect_uris: [redirectUri()],
       grant_types: ["authorization_code", "refresh_token"],
       token_endpoint_auth_method: "none",
+      ...(HARBOR ? { scope: HARBOR_SCOPE } : {}),
     }),
   });
   if (!res.ok) throw new Error(t("auth.registerFailed", { status: res.status }));
@@ -79,6 +85,7 @@ export async function beginLogin(returnTo: string): Promise<void> {
     code_challenge_method: "S256",
     resource: OAUTH_RESOURCE,
   });
+  if (HARBOR) params.set("scope", HARBOR_SCOPE);
   // 走備用網域時，登入頁也要換成備用網域的（邊緣代理會把 Host 改寫，伺服器光看 Host 判不出來）
   if (/\/\/api\.lunatalk\.pro(?::\d+)?$/i.test(UPSTREAM_API)) params.set("login_site", "pro");
   location.assign(`${UPSTREAM_API}/oauth/authorize?${params}`);

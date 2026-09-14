@@ -252,6 +252,7 @@
   "editor.publish.hint": "먼저 심사를 거치고, 통과해야 다른 사람에게 보입니다.",
   "editor.publish.saveFirst": "저장하지 않은 변경이 있어요. 한 번 저장하고 심사에 내세요.",
   "editor.publish.submit": "심사 요청",
+  "editor.publish.mature": "이 카드에는 성인 콘텐츠가 포함되어 있습니다",
   "editor.publish.confirm": "심사에 들어가고, 통과하면 모두에게 보입니다. 보낼까요?",
   "editor.publish.summary": "작성자 심사 요청: {name}",
   "dialog.typeToConfirm": "확인하려면 \"{text}\"을(를) 입력하세요",

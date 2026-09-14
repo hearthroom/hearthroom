@@ -252,6 +252,7 @@
   "editor.publish.hint": "It goes through review first, and only appears to others once it passes.",
   "editor.publish.saveFirst": "You have unsaved changes. Save once before submitting.",
   "editor.publish.submit": "Submit for review",
+  "editor.publish.mature": "This card contains adult content",
   "editor.publish.confirm": "This card goes into review, and becomes visible to everyone once it passes. Submit?",
   "editor.publish.summary": "Author submitted for review: {name}",
   "dialog.typeToConfirm": "Type \"{text}\" to confirm",
