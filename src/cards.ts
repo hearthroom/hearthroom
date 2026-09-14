@@ -123,9 +123,14 @@ export interface ListResult {
   total: number | null;
 }
 
+/**
+ * 名單整份當一個 JSON 陣列綁進去，用 json_each 展開比對，而不是一個名字綁一個 `?`：
+ * 類型鍵展開成五種語言的名字，藏三十種類型就是一百五十個變數，超過 D1 一條語句 100 個的上限，
+ * 整個榜單直接 500（2026-09-15 實測）。
+ */
+const inList = (table: string) => `EXISTS (SELECT 1 FROM json_each(${table}.tags) WHERE json_each.value IN (SELECT value FROM json_each(?)))`;
 /** 「卡片標籤裡沒有任何一個在名單裡」：跟 tags 的 EXISTS 同一個形狀，反過來。 */
-const excludeClause = (table: string, n: number) =>
-  `NOT EXISTS (SELECT 1 FROM json_each(${table}.tags) WHERE json_each.value IN (${Array.from({ length: n }, () => "?").join(",")}))`;
+const excludeClause = (table: string) => `NOT ${inList(table)}`;
 
 export async function listCards(db: D1Database, opts: ListOptions) {
   const where: string[] = opts.anyStatus ? ["1=1"] : [`c.${listed(!!opts.allowNsfw)}`];
@@ -150,12 +155,12 @@ export async function listCards(db: D1Database, opts: ListOptions) {
   }
   if (opts.tags?.length) {
     // 類型鍵展開成幾種語言的名字，任一命中都算；字面標籤就是一個名字
-    where.push(`EXISTS (SELECT 1 FROM json_each(c.tags) WHERE json_each.value IN (${opts.tags.map(() => "?").join(",")}))`);
-    binds.push(...opts.tags);
+    where.push(inList("c"));
+    binds.push(JSON.stringify(opts.tags));
   }
   if (opts.excludeTags?.length) {
-    where.push(excludeClause("c", opts.excludeTags.length));
-    binds.push(...opts.excludeTags);
+    where.push(excludeClause("c"));
+    binds.push(JSON.stringify(opts.excludeTags));
   }
   if (opts.since !== undefined) {
     // 日／週／月榜：只看上榜時間在窗口內的卡（owner 2026-09-07：時間是卡片上榜的那一刻）
@@ -201,7 +206,7 @@ export async function listCards(db: D1Database, opts: ListOptions) {
     const countWhere = [listed(!!opts.allowNsfw)];
     const countBinds: unknown[] = [];
     if (opts.zone) { countWhere.push("zone IN (?, 'all')"); countBinds.push(opts.zone); }
-    if (opts.excludeTags?.length) { countWhere.push(excludeClause("cards", opts.excludeTags.length)); countBinds.push(...opts.excludeTags); }
+    if (opts.excludeTags?.length) { countWhere.push(excludeClause("cards")); countBinds.push(JSON.stringify(opts.excludeTags)); }
     const counted = await db.prepare(`SELECT COUNT(*) AS n FROM cards WHERE ${countWhere.join(" AND ")}`).bind(...countBinds).first<{ n: number }>();
     total = counted?.n ?? 0;
   } else if (!hasNext) {
