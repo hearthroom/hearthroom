@@ -1122,7 +1122,7 @@ async function exportCard(format: "png" | "json") {
               <button type="button" class="seg__item" :class="{ 'seg__item--on': chatPage === 'classic' }" role="radio"
                       :aria-checked="chatPage === 'classic'" @click="chatPage = 'classic'">{{ $t("editor.chatPage.classic") }}</button>
             </div>
-            <span class="subtle">{{ $t("editor.chatPage.hint") }} <RouterLink :to="lp('/guide')">{{ $t("editor.chatPage.doc") }}</RouterLink></span>
+            <span class="subtle">{{ $t("editor.chatPage.hint") }} <RouterLink class="link" :to="lp('/guide')">{{ $t("editor.chatPage.doc") }}</RouterLink></span>
           </div>
 
           <FieldText id="f-name" v-model="draft.roleName" :label="$t('editor.name')" required :max="60"
@@ -1540,8 +1540,7 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 /*
    右欄要有確定的高度，面板裡的 iframe 才長得起來：沒有高度時 minmax(0,1fr)
    解成內容高，對話畫布只剩自己的 min-height（實測 420px，裡面的訊息區塞成 150px）。
-   高度一路吃到視窗底，除了分頁列以外不放別的東西——手機框的寬度是由高度乘比例
-   反推的，所以在這條欄上少放一行，框就同時長高又變寬。
+   高度一路吃到視窗底，除了分頁列以外不放別的東西——多放一行，框就矮一行。
 */
 .chatpage { width: fit-content; }
 /* 拖曳把手貼在右欄左緣：一條細桿，滑上去變粗；只在寬螢幕、面板展開時有 */
@@ -1563,12 +1562,11 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 /* 面板收起來時沒有東西要撐開，讓右欄縮回內容高，底下不留一長條空白 */
 .rail:not(.rail--wide) { height: auto; grid-template-rows: auto; }
 /*
-   右欄的寬度跟著手機框走，不是一個寫死的數字。框的高度吃滿面板、寬度由 9:19.5 反推，
-   所以能有多寬完全看視窗有多高；寫死一個數字要嘛在框旁邊留一條放不下東西的空白，
-   要嘛把框壓窄。這條就是把面板的可用高乘上比例：
+   右欄的預設寬度照手機比例算，不是一個寫死的數字。對話測試的框填滿右欄，所以
+   右欄多寬框就多寬；預設要讓它看起來像一支手機，就把面板的可用高乘上 9:19.5：
    可用高 = 100vh − 60(頁首) − 24(上緣留白) − 48(分頁列與它下面那道間距)，
    乘 9/19.5 得 46vh − 61px，再多給幾像素讓框不要貼著邊。上下限擋住極端視窗。
-   算不準也不會壞：框太窄由 max-width 收，框太寬就維持置中留白。
+   使用者拖過把手之後，layoutStyle 會用 inline 的 --rail-w 蓋掉這條，框跟著變寬。
 */
 .layout:has(.rail--wide) { --rail-w: clamp(320px, calc(46vh - 54px), 640px); }
 .rail__tabs { display: flex; gap: var(--s-2); align-items: center; }
