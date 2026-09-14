@@ -46,11 +46,13 @@ describe("沙箱子網域", () => {
     expect(csp).toContain("frame-ancestors https://hearthroom.club https://www.hearthroom.club");
     expect(csp).toContain("script-src 'self' 'unsafe-inline' 'unsafe-eval' https:");
     expect(page.headers.get("cache-control")).toBe("no-cache");
-    expect(page.headers.get("etag")).toBeNull();
+    expect(page.headers.get("etag")).toBe('"x"');
     const js = await get("https://c1.hearthroom.club/sandbox/sandbox.js");
     expect(js.status).toBe(200);
     expect(js.headers.get("content-type")).toContain("javascript");
     expect(js.headers.get("content-security-policy")).toContain("frame-ancestors");
+    // 部署後不能配到舊殼：js/css 也每次重新驗證
+    expect(js.headers.get("cache-control")).toBe("no-cache");
     const css = await get("https://c1.hearthroom.club/sandbox/sandbox.css");
     expect(css.headers.get("content-type")).toContain("css");
   });
