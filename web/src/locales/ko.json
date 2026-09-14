@@ -943,5 +943,11 @@
   "editor.chatPage.classic": "기존",
   "editor.chatPage.hint": "샌드박스는 카드의 화면과 스크립트를 격리해 실행합니다. 일반 카드는 그대로 표시됩니다. 오래된 카드가 샌드박스에서 이상할 때만 기존으로 되돌리세요.",
   "editor.chatPage.doc": "카드 작성 가이드",
-  "editor.panel.resize": "드래그하여 너비 조절"
+  "editor.panel.resize": "드래그하여 너비 조절",
+  "pwa.install.title": "Hearthroom을 홈 화면에 추가",
+  "pwa.install.body": "앱처럼 홈 화면에서 전체 화면으로 바로 열립니다.",
+  "pwa.install.cta": "설치",
+  "pwa.install.later": "나중에",
+  "pwa.install.ios": "Safari에서 ‘공유’를 누른 뒤 ‘홈 화면에 추가’를 선택하세요.",
+  "pwa.install.ok": "알겠어요"
 }

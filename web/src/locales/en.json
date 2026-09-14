@@ -943,5 +943,11 @@
   "editor.chatPage.classic": "Classic",
   "editor.chatPage.hint": "Sandbox runs the card’s page and scripts in isolation; ordinary cards look the same. Switch back to classic only if an older card misbehaves in the sandbox.",
   "editor.chatPage.doc": "Card authoring guide",
-  "editor.panel.resize": "Drag to resize"
+  "editor.panel.resize": "Drag to resize",
+  "pwa.install.title": "Add Hearthroom to your home screen",
+  "pwa.install.body": "Opens like an app: full screen, straight from your home screen.",
+  "pwa.install.cta": "Install",
+  "pwa.install.later": "Not now",
+  "pwa.install.ios": "Tap Share in Safari, then choose “Add to Home Screen”.",
+  "pwa.install.ok": "Got it"
 }
