@@ -72,36 +72,24 @@ defineExpose({ reload: () => { nonce.value += 1; } });
 </template>
 
 <style scoped>
-/* flex 而不是固定行數的 grid：上面那條提示是 v-if，不脏的時候整個不存在，
-   照位置指定的 minmax(0,1fr) 會落到別的孩子身上，該撐滿的那格反而拿到 auto。 */
-.ct { display: flex; flex-direction: column; gap: var(--s-2); min-height: 0; }
-.ct__state { display: grid; gap: var(--s-3); place-content: center; text-align: center; padding: var(--s-5) var(--s-3); }
-.ct__state .subtle { margin: 0; }
-.ct__notice {
-  flex: none; display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap;
-  padding: var(--s-2) var(--s-3); border-radius: var(--r-sm); background: var(--surface-2);
-}
-.ct__notice .subtle { flex: 1; min-width: 0; font-size: 12.5px; }
 /*
-   手機比例，不是「剩下多寬就多寬」。
-   卡片是照手機畫的——版面、字級、氣泡寬度、作者自己貼的 HUD 都按那個比例算。
-   用一個橫的框去測，看到的是一張永遠不會有人看到的版面。9:19.5 是現在常見的
-   手機長寬比；高度吃滿面板，寬度由比例反推，置中放。
+   框把面板填滿：寬度跟著右欄走、高度吃到面板底。
+   右欄的預設寬度（見編輯頁 --rail-w）是照手機比例由視窗高反推的，所以不拖的時候
+   看到的仍是一張手機版面；把把手往左拉，框就跟著變寬，用來看卡在平板／寬版下的樣子。
+   以前是「高度吃滿、寬度由 9:19.5 反推」，拖寬右欄時框不動，只在旁邊多出空白。
 */
-/* flex 置中而不是 grid：grid 的隱式行由子元素撐，而子元素又靠 height:100% 反查行高——
-   循環相依之下瀏覽器退回「照寬度乘比例」，框就變成 440×953 撐破面板。 */
 .ct__stage {
   flex: 1; min-height: 0; overflow: hidden;
-  display: flex; align-items: center; justify-content: center;
+  display: flex; align-items: stretch; justify-content: center;
 }
 .ct__frame {
-  height: 100%; aspect-ratio: 9 / 19.5; width: auto; max-width: 100%; border: 0;
+  width: 100%; height: 100%; border: 0;
   border-radius: var(--r-lg); background: var(--surface-2);
   box-shadow: 0 0 0 1px var(--line), var(--shadow-sm);
 }
-/* 面板太矮時倒過來：寬度吃滿、高度由比例決定，寧可讓外層捲也不要壓扁比例 */
+/* 面板太矮時給框一個底線高度，寧可讓外層捲也不要把對話壓扁 */
 @media (max-height: 720px) {
-  .ct__stage { align-items: start; overflow-y: auto; }
-  .ct__frame { height: auto; width: min(100%, 300px); }
+  .ct__stage { overflow-y: auto; }
+  .ct__frame { min-height: 480px; }
 }
 </style>
