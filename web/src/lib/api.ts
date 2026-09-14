@@ -3,7 +3,8 @@ import { hideParam } from "./hidden-tags";
 import { currentSurface } from "./track";
 import { i18n } from "./i18n";
 import { HARBOR } from "./provider";
-import { harborCreateRole, harborPublish, harborSaveDocument, harborScoreRecords, harborUploadImage, harborWallet } from "./harbor";
+/** Harbor 相容層只在 Harbor 建置才載入：預設（LunaTalk）建置執行時不會碰到它。 */
+const harbor = () => import("./harbor");
 import type { Author, AuthorSort, CardPage, CommunityCard, MyRole, Sort, Zone } from "./types";
 import type { RoleDocumentFields, TalkExampleEntry, WorldbookEntryDraft } from "./role-draft";
 
@@ -516,7 +517,7 @@ export interface RoleDraft {
  * 作者在主站建的卡不會混進來。
  */
 export async function createRole(draft: { roleName: string; language?: string }, token: string): Promise<{ roleId?: string }> {
-  if (HARBOR) return harborCreateRole(draft, token);
+  if (HARBOR) return (await harbor()).harborCreateRole(draft, token);
   return json<{ roleId?: string }>(
     await fetch(`${UPSTREAM_API}/open/v1/role`, {
       method: "POST",
@@ -573,7 +574,7 @@ export async function savePlayerPersona(patch: Partial<PlayerPersona>, token: st
 }
 
 export async function fetchWallet(token: string): Promise<Wallet> {
-  if (HARBOR) return harborWallet(token);
+  if (HARBOR) return (await harbor()).harborWallet(token);
   return json<Wallet>(await fetch(`${UPSTREAM_API}/open/v1/me/wallet`, { headers: authHeaders(token) }));
 }
 
@@ -592,7 +593,7 @@ export interface ScoreRecordPage {
 }
 
 export async function fetchScoreRecords(token: string, page = 1, pageSize = 20): Promise<ScoreRecordPage> {
-  if (HARBOR) return harborScoreRecords(token);
+  if (HARBOR) return (await harbor()).harborScoreRecords(token);
   return json<ScoreRecordPage>(
     await fetch(`${UPSTREAM_API}/open/v1/me/score/records?pageNum=${page}&pageSize=${pageSize}`, {
       headers: authHeaders(token),
@@ -602,7 +603,7 @@ export async function fetchScoreRecords(token: string, page = 1, pageSize = 20):
 
 /** 原站的充值頁。本站不碰付款，只把人送過去。 */
 export const TOP_UP_URL = HARBOR
-  ? `${import.meta.env.VITE_HARBOR_CONSOLE_URL ?? "http://localhost:8090"}/me/wallet`
+  ? `${import.meta.env.VITE_HARBOR_CONSOLE_URL ?? ""}/me/wallet`
   : `${UPSTREAM_API.replace("api.", "")}/pages/mine/vippay`;
 
 // ---- 建卡工作台：上游的寫入面 ------------------------------------------------
@@ -630,7 +631,7 @@ const writeHeaders = (token: string): Record<string, string> => ({
 
 /** 一次寫入表單上的所有欄位。沒送的欄位上游完全不碰。 */
 export async function patchRoleDocument(roleId: string, fields: RoleDocumentFields, token: string): Promise<unknown> {
-  if (HARBOR) return harborSaveDocument(roleId, fields, token);
+  if (HARBOR) return (await harbor()).harborSaveDocument(roleId, fields, token);
   return json<unknown>(
     await fetch(`${UPSTREAM_API}/open/v1/role/${encodeURIComponent(roleId)}/document`, {
       method: "POST",
@@ -651,7 +652,7 @@ export async function patchRoleWelcome(
   patch: { roleWelcome: string; alternates: string[]; prologue: string[] },
   token: string,
 ): Promise<unknown> {
-  if (HARBOR) return harborSaveDocument(roleId, { roleWelcome: patch.roleWelcome }, token);
+  if (HARBOR) return (await harbor()).harborSaveDocument(roleId, { roleWelcome: patch.roleWelcome }, token);
   return json<unknown>(
     await fetch(`${UPSTREAM_API}/open/v1/role/${encodeURIComponent(roleId)}/welcome`, {
       method: "PATCH",
@@ -689,7 +690,7 @@ export async function submitRoleForReview(
   /** Harbor 模式要作者宣告分級；LunaTalk 那邊由登記時的宣告負責，這個參數不送。 */
   mature = false,
 ): Promise<{ reviewStatus?: string }> {
-  if (HARBOR) return harborPublish(roleId, mature, token).then(() => ({ reviewStatus: "pending" }));
+  if (HARBOR) return (await harbor()).harborPublish(roleId, mature, token).then(() => ({ reviewStatus: "pending" }));
   return json<{ reviewStatus?: string }>(
     await fetch(`${UPSTREAM_API}/open/v1/role/${encodeURIComponent(roleId)}/publish`, {
       method: "POST",
@@ -727,7 +728,7 @@ export async function unpublishRole(roleId: string, token: string): Promise<unkn
  * 擋掉）就改走舊的一次送上去。已經放進儲存但登記失敗**不**備援——那會傳兩次。
  */
 export async function uploadImage(file: File, token: string, roleId?: string, folderIds: string[] = [], onProgress?: (fraction: number) => void): Promise<string> {
-  if (HARBOR) return harborUploadImage(file, token, onProgress);
+  if (HARBOR) return (await harbor()).harborUploadImage(file, token, onProgress);
   const intentRes = await libraryPost("uploadIntent", { byteSize: file.size }, token);
   if (intentRes.status === 404) return uploadImageLegacy(file, token, roleId, folderIds);
   const intent = await libraryJson<{ uploadId?: string; uploadUrl?: string; contentType?: string }>(intentRes);
