@@ -35,8 +35,32 @@ export interface RegexRuleSet {
   lowered: boolean;
   /** 上游還有第三層 cover（蓋整個畫面）；本站編輯器不提供，但讀到了要原樣存回去。 */
   mountLayer?: "cover";
-  /** 上游的頁面模式（classic / immersive）；同樣只是帶著走。 */
-  pageMode?: string;
+  /**
+   * 頁面模式。缺＝舊版聊天頁（規則直接套在畫面上）。`sandbox`＝新版沙箱：整個聊天區交給
+   * 作者的殼在獨立 iframe 裡渲染，對應魅魔島匯出檔的 `chatVersion: 1`。`immersive` 是上游另一種
+   * 舊頁版面（滿版乾淨畫布），本站編輯器不提供，讀到了原樣帶著走。
+   */
+  pageMode?: RegexPageMode;
+}
+
+export type RegexPageMode = "classic" | "immersive" | "sandbox";
+
+/** 編輯器給作者選的聊天頁版本：舊版（規則套在畫面上）或新版沙箱。immersive 不在選單裡。 */
+export type ChatPageChoice = "classic" | "sandbox";
+
+export function chatPageOf(set: Pick<RegexRuleSet, "pageMode">): ChatPageChoice {
+  return set.pageMode === "sandbox" ? "sandbox" : "classic";
+}
+
+/** 認上游／檔案裡的 pageMode 字串；認不得的當沒寫。 */
+export function pageModeFrom(v: unknown): RegexPageMode | undefined {
+  const s = text(v);
+  return s === "classic" || s === "immersive" || s === "sandbox" ? s : undefined;
+}
+
+/** 魅魔島匯出檔的 `chatVersion`：1（數字或字串）是新版沙箱卡，其他值或缺欄位都是舊版。 */
+export function isSandboxChatVersion(v: unknown): boolean {
+  return String(v ?? "").trim() === "1";
 }
 
 /**
@@ -207,6 +231,8 @@ export function rulesToTavern(rules: RegexRule[]): TavernRegexScript[] {
 
 /** 魅魔島的匯出檔。`beginning` 是第一句話（開場白），跟規則分開回給呼叫端決定要不要蓋。 */
 export interface MeimoRegexFile {
+  /** 1＝新版沙箱聊天頁；舊版檔沒有這個欄位。 */
+  chatVersion?: number;
   pageDepth?: number;
   statusbar?: string;
   beginning?: string;
@@ -219,7 +245,10 @@ function ruleSetFromNative(obj: Record<string, unknown>): RegexRuleSet | null {
   const rules: RegexRule[] = (obj.rules as Partial<RegexRule>[])
     .filter((r) => r && typeof r === "object" && text(r.find))
     .map((r) => ({ id: text(r.id) || newRuleId(), name: text(r.name), find: text(r.find), replace: text(r.replace), enabled: r.enabled !== false }));
-  return { version: 1, rules, statusbar: text(obj.statusbar), lowered: obj.lowered === true };
+  const set: RegexRuleSet = { version: 1, rules, statusbar: text(obj.statusbar), lowered: obj.lowered === true };
+  const pageMode = pageModeFrom(obj.pageMode);
+  if (pageMode) set.pageMode = pageMode;
+  return set;
 }
 
 export function ruleSetFromImport(raw: unknown): { set: RegexRuleSet; welcome: string } | null {
@@ -231,6 +260,7 @@ export function ruleSetFromImport(raw: unknown): { set: RegexRuleSet; welcome: s
     const native = ruleSetFromNative(obj);
     if (!native || !native.rules.length) return null;
     if ("pageDepth" in obj) native.lowered = loweredFromPageDepth(obj.pageDepth);
+    if (isSandboxChatVersion(obj.chatVersion)) native.pageMode = "sandbox";
     return { set: native, welcome: text(obj.welcome) };
   }
   // 三種來源：魅魔島檔、酒館卡（extensions.regex_scripts）、裸陣列
@@ -239,7 +269,9 @@ export function ruleSetFromImport(raw: unknown): { set: RegexRuleSet; welcome: s
   if (!scripts && Array.isArray(raw)) scripts = raw;
   const rules = rulesFromTavern(scripts);
   if (!rules.length) return null;
-  return { set: { version: 1, rules, statusbar: text(obj.statusbar), lowered: loweredFromPageDepth(obj.pageDepth) }, welcome: text(obj.beginning) };
+  const set: RegexRuleSet = { version: 1, rules, statusbar: text(obj.statusbar), lowered: loweredFromPageDepth(obj.pageDepth) };
+  if (isSandboxChatVersion(obj.chatVersion)) set.pageMode = "sandbox";
+  return { set, welcome: text(obj.beginning) };
 }
 
 /**
@@ -253,7 +285,10 @@ export function loweredFromPageDepth(v: unknown): boolean {
 }
 
 export function ruleSetToExport(set: RegexRuleSet, welcome: string): MeimoRegexFile {
-  return { pageDepth: set.lowered ? 1 : 2, statusbar: set.statusbar, beginning: welcome, regex_scripts: rulesToTavern(set.rules) };
+  const file: MeimoRegexFile = { pageDepth: set.lowered ? 1 : 2, statusbar: set.statusbar, beginning: welcome, regex_scripts: rulesToTavern(set.rules) };
+  // 新版卡的匯出檔第一個鍵就是 chatVersion；舊版檔沒有這個鍵，原站據此分辨，所以舊版不能寫 0。
+  if (set.pageMode === "sandbox") return { chatVersion: 1, ...file };
+  return file;
 }
 
 // ── 上游的「作者資產」形狀 ──────────────────────────────────────────────
@@ -271,7 +306,8 @@ export function ruleSetFromAuthorAsset(asset: AuthorAssetLike): RegexRuleSet {
   const layer = text(asset.mountLayer);
   const set: RegexRuleSet = { ...native, statusbar: text(asset.mountTrigger), lowered: layer === "under" };
   if (layer === "cover") set.mountLayer = "cover";
-  if (text(asset.pageMode)) set.pageMode = text(asset.pageMode);
+  const pageMode = pageModeFrom(asset.pageMode);
+  if (pageMode) set.pageMode = pageMode;
   return set;
 }
 
