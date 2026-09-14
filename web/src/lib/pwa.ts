@@ -6,7 +6,8 @@
  *
  * 提示卡什麼時候出現：
  * - 不在已安裝的視窗裡（display-mode: standalone）；
- * - 使用者按過「以後再說」的話，三十天內不再問；
+ * - 按過「以後再說」的先歇一天再問；再按就越歇越久（1、3、7、14、30 天），不是一次就推滿三十天。
+ *   第一次來的人多半不裝，但之後用熟了可能想裝；問太少會讓想裝的人找不到入口（owner 2026-09-15）。
  * - 首屏畫完幾秒後就問（owner 2026-09-15：原本要第二天再問，結果三個平台都看不到提示）。
  * - Chromium 系：等瀏覽器發 beforeinstallprompt 才有得裝，按下去走原生的安裝框。
  * - iOS Safari：沒有事件也沒有 API，只能提示「分享 → 加入主畫面」。
@@ -20,8 +21,15 @@
 import { reactive } from "vue";
 
 const DISMISS_KEY = "hearthroom.pwa.dismissedAt";
+const DISMISS_COUNT_KEY = "hearthroom.pwa.dismissCount";
 const DAYS_KEY = "hearthroom.pwa.days";
-const DISMISS_FOR_MS = 30 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** 第 n 次按「以後再說」之後要歇幾天；超過表長就一直用最後一個。 */
+const DISMISS_BACKOFF_DAYS = [1, 3, 7, 14, 30];
+export function dismissWaitMs(count: number): number {
+  const i = Math.min(Math.max(1, Math.floor(count)), DISMISS_BACKOFF_DAYS.length) - 1;
+  return DISMISS_BACKOFF_DAYS[i] * DAY_MS;
+}
 const MIN_DAYS = 1;
 const KEEP_DAYS = 8;
 
@@ -61,17 +69,22 @@ export function isIosSafari(ua = navigator.userAgent): boolean {
   return !/CriOS|FxiOS|EdgiOS|OPiOS/.test(ua);
 }
 
-/** 純判斷：現在該不該把提示卡拿出來。 */
-export function shouldOffer(opts: { standalone: boolean; dismissedAt: number | null; visitDays: number; now?: number }): boolean {
+/** 純判斷：現在該不該把提示卡拿出來。dismissCount 是按過幾次「以後再說」，決定要歇多久。 */
+export function shouldOffer(opts: { standalone: boolean; dismissedAt: number | null; dismissCount?: number; visitDays: number; now?: number }): boolean {
   const now = opts.now ?? Date.now();
   if (opts.standalone) return false;
-  if (opts.dismissedAt && now - opts.dismissedAt < DISMISS_FOR_MS) return false;
+  if (opts.dismissedAt && now - opts.dismissedAt < dismissWaitMs(opts.dismissCount ?? 1)) return false;
   return opts.visitDays >= MIN_DAYS;
 }
 
 export function readDismissedAt(store: Storage | null): number | null {
   const v = Number(store?.getItem(DISMISS_KEY));
   return Number.isFinite(v) && v > 0 ? v : null;
+}
+
+export function readDismissCount(store: Storage | null): number {
+  const v = Number(store?.getItem(DISMISS_COUNT_KEY));
+  return Number.isFinite(v) && v > 0 ? Math.floor(v) : 0;
 }
 
 export const installPrompt = reactive({
@@ -94,7 +107,7 @@ function consider(): void {
   refreshAvailable();
   if (installPrompt.visible) return;
   const store = safeStorage();
-  const ok = shouldOffer({ standalone: isStandalone(), dismissedAt: readDismissedAt(store), visitDays });
+  const ok = shouldOffer({ standalone: isStandalone(), dismissedAt: readDismissedAt(store), dismissCount: readDismissCount(store), visitDays });
   if (!ok) return;
   if (deferred) { installPrompt.kind = "native"; installPrompt.visible = true; return; }
   if (isIosSafari()) { installPrompt.kind = "ios"; installPrompt.visible = true; }
@@ -116,7 +129,7 @@ if (typeof window !== "undefined") {
     deferred = null;
     installPrompt.visible = false;
     installPrompt.available = false;
-    try { safeStorage()?.removeItem(DISMISS_KEY); } catch { /* 無妨 */ }
+    try { safeStorage()?.removeItem(DISMISS_KEY); safeStorage()?.removeItem(DISMISS_COUNT_KEY); } catch { /* 無妨 */ }
   });
 }
 
@@ -143,7 +156,11 @@ export async function acceptInstall(): Promise<void> {
 
 export function dismissInstall(): void {
   installPrompt.visible = false;
-  try { safeStorage()?.setItem(DISMISS_KEY, String(Date.now())); } catch { /* 存不了就下次再問 */ }
+  try {
+    const store = safeStorage();
+    store?.setItem(DISMISS_KEY, String(Date.now()));
+    store?.setItem(DISMISS_COUNT_KEY, String(readDismissCount(store) + 1));
+  } catch { /* 存不了就下次再問 */ }
 }
 
 /** 只在正式建置、且在主站網域上註冊：子網域（沙箱殼）跑的是同一個 Worker，不該讓站台的 SW 掛到那裡。 */
