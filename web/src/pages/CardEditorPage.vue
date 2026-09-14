@@ -1122,7 +1122,7 @@ async function exportCard(format: "png" | "json") {
               <button type="button" class="seg__item" :class="{ 'seg__item--on': chatPage === 'classic' }" role="radio"
                       :aria-checked="chatPage === 'classic'" @click="chatPage = 'classic'">{{ $t("editor.chatPage.classic") }}</button>
             </div>
-            <span class="subtle">{{ $t("editor.chatPage.hint") }} <RouterLink :to="lp('/developers')">{{ $t("editor.chatPage.doc") }}</RouterLink></span>
+            <span class="subtle">{{ $t("editor.chatPage.hint") }} <RouterLink :to="lp('/guide')">{{ $t("editor.chatPage.doc") }}</RouterLink></span>
           </div>
 
           <FieldText id="f-name" v-model="draft.roleName" :label="$t('editor.name')" required :max="60"

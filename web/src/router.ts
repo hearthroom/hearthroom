@@ -32,6 +32,7 @@ const pages = [
   { path: "resources", component: () => import("./pages/ResourcesPage.vue"), meta: { auth: true } },
   { path: "settings", component: () => import("./pages/SettingsPage.vue"), meta: { auth: true } },
   { path: "developers", component: () => import("./pages/DevelopersPage.vue") },
+  { path: "guide", component: () => import("./pages/GuidePage.vue") },
   // 站內玩卡：舞台整頁接管（bare = 不套站台頁首頁尾），對話要登入
   { path: "play/:roleId", component: () => import("./pages/PlayPage.vue"), meta: { auth: true, bare: true } },
   // 遊戲模式：同一張卡，回覆拆成敘事＋舞台狀態。開場白是公開的，遊客可看第一幕；行動時才要登入。
