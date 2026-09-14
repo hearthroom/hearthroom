@@ -76,8 +76,9 @@ export async function serveSandbox(c: { req: { url: string }; env: Env }): Promi
   headers.set("Content-Security-Policy", SANDBOX_CSP);
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("Referrer-Policy", "no-referrer");
-  headers.set("Cache-Control", isPage ? "no-cache" : "public, max-age=600");
-  headers.delete("etag");
+  // 三個檔都 no-cache（每次重新驗證）：檔名沒有雜湊，部署後若邊緣還抓著舊的 js，新的宿主就會配到舊殼。
+  // 保留資源層的 ETag，重新驗證多半是 304，不會每次重抓整包。
+  headers.set("Cache-Control", "no-cache");
   headers.delete("last-modified");
   return new Response(asset.body, { status: 200, headers });
 }
