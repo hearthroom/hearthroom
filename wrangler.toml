@@ -7,7 +7,11 @@ compatibility_date = "2026-08-22"
 # 只掛本站自己的網域；www 只做 301 到正本（見 src/site.ts）。
 routes = [
   { pattern = "hearthroom.club", custom_domain = true },
-  { pattern = "www.hearthroom.club", custom_domain = true }
+  { pattern = "www.hearthroom.club", custom_domain = true },
+  # 新版沙箱卡的殼：每張卡一個子網域 c<roleId>.hearthroom.club（src/sandbox.ts）。萬用網域不能當
+  # custom_domain，走 zone 路由；DNS 另外要一筆代理的萬用記錄（`* AAAA 100::`，Proxied），
+  # wrangler 不會替路由建 DNS。Universal SSL 蓋得到一層的 *.hearthroom.club。
+  { pattern = "*.hearthroom.club/*", zone_name = "hearthroom.club" }
 ]
 
 # 同一個 Worker 服務 API 與前端：/v1/* 走 Hono，其餘落到打包好的 SPA。
@@ -29,6 +33,9 @@ run_worker_first = [
   # /assets/* 也過 Worker：資源層找不到（舊部署的 hash 檔）時回退到 ASSET_ARCHIVE。這些檔帶 immutable
   # 快取頭，邊緣命中時不會真的進 Worker，只有 miss 才付一次呼叫。
   "/assets/*",
+  # 沙箱殼頁與它的 js/css：只在 c<roleId>.hearthroom.club 子網域上有意義，Worker 補 CSP／frame-ancestors
+  # 標頭再出（資源層直接出的話沒有這些標頭）；主站網域上這條路徑一樣進 Worker，然後照 SPA 規則回退。
+  "/sandbox/*",
 ]
 
 # 行為埋點。CF Web Analytics 管「有多少人來」，這個資料集管「他們做了什麼」。

@@ -20,7 +20,7 @@
     "predeploy": "npm run preflight && npm run typecheck && npm run build:stage && npm run test && npm run build:web",
     "archive:assets": "node scripts/archive-assets.mjs",
     "deploy": "npm run archive:assets && wrangler deploy",
-    "build:stage": "npm --prefix stage ci --no-audit --no-fund && npm --prefix stage run build:stage",
+    "build:stage": "npm --prefix stage ci --no-audit --no-fund && npm --prefix stage run build:stage && npm --prefix stage run build:sandbox && node scripts/copy-sandbox.mjs",
     "sync:stage": "node scripts/sync-stage.mjs"
   },
   "dependencies": {
