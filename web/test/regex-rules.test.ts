@@ -53,6 +53,21 @@ describe("匯入匯出", () => {
     expect(ruleSetFromImport(scripts)!.set.rules.map((r) => r.name)).toEqual(["out", "any"]);
   });
 
+  it("魅魔島新版卡：chatVersion 1 → pageMode sandbox，匯出時還原 chatVersion；舊版不帶", () => {
+    const got = ruleSetFromImport({ ...meimo, chatVersion: 1 })!;
+    expect(got.set.pageMode).toBe("sandbox");
+    expect(ruleSetFromImport({ ...meimo, chatVersion: "1" })!.set.pageMode).toBe("sandbox");
+    expect(ruleSetFromImport(meimo)!.set.pageMode).toBeUndefined();
+    expect(ruleSetFromImport({ ...meimo, chatVersion: 0 })!.set.pageMode).toBeUndefined();
+    expect(ruleSetToExport(got.set, "").chatVersion).toBe(1);
+    expect("chatVersion" in ruleSetToExport(ruleSetFromImport(meimo)!.set, "")).toBe(false);
+    // 本站自己存的文件也帶 pageMode
+    expect(ruleSetFromImport({ version: 1, lowered: false, statusbar: "", pageMode: "sandbox", rules: [{ find: "x", replace: "y" }] })!.set.pageMode).toBe("sandbox");
+    // 上游資產往返
+    expect(ruleSetToAuthorAsset(got.set, 2).pageMode).toBe("sandbox");
+    expect(ruleSetFromAuthorAsset({ rules: [], mountLayer: "over", pageMode: "sandbox" }).pageMode).toBe("sandbox");
+  });
+
   it("魅魔島匯入酬載：rules + statusbar + welcome + pageDepth", () => {
     const payload = { rules: [{ find: "《x》", replace: "<b/>" }], statusbar: "《x》", welcome: "hi", pageDepth: 1 };
     const got = ruleSetFromImport(payload)!;

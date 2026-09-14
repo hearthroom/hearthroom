@@ -35,6 +35,17 @@ describe("classifyMmdFile", () => {
     expect(got.welcome).toBe(EXPORT.beginning);
   });
 
+  it("新版卡（chatVersion 1）：六鍵匯出檔認得出來，pageMode 是 sandbox", () => {
+    const got = classifyMmdFile("角色-regex.json", JSON.stringify({ chatVersion: 1, personality: "x", ...EXPORT }));
+    expect(got.part).toBe("rules");
+    if (got.part !== "rules") return;
+    expect(got.set.pageMode).toBe("sandbox");
+    expect(got.set.lowered).toBe(true);
+    const old = classifyMmdFile("角色-regex.json", JSON.stringify(EXPORT));
+    if (old.part !== "rules") return;
+    expect(old.set.pageMode).toBeUndefined();
+  });
+
   it("「導出正則」列表與 API 回包 {code,data} 都是規則", () => {
     for (const raw of [LIST, { code: 200, data: LIST }]) {
       const got = classifyMmdFile("list.json", JSON.stringify(raw));
