@@ -145,7 +145,7 @@ Issues and pull requests are welcome.
 
 - **Bugs and ideas** — open an [issue](https://github.com/hearthroom/hearthroom/issues). For bugs, include the page, the browser, and what you expected to see.
 - **Pull requests** — CI runs typecheck, build and tests on every PR. Please keep a PR to one change, add or update tests next to the code it touches (`test/` for the Worker, `web/test/` for the front end), and run `npm test` before pushing.
-- **Translations** — UI strings live in `web/src/locales/<locale>.json`, one file per language. `npm run i18n -w web` shows what each locale is missing. New strings must be added to all five files; the check fails the build if a component contains untranslated text. The authoring guide has one file per language under `docs/guide/`.
+- **Translations** — UI strings live in `web/src/locales/<locale>.json`, one file per language. `npm run i18n -w web` shows what each locale is missing. New strings must be added to all five files; the test step fails if a component contains untranslated text. The authoring guide has one file per language under `docs/guide/`.
 - **Chat stage** — changes to the conversation UI belong in the stage project, not here.
 - **License** — contributions are accepted under the same AGPL-3.0 license as the project.
 
