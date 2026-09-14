@@ -21,11 +21,11 @@ describe("sandboxOptions", () => {
     const { sandboxOptions } = await import("../src/lib/stage-host");
     const prod = sandboxOptions("hearthroom.club", session);
     for (const bad of ["a_b", "a.b", "", "x".repeat(63)]) {
-      expect(prod.shellUrl(bad), bad).toBe("/sandbox/index.html");
+      expect(prod.shellUrl(bad), bad).toBe("/sandbox/");
       expect(prod.origin(bad), bad).toBe("null");
     }
     const local = sandboxOptions("localhost", session);
-    expect(local.shellUrl("abc")).toBe("/sandbox/index.html");
+    expect(local.shellUrl("abc")).toBe("/sandbox/");
     expect(local.origin("abc")).toBe("null");
   });
 });
