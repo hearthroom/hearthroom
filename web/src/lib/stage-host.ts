@@ -58,9 +58,15 @@ export function sandboxOptions(hostname: string, session: Session) {
     if (!t) throw new Error("not signed in");
     return fn(t);
   };
+  // 子網域標籤：瀏覽器把主機名一律小寫，postMessage 的 origin 也是小寫，這裡先小寫才對得上；
+  // 不合 DNS 標籤（只許 a-z 0-9 -，最長 62）的 roleId 退回同站 opaque 殼，不硬湊一個連不上的主機名。
+  const label = (roleId: string): string | null => {
+    const l = String(roleId).toLowerCase();
+    return production && /^[a-z0-9-]{1,62}$/.test(l) ? l : null;
+  };
   return {
-    shellUrl: (roleId: string) => (production ? `https://c${roleId}.${SITE_HOST}/sandbox/` : "/sandbox/index.html"),
-    origin: (roleId: string) => (production ? `https://c${roleId}.${SITE_HOST}` : "null"),
+    shellUrl: (roleId: string) => { const l = label(roleId); return l ? `https://c${l}.${SITE_HOST}/sandbox/` : "/sandbox/index.html"; },
+    origin: (roleId: string) => { const l = label(roleId); return l ? `https://c${l}.${SITE_HOST}` : "null"; },
     saves: {
       load: (roleId: string) => withToken((t) => fetchCardSaves(roleId, t)),
       set: (roleId: string, key: string, value: unknown) => withToken((t) => putCardSave(roleId, key, value, t)),

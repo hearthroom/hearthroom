@@ -10,8 +10,11 @@ import { isSandboxHost, sandboxRoleIdOf } from "../src/sandbox";
 import { isSelfHost } from "../src/site";
 
 const SHELL = "<!doctype html><html><head><title>chat sandbox</title></head><body><div id=\"app\"></div></body></html>";
+// 真資源層對 /sandbox/index.html 回 3xx 到 /sandbox/，所以殼頁只掛在目錄路徑上；index.html 路徑故意給 302，
+// Worker 若走錯路徑就會拿到非 200 而 503。
 const testEnv = envWithAssets({
-  "/sandbox/index.html": new Response(SHELL, { headers: { "content-type": "text/html; charset=utf-8", etag: '"x"' } }),
+  "/sandbox/index.html": new Response(null, { status: 302, headers: { location: "/sandbox/" } }),
+  "/sandbox/": new Response(SHELL, { headers: { "content-type": "text/html; charset=utf-8", etag: '"x"' } }),
   "/sandbox/sandbox.js": new Response("console.log(1)", { headers: { "content-type": "text/javascript; charset=utf-8" } }),
   "/sandbox/sandbox.css": new Response("body{}", { headers: { "content-type": "text/css; charset=utf-8" } }),
 });
@@ -36,6 +39,7 @@ describe("沙箱子網域", () => {
   it("/sandbox/ 出殼頁並補 CSP、frame-ancestors、no-cache；js/css 帶自己的 content-type", async () => {
     const page = await get("https://c1.hearthroom.club/sandbox/");
     expect(page.status).toBe(200);
+    expect((await get("https://c1.hearthroom.club/sandbox/index.html")).status).toBe(200);
     expect(await page.text()).toContain("<title>chat sandbox</title>");
     const csp = page.headers.get("content-security-policy") ?? "";
     expect(csp).toContain("connect-src 'self'");
@@ -58,7 +62,7 @@ describe("沙箱子網域", () => {
   });
 
   it("殼沒建進資源層（SPA 回退給了主站的 index.html）→ 503，不把主站頁當殼出去", async () => {
-    const spa = envWithAssets({ "/sandbox/index.html": new Response("<!doctype html><title>Hearthroom</title>", { headers: { "content-type": "text/html" } }), "/sandbox/sandbox.js": new Response("<!doctype html>", { headers: { "content-type": "text/html" } }) });
+    const spa = envWithAssets({ "/sandbox/": new Response("<!doctype html><title>Hearthroom</title>", { headers: { "content-type": "text/html" } }), "/sandbox/sandbox.js": new Response("<!doctype html>", { headers: { "content-type": "text/html" } }) });
     expect((await get("https://c1.hearthroom.club/sandbox/", spa)).status).toBe(503);
     expect((await get("https://c1.hearthroom.club/sandbox/sandbox.js", spa)).status).toBe(503);
   });
