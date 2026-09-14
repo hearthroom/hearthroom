@@ -1,17 +1,22 @@
 <script setup lang="ts">
 /**
  * 寫卡指南：給作者的說明書（docs/guide/card-authoring.<語系>.md），跟開發者文件同一套目錄與排版。
- * 正體與簡體讀正體那份，其餘讀英文；之後有翻譯再補檔就好，這裡不用改。
+ * 五種語系各一份；沒有對應檔的語系退回英文。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import zhHant from "../../../docs/guide/card-authoring.zh-Hant.md?raw";
+import zhHans from "../../../docs/guide/card-authoring.zh-Hans.md?raw";
 import en from "../../../docs/guide/card-authoring.en.md?raw";
+import ja from "../../../docs/guide/card-authoring.ja.md?raw";
+import ko from "../../../docs/guide/card-authoring.ko.md?raw";
 import { pageTitle } from "@/lib/i18n";
 import { renderDoc, type TocItem } from "@/lib/markdown-toc";
 
+const SOURCES: Record<string, string> = { "zh-Hant": zhHant, "zh-Hans": zhHans, en, ja, ko };
+
 const { t, locale } = useI18n();
-const source = computed(() => (String(locale.value).startsWith("zh") ? zhHant : en));
+const source = computed(() => SOURCES[String(locale.value)] ?? en);
 const rendered = computed(() => renderDoc(source.value));
 const toc = computed<TocItem[]>(() => rendered.value.toc);
 
