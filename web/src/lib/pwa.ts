@@ -7,10 +7,12 @@
  * 提示卡什麼時候出現：
  * - 不在已安裝的視窗裡（display-mode: standalone）；
  * - 使用者按過「以後再說」的話，三十天內不再問；
- * - 不是第一次來：至少兩個不同日期造訪過。第一次打開就被問裝不裝，多半直接關掉，
- *   之後三十天都問不到；等人回來第二次再問，答應的比例高得多。
+ * - 首屏畫完幾秒後就問（owner 2026-09-15：原本要第二天再問，結果三個平台都看不到提示）。
  * - Chromium 系：等瀏覽器發 beforeinstallprompt 才有得裝，按下去走原生的安裝框。
  * - iOS Safari：沒有事件也沒有 API，只能提示「分享 → 加入主畫面」。
+ *
+ * 提示卡之外，頁尾另有一條「安裝 App」的常駐入口（installAvailable）：關掉提示卡的人之後
+ * 想裝，不必等三十天。
  *
  * beforeinstallprompt 在頁面載入很早就發，比 Vue 掛上去還早；監聽器放在模組頂層，
  * main.ts 在任何 await 之前就 import 這個檔。
@@ -20,7 +22,7 @@ import { reactive } from "vue";
 const DISMISS_KEY = "hearthroom.pwa.dismissedAt";
 const DAYS_KEY = "hearthroom.pwa.days";
 const DISMISS_FOR_MS = 30 * 24 * 60 * 60 * 1000;
-const MIN_DAYS = 2;
+const MIN_DAYS = 1;
 const KEEP_DAYS = 8;
 
 interface BeforeInstallPromptEvent extends Event {
@@ -77,17 +79,30 @@ export const installPrompt = reactive({
   visible: false,
   /** "native"＝有原生安裝框可以按；"ios"＝只能給步驟。 */
   kind: "native" as "native" | "ios",
+  /** 頁尾常駐入口要不要顯示：有原生安裝框、或是 iOS Safari，且不在已安裝的視窗裡。 */
+  available: false,
 });
 
 let deferred: BeforeInstallPromptEvent | null = null;
 let visitDays = 0;
 
+function refreshAvailable(): void {
+  installPrompt.available = !isStandalone() && (!!deferred || isIosSafari());
+}
+
 function consider(): void {
+  refreshAvailable();
   if (installPrompt.visible) return;
   const store = safeStorage();
   const ok = shouldOffer({ standalone: isStandalone(), dismissedAt: readDismissedAt(store), visitDays });
   if (!ok) return;
   if (deferred) { installPrompt.kind = "native"; installPrompt.visible = true; return; }
+  if (isIosSafari()) { installPrompt.kind = "ios"; installPrompt.visible = true; }
+}
+
+/** 頁尾「安裝 App」：有原生安裝框就直接開；iOS 把步驟卡拿出來（不管有沒有按過以後再說）。 */
+export function openInstall(): void {
+  if (deferred) { void acceptInstall(); return; }
   if (isIosSafari()) { installPrompt.kind = "ios"; installPrompt.visible = true; }
 }
 
@@ -100,6 +115,7 @@ if (typeof window !== "undefined") {
   window.addEventListener("appinstalled", () => {
     deferred = null;
     installPrompt.visible = false;
+    installPrompt.available = false;
     try { safeStorage()?.removeItem(DISMISS_KEY); } catch { /* 無妨 */ }
   });
 }
@@ -107,8 +123,9 @@ if (typeof window !== "undefined") {
 /** 頁面掛上之後叫一次：記今天來過，然後看要不要提示。 */
 export function startInstallPrompt(): void {
   visitDays = recordVisit(safeStorage());
+  refreshAvailable();
   // 等首屏畫完再出現，別跟內容搶第一眼
-  setTimeout(consider, 4000);
+  setTimeout(consider, 3000);
 }
 
 export async function acceptInstall(): Promise<void> {
@@ -116,6 +133,7 @@ export async function acceptInstall(): Promise<void> {
   if (!ev) { installPrompt.visible = false; return; }
   deferred = null;
   installPrompt.visible = false;
+  installPrompt.available = false;
   try {
     await ev.prompt();
     const { outcome } = await ev.userChoice;

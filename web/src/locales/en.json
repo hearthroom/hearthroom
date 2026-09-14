@@ -949,5 +949,6 @@
   "pwa.install.cta": "Install",
   "pwa.install.later": "Not now",
   "pwa.install.ios": "Tap Share in Safari, then choose “Add to Home Screen”.",
-  "pwa.install.ok": "Got it"
+  "pwa.install.ok": "Got it",
+  "pwa.install.link": "Install app"
 }

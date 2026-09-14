@@ -949,5 +949,6 @@
   "pwa.install.cta": "安裝",
   "pwa.install.later": "以後再說",
   "pwa.install.ios": "在 Safari 點下方的「分享」，再選「加入主畫面」。",
-  "pwa.install.ok": "知道了"
+  "pwa.install.ok": "知道了",
+  "pwa.install.link": "安裝 App"
 }
