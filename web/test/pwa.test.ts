@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isIosSafari, readDismissedAt, recordVisit, shouldOffer } from "../src/lib/pwa";
+import { dismissWaitMs, isIosSafari, readDismissCount, readDismissedAt, recordVisit, shouldOffer } from "../src/lib/pwa";
 
 class Mem { m = new Map<string, string>(); getItem(k: string) { return this.m.has(k) ? this.m.get(k)! : null; } setItem(k: string, v: string) { this.m.set(k, v); } removeItem(k: string) { this.m.delete(k); } }
 
@@ -31,8 +31,29 @@ describe("pwa install prompt", () => {
     expect(shouldOffer({ standalone: false, dismissedAt: null, visitDays: 1, now })).toBe(true);
     expect(shouldOffer({ standalone: false, dismissedAt: null, visitDays: 2, now })).toBe(true);
     expect(shouldOffer({ standalone: true, dismissedAt: null, visitDays: 5, now })).toBe(false);
-    expect(shouldOffer({ standalone: false, dismissedAt: now - 10 * DAY, visitDays: 5, now })).toBe(false);
-    expect(shouldOffer({ standalone: false, dismissedAt: now - 31 * DAY, visitDays: 5, now })).toBe(true);
+    // 第一次按「以後再說」只歇一天
+    expect(shouldOffer({ standalone: false, dismissedAt: now - 0.5 * DAY, dismissCount: 1, visitDays: 5, now })).toBe(false);
+    expect(shouldOffer({ standalone: false, dismissedAt: now - 1.1 * DAY, dismissCount: 1, visitDays: 5, now })).toBe(true);
+    // 按得越多歇越久：第三次七天，第五次以後三十天
+    expect(shouldOffer({ standalone: false, dismissedAt: now - 5 * DAY, dismissCount: 3, visitDays: 5, now })).toBe(false);
+    expect(shouldOffer({ standalone: false, dismissedAt: now - 8 * DAY, dismissCount: 3, visitDays: 5, now })).toBe(true);
+    expect(shouldOffer({ standalone: false, dismissedAt: now - 20 * DAY, dismissCount: 9, visitDays: 5, now })).toBe(false);
+    expect(shouldOffer({ standalone: false, dismissedAt: now - 31 * DAY, dismissCount: 9, visitDays: 5, now })).toBe(true);
+    // 沒記到次數（舊資料）當第一次
+    expect(shouldOffer({ standalone: false, dismissedAt: now - 2 * DAY, visitDays: 5, now })).toBe(true);
+  });
+
+  it("backs off 1, 3, 7, 14, 30 days and then stays at 30", () => {
+    expect([1, 2, 3, 4, 5, 6, 0].map((n) => dismissWaitMs(n) / DAY)).toEqual([1, 3, 7, 14, 30, 30, 1]);
+  });
+
+  it("reads the dismiss count defensively", () => {
+    const s = new Mem();
+    expect(readDismissCount(s)).toBe(0);
+    s.setItem("hearthroom.pwa.dismissCount", "2.7");
+    expect(readDismissCount(s)).toBe(2);
+    s.setItem("hearthroom.pwa.dismissCount", "x");
+    expect(readDismissCount(s)).toBe(0);
   });
 
   it("reads a dismissal timestamp defensively", () => {
