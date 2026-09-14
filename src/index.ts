@@ -31,6 +31,8 @@ import {
 import { setCardNsfw, setCardStatus } from "./cards";
 import { type Env, HttpError } from "./types";
 import { gameRoutes } from "./game";
+import { serveSandbox } from "./sandbox";
+import { listSaves, putSave, removeSave } from "./saves";
 import { upstream, ZONES, type Zone, CREATION_METHOD } from "./upstream";
 
 const app = new Hono<{ Bindings: Env; Variables: { ev: Pending } }>();
@@ -73,6 +75,19 @@ app.use("*", async (c, next) => {
  *
  * 用 301 而不是 302：搜尋引擎才會把累積的排名轉過來，瀏覽器與抓取器也才會記住。
  */
+/**
+ * 沙箱子網域（c<roleId>.hearthroom.club）：只出殼頁與它的 js/css，其餘 404（src/sandbox.ts）。
+ * 掛在別名轉向之前：這些主機不是別名，也不該落到主站的路由。
+ */
+app.use("*", async (c, next) => {
+  const served = await serveSandbox(c);
+  if (served) {
+    note(c, { event: "sandbox_shell", detail: served.status === 200 ? "ok" : String(served.status) });
+    return served;
+  }
+  return next();
+});
+
 app.use("*", async (c, next) => {
   const url = new URL(c.req.url);
   if (!ALIAS_HOSTS.includes(url.host)) return next();
@@ -433,6 +448,32 @@ app.post("/v1/me/settings", async (c) => {
     nsfw = { showNsfw: current.showNsfw && current.ageVerifiedAt !== null, ageVerified: current.ageVerifiedAt !== null };
   }
   return c.json({ ...nsfw, hiddenTags }, 200, { "Cache-Control": "no-store" });
+});
+
+/**
+ * 沙箱卡的存檔（sdk.save.*）：舞台代作者腳本讀寫，每個成員每張卡最多 10 個 key、單值 64 KB。
+ * 讀回整包（殼進頁時預載）；寫與刪各一個 key。錯誤碼：key_invalid、value_too_large、saves_full。
+ */
+app.get("/v1/me/cards/:roleId/saves", async (c) => {
+  const member = await requireMember(c);
+  const saves = await listSaves(c.env.DB, member.id, c.req.param("roleId"));
+  return c.json({ saves }, 200, { "Cache-Control": "no-store" });
+});
+
+app.put("/v1/me/cards/:roleId/saves/:key", async (c) => {
+  const member = await requireMember(c);
+  const body = (await c.req.json().catch(() => null)) as { value?: unknown } | null;
+  if (!body || typeof body !== "object" || !("value" in body)) throw new HttpError(400, "value_required");
+  await putSave(c.env.DB, member.id, c.req.param("roleId"), c.req.param("key"), body.value, Date.now());
+  note(c, { event: "card_save", detail: "set" });
+  return c.json({ ok: true }, 200, { "Cache-Control": "no-store" });
+});
+
+app.delete("/v1/me/cards/:roleId/saves/:key", async (c) => {
+  const member = await requireMember(c);
+  await removeSave(c.env.DB, member.id, c.req.param("roleId"), c.req.param("key"));
+  note(c, { event: "card_save", detail: "remove" });
+  return c.json({ ok: true }, 200, { "Cache-Control": "no-store" });
 });
 
 /**

@@ -22,7 +22,11 @@ export const ALIAS_HOSTS: readonly string[] = [
 ];
 
 /** 這個主機是不是我們自己（含別名與搬家前的）。用來判斷 referer 算不算站外來源。 */
-export const isSelfHost = (host: string): boolean => host === HOST || ALIAS_HOSTS.includes(host);
+export const isSelfHost = (host: string): boolean => host === HOST || ALIAS_HOSTS.includes(host) || isSandboxSubdomain(host);
+
+/** 沙箱卡的殼子網域（c<roleId>.<HOST>）：算自己人，不算站外來源。判式跟 src/sandbox.ts 同一條。 */
+const SANDBOX_SUBDOMAIN_RE = new RegExp(`^c[a-z0-9-]+\\.${HOST.replace(/\./g, "\\.")}$`, "i");
+export const isSandboxSubdomain = (host: string): boolean => SANDBOX_SUBDOMAIN_RE.test(host);
 
 /** 這一頁的正本網址。永遠指向 `HOST`，不跟著請求進來的主機走。 */
 export const canonicalUrl = (url: URL): string => `https://${HOST}${url.pathname}`;

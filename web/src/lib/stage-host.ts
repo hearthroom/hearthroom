@@ -12,6 +12,7 @@ import type { App, Component } from "vue";
 import { reactive } from "vue";
 import type { Router } from "vue-router";
 import { UPSTREAM_API } from "@/lib/config";
+import { deleteCardSave, fetchCardSaves, putCardSave } from "@/lib/api";
 import { confirmDialog } from "@/lib/confirm";
 import { loginPath } from "@/lib/login-return";
 import { applyLocale, i18n } from "@/lib/i18n";
@@ -40,6 +41,33 @@ export interface StageDeps {
 }
 
 let stagePromise: Promise<Component> | null = null;
+
+/** 本站的正本主機；殼子網域只在它底下才存在（Worker 的萬用路由與 DNS 都掛在這個 zone）。 */
+const SITE_HOST = "hearthroom.club";
+
+/**
+ * 新版沙箱卡的殼在哪裡。正式站每張卡一個子網域 `c<roleId>.hearthroom.club`（Worker 出殼頁、
+ * 補 CSP）；本機開發或別的主機上沒有那些子網域，退回不透明 origin 載同源的 /sandbox/index.html
+ * （前端 build 會把上游的殼複製到 web/public/sandbox/）。
+ */
+export function sandboxOptions(hostname: string, session: Session) {
+  const production = hostname === SITE_HOST || hostname === `www.${SITE_HOST}`;
+  const token = () => session.accessToken();
+  const withToken = async <T>(fn: (t: string) => Promise<T>): Promise<T> => {
+    const t = await token();
+    if (!t) throw new Error("not signed in");
+    return fn(t);
+  };
+  return {
+    shellUrl: (roleId: string) => (production ? `https://c${roleId}.${SITE_HOST}/sandbox/` : "/sandbox/index.html"),
+    origin: (roleId: string) => (production ? `https://c${roleId}.${SITE_HOST}` : "null"),
+    saves: {
+      load: (roleId: string) => withToken((t) => fetchCardSaves(roleId, t)),
+      set: (roleId: string, key: string, value: unknown) => withToken((t) => putCardSave(roleId, key, value, t)),
+      remove: (roleId: string, key: string) => withToken((t) => deleteCardSave(roleId, key, t)),
+    },
+  };
+}
 
 /** 載入並安裝舞台套件，回畫布元件。重複呼叫共用同一個 Promise。 */
 export function ensureStage(deps: StageDeps): Promise<Component> {
@@ -75,6 +103,7 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
       },
       api: { base: UPSTREAM_API },
       i18n: i18n.global,
+      sandbox: sandboxOptions(window.location.hostname, deps.session),
     });
     return stage.MoonStage;
   })();

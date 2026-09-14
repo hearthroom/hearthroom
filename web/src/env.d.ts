@@ -38,6 +38,16 @@ declare module "moonstage/stage" {
       };
       api: { base: string };
       i18n?: StageI18n;
+      /** 新版沙箱卡：殼位址、origin、存檔落地（上游 src/host/sandbox-host.ts）。 */
+      sandbox?: {
+        shellUrl(roleId: string): string;
+        origin(roleId: string): string;
+        saves?: {
+          load(roleId: string): Promise<Record<string, unknown>>;
+          set(roleId: string, key: string, value: unknown): Promise<void>;
+          remove(roleId: string, key: string): Promise<void>;
+        };
+      };
     },
   ): Promise<void>;
   export function mergeStageMessages(i18n: StageI18n): void;

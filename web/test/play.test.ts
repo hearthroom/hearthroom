@@ -31,6 +31,9 @@ vi.mock("../src/lib/api", () => ({
   fetchSiteMe: vi.fn(async () => ({ handle: "abcdefgh", memberSince: 0, reviewer: false, identities: [] })),
   setNsfwViewer: () => {},
   setViewerHiddenTags: () => {},
+  fetchCardSaves: vi.fn(async () => ({})),
+  putCardSave: vi.fn(async () => {}),
+  deleteCardSave: vi.fn(async () => {}),
 }));
 
 let app: App | null = null;
