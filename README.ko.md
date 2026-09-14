@@ -5,12 +5,13 @@
 <h1 align="center">Hearthroom</h1>
 
 <p align="center">
-  커뮤니티가 운영하는 AI 캐릭터 카드 오픈 랭킹 보드.<br>
+AI 캐릭터 카드의 오픈 태번: 커뮤니티 랭킹, 사이트 안에서 바로 즐기는 채팅, 그리고 카드 배포.<br>
   랭킹, 검색, 작성자 페이지, 카드 편집기, 커뮤니티 심사를 Cloudflare Worker 하나로.
 </p>
 
 <p align="center">
   <a href="https://hearthroom.club"><img src="https://img.shields.io/website?url=https%3A%2F%2Fhearthroom.club&label=hearthroom.club" alt="Website"></a>
+  <a href="https://discord.gg/FCEYZCFtR"><img src="https://img.shields.io/badge/Discord-join%20the%20community-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
   <a href="https://github.com/hearthroom/hearthroom/actions/workflows/deploy.yml"><img src="https://github.com/hearthroom/hearthroom/actions/workflows/deploy.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/hearthroom/hearthroom" alt="License: AGPL-3.0"></a>
   <a href="https://github.com/hearthroom/hearthroom/commits/main"><img src="https://img.shields.io/github/last-commit/hearthroom/hearthroom" alt="Last commit"></a>
@@ -31,9 +32,13 @@
 
 ## Hearthroom이란
 
-Hearthroom은 공개 랭킹 보드입니다. 작성자가 자신의 AI 캐릭터 카드를 등록하고, 독자는 여기서 카드를 찾습니다. 일간·주간·월간 랭킹, 이름·소개·태그 검색, 작성자 페이지, 대화 테스트 패널이 있는 카드 편집기를 제공합니다.
+Hearthroom은 AI 캐릭터 카드를 위한 오픈 플랫폼으로, 세 가지 역할을 하나로 합쳤습니다.
 
-카드 자체는 여기에 저장되지 않습니다. 카드는 **카드 제공자** 쪽에 있습니다. 로그인, 카드 데이터, 대화를 위한 오픈 API를 제공하는 채팅 서비스입니다. Hearthroom이 가진 것은 세 가지뿐입니다. 어떤 카드가 등재되었는지, 어떻게 순위를 매기는지, 검색 인덱스. 작성자는 제공자를 통해 로그인하고 카드 ID로 등록하며, 사이트는 한 시간마다 제공자에서 공개 필드를 동기화합니다. 이 사이트를 닫아도 카드는 한 글자도 사라지지 않습니다.
+- **랭킹 보드** — 작성자가 카드를 등록하고, 독자는 일간·주간·월간 랭킹, 검색, 태그, 작성자 페이지로 카드를 찾습니다.
+- **태번** — 모든 카드를 사이트에서 바로 플레이할 수 있습니다. 채팅 스테이지(별도의 오픈소스 프로젝트로 `stage/` 서브모듈로 가져옴)가 대화, 카드의 상태 바, 패널, 스크립트를 그리고, 카드 스크립트는 샌드박스에서 실행됩니다.
+- **배포** — 카드는 커뮤니티 심사를 거쳐 규칙, 세계관, 이미지와 함께 카드를 여는 모든 사람에게 전달됩니다. SillyTavern 등 다른 형식에서 가져오기도 내장되어 있습니다.
+
+오픈소스 태번이지만 SillyTavern의 복제품은 아닙니다. 로컬 설치도, API 키 관리도 필요 없습니다. 카드와 대화는 **카드 제공자** 쪽에 있습니다. 로그인, 카드 데이터, 생성을 위한 오픈 API를 제공하는 채팅 서비스입니다. Hearthroom이 가진 것은 랭킹 보드, 심사 절차, 검색 인덱스, 그리고 플레이 화면입니다. 작성자는 제공자를 통해 로그인하고 카드 ID로 등록하며, 사이트는 한 시간마다 제공자에서 공개 필드를 동기화합니다. 이 사이트를 닫아도 카드는 한 글자도 사라지지 않습니다.
 
 등재는 **커뮤니티 심사**를 거칩니다. 심사자는 공유 대기열에서 신청을 가져가고, 첫 심사는 두 명의 승인, 재심사는 한 명의 승인이 필요하며, 한 명이라도 반려하면 반려되고, 심사 페이지에는 작성자가 표시되지 않습니다. 승인은 카드의 내용 버전에 묶입니다. 작성자가 카드를 바꾸면 보드에서 내려가고 다시 대기열에 들어갑니다.
 
@@ -53,6 +58,7 @@ Hearthroom은 공개 랭킹 보드입니다. 작성자가 자신의 AI 캐릭터
   <img src="docs/screenshots/board-light.png" width="49%" alt="랭킹 보드(라이트)">
   <img src="docs/screenshots/guide.png" width="49%" alt="카드 작성 가이드">
 </p>
+<p align="center"><sub>스크린샷은 데모 카드입니다.</sub></p>
 
 ## 사용하기
 
@@ -138,6 +144,10 @@ npm run deploy              # 사전 점검, 타입 검사, 테스트, 빌드를
 ```
 
 **지속적 배포.** 포함된 워크플로(`.github/workflows/deploy.yml`)는 모든 push와 PR에서 타입 검사, 빌드, 테스트를 실행합니다. `main`에서는 저장소 secrets `CLOUDFLARE_API_TOKEN`과 `CLOUDFLARE_ACCOUNT_ID`가 설정되어 있으면 마이그레이션을 적용하고 배포하며, 없으면 배포를 건너뛰었다고 표시하고 녹색을 유지합니다.
+
+## 커뮤니티
+
+플레이어, 카드 작성자, 개발자가 **[Discord](https://discord.gg/FCEYZCFtR)** 에 모여 있습니다. 카드를 플레이하고, 카드를 쓰고, 태번과 사이트를 만드는 일 모두 환영합니다. 버그 신고와 기능 제안은 [GitHub issue](https://github.com/hearthroom/hearthroom/issues)로도 받습니다.
 
 ## 기여하기
 
