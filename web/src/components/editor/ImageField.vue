@@ -86,7 +86,7 @@ function pick(file: File) {
           <button type="button" class="btn btn--sm" :disabled="busy" @click="input?.click()">
             {{ busy ? uploading : pickLabel }}
           </button>
-          <button type="button" class="btn btn--sm" :disabled="busy" @click="picking = true">{{ libraryLabel }}</button>
+          <button v-if="libraryLabel" type="button" class="btn btn--sm" :disabled="busy" @click="picking = true">{{ libraryLabel }}</button>
           <button v-if="modelValue" type="button" class="btn btn--sm btn--ghost" :disabled="busy"
                   @click="emit('update:modelValue', '')">
             {{ clearLabel }}

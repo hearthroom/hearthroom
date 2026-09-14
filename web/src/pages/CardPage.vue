@@ -17,6 +17,7 @@ import { useLocalePath } from "@/lib/use-locale";
 import { compact, hueFrom, plainText, relativeTime } from "@/lib/format";
 import { confirmDialog } from "@/lib/confirm";
 import { track } from "@/lib/track";
+import { FEATURES } from "@/lib/provider";
 import type { CommunityCard } from "@/lib/types";
 
 const route = useRoute();
@@ -96,14 +97,14 @@ async function load() {
       // 再交給沙盒 iframe 用同一套元件庫畫（HtmlCardFrame）。功能欄那份整頁美化不放（見 welcome-render）。規則要登入才拿得到，
       // 遊客與沒規則的卡就只畫 HTML／markdown 本身；純文字的開場白照舊走氣泡。
       void session.accessToken().catch(() => null)
-        .then((token) => fetchPlayerAsset(roleId, token || undefined).catch(() => null))
+        .then((token) => (FEATURES.regex ? fetchPlayerAsset(roleId, token || undefined).catch(() => null) : null))
         .then((asset) => {
           if (card.value?.roleId !== roleId) return;
           const out = renderWelcome(rawWelcome, { charName, userName: t("card.you"), asset });
           welcomeHtml.value = out.html;
         });
-      showComments.value = raw.previewShowComments !== false;
-      if (raw.hasPreviewPage === true) {
+      showComments.value = FEATURES.comments && raw.previewShowComments !== false;
+      if (FEATURES.previewPage && raw.hasPreviewPage === true) {
         return fetchPreviewPage(roleId).then((p) => {
           previewDoc.value = p.doc ?? null;
           previewSkin.value = p.skinId ?? "";
@@ -220,7 +221,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 
           <div class="role__actions">
             <!-- 站內玩：/play/:roleId 由舞台（stage/）整頁接管 -->
-            <RouterLink class="btn btn--primary btn--lg role__cta" :to="lp(`/play/${card.roleId}`)" @click="track('cta', { subject: card.roleId })">
+            <RouterLink v-if="FEATURES.chatTest" class="btn btn--primary btn--lg role__cta" :to="lp(`/play/${card.roleId}`)" @click="track('cta', { subject: card.roleId })">
               {{ $t("card.play") }}
             </RouterLink>
             <button class="btn btn--lg btn--icon role__share" :aria-label="$t('card.share')" :title="$t('card.share')" @click="share">

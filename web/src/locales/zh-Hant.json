@@ -252,6 +252,7 @@
   "editor.publish.hint": "送出後會先經過審核，通過才會出現在別人面前。",
   "editor.publish.saveFirst": "有還沒儲存的修改，先存一次再送審。",
   "editor.publish.submit": "送出審核",
+  "editor.publish.mature": "這張卡含成人內容",
   "editor.publish.confirm": "送出之後這張卡會進入審核，通過就對所有人可見。要送嗎？",
   "editor.publish.summary": "作者確認送審：{name}",
   "dialog.typeToConfirm": "輸入「{text}」以確認",
