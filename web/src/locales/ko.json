@@ -385,10 +385,6 @@
   "regex.statusbar.hint": "채팅 화면 최상위 층에 고정되는 구역입니다. 보는 사람에게만 표시되고 AI에게는 전달되지 않습니다. 장식 스타일과 사이드 도구 마커를 두면 규칙이 똑같이 펼쳐 줍니다.",
   "regex.lowered": "층 낮추기",
   "regex.lowered.hint": "체크하면 입력창 아래에 놓입니다.",
-  "regex.page": "채팅 페이지 버전",
-  "regex.page.classic": "구버전(규칙을 화면에 적용)",
-  "regex.page.sandbox": "신버전 샌드박스",
-  "regex.page.hint": "샌드박스 카드는 채팅 영역 전체를 작성자의 페이지에 맡깁니다. 읽는 사람은 업데이트된 플레이어가 필요합니다. 신버전 규칙 파일을 가져오면 자동으로 선택됩니다.",
   "regex.test": "테스트",
   "regex.test.scope": "적용 범위",
   "regex.test.all": "모든 규칙",
@@ -939,5 +935,11 @@
   "error.quotaImageExceeded": "자료실의 파일 수가 상한에 도달했습니다. 몇 개 삭제한 뒤 다시 업로드하세요.",
   "error.quotaBytesExceeded": "자료실 용량이 가득 찼습니다. 몇 개 삭제한 뒤 다시 업로드하세요.",
   "res.prefix.label": "자료실 URL 접두사",
-  "res.prefix.hint": "업로드는 원래 파일 이름을 유지하며 URL은 「접두사／파일 이름」이 됩니다. 같은 이름으로 다시 올리면 같은 URL로 교체됩니다. 카드 스크립트에서 접두사와 파일 이름으로 URL을 조합할 수 있습니다."
+  "res.prefix.hint": "업로드는 원래 파일 이름을 유지하며 URL은 「접두사／파일 이름」이 됩니다. 같은 이름으로 다시 올리면 같은 URL로 교체됩니다. 카드 스크립트에서 접두사와 파일 이름으로 URL을 조합할 수 있습니다.",
+  "editor.chatPage": "채팅 페이지",
+  "editor.chatPage.sandbox": "샌드박스 (권장)",
+  "editor.chatPage.classic": "기존",
+  "editor.chatPage.hint": "샌드박스는 카드의 화면과 스크립트를 격리해 실행합니다. 일반 카드는 그대로 표시됩니다. 오래된 카드가 샌드박스에서 이상할 때만 기존으로 되돌리세요.",
+  "editor.chatPage.doc": "카드 작성 가이드",
+  "editor.panel.resize": "드래그하여 너비 조절"
 }

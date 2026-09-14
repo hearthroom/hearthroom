@@ -40,7 +40,7 @@ import {
   type WorldbookMetadataPatch,
   type WorldbookSummary,
 } from "@/lib/api";
-import { emptyRuleSet, ruleSetFromAuthorAsset, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, validateRuleSet, type RegexRuleSet } from "@/lib/regex-rules";
+import { emptyRuleSet, ruleSetFromAuthorAsset, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, validateRuleSet, type RegexRuleSet, chatPageOf, type ChatPageChoice } from "@/lib/regex-rules";
 import RegexRulesEditor from "@/components/editor/RegexRulesEditor.vue";
 import ChatTestPanel from "@/components/editor/ChatTestPanel.vue";
 import ResourcePanel from "@/components/editor/ResourcePanel.vue";
@@ -122,6 +122,18 @@ const worldbookBindPending = ref(false);
 /** 正則規則：整份存、整份換。version 是上游的樂觀鎖，沒規則時是 0。 */
 const regexSet = ref<RegexRuleSet>(emptyRuleSet());
 const regexOriginal = ref<RegexRuleSet>(emptyRuleSet());
+/**
+ * 聊天頁：沙箱（預設）或傳統。跟規則存在同一份（上游的 pageMode），所以掛在規則集上；
+ * 新卡預設沙箱——規則集一開始就標上，跟原本那份不同就會隨第一次儲存寫上去。
+ * 既有的卡照伺服器存的來，不替作者改。
+ */
+const chatPage = computed<ChatPageChoice>({
+  get: () => chatPageOf(regexSet.value),
+  set: (v) => { regexSet.value.pageMode = v === "sandbox" ? "sandbox" : "classic"; },
+});
+function defaultChatPageForNew() {
+  if (isNew.value && !regexSet.value.pageMode) regexSet.value.pageMode = "sandbox";
+}
 const regexVersion = ref(0);
 const regexOpen = ref(false);
 
@@ -132,6 +144,25 @@ const panel = ref<Panel>("test");
 /** 分頁列上的重載鈕要按到面板裡的 iframe。 */
 const testPanel = ref<InstanceType<typeof ChatTestPanel> | null>(null);
 const panelOpen = ref(true);
+/** 右欄寬度（寬螢幕）：作者用把手拉過就記住；null＝用預設的 clamp。 */
+const RAIL_W_KEY = "hearthroom.editor.railWidth";
+const railWidth = ref<number | null>((() => { try { const v = Number(localStorage.getItem(RAIL_W_KEY)); return v >= 320 ? v : null; } catch { return null; } })());
+const layoutStyle = computed(() => (panelOpen.value && railWidth.value ? { "--rail-w": `${railWidth.value}px` } : undefined));
+watch(railWidth, (v) => { try { if (v) localStorage.setItem(RAIL_W_KEY, String(Math.round(v))); else localStorage.removeItem(RAIL_W_KEY); } catch { /* 存不了就下次再拉 */ } });
+function onGripDown(e: PointerEvent) {
+  const grip = e.currentTarget as HTMLElement;
+  const rail = grip.parentElement as HTMLElement;
+  const startX = e.clientX;
+  const startW = rail.getBoundingClientRect().width;
+  const max = Math.max(320, Math.min(960, window.innerWidth - 520));
+  grip.setPointerCapture(e.pointerId);
+  e.preventDefault();
+  const move = (ev: PointerEvent) => { railWidth.value = Math.min(max, Math.max(320, Math.round(startW + (startX - ev.clientX)))); };
+  const up = () => { grip.removeEventListener("pointermove", move); grip.removeEventListener("pointerup", up); grip.removeEventListener("pointercancel", up); };
+  grip.addEventListener("pointermove", move);
+  grip.addEventListener("pointerup", up);
+  grip.addEventListener("pointercancel", up);
+}
 try {
   const saved = localStorage.getItem(PANEL_KEY);
   if (saved === "closed") panelOpen.value = false;
@@ -179,7 +210,7 @@ function flash(message: string) {
   toastTimer = setTimeout(() => { toast.value = ""; }, 2600);
 }
 
-const SECTIONS = ["basic", "persona", "dialogue", "media", "worldbook", "publish"] as const;
+const SECTIONS = ["basic", "persona", "dialogue", "worldbook", "publish"] as const;
 type Section = (typeof SECTIONS)[number];
 const section = ref<Section>("basic");
 const body = ref<HTMLElement | null>(null);
@@ -272,7 +303,6 @@ const filled = computed<Record<Section, boolean>>(() => ({
   basic: Boolean(draft.value.roleName.trim()),
   persona: Boolean(draft.value.roleDetailDesc.trim()),
   dialogue: Boolean(draft.value.roleWelcome.trim()),
-  media: Boolean(draft.value.roleAvatar || draft.value.roleBackground),
   worldbook: worldbookEntries.value.some((e) => e.content.trim()),
   publish: false,
 }));
@@ -413,6 +443,7 @@ async function loadWorldbookMeta(token: string, bookId: string) {
 onMounted(async () => {
   if (!roleId.value) {
     restoreDraft();
+    defaultChatPageForNew();
     return;
   }
   try {
@@ -518,6 +549,7 @@ function onRegexFile(event: Event) {
       const imported = ruleSetFromImport(JSON.parse(await file.text()));
       if (!imported) throw new Error("regex_invalid");
       regexSet.value = imported.set;
+      defaultChatPageForNew();
       // 魅魔島的檔帶著「第一句話」：開場白還是空的才幫他填，不蓋掉已經寫好的
       if (imported.welcome && !draft.value.roleWelcome.trim()) draft.value.roleWelcome = imported.welcome;
       // 整份太大這種掛在整份上的問題，匯入當下就講清楚多大、上限多少；
@@ -983,6 +1015,7 @@ function applyImport(result: ImportResult) {
   }
   if (result.image) void adoptImage(result.image);
   if (result.regex) regexSet.value = result.regex;
+  defaultChatPageForNew();
   goto("basic");
 }
 
@@ -1030,7 +1063,7 @@ async function exportCard(format: "png" | "json") {
 </script>
 
 <template>
-  <div class="page editor layout">
+  <div class="page editor layout" :style="layoutStyle">
     <header class="head">
       <p class="eyebrow">{{ $t("mine.eyebrow") }}</p>
       <h1 class="display">{{ isNew ? $t("editor.title.new") : $t("editor.title.edit") }}</h1>
@@ -1080,8 +1113,31 @@ async function exportCard(format: "png" | "json") {
           <h2 class="pane__title">{{ $t("editor.section.basic") }}</h2>
           <ImportPanel v-if="isNew" :language="draft.language" :detail-max="limits.roleDetailDesc" @apply="applyImport" />
 
+          <!-- 聊天頁模式放在最上面：這是整張卡怎麼跑的決定，不藏在規則編輯器裡（站台管理者 2026-09-14） -->
+          <div class="field">
+            <label>{{ $t("editor.chatPage") }}</label>
+            <div class="seg chatpage" role="radiogroup" :aria-label="$t('editor.chatPage')">
+              <button type="button" class="seg__item" :class="{ 'seg__item--on': chatPage === 'sandbox' }" role="radio"
+                      :aria-checked="chatPage === 'sandbox'" @click="chatPage = 'sandbox'">{{ $t("editor.chatPage.sandbox") }}</button>
+              <button type="button" class="seg__item" :class="{ 'seg__item--on': chatPage === 'classic' }" role="radio"
+                      :aria-checked="chatPage === 'classic'" @click="chatPage = 'classic'">{{ $t("editor.chatPage.classic") }}</button>
+            </div>
+            <span class="subtle">{{ $t("editor.chatPage.hint") }} <RouterLink :to="lp('/developers')">{{ $t("editor.chatPage.doc") }}</RouterLink></span>
+          </div>
+
           <FieldText id="f-name" v-model="draft.roleName" :label="$t('editor.name')" required :max="60"
                      :placeholder="$t('create.name.placeholder')" />
+
+          <!-- 形象緊接在名稱後面：寫卡最先有的是名字跟圖，簡介之後才寫（社群管理員 2026-09-14） -->
+          <p class="muted">{{ $t("editor.media.lede") }}</p>
+          <ImageField v-model="draft.roleAvatar" :label="$t('editor.avatar')" :hint="$t('editor.avatar.hint')"
+                      :pick-label="$t('editor.image.pick')" :clear-label="$t('editor.image.clear')"
+                      :library-label="$t('editor.image.library')"
+                      :uploading="$t('editor.image.uploading')" ratio="square" @pick="onPickImage" />
+          <ImageField v-model="draft.roleBackground" :label="$t('editor.background')"
+                      :hint="$t('editor.background.hint')" :pick-label="$t('editor.image.pick')"
+                      :clear-label="$t('editor.image.clear')" :library-label="$t('editor.image.library')"
+                      :uploading="$t('editor.image.uploading')" ratio="wide" @pick="onPickImage" />
 
           <div v-if="isNew" class="field">
             <label for="f-lang">{{ $t("create.language") }}</label>
@@ -1189,19 +1245,6 @@ async function exportCard(format: "png" | "json") {
         </section>
 
         <!-- 形象 -->
-        <section data-section="media" class="pane">
-          <h2 class="pane__title">{{ $t("editor.section.media") }}</h2>
-          <p class="muted">{{ $t("editor.media.lede") }}</p>
-          <ImageField v-model="draft.roleAvatar" :label="$t('editor.avatar')" :hint="$t('editor.avatar.hint')"
-                      :pick-label="$t('editor.image.pick')" :clear-label="$t('editor.image.clear')"
-                      :library-label="$t('editor.image.library')"
-                      :uploading="$t('editor.image.uploading')" ratio="square" @pick="onPickImage" />
-          <ImageField v-model="draft.roleBackground" :label="$t('editor.background')"
-                      :hint="$t('editor.background.hint')" :pick-label="$t('editor.image.pick')"
-                      :clear-label="$t('editor.image.clear')" :library-label="$t('editor.image.library')"
-                      :uploading="$t('editor.image.uploading')" ratio="wide" @pick="onPickImage" />
-        </section>
-
         <!-- 世界书 -->
         <section data-section="worldbook" class="pane">
           <h2 class="pane__title">{{ $t("editor.section.worldbook") }}</h2>
@@ -1295,6 +1338,9 @@ async function exportCard(format: "png" | "json") {
 
       <!-- 右：預覽與動作 -->
       <aside class="rail" :class="{ 'rail--wide': panelOpen, 'rail--sheet': sheetOpen }">
+        <!-- 拖曳把手：寬螢幕上右欄的寬度由作者自己拉，看卡在不同寬度下長什麼樣（站台管理者 2026-09-14） -->
+        <div v-if="panelOpen && !sheetOpen" class="rail__grip" role="separator" aria-orientation="vertical"
+             :aria-label="$t('editor.panel.resize')" :title="$t('editor.panel.resize')" @pointerdown="onGripDown" @dblclick="railWidth = null" />
         <!--
           先前這裡是一張卡片預覽。它既不是對話測試也不是發布，作者盯著它也判斷不了
           「這張卡聊起來對不對」（owner 2026-09-08）。換成真的用得上的兩件事：
@@ -1497,6 +1543,17 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
    高度一路吃到視窗底，除了分頁列以外不放別的東西——手機框的寬度是由高度乘比例
    反推的，所以在這條欄上少放一行，框就同時長高又變寬。
 */
+.chatpage { width: fit-content; }
+/* 拖曳把手貼在右欄左緣：一條細桿，滑上去變粗；只在寬螢幕、面板展開時有 */
+.rail__grip {
+  position: absolute; left: calc(var(--s-5) * -0.5 - 7px); top: 0; bottom: 0; width: 14px;
+  cursor: col-resize; touch-action: none; z-index: 6;
+}
+.rail__grip::before {
+  content: ""; position: absolute; left: 5px; top: 50%; width: 4px; height: 48px; margin-top: -24px;
+  border-radius: 2px; background: var(--line); transition: background .15s, height .15s;
+}
+.rail__grip:hover::before, .rail__grip:active::before { background: var(--muted); height: 96px; margin-top: -48px; }
 .rail {
   grid-column: 2; grid-row: 1 / span 3;
   position: sticky; top: calc(var(--header-h) + var(--s-4));

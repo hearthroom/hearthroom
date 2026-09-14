@@ -385,10 +385,6 @@
   "regex.statusbar.hint": "页面最上层的固定区块，只在看的人画面上显示、不会送给 AI；放美化样式与侧边工具的标记，一样会被规则展开。",
   "regex.lowered": "降低层级",
   "regex.lowered.hint": "勾选后放到输入框之下。",
-  "regex.page": "聊天页版本",
-  "regex.page.classic": "旧版（规则套在画面上）",
-  "regex.page.sandbox": "新版沙箱",
-  "regex.page.hint": "新版沙箱卡整个聊天区由作者的页面接手，读的人要更新播放器才能开；新版卡的规则文件导入时会自动选上。",
   "regex.test": "测试",
   "regex.test.scope": "套用范围",
   "regex.test.all": "全部规则",
@@ -939,5 +935,11 @@
   "error.quotaImageExceeded": "资源库的文件数已达上限，先删掉一些再上传。",
   "error.quotaBytesExceeded": "资源库的容量已满，先删掉一些再上传。",
   "res.prefix.label": "图库网址前缀",
-  "res.prefix.hint": "上传会保留原始文件名，网址就是「前缀／文件名」；同名再传会直接换掉旧的那张，网址不变。卡片代码里可以用前缀加文件名直接组网址。"
+  "res.prefix.hint": "上传会保留原始文件名，网址就是「前缀／文件名」；同名再传会直接换掉旧的那张，网址不变。卡片代码里可以用前缀加文件名直接组网址。",
+  "editor.chatPage": "聊天页",
+  "editor.chatPage.sandbox": "沙箱（推荐）",
+  "editor.chatPage.classic": "传统",
+  "editor.chatPage.hint": "沙箱把卡片的画面与程序隔离运行，一般卡照常显示；旧卡在沙箱里不对劲时再改回传统。",
+  "editor.chatPage.doc": "写卡指南",
+  "editor.panel.resize": "拖动调整宽度"
 }

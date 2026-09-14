@@ -208,7 +208,7 @@
   "editor.section.basic": "基本",
   "editor.section.persona": "人物像",
   "editor.section.dialogue": "会話",
-  "editor.section.media": "画像",
+  "editor.section.media": "ビジュアル",
   "editor.section.worldbook": "世界設定",
   "editor.section.publish": "公開",
   "editor.name": "キャラクター名",
@@ -385,10 +385,6 @@
   "regex.statusbar.hint": "チャット画面の最上層に固定される区画です。閲覧者にだけ表示され、AI には渡りません。装飾スタイルやサイドツールのマーカーを置くと、同じくルールで展開されます。",
   "regex.lowered": "階層を下げる",
   "regex.lowered.hint": "チェックすると入力欄の下に配置されます。",
-  "regex.page": "チャット画面のバージョン",
-  "regex.page.classic": "旧版（ルールを画面に適用）",
-  "regex.page.sandbox": "新版サンドボックス",
-  "regex.page.hint": "サンドボックス版はチャット領域全体を作者のページに任せます。閲覧者は更新されたプレイヤーが必要です。新版のルールファイルを読み込むと自動で選択されます。",
   "regex.test": "テスト",
   "regex.test.scope": "適用範囲",
   "regex.test.all": "すべてのルール",
@@ -939,5 +935,11 @@
   "error.quotaImageExceeded": "ライブラリのファイル数が上限に達しています。いくつか削除してからアップロードしてください。",
   "error.quotaBytesExceeded": "ライブラリの容量がいっぱいです。いくつか削除してからアップロードしてください。",
   "res.prefix.label": "ライブラリURLの接頭辞",
-  "res.prefix.hint": "アップロードは元のファイル名を保持し、URLは「接頭辞／ファイル名」になります。同じ名前で再アップロードすると同じURLのまま差し替わります。カードのスクリプトでは接頭辞とファイル名からURLを組み立てられます。"
+  "res.prefix.hint": "アップロードは元のファイル名を保持し、URLは「接頭辞／ファイル名」になります。同じ名前で再アップロードすると同じURLのまま差し替わります。カードのスクリプトでは接頭辞とファイル名からURLを組み立てられます。",
+  "editor.chatPage": "チャットページ",
+  "editor.chatPage.sandbox": "サンドボックス（推奨）",
+  "editor.chatPage.classic": "従来",
+  "editor.chatPage.hint": "サンドボックスはカードの画面とスクリプトを隔離して実行します。通常のカードはそのまま表示されます。古いカードがサンドボックスでおかしいときだけ従来に戻してください。",
+  "editor.chatPage.doc": "カード作成ガイド",
+  "editor.panel.resize": "ドラッグして幅を調整"
 }

@@ -385,10 +385,6 @@
   "regex.statusbar.hint": "A fixed block on the top layer of the chat page. Viewers see it, the AI never does. Put markers for global styling and side tools here; rules expand them too.",
   "regex.lowered": "Lower layer",
   "regex.lowered.hint": "When checked it sits under the composer.",
-  "regex.page": "Chat page version",
-  "regex.page.classic": "Classic (rules applied to the page)",
-  "regex.page.sandbox": "New sandbox",
-  "regex.page.hint": "A sandbox card hands the whole chat area to the author's page; readers need the updated player to open it. Importing a sandbox rule file selects this automatically.",
   "regex.test": "Test",
   "regex.test.scope": "Apply",
   "regex.test.all": "All rules",
@@ -939,5 +935,11 @@
   "error.quotaImageExceeded": "Your library has reached its item limit. Delete some files before uploading more.",
   "error.quotaBytesExceeded": "Your library is out of space. Delete some files before uploading more.",
   "res.prefix.label": "Library URL prefix",
-  "res.prefix.hint": "Uploads keep their original file name, so the URL is prefix/filename. Uploading the same name again replaces the old file at the same URL. Card scripts can build URLs from the prefix and a file name."
+  "res.prefix.hint": "Uploads keep their original file name, so the URL is prefix/filename. Uploading the same name again replaces the old file at the same URL. Card scripts can build URLs from the prefix and a file name.",
+  "editor.chatPage": "Chat page",
+  "editor.chatPage.sandbox": "Sandbox (recommended)",
+  "editor.chatPage.classic": "Classic",
+  "editor.chatPage.hint": "Sandbox runs the card’s page and scripts in isolation; ordinary cards look the same. Switch back to classic only if an older card misbehaves in the sandbox.",
+  "editor.chatPage.doc": "Card authoring guide",
+  "editor.panel.resize": "Drag to resize"
 }
