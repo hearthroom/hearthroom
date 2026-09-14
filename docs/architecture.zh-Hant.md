@@ -60,7 +60,7 @@ API 存取範圍，跟這個服務拿到的一模一樣。
 任何憑證，權限範圍就是作者自己授予的那些。
 
 **沒有服務帳號、沒有特殊金鑰、沒有私有介面。** 轉發的 token 只在那一個呼叫裡出現，
-用完即棄：不落 D1、不進 KV、不寫日誌。改掉 `LUNATALK_API_BASE` 就能指向別的部署。
+用完即棄：不落 D1、不進 KV、不寫日誌。改掉 `PROVIDER_API_BASE` 就能指向別的部署。
 
 為什麼登記非得問上游一次：「這張卡是我寫的」這個事實只存在於上游的資料庫，本地
 怎麼算都變不出來，任何在客戶端推導的方案都可偽造。但這不需要特權——轉發使用者
@@ -270,7 +270,7 @@ optional peer 圖會崩（`TypeError: reading 'edgesOut'`）。
 
 ```
 node scripts/mock-upstream.mjs                              # :8899
-VITE_LUNATALK_API_BASE=http://127.0.0.1:8899 npm run dev:web
+VITE_PROVIDER_API_BASE=http://127.0.0.1:8899 npm run dev:web
 ```
 
 再在瀏覽器 console 塞一組假 token：
@@ -290,7 +290,7 @@ npm run deploy              # predeploy 會先跑 typecheck + 測試 + 前端 bu
 ```
 
 自架時要改的只有 `wrangler.toml` 的 `routes`（換成你的網域）、`src/site.ts` 的 `HOST`、
-`LUNATALK_API_BASE`，以及 `web/src/lib/site.ts` 的站台名稱。
+`PROVIDER_API_BASE`，以及 `web/src/lib/site.ts` 的站台名稱。
 
 ### 一個正本，其餘都轉過去
 

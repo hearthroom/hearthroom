@@ -48,11 +48,12 @@ binding = "EVENTS"
 dataset = "hearthroom_events"
 
 [vars]
-# 上游的開放 API。這裡對它只有兩種呼叫：轉發作者 token 問身分、以游客讀卡片公開資訊。
-LUNATALK_API_BASE = "https://api.lunatalk.ai"
-# 中國連不上主網域，那邊的瀏覽器改打這個；由 /v1/region 依 Cloudflare 判斷的國別回給前端。
-# 本站 Worker 自己打上游仍固定用上面那個（Worker 在邊緣跑，不在中國）。
-LUNATALK_API_BASE_CN = "https://api.lunatalk.pro"
+# 卡片供應商的開放 API。本站對它只有兩種呼叫：轉發作者 token 問身分、以游客讀卡片公開資訊。
+PROVIDER_API_BASE = "https://api.lunatalk.ai"
+# 依來源國別改走的閘道：`CC=網址`，逗號分隔。有些地區連不上供應商的主網域，那邊的瀏覽器改打
+# 對應的閘道；/v1/region 依 Cloudflare 判斷的國別把網址回給前端。本站 Worker 自己打供應商
+# 仍固定用上面那個（Worker 在邊緣跑）。留空就是所有地區都走主網址。
+PROVIDER_API_GATEWAYS = "CN=https://api.lunatalk.pro"
 # 每輪排程同步幾張卡。Worker 一次執行最多 50 個對外請求（實測 2026-09-07：批量 200 只成功 50 張，
 # 其餘全部失敗保留），所以一輪最多 50，留一點餘裕給其他請求。
 SYNC_BATCH_SIZE = "45"

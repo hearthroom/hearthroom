@@ -111,7 +111,7 @@ The editor sits behind the provider's OAuth, which cannot complete against `loca
 
 ```bash
 node scripts/mock-upstream.mjs                                  # :8899
-VITE_LUNATALK_API_BASE=http://127.0.0.1:8899 npm run dev:web
+VITE_PROVIDER_API_BASE=http://127.0.0.1:8899 npm run dev:web
 ```
 
 Then, in the browser console, plant a token:
@@ -128,7 +128,7 @@ Everything runs on a Cloudflare account; the free tier is enough for a small com
 
 1. Create the resources and put their IDs in `wrangler.toml`: a **D1** database (`DB`), two **KV** namespaces (`CACHE`, `ASSET_ARCHIVE`), and optionally an **Analytics Engine** dataset (`EVENTS`; set `ANALYTICS_ENABLED = "false"` to skip it).
 2. Point the site at your domain: `routes` in `wrangler.toml`, `HOST` in `src/site.ts`, and the site name in `web/src/lib/site.ts`. Custom domains cannot be attached to a hostname that already has a DNS record; delete the parking record first.
-3. Configure the provider: `LUNATALK_API_BASE` (and the regional fallback `LUNATALK_API_BASE_CN`) in `[vars]`. The variable names reflect the first provider wired in; the site treats it as a generic provider.
+3. Configure the provider: `PROVIDER_API_BASE` in `[vars]`. If some countries cannot reach the provider's main domain, list per-country gateways in `PROVIDER_API_GATEWAYS` (`CC=url,…`); `/v1/region` hands the matching one to browsers from that country.
 4. Optional review bot: `REVIEW_BOT_ACCOUNT_NUM_ID` in `[vars]` and `wrangler secret put REVIEW_BOT_KEY`. Without both, submissions list immediately instead of going through review. Grant reviewers with `node scripts/grant-reviewer.mjs <provider account id>`.
 5. Deploy:
 

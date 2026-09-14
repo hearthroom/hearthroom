@@ -108,8 +108,8 @@ Today a second provider is configuration plus a small code change, not a runtime
 
 | Where | Setting |
 |---|---|
-| Web build | `VITE_LUNATALK_API_BASE` — the `<API_BASE>` the browser talks to; the OAuth `resource` is `<API_BASE>/open/v1`. |
-| Site server (Worker) | `LUNATALK_API_BASE` — the `<API_BASE>` used for sync, identity checks and review calls; an optional regional alternate. |
+| Web build | `VITE_PROVIDER_API_BASE` — the `<API_BASE>` the browser talks to; the OAuth `resource` is `<API_BASE>/open/v1`. |
+| Site server (Worker) | `PROVIDER_API_BASE` — the `<API_BASE>` used for sync, identity checks and review calls; `PROVIDER_API_GATEWAYS` — optional per-country gateways (`CC=url,…`) handed to browsers by `/v1/region`. |
 | Review bot | `REVIEW_BOT_KEY` (secret) and `REVIEW_BOT_ACCOUNT_NUM_ID`; with either missing the site runs in "listing is publishing" mode. |
 | Code | `src/providers.ts` — the provider id union and the review-bot lookup. Members, identities, cards and review submissions all carry a provider column, so adding a provider needs no schema change. |
 

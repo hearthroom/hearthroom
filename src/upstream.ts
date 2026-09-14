@@ -13,7 +13,7 @@ import { type Env, HttpError, type Localized } from "./types";
  * 所以任何人都能 fork 一份自己架。
  */
 
-const apiUrl = (env: Env, path: string) => `${env.LUNATALK_API_BASE}${path}`;
+const apiUrl = (env: Env, path: string) => `${env.PROVIDER_API_BASE}${path}`;
 
 /**
  * 明確表明身分。上游擋在 CDN 的 bot 防護後面，沒有 User-Agent 的自動請求容易被
