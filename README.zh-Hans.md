@@ -145,7 +145,7 @@ npm run deploy              # 会先跑部署前检查、类型检查、测试�
 
 - **问题与想法**——开一个 [issue](https://github.com/hearthroom/hearthroom/issues)。报告错误请附页面、浏览器与你预期看到的结果。
 - **Pull request**——每个 PR 都会跑类型检查、构建与测试。一个 PR 只做一件事，测试放在改到的代码旁边（Worker 在 `test/`，前端在 `web/test/`），推之前跑一次 `npm test`。
-- **翻译**——界面文案在 `web/src/locales/<语言>.json`，一个语言一个文件。`npm run i18n -w web` 列出每个语言缺什么。新增字符串要五个文件都补；组件里留有没翻的文字会让构建失败。写卡指南在 `docs/guide/` 下每个语言一份。
+- **翻译**——界面文案在 `web/src/locales/<语言>.json`，一个语言一个文件。`npm run i18n -w web` 列出每个语言缺什么。新增字符串要五个文件都补；组件里留有没翻的文字会让测试步骤失败。写卡指南在 `docs/guide/` 下每个语言一份。
 - **对话舞台**——对话界面的改动属于舞台项目，不在这里。
 - **许可**——贡献以与项目相同的 AGPL-3.0 许可接受。
 
