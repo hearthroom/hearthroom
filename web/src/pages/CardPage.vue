@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute } from "vue-router";
 import CardGrid from "@/components/CardGrid.vue";
@@ -17,6 +17,8 @@ import { useLocalePath } from "@/lib/use-locale";
 import { compact, hueFrom, plainText, relativeTime } from "@/lib/format";
 import { confirmDialog } from "@/lib/confirm";
 import { track } from "@/lib/track";
+import { applyCardHead } from "@/lib/card-manifest";
+import { installPrompt, openInstall } from "@/lib/pwa";
 import type { CommunityCard } from "@/lib/types";
 
 const route = useRoute();
@@ -151,6 +153,11 @@ watch(() => route.params.id, () => {
   load();
 }, { immediate: true });
 watch(locale, load);
+
+// 卡片頁的 manifest 是這張卡的：瀏覽器的「安裝」與 iOS 的「加入主畫面」裝下去的就是它（lib/card-manifest.ts）。
+watch(card, (c) => applyCardHead(c, locale.value));
+onBeforeUnmount(() => applyCardHead(null, locale.value));
+function addToHome() { track("pwa_card_install_click", { subject: card.value?.roleId ?? "" }); openInstall(); }
 // 開關剛載好（或改了）：成人內容的卡在那之前會是 404，重讀一次
 // 開關改了要重讀；身分剛載好、發現本來就開著（undefined → true）也要——第一次讀多半比身分早到
 watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && (now === true || before !== undefined)) load(); });
@@ -229,6 +236,14 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
               </svg>
             </button>
           </div>
+          <!-- 加到主畫面：瀏覽器說這一頁能裝（或是 iOS Safari）才出現；成人內容的卡不換 manifest，所以也不會出現 -->
+          <button v-if="installPrompt.available && installPrompt.target === 'card'" type="button" class="btn btn--sm btn--ghost role__install" @click="addToHome">
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <rect x="3" y="3" width="14" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="1.6" />
+              <path d="M10 6.5v7M6.5 10h7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+            </svg>
+            {{ $t("card.addHome") }}
+          </button>
           <p v-if="card.provider" class="subtle role__via">{{ $t("card.supports", { provider: providerName(card.provider) }) }}</p>
 
           <p class="subtle role__foot">
@@ -340,6 +355,8 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 .role__actions { display: flex; gap: var(--s-2); }
 .role__cta { flex: 1; min-width: 0; }
 .role__via { margin: 6px 0 0; }
+.role__install { justify-self: start; gap: 6px; margin-top: 2px; }
+.role__install svg { width: 16px; height: 16px; }
 .role__share { width: var(--h-lg); flex: none; }
 .role__share svg { width: 18px; height: 18px; }
 .role__foot { line-height: 1.5; }
@@ -370,7 +387,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
   .role__layout { grid-template-columns: 1fr; }
   .role__side { position: static; grid-template-columns: 132px minmax(0, 1fr); align-items: start; column-gap: var(--s-4); }
   .role__art { grid-row: 1 / span 3; }
-  .role__stats, .role__tags, .role__actions, .role__foot { grid-column: 1 / -1; }
+  .role__stats, .role__tags, .role__actions, .role__install, .role__foot { grid-column: 1 / -1; }
   .role__home, .role__comments { padding: var(--s-4); }
 }
 </style>

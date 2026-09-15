@@ -34,6 +34,7 @@ import { type Env, HttpError } from "./types";
 import { gameRoutes } from "./game";
 import { serveSandbox } from "./sandbox";
 import { listSaves, putSave, removeSave } from "./saves";
+import { IMAGE_HOSTS, SVG_WRAP_LIMIT, TOUCH_ICON_SIZE, allowedImageUrl, cardManifest, iconSize, svgWrap } from "./shortcut";
 import { upstream, ZONES, type Zone, CREATION_METHOD } from "./upstream";
 
 const app = new Hono<{ Bindings: Env; Variables: { ev: Pending } }>();
@@ -149,7 +150,7 @@ app.get("/v1/region", (c) => {
  * 只放行上游的圖片主機，不然這就是一個開放代理。回應用 Cache API 快取一天：同一張頭像
  * 被反覆匯出時不必每次都回上游拿。
  */
-export const IMAGE_PROXY_HOSTS = new Set(["objects.lunatalk.ai", "cdn.lunatalk.ai"]);
+export const IMAGE_PROXY_HOSTS = IMAGE_HOSTS;
 export const imageCache = { namespace: "image" };
 
 app.get("/v1/image", async (c) => {
@@ -355,6 +356,63 @@ app.get("/v1/cards/:id", async (c) => {
   // 「其他作品」副請求則是 /v1/cards?author=，兩者都不算一次瀏覽，否則分母會被灌水三倍。
   note(c, { event: "card_view", subject: row.source_role_id, zoneScope: "current" });
   return c.json(toCard(row, lang(c)), 200, allowNsfw ? { "Cache-Control": "private, no-store" } : {});
+});
+
+/**
+ * 把一張卡加到主畫面：卡片專屬的 manifest 與圖示。設計見 src/shortcut.ts。
+ *
+ * 兩條路都是瀏覽器自己抓的（沒有 Authorization），所以只認公開狀態：不在榜或成人內容一律 404。
+ * 快取期短：名字與頭像每小時同步一次，圖示另有自己的 Cache API 快取。
+ */
+app.get("/v1/cards/:id/manifest.webmanifest", async (c) => {
+  const row = await getCard(c.env.DB, c.req.param("id"));
+  if (!row || row.status !== "approved" || row.nsfw === 1) throw new HttpError(404, "card not found");
+  return c.json(cardManifest(row, lang(c)), 200, {
+    "Content-Type": "application/manifest+json; charset=utf-8",
+    "Cache-Control": "public, max-age=3600",
+  });
+});
+
+export const iconCache = { namespace: "card-icon" };
+
+// icon-192.png／icon-512.png 給 manifest（退路可以是 SVG）；touch-icon.png 給 iOS（退路是原圖）
+app.get("/v1/cards/:id/:file{(icon-[0-9]+|touch-icon)\\.png}", async (c) => {
+  const row = await getCard(c.env.DB, c.req.param("id"));
+  if (!row || row.status !== "approved" || row.nsfw === 1) throw new HttpError(404, "card not found");
+  const file = c.req.param("file");
+  const raster = file === "touch-icon.png";
+  const size = raster ? TOUCH_ICON_SIZE : iconSize(file.slice("icon-".length, -".png".length));
+  const src = allowedImageUrl(row.avatar_url);
+  // 沒頭像（或頭像不在放行主機上）：退回站台自己的圖示，至少還裝得起來
+  const siteIcon = () => c.redirect(new URL(`/icons/icon-${size >= 512 ? 512 : 192}.png`, c.req.url).toString(), 302);
+  if (!src) return siteIcon();
+
+  const cache = await caches.open(iconCache.namespace);
+  const key = new Request(`https://icon.invalid/${row.id}/${size}/${raster ? "raw" : "any"}?src=${encodeURIComponent(src.toString())}`);
+  const hit = await cache.match(key);
+  if (hit) return hit;
+
+  const res = await fetch(src.toString(), { headers: { "User-Agent": "Hearthroom/0.1 (home screen icon)" } });
+  if (!res.ok) return siteIcon();
+  const type = (res.headers.get("content-type") ?? "").split(";")[0].trim();
+  if (!type.startsWith("image/")) return siteIcon();
+  const bytes = await res.arrayBuffer();
+
+  const headers = { "cache-control": "public, max-age=86400", "x-content-type-options": "nosniff" };
+  let out: Response | null = null;
+  // 1. Images 綁定：裁成正方形、轉 PNG。帳號沒開 Images 時這裡會丟錯，往下退。
+  if (c.env.IMAGES) {
+    try {
+      const png = await c.env.IMAGES.input(new Blob([bytes]).stream()).transform({ width: size, height: size, fit: "cover" }).output({ format: "image/png" });
+      out = new Response(await png.response().arrayBuffer(), { status: 200, headers: { ...headers, "content-type": "image/png" } });
+    } catch { out = null; }
+  }
+  // 2. 本來就是 PNG：原樣給。3. 其他格式：包一層 SVG（要原圖的 raster=1 除外）。
+  if (!out && (type === "image/png" || raster)) out = new Response(bytes, { status: 200, headers: { ...headers, "content-type": type } });
+  if (!out && bytes.byteLength <= SVG_WRAP_LIMIT) out = new Response(svgWrap(bytes, type, size), { status: 200, headers: { ...headers, "content-type": "image/svg+xml" } });
+  if (!out) return siteIcon();
+  c.executionCtx.waitUntil(cache.put(key, out.clone()));
+  return out;
 });
 
 /**
