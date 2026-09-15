@@ -209,6 +209,12 @@ describe("beacon 端點", () => {
     expect(seen("cta")).toHaveLength(1);
   });
 
+  it("裝到主畫面的三個事件收得下：站台提示卡的安裝／以後再說、卡片頁的加到主畫面", async () => {
+    await post([{ event: "pwa_install_click" }, { event: "pwa_install_later" }, { event: "pwa_card_install_click", subject: "r-1" }]);
+    expect(points).toHaveLength(3);
+    expect(seen("pwa_card_install_click")[0]!.subject).toBe("r-1");
+  });
+
   it("跨站來的一律靜默丟棄", async () => {
     const res = await post([{ event: "cta" }], { Origin: "https://evil.example" });
     expect(res.status).toBe(204);
