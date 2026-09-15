@@ -255,6 +255,8 @@
   "editor.publish.submit": "審査に出す",
   "editor.publish.confirm": "審査に進み、通れば全員に見えるようになります。出しますか？",
   "editor.publish.summary": "作者が審査に提出：{name}",
+  "editor.publicNotice": "このカードは公開中です。保存すると先に非公開へ戻ります。編集が終わったら再度審査に出してください。すでにリンクを持っている人はそのまま遊べます。",
+  "editor.reviewNotice": "このカードは審査中です。審査が終わると編集できます。",
   "dialog.typeToConfirm": "「{text}」と入力して確認",
   "editor.delete": "このカードを削除",
   "editor.delete.hint": "会話、ワールドブックの紐付け、ボードの登録ごと削除します。元に戻せません。",
