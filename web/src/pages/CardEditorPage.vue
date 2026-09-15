@@ -1182,10 +1182,16 @@ async function exportCard(format: "png" | "json") {
                       :pick-label="$t('editor.image.pick')" :clear-label="$t('editor.image.clear')"
                       :library-label="$t('editor.image.library')"
                       :uploading="$t('editor.image.uploading')" ratio="square" @pick="onPickImage" />
+          <!-- 直式背景是基準（9:16），橫式選填；舞台依螢幕方向選圖，兩張都用 cover 裁邊，
+               所以框上畫出中央 75% 安全區：重要元素放裡面，任何比例的螢幕都不會被裁掉。 -->
           <ImageField v-model="draft.roleBackground" :label="$t('editor.background')"
                       :hint="$t('editor.background.hint')" :pick-label="$t('editor.image.pick')"
                       :clear-label="$t('editor.image.clear')" :library-label="$t('editor.image.library')"
-                      :uploading="$t('editor.image.uploading')" ratio="wide" @pick="onPickImage" />
+                      :uploading="$t('editor.image.uploading')" ratio="tall" safe-zone @pick="onPickImage" />
+          <ImageField v-model="draft.roleBackgroundLandscape" :label="$t('editor.backgroundLandscape')"
+                      :hint="$t('editor.backgroundLandscape.hint')" :pick-label="$t('editor.image.pick')"
+                      :clear-label="$t('editor.image.clear')" :library-label="$t('editor.image.library')"
+                      :uploading="$t('editor.image.uploading')" ratio="wide" safe-zone @pick="onPickImage" />
 
           <div v-if="isNew" class="field">
             <label for="f-lang">{{ $t("create.language") }}</label>
