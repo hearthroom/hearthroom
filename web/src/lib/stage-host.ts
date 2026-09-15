@@ -17,6 +17,7 @@ import { confirmDialog } from "@/lib/confirm";
 import { loginPath } from "@/lib/login-return";
 import { applyLocale, i18n } from "@/lib/i18n";
 import { isPlayHost } from "@/lib/site";
+import { isStandalone } from "@/lib/pwa";
 import type { useSession } from "@/lib/session";
 
 type Session = ReturnType<typeof useSession>;
@@ -96,6 +97,8 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
           deps.router.push(isPlayHost() ? deps.currentPath().split("?")[0] : deps.lp("/"));
         },
         toEntry: () => { deps.router.push(isPlayHost() ? deps.currentPath().split("?")[0] : deps.lp("/")); },
+        // 從主畫面圖示開進來的獨立卡片 App：沒有上一頁，舞台（頁首與沙箱殼的頁首）都不畫返回鍵
+        canBack: () => !(isPlayHost() && isStandalone()),
         toLogin: (returnTo) => { void deps.router.push(deps.lp(loginPath(returnTo || deps.currentPath()))); },
       },
       locale: {

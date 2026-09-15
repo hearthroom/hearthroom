@@ -16,7 +16,7 @@ import { contentLang, pageTitle } from "@/lib/i18n";
 import { track } from "@/lib/track";
 import { fetchCard } from "@/lib/api";
 import { applyCardHead } from "@/lib/card-manifest";
-import { isStandalone, requestInstallToast } from "@/lib/pwa";
+import { requestInstallToast } from "@/lib/pwa";
 import { SITE, isPlayHost } from "@/lib/site";
 
 const route = useRoute();
@@ -39,8 +39,7 @@ const playApp = isPlayHost();
 const cardPageUrl = computed(() => `https://${SITE.host}/${locale.value === "zh-Hant" ? "" : `${locale.value}/`}cards/${encodeURIComponent(roleId.value)}`);
 let headSeq = 0;
 if (playApp) {
-  // 從主畫面圖示開進來的（standalone）：舞台的返回箭頭沒有地方可回，藏起來（styles/stage.css）
-  if (isStandalone()) document.documentElement.dataset.app = "card";
+  // 從主畫面圖示開進來的（standalone）舞台不畫返回鍵：lib/stage-host.ts 的 nav.canBack
   watch([roleId, locale], async ([id, loc]) => {
     const seq = ++headSeq;
     let card = null;
