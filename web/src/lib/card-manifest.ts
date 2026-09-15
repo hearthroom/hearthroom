@@ -15,6 +15,8 @@ export interface CardHead {
   name: string;
   avatarUrl: string | null;
   nsfw?: boolean;
+  /** 成人卡才有：伺服器發給過了門的人的短效鑰匙，manifest 與圖示網址都要帶。 */
+  shortcutKey?: string;
 }
 
 export const SITE_HEAD = {
@@ -24,10 +26,12 @@ export const SITE_HEAD = {
 } as const;
 
 export function cardHead(card: CardHead, locale: string): { manifest: string; touchIcon: string; title: string } {
+  const id = encodeURIComponent(card.id);
+  const key = card.shortcutKey ? `&k=${encodeURIComponent(card.shortcutKey)}` : "";
   return {
-    manifest: `/v1/cards/${encodeURIComponent(card.id)}/manifest.webmanifest?lang=${encodeURIComponent(locale)}`,
+    manifest: `/v1/cards/${id}/manifest.webmanifest?lang=${encodeURIComponent(locale)}${key}`,
     // iOS 不吃 SVG 圖示：touch-icon.png 轉不了 PNG 時給原圖
-    touchIcon: card.avatarUrl ? `/v1/cards/${encodeURIComponent(card.id)}/touch-icon.png` : SITE_HEAD.touchIcon,
+    touchIcon: card.avatarUrl ? `/v1/cards/${id}/touch-icon.png${key ? "?" + key.slice(1) : ""}` : SITE_HEAD.touchIcon,
     title: card.name,
   };
 }
@@ -45,11 +49,11 @@ function setMeta(doc: Document, name: string, content: string): void {
 }
 
 /**
- * 進卡片頁帶卡片、離開帶 null。成人內容的卡不換：那份 manifest 對瀏覽器（沒登入狀態）是 404，
- * 換了只會讓安裝入口消失又不知道為什麼。
+ * 進卡片頁帶卡片、離開帶 null。成人內容的卡只在有鑰匙時換（過了門的人才拿得到）：沒鑰匙那份
+ * manifest 對瀏覽器（沒登入狀態）是 404，換了只會讓安裝入口消失又不知道為什麼。
  */
 export function applyCardHead(card: CardHead | null, locale: string, doc: Document = document): void {
-  const usable = card && !card.nsfw ? card : null;
+  const usable = card && (!card.nsfw || card.shortcutKey) ? card : null;
   const head = usable ? cardHead(usable, locale) : SITE_HEAD;
   setLink(doc, "manifest", head.manifest);
   setLink(doc, "apple-touch-icon", head.touchIcon);

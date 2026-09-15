@@ -134,7 +134,8 @@ localStorage.setItem("hearthroom.oauth.access", JSON.stringify({ accessToken: "t
 2. 도메인을 설정합니다: `wrangler.toml`의 `routes`, `src/site.ts`의 `HOST`, `web/src/lib/site.ts`의 사이트 이름. 이미 DNS 레코드가 있는 호스트명에는 커스텀 도메인을 붙일 수 없으므로 파킹 레코드를 먼저 삭제합니다.
 3. 제공자를 설정합니다: `[vars]`의 `PROVIDER_API_BASE`. 일부 국가에서 제공자의 주 도메인에 접속할 수 없다면 `PROVIDER_API_GATEWAYS`에 국가별 게이트웨이(`CC=URL,…`)를 나열합니다. `/v1/region`이 해당 국가의 브라우저에 맞는 게이트웨이를 반환합니다.
 4. 선택적으로 심사 봇을 설정합니다: `[vars]`의 `REVIEW_BOT_ACCOUNT_NUM_ID`와 `wrangler secret put REVIEW_BOT_KEY`. 둘 다 없으면 제출은 심사 없이 등재됩니다. 심사자는 `node scripts/grant-reviewer.mjs <제공자 계정 ID>`로 부여합니다.
-5. 배포합니다:
+5. 선택적으로 `wrangler secret put SHORTCUT_SECRET`(임의의 무작위 문자열)를 설정합니다. 성인 콘텐츠를 켠 회원이 성인 카드를 홈 화면에 추가할 수 있도록 단기 키에 서명하는 데 쓰입니다. 설정하지 않으면 성인 카드에는 해당 버튼이 나타나지 않습니다.
+6. 배포합니다:
 
 ```bash
 npm run migrate:remote

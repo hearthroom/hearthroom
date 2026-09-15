@@ -15,8 +15,12 @@
  * 先看副檔名決定「這個圖示能不能用」，/icon?size=192 這種會直接被跳過（本機實測 no-acceptable-icon）。
  * touch-icon.png 給 iOS 的 apple-touch-icon：不包 SVG（iOS 不吃），轉不了 PNG 就給原圖。
  *
- * 成人內容：manifest 與圖示都是瀏覽器自己抓的，帶不了登入狀態，所以對 nsfw 的卡一律 404——
- * 名字與頭像正是 /v1/cards/:id 對沒開成人內容的人擋下來的東西。
+ * 成人內容：manifest 與圖示都是瀏覽器自己抓的，帶不了登入狀態。名字與頭像正是 /v1/cards/:id
+ * 對沒開成人內容的人擋下來的東西，所以 nsfw 的卡要多一把鑰匙：過了門的人在 /v1/cards/:id 拿到
+ * 一把短效簽章（shortcutKey，綁卡片 ID、24 小時到期），前端把它帶在 manifest 與圖示的網址上，
+ * 端點驗過才回內容；沒鑰匙或過期一律 404。鑰匙只證明「有人過了門」，漏出去的上限是這一張卡的
+ * 名字與頭像、到期為止。簽章用 SHORTCUT_SECRET（wrangler secret）；沒設就不發鑰匙，成人卡沒有入口
+ *（owner 2026-09-15）。
  */
 import type { CardRow } from "./cards";
 import { type Localized, pickLocale } from "./types";
@@ -51,9 +55,36 @@ export function allowedImageUrl(raw: string | null | undefined): URL | null {
   }
 }
 
-export function cardManifest(row: CardRow, lang: string) {
+/** 鑰匙的有效期。安裝在開頁後幾分鐘內就會發生；留一天是給「開著分頁隔天才裝」的人。 */
+export const SHORTCUT_KEY_TTL_MS = 24 * 60 * 60 * 1000;
+
+const b64url = (bytes: ArrayBuffer): string => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+async function hmac(secret: string, message: string): Promise<ArrayBuffer> {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
+}
+
+/** `<到期毫秒>.<簽章>`，簽章綁卡片 ID 與到期時間。 */
+export async function signShortcutKey(secret: string, cardId: string, now = Date.now()): Promise<string> {
+  const exp = now + SHORTCUT_KEY_TTL_MS;
+  return `${exp}.${b64url(await hmac(secret, `${cardId}:${exp}`))}`;
+}
+
+export async function verifyShortcutKey(secret: string | undefined, cardId: string, key: string | undefined, now = Date.now()): Promise<boolean> {
+  if (!secret || !key) return false;
+  const dot = key.indexOf(".");
+  if (dot <= 0) return false;
+  const exp = Number(key.slice(0, dot));
+  if (!Number.isFinite(exp) || exp <= now) return false;
+  const expect = new TextEncoder().encode(b64url(await hmac(secret, `${cardId}:${exp}`)));
+  const got = new TextEncoder().encode(key.slice(dot + 1));
+  return expect.byteLength === got.byteLength && crypto.subtle.timingSafeEqual(expect, got);
+}
+
+export function cardManifest(row: CardRow, lang: string, key?: string) {
   const name = pickLocale(JSON.parse(row.names) as Localized, lang) || row.source_role_id;
-  const icon = (size: IconSize) => ({ src: iconPath(row.id, size), sizes: `${size}x${size}`, purpose: "any" });
+  const icon = (size: IconSize) => ({ src: iconPath(row.id, size) + (key ? `?k=${encodeURIComponent(key)}` : ""), sizes: `${size}x${size}`, purpose: "any" });
   return {
     id: `/play/${row.source_role_id}`,
     name,

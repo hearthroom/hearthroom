@@ -13,6 +13,8 @@ export type Env = Omit<Cloudflare.Env, "EVENTS" | "ANALYTICS_ENABLED" | "REVIEW_
    */
   REVIEW_BOT_KEY?: string;
   REVIEW_BOT_ACCOUNT_NUM_ID?: string;
+  /** 成人卡「加到主畫面」鑰匙的簽章密鑰（`wrangler secret put SHORTCUT_SECRET`）。沒設就不發鑰匙，見 src/shortcut.ts。 */
+  SHORTCUT_SECRET?: string;
 };
 
 export class HttpError extends Error {
