@@ -34,6 +34,7 @@ import {
   reorderWorldbookEntries,
   saveAuthorAsset,
   submitRoleForReview,
+  unpublishRole,
   unregisterCard,
   uploadImage,
   type WorldbookDocumentEntry,
@@ -449,6 +450,7 @@ onMounted(async () => {
   try {
     const token = await session.accessToken();
     const raw = await fetchRoleDetail(roleId.value, token ?? undefined);
+    roleVisibility.value = String((raw as { roleVisibility?: unknown }).roleVisibility ?? "");
     draft.value = draftFromRoleDetail(raw, locale.value);
     tagsText.value = formatTags(draft.value.roleTag);
     original.value = cloneDraft(draft.value);
@@ -824,6 +826,14 @@ async function saveWorldbook(token: string, targetRoleId: string) {
 
 // ── 儲存 ──────────────────────────────────────────────────────────
 
+/**
+ * 這張卡在供應商那邊的狀態：private／public／waitReview。
+ * 公開的卡供應商不讓改（要先轉回私有，改完再送審）。作者想改就替他做：儲存時先轉私有再存，
+ * 頁上提示改完要再送審；已經拿到連結的人照樣能玩，不受影響（owner 2026-09-15）。
+ * 審核中的卡連轉私有都不行，只能等審完。
+ */
+const roleVisibility = ref("");
+
 async function save() {
   if (saving.value || loading.value) return;
   if (!dirty.value && !isNew.value) return;
@@ -866,6 +876,11 @@ async function save() {
       targetRoleId = created.roleId;
       roleId.value = targetRoleId;
       track("card_create", { subject: targetRoleId });
+    }
+
+    if (roleVisibility.value === "public") {
+      await unpublishRole(targetRoleId, token);
+      roleVisibility.value = "private";
     }
 
     const fields = documentPatch(draft.value, original.value);
@@ -1102,6 +1117,8 @@ async function exportCard(format: "png" | "json") {
 
       <!-- 中：表單 -->
       <form ref="body" class="body" @submit.prevent="save">
+        <p v-if="roleVisibility === 'public'" class="notice" role="status">{{ $t("editor.publicNotice") }}</p>
+        <p v-else-if="roleVisibility === 'waitReview'" class="notice" role="status">{{ $t("editor.reviewNotice") }}</p>
         <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
         <p v-else-if="restoredDraft" class="notice restored" role="status">
           <span>{{ $t("editor.draftRestored") }}</span>

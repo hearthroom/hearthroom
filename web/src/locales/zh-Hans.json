@@ -255,6 +255,8 @@
   "editor.publish.submit": "送出审核",
   "editor.publish.confirm": "送出之后这张卡会进入审核，通过就对所有人可见。要送吗？",
   "editor.publish.summary": "作者确认送审：{name}",
+  "editor.publicNotice": "这张卡已经公开。保存修改时会先把它转回私有，改完记得再送审；已经拿到链接的人照样能玩。",
+  "editor.reviewNotice": "这张卡正在审核中，通过或驳回之后才能修改。",
   "dialog.typeToConfirm": "输入“{text}”以确认",
   "editor.delete": "删除这张卡",
   "editor.delete.hint": "连同它的对话、世界书绑定与榜单登记一起删掉，删了就回不来。",
