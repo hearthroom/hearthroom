@@ -152,6 +152,8 @@ export const BEACON_EVENTS = new Set([
   "page_404", "error",
   // 舊分頁向歸檔要舊版區塊的次數：持續為 0 代表沒人撞到部署，可以評估要不要縮短 30 天
   "asset_archive_hit",
+  // 裝到主畫面：站台提示卡按了安裝／以後再說，以及卡片頁的「加到主畫面」（subject 是 roleId）
+  "pwa_install_click", "pwa_install_later", "pwa_card_install_click",
 ]);
 
 /** beacon 事件的 detail 小分类。同样白名单，避免自由字串进 blob。 */

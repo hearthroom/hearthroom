@@ -151,6 +151,8 @@ if (typeof window !== "undefined") {
     deferred = null;
     installPrompt.visible = false;
     installPrompt.available = false;
+    // 裝的是站台才清「以後再說」的計數；裝了一張卡不代表想再被問要不要裝站台
+    if (installPrompt.target !== "site") return;
     try { safeStorage()?.removeItem(DISMISS_KEY); safeStorage()?.removeItem(DISMISS_COUNT_KEY); } catch { /* 無妨 */ }
   });
 }
