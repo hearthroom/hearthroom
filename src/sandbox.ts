@@ -28,17 +28,21 @@ export function sandboxRoleIdOf(host: string): string | null {
   return m ? m[1]! : null;
 }
 
-/** 殼頁的 CSP：殼自己只連自己（connect-src 'self'）、只能被主站嵌（frame-ancestors）；作者外鏈腳本走 https:。 */
+/**
+ * 殼頁的 CSP：殼自己只連自己（connect-src 'self'）、只能被主站嵌（frame-ancestors）；作者外鏈腳本與樣式走 https:。
+ * frame-src 放行同源／srcdoc／blob：前端區塊協議（上游 common/frontend-block）把圍欄裡的整份 HTML 文件掛成各自的
+ * iframe；作者自己寫的 <iframe> 標籤仍被淨化層剝掉。跟上游 src/sandbox/index.html 的 meta 同一份。
+ */
 export const SANDBOX_CSP = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:",
-  "style-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline' https:",
   "img-src 'self' data: blob: https:",
   "media-src 'self' data: blob: https:",
   "font-src 'self' data: https:",
   "connect-src 'self'",
   "worker-src 'self'",
-  "frame-src 'none'",
+  "frame-src 'self' about: blob:",
   "form-action 'none'",
   "base-uri 'none'",
   "object-src 'none'",
