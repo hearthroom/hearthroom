@@ -75,3 +75,17 @@ describe("pwa install prompt", () => {
     expect(isIosSafari(android)).toBe(false);
   });
 });
+
+describe("install target", () => {
+  it("switching target hides a pending toast and drops availability until the browser re-offers", async () => {
+    const { installPrompt, setInstallTarget } = await import("../src/lib/pwa");
+    installPrompt.visible = true;
+    setInstallTarget("card", "夜行偵探");
+    expect(installPrompt.visible).toBe(false);
+    expect(installPrompt.target).toBe("card");
+    expect(installPrompt.available).toBe(false);
+    setInstallTarget("site");
+    expect(installPrompt.target).toBe("site");
+    expect(installPrompt.name).toBe("");
+  });
+});

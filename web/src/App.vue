@@ -119,7 +119,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
         <a :href="`${SITE.repoUrl}/blob/main/LICENSE`" target="_blank" rel="noopener">{{ $t("footer.license", { name: SITE.license }) }}</a>
         <RouterLink :to="lp('/guide')">{{ $t("footer.guide") }}</RouterLink>
         <RouterLink :to="lp('/developers')">{{ $t("footer.developers") }}</RouterLink>
-        <a v-if="installPrompt.available" href="#" @click.prevent="openInstall()">{{ $t("pwa.install.link") }}</a>
+        <a v-if="installPrompt.available && installPrompt.target === 'site'" href="#" @click.prevent="openInstall()">{{ $t("pwa.install.link") }}</a>
       </nav>
     </div>
   </footer>
