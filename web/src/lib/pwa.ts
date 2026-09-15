@@ -129,7 +129,8 @@ export function requestInstallToast(): void {
   toastWanted = true;
   offerIfWanted();
   setTimeout(() => {
-    if (!toastWanted || installPrompt.visible) return;
+    // manifest 還沒換成這張卡的（讀不到卡片資料）就沒得裝，不拿出來
+    if (!toastWanted || installPrompt.visible || !installPrompt.name) return;
     toastWanted = false;
     installPrompt.kind = "menu";
     installPrompt.visible = true;
@@ -214,6 +215,8 @@ export async function acceptInstall(): Promise<void> {
 
 export function dismissInstall(): void {
   installPrompt.visible = false;
+  // 卡片的提示卡是使用者自己按「加到主畫面」叫出來的，關掉不算「以後再說」：下次按還是要跳
+  if (installPrompt.target !== "site") return;
   try {
     const store = safeStorage();
     store?.setItem(DISMISS_KEY, String(Date.now()));

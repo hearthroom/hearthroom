@@ -60,7 +60,3 @@
   --lt-canvas-accent-fg: var(--on-accent);
   --lt-canvas-danger: var(--danger);
 }
-
-/* 卡片 App（play.<站台>，從主畫面圖示開進來）：沒有上一頁可回，舞台頁首的返回箭頭藏起來。
-   沙箱殼裡那顆在跨源 iframe 內，這裡管不到，要由殼自己依宿主的旗標處理。 */
-html[data-app="card"] .icon-back[data-lt="back"] { display: none; }

@@ -4,12 +4,25 @@
  * 兩種樣子：有原生安裝框的（Chromium 系）給「安裝／以後再說」；iOS Safari 沒有 API，給步驟與「知道了」。
  * 對象是卡片（卡片頁按了「加到主畫面」）時標題換成卡名；步驟一樣。
  */
+import { nextTick, ref, watch } from "vue";
 import { acceptInstall, dismissInstall, installPrompt } from "@/lib/pwa";
 import { isPlayHost } from "@/lib/site";
 import { track } from "@/lib/track";
 
-// 卡片 App 網域上，提示卡要壓過舞台的浮層（舞台自己的提示用 1200）
+/**
+ * 卡片 App 網域上，提示卡要壓過舞台與作者卡片的所有浮層——作者的樣式可以把 z-index 開到任意大，
+ * 靠數字比不贏。用 Popover API 把它放進瀏覽器的頂層（top layer），任何 z-index 都在它底下；
+ * 老瀏覽器沒有 showPopover 就退回大 z-index。
+ */
 const overStage = isPlayHost();
+const el = ref<HTMLElement | null>(null);
+watch(() => installPrompt.visible, async (v) => {
+  if (!overStage) return;
+  await nextTick();
+  const node = el.value as (HTMLElement & { showPopover?: () => void; hidePopover?: () => void }) | null;
+  if (!node?.showPopover) return;
+  try { if (v && !node.matches(":popover-open")) node.showPopover(); } catch { /* 已經開著或不支援 */ }
+});
 
 function onInstall() { track("pwa_install_click"); void acceptInstall(); }
 function onLater() { track("pwa_install_later"); dismissInstall(); }
@@ -17,7 +30,7 @@ function onLater() { track("pwa_install_later"); dismissInstall(); }
 
 <template>
   <Transition name="install">
-    <section v-if="installPrompt.visible" class="install" :class="{ 'install--over-stage': overStage }" role="region" :aria-label="$t('pwa.install.title')">
+    <section v-if="installPrompt.visible" ref="el" class="install" :class="{ 'install--over-stage': overStage }" :popover="overStage ? 'manual' : undefined" role="region" :aria-label="$t('pwa.install.title')">
       <div class="install__row">
         <span class="install__tile" aria-hidden="true">
           <img v-if="installPrompt.target === 'card' && installPrompt.icon" :src="installPrompt.icon" alt="" />
@@ -54,7 +67,10 @@ function onLater() { track("pwa_install_later"); dismissInstall(); }
 @media (min-width: 720px) {
   .install { left: auto; width: 380px; right: var(--s-5); bottom: calc(var(--s-5) + env(safe-area-inset-bottom)); }
 }
-.install--over-stage { z-index: 1300; }
+.install--over-stage { z-index: 2147483000; }
+/* 頂層（popover）：把瀏覽器給 popover 的預設外觀還原成提示卡自己的位置與樣式 */
+.install[popover] { inset: auto; margin: 0; border: 0; padding: var(--s-4); overflow: visible; width: auto; height: auto; }
+.install[popover]::backdrop { display: none; }
 .install__row { display: flex; gap: var(--s-3); align-items: flex-start; }
 .install__tile {
   flex: none; width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; overflow: hidden;

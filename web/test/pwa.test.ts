@@ -101,3 +101,20 @@ describe("which browsers can install at all", () => {
     expect(canInstall("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15")).toBe(false);
   });
 });
+
+describe("card target dismissal", () => {
+  it("closing the card prompt does not start the site's back-off", async () => {
+    const { dismissInstall, installPrompt, setInstallTarget } = await import("../src/lib/pwa");
+    localStorage.removeItem("hearthroom.pwa.dismissedAt");
+    localStorage.removeItem("hearthroom.pwa.dismissCount");
+    setInstallTarget("card", "夜行偵探");
+    installPrompt.visible = true;
+    dismissInstall();
+    expect(installPrompt.visible).toBe(false);
+    expect(localStorage.getItem("hearthroom.pwa.dismissedAt")).toBeNull();
+    expect(localStorage.getItem("hearthroom.pwa.dismissCount")).toBeNull();
+    setInstallTarget("site");
+    dismissInstall();
+    expect(localStorage.getItem("hearthroom.pwa.dismissCount")).toBe("1");
+  });
+});
