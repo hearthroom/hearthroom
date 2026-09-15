@@ -948,7 +948,7 @@
   "pwa.install.title": "Hearthroom をホーム画面に追加",
   "pwa.install.body": "アプリのようにホーム画面から全画面で開けます。",
   "pwa.install.cardTitle": "「{name}」をホーム画面に追加",
-  "pwa.install.cardBody": "このカードのアイコンがホーム画面に追加され、開くとすぐ会話に入れます。",
+  "pwa.install.cardBody": "ホーム画面に追加すれば、次からワンタップでこの会話に戻れます。",
   "pwa.install.cta": "インストール",
   "pwa.install.later": "あとで",
   "pwa.install.ios": "Safari の「共有」をタップし、「ホーム画面に追加」を選んでください。",

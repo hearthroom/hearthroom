@@ -68,8 +68,10 @@ function onLater() { track("pwa_install_later"); dismissInstall(); }
   .install { left: auto; width: 380px; right: var(--s-5); bottom: calc(var(--s-5) + env(safe-area-inset-bottom)); }
 }
 .install--over-stage { z-index: 2147483000; }
-/* 頂層（popover）：把瀏覽器給 popover 的預設外觀還原成提示卡自己的位置與樣式 */
-.install[popover] { inset: auto; margin: 0; border: 0; padding: var(--s-4); overflow: visible; width: auto; height: auto; }
+/* 頂層（popover）：把瀏覽器給 popover 的預設外觀還原成提示卡自己的樣式。
+   位置只清 top——inset 是 top/right/bottom/left 的縮寫，清 inset 會把上面設好的貼底位置一起清掉，卡片就跑到畫面頂端。 */
+.install[popover] { top: auto; margin: 0; border: 0; padding: var(--s-4); overflow: visible; height: auto; }
+@media (min-width: 720px) { .install[popover] { width: 380px; } }
 .install[popover]::backdrop { display: none; }
 .install__row { display: flex; gap: var(--s-3); align-items: flex-start; }
 .install__tile {
