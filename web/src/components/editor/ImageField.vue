@@ -16,7 +16,9 @@ const props = defineProps<{
   pickLabel: string;
   clearLabel: string;
   uploading: string;
-  ratio?: "square" | "wide";
+  ratio?: "square" | "wide" | "tall";
+  /** 畫出中央 75%×75% 的安全區虛線：背景在舞台用 cover 裁邊，重要元素要放在這裡面。 */
+  safeZone?: boolean;
   libraryLabel: string;
   /** 供應商沒有圖庫時收起「從圖庫選」。預設 false，既有呼叫端行為不變。 */
   hideLibrary?: boolean;
@@ -75,6 +77,7 @@ function pick(file: File) {
               :aria-label="pickLabel" :disabled="busy"
               @click="input?.click()" @dragover.prevent="dragging = true" @dragleave="dragging = false" @drop.prevent="onDrop">
         <img v-if="modelValue" :src="modelValue" alt="" />
+        <span v-if="modelValue && safeZone" class="safe" aria-hidden="true"></span>
         <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="ph">
           <rect x="3" y="4" width="18" height="16" rx="2" />
@@ -117,8 +120,12 @@ function pick(file: File) {
 .frame--busy { cursor: progress; }
 .frame img { transition: opacity var(--dur) var(--ease); }
 .frame--square { width: 128px; height: 128px; }
-/* 背景是整頁的底圖，16:9 才看得出實際會長怎樣；160×96 判斷不了亮不亮 */
+/* 背景是整頁的底圖，照實際比例看才知道會長怎樣；小方框判斷不了亮不亮 */
 .frame--wide { width: 256px; height: 144px; }
+.frame--tall { width: 144px; height: 256px; }
+.frame { position: relative; }
+/* 安全區：外圍各 12.5% 是可能被裁掉的區域 */
+.safe { position: absolute; inset: 12.5%; border: 1px dashed rgba(255, 255, 255, 0.85); outline: 1px dashed rgba(0, 0, 0, 0.35); pointer-events: none; }
 .frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .ph { width: 28px; height: 28px; }
 .side { flex: 1 1 180px; min-width: 0; display: grid; gap: var(--s-2); align-content: start; }

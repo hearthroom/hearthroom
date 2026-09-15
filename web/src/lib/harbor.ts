@@ -76,7 +76,7 @@ export async function harborSaveDocument(
   token: string,
 ): Promise<void> {
   const covers: Record<string, string> = {};
-  for (const [field, key] of [["roleAvatar", "avatar"], ["roleBackground", "background"]] as const) {
+  for (const [field, key] of [["roleAvatar", "avatar"], ["roleBackground", "background"], ["roleBackgroundLandscape", "backgroundLandscape"]] as const) {
     const value = fields[field];
     if (value === undefined) continue;
     if (value === "") { covers[key] = ""; continue; }
