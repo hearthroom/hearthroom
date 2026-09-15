@@ -200,10 +200,17 @@ export async function stamp(
     );
   } else if (approvals >= required) {
     cardStatus = "approved";
-    writes.push(
-      db.prepare("UPDATE review_submissions SET status = 'approved', decided_at = ? WHERE id = ?").bind(input.now, row.id),
-      db.prepare("UPDATE cards SET status = 'approved', reviewed_hash = ? WHERE id = ?").bind(row.content_hash, row.card_id),
-    );
+    writes.push(db.prepare("UPDATE review_submissions SET status = 'approved', decided_at = ? WHERE id = ?").bind(input.now, row.id));
+    if (row.kind === "first") {
+      // 上榜時間＝卡片第一次過審、真的出現在榜上的那一刻（owner 2026-09-07：時間是卡片上榜的那一刻）。
+      // 以前只在登記時寫一次：昨天送審、今天才過審的卡，上榜時間停在昨天，日榜的 24 小時窗口
+      // 已經滑過去，卡片直接出現在週榜（2026-09-15 owner 回報）。重審過關不算重新上榜，不動它。
+      writes.push(
+        db.prepare("UPDATE cards SET status = 'approved', reviewed_hash = ?, registered_at = ? WHERE id = ?").bind(row.content_hash, input.now, row.card_id),
+      );
+    } else {
+      writes.push(db.prepare("UPDATE cards SET status = 'approved', reviewed_hash = ? WHERE id = ?").bind(row.content_hash, row.card_id));
+    }
   }
   await db.batch(writes);
   return { submission: await getSubmission(db, row.id), cardStatus, approvals, required };
