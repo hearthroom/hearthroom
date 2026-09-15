@@ -948,7 +948,7 @@
   "pwa.install.title": "Add Hearthroom to your home screen",
   "pwa.install.body": "Opens like an app: full screen, straight from your home screen.",
   "pwa.install.cardTitle": "Add “{name}” to your home screen",
-  "pwa.install.cardBody": "Puts an icon for this card on your home screen. Open it to go straight to the conversation.",
+  "pwa.install.cardBody": "Add it to your home screen and jump back into this conversation with one tap.",
   "pwa.install.cta": "Install",
   "pwa.install.later": "Not now",
   "pwa.install.ios": "Tap Share in Safari, then choose “Add to Home Screen”.",

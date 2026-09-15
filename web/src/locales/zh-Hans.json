@@ -948,7 +948,7 @@
   "pwa.install.title": "把 Hearthroom 装到主屏幕",
   "pwa.install.body": "像 App 一样从主屏幕打开，全屏、不用先开浏览器。",
   "pwa.install.cardTitle": "把“{name}”添加到主屏幕",
-  "pwa.install.cardBody": "主屏幕上多一个这张卡的图标，点开直接进对话。",
+  "pwa.install.cardBody": "添加到主屏幕，以后一键就能回到这段对话。",
   "pwa.install.cta": "安装",
   "pwa.install.later": "以后再说",
   "pwa.install.ios": "在 Safari 点下方的“分享”，再选“添加到主屏幕”。",
