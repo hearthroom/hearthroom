@@ -46,11 +46,11 @@ const error = ref("");
 const preview = ref<ImportResult | null>(null);
 const raw = ref<TavernCard | null>(null);
 const rawImage = ref<Blob | null>(null);
+const rawBackground = ref<Blob | null>(null);
 
 const ERRORS: Record<string, string> = {
   tavern_invalid: "import.error.invalid",
   tavern_no_metadata: "import.error.noMetadata",
-  tavern_charx_unsupported: "import.error.charx",
 };
 const MMD_ERRORS: Record<string, string> = {
   mmd_empty: "import.mmd.error.empty",
@@ -63,6 +63,7 @@ function build() {
   const result = tavernToDraft(raw.value, {
     language: props.language,
     image: rawImage.value,
+    background: rawBackground.value,
     labels: { personality: t("import.label.personality"), scenario: t("import.label.scenario") },
   });
   preview.value = result;
@@ -75,6 +76,7 @@ async function read(file: File) {
     const parsed = await parseTavernFile(file);
     raw.value = parsed.card;
     rawImage.value = parsed.image;
+    rawBackground.value = parsed.background;
     build();
   } catch (err) {
     raw.value = null;

@@ -162,18 +162,20 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     await mount("/create");
     await pickFile($("input[type=file]"), new File([JSON.stringify(CARD)], "avra.json", { type: "application/json" }));
 
-    // 報告：標籤多了兩個、正則腳本一條、原作者署名
+    // 報告：標籤多了兩個、正則腳本一條
     const report = root.textContent ?? "";
     expect(report).toContain("讀到了：阿芙拉");
     expect(report).toContain("多出來的 2 個標籤");
     // 正則腳本不再是「沒能帶過來」：套用後變成這張卡的規則，對話區的按鈕上會帶著數量
     expect(report).not.toContain("正則腳本");
-    expect(report).toContain("someone");
+    // 原作者署名現在有落點（V3 的 creator），不再進報告，套用後出現在署名那一格
+    expect(report).not.toContain("someone");
 
     byText("套用到表單").click();
     await flush();
 
     expect($<HTMLInputElement>("#f-name").value).toBe("阿芙拉");
+    expect($<HTMLInputElement>("#f-creator").value).toBe("someone");
     expect($<HTMLTextAreaElement>("#f-desc").value).toBe("一張慢熱的懸疑卡。");
     expect($<HTMLTextAreaElement>("#f-detail").value).toBe("金麥穗酒館的老闆娘。\n\n【性格】\n嘴硬心軟。\n\n【場景】\n北境邊鎮，商隊失蹤的那一週。");
     expect($<HTMLTextAreaElement>("#f-welcome").value).toContain("北境每天都有遲到的車隊");
@@ -200,6 +202,7 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
       roleDesc: "一張慢熱的懸疑卡。",
       roleOutputContract: "回覆用第三人稱。",
       jailbreak: "不要替玩家做決定。",
+      cardMeta: { creator: "someone" },
       talkExample: [
         { roleType: "user", content: "我聽說有支商隊沒到。" },
         { roleType: "ai", content: "「當它是雨聲。」" },

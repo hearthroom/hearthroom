@@ -10234,6 +10234,22 @@
           "roleEntry": {
             "type": "string",
             "description": "Omitted when empty."
+          },
+          "nickname": {
+            "type": "string",
+            "maxLength": 70,
+            "description": "What `{{char}}` expands to in prompts when it should differ from `roleName`. Empty string means `roleName` is used."
+          },
+          "cardMeta": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CardMeta"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Character Card V3 provenance; null when absent."
           }
         }
       },
@@ -14926,6 +14942,22 @@
           "roleEntry": {
             "type": "string",
             "description": "Entry point marker; omitted when absent."
+          },
+          "nickname": {
+            "type": "string",
+            "maxLength": 70,
+            "description": "What `{{char}}` expands to in prompts when it should differ from `roleName`. Empty string means `roleName` is used."
+          },
+          "cardMeta": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CardMeta"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Character Card V3 provenance; null when absent."
           }
         }
       },
@@ -15158,6 +15190,15 @@
           "jailbreak": {
             "type": "string",
             "description": "Author-private instruction; limit 500 chars for zh-Hant/zh-Hans cards, 1500 otherwise. Never returned by v1 read routes."
+          },
+          "nickname": {
+            "type": "string",
+            "maxLength": 70,
+            "description": "What `{{char}}` expands to in prompts when it should differ from `roleName`. Empty string means `roleName` is used. Absent leaves it untouched; empty string clears it (`nickname_too_long` above 70 characters)."
+          },
+          "cardMeta": {
+            "$ref": "#/components/schemas/CardMeta",
+            "description": "Replaces the whole object; send `{}` to clear. Absent leaves it untouched."
           }
         }
       },
@@ -15540,6 +15581,22 @@
           "systemTag": {
             "type": "string",
             "description": "System classification tag; empty string on `/role/detail`, omitted on `/role/mine` items when empty."
+          },
+          "nickname": {
+            "type": "string",
+            "maxLength": 70,
+            "description": "What `{{char}}` expands to in prompts when it should differ from `roleName`. Empty string means `roleName` is used."
+          },
+          "cardMeta": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CardMeta"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Character Card V3 provenance; null when absent."
           }
         }
       },
@@ -16402,6 +16459,15 @@
           },
           "roleOutputContract": {
             "type": "string"
+          },
+          "nickname": {
+            "type": "string",
+            "maxLength": 70,
+            "description": "What `{{char}}` expands to in prompts when it should differ from `roleName`. Empty string means `roleName` is used."
+          },
+          "cardMeta": {
+            "type": "string",
+            "description": "Character Card V3 provenance as a JSON string (shape: CardMeta); absent when the card has none."
           }
         }
       },
@@ -18582,6 +18648,42 @@
                 "description": "Send exactly this `Content-Type` on the PUT (always `application/octet-stream`); the real type is sniffed from the bytes at `uploadComplete`."
               }
             }
+          }
+        }
+      },
+      "CardMeta": {
+        "type": "object",
+        "description": "Character Card V3 provenance kept for export and never used in prompts. Absent or null when the card has none.",
+        "properties": {
+          "creator": {
+            "type": "string",
+            "description": "Original author credit."
+          },
+          "characterVersion": {
+            "type": "string",
+            "description": "Card version string as written by the author."
+          },
+          "source": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Source URLs or identifiers."
+          },
+          "creatorNotesMultilingual": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Language code → creator notes in that language."
+          },
+          "creationDate": {
+            "type": "integer",
+            "description": "Unix seconds."
+          },
+          "modificationDate": {
+            "type": "integer",
+            "description": "Unix seconds."
           }
         }
       }
