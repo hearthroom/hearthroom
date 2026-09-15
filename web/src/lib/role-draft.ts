@@ -75,6 +75,8 @@ export interface RoleDraft {
   roleTag: string[];
   roleAvatar: string;
   roleBackground: string;
+  /** 橫式背景（選填）：舞台在橫向螢幕優先用它，沒有就退回直式的 roleBackground。 */
+  roleBackgroundLandscape: string;
   roleDetailDesc: string;
   roleWelcome: string;
   /** 備選開場白：換一個開場，但仍是同一場故事。 */
@@ -105,6 +107,7 @@ export const makeDraft = (language: string): RoleDraft => ({
   roleTag: [],
   roleAvatar: "",
   roleBackground: "",
+  roleBackgroundLandscape: "",
   roleDetailDesc: "",
   roleWelcome: "",
   alternates: [],
@@ -251,6 +254,7 @@ export function draftFromRoleDetail(raw: Record<string, unknown>, fallbackLangua
   draft.roleTag = readTags(raw.roleTag);
   draft.roleAvatar = str(raw.roleAvatar);
   draft.roleBackground = str(raw.roleBackground);
+  draft.roleBackgroundLandscape = str(raw.roleBackgroundLandscape);
   draft.roleDetailDesc = str(raw.roleDetailDesc);
   draft.roleWelcome = str(raw.roleWelcome);
   draft.alternates = strList(raw.roleWelcomeAlternates ?? raw.alternates);
@@ -270,6 +274,7 @@ export interface RoleDocumentFields {
   roleSex?: string;
   roleAvatar?: string;
   roleBackground?: string;
+  roleBackgroundLandscape?: string;
   roleDetailDesc?: string;
   talkExample?: TalkExampleEntry[];
   roleOutputContract?: string;
@@ -286,6 +291,7 @@ const TEXT_FIELDS = [
   "roleSex",
   "roleAvatar",
   "roleBackground",
+  "roleBackgroundLandscape",
   "roleDetailDesc",
   "roleOutputContract",
   "jailbreak",
