@@ -194,7 +194,7 @@ onBeforeUnmount(() => { if (thumb.value) URL.revokeObjectURL(thumb.value); });
       <button type="button" class="btn btn--sm" @click="input?.click()">{{ $t("import.pick") }}</button>
       <p class="subtle">{{ kind === "mmd" ? $t("import.mmd.formats") : $t("import.formats") }}</p>
       <input v-if="kind === 'mmd'" ref="input" type="file" multiple accept=".json,.txt,application/json,text/plain" class="sr-only" @change="onPick" />
-      <input v-else ref="input" type="file" accept=".png,.json,image/png,application/json" class="sr-only" @change="onPick" />
+      <input v-else ref="input" type="file" accept=".png,.json,.charx,image/png,application/json,application/zip" class="sr-only" @change="onPick" />
     </div>
 
     <p v-if="error" class="notice notice--error import__error" role="alert">{{ error }}</p>
