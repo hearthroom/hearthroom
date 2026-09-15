@@ -43,8 +43,28 @@ export interface WorldbookMatchOptions {
   selectiveLogic: number;
 }
 
+/**
+ * 角色卡 V3 附帶的資料：不進提示詞，只為了匯出時原樣還回去（上游 cardMeta）。
+ * 欄位名是本站的駝峰寫法；酒館那邊的底線寫法在 tavern.ts 對回去。
+ */
+export interface CardMeta {
+  creator?: string;
+  characterVersion?: string;
+  source?: string[];
+  /** 語言碼 → 該語言的作者說明。roleDesc 存的是跟卡片語區對上的那一份。 */
+  creatorNotesMultilingual?: Record<string, string>;
+  /** 秒級 Unix 時間。 */
+  creationDate?: number;
+  modificationDate?: number;
+}
+
+/** 別名跟角色名同一個上限（上游 nickname 是 70 字）。 */
+export const NICKNAME_MAX = 70;
+
 export interface RoleDraft {
   roleName: string;
+  /** 角色自稱／別名：{{char}} 展開成這個；空＝用角色名。角色卡 V3 的 nickname。 */
+  nickname: string;
   /** 角色卡語區。建立之後就定了，編輯時不出現。 */
   language: string;
   /** 玩家在這張卡裡的稱呼，對應 {{user}}。 */
@@ -64,6 +84,7 @@ export interface RoleDraft {
   talkExample: TalkExampleEntry[];
   roleOutputContract: string;
   jailbreak: string;
+  cardMeta: CardMeta;
 }
 
 export const LANGUAGES = [
@@ -76,6 +97,7 @@ export const LANGUAGES = [
 
 export const makeDraft = (language: string): RoleDraft => ({
   roleName: "",
+  nickname: "",
   language,
   userName: "",
   roleSex: "",
@@ -90,6 +112,7 @@ export const makeDraft = (language: string): RoleDraft => ({
   talkExample: [],
   roleOutputContract: "",
   jailbreak: "",
+  cardMeta: {},
 });
 
 /**
@@ -182,10 +205,46 @@ const str = (raw: unknown): string => (typeof raw === "string" ? raw : "");
 const strList = (raw: unknown): string[] =>
   Array.isArray(raw) ? raw.map((v) => str(v).trim()).filter(Boolean) : [];
 
+const numOr0 = (raw: unknown): number => (typeof raw === "number" && Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0);
+
+/**
+ * 上游的 cardMeta：物件，或（舊回應、分享詳情）一段 JSON 字串。壞掉的一律當空——
+ * 這份資料不影響卡片能不能用，讀不出來不該讓整張卡讀不出來。
+ */
+export function readCardMeta(raw: unknown): CardMeta {
+  let obj: unknown = raw;
+  if (typeof raw === "string") {
+    try {
+      obj = JSON.parse(raw);
+    } catch {
+      return {};
+    }
+  }
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return {};
+  const o = obj as Record<string, unknown>;
+  const meta: CardMeta = {};
+  if (str(o.creator).trim()) meta.creator = str(o.creator).trim();
+  if (str(o.characterVersion).trim()) meta.characterVersion = str(o.characterVersion).trim();
+  const source = strList(o.source);
+  if (source.length) meta.source = source;
+  if (o.creatorNotesMultilingual && typeof o.creatorNotesMultilingual === "object" && !Array.isArray(o.creatorNotesMultilingual)) {
+    const notes: Record<string, string> = {};
+    for (const [lang, note] of Object.entries(o.creatorNotesMultilingual as Record<string, unknown>)) {
+      if (lang.trim() && str(note).trim()) notes[lang.trim()] = str(note).trim();
+    }
+    if (Object.keys(notes).length) meta.creatorNotesMultilingual = notes;
+  }
+  if (numOr0(o.creationDate)) meta.creationDate = numOr0(o.creationDate);
+  if (numOr0(o.modificationDate)) meta.modificationDate = numOr0(o.modificationDate);
+  return meta;
+}
+
 /** 上游的角色詳情 → 草稿。 */
 export function draftFromRoleDetail(raw: Record<string, unknown>, fallbackLanguage: string): RoleDraft {
   const draft = makeDraft(str(raw.language) || fallbackLanguage);
   draft.roleName = str(raw.roleName);
+  draft.nickname = str(raw.nickname);
+  draft.cardMeta = readCardMeta(raw.cardMeta);
   draft.userName = str(raw.userName);
   draft.roleSex = str(raw.roleSex);
   draft.roleDesc = str(raw.roleDesc);
@@ -215,10 +274,13 @@ export interface RoleDocumentFields {
   talkExample?: TalkExampleEntry[];
   roleOutputContract?: string;
   jailbreak?: string;
+  nickname?: string;
+  cardMeta?: CardMeta;
 }
 
 const TEXT_FIELDS = [
   "roleName",
+  "nickname",
   "roleDesc",
   "userName",
   "roleSex",
@@ -243,6 +305,10 @@ export function documentPatch(draft: RoleDraft, original: RoleDraft | null): Rol
     if (!original || draft[key] !== original[key]) patch[key] = draft[key];
   }
   if (!original || JSON.stringify(draft.roleTag) !== JSON.stringify(original.roleTag)) patch.roleTag = draft.roleTag;
+  // 新卡沒有附帶資料就不送：上游本來就是空的，送一個 {} 只是多一次寫入
+  if (original ? JSON.stringify(draft.cardMeta) !== JSON.stringify(original.cardMeta) : Object.keys(draft.cardMeta).length > 0) {
+    patch.cardMeta = draft.cardMeta;
+  }
   if (!original || JSON.stringify(draft.talkExample) !== JSON.stringify(original.talkExample)) {
     // 空陣列送過去會被服務層當成 invalid_talk_example 擋掉，而作者清空示例是合理操作。
     // 沒有東西可送時就不送——清空對話示例目前只能在原站做。

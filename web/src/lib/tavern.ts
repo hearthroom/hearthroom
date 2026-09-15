@@ -1,11 +1,19 @@
 /**
  * 酒館角色卡（Character Card V2 / V3）與本站草稿之間的雙向轉換。
  *
- * 載體有三種，這裡支援兩種：
+ * 載體三種都收：
  *   - PNG：資料在 tEXt chunk（`ccv3` 優先於 `chara`，兩者都是 base64 的 JSON）
  *   - JSON：裸卡，或是外面包一層 `{spec, data}`
- *   - CHARX（.charx，V3 的 zip 封裝）**不支援**——它需要一整套 zip 讀取，而野生的卡
- *     絕大多數是前兩種。遇到就明確告訴使用者，不要假裝讀失敗。
+ *   - CHARX（.charx，V3 的 zip 封裝）：根目錄的 card.json 是卡，`embeded://` 指向包裡的素材；
+ *     只取主頭像與主背景，其餘素材（表情差分、音效…）本站沒地方放，進報告。
+ *
+ * V3 比 V2 多的東西怎麼落：
+ *   - nickname、creator、character_version、source、多語言 creator_notes、建立／修改時間
+ *     → 草稿的 nickname 與 cardMeta（上游有欄位，匯出時原樣還回去）
+ *   - 世界書 use_regex → 關鍵詞包成 `/key/i`，上游本來就認這種寫法
+ *   - 世界書修飾詞（@@activate 那些）→ 常駐／停用／補關鍵詞三個有對應，其餘剝掉並進報告；
+ *     插入位置、深度、機率這些我們刻意不做（它們會讓每一輪的提示詞不一樣，打爆快取）
+ *   - group_only_greetings → 併進備選開場白（本站沒有群聊，但開場白本身還是能用），進報告
  *
  * 兩邊的欄位不是一一對應，這是這個檔案的全部難處。**對不上的欄位一律進報告**，
  * 不靜默丟掉：作者匯入一張卡之後如果不知道次要關鍵詞沒了，他會以為卡壞了。
@@ -14,9 +22,10 @@
  */
 
 import { isPng, readTextChunk, replaceTextChunks, base64FromUtf8, utf8FromBase64 } from "./png-chunks";
-import type { RoleDraft, TalkExampleEntry, WorldbookEntryDraft, WorldbookMatchOptions } from "./role-draft";
+import type { CardMeta, RoleDraft, TalkExampleEntry, WorldbookEntryDraft, WorldbookMatchOptions } from "./role-draft";
 import { makeDraft } from "./role-draft";
 import { rulesFromTavern, rulesToTavern, type RegexRuleSet } from "./regex-rules";
+import { unzipSync } from "fflate";
 
 export interface TavernBookEntry {
   keys?: string[];
@@ -33,6 +42,8 @@ export interface TavernBookEntry {
   selective?: boolean;
   match_whole_words?: boolean;
   selective_logic?: number;
+  /** V3：關鍵詞是正規表示式。 */
+  use_regex?: boolean;
 }
 
 export interface TavernBook {
@@ -61,7 +72,20 @@ export interface TavernCardData {
   creator?: string;
   character_version?: string;
   nickname?: string;
+  /** V3 */
+  source?: string[];
+  creator_notes_multilingual?: Record<string, string>;
+  creation_date?: number;
+  modification_date?: number;
+  assets?: TavernAsset[];
   extensions?: Record<string, unknown>;
+}
+
+export interface TavernAsset {
+  type?: string;
+  uri?: string;
+  name?: string;
+  ext?: string;
 }
 
 export interface TavernCard {
@@ -84,6 +108,8 @@ export interface ImportResult {
   dropped: DropNote[];
   /** 卡片自帶的立繪（PNG 匯入時才有），拿去當頭像與背景的預設值。 */
   image: Blob | null;
+  /** V3 卡帶的主背景（CHARX 內嵌或 data: URI）。沒有就不給。 */
+  background?: Blob | null;
   spec: string;
   /** 酒館卡 extensions.regex_scripts 落成的正則規則。沒有就是 null。 */
   regex: RegexRuleSet | null;
@@ -171,17 +197,93 @@ function unwrap(raw: unknown): TavernCard {
   throw new Error("tavern_invalid");
 }
 
+export interface ParsedTavernFile {
+  card: TavernCard;
+  image: Blob | null;
+  /** V3 主背景（CHARX 內嵌或 data: URI）。 */
+  background: Blob | null;
+}
+
+const ZIP_MAGIC = [0x50, 0x4b, 0x03, 0x04];
+const isZip = (bytes: Uint8Array): boolean => ZIP_MAGIC.every((b, i) => bytes[i] === b);
+
+const IMAGE_MIME: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp", gif: "image/gif", avif: "image/avif" };
+const mimeForExt = (ext: string): string => IMAGE_MIME[ext.toLowerCase().replace(/^\./, "")] ?? "application/octet-stream";
+
+/** V3 的 assets 裡挑「某一類的主要那一個」：name 是 main 的優先，沒有就取第一個。 */
+export function mainAsset(assets: TavernAsset[] | undefined, type: string): TavernAsset | null {
+  const ofType = (assets ?? []).filter((a) => a && a.type === type && text(a.uri));
+  return ofType.find((a) => text(a.name).toLowerCase() === "main") ?? ofType[0] ?? null;
+}
+
+/** data: URI → Blob；不是 data: 或解不開就 null。只認圖片。 */
+export function blobFromDataUri(uri: string): Blob | null {
+  const match = /^data:(image\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+)$/i.exec(uri.trim());
+  if (!match) return null;
+  try {
+    const bin = atob(match[2].replace(/\s+/g, ""));
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return new Blob([out], { type: match[1].toLowerCase() });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 從 CHARX 讀卡。card.json 在根目錄；素材用 `embeded://路徑`（規格就是這個拼法）指向包裡的檔案。
+ * 只取 icon／background 的主要那一個；沒有 icon 但包裡有圖也不猜，頭像讓作者自己選。
+ */
+function parseCharx(bytes: Uint8Array): ParsedTavernFile {
+  let files: Record<string, Uint8Array>;
+  try {
+    files = unzipSync(bytes);
+  } catch {
+    throw new Error("tavern_invalid");
+  }
+  const cardFile = files["card.json"];
+  if (!cardFile) throw new Error("tavern_no_metadata");
+  const card = unwrap(JSON.parse(new TextDecoder().decode(cardFile)));
+  const embedded = (asset: TavernAsset | null): Blob | null => {
+    const uri = text(asset?.uri);
+    if (!uri) return null;
+    if (uri.startsWith("data:")) return blobFromDataUri(uri);
+    const match = /^embeded:\/\/(.+)$/.exec(uri);
+    if (!match) return null;
+    const data = files[match[1]];
+    // slice() 拿到一塊型別上確定是 ArrayBuffer 的緩衝區（zip 解出來的視圖可能共用底層緩衝）
+    return data ? new Blob([data.slice().buffer], { type: mimeForExt(text(asset?.ext) || match[1].split(".").pop() || "") }) : null;
+  };
+  return {
+    card,
+    image: embedded(mainAsset(card.data?.assets, "icon")),
+    background: embedded(mainAsset(card.data?.assets, "background")),
+  };
+}
+
 /** 從檔案讀出一張卡。副檔名不可信，看實際位元組。 */
-export async function parseTavernFile(file: File): Promise<{ card: TavernCard; image: Blob | null }> {
+export async function parseTavernFile(file: File): Promise<ParsedTavernFile> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   if (isPng(bytes)) {
     // V3 優先：同一張圖常常兩個 chunk 都在，而 ccv3 才是新的那份。
     const raw = readTextChunk(bytes, "ccv3") ?? readTextChunk(bytes, "chara");
     if (!raw) throw new Error("tavern_no_metadata");
-    return { card: unwrap(JSON.parse(utf8FromBase64(raw))), image: new Blob([bytes], { type: "image/png" }) };
+    const card = unwrap(JSON.parse(utf8FromBase64(raw)));
+    // PNG 卡的頭像就是這張圖；V3 的 assets 若另外帶了 data: 的背景也收
+    const bg = mainAsset(card.data?.assets, "background");
+    return { card, image: new Blob([bytes], { type: "image/png" }), background: bg ? blobFromDataUri(text(bg.uri)) : null };
   }
-  if (file.name.toLowerCase().endsWith(".charx")) throw new Error("tavern_charx_unsupported");
-  return { card: unwrap(JSON.parse(new TextDecoder().decode(bytes))), image: null };
+  if (isZip(bytes)) return parseCharx(bytes);
+  let raw: unknown;
+  try {
+    raw = JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    throw new Error("tavern_invalid");
+  }
+  const card = unwrap(raw);
+  const icon = mainAsset(card.data?.assets, "icon");
+  const bg = mainAsset(card.data?.assets, "background");
+  return { card, image: icon ? blobFromDataUri(text(icon.uri)) : null, background: bg ? blobFromDataUri(text(bg.uri)) : null };
 }
 
 /**
@@ -236,24 +338,88 @@ function joinPersona(data: TavernCardData, labels: { personality: string; scenar
   return parts.join("\n\n");
 }
 
+/**
+ * V3 的修飾詞：條目內容開頭一行一個 `@@name value`，`@@@name` 是「上一個認不得時的備胎」。
+ * 讀法照 SillyTavern：從第一行起連續的 `@@` 行都是修飾詞，遇到第一行正文就停；
+ * 備胎行只在前一個修飾詞認不得時才算數。
+ *
+ * 有落點的三個：activate（常駐）、dont_activate（停用）、additional_keys（補進關鍵詞）。
+ * 其餘（depth、position、role、probability、sticky、exclude_keys…）剝掉並回報——它們控制的是
+ * 「放在提示詞的哪裡、多常放」，本站刻意不做這一層。
+ */
+export const KNOWN_DECORATORS = ["activate", "dont_activate", "additional_keys"] as const;
+
+export interface ParsedDecorators {
+  content: string;
+  activate: boolean;
+  dontActivate: boolean;
+  additionalKeys: string[];
+  /** 剝掉但沒對應的修飾詞名字（去重）。 */
+  unsupported: string[];
+}
+
+export function parseDecorators(raw: string): ParsedDecorators {
+  const out: ParsedDecorators = { content: raw, activate: false, dontActivate: false, additionalKeys: [], unsupported: [] };
+  if (!raw.startsWith("@@")) return out;
+  const lines = raw.split("\n");
+  let fallbacked = false;
+  let i = 0;
+  for (; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.startsWith("@@")) break;
+    const isFallback = line.startsWith("@@@");
+    if (isFallback && !fallbacked) continue;
+    const body = (isFallback ? line.slice(3) : line.slice(2)).trim();
+    const match = /^([a-z_]+)\s*(.*)$/i.exec(body);
+    const name = match ? match[1].toLowerCase() : "";
+    const value = match ? match[2].trim() : "";
+    if (name === "activate") out.activate = true;
+    else if (name === "dont_activate") out.dontActivate = true;
+    else if (name === "additional_keys") out.additionalKeys.push(...value.split(",").map((k) => k.trim()).filter(Boolean));
+    else {
+      // 認不得：下一行若是 @@@ 備胎就讓它接手；備胎也認不得就一起進報告
+      if (name && !out.unsupported.includes(name)) out.unsupported.push(name);
+      fallbacked = true;
+      continue;
+    }
+    fallbacked = false;
+  }
+  out.content = lines.slice(i).join("\n");
+  return out;
+}
+
+/**
+ * V3 的 use_regex：整條的關鍵詞都是正規表示式。上游本來就認 `/pattern/flags` 這種寫法
+ * （不分大小寫加 i），所以包起來就好；作者已經寫成 `/…/` 的不重包。
+ */
+export function regexKey(key: string, caseSensitive: boolean): string {
+  if (/^\/.+\/[a-z]*$/.test(key)) return key;
+  return `/${key}/${caseSensitive ? "" : "i"}`;
+}
+
+const entryKeywords = (entry: TavernBookEntry, raw: string[]): string[] =>
+  entry.use_regex === true ? raw.map((k) => regexKey(k, entry.case_sensitive === true)) : raw;
+
 /** 酒館的條目 → 本站的條目。 */
 export function bookEntriesToDrafts(entries: TavernBookEntry[]): WorldbookEntryDraft[] {
   const drafts: WorldbookEntryDraft[] = [];
   entries.forEach((entry, index) => {
-    const content = text(entry.content);
+    const decorated = parseDecorators(text(entry.content));
+    const content = decorated.content.trim();
     if (!content) return;
     // 條目要有名字才找得回來。酒館這兩個欄位常常都空，那就用第一個關鍵詞。
     const baseName = text(entry.name) || text(entry.comment) || keyList(entry.keys)[0] || `#${index + 1}`;
+    const keywords = entryKeywords(entry, [...keyList(entry.keys), ...decorated.additionalKeys]);
     const parts = splitEntryContent(content);
     parts.forEach((part, i) => {
       const name = parts.length === 1 ? baseName.slice(0, 20) : `${[...baseName].slice(0, 14).join("")} (${i + 1}/${parts.length})`;
       drafts.push({
         name,
         content: part,
-        keywords: keyList(entry.keys),
-        secondaryKeywords: keyList(entry.secondary_keys),
-        isEnabled: entry.enabled !== false,
-        isConstant: entry.constant === true,
+        keywords,
+        secondaryKeywords: entryKeywords(entry, keyList(entry.secondary_keys)),
+        isEnabled: entry.enabled !== false && !decorated.dontActivate,
+        isConstant: entry.constant === true || decorated.activate,
         matchOptions: entryMatchOptions(entry),
       });
     });
@@ -276,7 +442,7 @@ export function entryMatchOptions(entry: TavernBookEntry): WorldbookMatchOptions
 
 /** 匯入報告用：有幾條因為太長被拆開。 */
 export function countSplitEntries(entries: TavernBookEntry[]): number {
-  return entries.filter((entry) => [...text(entry.content)].length > ENTRY_CONTENT_MAX).length;
+  return entries.filter((entry) => [...parseDecorators(text(entry.content)).content.trim()].length > ENTRY_CONTENT_MAX).length;
 }
 
 /**
@@ -314,6 +480,7 @@ export function worldInfoToBook(raw: unknown): TavernBook | null {
         case_sensitive: row.case_sensitive === true || row.caseSensitive === true || ext(row).case_sensitive === true,
         match_whole_words: row.matchWholeWords === true || ext(row).match_whole_words === true,
         selective_logic: numberOr(row.selectiveLogic ?? ext(row).selectiveLogic ?? ext(row).selective_logic, 0),
+        use_regex: row.use_regex === true || ext(row).use_regex === true,
       })),
   };
 }
@@ -381,12 +548,19 @@ export function worldbookToExport(name: string, entries: WorldbookEntryDraft[]) 
 /** 條目層面沒地方放的欄位。每一個都要出現在報告裡。 */
 export function bookEntryDrops(entries: TavernBookEntry[]): DropNote[] {
   // 次要關鍵詞、大小寫、整詞、次要邏輯現在都有落點（上游的酒館匹配規則），不再進報告。
-  const counts = { position: 0 };
+  const counts = { position: 0, decorators: 0 };
+  const names = new Set<string>();
   for (const entry of entries) {
     if (text(entry.position)) counts.position++;
+    const unsupported = parseDecorators(text(entry.content)).unsupported;
+    if (unsupported.length) {
+      counts.decorators++;
+      unsupported.forEach((n) => names.add(`@@${n}`));
+    }
   }
   const notes: DropNote[] = [];
   if (counts.position) notes.push({ key: "import.drop.position", params: { n: counts.position } });
+  if (counts.decorators) notes.push({ key: "import.drop.decorators", params: { n: counts.decorators, names: [...names].join(", ") } });
   return notes;
 }
 
@@ -402,17 +576,26 @@ export interface ImportLabels {
  */
 export function tavernToDraft(
   card: TavernCard,
-  options: { language: string; labels: ImportLabels; image?: Blob | null },
+  options: { language: string; labels: ImportLabels; image?: Blob | null; background?: Blob | null },
 ): ImportResult {
   const data = card.data ?? {};
   const dropped: DropNote[] = [];
   const draft = makeDraft(options.language);
 
   draft.roleName = text(data.name);
-  draft.roleDesc = text(data.creator_notes);
+  draft.nickname = text(data.nickname);
+  draft.cardMeta = cardMetaFromTavern(data);
+  // V3 的多語言作者說明：有跟卡片語區對上的就用那份，沒有才用 creator_notes；整份留在 cardMeta 匯出用。
+  draft.roleDesc = multilingualNote(data.creator_notes_multilingual, options.language) || text(data.creator_notes);
   draft.roleDetailDesc = joinPersona(data, options.labels);
   draft.roleWelcome = text(data.first_mes);
   draft.alternates = list(data.alternate_greetings);
+  // 群聊專用開場白：本站沒有群聊，但開場白本身照樣能開場，併進備選開場白並告知
+  const groupGreetings = list(data.group_only_greetings);
+  if (groupGreetings.length) {
+    draft.alternates.push(...groupGreetings);
+    dropped.push({ key: "import.note.groupGreetings", params: { n: groupGreetings.length } });
+  }
   draft.roleOutputContract = text(data.system_prompt);
   draft.jailbreak = text(data.post_history_instructions);
   const tags = list(data.tags);
@@ -432,11 +615,13 @@ export function tavernToDraft(
     } else dropped.push({ key: "import.drop.mesExample" });
   }
 
-  // 只有這幾個是「本站真的沒有對應概念」。有對應但形狀不同的（例如三段人設）不算丟。
-  if (text(data.creator)) dropped.push({ key: "import.drop.creator", params: { name: text(data.creator) } });
-  if (text(data.character_version)) dropped.push({ key: "import.drop.version" });
-  if (text(data.nickname)) dropped.push({ key: "import.drop.nickname", params: { name: text(data.nickname) } });
-  if (list(data.group_only_greetings).length) dropped.push({ key: "import.drop.groupGreetings" });
+  // V3 素材：只收主頭像與主背景（由 parseTavernFile 取出）；表情差分、使用者頭像、音效這些本站沒地方放
+  const otherAssets = (data.assets ?? []).filter((a) => {
+    if (!a || !text(a.uri)) return false;
+    if (text(a.uri) === "ccdefault:") return false;
+    return a !== mainAsset(data.assets, "icon") && a !== mainAsset(data.assets, "background");
+  }).length;
+  if (otherAssets) dropped.push({ key: "import.drop.assets", params: { n: otherAssets } });
   // 正則腳本（狀態欄、美化面板）現在有落點：直接變成這張卡的正則規則，不進報告。
   const extensions = Object.keys(data.extensions ?? {});
   const regexRules = rulesFromTavern(data.extensions?.regex_scripts);
@@ -462,20 +647,63 @@ export function tavernToDraft(
     }
   }
 
-  return { draft, worldbook, dropped, image: options.image ?? null, spec: card.spec, regex };
+  return { draft, worldbook, dropped, image: options.image ?? null, background: options.background ?? null, spec: card.spec, regex };
 }
 
 /**
- * 反向：草稿寫成一張 V2 卡。
+ * 多語言作者說明挑哪一份：V3 的鍵是 ISO 639-1（en／ja／ko／zh），本站語區是 zh-Hant 這種 BCP 47。
+ * 先找完全相同的，再找語言碼相同的（zh-Hant → zh、zh-TW、zh-Hant-TW）。
+ */
+export function multilingualNote(notes: Record<string, string> | undefined, language: string): string {
+  if (!notes || typeof notes !== "object") return "";
+  const want = language.toLowerCase();
+  const base = want.split("-")[0];
+  let fallback = "";
+  for (const [lang, note] of Object.entries(notes)) {
+    const key = lang.toLowerCase();
+    if (key === want) return text(note);
+    if (!fallback && key.split("-")[0] === base) fallback = text(note);
+  }
+  return fallback;
+}
+
+const positiveInt = (value: unknown): number => {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+};
+
+/** V3 的附帶欄位 → 本站的 cardMeta（底線寫法 → 駝峰）。空的不放，草稿裡才不會多一堆空鍵。 */
+export function cardMetaFromTavern(data: TavernCardData): CardMeta {
+  const meta: CardMeta = {};
+  if (text(data.creator)) meta.creator = text(data.creator);
+  if (text(data.character_version)) meta.characterVersion = text(data.character_version);
+  const source = list(data.source);
+  if (source.length) meta.source = source;
+  if (data.creator_notes_multilingual && typeof data.creator_notes_multilingual === "object") {
+    const notes: Record<string, string> = {};
+    for (const [lang, note] of Object.entries(data.creator_notes_multilingual)) {
+      if (lang.trim() && text(note)) notes[lang.trim()] = text(note);
+    }
+    if (Object.keys(notes).length) meta.creatorNotesMultilingual = notes;
+  }
+  if (positiveInt(data.creation_date)) meta.creationDate = positiveInt(data.creation_date);
+  if (positiveInt(data.modification_date)) meta.modificationDate = positiveInt(data.modification_date);
+  return meta;
+}
+
+/**
+ * 反向：草稿寫成一張 V3 卡。
  *
- * 匯出固定用 V2 而不是 V3：V2 是所有客戶端都讀得懂的那一版，而本站沒有任何一個欄位
- * 需要 V3 才裝得下。多帶一份 V3 只會讓兩份資料有機會不一致。
+ * V3 是 V2 的超集：V2 的欄位一個不少，多出來的 nickname、creator、source 那些是本站現在有落點的
+ * 東西，不寫回去等於作者匯進來又匯出去就丟了。PNG 匯出時兩個 chunk 都寫（見 embedIntoPng）：
+ * 只認 V2 的客戶端讀 chara，認 V3 的讀 ccv3，兩份由同一份草稿產生，不會不一致。
  */
 export function draftToTavern(
   draft: RoleDraft,
   worldbookEntries: WorldbookEntryDraft[] = [],
-  meta: { creator?: string; regex?: RegexRuleSet | null } = {},
+  meta: { creator?: string; regex?: RegexRuleSet | null; now?: number } = {},
 ): TavernCard {
+  const cardMeta = draft.cardMeta ?? {};
   const data: TavernCardData = {
     name: draft.roleName,
     description: draft.roleDetailDesc,
@@ -488,10 +716,20 @@ export function draftToTavern(
     post_history_instructions: draft.jailbreak,
     alternate_greetings: draft.alternates,
     tags: draft.roleTag,
-    creator: meta.creator ?? "",
-    character_version: "",
+    creator: cardMeta.creator ?? meta.creator ?? "",
+    character_version: cardMeta.characterVersion ?? "",
     // 正則規則寫回酒館認得的位置，別的客戶端拿到卡就能用同一套顯示規則
     extensions: meta.regex?.rules.length ? { regex_scripts: rulesToTavern(meta.regex.rules) } : {},
+    // V3
+    nickname: draft.nickname ?? "",
+    group_only_greetings: [],
+    source: cardMeta.source ?? [],
+    // 本站的簡介就是卡片語區那一份作者說明；其他語言的照匯入時的原樣還回去
+    creator_notes_multilingual: { ...(cardMeta.creatorNotesMultilingual ?? {}), ...(draft.roleDesc ? { [draft.language.split("-")[0]]: draft.roleDesc } : {}) },
+    creation_date: cardMeta.creationDate ?? Math.floor((meta.now ?? Date.now()) / 1000),
+    modification_date: Math.floor((meta.now ?? Date.now()) / 1000),
+    // PNG 匯出時卡就嵌在頭像那張圖裡：ccdefault: 依規格指向這張圖本身
+    assets: [{ type: "icon", uri: "ccdefault:", name: "main", ext: "png" }],
   };
   if (worldbookEntries.length) {
     data.character_book = {
@@ -510,7 +748,13 @@ export function draftToTavern(
       })) as TavernBookEntry[],
     };
   }
-  return { spec: "chara_card_v2", spec_version: "2.0", data };
+  return { spec: "chara_card_v3", spec_version: "3.0", data };
+}
+
+/** V3 卡 → 只認 V2 的客戶端讀的那一份：拿掉 V3 才有的鍵，spec 改回 V2。 */
+export function toV2Card(card: TavernCard): TavernCard {
+  const { nickname: _n, group_only_greetings: _g, source: _s, creator_notes_multilingual: _m, creation_date: _c, modification_date: _d, assets: _a, ...v2 } = card.data;
+  return { spec: "chara_card_v2", spec_version: "2.0", data: v2 };
 }
 
 /**
@@ -529,8 +773,14 @@ export function imageFetchUrl(src: string, origin: string): string {
   }
 }
 
-/** 把卡寫進一張 PNG 的 tEXt。圖是作者自己的頭像，所以匯出的卡看起來就是那張立繪。 */
+/**
+ * 把卡寫進一張 PNG 的 tEXt。圖是作者自己的頭像，所以匯出的卡看起來就是那張立繪。
+ * 兩個 chunk 都寫：`chara` 放 V2（所有客戶端都讀得懂），`ccv3` 放 V3（認 V3 的優先讀它）。
+ */
 export function embedIntoPng(imageBytes: Uint8Array, card: TavernCard): Uint8Array {
-  const encoded = base64FromUtf8(JSON.stringify(card));
-  return replaceTextChunks(imageBytes, [{ keyword: "chara", text: encoded }]);
+  const v3 = card.spec === "chara_card_v3" ? card : null;
+  const v2 = v3 ? toV2Card(v3) : card;
+  const chunks = [{ keyword: "chara", text: base64FromUtf8(JSON.stringify(v2)) }];
+  if (v3) chunks.push({ keyword: "ccv3", text: base64FromUtf8(JSON.stringify(v3)) });
+  return replaceTextChunks(imageBytes, chunks);
 }

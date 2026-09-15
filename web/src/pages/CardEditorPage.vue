@@ -54,6 +54,7 @@ import {
   hasAnyField,
   makeDraft,
   missingRequired,
+  NICKNAME_MAX,
   parseTags,
   resolveLimits,
   welcomeChanged,
@@ -100,6 +101,19 @@ const draft = ref<RoleDraft>(makeDraft(locale.value));
 const original = ref<RoleDraft | null>(null);
 const pristine = ref<RoleDraft>(makeDraft(locale.value));
 const tagsText = ref("");
+// V3 的署名與版本住在 cardMeta 裡；空字串＝拿掉那個鍵，草稿比對時才不會把「沒填」當成改動
+const metaField = (key: "creator" | "characterVersion") =>
+  computed({
+    get: () => draft.value.cardMeta[key] ?? "",
+    set: (value: string) => {
+      const next = { ...draft.value.cardMeta };
+      if (value.trim()) next[key] = value.trim();
+      else delete next[key];
+      draft.value.cardMeta = next;
+    },
+  });
+const cardCreator = metaField("creator");
+const cardVersion = metaField("characterVersion");
 const TAGS_MAX = 10;
 
 const worldbookId = ref("");
@@ -999,20 +1013,30 @@ async function publish() {
  * 上傳與套用表單是分開的兩步：套用是同步的、立刻看得到；上傳要等網路。中間預覽先用本機
  * 那張，傳好了換成正式網址。傳失敗不算匯入失敗——設定都進來了，只是圖要作者自己再選一次。
  */
-async function adoptImage(image: Blob) {
-  if (pendingAvatar.value) URL.revokeObjectURL(pendingAvatar.value);
-  pendingAvatar.value = URL.createObjectURL(image);
+/** 匯入的卡自帶的圖：上傳後填進還空著的那一格（頭像，或 V3 卡的主背景）。 */
+async function adoptImage(image: Blob, slot: "avatar" | "background" = "avatar") {
+  if (slot === "avatar") {
+    if (pendingAvatar.value) URL.revokeObjectURL(pendingAvatar.value);
+    pendingAvatar.value = URL.createObjectURL(image);
+  }
   try {
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
-    const file = new File([image], "card.png", { type: image.type || "image/png" });
+    const ext = image.type === "image/jpeg" ? "jpg" : image.type === "image/webp" ? "webp" : "png";
+    const file = new File([image], `card.${ext}`, { type: image.type || "image/png" });
     const url = await uploadImage(file, token, roleId.value || undefined);
+    if (slot === "background") {
+      if (!draft.value.roleBackground) draft.value.roleBackground = url;
+      return;
+    }
     if (!draft.value.roleAvatar) draft.value.roleAvatar = url;
   } catch {
     error.value = t("import.avatarFailed");
   } finally {
-    URL.revokeObjectURL(pendingAvatar.value);
-    pendingAvatar.value = "";
+    if (slot === "avatar") {
+      URL.revokeObjectURL(pendingAvatar.value);
+      pendingAvatar.value = "";
+    }
   }
 }
 
@@ -1029,6 +1053,7 @@ function applyImport(result: ImportResult) {
     worldbookEntries.value = result.worldbook.entries.map((entry) => ({ ...entry, entryId: undefined }));
   }
   if (result.image) void adoptImage(result.image);
+  if (result.background) void adoptImage(result.background, "background");
   if (result.regex) regexSet.value = result.regex;
   defaultChatPageForNew();
   goto("basic");
@@ -1144,6 +1169,8 @@ async function exportCard(format: "png" | "json") {
 
           <FieldText id="f-name" v-model="draft.roleName" :label="$t('editor.name')" required :max="60"
                      :placeholder="$t('create.name.placeholder')" />
+          <FieldText id="f-nickname" v-model="draft.nickname" :label="$t('editor.nickname')" :max="NICKNAME_MAX"
+                     :hint="$t('editor.nickname.hint')" />
 
           <!-- 形象緊接在名稱後面：寫卡最先有的是名字跟圖，簡介之後才寫（社群管理員 2026-09-14） -->
           <p class="muted">{{ $t("editor.media.lede") }}</p>
@@ -1166,6 +1193,19 @@ async function exportCard(format: "png" | "json") {
 
           <FieldText id="f-desc" v-model="draft.roleDesc" :label="$t('editor.summary')" :rows="3"
                      :max="limits.roleDesc" :hint="$t('edit.summary.hint')" />
+
+          <!-- 角色卡 V3 的署名與版本：匯入的卡帶什麼就留什麼，作者也能自己填；匯出時原樣寫回 -->
+          <div class="row2">
+            <div class="field">
+              <label for="f-creator">{{ $t("editor.creator") }}</label>
+              <input id="f-creator" v-model="cardCreator" class="input" :maxlength="120" :placeholder="$t('editor.creator.placeholder')" />
+            </div>
+            <div class="field">
+              <label for="f-version">{{ $t("editor.version") }}</label>
+              <input id="f-version" v-model="cardVersion" class="input" :maxlength="40" :placeholder="$t('editor.version.placeholder')" />
+            </div>
+          </div>
+          <span class="subtle">{{ $t("editor.creator.hint") }}</span>
 
           <div class="field">
             <label for="f-tags">{{ $t("edit.tags") }}</label>
@@ -1420,6 +1460,7 @@ async function exportCard(format: "png" | "json") {
 </template>
 
 <style scoped>
+.row2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); }
 /*
    這一頁比別頁寬得多。1200 是給榜單的，卡片網格在那個寬度剛好；編輯器是工作區，
    表單與對話測試並排，2026-09 使用者回饋 2000px 的螢幕兩側各空三百多像素、表單只剩
@@ -1597,6 +1638,7 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 /* ---- 窄一點：右欄收掉，動作回到底部黏著的那條 ---------------------------------- */
 @media (max-width: 1100px) {
   .layout { grid-template-columns: minmax(0, 1fr); }
+  .row2 { grid-template-columns: minmax(0, 1fr); }
   /*
      右欄在窄螢幕整條收起來，但對話測試與我的資源不能跟著消失——站上其他功能都適配
      手機，這兩個也要有（owner 2026-09-08）。改成鋪滿整個視窗的浮層：從底部那條
