@@ -64,6 +64,19 @@ describe("harborSaveDocument", () => {
     expect(calls[1]!.init.method).toBe("PUT");
   });
 
+  it("橫式背景走同一條資產路，鍵名 backgroundLandscape；沒動就不送", async () => {
+    scripted(
+      [201, { assetId: "a-2", upload: { url: "http://h/internal/blob/staging/a-2", method: "PUT", headers: { "Content-Type": "image/png" } } }],
+      [204, null],
+      [200, { id: "a-2", url: "http://h/blob/media/a-2" }],
+    );
+    const url = await harborUploadImage(new File([new Uint8Array([1])], "l.png", { type: "image/png" }), "tok");
+    const more = scripted([204, null]);
+    await harborSaveDocument("r-1", { roleBackgroundLandscape: url }, "tok");
+    expect(more).toHaveLength(1);
+    expect(sent(more[0]!)).toEqual({ backgroundLandscape: "a-2" });
+  });
+
   it("不是這次上傳的網址（例如圖庫裡選的舊圖）送不了，明說而不是悄悄忽略", async () => {
     scripted();
     await expect(harborSaveDocument("r-1", { roleAvatar: "https://elsewhere/x.png" }, "tok")).rejects.toThrow();
