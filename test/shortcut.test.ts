@@ -66,6 +66,7 @@ describe("卡片 manifest", () => {
     expect(m.scope).toBe("/role-safe/");
     expect(m.start_url).toBe("/role-safe/?lang=en");
     expect(m.name).toBe("Night Detective");
+    expect(m.display).toBe("fullscreen");
     // 本機開發用的 play.localhost 也算
     const ctx2 = createExecutionContext();
     const local = await worker.fetch(new Request("http://play.localhost:8787/v1/cards/role-safe/manifest.webmanifest"), env, ctx2);

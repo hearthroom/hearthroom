@@ -64,9 +64,10 @@ export function recordVisit(store: Storage | null, now = Date.now()): number {
   return days.length;
 }
 
+/** 是不是在已安裝的 App 視窗裡（standalone；卡片 App 是 fullscreen）。 */
 export function isStandalone(): boolean {
   try {
-    if (matchMedia("(display-mode: standalone)").matches) return true;
+    if (matchMedia("(display-mode: standalone), (display-mode: fullscreen)").matches) return true;
   } catch { /* 沒有 matchMedia 的環境 */ }
   return (navigator as { standalone?: boolean }).standalone === true;
 }
