@@ -29,6 +29,8 @@ not_found_handling = "single-page-application"
 run_worker_first = [
   "/", "/v1/*", "/search*", "/mine*", "/wallet*", "/create*", "/auth/*",
   "/cards/*", "/authors/*", "/review*",
+  # 站台 manifest 在卡片 App 網域（play.）上要 404，得先過 Worker（src/index.ts）
+  "/manifest.webmanifest",
   "/zh-Hans/*", "/en/*", "/ja/*", "/ko/*",
   # /assets/* 也過 Worker：資源層找不到（舊部署的 hash 檔）時回退到 ASSET_ARCHIVE。這些檔帶 immutable
   # 快取頭，邊緣命中時不會真的進 Worker，只有 miss 才付一次呼叫。

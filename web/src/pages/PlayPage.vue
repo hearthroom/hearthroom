@@ -16,6 +16,8 @@ import { contentLang, pageTitle } from "@/lib/i18n";
 import { track } from "@/lib/track";
 import { fetchCard } from "@/lib/api";
 import { applyCardHead } from "@/lib/card-manifest";
+import { isStandalone, requestInstallToast } from "@/lib/pwa";
+import { SITE, isPlayHost } from "@/lib/site";
 
 const route = useRoute();
 const router = useRouter();
@@ -30,16 +32,25 @@ const error = shallowRef("");
 // 路由守衛每次導航都會把標題設回預設，換卡（同一個元件實例）之後要再蓋一次
 watch(roleId, () => { document.title = pageTitle(t("play.title")); }, { immediate: true });
 
-// 對話頁的 manifest 也是這張卡的：從瀏覽器選單「安裝」或「加入主畫面」裝下去的就是它（lib/card-manifest.ts）。
-// 在榜的卡才有資料；用 ID 直接玩的私有卡讀不到，就維持站台的。
+// 卡片 App 網域（lib/site.ts）：這一頁的 manifest 是這張卡的，瀏覽器的「安裝」與 iOS 的「加入主畫面」
+// 裝下去的就是它（lib/card-manifest.ts）。在榜的卡才有資料；用 ID 直接玩的私有卡讀不到，就沒有。
+// 主站的對話頁不換：卡片只該有一個 App 身分，就是卡片 App 網域上那個。
+const playApp = isPlayHost();
+const cardPageUrl = computed(() => `https://${SITE.host}/${locale.value === "zh-Hant" ? "" : `${locale.value}/`}cards/${encodeURIComponent(roleId.value)}`);
 let headSeq = 0;
-watch([roleId, locale], async ([id, loc]) => {
-  const seq = ++headSeq;
-  let card = null;
-  try { card = id ? await fetchCard(id, contentLang(String(loc)), { quiet: true }) : null; } catch { card = null; }
-  if (seq === headSeq) applyCardHead(card, String(loc));
-}, { immediate: true });
-onBeforeUnmount(() => applyCardHead(null, String(locale.value)));
+if (playApp) {
+  // 從主畫面圖示開進來的（standalone）：舞台的返回箭頭沒有地方可回，藏起來（styles/stage.css）
+  if (isStandalone()) document.documentElement.dataset.app = "card";
+  watch([roleId, locale], async ([id, loc]) => {
+    const seq = ++headSeq;
+    let card = null;
+    try { card = id ? await fetchCard(id, contentLang(String(loc)), { quiet: true }) : null; } catch { card = null; }
+    if (seq === headSeq) applyCardHead(card, String(loc));
+  }, { immediate: true });
+  onBeforeUnmount(() => applyCardHead(null, String(locale.value)));
+  // 卡片頁按了「加到主畫面」帶 ?install=1 過來：把提示卡拿出來
+  if (route.query.install === "1") requestInstallToast();
+}
 
 onMounted(async () => {
   const app = getCurrentInstance()?.appContext.app;
@@ -68,7 +79,8 @@ watch(locale, () => { void remergeStageMessages(); });
     <div v-else class="play__state">
       <p v-if="error" class="play__error" role="alert">{{ error }}</p>
       <p v-else class="subtle">{{ $t("play.loading") }}</p>
-      <RouterLink v-if="error" class="btn" :to="lp(`/cards/${roleId}`)">{{ $t("play.backToCard") }}</RouterLink>
+      <a v-if="error && playApp" class="btn" :href="cardPageUrl">{{ $t("play.backToCard") }}</a>
+      <RouterLink v-else-if="error" class="btn" :to="lp(`/cards/${roleId}`)">{{ $t("play.backToCard") }}</RouterLink>
     </div>
     <div class="play__toasts" aria-live="polite">
       <div v-for="toast in stageToasts.list" :key="toast.id" class="play__toast" :class="`play__toast--${toast.kind}`">{{ toast.text }}</div>
