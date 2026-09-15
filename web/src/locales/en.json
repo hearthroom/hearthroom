@@ -255,6 +255,8 @@
   "editor.publish.submit": "Submit for review",
   "editor.publish.confirm": "This card goes into review, and becomes visible to everyone once it passes. Submit?",
   "editor.publish.summary": "Author submitted for review: {name}",
+  "editor.publicNotice": "This card is public. Saving will switch it back to private first; submit it for review again when you are done. Anyone who already has the link can keep playing.",
+  "editor.reviewNotice": "This card is under review. You can edit it once the review is finished.",
   "dialog.typeToConfirm": "Type \"{text}\" to confirm",
   "editor.delete": "Delete this card",
   "editor.delete.hint": "Removes the card along with its chats, lorebook bindings, and board listing. This cannot be undone.",

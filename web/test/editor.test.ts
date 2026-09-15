@@ -19,6 +19,7 @@ const api = vi.hoisted(() => ({
   createRole: vi.fn(async () => ({ roleId: "r1" })),
   patchRoleDocument: vi.fn(async () => ({})),
   patchRoleWelcome: vi.fn(async () => ({})),
+  unpublishRole: vi.fn(async () => ({})),
   createWorldbook: vi.fn(async () => "wb1"),
   patchWorldbookDocument: vi.fn(async () => ({})),
   reorderWorldbookEntries: vi.fn(async () => {}),
@@ -442,6 +443,35 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
 
     const [, doc] = api.patchWorldbookDocument.mock.calls[0] as unknown as [string, { entries: { triggerRegion?: string }[] }];
     expect(doc.entries[0].triggerRegion).toBe("user_only");
+  });
+
+  it("已公開的卡：頁上提示，儲存時先轉私有再存；審核中的卡只提示", async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "北境", roleDesc: "舊簡介", roleVisibility: "public" });
+    await mount("/cards/r1/edit");
+    expect(document.body.textContent).toContain("這張卡已經公開");
+    api.unpublishRole.mockClear();
+    api.patchRoleDocument.mockClear();
+    const desc = $<HTMLTextAreaElement>("#f-desc");
+    desc.value = "改過的簡介";
+    desc.dispatchEvent(new Event("input", { bubbles: true }));
+    await flush();
+    await submit();
+    expect(api.unpublishRole).toHaveBeenCalledWith("r1", "tok");
+    expect(api.patchRoleDocument).toHaveBeenCalledTimes(1);
+    expect(api.unpublishRole.mock.invocationCallOrder[0]).toBeLessThan(api.patchRoleDocument.mock.invocationCallOrder[0]);
+    // 轉過一次就不再轉：再存一次不會又打一次
+    api.unpublishRole.mockClear();
+    desc.value = "再改一次";
+    desc.dispatchEvent(new Event("input", { bubbles: true }));
+    await flush();
+    await submit();
+    expect(api.unpublishRole).not.toHaveBeenCalled();
+    expect(document.body.textContent).not.toContain("這張卡已經公開");
+    app.unmount(); root.remove();
+
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "北境", roleVisibility: "waitReview" });
+    await mount("/cards/r2/edit");
+    expect(document.body.textContent).toContain("正在審核中");
   });
 
   it("只調順序也存得下來：不送任何條目操作，只送新的順序", async () => {
