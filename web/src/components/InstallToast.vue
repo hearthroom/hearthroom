@@ -21,7 +21,7 @@ function onLater() { track("pwa_install_later"); dismissInstall(); }
         </span>
         <div class="install__text">
           <p class="install__title">{{ installPrompt.target === "card" ? $t("pwa.install.cardTitle", { name: installPrompt.name }) : $t("pwa.install.title") }}</p>
-          <p class="install__body">{{ installPrompt.kind === "ios" ? $t("pwa.install.ios") : installPrompt.target === "card" ? $t("pwa.install.cardBody") : $t("pwa.install.body") }}</p>
+          <p class="install__body">{{ installPrompt.kind === "ios" ? $t("pwa.install.ios") : installPrompt.kind === "android" ? $t("pwa.install.android") : installPrompt.target === "card" ? $t("pwa.install.cardBody") : $t("pwa.install.body") }}</p>
         </div>
         <button type="button" class="btn btn--icon btn--sm btn--ghost install__close" :aria-label="$t('pwa.install.later')" @click="onLater">
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none" /></svg>

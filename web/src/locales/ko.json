@@ -952,6 +952,7 @@
   "pwa.install.cta": "설치",
   "pwa.install.later": "나중에",
   "pwa.install.ios": "Safari에서 ‘공유’를 누른 뒤 ‘홈 화면에 추가’를 선택하세요.",
+  "pwa.install.android": "Chrome 메뉴에서 ‘홈 화면에 추가’를 누르세요. Hearthroom이 이미 설치되어 있다면 ‘바로가기 만들기’를 선택하세요.",
   "pwa.install.ok": "알겠어요",
   "pwa.install.link": "앱 설치"
 }

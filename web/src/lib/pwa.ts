@@ -18,6 +18,11 @@
  * beforeinstallprompt 在頁面載入很早就發，比 Vue 掛上去還早；監聽器放在模組頂層，
  * main.ts 在任何 await 之前就 import 這個檔。
  *
+ * Android Chrome 已經裝了站台的話，判「已安裝」看的是「這一頁在不在某個已裝 App 的範圍內」，而站台的
+ * 範圍是整站，所以卡片的 manifest 永遠拿不到安裝事件（owner 2026-09-15 手機實測）。那裡能做到的是
+ * 瀏覽器選單「加到主畫面 → 建立捷徑」：捷徑用的是卡片 manifest 的名字與頭像，點開在站台的 App 視窗裡
+ * 直接進那張卡。所以卡片頁在 Android Chrome 上一律給按鈕，沒有安裝事件就給這條步驟。
+ *
  * 安裝的對象有兩種：站台本身，或卡片頁上的那張卡（lib/card-manifest.ts 換了 manifest 之後）。
  * 提示卡只替站台自動跳；卡片的安裝入口在卡片頁自己的按鈕上。換了對象就丟掉手上的安裝事件——
  * 它屬於前一份 manifest，瀏覽器會為新的那份再發一次。
@@ -66,6 +71,10 @@ export function isStandalone(): boolean {
   return (navigator as { standalone?: boolean }).standalone === true;
 }
 
+export function isAndroidChromium(ua = navigator.userAgent): boolean {
+  return /Android/.test(ua) && /Chrome\//.test(ua) && !/Firefox|OPR\/|SamsungBrowser/.test(ua);
+}
+
 export function isIosSafari(ua = navigator.userAgent): boolean {
   const ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && typeof navigator !== "undefined" && navigator.maxTouchPoints > 1);
   if (!ios) return false;
@@ -94,8 +103,8 @@ export function readDismissCount(store: Storage | null): number {
 export const installPrompt = reactive({
   /** 提示卡要不要畫出來。 */
   visible: false,
-  /** "native"＝有原生安裝框可以按；"ios"＝只能給步驟。 */
-  kind: "native" as "native" | "ios",
+  /** "native"＝有原生安裝框可以按；"ios"／"android"＝只能給步驟。 */
+  kind: "native" as "native" | "ios" | "android",
   /** 安裝入口要不要顯示：有原生安裝框、或是 iOS Safari，且不在已安裝的視窗裡。指的是目前的 target。 */
   available: false,
   /** 現在安裝下去的是站台，還是卡片頁上的那張卡。 */
@@ -109,7 +118,7 @@ let deferred: BeforeInstallPromptEvent | null = null;
 let visitDays = 0;
 
 function refreshAvailable(): void {
-  installPrompt.available = !isStandalone() && (!!deferred || isIosSafari());
+  installPrompt.available = !isStandalone() && (!!deferred || isIosSafari() || (installPrompt.target === "card" && isAndroidChromium()));
 }
 
 function consider(): void {
@@ -138,7 +147,8 @@ export function setInstallTarget(target: "site" | "card", name = "", icon = ""):
 /** 頁尾「安裝 App」與卡片頁「加到主畫面」：有原生安裝框就直接開；iOS 把步驟卡拿出來（不管有沒有按過以後再說）。 */
 export function openInstall(): void {
   if (deferred) { void acceptInstall(); return; }
-  if (isIosSafari()) { installPrompt.kind = "ios"; installPrompt.visible = true; }
+  if (isIosSafari()) { installPrompt.kind = "ios"; installPrompt.visible = true; return; }
+  if (installPrompt.target === "card" && isAndroidChromium()) { installPrompt.kind = "android"; installPrompt.visible = true; }
 }
 
 if (typeof window !== "undefined") {

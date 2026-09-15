@@ -89,3 +89,13 @@ describe("install target", () => {
     expect(installPrompt.name).toBe("");
   });
 });
+
+describe("android chrome with the site already installed", () => {
+  it("recognises Android Chrome and not other Android browsers", async () => {
+    const { isAndroidChromium } = await import("../src/lib/pwa");
+    expect(isAndroidChromium("Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36")).toBe(true);
+    expect(isAndroidChromium("Mozilla/5.0 (Android 14; Mobile; rv:128.0) Gecko/128.0 Firefox/128.0")).toBe(false);
+    expect(isAndroidChromium("Mozilla/5.0 (Linux; Android 14; SAMSUNG SM-S911B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/25.0 Chrome/121.0.0.0 Mobile Safari/537.36")).toBe(false);
+    expect(isAndroidChromium("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128 Safari/537.36")).toBe(false);
+  });
+});
