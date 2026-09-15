@@ -33,6 +33,8 @@ describe("classifyMmdFile", () => {
     expect(got.set.statusbar).toBe("《美1》《状1》");
     expect(got.set.lowered).toBe(true);
     expect(got.welcome).toBe(EXPORT.beginning);
+    // 魅魔島檔是 MMD 寫法：不宣告酒館格式（缺＝MMD，樣式原樣套整頁）
+    expect(got.set.format).toBeUndefined();
   });
 
   it("新版卡（chatVersion 1）：六鍵匯出檔認得出來，pageMode 是 sandbox", () => {

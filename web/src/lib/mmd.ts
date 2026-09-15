@@ -54,7 +54,7 @@ export function classifyMmdFile(fileName: string, content: string): MmdFile {
   // 「導出正則」列表，或 API 回包 { code, data: [...] }
   const list = Array.isArray(raw) ? raw : Array.isArray(obj.data) ? obj.data : null;
   if (list && list.length && list.every(isMeimoRegexItem)) {
-    const set: RegexRuleSet = { version: 1, rules: rulesFromMeimoList(list), statusbar: "", lowered: false };
+    const set: RegexRuleSet = { version: 1, rules: rulesFromMeimoList(list), statusbar: "", lowered: false, format: "mmd" };
     if (!set.rules.length) throw new Error("mmd_empty");
     return { part: "rules", fileName, set, welcome: "", roleName: "" };
   }

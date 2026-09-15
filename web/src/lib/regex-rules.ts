@@ -41,6 +41,18 @@ export interface RegexRuleSet {
    * 舊頁版面（滿版乾淨畫布），本站編輯器不提供，讀到了原樣帶著走。
    */
   pageMode?: RegexPageMode;
+  /**
+   * 卡片格式：這套規則裡的 <style> 是用哪一邊的寫法寫的。缺＝MMD（樣式原樣套整頁，作者就是靠它換
+   * 背景與輸入框）。`tavern`＝酒館寫法：原平台會替每條選擇器逐字接上訊息層前綴，`body{}` 這種在那邊從來
+   * 沒生效過；聊天頁照同一套政策落地，卡在兩邊才長得一樣。由匯入來源宣告，讀的人不猜。
+   */
+  format?: RegexCardFormat;
+}
+
+export type RegexCardFormat = "mmd" | "tavern";
+export function cardFormatFrom(v: unknown): RegexCardFormat | undefined {
+  const value = typeof v === "string" ? v.trim().toLowerCase() : "";
+  return value === "mmd" || value === "tavern" ? value : undefined;
 }
 
 export type RegexPageMode = "classic" | "immersive" | "sandbox";
@@ -248,6 +260,8 @@ function ruleSetFromNative(obj: Record<string, unknown>): RegexRuleSet | null {
   const set: RegexRuleSet = { version: 1, rules, statusbar: text(obj.statusbar), lowered: obj.lowered === true };
   const pageMode = pageModeFrom(obj.pageMode);
   if (pageMode) set.pageMode = pageMode;
+  const format = cardFormatFrom(obj.cardFormat);
+  if (format) set.format = format;
   return set;
 }
 
@@ -271,6 +285,8 @@ export function ruleSetFromImport(raw: unknown): { set: RegexRuleSet; welcome: s
   if (!rules.length) return null;
   const set: RegexRuleSet = { version: 1, rules, statusbar: text(obj.statusbar), lowered: loweredFromPageDepth(obj.pageDepth) };
   if (isSandboxChatVersion(obj.chatVersion)) set.pageMode = "sandbox";
+  // 魅魔島的正則匯出檔也是酒館的欄位名（regex_scripts），但那是 MMD 卡；只有真的酒館卡才是酒館寫法。
+  if (obj.spec === "chara_card_v2" || obj.spec === "chara_card_v3" || Array.isArray(raw)) set.format = "tavern";
   return { set, welcome: text(obj.beginning) };
 }
 
@@ -299,6 +315,7 @@ export interface AuthorAssetLike {
   mountTrigger?: string;
   mountLayer?: string;
   pageMode?: string;
+  cardFormat?: string;
 }
 
 export function ruleSetFromAuthorAsset(asset: AuthorAssetLike): RegexRuleSet {
@@ -308,6 +325,8 @@ export function ruleSetFromAuthorAsset(asset: AuthorAssetLike): RegexRuleSet {
   if (layer === "cover") set.mountLayer = "cover";
   const pageMode = pageModeFrom(asset.pageMode);
   if (pageMode) set.pageMode = pageMode;
+  const format = cardFormatFrom(asset.cardFormat);
+  if (format) set.format = format;
   return set;
 }
 
@@ -318,6 +337,7 @@ export function ruleSetToAuthorAsset(set: RegexRuleSet, version: number): Requir
     mountTrigger: set.statusbar,
     mountLayer,
     pageMode: set.pageMode ?? "",
+    cardFormat: set.format ?? "",
     version,
   };
 }
