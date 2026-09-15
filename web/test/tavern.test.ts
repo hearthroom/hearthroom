@@ -116,6 +116,11 @@ describe("tavern → draft", () => {
     },
   };
 
+  it("酒館卡帶正則腳本時，規則集宣告酒館格式（聊天頁替 <style> 加訊息層前綴）", () => {
+    const withRegex = { ...card, data: { ...card.data, extensions: { regex_scripts: [{ scriptName: "美化", findRegex: "/x/", replaceString: "<style>body{display:flex}</style>" }] } } };
+    expect(tavernToDraft(withRegex, { language: "zh-Hant", labels: LABELS }).regex?.format).toBe("tavern");
+  });
+
   it("欄位落到對得上的地方", () => {
     const { draft } = tavernToDraft(card, { language: "zh-Hant", labels: LABELS });
     expect(draft.roleName).toBe("雨宮");
