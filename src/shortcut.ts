@@ -95,7 +95,9 @@ export function cardManifest(row: CardRow, lang: string, key?: string, opts: { p
     short_name: name,
     start_url: opts.playApp ? `${app}?lang=${encodeURIComponent(lang)}` : `${localePrefix(lang)}/play/${row.source_role_id}`,
     scope: opts.playApp ? app : "/",
-    display: "standalone",
+    // 卡片 App 全螢幕：Android 把狀態列與導覽列一起收掉，整個畫面都是卡（從頂端往下滑可暫時叫出狀態列）。
+    // 不支援全螢幕的平台（iOS、桌面）自動退到 standalone。站台本身維持 standalone。
+    display: opts.playApp ? "fullscreen" : "standalone",
     background_color: "#f5f5f7",
     theme_color: "#f5f5f7",
     icons: [icon(192), icon(512)],
