@@ -27,6 +27,8 @@ describe("card app host", () => {
     await router.push("/r2/?lang=en");
     expect(router.currentRoute.value.path).toBe("/login");
     expect(router.currentRoute.value.query.returnTo).toBe("/r2/?lang=en");
+    // 登入頁也要是同一個語言
+    expect(router.currentRoute.value.query.lang).toBe("en");
   });
 
   it("links carry the locale as a query, never a prefix", () => {
