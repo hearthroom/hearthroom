@@ -17,6 +17,10 @@
  *
  * beforeinstallprompt 在頁面載入很早就發，比 Vue 掛上去還早；監聽器放在模組頂層，
  * main.ts 在任何 await 之前就 import 這個檔。
+ *
+ * 安裝的對象有兩種：站台本身，或卡片頁上的那張卡（lib/card-manifest.ts 換了 manifest 之後）。
+ * 提示卡只替站台自動跳；卡片的安裝入口在卡片頁自己的按鈕上。換了對象就丟掉手上的安裝事件——
+ * 它屬於前一份 manifest，瀏覽器會為新的那份再發一次。
  */
 import { reactive } from "vue";
 
@@ -92,8 +96,13 @@ export const installPrompt = reactive({
   visible: false,
   /** "native"＝有原生安裝框可以按；"ios"＝只能給步驟。 */
   kind: "native" as "native" | "ios",
-  /** 頁尾常駐入口要不要顯示：有原生安裝框、或是 iOS Safari，且不在已安裝的視窗裡。 */
+  /** 安裝入口要不要顯示：有原生安裝框、或是 iOS Safari，且不在已安裝的視窗裡。指的是目前的 target。 */
   available: false,
+  /** 現在安裝下去的是站台，還是卡片頁上的那張卡。 */
+  target: "site" as "site" | "card",
+  /** target 是卡的時候，卡的名字與頭像（提示卡的標題與圖示用）。 */
+  name: "",
+  icon: "",
 });
 
 let deferred: BeforeInstallPromptEvent | null = null;
@@ -106,6 +115,8 @@ function refreshAvailable(): void {
 function consider(): void {
   refreshAvailable();
   if (installPrompt.visible) return;
+  // 卡片頁：不自動跳「裝 Hearthroom」——裝下去的會是那張卡。入口在頁上的按鈕。
+  if (installPrompt.target !== "site") return;
   const store = safeStorage();
   const ok = shouldOffer({ standalone: isStandalone(), dismissedAt: readDismissedAt(store), dismissCount: readDismissCount(store), visitDays });
   if (!ok) return;
@@ -113,7 +124,18 @@ function consider(): void {
   if (isIosSafari()) { installPrompt.kind = "ios"; installPrompt.visible = true; }
 }
 
-/** 頁尾「安裝 App」：有原生安裝框就直接開；iOS 把步驟卡拿出來（不管有沒有按過以後再說）。 */
+/** manifest 換了（進出卡片頁）：手上的安裝事件作廢，等瀏覽器為新的 manifest 再發一次。 */
+export function setInstallTarget(target: "site" | "card", name = "", icon = ""): void {
+  if (installPrompt.target === target && installPrompt.name === name && installPrompt.icon === icon) return;
+  deferred = null;
+  installPrompt.target = target;
+  installPrompt.name = name;
+  installPrompt.icon = icon;
+  installPrompt.visible = false;
+  refreshAvailable();
+}
+
+/** 頁尾「安裝 App」與卡片頁「加到主畫面」：有原生安裝框就直接開；iOS 把步驟卡拿出來（不管有沒有按過以後再說）。 */
 export function openInstall(): void {
   if (deferred) { void acceptInstall(); return; }
   if (isIosSafari()) { installPrompt.kind = "ios"; installPrompt.visible = true; }
@@ -150,8 +172,9 @@ export async function acceptInstall(): Promise<void> {
   try {
     await ev.prompt();
     const { outcome } = await ev.userChoice;
-    if (outcome === "dismissed") dismissInstall();
-  } catch { dismissInstall(); }
+    // 卡片的安裝框被關掉不算「以後再說」：那是站台提示卡的計數
+    if (outcome === "dismissed" && installPrompt.target === "site") dismissInstall();
+  } catch { if (installPrompt.target === "site") dismissInstall(); }
 }
 
 export function dismissInstall(): void {
