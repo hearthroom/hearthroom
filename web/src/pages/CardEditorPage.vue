@@ -897,16 +897,20 @@ async function save() {
       roleVisibility.value = "private";
     }
 
-    const fields = documentPatch(draft.value, original.value);
+    // 送出的是此刻的快照。存檔期間草稿還可能在變（匯入的立繪要先上傳、傳完才填進頭像那格），
+    // 存完拿快照當「上次存的內容」，中途進來的改動才會留在未儲存狀態、下次存得到；
+    // 用當下的草稿當基準，那張頭像就會靜默消失（2026-09-15 匯入 V3 範例卡時發生）。
+    const sent = cloneDraft(draft.value);
+    const fields = documentPatch(sent, original.value);
     if (hasAnyField(fields)) await patchRoleDocument(targetRoleId, fields, token);
 
-    if (welcomeChanged(draft.value, original.value) && draft.value.roleWelcome.trim()) {
+    if (welcomeChanged(sent, original.value) && sent.roleWelcome.trim()) {
       await patchRoleWelcome(
         targetRoleId,
         {
-          roleWelcome: draft.value.roleWelcome,
-          alternates: draft.value.alternates.filter((a) => a.trim()),
-          prologue: draft.value.prologue.filter((p) => p.trim()),
+          roleWelcome: sent.roleWelcome,
+          alternates: sent.alternates.filter((a) => a.trim()),
+          prologue: sent.prologue.filter((p) => p.trim()),
         },
         token,
       );
@@ -915,7 +919,7 @@ async function save() {
     await saveWorldbook(token, targetRoleId);
     await saveRegex(token, targetRoleId);
 
-    original.value = cloneDraft(draft.value);
+    original.value = sent;
     saved.value = true;
     restoredDraft.value = false;
     if (onCreatePage.value) localStorage.removeItem(DRAFT_KEY);
