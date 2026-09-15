@@ -128,6 +128,15 @@ describe("卡片 manifest", () => {
     expect(((await res.json()) as { shortcutKey?: string }).shortcutKey).toBeUndefined();
   });
 
+  it("view=0 讀卡片不算一次瀏覽（對話頁換 manifest 用）", async () => {
+    const points: unknown[] = [];
+    env.EVENTS = { writeDataPoint: (p: unknown) => points.push(p) } as unknown as AnalyticsEngineDataset;
+    expect((await get("/v1/cards/role-safe?view=0")).status).toBe(200);
+    expect(points.filter((p) => (p as { blobs: string[] }).blobs[0] === "card_view")).toHaveLength(0);
+    expect((await get("/v1/cards/role-safe")).status).toBe(200);
+    expect(points.filter((p) => (p as { blobs: string[] }).blobs[0] === "card_view")).toHaveLength(1);
+  });
+
   it("純函式：語言前綴與尺寸收斂", () => {
     expect(localePrefix("zh-Hant")).toBe("");
     expect(localePrefix("zh-Hans")).toBe("/zh-Hans");

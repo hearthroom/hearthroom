@@ -151,9 +151,11 @@ export async function fetchBoard(query: BoardQuery = {}): Promise<CardPage> {
   return json<CardPage>(await fetch(`${COMMUNITY_API}/cards?${params}`, { headers: { ...from(), ...viewer.headers } }));
 }
 
-export async function fetchCard(id: string, lang?: string): Promise<CommunityCard> {
+/** opts.quiet：不算一次瀏覽（對話頁為了換 manifest 讀卡片資料時用）。 */
+export async function fetchCard(id: string, lang?: string, opts: { quiet?: boolean } = {}): Promise<CommunityCard> {
   const params = new URLSearchParams();
   if (lang) params.set("lang", lang);
+  if (opts.quiet) params.set("view", "0");
   const viewer = await viewerAccess();
   if (viewer.param) params.set("nsfw", "1");
   const q = params.size ? `?${params}` : "";

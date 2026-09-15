@@ -354,7 +354,8 @@ app.get("/v1/cards/:id", async (c) => {
   if (row.nsfw === 1 && !allowNsfw) throw new HttpError(403, "adult_content");
   // 卡片瀏覽只在這裡記一次。HTML 殼那條路（page_html）多半是抓取器，卡片頁替作者發的
   // 「其他作品」副請求則是 /v1/cards?author=，兩者都不算一次瀏覽，否則分母會被灌水三倍。
-  note(c, { event: "card_view", subject: row.source_role_id, zoneScope: "current" });
+  // 對話頁為了換 manifest 也讀這一條（view=0）：那不是一次瀏覽，卡片頁已經記過、從主畫面圖示直接進來的更不是
+  if (c.req.query("view") !== "0") note(c, { event: "card_view", subject: row.source_role_id, zoneScope: "current" });
   // 過了成人門的人拿一把「加到主畫面」的鑰匙：manifest 與圖示是瀏覽器抓的，帶不了登入（src/shortcut.ts）
   const secret = c.env.SHORTCUT_SECRET;
   const shortcutKey = allowNsfw && secret ? await signShortcutKey(secret, row.id) : undefined;

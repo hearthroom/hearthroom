@@ -6,14 +6,16 @@
  * 因為魅魔島那類卡靠全頁樣式換背景與輸入框，套上站台外框會打架。
  * 這頁只負責三件事：把套件載進來並接上宿主、把 roleId 交給畫布、畫舞台丟出來的提示。
  */
-import { computed, getCurrentInstance, onMounted, shallowRef, watch, type Component } from "vue";
+import { computed, getCurrentInstance, onBeforeUnmount, onMounted, shallowRef, watch, type Component } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { ensureStage, remergeStageMessages, stageToasts } from "@/lib/stage-host";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
-import { pageTitle } from "@/lib/i18n";
+import { contentLang, pageTitle } from "@/lib/i18n";
 import { track } from "@/lib/track";
+import { fetchCard } from "@/lib/api";
+import { applyCardHead } from "@/lib/card-manifest";
 
 const route = useRoute();
 const router = useRouter();
@@ -27,6 +29,17 @@ const error = shallowRef("");
 
 // 路由守衛每次導航都會把標題設回預設，換卡（同一個元件實例）之後要再蓋一次
 watch(roleId, () => { document.title = pageTitle(t("play.title")); }, { immediate: true });
+
+// 對話頁的 manifest 也是這張卡的：從瀏覽器選單「安裝」或「加入主畫面」裝下去的就是它（lib/card-manifest.ts）。
+// 在榜的卡才有資料；用 ID 直接玩的私有卡讀不到，就維持站台的。
+let headSeq = 0;
+watch([roleId, locale], async ([id, loc]) => {
+  const seq = ++headSeq;
+  let card = null;
+  try { card = id ? await fetchCard(id, contentLang(String(loc)), { quiet: true }) : null; } catch { card = null; }
+  if (seq === headSeq) applyCardHead(card, String(loc));
+}, { immediate: true });
+onBeforeUnmount(() => applyCardHead(null, String(locale.value)));
 
 onMounted(async () => {
   const app = getCurrentInstance()?.appContext.app;
