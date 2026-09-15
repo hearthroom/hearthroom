@@ -122,7 +122,10 @@ router.beforeEach(async (to) => {
   if (session.me) return true;
   // 先到本站的登入頁，不直接跳去供應商：登入方式是這個站的事，供應商只是其中一種。
   // query 要分開給：物件位置的 path 不帶查詢字串（vue-router 只讀 path 本身），塞在 path 裡會被丟掉
-  return { path: withLocale("/login", locale), query: to.fullPath === "/" ? {} : { returnTo: to.fullPath }, replace: true };
+  const query: Record<string, string> = to.fullPath === "/" ? {} : { returnTo: to.fullPath };
+  // 卡片 App 網域的語言在查詢字串裡，不在路徑上：得放進 query 物件，放在 path 裡會被丟掉
+  if (isPlayHost()) return { path: "/login", query: { ...query, lang: locale }, replace: true };
+  return { path: withLocale("/login", locale), query, replace: true };
 });
 
 /**
