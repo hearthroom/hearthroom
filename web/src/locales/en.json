@@ -952,6 +952,7 @@
   "pwa.install.cta": "Install",
   "pwa.install.later": "Not now",
   "pwa.install.ios": "Tap Share in Safari, then choose “Add to Home Screen”.",
+  "pwa.install.android": "Open the Chrome menu and tap “Add to Home screen”. If Hearthroom is already installed, choose “Create shortcut”.",
   "pwa.install.ok": "Got it",
   "pwa.install.link": "Install app"
 }
