@@ -18,16 +18,16 @@
  * beforeinstallprompt 在頁面載入很早就發，比 Vue 掛上去還早；監聽器放在模組頂層，
  * main.ts 在任何 await 之前就 import 這個檔。
  *
- * Android Chrome 已經裝了站台的話，判「已安裝」看的是「這一頁在不在某個已裝 App 的範圍內」，而站台的
- * 範圍是整站，所以卡片的 manifest 永遠拿不到安裝事件（owner 2026-09-15 手機實測）。那裡能做到的是
- * 瀏覽器選單「加到主畫面 → 建立捷徑」：捷徑用的是卡片 manifest 的名字與頭像，點開在站台的 App 視窗裡
- * 直接進那張卡。所以卡片頁在 Android Chrome 上一律給按鈕，沒有安裝事件就給這條步驟。
- *
- * 安裝的對象有兩種：站台本身，或卡片頁上的那張卡（lib/card-manifest.ts 換了 manifest 之後）。
+ * 安裝的對象有兩種：站台本身（主站），或卡片 App 網域上的那張卡（lib/site.ts 的 isPlayHost；
+ * lib/card-manifest.ts 在對話頁換 manifest）。卡片為什麼要另一個網域，見 lib/site.ts。
+ * 卡片 App 網域上從一開始就是 "card"，站台的提示卡在那裡永遠不會跳。
+ * 帶 ?install=1 進來（卡片頁按了「加到主畫面」）：等瀏覽器說能裝就把提示卡拿出來，按「安裝」才開原生框
+ *（原生框一定要在使用者的點擊裡開）；等不到事件又不是 iOS，就給「從瀏覽器選單安裝」的步驟。
  * 提示卡只替站台自動跳；卡片的安裝入口在卡片頁自己的按鈕上。換了對象就丟掉手上的安裝事件——
  * 它屬於前一份 manifest，瀏覽器會為新的那份再發一次。
  */
 import { reactive } from "vue";
+import { isPlayHost } from "./site";
 
 const DISMISS_KEY = "hearthroom.pwa.dismissedAt";
 const DISMISS_COUNT_KEY = "hearthroom.pwa.dismissCount";
@@ -71,10 +71,6 @@ export function isStandalone(): boolean {
   return (navigator as { standalone?: boolean }).standalone === true;
 }
 
-export function isAndroidChromium(ua = navigator.userAgent): boolean {
-  return /Android/.test(ua) && /Chrome\//.test(ua) && !/Firefox|OPR\/|SamsungBrowser/.test(ua);
-}
-
 export function isIosSafari(ua = navigator.userAgent): boolean {
   const ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && typeof navigator !== "undefined" && navigator.maxTouchPoints > 1);
   if (!ios) return false;
@@ -103,12 +99,12 @@ export function readDismissCount(store: Storage | null): number {
 export const installPrompt = reactive({
   /** 提示卡要不要畫出來。 */
   visible: false,
-  /** "native"＝有原生安裝框可以按；"ios"／"android"＝只能給步驟。 */
-  kind: "native" as "native" | "ios" | "android",
+  /** "native"＝有原生安裝框可以按；"ios"／"menu"＝只能給步驟（Safari 的分享／瀏覽器選單）。 */
+  kind: "native" as "native" | "ios" | "menu",
   /** 安裝入口要不要顯示：有原生安裝框、或是 iOS Safari，且不在已安裝的視窗裡。指的是目前的 target。 */
   available: false,
-  /** 現在安裝下去的是站台，還是卡片頁上的那張卡。 */
-  target: "site" as "site" | "card",
+  /** 現在安裝下去的是站台，還是那張卡。 */
+  target: (isPlayHost() ? "card" : "site") as "site" | "card",
   /** target 是卡的時候，卡的名字與頭像（提示卡的標題與圖示用）。 */
   name: "",
   icon: "",
@@ -118,7 +114,32 @@ let deferred: BeforeInstallPromptEvent | null = null;
 let visitDays = 0;
 
 function refreshAvailable(): void {
-  installPrompt.available = !isStandalone() && (!!deferred || isIosSafari() || (installPrompt.target === "card" && isAndroidChromium()));
+  installPrompt.available = !isStandalone() && (!!deferred || isIosSafari());
+}
+
+/** 這個瀏覽器有沒有辦法把網頁裝到主畫面／桌面（Chromium 系或 iOS Safari）。卡片頁的按鈕看它。 */
+export function canInstall(ua = navigator.userAgent): boolean {
+  return isIosSafari(ua) || (/Chrome\//.test(ua) && !/Firefox|OPR\//.test(ua));
+}
+
+let toastWanted = false;
+/** 卡片 App 網域帶 ?install=1 進來：瀏覽器一說能裝就把提示卡拿出來；等不到就給步驟。 */
+export function requestInstallToast(): void {
+  if (isStandalone()) return;
+  toastWanted = true;
+  offerIfWanted();
+  setTimeout(() => {
+    if (!toastWanted || installPrompt.visible) return;
+    toastWanted = false;
+    installPrompt.kind = "menu";
+    installPrompt.visible = true;
+  }, 4000);
+}
+function offerIfWanted(): void {
+  // manifest 還沒換成這張卡的（name 還空著）就不拿出來：那時手上的事件屬於別份 manifest
+  if (!toastWanted || !installPrompt.name) return;
+  if (deferred) { toastWanted = false; installPrompt.kind = "native"; installPrompt.visible = true; return; }
+  if (isIosSafari()) { toastWanted = false; installPrompt.kind = "ios"; installPrompt.visible = true; }
 }
 
 function consider(): void {
@@ -142,13 +163,14 @@ export function setInstallTarget(target: "site" | "card", name = "", icon = ""):
   installPrompt.icon = icon;
   installPrompt.visible = false;
   refreshAvailable();
+  offerIfWanted();
 }
 
 /** 頁尾「安裝 App」與卡片頁「加到主畫面」：有原生安裝框就直接開；iOS 把步驟卡拿出來（不管有沒有按過以後再說）。 */
 export function openInstall(): void {
   if (deferred) { void acceptInstall(); return; }
   if (isIosSafari()) { installPrompt.kind = "ios"; installPrompt.visible = true; return; }
-  if (installPrompt.target === "card" && isAndroidChromium()) { installPrompt.kind = "android"; installPrompt.visible = true; }
+  installPrompt.kind = "menu"; installPrompt.visible = true;
 }
 
 if (typeof window !== "undefined") {
@@ -156,6 +178,7 @@ if (typeof window !== "undefined") {
     e.preventDefault();
     deferred = e as BeforeInstallPromptEvent;
     consider();
+    offerIfWanted();
   });
   window.addEventListener("appinstalled", () => {
     deferred = null;
@@ -198,9 +221,9 @@ export function dismissInstall(): void {
   } catch { /* 存不了就下次再問 */ }
 }
 
-/** 只在正式建置、且在主站網域上註冊：子網域（沙箱殼）跑的是同一個 Worker，不該讓站台的 SW 掛到那裡。 */
+/** 只在正式建置、且在主站網域上註冊：子網域（沙箱殼、卡片 App）跑的是同一個 Worker，不該讓站台的 SW 掛到那裡。 */
 export function registerServiceWorker(): void {
   if (!import.meta.env.PROD || !("serviceWorker" in navigator)) return;
-  if (/^c[0-9a-f-]+\./i.test(location.hostname)) return;
+  if (/^c[0-9a-f-]+\./i.test(location.hostname) || isPlayHost()) return;
   window.addEventListener("load", () => { navigator.serviceWorker.register("/sw.js").catch(() => { /* 註冊失敗不影響站台 */ }); });
 }

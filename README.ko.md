@@ -131,7 +131,7 @@ localStorage.setItem("hearthroom.oauth.access", JSON.stringify({ accessToken: "t
 사이트는 Cloudflare 계정 하나에서 실행됩니다. 작은 커뮤니티라면 무료 요금제로 충분합니다.
 
 1. 리소스를 만들고 ID를 `wrangler.toml`에 적습니다: D1 데이터베이스(`DB`), KV 네임스페이스 두 개(`CACHE`, `ASSET_ARCHIVE`), 선택적으로 Analytics Engine 데이터셋(`EVENTS`; 끄려면 `ANALYTICS_ENABLED = "false"`).
-2. 도메인을 설정합니다: `wrangler.toml`의 `routes`, `src/site.ts`의 `HOST`, `web/src/lib/site.ts`의 사이트 이름. 이미 DNS 레코드가 있는 호스트명에는 커스텀 도메인을 붙일 수 없으므로 파킹 레코드를 먼저 삭제합니다.
+2. 도메인을 설정합니다: `wrangler.toml`의 `routes`, `src/site.ts`의 `HOST`, `web/src/lib/site.ts`의 사이트 이름. 이미 DNS 레코드가 있는 호스트명에는 커스텀 도메인을 붙일 수 없으므로 파킹 레코드를 먼저 삭제합니다. 카드 앱은 `play.<도메인>`, 샌드박스 셸은 `c<id>.<도메인>`에서 동작하며 둘 다 같은 와일드카드 라우트로 제공되므로 존에 프록시된 와일드카드 DNS 레코드가 필요합니다.
 3. 제공자를 설정합니다: `[vars]`의 `PROVIDER_API_BASE`. 일부 국가에서 제공자의 주 도메인에 접속할 수 없다면 `PROVIDER_API_GATEWAYS`에 국가별 게이트웨이(`CC=URL,…`)를 나열합니다. `/v1/region`이 해당 국가의 브라우저에 맞는 게이트웨이를 반환합니다.
 4. 선택적으로 심사 봇을 설정합니다: `[vars]`의 `REVIEW_BOT_ACCOUNT_NUM_ID`와 `wrangler secret put REVIEW_BOT_KEY`. 둘 다 없으면 제출은 심사 없이 등재됩니다. 심사자는 `node scripts/grant-reviewer.mjs <제공자 계정 ID>`로 부여합니다.
 5. 선택적으로 `wrangler secret put SHORTCUT_SECRET`(임의의 무작위 문자열)를 설정합니다. 성인 콘텐츠를 켠 회원이 성인 카드를 홈 화면에 추가할 수 있도록 단기 키에 서명하는 데 쓰입니다. 설정하지 않으면 성인 카드에는 해당 버튼이 나타나지 않습니다.

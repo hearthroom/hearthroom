@@ -16,6 +16,7 @@ import { deleteCardSave, fetchCardSaves, putCardSave } from "@/lib/api";
 import { confirmDialog } from "@/lib/confirm";
 import { loginPath } from "@/lib/login-return";
 import { applyLocale, i18n } from "@/lib/i18n";
+import { isPlayHost } from "@/lib/site";
 import type { useSession } from "@/lib/session";
 
 type Session = ReturnType<typeof useSession>;
@@ -51,7 +52,8 @@ const SITE_HOST = "hearthroom.club";
  * （前端 build 會把上游的殼複製到 web/public/sandbox/）。
  */
 export function sandboxOptions(hostname: string, session: Session) {
-  const production = hostname === SITE_HOST || hostname === `www.${SITE_HOST}`;
+  // 卡片 App 網域（play.<站台>）也在同一個 zone 底下，殼子網域一樣用得到
+  const production = hostname === SITE_HOST || hostname === `www.${SITE_HOST}` || hostname === `play.${SITE_HOST}`;
   const token = () => session.accessToken();
   const withToken = async <T>(fn: (t: string) => Promise<T>): Promise<T> => {
     const t = await token();
@@ -88,8 +90,12 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
         loading: () => {},
       },
       nav: {
-        back: () => { if (window.history.length > 1) deps.router.back(); else deps.router.push(deps.lp("/")); },
-        toEntry: () => { deps.router.push(deps.lp("/")); },
+        // 卡片 App 網域上沒有站台可回：App 的入口就是這張卡自己（/<roleId>/），回到它就是「回到起點」
+        back: () => {
+          if (window.history.length > 1) { deps.router.back(); return; }
+          deps.router.push(isPlayHost() ? deps.currentPath().split("?")[0] : deps.lp("/"));
+        },
+        toEntry: () => { deps.router.push(isPlayHost() ? deps.currentPath().split("?")[0] : deps.lp("/")); },
         toLogin: (returnTo) => { void deps.router.push(deps.lp(loginPath(returnTo || deps.currentPath()))); },
       },
       locale: {

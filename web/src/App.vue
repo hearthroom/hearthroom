@@ -12,6 +12,7 @@ import { useReviewer } from "@/lib/review";
 import { useSession } from "@/lib/session";
 import { SITE } from "@/lib/site";
 import { installPrompt, openInstall } from "@/lib/pwa";
+import { isPlayHost } from "@/lib/site";
 import { loginPath } from "@/lib/login-return";
 
 const { lp } = useLocalePath();
@@ -104,7 +105,8 @@ onMounted(() => document.addEventListener("keydown", onSlash));
   <main id="main" tabindex="-1" :class="{ 'main--bare': route.meta.bare }"><RouterView /></main>
   <ConfirmDialog />
   <!-- 裝到主畫面的提示：對話與遊戲頁是全螢幕的，不在那裡打擾 -->
-  <InstallToast v-if="!route.meta.bare" />
+  <!-- 卡片 App 網域的頁全是 bare，但「加到主畫面」的提示卡就在那裡 -->
+  <InstallToast v-if="!route.meta.bare || isPlayHost()" />
 
   <!-- 社群維護的開源站：頁尾照開源專案的慣例，把人導去倉庫——回報問題、看原始碼、看授權都在那裡 -->
   <footer v-if="SITE.repoUrl && !route.meta.bare" class="footer">

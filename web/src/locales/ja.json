@@ -952,7 +952,7 @@
   "pwa.install.cta": "インストール",
   "pwa.install.later": "あとで",
   "pwa.install.ios": "Safari の「共有」をタップし、「ホーム画面に追加」を選んでください。",
-  "pwa.install.android": "Chrome のメニューから「ホーム画面に追加」を選びます。Hearthroom をインストール済みの場合は「ショートカットを作成」を選んでください。",
+  "pwa.install.menu": "ブラウザのメニューから「アプリをインストール」または「ホーム画面に追加」を選んでください。すでに追加済みなら、ホーム画面から開けます。",
   "pwa.install.ok": "わかった",
   "pwa.install.link": "アプリをインストール"
 }

@@ -131,7 +131,7 @@ localStorage.setItem("hearthroom.oauth.access", JSON.stringify({ accessToken: "t
 站台在單一 Cloudflare 帳號上執行，小型社群使用免費方案即可。
 
 1. 建立資源並將 ID 填入 `wrangler.toml`：一個 D1 資料庫（`DB`）、兩個 KV 命名空間（`CACHE`、`ASSET_ARCHIVE`），以及選用的 Analytics Engine 資料集（`EVENTS`；設定 `ANALYTICS_ENABLED = "false"` 可停用）。
-2. 設定網域：`wrangler.toml` 的 `routes`、`src/site.ts` 的 `HOST`、`web/src/lib/site.ts` 的站名。已有 DNS 記錄的主機名無法綁定自訂網域，須先刪除停放記錄。
+2. 設定網域：`wrangler.toml` 的 `routes`、`src/site.ts` 的 `HOST`、`web/src/lib/site.ts` 的站名。已有 DNS 記錄的主機名無法綁定自訂網域，須先刪除停放記錄。 卡片 App 在 `play.<網域>`、沙箱殼在 `c<id>.<網域>`，都由同一條萬用路由服務，zone 要有一筆代理的萬用 DNS 記錄。
 3. 設定供應商：`[vars]` 中的 `PROVIDER_API_BASE`。若部分國家無法連上供應商的主網域，在 `PROVIDER_API_GATEWAYS` 列出各國閘道（`CC=網址,…`）；`/v1/region` 會把對應的閘道回給該國的瀏覽器。
 4. 選用的審核機器人：`[vars]` 中的 `REVIEW_BOT_ACCOUNT_NUM_ID` 與 `wrangler secret put REVIEW_BOT_KEY`。兩者未齊備時，提交不經審核直接上榜。以 `node scripts/grant-reviewer.mjs <供應商帳號 ID>` 授權審核人。
 5. 選用的 `wrangler secret put SHORTCUT_SECRET`（任意隨機字串）：用來簽發短效鑰匙，讓開了成人內容的成員也能把成人卡加到主畫面；不設的話成人卡就沒有這個按鈕。

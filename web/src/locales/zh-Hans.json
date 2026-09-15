@@ -952,7 +952,7 @@
   "pwa.install.cta": "安装",
   "pwa.install.later": "以后再说",
   "pwa.install.ios": "在 Safari 点下方的“分享”，再选“添加到主屏幕”。",
-  "pwa.install.android": "在 Chrome 右上角的菜单点“添加到主屏幕”；已经装了 Hearthroom 的话，再选“创建快捷方式”。",
+  "pwa.install.menu": "在浏览器的菜单里点“安装应用”或“添加到主屏幕”；已经装过的话，从主屏幕直接打开就好。",
   "pwa.install.ok": "知道了",
   "pwa.install.link": "安装 App"
 }

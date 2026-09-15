@@ -2,6 +2,7 @@ import { nextTick } from "vue";
 import { createRouter, createWebHistory } from "vue-router";
 import { LOCALE_CODES, SOURCE_LOCALE, applyLocale, detectLocale, pageTitle, updateHreflang } from "./lib/i18n";
 import { useSession } from "./lib/session";
+import { isPlayHost } from "./lib/site";
 import { setSurface } from "./lib/track";
 
 /**
@@ -45,25 +46,44 @@ const pages = [
   { path: ":pathMatch(.*)*", component: () => import("./pages/NotFoundPage.vue") },
 ];
 
+/**
+ * 卡片 App 網域（lib/site.ts 的 isPlayHost）只有三種頁：/<roleId>/ 是那張卡的對話頁，加上登入與回調。
+ * 沒有語言前綴——每張卡 App 的範圍是 /<roleId>/，前綴會把頁面推出範圍；語言放 ?lang=。
+ * 全部 bare：這裡沒有站台的頁首頁尾可去。
+ */
+const playAppPages = [
+  { path: "/login", component: () => import("./pages/LoginPage.vue"), meta: { bare: true } },
+  { path: "/auth/callback", component: () => import("./pages/CallbackPage.vue"), meta: { bare: true } },
+  { path: "/:roleId([^/]+)", component: () => import("./pages/PlayPage.vue"), meta: { auth: true, bare: true, playApp: true } },
+  { path: "/:pathMatch(.*)*", component: () => import("./pages/NotFoundPage.vue"), meta: { bare: true } },
+];
+
 export const router = createRouter({
   history: createWebHistory(),
-  routes: [
-    {
-      // 前綴用列舉而不是萬用參數：不然 /cards/xxx 的 cards 會被當成語言代碼。
-      path: `/:locale(${PREFIXED.join("|")})?`,
-      children: pages,
-    },
-  ],
+  routes: isPlayHost()
+    ? playAppPages
+    : [
+        {
+          // 前綴用列舉而不是萬用參數：不然 /cards/xxx 的 cards 會被當成語言代碼。
+          path: `/:locale(${PREFIXED.join("|")})?`,
+          children: pages,
+        },
+      ],
   scrollBehavior: (_to, _from, saved) => saved ?? { top: 0 },
 });
 
-/** 目前路徑的語言。沒有前綴就是預設語言。 */
-export const localeOf = (route: { params: Record<string, unknown> }) =>
-  (route.params.locale as string) || SOURCE_LOCALE;
+const isLocaleCode = (v: unknown): v is string => typeof v === "string" && LOCALE_CODES.includes(v);
 
-/** 組出帶目前語言前綴的路徑。所有站內連結都要經過它，否則點一下就掉回預設語言。 */
+/** 目前路徑的語言。主站看前綴，沒有就是預設語言；卡片 App 網域看 ?lang=，沒有就照瀏覽器偏好。 */
+export const localeOf = (route: { params: Record<string, unknown>; query?: Record<string, unknown> }) => {
+  if (isPlayHost()) return isLocaleCode(route.query?.lang) ? route.query.lang : detectLocale();
+  return (route.params.locale as string) || SOURCE_LOCALE;
+};
+
+/** 組出帶目前語言的路徑。所有站內連結都要經過它，否則點一下就掉回預設語言。主站是前綴，卡片 App 網域是 ?lang=。 */
 export function withLocale(path: string, locale: string): string {
   const clean = path.startsWith("/") ? path : `/${path}`;
+  if (isPlayHost()) return `${clean}${clean.includes("?") ? "&" : "?"}lang=${encodeURIComponent(locale)}`;
   return locale === SOURCE_LOCALE ? clean : `/${locale}${clean === "/" ? "" : clean}`;
 }
 
@@ -72,11 +92,16 @@ let firstNavigation = true;
 router.beforeEach(async (to) => {
   const locale = localeOf(to);
 
+  // 卡片 App 網域：/<roleId> 補上結尾斜線——App 的範圍是 /<roleId>/，少了斜線就在範圍外
+  if (isPlayHost() && to.meta.playApp && !to.path.endsWith("/")) {
+    return { path: `${to.path}/`, query: to.query, replace: true };
+  }
+
   // 第一次進站且沒指定語言時，照瀏覽器偏好轉一次。之後不再自動轉——
   // 使用者手動選了語言，網址就是他的選擇，不該被偵測結果蓋掉。
   if (firstNavigation) {
     firstNavigation = false;
-    if (!to.params.locale) {
+    if (!isPlayHost() && !to.params.locale) {
       const detected = detectLocale();
       if (detected !== SOURCE_LOCALE) {
         return { path: withLocale(to.path, detected), query: to.query, replace: true };
@@ -85,8 +110,8 @@ router.beforeEach(async (to) => {
   }
 
   await applyLocale(locale);
-  // 去掉語言前綴的路徑，才是各語言版本共同的那一頁
-  updateHreflang(locale === SOURCE_LOCALE ? to.path : to.path.replace(`/${locale}`, "") || "/");
+  // 去掉語言前綴的路徑，才是各語言版本共同的那一頁（卡片 App 網域不進搜尋，沒有各語言版本）
+  if (!isPlayHost()) updateHreflang(locale === SOURCE_LOCALE ? to.path : to.path.replace(`/${locale}`, "") || "/");
   // 每次導航先給一個跟著語言走的預設標題；有自己標題的頁面（卡片、作者）掛載後會覆寫。
   // 少了這行，分頁標題會一直停在 index.html 裡那個寫死的中文。
   document.title = pageTitle();
@@ -106,6 +131,7 @@ router.beforeEach(async (to) => {
  */
 /** 路由 → 來源標記。API 請求帶著它，服務端才知道這次瀏覽是從哪一頁走過來的。 */
 function surfaceOf(path: string): string {
+  if (isPlayHost()) return path.startsWith("/login") || path.startsWith("/auth") ? "login" : "play";
   const bare = "/" + path.replace(/^\/(zh-Hans|en|ja|ko)(?=\/|$)/, "").replace(/^\//, "");
   if (bare === "/") return "board";
   if (bare.startsWith("/search")) return "search";

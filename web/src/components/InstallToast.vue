@@ -5,7 +5,11 @@
  * 對象是卡片（卡片頁按了「加到主畫面」）時標題換成卡名；步驟一樣。
  */
 import { acceptInstall, dismissInstall, installPrompt } from "@/lib/pwa";
+import { isPlayHost } from "@/lib/site";
 import { track } from "@/lib/track";
+
+// 卡片 App 網域上，提示卡要壓過舞台的浮層（舞台自己的提示用 1200）
+const overStage = isPlayHost();
 
 function onInstall() { track("pwa_install_click"); void acceptInstall(); }
 function onLater() { track("pwa_install_later"); dismissInstall(); }
@@ -13,7 +17,7 @@ function onLater() { track("pwa_install_later"); dismissInstall(); }
 
 <template>
   <Transition name="install">
-    <section v-if="installPrompt.visible" class="install" role="region" :aria-label="$t('pwa.install.title')">
+    <section v-if="installPrompt.visible" class="install" :class="{ 'install--over-stage': overStage }" role="region" :aria-label="$t('pwa.install.title')">
       <div class="install__row">
         <span class="install__tile" aria-hidden="true">
           <img v-if="installPrompt.target === 'card' && installPrompt.icon" :src="installPrompt.icon" alt="" />
@@ -21,7 +25,7 @@ function onLater() { track("pwa_install_later"); dismissInstall(); }
         </span>
         <div class="install__text">
           <p class="install__title">{{ installPrompt.target === "card" ? $t("pwa.install.cardTitle", { name: installPrompt.name }) : $t("pwa.install.title") }}</p>
-          <p class="install__body">{{ installPrompt.kind === "ios" ? $t("pwa.install.ios") : installPrompt.kind === "android" ? $t("pwa.install.android") : installPrompt.target === "card" ? $t("pwa.install.cardBody") : $t("pwa.install.body") }}</p>
+          <p class="install__body">{{ installPrompt.kind === "ios" ? $t("pwa.install.ios") : installPrompt.kind === "menu" ? $t("pwa.install.menu") : installPrompt.target === "card" ? $t("pwa.install.cardBody") : $t("pwa.install.body") }}</p>
         </div>
         <button type="button" class="btn btn--icon btn--sm btn--ghost install__close" :aria-label="$t('pwa.install.later')" @click="onLater">
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none" /></svg>
@@ -50,6 +54,7 @@ function onLater() { track("pwa_install_later"); dismissInstall(); }
 @media (min-width: 720px) {
   .install { left: auto; width: 380px; right: var(--s-5); bottom: calc(var(--s-5) + env(safe-area-inset-bottom)); }
 }
+.install--over-stage { z-index: 1300; }
 .install__row { display: flex; gap: var(--s-3); align-items: flex-start; }
 .install__tile {
   flex: none; width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; overflow: hidden;

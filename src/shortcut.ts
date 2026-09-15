@@ -6,8 +6,11 @@
  * 換成這一份，瀏覽器就把「安裝」當成安裝這張卡——桌面／主畫面上多一個以角色為名的圖示，
  * 點下去直接進對話，不經過首頁（owner 2026-09-15）。
  *
- * scope 維持「/」而不是收窄到 /play/<id>：語言前綴（/zh-Hans/play/…）與從對話頁回榜單都還在同一個
- * 範圍內，不會被瀏覽器當成「離開 App」而加上一條網址列。同一站上多個 manifest 靠 id 區分。
+ * 兩種形式：
+ * - 卡片 App 網域（play.<HOST>，見 src/site.ts）：id／scope／start_url 都是 /<roleId>/。每張卡的範圍互不重疊，
+ *   這個網域上也沒有範圍是根目錄的 App，所以每張卡都能各自裝成一個 App。結尾的斜線是範圍的邊界：
+ *   /abc 不在 /abc/ 裡。語言放在查詢字串（?lang=），不能放路徑前綴，否則就跑出範圍。
+ * - 主站：scope 維持「/」、start_url 是 /play/<roleId>。保留給不能另開網域的自架環境。
  *
  * 圖示：安裝條件要求 PNG／WebP／SVG、至少 192px，而頭像有 jpg 與 gif。/v1/cards/:id/icon-<size>.png 先試
  * Images 綁定轉成正方形 PNG；轉不了（帳號沒開 Images）就照原樣回 PNG，其他格式包成一層 SVG——
@@ -82,15 +85,16 @@ export async function verifyShortcutKey(secret: string | undefined, cardId: stri
   return expect.byteLength === got.byteLength && crypto.subtle.timingSafeEqual(expect, got);
 }
 
-export function cardManifest(row: CardRow, lang: string, key?: string) {
+export function cardManifest(row: CardRow, lang: string, key?: string, opts: { playApp?: boolean } = {}) {
   const name = pickLocale(JSON.parse(row.names) as Localized, lang) || row.source_role_id;
   const icon = (size: IconSize) => ({ src: iconPath(row.id, size) + (key ? `?k=${encodeURIComponent(key)}` : ""), sizes: `${size}x${size}`, purpose: "any" });
+  const app = `/${encodeURIComponent(row.source_role_id)}/`;
   return {
-    id: `/play/${row.source_role_id}`,
+    id: opts.playApp ? app : `/play/${row.source_role_id}`,
     name,
     short_name: name,
-    start_url: `${localePrefix(lang)}/play/${row.source_role_id}`,
-    scope: "/",
+    start_url: opts.playApp ? `${app}?lang=${encodeURIComponent(lang)}` : `${localePrefix(lang)}/play/${row.source_role_id}`,
+    scope: opts.playApp ? app : "/",
     display: "standalone",
     background_color: "#f5f5f7",
     theme_color: "#f5f5f7",

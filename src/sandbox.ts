@@ -42,7 +42,8 @@ export const SANDBOX_CSP = [
   "form-action 'none'",
   "base-uri 'none'",
   "object-src 'none'",
-  `frame-ancestors https://${HOST} https://www.${HOST}`,
+  // 卡片 App 網域（play.<HOST>）也會嵌殼：同一份對話頁在那裡跑
+  `frame-ancestors https://${HOST} https://www.${HOST} https://play.${HOST}`,
 ].join("; ");
 
 // 殼頁向資源層要的是 /sandbox/（目錄），不是 /sandbox/index.html：資源層預設會把後者 3xx 到前者，
