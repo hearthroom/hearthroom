@@ -72,6 +72,62 @@ describe("卡片 manifest", () => {
     expect((await get("/v1/cards/role-adult/touch-icon.png")).status).toBe(404);
   });
 
+  it("成人卡：過了門的人在卡片頁拿到鑰匙，帶著鑰匙 manifest 與圖示才開；沒鑰匙、錯鑰匙、過期都是 404", async () => {
+    const { signShortcutKey, verifyShortcutKey } = await import("../src/shortcut");
+    identities({ "author-token": AUTHOR, "viewer-token": 40004 });
+    const settings = (body: Record<string, unknown>) =>
+      SELF.fetch("https://c.test/v1/me/settings", { method: "POST", headers: { "Content-Type": "application/json", ...bearer("viewer-token") }, body: JSON.stringify(body) });
+    const y = new Date().getUTCFullYear() - 20;
+    expect((await settings({ showNsfw: true, birthdate: `${y}-01-01` })).status).toBe(200);
+    const adult = await env.DB.prepare("SELECT id FROM cards WHERE source_role_id = 'role-adult'").first<{ id: string }>();
+    // 沒開開關的人：卡片本身就 403，自然沒有鑰匙
+    expect((await SELF.fetch(`https://c.test/v1/cards/${adult!.id}`)).status).toBe(403);
+    const detail = await (await SELF.fetch(`https://c.test/v1/cards/${adult!.id}?nsfw=1`, { headers: bearer("viewer-token") })).json() as { shortcutKey?: string; nsfw: boolean };
+    expect(detail.nsfw).toBe(true);
+    expect(detail.shortcutKey).toMatch(/^\d+\.[A-Za-z0-9_-]+$/);
+    // 一般卡不發鑰匙
+    const safe = await (await SELF.fetch("https://c.test/v1/cards/role-safe")).json() as { shortcutKey?: string };
+    expect(safe.shortcutKey).toBeUndefined();
+
+    const k = encodeURIComponent(detail.shortcutKey!);
+    expect((await get(`/v1/cards/${adult!.id}/manifest.webmanifest`)).status).toBe(404);
+    expect((await get(`/v1/cards/${adult!.id}/manifest.webmanifest?k=${k}x`)).status).toBe(404);
+    const ok = await get(`/v1/cards/${adult!.id}/manifest.webmanifest?lang=en&k=${k}`);
+    expect(ok.status).toBe(200);
+    expect(ok.headers.get("cache-control")).toBe("private, no-store");
+    const m = await ok.json() as { name: string; icons: { src: string }[] };
+    expect(m.name).toBe("深夜的卡");
+    // 圖示網址也帶鑰匙，瀏覽器抓圖示時才進得來
+    expect(m.icons[0].src).toBe(`/v1/cards/${adult!.id}/icon-192.png?k=${k}`);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(PNG, { headers: { "content-type": "image/png" } })));
+    expect((await get(`/v1/cards/${adult!.id}/icon-192.png`, noImages())).status).toBe(404);
+    expect((await get(`/v1/cards/${adult!.id}/icon-192.png?k=${k}`, noImages())).status).toBe(200);
+    expect((await get(`/v1/cards/${adult!.id}/touch-icon.png?k=${k}`, noImages())).status).toBe(200);
+
+    // 鑰匙綁卡片、綁到期時間、綁密鑰
+    const now = Date.UTC(2026, 8, 15);
+    const key = await signShortcutKey("s", "card-a", now);
+    expect(await verifyShortcutKey("s", "card-a", key, now + 1000)).toBe(true);
+    expect(await verifyShortcutKey("s", "card-b", key, now + 1000)).toBe(false);
+    expect(await verifyShortcutKey("other", "card-a", key, now + 1000)).toBe(false);
+    expect(await verifyShortcutKey("s", "card-a", key, now + 25 * 60 * 60 * 1000)).toBe(false);
+    expect(await verifyShortcutKey(undefined, "card-a", key, now)).toBe(false);
+    expect(await verifyShortcutKey("s", "card-a", "garbage", now)).toBe(false);
+  });
+
+  it("沒設密鑰：成人卡不發鑰匙，端點也照樣 404", async () => {
+    identities({ "author-token": AUTHOR, "viewer-token": 40004 });
+    const y = new Date().getUTCFullYear() - 20;
+    await SELF.fetch("https://c.test/v1/me/settings", { method: "POST", headers: { "Content-Type": "application/json", ...bearer("viewer-token") }, body: JSON.stringify({ showNsfw: true, birthdate: `${y}-01-01` }) });
+    const adult = await env.DB.prepare("SELECT id FROM cards WHERE source_role_id = 'role-adult'").first<{ id: string }>();
+    const noSecret = { ...env, SHORTCUT_SECRET: undefined } as unknown as typeof env;
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(new Request(`https://c.test/v1/cards/${adult!.id}?nsfw=1`, { headers: bearer("viewer-token") }), noSecret, ctx);
+    await waitOnExecutionContext(ctx);
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { shortcutKey?: string }).shortcutKey).toBeUndefined();
+  });
+
   it("純函式：語言前綴與尺寸收斂", () => {
     expect(localePrefix("zh-Hant")).toBe("");
     expect(localePrefix("zh-Hans")).toBe("/zh-Hans");
