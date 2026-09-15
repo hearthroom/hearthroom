@@ -299,7 +299,7 @@
   "wb.entry.deleteConfirm": "删掉这条就找不回来了，确定吗？",
   "import.drop": "把角色卡拖到这里",
   "import.pick": "选择文件",
-  "import.formats": "支持 PNG 与 JSON 格式的角色卡",
+  "import.formats": "支持 PNG、JSON 与 CHARX 格式的角色卡",
   "import.label.personality": "【性格】",
   "import.label.scenario": "【场景】",
   "import.review.title": "读到了：{name}",

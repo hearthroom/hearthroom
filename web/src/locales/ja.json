@@ -299,7 +299,7 @@
   "wb.entry.deleteConfirm": "削除すると元に戻せません。よろしいですか？",
   "import.drop": "キャラクターカードをここへ",
   "import.pick": "ファイルを選ぶ",
-  "import.formats": "PNG と JSON のキャラクターカードに対応",
+  "import.formats": "PNG・JSON・CHARX 形式のキャラクターカードに対応",
   "import.label.personality": "【性格】",
   "import.label.scenario": "【場面】",
   "import.review.title": "読み込みました：{name}",
