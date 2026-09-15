@@ -14,6 +14,7 @@ import type { Router } from "vue-router";
 import { UPSTREAM_API } from "@/lib/config";
 import { deleteCardSave, fetchCardSaves, putCardSave } from "@/lib/api";
 import { confirmDialog } from "@/lib/confirm";
+import { useAppearance } from "@/lib/appearance";
 import { loginPath } from "@/lib/login-return";
 import { applyLocale, i18n } from "@/lib/i18n";
 import { isPlayHost } from "@/lib/site";
@@ -89,6 +90,13 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
         toast: (text, kind) => pushStageToast(text, kind),
         confirm: (o) => confirmDialog({ title: o.title, message: o.content, confirmText: o.confirmText, cancelText: o.cancelText }),
         loading: () => {},
+        // 手機的系統狀態列跟著頁面的 theme-color 塗色：對話頁上塗成舞台頂欄的實際底色（作者換配色會再叫），
+        // 離開對話頁（null）還原成站台自己的底色（lib/appearance.ts）
+        themeColor: (color) => {
+          const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+          if (color && meta) meta.content = color;
+          else useAppearance().init();
+        },
       },
       nav: {
         // 卡片 App 網域上沒有站台可回：App 的入口就是這張卡自己（/<roleId>/），回到它就是「回到起點」

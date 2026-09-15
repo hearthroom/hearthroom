@@ -380,7 +380,8 @@ app.get("/v1/cards/:id/manifest.webmanifest", async (c) => {
   const { row, key } = await shortcutCard(c);
   return c.json(cardManifest(row, lang(c), key, { playApp: isPlayHost(requestHost(c)) }), 200, {
     "Content-Type": "application/manifest+json; charset=utf-8",
-    "Cache-Control": key ? "private, no-store" : "public, max-age=3600",
+    // 快取期要短：瀏覽器安裝與更新檢查都讀這份，改了顯示模式（例如全螢幕）拿到一小時前的舊版就裝錯
+    "Cache-Control": key ? "private, no-store" : "public, max-age=60",
   });
 });
 
