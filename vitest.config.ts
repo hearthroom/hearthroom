@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [
     cloudflareTest({
       wrangler: { configPath: "./wrangler.toml" },
-      miniflare: { bindings: { TEST_MIGRATIONS: migrations } },
+      miniflare: { bindings: { TEST_MIGRATIONS: migrations, SHORTCUT_SECRET: "test-shortcut-secret" } },
     }),
   ],
   test: {

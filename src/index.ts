@@ -34,7 +34,7 @@ import { type Env, HttpError } from "./types";
 import { gameRoutes } from "./game";
 import { serveSandbox } from "./sandbox";
 import { listSaves, putSave, removeSave } from "./saves";
-import { IMAGE_HOSTS, SVG_WRAP_LIMIT, TOUCH_ICON_SIZE, allowedImageUrl, cardManifest, iconSize, svgWrap } from "./shortcut";
+import { IMAGE_HOSTS, SVG_WRAP_LIMIT, TOUCH_ICON_SIZE, allowedImageUrl, cardManifest, iconSize, signShortcutKey, svgWrap, verifyShortcutKey } from "./shortcut";
 import { upstream, ZONES, type Zone, CREATION_METHOD } from "./upstream";
 
 const app = new Hono<{ Bindings: Env; Variables: { ev: Pending } }>();
@@ -355,21 +355,31 @@ app.get("/v1/cards/:id", async (c) => {
   // 卡片瀏覽只在這裡記一次。HTML 殼那條路（page_html）多半是抓取器，卡片頁替作者發的
   // 「其他作品」副請求則是 /v1/cards?author=，兩者都不算一次瀏覽，否則分母會被灌水三倍。
   note(c, { event: "card_view", subject: row.source_role_id, zoneScope: "current" });
-  return c.json(toCard(row, lang(c)), 200, allowNsfw ? { "Cache-Control": "private, no-store" } : {});
+  // 過了成人門的人拿一把「加到主畫面」的鑰匙：manifest 與圖示是瀏覽器抓的，帶不了登入（src/shortcut.ts）
+  const secret = c.env.SHORTCUT_SECRET;
+  const shortcutKey = allowNsfw && secret ? await signShortcutKey(secret, row.id) : undefined;
+  return c.json({ ...toCard(row, lang(c)), ...(shortcutKey ? { shortcutKey } : {}) }, 200, allowNsfw ? { "Cache-Control": "private, no-store" } : {});
 });
 
 /**
  * 把一張卡加到主畫面：卡片專屬的 manifest 與圖示。設計見 src/shortcut.ts。
  *
- * 兩條路都是瀏覽器自己抓的（沒有 Authorization），所以只認公開狀態：不在榜或成人內容一律 404。
- * 快取期短：名字與頭像每小時同步一次，圖示另有自己的 Cache API 快取。
+ * 兩條路都是瀏覽器自己抓的（沒有 Authorization）：不在榜一律 404；成人內容要帶有效的鑰匙（?k=），
+ * 沒有就 404。快取期短：名字與頭像每小時同步一次，圖示另有自己的 Cache API 快取。
  */
+async function shortcutCard(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>) {
+  const row = await getCard(c.env.DB, c.req.param("id") ?? "");
+  if (!row || row.status !== "approved") throw new HttpError(404, "card not found");
+  const key = c.req.query("k");
+  if (row.nsfw === 1 && !(await verifyShortcutKey(c.env.SHORTCUT_SECRET, row.id, key))) throw new HttpError(404, "card not found");
+  return { row, key: row.nsfw === 1 ? key : undefined };
+}
+
 app.get("/v1/cards/:id/manifest.webmanifest", async (c) => {
-  const row = await getCard(c.env.DB, c.req.param("id"));
-  if (!row || row.status !== "approved" || row.nsfw === 1) throw new HttpError(404, "card not found");
-  return c.json(cardManifest(row, lang(c)), 200, {
+  const { row, key } = await shortcutCard(c);
+  return c.json(cardManifest(row, lang(c), key), 200, {
     "Content-Type": "application/manifest+json; charset=utf-8",
-    "Cache-Control": "public, max-age=3600",
+    "Cache-Control": key ? "private, no-store" : "public, max-age=3600",
   });
 });
 
@@ -377,8 +387,7 @@ export const iconCache = { namespace: "card-icon" };
 
 // icon-192.png／icon-512.png 給 manifest（退路可以是 SVG）；touch-icon.png 給 iOS（退路是原圖）
 app.get("/v1/cards/:id/:file{(icon-[0-9]+|touch-icon)\\.png}", async (c) => {
-  const row = await getCard(c.env.DB, c.req.param("id"));
-  if (!row || row.status !== "approved" || row.nsfw === 1) throw new HttpError(404, "card not found");
+  const { row } = await shortcutCard(c);
   const file = c.req.param("file");
   const raster = file === "touch-icon.png";
   const size = raster ? TOUCH_ICON_SIZE : iconSize(file.slice("icon-".length, -".png".length));

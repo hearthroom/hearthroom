@@ -11,6 +11,8 @@ export interface CommunityCard {
   provider?: string;
   /** 成人內容（本站的分級，作者宣告、審核人對照過） */
   nsfw?: boolean;
+  /** 成人卡「加到主畫面」的鑰匙：只有過了成人門的人拿得到，帶在 manifest 與圖示網址上（lib/card-manifest.ts）。 */
+  shortcutKey?: string;
   name: string;
   summary: string;
   names: Localized;

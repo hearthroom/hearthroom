@@ -134,7 +134,8 @@ localStorage.setItem("hearthroom.oauth.access", JSON.stringify({ accessToken: "t
 2. 设置域名：`wrangler.toml` 的 `routes`、`src/site.ts` 的 `HOST`、`web/src/lib/site.ts` 的站名。已有 DNS 记录的主机名无法绑定自定义域名，须先删除停放记录。
 3. 设置提供方：`[vars]` 中的 `PROVIDER_API_BASE`。若部分国家无法连上提供方的主域名，在 `PROVIDER_API_GATEWAYS` 列出各国网关（`CC=网址,…`）；`/v1/region` 会把对应的网关返回给该国的浏览器。
 4. 可选的审核机器人：`[vars]` 中的 `REVIEW_BOT_ACCOUNT_NUM_ID` 与 `wrangler secret put REVIEW_BOT_KEY`。两者未齐备时，提交不经审核直接上榜。以 `node scripts/grant-reviewer.mjs <提供方账号 ID>` 授权审核人。
-5. 部署：
+5. 可选的 `wrangler secret put SHORTCUT_SECRET`（任意随机字符串）：用来签发短效钥匙，让开启了成人内容的成员也能把成人卡添加到主屏幕；不设的话成人卡就没有这个按钮。
+6. 部署：
 
 ```bash
 npm run migrate:remote

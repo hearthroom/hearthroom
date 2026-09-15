@@ -32,10 +32,17 @@ describe("card manifest head swap", () => {
     expect(installPrompt.target).toBe("site");
   });
 
-  it("leaves the site head in place for adult cards: their manifest is a 404 to the browser", () => {
+  it("leaves the site head in place for adult cards without a key: their manifest is a 404 to the browser", () => {
     applyCardHead({ ...card, nsfw: true }, "zh-Hant");
     expect(q('link[rel="manifest"]')).toBe(SITE_HEAD.manifest);
     expect(installPrompt.target).toBe("site");
+  });
+
+  it("adult card with a key: manifest and touch icon carry the key so the browser gets through", () => {
+    applyCardHead({ ...card, nsfw: true, shortcutKey: "123.ab+c" }, "en");
+    expect(q('link[rel="manifest"]')).toBe("/v1/cards/c-1/manifest.webmanifest?lang=en&k=123.ab%2Bc");
+    expect(q('link[rel="apple-touch-icon"]')).toBe("/v1/cards/c-1/touch-icon.png?k=123.ab%2Bc");
+    expect(installPrompt.target).toBe("card");
   });
 
   it("creates the tags when the document lacks them", () => {

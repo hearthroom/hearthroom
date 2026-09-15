@@ -134,7 +134,8 @@ localStorage.setItem("hearthroom.oauth.access", JSON.stringify({ accessToken: "t
 2. ドメインを設定します：`wrangler.toml` の `routes`、`src/site.ts` の `HOST`、`web/src/lib/site.ts` のサイト名。既に DNS レコードがあるホスト名にはカスタムドメインを付けられないため、パーキングレコードを先に削除します。
 3. プロバイダーを設定します：`[vars]` の `PROVIDER_API_BASE`。一部の国からプロバイダーのメインドメインに届かない場合は、`PROVIDER_API_GATEWAYS` に国別ゲートウェイ（`CC=URL,…`）を列挙します。`/v1/region` がその国のブラウザーに対応するゲートウェイを返します。
 4. 任意で審査ボットを設定します：`[vars]` の `REVIEW_BOT_ACCOUNT_NUM_ID` と `wrangler secret put REVIEW_BOT_KEY`。両方がない場合、申請は審査なしで掲載されます。審査員は `node scripts/grant-reviewer.mjs <プロバイダーのアカウント ID>` で付与します。
-5. デプロイします：
+5. 任意で `wrangler secret put SHORTCUT_SECRET`（任意のランダム文字列）を設定します。成人向けコンテンツを有効にしたメンバーが成人向けカードをホーム画面に追加するための短期キーの署名に使います。未設定の場合、成人向けカードにはそのボタンが表示されません。
+6. デプロイします：
 
 ```bash
 npm run migrate:remote

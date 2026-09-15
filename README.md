@@ -134,7 +134,8 @@ The site runs on a single Cloudflare account. The free tier is sufficient for a 
 2. Set the domain: `routes` in `wrangler.toml`, `HOST` in `src/site.ts`, and the site name in `web/src/lib/site.ts`. A custom domain cannot be attached to a hostname that already has a DNS record; delete any parking record first.
 3. Set the provider: `PROVIDER_API_BASE` in `[vars]`. If the provider's main domain is unreachable from some countries, list per-country gateways in `PROVIDER_API_GATEWAYS` (`CC=url,…`); `/v1/region` returns the matching gateway to browsers from that country.
 4. Optionally configure the review bot: `REVIEW_BOT_ACCOUNT_NUM_ID` in `[vars]` and `wrangler secret put REVIEW_BOT_KEY`. Without both, submissions are listed without review. Reviewers are granted with `node scripts/grant-reviewer.mjs <provider account id>`.
-5. Deploy:
+5. Optionally set `wrangler secret put SHORTCUT_SECRET` (any random string). It signs the short-lived keys that let members who have enabled adult content add adult cards to their home screen; without it, adult cards simply have no such button.
+6. Deploy:
 
 ```bash
 npm run migrate:remote
