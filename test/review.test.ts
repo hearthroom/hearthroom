@@ -203,6 +203,36 @@ describe("內容版本", () => {
     await waitOnExecutionContext(ctx);
   };
 
+  const DAY = 86_400_000;
+  const registeredAt = async (roleId: string) =>
+    (await env.DB.prepare("SELECT registered_at FROM cards WHERE source_role_id = ?").bind(roleId).first<{ registered_at: number }>())!.registered_at;
+  const dayBoard = async () =>
+    ((await (await SELF.fetch(`https://c.test/v1/cards?sort=day&_=${++boardSeq}`)).json()) as { items: { roleId: string }[] }).items.map((i) => i.roleId);
+
+  it("昨天送審、今天才過審：上榜時間是過審那一刻，進日榜而不是直接落到週榜", async () => {
+    await submit("role-1");
+    // 登記在兩天前；日榜的 24 小時窗口早就滑過登記時間
+    await env.DB.prepare("UPDATE cards SET registered_at = ? WHERE source_role_id = ?").bind(Date.now() - 2 * DAY, "role-1").run();
+    const before = Date.now();
+    await approve("role-1");
+    expect(await registeredAt("role-1")).toBeGreaterThanOrEqual(before);
+    expect(await dayBoard()).toEqual(["role-1"]);
+  });
+
+  it("重審過關不算重新上榜：上榜時間不動", async () => {
+    await submit("role-1");
+    await approve("role-1");
+    const listedAt = Date.now() - 3 * DAY;
+    await env.DB.prepare("UPDATE cards SET registered_at = ? WHERE source_role_id = ?").bind(listedAt, "role-1").run();
+    upstreamHashes.set("role-1", "sha256:role-1-v2");
+    await sync();
+    const id = (await queue("rev-a")).body.items[0].id as string;
+    await act(id, "claim", "rev-a");
+    expect(((await (await act(id, "stamp", "rev-a", { verdict: "approve" })).json()) as any).cardStatus).toBe("approved");
+    expect(await registeredAt("role-1")).toBe(listedAt);
+    expect(await dayBoard()).toEqual([]);
+  });
+
   it("過審後作者改了卡：同步發現雜湊變了 → 離榜、開重審單；重審一章即回榜", async () => {
     await submit("role-1");
     await approve("role-1");
