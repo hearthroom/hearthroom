@@ -299,7 +299,7 @@
   "wb.entry.deleteConfirm": "Deleting this entry can't be undone. Sure?",
   "import.drop": "Drop a character card here",
   "import.pick": "Choose a file",
-  "import.formats": "PNG and JSON character cards",
+  "import.formats": "PNG, JSON and CHARX character cards are supported",
   "import.label.personality": "[Personality]",
   "import.label.scenario": "[Scenario]",
   "import.review.title": "Read: {name}",

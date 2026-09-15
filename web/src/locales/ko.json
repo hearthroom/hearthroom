@@ -299,7 +299,7 @@
   "wb.entry.deleteConfirm": "삭제하면 되돌릴 수 없습니다. 계속할까요?",
   "import.drop": "캐릭터 카드를 여기에 놓으세요",
   "import.pick": "파일 선택",
-  "import.formats": "PNG와 JSON 캐릭터 카드 지원",
+  "import.formats": "PNG, JSON, CHARX 형식의 캐릭터 카드를 지원합니다",
   "import.label.personality": "【성격】",
   "import.label.scenario": "【장면】",
   "import.review.title": "읽었습니다: {name}",
