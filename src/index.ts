@@ -18,7 +18,7 @@ import {
   type EventFields, type Pending,
 } from "./analytics";
 import { authorLine, renderHead } from "./head";
-import { ALIAS_HOSTS, HOST, canonicalUrl } from "./site";
+import { ALIAS_HOSTS, HOST, canonicalUrl, isPlayHost } from "./site";
 import { loadMine, type MineFilter } from "./mine";
 import { tagNamesFor } from "../shared/tag-catalog";
 import { isReviewer, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
@@ -378,10 +378,26 @@ async function shortcutCard(c: Context<{ Bindings: Env; Variables: { ev: Pending
 
 app.get("/v1/cards/:id/manifest.webmanifest", async (c) => {
   const { row, key } = await shortcutCard(c);
-  return c.json(cardManifest(row, lang(c), key), 200, {
+  return c.json(cardManifest(row, lang(c), key, { playApp: isPlayHost(requestHost(c)) }), 200, {
     "Content-Type": "application/manifest+json; charset=utf-8",
     "Cache-Control": key ? "private, no-store" : "public, max-age=3600",
   });
+});
+
+/**
+ * 請求打到哪個主機。注意本機 wrangler dev 會把網址與 Host 都改寫成第一條路由的主機（hearthroom.club），
+ * 要驗卡片 App 網域得另起一個 `wrangler dev --host play.hearthroom.club` 的實例。
+ */
+const requestHost = (c: { req: { url: string; header: (k: string) => string | undefined } }): string =>
+  c.req.header("host") ?? new URL(c.req.url).host;
+
+/**
+ * 站台自己的 manifest 在卡片 App 網域上不存在：那裡若裝得了範圍是「/」的站台 App，所有卡片 App
+ * 就又被它罩住（Android 的已安裝判定看範圍）。主站照舊由資源層出檔。
+ */
+app.get("/manifest.webmanifest", async (c) => {
+  if (isPlayHost(requestHost(c))) throw new HttpError(404, "not on this host");
+  return c.env.ASSETS.fetch(c.req.raw);
 });
 
 export const iconCache = { namespace: "card-icon" };

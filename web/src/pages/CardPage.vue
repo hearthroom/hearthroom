@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute } from "vue-router";
 import CardGrid from "@/components/CardGrid.vue";
@@ -17,8 +17,8 @@ import { useLocalePath } from "@/lib/use-locale";
 import { compact, hueFrom, plainText, relativeTime } from "@/lib/format";
 import { confirmDialog } from "@/lib/confirm";
 import { track } from "@/lib/track";
-import { applyCardHead } from "@/lib/card-manifest";
-import { installPrompt, openInstall } from "@/lib/pwa";
+import { canInstall } from "@/lib/pwa";
+import { playAppUrl } from "@/lib/site";
 import type { CommunityCard } from "@/lib/types";
 
 const route = useRoute();
@@ -154,10 +154,15 @@ watch(() => route.params.id, () => {
 }, { immediate: true });
 watch(locale, load);
 
-// 卡片頁的 manifest 是這張卡的：瀏覽器的「安裝」與 iOS 的「加入主畫面」裝下去的就是它（lib/card-manifest.ts）。
-watch(card, (c) => applyCardHead(c, locale.value));
-onBeforeUnmount(() => applyCardHead(null, locale.value));
-function addToHome() { track("pwa_card_install_click", { subject: card.value?.roleId ?? "" }); openInstall(); }
+// 加到主畫面：每張卡在卡片 App 網域上各自是一個 App（lib/site.ts），安裝要在那個網域的頁面上做，
+// 所以按下去先過去那張卡的對話頁（帶 install=1，那邊會把提示卡拿出來）。
+const installable = canInstall();
+function addToHome() {
+  const c = card.value;
+  if (!c) return;
+  track("pwa_card_install_click", { subject: c.roleId });
+  location.assign(playAppUrl(c.roleId, locale.value, { install: true }));
+}
 // 開關剛載好（或改了）：成人內容的卡在那之前會是 404，重讀一次
 // 開關改了要重讀；身分剛載好、發現本來就開著（undefined → true）也要——第一次讀多半比身分早到
 watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && (now === true || before !== undefined)) load(); });
@@ -236,8 +241,8 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
               </svg>
             </button>
           </div>
-          <!-- 加到主畫面：瀏覽器說這一頁能裝（或是 iOS Safari）才出現；成人內容的卡不換 manifest，所以也不會出現 -->
-          <button v-if="installPrompt.available && installPrompt.target === 'card'" type="button" class="btn btn--sm btn--ghost role__install" @click="addToHome">
+          <!-- 加到主畫面：能裝網頁的瀏覽器才出現；成人卡要過了門（有鑰匙）才有 -->
+          <button v-if="installable && (!card.nsfw || card.shortcutKey)" type="button" class="btn btn--sm btn--ghost role__install" @click="addToHome">
             <svg viewBox="0 0 20 20" aria-hidden="true">
               <rect x="3" y="3" width="14" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="1.6" />
               <path d="M10 6.5v7M6.5 10h7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />

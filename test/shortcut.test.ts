@@ -56,6 +56,31 @@ describe("卡片 manifest", () => {
     expect(icons[1].src).toMatch(/\/icon-512\.png$/);
   });
 
+  it("卡片 App 網域（play.）：id／scope／start_url 都是 /<roleId>/，語言在查詢字串", async () => {
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(new Request("https://play.hearthroom.club/v1/cards/role-safe/manifest.webmanifest?lang=en"), env, ctx);
+    await waitOnExecutionContext(ctx);
+    expect(res.status).toBe(200);
+    const m = await res.json() as Record<string, unknown>;
+    expect(m.id).toBe("/role-safe/");
+    expect(m.scope).toBe("/role-safe/");
+    expect(m.start_url).toBe("/role-safe/?lang=en");
+    expect(m.name).toBe("Night Detective");
+    // 本機開發用的 play.localhost 也算
+    const ctx2 = createExecutionContext();
+    const local = await worker.fetch(new Request("http://play.localhost:8787/v1/cards/role-safe/manifest.webmanifest"), env, ctx2);
+    await waitOnExecutionContext(ctx2);
+    expect(((await local.json()) as Record<string, unknown>).scope).toBe("/role-safe/");
+  });
+
+  it("站台自己的 manifest 在卡片 App 網域上是 404，主站照常", async () => {
+    const assets = { ...env, ASSETS: { fetch: async () => new Response("{}", { headers: { "content-type": "application/manifest+json" } }) } } as unknown as typeof env;
+    const ctx = createExecutionContext();
+    expect((await worker.fetch(new Request("https://play.hearthroom.club/manifest.webmanifest"), assets, ctx)).status).toBe(404);
+    const ctx2 = createExecutionContext();
+    expect((await worker.fetch(new Request("https://c.test/manifest.webmanifest"), assets, ctx2)).status).toBe(200);
+  });
+
   it("來源語言不帶前綴；沒有該語言的名字就退回中文", async () => {
     const m = await (await get("/v1/cards/role-safe/manifest.webmanifest?lang=zh-Hant")).json() as Record<string, unknown>;
     expect(m.start_url).toBe("/play/role-safe");
