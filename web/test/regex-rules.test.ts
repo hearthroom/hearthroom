@@ -85,6 +85,18 @@ describe("匯入匯出", () => {
     expect(got.set.rules.every((r) => r.enabled && r.id)).toBe(true);
   });
 
+  // 格式由匯入來源宣告：酒館卡是酒館寫法（聊天頁替 <style> 加訊息層前綴），魅魔島檔是 MMD；上游資產往返不掉。
+  it("卡片格式跟著來源走，往返上游資產時原樣帶著", () => {
+    const card = { spec: "chara_card_v3", data: { name: "x", extensions: { regex_scripts: [{ scriptName: "s", findRegex: "/a/g", replaceString: "<style>body{display:flex}</style>" }] } } };
+    expect(ruleSetFromImport(card)!.set.format).toBe("tavern");
+    expect(ruleSetFromImport(meimo)!.set.format).toBeUndefined();
+    expect(ruleSetToAuthorAsset(ruleSetFromImport(card)!.set, 0).cardFormat).toBe("tavern");
+    expect(ruleSetToAuthorAsset(ruleSetFromImport(meimo)!.set, 0).cardFormat).toBe("");
+    expect(ruleSetFromAuthorAsset({ rules: [], mountLayer: "over", cardFormat: "tavern" }).format).toBe("tavern");
+    expect(ruleSetFromAuthorAsset({ rules: [], mountLayer: "over", cardFormat: "" }).format).toBeUndefined();
+    expect(ruleSetFromAuthorAsset({ rules: [], mountLayer: "over", cardFormat: "risu" }).format).toBeUndefined();
+  });
+
   it("酒館卡的 extensions.regex_scripts 與裸陣列也吃；disabled 帶過來", () => {
     const card = { spec: "chara_card_v3", data: { name: "x", extensions: { regex_scripts: [{ scriptName: "s", findRegex: "/a/g", replaceString: "b", disabled: true }] } } };
     expect(ruleSetFromImport(card)!.set.rules[0]).toMatchObject({ name: "s", enabled: false });
