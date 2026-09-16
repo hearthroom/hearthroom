@@ -43,6 +43,7 @@ import {
 } from "@/lib/api";
 import { emptyRuleSet, ruleSetFromAuthorAsset, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, validateRuleSet, type RegexRuleSet, chatPageOf, type ChatPageChoice } from "@/lib/regex-rules";
 import RegexRulesEditor from "@/components/editor/RegexRulesEditor.vue";
+import { can } from "@/lib/provider";
 import ChatTestPanel from "@/components/editor/ChatTestPanel.vue";
 import ResourcePanel from "@/components/editor/ResourcePanel.vue";
 import {
@@ -1254,7 +1255,7 @@ async function exportCard(format: "png" | "json") {
           <div class="rxbar">
             <p class="rxbar__hint">{{ $t("regex.bar.hint") }}</p>
             <div class="rxbar__acts">
-              <button type="button" class="btn btn--sm btn--primary" @click="regexOpen = true">
+              <button v-if="can('regex')" type="button" class="btn btn--sm btn--primary" @click="regexOpen = true">
                 {{ $t("regex.open") }}
                 <span v-if="regexSet.rules.length" class="chip">{{ regexSet.rules.length }}</span>
               </button>
@@ -1313,7 +1314,7 @@ async function exportCard(format: "png" | "json") {
 
         <!-- 形象 -->
         <!-- 世界书 -->
-        <section data-section="worldbook" class="pane">
+        <section v-if="can('worldbook')" data-section="worldbook" class="pane">
           <h2 class="pane__title">{{ $t("editor.section.worldbook") }}</h2>
           <p class="muted">{{ $t("wb.lede") }}</p>
           <WorldbookEditor v-model="worldbookEntries" v-model:book-name="worldbookName"

@@ -620,7 +620,7 @@
   "login.title": "Sign in to Hearthroom",
   "login.lead": "Sign in with an account you already have. No separate registration needed.",
   "login.continueWith": "Continue with {provider}",
-  "login.moreComing": "More sign-in options coming",
+  "login.moreComing": "The two accounts are separate; switching sides means switching accounts.",
   "login.note": "Hearthroom stores only your public ID and nickname. Your password is never shared with us.",
   "me.title": "Me",
   "me.handle": "Member ID on this site",
@@ -963,5 +963,7 @@
   "pwa.install.ios": "Tap Share in Safari, then choose “Add to Home Screen”.",
   "pwa.install.menu": "Open the browser menu and choose “Install app” or “Add to Home screen”. If it is already installed, open it from your home screen.",
   "pwa.install.ok": "Got it",
-  "pwa.install.link": "Install app"
+  "pwa.install.link": "Install app",
+  "login.switchWarning": "Signing in with {provider} shows you what's on {provider}: your cards, the boards and your balance all change with it. Nothing on your current account is lost — switch back and it's there.",
+  "login.switchConfirm": "Switch to {provider}"
 }

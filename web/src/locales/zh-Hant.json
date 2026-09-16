@@ -620,7 +620,7 @@
   "login.title": "登入 Hearthroom",
   "login.lead": "使用你現有的帳號登入，不需要另外註冊。",
   "login.continueWith": "使用 {provider} 帳號繼續",
-  "login.moreComing": "更多登入方式準備中",
+  "login.moreComing": "兩邊的帳號各自獨立，換一邊等於換一個帳號。",
   "login.note": "Hearthroom 只會保存你的公開 ID 與暱稱，不會取得你的密碼。",
   "me.title": "我的",
   "me.handle": "本站成員 ID",
@@ -963,5 +963,7 @@
   "pwa.install.ios": "在 Safari 點下方的「分享」，再選「加入主畫面」。",
   "pwa.install.menu": "在瀏覽器的選單裡點「安裝應用程式」或「加到主畫面」；已經裝過的話，從主畫面直接打開就好。",
   "pwa.install.ok": "知道了",
-  "pwa.install.link": "安裝 App"
+  "pwa.install.link": "安裝 App",
+  "login.switchWarning": "換成 {provider} 帳號登入，看到的會是 {provider} 上的內容：我的卡片、榜單與餘額都會跟著換，目前這個帳號的東西不會不見，換回來就看得到。",
+  "login.switchConfirm": "換成 {provider}"
 }
