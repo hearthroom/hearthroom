@@ -9,6 +9,7 @@ import { useLocalePath } from "@/lib/use-locale";
 import MyCardTile from "@/components/MyCardTile.vue";
 import * as cache from "@/lib/mine-cache";
 import { useSession } from "@/lib/session";
+import { can } from "@/lib/provider";
 
 const route = useRoute();
 const router = useRouter();
@@ -195,7 +196,7 @@ watch(() => route.query.fresh, (f) => {
           <template v-if="revalidating"> · {{ $t("mine.syncing") }}</template>
         </p>
       </div>
-      <RouterLink :to="lp('/create')" class="btn btn--primary">{{ $t("mine.create") }}</RouterLink>
+      <RouterLink v-if="can('editor')" :to="lp('/create')" class="btn btn--primary">{{ $t("mine.create") }}</RouterLink>
     </header>
 
     <section v-if="quota && quotaRange" class="quota panel" :class="{ 'quota--full': quotaFull }" aria-live="polite">
@@ -240,7 +241,7 @@ watch(() => route.query.fresh, (f) => {
 
     <div v-else-if="!data?.items.length" class="empty panel">
       <p class="empty__title">{{ $t("mine.empty") }}</p>
-      <RouterLink :to="lp('/create')" class="btn btn--primary">{{ $t("mine.empty.cta") }}</RouterLink>
+      <RouterLink v-if="can('editor')" :to="lp('/create')" class="btn btn--primary">{{ $t("mine.empty.cta") }}</RouterLink>
     </div>
 
     <div v-else-if="!visible.length" class="empty panel"><p class="empty__title">{{ $t("mine.emptyFilter") }}</p></div>

@@ -4,6 +4,7 @@ import { RouterLink } from "vue-router";
 import { compact, hueFrom } from "@/lib/format";
 import { zoneLabel } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
+import { can } from "@/lib/provider";
 import type { MyCard } from "@/lib/api";
 
 /** locked：這週的登記額度用完了。只鎖「登記」，撤銷登記照常——撤掉不佔額度。 */
@@ -20,7 +21,7 @@ const hasArt = computed(() => !!props.card.avatarUrl && !broken.value);
 
 <template>
   <article class="card rise">
-    <RouterLink :to="lp(`/cards/${card.roleId}/edit`)" class="card__art">
+    <RouterLink :to="lp(can('editor') ? `/cards/${card.roleId}/edit` : `/cards/${card.roleId}`)" class="card__art">
       <img v-if="hasArt" :src="card.avatarUrl!" alt="" loading="lazy" @error="broken = true" />
       <div
         v-else
@@ -44,7 +45,7 @@ const hasArt = computed(() => !!props.card.avatarUrl && !broken.value);
       <div class="card__actions">
         <!-- 自己的卡不用登記也能玩：登記是上榜，不是能不能對話的門檻 -->
         <RouterLink class="btn btn--sm" :to="lp(`/play/${card.roleId}`)">{{ $t("mine.action.play") }}</RouterLink>
-        <RouterLink class="btn btn--sm" :to="lp(`/cards/${card.roleId}/edit`)">{{ $t("mine.action.edit") }}</RouterLink>
+        <RouterLink v-if="can('editor')" class="btn btn--sm" :to="lp(`/cards/${card.roleId}/edit`)">{{ $t("mine.action.edit") }}</RouterLink>
         <!-- 被駁回、離榜重審、被收回授權的卡：主鍵是「重新提交」，取消登記退到次要 -->
         <button
           v-if="card.registered && (card.status === 'rejected' || card.status === 'needs_review' || card.status === 'unshared')"
