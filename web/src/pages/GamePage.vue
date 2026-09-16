@@ -39,7 +39,7 @@ import CanvasMemory from "stage-canvas/components/canvas-memory.vue";
 import { applyMemoryDeleteResponse, normalizeMemoryAtoms, type MemoryAtom } from "stage-canvas/memory";
 import * as np from "@/game/notepad-client";
 import { ensureStage, remergeStageMessages } from "@/lib/stage-host";
-import { addDirective, deleteDirective, fetchDirectives, fetchRoleSettings, saveRoleSettings, updateDirective, type Directive, type RoleSettings } from "@/game/settings-client";
+import { addDirective, deleteDirective, fetchDirectives, fetchRoleSettings, saveConversationPersona, saveRoleSettings, updateDirective, type ConversationPersona, type Directive, type RoleSettings } from "@/game/settings-client";
 import { getCurrentInstance } from "vue";
 
 const route = useRoute();
@@ -111,6 +111,8 @@ const stageReady = ref(false);
 const instance = getCurrentInstance();
 const roleSettings = ref<RoleSettings | null>(null);
 const globalPersona = ref<{ userName?: string; userSex?: string; userDefine?: string }>({});
+/** 這個存檔那份人設（當前會話）；跟設定一起載入，換存檔後再開彈層會重載 */
+const conversationPersona = ref<ConversationPersona>({ userName: "", userSex: "", userDefine: "", exists: false });
 const personaSaving = ref(false);
 const personaError = ref("");
 const directives = ref<{ list: Directive[]; maxCount: number; maxLength: number; loading: boolean; loadFailed: boolean; draft: string; editingSourceId: string; editingText: string; error: string }>({ list: [], maxCount: 10, maxLength: 200, loading: false, loadFailed: false, draft: "", editingSourceId: "", editingText: "", error: "" });
@@ -139,7 +141,7 @@ async function openSheet(which: Exclude<Sheet, "">) {
   sheetToken = token;
   if (!(await ensureStageRuntime())) return;
   if (which === "model" || which === "persona") {
-    try { const b = await fetchRoleSettings(UPSTREAM_API, token, locale.value, roleId.value); roleSettings.value = b.settings; globalPersona.value = b.globalPersona; }
+    try { const b = await fetchRoleSettings(UPSTREAM_API, token, locale.value, roleId.value, conversationId.value); roleSettings.value = b.settings; globalPersona.value = b.globalPersona; conversationPersona.value = b.conversationPersona; }
     catch (e) { console.error("[game] role settings failed", e); }
   }
   if (which === "directives") { if (!conversationId.value) await restore(token).catch(() => {}); void loadDirectives(); }
@@ -291,7 +293,17 @@ async function onApplyModel(payload: Record<string, unknown>) {
 async function onSavePersona(value: { personaMode: string; userName: string; userSex: string; userDefine: string; sandboxLevel: string; jailbreak: string }) {
   const before = roleSettings.value; if (!before) return;
   personaSaving.value = true; personaError.value = "";
-  const after: RoleSettings = { ...before, personaMode: value.personaMode as RoleSettings["personaMode"], userName: value.userName, userSex: value.userSex as RoleSettings["userSex"], userDefine: value.userDefine, sandboxLevel: value.sandboxLevel, jailbreak: value.jailbreak };
+  let after: RoleSettings;
+  if (value.personaMode === "conversation") {
+    // 這個存檔那份先存（審核在那邊擋）；這張卡只記「用當前會話的」，卡片自己那三欄不動。
+    if (!conversationId.value) { personaSaving.value = false; personaError.value = t("canvas.panel.personaModeConversationNeedsChat"); return; }
+    const cp = await saveConversationPersona(UPSTREAM_API, sheetToken, locale.value, conversationId.value, conversationPersona.value, { userName: value.userName, userSex: value.userSex, userDefine: value.userDefine });
+    if (!cp.ok) { personaSaving.value = false; personaError.value = cp.reason || t("game.settings.saveFailed"); return; }
+    conversationPersona.value = cp.persona;
+    after = { ...before, personaMode: "conversation", sandboxLevel: value.sandboxLevel, jailbreak: value.jailbreak };
+  } else {
+    after = { ...before, personaMode: value.personaMode as RoleSettings["personaMode"], userName: value.userName, userSex: value.userSex as RoleSettings["userSex"], userDefine: value.userDefine, sandboxLevel: value.sandboxLevel, jailbreak: value.jailbreak };
+  }
   const r = await saveRoleSettings(UPSTREAM_API, sheetToken, locale.value, roleId.value, before, after);
   personaSaving.value = false;
   if (r.ok) { roleSettings.value = after; syncWorld(); say(t("game.settings.saved")); closeSheet(); } else personaError.value = r.reason || t("game.settings.saveFailed");
@@ -325,8 +337,9 @@ const personaSexOptions = computed(() => [{ value: "man", label: t("create.roleS
 const personaSandboxOptions = computed(() => ["light", "standard", "immersive", "deep"].map((v) => ({ value: v, label: t(`chat.sandbox_${v}`), hint: t(`chat.sandboxHint_${v}`) })));
 const personaLabels = computed(() => ({
   title: t("canvas.panel.persona"), cancel: t("main.cancel"), save: t("main.sure"), modeLabel: t("canvas.panel.personaMode"),
-  modeNameOnly: t("canvas.panel.personaModeNameOnly"), modeGlobal: t("canvas.panel.personaModeGlobal"), modeCustom: t("canvas.panel.personaModeCustom"),
+  modeNameOnly: t("canvas.panel.personaModeNameOnly"), modeGlobal: t("canvas.panel.personaModeGlobal"), modeCustom: t("canvas.panel.personaModeCustom"), modeConversation: t("canvas.panel.personaModeConversation"),
   modeNameOnlyHint: t("canvas.panel.personaModeNameOnlyHint"), modeGlobalHint: t("canvas.panel.personaModeGlobalHint"), modeCustomHint: t("canvas.panel.personaModeCustomHint"),
+  modeConversationHint: t("canvas.panel.personaModeConversationHint"), modeConversationNeedsChat: t("canvas.panel.personaModeConversationNeedsChat"),
   nickNameHint: session.me?.nickName ? t("canvas.panel.personaNickNameHint", { name: session.me.nickName }) : "",
   nameLabel: t("canvas.panel.personaName"), namePlaceholder: t("canvas.panel.personaNamePlaceholder"), sexLabel: t("canvas.panel.personaSex"),
   defineLabel: t("canvas.panel.personaDefine"), definePlaceholder: t("canvas.panel.personaDefinePlaceholder"), sandboxLabel: t("chat.sandboxLevel"), sandboxDesc: t("chat.sandboxLevelDesc"),
@@ -853,7 +866,7 @@ function installTestHooks() {
                           :show-thinking-process="true" :labels="modelPanelLabels" @apply="onApplyModel" @close="closeSheet" />
       </CanvasPopup>
       <CanvasPopup :open="sheet === 'persona'" :title="$t('canvas.panel.persona')" :close-label="$t('main.cancel')" @close="closeSheet">
-        <CanvasPersona v-if="sheet === 'persona' && roleSettings" :persona-mode="roleSettings.personaMode || 'global'" :global-persona="globalPersona" :nick-name="session.me?.nickName || ''"
+        <CanvasPersona v-if="sheet === 'persona' && roleSettings" :persona-mode="roleSettings.personaMode || 'global'" :global-persona="globalPersona" :conversation-persona="conversationPersona" :has-conversation="!!conversationId" :nick-name="session.me?.nickName || ''"
                        :user-name="roleSettings.userName" :user-sex="roleSettings.userSex" :user-define="roleSettings.userDefine" :sandbox-level="roleSettings.sandboxLevel" :jailbreak="roleSettings.jailbreak"
                        :default-jailbreak="''" :sex-options="personaSexOptions" :sandbox-options="personaSandboxOptions" :saving="personaSaving" :error="personaError" :labels="personaLabels"
                        @save="onSavePersona" @close="closeSheet" />
