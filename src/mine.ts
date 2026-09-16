@@ -1,6 +1,6 @@
 import { countByAuthor, listCards, toCard, registeredAmong } from "./cards";
 import { resolveMember } from "./members";
-import { DEFAULT_PROVIDER } from "./providers";
+import { type ProviderId, DEFAULT_PROVIDER } from "./providers";
 import { quotaFor, type Quota } from "./quota";
 import { type CardStatus, statusAmong } from "./review";
 import { gameEnabledAmong } from "./game";
@@ -68,17 +68,19 @@ export async function loadMine(
   env: Env,
   bearer: string,
   accountNumId: number,
-  opts: { page: number; pageSize: number; fresh: boolean; filter: MineFilter },
+  opts: { page: number; pageSize: number; fresh: boolean; filter: MineFilter; provider?: ProviderId },
 ): Promise<MineResult> {
-  const registeredTotal = await countByAuthor(env.DB, accountNumId);
-  const quota = await quotaFor(env.DB, accountNumId, Date.now());
+  const provider: ProviderId = opts.provider ?? DEFAULT_PROVIDER;
+  const registeredTotal = await countByAuthor(env.DB, accountNumId, provider);
+  const quota = await quotaFor(env.DB, accountNumId, Date.now(), provider);
 
   // 「已登記」整組直接從本站的庫出：那是完整的一組，翻頁也對，而且不必問上游。
   // 走上游那條路的話，篩的只會是「這一頁裡已登記的」——作者卡多的時候差很多。
   if (opts.filter === "listed") {
     // 作者條件是本站成員 id（0005 起）；第一次來就建成員，跟登記那條路一致
-    const memberId = await resolveMember(env.DB, DEFAULT_PROVIDER, accountNumId, Date.now());
+    const memberId = await resolveMember(env.DB, provider, accountNumId, Date.now());
     const { rows, hasNext } = await listCards(env.DB, {
+      provider,
       authorMemberId: memberId,
       sort: "new",
       limit: opts.pageSize,
@@ -137,7 +139,7 @@ export async function loadMine(
   }
 
   if (!roles) {
-    roles = await upstream.fetchMyRoles(env, bearer, opts.page, opts.pageSize);
+    roles = await upstream.fetchMyRoles(env, bearer, opts.page, opts.pageSize, provider);
     // 快取的是上游那一份原始清單，不含登記狀態——登記狀態下面才查，才不會連同被凍住。
     await cache.put(
       key,
@@ -147,7 +149,7 @@ export async function loadMine(
     );
   }
 
-  const registered = await registeredAmong(env.DB, roles.items.map((r) => r.roleId));
+  const registered = await registeredAmong(env.DB, roles.items.map((r) => r.roleId), provider);
   const statuses = await statusAmong(env.DB, roles.items.map((r) => r.roleId));
   const games = await gameEnabledAmong(env.DB, roles.items.map((r) => r.roleId));
   const items = roles.items

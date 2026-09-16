@@ -1,5 +1,6 @@
 import { env } from "cloudflare:test";
 import { type UpstreamRole, upstream } from "../src/upstream";
+import type { ProviderId } from "../src/providers";
 import { HttpError } from "../src/types";
 import { mineCache } from "../src/mine";
 import { boardCache } from "../src/index";
@@ -132,6 +133,21 @@ export function rolesOnMainSite(...fixtures: RoleFixture[]): void {
   };
 }
 
+/**
+ * 兩家供應商上各有哪些卡。同一個 roleId 在兩家可以是不同的卡——撞號正是要驗的事。
+ */
+export function rolesOnProviders(byProvider: Partial<Record<ProviderId, RoleFixture[]>>): void {
+  const maps = new Map<ProviderId, Map<string, UpstreamRole>>();
+  for (const [id, fixtures] of Object.entries(byProvider)) {
+    maps.set(id as ProviderId, new Map((fixtures ?? []).map((f) => [f.roleId, role(f)])));
+  }
+  upstream.fetchRole = async (_env, roleId, provider = "lunatalk") => {
+    const found = maps.get(provider)?.get(roleId);
+    if (!found) throw new HttpError(404, "role not found");
+    return found;
+  };
+}
+
 export function mainSiteDown(): void {
   upstream.fetchRole = async () => {
     throw new HttpError(502, "upstream role failed with 500");
@@ -142,8 +158,16 @@ export const bearer = (t = "author-token") => ({ Authorization: `Bearer ${t}` })
 
 /** token → 公開數字 ID 的對照，用來模擬「不同的人拿著不同的 token」。 */
 export function identities(map: Record<string, number>): void {
-  upstream.fetchMe = async (_env, token) => {
-    const id = map[token];
+  identitiesFor({ lunatalk: map });
+}
+
+/**
+ * 每家供應商各自一組 token → 公開數字 ID。同一個數字在兩家是兩個人，
+ * 假上游也必須照這個規矩答，否則測不出資料有沒有混。
+ */
+export function identitiesFor(byProvider: Partial<Record<ProviderId, Record<string, number>>>): void {
+  upstream.fetchMe = async (_env, token, provider = "lunatalk") => {
+    const id = byProvider[provider]?.[token];
     if (!id) throw new HttpError(401, "upstream rejected the token");
     return { accountNumId: id };
   };
