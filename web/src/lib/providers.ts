@@ -1,13 +1,5 @@
 /**
- * 供應商的顯示名稱。
- *
- * 本站自己不存卡、不跑模型、不管登入，這些都住在供應商那邊；成員、卡片都帶著供應商代號。
- * 現在只有一家，之後接第二家時在這裡加一列（代號、名稱），登入頁與作者頁就會多出它。
- * 名稱是專有名詞，各語言都一樣，不進翻譯檔。
+ * 舊的入口，只做轉接：供應商的真相在 lib/provider.ts（代號、顯示名、API 位址、能力）。
+ * 卡片與作者頁靠 providerName 把資料裡的代號翻成人看的名字，路徑保持不變。
  */
-/* i18n-ignore */
-export const PROVIDERS: { id: string; name: string }[] = [{ id: "lunatalk", name: "LunaTalk" }];
-
-export function providerName(id: string): string {
-  return PROVIDERS.find((p) => p.id === id)?.name ?? id;
-}
+export { PROVIDERS, providerName, type ProviderId } from "./provider";
