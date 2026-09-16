@@ -146,7 +146,7 @@ export interface FieldLimits {
   roleDetailDescMaxChars?: number;
   roleWelcomeMaxChars?: number;
   roleOutputContractMaxChars?: number;
-  jailbreakMaxChars?: number;
+  customInstructionsMaxChars?: number; jailbreakMaxChars?: number;
 }
 
 export function resolveLimits(remote: FieldLimits | null, language = ""): Record<string, number> {
@@ -158,7 +158,7 @@ export function resolveLimits(remote: FieldLimits | null, language = ""): Record
     ...(remote.roleDetailDescMaxChars ? { roleDetailDesc: remote.roleDetailDescMaxChars } : {}),
     ...(remote.roleWelcomeMaxChars ? { roleWelcome: remote.roleWelcomeMaxChars } : {}),
     ...(remote.roleOutputContractMaxChars ? { roleOutputContract: remote.roleOutputContractMaxChars } : {}),
-    ...(remote.jailbreakMaxChars ? { jailbreak: remote.jailbreakMaxChars } : {}),
+    ...((remote.customInstructionsMaxChars ?? remote.jailbreakMaxChars) ? { jailbreak: (remote.customInstructionsMaxChars ?? remote.jailbreakMaxChars)! } : {}),
   };
 }
 
@@ -261,7 +261,7 @@ export function draftFromRoleDetail(raw: Record<string, unknown>, fallbackLangua
   draft.prologue = strList(raw.rolePrologue ?? raw.prologue);
   draft.talkExample = readTalkExample(raw.talkExample);
   draft.roleOutputContract = str(raw.roleOutputContract);
-  draft.jailbreak = str(raw.jailbreak);
+  draft.jailbreak = str(raw.customInstructions ?? raw.jailbreak);
   return draft;
 }
 
