@@ -15,7 +15,7 @@ import { useRoute, useRouter } from "vue-router";
 import { pageTitle } from "@/lib/i18n";
 import { safeReturnTo } from "@/lib/login-return";
 import { currentProvider, PROVIDERS } from "@/lib/provider";
-import { chooseProvider, needsSwitchConfirm } from "@/lib/provider-switch";
+import { availableProviders, chooseProvider, needsSwitchConfirm } from "@/lib/provider-switch";
 import { useSession } from "@/lib/session";
 import { SITE } from "@/lib/site";
 
@@ -28,6 +28,8 @@ const returnTo = () => safeReturnTo(route.query.returnTo);
 
 /** 正在問「要換到另一家嗎」的那一家；null 表示沒有在問。 */
 const pendingSwitch = ref<(typeof PROVIDERS)[number] | null>(null);
+/** 這個部署有的那幾家。先給預設那家，問到再換上——登入頁不該為了一次請求空白著。 */
+const providers = ref<typeof PROVIDERS>([PROVIDERS[0]]);
 
 function start(provider: (typeof PROVIDERS)[number]) {
   // 換一家等於換一個帳號：已經登入的人要先看清楚這件事再決定。
@@ -47,8 +49,9 @@ async function go(id: (typeof PROVIDERS)[number]["id"]) {
   });
 }
 
-onMounted(() => {
+onMounted(async () => {
   document.title = pageTitle(t("login.title"));
+  providers.value = await availableProviders();
 });
 watch(() => [session.ready, session.me], () => {
   if (session.ready && session.me) void router.replace(returnTo());
@@ -64,7 +67,7 @@ watch(() => [session.ready, session.me], () => {
 
       <div class="login__providers">
         <button
-          v-for="p in PROVIDERS"
+          v-for="p in providers"
           :key="p.id"
           type="button"
           class="btn btn--lg login__provider"

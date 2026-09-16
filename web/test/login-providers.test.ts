@@ -6,7 +6,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { currentProvider, PROVIDERS, setProvider } from "@/lib/provider";
-import { chooseProvider, needsSwitchConfirm } from "@/lib/provider-switch";
+import { availableProviders, chooseProvider, needsSwitchConfirm } from "@/lib/provider-switch";
 
 beforeEach(() => {
   localStorage.clear();
@@ -51,5 +51,24 @@ describe("選一家", () => {
     const logout = vi.fn(async () => {});
     await chooseProvider("lunatalk", { login: async () => {}, logout, signedIn: true });
     expect(logout).not.toHaveBeenCalled();
+  });
+});
+
+describe("這個部署有哪幾家，由伺服器說了算", () => {
+  it("伺服器只回一家時，登入頁就只有一顆按鈕", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ providers: [{ id: "lunatalk", name: "LunaTalk" }] }), { headers: { "content-type": "application/json" } })));
+    const list = await availableProviders();
+    expect(list.map((p) => p.id)).toEqual(["lunatalk"]);
+  });
+
+  it("問不到就只顯示預設那家：寧可少一顆按鈕，也不要一顆按了就報錯的按鈕", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
+    const list = await availableProviders();
+    expect(list.map((p) => p.id)).toEqual(["lunatalk"]);
+  });
+
+  it("伺服器回了不認得的代號就忽略它", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ providers: [{ id: "lunatalk" }, { id: "openai" }] }), { headers: { "content-type": "application/json" } })));
+    expect((await availableProviders()).map((p) => p.id)).toEqual(["lunatalk"]);
   });
 });
