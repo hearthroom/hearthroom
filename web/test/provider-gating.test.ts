@@ -21,7 +21,8 @@ describe("能力表", () => {
     expect(can("editor")).toBe(true);
     setProvider("harbor");
     expect(can("editor")).toBe(true);
-    for (const f of ["worldbook", "regex", "validation", "chatTest", "library"] as const) expect(can(f), f).toBe(false);
+    expect(can("regex")).toBe(true);
+    for (const f of ["worldbook", "validation", "chatTest", "library"] as const) expect(can(f), f).toBe(false);
   });
 });
 
