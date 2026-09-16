@@ -57,7 +57,7 @@ const FEATURES: Record<ProviderId, Record<string, boolean>> = {
     outputContract: true, chatTest: true, previewPage: true, review: true,
   },
   harbor: {
-    editor: true, comments: false, worldbook: false, regex: false, library: false, persona: false,
+    editor: true, comments: false, worldbook: false, regex: true, library: false, persona: false,
     validation: false, deleteRole: false, tags: false, welcomeExtras: false,
     outputContract: false, chatTest: false, previewPage: false, review: false,
   },
