@@ -60,6 +60,9 @@ PROVIDER_API_BASE = "https://api.lunatalk.ai"
 # 對應的閘道；/v1/region 依 Cloudflare 判斷的國別把網址回給前端。本站 Worker 自己打供應商
 # 仍固定用上面那個（Worker 在邊緣跑）。留空就是所有地區都走主網址。
 PROVIDER_API_GATEWAYS = "CN=https://api.lunatalk.pro"
+# 第二家供應商。設了才存在：沒有這一列，/v1/providers 不會列出它，登入頁也不會長出那顆按鈕，
+# 帶 `X-Provider: harbor` 的請求一律 400。關掉第二家就是刪掉這一列，程式不用回退。
+PROVIDER_API_BASE_HARBOR = "https://api.harperharbor.com"
 # 每輪排程同步幾張卡。Worker 一次執行最多 50 個對外請求（實測 2026-09-07：批量 200 只成功 50 張，
 # 其餘全部失敗保留），所以一輪最多 50，留一點餘裕給其他請求。
 SYNC_BATCH_SIZE = "45"
