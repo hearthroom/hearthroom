@@ -1,4 +1,5 @@
 import { COMMUNITY_API, UPSTREAM_API } from "./config";
+import { currentProvider } from "./provider";
 import { hideParam } from "./hidden-tags";
 import { currentSurface } from "./track";
 import { i18n } from "./i18n";
@@ -113,7 +114,9 @@ const authHeaders = (token?: string): Record<string, string> =>
  *
  * 不影響邊緣快取：快取鍵是 URL，而存進去的回應沒有設 Vary，所以請求頭不參與比對。
  */
-const from = (): Record<string, string> => ({ "X-From": currentSurface() });
+// 每個對本站的請求都說清楚自己是哪一家：兩家的榜單、卡片、會員完全分開，
+// 後端不從 token 反推（兩家的格式沒有互斥保證）。
+const from = (): Record<string, string> => ({ "X-From": currentSurface(), "X-Provider": currentProvider() });
 
 /**
  * 「看的人開了成人內容嗎」。session 在載好本站身分後把它接上（開了才回 token），登出時拆掉；
