@@ -11,6 +11,7 @@ import HtmlCardFrame from "@/components/HtmlCardFrame.vue";
 import { ApiError, fetchBoard, fetchCard, fetchPlayerAsset, fetchPreviewPage, fetchRoleDetail } from "@/lib/api";
 import { renderWelcome } from "@/lib/welcome-render";
 import { providerName } from "@/lib/providers";
+import { can } from "@/lib/provider";
 import { useSession } from "@/lib/session";
 import { contentLang, pageTitle, zoneLabel } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
@@ -40,7 +41,8 @@ const welcome = ref("");
 const welcomeHtml = ref("");
 /** 這張卡能不能用遊戲模式玩（有精修世界，或開場白照 zzroles 協定寫） */
 const session = useSession();
-const showComments = ref(true);
+// 這一家有沒有評論這件事：Harbor 那邊沒有這條 API，掛上去只會對著空氣轉圈。
+const showComments = ref(can("comments"));
 const previewDoc = ref<unknown>(null);
 const previewSkin = ref("");
 const commentCount = ref<number | null>(null);
