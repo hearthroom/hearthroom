@@ -18,6 +18,9 @@ export const PROVIDERS: { id: ProviderId; name: string }[] = [
   { id: "harbor", name: "HarperHarbor" },
 ];
 
+/** 預設那家。沒選過就是它，地區閘道也只作用在它身上。 */
+export const DEFAULT_PROVIDER: ProviderId = "lunatalk";
+
 const STORE_KEY = "hearthroom.provider";
 
 /** 換家等於換帳號，所以上一家的憑證要一起清掉——留著的話下一個請求會拿 A 家的 token 去問 B 家。 */
@@ -68,9 +71,9 @@ function isProvider(raw: string | null): raw is ProviderId {
 export function currentProvider(): ProviderId {
   try {
     const raw = localStorage.getItem(STORE_KEY);
-    return isProvider(raw) ? raw : "lunatalk";
+    return isProvider(raw) ? raw : DEFAULT_PROVIDER;
   } catch {
-    return "lunatalk";
+    return DEFAULT_PROVIDER;
   }
 }
 
@@ -90,7 +93,7 @@ export function setProvider(id: ProviderId): void {
 }
 
 export function apiBaseOf(id: ProviderId = currentProvider()): string {
-  return API_BASE[id] ?? API_BASE.lunatalk;
+  return API_BASE[id] ?? API_BASE[DEFAULT_PROVIDER];
 }
 
 export function scopeOf(id: ProviderId = currentProvider()): string {
