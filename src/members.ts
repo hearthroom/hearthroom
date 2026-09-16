@@ -1,4 +1,4 @@
-import { DEFAULT_PROVIDER, type ProviderId } from "./providers";
+import { DEFAULT_PROVIDER, parseProvider, type ProviderId, requireConfigured } from "./providers";
 import { tagNamesFor } from "../shared/tag-catalog";
 import { type Env, HttpError } from "./types";
 import { upstream } from "./upstream";
@@ -260,9 +260,16 @@ type Ctx = { env: Env; req: { header: (k: string) => string | undefined } };
 export async function requireMember(c: Ctx): Promise<Member> {
   const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1];
   if (!bearer) throw new HttpError(401, "missing bearer token");
-  const me = await upstream.fetchMe(c.env, bearer);
-  const id = await resolveMember(c.env.DB, DEFAULT_PROVIDER, me.accountNumId, Date.now());
-  return { id, provider: DEFAULT_PROVIDER, externalId: me.accountNumId };
+  // token 屬於哪一家由呼叫端明說，不從 token 反推：兩家的格式沒有互斥保證。
+  const provider = providerOf(c);
+  const me = await upstream.fetchMe(c.env, bearer, provider);
+  const id = await resolveMember(c.env.DB, provider, me.accountNumId, Date.now());
+  return { id, provider, externalId: me.accountNumId };
+}
+
+/** 這個請求屬於哪一家供應商。沒帶標頭就是預設那家；不認得或這個部署沒設定的一律 400。 */
+export function providerOf(c: Ctx): ProviderId {
+  return requireConfigured(c.env, parseProvider(c.req.header("X-Provider")));
 }
 
 export async function requireReviewer(c: Ctx): Promise<Member> {

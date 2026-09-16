@@ -1,3 +1,4 @@
+import type { ProviderId } from "./providers";
 /**
  * 每週登記額度。
  *
@@ -34,26 +35,26 @@ export interface Quota {
 }
 
 /** 這週已經登記過的 role（去重）。 */
-export async function registeredThisWeek(db: D1Database, authorNumId: number, now: number): Promise<Set<string>> {
+export async function registeredThisWeek(db: D1Database, authorNumId: number, now: number, provider: ProviderId = "lunatalk"): Promise<Set<string>> {
   const { start, end } = weekWindow(now);
   const rows = await db
     .prepare(
-      "SELECT DISTINCT source_role_id FROM card_registrations WHERE author_num_id = ? AND registered_at >= ? AND registered_at < ?",
+      "SELECT DISTINCT source_role_id FROM card_registrations WHERE provider = ? AND author_num_id = ? AND registered_at >= ? AND registered_at < ?",
     )
-    .bind(authorNumId, start, end)
+    .bind(provider, authorNumId, start, end)
     .all<{ source_role_id: string }>();
   return new Set(rows.results.map((r) => r.source_role_id));
 }
 
-export async function quotaFor(db: D1Database, authorNumId: number, now: number): Promise<Quota> {
+export async function quotaFor(db: D1Database, authorNumId: number, now: number, provider: ProviderId = "lunatalk"): Promise<Quota> {
   const { start, end } = weekWindow(now);
-  const used = (await registeredThisWeek(db, authorNumId, now)).size;
+  const used = (await registeredThisWeek(db, authorNumId, now, provider)).size;
   return { limit: WEEKLY_LIMIT, used: Math.min(used, WEEKLY_LIMIT), weekStart: start, weekEnd: end };
 }
 
-export async function recordRegistration(db: D1Database, authorNumId: number, roleId: string, now: number): Promise<void> {
+export async function recordRegistration(db: D1Database, authorNumId: number, roleId: string, now: number, provider: ProviderId = "lunatalk"): Promise<void> {
   await db
-    .prepare("INSERT INTO card_registrations (author_num_id, source_role_id, registered_at) VALUES (?, ?, ?)")
-    .bind(authorNumId, roleId, now)
+    .prepare("INSERT INTO card_registrations (provider, author_num_id, source_role_id, registered_at) VALUES (?, ?, ?, ?)")
+    .bind(provider, authorNumId, roleId, now)
     .run();
 }
