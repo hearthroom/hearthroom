@@ -49,6 +49,8 @@ const commentCount = ref<number | null>(null);
 /** 同一位作者的其他作品：看完一張想接著看，不必先繞去作者頁 */
 const more = ref<CommunityCard[]>([]);
 const copied = ref(false);
+/** 剛複製的是連結還是卡片 ID：同一個小提示，字不一樣 */
+const copiedWhat = ref<"link" | "id">("link");
 
 type Tab = "home" | "comments";
 const tab = ref<Tab>("home");
@@ -125,6 +127,21 @@ async function load() {
   }
 }
 
+// 卡片 ID 就是上游的 roleId（網址裡那一串）：作者對外報卡、玩家在別處靠 ID 找卡都要它
+//（作者回報 2026-09-16）。拿不到剪貼簿就把它攤開讓人自己選。
+async function copyId() {
+  const id = card.value?.roleId ?? "";
+  if (!id) return;
+  try {
+    await navigator.clipboard.writeText(id);
+    copiedWhat.value = "id";
+    copied.value = true;
+    setTimeout(() => { copied.value = false; }, 1800);
+  } catch {
+    await confirmDialog({ title: t("card.id"), message: t("card.copyIdManual"), detail: id, single: true });
+  }
+}
+
 async function share() {
   const url = location.href;
   const title = card.value?.name ?? "";
@@ -138,6 +155,7 @@ async function share() {
   }
   try {
     await navigator.clipboard.writeText(url);
+    copiedWhat.value = "link";
     copied.value = true;
     track("share", { detail: "share_clipboard", subject });
     setTimeout(() => { copied.value = false; }, 1800);
@@ -218,6 +236,11 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
               </span>
               <svg v-if="card.author.handle" class="role__by-arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
             </component>
+            <button type="button" class="role__cid" :title="$t('card.copyId')" @click="copyId">
+              <span class="role__cid-label">{{ $t("card.id") }}</span>
+              <code class="role__cid-value mono">{{ card.roleId }}</code>
+              <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4" /><path d="M10.5 5.5V3.5a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2" fill="none" stroke="currentColor" stroke-width="1.4" /></svg>
+            </button>
           </div>
 
           <dl class="role__stats">
@@ -304,7 +327,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
     </template>
 
     <!-- live region 要先存在再改內容，讀屏器才會唸；所以常駐、用 hidden 切 -->
-    <div class="toast" role="status" :hidden="!copied">{{ copied ? $t("card.copied") : "" }}</div>
+    <div class="toast" role="status" :hidden="!copied">{{ copied ? $t(copiedWhat === "id" ? "card.idCopied" : "card.copied") : "" }}</div>
   </div>
 </template>
 
@@ -353,6 +376,19 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 .role__by-text strong { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .role__by-arrow { width: 16px; height: 16px; margin-left: auto; color: var(--text-3); flex: none; transition: transform var(--dur) var(--ease), color var(--dur) var(--ease); }
 .role__by:hover .role__by-arrow { transform: translateX(3px); color: var(--accent-text); }
+
+/* 卡片 ID：一整列可按，按了複製。字用等寬、可換行，手機上 UUID 才不會撐破側欄 */
+.role__cid {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0;
+  margin: 0; padding: 6px 10px; border: 0; border-radius: var(--r-md);
+  background: transparent; color: var(--text-2); font: inherit; text-align: left; cursor: pointer;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.role__cid:hover { background: var(--surface-2); color: var(--text); }
+.role__cid-label { flex: none; font-size: 12px; color: var(--text-3); }
+.role__cid-value { flex: 1; min-width: 0; font-size: 12px; overflow-wrap: anywhere; line-height: 1.4; }
+.role__cid svg { width: 14px; height: 14px; flex: none; color: var(--text-3); }
+.role__cid:hover svg { color: var(--accent-text); }
 
 .role__stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-2); padding: var(--s-3) 0; box-shadow: 0 1px 0 var(--line), 0 -1px 0 var(--line); }
 .role__stats .stat dd { font-size: 16px; }
