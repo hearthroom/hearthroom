@@ -23,6 +23,7 @@ describe("能力表", () => {
     expect(can("editor")).toBe(true);
     expect(can("regex")).toBe(true);
     expect(can("worldbook")).toBe(true);
+    expect(can("comments")).toBe(true);
     for (const f of ["validation", "chatTest", "library"] as const) expect(can(f), f).toBe(false);
   });
 });
