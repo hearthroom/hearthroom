@@ -411,7 +411,8 @@ const pendingAvatar = ref("");
 
 
 async function loadValidation() {
-  if (!can('validation')) return; // 這一家沒有校驗端點：用保守預設，不去打
+  // 這一家沒有校驗端點：用保守預設，不去打
+  if (!can('validation')) return;
   const token = await session.accessToken();
   if (!token || !roleId.value) return;
   try {
@@ -551,7 +552,8 @@ async function loadRegexRules(token: string) {
 
 /** 卡片存完才存規則：新卡要先有 roleId。沒改就不送。 */
 async function saveRegex(token: string, targetRoleId: string) {
-  if (!can('regex') || !regexDirty.value) return; // 匯入的卡可能帶正則進來；這一家存不了就不送
+  // 匯入的卡可能帶正則進來；這一家存不了就不送
+  if (!can('regex') || !regexDirty.value) return;
   const saved = await saveAuthorAsset(targetRoleId, ruleSetToAuthorAsset(regexSet.value, regexVersion.value), token);
   regexVersion.value = saved.version;
   regexOriginal.value = JSON.parse(JSON.stringify(regexSet.value));
