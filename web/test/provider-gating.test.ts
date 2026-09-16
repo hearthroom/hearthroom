@@ -24,7 +24,9 @@ describe("能力表", () => {
     expect(can("regex")).toBe(true);
     expect(can("worldbook")).toBe(true);
     expect(can("comments")).toBe(true);
-    for (const f of ["validation", "chatTest", "library"] as const) expect(can(f), f).toBe(false);
+    for (const f of ["validation", "deleteRole", "tags", "previewPage", "outputContract", "welcomeExtras"] as const) expect(can(f), f).toBe(true);
+    // 圖庫等物件儲存接上、試玩等對話引擎、審核等機器人
+    for (const f of ["chatTest", "library", "review"] as const) expect(can(f), f).toBe(false);
   });
 });
 
