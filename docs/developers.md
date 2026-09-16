@@ -24,6 +24,22 @@ The documentation lives next to the code. A test in the repository (`web/test/pr
 | Macros | `{{user}}` and `{{char}}` inside card text are substituted by the provider before the text reaches the model, case-insensitively. `{{char}}` becomes the character name; `{{user}}` follows the persona precedence below. |
 | User-Agent | The site's server-side and scheduled requests carry a fixed `User-Agent`. Providers should not treat it as browser traffic to be challenged. |
 
+### A second code table
+
+A provider does not have to reuse the code names above. The second provider the site runs
+against numbers the same situations differently — it says `forbidden` where the table above
+says `permission_denied`, and `invalid_request` where that one says `invalid_arguments` —
+so the site translates both tables. If your codes mean the same thing as an existing one,
+tell us and we map them to the same sentence; a code nobody has mapped reaches the user as
+the bare code, which helps no one.
+
+Mapped onto sentences the site already had: `invalid_request`, `forbidden`, `not_the_author`,
+`role_not_found`, `asset_not_found`, `account_not_found`, `grantee_not_found`,
+`role_not_passed_review`, `temporarily_unavailable`, `file_too_large`, `upload_not_found`,
+`size_mismatch`. Given their own: `insufficient_scope` (the token lacks a scope the site
+needs — the user is told to sign in again and approve it), `unsupported_media_type`,
+`invalid_cursor`, `quota_exceeded`, `asset_not_passed_review`.
+
 ## Capability levels
 
 A provider does not have to implement everything at once. Each level unlocks a set of site features.
