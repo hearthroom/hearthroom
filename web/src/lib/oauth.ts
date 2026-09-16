@@ -1,4 +1,5 @@
-import { UPSTREAM_API, OAUTH_RESOURCE } from "./config";
+import { UPSTREAM_API, oauthResource } from "./config";
+import { currentProvider, scopeOf } from "./provider";
 import { track } from "./track";
 import { i18n } from "./i18n";
 import { SITE } from "./site";
@@ -42,7 +43,9 @@ async function s256(verifier: string): Promise<string> {
 }
 
 async function clientId(): Promise<string> {
-  const cached = localStorage.getItem(STORE.client);
+  // 客戶端是在供應商那邊註冊的，一家一組；共用一組等於拿 A 家的 client 去 B 家換 token。
+  const cacheKey = `${STORE.client}.${currentProvider()}`;
+  const cached = localStorage.getItem(cacheKey);
   if (cached) return cached;
 
   const res = await fetch(`${UPSTREAM_API}/oauth/register`, {
@@ -58,7 +61,7 @@ async function clientId(): Promise<string> {
   if (!res.ok) throw new Error(t("auth.registerFailed", { status: res.status }));
   const id = ((await res.json()) as { client_id?: string }).client_id;
   if (!id) throw new Error(t("auth.noClientId"));
-  localStorage.setItem(STORE.client, id);
+  localStorage.setItem(cacheKey, id);
   return id;
 }
 
@@ -77,8 +80,11 @@ export async function beginLogin(returnTo: string): Promise<void> {
     state,
     code_challenge: await s256(verifier),
     code_challenge_method: "S256",
-    resource: OAUTH_RESOURCE,
+    resource: oauthResource(),
   });
+  // Harbor 不給 scope 只會拿到唯讀，寫不了卡；LunaTalk 的客戶端不帶（它的預設就是全部）。
+  const scope = scopeOf();
+  if (scope) params.set("scope", scope);
   // 走備用網域時，登入頁也要換成備用網域的（邊緣代理會把 Host 改寫，伺服器光看 Host 判不出來）
   if (/\/\/api\.lunatalk\.pro(?::\d+)?$/i.test(UPSTREAM_API)) params.set("login_site", "pro");
   location.assign(`${UPSTREAM_API}/oauth/authorize?${params}`);
@@ -97,7 +103,7 @@ async function exchange(body: Record<string, string>): Promise<TokenPair> {
   const res = await fetch(`${UPSTREAM_API}/oauth/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ ...body, client_id: await clientId(), resource: OAUTH_RESOURCE }),
+    body: new URLSearchParams({ ...body, client_id: await clientId(), resource: oauthResource() }),
   });
   if (!res.ok) {
     // 4xx 是「這張憑證不算數」，5xx 與斷網是「現在問不到」。只有前者該把人登出——

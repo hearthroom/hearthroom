@@ -1,3 +1,5 @@
+import { apiBaseOf } from "./provider";
+
 /**
  * 角色卡來源服務的 API 位址。
  *
@@ -5,16 +7,26 @@
  * 連線來源判國別），那些地區改用對應的閘道。結果記在這個分頁的 sessionStorage，重新整理不用再問。
  * 自架時改 VITE_PROVIDER_API_BASE 就能指向別的供應商部署。
  */
-const DEFAULT_API: string = import.meta.env.VITE_PROVIDER_API_BASE ?? "https://api.lunatalk.ai";
+const DEFAULT_API: string = apiBaseOf("lunatalk");
 
-export let UPSTREAM_API: string = DEFAULT_API;
+/**
+ * 目前這個會話打的上游。它跟著會話的供應商走（見 lib/provider.ts）：換一家等於換一個帳號，
+ * 連帶換一個上游。地區閘道只作用在預設那家——那是為了繞開特定網域的封鎖，不是通用轉送。
+ */
+export let UPSTREAM_API: string = apiBaseOf();
+
+/** 換過供應商之後重新指向那一家；換家的流程要叫一次，否則請求還打在舊的那家。 */
+export function useProviderUpstream(): string {
+  UPSTREAM_API = apiBaseOf();
+  return UPSTREAM_API;
+}
 
 /**
  * OAuth resource indicator（RFC 8707）：換到的 token 只對這個資源有效。
  * 這是邏輯識別字，不跟著實際打的網域走：授權伺服器只認這一個字串，同一顆 token 在主網域與
  * 備用網域都有效，切換網域不用重新登入。
  */
-export const OAUTH_RESOURCE = `${DEFAULT_API}/open/v1`;
+export const oauthResource = (): string => `${apiBaseOf()}/open/v1`;
 
 /** 本站自己的 API 與前端同源，所以是相對路徑，不需要處理 CORS。 */
 export const COMMUNITY_API = "/v1";
