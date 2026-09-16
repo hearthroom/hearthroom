@@ -5865,6 +5865,120 @@
         }
       }
     },
+    "/open/v1/player/conversation-persona": {
+      "get": {
+        "operationId": "getConversationPersona",
+        "tags": [
+          "Player settings"
+        ],
+        "summary": "Per-conversation player persona",
+        "description": "The persona saved for one conversation (chat save). Applies only while the card's `personaMode` is `conversation`; a conversation that has none falls back to the card's own three fields. A conversation that is not the caller's reads as `exists=false` with empty fields.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Persona (all fields empty and `exists=false` when never saved).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationPersona"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`conversationId is required`, or a database error; `{\"error\": \"<text>\"}`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/player/conversation-persona/save": {
+      "post": {
+        "operationId": "saveConversationPersona",
+        "tags": [
+          "Player settings"
+        ],
+        "summary": "Save per-conversation player persona",
+        "description": "Partial update: only fields present in the body are changed (an explicit empty string clears a field); the row is created on first save. Same limits and moderation as the global persona: `userName` + `userDefine` are moderated together whenever either changes and the combination is non-empty. Saving does not switch the card to this persona — set `personaMode: conversation` through role-settings/save afterwards.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConversationPersonaSaveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved persona plus `success: \"ok\"`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationPersonaSaveResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed JSON, `conversationId is required`, `conversation not found` (not the caller's), `userName` > 20 characters, `userDefine` > 1000 characters (localized messages), `userSex must be man, women, other or empty`, moderation rejection, or database error. Body `{\"error\": \"<text>\"}`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/open/v1/player/preference": {
       "get": {
         "operationId": "getPlayerPreference",
@@ -6014,6 +6128,15 @@
               "format": "uuid"
             },
             "description": "Card id. Technically not validated: empty/unknown ids return defaults."
+          },
+          {
+            "name": "conversationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional. When given (and the conversation belongs to the caller), the response also carries `conversationPersona` for it so one request loads everything the persona sheet shows."
           }
         ],
         "responses": {
@@ -13664,9 +13787,10 @@
             "enum": [
               "name_only",
               "global",
-              "custom"
+              "custom",
+              "conversation"
             ],
-            "description": "Which persona applies to this card. Always resolved: stored value if valid; otherwise `custom` if any of userName/userSex/userDefine is non-empty, else `global`. `name_only` = only the name is sent to the model; `global` = the account persona (/player/persona); `custom` = this card's three fields."
+            "description": "Which persona applies to this card. Always resolved: stored value if valid; otherwise `custom` if any of userName/userSex/userDefine is non-empty, else `global`. `name_only` = only the name is sent to the model; `global` = the account persona (/player/persona); `custom` = this card's three fields; `conversation` = the per-conversation persona (/player/conversation-persona), falling back to this card's three fields while that conversation has none."
           },
           "compactSections": {
             "type": "string",
@@ -13724,6 +13848,9 @@
           "IsNoLimitFree": {
             "type": "boolean",
             "description": "Internal transient field; always false. Ignore."
+          },
+          "conversationPersona": {
+            "$ref": "#/components/schemas/ConversationPersona"
           }
         }
       },
@@ -13820,9 +13947,10 @@
             "enum": [
               "name_only",
               "global",
-              "custom"
+              "custom",
+              "conversation"
             ],
-            "description": "If omitted but any of userName/userSex/userDefine is present, `custom` is stored."
+            "description": "If omitted but any of userName/userSex/userDefine is present, `custom` is stored. `conversation` selects the per-conversation persona (/player/conversation-persona); save that persona first, then set the mode."
           }
         }
       },
@@ -18684,6 +18812,101 @@
           "modificationDate": {
             "type": "integer",
             "description": "Unix seconds."
+          }
+        }
+      },
+      "ConversationPersona": {
+        "type": "object",
+        "required": [
+          "userName",
+          "userSex",
+          "userDefine",
+          "exists"
+        ],
+        "description": "Per-conversation persona: one per chat save. Only used while the card's `personaMode` is `conversation`. `exists=false` means the conversation has never saved one (or the conversation is not the caller's), in which case the card's own three fields apply.",
+        "properties": {
+          "userName": {
+            "type": "string",
+            "maxLength": 20,
+            "description": "What the AI calls the player in this conversation."
+          },
+          "userSex": {
+            "type": "string",
+            "enum": [
+              "",
+              "man",
+              "women",
+              "other"
+            ]
+          },
+          "userDefine": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Player self-introduction for this conversation."
+          },
+          "exists": {
+            "type": "boolean",
+            "description": "false when this conversation has no persona of its own."
+          }
+        }
+      },
+      "ConversationPersonaSaveRequest": {
+        "type": "object",
+        "required": [
+          "conversationId"
+        ],
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "description": "Must belong to the caller."
+          },
+          "userName": {
+            "type": "string",
+            "maxLength": 20,
+            "description": "Omit to keep; empty string clears."
+          },
+          "userSex": {
+            "type": "string",
+            "enum": [
+              "",
+              "man",
+              "women",
+              "other"
+            ]
+          },
+          "userDefine": {
+            "type": "string",
+            "maxLength": 1000
+          }
+        }
+      },
+      "ConversationPersonaSaveResponse": {
+        "type": "object",
+        "required": [
+          "userName",
+          "userSex",
+          "userDefine",
+          "exists",
+          "success"
+        ],
+        "properties": {
+          "userName": {
+            "type": "string"
+          },
+          "userSex": {
+            "type": "string"
+          },
+          "userDefine": {
+            "type": "string"
+          },
+          "exists": {
+            "type": "boolean"
+          },
+          "success": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
           }
         }
       }

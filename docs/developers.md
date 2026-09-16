@@ -107,12 +107,13 @@ There is no "select model" endpoint. Selection is a value you store or send:
 
 The provider must resolve `{{user}}` (and how the character addresses the player) in this order:
 
-1. the card-specific persona (`player/role-settings` with `personaMode = custom`);
-2. the account-wide persona (`player/persona`; `personaMode = global`, or when the card has never been configured);
-3. the account nickname only (`personaMode = name_only`, or when the fields above are empty);
-4. a language-dependent generic address ("you") when even the nickname is empty.
+1. the per-conversation persona (`player/conversation-persona` with `personaMode = conversation`), falling back to the card-specific fields while that conversation has none;
+2. the card-specific persona (`player/role-settings` with `personaMode = custom`);
+3. the account-wide persona (`player/persona`; `personaMode = global`, or when the card has never been configured);
+4. the account nickname only (`personaMode = name_only`, or when the fields above are empty);
+5. a language-dependent generic address ("you") when even the nickname is empty.
 
-`personaMode` is one of `name_only`, `global`, `custom`. When absent: `custom` if any card-specific field is set, otherwise `global`. Limits: nickname ≤ 20 characters, self-description ≤ 1000 characters; both go through the provider's content moderation, and a rejection carries the reason in `message`.
+`personaMode` is one of `name_only`, `global`, `custom`, `conversation`. When absent: `custom` if any card-specific field is set, otherwise `global`. `conversation` exists for world cards where each chat save plays a different race or look: the persona is keyed by conversation, so switching saves switches personas; a fresh save starts from the card-specific fields until the player edits it. Limits: nickname ≤ 20 characters, self-description ≤ 1000 characters; both go through the provider's content moderation, and a rejection carries the reason in `message`.
 
 ## Adult content
 
