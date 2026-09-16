@@ -16,18 +16,25 @@ beforeEach(() => {
 afterEach(() => setProvider("lunatalk"));
 
 describe("能力表", () => {
-  it("建卡與編輯是一項能力：LunaTalk 有，Harbor 沒有", () => {
+  it("建卡與編輯是一項能力，兩家都有；編輯頁裡靠別家端點的功能 Harbor 沒有", () => {
     setProvider("lunatalk");
     expect(can("editor")).toBe(true);
     setProvider("harbor");
-    expect(can("editor")).toBe(false);
+    expect(can("editor")).toBe(true);
+    for (const f of ["worldbook", "regex", "validation", "chatTest", "library"] as const) expect(can(f), f).toBe(false);
   });
 });
 
 describe("路由擋下那一家沒有的頁", () => {
+  it("建卡與編輯兩家都進得去", () => {
+    for (const id of ["lunatalk", "harbor"] as const) {
+      setProvider(id);
+      expect(can(router.resolve("/create").meta.feature as never), id).toBe(true);
+      expect(can(router.resolve("/cards/abc/edit").meta.feature as never), id).toBe(true);
+    }
+  });
+
   const cases: [string, string][] = [
-    ["/create", "editor"],
-    ["/cards/abc/edit", "editor"],
     ["/resources", "library"],
   ];
 
