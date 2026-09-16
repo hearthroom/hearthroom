@@ -44,7 +44,7 @@ export async function fetchRoleSettings(base: string, token: string, lang: strin
       personaMode: asText(raw.personaMode) as RoleSettings["personaMode"],
       userName: asText(raw.userName), userSex: asText(raw.userSex) as RoleSettings["userSex"], userDefine: asText(raw.userDefine),
       selectModel: asText(raw.selectModel), context: Number.isFinite(ctx) && ctx > 0 ? ctx : 1, thinkingDepth: asText(raw.thinkingDepth),
-      sandboxLevel: asText(raw.sandboxLevel), jailbreak: asText(raw.jailbreak),
+      sandboxLevel: asText(raw.sandboxLevel), jailbreak: asText(raw.customInstructions ?? raw.jailbreak),
     },
     globalPersona: { userName: asText(gp.userName), userSex: asText(gp.userSex), userDefine: asText(gp.userDefine) },
     conversationPersona: readConversationPersona(raw.conversationPersona),
@@ -68,7 +68,7 @@ export async function saveRoleSettings(base: string, token: string, lang: string
   for (const k of Object.keys(after) as (keyof RoleSettings)[]) if (after[k] !== before[k]) (changed as Record<string, unknown>)[k] = after[k];
   if (!Object.keys(changed).length) return { ok: true };
   if (!("personaMode" in changed) && ("userName" in changed || "userSex" in changed || "userDefine" in changed) && after.personaMode) changed.personaMode = after.personaMode;
-  const res = await fetch(`${base}/open/v1/player/role-settings/save`, { method: "POST", headers: headers(token, lang), body: JSON.stringify({ roleId, ...changed }) });
+  const res = await fetch(`${base}/open/v1/player/role-settings/save`, { method: "POST", headers: headers(token, lang), body: JSON.stringify({ roleId, ...Object.fromEntries(Object.entries(changed).map(([key, value]) => [key === "jailbreak" ? "customInstructions" : key, value])) }) });
   if (res.ok) return { ok: true };
   const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
   return { ok: false, reason: String(body.error || body.message || res.status) };

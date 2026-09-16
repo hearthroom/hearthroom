@@ -194,3 +194,22 @@ describe("uploadImage", () => {
     expect(FakeXHR.instances).toEqual([]);
   });
 });
+
+it("建立上游設定只送協定欄位，不把社群分級一起帶去", async () => {
+ const fetchMock=vi.fn(async()=>new Response(JSON.stringify({roleId:"r1"}),{status:200}));vi.stubGlobal("fetch",fetchMock);
+ const draft={roleName:"Support",language:"en",contentRatingIntent:"r18",contentRating:"R18",isR18:true,nsfw:true};
+ await createRole(draft,"token");
+ const init=(fetchMock.mock.calls[0] as unknown as [string,RequestInit])[1];
+ expect(JSON.parse(String(init.body))).toEqual({roleName:"Support",language:"en",origin:"hearthroom"});
+});
+
+it("sends customInstructions while keeping the editor draft intact", async () => {
+  const { patchRoleDocument } = await import("../src/lib/api");
+  const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }));
+  vi.stubGlobal("fetch", fetchMock);
+  const draft = { jailbreak: "", roleDesc: "keep" };
+  await patchRoleDocument("r1", draft, "tok");
+  const init = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1];
+  expect(JSON.parse(String(init.body))).toEqual({ fields: { customInstructions: "", roleDesc: "keep" } });
+  expect(draft).toEqual({ jailbreak: "", roleDesc: "keep" });
+});

@@ -36,7 +36,7 @@ const CODE_KEY: Record<string, string> = {
   role_desc_too_long: "error.fieldTooLong",
   role_detail_too_long: "error.fieldTooLong",
   role_welcome_too_long: "error.fieldTooLong",
-  jailbreak_too_long: "error.fieldTooLong",
+  custom_instructions_too_long: "error.fieldTooLong",
   role_output_contract_too_long: "error.fieldTooLong",
   upload_invalid: "error.uploadRetry",
   upload_expired: "error.uploadExpired",
@@ -105,7 +105,8 @@ const SITE_CODE_KEY: Record<string, string> = {
 const looksLikeCode = (raw: string): boolean => /^[a-z][a-z0-9_]*$/.test(raw);
 
 export function describeApiError(status: number, raw: string, detail?: LimitDetail): string {
-  const text = (raw || "").trim();
+  const legacy = (raw || "").trim();
+  const text = legacy === "jailbreak_too_long" ? "custom_instructions_too_long" : legacy;
   const byDetail = text ? describeLimit(text, detail) : null;
   if (byDetail) return byDetail;
   if (text && (CODE_KEY[text] || SITE_CODE_KEY[text])) return i18n.global.t((CODE_KEY[text] ?? SITE_CODE_KEY[text])!);
@@ -118,6 +119,7 @@ export function describeApiError(status: number, raw: string, detail?: LimitDeta
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string; detail?: LimitDetail };
+    if (body.detail?.field === "customInstructions") body.detail.field = "jailbreak";
     const raw = body.error ?? body.message ?? "";
     throw new ApiError(res.status, describeApiError(res.status, raw, body.detail), body.error ?? "");
   }
@@ -257,7 +259,7 @@ export interface ReviewDetail {
     document: {
       roleName: string; userName: string; roleDesc: string; roleAvatar: string; roleBackground: string;
       roleDetailDesc: string; roleTag: string; roleType: string; roleSex: string; roleSpeech: string;
-      language: string; isR18: boolean; jailbreak: string; talkExample: string; roleOutputContract: string;
+      language: string; customInstructions?: string; jailbreak?: string; talkExample: string; roleOutputContract: string;
     };
     greetings: { welcome: string; alternates: string[]; prologue: string[] };
     worldbook: {
@@ -544,7 +546,7 @@ export async function createRole(draft: { roleName: string; language?: string },
     await fetch(`${UPSTREAM_API}/open/v1/role`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders(token) },
-      body: JSON.stringify({ ...draft, origin: "hearthroom" }),
+      body: JSON.stringify({ roleName: draft.roleName, language: draft.language, origin: "hearthroom" }),
     }),
   );
 }
@@ -637,7 +639,7 @@ export interface ValidationReport {
       roleDetailDescMaxChars?: number;
       roleWelcomeMaxChars?: number;
       roleOutputContractMaxChars?: number;
-      jailbreakMaxChars?: number;
+      customInstructionsMaxChars?: number; jailbreakMaxChars?: number;
     };
   };
 }
@@ -653,7 +655,10 @@ export async function patchRoleDocument(roleId: string, fields: RoleDocumentFiel
     await fetch(`${UPSTREAM_API}/open/v1/role/${encodeURIComponent(roleId)}/document`, {
       method: "POST",
       headers: writeHeaders(token),
-      body: JSON.stringify({ fields }),
+      body: JSON.stringify({ fields: (() => {
+        const { jailbreak, ...rest } = fields;
+        return jailbreak === undefined ? rest : { ...rest, customInstructions: jailbreak };
+      })() }),
     }),
   );
 }

@@ -6112,7 +6112,7 @@
           "Player settings"
         ],
         "summary": "Per-card player settings",
-        "description": "The caller's settings for one card: persona fields, selected model/lane, context tier, thinking depth, memory/compaction switches, voice and display options. These values are what the chat turn actually reads (unlike /player/preference which is purely client-side appearance). If the caller has never saved settings for this card the response is a defaults object (200, not 404); an unknown `roleId` also yields defaults. `selectModel` is filled with the platform default when empty. For non-members `autoAudio` and `permanentMemory` are forced to false. The response is produced by reflecting the stored row, so it also carries a few legacy/internal keys documented below; `accountId` and the custom `jailbreak` are removed by the response scrub.",
+        "description": "The caller's settings for one card: persona fields, selected model/lane, context tier, thinking depth, memory/compaction switches, voice and display options. These values are what the chat turn actually reads (unlike /player/preference which is purely client-side appearance). If the caller has never saved settings for this card the response is a defaults object (200, not 404); an unknown `roleId` also yields defaults. `selectModel` is filled with the platform default when empty. For non-members `autoAudio` and `permanentMemory` are forced to false. The response is produced by reflecting the stored row, so it also carries a few legacy/internal keys documented below; `accountId` and the custom `customInstructions` are removed by the response scrub.",
         "security": [
           {
             "userToken": []
@@ -6180,7 +6180,7 @@
           "Player settings"
         ],
         "summary": "Save per-card player settings",
-        "description": "Partial update: every field is optional; fields absent from the body keep their stored value, fields present (even empty string / false / empty array) are written. On first save for a card a row is created with defaults for omitted fields (`speechSpeed` 1.0, `limitLevel` \"medium\", `context` 1, `autoCompactEnabled` true, everything else empty/false). Validation: `systemPrompt` <= 2000 characters; `userName` <= 20; `userDefine` <= 1000; `jailbreak` <= 1500 characters (500 for zh-Hans/zh-Hant `language`) and is trimmed; `personaMode` must be one of the enum values. Moderation: `userName`+`userDefine` are moderated together when either changes; a non-empty changed `jailbreak` is moderated. No server-side enum validation exists for `selectModel`, `context`, `thinkingDepth`, `sandboxLevel`, `limitLevel`, `promptStrategy`, `templateStyle` or `roleSpeech` — send values taken from /models. personaMode derivation when absent: if any of `userName`/`userSex`/`userDefine` is present the mode is set to `custom`; if none is present the mode is left unchanged.",
+        "description": "Partial update: every field is optional; fields absent from the body keep their stored value, fields present (even empty string / false / empty array) are written. On first save for a card a row is created with defaults for omitted fields (`speechSpeed` 1.0, `limitLevel` \"medium\", `context` 1, `autoCompactEnabled` true, everything else empty/false). Validation: `systemPrompt` <= 2000 characters; `userName` <= 20; `userDefine` <= 1000; `customInstructions` <= 1500 characters (500 for zh-Hans/zh-Hant `language`) and is trimmed; `personaMode` must be one of the enum values. Moderation: `userName`+`userDefine` are moderated together when either changes; a non-empty changed `customInstructions` is moderated. No server-side enum validation exists for `selectModel`, `context`, `thinkingDepth`, `sandboxLevel`, `limitLevel`, `promptStrategy`, `templateStyle` or `roleSpeech` — send values taken from /models. personaMode derivation when absent: if any of `userName`/`userSex`/`userDefine` is present the mode is set to `custom`; if none is present the mode is left unchanged.",
         "security": [
           {
             "userToken": []
@@ -6237,7 +6237,7 @@
           "Roles"
         ],
         "summary": "Create a private role card",
-        "description": "Creates a new role card owned by the bearer account with `roleVisibility=private` and `reviewStatus=not_submitted`. Only `roleName` is required; content fields are filled afterwards with `POST /role/{roleId}/document` and `PATCH /role/{roleId}/welcome`. `language` is normalized (`en`, `zh-Hant`, `zh-Hans`, `ja`, `ko`, `all`; common aliases such as `zh-TW`, `zh-CN`, `jp`, `kr` are accepted); when omitted the account's language is used, falling back to `zh-Hans`. The card language decides the per-field character limits enforced later (see `GET /role/validate`). `cardType` defaults to `story` and is stored as the card's `roleType`. `contentRatingIntent=r18` marks the card `isR18=true`; any other value leaves it false. `origin` is a self-declared creation source: only whitelisted values (currently `hearthroom`) are stored as the card's `creationMethod`; anything else falls back to `open_api`. The card is stored with platform scope `from=all`. `idempotencyKey` is accepted but not consumed by the create path (no deduplication is performed).",
+        "description": "Creates a new role card owned by the bearer account with `roleVisibility=private` and `reviewStatus=not_submitted`. Only `roleName` is required; content fields are filled afterwards with `POST /role/{roleId}/document` and `PATCH /role/{roleId}/welcome`. `language` is normalized (`en`, `zh-Hant`, `zh-Hans`, `ja`, `ko`, `all`; common aliases such as `zh-TW`, `zh-CN`, `jp`, `kr` are accepted); when omitted the account's language is used, falling back to `zh-Hans`. The card language decides the per-field character limits enforced later (see `GET /role/validate`). `cardType` defaults to `story` and is stored as the card's `roleType`. `origin` is a self-declared creation source: only whitelisted values (currently `hearthroom`) are stored as the card's `creationMethod`; anything else falls back to `open_api`. The card is stored with platform scope `from=all`. `idempotencyKey` is accepted but not consumed by the create path (no deduplication is performed).",
         "security": [
           {
             "userToken": []
@@ -6480,7 +6480,7 @@
           "Roles"
         ],
         "summary": "Get a role card by id",
-        "description": "Returns the full role card record for `roleId`. Guest-readable: no Authorization header is required; when a bearer token is present it is used to compute viewer-relative fields (`isFollow`, `isUserFollow`, `hasConversation`) and to decide owner-only fields. There is no visibility check on this route — any caller who knows the roleId (private, waitReview or public) receives the card. Owner-only fields: `roleDetailDesc` and `roleOutputContract` are returned as empty strings to anyone who is not the author (localized variants `roleDetailDescEn/Ja/Ko` and `talkExample` are not blanked by this route). `jailbreak` and `accountId` are always removed by the response scrubber. On this v1 route the server does not apply language conversion to `roleName`/`roleDesc`/`roleWelcome` (author text is returned verbatim); only the avatar/background asset host is rewritten according to the `language` header. `roleTag` and `talkExample` are parsed into arrays here (unlike `/role/mine`). Admin viewers may receive additional moderation keys (not documented). The optional request header `X-XMLV3-Feature-Level` (positive integer, default 1) declares the client's renderer feature level and drives `xmlV3Compatibility`.",
+        "description": "Returns the full role card record for `roleId`. Guest-readable: no Authorization header is required; when a bearer token is present it is used to compute viewer-relative fields (`isFollow`, `isUserFollow`, `hasConversation`) and to decide owner-only fields. There is no visibility check on this route — any caller who knows the roleId (private, waitReview or public) receives the card. Owner-only fields: `roleDetailDesc` and `roleOutputContract` are returned as empty strings to anyone who is not the author (localized variants `roleDetailDescEn/Ja/Ko` and `talkExample` are not blanked by this route). `customInstructions` and `accountId` are always removed by the response scrubber. On this v1 route the server does not apply language conversion to `roleName`/`roleDesc`/`roleWelcome` (author text is returned verbatim); only the avatar/background asset host is rewritten according to the `language` header. `roleTag` and `talkExample` are parsed into arrays here (unlike `/role/mine`). Admin viewers may receive additional moderation keys (not documented). The optional request header `X-XMLV3-Feature-Level` (positive integer, default 1) declares the client's renderer feature level and drives `xmlV3Compatibility`.",
         "security": [],
         "parameters": [
           {
@@ -7194,7 +7194,7 @@
           "Roles"
         ],
         "summary": "Write many role fields in one request",
-        "description": "Applies a partial document to an owned private role in a single write. Every key under `fields` is optional; absent keys are untouched, present keys overwrite (an empty string clears the field where allowed). `fieldPatches` carries anchored text edits (`operations`) applied on top of the current value of the corresponding field and is the way to edit long text without resending it. At least one key under `fields` must be present (`nothing to update` otherwise); if nothing is effectively changed (e.g. only a blank `roleName`), the service answers `invalid_arguments`. Rules: `roleName` blank is ignored; `roleAvatar`/`roleBackground` blank is ignored, otherwise must be an http(s) URL (`invalid_asset_url`); `roleSex` accepts `man|women|other` and aliases (`male`, `female`, `woman`, `男`, `女`, `其他`; empty clears; else `invalid_role_sex`); `talkExample[].roleType` accepts `ai|user` (`assistant` maps to `ai`) and `content` must be non-blank (`invalid_talk_example`); `roleTag` replaces the whole tag list (each non-blank string becomes a platform tag `{icon:\"\", text, type:2}`); `jailbreak` is writable here but is never returned by v1 read routes. Character limits depend on the card language (see `GET /role/validate` → `tokenBudget.limits`): roleDesc 500 (English 2500), roleDetailDesc 10000 (English 50000), roleWelcome 8000 (English 10000), jailbreak 500 for zh-Hant/zh-Hans, 1500 otherwise, roleOutputContract 2000. Violations return `<field>_too_long` codes (`role_desc_too_long`, `role_detail_too_long`, `role_welcome_too_long`, `jailbreak_too_long`, `role_output_contract_too_long`), which the error mapper surfaces as HTTP 500 with `retryable: true`. The role must be `private` (`public_role_requires_clone`). Alternates/prologue greetings are not part of this document — use `PATCH /role/{roleId}/welcome`.",
+        "description": "Applies a partial document to an owned private role in a single write. Every key under `fields` is optional; absent keys are untouched, present keys overwrite (an empty string clears the field where allowed). `fieldPatches` carries anchored text edits (`operations`) applied on top of the current value of the corresponding field and is the way to edit long text without resending it. At least one key under `fields` must be present (`nothing to update` otherwise); if nothing is effectively changed (e.g. only a blank `roleName`), the service answers `invalid_arguments`. Rules: `roleName` blank is ignored; `roleAvatar`/`roleBackground` blank is ignored, otherwise must be an http(s) URL (`invalid_asset_url`); `roleSex` accepts `man|women|other` and aliases (`male`, `female`, `woman`, `男`, `女`, `其他`; empty clears; else `invalid_role_sex`); `talkExample[].roleType` accepts `ai|user` (`assistant` maps to `ai`) and `content` must be non-blank (`invalid_talk_example`); `roleTag` replaces the whole tag list (each non-blank string becomes a platform tag `{icon:\"\", text, type:2}`); `customInstructions` is writable here but is never returned by v1 read routes. Character limits depend on the card language (see `GET /role/validate` → `tokenBudget.limits`): roleDesc 500 (English 2500), roleDetailDesc 10000 (English 50000), roleWelcome 8000 (English 10000), customInstructions 500 for zh-Hant/zh-Hans, 1500 otherwise, roleOutputContract 2000. Violations return `<field>_too_long` codes (`role_desc_too_long`, `role_detail_too_long`, `role_welcome_too_long`, `custom_instructions_too_long`, `role_output_contract_too_long`), which the error mapper surfaces as HTTP 500 with `retryable: true`. The role must be `private` (`public_role_requires_clone`). Alternates/prologue greetings are not part of this document — use `PATCH /role/{roleId}/welcome`.",
         "security": [
           {
             "userToken": []
@@ -7282,7 +7282,7 @@
           "Roles"
         ],
         "summary": "Submit an owned private role for publication review",
-        "description": "Submits the card to moderation. Requires an explicit confirmation: `userConfirmed` must be `true` and `confirmationSummary` must be at least 8 characters (`confirmation_required`). The role must be `private` (`publish_requires_private_role`) and must have non-empty `roleName`, `roleWelcome`, `roleDetailDesc`, `roleAvatar` and `roleBackground` (`validation_blocker`). On success an asynchronous moderation task starts and the response carries `reviewStatus: \"running\"` with its `taskId`; the card becomes `public` (reviewStatus `passed`), goes to human review (`waitReview`/`pending`), or is returned to `private` with `suggest_r18`/`rejected` when the task completes. If the card is already in the human-review queue or is flagged for forced human review, no task is created and `reviewStatus` is `pending` without `taskId`. Poll `GET /role/detail` (`roleVisibility`, `reviewStatus`, `reviewReason`) for the outcome.",
+        "description": "Submits the card to moderation. Requires an explicit confirmation: `userConfirmed` must be `true` and `confirmationSummary` must be at least 8 characters (`confirmation_required`). The role must be `private` (`publish_requires_private_role`) and must have non-empty `roleName`, `roleWelcome`, `roleDetailDesc`, `roleAvatar` and `roleBackground` (`validation_blocker`). On success an asynchronous moderation task starts and the response carries `reviewStatus: \"running\"` with its `taskId`; the card becomes `public` (reviewStatus `passed`), goes to human review (`waitReview`/`pending`), or is returned to `private` with `rejected` when the task completes. If the card is already in the human-review queue or is flagged for forced human review, no task is created and `reviewStatus` is `pending` without `taskId`. Poll `GET /role/detail` (`roleVisibility`, `reviewStatus`, `reviewReason`) for the outcome.",
         "security": [
           {
             "userToken": []
@@ -8089,7 +8089,7 @@
           "Role sharing"
         ],
         "summary": "Full card settings for the author or a grantee",
-        "description": "Returns the complete card configuration (document incl. private fields such as `jailbreak`, `talkExample`, `roleOutputContract`; greetings; the bound worldbook with all entries including disabled ones; author display rules; per-section content hashes; a rough cost profile). Callable by the author (`access=owner`) or by any account with an active `read_detail` grant (`access=shared`) — user token or service key. Data is read live (no cache). Response carries `Cache-Control: private, no-store`. This is the only route where the response scrub keeps `jailbreak`.",
+        "description": "Returns the complete card configuration (document incl. private fields such as `customInstructions`, `talkExample`, `roleOutputContract`; greetings; the bound worldbook with all entries including disabled ones; author display rules; per-section content hashes; a rough cost profile). Callable by the author (`access=owner`) or by any account with an active `read_detail` grant (`access=shared`) — user token or service key. Data is read live (no cache). Response carries `Cache-Control: private, no-store`. This is the only route where the response scrub keeps `customInstructions`.",
         "security": [
           {
             "userToken": []
@@ -8688,7 +8688,7 @@
             }
           },
           "413": {
-            "description": "`trial_payload_too_large` — body over 48 MiB, `name` too long, too many entries, an entry `content` too long, a rule `replace` too large, rules total too large, or a role field over its language limit (`reason` in `welcome|roleDesc|roleDetailDesc|roleOutputContract|jailbreak|body|name|entries|entryContent|ruleReplace|rulesTotal`). `detail` says which section/item and the limit.",
+            "description": "`trial_payload_too_large` — body over 48 MiB, `name` too long, too many entries, an entry `content` too long, a rule `replace` too large, rules total too large, or a role field over its language limit (`reason` in `welcome|roleDesc|roleDetailDesc|roleOutputContract|customInstructions|body|name|entries|entryContent|ruleReplace|rulesTotal`). `detail` says which section/item and the limit.",
             "content": {
               "application/json": {
                 "schema": {
@@ -10076,7 +10076,7 @@
       },
       "CharacterRole": {
         "type": "object",
-        "description": "Role card record as serialized by the server. Internal `accountId` and the author-private `jailbreak` are removed by the v1 response scrubber. In `/conversation/start` the `roleDetailDesc*` fields are blanked and `roleWelcome`/`roleName`/`roleDesc` are localized.",
+        "description": "Role card record as serialized by the server. Internal `accountId` and the author-private `customInstructions` are removed by the v1 response scrubber. In `/conversation/start` the `roleDetailDesc*` fields are blanked and `roleWelcome`/`roleName`/`roleDesc` are localized.",
         "properties": {
           "id": {
             "type": "integer",
@@ -10227,27 +10227,6 @@
           "imageNeedReview": {
             "type": "boolean"
           },
-          "isR18": {
-            "type": "boolean"
-          },
-          "textContentRating": {
-            "type": "string"
-          },
-          "imageContentRating": {
-            "type": "string"
-          },
-          "contentRating": {
-            "type": "string",
-            "description": "G/PG/PG12/PG15/R18 style rating."
-          },
-          "contentRatingVersion": {
-            "type": "string"
-          },
-          "contentRatingDetails": {
-            "type": "string",
-            "nullable": true,
-            "description": "Omitted when null."
-          },
           "enMarketSuitable": {
             "type": "boolean",
             "nullable": true
@@ -10289,7 +10268,7 @@
           },
           "reviewStatus": {
             "type": "string",
-            "description": "passed / pending / suggest_r18 / rejected."
+            "description": "passed / pending / rejected."
           },
           "reviewReason": {
             "type": "string"
@@ -13674,7 +13653,7 @@
           "personaMode",
           "compactSections",
           "compactExtraInstruction",
-          "defaultJailbreak",
+          "defaultCustomInstructions",
           "globalPersona",
           "nickName",
           "selectModelName"
@@ -13801,9 +13780,9 @@
             "maxLength": 250,
             "description": "Custom compaction instruction (set via /player/compact-preference)."
           },
-          "defaultJailbreak": {
+          "defaultCustomInstructions": {
             "type": "string",
-            "description": "The jailbreak text that applies when the player has no custom one: the card author's jailbreak if set, else the platform default for the `language` header."
+            "description": "The effective default for the instruction segment: the author override when present, otherwise the platform default for the requested language."
           },
           "globalPersona": {
             "$ref": "#/components/schemas/GlobalPersonaSummary"
@@ -13934,9 +13913,9 @@
             "type": "string",
             "description": "\"light\" | \"standard\" | \"immersive\" | \"deep\"."
           },
-          "jailbreak": {
+          "customInstructions": {
             "type": "string",
-            "description": "Custom jailbreak; empty string = use default. Max 1500 characters (500 when `language` is zh-Hans/zh-Hant). Trimmed and moderated. Never echoed back on read."
+            "description": "Custom instructions that replace the corresponding default content-scope segment in prompt construction, not the entire system prompt. Existing authorization, validation and moderation rules still apply. An empty value clears the override."
           },
           "thinkingDepth": {
             "type": "string",
@@ -14554,10 +14533,6 @@
             "default": "story",
             "description": "Stored as-is as the card's `roleType` (not validated). Values understood by validation/quality heuristics: `companion`, `story`, `game`, `generator`."
           },
-          "contentRatingIntent": {
-            "type": "string",
-            "description": "`r18` marks the card adult (`isR18=true`); any other value leaves it non-adult."
-          },
           "idempotencyKey": {
             "type": "string",
             "description": "Accepted for API symmetry; not used for deduplication on this route."
@@ -14723,7 +14698,7 @@
       },
       "RoleInfo": {
         "type": "object",
-        "description": "Role card record as returned by conversation endpoints. On this API all text fields are returned verbatim in the card's base language; localized variants are exposed as separate `*En`/`*Ja`/`*Ko` fields. Internal account identifiers and the author's private jailbreak text are never included.",
+        "description": "Role card record as returned by conversation endpoints. On this API all text fields are returned verbatim in the card's base language; localized variants are exposed as separate `*En`/`*Ja`/`*Ko` fields. Internal account identifiers and the author's private customInstructions text are never included.",
         "properties": {
           "id": {
             "type": "integer",
@@ -14897,30 +14872,6 @@
           "imageNeedReview": {
             "type": "boolean",
             "description": "Whether the card image is pending review."
-          },
-          "isR18": {
-            "type": "boolean",
-            "description": "Whether the card is adult-rated."
-          },
-          "textContentRating": {
-            "type": "string",
-            "description": "Content rating of the text."
-          },
-          "imageContentRating": {
-            "type": "string",
-            "description": "Content rating of the images."
-          },
-          "contentRating": {
-            "type": "string",
-            "description": "Overall content rating."
-          },
-          "contentRatingVersion": {
-            "type": "string",
-            "description": "Version of the rating scheme applied."
-          },
-          "contentRatingDetails": {
-            "type": "string",
-            "description": "Rating details; omitted when absent."
           },
           "enMarketSuitable": {
             "type": [
@@ -15209,7 +15160,6 @@
               "not_submitted",
               "pending",
               "passed",
-              "suggest_r18",
               "rejected"
             ],
             "description": "Moderation status."
@@ -15315,9 +15265,9 @@
             "maxLength": 2000,
             "description": "Output format contract; trimmed; limit 2000 chars."
           },
-          "jailbreak": {
+          "customInstructions": {
             "type": "string",
-            "description": "Author-private instruction; limit 500 chars for zh-Hant/zh-Hans cards, 1500 otherwise. Never returned by v1 read routes."
+            "description": "Custom instructions that replace the corresponding default content-scope segment in prompt construction, not the entire system prompt. Existing authorization, validation and moderation rules still apply. An empty value clears the override."
           },
           "nickname": {
             "type": "string",
@@ -15424,7 +15374,7 @@
       },
       "RoleRecord": {
         "type": "object",
-        "description": "Stored role card fields (shared by `/role/detail` and `/role/mine` items). Internal `accountId` and `jailbreak` are removed on every v1 response. Timestamps are RFC3339 strings or null.",
+        "description": "Stored role card fields (shared by `/role/detail` and `/role/mine` items). Internal `accountId` and `customInstructions` are removed on every v1 response. Timestamps are RFC3339 strings or null.",
         "properties": {
           "id": {
             "type": "integer",
@@ -15575,26 +15525,6 @@
           "imageNeedReview": {
             "type": "boolean"
           },
-          "isR18": {
-            "type": "boolean"
-          },
-          "textContentRating": {
-            "type": "string"
-          },
-          "imageContentRating": {
-            "type": "string"
-          },
-          "contentRating": {
-            "type": "string",
-            "description": "Overall content rating (G/PG/PG12/PG15/R18)."
-          },
-          "contentRatingVersion": {
-            "type": "string"
-          },
-          "contentRatingDetails": {
-            "type": "string",
-            "nullable": true
-          },
           "enMarketSuitable": {
             "type": "boolean",
             "nullable": true
@@ -15643,7 +15573,6 @@
               "not_submitted",
               "pending",
               "passed",
-              "suggest_r18",
               "rejected"
             ],
             "description": "Moderation status; `pending` corresponds to `roleVisibility=waitReview`."
@@ -15835,8 +15764,9 @@
           "roleOutputContract": {
             "$ref": "#/components/schemas/TextDeepPatch"
           },
-          "jailbreak": {
-            "$ref": "#/components/schemas/TextDeepPatch"
+          "customInstructions": {
+            "$ref": "#/components/schemas/TextDeepPatch",
+            "description": "Custom instructions that replace the corresponding default content-scope segment in prompt construction, not the entire system prompt. Existing authorization, validation and moderation rules still apply. An empty value clears the override."
           }
         }
       },
@@ -16533,8 +16463,7 @@
           "roleSex",
           "roleSpeech",
           "language",
-          "isR18",
-          "jailbreak",
+          "customInstructions",
           "talkExample",
           "roleOutputContract"
         ],
@@ -16574,12 +16503,9 @@
           "language": {
             "type": "string"
           },
-          "isR18": {
-            "type": "boolean"
-          },
-          "jailbreak": {
+          "customInstructions": {
             "type": "string",
-            "description": "Author jailbreak (private; kept by the scrub on this route only)."
+            "description": "Custom instructions that replace the corresponding default content-scope segment in prompt construction, not the entire system prompt. Existing authorization, validation and moderation rules still apply. An empty value clears the override."
           },
           "talkExample": {
             "type": "string",
@@ -17073,7 +16999,7 @@
           "roleDescMaxChars",
           "roleDetailDescMaxChars",
           "roleWelcomeMaxChars",
-          "jailbreakMaxChars",
+          "customInstructionsMaxChars",
           "roleOutputContractMaxChars"
         ],
         "description": "Hard per-field character limits for this card's language. Non-English cards: 500 / 10000 / 8000 / (500 for zh-Hant and zh-Hans, else 1500) / 2000. English cards: 2500 / 50000 / 10000 / 1500 / 2000.",
@@ -17087,7 +17013,7 @@
           "roleWelcomeMaxChars": {
             "type": "integer"
           },
-          "jailbreakMaxChars": {
+          "customInstructionsMaxChars": {
             "type": "integer"
           },
           "roleOutputContractMaxChars": {
@@ -17101,7 +17027,7 @@
           "roleDescChars",
           "roleDetailDescChars",
           "roleWelcomeChars",
-          "jailbreakChars",
+          "customInstructionsChars",
           "roleOutputContractChars",
           "totalChars",
           "estimatedTokens",
@@ -17118,7 +17044,7 @@
           "roleWelcomeChars": {
             "type": "integer"
           },
-          "jailbreakChars": {
+          "customInstructionsChars": {
             "type": "integer"
           },
           "roleOutputContractChars": {
@@ -17333,7 +17259,7 @@
                   "roleDesc",
                   "roleDetailDesc",
                   "roleOutputContract",
-                  "jailbreak"
+                  "customInstructions"
                 ]
               },
               "section": {
@@ -19013,12 +18939,12 @@
       "AccountId",
       "account_id",
       "authorAccountId",
-      "jailbreak"
+      "customInstructions"
     ],
     "depth": "Recursive: the keys are deleted from every object at any nesting depth, inside arrays too.",
-    "exceptions": "On GET /open/v1/share/role/detail the key `jailbreak` is kept (the author's private jailbreak is part of the shared card settings); account-identifier keys are still removed there.",
+    "exceptions": "On GET /open/v1/share/role/detail the key `customInstructions` is kept (the author's private customInstructions is part of the shared card settings); account-identifier keys are still removed there.",
     "consequences": [
-      "GET /player/role-settings never returns the player's custom `jailbreak` even though POST /player/role-settings/save accepts it; only `defaultJailbreak` survives.",
+      "GET /player/role-settings never returns the player's custom `customInstructions` even though POST /player/role-settings/save accepts it; only `defaultCustomInstructions` survives.",
       "Legacy `accountId` fields in role-settings, score records, comments etc. are absent on the wire.",
       "If the body is not parseable JSON it is forwarded unchanged."
     ]
