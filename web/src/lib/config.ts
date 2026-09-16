@@ -1,4 +1,4 @@
-import { apiBaseOf } from "./provider";
+import { apiBaseOf, currentProvider, DEFAULT_PROVIDER } from "./provider";
 
 /**
  * 角色卡來源服務的 API 位址。
@@ -38,6 +38,9 @@ const REGION_KEY = "hr.apiBase";
  * 頁面照常開。呼叫端要在第一個上游請求之前 await 它。
  */
 export async function resolveUpstream(fetcher: typeof fetch = fetch, timeoutMs = 2500): Promise<string> {
+  // 閘道是為了繞開**預設那家**主網域被封鎖的地區，不是通用轉送。接的是別家時整條跳過：
+  // 套下去等於把另一家的請求送進第一家的網域，登入會被送到錯的授權頁。
+  if (currentProvider() !== DEFAULT_PROVIDER) return useProviderUpstream();
   try {
     const cached = sessionStorage.getItem(REGION_KEY);
     if (cached && /^https?:\/\//.test(cached)) {

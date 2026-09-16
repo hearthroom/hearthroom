@@ -1,4 +1,4 @@
-import { COMMUNITY_API } from "./config";
+import { COMMUNITY_API, useProviderUpstream } from "./config";
 import { currentProvider, PROVIDERS, type ProviderId, providerName, setProvider } from "./provider";
 
 /**
@@ -34,6 +34,9 @@ export async function chooseProvider(id: ProviderId, opts: ChooseOptions): Promi
   const switching = opts.signedIn === true && id !== currentProvider();
   if (switching && opts.logout) await opts.logout();
   setProvider(id);
+  // 上游位址是模組層的值，不會自己跟著換。漏了這一步，接下來的請求（包含 OAuth 授權頁）
+  // 仍然打在上一家——線上出過這個錯：點第二家卻被送到第一家的登入頁。
+  useProviderUpstream();
   await opts.login();
 }
 
