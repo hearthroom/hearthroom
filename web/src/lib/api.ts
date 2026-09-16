@@ -44,6 +44,27 @@ const CODE_KEY: Record<string, string> = {
   upload_size_mismatch: "error.uploadRetry",
   quota_image_exceeded: "error.quotaImageExceeded",
   quota_bytes_exceeded: "error.quotaBytesExceeded",
+  // 第二家的碼表另起一套（它說 forbidden，上面那批說 permission_denied）。意思一樣的
+  // 就共用同一句，不必為了碼名多寫一份文案。
+  invalid_request: "error.invalidArguments",
+  forbidden: "state.forbidden",
+  not_the_author: "state.forbidden",
+  role_not_found: "state.notFound",
+  asset_not_found: "state.notFound",
+  account_not_found: "state.notFound",
+  grantee_not_found: "state.notFound",
+  unauthorized: "auth.expired",
+  role_not_passed_review: "error.roleInReview",
+  temporarily_unavailable: "state.serverBusy",
+  file_too_large: "error.payloadTooLarge",
+  upload_not_found: "error.uploadRetry",
+  size_mismatch: "error.uploadRetry",
+  // 這幾件事上面那批沒有對應的說法，各給一句
+  insufficient_scope: "error.insufficientScope",
+  unsupported_media_type: "error.unsupportedMediaType",
+  invalid_cursor: "error.invalidCursor",
+  quota_exceeded: "error.quotaExceeded",
+  asset_not_passed_review: "error.assetNotPassedReview",
 };
 
 /** 上游驗證失敗附的明細（作者資產、試玩卡）：哪一條、多大、上限多少。 */
