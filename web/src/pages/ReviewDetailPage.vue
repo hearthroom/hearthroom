@@ -157,7 +157,7 @@ onMounted(() => { void load(); });
       <section v-show="section === 'persona'" class="pane panel">
         <div class="field"><label>{{ $t("editor.detail") }}</label><pre class="text mono">{{ doc.roleDetailDesc }}</pre></div>
         <div class="field"><label>{{ $t("editor.contract") }}</label><pre class="text mono">{{ doc.roleOutputContract }}</pre></div>
-        <div class="field"><label>{{ $t("editor.jailbreak") }}</label><pre class="text mono">{{ doc.jailbreak }}</pre></div>
+        <div class="field"><label>{{ $t("editor.jailbreak") }}</label><pre class="text mono">{{ doc.customInstructions ?? doc.jailbreak }}</pre></div>
       </section>
 
       <section v-show="section === 'dialogue'" class="pane panel">
