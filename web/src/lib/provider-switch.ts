@@ -1,4 +1,5 @@
-import { currentProvider, type ProviderId, setProvider } from "./provider";
+import { COMMUNITY_API } from "./config";
+import { currentProvider, PROVIDERS, type ProviderId, providerName, setProvider } from "./provider";
 
 /**
  * 換供應商的規則。
@@ -34,4 +35,25 @@ export async function chooseProvider(id: ProviderId, opts: ChooseOptions): Promi
   if (switching && opts.logout) await opts.logout();
   setProvider(id);
   await opts.login();
+}
+
+/**
+ * 這個部署真的有哪幾家。伺服器說了算——前端寫死的話，沒配第二家的部署（包括自架的人）
+ * 也會看到那顆按鈕，按下去每個請求都 400。
+ *
+ * 問不到就只給預設那家：寧可少一顆按鈕，也不要一顆按了就報錯的按鈕。
+ */
+export async function availableProviders(): Promise<{ id: ProviderId; name: string }[]> {
+  const fallback = [{ id: "lunatalk" as ProviderId, name: providerName("lunatalk") }];
+  try {
+    const res = await fetch(`${COMMUNITY_API}/providers`);
+    if (!res.ok) return fallback;
+    const body = (await res.json()) as { providers?: { id?: string }[] };
+    const known = (body.providers ?? [])
+      .map((p) => PROVIDERS.find((known) => known.id === p.id))
+      .filter((p): p is (typeof PROVIDERS)[number] => !!p);
+    return known.length ? known : fallback;
+  } catch {
+    return fallback;
+  }
 }

@@ -26,6 +26,9 @@ export const PROVIDER_IDS: readonly ProviderId[] = ["lunatalk", "harbor"];
 
 export const DEFAULT_PROVIDER: ProviderId = "lunatalk";
 
+/** 給人看的名字。專有名詞，各語言都一樣，不進翻譯檔。 */
+export const PROVIDER_NAMES: Record<ProviderId, string> = { lunatalk: "LunaTalk", harbor: "HarperHarbor" };
+
 /** 這個部署有沒有設定這家：API 位址的環境變數名。第二家起加後綴，第一家維持原名不動。 */
 const API_BASE_VAR: Record<ProviderId, keyof ProviderEnv> = {
   lunatalk: "PROVIDER_API_BASE",

@@ -22,7 +22,7 @@ import { ALIAS_HOSTS, HOST, canonicalUrl, isPlayHost } from "./site";
 import { loadMine, type MineFilter } from "./mine";
 import { tagNamesFor } from "../shared/tag-catalog";
 import { providerOf, isReviewer, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
-import { DEFAULT_PROVIDER, type ProviderId, reviewBotOf } from "./providers";
+import { configuredProviders, DEFAULT_PROVIDER, PROVIDER_NAMES, type ProviderId, reviewBotOf } from "./providers";
 import { providerApiBaseFor } from "./providers";
 import { WEEKLY_LIMIT, recordRegistration, registeredThisWeek } from "./quota";
 import {
@@ -140,6 +140,19 @@ app.get("/v1/region", (c) => {
   const apiBase = providerApiBaseFor(c.env, country);
   return c.json({ country, apiBase }, 200, { "Cache-Control": "no-store" });
 });
+
+/**
+ * 這個部署接了哪幾家供應商。登入頁照這個列按鈕——前端寫死的話，沒配第二家的部署
+ * （包括自架的人）也會看到那顆按鈕，按下去每個請求都 400。
+ * 不需要登入：登入頁本來就還沒有身分。
+ */
+app.get("/v1/providers", (c) =>
+  c.json(
+    { providers: configuredProviders(c.env).map((id) => ({ id, name: PROVIDER_NAMES[id] })) },
+    200,
+    { "Cache-Control": "public, max-age=300" },
+  ),
+);
 
 /**
  * 圖片代抓，只給「匯出成 PNG 卡」用。
