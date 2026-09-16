@@ -411,6 +411,7 @@ const pendingAvatar = ref("");
 
 
 async function loadValidation() {
+  if (!can('validation')) return; // 這一家沒有校驗端點：用保守預設，不去打
   const token = await session.accessToken();
   if (!token || !roleId.value) return;
   try {
@@ -550,7 +551,7 @@ async function loadRegexRules(token: string) {
 
 /** 卡片存完才存規則：新卡要先有 roleId。沒改就不送。 */
 async function saveRegex(token: string, targetRoleId: string) {
-  if (!regexDirty.value) return;
+  if (!can('regex') || !regexDirty.value) return; // 匯入的卡可能帶正則進來；這一家存不了就不送
   const saved = await saveAuthorAsset(targetRoleId, ruleSetToAuthorAsset(regexSet.value, regexVersion.value), token);
   regexVersion.value = saved.version;
   regexOriginal.value = JSON.parse(JSON.stringify(regexSet.value));
@@ -752,6 +753,7 @@ function acceptMetadata(metadata: WorldbookMetadataPatch) {
 }
 
 async function saveWorldbook(token: string, targetRoleId: string) {
+  if (!can('worldbook')) return;
   const ops = worldbookOps();
   const needsBook = worldbookPending.value || Boolean(worldbookId.value);
   const metaDirty = metadataChanged();
@@ -1405,7 +1407,7 @@ async function exportCard(format: "png" | "json") {
       </form>
 
       <!-- 右：預覽與動作 -->
-      <aside class="rail" :class="{ 'rail--wide': panelOpen, 'rail--sheet': sheetOpen }">
+      <aside v-if="can('chatTest') || can('library')" class="rail" :class="{ 'rail--wide': panelOpen, 'rail--sheet': sheetOpen }">
         <!-- 拖曳把手：寬螢幕上右欄的寬度由作者自己拉，看卡在不同寬度下長什麼樣（站台管理者 2026-09-14） -->
         <div v-if="panelOpen && !sheetOpen" class="rail__grip" role="separator" aria-orientation="vertical"
              :aria-label="$t('editor.panel.resize')" :title="$t('editor.panel.resize')" @pointerdown="onGripDown" @dblclick="railWidth = null" />
@@ -1416,11 +1418,11 @@ async function exportCard(format: "png" | "json") {
         -->
         <div class="rail__tabs">
           <div class="seg" role="tablist" :aria-label="$t('editor.panel.tabs')">
-            <button type="button" class="seg__item" :class="{ 'seg__item--on': panelOpen && panel === 'test' }"
+            <button v-if="can('chatTest')" type="button" class="seg__item" :class="{ 'seg__item--on': panelOpen && panel === 'test' }"
                     role="tab" :aria-selected="panelOpen && panel === 'test'" @click="openPanel('test')">
               {{ $t("editor.test.title") }}
             </button>
-            <button type="button" class="seg__item" :class="{ 'seg__item--on': panelOpen && panel === 'res' }"
+            <button v-if="can('library')" type="button" class="seg__item" :class="{ 'seg__item--on': panelOpen && panel === 'res' }"
                     role="tab" :aria-selected="panelOpen && panel === 'res'" @click="openPanel('res')">
               {{ $t("editor.panel.resources") }}
             </button>
