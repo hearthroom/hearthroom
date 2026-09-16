@@ -21,7 +21,8 @@ const hasArt = computed(() => !!props.card.avatarUrl && !broken.value);
 
 <template>
   <article class="card rise">
-    <RouterLink :to="lp(can('editor') ? `/cards/${card.roleId}/edit` : `/cards/${card.roleId}`)" class="card__art">
+    <!-- 封面連到卡片頁：編輯有自己的鍵在下面（作者回報 2026-09-16：點自己的卡跳進編輯頁） -->
+    <RouterLink :to="lp(`/cards/${card.roleId}`)" class="card__art">
       <img v-if="hasArt" :src="card.avatarUrl!" alt="" loading="lazy" @error="broken = true" />
       <div
         v-else
@@ -83,7 +84,7 @@ const hasArt = computed(() => !!props.card.avatarUrl && !broken.value);
 .card__art img { width: 100%; height: 100%; object-fit: cover; transition: transform var(--dur-slow) var(--ease); }
 .card:hover .card__art img { transform: scale(1.04); }
 .card__art::after { content: ""; position: absolute; inset: 0; box-shadow: inset 0 0 0 1px rgba(16, 16, 24, 0.05); pointer-events: none; }
-/* 圖上壓一個「編輯」提示，只在 hover 出現——動作按鈕在下面，這只是告訴人圖也能點 */
+/* 圖上壓一層漸暗，只在 hover 出現——動作按鈕在下面，這只是告訴人圖也能點 */
 .card__art::before {
   content: ""; position: absolute; inset: 0; z-index: 1;
   background: linear-gradient(to top, rgba(16, 16, 24, 0.35), transparent 40%);
