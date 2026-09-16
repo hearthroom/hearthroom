@@ -9,7 +9,7 @@ const json = async <T>(res: Response): Promise<T> => {
   return (await res.json()) as T;
 };
 
-export type PersonaMode = "name_only" | "global" | "custom";
+export type PersonaMode = "name_only" | "global" | "custom" | "conversation";
 export interface RoleSettings {
   personaMode: PersonaMode | "";
   userName: string;
@@ -21,12 +21,21 @@ export interface RoleSettings {
   sandboxLevel: string;
   jailbreak: string;
 }
-export interface RoleSettingsBundle { settings: RoleSettings; globalPersona: { userName?: string; userSex?: string; userDefine?: string } }
+export interface PersonaFields { userName: string; userSex: string; userDefine: string }
+/** 這個存檔那份人設；exists=false＝存檔還沒設過，「當前會話」那檔從這張卡的人設起步 */
+export interface ConversationPersona extends PersonaFields { exists: boolean }
+export interface RoleSettingsBundle { settings: RoleSettings; globalPersona: { userName?: string; userSex?: string; userDefine?: string }; conversationPersona: ConversationPersona }
+
+const readConversationPersona = (raw: unknown): ConversationPersona => {
+  const cp = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  return { userName: asText(cp.userName), userSex: asText(cp.userSex), userDefine: asText(cp.userDefine), exists: cp.exists === true };
+};
 
 const asText = (v: unknown) => (typeof v === "string" ? v : v == null ? "" : String(v));
 
-export async function fetchRoleSettings(base: string, token: string, lang: string, roleId: string): Promise<RoleSettingsBundle> {
-  const q = new URLSearchParams({ roleId });
+/** 帶了 conversationId 就連「當前會話」那份一起回來，一個請求載齊人設彈層要的東西 */
+export async function fetchRoleSettings(base: string, token: string, lang: string, roleId: string, conversationId = ""): Promise<RoleSettingsBundle> {
+  const q = new URLSearchParams(conversationId ? { roleId, conversationId } : { roleId });
   const raw = await json<Record<string, unknown>>(await fetch(`${base}/open/v1/player/role-settings?${q}`, { headers: headers(token, lang) }));
   const ctx = Number(raw.context);
   const gp = (raw.globalPersona && typeof raw.globalPersona === "object" ? raw.globalPersona : {}) as Record<string, unknown>;
@@ -38,7 +47,19 @@ export async function fetchRoleSettings(base: string, token: string, lang: strin
       sandboxLevel: asText(raw.sandboxLevel), jailbreak: asText(raw.jailbreak),
     },
     globalPersona: { userName: asText(gp.userName), userSex: asText(gp.userSex), userDefine: asText(gp.userDefine) },
+    conversationPersona: readConversationPersona(raw.conversationPersona),
   };
+}
+
+/** 存這個存檔那份人設。還沒設過時整份送（伺服器建列），設過了只送動到的欄位。 */
+export async function saveConversationPersona(base: string, token: string, lang: string, conversationId: string, before: ConversationPersona, after: PersonaFields): Promise<{ ok: true; persona: ConversationPersona } | { ok: false; reason: string }> {
+  const changed: Partial<PersonaFields> = {};
+  for (const k of ["userName", "userSex", "userDefine"] as const) if (!before.exists || (before[k] || "") !== (after[k] || "")) changed[k] = after[k] || "";
+  if (!Object.keys(changed).length) return { ok: true, persona: before };
+  const res = await fetch(`${base}/open/v1/player/conversation-persona/save`, { method: "POST", headers: headers(token, lang), body: JSON.stringify({ conversationId, ...changed }) });
+  if (res.ok) return { ok: true, persona: { ...before, ...changed, exists: true } };
+  const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+  return { ok: false, reason: String(body.error || body.message || res.status) };
 }
 
 /** 只送改了的欄位；動到人設三欄時把 personaMode 一起帶上（伺服器對缺模式的舊客戶端會推定成「單獨設置」） */
