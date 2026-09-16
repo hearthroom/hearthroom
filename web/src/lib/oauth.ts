@@ -42,9 +42,17 @@ async function s256(verifier: string): Promise<string> {
     .replace(/=+$/, "");
 }
 
+/** 範圍字串壓成一小段可當 key 的字：內容一樣就是同一顆 client，不同就各存各的。 */
+function scopeTag(scope: string): string {
+  return scope.split(/\s+/).filter(Boolean).sort().join(",");
+}
+
 async function clientId(): Promise<string> {
   // 客戶端是在供應商那邊註冊的，一家一組；共用一組等於拿 A 家的 client 去 B 家換 token。
-  const cacheKey = `${STORE.client}.${currentProvider()}`;
+  // 範圍也算進識別：註冊時登記的範圍就是這顆 client 的上限，之後改不了，所以要多要一項
+  // 就得換一顆——沿用舊的只會在授權時被回 invalid_scope。
+  const scope = scopeOf();
+  const cacheKey = `${STORE.client}.${currentProvider()}${scope ? `.${scopeTag(scope)}` : ""}`;
   const cached = localStorage.getItem(cacheKey);
   if (cached) return cached;
 
@@ -56,6 +64,8 @@ async function clientId(): Promise<string> {
       redirect_uris: [redirectUri()],
       grant_types: ["authorization_code", "refresh_token"],
       token_endpoint_auth_method: "none",
+      // 不帶的話拿到的是那一家的預設；Harbor 的預設是唯讀，寫不了卡。
+      ...(scope ? { scope } : {}),
     }),
   });
   if (!res.ok) throw new Error(t("auth.registerFailed", { status: res.status }));
