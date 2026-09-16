@@ -15,6 +15,7 @@
 import { computed, onMounted, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { ApiError, fetchPlayerPersona, savePlayerPersona, updateSiteSettings, type PlayerPersona } from "@/lib/api";
+import { can } from "@/lib/provider";
 import { pageTitle } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
@@ -43,6 +44,8 @@ async function token(): Promise<string> {
 }
 
 async function load() {
+  // 這一家沒有玩家人格就別去問：那條路徑在它那邊不存在，問了只會拿到 404。
+  if (!can("persona")) { loading.value = false; return; }
   loading.value = true;
   error.value = "";
   try {
@@ -145,7 +148,7 @@ onMounted(() => {
       <h1 class="head__title display">{{ $t("settings.title") }}</h1>
     </header>
 
-    <section class="panel persona">
+    <section v-if="can('persona')" class="panel persona">
       <p class="eyebrow">{{ $t("settings.persona.title") }}</p>
       <p class="subtle">{{ $t("settings.persona.desc") }}</p>
 

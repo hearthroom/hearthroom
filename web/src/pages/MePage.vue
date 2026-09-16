@@ -16,6 +16,7 @@ import { pageTitle } from "@/lib/i18n";
 import { providerName } from "@/lib/providers";
 import { useReviewer } from "@/lib/review";
 import { useSession } from "@/lib/session";
+import { can } from "@/lib/provider";
 import { useLocalePath } from "@/lib/use-locale";
 import { track } from "@/lib/track";
 
@@ -91,7 +92,7 @@ onMounted(() => {
 
     <nav class="panel me__links" :aria-label="$t('me.title')">
       <RouterLink :to="lp('/mine')" class="me__link">{{ $t("nav.mine") }}</RouterLink>
-      <RouterLink :to="lp('/resources')" class="me__link">{{ $t("nav.resources") }}</RouterLink>
+      <RouterLink v-if="can('library')" :to="lp('/resources')" class="me__link">{{ $t("nav.resources") }}</RouterLink>
       <RouterLink :to="lp('/wallet')" class="me__link">{{ $t("nav.wallet") }}</RouterLink>
       <RouterLink v-if="reviewerStore.reviewer" :to="lp('/review')" class="me__link">{{ $t("nav.review") }}</RouterLink>
       <RouterLink :to="lp('/settings')" class="me__link">{{ $t("nav.settings") }}</RouterLink>

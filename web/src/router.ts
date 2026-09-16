@@ -2,6 +2,7 @@ import { nextTick } from "vue";
 import { createRouter, createWebHistory } from "vue-router";
 import { LOCALE_CODES, SOURCE_LOCALE, applyLocale, detectLocale, pageTitle, updateHreflang } from "./lib/i18n";
 import { useSession } from "./lib/session";
+import { can } from "./lib/provider";
 import { isPlayHost } from "./lib/site";
 import { setSurface } from "./lib/track";
 
@@ -21,16 +22,16 @@ const pages = [
   { path: "", component: () => import("./pages/BoardPage.vue") },
   { path: "search", component: () => import("./pages/SearchPage.vue") },
   { path: "cards/:id", component: () => import("./pages/CardPage.vue") },
-  { path: "cards/:roleId/edit", component: () => import("./pages/CardEditorPage.vue"), meta: { auth: true } },
+  { path: "cards/:roleId/edit", component: () => import("./pages/CardEditorPage.vue"), meta: { auth: true, feature: "editor" } },
   { path: "authors/:handle", component: () => import("./pages/AuthorPage.vue") },
   { path: "me", component: () => import("./pages/MePage.vue"), meta: { auth: true } },
   { path: "login", component: () => import("./pages/LoginPage.vue") },
   { path: "mine", component: () => import("./pages/MyCardsPage.vue"), meta: { auth: true } },
   // 建立與編輯是同一頁：差別只有有沒有 roleId。
-  { path: "create", component: () => import("./pages/CardEditorPage.vue"), meta: { auth: true } },
+  { path: "create", component: () => import("./pages/CardEditorPage.vue"), meta: { auth: true, feature: "editor" } },
   { path: "wallet", component: () => import("./pages/WalletPage.vue"), meta: { auth: true } },
   // 我的資源：作者的素材圖庫（上游圖床），拿網址寫進正則規則用
-  { path: "resources", component: () => import("./pages/ResourcesPage.vue"), meta: { auth: true } },
+  { path: "resources", component: () => import("./pages/ResourcesPage.vue"), meta: { auth: true, feature: "library" } },
   { path: "settings", component: () => import("./pages/SettingsPage.vue"), meta: { auth: true } },
   { path: "developers", component: () => import("./pages/DevelopersPage.vue") },
   { path: "guide", component: () => import("./pages/GuidePage.vue") },
@@ -115,6 +116,12 @@ router.beforeEach(async (to) => {
   // 每次導航先給一個跟著語言走的預設標題；有自己標題的頁面（卡片、作者）掛載後會覆寫。
   // 少了這行，分頁標題會一直停在 index.html 裡那個寫死的中文。
   document.title = pageTitle();
+
+  // 這一家沒有的功能就沒有那一頁。擋在登入之前——不該為了一個進不去的頁先要人登入。
+  // 入口本身也會依能力隱藏；這裡守的是直接貼網址與舊書籤。
+  if (to.meta.feature && !can(to.meta.feature as Parameters<typeof can>[0])) {
+    return { path: isPlayHost() ? "/" : withLocale("/", locale), replace: true };
+  }
 
   if (!to.meta.auth) return true;
   const session = useSession();
