@@ -620,7 +620,7 @@
   "login.title": "Hearthroom にログイン",
   "login.lead": "お持ちのアカウントでログインできます。新しく登録する必要はありません。",
   "login.continueWith": "{provider} アカウントで続ける",
-  "login.moreComing": "ほかのログイン方法は準備中です",
+  "login.moreComing": "2 つのアカウントはそれぞれ独立しています。切り替えるとアカウントが変わります。",
   "login.note": "Hearthroom が保存するのは公開 ID とニックネームだけです。パスワードが渡されることはありません。",
   "me.title": "マイページ",
   "me.handle": "このサイトのメンバー ID",
@@ -963,5 +963,7 @@
   "pwa.install.ios": "Safari の「共有」をタップし、「ホーム画面に追加」を選んでください。",
   "pwa.install.menu": "ブラウザのメニューから「アプリをインストール」または「ホーム画面に追加」を選んでください。すでに追加済みなら、ホーム画面から開けます。",
   "pwa.install.ok": "わかった",
-  "pwa.install.link": "アプリをインストール"
+  "pwa.install.link": "アプリをインストール",
+  "login.switchWarning": "{provider} のアカウントでログインすると、表示されるのは {provider} 上の内容です。マイカード・ランキング・残高もすべて切り替わります。今のアカウントの内容が消えることはなく、戻せばまた表示されます。",
+  "login.switchConfirm": "{provider} に切り替える"
 }

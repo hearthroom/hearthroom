@@ -1,3 +1,4 @@
+import type { ProviderId } from "./providers";
 import type { UpstreamRole, Zone } from "./upstream";
 import { buildSearchText } from "./upstream";
 import { HttpError, type Localized, pickLocale } from "./types";
@@ -89,6 +90,11 @@ const ftsPhrase = (q: string) => `"${q.replace(/"/g, '""')}"`;
 const likeTerm = (q: string) => `%${q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
 
 export interface ListOptions {
+  /**
+   * 看的是哪一家供應商的卡。兩家的資料完全不混（owner 2026-09-16），而上游的卡片 ID 與
+   * 作者數字 ID 在兩家各自編號，會撞號——所以這個條件是必填，不是選填。
+   */
+  provider: ProviderId;
   /** 語區。榜單永遠帶著；作者主頁不帶，列他所有語言的作品。 */
   zone?: Zone;
   q?: string;
@@ -135,6 +141,8 @@ const excludeClause = (table: string) => `NOT ${inList(table)}`;
 export async function listCards(db: D1Database, opts: ListOptions) {
   const where: string[] = opts.anyStatus ? ["1=1"] : [`c.${listed(!!opts.allowNsfw)}`];
   const binds: unknown[] = [];
+  where.push("c.provider = ?");
+  binds.push(opts.provider);
   let from = "cards c";
   let usingFts = false;
 
@@ -203,8 +211,8 @@ export async function listCards(db: D1Database, opts: ListOptions) {
   if (!filtered) {
     // 語區條件走索引，數起來便宜；只有搜尋與標籤過濾才貴到不值得數。
     // 「不想看的類型」不算篩選：它是這個人的常態視角，「共 N 張」要照他看得到的數，所以數的時候一起排除。
-    const countWhere = [listed(!!opts.allowNsfw)];
-    const countBinds: unknown[] = [];
+    const countWhere = [listed(!!opts.allowNsfw), "provider = ?"];
+    const countBinds: unknown[] = [opts.provider];
     if (opts.zone) { countWhere.push("zone IN (?, 'all')"); countBinds.push(opts.zone); }
     if (opts.excludeTags?.length) { countWhere.push(excludeClause("cards")); countBinds.push(JSON.stringify(opts.excludeTags)); }
     const counted = await db.prepare(`SELECT COUNT(*) AS n FROM cards WHERE ${countWhere.join(" AND ")}`).bind(...countBinds).first<{ n: number }>();
@@ -223,10 +231,11 @@ export async function listCards(db: D1Database, opts: ListOptions) {
  * 內容全部來自同步結果，作者送不進任何欄位——這是「登記完再偷換成別的東西」
  * 在結構上不可能發生的原因。
  */
-export async function upsertCard(db: D1Database, role: UpstreamRole, now: number, opts: { status?: string; provider?: string; nsfw?: boolean } = {}) {
+export async function upsertCard(db: D1Database, role: UpstreamRole, now: number, opts: { status?: string; provider?: ProviderId; nsfw?: boolean } = {}) {
+  const provider: ProviderId = opts.provider ?? "lunatalk";
   const existing = await db
-    .prepare("SELECT id, talk_num FROM cards WHERE source_role_id = ?")
-    .bind(role.roleId)
+    .prepare("SELECT id, talk_num FROM cards WHERE provider = ? AND source_role_id = ?")
+    .bind(provider, role.roleId)
     .first<{ id: string; talk_num: number }>();
 
   const shared = [
@@ -284,24 +293,24 @@ export async function setCardStatus(db: D1Database, id: string, status: string):
   await db.prepare("UPDATE cards SET status = ? WHERE id = ?").bind(status, id).run();
 }
 
-export async function getCard(db: D1Database, id: string) {
+export async function getCard(db: D1Database, id: string, provider: ProviderId = "lunatalk") {
   return await db
-    .prepare(`SELECT ${CARD_COLUMNS} FROM cards c ${AUTHOR_JOIN} WHERE c.id = ? OR c.source_role_id = ?`)
-    .bind(id, id)
+    .prepare(`SELECT ${CARD_COLUMNS} FROM cards c ${AUTHOR_JOIN} WHERE c.provider = ? AND (c.id = ? OR c.source_role_id = ?)`)
+    .bind(provider, id, id)
     .first<CardRow>();
 }
 
 /** 一個成員的公開作者頁：把他在各家供應商上、登記在本站且在榜的卡彙總。沒有在榜的卡就是 null。 */
-export async function getAuthor(db: D1Database, memberId: string, allowNsfw = false) {
+export async function getAuthor(db: D1Database, memberId: string, allowNsfw = false, provider: ProviderId = "lunatalk") {
   const row = await db
     .prepare(
       `SELECT am.handle AS handle, MAX(c.author_name) AS author_name, MAX(c.author_avatar) AS author_avatar,
               COUNT(*) AS card_count, SUM(c.talk_num) AS talk_total, MIN(c.registered_at) AS joined_at,
               GROUP_CONCAT(DISTINCT c.provider) AS providers
        FROM cards c ${AUTHOR_JOIN}
-       WHERE ai.member_id = ? AND c.${listed(allowNsfw)}`,
+       WHERE ai.member_id = ? AND c.provider = ? AND c.${listed(allowNsfw)}`,
     )
-    .bind(memberId)
+    .bind(memberId, provider)
     .first<{
       handle: string | null;
       author_name: string;
@@ -315,10 +324,10 @@ export async function getAuthor(db: D1Database, memberId: string, allowNsfw = fa
   return { ...row, providers: (row.providers ?? "").split(",").filter(Boolean) };
 }
 
-export async function unregister(db: D1Database, roleId: string, authorNumId: number) {
+export async function unregister(db: D1Database, roleId: string, authorNumId: number, provider: ProviderId = "lunatalk") {
   const row = await db
-    .prepare("SELECT id, author_num_id FROM cards WHERE source_role_id = ? OR id = ?")
-    .bind(roleId, roleId)
+    .prepare("SELECT id, author_num_id FROM cards WHERE provider = ? AND (source_role_id = ? OR id = ?)")
+    .bind(provider, roleId, roleId)
     .first<{ id: string; author_num_id: number }>();
   if (!row) throw new HttpError(404, "card not registered");
   if (row.author_num_id !== authorNumId) throw new HttpError(403, "not the author of this card");
@@ -377,21 +386,21 @@ export function syncStatement(db: D1Database, id: string, prevTalkNum: number, r
  * 「已登記」不能靠掃上游那一頁來數：作者可能有一百多張卡，一頁只看得到二十幾張，
  * 數出來的是「這一頁裡有幾張」而不是「一共有幾張」。本站的 D1 才是登記這件事的權威。
  */
-export async function countByAuthor(db: D1Database, authorNumId: number): Promise<number> {
+export async function countByAuthor(db: D1Database, authorNumId: number, provider: ProviderId = "lunatalk"): Promise<number> {
   const row = await db
-    .prepare("SELECT COUNT(*) AS n FROM cards WHERE author_num_id = ?")
-    .bind(authorNumId)
+    .prepare("SELECT COUNT(*) AS n FROM cards WHERE provider = ? AND author_num_id = ?")
+    .bind(provider, authorNumId)
     .first<{ n: number }>();
   return row?.n ?? 0;
 }
 
 /** 這批 roleId 裡，哪些已經登記在本站。永遠直接查庫，不快取——見 src/mine.ts 的說明。 */
-export async function registeredAmong(db: D1Database, roleIds: string[]): Promise<Set<string>> {
+export async function registeredAmong(db: D1Database, roleIds: string[], provider: ProviderId = "lunatalk"): Promise<Set<string>> {
   if (!roleIds.length) return new Set();
   const holes = roleIds.map(() => "?").join(",");
   const rows = await db
-    .prepare(`SELECT source_role_id FROM cards WHERE source_role_id IN (${holes})`)
-    .bind(...roleIds)
+    .prepare(`SELECT source_role_id FROM cards WHERE provider = ? AND source_role_id IN (${holes})`)
+    .bind(provider, ...roleIds)
     .all<{ source_role_id: string }>();
   return new Set(rows.results.map((r) => r.source_role_id));
 }
@@ -400,9 +409,11 @@ export async function registeredAmong(db: D1Database, roleIds: string[]): Promis
  * 這一區最常見的標籤。榜單用它做「按類型看」的篩選列——標籤是作者自己打的，
  * 沒有固定分類表，所以「類型」就是大家實際在用的那些詞。
  */
-export async function topTags(db: D1Database, zone: Zone | undefined, limit: number) {
-  const where = zone ? `WHERE c.${listed(false)} AND c.zone IN (?, 'all')` : `WHERE c.${listed(false)}`;
-  const binds: unknown[] = zone ? [zone, limit] : [limit];
+export async function topTags(db: D1Database, zone: Zone | undefined, limit: number, provider: ProviderId = "lunatalk") {
+  const where = zone
+    ? `WHERE c.${listed(false)} AND c.provider = ? AND c.zone IN (?, 'all')`
+    : `WHERE c.${listed(false)} AND c.provider = ?`;
+  const binds: unknown[] = zone ? [provider, zone, limit] : [provider, limit];
   const rows = await db
     .prepare(
       `SELECT j.value AS tag, COUNT(*) AS n FROM cards c, json_each(c.tags) j ${where}
@@ -430,10 +441,10 @@ export interface AuthorRow {
  */
 export async function listAuthors(
   db: D1Database,
-  opts: { zone?: Zone; q?: string; sort: "talk" | "cards" | "hot"; limit: number; offset: number },
+  opts: { provider: ProviderId; zone?: Zone; q?: string; sort: "talk" | "cards" | "hot"; limit: number; offset: number },
 ) {
-  const where: string[] = [`c.${listed(false)}`];
-  const binds: unknown[] = [];
+  const where: string[] = [`c.${listed(false)}`, "c.provider = ?"];
+  const binds: unknown[] = [opts.provider];
   if (opts.zone) { where.push("c.zone IN (?, 'all')"); binds.push(opts.zone); }
   if (opts.q) { where.push(`c.author_name LIKE ? ESCAPE '\\'`); binds.push(likeTerm(opts.q)); }
   const orderBy =
