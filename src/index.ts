@@ -21,8 +21,8 @@ import { authorLine, renderHead } from "./head";
 import { ALIAS_HOSTS, HOST, canonicalUrl, isPlayHost } from "./site";
 import { loadMine, type MineFilter } from "./mine";
 import { tagNamesFor } from "../shared/tag-catalog";
-import { isReviewer, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
-import { DEFAULT_PROVIDER, type ProviderId, reviewBotOf } from "./providers";
+import { providerOf, isReviewer, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
+import { configuredProviders, DEFAULT_PROVIDER, PROVIDER_NAMES, type ProviderId, reviewBotOf } from "./providers";
 import { providerApiBaseFor } from "./providers";
 import { WEEKLY_LIMIT, recordRegistration, registeredThisWeek } from "./quota";
 import {
@@ -122,7 +122,7 @@ const clamp = (raw: string | undefined, fallback: number, max: number) => {
 async function requireAuthor(c: { env: Env; req: { header: (k: string) => string | undefined } }) {
   const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1];
   if (!bearer) throw new HttpError(401, "missing bearer token");
-  return await upstream.fetchMe(c.env, bearer);
+  return await upstream.fetchMe(c.env, bearer, providerOf(c));
 }
 
 app.get("/v1/health", (c) => c.json({ ok: true }));
@@ -140,6 +140,19 @@ app.get("/v1/region", (c) => {
   const apiBase = providerApiBaseFor(c.env, country);
   return c.json({ country, apiBase }, 200, { "Cache-Control": "no-store" });
 });
+
+/**
+ * 這個部署接了哪幾家供應商。登入頁照這個列按鈕——前端寫死的話，沒配第二家的部署
+ * （包括自架的人）也會看到那顆按鈕，按下去每個請求都 400。
+ * 不需要登入：登入頁本來就還沒有身分。
+ */
+app.get("/v1/providers", (c) =>
+  c.json(
+    { providers: configuredProviders(c.env).map((id) => ({ id, name: PROVIDER_NAMES[id] })) },
+    200,
+    { "Cache-Control": "public, max-age=300" },
+  ),
+);
 
 /**
  * 圖片代抓，只給「匯出成 PNG 卡」用。
@@ -207,10 +220,21 @@ function parseZone(raw: string | undefined): Zone | undefined {
   return (ZONES as readonly string[]).includes(raw ?? "") ? (raw as Zone) : "zh";
 }
 
+/**
+ * 邊緣快取的鍵。供應商必須進去：兩家看的是各自的卡，共用一份快取等於把一家的內容
+ * 發給另一家的訪客。標頭不是快取鍵的一部分，所以要塞進網址。
+ */
+function cacheKeyFor(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, provider: ProviderId): Request {
+  const url = new URL(c.req.url);
+  url.searchParams.set("__provider", provider);
+  return new Request(url.toString(), { method: "GET", headers: c.req.raw.headers });
+}
+
 /** 公開、只讀、對所有人一樣的回應，都走這個邊緣快取。 */
 async function cachedJson(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, ttl: number, compute: () => Promise<unknown>) {
   const cache = await caches.open(boardCache.namespace);
-  const hit = await cache.match(c.req.raw);
+  const key = cacheKeyFor(c, providerOf(c));
+  const hit = await cache.match(key);
   if (hit) {
     const res = new Response(hit.body, hit);
     res.headers.set("X-Cache", "hit");
@@ -221,7 +245,7 @@ async function cachedJson(c: Context<{ Bindings: Env; Variables: { ev: Pending }
   res.headers.set("X-Cache", "miss");
   const stored = res.clone();
   stored.headers.set("X-Cache", "hit");
-  c.executionCtx.waitUntil(cache.put(c.req.raw, stored));
+  c.executionCtx.waitUntil(cache.put(key, stored));
   return res;
 }
 
@@ -238,9 +262,12 @@ app.get("/v1/cards", async (c) => {
   // 開了成人內容的人：先驗身分再查資料，回應不進快取、也不從快取拿——
   // 邊緣快取是公開的，一份帶成人內容的回應進了快取就會給下一個沒登入的人。
   const allowNsfw = await viewerAllowsNsfw(c);
+  const provider = providerOf(c);
   // 只有 GET 而且完全公開，所以整個 URL 就是快取鍵，不必自己組。推薦是隨機的，快取住就不隨機了。
+  // 供應商必須進快取鍵：兩家的榜單各看各的，共用一份快取等於把一家的卡發給另一家。
+  const cacheKey = cacheKeyFor(c, provider);
   const cache = await caches.open(boardCache.namespace);
-  const hit = allowNsfw || c.req.query("sort") === "random" ? undefined : await cache.match(c.req.raw);
+  const hit = allowNsfw || c.req.query("sort") === "random" ? undefined : await cache.match(cacheKey);
   if (hit) {
     // 快取命中一樣是一次瀏覽行為，只是結果數這種東西這條路上沒有
     const q0 = c.req.query("q")?.trim();
@@ -279,6 +306,7 @@ app.get("/v1/cards", async (c) => {
     return names.size ? [...names] : undefined;
   })();
   const { rows, total, hasNext } = await listCards(c.env.DB, {
+    provider,
     zone,
     q: c.req.query("q")?.trim() || undefined,
     tags,
@@ -316,7 +344,7 @@ app.get("/v1/cards", async (c) => {
   if (sort !== "random") {
     const stored = res.clone();
     stored.headers.set("X-Cache", "hit");
-    c.executionCtx.waitUntil(cache.put(c.req.raw, stored));
+    c.executionCtx.waitUntil(cache.put(cacheKey, stored));
   }
   return res;
 });
@@ -336,6 +364,7 @@ app.get("/v1/authors", (c) =>
     const limit = Math.max(1, clamp(c.req.query("limit"), 24, 100));
     const offset = clamp(c.req.query("offset"), 0, 10_000);
     const { rows, hasNext } = await listAuthors(c.env.DB, {
+      provider: providerOf(c),
       zone: parseZone(c.req.query("zone")),
       q: c.req.query("q")?.trim() || undefined,
       sort, limit, offset,
@@ -459,8 +488,9 @@ app.get("/v1/me/cards", async (c) => {
   const filterParam = c.req.query("filter");
   const filter: MineFilter = filterParam === "listed" || filterParam === "unlisted" ? filterParam : "all";
 
-  const me = await upstream.fetchMe(c.env, bearer);
-  const { body, source } = await loadMine(c.env, bearer, me.accountNumId, { page, pageSize, fresh, filter });
+  const provider = providerOf(c);
+  const me = await upstream.fetchMe(c.env, bearer, provider);
+  const { body, source } = await loadMine(c.env, bearer, me.accountNumId, { page, pageSize, fresh, filter, provider });
 
   note(c, { event: "mine_view", resultCount: body.items.length, offset: (page - 1) * pageSize, detail: filter });
   c.header("X-Cache", source);
@@ -580,10 +610,11 @@ app.post("/v1/cards", async (c) => {
   if (typeof body.nsfw !== "boolean") throw new HttpError(400, "nsfw_required");
   const nsfw = body.nsfw;
 
-  const role = await upstream.fetchRole(c.env, roleId);
+  const provider = providerOf(c);
+  const role = await upstream.fetchRole(c.env, roleId, provider);
   if (role.authorNumId !== me.accountNumId) throw new HttpError(403, "not the author of this card");
   // 登記的人一定是成員：作者頁與卡片上的作者連結都靠成員的公開 ID
-  await resolveMember(c.env.DB, DEFAULT_PROVIDER, me.accountNumId, Date.now());
+  await resolveMember(c.env.DB, provider, me.accountNumId, Date.now());
   // 榜單只收在本站建的卡。作者在主站建的卡不是這裡的東西——「我的卡片」也不會列它，
   // 這條是防直接打 API 的那一手。
   if (role.creationMethod !== CREATION_METHOD) throw new HttpError(403, "only cards created on this site can be listed");
@@ -591,9 +622,9 @@ app.post("/v1/cards", async (c) => {
   // 每週額度（見 quota.ts）。已經在榜上的卡再送一次是「刷新」，不佔額度；
   // 這週登記過又撤掉的同一張卡再登也不佔——它已經算過了。
   const now = Date.now();
-  const existing = await getCard(c.env.DB, roleId);
+  const existing = await getCard(c.env.DB, roleId, provider);
   if (!existing) {
-    const thisWeek = await registeredThisWeek(c.env.DB, me.accountNumId, now);
+    const thisWeek = await registeredThisWeek(c.env.DB, me.accountNumId, now, provider);
     if (!thisWeek.has(roleId) && thisWeek.size >= WEEKLY_LIMIT) {
       note(c, { event: "register", subject: roleId, detail: "quota" });
       throw new HttpError(403, "weekly_quota_exceeded");
@@ -604,15 +635,16 @@ app.post("/v1/cards", async (c) => {
   // 這是他的意思表示；前端在按下之前已經明說機器人能讀什麼），再記下提交當下的內容版本。
   // 授權失敗就整個提交失敗——沒有授權，審核人什麼都看不到，排進佇列也只是卡住。
   // 沒配機器人的部署退回「登記即上榜」。
-  const bot = reviewBotOf(c.env);
+  // 沒有審核機器人的供應商（Harbor 還沒有分享介面）退回「登記即上榜」。
+  const bot = reviewBotOf(c.env, provider);
   let contentHash = "";
   if (bot) {
-    await upstream.grantShare(c.env, bearer, roleId, bot.accountNumId);
-    contentHash = (await upstream.fetchContentHash(c.env, bot.key, roleId)).content;
+    await upstream.grantShare(c.env, bearer, roleId, bot.accountNumId, provider);
+    contentHash = (await upstream.fetchContentHash(c.env, bot.key, roleId, provider)).content;
   }
 
-  const { id, created } = await upsertCard(c.env.DB, role, now, { status: bot ? "pending" : "approved", provider: DEFAULT_PROVIDER, nsfw });
-  if (created) await recordRegistration(c.env.DB, me.accountNumId, roleId, now);
+  const { id, created } = await upsertCard(c.env.DB, role, now, { status: bot ? "pending" : "approved", provider, nsfw });
+  if (created) await recordRegistration(c.env.DB, me.accountNumId, roleId, now, provider);
   // 宣告跟著最新一次提交走；在榜的卡改了宣告視同內容變了（下面重審）
   const declarationChanged = !!existing && (existing.nsfw === 1) !== nsfw;
   if (existing && declarationChanged) await setCardNsfw(c.env.DB, id, nsfw);

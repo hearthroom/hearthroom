@@ -1,3 +1,4 @@
+import { apiBaseOf, DEFAULT_PROVIDER, type ProviderId } from "./providers";
 import { type Env, HttpError, type Localized } from "./types";
 
 /**
@@ -13,7 +14,8 @@ import { type Env, HttpError, type Localized } from "./types";
  * 所以任何人都能 fork 一份自己架。
  */
 
-const apiUrl = (env: Env, path: string) => `${env.PROVIDER_API_BASE}${path}`;
+// 位址依供應商挑：同一支程式對兩家說同一套公開契約，只是各自的家在不同網域。
+const apiUrl = (env: Env, provider: ProviderId, path: string) => `${apiBaseOf(env, provider)}${path}`;
 
 /**
  * 明確表明身分。上游擋在 CDN 的 bot 防護後面，沒有 User-Agent 的自動請求容易被
@@ -35,8 +37,8 @@ async function readJson(res: Response, what: string): Promise<Record<string, unk
  * 轉發的是使用者自己授權給本站的 token，權限範圍不超過他本來就給出去的那些；
  * 它只在這一個呼叫裡出現，不寫日誌、不進 D1、不進 KV。
  */
-async function fetchMe(env: Env, bearer: string): Promise<{ accountNumId: number }> {
-  const res = await fetch(apiUrl(env, "/open/v1/me"), {
+async function fetchMe(env: Env, bearer: string, provider: ProviderId = DEFAULT_PROVIDER): Promise<{ accountNumId: number }> {
+  const res = await fetch(apiUrl(env, provider, "/open/v1/me"), {
     headers: { Authorization: `Bearer ${bearer}`, "User-Agent": UA },
   });
   const body = await readJson(res, "identity");
@@ -168,10 +170,11 @@ export async function fetchMyRoles(
   bearer: string,
   page: number,
   pageSize: number,
+  provider: ProviderId = DEFAULT_PROVIDER,
 ): Promise<MyRolePage> {
   const res = await fetch(
     // 只要本站建的那一組：作者在主站建的卡不進這裡，也登記不上榜。
-    apiUrl(env, `/open/v1/role/mine?pageNum=${page}&pageSize=${pageSize}&creationMethod=${CREATION_METHOD}`),
+    apiUrl(env, provider, `/open/v1/role/mine?pageNum=${page}&pageSize=${pageSize}&creationMethod=${CREATION_METHOD}`),
     { headers: { Authorization: `Bearer ${bearer}`, language: "zh-Hans", "User-Agent": UA } },
   );
   const body = await readJson(res, "role list");
@@ -194,8 +197,8 @@ export async function fetchMyRoles(
 }
 
 /** 匿名讀一張卡。同步跑在排程裡，那時沒有使用者在線，手上不會有任何人的 token。 */
-async function fetchRole(env: Env, roleId: string): Promise<UpstreamRole> {
-  const res = await fetch(apiUrl(env, `/open/v1/role/detail?roleId=${encodeURIComponent(roleId)}`), {
+async function fetchRole(env: Env, roleId: string, provider: ProviderId = DEFAULT_PROVIDER): Promise<UpstreamRole> {
+  const res = await fetch(apiUrl(env, provider, `/open/v1/role/detail?roleId=${encodeURIComponent(roleId)}`), {
     headers: { language: "zh-Hans", "User-Agent": UA },
   });
   const role = projectRole(await readJson(res, "role"));
@@ -228,8 +231,8 @@ export function buildSearchText(role: UpstreamRole): string {
 // 聊天、點數、建卡之外。這是對檔頭「沒有服務帳號」那句話的有意識翻轉（2026-09-07）。
 
 /** 作者把一張卡的「可閱讀詳情」授權給某個帳號。作者自己的 token，用完即棄。 */
-async function grantShare(env: Env, bearer: string, roleId: string, granteeAccountNumId: number): Promise<void> {
-  const res = await fetch(apiUrl(env, "/open/v1/share/role/grant"), {
+async function grantShare(env: Env, bearer: string, roleId: string, granteeAccountNumId: number, provider: ProviderId = DEFAULT_PROVIDER): Promise<void> {
+  const res = await fetch(apiUrl(env, provider, "/open/v1/share/role/grant"), {
     method: "POST",
     headers: { Authorization: `Bearer ${bearer}`, "Content-Type": "application/json", "User-Agent": UA },
     body: JSON.stringify({ roleId, granteeAccountNumId }),
@@ -243,8 +246,8 @@ export interface ContentHashes { card: string; welcome: string; worldbook: strin
 const botHeaders = (key: string) => ({ Authorization: `Bearer ${key}`, "User-Agent": UA });
 
 /** 機器人讀一張卡的內容雜湊。授權被收回時上游回 401/403，readJson 統一成 401。 */
-async function fetchContentHash(env: Env, botKey: string, roleId: string): Promise<ContentHashes> {
-  const res = await fetch(apiUrl(env, `/open/v1/share/role/content-hash?roleId=${encodeURIComponent(roleId)}`), { headers: botHeaders(botKey) });
+async function fetchContentHash(env: Env, botKey: string, roleId: string, provider: ProviderId = DEFAULT_PROVIDER): Promise<ContentHashes> {
+  const res = await fetch(apiUrl(env, provider, `/open/v1/share/role/content-hash?roleId=${encodeURIComponent(roleId)}`), { headers: botHeaders(botKey) });
   const body = await readJson(res, "content hash");
   const h = (body.hashes ?? {}) as Record<string, unknown>;
   return { card: str(h.card), welcome: str(h.welcome), worldbook: str(h.worldbook), authorAsset: str(h.authorAsset), content: str(h.content) };
@@ -254,8 +257,8 @@ async function fetchContentHash(env: Env, botKey: string, roleId: string): Promi
  * 機器人讀整份設定。回上游原樣（審核頁要看的就是原始碼），但作者的公開 ID 在這裡就拿掉——
  * 盲審：審核人不該從回應裡看到是誰寫的。
  */
-async function fetchSharedDetail(env: Env, botKey: string, roleId: string): Promise<Record<string, unknown>> {
-  const res = await fetch(apiUrl(env, `/open/v1/share/role/detail?roleId=${encodeURIComponent(roleId)}`), { headers: botHeaders(botKey) });
+async function fetchSharedDetail(env: Env, botKey: string, roleId: string, provider: ProviderId = DEFAULT_PROVIDER): Promise<Record<string, unknown>> {
+  const res = await fetch(apiUrl(env, provider, `/open/v1/share/role/detail?roleId=${encodeURIComponent(roleId)}`), { headers: botHeaders(botKey) });
   const body = await readJson(res, "shared detail");
   const { authorNumId: _dropped, ...rest } = body;
   return rest;

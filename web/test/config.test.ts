@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as config from "../src/lib/config";
+import { setProvider } from "../src/lib/provider";
 
 const DEFAULT = "https://api.lunatalk.ai";
 const reply = (body: unknown) => vi.fn(async () => new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } }));
@@ -25,8 +26,15 @@ describe("resolveUpstream", () => {
     expect(await config.resolveUpstream(never as unknown as typeof fetch, 10)).toBe(DEFAULT);
   });
 
-  it("resource 指示器固定用主網域，不跟著實際打的網域走", async () => {
+  it("resource 指示器固定用該供應商的主網域，不跟著實際打的網域走", async () => {
     await config.resolveUpstream(reply({ apiBase: "https://api.example.pro" }) as unknown as typeof fetch);
-    expect(config.OAUTH_RESOURCE).toBe(`${DEFAULT}/open/v1`);
+    expect(config.oauthResource()).toBe(`${DEFAULT}/open/v1`);
+  });
+
+  it("換一家供應商，resource 跟著換：同一個字串在兩家不通用", () => {
+    setProvider("harbor");
+    expect(config.oauthResource()).toBe("https://api.harperharbor.com/open/v1");
+    setProvider("lunatalk");
+    expect(config.oauthResource()).toBe(`${DEFAULT}/open/v1`);
   });
 });

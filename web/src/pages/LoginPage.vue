@@ -9,12 +9,13 @@
  * 登入後回哪裡走網址參數（?returnTo=），只收站內路徑（safeReturnTo），擋開放轉址。
  * 已經登入的人來到這頁：直接送去 returnTo。
  */
-import { onMounted, watch } from "vue";
+import { onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import { pageTitle } from "@/lib/i18n";
 import { safeReturnTo } from "@/lib/login-return";
-import { PROVIDERS } from "@/lib/providers";
+import { currentProvider, PROVIDERS } from "@/lib/provider";
+import { availableProviders, chooseProvider, needsSwitchConfirm } from "@/lib/provider-switch";
 import { useSession } from "@/lib/session";
 import { SITE } from "@/lib/site";
 
@@ -25,14 +26,32 @@ const { t } = useI18n();
 
 const returnTo = () => safeReturnTo(route.query.returnTo);
 
-function start(providerId: string) {
-  // 現在只有一家；接第二家時這裡按代號分流
-  if (providerId !== "lunatalk") return;
-  void session.login(returnTo());
+/** 正在問「要換到另一家嗎」的那一家；null 表示沒有在問。 */
+const pendingSwitch = ref<(typeof PROVIDERS)[number] | null>(null);
+/** 這個部署有的那幾家。先給預設那家，問到再換上——登入頁不該為了一次請求空白著。 */
+const providers = ref<typeof PROVIDERS>([PROVIDERS[0]]);
+
+function start(provider: (typeof PROVIDERS)[number]) {
+  // 換一家等於換一個帳號：已經登入的人要先看清楚這件事再決定。
+  if (needsSwitchConfirm(provider.id, { signedIn: !!session.me })) {
+    pendingSwitch.value = provider;
+    return;
+  }
+  void go(provider.id);
 }
 
-onMounted(() => {
+async function go(id: (typeof PROVIDERS)[number]["id"]) {
+  pendingSwitch.value = null;
+  await chooseProvider(id, {
+    signedIn: !!session.me,
+    logout: () => session.logout(),
+    login: () => session.login(returnTo()),
+  });
+}
+
+onMounted(async () => {
   document.title = pageTitle(t("login.title"));
+  providers.value = await availableProviders();
 });
 watch(() => [session.ready, session.me], () => {
   if (session.ready && session.me) void router.replace(returnTo());
@@ -47,11 +66,29 @@ watch(() => [session.ready, session.me], () => {
       <p class="login__lead">{{ $t("login.lead") }}</p>
 
       <div class="login__providers">
-        <button v-for="p in PROVIDERS" :key="p.id" type="button" class="btn btn--primary btn--lg login__provider" @click="start(p.id)">
+        <button
+          v-for="p in providers"
+          :key="p.id"
+          type="button"
+          class="btn btn--lg login__provider"
+          :class="p.id === currentProvider() ? 'btn--primary' : 'btn--ghost'"
+          @click="start(p)"
+        >
           {{ $t("login.continueWith", { provider: p.name }) }}
         </button>
       </div>
       <p class="subtle login__more">{{ $t("login.moreComing") }}</p>
+
+      <!-- 換家＝換帳號。講清楚會變成什麼，再讓他按下去。 -->
+      <div v-if="pendingSwitch" class="login__confirm" role="alertdialog" aria-live="polite">
+        <p class="login__confirmText">{{ $t("login.switchWarning", { provider: pendingSwitch.name }) }}</p>
+        <div class="login__confirmActions">
+          <button type="button" class="btn btn--ghost" @click="pendingSwitch = null">{{ $t("dialog.cancel") }}</button>
+          <button type="button" class="btn btn--primary" @click="go(pendingSwitch.id)">
+            {{ $t("login.switchConfirm", { provider: pendingSwitch.name }) }}
+          </button>
+        </div>
+      </div>
       <p class="subtle login__note">{{ $t("login.note") }}</p>
     </section>
   </div>
@@ -66,4 +103,7 @@ watch(() => [session.ready, session.me], () => {
 .login__provider { width: 100%; }
 .login__more { margin: 0; }
 .login__note { margin: var(--s-2) 0 0; }
+.login__confirm { margin-top: var(--s-2); padding: var(--s-3); border: 1px solid var(--line); border-radius: var(--r-2); background: var(--surface-2); display: grid; gap: var(--s-2); }
+.login__confirmText { margin: 0; font-size: 14px; line-height: 1.6; text-align: left; }
+.login__confirmActions { display: flex; gap: var(--s-2); justify-content: flex-end; }
 </style>
