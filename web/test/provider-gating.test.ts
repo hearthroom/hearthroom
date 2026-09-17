@@ -25,8 +25,9 @@ describe("能力表", () => {
     expect(can("worldbook")).toBe(true);
     expect(can("comments")).toBe(true);
     for (const f of ["validation", "deleteRole", "tags", "previewPage", "outputContract", "welcomeExtras"] as const) expect(can(f), f).toBe(true);
-    // 圖庫等物件儲存接上、試玩等對話引擎、審核等機器人
-    for (const f of ["chatTest", "library", "review"] as const) expect(can(f), f).toBe(false);
+    expect(can("chatTest")).toBe(true);
+    expect(can("library")).toBe(true);
+    for (const f of ["review"] as const) expect(can(f), f).toBe(false);
   });
 });
 
@@ -44,11 +45,11 @@ describe("路由擋下那一家沒有的頁", () => {
   ];
 
   for (const [path, feature] of cases) {
-    it(`${path} 需要 ${feature}：Harbor 進不去`, async () => {
+    it(`${path} 需要 ${feature}：Harbor 圖庫已接上`, async () => {
       setProvider("harbor");
       const match = router.resolve(path);
       expect(match.meta.feature).toBe(feature);
-      expect(can(match.meta.feature as never)).toBe(false);
+      expect(can(match.meta.feature as never)).toBe(true);
     });
 
     it(`${path}：LunaTalk 照常進得去`, () => {

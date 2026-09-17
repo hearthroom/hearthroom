@@ -58,6 +58,8 @@ it("copies bound worldbooks and the author asset, then binds the new book to the
   const requests = fakeUpstream({
     "/role/detail": () => role,
     "/worldbook/bindings": () => ({ bindings: [{ worldbookId: "book", name: "Lore", entryCount: 1 }] }),
+    "/worldbook/detail": () => ({name:"Lore",language:"en"}),
+    "/worldbook/entry/list?worldbookId=tb": () => ({entries:[]}),
     "/worldbook/entry/list": () => ({ list: [{ entryId: "e1", name: " Town ", content: "A port", keywords: ["port", " "], isEnabled: true, category: "custom", triggerRegion: "both" }] }),
     "/role/author-asset?roleId=source": () => ({ rules: [{ find: "a", replace: "b" }], mountTrigger: "", mountLayer: "under", pageMode: "", version: 3 }),
     "/role/author-asset?roleId=target": () => json({ error: "not_found" }, 404),
@@ -66,7 +68,7 @@ it("copies bound worldbooks and the author asset, then binds the new book to the
   });
   const source = await transfers.read(env, "lunatalk", "token", "source", 1);
   expect(source.card.worldbooks).toEqual([
-    { sourceId: "book", name: "Lore", entries: [{ name: "Town", content: "A port", keywords: ["port"], secondaryKeywords: [], isEnabled: true, isConstant: false, category: "", triggerRegion: "" }] },
+    { sourceId: "book", name: "Lore", metadata:expect.objectContaining({name:"Lore",language:"en"}), entries: [{ name: "Town", content: "A port", keywords: ["port"], secondaryKeywords: [], isEnabled: true, isConstant: false, category: "", triggerRegion: "" }] },
   ]);
   expect(source.card.authorAsset).toEqual({ rules: [{ find: "a", replace: "b" }], mountTrigger: "", mountLayer: "under", pageMode: "" });
 
@@ -149,10 +151,55 @@ it('preserves instructions, examples and tags through the shared document API', 
   const read=await transfers.read(env,'lunatalk','token','source',1);
   await transfers.update(env,'harbor','target','copy',read.card);
   const document=requests.find(r=>r.url.endsWith('/document'));
-  const {customInstructions,...rest}=extra;
-  // 寫入時用契約兩家都認的 jailbreak，不用只有一家認的 customInstructions
-  expect(body(document).fields).toMatchObject({...rest,jailbreak:customInstructions});
+  expect(body(document).fields).toMatchObject(extra);
+  expect(body(document).fields).not.toHaveProperty('jailbreak');
   await transfers.publish(env,'harbor','target','copy');
   expect(requests.at(-1)?.url.endsWith('/role/copy/publish')).toBe(true);
   expect(body(requests.at(-1))).not.toHaveProperty('content_rating');
+});
+
+it('preserves Lorebook entries, alternate greetings and author rendering assets', async () => {
+  const calls:{url:string,method:string,body:any}[]=[];
+  const detail={...role,roleWelcomeAlternates:['Another opening'],rolePrologue:['Ask for help'],cardMeta:{version:1}};
+  const entry={entryId:'source-entry',name:'Support hours',content:'Open weekdays',keywords:['hours'],secondaryKeywords:[],isEnabled:true,isConstant:false,category:'rule',triggerRegion:'both',matchOptions:{caseSensitive:false,matchWholeWords:true,selectiveLogic:0}};
+  const asset={rules:[{id:'rule-1',name:'Title',find:'Hello',replace:'Welcome',enabled:true}],pageMode:'sandbox',mountTrigger:'{{app}}',mountLayer:'overlay',version:4};
+  vi.stubGlobal('fetch',vi.fn(async(url:string,init?:RequestInit)=>{
+    const u=String(url),body=init?.body?JSON.parse(String(init.body)):null;
+    calls.push({url:u,method:init?.method||'GET',body});
+    if(u.includes('/role/detail'))return json(detail);
+    if(u.includes('/worldbook/bindings'))return json({bindings:[{worldbookId:'source-book'}]});
+    if(u.includes('/worldbook/detail'))return json({worldbookId:'source-book',name:'Support',description:'Policy',language:'en',format:'tavern',tags:''});
+    if(u.includes('/worldbook/entry/list'))return json({entries:u.includes('target-book')?[]:[entry]});
+    if(u.includes('/role/author-asset?'))return json(u.includes('roleId=source')?asset:{version:0,rules:[],pageMode:'classic'});
+    if(u.endsWith('/worldbook'))return json({worldbookId:'target-book'});
+    return json({});
+  }));
+  const source=await transfers.read(env,'lunatalk','source-token','source',1);
+  const progress:any={books:{}};
+  const checkpoints:any[]=[];
+  await transfers.update(env,'harbor','target-token','target',source.card,async()=>{},progress,async()=>{checkpoints.push(structuredClone(progress))});
+  expect(calls.find(c=>c.url.endsWith('/role/target/welcome'))?.body).toMatchObject({roleWelcome:'Hello',alternates:['Another opening'],prologue:['Ask for help']});
+  expect(calls.find(c=>c.method==='PUT'&&c.url.endsWith('/role/target/author-asset'))?.body).toMatchObject({...asset,version:0});
+  const doc=calls.find(c=>c.url.endsWith('/worldbook/target-book/document'))?.body;
+  expect(doc.binding).toEqual({roleId:'target'});
+  const {entryId: sourceEntryId,...content}=entry;
+  expect(doc.entries[0]).toMatchObject({...content,triggerRegion:'',op:'create'});
+  expect(doc.entries[0]).not.toHaveProperty('entryId');
+  expect(progress.books['source-book'].id).toBe('target-book');
+  expect(checkpoints[0].books['source-book'].status).toBe('creating');
+  expect(checkpoints[1].books['source-book'].id).toBe('target-book');
+  expect(JSON.stringify(calls)).not.toContain('contentRatingIntent');
+});
+it('preserves translated instructions in an author-owned Harper copy',async()=>{
+ const writes:any[]=[];
+ vi.stubGlobal('fetch',vi.fn(async(url:string,init?:RequestInit)=>{
+  if(String(url).includes('/role/detail'))return json({...role,roleNameJa:'案内',roleDescJa:'紹介',roleDetailDescJa:'非公開の設定',roleWelcomeJa:'こんにちは'});
+  if(String(url).includes('/bindings'))return json({bindings:[]});
+  if(String(url).includes('/author-asset'))return json({rules:[]});
+  if(init?.body)writes.push({url:String(url),body:JSON.parse(String(init.body))});
+  return new Response(null,{status:204});
+ }));
+ const source=await transfers.read(env,'lunatalk','source-token','source',1);
+ await transfers.update(env,'harbor','target-token','target',source.card);
+ expect(writes).toContainEqual({url:expect.stringContaining('/roles/target/locales'),body:{locale:'ja',name:'案内',summary:'紹介',description:'非公開の設定',greeting:'こんにちは',source:'human',source_locale:'en'}});
 });

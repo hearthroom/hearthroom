@@ -80,7 +80,7 @@ it("lists each available copy once and separates storage from play capability", 
   ).json()) as any;
   expect(result.platforms).toEqual([
     { provider: "lunatalk", roleId: "source", playable: true },
-    { provider: "harbor", roleId: "copy", playable: false },
+    { provider: "harbor", roleId: "copy", playable: true },
   ]);
 });
 it("never advertises failed copies or adult cards to unauthenticated readers", async () => {

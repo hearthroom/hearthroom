@@ -2091,6 +2091,240 @@
               }
             }
           }
+        },
+        "x-harperharbor": {
+          "description": "Returns stored messages, newest first, plus durable operation outcomes. Requires chat.play and conversation ownership. page starts at 1; pageSize defaults to 50 and is limited to 100. chats contains public chat IDs, message text, thinking text, model, turnStatus and completion state. Partial output remains visible after interruption.",
+          "security": [
+            {
+              "userToken": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "conversationId",
+              "in": "query",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            {
+              "name": "page",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "integer",
+                "minimum": 1,
+                "default": 1
+              }
+            },
+            {
+              "name": "pageSize",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100,
+                "default": 50
+              }
+            }
+          ],
+          "responses": {
+            "400": {
+              "description": "invalid_request",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "unauthorized",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "403": {
+              "description": "insufficient_scope: requires chat.play",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "not_found: inaccessible resource",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "409": {
+              "description": "chat_operation_conflict",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "503": {
+              "description": "temporarily_unavailable",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "200": {
+              "description": "Successful response.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "total": {
+                        "type": "integer"
+                      },
+                      "size": {
+                        "type": "integer"
+                      },
+                      "pages": {
+                        "type": "integer"
+                      },
+                      "hasNextPage": {
+                        "type": "boolean"
+                      },
+                      "chats": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "chatId": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "chatRole": {
+                              "type": "string",
+                              "enum": [
+                                "USER",
+                                "AI"
+                              ]
+                            },
+                            "chatMessage": {
+                              "type": "string"
+                            },
+                            "contentThinking": {
+                              "type": "string"
+                            },
+                            "isComplete": {
+                              "type": "boolean"
+                            },
+                            "isFirst": {
+                              "type": "boolean"
+                            },
+                            "model": {
+                              "type": "string"
+                            },
+                            "turnStatus": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      "operations": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "operationId": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "clientOperationId": {
+                              "type": "string"
+                            },
+                            "conversationId": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "send"
+                              ]
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "accepted",
+                                "generating",
+                                "completed",
+                                "failed_retryable",
+                                "interrupted",
+                                "stopped"
+                              ]
+                            },
+                            "version": {
+                              "type": "integer"
+                            },
+                            "outputDisposition": {
+                              "type": "string"
+                            },
+                            "retryable": {
+                              "type": "boolean"
+                            },
+                            "assistantChatId": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "sourceChatId": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "chargeCredits": {
+                              "type": "integer"
+                            },
+                            "settled": {
+                              "type": "boolean"
+                            },
+                            "allowedActions": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "operationStatusAvailable": {
+                        "type": "boolean"
+                      },
+                      "schemaVersion": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -2380,6 +2614,167 @@
               }
             }
           }
+        },
+        "x-harperharbor": {
+          "description": "Lists durable send operations for the owned conversation. Requires chat.play. Returns operations and operationStatusAvailable=true. Each outcome includes public operation/message identifiers, state, outputDisposition, chargeCredits and settled. Wallet settlement can complete just after the terminal output state; poll again when settled=false.",
+          "security": [
+            {
+              "userToken": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "conversationId",
+              "in": "query",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          ],
+          "responses": {
+            "400": {
+              "description": "invalid_request",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "unauthorized",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "403": {
+              "description": "insufficient_scope: requires chat.play",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "not_found: inaccessible resource",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "409": {
+              "description": "chat_operation_conflict",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "503": {
+              "description": "temporarily_unavailable",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "200": {
+              "description": "Successful response.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "operations": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "operationId": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "clientOperationId": {
+                              "type": "string"
+                            },
+                            "conversationId": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "send"
+                              ]
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "accepted",
+                                "generating",
+                                "completed",
+                                "failed_retryable",
+                                "interrupted",
+                                "stopped"
+                              ]
+                            },
+                            "version": {
+                              "type": "integer"
+                            },
+                            "outputDisposition": {
+                              "type": "string"
+                            },
+                            "retryable": {
+                              "type": "boolean"
+                            },
+                            "assistantChatId": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "sourceChatId": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "chargeCredits": {
+                              "type": "integer"
+                            },
+                            "settled": {
+                              "type": "boolean"
+                            },
+                            "allowedActions": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "operationStatusAvailable": {
+                        "type": "boolean"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -2471,6 +2866,156 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/OperationStatusError"
+                }
+              }
+            }
+          }
+        },
+        "x-harperharbor": {
+          "description": "Returns one owned durable send operation. Requires chat.play. The operation identifier is not authority: a different account receives not_found.",
+          "security": [
+            {
+              "userToken": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "operationId",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          ],
+          "responses": {
+            "400": {
+              "description": "invalid_request",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "unauthorized",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "403": {
+              "description": "insufficient_scope: requires chat.play",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "not_found: inaccessible resource",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "409": {
+              "description": "chat_operation_conflict",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "503": {
+              "description": "temporarily_unavailable",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "200": {
+              "description": "Successful response.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "operationId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "clientOperationId": {
+                        "type": "string"
+                      },
+                      "conversationId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "send"
+                        ]
+                      },
+                      "state": {
+                        "type": "string",
+                        "enum": [
+                          "accepted",
+                          "generating",
+                          "completed",
+                          "failed_retryable",
+                          "interrupted",
+                          "stopped"
+                        ]
+                      },
+                      "version": {
+                        "type": "integer"
+                      },
+                      "outputDisposition": {
+                        "type": "string"
+                      },
+                      "retryable": {
+                        "type": "boolean"
+                      },
+                      "assistantChatId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "sourceChatId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "chargeCredits": {
+                        "type": "integer"
+                      },
+                      "settled": {
+                        "type": "boolean"
+                      },
+                      "allowedActions": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -3072,6 +3617,149 @@
           "500": {
             "description": "Body had no string `roleId` (unchecked type assertion → panic recovery). Empty body."
           }
+        },
+        "x-harperharbor": {
+          "description": "Opens or resumes the current conversation for the caller and agent. Requires chat.play and agent access. Inserts the selected greeting only when creating the conversation; this endpoint does not call a model. Returns conversationId, defaultRelay (greeting text), historyConversation, roleInfo and xmlV3Compatibility=false. Missing or invalid roleId returns 400.",
+          "security": [
+            {
+              "userToken": []
+            }
+          ],
+          "parameters": [],
+          "responses": {
+            "400": {
+              "description": "invalid_request",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "unauthorized",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "403": {
+              "description": "insufficient_scope: requires chat.play",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "not_found: inaccessible resource",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "409": {
+              "description": "chat_operation_conflict",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "503": {
+              "description": "temporarily_unavailable",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "200": {
+              "description": "Successful response.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "conversationId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "defaultRelay": {
+                        "type": "string"
+                      },
+                      "historyConversation": {
+                        "type": "boolean"
+                      },
+                      "roleInfo": {
+                        "type": "object",
+                        "properties": {
+                          "roleId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "roleName": {
+                            "type": "string"
+                          },
+                          "roleWelcome": {
+                            "type": "string"
+                          },
+                          "roleAvatar": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "xmlV3Compatibility": {
+                        "type": "boolean"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "roleId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "language": {
+                      "type": "string"
+                    },
+                    "userName": {
+                      "type": "string"
+                    },
+                    "greetingIndex": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "roleId"
+                  ]
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -3156,6 +3844,111 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LegacyError"
+                }
+              }
+            }
+          }
+        },
+        "x-harperharbor": {
+          "description": "Requests cancellation of the active operation for an owned conversation. Requires chat.play. The initial Harper runtime charges only completed results; stopped and interrupted operations release reserved credits. Returns stopped=true after recording the stop request.",
+          "security": [
+            {
+              "userToken": []
+            }
+          ],
+          "parameters": [],
+          "responses": {
+            "400": {
+              "description": "invalid_request",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "unauthorized",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "403": {
+              "description": "insufficient_scope: requires chat.play",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "not_found: inaccessible resource",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "409": {
+              "description": "chat_operation_conflict",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "503": {
+              "description": "temporarily_unavailable",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "200": {
+              "description": "Successful response.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "stopped": {
+                        "type": "boolean"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "conversationId": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  },
+                  "required": [
+                    "conversationId"
+                  ]
                 }
               }
             }
@@ -3899,6 +4692,128 @@
             "firstChatFrame": "15 s",
             "ticketTTL": "30 s",
             "resumeRecentReplyWindow": "30 s"
+          }
+        },
+        "x-harperharbor": {
+          "description": "Requires chat.play. Issues a random, single-use ticket with a 30-second lifetime. Connect to /open/v1/conversation/ws?protocolVersion=2 and send {\"type\":\"auth\",\"ticket\":\"...\"} as the first frame. Wait for ready before sending. The first turn contains conversationId, message and a stable clientOperationId; operationKind is send. Only the configured model is accepted. Rewrite, continue, multi-pass and thinking-depth overrides are rejected. SSE-formatted WebSocket frames include streamMeta, accepted, messageMeta, answer/thinking deltas, operationStatus and done. Reconnect with resumeStreamId and lastEventId to replay durable chunks; mode=tryResume plus conversationId finds an active operation. Reusing a clientOperationId with different input returns a conflict. No bearer or ticket belongs in a URL.",
+          "security": [
+            {
+              "userToken": []
+            }
+          ],
+          "parameters": [],
+          "responses": {
+            "400": {
+              "description": "invalid_request",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "unauthorized",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "403": {
+              "description": "insufficient_scope: requires chat.play",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "not_found: inaccessible resource",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "409": {
+              "description": "chat_operation_conflict",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "503": {
+              "description": "temporarily_unavailable",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "200": {
+              "description": "Successful response.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "ticket": {
+                        "type": "string"
+                      },
+                      "expiresIn": {
+                        "type": "integer"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "x-websocket": {
+            "path": "/open/v1/conversation/ws",
+            "protocolVersion": "2",
+            "authFrame": {
+              "type": "auth",
+              "ticket": "<single-use ticket>"
+            },
+            "sendFields": [
+              "conversationId",
+              "message",
+              "clientOperationId",
+              "operationKind",
+              "language",
+              "model"
+            ],
+            "supportedOperations": [
+              "send",
+              "stop",
+              "resume"
+            ],
+            "events": [
+              "ready",
+              "streamMeta",
+              "accepted",
+              "messageMeta",
+              "answer",
+              "thinking",
+              "operationStatus",
+              "done",
+              "error",
+              "noActiveStream"
+            ]
           }
         }
       }
@@ -4947,6 +5862,90 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-harperharbor": {
+          "description": "Returns configured model groups and variants. Requires chat.play. Rates are credits per 1,000,000 tokens (input, output and cached input). estMinScore/estMaxScore are conservative per-turn bounds from the minimum completed charge and maximum accepted input/output, not typical-use estimates. No uptime history, membership discounts or multi-pass pricing is implied.",
+          "security": [
+            {
+              "userToken": []
+            }
+          ],
+          "parameters": [],
+          "responses": {
+            "400": {
+              "description": "invalid_request",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "unauthorized",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "403": {
+              "description": "insufficient_scope: requires chat.play",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "not_found: inaccessible resource",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "409": {
+              "description": "chat_operation_conflict",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "503": {
+              "description": "temporarily_unavailable",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "200": {
+              "description": "Successful response.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ModelGroup"
+                    }
+                  }
                 }
               }
             }
@@ -6170,6 +7169,136 @@
               }
             }
           }
+        },
+        "x-harperharbor": {
+          "description": "Returns the caller's per-agent settings. Requires chat.play and access to the agent. Supported persona modes are name_only and custom. Global and conversation-specific personas, permanent memory, automatic compaction and multi-pass mode are not supported.",
+          "security": [
+            {
+              "userToken": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "roleId",
+              "in": "query",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          ],
+          "responses": {
+            "400": {
+              "description": "invalid_request",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "unauthorized",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "403": {
+              "description": "insufficient_scope: requires chat.play",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "not_found: inaccessible resource",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "409": {
+              "description": "chat_operation_conflict",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "503": {
+              "description": "temporarily_unavailable",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "200": {
+              "description": "Successful response.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "roleId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "userName": {
+                        "type": "string"
+                      },
+                      "userSex": {
+                        "type": "string"
+                      },
+                      "userDefine": {
+                        "type": "string"
+                      },
+                      "personaMode": {
+                        "type": "string"
+                      },
+                      "selectModel": {
+                        "type": "string"
+                      },
+                      "sandboxLevel": {
+                        "type": "string"
+                      },
+                      "customInstructions": {
+                        "type": "string"
+                      },
+                      "systemPrompt": {
+                        "type": "string"
+                      },
+                      "thinkingDepth": {
+                        "type": "string"
+                      },
+                      "context": {
+                        "type": "integer",
+                        "enum": [
+                          1
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -6223,6 +7352,144 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-harperharbor": {
+          "description": "Partially updates the caller's per-agent settings. Requires chat.play and access to the agent. Settings used by generation include userName, personaMode, userSex, userDefine, sandboxLevel, systemPrompt, customInstructions and selectModel. Unsupported settings are rejected; changing settings does not change an existing send intent.",
+          "security": [
+            {
+              "userToken": []
+            }
+          ],
+          "parameters": [],
+          "responses": {
+            "400": {
+              "description": "invalid_request",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "unauthorized",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "403": {
+              "description": "insufficient_scope: requires chat.play",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "not_found: inaccessible resource",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "409": {
+              "description": "chat_operation_conflict",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "503": {
+              "description": "temporarily_unavailable",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "200": {
+              "description": "Successful response.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "success": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "roleId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "userName": {
+                      "type": "string"
+                    },
+                    "userSex": {
+                      "type": "string"
+                    },
+                    "userDefine": {
+                      "type": "string"
+                    },
+                    "personaMode": {
+                      "type": "string"
+                    },
+                    "selectModel": {
+                      "type": "string"
+                    },
+                    "sandboxLevel": {
+                      "type": "string"
+                    },
+                    "customInstructions": {
+                      "type": "string"
+                    },
+                    "systemPrompt": {
+                      "type": "string"
+                    },
+                    "thinkingDepth": {
+                      "type": "string"
+                    },
+                    "context": {
+                      "type": "integer",
+                      "enum": [
+                        1
+                      ]
+                    }
+                  },
+                  "required": [
+                    "roleId"
+                  ]
                 }
               }
             }
@@ -9653,6 +10920,68 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/open/v1/conversation/ws": {
+      "get": {
+        "operationId": "connectConversationStream",
+        "tags": [
+          "Conversation"
+        ],
+        "summary": "Connect an authenticated conversation stream",
+        "description": "Requires chat.play. Issues a random, single-use ticket with a 30-second lifetime. Connect to /open/v1/conversation/ws?protocolVersion=2 and send {\"type\":\"auth\",\"ticket\":\"...\"} as the first frame. Wait for ready before sending. The first turn contains conversationId, message and a stable clientOperationId; operationKind is send. Only the configured model is accepted. Rewrite, continue, multi-pass and thinking-depth overrides are rejected. SSE-formatted WebSocket frames include streamMeta, accepted, messageMeta, answer/thinking deltas, operationStatus and done. Reconnect with resumeStreamId and lastEventId to replay durable chunks; mode=tryResume plus conversationId finds an active operation. Reusing a clientOperationId with different input returns a conflict. No bearer or ticket belongs in a URL.",
+        "x-harperharbor": {
+          "description": "Requires chat.play. Issues a random, single-use ticket with a 30-second lifetime. Connect to /open/v1/conversation/ws?protocolVersion=2 and send {\"type\":\"auth\",\"ticket\":\"...\"} as the first frame. Wait for ready before sending. The first turn contains conversationId, message and a stable clientOperationId; operationKind is send. Only the configured model is accepted. Rewrite, continue, multi-pass and thinking-depth overrides are rejected. SSE-formatted WebSocket frames include streamMeta, accepted, messageMeta, answer/thinking deltas, operationStatus and done. Reconnect with resumeStreamId and lastEventId to replay durable chunks; mode=tryResume plus conversationId finds an active operation. Reusing a clientOperationId with different input returns a conflict. No bearer or ticket belongs in a URL.",
+          "security": [],
+          "parameters": [
+            {
+              "name": "protocolVersion",
+              "in": "query",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "enum": [
+                  "2"
+                ]
+              }
+            }
+          ],
+          "responses": {
+            "101": {
+              "description": "WebSocket upgraded; send the ticket in the first auth frame."
+            },
+            "400": {
+              "description": "Unsupported protocol version."
+            },
+            "403": {
+              "description": "Origin is not permitted."
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "protocolVersion",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "2"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "101": {
+            "description": "WebSocket upgraded. Send the ticket in the first auth frame."
+          },
+          "400": {
+            "description": "Unsupported protocol version."
+          },
+          "403": {
+            "description": "Origin is not permitted."
           }
         }
       }
