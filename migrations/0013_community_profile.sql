@@ -1,0 +1,2 @@
+ALTER TABLE members ADD COLUMN display_name TEXT;
+ALTER TABLE members ADD COLUMN avatar_url TEXT NOT NULL DEFAULT '';

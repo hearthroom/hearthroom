@@ -1,6 +1,6 @@
 import { PROVIDERS } from "./provider";
 import { defineStore } from "pinia";
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { fetchMe, fetchSiteMe, fetchWallet, setNsfwViewer, setViewerHiddenTags } from "./api";
 import type { Me, SiteMe, Wallet } from "./api";
 import {
@@ -31,6 +31,8 @@ export const useSession = defineStore("session", () => {
   /** 本站的身分（公開 ID、連結的帳號）。登入後問一次就建好成員；讀不到不影響登入。 */
   const profile = ref<SiteMe | null>(null);
   const ready = ref(false);
+  const displayName = computed(() => profile.value?.displayName || profile.value?.handle || "HearthRoom");
+  const avatarUrl = computed(() => profile.value?.avatarUrl || "");
 
   async function loadWallet(accessToken: string) {
     try {
@@ -133,5 +135,5 @@ export const useSession = defineStore("session", () => {
   }
 
   /** 重新向供應商授權（真正開始 OAuth）。進站的「登入」一律先到本站的登入頁（/login），由那一頁呼叫這個。 */
-  return { token, me, wallet, profile, ready, adopt, restore, accessToken, refreshWallet, logout, login: beginLogin };
+  return { displayName, avatarUrl, token, me, wallet, profile, ready, adopt, restore, accessToken, refreshWallet, logout, login: beginLogin };
 });

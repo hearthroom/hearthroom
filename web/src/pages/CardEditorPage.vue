@@ -15,6 +15,7 @@
  * 後面每一步都需要前一步產生的 id。任何一步失敗就停下並保留草稿，不做局部回滾——
  * 上游沒有跨資源的交易，硬回滾只會在失敗之上再疊一次失敗。
  */
+import CardSyncPanel from "@/components/CardSyncPanel.vue";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
@@ -851,6 +852,7 @@ async function saveWorldbook(token: string, targetRoleId: string) {
  * 頁上提示改完要再送審；已經拿到連結的人照樣能玩，不受影響（owner 2026-09-15）。
  * 審核中的卡連轉私有都不行，只能等審完。
  */
+const distribution = ref<InstanceType<typeof CardSyncPanel> | null>(null);
 const roleVisibility = ref("");
 
 async function save() {
@@ -996,7 +998,7 @@ async function remove() {
 // ── 送審 ──────────────────────────────────────────────────────────
 
 async function publish() {
-  if (!canPublish.value) return;
+  if (!canPublish.value || (distribution.value && !distribution.value.validate(true))) return;
   if (!(await confirmDialog({ message: t("editor.publish.confirm"), confirmText: t("editor.publish.submit") }))) return;
   saving.value = true;
   error.value = "";
@@ -1005,6 +1007,7 @@ async function publish() {
     if (!token) throw new Error(t("auth.expired"));
     // 上游要求確認摘要至少 8 個字：那是給審核方看的一句話，不是一個旗標。
     await submitRoleForReview(roleId.value, t("editor.publish.summary", { name: draft.value.roleName }), token);
+    if (distribution.value && !await distribution.value.run(true)) { error.value=t("linked.partialPublish"); return; }
     saved.value = true;
     await router.push({ path: lp("/mine"), query: { fresh: "1" } });
   } catch (err) {
@@ -1354,6 +1357,8 @@ async function exportCard(format: "png" | "json") {
               {{ $t("editor.publish.submit") }}
             </button>
           </div>
+
+          <CardSyncPanel v-if="roleId" ref="distribution" :role-id="roleId" :disabled="dirty || isNew" />
 
           <!-- 刪卡：放在最後、跟其他動作隔開，紅色只用在這一顆 -->
           <div v-if="!isNew" class="panel panel--danger">

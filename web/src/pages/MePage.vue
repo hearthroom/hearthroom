@@ -5,8 +5,9 @@
  * 本站有自己的成員 ID（公開的 8 個小寫字母），供應商帳號只是掛在底下的一筆「身分」——
  * 這頁把兩層分開講：上面是你在本站是誰，下面是你用哪個帳號登入進來、狀態如何。
  *
- * 顯示名稱與頭像來自登入用的那個帳號（供應商回的），本站不另存一份。
+ * 顯示名稱與頭像由社區保存，首次登入預填後即可獨立編輯。
  */
+import CommunityProfile from "@/components/CommunityProfile.vue";
 import ConnectedAccounts from "@/components/ConnectedAccounts.vue";
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
@@ -45,11 +46,11 @@ onMounted(() => {
 <template>
   <div v-if="session.me" class="page page--narrow me">
     <header class="panel me__who">
-      <img v-if="session.me.avatar" :src="session.me.avatar" alt="" class="me__face" />
-      <div v-else class="me__face mono" :style="{ '--h': hueFrom(session.me.nickName) }">{{ [...session.me.nickName][0] }}</div>
+      <img v-if="session.avatarUrl" :src="session.avatarUrl" alt="" class="me__face" />
+      <div v-else class="me__face mono" :style="{ '--h': hueFrom(session.displayName) }">{{ [...session.displayName][0] }}</div>
       <div class="me__text">
         <p class="eyebrow">{{ $t("me.title") }}</p>
-        <h1 class="me__name display">{{ session.me.nickName }}</h1>
+        <h1 class="me__name display">{{ session.displayName }}</h1>
         <div class="me__id">
           <span class="subtle">{{ $t("me.handle") }}</span>
           <span v-if="handle" class="me__id-row">
@@ -62,6 +63,7 @@ onMounted(() => {
       </div>
     </header>
 
+    <CommunityProfile />
     <ConnectedAccounts />
 
 

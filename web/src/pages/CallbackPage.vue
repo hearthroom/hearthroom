@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, useRouter } from "vue-router";
 import { connectionMessage } from "@/lib/connection-ui";
@@ -20,8 +20,6 @@ const pending = ref<Awaited<ReturnType<typeof completeLogin>> | null>(null);
 const preview = ref<ConnectionPreview | null>(null);
 const keepHandle = ref('');
 const busy = ref(false);
-const choices = computed(() => preview.value ? [preview.value.source, ...(preview.value.target.handle && preview.value.target.handle !== preview.value.source.handle ? [preview.value.target] : [])] : []);
-function joinedAt(timestamp?: number) { return timestamp ? new Date(timestamp).toLocaleDateString() : '' }
 async function confirmConnection() {
   if (!pending.value?.linkFrom || !preview.value || !keepHandle.value || busy.value) return;
   busy.value = true; error.value = '';
@@ -45,7 +43,7 @@ onMounted(async () => {
     if (linkFrom) {
       pending.value = completed;
       preview.value = await previewConnection(provider, linkFrom, token);
-      if (!preview.value.target.handle || preview.value.target.handle === preview.value.source.handle) keepHandle.value = preview.value.source.handle!;
+      keepHandle.value = preview.value.source.handle!;
       return;
     }
     setProvider(provider); useProviderUpstream();
@@ -69,13 +67,8 @@ onMounted(async () => {
     <section v-if="preview" class="panel link-confirm">
       <h1>{{ $t('linked.chooseTitle') }}</h1>
       <p>{{ $t('linked.chooseIntro', {provider:providerName(preview.target.provider)}) }}</p>
-      <fieldset :disabled="busy">
-        <legend>{{ $t('linked.keepPrompt') }}</legend>
-        <label v-for="account in choices" :key="account.handle" class="link-choice">
-          <input v-model="keepHandle" type="radio" name="community" :value="account.handle" />
-          <span><strong>{{ account.name }}</strong><span class="subtle">{{ providerName(account.provider) }} · {{ account.handle }}</span><span class="subtle">{{ $t('me.since', {date:joinedAt(account.memberSince)}) }}</span></span>
-        </label>
-      </fieldset>
+      <div class="link-destination"><strong>{{ preview.source.name }}</strong><code>{{ preview.source.handle }}</code></div>
+      <p v-if="preview.target.handle && preview.target.handle !== preview.source.handle" class="subtle">{{ $t('linked.previousCommunity', {handle:preview.target.handle}) }}</p>
       <p class="subtle">{{ $t('linked.keepHint') }}</p>
       <p v-if="error" role="alert" class="notice notice--error">{{ error }}</p>
       <div class="link-actions">

@@ -1,0 +1,69 @@
+import { apiBaseOf, type ProviderId } from "./providers";
+import { IMAGE_HOSTS } from "./shortcut";
+import { HttpError, type Env } from "./types";
+
+export const MEDIA_FIELDS = [
+  "avatar",
+  "background",
+  "backgroundLandscape",
+] as const;
+export type CardMedia = Partial<Record<(typeof MEDIA_FIELDS)[number], string>>;
+
+/** Keep the original SaaS URL. Community sync never reads or writes image bytes. */
+export function imageReference(
+  env: Env,
+  provider: ProviderId,
+  raw: string
+): string {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new HttpError(409, "sync_image_reference_unavailable");
+  }
+  const base = new URL(apiBaseOf(env, provider));
+  if (
+    raw.length > 2048 ||
+    url.protocol !== "https:" ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash ||
+    (url.port && url.port !== "443") ||
+    (!IMAGE_HOSTS.has(url.hostname) && url.origin !== base.origin)
+  )
+    throw new HttpError(409, "sync_image_reference_unavailable");
+  return raw;
+}
+
+/** The target stores reference metadata, never an uploaded copy. */
+export async function registerImageReference(
+  env: Env,
+  provider: ProviderId,
+  token: string,
+  url: string
+): Promise<string> {
+  if (provider === "lunatalk") return url;
+  const r = await fetch(
+    `${apiBaseOf(env, provider)}/open/v1/media/references`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ url }),
+      redirect: "error",
+      signal: AbortSignal.timeout(20000),
+    }
+  );
+  if (!r.ok) throw new HttpError(409, "sync_image_reference_unavailable");
+  const body = (await r.json()) as {
+    assetId?: string;
+    url?: string;
+    storage?: string;
+  };
+  if (!body.assetId || body.url !== url || body.storage !== "reference")
+    throw new HttpError(502, "sync_image_reference_unavailable");
+  return body.assetId;
+}

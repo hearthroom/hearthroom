@@ -316,6 +316,8 @@ export interface Me { accountNumId: number; nickName: string; avatar: string }
 
 /** 登入者在本站的身分（不是供應商那邊的）：公開 ID、加入時間、連結了哪些供應商帳號。 */
 export interface SiteMe {
+  displayName?: string;
+  avatarUrl?: string;
   handle: string;
   memberSince: number;
   reviewer: boolean;
@@ -378,6 +380,10 @@ export async function fetchSiteMe(token: string): Promise<SiteMe> {
 }
 
 export interface MyCard {
+  provider?: import("./provider").ProviderId;
+  workId?: string;
+  sourceProvider?: import("./provider").ProviderId;
+  sourceRoleId?: string;
   roleId: string;
   zone: Zone | "all";
   name: string;
@@ -426,7 +432,7 @@ export interface MyCardPage {
  */
 export async function fetchMyCards(
   token: string,
-  opts: { page?: number; pageSize?: number; fresh?: boolean; filter?: "all" | "listed" | "unlisted" } = {},
+  opts: { provider?: import("./provider").ProviderId; page?: number; pageSize?: number; fresh?: boolean; filter?: "all" | "listed" | "unlisted" } = {},
 ): Promise<MyCardPage> {
   const params = new URLSearchParams();
   if (opts.page) params.set("page", String(opts.page));
@@ -434,7 +440,7 @@ export async function fetchMyCards(
   if (opts.fresh) params.set("fresh", "1");
   if (opts.filter && opts.filter !== "all") params.set("filter", opts.filter);
   return json<MyCardPage>(
-    await fetch(`${COMMUNITY_API}/me/cards?${params}`, { headers: { ...from(), ...authHeaders(token) } }),
+    await fetch(`${COMMUNITY_API}/me/cards?${params}`, { headers: { ...from(), ...(opts.provider ? {"X-Provider":opts.provider} : {}), ...authHeaders(token) } }),
   );
 }
 
@@ -598,7 +604,8 @@ export async function savePlayerPersona(patch: Partial<PlayerPersona>, token: st
 }
 
 export async function fetchWallet(token: string): Promise<Wallet> {
-  return json<Wallet>(await fetch(`${UPSTREAM_API}/open/v1/me/wallet`, { headers: authHeaders(token) }));
+  const raw = await json<Wallet & {available?:number}>(await fetch(`${UPSTREAM_API}/open/v1/me/wallet`, {headers:authHeaders(token)}));
+  return currentProvider()==='harbor' ? {score:raw.available ?? 0,tempScore:0,plans:[]} : raw;
 }
 
 export interface ScoreRecord {
@@ -1164,4 +1171,17 @@ export async function saveGameSpec(roleId: string, spec: GameSpecJson, token: st
 export async function deleteGameSpec(roleId: string, token: string): Promise<void> {
   const res = await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(roleId)}/game`, { method: "DELETE", headers: { ...from(), ...authHeaders(token) } });
   if (!res.ok) throw new ApiError(res.status, describeApiError(res.status, await res.text().catch(() => "")));
+}
+
+export async function fetchCardPlatforms(roleId:string,provider:import('./provider').ProviderId):Promise<{provider:import('./provider').ProviderId;roleId:string;playable:boolean}[]> {
+  const viewer=await viewerAccess();
+  const q=viewer.param?`?${viewer.param}`:'';
+  const body=await json<{platforms:{provider:import('./provider').ProviderId;roleId:string;playable:boolean}[]}>(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(roleId)}/platforms${q}`,{headers:{'X-Provider':provider,...viewer.headers}}));
+  return body.platforms;
+}
+
+
+
+export async function updateSiteProfile(token:string, profile:{displayName:string;avatarUrl:string}):Promise<SiteMe> {
+  return json<SiteMe>(await fetch(`${COMMUNITY_API}/me/profile`, {method:"PUT",headers:{...from(),...authHeaders(token),"Content-Type":"application/json"},body:JSON.stringify(profile)}));
 }
