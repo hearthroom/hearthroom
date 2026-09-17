@@ -10,12 +10,13 @@ import PreviewDoc from "@/components/preview/PreviewDoc.vue";
 import HtmlCardFrame from "@/components/HtmlCardFrame.vue";
 import { ApiError, fetchBoard, fetchCard, fetchPlayerAsset, fetchPreviewPage, fetchRoleDetail } from "@/lib/api";
 import { renderWelcome } from "@/lib/welcome-render";
+import { recallCard } from "@/lib/card-memory";
 import CardPlatforms from "@/components/CardPlatforms.vue";
 import { can } from "@/lib/provider";
 import { useSession } from "@/lib/session";
 import { contentLang, pageTitle, zoneLabel } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
-import { compact, dateOnly, dateTime, hueFrom, plainText, relativeTime } from "@/lib/format";
+import { compact, dateOnly, dateTime, hueFrom, plainText } from "@/lib/format";
 import { confirmDialog } from "@/lib/confirm";
 import { track } from "@/lib/track";
 import { canInstall } from "@/lib/pwa";
@@ -71,33 +72,11 @@ const hue = computed(() => hueFrom(card.value?.name ?? ""));
 const broken = ref(false);
 const hasArt = computed(() => !!card.value?.avatarUrl && !broken.value);
 
-async function load() {
-  // 換語言時手上還有卡：留著，資料到了再換，不退回骨架
-  revalidating.value = !!card.value;
-  loading.value = !card.value;
-  missing.value = false;
-  gated.value = false;
-  error.value = "";
-  const id = route.params.id as string;
-  const lang = contentLang(locale.value);
-  try {
-    card.value = await fetchCard(id, lang);
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 404) missing.value = true;
-    else if (err instanceof ApiError && err.status === 403 && err.code === "adult_content") { gated.value = true; card.value = null; }
-    else error.value = err instanceof Error ? err.message : t("state.loadFailed");
-    loading.value = false;
-    revalidating.value = false;
-    return;
-  }
-  loading.value = false;
-  revalidating.value = false;
-  document.title = pageTitle(card.value.name);
-  document.querySelector<HTMLMetaElement>('meta[name="description"]')?.setAttribute("content", card.value.summary);
-
-  const roleId = card.value.roleId;
-  const authorHandle = card.value.author.handle;
-  // 主頁的其餘資料在卡片之後補上：讀不到只是少一塊，不擋整頁。
+/**
+ * 主頁其餘的資料：開場白、作者裝修的版面、同一位作者的其他作品。
+ * 讀不到只是少一塊，不擋整頁；跟卡片本身分開，手上一有卡就可以開始拿。
+ */
+function loadDetails(roleId: string, authorHandle: string | null, lang: string) {
   void fetchRoleDetail(roleId, undefined, lang)
     .then((raw) => {
       const rawWelcome = String(raw.roleWelcome ?? "");
@@ -132,6 +111,46 @@ async function load() {
   } else {
     more.value = [];
   }
+}
+
+/** 標題與描述跟著手上這份卡走；先畫的那份就先寫，伺服器那份回來再寫一次。 */
+function applyHead(c: { name: string; summary: string }) {
+  document.title = pageTitle(c.name);
+  document.querySelector<HTMLMetaElement>('meta[name="description"]')?.setAttribute("content", c.summary);
+}
+
+async function load() {
+  // 換語言時手上還有卡：留著變淡，資料到了再換，不退回骨架
+  revalidating.value = !!card.value;
+  const id = route.params.id as string;
+  const lang = contentLang(locale.value);
+  // 剛才那一屏（榜單／搜尋／作者頁）看過這張卡：立刻整頁畫出來，不變淡也能點，
+  // 伺服器那一份在背景更新。點一張卡要等一秒黑畫面的就是這一次往返（玩家回報 2026-09-17）。
+  if (!card.value) card.value = recallCard(id);
+  loading.value = !card.value;
+  missing.value = false;
+  gated.value = false;
+  error.value = "";
+  const shown = card.value;
+  if (shown) {
+    applyHead(shown);
+    loadDetails(shown.roleId, shown.author.handle, lang);
+  }
+  try {
+    card.value = await fetchCard(id, lang);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) missing.value = true;
+    else if (err instanceof ApiError && err.status === 403 && err.code === "adult_content") { gated.value = true; card.value = null; }
+    else if (!shown) error.value = err instanceof Error ? err.message : t("state.loadFailed");
+    // 手上那份是剛才那一屏帶過來的：背景更新失敗就讓它繼續顯示，不要把已經畫好的頁面換成錯誤
+    loading.value = false;
+    revalidating.value = false;
+    return;
+  }
+  loading.value = false;
+  revalidating.value = false;
+  applyHead(card.value);
+  if (!shown) loadDetails(card.value.roleId, card.value.author.handle, lang);
 }
 
 // 卡號是本站發的短數字（登記過的卡才有）：作者對外報卡、玩家在不能貼連結的地方靠它找卡
@@ -255,6 +274,9 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
               <code class="role__cid-value mono">#{{ card.num }}</code>
               <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4" /><path d="M10.5 5.5V3.5a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2" fill="none" stroke="currentColor" stroke-width="1.4" /></svg>
             </button>
+            <p class="subtle role__foot">
+              {{ zoneLabel(card.zone) }}<template v-if="editedAt"> · <span :title="dateTime(editedAt)">{{ $t("card.updated", { date: dateOnly(Math.floor(editedAt / 1000)) }) }}</span></template>
+            </p>
           </div>
 
           <dl class="role__stats">
@@ -286,12 +308,6 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
             </svg>
             {{ $t("card.addHome") }}
           </button>
-
-
-          <p class="subtle role__foot">
-            {{ zoneLabel(card.zone) }}<template v-if="card.registeredAt"> · {{ $t("card.meta", { registered: relativeTime(card.registeredAt) }) }}</template>
-            <template v-if="editedAt"> · <span :title="dateTime(editedAt)">{{ $t("card.updated", { date: dateOnly(Math.floor(editedAt / 1000)) }) }}</span></template>
-          </p>
         </aside>
 
         <section class="role__main">
@@ -417,7 +433,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 .role__install svg { width: 16px; height: 16px; }
 .role__share { width: var(--h-lg); flex: none; }
 .role__share svg { width: 18px; height: 18px; }
-.role__foot { line-height: 1.5; }
+.role__foot { margin: 2px 0 0; line-height: 1.5; }
 
 .role__main { display: grid; gap: var(--s-3); min-width: 0; align-content: start; }
 .role__tabs { width: fit-content; }
@@ -445,7 +461,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
   .role__layout { grid-template-columns: 1fr; }
   .role__side { position: static; grid-template-columns: 132px minmax(0, 1fr); align-items: start; column-gap: var(--s-4); }
   .role__art { grid-row: 1 / span 3; }
-  .role__stats, .role__tags, .role__actions, .role__install, .role__foot { grid-column: 1 / -1; }
+  .role__stats, .role__tags, .role__actions, .role__install { grid-column: 1 / -1; }
   .role__home, .role__comments { padding: var(--s-4); }
 }
 </style>

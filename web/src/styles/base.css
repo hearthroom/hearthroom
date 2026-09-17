@@ -264,6 +264,14 @@ select.input { height: var(--h-md); }
   background: linear-gradient(90deg, transparent 20%, var(--border) 50%, transparent 80%);
   animation: sweep 1.4s var(--ease) infinite;
 }
+/* 深色下骨架屏要看得出來是「在載入」，不是「頁面壞了」。
+   surface-2 (#24242b) 貼著紙 (#101013) 只差一階，掃過的光又用 border 色，整頁看起來就是一片黑
+   （玩家回報 2026-09-17：點進卡片頁黑屏一兩秒）。塊體抬高一階、光帶換成白的半透明。
+   只動 .ghost：surface-2 還兼著 hover 底色與封面底色，動它會波及一整排元件。 */
+:root[data-mode="dark"] .ghost { background: #2a2a32; }
+:root[data-mode="dark"] .ghost::after {
+  background: linear-gradient(90deg, transparent 20%, rgba(255, 255, 255, 0.07) 50%, transparent 80%);
+}
 @keyframes sweep { to { transform: translateX(100%); } }
 
 /* ---- 進場：一次淡入，不做錯落——內容社群的列表要的是「馬上可用」不是「表演」 ---- */
