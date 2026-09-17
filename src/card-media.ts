@@ -2,6 +2,9 @@ import { apiBaseOf, type ProviderId } from "./providers";
 import { IMAGE_HOSTS } from "./shortcut";
 import { HttpError, type Env } from "./types";
 
+// Current SaaS asset domains are references only, not additions to the image proxy allowlist.
+const REFERENCE_HOSTS = new Set([...IMAGE_HOSTS, "assets.lunatalk.ai", "assets.harperharbor.com"]);
+
 export const MEDIA_FIELDS = [
   "avatar",
   "background",
@@ -30,7 +33,7 @@ export function imageReference(
     url.search ||
     url.hash ||
     (url.port && url.port !== "443") ||
-    (!IMAGE_HOSTS.has(url.hostname) && url.origin !== base.origin)
+    (!REFERENCE_HOSTS.has(url.hostname) && url.origin !== base.origin)
   )
     throw new HttpError(409, "sync_image_reference_unavailable");
   return raw;

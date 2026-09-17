@@ -230,3 +230,11 @@ it('rejects redirects instead of forwarding a card token to another location',as
  expect(requests).toHaveLength(1);
  expect(requests[0].init?.redirect).toBe('manual');
 });
+it('preserves names from the structured tags returned by the source API',async()=>{
+ fakeUpstream({'/role/detail':()=>({...role,roleTag:[{tagName:'example'},{text:'support',type:'custom'},'plain']}),'/worldbook/bindings':()=>({bindings:[]}),'/author-asset':()=>json({},404)});
+ expect((await transfers.read(env,'lunatalk','fixture','source',1)).card.fields?.roleTag).toEqual(['example','support','plain']);
+});
+it.each([['lunatalk','assets.lunatalk.ai'],['harbor','assets.harperharbor.com']] as const)('accepts the current %s SaaS asset host without copying bytes',async(provider,host)=>{
+ fakeUpstream({'/role/detail':()=>({...role,roleAvatar:`https://${host}/synthetic.png`}),'/worldbook/bindings':()=>({bindings:[]}),'/author-asset':()=>json({},404)});
+ expect((await transfers.read(env,provider,'fixture','source',1)).card.media?.avatar).toBe(`https://${host}/synthetic.png`);
+});
