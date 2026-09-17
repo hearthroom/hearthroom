@@ -31,7 +31,7 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock("../src/lib/api", () => api);
 vi.mock("../src/lib/session", () => ({
-  useSession: () => ({ accessToken: async () => "tok", me: { accountNumId: 7, nickName: "審核人", avatar: "" } }),
+  useSession: () => ({ displayName:"社區暱稱",avatarUrl:"", accessToken: async () => "tok", me: { accountNumId: 7, nickName: "審核人", avatar: "" } }),
 }));
 vi.mock("../src/lib/track", () => ({ track: () => {}, currentSurface: () => "review", setSurface: () => {} }));
 

@@ -27,16 +27,14 @@ beforeEach(()=>{
  fixtures.finish.mockRejectedValue(new Error('connection_preview_changed'));
 });
 afterEach(()=>{app?.unmount();el?.remove();vi.restoreAllMocks()});
-it('requires an explicit choice before connecting two existing community accounts',async()=>{
+it('connects a platform to the current community without choosing a community to replace',async()=>{
  await mount(CallbackPage);
- const radios=el.querySelectorAll<HTMLInputElement>('input[type=radio]');expect(radios).toHaveLength(2);
- expect([...radios].some(r=>r.checked)).toBe(false);
- expect(el.querySelector<HTMLButtonElement>('.link-actions button')!.disabled).toBe(true);
+ expect(el.querySelectorAll('input[type=radio]')).toHaveLength(0);
+ expect(el.textContent).toContain('newxxxxx');
  expect(fixtures.finish).not.toHaveBeenCalled();
- radios[1].click();await settle();el.querySelector<HTMLButtonElement>('.link-actions button')!.click();await settle();
- expect(fixtures.finish).toHaveBeenCalledWith('lunatalk','harbor',expect.any(Object),{keepHandle:'oldxxxxx',sourceHandle:'newxxxxx',targetHandle:'oldxxxxx'});
+ el.querySelector<HTMLButtonElement>('.link-actions button')!.click();await settle();
+ expect(fixtures.finish).toHaveBeenCalledWith('lunatalk','harbor',expect.any(Object),{keepHandle:'newxxxxx',sourceHandle:'newxxxxx',targetHandle:'oldxxxxx'});
  expect(el.querySelector('[role=alert]')).not.toBeNull();
- expect(el.querySelector<HTMLButtonElement>('.link-actions button:last-child')!.disabled).toBe(false);
 });
 it('cancel returns to the original page without establishing a connection',async()=>{
  const replace=vi.spyOn(window.location,'replace').mockImplementation(()=>{});
@@ -50,4 +48,12 @@ it('shows the missing second platform and starts its linking flow',async()=>{
  expect(luna.textContent).toContain(i18n.global.t('linked.notConnected'));
  luna.querySelector<HTMLButtonElement>('button')!.click();await settle();
  expect(fixtures.connect).toHaveBeenCalledWith('lunatalk','/me');
+});
+
+it('never asks the user to activate one of their connected platforms',async()=>{
+ fixtures.session.profile.identities=[{provider:'harbor',externalId:22,founding:true},{provider:'lunatalk',externalId:11,founding:false}];
+ await mount(ConnectedAccounts);
+ expect(el.textContent).not.toContain(i18n.global.t('linked.use'));
+ expect(el.textContent).not.toContain(i18n.global.t('linked.current'));
+ expect(el.querySelector('a[href*="provider="]')).toBeNull();
 });

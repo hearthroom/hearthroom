@@ -213,3 +213,11 @@ it("sends customInstructions while keeping the editor draft intact", async () =>
   expect(JSON.parse(String(init.body))).toEqual({ fields: { customInstructions: "", roleDesc: "keep" } });
   expect(draft).toEqual({ jailbreak: "", roleDesc: "keep" });
 });
+
+it('normalizes Harper wallet balances without treating reserved credits as spendable',async()=>{
+  const {setProvider}=await import('../src/lib/provider');
+  const {fetchWallet}=await import('../src/lib/api');
+  setProvider('harbor');
+  vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({available:120,permanent:100,expiring:40,reserved:20,ledger:[]}))));
+  try {expect(await fetchWallet('fixture')).toEqual({score:120,tempScore:0,plans:[]});}finally{setProvider('lunatalk')}
+});
