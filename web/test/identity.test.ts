@@ -24,6 +24,8 @@ const session = vi.hoisted(() => ({
   accessToken: async () => "tok",
 }));
 vi.mock("../src/lib/session", () => ({ useSession: () => session }));
+const connect = vi.hoisted(()=>vi.fn(async()=>undefined));
+vi.mock("../src/lib/connections",()=>({connectAccount:connect,disconnectAccount:vi.fn()}));
 vi.mock("../src/lib/review", () => ({ useReviewer: () => ({ reviewer: false }) }));
 vi.mock("../src/lib/track", () => ({ track: () => {}, currentSurface: () => "me", setSurface: () => {} }));
 
@@ -89,7 +91,7 @@ describe("「我的」頁", () => {
     const { el } = await mount(MePage, "/me");
     expect(el.querySelector(".me__handle")?.textContent).toBe("kxxoxfyb");
     expect(el.textContent).toContain("LunaTalk");
-    expect(el.textContent).toContain("ID 7");
+    expect(el.textContent).toContain(i18n.global.t("linked.account",{id:7}));
     expect(el.querySelector('a[href*="/authors/kxxoxfyb"]')).not.toBeNull();
     expect(el.querySelector('a[href*="/mine"]')).not.toBeNull();
     expect(el.querySelector('a[href*="/settings"]')).not.toBeNull();
@@ -100,6 +102,6 @@ describe("「我的」頁", () => {
     const { el } = await mount(MePage, "/me");
     const btn = [...el.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.trim() === i18n.global.t("me.reauthorize"))!;
     btn.click();
-    expect(session.login).toHaveBeenCalledWith("/me");
+    expect(connect).toHaveBeenCalledWith("lunatalk","/me");
   });
 });
