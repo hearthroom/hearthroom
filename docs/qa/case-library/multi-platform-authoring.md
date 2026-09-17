@@ -71,3 +71,30 @@ card did not cover these larger Lorebook cases.
 Local validation for the Lorebook correction: type checks passed; 306 API tests and
 337 web tests passed, with the same pre-existing skipped web suite and embedded-player
 loopback warnings. Production deployment and live readback are separate checks.
+
+## Explicit recovery of a missing destination
+
+A deleted destination can leave a valid community mapping pointing at an upstream
+`role_not_found`. Ordinary retry must not silently recreate a deliberately removed
+copy. The platform panel offers “Create a new private copy” only for the destination
+card-read 404, from either the immediate response or its persisted error envelope.
+The authenticated recovery request rechecks both linked identities, the source owner,
+the stored destination account and the missing-card response before replacing the
+mapping. It clears old resource mappings, uses a distinct creation key and retains
+the existing unknown-create and external-edit protections. It never restores or deletes
+old resources, and cannot submit the replacement for review in the same request.
+
+Red/Green: missing-target recovery, private-only enforcement, and uncertain replacement
+creation failed before implementation. Network errors, authorization failures, source
+404s and Lorebook 404s preserve the old mapping. The browser's synthetic natural path
+confirmed one recovery request with `publish:false` even when review was checked;
+success removes the error and recovery action. All five locales fit at 390 px; the
+new action has a 44 px hit target and no horizontal overflow. English text centering
+was within 1 px. Type checks, 312 API tests, 338 web tests and the web build passed;
+the existing skipped web suite and build/embedded-player warnings remain unchanged.
+
+MCP is not applicable: this is an authenticated community orchestration recovery,
+using existing provider create/read/write APIs, not a new provider/model tool.
+Observability reuses the bounded `card_sync` outcome and existing safe failure
+envelope. Durable verification reads the resulting mapping and final hash comparison;
+no card content, account IDs or credentials are added to logs or metrics.

@@ -1,3 +1,4 @@
+import { HttpError } from "../src/types";
 import { env } from "cloudflare:test";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { resetDb } from "./helpers";
@@ -99,4 +100,57 @@ it('updates a published matching copy only with explicit edit consent and never 
  expect(unpublish).not.toHaveBeenCalled();
  await expect(syncCard(env,{...input,updatePublished:true})).resolves.toMatchObject({status:'synced'});
  expect(unpublish).toHaveBeenCalledTimes(1);
+});
+
+const missingTarget = () => new HttpError(502,'sync_resource_missing',{provider:'harbor',step:'read',upstreamStatus:404,upstreamCode:'role_not_found'});
+async function deletedCopy() {
+ await syncCard(env,input);
+ await env.DB.prepare("UPDATE work_copies SET transfer_state=?,worldbooks=?").bind(JSON.stringify({books:{old:{id:'old-book',status:'created'}}}),JSON.stringify({old:'old-book'})).run();
+ vi.mocked(transfers.read).mockImplementation(async(_env,provider,_token,id)=>{
+  if(provider==='harbor' && id==='target')throw missingTarget();
+  return {card:source,public:false};
+ });
+ vi.mocked(transfers.create).mockResolvedValue('replacement');
+}
+it('recreates a missing target only on explicit request, clearing stale resource mappings',async()=>{
+ await deletedCopy();
+ await expect(syncCard(env,input)).rejects.toThrow('sync_resource_missing');
+ expect(transfers.create).toHaveBeenCalledTimes(1);
+ await expect(syncCard(env,{...input,recreateMissing:true})).resolves.toMatchObject({roleId:'replacement',status:'synced'});
+ expect(transfers.create).toHaveBeenCalledTimes(2);
+ expect(vi.mocked(transfers.create).mock.calls[1][4]).not.toBe(vi.mocked(transfers.create).mock.calls[0][4]);
+ const progress=vi.mocked(transfers.update).mock.calls.at(-1)![6];
+ expect(progress).toEqual({books:{}});
+ const row=await env.DB.prepare('SELECT role_id,worldbooks,transfer_state FROM work_copies').first<any>();
+ expect(row.role_id).toBe('replacement');
+ expect(JSON.parse(row.worldbooks)).toEqual({});
+ expect(JSON.parse(row.transfer_state)).toEqual({books:{}});
+ expect(transfers.publish).not.toHaveBeenCalled();
+});
+it.each([
+ new Error('network'),
+ new HttpError(403,'sync_permission_denied',{provider:'harbor',step:'read',upstreamStatus:403}),
+ new HttpError(502,'sync_resource_missing',{provider:'harbor',step:'lorebook',upstreamStatus:404,upstreamCode:'not_found'}),
+])('never recreates on an ambiguous or unrelated target error: %s',async(error)=>{
+ await syncCard(env,input);
+ vi.mocked(transfers.read).mockImplementation(async(_env,p)=>{if(p==='harbor')throw error;return {card:source,public:false};});
+ await expect(syncCard(env,{...input,recreateMissing:true})).rejects.toThrow();
+ expect(transfers.create).toHaveBeenCalledTimes(1);
+ expect((await env.DB.prepare('SELECT role_id FROM work_copies').first<any>()).role_id).toBe('target');
+});
+it('does not recreate when the source is missing or publish a recovery copy',async()=>{
+ await syncCard(env,input);
+ vi.mocked(transfers.read).mockRejectedValue(new HttpError(502,'sync_resource_missing',{provider:'lunatalk',step:'read',upstreamStatus:404,upstreamCode:'role_not_found'}));
+ await expect(syncCard(env,{...input,recreateMissing:true})).rejects.toThrow();
+ expect(transfers.create).toHaveBeenCalledTimes(1);
+ vi.mocked(transfers.read).mockResolvedValue({card:source,public:false});
+ await expect(syncCard(env,{...input,recreateMissing:true,publish:true})).rejects.toThrow('sync_proof_required');
+ expect(transfers.publish).not.toHaveBeenCalled();
+});
+it('keeps an uncertain replacement creation blocked instead of duplicating it',async()=>{
+ await deletedCopy();
+ vi.mocked(transfers.create).mockRejectedValueOnce(new Error('response lost'));
+ await expect(syncCard(env,{...input,recreateMissing:true})).rejects.toThrow('sync_create_unconfirmed');
+ await expect(syncCard(env,{...input,recreateMissing:true})).rejects.toThrow('sync_create_unconfirmed');
+ expect(transfers.create).toHaveBeenCalledTimes(2);
 });

@@ -66,6 +66,7 @@ it("does not infer missing issuers and rejects malformed payloads", async () => 
     (await request("/v1/me/card-sync", { ...input, targetProvider: "" })).status
   ).toBe(400);
   expect((await request("/v1/me/card-sync", null)).status).toBe(400);
+  expect((await request("/v1/me/card-sync", {...input,recreateMissing:"yes"})).status).toBe(400);
   expect((await request("/v1/me/connections", null)).status).toBe(400);
 });
 it("lists each available copy once and separates storage from play capability", async () => {

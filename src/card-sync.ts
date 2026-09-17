@@ -16,6 +16,7 @@ export interface SyncInput {
   targetToken: string;
   publish: boolean;
   updatePublished?: boolean;
+  recreateMissing?: boolean;
 }
 export async function cardHash(card: TransferCard, legacy = false) {
   const raw = await crypto.subtle.digest(
@@ -53,6 +54,7 @@ interface Copy {
   transfer_state: string;
 }
 export async function syncCard(env: Env, i: SyncInput) {
+  if(i.recreateMissing && i.publish)throw new HttpError(400,"sync_proof_required");
   if (i.sourceProvider === i.targetProvider)
     throw new HttpError(400, "sync_same_provider");
   const source = await transfers.read(
@@ -150,15 +152,31 @@ export async function syncCard(env: Env, i: SyncInput) {
       .run();
   };
   try {
-    if (roleId) {
+    let existing:Awaited<ReturnType<typeof transfers.read>>|undefined;
+    let creationKey=`${id}:${i.targetProvider}`;
+    if(roleId) {
+      try {
+        existing=await transfers.read(env,i.targetProvider,i.targetToken,roleId,i.targetAccount);
+      } catch(error) {
+        const detail=error instanceof HttpError?error.detail:undefined;
+        const missing=error instanceof HttpError && error.message==='sync_resource_missing'
+          && detail?.provider===i.targetProvider && detail.step==='read'
+          && detail.upstreamStatus===404 && detail.upstreamCode==='role_not_found';
+        if(!i.recreateMissing || !missing)throw error;
+        // Explicit replacement only. Never undelete the old card or reuse its
+        // resource mappings; those resources may still belong to other cards.
+        creationKey+=`:replacement:${roleId}`;
+        const reset=await env.DB.prepare("UPDATE work_copies SET role_id=NULL,source_hash='',target_hash='',worldbooks='{}',transfer_state=? WHERE work_id=? AND provider=? AND operation=?")
+          .bind(JSON.stringify({books:{}}),id,i.targetProvider,operation).run();
+        if(!reset.meta.changes)throw new HttpError(409,'sync_busy');
+        roleId=null;
+        targetHash='';
+        books={};
+        progress.books={};
+      }
+    }
+    if (roleId && existing) {
       if (!targetHash) throw new HttpError(409, "sync_target_unverified");
-      const existing = await transfers.read(
-        env,
-        i.targetProvider,
-        i.targetToken,
-        roleId,
-        i.targetAccount
-      );
       const actual = await cardHash(existing.card);
       if (targetHash && actual !== targetHash && actual !== hash && await cardHash(existing.card,true) !== targetHash)
         throw new HttpError(409, "sync_target_changed");
@@ -189,7 +207,7 @@ export async function syncCard(env: Env, i: SyncInput) {
         i.targetProvider,
         i.targetToken,
         source.card,
-        `${id}:${i.targetProvider}`
+        creationKey
       );
       await env.DB.prepare(
         "UPDATE work_copies SET role_id=? WHERE work_id=? AND provider=? AND operation=?"

@@ -1007,6 +1007,8 @@
   "linked.error.connection_choice_required": "使用するコミュニティアカウントを選んでください。",
   "linked.error.connection_choice_invalid": "このコミュニティアカウントは選択できません。",
   "linked.platforms": "カードの保存先",
+  "linked.recreateCopy": "非公開のコピーを再作成",
+  "linked.recreateHint": "このプラットフォームのコピーが見つかりません。元のカードから非公開のコピーを作成できます。削除済みの内容は復元されません。",
   "linked.syncHint": "保存時に選択したプラットフォームへ同期できます。ここから手動でも同期できます。元のカードは保持され、コピーが個別に編集されている場合は同期を停止してお知らせします。",
   "linked.retry": "再試行",
   "linked.source": "元のカード",
