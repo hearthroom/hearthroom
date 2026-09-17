@@ -3,6 +3,7 @@ import { currentProvider } from "./provider";
 import { hideParam } from "./hidden-tags";
 import { currentSurface } from "./track";
 import { i18n } from "./i18n";
+import { rememberCard, rememberCards } from "./card-memory";
 import type { Author, AuthorSort, CardPage, CommunityCard, MyRole, Sort, Zone } from "./types";
 import type { RoleDocumentFields, TalkExampleEntry, WorldbookEntryDraft } from "./role-draft";
 
@@ -180,7 +181,10 @@ export async function fetchBoard(query: BoardQuery = {}): Promise<CardPage> {
   if (viewer.param) params.set("nsfw", "1");
   // 作者頁不套：看一個人的作品時，口味不是篩選條件
   if (!query.author) { const hide = await viewerHide(); if (hide) params.set("hide", hide); }
-  return json<CardPage>(await fetch(`${COMMUNITY_API}/cards?${params}`, { headers: { ...from(), ...viewer.headers } }));
+  const page = await json<CardPage>(await fetch(`${COMMUNITY_API}/cards?${params}`, { headers: { ...from(), ...viewer.headers } }));
+  // 列出來的卡先記著：點進卡片頁時直接畫，不必再等一次往返（見 card-memory）
+  rememberCards(page.items);
+  return page;
 }
 
 /** opts.quiet：不算一次瀏覽（對話頁為了換 manifest 讀卡片資料時用）。 */
@@ -193,7 +197,9 @@ export async function fetchCard(id: string, lang?: string, opts: { quiet?: boole
   const q = params.size ? `?${params}` : "";
   // 成人內容那條已經帶了 token 就不重複；否則登入了就帶，作者才看得到自己還沒上榜的卡
   const login = viewer.headers.Authorization ? null : loginViewer ? await loginViewer().catch(() => null) : null;
-  return json<CommunityCard>(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(id)}${q}`, { headers: { ...from(), ...viewer.headers, ...authHeaders(login ?? undefined) } }));
+  const card = await json<CommunityCard>(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(id)}${q}`, { headers: { ...from(), ...viewer.headers, ...authHeaders(login ?? undefined) } }));
+  rememberCard(card);
+  return card;
 }
 
 /** 這一區最常見的標籤，給榜單的類型篩選列。 */
