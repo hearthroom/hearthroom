@@ -103,7 +103,8 @@ it("supports retry after a target failure without sending platform content ratin
     provider: "lunatalk",
     initialOpen: true,
   });
-  root.querySelector<HTMLInputElement>("input[value=harbor]")!.click();
+  // 已綁定的目標站預設勾選，不必再點
+  expect(root.querySelector<HTMLInputElement>("input[value=harbor]")!.checked).toBe(true);
   const submit = root.querySelector<HTMLInputElement>(".option input")!;
   submit.click();
   await settle();
@@ -126,4 +127,16 @@ it("supports retry after a target failure without sending platform content ratin
   expect(mocks.sync).toHaveBeenLastCalledWith("original","lunatalk","harbor",true);
   expect(root.querySelector(".notice--error")).toBeNull();
   expect(root.textContent).toContain(i18n.global.t("linked.status.synced"));
+});
+
+it("pre-selects every connected target so publishing distributes by default", async () => {
+  await mount(CardSyncPanel, { roleId: "original", provider: "lunatalk", initialOpen: true });
+  const harbor = root.querySelector<HTMLInputElement>("input[value=harbor]")!;
+  expect(harbor.checked).toBe(true);
+  // 來源那家沒有勾選框
+  expect(root.querySelector("input[value=lunatalk]")).toBeNull();
+  // 作者取消一家後，發布就不送那家
+  harbor.click();
+  await settle();
+  expect(harbor.checked).toBe(false);
 });

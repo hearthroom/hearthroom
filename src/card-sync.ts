@@ -255,6 +255,33 @@ export async function syncCard(env: Env, i: SyncInput) {
     throw new HttpError(e instanceof HttpError ? e.status : 502, error);
   }
 }
+/**
+ * 這一批卡在別家已發布的副本：`來源家:來源卡 id` → 副本們。每小時同步把副本的對話數加進來源那張。
+ * 一次查完整批（json_each 展開），D1 呼叫也算子請求，逐張查會吃掉上游的額度。
+ */
+export async function publishedCopiesFor(
+  db: D1Database,
+  cards: { provider: string; source_role_id: string }[]
+): Promise<Map<string, { provider: ProviderId; roleId: string }[]>> {
+  const out = new Map<string, { provider: ProviderId; roleId: string }[]>();
+  if (!cards.length) return out;
+  const rows = await db
+    .prepare(
+      `SELECT w.source_provider, w.source_role_id, wc.provider, wc.role_id FROM works w
+         JOIN work_copies wc ON wc.work_id = w.id
+        WHERE wc.status = 'published' AND wc.role_id IS NOT NULL
+          AND w.source_role_id IN (SELECT value FROM json_each(?))`
+    )
+    .bind(JSON.stringify(cards.map((c) => c.source_role_id)))
+    .all<{ source_provider: string; source_role_id: string; provider: ProviderId; role_id: string }>();
+  const wanted = new Set(cards.map((c) => `${c.provider}:${c.source_role_id}`));
+  for (const r of rows.results) {
+    const key = `${r.source_provider}:${r.source_role_id}`;
+    if (!wanted.has(key)) continue;
+    out.set(key, [...(out.get(key) ?? []), { provider: r.provider, roleId: r.role_id }]);
+  }
+  return out;
+}
 export interface CopySummary {
   provider: ProviderId;
   roleId: string | null;

@@ -40,11 +40,17 @@ onMounted(async () => {
   providers.value = await availableProviders();
   if (props.initialOpen) await load();
 });
+// 一處寫卡、多站發布（owner 2026-09-17）：已綁定的目標站預設全勾，發布時就一併送過去；
+// 作者不想送某一家再自己取消。身分清單可能晚於面板載入，所以跟著 profile 一起算。
+const defaults = computed(() =>
+  providers.value.filter((p) => p.id !== source.value && connected(p.id)).map((p) => p.id)
+);
+watch(defaults, (next) => { selected.value = next; }, { immediate: true });
 watch(
   () => [props.roleId, props.provider],
   () => {
     states.value = [];
-    selected.value = [];
+    selected.value = defaults.value;
   }
 );
 function validate(sendForReview = false) {

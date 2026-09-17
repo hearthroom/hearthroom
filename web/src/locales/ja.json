@@ -1006,7 +1006,7 @@
   "linked.error.connection_choice_required": "使用するコミュニティアカウントを選んでください。",
   "linked.error.connection_choice_invalid": "このコミュニティアカウントは選択できません。",
   "linked.platforms": "カードの保存先",
-  "linked.syncHint": "コピー先を選んでください。元のカードはそのまま残り、作成済みのコピーは更新されます。コピーが別途編集されていた場合は停止します。",
+  "linked.syncHint": "連携済みのプラットフォームは最初から選択されています。公開すると、選択したすべてのプラットフォームへ送られます。元のカードはそのまま残り、作成済みのコピーは更新されます。コピーが別途編集されていた場合は停止します。",
   "linked.retry": "再試行",
   "linked.source": "元のカード",
   "linked.submitToo": "コピーをサービスの審査に提出",
