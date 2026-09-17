@@ -1,5 +1,5 @@
 import { MEDIA_FIELDS } from "./card-media";
-import { transfers, type TransferCard } from "./card-transfer";
+import { transfers, type TransferCard, type WorldbookMap } from "./card-transfer";
 import { HttpError, type Env } from "./types";
 import type { ProviderId } from "./providers";
 export { transfers };
@@ -26,6 +26,10 @@ export async function cardHash(card: TransferCard) {
         language: card.language,
         fields: card.fields ?? {},
         media: MEDIA_FIELDS.map((key) => card.media?.[key] ?? ""),
+        // 開場白備選／序章、世界書條目（不含兩邊各自的 id）、作者資產：改了任何一項都要再同步。
+        welcome: card.welcome ?? null,
+        worldbooks: (card.worldbooks ?? []).map((b) => ({ name: b.name, entries: b.entries })),
+        authorAsset: card.authorAsset ?? null,
       })
     )
   );
@@ -41,6 +45,7 @@ interface Copy {
   status: string;
   updated_at: number;
   operation: string | null;
+  worldbooks: string;
 }
 export async function syncCard(env: Env, i: SyncInput) {
   if (i.sourceProvider === i.targetProvider)
@@ -105,6 +110,16 @@ export async function syncCard(env: Env, i: SyncInput) {
   let creating = false;
   let status = "synced";
   let targetHash = row.target_hash;
+  let books: WorldbookMap = {};
+  try {
+    books = JSON.parse(row.worldbooks || "{}");
+  } catch {
+    books = {};
+  }
+  // 假來源（測試）的 update 沒有回傳值：對照表就維持原樣。
+  const remember = (next: WorldbookMap | void) => {
+    if (next) books = next;
+  };
   const checkpoint = async () => {
     const current = await transfers.read(
       env,
@@ -142,14 +157,15 @@ export async function syncCard(env: Env, i: SyncInput) {
       else {
         if (existing.public || existing.pending)
           throw new HttpError(409, "sync_target_published");
-        await transfers.update(
+        remember(await transfers.update(
           env,
           i.targetProvider,
           i.targetToken,
           roleId,
           source.card,
-          checkpoint
-        );
+          checkpoint,
+          books
+        ));
       }
     } else {
       creating = true;
@@ -183,14 +199,15 @@ export async function syncCard(env: Env, i: SyncInput) {
       )
         .bind(targetHash, id, i.targetProvider, operation)
         .run();
-      await transfers.update(
+      remember(await transfers.update(
         env,
         i.targetProvider,
         i.targetToken,
         roleId,
         source.card,
-        checkpoint
-      );
+        checkpoint,
+        books
+      ));
     }
     const readback = await transfers.read(
       env,
@@ -211,9 +228,9 @@ export async function syncCard(env: Env, i: SyncInput) {
       status = "pending";
     }
     await env.DB.prepare(
-      "UPDATE work_copies SET status=?,source_hash=?,target_hash=?,error='',operation=NULL,updated_at=? WHERE work_id=? AND provider=? AND operation=?"
+      "UPDATE work_copies SET status=?,source_hash=?,target_hash=?,worldbooks=?,error='',operation=NULL,updated_at=? WHERE work_id=? AND provider=? AND operation=?"
     )
-      .bind(status, hash, hash, Date.now(), id, i.targetProvider, operation)
+      .bind(status, hash, hash, JSON.stringify(books), Date.now(), id, i.targetProvider, operation)
       .run();
     return { workId: id, provider: i.targetProvider, roleId, status };
   } catch (e) {
@@ -223,11 +240,12 @@ export async function syncCard(env: Env, i: SyncInput) {
       ? e.message
       : "sync_failed";
     await env.DB.prepare(
-      "UPDATE work_copies SET status=?,error=?,operation=NULL,updated_at=? WHERE work_id=? AND provider=? AND operation=?"
+      "UPDATE work_copies SET status=?,error=?,worldbooks=?,operation=NULL,updated_at=? WHERE work_id=? AND provider=? AND operation=?"
     )
       .bind(
         creating ? "unknown" : "failed",
         error,
+        JSON.stringify(books),
         Date.now(),
         id,
         i.targetProvider,
