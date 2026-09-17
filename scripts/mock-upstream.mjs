@@ -61,6 +61,10 @@ http.createServer(async (req, res) => {
   if (path.startsWith("/open/v1/conversation/memory")) return json(res, 200, { atoms: [] });
   if (path === "/open/v1/role/multiPassPreference" || path === "/open/v1/player/multi-pass") return json(res, 200, {});
   if (path === "/open/v1/me/wallet") return json(res, 200, { score: 999596, tempScore: 0, plans: [{ tier: "member", expiresAt: Date.now() + 86400e3 * 30 }] });
+  if (path === "/open/v1/me/score/records") return json(res, 200, { total: 2, size: 30, pages: 1, hasNextPage: false, records: [
+    { id: 2, record: "chat", recordType: "sub", score: 1, createTime: new Date().toISOString() },
+    { id: 1, record: "grant", recordType: "add", score: 10000, createTime: new Date(Date.now() - 3600e3).toISOString() },
+  ] });
   // 建卡：連同「我的卡片」與登記那條路會讀的欄位一起存（characterRoleId／accountNumId／creationMethod），
   // 本機的 /mine 與登記額度才走得通。
   if (m === "POST" && path === "/open/v1/role") { const roleId = id("role"); roles.set(roleId, { roleId, characterRoleId: roleId, roleName: body.roleName, roleDesc: body.roleDesc || "", roleWelcome: body.roleWelcome || "", language: body.language, visibility: "private", roleVisibility: "private", accountNumId: 424242, authorName: "測試作者", creationMethod: "hearthroom", roleTag: [], talkNum: 0, followNum: 0 }); return json(res, 200, { roleId }); }
