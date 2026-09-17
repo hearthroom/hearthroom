@@ -1067,7 +1067,6 @@
   "linked.previousCommunity": "這個平台先前連接到社區帳號 {handle}。原有社區紀錄會保留；連接不會合併兩個社區帳號。",
   "linked.createOn": "選擇原始卡片的平台",
   "linked.wallets": "各平台餘額",
-  "linked.harborWallet": "前往 HarperHarbor 查看餘額與帳單",
   "linked.error.sync_authorization_expired": "平台授權已失效。請到「我的」重新授權錯誤資訊中指定的平台。",
   "linked.error.sync_permission_denied": "平台拒絕存取。請確認已授權讀取與編輯卡片；若仍失敗，請回報下方錯誤資訊。",
   "linked.error.sync_upstream_rejected": "目標平台不接受這次內容。請保留草稿，並回報下方平台與步驟資訊。",

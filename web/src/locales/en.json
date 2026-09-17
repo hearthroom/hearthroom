@@ -1067,7 +1067,6 @@
   "linked.previousCommunity": "This platform was previously linked to community {handle}. Its community history stays there; this connection does not merge accounts.",
   "linked.createOn": "Create the original on",
   "linked.wallets": "Platform balances",
-  "linked.harborWallet": "View balance and billing in HarperHarbor",
   "linked.error.sync_authorization_expired": "Platform authorization expired. Reauthorize the named platform from My account.",
   "linked.error.sync_permission_denied": "The platform denied access. Check that reading and editing cards are authorized, or report the details below.",
   "linked.error.sync_upstream_rejected": "The platform rejected this content. Keep your draft and report the platform and step below.",

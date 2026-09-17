@@ -5,7 +5,7 @@ import { fetchScoreRecords, TOP_UP_URL, type ScoreRecord } from "@/lib/api";
 import { clock, dateOnly, dayLabel, whole } from "@/lib/format";
 import { pageTitle } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
-import { currentProvider, providerName, type ProviderId } from "@/lib/provider";
+import { can, currentProvider, providerName, type ProviderId } from "@/lib/provider";
 import { platformPath } from "@/lib/connection-ui";
 import { useLocalePath } from "@/lib/use-locale";
 import { track } from "@/lib/track";
@@ -26,7 +26,6 @@ const kind = ref<Kind>("all");
 const PLAN_LABEL: Record<string, string> = { unlimited: "wallet.plan.unlimited", member: "wallet.plan.member", trial: "wallet.plan.trial" };
 
 async function load(reset = false) {
-  if(currentProvider()==='harbor')return;
   if (reset) { page.value = 1; records.value = []; }
   loading.value = true;
   error.value = "";
@@ -72,10 +71,13 @@ watch(() => session.me?.accountNumId, () => load(true), { immediate: true });
 </script>
 
 <template>
-  <nav v-if="session.profile" class="wallet-platforms" :aria-label="$t('linked.wallets')"><a v-for="identity in session.profile.identities" :key="identity.provider" :href="platformPath(lp('/wallet'),identity.provider as ProviderId)" class="btn btn--sm" :aria-current="identity.provider===currentProvider()?'page':undefined">{{ providerName(identity.provider as ProviderId) }}</a></nav>
   <div class="page wallet">
-    <a v-if="currentProvider()==='harbor'" class="btn" href="https://console.harperharbor.com/me/wallet">{{ $t('linked.harborWallet') }}</a>
     <h1 class="display wallet__title">{{ $t("wallet.title") }}</h1>
+    <!-- 綁了不只一家才需要切：每家的積分各自獨立，這裡看的是目前這一家的 -->
+    <nav v-if="session.profile && session.profile.identities.length > 1" class="wallet-platforms" :aria-label="$t('linked.wallets')">
+      <span class="subtle wallet-platforms__label">{{ $t('linked.wallets') }}</span>
+      <a v-for="identity in session.profile.identities" :key="identity.provider" :href="platformPath(lp('/wallet'),identity.provider as ProviderId)" class="btn btn--sm" :class="{ 'btn--primary': identity.provider===currentProvider() }" :aria-current="identity.provider===currentProvider()?'page':undefined">{{ providerName(identity.provider as ProviderId) }}</a>
+    </nav>
 
     <div class="wallet__grid">
       <aside class="wallet__side">
@@ -91,7 +93,7 @@ watch(() => session.me?.accountNumId, () => load(true), { immediate: true });
           <a class="btn btn--primary btn--lg balance__cta" :href="currentProvider() === 'harbor' ? 'https://console.harperharbor.com/me/wallet' : TOP_UP_URL" target="_blank" rel="noopener" @click="track('topup_click')">{{ $t("wallet.topUp") }} ↗</a>
         </section>
 
-        <section class="panel plans">
+        <section v-if="can('membership')" class="panel plans">
           <p class="eyebrow">{{ $t("wallet.plan") }}</p>
           <ul v-if="session.wallet?.plans.length" class="plans__list">
             <li v-for="plan in session.wallet.plans" :key="plan.tier" class="plan">
@@ -103,7 +105,7 @@ watch(() => session.me?.accountNumId, () => load(true), { immediate: true });
         </section>
       </aside>
 
-      <section v-if="currentProvider() !== 'harbor'" class="panel history">
+      <section class="panel history">
         <div class="history__head">
           <h2 class="history__title">{{ $t("wallet.records") }}<span v-if="total" class="history__n">{{ total }}</span></h2>
           <div class="seg">
@@ -141,7 +143,8 @@ watch(() => session.me?.accountNumId, () => load(true), { immediate: true });
 </template>
 
 <style scoped>
-.wallet-platforms {display:flex;gap:var(--s-2);flex-wrap:wrap;margin:var(--s-4) auto;max-width:var(--page-width,1100px);padding:0 var(--s-4)}
+.wallet-platforms { display: flex; gap: var(--s-2); flex-wrap: wrap; align-items: center; margin-bottom: var(--s-4); }
+.wallet-platforms__label { font-size: 13px; margin-right: var(--s-1); }
 .wallet { max-width: 1080px; }
 .wallet__title { font-size: 22px; margin-bottom: var(--s-4); }
 .wallet__grid { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: var(--s-4); align-items: start; }
