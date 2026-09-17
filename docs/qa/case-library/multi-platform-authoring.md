@@ -25,3 +25,7 @@ Chrome with synthetic local upstreams confirmed initial multi-selection, a visib
 MCP: not applicable. This change orchestrates existing provider APIs inside the community authoring UI; it introduces no provider capability or new model-facing tool.
 
 Observability: reuse the Worker event outcome and emit `card_sync_failed` with a bounded error code and safe provider/step/status details. No Prometheus endpoint is introduced for the Worker. Verify the authenticated response and durable copy status; never use private card content or identifiers as metric labels.
+
+## Workers runtime regression
+
+The production sync failed before reading the source because the request used `redirect: "error"`. A real Workers `Request` constructor rejects this mode; mock-only fetch tests did not construct the request. Transfer fixtures now construct a Workers request before returning responses. Both card transfer and image-reference registration use `manual` and reject non-success responses. A redirect regression verifies there is exactly one request and no credential forwarding.

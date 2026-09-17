@@ -57,7 +57,8 @@ export async function registerImageReference(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ url }),
-      redirect: "error",
+      // Workers supports manual/follow only. Non-2xx is rejected below; never forward tokens to redirects.
+    redirect: "manual",
       signal: AbortSignal.timeout(20000),
     }
   );

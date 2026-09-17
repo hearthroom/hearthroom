@@ -25,6 +25,7 @@ function fakeUpstream(routes: Record<string, (init?: RequestInit) => unknown>, f
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
+      new Request(String(url), init); // Exercise the real Workers Request contract before returning fixtures.
       requests.push({ url: String(url), init });
       const key = Object.keys(routes).find((k) => String(url).includes(k));
       const v = key ? routes[key](init) : fallback;
@@ -222,4 +223,10 @@ it('hashes equal metadata independently of object key order',async()=>{
 it('turns malformed successful upstream responses into a safe step-specific error',async()=>{
  fakeUpstream({'/role/detail':()=>new Response('<html>upstream page</html>')});
  await expect(transfers.read(env,'lunatalk','fixture','source',1)).rejects.toMatchObject({message:'sync_invalid_response',detail:{provider:'lunatalk',step:'read',upstreamStatus:200}});
+});
+it('rejects redirects instead of forwarding a card token to another location',async()=>{
+ const requests=fakeUpstream({'/role/detail':()=>new Response(null,{status:302,headers:{Location:'https://example.com/other'}})});
+ await expect(transfers.read(env,'lunatalk','synthetic-token','source',1)).rejects.toMatchObject({message:'sync_upstream_rejected',detail:{provider:'lunatalk',step:'read',upstreamStatus:302}});
+ expect(requests).toHaveLength(1);
+ expect(requests[0].init?.redirect).toBe('manual');
 });
