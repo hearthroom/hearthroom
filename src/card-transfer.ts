@@ -78,7 +78,8 @@ async function request(
       "User-Agent": "HearthRoom/1.0",
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    redirect: "error",
+    // Workers supports manual/follow only. Non-2xx is rejected below; never forward tokens to redirects.
+    redirect: "manual",
     signal: AbortSignal.timeout(20000),
   }).catch(() => { throw new HttpError(502,"sync_network_failed",{provider:p,step:syncStep(path)}); });
 }
