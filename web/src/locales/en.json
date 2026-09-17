@@ -1007,6 +1007,8 @@
   "linked.error.connection_choice_required": "Choose which community account to keep.",
   "linked.error.connection_choice_invalid": "This community account cannot be selected.",
   "linked.platforms": "Card copies",
+  "linked.recreateCopy": "Create a new private copy",
+  "linked.recreateHint": "This platform’s copy could not be found. Create a new private copy from the source card. Deleted content will not be restored.",
   "linked.syncHint": "Save edits to your selected platforms, or sync manually here. The source stays intact. If a copy was edited separately, sync stops and lets you know.",
   "linked.retry": "Retry",
   "linked.source": "Original",

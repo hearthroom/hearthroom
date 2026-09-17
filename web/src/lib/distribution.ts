@@ -11,6 +11,13 @@ export interface CardCopy {
 export class DistributionError extends Error {
   constructor(code:string, readonly detail?:{provider?:ProviderId;step?:string;upstreamStatus?:number;upstreamCode?:string}) { super(code); }
 }
+export function canRecreateCopy(error: unknown, provider:ProviderId):boolean {
+ let code=error instanceof Error?error.message:'';
+ let detail=error instanceof DistributionError?error.detail:undefined;
+ if(code.startsWith('{')) {try{const parsed=JSON.parse(code);code=parsed.error;detail=parsed.detail;}catch{return false;}}
+ return code==='sync_resource_missing' && detail?.provider===provider && detail.step==='read'
+   && detail.upstreamStatus===404 && detail.upstreamCode==='role_not_found';
+}
 export function connectionMessage(error: unknown): string {
   let code = error instanceof Error ? error.message : "";
   let detail = error instanceof DistributionError ? error.detail : undefined;
@@ -51,7 +58,8 @@ export async function synchronize(
   sourceProvider: ProviderId,
   targetProvider: ProviderId,
   publish = false,
-  updatePublished = false
+  updatePublished = false,
+  recreateMissing = false
 ): Promise<CardCopy> {
   const [sourceToken, targetToken, memberToken] = await Promise.all([
     accountToken(sourceProvider),
@@ -75,6 +83,7 @@ export async function synchronize(
       targetToken,
       publish,
       updatePublished,
+      recreateMissing,
     }),
   });
   return response(r);

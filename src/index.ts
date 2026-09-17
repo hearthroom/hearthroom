@@ -562,8 +562,8 @@ app.get("/v1/authors/:handle", async (c) => {
  */
 app.post('/v1/me/card-sync', async (c) => {
  const member=await requireMember(c);
- const b=await c.req.json<{sourceProvider:string;sourceRoleId:string;sourceToken:string;targetProvider:string;targetToken:string;publish?:boolean;updatePublished?:boolean}>();
- if(!b || typeof b.sourceProvider!=='string' || !b.sourceProvider.trim() || typeof b.targetProvider!=='string' || !b.targetProvider.trim() || typeof b.sourceRoleId!=='string' || !b.sourceRoleId || b.sourceRoleId.length>200 || [b.sourceToken,b.targetToken].some(t=>typeof t!=='string'||!t||t.length>16384) || (b.publish!==undefined && typeof b.publish!=='boolean') || (b.updatePublished!==undefined && typeof b.updatePublished!=='boolean'))throw new HttpError(400,'sync_proof_required');
+ const b=await c.req.json<{sourceProvider:string;sourceRoleId:string;sourceToken:string;targetProvider:string;targetToken:string;publish?:boolean;updatePublished?:boolean;recreateMissing?:boolean}>();
+ if(!b || typeof b.sourceProvider!=='string' || !b.sourceProvider.trim() || typeof b.targetProvider!=='string' || !b.targetProvider.trim() || typeof b.sourceRoleId!=='string' || !b.sourceRoleId || b.sourceRoleId.length>200 || [b.sourceToken,b.targetToken].some(t=>typeof t!=='string'||!t||t.length>16384) || (b.publish!==undefined && typeof b.publish!=='boolean') || (b.updatePublished!==undefined && typeof b.updatePublished!=='boolean') || (b.recreateMissing!==undefined && typeof b.recreateMissing!=='boolean'))throw new HttpError(400,'sync_proof_required');
  const sourceProvider=requireConfigured(c.env,parseProvider(b.sourceProvider));
  const targetProvider=requireConfigured(c.env,parseProvider(b.targetProvider));
  const profile=await memberProfile(c.env.DB,member.id);
@@ -576,7 +576,7 @@ app.post('/v1/me/card-sync', async (c) => {
  for(const [provider,account] of [[sourceProvider,source.accountNumId],[targetProvider,target.accountNumId]] as const) {
   if(!profile?.identities.some(x=>x.provider===provider&&x.externalId===account))throw new HttpError(403,'sync_account_not_connected');
  }
- const result=await syncCard(c.env,{memberId:member.id,sourceProvider,sourceRoleId:b.sourceRoleId,sourceAccount:source.accountNumId,sourceToken:b.sourceToken,targetProvider,targetAccount:target.accountNumId,targetToken:b.targetToken,publish:b.publish===true,updatePublished:b.updatePublished===true});
+ const result=await syncCard(c.env,{memberId:member.id,sourceProvider,sourceRoleId:b.sourceRoleId,sourceAccount:source.accountNumId,sourceToken:b.sourceToken,targetProvider,targetAccount:target.accountNumId,targetToken:b.targetToken,publish:b.publish===true,updatePublished:b.updatePublished===true,recreateMissing:b.recreateMissing===true});
  note(c,{event:'card_sync',detail:result.status});
  return c.json(result,200,{'Cache-Control':'no-store'});
 });
