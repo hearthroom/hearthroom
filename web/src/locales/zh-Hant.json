@@ -1006,7 +1006,7 @@
   "linked.error.connection_choice_required": "請選擇要保留的社區帳號。",
   "linked.error.connection_choice_invalid": "無法選擇這個社區帳號。",
   "linked.platforms": "卡片所在平台",
-  "linked.syncHint": "選擇要放置副本的平台。同步會保留來源卡，並更新已建立的副本；如果副本被另外修改，會停止同步。",
+  "linked.syncHint": "已綁定的平台預設勾選：發布時會一併送到每個勾選的平台。同步會保留來源卡，並更新已建立的副本；如果副本被另外修改，會停止同步。",
   "linked.retry": "重試",
   "linked.source": "來源卡",
   "linked.submitToo": "同步後提交平台審核",

@@ -8,8 +8,9 @@ import type { Env } from "./types";
  * 審到哪一步、誰蓋了章」。成員、身分、卡片與審核單全部都帶著供應商代號，所以接第二家
  * 是加一列設定，不是改資料表。
  *
- * 兩家的資料完全不混（owner 2026-09-16）：同一個外部數字 ID 在兩家是兩個人，
- * 榜單、搜尋、作者頁也各看各的。
+ * 身分不混、榜單相通（owner 2026-09-17，覆蓋 2026-09-16 的「完全不混」）：同一個外部數字 ID
+ * 在兩家是兩個人，登記、「我的卡片」、審核都鎖在一家；榜單、搜尋、標籤、作者榜則把兩家的卡
+ * 列在一起，X-Provider 在那些路徑上只代表「我用哪家的帳號」。
  *
  * 契約分兩級：
  *   基本級：OAuth 登入＋「你是誰」、讀卡片公開資料、內容雜湊 → 能登記、上榜、搜尋
@@ -37,6 +38,17 @@ const API_BASE_VAR: Record<ProviderId, keyof ProviderEnv> = {
 
 /** 只有 lunatalk 有審核機器人；Harbor 那邊還沒有分享／審核介面。 */
 const HAS_REVIEW_BOT: Record<ProviderId, boolean> = { lunatalk: true, harbor: false };
+
+/**
+ * 哪幾家有對話引擎（契約的 conversation／streaming 那一級）。沒有的那家存得了卡、上得了榜，
+ * 但玩不了——卡片頁把它列成「只存放」。Harbor 是平台不做對話（owner 2026-09-17）。
+ */
+const HAS_CHAT: Record<ProviderId, boolean> = { lunatalk: true, harbor: false };
+
+/** 這家能不能在站內玩這張卡。 */
+export function hasChat(provider: ProviderId): boolean {
+  return HAS_CHAT[provider] === true;
+}
 
 export interface ProviderEnv {
   PROVIDER_API_BASE: string;

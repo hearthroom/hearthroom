@@ -1,5 +1,5 @@
 import { updateMemberProfile } from "./members";
-import { syncCard, copiesFor, workFor } from "./card-sync";
+import { syncCard, copiesFor, workFor, publishedCopiesFor } from "./card-sync";
 import { apiBaseOf as providerApiBase } from "./providers";
 import { linkIdentity, unlinkIdentity, connectedMemberId } from './connections';
 import { saveMemberId } from './members';
@@ -29,7 +29,7 @@ import { ALIAS_HOSTS, HOST, canonicalUrl, isPlayHost } from "./site";
 import { loadMine, type MineFilter } from "./mine";
 import { tagNamesFor } from "../shared/tag-catalog";
 import { providerOf, isReviewer, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
-import { configuredProviders, parseProvider, requireConfigured, DEFAULT_PROVIDER, PROVIDER_NAMES, type ProviderId, reviewBotOf } from "./providers";
+import { configuredProviders, hasChat, parseProvider, requireConfigured, DEFAULT_PROVIDER, PROVIDER_NAMES, type ProviderId, type ReviewBot, reviewBotOf } from "./providers";
 import { providerApiBaseFor } from "./providers";
 import { WEEKLY_LIMIT, recordRegistration, registeredThisWeek } from "./quota";
 import {
@@ -231,16 +231,14 @@ function parseZone(raw: string | undefined): Zone | undefined {
  * 邊緣快取的鍵。供應商必須進去：兩家看的是各自的卡，共用一份快取等於把一家的內容
  * 發給另一家的訪客。標頭不是快取鍵的一部分，所以要塞進網址。
  */
-function cacheKeyFor(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, provider: ProviderId): Request {
-  const url = new URL(c.req.url);
-  url.searchParams.set("__provider", provider);
-  return new Request(url.toString(), { method: "GET", headers: c.req.raw.headers });
+function cacheKeyFor(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>): Request {
+  return new Request(c.req.url, { method: "GET", headers: c.req.raw.headers });
 }
 
 /** 公開、只讀、對所有人一樣的回應，都走這個邊緣快取。 */
 async function cachedJson(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, ttl: number, compute: () => Promise<unknown>) {
   const cache = await caches.open(boardCache.namespace);
-  const key = cacheKeyFor(c, providerOf(c));
+  const key = cacheKeyFor(c);
   const hit = await cache.match(key);
   if (hit) {
     const res = new Response(hit.body, hit);
@@ -269,10 +267,9 @@ app.get("/v1/cards", async (c) => {
   // 開了成人內容的人：先驗身分再查資料，回應不進快取、也不從快取拿——
   // 邊緣快取是公開的，一份帶成人內容的回應進了快取就會給下一個沒登入的人。
   const allowNsfw = await viewerAllowsNsfw(c);
-  const provider = providerOf(c);
   // 只有 GET 而且完全公開，所以整個 URL 就是快取鍵，不必自己組。推薦是隨機的，快取住就不隨機了。
-  // 供應商必須進快取鍵：兩家的榜單各看各的，共用一份快取等於把一家的卡發給另一家。
-  const cacheKey = cacheKeyFor(c, provider);
+  // 榜單不分供應商（owner 2026-09-17）：X-Provider 只是「我用哪家的帳號」，不進快取鍵也不進查詢。
+  const cacheKey = cacheKeyFor(c);
   const cache = await caches.open(boardCache.namespace);
   const hit = allowNsfw || c.req.query("sort") === "random" ? undefined : await cache.match(cacheKey);
   if (hit) {
@@ -313,7 +310,6 @@ app.get("/v1/cards", async (c) => {
     return names.size ? [...names] : undefined;
   })();
   const { rows, total, hasNext } = await listCards(c.env.DB, {
-    provider,
     zone,
     q: c.req.query("q")?.trim() || undefined,
     tags,
@@ -371,7 +367,6 @@ app.get("/v1/authors", (c) =>
     const limit = Math.max(1, clamp(c.req.query("limit"), 24, 100));
     const offset = clamp(c.req.query("offset"), 0, 10_000);
     const { rows, hasNext } = await listAuthors(c.env.DB, {
-      provider: providerOf(c),
       zone: parseZone(c.req.query("zone")),
       q: c.req.query("q")?.trim() || undefined,
       sort, limit, offset,
@@ -595,7 +590,7 @@ app.get('/v1/cards/:roleId/platforms',async(c)=>{
  if(base.nsfw && !await viewerAllowsNsfw(c))throw new HttpError(403,'nsfw_gated');
  const candidates=[{provider,roleId},...(await copiesFor(c.env.DB,provider,roleId)).filter(x=>x.roleId && ['source','synced','pending','published'].includes(x.status)).map(x=>({provider:x.provider as ProviderId,roleId:x.roleId as string}))];
  const platforms=[];
- for(const x of candidates.filter((x,i,all)=>all.findIndex(y=>y.provider===x.provider&&y.roleId===x.roleId)===i)) {try {await upstream.fetchRole(c.env,x.roleId,x.provider);platforms.push({...x,playable:x.provider==='lunatalk'});}catch{ /* Never advertise an inaccessible copy as playable. */ }}
+ for(const x of candidates.filter((x,i,all)=>all.findIndex(y=>y.provider===x.provider&&y.roleId===x.roleId)===i)) {try {await upstream.fetchRole(c.env,x.roleId,x.provider);platforms.push({...x,playable:hasChat(x.provider)});}catch{ /* Never advertise an inaccessible copy as playable. */ }}
  return c.json({platforms},200,{'Cache-Control':'no-store'});
 });
 
@@ -971,23 +966,30 @@ const SUBREQUEST_BUDGET = 48;
 
 export async function syncBatch(env: Env): Promise<{ ok: number; failed: number; delisted: number; ms: number }> {
   const started = Date.now();
-  let bot = reviewBotOf(env);
-  // 先確認機器人的金鑰還活著（一個子請求）。金鑰被撤、換錯、帳號被停用時，上游對每張卡都回 401，
-  // 不擋的話整輪會把所有綁了版本的卡當成「作者收回授權」全部下架——這一輪就不比對，只記一行。
-  if (bot) {
+  // 每家各有自己的審核機器人（或沒有）。先確認金鑰還活著（每家一個子請求）：金鑰被撤、換錯、
+  // 帳號被停用時，上游對每張卡都回 401，不擋的話整輪會把所有綁了版本的卡當成「作者收回授權」
+  // 全部下架——那家這一輪就不比對，只記一行。
+  const bots = new Map<ProviderId, ReviewBot | null>();
+  let spent = 0; // 這一輪已經用掉的子請求
+  for (const p of configuredProviders(env)) {
+    const bot = reviewBotOf(env, p);
+    if (!bot) continue;
+    spent++;
     try {
-      await upstream.fetchMe(env, bot.key);
+      await upstream.fetchMe(env, bot.key, p);
+      bots.set(p, bot);
     } catch (err) {
-      console.error("review bot key rejected by upstream; skipping content checks this run", { error: String(err) });
-      bot = null;
+      console.error("review bot key rejected by upstream; skipping content checks this run", { provider: p, error: String(err) });
     }
   }
   // 有審核機器人時每張卡要打兩次上游（公開資料＋內容雜湊），一輪能處理的卡就減半，
   // 否則後半批全部撞到子請求上限、整輪靜默失敗。
-  const perCard = bot ? 2 : 1;
-  const budget = SUBREQUEST_BUDGET - (bot ? 1 : 0);
+  const perCard = bots.size ? 2 : 1;
+  const budget = SUBREQUEST_BUDGET - spent;
   const limit = Math.max(1, Math.min(Number(env.SYNC_BATCH_SIZE) || 50, Math.floor(budget / perCard)));
   const batch = await dueForSync(env.DB, limit);
+  // 已發布到另一家的副本：熱度加總（owner 2026-09-17）。一次查完整批，D1 也算子請求。
+  const copies = await publishedCopiesFor(env.DB, batch);
   const concurrency = Math.max(1, Number(env.SYNC_CONCURRENCY) || 6);
   let ok = 0;
   let failed = 0;
@@ -999,7 +1001,10 @@ export async function syncBatch(env: Env): Promise<{ ok: number; failed: number;
 
   await pooled(batch, concurrency, async (row) => {
     try {
-      const role = await upstream.fetchRole(env, row.source_role_id);
+      const provider = row.provider as ProviderId;
+      const bot = bots.get(provider) ?? null;
+      spent++;
+      const role = { ...(await upstream.fetchRole(env, row.source_role_id, provider)) };
       // 榜單只收在本站建的卡。登記那條路早就這樣擋，但規則之前登記進來的主站老卡還在榜上
       // （owner 2026-09-07：189 張要下架）——同步時看到來源不對就撤掉，之後也不會再有漏網的。
       // 讀得到但來源不對才撤；讀不到走下面的 catch，保留。
@@ -1008,6 +1013,18 @@ export async function syncBatch(env: Env): Promise<{ ok: number; failed: number;
         delisted++;
         console.log("delisted: not created on this site", { roleId: row.source_role_id, creationMethod: role.creationMethod });
         return;
+      }
+      // 副本的對話數加進來；預算內才抓，抓不到就這一輪少算它（下一輪再補）。
+      for (const copy of copies.get(`${provider}:${row.source_role_id}`) ?? []) {
+        if (spent >= SUBREQUEST_BUDGET) break;
+        spent++;
+        try {
+          const twin = await upstream.fetchRole(env, copy.roleId, copy.provider);
+          role.talkNum += twin.talkNum;
+          role.followNum += twin.followNum;
+        } catch {
+          /* 副本暫時讀不到：來源的數字照樣寫 */
+        }
       }
       writes.push(syncStatement(env.DB, row.id, row.talk_num, role, now));
       // 作者一定要有成員列（公開 ID 從那裡來）。0005 之前登記、之後沒再登入過的作者會缺——
@@ -1018,7 +1035,8 @@ export async function syncBatch(env: Env): Promise<{ ok: number; failed: number;
       // 讀不到不是「作者收回了」。這些卡留在榜上不比對，等作者下次提交時才授權並綁上版本。
       if (bot && row.status === "approved" && row.reviewed_hash) {
         try {
-          const hashes = await upstream.fetchContentHash(env, bot.key, row.source_role_id);
+          spent++;
+          const hashes = await upstream.fetchContentHash(env, bot.key, row.source_role_id, provider);
           if (hashes.content !== row.reviewed_hash) {
             writes.push(...needsReviewStatements(env.DB, { cardId: row.id, provider: row.provider, roleId: row.source_role_id, contentHash: hashes.content, now }));
           }

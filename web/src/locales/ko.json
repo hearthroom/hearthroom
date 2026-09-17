@@ -1006,7 +1006,7 @@
   "linked.error.connection_choice_required": "유지할 커뮤니티 계정을 선택하세요.",
   "linked.error.connection_choice_invalid": "이 커뮤니티 계정은 선택할 수 없습니다.",
   "linked.platforms": "카드가 있는 플랫폼",
-  "linked.syncHint": "복사할 플랫폼을 선택하세요. 원본을 유지하며 기존 사본을 업데이트합니다. 사본이 별도로 수정되었다면 동기화를 중단합니다.",
+  "linked.syncHint": "연결된 플랫폼은 기본으로 선택됩니다. 게시하면 선택한 모든 플랫폼으로 함께 보냅니다. 원본을 유지하며 기존 사본을 업데이트하고, 사본이 별도로 수정되었다면 동기화를 중단합니다.",
   "linked.retry": "다시 시도",
   "linked.source": "원본",
   "linked.submitToo": "동기화 후 플랫폼 심사에 제출",

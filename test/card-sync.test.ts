@@ -27,7 +27,7 @@ beforeEach(async () => {
     public: false,
   });
   vi.spyOn(transfers, "create").mockResolvedValue("target");
-  vi.spyOn(transfers, "update").mockResolvedValue();
+  vi.spyOn(transfers, "update").mockResolvedValue({});
   vi.spyOn(transfers, "publish").mockResolvedValue();
 });
 afterEach(() => vi.restoreAllMocks());

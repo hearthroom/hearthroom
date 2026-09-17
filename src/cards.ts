@@ -102,10 +102,10 @@ const likeTerm = (q: string) => `%${q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
 
 export interface ListOptions {
   /**
-   * 看的是哪一家供應商的卡。兩家的資料完全不混（owner 2026-09-16），而上游的卡片 ID 與
-   * 作者數字 ID 在兩家各自編號，會撞號——所以這個條件是必填，不是選填。
+   * 只有作者看自己的清單才帶（anyStatus）：上游的卡片 ID 與作者數字 ID 在兩家各自編號，
+   * 「我的」一定要鎖在一家。公開的榜單與搜尋不帶——兩家的卡列在同一個榜上（owner 2026-09-17）。
    */
-  provider: ProviderId;
+  provider?: ProviderId;
   /** 語區。榜單永遠帶著；作者主頁不帶，列他所有語言的作品。 */
   zone?: Zone;
   q?: string;
@@ -145,15 +145,24 @@ export interface ListResult {
  * 類型鍵展開成五種語言的名字，藏三十種類型就是一百五十個變數，超過 D1 一條語句 100 個的上限，
  * 整個榜單直接 500（2026-09-15 實測）。
  */
+/**
+ * 搬到另一家的副本（work_copies.role_id）不上榜：榜上只列來源那張，卡片頁的「用哪家玩」
+ * 才列副本。副本若被作者在那家提交登記，會有自己的 cards 列——這條把它藏起來。
+ */
+const NOT_A_COPY = (table: string) =>
+  `NOT EXISTS (SELECT 1 FROM work_copies w WHERE w.provider = ${table}.provider AND w.role_id = ${table}.source_role_id)`;
+
 const inList = (table: string) => `EXISTS (SELECT 1 FROM json_each(${table}.tags) WHERE json_each.value IN (SELECT value FROM json_each(?)))`;
 /** 「卡片標籤裡沒有任何一個在名單裡」：跟 tags 的 EXISTS 同一個形狀，反過來。 */
 const excludeClause = (table: string) => `NOT ${inList(table)}`;
 
 export async function listCards(db: D1Database, opts: ListOptions) {
-  const where: string[] = opts.anyStatus ? ["1=1"] : [`c.${listed(!!opts.allowNsfw)}`];
+  const where: string[] = opts.anyStatus ? ["1=1"] : [`c.${listed(!!opts.allowNsfw)}`, NOT_A_COPY("c")];
   const binds: unknown[] = [];
-  where.push("c.provider = ?");
-  binds.push(opts.provider);
+  if (opts.provider) {
+    where.push("c.provider = ?");
+    binds.push(opts.provider);
+  }
   let from = "cards c";
   let usingFts = false;
 
@@ -222,8 +231,9 @@ export async function listCards(db: D1Database, opts: ListOptions) {
   if (!filtered) {
     // 語區條件走索引，數起來便宜；只有搜尋與標籤過濾才貴到不值得數。
     // 「不想看的類型」不算篩選：它是這個人的常態視角，「共 N 張」要照他看得到的數，所以數的時候一起排除。
-    const countWhere = [listed(!!opts.allowNsfw), "provider = ?"];
-    const countBinds: unknown[] = [opts.provider];
+    const countWhere = [listed(!!opts.allowNsfw), NOT_A_COPY("cards")];
+    const countBinds: unknown[] = [];
+    if (opts.provider) { countWhere.push("provider = ?"); countBinds.push(opts.provider); }
     if (opts.zone) { countWhere.push("zone IN (?, 'all')"); countBinds.push(opts.zone); }
     if (opts.excludeTags?.length) { countWhere.push(excludeClause("cards")); countBinds.push(JSON.stringify(opts.excludeTags)); }
     const counted = await db.prepare(`SELECT COUNT(*) AS n FROM cards WHERE ${countWhere.join(" AND ")}`).bind(...countBinds).first<{ n: number }>();
@@ -463,11 +473,11 @@ export async function registeredAmong(db: D1Database, roleIds: string[], provide
  * 這一區最常見的標籤。榜單用它做「按類型看」的篩選列——標籤是作者自己打的，
  * 沒有固定分類表，所以「類型」就是大家實際在用的那些詞。
  */
-export async function topTags(db: D1Database, zone: Zone | undefined, limit: number, provider: ProviderId = "lunatalk") {
+export async function topTags(db: D1Database, zone: Zone | undefined, limit: number) {
   const where = zone
-    ? `WHERE c.${listed(false)} AND c.provider = ? AND c.zone IN (?, 'all')`
-    : `WHERE c.${listed(false)} AND c.provider = ?`;
-  const binds: unknown[] = zone ? [provider, zone, limit] : [provider, limit];
+    ? `WHERE c.${listed(false)} AND ${NOT_A_COPY("c")} AND c.zone IN (?, 'all')`
+    : `WHERE c.${listed(false)} AND ${NOT_A_COPY("c")}`;
+  const binds: unknown[] = zone ? [zone, limit] : [limit];
   const rows = await db
     .prepare(
       `SELECT j.value AS tag, COUNT(*) AS n FROM cards c, json_each(c.tags) j ${where}
@@ -490,15 +500,16 @@ export interface AuthorRow {
 }
 
 /**
- * 作者榜：把這一區的卡按作者彙總。
+ * 作者榜：把這一區的卡按作者彙總，兩家一起。
  * 數字都是他登記在本站的作品加總，不是他在來源那邊的全部——本站看不到、也不該看到其他的。
+ * 一個成員綁了兩家身分就合成一列（am.id）；沒成員列的照「哪家＋數字 ID」分開，兩家撞號不能混。
  */
 export async function listAuthors(
   db: D1Database,
-  opts: { provider: ProviderId; zone?: Zone; q?: string; sort: "talk" | "cards" | "hot"; limit: number; offset: number },
+  opts: { zone?: Zone; q?: string; sort: "talk" | "cards" | "hot"; limit: number; offset: number },
 ) {
-  const where: string[] = [`c.${listed(false)}`, "c.provider = ?"];
-  const binds: unknown[] = [opts.provider];
+  const where: string[] = [`c.${listed(false)}`, NOT_A_COPY("c")];
+  const binds: unknown[] = [];
   if (opts.zone) { where.push("c.zone IN (?, 'all')"); binds.push(opts.zone); }
   if (opts.q) { where.push(`COALESCE(am.display_name,c.author_name) LIKE ? ESCAPE '\\'`); binds.push(likeTerm(opts.q)); }
   const orderBy =
@@ -509,7 +520,7 @@ export async function listAuthors(
               COUNT(*) AS card_count, SUM(c.talk_num) AS talk_total, SUM(MAX(c.hot_score, 0)) AS trending,
               MIN(c.registered_at) AS joined_at
        FROM cards c ${AUTHOR_JOIN} WHERE ${where.join(" AND ")}
-       GROUP BY c.provider, c.author_num_id ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
+       GROUP BY COALESCE(am.id, c.provider || ':' || c.author_num_id) ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
     )
     .bind(...binds, opts.limit + 1, opts.offset)
     .all<AuthorRow>();
