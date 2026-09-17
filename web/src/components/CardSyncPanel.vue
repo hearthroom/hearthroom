@@ -40,8 +40,9 @@ onMounted(async () => {
   providers.value = await availableProviders();
   if (props.initialOpen) await load();
 });
-// 一處寫卡、多站發布（owner 2026-09-17）：已綁定的目標站預設全勾，發布時就一併送過去；
-// 作者不想送某一家再自己取消。身分清單可能晚於面板載入，所以跟著 profile 一起算。
+// 登記即分發（owner 2026-09-17）：作者在「我的卡片」按登記時，站台在背景同步到所有已綁定的渠道。
+// 這個面板是手動重送／補送：已綁定的目標站預設全勾，作者不想送某一家再自己取消。
+// 身分清單可能晚於面板載入，所以跟著 profile 一起算。
 const defaults = computed(() =>
   providers.value.filter((p) => p.id !== source.value && connected(p.id)).map((p) => p.id)
 );

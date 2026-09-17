@@ -1,5 +1,5 @@
 import { updateMemberProfile } from "./members";
-import { syncCard, copiesFor, workFor, publishedCopiesFor } from "./card-sync";
+import { syncCard, copiesFor, workFor, publishedCopiesFor, distributeCard, type DistributeTarget } from "./card-sync";
 import { apiBaseOf as providerApiBase } from "./providers";
 import { linkIdentity, unlinkIdentity, connectedMemberId } from './connections';
 import { saveMemberId } from './members';
@@ -711,7 +711,7 @@ app.delete("/v1/me/cards/:roleId/saves/:key", async (c) => {
 app.post("/v1/cards", async (c) => {
   const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1] ?? "";
   const me = await requireAuthor(c);
-  const body = (await c.req.json().catch(() => ({}))) as { roleId?: unknown; nsfw?: unknown };
+  const body = (await c.req.json().catch(() => ({}))) as { roleId?: unknown; nsfw?: unknown; distribute?: unknown };
   const roleId = typeof body.roleId === "string" ? body.roleId.trim() : "";
   if (!roleId) throw new HttpError(400, "roleId is required");
   // 作者提交時必須宣告是不是成人內容（owner 2026-09-08）；沒宣告不收
@@ -722,7 +722,15 @@ app.post("/v1/cards", async (c) => {
   const role = await upstream.fetchRole(c.env, roleId, provider);
   if (role.authorNumId !== me.accountNumId) throw new HttpError(403, "not the author of this card");
   // 登記的人一定是成員：作者頁與卡片上的作者連結都靠成員的公開 ID
-  await resolveMember(c.env.DB, provider, me.accountNumId, Date.now());
+  const memberId = await resolveMember(c.env.DB, provider, me.accountNumId, Date.now());
+  // 登記即分發：其他已登入渠道的 token 隨登記一起送來，登記成功後在背景同步過去（不等它）。
+  const distribute: DistributeTarget[] = [];
+  for (const item of Array.isArray(body.distribute) ? body.distribute : []) {
+    const target = item as { provider?: unknown; token?: unknown };
+    if (typeof target?.provider !== "string" || typeof target?.token !== "string" || !target.token || target.token.length > 16384) throw new HttpError(400, "sync_proof_required");
+    const targetProvider = requireConfigured(c.env, parseProvider(target.provider));
+    if (targetProvider !== provider) distribute.push({ provider: targetProvider, token: target.token });
+  }
   // 榜單只收在本站建的卡。作者在主站建的卡不是這裡的東西——「我的卡片」也不會列它，
   // 這條是防直接打 API 的那一手。
   if (role.creationMethod !== CREATION_METHOD) throw new HttpError(403, "only cards created on this site can be listed");
@@ -776,7 +784,10 @@ app.post("/v1/cards", async (c) => {
   }
   const row = await getCard(c.env.DB, id);
   note(c, { event: "register", subject: roleId, detail });
-  return c.json(row ? { ...toCard(row, lang(c)), status: row.status } : { id }, created ? 201 : 200);
+  if (distribute.length) {
+    c.executionCtx.waitUntil(distributeCard(c.env, memberId, { provider, roleId, account: me.accountNumId, token: bearer }, distribute));
+  }
+  return c.json(row ? { ...toCard(row, lang(c)), status: row.status, distributing: distribute.map((t) => t.provider) } : { id }, created ? 201 : 200);
 });
 
 // ---- 社群審核 ----------------------------------------------------------------

@@ -1,5 +1,5 @@
 import { COMMUNITY_API, UPSTREAM_API } from "./config";
-import { currentProvider } from "./provider";
+import { currentProvider, type ProviderId } from "./provider";
 import { hideParam } from "./hidden-tags";
 import { currentSurface } from "./track";
 import { i18n } from "./i18n";
@@ -224,12 +224,18 @@ export async function fetchAuthor(handle: string): Promise<Author> {
 
 /** 登記只送 roleId：內容由服務端自己去上游取，作者塞不進任何欄位。 */
 /** 登記／提交。nsfw 是作者對這張卡的分級宣告，必填（沒宣告伺服器不收）。 */
-export async function registerCard(roleId: string, token: string, nsfw: boolean): Promise<CommunityCard> {
+/** distribute：其他已登入渠道的 token，登記成功後站台在背景把卡同步過去（登記即分發）。 */
+export async function registerCard(
+  roleId: string,
+  token: string,
+  nsfw: boolean,
+  distribute: { provider: ProviderId; token: string }[] = [],
+): Promise<CommunityCard> {
   return json<CommunityCard>(
     await fetch(`${COMMUNITY_API}/cards`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...from(), ...authHeaders(token) },
-      body: JSON.stringify({ roleId, nsfw }),
+      body: JSON.stringify({ roleId, nsfw, ...(distribute.length ? { distribute } : {}) }),
     }),
   );
 }

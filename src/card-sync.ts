@@ -3,6 +3,7 @@ import { MEDIA_FIELDS } from "./card-media";
 import { transfers, type TransferCard, type WorldbookMap } from "./card-transfer";
 import { HttpError, type Env } from "./types";
 import type { ProviderId } from "./providers";
+import { memberProfile } from "./members";
 export { transfers };
 export interface SyncInput {
   memberId: string;
@@ -265,6 +266,48 @@ export async function syncCard(env: Env, i: SyncInput) {
       )
       .run();
     throw new HttpError(e instanceof HttpError ? e.status : 502, error);
+  }
+}
+export interface DistributeTarget {
+  provider: ProviderId;
+  token: string;
+}
+/**
+ * 登記即分發（owner 2026-09-17）：作者按下登記，卡就排進其他已登入渠道的同步。
+ * 這條在回應之後跑（executionCtx.waitUntil），登記本身不等它；結果落在 work_copies，
+ * 「我的卡片」的分發面板讀那裡。一家失敗不影響另一家，也不影響登記。
+ */
+export async function distributeCard(
+  env: Env,
+  memberId: string,
+  source: { provider: ProviderId; roleId: string; account: number; token: string },
+  targets: DistributeTarget[]
+): Promise<void> {
+  const profile = await memberProfile(env.DB, memberId);
+  for (const target of targets) {
+    if (target.provider === source.provider) continue;
+    try {
+      const who = await (await import("./upstream")).upstream.fetchMe(env, target.token, target.provider);
+      // 目標帳號要是這個成員綁過的：不能拿別人的 token 把卡寫進別人的帳號
+      if (!profile?.identities.some((x) => x.provider === target.provider && x.externalId === who.accountNumId)) {
+        console.error("distribute skipped: target account not connected", { provider: target.provider });
+        continue;
+      }
+      await syncCard(env, {
+        memberId,
+        sourceProvider: source.provider,
+        sourceRoleId: source.roleId,
+        sourceAccount: source.account,
+        sourceToken: source.token,
+        targetProvider: target.provider,
+        targetAccount: who.accountNumId,
+        targetToken: target.token,
+        publish: true,
+      });
+    } catch (err) {
+      // syncCard 已把失敗原因寫進 work_copies.error；這裡只留一行給日誌
+      console.error("distribute failed", { provider: target.provider, error: String(err) });
+    }
   }
 }
 /**

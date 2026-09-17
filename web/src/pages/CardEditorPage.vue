@@ -998,7 +998,7 @@ async function remove() {
 // ── 送審 ──────────────────────────────────────────────────────────
 
 async function publish() {
-  if (!canPublish.value || (distribution.value && !distribution.value.validate(true))) return;
+  if (!canPublish.value) return;
   if (!(await confirmDialog({ message: t("editor.publish.confirm"), confirmText: t("editor.publish.submit") }))) return;
   saving.value = true;
   error.value = "";
@@ -1006,8 +1006,8 @@ async function publish() {
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
     // 上游要求確認摘要至少 8 個字：那是給審核方看的一句話，不是一個旗標。
+    // 分發不在這裡：作者在「我的卡片」按登記時，站台才把卡同步到其他已登入渠道（登記即分發）。
     await submitRoleForReview(roleId.value, t("editor.publish.summary", { name: draft.value.roleName }), token);
-    if (distribution.value && !await distribution.value.run(true)) { error.value=t("linked.partialPublish"); return; }
     saved.value = true;
     await router.push({ path: lp("/mine"), query: { fresh: "1" } });
   } catch (err) {
