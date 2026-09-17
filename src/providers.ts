@@ -41,9 +41,9 @@ const HAS_REVIEW_BOT: Record<ProviderId, boolean> = { lunatalk: true, harbor: fa
 
 /**
  * 哪幾家有對話引擎（契約的 conversation／streaming 那一級）。沒有的那家存得了卡、上得了榜，
- * 但玩不了——卡片頁把它列成「只存放」。Harbor 是平台不做對話（owner 2026-09-17）。
+ * 但玩不了——卡片頁把它列成「只存放」。Harper 使用已配置的模型對話服務。
  */
-const HAS_CHAT: Record<ProviderId, boolean> = { lunatalk: true, harbor: false };
+const HAS_CHAT: Record<ProviderId, boolean> = { lunatalk: true, harbor: true };
 
 /** 這家能不能在站內玩這張卡。 */
 export function hasChat(provider: ProviderId): boolean {

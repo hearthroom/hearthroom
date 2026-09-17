@@ -1,3 +1,4 @@
+import { readBooks, writeBooks, type TransferProgress } from "./card-transfer-resources";
 import {
   imageReference,
   registerImageReference,
@@ -28,6 +29,7 @@ export interface TransferEntry {
 export interface TransferWorldbook {
   /** 來源站的世界書 id；只用來對照目標站那一本（work_copies.worldbooks），不進雜湊。 */
   sourceId: string;
+  metadata?: Record<string, any>;
   name: string;
   entries: TransferEntry[];
 }
@@ -45,6 +47,7 @@ export interface TransferCard {
   language: string;
   media?: CardMedia;
   fields?: Record<string, unknown>;
+  translations?: Record<string,{name:string;summary:string;description:string;greeting:string}>;
   welcome?: { alternates: string[]; prologue: string[] };
   worldbooks?: TransferWorldbook[];
   /** null＝來源沒有作者資產（目標若有要拿掉）；undefined＝沒讀（測試的假來源）。 */
@@ -142,17 +145,8 @@ function normalizeEntry(e: Record<string, any>): TransferEntry {
   };
 }
 async function readWorldbooks(env: Env, p: ProviderId, token: string, roleId: string): Promise<TransferWorldbook[]> {
-  const books = await call(env, p, token, `/worldbook/bindings?roleId=${encodeURIComponent(roleId)}`);
-  const out: TransferWorldbook[] = [];
-  for (const b of Array.isArray(books.bindings) ? books.bindings : []) {
-    const id = text(b?.worldbookId);
-    if (!id) continue;
-    const rows = await call(env, p, token, `/worldbook/entry/list?worldbookId=${encodeURIComponent(id)}`);
-    const list = Array.isArray(rows.list) ? rows.list : Array.isArray(rows.entries) ? rows.entries : [];
-    out.push({ sourceId: id, name: text(b.name).trim() || "Worldbook", entries: list.map(normalizeEntry) });
-  }
-  // 綁了幾本、順序如何，兩家讀回可能不同；按名字排，雜湊才穩。
-  return out.sort((a, b) => a.name.localeCompare(b.name));
+  const books = await readBooks((path,body,method)=>call(env,p,token,path,body,method),roleId);
+  return books.map(b=>({sourceId:b.sourceId,name:String(b.metadata.name),metadata:b.metadata,entries:b.entries.map(normalizeEntry)})).sort((a,b)=>a.name.localeCompare(b.name));
 }
 function normalizeAsset(a: Record<string, any> | null): TransferAsset | null {
   if (!a) return null;
@@ -181,15 +175,38 @@ async function read(
     throw new HttpError(403, "sync_not_owner");
   if (!("roleDetailDesc" in r))
     throw new HttpError(409, "sync_private_content_unavailable");
+  // Transfer the common text and image contract. Reject richer fields that cannot be preserved.
+  for (const key of [
+    "roleSpeech",
+  ]) {
+    const v = r[key];
+    if (
+      (typeof v === "string" && v.trim() && v !== "[]" && v !== "{}") ||
+      (Array.isArray(v) && v.length) || (v && typeof v === "object" && !Array.isArray(v) && Object.keys(v).length)
+    )
+      throw new HttpError(409, "sync_unsupported_content");
+  }
+  const translations:NonNullable<TransferCard['translations']>={};
+  for(const [language,suffix] of [['en','En'],['ja','Ja'],['ko','Ko']]) {
+   if(language===text(r.language))continue;
+   const name=text(r['roleName'+suffix]);
+   if(name) {
+    if(!('roleDetailDesc'+suffix in r))throw new HttpError(409,'sync_private_content_unavailable');
+    translations[language]={name,summary:text(r['roleDesc'+suffix]),description:text(r['roleDetailDesc'+suffix]),greeting:text(r['roleWelcome'+suffix])};
+   }
+  }
   const fields: Record<string, unknown> = {};
   for (const key of ["roleOutputContract", "userName", "nickname", "roleSex", "roleType"]) fields[key] = text(r[key]);
-  // 越獄／自訂指令：讀回時兩個名字都可能出現，寫入時契約兩家都認 jailbreak。
-  fields.jailbreak = text(r.customInstructions) || text(r.jailbreak);
+  // Accept older responses, but write the current shared public field.
+  fields.customInstructions = text(r.customInstructions) || text(r.jailbreak);
   const list = (v: unknown): unknown[] => {
     if (v == null || v === '') return [];
     try { const parsed = typeof v === 'string' ? JSON.parse(v) : v; if (Array.isArray(parsed)) return parsed; } catch {}
     throw new HttpError(409,'sync_unsupported_content');
   };
+  if(r.cardMeta && (typeof r.cardMeta==='object'||typeof r.cardMeta==='string')) {
+   try {const meta=typeof r.cardMeta==='string'?JSON.parse(r.cardMeta):r.cardMeta;if(meta&&Object.keys(meta).length)fields.cardMeta=meta;}catch{throw new HttpError(409,'sync_unsupported_content')}
+  }
   fields.roleTag = list(r.roleTag).map(String);
   fields.talkExample = list(r.talkExample).map((v:any) => {
     if (!v || typeof v.roleType !== 'string' || typeof v.content !== 'string') throw new HttpError(409,'sync_unsupported_content');
@@ -209,6 +226,7 @@ async function read(
   return {
     card: {
       fields,
+      ...(Object.keys(translations).length?{translations}:{}),
       ...(Object.keys(media).length ? { media } : {}),
       name: text(r.roleName),
       summary: text(r.roleDesc),
@@ -252,7 +270,8 @@ async function update(
   id: string,
   c: TransferCard,
   checkpoint?: () => Promise<void>,
-  books: WorldbookMap = {}
+  progress: TransferProgress | WorldbookMap = {books:{}},
+  saveProgress: () => Promise<void> = async()=>{}
 ): Promise<WorldbookMap> {
   const images: Record<string, string> = {};
   for (const field of MEDIA_FIELDS)
@@ -286,31 +305,18 @@ async function update(
     else if (normalizeAsset(current))
       await call(env, p, token, `/role/${encodeURIComponent(id)}/author-asset`, undefined, "DELETE");
   }
-  const map: WorldbookMap = { ...books };
-  for (const book of c.worldbooks ?? []) {
-    let targetId = map[book.sourceId];
-    const ops: Record<string, unknown>[] = [];
-    if (targetId) {
-      // 覆寫＝舊條目全刪、來源條目全建，一次 document 呼叫；中途斷掉留的是一本空書，不是半本。
-      const rows = await call(env, p, token, `/worldbook/entry/list?worldbookId=${encodeURIComponent(targetId)}`);
-      for (const e of Array.isArray(rows.list) ? rows.list : Array.isArray(rows.entries) ? rows.entries : [])
-        if (text(e?.entryId)) ops.push({ op: "delete", entryId: e.entryId });
-    } else {
-      const made = await call(env, p, token, "/worldbook", { name: book.name, language: c.language });
-      if (typeof made.worldbookId !== "string" || !made.worldbookId) throw new HttpError(502, "sync_upstream_failed");
-      targetId = made.worldbookId;
-      map[book.sourceId] = targetId;
-    }
-    for (const e of book.entries) ops.push({ op: "create", ...e });
-    const result = await call(env, p, token, `/worldbook/${encodeURIComponent(targetId)}/document`, {
-      entries: ops,
-      binding: { roleId: id },
-    });
-    if (Array.isArray(result.createdEntryIds) && result.createdEntryIds.length)
-      await call(env, p, token, `/worldbook/${encodeURIComponent(targetId)}/entries/reorder`, { entryIds: result.createdEntryIds });
+  for(const [locale,content] of Object.entries(c.translations??{})) {
+   if(p==='harbor')await call(env,p,token,`/roles/${encodeURIComponent(id)}/locales`,{locale,...content,source:'human',source_locale:c.language});
+   else {
+    const suffix=({en:'En',ja:'Ja',ko:'Ko'} as Record<string,string>)[locale];
+    await call(env,p,token,`/role/${encodeURIComponent(id)}/document`,{fields:{['roleName'+suffix]:content.name,['roleDesc'+suffix]:content.summary,['roleDetailDesc'+suffix]:content.description,['roleWelcome'+suffix]:content.greeting}});
+   }
+   await checkpoint?.();
   }
-  await checkpoint?.();
-  return map;
+  const state:TransferProgress = typeof progress.books==='object' ? progress as TransferProgress : {books:Object.fromEntries(Object.entries(progress).map(([sourceId,id])=>[sourceId,{id,status:'created' as const}]))};
+  await writeBooks((path,body,method)=>call(env,p,token,path,body,method),id,
+    (c.worldbooks??[]).map(b=>({sourceId:b.sourceId,metadata:b.metadata??{name:b.name,language:c.language},entries:b.entries})),state,saveProgress,async()=>{await checkpoint?.()});
+  return Object.fromEntries(Object.entries(state.books).filter(([,v])=>v.id).map(([k,v])=>[k,v.id!]));
 }
 async function publish(
   env: Env,

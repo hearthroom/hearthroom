@@ -33,7 +33,7 @@ const API_BASE: Record<ProviderId, string> = {
  */
 const SCOPES: Record<ProviderId, string> = {
   lunatalk: "",
-  harbor: "profile.read role.read role.write",
+  harbor: "profile.read role.read role.write chat.play",
 };
 
 /**
@@ -47,9 +47,9 @@ const FEATURES: Record<ProviderId, Record<string, boolean>> = {
     outputContract: true, chatTest: true, previewPage: true, review: true,
   },
   harbor: {
-    editor: true, comments: true, worldbook: true, regex: true, library: false, persona: false,
+    editor: true, comments: true, worldbook: true, regex: true, library: true, persona: false,
     validation: true, deleteRole: true, tags: true, welcomeExtras: true,
-    outputContract: true, chatTest: false, previewPage: true, review: false,
+    outputContract: true, chatTest: true, previewPage: true, review: false,
   },
 };
 
