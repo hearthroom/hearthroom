@@ -64,7 +64,15 @@ it("copies bound worldbooks and the author asset, then binds the new book to the
     "/worldbook/entry/list": () => ({ list: [{ entryId: "e1", name: " Town ", content: "A port", keywords: ["port", " "], isEnabled: true, category: "custom", triggerRegion: "both" }] }),
     "/role/author-asset?roleId=source": () => ({ rules: [{ find: "a", replace: "b" }], mountTrigger: "", mountLayer: "under", pageMode: "", version: 3 }),
     "/role/author-asset?roleId=target": () => json({ error: "not_found" }, 404),
-    "/worldbook/tb/document": () => ({ createdEntryIds: ["x1"] }),
+    "/worldbook/tb/document": (init) => {
+      const { entries } = JSON.parse(String(init?.body));
+      // Harper validates explicit enums; a hash-normalized empty string is not an API default.
+      if (entries.some((e: any) => !["rule", "character", "location", "item", "event", "custom"].includes(e.category)
+        || !["both", "user_only", "ai_only"].includes(e.triggerRegion))) {
+        return json({ error: "invalid_arguments" }, 400);
+      }
+      return { createdEntryIds: ["x1"] };
+    },
     "/open/v1/worldbook": () => ({ worldbookId: "tb" }),
   });
   const source = await transfers.read(env, "lunatalk", "token", "source", 1);
@@ -78,7 +86,7 @@ it("copies bound worldbooks and the author asset, then binds the new book to the
   expect(body(requests.find((r) => r.url.endsWith("/open/v1/worldbook")))).toMatchObject({ name: "Lore", language: "en" });
   const doc = body(requests.find((r) => r.url.endsWith("/worldbook/tb/document")));
   expect(doc.binding).toEqual({ roleId: "target" });
-  expect(doc.entries).toEqual([{ op: "create", name: "Town", content: "A port", keywords: ["port"], secondaryKeywords: [], isEnabled: true, isConstant: false, category: "", triggerRegion: "" }]);
+  expect(doc.entries).toEqual([{ op: "create", name: "Town", content: "A port", keywords: ["port"], secondaryKeywords: [], isEnabled: true, isConstant: false, category: "custom", triggerRegion: "both", matchOptions: null }]);
   expect(body(requests.find((r) => r.url.endsWith("/worldbook/tb/entries/reorder")))).toEqual({ entryIds: ["x1"] });
   const asset = requests.find((r) => r.url.endsWith("/role/target/author-asset"));
   expect(asset?.init?.method).toBe("PUT");
@@ -184,7 +192,7 @@ it('preserves Lorebook entries, alternate greetings and author rendering assets'
   const doc=calls.find(c=>c.url.endsWith('/worldbook/target-book/document'))?.body;
   expect(doc.binding).toEqual({roleId:'target'});
   const {entryId: sourceEntryId,...content}=entry;
-  expect(doc.entries[0]).toMatchObject({...content,triggerRegion:'',op:'create'});
+  expect(doc.entries[0]).toMatchObject({...content,op:'create'});
   expect(doc.entries[0]).not.toHaveProperty('entryId');
   expect(progress.books['source-book'].id).toBe('target-book');
   expect(checkpoints[0].books['source-book'].status).toBe('creating');

@@ -323,7 +323,7 @@ async function update(
   }
   const state:TransferProgress = typeof progress.books==='object' ? progress as TransferProgress : {books:Object.fromEntries(Object.entries(progress).map(([sourceId,id])=>[sourceId,{id,status:'created' as const}]))};
   await writeBooks((path,body,method)=>call(env,p,token,path,body,method),id,
-    (c.worldbooks??[]).map(b=>({sourceId:b.sourceId,metadata:b.metadata??{name:b.name,language:c.language},entries:b.entries})),state,saveProgress,async()=>{await checkpoint?.()});
+    (c.worldbooks??[]).map(b=>({sourceId:b.sourceId,metadata:b.metadata??{name:b.name,language:c.language},entries:b.entries})),state,saveProgress,async()=>{await checkpoint?.()},p==='harbor'?'prepend-batches':'whole-book');
   return Object.fromEntries(Object.entries(state.books).filter(([,v])=>v.id).map(([k,v])=>[k,v.id!]));
 }
 async function publish(

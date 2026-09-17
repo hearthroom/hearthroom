@@ -29,8 +29,10 @@ export async function readBooks(call:TransferCall,roleId:string):Promise<Transfe
  }
  return books;
 }
-export async function writeBooks(call:TransferCall,roleId:string,books:TransferBook[],progress:TransferProgress,save:()=>Promise<void>,checkpoint:()=>Promise<void>) {
+export async function writeBooks(call:TransferCall,roleId:string,books:TransferBook[],progress:TransferProgress,save:()=>Promise<void>,checkpoint:()=>Promise<void>,reorderMode:'whole-book'|'prepend-batches'='whole-book') {
  for(const book of books) {
+  // LunaTalk assigns absolute positions and accepts at most 2,000 IDs.
+  if(reorderMode==='whole-book' && book.entries.length>2000)throw new HttpError(409,'sync_unsupported_content');
   let state=progress.books[book.sourceId];
   if(state?.status==='creating'&&!state.id)throw new HttpError(409,'sync_create_unconfirmed');
   if(!state?.id) {
@@ -44,14 +46,31 @@ export async function writeBooks(call:TransferCall,roleId:string,books:TransferB
   const old=await call(`/worldbook/entry/list?worldbookId=${encodeURIComponent(state.id!)}`);
   old.entries ??= old.list;
   if(!Array.isArray(old.entries)||old.hasNextPage||(typeof old.total==='number'&&old.total>old.entries.length))throw new HttpError(409,'sync_unsupported_content');
-  // Document replacement is atomic upstream. Re-reading before retry avoids
-  // duplicate entries even if the previous response was lost.
-  const result=await call(`/worldbook/${encodeURIComponent(state.id!)}/document`,{
-   metadata:{...book.metadata,visibility:'private'},
-   entries:[...old.entries.map((e:any)=>({op:'delete',entryId:e.entryId})),...book.entries.map(e=>({op:'create',...e}))],
-   binding:{roleId},
-  });
-  if(Array.isArray(result.createdEntryIds)&&result.createdEntryIds.length)await call(`/worldbook/${encodeURIComponent(state.id!)}/entries/reorder`,{entryIds:result.createdEntryIds});
-  await checkpoint();
+  // Hash normalization is not a wire format: restore defaults before API writes.
+  const operations=[...old.entries.map((e:any)=>({op:'delete',entryId:e.entryId})),...book.entries.map(e=>({op:'create',...canonicalEntry(e)}))];
+  const createdIds:string[]=[];
+  // Stay below both providers' document limits. A retry reads the mapped book
+  // again and replaces its current entries, including any completed chunks.
+  // Keep a readback checkpoint after every acknowledged write; an ambiguous
+  // response still fails closed through the existing target-version guard.
+  for(let offset=0;offset<Math.max(1,operations.length);offset+=100) {
+   const result=await call(`/worldbook/${encodeURIComponent(state.id!)}/document`,{
+    metadata:{...book.metadata,visibility:'private'},
+    entries:operations.slice(offset,offset+100),
+    binding:{roleId},
+   });
+   if(Array.isArray(result.createdEntryIds))createdIds.push(...result.createdEntryIds);
+   await checkpoint();
+  }
+  if(createdIds.length) {
+   // Harper moves listed IDs to the front, retaining the rest in order.
+   // Prepend chunks from last to first to preserve the complete source order.
+   // LunaTalk assigns absolute positions, so it must receive one complete list.
+   const size=reorderMode==='prepend-batches'?100:createdIds.length;
+   for(let offset=Math.floor((createdIds.length-1)/size)*size;offset>=0;offset-=size) {
+    await call(`/worldbook/${encodeURIComponent(state.id!)}/entries/reorder`,{entryIds:createdIds.slice(offset,offset+size)});
+    await checkpoint();
+   }
+  }
  }
 }
