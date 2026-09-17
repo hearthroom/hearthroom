@@ -32,6 +32,22 @@ beforeEach(() => {
 });
 
 describe("換發憑證", () => {
+  it("增加 Harper 權限後，舊 refresh token 仍使用原本註冊的 client", async () => {
+    localStorage.setItem("hearthroom.oauth.refresh.harbor", "old-refresh");
+    localStorage.setItem("hearthroom.oauth.client.harbor.profile.read,role.read,role.write", "old-client");
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      calls.push(String(url));
+      if (String(url).endsWith("/oauth/register")) return Response.json({client_id:"new-client"});
+      const body = new URLSearchParams(String(init?.body));
+      return body.get("client_id") === "old-client"
+        ? Response.json({access_token:"renewed",refresh_token:"rotated",expires_in:3600})
+        : Response.json({error:"invalid_grant"},{status:400});
+    });
+    expect((await refresh("harbor"))?.accessToken).toBe("renewed");
+    expect(calls.some(url => url.endsWith("/oauth/register"))).toBe(false);
+    expect((await refresh("harbor"))?.accessToken).toBe("renewed");
+  });
   /**
    * 這是「一重新整理就要重新登入」的真正原因：路由守衛與 App 的 onMounted 同時
    * 觸發換發，兩個帶著同一顆 refresh token，第二個被判重放 → session 作廢。

@@ -22,6 +22,7 @@ const STORE = {
   state: "hearthroom.oauth.state",
   refresh: "hearthroom.oauth.refresh",
   access: "hearthroom.oauth.access",
+  grantClient: "hearthroom.oauth.grant_client",
   returnTo: "hearthroom.oauth.return_to",
 } as const;
 
@@ -108,6 +109,7 @@ export async function beginLogin(returnTo: string, options: {provider?:ProviderI
 
 export interface TokenPair {
   accessToken: string;
+  clientId?: string;
   refreshToken?: string;
   /** epoch ms。存起來，重新整理後還沒過期就直接用，不必多跑一次換發。 */
   expiresAt: number;
@@ -116,11 +118,22 @@ export interface TokenPair {
 /** 換發失敗時要不要把憑證丟掉——只有伺服器明確說「這張不算數」才丟。 */
 export class AuthExpired extends Error {}
 
+async function grantClientId(provider: ProviderId): Promise<string> {
+  const saved = readCredential(STORE.grantClient, provider);
+  if (saved) return saved;
+  // 已發出的 refresh token 屬於舊 client；增加 scope 不能改變這個綁定。
+  const legacy = provider === 'harbor'
+    ? localStorage.getItem(`${STORE.client}.harbor.profile.read,role.read,role.write`) ?? localStorage.getItem(`${STORE.client}.harbor`)
+    : readCredential(STORE.client, provider);
+  return legacy || await clientId(provider);
+}
+
 async function exchange(body: Record<string, string>, provider:ProviderId=currentProvider()): Promise<TokenPair> {
+  const grantClient = body.grant_type === 'refresh_token' ? await grantClientId(provider) : await clientId(provider);
   const res = await fetch(`${baseFor(provider)}/oauth/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ ...body, client_id: await clientId(provider), resource: `${apiBaseOf(provider)}/open/v1` }),
+    body: new URLSearchParams({ ...body, client_id: grantClient, resource: `${apiBaseOf(provider)}/open/v1` }),
   });
   if (!res.ok) {
     // 4xx 是「這張憑證不算數」，5xx 與斷網是「現在問不到」。只有前者該把人登出——
@@ -132,6 +145,7 @@ async function exchange(body: Record<string, string>, provider:ProviderId=curren
 
   return {
     accessToken: data.access_token,
+    clientId: grantClient,
     ...(data.refresh_token ? {refreshToken:data.refresh_token} : {}),
     // 提早 60 秒視為過期，避免請求正好卡在邊界上。
     expiresAt: Date.now() + Math.max(0, (data.expires_in ?? 3600) - 60) * 1000,
@@ -207,6 +221,7 @@ export function refresh(provider:ProviderId=currentProvider()): Promise<TokenPai
  */
 export function persist(pair: TokenPair, provider:ProviderId=currentProvider()): void {
   try {
+    if (pair.clientId) writeCredential(STORE.grantClient, pair.clientId, provider);
     writeCredential(STORE.access, JSON.stringify({accessToken:pair.accessToken,expiresAt:pair.expiresAt}),provider);
     if(pair.refreshToken) writeCredential(STORE.refresh,pair.refreshToken,provider);
   } catch {
@@ -226,6 +241,7 @@ export function restorePersisted(provider:ProviderId=currentProvider()): TokenPa
 }
 
 export function forgetSession(provider:ProviderId=currentProvider()): void {
+  removeCredential(STORE.grantClient,provider);
   removeCredential(STORE.refresh,provider);
   removeCredential(STORE.access,provider);
 }
@@ -233,13 +249,14 @@ export function forgetSession(provider:ProviderId=currentProvider()): void {
 /** 登出時順手告訴伺服器把 refresh token 作廢，不要留一顆到過期為止都還能用的憑證。 */
 export async function revokeSession(provider:ProviderId=currentProvider()): Promise<void> {
   const refreshToken = readCredential(STORE.refresh,provider);
+  const grantClient = refreshToken ? await grantClientId(provider) : null;
   forgetSession(provider);
   if (!refreshToken) return;
   try {
     await fetch(`${baseFor(provider)}/oauth/revoke`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ token: refreshToken, client_id: await clientId(provider) }),
+      body: new URLSearchParams({ token: refreshToken, client_id: grantClient! }),
     });
   } catch {
     // 本地憑證已經清掉，撤銷失敗只是伺服器那顆會留到過期，不影響使用者。

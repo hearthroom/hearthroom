@@ -1,6 +1,6 @@
 # Developer documentation
 
-Hearthroom is a community-maintained, open-source character-card board. The site itself stores **no cards, runs no models and keeps no passwords**: accounts, card content and conversations live with a *provider*; the site only owns "who listed which card, how far it got in review, and who stamped it". Today the only provider is the LunaTalk Open API (`/open/v1`).
+Hearthroom is a community-maintained, open-source character-card board. The site itself stores **no cards, runs no models and keeps no passwords**: accounts, card content and conversations live with a *provider*; the site only owns "who listed which card, how far it got in review, and who stamped it". LunaTalk and HarperHarbor implement the shared Open API (`/open/v1`) with different capability sets; see the provider matrix below.
 
 This page has two parts:
 
@@ -157,10 +157,30 @@ These are **HearthRoom community endpoints** under `/v1`, separate from the prov
 
 A mistaken connection is resolved from the intended community account: disconnect the additional platform from the wrong community, then connect it to the intended one. No community accounts or history are merged or deleted. A different account on an already-connected provider is rejected. Independent HearthRoom login and detaching a founding login are outside this release.
 
-Authors choose the initial platform when creating a card and select additional destinations per card. Synchronization currently preserves common text, instructions, examples, tags, identity settings and images. Rich content outside this transfer contract (worldbooks, author scripts, translated variants, alternate openings and metadata) is rejected before creation. This is an explicit transfer limitation, not a claim that the provider cannot store those features. Destination edits stop overwrite; uncertain creation results require reconciliation instead of blind retry. Publication requires an explicit action and follows each provider's review. Community content ratings are not sent to providers.
+Authors choose the initial platform when creating a card and select additional destinations per card. Synchronization preserves common text, instructions, examples, tags, identity settings, image references, bound Lorebooks, author assets, translated variants, alternate openings and metadata. Voice-specific content (`roleSpeech`) and incomplete paginated upstream documents are rejected before creation. Lorebooks are recreated as owned private resources on the destination; uncertain creates are retained for reconciliation instead of creating duplicates. This is an explicit transfer limitation, not a claim that the provider cannot store those features. Destination edits stop overwrite; uncertain creation results require reconciliation instead of blind retry. Publication requires an explicit action and follows each provider's review. Community content ratings are not sent to providers.
 
 Images retain the original SaaS URL. HarperHarbor stores owned references using `POST /open/v1/media/references`; HearthRoom does not download or re-upload image bytes. An image reference remains subject to ownership, quota and media review.
 
-Players select a published copy and its linked platform account for each play action. The destination contains both the provider and that platform's role ID. Balances and conversations never combine. HarperHarbor's current provider deployment exposes card hosting but no model/chat runtime; stored copies therefore have no play action until a real runtime is connected.
+Players select a published copy and its linked platform account for each play action. The destination contains both the provider and that platform's role ID. Balances and conversations never combine. HarperHarbor supports the core conversation flow listed below when its model runtime is configured. The browser uses the selected provider for both HTTP requests and WebSocket connections. Existing Harper authoring grants must approve the additional `chat.play` scope before playing; refreshing an older grant retains its original OAuth client.
 
 MCP: not applicable to community identity/linking, which requires interactive OAuth proofs and has no community MCP transport. Card operations reuse the provider's existing authenticated service APIs; they do not add a second privileged authoring path. Observability uses existing HTTP outcomes, durable `work_copies` state and `card_sync` result events, with no tokens, account IDs or content in event fields.
+
+
+### HarperHarbor conversation capability
+
+| Capability | HarperHarbor implementation |
+|---|---|
+| Model catalog | `GET /models`; server-owned token rates in credits. The initial configured model is `deepseek-v4-flash`. |
+| Start and resume | `POST /conversation/start`; one current conversation per account and agent, with an initial or selected alternate greeting. |
+| Send | `POST /conversation/ws-ticket`, then `/conversation/ws?protocolVersion=2`; authenticate with a single-use ticket before sending a turn. |
+| History and status | `GET /conversation/messages`, `GET /conversation/operations`, and `GET /conversation/operations/{operationId}`. |
+| Stop and reconnect | `POST /conversation/stop`; durable chunks replay through `resumeStreamId` plus `lastEventId`, or `mode=tryResume` plus `conversationId`. |
+| Player settings | Name-only or custom persona, response preferences and custom instructions; global and per-conversation personas are not implemented. |
+| Prompt construction | Prompt V2 assembles agent instructions, examples, persona, history and matching bound Lorebook entries. Lorebook recall uses keywords and constant entries, not semantic embeddings. |
+| Billing | Reserve credits before generation; settle once from upstream token usage after a completed result. Failed, interrupted and stopped turns release their reservation without a charge in this initial implementation. |
+
+A `clientOperationId` identifies one immutable send intent. Reusing it with different text or a different conversation is rejected. Reconnecting replays stored chunks rather than starting a new model request. Partial output and terminal state remain available in history. Provider balances and histories remain separate.
+
+HarperHarbor does not currently implement rewrite, continue, conversation archives, message editing/deletion, notepad, memory management, reply suggestions or multi-pass mode. The embedded player hides those controls for Harper; LunaTalk retains its existing capabilities. Public play still requires provider access and review approval. An author may preview their own private agent and author asset; this does not publish it or approve it for another account.
+
+The model relay must be configured before enabling Harper play on the community deployment. Local synthetic tests, live upstream verification and production deployment/readback are separate release checks.

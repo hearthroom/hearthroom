@@ -75,3 +75,16 @@ it("does not overwrite a copy whose first readback was unavailable", async () =>
   await expect(syncCard(env, input)).rejects.toThrow("target_unverified");
   expect(transfers.update).not.toHaveBeenCalled();
 });
+
+it('persists the remote resource checkpoint before retrying a failed sync', async()=>{
+  vi.mocked(transfers.update).mockImplementationOnce(async(_e,_p,_t,_id,_card,_checkpoint,progress,save)=>{
+    if(!progress||typeof progress.books!=='object'||!save)throw new Error('resource checkpoint missing');
+    progress.books['book']={status:'created',id:'remote-book'};
+    await save();
+    throw new Error('network after book creation');
+  });
+  await expect(syncCard(env,input)).rejects.toThrow();
+  const row=await env.DB.prepare('SELECT transfer_state FROM work_copies').first<{transfer_state:string}>();
+  expect(JSON.parse(row!.transfer_state).books.book.id).toBe('remote-book');
+  vi.mocked(transfers.read).mockImplementation(async(_e,p)=>({card:p==='harbor'?{...source,description:'not finished'}:source,public:false}));
+});

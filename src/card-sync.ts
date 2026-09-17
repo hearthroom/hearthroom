@@ -1,3 +1,4 @@
+import type { TransferProgress } from "./card-transfer-resources";
 import { MEDIA_FIELDS } from "./card-media";
 import { transfers, type TransferCard, type WorldbookMap } from "./card-transfer";
 import { HttpError, type Env } from "./types";
@@ -25,10 +26,11 @@ export async function cardHash(card: TransferCard) {
         greeting: card.greeting,
         language: card.language,
         fields: card.fields ?? {},
+        ...(card.translations?{translations:card.translations}:{}),
         media: MEDIA_FIELDS.map((key) => card.media?.[key] ?? ""),
         // 開場白備選／序章、世界書條目（不含兩邊各自的 id）、作者資產：改了任何一項都要再同步。
         welcome: card.welcome ?? null,
-        worldbooks: (card.worldbooks ?? []).map((b) => ({ name: b.name, entries: b.entries })),
+        worldbooks: (card.worldbooks ?? []).map((b) => ({ name: b.name, entries: b.entries, ...(b.metadata?{metadata:b.metadata}:{}) })),
         authorAsset: card.authorAsset ?? null,
       })
     )
@@ -46,6 +48,7 @@ interface Copy {
   updated_at: number;
   operation: string | null;
   worldbooks: string;
+  transfer_state: string;
 }
 export async function syncCard(env: Env, i: SyncInput) {
   if (i.sourceProvider === i.targetProvider)
@@ -116,6 +119,15 @@ export async function syncCard(env: Env, i: SyncInput) {
   } catch {
     books = {};
   }
+  const progress:TransferProgress=JSON.parse(row.transfer_state||'{"books":{}}');
+  for(const [sourceId,remoteId] of Object.entries(books)) {
+    if(!progress.books[sourceId])progress.books[sourceId]={id:remoteId,status:'created'};
+  }
+  const saveProgress=async()=>{
+    const saved=await env.DB.prepare("UPDATE work_copies SET transfer_state=?,updated_at=? WHERE work_id=? AND provider=? AND operation=?")
+      .bind(JSON.stringify(progress),Date.now(),id,i.targetProvider,operation).run();
+    if(!saved.meta.changes)throw new HttpError(409,"sync_busy");
+  };
   // 假來源（測試）的 update 沒有回傳值：對照表就維持原樣。
   const remember = (next: WorldbookMap | void) => {
     if (next) books = next;
@@ -164,7 +176,7 @@ export async function syncCard(env: Env, i: SyncInput) {
           roleId,
           source.card,
           checkpoint,
-          books
+          progress, saveProgress
         ));
       }
     } else {
@@ -206,7 +218,7 @@ export async function syncCard(env: Env, i: SyncInput) {
         roleId,
         source.card,
         checkpoint,
-        books
+        progress, saveProgress
       ));
     }
     const readback = await transfers.read(

@@ -9,6 +9,7 @@
 import { computed, getCurrentInstance, onBeforeUnmount, onMounted, shallowRef, watch, type Component } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
+import { ensurePlayAuthorization } from "@/lib/play-authorization";
 import { ensureStage, remergeStageMessages, stageToasts } from "@/lib/stage-host";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
@@ -55,6 +56,8 @@ onMounted(async () => {
   const app = getCurrentInstance()?.appContext.app;
   if (!app) return;
   try {
+    const token = await session.accessToken();
+    if (!token || !await ensurePlayAuthorization(token, route.fullPath)) return;
     Stage.value = await ensureStage({
       app,
       router,
