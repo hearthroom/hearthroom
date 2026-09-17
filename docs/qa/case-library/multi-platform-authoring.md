@@ -115,3 +115,14 @@ credentials, account mutations or model calls.
 
 MCP is not applicable: no API capability is added. Provider rejection metrics
 remain the diagnostic source; the UI does not log card or message content.
+
+## Sandbox composer clears sent drafts
+
+Typing or author-provided input must clear from the sandbox composer when the
+host clears its submitted draft. If admission fails, the same draft must be
+restored; later typing must not be erased by repeated host synchronization.
+The bridge tracks the current shell value rather than suppressing values that
+were seen earlier in either direction. The regression fails on the prior bridge
+and passes with the fix. All 1,837 player tests pass on Node 22 and the stage
+build succeeds. No API or billing behavior changes; MCP and new server metrics
+are not applicable.
