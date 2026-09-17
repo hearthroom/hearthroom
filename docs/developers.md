@@ -152,7 +152,7 @@ These are **HearthRoom community endpoints** under `/v1`, separate from the prov
 | `DELETE /v1/me/connections/:provider` | Disconnects an additional platform without deleting accounts or assets. The founding login remains protected. To remove the sign-in provider, the client uses another verified linked provider's proof, then resumes through that provider. |
 | `GET /v1/me/cards` | List on the explicitly requested provider. Items include provider and, when synchronized, canonical work/source identifiers. The client combines connected lists and groups copies. |
 | `GET /v1/me/card-copies/:roleId` | Verifies ownership on the requested provider, then returns synchronization states. |
-| `POST /v1/me/card-sync` | Body `{sourceProvider, sourceRoleId, sourceToken, targetProvider, targetToken, publish}`. Both accounts must belong to the authenticated community; the source and existing destination must be owned by those accounts. Tokens are transient. |
+| `POST /v1/me/card-sync` | Body `{sourceProvider, sourceRoleId, sourceToken, targetProvider, targetToken, publish, updatePublished?}`. Both accounts must belong to the authenticated community; the source and existing destination must be owned by those accounts. Tokens are transient. `updatePublished: true` explicitly permits returning an unchanged published destination to draft before updating it; independently edited or pending-review copies remain protected. |
 | `GET /v1/cards/:roleId/platforms` | Public copies of an approved community card, after community age gating and upstream accessibility checks. `playable` distinguishes storage from an actual runtime. |
 
 A mistaken connection is resolved from the intended community account: disconnect the additional platform from the wrong community, then connect it to the intended one. No community accounts or history are merged or deleted. A different account on an already-connected provider is rejected. Independent HearthRoom login and detaching a founding login are outside this release.
@@ -184,3 +184,11 @@ A `clientOperationId` identifies one immutable send intent. Reusing it with diff
 HarperHarbor does not currently implement rewrite, continue, conversation archives, message editing/deletion, notepad, memory management, reply suggestions or multi-pass mode. The embedded player hides those controls for Harper; LunaTalk retains its existing capabilities. Public play still requires provider access and review approval. An author may preview their own private agent and author asset; this does not publish it or approve it for another account.
 
 The model relay must be configured before enabling Harper play on the community deployment. Local synthetic tests, live upstream verification and production deployment/readback are separate release checks.
+
+### Cross-platform authoring results
+
+The editor starts with the content, then asks which connected platforms to save to. All connected platforms are selected initially. Later saves keep the source and update selected copies. The selection is remembered in the current browser; it is not an account-wide preference. Publication has a separate multi-platform confirmation.
+
+Each platform returns its own result; a failed destination does not roll back a saved source. Retrying reuses the source and previously created copies. The combined card list opens the source editor for an existing distribution.
+
+Sync errors may include `detail: {provider, step, upstreamStatus, upstreamCode}`. Only fixed step names and allowlisted upstream codes are exposed. Never include upstream prose, request bodies, tokens or private content in reports. Stored copy failures retain the same safe diagnostic envelope.

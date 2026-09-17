@@ -1,3 +1,4 @@
+import { upstreamSyncError, syncStep } from "./sync-error";
 import { readBooks, writeBooks, type TransferProgress } from "./card-transfer-resources";
 import {
   imageReference,
@@ -79,12 +80,18 @@ async function request(
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     redirect: "error",
     signal: AbortSignal.timeout(20000),
-  });
+  }).catch(() => { throw new HttpError(502,"sync_network_failed",{provider:p,step:syncStep(path)}); });
 }
-async function parse(r: Response) {
+async function parse(r: Response, p: ProviderId, path: string) {
   if (r.status === 204 || r.status === 202) return {};
   const text = await r.text();
-  return (text ? JSON.parse(text) : {}) as Record<string, any>;
+  try {
+    const value = text ? JSON.parse(text) : {};
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error();
+    return value as Record<string, any>;
+  } catch {
+    throw new HttpError(502, "sync_invalid_response", {provider:p,step:syncStep(path),upstreamStatus:r.status});
+  }
 }
 async function call(
   env: Env,
@@ -95,20 +102,15 @@ async function call(
   method?: string
 ) {
   const r = await request(env, p, token, path, body, method);
-  if (!r.ok)
-    throw new HttpError(
-      r.status === 401 || r.status === 403 ? 401 : 502,
-      "sync_upstream_failed"
-    );
-  return parse(r);
+  if (!r.ok) throw await upstreamSyncError(r,p,path);
+  return parse(r,p,path);
 }
 /** 404＝這一項在那邊不存在（例如還沒有作者資產），不是失敗。 */
 async function callOptional(env: Env, p: ProviderId, token: string, path: string) {
   const r = await request(env, p, token, path);
   if (r.status === 404) return null;
-  if (!r.ok)
-    throw new HttpError(r.status === 401 || r.status === 403 ? 401 : 502, "sync_upstream_failed");
-  return parse(r);
+  if (!r.ok) throw await upstreamSyncError(r,p,path);
+  return parse(r,p,path);
 }
 const text = (v: unknown) => (typeof v === "string" ? v : "");
 /** 字串陣列：上游有時給 JSON 字串、有時給陣列；空白項丟掉。 */
@@ -218,7 +220,7 @@ async function read(
     if (text(r[key])) media[field] = imageReference(env, p, text(r[key]));
   }
   const welcome = {
-    alternates: strings(r.roleWelcomeAlternates ?? r.alternates),
+    alternates: strings(r.welcomeAlternates ?? r.roleWelcomeAlternates ?? r.alternates),
     prologue: strings(r.rolePrologue ?? r.prologue),
   };
   const worldbooks = await readWorldbooks(env, p, token, id);
@@ -329,4 +331,7 @@ async function publish(
     confirmationSummary: "Publish my synchronized HearthRoom character card.",
   });
 }
-export const transfers = { read, create, update, publish };
+async function unpublish(env:Env,p:ProviderId,token:string,id:string) {
+ await call(env,p,token,`/role/${encodeURIComponent(id)}/visibility`,{visibility:'private'});
+}
+export const transfers = { read, create, update, publish, unpublish };

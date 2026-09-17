@@ -15,8 +15,9 @@ export interface SyncInput {
   targetAccount: number;
   targetToken: string;
   publish: boolean;
+  updatePublished?: boolean;
 }
-export async function cardHash(card: TransferCard) {
+export async function cardHash(card: TransferCard, legacy = false) {
   const raw = await crypto.subtle.digest(
     "SHA-256",
     new TextEncoder().encode(
@@ -33,7 +34,7 @@ export async function cardHash(card: TransferCard) {
         welcome: card.welcome ?? null,
         worldbooks: (card.worldbooks ?? []).map((b) => ({ name: b.name, entries: b.entries, ...(b.metadata?{metadata:b.metadata}:{}) })),
         authorAsset: card.authorAsset ?? null,
-      })
+      }, legacy ? undefined : (_key,value)=>value && typeof value==='object' && !Array.isArray(value) ? Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b))) : value)
     )
   );
   return [...new Uint8Array(raw)]
@@ -159,7 +160,7 @@ export async function syncCard(env: Env, i: SyncInput) {
         i.targetAccount
       );
       const actual = await cardHash(existing.card);
-      if (targetHash && actual !== targetHash && actual !== hash)
+      if (targetHash && actual !== targetHash && actual !== hash && await cardHash(existing.card,true) !== targetHash)
         throw new HttpError(409, "sync_target_changed");
       if (actual === hash)
         status = existing.public
@@ -168,8 +169,9 @@ export async function syncCard(env: Env, i: SyncInput) {
           ? "pending"
           : "synced";
       else {
-        if (existing.public || existing.pending)
+        if (existing.pending || (existing.public && !i.updatePublished))
           throw new HttpError(409, "sync_target_published");
+        if(existing.public)await transfers.unpublish(env,i.targetProvider,i.targetToken,roleId);
         remember(await transfers.update(
           env,
           i.targetProvider,
@@ -257,7 +259,7 @@ export async function syncCard(env: Env, i: SyncInput) {
     )
       .bind(
         creating ? "unknown" : "failed",
-        error,
+        e instanceof HttpError && e.detail ? JSON.stringify({error,detail:e.detail}) : error,
         JSON.stringify(books),
         Date.now(),
         id,
@@ -265,7 +267,7 @@ export async function syncCard(env: Env, i: SyncInput) {
         operation
       )
       .run();
-    throw new HttpError(e instanceof HttpError ? e.status : 502, error);
+    throw new HttpError(e instanceof HttpError ? e.status : 502, error, e instanceof HttpError ? e.detail : undefined);
   }
 }
 export interface DistributeTarget {

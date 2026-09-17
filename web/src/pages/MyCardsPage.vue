@@ -126,9 +126,11 @@ async function submit(card: MyCard) {
     if (!token) throw new Error(t("auth.expired"));
     // 登記即分發：其他已綁定渠道的 token 一起送，站台在背景同步過去，這裡不等
     const distribute: { provider: ProviderId; token: string }[] = [];
+    let selected:string[]|null=null;
+    try {const stored=JSON.parse(localStorage.getItem(`hearthroom.save-platforms.${currentProvider()}.${card.roleId}`)||'null');if(Array.isArray(stored))selected=stored;}catch{}
     for (const identity of session.profile?.identities ?? []) {
       const other = identity.provider as ProviderId;
-      if (other === currentProvider()) continue;
+      if (other === currentProvider() || (selected && !selected.includes(other))) continue;
       const otherToken = await accountToken(other, identity.externalId).catch(() => null);
       if (otherToken) distribute.push({ provider: other, token: otherToken });
     }
@@ -209,8 +211,7 @@ watch(() => route.query.fresh, (f) => {
           <template v-if="revalidating"> · {{ $t("mine.syncing") }}</template>
         </p>
       </div>
-      <details v-if="combined" class="create-platform"><summary class="btn btn--primary">{{ $t("mine.create") }}</summary><p>{{ $t('linked.createOn') }}</p><a v-for="identity in session.profile?.identities" :key="identity.provider" class="btn btn--sm" :href="platformPath(lp('/create'), identity.provider as ProviderId)">{{ providerName(identity.provider as ProviderId) }}</a></details>
-      <RouterLink v-else-if="can('editor')" :to="lp('/create')" class="btn btn--primary">{{ $t("mine.create") }}</RouterLink>
+      <RouterLink v-if="can('editor')" :to="lp('/create')" class="btn btn--primary">{{ $t("mine.create") }}</RouterLink>
     </header>
 
     <ConnectedCards v-if="combined" />
