@@ -7,6 +7,7 @@ import {
   copies,
   synchronize,
   connectionMessage,
+  canRecreateCopy,
   type CardCopy,
 } from "@/lib/distribution";
 import { useLocalePath } from "@/lib/use-locale";
@@ -23,6 +24,7 @@ const providers = ref<{ id: ProviderId; name: string }[]>([]);
 const selected = ref<ProviderId[]>([]);
 const states = ref<CardCopy[]>([]);
 const errors = ref<Record<string, string>>({});
+const rawErrors = ref<Record<string, unknown>>({});
 const busy = ref(false);
 const publish = ref(false);
 const loadError = ref("");
@@ -56,6 +58,8 @@ watch(
   () => [props.roleId, props.provider],
   () => {
     states.value = [];
+    errors.value = {};
+    rawErrors.value = {};
     selected.value = remembered(defaults.value);
   }
 );
@@ -79,13 +83,32 @@ async function run(sendForReview = publish.value) {
         sendForReview
       );
       states.value = [...states.value.filter((x) => x.provider !== p), r];
+      delete rawErrors.value[p];
     } catch (e) {
       ok = false;
       errors.value[p] = connectionMessage(e);
+      rawErrors.value[p] = e;
     }
   }
   busy.value = false;
   return ok;
+}
+function missingCopy(p:ProviderId) {
+ return canRecreateCopy(rawErrors.value[p] ?? new Error(states.value.find(x=>x.provider===p)?.error),p);
+}
+async function recreate(p:ProviderId) {
+ if(busy.value || props.disabled || !connected(p) || !missingCopy(p))return;
+ busy.value=true;
+ try {
+  // Recovery always creates a private copy, regardless of the review checkbox.
+  const result=await synchronize(props.roleId,source.value,p,false,false,true);
+  states.value=[...states.value.filter(x=>x.provider!==p),result];
+  delete errors.value[p];
+  delete rawErrors.value[p];
+ } catch(error) {
+  errors.value[p]=connectionMessage(error);
+  rawErrors.value[p]=error;
+ } finally {busy.value=false;}
 }
 defineExpose({ run, validate, load });
 </script>
@@ -141,6 +164,12 @@ defineExpose({ run, validate, load });
           )
         }}
       </p>
+      <div v-if="p.id !== source && connected(p.id) && missingCopy(p.id)" class="recovery">
+        <p class="subtle">{{ $t("linked.recreateHint") }}</p>
+        <button class="btn btn--sm" :disabled="busy || disabled" @click="recreate(p.id)">
+          {{ busy ? $t("linked.syncing") : $t("linked.recreateCopy") }}
+        </button>
+      </div>
     </div>
     <label class="option"
       ><input v-model="publish" type="checkbox" :disabled="busy || disabled" />
@@ -177,6 +206,13 @@ summary {
   flex-basis: 100%;
   margin: 0;
 }
+.recovery {
+  flex-basis: 100%;
+  display: grid;
+  gap: var(--s-2);
+  justify-items: start;
+}
+.recovery button { min-height: var(--h-lg); height: auto; max-width: 100%; white-space: normal; }
 .option {
   display: flex;
   gap: var(--s-2);

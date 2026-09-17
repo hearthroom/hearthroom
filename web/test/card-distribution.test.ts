@@ -140,3 +140,19 @@ it("pre-selects every connected target so publishing distributes by default", as
   await settle();
   expect(harbor.checked).toBe(false);
 });
+
+it('offers explicit private-copy recovery for a persisted missing target',async()=>{
+ expect(i18n.global.te('linked.recreateCopy')).toBe(true);
+ mocks.copies.mockResolvedValue([{provider:'harbor',roleId:'deleted',status:'failed',error:JSON.stringify({error:'sync_resource_missing',detail:{provider:'harbor',step:'read',upstreamStatus:404,upstreamCode:'role_not_found'}})}]);
+ await mount(CardSyncPanel,{roleId:'original',provider:'lunatalk',initialOpen:true});
+ const recovery=[...root.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent?.trim()===i18n.global.t('linked.recreateCopy'));
+ expect(recovery).toBeDefined();
+ expect(mocks.sync).not.toHaveBeenCalled();
+ root.querySelector<HTMLInputElement>('.option input')!.click();
+ mocks.sync.mockResolvedValueOnce({provider:'harbor',roleId:'new-copy',status:'synced'});
+ recovery!.click();
+ await settle();
+ expect(mocks.sync).toHaveBeenLastCalledWith('original','lunatalk','harbor',false,false,true);
+ expect(root.querySelector('.notice--error')).toBeNull();
+ expect(root.textContent).not.toContain(i18n.global.t('linked.recreateCopy'));
+});

@@ -1007,6 +1007,8 @@
   "linked.error.connection_choice_required": "请选择要保留的社区账号。",
   "linked.error.connection_choice_invalid": "无法选择这个社区账号。",
   "linked.platforms": "卡片所在平台",
+  "linked.recreateCopy": "重新创建私有副本",
+  "linked.recreateHint": "找不到此平台的副本。可以从来源卡重新创建私有副本；已删除的内容不会恢复。",
   "linked.syncHint": "保存卡片时可同步到所选平台；这里也可以手动同步。来源卡会保留，副本若被另外修改，会停止同步并提醒你。",
   "linked.retry": "重试",
   "linked.source": "来源卡",
