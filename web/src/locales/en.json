@@ -1006,7 +1006,7 @@
   "linked.error.connection_choice_required": "Choose which community account to keep.",
   "linked.error.connection_choice_invalid": "This community account cannot be selected.",
   "linked.platforms": "Card copies",
-  "linked.syncHint": "Choose where to copy this card. Sync keeps the original and updates existing copies. It stops if a copy has been edited separately.",
+  "linked.syncHint": "Connected platforms are selected by default: publishing sends the card to every selected one. Sync keeps the original and updates existing copies; it stops if a copy has been edited separately.",
   "linked.retry": "Retry",
   "linked.source": "Original",
   "linked.submitToo": "Submit copies for platform review",
