@@ -1392,8 +1392,8 @@ async function exportCard(format: "png" | "json") {
           <button v-if="!isNew" type="button" class="btn" :disabled="!canPublish || saving" @click="publish">
             {{ $t("editor.publish.submit") }}
           </button>
-          <button type="button" class="btn bar__panel" @click="openSheet('test')">{{ $t("editor.test.title") }}</button>
-          <button type="button" class="btn bar__panel" @click="openSheet('res')">{{ $t("editor.panel.resources") }}</button>
+          <button v-if="can('chatTest')" type="button" class="btn bar__panel" @click="openSheet('test')">{{ $t("editor.test.title") }}</button>
+          <button v-if="can('library')" type="button" class="btn bar__panel" @click="openSheet('res')">{{ $t("editor.panel.resources") }}</button>
           <RouterLink class="btn btn--ghost" :class="{ 'is-off': saving }" :aria-disabled="saving || undefined"
                       :to="{ path: lp('/mine'), query: { fresh: '1' } }">
             {{ $t("edit.back") }}
@@ -1647,6 +1647,11 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
    使用者拖過把手之後，layoutStyle 會用 inline 的 --rail-w 蓋掉這條，框跟著變寬。
 */
 .layout:has(.rail--wide) { --rail-w: clamp(320px, calc(46vh - 54px), 640px); }
+/*
+   右欄整個不存在時（供應方沒有試聊也沒有圖庫），網格要收成一列。不收的話兩列還在，
+   表單靠自動放置會落到第 1 行第 2 列——寬螢幕上整張表單擠進 240px 的右欄。
+*/
+.layout:not(:has(.rail)) { grid-template-columns: minmax(0, 1fr); }
 .rail__tabs { display: flex; gap: var(--s-2); align-items: center; }
 .rail__tabs .seg { min-width: 0; overflow-x: auto; }
 /* 收合鈕永遠靠右，中間那幾顆工具鈕貼著分頁籤 */
