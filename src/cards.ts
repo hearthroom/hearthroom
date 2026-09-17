@@ -34,6 +34,8 @@ export interface CardRow {
   community_avatar?: string | null;
   /** 成人內容（0006 起）：作者提交時宣告、審核人對照過的本站分級。預設不展示。 */
   nsfw: number;
+  /** 本站卡號（0014 起）：登記時發、撤銷再登記不換號。從 card_numbers 接上來的，列還沒補到號時是 null。 */
+  num?: number | null;
 }
 
 /**
@@ -42,8 +44,12 @@ export interface CardRow {
  */
 const AUTHOR_JOIN = `LEFT JOIN member_identities ai ON ai.provider = c.provider AND ai.external_id = CAST(c.author_num_id AS TEXT)
   LEFT JOIN member_connections ac ON ac.provider=c.provider AND ac.external_id=CAST(c.author_num_id AS TEXT)
-  LEFT JOIN members am ON am.id = COALESCE(ac.owner_member_id,ai.member_id)`;
-const CARD_COLUMNS = "c.*, am.handle AS author_handle, am.display_name AS community_name, CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url END AS community_avatar";
+  LEFT JOIN members am ON am.id = COALESCE(ac.owner_member_id,ai.member_id)
+  LEFT JOIN card_numbers cn ON cn.provider = c.provider AND cn.source_role_id = c.source_role_id`;
+const CARD_COLUMNS = "c.*, am.handle AS author_handle, am.display_name AS community_name, CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url END AS community_avatar, cn.num AS num";
+
+/** 卡號長什麼樣：純數字。網址與搜尋框裡看到這種形狀就當卡號查，其餘當上游的卡片 ID。 */
+export const CARD_NUMBER = /^[1-9]\d{0,11}$/;
 
 /** 對外露出的卡片只有在榜的。榜單、標籤、作者榜、卡片頁都走這個條件。 */
 const LISTED = "status = 'approved'";
@@ -60,6 +66,8 @@ export function toCard(row: CardRow, lang: string) {
   return {
     id: row.id,
     roleId: row.source_role_id,
+    /** 本站卡號：短、能唸出來、能在不准貼連結的地方報。撤銷再登記不換號（card_numbers）。 */
+    num: row.num ?? undefined,
     zone: row.zone,
     /** 這張卡支援哪家供應商（拿那家的帳號、用那家的 AI 服務在本站玩）。不是來源、不是由誰提供——卡是作者的。 */
     provider: row.provider,
@@ -272,6 +280,8 @@ export async function upsertCard(db: D1Database, role: UpstreamRole, now: number
   }
 
   const id = crypto.randomUUID();
+  // 卡號：第一次登記發號，之前登記過又撤掉的卡拿回原來的號（INSERT OR IGNORE 撞到唯一鍵就不動）。
+  await db.prepare("INSERT OR IGNORE INTO card_numbers (provider, source_role_id) VALUES (?, ?)").bind(provider, role.roleId).run();
   await db
     .prepare(
       `INSERT INTO cards (id, source_role_id, zone, author_num_id, author_name, author_avatar, names, summaries,
@@ -296,11 +306,52 @@ export async function setCardStatus(db: D1Database, id: string, status: string):
   await db.prepare("UPDATE cards SET status = ? WHERE id = ?").bind(status, id).run();
 }
 
+/**
+ * 找一張卡：卡號（純數字）、上游的卡片 ID、或本站列的 id 都認。
+ * 卡號是站內唯一的，不看供應商；另外兩種在兩家會撞號，要帶供應商。
+ */
 export async function getCard(db: D1Database, id: string, provider: ProviderId = "lunatalk") {
+  if (CARD_NUMBER.test(id)) {
+    return await db
+      .prepare(`SELECT ${CARD_COLUMNS} FROM cards c ${AUTHOR_JOIN} WHERE cn.num = ?`)
+      .bind(Number(id))
+      .first<CardRow>();
+  }
   return await db
     .prepare(`SELECT ${CARD_COLUMNS} FROM cards c ${AUTHOR_JOIN} WHERE c.provider = ? AND (c.id = ? OR c.source_role_id = ?)`)
     .bind(provider, id, id)
     .first<CardRow>();
+}
+
+/**
+ * 作者自己還沒登記（或還沒過審）的卡，照卡片頁的形狀從上游的公開資料拼一份。
+ *
+ * 只給作者本人看：卡片頁對別人是 404，作者點自己的封面卻掉進 404 是死路（玩家回報 2026-09-17）。
+ * 沒有卡號、沒有登記時間，`status: "unlisted"` 讓前端知道這是預覽而不是在榜的卡。
+ */
+export function previewCard(role: UpstreamRole, lang: string, provider: ProviderId) {
+  return {
+    id: role.roleId,
+    roleId: role.roleId,
+    zone: role.zone,
+    provider,
+    nsfw: false,
+    name: pickLocale(role.names, lang),
+    summary: pickLocale(role.summaries, lang),
+    names: role.names,
+    summaries: role.summaries,
+    avatarUrl: role.avatarUrl,
+    backgroundUrl: role.backgroundUrl,
+    slug: role.slug,
+    tags: role.tags,
+    author: { handle: null, accountNumId: role.authorNumId, name: role.authorName, avatar: role.authorAvatar },
+    talkNum: role.talkNum,
+    followNum: role.followNum,
+    trending: 0,
+    registeredAt: 0,
+    syncedAt: 0,
+    status: "unlisted" as const,
+  };
 }
 
 /** 一個成員的公開作者頁：把他在各家供應商上、登記在本站且在榜的卡彙總。沒有在榜的卡就是 null。 */

@@ -80,7 +80,12 @@ function navigate(patch: Record<string, string | undefined>) {
   if (!("offset" in patch)) delete query.offset;
   router.push({ query });
 }
-function submit() { navigate({ q: draft.value.trim() }); }
+/** 純數字就是卡號（玩家在別處拿到的那個短號）：直接開那張卡，不當關鍵字搜 */
+function submit() {
+  const q = draft.value.trim();
+  if (/^#?[1-9]\d{0,11}$/.test(q)) { router.push(lp(`/cards/${q.replace(/^#/, "")}`)); return; }
+  navigate({ q });
+}
 function searchTag(tag: string) { router.push({ path: lp("/"), query: { tag } }); }
 
 /** 結果數不確定（有篩選又還有下一頁）時只說「這一頁以上」，不假裝知道總數 */
