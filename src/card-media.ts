@@ -36,7 +36,11 @@ export function imageReference(
   return raw;
 }
 
-/** The target stores reference metadata, never an uploaded copy. */
+/**
+ * 讓目標站認得這個網址，回傳要寫進 document 的值——永遠是原網址。
+ * LunaTalk 的 document 直接收外站網址；Harbor 要先登記成「引用資產」（只存網址、進圖片審核，
+ * 不下載位元組），登記完 document 再送同一個網址就能反查成本人的資產。
+ */
 export async function registerImageReference(
   env: Env,
   provider: ProviderId,
@@ -58,12 +62,8 @@ export async function registerImageReference(
     }
   );
   if (!r.ok) throw new HttpError(409, "sync_image_reference_unavailable");
-  const body = (await r.json()) as {
-    assetId?: string;
-    url?: string;
-    storage?: string;
-  };
-  if (!body.assetId || body.url !== url || body.storage !== "reference")
+  const body = (await r.json()) as { assetId?: string; url?: string };
+  if (!body.assetId || body.url !== url)
     throw new HttpError(502, "sync_image_reference_unavailable");
-  return body.assetId;
+  return url;
 }
