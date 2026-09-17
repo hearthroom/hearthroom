@@ -1,3 +1,4 @@
+import { PROVIDERS } from "./provider";
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import { fetchMe, fetchSiteMe, fetchWallet, setNsfwViewer, setViewerHiddenTags } from "./api";
@@ -122,7 +123,7 @@ export const useSession = defineStore("session", () => {
     wallet.value = null;
     profile.value = null;
     setNsfwViewer(null);
-    await revokeSession();
+    await Promise.all(PROVIDERS.map(provider => revokeSession(provider.id)));
   }
 
   /** 剛充完值回來、或想看最新餘額時呼叫。 */

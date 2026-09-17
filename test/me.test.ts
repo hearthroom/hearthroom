@@ -28,7 +28,7 @@ describe("GET /v1/me", () => {
     expect(body.handle).toMatch(/^[a-z]{8}$/);
     expect(body.memberSince).toBeGreaterThan(0);
     expect(body.reviewer).toBe(false);
-    expect(body.identities).toEqual([{ provider: "lunatalk", externalId: 10001, linkedAt: expect.any(Number) }]);
+    expect(body.identities).toEqual([{ provider: "lunatalk", externalId: 10001, founding: true, linkedAt: expect.any(Number) }]);
     const rows = await env.DB.prepare("SELECT COUNT(*) AS n FROM members").first<{ n: number }>();
     expect(rows?.n).toBe(1);
   });

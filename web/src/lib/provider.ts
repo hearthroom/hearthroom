@@ -1,14 +1,4 @@
-/**
- * 現在接的是哪一家供應商，以及它有哪些能力。
- *
- * 本站不存卡、不跑模型、不管登入，這些都住在供應商那邊。以前只有一家，所以這是個常數；
- * 現在兩家，而且**兩家的資料完全不混**（owner 2026-09-16）：登入哪一家就用哪一家的 API，
- * 看到的榜單、卡片、作者也是那一家的。所以它屬於這個會話，不是建置期選項。
- *
- * 這個檔不 import 任何自家模組：api.ts 的頂層常數要讀它，而它若反過來引用 api.ts，
- * 瀏覽器依載入順序會在初始化前讀到 undefined。
- */
-
+/** Active platform, capabilities and issuer-scoped credential compatibility. */
 export type ProviderId = "lunatalk" | "harbor";
 
 /** 名稱是專有名詞，各語言都一樣，不進翻譯檔。 */
@@ -23,7 +13,7 @@ export const DEFAULT_PROVIDER: ProviderId = "lunatalk";
 
 const STORE_KEY = "hearthroom.provider";
 
-/** 換家等於換帳號，所以上一家的憑證要一起清掉——留著的話下一個請求會拿 A 家的 token 去問 B 家。 */
+/** Legacy mirrors follow the last-selected issuer; scoped credentials remain independent. */
 const CREDENTIAL_KEYS = [
   "hearthroom.oauth.access",
   "hearthroom.oauth.refresh",
@@ -70,26 +60,35 @@ function isProvider(raw: string | null): raw is ProviderId {
 /** 這個會話接的是哪一家。沒選過、或存進去的值壞了，一律回預設那家。 */
 export function currentProvider(): ProviderId {
   try {
-    const raw = localStorage.getItem(STORE_KEY);
+    const raw = sessionStorage.getItem(STORE_KEY) ?? localStorage.getItem(STORE_KEY);
     return isProvider(raw) ? raw : DEFAULT_PROVIDER;
   } catch {
     return DEFAULT_PROVIDER;
   }
 }
 
-/**
- * 換一家。換了就等於換一個帳號：上一家的憑證立刻作廢，呼叫端接著要重新登入。
- * 選的是同一家就什麼都不做——不能讓「再點一次目前這家」把人登出。
- */
+/** Pin this tab to its platform. Another tab's selection cannot reroute its requests. */
 export function setProvider(id: ProviderId): void {
   if (!isProvider(id)) return;
-  const changed = currentProvider() !== id;
   try {
-    localStorage.setItem(STORE_KEY, id);
-    if (changed) for (const key of CREDENTIAL_KEYS) localStorage.removeItem(key);
-  } catch {
-    /* 隱私模式下寫不進去：這一次就用預設那家，不影響瀏覽 */
-  }
+    const stored=localStorage.getItem(STORE_KEY);
+    const mirrorProvider=isProvider(stored)?stored:DEFAULT_PROVIDER;
+    // Migrate mirrors using their global owner, never this tab's previous issuer.
+    for(const key of CREDENTIAL_KEYS) {
+      if(!key.endsWith('.access')&&!key.endsWith('.refresh'))continue;
+      const value=localStorage.getItem(key);
+      if(value && !localStorage.getItem(`${key}.${mirrorProvider}`))localStorage.setItem(`${key}.${mirrorProvider}`,value);
+    }
+    sessionStorage.setItem(STORE_KEY,id);
+    if(mirrorProvider===id){localStorage.setItem(STORE_KEY,id);return;}
+    for(const key of CREDENTIAL_KEYS)localStorage.removeItem(key);
+    localStorage.setItem(STORE_KEY,id);
+    for(const key of CREDENTIAL_KEYS) {
+      if(!key.endsWith('.access')&&!key.endsWith('.refresh'))continue;
+      const value=localStorage.getItem(`${key}.${id}`);
+      if(value)localStorage.setItem(key,value);
+    }
+  } catch { /* Storage unavailable: requests remain subject to authentication. */ }
 }
 
 export function apiBaseOf(id: ProviderId = currentProvider()): string {

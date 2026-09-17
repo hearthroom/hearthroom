@@ -4,25 +4,22 @@
  *
  * 本站有自己的成員 ID（公開的 8 個小寫字母），供應商帳號只是掛在底下的一筆「身分」——
  * 這頁把兩層分開講：上面是你在本站是誰，下面是你用哪個帳號登入進來、狀態如何。
- * 只有一家供應商時「解除連結」等於把自己鎖在外面，所以這一版只有「重新授權」與「登出」。
  *
  * 顯示名稱與頭像來自登入用的那個帳號（供應商回的），本站不另存一份。
  */
+import ConnectedAccounts from "@/components/ConnectedAccounts.vue";
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { RouterLink, useRoute } from "vue-router";
+import { RouterLink } from "vue-router";
 import { dateOnly, hueFrom } from "@/lib/format";
 import { pageTitle } from "@/lib/i18n";
-import { providerName } from "@/lib/providers";
 import { useReviewer } from "@/lib/review";
 import { useSession } from "@/lib/session";
 import { can } from "@/lib/provider";
 import { useLocalePath } from "@/lib/use-locale";
-import { track } from "@/lib/track";
 
 const session = useSession();
 const reviewerStore = useReviewer();
-const route = useRoute();
 const { lp } = useLocalePath();
 const { t } = useI18n();
 const copied = ref(false);
@@ -38,11 +35,6 @@ async function copyHandle() {
   } catch {
     /* 拿不到剪貼簿：字就在畫面上，使用者自己選取 */
   }
-}
-
-function reauthorize() {
-  // session.login 自己會記 login_start
-  void session.login(route.fullPath);
 }
 
 onMounted(() => {
@@ -70,25 +62,8 @@ onMounted(() => {
       </div>
     </header>
 
-    <section class="panel me__linked">
-      <p class="eyebrow">{{ $t("me.linked.title") }}</p>
-      <p class="subtle">{{ $t("me.linked.desc") }}</p>
-      <ul class="me__accounts">
-        <li v-for="id in session.profile?.identities ?? []" :key="`${id.provider}:${id.externalId}`" class="me__account">
-          <div class="me__account-text">
-            <strong>{{ providerName(id.provider) }}</strong>
-            <span class="subtle">{{ session.me.nickName }} · ID {{ id.externalId }}</span>
-            <span class="subtle">{{ $t("me.linked.at", { date: dateOnly(Math.floor(id.linkedAt / 1000)) }) }}</span>
-          </div>
-          <span class="me__status">{{ $t("me.linked.active") }}</span>
-        </li>
-        <li v-if="!session.profile" class="subtle">{{ $t("state.loading") }}</li>
-      </ul>
-      <div class="me__acts">
-        <button type="button" class="btn btn--sm" @click="reauthorize">{{ $t("me.reauthorize") }}</button>
-        <button type="button" class="btn btn--sm btn--ghost" @click="track('logout'); session.logout()">{{ $t("nav.logout") }}</button>
-      </div>
-    </section>
+    <ConnectedAccounts />
+
 
     <nav class="panel me__links" :aria-label="$t('me.title')">
       <RouterLink :to="lp('/mine')" class="me__link">{{ $t("nav.mine") }}</RouterLink>

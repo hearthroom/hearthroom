@@ -1,5 +1,7 @@
-import { UPSTREAM_API, oauthResource } from "./config";
-import { currentProvider, scopeOf } from "./provider";
+import { safeReturnTo } from './login-return';
+import { readCredential, writeCredential, removeCredential } from './credential-store';
+import { UPSTREAM_API } from "./config";
+import { apiBaseOf, currentProvider, scopeOf, type ProviderId } from "./provider";
 import { track } from "./track";
 import { i18n } from "./i18n";
 import { SITE } from "./site";
@@ -47,16 +49,18 @@ function scopeTag(scope: string): string {
   return scope.split(/\s+/).filter(Boolean).sort().join(",");
 }
 
-async function clientId(): Promise<string> {
+const baseFor = (provider:ProviderId) => provider===currentProvider()?UPSTREAM_API:apiBaseOf(provider);
+
+async function clientId(provider:ProviderId=currentProvider()): Promise<string> {
   // 客戶端是在供應商那邊註冊的，一家一組；共用一組等於拿 A 家的 client 去 B 家換 token。
   // 範圍也算進識別：註冊時登記的範圍就是這顆 client 的上限，之後改不了，所以要多要一項
   // 就得換一顆——沿用舊的只會在授權時被回 invalid_scope。
-  const scope = scopeOf();
-  const cacheKey = `${STORE.client}.${currentProvider()}${scope ? `.${scopeTag(scope)}` : ""}`;
+  const scope = scopeOf(provider);
+  const cacheKey = `${STORE.client}.${provider}${scope ? `.${scopeTag(scope)}` : ""}`;
   const cached = localStorage.getItem(cacheKey);
   if (cached) return cached;
 
-  const res = await fetch(`${UPSTREAM_API}/oauth/register`, {
+  const res = await fetch(`${baseFor(provider)}/oauth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -75,7 +79,9 @@ async function clientId(): Promise<string> {
   return id;
 }
 
-export async function beginLogin(returnTo: string): Promise<void> {
+export async function beginLogin(returnTo: string, options: {provider?:ProviderId; linkFrom?:ProviderId} = {}): Promise<void> {
+  const provider=options.provider ?? currentProvider();
+  sessionStorage.setItem("hearthroom.oauth.pending",JSON.stringify({provider,linkFrom:options.linkFrom}));
   track("login_start");
   const verifier = randomString();
   const state = randomString(16);
@@ -85,23 +91,24 @@ export async function beginLogin(returnTo: string): Promise<void> {
 
   const params = new URLSearchParams({
     response_type: "code",
-    client_id: await clientId(),
+    client_id: await clientId(provider),
     redirect_uri: redirectUri(),
     state,
     code_challenge: await s256(verifier),
     code_challenge_method: "S256",
-    resource: oauthResource(),
+    resource: `${apiBaseOf(provider)}/open/v1`,
   });
   // Harbor 不給 scope 只會拿到唯讀，寫不了卡；LunaTalk 的客戶端不帶（它的預設就是全部）。
-  const scope = scopeOf();
+  const scope = scopeOf(provider);
   if (scope) params.set("scope", scope);
   // 走備用網域時，登入頁也要換成備用網域的（邊緣代理會把 Host 改寫，伺服器光看 Host 判不出來）
-  if (/\/\/api\.lunatalk\.pro(?::\d+)?$/i.test(UPSTREAM_API)) params.set("login_site", "pro");
-  location.assign(`${UPSTREAM_API}/oauth/authorize?${params}`);
+  if (provider === "lunatalk" && /\/\/api\.lunatalk\.pro(?::\d+)?$/i.test(UPSTREAM_API)) params.set("login_site", "pro");
+  location.assign(`${baseFor(provider)}/oauth/authorize?${params}`);
 }
 
 export interface TokenPair {
   accessToken: string;
+  refreshToken?: string;
   /** epoch ms。存起來，重新整理後還沒過期就直接用，不必多跑一次換發。 */
   expiresAt: number;
 }
@@ -109,11 +116,11 @@ export interface TokenPair {
 /** 換發失敗時要不要把憑證丟掉——只有伺服器明確說「這張不算數」才丟。 */
 export class AuthExpired extends Error {}
 
-async function exchange(body: Record<string, string>): Promise<TokenPair> {
-  const res = await fetch(`${UPSTREAM_API}/oauth/token`, {
+async function exchange(body: Record<string, string>, provider:ProviderId=currentProvider()): Promise<TokenPair> {
+  const res = await fetch(`${baseFor(provider)}/oauth/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ ...body, client_id: await clientId(), resource: oauthResource() }),
+    body: new URLSearchParams({ ...body, client_id: await clientId(provider), resource: `${apiBaseOf(provider)}/open/v1` }),
   });
   if (!res.ok) {
     // 4xx 是「這張憑證不算數」，5xx 與斷網是「現在問不到」。只有前者該把人登出——
@@ -122,15 +129,18 @@ async function exchange(body: Record<string, string>): Promise<TokenPair> {
     throw new Error(t("auth.exchangeFailed", { status: res.status }));
   }
   const data = (await res.json()) as { access_token: string; refresh_token?: string; expires_in?: number };
-  if (data.refresh_token) localStorage.setItem(STORE.refresh, data.refresh_token);
+
   return {
     accessToken: data.access_token,
+    ...(data.refresh_token ? {refreshToken:data.refresh_token} : {}),
     // 提早 60 秒視為過期，避免請求正好卡在邊界上。
     expiresAt: Date.now() + Math.max(0, (data.expires_in ?? 3600) - 60) * 1000,
   };
 }
 
-export async function completeLogin(query: URLSearchParams): Promise<{ token: TokenPair; returnTo: string }> {
+export async function completeLogin(query: URLSearchParams): Promise<{ token: TokenPair; returnTo: string; provider:ProviderId; linkFrom?:ProviderId }> {
+  const pending=JSON.parse(sessionStorage.getItem("hearthroom.oauth.pending") || "{}");
+  const provider:ProviderId=pending.provider==='harbor'?'harbor':pending.provider==='lunatalk'?'lunatalk':currentProvider();
   const error = query.get("error");
   if (error) throw new Error(t("auth.denied", { error }));
 
@@ -151,10 +161,11 @@ export async function completeLogin(query: URLSearchParams): Promise<{ token: To
     code,
     redirect_uri: redirectUri(),
     code_verifier: verifier,
-  });
+  }, provider);
   const returnTo = sessionStorage.getItem(STORE.returnTo) || "/";
   sessionStorage.removeItem(STORE.returnTo);
-  return { token, returnTo };
+  sessionStorage.removeItem("hearthroom.oauth.pending");
+  return { token, returnTo: safeReturnTo(returnTo), provider, linkFrom:pending.linkFrom };
 }
 
 /**
@@ -164,24 +175,27 @@ export async function completeLogin(query: URLSearchParams): Promise<{ token: To
  * 並且直接把整個 session 標成 revoked——所以兩個並發的換發不是「多跑一次」，
  * 是「兩個都死」。並發的呼叫者共用同一個 Promise。
  */
-let inFlight: Promise<TokenPair | null> | null = null;
+const inFlight = new Map<ProviderId, Promise<TokenPair|null>>();
 
-export function refresh(): Promise<TokenPair | null> {
-  if (inFlight) return inFlight;
-  inFlight = (async () => {
-    const refreshToken = localStorage.getItem(STORE.refresh);
+export function refresh(provider:ProviderId=currentProvider()): Promise<TokenPair | null> {
+  const running=inFlight.get(provider); if(running) return running;
+  const task = (async () => {
+    const refreshToken = readCredential(STORE.refresh,provider);
     if (!refreshToken) return null;
     try {
-      return await exchange({ grant_type: "refresh_token", refresh_token: refreshToken });
+      const pair=await exchange({ grant_type: "refresh_token", refresh_token: refreshToken },provider);
+      persist(pair,provider); return pair;
     } catch (err) {
       // 只有伺服器明確拒絕才清掉憑證；網路問題留著，下次再試。
-      if (err instanceof AuthExpired) forgetSession();
+      if (err instanceof AuthExpired) forgetSession(provider);
       return null;
     } finally {
-      inFlight = null;
+      inFlight.delete(provider);
     }
   })();
-  return inFlight;
+  inFlight.set(provider,task);
+  void task.finally(()=>inFlight.delete(provider));
+  return task;
 }
 
 /**
@@ -191,17 +205,18 @@ export function refresh(): Promise<TokenPair | null> {
  * 而 refresh token 權限更大（能無限換新的）。只藏 access token 擋不住任何攻擊，
  * 卻讓每次重新整理都得多跑一次換發——而每次換發都是一次輪替，也就是一次出錯的機會。
  */
-export function persist(pair: TokenPair): void {
+export function persist(pair: TokenPair, provider:ProviderId=currentProvider()): void {
   try {
-    localStorage.setItem(STORE.access, JSON.stringify(pair));
+    writeCredential(STORE.access, JSON.stringify({accessToken:pair.accessToken,expiresAt:pair.expiresAt}),provider);
+    if(pair.refreshToken) writeCredential(STORE.refresh,pair.refreshToken,provider);
   } catch {
     /* 隱私模式寫不進去，退回每次換發 */
   }
 }
 
-export function restorePersisted(): TokenPair | null {
+export function restorePersisted(provider:ProviderId=currentProvider()): TokenPair | null {
   try {
-    const raw = localStorage.getItem(STORE.access);
+    const raw = readCredential(STORE.access,provider);
     if (!raw) return null;
     const pair = JSON.parse(raw) as TokenPair;
     return pair.accessToken && pair.expiresAt > Date.now() ? pair : null;
@@ -210,21 +225,21 @@ export function restorePersisted(): TokenPair | null {
   }
 }
 
-export function forgetSession(): void {
-  localStorage.removeItem(STORE.refresh);
-  localStorage.removeItem(STORE.access);
+export function forgetSession(provider:ProviderId=currentProvider()): void {
+  removeCredential(STORE.refresh,provider);
+  removeCredential(STORE.access,provider);
 }
 
 /** 登出時順手告訴伺服器把 refresh token 作廢，不要留一顆到過期為止都還能用的憑證。 */
-export async function revokeSession(): Promise<void> {
-  const refreshToken = localStorage.getItem(STORE.refresh);
-  forgetSession();
+export async function revokeSession(provider:ProviderId=currentProvider()): Promise<void> {
+  const refreshToken = readCredential(STORE.refresh,provider);
+  forgetSession(provider);
   if (!refreshToken) return;
   try {
-    await fetch(`${UPSTREAM_API}/oauth/revoke`, {
+    await fetch(`${baseFor(provider)}/oauth/revoke`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ token: refreshToken, client_id: await clientId() }),
+      body: new URLSearchParams({ token: refreshToken, client_id: await clientId(provider) }),
     });
   } catch {
     // 本地憑證已經清掉，撤銷失敗只是伺服器那顆會留到過期，不影響使用者。

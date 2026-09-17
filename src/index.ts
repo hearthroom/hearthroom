@@ -1,3 +1,5 @@
+import { linkIdentity, unlinkIdentity, connectedMemberId } from './connections';
+import { saveMemberId } from './members';
 import { type Context, Hono } from "hono";
 import {
   syncStatement,
@@ -22,7 +24,7 @@ import { ALIAS_HOSTS, HOST, canonicalUrl, isPlayHost } from "./site";
 import { loadMine, type MineFilter } from "./mine";
 import { tagNamesFor } from "../shared/tag-catalog";
 import { providerOf, isReviewer, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
-import { configuredProviders, DEFAULT_PROVIDER, PROVIDER_NAMES, type ProviderId, reviewBotOf } from "./providers";
+import { configuredProviders, parseProvider, requireConfigured, DEFAULT_PROVIDER, PROVIDER_NAMES, type ProviderId, reviewBotOf } from "./providers";
 import { providerApiBaseFor } from "./providers";
 import { WEEKLY_LIMIT, recordRegistration, registeredThisWeek } from "./quota";
 import {
@@ -528,6 +530,48 @@ app.get("/v1/authors/:handle", async (c) => {
  * 登入者在本站的身分：公開 ID、加入時間、連結了哪些供應商帳號、是不是審核人。
  * 第一次呼叫就建成員——所以登入後前端立刻問一次，「我的」頁才有 ID 可顯示。
  */
+app.post('/v1/me/connections/preview', async (c) => {
+  const member = await requireMember(c);
+  const body = await c.req.json<{provider?: string; token?: string}>();
+  if (!body || typeof body.provider !== 'string' || !body.provider.trim() || typeof body.token !== 'string' || !body.token || body.token.length > 16384) throw new HttpError(400, 'connection_proof_required');
+  const provider = requireConfigured(c.env, parseProvider(body.provider));
+  const target = await upstream.fetchMe(c.env, body.token, provider);
+  const sourceIdentity = await upstream.fetchMe(c.env, c.req.header('Authorization')!.replace(/^Bearer\s+/, ''), member.provider);
+  const targetId = await connectedMemberId(c.env.DB, provider, target.accountNumId);
+  const sourceProfile = (await memberProfile(c.env.DB, member.id))!;
+  const targetProfile = targetId ? await memberProfile(c.env.DB, targetId) : null;
+  const summary = (profile: typeof targetProfile) => profile ? {handle: profile.handle, memberSince: profile.memberSince} : null;
+  return c.json({
+    source: {...summary(sourceProfile), provider: member.provider, name: sourceIdentity.nickName || PROVIDER_NAMES[member.provider]},
+    target: {...summary(targetProfile), provider, name: target.nickName || PROVIDER_NAMES[provider]},
+  }, 200, {'Cache-Control': 'no-store'});
+});
+app.post("/v1/me/connections", async (c) => {
+  const member = await requireMember(c);
+  const body = await c.req.json<{ provider?: string; token?: string; keepHandle?: string; sourceHandle?: string; targetHandle?: string | null }>();
+  if (!body || typeof body.provider !== 'string' || !body.provider.trim() || typeof body.token !== 'string' || !body.token || body.token.length > 16384) throw new HttpError(400, 'connection_proof_required');
+  const provider = requireConfigured(c.env, parseProvider(body.provider));
+  const target = await upstream.fetchMe(c.env, body.token, provider);
+  const targetId = await connectedMemberId(c.env.DB, provider, target.accountNumId);
+  const sourceProfile = (await memberProfile(c.env.DB, member.id))!;
+  const targetProfile = targetId ? await memberProfile(c.env.DB, targetId) : null;
+  if (targetProfile && targetId !== member.id && !body.keepHandle) throw new HttpError(409, 'connection_choice_required');
+  if (body.keepHandle && (body.sourceHandle !== sourceProfile.handle || body.targetHandle !== (targetProfile?.handle ?? null))) throw new HttpError(409, 'connection_preview_changed');
+  if (body.keepHandle && body.keepHandle !== sourceProfile.handle && body.keepHandle !== targetProfile?.handle) throw new HttpError(400, 'connection_choice_invalid');
+  const keepTarget = !!targetId && targetId !== member.id && body.keepHandle === targetProfile?.handle;
+  if (keepTarget) {
+    await linkIdentity(c.env.DB, {id: targetId!, provider, externalId: target.accountNumId}, member.provider, member.externalId, Date.now());
+  } else {
+    await linkIdentity(c.env.DB, member, provider, target.accountNumId, Date.now());
+  }
+  return c.json(await memberProfile(c.env.DB, keepTarget ? targetId! : member.id), 200, { 'Cache-Control': 'no-store' });
+});
+app.delete('/v1/me/connections/:provider', async (c) => {
+  const member = await requireMember(c);
+  await unlinkIdentity(c.env.DB, member, parseProvider(c.req.param('provider')));
+  return c.json(await memberProfile(c.env.DB, member.id), 200, { 'Cache-Control': 'no-store' });
+});
+
 app.get("/v1/me", async (c) => {
   const member = await requireMember(c);
   const profile = await memberProfile(c.env.DB, member.id);
@@ -571,7 +615,7 @@ app.post("/v1/me/settings", async (c) => {
  */
 app.get("/v1/me/cards/:roleId/saves", async (c) => {
   const member = await requireMember(c);
-  const saves = await listSaves(c.env.DB, member.id, c.req.param("roleId"));
+  const saves = await listSaves(c.env.DB, await saveMemberId(c.env.DB, member), c.req.param("roleId"));
   return c.json({ saves }, 200, { "Cache-Control": "no-store" });
 });
 
@@ -579,14 +623,14 @@ app.put("/v1/me/cards/:roleId/saves/:key", async (c) => {
   const member = await requireMember(c);
   const body = (await c.req.json().catch(() => null)) as { value?: unknown } | null;
   if (!body || typeof body !== "object" || !("value" in body)) throw new HttpError(400, "value_required");
-  await putSave(c.env.DB, member.id, c.req.param("roleId"), c.req.param("key"), body.value, Date.now());
+  await putSave(c.env.DB, await saveMemberId(c.env.DB, member), c.req.param("roleId"), c.req.param("key"), body.value, Date.now());
   note(c, { event: "card_save", detail: "set" });
   return c.json({ ok: true }, 200, { "Cache-Control": "no-store" });
 });
 
 app.delete("/v1/me/cards/:roleId/saves/:key", async (c) => {
   const member = await requireMember(c);
-  await removeSave(c.env.DB, member.id, c.req.param("roleId"), c.req.param("key"));
+  await removeSave(c.env.DB, await saveMemberId(c.env.DB, member), c.req.param("roleId"), c.req.param("key"));
   note(c, { event: "card_save", detail: "remove" });
   return c.json({ ok: true }, 200, { "Cache-Control": "no-store" });
 });

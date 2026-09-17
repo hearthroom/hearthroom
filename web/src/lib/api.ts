@@ -319,7 +319,7 @@ export interface SiteMe {
   handle: string;
   memberSince: number;
   reviewer: boolean;
-  identities: { provider: string; externalId: number; linkedAt: number }[];
+  identities: { provider: string; externalId: number; linkedAt: number; founding?: boolean }[];
   /** 成人內容開關（要先驗過年齡） */
   showNsfw: boolean;
   ageVerified: boolean;

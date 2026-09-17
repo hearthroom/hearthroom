@@ -37,7 +37,7 @@ async function readJson(res: Response, what: string): Promise<Record<string, unk
  * 轉發的是使用者自己授權給本站的 token，權限範圍不超過他本來就給出去的那些；
  * 它只在這一個呼叫裡出現，不寫日誌、不進 D1、不進 KV。
  */
-async function fetchMe(env: Env, bearer: string, provider: ProviderId = DEFAULT_PROVIDER): Promise<{ accountNumId: number }> {
+async function fetchMe(env: Env, bearer: string, provider: ProviderId = DEFAULT_PROVIDER): Promise<{ accountNumId: number; nickName?: string }> {
   const res = await fetch(apiUrl(env, provider, "/open/v1/me"), {
     headers: { Authorization: `Bearer ${bearer}`, "User-Agent": UA },
   });
@@ -46,7 +46,7 @@ async function fetchMe(env: Env, bearer: string, provider: ProviderId = DEFAULT_
   if (!Number.isSafeInteger(accountNumId) || accountNumId <= 0) {
     throw new HttpError(401, "upstream returned no public account id");
   }
-  return { accountNumId };
+  return { accountNumId, ...(typeof body.nickName === "string" ? {nickName: body.nickName} : {}) };
 }
 
 /** 語區：榜單按這個分開列。all 是來源標成「不分語言」的卡，每區都出現。 */

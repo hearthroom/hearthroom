@@ -37,14 +37,14 @@ describe("選一家", () => {
     expect(login).toHaveBeenCalledOnce();
   });
 
-  it("換家會先登出目前的帳號，順序不能反：反了的話登出會把新的憑證也清掉", async () => {
+  it("切換平台保留其他平台的授權，僅啟動目標平台登入", async () => {
     const order: string[] = [];
     await chooseProvider("harbor", {
       login: async () => { order.push("login"); },
       logout: async () => { order.push("logout"); },
       signedIn: true,
     });
-    expect(order).toEqual(["logout", "login"]);
+    expect(order).toEqual(["login"]);
   });
 
   it("選同一家時不登出：只是重新登入一次", async () => {
