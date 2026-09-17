@@ -29,3 +29,12 @@ Observability: reuse the Worker event outcome and emit `card_sync_failed` with a
 ## Workers runtime regression
 
 The production sync failed before reading the source because the request used `redirect: "error"`. A real Workers `Request` constructor rejects this mode; mock-only fetch tests did not construct the request. Transfer fixtures now construct a Workers request before returning responses. Both card transfer and image-reference registration use `manual` and reject non-success responses. A redirect regression verifies there is exactly one request and no credential forwarding.
+
+## Current SaaS image references and tag preservation
+
+Source APIs may return tags as strings or objects with `text` / `tagName`.
+Normalize the documented names rather than coercing an object to a string.
+The transfer-only reference allowlist includes the current `assets.lunatalk.ai`
+and `assets.harperharbor.com` hosts; the image proxy allowlist is unchanged.
+Harper's `MEDIA_REFERENCE_HOSTS` must include the actual source SaaS asset host.
+This registers public URLs only and never copies image bytes.
