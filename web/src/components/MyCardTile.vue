@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CardSyncPanel from "./CardSyncPanel.vue";
 import { computed, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 import { compact, hueFrom } from "@/lib/format";
@@ -66,6 +67,7 @@ const hasArt = computed(() => !!props.card.avatarUrl && !broken.value);
           {{ busy ? "…" : card.registered ? $t("mine.action.unregister") : $t("mine.action.submit") }}
         </button>
       </div>
+      <CardSyncPanel :role-id="card.sourceRoleId??card.roleId" :provider="card.sourceProvider??card.provider" />
     </div>
   </article>
 </template>

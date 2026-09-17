@@ -135,20 +135,32 @@ Today a second provider is configuration plus a small code change, not a runtime
 - Semantics of a partially implemented level 4.
 - No second provider has been integrated end to end yet; the section above describes the code as it is, not a verified port.
 
-## Connecting platform accounts to one community account
+## Community identity and connected platforms
 
-HearthRoom supports one connected account per platform. Connecting proves control of both accounts; it does not move platform assets, credits or conversations. Existing community rows and per-account saves remain intact.
+A HearthRoom member has one community handle, display name and avatar. The name and avatar are seeded once from the first verified sign-in and can then be edited independently. Changing the platform used for an action never changes that community profile.
 
-These are **HearthRoom community endpoints** under `/v1`, separate from the provider Open API described elsewhere in this document:
+Connect at most one account per provider. LunaTalk and HarperHarbor may be connected simultaneously. There is no global active-account choice. Credits, conversations and source assets remain on their respective platforms.
+
+These are **HearthRoom community endpoints** under `/v1`, separate from the provider Open API:
 
 | Endpoint | Contract |
 |---|---|
-| `POST /v1/me/connections/preview` | Bearer and `X-Provider` identify the current account. Body `{provider, token}` proves the other account. Returns `source` and `target` summaries: provider, name, community handle and joining time where one exists. No target account or connection is created. |
-| `POST /v1/me/connections` | Same proofs plus `{keepHandle, sourceHandle, targetHandle}` from the preview. `targetHandle` is null when no target community exists. Revalidates both accounts and the preview, then keeps the explicitly chosen community identity. Returns its profile. |
-| `DELETE /v1/me/connections/:provider` | Disconnects an additional platform. Current and founding accounts are protected. The original community identity and upstream data remain. |
+| `GET /v1/me` | Returns the community profile, including `displayName`, `avatarUrl` and linked identities. |
+| `PUT /v1/me/profile` | Authenticated update `{displayName, avatarUrl}`. Name is 1–60 characters; avatar is empty or an HTTPS URL. Images remain hosted externally, including on the user's SaaS. |
+| `POST /v1/me/connections/preview` | Current bearer plus `X-Provider`; body `{provider, token}` proves the additional account. Read-only source/target community preview. |
+| `POST /v1/me/connections` | Same proofs plus `{keepHandle, sourceHandle, targetHandle}` from preview. `keepHandle` must equal the current community's `sourceHandle`; it is retained for request compatibility, not an account-selection UI. Existing target communities require explicit confirmation. Stale previews fail closed. |
+| `DELETE /v1/me/connections/:provider` | Disconnects an additional platform without deleting accounts or assets. The founding login remains protected. To remove the sign-in provider, the client uses another verified linked provider's proof, then resumes through that provider. |
+| `GET /v1/me/cards` | List on the explicitly requested provider. Items include provider and, when synchronized, canonical work/source identifiers. The client combines connected lists and groups copies. |
+| `GET /v1/me/card-copies/:roleId` | Verifies ownership on the requested provider, then returns synchronization states. |
+| `POST /v1/me/card-sync` | Body `{sourceProvider, sourceRoleId, sourceToken, targetProvider, targetToken, publish}`. Both accounts must belong to the authenticated community; the source and existing destination must be owned by those accounts. Tokens are transient. |
+| `GET /v1/cards/:roleId/platforms` | Public copies of an approved community card, after community age gating and upstream accessibility checks. `playable` distinguishes storage from an actual runtime. |
 
-An accidental first login on another platform may create a second community account. The user can start from either side: after authorization, show both names, handles and join dates, require an explicit choice if both exist, and allow cancellation. Never select the currently signed-in new account automatically. A forged choice or changed preview is rejected; do not retry silently against a different identity.
+A mistaken connection is resolved from the intended community account: disconnect the additional platform from the wrong community, then connect it to the intended one. No community accounts or history are merged or deleted. A different account on an already-connected provider is rejected. Independent HearthRoom login and detaching a founding login are outside this release.
 
-`409 connection_choice_required` means an existing second account needs an explicit primary-community choice. `409 connection_preview_changed` requires a new preview. `409 provider_already_connected` never replaces a different account on the same platform. `409 account_already_connected` / `connection_conflict` require resolving an existing group before continuing. Proof tokens are processed transiently, never stored in D1 or included in analytics.
+Authors choose the initial platform when creating a card and select additional destinations per card. Synchronization currently preserves common text, instructions, examples, tags, identity settings and images. Rich content outside this transfer contract (worldbooks, author scripts, translated variants, alternate openings and metadata) is rejected before creation. This is an explicit transfer limitation, not a claim that the provider cannot store those features. Destination edits stop overwrite; uncertain creation results require reconciliation instead of blind retry. Publication requires an explicit action and follows each provider's review. Community content ratings are not sent to providers.
 
-This release covers account linking and switching. Card-copy distribution remains separate and is not exposed by these endpoints.
+Images retain the original SaaS URL. HarperHarbor stores owned references using `POST /open/v1/media/references`; HearthRoom does not download or re-upload image bytes. An image reference remains subject to ownership, quota and media review.
+
+Players select a published copy and its linked platform account for each play action. The destination contains both the provider and that platform's role ID. Balances and conversations never combine. HarperHarbor's current provider deployment exposes card hosting but no model/chat runtime; stored copies therefore have no play action until a real runtime is connected.
+
+MCP: not applicable to community identity/linking, which requires interactive OAuth proofs and has no community MCP transport. Card operations reuse the provider's existing authenticated service APIs; they do not add a second privileged authoring path. Observability uses existing HTTP outcomes, durable `work_copies` state and `card_sync` result events, with no tokens, account IDs or content in event fields.

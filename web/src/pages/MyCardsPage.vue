@@ -6,10 +6,12 @@ import { ApiError, fetchMyCards, registerCard, unregisterCard, type MyCard, type
 import { confirmChoice } from "@/lib/confirm";
 import { daysUntilReset, remaining, weekRange } from "@/lib/quota";
 import { useLocalePath } from "@/lib/use-locale";
+import ConnectedCards from "@/components/ConnectedCards.vue";
 import MyCardTile from "@/components/MyCardTile.vue";
 import * as cache from "@/lib/mine-cache";
 import { useSession } from "@/lib/session";
-import { can } from "@/lib/provider";
+import { platformPath } from "@/lib/connection-ui";
+import { can, providerName, type ProviderId } from "@/lib/provider";
 
 const route = useRoute();
 const router = useRouter();
@@ -17,6 +19,7 @@ const session = useSession();
 const { lp } = useLocalePath();
 const { t, locale } = useI18n();
 
+const combined = computed(() => (session.profile?.identities.length??0)>1 && route.query.single!=="1");
 const data = ref<MyCardPage | null>(null);
 const loading = ref(true);
 const revalidating = ref(false);
@@ -190,15 +193,18 @@ watch(() => route.query.fresh, (f) => {
     <header class="head">
       <div class="head__text">
         <h1 class="head__title display">{{ $t("mine.title") }}</h1>
-        <p v-if="data" class="subtle">
+        <p v-if="data && !combined" class="subtle">
           <template v-if="data.total !== null">{{ $t("mine.tally.all") }} {{ data.total }} · </template>
           {{ $t("mine.tally.listed") }} {{ data.registeredTotal }}
           <template v-if="revalidating"> · {{ $t("mine.syncing") }}</template>
         </p>
       </div>
-      <RouterLink v-if="can('editor')" :to="lp('/create')" class="btn btn--primary">{{ $t("mine.create") }}</RouterLink>
+      <details v-if="combined" class="create-platform"><summary class="btn btn--primary">{{ $t("mine.create") }}</summary><p>{{ $t('linked.createOn') }}</p><a v-for="identity in session.profile?.identities" :key="identity.provider" class="btn btn--sm" :href="platformPath(lp('/create'), identity.provider as ProviderId)">{{ providerName(identity.provider as ProviderId) }}</a></details>
+      <RouterLink v-else-if="can('editor')" :to="lp('/create')" class="btn btn--primary">{{ $t("mine.create") }}</RouterLink>
     </header>
 
+    <ConnectedCards v-if="combined" />
+    <template v-else>
     <section v-if="quota && quotaRange" class="quota panel" :class="{ 'quota--full': quotaFull }" aria-live="polite">
       <div class="quota__count">
         <span class="eyebrow">{{ $t("mine.quota.eyebrow") }}</span>
@@ -263,10 +269,12 @@ watch(() => route.query.fresh, (f) => {
       <span class="subtle">{{ $t("pager.page", { n: page }) }}</span>
       <button class="btn btn--sm" :disabled="!data.hasNext" @click="go({ page: String(page + 1) })">{{ $t("pager.next") }} →</button>
     </nav>
+    </template>
   </div>
 </template>
 
 <style scoped>
+.create-platform {max-width:100%} .create-platform a {margin:var(--s-2)}
 .head {
   display: flex; flex-wrap: wrap; gap: var(--s-4);
   align-items: center; justify-content: space-between;

@@ -57,7 +57,7 @@ describe("我的卡片", () => {
   it("只回傳畫面用得到的欄位", async () => {
     const { body } = await mine();
     expect(Object.keys(body.items[0]).sort()).toEqual(
-      ["avatarUrl", "game", "name", "registered", "roleId", "summary", "talkNum", "visibility", "zone"],
+      ["avatarUrl", "game", "name", "provider", "registered", "roleId", "summary", "talkNum", "visibility", "zone"],
     );
   });
 });

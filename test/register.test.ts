@@ -131,7 +131,7 @@ describe("作者主頁", () => {
     await register({ roleId: "role-2" });
 
     // 作者頁的網址是本站的公開 ID（登記時就建好成員），不是上游的數字 ID
-    const me = (await (await SELF.fetch("https://c.test/v1/me", { headers: bearer() })).json()) as { handle: string };
+    const me = (await (await SELF.fetch("https://c.test/v1/me", { headers: bearer() })).json()) as { handle: string; displayName:string };
     expect(me.handle).toMatch(/^[a-z]{8}$/);
 
     const res = await SELF.fetch(`https://c.test/v1/authors/${me.handle}`);
@@ -140,7 +140,7 @@ describe("作者主頁", () => {
     expect(author.handle).toBe(me.handle);
     expect(author.cardCount).toBe(2);
     expect(author.talkTotal).toBe(42);
-    expect(author.name).toBe("月光");
+    expect(author.name).toBe(me.displayName); // 社區個人檔案優先於卡片上游的作者快照。
     expect(author.providers).toEqual(["lunatalk"]);
 
     const own = await list(`?author=${me.handle}`);

@@ -1,3 +1,4 @@
+import { currentProvider } from "./provider";
 import type { MyCardPage } from "./api";
 
 /**
@@ -19,7 +20,7 @@ interface Entry {
 }
 
 /** 鍵要帶 filter：三個篩選各是一組不同的結果，共用一個鍵就會互相讀到對方的。 */
-const key = (accountNumId: number, page: number, filter: string) => `mine:${accountNumId}:${filter}:${page}`;
+const key = (accountNumId: number, page: number, filter: string) => `mine:${currentProvider()}:${accountNumId}:${filter}:${page}`;
 
 export function read(accountNumId: number, page: number, filter: string): { page: MyCardPage; stale: boolean } | null {
   try {
@@ -44,7 +45,7 @@ export function write(accountNumId: number, page: number, filter: string, value:
 /** 自己改過資料之後把整個帳號的快取丟掉：寧可多抓一次，也不要顯示已知是錯的東西。 */
 export function invalidate(accountNumId: number): void {
   try {
-    const prefix = `mine:${accountNumId}:`;
+    const prefix = `mine:${currentProvider()}:${accountNumId}:`;
     for (let i = sessionStorage.length - 1; i >= 0; i--) {
       const k = sessionStorage.key(i);
       if (k?.startsWith(prefix)) sessionStorage.removeItem(k);

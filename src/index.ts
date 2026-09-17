@@ -1,3 +1,6 @@
+import { updateMemberProfile } from "./members";
+import { syncCard, copiesFor, workFor } from "./card-sync";
+import { apiBaseOf as providerApiBase } from "./providers";
 import { linkIdentity, unlinkIdentity, connectedMemberId } from './connections';
 import { saveMemberId } from './members';
 import { type Context, Hono } from "hono";
@@ -498,7 +501,11 @@ app.get("/v1/me/cards", async (c) => {
   c.header("X-Cache", source);
   // 這是私人資料：可以放進使用者自己的瀏覽器，但任何共用快取都不准碰。
   c.header("Cache-Control", "private, no-store");
-  return c.json(body);
+  const items = await Promise.all(body.items.map(async item => {
+    const work = await workFor(c.env.DB, provider, item.roleId);
+    return {...item, provider, workId:work?.id, sourceProvider:work?.source_provider, sourceRoleId:work?.source_role_id};
+  }));
+  return c.json({...body, items});
 });
 
 /** 作者主頁。這裡只認得他登記過的卡——本站看不到、也不該看到他的其他作品。 */
@@ -530,19 +537,53 @@ app.get("/v1/authors/:handle", async (c) => {
  * 登入者在本站的身分：公開 ID、加入時間、連結了哪些供應商帳號、是不是審核人。
  * 第一次呼叫就建成員——所以登入後前端立刻問一次，「我的」頁才有 ID 可顯示。
  */
+app.post('/v1/me/card-sync', async (c) => {
+ const member=await requireMember(c);
+ const b=await c.req.json<{sourceProvider:string;sourceRoleId:string;sourceToken:string;targetProvider:string;targetToken:string;publish?:boolean}>();
+ if(!b || typeof b.sourceProvider!=='string' || !b.sourceProvider.trim() || typeof b.targetProvider!=='string' || !b.targetProvider.trim() || typeof b.sourceRoleId!=='string' || !b.sourceRoleId || b.sourceRoleId.length>200 || [b.sourceToken,b.targetToken].some(t=>typeof t!=='string'||!t||t.length>16384) || (b.publish!==undefined && typeof b.publish!=='boolean'))throw new HttpError(400,'sync_proof_required');
+ const sourceProvider=requireConfigured(c.env,parseProvider(b.sourceProvider));
+ const targetProvider=requireConfigured(c.env,parseProvider(b.targetProvider));
+ const profile=await memberProfile(c.env.DB,member.id);
+ const source=await upstream.fetchMe(c.env,b.sourceToken,sourceProvider);
+ const target=await upstream.fetchMe(c.env,b.targetToken,targetProvider);
+ for(const [provider,account] of [[sourceProvider,source.accountNumId],[targetProvider,target.accountNumId]] as const) {
+  if(!profile?.identities.some(x=>x.provider===provider&&x.externalId===account))throw new HttpError(403,'sync_account_not_connected');
+ }
+ const result=await syncCard(c.env,{memberId:member.id,sourceProvider,sourceRoleId:b.sourceRoleId,sourceAccount:source.accountNumId,sourceToken:b.sourceToken,targetProvider,targetAccount:target.accountNumId,targetToken:b.targetToken,publish:b.publish===true});
+ note(c,{event:'card_sync',detail:result.status});
+ return c.json(result,200,{'Cache-Control':'no-store'});
+});
+app.get('/v1/me/card-copies/:roleId',async(c)=>{
+ const member=await requireMember(c);const provider=providerOf(c);const bearer=c.req.header('Authorization')!.slice(7);
+ // Ownership is checked by the upstream even for a card not registered in the community.
+ const r=await fetch(`${providerApiBase(c.env,provider)}/open/v1/role/detail?roleId=${encodeURIComponent(c.req.param('roleId'))}`,{headers:{Authorization:`Bearer ${bearer}`},signal:AbortSignal.timeout(20000)});
+ if(!r.ok)throw new HttpError(404,'card not found');const role=await r.json() as {accountNumId:number};
+ if(role.accountNumId!==member.externalId)throw new HttpError(403,'not the author of this card');
+ return c.json({copies:await copiesFor(c.env.DB,provider,c.req.param('roleId'))},200,{'Cache-Control':'no-store'});
+});
+app.get('/v1/cards/:roleId/platforms',async(c)=>{
+ const provider=providerOf(c);const roleId=c.req.param('roleId');
+ const base=await getCard(c.env.DB,roleId,provider);
+ if(!base||base.status!=='approved')throw new HttpError(404,'card not registered');
+ if(base.nsfw && !await viewerAllowsNsfw(c))throw new HttpError(403,'nsfw_gated');
+ const candidates=[{provider,roleId},...(await copiesFor(c.env.DB,provider,roleId)).filter(x=>x.roleId && ['source','synced','pending','published'].includes(x.status)).map(x=>({provider:x.provider as ProviderId,roleId:x.roleId as string}))];
+ const platforms=[];
+ for(const x of candidates.filter((x,i,all)=>all.findIndex(y=>y.provider===x.provider&&y.roleId===x.roleId)===i)) {try {await upstream.fetchRole(c.env,x.roleId,x.provider);platforms.push({...x,playable:x.provider==='lunatalk'});}catch{ /* Never advertise an inaccessible copy as playable. */ }}
+ return c.json({platforms},200,{'Cache-Control':'no-store'});
+});
+
 app.post('/v1/me/connections/preview', async (c) => {
   const member = await requireMember(c);
   const body = await c.req.json<{provider?: string; token?: string}>();
   if (!body || typeof body.provider !== 'string' || !body.provider.trim() || typeof body.token !== 'string' || !body.token || body.token.length > 16384) throw new HttpError(400, 'connection_proof_required');
   const provider = requireConfigured(c.env, parseProvider(body.provider));
   const target = await upstream.fetchMe(c.env, body.token, provider);
-  const sourceIdentity = await upstream.fetchMe(c.env, c.req.header('Authorization')!.replace(/^Bearer\s+/, ''), member.provider);
   const targetId = await connectedMemberId(c.env.DB, provider, target.accountNumId);
   const sourceProfile = (await memberProfile(c.env.DB, member.id))!;
   const targetProfile = targetId ? await memberProfile(c.env.DB, targetId) : null;
   const summary = (profile: typeof targetProfile) => profile ? {handle: profile.handle, memberSince: profile.memberSince} : null;
   return c.json({
-    source: {...summary(sourceProfile), provider: member.provider, name: sourceIdentity.nickName || PROVIDER_NAMES[member.provider]},
+    source: {...summary(sourceProfile), provider: member.provider, name: sourceProfile.displayName},
     target: {...summary(targetProfile), provider, name: target.nickName || PROVIDER_NAMES[provider]},
   }, 200, {'Cache-Control': 'no-store'});
 });
@@ -557,19 +598,20 @@ app.post("/v1/me/connections", async (c) => {
   const targetProfile = targetId ? await memberProfile(c.env.DB, targetId) : null;
   if (targetProfile && targetId !== member.id && !body.keepHandle) throw new HttpError(409, 'connection_choice_required');
   if (body.keepHandle && (body.sourceHandle !== sourceProfile.handle || body.targetHandle !== (targetProfile?.handle ?? null))) throw new HttpError(409, 'connection_preview_changed');
-  if (body.keepHandle && body.keepHandle !== sourceProfile.handle && body.keepHandle !== targetProfile?.handle) throw new HttpError(400, 'connection_choice_invalid');
-  const keepTarget = !!targetId && targetId !== member.id && body.keepHandle === targetProfile?.handle;
-  if (keepTarget) {
-    await linkIdentity(c.env.DB, {id: targetId!, provider, externalId: target.accountNumId}, member.provider, member.externalId, Date.now());
-  } else {
-    await linkIdentity(c.env.DB, member, provider, target.accountNumId, Date.now());
-  }
-  return c.json(await memberProfile(c.env.DB, keepTarget ? targetId! : member.id), 200, { 'Cache-Control': 'no-store' });
+  if (body.keepHandle && body.keepHandle !== sourceProfile.handle) throw new HttpError(400, 'connection_choice_invalid');
+  await linkIdentity(c.env.DB, member, provider, target.accountNumId, Date.now());
+  return c.json(await memberProfile(c.env.DB, member.id), 200, { 'Cache-Control': 'no-store' });
 });
 app.delete('/v1/me/connections/:provider', async (c) => {
   const member = await requireMember(c);
   await unlinkIdentity(c.env.DB, member, parseProvider(c.req.param('provider')));
   return c.json(await memberProfile(c.env.DB, member.id), 200, { 'Cache-Control': 'no-store' });
+});
+
+app.put("/v1/me/profile", async c => {
+  const member = await requireMember(c);
+  const profile = await updateMemberProfile(c.env.DB, member.id, await c.req.json().catch(() => null));
+  return c.json({...profile, reviewer: await isReviewer(c.env.DB, member.id)}, 200, {"Cache-Control":"no-store"});
 });
 
 app.get("/v1/me", async (c) => {

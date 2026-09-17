@@ -9,7 +9,7 @@ import {
   type ProviderId,
 } from "@/lib/provider";
 import { connectAccount, disconnectAccount } from "@/lib/connections";
-import { connectionMessage, platformPath } from "@/lib/connection-ui";
+import { connectionMessage } from "@/lib/connection-ui";
 import { confirmDialog } from "@/lib/confirm";
 import { useI18n } from "vue-i18n";
 import { useLocalePath } from "@/lib/use-locale";
@@ -52,7 +52,9 @@ async function disconnect(provider: ProviderId) {
   try {
     const token = await session.accessToken();
     if (!token) throw new Error("connection_source_expired");
-    session.profile = await disconnectAccount(provider, token);
+    const removedLogin = currentProvider() === provider;
+    session.profile = await disconnectAccount(provider, token, session.profile?.identities);
+    if (removedLogin) location.reload();
   } catch (e) {
     error.value = connectionMessage(e);
   } finally {
@@ -84,12 +86,6 @@ async function disconnect(provider: ProviderId) {
         class="actions"
         v-if="session.profile?.identities.some((i) => i.provider === p.id)"
       >
-        <span v-if="p.id === currentProvider()" class="subtle">{{
-          $t("linked.current")
-        }}</span>
-        <a v-else class="btn btn--sm" :href="platformPath(lp('/me'), p.id)">{{
-          $t("linked.use")
-        }}</a>
         <button
           class="btn btn--sm"
           :disabled="busy || !session.profile"
@@ -99,7 +95,6 @@ async function disconnect(provider: ProviderId) {
         </button>
         <button
           v-if="
-            p.id !== currentProvider() &&
             !session.profile?.identities.find((i) => i.provider === p.id)
               ?.founding
           "

@@ -4,7 +4,7 @@ import { RouterLink } from "vue-router";
 import { hueFrom, whole } from "@/lib/format";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
-import { can } from "@/lib/provider";
+import { can, currentProvider, providerName } from "@/lib/provider";
 import { useReviewer } from "@/lib/review";
 import { track } from "@/lib/track";
 
@@ -33,18 +33,18 @@ const PLAN_LABEL: Record<string, string> = { unlimited: "wallet.plan.unlimited",
     <!-- 餘額放在頁首：這是登入後最常想瞄一眼的數字 -->
     <RouterLink v-if="session.wallet" :to="lp('/wallet')" class="acct__credits" :title="$t('wallet.balance')">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5l1.9 4.1 4.5.5-3.3 3.1.9 4.4L8 11.4l-3.9 2.2.9-4.4L1.6 6.1l4.5-.5z" /></svg>
-      {{ whole(session.wallet.score + session.wallet.tempScore) }}
+      {{ providerName(currentProvider()) }} · {{ whole(session.wallet.score + session.wallet.tempScore) }}
     </RouterLink>
 
     <button class="acct__btn" :aria-label="$t('nav.menu')" aria-haspopup="menu" :aria-expanded="open" @click="open = !open">
-      <img v-if="session.me.avatar" :src="session.me.avatar" alt="" class="acct__face" />
-      <span v-else class="acct__face mono" :style="{ '--h': hueFrom(session.me.nickName) }">{{ [...session.me.nickName][0] }}</span>
+      <img v-if="session.avatarUrl" :src="session.avatarUrl" alt="" class="acct__face" />
+      <span v-else class="acct__face mono" :style="{ '--h': hueFrom(session.displayName) }">{{ [...session.displayName][0] }}</span>
     </button>
 
     <div v-if="open" class="menu panel" role="menu" @click="open = false">
       <div class="menu__head">
-        <strong class="menu__name">{{ session.me.nickName }}</strong>
-        <span v-if="session.wallet?.plans.length" class="menu__plan">{{ $t(PLAN_LABEL[session.wallet.plans[0]!.tier] ?? "wallet.plan") }}</span>
+        <strong class="menu__name">{{ session.displayName }}</strong>
+        <span v-if="session.wallet?.plans.length" class="menu__plan">{{ providerName(currentProvider()) }} · {{ $t(PLAN_LABEL[session.wallet.plans[0]!.tier] ?? "wallet.plan") }}</span>
       </div>
       <RouterLink :to="lp('/me')" class="menu__item" role="menuitem">{{ $t("nav.me") }}</RouterLink>
       <RouterLink :to="lp('/mine')" class="menu__item" role="menuitem">{{ $t("nav.mine") }}</RouterLink>

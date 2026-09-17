@@ -10,7 +10,7 @@ import PreviewDoc from "@/components/preview/PreviewDoc.vue";
 import HtmlCardFrame from "@/components/HtmlCardFrame.vue";
 import { ApiError, fetchBoard, fetchCard, fetchPlayerAsset, fetchPreviewPage, fetchRoleDetail } from "@/lib/api";
 import { renderWelcome } from "@/lib/welcome-render";
-import { providerName } from "@/lib/providers";
+import CardPlatforms from "@/components/CardPlatforms.vue";
 import { can } from "@/lib/provider";
 import { useSession } from "@/lib/session";
 import { contentLang, pageTitle, zoneLabel } from "@/lib/i18n";
@@ -257,9 +257,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 
           <div class="role__actions">
             <!-- 站內玩：/play/:roleId 由舞台（stage/）整頁接管 -->
-            <RouterLink class="btn btn--primary btn--lg role__cta" :to="lp(`/play/${card.roleId}`)" @click="track('cta', { subject: card.roleId })">
-              {{ $t("card.play") }}
-            </RouterLink>
+            <CardPlatforms :role-id="card.roleId" :provider="card.provider" />
             <button class="btn btn--lg btn--icon role__share" :aria-label="$t('card.share')" :title="$t('card.share')" @click="share">
               <svg viewBox="0 0 20 20" aria-hidden="true">
                 <path d="M10 12.5V3.5M6.5 7 10 3.5 13.5 7M4 11v4.5a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
@@ -274,7 +272,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
             </svg>
             {{ $t("card.addHome") }}
           </button>
-          <p v-if="card.provider" class="subtle role__via">{{ $t("card.supports", { provider: providerName(card.provider) }) }}</p>
+
 
           <p class="subtle role__foot">
             {{ zoneLabel(card.zone) }} · {{ $t("card.meta", { registered: relativeTime(card.registeredAt), synced: relativeTime(card.syncedAt) }) }}

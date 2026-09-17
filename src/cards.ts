@@ -30,6 +30,8 @@ export interface CardRow {
   reviewed_hash: string;
   /** 作者的本站公開 ID（members.handle，0005 起），從身分表接上來的；作者還沒成為成員時是 null。 */
   author_handle?: string | null;
+  community_name?: string | null;
+  community_avatar?: string | null;
   /** 成人內容（0006 起）：作者提交時宣告、審核人對照過的本站分級。預設不展示。 */
   nsfw: number;
 }
@@ -39,8 +41,9 @@ export interface CardRow {
  * LEFT JOIN——作者還沒有成員列（只在很早期登記過、還沒再登入）時 handle 是 null，前端把名字畫成純文字。
  */
 const AUTHOR_JOIN = `LEFT JOIN member_identities ai ON ai.provider = c.provider AND ai.external_id = CAST(c.author_num_id AS TEXT)
-  LEFT JOIN members am ON am.id = ai.member_id`;
-const CARD_COLUMNS = "c.*, am.handle AS author_handle";
+  LEFT JOIN member_connections ac ON ac.provider=c.provider AND ac.external_id=CAST(c.author_num_id AS TEXT)
+  LEFT JOIN members am ON am.id = COALESCE(ac.owner_member_id,ai.member_id)`;
+const CARD_COLUMNS = "c.*, am.handle AS author_handle, am.display_name AS community_name, CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url END AS community_avatar";
 
 /** 對外露出的卡片只有在榜的。榜單、標籤、作者榜、卡片頁都走這個條件。 */
 const LISTED = "status = 'approved'";
@@ -72,8 +75,8 @@ export function toCard(row: CardRow, lang: string) {
     author: {
       handle: row.author_handle ?? null,
       accountNumId: row.author_num_id,
-      name: row.author_name,
-      avatar: row.author_avatar,
+      name: row.community_name ?? row.author_name,
+      avatar: row.community_avatar ?? row.author_avatar,
     },
     talkNum: row.talk_num,
     followNum: row.follow_num,
@@ -177,7 +180,7 @@ export async function listCards(db: D1Database, opts: ListOptions) {
   }
   if (opts.authorMemberId !== undefined) {
     // 作者＝這個成員在任一家供應商上的身分
-    where.push("ai.member_id = ?");
+    where.push("am.id = ?");
     binds.push(opts.authorMemberId);
   }
 
@@ -304,11 +307,11 @@ export async function getCard(db: D1Database, id: string, provider: ProviderId =
 export async function getAuthor(db: D1Database, memberId: string, allowNsfw = false, provider: ProviderId = "lunatalk") {
   const row = await db
     .prepare(
-      `SELECT am.handle AS handle, MAX(c.author_name) AS author_name, MAX(c.author_avatar) AS author_avatar,
+      `SELECT am.handle AS handle, MAX(COALESCE(am.display_name,c.author_name)) AS author_name, MAX(CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url ELSE c.author_avatar END) AS author_avatar,
               COUNT(*) AS card_count, SUM(c.talk_num) AS talk_total, MIN(c.registered_at) AS joined_at,
               GROUP_CONCAT(DISTINCT c.provider) AS providers
        FROM cards c ${AUTHOR_JOIN}
-       WHERE ai.member_id = ? AND c.provider = ? AND c.${listed(allowNsfw)}`,
+       WHERE am.id = ? AND c.provider = ? AND c.${listed(allowNsfw)}`,
     )
     .bind(memberId, provider)
     .first<{
@@ -446,12 +449,12 @@ export async function listAuthors(
   const where: string[] = [`c.${listed(false)}`, "c.provider = ?"];
   const binds: unknown[] = [opts.provider];
   if (opts.zone) { where.push("c.zone IN (?, 'all')"); binds.push(opts.zone); }
-  if (opts.q) { where.push(`c.author_name LIKE ? ESCAPE '\\'`); binds.push(likeTerm(opts.q)); }
+  if (opts.q) { where.push(`COALESCE(am.display_name,c.author_name) LIKE ? ESCAPE '\\'`); binds.push(likeTerm(opts.q)); }
   const orderBy =
     opts.sort === "cards" ? "card_count DESC, talk_total DESC" : opts.sort === "hot" ? "trending DESC, talk_total DESC" : "talk_total DESC, card_count DESC";
   const rows = await db
     .prepare(
-      `SELECT am.handle AS handle, c.author_num_id, MAX(c.author_name) AS author_name, MAX(c.author_avatar) AS author_avatar,
+      `SELECT am.handle AS handle, c.author_num_id, MAX(COALESCE(am.display_name,c.author_name)) AS author_name, MAX(CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url ELSE c.author_avatar END) AS author_avatar,
               COUNT(*) AS card_count, SUM(c.talk_num) AS talk_total, SUM(MAX(c.hot_score, 0)) AS trending,
               MIN(c.registered_at) AS joined_at
        FROM cards c ${AUTHOR_JOIN} WHERE ${where.join(" AND ")}

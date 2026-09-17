@@ -166,15 +166,15 @@ it('requires a primary community choice when both accounts already exist', async
   expect((await r.json() as any).error).toBe('connection_choice_required');
   expect((await profile()).identities).toHaveLength(1);
 });
-it('can start from the accidental account and retain the original community', async () => {
+it('rejects attempts to replace the current community through the obsolete keep-account choice', async () => {
   const old = await profile(); const accidental = await profile('new', 'harbor');
   const r = await SELF.fetch('https://c.test/v1/me/connections', {
     method: 'POST', headers: { ...bearer('new'), 'X-Provider': 'harbor', 'Content-Type': 'application/json' },
     body: JSON.stringify({ provider: 'lunatalk', token: 'owner', keepHandle: old.handle, sourceHandle: accidental.handle, targetHandle: old.handle }),
   });
-  expect(r.status).toBe(200);
-  expect((await profile('new', 'harbor')).handle).toBe(old.handle);
-  expect((await profile()).identities).toHaveLength(2);
+  expect(r.status).toBe(400);
+  expect((await profile('new', 'harbor')).handle).toBe(accidental.handle);
+  expect((await profile()).identities).toHaveLength(1);
   expect((await env.DB.prepare('SELECT id FROM members').all()).results).toHaveLength(2);
 });
 it('rejects arbitrary retained handles and stale previews without linking',async()=>{

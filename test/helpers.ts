@@ -12,7 +12,7 @@ let cacheGeneration = 0;
  * 邊緣快取也一樣——不換命名空間的話，後面的測試會讀到前一個測試留下的結果。
  */
 export async function resetDb(): Promise<void> {
-  for (const table of ["member_connections", "card_saves", "game_worlds", "cards", "card_registrations", "review_stamps", "review_submissions", "reviewers", "member_identities", "members"]) {
+  for (const table of ["work_copies", "works", "member_connections", "card_saves", "game_worlds", "cards", "card_registrations", "review_stamps", "review_submissions", "reviewers", "member_identities", "members"]) {
     await env.DB.prepare(`DELETE FROM ${table}`).run();
   }
   mineCache.namespace = `mine-test-${++cacheGeneration}`;

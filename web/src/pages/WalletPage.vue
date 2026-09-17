@@ -5,9 +5,13 @@ import { fetchScoreRecords, TOP_UP_URL, type ScoreRecord } from "@/lib/api";
 import { clock, dateOnly, dayLabel, whole } from "@/lib/format";
 import { pageTitle } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
+import { currentProvider, providerName, type ProviderId } from "@/lib/provider";
+import { platformPath } from "@/lib/connection-ui";
+import { useLocalePath } from "@/lib/use-locale";
 import { track } from "@/lib/track";
 
 const session = useSession();
+const {lp}=useLocalePath();
 const { t } = useI18n();
 
 const PAGE = 30;
@@ -22,6 +26,7 @@ const kind = ref<Kind>("all");
 const PLAN_LABEL: Record<string, string> = { unlimited: "wallet.plan.unlimited", member: "wallet.plan.member", trial: "wallet.plan.trial" };
 
 async function load(reset = false) {
+  if(currentProvider()==='harbor')return;
   if (reset) { page.value = 1; records.value = []; }
   loading.value = true;
   error.value = "";
@@ -67,7 +72,9 @@ watch(() => session.me?.accountNumId, () => load(true), { immediate: true });
 </script>
 
 <template>
+  <nav v-if="session.profile" class="wallet-platforms" :aria-label="$t('linked.wallets')"><a v-for="identity in session.profile.identities" :key="identity.provider" :href="platformPath(lp('/wallet'),identity.provider as ProviderId)" class="btn btn--sm" :aria-current="identity.provider===currentProvider()?'page':undefined">{{ providerName(identity.provider as ProviderId) }}</a></nav>
   <div class="page wallet">
+    <a v-if="currentProvider()==='harbor'" class="btn" href="https://console.harperharbor.com/me/wallet">{{ $t('linked.harborWallet') }}</a>
     <h1 class="display wallet__title">{{ $t("wallet.title") }}</h1>
 
     <div class="wallet__grid">
@@ -81,7 +88,7 @@ watch(() => session.me?.accountNumId, () => load(true), { immediate: true });
             <span v-else class="ghost balance__ghost" />
           </p>
           <p v-if="session.wallet?.tempScore" class="subtle">{{ $t("wallet.temp", { n: whole(session.wallet.tempScore) }) }}</p>
-          <a class="btn btn--primary btn--lg balance__cta" :href="TOP_UP_URL" target="_blank" rel="noopener" @click="track('topup_click')">{{ $t("wallet.topUp") }} ↗</a>
+          <a class="btn btn--primary btn--lg balance__cta" :href="currentProvider() === 'harbor' ? 'https://console.harperharbor.com/me/wallet' : TOP_UP_URL" target="_blank" rel="noopener" @click="track('topup_click')">{{ $t("wallet.topUp") }} ↗</a>
         </section>
 
         <section class="panel plans">
@@ -96,7 +103,7 @@ watch(() => session.me?.accountNumId, () => load(true), { immediate: true });
         </section>
       </aside>
 
-      <section class="panel history">
+      <section v-if="currentProvider() !== 'harbor'" class="panel history">
         <div class="history__head">
           <h2 class="history__title">{{ $t("wallet.records") }}<span v-if="total" class="history__n">{{ total }}</span></h2>
           <div class="seg">
@@ -134,6 +141,7 @@ watch(() => session.me?.accountNumId, () => load(true), { immediate: true });
 </template>
 
 <style scoped>
+.wallet-platforms {display:flex;gap:var(--s-2);flex-wrap:wrap;margin:var(--s-4) auto;max-width:var(--page-width,1100px);padding:0 var(--s-4)}
 .wallet { max-width: 1080px; }
 .wallet__title { font-size: 22px; margin-bottom: var(--s-4); }
 .wallet__grid { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: var(--s-4); align-items: start; }
