@@ -210,7 +210,12 @@ async function read(
   if(r.cardMeta && (typeof r.cardMeta==='object'||typeof r.cardMeta==='string')) {
    try {const meta=typeof r.cardMeta==='string'?JSON.parse(r.cardMeta):r.cardMeta;if(meta&&Object.keys(meta).length)fields.cardMeta=meta;}catch{throw new HttpError(409,'sync_unsupported_content')}
   }
-  fields.roleTag = list(r.roleTag).map(String);
+  fields.roleTag = list(r.roleTag).map((tag: any) => {
+    if (typeof tag === "string") return tag;
+    const name = tag && (text(tag.text) || text(tag.tagName));
+    if (!name) throw new HttpError(409, "sync_unsupported_content");
+    return name;
+  });
   fields.talkExample = list(r.talkExample).map((v:any) => {
     if (!v || typeof v.roleType !== 'string' || typeof v.content !== 'string') throw new HttpError(409,'sync_unsupported_content');
     return {roleType:v.roleType,content:v.content};
