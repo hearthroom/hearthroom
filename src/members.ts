@@ -39,6 +39,8 @@ export function newHandle(): string {
  */
 export async function resolveMember(db: D1Database, provider: ProviderId, externalId: number, now: number): Promise<string> {
   const ext = String(externalId);
+  const connected = await db.prepare("SELECT owner_member_id FROM member_connections WHERE provider=? AND external_id=?").bind(provider,ext).first<{owner_member_id:string}>();
+  if(connected) return connected.owner_member_id;
   const lookup = () =>
     db
       .prepare("SELECT member_id FROM member_identities WHERE provider = ? AND external_id = ?")
@@ -102,7 +104,7 @@ export async function memberByHandle(db: D1Database, handle: string): Promise<st
 export interface MemberProfile {
   handle: string;
   memberSince: number;
-  identities: { provider: string; externalId: number; linkedAt: number }[];
+  identities: { provider: string; externalId: number; linkedAt: number; founding: boolean }[];
   /** 成人內容開關（要先驗過年齡才開得了） */
   showNsfw: boolean;
   /** 驗過年齡了（只記有沒有，不記生日） */
@@ -139,14 +141,15 @@ export async function memberProfile(db: D1Database, memberId: string): Promise<M
     .bind(memberId)
     .first<{ handle: string; created_at: number; show_nsfw: number; age_verified_at: number | null; hidden_tags: string }>();
   if (!m) return null;
+  const founding = await db.prepare("SELECT provider FROM member_identities WHERE member_id=?").bind(memberId).all<{provider:string}>();
   const ids = await db
-    .prepare("SELECT provider, external_id, linked_at FROM member_identities WHERE member_id = ? ORDER BY linked_at")
-    .bind(memberId)
+    .prepare("SELECT provider, external_id, linked_at FROM member_connections WHERE owner_member_id = ? UNION SELECT provider, external_id, linked_at FROM member_identities WHERE member_id = ? AND NOT EXISTS (SELECT 1 FROM member_connections c WHERE c.provider=member_identities.provider AND c.external_id=member_identities.external_id) ORDER BY linked_at")
+    .bind(memberId, memberId)
     .all<{ provider: string; external_id: string; linked_at: number }>();
   return {
     handle: m.handle,
     memberSince: m.created_at,
-    identities: ids.results.map((r) => ({ provider: r.provider, externalId: Number(r.external_id), linkedAt: r.linked_at })),
+    identities: ids.results.map((r) => ({ provider: r.provider, externalId: Number(r.external_id), linkedAt: r.linked_at, founding: founding.results.some(i=>i.provider===r.provider) })),
     showNsfw: m.show_nsfw === 1,
     ageVerified: m.age_verified_at !== null,
     hiddenTags: parseHiddenTags(m.hidden_tags),
@@ -247,11 +250,8 @@ export async function isReviewer(db: D1Database, memberId: string): Promise<bool
 
 /** 這個成員在某家供應商上的公開 ID；沒綁就是 null。 */
 export async function externalIdOf(db: D1Database, memberId: string, provider: ProviderId): Promise<number | null> {
-  const row = await db
-    .prepare("SELECT external_id FROM member_identities WHERE member_id = ? AND provider = ?")
-    .bind(memberId, provider)
-    .first<{ external_id: string }>();
-  return row ? Number(row.external_id) : null;
+  const profile=await memberProfile(db,memberId);
+  return profile?.identities.find(i=>i.provider===provider)?.externalId ?? null;
 }
 
 type Ctx = { env: Env; req: { header: (k: string) => string | undefined } };
@@ -276,4 +276,9 @@ export async function requireReviewer(c: Ctx): Promise<Member> {
   const member = await requireMember(c);
   if (!(await isReviewer(c.env.DB, member.id))) throw new HttpError(403, "not a reviewer");
   return member;
+}
+
+export async function saveMemberId(db:D1Database,member:Member):Promise<string> {
+ const original=await db.prepare('SELECT member_id FROM member_identities WHERE provider=? AND external_id=?').bind(member.provider,String(member.externalId)).first<{member_id:string}>();
+ return original?.member_id ?? member.id;
 }

@@ -134,3 +134,21 @@ Today a second provider is configuration plus a small code change, not a runtime
 
 - Semantics of a partially implemented level 4.
 - No second provider has been integrated end to end yet; the section above describes the code as it is, not a verified port.
+
+## Connecting platform accounts to one community account
+
+HearthRoom supports one connected account per platform. Connecting proves control of both accounts; it does not move platform assets, credits or conversations. Existing community rows and per-account saves remain intact.
+
+These are **HearthRoom community endpoints** under `/v1`, separate from the provider Open API described elsewhere in this document:
+
+| Endpoint | Contract |
+|---|---|
+| `POST /v1/me/connections/preview` | Bearer and `X-Provider` identify the current account. Body `{provider, token}` proves the other account. Returns `source` and `target` summaries: provider, name, community handle and joining time where one exists. No target account or connection is created. |
+| `POST /v1/me/connections` | Same proofs plus `{keepHandle, sourceHandle, targetHandle}` from the preview. `targetHandle` is null when no target community exists. Revalidates both accounts and the preview, then keeps the explicitly chosen community identity. Returns its profile. |
+| `DELETE /v1/me/connections/:provider` | Disconnects an additional platform. Current and founding accounts are protected. The original community identity and upstream data remain. |
+
+An accidental first login on another platform may create a second community account. The user can start from either side: after authorization, show both names, handles and join dates, require an explicit choice if both exist, and allow cancellation. Never select the currently signed-in new account automatically. A forged choice or changed preview is rejected; do not retry silently against a different identity.
+
+`409 connection_choice_required` means an existing second account needs an explicit primary-community choice. `409 connection_preview_changed` requires a new preview. `409 provider_already_connected` never replaces a different account on the same platform. `409 account_already_connected` / `connection_conflict` require resolving an existing group before continuing. Proof tokens are processed transiently, never stored in D1 or included in analytics.
+
+This release covers account linking and switching. Card-copy distribution remains separate and is not exposed by these endpoints.
