@@ -21,6 +21,7 @@ export class HttpError extends Error {
   constructor(
     readonly status: 400 | 401 | 403 | 404 | 409 | 502 | 503,
     message: string,
+    readonly detail?: import("./sync-error").SyncDetail,
   ) {
     super(message);
   }

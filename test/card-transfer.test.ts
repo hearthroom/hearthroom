@@ -203,3 +203,23 @@ it('preserves translated instructions in an author-owned Harper copy',async()=>{
  await transfers.update(env,'harbor','target-token','target',source.card);
  expect(writes).toContainEqual({url:expect.stringContaining('/roles/target/locales'),body:{locale:'ja',name:'案内',summary:'紹介',description:'非公開の設定',greeting:'こんにちは',source:'human',source_locale:'en'}});
 });
+
+it('reports the provider, failed step and safe upstream code for rejected document writes', async()=>{
+ fakeUpstream({'/role/target/document':()=>json({error:'invalid_arguments',message:'sensitive upstream text'},400)});
+ await expect(transfers.update(env,'harbor','fixture','target',{name:'A',summary:'S',description:'D',greeting:'G',language:'en'})).rejects.toMatchObject({
+  message:'sync_upstream_rejected',detail:{provider:'harbor',step:'document',upstreamStatus:400,upstreamCode:'invalid_arguments'}
+ });
+});
+it('preserves the welcomeAlternates field returned by the current shared API',async()=>{
+ fakeUpstream({'/role/detail':()=>({...role,welcomeAlternates:['Another greeting']}),'/worldbook/bindings':()=>({bindings:[]}),'/author-asset':()=>json({},404)});
+ expect((await transfers.read(env,'lunatalk','fixture','source',1)).card.welcome?.alternates).toEqual(['Another greeting']);
+});
+it('hashes equal metadata independently of object key order',async()=>{
+ const a={name:'A',summary:'',description:'D',greeting:'G',language:'en',fields:{cardMeta:{creator:'Synthetic',version:'1'}}};
+ const b={...a,fields:{cardMeta:{version:'1',creator:'Synthetic'}}};
+ expect(await cardHash(a)).toBe(await cardHash(b));
+});
+it('turns malformed successful upstream responses into a safe step-specific error',async()=>{
+ fakeUpstream({'/role/detail':()=>new Response('<html>upstream page</html>')});
+ await expect(transfers.read(env,'lunatalk','fixture','source',1)).rejects.toMatchObject({message:'sync_invalid_response',detail:{provider:'lunatalk',step:'read',upstreamStatus:200}});
+});

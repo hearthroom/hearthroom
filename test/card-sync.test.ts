@@ -88,3 +88,15 @@ it('persists the remote resource checkpoint before retrying a failed sync', asyn
   expect(JSON.parse(row!.transfer_state).books.book.id).toBe('remote-book');
   vi.mocked(transfers.read).mockImplementation(async(_e,p)=>({card:p==='harbor'?{...source,description:'not finished'}:source,public:false}));
 });
+it('updates a published matching copy only with explicit edit consent and never overwrites external edits',async()=>{
+ const unpublish=vi.spyOn(transfers,'unpublish').mockResolvedValue();
+ await syncCard(env,input);
+ const updated={...source,description:'Updated synthetic text'};
+ let written=false;
+ vi.mocked(transfers.read).mockImplementation(async(_e,p)=>({card:p==='lunatalk'||written?updated:source,public:p==='harbor'&&!written}));
+ vi.mocked(transfers.update).mockImplementation(async()=>{written=true;return {};});
+ await expect(syncCard(env,input)).rejects.toThrow('sync_target_published');
+ expect(unpublish).not.toHaveBeenCalled();
+ await expect(syncCard(env,{...input,updatePublished:true})).resolves.toMatchObject({status:'synced'});
+ expect(unpublish).toHaveBeenCalledTimes(1);
+});

@@ -46,12 +46,17 @@ onMounted(async () => {
 const defaults = computed(() =>
   providers.value.filter((p) => p.id !== source.value && connected(p.id)).map((p) => p.id)
 );
-watch(defaults, (next) => { selected.value = next; }, { immediate: true });
+function remembered(next:ProviderId[]) {
+ try {const saved=JSON.parse(localStorage.getItem(`hearthroom.save-platforms.${source.value}.${props.roleId}`)||'null');if(Array.isArray(saved))return next.filter(p=>saved.includes(p));}catch{}
+ return next;
+}
+function remember() {try {localStorage.setItem(`hearthroom.save-platforms.${source.value}.${props.roleId}`,JSON.stringify([source.value,...selected.value]));}catch{}}
+watch(defaults, (next) => { selected.value = remembered(next); }, { immediate: true });
 watch(
   () => [props.roleId, props.provider],
   () => {
     states.value = [];
-    selected.value = defaults.value;
+    selected.value = remembered(defaults.value);
   }
 );
 function validate(sendForReview = false) {
@@ -82,7 +87,7 @@ async function run(sendForReview = publish.value) {
   busy.value = false;
   return ok;
 }
-defineExpose({ run, validate });
+defineExpose({ run, validate, load });
 </script>
 <template>
   <details
@@ -105,6 +110,7 @@ defineExpose({ run, validate });
           v-model="selected"
           type="checkbox"
           :value="p.id"
+          @change="remember"
           :disabled="busy || disabled"
         />
         {{ p.name }}</label

@@ -1,4 +1,4 @@
-import { currentProvider, type ProviderId } from "./provider";
+import { currentProvider, providerName, type ProviderId } from "./provider";
 import { accountToken } from "./connections";
 import { i18n } from "./i18n";
 export interface CardCopy {
@@ -8,12 +8,29 @@ export interface CardCopy {
   error?: string;
   updatedAt?: number;
 }
+export class DistributionError extends Error {
+  constructor(code:string, readonly detail?:{provider?:ProviderId;step?:string;upstreamStatus?:number;upstreamCode?:string}) { super(code); }
+}
 export function connectionMessage(error: unknown): string {
-  const code = error instanceof Error ? error.message : "";
+  let code = error instanceof Error ? error.message : "";
+  let detail = error instanceof DistributionError ? error.detail : undefined;
+  // Durable results use the same safe envelope as the immediate response.
+  if(code.startsWith('{')) { try { const parsed=JSON.parse(code);code=parsed.error;detail=parsed.detail; } catch {code='';} }
+  const safe=(v:unknown):v is string=>typeof v==='string' && /^[a-z][a-z0-9_]{0,63}$/.test(v);
+  if(!safe(code))code='sync_failed';
   const key = `linked.error.${code}`;
-  return i18n.global.te(key)
-    ? i18n.global.t(key)
-    : i18n.global.t("linked.error.generic");
+  const message=i18n.global.te(key)?i18n.global.t(key):i18n.global.t("linked.error.generic");
+  const parts=[code];
+  if(detail?.provider==='lunatalk'||detail?.provider==='harbor')parts.push(providerName(detail.provider));
+  if(safe(detail?.step))parts.push(i18n.global.te(`linked.step.${detail.step}`)?i18n.global.t(`linked.step.${detail.step}`):detail.step);
+  if(Number.isInteger(detail?.upstreamStatus))parts.push(`HTTP ${detail!.upstreamStatus}`);
+  if(safe(detail?.upstreamCode))parts.push(detail.upstreamCode);
+  return `${message} (${parts.join(' · ')})`;
+}
+async function response(r:Response) {
+ const body=await r.json().catch(()=>({error:'sync_invalid_response'}));
+ if(!r.ok || body.error)throw new DistributionError(body.error||'sync_failed',body.detail);
+ return body;
 }
 export function platformPath(path: string, provider: ProviderId): string {
   return `${path}${path.includes("?") ? "&" : "?"}provider=${provider}`;
@@ -27,14 +44,14 @@ export async function copies(
   const r = await fetch(`/v1/me/card-copies/${encodeURIComponent(roleId)}`, {
     headers: { Authorization: `Bearer ${token}`, "X-Provider": provider },
   });
-  if (!r.ok) throw new Error("sync_failed");
-  return (await r.json()).copies;
+  return (await response(r)).copies;
 }
 export async function synchronize(
   roleId: string,
   sourceProvider: ProviderId,
   targetProvider: ProviderId,
-  publish = false
+  publish = false,
+  updatePublished = false
 ): Promise<CardCopy> {
   const [sourceToken, targetToken, memberToken] = await Promise.all([
     accountToken(sourceProvider),
@@ -42,7 +59,7 @@ export async function synchronize(
     accountToken(currentProvider()),
   ]);
   if (!sourceToken || !targetToken || !memberToken)
-    throw new Error("connection_source_expired");
+    throw new DistributionError("connection_source_expired",{provider:!sourceToken?sourceProvider:!targetToken?targetProvider:currentProvider(),step:'identity'});
   const r = await fetch("/v1/me/card-sync", {
     method: "POST",
     headers: {
@@ -57,9 +74,8 @@ export async function synchronize(
       targetProvider,
       targetToken,
       publish,
+      updatePublished,
     }),
   });
-  const body = await r.json();
-  if (!r.ok) throw new Error(body.error || "sync_failed");
-  return body;
+  return response(r);
 }

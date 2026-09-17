@@ -109,8 +109,9 @@ app.use("*", async (c, next) => {
 app.onError((err, c) => {
   const ev = c.get("ev") as Pending | undefined;
   if (err instanceof HttpError) {
+    if(c.req.path==='/v1/me/card-sync')console.error('card_sync_failed',{code:err.message.startsWith('sync_')?err.message:'sync_identity_failed',...err.detail});
     if (ev) ev.outcome = err.status === 404 ? "not_found" : err.status === 403 ? "forbidden" : err.status === 502 ? "upstream_error" : "rejected";
-    return c.json({ error: err.message }, err.status);
+    return c.json({ error: err.message, ...(err.detail ? {detail:err.detail} : {}) }, err.status);
   }
   if (ev) ev.outcome = "internal";
   console.error("unhandled error", err);
@@ -561,17 +562,21 @@ app.get("/v1/authors/:handle", async (c) => {
  */
 app.post('/v1/me/card-sync', async (c) => {
  const member=await requireMember(c);
- const b=await c.req.json<{sourceProvider:string;sourceRoleId:string;sourceToken:string;targetProvider:string;targetToken:string;publish?:boolean}>();
- if(!b || typeof b.sourceProvider!=='string' || !b.sourceProvider.trim() || typeof b.targetProvider!=='string' || !b.targetProvider.trim() || typeof b.sourceRoleId!=='string' || !b.sourceRoleId || b.sourceRoleId.length>200 || [b.sourceToken,b.targetToken].some(t=>typeof t!=='string'||!t||t.length>16384) || (b.publish!==undefined && typeof b.publish!=='boolean'))throw new HttpError(400,'sync_proof_required');
+ const b=await c.req.json<{sourceProvider:string;sourceRoleId:string;sourceToken:string;targetProvider:string;targetToken:string;publish?:boolean;updatePublished?:boolean}>();
+ if(!b || typeof b.sourceProvider!=='string' || !b.sourceProvider.trim() || typeof b.targetProvider!=='string' || !b.targetProvider.trim() || typeof b.sourceRoleId!=='string' || !b.sourceRoleId || b.sourceRoleId.length>200 || [b.sourceToken,b.targetToken].some(t=>typeof t!=='string'||!t||t.length>16384) || (b.publish!==undefined && typeof b.publish!=='boolean') || (b.updatePublished!==undefined && typeof b.updatePublished!=='boolean'))throw new HttpError(400,'sync_proof_required');
  const sourceProvider=requireConfigured(c.env,parseProvider(b.sourceProvider));
  const targetProvider=requireConfigured(c.env,parseProvider(b.targetProvider));
  const profile=await memberProfile(c.env.DB,member.id);
- const source=await upstream.fetchMe(c.env,b.sourceToken,sourceProvider);
- const target=await upstream.fetchMe(c.env,b.targetToken,targetProvider);
+ const identity=async(provider:ProviderId,token:string)=> {
+  try{return await upstream.fetchMe(c.env,token,provider);}
+  catch(e){throw new HttpError(e instanceof HttpError?e.status:502,e instanceof HttpError&&e.status===401?'sync_authorization_expired':'sync_identity_failed',{provider,step:'identity'});}
+ };
+ const source=await identity(sourceProvider,b.sourceToken);
+ const target=await identity(targetProvider,b.targetToken);
  for(const [provider,account] of [[sourceProvider,source.accountNumId],[targetProvider,target.accountNumId]] as const) {
   if(!profile?.identities.some(x=>x.provider===provider&&x.externalId===account))throw new HttpError(403,'sync_account_not_connected');
  }
- const result=await syncCard(c.env,{memberId:member.id,sourceProvider,sourceRoleId:b.sourceRoleId,sourceAccount:source.accountNumId,sourceToken:b.sourceToken,targetProvider,targetAccount:target.accountNumId,targetToken:b.targetToken,publish:b.publish===true});
+ const result=await syncCard(c.env,{memberId:member.id,sourceProvider,sourceRoleId:b.sourceRoleId,sourceAccount:source.accountNumId,sourceToken:b.sourceToken,targetProvider,targetAccount:target.accountNumId,targetToken:b.targetToken,publish:b.publish===true,updatePublished:b.updatePublished===true});
  note(c,{event:'card_sync',detail:result.status});
  return c.json(result,200,{'Cache-Control':'no-store'});
 });

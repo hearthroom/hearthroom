@@ -15,6 +15,8 @@ import { writeChunks } from "../src/lib/png-chunks";
 import CardEditorPage from "../src/pages/CardEditorPage.vue";
 import { confirmState, settleConfirm } from "../src/lib/confirm";
 
+const platforms = vi.hoisted(()=>({profile:undefined as any, saveCopies:vi.fn(async()=>[] as any[])}));
+vi.mock("../src/lib/authoring-platforms",()=>({saveCopies:platforms.saveCopies}));
 const api = vi.hoisted(() => ({
   createRole: vi.fn(async () => ({ roleId: "r1" })),
   patchRoleDocument: vi.fn(async () => ({})),
@@ -42,7 +44,7 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock("../src/lib/api", () => api);
 vi.mock("../src/lib/session", () => ({
-  useSession: () => ({ accessToken: async () => "tok", me: { accountNumId: 7, nickName: "作者", avatar: "" } }),
+  useSession: () => ({ profile:platforms.profile, accessToken: async () => "tok", me: { accountNumId: 7, nickName: "作者", avatar: "" } }),
 }));
 vi.mock("../src/lib/track", () => ({ track: () => {}, currentSurface: () => "create", setSurface: () => {} }));
 
@@ -144,6 +146,7 @@ async function submit() {
 
 beforeEach(() => {
   localStorage.clear();
+  platforms.profile=undefined; platforms.saveCopies.mockClear();
   for (const fn of Object.values(api)) fn.mockClear();
   // happy-dom 沒有 object URL；預覽用的立繪縮圖走這條
   if (!("createObjectURL" in URL)) {
@@ -676,3 +679,23 @@ describe("建卡成功、內容沒存進去", () => {
   });
 });
 
+
+
+it('writes first, then selects multiple save destinations and keeps a failed target visible',async()=>{
+ platforms.profile={identities:[{provider:'lunatalk',externalId:7},{provider:'harbor',externalId:8}]};
+ await mount('/create');
+ await type($<HTMLInputElement>('#f-name'),'Synthetic multi-platform card');
+ expect(root.querySelector('.platform-dialog')).toBeNull();
+ await submit();
+ expect(api.createRole).not.toHaveBeenCalled();
+ const choices=root.querySelectorAll<HTMLInputElement>('.platform-dialog input[type=checkbox]');
+ expect(choices.length).toBe(2);
+ expect([...choices].every(x=>x.checked)).toBe(true);
+ platforms.saveCopies.mockResolvedValueOnce([{provider:'harbor',status:'failed',error:'sync_permission_denied'}]);
+ root.querySelector<HTMLButtonElement>('.platform-dialog .btn--primary')!.click();await flush();await flush();
+ expect(api.createRole).toHaveBeenCalledTimes(1);
+ expect(platforms.saveCopies).toHaveBeenCalledWith('r1','lunatalk',['lunatalk','harbor'],false);
+ expect(root.textContent).toContain('sync_permission_denied');
+ expect(root.querySelector<HTMLButtonElement>('button[type=submit]')!.disabled).toBe(false);
+ expect(root.textContent).toContain('HarperHarbor');
+});
