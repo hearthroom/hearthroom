@@ -12,9 +12,11 @@ let cacheGeneration = 0;
  * 邊緣快取也一樣——不換命名空間的話，後面的測試會讀到前一個測試留下的結果。
  */
 export async function resetDb(): Promise<void> {
-  for (const table of ["work_copies", "works", "member_connections", "card_saves", "game_worlds", "cards", "card_registrations", "review_stamps", "review_submissions", "reviewers", "member_identities", "members"]) {
+  for (const table of ["work_copies", "works", "member_connections", "card_saves", "game_worlds", "cards", "card_numbers", "card_registrations", "review_stamps", "review_submissions", "reviewers", "member_identities", "members"]) {
     await env.DB.prepare(`DELETE FROM ${table}`).run();
   }
+  // 卡號是 AUTOINCREMENT（刪過的號不再發），測試裡從 1 數起才好讀：連序號一起歸零
+  await env.DB.prepare("DELETE FROM sqlite_sequence WHERE name = 'card_numbers'").run();
   mineCache.namespace = `mine-test-${++cacheGeneration}`;
   boardCache.namespace = `board-test-${cacheGeneration}`;
 }

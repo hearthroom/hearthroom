@@ -5,10 +5,12 @@ import { linkIdentity, unlinkIdentity, connectedMemberId } from './connections';
 import { saveMemberId } from './members';
 import { type Context, Hono } from "hono";
 import {
+  CARD_NUMBER,
   syncStatement,
   dueForSync,
   getAuthor,
   getCard,
+  previewCard,
   listAuthors,
   listCards,
   toAuthor,
@@ -378,10 +380,35 @@ app.get("/v1/authors", (c) =>
   }),
 );
 
+/**
+ * 作者看自己還沒上榜的卡：卡片頁對別人是 404，但作者從「我的角色卡」點封面進來不該掉進死路
+ *（玩家回報 2026-09-17）。帶著 token、而且卡真是他的，就把卡片頁的資料給他，附上審核狀態；
+ * 本站還沒有這張卡的列（沒提交過）就從上游的公開資料拼一份預覽。
+ * 回 null 表示「不是作者本人」，呼叫端照舊 404——對外不透露這張卡存不存在。
+ */
+async function ownCardView(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, id: string, row: Awaited<ReturnType<typeof getCard>>) {
+  const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1];
+  if (!bearer) return null;
+  const provider = providerOf(c);
+  const me = await upstream.fetchMe(c.env, bearer, provider).catch(() => null);
+  if (!me) return null;
+  if (row) return row.author_num_id === me.accountNumId ? { ...toCard(row, lang(c)), status: row.status } : null;
+  // 卡號查不到就是沒這張卡；只有上游的卡片 ID 才值得去上游問
+  if (CARD_NUMBER.test(id)) return null;
+  const role = await upstream.fetchRole(c.env, id, provider).catch(() => null);
+  if (!role || role.authorNumId !== me.accountNumId) return null;
+  return previewCard(role, lang(c), provider);
+}
+
 app.get("/v1/cards/:id", async (c) => {
   const row = await getCard(c.env.DB, c.req.param("id"));
   // 還沒過審、被駁回、離榜重審中的卡對外都不存在；作者在「我的卡片」看得到狀態。
-  if (!row || row.status !== "approved") throw new HttpError(404, "card not found");
+  if (!row || row.status !== "approved") {
+    // 作者本人例外：給他看，但不算一次瀏覽、不進任何快取
+    const own = await ownCardView(c, c.req.param("id"), row);
+    if (own) return c.json(own, 200, { "Cache-Control": "private, no-store" });
+    throw new HttpError(404, "card not found");
+  }
   // 成人內容：沒開（或沒登入、沒驗年齡）的人拿不到內容，但要知道「這是成人內容、要登入／驗年齡」
   // 才能引導（owner 2026-09-08 改成 Steam 式的門，不是 404）。403 只透露這一件事，內容一個欄位都不給。
   const allowNsfw = row.nsfw === 1 ? await viewerAllowsNsfw(c) : false;
@@ -1093,8 +1120,10 @@ app.get("*", async (c) => {
     // 成人內容不做分享預覽（抓取器沒有身分）：回沒有卡片資訊的殼，讓前端畫登入／驗年齡的門
     if (row.nsfw === 1) return new Response(shell.body, { status: 200, headers: shell.headers });
     const card = toCard(row, l);
+    // 用卡號開的頁（/cards/123）：canonical 仍指卡片 ID 那個網址，一張卡在搜尋引擎眼裡只有一個地址
+    const canonical = id === row.source_role_id ? self : canonicalUrl(new URL(url.pathname.replace(/[^/]+$/, encodeURIComponent(row.source_role_id)), url));
     const res = renderHead(shell, {
-      lang: locale, title: `${card.name} · ${SITE_NAME}`, description: card.summary, image: card.avatarUrl, url: self, type: "profile",
+      lang: locale, title: `${card.name} · ${SITE_NAME}`, description: card.summary, image: card.avatarUrl, url: canonical, type: "profile",
     });
     res.headers.set("Cache-Control", `public, max-age=${PAGE_TTL}`);
     return res;

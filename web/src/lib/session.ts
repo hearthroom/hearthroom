@@ -1,7 +1,7 @@
 import { PROVIDERS } from "./provider";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
-import { fetchMe, fetchSiteMe, fetchWallet, setNsfwViewer, setViewerHiddenTags } from "./api";
+import { fetchMe, fetchSiteMe, fetchWallet, setLoginViewer, setNsfwViewer, setViewerHiddenTags } from "./api";
 import type { Me, SiteMe, Wallet } from "./api";
 import {
   beginLogin,
@@ -59,6 +59,8 @@ export const useSession = defineStore("session", () => {
     if (profilePromise) await profilePromise;
     return profile.value?.showNsfw && profile.value.ageVerified ? await accessToken() : null;
   });
+  // 登入了就給卡片頁一把 token：作者看自己還沒上榜的卡要靠它（伺服器只對作者本人放行）
+  setLoginViewer(async () => (me.value ? await accessToken() : null));
   // 不想看的類型：同樣等身分載好再答，第一屏就是過濾好的版本
   setViewerHiddenTags(async () => {
     if (profilePromise) await profilePromise;
@@ -125,6 +127,7 @@ export const useSession = defineStore("session", () => {
     wallet.value = null;
     profile.value = null;
     setNsfwViewer(null);
+    setLoginViewer(null);
     await Promise.all(PROVIDERS.map(provider => revokeSession(provider.id)));
   }
 

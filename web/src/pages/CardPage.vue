@@ -15,7 +15,7 @@ import { can } from "@/lib/provider";
 import { useSession } from "@/lib/session";
 import { contentLang, pageTitle, zoneLabel } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
-import { compact, hueFrom, plainText, relativeTime } from "@/lib/format";
+import { compact, dateOnly, dateTime, hueFrom, plainText, relativeTime } from "@/lib/format";
 import { confirmDialog } from "@/lib/confirm";
 import { track } from "@/lib/track";
 import { canInstall } from "@/lib/pwa";
@@ -49,8 +49,13 @@ const commentCount = ref<number | null>(null);
 /** 同一位作者的其他作品：看完一張想接著看，不必先繞去作者頁 */
 const more = ref<CommunityCard[]>([]);
 const copied = ref(false);
-/** 剛複製的是連結還是卡片 ID：同一個小提示，字不一樣 */
+/** 剛複製的是連結還是卡號：同一個小提示，字不一樣 */
 const copiedWhat = ref<"link" | "id">("link");
+/**
+ * 作者最後一次改內容的時間（來源端的資料，對話次數之類的統計不會動它）。
+ * 玩家靠它判斷「這張卡有沒有更新」（玩家回報 2026-09-17）；很早期建的卡沒有這個值，就不顯示。
+ */
+const editedAt = ref<number | null>(null);
 
 type Tab = "home" | "comments";
 const tab = ref<Tab>("home");
@@ -97,6 +102,8 @@ async function load() {
     .then((raw) => {
       const rawWelcome = String(raw.roleWelcome ?? "");
       const charName = card.value?.name ?? "";
+      const edited = Date.parse(String(raw.contentLastEditedAt ?? ""));
+      editedAt.value = Number.isFinite(edited) ? edited : null;
       welcome.value = plainText(rawWelcome, charName, t("card.you"));
       // 開場白照對話頁的方式畫：先套作者的正則規則（酒館／MMD 卡靠它把標記換成版面），
       // 再交給沙盒 iframe 用同一套元件庫畫（HtmlCardFrame）。功能欄那份整頁美化不放（見 welcome-render）。規則要登入才拿得到，
@@ -127,10 +134,11 @@ async function load() {
   }
 }
 
-// 卡片 ID 就是上游的 roleId（網址裡那一串）：作者對外報卡、玩家在別處靠 ID 找卡都要它
-//（作者回報 2026-09-16）。拿不到剪貼簿就把它攤開讓人自己選。
+// 卡號是本站發的短數字（登記過的卡才有）：作者對外報卡、玩家在不能貼連結的地方靠它找卡
+//（作者回報 2026-09-16 要 ID；2026-09-17 嫌一長串，改成短號）。搜尋框輸入卡號就會開這張卡。
+// 拿不到剪貼簿就把它攤開讓人自己選。
 async function copyId() {
-  const id = card.value?.roleId ?? "";
+  const id = card.value?.num ? String(card.value.num) : "";
   if (!id) return;
   try {
     await navigator.clipboard.writeText(id);
@@ -168,7 +176,7 @@ async function share() {
 }
 
 watch(() => route.params.id, () => {
-  card.value = null; welcome.value = ""; welcomeHtml.value = ""; previewDoc.value = null; more.value = []; broken.value = false; tab.value = "home";
+  card.value = null; welcome.value = ""; welcomeHtml.value = ""; previewDoc.value = null; more.value = []; broken.value = false; tab.value = "home"; editedAt.value = null;
   commentCount.value = null; showComments.value = true;
   load();
 }, { immediate: true });
@@ -212,6 +220,12 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
       <!-- 背景圖只當氛圍：糊掉、壓淡，讓整頁有這張卡自己的色調 -->
       <div class="role__ambient" :style="{ backgroundImage: `url(${card.backgroundUrl || card.avatarUrl || ''})` }" aria-hidden="true" />
 
+      <!-- 作者看自己還沒上榜的卡：說清楚為什麼別人看不到，並給他去處理的路 -->
+      <p v-if="card.status && card.status !== 'approved'" class="notice role__own" role="status">
+        {{ $t(`card.own.${card.status}`) }}
+        <RouterLink :to="lp('/mine')">{{ $t("card.own.manage") }}</RouterLink>
+      </p>
+
       <div class="role__layout" :aria-busy="revalidating || undefined">
         <aside class="role__side panel rise">
           <div class="role__art">
@@ -236,9 +250,9 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
               </span>
               <svg v-if="card.author.handle" class="role__by-arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
             </component>
-            <button type="button" class="role__cid" :title="$t('card.copyId')" @click="copyId">
+            <button v-if="card.num" type="button" class="role__cid" :title="$t('card.copyId')" @click="copyId">
               <span class="role__cid-label">{{ $t("card.id") }}</span>
-              <code class="role__cid-value mono">{{ card.roleId }}</code>
+              <code class="role__cid-value mono">#{{ card.num }}</code>
               <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4" /><path d="M10.5 5.5V3.5a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2" fill="none" stroke="currentColor" stroke-width="1.4" /></svg>
             </button>
           </div>
@@ -275,7 +289,8 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 
 
           <p class="subtle role__foot">
-            {{ zoneLabel(card.zone) }} · {{ $t("card.meta", { registered: relativeTime(card.registeredAt), synced: relativeTime(card.syncedAt) }) }}
+            {{ zoneLabel(card.zone) }}<template v-if="card.registeredAt"> · {{ $t("card.meta", { registered: relativeTime(card.registeredAt) }) }}</template>
+            <template v-if="editedAt"> · <span :title="dateTime(editedAt)">{{ $t("card.updated", { date: dateOnly(Math.floor(editedAt / 1000)) }) }}</span></template>
           </p>
         </aside>
 
@@ -387,6 +402,8 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 .role__cid-value { flex: 1; min-width: 0; font-size: 12px; overflow-wrap: anywhere; line-height: 1.4; }
 .role__cid svg { width: 14px; height: 14px; flex: none; color: var(--text-3); }
 .role__cid:hover svg { color: var(--accent-text); }
+.role__own { position: relative; z-index: 1; margin-bottom: var(--s-4); display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-3); align-items: center; }
+.role__own a { color: var(--accent-text); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
 
 .role__stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-2); padding: var(--s-3) 0; box-shadow: 0 1px 0 var(--line), 0 -1px 0 var(--line); }
 .role__stats .stat dd { font-size: 16px; }

@@ -149,6 +149,12 @@ const from = (): Record<string, string> => ({ "X-From": currentSurface(), "X-Pro
 let nsfwViewer: (() => Promise<string | null>) | null = null;
 export function setNsfwViewer(fn: (() => Promise<string | null>) | null): void { nsfwViewer = fn; }
 /**
+ * 「看的人登入了嗎」。卡片頁帶著它，作者才看得到自己還沒上榜的卡（伺服器只對作者本人放行）。
+ * 同樣由 session 接上、登出時拆掉；沒登入就不帶，公開讀取照常走邊緣快取。
+ */
+let loginViewer: (() => Promise<string | null>) | null = null;
+export function setLoginViewer(fn: (() => Promise<string | null>) | null): void { loginViewer = fn; }
+/**
  * 「看的人不想看的類型」。同樣由 session 接上（等本站身分載好再回名單），登出時拆掉。
  * 榜單與搜尋帶 ?hide=鍵,鍵 由伺服器過濾；不用 token——這不是權限，只是這個人的口味，回應照常進公開快取。
  */
@@ -185,7 +191,9 @@ export async function fetchCard(id: string, lang?: string, opts: { quiet?: boole
   const viewer = await viewerAccess();
   if (viewer.param) params.set("nsfw", "1");
   const q = params.size ? `?${params}` : "";
-  return json<CommunityCard>(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(id)}${q}`, { headers: { ...from(), ...viewer.headers } }));
+  // 成人內容那條已經帶了 token 就不重複；否則登入了就帶，作者才看得到自己還沒上榜的卡
+  const login = viewer.headers.Authorization ? null : loginViewer ? await loginViewer().catch(() => null) : null;
+  return json<CommunityCard>(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(id)}${q}`, { headers: { ...from(), ...viewer.headers, ...authHeaders(login ?? undefined) } }));
 }
 
 /** 這一區最常見的標籤，給榜單的類型篩選列。 */
