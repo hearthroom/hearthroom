@@ -624,7 +624,7 @@
   "login.title": "Hearthroom にログイン",
   "login.lead": "お持ちのアカウントでログインできます。新しく登録する必要はありません。",
   "login.continueWith": "{provider} アカウントで続ける",
-  "login.moreComing": "2 つのアカウントはそれぞれ独立しています。切り替えるとアカウントが変わります。",
+  "login.moreComing": "すでに Hearthroom をご利用の場合は、これまでのサービスでログインし、「マイページ」から別のサービスを連携してください。",
   "login.note": "Hearthroom が保存するのは公開 ID とニックネームだけです。パスワードが渡されることはありません。",
   "me.title": "マイページ",
   "me.handle": "このサイトのメンバー ID",
