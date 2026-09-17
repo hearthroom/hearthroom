@@ -16,9 +16,9 @@ Write before choosing a platform. At save, all connected destinations are initia
 
 ## Evidence for this change
 
-API suite: 298 passing tests. Web suite: 337 passing tests, one pre-existing skipped suite. Type checks and Stage/web build passed. Build retains existing large-chunk warnings; embedded player tests retain loopback fetch warnings.
+API suite: 302 passing tests. Web suite: 337 passing tests, one pre-existing skipped suite. Type checks and Stage/web build passed. Build retains existing large-chunk warnings; embedded player tests retain loopback fetch warnings.
 
-Chrome with synthetic local upstreams confirmed initial multi-selection, a visible permission failure, retry without edits, exactly one source creation and matching source/target payloads after retry. All five locale dialogs fit the 390 px viewport without button text overflow. English modal button text centers differed by less than 1 px, with no overflow and unobstructed hit targets at 390 px. Live production sync still requires successful readback; local fixtures do not establish that result.
+Chrome with synthetic local upstreams confirmed initial multi-selection, a visible permission failure, retry without edits, exactly one source creation and matching source/target payloads after retry. All five locale dialogs fit the 390 px viewport without button text overflow. English modal button text centers differed by less than 1 px, with no overflow and unobstructed hit targets at 390 px. Live production validation subsequently passed after the runtime and asset-host corrections described below.
 
 ## Surface and observability decisions
 
@@ -38,3 +38,9 @@ The transfer-only reference allowlist includes the current `assets.lunatalk.ai`
 and `assets.harperharbor.com` hosts; the image proxy allowlist is unchanged.
 Harper's `MEDIA_REFERENCE_HOSTS` must include the actual source SaaS asset host.
 This registers public URLs only and never copies image bytes.
+
+## Production readback
+
+The deployed change was verified with an owner-authorized synthetic private card. The natural My cards sync action returned “copy saved” without requesting publication. A read-only D1 lookup limited to that test work confirmed one Harper copy, `status=synced`, matching non-empty source/target hashes and an empty error. The transfer service only records success after reading the destination content back. No real user card was overwritten or submitted for public review during this verification.
+
+Release sequence: `1f6f46d` (authoring and diagnostics), `2619f5a` (Workers request compatibility), `fa8969a` (current SaaS images and structured tags). All three exact sources passed CI and deployed. Harper image-reference configuration was updated separately; the API readiness check passed.
