@@ -98,3 +98,20 @@ using existing provider create/read/write APIs, not a new provider/model tool.
 Observability reuses the bounded `card_sync` outcome and existing safe failure
 envelope. Durable verification reads the resulting mapping and final hash comparison;
 no card content, account IDs or credentials are added to logs or metrics.
+
+## Player rejects an unaccepted turn
+
+The embedded player must end its replying state, keep the draft and show one
+persistent error when the provider rejects a send before admission. The provider
+must return a typed stream error and an `outcome_v1` operation-list response so
+an exact client-operation probe can resolve the missing operation.
+
+Chrome regression with a synthetic insufficient-credit response reproduced two
+messages in the old player. The updated player shows one error, restores the
+original draft, and stops waiting. All five billing hints refer to the current
+platform instead of directing every provider's users to LunaTalk. The player
+build and all 1,836 trusted player tests pass. Tests use no production messages,
+credentials, account mutations or model calls.
+
+MCP is not applicable: no API capability is added. Provider rejection metrics
+remain the diagnostic source; the UI does not log card or message content.
