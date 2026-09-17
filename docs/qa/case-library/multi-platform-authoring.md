@@ -44,3 +44,30 @@ This registers public URLs only and never copies image bytes.
 The deployed change was verified with an owner-authorized synthetic private card. The natural My cards sync action returned “copy saved” without requesting publication. A read-only D1 lookup limited to that test work confirmed one Harper copy, `status=synced`, matching non-empty source/target hashes and an empty error. The transfer service only records success after reading the destination content back. No real user card was overwritten or submitted for public review during this verification.
 
 Release sequence: `1f6f46d` (authoring and diagnostics), `2619f5a` (Workers request compatibility), `fa8969a` (current SaaS images and structured tags). All three exact sources passed CI and deployed. Harper image-reference configuration was updated separately; the API readiness check passed.
+
+## Lorebook transfer contract regression
+
+Two adapter defects can produce `sync_upstream_rejected` / `invalid_arguments`:
+normalized hash entries use empty strings for default category and trigger region,
+but Harper's document API requires explicit valid enums; and a whole-book replacement
+can exceed its 200-operation limit. Restore `custom` / `both` on API writes and send
+at most 100 operations per document, including deletion operations on re-sync.
+
+Read back the target after each acknowledged document and order change. Retrying a
+known partial result reuses the mapped book and replaces its actual current entries.
+An unknown write result still uses the existing target-version conflict protection.
+Harper's reorder moves listed entries to the front, so bounded chunks are prepended
+from last to first. LunaTalk assigns absolute positions and receives the complete
+order in one request within its 2,000-entry limit. Never truncate a book to meet a limit.
+
+Regression cases use synthetic entries: default enum validation, 475-entry creation
+and replacement, failure after two successful chunks followed by retry, both ordering
+contracts, and clearing a large book. The enum and oversized-document tests were
+observed failing before their respective fixes. This change uses the existing sync
+endpoint, safe error envelope, and durable readback; the surface and observability
+decisions above remain applicable. Prior production success with a smaller synthetic
+card did not cover these larger Lorebook cases.
+
+Local validation for the Lorebook correction: type checks passed; 306 API tests and
+337 web tests passed, with the same pre-existing skipped web suite and embedded-player
+loopback warnings. Production deployment and live readback are separate checks.
