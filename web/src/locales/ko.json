@@ -624,7 +624,7 @@
   "login.title": "Hearthroom 로그인",
   "login.lead": "이미 가진 계정으로 로그인하세요. 별도 가입은 필요 없습니다.",
   "login.continueWith": "{provider} 계정으로 계속",
-  "login.moreComing": "두 계정은 서로 독립적이며, 한쪽으로 바꾸면 계정이 바뀝니다.",
+  "login.moreComing": "Hearthroom을 이미 사용 중이라면 기존 플랫폼으로 로그인한 다음 내 계정에서 다른 플랫폼을 연결하세요.",
   "login.note": "Hearthroom은 공개 ID와 닉네임만 저장하며, 비밀번호는 전달되지 않습니다.",
   "me.title": "내 정보",
   "me.handle": "이 사이트의 회원 ID",

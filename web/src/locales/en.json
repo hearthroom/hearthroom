@@ -624,7 +624,7 @@
   "login.title": "Sign in to Hearthroom",
   "login.lead": "Sign in with an account you already have. No separate registration needed.",
   "login.continueWith": "Continue with {provider}",
-  "login.moreComing": "The two accounts are separate; switching sides means switching accounts.",
+  "login.moreComing": "If you already use Hearthroom, sign in through your original platform, then connect another platform from My account.",
   "login.note": "Hearthroom stores only your public ID and nickname. Your password is never shared with us.",
   "me.title": "Me",
   "me.handle": "Member ID on this site",

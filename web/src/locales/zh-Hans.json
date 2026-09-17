@@ -624,7 +624,7 @@
   "login.title": "登录 Hearthroom",
   "login.lead": "使用你现有的账号登录，无需另外注册。",
   "login.continueWith": "使用 {provider} 账号继续",
-  "login.moreComing": "两边的账号各自独立，换一边等于换一个账号。",
+  "login.moreComing": "已有 Hearthroom 账号，请先通过原来的平台登录，再到“我的”连接另一个平台。",
   "login.note": "Hearthroom 只会保存你的公开 ID 与昵称，不会获取你的密码。",
   "me.title": "我的",
   "me.handle": "本站成员 ID",
