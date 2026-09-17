@@ -1067,7 +1067,6 @@
   "linked.previousCommunity": "このプラットフォームは以前 {handle} に連携していました。履歴は元のコミュニティに残り、アカウントは統合されません。",
   "linked.createOn": "元のカードを作成するプラットフォーム",
   "linked.wallets": "プラットフォーム別の残高",
-  "linked.harborWallet": "HarperHarbor で残高と請求を確認",
   "linked.error.sync_authorization_expired": "認証の有効期限が切れました。「マイページ」で表示されたプラットフォームを再認証してください。",
   "linked.error.sync_permission_denied": "アクセスが拒否されました。カードの読み取り・編集権限を確認し、解決しない場合は詳細をご連絡ください。",
   "linked.error.sync_upstream_rejected": "内容がプラットフォームに受け付けられませんでした。下書きを保持し、以下の情報をご連絡ください。",
