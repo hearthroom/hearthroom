@@ -11,7 +11,8 @@ import MyCardTile from "@/components/MyCardTile.vue";
 import * as cache from "@/lib/mine-cache";
 import { useSession } from "@/lib/session";
 import { platformPath } from "@/lib/connection-ui";
-import { can, providerName, type ProviderId } from "@/lib/provider";
+import { can, currentProvider, providerName, type ProviderId } from "@/lib/provider";
+import { accountToken } from "@/lib/connections";
 
 const route = useRoute();
 const router = useRouter();
@@ -123,7 +124,15 @@ async function submit(card: MyCard) {
   try {
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
-    const res = (await registerCard(card.roleId, token, nsfw)) as { status?: MyCard["status"] };
+    // 登記即分發：其他已綁定渠道的 token 一起送，站台在背景同步過去，這裡不等
+    const distribute: { provider: ProviderId; token: string }[] = [];
+    for (const identity of session.profile?.identities ?? []) {
+      const other = identity.provider as ProviderId;
+      if (other === currentProvider()) continue;
+      const otherToken = await accountToken(other, identity.externalId).catch(() => null);
+      if (otherToken) distribute.push({ provider: other, token: otherToken });
+    }
+    const res = (await registerCard(card.roleId, token, nsfw, distribute)) as { status?: MyCard["status"]; distributing?: string[] };
     card.registered = true;
     card.status = res.status ?? "approved";
     card.note = "";
@@ -132,6 +141,7 @@ async function submit(card: MyCard) {
     // 登記成功就多用掉一格；撤銷不還——額度數的是「這週登記過幾張不同的卡」
     if (!wasRegistered && data.value) data.value.quota.used = Math.min(data.value.quota.limit, data.value.quota.used + 1);
     notice.value = card.status === "approved" ? "" : t("mine.submitted");
+    if (res.distributing?.length) notice.value = [notice.value, t("mine.distributing")].filter(Boolean).join(" ");
   } catch (err) {
     error.value =
       err instanceof ApiError && err.code === "weekly_quota_exceeded"

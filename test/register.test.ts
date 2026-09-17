@@ -155,3 +155,48 @@ describe("作者主頁", () => {
     expect((await list("?author=zzzzzzzz")).body.items).toEqual([]);
   });
 });
+
+describe("登記即分發（owner 2026-09-17）", () => {
+  it("登記時帶上其他已登入渠道的 token：登記立刻回應，同步在背景跑並落在 work_copies", async () => {
+    const { transfers } = await import("../src/card-sync");
+    const { identitiesFor, rolesOnProviders } = await import("./helpers");
+    const { vi } = await import("vitest");
+    identitiesFor({ lunatalk: { "author-token": 10001 }, harbor: { "harbor-token": 22 } });
+    rolesOnProviders({ lunatalk: [{ roleId: "role-1", authorNumId: 10001 }] });
+    vi.spyOn(transfers, "read").mockResolvedValue({ card: { name: "A", summary: "S", description: "D", greeting: "G", language: "zh" }, public: false });
+    vi.spyOn(transfers, "create").mockResolvedValue("copy-1");
+    vi.spyOn(transfers, "update").mockResolvedValue({});
+    const publish = vi.spyOn(transfers, "publish").mockResolvedValue();
+    try {
+      // 先把 Harbor 帳號綁到這個成員底下（登記的人一定是成員）
+      const link = await SELF.fetch("https://c.test/v1/me/connections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...bearer("author-token") },
+        body: JSON.stringify({ provider: "harbor", token: "harbor-token" }),
+      });
+      expect(link.status).toBe(200);
+
+      const res = await register({ roleId: "role-1", distribute: [{ provider: "harbor", token: "harbor-token" }] }, bearer("author-token"));
+      expect(res.status).toBe(201);
+      expect(((await res.json()) as any).distributing).toEqual(["harbor"]);
+
+      // 背景工作在回應之後完成：等 work_copies 出現那一列
+      let copy: { provider: string; role_id: string; status: string } | null = null;
+      for (let i = 0; i < 40 && !copy; i++) {
+        copy = await env.DB.prepare("SELECT provider, role_id, status FROM work_copies WHERE provider = 'harbor'").first();
+        if (!copy) await new Promise((r) => setTimeout(r, 50));
+      }
+      expect(copy).toMatchObject({ provider: "harbor", role_id: "copy-1", status: "pending" });
+      expect(publish).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("distribute 形狀不對 → 400，登記不落庫", async () => {
+    rolesOnMainSite({ roleId: "role-1", authorNumId: 10001 });
+    const res = await register({ roleId: "role-1", distribute: [{ provider: "harbor" }] });
+    expect(res.status).toBe(400);
+    expect((await list()).body.items).toHaveLength(0);
+  });
+});
