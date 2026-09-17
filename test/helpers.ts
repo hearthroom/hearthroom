@@ -15,8 +15,10 @@ export async function resetDb(): Promise<void> {
   for (const table of ["work_copies", "works", "member_connections", "card_saves", "game_worlds", "cards", "card_numbers", "card_registrations", "review_stamps", "review_submissions", "reviewers", "member_identities", "members"]) {
     await env.DB.prepare(`DELETE FROM ${table}`).run();
   }
-  // 卡號是 AUTOINCREMENT（刪過的號不再發），測試裡從 1 數起才好讀：連序號一起歸零
+  // 卡號是 AUTOINCREMENT（刪過的號不再發），測試之間把序號推回起點，每個測試都從 100001 數起
+  // sqlite_sequence 沒有唯一鍵，不能 INSERT OR REPLACE（只會多一列）；刪掉再放
   await env.DB.prepare("DELETE FROM sqlite_sequence WHERE name = 'card_numbers'").run();
+  await env.DB.prepare("INSERT INTO sqlite_sequence (name, seq) VALUES ('card_numbers', 100000)").run();
   mineCache.namespace = `mine-test-${++cacheGeneration}`;
   boardCache.namespace = `board-test-${cacheGeneration}`;
 }

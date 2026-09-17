@@ -34,7 +34,7 @@ export interface CardRow {
   community_avatar?: string | null;
   /** 成人內容（0006 起）：作者提交時宣告、審核人對照過的本站分級。預設不展示。 */
   nsfw: number;
-  /** 本站卡號（0014 起）：登記時發、撤銷再登記不換號。從 card_numbers 接上來的，列還沒補到號時是 null。 */
+  /** 本站卡號（0014 起；0015 起固定 6 位數從 100001 起跳）：登記時發、撤銷再登記不換號。從 card_numbers 接上來的，列還沒補到號時是 null。 */
   num?: number | null;
 }
 
