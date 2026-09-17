@@ -11,7 +11,6 @@
 import type { App, Component } from "vue";
 import { reactive } from "vue";
 import type { Router } from "vue-router";
-import { currentProvider } from "@/lib/provider";
 import { UPSTREAM_API } from "@/lib/config";
 import { deleteCardSave, fetchCardSaves, putCardSave } from "@/lib/api";
 import { confirmDialog } from "@/lib/confirm";
@@ -87,10 +86,6 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
     // 套件的 CSS 之後再蓋站台的接線（styles/stage.css）：畫布的變數改接站台的 token，深淺與主題才跟得上
     const [stage] = await Promise.all([import("moonstage/stage"), import("moonstage/stage.css"), import("@/styles/stage.css")]);
     const host = stage.browserHost({
-      ...(currentProvider() === "harbor" ? {capabilities:{
-        actions:["copy"], panels:["model","persona","export","bottom"],
-        personaModes:["name_only","custom"], assist:false, preferences:false, agentMode:false,
-      }} : {}),
       ui: {
         toast: (text, kind) => pushStageToast(text, kind),
         confirm: (o) => confirmDialog({ title: o.title, message: o.content, confirmText: o.confirmText, cancelText: o.cancelText }),

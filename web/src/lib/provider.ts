@@ -37,8 +37,8 @@ const SCOPES: Record<ProviderId, string> = {
 };
 
 /**
- * 這家供應商有哪些能力。LunaTalk 全部都有；Harbor 目前只有卡片本身、封面與錢包，
- * 其餘入口在那一家的會話裡收起來——不是藏起來的半成品，是那邊真的沒有這條 API。
+ * 這家供應商有哪些能力。LunaTalk 全部都有；Harbor 沒有審核站與會員方案，
+ * 這兩個入口在那一家的會話裡收起來——不是藏起來的半成品，是那邊真的沒有這條 API。
  */
 const FEATURES: Record<ProviderId, Record<string, boolean>> = {
   lunatalk: {
@@ -47,7 +47,7 @@ const FEATURES: Record<ProviderId, Record<string, boolean>> = {
     outputContract: true, chatTest: true, previewPage: true, review: true, membership: true,
   },
   harbor: {
-    editor: true, comments: true, worldbook: true, regex: true, library: true, persona: false,
+    editor: true, comments: true, worldbook: true, regex: true, library: true, persona: true,
     validation: true, deleteRole: true, tags: true, welcomeExtras: true,
     outputContract: true, chatTest: true, previewPage: true, review: false, membership: false,
   },
