@@ -1026,7 +1026,7 @@
   "linked.status.failed": "동기화 미완료",
   "linked.status.unknown": "생성 결과 확인 필요",
   "linked.mineHint": "연결된 계정의 카드입니다. 동기화한 사본은 하나로 묶어 표시합니다. 편집이나 커뮤니티 등록은 해당 플랫폼에서 관리하세요.",
-  "linked.manage": "카드 관리",
+  "linked.manage": "{name} 계정 관리",
   "linked.manageOn": "{provider}에서 관리",
   "linked.loading": "불러오는 중…",
   "linked.empty": "연결된 계정에 아직 카드가 없습니다.",

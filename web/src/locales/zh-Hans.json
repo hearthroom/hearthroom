@@ -1026,7 +1026,7 @@
   "linked.status.failed": "同步未完成",
   "linked.status.unknown": "创建结果待确认",
   "linked.mineHint": "这里列出已连接账号的卡片。同一张卡的同步副本会放在一起；要编辑或管理社区登记，请进入卡片所属的平台。",
-  "linked.manage": "管理卡片",
+  "linked.manage": "管理 {name} 账号",
   "linked.manageOn": "在 {provider} 管理",
   "linked.loading": "正在加载…",
   "linked.empty": "已连接的账号里还没有卡片。",

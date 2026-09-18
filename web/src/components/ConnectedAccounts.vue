@@ -3,12 +3,15 @@ import { computed, onMounted, ref } from "vue";
 import { useSession } from "@/lib/session";
 import { availableProviders } from "@/lib/provider-switch";
 import {
+  ACCOUNT_PAGE,
   PROVIDERS,
+  apiBaseOf,
   currentProvider,
   providerName,
   type ProviderId,
 } from "@/lib/provider";
-import { connectAccount, disconnectAccount } from "@/lib/connections";
+import { accountToken, connectAccount, disconnectAccount } from "@/lib/connections";
+import { fetchMeAt } from "@/lib/api";
 import { connectionMessage } from "@/lib/connection-ui";
 import { confirmDialog } from "@/lib/confirm";
 import { useI18n } from "vue-i18n";
@@ -26,8 +29,33 @@ const providers = computed(() =>
 );
 const error = ref("");
 const busy = ref(false);
+// 每一家連的是哪個信箱。使用者要確認的是「這是我哪一個帳號」，公開編號回答不了這件事。
+// 問不到就維持顯示編號——那一家可能還沒給這項授權，而這一列不該因此變成空的。
+const emails = ref<Partial<Record<ProviderId, string>>>({});
+async function loadEmails() {
+  for (const p of session.profile?.identities ?? []) {
+    const id = p.provider as ProviderId;
+    if (!PROVIDERS.some((x) => x.id === id)) continue;
+    try {
+      const token = await accountToken(id);
+      if (!token) continue;
+      const me = await fetchMeAt(apiBaseOf(id), token);
+      if (me.email) emails.value = { ...emails.value, [id]: me.email };
+    } catch {
+      // 拿不到就算了：這一列的主要資訊是「連了沒有」，信箱只是錦上添花。
+    }
+  }
+}
+
+/** 管完帳號要回得來，所以把現在這一頁帶過去。 */
+function accountPage(id: ProviderId): string | null {
+  const base = ACCOUNT_PAGE[id];
+  return base ? `${base}?return_to=${encodeURIComponent(location.href)}` : null;
+}
+
 onMounted(async () => {
   configured.value = await availableProviders();
+  void loadEmails();
 });
 async function connect(provider: ProviderId) {
   error.value = "";
@@ -72,13 +100,15 @@ async function disconnect(provider: ProviderId) {
         <strong>{{ providerName(p.id) }}</strong>
         <p class="subtle">
           {{
-            session.profile?.identities.find((i) => i.provider === p.id)
-              ? $t("linked.account", {
-                  id: session.profile.identities.find(
-                    (i) => i.provider === p.id
-                  )!.externalId,
-                })
-              : $t("linked.notConnected")
+            !session.profile?.identities.find((i) => i.provider === p.id)
+              ? $t("linked.notConnected")
+              : emails[p.id]
+                ? emails[p.id]
+                : $t("linked.account", {
+                    id: session.profile.identities.find(
+                      (i) => i.provider === p.id
+                    )!.externalId,
+                  })
           }}
         </p>
       </div>
@@ -86,6 +116,17 @@ async function disconnect(provider: ProviderId) {
         class="actions"
         v-if="session.profile?.identities.some((i) => i.provider === p.id)"
       >
+        <!-- 改密碼、換信箱、換綁第三方都只能在那一家自己的頁面上做：那些操作要再確認一次
+             本人，而我們這邊沒有辦法替他做那件事，也不該有那個能力。 -->
+        <a
+          v-if="accountPage(p.id)"
+          class="btn btn--sm"
+          :href="accountPage(p.id)!"
+          target="_blank"
+          rel="noopener"
+        >
+          {{ $t("linked.manage", { name: providerName(p.id) }) }} ↗
+        </a>
         <button
           class="btn btn--sm"
           :disabled="busy || !session.profile"
