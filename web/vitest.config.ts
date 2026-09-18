@@ -30,5 +30,10 @@ export default defineConfig({
       { find: "moonstage/stage", replacement: fileURLToPath(new URL("../stage/dist-stage/moonstage-stage.js", import.meta.url)) },
     ],
   },
-  test: { environment: "happy-dom", include: ["test/**/*.test.ts"] },
+  test: {
+    environment: "happy-dom",
+    include: ["test/**/*.test.ts"],
+    // setup-storage 說明了為什麼需要它：Node 自己帶的 localStorage 會蓋過 happy-dom 的。
+    setupFiles: ["./test/setup-storage.ts"],
+  },
 });

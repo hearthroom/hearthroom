@@ -1026,7 +1026,7 @@
   "linked.status.failed": "同期未完了",
   "linked.status.unknown": "作成結果の確認が必要",
   "linked.mineHint": "連携したアカウントのカードを表示しています。同じカードのコピーはまとめて表示します。編集やコミュニティへの掲載管理は各サービスから行えます。",
-  "linked.manage": "カードを管理",
+  "linked.manage": "{name} アカウントを管理",
   "linked.manageOn": "{provider} で管理",
   "linked.loading": "読み込み中…",
   "linked.empty": "連携したアカウントにはまだカードがありません。",

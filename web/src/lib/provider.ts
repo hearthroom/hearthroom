@@ -22,6 +22,12 @@ const CREDENTIAL_KEYS = [
   "hearthroom.oauth.state",
 ];
 
+/** 那一家自己的帳號頁。使用者要改密碼、換信箱、換綁第三方，都只能回它家做。 */
+export const ACCOUNT_PAGE: Record<ProviderId, string | null> = {
+  lunatalk: null,
+  harbor: "https://console.harperharbor.com/me/account",
+};
+
 const API_BASE: Record<ProviderId, string> = {
   lunatalk: import.meta.env.VITE_PROVIDER_API_BASE ?? "https://api.lunatalk.ai",
   harbor: import.meta.env.VITE_HARBOR_API_BASE ?? "https://api.harperharbor.com",
@@ -33,7 +39,7 @@ const API_BASE: Record<ProviderId, string> = {
  */
 const SCOPES: Record<ProviderId, string> = {
   lunatalk: "",
-  harbor: "profile.read role.read role.write chat.play",
+  harbor: "profile.read email.read role.read role.write chat.play",
 };
 
 /**
