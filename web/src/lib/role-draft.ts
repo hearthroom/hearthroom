@@ -38,6 +38,12 @@ export interface WorldbookEntryDraft {
 }
 
 export interface WorldbookMatchOptions {
+  selective?: boolean;
+  scanDepth?: number;
+  order?: number;
+  groupId?: string;
+  groupOrder?: number;
+  extensions?: Record<string, unknown>;
   caseSensitive: boolean;
   matchWholeWords: boolean;
   selectiveLogic: number;

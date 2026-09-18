@@ -28,6 +28,8 @@ import { rulesFromTavern, rulesToTavern, type RegexRuleSet } from "./regex-rules
 import { unzipSync } from "fflate";
 
 export interface TavernBookEntry {
+  scan_depth?: number;
+  extensions?: Record<string, unknown>;
   keys?: string[];
   secondary_keys?: string[];
   content?: string;
@@ -401,7 +403,7 @@ const entryKeywords = (entry: TavernBookEntry, raw: string[]): string[] =>
   entry.use_regex === true ? raw.map((k) => regexKey(k, entry.case_sensitive === true)) : raw;
 
 /** 酒館的條目 → 本站的條目。 */
-export function bookEntriesToDrafts(entries: TavernBookEntry[]): WorldbookEntryDraft[] {
+export function bookEntriesToDrafts(entries: TavernBookEntry[], scanDepth?: number): WorldbookEntryDraft[] {
   const drafts: WorldbookEntryDraft[] = [];
   entries.forEach((entry, index) => {
     const decorated = parseDecorators(text(entry.content));
@@ -411,6 +413,8 @@ export function bookEntriesToDrafts(entries: TavernBookEntry[]): WorldbookEntryD
     const baseName = text(entry.name) || text(entry.comment) || keyList(entry.keys)[0] || `#${index + 1}`;
     const keywords = entryKeywords(entry, [...keyList(entry.keys), ...decorated.additionalKeys]);
     const parts = splitEntryContent(content);
+    const options = entryMatchOptions({ ...entry, scan_depth: entry.scan_depth ?? scanDepth });
+    const groupId = options.groupId || (parts.length > 1 ? crypto.randomUUID() : undefined);
     parts.forEach((part, i) => {
       const name = parts.length === 1 ? baseName.slice(0, 20) : `${[...baseName].slice(0, 14).join("")} (${i + 1}/${parts.length})`;
       drafts.push({
@@ -420,7 +424,7 @@ export function bookEntriesToDrafts(entries: TavernBookEntry[]): WorldbookEntryD
         secondaryKeywords: entryKeywords(entry, keyList(entry.secondary_keys)),
         isEnabled: entry.enabled !== false && !decorated.dontActivate,
         isConstant: entry.constant === true || decorated.activate,
-        matchOptions: entryMatchOptions(entry),
+        matchOptions: { ...options, ...(groupId ? { groupId, groupOrder: parts.length > 1 ? i : options.groupOrder ?? 0 } : {}) },
       });
     });
   });
@@ -433,7 +437,14 @@ export function bookEntriesToDrafts(entries: TavernBookEntry[]): WorldbookEntryD
  */
 export function entryMatchOptions(entry: TavernBookEntry): WorldbookMatchOptions {
   const logic = Number(entry.selective_logic ?? 0);
+  const extension = entry.extensions ?? {};
+  const group = extension.harperharbor && typeof extension.harperharbor === "object" ? extension.harperharbor as Record<string, unknown> : {};
   return {
+    ...(typeof entry.selective === "boolean" ? { selective: entry.selective } : {}),
+    ...(Number.isInteger(entry.scan_depth) && entry.scan_depth! > 0 && entry.scan_depth! <= 100 ? { scanDepth: entry.scan_depth } : {}),
+    ...(Number.isInteger(entry.insertion_order) ? { order: entry.insertion_order } : {}),
+    ...(typeof group.groupId === "string" ? { groupId: group.groupId, groupOrder: Number(group.groupOrder) || 0 } : {}),
+    ...(Object.keys(extension).length ? { extensions: extension } : {}),
     caseSensitive: entry.case_sensitive === true,
     matchWholeWords: entry.match_whole_words === true,
     selectiveLogic: Number.isInteger(logic) && logic >= 0 && logic <= 3 ? logic : 0,
@@ -466,6 +477,7 @@ export function worldInfoToBook(raw: unknown): TavernBook | null {
   return {
     name: text(obj.name),
     description: text(obj.description),
+    scan_depth: numberOr(obj.scan_depth ?? obj.scanDepth, 2),
     entries: rows
       .filter((row) => row && typeof row === "object")
       .map((row) => ({
@@ -476,6 +488,10 @@ export function worldInfoToBook(raw: unknown): TavernBook | null {
         comment: text(row.comment),
         enabled: row.enabled === undefined ? row.disable !== true : row.enabled !== false,
         constant: row.constant === true,
+        ...(typeof row.selective === "boolean" ? { selective: row.selective } : {}),
+        scan_depth: numberOr(row.scan_depth ?? row.scanDepth ?? ext(row).scan_depth ?? ext(row).scanDepth, numberOr(obj.scan_depth ?? obj.scanDepth, 2)),
+        insertion_order: numberOr(row.insertion_order ?? row.order, 0),
+        extensions: ext(row),
         position: typeof row.position === "string" ? row.position : undefined,
         case_sensitive: row.case_sensitive === true || row.caseSensitive === true || ext(row).case_sensitive === true,
         match_whole_words: row.matchWholeWords === true || ext(row).match_whole_words === true,
@@ -508,7 +524,7 @@ export async function parseWorldbookFile(
   const dropped = bookEntryDrops(entries);
   const split = countSplitEntries(entries);
   if (split) dropped.push({ key: "import.split.entries", params: { n: split, max: ENTRY_CONTENT_MAX } });
-  return { name: text(book.name), format: "tavern", entries: bookEntriesToDrafts(entries), dropped };
+  return { name: text(book.name), format: "tavern", entries: bookEntriesToDrafts(entries, book.scan_depth), dropped };
 }
 
 /**
@@ -533,13 +549,14 @@ export function worldbookToExport(name: string, entries: WorldbookEntryDraft[]) 
       content: entry.content,
       constant: entry.isConstant,
       // 酒館的 AND 門要同時寫 keysecondary 與 selective；只寫前者的話對方當成沒有次要詞
-      selective: secondary.length > 0,
+      selective: entry.matchOptions?.selective ?? secondary.length > 0,
       selectiveLogic: entry.matchOptions?.selectiveLogic ?? 0,
       caseSensitive: entry.matchOptions?.caseSensitive ?? false,
       matchWholeWords: entry.matchOptions?.matchWholeWords ?? false,
       disable: !entry.isEnabled,
-      order: index,
-      extensions: {},
+      order: entry.matchOptions?.order ?? index,
+      scanDepth: entry.matchOptions?.scanDepth,
+      extensions: matchExtensions(entry),
     };
   });
   return { name, entries: rows };
@@ -638,7 +655,7 @@ export function tavernToDraft(
       name: text(book?.name) || draft.roleName || "",
       description: text(book?.description),
       format: "tavern",
-      entries: bookEntriesToDrafts(bookEntries),
+      entries: bookEntriesToDrafts(bookEntries, data.character_book?.scan_depth),
     };
     dropped.push(...bookEntryDrops(bookEntries));
     const split = countSplitEntries(bookEntries);
@@ -739,13 +756,17 @@ export function draftToTavern(
         keys: entry.keywords,
         // 酒館的 AND 門要同時寫 secondary_keys 與 selective；只寫前者的話客戶端當成沒有次要詞
         secondary_keys: entry.secondaryKeywords ?? [],
-        selective: (entry.secondaryKeywords ?? []).length > 0,
+        selective: entry.matchOptions?.selective ?? (entry.secondaryKeywords ?? []).length > 0,
         content: entry.content,
         name: entry.name,
         enabled: entry.isEnabled,
         constant: entry.isConstant,
-        insertion_order: index,
-        extensions: {},
+        insertion_order: entry.matchOptions?.order ?? index,
+        scan_depth: entry.matchOptions?.scanDepth,
+        case_sensitive: entry.matchOptions?.caseSensitive,
+        match_whole_words: entry.matchOptions?.matchWholeWords,
+        selective_logic: entry.matchOptions?.selectiveLogic,
+        extensions: matchExtensions(entry),
       })) as TavernBookEntry[],
     };
   }
@@ -784,4 +805,9 @@ export function embedIntoPng(imageBytes: Uint8Array, card: TavernCard): Uint8Arr
   const chunks = [{ keyword: "chara", text: base64FromUtf8(JSON.stringify(v2)) }];
   if (v3) chunks.push({ keyword: "ccv3", text: base64FromUtf8(JSON.stringify(v3)) });
   return replaceTextChunks(imageBytes, chunks);
+}
+
+function matchExtensions(entry: WorldbookEntryDraft): Record<string, unknown> {
+ const options=entry.matchOptions;
+ return { ...(options?.extensions ?? {}), ...(options?.groupId ? {harperharbor:{groupId:options.groupId,groupOrder:options.groupOrder ?? 0}} : {}) };
 }
