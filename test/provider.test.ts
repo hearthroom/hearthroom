@@ -10,7 +10,7 @@
 import { SELF } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { bearer, identitiesFor, resetDb } from "./helpers";
-import { apiBaseOf, configuredProviders, parseProvider, requireConfigured, reviewBotOf } from "../src/providers";
+import { apiBaseOf, configuredProviders, parseProvider, requireConfigured, reviewEnabled } from "../src/providers";
 import { HttpError } from "../src/types";
 
 beforeEach(async () => {
@@ -58,10 +58,10 @@ describe("供應商設定", () => {
       .toEqual(["lunatalk", "harbor"]);
   });
 
-  it("Harbor 沒有審核機器人：提交走登記即上榜，不是拿 LunaTalk 的機器人去讀 Harbor 的卡", () => {
-    const e = { REVIEW_BOT_KEY: "lsk_x", REVIEW_BOT_ACCOUNT_NUM_ID: "330016" } as never;
-    expect(reviewBotOf(e, "lunatalk")).not.toBeNull();
-    expect(reviewBotOf(e, "harbor")).toBeNull();
+  it("審核開關：只有明說 true 才審，其餘退回登記即上榜", () => {
+    expect(reviewEnabled({ REVIEW_ENABLED: "true" })).toBe(true);
+    expect(reviewEnabled({ REVIEW_ENABLED: "false" })).toBe(false);
+    expect(reviewEnabled({})).toBe(false);
   });
 });
 

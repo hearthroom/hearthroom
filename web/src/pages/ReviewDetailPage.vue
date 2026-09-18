@@ -110,6 +110,7 @@ onMounted(() => { void load(); });
 <template>
   <div class="page">
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
+    <p v-if="data?.detail.partial" class="notice" role="status">{{ $t("review.partial") }}</p>
     <p v-if="done" class="notice" role="status">{{ done }} <RouterLink :to="lp('/review')">← {{ $t("review.eyebrow") }}</RouterLink></p>
 
     <div v-if="loading" class="ghost detail-ghost" aria-hidden="true" />

@@ -265,7 +265,7 @@ export interface ReviewQueueItem {
   stampedByMe: boolean;
 }
 
-/** 主站的分享讀取回的整份設定（見主站 /open/v1/share/role/detail）。作者身分已在服務端拿掉。 */
+/** 送審當下本站替這張單存的整份設定（快照）。作者身分不在裡面。partial＝同步開的重審單，只有公開資料。 */
 export interface ReviewDetail {
   submission: {
     id: string; kind: "first" | "re"; status: string; contentHash: string; submittedAt: number;
@@ -276,6 +276,7 @@ export interface ReviewDetail {
   };
   card: { id: string; roleId: string };
   detail: {
+    partial?: boolean;
     document: {
       roleName: string; userName: string; roleDesc: string; roleAvatar: string; roleBackground: string;
       roleDetailDesc: string; roleTag: string; roleType: string; roleSex: string; roleSpeech: string;
@@ -486,7 +487,7 @@ export async function fetchPreviewPage(roleId: string): Promise<PreviewPage> {
   return json<PreviewPage>(await fetch(`${UPSTREAM_API}/open/v1/role/preview-page?roleId=${encodeURIComponent(roleId)}`));
 }
 
-// ---- 評論：跟作品所在的服務共用同一個評論池 -----------------------------------------
+// ---- 留言：本站自己的資料，掛在本站的卡上 -------------------------------------------
 
 export interface Comment {
   commentId: string;
@@ -496,61 +497,53 @@ export interface Comment {
   replyToNickName: string;
   likeCount: number;
   replyCount: number;
-  isPinned: boolean;
-  isCreatorReply: boolean;
   createTime: string;
   accountNickName: string;
   accountAvatar: string;
-  accountNumId: number;
+  /** 留言者在本站的公開 ID（作者頁網址用的那一個）。 */
+  handle: string;
   isLiked: boolean;
   isOwner: boolean;
   isCreator: boolean;
+  isPinned?: boolean;
   canDelete: boolean;
   replies?: Comment[];
 }
 
-export async function fetchComments(roleId: string, page: number, lang: string, token?: string) {
-  const q = `roleId=${encodeURIComponent(roleId)}&pageNum=${page}&pageSize=20`;
-  return json<{ total: number; comments: Comment[]; isRoleCreator: boolean }>(
-    await fetch(`${UPSTREAM_API}/open/v1/comment/list?${q}`, { headers: { language: lang, ...authHeaders(token) } }),
-  );
+/**
+ * 留言的讀寫都打本站；登入的人帶自己那一家的 token，本站據此認出是哪個成員。
+ * 成人內容的卡：留言區跟卡片頁同一道門，過了門的人帶 ?nsfw=1（見 viewerAccess）。
+ */
+const commentHeaders = (token?: string) => ({ ...from(), ...(token ? authHeaders(token) : {}) });
+async function commentUrl(cardId: string, tail = "", query = ""): Promise<{ url: string; headers: Record<string, string> }> {
+  const access = await viewerAccess();
+  const q = [query, access.param].filter(Boolean).join("&");
+  return { url: `${COMMUNITY_API}/cards/${encodeURIComponent(cardId)}/comments${tail}${q ? `?${q}` : ""}`, headers: access.headers };
 }
 
-export async function fetchReplies(roleId: string, rootId: string, page: number, lang: string, token?: string) {
-  const q = `roleId=${encodeURIComponent(roleId)}&rootId=${encodeURIComponent(rootId)}&pageNum=${page}&pageSize=20`;
-  return json<{ total: number; replies: Comment[] }>(
-    await fetch(`${UPSTREAM_API}/open/v1/comment/replies?${q}`, { headers: { language: lang, ...authHeaders(token) } }),
-  );
+export async function fetchComments(cardId: string, page: number, token?: string) {
+  const { url, headers } = await commentUrl(cardId, "", `page=${page}`);
+  return json<{ total: number; comments: Comment[]; isRoleCreator: boolean }>(await fetch(url, { headers: { ...headers, ...commentHeaders(token) } }));
 }
 
-export async function createComment(
-  body: { roleId: string; content: string; parentId?: string; rootId?: string; replyToNickName?: string },
-  token: string,
-  lang: string,
-): Promise<{ commentId: string }> {
+export async function fetchReplies(cardId: string, rootId: string, page: number, token?: string) {
+  const { url, headers } = await commentUrl(cardId, `/${encodeURIComponent(rootId)}/replies`, `page=${page}`);
+  return json<{ total: number; replies: Comment[] }>(await fetch(url, { headers: { ...headers, ...commentHeaders(token) } }));
+}
+
+export async function createComment(cardId: string, body: { content: string; parentId?: string; rootId?: string }, token: string): Promise<{ commentId: string }> {
+  const { url } = await commentUrl(cardId);
   return json<{ commentId: string }>(
-    await fetch(`${UPSTREAM_API}/open/v1/comment`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", language: lang, ...authHeaders(token) },
-      body: JSON.stringify(body),
-    }),
+    await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", ...commentHeaders(token) }, body: JSON.stringify(body) }),
   );
 }
 
-export async function deleteComment(commentId: string, roleId: string, token: string): Promise<void> {
-  await json(await fetch(`${UPSTREAM_API}/open/v1/comment/delete`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders(token) },
-    body: JSON.stringify({ commentId, roleId }),
-  }));
+export async function deleteComment(commentId: string, token: string): Promise<void> {
+  await json(await fetch(`${COMMUNITY_API}/comments/${encodeURIComponent(commentId)}`, { method: "DELETE", headers: commentHeaders(token) }));
 }
 
 export async function likeComment(commentId: string, like: boolean, token: string): Promise<void> {
-  await json(await fetch(`${UPSTREAM_API}/open/v1/comment/like`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders(token) },
-    body: JSON.stringify({ commentId, action: like ? "like" : "unlike" }),
-  }));
+  await json(await fetch(`${COMMUNITY_API}/comments/${encodeURIComponent(commentId)}/like`, { method: like ? "PUT" : "DELETE", headers: commentHeaders(token) }));
 }
 
 export interface RoleDraft {

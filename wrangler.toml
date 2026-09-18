@@ -70,9 +70,9 @@ SYNC_BATCH_SIZE = "45"
 SYNC_CONCURRENCY = "6"
 # 埋點總開關。設成 "false" 就一行事件都不發，分叉或本機除錯時用。
 ANALYTICS_ENABLED = "true"
-# 審核機器人在主站的公開數字 ID。作者提交審核時把卡授權給它，站方審核人員透過它讀設定。
-# 金鑰另外用 `wrangler secret put REVIEW_BOT_KEY` 放進去；兩個都缺就退回「登記即上榜」（src/providers.ts）。
-REVIEW_BOT_ACCOUNT_NUM_ID = "330016"
+# 社群審核開關。"true"＝作者提交後要經審核人蓋章才上榜：本站用作者自己的 token 讀一次整份設定
+# 存成審核單的快照，定案就刪（src/review-snapshot.ts）。其餘值退回「登記即上榜」，分叉自架不想審核的人用。
+REVIEW_ENABLED = "true"
 
 [[d1_databases]]
 binding = "DB"

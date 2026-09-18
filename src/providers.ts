@@ -16,10 +16,9 @@ import type { Env } from "./types";
  *   基本級：OAuth 登入＋「你是誰」、讀卡片公開資料、內容雜湊 → 能登記、上榜、搜尋
  *   完整級：授權讀整份設定、對話介面 → 能在站內審核與試玩
  *
- * 審核機器人：本站在供應商那邊持有一個服務帳號。作者提交時把卡授權給它，站方審核人員
- * 透過它讀設定。金鑰是 Worker 的 secret（REVIEW_BOT_KEY），公開數字 ID 是一般變數
- * （REVIEW_BOT_ACCOUNT_NUM_ID）。沒有機器人的供應商退回「登記即上榜」——分叉自架的人
- * 不想做審核也能跑。
+ * 審核：本站自己的事。作者提交時，本站用作者自己的 token 讀一次整份設定存成快照，審核人看快照
+ * （src/review-snapshot.ts）；不需要供應商提供分享介面或服務帳號，所以每一家都能審。
+ * REVIEW_ENABLED 不是 "true" 的部署退回「登記即上榜」——分叉自架的人不想做審核也能跑。
  */
 export type ProviderId = "lunatalk" | "harbor";
 
@@ -35,9 +34,6 @@ const API_BASE_VAR: Record<ProviderId, keyof ProviderEnv> = {
   lunatalk: "PROVIDER_API_BASE",
   harbor: "PROVIDER_API_BASE_HARBOR",
 };
-
-/** 只有 lunatalk 有審核機器人；Harbor 那邊還沒有分享／審核介面。 */
-const HAS_REVIEW_BOT: Record<ProviderId, boolean> = { lunatalk: true, harbor: false };
 
 /**
  * 哪幾家有對話引擎（契約的 conversation／streaming 那一級）。沒有的那家存得了卡、上得了榜，
@@ -110,16 +106,7 @@ export function providerApiBaseFor(env: ProviderEnv, country: string): string {
   return apiBaseOf(env, DEFAULT_PROVIDER, country);
 }
 
-export interface ReviewBot {
-  key: string;
-  accountNumId: number;
-}
-
-/** 這家供應商的審核機器人；沒有就是 null，提交走「登記即上榜」。 */
-export function reviewBotOf(env: Env, provider: ProviderId = DEFAULT_PROVIDER): ReviewBot | null {
-  if (!HAS_REVIEW_BOT[provider]) return null;
-  const key = (env.REVIEW_BOT_KEY ?? "").trim();
-  const accountNumId = Number(env.REVIEW_BOT_ACCOUNT_NUM_ID);
-  if (!key || !Number.isSafeInteger(accountNumId) || accountNumId <= 0) return null;
-  return { key, accountNumId };
+/** 這個部署要不要社群審核。沒開就是「登記即上榜」。 */
+export function reviewEnabled(env: { REVIEW_ENABLED?: string }): boolean {
+  return (env.REVIEW_ENABLED ?? "").trim().toLowerCase() === "true";
 }
