@@ -23,11 +23,11 @@ describe("能力表", () => {
     expect(can("editor")).toBe(true);
     expect(can("regex")).toBe(true);
     expect(can("worldbook")).toBe(true);
-    expect(can("comments")).toBe(true);
     for (const f of ["validation", "deleteRole", "tags", "previewPage", "outputContract", "welcomeExtras"] as const) expect(can(f), f).toBe(true);
     expect(can("chatTest")).toBe(true);
     expect(can("library")).toBe(true);
-    for (const f of ["review"] as const) expect(can(f), f).toBe(false);
+    // 審核是本站自己的事（送審當下存快照），不看供應商有沒有分享介面
+    expect(can("review")).toBe(true);
   });
 });
 

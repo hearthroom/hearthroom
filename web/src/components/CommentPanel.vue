@@ -4,22 +4,21 @@ import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import { createComment, deleteComment, fetchComments, fetchReplies, likeComment, type Comment } from "@/lib/api";
 import { hueFrom, relativeTime } from "@/lib/format";
-import { contentLang } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
 import { confirmDialog } from "@/lib/confirm";
 import { track } from "@/lib/track";
 import { loginPath } from "@/lib/login-return";
 
-const props = defineProps<{ roleId: string }>();
+/** 本站的卡 id：留言掛在本站的卡上，不看這張卡住在哪一家供應商。roleId 只給埋點用。 */
+const props = defineProps<{ cardId: string; roleId: string }>();
 const emit = defineEmits<{ count: [n: number] }>();
 
 const session = useSession();
 const route = useRoute();
 const router = useRouter();
-const { locale, lp } = useLocalePath();
+const { lp } = useLocalePath();
 const { t } = useI18n();
-const lang = computed(() => contentLang(locale.value));
 
 const comments = ref<Comment[]>([]);
 const total = ref(0);
@@ -46,10 +45,12 @@ async function load(reset = false) {
   loading.value = true;
   error.value = "";
   try {
-    const res = await fetchComments(props.roleId, page.value, lang.value, (await tokenOrNull()) ?? undefined);
-    comments.value = reset || page.value === 1 ? res.comments : [...comments.value, ...res.comments];
-    total.value = res.total;
-    emit("count", res.total);
+    const res = await fetchComments(props.cardId, page.value, (await tokenOrNull()) ?? undefined);
+    // 回應形狀不對（代理回了別的東西）就當成沒有留言，不讓整個面板崩掉
+    const got = Array.isArray(res.comments) ? res.comments : [];
+    comments.value = reset || page.value === 1 ? got : [...comments.value, ...got];
+    total.value = Number(res.total) || 0;
+    emit("count", total.value);
   } catch (err) {
     error.value = err instanceof Error ? err.message : t("state.loadFailed");
   } finally {
@@ -67,10 +68,7 @@ async function submit(root?: Comment, target?: Comment) {
   try {
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
-    const created = await createComment(
-      { roleId: props.roleId, content: text, parentId: target?.commentId, rootId: root?.commentId, replyToNickName: target?.accountNickName },
-      token, lang.value,
-    );
+    const created = await createComment(props.cardId, { content: text, parentId: target?.commentId, rootId: root?.commentId }, token);
     if (root) { replyDraft.value = ""; replyTo.value = null; delete expanded.value[root.commentId]; } else draft.value = "";
     await load(true);
     // 審核中的留言列表裡看不到——說一聲，不然像是沒送出去
@@ -115,7 +113,7 @@ async function remove(c: Comment) {
   const token = await session.accessToken();
   if (!token) return;
   try {
-    await deleteComment(c.commentId, props.roleId, token);
+    await deleteComment(c.commentId, token);
     track("comment_delete", { subject: props.roleId });
     await load(true);
   } catch (err) {
@@ -127,14 +125,15 @@ async function remove(c: Comment) {
 async function showAllReplies(root: Comment) {
   const cur = expanded.value[root.commentId];
   const page = cur ? cur.page + 1 : 1;
-  const res = await fetchReplies(props.roleId, root.commentId, page, lang.value, (await tokenOrNull()) ?? undefined);
-  const replies = cur ? [...cur.replies, ...res.replies] : res.replies;
-  expanded.value[root.commentId] = { replies, page, hasMore: replies.length < root.replyCount && res.replies.length > 0 };
+  const res = await fetchReplies(props.cardId, root.commentId, page, (await tokenOrNull()) ?? undefined);
+  const got = Array.isArray(res.replies) ? res.replies : [];
+  const replies = cur ? [...cur.replies, ...got] : got;
+  expanded.value[root.commentId] = { replies, page, hasMore: replies.length < root.replyCount && got.length > 0 };
 }
 const repliesOf = (root: Comment) => expanded.value[root.commentId]?.replies ?? root.replies ?? [];
 const moreReplies = (root: Comment) => (expanded.value[root.commentId] ? expanded.value[root.commentId]!.hasMore : root.replyCount > repliesOf(root).length);
 
-watch([() => props.roleId, lang, () => session.me?.accountNumId], () => load(true), { immediate: true });
+watch([() => props.cardId, () => session.me?.accountNumId], () => load(true), { immediate: true });
 </script>
 
 <template>
@@ -164,7 +163,6 @@ watch([() => props.roleId, lang, () => session.me?.accountNumId], () => load(tru
         <span v-else class="cmt__face mono" :style="{ '--h': hueFrom(c.accountNickName || '') }">{{ [...(c.accountNickName || '?')][0] }}</span>
         <div class="cmt__body">
           <div class="cmt__head">
-            <!-- 留言者是供應商那邊的使用者，不一定是本站成員；本站的作者頁網址是成員的公開 ID，這裡沒有，所以只放名字 -->
             <span class="cmt__name">{{ c.accountNickName }}</span>
             <span v-if="c.isCreator" class="cmt__badge">{{ $t("comment.creator") }}</span>
             <span v-if="c.isPinned" class="cmt__badge cmt__badge--pin">{{ $t("comment.pinned") }}</span>

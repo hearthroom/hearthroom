@@ -12,7 +12,6 @@ import { ApiError, fetchBoard, fetchCard, fetchPlayerAsset, fetchPreviewPage, fe
 import { renderWelcome } from "@/lib/welcome-render";
 import { recallCard } from "@/lib/card-memory";
 import CardPlatforms from "@/components/CardPlatforms.vue";
-import { can } from "@/lib/provider";
 import { useSession } from "@/lib/session";
 import { contentLang, pageTitle, zoneLabel } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
@@ -43,7 +42,8 @@ const welcomeHtml = ref("");
 /** 這張卡能不能用遊戲模式玩（有精修世界，或開場白照 zzroles 協定寫） */
 const session = useSession();
 // 這一家有沒有評論這件事：Harbor 那邊沒有這條 API，掛上去只會對著空氣轉圈。
-const showComments = ref(can("comments"));
+// 留言是本站自己的功能，不看供應商；只有作者在裝修頁關掉時才收起來
+const showComments = ref(true);
 const previewDoc = ref<unknown>(null);
 const previewSkin = ref("");
 const commentCount = ref<number | null>(null);
@@ -341,7 +341,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 
           <!-- 評論面板常駐（v-show），切回來不必重載；作者關掉評論就整個不掛 -->
           <div v-if="showComments" v-show="tab === 'comments'" id="panel-comments" class="panel role__comments" role="tabpanel" aria-labelledby="tab-comments">
-            <CommentPanel :role-id="card.roleId" @count="commentCount = $event" />
+            <CommentPanel :card-id="card.id" :role-id="card.roleId" @count="commentCount = $event" />
           </div>
 
           <section v-if="more.length" class="role__more">

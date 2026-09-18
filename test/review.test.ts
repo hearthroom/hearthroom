@@ -2,12 +2,12 @@ import { SELF, createExecutionContext, env, waitOnExecutionContext } from "cloud
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import worker from "../src/index";
 import {
-  bearer, grantCalls, identities, makeReviewer, resetDb, restoreUpstream, reviewUpstream, rolesOnMainSite, upstreamHashes,
+  bearer, identities, makeReviewer, resetDb, restoreUpstream, reviewOff, reviewOn, reviewUpstream, rolesOnMainSite, settingsReads,
 } from "./helpers";
 import { CLAIM_TTL_MS } from "../src/review";
 
-// 審核機器人配好時，提交＝授權＋排隊；審核人領、蓋章、上榜；內容變了重審。
-// 測試環境的 wrangler.toml 帶著 REVIEW_BOT_ACCOUNT_NUM_ID，金鑰由這裡塞進 env。
+// 審核開著時，提交＝本站用作者的 token 讀一次整份設定存成快照＋排隊；審核人領、蓋章、上榜；
+// 公開資料變了重審。審核讀取是本站自己的事：沒有供應商的分享介面，也沒有站方持有的金鑰。
 const AUTHOR = 10001;
 const REVIEWER_A = 20001;
 const REVIEWER_B = 20002;
@@ -15,16 +15,20 @@ const STRANGER = 30003;
 
 beforeEach(async () => {
   await resetDb();
-  upstreamHashes.clear();
   identities({ "author-token": AUTHOR, "rev-a": REVIEWER_A, "rev-b": REVIEWER_B, "stranger": STRANGER });
   rolesOnMainSite({ roleId: "role-1", authorNumId: AUTHOR }, { roleId: "role-2", authorNumId: AUTHOR });
   reviewUpstream();
-  (env as { REVIEW_BOT_KEY?: string }).REVIEW_BOT_KEY = "lsk_test";
+  reviewOn();
 });
 afterEach(() => {
   restoreUpstream();
-  delete (env as { REVIEW_BOT_KEY?: string }).REVIEW_BOT_KEY;
+  reviewOff();
 });
+
+/** 作者在供應商那邊改了訪客看得到的東西（這裡改名字）。 */
+const authorEditsPublicly = (roleId: string, name: string) =>
+  rolesOnMainSite(...["role-1", "role-2"].map((id) => ({ roleId: id, authorNumId: AUTHOR, ...(id === roleId ? { name } : {}) })));
+const snapshots = async () => (await env.DB.prepare("SELECT COUNT(*) AS n FROM review_snapshots").first<{ n: number }>())!.n;
 
 const submit = (roleId: string, token = "author-token") =>
   SELF.fetch("https://c.test/v1/cards", {
@@ -50,34 +54,44 @@ const cardStatus = async (roleId: string) =>
   (await env.DB.prepare("SELECT status, reviewed_hash FROM cards WHERE source_role_id = ?").bind(roleId).first<{ status: string; reviewed_hash: string }>())!;
 
 describe("提交", () => {
-  it("替作者把卡授權給機器人、記下內容版本、排進佇列；卡不上榜", async () => {
+  it("用作者的 token 讀整份設定存成快照、記下公開指紋、排進佇列；卡不上榜", async () => {
     const res = await submit("role-1");
     expect(res.status).toBe(201);
     expect(((await res.json()) as any).status).toBe("pending");
-    expect(grantCalls).toEqual([{ token: "author-token", roleId: "role-1", granteeAccountNumId: 330016 }]);
+    expect(settingsReads).toEqual([{ token: "author-token", roleId: "role-1", provider: "lunatalk" }]);
     expect(await board()).toHaveLength(0);
     const s = await env.DB.prepare("SELECT kind, status, content_hash FROM review_submissions").first<any>();
-    expect(s).toMatchObject({ kind: "first", status: "pending", content_hash: "sha256:role-1-v1" });
-    // 再送一次是冪等的：不開第二張單
+    expect(s).toMatchObject({ kind: "first", status: "pending" });
+    expect(s.content_hash).toMatch(/^pub1:[0-9a-f]{64}$/);
+    expect(await snapshots()).toBe(1);
+    // 再送一次是冪等的：不開第二張單，快照也還是一份
     expect((await submit("role-1")).status).toBe(200);
     const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM review_submissions").first<{ n: number }>();
     expect(n?.n).toBe(1);
+    expect(await snapshots()).toBe(1);
   });
 
-  it("授權失敗就整個提交失敗，不落庫", async () => {
+  it("讀不到設定就整個提交失敗，不落庫", async () => {
     const { upstream } = await import("../src/upstream");
-    upstream.grantShare = async () => { throw new Error("boom"); };
+    upstream.readForReview = async () => { throw new Error("boom"); };
     expect((await submit("role-1")).status).toBe(500);
     const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM cards").first<{ n: number }>();
     expect(n?.n).toBe(0);
   });
 
-  it("沒配機器人的部署退回登記即上榜", async () => {
-    delete (env as { REVIEW_BOT_KEY?: string }).REVIEW_BOT_KEY;
+  it("沒開審核的部署退回登記即上榜，也不去讀作者的設定", async () => {
+    reviewOff();
     expect((await submit("role-1")).status).toBe(201);
-    expect(grantCalls).toHaveLength(0);
+    expect(settingsReads).toHaveLength(0);
     expect(await board()).toHaveLength(1);
     expect((await cardStatus("role-1")).status).toBe("approved");
+  });
+
+  it("作者撤銷登記：排隊中的單與快照一起消失", async () => {
+    await submit("role-1");
+    expect(await snapshots()).toBe(1);
+    expect((await SELF.fetch("https://c.test/v1/cards/role-1", { method: "DELETE", headers: bearer("author-token") })).status).toBe(204);
+    expect(await snapshots()).toBe(0);
   });
 });
 
@@ -123,7 +137,9 @@ describe("審核佇列", () => {
     const second = (await (await act(id, "stamp", "rev-b", { verdict: "approve" })).json()) as any;
     expect(second).toMatchObject({ status: "approved", cardStatus: "approved", stamps: { approve: 2, required: 2 } });
     expect(await board()).toHaveLength(1);
-    expect(await cardStatus("role-1")).toEqual({ status: "approved", reviewed_hash: "sha256:role-1-v1" });
+    expect(await cardStatus("role-1")).toMatchObject({ status: "approved", reviewed_hash: expect.stringMatching(/^pub1:/) });
+    // 上榜＝定案：快照刪掉，本站不留私有設定
+    expect(await snapshots()).toBe(0);
     expect((await queue("rev-a")).body.items).toHaveLength(0);
   });
 
@@ -160,8 +176,8 @@ describe("審核佇列", () => {
     expect((await act(id, "stamp", "rev-a", { verdict: "approve" })).status).toBe(409);
   });
 
-  it("審核頁：機器人讀整份設定，帶審核單狀態，不帶作者", async () => {
-    reviewUpstream((roleId) => ({ roleId, authorNumId: AUTHOR, document: { roleName: "夜行偵探", jailbreak: "越獄詞" } }));
+  it("審核頁：看的是送審當下的快照，帶審核單狀態，不帶作者；定案後快照就刪", async () => {
+    reviewUpstream((roleId) => ({ roleId, authorNumId: AUTHOR, document: { roleName: "夜行偵探", customInstructions: "自訂指示" } }));
     await submit("role-1");
     await makeReviewer(REVIEWER_A);
     const id = (await queue("rev-a")).body.items[0].id as string;
@@ -169,20 +185,27 @@ describe("審核佇列", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("Cache-Control")).toContain("no-store");
     const body = (await res.json()) as any;
-    expect(body.detail.document.jailbreak).toBe("越獄詞");
+    expect(body.detail.document.customInstructions).toBe("自訂指示");
     expect(body.submission).toMatchObject({ kind: "first", required: 2, claimedByMe: false });
     expect(JSON.stringify(body)).not.toContain(String(AUTHOR));
     expect((await SELF.fetch(`https://c.test/v1/review/${id}/detail`, { headers: bearer("stranger") })).status).toBe(403);
+    // 審核頁不再回頭問供應商：快照是唯一來源
+    expect(settingsReads).toHaveLength(1);
+    // 駁回即定案：快照刪掉
+    await act(id, "claim", "rev-a");
+    expect((await act(id, "stamp", "rev-a", { verdict: "reject", note: "不行" })).status).toBe(200);
+    expect(await snapshots()).toBe(0);
   });
 
-  it("作者收回授權：審核頁回 409，卡離榜、單作廢", async () => {
+  it("排隊中再送一次：快照換成最新送來的那一份", async () => {
+    reviewUpstream(() => ({ document: { roleName: "第一版" } }));
+    await submit("role-1");
+    reviewUpstream(() => ({ document: { roleName: "第二版" } }));
     await submit("role-1");
     await makeReviewer(REVIEWER_A);
     const id = (await queue("rev-a")).body.items[0].id as string;
-    upstreamHashes.set("role-1", "revoked");
-    expect((await SELF.fetch(`https://c.test/v1/review/${id}/detail`, { headers: bearer("rev-a") })).status).toBe(409);
-    expect((await cardStatus("role-1")).status).toBe("unshared");
-    expect((await queue("rev-a")).body.items).toHaveLength(0);
+    const body = (await (await SELF.fetch(`https://c.test/v1/review/${id}/detail`, { headers: bearer("rev-a") })).json()) as any;
+    expect(body.detail.document.roleName).toBe("第二版");
   });
 });
 
@@ -196,7 +219,7 @@ describe("內容版本", () => {
       await act(id, "stamp", t, { verdict: "approve" });
     }
   }
-  // 直接叫 scheduled：同步是排程跑的，走 fetch 進不去。用真的 env（含測試塞進去的機器人金鑰）。
+  // 直接叫 scheduled：同步是排程跑的，走 fetch 進不去。
   const sync = async () => {
     const ctx = createExecutionContext();
     await worker.scheduled({ cron: "17 * * * *", scheduledTime: Date.now(), noRetry() {} } as ScheduledController, env, ctx);
@@ -224,7 +247,7 @@ describe("內容版本", () => {
     await approve("role-1");
     const listedAt = Date.now() - 3 * DAY;
     await env.DB.prepare("UPDATE cards SET registered_at = ? WHERE source_role_id = ?").bind(listedAt, "role-1").run();
-    upstreamHashes.set("role-1", "sha256:role-1-v2");
+    authorEditsPublicly("role-1", "改名了");
     await sync();
     const id = (await queue("rev-a")).body.items[0].id as string;
     await act(id, "claim", "rev-a");
@@ -233,23 +256,35 @@ describe("內容版本", () => {
     expect(await dayBoard()).toEqual([]);
   });
 
-  it("過審後作者改了卡：同步發現雜湊變了 → 離榜、開重審單；重審一章即回榜", async () => {
+  it("過審後作者改了訪客看得到的東西：同步發現公開指紋變了 → 離榜、開重審單；重審一章即回榜", async () => {
     await submit("role-1");
     await approve("role-1");
     expect(await board()).toHaveLength(1);
+    const approvedHash = (await cardStatus("role-1")).reviewed_hash;
+    expect(approvedHash).toMatch(/^pub1:/);
+    // 沒改：同步跑幾次都不開單
+    await sync();
+    expect((await cardStatus("role-1")).status).toBe("approved");
 
-    upstreamHashes.set("role-1", "sha256:role-1-v2");
+    authorEditsPublicly("role-1", "改名了");
     await sync();
     expect((await cardStatus("role-1")).status).toBe("needs_review");
     expect(await board()).toHaveLength(0);
     const q = await queue("rev-a");
     expect(q.body.items[0]).toMatchObject({ kind: "re", stamps: { approve: 0, required: 1 } });
 
+    // 同步開的單沒有快照（那時沒有作者的 token）：審核人看的是變動後的公開資料
     const id = q.body.items[0].id as string;
+    const detail = (await (await SELF.fetch(`https://c.test/v1/review/${id}/detail`, { headers: bearer("rev-a") })).json()) as any;
+    expect(detail.detail).toMatchObject({ partial: true, document: { roleName: "改名了" } });
+    expect(JSON.stringify(detail)).not.toContain(String(AUTHOR));
+
     await act(id, "claim", "rev-a");
     const res = (await (await act(id, "stamp", "rev-a", { verdict: "approve" })).json()) as any;
     expect(res.cardStatus).toBe("approved");
-    expect(await cardStatus("role-1")).toEqual({ status: "approved", reviewed_hash: "sha256:role-1-v2" });
+    const after = await cardStatus("role-1");
+    expect(after.status).toBe("approved");
+    expect(after.reviewed_hash).not.toBe(approvedHash);
     expect(await board()).toHaveLength(1);
     // 同步再跑一次：版本一致，不再開單
     await sync();
@@ -257,45 +292,25 @@ describe("內容版本", () => {
     expect(n?.n).toBe(0);
   });
 
-  it("過審前登記的舊卡：留在榜上，同步不去問機器人（它沒被授權，讀不到不等於作者收回）", async () => {
-    delete (env as { REVIEW_BOT_KEY?: string }).REVIEW_BOT_KEY;
+  it("過審前登記的舊卡：留在榜上，同步不比對", async () => {
+    reviewOff();
     await submit("role-2");
-    (env as { REVIEW_BOT_KEY?: string }).REVIEW_BOT_KEY = "lsk_test";
+    reviewOn();
     expect(await cardStatus("role-2")).toEqual({ status: "approved", reviewed_hash: "" });
-    // 機器人真的讀不到這張卡
-    upstreamHashes.set("role-2", "revoked");
+    authorEditsPublicly("role-2", "改名了");
     await sync();
     expect(await cardStatus("role-2")).toEqual({ status: "approved", reviewed_hash: "" });
     expect(await board()).toHaveLength(1);
   });
 
-  it("機器人的金鑰壞了：同步不比對、審核頁回 503，一張卡都不下架", async () => {
+  it("舊版本綁的是供應商給的內容雜湊：同步改綁成公開指紋，不重審、不下架", async () => {
     await submit("role-1");
     await approve("role-1");
-    const { upstream } = await import("../src/upstream");
-    const users = upstream.fetchMe;
-    upstream.fetchMe = async (env, token) => {
-      if (token === "lsk_test") throw new (await import("../src/types")).HttpError(401, "upstream rejected the token");
-      return users(env, token);
-    };
-    upstreamHashes.set("role-1", "revoked");
+    await env.DB.prepare("UPDATE cards SET reviewed_hash = 'sha256:legacy-upstream-hash' WHERE source_role_id = 'role-1'").run();
     await sync();
-    expect((await cardStatus("role-1")).status).toBe("approved");
+    const row = await cardStatus("role-1");
+    expect(row.status).toBe("approved");
+    expect(row.reviewed_hash).toMatch(/^pub1:/);
     expect(await board()).toHaveLength(1);
-
-    await submit("role-2");
-    upstreamHashes.set("role-2", "revoked");
-    const id = (await queue("rev-a")).body.items[0].id as string;
-    expect((await SELF.fetch(`https://c.test/v1/review/${id}/detail`, { headers: bearer("rev-a") })).status).toBe(503);
-    expect((await cardStatus("role-2")).status).toBe("pending");
-  });
-
-  it("作者在主站收回授權：同步把卡標成 unshared、離榜", async () => {
-    await submit("role-1");
-    await approve("role-1");
-    upstreamHashes.set("role-1", "revoked");
-    await sync();
-    expect((await cardStatus("role-1")).status).toBe("unshared");
-    expect(await board()).toHaveLength(0);
   });
 });

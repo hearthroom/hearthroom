@@ -29,7 +29,7 @@ import { ALIAS_HOSTS, HOST, canonicalUrl, isPlayHost } from "./site";
 import { loadMine, type MineFilter } from "./mine";
 import { tagNamesFor } from "../shared/tag-catalog";
 import { providerOf, isReviewer, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
-import { configuredProviders, hasChat, parseProvider, requireConfigured, DEFAULT_PROVIDER, PROVIDER_NAMES, type ProviderId, type ReviewBot, reviewBotOf } from "./providers";
+import { configuredProviders, hasChat, parseProvider, requireConfigured, DEFAULT_PROVIDER, PROVIDER_NAMES, type ProviderId, reviewEnabled } from "./providers";
 import { providerApiBaseFor } from "./providers";
 import { WEEKLY_LIMIT, recordRegistration, registeredThisWeek } from "./quota";
 import {
@@ -37,10 +37,12 @@ import {
   release as releaseSubmission, stamp as stampSubmission,
 } from "./review";
 import { setCardNsfw, setCardStatus } from "./cards";
+import { PUBLIC_HASH_PREFIX, loadSnapshot, publicHash, saveSnapshotStatement, type ReviewSettings } from "./review-snapshot";
 import { type Env, HttpError } from "./types";
 import { gameRoutes } from "./game";
 import { serveSandbox } from "./sandbox";
 import { listSaves, putSave, removeSave } from "./saves";
+import { commentCard, countTop, deleteComment, listReplies, listTop, postComment, setLike, type Viewer } from "./comments";
 import { IMAGE_HOSTS, SVG_WRAP_LIMIT, TOUCH_ICON_SIZE, allowedImageUrl, cardManifest, iconSize, signShortcutKey, svgWrap, verifyShortcutKey } from "./shortcut";
 import { upstream, ZONES, type Zone, CREATION_METHOD } from "./upstream";
 
@@ -705,6 +707,74 @@ app.delete("/v1/me/cards/:roleId/saves/:key", async (c) => {
 });
 
 /**
+ * 留言：本站自己的資料（src/comments.ts）。供應商不參與——哪一家登入的都是本站成員，
+ * 同一張卡底下是同一串留言。讀不用登入；寫、讚、刪要登入。
+ *
+ * 成人內容的卡：留言區跟卡片頁同一道門，沒過門的人連留言也讀不到。
+ */
+async function commentViewer(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>): Promise<Viewer> {
+  if (!c.req.header("Authorization")) return { memberId: null, moderator: false };
+  try {
+    const member = await requireMember(c);
+    return { memberId: member.id, moderator: await isReviewer(c.env.DB, member.id) };
+  } catch (err) {
+    // 讀留言不該因為 token 過期就整個失敗：當成訪客
+    if (err instanceof HttpError && err.status === 401) return { memberId: null, moderator: false };
+    throw err;
+  }
+}
+async function commentCardFor(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>) {
+  const card = await commentCard(c.env.DB, c.req.param("id") ?? "");
+  if (card.nsfw && !(await viewerAllowsNsfw(c))) throw new HttpError(403, "adult_content");
+  return card;
+}
+const pageOf = (raw: string | undefined) => Math.min(500, Math.max(1, Math.floor(Number(raw)) || 1));
+
+app.get("/v1/cards/:id/comments", async (c) => {
+  const card = await commentCardFor(c);
+  const res = await listTop(c.env.DB, card, await commentViewer(c), pageOf(c.req.query("page")));
+  return c.json(res, 200, { "Cache-Control": "private, no-store" });
+});
+
+app.get("/v1/cards/:id/comments/count", async (c) => {
+  const card = await commentCardFor(c);
+  return c.json({ count: await countTop(c.env.DB, card.id) }, 200, { "Cache-Control": "private, no-store" });
+});
+
+app.get("/v1/cards/:id/comments/:rootId/replies", async (c) => {
+  const card = await commentCardFor(c);
+  const res = await listReplies(c.env.DB, card, c.req.param("rootId"), await commentViewer(c), pageOf(c.req.query("page")));
+  return c.json(res, 200, { "Cache-Control": "private, no-store" });
+});
+
+app.post("/v1/cards/:id/comments", async (c) => {
+  const member = await requireMember(c);
+  const card = await commentCardFor(c);
+  const body = (await c.req.json().catch(() => ({}))) as { content?: unknown; parentId?: unknown; rootId?: unknown };
+  const created = await postComment(c.env.DB, { card, memberId: member.id, content: body.content, parentId: body.parentId, rootId: body.rootId, now: Date.now() });
+  note(c, { event: "comment_create", subject: card.id, detail: body.rootId || body.parentId ? "reply" : "root" });
+  return c.json(created, 201);
+});
+
+app.delete("/v1/comments/:id", async (c) => {
+  const member = await requireMember(c);
+  await deleteComment(c.env.DB, c.req.param("id"), { memberId: member.id, moderator: await isReviewer(c.env.DB, member.id) }, Date.now());
+  return c.body(null, 204);
+});
+
+app.put("/v1/comments/:id/like", async (c) => {
+  const member = await requireMember(c);
+  await setLike(c.env.DB, c.req.param("id"), member.id, true, Date.now());
+  return c.body(null, 204);
+});
+
+app.delete("/v1/comments/:id/like", async (c) => {
+  const member = await requireMember(c);
+  await setLike(c.env.DB, c.req.param("id"), member.id, false, Date.now());
+  return c.body(null, 204);
+});
+
+/**
  * 登記一張卡。
  *
  * 作者只送 roleId，內容一概不收——先確認這張卡真是他的，再由公開資料填滿所有欄位。
@@ -752,26 +822,26 @@ app.post("/v1/cards", async (c) => {
     }
   }
 
-  // 審核：作者提交＝把這張卡的「可閱讀詳情」授權給本站的審核機器人（用作者自己的 token，
-  // 這是他的意思表示；前端在按下之前已經明說機器人能讀什麼），再記下提交當下的內容版本。
-  // 授權失敗就整個提交失敗——沒有授權，審核人什麼都看不到，排進佇列也只是卡住。
-  // 沒配機器人的部署退回「登記即上榜」。
-  // 沒有審核機器人的供應商（Harbor 還沒有分享介面）退回「登記即上榜」。
-  const bot = reviewBotOf(c.env, provider);
+  // 審核：作者提交＝同意本站用他自己的 token 讀一次整份設定，存成這張單的快照給審核人看
+  // （前端在按下之前已經明說）。讀不到就整個提交失敗——審核人什麼都看不到，排進佇列也只是卡住。
+  // 內容版本記的是公開指紋：排程同步匿名就能比對，過審後訪客看得到的東西變了就重審。
+  // 沒開審核的部署退回「登記即上榜」。
+  const reviewing = reviewEnabled(c.env);
   let contentHash = "";
-  if (bot) {
-    await upstream.grantShare(c.env, bearer, roleId, bot.accountNumId, provider);
-    contentHash = (await upstream.fetchContentHash(c.env, bot.key, roleId, provider)).content;
+  let settings: ReviewSettings | null = null;
+  if (reviewing) {
+    settings = await upstream.readForReview(c.env, bearer, roleId, provider);
+    contentHash = await publicHash(role);
   }
 
-  const { id, created } = await upsertCard(c.env.DB, role, now, { status: bot ? "pending" : "approved", provider, nsfw });
+  const { id, created } = await upsertCard(c.env.DB, role, now, { status: reviewing ? "pending" : "approved", provider, nsfw });
   if (created) await recordRegistration(c.env.DB, me.accountNumId, roleId, now, provider);
   // 宣告跟著最新一次提交走；在榜的卡改了宣告視同內容變了（下面重審）
   const declarationChanged = !!existing && (existing.nsfw === 1) !== nsfw;
   if (existing && declarationChanged) await setCardNsfw(c.env.DB, id, nsfw);
 
   let detail = created ? "new" : "again";
-  if (bot) {
+  if (reviewing && settings) {
     // 在榜的卡再送一次只是刷新；被駁回、離榜重審、被收回授權的卡再送＝重新排隊。
     // 在榜但改了分級宣告：跟改內容一樣要重審，不能過審後把「成人」改成「一般」就直接生效。
     // 過過審的走重審（一章），從沒過過的走初審（兩章）。
@@ -779,11 +849,17 @@ app.post("/v1/cards", async (c) => {
     if (created || current === "rejected" || current === "needs_review" || current === "unshared" || (current === "approved" && declarationChanged)) {
       const kind = existing?.reviewed_hash ? "re" : "first";
       if (!created) await setCardStatus(c.env.DB, id, kind === "re" ? "needs_review" : "pending");
-      await createSubmission(c.env.DB, { cardId: id, provider: DEFAULT_PROVIDER, roleId, kind, contentHash, now, nsfw });
+      const sub = await createSubmission(c.env.DB, { cardId: id, provider, roleId, kind, contentHash, now, nsfw });
+      await saveSnapshotStatement(c.env.DB, sub.id, settings, now).run();
       detail = created ? "submitted" : "resubmitted";
     } else if (current === "pending") {
       // 還在排隊：單子照舊；改了宣告的話 createSubmission 會把單上的宣告更新成最新的
-      await createSubmission(c.env.DB, { cardId: id, provider: DEFAULT_PROVIDER, roleId, kind: existing?.reviewed_hash ? "re" : "first", contentHash, now, nsfw });
+      const sub = await createSubmission(c.env.DB, { cardId: id, provider, roleId, kind: existing?.reviewed_hash ? "re" : "first", contentHash, now, nsfw });
+      // 還在排隊：快照換成最新送來的這一份，審核人看到的是作者現在的設定
+      await c.env.DB.batch([
+        saveSnapshotStatement(c.env.DB, sub.id, settings, now),
+        c.env.DB.prepare("UPDATE review_submissions SET content_hash = ? WHERE id = ? AND status = 'pending'").bind(contentHash, sub.id),
+      ]);
       detail = "queued";
     }
   }
@@ -798,8 +874,8 @@ app.post("/v1/cards", async (c) => {
 // ---- 社群審核 ----------------------------------------------------------------
 //
 // 共享佇列、領取、蓋章。誰能審由 reviewers 表決定（初期站方手動登記，見 scripts/grant-reviewer.mjs）。
-// 佇列與詳情都不帶作者身分（盲審）。詳情是本站的審核機器人拿自己的金鑰去主站讀作者授權過的
-// 那份設定，轉給審核人；不落庫、不快取。
+// 佇列與詳情都不帶作者身分（盲審）。詳情是作者送審當下本站替這張單存的快照，定案就刪；
+// 同步開的重審單沒有快照（那時手上沒有作者的 token），審核人看的是變動後的公開資料。
 
 app.get("/v1/review/me", async (c) => {
   const member = await requireMember(c);
@@ -852,29 +928,25 @@ app.post("/v1/review/:id/stamp", async (c) => {
 app.get("/v1/review/:id/detail", async (c) => {
   const member = await requireReviewer(c);
   const s = await getSubmission(c.env.DB, c.req.param("id"));
-  const bot = reviewBotOf(c.env);
-  if (!bot) throw new HttpError(503, "review bot is not configured");
-  let detail: Record<string, unknown>;
-  try {
-    detail = await upstream.fetchSharedDetail(c.env, bot.key, s.source_role_id);
-  } catch (err) {
-    // 作者收回了授權：卡片離榜、單子作廢，審核人看到的是「作者已收回」而不是一個 401。
-    // 但先確認是這張卡讀不到、不是機器人的金鑰壞了——金鑰壞了每張卡都 401，那不能拿來下架。
-    if (err instanceof HttpError && err.status === 401) {
-      try {
-        await upstream.fetchMe(c.env, bot.key);
-      } catch {
-        throw new HttpError(503, "review bot key rejected by upstream");
-      }
-      await c.env.DB.batch([
-        c.env.DB.prepare("UPDATE cards SET status = 'unshared' WHERE id = ?").bind(s.card_id),
-        c.env.DB.prepare("UPDATE review_submissions SET status = 'rejected', decided_at = ?, note = 'unshared' WHERE id = ? AND status = 'pending'").bind(Date.now(), s.id),
-      ]);
-      throw new HttpError(409, "the author has revoked access to this card");
-    }
-    throw err;
+  let detail = await loadSnapshot(c.env.DB, s.id);
+  if (!detail) {
+    // 沒有快照：同步發現公開資料變了而開的重審單。變的就是公開資料，審核人看現在的公開版本。
+    const role = await upstream.fetchRole(c.env, s.source_role_id, s.provider as ProviderId);
+    detail = {
+      partial: true,
+      document: {
+        roleName: role.names.zh || role.names.en || role.names.ja || role.names.ko, roleDesc: role.summaries.zh || role.summaries.en || role.summaries.ja || role.summaries.ko,
+        roleAvatar: role.avatarUrl ?? "", roleBackground: role.backgroundUrl ?? "", roleTag: JSON.stringify(role.tags),
+        userName: "", roleDetailDesc: "", roleType: "", roleSex: "", roleSpeech: "", language: "", talkExample: "", roleOutputContract: "",
+      },
+      greetings: { welcome: role.welcome, alternates: [], prologue: [] },
+      worldbook: null, worldbookAvailable: false,
+      authorAsset: { rules: [], mountTrigger: "", mountLayer: "", pageMode: "classic", status: "", version: 0 },
+      hashes: { card: "", welcome: "", worldbook: "", authorAsset: "", content: s.content_hash },
+      costProfile: { personaChars: 0, worldbookEntryCount: 0, worldbookEnabledCount: 0, worldbookConstantCount: 0, worldbookChars: 0, worldbookConstantChars: 0, estimatedConstantTokens: 0, estimatedMaxTokens: 0 },
+    };
   }
-  // 盲審：作者的公開 ID 不進審核頁。上游客戶端已經拿掉一次，這裡再擋一次——兩層之間任何一層換了實作都不會漏。
+  // 盲審：作者的公開 ID 不進審核頁。快照本來就不含，這裡再擋一次——組快照的那一層換了實作也不會漏。
   delete detail.authorNumId;
   const stamps = await c.env.DB
     .prepare("SELECT verdict, note, created_at FROM review_stamps WHERE submission_id = ? ORDER BY created_at ASC")
@@ -982,27 +1054,10 @@ const SUBREQUEST_BUDGET = 48;
 
 export async function syncBatch(env: Env): Promise<{ ok: number; failed: number; delisted: number; ms: number }> {
   const started = Date.now();
-  // 每家各有自己的審核機器人（或沒有）。先確認金鑰還活著（每家一個子請求）：金鑰被撤、換錯、
-  // 帳號被停用時，上游對每張卡都回 401，不擋的話整輪會把所有綁了版本的卡當成「作者收回授權」
-  // 全部下架——那家這一輪就不比對，只記一行。
-  const bots = new Map<ProviderId, ReviewBot | null>();
   let spent = 0; // 這一輪已經用掉的子請求
-  for (const p of configuredProviders(env)) {
-    const bot = reviewBotOf(env, p);
-    if (!bot) continue;
-    spent++;
-    try {
-      await upstream.fetchMe(env, bot.key, p);
-      bots.set(p, bot);
-    } catch (err) {
-      console.error("review bot key rejected by upstream; skipping content checks this run", { provider: p, error: String(err) });
-    }
-  }
-  // 有審核機器人時每張卡要打兩次上游（公開資料＋內容雜湊），一輪能處理的卡就減半，
-  // 否則後半批全部撞到子請求上限、整輪靜默失敗。
-  const perCard = bots.size ? 2 : 1;
-  const budget = SUBREQUEST_BUDGET - spent;
-  const limit = Math.max(1, Math.min(Number(env.SYNC_BATCH_SIZE) || 50, Math.floor(budget / perCard)));
+  // 比對內容版本用的是同一次匿名讀取算出來的公開指紋，不多花子請求。
+  const reviewing = reviewEnabled(env);
+  const limit = Math.max(1, Math.min(Number(env.SYNC_BATCH_SIZE) || 50, SUBREQUEST_BUDGET));
   const batch = await dueForSync(env.DB, limit);
   // 已發布到另一家的副本：熱度加總（owner 2026-09-17）。一次查完整批，D1 也算子請求。
   const copies = await publishedCopiesFor(env.DB, batch);
@@ -1018,9 +1073,9 @@ export async function syncBatch(env: Env): Promise<{ ok: number; failed: number;
   await pooled(batch, concurrency, async (row) => {
     try {
       const provider = row.provider as ProviderId;
-      const bot = bots.get(provider) ?? null;
       spent++;
       const role = { ...(await upstream.fetchRole(env, row.source_role_id, provider)) };
+      const fingerprint = await publicHash(role);
       // 榜單只收在本站建的卡。登記那條路早就這樣擋，但規則之前登記進來的主站老卡還在榜上
       // （owner 2026-09-07：189 張要下架）——同步時看到來源不對就撤掉，之後也不會再有漏網的。
       // 讀得到但來源不對才撤；讀不到走下面的 catch，保留。
@@ -1046,21 +1101,15 @@ export async function syncBatch(env: Env): Promise<{ ok: number; failed: number;
       // 作者一定要有成員列（公開 ID 從那裡來）。0005 之前登記、之後沒再登入過的作者會缺——
       // 先記下來，迴圈外一次查、缺的併進同一批寫入（D1 呼叫也算子請求，迴圈裡逐張查會吃掉上游的額度）。
       authorsSeen.set(`${row.provider}:${role.authorNumId}`, { provider: row.provider as ProviderId, externalId: role.authorNumId });
-      // 在榜的卡順手比對內容版本：作者過審後改了卡就要重審（owner 2026-09-07）。
-      // 過審前登記的舊卡 reviewed_hash 是空的，而且作者從沒授權過機器人——機器人讀不到它，
-      // 讀不到不是「作者收回了」。這些卡留在榜上不比對，等作者下次提交時才授權並綁上版本。
-      if (bot && row.status === "approved" && row.reviewed_hash) {
-        try {
-          spent++;
-          const hashes = await upstream.fetchContentHash(env, bot.key, row.source_role_id, provider);
-          if (hashes.content !== row.reviewed_hash) {
-            writes.push(...needsReviewStatements(env.DB, { cardId: row.id, provider: row.provider, roleId: row.source_role_id, contentHash: hashes.content, now }));
-          }
-        } catch (err) {
-          // 作者收回了授權（上游 401/403）：離榜。其餘錯誤當暫時性的，下一輪再比。
-          if (err instanceof HttpError && err.status === 401) {
-            writes.push(env.DB.prepare("UPDATE cards SET status = 'unshared' WHERE id = ?").bind(row.id));
-          }
+      // 在榜的卡順手比對內容版本：作者過審後改了訪客看得到的東西就要重審（owner 2026-09-07）。
+      // 指紋要在加總副本熱度之前算——它只看這張卡自己的公開欄位。
+      // 舊版本綁的是供應商給的內容雜湊（沒有前綴）：那個比不了，這一輪改綁成公開指紋，不重審。
+      // 過審前登記的舊卡 reviewed_hash 是空的：留在榜上不比對，等作者下次提交才綁上版本。
+      if (reviewing && row.status === "approved" && row.reviewed_hash) {
+        if (!row.reviewed_hash.startsWith(PUBLIC_HASH_PREFIX)) {
+          writes.push(env.DB.prepare("UPDATE cards SET reviewed_hash = ? WHERE id = ?").bind(fingerprint, row.id));
+        } else if (fingerprint !== row.reviewed_hash) {
+          writes.push(...needsReviewStatements(env.DB, { cardId: row.id, provider: row.provider, roleId: row.source_role_id, contentHash: fingerprint, now }));
         }
       }
       ok++;

@@ -5,7 +5,7 @@ import { SELF, createExecutionContext, env, waitOnExecutionContext } from "cloud
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker, { boardCache, iconCache } from "../src/index";
 import { cardManifest, iconSize, localePrefix, svgWrap } from "../src/shortcut";
-import { bearer, identities, resetDb, restoreUpstream, rolesOnMainSite, upstreamHashes } from "./helpers";
+import { bearer, identities, resetDb, restoreUpstream, rolesOnMainSite } from "./helpers";
 
 const AUTHOR = 10001;
 const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -14,7 +14,6 @@ const JPG = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0]);
 let gen = 0;
 beforeEach(async () => {
   await resetDb();
-  upstreamHashes.clear();
   boardCache.namespace = `board-${Math.random()}`;
   iconCache.namespace = `card-icon-test-${++gen}`;
   identities({ "author-token": AUTHOR });

@@ -38,9 +38,10 @@ const specHas = (p: string) => specPaths.has(p) || specShapes.has(shape(p));
 
 /** 來源檔與「至少要撈到幾條」：撈到太少代表抽取壞了（例如常數前綴沒展開），不是程式碼真的只打那幾條。 */
 const SOURCES: Record<string, { file: string; atLeast: number }> = {
-  "站台前端 api.ts": { file: at("../src/lib/api.ts"), atLeast: 30 },
+  // 留言與審核讀取搬回本站之後，打上游的路徑變少是預期的（owner 2026-09-18）
+  "站台前端 api.ts": { file: at("../src/lib/api.ts"), atLeast: 25 },
   "站台前端 oauth.ts": { file: at("../src/lib/oauth.ts"), atLeast: 3 },
-  "站台伺服器 upstream.ts": { file: at("../../src/upstream.ts"), atLeast: 5 },
+  "站台伺服器 upstream.ts": { file: at("../../src/upstream.ts"), atLeast: 3 },
   "舞台端點表": { file: at("../../stage/src/config/request-url.js"), atLeast: 40 },
 };
 

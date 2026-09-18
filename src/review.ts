@@ -1,3 +1,4 @@
+import { dropSnapshotStatement } from "./review-snapshot";
 import { HttpError, type Localized, pickLocale } from "./types";
 
 /**
@@ -197,10 +198,13 @@ export async function stamp(
     writes.push(
       db.prepare("UPDATE review_submissions SET status = 'rejected', decided_at = ?, note = ? WHERE id = ?").bind(input.now, note, row.id),
       db.prepare("UPDATE cards SET status = 'rejected' WHERE id = ?").bind(row.card_id),
+      dropSnapshotStatement(db, row.id),
     );
   } else if (approvals >= required) {
     cardStatus = "approved";
     writes.push(db.prepare("UPDATE review_submissions SET status = 'approved', decided_at = ? WHERE id = ?").bind(input.now, row.id));
+    // 定案就刪快照：本站不留任何卡片的私有設定
+    writes.push(dropSnapshotStatement(db, row.id));
     if (row.kind === "first") {
       // 上榜時間＝卡片第一次過審、真的出現在榜上的那一刻（owner 2026-09-07：時間是卡片上榜的那一刻）。
       // 以前只在登記時寫一次：昨天送審、今天才過審的卡，上榜時間停在昨天，日榜的 24 小時窗口

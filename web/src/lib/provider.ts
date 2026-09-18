@@ -42,14 +42,14 @@ const SCOPES: Record<ProviderId, string> = {
  */
 const FEATURES: Record<ProviderId, Record<string, boolean>> = {
   lunatalk: {
-    editor: true, comments: true, worldbook: true, regex: true, library: true, persona: true,
+    editor: true, worldbook: true, regex: true, library: true, persona: true,
     validation: true, deleteRole: true, tags: true, welcomeExtras: true,
     outputContract: true, chatTest: true, previewPage: true, review: true, membership: true,
   },
   harbor: {
-    editor: true, comments: true, worldbook: true, regex: true, library: true, persona: true,
+    editor: true, worldbook: true, regex: true, library: true, persona: true,
     validation: true, deleteRole: true, tags: true, welcomeExtras: true,
-    outputContract: true, chatTest: true, previewPage: true, review: false, membership: false,
+    outputContract: true, chatTest: true, previewPage: true, review: true, membership: false,
   },
 };
 

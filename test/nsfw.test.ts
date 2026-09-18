@@ -10,7 +10,7 @@ import { SELF, createExecutionContext, env, waitOnExecutionContext } from "cloud
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import worker from "../src/index";
 import { boardCache } from "../src/index";
-import { bearer, envWithAssets, identities, makeMember, makeReviewer, resetDb, restoreUpstream, reviewUpstream, rolesOnMainSite, testHandle, upstreamHashes } from "./helpers";
+import { bearer, envWithAssets, identities, makeMember, makeReviewer, resetDb, restoreUpstream, reviewOff, reviewOn, reviewUpstream, rolesOnMainSite, testHandle } from "./helpers";
 
 const AUTHOR = 10001;
 const VIEWER = 40004;
@@ -18,7 +18,6 @@ const REVIEWER = 20001;
 
 beforeEach(async () => {
   await resetDb();
-  upstreamHashes.clear();
   boardCache.namespace = `board-${Math.random()}`;
   identities({ "author-token": AUTHOR, "viewer-token": VIEWER, "rev-token": REVIEWER });
   rolesOnMainSite(
@@ -164,9 +163,9 @@ describe("成人內容開關與年齡驗證", () => {
 describe("審核", () => {
   beforeEach(() => {
     reviewUpstream();
-    (env as { REVIEW_BOT_KEY?: string }).REVIEW_BOT_KEY = "lsk_test";
+    reviewOn();
   });
-  afterEach(() => { delete (env as { REVIEW_BOT_KEY?: string }).REVIEW_BOT_KEY; });
+  afterEach(() => { reviewOff(); });
 
   it("佇列與詳情帶著作者的宣告；沒驗年齡的審核人領不了成人內容的單", async () => {
     await makeReviewer(REVIEWER);

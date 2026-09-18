@@ -12,7 +12,7 @@ let cacheGeneration = 0;
  * 邊緣快取也一樣——不換命名空間的話，後面的測試會讀到前一個測試留下的結果。
  */
 export async function resetDb(): Promise<void> {
-  for (const table of ["work_copies", "works", "member_connections", "card_saves", "game_worlds", "cards", "card_numbers", "card_registrations", "review_stamps", "review_submissions", "reviewers", "member_identities", "members"]) {
+  for (const table of ["work_copies", "works", "member_connections", "card_saves", "comment_likes", "comments", "game_worlds", "cards", "card_numbers", "card_registrations", "review_stamps", "review_snapshots", "review_submissions", "reviewers", "member_identities", "members"]) {
     await env.DB.prepare(`DELETE FROM ${table}`).run();
   }
   // 卡號是 AUTOINCREMENT（刪過的號不再發），測試之間把序號推回起點，每個測試都從 100001 數起
@@ -28,33 +28,25 @@ export function restoreUpstream(): void {
   Object.assign(upstream, real);
 }
 
-// ---- 審核契約的假上游 ------------------------------------------------------------
+// ---- 審核的假上游 ----------------------------------------------------------------
 
-/** 記錄每次授權呼叫：測試才驗得出提交真的替作者授權給了機器人。 */
-export const grantCalls: { token: string; roleId: string; granteeAccountNumId: number }[] = [];
+/** 記錄每次「用作者的 token 讀整份設定」：測試才驗得出提交真的讀了、而且是拿作者的 token 讀的。 */
+export const settingsReads: { token: string; roleId: string; provider: string }[] = [];
 
-/** 每張卡目前的內容雜湊（測試改這個模擬作者改了卡）；設成 "revoked" 模擬作者收回授權。 */
-export const upstreamHashes = new Map<string, string>();
+/** 打開社群審核（測試環境預設是關的：大多數測試關心的是登記即上榜那條路）。 */
+export function reviewOn(): void { (env as { REVIEW_ENABLED?: string }).REVIEW_ENABLED = "true"; }
+export function reviewOff(): void { (env as { REVIEW_ENABLED?: string }).REVIEW_ENABLED = "false"; }
 
-/** 測試裡機器人的金鑰；上游的「你是誰」要認得它，同步與審核頁才會把 401 當成「這張卡讀不到」而不是「金鑰壞了」。 */
-export const BOT_KEY = "lsk_test";
-export const BOT_ACCOUNT_NUM_ID = 330016;
+const blankSettings = (roleId: string) => ({
+  document: { roleName: roleId },
+  hashes: { card: "c", welcome: "w", worldbook: "", authorAsset: "a", content: `sha256:${roleId}` },
+});
 
-export function reviewUpstream(detailFor: (roleId: string) => Record<string, unknown> = (roleId) => ({ roleId, document: { roleName: roleId } })): void {
-  grantCalls.length = 0;
-  const users = upstream.fetchMe;
-  upstream.fetchMe = async (env, token) => (token === BOT_KEY ? { accountNumId: BOT_ACCOUNT_NUM_ID } : users(env, token));
-  upstream.grantShare = async (_env, token, roleId, granteeAccountNumId) => {
-    grantCalls.push({ token, roleId, granteeAccountNumId });
-  };
-  upstream.fetchContentHash = async (_env, _key, roleId) => {
-    const h = upstreamHashes.get(roleId) ?? `sha256:${roleId}-v1`;
-    if (h === "revoked") throw new HttpError(401, "upstream rejected the token");
-    return { card: h, welcome: h, worldbook: h, authorAsset: h, content: h };
-  };
-  upstream.fetchSharedDetail = async (_env, _key, roleId) => {
-    if (upstreamHashes.get(roleId) === "revoked") throw new HttpError(401, "upstream rejected the token");
-    return detailFor(roleId);
+export function reviewUpstream(detailFor: (roleId: string) => Record<string, unknown> = blankSettings): void {
+  settingsReads.length = 0;
+  upstream.readForReview = async (_env, token, roleId, provider) => {
+    settingsReads.push({ token, roleId, provider });
+    return { ...blankSettings(roleId), ...detailFor(roleId) } as Awaited<ReturnType<typeof real.readForReview>>;
   };
 }
 
