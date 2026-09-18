@@ -535,7 +535,7 @@
             }
           },
           "403": {
-            "description": "`service_account_forbidden` — a service-account key (`lsk_...`) cannot call this route.",
+            "description": "..`) cannot call this route.",
             "content": {
               "application/json": {
                 "schema": {
@@ -621,16 +621,6 @@
               }
             }
           },
-          "403": {
-            "description": "`service_account_forbidden`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
           "409": {
             "description": "`errorCode` one of `rollback_client_unsupported`, `server_busy` (retryable), `operation_in_progress` (retryable), or a terminal replay of a failed/superseded operation (`rollback_failed`, `rollback_superseded`, or the operation's stored error code) with `status` `failed`/`superseded` and `operationID`/`supportCode`/`targetRowID`.",
             "content": {
@@ -707,16 +697,6 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "`service_account_forbidden`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         }
       }
@@ -774,16 +754,6 @@
           },
           "401": {
             "description": "`unauthorized`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "`service_account_forbidden`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -869,16 +839,6 @@
               }
             }
           },
-          "403": {
-            "description": "`service_account_forbidden` — service-account keys cannot call this route.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
           "500": {
             "description": "`error` = \"database unavailable\" or \"save failed\".",
             "content": {
@@ -946,16 +906,6 @@
               }
             }
           },
-          "403": {
-            "description": "`service_account_forbidden` — service-account keys cannot call this route.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
           "500": {
             "description": "`error` = \"database unavailable\" or \"save failed\".",
             "content": {
@@ -1015,16 +965,6 @@
           },
           "401": {
             "description": "`unauthorized` — missing or invalid bearer token.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "`service_account_forbidden` — service-account keys cannot call this route.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1102,16 +1042,6 @@
               }
             }
           },
-          "403": {
-            "description": "`service_account_forbidden` — service-account keys cannot call this route.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
           "500": {
             "description": "`error` = \"database unavailable\".",
             "content": {
@@ -1180,7 +1110,7 @@
             }
           },
           "403": {
-            "description": "`forbidden` — the conversation does not exist, is deleted, or is not owned by the caller (message is always \"conversation not found\"; a database error while resolving the conversation also yields this response). `service_account_forbidden` — service-account keys cannot call this route.",
+            "description": "`forbidden` — the conversation does not exist, is deleted, or is not owned by the caller (message is always \"conversation not found\"; a database error while resolving the conversation also yields this response).",
             "content": {
               "application/json": {
                 "schema": {
@@ -1295,16 +1225,6 @@
               }
             }
           },
-          "403": {
-            "description": "`service_account_forbidden`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
           "500": {
             "description": "`pageSize` missing or 0 (division by zero, panic recovery). Empty body."
           }
@@ -1361,7 +1281,7 @@
             }
           },
           "403": {
-            "description": "Legacy `{error: \"forbidden\"}` — the conversation belongs to another account. Canonical `service_account_forbidden` — service-account keys cannot call this route.",
+            "description": "Legacy `{error: \"forbidden\"}` — the conversation belongs to another account.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1475,7 +1395,7 @@
             }
           },
           "403": {
-            "description": "Legacy `{error: \"forbidden\"}` — the conversation, or the entry itself, belongs to another account. Canonical `service_account_forbidden` — service-account keys cannot call this route.",
+            "description": "Legacy `{error: \"forbidden\"}` — the conversation, or the entry itself, belongs to another account.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1636,7 +1556,7 @@
             }
           },
           "403": {
-            "description": "`{\"error\":\"forbidden\"}` — conversation does not belong to the caller (or `conversationId` empty); or `service_account_forbidden`.",
+            "description": "`{\"error\":\"forbidden\"}` — conversation does not belong to the caller (or `conversationId` empty)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1945,16 +1865,6 @@
               }
             }
           },
-          "403": {
-            "description": "`service_account_forbidden` — service-account keys cannot call this route.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
           "500": {
             "description": "`error` = \"database unavailable\".",
             "content": {
@@ -2021,16 +1931,6 @@
           },
           "401": {
             "description": "`unauthorized` — missing or invalid bearer token.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "`service_account_forbidden` — service-account keys cannot call this route.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2141,16 +2041,6 @@
                       "$ref": "#/components/schemas/OperationStatusError"
                     }
                   ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "`service_account_forbidden`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -2397,16 +2287,6 @@
                       "$ref": "#/components/schemas/OperationStatusError"
                     }
                   ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "`service_account_forbidden`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -2672,7 +2552,7 @@
             }
           },
           "403": {
-            "description": "`{\"error\":\"conversation not found\"}` — not owned or unknown; or `service_account_forbidden`.",
+            "description": "`{\"error\":\"conversation not found\"}` — not owned or unknown.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2748,16 +2628,6 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "`service_account_forbidden`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         }
       }
@@ -2826,16 +2696,6 @@
           },
           "401": {
             "description": "`unauthorized`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "`service_account_forbidden`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2931,16 +2791,6 @@
           },
           "401": {
             "description": "`unauthorized`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "`service_account_forbidden`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3063,7 +2913,7 @@
             }
           },
           "403": {
-            "description": "`forbidden` — the conversation does not exist, is deleted, or is not owned by the caller (message \"conversation not found\"). `service_account_forbidden` — service-account keys cannot call this route.",
+            "description": "`forbidden` — the conversation does not exist, is deleted, or is not owned by the caller (message \"conversation not found\").",
             "content": {
               "application/json": {
                 "schema": {
@@ -3170,16 +3020,6 @@
           },
           "401": {
             "description": "`unauthorized` — missing or invalid bearer token.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "`service_account_forbidden` — service-account keys cannot call conversation routes.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3402,16 +3242,6 @@
               }
             }
           },
-          "403": {
-            "description": "`service_account_forbidden`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
           "503": {
             "description": "`stop request could not be recorded` — the stop could not be persisted; retry.",
             "content": {
@@ -3608,7 +3438,7 @@
             }
           },
           "403": {
-            "description": "`forbidden` — conversation not found or not owned; or `service_account_forbidden`.",
+            "description": "`forbidden` — conversation not found or not owned.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3692,7 +3522,7 @@
             }
           },
           "403": {
-            "description": "`forbidden` — the conversation does not exist, is deleted, or is not owned by the caller (message \"conversation not found\"). `service_account_forbidden` — service-account keys cannot call this route.",
+            "description": "`forbidden` — the conversation does not exist, is deleted, or is not owned by the caller (message \"conversation not found\").",
             "content": {
               "application/json": {
                 "schema": {
@@ -3780,7 +3610,7 @@
             }
           },
           "403": {
-            "description": "`forbidden` — the conversation is not owned by the caller (legacy shape `{error: \"forbidden\"}`). `service_account_forbidden` — service-account keys cannot call this route (canonical shape).",
+            "description": "`forbidden` — the conversation is not owned by the caller (legacy shape `{error: \"forbidden\"}`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -3835,16 +3665,6 @@
           },
           "401": {
             "description": "`unauthorized` — missing/invalid bearer (middleware, with `message`), or the identity was not established from a token (handler: `{\"error\":\"unauthorized\",\"retryable\":false}`, no `message` key).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "`service_account_forbidden`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5164,7 +4984,7 @@
           "Identity"
         ],
         "summary": "Who am I",
-        "description": "Returns the caller's public identity. Third-party clients compare `accountNumId` with the `accountNumId` returned by role detail to know whether the caller authored a card. Accepts user tokens and service-account keys (`accountType` tells which).",
+        "description": "Returns the caller's public identity. Third-party clients compare `accountNumId` with the `accountNumId` returned by role detail to know whether the caller authored a card. Accepts user tokens and long-lived personal API keys.",
         "security": [
           {
             "userToken": []
@@ -5663,16 +5483,6 @@
               }
             }
           },
-          "403": {
-            "description": "`service_account_forbidden` — service-account keys cannot call this route.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
           "500": {
             "description": "`error` = \"database unavailable\".",
             "content": {
@@ -5741,16 +5551,6 @@
           },
           "401": {
             "description": "`unauthorized` — missing or invalid bearer token.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "`service_account_forbidden` — service-account keys cannot call this route.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5833,16 +5633,6 @@
               }
             }
           },
-          "403": {
-            "description": "`service_account_forbidden` — service-account keys cannot call this route.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
           "500": {
             "description": "`error` = \"database unavailable\" or \"save failed\".",
             "content": {
@@ -5902,16 +5692,6 @@
           },
           "401": {
             "description": "`unauthorized` — missing or invalid bearer token.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "`service_account_forbidden` — service-account keys cannot call this route.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5987,16 +5767,6 @@
               }
             }
           },
-          "403": {
-            "description": "`service_account_forbidden` — service-account keys cannot call this route.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
           "500": {
             "description": "`error` = \"revoke failed\".",
             "content": {
@@ -6044,16 +5814,6 @@
               }
             }
           },
-          "403": {
-            "description": "`service_account_forbidden` — service-account keys cannot call this route.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
           "500": {
             "description": "`error` = \"database unavailable\".",
             "content": {
@@ -6093,16 +5853,6 @@
           },
           "401": {
             "description": "`unauthorized` — missing or invalid bearer token.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "`service_account_forbidden` — service-account keys cannot call this route.",
             "content": {
               "application/json": {
                 "schema": {
@@ -7126,7 +6876,7 @@
             }
           },
           "403": {
-            "description": "`permission_denied` or `service_account_forbidden`.",
+            "description": "`permission_denied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -7394,7 +7144,7 @@
             }
           },
           "403": {
-            "description": "`service_account_forbidden` — service-account keys (`lsk_...`) cannot call this route.",
+            "description": "..`) cannot call this route.",
             "content": {
               "application/json": {
                 "schema": {
@@ -7515,16 +7265,6 @@
           },
           "401": {
             "description": "`unauthorized` — missing or invalid bearer.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "`service_account_forbidden`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -8454,16 +8194,6 @@
               }
             }
           },
-          "403": {
-            "description": "`service_account_forbidden` — service-account keys cannot call this route.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
           "500": {
             "description": "`error` = \"database unavailable\" or \"import failed\".",
             "content": {
@@ -8524,16 +8254,6 @@
           },
           "401": {
             "description": "`unauthorized` — missing or invalid bearer token.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "`service_account_forbidden` — service-account keys cannot call this route.",
             "content": {
               "application/json": {
                 "schema": {
@@ -9803,7 +9523,7 @@
       "serviceKey": {
         "type": "http",
         "scheme": "bearer",
-        "description": "Service-account key (prefix `lsk_`). Accepted only on the allow-listed routes; other routes return `service_account_forbidden`."
+        "description": "Long-lived personal API key, created and revoked by its owner in the provider's own console. It authenticates as that user. The prefix is provider-specific (LunaTalk `lsk_`, HarperHarbor `hh_live_`)."
       }
     },
     "schemas": {
@@ -11790,7 +11510,7 @@
               "user",
               "service"
             ],
-            "description": "`service` when the bearer is a service-account key / the account is a service account."
+            "description": "`service` when the bearer is a long-lived API key."
           }
         }
       },
@@ -18198,32 +17918,22 @@
   "x-auth-notes": {
     "bearerResolution": [
       "The identity middleware on the /open/v1 group reads only `Authorization: Bearer <token>`. Raw `accountId`, `accountToken` and test-account headers sent by the client are deleted/overwritten and never trusted.",
-      "Resolution order for a non-empty bearer: (1) if it starts with `lsk_` it is treated as a service-account key and looked up by SHA-256 hash; a revoked/unknown key, a non-service account or a banned account yields 401 `unauthorized` (no fall-through). (2) Otherwise it is tried as an OAuth access token; it must be unexpired, unrevoked and bound (token and session) to the resource `<API_BASE>/open/v1`; an MCP-resource token is rejected here. (3) Otherwise it is tried as a legacy first-party account token (official web/app login state). Anything else is 401 `unauthorized`.",
+      "Resolution order for a non-empty bearer: (1) if it carries the provider's API-key prefix it is treated as a long-lived personal API key and looked up by SHA-256 hash; a revoked/unknown key or a banned account yields 401 `unauthorized` (no fall-through). (2) Otherwise it is tried as an OAuth access token; it must be unexpired, unrevoked and bound (token and session) to the resource `<API_BASE>/open/v1`; an MCP-resource token is rejected here. (3) Otherwise it is tried as a legacy first-party account token (official web/app login state). Anything else is 401 `unauthorized`.",
       "A bearer that is present but invalid is always 401, even on guest-readable routes; only a completely absent Authorization header is downgraded to guest.",
-      "Service-account keys are additionally restricted to an allow-list; a valid key on any other route is 403 `service_account_forbidden` from the middleware (the handler is never reached).",
-      "For OAuth bearers the middleware also records the OAuth `client_id` that issued the token; role-share grants created through such a token store that client id.",
-      "The middleware sets request defaults `from=app` and `X-Client-Platform=web` when the client did not send them (web clients are not subject to app-store content filtering). The optional `language` header (`zh-Hant`, `zh-Hans`, `en`, `ja`, `ko`) selects localized strings and, for comments, the locale filter."
+      "The middleware sets request defaults `from=app` and `X-Client-Platform=web` when the client did not send them (web clients are not subject to app-store content filtering). The optional `language` header (`zh-Hant`, `zh-Hans`, `en`, `ja`, `ko`) selects localized strings."
     ],
     "guestReadableRoutes": [
       "GET /open/v1/role/detail",
-      "GET /open/v1/role/preview-page",
-      "GET /open/v1/comment/list",
-      "GET /open/v1/comment/replies",
-      "GET /open/v1/comment/count"
+      "GET /open/v1/role/preview-page"
     ],
-    "guestNote": "Guest routes are matched on the gin route pattern (not the raw path). On a guest request the identity is empty; comment handlers then return `isLiked`/`isOwner`/`canDelete` = false and hide the caller's own rejected comments. If a valid bearer is sent it is used normally.",
-    "serviceKeyAllowList": [
-      "GET /open/v1/me",
-      "GET /open/v1/share/role/detail",
-      "GET /open/v1/share/role/content-hash"
-    ],
-    "serviceKeyFormat": "`lsk_` followed by 43 base64url characters (32 random bytes). The key is shown once at creation; only its first 12 characters (`keyPrefix`) are retrievable afterwards."
+    "guestNote": "Guest routes are matched on the route pattern (not the raw path). On a guest request the identity is empty. If a valid bearer is sent it is used normally.",
+    "serviceKeyFormat": "Provider-specific prefix followed by random characters (LunaTalk: `lsk_` plus 43 base64url characters; HarperHarbor: `hh_live_`). A personal API key is shown once at creation; only a short prefix is retrievable afterwards."
   },
   "x-error-envelope": {
     "shapes": [
       {
         "shape": "{\"error\": string, \"message\": string, \"retryable\": boolean}",
-        "emittedBy": "identity middleware (401 `unauthorized`, 403 `service_account_forbidden`), GET /me, GET /me/wallet"
+        "emittedBy": "identity middleware (401 `unauthorized`), GET /me, GET /me/wallet"
       },
       {
         "shape": "{\"error\": \"<snake_case_code>\"}",
@@ -18231,11 +17941,7 @@
       },
       {
         "shape": "{\"error\": \"<free-text or localized sentence>\"}",
-        "emittedBy": "/player/persona/save, /player/role-settings/save, /player/compact-preference, /me/score/records, /comment/* — the value is `err.Error()` or a localized message, not a stable code; some values are listed below where fixed"
-      },
-      {
-        "shape": "{\"error\": \"<code>: <detail>\", \"retryable\"?: boolean}",
-        "emittedBy": "/service-accounts/*, /share/role/*: errors from the service layer go through writeRoleServiceError (status from the prefix: `permission_denied` -> 403, `not_found` -> 404, `invalid_argument`/`validation`/`required`/`too long` -> 400, else 500; `retryable` true only for 5xx). The handlers' own argument checks (`invalid_argument: roleId is required`, `... keyId is required`, `... name is required`, `... body must be JSON with roleId and granteeAccountNumId`) return 400 with only `error`."
+        "emittedBy": "/player/persona/save, /player/role-settings/save, /player/compact-preference, /me/score/records — the value is `err.Error()` or a localized message, not a stable code; some values are listed below where fixed"
       },
       {
         "shape": "{\"error\": \"image_in_use\", \"imageUrls\": [string]}",
@@ -18248,8 +17954,7 @@
     ],
     "codes": {
       "unauthorized": "No/invalid bearer (401). Also `{\"error\":\"unauthorized\"}` from some handlers when identity is missing.",
-      "service_account_forbidden": "Valid service key used on a route outside the allow-list (403).",
-      "not_found": "Account/folder/task not found (404). In share/service-account routes appears as `not_found: <what>`.",
+      "not_found": "Account/folder/task not found (404).",
       "invalid_param": "Missing/invalid request parameter (Media library, preferences, agent-mode) (400).",
       "generic_error": "Unmapped server error (500).",
       "duplicate_name": "Folder name already exists (400).",
@@ -18260,7 +17965,6 @@
       "quota_bytes_exceeded": "Account storage would exceed 500 MiB (400).",
       "invalid_file_type": "Uploaded bytes are not an accepted type, or an image cannot be decoded (400).",
       "file_too_large": "Upload larger than 100 MiB (413).",
-      "invalid_argument: ...": "Bad input on service-account/share routes (400).",
       "permission_denied: ...": "Caller is not the author / has no grant / is a service key on a user-only route (403).",
       "roleId is required": "Free-text 400 from compact-preference, comment create and comment count.",
       "commentId is required": "Free-text 400 from comment delete.",
@@ -18299,10 +18003,9 @@
       "customInstructions"
     ],
     "depth": "Recursive: the keys are deleted from every object at any nesting depth, inside arrays too.",
-    "exceptions": "On GET /open/v1/share/role/detail the key `customInstructions` is kept (the author's private customInstructions is part of the shared card settings); account-identifier keys are still removed there.",
     "consequences": [
       "GET /player/role-settings never returns the player's custom `customInstructions` even though POST /player/role-settings/save accepts it; only `defaultCustomInstructions` survives.",
-      "Legacy `accountId` fields in role-settings, score records, comments etc. are absent on the wire.",
+      "Legacy `accountId` fields in role-settings, score records etc. are absent on the wire.",
       "If the body is not parseable JSON it is forwarded unchanged."
     ]
   }
