@@ -1026,7 +1026,7 @@
   "linked.status.failed": "Sync incomplete",
   "linked.status.unknown": "Creation needs checking",
   "linked.mineHint": "Cards from your connected accounts appear here. Synced copies are grouped together. Open a platform to edit a card or manage its community listing.",
-  "linked.manage": "Manage cards",
+  "linked.manage": "Manage {name} account",
   "linked.manageOn": "Manage on {provider}",
   "linked.loading": "Loading…",
   "linked.empty": "Your connected accounts have no cards yet.",

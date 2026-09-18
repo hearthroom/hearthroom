@@ -333,7 +333,7 @@ export async function fetchReviewDetail(id: string, token: string): Promise<Revi
 
 // ---- 上游開放 API（跨網域）---------------------------------------------------
 
-export interface Me { accountNumId: number; nickName: string; avatar: string }
+export interface Me { accountNumId: number; nickName: string; avatar: string; email?: string }
 
 /** 登入者在本站的身分（不是供應商那邊的）：公開 ID、加入時間、連結了哪些供應商帳號。 */
 export interface SiteMe {
@@ -467,6 +467,11 @@ export async function fetchMyCards(
 
 export async function fetchMe(token: string): Promise<Me> {
   return json<Me>(await fetch(`${UPSTREAM_API}/open/v1/me`, { headers: authHeaders(token) }));
+}
+
+/** 對指定的那一家問「我是誰」。已連接但目前沒在用的那一家，要靠它才問得到。 */
+export async function fetchMeAt(apiBase: string, token: string): Promise<Me> {
+  return json<Me>(await fetch(`${apiBase}/open/v1/me`, { headers: authHeaders(token) }));
 }
 
 /** 角色卡詳情。未登入的訪客也讀得到，所以 token 是選填的。 */
