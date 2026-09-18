@@ -192,3 +192,12 @@ The editor starts with the content, then asks which connected platforms to save 
 Each platform returns its own result; a failed destination does not roll back a saved source. Retrying reuses the source and previously created copies. The combined card list opens the source editor for an existing distribution.
 
 Sync errors may include `detail: {provider, step, upstreamStatus, upstreamCode}`. Only fixed step names and allowlisted upstream codes are exposed. Never include upstream prose, request bodies, tokens or private content in reports. Stored copy failures retain the same safe diagnostic envelope.
+
+### Context usage for individual replies
+
+HarperHarbor returns `hasContextUsage` with assistant history rows and operation
+statuses. The player keeps a Context usage entry even when the model has no
+published token capacity. It sends the selected row's `chatId` to
+`/open/v1/conversation/prompt-diagnostics` and displays that reply's snapshot.
+Input/cache usage is model-reported; composition buckets remain estimates.
+Replies recorded before usage persistence may have composition data only.
