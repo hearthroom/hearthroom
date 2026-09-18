@@ -211,3 +211,12 @@ published token capacity. It sends the selected row's `chatId` to
 `/open/v1/conversation/prompt-diagnostics` and displays that reply's snapshot.
 Input/cache usage is model-reported; composition buckets remain estimates.
 Replies recorded before usage persistence may have composition data only.
+
+
+### HarperHarbor Lorebook and memory behavior
+
+`matchOptions` preserves `selective`, `scanDepth` (0–100), `order`, `groupId`, `groupOrder` and `extensions`. A zero scan depth uses the current input and latest assistant reply. Unknown extension fields are stored, not executed. Imported fragments share a book-scoped group ID; semantic recall admits eligible fragments together in fragment order. Keyword and regular-expression matches run first; semantic ranking supplements them without overriding secondary-key exclusions.
+
+For stable context caching, admitted entries retain their original place across ordinary turns. Author ordering applies when entries first enter the context. Arbitrary insertion positions, timed removal, probability, recursive scanning and group scoring are not implemented by Harper. Source edits and deletion invalidate affected entries. A full memory checkpoint can release older dynamic retrieval; the Lorebook source remains available for later recall.
+
+Automatic chapter summaries and hierarchical consolidation preserve original chat history. During preparation, clients handle `compacting`, `compactDone` and `compactFailed`, and keep Stop available. Phase events describe preparation, not final reply success. Use the terminal operation state to decide whether to retain an unsent draft. `context_capacity_exceeded` means the request cannot fit after safe preparation; changing the input or model capacity is required. Retry with unchanged input is not an automatic recovery.
