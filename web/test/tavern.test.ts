@@ -356,3 +356,16 @@ describe("V3 世界書：use_regex 與修飾詞", () => {
     for (const d of drafts) expect(d.content.startsWith("@@")).toBe(false);
   });
 });
+
+it("preserves a split entry as one logical group and round trips author matching metadata", () => {
+ const rows=bookEntriesToDrafts([{content:"A".repeat(6100),keys:["/code:(blue|green)/i"],secondary_keys:["approval"],selective:false,scan_depth:6,insertion_order:42,extensions:{source_flag:"kept"}}]);
+ expect(rows).toHaveLength(3);
+ expect(rows[0].matchOptions).toMatchObject({selective:false,scanDepth:6,order:42,extensions:{source_flag:"kept"}});
+ expect(rows[0].matchOptions?.groupId).toBeTruthy();
+ expect(rows.map(r=>r.matchOptions?.groupId)).toEqual(Array(3).fill(rows[0].matchOptions?.groupId));
+ expect(rows.map(r=>r.matchOptions?.groupOrder)).toEqual([0,1,2]);
+ const exported=worldbookToExport("Test",rows);
+ const restored=bookEntriesToDrafts(worldInfoToBook(exported)!.entries!);
+ expect(restored[0].matchOptions).toMatchObject({selective:false,scanDepth:6,order:42,extensions:{source_flag:"kept"}});
+ expect(restored[0].matchOptions?.groupId).toBe(rows[0].matchOptions?.groupId);
+});
