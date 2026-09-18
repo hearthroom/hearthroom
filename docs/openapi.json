@@ -3030,7 +3030,7 @@
           "Conversation"
         ],
         "summary": "Context-usage breakdown of the latest turn of a conversation",
-        "description": "Returns how the prompt of the most recent AI turn was composed (per-component character/token estimates and percentages), cache statistics, billing points and worldbook recall results. `status` is `ok` when a snapshot exists, `notReady` when the model supports diagnostics but no turn has been recorded yet, `unsupportedModel` when the conversation's model does not use the cache-stable context pipeline. `breakdownVersion=2` splits `mod`, `notepad` and `directive` out of `system` (11 items instead of 8) and sets `schemaVersion:2`. Worldbook entry names in `worldbookRecall.entries[]` are returned only to the role's author; other callers receive entries with `name` omitted.",
+        "description": "Returns how the prompt of the most recent AI turn was composed (per-component character/token estimates and percentages), cache statistics, billing points and worldbook recall results. `status` is `ok` when a snapshot exists, `notReady` when the model supports diagnostics but no turn has been recorded yet, `unsupportedModel` when the conversation's model does not use the cache-stable context pipeline. `breakdownVersion=2` splits `mod`, `notepad` and `directive` out of `system` (11 items instead of 8) and sets `schemaVersion:2`. Worldbook entry names in `worldbookRecall.entries[]` are returned only to the role's author; other callers receive entries with `name` omitted. Providers advertising `hasContextUsage` on a chat row additionally accept `chatId` to select that exact reply. Unknown, removed or unowned replies return 404; they do not fall back to the latest turn.",
         "security": [
           {
             "userToken": []
@@ -3060,6 +3060,16 @@
               "default": "1"
             },
             "description": "`2` selects the 11-item breakdown; any other value means 1."
+          },
+          {
+            "name": "chatId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Optional per-reply extension. Send only for a row advertising hasContextUsage; must belong to the specified conversation and caller."
           }
         ],
         "responses": {
@@ -3116,6 +3126,9 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Selected reply not found or not accessible (per-reply extension)."
           }
         }
       }
@@ -11813,6 +11826,13 @@
           "isV3": {
             "type": "boolean",
             "description": "Runtime flag: AI row of an XMLV3-theme role (render with the V3 renderer)."
+          },
+          "contextUsage": {
+            "$ref": "#/components/schemas/ContextTokenUsage"
+          },
+          "hasContextUsage": {
+            "type": "boolean",
+            "description": "This provider supports diagnostics for this specific reply."
           }
         }
       },
@@ -11955,6 +11975,13 @@
           "lastUpdateTime": {
             "type": "string",
             "format": "date-time"
+          },
+          "contextUsage": {
+            "$ref": "#/components/schemas/ContextTokenUsage"
+          },
+          "hasContextUsage": {
+            "type": "boolean",
+            "description": "This provider supports diagnostics for this specific reply."
           }
         }
       },
@@ -15354,7 +15381,7 @@
                 "type": "boolean"
               },
               "hitRate": {
-                "type": "integer",
+                "type": "number",
                 "description": "Percent."
               },
               "inputTokens": {
@@ -15376,9 +15403,6 @@
             "required": [
               "available",
               "totalPoints",
-              "inputPoints",
-              "cacheReadPoints",
-              "outputPoints",
               "cacheHitRate"
             ],
             "properties": {
@@ -15398,13 +15422,28 @@
                 "type": "integer"
               },
               "cacheHitRate": {
-                "type": "integer",
+                "type": [
+                  "number",
+                  "null"
+                ],
                 "description": "Percent."
+              },
+              "componentsAvailable": {
+                "type": "boolean",
+                "description": "False when the provider only has a settled total. Component cost fields must not be displayed."
               }
             }
           },
           "worldbookRecall": {
             "$ref": "#/components/schemas/PromptWorldbookRecall"
+          },
+          "contextUsage": {
+            "$ref": "#/components/schemas/ContextTokenUsage"
+          },
+          "chatId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Selected reply, when requested through the per-reply extension."
           }
         }
       },
@@ -20162,6 +20201,28 @@
             "enum": [
               "ok"
             ]
+          }
+        }
+      },
+      "ContextTokenUsage": {
+        "type": ["object", "null"],
+        "description": "Optional model-reported usage saved with this reply. Missing historical usage is not a measured zero.",
+        "properties": {
+          "inputTokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "outputTokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cachedTokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cacheWriteTokens": {
+            "type": "integer",
+            "minimum": 0
           }
         }
       }
