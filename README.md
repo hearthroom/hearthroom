@@ -40,7 +40,7 @@ Hearthroom is an open-source platform for AI character cards. It combines three 
 
 Hearthroom differs from SillyTavern in where things run. Nothing is installed locally and no API keys are configured by the user. Sign-in, card storage and text generation are handled by a **card provider**, a chat service with an open API. Hearthroom stores the registry (which cards are listed), the review state, the search index and site-level settings. Authors sign in through the provider and register a card by its ID; the site copies the card's public fields from the provider once an hour. Card content is never stored on the site.
 
-Review works as follows: reviewers take submissions from a shared queue; a first review needs two approvals, a re-review needs one; a single rejection rejects; the review page does not show the author. An approval is bound to the card's content version. When the author edits the card, it is removed from the board and queued again.
+Review works as follows: reviewers take submissions from a shared queue; a first review needs two approvals, a re-review needs one; a single rejection rejects; the review page does not show the author. When an author submits, the site reads the card's full settings once with the author's own sign-in and keeps a review copy; the copy is deleted when the review ends. An approval is bound to a fingerprint of the card's public fields (name, summary, cover, tags, opening). When those change, the card is removed from the board and queued again. Comments under a card are stored by the site itself.
 
 ## Features
 
@@ -133,7 +133,7 @@ The site runs on a single Cloudflare account. The free tier is sufficient for a 
 1. Create the resources and enter their IDs in `wrangler.toml`: a D1 database (`DB`), two KV namespaces (`CACHE`, `ASSET_ARCHIVE`) and, optionally, an Analytics Engine dataset (`EVENTS`; set `ANALYTICS_ENABLED = "false"` to disable).
 2. Set the domain: `routes` in `wrangler.toml`, `HOST` in `src/site.ts`, and the site name in `web/src/lib/site.ts`. A custom domain cannot be attached to a hostname that already has a DNS record; delete any parking record first. Card apps live on `play.<host>` and sandbox shells on `c<id>.<host>`; both are served by the same wildcard route, so the zone needs a proxied wildcard DNS record.
 3. Set the provider: `PROVIDER_API_BASE` in `[vars]`. If the provider's main domain is unreachable from some countries, list per-country gateways in `PROVIDER_API_GATEWAYS` (`CC=url,…`); `/v1/region` returns the matching gateway to browsers from that country.
-4. Optionally configure the review bot: `REVIEW_BOT_ACCOUNT_NUM_ID` in `[vars]` and `wrangler secret put REVIEW_BOT_KEY`. Without both, submissions are listed without review. Reviewers are granted with `node scripts/grant-reviewer.mjs <provider account id>`.
+4. Choose whether to review: `REVIEW_ENABLED = "true"` in `[vars]` requires community review; any other value lists submissions without review. Review needs no key or account at the provider. Reviewers are granted with `node scripts/grant-reviewer.mjs <provider account id>`.
 5. Optionally set `wrangler secret put SHORTCUT_SECRET` (any random string). It signs the short-lived keys that let members who have enabled adult content add adult cards to their home screen; without it, adult cards simply have no such button.
 6. Deploy:
 

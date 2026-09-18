@@ -1,6 +1,6 @@
 # Developer documentation
 
-Hearthroom is a community-maintained, open-source character-card board. The site itself stores **no cards, runs no models and keeps no passwords**: accounts, card content and conversations live with a *provider*; the site only owns "who listed which card, how far it got in review, and who stamped it". LunaTalk and HarperHarbor implement the shared Open API (`/open/v1`) with different capability sets; see the provider matrix below.
+Hearthroom is a community-maintained, open-source character-card board. The site itself stores **no cards, runs no models and keeps no passwords**: accounts, card content and conversations live with a *provider*. The site owns what belongs to the community: who listed which card, how far it got in review and who stamped it, and the comments under each card. The only card content it ever holds is the review copy an author submits, and that copy is deleted when the review ends. LunaTalk and HarperHarbor implement the shared Open API (`/open/v1`) with different capability sets; see the provider matrix below.
 
 This page has two parts:
 
@@ -14,7 +14,7 @@ The documentation lives next to the code. A test in the repository (`web/test/pr
 | Topic | Rule |
 |---|---|
 | Base URL | Every resource lives under `<API_BASE>/open/v1/...`. `<API_BASE>` is configured per deployment (see *Plugging in a provider*). |
-| Authentication | `Authorization: Bearer <token>`. The token is either a user access token obtained through OAuth, or a service-account key (see *Review*). |
+| Authentication | `Authorization: Bearer <token>`. The token is a user access token obtained through OAuth. The site holds no key of its own at any provider. |
 | Language | Requests may send a `language` header (`zh-Hant`, `zh-Hans`, `en`, `ja`, `ko`). The provider uses it for human-readable text in responses. |
 | Guest-readable | A small set of read endpoints accept requests without a token; they are marked **no auth** in the reference. A token, when present, is still honoured. |
 | Error envelope | The canonical shape for non-2xx responses is `{ "error": "<snake_case_code>", "message": "<human sentence>", "retryable": <bool> }`; the identity middleware and the newer endpoints use it. Several older endpoints return narrower legacy shapes (for example `{ "error": "<code>" }` only, or `{ "errorCode", "messageKey" }`). The reference documents the exact shape per endpoint and the *Notes* section lists every shape and code found. HTTP status follows the semantics (400 / 401 / 403 / 404 / 409 / 429 / 5xx). |
@@ -47,8 +47,8 @@ A provider does not have to implement everything at once. Each level unlocks a s
 | Level | Purpose | What it unlocks |
 |---|---|---|
 | **0 — Identity** | OAuth 2.1 (authorization code + PKCE, dynamic client registration, resource indicators) and `GET /open/v1/me`. | Sign-in. Without it the site is a read-only board. |
-| **1 — Read & list** | Public card detail and preview page, the author's own card list, comments, wallet. | Authors can list their cards; the board, search and author pages work. |
-| **2 — Review** | Service accounts and per-card sharing grants, plus a content hash. | Community review with the site's review bot. Without it the site falls back to "listing is publishing". |
+| **1 — Read & list** | Public card detail and preview page, the author's own card list, wallet. | Authors can list their cards; the board, search and author pages work. |
+| **2 — Review** | The author's token can read the author's own full settings: card, openings, bound worldbooks, author asset. | Community review. Nothing review-specific is asked of the provider; a deployment that turns review off falls back to "listing is publishing". |
 | **3 — Authoring** | Create / patch / publish cards, welcome messages, author assets, worldbooks, the media library, canonical tags. | Authors can create and edit cards on the site instead of the provider's own UI. |
 | **4 — Play** | The conversation endpoints used by the embedded stage. | Playing cards inside the site. |
 
@@ -70,15 +70,19 @@ Sign-in starts on the site's own `/login` page, where the user picks a provider;
 
 ### Level 1 — Read & list
 
-Public read: `GET /open/v1/role/detail`, `GET /open/v1/role/preview-page`, comment listing. Authenticated: `GET /open/v1/role/mine` (with a `creationMethod` filter so the site can show only cards created through it), `GET /open/v1/role/author-asset/serve`, comment writes, `GET /open/v1/me/wallet`, `GET /open/v1/me/score/records`.
+Public read: `GET /open/v1/role/detail`, `GET /open/v1/role/preview-page`. Authenticated: `GET /open/v1/role/mine` (with a `creationMethod` filter so the site can show only cards created through it), `GET /open/v1/role/author-asset/serve`, `GET /open/v1/me/wallet`, `GET /open/v1/me/score/records`.
 
 Fields the site reads from `role/detail` are listed in the reference; extra fields are ignored. Language codes map to board zones: `zh*` → Chinese, `en`/`ja`/`ko` → their own zone, anything else → "all zones".
 
 ### Level 2 — Review
 
-The site holds one **service account** at the provider (the "review bot"). Its key is a deployment secret; its public numeric id is ordinary configuration. A service key may only call an allow-list of routes — `GET /open/v1/me`, `GET /open/v1/share/role/detail`, `GET /open/v1/share/role/content-hash` — and receives `service_account_forbidden` elsewhere. That boundary is the provider's to enforce.
+Review is the community's own service; the provider is not asked for a sharing API, a service account or a content hash.
 
-When an author submits a card, the site forwards the author's token to `POST /open/v1/share/role/grant` so the bot may read the card's full settings, and records the content hash from `GET /open/v1/share/role/content-hash`. The hourly sync re-checks the hash; a change sends the card back to review. The provider should notify the author when a grant is created or revoked.
+When an author submits a card, the site uses the author's token, inside that one request, to read the author's own full settings: `GET /open/v1/role/detail` (the owner view, which includes the private definition), `GET /open/v1/worldbook/bindings`, `GET /open/v1/worldbook/detail`, `GET /open/v1/worldbook/entry/list` and `GET /open/v1/role/author-asset`. It stores the result as the review copy of that submission. Reviewers read the copy, never the provider. The copy is deleted when the submission is decided (approved or rejected) or the author withdraws the card. The token is never stored.
+
+An approval is bound to a fingerprint of the card's **public** fields (names, summaries, cover, background, tags, opening). The hourly sync already reads those fields anonymously; when the fingerprint changes the card leaves the board and a re-review opens, showing the reviewer the current public content. Changes to private settings are invisible to the site and to the board; an author who wants reviewers to see a new version resubmits.
+
+A deployment sets `REVIEW_ENABLED = "true"` to require review. Any other value means "listing is publishing".
 
 ### Level 3 — Authoring
 
@@ -127,8 +131,8 @@ Today a second provider is configuration plus a small code change, not a runtime
 |---|---|
 | Web build | `VITE_PROVIDER_API_BASE` — the `<API_BASE>` the browser talks to; the OAuth `resource` is `<API_BASE>/open/v1`. |
 | Site server (Worker) | `PROVIDER_API_BASE` — the `<API_BASE>` used for sync, identity checks and review calls; `PROVIDER_API_GATEWAYS` — optional per-country gateways (`CC=url,…`) handed to browsers by `/v1/region`. |
-| Review bot | `REVIEW_BOT_KEY` (secret) and `REVIEW_BOT_ACCOUNT_NUM_ID`; with either missing the site runs in "listing is publishing" mode. |
-| Code | `src/providers.ts` — the provider id union and the review-bot lookup. Members, identities, cards and review submissions all carry a provider column, so adding a provider needs no schema change. |
+| Review | `REVIEW_ENABLED` — `"true"` requires community review; any other value runs the site in "listing is publishing" mode. There is no provider-side key. |
+| Code | `src/providers.ts` — the provider id union and the review switch. Members, identities, cards and review submissions all carry a provider column, so adding a provider needs no schema change. |
 
 ## Open items
 
@@ -153,6 +157,12 @@ These are **HearthRoom community endpoints** under `/v1`, separate from the prov
 | `GET /v1/me/cards` | List on the explicitly requested provider. Items include provider and, when synchronized, canonical work/source identifiers. The client combines connected lists and groups copies. |
 | `GET /v1/me/card-copies/:roleId` | Verifies ownership on the requested provider, then returns synchronization states. |
 | `POST /v1/me/card-sync` | Body `{sourceProvider, sourceRoleId, sourceToken, targetProvider, targetToken, publish, updatePublished?, recreateMissing?}`. Both accounts must belong to the authenticated community; the source and existing destination must be owned by those accounts. Tokens are transient. `updatePublished: true` explicitly permits returning an unchanged published destination to draft before updating it; independently edited or pending-review copies remain protected. `recreateMissing: true` explicitly requests a new private copy only after the stored destination returns `404 role_not_found` on its card read. It requires `publish: false`, resets only the destination mapping, and never restores or deletes the old card or resources. Network, authorization and resource errors do not trigger replacement. |
+| `GET /v1/cards/:cardId/comments?page=` | Public. Top-level comments of a listed card, newest first, 20 per page, each with up to three replies (most liked first). Adult cards need the same `?nsfw=1` plus token as the card page. |
+| `GET /v1/cards/:cardId/comments/:rootId/replies?page=` | Public. Replies under one comment, oldest first. |
+| `GET /v1/cards/:cardId/comments/count` | Public. Number of top-level comments. |
+| `POST /v1/cards/:cardId/comments` | Member. Body `{content, rootId?, parentId?}`; 1–500 characters; six comments per member per minute (`429 comment_rate_limited`). The "replying to" name is resolved by the site. |
+| `DELETE /v1/comments/:id` | The commenter, the card's author, or a site reviewer. Deleting a top-level comment removes its replies. |
+| `PUT` / `DELETE /v1/comments/:id/like` | Member. One like per member per comment; repeats are no-ops. |
 | `GET /v1/cards/:roleId/platforms` | Public copies of an approved community card, after community age gating and upstream accessibility checks. `playable` distinguishes storage from an actual runtime. |
 
 A mistaken connection is resolved from the intended community account: disconnect the additional platform from the wrong community, then connect it to the intended one. No community accounts or history are merged or deleted. A different account on an already-connected provider is rejected. Independent HearthRoom login and detaching a founding login are outside this release.

@@ -4,22 +4,18 @@
  * 兩處放寬：埋點的資料集綁定是可選的（分叉的人多半不會配，那時 env.EVENTS 就是 undefined，
  * 型別上就逼呼叫端判空，而不是等執行期炸），開關是任意字串（產生器把它縮成了字面值 "true"）。
  */
-export type Env = Omit<Cloudflare.Env, "EVENTS" | "ANALYTICS_ENABLED" | "REVIEW_BOT_ACCOUNT_NUM_ID"> & {
+export type Env = Omit<Cloudflare.Env, "EVENTS" | "ANALYTICS_ENABLED" | "REVIEW_ENABLED"> & {
   EVENTS?: AnalyticsEngineDataset;
   ANALYTICS_ENABLED?: string;
-  /**
-   * 審核機器人：主站上的服務帳號。金鑰是 secret（`wrangler secret put REVIEW_BOT_KEY`），
-   * 公開數字 ID 是一般變數。兩個都缺就退回「登記即上榜」，見 src/providers.ts。
-   */
-  REVIEW_BOT_KEY?: string;
-  REVIEW_BOT_ACCOUNT_NUM_ID?: string;
+  /** 社群審核開關："true" 才審；其餘退回「登記即上榜」，見 src/providers.ts。 */
+  REVIEW_ENABLED?: string;
   /** 成人卡「加到主畫面」鑰匙的簽章密鑰（`wrangler secret put SHORTCUT_SECRET`）。沒設就不發鑰匙，見 src/shortcut.ts。 */
   SHORTCUT_SECRET?: string;
 };
 
 export class HttpError extends Error {
   constructor(
-    readonly status: 400 | 401 | 403 | 404 | 409 | 502 | 503,
+    readonly status: 400 | 401 | 403 | 404 | 409 | 429 | 502 | 503,
     message: string,
     readonly detail?: import("./sync-error").SyncDetail,
   ) {

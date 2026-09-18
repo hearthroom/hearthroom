@@ -41,6 +41,8 @@ function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respon
   const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
   const json = (body: unknown, status = 200) =>
     Promise.resolve(new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
+  // 留言是本站的另一條請求，跟卡片請求無關：照常回空列表
+  if (url.includes("/comments")) return json({ total: 0, comments: [], isRoleCreator: false });
   if (/\/v1\/cards\/[^?]+\?/.test(url)) { cardRequests++; return new Promise(() => {}); }
   if (url.includes("/v1/cards?")) return json({ items: [CARD], total: 1, hasNext: false, limit: 24, offset: 0, sort: "hot" });
   if (url.endsWith("/v1/me")) return json({ error: "unauthorized" }, 401);

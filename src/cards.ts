@@ -397,6 +397,7 @@ export async function unregister(db: D1Database, roleId: string, authorNumId: nu
   if (row.author_num_id !== authorNumId) throw new HttpError(403, "not the author of this card");
   // 還在排隊的審核單一併作廢；蓋過章的紀錄留著（那是審核人做過的事，不隨卡片消失）。
   await db.batch([
+    db.prepare("DELETE FROM review_snapshots WHERE submission_id IN (SELECT id FROM review_submissions WHERE card_id = ?)").bind(row.id),
     db.prepare("DELETE FROM review_submissions WHERE card_id = ? AND status = 'pending'").bind(row.id),
     db.prepare("DELETE FROM cards WHERE id = ?").bind(row.id),
   ]);
