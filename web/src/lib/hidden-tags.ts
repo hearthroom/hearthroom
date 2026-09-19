@@ -10,10 +10,10 @@ import type { TagEntry } from "../../../shared/tag-catalog";
  * 類型列要畫的籤：隱藏的不畫（那排只列你看得到的）；例外是網址上正點著的那個籤——
  * 分享來的連結點的就是它，籤要在，人才知道自己在看什麼、怎麼取消。
  */
-export function visibleCatalog(catalog: TagEntry[], hidden: string[], activeTag: string): TagEntry[] {
+export function visibleCatalog(catalog: TagEntry[], hidden: string[], activeTag: string | string[]): TagEntry[] {
   if (!hidden.length) return catalog;
   const set = new Set(hidden);
-  return catalog.filter((x) => !set.has(x.key) || x.key === activeTag);
+  return catalog.filter((x) => !set.has(x.key) || (Array.isArray(activeTag) ? activeTag.includes(x.key) : x.key === activeTag));
 }
 
 /** 查詢字串用的值：排序去重，同一組名單永遠同一串，邊緣快取才共用得到；空名單回空字串（不帶參數）。 */

@@ -1117,5 +1117,17 @@
   "me.resourcesHint": "管理圖片與創作素材",
   "services.description": "卡片儲存與遊玩點數由以下服務提供。",
   "services.manage": "管理帳號",
-  "services.emailUnavailable": "尚未取得電子郵件"
+  "services.emailUnavailable": "尚未取得電子郵件",
+  "search.filter": "篩選",
+  "search.users": "使用者",
+  "search.tags": "標籤",
+  "search.period": "時間",
+  "search.period.all": "所有時間",
+  "search.period.week": "本週",
+  "search.period.month": "月度",
+  "search.period.quarter": "季度",
+  "search.period.year": "年度",
+  "search.periodHint": "依卡片上榜時間，顯示最近 7、30、90 或 365 天的卡片",
+  "search.matchAll": "結果會同時符合所有已選標籤。",
+  "search.clear": "清除標籤"
 }

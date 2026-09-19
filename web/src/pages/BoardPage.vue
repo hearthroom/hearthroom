@@ -6,8 +6,8 @@ import AuthorList from "@/components/AuthorList.vue";
 import CardGrid from "@/components/CardGrid.vue";
 import { fetchAuthors, fetchBoard } from "@/lib/api";
 import { contentLang, defaultZone } from "@/lib/i18n";
-import { TAG_CATALOG, tagLabel } from "../../../shared/tag-catalog";
-import { visibleCatalog } from "@/lib/hidden-tags";
+import DiscoveryTags from "@/components/DiscoveryTags.vue";
+import { selectedTags } from "@/lib/discovery";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
 import type { AuthorPage } from "@/lib/api";
@@ -40,11 +40,11 @@ const authorSort = computed<AuthorSort>(() => {
   const s = route.query.sort;
   return s === "cards" || s === "hot" ? s : "talk";
 });
-const tag = computed(() => (typeof route.query.tag === "string" ? route.query.tag : ""));
+const tags = computed(() => selectedTags(route.query.tag));
 const offset = computed(() => Number(route.query.offset ?? 0) || 0);
 /** 不想看的類型（設定頁勾的）：類型列少畫那幾顆，排尾一顆「已隱藏 N 類」帶去設定頁；清單本身由伺服器過濾。 */
 const hidden = computed(() => session.profile?.hiddenTags ?? []);
-const catalog = computed(() => visibleCatalog(TAG_CATALOG, hidden.value, tag.value));
+
 
 /**
  * 語區跟著介面語言走，不另設開關：看日文介面的人要的就是日文卡。
@@ -52,31 +52,36 @@ const catalog = computed(() => visibleCatalog(TAG_CATALOG, hidden.value, tag.val
  */
 const zone = computed(() => defaultZone(locale.value));
 
+let loadId = 0;
 async function load() {
+  const id = ++loadId;
   loading.value = true;
   error.value = "";
   try {
     if (mode.value === "authors") {
-      authors.value = await fetchAuthors({ zone: zone.value, sort: authorSort.value, offset: offset.value });
+      const result = await fetchAuthors({ zone: zone.value, sort: authorSort.value, offset: offset.value });
+      if (id === loadId) authors.value = result;
     } else {
-      page.value = await fetchBoard({
+      const result = await fetchBoard({
         zone: zone.value,
-        tag: tag.value || undefined,
+        tag: tags.value,
         sort: sort.value,
         offset: offset.value,
         lang: contentLang(locale.value),
       });
+      if (id === loadId) page.value = result;
     }
   } catch (err) {
+    if (id !== loadId) return;
     error.value = err instanceof Error ? err.message : t("state.loadFailed");
   } finally {
-    loading.value = false;
+    if (id === loadId) loading.value = false;
   }
 }
 
 /** 狀態放進網址：篩選結果可以直接分享，上一頁也回得去。 */
-function navigate(patch: Record<string, string | undefined>) {
-  const query: Record<string, string> = { ...(route.query as Record<string, string>) };
+function navigate(patch: Record<string, string | string[] | undefined>) {
+  const query: Record<string, string | string[]> = { ...(route.query as Record<string, string | string[]>) };
   for (const [k, v] of Object.entries(patch)) {
     if (v === undefined || v === "") delete query[k];
     else query[k] = v;
@@ -119,15 +124,7 @@ watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (no
     </div>
 
     <!-- 類型列：固定的一排（照魅魔島），鍵進網址、名字跟介面語言走。摺成幾行，全部看得到 -->
-    <nav v-if="mode === 'cards'" class="rail" :aria-label="$t('board.tags')">
-      <div class="rail__inner">
-        <button class="tagchip" :class="{ 'is-on': !tag }" :aria-pressed="!tag" @click="navigate({ tag: undefined })">{{ $t("board.tag.all") }}</button>
-        <button v-for="x in catalog" :key="x.key" class="tagchip" :class="{ 'is-on': tag === x.key }" :aria-pressed="tag === x.key" @click="navigate({ tag: tag === x.key ? undefined : x.key })">
-          {{ tagLabel(x, locale) }}
-        </button>
-        <RouterLink v-if="hidden.length" :to="lp('/settings') + '#hidden'" class="tagchip tagchip--hidden">{{ $t("board.hidden", { n: hidden.length }) }}</RouterLink>
-      </div>
-    </nav>
+    <DiscoveryTags v-if="mode === 'cards'" :selected="tags" :hidden="hidden" scroll @change="navigate({ tag: $event.length ? $event : undefined })" />
 
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
 
@@ -137,11 +134,11 @@ watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (no
         :cards="page?.items ?? []"
         :loading="loading && !page"
         :busy="loading"
-        :ranked="!tag"
+        :ranked="!tags.length"
         :rank-offset="page?.offset ?? 0"
         :show-trending="WINDOWED.has(sort)"
-        :empty-title="$t(tag ? 'board.empty.search.title' : 'board.empty.title')"
-        :empty-hint="$t(tag ? 'board.empty.search.hint' : 'board.empty.hint')"
+        :empty-title="$t(tags.length ? 'board.empty.search.title' : 'board.empty.title')"
+        :empty-hint="$t(tags.length ? 'board.empty.search.hint' : 'board.empty.hint')"
       />
       <nav v-if="page && (page.offset > 0 || page.hasNext)" class="pager">
         <button class="btn btn--sm" :disabled="page.offset === 0" @click="navigate({ offset: String(Math.max(0, page.offset - page.limit)) })">← {{ $t("pager.prev") }}</button>
@@ -184,31 +181,6 @@ watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (no
 .sorts__item:hover { color: var(--text); }
 .sorts__item--on { color: var(--accent-text); background: var(--accent-tint); }
 
-/* 固定的類型清單有五十來個，摺行全部露出來（照魅魔島）；手機上還是橫向捲，省高度 */
-.rail { position: relative; margin: 0 0 var(--s-4); }
-.rail__inner { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0; }
-.tagchip__n { display: none; }
-@media (max-width: 640px) {
-  .rail { margin: 0 calc(-1 * var(--s-4)) var(--s-4); overflow-x: auto; scrollbar-width: none; mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent); -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent); }
-  .rail::-webkit-scrollbar { display: none; }
-  .rail__inner { display: inline-flex; flex-wrap: nowrap; padding: 2px var(--s-4); }
-}
-.tagchip {
-  display: inline-flex; align-items: center; gap: 5px;
-  height: var(--h-sm); padding: 0 12px; white-space: nowrap;
-  background: var(--surface); border: 0; border-radius: var(--r-pill);
-  box-shadow: 0 0 0 1px var(--line);
-  font-size: 13px; font-weight: 500; color: var(--text-2); cursor: pointer;
-  transition: background var(--dur) var(--ease), color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
-}
-.tagchip:hover { color: var(--text); box-shadow: 0 0 0 1px var(--line-strong); }
-.tagchip.is-on { background: var(--text); color: var(--surface); box-shadow: none; }
-.tagchip__n { font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; }
-.tagchip.is-on .tagchip__n { color: inherit; opacity: 0.7; }
-/* 「已隱藏 N 類」：不是籤，是回設定頁的路；虛線框跟籤區分開 */
-.tagchip--hidden { text-decoration: none; color: var(--text-3); box-shadow: none; border: 1px dashed var(--line-strong); background: transparent; }
-.tagchip--hidden:hover { color: var(--text); border-color: var(--text-3); box-shadow: none; }
-
 .count { margin-bottom: var(--s-3); font-variant-numeric: tabular-nums; }
 .ghosts { display: grid; gap: 6px; }
 .ghosts .ghost { height: 62px; }
@@ -216,8 +188,4 @@ watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (no
 .empty__title { font-size: 16px; font-weight: 600; margin-bottom: var(--s-2); }
 .empty__hint { font-size: 13.5px; }
 
-@media (max-width: 640px) {
-  .rail { margin-inline: calc(-1 * var(--s-4)); }
-  .rail__inner { padding-inline: var(--s-4); }
-}
 </style>
