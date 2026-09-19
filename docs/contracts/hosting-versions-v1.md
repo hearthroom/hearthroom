@@ -31,6 +31,29 @@ Runtime configuration: both backends receive the same backend-only
 HearthRoom origin. Never place the key in frontend assets. Missing configuration fails
 closed. Activate the host before deploying the new issuer/client workflow.
 
+## Pending edits and A/B switching (2026-09-20)
+
+The HearthRoom editor calls `POST /v1/cards/{roleId}/edit` before any Harbor draft
+write. A pending submission becomes `superseded`, loses its review claim and private
+snapshot, and cannot receive further stamps or approval even from an in-flight request.
+This does not revoke the approved revision. After every part of the draft is saved,
+`resubmit: true` causes a fresh submission with the prior author-declared rating.
+Partial saves never submit partial content. Retrying the edit endpoint recovers the
+re-review obligation; authors can change the rating through explicit submission.
+
+Saving after approval remains draft-only until the author explicitly submits again.
+Direct API clients must use the same begin-edit / complete-save / submit sequence;
+editing only a provider draft cannot mutate an immutable submitted version. This
+release does not add provider mutation webhooks or automatically inspect drafts edited
+outside that sequence. Clients must not label such edits as an updated submission.
+
+Approval switches the public projection, rating, search text and hosted revision in
+one D1 transaction. Previously approved revision links resolve to the current listing;
+existing conversations keep their pinned approved revision. A delayed background sync
+of an older revision cannot overwrite the new projection. Explicit withdrawal remains
+separate and revokes old versions. There is no historical-version browsing UI or
+unreferenced snapshot garbage collection in this release.
+
 ## Outcome and scope
 
 HearthRoom owns works, version issuance, community review and publication. SaaS providers

@@ -1,4 +1,4 @@
-import { hostGateway, submitHosted, hostingDecision } from "./hosting";
+import { hostGateway, submitHosted, hostingDecision, beginHostedEdit } from "./hosting";
 import { saveCommunityProfile, cleanAvatars } from "./community-profile";
 import { bodyLimit } from "hono/body-limit";
 import { syncCard, copiesFor, workFor, publishedCopiesFor, distributeCard, type DistributeTarget } from "./card-sync";
@@ -917,6 +917,16 @@ app.post("/v1/cards", async (c) => {
     c.executionCtx.waitUntil(distributeCard(c.env, memberId, { provider, roleId, account: me.accountNumId, token: bearer }, distribute));
   }
   return c.json(row ? { ...toCard(row, lang(c)), status: row.status, distributing: distribute.map((t) => t.provider) } : { id }, created ? 201 : 200);
+});
+
+app.post('/v1/cards/:roleId/edit',async(c)=>{
+ const me=await requireAuthor(c);
+ if(providerOf(c)!=='harbor')throw new HttpError(400,'hosting_provider_unsupported');
+ if(!c.env.HOSTING_SERVICE_KEY)throw new HttpError(503,'hosting_unavailable');
+ const memberId=await resolveMember(c.env.DB,'harbor',me.accountNumId,Date.now());
+ const result=await beginHostedEdit(c.env.DB,memberId,c.req.param('roleId'),Date.now());
+ note(c,{event:'register',detail:result.resubmit?'review_superseded':'draft_edit'});
+ return c.json(result,200,{'Cache-Control':'private, no-store'});
 });
 
 app.get('/v1/hosting/versions/:versionId/decision',async(c)=>{

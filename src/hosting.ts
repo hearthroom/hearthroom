@@ -3,7 +3,7 @@ import { apiBaseOf } from './providers';
 import { getCard, upsertCard } from './cards';
 import { pendingSubmissionOf } from './review';
 import { saveSnapshotStatement } from './review-snapshot';
-import { projectRole, upstream, type UpstreamRole } from './upstream';
+import { buildSearchText, projectRole, upstream, type UpstreamRole } from './upstream';
 
 interface Receipt { workId: string; versionId: string; hostedRevisionId: string }
 interface VersionRow {
@@ -35,6 +35,22 @@ export const hostGateway = {
  },
 };
 const receiptOf=(r:VersionRow):Receipt=>({workId:r.work_id,versionId:r.version_id,hostedRevisionId:r.hosted_revision_id!});
+
+// Called before the editor writes any part of a draft. Retire the old review
+// first so a reviewer holding its snapshot cannot publish it during the save.
+// Keep the obligation durable across partial saves and browser/network failures.
+export async function beginHostedEdit(db:D1Database,memberId:string,roleId:string,now:number):Promise<{resubmit:boolean;nsfw?:boolean}> {
+ const work=await db.prepare("SELECT id,member_id FROM works WHERE source_provider='harbor' AND source_role_id=?").bind(roleId).first<{id:string;member_id:string}>();
+ if(!work)return {resubmit:false};
+ if(work.member_id!==memberId)throw new HttpError(403,'not the author of this card');
+ await db.batch([
+  db.prepare("UPDATE review_submissions SET status='superseded',claimed_by=NULL,claimed_at=NULL,decided_at=? WHERE status='pending' AND id IN (SELECT submission_id FROM hosting_versions WHERE work_id=?)").bind(now,work.id),
+  db.prepare("DELETE FROM review_snapshots WHERE submission_id IN (SELECT s.id FROM review_submissions s JOIN hosting_versions v ON v.submission_id=s.id WHERE v.work_id=? AND s.status='superseded')").bind(work.id),
+  db.prepare("UPDATE cards SET status='needs_review' WHERE approved_version_id IS NULL AND id IN (SELECT card_id FROM hosting_versions WHERE work_id=? AND state='superseded')").bind(work.id),
+ ]);
+ const latest=await db.prepare('SELECT state,nsfw FROM hosting_versions WHERE work_id=? AND submission_id IS NOT NULL ORDER BY created_at DESC,rowid DESC LIMIT 1').bind(work.id).first<{state:string;nsfw:number}>();
+ return latest?.state==='superseded'?{resubmit:true,nsfw:latest.nsfw===1}:{resubmit:false};
+}
 
 // Persist the issuer's operation before contacting the host: a lost HTTP reply can
 // resume the same seal without reading a later draft or creating another version.
@@ -73,7 +89,7 @@ export async function submitHosted(env:Env,input:{memberId:string;account:number
  saveSnapshotStatement(db,submissionId,settings,input.now);
  const snapshot=db.prepare('INSERT INTO review_snapshots(submission_id,detail,created_at) SELECT ?,?,? WHERE EXISTS(SELECT 1 FROM review_submissions WHERE id=?)').bind(submissionId,JSON.stringify(settings),input.now,submissionId);
  const finalize=(cardId:string):D1PreparedStatement[]=>[
-   db.prepare("UPDATE hosting_versions SET hosted_revision_id=?,card_id=?,submission_id=?,public_role=?,state='pending' WHERE version_id=? AND submission_id IS NULL").bind(receipt.hostedRevisionId,cardId,submissionId,JSON.stringify(sealed),version!.version_id),
+   db.prepare("UPDATE hosting_versions SET hosted_revision_id=?,card_id=?,submission_id=?,public_role=?,state='pending' WHERE version_id=? AND submission_id IS NULL").bind(receipt.hostedRevisionId,cardId,submissionId,JSON.stringify({...sealed,searchText:buildSearchText(sealed)}),version!.version_id),
    db.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,content_hash,submitted_at,nsfw) SELECT ?,?,'harbor',?,?,'pending',?,?,? WHERE EXISTS(SELECT 1 FROM hosting_versions WHERE version_id=? AND submission_id=?)")
     .bind(submissionId,cardId,receipt.hostedRevisionId,existing?.reviewed_hash?'re':'first','version:'+receipt.versionId,input.now,Number(input.nsfw),version!.version_id,submissionId),
    snapshot,

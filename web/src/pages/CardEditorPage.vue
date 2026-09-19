@@ -43,6 +43,7 @@ import {
   saveAuthorAsset,
   submitRoleForReview,
   registerCard,
+  beginCardEdit,
   unpublishRole,
   unregisterCard,
   uploadImage,
@@ -263,6 +264,8 @@ const saving = ref(false);
 const saveProgress = ref<{ done: number; total: number } | null>(null);
 const error = ref("");
 const saved = ref(false);
+const reviewRetry = ref(false);
+const reviewResubmitted = ref(false);
 /** 卡已經刪掉：離開時不再問「放棄修改？」，也不攔關分頁 */
 const deleted = ref(false);
 /** 右下角那一條「已儲存」。說完就走，不佔版面。 */
@@ -937,6 +940,11 @@ async function save() {
     if (!token) throw new Error(t("auth.expired"));
 
     let targetRoleId = roleId.value;
+    const review = targetRoleId && editorProvider.value === 'harbor'
+      ? await beginCardEdit(targetRoleId, token, editorProvider.value)
+      : {resubmit:false, nsfw:false};
+    reviewRetry.value = review.resubmit;
+    reviewResubmitted.value = false;
     if (!targetRoleId) {
       const created = await createRole(
         { roleName: draft.value.roleName.trim(), language: draft.value.language },
@@ -948,6 +956,8 @@ async function save() {
       track("card_create", { subject: targetRoleId });
     }
 
+    // Only the editable source becomes private; the approved hosted revision has
+    // its own immutable ID and remains available through the issuer decision.
     if (roleVisibility.value === "public") {
       await unpublishRole(targetRoleId, token);
       roleVisibility.value = "private";
@@ -975,6 +985,12 @@ async function save() {
 
     await saveWorldbook(token, targetRoleId);
     await saveRegex(token, targetRoleId);
+
+    if (review.resubmit) {
+      await registerCard(targetRoleId, token, review.nsfw === true, [], editorProvider.value);
+      reviewRetry.value = false;
+      reviewResubmitted.value = true;
+    }
 
     original.value = sent;
     saved.value = true;
@@ -1226,8 +1242,11 @@ async function exportCard(format: "png" | "json") {
             <strong>{{ providerName(result.provider) }}</strong> · {{ result.error || $t(result.status === 'synced' ? 'edit.saved' : `linked.status.${result.status}`) }}
           </p>
         </section>
-        <p v-if="roleVisibility === 'public'" class="notice" role="status">{{ $t("editor.publicNotice") }}</p>
+        <p v-if="editorProvider === 'harbor' && !isNew" class="notice" role="status">{{ $t("workspace.editNotice") }}</p>
+        <p v-else-if="roleVisibility === 'public'" class="notice" role="status">{{ $t("editor.publicNotice") }}</p>
         <p v-else-if="roleVisibility === 'waitReview'" class="notice" role="status">{{ $t("editor.reviewNotice") }}</p>
+        <p v-if="reviewResubmitted" class="notice" role="status">{{ $t("workspace.reviewRestarted") }}</p>
+        <p v-if="reviewRetry && !saving" class="notice" role="status">{{ $t("workspace.reviewSaveRetry") }}</p>
         <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
         <p v-else-if="restoredDraft" class="notice restored" role="status">
           <span>{{ $t("editor.draftRestored") }}</span>
@@ -1458,7 +1477,7 @@ async function exportCard(format: "png" | "json") {
           右欄就整條讓給手機框。
         -->
         <div class="bar">
-          <button class="btn btn--primary" type="submit" :disabled="saving || (!dirty && !isNew && !platformResults.some(r => r.error))">
+          <button class="btn btn--primary" type="submit" :disabled="saving || (!dirty && !isNew && !reviewRetry && !platformResults.some(r => r.error))">
             {{ saveLabel }}
           </button>
           <button v-if="!isNew" type="button" class="btn" :disabled="!canPublish || saving" @click="publish">

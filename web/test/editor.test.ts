@@ -37,6 +37,7 @@ const api = vi.hoisted(() => ({
   ]),
   submitRoleForReview: vi.fn(async () => ({})),
   registerCard: vi.fn(async () => ({status:'pending'})),
+  beginCardEdit: vi.fn(async ():Promise<{resubmit:boolean;nsfw?:boolean}> => ({resubmit:false})),
   deleteRole: vi.fn(async () => {}),
   unregisterCard: vi.fn(async () => {}),
   uploadImage: vi.fn(async () => "https://img.test/avatar.png"),
@@ -728,4 +729,29 @@ it('keeps private LunaTalk drafts on their existing upstream review path',async(
  expect(api.submitRoleForReview).toHaveBeenCalledWith('r1',i18n.global.t('editor.publish.summary',{name:'Legacy draft'}),'tok');
  expect(api.registerCard).not.toHaveBeenCalled();
  expect(router.currentRoute.value.path).toBe('/mine');
+});
+
+it('retires a pending Harbor review before saving, then submits the completed draft again',async()=>{
+ localStorage.setItem('hearthroom.provider','harbor');
+ api.fetchRoleDetail.mockResolvedValueOnce({roleName:'A',roleDetailDesc:'Private instructions',roleWelcome:'Hello',roleVisibility:'public'});
+ api.beginCardEdit.mockResolvedValueOnce({resubmit:true,nsfw:true});
+ await mount('/cards/r1/edit');
+ await type($<HTMLInputElement>('#f-name'),'B revised');await submit();
+ expect(api.beginCardEdit).toHaveBeenCalledWith('r1','tok','harbor');
+ expect(api.beginCardEdit.mock.invocationCallOrder[0]).toBeLessThan(api.patchRoleDocument.mock.invocationCallOrder[0]);
+ expect(api.unpublishRole).toHaveBeenCalledWith('r1','tok');
+ expect(api.registerCard).toHaveBeenCalledWith('r1','tok',true,[],'harbor');
+ expect(api.registerCard.mock.invocationCallOrder[0]).toBeGreaterThan(api.patchRoleDocument.mock.invocationCallOrder[0]);
+});
+
+it('a failed draft save never submits partial content for review',async()=>{
+ localStorage.setItem('hearthroom.provider','harbor');
+ api.fetchRoleDetail.mockResolvedValueOnce({roleName:'A'});
+ api.beginCardEdit.mockResolvedValueOnce({resubmit:true,nsfw:false});
+ api.patchRoleDocument.mockRejectedValueOnce(new Error('fixture save failed'));
+ await mount('/cards/r1/edit');await type($<HTMLInputElement>('#f-name'),'B');await submit();
+ expect(api.beginCardEdit).toHaveBeenCalled();
+ expect(api.registerCard).not.toHaveBeenCalled();
+ expect(root.textContent).toContain('fixture save failed');
+ expect($<HTMLInputElement>('#f-name').value).toBe('B');
 });
