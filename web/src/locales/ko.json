@@ -1147,5 +1147,7 @@
   "workspace.submitUnavailable": "검토를 요청하지 못했어요. 잠시 후 다시 시도해 주세요.",
   "workspace.submitConflict": "제출 내용이 변경되었어요. 새로고침 후 다시 시도해 주세요.",
   "workspace.reviewConsent": "HearthRoom은 캐릭터 설정, 인사말, Lorebook, 추가 지침과 표시 규칙을 포함한 이 버전의 전체 설정을 검토용으로 읽고, 검토가 끝나거나 철회하면 검토용 사본을 삭제해요. 호스팅 서비스는 이 버전을 보관하며, 초안 수정은 게시된 내용에 영향을 주지 않아요. 새 버전은 별도 검토가 필요해요.",
-  "workspace.editHint": "저장하면 초안만 업데이트되고 게시된 버전은 유지돼요."
+  "workspace.editHint": "저장하면 초안만 업데이트되고 게시된 버전은 유지돼요.",
+  "workspace.legacyReview": "LunaTalk 심사에 제출",
+  "workspace.legacyReviewHint": "LunaTalk은 기존 심사 절차를 사용합니다. 승인 후 내 카드에서 HearthRoom 커뮤니티 심사에 제출하세요."
 }

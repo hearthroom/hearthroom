@@ -1422,8 +1422,8 @@ async function exportCard(format: "png" | "json") {
           </div>
 
           <div class="panel">
-            <h2>{{ $t("editor.publish") }}</h2>
-            <p class="muted">{{ $t("editor.publish.hint") }}</p>
+            <h2>{{ $t(editorProvider === "harbor" ? "editor.publish" : "workspace.legacyReview") }}</h2>
+            <p class="muted">{{ $t(editorProvider === "harbor" ? "editor.publish.hint" : "workspace.legacyReviewHint") }}</p>
             <p v-if="dirty || isNew" class="subtle">{{ $t("editor.publish.saveFirst") }}</p>
             <button type="button" class="btn btn--primary" :disabled="!canPublish || saving" @click="publish">
               {{ $t("editor.publish.submit") }}
