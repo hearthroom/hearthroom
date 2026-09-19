@@ -2,7 +2,7 @@
 
 The previous Me page gave identity, shortcuts and service management the same stacked-panel treatment. This revision emphasizes the member's avatar, name and bio; desktop separates the profile from creation/service controls, while mobile reads in the same logical DOM and visual order. Secondary metadata is quieter, controls use compact rounded rectangles, creation links include consistent line icons and explanatory copy, and service management uses text links instead of competing outlined buttons.
 
-References inspected visually: [GitHub profile](https://github.com/sindresorhus) for profile/content separation and restrained metadata; [Discourse profile](https://meta.discourse.org/u/sam/summary) for prominent community identity and grouped secondary navigation. These informed the hierarchy; no imagery, statistics or functionality was copied. Existing Hearthroom color, spacing and radius tokens remain in use. Provider initials are letter placeholders, not invented provider logos.
+References inspected visually: [GitHub profile](https://github.com/sindresorhus) for profile/content separation and restrained metadata; [Discourse profile](https://meta.discourse.org/u/sam/summary) for prominent community identity and grouped secondary navigation. These informed the hierarchy; no imagery, statistics or functionality was copied. Existing Hearthroom color, spacing and radius tokens remain in use. HarperHarbor uses its official yellow-backed Fraunces italic H, matching its website wordmark; the single-glyph font is bundled locally with its OFL license. The LunaTalk initial remains a placeholder.
 
 ## Behavior preserved and corrected
 
