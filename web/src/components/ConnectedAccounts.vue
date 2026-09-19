@@ -6,17 +6,17 @@ import {
   ACCOUNT_PAGE,
   PROVIDERS,
   apiBaseOf,
-  currentProvider,
   providerName,
   type ProviderId,
 } from "@/lib/provider";
-import { accountToken, connectAccount, disconnectAccount } from "@/lib/connections";
-import { fetchMeAt } from "@/lib/api";
+import { accountToken, connectAccount } from "@/lib/connections";
+import { ApiError, fetchMeAt } from "@/lib/api";
 import { connectionMessage } from "@/lib/connection-ui";
-import { confirmDialog } from "@/lib/confirm";
+import { useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useLocalePath } from "@/lib/use-locale";
 const session = useSession();
+const route=useRoute();
 const { t } = useI18n();
 const { lp } = useLocalePath();
 const configured = ref<{ id: ProviderId; name: string }[]>([]);
@@ -32,30 +32,37 @@ const busy = ref(false);
 // 每一家連的是哪個信箱。使用者要確認的是「這是我哪一個帳號」，公開編號回答不了這件事。
 // 問不到就維持顯示編號——那一家可能還沒給這項授權，而這一列不該因此變成空的。
 const emails = ref<Partial<Record<ProviderId, string>>>({});
+const states=ref<Partial<Record<ProviderId,'checking'|'ready'|'expired'|'unavailable'>>>({});
 async function loadEmails() {
   for (const p of session.profile?.identities ?? []) {
     const id = p.provider as ProviderId;
     if (!PROVIDERS.some((x) => x.id === id)) continue;
+    states.value[id]="checking";
     try {
       const token = await accountToken(id);
-      if (!token) continue;
+      if (!token) {states.value[id]="expired";continue;}
       const me = await fetchMeAt(apiBaseOf(id), token);
+      if (me.accountNumId !== p.externalId) {states.value[id]="expired";continue;}
+      states.value[id]="ready";
       if (me.email) emails.value = { ...emails.value, [id]: me.email };
-    } catch {
-      // 拿不到就算了：這一列的主要資訊是「連了沒有」，信箱只是錦上添花。
+    } catch (e) {
+      states.value[id]=e instanceof ApiError && e.status===401?"expired":"unavailable";
     }
   }
 }
 
 /** 管完帳號要回得來，所以把現在這一頁帶過去。 */
+function billingPage(id:ProviderId):string {
+ return id==='harbor'?'https://console.harperharbor.com/me/wallet':'https://lunatalk.ai/pages/mine/vippay';
+}
 function accountPage(id: ProviderId): string | null {
   const base = ACCOUNT_PAGE[id];
-  return base ? `${base}?return_to=${encodeURIComponent(location.href)}` : null;
+  return base ? `${base}?return_to=${encodeURIComponent(new URL(route.fullPath,location.origin).href)}` : null;
 }
 
 onMounted(async () => {
-  configured.value = await availableProviders();
   void loadEmails();
+  configured.value = await availableProviders();
 });
 async function connect(provider: ProviderId) {
   error.value = "";
@@ -64,28 +71,6 @@ async function connect(provider: ProviderId) {
     await connectAccount(provider, lp("/me"));
   } catch (e) {
     error.value = connectionMessage(e);
-    busy.value = false;
-  }
-}
-async function disconnect(provider: ProviderId) {
-  if (
-    !(await confirmDialog({
-      message: t("linked.disconnectHint"),
-      confirmText: t("linked.disconnect"),
-    }))
-  )
-    return;
-  error.value = "";
-  busy.value = true;
-  try {
-    const token = await session.accessToken();
-    if (!token) throw new Error("connection_source_expired");
-    const removedLogin = currentProvider() === provider;
-    session.profile = await disconnectAccount(provider, token, session.profile?.identities);
-    if (removedLogin) location.reload();
-  } catch (e) {
-    error.value = connectionMessage(e);
-  } finally {
     busy.value = false;
   }
 }
@@ -111,6 +96,7 @@ async function disconnect(provider: ProviderId) {
                   })
           }}
         </p>
+        <p v-if="session.profile?.identities.some(i=>i.provider===p.id)" class="subtle" role="status">{{ $t(`services.${states[p.id]??'checking'}`) }}</p>
       </div>
       <div
         class="actions"
@@ -127,24 +113,16 @@ async function disconnect(provider: ProviderId) {
         >
           {{ $t("linked.manage", { name: providerName(p.id) }) }} ↗
         </a>
+        <a class="btn btn--sm" :href="billingPage(p.id)" target="_blank" rel="noopener">{{ $t('services.billing') }} ↗</a>
         <button
+          v-if="states[p.id]==='expired'"
           class="btn btn--sm"
           :disabled="busy || !session.profile"
           @click="connect(p.id)"
         >
           {{ $t("me.reauthorize") }}
         </button>
-        <button
-          v-if="
-            !session.profile?.identities.find((i) => i.provider === p.id)
-              ?.founding
-          "
-          class="btn btn--sm btn--ghost"
-          :disabled="busy || !session.profile"
-          @click="disconnect(p.id)"
-        >
-          {{ $t("linked.disconnect") }}
-        </button>
+        <button v-if="states[p.id]==='unavailable'" class="btn btn--sm" :disabled="busy" @click="loadEmails">{{ $t('linked.retry') }}</button>
       </div>
       <button
         v-else
@@ -155,9 +133,7 @@ async function disconnect(provider: ProviderId) {
         {{ $t("linked.connect") }}
       </button>
     </div>
-    <button class="btn btn--sm" @click="session.logout()">
-      {{ $t("nav.logout") }}
-    </button>
+    <p class="subtle">{{ $t("services.permanent") }}</p>
   </section>
 </template>
 <style scoped>
@@ -177,7 +153,7 @@ p {
   gap: var(--s-3);
   flex-wrap: wrap;
   border-top: 1px solid var(--line);
-  padding-top: var(--s-3);
+  padding-top: var(--s-4);
 }
 .actions {
   display: flex;
@@ -185,4 +161,6 @@ p {
   align-items: center;
   gap: var(--s-2);
 }
+.btn {min-height:var(--h-lg);height:auto;white-space:normal}
+.account > div:first-child {min-width:0;overflow-wrap:anywhere}
 </style>

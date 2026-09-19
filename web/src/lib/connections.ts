@@ -1,6 +1,5 @@
 import {
   beginLogin,
-  forgetSession,
   persist,
   refresh,
   restorePersisted,
@@ -64,33 +63,6 @@ export async function finishConnection(
   persist(token, provider);
   setProvider(from);
   useProviderUpstream();
-  return profile;
-}
-export async function disconnectAccount(
-  provider: ProviderId,
-  token: string,
-  identities: SiteMe["identities"] = []
-): Promise<SiteMe> {
-  let issuer = currentProvider();
-  if (issuer === provider) {
-    const remaining = identities.find(i => i.provider !== provider);
-    if (!remaining) throw new Error("cannot_disconnect_current_account");
-    issuer = remaining.provider as ProviderId;
-    const proof = await accountToken(issuer, remaining.externalId);
-    if (!proof) throw new Error("connection_source_expired");
-    token = proof;
-  }
-  const profile = await result(
-    await fetch(`/v1/me/connections/${provider}`, {
-      method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "X-Provider": issuer,
-      },
-    })
-  );
-  forgetSession(provider);
-  if(currentProvider()===provider) {setProvider(issuer);useProviderUpstream()}
   return profile;
 }
 

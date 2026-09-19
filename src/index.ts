@@ -1,7 +1,8 @@
-import { updateMemberProfile } from "./members";
+import { saveCommunityProfile, cleanAvatars } from "./community-profile";
+import { bodyLimit } from "hono/body-limit";
 import { syncCard, copiesFor, workFor, publishedCopiesFor, distributeCard, type DistributeTarget } from "./card-sync";
 import { apiBaseOf as providerApiBase } from "./providers";
-import { linkIdentity, unlinkIdentity, connectedMemberId } from './connections';
+import { linkIdentity, unlinkIdentity, connectedMemberId, emptyCommunity } from './connections';
 import { saveMemberId } from './members';
 import { type Context, Hono } from "hono";
 import {
@@ -31,7 +32,7 @@ import { tagNamesFor } from "../shared/tag-catalog";
 import { providerOf, isReviewer, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
 import { configuredProviders, hasChat, parseProvider, requireConfigured, DEFAULT_PROVIDER, PROVIDER_NAMES, type ProviderId, reviewEnabled } from "./providers";
 import { providerApiBaseFor } from "./providers";
-import { WEEKLY_LIMIT, recordRegistration, registeredThisWeek } from "./quota";
+import { WEEKLY_LIMIT, registeredThisWeek } from "./quota";
 import {
   STAMPS_REQUIRED, claim as claimSubmission, createSubmission, getSubmission, listQueue, needsReviewStatements,
   release as releaseSubmission, stamp as stampSubmission,
@@ -551,6 +552,7 @@ app.get("/v1/authors/:handle", async (c) => {
     handle: author.handle,
     name: author.author_name,
     avatar: author.author_avatar,
+    bio: author.bio,
     cardCount: author.card_count,
     talkTotal: author.talk_total ?? 0,
     joinedAt: author.joined_at,
@@ -610,6 +612,11 @@ app.post('/v1/me/connections/preview', async (c) => {
   const targetId = await connectedMemberId(c.env.DB, provider, target.accountNumId);
   const sourceProfile = (await memberProfile(c.env.DB, member.id))!;
   const targetProfile = targetId ? await memberProfile(c.env.DB, targetId) : null;
+  if (targetId && targetId !== member.id) {
+    if (!await emptyCommunity(c.env.DB,targetId)) throw new HttpError(409,'connection_target_not_empty');
+    const drafts=await upstream.fetchMyRoles(c.env,body.token,1,1,provider);
+    if (drafts.items.length || drafts.hasNext) throw new HttpError(409,'connection_target_not_empty');
+  }
   const summary = (profile: typeof targetProfile) => profile ? {handle: profile.handle, memberSince: profile.memberSince} : null;
   return c.json({
     source: {...summary(sourceProfile), provider: member.provider, name: sourceProfile.displayName},
@@ -628,6 +635,11 @@ app.post("/v1/me/connections", async (c) => {
   if (targetProfile && targetId !== member.id && !body.keepHandle) throw new HttpError(409, 'connection_choice_required');
   if (body.keepHandle && (body.sourceHandle !== sourceProfile.handle || body.targetHandle !== (targetProfile?.handle ?? null))) throw new HttpError(409, 'connection_preview_changed');
   if (body.keepHandle && body.keepHandle !== sourceProfile.handle) throw new HttpError(400, 'connection_choice_invalid');
+  if(targetId && targetId!==member.id) {
+    if(!await emptyCommunity(c.env.DB,targetId))throw new HttpError(409,'connection_target_not_empty');
+    const drafts=await upstream.fetchMyRoles(c.env,body.token,1,1,provider);
+    if(drafts.items.length || drafts.hasNext)throw new HttpError(409,'connection_target_not_empty');
+  }
   await linkIdentity(c.env.DB, member, provider, target.accountNumId, Date.now());
   return c.json(await memberProfile(c.env.DB, member.id), 200, { 'Cache-Control': 'no-store' });
 });
@@ -637,10 +649,20 @@ app.delete('/v1/me/connections/:provider', async (c) => {
   return c.json(await memberProfile(c.env.DB, member.id), 200, { 'Cache-Control': 'no-store' });
 });
 
-app.put("/v1/me/profile", async c => {
+app.put("/v1/me/profile", bodyLimit({maxSize: 2 * 1024 * 1024 + 16384, onError: c => c.json({error:"avatar_invalid"},400)}), async c => {
   const member = await requireMember(c);
-  const profile = await updateMemberProfile(c.env.DB, member.id, await c.req.json().catch(() => null));
+  const profile = await saveCommunityProfile(c.env, member.id, c.req.raw);
   return c.json({...profile, reviewer: await isReviewer(c.env.DB, member.id)}, 200, {"Cache-Control":"no-store"});
+});
+
+app.get('/v1/avatars/:handle/:file',async c=>{
+ const handle=c.req.param('handle'), file=c.req.param('file');
+ if(!/^[a-z]{8}$/.test(handle)||!/^[-a-f0-9]{36}\.webp$/.test(file))throw new HttpError(404,'avatar not found');
+ const key=`${handle}/${file}`;
+ if(!await c.env.DB.prepare('SELECT 1 FROM members WHERE handle=? AND avatar_key=?').bind(handle,key).first())throw new HttpError(404,'avatar not found');
+ const image=await c.env.AVATARS?.get(key);
+ if(!image)throw new HttpError(404,'avatar not found');
+ return new Response(image.body,{headers:{'Content-Type':'image/webp','Cache-Control':'public, max-age=300','X-Content-Type-Options':'nosniff'}});
 });
 
 app.get("/v1/me", async (c) => {
@@ -810,13 +832,16 @@ app.post("/v1/cards", async (c) => {
   // 這條是防直接打 API 的那一手。
   if (role.creationMethod !== CREATION_METHOD) throw new HttpError(403, "only cards created on this site can be listed");
 
+  const mapped = await workFor(c.env.DB, provider, roleId);
+  if (mapped && (mapped.source_provider !== provider || mapped.source_role_id !== roleId)) throw new HttpError(409, 'publication_use_original');
+
   // 每週額度（見 quota.ts）。已經在榜上的卡再送一次是「刷新」，不佔額度；
   // 這週登記過又撤掉的同一張卡再登也不佔——它已經算過了。
   const now = Date.now();
   const existing = await getCard(c.env.DB, roleId, provider);
   if (!existing) {
     const thisWeek = await registeredThisWeek(c.env.DB, me.accountNumId, now, provider);
-    if (!thisWeek.has(roleId) && thisWeek.size >= WEEKLY_LIMIT) {
+    if (!thisWeek.has(`${provider}:${roleId}`) && thisWeek.size >= WEEKLY_LIMIT) {
       note(c, { event: "register", subject: roleId, detail: "quota" });
       throw new HttpError(403, "weekly_quota_exceeded");
     }
@@ -834,8 +859,7 @@ app.post("/v1/cards", async (c) => {
     contentHash = await publicHash(role);
   }
 
-  const { id, created } = await upsertCard(c.env.DB, role, now, { status: reviewing ? "pending" : "approved", provider, nsfw });
-  if (created) await recordRegistration(c.env.DB, me.accountNumId, roleId, now, provider);
+  const { id, created } = await upsertCard(c.env.DB, role, now, { status: reviewing ? "pending" : "approved", provider, nsfw, recordRegistration: true });
   // 宣告跟著最新一次提交走；在榜的卡改了宣告視同內容變了（下面重審）
   const declarationChanged = !!existing && (existing.nsfw === 1) !== nsfw;
   if (existing && declarationChanged) await setCardNsfw(c.env.DB, id, nsfw);
@@ -972,7 +996,7 @@ app.get("/v1/review/:id/detail", async (c) => {
 /** 作者自己撤銷登記。這是作品離開榜單的唯一途徑。 */
 app.delete("/v1/cards/:id", async (c) => {
   const me = await requireAuthor(c);
-  await unregister(c.env.DB, c.req.param("id"), me.accountNumId);
+  await unregister(c.env.DB, c.req.param("id"), me.accountNumId, providerOf(c));
   note(c, { event: "unregister", subject: c.req.param("id") });
   return c.body(null, 204);
 });
@@ -1224,6 +1248,7 @@ app.get("*", async (c) => {
 export default {
   fetch: app.fetch,
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(cleanAvatars(env));
     ctx.waitUntil(
       syncBatch(env).then((r) => {
         console.log("sync done", r);

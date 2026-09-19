@@ -1,11 +1,12 @@
 import { SELF, env } from "cloudflare:test";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
-import { resetDb, identities, restoreUpstream, bearer } from "./helpers";
+import { resetDb, identities, restoreUpstream, bearer, myRolesOnUpstream } from "./helpers";
 import { upstream } from "../src/upstream";
 
 beforeEach(async () => {
   await resetDb();
   identities({ owner: 11, other: 22 });
+  myRolesOnUpstream({new:[],other:[],owner:[]});
   vi.spyOn(upstream, "fetchMe").mockImplementation(async (_e, t, p) => {
     if (t === "owner" && p === "lunatalk") return { accountNumId: 11 };
     if (t === "new" && p === "harbor") return { accountNumId: 22 };
@@ -62,26 +63,13 @@ it("requires proof of both accounts and does not accept a caller-supplied accoun
   expect(r.status).toBe(400);
   expect((await profile()).identities).toHaveLength(1);
 });
-it("cannot disconnect the last identity; disconnecting another never deletes its upstream assets", async () => {
-  await profile();
-  expect(
-    (
-      await SELF.fetch("https://c.test/v1/me/connections/lunatalk", {
-        method: "DELETE",
-        headers: bearer("owner"),
-      })
-    ).status
-  ).toBe(409);
-  await link();
-  expect(
-    (
-      await SELF.fetch("https://c.test/v1/me/connections/harbor", {
-        method: "DELETE",
-        headers: bearer("owner"),
-      })
-    ).status
-  ).toBe(200);
-  expect((await profile()).identities).toHaveLength(1);
+it("never disconnects either service", async () => {
+ await profile();await link();
+ for(const provider of ['lunatalk','harbor']) {
+  const r=await SELF.fetch(`https://c.test/v1/me/connections/${provider}`,{method:'DELETE',headers:bearer('owner')});
+  expect(r.status).toBe(409);
+ }
+ expect((await profile()).identities).toHaveLength(2);
 });
 it("enforces one identity per provider at the database boundary", async () => {
   await profile();
@@ -104,46 +92,12 @@ it("keeps the founding account attached when signed in through another provider"
   expect(r.status).toBe(409);
   expect((await profile("new", "harbor")).identities).toHaveLength(2);
 });
-it("preserves every original member and identity when linking and unlinking", async () => {
-  const a = await profile();
-  const b = await profile("new", "harbor");
-  await link();
-  expect(
-    (await env.DB.prepare("SELECT id FROM members").all()).results
-  ).toHaveLength(2);
-  expect(
-    (await env.DB.prepare("SELECT member_id FROM member_identities").all())
-      .results
-  ).toHaveLength(2);
-  await SELF.fetch("https://c.test/v1/me/connections/harbor", {
-    method: "DELETE",
-    headers: bearer("owner"),
-  });
-  expect((await profile("new", "harbor")).handle).toBe(b.handle);
-  expect((await profile()).handle).toBe(a.handle);
-});
-it("can connect a former founding account after its other connections are removed", async () => {
-  const a = await profile();
-  const b = await profile("new", "harbor");
-  await link();
-  await SELF.fetch("https://c.test/v1/me/connections/harbor", {
-    method: "DELETE",
-    headers: bearer("owner"),
-  });
-  const r = await SELF.fetch("https://c.test/v1/me/connections", {
-    method: "POST",
-    headers: {
-      ...bearer("new"),
-      "X-Provider": "harbor",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ provider: "lunatalk", token: "owner", keepHandle:b.handle,sourceHandle:b.handle,targetHandle:a.handle }),
-  });
-  expect(r.status).toBe(200);
-  expect((await profile()).handle).toBe(b.handle);
-  expect(
-    (await env.DB.prepare("SELECT id FROM members").all()).results
-  ).toHaveLength(2);
+it("retains the chosen community and removes only the empty duplicate", async () => {
+ const a=await profile();const b=await profile('new','harbor');await link();
+ expect((await env.DB.prepare('SELECT id FROM members').all()).results).toHaveLength(1);
+ expect((await env.DB.prepare('SELECT member_id FROM member_identities').all()).results).toHaveLength(2);
+ expect((await profile('new','harbor')).handle).toBe(a.handle);
+ expect(await env.DB.prepare('SELECT id FROM members WHERE handle=?').bind(b.handle).first()).toBeNull();
 });
 
 it('previews both existing communities without connecting them', async () => {

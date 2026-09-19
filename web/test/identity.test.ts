@@ -26,7 +26,7 @@ const session = vi.hoisted(() => ({
 }));
 vi.mock("../src/lib/session", () => ({ useSession: () => session }));
 const connect = vi.hoisted(()=>vi.fn(async()=>undefined));
-vi.mock("../src/lib/connections",()=>({connectAccount:connect,disconnectAccount:vi.fn()}));
+vi.mock("../src/lib/connections",()=>({connectAccount:connect,accountToken:async()=>null}));
 vi.mock("../src/lib/review", () => ({ useReviewer: () => ({ reviewer: false }) }));
 vi.mock("../src/lib/track", () => ({ track: () => {}, currentSurface: () => "me", setSurface: () => {} }));
 

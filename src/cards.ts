@@ -252,7 +252,7 @@ export async function listCards(db: D1Database, opts: ListOptions) {
  * 內容全部來自同步結果，作者送不進任何欄位——這是「登記完再偷換成別的東西」
  * 在結構上不可能發生的原因。
  */
-export async function upsertCard(db: D1Database, role: UpstreamRole, now: number, opts: { status?: string; provider?: ProviderId; nsfw?: boolean } = {}) {
+export async function upsertCard(db: D1Database, role: UpstreamRole, now: number, opts: { status?: string; provider?: ProviderId; nsfw?: boolean; recordRegistration?: boolean } = {}) {
   const provider: ProviderId = opts.provider ?? "lunatalk";
   const existing = await db
     .prepare("SELECT id, talk_num FROM cards WHERE provider = ? AND source_role_id = ?")
@@ -292,7 +292,7 @@ export async function upsertCard(db: D1Database, role: UpstreamRole, now: number
   const id = crypto.randomUUID();
   // 卡號：第一次登記發號，之前登記過又撤掉的卡拿回原來的號（INSERT OR IGNORE 撞到唯一鍵就不動）。
   await db.prepare("INSERT OR IGNORE INTO card_numbers (provider, source_role_id) VALUES (?, ?)").bind(provider, role.roleId).run();
-  await db
+  const insert = db
     .prepare(
       `INSERT INTO cards (id, source_role_id, zone, author_num_id, author_name, author_avatar, names, summaries,
          avatar_url, background_url, slug, tags, talk_num, follow_num, search_text, last_synced_at,
@@ -301,8 +301,16 @@ export async function upsertCard(db: D1Database, role: UpstreamRole, now: number
     )
     // 首次登記把 prev 設成當前值 → trending 從 0 起算。
     // 不這樣的話一張老熱卡剛登記就會用累積總量霸榜。
-    .bind(id, role.roleId, ...shared, role.talkNum, now, opts.provider ?? "lunatalk", opts.status ?? "approved", opts.nsfw ? 1 : 0)
-    .run();
+    .bind(id, role.roleId, ...shared, role.talkNum, now, opts.provider ?? "lunatalk", opts.status ?? "approved", opts.nsfw ? 1 : 0);
+  try {
+    await db.batch([
+      ...(opts.recordRegistration ? [db.prepare("INSERT INTO card_registrations(provider,author_num_id,source_role_id,registered_at) VALUES (?,?,?,?)").bind(provider,role.authorNumId,role.roleId,now)] : []),
+      insert,
+    ]);
+  } catch (error) {
+    if (String(error).includes('weekly_quota_exceeded')) throw new HttpError(403,'weekly_quota_exceeded');
+    throw error;
+  }
   return { id, created: true };
 }
 
@@ -369,14 +377,15 @@ export async function getAuthor(db: D1Database, memberId: string, allowNsfw = fa
   const row = await db
     .prepare(
       `SELECT am.handle AS handle, MAX(COALESCE(am.display_name,c.author_name)) AS author_name, MAX(CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url ELSE c.author_avatar END) AS author_avatar,
-              COUNT(*) AS card_count, SUM(c.talk_num) AS talk_total, MIN(c.registered_at) AS joined_at,
+              MAX(am.bio) AS bio, COUNT(*) AS card_count, SUM(c.talk_num) AS talk_total, MIN(c.registered_at) AS joined_at,
               GROUP_CONCAT(DISTINCT c.provider) AS providers
        FROM cards c ${AUTHOR_JOIN}
-       WHERE am.id = ? AND c.provider = ? AND c.${listed(allowNsfw)}`,
+       WHERE am.id = ? AND ${NOT_A_COPY("c")} AND c.${listed(allowNsfw)}`,
     )
-    .bind(memberId, provider)
+    .bind(memberId)
     .first<{
       handle: string | null;
+      bio: string;
       author_name: string;
       author_avatar: string;
       card_count: number;
@@ -384,7 +393,10 @@ export async function getAuthor(db: D1Database, memberId: string, allowNsfw = fa
       joined_at: number;
       providers: string | null;
     }>();
-  if (!row || !row.card_count) return null;
+  if (!row || !row.card_count) {
+    const member=await db.prepare("SELECT handle,display_name AS author_name,avatar_url AS author_avatar,bio,created_at FROM members WHERE id=?").bind(memberId).first<{handle:string;author_name:string;author_avatar:string;bio:string;created_at:number}>();
+    return member?{...member,card_count:0,talk_total:0,joined_at:member.created_at,providers:[] as string[]}:null;
+  }
   return { ...row, providers: (row.providers ?? "").split(",").filter(Boolean) };
 }
 

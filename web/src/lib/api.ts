@@ -96,6 +96,7 @@ function describeLimit(code: string, detail: LimitDetail | undefined): string | 
 }
 /** 本站自己的 API 回的碼（不是供應商契約的一部分，所以不進 docs/provider-protocol.md）。 */
 const SITE_CODE_KEY: Record<string, string> = {
+  publication_use_original: "error.publicationUseOriginal",
   adult_content: "card.gate.title",
   nsfw_required: "error.nsfwRequired",
   birthdate_required: "error.birthdateRequired",
@@ -338,6 +339,7 @@ export interface Me { accountNumId: number; nickName: string; avatar: string; em
 /** 登入者在本站的身分（不是供應商那邊的）：公開 ID、加入時間、連結了哪些供應商帳號。 */
 export interface SiteMe {
   displayName?: string;
+  bio?: string;
   avatarUrl?: string;
   handle: string;
   memberSince: number;
@@ -1200,6 +1202,9 @@ export async function fetchCardPlatforms(roleId:string,provider:import('./provid
 
 
 
-export async function updateSiteProfile(token:string, profile:{displayName:string;avatarUrl:string}):Promise<SiteMe> {
-  return json<SiteMe>(await fetch(`${COMMUNITY_API}/me/profile`, {method:"PUT",headers:{...from(),...authHeaders(token),"Content-Type":"application/json"},body:JSON.stringify(profile)}));
+export async function updateSiteProfile(token:string, profile:{displayName:string;bio:string;avatar?:File|null;removeAvatar?:boolean}):Promise<SiteMe> {
+ const body=new FormData();body.set('displayName',profile.displayName);body.set('bio',profile.bio);
+ if(profile.avatar)body.set('avatar',profile.avatar);
+ if(profile.removeAvatar)body.set('removeAvatar','true');
+ return json<SiteMe>(await fetch(`${COMMUNITY_API}/me/profile`,{method:'PUT',headers:{...from(),...authHeaders(token)},body}));
 }

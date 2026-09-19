@@ -12,7 +12,7 @@ let cacheGeneration = 0;
  * 邊緣快取也一樣——不換命名空間的話，後面的測試會讀到前一個測試留下的結果。
  */
 export async function resetDb(): Promise<void> {
-  for (const table of ["work_copies", "works", "member_connections", "card_saves", "comment_likes", "comments", "game_worlds", "cards", "card_numbers", "card_registrations", "review_stamps", "review_snapshots", "review_submissions", "reviewers", "member_identities", "members"]) {
+  for (const table of ["avatar_cleanup", "work_copies", "works", "member_connections", "card_saves", "comment_likes", "comments", "game_worlds", "cards", "card_numbers", "card_registrations", "review_stamps", "review_snapshots", "review_submissions", "reviewers", "member_identities", "members"]) {
     await env.DB.prepare(`DELETE FROM ${table}`).run();
   }
   // 卡號是 AUTOINCREMENT（刪過的號不再發），測試之間把序號推回起點，每個測試都從 100001 數起

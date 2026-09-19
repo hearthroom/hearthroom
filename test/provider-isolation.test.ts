@@ -79,7 +79,7 @@ describe("身分不混、榜單相通", () => {
   it("搬到另一家的副本不重複上榜：榜上只有來源那張", async () => {
     await register("luna-token");
     await copyOnHarbor();
-    expect((await register("harbor-token", "harbor", "copy-1")).status).toBe(201);
+    expect((await register("harbor-token", "harbor", "copy-1")).status).toBe(409);
     const body = (await (await board()).json()) as { items: { name: string }[] };
     expect(body.items.map((c) => c.name)).toEqual(["月光"]);
   });
