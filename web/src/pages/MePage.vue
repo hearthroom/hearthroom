@@ -46,6 +46,7 @@ onMounted(() => {
 <template>
   <div v-if="session.me" class="page page--narrow me">
     <header class="panel me__who">
+     <div class="me__identity">
       <img v-if="session.avatarUrl" :src="session.avatarUrl" alt="" class="me__face" />
       <div v-else class="me__face mono" :style="{ '--h': hueFrom(session.displayName) }">{{ [...session.displayName][0] }}</div>
       <div class="me__text">
@@ -61,10 +62,13 @@ onMounted(() => {
         </div>
         <p v-if="session.profile" class="subtle me__since">{{ $t("me.since", { date: dateOnly(Math.floor(session.profile.memberSince / 1000)) }) }}</p>
       </div>
+     </div>
+     <p v-if="session.profile?.bio" class="me__bio">{{ session.profile.bio }}</p>
+     <div class="me__profile-actions">
+       <CommunityProfile />
+       <RouterLink v-if="handle" :to="lp(`/authors/${handle}`)" class="me__public">{{ $t('me.publicPage') }} →</RouterLink>
+     </div>
     </header>
-
-    <CommunityProfile />
-    <ConnectedAccounts />
 
 
     <nav class="panel me__links" :aria-label="$t('me.title')">
@@ -73,19 +77,27 @@ onMounted(() => {
       <RouterLink :to="lp('/wallet')" class="me__link">{{ $t("nav.wallet") }}</RouterLink>
       <RouterLink v-if="reviewerStore.reviewer" :to="lp('/review')" class="me__link">{{ $t("nav.review") }}</RouterLink>
       <RouterLink :to="lp('/settings')" class="me__link">{{ $t("nav.settings") }}</RouterLink>
-      <RouterLink v-if="handle" :to="lp(`/authors/${handle}`)" class="me__link">{{ $t("me.publicPage") }}</RouterLink>
+
     </nav>
+    <ConnectedAccounts />
+    <button type="button" class="btn btn--ghost me__logout" @click="session.logout()">{{ $t('nav.logout') }}</button>
   </div>
 </template>
 
 <style scoped>
 .me { display: grid; gap: var(--s-4); }
-.me__who { display: flex; align-items: center; gap: var(--s-4); padding: var(--s-5); }
+.me__who { display:grid;gap:var(--s-4);padding:var(--s-5) }
+.me__identity {display:flex;align-items:center;gap:var(--s-4);min-width:0}
+.me__bio {margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.me__profile-actions {display:flex;gap:var(--s-4);align-items:center;flex-wrap:wrap}
+.me__public {padding-block:var(--s-2);min-height:var(--h-lg);display:flex;align-items:center}
+.me__logout {justify-self:start;min-height:var(--h-lg)}
+.me__id .btn {min-height:var(--h-lg)}
 .me__face { width: 64px; height: 64px; border-radius: var(--r-pill); object-fit: cover; flex: none; font-size: 24px; }
 .me__text { min-width: 0; display: grid; gap: 4px; }
-.me__name { font-size: clamp(20px, 2.6vw, 26px); margin: 0; }
+.me__name { font-size: clamp(20px, 2.6vw, 26px); margin: 0; overflow-wrap:anywhere; }
 /* 標籤一行、ID 與複製鈕一行且不拆開：手機上原本會把「複製」擠到下一行 */
-.me__id { display: grid; gap: 2px; margin: 0; }
+.me__id { display: flex; flex-wrap:wrap; align-items:center; gap:var(--s-2); margin: 0; }
 .me__id-row { display: inline-flex; align-items: center; gap: var(--s-2); white-space: nowrap; }
 .me__handle { font-size: 14px; padding: 2px 8px; border-radius: 6px; background: var(--surface-2); }
 .me__since { margin: 0; }
@@ -95,7 +107,7 @@ onMounted(() => {
 .me__account-text { display: grid; gap: 2px; min-width: 0; }
 .me__status { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 6px; background: var(--accent-tint); color: var(--accent-text); flex: none; }
 .me__acts { display: flex; gap: var(--s-2); justify-content: flex-end; }
-.me__links { padding: var(--s-2); display: grid; }
-.me__link { padding: 10px 12px; border-radius: var(--r-sm); color: var(--text); }
+.me__links { padding:var(--s-2);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s-1) }
+.me__link { min-height:var(--h-lg);display:flex;align-items:center;padding:var(--s-3); border-radius: var(--r-sm); color: var(--text); }
 .me__link:hover { background: var(--surface-2); }
 </style>

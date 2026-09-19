@@ -66,6 +66,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
       <div class="who__text">
         <p class="eyebrow">{{ $t("author.eyebrow") }}</p>
         <h1 class="who__name display">{{ author.name }}</h1>
+        <p v-if="author.bio" class="who__bio">{{ author.bio }}</p>
         <p class="subtle who__id">
           <span class="mono">@{{ author.handle }}</span>
           <span v-if="author.providers?.length"> · {{ $t("author.supports", { providers: author.providers.map(providerName).join("、") }) }}</span>
@@ -106,6 +107,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 }
 .who--ghost { height: 112px; border-radius: var(--r-lg); margin-bottom: var(--s-5); }
 .who__face { width: 64px; height: 64px; border-radius: var(--r-pill); object-fit: cover; flex: none; font-size: 24px; }
+.who__bio {white-space:pre-wrap;overflow-wrap:anywhere;max-width:40rem}
 .who__text { min-width: 0; margin-right: auto; }
 .who__name { font-size: clamp(20px, 2.6vw, 26px); }
 .who__id { margin: 4px 0 0; }

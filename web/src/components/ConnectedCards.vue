@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { useSession } from "@/lib/session";
-import { fetchMyCards, type MyCard } from "@/lib/api";
+import { fetchMyCards, type MyCard, type MyCardPage } from "@/lib/api";
 import { accountToken } from "@/lib/connections";
 import { connectionMessage, platformPath } from "@/lib/distribution";
 import { can, providerName, type ProviderId } from "@/lib/provider";
 import { useLocalePath } from "@/lib/use-locale";
 import CardSyncPanel from "./CardSyncPanel.vue";
 const session = useSession();
+const quota=ref<MyCardPage["quota"]|null>(null);
 const { lp } = useLocalePath();
 const rows = ref<Partial<Record<ProviderId, MyCard[]>>>({});
 const pages = ref<Partial<Record<ProviderId, number>>>({});
@@ -40,6 +41,7 @@ async function load(provider: ProviderId, append = false) {
     if (!token) throw new Error("connection_source_expired");
     const page = append ? (pages.value[provider] ?? 0) + 1 : 1;
     const result = await fetchMyCards(token, { provider, page, fresh: true });
+    quota.value=result.quota;
     rows.value[provider] = append
       ? [...(rows.value[provider] ?? []), ...result.items]
       : result.items;
@@ -61,6 +63,7 @@ watch(
 </script>
 <template>
   <section>
+    <p v-if="quota" role="status">{{ $t("services.quota",{used:quota.used,limit:quota.limit}) }}</p>
     <p class="subtle">{{ $t("linked.mineHint") }}</p>
     <div class="services">
       <div v-for="p in providers" :key="p" class="service panel">

@@ -24,7 +24,7 @@ const CREDENTIAL_KEYS = [
 
 /** 那一家自己的帳號頁。使用者要改密碼、換信箱、換綁第三方，都只能回它家做。 */
 export const ACCOUNT_PAGE: Record<ProviderId, string | null> = {
-  lunatalk: null,
+  lunatalk: "https://lunatalk.ai/pages/mine/main",
   harbor: "https://console.harperharbor.com/me/account",
 };
 

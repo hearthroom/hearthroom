@@ -50,6 +50,7 @@ export interface CardPage {
 export type Sort = "day" | "week" | "month" | "hot" | "new" | "random" | "relevance";
 
 export interface Author {
+  bio?: string;
   /** 本站公開 ID（作者頁的網址）；null 表示還沒成為成員。 */
   handle: string | null;
   accountNumId: number;
