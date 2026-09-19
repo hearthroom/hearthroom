@@ -93,3 +93,10 @@ it('a failed review transaction cannot consume a listing slot or leave an empty 
   expect((await env.DB.prepare('SELECT count(*) n FROM card_registrations').first<{n:number}>())?.n).toBe(0);
  } finally { await env.DB.prepare('DROP TRIGGER fixture_snapshot_failure').run(); }
 });
+
+it('never caches an unknown review version decision',async()=>{
+ const response=await SELF.fetch('https://c.test/v1/hosting/versions/'+crypto.randomUUID()+'/decision');
+ expect(response.status).toBe(404);
+ expect(await response.json()).toEqual({error:'version_not_found'});
+ expect(response.headers.get('cache-control')).toContain('no-store');
+});

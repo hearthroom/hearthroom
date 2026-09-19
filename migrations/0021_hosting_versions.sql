@@ -40,12 +40,15 @@ BEGIN
 END;
 
 CREATE TRIGGER hosting_submission_guard BEFORE UPDATE OF submission_id ON hosting_versions
-WHEN NEW.submission_id IS NOT NULL AND OLD.submission_id IS NULL
-BEGIN
- SELECT CASE WHEN OLD.state<>'preparing' OR EXISTS(
+WHEN NEW.submission_id IS NOT NULL AND OLD.submission_id IS NULL AND (
+ OLD.state<>'preparing' OR EXISTS(
   SELECT 1 FROM hosting_versions v JOIN review_submissions s ON s.id=v.submission_id
   WHERE v.work_id=NEW.work_id AND s.status='pending'
- ) THEN RAISE(ABORT,'submission_pending') END;
+ )
+)
+-- Remote D1 splits CASE ... END inside triggers; keep the predicate in WHEN.
+BEGIN
+ SELECT RAISE(ABORT,'submission_pending');
 END;
 
 CREATE TRIGGER hosting_review_immutable BEFORE UPDATE ON review_submissions
