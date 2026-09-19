@@ -17,9 +17,9 @@ LEFT JOIN work_copies cp ON cp.provider=r.provider AND cp.role_id=r.source_role_
 LEFT JOIN works w ON w.id=cp.work_id;
 
 -- A serialised SQLite write closes the check-then-insert race across providers.
+-- Keep the condition in WHEN: remote D1 can split CASE ... END inside a trigger.
 CREATE TRIGGER community_weekly_limit BEFORE INSERT ON card_registrations
-BEGIN
- SELECT CASE WHEN
+WHEN
  (SELECT COUNT(DISTINCT work_key) FROM community_registration_usage
   WHERE member_id=COALESCE(
    (SELECT owner_member_id FROM member_connections WHERE provider=NEW.provider AND external_id=CAST(NEW.author_num_id AS TEXT)),
@@ -34,7 +34,9 @@ BEGIN
  AND work_key=COALESCE((SELECT w.source_provider||':'||w.source_role_id FROM work_copies cp JOIN works w ON w.id=cp.work_id WHERE cp.provider=NEW.provider AND cp.role_id=NEW.source_role_id),NEW.provider||':'||NEW.source_role_id)
  AND registered_at >= ((NEW.registered_at-345600000)/604800000)*604800000+345600000
  AND registered_at < ((NEW.registered_at-345600000)/604800000)*604800000+950400000
- ) THEN RAISE(ABORT,'weekly_quota_exceeded') END;
+ )
+BEGIN
+ SELECT RAISE(ABORT,'weekly_quota_exceeded');
 END;
 
 CREATE TABLE avatar_cleanup (key TEXT PRIMARY KEY, delete_after INTEGER NOT NULL);
