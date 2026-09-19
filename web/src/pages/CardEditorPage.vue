@@ -41,7 +41,7 @@ import {
   patchWorldbookDocument,
   reorderWorldbookEntries,
   saveAuthorAsset,
-  submitRoleForReview,
+  registerCard,
   unpublishRole,
   unregisterCard,
   uploadImage,
@@ -74,7 +74,7 @@ import {
 import { ENTRY_CONTENT_MAX, draftToTavern, embedIntoPng, imageFetchUrl, worldbookToExport, type ImportResult } from "@/lib/tavern";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
-import { confirmDialog } from "@/lib/confirm";
+import { confirmChoice, confirmDialog } from "@/lib/confirm";
 import { track } from "@/lib/track";
 import FieldText from "@/components/editor/FieldText.vue";
 import ListEditor from "@/components/editor/ListEditor.vue";
@@ -99,13 +99,13 @@ const linkedProviders=computed<ProviderId[]>(()=> {
  return linked.length?linked:[editorProvider.value];
 });
 const preferenceKey=()=>`hearthroom.save-platforms.${editorProvider.value}.${roleId.value||'new'}`;
-async function choosePlatforms(publish=false):Promise<ProviderId[]|null> {
+async function choosePlatforms():Promise<ProviderId[]|null> {
  let defaults=linkedProviders.value;
  try {const saved=JSON.parse(localStorage.getItem(preferenceKey())||'null');if(Array.isArray(saved))defaults=defaults.filter(p=>saved.includes(p));}catch{}
  if(!defaults.length)defaults=linkedProviders.value;
  if(linkedProviders.value.length===1)return [...linkedProviders.value];
  selectingPlatforms.value=true;
- try {return await platformDialog.value!.choose(linkedProviders.value,defaults,!publish&&roleId.value?editorProvider.value:undefined,publish);}
+ try {return await platformDialog.value!.choose(linkedProviders.value,defaults,roleId.value?editorProvider.value:undefined,{name:draft.value.roleName,avatarUrl:draft.value.roleAvatar});}
  finally {selectingPlatforms.value=false;}
 }
 function rememberPlatforms(selected:ProviderId[]) {try{localStorage.setItem(preferenceKey(),JSON.stringify(selected));}catch{}}
@@ -1050,24 +1050,24 @@ async function remove() {
 // ── 送審 ──────────────────────────────────────────────────────────
 
 async function publish() {
-  if (!canPublish.value || selectingPlatforms.value) return;
-  const selected=await choosePlatforms(true);
-  if(!selected?.length)return;
-  if (!(await confirmDialog({ message: t("editor.publish.confirm"), confirmText: t("editor.publish.submit") }))) return;
+  if (!canPublish.value || selectingPlatforms.value || saving.value) return;
+  const rating = await confirmChoice({
+    title: t("mine.consent.title"), message: t(editorProvider.value==='harbor'?"workspace.reviewConsent":"mine.consent.message"),
+    confirmText: t("mine.consent.confirm"), choiceLabel: t("mine.rating.label"),
+    choices: [
+      {value: "sfw", label: t("mine.rating.sfw"), hint: t("mine.rating.sfwHint")},
+      {value: "nsfw", label: t("mine.rating.nsfw"), hint: t("mine.rating.nsfwHint")},
+    ],
+  });
+  if (!rating) return;
   saving.value = true;
   error.value = "";
   try {
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
-    // 上游要求確認摘要至少 8 個字：那是給審核方看的一句話，不是一個旗標。
-    platformResults.value=[];
-    if(selected.includes(editorProvider.value)) {
-      try {await submitRoleForReview(roleId.value, t("editor.publish.summary", { name: draft.value.roleName }), token);platformResults.value.push({provider:editorProvider.value,status:'pending'});}
-      catch(e) {platformResults.value.push({provider:editorProvider.value,status:'failed',error:e instanceof Error?e.message:t('state.saveFailed')});}
-    }
-    platformResults.value.push(...await saveCopies(roleId.value,editorProvider.value,selected,true));
-    rememberPlatforms(selected);
-    saved.value=!platformResults.value.some(r=>r.error);
+    await registerCard(roleId.value, token, rating === "nsfw", [], editorProvider.value);
+    saving.value = false;
+    await router.push(lp("/mine?fresh=1"));
   } catch (err) {
     error.value = err instanceof Error ? err.message : t("state.saveFailed");
   } finally {
@@ -1179,7 +1179,7 @@ async function exportCard(format: "png" | "json") {
     <header class="head">
       <p class="eyebrow">{{ $t("mine.eyebrow") }}</p>
       <h1 class="display">{{ isNew ? $t("editor.title.new") : $t("editor.title.edit") }}</h1>
-      <p class="muted lede">{{ isNew ? $t("editor.lede.new") : $t("editor.lede.edit") }}</p>
+      <p class="muted lede">{{ isNew ? $t("editor.lede.new") : $t(editorProvider==='harbor'?"workspace.editHint":"editor.lede.edit") }}</p>
     </header>
 
     <div v-if="loading" class="ghosts" aria-hidden="true">

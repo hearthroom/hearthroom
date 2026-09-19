@@ -1,3 +1,4 @@
+import { hostGateway, submitHosted, hostingDecision } from "./hosting";
 import { saveCommunityProfile, cleanAvatars } from "./community-profile";
 import { bodyLimit } from "hono/body-limit";
 import { syncCard, copiesFor, workFor, publishedCopiesFor, distributeCard, type DistributeTarget } from "./card-sync";
@@ -34,7 +35,7 @@ import { configuredProviders, hasChat, parseProvider, requireConfigured, DEFAULT
 import { providerApiBaseFor } from "./providers";
 import { WEEKLY_LIMIT, registeredThisWeek } from "./quota";
 import {
-  STAMPS_REQUIRED, claim as claimSubmission, createSubmission, getSubmission, listQueue, needsReviewStatements,
+  CLAIM_TTL_MS, STAMPS_REQUIRED, claim as claimSubmission, createSubmission, getSubmission, listQueue, needsReviewStatements,
   release as releaseSubmission, stamp as stampSubmission,
 } from "./review";
 import { setCardNsfw, setCardStatus } from "./cards";
@@ -402,13 +403,13 @@ async function ownCardView(c: Context<{ Bindings: Env; Variables: { ev: Pending 
   if (row) return row.author_num_id === me.accountNumId ? { ...toCard(row, lang(c)), status: row.status } : null;
   // 卡號查不到就是沒這張卡；只有上游的卡片 ID 才值得去上游問
   if (CARD_NUMBER.test(id)) return null;
-  const role = await upstream.fetchRole(c.env, id, provider).catch(() => null);
+  const role = await (provider==='harbor'?hostGateway.read(c.env,bearer,id):upstream.fetchRole(c.env,id,provider)).catch(() => null);
   if (!role || role.authorNumId !== me.accountNumId) return null;
   return previewCard(role, lang(c), provider);
 }
 
 app.get("/v1/cards/:id", async (c) => {
-  const row = await getCard(c.env.DB, c.req.param("id"));
+  const row = await getCard(c.env.DB, c.req.param("id"),providerOf(c));
   // 還沒過審、被駁回、離榜重審中的卡對外都不存在；作者在「我的卡片」看得到狀態。
   if (!row || row.status !== "approved") {
     // 作者本人例外：給他看，但不算一次瀏覽、不進任何快取
@@ -605,6 +606,10 @@ app.get('/v1/cards/:roleId/platforms',async(c)=>{
  const base=await getCard(c.env.DB,roleId,provider);
  if(!base||base.status!=='approved')throw new HttpError(404,'card not registered');
  if(base.nsfw && !await viewerAllowsNsfw(c))throw new HttpError(403,'nsfw_gated');
+ if(base.approved_version_id && base.approved_hosted_role_id) {
+  const decision=await hostingDecision(c.env.DB,base.approved_version_id);
+  return c.json({platforms:decision.status==='approved'?[{provider:base.provider,roleId:base.approved_hosted_role_id,playable:hasChat(base.provider as ProviderId)}]:[]},200,{'Cache-Control':'no-store'});
+ }
  const candidates=[{provider,roleId},...(await copiesFor(c.env.DB,provider,roleId)).filter(x=>x.roleId && ['source','synced','pending','published'].includes(x.status)).map(x=>({provider:x.provider as ProviderId,roleId:x.roleId as string}))];
  const platforms=[];
  for(const x of candidates.filter((x,i,all)=>all.findIndex(y=>y.provider===x.provider&&y.roleId===x.roleId)===i)) {try {await upstream.fetchRole(c.env,x.roleId,x.provider);platforms.push({...x,playable:hasChat(x.provider)});}catch{ /* Never advertise an inaccessible copy as playable. */ }}
@@ -816,7 +821,7 @@ app.delete("/v1/comments/:id/like", async (c) => {
 app.post("/v1/cards", async (c) => {
   const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1] ?? "";
   const me = await requireAuthor(c);
-  const body = (await c.req.json().catch(() => ({}))) as { roleId?: unknown; nsfw?: unknown; distribute?: unknown };
+  const body = (await c.req.json().catch(() => ({}))) as { roleId?: unknown; nsfw?: unknown; distribute?: unknown; operationId?: unknown };
   const roleId = typeof body.roleId === "string" ? body.roleId.trim() : "";
   if (!roleId) throw new HttpError(400, "roleId is required");
   // 作者提交時必須宣告是不是成人內容（owner 2026-09-08）；沒宣告不收
@@ -824,7 +829,8 @@ app.post("/v1/cards", async (c) => {
   const nsfw = body.nsfw;
 
   const provider = providerOf(c);
-  const role = await upstream.fetchRole(c.env, roleId, provider);
+  const hosted = provider === "harbor" && !!c.env.HOSTING_SERVICE_KEY;
+  const role = hosted ? await hostGateway.read(c.env,bearer,roleId) : await upstream.fetchRole(c.env, roleId, provider);
   if (role.authorNumId !== me.accountNumId) throw new HttpError(403, "not the author of this card");
   // 登記的人一定是成員：作者頁與卡片上的作者連結都靠成員的公開 ID
   const memberId = await resolveMember(c.env.DB, provider, me.accountNumId, Date.now());
@@ -853,6 +859,16 @@ app.post("/v1/cards", async (c) => {
       note(c, { event: "register", subject: roleId, detail: "quota" });
       throw new HttpError(403, "weekly_quota_exceeded");
     }
+  }
+
+  if (hosted) {
+    if (!reviewEnabled(c.env)) throw new HttpError(503,"hosting_review_required");
+    const operationId=typeof body.operationId==='string'?body.operationId:'';
+    if(!/^[0-9a-f-]{36}$/i.test(operationId))throw new HttpError(400,'hosting_operation_required');
+    const receipt=await submitHosted(c.env,{memberId,account:me.accountNumId,role,token:bearer,nsfw,operationId,now});
+    const row=(await getCard(c.env.DB,roleId,provider))!;
+    note(c,{event:"register",detail:"submitted"});
+    return c.json({...toCard(row,lang(c)),status:row.status,versionId:receipt.versionId},existing?200:201,{'Cache-Control':'private, no-store'});
   }
 
   // 審核：作者提交＝同意本站用他自己的 token 讀一次整份設定，存成這張單的快照給審核人看
@@ -902,6 +918,8 @@ app.post("/v1/cards", async (c) => {
   }
   return c.json(row ? { ...toCard(row, lang(c)), status: row.status, distributing: distribute.map((t) => t.provider) } : { id }, created ? 201 : 200);
 });
+
+app.get('/v1/hosting/versions/:versionId/decision',async(c)=>c.json(await hostingDecision(c.env.DB,c.req.param('versionId')),200,{'Cache-Control':'no-store'}));
 
 // ---- 社群審核 ----------------------------------------------------------------
 //
@@ -960,7 +978,11 @@ app.post("/v1/review/:id/stamp", async (c) => {
 app.get("/v1/review/:id/detail", async (c) => {
   const member = await requireReviewer(c);
   const s = await getSubmission(c.env.DB, c.req.param("id"));
+
+  if(s.status!=='pending'||s.claimed_by!==member.id||s.claimed_at===null||Date.now()-s.claimed_at>=CLAIM_TTL_MS)throw new HttpError(409,'claim this submission first');
+  if(s.nsfw===1&&(await memberNsfw(c.env.DB,member.id)).ageVerifiedAt===null)throw new HttpError(403,'age_verification_required');
   let detail = await loadSnapshot(c.env.DB, s.id);
+  if(!detail&&s.content_hash.startsWith('version:'))throw new HttpError(404,'snapshot not found');
   if (!detail) {
     // 沒有快照：同步發現公開資料變了而開的重審單。變的就是公開資料，審核人看現在的公開版本。
     const role = await upstream.fetchRole(c.env, s.source_role_id, s.provider as ProviderId);
@@ -1106,12 +1128,15 @@ export async function syncBatch(env: Env): Promise<{ ok: number; failed: number;
     try {
       const provider = row.provider as ProviderId;
       spent++;
-      const role = { ...(await upstream.fetchRole(env, row.source_role_id, provider)) };
+      if(row.reviewed_hash.startsWith('version:')&&!row.approved_hosted_role_id){
+        writes.push(env.DB.prepare('UPDATE cards SET last_synced_at=? WHERE id=?').bind(now,row.id));return;
+      }
+      const role = { ...(await upstream.fetchRole(env, row.approved_hosted_role_id ?? row.source_role_id, provider)) };
       const fingerprint = await publicHash(role);
       // 榜單只收在本站建的卡。登記那條路早就這樣擋，但規則之前登記進來的主站老卡還在榜上
       // （owner 2026-09-07：189 張要下架）——同步時看到來源不對就撤掉，之後也不會再有漏網的。
       // 讀得到但來源不對才撤；讀不到走下面的 catch，保留。
-      if (role.creationMethod !== CREATION_METHOD) {
+      if (!row.approved_version_id && role.creationMethod !== CREATION_METHOD) {
         writes.push(env.DB.prepare("DELETE FROM cards WHERE id = ?").bind(row.id));
         delisted++;
         console.log("delisted: not created on this site", { roleId: row.source_role_id, creationMethod: role.creationMethod });
@@ -1137,7 +1162,7 @@ export async function syncBatch(env: Env): Promise<{ ok: number; failed: number;
       // 指紋要在加總副本熱度之前算——它只看這張卡自己的公開欄位。
       // 舊版本綁的是供應商給的內容雜湊（沒有前綴）：那個比不了，這一輪改綁成公開指紋，不重審。
       // 過審前登記的舊卡 reviewed_hash 是空的：留在榜上不比對，等作者下次提交才綁上版本。
-      if (reviewing && row.status === "approved" && row.reviewed_hash) {
+      if (!row.approved_version_id && reviewing && row.status === "approved" && row.reviewed_hash) {
         if (!row.reviewed_hash.startsWith(PUBLIC_HASH_PREFIX)) {
           writes.push(env.DB.prepare("UPDATE cards SET reviewed_hash = ? WHERE id = ?").bind(fingerprint, row.id));
         } else if (fingerprint !== row.reviewed_hash) {
