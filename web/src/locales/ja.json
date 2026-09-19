@@ -643,7 +643,7 @@
   "me.linked.at": "{date} に連携",
   "me.linked.active": "連携中",
   "me.reauthorize": "再認証",
-  "me.publicPage": "自分の公開作者ページを見る",
+  "me.publicPage": "公開プロフィール",
   "author.supports": "{providers} 対応",
   "card.supports": "{provider} 対応",
   "card.nsfw": "18+",
@@ -1058,7 +1058,7 @@
   "linked.error.sync_from_original": "コピーを同じ作品として扱うため、元のカードから同期してください。",
   "linked.error.sync_image_reference_unavailable": "コピー先でこの画像を参照できません。公開された固定URLで、コピー先がその配信元に対応しているか確認してください。画像ファイルは移動しません。",
   "linked.storedOnly": "カード保存済み・プレイは未対応",
-  "community.edit": "プロフィールを編集",
+  "community.edit": "プロフィール編集",
   "community.hint": "HearthRoom の名前と画像は、連携するプラットフォームを変えても同じです。",
   "community.name": "表示名",
   "community.avatar": "プロフィール画像の URL",
@@ -1111,5 +1111,10 @@
   "linked.error.connection_target_not_empty": "このサービスのコミュニティアカウントには利用データがあるため統合できません。両方を残すか、元のアカウントでログインしてください。",
   "linked.error.connection_permanent": "サービスの連携は解除できません。",
   "error.publicationUseOriginal": "これは同期コピーです。元の作品からコミュニティでの公開を管理してください。",
-  "services.quota": "今週のコミュニティ公開：{used}／{limit} 作品"
+  "services.quota": "今週のコミュニティ公開：{used}／{limit} 作品",
+  "me.workspace": "自分の作品",
+  "me.cardsHint": "公開・編集・同期",
+  "me.resourcesHint": "画像や制作素材を管理",
+  "services.description": "カードの保存とプレイ用ポイントは、以下のサービスで管理されます。",
+  "services.manage": "アカウント管理"
 }
