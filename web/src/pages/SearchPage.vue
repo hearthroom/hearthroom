@@ -4,11 +4,14 @@ import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import AuthorList from "@/components/AuthorList.vue";
 import CardGrid from "@/components/CardGrid.vue";
-import { fetchAuthors, fetchBoard, fetchTags } from "@/lib/api";
+import { fetchAuthors, fetchBoard, fetchTags, searchTags } from "@/lib/api";
 import { contentLang, defaultZone, pageTitle } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
-import type { AuthorPage } from "@/lib/api";
+import DiscoveryTags from "@/components/DiscoveryTags.vue";
+import { selectedTags, toggleTag } from "@/lib/discovery";
+import { TAG_CATALOG, tagLabel } from "../../../shared/tag-catalog";
+import type { TagPage, AuthorPage } from "@/lib/api";
 import type { CardPage, CommunityCard } from "@/lib/types";
 
 const route = useRoute();
@@ -24,10 +27,18 @@ const box = ref<HTMLInputElement | null>(null);
 onMounted(() => { void nextTick(() => box.value?.focus()); });
 /** 預設搜目前語言那一區；明說 all 才跨語區。 */
 const allZones = computed(() => route.query.zone === "all");
-const kind = computed(() => (route.query.kind === "authors" ? "authors" : "cards"));
+const kind = computed(() => (route.query.kind === "authors" || route.query.kind === "tags" ? route.query.kind : "cards"));
 const offset = computed(() => Number(route.query.offset ?? 0) || 0);
 const zone = computed(() => (allZones.value ? "all" : defaultZone(locale.value)));
 
+const selected = computed(() => selectedTags(route.query.tag));
+const filtersOpen = ref(false);
+const PERIODS = ["all", "week", "month", "quarter", "year"];
+const period = computed(() => typeof route.query.period === "string" && PERIODS.includes(route.query.period) ? route.query.period : "all");
+const sort = computed(() => route.query.sort === "new" ? "new" : "hot");
+const hasQuery = computed(() => !!q.value || selected.value.length > 0 || kind.value !== "cards" || period.value !== "all" || route.query.sort !== undefined);
+const tagResults = ref<TagPage | null>(null);
+const selectedLabel = (tag: string) => { const entry = TAG_CATALOG.find(x => x.key === tag); return entry ? tagLabel(entry, locale.value) : tag; };
 const cards = ref<CardPage | null>(null);
 const authors = ref<AuthorPage | null>(null);
 const loading = ref(false);
@@ -36,23 +47,29 @@ const error = ref("");
 const tags = ref<{ tag: string; n: number }[]>([]);
 const hot = ref<CommunityCard[]>([]);
 
+let loadId = 0;
 async function load() {
+  const id = ++loadId;
   document.title = pageTitle(q.value ? `${q.value} · ${t("search.title")}` : t("search.title"));
-  if (!q.value) { cards.value = null; authors.value = null; return; }
+  if (!hasQuery.value) { cards.value = null; authors.value = null; tagResults.value = null; error.value = ""; loading.value = false; return; }
   loading.value = true;
   error.value = "";
   try {
-    // 兩邊一起抓：分頁上的數字要同時知道兩種結果各有多少
-    const [c, a] = await Promise.all([
-      fetchBoard({ zone: zone.value, q: q.value, sort: "relevance", offset: kind.value === "cards" ? offset.value : 0, lang: contentLang(locale.value) }),
+    // 三種結果一起抓，分頁數字維持同一組關鍵字與語區。
+    const [c, a, tg] = await Promise.all([
+      fetchBoard({ zone: zone.value, q: q.value, tag: selected.value, period: period.value, sort: sort.value, offset: kind.value === "cards" ? offset.value : 0, lang: contentLang(locale.value) }),
       fetchAuthors({ zone: zone.value, q: q.value, offset: kind.value === "authors" ? offset.value : 0 }),
+      searchTags(zone.value, q.value, kind.value === "tags" ? offset.value : 0),
     ]);
+    if (id !== loadId) return;
     cards.value = c;
+    tagResults.value = tg;
     authors.value = a;
   } catch (err) {
+    if (id !== loadId) return;
     error.value = err instanceof Error ? err.message : t("state.loadFailed");
   } finally {
-    loading.value = false;
+    if (id === loadId) loading.value = false;
   }
 }
 async function loadSide() {
@@ -65,14 +82,14 @@ async function loadSide() {
   hot.value = hb;
 }
 
-const sparse = computed(() => !!q.value && !loading.value && kind.value === "cards" && cards.value !== null && cards.value.items.length < 4 && cards.value.offset === 0);
+const sparse = computed(() => !!q.value && !selected.value.length && period.value === "all" && !error.value && !loading.value && kind.value === "cards" && cards.value !== null && cards.value.items.length < 4 && cards.value.offset === 0);
 const hotShown = computed(() => {
   const seen = new Set(cards.value?.items.map((c) => c.roleId) ?? []);
   return hot.value.filter((c) => !seen.has(c.roleId));
 });
 
-function navigate(patch: Record<string, string | undefined>) {
-  const query: Record<string, string> = { ...(route.query as Record<string, string>) };
+function navigate(patch: Record<string, string | string[] | undefined>) {
+  const query: Record<string, string | string[]> = { ...(route.query as Record<string, string | string[]>) };
   for (const [k, v] of Object.entries(patch)) {
     if (v === undefined || v === "") delete query[k];
     else query[k] = v;
@@ -86,7 +103,7 @@ function submit() {
   if (/^#?[1-9]\d{0,11}$/.test(q)) { router.push(lp(`/cards/${q.replace(/^#/, "")}`)); return; }
   navigate({ q });
 }
-function searchTag(tag: string) { router.push({ path: lp("/"), query: { tag } }); }
+function searchTag(tag: string) { navigate({ kind: undefined, q: undefined, tag: [tag] }); }
 
 /** 結果數不確定（有篩選又還有下一頁）時只說「這一頁以上」，不假裝知道總數 */
 const countLabel = (page: { total: number | null; hasNext: boolean; limit: number; items: unknown[] } | null | undefined) => {
@@ -108,30 +125,57 @@ watch(q, (v) => { draft.value = v; });
 <template>
   <div class="page page--search">
     <form class="search__form" role="search" @submit.prevent="submit">
+      <button v-if="kind === 'cards'" class="btn btn--lg search__filter" :class="{ 'search__filter--on': selected.length || filtersOpen }" type="button" :aria-expanded="filtersOpen" aria-controls="search-filters" @click="filtersOpen = !filtersOpen">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M8 4v6M16 14v6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg>
+        {{ $t('search.filter') }}<span v-if="selected.length">{{ selected.length }}</span>
+      </button>
+      <div class="search__field">
       <svg class="search__icon" viewBox="0 0 20 20" aria-hidden="true">
         <circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.7" />
         <path d="M12.8 12.8 17 17" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
       </svg>
       <input ref="box" v-model="draft" class="search__input" type="search" :placeholder="$t('search.placeholder')" :aria-label="$t('search.title')" enterkeyhint="search" />
+      </div>
       <button class="btn btn--primary btn--lg search__go" type="submit">{{ $t("board.search.submit") }}</button>
     </form>
 
-    <template v-if="q">
       <div class="bar">
         <div class="seg">
           <button class="seg__item" :class="{ 'seg__item--on': kind === 'cards' }" :aria-pressed="kind === 'cards'" @click="navigate({ kind: undefined })">
             {{ $t("search.cards") }}<span class="seg__n">{{ countLabel(cards) }}</span>
           </button>
           <button class="seg__item" :class="{ 'seg__item--on': kind === 'authors' }" :aria-pressed="kind === 'authors'" @click="navigate({ kind: 'authors' })">
-            {{ $t("search.authors") }}<span class="seg__n">{{ authors ? (authors.hasNext ? `${authors.limit}+` : String(authors.items.length)) : "" }}</span>
+            {{ $t("search.users") }}<span class="seg__n">{{ authors ? (authors.hasNext ? `${authors.limit}+` : String(authors.items.length)) : "" }}</span>
           </button>
+          <button class="seg__item" :class="{ 'seg__item--on': kind === 'tags' }" :aria-pressed="kind === 'tags'" @click="navigate({ kind: 'tags' })">{{ $t('search.tags') }}<span class="seg__n">{{ tagResults ? (tagResults.hasNext ? `${tagResults.offset + tagResults.limit}+` : String(tagResults.offset + tagResults.items.length)) : '' }}</span></button>
         </div>
+        <div class="bar__options">
+          <template v-if="kind === 'cards'">
+            <label class="sr-only" for="search-period">{{ $t('search.period') }}</label>
+            <select id="search-period" name="period" class="search__select" :value="period" :title="$t('search.periodHint')" @change="navigate({ period: ($event.target as HTMLSelectElement).value })">
+              <option v-for="p in PERIODS" :key="p" :value="p">{{ $t(`search.period.${p}`) }}</option>
+            </select>
+            <label class="sr-only" for="search-sort">{{ $t('board.sorts') }}</label>
+            <select id="search-sort" name="sort" class="search__select" :value="sort" @change="navigate({ sort: ($event.target as HTMLSelectElement).value })">
+              <option value="hot">{{ $t('board.sort.hot') }}</option><option value="new">{{ $t('board.sort.new') }}</option>
+            </select>
+          </template>
         <div class="seg">
           <button class="seg__item" :class="{ 'seg__item--on': !allZones }" :aria-pressed="!allZones" @click="navigate({ zone: undefined })">{{ $t("search.zone.current") }}</button>
           <button class="seg__item" :class="{ 'seg__item--on': allZones }" :aria-pressed="allZones" @click="navigate({ zone: 'all' })">{{ $t("search.zone.all") }}</button>
         </div>
+        </div>
       </div>
 
+      <div v-if="kind === 'cards' && filtersOpen" id="search-filters" class="search__filters panel">
+        <p class="muted">{{ $t('search.matchAll') }}</p>
+        <DiscoveryTags :selected="selected" :hidden="hidden" @change="navigate({ tag: $event.length ? $event : undefined })" />
+      </div>
+      <div v-if="kind === 'cards' && selected.length && !filtersOpen" class="search__selected">
+        <button v-for="tag in selected" :key="tag" class="tagchip" @click="navigate({ tag: toggleTag(selected, tag) })">{{ selectedLabel(tag) }} <span aria-hidden="true">×</span></button>
+        <button class="btn btn--sm" @click="navigate({ tag: undefined })">{{ $t('search.clear') }}</button>
+      </div>
+    <template v-if="hasQuery">
       <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
       <p v-if="kind === 'cards' && hidden.length" class="muted search__hidden">
         <RouterLink :to="lp('/settings') + '#hidden'">{{ $t("board.hidden", { n: hidden.length }) }}</RouterLink>
@@ -143,7 +187,7 @@ watch(q, (v) => { draft.value = v; });
           :loading="loading && !cards"
           :busy="loading"
           :show-zone="allZones"
-          :empty-title="$t('search.empty', { q })"
+          :empty-title="q ? $t('search.empty', { q }) : $t('board.empty.search.title')"
           :empty-hint="$t('board.empty.search.hint')"
         />
         <nav v-if="cards && (cards.offset > 0 || cards.hasNext)" class="pager">
@@ -156,7 +200,7 @@ watch(q, (v) => { draft.value = v; });
           <CardGrid :cards="hotShown" />
         </section>
       </template>
-      <template v-else>
+      <template v-else-if="kind === 'authors'">
         <div v-if="loading && !authors" class="ghosts"><div v-for="i in 6" :key="i" class="ghost" /></div>
         <div v-else-if="!authors?.items.length" class="empty panel">
           <p class="empty__title">{{ $t("search.empty", { q }) }}</p>
@@ -167,6 +211,18 @@ watch(q, (v) => { draft.value = v; });
           <button class="btn btn--sm" :disabled="authors.offset === 0" @click="navigate({ offset: String(Math.max(0, authors.offset - authors.limit)) })">← {{ $t("pager.prev") }}</button>
           <span class="subtle">{{ $t("pager.page", { n: Math.floor(authors.offset / authors.limit) + 1 }) }}</span>
           <button class="btn btn--sm" :disabled="!authors.hasNext" @click="navigate({ offset: String(authors.offset + authors.limit) })">{{ $t("pager.next") }} →</button>
+        </nav>
+      </template>
+      <template v-else>
+        <div v-if="loading && !tagResults" class="ghosts"><div v-for="i in 3" :key="i" class="ghost" /></div>
+        <div v-else-if="!tagResults?.items.length" class="empty panel"><p class="empty__title">{{ $t('search.empty', { q }) }}</p><p class="muted">{{ $t('board.empty.search.hint') }}</p></div>
+        <div v-else class="search__tag-results" :aria-busy="loading">
+          <button v-for="x in tagResults.items" :key="x.tag" class="search__tag-result panel" @click="searchTag(x.tag)"><span># {{ x.tag }}</span><span class="muted">{{ $t('board.count', { n: x.n }) }} →</span></button>
+        </div>
+        <nav v-if="tagResults && (tagResults.offset > 0 || tagResults.hasNext)" class="pager">
+          <button class="btn btn--sm" :disabled="tagResults.offset === 0" @click="navigate({ offset: String(Math.max(0, tagResults.offset - tagResults.limit)) })">← {{ $t('pager.prev') }}</button>
+          <span class="subtle">{{ $t('pager.page', { n: Math.floor(tagResults.offset / tagResults.limit) + 1 }) }}</span>
+          <button class="btn btn--sm" :disabled="!tagResults.hasNext" @click="navigate({ offset: String(tagResults.offset + tagResults.limit) })">{{ $t('pager.next') }} →</button>
         </nav>
       </template>
     </template>
@@ -193,7 +249,7 @@ watch(q, (v) => { draft.value = v; });
 .search__form { position: relative; display: flex; gap: var(--s-2); margin-bottom: var(--s-4); }
 .search__icon { position: absolute; left: 16px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%); color: var(--text-3); pointer-events: none; }
 .search__input {
-  flex: 1; min-width: 0; height: var(--h-lg); padding: 0 var(--s-4) 0 46px;
+  width: 100%; min-width: 0; height: var(--h-lg); padding: 0 var(--s-4) 0 46px;
   font: inherit; font-size: 16px; color: var(--text);
   background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r-pill);
   box-shadow: var(--shadow-sm);
@@ -202,6 +258,27 @@ watch(q, (v) => { draft.value = v; });
 .search__input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .search__input::-webkit-search-cancel-button { -webkit-appearance: none; }
 .search__go { flex: none; }
+.search__field { position: relative; flex: 1; min-width: 0; }
+.search__filter { gap: var(--s-2); }
+.search__filter svg { width: 1.15em; height: 1.15em; }
+.search__filter--on { color: var(--accent-text); border-color: var(--accent); }
+.bar__options { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin-left: auto; }
+.search__select { min-height: var(--h-md); padding: 0 var(--s-3); color: var(--text); background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-pill); font: inherit; font-size: 13px; cursor: pointer; }
+.search__filters { padding: var(--s-4); margin-bottom: var(--s-4); }
+.search__filters p { margin-bottom: var(--s-2); font-size: 13px; }
+.search__filters :deep(.discovery-tags) { margin-bottom: 0; }
+.search__selected { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-bottom: var(--s-4); }
+.search__tag-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: var(--s-3); }
+.search__tag-result { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); padding: var(--s-4); color: var(--text); font: inherit; cursor: pointer; text-align: start; }
+.search__tag-result > span { overflow-wrap: anywhere; }
+.search__tag-result:hover { border-color: var(--accent); }
+@media (max-width: 640px) {
+  .bar__options { margin-left: 0; width: 100%; }
+  .search__form { gap: var(--s-2); }
+  .search__filter, .search__go { padding-inline: var(--s-3); }
+  .search__filter svg { display: none; }
+  .search__select, .seg__item, .tagchip, .search__selected .btn { min-height: var(--h-lg); }
+}
 
 .bar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--s-3); margin-bottom: var(--s-4); }
 .seg__n { margin-left: 6px; font-size: 11.5px; color: var(--text-3); font-variant-numeric: tabular-nums; }

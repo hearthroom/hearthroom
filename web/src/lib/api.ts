@@ -173,11 +173,14 @@ async function viewerAccess(): Promise<{ param: string; headers: Record<string, 
 
 // ---- 社群 API（同源）------------------------------------------------------
 
-export interface BoardQuery { zone?: Zone | "all"; q?: string; tag?: string; sort?: Sort; /** 作者的本站公開 ID */ author?: string; limit?: number; offset?: number; lang?: string }
+export interface BoardQuery { zone?: Zone | "all"; q?: string; tag?: string | string[]; period?: string; sort?: Sort; /** 作者的本站公開 ID */ author?: string; limit?: number; offset?: number; lang?: string }
 
 export async function fetchBoard(query: BoardQuery = {}): Promise<CardPage> {
   const params = new URLSearchParams();
-  for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== "") params.set(k, String(v));
+  for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== "") {
+    if (Array.isArray(v)) v.forEach(value => params.append(k, value));
+    else params.set(k, String(v));
+  }
   const viewer = await viewerAccess();
   if (viewer.param) params.set("nsfw", "1");
   // 作者頁不套：看一個人的作品時，口味不是篩選條件
@@ -207,6 +210,12 @@ export async function fetchCard(id: string, lang?: string, opts: { quiet?: boole
 export async function fetchTags(zone: Zone | "all"): Promise<{ tag: string; n: number }[]> {
   const res = await json<{ items: { tag: string; n: number }[] }>(await fetch(`${COMMUNITY_API}/tags?zone=${zone}`, { headers: from() }));
   return res.items;
+}
+
+export interface TagPage { items: { tag: string; n: number }[]; hasNext: boolean; limit: number; offset: number }
+export async function searchTags(zone: Zone | "all", q: string, offset = 0): Promise<TagPage> {
+  const params = new URLSearchParams({ zone, q, offset: String(offset) });
+  return json<TagPage>(await fetch(`${COMMUNITY_API}/tags?${params}`, { headers: from() }));
 }
 
 export interface AuthorPage { items: Author[]; hasNext: boolean; limit: number; offset: number; sort: AuthorSort }

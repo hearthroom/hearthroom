@@ -1117,5 +1117,17 @@
   "me.resourcesHint": "이미지와 창작 자료 관리",
   "services.description": "아래 서비스에서 카드를 저장하고 플레이 포인트를 제공합니다.",
   "services.manage": "계정 관리",
-  "services.emailUnavailable": "이메일을 가져오지 못했습니다"
+  "services.emailUnavailable": "이메일을 가져오지 못했습니다",
+  "search.filter": "필터",
+  "search.users": "사용자",
+  "search.tags": "태그",
+  "search.period": "기간",
+  "search.period.all": "전체 기간",
+  "search.period.week": "이번 주",
+  "search.period.month": "월간",
+  "search.period.quarter": "분기",
+  "search.period.year": "연간",
+  "search.periodHint": "최근 7일, 30일, 90일 또는 365일 이내에 등록된 카드",
+  "search.matchAll": "선택한 모든 태그와 일치하는 카드를 표시합니다.",
+  "search.clear": "태그 해제"
 }

@@ -1117,5 +1117,17 @@
   "me.resourcesHint": "Images and creative assets",
   "services.description": "These services store your cards and provide credits for play.",
   "services.manage": "Manage account",
-  "services.emailUnavailable": "Email not available"
+  "services.emailUnavailable": "Email not available",
+  "search.filter": "Filter",
+  "search.users": "Users",
+  "search.tags": "Tags",
+  "search.period": "Time",
+  "search.period.all": "All time",
+  "search.period.week": "This week",
+  "search.period.month": "Monthly",
+  "search.period.quarter": "Quarterly",
+  "search.period.year": "Yearly",
+  "search.periodHint": "Cards listed in the last 7, 30, 90 or 365 days",
+  "search.matchAll": "Results match all selected tags.",
+  "search.clear": "Clear tags"
 }
