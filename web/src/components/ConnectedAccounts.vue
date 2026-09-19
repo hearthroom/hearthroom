@@ -91,7 +91,7 @@ async function connect(provider: ProviderId) {
     <div class="accounts__list">
       <div v-for="p in providers" :key="p.id" class="account" :class="{'account--connected':isConnected(p.id)}">
         <div class="account__identity">
-          <span class="account__mark" aria-hidden="true">{{ p.id==='harbor'?'H':'L' }}</span>
+          <span class="account__mark" :class="{'account__mark--harbor':p.id==='harbor'}" aria-hidden="true">{{ p.id==='harbor'?'H':'L' }}</span>
           <div class="account__text">
             <h3>{{ providerName(p.id) }}</h3>
             <p>{{ !isConnected(p.id) ? $t('linked.notConnected') : emails[p.id] || $t('linked.account', {id:session.profile!.identities.find(i=>i.provider===p.id)!.externalId}) }}</p>
@@ -113,6 +113,9 @@ async function connect(provider: ProviderId) {
   </section>
 </template>
 <style scoped>
+/* Same Fraunces italic H and brand colors as HarperHarbor's official wordmark.
+   The local subset contains only H; its OFL license lives beside the font. */
+@font-face {font-family:'HarperHarbor Mark';font-style:italic;font-weight:500;font-display:swap;src:url('../assets/harperharbor-h.ttf') format('truetype')}
 .accounts {display:grid;gap:var(--s-4);min-width:0}
 .accounts__heading {display:grid;gap:var(--s-2)}
 h2,h3,p {margin:0}
@@ -124,6 +127,7 @@ h2 {font-size:18px;font-weight:650;letter-spacing:-.015em}
 .account__identity {display:flex;align-items:center;gap:var(--s-3);min-width:0;flex:1;flex-wrap:wrap}
 .account__mark {width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface-2);color:var(--text-2);font-size:20px;font-weight:650;flex:none}
 .account--connected .account__mark {background:var(--accent-tint);color:var(--accent-text);border-color:transparent}
+.account .account__mark--harbor {background:#F2B84B;color:#1A1204;border-color:transparent;font-family:'HarperHarbor Mark',Georgia,serif;font-style:italic;font-weight:500;font-size:26px}
 .account__text {min-width:0;flex:1 1 120px}
 h3 {font-size:15px;font-weight:600;line-height:1.5}
 .account__text p {font-size:13px;line-height:1.6;color:var(--text-2);overflow-wrap:anywhere;margin-top:var(--s-1)}
