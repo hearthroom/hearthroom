@@ -41,6 +41,12 @@ watch(kind, (value) => {
 });
 
 const input = ref<HTMLInputElement | null>(null);
+/** 兩種模式收的副檔名。三件套是純文字與 JSON，酒館卡另外吃 PNG 與 charx 壓縮包。 */
+const acceptFor = computed(() =>
+  kind.value === "mmd"
+    ? ".json,.txt,application/json,text/plain"
+    : ".png,.json,.charx,image/png,application/json,application/zip",
+);
 const dragging = ref(false);
 const error = ref("");
 const preview = ref<ImportResult | null>(null);
@@ -193,8 +199,11 @@ onBeforeUnmount(() => { if (thumb.value) URL.revokeObjectURL(thumb.value); });
       <p class="muted">{{ kind === "mmd" ? $t("import.mmd.drop") : $t("import.drop") }}</p>
       <button type="button" class="btn btn--sm" @click="input?.click()">{{ $t("import.pick") }}</button>
       <p class="subtle">{{ kind === "mmd" ? $t("import.mmd.formats") : $t("import.formats") }}</p>
-      <input v-if="kind === 'mmd'" ref="input" type="file" multiple accept=".json,.txt,application/json,text/plain" class="sr-only" @change="onPick" />
-      <input v-else ref="input" type="file" accept=".png,.json,.charx,image/png,application/json,application/zip" class="sr-only" @change="onPick" />
+      <!-- 一個 input 兩種模式：原本是 v-if/v-else 兩個元素共用同一個 ref="input"，
+           切換分頁時 ref 的掛載與卸載誰先誰後決定它是元素還是 null，而按鈕寫的是
+           `input?.click()`——真的變成 null 時會**靜默什麼都不做**，正好就是作者回報的
+           「點了沒反應」。屬性綁定成一個元素之後，ref 不再有兩個主人。 -->
+      <input ref="input" type="file" :multiple="kind === 'mmd'" :accept="acceptFor" class="sr-only" @change="onPick" />
     </div>
 
     <p v-if="error" class="notice notice--error import__error" role="alert">{{ error }}</p>
