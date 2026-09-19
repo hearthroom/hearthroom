@@ -152,13 +152,17 @@ watch(q, (v) => { draft.value = v; });
         <div class="bar__options">
           <template v-if="kind === 'cards'">
             <label class="sr-only" for="search-period">{{ $t('search.period') }}</label>
-            <select id="search-period" name="period" class="search__select" :value="period" :title="$t('search.periodHint')" @change="navigate({ period: ($event.target as HTMLSelectElement).value })">
-              <option v-for="p in PERIODS" :key="p" :value="p">{{ $t(`search.period.${p}`) }}</option>
-            </select>
+            <span class="search__select-wrap">
+              <select id="search-period" name="period" class="search__select" :value="period" :title="$t('search.periodHint')" @change="navigate({ period: ($event.target as HTMLSelectElement).value })">
+                <option v-for="p in PERIODS" :key="p" :value="p">{{ $t(`search.period.${p}`) }}</option>
+              </select>
+            </span>
             <label class="sr-only" for="search-sort">{{ $t('board.sorts') }}</label>
-            <select id="search-sort" name="sort" class="search__select" :value="sort" @change="navigate({ sort: ($event.target as HTMLSelectElement).value })">
-              <option value="hot">{{ $t('board.sort.hot') }}</option><option value="new">{{ $t('board.sort.new') }}</option>
-            </select>
+            <span class="search__select-wrap">
+              <select id="search-sort" name="sort" class="search__select" :value="sort" @change="navigate({ sort: ($event.target as HTMLSelectElement).value })">
+                <option value="hot">{{ $t('board.sort.hot') }}</option><option value="new">{{ $t('board.sort.new') }}</option>
+              </select>
+            </span>
           </template>
         <div class="seg">
           <button class="seg__item" :class="{ 'seg__item--on': !allZones }" :aria-pressed="!allZones" @click="navigate({ zone: undefined })">{{ $t("search.zone.current") }}</button>
@@ -263,7 +267,22 @@ watch(q, (v) => { draft.value = v; });
 .search__filter svg { width: 1.15em; height: 1.15em; }
 .search__filter--on { color: var(--accent-text); border-color: var(--accent); }
 .bar__options { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin-left: auto; }
-.search__select { min-height: var(--h-md); padding: 0 var(--s-3); color: var(--text); background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-pill); font: inherit; font-size: 13px; cursor: pointer; }
+.search__select-wrap { position: relative; display: inline-flex; max-width: 100%; color: var(--text-3); }
+.search__select-wrap::after {
+  content: ""; position: absolute; inset-inline-end: var(--s-4); top: 50%;
+  width: 6px; height: 6px; border-inline-end: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: translateY(-70%) rotate(45deg); pointer-events: none;
+}
+.search__select {
+  appearance: none; -webkit-appearance: none; max-width: 100%; height: var(--h-md);
+  padding: 0 var(--s-6) 0 var(--s-3); color: var(--text); background: var(--surface);
+  border: 1px solid var(--line-strong); border-radius: var(--r-pill);
+  font: inherit; font-size: 13px; font-weight: 500; cursor: pointer;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.search__select:hover { background: var(--surface-2); border-color: var(--border-strong); }
+.search__select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.search__select-wrap:focus-within { color: var(--text); }
 .search__filters { padding: var(--s-4); margin-bottom: var(--s-4); }
 .search__filters p { margin-bottom: var(--s-2); font-size: 13px; }
 .search__filters :deep(.discovery-tags) { margin-bottom: 0; }
@@ -278,6 +297,7 @@ watch(q, (v) => { draft.value = v; });
   .search__filter, .search__go { padding-inline: var(--s-3); }
   .search__filter svg { display: none; }
   .search__select, .seg__item, .tagchip, .search__selected .btn { min-height: var(--h-lg); }
+  .bar__options .seg__item { min-height: calc(var(--h-lg) - 6px); }
 }
 
 .bar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--s-3); margin-bottom: var(--s-4); }
