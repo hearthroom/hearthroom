@@ -721,6 +721,7 @@ it('HarperHarbor submits once to HearthRoom with an explicit rating and no hosti
 it('keeps private LunaTalk drafts on their existing upstream review path',async()=>{
  api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Legacy draft',roleDetailDesc:'Private instructions',roleWelcome:'Hello'});
  await mount('/cards/r1/edit');
+ expect(root.textContent).toContain(i18n.global.t('workspace.legacyReviewHint'));
  byText('發布').click();await flush();
  btnIn(root,i18n.global.t('editor.publish.submit')).click();await flush();
  settleConfirm(true,'','sfw');await flush();await flush();
