@@ -9515,6 +9515,7 @@
     "/open/v1/hosting/seal": {
       "post": {
         "operationId": "sealHostedRevision",
+        "summary": "Seal an immutable HearthRoom hosting revision",
         "description": "Backend issuer key plus author OAuth role.read and role.write. Copies the agent configuration, all locales, Lorebooks, presentation rules and retained uploads atomically. External mutable media is rejected. Repeating a version/work/source binding returns its original receipt.",
         "security": [
           {
