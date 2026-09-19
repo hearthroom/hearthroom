@@ -2,16 +2,16 @@
 import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { ApiError, fetchMyCards, registerCard, unregisterCard, type MyCard, type MyCardPage } from "@/lib/api";
+import { ApiError, fetchMeAt, fetchMyCards, registerCard, unregisterCard, type MyCard, type MyCardPage } from "@/lib/api";
 import { confirmChoice } from "@/lib/confirm";
 import { daysUntilReset, remaining, weekRange } from "@/lib/quota";
 import { useLocalePath } from "@/lib/use-locale";
-import ConnectedCards from "@/components/ConnectedCards.vue";
+import { groupWorks, workKey, type WorkspaceCard } from "@/lib/card-workspace";
 import MyCardTile from "@/components/MyCardTile.vue";
-import * as cache from "@/lib/mine-cache";
+
 import { useSession } from "@/lib/session";
-import { platformPath } from "@/lib/connection-ui";
-import { can, currentProvider, providerName, type ProviderId } from "@/lib/provider";
+import { connectionMessage } from "@/lib/distribution";
+import { apiBaseOf, can, currentProvider, providerName, type ProviderId } from "@/lib/provider";
 import { accountToken } from "@/lib/connections";
 
 const route = useRoute();
@@ -20,86 +20,59 @@ const session = useSession();
 const { lp } = useLocalePath();
 const { t, locale } = useI18n();
 
-const combined = computed(() => (session.profile?.identities.length??0)>1 && route.query.single!=="1");
-const data = ref<MyCardPage | null>(null);
+const emails=ref<Partial<Record<ProviderId,string>>>({});
+const rows = ref<Partial<Record<ProviderId, MyCard[]>>>({});
+const pages = ref<Partial<Record<ProviderId, number>>>({});
+const more = ref<Partial<Record<ProviderId, boolean>>>({});
+const failures = ref<Partial<Record<ProviderId, string>>>({});
+const quota = ref<MyCardPage["quota"] | null>(null);
 const loading = ref(true);
-const revalidating = ref(false);
 const error = ref("");
 const notice = ref("");
 const busy = ref<string | null>(null);
-
-type Filter = "all" | "listed" | "unlisted";
-const filter = computed<Filter>(() => {
-  const f = route.query.filter;
-  return f === "listed" || f === "unlisted" ? f : "all";
-});
-const page = computed(() => Math.max(1, Number(route.query.page ?? 1) || 1));
-
-/**
- * 篩選交給服務端做，不在這裡挑。
- *
- * 在手上這一頁挑，挑出來的是「這一頁裡已登記的」——作者有一百多張卡、一頁只抓
- * 二十幾張時，那個結果跟「我登記了哪些」差很多，而畫面上看不出差在哪。
- */
-const visible = computed<MyCard[]>(() => data.value?.items ?? []);
-
-/**
- * 這週的登記額度（服務端算的，這裡只排版）。
- * 額度用完時鎖住每張未登記卡的「登記」鍵——按下去只會得到一句拒絕，不如一開始就按不下去。
- */
-const quota = computed(() => data.value?.quota ?? null);
-const quotaLeft = computed(() => (quota.value ? remaining(quota.value) : 0));
+const providers = computed(() => session.profile?.identities.map(i=>i.provider as ProviderId) ?? (session.me ? [currentProvider()] : []));
+const visible = computed(()=>groupWorks(rows.value));
+const hasNext = computed(()=>Object.values(more.value).some(Boolean));
+const quotaLeft = computed(() => quota.value ? remaining(quota.value) : 0);
 const quotaFull = computed(() => !!quota.value && quotaLeft.value === 0);
-const quotaRange = computed(() => (quota.value ? weekRange(quota.value, String(locale.value)) : null));
-const quotaResetText = computed(() => {
-  if (!quota.value) return "";
-  const n = daysUntilReset(quota.value);
-  return n <= 1 ? t("mine.quota.resetSoon") : t("mine.quota.reset", { n });
-});
-
-/**
- * 先畫快取、同時在背景重抓。
- *
- * loading 只在「完全沒東西可畫」時才為真——手上有舊資料時不該退回骨架屏，
- * 那會讓每次回到這頁都閃一下。
- */
-async function load(opts: { fresh?: boolean } = {}) {
-  error.value = "";
-  const me = session.me;
-  if (!me) return;
-
-  const cached = opts.fresh ? null : cache.read(me.accountNumId, page.value, filter.value);
-  if (cached) {
-    data.value = cached.page;
-    loading.value = false;
-    if (!cached.stale) return;
-  } else {
-    loading.value = !data.value;
-  }
-
-  revalidating.value = true;
-  try {
-    const token = await session.accessToken();
-    if (!token) throw new Error(t("auth.expired"));
-    const fresh = await fetchMyCards(token, { page: page.value, fresh: opts.fresh, filter: filter.value });
-    data.value = fresh;
-    cache.write(me.accountNumId, page.value, filter.value, fresh);
-  } catch (err) {
-    // 有舊資料時，重抓失敗不該把畫面清空——顯示錯誤，但讓使用者繼續看得到東西。
-    error.value = err instanceof Error ? err.message : t("state.loadFailed");
-  } finally {
-    loading.value = false;
-    revalidating.value = false;
-  }
+const quotaRange = computed(() => quota.value ? weekRange(quota.value, String(locale.value)) : null);
+const quotaResetText = computed(() => !quota.value ? "" : daysUntilReset(quota.value)<=1 ? t("mine.quota.resetSoon") : t("mine.quota.reset",{n:daysUntilReset(quota.value)}));
+let generation=0;
+async function loadProvider(provider:ProviderId, append=false, version=generation) {
+ try {
+  const identity=session.profile?.identities.find(i=>i.provider===provider);
+  const token=await accountToken(provider,identity?.externalId);
+  if(!token)throw new Error("connection_source_expired");
+  const page=append?(pages.value[provider]??0)+1:1;
+  if(!append) {const me=await fetchMeAt(apiBaseOf(provider),token).catch(()=>null);if(version===generation && me?.email)emails.value[provider]=me.email;}
+  const result=await fetchMyCards(token,{provider,page,fresh:true});
+  if(version!==generation)return;
+  rows.value[provider]=append?[...(rows.value[provider]??[]),...result.items]:result.items;
+  pages.value[provider]=page;more.value[provider]=result.hasNext;
+  quota.value=result.quota;delete failures.value[provider];
+ }catch(e){if(version===generation)failures.value[provider]=connectionMessage(e);}
 }
-
+async function load(append=false) {
+ if(!providers.value.length)return;
+ loading.value=true;
+ const version=generation;
+ await Promise.all(providers.value.filter(p=>!append||more.value[p]||failures.value[p]).map(p=>loadProvider(p,append,version)));
+ if(version===generation)loading.value=false;
+}
+async function cardToken(card:WorkspaceCard) {
+ const provider=card.sourceProvider??card.provider;
+ const token=await accountToken(provider,session.profile?.identities.find(i=>i.provider===provider)?.externalId);
+ if(!token)throw new Error(t("auth.expired"));
+ return token;
+}
 /**
  * 提交審核（登記）。
  *
  * 按下去之前先把話說清楚：提交等於把這張卡的完整設定授權給本站的審核帳號唯讀。
  * 這是作者的意思表示，服務端用他自己的 token 去主站授權，所以確認框不能省。
  */
-async function submit(card: MyCard) {
+async function submit(card: WorkspaceCard) {
+  if (!card.sourceAvailable) return;
   if (!card.registered && quotaFull.value) {
     error.value = t("mine.quota.exceeded");
     return;
@@ -107,7 +80,7 @@ async function submit(card: MyCard) {
   // 提交時必須宣告分級，而且刻意不預選：這是作者親手做的聲明，審核人會對照內容，不符會被駁回
   const rating = await confirmChoice({
     title: t("mine.consent.title"),
-    message: t("mine.consent.message"),
+    message: t(card.provider==='harbor'?"workspace.reviewConsent":"mine.consent.message"),
     confirmText: t("mine.consent.confirm"),
     choiceLabel: t("mine.rating.label"),
     choices: [
@@ -118,32 +91,23 @@ async function submit(card: MyCard) {
   if (!rating) return;
   const nsfw = rating === "nsfw";
   const wasRegistered = card.registered;
-  busy.value = card.roleId;
+  busy.value = workKey(card);
   error.value = "";
   notice.value = "";
   try {
-    const token = await session.accessToken();
-    if (!token) throw new Error(t("auth.expired"));
-    // 登記即分發：其他已綁定渠道的 token 一起送，站台在背景同步過去，這裡不等
-    const distribute: { provider: ProviderId; token: string }[] = [];
-    let selected:string[]|null=null;
-    try {const stored=JSON.parse(localStorage.getItem(`hearthroom.save-platforms.${currentProvider()}.${card.roleId}`)||'null');if(Array.isArray(stored))selected=stored;}catch{}
-    for (const identity of session.profile?.identities ?? []) {
-      const other = identity.provider as ProviderId;
-      if (other === currentProvider() || (selected && !selected.includes(other))) continue;
-      const otherToken = await accountToken(other, identity.externalId).catch(() => null);
-      if (otherToken) distribute.push({ provider: other, token: otherToken });
-    }
-    const res = (await registerCard(card.roleId, token, nsfw, distribute)) as { status?: MyCard["status"]; distributing?: string[] };
+    const token = await cardToken(card);
+    // Community review is one publication. Platform distribution is an explicit, separate choice.
+    const res = await registerCard(card.roleId, token, nsfw, [], card.provider);
     card.registered = true;
-    card.status = res.status ?? "approved";
+    card.updateStatus = wasRegistered && res.status==='approved' ? 'pending' : undefined;
+    card.status = res.status === "unlisted" ? undefined : res.status ?? "approved";
     card.note = "";
     card.nsfw = nsfw;
-    if (session.me) cache.write(session.me.accountNumId, page.value, filter.value, data.value!);
+
     // 登記成功就多用掉一格；撤銷不還——額度數的是「這週登記過幾張不同的卡」
-    if (!wasRegistered && data.value) data.value.quota.used = Math.min(data.value.quota.limit, data.value.quota.used + 1);
-    notice.value = card.status === "approved" ? "" : t("mine.submitted");
-    if (res.distributing?.length) notice.value = [notice.value, t("mine.distributing")].filter(Boolean).join(" ");
+    if (!wasRegistered && quota.value) quota.value.used = Math.min(quota.value.limit, quota.value.used + 1);
+    notice.value = t("mine.submitted");
+    persistCard(card);
   } catch (err) {
     error.value =
       err instanceof ApiError && err.code === "weekly_quota_exceeded"
@@ -154,19 +118,20 @@ async function submit(card: MyCard) {
   }
 }
 
-async function toggle(card: MyCard) {
+async function toggle(card: WorkspaceCard) {
+  if (!card.sourceAvailable) return;
   if (!card.registered) return submit(card);
-  busy.value = card.roleId;
+  busy.value = workKey(card);
   error.value = "";
-  // 樂觀更新：撤銷是本站自己的資料，往返很快，失敗再翻回來。
+  // Keep the displayed card while the original provider handles the request.
   card.registered = false;
   try {
-    const token = await session.accessToken();
+    const token = await cardToken(card);
     if (!token) throw new Error(t("auth.expired"));
-    await unregisterCard(card.roleId, token);
+    await unregisterCard(card.roleId, token, card.provider);
     card.status = undefined;
     card.note = "";
-    if (session.me) cache.write(session.me.accountNumId, page.value, filter.value, data.value!);
+    persistCard(card);
   } catch (err) {
     card.registered = true;
     error.value = err instanceof Error ? err.message : t("state.actionFailed");
@@ -175,29 +140,19 @@ async function toggle(card: MyCard) {
   }
 }
 
-function go(patch: Record<string, string | undefined>, replace = false) {
-  const query: Record<string, string> = { ...(route.query as Record<string, string>) };
-  for (const [k, v] of Object.entries(patch)) {
-    if (v === undefined || v === "all") delete query[k];
-    else query[k] = v;
-  }
-  router[replace ? "replace" : "push"]({ query });
+function persistCard(card:WorkspaceCard) {
+ const original=rows.value[card.provider]?.find(c=>c.roleId===card.roleId);
+ if(original)Object.assign(original,card);
 }
-
-watch(() => [session.me?.accountNumId, page.value, filter.value], () => {
-  // 帶著 fresh=1 進來的那一次交給下面那個 watcher，不然會先打一次舊快取再打一次 fresh
-  if (route.query.fresh === "1") return;
-  load();
-}, { immediate: true });
-// 從建立／編輯頁回來時帶著 ?fresh=1：剛寫過的資料要繞過所有快取。
-watch(() => route.query.fresh, (f) => {
-  if (f !== "1") return;
-  if (session.me) cache.invalidate(session.me.accountNumId);
-  load({ fresh: true });
-  // replace 而不是 push：不然按返回會落回 ?fresh=1，又被推回來，永遠回不到編輯頁
-  go({ fresh: undefined }, true);
-  // immediate：從編輯頁回來是一次新的導航，這個元件掛載時 fresh 就已經是 1，沒有「變化」可等
-}, { immediate: true });
+watch(()=>[session.me?.accountNumId,providers.value.join(',')],()=>{
+ generation++;emails.value={};rows.value={};pages.value={};more.value={};failures.value={};quota.value=null;
+ void load();
+},{immediate:true});
+watch(()=>route.query.fresh, fresh=>{
+ if(fresh!=="1")return;
+ void load();
+ const {fresh:_,...query}=route.query;void router.replace({query});
+});
 </script>
 
 <template>
@@ -205,17 +160,12 @@ watch(() => route.query.fresh, (f) => {
     <header class="head">
       <div class="head__text">
         <h1 class="head__title display">{{ $t("mine.title") }}</h1>
-        <p v-if="data && !combined" class="subtle">
-          <template v-if="data.total !== null">{{ $t("mine.tally.all") }} {{ data.total }} · </template>
-          {{ $t("mine.tally.listed") }} {{ data.registeredTotal }}
-          <template v-if="revalidating"> · {{ $t("mine.syncing") }}</template>
-        </p>
+        <p class="subtle">{{ $t("workspace.hint") }}</p>
       </div>
       <RouterLink v-if="can('editor')" :to="lp('/create')" class="btn btn--primary">{{ $t("mine.create") }}</RouterLink>
     </header>
 
-    <ConnectedCards v-if="combined" />
-    <template v-else>
+
     <section v-if="quota && quotaRange" class="quota panel" :class="{ 'quota--full': quotaFull }" aria-live="polite">
       <div class="quota__count">
         <span class="eyebrow">{{ $t("mine.quota.eyebrow") }}</span>
@@ -236,55 +186,45 @@ watch(() => route.query.fresh, (f) => {
       </div>
     </section>
 
-    <div class="seg filters">
-      <button
-        v-for="f in ['all', 'listed', 'unlisted']"
-        :key="f"
-        class="seg__item"
-        :class="{ 'seg__item--on': filter === f }"
-        :aria-pressed="filter === f"
-        @click="go({ filter: f, page: undefined })"
-      >
-        {{ $t(`mine.filter.${f}`) }}
-      </button>
+    <div v-for="(message, provider) in failures" :key="provider" class="notice notice--error" role="alert">
+      {{ providerName(provider as ProviderId) }} · {{ message }}
+      <button class="btn btn--sm" :disabled="loading" @click="load()">{{ $t('linked.retry') }}</button>
+      <RouterLink :to="lp('/me')">{{ $t('me.reauthorize') }}</RouterLink>
     </div>
-
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
     <p v-else-if="notice" class="notice" role="status">{{ notice }}</p>
 
-    <div v-if="loading" class="wall" aria-hidden="true">
+    <div v-if="loading && !visible.length" class="wall" aria-hidden="true">
       <div v-for="i in 12" :key="i" class="ghost ghost--card" />
     </div>
 
-    <div v-else-if="!data?.items.length" class="empty panel">
+    <div v-else-if="!visible.length && !Object.keys(failures).length" class="empty panel">
       <p class="empty__title">{{ $t("mine.empty") }}</p>
       <RouterLink v-if="can('editor')" :to="lp('/create')" class="btn btn--primary">{{ $t("mine.empty.cta") }}</RouterLink>
     </div>
 
-    <div v-else-if="!visible.length" class="empty panel"><p class="empty__title">{{ $t("mine.emptyFilter") }}</p></div>
 
-    <div v-else class="wall" :aria-busy="revalidating || undefined">
+    <div v-else class="wall" :aria-busy="loading || undefined">
       <MyCardTile
         v-for="card in visible"
-        :key="card.roleId"
+        :key="workKey(card)"
         :card="card"
         :locked="quotaFull"
-        :busy="busy === card.roleId"
+        :emails="emails"
+        :busy="busy === workKey(card)"
         @toggle="toggle(card)"
         @resubmit="submit(card)"
       />
     </div>
 
-    <nav v-if="data && (page > 1 || data.hasNext)" class="pager">
-      <button class="btn btn--sm" :disabled="page === 1" @click="go({ page: String(page - 1) })">← {{ $t("pager.prev") }}</button>
-      <span class="subtle">{{ $t("pager.page", { n: page }) }}</span>
-      <button class="btn btn--sm" :disabled="!data.hasNext" @click="go({ page: String(page + 1) })">{{ $t("pager.next") }} →</button>
-    </nav>
-    </template>
+    <div v-if="hasNext" class="pager">
+      <button class="btn" :disabled="loading" @click="load(true)">{{ $t(loading?'linked.loading':'workspace.more') }}</button>
+    </div>
   </div>
 </template>
 
 <style scoped>
+.head .btn { min-height:44px; }
 .create-platform {max-width:100%} .create-platform a {margin:var(--s-2)}
 .head {
   display: flex; flex-wrap: wrap; gap: var(--s-4);
@@ -317,18 +257,9 @@ watch(() => route.query.fresh, (f) => {
   .quota__when { margin-left: 0; text-align: left; flex-basis: 100%; }
 }
 
-.wall {
-  display: grid; gap: var(--s-4);
-  /*
-   * 欄數釘死，不讓它隨寬度自動算：一頁 24 張，欄數必須整除 24，最後一列才不會缺角
-   * （owner 2026-09-07：桌機自動算出 5 欄，最後一列只剩 4 張）。2／3／4／6 都整除 24；
-   * 手機兩欄、平板三到四欄、桌機六欄——1080px 以上六欄每張仍有 158px 以上，名字放得下。
-   */
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-@media (min-width: 600px) { .wall { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (min-width: 820px) { .wall { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-@media (min-width: 1080px) { .wall { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+.wall { display:grid; gap:var(--s-5); grid-template-columns:minmax(0,1fr); align-items:start; }
+@media(min-width:640px){.wall{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(min-width:1080px){.wall{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .ghost--card { aspect-ratio: 3 / 5.4; }
 
 .empty { padding: var(--s-8) var(--s-5); text-align: center; display: grid; gap: var(--s-4); justify-items: center; }

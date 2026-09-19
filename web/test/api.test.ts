@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createRole, fetchLibraryImages, fetchWorldbookEntries, readKeywordList } from "../src/lib/api";
+import { registerCard, unregisterCard, createRole, fetchLibraryImages, fetchWorldbookEntries, readKeywordList } from "../src/lib/api";
 
 /** 上游真實回應的形狀（2026-09-06 線上抓的）：`list` 而不是 `entries`，關鍵詞是 JSON 字串。 */
 const UPSTREAM_ROW = {
@@ -221,3 +221,11 @@ it('normalizes Harper wallet balances without treating reserved credits as spend
   vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({available:120,permanent:100,expiring:40,reserved:20,ledger:[]}))));
   try {expect(await fetchWallet('fixture')).toEqual({score:120,tempScore:0,plans:[]});}finally{setProvider('lunatalk')}
 });
+
+ it("routes publication writes to the selected original provider, independently of the active account",async()=>{
+ const request=vi.fn(async()=>new Response(JSON.stringify({status:'pending'}),{status:200}));
+ vi.stubGlobal('fetch',request);
+ await registerCard('original','harbor-token',false,[],'harbor');
+ await unregisterCard('original','harbor-token','harbor');
+ for(const call of request.mock.calls){const headers=new Headers((call as unknown as [string,RequestInit])[1].headers);expect(headers.get('X-Provider')).toBe('harbor');expect(headers.get('Authorization')).toBe('Bearer harbor-token');}
+ });

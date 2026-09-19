@@ -181,12 +181,14 @@ describe("審核佇列", () => {
     await submit("role-1");
     await makeReviewer(REVIEWER_A);
     const id = (await queue("rev-a")).body.items[0].id as string;
+    expect((await SELF.fetch(`https://c.test/v1/review/${id}/detail`, { headers: bearer("rev-a") })).status).toBe(409);
+    await act(id,"claim","rev-a");
     const res = await SELF.fetch(`https://c.test/v1/review/${id}/detail`, { headers: bearer("rev-a") });
     expect(res.status).toBe(200);
     expect(res.headers.get("Cache-Control")).toContain("no-store");
     const body = (await res.json()) as any;
     expect(body.detail.document.customInstructions).toBe("自訂指示");
-    expect(body.submission).toMatchObject({ kind: "first", required: 2, claimedByMe: false });
+    expect(body.submission).toMatchObject({ kind: "first", required: 2, claimedByMe: true });
     expect(JSON.stringify(body)).not.toContain(String(AUTHOR));
     expect((await SELF.fetch(`https://c.test/v1/review/${id}/detail`, { headers: bearer("stranger") })).status).toBe(403);
     // 審核頁不再回頭問供應商：快照是唯一來源
@@ -204,6 +206,7 @@ describe("審核佇列", () => {
     await submit("role-1");
     await makeReviewer(REVIEWER_A);
     const id = (await queue("rev-a")).body.items[0].id as string;
+    await act(id,"claim","rev-a");
     const body = (await (await SELF.fetch(`https://c.test/v1/review/${id}/detail`, { headers: bearer("rev-a") })).json()) as any;
     expect(body.detail.document.roleName).toBe("第二版");
   });
@@ -275,6 +278,7 @@ describe("內容版本", () => {
 
     // 同步開的單沒有快照（那時沒有作者的 token）：審核人看的是變動後的公開資料
     const id = q.body.items[0].id as string;
+    await act(id,"claim","rev-a");
     const detail = (await (await SELF.fetch(`https://c.test/v1/review/${id}/detail`, { headers: bearer("rev-a") })).json()) as any;
     expect(detail.detail).toMatchObject({ partial: true, document: { roleName: "改名了" } });
     expect(JSON.stringify(detail)).not.toContain(String(AUTHOR));
