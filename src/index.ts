@@ -919,7 +919,10 @@ app.post("/v1/cards", async (c) => {
   return c.json(row ? { ...toCard(row, lang(c)), status: row.status, distributing: distribute.map((t) => t.provider) } : { id }, created ? 201 : 200);
 });
 
-app.get('/v1/hosting/versions/:versionId/decision',async(c)=>c.json(await hostingDecision(c.env.DB,c.req.param('versionId')),200,{'Cache-Control':'no-store'}));
+app.get('/v1/hosting/versions/:versionId/decision',async(c)=>{
+ c.header('Cache-Control','no-store');
+ return c.json(await hostingDecision(c.env.DB,c.req.param('versionId')));
+});
 
 // ---- 社群審核 ----------------------------------------------------------------
 //
