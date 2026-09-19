@@ -99,3 +99,18 @@ new client logs, account identifiers or private content are emitted.
   rollback without consuming a publication slot. Browser fixtures are UI evidence only.
 - Full frontend suite retains the existing opt-in real-card probe skip; no production
   author card was created, reviewed, changed or deleted as a test.
+
+## Compact card layout, 2026-09-20
+
+At 1280 px, the workspace has four 276 px columns. Default synthetic cards measure
+about 426 px high (previously 606 px); covers are 138 px high, capped at 160 px on
+wider tiles. At 390 px, cards remain one column and about 448 px high. Keep three
+common actions in one row with at least 44 px touch height; a fourth recovery action
+may occupy a separate row. Expanded play choices and sync management grow naturally.
+
+Recheck all five locale layouts for horizontal overflow, long action labels and the
+44 px action minimum. Inspect image and fallback covers, two-line descriptions,
+review badges, light/dark appearances, and open both Play and Manage sync. Use the
+synthetic fixture for account interactions; production asset readback proves delivery,
+not authenticated account or hosting mutation coverage. The change is CSS only;
+existing API/MCP and observability decisions remain unchanged.
