@@ -32,10 +32,11 @@ const providers = computed(() =>
 const error = ref("");
 const busy = ref(false);
 // 每一家連的是哪個信箱。使用者要確認的是「這是我哪一個帳號」，公開編號回答不了這件事。
-// 問不到就維持顯示編號——那一家可能還沒給這項授權，而這一列不該因此變成空的。
+// 舊授權可能未包含信箱權限；提供重新授權，不退回內部編號。
 const emails = ref<Partial<Record<ProviderId, string>>>({});
 const states=ref<Partial<Record<ProviderId,'checking'|'ready'|'expired'|'unavailable'>>>({});
 async function loadEmails() {
+  emails.value = {};
   for (const p of session.profile?.identities ?? []) {
     const id = p.provider as ProviderId;
     if (!PROVIDERS.some((x) => x.id === id)) continue;
@@ -46,7 +47,7 @@ async function loadEmails() {
       const me = await fetchMeAt(apiBaseOf(id), token);
       if (me.accountNumId !== p.externalId) {states.value[id]="expired";continue;}
       states.value[id]="ready";
-      if (me.email) emails.value = { ...emails.value, [id]: me.email };
+      if (me.email?.trim()) emails.value = { ...emails.value, [id]: me.email.trim() };
     } catch (e) {
       states.value[id]=e instanceof ApiError && e.status===401?"expired":"unavailable";
     }
@@ -94,7 +95,9 @@ async function connect(provider: ProviderId) {
           <span class="account__mark" :class="{'account__mark--harbor':p.id==='harbor'}" aria-hidden="true">{{ p.id==='harbor'?'H':'L' }}</span>
           <div class="account__text">
             <h3>{{ providerName(p.id) }}</h3>
-            <p>{{ !isConnected(p.id) ? $t('linked.notConnected') : emails[p.id] || $t('linked.account', {id:session.profile!.identities.find(i=>i.provider===p.id)!.externalId}) }}</p>
+            <p v-if="!isConnected(p.id)">{{ $t('linked.notConnected') }}</p>
+            <p v-else-if="emails[p.id]">{{ emails[p.id] }}</p>
+            <p v-else-if="states[p.id] && states[p.id]!=='checking'">{{ $t('services.emailUnavailable') }}</p>
           </div>
           <span v-if="isConnected(p.id)" class="account__status" :class="{'account__status--ready':states[p.id]==='ready'}" role="status">
             <span class="account__dot" aria-hidden="true" />{{ $t(`services.${states[p.id]??'checking'}`) }}
@@ -103,7 +106,7 @@ async function connect(provider: ProviderId) {
         <div class="account__actions" v-if="isConnected(p.id)">
           <a v-if="accountPage(p.id)" class="account__action" :href="accountPage(p.id)!" :aria-label="$t('linked.manage',{name:providerName(p.id)})" target="_blank" rel="noopener">{{ $t('services.manage') }}<AccountIcon name="external" /></a>
           <a class="account__action" :href="billingPage(p.id)" target="_blank" rel="noopener">{{ $t('services.billing') }}<AccountIcon name="external" /></a>
-          <button v-if="states[p.id]==='expired'" class="btn account__connect" :disabled="busy || !session.profile" @click="connect(p.id)">{{ $t('me.reauthorize') }}</button>
+          <button v-if="states[p.id]==='expired' || (states[p.id]==='ready' && !emails[p.id])" class="btn account__connect" :disabled="busy || !session.profile" @click="connect(p.id)">{{ $t('me.reauthorize') }}</button>
           <button v-if="states[p.id]==='unavailable'" class="btn account__connect" :disabled="busy" @click="loadEmails">{{ $t('linked.retry') }}</button>
         </div>
         <button v-else class="btn account__connect" :disabled="busy || !session.profile" @click="connect(p.id)">{{ $t('linked.connect') }}</button>
