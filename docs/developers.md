@@ -141,7 +141,7 @@ Today a second provider is configuration plus a small code change, not a runtime
 
 ## Community identity and connected platforms
 
-A HearthRoom member has one community handle, display name and avatar. The name and avatar are seeded once from the first verified sign-in and can then be edited independently. Changing the platform used for an action never changes that community profile.
+A HearthRoom member has one community handle, display name, bio and avatar. The name and avatar are seeded once from the first verified sign-in and can then be edited independently. Uploaded community avatars are processed and stored in HearthRoom's own R2 bucket. Changing the platform used for an action never changes that community profile.
 
 Connect at most one account per provider. LunaTalk and HarperHarbor may be connected simultaneously. There is no global active-account choice. Credits, conversations and source assets remain on their respective platforms.
 
@@ -149,11 +149,12 @@ These are **HearthRoom community endpoints** under `/v1`, separate from the prov
 
 | Endpoint | Contract |
 |---|---|
-| `GET /v1/me` | Returns the community profile, including `displayName`, `avatarUrl` and linked identities. |
-| `PUT /v1/me/profile` | Authenticated update `{displayName, avatarUrl}`. Name is 1–60 characters; avatar is empty or an HTTPS URL. Images remain hosted externally, including on the user's SaaS. |
+| `GET /v1/me` | Returns the community profile, including `displayName`, `bio`, `avatarUrl` and linked identities. |
+| `PUT /v1/me/profile` | Authenticated multipart update: `displayName` (1–60 characters), `bio` (up to 500), optional `avatar` (JPEG/PNG/WebP, up to 2 MiB), or `removeAvatar=true`. Images are validated, cropped to 512×512 WebP and stored in owned R2; replacement schedules the old object for deletion. JSON supports name/bio only; `avatarUrl` input is rejected. |
+| `GET /v1/avatars/:handle/:file` | Public current community avatar. Retired object URLs return 404. Author responses also include `bio`, including for authors without listed cards. |
 | `POST /v1/me/connections/preview` | Current bearer plus `X-Provider`; body `{provider, token}` proves the additional account. Read-only source/target community preview. |
-| `POST /v1/me/connections` | Same proofs plus `{keepHandle, sourceHandle, targetHandle}` from preview. `keepHandle` must equal the current community's `sourceHandle`; it is retained for request compatibility, not an account-selection UI. Existing target communities require explicit confirmation. Stale previews fail closed. |
-| `DELETE /v1/me/connections/:provider` | Disconnects an additional platform without deleting accounts or assets. The founding login remains protected. To remove the sign-in provider, the client uses another verified linked provider's proof, then resumes through that provider. |
+| `POST /v1/me/connections` | Same proofs plus `{keepHandle, sourceHandle, targetHandle}` from preview. `keepHandle` must equal the current community's `sourceHandle`. An existing target must be provably empty and explicitly confirmed; its identity moves to the retained community and its empty community record is deleted atomically. SaaS accounts/assets are preserved. Stale previews fail closed. |
+| `DELETE /v1/me/connections/:provider` | Always rejects with 409 `connection_permanent`; self-service disconnection is unavailable. |
 | `GET /v1/me/cards` | List on the explicitly requested provider. Items include provider and, when synchronized, canonical work/source identifiers. The client combines connected lists and groups copies. |
 | `GET /v1/me/card-copies/:roleId` | Verifies ownership on the requested provider, then returns synchronization states. |
 | `POST /v1/me/card-sync` | Body `{sourceProvider, sourceRoleId, sourceToken, targetProvider, targetToken, publish, updatePublished?, recreateMissing?}`. Both accounts must belong to the authenticated community; the source and existing destination must be owned by those accounts. Tokens are transient. `updatePublished: true` explicitly permits returning an unchanged published destination to draft before updating it; independently edited or pending-review copies remain protected. `recreateMissing: true` explicitly requests a new private copy only after the stored destination returns `404 role_not_found` on its card read. It requires `publish: false`, resets only the destination mapping, and never restores or deletes the old card or resources. Network, authorization and resource errors do not trigger replacement. |
@@ -165,11 +166,13 @@ These are **HearthRoom community endpoints** under `/v1`, separate from the prov
 | `PUT` / `DELETE /v1/comments/:id/like` | Member. One like per member per comment; repeats are no-ops. |
 | `GET /v1/cards/:roleId/platforms` | Public copies of an approved community card, after community age gating and upstream accessibility checks. `playable` distinguishes storage from an actual runtime. |
 
-A mistaken connection is resolved from the intended community account: disconnect the additional platform from the wrong community, then connect it to the intended one. No community accounts or history are merged or deleted. A different account on an already-connected provider is rejected. Independent HearthRoom login and detaching a founding login are outside this release.
+A duplicate empty community is resolved by signing into the intended community and connecting the other verified SaaS account. Prior profile edits, preferences, community activity, publication history, owned works/copies, game saves or upstream cards prevent absorption. Older profiles without reliable edit history are conservatively protected by the migration. A different account on an already-connected provider is rejected. Populated-account merging and detaching identities are outside this release.
+
+Community publication permits three distinct works per community per UTC week (Monday reset), shared across every connected provider. Copies map to the original work and do not add usage; registering a mapped copy separately fails with `publication_use_original`. Unlisting does not erase usage/history. The database enforces the limit within the publication transaction, including concurrent submissions. Existing listed cards may be refreshed without new usage.
 
 Authors choose the initial platform when creating a card and select additional destinations per card. Synchronization preserves common text, instructions, examples, tags, identity settings, image references, bound Lorebooks, author assets, translated variants, alternate openings and metadata. Voice-specific content (`roleSpeech`) and incomplete paginated upstream documents are rejected before creation. Lorebooks are recreated as owned private resources on the destination; uncertain creates are retained for reconciliation instead of creating duplicates. This is an explicit transfer limitation, not a claim that the provider cannot store those features. Destination edits stop overwrite; uncertain creation results require reconciliation instead of blind retry. Publication requires an explicit action and follows each provider's review. Community content ratings are not sent to providers.
 
-Images retain the original SaaS URL. HarperHarbor stores owned references using `POST /open/v1/media/references`; HearthRoom does not download or re-upload image bytes. An image reference remains subject to ownership, quota and media review.
+Card images retain the original SaaS URL. HarperHarbor stores owned references using `POST /open/v1/media/references`; card synchronization does not download or re-upload image bytes. An image reference remains subject to ownership, quota and media review. This is separate from uploaded community profile avatars.
 
 Players select a published copy and its linked platform account for each play action. The destination contains both the provider and that platform's role ID. Balances and conversations never combine. HarperHarbor supports the core conversation flow listed below when its model runtime is configured. The browser uses the selected provider for both HTTP requests and WebSocket connections. Existing Harper authoring grants must approve the additional `chat.play` scope before playing; refreshing an older grant retains its original OAuth client.
 

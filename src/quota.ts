@@ -1,8 +1,9 @@
+import { resolveMember } from "./members";
 import type { ProviderId } from "./providers";
 /**
  * 每週登記額度。
  *
- * 榜單的品質靠「作者只把最好的那幾張放上來」，所以一個作者一週最多登記 WEEKLY_LIMIT 張。
+ * 榜單的品質靠「作者只把最好的那幾張放上來」，所以一個社群帳號一週最多登記 WEEKLY_LIMIT 張。
  * 週的定義是 UTC 的週一 00:00 到下週一 00:00：全站一個時鐘，不隨作者所在時區飄；
  * 畫面上把兩個時間點換成作者本地的日期就好。
  *
@@ -37,13 +38,10 @@ export interface Quota {
 /** 這週已經登記過的 role（去重）。 */
 export async function registeredThisWeek(db: D1Database, authorNumId: number, now: number, provider: ProviderId = "lunatalk"): Promise<Set<string>> {
   const { start, end } = weekWindow(now);
-  const rows = await db
-    .prepare(
-      "SELECT DISTINCT source_role_id FROM card_registrations WHERE provider = ? AND author_num_id = ? AND registered_at >= ? AND registered_at < ?",
-    )
-    .bind(provider, authorNumId, start, end)
-    .all<{ source_role_id: string }>();
-  return new Set(rows.results.map((r) => r.source_role_id));
+  const memberId = await resolveMember(db, provider, authorNumId, now);
+  const rows = await db.prepare("SELECT DISTINCT work_key FROM community_registration_usage WHERE member_id=? AND registered_at>=? AND registered_at<?")
+    .bind(memberId,start,end).all<{work_key:string}>();
+  return new Set(rows.results.map(r=>r.work_key));
 }
 
 export async function quotaFor(db: D1Database, authorNumId: number, now: number, provider: ProviderId = "lunatalk"): Promise<Quota> {

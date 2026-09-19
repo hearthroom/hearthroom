@@ -104,6 +104,7 @@ export async function memberByHandle(db: D1Database, handle: string): Promise<st
 export interface MemberProfile {
   displayName: string;
   avatarUrl: string;
+  bio: string;
   handle: string;
   memberSince: number;
   identities: { provider: string; externalId: number; linkedAt: number; founding: boolean }[];
@@ -139,9 +140,9 @@ export function normalizeHiddenTags(input: unknown): string[] {
 /** 「我的」頁要的：公開 ID、加入時間、連結了哪些供應商帳號。沒有 token、沒有信箱。 */
 export async function memberProfile(db: D1Database, memberId: string): Promise<MemberProfile | null> {
   const m = await db
-    .prepare("SELECT handle, display_name, avatar_url, created_at, show_nsfw, age_verified_at, hidden_tags FROM members WHERE id = ?")
+    .prepare("SELECT handle, display_name, avatar_url, bio, created_at, show_nsfw, age_verified_at, hidden_tags FROM members WHERE id = ?")
     .bind(memberId)
-    .first<{ handle: string; display_name: string | null; avatar_url: string; created_at: number; show_nsfw: number; age_verified_at: number | null; hidden_tags: string }>();
+    .first<{ handle: string; display_name: string | null; avatar_url: string; bio: string; created_at: number; show_nsfw: number; age_verified_at: number | null; hidden_tags: string }>();
   if (!m) return null;
   const founding = await db.prepare("SELECT provider FROM member_identities WHERE member_id=?").bind(memberId).all<{provider:string}>();
   const ids = await db
@@ -152,6 +153,7 @@ export async function memberProfile(db: D1Database, memberId: string): Promise<M
     handle: m.handle,
     displayName: m.display_name ?? m.handle,
     avatarUrl: m.avatar_url,
+    bio: m.bio,
     memberSince: m.created_at,
     identities: ids.results.map((r) => ({ provider: r.provider, externalId: Number(r.external_id), linkedAt: r.linked_at, founding: founding.results.some(i=>i.provider===r.provider) })),
     showNsfw: m.show_nsfw === 1,
@@ -292,9 +294,4 @@ export async function saveMemberId(db:D1Database,member:Member):Promise<string> 
 function safeAvatar(value: unknown): string {
   if (typeof value !== "string" || !value) return "";
   try { const url = new URL(value); return url.protocol === "https:" && !url.username && !url.password && value.length <= 2048 ? url.href : ""; } catch { return ""; }
-}
-export async function updateMemberProfile(db: D1Database, id: string, input: {displayName?: unknown; avatarUrl?: unknown}) {
-  if (typeof input?.displayName !== "string" || !input.displayName.trim() || input.displayName.trim().length > 60 || typeof input.avatarUrl !== "string" || (input.avatarUrl && !safeAvatar(input.avatarUrl))) throw new HttpError(400, "profile_invalid");
-  await db.prepare("UPDATE members SET display_name=?, avatar_url=? WHERE id=?").bind(input.displayName.trim(), safeAvatar(input.avatarUrl), id).run();
-  return memberProfile(db, id);
 }

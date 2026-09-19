@@ -8,7 +8,7 @@ const fixtures = vi.hoisted(() => ({
   session:{me:{nickName:'New name',avatar:'',accountNumId:22},profile:{handle:'newxxxxx',identities:[{provider:'harbor',externalId:22,founding:true}]},adopt:vi.fn(),logout:vi.fn(),accessToken:vi.fn()},
 }));
 vi.mock('../src/lib/oauth',()=>({completeLogin:fixtures.complete}));
-vi.mock('../src/lib/connections',()=>({previewConnection:fixtures.preview,finishConnection:fixtures.finish,connectAccount:fixtures.connect,disconnectAccount:vi.fn()}));
+vi.mock('../src/lib/connections',()=>({previewConnection:fixtures.preview,finishConnection:fixtures.finish,connectAccount:fixtures.connect,accountToken:async()=>null}));
 vi.mock('../src/lib/session',()=>({useSession:()=>fixtures.session}));
 vi.mock('../src/lib/provider-switch',()=>({availableProviders:async()=>[{id:'lunatalk',name:'LunaTalk'},{id:'harbor',name:'HarperHarbor'}]}));
 vi.mock('../src/lib/track',()=>({track:vi.fn()}));
