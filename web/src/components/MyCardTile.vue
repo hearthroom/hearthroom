@@ -104,7 +104,7 @@ const hasArt = computed(() => !!props.card.avatarUrl && !broken.value);
   transition: box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
 .card:hover { box-shadow: 0 0 0 1px var(--line-strong), var(--shadow-md); }
-.card__art { position: relative; display: block; aspect-ratio: 16 / 10; background: var(--surface-2); overflow: hidden; }
+.card__art { position: relative; display: block; aspect-ratio: 2 / 1; max-height: 160px; background: var(--surface-2); overflow: hidden; }
 .card__art img { width: 100%; height: 100%; object-fit: cover; transition: transform var(--dur-slow) var(--ease); }
 
 .card__art::after { content: ""; position: absolute; inset: 0; box-shadow: inset 0 0 0 1px rgba(16, 16, 24, 0.05); pointer-events: none; }
@@ -116,7 +116,7 @@ const hasArt = computed(() => !!props.card.avatarUrl && !broken.value);
 }
 .card:hover .card__art::before { opacity: 1; }
 .card__void { display: grid; place-items: center; width: 100%; height: 100%; }
-.card__void span { font-size: 40px; font-weight: 600; color: rgba(255, 255, 255, 0.9); }
+.card__void span { font-size: 28px; font-weight: 500; color: rgba(255, 255, 255, 0.7); }
 
 .card__badge {
   position: absolute; top: 8px; left: 8px; z-index: 2;
@@ -129,19 +129,21 @@ const hasArt = computed(() => !!props.card.avatarUrl && !broken.value);
 .card__badge--muted { background: rgba(16, 16, 24, 0.7); color: #fff; }
 .card__note { font-size: 12px; color: var(--danger); line-height: 1.5; }
 
-.card__body { display: grid; gap: var(--s-2); padding: var(--s-4); }
-.card__name { font-size: 18px; font-weight: 600; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card__body { display: grid; gap: var(--s-2); padding: var(--s-3); }
+.card__name { font-size: 16px; font-weight: 600; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card__hook {
-  font-size: 14px; line-height: 1.6; color: var(--text-2);
+  font-size: 13px; line-height: 1.5; color: var(--text-2);
   display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-  min-height: calc(14px * 1.6 * 2);
+  min-height: calc(13px * 1.5 * 2);
 }
 .card__meta { font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
-/* 卡片最窄 140px：三顆一排放不下會被圓角裁掉。試玩、編輯一列平分；登記（或取消登記）獨占一列。 */
-.card__actions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-2); margin-top: var(--s-2); }
+/* 工作區保留三個常用操作；長翻譯可換行，觸控高度不縮小。 */
+.card__actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-2); margin-top: var(--s-2); }
 .card__actions > .btn { min-height:44px; height:auto; white-space:normal; min-width: 0; padding-left: var(--s-2); padding-right: var(--s-2); overflow-wrap:anywhere; }
-.card__actions > .btn--primary, .card__actions > .btn--danger { grid-column: 1 / -1; }
-.card__withdraw{grid-column:1/-1;color:var(--text-3);border-color:transparent;background:transparent;}
+.card__actions > .btn:nth-child(4) { grid-column: 1 / -1; }
+.card__withdraw{color:var(--text-3);border-color:transparent;background:transparent;}
+.card__body :deep(.copy-summary) { margin-top: 0; padding-top: var(--s-2); gap: var(--s-2); }
+.card__body :deep(.copy-summary + .distribution) { padding-top: 0; }
 .play-choices{display:grid;gap:var(--s-2);padding:var(--s-3);background:var(--surface-2);border-radius:var(--r-sm);margin-top:var(--s-2)}
 .play-choices h4{font-size:14px}.play-choices p{font-size:12px;line-height:1.6}
 .play-choice{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px var(--s-2);padding:var(--s-3);border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface);font-size:13px}
