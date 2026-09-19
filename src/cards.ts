@@ -111,6 +111,8 @@ export interface ListOptions {
   q?: string;
   /** 標籤名字們（類型鍵展開後）；任一命中都算。 */
   tags?: string[];
+  /** 每組代表一個類型；組內任一名稱命中，組與組取交集。 */
+  tagGroups?: string[][];
   /** 看的人不想看的標籤名字們（類型鍵展開後）；任一命中就不列。 */
   excludeTags?: string[];
   /** 作者頁：這個成員（本站 id）的卡 */
@@ -186,6 +188,10 @@ export async function listCards(db: D1Database, opts: ListOptions) {
     where.push(inList("c"));
     binds.push(JSON.stringify(opts.tags));
   }
+  for (const group of opts.tagGroups ?? []) {
+    where.push(inList("c"));
+    binds.push(JSON.stringify(group));
+  }
   if (opts.excludeTags?.length) {
     where.push(excludeClause("c"));
     binds.push(JSON.stringify(opts.excludeTags));
@@ -216,7 +222,7 @@ export async function listCards(db: D1Database, opts: ListOptions) {
           ? "bm25(cards_fts), c.talk_num DESC"
           : "c.talk_num DESC, c.follow_num DESC, c.registered_at DESC";
 
-  const filtered = Boolean(opts.q || opts.tags?.length || opts.authorMemberId !== undefined || opts.since !== undefined);
+  const filtered = Boolean(opts.q || opts.tags?.length || opts.tagGroups?.length || opts.authorMemberId !== undefined || opts.since !== undefined);
 
   // 多撈一筆就知道還有沒有下一頁，不必數完整組結果。
   const probe = await db
@@ -486,15 +492,17 @@ export async function registeredAmong(db: D1Database, roleIds: string[], provide
  * 這一區最常見的標籤。榜單用它做「按類型看」的篩選列——標籤是作者自己打的，
  * 沒有固定分類表，所以「類型」就是大家實際在用的那些詞。
  */
-export async function topTags(db: D1Database, zone: Zone | undefined, limit: number) {
-  const where = zone
+export async function topTags(db: D1Database, zone: Zone | undefined, limit: number, q?: string, offset = 0) {
+  let where = zone
     ? `WHERE c.${listed(false)} AND ${NOT_A_COPY("c")} AND c.zone IN (?, 'all')`
     : `WHERE c.${listed(false)} AND ${NOT_A_COPY("c")}`;
-  const binds: unknown[] = zone ? [zone, limit] : [limit];
+  const binds: unknown[] = zone ? [zone] : [];
+  if (q) { where += " AND j.value LIKE ? ESCAPE '\\'"; binds.push(likeTerm(q)); }
+  binds.push(limit, offset);
   const rows = await db
     .prepare(
       `SELECT j.value AS tag, COUNT(*) AS n FROM cards c, json_each(c.tags) j ${where}
-       GROUP BY j.value ORDER BY n DESC, tag LIMIT ?`,
+       GROUP BY j.value ORDER BY n DESC, tag LIMIT ? OFFSET ?`,
     )
     .bind(...binds)
     .all<{ tag: string; n: number }>();

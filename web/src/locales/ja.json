@@ -1117,5 +1117,17 @@
   "me.resourcesHint": "画像や制作素材を管理",
   "services.description": "カードの保存とプレイ用ポイントは、以下のサービスで管理されます。",
   "services.manage": "アカウント管理",
-  "services.emailUnavailable": "メールアドレスを取得できていません"
+  "services.emailUnavailable": "メールアドレスを取得できていません",
+  "search.filter": "絞り込み",
+  "search.users": "ユーザー",
+  "search.tags": "タグ",
+  "search.period": "期間",
+  "search.period.all": "全期間",
+  "search.period.week": "今週",
+  "search.period.month": "月間",
+  "search.period.quarter": "四半期",
+  "search.period.year": "年間",
+  "search.periodHint": "掲載日から過去7・30・90・365日以内のカードを表示",
+  "search.matchAll": "選択したすべてのタグに一致するカードを表示します。",
+  "search.clear": "タグを解除"
 }

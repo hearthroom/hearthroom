@@ -569,3 +569,37 @@ describe("作者榜", () => {
     expect((await authors("?q=乙")).map((a) => a.accountNumId)).toEqual([2]);
   });
 });
+
+describe("組合探索", () => {
+  it("多選標籤取交集，每個類型仍接受跨語言名稱；分頁不漏卡", async () => {
+    await seed({ id: "both", tags: ["Roleplay", "劇情"] });
+    await seed({ id: "one", tags: ["角色扮演"] });
+    await seed({ id: "other", tags: ["劇情"] });
+    expect(ids((await list("?tag=roleplay&tag=story&hide=roleplay,story")).body)).toEqual(["both"]);
+    expect(ids((await list("?tag=story&tag=roleplay&limit=1")).body)).toEqual(["both"]);
+    expect((await list("?tag=story&tag=roleplay&limit=1")).body.hasNext).toBe(false);
+  });
+
+  it("時間與熱門／最新獨立組合，依上榜時間篩選", async () => {
+    const day = 86_400_000;
+    await seed({ id: "old", name: "探索", registeredAt: Date.now() - 400 * day, talkNum: 9999 });
+    await seed({ id: "quarter", name: "探索", registeredAt: Date.now() - 60 * day, talkNum: 500 });
+    await seed({ id: "recent", name: "探索", registeredAt: Date.now() - day, talkNum: 10 });
+    expect(ids((await list("?q=探索&period=week&sort=hot")).body)).toEqual(["recent"]);
+    expect(ids((await list("?q=探索&period=quarter&sort=hot")).body)).toEqual(["quarter", "recent"]);
+    expect(ids((await list("?q=探索&period=year&sort=new")).body)).toEqual(["recent", "quarter"]);
+    expect(ids((await list("?q=探索&period=all&sort=hot")).body)[0]).toBe("old");
+  });
+
+  it("標籤搜尋先篩選再分頁，不只搜尋熱門前幾個，保留語區限制", async () => {
+    await seed({ id: "a", tags: ["西幻", "西幻冒險"] });
+    await seed({ id: "b", tags: ["都市"] });
+    await seed({ id: "c", tags: ["西幻英文"], zone: "en" });
+    const res = await SELF.fetch("https://c.test/v1/tags?zone=zh&q=西幻&limit=1");
+    const body = await res.json() as any;
+    expect(body.items.map((x: any) => x.tag)).toEqual(["西幻"]);
+    expect(body.hasNext).toBe(true);
+    const next = await SELF.fetch("https://c.test/v1/tags?zone=zh&q=西幻&limit=1&offset=1");
+    expect((await next.json() as any).items.map((x: any) => x.tag)).toEqual(["西幻冒險"]);
+  });
+});

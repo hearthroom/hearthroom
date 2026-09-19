@@ -292,7 +292,10 @@ app.get("/v1/cards", async (c) => {
     res.headers.set("X-Cache", "hit");
     return res;
   }
-  const { sort, since, key: sortKey } = parseBoardSort(c.req.query("sort"));
+  const { sort, since: sortSince, key: sortKey } = parseBoardSort(c.req.query("sort"));
+  const periods: Record<string, number> = { week: 7, month: 30, quarter: 90, year: 365 };
+  const period = c.req.query("period");
+  const since = period && Object.hasOwn(periods, period) ? Date.now() - periods[period] * 86_400_000 : sortSince;
   const offset = clamp(c.req.query("offset"), 0, 10_000);
   const limit = Math.max(1, clamp(c.req.query("limit"), 24, 100));
   // author 是作者的本站公開 ID（members.handle），不是上游的數字 ID。沒這個人就是空榜。
@@ -302,7 +305,9 @@ app.get("/v1/cards", async (c) => {
   const zone = author ? undefined : parseZone(c.req.query("zone"));
   const authorMemberId = author ? ((await memberByHandle(c.env.DB, author)) ?? "") : undefined;
 
-  const tags = (() => { const raw = c.req.query("tag")?.trim(); return raw ? (tagNamesFor(raw) ?? [raw]) : undefined; })();
+  const selectedTags = [...new Set((c.req.queries("tag") ?? []).map(t => t.trim()).filter(Boolean))];
+  if (selectedTags.length > 60) return c.json({ error: "too_many_tags" }, 400);
+  const tagGroups = selectedTags.map(tag => tagNamesFor(tag) ?? [tag]);
   // 看的人不想看的類型（?hide=鍵,鍵）：鍵展開成五語名字後排除；不是鍵的忽略。
   // 明確點了要看的類型（?tag=）永遠贏——分享來的連結、榜單上點的籤，不能因為在隱藏名單裡就變成空榜。
   // 這是查詢字串的一部分，所以回應照常進公開快取（同一組隱藏名單共用一份）。
@@ -310,13 +315,13 @@ app.get("/v1/cards", async (c) => {
     const raw = c.req.query("hide")?.trim();
     if (!raw) return undefined;
     const names = new Set(raw.split(",").flatMap((k) => tagNamesFor(k.trim()) ?? []));
-    for (const name of tags ?? []) names.delete(name);
+    for (const name of tagGroups.flat()) names.delete(name);
     return names.size ? [...names] : undefined;
   })();
   const { rows, total, hasNext } = await listCards(c.env.DB, {
     zone,
     q: c.req.query("q")?.trim() || undefined,
-    tags,
+    tagGroups,
     excludeTags,
     authorMemberId,
     allowNsfw,
@@ -358,9 +363,12 @@ app.get("/v1/cards", async (c) => {
 
 /** 這一區最常見的標籤，給榜單的類型篩選列。標籤分佈變得慢，快取久一點。 */
 app.get("/v1/tags", (c) =>
-  cachedJson(c, 300, async () => ({
-    items: await topTags(c.env.DB, parseZone(c.req.query("zone")), Math.max(1, clamp(c.req.query("limit"), 24, 60))),
-  })),
+  cachedJson(c, 300, async () => {
+    const limit = Math.max(1, clamp(c.req.query("limit"), 24, 60));
+    const offset = clamp(c.req.query("offset"), 0, 10_000);
+    const rows = await topTags(c.env.DB, parseZone(c.req.query("zone")), limit + 1, c.req.query("q")?.trim(), offset);
+    return { items: rows.slice(0, limit), hasNext: rows.length > limit, limit, offset };
+  }),
 );
 
 /** 作者榜：按作品在本站的合計排。 */

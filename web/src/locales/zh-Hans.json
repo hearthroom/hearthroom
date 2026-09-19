@@ -1117,5 +1117,17 @@
   "me.resourcesHint": "管理图片与创作素材",
   "services.description": "以下服务提供卡片存储和游玩点数。",
   "services.manage": "管理账号",
-  "services.emailUnavailable": "尚未获取电子邮件"
+  "services.emailUnavailable": "尚未获取电子邮件",
+  "search.filter": "筛选",
+  "search.users": "用户",
+  "search.tags": "标签",
+  "search.period": "时间",
+  "search.period.all": "所有时间",
+  "search.period.week": "本周",
+  "search.period.month": "月度",
+  "search.period.quarter": "季度",
+  "search.period.year": "年度",
+  "search.periodHint": "按卡片上榜时间，显示最近 7、30、90 或 365 天的卡片",
+  "search.matchAll": "结果会同时符合所有已选标签。",
+  "search.clear": "清除标签"
 }
