@@ -1149,5 +1149,8 @@
   "workspace.reviewConsent": "HearthRoom 會讀取這一版的完整設定供審核，包括角色設定、開場白、世界書、額外指示與版面規則；審核結束或撤回後刪除審核副本。託管服務會保留這一版，草稿修改不會改變已發布的內容，新版需另外送審。",
   "workspace.editHint": "儲存會更新草稿，已發布的版本不會改變。",
   "workspace.legacyReview": "提交 LunaTalk 審核",
-  "workspace.legacyReviewHint": "LunaTalk 目前沿用舊版流程。通過後，再到「我的卡片」提交 HearthRoom 社群審核。"
+  "workspace.legacyReviewHint": "LunaTalk 目前沿用舊版流程。通過後，再到「我的卡片」提交 HearthRoom 社群審核。",
+  "workspace.editNotice": "已發布版本會繼續開放遊玩；待審版本修改後儲存，會重新開始審核。",
+  "workspace.reviewRestarted": "修改已儲存並重新送審，已發布版本仍可遊玩。",
+  "workspace.reviewSaveRetry": "這次修改尚未重新送審，請儲存重試；已發布版本不受影響。"
 }

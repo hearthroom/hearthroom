@@ -349,8 +349,10 @@ export async function getCard(db: D1Database, id: string, provider: ProviderId =
       .first<CardRow>();
   }
   return await db
-    .prepare(`SELECT ${CARD_COLUMNS} FROM cards c ${AUTHOR_JOIN} WHERE c.provider = ? AND (c.id = ? OR c.source_role_id = ? OR c.approved_hosted_role_id = ?)`)
-    .bind(provider, id, id, id)
+    .prepare(`SELECT ${CARD_COLUMNS} FROM cards c ${AUTHOR_JOIN} WHERE c.provider = ? AND (c.id = ? OR c.source_role_id = ? OR c.approved_hosted_role_id = ? OR EXISTS (
+      SELECT 1 FROM hosting_versions v WHERE v.card_id=c.id AND v.hosted_revision_id=? AND v.state='approved'
+    ))`)
+    .bind(provider, id, id, id, id)
     .first<CardRow>();
 }
 
@@ -448,7 +450,7 @@ export function syncStatement(db: D1Database, id: string, prevTalkNum: number, r
     .prepare(
       `UPDATE cards SET zone=?, author_name=?, author_avatar=?, names=?, summaries=?, avatar_url=?, background_url=?,
          slug=?, tags=?, talk_num=?, follow_num=?, search_text=?, talk_num_prev=?, last_synced_at=?
-       WHERE id=?`,
+       WHERE id=? AND (approved_hosted_role_id IS NULL OR approved_hosted_role_id=?)`,
     )
     .bind(
       role.zone,
@@ -466,6 +468,7 @@ export function syncStatement(db: D1Database, id: string, prevTalkNum: number, r
       prevTalkNum,
       now,
       id,
+      role.roleId,
     );
 }
 

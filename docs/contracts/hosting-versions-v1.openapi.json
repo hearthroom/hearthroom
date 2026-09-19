@@ -117,7 +117,8 @@
                         "pending",
                         "approved",
                         "rejected",
-                        "revoked"
+                        "revoked",
+                        "superseded"
                       ]
                     }
                   }
@@ -127,6 +128,69 @@
           },
           "404": {
             "description": "Unknown or incomplete version; must deny play"
+          }
+        }
+      }
+    },
+    "/v1/cards/{roleId}/edit": {
+      "post": {
+        "operationId": "beginHostedDraftEdit",
+        "description": "HearthRoom author endpoint. Call before changing a Harbor draft. Retires a pending review and its private snapshot without withdrawing the published version. After the complete save, resubmit with a fresh operationId when resubmit is true. Repeated calls retain that obligation across interrupted saves. Direct authoring clients must use this sequence too.",
+        "security": [
+          {
+            "AuthorBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "roleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Provider",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "const": "harbor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Published version is unchanged; resubmit indicates a fresh review is required after saving.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "resubmit"
+                  ],
+                  "properties": {
+                    "resubmit": {
+                      "type": "boolean"
+                    },
+                    "nsfw": {
+                      "type": "boolean",
+                      "description": "The retired submission rating; present when resubmit is true."
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Author authentication required"
+          },
+          "403": {
+            "description": "The work belongs to another community member"
+          },
+          "503": {
+            "description": "Immutable hosting is not configured"
           }
         }
       }

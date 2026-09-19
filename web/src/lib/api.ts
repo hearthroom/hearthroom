@@ -258,6 +258,12 @@ export async function registerCard(
   );
 }
 
+export async function beginCardEdit(roleId:string,token:string,provider:ProviderId):Promise<{resubmit:boolean;nsfw?:boolean}> {
+  return json(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(roleId)}/edit`, {
+    method:'POST',headers:{...from(),'X-Provider':provider,...authHeaders(token)},
+  }));
+}
+
 export async function unregisterCard(roleId: string, token: string, provider: ProviderId = currentProvider()): Promise<void> {
   const res = await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(roleId)}`, {
     method: "DELETE",
