@@ -1116,5 +1116,6 @@
   "me.cardsHint": "發布、編輯與同步",
   "me.resourcesHint": "管理圖片與創作素材",
   "services.description": "卡片儲存與遊玩點數由以下服務提供。",
-  "services.manage": "管理帳號"
+  "services.manage": "管理帳號",
+  "services.emailUnavailable": "尚未取得電子郵件"
 }

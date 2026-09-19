@@ -1116,5 +1116,6 @@
   "me.cardsHint": "게시, 편집 및 동기화",
   "me.resourcesHint": "이미지와 창작 자료 관리",
   "services.description": "아래 서비스에서 카드를 저장하고 플레이 포인트를 제공합니다.",
-  "services.manage": "계정 관리"
+  "services.manage": "계정 관리",
+  "services.emailUnavailable": "이메일을 가져오지 못했습니다"
 }

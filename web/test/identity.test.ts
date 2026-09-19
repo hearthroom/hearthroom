@@ -93,7 +93,8 @@ describe("「我的」頁", () => {
     expect(el.querySelector(".me__handle")?.textContent).toBe("kxxoxfyb");
     expect(el.textContent).toContain("LunaTalk");
     expect(el.querySelector("h1")?.textContent).toBe("社區暱稱");
-    expect(el.textContent).toContain(i18n.global.t("linked.account",{id:7}));
+    expect(el.textContent).not.toContain(i18n.global.t("linked.account",{id:7}));
+    expect(el.textContent).toContain(i18n.global.t("services.emailUnavailable"));
     expect(el.querySelector('a[href*="/authors/kxxoxfyb"]')).not.toBeNull();
     expect(el.querySelector('a[href*="/mine"]')).not.toBeNull();
     expect(el.querySelector('a[href*="/settings"]')).not.toBeNull();

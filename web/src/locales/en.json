@@ -1116,5 +1116,6 @@
   "me.cardsHint": "Publish, edit and sync",
   "me.resourcesHint": "Images and creative assets",
   "services.description": "These services store your cards and provide credits for play.",
-  "services.manage": "Manage account"
+  "services.manage": "Manage account",
+  "services.emailUnavailable": "Email not available"
 }

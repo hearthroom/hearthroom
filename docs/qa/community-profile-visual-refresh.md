@@ -33,3 +33,10 @@ Case library: added `docs/qa/case-library/cases/ME-01-profile-layout.md`.
 An additional root harness run exited 1. No root harness, desktop, mobile or server files were changed by this revision. Failures were attributed to the current root checkout/environment: missing desktop/mobile vendored copy linters and generated token drift; missing desktop display-rule engine and Moonloom reference document; missing `zod` for email/payment tests; six local-listener tests denied by sandbox `EPERM`; and two SSH-process cleanup assertions failed. The cleanup assertions remain unresolved outside this UI scope. Expected negative-test diagnostics for model snapshot gates are not treated as actual suite failures. Do not describe the root harness as green or broaden this page change to repair those independent files.
 
 No production deploy or production data change occurred.
+# Connected account email follow-up
+
+- Connected service rows show the provider-returned email, never the legacy numeric account identifier. Missing email is explicit; a valid grant without email now offers renewed authorization through the existing flow.
+- Existing `email.read` permission checks and account ownership matching remain enforced. HarperHarbor registration requires a verified email, but older client grants may not include permission to read it. This change does not migrate numeric identity keys or expose email on public author pages.
+- Red: two focused cases reproduced the numeric fallback. Green: 341 Worker and 346 frontend tests passed, with the existing optional external-card suite skipped. The old profile test was updated intentionally because numeric account labels are no longer desired. Typecheck and frontend build passed.
+- Native Chrome with isolated local account fixtures confirmed the missing-email message and reauthorization button. The fixture did not perform a real expanded-scope consent; that remains a user action when required.
+- MCP and new metrics: not applicable; this only changes private UI presentation and exposes an existing authorization action, with no server contract or new data collection.
