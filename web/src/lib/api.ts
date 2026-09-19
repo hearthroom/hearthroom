@@ -96,6 +96,13 @@ function describeLimit(code: string, detail: LimitDetail | undefined): string | 
 }
 /** 本站自己的 API 回的碼（不是供應商契約的一部分，所以不進 docs/provider-protocol.md）。 */
 const SITE_CODE_KEY: Record<string, string> = {
+  hosting_requires_uploaded_media: "workspace.uploadMedia",
+  submission_pending: "workspace.alreadyPending",
+  hosting_unavailable: "workspace.submitUnavailable",
+  hosting_seal_failed: "workspace.submitUnavailable",
+  hosting_read_failed: "workspace.submitUnavailable",
+  hosting_receipt_invalid: "workspace.submitUnavailable",
+  hosting_operation_conflict: "workspace.submitConflict",
   publication_use_original: "error.publicationUseOriginal",
   adult_content: "card.gate.title",
   nsfw_required: "error.nsfwRequired",
@@ -240,20 +247,21 @@ export async function registerCard(
   token: string,
   nsfw: boolean,
   distribute: { provider: ProviderId; token: string }[] = [],
+  provider: ProviderId = currentProvider(),
 ): Promise<CommunityCard> {
   return json<CommunityCard>(
     await fetch(`${COMMUNITY_API}/cards`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...from(), ...authHeaders(token) },
-      body: JSON.stringify({ roleId, nsfw, ...(distribute.length ? { distribute } : {}) }),
+      headers: { "Content-Type": "application/json", ...from(), "X-Provider": provider, ...authHeaders(token) },
+      body: JSON.stringify({ roleId, nsfw, operationId: crypto.randomUUID(), ...(distribute.length ? { distribute } : {}) }),
     }),
   );
 }
 
-export async function unregisterCard(roleId: string, token: string): Promise<void> {
+export async function unregisterCard(roleId: string, token: string, provider: ProviderId = currentProvider()): Promise<void> {
   const res = await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(roleId)}`, {
     method: "DELETE",
-    headers: { ...from(), ...authHeaders(token) },
+    headers: { ...from(), "X-Provider": provider, ...authHeaders(token) },
   });
   if (!res.ok && res.status !== 204) await json(res);
 }
@@ -428,6 +436,7 @@ export interface MyCard {
   game: boolean;
   /** 本站的審核狀態；只有 registered 時才有。 */
   status?: CardStatus;
+  updateStatus?: string;
   /** 最近一次駁回給作者的說明。 */
   note?: string;
   /** 作者宣告的分級；只有 registered 時才有。 */

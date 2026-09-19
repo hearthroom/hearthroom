@@ -6,6 +6,7 @@
  */
 export type Env = Omit<Cloudflare.Env, "EVENTS" | "ANALYTICS_ENABLED" | "REVIEW_ENABLED"> & {
   EVENTS?: AnalyticsEngineDataset;
+  HOSTING_SERVICE_KEY?: string;
   ANALYTICS_ENABLED?: string;
   /** 社群審核開關："true" 才審；其餘退回「登記即上榜」，見 src/providers.ts。 */
   REVIEW_ENABLED?: string;
