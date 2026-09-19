@@ -1116,5 +1116,6 @@
   "me.cardsHint": "发布、编辑与同步",
   "me.resourcesHint": "管理图片与创作素材",
   "services.description": "以下服务提供卡片存储和游玩点数。",
-  "services.manage": "管理账号"
+  "services.manage": "管理账号",
+  "services.emailUnavailable": "尚未获取电子邮件"
 }

@@ -1116,5 +1116,6 @@
   "me.cardsHint": "公開・編集・同期",
   "me.resourcesHint": "画像や制作素材を管理",
   "services.description": "カードの保存とプレイ用ポイントは、以下のサービスで管理されます。",
-  "services.manage": "アカウント管理"
+  "services.manage": "アカウント管理",
+  "services.emailUnavailable": "メールアドレスを取得できていません"
 }

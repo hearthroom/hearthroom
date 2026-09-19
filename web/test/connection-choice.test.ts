@@ -14,6 +14,7 @@ vi.mock('../src/lib/provider-switch',()=>({availableProviders:async()=>[{id:'lun
 vi.mock('../src/lib/track',()=>({track:vi.fn()}));
 import CallbackPage from '../src/pages/CallbackPage.vue';
 import ConnectedAccounts from '../src/components/ConnectedAccounts.vue';
+import * as api from '../src/lib/api';
 let app:App|undefined; let el:HTMLDivElement;
 const settle=async()=>{await nextTick();await new Promise(r=>setTimeout(r,0));await nextTick()};
 async function mount(component:any){
@@ -22,6 +23,7 @@ async function mount(component:any){
 }
 beforeEach(()=>{
  vi.clearAllMocks(); localStorage.clear(); sessionStorage.clear();
+ fixtures.accountToken.mockResolvedValue(null);
  fixtures.session.profile.identities=[{provider:'harbor',externalId:22,founding:true}];
  fixtures.complete.mockResolvedValue({provider:'lunatalk',linkFrom:'harbor',token:{accessToken:'fixture',expiresAt:Date.now()+60000},returnTo:'/me'});
  fixtures.preview.mockResolvedValue({source:{name:'New account',handle:'newxxxxx',memberSince:10,provider:'harbor'},target:{name:'Original account',handle:'oldxxxxx',memberSince:1,provider:'lunatalk'}});
@@ -67,5 +69,34 @@ it('checks authorization when the community profile arrives after mount',async()
  reactive(fixtures.session).profile.identities=[{provider:'harbor',externalId:22,founding:true}];
  await settle();
  expect(fixtures.accountToken).toHaveBeenCalledWith('harbor');
+ expect(el.textContent).toContain(i18n.global.t('services.expired'));
+});
+
+it('identifies the connected account by email without displaying its numeric ID',async()=>{
+ fixtures.accountToken.mockResolvedValue('fixture' as never);
+ vi.spyOn(api,'fetchMeAt').mockResolvedValue({accountNumId:22,nickName:'Harbor member',avatar:'',email:'member@example.com'});
+ await mount(ConnectedAccounts);
+ expect(el.querySelector('.account__text p')?.textContent).toBe('member@example.com');
+ expect(el.textContent).not.toContain(i18n.global.t('linked.account',{id:22}));
+});
+
+it('offers renewed authorization when a valid legacy grant cannot return an email',async()=>{
+ fixtures.accountToken.mockResolvedValue('fixture' as never);
+ vi.spyOn(api,'fetchMeAt').mockResolvedValue({accountNumId:22,nickName:'Harbor member',avatar:''});
+ await mount(ConnectedAccounts);
+ expect(el.querySelector('.account__text p')?.textContent).not.toContain('22');
+ expect(el.textContent).toContain(i18n.global.t('services.ready'));
+ const renew=el.querySelector<HTMLButtonElement>('.account--connected .account__connect');
+ expect(renew).not.toBeNull();
+ renew!.click();await settle();
+ expect(fixtures.connect).toHaveBeenCalledWith('harbor','/me');
+});
+
+it('does not display another account email when the saved grant does not match the connection',async()=>{
+ fixtures.accountToken.mockResolvedValue('fixture' as never);
+ vi.spyOn(api,'fetchMeAt').mockResolvedValue({accountNumId:99,nickName:'Other member',avatar:'',email:'other@example.com'});
+ await mount(ConnectedAccounts);
+ expect(el.textContent).not.toContain('other@example.com');
+ expect(el.querySelector('.account__text p')?.textContent).not.toContain('22');
  expect(el.textContent).toContain(i18n.global.t('services.expired'));
 });
