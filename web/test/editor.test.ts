@@ -147,6 +147,7 @@ async function submit() {
 
 beforeEach(() => {
   localStorage.clear();
+  sessionStorage.clear();
   platforms.profile=undefined; platforms.saveCopies.mockClear();
   for (const fn of Object.values(api)) fn.mockClear();
   // happy-dom 沒有 object URL；預覽用的立繪縮圖走這條
@@ -701,7 +702,8 @@ it('writes first, then selects multiple save destinations and keeps a failed tar
  expect(root.textContent).toContain('HarperHarbor');
 });
 
-it('submits once to HearthRoom with an explicit rating and no hosting destination chooser',async()=>{
+it('HarperHarbor submits once to HearthRoom with an explicit rating and no hosting destination chooser',async()=>{
+ localStorage.setItem('hearthroom.provider','harbor');
  platforms.profile={identities:[{provider:'lunatalk',externalId:7},{provider:'harbor',externalId:8}]};
  api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Synthetic card',roleDesc:'Summary',roleDetailDesc:'Private instructions',roleWelcome:'Hello',roleAvatar:'https://img.test/avatar.png'});
  await mount('/cards/r1/edit');
@@ -710,8 +712,19 @@ it('submits once to HearthRoom with an explicit rating and no hosting destinatio
  expect(root.querySelector('.platform-dialog')).toBeNull();
  expect(confirmState.current?.choices?.map(c=>c.value)).toEqual(['sfw','nsfw']);
  settleConfirm(true,'','sfw');await flush();await flush();
- expect(api.registerCard).toHaveBeenCalledWith('r1','tok',false,[],'lunatalk');
+ expect(api.registerCard).toHaveBeenCalledWith('r1','tok',false,[],'harbor');
  expect(api.submitRoleForReview).not.toHaveBeenCalled();
  expect(platforms.saveCopies).not.toHaveBeenCalled();
+ expect(router.currentRoute.value.path).toBe('/mine');
+});
+
+it('keeps private LunaTalk drafts on their existing upstream review path',async()=>{
+ api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Legacy draft',roleDetailDesc:'Private instructions',roleWelcome:'Hello'});
+ await mount('/cards/r1/edit');
+ byText('發布').click();await flush();
+ btnIn(root,i18n.global.t('editor.publish.submit')).click();await flush();
+ settleConfirm(true,'','sfw');await flush();await flush();
+ expect(api.submitRoleForReview).toHaveBeenCalledWith('r1',i18n.global.t('editor.publish.summary',{name:'Legacy draft'}),'tok');
+ expect(api.registerCard).not.toHaveBeenCalled();
  expect(router.currentRoute.value.path).toBe('/mine');
 });
