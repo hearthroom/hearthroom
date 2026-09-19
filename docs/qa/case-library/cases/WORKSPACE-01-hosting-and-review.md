@@ -114,3 +114,8 @@ review badges, light/dark appearances, and open both Play and Manage sync. Use t
 synthetic fixture for account interactions; production asset readback proves delivery,
 not authenticated account or hosting mutation coverage. The change is CSS only;
 existing API/MCP and observability decisions remain unchanged.
+
+The third action receives extra width so English "Submit for review" uses two lines,
+not three. English cards remain equal height with 44 px actions at 1280, 960 and
+640 px viewports. Five mobile locales have no horizontal overflow; light and dark
+card appearances were visually inspected using synthetic content.

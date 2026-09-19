@@ -138,7 +138,7 @@ const hasArt = computed(() => !!props.card.avatarUrl && !broken.value);
 }
 .card__meta { font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 /* 工作區保留三個常用操作；長翻譯可換行，觸控高度不縮小。 */
-.card__actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-2); margin-top: var(--s-2); }
+.card__actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.5fr); gap: var(--s-2); margin-top: var(--s-2); }
 .card__actions > .btn { min-height:44px; height:auto; white-space:normal; min-width: 0; padding-left: var(--s-2); padding-right: var(--s-2); overflow-wrap:anywhere; }
 .card__actions > .btn:nth-child(4) { grid-column: 1 / -1; }
 .card__withdraw{color:var(--text-3);border-color:transparent;background:transparent;}
