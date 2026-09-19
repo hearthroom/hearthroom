@@ -43,7 +43,7 @@ const cacheKey = (accountNumId: number, page: number, pageSize: number) =>
 export interface MinePage {
   /** registered＝本站有這張卡的登記（不論審到哪）；status 只在 registered 時有；note 是最近一次駁回的說明。 */
   /** game＝這張卡有啟用中的遊戲模式配置（畫面多一顆「遊戲模式」鍵） */
-  items: (MyRole & { registered: boolean; game: boolean; status?: CardStatus; note?: string; nsfw?: boolean })[];
+  items: (MyRole & { registered: boolean; game: boolean; status?: CardStatus; updateStatus?: string; note?: string; nsfw?: boolean })[];
   /** 作者一共有幾張卡。這個數字只有上游知道，「已登記」那條路不問上游，所以是 null。 */
   total: number | null;
   /** 已登記幾張。**全域**的數字，不是這一頁數出來的——見 countByAuthor。 */
@@ -97,7 +97,7 @@ export async function loadMine(
         items: rows.map((row) => {
           const card = toCard(row, "zh");
           return {
-            roleId: card.roleId,
+            roleId: row.source_role_id,
             zone: card.zone as MyRole["zone"],
             name: card.name,
             summary: card.summary,
@@ -108,6 +108,7 @@ export async function loadMine(
             registered: true,
             game: games.has(row.source_role_id),
             status: row.status as CardStatus,
+            updateStatus: notes.get(row.source_role_id)?.updateStatus,
             note: notes.get(row.source_role_id)?.note ?? "",
             nsfw: card.nsfw,
           };
@@ -155,7 +156,7 @@ export async function loadMine(
   const items = roles.items
     .map((r) => {
       const s = statuses.get(r.roleId);
-      return { ...r, registered: registered.has(r.roleId), game: games.has(r.roleId), ...(s ? { status: s.status, note: s.note, nsfw: s.nsfw } : {}) };
+      return { ...r, registered: registered.has(r.roleId), game: games.has(r.roleId), ...(s ? { status: s.status, updateStatus: s.updateStatus, note: s.note, nsfw: s.nsfw } : {}) };
     })
     // 「還沒登記」是把這一頁裡已登記的挑掉。已登記的那組另有完整來源（見上面），
     // 這一組沒有——要全域篩就得把作者所有的頁都抓回來，每次看一頁都付那個代價不值得。
