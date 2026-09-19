@@ -1147,5 +1147,7 @@
   "workspace.submitUnavailable": "这次未能提交审核，请稍后再试。",
   "workspace.submitConflict": "提交内容已变更，请刷新后再试。",
   "workspace.reviewConsent": "HearthRoom 会读取这一版的完整设定供审核，包括角色设定、开场白、世界书、额外指示与版面规则；审核结束或撤回后删除审核副本。托管服务会保留这一版，草稿修改不会改变已发布的内容，新版需另行送审。",
-  "workspace.editHint": "保存会更新草稿，已发布的版本不会改变。"
+  "workspace.editHint": "保存会更新草稿，已发布的版本不会改变。",
+  "workspace.legacyReview": "提交 LunaTalk 审核",
+  "workspace.legacyReviewHint": "LunaTalk 目前沿用旧版流程。通过后，再到“我的卡片”提交 HearthRoom 社区审核。"
 }

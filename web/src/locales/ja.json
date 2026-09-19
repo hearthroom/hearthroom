@@ -1147,5 +1147,7 @@
   "workspace.submitUnavailable": "審査に提出できませんでした。しばらくしてから再試行してください。",
   "workspace.submitConflict": "提出内容が変更されました。ページを更新して再試行してください。",
   "workspace.reviewConsent": "HearthRoom はキャラクター設定、挨拶、Lorebook、追加指示、表示ルールを含むこの版の設定を審査用に読み取り、審査終了または取り下げ後に審査用コピーを削除します。ホスティングサービスはこの版を保持し、下書きの編集は公開済みの内容に影響しません。更新版は改めて審査に提出してください。",
-  "workspace.editHint": "保存すると下書きが更新され、公開済みの版は変わりません。"
+  "workspace.editHint": "保存すると下書きが更新され、公開済みの版は変わりません。",
+  "workspace.legacyReview": "LunaTalk の審査に提出",
+  "workspace.legacyReviewHint": "LunaTalk は従来の審査フローを使用します。承認後、「マイカード」から HearthRoom の審査に提出してください。"
 }

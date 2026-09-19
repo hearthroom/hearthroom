@@ -1147,5 +1147,7 @@
   "workspace.submitUnavailable": "The card could not be submitted; please try again later.",
   "workspace.submitConflict": "The submission changed; refresh the page and try again.",
   "workspace.reviewConsent": "HearthRoom reads this version’s full configuration for review, including character instructions, greetings, Lorebooks, additional instructions and presentation rules, then deletes its review copy when review ends or you withdraw. The hosting service retains this version; draft edits leave published content unchanged and updates require a new review.",
-  "workspace.editHint": "Saving updates the draft and leaves the published version unchanged."
+  "workspace.editHint": "Saving updates the draft and leaves the published version unchanged.",
+  "workspace.legacyReview": "Submit to LunaTalk review",
+  "workspace.legacyReviewHint": "LunaTalk still uses its existing review process. Once approved, submit to HearthRoom from My cards."
 }
