@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {onBeforeUnmount, ref} from 'vue';
+import AccountIcon from './AccountIcon.vue';
 import {useI18n} from 'vue-i18n';
 import {useSession} from '@/lib/session';
 import {updateSiteProfile} from '@/lib/api';
@@ -30,13 +31,13 @@ onBeforeUnmount(clearPreview);
 </script>
 <template>
  <div class="community-profile" :class="{'community-profile--editing':editing}">
-  <template v-if="!editing"><button class="btn" @click="begin">{{ $t('community.edit') }}</button><p v-if="saved" role="status">{{ $t('community.saved') }}</p></template>
+  <template v-if="!editing"><button class="btn profile-edit" @click="begin"><AccountIcon name="edit" />{{ $t('community.edit') }}</button><p v-if="saved" role="status">{{ $t('community.saved') }}</p></template>
   <form v-else @submit.prevent="save" :aria-busy="busy">
    <h2>{{ $t('community.edit') }}</h2>
    <div class="profile-avatar">
     <img v-if="preview" :src="preview" :alt="$t('community.avatarPreview')" />
     <div class="profile-avatar__controls">
-     <label class="avatar-picker">{{ $t('community.chooseAvatar') }}<input type="file" accept="image/jpeg,image/png,image/webp" :disabled="busy" @change="selectAvatar" aria-describedby="avatar-hint" /></label>
+     <label class="avatar-picker"><AccountIcon name="image" />{{ $t('community.chooseAvatar') }}<input type="file" accept="image/jpeg,image/png,image/webp" :disabled="busy" @change="selectAvatar" aria-describedby="avatar-hint" /></label>
      <button v-if="preview" type="button" class="btn btn--ghost" :disabled="busy" @click="remove">{{ $t('community.removeAvatar') }}</button>
     </div>
    </div>
@@ -55,14 +56,25 @@ onBeforeUnmount(clearPreview);
 form {width:100%}
 form,label {display:grid;gap:var(--s-2)}
 form {gap:var(--s-4);border-top:1px solid var(--line);padding-top:var(--s-5)}
+.profile-edit {width:100%;padding-inline:var(--s-2);font-weight:600;background:var(--surface-2);border-color:var(--line-strong)}
+label {font-size:13px;font-weight:500;color:var(--text-2)}
+.subtle {font-size:12px;line-height:1.7}
 h2,p {margin:0}
 h2 {font-size:1.125rem}
 input,textarea {width:100%;min-width:0;padding:var(--s-3);border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--surface-2);color:var(--text);font:inherit}
 textarea {resize:vertical}
-input[type=file] {max-width:100%;font-size:.875rem}
+.avatar-picker {position:relative;display:flex;align-items:center;justify-content:center;gap:var(--s-2);min-height:44px;padding:var(--s-2) var(--s-3);border:1px solid var(--line-strong);border-radius:var(--r-sm);color:var(--text);background:var(--surface);cursor:pointer;font-weight:500}
+.avatar-picker:hover {background:var(--surface-2)}
+.avatar-picker:focus-within {outline:2px solid var(--accent);outline-offset:3px}
+.avatar-picker input[type=file] {position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;padding:0;border:0}
+.avatar-picker svg {width:16px;height:16px}
 .profile-avatar {display:flex;align-items:center;gap:var(--s-4);flex-wrap:wrap}
-.profile-avatar img {width:calc(var(--s-6)*3);height:calc(var(--s-6)*3);object-fit:cover;border-radius:var(--r-pill)}
+.profile-avatar img {width:64px;height:64px;object-fit:cover;border-radius:var(--r-pill)}
 .profile-avatar__controls {display:grid;gap:var(--s-2);min-width:0;flex:1}
 .actions {display:flex;gap:var(--s-2);flex-wrap:wrap}
-.btn {min-height:var(--h-lg);height:auto;white-space:normal}
+.btn {min-height:var(--h-lg);height:auto;white-space:normal;border-radius:var(--r-sm);box-shadow:none}
+.btn--primary {background:var(--accent-btn)}
+.btn--primary:hover {background:var(--accent-deep);filter:none}
+.community-profile {width:100%}
+.actions {display:grid;grid-template-columns:1fr 1fr}
 </style>

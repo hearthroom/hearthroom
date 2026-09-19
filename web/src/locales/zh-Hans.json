@@ -643,7 +643,7 @@
   "me.linked.at": "{date} 连接",
   "me.linked.active": "已连接",
   "me.reauthorize": "重新授权",
-  "me.publicPage": "查看我的公开作者页",
+  "me.publicPage": "查看公开页",
   "author.supports": "支持 {providers}",
   "card.supports": "支持 {provider}",
   "card.nsfw": "18+",
@@ -1111,5 +1111,10 @@
   "linked.error.connection_target_not_empty": "这个服务已属于有使用记录的社区账号，无法合并；请保留两个账号，或登录你原本要使用的社区账号。",
   "linked.error.connection_permanent": "服务绑定后无法自行解除。",
   "error.publicationUseOriginal": "这是同一作品的同步副本，请从原作品管理社区发布。",
-  "services.quota": "本周社区发布：{used}／{limit} 张"
+  "services.quota": "本周社区发布：{used}／{limit} 张",
+  "me.workspace": "我的创作",
+  "me.cardsHint": "发布、编辑与同步",
+  "me.resourcesHint": "管理图片与创作素材",
+  "services.description": "以下服务提供卡片存储和游玩点数。",
+  "services.manage": "管理账号"
 }

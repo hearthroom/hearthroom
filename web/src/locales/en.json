@@ -643,7 +643,7 @@
   "me.linked.at": "Linked {date}",
   "me.linked.active": "Linked",
   "me.reauthorize": "Re-authorize",
-  "me.publicPage": "View my public author page",
+  "me.publicPage": "View public profile",
   "author.supports": "Supports {providers}",
   "card.supports": "Supports {provider}",
   "card.nsfw": "18+",
@@ -1111,5 +1111,10 @@
   "linked.error.connection_target_not_empty": "This service belongs to a community account with existing data and cannot be merged. Keep both accounts or sign in to your original community account.",
   "linked.error.connection_permanent": "Service connections cannot be removed.",
   "error.publicationUseOriginal": "This is a synced copy. Manage the community publication from the original work.",
-  "services.quota": "Community publications this week: {used} / {limit}"
+  "services.quota": "Community publications this week: {used} / {limit}",
+  "me.workspace": "Your creations",
+  "me.cardsHint": "Publish, edit and sync",
+  "me.resourcesHint": "Images and creative assets",
+  "services.description": "These services store your cards and provide credits for play.",
+  "services.manage": "Manage account"
 }
