@@ -36,6 +36,7 @@ const api = vi.hoisted(() => ({
     { worldbookId: "wb9", name: "北境設定", description: "舊描述", entryCount: 2, iconUrl: "https://img.test/wb.png", visibility: "private", tags: "北境,懸疑" },
   ]),
   submitRoleForReview: vi.fn(async () => ({})),
+  registerCard: vi.fn(async () => ({status:'pending'})),
   deleteRole: vi.fn(async () => {}),
   unregisterCard: vi.fn(async () => {}),
   uploadImage: vi.fn(async () => "https://img.test/avatar.png"),
@@ -698,4 +699,19 @@ it('writes first, then selects multiple save destinations and keeps a failed tar
  expect(root.textContent).toContain('sync_permission_denied');
  expect(root.querySelector<HTMLButtonElement>('button[type=submit]')!.disabled).toBe(false);
  expect(root.textContent).toContain('HarperHarbor');
+});
+
+it('submits once to HearthRoom with an explicit rating and no hosting destination chooser',async()=>{
+ platforms.profile={identities:[{provider:'lunatalk',externalId:7},{provider:'harbor',externalId:8}]};
+ api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Synthetic card',roleDesc:'Summary',roleDetailDesc:'Private instructions',roleWelcome:'Hello',roleAvatar:'https://img.test/avatar.png'});
+ await mount('/cards/r1/edit');
+ byText('發布').click();await flush();
+ btnIn(root,i18n.global.t('editor.publish.submit')).click();await flush();
+ expect(root.querySelector('.platform-dialog')).toBeNull();
+ expect(confirmState.current?.choices?.map(c=>c.value)).toEqual(['sfw','nsfw']);
+ settleConfirm(true,'','sfw');await flush();await flush();
+ expect(api.registerCard).toHaveBeenCalledWith('r1','tok',false,[],'lunatalk');
+ expect(api.submitRoleForReview).not.toHaveBeenCalled();
+ expect(platforms.saveCopies).not.toHaveBeenCalled();
+ expect(router.currentRoute.value.path).toBe('/mine');
 });

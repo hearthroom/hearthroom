@@ -88,12 +88,12 @@ export async function verifyShortcutKey(secret: string | undefined, cardId: stri
 export function cardManifest(row: CardRow, lang: string, key?: string, opts: { playApp?: boolean } = {}) {
   const name = pickLocale(JSON.parse(row.names) as Localized, lang) || row.source_role_id;
   const icon = (size: IconSize) => ({ src: iconPath(row.id, size) + (key ? `?k=${encodeURIComponent(key)}` : ""), sizes: `${size}x${size}`, purpose: "any" });
-  const app = `/${encodeURIComponent(row.source_role_id)}/`;
+  const app = `/${encodeURIComponent(row.approved_hosted_role_id ?? row.source_role_id)}/`;
   return {
-    id: opts.playApp ? app : `/play/${row.source_role_id}`,
+    id: opts.playApp ? app : `/play/${row.approved_hosted_role_id ?? row.source_role_id}`,
     name,
     short_name: name,
-    start_url: opts.playApp ? `${app}?lang=${encodeURIComponent(lang)}` : `${localePrefix(lang)}/play/${row.source_role_id}`,
+    start_url: opts.playApp ? `${app}?lang=${encodeURIComponent(lang)}` : `${localePrefix(lang)}/play/${row.approved_hosted_role_id ?? row.source_role_id}`,
     scope: opts.playApp ? app : "/",
     // 卡片 App 全螢幕：Android 把狀態列與導覽列一起收掉，整個畫面都是卡（從頂端往下滑可暫時叫出狀態列）。
     // 不支援全螢幕的平台（iOS、桌面）自動退到 standalone。站台本身維持 standalone。

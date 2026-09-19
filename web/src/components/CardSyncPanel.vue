@@ -16,7 +16,10 @@ const props = defineProps<{
   provider?: ProviderId;
   disabled?: boolean;
   initialOpen?: boolean;
+  compact?: boolean;
+
 }>();
+const emit=defineEmits<{updated:[copies:CardCopy[]]}>();
 const session = useSession();
 const { lp } = useLocalePath();
 const source = computed(() => props.provider ?? currentProvider());
@@ -26,7 +29,6 @@ const states = ref<CardCopy[]>([]);
 const errors = ref<Record<string, string>>({});
 const rawErrors = ref<Record<string, unknown>>({});
 const busy = ref(false);
-const publish = ref(false);
 const loadError = ref("");
 const connected = (p: ProviderId) =>
   session.profile?.identities.some((i) => i.provider === p);
@@ -34,16 +36,17 @@ async function load() {
   loadError.value = "";
   try {
     states.value = await copies(props.roleId, source.value);
+    emit("updated",states.value);
   } catch (e) {
     loadError.value = connectionMessage(e);
   }
 }
 onMounted(async () => {
   providers.value = await availableProviders();
-  if (props.initialOpen) await load();
+  if (props.initialOpen || props.compact) await load();
 });
-// 登記即分發（owner 2026-09-17）：作者在「我的卡片」按登記時，站台在背景同步到所有已綁定的渠道。
-// 這個面板是手動重送／補送：已綁定的目標站預設全勾，作者不想送某一家再自己取消。
+// 託管同步與 HearthRoom 送審分開：只儲存副本，不觸發 SaaS 審核。
+// 已綁定的目標服務預設全勾，之後沿用作者上次的選擇。
 // 身分清單可能晚於面板載入，所以跟著 profile 一起算。
 const defaults = computed(() =>
   providers.value.filter((p) => p.id !== source.value && connected(p.id)).map((p) => p.id)
@@ -63,13 +66,13 @@ watch(
     selected.value = remembered(defaults.value);
   }
 );
-function validate(sendForReview = false) {
+function validate() {
   if (props.disabled) return false;
   return true;
 }
-async function run(sendForReview = publish.value) {
+async function run() {
   if (busy.value || props.disabled) return false;
-  if (!validate(sendForReview)) return false;
+  if (!validate()) return false;
   loadError.value = "";
   busy.value = true;
   errors.value = {};
@@ -80,9 +83,10 @@ async function run(sendForReview = publish.value) {
         props.roleId,
         source.value,
         p,
-        sendForReview
+        false
       );
       states.value = [...states.value.filter((x) => x.provider !== p), r];
+      emit("updated",states.value);
       delete rawErrors.value[p];
     } catch (e) {
       ok = false;
@@ -100,9 +104,10 @@ async function recreate(p:ProviderId) {
  if(busy.value || props.disabled || !connected(p) || !missingCopy(p))return;
  busy.value=true;
  try {
-  // Recovery always creates a private copy, regardless of the review checkbox.
+  // Recovery creates a private hosting copy.
   const result=await synchronize(props.roleId,source.value,p,false,false,true);
   states.value=[...states.value.filter(x=>x.provider!==p),result];
+  emit("updated",states.value);
   delete errors.value[p];
   delete rawErrors.value[p];
  } catch(error) {
@@ -113,12 +118,18 @@ async function recreate(p:ProviderId) {
 defineExpose({ run, validate, load });
 </script>
 <template>
+  <div v-if="compact" class="copy-summary" :aria-label="$t('linked.platforms')">
+    <span v-for="p in providers.filter(p=>connected(p.id))" :key="p.id" class="copy-status">
+      <span class="copy-status__dot" :class="{'copy-status__dot--saved':p.id===source || ['synced','pending','published'].includes(states.find(x=>x.provider===p.id)?.status??'')}" />
+      <span>{{ p.name }}<small>{{ p.id===source ? $t('workspace.saved') : loadError ? $t('workspace.unknown') : $t(`linked.status.${states.find(x=>x.provider===p.id)?.status||'missing'}`) }}</small></span>
+    </span>
+  </div>
   <details
     class="distribution"
     :open="initialOpen"
     @toggle="($event.target as HTMLDetailsElement).open && load()"
   >
-    <summary>{{ $t("linked.platforms") }}</summary>
+    <summary>{{ $t(compact ? "workspace.manageSync" : "linked.platforms") }}</summary>
     <p class="subtle">{{ $t("linked.syncHint") }}</p>
     <p v-if="loadError" role="alert">
       {{ loadError }}
@@ -171,10 +182,6 @@ defineExpose({ run, validate, load });
         </button>
       </div>
     </div>
-    <label class="option"
-      ><input v-model="publish" type="checkbox" :disabled="busy || disabled" />
-      {{ $t("linked.submitToo") }}</label
-    >
     <button
       class="btn btn--sm"
       :disabled="busy || disabled || !selected.length"
@@ -186,6 +193,12 @@ defineExpose({ run, validate, load });
   </details>
 </template>
 <style scoped>
+.distribution .btn, .target label { min-height:44px; }
+.target label { display:flex; align-items:center; gap:var(--s-2); }
+.copy-summary{display:flex;flex-wrap:wrap;gap:var(--s-3);padding-top:var(--s-3);margin-top:var(--s-2);border-top:1px solid var(--line)}
+.copy-status{display:flex;gap:6px;align-items:baseline;font-size:12px;color:var(--text-2)}
+.copy-status small{display:block;color:var(--text-3);font-size:11px;margin-top:2px}.copy-status__dot{width:6px;height:6px;border-radius:50%;background:var(--text-3);flex-shrink:0}.copy-status__dot--saved{background:var(--success)}
+.copy-summary + .distribution{border-top:0;margin-top:0;padding-top:var(--s-2)}
 .distribution {
   border-top: 1px solid var(--line);
   padding-top: var(--s-3);
@@ -193,6 +206,8 @@ defineExpose({ run, validate, load });
 }
 summary {
   cursor: pointer;
+  min-height:44px;
+  align-content:center;
   font-weight: 600;
 }
 .target {

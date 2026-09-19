@@ -1,0 +1,173 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "HearthRoom immutable hosting protocol",
+    "version": "1.0.0",
+    "description": "HearthRoom issues review versions; compatible providers retain immutable agent configurations. Initial implementation: HarperHarbor seal/read/play and HearthRoom decisions. Cross-provider immutable import is not yet supported; draft synchronization never grants review approval."
+  },
+  "paths": {
+    "/open/v1/hosting/seal": {
+      "post": {
+        "operationId": "sealHostedRevision",
+        "description": "Backend issuer key plus author OAuth role.read and role.write. Copies the agent configuration, all locales, Lorebooks, presentation rules and retained uploads atomically. External mutable media is rejected. Repeating a version/work/source binding returns its original receipt.",
+        "security": [
+          {
+            "AuthorBearer": [],
+            "HostingIssuerKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "roleId",
+                  "workId",
+                  "versionId"
+                ],
+                "properties": {
+                  "roleId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "workId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "versionId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed immutable revision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid issuer or OAuth credential"
+          },
+          "403": {
+            "description": "Wrong owner or missing scope"
+          },
+          "409": {
+            "description": "hosting_version_conflict or hosting_requires_uploaded_media"
+          },
+          "503": {
+            "description": "hosting_unavailable"
+          }
+        }
+      }
+    },
+    "/v1/hosting/versions/{versionId}/decision": {
+      "get": {
+        "operationId": "readHostingDecision",
+        "description": "Read only from the configured HearthRoom HTTPS authority, reject redirects and fail closed. No caching or approval assertions. Contains no private configuration. An approved revision remains authorized until withdrawal or takedown even after a later version is approved.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "versionId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current decision; Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "workId",
+                    "versionId",
+                    "hostedRevisionId",
+                    "status"
+                  ],
+                  "properties": {
+                    "workId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "versionId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "hostedRevisionId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "status": {
+                      "enum": [
+                        "pending",
+                        "approved",
+                        "rejected",
+                        "revoked"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown or incomplete version; must deny play"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "AuthorBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      },
+      "HostingIssuerKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Hosting-Key"
+      }
+    },
+    "schemas": {
+      "Receipt": {
+        "type": "object",
+        "required": [
+          "workId",
+          "versionId",
+          "hostedRevisionId"
+        ],
+        "properties": {
+          "workId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "versionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "hostedRevisionId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}

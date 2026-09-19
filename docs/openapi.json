@@ -9511,6 +9511,72 @@
           }
         }
       }
+    },
+    "/open/v1/hosting/seal": {
+      "post": {
+        "operationId": "sealHostedRevision",
+        "description": "Backend issuer key plus author OAuth role.read and role.write. Copies the agent configuration, all locales, Lorebooks, presentation rules and retained uploads atomically. External mutable media is rejected. Repeating a version/work/source binding returns its original receipt.",
+        "security": [
+          {
+            "AuthorBearer": [],
+            "HostingIssuerKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "roleId",
+                  "workId",
+                  "versionId"
+                ],
+                "properties": {
+                  "roleId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "workId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "versionId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed immutable revision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostedRevisionReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid issuer or OAuth credential"
+          },
+          "403": {
+            "description": "Wrong owner or missing scope"
+          },
+          "409": {
+            "description": "hosting_version_conflict or hosting_requires_uploaded_media"
+          },
+          "503": {
+            "description": "hosting_unavailable"
+          }
+        },
+        "x-capability": "immutable-hosting-v1"
+      }
     }
   },
   "components": {
@@ -9524,6 +9590,15 @@
         "type": "http",
         "scheme": "bearer",
         "description": "Long-lived personal API key, created and revoked by its owner in the provider's own console. It authenticates as that user. The prefix is provider-specific (LunaTalk `lsk_`, HarperHarbor `hh_live_`)."
+      },
+      "AuthorBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      },
+      "HostingIssuerKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Hosting-Key"
       }
     },
     "schemas": {
@@ -17942,6 +18017,29 @@
             "minimum": 0
           }
         }
+      },
+      "HostedRevisionReceipt": {
+        "type": "object",
+        "required": [
+          "workId",
+          "versionId",
+          "hostedRevisionId"
+        ],
+        "properties": {
+          "workId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "versionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "hostedRevisionId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "additionalProperties": false
       }
     }
   },

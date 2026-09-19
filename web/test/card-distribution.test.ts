@@ -105,9 +105,7 @@ it("supports retry after a target failure without sending platform content ratin
   });
   // 已綁定的目標站預設勾選，不必再點
   expect(root.querySelector<HTMLInputElement>("input[value=harbor]")!.checked).toBe(true);
-  const submit = root.querySelector<HTMLInputElement>(".option input")!;
-  submit.click();
-  await settle();
+  expect(root.querySelector(".option input")).toBeNull();
   const button = () =>
     [...root.querySelectorAll<HTMLButtonElement>("button")].find(
       (b) => b.textContent === i18n.global.t("linked.sync")
@@ -124,18 +122,18 @@ it("supports retry after a target failure without sending platform content ratin
   button().click();
   await settle();
   expect(mocks.sync).toHaveBeenCalledTimes(2);
-  expect(mocks.sync).toHaveBeenLastCalledWith("original","lunatalk","harbor",true);
+  expect(mocks.sync).toHaveBeenLastCalledWith("original","lunatalk","harbor",false);
   expect(root.querySelector(".notice--error")).toBeNull();
   expect(root.textContent).toContain(i18n.global.t("linked.status.synced"));
 });
 
-it("pre-selects every connected target so publishing distributes by default", async () => {
+it("pre-selects connected hosting destinations for synchronization", async () => {
   await mount(CardSyncPanel, { roleId: "original", provider: "lunatalk", initialOpen: true });
   const harbor = root.querySelector<HTMLInputElement>("input[value=harbor]")!;
   expect(harbor.checked).toBe(true);
   // 來源那家沒有勾選框
   expect(root.querySelector("input[value=lunatalk]")).toBeNull();
-  // 作者取消一家後，發布就不送那家
+  // 作者取消一家後，同步就不送那家
   harbor.click();
   await settle();
   expect(harbor.checked).toBe(false);
@@ -148,7 +146,7 @@ it('offers explicit private-copy recovery for a persisted missing target',async(
  const recovery=[...root.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent?.trim()===i18n.global.t('linked.recreateCopy'));
  expect(recovery).toBeDefined();
  expect(mocks.sync).not.toHaveBeenCalled();
- root.querySelector<HTMLInputElement>('.option input')!.click();
+ expect(root.querySelector('.option input')).toBeNull();
  mocks.sync.mockResolvedValueOnce({provider:'harbor',roleId:'new-copy',status:'synced'});
  recovery!.click();
  await settle();

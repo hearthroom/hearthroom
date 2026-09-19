@@ -90,10 +90,13 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
   const rows = await db
     .prepare(
       `SELECT s.id, s.kind, s.submitted_at, s.claimed_by, s.claimed_at, s.nsfw,
-              c.id AS card_id, c.source_role_id, c.names, c.summaries, c.avatar_url, c.zone, c.tags,
+              c.id AS card_id, c.source_role_id,
+              COALESCE(json_extract(v.public_role,'$.names'),c.names) AS names,
+              COALESCE(json_extract(v.public_role,'$.summaries'),c.summaries) AS summaries,
+              COALESCE(json_extract(v.public_role,'$.avatarUrl'),c.avatar_url) AS avatar_url, c.zone, c.tags,
               (SELECT COUNT(*) FROM review_stamps st WHERE st.submission_id = s.id AND st.verdict = 'approve') AS approvals,
               (SELECT COUNT(*) FROM review_stamps st WHERE st.submission_id = s.id AND st.member_id = ?) AS mine
-       FROM review_submissions s JOIN cards c ON c.id = s.card_id
+       FROM review_submissions s JOIN cards c ON c.id = s.card_id LEFT JOIN hosting_versions v ON v.submission_id=s.id
        WHERE s.status = 'pending' ORDER BY s.submitted_at ASC LIMIT 200`,
     )
     .bind(memberId)
@@ -197,7 +200,7 @@ export async function stamp(
     cardStatus = "rejected";
     writes.push(
       db.prepare("UPDATE review_submissions SET status = 'rejected', decided_at = ?, note = ? WHERE id = ?").bind(input.now, note, row.id),
-      db.prepare("UPDATE cards SET status = 'rejected' WHERE id = ?").bind(row.card_id),
+      db.prepare("UPDATE cards SET status = 'rejected' WHERE id = ? AND approved_version_id IS NULL").bind(row.card_id),
       dropSnapshotStatement(db, row.id),
     );
   } else if (approvals >= required) {
@@ -217,27 +220,31 @@ export async function stamp(
     }
   }
   await db.batch(writes);
-  return { submission: await getSubmission(db, row.id), cardStatus, approvals, required };
+  const finalCard = await db.prepare("SELECT status FROM cards WHERE id=?").bind(row.card_id).first<{status:CardStatus}>();
+  return { submission: await getSubmission(db, row.id), cardStatus:finalCard?.status ?? cardStatus, approvals, required };
 }
 
 /** 作者這幾張卡的審核狀態與最近一次駁回說明（給「我的卡片」）。 */
 export async function statusAmong(
   db: D1Database,
   roleIds: string[],
-): Promise<Map<string, { status: CardStatus; note: string; nsfw: boolean }>> {
-  const out = new Map<string, { status: CardStatus; note: string; nsfw: boolean }>();
+): Promise<Map<string, { status: CardStatus; note: string; nsfw: boolean; updateStatus?: string }>> {
+  const out = new Map<string, { status: CardStatus; note: string; nsfw: boolean; updateStatus?: string }>();
   if (!roleIds.length) return out;
   const holes = roleIds.map(() => "?").join(",");
   const rows = await db
     .prepare(
       `SELECT c.source_role_id, c.status, c.nsfw,
+              CASE WHEN c.approved_version_id IS NOT NULL THEN
+                (SELECT s.status FROM review_submissions s WHERE s.card_id=c.id ORDER BY s.submitted_at DESC,s.rowid DESC LIMIT 1)
+              END AS update_status,
               (SELECT note FROM review_submissions s WHERE s.card_id = c.id AND s.status = 'rejected'
                ORDER BY s.decided_at DESC LIMIT 1) AS note
        FROM cards c WHERE c.source_role_id IN (${holes})`,
     )
     .bind(...roleIds)
-    .all<{ source_role_id: string; status: CardStatus; note: string | null; nsfw: number }>();
-  for (const r of rows.results) out.set(r.source_role_id, { status: r.status, note: r.note ?? "", nsfw: r.nsfw === 1 });
+    .all<{ source_role_id: string; status: CardStatus; note: string | null; nsfw: number; update_status:string|null }>();
+  for (const r of rows.results) out.set(r.source_role_id, { status: r.status, note: r.note ?? "", nsfw: r.nsfw === 1, ...(r.update_status && r.update_status!=="approved"?{updateStatus:r.update_status}:{}) });
   return out;
 }
 

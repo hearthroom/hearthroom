@@ -4,6 +4,8 @@ import { buildSearchText } from "./upstream";
 import { HttpError, type Localized, pickLocale } from "./types";
 
 export interface CardRow {
+  approved_version_id: string | null;
+  approved_hosted_role_id: string | null;
   id: string;
   source_role_id: string;
   zone: string;
@@ -65,7 +67,7 @@ export function toCard(row: CardRow, lang: string) {
   const summaries = JSON.parse(row.summaries) as Localized;
   return {
     id: row.id,
-    roleId: row.source_role_id,
+    roleId: row.approved_hosted_role_id ?? row.source_role_id,
     /** 本站卡號：短、能唸出來、能在不准貼連結的地方報。撤銷再登記不換號（card_numbers）。 */
     num: row.num ?? undefined,
     zone: row.zone,
@@ -252,7 +254,7 @@ export async function listCards(db: D1Database, opts: ListOptions) {
  * 內容全部來自同步結果，作者送不進任何欄位——這是「登記完再偷換成別的東西」
  * 在結構上不可能發生的原因。
  */
-export async function upsertCard(db: D1Database, role: UpstreamRole, now: number, opts: { status?: string; provider?: ProviderId; nsfw?: boolean; recordRegistration?: boolean } = {}) {
+export async function upsertCard(db: D1Database, role: UpstreamRole, now: number, opts: { status?: string; provider?: ProviderId; nsfw?: boolean; recordRegistration?: boolean; preserveExisting?: boolean; additionalWrites?: (id:string)=>D1PreparedStatement[] } = {}) {
   const provider: ProviderId = opts.provider ?? "lunatalk";
   const existing = await db
     .prepare("SELECT id, talk_num FROM cards WHERE provider = ? AND source_role_id = ?")
@@ -277,6 +279,10 @@ export async function upsertCard(db: D1Database, role: UpstreamRole, now: number
   ];
 
   if (existing) {
+    if(opts.preserveExisting){
+      if(opts.additionalWrites)await db.batch(opts.additionalWrites(existing.id));
+      return {id:existing.id,created:false};
+    }
     await db
       .prepare(
         `UPDATE cards SET zone=?, author_num_id=?, author_name=?, author_avatar=?, names=?, summaries=?,
@@ -306,6 +312,7 @@ export async function upsertCard(db: D1Database, role: UpstreamRole, now: number
     await db.batch([
       ...(opts.recordRegistration ? [db.prepare("INSERT INTO card_registrations(provider,author_num_id,source_role_id,registered_at) VALUES (?,?,?,?)").bind(provider,role.authorNumId,role.roleId,now)] : []),
       insert,
+      ...(opts.additionalWrites?.(id) ?? []),
     ]);
   } catch (error) {
     if (String(error).includes('weekly_quota_exceeded')) throw new HttpError(403,'weekly_quota_exceeded');
@@ -336,8 +343,8 @@ export async function getCard(db: D1Database, id: string, provider: ProviderId =
       .first<CardRow>();
   }
   return await db
-    .prepare(`SELECT ${CARD_COLUMNS} FROM cards c ${AUTHOR_JOIN} WHERE c.provider = ? AND (c.id = ? OR c.source_role_id = ?)`)
-    .bind(provider, id, id)
+    .prepare(`SELECT ${CARD_COLUMNS} FROM cards c ${AUTHOR_JOIN} WHERE c.provider = ? AND (c.id = ? OR c.source_role_id = ? OR c.approved_hosted_role_id = ?)`)
+    .bind(provider, id, id, id)
     .first<CardRow>();
 }
 
@@ -418,9 +425,9 @@ export async function unregister(db: D1Database, roleId: string, authorNumId: nu
 /** 排程同步挑最久沒更新的一批。帶著審核狀態與已過審的內容版本，同步順手比對內容有沒有變。 */
 export async function dueForSync(db: D1Database, limit: number) {
   const rows = await db
-    .prepare("SELECT id, source_role_id, talk_num, provider, status, reviewed_hash FROM cards ORDER BY last_synced_at ASC LIMIT ?")
+    .prepare("SELECT id, source_role_id, talk_num, provider, status, reviewed_hash, approved_version_id, approved_hosted_role_id FROM cards ORDER BY last_synced_at ASC LIMIT ?")
     .bind(limit)
-    .all<{ id: string; source_role_id: string; talk_num: number; provider: string; status: string; reviewed_hash: string }>();
+    .all<{ id: string; source_role_id: string; talk_num: number; provider: string; status: string; reviewed_hash: string; approved_version_id: string|null; approved_hosted_role_id: string|null }>();
   return rows.results;
 }
 
