@@ -41,6 +41,7 @@ import {
   patchWorldbookDocument,
   reorderWorldbookEntries,
   saveAuthorAsset,
+  submitRoleForReview,
   registerCard,
   unpublishRole,
   unregisterCard,
@@ -1051,21 +1052,26 @@ async function remove() {
 
 async function publish() {
   if (!canPublish.value || selectingPlatforms.value || saving.value) return;
-  const rating = await confirmChoice({
-    title: t("mine.consent.title"), message: t(editorProvider.value==='harbor'?"workspace.reviewConsent":"mine.consent.message"),
+  const rating = editorProvider.value === "harbor" ? await confirmChoice({
+    title: t("mine.consent.title"), message: t("workspace.reviewConsent"),
     confirmText: t("mine.consent.confirm"), choiceLabel: t("mine.rating.label"),
     choices: [
       {value: "sfw", label: t("mine.rating.sfw"), hint: t("mine.rating.sfwHint")},
       {value: "nsfw", label: t("mine.rating.nsfw"), hint: t("mine.rating.nsfwHint")},
     ],
-  });
+  }) : await confirmDialog({ message: t("editor.publish.confirm"), confirmText: t("editor.publish.submit") });
   if (!rating) return;
   saving.value = true;
   error.value = "";
   try {
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
-    await registerCard(roleId.value, token, rating === "nsfw", [], editorProvider.value);
+    if (editorProvider.value === "harbor") {
+      await registerCard(roleId.value, token, rating === "nsfw", [], editorProvider.value);
+    } else {
+      // Legacy LunaTalk drafts are not anonymously readable until its own review completes.
+      await submitRoleForReview(roleId.value, t("editor.publish.summary", { name: draft.value.roleName }), token);
+    }
     saving.value = false;
     await router.push(lp("/mine?fresh=1"));
   } catch (err) {
