@@ -643,7 +643,7 @@
   "me.linked.at": "{date} 연결",
   "me.linked.active": "연결됨",
   "me.reauthorize": "다시 인증",
-  "me.publicPage": "내 공개 작가 페이지 보기",
+  "me.publicPage": "공개 프로필 보기",
   "author.supports": "{providers} 지원",
   "card.supports": "{provider} 지원",
   "card.nsfw": "18+",
@@ -1111,5 +1111,10 @@
   "linked.error.connection_target_not_empty": "이 서비스의 커뮤니티 계정에 기존 데이터가 있어 합칠 수 없습니다. 두 계정을 유지하거나 원래 계정으로 로그인해 주세요.",
   "linked.error.connection_permanent": "서비스 연결은 해제할 수 없습니다.",
   "error.publicationUseOriginal": "동기화된 사본입니다. 원본 작품에서 커뮤니티 게시를 관리해 주세요.",
-  "services.quota": "이번 주 커뮤니티 게시: {used} / {limit}개"
+  "services.quota": "이번 주 커뮤니티 게시: {used} / {limit}개",
+  "me.workspace": "내 창작 공간",
+  "me.cardsHint": "게시, 편집 및 동기화",
+  "me.resourcesHint": "이미지와 창작 자료 관리",
+  "services.description": "아래 서비스에서 카드를 저장하고 플레이 포인트를 제공합니다.",
+  "services.manage": "계정 관리"
 }

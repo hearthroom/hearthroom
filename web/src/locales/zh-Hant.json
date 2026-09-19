@@ -643,7 +643,7 @@
   "me.linked.at": "{date} 連結",
   "me.linked.active": "已連結",
   "me.reauthorize": "重新授權",
-  "me.publicPage": "查看我的公開作者頁",
+  "me.publicPage": "查看公開頁",
   "author.supports": "支援 {providers}",
   "card.supports": "支援 {provider}",
   "card.nsfw": "18+",
@@ -1111,5 +1111,10 @@
   "linked.error.connection_target_not_empty": "這個服務已屬於有使用紀錄的社群帳號，無法合併；請保留兩個帳號，或登入你原本要使用的社群帳號。",
   "linked.error.connection_permanent": "服務綁定後無法自行解除。",
   "error.publicationUseOriginal": "這是同一作品的同步副本，請從原作品管理社群發布。",
-  "services.quota": "本週社群發布：{used}／{limit} 張"
+  "services.quota": "本週社群發布：{used}／{limit} 張",
+  "me.workspace": "我的創作",
+  "me.cardsHint": "發布、編輯與同步",
+  "me.resourcesHint": "管理圖片與創作素材",
+  "services.description": "卡片儲存與遊玩點數由以下服務提供。",
+  "services.manage": "管理帳號"
 }

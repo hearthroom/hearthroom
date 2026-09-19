@@ -1,15 +1,15 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { createApp, nextTick, type App } from 'vue';
+import { createApp, nextTick, reactive, type App } from 'vue';
 import { createPinia } from 'pinia';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { i18n } from '../src/lib/i18n';
 const fixtures = vi.hoisted(() => ({
-  complete:vi.fn(), preview:vi.fn(), finish:vi.fn(), connect:vi.fn(),
+  complete:vi.fn(), preview:vi.fn(), finish:vi.fn(), connect:vi.fn(), accountToken:vi.fn(async()=>null),
   session:{me:{nickName:'New name',avatar:'',accountNumId:22},profile:{handle:'newxxxxx',identities:[{provider:'harbor',externalId:22,founding:true}]},adopt:vi.fn(),logout:vi.fn(),accessToken:vi.fn()},
 }));
 vi.mock('../src/lib/oauth',()=>({completeLogin:fixtures.complete}));
-vi.mock('../src/lib/connections',()=>({previewConnection:fixtures.preview,finishConnection:fixtures.finish,connectAccount:fixtures.connect,accountToken:async()=>null}));
-vi.mock('../src/lib/session',()=>({useSession:()=>fixtures.session}));
+vi.mock('../src/lib/connections',()=>({previewConnection:fixtures.preview,finishConnection:fixtures.finish,connectAccount:fixtures.connect,accountToken:fixtures.accountToken}));
+vi.mock('../src/lib/session',()=>({useSession:()=>reactive(fixtures.session)}));
 vi.mock('../src/lib/provider-switch',()=>({availableProviders:async()=>[{id:'lunatalk',name:'LunaTalk'},{id:'harbor',name:'HarperHarbor'}]}));
 vi.mock('../src/lib/track',()=>({track:vi.fn()}));
 import CallbackPage from '../src/pages/CallbackPage.vue';
@@ -22,6 +22,7 @@ async function mount(component:any){
 }
 beforeEach(()=>{
  vi.clearAllMocks(); localStorage.clear(); sessionStorage.clear();
+ fixtures.session.profile.identities=[{provider:'harbor',externalId:22,founding:true}];
  fixtures.complete.mockResolvedValue({provider:'lunatalk',linkFrom:'harbor',token:{accessToken:'fixture',expiresAt:Date.now()+60000},returnTo:'/me'});
  fixtures.preview.mockResolvedValue({source:{name:'New account',handle:'newxxxxx',memberSince:10,provider:'harbor'},target:{name:'Original account',handle:'oldxxxxx',memberSince:1,provider:'lunatalk'}});
  fixtures.finish.mockRejectedValue(new Error('connection_preview_changed'));
@@ -44,6 +45,7 @@ it('cancel returns to the original page without establishing a connection',async
 it('shows the missing second platform and starts its linking flow',async()=>{
  await mount(ConnectedAccounts);
  const rows=el.querySelectorAll('.account');expect(rows).toHaveLength(2);
+ expect(rows[0].textContent).toContain('HarperHarbor');
  const luna=[...rows].find(r=>r.textContent?.includes('LunaTalk'))!;
  expect(luna.textContent).toContain(i18n.global.t('linked.notConnected'));
  luna.querySelector<HTMLButtonElement>('button')!.click();await settle();
@@ -56,4 +58,14 @@ it('never asks the user to activate one of their connected platforms',async()=>{
  expect(el.textContent).not.toContain(i18n.global.t('linked.use'));
  expect(el.textContent).not.toContain(i18n.global.t('linked.current'));
  expect(el.querySelector('a[href*="provider="]')).toBeNull();
+});
+
+it('checks authorization when the community profile arrives after mount',async()=>{
+ fixtures.session.profile.identities=[];
+ await mount(ConnectedAccounts);
+ expect(fixtures.accountToken).not.toHaveBeenCalled();
+ reactive(fixtures.session).profile.identities=[{provider:'harbor',externalId:22,founding:true}];
+ await settle();
+ expect(fixtures.accountToken).toHaveBeenCalledWith('harbor');
+ expect(el.textContent).toContain(i18n.global.t('services.expired'));
 });
