@@ -67,7 +67,7 @@ onMounted(async () => {
     <section v-if="preview" class="panel link-confirm">
       <h1>{{ $t('linked.chooseTitle') }}</h1>
       <p>{{ $t('linked.chooseIntro', {provider:providerName(preview.target.provider)}) }}</p>
-      <div class="link-destination"><strong>{{ preview.source.name }}</strong><code>{{ preview.source.handle }}</code></div>
+      <div class="link-destination"><strong>{{ preview.source.name }}</strong></div>
       <p v-if="preview.target.handle && preview.target.handle !== preview.source.handle" class="subtle">{{ $t('linked.previousCommunity', {handle:preview.target.handle}) }}</p>
       <p class="subtle">{{ $t('linked.keepHint') }}</p>
       <p v-if="error" role="alert" class="notice notice--error">{{ error }}</p>

@@ -33,7 +33,8 @@ afterEach(()=>{app?.unmount();el?.remove();vi.restoreAllMocks()});
 it('connects a platform to the current community without choosing a community to replace',async()=>{
  await mount(CallbackPage);
  expect(el.querySelectorAll('input[type=radio]')).toHaveLength(0);
- expect(el.textContent).toContain('newxxxxx');
+ expect(el.querySelector('.link-destination')?.textContent).toBe('New account');
+ expect(el.querySelector('.link-destination')?.textContent).not.toContain('newxxxxx');
  expect(fixtures.finish).not.toHaveBeenCalled();
  el.querySelector<HTMLButtonElement>('.link-actions button')!.click();await settle();
  expect(fixtures.finish).toHaveBeenCalledWith('lunatalk','harbor',expect.any(Object),{keepHandle:'newxxxxx',sourceHandle:'newxxxxx',targetHandle:'oldxxxxx'});
