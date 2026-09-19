@@ -16,7 +16,7 @@ export const CLAIM_TTL_MS = 45 * 60 * 1000;
 export const STAMPS_REQUIRED: Record<SubmissionKind, number> = { first: 2, re: 1 };
 
 export type SubmissionKind = "first" | "re";
-export type SubmissionStatus = "pending" | "approved" | "rejected";
+export type SubmissionStatus = "pending" | "approved" | "rejected" | "superseded";
 export type CardStatus = "pending" | "approved" | "rejected" | "needs_review" | "unshared";
 
 export interface SubmissionRow {
