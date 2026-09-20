@@ -86,6 +86,9 @@ it('proxies only verified PNG assets and counts media failures without identity 
  const {communityRoutes}=await import('../src/community/routes');
  const response=await communityRoutes.fetch(new Request('https://hearthroom.club/v1/community/media/'+('0'.repeat(64))),config());expect(response.status).toBe(404);
  expect(await env.DB.prepare("SELECT value FROM community_metrics WHERE operation='media' AND outcome='denied'").first()).toEqual({value:1});
+ const {libraryRoutes}=await import('../src/library');
+ const metrics=await (await libraryRoutes.fetch(new Request('https://hearthroom.club/metrics'),config())).text();
+ expect(metrics).toContain('hearthroom_community_requests_total{operation="media",outcome="denied"} 1');
 });
 it('requires member auth for saving and signed bridge auth for granting',async()=>{
  const {communityRoutes}=await import('../src/community/routes');

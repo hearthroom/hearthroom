@@ -24,7 +24,7 @@ libraryRoutes.get('/metrics', async c => {
   const lines = rows.results.filter(r => /^(favorites|following|feed|conversations)_(get|put|delete)$/.test(r.operation) && /^(success|denied|error)$/.test(r.outcome))
     .map(r => `hearthroom_library_requests_total{operation="${r.operation}",outcome="${r.outcome}"} ${r.value}`);
   const community = await c.env.DB.prepare('SELECT operation,outcome,value FROM community_metrics').all<{operation:string;outcome:string;value:number}>();
-  const communityLines=community.results.filter(r=>/^(member|bridge|oauth)$/.test(r.operation)&&/^(success|denied|error)$/.test(r.outcome)).map(r=>`hearthroom_community_requests_total{operation="${r.operation}",outcome="${r.outcome}"} ${r.value}`);
+  const communityLines=community.results.filter(r=>/^(member|bridge|oauth|media)$/.test(r.operation)&&/^(success|denied|error)$/.test(r.outcome)).map(r=>`hearthroom_community_requests_total{operation="${r.operation}",outcome="${r.outcome}"} ${r.value}`);
   lines.push('# HELP hearthroom_community_requests_total Community integration requests.','# TYPE hearthroom_community_requests_total counter',...communityLines);
   return c.text('# HELP hearthroom_library_requests_total Community library requests.\n# TYPE hearthroom_library_requests_total counter\n' + lines.join('\n') + '\n' + await moderationMetrics(c.env.DB), 200, { 'Content-Type': 'text/plain; version=0.0.4', 'Cache-Control': 'no-store' });
 });
