@@ -16,6 +16,7 @@ import {
   dueForSync,
   getAuthor,
   getCard,
+  getPublicCard,
   previewCard,
   listAuthors,
   listCards,
@@ -410,7 +411,7 @@ async function ownCardView(c: Context<{ Bindings: Env; Variables: { ev: Pending 
   const provider = providerOf(c);
   const me = await upstream.fetchMe(c.env, bearer, provider).catch(() => null);
   if (!me) return null;
-  if (row) return row.author_num_id === me.accountNumId ? { ...toCard(row, lang(c)), status: row.status } : null;
+  if (row) return row.provider === provider && row.author_num_id === me.accountNumId ? { ...toCard(row, lang(c)), status: row.status } : null;
   // 卡號查不到就是沒這張卡；只有上游的卡片 ID 才值得去上游問
   if (CARD_NUMBER.test(id)) return null;
   const role = await (provider==='harbor'?hostGateway.read(c.env,bearer,id):upstream.fetchRole(c.env,id,provider)).catch(() => null);
@@ -419,7 +420,7 @@ async function ownCardView(c: Context<{ Bindings: Env; Variables: { ev: Pending 
 }
 
 app.get("/v1/cards/:id", async (c) => {
-  const row = await getCard(c.env.DB, c.req.param("id"),providerOf(c));
+  const row = await getPublicCard(c.env.DB, c.req.param("id"),providerOf(c));
   // 還沒過審、被駁回、離榜重審中的卡對外都不存在；作者在「我的卡片」看得到狀態。
   if (!row || row.status !== "approved" || row.public_blocked) {
     // 作者本人例外：給他看，但不算一次瀏覽、不進任何快取
@@ -613,10 +614,10 @@ app.get('/v1/me/card-copies/:roleId',async(c)=>{
  return c.json({copies:await copiesFor(c.env.DB,provider,c.req.param('roleId'))},200,{'Cache-Control':'no-store'});
 });
 app.get('/v1/cards/:roleId/platforms',async(c)=>{
- const provider=providerOf(c);const roleId=c.req.param('roleId');
- const base=await getCard(c.env.DB,roleId,provider);
+ const base=await getPublicCard(c.env.DB,c.req.param('roleId'),providerOf(c));
  if(!base||base.status!=='approved'||base.public_blocked)throw new HttpError(404,'card not registered');
  if(base.nsfw && !await viewerAllowsNsfw(c))throw new HttpError(403,'nsfw_gated');
+ const provider=base.provider as ProviderId;const roleId=base.source_role_id;
  if(base.approved_version_id && base.approved_hosted_role_id) {
   const decision=await hostingDecision(c.env.DB,base.approved_version_id);
   return c.json({platforms:decision.status==='approved'?[{provider:base.provider,roleId:base.approved_hosted_role_id,playable:hasChat(base.provider as ProviderId)}]:[]},200,{'Cache-Control':'no-store'});
@@ -1282,7 +1283,7 @@ app.get("*", async (c) => {
   if (m[2] === "cards") {
     let id: string;
     try { id = decodeURIComponent(m[3]!); } catch { return new Response(shell.body, { status: 404, headers: shell.headers }); }
-    const row = await getCard(c.env.DB, id);
+    const row = await getPublicCard(c.env.DB, id);
     if (!row || row.status !== "approved" || row.public_blocked) return new Response(shell.body, { status: 404, headers: shell.headers });
     // 成人內容不做分享預覽（抓取器沒有身分）：回沒有卡片資訊的殼，讓前端畫登入／驗年齡的門
     if (row.nsfw === 1) return new Response(shell.body, { status: 200, headers: shell.headers });

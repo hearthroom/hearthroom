@@ -372,6 +372,23 @@ export async function getCard(db: D1Database, id: string, provider: ProviderId =
 }
 
 /**
+ * 公開卡片入口不受訪客的登入平台限制。本站 ID／卡號全站唯一；舊上游 ID
+ * 撞號時才以 provider 消歧。呼叫端仍須檢查審核、封鎖、成人內容與作者權限。
+ * 身分綁定的編輯／登記路徑繼續使用 getCard，不可改用這個跨平台查詢。
+ */
+export async function getPublicCard(db: D1Database, id: string, provider: ProviderId = "lunatalk") {
+  if (CARD_NUMBER.test(id)) return getCard(db, id, provider);
+  return await db
+    .prepare(`SELECT ${CARD_COLUMNS} FROM cards c ${AUTHOR_JOIN}
+      WHERE c.id = ? OR c.source_role_id = ? OR c.approved_hosted_role_id = ? OR EXISTS (
+        SELECT 1 FROM hosting_versions v WHERE v.card_id=c.id AND v.hosted_revision_id=? AND v.state='approved'
+      )
+      ORDER BY (c.id = ?) DESC, (c.provider = ?) DESC, c.id LIMIT 1`)
+    .bind(id, id, id, id, id, provider)
+    .first<CardRow>();
+}
+
+/**
  * 作者自己還沒登記（或還沒過審）的卡，照卡片頁的形狀從上游的公開資料拼一份。
  *
  * 只給作者本人看：卡片頁對別人是 404，作者點自己的封面卻掉進 404 是死路（玩家回報 2026-09-17）。
