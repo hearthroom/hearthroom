@@ -39,6 +39,8 @@ it("notifies followers on a public release even when this deployment has no revi
   ).run();
   expect((await notifications()).results).toHaveLength(1);
   expect((await notifications()).results[0].id).toMatch(/^[a-f0-9]{32}$/);
+  await env.DB.prepare("UPDATE cards SET public_blocked=1,reviewed_hash='blocked-revision' WHERE source_role_id='new-work'").run();
+  expect((await notifications()).results).toHaveLength(1);
 });
 it("awards the first approved work once and creates one private review-result notification", async () => {
   const { reviewOn, reviewOff, reviewUpstream, makeReviewer } = await import(
