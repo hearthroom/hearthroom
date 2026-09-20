@@ -13,6 +13,7 @@ import {
   completeLink,
   unlink,
   communityView,
+  publicCommunityView,
   setPreferences,
   projection,
   finishProjection,
@@ -136,12 +137,7 @@ app.post("/v1/me/community/retry", async (c) => {
 app.get("/v1/community/members/:handle", async (c) => {
   c.header("Cache-Control", "no-store");
   const m = await memberByHandle(c.env.DB, c.req.param("handle"));
-  const rows = await c.env.DB.prepare(
-    "SELECT a.badge FROM community_awards a JOIN community_preferences p ON p.member_id=a.member_id AND p.public_badges=1 WHERE a.member_id=?",
-  )
-    .bind(m ?? "")
-    .all<{ badge: string }>();
-  return c.json({ badges: rows.results.map((r) => r.badge) });
+  return c.json(await publicCommunityView(c.env, m ?? ""));
 });
 // The OAuth access token is used only for identify and immediately revoked/discarded.
 export const discordOAuth = {

@@ -1386,5 +1386,8 @@
   "community.caseStates.waiting_technical": "等待技術處理",
   "community.caseStates.under_discussion": "討論中",
   "community.caseStates.closed": "已結案",
-  "community.noCases": "目前沒有回報。"
+  "community.noCases": "目前沒有回報。",
+  "community.publicLevel": "在個人頁公開等級",
+  "community.badges.discord_linked": "Discord 已連結",
+  "community.nextLevel": "再累積 {xp} XP 升到等級 {level}"
 }

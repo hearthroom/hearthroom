@@ -1386,5 +1386,8 @@
   "community.caseStates.waiting_technical": "Waiting for technical help",
   "community.caseStates.under_discussion": "Under discussion",
   "community.caseStates.closed": "Closed",
-  "community.noCases": "No reports yet."
+  "community.noCases": "No reports yet.",
+  "community.publicLevel": "Show my level on my profile",
+  "community.badges.discord_linked": "Discord connected",
+  "community.nextLevel": "{xp} XP to reach level {level}"
 }
