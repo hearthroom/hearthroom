@@ -234,9 +234,10 @@ FTS5 + **trigram** tokenizer。`unicode61` 不切中日韓詞，整句會變成�
 
 ## 對話舞台（stage/）
 
-卡片頁的「開始對話」走站內 `/play/:roleId`，畫布是 [Moonstage](https://github.com/lunatalkai/moonstage)——
-LunaTalk 的開源對話舞台。它以子模組 `stage/` 直接掛上游，釘在一個 commit。社群名下的 fork
-[hearthroom/moonstage](https://github.com/hearthroom/moonstage) 只用來以社群名義往上游發 PR（發之前先把它的 main 同步到上游），站台本身不讀它。
+卡片頁的「開始對話」走站內 `/play/:roleId`，畫布是 [Moonstage](https://github.com/hearthroom/moonstage)。
+它由 Hearthroom 獨立維護，以子模組 `stage/` 釘在匿名化歷史中的特定 commit。
+獨立 playground 位於 `playground.hearthroom.club`，使用 HarperHarbor OAuth；
+嵌入本站時仍由 `StageHost` 提供 API origin 與身分，不改既有供應商帳號或資料。
 
 舞台當套件用的那一層（`src/stage/`、`vite.stage.config.ts`、`npm run build:stage`）由上游提供，任何站台都能拿去嵌。
 程式碼改動一律往上游提；要跟上上游就更新指標：
