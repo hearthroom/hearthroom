@@ -50,3 +50,10 @@ it('retries old-avatar cleanup without deleting the active avatar',async()=>{
  const {cleanAvatars}=await import('../src/community-profile');await cleanAvatars(fixture());
  expect(objects.size).toBe(1);expect((await call((await profile()).avatarUrl)).status).toBe(200);
 });
+it('switches to the newly uploaded avatar while preserving supporter style preferences',async()=>{
+ await profile();
+ const m=await env.DB.prepare("SELECT id FROM members LIMIT 1").first<{id:string}>();
+ await env.DB.prepare("INSERT INTO community_appearance_preferences(member_id,avatar_source,name_style,frame) VALUES(?,'discord','glow','hearth')").bind(m!.id).run();
+ expect((await save(form())).status).toBe(200);
+ expect(await env.DB.prepare('SELECT avatar_source,name_style,frame FROM community_appearance_preferences WHERE member_id=?').bind(m!.id).first()).toEqual({avatar_source:'site',name_style:'glow',frame:'hearth'});
+});

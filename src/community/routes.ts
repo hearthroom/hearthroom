@@ -1,3 +1,4 @@
+import { syncAppearance, saveAppearance, appearanceMedia } from './appearance';
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { HttpError, type Env } from "../types";
@@ -36,10 +37,12 @@ for (const path of [
   "/v1/me/community*",
   "/internal/community/*",
   "/v1/community/discord/callback",
+  "/v1/community/media/*",
 ])
   app.use(path, async (c, next) => {
     const operation = c.req.path.startsWith("/internal/")
       ? "bridge"
+      : c.req.path.startsWith("/v1/community/media/") ? "media"
       : c.req.path.endsWith("/callback")
         ? "oauth"
         : "member";
@@ -95,6 +98,13 @@ app.get("/v1/community/config", (c) =>
 app.get("/v1/me/community", async (c) =>
   c.json(await communityView(c.env, (await requireMember(c)).id)),
 );
+app.patch("/v1/me/community/appearance", async c => {
+  enabled(c.env);
+  const member = await requireMember(c);
+  await saveAppearance(c.env,member.id,await c.req.json());
+  return c.json(await communityView(c.env,member.id));
+});
+app.get("/v1/community/media/:key", async c => appearanceMedia(c.env,c.req.param('key')));
 app.post("/v1/me/community/link", async (c) => {
   const m = await requireMember(c);
   const b = await c.req.json();
@@ -391,6 +401,10 @@ app.post("/internal/community/:operation", async (c) => {
     op = c.req.param("operation");
   if (b.guild !== c.env.COMMUNITY_GUILD_ID)
     throw new HttpError(403, "community_guild");
+  if (op === "appearance-sync") {
+    enabled(c.env);
+    return c.json({accepted:await syncAppearance(c.env,b)});
+  }
   if (op === "card") {
     if (typeof b.card !== "string" || !/^[1-9]\d{0,11}$/.test(b.card))
       throw new HttpError(400, "community_input");
@@ -437,9 +451,9 @@ app.post("/internal/community/:operation", async (c) => {
       ).bind(Date.now() - 2592000000),
     ]);
     const subjects = await c.env.DB.prepare(
-      "SELECT discord_id FROM community_subjects WHERE retry_at<? AND (dirty=1 OR synced_at<?) ORDER BY retry_at LIMIT 20",
+      "SELECT discord_id FROM community_subjects WHERE retry_at<? AND (dirty=1 OR synced_at<? OR (EXISTS(SELECT 1 FROM discord_links l WHERE l.discord_id=community_subjects.discord_id AND l.state='active' AND (synced_at<? OR NOT EXISTS(SELECT 1 FROM community_discord_appearance a WHERE a.member_id=l.member_id AND a.link_version=l.version))))) ORDER BY retry_at LIMIT 20",
     )
-      .bind(Date.now(), Date.now() - 86400000)
+      .bind(Date.now(), Date.now() - 86400000, Date.now() - 900000)
       .all<{ discord_id: string }>();
     const jobs = await c.env.DB.prepare(
       "SELECT j.id FROM community_case_jobs j JOIN discord_links l ON l.member_id=j.member_id AND l.version=j.link_version AND l.state='active' JOIN community_preferences p ON p.member_id=l.member_id AND p.case_access=1 WHERE j.status='pending' AND j.lease_until<? AND j.expires>? LIMIT 10",

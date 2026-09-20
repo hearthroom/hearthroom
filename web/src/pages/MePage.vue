@@ -7,6 +7,9 @@
  *
  * 顯示名稱與頭像由社區保存，首次登入預填後即可獨立編輯。
  */
+import CommunityAvatar from "@/components/CommunityAvatar.vue";
+import CommunityName from "@/components/CommunityName.vue";
+import { clearAppearanceCache, type EffectiveAppearance } from "@/lib/community-appearance";
 import DiscordCommunity from "@/components/DiscordCommunity.vue";
 import CommunityBadgeList from "@/components/CommunityBadgeList.vue";
 import CommunityProfile from "@/components/CommunityProfile.vue";
@@ -27,9 +30,11 @@ const reviewerStore = useReviewer();
 const { lp } = useLocalePath();
 const { t } = useI18n();
 const copied = ref(false);
+const communityRefresh=ref(0);
+function profileUpdated(){clearAppearanceCache(handle.value);communityRefresh.value++;}
 
 const handle = computed(() => session.profile?.handle ?? "");
-const community = ref<{ badges: string[]; level: number | null } | null>(null);
+const community = ref<{ badges: string[]; level: number | null; appearance?: EffectiveAppearance } | null>(null);
 watch(handle, () => { community.value = null; });
 
 async function copyHandle() {
@@ -52,10 +57,9 @@ onMounted(() => {
   <div v-if="session.me" class="page me">
     <header class="me__who">
      <div class="me__identity">
-      <img v-if="session.avatarUrl" :src="session.avatarUrl" alt="" class="me__face" />
-      <div v-else class="me__face mono" :style="{ '--h': hueFrom(session.displayName) }">{{ [...session.displayName][0] }}</div>
+      <CommunityAvatar :src="session.avatarUrl" :name="session.displayName" :appearance="community?.appearance ?? null" class="me__face" />
       <div class="me__text">
-        <h1 class="me__name display">{{ session.displayName }}</h1>
+        <h1 class="me__name display"><CommunityName :name="session.displayName" :appearance="community?.appearance ?? null" /></h1>
         <div class="me__id" :aria-label="$t('me.handle')">
           <span v-if="handle" class="me__id-row">
             <span aria-hidden="true">@</span><span class="me__handle">{{ handle }}</span>
@@ -69,13 +73,13 @@ onMounted(() => {
      <p v-if="session.profile?.bio" class="me__bio">{{ session.profile.bio }}</p>
      <p v-if="session.profile" class="me__since"><AccountIcon name="calendar" />{{ $t("me.since", { date: dateOnly(Math.floor(session.profile.memberSince / 1000)) }) }}</p>
      <div class="me__profile-actions">
-       <CommunityProfile />
+       <CommunityProfile @updated="profileUpdated" />
        <RouterLink v-if="handle" :to="lp(`/authors/${handle}`)" class="me__public">{{ $t('me.publicPage') }}<AccountIcon name="arrow" /></RouterLink>
      </div>
     </header>
 
     <div class="me__main">
-      <DiscordCommunity v-if="handle" :key="handle" @change="community = $event" />
+      <DiscordCommunity v-if="handle" :key="handle" :refresh="communityRefresh" @change="community = $event" />
       <section class="me__workspace" aria-labelledby="workspace-title">
         <h2 id="workspace-title">{{ $t('me.workspace') }}</h2>
         <nav class="me__destinations" :aria-label="$t('me.workspace')">

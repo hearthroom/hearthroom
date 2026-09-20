@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import CommunityAvatar from "@/components/CommunityAvatar.vue";
+import CommunityName from "@/components/CommunityName.vue";
 import CommunityBadges from "@/components/CommunityBadges.vue";
 import LibraryToggle from "@/components/LibraryToggle.vue";
 import { computed, ref, watch } from "vue";
@@ -63,11 +65,10 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
 
     <header v-else-if="author" class="who panel rise">
-      <img v-if="author.avatar" :src="author.avatar" alt="" class="who__face" />
-      <div v-else class="who__face mono" :style="{ '--h': hueFrom(author.name) }">{{ [...author.name][0] }}</div>
+      <CommunityAvatar :handle="author.handle ?? undefined" :src="author.avatar" :name="author.name" class="who__face" />
       <div class="who__text">
         <p class="eyebrow">{{ $t("author.eyebrow") }}</p>
-        <h1 class="who__name display">{{ author.name }}</h1>
+        <h1 class="who__name display"><CommunityName :handle="author.handle ?? undefined" :name="author.name" /></h1>
         <CommunityBadges v-if="author.handle" :handle="author.handle" />
         <p v-if="author.bio" class="who__bio">{{ author.bio }}</p>
         <p class="subtle who__id">

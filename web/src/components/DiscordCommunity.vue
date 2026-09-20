@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref, watch } from "vue";
+import CommunityAppearance from "./CommunityAppearance.vue";
+import { clearAppearanceCache, type AppearancePreferences, type EffectiveAppearance } from "@/lib/community-appearance";
 import CommunityBadgeList from "./CommunityBadgeList.vue";
 import CommunityIcon from "./CommunityIcon.vue";
 import { RouterLink, useRoute } from "vue-router";
@@ -17,6 +19,8 @@ import {
   type CommunityNotice,
   type CommunityCase,
 } from "@/lib/community";
+const props=defineProps<{refresh?:number}>();
+watch(()=>props.refresh,()=>{void run(load);});
 const session = useSession(),
   { t } = useI18n(),
   { lp } = useLocalePath(),
@@ -59,8 +63,8 @@ const caseAllowed = computed(
   () => linked.value && data.value?.preferences.case_access === 1,
 );
 const state = computed(() => data.value?.link?.state ?? "unlinked");
-const emit = defineEmits<{ change: [value: { badges: string[]; level: number | null } | null] }>();
-watch(data, value => emit("change", value?.enabled ? { badges: value.badges, level: linked.value ? value.level : null } : null), { immediate: true });
+const emit = defineEmits<{ change: [value: { badges: string[]; level: number | null; appearance?: EffectiveAppearance } | null] }>();
+watch(data, value => emit("change", value?.enabled ? { badges: value.badges, level: linked.value ? value.level : null, appearance: value.appearance?.effective } : null), { immediate: true });
 let alive = true,
   timer: ReturnType<typeof setInterval> | undefined;
 const request = async <T,>(path = "", method = "GET", input?: unknown) => {
@@ -129,6 +133,13 @@ async function preference(key: string, value: boolean) {
     }
     await load();
   });
+}
+async function saveAppearance(preferences: AppearancePreferences) {
+ await run(async()=>{
+  try { data.value=await request<CommunityView>("/appearance","PATCH",preferences); }
+  catch (error) { await load().catch(()=>{}); throw error; }
+  clearAppearanceCache(session.profile?.handle);
+ });
 }
 async function retry() {
   await run(async () => {
@@ -309,6 +320,7 @@ onBeforeUnmount(() => {
           ><small>{{ t("community.xpRule") }}</small>
         </div>
         <CommunityBadgeList :badges="data.badges" />
+        <CommunityAppearance v-if="data.appearance" :appearance="data.appearance" :linked="linked" :busy="busy" :error="error" @save="saveAppearance" />
         <details>
           <summary>{{ t("community.preferences") }}</summary>
           <div class="community__preferences">

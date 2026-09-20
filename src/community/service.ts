@@ -1,3 +1,4 @@
+import { appearanceView } from './appearance';
 import { HttpError, type Env } from "../types";
 import { digest, random } from "./crypto";
 export const snowflake = (v: unknown): v is string =>
@@ -222,14 +223,16 @@ async function memberBadges(env: Env, member: string) {
     `SELECT 'discord_linked' AS badge WHERE EXISTS(SELECT 1 FROM discord_links WHERE member_id=? AND state='active')
      UNION ALL SELECT badge FROM community_awards WHERE member_id=? ORDER BY badge`,
   ).bind(member, member).all<{ badge: string }>();
-  return rows.results.map(r => r.badge);
+  const badges = rows.results.map(r => r.badge);
+  if ((await appearanceView(env,member)).supporter.active) badges.push("server_booster");
+  return badges;
 }
 
 export async function publicCommunityView(env: Env, member: string) {
   const prefs = await env.DB.prepare(
     "SELECT public_badges,public_level FROM community_preferences WHERE member_id=?",
   ).bind(member).first<{public_badges:number;public_level:number}>();
-  const result: {badges:string[];level?:number} = {
+  const result: {badges:string[];level?:number;appearance?:Awaited<ReturnType<typeof appearanceView>>["effective"]} = {
     badges: prefs?.public_badges ? await memberBadges(env, member) : [],
   };
   if (prefs?.public_level) {
@@ -240,6 +243,8 @@ export async function publicCommunityView(env: Env, member: string) {
     ).bind(member).first<{xp:number}>();
     if (progress) result.level = level(progress.xp);
   }
+  const appearance = (await appearanceView(env,member,true)).effective;
+  if (appearance.avatarUrl || appearance.nameStyle !== "none" || appearance.frame !== "none") result.appearance = appearance;
   return result;
 }
 
@@ -285,6 +290,7 @@ export async function communityView(env: Env, member: string) {
     badges,
     preferences,
     xpEnabled,
+    appearance: await appearanceView(env,member),
   };
 }
 export function invite(env: Env) {

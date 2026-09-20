@@ -1,8 +1,10 @@
+import type { AppearanceView } from "./community-appearance";
 import { COMMUNITY_API } from "./config";
 import { currentProvider } from "./provider";
 import { ApiError } from "./api";
 import { i18n } from "./i18n";
 export interface CommunityView {
+  appearance?: AppearanceView;
   enabled: boolean;
   invite: string | null;
   link: { name: string; state: string } | null;
@@ -66,7 +68,9 @@ export async function communityRequest<T>(
   if (!response.ok) {
     const code = typeof result.error === "string" ? result.error : "";
     const key =
-      code === "community_link_conflict"
+      code === "community_supporter_required" ? "supporterRequired"
+      : code === "community_link_required" ? "linkRequired"
+      : code === "community_link_conflict"
         ? "conflict"
         : code === "community_expired"
           ? "expired"
