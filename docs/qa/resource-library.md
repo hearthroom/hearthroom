@@ -97,3 +97,17 @@ Native directory-picker automation was attempted but `setFiles` was rejected by
 the Chrome extension's file-URL permission; that OS entry step remains unverified,
 while the file-input event, directory path transport and backend behavior are tested.
 No production files were uploaded, replaced or deleted for validation.
+
+Sealed-version regression: bind one named image as avatar/background/landscape,
+seal, then overwrite and delete the mutable resource. All sealed slots still use
+the old immutable URL and bytes. One retained snapshot is counted in existing
+storage/item quotas, but omitted from resource and Console inventories. A legacy
+sealed unnamed asset cannot be made mutable via a repeated upload completion.
+Failed old-blob cleanup followed by deletion preserves retries on failure and
+cleans pending bytes on success. These cases have concrete Red/Green evidence.
+
+Release-review limitation: the light controller's Codex CLI review process failed
+after bootstrap, leaving no valid receipt. One independent read-only advisory
+review found the sealed-media interaction above; the same reviewer checks closure.
+A PostgreSQL testcontainer connection failure occurred in the parallel full suite;
+final closure uses the complete serial suite on the final committed source.
