@@ -223,3 +223,7 @@ Replies recorded before usage persistence may have composition data only.
 For stable context caching, admitted entries retain their original place across ordinary turns. Author ordering applies when entries first enter the context. Arbitrary insertion positions, timed removal, probability, recursive scanning and group scoring are not implemented by Harper. Source edits and deletion invalidate affected entries. A full memory checkpoint can release older dynamic retrieval; the Lorebook source remains available for later recall.
 
 Automatic chapter summaries and hierarchical consolidation preserve original chat history. During preparation, clients handle `compacting`, `compactDone` and `compactFailed`, and keep Stop available. Phase events describe preparation, not final reply success. Use the terminal operation state to decide whether to retain an unsent draft. `context_capacity_exceeded` means the request cannot fit after safe preparation; changing the input or model capacity is required. Retry with unchanged input is not an automatic recovery.
+
+## Website community integration
+
+Discord account links, community growth, notifications and own-report access are website-owned services, separate from this provider API. See [the community integration contract](./community-integration.md) for routes, authorization, lifecycle, configuration and the MCP applicability decision.
