@@ -17,6 +17,12 @@ beforeEach(async () => {
 });
 afterEach(restoreUpstream);
 
+it('can save a card hosted by another provider using its community ID', async () => {
+  await env.DB.prepare("UPDATE cards SET provider='harbor' WHERE id=?").bind(cardId).run();
+  expect((await request(`me/favorites/${cardId}`, 'fan', 'PUT')).status).toBe(200);
+  expect((await body(await request('me/favorites'))).items.map((c: any) => c.id)).toEqual([cardId]);
+});
+
 it("saves cards durably, idempotently, and only for the authenticated member", async () => {
   expect((await request(`me/favorites/${cardId}`, "", "PUT")).status).toBe(401);
   for (let i = 0; i < 2; i++) expect((await request(`me/favorites/${cardId}`, "fan", "PUT")).status).toBe(200);

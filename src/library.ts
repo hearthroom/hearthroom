@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { getCard, listCards, toCard } from "./cards";
+import { listCards, toCard } from "./cards";
 import { memberByHandle, memberHiddenTags, memberNsfw, requireMember } from "./members";
 import { tagNamesFor } from "../shared/tag-catalog";
 import { HttpError, type Env } from "./types";
@@ -36,9 +36,9 @@ for (const kind of kinds) {
     const target = kind === "favorites" ? raw : await memberByHandle(c.env.DB, raw);
     if (!target) throw new HttpError(404, "not_found");
     if (c.req.method !== "DELETE" && kind === "favorites") {
-      const card = await getCard(c.env.DB, target);
+      const card = await c.env.DB.prepare('SELECT status,nsfw FROM cards WHERE id=?').bind(target).first<{status:string; nsfw:number}>();
       const access = await memberNsfw(c.env.DB, member.id);
-      if (!card || card.id !== target || card.status !== "approved" || (card.nsfw && !(access.showNsfw && access.ageVerifiedAt))) throw new HttpError(404, "not_found");
+      if (!card || card.status !== "approved" || (card.nsfw && !(access.showNsfw && access.ageVerifiedAt))) throw new HttpError(404, "not_found");
     }
     if (c.req.method === "PUT") {
       await c.env.DB.prepare(`INSERT OR IGNORE INTO ${table}(member_id,${column},created_at) VALUES(?,?,?)`).bind(member.id, target, Date.now()).run();
