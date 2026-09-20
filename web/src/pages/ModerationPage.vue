@@ -1,17 +1,16 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, nextTick, ref, watch } from 'vue';
-import { RouterLink } from 'vue-router';
+import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useSession } from '@/lib/session';
 import { useReviewer } from '@/lib/review';
-import { useLocalePath } from '@/lib/use-locale';
 import { currentProvider } from '@/lib/provider';
 import { confirmDialog, settleConfirm } from '@/lib/confirm';
 import { moderationRequest, type ModerationCase, type ManagedCard, type CardHistory } from '@/lib/moderation';
 import { dateTime } from '@/lib/format';
 import { pageTitle } from '@/lib/i18n';
-const {t,locale}=useI18n();const {lp}=useLocalePath();const session=useSession();const reviewer=useReviewer();
-const tab=ref<'cases'|'cards'|'history'>('cases');const cases=ref<ModerationCase[]>([]);const cards=ref<ManagedCard[]>([]);
+const {t,locale}=useI18n();const route=useRoute();const session=useSession();const reviewer=useReviewer();
+const tab=computed(() => route.meta.managementTab === 'cards' ? 'cards' : route.meta.managementTab === 'history' ? 'history' : 'cases');const cases=ref<ModerationCase[]>([]);const cards=ref<ManagedCard[]>([]);
 const selected=ref<ModerationCase|null>(null);const history=ref<CardHistory|null>(null);const q=ref('');const offset=ref(0);const hasNext=ref(false);
 const loading=ref(false);const busy=ref(false);const error=ref('');const done=ref('');const reason=ref('');
 const action=ref('delist');const tagText=ref('');const hours=ref(1);const board=ref('day');
@@ -33,7 +32,7 @@ async function load(){if(busy.value)return;const gen=++generation,who=identity()
  if(!alive||gen!==generation||who!==identity())return;
  if(requestTab==='cards')cards.value=data.items as ManagedCard[];else cases.value=data.items as ModerationCase[];hasNext.value=data.hasNext;
  }catch(e){if(gen===generation&&who===identity())error.value=e instanceof Error?e.message:t('state.loadFailed');}finally{if(gen===generation)loading.value=false;}}
-function switchTab(value:typeof tab.value){if(busy.value)return;tab.value=value;offset.value=0;done.value='';void load();}
+watch(tab,()=>{invalidate();offset.value=0;document.title=pageTitle(t('moderation.title'));void load();},{flush:'sync'});
 function selectCase(item:ModerationCase){if(busy.value)return;clearSelection();selected.value=item;done.value='';}
 const evidence=ref<{cardNumber:number;version:string;names:Record<string,string>;summaries:Record<string,string>;tags:string[];welcome:string;searchText:string;avatarUrl:string|null;nsfw:boolean}|null>(null);
 async function readEvidence(){if(!selected.value||busy.value)return;const gen=selectionGeneration,who=identity(),id=selected.value.id;error.value='';try{
@@ -51,13 +50,13 @@ async function perform(path:string,body:unknown,label:string,effect:string){
  if(busy.value||!reason.value.trim())return;
  const origin=document.activeElement as HTMLElement|null;const who=identity(),gen=selectionGeneration;busy.value=true;ownConfirmation=true;
  try{
- const ok=await confirmDialog({title:label,message:effect,detail:selected.value?.title??history.value?.card.name,confirmText:label,cancelText:t('moderation.cancel'),danger:true});ownConfirmation=false;
+ const ok=await confirmDialog({title:label,message:effect,detail:selected.value?.title??history.value?.card.name,confirmText:label,cancelText:t('moderation.cancel'),danger:true});if(alive&&who===identity()&&gen===selectionGeneration)ownConfirmation=false;
  if(!ok||!alive||who!==identity()||gen!==selectionGeneration)return;
  const access=await token();if(!alive||who!==identity()||gen!==selectionGeneration)return;
  error.value='';done.value='';await moderationRequest(path,access,body);
  if(!alive||who!==identity()||gen!==selectionGeneration)return;
  done.value=t('moderation.saved');operation.value=crypto.randomUUID();clearSelection();busy.value=false;await load();await reviewer.refresh();
- }catch(e){if(who===identity()&&gen===selectionGeneration)error.value=e instanceof Error?e.message:t('moderation.error.retry');}finally{ownConfirmation=false;if(who===identity()){busy.value=false;await nextTick();if(alive&&gen===selectionGeneration)origin?.focus();}}}
+ }catch(e){if(who===identity()&&gen===selectionGeneration)error.value=e instanceof Error?e.message:t('moderation.error.retry');}finally{if(alive&&who===identity()&&gen===selectionGeneration){ownConfirmation=false;busy.value=false;await nextTick();if(alive&&gen===selectionGeneration)origin?.focus();}}}
 function vote(vote:'confirm'|'oppose'){if(!selected.value)return;return perform(`/cases/${selected.value.id}/vote`,{vote,reason:reason.value.trim()},t(`moderation.${vote}`),t(vote==='confirm'?`moderation.effect.${selected.value.action}`:'moderation.oppositionEffect'));}
 function resolve(decision:'confirm'|'dismiss'){if(!selected.value)return;return perform(`/cases/${selected.value.id}/resolve`,{decision,reason:reason.value.trim()},t(`moderation.${decision}`),t(decision==='confirm'?`moderation.effect.${selected.value.action}`:'moderation.dismissEffect'));}
 function propose(){if(!history.value)return;return perform('/cases',{cardId:history.value.card.id,action:action.value,reason:reason.value.trim(),operationId:operation.value},t(`moderation.action.${action.value}`),t(`moderation.proposal.${action.value}`));}
@@ -67,9 +66,7 @@ function eventValue(item:CardHistory['events'][number]){try{const after=JSON.par
 onMounted(()=>{document.title=pageTitle(t('moderation.title'));void reviewer.refresh();void load();});
 </script>
 <template>
- <div class="page moderation">
-  <header class="work-head"><div><p class="eyebrow">HearthRoom</p><h1 class="display">{{t('moderation.title')}}</h1><p class="subtle">{{t('moderation.intro')}}</p></div><RouterLink class="btn btn--sm" :to="lp('/review')">{{t('moderation.reviewQueue')}}</RouterLink></header>
-  <nav class="work-tabs" :aria-label="t('moderation.title')"><button v-for="name in (['cases','cards','history'] as const)" :key="name" class="btn btn--sm" :class="{'btn--primary':tab===name}" :aria-pressed="tab===name" :disabled="busy" @click="switchTab(name)">{{t(`moderation.tab.${name}`)}}</button></nav>
+ <section class="moderation" :aria-label="t(`moderation.tab.${tab}`)">
   <p v-if="error" class="notice notice--error" role="alert">{{error}} <button class="btn btn--sm" :disabled="busy" @click="load">{{t('review.refresh')}}</button></p>
   <p v-if="done" class="notice" role="status">{{done}}</p>
   <form v-if="tab==='cards'" class="work-search" @submit.prevent="offset=0;load()"><input v-model="q" class="input" type="search" :placeholder="t('moderation.search')" :aria-label="t('moderation.search')"/><button class="btn btn--primary" :disabled="loading||busy">{{t('moderation.find')}}</button></form>
@@ -102,13 +99,11 @@ onMounted(()=>{document.title=pageTitle(t('moderation.title'));void reviewer.ref
     <div v-else class="work-empty"><h2>{{t('moderation.select')}}</h2><p class="subtle">{{t('moderation.selectHint')}}</p></div>
    </section>
   </div>
- </div>
+ </section>
 </template>
 <style scoped>
-.work-head {display:flex;align-items:flex-start;justify-content:space-between;gap:var(--s-4);margin-bottom:var(--s-5);flex-wrap:wrap;}
-.work-head h1{font-size:clamp(24px,3vw,32px);margin:var(--s-1) 0 var(--s-2);}
-.work-tabs,.work-actions,.work-search,.work-pager{display:flex;gap:var(--s-2);flex-wrap:wrap;align-items:center;}
-.work-tabs,.work-search{margin-bottom:var(--s-4);}.work-search .input{flex:1;min-width:180px;}
+.work-actions,.work-search,.work-pager{display:flex;gap:var(--s-2);flex-wrap:wrap;align-items:center;}
+.work-search{margin-bottom:var(--s-4);}.work-search .input{flex:1;min-width:180px;}
 .work-grid{display:grid;grid-template-columns:minmax(240px,0.85fr) minmax(0,1.4fr);gap:var(--s-4);align-items:start;}
 .work-list{display:grid;gap:var(--s-3);}.work-item{display:grid;gap:var(--s-2);padding:var(--s-4);width:100%;text-align:start;color:var(--text);font:inherit;cursor:pointer;border:1px solid var(--line);}
 .work-item:hover,.work-item:focus-visible{border-color:var(--accent);background:var(--surface-2);}.work-item--urgent{border-inline-start:3px solid var(--danger);}
@@ -116,5 +111,5 @@ onMounted(()=>{document.title=pageTitle(t('moderation.title'));void reviewer.ref
 .work-detail h2{font-size:22px;}.work-detail h3{font-size:17px;margin-top:var(--s-4);}.work-detail label{font-size:13px;font-weight:600;}.work-detail .input{width:100%;}.work-reason{white-space:pre-wrap;}.work-submit{justify-self:start;}
 .work-timeline{padding-inline-start:var(--s-5);margin:0;display:grid;gap:var(--s-4);font-size:14px;}.work-timeline p{white-space:pre-wrap;margin:var(--s-1) 0;}.work-timeline time{color:var(--text-3);font-size:12px;}
 .work-art{max-width:160px;border-radius:var(--r-md);}.work-evidence{min-width:0;}.work-evidence pre{overflow-wrap:anywhere;font:inherit;}.work-evidence dd{margin:0 0 var(--s-2);}.work-item:disabled{cursor:default;opacity:.6;}.work-empty{padding:var(--s-5);display:grid;gap:var(--s-3);}.work-ghost{height:110px;border-radius:var(--r-md);}.work-tools{border-top:1px solid var(--line);padding-top:var(--s-4);}.work-tools summary{cursor:pointer;font-weight:600;margin-bottom:var(--s-3);}.work-tools[open]>:not(summary){margin-bottom:var(--s-3);}.work-tools label{display:block;}
-@media(max-width:760px){.moderation .btn,.moderation input,.moderation select{min-height:44px;}.work-tools summary{min-height:44px;display:flex;align-items:center;}.work-grid{grid-template-columns:minmax(0,1fr);}.work-detail{padding:var(--s-4);}.work-actions .btn{flex:1;}.work-list{max-height:45vh;overflow:auto;padding:2px;}.work-tabs .btn{flex:1;}}
+@media(max-width:760px){.moderation .btn,.moderation input,.moderation select{min-height:44px;}.work-tools summary{min-height:44px;display:flex;align-items:center;}.work-grid{grid-template-columns:minmax(0,1fr);}.work-detail{padding:var(--s-4);}.work-actions .btn{flex:1;}.work-list{max-height:45vh;overflow:auto;padding:2px;}}
 </style>

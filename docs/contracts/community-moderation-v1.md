@@ -4,7 +4,7 @@
 
 ## 使用流程
 
-HearthRoom 首頁的審核入口顯示目前帳號可處理的待辦數；手機帳號選單另有紅點。新卡審核留在 `/review`，社群管理工作台位於 `/review/manage`，分成待複核、作品管理、處理紀錄。登入身分或審核權限改變時清除舊選取、理由及未完成確認。
+HearthRoom 首頁與手機帳號選單統一使用「社群管理」入口，顯示目前帳號可處理的待辦總數／紅點。`/review` 是同一個工作台，分成卡片審核（首頁）、處置複核（`/review/cases`）、作品管理（`/review/cards`）、處理紀錄（`/review/history`）；卡片審核詳情仍在工作台內。卡片審核與處置複核各顯示自己的待辦數。舊 `/review/manage` 書籤轉到處置複核，保留語言、查詢與錨點。各功能使用同一份審核員資格，管理員專屬操作另驗權限。切換功能、登入身分或審核權限時清除舊選取、理由及未完成確認。
 
 | 動作 | 生效方式 | 結果 |
 | --- | --- | --- |
@@ -42,3 +42,5 @@ HearthRoom 首頁的審核入口顯示目前帳號可處理的待辦數；手機
 ## 可觀測性
 
 `hearthroom_moderation_requests_total` 為持久累計 counter，標籤僅 `operation`（read、propose、vote、resolve、tags、compensation、staff）及 `outcome`（success、denied、error）。路由回應完成後依 HTTP 狀態記錄；記錄失敗只輸出固定訊息，不含成員、案件、內容或 token。`/metrics` 可讀回；例如 `sum by (operation, outcome) (rate(hearthroom_moderation_requests_total[5m]))`。正式監控抓取與告警尚未部署。
+
+2026-09-20 導覽統整：僅調整既有前端工作台、五語名稱與待辦呈現，沒有新增 HTTP／MCP 能力或改變權限。可觀測性沿用既有 API 計數與部署資源讀回，不新增前端指標。

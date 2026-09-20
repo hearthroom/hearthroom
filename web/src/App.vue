@@ -53,7 +53,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
   <a class="skip" href="#main">{{ $t("nav.skip") }}</a>
 
   <header v-if="!route.meta.bare" class="header">
-    <div class="header__inner" :class="{ 'header__inner--nosearch': onSearchPage }">
+    <div class="header__inner" :class="{ 'header__inner--nosearch': onSearchPage, 'header__inner--reviewer': reviewerStore.reviewer }">
       <RouterLink :to="lp('/')" class="brand" :aria-label="SITE.name">
         <svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M5 3h14a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3h-7.5L7 21.5V18H5a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3z" />
@@ -217,6 +217,16 @@ onMounted(() => document.addEventListener("keydown", onSlash));
 .footer__links a:hover { color: var(--text); }
 .footer__gh { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
 .footer__gh svg { width: 16px; height: 16px; fill: currentColor; }
+
+/* 站務入口較長；窄桌面將導覽放第二列，避免擠壓搜尋與帳號控制項。 */
+.header__inner--reviewer .nav__item { white-space: nowrap; }
+@media (min-width: 861px) and (max-width: 1280px) {
+  .header__inner--reviewer { grid-template-columns: minmax(0, 1fr) auto; row-gap: 0; }
+  .header__inner--reviewer .brand, .header__inner--reviewer .account { min-height: var(--header-h); }
+  .header__inner--reviewer .nav { grid-column: 1 / -1; grid-row: 2; justify-content: center; padding-bottom: var(--s-2); }
+  .header__inner--reviewer .search { display: none; }
+  .header__inner--reviewer .search-go { display: inline-flex; }
+}
 
 /* 手機：一排收完。品牌與榜單同一個目的地，榜單那顆省掉；搜尋收成圖示。
    右邊那排（搜尋、外觀、語言、餘額、頭像）寬度由內容決定、不能疊；擠不下時讓位的是字標——
