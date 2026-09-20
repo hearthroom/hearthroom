@@ -1034,7 +1034,7 @@
   "linked.playWith": "플레이할 플랫폼 선택",
   "linked.balanceUnknown": "잔액을 확인할 수 없음",
   "linked.balance": "사용 가능 포인트: {amount}",
-  "linked.playHint": "선택한 플랫폼의 계정과 포인트를 사용합니다. 대화는 해당 플랫폼에 저장되며, 플랫폼마다 요금이 다를 수 있습니다.",
+  "linked.playHint": "이번 플레이에는 선택한 서비스의 크레딧이 사용되며, 서비스마다 요금이 다를 수 있습니다.",
   "linked.connectPlay": "계정 연결 후 플레이",
   "linked.noPlayable": "현재 플레이할 수 있는 공개 버전이 없습니다.",
   "linked.platformLoadFailed": "이 카드를 플레이할 수 있는 플랫폼을 확인하지 못했습니다. 다시 시도하세요.",
@@ -1159,7 +1159,7 @@
   "library.conversations": "최근 대화",
   "library.favorites": "저장한 카드",
   "library.following": "팔로잉",
-  "library.conversationsHint": "최근 대화부터 표시됩니다. 같은 카드의 다른 저장 기록은 대화 안에서 확인할 수 있습니다.",
+  "library.conversationsHint": "이 사이트에서 연 대화가 목록에 저장됩니다. 선택하면 이어서 플레이할 수 있습니다.",
   "library.favoritesHint": "저장한 카드에서 언제든 다음 이야기를 골라 보세요.",
   "library.followingHint": "팔로우한 작가의 새 카드는 홈의 ‘팔로잉 소식’에 표시됩니다.",
   "library.conversationsEmpty": "아직 대화가 없습니다",
@@ -1185,5 +1185,6 @@
   "library.authorHint": "작품 보기",
   "library.navigation": "주요 탐색",
   "library.unsave": "저장 취소",
-  "library.unfollow": "팔로우 취소"
+  "library.unfollow": "팔로우 취소",
+  "library.recordFailed": "대화를 목록에 저장하지 못했습니다. 다음에 열 때 다시 시도합니다."
 }

@@ -1034,7 +1034,7 @@
   "linked.playWith": "プレイするサービスを選択",
   "linked.balanceUnknown": "残高を取得できません",
   "linked.balance": "利用可能ポイント: {amount}",
-  "linked.playHint": "選んだサービスのアカウントとポイントを使います。会話はそのサービスに保存されます。料金体系はサービスごとに異なります。",
+  "linked.playHint": "今回のプレイには選んだサービスのクレジットを使用します。料金はサービスによって異なります。",
   "linked.connectPlay": "連携してプレイ",
   "linked.noPlayable": "現在プレイできる公開版がありません。",
   "linked.platformLoadFailed": "プレイ先を確認できませんでした。再試行してください。",
@@ -1159,7 +1159,7 @@
   "library.conversations": "最近の会話",
   "library.favorites": "保存したカード",
   "library.following": "フォロー中",
-  "library.conversationsHint": "最近の会話から順に表示します。同じカードの別のセーブは会話内で確認できます。",
+  "library.conversationsHint": "このサイトで開いた会話を一覧に保存します。選ぶと続きから遊べます。",
   "library.favoritesHint": "保存したカードから、次の物語をいつでも選べます。",
   "library.followingHint": "フォローした作者の新作は、ホームの「フォロー新着」に表示されます。",
   "library.conversationsEmpty": "まだ会話がありません",
@@ -1185,5 +1185,6 @@
   "library.authorHint": "作者の作品を見る",
   "library.navigation": "メインナビゲーション",
   "library.unsave": "保存を解除",
-  "library.unfollow": "フォローを解除"
+  "library.unfollow": "フォローを解除",
+  "library.recordFailed": "会話を一覧に保存できませんでした。次に開いたときに再試行します。"
 }

@@ -5,10 +5,9 @@ import { useI18n } from 'vue-i18n';
 import { useSession } from '@/lib/session';
 import { useLocalePath } from '@/lib/use-locale';
 import { fetchConversations, libraryRequest, type ConversationSummary } from '@/lib/library';
-import { currentProvider } from '@/lib/provider';
-import { providerName } from '@/lib/providers';
+import { platformPath } from '@/lib/connection-ui';
 import { contentLang, pageTitle } from '@/lib/i18n';
-import { hueFrom, relativeTime, plainText } from '@/lib/format';
+import { hueFrom, relativeTime } from '@/lib/format';
 import type { CommunityCard } from '@/lib/types';
 import CardGrid from '@/components/CardGrid.vue';
 import LibraryToggle from '@/components/LibraryToggle.vue';
@@ -50,17 +49,17 @@ watch([tab, page, locale, () => session.me, () => session.profile?.showNsfw, () 
   <div class="page library">
     <header class="library__header"><div><p class="eyebrow">{{ $t('library.eyebrow') }}</p><h1 class="display">{{ $t('library.title') }}</h1><p class="muted">{{ $t('library.hint') }}</p></div><RouterLink class="btn library__discover" :to="lp('/')">{{ $t('library.discover') }} <AccountIcon name="arrow" /></RouterLink></header>
     <nav class="library__tabs" :aria-label="$t('library.title')"><RouterLink v-for="item in tabs" :key="item" :to="{ path: lp('/library'), query: { tab: item } }" :aria-current="tab === item ? 'page' : undefined" :class="{ 'library__tab--on': tab === item }">{{ $t(`library.${item}`) }}</RouterLink></nav>
-    <div class="library__context"><p class="muted">{{ $t(`library.${tab}Hint`) }}</p><span v-if="tab === 'conversations'" class="library__provider">{{ providerName(currentProvider()) }}</span></div>
+    <div class="library__context"><p class="muted">{{ $t(`library.${tab}Hint`) }}</p></div>
     <div v-if="failed" class="empty panel" role="alert"><p class="empty__title">{{ $t('library.loadFailed') }}</p><button class="btn" @click="load">{{ $t('library.retry') }}</button></div>
     <CardGrid v-else-if="tab === 'favorites' && (loading || !empty)" :cards="cards" :loading="loading" />
     <div v-else-if="loading" class="library__rows" aria-hidden="true"><div v-for="n in 4" :key="n" class="ghost library__ghost" /></div>
     <div v-else-if="empty" class="empty panel library__empty"><span class="library__empty-icon"><AccountIcon :name="tab === 'conversations' ? 'calendar' : tab === 'favorites' ? 'cards' : 'folder'" /></span><h2 class="empty__title">{{ $t(`library.${tab}Empty`) }}</h2><p class="empty__hint muted">{{ $t(`library.${tab}Hint`) }}</p><RouterLink class="btn" :to="lp('/')">{{ $t('library.discover') }}</RouterLink></div>
     <div v-else-if="tab === 'conversations'" class="library__rows">
-      <RouterLink v-for="chat in chats" :key="chat.conversationId" :to="lp(`/play/${encodeURIComponent(chat.conversationRoleId)}`)" class="conversation panel">
+      <a v-for="chat in chats" :key="`${chat.provider}:${chat.conversationRoleId}`" :href="platformPath(lp(`/play/${encodeURIComponent(chat.conversationRoleId)}`), chat.provider)" class="conversation panel">
         <img v-if="chat.roleAvatar" class="conversation__avatar" :src="chat.roleAvatar" alt="" loading="lazy" /><span v-else class="conversation__avatar mono" :style="{ '--h': hueFrom(chat.roleName) }"><AccountIcon name="cards" /></span>
-        <div class="conversation__body"><div class="conversation__heading"><h2>{{ chat.conversationTitle || chat.roleName || $t('library.untitled') }}</h2><time v-if="time(chat)" :datetime="chat.lastChatTime || chat.createTime">{{ time(chat) }}</time></div><p v-if="chat.conversationTitle" class="conversation__role muted">{{ chat.roleName }}</p><p class="conversation__preview muted">{{ plainText(chat.lastChat, chat.roleName, session.displayName) || $t('library.resumeHint') }}</p></div>
+        <div class="conversation__body"><div class="conversation__heading"><h2>{{ chat.conversationTitle || chat.roleName || $t('library.untitled') }}</h2><time v-if="time(chat)" :datetime="chat.lastChatTime || chat.createTime">{{ time(chat) }}</time></div><p v-if="chat.conversationTitle" class="conversation__role muted">{{ chat.roleName }}</p><p class="conversation__preview muted">{{ $t('library.resumeHint') }}</p></div>
         <span class="conversation__continue">{{ $t('library.resume') }} <AccountIcon name="arrow" /></span>
-      </RouterLink>
+      </a>
     </div>
     <div v-else class="library__authors">
       <article v-for="author in authors" :key="author.handle" class="followed panel"><RouterLink class="followed__identity" :to="lp(`/authors/${author.handle}`)"><img v-if="author.avatar" :src="author.avatar" alt="" /><span v-else class="mono" :style="{ '--h': hueFrom(author.name) }">{{ [...author.name][0] }}</span><div><h2>{{ author.name }}</h2><p class="muted">{{ author.bio || $t('library.authorHint') }}</p></div></RouterLink><LibraryToggle kind="following" :target="author.handle" /></article>
