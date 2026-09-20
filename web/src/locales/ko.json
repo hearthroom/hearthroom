@@ -1317,6 +1317,8 @@
   "moderation.evidenceHint": "사건 생성 당시의 공개 소개, 태그, 도입 내용입니다. 작가의 비공개 설정은 포함되지 않습니다.",
   "moderation.resolution.versionChanged": "공개 버전이 변경되었습니다. 최신 버전으로 복구를 다시 요청하세요.",
   "resource.maxFileLabel": "파일당 최대 크기",
+  "community.activity": "커뮤니티 활동 및 설정",
+  "community.unreadCount": "읽지 않은 알림 {count}개",
   "community.title": "Discord 커뮤니티",
   "community.join": "Discord 참여",
   "community.unlinked": "연결되지 않음",

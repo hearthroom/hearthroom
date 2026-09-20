@@ -74,8 +74,8 @@ onMounted(() => {
      </div>
     </header>
 
-
     <div class="me__main">
+      <DiscordCommunity v-if="handle" :key="handle" @change="community = $event" />
       <section class="me__workspace" aria-labelledby="workspace-title">
         <h2 id="workspace-title">{{ $t('me.workspace') }}</h2>
         <nav class="me__destinations" :aria-label="$t('me.workspace')">
@@ -93,7 +93,6 @@ onMounted(() => {
         </nav>
       </section>
     <ConnectedAccounts />
-    <DiscordCommunity v-if="handle" :key="handle" @change="community = $event" />
     </div>
     <nav class="me__links" :aria-label="$t('me.title')">
       <RouterLink :to="lp('/wallet')" class="me__link"><AccountIcon name="wallet" />{{ $t("nav.wallet") }}<AccountIcon name="arrow" class="me__chevron" /></RouterLink>
@@ -106,9 +105,10 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.me { max-width:1080px;display:grid;grid-template-columns:272px minmax(0,1fr);column-gap:var(--s-7);row-gap:var(--s-4);align-items:start;padding-top:var(--s-7); }
+/* Keep profile and navigation rows intrinsic; only the final row absorbs a taller main column. */
+.me { max-width:1080px;display:grid;grid-template-columns:272px minmax(0,1fr);grid-template-rows:min-content min-content 1fr;column-gap:var(--s-7);row-gap:var(--s-4);align-items:start;padding-top:var(--s-7); }
 .me__who,.me__main {min-width:0}
-.me__who {display:grid;gap:var(--s-4);grid-column:1;grid-row:1}
+.me__who {grid-column:1;grid-row:1;display:grid;gap:var(--s-4)}
 .me__identity {display:grid;gap:var(--s-5);min-width:0}
 .me__face:not(img) {background:var(--accent-tint);color:var(--accent-text)}
 .me__face {width:96px;height:96px;border-radius:var(--r-pill);object-fit:cover;display:flex;align-items:center;justify-content:center;font-size:32px;box-shadow:0 0 0 4px var(--surface)}
@@ -126,28 +126,28 @@ onMounted(() => {
 .me__public {display:flex;align-items:center;justify-content:center;gap:var(--s-2);min-height:44px;font-size:14px;color:var(--text-2)}
 .me__public:hover {color:var(--accent-text)}
 .me__public svg {width:14px;height:14px}
-.me__links {grid-column:1;grid-row:2;display:grid;border-top:1px solid var(--line-strong);margin-top:var(--s-5);padding-top:var(--s-4)}
+.me__links {grid-column:1;grid-row:2;display:grid;border-top:1px solid var(--line-strong);margin-top:var(--s-2);padding-top:var(--s-3)}
 .me__link {display:flex;align-items:center;gap:var(--s-3);min-height:44px;padding:var(--s-3) var(--s-2);font-size:14px;font-weight:500;border:0;background:transparent;color:var(--text-2);border-radius:var(--r-sm);cursor:pointer;text-align:start}
 .me__link:hover {background:var(--surface-2);color:var(--text)}
 .me__chevron {margin-left:auto;width:16px;height:16px;color:var(--text-3)}
 .me__logout {grid-column:1;grid-row:3;margin-top:0;font-weight:400;width:100%;color:var(--text-3)}
-.me__main {grid-column:2;grid-row:1 / span 3;display:grid;align-content:start;gap:var(--s-7)}
+.me__main {grid-column:2;grid-row:1 / span 3;display:grid;align-content:start;gap:var(--s-6)}
 .me__workspace h2 {margin:0 0 var(--s-4);font-size:18px;font-weight:650;letter-spacing:-.015em}
-.me__destinations {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s-4)}
-.me__destination {display:flex;align-items:center;gap:var(--s-3);padding:var(--s-5) var(--s-4);border:1px solid var(--line-strong);border-radius:var(--r-md);background:var(--surface);transition:border-color var(--dur),background var(--dur);min-width:0}
+.me__destinations {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--s-4)}
+.me__destination {display:grid;grid-template-columns:1fr auto;align-content:start;align-items:center;gap:var(--s-3);padding:var(--s-5) var(--s-4);border:1px solid var(--line-strong);border-radius:var(--r-md);background:var(--surface);transition:border-color var(--dur),background var(--dur);min-width:0}
 .me__destination:hover {border-color:var(--accent);background:var(--accent-tint)}
 .me__destination-icon {display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:var(--r-sm);color:var(--accent-text);background:var(--accent-tint);flex:none}
-.me__destination-text {display:grid;gap:var(--s-1);min-width:0}
+.me__destination-text {grid-column:1 / -1;grid-row:2;display:grid;gap:var(--s-1);min-width:0}
 .me__destination-text strong {font-size:15px;font-weight:600;color:var(--text)}
 .me__destination-text > span {font-size:13px;line-height:1.5;color:var(--text-2)}
-@media(max-width:960px) {.me{grid-template-columns:240px minmax(0,1fr);gap:var(--s-6)}.me__destinations{grid-template-columns:1fr}}
+@media(max-width:960px) {.me{grid-template-columns:240px minmax(0,1fr);gap:var(--s-6)}.me__destinations{grid-template-columns:1fr}.me__destination{display:flex;align-items:center}}
 @media(max-width:700px) {
- .me{grid-template-columns:1fr;gap:var(--s-6);padding-top:var(--s-6)}
+ .me{grid-template-columns:1fr;grid-template-rows:auto;gap:var(--s-6);padding-top:var(--s-6)}
  .me__who{gap:var(--s-3)}.me__identity{display:flex;align-items:center;gap:var(--s-4)}
  .me__face{width:72px;height:72px}.me__name{font-size:24px}.me__bio{font-size:15px}
  .me__profile-actions{grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start;gap:var(--s-3)}
  .me__profile-actions:has(.community-profile--editing){grid-template-columns:1fr}
- .me__main{grid-column:1;grid-row:2;gap:var(--s-6)}.me__links{grid-row:3;margin:0;padding-top:var(--s-4)}.me__logout{grid-row:4;margin-top:calc(var(--s-4)*-1)}
+ .me__who{grid-row:1}.me__main{grid-column:1;grid-row:2;gap:var(--s-6)}.me__links{grid-row:3;margin:0;padding-top:var(--s-4)}.me__logout{grid-row:4;margin-top:calc(var(--s-4)*-1)}
  .me__destination{padding:var(--s-4)}
 }
 </style>
