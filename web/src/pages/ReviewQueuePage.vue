@@ -5,7 +5,6 @@
  * 誰想審就自己領；領了就是「我正在看」，逾時自動放回。這裡只列狀態與入口，
  * 看設定、蓋章在 ReviewDetailPage。不顯示作者（盲審）。
  */
-import ReviewBadge from "@/components/ReviewBadge.vue";
 import { computed, onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 import { useI18n } from "vue-i18n";
@@ -85,13 +84,11 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="page">
+  <section class="review-queue">
     <header class="head">
       <div>
-        <p class="eyebrow">{{ $t("review.eyebrow") }}</p>
-        <h1 class="head__title display">{{ $t("review.title") }}</h1>
+        <h2 class="head__title">{{ $t("review.title") }}</h2>
       </div>
-      <RouterLink class="btn btn--sm" :to="lp('/review/manage')">{{ $t("moderation.title") }}<ReviewBadge /></RouterLink>
       <button class="btn btn--sm" :disabled="loading" @click="load">{{ $t("review.refresh") }}</button>
     </header>
 
@@ -139,7 +136,7 @@ onMounted(() => {
         </li>
       </ul>
     </template>
-  </div>
+  </section>
 </template>
 
 <style scoped>

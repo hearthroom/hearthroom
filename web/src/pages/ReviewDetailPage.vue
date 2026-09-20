@@ -111,7 +111,7 @@ onMounted(() => { void load(); });
 </script>
 
 <template>
-  <div class="page">
+  <section class="review-detail">
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
     <button v-if="needsClaim" class="btn btn--primary" :disabled="busy" @click="claim">{{ $t("review.action.claim") }}</button>
     <p v-if="data?.detail.partial" class="notice" role="status">{{ $t("review.partial") }}</p>
@@ -127,7 +127,7 @@ onMounted(() => { void load(); });
             · {{ $t(`review.kind.${data.submission.kind}`) }}
             · {{ $t("review.stamps", { n: data.submission.stamps.filter((s) => s.verdict === 'approve').length, required: data.submission.required }) }}
           </p>
-          <h1 class="head__title display">{{ doc.roleName }}</h1>
+          <h2 class="head__title display">{{ doc.roleName }}</h2>
           <p class="subtle">{{ doc.roleDesc }}</p>
           <!-- 作者的分級宣告放最上面：審核人第一件事就是對照內容跟它符不符 -->
           <p class="rating" :class="{ 'rating--nsfw': data.submission.nsfw }">
@@ -258,7 +258,7 @@ onMounted(() => { void load(); });
         </div>
       </section>
     </template>
-  </div>
+  </section>
 </template>
 
 <style scoped>
