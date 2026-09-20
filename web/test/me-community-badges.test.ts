@@ -11,10 +11,10 @@ vi.mock("../src/components/CommunityProfile.vue",()=>({default:{template:"<div /
 vi.mock("../src/components/ConnectedAccounts.vue",()=>({default:{template:"<div />"}}));
 import MePage from "../src/pages/MePage.vue";
 let app:App,el:HTMLDivElement;
-const view={enabled:true,invite:"https://discord.gg/fixture",link:{name:"Linked",state:"synced"},xp:1,level:0,badges:["discord_linked","first_work"],xpEnabled:true,preferences:{public_badges:0,public_level:0,notifications:0,discord_dm:0,case_access:0}};
+const view={enabled:true,invite:"https://discord.gg/fixture",link:{name:"Linked",state:"synced"},xp:1,level:0,badges:["discord_linked","first_work"],xpEnabled:true,preferences:{public_badges:0,public_level:0,notifications:1,discord_dm:0,case_access:0}};
 beforeEach(async()=>{
  vi.clearAllMocks();await applyLocale("en");
- mock.request.mockImplementation(async(_path:string,_token:string,method:string)=>method==="DELETE"?{...view,link:null,badges:["first_work"]}:view);
+ mock.request.mockImplementation(async(_path:string,_token:string,method:string)=>_path.endsWith("/notifications")?{items:[{id:"notice",kind:"review_result",path:"/me",created_at:0,read_at:null}]}:method==="DELETE"?{...view,link:null,badges:["first_work"]}:view);
  const router=createRouter({history:createMemoryHistory(),routes:[{path:"/:pathMatch(.*)*",component:MePage}]});await router.push("/me");
  el=document.createElement("div");document.body.append(el);app=createApp(MePage).use(router).use(i18n);app.mount(el);
  await nextTick();await new Promise(r=>setTimeout(r,0));
@@ -33,4 +33,20 @@ it("clears linked level and badge immediately after unlink while retaining earne
  const header=el.querySelector(".me__who")!;
  expect(header.textContent).not.toContain("Level 0");expect(header.textContent).not.toContain("Discord connected");
  expect(header.textContent).toContain(i18n.global.t("community.badges.first_work"));
+});
+
+it("keeps community details folded while surfacing unread notifications",()=>{
+ const details=el.querySelector<HTMLDetailsElement>(".community__details");
+ expect(details).not.toBeNull();
+ expect(details!.open).toBe(false);
+ expect(details!.querySelector("summary")?.textContent).toContain(i18n.global.t("community.unreadCount",{count:1}));
+ expect(el.querySelector('a[href="https://discord.gg/fixture"]')?.closest("details")).toBeNull();
+});
+it("opens community details when arriving from a card report",async()=>{
+ app.unmount();
+ const router=createRouter({history:createMemoryHistory(),routes:[{path:"/:pathMatch(.*)*",component:MePage}]});
+ await router.push("/me?reportCard=example");
+ app=createApp(MePage).use(router).use(i18n);app.mount(el);
+ await nextTick();await new Promise(r=>setTimeout(r,0));
+ expect(el.querySelector<HTMLDetailsElement>(".community__details")?.open).toBe(true);
 });

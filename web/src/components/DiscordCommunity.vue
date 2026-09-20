@@ -29,6 +29,7 @@ const data = ref<CommunityView | null>(null),
   selected = ref<CommunityCase | null>(null),
   reply = ref("");
 const caseLoaded = ref(false);
+const unreadCount = computed(() => notices.value.filter(n => !n.read_at).length);
 const showForm = ref(false),
   title = ref(""),
   body = ref(""),
@@ -262,7 +263,7 @@ onBeforeUnmount(() => {
         :href="data.invite"
         target="_blank"
         rel="noopener noreferrer"
-        class="btn"
+        class="btn btn--primary community__join"
         ><CommunityIcon name="discord" />{{ t("community.join") }}</a
       >
     </header>
@@ -294,6 +295,9 @@ onBeforeUnmount(() => {
             {{ t("community.retry") }}
           </button>
         </div>
+        <details class="community__details" :open="!!card">
+          <summary><span class="community__summary-text"><span>{{ t("community.activity") }}</span><span v-if="unreadCount" class="community__unread">{{ t("community.unreadCount", { count: unreadCount }) }}</span></span></summary>
+          <div class="community__details-body">
         <div class="community__progress">
           <CommunityBadgeList :badges="[]" :level="data.level" />
           <span>{{ data.xp }} XP</span
@@ -518,6 +522,8 @@ onBeforeUnmount(() => {
             </article>
           </template>
         </section>
+          </div>
+        </details>
       </template>
     </template>
   </section>
@@ -532,6 +538,15 @@ onBeforeUnmount(() => {
   background: var(--surface);
   min-width: 0;
 }
+.community__details {border-top:1px solid var(--line-strong);padding-top:var(--s-2);min-width:0}
+.community__details:not([open]) > .community__details-body {display:none}
+.community__details-body {display:grid;gap:var(--s-5);padding-top:var(--s-4)}
+.community__unread {font-size:.8125rem;color:var(--accent-text);background:var(--accent-tint);padding:var(--s-1) var(--s-2);border-radius:var(--r-pill)}
+.community summary {gap:var(--s-2)}
+.community__summary-text {display:flex;align-items:center;flex-wrap:wrap;gap:var(--s-2);min-width:0}
+.community__join {flex:none}
+.community header > div,.community__identity > div {min-width:0;overflow-wrap:anywhere}
+.community .btn {height:auto;white-space:normal;text-align:center}
 .community header,
 .community__identity {
   display: flex;
@@ -682,7 +697,7 @@ progress {
   content: "+";
   margin-inline-start: auto;
 }
-.community details[open] summary::after {
+.community details[open] > summary::after {
   content: "−";
 }
 .community button:disabled {
