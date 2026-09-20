@@ -319,6 +319,7 @@ app.post("/v1/me/community/cases", async (c) => {
       if (
         !card ||
         card.status !== "approved" ||
+        card.public_blocked ||
         (card.nsfw && !(access.ageVerifiedAt && access.showNsfw))
       )
         throw new HttpError(404, "not_found");
@@ -398,7 +399,7 @@ app.post("/internal/community/:operation", async (c) => {
     if (typeof b.card !== "string" || !/^[1-9]\d{0,11}$/.test(b.card))
       throw new HttpError(400, "community_input");
     const card = await getCard(c.env.DB, b.card);
-    if (!card || card.status !== "approved" || card.nsfw)
+    if (!card || card.status !== "approved" || card.public_blocked || card.nsfw)
       throw new HttpError(404, "not_found");
     const names = JSON.parse(card.names),
       summaries = JSON.parse(card.summaries);

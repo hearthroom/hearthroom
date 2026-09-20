@@ -8,6 +8,7 @@ import {
   whoAmI,
   bearer,
   restoreUpstream,
+  rolesOnMainSite,
 } from "./helpers";
 import {
   beginLink,
@@ -29,6 +30,35 @@ const e = () =>
   }) as Env;
 beforeEach(resetDb);
 afterEach(restoreUpstream);
+it("honors publication suspension in Discord previews and website report card context", async () => {
+  const m = await makeMember(1);
+  whoAmI(1);
+  rolesOnMainSite({ roleId: "moderated-card", authorNumId: 1 });
+  const published = await app.fetch(new Request("https://hearthroom.club/v1/cards", {
+    method: "POST", headers: { ...bearer(), "Content-Type": "application/json" },
+    body: JSON.stringify({ roleId: "moderated-card", nsfw: false }),
+  }), e(), createExecutionContext());
+  expect(published.status).toBe(201);
+  const preview = async () => {
+    const path = "/internal/community/card", time = String(Date.now()), nonce = crypto.randomUUID();
+    const body = JSON.stringify({ guild: e().COMMUNITY_GUILD_ID, card: "100001" });
+    return app.fetch(new Request("https://hearthroom.club" + path, { method: "POST", body, headers: {
+      "X-Community-Time": time, "X-Community-Nonce": nonce,
+      "X-Community-Signature": await sign(e().COMMUNITY_BRIDGE_KEY!, "POST", path, time, nonce, body),
+    } }), e(), createExecutionContext());
+  };
+  expect((await preview()).status).toBe(200);
+  const nonce = "x".repeat(40), start = await beginLink(e(), m, nonce);
+  await completeLink(e(), m, await acceptIdentity(e(), start.state, { id: "423456789012345678", name: "QA" }), nonce);
+  await setPreferences(e(), m, { caseAccess: true });
+  await env.DB.prepare("UPDATE cards SET public_blocked=1 WHERE source_role_id='moderated-card'").run();
+  expect((await preview()).status).toBe(404);
+  const report = await app.fetch(new Request("https://hearthroom.club/v1/me/community/cases", {
+    method: "POST", headers: { ...bearer(), "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "create", requestId: crypto.randomUUID(), title: "Report", body: "Details", category: "bug", card: "100001" }),
+  }), e(), createExecutionContext());
+  expect(report.status).toBe(404);
+});
 it("requires member authentication and makes member responses private", async () => {
   whoAmI(null);
   expect(
