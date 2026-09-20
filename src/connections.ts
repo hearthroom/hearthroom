@@ -11,6 +11,7 @@ export const EMPTY_MEMBER = `
  AND NOT EXISTS (SELECT 1 FROM discord_links WHERE member_id=members.id)
  AND NOT EXISTS (SELECT 1 FROM discord_link_attempts WHERE member_id=members.id)
  AND NOT EXISTS (SELECT 1 FROM community_preferences WHERE member_id=members.id)
+ AND NOT EXISTS (SELECT 1 FROM community_appearance_preferences WHERE member_id=members.id)
  AND NOT EXISTS (SELECT 1 FROM community_awards WHERE member_id=members.id)
  AND NOT EXISTS (SELECT 1 FROM community_notifications WHERE member_id=members.id)
  AND NOT EXISTS (SELECT 1 FROM community_case_jobs WHERE member_id=members.id)

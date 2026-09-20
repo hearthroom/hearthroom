@@ -51,6 +51,7 @@ export async function saveCommunityProfile(env:Env, memberId:string, request:Req
  const updated=await env.DB.prepare(`UPDATE members SET display_name=?,bio=?,avatar_url=?,avatar_key=?,profile_edited_at=? WHERE id=? AND avatar_key=?`).bind(name.trim(),bio.trim(),url,key,Date.now(),memberId,prior.avatar_key).run();
  if(!updated.meta.changes)throw new HttpError(409,'profile_changed');
  if(prior.avatar_key && prior.avatar_key!==key)await env.DB.prepare('INSERT OR REPLACE INTO avatar_cleanup(key,delete_after) VALUES (?,?)').bind(prior.avatar_key,0).run();
+ if(file||remove)await env.DB.prepare("UPDATE community_appearance_preferences SET avatar_source='site' WHERE member_id=?").bind(memberId).run();
  await cleanAvatars(env);
  return memberProfile(env.DB,memberId);
 }

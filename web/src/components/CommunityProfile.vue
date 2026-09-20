@@ -4,6 +4,7 @@ import AccountIcon from './AccountIcon.vue';
 import {useI18n} from 'vue-i18n';
 import {useSession} from '@/lib/session';
 import {updateSiteProfile} from '@/lib/api';
+const emit=defineEmits<{updated:[]}>();
 const session=useSession();
 const {t}=useI18n();
 const editing=ref(false),busy=ref(false),error=ref(''),saved=ref(false);
@@ -24,7 +25,7 @@ async function save(){
  try {
   const token=await session.accessToken();if(!token)throw new Error('expired');
   session.profile=await updateSiteProfile(token,{displayName:name.value,bio:bio.value,avatar:file.value,removeAvatar:removeAvatar.value});
-  clearPreview();editing.value=false;saved.value=true;
+  clearPreview();editing.value=false;saved.value=true;emit("updated");
  }catch {error.value=t('community.failed');}finally{busy.value=false;}
 }
 onBeforeUnmount(clearPreview);

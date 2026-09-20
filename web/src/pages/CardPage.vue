@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import CommunityAvatar from "@/components/CommunityAvatar.vue";
+import CommunityName from "@/components/CommunityName.vue";
 import LibraryToggle from "@/components/LibraryToggle.vue";
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -262,10 +264,9 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
             </h1>
             <!-- 作者是一張可點的名片，不只是一行灰字 -->
             <component :is="card.author.handle ? RouterLink : 'div'" :to="card.author.handle ? lp(`/authors/${card.author.handle}`) : undefined" class="role__by">
-              <img v-if="card.author.avatar" :src="card.author.avatar" alt="" />
-              <span v-else class="role__by-void mono" :style="{ '--h': hueFrom(card.author.name) }">{{ [...card.author.name][0] }}</span>
+              <CommunityAvatar :handle="card.author.handle ?? undefined" :src="card.author.avatar" :name="card.author.name" class="role__by-avatar" />
               <span class="role__by-text">
-                <strong>{{ card.author.name }}</strong>
+                <strong><CommunityName :handle="card.author.handle ?? undefined" :name="card.author.name" /></strong>
                 <span v-if="card.author.handle" class="subtle">{{ $t("card.authorPage") }}</span>
               </span>
               <svg v-if="card.author.handle" class="role__by-arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>

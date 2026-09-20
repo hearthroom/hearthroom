@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import CommunityAvatar from "@/components/CommunityAvatar.vue";
+import CommunityName from "@/components/CommunityName.vue";
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
@@ -159,11 +161,10 @@ watch([() => props.cardId, () => session.me?.accountNumId], () => load(true), { 
 
     <ul v-else class="cmt__list">
       <li v-for="c in comments" :key="c.commentId" class="cmt__item">
-        <img v-if="c.accountAvatar" :src="c.accountAvatar" alt="" class="cmt__face" />
-        <span v-else class="cmt__face mono" :style="{ '--h': hueFrom(c.accountNickName || '') }">{{ [...(c.accountNickName || '?')][0] }}</span>
+        <CommunityAvatar :handle="c.handle" :src="c.accountAvatar" :name="c.accountNickName" class="cmt__face" />
         <div class="cmt__body">
           <div class="cmt__head">
-            <span class="cmt__name">{{ c.accountNickName }}</span>
+            <CommunityName :handle="c.handle" :name="c.accountNickName" class="cmt__name" />
             <span v-if="c.isCreator" class="cmt__badge">{{ $t("comment.creator") }}</span>
             <span v-if="c.isPinned" class="cmt__badge cmt__badge--pin">{{ $t("comment.pinned") }}</span>
             <span class="subtle">{{ relativeTime(Date.parse(c.createTime)) }}</span>
@@ -180,11 +181,10 @@ watch([() => props.cardId, () => session.me?.accountNumId], () => load(true), { 
 
           <ul v-if="repliesOf(c).length" class="cmt__replies">
             <li v-for="r in repliesOf(c)" :key="r.commentId" class="cmt__reply">
-              <img v-if="r.accountAvatar" :src="r.accountAvatar" alt="" class="cmt__face cmt__face--sm" />
-              <span v-else class="cmt__face cmt__face--sm mono" :style="{ '--h': hueFrom(r.accountNickName || '') }">{{ [...(r.accountNickName || '?')][0] }}</span>
+              <CommunityAvatar :handle="r.handle" :src="r.accountAvatar" :name="r.accountNickName" class="cmt__face cmt__face--sm" />
               <div class="cmt__body">
                 <div class="cmt__head">
-                  <span class="cmt__name">{{ r.accountNickName }}</span>
+                  <CommunityName :handle="r.handle" :name="r.accountNickName" class="cmt__name" />
                   <span v-if="r.isCreator" class="cmt__badge">{{ $t("comment.creator") }}</span>
                   <span class="subtle">{{ relativeTime(Date.parse(r.createTime)) }}</span>
                 </div>

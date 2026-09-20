@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import CommunityAvatar from "@/components/CommunityAvatar.vue";
+import CommunityName from "@/components/CommunityName.vue";
 import { computed, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 import { compact, hueFrom } from "@/lib/format";
@@ -74,12 +76,12 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
       <div class="card__meta">
         <span v-if="showZone" class="card__by">{{ zoneLabel(card.zone) }}</span>
         <RouterLink v-else-if="card.author.handle" :to="lp(`/authors/${card.author.handle}`)" class="card__by card__by--link">
-          <img v-if="card.author.avatar" :src="card.author.avatar" alt="" class="card__face" />
-          <span class="card__author">{{ card.author.name }}</span>
+          <CommunityAvatar :handle="card.author.handle ?? undefined" :src="card.author.avatar" :name="card.author.name" class="card__face" />
+          <CommunityName :handle="card.author.handle ?? undefined" :name="card.author.name" class="card__author" />
         </RouterLink>
         <span v-else class="card__by">
-          <img v-if="card.author.avatar" :src="card.author.avatar" alt="" class="card__face" />
-          <span class="card__author">{{ card.author.name }}</span>
+          <CommunityAvatar :handle="card.author.handle ?? undefined" :src="card.author.avatar" :name="card.author.name" class="card__face" />
+          <CommunityName :handle="card.author.handle ?? undefined" :name="card.author.name" class="card__author" />
         </span>
         <span class="card__num" :class="{ 'card__num--up': showTrending && card.trending > 0 }" :title="$t('card.talkCount', { n: compact(card.talkNum) })">
           <span class="sr-only">{{ $t("card.talkCount", { n: compact(card.talkNum) }) }}</span>
