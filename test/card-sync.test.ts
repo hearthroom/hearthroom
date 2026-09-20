@@ -30,6 +30,7 @@ beforeEach(async () => {
   vi.spyOn(transfers, "create").mockResolvedValue("target");
   vi.spyOn(transfers, "update").mockResolvedValue({});
   vi.spyOn(transfers, "publish").mockResolvedValue();
+  vi.spyOn(transfers, "ensurePlayable").mockResolvedValue();
 });
 afterEach(() => vi.restoreAllMocks());
 it("creates one copy and reuses it on retry", async () => {
@@ -47,6 +48,20 @@ it("does not overwrite a target changed outside HearthRoom", async () => {
   }));
   await expect(syncCard(env, input)).rejects.toThrow("target_changed");
   expect(transfers.update).toHaveBeenCalledTimes(1);
+  expect(transfers.ensurePlayable).not.toHaveBeenCalled();
+});
+it("repairs access to an unchanged legacy Harbor copy without rewriting or publishing it", async () => {
+  await syncCard(env, input);
+  await expect(syncCard(env, input)).resolves.toMatchObject({roleId:"target",status:"synced"});
+  expect(transfers.ensurePlayable).toHaveBeenCalledWith(env,"harbor","t","target");
+  expect(transfers.update).toHaveBeenCalledTimes(1);
+  expect(transfers.publish).not.toHaveBeenCalled();
+});
+it("does not report success when unchanged-copy access repair fails", async () => {
+  await syncCard(env, input);
+  vi.mocked(transfers.ensurePlayable).mockRejectedValueOnce(new Error("access write failed"));
+  await expect(syncCard(env, input)).rejects.toThrow("sync_failed");
+  expect(await env.DB.prepare("SELECT status FROM work_copies").first()).toMatchObject({status:"failed"});
 });
 it("does not retry a create with an unknown result", async () => {
   vi.mocked(transfers.create).mockRejectedValue(new Error("network"));

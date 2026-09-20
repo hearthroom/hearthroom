@@ -324,8 +324,11 @@ async function update(
   const state:TransferProgress = typeof progress.books==='object' ? progress as TransferProgress : {books:Object.fromEntries(Object.entries(progress).map(([sourceId,id])=>[sourceId,{id,status:'created' as const}]))};
   await writeBooks((path,body,method)=>call(env,p,token,p==='harbor'&&path==='/worldbook'?path+'?roleId='+encodeURIComponent(id):path,body,method),id,
     (c.worldbooks??[]).map(b=>({sourceId:b.sourceId,metadata:b.metadata??{name:b.name,language:c.language},entries:b.entries})),state,saveProgress,async()=>{await checkpoint?.()},p==='harbor'?'prepend-batches':'whole-book');
-  if(p==='harbor')await call(env,p,token,`/role/${encodeURIComponent(id)}/visibility`,{visibility:'unlisted'});
+  await ensurePlayable(env,p,token,id);
   return Object.fromEntries(Object.entries(state.books).filter(([,v])=>v.id).map(([k,v])=>[k,v.id!]));
+}
+async function ensurePlayable(env:Env,p:ProviderId,token:string,id:string) {
+  if(p==='harbor')await call(env,p,token,`/role/${encodeURIComponent(id)}/visibility`,{visibility:'unlisted'});
 }
 async function publish(
   env: Env,
@@ -341,4 +344,4 @@ async function publish(
 async function unpublish(env:Env,p:ProviderId,token:string,id:string) {
  await call(env,p,token,`/role/${encodeURIComponent(id)}/visibility`,{visibility:p==='harbor'?'unlisted':'private'});
 }
-export const transfers = { read, create, update, publish, unpublish };
+export const transfers = { read, create, update, ensurePlayable, publish, unpublish };
