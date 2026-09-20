@@ -122,15 +122,6 @@ async function useSavePlatform(provider:ProviderId) {
  try {await session.adopt(pair);editorProvider.value=provider;}
  catch(e) {setProvider(before);useProviderUpstream();throw e;}
 }
-async function retainImageReferences(sent:RoleDraft,token:string) {
- if(editorProvider.value!=='harbor')return;
- for(const key of ['roleAvatar','roleBackground','roleBackgroundLandscape'] as const) {
-  const url=sent[key];if(!url || !/^https:\/\//.test(url))continue;
-  if(new URL(url).hostname==='assets.harperharbor.com')continue;
-  const r=await fetch(`${UPSTREAM_API}/open/v1/media/references`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({url})});
-  if(!r.ok)throw new Error(t('linked.error.sync_image_reference_unavailable'));
- }
-}
 const roleId = ref<string>((route.params.roleId as string) ?? "");
 const isNew = computed(() => !roleId.value);
 /**
@@ -967,7 +958,6 @@ async function save() {
     // 存完拿快照當「上次存的內容」，中途進來的改動才會留在未儲存狀態、下次存得到；
     // 用當下的草稿當基準，那張頭像就會靜默消失（2026-09-15 匯入 V3 範例卡時發生）。
     const sent = cloneDraft(draft.value);
-    await retainImageReferences(sent,token);
     const fields = documentPatch(sent, original.value);
     if (hasAnyField(fields)) await patchRoleDocument(targetRoleId, fields, token);
 
