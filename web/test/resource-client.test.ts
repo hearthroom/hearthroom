@@ -4,6 +4,22 @@ const response = (data: unknown) =>
   new Response(JSON.stringify({ code: 0, data }), { status: 200 });
 afterEach(() => vi.unstubAllGlobals());
 describe("provider-bound resources", () => {
+  it("normalizes Harbor folder IDs and preserves authored directory paths in completion", async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      if (url.endsWith("folder/list")) return response({ folders: [{id:"folder-1",name:"立繪",itemCount:3}] });
+      if (url.endsWith("uploadIntent")) return response({uploadId:"u",uploadUrl:"https://storage.test/u"});
+      return response({imageId:"i",imageUrl:"https://assets.test/u/author/立繪/表情/happy.png"});
+    });
+    vi.stubGlobal("fetch",fetcher);
+    vi.stubGlobal("XMLHttpRequest",class {status=200;upload={};open(){};setRequestHeader(){};onload=()=>{};send(){this.onload();}});
+    const c=resourceClient("harbor","token");
+    expect(await c.folders()).toEqual([{folderId:"folder-1",name:"立繪",imageCount:3}]);
+    const file=new File(["x"],"happy.png",{type:"image/png"});
+    Object.defineProperty(file,"webkitRelativePath",{value:"表情/happy.png"});
+    await c.upload(file,["folder-1"],()=>{});
+    const complete=fetcher.mock.calls.find(([url])=>url.endsWith("uploadComplete"));
+    expect(JSON.parse(complete![1].body)).toMatchObject({relativePath:"表情/happy.png",fileName:"happy.png",folderIds:["folder-1"]});
+  });
   it("pins reads and mutations to the requested provider, preserving string IDs", async () => {
     const fetcher = vi.fn(async () =>
       response({

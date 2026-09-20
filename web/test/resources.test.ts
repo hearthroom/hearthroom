@@ -3,6 +3,7 @@ import { createApp, nextTick, reactive, type App } from "vue";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { i18n } from "../src/lib/i18n";
 import ResourcesPage from "../src/pages/ResourcesPage.vue";
+import { confirmState, settleConfirm } from "../src/lib/confirm";
 const mocks = vi.hoisted(() => ({
   list: vi.fn(),
   folders: vi.fn(async () => []),
@@ -83,6 +84,24 @@ afterEach(() => {
   root?.remove();
 });
 describe("provider resource library", () => {
+  it("shows each provider's prefix without expanding and copies exactly the displayed prefix", async () => {
+    state.profile.identities.push({ provider: "lunatalk", externalId: 3 });
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    mocks.list.mockImplementation(async (provider: string) => ({
+      ...page(), libraryPrefix: `https://assets.example/${provider}/u/test${provider === "harbor" ? "/" : ""}`,
+    }));
+    await mount();
+    const prefix = () => root.querySelector<HTMLElement>(".resource-prefix")!;
+    expect(prefix().closest("details:not([open])")).toBeNull();
+    expect(prefix().querySelector("code")?.textContent).toBe("https://assets.example/harbor/u/test/");
+    prefix().querySelector<HTMLButtonElement>("button")!.click();
+    await flush();
+    expect(writeText).toHaveBeenLastCalledWith("https://assets.example/harbor/u/test/");
+    root.querySelector<HTMLButtonElement>('[data-provider="lunatalk"]')!.click();
+    await flush();
+    expect(prefix().querySelector("code")?.textContent).toBe("https://assets.example/lunatalk/u/test/");
+  });
   it("restores a linked sort before capabilities have loaded", async () => {
     await mount("/resources?provider=harbor&sort=name&page=2");
     expect(mocks.list.mock.calls[0][1]).toMatchObject({
@@ -190,4 +209,27 @@ it("retries only failed upload entries", async () => {
   await flush();
   expect(mocks.upload).toHaveBeenCalledTimes(3);
   expect(mocks.upload.mock.calls[2][0].name).toBe("b.png");
+});
+
+it("uploads a thousand directory files with authored paths after one overwrite confirmation", async () => {
+  mocks.list.mockImplementation(async () => ({ ...page(), libraryPrefix:"https://assets.test/u/author", capabilities:{...page().capabilities,overwrite:true,relativePaths:true} }));
+  mocks.upload.mockResolvedValue("ok");
+  await mount();
+  const input=root.querySelector<HTMLInputElement>("input[webkitdirectory]")!;
+  expect(input).not.toBeNull();
+  const files=Array.from({length:1000},(_,i)=>{
+    const file=new File(["x"],`image-${i%100}.png`,{type:"image/png"});
+    Object.defineProperty(file,"webkitRelativePath",{value:`my-card/scene-${Math.floor(i/100)}/${file.name}`});
+    return file;
+  });
+  Object.defineProperty(input,"files",{value:files});
+  input.dispatchEvent(new Event("change"));
+  await flush();
+  expect(mocks.upload).not.toHaveBeenCalled();
+  expect(confirmState.current?.danger).toBe(true);
+  settleConfirm(true);
+  await flush();
+  expect(mocks.upload).toHaveBeenCalledTimes(1000);
+  expect(mocks.upload.mock.calls[999][0].webkitRelativePath).toBe("my-card/scene-9/image-99.png");
+  expect(root.textContent).toContain("my-card/scene-9/image-99.png");
 });

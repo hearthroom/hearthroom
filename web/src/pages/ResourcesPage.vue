@@ -102,6 +102,7 @@ const formatGroups = computed(() =>
     }))
     .filter((group) => group.formats.length),
 );
+const libraryPrefix = computed(() => result.value?.libraryPrefix ? result.value.libraryPrefix.replace(/\/+$/, "") + "/" : "");
 const cap = computed(() => capabilities.value),
   activeFolder = computed(() =>
     folders.value.find((f) => f.folderId === scope.value),
@@ -436,6 +437,7 @@ async function deleteFolder() {
   });
 }
 const input = ref<HTMLInputElement | null>(null);
+const directoryInput = ref<HTMLInputElement | null>(null);
 type UploadEntry = {
   file: File;
   status: "waiting" | "uploading" | "done" | "failed";
@@ -446,6 +448,10 @@ const uploads = ref<UploadEntry[]>([]),
   uploading = ref(false),
   uploadProvider = ref<ProviderId | "">(""),
   uploadFolder = ref("");
+const uploadPage = ref(1);
+const uploadPages = computed(() => Math.max(1, Math.ceil(uploads.value.length / 24)));
+const visibleUploads = computed(() => uploads.value.slice((uploadPage.value - 1) * 24, uploadPage.value * 24));
+const uploadCounts = computed(() => ({ total: uploads.value.length, done: uploads.value.filter(u => u.status === "done").length, failed: uploads.value.filter(u => u.status === "failed").length }));
 let uploadClient: Awaited<ReturnType<typeof client>> | null = null;
 let uploadFolderIds: string[] = [];
 const accept = computed(() => {
@@ -498,6 +504,7 @@ async function enqueue(files: File[]) {
     return;
   }
   uploadProvider.value = id;
+  uploadPage.value = 1;
   uploadFolder.value = folder?.name || t("res.scope.unfiled");
   uploadFolderIds = folder ? [folder.folderId] : [];
   uploads.value = files.map((file) => ({
@@ -535,9 +542,11 @@ async function runUploads(retry: boolean) {
   const c = uploadClient,
     id = uploadProvider.value;
   try {
-    for (const u of uploads.value) {
+    for (let index = 0; index < uploads.value.length; index++) {
+      const u = uploads.value[index];
       if (disposed) break;
       if (u.status !== "waiting" && !(retry && u.status === "failed")) continue;
+      uploadPage.value = Math.floor(index / 24) + 1;
       u.status = "uploading";
       u.error = "";
       try {
@@ -626,6 +635,12 @@ async function previewMove(direction: number) {
         >
           {{ $t("res.refresh") }}</button
         ><button
+          v-if="cap?.relativePaths"
+          class="btn"
+          :disabled="!result || loading || busy || expired || uploading || quotaFull"
+          @click="directoryInput?.click()"
+        >{{ $t("resource.uploadDirectory") }}</button
+        ><button
           class="btn btn--primary"
           :disabled="
             !result || loading || busy || expired || uploading || quotaFull
@@ -641,6 +656,7 @@ async function previewMove(direction: number) {
           :accept="accept"
           @change="pick"
         />
+        <input v-if="cap?.relativePaths" ref="directoryInput" type="file" class="sr-only" multiple webkitdirectory :aria-label="$t('resource.uploadDirectory')" @change="pick" />
       </div>
     </header>
     <section class="resource-overview panel">
@@ -735,22 +751,21 @@ async function previewMove(direction: number) {
               </div>
             </div>
           </details>
-          <details
-            v-if="result?.libraryPrefix"
+          <section
+            v-if="libraryPrefix"
             class="resource-rules resource-prefix"
+            :aria-label="$t('res.prefix.label')"
           >
-            <summary>
-              <span>{{ $t("res.prefix.label") }}</span
-              ><AccountIcon name="arrow" />
-            </summary>
+            <h3>{{ $t("res.prefix.label") }}</h3>
             <div class="prefix-row">
-              <code>{{ result.libraryPrefix }}/</code
-              ><button class="btn btn--sm" @click="copy(result.libraryPrefix)">
+              <code>{{ libraryPrefix }}</code
+              ><button class="btn btn--sm" @click="copy(libraryPrefix)">
                 {{ $t("res.copy") }}
               </button>
             </div>
             <p class="subtle">{{ $t("res.prefix.hint") }}</p>
-          </details>
+            <p v-if="cap?.relativePaths" class="subtle">{{ $t("resource.directoryHint") }}</p>
+          </section>
         </div>
       </div>
     </section>
@@ -804,9 +819,10 @@ async function previewMove(direction: number) {
             {{ $t("resource.close") }}
           </button>
         </header>
+        <p class="subtle" role="status">{{ $t('resource.uploadSummary', uploadCounts) }}</p>
         <ul>
-          <li v-for="(u, i) in uploads" :key="i">
-            <span>{{ u.file.name }}</span
+          <li v-for="(u, i) in visibleUploads" :key="(uploadPage - 1) * 24 + i">
+            <span>{{ u.file.webkitRelativePath || u.file.name }}</span
             ><span
               >{{ $t("resource.upload." + u.status) }}
               {{ u.status === "uploading" ? u.progress + "%" : "" }}</span
@@ -814,6 +830,11 @@ async function previewMove(direction: number) {
             <p v-if="u.error" class="error-text">{{ u.error }}</p>
           </li>
         </ul>
+        <nav v-if="uploadPages > 1" class="upload-pages" :aria-label="$t('resource.uploadPages')">
+          <button class="btn" :disabled="uploading || uploadPage <= 1" @click="uploadPage--">{{ $t('resource.previous') }}</button>
+          <span>{{ uploadPage }} / {{ uploadPages }}</span>
+          <button class="btn" :disabled="uploading || uploadPage >= uploadPages" @click="uploadPage++">{{ $t('resource.next') }}</button>
+        </nav>
       </section>
       <div class="resource-layout">
         <aside class="resource-sidebar">
@@ -1372,7 +1393,15 @@ async function previewMove(direction: number) {
 .resource-prefix {
   border-top: 1px solid var(--line);
   margin-top: var(--s-2);
+  padding-top: var(--s-4);
 }
+.resource-prefix h3 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.prefix-row .btn { min-height: 44px; }
+.upload-pages { display: flex; align-items: center; justify-content: flex-end; gap: var(--s-3); }
 .resource-rules p,
 .prefix-row code {
   overflow-wrap: anywhere;

@@ -962,8 +962,8 @@
   "error.invalidCursor": "这份列表已经变了，请重新加载再看。",
   "error.quotaExceeded": "额度已经用完了。",
   "error.assetNotPassedReview": "这张卡用到的图还在审核，通过之后才能做这件事。",
-  "res.prefix.label": "图库网址前缀",
-  "res.prefix.hint": "上传会保留原始文件名，网址就是「前缀／文件名」；同名再传会直接换掉旧的那张，网址不变。卡片代码里可以用前缀加文件名直接组网址。",
+  "res.prefix.label": "资源网址前缀",
+  "res.prefix.hint": "固定前缀加上文件路径，就能在卡片中拼接资源网址；相同路径重新上传会更新内容，网址不变。",
   "editor.chatPage": "聊天页",
   "editor.chatPage.sandbox": "沙箱（推荐）",
   "editor.chatPage.classic": "传统",
@@ -1389,5 +1389,9 @@
   "community.noCases": "目前没有反馈。",
   "community.publicLevel": "在个人主页公开等级",
   "community.badges.discord_linked": "已关联 Discord",
-  "community.nextLevel": "再获得 {xp} XP 升到等级 {level}"
+  "community.nextLevel": "再获得 {xp} XP 升到等级 {level}",
+  "resource.uploadDirectory": "上传文件夹",
+  "resource.directoryHint": "文件夹上传会保留原本的名称与层级，例如“前缀／立绘／表情／开心.png”。",
+  "resource.uploadSummary": "已完成 {done}／{total} 个文件，{failed} 个失败",
+  "resource.uploadPages": "上传列表分页"
 }

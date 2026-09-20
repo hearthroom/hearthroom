@@ -4911,7 +4911,7 @@
           }
         },
         "x-harperharbor": {
-          "description": "List locally hosted, account-owned stored media with pagination, folder and kind filters, optional filename search and ordering. External references are excluded. Harbor returns capabilities and has no moderationState field."
+          "description": "List locally hosted, account-owned stored media with pagination, folder and kind filters, optional filename search and ordering. External references are excluded. Harbor returns capabilities and has no moderationState field. Returns the account-fixed public UID libraryPrefix, including for an empty library; overwrite and relativePaths capabilities are true. fileName contains the authored relative path for named resources."
         }
       }
     },
@@ -4954,6 +4954,11 @@
                       "type": "string"
                     },
                     "description": "Optional; repeat the field for each folder id to bind the new item to."
+                  },
+                  "relativePath": {
+                    "type": "string",
+                    "maxLength": 1024,
+                    "description": "Harbor extension when capabilities.relativePaths is true: author-provided relative file path, e.g. my-card/expressions/happy.png. Overrides fileName; the first selected folder name is prepended. Same-path uploads replace content. Other providers may not support this field."
                   }
                 }
               }
@@ -5013,7 +5018,7 @@
           }
         },
         "x-harperharbor": {
-          "description": "Upload one image, video, audio file or font. Harbor supports JPG, PNG, GIF, WebP, MP4, WebM, MP3, WAV, OGG, WOFF and WOFF2, up to 10 MiB per file. File-byte signatures and the declared media category must agree. Ownership and storage quota checks apply; stored media is immediately usable without content review. Responses do not include moderationState."
+          "description": "Upload one image, video, audio file or font. Harbor supports JPG, PNG, GIF, WebP, MP4, WebM, MP3, WAV, OGG, WOFF and WOFF2, up to 10 MiB per file. File-byte signatures and the declared media category must agree. Ownership and storage quota checks apply; stored media is immediately usable without content review. Responses do not include moderationState. Harbor assigns a stable libraryPrefix at https://<API host>/u/<public UID>. Named uploads use <libraryPrefix>/<author relative path>; each path segment is URL-encoded. The first selected folder name prefixes that path. Original names and subdirectories are preserved (Unicode NFC); empty/dot/traversal segments, backslashes, controls and overly long paths are rejected. The same path replaces content atomically while preserving URL, asset ID and existing folder/card references. Completed-upload retries do not restore older content. Existing unnamed URLs remain valid."
         }
       }
     },
@@ -9666,6 +9671,11 @@
                   "fileName": {
                     "type": "string",
                     "description": "Original file name. The object is stored as `u/<numeric user id>/<fileName>` (path, control characters and `#%?&<>:\"|*` are stripped or replaced; the extension is aligned to the sniffed type). Uploading the same name again replaces the existing item in place: same item id, same URL. Omitted → a generated name."
+                  },
+                  "relativePath": {
+                    "type": "string",
+                    "maxLength": 1024,
+                    "description": "Harbor extension when capabilities.relativePaths is true: author-provided relative file path, e.g. my-card/expressions/happy.png. Overrides fileName; the first selected folder name is prepended. Same-path uploads replace content. Other providers may not support this field."
                   }
                 }
               }
@@ -9725,7 +9735,7 @@
           }
         },
         "x-harperharbor": {
-          "description": "Complete an upload after validating its bytes, file type, dimensions and quota. Stored media is immediately usable without content review. The response matches /image/upload and does not include moderationState."
+          "description": "Complete an upload after validating its bytes, file type, dimensions and quota. Stored media is immediately usable without content review. The response matches /image/upload and does not include moderationState. Harbor assigns a stable libraryPrefix at https://<API host>/u/<public UID>. Named uploads use <libraryPrefix>/<author relative path>; each path segment is URL-encoded. The first selected folder name prefixes that path. Original names and subdirectories are preserved (Unicode NFC); empty/dot/traversal segments, backslashes, controls and overly long paths are rejected. The same path replaces content atomically while preserving URL, asset ID and existing folder/card references. Completed-upload retries do not restore older content. Existing unnamed URLs remain valid."
         }
       }
     },
@@ -10224,6 +10234,94 @@
         },
         "x-harperharbor": {
           "description": "HarperHarbor-only operation. Requires chat.play and conversation ownership."
+        }
+      }
+    },
+    "/u/{uid}/{path}": {
+      "get": {
+        "tags": [
+          "Media"
+        ],
+        "operationId": "resolveLibraryPath",
+        "summary": "Resolve an author-owned resource path",
+        "description": "Harbor-only public resource alias. Resolves exactly one stored resource to its current immutable blob URL. The redirect is not cached, so same-path replacements are visible. No private inventory or token is returned. Nested path segments are supported.",
+        "security": [],
+        "x-harperharbor": {
+          "supported": true
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "uid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Harbor public UID."
+          },
+          {
+            "in": "path",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Author-provided relative path, including folder names."
+          }
+        ],
+        "responses": {
+          "307": {
+            "description": "Current public blob; Location header points to the immutable object. Cache-Control: no-store."
+          },
+          "404": {
+            "description": "No published resource at this path."
+          },
+          "503": {
+            "description": "Resource resolution temporarily unavailable."
+          }
+        }
+      },
+      "head": {
+        "tags": [
+          "Media"
+        ],
+        "operationId": "headPublicLibraryResource",
+        "summary": "Resolve an authored resource path without a response body",
+        "description": "Harbor-only public resource alias. Resolves exactly one stored resource to its current immutable blob URL. The redirect is not cached, so same-path replacements are visible. No private inventory or token is returned. Nested path segments are supported.",
+        "security": [],
+        "x-harperharbor": {
+          "supported": true
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "uid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Harbor public UID."
+          },
+          {
+            "in": "path",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Author-provided relative path, including folder names."
+          }
+        ],
+        "responses": {
+          "307": {
+            "description": "Current public blob; Location header points to the immutable object. Cache-Control: no-store."
+          },
+          "404": {
+            "description": "No published resource at this path."
+          },
+          "503": {
+            "description": "Resource resolution temporarily unavailable."
+          }
         }
       }
     }
@@ -12606,7 +12704,7 @@
               },
               "libraryPrefix": {
                 "type": "string",
-                "description": "The caller's library URL prefix without trailing slash (`https://<objects host>/u/<numeric user id>`). Files uploaded with a name live at `<libraryPrefix>/<fileName>`."
+                "description": "Account-fixed library URL prefix without a trailing slash. LunaTalk uses https://<objects host>/u/<numeric user id>; Harbor uses https://<API host>/u/<public UID>. Combine it with / and the authored relative path, URL-encoding individual segments. Do not derive one provider prefix from another provider UID."
               },
               "capabilities": {
                 "type": "object",
@@ -12640,7 +12738,11 @@
                   },
                   "overwrite": {
                     "type": "boolean",
-                    "description": "Whether a same-name upload replaces an existing file."
+                    "description": "Whether uploading to the same relative path replaces content while preserving its URL."
+                  },
+                  "relativePaths": {
+                    "type": "boolean",
+                    "description": "Supports relativePath uploads preserving authored folder names and directory structure. Do not flatten directories for providers lacking this capability."
                   }
                 }
               }

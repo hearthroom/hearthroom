@@ -962,8 +962,8 @@
   "error.invalidCursor": "この一覧は開いたあとに変わりました。読み込み直してください。",
   "error.quotaExceeded": "利用できる分を使い切りました。",
   "error.assetNotPassedReview": "このカードで使っている画像がまだ審査中です。通過してからもう一度お試しください。",
-  "res.prefix.label": "ライブラリURLの接頭辞",
-  "res.prefix.hint": "アップロードは元のファイル名を保持し、URLは「接頭辞／ファイル名」になります。同じ名前で再アップロードすると同じURLのまま差し替わります。カードのスクリプトでは接頭辞とファイル名からURLを組み立てられます。",
+  "res.prefix.label": "素材URLの接頭辞",
+  "res.prefix.hint": "固定の接頭辞とファイルのパスを組み合わせてカード内のURLを作れます。同じパスに再アップロードすると、URLを変えずに内容が更新されます。",
   "editor.chatPage": "チャットページ",
   "editor.chatPage.sandbox": "サンドボックス（推奨）",
   "editor.chatPage.classic": "従来",
@@ -1389,5 +1389,9 @@
   "community.noCases": "報告はまだありません。",
   "community.publicLevel": "プロフィールでレベルを公開",
   "community.badges.discord_linked": "Discord 連携済み",
-  "community.nextLevel": "レベル {level} まであと {xp} XP"
+  "community.nextLevel": "レベル {level} まであと {xp} XP",
+  "resource.uploadDirectory": "フォルダーをアップロード",
+  "resource.directoryHint": "フォルダー内の名前と階層はそのまま保持されます。例：接頭辞/立ち絵/表情/笑顔.png。",
+  "resource.uploadSummary": "{total}件中{done}件完了・{failed}件失敗",
+  "resource.uploadPages": "アップロード一覧のページ"
 }

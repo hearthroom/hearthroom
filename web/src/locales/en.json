@@ -962,8 +962,8 @@
   "error.invalidCursor": "This list has changed since you opened it. Reload to see the current one.",
   "error.quotaExceeded": "You've used up your allowance.",
   "error.assetNotPassedReview": "An image this card uses is still being reviewed. You can do this once it passes.",
-  "res.prefix.label": "Library URL prefix",
-  "res.prefix.hint": "Uploads keep their original file name, so the URL is prefix/filename. Uploading the same name again replaces the old file at the same URL. Card scripts can build URLs from the prefix and a file name.",
+  "res.prefix.label": "Resource URL prefix",
+  "res.prefix.hint": "Your fixed prefix and file path form the resource URL for your card; uploading to the same path replaces its content without changing the URL.",
   "editor.chatPage": "Chat page",
   "editor.chatPage.sandbox": "Sandbox (recommended)",
   "editor.chatPage.classic": "Classic",
@@ -1389,5 +1389,9 @@
   "community.noCases": "No reports yet.",
   "community.publicLevel": "Show my level on my profile",
   "community.badges.discord_linked": "Discord connected",
-  "community.nextLevel": "{xp} XP to reach level {level}"
+  "community.nextLevel": "{xp} XP to reach level {level}",
+  "resource.uploadDirectory": "Upload folder",
+  "resource.directoryHint": "Folder uploads keep your names and directory structure, for example prefix/portraits/expressions/happy.png.",
+  "resource.uploadSummary": "{done} of {total} files complete; {failed} failed",
+  "resource.uploadPages": "Upload list pages"
 }
