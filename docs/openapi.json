@@ -1574,7 +1574,7 @@
           }
         },
         "x-harperharbor": {
-          "description": "Returns stored messages, newest first, plus durable operation outcomes. Requires chat.play and conversation ownership. page starts at 1; pageSize defaults to 50 and is limited to 100. chats contains public chat IDs, message text, thinking text, model, turnStatus and completion state. Partial output remains visible after interruption.",
+          "description": "Returns stored messages, newest first, plus durable operation outcomes. Requires chat.play and conversation ownership. page starts at 1; pageSize defaults to 50 and is limited to 100. chats contains public chat IDs, message text, thinking text, model, turnStatus and completion state. Partial output remains visible after interruption. HarperHarbor advertises responseSettingsVersion=1 for conversation response preferences.",
           "security": [
             {
               "userToken": []
@@ -1799,6 +1799,10 @@
                       },
                       "schemaVersion": {
                         "type": "string"
+                      },
+                      "responseSettingsVersion": {
+                        "type": "integer",
+                        "const": 1
                       }
                     }
                   }
@@ -3033,7 +3037,7 @@
           }
         },
         "x-harperharbor": {
-          "description": "Opens or resumes the current conversation for the caller and agent. Requires chat.play and agent access. Inserts the selected greeting only when creating the conversation; this endpoint does not call a model. Returns conversationId, defaultRelay (greeting text), historyConversation, roleInfo and xmlV3Compatibility=false. Missing or invalid roleId returns 400. Shareable configurations can be used across application tenants without community review. The conversation, player settings and subsequent charges remain scoped to the calling application and player; the source configuration and its Lorebooks remain in their storage tenant.",
+          "description": "Opens or resumes the current conversation for the caller and agent. Requires chat.play and agent access. Inserts the selected greeting only when creating the conversation; this endpoint does not call a model. Returns conversationId, defaultRelay (greeting text), historyConversation, roleInfo and xmlV3Compatibility=false. Missing or invalid roleId returns 400. Shareable configurations can be used across application tenants without community review. The conversation, player settings and subsequent charges remain scoped to the calling application and player; the source configuration and its Lorebooks remain in their storage tenant. HarperHarbor advertises responseSettingsVersion=1 for conversation response preferences.",
           "security": [
             {
               "userToken": []
@@ -3138,6 +3142,10 @@
                       },
                       "xmlV3Compatibility": {
                         "type": "boolean"
+                      },
+                      "responseSettingsVersion": {
+                        "type": "integer",
+                        "const": 1
                       }
                     }
                   }
@@ -9903,6 +9911,319 @@
           "404": {
             "description": "Target agent configuration is missing or not owned by caller."
           }
+        }
+      }
+    },
+    "/open/v1/conversation/response-settings": {
+      "get": {
+        "tags": [
+          "Conversations"
+        ],
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authoritative saved settings and resolved effective preferences.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationResponseSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or patch. No settings changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "chat.play scope required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Conversation is unavailable to this caller.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale expectedRevision; reload without discarding the local draft.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "getConversationResponseSettings",
+        "summary": "Read conversation response preferences",
+        "description": "HarperHarbor only, advertised by responseSettingsVersion=1 on conversation start and messages. Requires ownership and current agent configuration access. Defaults are protect, card style, card perspective, auto length and natural pace. This call performs no inference and charges no credits.",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "x-harperharbor": {
+          "description": "HarperHarbor-only operation. Requires chat.play and conversation ownership."
+        }
+      }
+    },
+    "/open/v1/conversation/response-settings/save": {
+      "post": {
+        "tags": [
+          "Conversations"
+        ],
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authoritative saved settings and resolved effective preferences.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationResponseSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or patch. No settings changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "chat.play scope required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Conversation is unavailable to this caller.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale expectedRevision; reload without discarding the local draft.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "saveConversationResponseSettings",
+        "summary": "Save conversation response preferences",
+        "description": "HarperHarbor only. Partial patch: omitted fields remain unchanged; null removes the override. Empty or unchanged patches preserve the revision. Invalid enums, types, unknown keys and custom styles over 1000 Unicode code points reject the entire patch. Custom style requires nonblank customStyle; switching away must clear customStyle with null. A new generation snapshots settings once; changes apply to the next operation, while replay of an existing clientId retains its original snapshot. Forks copy preferences independently; new conversations use defaults. This call performs no inference and charges no credits.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "conversationId",
+                  "expectedRevision",
+                  "patch"
+                ],
+                "properties": {
+                  "conversationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "patch": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "agency": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "protect",
+                              "assist",
+                              "coauthor"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "style": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "card",
+                              "plain",
+                              "dialogue",
+                              "descriptive",
+                              "custom"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "perspective": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "card",
+                              "first_character",
+                              "second_user",
+                              "third_limited"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "length": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "auto",
+                              "brief",
+                              "balanced",
+                              "detailed"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "pace": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "natural",
+                              "linger",
+                              "advance"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "customStyle": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 1000
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-harperharbor": {
+          "description": "HarperHarbor-only operation. Requires chat.play and conversation ownership."
         }
       }
     }
@@ -18425,6 +18746,110 @@
           }
         },
         "additionalProperties": false
+      },
+      "ResponsePreferences": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "agency": {
+            "type": "string",
+            "enum": [
+              "protect",
+              "assist",
+              "coauthor"
+            ]
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "card",
+              "plain",
+              "dialogue",
+              "descriptive",
+              "custom"
+            ]
+          },
+          "perspective": {
+            "type": "string",
+            "enum": [
+              "card",
+              "first_character",
+              "second_user",
+              "third_limited"
+            ]
+          },
+          "length": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "brief",
+              "balanced",
+              "detailed"
+            ]
+          },
+          "pace": {
+            "type": "string",
+            "enum": [
+              "natural",
+              "linger",
+              "advance"
+            ]
+          },
+          "customStyle": {
+            "type": "string",
+            "maxLength": 1000
+          }
+        }
+      },
+      "ConversationResponseSettings": {
+        "type": "object",
+        "required": [
+          "conversationId",
+          "revision",
+          "scope",
+          "schemaVersion",
+          "compilerVersion",
+          "overrides",
+          "effective"
+        ],
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "scope": {
+            "const": "conversation"
+          },
+          "schemaVersion": {
+            "const": 1
+          },
+          "compilerVersion": {
+            "type": "integer"
+          },
+          "overrides": {
+            "$ref": "#/components/schemas/ResponsePreferences"
+          },
+          "effective": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ResponsePreferences"
+              },
+              {
+                "required": [
+                  "agency",
+                  "style",
+                  "perspective",
+                  "length",
+                  "pace"
+                ]
+              }
+            ]
+          }
+        }
       }
     }
   },
