@@ -81,21 +81,23 @@ CREATE TRIGGER community_comment_reply AFTER INSERT ON comments WHEN NEW.parent_
  JOIN community_preferences p ON p.member_id=c.member_id AND p.notifications=1
  WHERE c.id=NEW.parent_id AND c.member_id<>NEW.member_id;
 END;
-CREATE TRIGGER community_publication_insert AFTER INSERT ON cards WHEN NEW.status='approved' BEGIN
+CREATE TRIGGER community_publication_insert AFTER INSERT ON cards WHEN NEW.status='approved' AND NEW.public_blocked=0 AND NEW.board_hidden=0 BEGIN
  INSERT OR IGNORE INTO community_notifications(event_key,member_id,kind,path,created_at,author_id)
  SELECT 'work:'||o.work_id||':'||COALESCE(NEW.approved_version_id,NULLIF(NEW.reviewed_hash,''),CAST(NEW.last_synced_at AS TEXT))||':'||f.member_id,
  f.member_id,'followed_work','/library',CAST(unixepoch('subsec')*1000 AS INTEGER),o.member_id
  FROM community_card_owners o JOIN member_follows f ON f.author_id=o.member_id
- JOIN community_preferences p ON p.member_id=f.member_id AND p.notifications=1 WHERE o.card_id=NEW.id;
+ JOIN community_preferences p ON p.member_id=f.member_id AND p.notifications=1 WHERE o.card_id=NEW.id
+ AND NOT EXISTS (SELECT 1 FROM moderation_state s WHERE s.provider=NEW.provider AND s.source_role_id=NEW.source_role_id AND (s.public_blocked=1 OR s.board_hidden=1));
 END;
 CREATE TRIGGER community_publication_update AFTER UPDATE OF status,reviewed_hash,approved_version_id,names,summaries ON cards
- WHEN NEW.status='approved' AND (OLD.status<>'approved' OR NEW.reviewed_hash<>OLD.reviewed_hash
+ WHEN NEW.status='approved' AND NEW.public_blocked=0 AND NEW.board_hidden=0 AND (OLD.status<>'approved' OR NEW.reviewed_hash<>OLD.reviewed_hash
  OR COALESCE(NEW.approved_version_id,'')<>COALESCE(OLD.approved_version_id,'') OR NEW.names<>OLD.names OR NEW.summaries<>OLD.summaries) BEGIN
  INSERT OR IGNORE INTO community_notifications(event_key,member_id,kind,path,created_at,author_id)
  SELECT 'work:'||o.work_id||':'||COALESCE(NEW.approved_version_id,NULLIF(NEW.reviewed_hash,''),CAST(NEW.last_synced_at AS TEXT))||':'||f.member_id,
  f.member_id,'followed_work','/library',CAST(unixepoch('subsec')*1000 AS INTEGER),o.member_id
  FROM community_card_owners o JOIN member_follows f ON f.author_id=o.member_id
- JOIN community_preferences p ON p.member_id=f.member_id AND p.notifications=1 WHERE o.card_id=NEW.id;
+ JOIN community_preferences p ON p.member_id=f.member_id AND p.notifications=1 WHERE o.card_id=NEW.id
+ AND NOT EXISTS (SELECT 1 FROM moderation_state s WHERE s.provider=NEW.provider AND s.source_role_id=NEW.source_role_id AND (s.public_blocked=1 OR s.board_hidden=1));
 END;
 CREATE INDEX community_subjects_pending ON community_subjects(dirty,retry_at);
 CREATE INDEX community_subjects_recheck ON community_subjects(synced_at);
