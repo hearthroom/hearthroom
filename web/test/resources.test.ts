@@ -232,4 +232,6 @@ it("uploads a thousand directory files with authored paths after one overwrite c
   expect(mocks.upload).toHaveBeenCalledTimes(1000);
   expect(mocks.upload.mock.calls[999][0].webkitRelativePath).toBe("my-card/scene-9/image-99.png");
   expect(root.textContent).toContain("my-card/scene-9/image-99.png");
-});
+  expect(root.querySelectorAll(".upload-list li").length).toBeGreaterThan(0);
+  expect(root.querySelectorAll(".upload-list li").length).toBeLessThanOrEqual(24);
+}, 30_000);
