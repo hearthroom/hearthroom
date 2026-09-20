@@ -217,6 +217,32 @@ export async function finishProjection(
   ]);
   return !!result[1].meta.changes;
 }
+async function memberBadges(env: Env, member: string) {
+  const rows = await env.DB.prepare(
+    `SELECT 'discord_linked' AS badge WHERE EXISTS(SELECT 1 FROM discord_links WHERE member_id=? AND state='active')
+     UNION ALL SELECT badge FROM community_awards WHERE member_id=? ORDER BY badge`,
+  ).bind(member, member).all<{ badge: string }>();
+  return rows.results.map(r => r.badge);
+}
+
+export async function publicCommunityView(env: Env, member: string) {
+  const prefs = await env.DB.prepare(
+    "SELECT public_badges,public_level FROM community_preferences WHERE member_id=?",
+  ).bind(member).first<{public_badges:number;public_level:number}>();
+  const result: {badges:string[];level?:number} = {
+    badges: prefs?.public_badges ? await memberBadges(env, member) : [],
+  };
+  if (prefs?.public_level) {
+    const progress = await env.DB.prepare(
+      `SELECT COALESCE(SUM(x.points),0) AS xp FROM discord_links l
+       LEFT JOIN community_xp x ON x.discord_id=l.discord_id
+       WHERE l.member_id=? AND l.state='active' GROUP BY l.discord_id`,
+    ).bind(member).first<{xp:number}>();
+    if (progress) result.level = level(progress.xp);
+  }
+  return result;
+}
+
 export async function communityView(env: Env, member: string) {
   const link = await env.DB.prepare(
     "SELECT discord_id,name,state FROM discord_links WHERE member_id=?",
@@ -225,11 +251,12 @@ export async function communityView(env: Env, member: string) {
     .first<{ discord_id: string; name: string; state: string }>();
   const p = link ? await projection(env, link.discord_id) : null;
   const preferences = (await env.DB.prepare(
-    "SELECT public_badges,notifications,discord_dm,case_access FROM community_preferences WHERE member_id=?",
+    "SELECT public_badges,public_level,notifications,discord_dm,case_access FROM community_preferences WHERE member_id=?",
   )
     .bind(member)
     .first()) ?? {
     public_badges: 0,
+    public_level: 0,
     notifications: 0,
     discord_dm: 0,
     case_access: 0,
@@ -243,11 +270,7 @@ export async function communityView(env: Env, member: string) {
           .first<{ xp_enabled: number }>()
       )?.xp_enabled
     : true;
-  const badges = (
-    await env.DB.prepare("SELECT badge FROM community_awards WHERE member_id=?")
-      .bind(member)
-      .all<{ badge: string }>()
-  ).results.map((r) => r.badge);
+  const badges = await memberBadges(env, member);
   return {
     enabled: env.COMMUNITY_ENABLED === "true",
     invite: invite(env),
@@ -282,6 +305,7 @@ export async function setPreferences(
 ) {
   const keys = {
     publicBadges: "public_badges",
+    publicLevel: "public_level",
     notifications: "notifications",
     discordDm: "discord_dm",
     caseAccess: "case_access",

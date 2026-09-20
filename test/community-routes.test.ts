@@ -15,6 +15,9 @@ import {
   acceptIdentity,
   completeLink,
   setPreferences,
+  communityView,
+  ingestXP,
+  unlink,
 } from "../src/community/service";
 import type { Env } from "../src/types";
 import { afterEach } from "vitest";
@@ -112,7 +115,7 @@ it("publishes only opted-in badges; never returns the Discord account or private
     e(),
     createExecutionContext(),
   );
-  expect(await r.json()).toEqual({ badges: ["first_work"] });
+  expect(await r.json()).toEqual({ badges: ["discord_linked", "first_work"] });
 });
 it("requires explicit linked case access before creating website case work", async () => {
   await makeMember(1);
@@ -199,4 +202,28 @@ it("revokes old case leases and cached reads immediately when access is withdraw
   expect(
     (await request("/v1/me/community/cases/" + job.id, "GET")).status,
   ).toBe(403);
+});
+
+it("shows an active link badge and publishes level only with separate consent", async () => {
+  const m = await makeMember(1), nonce = "x".repeat(40), user = "423456789012345678";
+  const start = await beginLink(e(), m, nonce);
+  await completeLink(e(), m, await acceptIdentity(e(), start.state, {id:user,name:"Private name"}), nonce);
+  expect((await communityView(e(), m)).badges).toEqual(["discord_linked"]);
+  const pub = async () => (await app.fetch(new Request("https://hearthroom.club/v1/community/members/aaaaaaab"),e(),createExecutionContext())).json();
+  expect(await pub()).toEqual({badges:[]});
+  await setPreferences(e(), m, {publicBadges:true});
+  expect(await pub()).toEqual({badges:["discord_linked"]});
+  await setPreferences(e(), m, {publicLevel:true});
+  expect(await pub()).toEqual({badges:["discord_linked"],level:0});
+  const now=Date.now();
+  for(let i=0;i<10;i++) await ingestXP({...e(),COMMUNITY_XP_CHANNELS:"323456789012345678"}, {id:String(523456789012345678n+BigInt(i)),user,channel:"323456789012345678",time:now-i*61000},now);
+  expect(await pub()).toEqual({badges:["discord_linked"],level:1});
+  await setPreferences(e(), m, {publicBadges:false});
+  expect(await pub()).toEqual({badges:[],level:1});
+  await setPreferences(e(), m, {publicLevel:false});
+  expect(await pub()).toEqual({badges:[]});
+  await setPreferences(e(), m, {publicBadges:true,publicLevel:true});
+  await unlink(e(),m);
+  expect(await pub()).toEqual({badges:[]});
+  expect((await communityView(e(),m)).badges).toEqual([]);
 });

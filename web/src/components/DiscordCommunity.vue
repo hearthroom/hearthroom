@@ -43,6 +43,7 @@ const categories = [
 ];
 const prefs = [
   ["publicBadges", "public_badges"],
+  ["publicLevel", "public_level"],
   ["notifications", "notifications"],
   ["discordDm", "discord_dm"],
   ["caseAccess", "case_access"],
@@ -295,7 +296,8 @@ onBeforeUnmount(() => {
             :value="data.xp - data.level * data.level * 10"
             :max="((data.level + 1) ** 2 - data.level ** 2) * 10"
             :aria-label="t('community.progress')"
-          /><small>{{ t("community.xpRule") }}</small>
+          /><small>{{ t("community.nextLevel", { xp: (data.level + 1) ** 2 * 10 - data.xp, level: data.level + 1 }) }}</small
+          ><small>{{ t("community.xpRule") }}</small>
         </div>
         <p v-if="data.badges.length" class="community__badges">
           <span v-for="badge in data.badges" :key="badge">{{

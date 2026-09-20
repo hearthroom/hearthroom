@@ -12,6 +12,7 @@ export interface CommunityView {
   xpEnabled: boolean;
   preferences: {
     public_badges: number;
+    public_level: number;
     notifications: number;
     discord_dm: number;
     case_access: number;

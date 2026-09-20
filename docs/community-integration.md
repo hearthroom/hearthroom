@@ -4,10 +4,10 @@ The website owns member links, chat XP receipts, achievements and notification p
 
 ## Implemented journeys
 
-- `/me`: connect Discord with `identify` OAuth, inspect sync state, retry and unlink. Discord identity is separate from permanent conversation-provider connections. Public profiles show only opted-in badges, never the Discord ID or private progress.
+- `/me`: connect Discord with `identify` OAuth, inspect sync state, retry and unlink. Discord identity is separate from permanent conversation-provider connections. An active link displays the `discord_linked` badge in account settings. Public profiles show badges and/or level only with separate opt-ins; neither Discord identity nor exact XP is public. Level zero is displayed when opted in, and unlinking immediately hides the linked badge and level.
 - Website footer: configured Discord invite. Bot `/link`, `/level` and `/subscriptions`: private account state, progression and website/profile links. `/xp enabled:false` stops future chat scoring without deleting history.
 - Chat rule `chat-v1`: designated public text channels only, one point per rolling 60 seconds, 60 points per UTC event day; `level = floor(sqrt(XP / 10))`. Events more than 24 hours late are rejected. No message content, threads, bots, webhooks, private channels or history imports. Edits are not counted.
-- First approved work earns `first_work` once per website member from a completed review decision. Existing approvals are not backfilled. Discord roles can map to level, this badge or active linking. Each mapping is a distinct, explicitly configured display role.
+- First approved work earns `first_work` once per website member from a completed review decision. Migration `0028` backfills completed, dated approvals using the same ownership view; imported or unreviewed cards do not qualify. The unique member/badge key makes replay safe and preserves existing awards. Discord roles can map to level, this badge or active linking. Each mapping is a distinct, explicitly configured display role.
 - Followed authors' public work releases/updates, review decisions and comment replies create durable website notifications. Discord DM is a separate opt-in and contains only a generic website link. Unfollowing suppresses pending author DMs. Staff review reminders are generic and keep blind-review author information private.
 - `/card number:<public number>` privately previews a currently approved, non-adult card and its public website link. Adult content remains behind the website's existing visibility controls.
 - Card issue link → `/me?reportCard=...` → title/details form → the same Bot CaseStore. The server resolves the public card, canonical work and approved version. Existing own cases can be listed, read, supplemented and submitted for closure/reopening. Staff decisions remain in Discord. Attachments use the existing private Discord conversation; there is no new website attachment store.
@@ -15,7 +15,7 @@ The website owns member links, chat XP receipts, achievements and notification p
 
 ## Website configuration
 
-Apply additive migration `0026_community.sql` through the normal reviewed deployment workflow. Do not deploy website code before its migration.
+Apply additive migrations `0026_community.sql`, `0027_community_public_level.sql` and `0028_community_award_backfill.sql` through the normal reviewed deployment workflow. Do not deploy website code before its migration.
 
 | Variable / secret | Purpose |
 |---|---|
@@ -32,6 +32,10 @@ Register exactly `<COMMUNITY_SITE_URL>/v1/community/discord/callback` as the Dis
 
 An unset invitation is hidden. No production invitation, role ID, scoring channel, client secret or bridge key is invented by the source change. Enabling and validating the actual deployment remains a distinct operational step.
 
+## Network boundary
+
+The browser uses the website's HTTPS Cloudflare Worker origin; Discord OAuth returns to that same origin. Hearthkeeper opens outbound Discord Gateway/API connections and signed HTTPS requests to the Worker. The website does not call a public Bot IP or inbound Bot endpoint. Bot metrics bind to loopback. This integration needs no extra public hostname or inbound server port.
+
 ## API and authorization
 
 Member routes use existing provider bearer validation and `X-Provider`; the authenticated community member is resolved server-side. All private responses use `private, no-store`.
@@ -39,11 +43,11 @@ Member routes use existing provider bearer validation and `X-Provider`; the auth
 | Route | Method | Contract |
 |---|---|---|
 | `/v1/community/config` | GET | Enabled flag and validated invite |
-| `/v1/community/members/:handle` | GET | Opted-in badge keys only |
+| `/v1/community/members/:handle` | GET | Opted-in badge keys and separately opted-in optional `level`; no Discord identity or exact XP |
 | `/v1/me/community` | GET | Own link state, XP, badges and preferences |
 | `/v1/me/community/link` | POST / DELETE | Begin using browser nonce / immediately revoke link access |
 | `/v1/me/community/complete` | POST | One-use receipt plus original browser nonce and same authenticated member |
-| `/v1/me/community/preferences` | PATCH | Boolean `publicBadges`, `notifications`, `discordDm`, `caseAccess`, `xpEnabled` |
+| `/v1/me/community/preferences` | PATCH | Boolean `publicBadges`, `publicLevel`, `notifications`, `discordDm`, `caseAccess`, `xpEnabled` |
 | `/v1/me/community/retry` | POST | Schedule current role projection |
 | `/v1/me/community/notifications` | GET | Latest 50 own notifications; opaque notification IDs |
 | `/v1/me/community/notifications/read` | POST | Mark own ID read |
@@ -68,9 +72,9 @@ Business notification records are unique; Discord delivery uses a local receipt 
 
 ## MCP and observability decisions
 
-MCP: not applicable to the initial private identity/role/case surfaces. Existing provider MCP credentials prove a provider account, not a direct Discord link or website case consent. No private bridge method is exposed as an upstream MCP tool. Existing public card URLs remain shareable. A future member-scoped MCP flow must use this same community service and consent rather than accepting a caller-supplied member ID.
+MCP: not applicable to the initial private identity/role/case surfaces. Existing provider MCP credentials prove a provider account, not a direct Discord link or website case consent. No private bridge method is exposed as an upstream MCP tool. Existing public card URLs remain shareable. Public badge/level presentation extends the existing public author HTTP surface, not a new member-authenticated MCP capability. A future member-scoped MCP flow must use this same community service and consent rather than accepting a caller-supplied member ID.
 
-The existing `/metrics` endpoint includes counter `hearthroom_community_requests_total{operation="member|bridge|oauth",outcome="success|denied|error"}`. The Bot adds `hearthkeeper_community_sync_total{outcome="synced|not_member|denied|failed"}` to its loopback registry. Verify with `sum by (outcome) (rate(hearthroom_community_requests_total[5m]))` and the corresponding Bot counter. Labels never contain member, Discord, case, message, email, token or text values. Production validation requires actual link/cleanup receipts and these live metrics; local tests do not prove deployment.
+The public-level preference uses existing member-operation metrics; read-only badge/level rendering adds no background job or new metric. The existing `/metrics` endpoint includes counter `hearthroom_community_requests_total{operation="member|bridge|oauth",outcome="success|denied|error"}`. The Bot adds `hearthkeeper_community_sync_total{outcome="synced|not_member|denied|failed"}` to its loopback registry. Verify with `sum by (outcome) (rate(hearthroom_community_requests_total[5m]))` and the corresponding Bot counter. Labels never contain member, Discord, case, message, email, token or text values. Production validation requires actual link/cleanup receipts and these live metrics; local tests do not prove deployment.
 
 ## Boundaries
 

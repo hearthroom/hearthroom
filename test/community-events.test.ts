@@ -86,6 +86,12 @@ it("awards the first approved work once and creates one private review-result no
           .all()
       ).results,
     ).toEqual([{ badge: "first_work" }]);
+    // Simulate a decision from before community awards existed, then replay the backfill.
+    await env.DB.prepare("DELETE FROM community_awards WHERE member_id=?").bind(author).run();
+    const backfill = env.TEST_MIGRATIONS.find(m => m.name.includes("0028_community_award_backfill"));
+    expect(backfill).toBeDefined();
+    for (let i=0;i<2;i++) for (const query of backfill!.queries) await env.DB.prepare(query).run();
+    expect(await env.DB.prepare("SELECT badge FROM community_awards WHERE member_id=?").bind(author).first()).toEqual({badge:"first_work"});
     await env.DB.prepare(
       "UPDATE review_submissions SET status='approved' WHERE id=?",
     )
