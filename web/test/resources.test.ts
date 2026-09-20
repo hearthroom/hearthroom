@@ -1,155 +1,193 @@
-/**
- * 我的資源：整頁掛起來、上游 API 換成假的，看送出去的請求對不對。
- *
- * 列表與資料夾各載一次；管理模式下勾兩張刪掉，送的是那兩個 id；在資料夾裡上傳，
- * folderIds 要跟著送；上游回 image_in_use 時畫面說的是「有圖片正被用」而不是通用錯誤。
- */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createApp, nextTick, type App } from "vue";
-import { createPinia } from "pinia";
-import { createMemoryHistory, createRouter, type Router } from "vue-router";
+import { createApp, nextTick, reactive, type App } from "vue";
+import { createMemoryHistory, createRouter } from "vue-router";
 import { i18n } from "../src/lib/i18n";
 import ResourcesPage from "../src/pages/ResourcesPage.vue";
-
-const api = vi.hoisted(() => {
-  class ApiError extends Error {
-    constructor(readonly status: number, message: string, readonly code = "") { super(message); }
-  }
-  const image = (id: number, extra: Record<string, unknown> = {}) => ({ id, imageUrl: `https://cdn.test/${id}.png`, kind: "image", byteSize: 1 << 20, moderationState: "pass", pixelWidth: 512, pixelHeight: 768, createTime: "", ...extra });
-  return {
-    ApiError,
-    fetchLibraryImages: vi.fn(async () => ({ items: [image(1), image(2, { moderationState: "pending" }), image(3, { kind: "font", imageUrl: "https://cdn.test/3.woff2", moderationState: "unreviewed" })], total: 3, quota: 10000, usedBytes: 3 << 20, byteQuota: 500 << 20 })),
-    fetchLibraryFolders: vi.fn(async () => [{ folderId: "f-1", name: "頭像框", imageCount: 1 }]),
-    createLibraryFolder: vi.fn(async (name: string) => ({ folderId: "f-2", name, imageCount: 0 })),
-    renameLibraryFolder: vi.fn(async () => {}),
-    deleteLibraryFolder: vi.fn(async () => {}),
-    addImagesToFolder: vi.fn(async () => {}),
-    removeImagesFromFolder: vi.fn(async () => {}),
-    deleteLibraryImages: vi.fn(async () => {}),
-    uploadImage: vi.fn(async () => "https://cdn.test/new.png"),
-  };
-});
-vi.mock("../src/lib/api", () => api);
-vi.mock("../src/lib/session", () => ({
-  useSession: () => ({ accessToken: async () => "tok", me: { accountNumId: 7, nickName: "作者", avatar: "" } }),
+const mocks = vi.hoisted(() => ({
+  list: vi.fn(),
+  folders: vi.fn(async () => []),
+  remove: vi.fn(async () => {}),
+  folder: vi.fn(),
+  upload: vi.fn(),
+  token: vi.fn(async () => "token"),
 }));
-vi.mock("../src/lib/confirm", () => ({ confirmDialog: async () => true }));
-
-let app: App | null = null;
-let router: Router;
+vi.mock("../src/lib/connections", () => ({
+  accountToken: mocks.token,
+  connectAccount: vi.fn(),
+}));
+vi.mock("../src/lib/resource-client", () => ({
+  resourceClient: (provider: string) => ({
+    list: (q: unknown) => mocks.list(provider, q),
+    folders: mocks.folders,
+    remove: mocks.remove,
+    folder: mocks.folder,
+    upload: mocks.upload,
+  }),
+}));
+const state = reactive({
+  profile: { identities: [{ provider: "harbor", externalId: 2 }] },
+  ensureProfile: async () => {},
+});
+vi.mock("../src/lib/session", () => ({ useSession: () => state }));
+let app: App;
 let root: HTMLElement;
-
 const flush = async () => {
-  for (let i = 0; i < 6; i++) await new Promise((r) => setTimeout(r, 0));
+  for (let i = 0; i < 8; i++) await new Promise((r) => setTimeout(r, 0));
   await nextTick();
 };
-
-async function mount() {
-  router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/resources", component: ResourcesPage }] });
-  await router.push("/resources");
-  await router.isReady();
+const page = (name = "a.png", total = 60) => ({
+  items: [
+    {
+      id: name,
+      imageUrl: "https://test/" + name,
+      fileName: name,
+      kind: "image",
+      byteSize: 12,
+    },
+  ],
+  total,
+  usedBytes: 12,
+  byteQuota: 1024,
+  libraryPrefix: "",
+  capabilities: {
+    kinds: ["image"],
+    formats: ["image/png"],
+    maxFileBytes: 1024,
+    search: true,
+    sorts: ["newest", "name"],
+    overwrite: false,
+  },
+});
+async function mount(path = "/resources") {
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: "/resources", component: ResourcesPage }],
+  });
+  await router.push(path);
   root = document.createElement("div");
-  document.body.appendChild(root);
-  app = createApp({ template: "<RouterView />" }).use(createPinia()).use(i18n).use(router);
+  document.body.append(root);
+  app = createApp({ template: "<RouterView />" }).use(router).use(i18n);
   app.mount(root);
   await flush();
+  return router;
 }
-
-const byText = (text: string) => [...root.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.trim() === text)!;
-
 beforeEach(() => {
-  for (const fn of Object.values(api)) if (typeof fn === "function" && "mockClear" in fn) (fn as ReturnType<typeof vi.fn>).mockClear();
+  vi.clearAllMocks();
+  localStorage.clear();
+  sessionStorage.clear();
+  state.profile.identities = [{ provider: "harbor", externalId: 2 }];
+  mocks.list.mockImplementation(async () => page());
 });
 afterEach(() => {
   app?.unmount();
-  app = null;
-  root.remove();
+  root?.remove();
+});
+describe("provider resource library", () => {
+  it("restores a linked sort before capabilities have loaded", async () => {
+    await mount("/resources?provider=harbor&sort=name&page=2");
+    expect(mocks.list.mock.calls[0][1]).toMatchObject({
+      sort: "name",
+      page: 2,
+    });
+  });
+  it("auto-selects the only linked provider and exposes inline preview", async () => {
+    await mount();
+    expect(root.textContent).toContain("HarperHarbor");
+    expect(root.querySelector("[data-provider]")).toBeNull();
+    expect(mocks.list.mock.calls[0][0]).toBe("harbor");
+    root.querySelector<HTMLButtonElement>("[data-preview]")!.click();
+    await flush();
+    expect(document.querySelector("[role=dialog]")).not.toBeNull();
+  });
+  it("requires a choice for multiple providers and discards a late response", async () => {
+    state.profile.identities.push({ provider: "lunatalk", externalId: 3 });
+    await mount();
+    expect(mocks.list).not.toHaveBeenCalled();
+    const select = root.querySelector<HTMLSelectElement>("[data-provider]")!;
+    let resolve!: (v: unknown) => void;
+    mocks.list.mockImplementationOnce(() => new Promise((r) => (resolve = r)));
+    select.value = "harbor";
+    select.dispatchEvent(new Event("change"));
+    await flush();
+    select.value = "lunatalk";
+    select.dispatchEvent(new Event("change"));
+    await flush();
+    resolve(page("stale.png"));
+    await flush();
+    expect(root.textContent).not.toContain("stale.png");
+  });
+  it("keeps the current page on failure and retries without skipping", async () => {
+    const router = await mount();
+    mocks.list.mockRejectedValueOnce(new Error("offline"));
+    root.querySelector<HTMLButtonElement>("[data-next]")!.click();
+    await flush();
+    expect(router.currentRoute.value.query.page ?? "1").toBe("1");
+    root.querySelector<HTMLButtonElement>("[data-next]")!.click();
+    await flush();
+    expect(mocks.list.mock.calls.at(-1)?.[1].page).toBe(2);
+    expect(router.currentRoute.value.query.page).toBe("2");
+  });
 });
 
-describe("我的資源", () => {
-  it("進頁面載一次列表與資料夾；審核中的圖有標記；配額照上游的張數", async () => {
-    await mount();
-    expect(api.fetchLibraryImages).toHaveBeenCalledWith({ kind: "all" }, 1, 48, "tok", "all");
-    expect(api.fetchLibraryFolders).toHaveBeenCalledTimes(1);
-    expect(root.querySelectorAll(".tile").length).toBe(3);
-    expect(root.querySelector(".tile__state")?.textContent).toBe("審核中");
-    expect(root.querySelector(".quota__num")?.textContent).toContain("3.0 MB");
-    expect(root.querySelector(".quota__num")?.textContent).toContain("500 MB");
-    // 字型沒有審核狀態徽章，圖塊上是副檔名
-    expect(root.querySelectorAll(".tile__state").length).toBe(1);
-    expect(root.querySelector(".tile__ext")?.textContent).toBe("WOFF2");
+it("uses server search across the collection and keeps capability controls while loading", async () => {
+  await mount();
+  const field = root.querySelector<HTMLInputElement>(".resource-search input")!;
+  field.value = "forest";
+  field.dispatchEvent(new Event("input"));
+  field
+    .closest("form")!
+    .dispatchEvent(new Event("submit", { cancelable: true }));
+  await flush();
+  expect(mocks.list.mock.calls.at(-1)?.[1]).toMatchObject({
+    q: "forest",
+    page: 1,
+    sort: "newest",
   });
-
-  it("管理模式勾兩張刪掉：送的是那兩個 id，刪完重抓", async () => {
-    await mount();
-    byText("管理").click();
-    await flush();
-    const picks = root.querySelectorAll<HTMLButtonElement>(".tile__pick");
-    picks[0].click();
-    picks[2].click();
-    await flush();
-    byText("刪除").click();
-    await flush();
-    expect(api.deleteLibraryImages).toHaveBeenCalledWith([1, 3], "tok");
-    expect(api.fetchLibraryImages).toHaveBeenCalledTimes(2);
+  expect(root.querySelector(".resource-search")).not.toBeNull();
+});
+it("clears selections when changing pages", async () => {
+  await mount();
+  [...root.querySelectorAll<HTMLButtonElement>("button")]
+    .find((b) => b.textContent?.trim() === "管理")!
+    .click();
+  await flush();
+  root.querySelector<HTMLInputElement>(".resource-check")!.click();
+  await flush();
+  expect(root.textContent).toContain("已選 1");
+  root.querySelector<HTMLButtonElement>("[data-next]")!.click();
+  await flush();
+  expect(root.querySelector<HTMLInputElement>(".resource-check")?.checked).toBe(
+    false,
+  );
+});
+it("does not show an empty library or zero capacity when authorization expires", async () => {
+  mocks.token.mockResolvedValueOnce(null as any);
+  await mount();
+  expect(root.textContent).toContain("重新連結");
+  expect(root.textContent).toContain("尚未取得");
+  expect(mocks.list).not.toHaveBeenCalled();
+  expect(root.querySelector(".resource-content .empty")).toBeNull();
+});
+it("retries only failed upload entries", async () => {
+  await mount();
+  mocks.upload
+    .mockResolvedValueOnce("ok")
+    .mockRejectedValueOnce(new Error("offline"))
+    .mockResolvedValueOnce("ok");
+  const input = root.querySelector<HTMLInputElement>("input[type=file]")!;
+  Object.defineProperty(input, "files", {
+    value: [
+      new File(["a"], "a.png", { type: "image/png" }),
+      new File(["b"], "b.png", { type: "image/png" }),
+    ],
   });
-
-  it("切到資料夾再上傳：folderIds 跟著送，列表只要那個資料夾", async () => {
-    await mount();
-    byText("頭像框 1").click();
-    await flush();
-    expect(api.fetchLibraryImages).toHaveBeenLastCalledWith({ kind: "folder", folderId: "f-1" }, 1, 48, "tok", "all");
-    const input = root.querySelector<HTMLInputElement>("input[type=file]")!;
-    const file = new File([new Uint8Array([1, 2, 3])], "a.png", { type: "image/png" });
-    Object.defineProperty(input, "files", { value: [file], configurable: true });
-    input.dispatchEvent(new Event("change"));
-    await flush();
-    expect(api.uploadImage).toHaveBeenCalledWith(file, "tok", undefined, ["f-1"]);
-  });
-
-  it("新建資料夾：Enter 送出，建好就切過去", async () => {
-    await mount();
-    byText("新資料夾").click();
-    await flush();
-    const input = root.querySelector<HTMLInputElement>(".folders__edit input")!;
-    input.value = "背景";
-    input.dispatchEvent(new Event("input"));
-    root.querySelector("form.folders__edit")!.dispatchEvent(new Event("submit", { cancelable: true }));
-    await flush();
-    expect(api.createLibraryFolder).toHaveBeenCalledWith("背景", "tok");
-    expect(api.fetchLibraryImages).toHaveBeenLastCalledWith({ kind: "folder", folderId: "f-2" }, 1, 48, "tok", "all");
-  });
-
-  it("切種類籤：只要那一種，檔案挑選器也跟著收窄", async () => {
-    await mount();
-    byText("影片").click();
-    await flush();
-    expect(api.fetchLibraryImages).toHaveBeenLastCalledWith({ kind: "all" }, 1, 48, "tok", "video");
-    expect(root.querySelector<HTMLInputElement>("input[type=file]")!.accept).toBe("video/mp4,video/webm");
-  });
-
-  it("超過 100 MB 的檔不送上游：先在頁面擋下並點名是哪個檔", async () => {
-    await mount();
-    const input = root.querySelector<HTMLInputElement>("input[type=file]")!;
-    const big = new File([new Uint8Array(1)], "movie.mp4", { type: "video/mp4" });
-    Object.defineProperty(big, "size", { value: 100 * 1024 * 1024 + 1 });
-    Object.defineProperty(input, "files", { value: [big], configurable: true });
-    input.dispatchEvent(new Event("change"));
-    await flush();
-    expect(api.uploadImage).not.toHaveBeenCalled();
-    expect(root.querySelector("[role=alert]")?.textContent).toContain("movie.mp4");
-    expect(root.querySelector("[role=alert]")?.textContent).toContain("100 MB");
-  });
-
-  it("上游說圖片被卡片用著：畫面照錯誤碼說話", async () => {
-    api.deleteLibraryImages.mockRejectedValueOnce(new api.ApiError(400, "請求失敗", "image_in_use"));
-    await mount();
-    byText("管理").click();
-    await flush();
-    root.querySelector<HTMLButtonElement>(".tile__pick")!.click();
-    await flush();
-    byText("刪除").click();
-    await flush();
-    expect(root.querySelector("[role=alert]")?.textContent).toContain("正被角色卡當頭像或背景用");
-  });
+  input.dispatchEvent(new Event("change"));
+  await flush();
+  expect(mocks.upload).toHaveBeenCalledTimes(2);
+  [...root.querySelectorAll<HTMLButtonElement>("button")]
+    .find((b) => b.textContent?.trim() === "重試失敗檔案")!
+    .click();
+  await flush();
+  expect(mocks.upload).toHaveBeenCalledTimes(3);
+  expect(mocks.upload.mock.calls[2][0].name).toBe("b.png");
 });

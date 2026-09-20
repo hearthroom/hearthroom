@@ -1,606 +1,1453 @@
 <script setup lang="ts">
-/**
- * 我的資源：作者的素材圖庫。
- *
- * 作者來這裡是為了拿網址——上傳一張圖，把公開網址貼進正則規則的 HTML（狀態欄、頭像框、
- * 背景）。所以每張圖第一順位的動作是「複製網址」，不是看大圖。
- *
- * 資料住在上游的素材庫：資料夾、列表、刪除全是上游的事，本站只是介面。一個檔可以同時在
- * 好幾個資料夾裡（上游的資料夾是標籤，不是目錄），刪資料夾不會刪檔。四種檔（圖片／影片／音訊／字型）
- * 住同一個庫，用種類籤分；帳號總容量 500 MB、四種共用、沒有單檔上限，只算 2026-09 之後上傳的檔（存量圖沒記體積）。
- */
-import { computed, onMounted, ref, watch } from "vue";
-import { useI18n } from "vue-i18n";
 import {
-  ApiError,
-  addImagesToFolder,
-  createLibraryFolder,
-  deleteLibraryFolder,
-  deleteLibraryImages,
-  fetchLibraryFolders,
-  fetchLibraryImages,
-  removeImagesFromFolder,
-  renameLibraryFolder,
-  uploadImage,
-  type LibraryFolder,
-  type LibraryImage,
-  type LibraryKind,
-  type LibraryScope,
-} from "@/lib/api";
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { useI18n } from "vue-i18n";
+import { useSession } from "@/lib/session";
+import { accountToken, connectAccount } from "@/lib/connections";
+import { PROVIDERS, providerName, type ProviderId } from "@/lib/provider";
+import {
+  resourceClient,
+  type Resource,
+  type ResourceId,
+  type ResourcePage,
+  type Folder,
+  type Capabilities,
+} from "@/lib/resource-client";
+import { ApiError } from "@/lib/api";
 import { confirmDialog } from "@/lib/confirm";
 import { pageTitle } from "@/lib/i18n";
-import { useSession } from "@/lib/session";
-
-const session = useSession();
-const { t } = useI18n();
-
-const PAGE = 48;
-/** 單檔上限，跟上游同一個數字：上游掛在 Cloudflare 後面，邊緣對上傳 body 就是 100 MB，超過會在邊緣被 413。先在這裡擋，錯誤才說得清。 */
-const FILE_MAX = 100 << 20;
-const KINDS = ["all", "image", "video", "audio", "font"] as const;
-type KindKey = (typeof KINDS)[number];
-/** 種類籤。上傳時的檔案挑選器也照它收窄。 */
-const kind = ref<KindKey>("all");
-const ACCEPT: Record<KindKey, string> = {
-  all: "image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,audio/mpeg,audio/wav,audio/ogg,.woff2,.woff,.ttf,.otf",
-  image: "image/png,image/jpeg,image/webp,image/gif",
-  video: "video/mp4,video/webm",
-  audio: "audio/mpeg,audio/wav,audio/ogg",
-  font: ".woff2,.woff,.ttf,.otf",
-};
-const folders = ref<LibraryFolder[]>([]);
-const images = ref<LibraryImage[]>([]);
-const total = ref(0);
-const quota = ref(0);
-const usedBytes = ref(0);
-const byteQuota = ref(0);
-const libraryPrefix = ref("");
-const page = ref(1);
-const loading = ref(true);
-const error = ref("");
-/** 現在看的是哪一組：全部、未歸檔、某個資料夾（存 folderId）。 */
-const scopeKey = ref<string>("all");
-const scope = computed<LibraryScope>(() =>
-  scopeKey.value === "all" ? { kind: "all" } : scopeKey.value === "unfiled" ? { kind: "unfiled" } : { kind: "folder", folderId: scopeKey.value },
+import { useLocalePath } from "@/lib/use-locale";
+import ResourcePreview from "@/components/ResourcePreview.vue";
+const { lp } = useLocalePath();
+const session = useSession(),
+  route = useRoute(),
+  router = useRouter(),
+  { t } = useI18n();
+const providers = computed(() =>
+  PROVIDERS.filter((p) =>
+    session.profile?.identities.some((i) => i.provider === p.id),
+  ),
 );
-const activeFolder = computed(() => folders.value.find((f) => f.folderId === scopeKey.value) ?? null);
-
-/** 上游的穩定錯誤碼對應到說得出口的話；其餘沿用通用訊息。 */
-const CODE_MESSAGE: Record<string, string> = {
-  image_in_use: "res.error.inUse",
-  quota_image_exceeded: "res.error.quota",
-  quota_bytes_exceeded: "res.error.quotaBytes",
-  file_too_large: "res.error.tooLarge",
-  invalid_file_type: "res.error.type",
-  duplicate_name: "res.error.duplicateName",
-  folder_limit: "res.error.folderLimit",
-};
-function describe(err: unknown, fallback: string): string {
-  if (err instanceof ApiError && CODE_MESSAGE[err.code]) return t(CODE_MESSAGE[err.code]);
-  return err instanceof Error ? err.message : t(fallback);
+const provider = ref<ProviderId | "">("");
+const ready = ref(false),
+  loading = ref(false),
+  busy = ref(false),
+  expired = ref(false);
+const result = ref<ResourcePage | null>(null),
+  folders = ref<Folder[]>([]),
+  error = ref(""),
+  folderError = ref(""),
+  notice = ref(""),
+  copyFallback = ref("");
+const page = ref(1),
+  pageSize = ref(48),
+  kind = ref("all"),
+  scope = ref("all"),
+  search = ref(""),
+  searchDraft = ref(""),
+  sort = ref("newest");
+const selected = ref(new Set<ResourceId>()),
+  managing = ref(false),
+  moveTarget = ref("");
+const items = computed(() => result.value?.items ?? []),
+  total = computed(() => result.value?.total ?? 0),
+  pages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)));
+const pageNumbers = computed(() =>
+  [...new Set([1, page.value - 1, page.value, page.value + 1, pages.value])]
+    .filter((n) => n > 0 && n <= pages.value)
+    .sort((a, b) => a - b),
+);
+const capabilities = ref<Capabilities | null>(null);
+const cap = computed(() => capabilities.value),
+  activeFolder = computed(() =>
+    folders.value.find((f) => f.folderId === scope.value),
+  );
+const quotaFull = computed(
+  () =>
+    result.value?.byteQuota != null &&
+    result.value.usedBytes != null &&
+    result.value.usedBytes >= result.value.byteQuota,
+);
+const quotaRatio = computed(() =>
+  result.value?.byteQuota && result.value.usedBytes != null
+    ? Math.min(100, (result.value.usedBytes / result.value.byteQuota) * 100)
+    : 0,
+);
+const choiceKey = computed(
+  () =>
+    `hearthroom.resources.${session.profile?.identities
+      .map((i) => i.provider + ":" + i.externalId)
+      .sort()
+      .join("|")}`,
+);
+const size = (v: number | null | undefined) =>
+  v == null
+    ? t("resource.unknown")
+    : v >= 1048576
+      ? `${(v / 1048576).toFixed(1)} MB`
+      : v >= 1024
+        ? `${(v / 1024).toFixed(1)} KB`
+        : `${v} B`;
+const name = (r: Resource) =>
+  r.fileName ||
+  r.imageUrl.split("/").pop()?.split("?")[0] ||
+  t("resource.unnamed");
+const message = (e: unknown) =>
+  e instanceof Error ? e.message : t("state.loadFailed");
+const thumbnailErrors = ref(new Set<ResourceId>());
+let generation = 0,
+  disposed = false;
+function query(targetPage = page.value) {
+  return {
+    scope:
+      scope.value === "all" || scope.value === "unfiled"
+        ? scope.value
+        : "folder",
+    folderId:
+      scope.value === "all" || scope.value === "unfiled"
+        ? undefined
+        : scope.value,
+    kind: kind.value,
+    page: targetPage,
+    pageSize: pageSize.value,
+    q: search.value,
+    sort:
+      sort.value !== "newest" || cap.value?.sorts.length
+        ? sort.value
+        : undefined,
+  };
 }
-
-async function token(): Promise<string> {
-  const value = await session.accessToken();
-  if (!value) throw new Error(t("auth.expired"));
-  return value;
+async function client(id = provider.value) {
+  if (!id) throw new Error(t("resource.choose"));
+  const identity = session.profile?.identities.find((i) => i.provider === id);
+  if (!identity) throw new Error(t("auth.expired"));
+  const token = await accountToken(id, identity.externalId);
+  if (!token) throw new ApiError(401, t("auth.expired"));
+  return resourceClient(id, token);
 }
-
-async function loadFolders() {
-  folders.value = await fetchLibraryFolders(await token());
+async function remember() {
+  const q = {
+    ...route.query,
+    provider: provider.value || undefined,
+    page: String(page.value),
+    pageSize: String(pageSize.value),
+    kind: kind.value,
+    folder: scope.value,
+    q: search.value || undefined,
+    sort: sort.value,
+  };
+  await router.replace({ query: q });
 }
-
-async function loadImages(reset = false) {
-  if (reset) {
-    page.value = 1;
-    images.value = [];
-  }
+async function load(targetPage = page.value, withFolders = false) {
+  if (!provider.value) return false;
+  const ticket = ++generation;
   loading.value = true;
   error.value = "";
+  expired.value = false;
+  const request = query(targetPage);
   try {
-    const res = await fetchLibraryImages(scope.value, page.value, PAGE, await token(), kind.value);
-    images.value = reset || page.value === 1 ? res.items : [...images.value, ...res.items];
-    total.value = res.total;
-    if (res.quota) quota.value = res.quota;
-    usedBytes.value = res.usedBytes;
-    if (res.byteQuota) byteQuota.value = res.byteQuota;
-    if (res.libraryPrefix) libraryPrefix.value = res.libraryPrefix;
-  } catch (err) {
-    error.value = describe(err, "state.loadFailed");
+    const c = await client();
+    if (ticket !== generation) return false;
+    const [data, groups] = await Promise.all([
+      c.list(request),
+      withFolders
+        ? c
+            .folders()
+            .then((v) => ({ value: v, error: "" }))
+            .catch((e) => ({ value: [] as Folder[], error: message(e) }))
+        : Promise.resolve(null),
+    ]);
+    if (ticket !== generation || disposed) return false;
+    const last = Math.max(1, Math.ceil(data.total / pageSize.value));
+    if (targetPage > last) return await load(last, withFolders);
+    result.value = data;
+    capabilities.value = data.capabilities;
+    page.value = targetPage;
+    selected.value = new Set();
+    thumbnailErrors.value = new Set();
+    if (groups) {
+      folders.value = groups.value;
+      folderError.value = groups.error;
+    }
+    await remember();
+    return true;
+  } catch (e) {
+    if (ticket === generation) {
+      error.value = message(e);
+      expired.value = e instanceof ApiError && e.status === 401;
+    }
+    return false;
   } finally {
-    loading.value = false;
+    if (ticket === generation) loading.value = false;
   }
 }
-const hasMore = computed(() => images.value.length < total.value);
-async function more() {
-  page.value += 1;
-  await loadImages();
+function restoreQuery() {
+  pageSize.value = [24, 48, 96].includes(Number(route.query.pageSize))
+    ? Number(route.query.pageSize)
+    : 48;
+  page.value = Math.max(1, Number(route.query.page) || 1);
+  kind.value = typeof route.query.kind === "string" ? route.query.kind : "all";
+  scope.value =
+    typeof route.query.folder === "string" ? route.query.folder : "all";
+  search.value = typeof route.query.q === "string" ? route.query.q : "";
+  searchDraft.value = search.value;
+  sort.value =
+    typeof route.query.sort === "string" ? route.query.sort : "newest";
 }
-
-/** 全部重抓：資料夾的張數與列表一起更新。 */
-async function refresh() {
-  await Promise.all([loadFolders().catch(() => {}), loadImages(true)]);
+async function choose() {
+  generation++;
+  result.value = null;
+  capabilities.value = null;
+  folders.value = [];
+  folderError.value = "";
+  error.value = "";
+  expired.value = false;
+  loading.value = false;
+  selected.value = new Set();
+  managing.value = false;
+  preview.value = null;
+  kind.value = "all";
+  scope.value = "all";
+  editing.value = null;
+  search.value = "";
+  searchDraft.value = "";
+  sort.value = "newest";
+  page.value = 1;
+  copyFallback.value = "";
+  notice.value = "";
+  try {
+    sessionStorage.setItem(choiceKey.value, provider.value);
+  } catch {}
+  await remember();
+  await load(1, true);
 }
-
-/** 容量條照位元組；上游每次列表都回帳號的總已用，跟看哪一組無關。 */
-const usedRatio = computed(() => (byteQuota.value ? Math.min(1, usedBytes.value / byteQuota.value) : 0));
-/** 12.3 MB 這種寫法：小於 1 MB 用 KB，小數只留到看得出差別。 */
-function fileSize(bytes: number): string {
-  if (bytes >= 1 << 20) return `${(bytes / (1 << 20)).toFixed(bytes >= 100 << 20 ? 0 : 1)} MB`;
-  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${bytes} B`;
-}
-
 onMounted(async () => {
   document.title = pageTitle(t("res.title"));
-  await refresh();
-});
-watch([scopeKey, kind], () => { selected.value = new Set(); void loadImages(true); });
-
-// ── 上傳 ──────────────────────────────────────────────────────────
-
-const fileInput = ref<HTMLInputElement | null>(null);
-/** 進度：第幾張／共幾張。0 代表沒在傳。 */
-const uploading = ref({ done: 0, count: 0 });
-async function onPick(event: Event) {
-  const input = event.target as HTMLInputElement;
-  const files = [...(input.files ?? [])];
-  input.value = "";
-  if (!files.length) return;
-  uploading.value = { done: 0, count: files.length };
-  error.value = "";
-  const failed: string[] = [];
+  await session.ensureProfile();
+  if (disposed) return;
+  restoreQuery();
+  let saved = "";
   try {
-    const bearer = await token();
-    // 傳進正在看的那個資料夾；看「全部」或「未歸檔」就不歸檔
-    const folderIds = scope.value.kind === "folder" ? [scope.value.folderId] : [];
-    for (const file of files) {
-      if (file.size > FILE_MAX) {
-        failed.push(`${file.name}：${t("res.error.tooLarge")}`);
-        uploading.value = { ...uploading.value, done: uploading.value.done + 1 };
-        continue;
+    saved = sessionStorage.getItem(choiceKey.value) || "";
+  } catch {}
+  const wanted = String(route.query.provider || saved);
+  provider.value =
+    providers.value.length === 1
+      ? providers.value[0]!.id
+      : providers.value.find((p) => p.id === wanted)?.id || "";
+  ready.value = true;
+  if (provider.value) await load(page.value, true);
+});
+watch(
+  () => route.fullPath,
+  () => {
+    if (!ready.value) return;
+    const p = providers.value.find((p) => p.id === route.query.provider)?.id;
+    const changed = p && p !== provider.value;
+    const navigation =
+      Number(route.query.page || 1) !== page.value ||
+      Number(route.query.pageSize || 48) !== pageSize.value ||
+      String(route.query.folder || "all") !== scope.value ||
+      String(route.query.kind || "all") !== kind.value ||
+      String(route.query.q || "") !== search.value ||
+      String(route.query.sort || "newest") !== sort.value;
+    if (changed || navigation) {
+      if (changed) {
+        provider.value = p!;
+        result.value = null;
+        capabilities.value = null;
+        folders.value = [];
+        preview.value = null;
       }
-      try {
-        await uploadImage(file, bearer, undefined, folderIds);
-      } catch (err) {
-        failed.push(`${file.name}：${describe(err, "state.uploadFailed")}`);
-      }
-      uploading.value = { ...uploading.value, done: uploading.value.done + 1 };
+      restoreQuery();
+      selected.value = new Set();
+      void load(page.value, !!changed);
     }
-  } finally {
-    uploading.value = { done: 0, count: 0 };
+  },
+);
+onBeforeUnmount(() => {
+  disposed = true;
+  generation++;
+});
+const toolbar = ref<HTMLElement | null>(null);
+async function goPage(n: number) {
+  if (await load(n)) {
+    await nextTick();
+    toolbar.value?.scrollIntoView?.({ block: "start" });
   }
-  // 先重抓再放錯誤：loadImages 一開始會把 error 清掉，順序反了訊息就沒了
-  await refresh();
-  if (failed.length) error.value = failed.join("\n");
-  else flash(t("res.uploaded", { n: files.length }));
 }
-
-// ── 選取與管理 ───────────────────────────────────────────────────
-
-const managing = ref(false);
-const selected = ref(new Set<number>());
-function toggleSelect(image: LibraryImage) {
-  const next = new Set(selected.value);
-  if (next.has(image.id)) next.delete(image.id);
-  else next.add(image.id);
-  selected.value = next;
-}
-function endManage() {
-  managing.value = false;
+async function filter() {
   selected.value = new Set();
+  preview.value = null;
+  result.value = null;
+  await load(1);
 }
-const busy = ref(false);
-
-async function removeSelected() {
+async function find() {
+  search.value = searchDraft.value.trim();
+  await filter();
+}
+async function reconnect() {
+  if (provider.value)
+    try {
+      await connectAccount(provider.value, route.fullPath);
+    } catch (e) {
+      error.value = message(e);
+    }
+}
+function toggle(id: ResourceId) {
+  const s = new Set(selected.value);
+  s.has(id) ? s.delete(id) : s.add(id);
+  selected.value = s;
+}
+async function copy(url: string) {
+  try {
+    await navigator.clipboard.writeText(url);
+    notice.value = t("res.copied");
+  } catch {
+    copyFallback.value = url;
+  }
+}
+async function mutate(
+  action: (c: Awaited<ReturnType<typeof client>>) => Promise<unknown>,
+) {
+  busy.value = true;
+  error.value = "";
+  try {
+    const c = await client();
+    await action(c);
+    selected.value = new Set();
+    await load(page.value, true);
+  } catch (e) {
+    const problem = message(e);
+    await load(page.value, true);
+    error.value = problem;
+  } finally {
+    busy.value = false;
+  }
+}
+async function remove() {
   const ids = [...selected.value];
   if (!ids.length) return;
-  if (!(await confirmDialog({ message: t("res.deleteConfirm", { n: ids.length }), confirmText: t("dialog.delete"), danger: true }))) return;
-  busy.value = true;
-  error.value = "";
+  if (
+    !(await confirmDialog({
+      title: t("resource.deleteTitle", {
+        n: ids.length,
+        provider: providerName(provider.value),
+      }),
+      message: t("resource.deleteHint"),
+      confirmText: t("dialog.delete"),
+      danger: true,
+    }))
+  )
+    return;
+  await mutate((c) => c.remove(ids));
+}
+async function move() {
+  const ids = [...selected.value],
+    target = moveTarget.value,
+    source = scope.value;
+  if (!target || !ids.length) return;
+  await mutate(async (c) => {
+    await c.folder("addItems", { folderId: target, imageIds: ids });
+    if (source !== "all" && source !== "unfiled" && source !== target)
+      await c.folder("removeItems", { folderId: source, imageIds: ids });
+  });
+  moveTarget.value = "";
+}
+const editing = ref<"create" | "rename" | null>(null),
+  folderName = ref("");
+async function saveFolder() {
+  if (!folderName.value.trim()) return;
+  const action = editing.value;
+  await mutate(async (c) => {
+    const d = await c.folder(action === "rename" ? "rename" : "create", {
+      name: folderName.value.trim(),
+      ...(action === "rename" ? { folderId: scope.value } : {}),
+    });
+    if (action === "create" && d.folderId) {
+      scope.value = d.folderId;
+      page.value = 1;
+    }
+  });
+  editing.value = null;
+  folderName.value = "";
+}
+async function deleteFolder() {
+  const f = activeFolder.value;
+  if (!f) return;
+  if (
+    !(await confirmDialog({
+      message: t("resource.deleteFolder", { name: f.name }),
+      confirmText: t("dialog.delete"),
+      danger: true,
+    }))
+  )
+    return;
+  await mutate(async (c) => {
+    await c.folder("delete", { folderId: f.folderId });
+    scope.value = "all";
+    page.value = 1;
+  });
+}
+const input = ref<HTMLInputElement | null>(null);
+type UploadEntry = {
+  file: File;
+  status: "waiting" | "uploading" | "done" | "failed";
+  progress: number;
+  error: string;
+};
+const uploads = ref<UploadEntry[]>([]),
+  uploading = ref(false),
+  uploadProvider = ref<ProviderId | "">(""),
+  uploadFolder = ref("");
+let uploadClient: Awaited<ReturnType<typeof client>> | null = null;
+let uploadFolderIds: string[] = [];
+const accept = computed(() => {
+  const formats = cap.value?.formats ?? [];
+  return formats.length
+    ? formats
+        .filter((f) => kind.value === "all" || f.startsWith(kind.value + "/"))
+        .join(",")
+    : kind.value === "all"
+      ? ""
+      : kind.value === "font"
+        ? ".woff,.woff2,.ttf,.otf"
+        : kind.value + "/*";
+});
+async function pick(event: Event) {
+  const el = event.target as HTMLInputElement;
+  const files = [...(el.files ?? [])];
+  el.value = "";
+  await enqueue(files);
+}
+async function enqueue(files: File[]) {
+  if (
+    !files.length ||
+    !provider.value ||
+    uploading.value ||
+    busy.value ||
+    loading.value ||
+    expired.value ||
+    !result.value
+  )
+    return;
+  const id = provider.value;
+  const folder = activeFolder.value;
+  const limits = cap.value;
+  const prefix = result.value.libraryPrefix;
+  if (
+    (limits?.overwrite === true || prefix) &&
+    !(await confirmDialog({
+      title: t("resource.overwriteTitle"),
+      message: t("resource.overwriteHint"),
+      confirmText: t("res.add"),
+      danger: true,
+    }))
+  )
+    return;
   try {
-    await deleteLibraryImages(ids, await token());
-    flash(t("res.deleted", { n: ids.length }));
-    endManage();
-    await refresh();
-  } catch (err) {
-    error.value = describe(err, "state.actionFailed");
-  } finally {
-    busy.value = false;
-  }
-}
-
-/** 搬去哪個資料夾：用一個 select，不另開彈窗。 */
-const moveTarget = ref("");
-async function moveSelected() {
-  const ids = [...selected.value];
-  const target = moveTarget.value;
-  if (!ids.length || !target) return;
-  busy.value = true;
-  error.value = "";
-  try {
-    const bearer = await token();
-    await addImagesToFolder(target, ids, bearer);
-    // 從某個資料夾搬走：同時從原資料夾拿掉，不然一張圖會同時在兩邊
-    if (scope.value.kind === "folder" && scope.value.folderId !== target) await removeImagesFromFolder(scope.value.folderId, ids, bearer);
-    moveTarget.value = "";
-    flash(t("res.moved", { n: ids.length }));
-    endManage();
-    await refresh();
-  } catch (err) {
-    error.value = describe(err, "state.actionFailed");
-  } finally {
-    busy.value = false;
-  }
-}
-
-async function unfileSelected() {
-  const ids = [...selected.value];
-  if (!ids.length || scope.value.kind !== "folder") return;
-  busy.value = true;
-  error.value = "";
-  try {
-    await removeImagesFromFolder(scope.value.folderId, ids, await token());
-    endManage();
-    await refresh();
-  } catch (err) {
-    error.value = describe(err, "state.actionFailed");
-  } finally {
-    busy.value = false;
-  }
-}
-
-// ── 資料夾 ───────────────────────────────────────────────────────
-
-/** 新建或改名時露出來的那一格輸入框。null＝收著；"" ＝新建；folderId＝改名。 */
-const editingFolder = ref<string | null>(null);
-const folderName = ref("");
-const folderInput = ref<HTMLInputElement | null>(null);
-function startFolder(folderId: string) {
-  editingFolder.value = folderId;
-  folderName.value = folderId ? (folders.value.find((f) => f.folderId === folderId)?.name ?? "") : "";
-  requestAnimationFrame(() => folderInput.value?.focus());
-}
-async function commitFolder() {
-  const name = folderName.value.trim();
-  const id = editingFolder.value;
-  if (id === null) return;
-  if (!name) {
-    editingFolder.value = null;
+    uploadClient = await client(id);
+  } catch (e) {
+    error.value = message(e);
     return;
   }
-  busy.value = true;
-  error.value = "";
-  try {
-    const bearer = await token();
-    if (id) await renameLibraryFolder(id, name, bearer);
-    else {
-      const created = await createLibraryFolder(name, bearer);
-      if (created.folderId) scopeKey.value = created.folderId;
+  uploadProvider.value = id;
+  uploadFolder.value = folder?.name || t("res.scope.unfiled");
+  uploadFolderIds = folder ? [folder.folderId] : [];
+  uploads.value = files.map((file) => ({
+    file,
+    status: "waiting",
+    progress: 0,
+    error: "",
+  }));
+  for (const u of uploads.value) {
+    if (limits?.maxFileBytes != null && u.file.size > limits.maxFileBytes) {
+      u.status = "failed";
+      u.error = t("resource.maxFile", { size: size(limits.maxFileBytes) });
+    } else if (
+      limits?.formats.length &&
+      u.file.type &&
+      !limits.formats.includes(u.file.type)
+    ) {
+      u.status = "failed";
+      u.error = t("res.error.type");
     }
-    editingFolder.value = null;
-    await loadFolders();
-  } catch (err) {
-    error.value = describe(err, "state.actionFailed");
+  }
+  await runUploads(false);
+}
+async function runUploads(retry: boolean) {
+  if (!uploadClient) return;
+  uploading.value = true;
+  const c = uploadClient,
+    id = uploadProvider.value;
+  try {
+    for (const u of uploads.value) {
+      if (disposed) break;
+      if (u.status !== "waiting" && !(retry && u.status === "failed")) continue;
+      u.status = "uploading";
+      u.error = "";
+      try {
+        await c.upload(
+          u.file,
+          uploadFolderIds,
+          (n) => (u.progress = Math.round(n * 100)),
+        );
+        u.status = "done";
+      } catch (e) {
+        u.status = "failed";
+        u.error = message(e);
+      }
+    }
   } finally {
-    busy.value = false;
+    uploading.value = false;
   }
+  if (!disposed && provider.value === id) await load(page.value, true);
 }
-async function removeFolder(folder: LibraryFolder) {
-  if (!(await confirmDialog({ message: t("res.folder.deleteConfirm", { name: folder.name }), confirmText: t("dialog.delete"), danger: true }))) return;
-  busy.value = true;
-  error.value = "";
+const preview = ref<Resource | null>(null),
+  previewItems = ref<Resource[]>([]),
+  previewIndex = ref(0),
+  previewPage = ref(1),
+  previewBusy = ref(false),
+  previewError = ref("");
+let previewQuery = query();
+let previewIssuer: ProviderId | "" = "";
+let previewTotal = 0;
+function open(r: Resource) {
+  previewItems.value = items.value;
+  previewIndex.value = items.value.indexOf(r);
+  preview.value = r;
+  previewPage.value = page.value;
+  previewQuery = query();
+  previewIssuer = provider.value;
+  previewTotal = total.value;
+  previewError.value = "";
+}
+async function previewMove(direction: number) {
+  if (previewBusy.value) return;
+  const at = previewIndex.value + direction;
+  if (at >= 0 && at < previewItems.value.length) {
+    previewIndex.value = at;
+    preview.value = previewItems.value[at]!;
+    return;
+  }
+  const target = previewPage.value + direction;
+  if (target < 1 || target > Math.ceil(previewTotal / pageSize.value)) return;
+  previewBusy.value = true;
+  previewError.value = "";
+  const issuer = previewIssuer;
   try {
-    await deleteLibraryFolder(folder.folderId, await token());
-    if (scopeKey.value === folder.folderId) scopeKey.value = "all";
-    await refresh();
-  } catch (err) {
-    error.value = describe(err, "state.actionFailed");
+    const data = await (
+      await client(issuer)
+    ).list({ ...previewQuery, page: target });
+    if (!preview.value || issuer !== provider.value) return;
+    if (!data.items.length) return;
+    previewItems.value = data.items;
+    previewPage.value = target;
+    previewIndex.value = direction > 0 ? 0 : data.items.length - 1;
+    preview.value = data.items[previewIndex.value]!;
+  } catch (e) {
+    previewError.value = message(e);
   } finally {
-    busy.value = false;
+    previewBusy.value = false;
   }
 }
-
-// ── 單張圖的動作 ─────────────────────────────────────────────────
-
-const toast = ref("");
-let toastTimer: ReturnType<typeof setTimeout> | undefined;
-function flash(message: string) {
-  toast.value = message;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { toast.value = ""; }, 2400);
-}
-
-async function copyLink(image: LibraryImage) {
-  await copyText(image.imageUrl);
-}
-
-async function copyText(text: string) {
-  try {
-    await navigator.clipboard.writeText(text);
-    flash(t("res.copied"));
-  } catch {
-    // 沒有剪貼簿權限（iframe、舊瀏覽器）：把網址露在列表上方讓作者自己選來複製，不開原生彈窗
-    copyFallback.value = text;
-  }
-}
-const copyFallback = ref("");
-
-/**
- * 字型的預覽：把檔載成 FontFace，圖塊用它排一行字。載不進來（多半是 CORS 沒開）就退回圖示。
- * 名字用 id 避免同名互蓋；只載一次，切籤回來不重載。
- */
-const fontFaces = ref<Record<number, "ready" | "failed">>({});
-const fontFamily = (image: LibraryImage) => `lib-font-${image.id}`;
-async function loadFont(image: LibraryImage) {
-  if (image.kind !== "font" || fontFaces.value[image.id] || typeof FontFace === "undefined") return;
-  try {
-    const face = new FontFace(fontFamily(image), `url(${image.imageUrl})`);
-    await face.load();
-    document.fonts.add(face);
-    fontFaces.value = { ...fontFaces.value, [image.id]: "ready" };
-  } catch {
-    fontFaces.value = { ...fontFaces.value, [image.id]: "failed" };
-  }
-}
-watch(images, (list) => { for (const image of list) void loadFont(image); });
-
-/** 檔名尾巴當標籤：網址最後一段的副檔名，沒有就用種類。 */
-const extOf = (image: LibraryImage) => (image.imageUrl.match(/\.([a-z0-9]{2,5})(?:[?#]|$)/i)?.[1] ?? image.kind).toUpperCase();
-
-const stateLabel = (image: LibraryImage) =>
-  image.moderationState === "pending" ? t("res.state.pending") : image.moderationState === "reject" ? t("res.state.rejected") : "";
 </script>
 
 <template>
-  <div class="page">
-    <header class="head">
+  <div
+    class="page resources"
+    @dragover.prevent
+    @drop.prevent="enqueue([...$event.dataTransfer!.files])"
+  >
+    <header class="resource-head">
       <div>
-        <h1 class="head__title display">{{ $t("res.title") }}</h1>
+        <h1 class="display">{{ $t("res.title") }}</h1>
+        <p class="subtle">{{ $t("resource.description") }}</p>
       </div>
-      <div class="head__acts">
-        <button type="button" class="btn" :disabled="loading || busy" @click="refresh">{{ $t("res.refresh") }}</button>
-        <button type="button" class="btn btn--primary" :disabled="uploading.count > 0" @click="fileInput?.click()">
-          <template v-if="uploading.count">{{ $t("res.uploading", { done: uploading.done, count: uploading.count }) }}</template>
-          <template v-else>{{ $t("res.add") }}</template>
-        </button>
-        <input ref="fileInput" type="file" :accept="ACCEPT[kind]" multiple class="sr-only" @change="onPick" />
+      <div class="resource-actions">
+        <button
+          class="btn"
+          :disabled="!provider || loading || busy"
+          @click="load(page, true)"
+        >
+          {{ $t("res.refresh") }}</button
+        ><button
+          class="btn btn--primary"
+          :disabled="
+            !result || loading || busy || expired || uploading || quotaFull
+          "
+          @click="input?.click()"
+        >
+          {{ $t("res.add") }}</button
+        ><input
+          ref="input"
+          type="file"
+          class="sr-only"
+          multiple
+          :accept="accept"
+          @change="pick"
+        />
       </div>
     </header>
-
-    <!-- 配額：帳號總容量，位元組 -->
-    <section class="quota panel" :aria-label="$t('res.quota.label')">
-      <p class="eyebrow">{{ $t("res.quota.label") }}</p>
-      <p class="quota__num">
-        <strong>{{ fileSize(usedBytes) }}</strong>
-        <span v-if="byteQuota" class="subtle"> / {{ fileSize(byteQuota) }}</span>
+    <section class="provider-bar panel">
+      <div v-if="providers.length === 1" class="provider-label">
+        <span class="provider-mark" aria-hidden="true">{{
+          providerName(provider).slice(0, 1)
+        }}</span
+        ><strong>{{
+          $t("resource.hosted", { provider: providerName(provider) })
+        }}</strong>
+      </div>
+      <label v-else-if="providers.length > 1" class="provider-label"
+        ><span>{{ $t("resource.host") }}</span
+        ><select
+          v-model="provider"
+          data-provider
+          class="input"
+          :disabled="busy"
+          @change="choose"
+        >
+          <option disabled value="">{{ $t("resource.choose") }}</option>
+          <option v-for="p in providers" :key="p.id" :value="p.id">
+            {{ p.name }}
+          </option>
+        </select></label
+      >
+      <p v-else>
+        {{ ready ? $t("resource.noProvider") : $t("state.loading") }}
       </p>
-      <div class="quota__bar" role="progressbar" :aria-valuenow="usedBytes" aria-valuemin="0" :aria-valuemax="byteQuota || undefined">
-        <span :style="{ width: `${usedRatio * 100}%` }" />
-      </div>
+      <RouterLink :to="lp('/me')" class="resource-link">{{
+        $t("resource.connections")
+      }}</RouterLink>
     </section>
-
-    <!-- 圖庫前綴：作者的卡片程式碼用「前綴／檔名」組網址，上傳保留原檔名、同名覆蓋 -->
-    <section v-if="libraryPrefix" class="prefix panel" :aria-label="$t('res.prefix.label')">
-      <p class="eyebrow">{{ $t("res.prefix.label") }}</p>
-      <div class="prefix__row">
-        <code class="prefix__code">{{ libraryPrefix }}/</code>
-        <button type="button" class="btn btn--sm" @click="copyText(libraryPrefix)">{{ $t("res.copy") }}</button>
-      </div>
-      <p class="subtle prefix__hint">{{ $t("res.prefix.hint") }}</p>
-    </section>
-
-    <!-- 種類籤：全部／圖片／影片／音訊／字型 -->
-    <div class="seg kinds" role="tablist">
-      <button v-for="k in KINDS" :key="k" type="button" class="seg__item" :class="{ 'seg__item--on': kind === k }" role="tab"
-              :aria-selected="kind === k" @click="kind = k">
-        {{ $t(`res.kind.${k}`) }}
-      </button>
+    <div v-if="!provider && ready" class="empty panel">
+      <h2>
+        {{ $t(providers.length ? "resource.choose" : "resource.noProvider") }}
+      </h2>
+      <p class="subtle">{{ $t("resource.isolated") }}</p>
     </div>
-
-    <!-- 資料夾：一排膠囊，最後一顆是新建 -->
-    <section class="folders">
-      <div class="seg folders__seg" role="tablist">
-        <button type="button" class="seg__item" :class="{ 'seg__item--on': scopeKey === 'all' }" role="tab" :aria-selected="scopeKey === 'all'" @click="scopeKey = 'all'">
-          {{ $t("res.scope.all") }}
-        </button>
-        <button type="button" class="seg__item" :class="{ 'seg__item--on': scopeKey === 'unfiled' }" role="tab" :aria-selected="scopeKey === 'unfiled'" @click="scopeKey = 'unfiled'">
-          {{ $t("res.scope.unfiled") }}
-        </button>
-        <button v-for="folder in folders" :key="folder.folderId" type="button" class="seg__item" :class="{ 'seg__item--on': scopeKey === folder.folderId }"
-                role="tab" :aria-selected="scopeKey === folder.folderId" @click="scopeKey = folder.folderId">
-          {{ folder.name }} <span class="seg__n">{{ folder.imageCount }}</span>
-        </button>
-      </div>
-      <div class="folders__acts">
-        <form v-if="editingFolder !== null" class="folders__edit" @submit.prevent="commitFolder">
-          <input ref="folderInput" v-model="folderName" class="input" maxlength="60" :placeholder="$t('res.folder.placeholder')"
-                 :aria-label="editingFolder ? $t('res.folder.rename') : $t('res.folder.new')" @keydown.esc="editingFolder = null" />
-          <button type="submit" class="btn btn--sm btn--primary" :disabled="busy">{{ $t("dialog.confirm") }}</button>
-          <button type="button" class="btn btn--sm btn--ghost" @click="editingFolder = null">{{ $t("dialog.cancel") }}</button>
-        </form>
-        <template v-else>
-          <button type="button" class="btn btn--sm" @click="startFolder('')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
-            {{ $t("res.folder.new") }}
-          </button>
-          <template v-if="activeFolder">
-            <button type="button" class="btn btn--sm btn--ghost" @click="startFolder(activeFolder.folderId)">{{ $t("res.folder.rename") }}</button>
-            <button type="button" class="btn btn--sm btn--ghost btn--danger" @click="removeFolder(activeFolder)">{{ $t("res.folder.delete") }}</button>
-          </template>
-        </template>
-      </div>
-    </section>
-
-    <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
-    <div v-if="copyFallback" class="notice copy" role="status">
-      <span>{{ $t("res.copyManual") }}</span>
-      <input class="input" readonly :value="copyFallback" @focus="($event.target as HTMLInputElement).select()" />
-      <button type="button" class="btn btn--sm btn--ghost" @click="copyFallback = ''">{{ $t("dialog.cancel") }}</button>
-    </div>
-
-    <!-- 列表標題列：張數、管理模式 -->
-    <div class="bar">
-      <p class="subtle">{{ $t("res.count", { n: total }) }}</p>
-      <div class="bar__acts">
-        <template v-if="managing">
-          <span class="subtle">{{ $t("res.selected", { n: selected.size }) }}</span>
-          <select v-model="moveTarget" class="input input--move" :aria-label="$t('res.moveTo')" :disabled="!selected.size || busy" @change="moveSelected">
-            <option value="" disabled>{{ $t("res.moveTo") }}</option>
-            <option v-for="folder in folders.filter((f) => f.folderId !== scopeKey)" :key="folder.folderId" :value="folder.folderId">{{ folder.name }}</option>
-          </select>
-          <button v-if="scope.kind === 'folder'" type="button" class="btn btn--sm" :disabled="!selected.size || busy" @click="unfileSelected">{{ $t("res.unfile") }}</button>
-          <button type="button" class="btn btn--sm btn--danger" :disabled="!selected.size || busy" @click="removeSelected">{{ $t("dialog.delete") }}</button>
-          <button type="button" class="btn btn--sm btn--ghost" @click="endManage">{{ $t("res.done") }}</button>
-        </template>
-        <button v-else type="button" class="btn btn--sm btn--ghost" :disabled="!images.length" @click="managing = true">{{ $t("res.manage") }}</button>
-      </div>
-    </div>
-
-    <div v-if="loading && !images.length" class="wall" aria-hidden="true">
-      <div v-for="i in 12" :key="i" class="ghost ghost--tile" />
-    </div>
-
-    <div v-else-if="!images.length" class="empty panel">
-      <p class="empty__title">{{ $t("res.empty") }}</p>
-      <button type="button" class="btn btn--primary" @click="fileInput?.click()">{{ $t("res.add") }}</button>
-    </div>
-
-    <ul v-else class="wall" :class="{ 'wall--manage': managing }">
-      <li v-for="image in images" :key="image.id" class="tile" :class="{ 'tile--on': selected.has(image.id) }">
-        <!-- 管理模式整張是勾選；平常是動作浮層 -->
-        <button v-if="managing" type="button" class="tile__pick" :aria-pressed="selected.has(image.id)" @click="toggleSelect(image)">
-          <img v-if="image.kind === 'image'" :src="image.imageUrl" alt="" loading="lazy" />
-          <span v-else class="tile__file" :data-kind="image.kind"><span class="tile__ext">{{ extOf(image) }}</span></span>
-          <span class="tile__check" aria-hidden="true">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7" /></svg>
-          </span>
-        </button>
-        <template v-else>
-          <img v-if="image.kind === 'image'" :src="image.imageUrl" alt="" loading="lazy" />
-          <!-- 影片：靜音、只載第一格當縮圖；滑進來才播 -->
-          <video v-else-if="image.kind === 'video'" :src="image.imageUrl" muted playsinline preload="metadata" loop
-                 @mouseenter="($event.target as HTMLVideoElement).play().catch(() => {})" @mouseleave="($event.target as HTMLVideoElement).pause()" />
-          <!-- 字型：載得進來就用它排一行字，載不進來（CORS）退回副檔名 -->
-          <span v-else-if="image.kind === 'font' && fontFaces[image.id] === 'ready'" class="tile__file tile__file--font" :style="{ fontFamily: fontFamily(image) }">{{ $t("res.fontSample") }}</span>
-          <span v-else class="tile__file" :data-kind="image.kind">
-            <svg v-if="image.kind === 'audio'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V6l11-2v12" /><circle cx="6" cy="18" r="3" /><circle cx="17" cy="16" r="3" /></svg>
-            <span class="tile__ext">{{ extOf(image) }}</span>
-          </span>
-          <div class="tile__acts">
-            <button type="button" class="btn btn--sm tile__copy" @click="copyLink(image)">{{ $t("res.copy") }}</button>
-            <a :href="image.imageUrl" target="_blank" rel="noopener" class="btn btn--sm btn--icon" :aria-label="$t('res.open')" :title="$t('res.open')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 13v6H5V6h6" /></svg>
-            </a>
+    <template v-if="provider">
+      <section class="resource-summary panel">
+        <div class="resource-usage">
+          <span class="subtle">{{ $t("res.quota.label") }}</span
+          ><strong
+            >{{ size(result?.usedBytes) }}
+            <span class="subtle">/ {{ size(result?.byteQuota) }}</span></strong
+          >
+          <div
+            class="resource-meter"
+            role="progressbar"
+            :aria-label="$t('res.quota.label')"
+            :aria-valuenow="result?.usedBytes ?? undefined"
+            :aria-valuemax="result?.byteQuota ?? undefined"
+            aria-valuemin="0"
+          >
+            <span :style="{ width: quotaRatio + '%' }" />
           </div>
-        </template>
-        <span v-if="stateLabel(image)" class="tile__state" :class="{ 'tile__state--bad': image.moderationState === 'reject' }">{{ stateLabel(image) }}</span>
-        <span v-if="image.fileName" class="tile__name" :title="image.fileName">{{ image.fileName }}</span>
-        <span class="tile__meta subtle">{{ image.kind === "image" && image.pixelWidth ? `${image.pixelWidth}×${image.pixelHeight}` : fileSize(image.byteSize) }}</span>
-      </li>
-    </ul>
-
-    <div v-if="hasMore" class="pager">
-      <button type="button" class="btn" :disabled="loading" @click="more">{{ $t("res.more") }}</button>
-    </div>
-
-    <div class="toast" role="status" :hidden="!toast">{{ toast }}</div>
+        </div>
+        <details>
+          <summary>{{ $t("resource.rules") }}</summary>
+          <p>
+            {{
+              cap?.formats.length
+                ? cap.formats.join(" · ")
+                : $t("resource.rulesUnavailable")
+            }}
+          </p>
+          <p v-if="cap?.maxFileBytes">
+            {{ $t("resource.maxFile", { size: size(cap.maxFileBytes) }) }}
+          </p>
+        </details>
+        <details v-if="result?.libraryPrefix">
+          <summary>{{ $t("res.prefix.label") }}</summary>
+          <div class="prefix-row">
+            <code>{{ result.libraryPrefix }}/</code
+            ><button class="btn btn--sm" @click="copy(result.libraryPrefix)">
+              {{ $t("res.copy") }}
+            </button>
+          </div>
+          <p class="subtle">{{ $t("res.prefix.hint") }}</p>
+        </details>
+      </section>
+      <p v-if="quotaFull" class="notice notice--error">
+        {{ $t("resource.quotaFull") }}
+      </p>
+      <p v-if="error" class="notice notice--error" role="alert">
+        {{ error }}
+        <button
+          class="btn btn--sm"
+          :disabled="loading"
+          @click="expired ? reconnect() : load(page, true)"
+        >
+          {{ $t(expired ? "resource.reconnect" : "resource.retry") }}
+        </button>
+      </p>
+      <p v-if="notice" class="notice" role="status">{{ notice }}</p>
+      <input
+        v-if="copyFallback"
+        readonly
+        class="input"
+        :aria-label="$t('res.copyManual')"
+        :value="copyFallback"
+        @focus="($event.target as HTMLInputElement).select()"
+      />
+      <section v-if="uploads.length" class="upload-list panel">
+        <header>
+          <h2>
+            {{
+              $t("resource.uploadTo", {
+                provider: providerName(uploadProvider),
+                folder: uploadFolder,
+              })
+            }}
+          </h2>
+          <button
+            v-if="!uploading && uploads.some((u) => u.status === 'failed')"
+            class="btn"
+            @click="runUploads(true)"
+          >
+            {{ $t("resource.retryFailed") }}</button
+          ><button
+            v-if="!uploading"
+            class="btn btn--ghost"
+            @click="uploads = []"
+          >
+            {{ $t("resource.close") }}
+          </button>
+        </header>
+        <ul>
+          <li v-for="(u, i) in uploads" :key="i">
+            <span>{{ u.file.name }}</span
+            ><span
+              >{{ $t("resource.upload." + u.status) }}
+              {{ u.status === "uploading" ? u.progress + "%" : "" }}</span
+            >
+            <p v-if="u.error" class="error-text">{{ u.error }}</p>
+          </li>
+        </ul>
+      </section>
+      <div class="resource-layout">
+        <aside class="resource-sidebar">
+          <h2>{{ $t("resource.folders") }}</h2>
+          <p v-if="folderError" role="alert" class="error-text">
+            {{ folderError }}
+          </p>
+          <nav :aria-label="$t('resource.folders')">
+            <button
+              v-for="f in [
+                { folderId: 'all', name: $t('res.scope.all') },
+                { folderId: 'unfiled', name: $t('res.scope.unfiled') },
+                ...folders,
+              ]"
+              :key="f.folderId"
+              class="folder-row"
+              :class="{ 'is-active': scope === f.folderId }"
+              :disabled="busy"
+              @click="
+                scope = f.folderId;
+                filter();
+              "
+            >
+              {{ f.name }}
+            </button>
+          </nav>
+          <select
+            v-model="scope"
+            class="input mobile-folders"
+            :aria-label="$t('resource.folders')"
+            :disabled="busy"
+            @change="filter"
+          >
+            <option value="all">{{ $t("res.scope.all") }}</option>
+            <option value="unfiled">{{ $t("res.scope.unfiled") }}</option>
+            <option v-for="f in folders" :key="f.folderId" :value="f.folderId">
+              {{ f.name }}
+            </option>
+          </select>
+          <button
+            class="btn btn--ghost"
+            :disabled="!result || busy || expired"
+            @click="
+              editing = 'create';
+              folderName = '';
+            "
+          >
+            ＋ {{ $t("res.folder.new") }}</button
+          ><template v-if="activeFolder"
+            ><button
+              class="btn btn--ghost"
+              :disabled="busy"
+              @click="
+                editing = 'rename';
+                folderName = activeFolder!.name;
+              "
+            >
+              {{ $t("res.folder.rename") }}</button
+            ><button
+              class="btn btn--ghost"
+              :disabled="busy"
+              @click="deleteFolder"
+            >
+              {{ $t("res.folder.delete") }}
+            </button></template
+          >
+          <form v-if="editing" class="folder-form" @submit.prevent="saveFolder">
+            <input
+              v-model="folderName"
+              class="input"
+              maxlength="60"
+              :aria-label="$t('res.folder.placeholder')"
+              :placeholder="$t('res.folder.placeholder')"
+            /><button class="btn" :disabled="busy || !folderName.trim()">
+              {{ $t("dialog.confirm") }}</button
+            ><button
+              type="button"
+              class="btn btn--ghost"
+              @click="editing = null"
+            >
+              {{ $t("dialog.cancel") }}
+            </button>
+          </form>
+        </aside>
+        <main class="resource-content">
+          <div ref="toolbar" class="resource-toolbar">
+            <div class="seg" role="tablist" :aria-label="$t('resource.types')">
+              <button
+                v-for="k in ['all', ...(cap?.kinds ?? [])]"
+                :key="k"
+                role="tab"
+                :aria-selected="kind === k"
+                class="seg__item"
+                :class="{ 'seg__item--on': kind === k }"
+                :disabled="busy"
+                @click="
+                  kind = k;
+                  filter();
+                "
+              >
+                {{ $t("res.kind." + k) }}
+              </button>
+            </div>
+            <button
+              class="btn btn--sm"
+              :disabled="!items.length || busy"
+              @click="
+                managing = !managing;
+                selected = new Set();
+              "
+            >
+              {{ $t(managing ? "res.done" : "res.manage") }}
+            </button>
+          </div>
+          <div v-if="cap?.search || cap?.sorts.length" class="resource-search">
+            <form v-if="cap.search" @submit.prevent="find">
+              <input
+                v-model="searchDraft"
+                class="input"
+                maxlength="200"
+                :placeholder="$t('resource.search')"
+                :aria-label="$t('resource.search')"
+              /><button class="btn" :disabled="busy">
+                {{ $t("resource.find") }}
+              </button>
+            </form>
+            <select
+              v-if="cap?.sorts.length"
+              v-model="sort"
+              class="input"
+              :aria-label="$t('resource.sort')"
+              :disabled="busy"
+              @change="filter"
+            >
+              <option v-for="s in cap.sorts" :key="s" :value="s">
+                {{ $t("resource.sort." + s) }}
+              </option>
+            </select>
+          </div>
+          <div v-if="managing" class="resource-batch panel">
+            <label
+              ><input
+                type="checkbox"
+                :checked="selected.size === items.length && items.length > 0"
+                @change="
+                  selected =
+                    selected.size === items.length
+                      ? new Set()
+                      : new Set(items.map((i) => i.id))
+                "
+              />{{ $t("resource.selectPage") }}</label
+            ><span>{{ $t("res.selected", { n: selected.size }) }}</span
+            ><select
+              v-model="moveTarget"
+              class="input"
+              :aria-label="$t('res.moveTo')"
+              :disabled="!selected.size || busy"
+              @change="move"
+            >
+              <option value="" disabled>{{ $t("res.moveTo") }}</option>
+              <option
+                v-for="f in folders.filter((f) => f.folderId !== scope)"
+                :key="f.folderId"
+                :value="f.folderId"
+              >
+                {{ f.name }}
+              </option></select
+            ><button
+              v-if="activeFolder"
+              class="btn"
+              :disabled="!selected.size || busy"
+              @click="
+                mutate((c) =>
+                  c.folder('removeItems', {
+                    folderId: scope,
+                    imageIds: [...selected],
+                  }),
+                )
+              "
+            >
+              {{ $t("res.unfile") }}</button
+            ><button
+              class="btn btn--danger"
+              :disabled="!selected.size || busy"
+              @click="remove"
+            >
+              {{ $t("dialog.delete") }}
+            </button>
+          </div>
+          <div v-if="loading && !result" class="resource-grid" aria-busy="true">
+            <div v-for="i in 12" :key="i" class="resource-skeleton ghost" />
+          </div>
+          <div v-else-if="!items.length && !error" class="empty panel">
+            <h2>{{ $t(search ? "resource.noResults" : "res.empty") }}</h2>
+            <p class="subtle">
+              {{ $t(search ? "resource.changeSearch" : "resource.dropHint") }}
+            </p>
+            <button
+              v-if="search"
+              class="btn"
+              @click="
+                searchDraft = '';
+                find();
+              "
+            >
+              {{ $t("resource.clearSearch") }}
+            </button>
+          </div>
+          <ul v-else class="resource-grid" :aria-busy="loading">
+            <li
+              v-for="r in items"
+              :key="r.id"
+              class="resource-card"
+              :class="{ 'is-selected': selected.has(r.id) }"
+            >
+              <button
+                data-preview
+                class="resource-thumb"
+                :aria-label="$t('resource.preview', { name: name(r) })"
+                @click="open(r)"
+              >
+                <img
+                  v-if="r.kind === 'image' && !thumbnailErrors.has(r.id)"
+                  :src="r.thumbnailUrl || r.imageUrl"
+                  :alt="name(r)"
+                  loading="lazy"
+                  @error="thumbnailErrors.add(r.id)"
+                /><span v-else class="resource-file">{{
+                  thumbnailErrors.has(r.id)
+                    ? $t("resource.thumbnailFailed")
+                    : (r.mimeType?.split("/")[1] || r.kind).toUpperCase()
+                }}</span></button
+              ><input
+                v-if="managing"
+                type="checkbox"
+                class="resource-check"
+                :checked="selected.has(r.id)"
+                :aria-label="$t('resource.select', { name: name(r) })"
+                @change="toggle(r.id)"
+              />
+              <div class="resource-card-meta">
+                <strong :title="name(r)">{{ name(r) }}</strong
+                ><span class="subtle"
+                  >{{ size(r.byteSize)
+                  }}<template v-if="r.pixelWidth">
+                    · {{ r.pixelWidth }}×{{ r.pixelHeight }}</template
+                  ></span
+                ><span
+                  v-if="
+                    r.moderationState === 'pending' ||
+                    r.moderationState === 'reject'
+                  "
+                  class="resource-state"
+                  >{{
+                    $t(
+                      r.moderationState === "pending"
+                        ? "res.state.pending"
+                        : "res.state.rejected",
+                    )
+                  }}</span
+                ><button
+                  class="btn btn--sm btn--ghost"
+                  @click="copy(r.imageUrl)"
+                >
+                  {{ $t("res.copy") }}
+                </button>
+              </div>
+            </li>
+          </ul>
+          <nav
+            v-if="result"
+            class="resource-pager"
+            :aria-label="$t('resource.pagination')"
+          >
+            <span class="subtle">{{
+              $t("resource.range", {
+                from: total ? (page - 1) * pageSize + 1 : 0,
+                to: Math.min(page * pageSize, total),
+                total,
+              })
+            }}</span>
+            <div class="page-buttons">
+              <button
+                class="btn btn--sm"
+                :disabled="page <= 1 || loading || busy"
+                @click="goPage(page - 1)"
+              >
+                {{ $t("resource.previous") }}</button
+              ><button
+                v-for="n in pageNumbers"
+                :key="n"
+                class="btn btn--sm"
+                :class="{ 'btn--primary': page === n }"
+                :aria-current="page === n ? 'page' : undefined"
+                :disabled="loading || busy"
+                @click="goPage(n)"
+              >
+                {{ n }}</button
+              ><button
+                data-next
+                class="btn btn--sm"
+                :disabled="page >= pages || loading || busy"
+                @click="goPage(page + 1)"
+              >
+                {{ $t("resource.next") }}
+              </button>
+            </div>
+            <select
+              v-model.number="pageSize"
+              class="input"
+              :aria-label="$t('resource.pageSize')"
+              :disabled="loading || busy"
+              @change="filter"
+            >
+              <option v-for="n in [24, 48, 96]" :key="n" :value="n">
+                {{ $t("resource.perPage", { n }) }}
+              </option>
+            </select>
+          </nav>
+        </main>
+      </div></template
+    >
+    <ResourcePreview
+      v-if="preview"
+      :item="preview"
+      :provider="providerName(provider)"
+      :previous="previewIndex > 0 || previewPage > 1"
+      :next="
+        previewIndex < previewItems.length - 1 ||
+        previewPage < Math.ceil(previewTotal / pageSize)
+      "
+      :busy="previewBusy"
+      :error="previewError"
+      @close="preview = null"
+      @move="previewMove"
+      @copy="copy"
+    />
   </div>
 </template>
-
 <style scoped>
-.head { display: flex; flex-wrap: wrap; gap: var(--s-4); align-items: center; justify-content: space-between; margin-bottom: var(--s-4); }
-.head__title { font-size: clamp(20px, 2.6vw, 24px); margin-bottom: 2px; }
-.head__acts { display: flex; gap: var(--s-2); }
-
-.quota { padding: var(--s-4); display: grid; gap: 6px; margin-bottom: var(--s-4); }
-.quota .eyebrow { margin: 0; }
-.quota__num { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; }
-.prefix { margin-top: 12px; }
-.prefix__row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
-.prefix__code { font-size: 13px; padding: 6px 10px; border-radius: 8px; background: var(--surface-2, rgba(0, 0, 0, 0.05)); overflow-wrap: anywhere; }
-.prefix__hint { margin-top: 8px; font-size: 13px; line-height: 1.6; }
-.tile__name {
-  position: absolute; left: 8px; right: 8px; bottom: 30px; font-size: 12px; line-height: 1.3;
-  color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  opacity: 0; transition: opacity var(--dur-fast, 150ms);
+.resource-head,
+.resource-actions,
+.provider-bar,
+.provider-label,
+.resource-toolbar,
+.resource-search,
+.resource-search form,
+.resource-batch,
+.resource-pager,
+.page-buttons,
+.upload-list header,
+.prefix-row {
+  display: flex;
+  gap: var(--s-3);
+  align-items: center;
+  flex-wrap: wrap;
 }
-.tile:hover .tile__name, .tile:focus-within .tile__name { opacity: 1; }
-.wall--manage .tile__name { display: none; }
-.quota__num .subtle { font-size: 13px; font-weight: 500; }
-.quota__bar { height: 6px; border-radius: var(--r-pill); background: var(--surface-2); overflow: hidden; }
-.quota__bar span { display: block; height: 100%; border-radius: inherit; background: var(--accent-grad); transition: width var(--dur-slow) var(--ease); }
-
-.folders { display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; justify-content: space-between; margin-bottom: var(--s-4); }
-.folders__seg { flex-wrap: wrap; max-width: 100%; }
-.seg__n { margin-left: 4px; font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; }
-.seg__item--on .seg__n { color: var(--text-2); }
-.folders__acts { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }
-.folders__edit { display: flex; gap: var(--s-2); align-items: center; }
-.folders__edit .input { width: 200px; height: var(--h-sm); }
-
-.bar { display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; justify-content: space-between; margin-bottom: var(--s-3); }
-.bar__acts { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }
-.input--move { width: auto; height: var(--h-sm); font-size: 13px; }
-
-.wall { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-3); grid-template-columns: repeat(auto-fill, minmax(clamp(120px, 28vw, 168px), 1fr)); }
-.ghost--tile { aspect-ratio: 1; }
-
-.tile {
-  position: relative; aspect-ratio: 1; overflow: hidden;
-  border-radius: var(--r-md); background: var(--surface-2);
-  box-shadow: 0 0 0 1px var(--line);
+.resource-head,
+.provider-bar,
+.resource-toolbar,
+.resource-pager {
+  justify-content: space-between;
 }
-.tile img, .tile video { width: 100%; height: 100%; object-fit: cover; display: block; }
-/* 非圖片的檔：置中的圖示或副檔名，底色照種類微微不同，一眼分得出影片、音訊、字型 */
-.tile__file { display: grid; place-items: center; gap: 6px; width: 100%; height: 100%; color: var(--text-2); }
-.tile__file svg { width: 32px; height: 32px; }
-.tile__file[data-kind="video"] { background: color-mix(in srgb, var(--accent) 8%, var(--surface-2)); }
-.tile__file[data-kind="audio"] { background: color-mix(in srgb, var(--ambient-3) 60%, var(--surface-2)); }
-.tile__file--font { font-size: 26px; line-height: 1.2; color: var(--text); padding: 8px; text-align: center; }
-.tile__ext { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; }
-.kinds { margin-bottom: var(--s-4); }
-.tile__pick { display: block; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: pointer; }
-/* 勾選框永遠在：管理模式下作者要一眼看出哪些已選 */
-.tile__check {
-  position: absolute; top: 8px; right: 8px; width: 22px; height: 22px;
-  display: grid; place-items: center; border-radius: var(--r-pill);
-  background: rgba(20, 20, 28, 0.55); color: transparent;
-  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+.resource-head {
+  margin-bottom: var(--s-4);
 }
-.tile__check svg { width: 13px; height: 13px; }
-.tile--on .tile__check { background: var(--accent-btn); color: #fff; box-shadow: none; }
-.tile--on::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 2px var(--accent); pointer-events: none; }
-/* 動作浮層：滑進來才出現；鍵盤走到按鈕也要出現 */
-.tile__acts {
-  position: absolute; inset: auto 0 0 0; display: flex; gap: 6px; justify-content: center; padding: 8px;
-  background: linear-gradient(to top, rgba(10, 10, 16, 0.6), transparent);
-  opacity: 0; transition: opacity var(--dur) var(--ease);
+.resource-head h1 {
+  font-size: 1.5rem;
+  margin: 0;
 }
-.tile:hover .tile__acts, .tile:focus-within .tile__acts { opacity: 1; }
-@media (hover: none) { .tile__acts { opacity: 1; } }
-.tile__state {
-  position: absolute; top: 8px; left: 8px; padding: 2px 8px; border-radius: var(--r-pill);
-  font-size: 11px; font-weight: 600; color: #fff; background: rgba(20, 20, 28, 0.6);
-  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+.resource-head p {
+  margin: var(--s-2) 0 0;
+  font-size: 0.9rem;
 }
-.tile__state--bad { background: var(--danger); }
-.tile__meta {
-  position: absolute; top: 8px; right: 8px; font-size: 11px; color: #fff; opacity: 0;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); transition: opacity var(--dur) var(--ease);
+.provider-bar {
+  padding: var(--s-4);
+  margin-bottom: var(--s-3);
 }
-.tile:hover .tile__meta { opacity: 1; }
-.wall--manage .tile__meta { display: none; }
+.provider-label {
+  flex-direction: row;
+  min-width: 0;
+}
+.provider-label select {
+  min-width: 180px;
+}
+.provider-mark {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: var(--r-sm);
+  font-weight: 700;
+}
+.resource-link {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.resource-summary {
+  display: flex;
+  gap: var(--s-5);
+  padding: var(--s-4);
+  margin-bottom: var(--s-5);
+  align-items: start;
+  flex-wrap: wrap;
+}
+.resource-usage {
+  display: grid;
+  gap: var(--s-2);
+  min-width: 240px;
+  flex: 1;
+}
+.resource-usage > span,
+details {
+  font-size: 0.85rem;
+}
+.resource-usage strong {
+  font-size: 1.15rem;
+}
+.resource-usage strong span {
+  font-weight: 400;
+}
+.resource-meter {
+  height: 5px;
+  background: var(--surface-2);
+  border-radius: var(--r-pill);
+  overflow: hidden;
+}
+.resource-meter span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+details {
+  max-width: 100%;
+  padding-top: var(--s-1);
+}
+summary {
+  cursor: pointer;
+}
+details p,
+code {
+  overflow-wrap: anywhere;
+}
+.prefix-row {
+  margin-top: var(--s-2);
+}
+.resource-layout {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: var(--s-5);
+}
+.resource-sidebar h2 {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 0 0 var(--s-3);
+}
+.resource-sidebar nav {
+  display: grid;
+  gap: var(--s-1);
+  margin-bottom: var(--s-3);
+}
+.folder-row {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.folder-row.is-active {
+  background: var(--surface-2);
+  font-weight: 700;
+}
+.resource-sidebar > .btn {
+  width: 100%;
+  justify-content: start;
+  margin-top: var(--s-1);
+}
+.mobile-folders {
+  display: none;
+}
+.resource-content {
+  min-width: 0;
+}
+.resource-toolbar {
+  margin-bottom: var(--s-4);
+}
+.resource-search {
+  margin-bottom: var(--s-4);
+}
+.resource-search form {
+  flex: 1;
+  min-width: 180px;
+  flex-wrap: nowrap;
+}
+.resource-search input {
+  width: 100%;
+}
+.resource-search > select {
+  max-width: 180px;
+}
+.resource-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+  gap: var(--s-3);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.resource-card {
+  position: relative;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--surface);
+}
+.resource-card.is-selected {
+  outline: 2px solid var(--accent);
+}
+.resource-thumb {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: var(--surface-2);
+  cursor: zoom-in;
+  color: var(--muted);
+}
+.resource-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.resource-file {
+  font-size: 0.85rem;
+  padding: var(--s-3);
+  overflow-wrap: anywhere;
+}
+.resource-card-meta {
+  padding: var(--s-3);
+  display: grid;
+  gap: var(--s-1);
+}
+.resource-card-meta strong {
+  font-size: 0.85rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.resource-card-meta > span {
+  font-size: 0.75rem;
+}
+.resource-card-meta .btn {
+  margin-top: var(--s-2);
+  width: 100%;
+  min-height: 36px;
+}
+.resource-check {
+  position: absolute;
+  left: var(--s-2);
+  top: var(--s-2);
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+}
+.resource-batch {
+  padding: var(--s-3);
+  margin-bottom: var(--s-3);
+  font-size: 0.85rem;
+}
+.resource-batch select {
+  max-width: 180px;
+}
+.resource-pager {
+  margin-top: var(--s-5);
+  font-size: 0.85rem;
+}
+.resource-pager select {
+  width: auto;
+}
+.page-buttons {
+  gap: var(--s-1);
+}
+.resource-skeleton {
+  aspect-ratio: 3/4;
+  border-radius: var(--r-md);
+}
+.upload-list {
+  padding: var(--s-4);
+  margin-bottom: var(--s-4);
+}
+.upload-list h2 {
+  font-size: 1rem;
+  margin: 0;
+  flex: 1;
+}
+.upload-list ul {
+  padding: 0;
+  list-style: none;
+  max-height: 240px;
+  overflow: auto;
+}
+.upload-list li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--s-2);
+  padding: var(--s-2) 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.85rem;
+}
+.upload-list li > span:first-child {
+  overflow-wrap: anywhere;
+  min-width: 0;
+  flex: 1;
+}
+.upload-list li p {
+  width: 100%;
+  margin: 0;
+}
+.error-text {
+  color: var(--danger);
+  font-size: 0.85rem;
+}
+.folder-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+}
+.folder-form input {
+  width: 100%;
+}
+.empty {
+  text-align: center;
+  padding: var(--s-5);
+}
+.empty h2 {
+  font-size: 1rem;
+}
+.resources > .notice {
+  margin-bottom: var(--s-3);
+}
+@media (max-width: 720px) {
+  .resources .btn,
+  .resources .seg__item,
+  .resources .input {
+    min-height: var(--h-lg);
+  }
 
-.empty { padding: var(--s-8) var(--s-5); text-align: center; display: grid; gap: var(--s-4); justify-items: center; }
-.empty__title { font-size: 16px; font-weight: 600; }
-.notice { white-space: pre-line; margin-bottom: var(--s-3); }
-.copy { display: flex; gap: var(--s-2); align-items: center; }
-.copy .input { flex: 1; height: var(--h-sm); }
-
-@media (max-width: 640px) {
-  .head__acts { width: 100%; }
-  .head__acts .btn { flex: 1; }
+  .resource-layout {
+    grid-template-columns: 1fr;
+    gap: var(--s-3);
+  }
+  .resource-sidebar nav,
+  .resource-sidebar h2 {
+    display: none;
+  }
+  .mobile-folders {
+    display: block;
+    flex: 1;
+    min-width: 130px;
+  }
+  .resource-sidebar {
+    display: flex;
+    gap: var(--s-2);
+    flex-wrap: wrap;
+  }
+  .resource-sidebar > .btn {
+    width: auto;
+    margin: 0;
+  }
+  .folder-form {
+    width: 100%;
+  }
+  .resource-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .resource-summary {
+    gap: var(--s-3);
+  }
+  .resource-usage {
+    min-width: 100%;
+  }
+  .resource-head {
+    align-items: start;
+  }
+  .resource-head p {
+    max-width: 24em;
+  }
+  .resource-toolbar .seg {
+    max-width: 100%;
+    overflow: auto;
+  }
+  .resource-pager {
+    gap: var(--s-3);
+  }
+  .page-buttons {
+    width: 100%;
+    justify-content: center;
+  }
+  .provider-label {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .provider-bar {
+    align-items: start;
+  }
 }
 </style>

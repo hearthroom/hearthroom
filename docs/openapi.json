@@ -4832,6 +4832,32 @@
               "default": 50
             },
             "description": "<1 or >100 becomes 50."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "description": "Harbor capability extension: literal filename substring search across the entire selected collection. Use only when capabilities.search is true."
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "newest",
+                "oldest",
+                "name",
+                "size"
+              ],
+              "default": "newest"
+            },
+            "description": "Harbor capability extension: order before pagination; use a value advertised by capabilities.sorts."
           }
         ],
         "responses": {
@@ -4877,7 +4903,7 @@
           }
         },
         "x-harperharbor": {
-          "description": "List the account-owned stored media with pagination, folder scope and storage quota. Harbor media has no moderationState field."
+          "description": "List locally hosted, account-owned stored media with pagination, folder and kind filters, optional filename search and ordering. External references are excluded. Harbor returns capabilities and has no moderationState field."
         }
       }
     },
@@ -12260,6 +12286,42 @@
               "libraryPrefix": {
                 "type": "string",
                 "description": "The caller's library URL prefix without trailing slash (`https://<objects host>/u/<numeric user id>`). Files uploaded with a name live at `<libraryPrefix>/<fileName>`."
+              },
+              "capabilities": {
+                "type": "object",
+                "description": "Optional provider-reported resource capabilities. Absence means unknown, not unrestricted.",
+                "properties": {
+                  "kinds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "formats": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Accepted MIME types."
+                  },
+                  "maxFileBytes": {
+                    "type": "integer",
+                    "format": "int64"
+                  },
+                  "search": {
+                    "type": "boolean"
+                  },
+                  "sorts": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "overwrite": {
+                    "type": "boolean",
+                    "description": "Whether a same-name upload replaces an existing file."
+                  }
+                }
               }
             }
           }
