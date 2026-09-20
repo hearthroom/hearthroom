@@ -2,16 +2,15 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute, useRouter } from "vue-router";
-import AuthorList from "@/components/AuthorList.vue";
+import FollowFeed from "@/components/FollowFeed.vue";
 import CardGrid from "@/components/CardGrid.vue";
-import { fetchAuthors, fetchBoard } from "@/lib/api";
+import { fetchBoard } from "@/lib/api";
 import { contentLang, defaultZone } from "@/lib/i18n";
 import DiscoveryTags from "@/components/DiscoveryTags.vue";
 import { selectedTags } from "@/lib/discovery";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
-import type { AuthorPage } from "@/lib/api";
-import type { AuthorSort, CardPage, Sort } from "@/lib/types";
+import type { CardPage, Sort } from "@/lib/types";
 
 const route = useRoute();
 const router = useRouter();
@@ -20,7 +19,6 @@ const session = useSession();
 const { t } = useI18n();
 
 const page = ref<CardPage | null>(null);
-const authors = ref<AuthorPage | null>(null);
 const loading = ref(true);
 const error = ref("");
 
@@ -28,17 +26,13 @@ const error = ref("");
 const SORTS: Sort[] = ["day", "week", "month", "hot", "new", "random"];
 /** 三個開窗的榜才顯示「正在被聊」的增量：最熱是累積量，增量在那裡沒意義。 */
 const WINDOWED = new Set<Sort>(["day", "week", "month"]);
-const AUTHOR_SORTS: AuthorSort[] = ["talk", "cards", "hot"];
 
-/** 角色卡榜或作者榜。 */
-const mode = computed(() => (route.query.mode === "authors" ? "authors" : "cards"));
+
+/** 角色卡探索或關注動態；相容舊作者榜連結。 */
+const mode = computed(() => ["following", "authors"].includes(String(route.query.mode)) ? "following" : "cards");
 const sort = computed<Sort>(() => {
   const s = route.query.sort;
   return typeof s === "string" && (SORTS as string[]).includes(s) ? (s as Sort) : "day";
-});
-const authorSort = computed<AuthorSort>(() => {
-  const s = route.query.sort;
-  return s === "cards" || s === "hot" ? s : "talk";
 });
 const tags = computed(() => selectedTags(route.query.tag));
 const offset = computed(() => Number(route.query.offset ?? 0) || 0);
@@ -58,10 +52,7 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    if (mode.value === "authors") {
-      const result = await fetchAuthors({ zone: zone.value, sort: authorSort.value, offset: offset.value });
-      if (id === loadId) authors.value = result;
-    } else {
+    if (mode.value === "cards") {
       const result = await fetchBoard({
         zone: zone.value,
         tag: tags.value,
@@ -90,7 +81,7 @@ function navigate(patch: Record<string, string | string[] | undefined>) {
   router.push({ query });
 }
 /** 換榜的時候排序鍵不通用，一起清掉。 */
-const switchMode = (m: "cards" | "authors") => navigate({ mode: m === "authors" ? "authors" : undefined, sort: undefined, tag: undefined });
+const switchMode = (m: "cards" | "following") => navigate({ mode: m === "following" ? "following" : undefined, sort: undefined, tag: undefined });
 
 watch([() => route.query, locale], load, { immediate: true });
 // 成人內容開關載好（登入後才知道）或改了：重讀，否則第一屏永遠是沒開的版本
@@ -108,7 +99,7 @@ watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (no
       <!-- 左邊選看哪個榜，右邊選怎麼排 -->
       <div class="seg seg--mode">
         <button class="seg__item" :class="{ 'seg__item--on': mode === 'cards' }" :aria-pressed="mode === 'cards'" @click="switchMode('cards')">{{ $t("board.mode.cards") }}</button>
-        <button class="seg__item" :class="{ 'seg__item--on': mode === 'authors' }" :aria-pressed="mode === 'authors'" @click="switchMode('authors')">{{ $t("board.mode.authors") }}</button>
+        <button class="seg__item" :class="{ 'seg__item--on': mode === 'following' }" :aria-pressed="mode === 'following'" @click="switchMode('following')">{{ $t("library.feed") }}</button>
       </div>
 
       <div v-if="mode === 'cards'" class="sorts" role="group" :aria-label="$t('board.sorts')">
@@ -116,11 +107,7 @@ watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (no
           {{ $t(`board.sort.${s}`) }}
         </button>
       </div>
-      <div v-else class="sorts" role="group" :aria-label="$t('board.sorts')">
-        <button v-for="s in AUTHOR_SORTS" :key="s" class="sorts__item" :class="{ 'sorts__item--on': authorSort === s }" :aria-pressed="authorSort === s" @click="navigate({ sort: s })">
-          {{ $t(`author.sort.${s}`) }}
-        </button>
-      </div>
+
     </div>
 
     <!-- 類型列：固定的一排（照魅魔島），鍵進網址、名字跟介面語言走。摺成幾行，全部看得到 -->
@@ -151,19 +138,7 @@ watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (no
       </nav>
     </template>
 
-    <template v-else>
-      <div v-if="loading && !authors" class="ghosts"><div v-for="i in 8" :key="i" class="ghost" /></div>
-      <div v-else-if="!authors?.items.length" class="empty panel">
-        <p class="empty__title">{{ $t("board.empty.title") }}</p>
-        <p class="empty__hint muted">{{ $t("board.empty.hint") }}</p>
-      </div>
-      <div v-else :aria-busy="loading || undefined"><AuthorList :authors="authors.items" ranked :rank-offset="authors.offset" :show-trending="authorSort === 'hot'" /></div>
-      <nav v-if="authors && (authors.offset > 0 || authors.hasNext)" class="pager">
-        <button class="btn btn--sm" :disabled="authors.offset === 0" @click="navigate({ offset: String(Math.max(0, authors.offset - authors.limit)) })">← {{ $t("pager.prev") }}</button>
-        <span class="subtle">{{ $t("pager.page", { n: Math.floor(authors.offset / authors.limit) + 1 }) }}</span>
-        <button class="btn btn--sm" :disabled="!authors.hasNext" @click="navigate({ offset: String(authors.offset + authors.limit) })">{{ $t("pager.next") }} →</button>
-      </nav>
-    </template>
+    <FollowFeed v-else />
   </div>
 </template>
 

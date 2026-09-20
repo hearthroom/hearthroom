@@ -1,3 +1,4 @@
+import { libraryRoutes } from "./library";
 import { hostGateway, submitHosted, hostingDecision, beginHostedEdit } from "./hosting";
 import { saveCommunityProfile, cleanAvatars } from "./community-profile";
 import { bodyLimit } from "hono/body-limit";
@@ -677,6 +678,8 @@ app.get('/v1/avatars/:handle/:file',async c=>{
  if(!image)throw new HttpError(404,'avatar not found');
  return new Response(image.body,{headers:{'Content-Type':'image/webp','Cache-Control':'public, max-age=300','X-Content-Type-Options':'nosniff'}});
 });
+
+app.route("/", libraryRoutes);
 
 app.get("/v1/me", async (c) => {
   const member = await requireMember(c);

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import LibraryToggle from "@/components/LibraryToggle.vue";
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
@@ -72,6 +73,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
           <span v-if="author.providers?.length"> · {{ $t("author.supports", { providers: author.providers.map(providerName).join("、") }) }}</span>
         </p>
       </div>
+      <LibraryToggle v-if="author.handle && author.handle !== session.profile?.handle" kind="following" :target="author.handle" />
       <dl class="who__stats">
         <div class="stat"><dt>{{ $t("author.stat.cards") }}</dt><dd>{{ author.cardCount }}</dd></div>
         <div class="stat"><dt>{{ $t("author.stat.talk") }}</dt><dd>{{ compact(author.talkTotal) }}</dd></div>

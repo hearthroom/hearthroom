@@ -47,6 +47,7 @@ const PLAN_LABEL: Record<string, string> = { unlimited: "wallet.plan.unlimited",
         <span v-if="session.wallet?.plans.length" class="menu__plan">{{ providerName(currentProvider()) }} · {{ $t(PLAN_LABEL[session.wallet.plans[0]!.tier] ?? "wallet.plan") }}</span>
       </div>
       <RouterLink :to="lp('/me')" class="menu__item" role="menuitem">{{ $t("nav.me") }}</RouterLink>
+      <RouterLink :to="lp('/library')" class="menu__item" role="menuitem">{{ $t("library.title") }}</RouterLink>
       <RouterLink :to="lp('/mine')" class="menu__item" role="menuitem">{{ $t("nav.mine") }}</RouterLink>
       <RouterLink v-if="reviewerStore.reviewer" :to="lp('/review')" class="menu__item" role="menuitem">{{ $t("nav.review") }}</RouterLink>
       <RouterLink v-if="can('library')" :to="lp('/resources')" class="menu__item" role="menuitem">{{ $t("nav.resources") }}</RouterLink>

@@ -74,6 +74,7 @@ onMounted(() => {
       <section class="me__workspace" aria-labelledby="workspace-title">
         <h2 id="workspace-title">{{ $t('me.workspace') }}</h2>
         <nav class="me__destinations" :aria-label="$t('me.workspace')">
+          <RouterLink :to="lp('/library')" class="me__destination"><span class="me__destination-icon"><AccountIcon name="calendar" /></span><span class="me__destination-text"><strong>{{ $t('library.title') }}</strong><span>{{ $t('library.hint') }}</span></span><AccountIcon name="arrow" class="me__chevron" /></RouterLink>
           <RouterLink :to="lp('/mine')" class="me__destination">
             <span class="me__destination-icon"><AccountIcon name="cards" /></span>
             <span class="me__destination-text"><strong>{{ $t('nav.mine') }}</strong><span>{{ $t('me.cardsHint') }}</span></span>
