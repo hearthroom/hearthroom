@@ -42,6 +42,7 @@ const pages = [
   { path: "game/:roleId", component: () => import("./pages/GamePage.vue"), meta: { bare: true } },
   // 社群審核：共享佇列與唯讀審核頁。誰能審由服務端決定（不是審核人會看到「你不是審核人」）。
   { path: "review", component: () => import("./pages/ReviewQueuePage.vue"), meta: { auth: true } },
+  { path: "review/manage", component: () => import("./pages/ModerationPage.vue"), meta: { auth: true } },
   { path: "review/:id", component: () => import("./pages/ReviewDetailPage.vue"), meta: { auth: true } },
   { path: "auth/callback", component: () => import("./pages/CallbackPage.vue") },
   // 404 也在語言前綴底下：/en/nope 要看到英文的 404，而不是被換回預設語言

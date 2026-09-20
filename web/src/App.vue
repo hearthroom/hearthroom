@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import ReviewBadge from "@/components/ReviewBadge.vue";
+import { computed, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import AccountMenu from "@/components/AccountMenu.vue";
 import AppearanceMenu from "@/components/AppearanceMenu.vue";
@@ -21,7 +22,10 @@ const reviewerStore = useReviewer();
 const route = useRoute();
 const router = useRouter();
 
-onMounted(() => { session.restore(); useAppearance().init(); });
+let reviewTimer: ReturnType<typeof setInterval> | undefined;
+function refreshReview(){ if(session.me && document.visibilityState==='visible') void reviewerStore.refresh(); }
+onMounted(() => { session.restore(); useAppearance().init(); reviewTimer=setInterval(refreshReview,60000); window.addEventListener('focus',refreshReview); document.addEventListener('visibilitychange',refreshReview); });
+onBeforeUnmount(()=>{clearInterval(reviewTimer);window.removeEventListener('focus',refreshReview);document.removeEventListener('visibilitychange',refreshReview);document.removeEventListener('keydown',onSlash);});
 
 /** 搜尋放在頁首，全站都搜得到；結果落在搜尋頁。按 / 直接聚焦。搜尋頁自己有一個大的，頁首那個就收起來。 */
 const q = ref((route.query.q as string) ?? "");
@@ -62,7 +66,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
         <RouterLink :to="lp('/library')" class="nav__item" active-class="nav__item--on">{{ $t("library.title") }}</RouterLink>
         <RouterLink v-if="session.me" :to="lp('/mine')" class="nav__item" active-class="nav__item--on">{{ $t("nav.mine") }}</RouterLink>
         <!-- 只有審核人看得到這顆：是不是審核人由本站決定，登入後問一次 -->
-        <RouterLink v-if="reviewerStore.reviewer" :to="lp('/review')" class="nav__item" active-class="nav__item--on">{{ $t("nav.review") }}</RouterLink>
+        <RouterLink v-if="reviewerStore.reviewer" :to="lp('/review')" class="nav__item" active-class="nav__item--on">{{ $t("nav.review") }}<ReviewBadge /></RouterLink>
       </nav>
 
       <form v-if="!onSearchPage" class="search" role="search" @submit.prevent="search">

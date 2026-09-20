@@ -31,10 +31,10 @@ export interface CommentCard {
 /** 這張卡在榜才有留言區；不在榜一律 404（跟卡片頁一致，不透露卡存不存在）。 */
 export async function commentCard(db: D1Database, cardId: string): Promise<CommentCard> {
   const row = await db
-    .prepare("SELECT id, provider, author_num_id, nsfw, status FROM cards WHERE id = ?")
+    .prepare("SELECT id, provider, author_num_id, nsfw, status, public_blocked FROM cards WHERE id = ?")
     .bind(cardId)
-    .first<{ id: string; provider: string; author_num_id: number; nsfw: number; status: string }>();
-  if (!row || row.status !== "approved") throw new HttpError(404, "card not found");
+    .first<{ id: string; provider: string; author_num_id: number; nsfw: number; status: string; public_blocked:number }>();
+  if (!row || (row.status !== "approved" || row.public_blocked)) throw new HttpError(404, "card not found");
   return { id: row.id, provider: row.provider as ProviderId, authorNumId: row.author_num_id, nsfw: row.nsfw === 1 };
 }
 

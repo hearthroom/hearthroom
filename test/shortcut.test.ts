@@ -181,7 +181,7 @@ describe("卡片圖示", () => {
     const res = await get("/v1/cards/role-safe/icon-192.png", noImages());
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("image/png");
-    expect(res.headers.get("cache-control")).toContain("max-age=86400");
+    expect(res.headers.get("cache-control")).toBe("no-store");
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(PNG);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(String((fetchSpy.mock.calls[0] as unknown[])[0])).toBe("https://cdn.lunatalk.ai/cover.png");
