@@ -1034,7 +1034,7 @@
   "linked.playWith": "Choose a platform",
   "linked.balanceUnknown": "Balance unavailable",
   "linked.balance": "Available credits: {amount}",
-  "linked.playHint": "Play with that platform’s account and credits. Conversations stay there. Pricing may differ between platforms.",
+  "linked.playHint": "This game uses credits from your chosen service; rates may vary.",
   "linked.connectPlay": "Connect account and play",
   "linked.noPlayable": "This card has no public version available to play.",
   "linked.platformLoadFailed": "We couldn’t check where this card is available. Please retry.",
@@ -1159,7 +1159,7 @@
   "library.conversations": "Recent chats",
   "library.favorites": "Saved cards",
   "library.following": "Following",
-  "library.conversationsHint": "Your most recent chats appear first. Other saves for each card are available inside the chat.",
+  "library.conversationsHint": "Conversations you open here stay in this list, ready to continue.",
   "library.favoritesHint": "Your saved cards stay here until you are ready for another story.",
   "library.followingHint": "New cards from these creators appear in Following on the home page.",
   "library.conversationsEmpty": "No conversations yet",
@@ -1185,5 +1185,6 @@
   "library.authorHint": "View their cards",
   "library.navigation": "Main navigation",
   "library.unsave": "Remove saved card",
-  "library.unfollow": "Unfollow creator"
+  "library.unfollow": "Unfollow creator",
+  "library.recordFailed": "This conversation could not be added to your list. We will retry when you open it again."
 }

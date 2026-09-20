@@ -1034,7 +1034,7 @@
   "linked.playWith": "選擇遊玩平台",
   "linked.balanceUnknown": "餘額暫時無法讀取",
   "linked.balance": "可用點數 {amount}",
-  "linked.playHint": "使用所選平台的帳號和點數。對話會保留在該平台，各平台的計價方式可能不同。",
+  "linked.playHint": "這次遊玩使用所選服務的積分，各服務的計價方式可能不同。",
   "linked.connectPlay": "連接帳號並遊玩",
   "linked.noPlayable": "這張卡目前沒有可遊玩的公開版本。",
   "linked.platformLoadFailed": "無法確認這張卡的遊玩平台，請重試。",
@@ -1159,7 +1159,7 @@
   "library.conversations": "最近對話",
   "library.favorites": "收藏卡片",
   "library.following": "關注作者",
-  "library.conversationsHint": "你玩過的卡依最近對話排序，同一張卡的其他存檔可在對話中查看。",
+  "library.conversationsHint": "你在本站開啟的對話都會保存在這份清單，點選即可繼續遊玩。",
   "library.favoritesHint": "你收藏的卡片會留在這裡，隨時回來挑下一個故事。",
   "library.followingHint": "你關注的作者都在這裡，新作品會出現在首頁的「關注動態」。",
   "library.conversationsEmpty": "還沒有對話紀錄",
@@ -1185,5 +1185,6 @@
   "library.authorHint": "查看作者作品",
   "library.navigation": "主要導覽",
   "library.unsave": "取消收藏",
-  "library.unfollow": "取消關注"
+  "library.unfollow": "取消關注",
+  "library.recordFailed": "這段對話暫時無法加入清單，下次開啟時會再試一次。"
 }

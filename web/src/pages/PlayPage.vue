@@ -9,13 +9,16 @@
 import { computed, getCurrentInstance, onBeforeUnmount, onMounted, shallowRef, watch, type Component } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
+import { playProvider } from '@/lib/play-context';
+import { accountToken, connectAccount } from '@/lib/connections';
+import { currentProvider, apiBaseOf } from '@/lib/provider';
 import { ensurePlayAuthorization } from "@/lib/play-authorization";
 import { ensureStage, remergeStageMessages, stageToasts } from "@/lib/stage-host";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
 import { contentLang, pageTitle } from "@/lib/i18n";
 import { track } from "@/lib/track";
-import { fetchCard } from "@/lib/api";
+import { fetchCard, fetchMeAt } from "@/lib/api";
 import { applyCardHead } from "@/lib/card-manifest";
 import { requestInstallToast } from "@/lib/pwa";
 import { SITE, isPlayHost } from "@/lib/site";
@@ -56,13 +59,24 @@ onMounted(async () => {
   const app = getCurrentInstance()?.appContext.app;
   if (!app) return;
   try {
-    const token = await session.accessToken();
-    if (!token || !await ensurePlayAuthorization(token, route.fullPath)) return;
+    await session.ensureProfile();
+    const provider = playProvider(route.query.provider);
+    const identity = session.profile?.identities.find(i => i.provider === provider);
+    const accessToken = () => provider === currentProvider() ? session.accessToken() : accountToken(provider, identity?.externalId);
+    if (provider !== currentProvider() && !identity) { await connectAccount(provider, route.fullPath); return; }
+    const token = await accessToken();
+    if (!token) { await connectAccount(provider, route.fullPath); return; }
+    if (!await ensurePlayAuthorization(token, route.fullPath, provider)) return;
+    const player = provider === currentProvider() ? session.me : await fetchMeAt(apiBaseOf(provider), token);
     Stage.value = await ensureStage({
       app,
       router,
       session,
+      provider,
+      accessToken,
+      player,
       currentPath: () => route.fullPath,
+      currentRoleId: () => roleId.value,
       lp,
     });
     track("play_open", { subject: roleId.value });
