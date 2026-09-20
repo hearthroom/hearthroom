@@ -245,8 +245,8 @@ async function read(
       worldbooks,
       authorAsset,
     },
-    public: r.roleVisibility === "public",
-    pending: r.reviewStatus === "pending",
+    public: p === "lunatalk" && r.roleVisibility === "public",
+    pending: p === "lunatalk" && r.reviewStatus === "pending",
   };
 }
 async function create(
@@ -284,7 +284,7 @@ async function update(
   const images: Record<string, string> = {};
   for (const field of MEDIA_FIELDS)
     images[field] = c.media?.[field]
-      ? await registerImageReference(env, p, token, c.media[field]!)
+      ? await registerImageReference(env, p, token, c.media[field]!, id)
       : "";
   await call(env, p, token, `/role/${encodeURIComponent(id)}/document`, {
     fields: {
@@ -322,8 +322,9 @@ async function update(
    await checkpoint?.();
   }
   const state:TransferProgress = typeof progress.books==='object' ? progress as TransferProgress : {books:Object.fromEntries(Object.entries(progress).map(([sourceId,id])=>[sourceId,{id,status:'created' as const}]))};
-  await writeBooks((path,body,method)=>call(env,p,token,path,body,method),id,
+  await writeBooks((path,body,method)=>call(env,p,token,p==='harbor'&&path==='/worldbook'?path+'?roleId='+encodeURIComponent(id):path,body,method),id,
     (c.worldbooks??[]).map(b=>({sourceId:b.sourceId,metadata:b.metadata??{name:b.name,language:c.language},entries:b.entries})),state,saveProgress,async()=>{await checkpoint?.()},p==='harbor'?'prepend-batches':'whole-book');
+  if(p==='harbor')await call(env,p,token,`/role/${encodeURIComponent(id)}/visibility`,{visibility:'unlisted'});
   return Object.fromEntries(Object.entries(state.books).filter(([,v])=>v.id).map(([k,v])=>[k,v.id!]));
 }
 async function publish(
@@ -338,6 +339,6 @@ async function publish(
   });
 }
 async function unpublish(env:Env,p:ProviderId,token:string,id:string) {
- await call(env,p,token,`/role/${encodeURIComponent(id)}/visibility`,{visibility:'private'});
+ await call(env,p,token,`/role/${encodeURIComponent(id)}/visibility`,{visibility:p==='harbor'?'unlisted':'private'});
 }
 export const transfers = { read, create, update, publish, unpublish };

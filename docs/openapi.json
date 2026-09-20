@@ -3033,7 +3033,7 @@
           }
         },
         "x-harperharbor": {
-          "description": "Opens or resumes the current conversation for the caller and agent. Requires chat.play and agent access. Inserts the selected greeting only when creating the conversation; this endpoint does not call a model. Returns conversationId, defaultRelay (greeting text), historyConversation, roleInfo and xmlV3Compatibility=false. Missing or invalid roleId returns 400.",
+          "description": "Opens or resumes the current conversation for the caller and agent. Requires chat.play and agent access. Inserts the selected greeting only when creating the conversation; this endpoint does not call a model. Returns conversationId, defaultRelay (greeting text), historyConversation, roleInfo and xmlV3Compatibility=false. Missing or invalid roleId returns 400. Shareable configurations can be used across application tenants without community review. The conversation, player settings and subsequent charges remain scoped to the calling application and player; the source configuration and its Lorebooks remain in their storage tenant.",
           "security": [
             {
               "userToken": []
@@ -6895,6 +6895,62 @@
               }
             }
           }
+        },
+        "x-harperharbor": {
+          "summary": "Create an agent configuration",
+          "description": "Creates an agent configuration owned by the bearer account. HarperHarbor defaults to `roleVisibility=unlisted`: anyone with the ID can use its public presentation and authenticated playback across applications, without community approval. Full instructions and Lorebooks remain author-only. Communities independently control review, listing and discovery. Explicit private configurations remain owner-only; deleted or provider-taken-down configurations are unavailable. Fill content with the document and welcome endpoints. Tenant records storage and application attribution, not a playback boundary.",
+          "responses": {
+            "200": {
+              "description": "Created with roleVisibility=unlisted and reviewStatus=not_submitted.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/RoleOutput"
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "`invalid JSON body`, `roleName is required` (body-level checks; body is `{\"error\": \"...\"}`), or `invalid_arguments` from the service (`{\"error\": \"invalid_arguments\", \"retryable\": false}`).",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "`unauthorized`.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "403": {
+              "description": "`permission_denied`",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Unclassified service/database error; `{\"error\": \"<string>\", \"retryable\": true}`.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -7061,6 +7117,10 @@
               }
             }
           }
+        },
+        "x-harperharbor": {
+          "summary": "Read agent display rules for rendering",
+          "description": "Returns presentation rules for an accessible agent configuration by ID across application tenants. Public and unlisted configurations are guest-readable; an explicit private configuration requires its author with role.read or chat.play. Missing, inaccessible or taken-down assets return 404. The compatibility status passed describes render eligibility, not community approval. Private instructions and Lorebooks are not included."
         }
       }
     },
@@ -7153,6 +7213,10 @@
               }
             }
           }
+        },
+        "x-harperharbor": {
+          "summary": "Read an agent configuration presentation",
+          "description": "Guest-readable for public or unlisted configurations by ID across application tenants. Explicit private configurations require the author with role.read; invalid bearer tokens are rejected. Only the author with role.read receives model-facing instructions, translated private definitions and other private author fields. Other callers receive presentation fields only. Deleted or provider-taken-down configurations are unavailable to players; authorized authors can inspect their own taken-down configuration. Community review does not gate this endpoint."
         }
       }
     },
@@ -7327,6 +7391,10 @@
               }
             }
           }
+        },
+        "x-harperharbor": {
+          "summary": "Read the compatibility preview-page response",
+          "description": "HarperHarbor currently returns an empty preview document (doc=null, version=0, skinId=\"\"). It requires roleId; an invalid supplied bearer is rejected. Agent display rules are available from role/author-asset/serve."
         }
       }
     },
@@ -7493,6 +7561,10 @@
               }
             }
           }
+        },
+        "x-harperharbor": {
+          "summary": "Patch an owned agent configuration",
+          "description": "Requires role.write and ownership. Updates only supplied fields of an owned configuration, including from another application tenant and while unlisted. Community review is not required. Validation, immutable hosted snapshot restrictions and ownership checks remain enforced. Use the document endpoint for structured content patches."
         }
       },
       "delete": {
@@ -7951,6 +8023,72 @@
               }
             }
           }
+        },
+        "x-harperharbor": {
+          "summary": "Allow use of an agent configuration by ID",
+          "description": "Compatibility endpoint: requires the existing confirmation fields, then sets the owned agent configuration to `unlisted`. Does not submit to moderation, start a task or list it in a community. Idempotent. Community review and discovery are independent of Harbor playback.",
+          "responses": {
+            "200": {
+              "description": "Use by ID enabled; stored reviewStatus is unchanged and taskId is empty.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/PublishSubmitOutput"
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "invalid JSON body or confirmation_required.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "`unauthorized`.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "403": {
+              "description": "`permission_denied`.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "`role_not_found` (role vanished between ownership check and submission).",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Unexpected service failure.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -8035,6 +8173,89 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-harperharbor": {
+          "summary": "Change agent configuration access",
+          "description": "HarperHarbor accepts private (owner only), unlisted (usable by ID; default), and legacy public. This changes provider access, not community publication. Authentication, role.write scope and authorship are required, including across application tenants. Playback never grants editing or private configuration export.",
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "visibility"
+                  ],
+                  "properties": {
+                    "visibility": {
+                      "type": "string",
+                      "enum": [
+                        "private",
+                        "unlisted",
+                        "public"
+                      ]
+                    },
+                    "idempotencyKey": {
+                      "type": "string",
+                      "description": "Accepted; not used for deduplication."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Access changed; review status is unchanged.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/RoleOutput"
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "invalid JSON body or invalid_param.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "`unauthorized`.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "403": {
+              "description": "`permission_denied`.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Unexpected service failure.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
                 }
               }
             }
@@ -8751,6 +8972,21 @@
               }
             }
           }
+        },
+        "x-harperharbor": {
+          "description": "Creates an empty worldbook owned by the bearer. `name` is required. `visibility` accepts `public`, `private` or `waitReview`; any other value (including omitted) is stored as `private`. `format` is `\"\"`/omitted for the native format or `tavern` (aliases `sillytavern`, `st`) for SillyTavern-style keyword matching; it cannot be changed after creation; unknown values fail with `unknown worldbook format`. `language` is stored as given (not validated here). Add entries and bind the book to a role with `POST /worldbook/{worldbookId}/document`. Returns 503 `worldbook_unavailable` when the worldbook service is not running on this deployment. HarperHarbor supports an optional roleId query parameter: the authenticated author can create a new private Lorebook in that agent configuration’s storage tenant, including from another application. This grants no access to another author’s resources.",
+          "parameters": [
+            {
+              "name": "roleId",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "description": "HarperHarbor: owned target agent configuration for resource placement."
+            }
+          ]
         }
       }
     },
@@ -9577,6 +9813,62 @@
           }
         },
         "x-capability": "immutable-hosting-v1"
+      }
+    },
+    "/open/v1/media/references": {
+      "post": {
+        "operationId": "createHarborMediaReference",
+        "tags": [
+          "Media library"
+        ],
+        "summary": "Register an external image reference",
+        "description": "HarperHarbor metadata-only operation. Requires role.write and a permitted image host; does not download image bytes. Optional roleId places the reference with an agent configuration owned by the caller, allowing synchronization across application tenants. The URL is resolved only as an owned media asset when attached.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "x-harperharbor": {},
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "url"
+                ],
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "roleId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created or reused an owned reference. Returns assetId and url."
+          },
+          "400": {
+            "description": "Invalid request or image source."
+          },
+          "401": {
+            "description": "Unauthorized."
+          },
+          "403": {
+            "description": "Missing role.write scope."
+          },
+          "404": {
+            "description": "Target agent configuration is missing or not owned by caller."
+          }
+        }
       }
     }
   },
@@ -14859,9 +15151,10 @@
             "enum": [
               "private",
               "public",
-              "waitReview"
+              "waitReview",
+              "unlisted"
             ],
-            "description": "Current visibility."
+            "description": "Current visibility. HarperHarbor defaults to unlisted (usable by ID without community listing)."
           },
           "reviewStatus": {
             "type": "string",
@@ -15185,8 +15478,10 @@
             "enum": [
               "private",
               "public",
-              "waitReview"
-            ]
+              "waitReview",
+              "unlisted"
+            ],
+            "description": " HarperHarbor defaults to unlisted (usable by ID without community listing)."
           },
           "roleDefinitionVisibility": {
             "type": "string",
