@@ -2,8 +2,7 @@
 /**
  * 把 stage/（上游 Moonstage 的子模組）更新到上游 main：拉最新、裝依賴、跑測試、build 套件。
  *
- * 子模組直接指向上游 lunatalkai/moonstage，本站沒有自己的 fork——舞台的套件 build
- * （`src/stage/`、`vite.stage.config.ts`）由上游提供，任何站台都能用。程式碼改動一律往上游提。
+ * 子模組指向 Hearthroom 維護的獨立 Moonstage；舞台程式碼在該倉庫修改。
  * 跑完把印出來的指標更新提交進本倉庫即可。
  *
  *   npm run sync:stage
