@@ -84,6 +84,23 @@ afterEach(() => {
   root?.remove();
 });
 describe("provider resource library", () => {
+  it("keeps the prefix available while upload details stay collapsed until requested", async () => {
+    mocks.list.mockResolvedValue({ ...page(), libraryPrefix: "https://assets.example/u/author/" });
+    await mount();
+    const toggle = root.querySelector<HTMLButtonElement>('[aria-controls="resource-details"]');
+    expect(toggle).not.toBeNull();
+    expect(toggle?.getAttribute("aria-expanded")).toBe("false");
+    expect(root.querySelector("#resource-details")).toBeNull();
+    expect(root.querySelector(".resource-prefix code")?.textContent).toContain("/u/author/");
+    toggle!.click();
+    await flush();
+    expect(toggle?.getAttribute("aria-expanded")).toBe("true");
+    expect(root.querySelector("#resource-details")?.textContent).toContain("PNG");
+    toggle!.click();
+    await flush();
+    expect(root.querySelector("#resource-details")).toBeNull();
+    expect(root.querySelector(".resource-prefix button")).not.toBeNull();
+  });
   it("shows each provider's prefix without expanding and copies exactly the displayed prefix", async () => {
     state.profile.identities.push({ provider: "lunatalk", externalId: 3 });
     const writeText = vi.fn(async () => {});

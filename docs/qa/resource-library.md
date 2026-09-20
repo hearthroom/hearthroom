@@ -111,3 +111,35 @@ after bootstrap, leaving no valid receipt. One independent read-only advisory
 review found the sealed-media interaction above; the same reviewer checks closure.
 A PostgreSQL testcontainer connection failure occurred in the parallel full suite;
 final closure uses the complete serial suite on the final committed source.
+
+## Compact resource overview — 2026-09-20
+
+The library takes priority over account metadata: provider choice and storage share
+one desktop row; the complete copyable prefix and formats toggle share the next.
+Format limits, authored-path help and connection management are disclosed on demand.
+The redundant page description is removed. Mobile actions and type/manage controls
+use compact spacing while keeping 44px touch targets. Existing five-language copy
+and provider-specific behavior are retained.
+
+Focused Red/Green covers the closed/open/closed details control and persistent
+prefix access. Full verification: 393 Worker tests and 412 web tests pass, typecheck
+and the complete pinned-stage/web build pass. One existing optional real-card
+fixture suite is skipped; fixture network-abort logs and bundle-size warnings
+remain baseline output. MCP parity and new metrics are not applicable: this change
+only rearranges client presentation, without changing API or resource operations.
+
+Native Chrome uses the real page/styles with synthetic provider data. At 1440px,
+the overview shrank from 357.5px to 129px; the file grid moved from y=618.5 to y=357.
+At 390px, the overview shrank from 476.3px to 252.8px and the grid moved from y=967.3
+to y=648.8. Traditional Chinese dark and English light layouts, open details,
+provider switching, prefix copy feedback and preview/Escape focus return pass.
+The 1000-item library restores page 21 with items 961–1000 and Next disabled.
+Final checked browser console errors: none. No production resources are mutated.
+
+The stylesheet-walking diagnostic timed out in the browser bridge. Verification
+used the documented fallback: explicit DOM enumeration and computed rect/font/
+radius/overflow/text geometry for changed overview, header and type controls,
+paired with screenshots. A deliberately shifted disposable button measured a
+12px text-center error, confirming the fallback detects misalignment. Both checked languages had no clipped controls; button
+text-center offsets stayed within 2px. This is a targeted layout recheck, not a
+new full-page audit of unchanged file-operation controls.

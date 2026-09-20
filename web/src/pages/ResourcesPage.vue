@@ -40,6 +40,7 @@ const providers = computed(() =>
     ),
 );
 const provider = ref<ProviderId | "">("");
+const detailsOpen = ref(false);
 const ready = ref(false),
   loading = ref(false),
   busy = ref(false),
@@ -625,7 +626,6 @@ async function previewMove(direction: number) {
     <header class="resource-head">
       <div>
         <h1 class="display">{{ $t("res.title") }}</h1>
-        <p class="subtle">{{ $t("resource.description") }}</p>
       </div>
       <div class="resource-actions">
         <button
@@ -663,9 +663,6 @@ async function previewMove(direction: number) {
       <div class="provider-bar">
         <div class="provider-heading">
           <h2>{{ $t("resource.host") }}</h2>
-          <RouterLink :to="lp('/me')" class="resource-link">{{
-            $t("resource.connections")
-          }}</RouterLink>
         </div>
         <div v-if="providers.length === 1" class="provider-single">
           <span class="provider-mark" aria-hidden="true">{{
@@ -708,9 +705,7 @@ async function previewMove(direction: number) {
         <p v-else class="subtle">
           {{ $t(ready ? "resource.noProvider" : "state.loading") }}
         </p>
-      </div>
-      <div v-if="provider" class="resource-summary">
-        <div class="resource-usage">
+        <div v-if="provider" class="resource-usage">
           <span class="subtle">{{ $t("res.quota.label") }}</span>
           <strong
             >{{ size(result?.usedBytes) }}
@@ -727,47 +722,47 @@ async function previewMove(direction: number) {
             <span :style="{ width: quotaRatio + '%' }" />
           </div>
         </div>
-        <div class="resource-info">
-          <details class="resource-rules">
-            <summary>
-              <span>{{ $t("resource.rules") }}</span
-              ><AccountIcon name="arrow" />
-            </summary>
-            <div class="resource-rules-content">
-              <dl v-if="formatGroups.length" class="format-groups">
-                <div v-for="group in formatGroups" :key="group.kind">
-                  <dt>{{ $t("res.kind." + group.kind) }}</dt>
-                  <dd>
-                    <span v-for="format in group.formats" :key="format">{{
-                      format
-                    }}</span>
-                  </dd>
-                </div>
-              </dl>
-              <p v-else class="subtle">{{ $t("resource.rulesUnavailable") }}</p>
-              <div v-if="cap?.maxFileBytes" class="upload-limit">
-                <span class="subtle">{{ $t("resource.maxFileLabel") }}</span
-                ><strong>{{ size(cap.maxFileBytes) }}</strong>
-              </div>
+      </div>
+      <div v-if="provider" class="resource-meta">
+        <section v-if="libraryPrefix" class="resource-prefix" :aria-label="$t('res.prefix.label')">
+          <h3>{{ $t("res.prefix.label") }}</h3>
+          <div class="prefix-row">
+            <code>{{ libraryPrefix }}</code>
+            <button class="btn btn--sm" @click="copy(libraryPrefix)">{{ $t("res.copy") }}</button>
+          </div>
+        </section>
+        <button
+          class="btn btn--ghost resource-details-toggle"
+          :aria-expanded="detailsOpen"
+          aria-controls="resource-details"
+          @click="detailsOpen = !detailsOpen"
+        >
+          {{ $t("resource.rules") }}<AccountIcon name="arrow" />
+        </button>
+      </div>
+      <div v-if="detailsOpen && provider" id="resource-details" class="resource-details">
+        <div class="resource-rules-content">
+          <dl v-if="formatGroups.length" class="format-groups">
+            <div v-for="group in formatGroups" :key="group.kind">
+              <dt>{{ $t("res.kind." + group.kind) }}</dt>
+              <dd><span v-for="format in group.formats" :key="format">{{ format }}</span></dd>
             </div>
-          </details>
-          <section
-            v-if="libraryPrefix"
-            class="resource-rules resource-prefix"
-            :aria-label="$t('res.prefix.label')"
-          >
+          </dl>
+          <p v-else class="subtle">{{ $t("resource.rulesUnavailable") }}</p>
+          <div v-if="cap?.maxFileBytes" class="upload-limit">
+            <span class="subtle">{{ $t("resource.maxFileLabel") }}</span><strong>{{ size(cap.maxFileBytes) }}</strong>
+          </div>
+        </div>
+        <div class="resource-help">
+          <template v-if="libraryPrefix">
             <h3>{{ $t("res.prefix.label") }}</h3>
-            <div class="prefix-row">
-              <code>{{ libraryPrefix }}</code
-              ><button class="btn btn--sm" @click="copy(libraryPrefix)">
-                {{ $t("res.copy") }}
-              </button>
-            </div>
             <p class="subtle">{{ $t("res.prefix.hint") }}</p>
             <p v-if="cap?.relativePaths" class="subtle">{{ $t("resource.directoryHint") }}</p>
-          </section>
+          </template>
+          <RouterLink :to="lp('/me')" class="resource-link">{{ $t("resource.connections") }}</RouterLink>
         </div>
       </div>
+      <RouterLink v-if="!provider" :to="lp('/me')" class="resource-link">{{ $t("resource.connections") }}</RouterLink>
     </section>
     <div v-if="!provider && ready" class="empty panel">
       <h2>{{ $t("resource.noProvider") }}</h2>
@@ -1198,25 +1193,24 @@ async function previewMove(direction: number) {
   font-size: 1.5rem;
   margin: 0;
 }
-.resource-head p {
-  margin: var(--s-2) 0 0;
-  font-size: 0.9rem;
-}
 .resources .input {
   border-radius: var(--r-pill);
 }
 .resource-overview {
-  margin-bottom: var(--s-5);
+  margin-bottom: var(--s-4);
+  padding: var(--s-3) var(--s-4);
 }
 .provider-bar {
-  padding: var(--s-5);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
 }
 .provider-heading {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: var(--s-3);
-  margin-bottom: var(--s-3);
 }
 .provider-heading h2 {
   margin: 0;
@@ -1234,7 +1228,7 @@ async function previewMove(direction: number) {
   align-items: center;
   gap: var(--s-2);
   min-height: var(--h-lg);
-  padding: var(--s-2) var(--s-4);
+  padding: var(--s-1) var(--s-3);
   border: 1px solid var(--line-strong);
   border-radius: var(--r-pill);
   color: var(--text);
@@ -1287,30 +1281,24 @@ async function previewMove(direction: number) {
   color: var(--text-2);
   text-underline-offset: 3px;
 }
-.resource-summary {
-  display: grid;
-  grid-template-columns: minmax(200px, 1fr) minmax(0, 1.5fr);
-  gap: var(--s-5);
-  padding: var(--s-5);
-  border-top: 1px solid var(--line);
-  align-items: start;
-}
 .resource-usage {
+  margin-left: auto;
   display: grid;
-  gap: var(--s-2);
-}
-.resource-usage > span {
+  grid-template-columns: auto auto;
+  column-gap: var(--s-2);
+  align-items: baseline;
   font-size: 0.8rem;
 }
 .resource-usage strong {
-  font-size: 1.2rem;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
 }
 .resource-usage strong span {
-  font-size: 0.85rem;
   font-weight: 400;
 }
 .resource-meter {
-  height: 5px;
+  grid-column: 1 / -1;
+  height: 3px;
   margin-top: var(--s-1);
   background: var(--surface-2);
   border-radius: var(--r-pill);
@@ -1321,40 +1309,51 @@ async function previewMove(direction: number) {
   height: 100%;
   background: var(--accent);
 }
-.resource-info {
-  min-width: 0;
-  border-left: 1px solid var(--line);
-  padding-left: var(--s-5);
-}
-.resource-rules {
-  font-size: 0.85rem;
-}
-.resource-rules summary {
+.resource-meta {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--s-3);
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-4);
+  margin-top: var(--s-2);
+  padding-top: var(--s-2);
+  border-top: 1px solid var(--line);
+}
+.resource-details-toggle {
+  margin-left: auto;
   min-height: var(--h-lg);
-  cursor: pointer;
-  list-style: none;
-  font-weight: 600;
+  font-size: 0.8rem;
+  flex: none;
 }
-.resource-rules summary::-webkit-details-marker {
-  display: none;
-}
-.resource-rules summary :deep(svg) {
+.resource-details-toggle :deep(svg) {
   width: 16px;
   height: 16px;
-  color: var(--text-3);
   transform: rotate(90deg);
   transition: transform var(--dur);
 }
-.resource-rules[open] summary :deep(svg) {
+.resource-details-toggle[aria-expanded="true"] :deep(svg) {
   transform: rotate(-90deg);
 }
-.resource-rules-content {
-  padding-top: var(--s-3);
+.resource-details {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--s-5);
   border-top: 1px solid var(--line);
+  margin-top: var(--s-2);
+  padding-block: var(--s-4) var(--s-2);
+  font-size: 0.85rem;
+}
+.resource-help p {
+  margin: var(--s-2) 0;
+  overflow-wrap: anywhere;
+}
+.resource-help h3 {
+  margin: 0;
+  font-size: inherit;
+}
+.resource-help .resource-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--h-lg);
 }
 .format-groups {
   margin: 0;
@@ -1391,30 +1390,33 @@ async function previewMove(direction: number) {
   font-size: 0.95rem;
 }
 .resource-prefix {
-  border-top: 1px solid var(--line);
-  margin-top: var(--s-2);
-  padding-top: var(--s-4);
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  gap: var(--s-3);
 }
 .resource-prefix h3 {
   margin: 0;
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-.prefix-row .btn { min-height: 44px; }
-.upload-pages { display: flex; align-items: center; justify-content: flex-end; gap: var(--s-3); }
-.resource-rules p,
-.prefix-row code {
-  overflow-wrap: anywhere;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-2);
+  flex: none;
 }
 .prefix-row {
-  margin-top: var(--s-2);
+  min-width: 0;
+  flex: 1;
   flex-wrap: nowrap;
+  gap: var(--s-2);
 }
+.prefix-row .btn { min-height: var(--h-lg); flex: none; }
 .prefix-row code {
   min-width: 0;
   flex: 1;
+  overflow-wrap: anywhere;
   font-size: 0.75rem;
 }
+.upload-pages { display: flex; align-items: center; justify-content: flex-end; gap: var(--s-3); }
 .resource-sort {
   width: 190px;
   flex: none;
@@ -1658,49 +1660,78 @@ async function previewMove(direction: number) {
   .resource-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .provider-bar,
-  .resource-summary {
-    padding: var(--s-4);
+  .resource-overview {
+    padding: var(--s-3);
   }
-  .resource-summary {
-    grid-template-columns: 1fr;
-    gap: var(--s-3);
-  }
-  .resource-info {
-    padding-left: 0;
-    padding-top: var(--s-2);
-    border-left: 0;
-    border-top: 1px solid var(--line);
+  .provider-heading {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
   }
   .provider-choice {
-    padding-inline: var(--s-3);
+    padding-inline: var(--s-2);
     flex: 1;
     justify-content: center;
     font-size: 0.85rem;
+    gap: var(--s-1);
   }
   .provider-choices {
-    flex-wrap: nowrap;
+    width: 100%;
     gap: var(--s-2);
   }
-  .provider-heading {
-    align-items: baseline;
-  }
-  .resource-link {
-    text-align: right;
-  }
-
   .resource-usage {
-    min-width: 100%;
+    margin-left: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-2);
+    width: 100%;
+  }
+  .resource-meter {
+    min-width: 32px;
+    flex: 1;
+    align-self: center;
+    margin: 0;
+  }
+  .resource-prefix {
+    flex-basis: 100%;
+    display: block;
+  }
+  .resource-prefix h3 {
+    margin-bottom: var(--s-1);
+  }
+  .resource-details-toggle {
+    margin-left: 0;
+    padding-inline: 0;
+  }
+  .resource-details {
+    grid-template-columns: 1fr;
+    gap: var(--s-4);
   }
   .resource-head {
     align-items: start;
   }
-  .resource-head p {
-    max-width: 24em;
+  .resource-actions {
+    gap: var(--s-2);
+  }
+  .resource-actions .btn {
+    padding-inline: var(--s-3);
+    font-size: 0.8rem;
+  }
+  .resource-toolbar {
+    flex-wrap: nowrap;
+    gap: var(--s-2);
   }
   .resource-toolbar .seg {
-    max-width: 100%;
+    min-width: 0;
     overflow: auto;
+  }
+  .resource-toolbar > .btn {
+    flex: none;
+  }
+  .resource-toolbar .seg__item {
+    padding-inline: var(--s-2);
   }
   .resource-pager {
     gap: var(--s-3);
