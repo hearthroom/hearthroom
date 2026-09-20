@@ -35,6 +35,8 @@ export function gameRoutes(app: App): void {
   app.get("/v1/cards/:roleId/game", async (c) => {
     const roleId = c.req.param("roleId");
     if (!ROLE_ID.test(roleId)) throw new HttpError(404, "no game config");
+    const blocked=await c.env.DB.prepare('SELECT 1 FROM moderation_state WHERE source_role_id=? AND public_blocked=1').bind(roleId).first();
+    if(blocked)throw new HttpError(404,'no game config');
     const row = await getGameSpec(c.env.DB, roleId);
     if (!row) throw new HttpError(404, "no game config");
     note(c, { event: "game_spec_read", subject: roleId });

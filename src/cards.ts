@@ -24,6 +24,8 @@ export interface CardRow {
   talk_num_prev: number;
   hot_score: number;
   registered_at: number;
+  board_hidden: number;
+  public_blocked: number;
   last_synced_at: number;
   /** 供應商代號（0004 起）。現在只有 lunatalk。 */
   provider: string;
@@ -55,7 +57,7 @@ const CARD_COLUMNS = "c.*, am.handle AS author_handle, am.display_name AS commun
 export const CARD_NUMBER = /^[1-9]\d{0,11}$/;
 
 /** 對外露出的卡片只有在榜的。榜單、標籤、作者榜、卡片頁都走這個條件。 */
-const LISTED = "status = 'approved'";
+const LISTED = "status = 'approved' AND board_hidden = 0 AND public_blocked = 0";
 /**
  * 加上成人內容的門：沒開啟（或沒登入）的人只看得到一般內容。
  * 標籤列與作者榜永遠只算一般內容——它們走邊緣快取、對所有人一樣；只有榜單、卡片頁、單一作者頁有「開了才看得到」的版本。
@@ -126,6 +128,7 @@ export interface ListOptions {
   /** relevance 只在有搜尋字時有意義；沒有搜尋字或走 LIKE 時退回 hot。 */
   /** 上榜時間下限（毫秒），日／週／月榜用。 */
   since?: number;
+  boardWindow?: string;
   sort: "hot" | "new" | "random" | "relevance";
   limit: number;
   offset: number;
@@ -204,8 +207,8 @@ export async function listCards(db: D1Database, opts: ListOptions) {
   }
   if (opts.since !== undefined) {
     // 日／週／月榜：只看上榜時間在窗口內的卡（owner 2026-09-07：時間是卡片上榜的那一刻）
-    where.push("c.registered_at >= ?");
-    binds.push(opts.since);
+    where.push("c.registered_at + COALESCE((SELECT SUM(milliseconds) FROM moderation_compensation mc WHERE mc.provider=c.provider AND mc.source_role_id=c.source_role_id AND mc.board=?),0) >= ?");
+    binds.push(opts.boardWindow ?? "", opts.since);
   }
   if (opts.authorMemberId !== undefined) {
     // 作者＝這個成員在任一家供應商上的身分

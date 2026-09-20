@@ -117,10 +117,10 @@ export async function submitHosted(env:Env,input:{memberId:string;account:number
 // This endpoint contains only authority metadata. TLS authenticates the configured
 // issuer; no user-supplied URL or browser approval is trusted by hosting services.
 export async function hostingDecision(db:D1Database,versionId:string){
- const row=await db.prepare(`SELECT v.*,s.status,c.status AS card_status,c.approved_version_id
+ const row=await db.prepare(`SELECT v.*,s.status,c.status AS card_status,c.public_blocked,EXISTS(SELECT 1 FROM moderation_blocked_versions b WHERE b.version_id=v.version_id) AS version_blocked,c.approved_version_id
   FROM hosting_versions v LEFT JOIN review_submissions s ON s.id=v.submission_id LEFT JOIN cards c ON c.id=v.card_id WHERE v.version_id=?`)
-  .bind(versionId).first<VersionRow & {status:string|null;card_status:string|null;approved_version_id:string|null}>();
+  .bind(versionId).first<VersionRow & {status:string|null;card_status:string|null;public_blocked:number|null;version_blocked:number;approved_version_id:string|null}>();
  if(!row||!row.hosted_revision_id)throw new HttpError(404,'version_not_found');
- const status=row.status==='approved'?(row.card_status==='approved'?'approved':'revoked'):(row.status??'pending');
+ const status=row.status==='approved'?(row.card_status==='approved'&&!row.public_blocked&&!row.version_blocked?'approved':'revoked'):(row.status??'pending');
  return {...receiptOf(row),status};
 }

@@ -1,3 +1,4 @@
+import { moderationMetrics } from "./moderation";
 import { bodyLimit } from "hono/body-limit";
 import { Hono } from "hono";
 import { listCards, toCard, type CardRow } from "./cards";
@@ -22,7 +23,7 @@ libraryRoutes.get('/metrics', async c => {
   const rows = await c.env.DB.prepare('SELECT operation,outcome,value FROM library_metrics ORDER BY operation,outcome').all<{ operation: string; outcome: string; value: number }>();
   const lines = rows.results.filter(r => /^(favorites|following|feed|conversations)_(get|put|delete)$/.test(r.operation) && /^(success|denied|error)$/.test(r.outcome))
     .map(r => `hearthroom_library_requests_total{operation="${r.operation}",outcome="${r.outcome}"} ${r.value}`);
-  return c.text('# HELP hearthroom_library_requests_total Community library requests.\n# TYPE hearthroom_library_requests_total counter\n' + lines.join('\n') + '\n', 200, { 'Content-Type': 'text/plain; version=0.0.4', 'Cache-Control': 'no-store' });
+  return c.text('# HELP hearthroom_library_requests_total Community library requests.\n# TYPE hearthroom_library_requests_total counter\n' + lines.join('\n') + '\n' + await moderationMetrics(c.env.DB), 200, { 'Content-Type': 'text/plain; version=0.0.4', 'Cache-Control': 'no-store' });
 });
 const kinds = ["favorites", "following"] as const;
 const offsetOf = (raw?: string) => Math.min(100000, Math.max(0, Math.floor(Number(raw) || 0)));
@@ -37,9 +38,9 @@ for (const kind of kinds) {
     const target = kind === "favorites" ? raw : await memberByHandle(c.env.DB, raw);
     if (!target) throw new HttpError(404, "not_found");
     if (c.req.method !== "DELETE" && kind === "favorites") {
-      const card = await c.env.DB.prepare('SELECT status,nsfw FROM cards WHERE id=?').bind(target).first<{status:string; nsfw:number}>();
+      const card = await c.env.DB.prepare('SELECT status,nsfw,public_blocked FROM cards WHERE id=?').bind(target).first<{status:string; nsfw:number; public_blocked:number}>();
       const access = await memberNsfw(c.env.DB, member.id);
-      if (!card || card.status !== "approved" || (card.nsfw && !(access.showNsfw && access.ageVerifiedAt))) throw new HttpError(404, "not_found");
+      if (!card || card.status !== "approved" || card.public_blocked || (card.nsfw && !(access.showNsfw && access.ageVerifiedAt))) throw new HttpError(404, "not_found");
     }
     if (c.req.method === "PUT") {
       await c.env.DB.prepare(`INSERT OR IGNORE INTO ${table}(member_id,${column},created_at) VALUES(?,?,?)`).bind(member.id, target, Date.now()).run();
@@ -105,7 +106,7 @@ libraryRoutes.get('/v1/me/conversations', async c => {
     WHERE r.member_id=? ORDER BY r.updated_at DESC,r.provider,r.role_id LIMIT 25 OFFSET ?`)
     .bind(member.id, (page - 1) * 24).all<CardRow & { conversationRoleId: string; conversationId: string; createdAt: number; updatedAt: number }>();
   return c.json({ conversations: rows.results.slice(0,24).map(row => {
-    const card = row.id && row.status === 'approved' && (!row.nsfw || (access.showNsfw && access.ageVerifiedAt)) ? toCard(row, c.req.query('lang') || 'zh-Hant') : null;
+    const card = row.id && row.status === 'approved' && !row.public_blocked && (!row.nsfw || (access.showNsfw && access.ageVerifiedAt)) ? toCard(row, c.req.query('lang') || 'zh-Hant') : null;
     return { provider: row.provider, conversationRoleId: row.conversationRoleId, conversationId: row.conversationId,
       roleName: card?.name || '', roleAvatar: card?.avatarUrl || '',
       lastChatTime: new Date(Number(row.updatedAt)).toISOString(), createTime: new Date(Number(row.createdAt)).toISOString() };

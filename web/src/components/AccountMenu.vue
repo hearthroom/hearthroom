@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ReviewBadge from "@/components/ReviewBadge.vue";
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 import { hueFrom } from "@/lib/format";
@@ -36,6 +37,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
     </RouterLink>
 
     <button class="acct__btn" :aria-label="$t('nav.menu')" aria-haspopup="menu" :aria-expanded="open" @click="open = !open">
+      <ReviewBadge dot />
       <img v-if="session.avatarUrl" :src="session.avatarUrl" alt="" class="acct__face" />
       <span v-else class="acct__face mono" :style="{ '--h': hueFrom(session.displayName) }">{{ [...session.displayName][0] }}</span>
     </button>
@@ -47,7 +49,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
       <RouterLink :to="lp('/me')" class="menu__item" role="menuitem">{{ $t("nav.me") }}</RouterLink>
       <RouterLink :to="lp('/library')" class="menu__item" role="menuitem">{{ $t("library.title") }}</RouterLink>
       <RouterLink :to="lp('/mine')" class="menu__item" role="menuitem">{{ $t("nav.mine") }}</RouterLink>
-      <RouterLink v-if="reviewerStore.reviewer" :to="lp('/review')" class="menu__item" role="menuitem">{{ $t("nav.review") }}</RouterLink>
+      <RouterLink v-if="reviewerStore.reviewer" :to="lp('/review')" class="menu__item" role="menuitem">{{ $t("nav.review") }}<ReviewBadge /></RouterLink>
       <RouterLink v-if="can('library')" :to="lp('/resources')" class="menu__item" role="menuitem">{{ $t("nav.resources") }}</RouterLink>
       <RouterLink :to="lp('/wallet')" class="menu__item" role="menuitem">{{ $t("nav.wallet") }}</RouterLink>
       <RouterLink :to="lp('/settings')" class="menu__item" role="menuitem">{{ $t("nav.settings") }}</RouterLink>
@@ -73,7 +75,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
 .acct__credits:hover { background: var(--border); }
 .acct__credits svg { width: 13px; height: 13px; fill: var(--gold); filter: drop-shadow(0 1px 1px rgba(242, 176, 30, 0.35)); }
 
-.acct__btn { padding: 2px; background: none; border: 0; border-radius: var(--r-pill); cursor: pointer; display: inline-flex; }
+.acct__btn { position:relative; padding: 2px; background: none; border: 0; border-radius: var(--r-pill); cursor: pointer; display: inline-flex; }
 .acct__btn:hover { background: var(--surface-2); }
 .acct__face { width: 30px; height: 30px; border-radius: var(--r-pill); object-fit: cover; font-size: 13px; }
 

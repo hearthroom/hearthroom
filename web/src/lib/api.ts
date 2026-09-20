@@ -327,7 +327,7 @@ export interface ReviewDetail {
   };
 }
 
-export async function fetchReviewMe(token: string): Promise<{ reviewer: boolean }> {
+export async function fetchReviewMe(token: string): Promise<{ reviewer: boolean; pending?:number; role?:"reviewer"|"manager"|"owner" }> {
   return json(await fetch(`${COMMUNITY_API}/review/me`, { headers: { ...from(), ...authHeaders(token) } }));
 }
 

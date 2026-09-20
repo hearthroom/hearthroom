@@ -25,6 +25,7 @@ const id = computed(() => String(route.params.id || ""));
 const data = ref<ReviewDetail | null>(null);
 const loading = ref(true);
 const error = ref("");
+const needsClaim = ref(false);
 const done = ref("");
 const busy = ref(false);
 const note = ref("");
@@ -48,10 +49,12 @@ async function load() {
   error.value = "";
   loading.value = !data.value;
   try {
+    needsClaim.value=false;
     data.value = await fetchReviewDetail(id.value, await token());
     document.title = pageTitle(`${t("review.detail.title")} · ${data.value.detail.document.roleName}`);
   } catch (err) {
-    error.value = err instanceof ApiError && err.status === 409 ? t("review.revoked") : err instanceof Error ? err.message : t("state.loadFailed");
+    needsClaim.value=err instanceof ApiError && err.status===409 && err.message==="claim this submission first";
+    error.value = needsClaim.value ? t("review.claimFirst") : err instanceof Error ? err.message : t("state.loadFailed");
   } finally {
     loading.value = false;
   }
@@ -62,7 +65,7 @@ async function claim() {
   error.value = "";
   try {
     await claimReview(id.value, await token());
-    if (data.value) data.value.submission.claimedByMe = true;
+    await load();
   } catch (err) {
     error.value = err instanceof Error ? err.message : t("state.actionFailed");
   } finally {
@@ -110,6 +113,7 @@ onMounted(() => { void load(); });
 <template>
   <div class="page">
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
+    <button v-if="needsClaim" class="btn btn--primary" :disabled="busy" @click="claim">{{ $t("review.action.claim") }}</button>
     <p v-if="data?.detail.partial" class="notice" role="status">{{ $t("review.partial") }}</p>
     <p v-if="done" class="notice" role="status">{{ done }} <RouterLink :to="lp('/review')">← {{ $t("review.eyebrow") }}</RouterLink></p>
 

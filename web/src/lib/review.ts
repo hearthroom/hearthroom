@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { ref, watch } from "vue";
 import { fetchReviewMe } from "./api";
+import { currentProvider } from "./provider";
 import { useSession } from "./session";
 
 /**
@@ -14,28 +15,36 @@ export const useReviewer = defineStore("reviewer", () => {
   const session = useSession();
   const reviewer = ref<boolean | null>(null);
 
+  const pending = ref(0);
+  const role = ref<"reviewer"|"manager"|"owner">("reviewer");
+  let generation = 0;
+
   async function refresh(): Promise<boolean> {
+    const requestGeneration = ++generation;
     const token = await session.accessToken();
     if (!token) {
-      reviewer.value = false;
+      reviewer.value = false; pending.value = 0;
       return false;
     }
     try {
-      reviewer.value = (await fetchReviewMe(token)).reviewer;
+      const result = await fetchReviewMe(token);
+      if (requestGeneration !== generation) return !!reviewer.value;
+      reviewer.value = result.reviewer; pending.value = result.pending ?? 0; role.value = result.role ?? "reviewer";
     } catch {
-      reviewer.value = false;
+      if (requestGeneration === generation) { reviewer.value = false; pending.value = 0; }
     }
-    return reviewer.value;
+    return !!reviewer.value;
   }
 
   watch(
-    () => session.me?.accountNumId,
+    () => `${currentProvider()}:${session.me?.accountNumId ?? ""}`,
     (id) => {
-      if (id) void refresh();
+      generation++; pending.value = 0; role.value = "reviewer";
+      if (session.me) void refresh();
       else reviewer.value = null;
     },
     { immediate: true },
   );
 
-  return { reviewer, refresh };
+  return { reviewer, pending, role, refresh };
 });

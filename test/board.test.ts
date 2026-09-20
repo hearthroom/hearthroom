@@ -119,9 +119,9 @@ describe("不想看的類型（hide）", () => {
     await seed({ id: "h4", name: "素卡", tags: [], talkNum: 5 });
   });
 
-  it("hide 帶類型鍵：任一命中的卡不列；五語名字都算；總數跟著少；回應仍是公開快取", async () => {
+  it("hide 帶類型鍵：任一命中的卡不列；五語名字都算；總數跟著少；回應要求重新驗證審核狀態", async () => {
     const res = await SELF.fetch("https://c.test/v1/cards?zone=zh&hide=training");
-    expect(res.headers.get("Cache-Control")).toMatch(/^public/);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
     const body = (await res.json()) as { items: any[]; total: number | null };
     expect(ids(body).sort()).toEqual(["h3", "h4"]);
     expect(body.total).toBe(2);
@@ -297,7 +297,7 @@ describe("榜單邊緣快取", () => {
 
   it("榜單是公開資料，可以進共用快取", async () => {
     const res = await SELF.fetch("https://c.test/v1/cards");
-    expect(res.headers.get("Cache-Control")).toContain("public");
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
   });
 });
 
