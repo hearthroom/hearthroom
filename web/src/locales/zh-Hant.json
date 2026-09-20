@@ -1393,5 +1393,10 @@
   "resource.uploadDirectory": "上傳資料夾",
   "resource.directoryHint": "資料夾上傳會保留原本的名稱與階層，例如「前綴／立繪／表情／開心.png」。",
   "resource.uploadSummary": "已完成 {done}／{total} 個檔案，{failed} 個失敗",
-  "resource.uploadPages": "上傳清單分頁"
+  "resource.uploadPages": "上傳清單分頁",
+  "community.caseStates.passed": "PASS（已完成）",
+  "community.caseStates.not_adopted": "未採納",
+  "community.caseStates.paused": "暫停處理",
+  "community.postArchived": "已封存",
+  "community.postLocked": "已鎖定"
 }
