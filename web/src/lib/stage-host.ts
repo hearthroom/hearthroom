@@ -124,11 +124,12 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
     const provider = deps.provider ?? currentProvider();
     const accessToken = deps.accessToken ?? (() => deps.session.accessToken());
     const player = deps.player === undefined ? deps.session.me : deps.player;
-    host.events.on('updateConversationId', async (payload: unknown) => {
-      const conversationId = (payload as { conversationId?: unknown } | null)?.conversationId;
+    host.events.on('conversationActivity', async (payload: unknown) => {
+      const activity = payload as { roleId?: unknown; conversationId?: unknown } | null;
+      const conversationId = activity?.conversationId;
       const path = deps.currentPath().split('?')[0] || '';
       const roleId = deps.currentRoleId?.() ?? path.match(/\/play\/([^/]+)\/?$/)?.[1];
-      if (typeof conversationId !== 'string' || !conversationId || !roleId) return;
+      if (typeof conversationId !== 'string' || !conversationId || !roleId || activity?.roleId !== decodeURIComponent(roleId)) return;
       try {
         const token = await accessToken();
         if (!token) throw new Error('unauthorized');
