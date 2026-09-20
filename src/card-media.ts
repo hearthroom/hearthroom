@@ -48,7 +48,8 @@ export async function registerImageReference(
   env: Env,
   provider: ProviderId,
   token: string,
-  url: string
+  url: string,
+  roleId?: string
 ): Promise<string> {
   if (provider === "lunatalk") return url;
   const r = await fetch(
@@ -59,7 +60,7 @@ export async function registerImageReference(
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url, ...(roleId?{roleId}:{}) }),
       // Workers supports manual/follow only. Non-2xx is rejected below; never forward tokens to redirects.
     redirect: "manual",
       signal: AbortSignal.timeout(20000),
