@@ -25,6 +25,7 @@ export interface CommunityCard {
   author: { handle: string | null; accountNumId: number; name: string; avatar: string };
   talkNum: number;
   followNum: number;
+  favoriteCount?: number;
   trending: number;
   registeredAt: number;
   syncedAt: number;

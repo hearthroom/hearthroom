@@ -100,6 +100,18 @@ it("retains the chosen community and removes only the empty duplicate", async ()
  expect(await env.DB.prepare('SELECT id FROM members WHERE handle=?').bind(b.handle).first()).toBeNull();
 });
 
+it.each(['outgoing', 'incoming'])('preserves a community with %s follows when connecting accounts', async (direction) => {
+  const a = await profile();
+  const b = await profile('new', 'harbor');
+  const owner = await env.DB.prepare('SELECT id FROM members WHERE handle=?').bind(a.handle).first<{id:string}>();
+  const target = await env.DB.prepare('SELECT id FROM members WHERE handle=?').bind(b.handle).first<{id:string}>();
+  const pair = direction === 'outgoing' ? [target!.id, owner!.id] : [owner!.id, target!.id];
+  await env.DB.prepare('INSERT INTO member_follows(member_id,author_id,created_at) VALUES (?,?,0)').bind(...pair).run();
+  expect((await link()).status).toBe(409);
+  expect((await profile('new', 'harbor')).handle).toBe(b.handle);
+  expect((await env.DB.prepare('SELECT * FROM member_follows').all()).results).toHaveLength(1);
+});
+
 it('previews both existing communities without connecting them', async () => {
   const old = await profile();
   const accidental = await profile('new', 'harbor');

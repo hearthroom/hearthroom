@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import LibraryToggle from "@/components/LibraryToggle.vue";
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute } from "vue-router";
@@ -281,7 +282,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 
           <dl class="role__stats">
             <div class="stat"><dt>{{ $t("card.stat.talk") }}</dt><dd>{{ compact(card.talkNum) }}</dd></div>
-            <div class="stat"><dt>{{ $t("card.stat.follow") }}</dt><dd>{{ compact(card.followNum) }}</dd></div>
+            <div class="stat"><dt>{{ $t("card.stat.follow") }}</dt><dd>{{ compact(card.favoriteCount ?? 0) }}</dd></div>
             <div class="stat"><dt>{{ $t("card.stat.trending") }}</dt><dd :class="{ up: card.trending > 0 }">{{ card.trending > 0 ? `+${compact(card.trending)}` : "—" }}</dd></div>
           </dl>
 
@@ -300,6 +301,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
               </svg>
             </button>
           </div>
+          <LibraryToggle kind="favorites" :target="card.id" @count="card.favoriteCount = $event" />
           <!-- 加到主畫面：能裝網頁的瀏覽器才出現；成人卡要過了門（有鑰匙）才有 -->
           <button v-if="installable && (!card.nsfw || card.shortcutKey)" type="button" class="btn btn--sm btn--ghost role__install" @click="addToHome">
             <svg viewBox="0 0 20 20" aria-hidden="true">
@@ -461,7 +463,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
   .role__layout { grid-template-columns: 1fr; }
   .role__side { position: static; grid-template-columns: 132px minmax(0, 1fr); align-items: start; column-gap: var(--s-4); }
   .role__art { grid-row: 1 / span 3; }
-  .role__stats, .role__tags, .role__actions, .role__install { grid-column: 1 / -1; }
+  .role__stats, .role__tags, .role__actions, .role__install, .role__side > .library-toggle { grid-column: 1 / -1; }
   .role__home, .role__comments { padding: var(--s-4); }
 }
 </style>
