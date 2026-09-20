@@ -1094,7 +1094,7 @@ export interface LibraryImage {
   /** 上傳時的位元組數；2026-09 前的存量圖是 0。 */
   byteSize: number;
   /** pending＝審核中、pass＝通過、reject＝被駁回；舊圖是 legacy，當通過看。 */
-  moderationState: string;
+  moderationState?: string;
   pixelWidth: number;
   pixelHeight: number;
   createTime: string;

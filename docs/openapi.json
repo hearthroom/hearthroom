@@ -4875,6 +4875,9 @@
               }
             }
           }
+        },
+        "x-harperharbor": {
+          "description": "List the account-owned stored media with pagination, folder scope and storage quota. Harbor media has no moderationState field."
         }
       }
     },
@@ -4974,6 +4977,9 @@
               }
             }
           }
+        },
+        "x-harperharbor": {
+          "description": "Upload one image or font. Harbor validates file type, size, ownership and storage quota; stored media is immediately usable without content review. Responses do not include moderationState."
         }
       }
     },
@@ -9683,6 +9689,9 @@
               }
             }
           }
+        },
+        "x-harperharbor": {
+          "description": "Complete an upload after validating its bytes, file type, dimensions and quota. Stored media is immediately usable without content review. The response matches /image/upload and does not include moderationState."
         }
       }
     },
