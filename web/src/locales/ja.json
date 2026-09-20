@@ -1159,7 +1159,7 @@
   "library.conversations": "最近の会話",
   "library.favorites": "保存したカード",
   "library.following": "フォロー中",
-  "library.conversationsHint": "このサイトで開いた会話を一覧に保存します。選ぶと続きから遊べます。",
+  "library.conversationsHint": "このサイトで会話したカードを保存します。いつでも戻って続きを楽しめます。",
   "library.favoritesHint": "保存したカードから、次の物語をいつでも選べます。",
   "library.followingHint": "フォローした作者の新作は、ホームの「フォロー新着」に表示されます。",
   "library.conversationsEmpty": "まだ会話がありません",

@@ -95,9 +95,18 @@ describe("/play/:roleId", () => {
     expect(installMoonStage).toHaveBeenCalledTimes(1);
     const [, options] = installMoonStage.mock.calls[0] as unknown as [unknown, { auth: { getAccessToken(): Promise<string | null> }; api: { base: string }; host: { ui: { toast(t: string): void } } }];
     expect(recordConversation).not.toHaveBeenCalled();
-    const handler = (options.host as any).events.on.mock.calls.find((call: any[]) => call[0] === 'updateConversationId')[1];
-    await handler({conversationId:'conversation-fixture'});
-    expect(recordConversation).toHaveBeenCalledWith('tok-1','lunatalk','role-9','conversation-fixture');
+    const handler = (options.host as any).events.on.mock.calls.find((call: any[]) => call[0] === 'updateConversationId')?.[1];
+    await handler?.({conversationId:'empty-conversation'});
+    expect(recordConversation).not.toHaveBeenCalled();
+    const activity = (options.host as any).events.on.mock.calls.find((call: any[]) => call[0] === 'conversationActivity')?.[1];
+    expect(activity).toBeTypeOf('function');
+    await activity({roleId:'role-9',conversationId:'played-conversation'});
+    expect(recordConversation).toHaveBeenLastCalledWith('tok-1','lunatalk','role-9','played-conversation');
+    recordConversation.mockClear();
+    await handler?.({conversationId:'new-empty-conversation'});
+    expect(recordConversation).not.toHaveBeenCalled();
+    await activity({roleId:'previous-role',conversationId:'late-conversation'});
+    expect(recordConversation).not.toHaveBeenCalled();
     expect(options.api.base).toMatch(/^https?:\/\//);
     await expect(options.auth.getAccessToken()).resolves.toBe("tok-1");
     // 畫布送訊息前看的是登入的人：宿主要把 session 裡的人交出去

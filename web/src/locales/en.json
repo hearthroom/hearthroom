@@ -1159,7 +1159,7 @@
   "library.conversations": "Recent chats",
   "library.favorites": "Saved cards",
   "library.following": "Following",
-  "library.conversationsHint": "Conversations you open here stay in this list, ready to continue.",
+  "library.conversationsHint": "Cards you have chatted with here stay in this list, ready to continue.",
   "library.favoritesHint": "Your saved cards stay here until you are ready for another story.",
   "library.followingHint": "New cards from these creators appear in Following on the home page.",
   "library.conversationsEmpty": "No conversations yet",
