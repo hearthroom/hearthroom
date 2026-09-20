@@ -47,7 +47,7 @@ it("keeps SaaS image URLs: registers a reference on Harbor and writes the origin
   const source = await transfers.read(env, "lunatalk", "luna-token", "source", 1);
   await transfers.update(env, "harbor", "harbor-token", "target", source.card);
   expect(requests.some((r) => r.init?.method === "PUT" || r.url.includes("/uploads") || r.url === original)).toBe(false);
-  expect(body(requests.find((r) => r.url.endsWith("/media/references")))).toEqual({ url: original });
+  expect(body(requests.find((r) => r.url.endsWith("/media/references")))).toEqual({ url: original, roleId:"target" });
   const document = requests.find((r) => r.url.endsWith("/role/target/document"));
   expect(body(document).fields.roleAvatar).toBe(original);
   // 兩家走同一組契約路由：沒有 Harbor 專用的 /roles/… 路徑
@@ -83,7 +83,7 @@ it("copies bound worldbooks and the author asset, then binds the new book to the
 
   const map = await transfers.update(env, "harbor", "t", "target", source.card);
   expect(map).toEqual({ book: "tb" });
-  expect(body(requests.find((r) => r.url.endsWith("/open/v1/worldbook")))).toMatchObject({ name: "Lore", language: "en" });
+  expect(body(requests.find((r) => r.url.endsWith("/open/v1/worldbook?roleId=target")))).toMatchObject({ name: "Lore", language: "en" });
   const doc = body(requests.find((r) => r.url.endsWith("/worldbook/tb/document")));
   expect(doc.binding).toEqual({ roleId: "target" });
   expect(doc.entries).toEqual([{ op: "create", name: "Town", content: "A port", keywords: ["port"], secondaryKeywords: [], isEnabled: true, isConstant: false, category: "custom", triggerRegion: "both", matchOptions: null }]);
@@ -106,7 +106,7 @@ it("re-sync overwrites the mapped target book instead of creating another", asyn
   };
   const map = await transfers.update(env, "harbor", "t", "target", card, undefined, { book: "tb" });
   expect(map).toEqual({ book: "tb" });
-  expect(requests.some((r) => r.url.endsWith("/open/v1/worldbook"))).toBe(false);
+  expect(requests.some((r) => r.url.endsWith("/open/v1/worldbook?roleId=target"))).toBe(false);
   const doc = body(requests.find((r) => r.url.endsWith("/worldbook/tb/document")));
   expect(doc.entries.map((e: any) => e.op)).toEqual(["delete", "delete", "create"]);
   expect(doc.entries.slice(0, 2).map((e: any) => e.entryId)).toEqual(["old1", "old2"]);
@@ -180,7 +180,7 @@ it('preserves Lorebook entries, alternate greetings and author rendering assets'
     if(u.includes('/worldbook/detail'))return json({worldbookId:'source-book',name:'Support',description:'Policy',language:'en',format:'tavern',tags:''});
     if(u.includes('/worldbook/entry/list'))return json({entries:u.includes('target-book')?[]:[entry]});
     if(u.includes('/role/author-asset?'))return json(u.includes('roleId=source')?asset:{version:0,rules:[],pageMode:'classic'});
-    if(u.endsWith('/worldbook'))return json({worldbookId:'target-book'});
+    if(u.includes('/worldbook?roleId='))return json({worldbookId:'target-book'});
     return json({});
   }));
   const source=await transfers.read(env,'lunatalk','source-token','source',1);
@@ -245,4 +245,11 @@ it('preserves names from the structured tags returned by the source API',async()
 it.each([['lunatalk','assets.lunatalk.ai'],['harbor','assets.harperharbor.com']] as const)('accepts the current %s SaaS asset host without copying bytes',async(provider,host)=>{
  fakeUpstream({'/role/detail':()=>({...role,roleAvatar:`https://${host}/synthetic.png`}),'/worldbook/bindings':()=>({bindings:[]}),'/author-asset':()=>json({},404)});
  expect((await transfers.read(env,provider,'fixture','source',1)).card.media?.avatar).toBe(`https://${host}/synthetic.png`);
+});
+
+it("makes a Harbor copy usable by ID after synchronization without community publication", async () => {
+ const requests=fakeUpstream({"/worldbook/bindings":()=>({bindings:[]})});
+ await transfers.update(env,"harbor","token","target",{name:"Agent",summary:"",description:"Instructions",greeting:"Hello",language:"en"});
+ expect(body(requests.find(r=>r.url.endsWith('/role/target/visibility')))).toEqual({visibility:'unlisted'});
+ expect(requests.some(r=>r.url.endsWith('/publish'))).toBe(false);
 });
