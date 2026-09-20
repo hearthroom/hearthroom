@@ -180,13 +180,16 @@ export async function syncCard(env: Env, i: SyncInput) {
       const actual = await cardHash(existing.card);
       if (targetHash && actual !== targetHash && actual !== hash && await cardHash(existing.card,true) !== targetHash)
         throw new HttpError(409, "sync_target_changed");
-      if (actual === hash)
+      if (actual === hash) {
+        // Legacy Harbor copies may still be private even when their content
+        // already matches. Repair access only after the target-version guard.
+        await transfers.ensurePlayable(env,i.targetProvider,i.targetToken,roleId);
         status = existing.public
           ? "published"
           : existing.pending
           ? "pending"
           : "synced";
-      else {
+      } else {
         if (existing.pending || (existing.public && !i.updatePublished))
           throw new HttpError(409, "sync_target_published");
         if(existing.public)await transfers.unpublish(env,i.targetProvider,i.targetToken,roleId);
