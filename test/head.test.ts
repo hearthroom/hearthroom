@@ -32,7 +32,7 @@ describe("分享預覽", () => {
     // canonical 一律指向正牌主機：搬家期間兩個網域並存，搜尋引擎要知道哪個才算數
     expect(html).toContain('<link rel="canonical" href="https://hearthroom.club/cards/r-1">');
     expect(html).toContain('<html lang="zh-Hant">');
-    expect(headers.get("cache-control")).toContain("max-age=60");
+    expect(headers.get("cache-control")).toBe("no-store");
     // 改寫過的內容不能沿用殼的驗證器：帶著它去重驗會拿到 304，卡改了也看不到
     expect(headers.get("etag")).toBeNull();
     expect(headers.get("last-modified")).toBeNull();

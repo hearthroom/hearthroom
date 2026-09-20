@@ -1,3 +1,4 @@
+import { moderationRoutes, reviewSummary } from "./moderation";
 import { libraryRoutes } from "./library";
 import { hostGateway, submitHosted, hostingDecision, beginHostedEdit } from "./hosting";
 import { saveCommunityProfile, cleanAvatars } from "./community-profile";
@@ -63,6 +64,7 @@ app.use("*", async (c, next) => {
   const ev: Pending = {};
   c.set("ev", ev);
   await next();
+  if (/^\/v1\/(cards|tags|authors)(?:\/|$)/.test(c.req.path) || /^\/(?:zh-Hant\/|zh-Hans\/|en\/|ja\/|ko\/)?cards\//.test(c.req.path)) c.header('Cache-Control',c.res.headers.get('Cache-Control')?.includes('private')?'private, no-store':'no-store');
   // beacon 端點自己發事件；健康檢查沒有分析價值
   const path = new URL(c.req.url).pathname;
   if (path === "/v1/e" || path === "/v1/health" || path === "/v1/region") return;
@@ -110,6 +112,8 @@ app.use("*", async (c, next) => {
   url.port = "";
   return c.redirect(url.toString(), 301);
 });
+
+app.route("/", moderationRoutes);
 
 app.onError((err, c) => {
   const ev = c.get("ev") as Pending | undefined;
@@ -237,14 +241,16 @@ function parseZone(raw: string | undefined): Zone | undefined {
  * 邊緣快取的鍵。供應商必須進去：兩家看的是各自的卡，共用一份快取等於把一家的內容
  * 發給另一家的訪客。標頭不是快取鍵的一部分，所以要塞進網址。
  */
-function cacheKeyFor(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>): Request {
-  return new Request(c.req.url, { method: "GET", headers: c.req.raw.headers });
+async function cacheKeyFor(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>): Promise<Request> {
+  const revision = await c.env.DB.prepare("SELECT revision FROM moderation_clock WHERE id=1").first<{revision:number}>();
+  const url = new URL(c.req.url); url.searchParams.set("_moderation",String(revision?.revision ?? 0));
+  return new Request(url, { method: "GET", headers: c.req.raw.headers });
 }
 
 /** 公開、只讀、對所有人一樣的回應，都走這個邊緣快取。 */
 async function cachedJson(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, ttl: number, compute: () => Promise<unknown>) {
   const cache = await caches.open(boardCache.namespace);
-  const key = cacheKeyFor(c);
+  const key = await cacheKeyFor(c);
   const hit = await cache.match(key);
   if (hit) {
     const res = new Response(hit.body, hit);
@@ -275,7 +281,7 @@ app.get("/v1/cards", async (c) => {
   const allowNsfw = await viewerAllowsNsfw(c);
   // 只有 GET 而且完全公開，所以整個 URL 就是快取鍵，不必自己組。推薦是隨機的，快取住就不隨機了。
   // 榜單不分供應商（owner 2026-09-17）：X-Provider 只是「我用哪家的帳號」，不進快取鍵也不進查詢。
-  const cacheKey = cacheKeyFor(c);
+  const cacheKey = await cacheKeyFor(c);
   const cache = await caches.open(boardCache.namespace);
   const hit = allowNsfw || c.req.query("sort") === "random" ? undefined : await cache.match(cacheKey);
   if (hit) {
@@ -329,6 +335,7 @@ app.get("/v1/cards", async (c) => {
     allowNsfw,
     sort,
     since,
+    boardWindow: period ? undefined : c.req.query("sort"),
     limit,
     offset,
   });
@@ -412,8 +419,9 @@ async function ownCardView(c: Context<{ Bindings: Env; Variables: { ev: Pending 
 app.get("/v1/cards/:id", async (c) => {
   const row = await getCard(c.env.DB, c.req.param("id"),providerOf(c));
   // 還沒過審、被駁回、離榜重審中的卡對外都不存在；作者在「我的卡片」看得到狀態。
-  if (!row || row.status !== "approved") {
+  if (!row || row.status !== "approved" || row.public_blocked) {
     // 作者本人例外：給他看，但不算一次瀏覽、不進任何快取
+    if (row?.public_blocked) throw new HttpError(404, "card not found");
     const own = await ownCardView(c, c.req.param("id"), row);
     if (own) return c.json(own, 200, { "Cache-Control": "private, no-store" });
     throw new HttpError(404, "card not found");
@@ -440,7 +448,7 @@ app.get("/v1/cards/:id", async (c) => {
  */
 async function shortcutCard(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>) {
   const row = await getCard(c.env.DB, c.req.param("id") ?? "");
-  if (!row || row.status !== "approved") throw new HttpError(404, "card not found");
+  if (!row || row.status !== "approved" || row.public_blocked) throw new HttpError(404, "card not found");
   const key = c.req.query("k");
   if (row.nsfw === 1 && !(await verifyShortcutKey(c.env.SHORTCUT_SECRET, row.id, key))) throw new HttpError(404, "card not found");
   return { row, key: row.nsfw === 1 ? key : undefined };
@@ -605,7 +613,7 @@ app.get('/v1/me/card-copies/:roleId',async(c)=>{
 app.get('/v1/cards/:roleId/platforms',async(c)=>{
  const provider=providerOf(c);const roleId=c.req.param('roleId');
  const base=await getCard(c.env.DB,roleId,provider);
- if(!base||base.status!=='approved')throw new HttpError(404,'card not registered');
+ if(!base||base.status!=='approved'||base.public_blocked)throw new HttpError(404,'card not registered');
  if(base.nsfw && !await viewerAllowsNsfw(c))throw new HttpError(403,'nsfw_gated');
  if(base.approved_version_id && base.approved_hosted_role_id) {
   const decision=await hostingDecision(c.env.DB,base.approved_version_id);
@@ -945,7 +953,7 @@ app.get('/v1/hosting/versions/:versionId/decision',async(c)=>{
 
 app.get("/v1/review/me", async (c) => {
   const member = await requireMember(c);
-  return c.json({ reviewer: await isReviewer(c.env.DB, member.id) }, 200, { "Cache-Control": "private, no-store" });
+  return c.json(await reviewSummary(c.env.DB,member), 200, { "Cache-Control": "private, no-store" });
 });
 
 app.get("/v1/review/queue", async (c) => {
@@ -1272,7 +1280,7 @@ app.get("*", async (c) => {
     let id: string;
     try { id = decodeURIComponent(m[3]!); } catch { return new Response(shell.body, { status: 404, headers: shell.headers }); }
     const row = await getCard(c.env.DB, id);
-    if (!row || row.status !== "approved") return new Response(shell.body, { status: 404, headers: shell.headers });
+    if (!row || row.status !== "approved" || row.public_blocked) return new Response(shell.body, { status: 404, headers: shell.headers });
     // 成人內容不做分享預覽（抓取器沒有身分）：回沒有卡片資訊的殼，讓前端畫登入／驗年齡的門
     if (row.nsfw === 1) return new Response(shell.body, { status: 200, headers: shell.headers });
     const card = toCard(row, l);
