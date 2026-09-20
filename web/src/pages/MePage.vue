@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BadgeShowcase from "@/components/BadgeShowcase.vue";
 /**
  * 「我的」：登入者在本站的身分，以及各功能的入口。
  *
@@ -69,7 +70,8 @@ onMounted(() => {
         </div>
       </div>
      </div>
-     <CommunityBadgeList v-if="community" :badges="community.badges.filter(b => b !== 'discord_linked')" :level="community.level" />
+     <CommunityBadgeList v-if="community" :badges="[]" :level="community.level" />
+     <BadgeShowcase v-if="handle" :key="handle" :handle="handle" own />
      <p v-if="session.profile?.bio" class="me__bio">{{ session.profile.bio }}</p>
      <p v-if="session.profile" class="me__since"><AccountIcon name="calendar" />{{ $t("me.since", { date: dateOnly(Math.floor(session.profile.memberSince / 1000)) }) }}</p>
      <div class="me__profile-actions">

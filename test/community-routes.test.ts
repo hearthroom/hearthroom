@@ -99,7 +99,7 @@ it("publishes only opted-in badges; never returns the Discord account or private
     nonce,
   );
   await env.DB.prepare(
-    "INSERT INTO community_awards VALUES(?,'first_work','approved-work',?)",
+    "INSERT INTO community_awards(member_id,badge,source,created_at) VALUES(?,'first_work','approved-work',?)",
   )
     .bind(m, Date.now())
     .run();
