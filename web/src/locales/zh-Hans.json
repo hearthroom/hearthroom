@@ -1034,7 +1034,7 @@
   "linked.playWith": "选择游玩平台",
   "linked.balanceUnknown": "余额暂时无法读取",
   "linked.balance": "可用点数 {amount}",
-  "linked.playHint": "使用所选平台的账号和点数。对话会保留在该平台，各平台的计价方式可能不同。",
+  "linked.playHint": "本次游玩使用所选服务的积分，各服务的计费方式可能不同。",
   "linked.connectPlay": "连接账号并游玩",
   "linked.noPlayable": "这张卡目前没有可游玩的公开版本。",
   "linked.platformLoadFailed": "无法确认这张卡的游玩平台，请重试。",
@@ -1159,7 +1159,7 @@
   "library.conversations": "最近对话",
   "library.favorites": "收藏卡片",
   "library.following": "关注作者",
-  "library.conversationsHint": "你玩过的卡按最近对话排序，同一张卡的其他存档可在对话中查看。",
+  "library.conversationsHint": "你在本站打开的对话都会保存在这个列表，点击即可继续游玩。",
   "library.favoritesHint": "你收藏的卡片会留在这里，随时回来挑下一个故事。",
   "library.followingHint": "你关注的作者都在这里，新作品会出现在首页的“关注动态”。",
   "library.conversationsEmpty": "还没有对话记录",
@@ -1185,5 +1185,6 @@
   "library.authorHint": "查看作者作品",
   "library.navigation": "主要导航",
   "library.unsave": "取消收藏",
-  "library.unfollow": "取消关注"
+  "library.unfollow": "取消关注",
+  "library.recordFailed": "这段对话暂时无法加入列表，下次打开时会重试。"
 }

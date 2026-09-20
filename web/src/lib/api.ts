@@ -1,5 +1,5 @@
 import { COMMUNITY_API, UPSTREAM_API } from "./config";
-import { currentProvider, type ProviderId } from "./provider";
+import { apiBaseOf, currentProvider, type ProviderId } from "./provider";
 import { hideParam } from "./hidden-tags";
 import { currentSurface } from "./track";
 import { i18n } from "./i18n";
@@ -395,28 +395,28 @@ export async function updateSiteSettings(input: { showNsfw?: boolean; birthdate?
  * 沙箱卡的存檔（舞台代作者腳本讀寫）：每個成員每張卡最多 10 個 key、單值 64 KB。
  * 錯誤碼 key_invalid／value_too_large／saves_full 由舞台那側翻成作者看得懂的 sdk 錯誤。
  */
-export async function fetchCardSaves(roleId: string, token: string): Promise<Record<string, unknown>> {
+export async function fetchCardSaves(roleId: string, token: string, provider: ProviderId = currentProvider()): Promise<Record<string, unknown>> {
   const body = await json<{ saves: Record<string, unknown> }>(
-    await fetch(`${COMMUNITY_API}/me/cards/${encodeURIComponent(roleId)}/saves`, { headers: { ...from(), ...authHeaders(token) } }),
+    await fetch(`${COMMUNITY_API}/me/cards/${encodeURIComponent(roleId)}/saves`, { headers: { ...from(), "X-Provider": provider, ...authHeaders(token) } }),
   );
   return body.saves ?? {};
 }
 
-export async function putCardSave(roleId: string, key: string, value: unknown, token: string): Promise<void> {
+export async function putCardSave(roleId: string, key: string, value: unknown, token: string, provider: ProviderId = currentProvider()): Promise<void> {
   await json(
     await fetch(`${COMMUNITY_API}/me/cards/${encodeURIComponent(roleId)}/saves/${encodeURIComponent(key)}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json", ...from(), ...authHeaders(token) },
+      headers: { "Content-Type": "application/json", ...from(), "X-Provider": provider, ...authHeaders(token) },
       body: JSON.stringify({ value }),
     }),
   );
 }
 
-export async function deleteCardSave(roleId: string, key: string, token: string): Promise<void> {
+export async function deleteCardSave(roleId: string, key: string, token: string, provider: ProviderId = currentProvider()): Promise<void> {
   await json(
     await fetch(`${COMMUNITY_API}/me/cards/${encodeURIComponent(roleId)}/saves/${encodeURIComponent(key)}`, {
       method: "DELETE",
-      headers: { ...from(), ...authHeaders(token) },
+      headers: { ...from(), "X-Provider": provider, ...authHeaders(token) },
     }),
   );
 }
@@ -647,9 +647,9 @@ export async function savePlayerPersona(patch: Partial<PlayerPersona>, token: st
   return { userName: String(raw.userName || ""), userSex: String(raw.userSex || ""), userDefine: String(raw.userDefine || "") };
 }
 
-export async function fetchWallet(token: string): Promise<Wallet> {
-  const raw = await json<Wallet & {available?:number}>(await fetch(`${UPSTREAM_API}/open/v1/me/wallet`, {headers:authHeaders(token)}));
-  return currentProvider()==='harbor' ? {score:raw.available ?? 0,tempScore:0,plans:[]} : raw;
+export async function fetchWallet(token: string, provider: ProviderId = currentProvider()): Promise<Wallet> {
+  const raw = await json<Wallet & {available?:number}>(await fetch(`${provider === currentProvider() ? UPSTREAM_API : apiBaseOf(provider)}/open/v1/me/wallet`, {headers:authHeaders(token)}));
+  return provider==='harbor' ? {score:raw.available ?? 0,tempScore:0,plans:[]} : raw;
 }
 
 export interface ScoreRecord {
@@ -666,9 +666,9 @@ export interface ScoreRecordPage {
   records: ScoreRecord[];
 }
 
-export async function fetchScoreRecords(token: string, page = 1, pageSize = 20): Promise<ScoreRecordPage> {
+export async function fetchScoreRecords(token: string, page = 1, pageSize = 20, provider: ProviderId = currentProvider()): Promise<ScoreRecordPage> {
   return json<ScoreRecordPage>(
-    await fetch(`${UPSTREAM_API}/open/v1/me/score/records?pageNum=${page}&pageSize=${pageSize}`, {
+    await fetch(`${provider === currentProvider() ? UPSTREAM_API : apiBaseOf(provider)}/open/v1/me/score/records?pageNum=${page}&pageSize=${pageSize}`, {
       headers: authHeaders(token),
     }),
   );

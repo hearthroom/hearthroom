@@ -11,6 +11,8 @@ import { createMemoryHistory, createRouter, type Router } from "vue-router";
 import { i18n } from "../src/lib/i18n";
 import { useSession } from "../src/lib/session";
 
+const recordConversation = vi.fn(async () => {});
+vi.mock('../src/lib/library', () => ({recordConversation}));
 const installMoonStage = vi.fn(async () => {});
 const mergeStageMessages = vi.fn();
 const MoonStage = defineComponent({
@@ -21,7 +23,7 @@ const MoonStage = defineComponent({
 vi.mock("moonstage/stage", () => ({
   installMoonStage,
   mergeStageMessages,
-  browserHost: (o: Record<string, unknown>) => ({ storage: {}, clipboard: {}, events: {}, scrollTo() {}, ...o }),
+  browserHost: (o: Record<string, unknown>) => ({ storage: {}, clipboard: {}, events: { on: vi.fn() }, scrollTo() {}, ...o }),
   MoonStage,
 }));
 vi.mock("moonstage/stage.css", () => ({}));
@@ -92,6 +94,10 @@ describe("/play/:roleId", () => {
     await mount("/play/role-9");
     expect(installMoonStage).toHaveBeenCalledTimes(1);
     const [, options] = installMoonStage.mock.calls[0] as unknown as [unknown, { auth: { getAccessToken(): Promise<string | null> }; api: { base: string }; host: { ui: { toast(t: string): void } } }];
+    expect(recordConversation).not.toHaveBeenCalled();
+    const handler = (options.host as any).events.on.mock.calls.find((call: any[]) => call[0] === 'updateConversationId')[1];
+    await handler({conversationId:'conversation-fixture'});
+    expect(recordConversation).toHaveBeenCalledWith('tok-1','lunatalk','role-9','conversation-fixture');
     expect(options.api.base).toMatch(/^https?:\/\//);
     await expect(options.auth.getAccessToken()).resolves.toBe("tok-1");
     // 畫布送訊息前看的是登入的人：宿主要把 session 裡的人交出去

@@ -1,5 +1,5 @@
-import { COMMUNITY_API, UPSTREAM_API } from './config';
-import { currentProvider } from './provider';
+import { COMMUNITY_API } from './config';
+import { currentProvider, type ProviderId } from './provider';
 import { ApiError, describeApiError } from './api';
 
 async function read<T>(response: Response): Promise<T> {
@@ -12,19 +12,24 @@ export async function libraryRequest<T>(path: string, token: string, method = 'G
   }));
 }
 export interface ConversationSummary {
+  provider: ProviderId;
   conversationId: string;
   conversationRoleId: string;
   conversationTitle: string | null;
   roleName: string;
   roleAvatar: string;
-  lastChat: string;
+  lastChat?: string;
   lastChatTime?: string;
   createTime?: string;
 }
 export async function fetchConversations(token: string, language: string, page = 1) {
-  const result = await read<{ conversations: ConversationSummary[] | null; hasNextPage: boolean }>(await fetch(
-    `${UPSTREAM_API}/open/v1/conversation/list?pageNum=${page}&pageSize=24`,
-    { cache: 'no-store', headers: { Authorization: `Bearer ${token}`, language } },
-  ));
-  return { ...result, conversations: result.conversations ?? [] };
+  return libraryRequest<{ conversations: ConversationSummary[]; hasNextPage: boolean }>(
+    `conversations?pageNum=${page}&lang=${encodeURIComponent(language)}`, token);
+}
+
+export async function recordConversation(token: string, provider: ProviderId, roleId: string, conversationId: string): Promise<void> {
+  await read(await fetch(`${COMMUNITY_API}/me/conversations`, {
+    method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'X-Provider': provider, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ roleId, conversationId }),
+  }));
 }

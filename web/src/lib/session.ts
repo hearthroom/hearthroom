@@ -131,6 +131,8 @@ export const useSession = defineStore("session", () => {
     await Promise.all(PROVIDERS.map(provider => revokeSession(provider.id)));
   }
 
+  async function ensureProfile() { if (profilePromise) await profilePromise; }
+
   /** 剛充完值回來、或想看最新餘額時呼叫。 */
   async function refreshWallet() {
     const t = await accessToken();
@@ -138,5 +140,5 @@ export const useSession = defineStore("session", () => {
   }
 
   /** 重新向供應商授權（真正開始 OAuth）。進站的「登入」一律先到本站的登入頁（/login），由那一頁呼叫這個。 */
-  return { displayName, avatarUrl, token, me, wallet, profile, ready, adopt, restore, accessToken, refreshWallet, logout, login: beginLogin };
+  return { displayName, avatarUrl, token, me, wallet, profile, ready, adopt, restore, accessToken, ensureProfile, refreshWallet, logout, login: beginLogin };
 });

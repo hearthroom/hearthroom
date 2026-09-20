@@ -1,6 +1,6 @@
 import { SELF, env } from "cloudflare:test";
 import { beforeEach, afterEach, expect, it } from "vitest";
-import { resetDb, identities, rolesOnMainSite, bearer, restoreUpstream } from "./helpers";
+import { resetDb, identities, identitiesFor, rolesOnMainSite, bearer, restoreUpstream } from "./helpers";
 import { emptyCommunity } from '../src/connections';
 
 let cardId = "";
@@ -68,4 +68,34 @@ it("exports durable low-cardinality metrics for successful and denied operations
   expect(text).toContain('hearthroom_library_requests_total{operation="favorites_put",outcome="denied"} 1');
   expect(text).not.toContain(cardId);
   expect(text).not.toContain(handle);
+});
+
+
+it('owns the recent conversation index across connected issuers, with private member isolation', async () => {
+  identitiesFor({ lunatalk: {fan:20001,other:20002}, harbor: {fan:20001} });
+  const put = (token: string, provider: string, roleId: string, conversationId: string) => SELF.fetch('https://c.test/v1/me/conversations', {
+    method: 'PUT', headers: { ...bearer(token), 'X-Provider': provider, 'Content-Type': 'application/json' }, body: JSON.stringify({ roleId, conversationId }),
+  });
+  expect((await put('', 'lunatalk', 'library-role', 'chat-1')).status).toBe(401);
+  expect((await put('fan', 'lunatalk', 'library-role', 'chat-1')).status).toBe(200);
+  expect((await put('fan', 'lunatalk', 'library-role', 'chat-2')).status).toBe(200);
+  const me = await env.DB.prepare("SELECT member_id AS id FROM member_identities WHERE external_id='20001'").first<{id:string}>();
+  await env.DB.prepare("INSERT INTO member_identities(provider,external_id,member_id,linked_at) VALUES('harbor','20001',?,1)").bind(me!.id).run();
+  expect((await put('fan', 'harbor', 'another-role', 'chat-3')).status).toBe(200);
+  const response = await request('me/conversations');
+  expect(response.headers.get('Cache-Control')).toContain('no-store');
+  const rows = (await body(response)).conversations;
+  expect(rows).toHaveLength(2);
+  expect(rows.find((r: any) => r.conversationId === 'chat-2').provider).toBe('lunatalk');
+  expect(rows.find((r: any) => r.conversationId === 'chat-3').provider).toBe('harbor');
+  expect(rows.find((r: any) => r.conversationId === 'chat-2').roleName).not.toBe('');
+  expect(rows.map((r: any) => r.conversationId)).toEqual(expect.arrayContaining(['chat-2','chat-3']));
+  expect((await body(await request('me/conversations','other'))).conversations).toEqual([]);
+  expect(await emptyCommunity(env.DB, me!.id)).toBe(false);
+  const viaHarbor = await SELF.fetch('https://c.test/v1/me/conversations',{headers:{...bearer('fan'),'X-Provider':'harbor'}});
+  expect((await body(viaHarbor)).conversations).toHaveLength(2);
+  expect((await put('fan','lunatalk','','')).status).toBe(400);
+  const metrics = await (await SELF.fetch('https://c.test/metrics')).text();
+  expect(metrics).toContain('operation="conversations_put",outcome="success"');
+  expect(metrics).not.toContain('chat-2');
 });

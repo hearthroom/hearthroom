@@ -11,6 +11,9 @@
 import type { App, Component } from "vue";
 import { reactive } from "vue";
 import type { Router } from "vue-router";
+import { recordConversation } from '@/lib/library';
+import { apiBaseOf, currentProvider, type ProviderId } from '@/lib/provider';
+import type { Me } from '@/lib/api';
 import { UPSTREAM_API } from "@/lib/config";
 import { deleteCardSave, fetchCardSaves, putCardSave } from "@/lib/api";
 import { confirmDialog } from "@/lib/confirm";
@@ -37,8 +40,12 @@ export interface StageDeps {
   app: App;
   router: Router;
   session: Session;
+  provider?: ProviderId;
+  accessToken?: () => Promise<string | null>;
+  player?: Me | null;
   /** 目前所在頁的完整路徑，登入後要回到這裡。 */
   currentPath: () => string;
+  currentRoleId?: () => string;
   /** 站台的 locale 前綴工具（/zh-Hans/...）。 */
   lp: (path: string) => string;
 }
@@ -53,7 +60,7 @@ const SITE_HOST = "hearthroom.club";
  * 補 CSP）；本機開發或別的主機上沒有那些子網域，退回不透明 origin 載同源的 /sandbox/index.html
  * （前端 build 會把上游的殼複製到 web/public/sandbox/）。
  */
-export function sandboxOptions(hostname: string, session: Session) {
+export function sandboxOptions(hostname: string, session: Pick<Session, 'accessToken'>, provider: ProviderId = currentProvider()) {
   // 卡片 App 網域（play.<站台>）也在同一個 zone 底下，殼子網域一樣用得到
   const production = hostname === SITE_HOST || hostname === `www.${SITE_HOST}` || hostname === `play.${SITE_HOST}`;
   const token = () => session.accessToken();
@@ -72,9 +79,9 @@ export function sandboxOptions(hostname: string, session: Session) {
     shellUrl: (roleId: string) => { const l = label(roleId); return l ? `https://c${l}.${SITE_HOST}/sandbox/` : "/sandbox/"; },
     origin: (roleId: string) => { const l = label(roleId); return l ? `https://c${l}.${SITE_HOST}` : "null"; },
     saves: {
-      load: (roleId: string) => withToken((t) => fetchCardSaves(roleId, t)),
-      set: (roleId: string, key: string, value: unknown) => withToken((t) => putCardSave(roleId, key, value, t)),
-      remove: (roleId: string, key: string) => withToken((t) => deleteCardSave(roleId, key, t)),
+      load: (roleId: string) => withToken((t) => fetchCardSaves(roleId, t, provider)),
+      set: (roleId: string, key: string, value: unknown) => withToken((t) => putCardSave(roleId, key, value, t, provider)),
+      remove: (roleId: string, key: string) => withToken((t) => deleteCardSave(roleId, key, t, provider)),
     },
   };
 }
@@ -114,19 +121,33 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
         set: (code) => { void applyLocale(code); },
       },
     });
+    const provider = deps.provider ?? currentProvider();
+    const accessToken = deps.accessToken ?? (() => deps.session.accessToken());
+    const player = deps.player === undefined ? deps.session.me : deps.player;
+    host.events.on('updateConversationId', async (payload: unknown) => {
+      const conversationId = (payload as { conversationId?: unknown } | null)?.conversationId;
+      const path = deps.currentPath().split('?')[0] || '';
+      const roleId = deps.currentRoleId?.() ?? path.match(/\/play\/([^/]+)\/?$/)?.[1];
+      if (typeof conversationId !== 'string' || !conversationId || !roleId) return;
+      try {
+        const token = await accessToken();
+        if (!token) throw new Error('unauthorized');
+        await recordConversation(token, provider, decodeURIComponent(roleId), conversationId);
+      } catch { pushStageToast(i18n.global.t('library.recordFailed'), 'error'); }
+    });
     await stage.installMoonStage(deps.app, {
       host,
       auth: {
-        getAccessToken: () => deps.session.accessToken(),
+        getAccessToken: accessToken,
         onUnauthorized: () => { void deps.router.push(deps.lp(loginPath(deps.currentPath()))); },
         // 畫布送訊息前看的是「有沒有登入的人」；這頁本來就要登入才進得來（meta.auth）
-        user: deps.session.me
-          ? { id: String(deps.session.me.accountNumId), nickName: deps.session.me.nickName, avatar: deps.session.me.avatar }
+        user: player
+          ? { id: String(player.accountNumId), nickName: player.nickName, avatar: player.avatar }
           : undefined,
       },
-      api: { base: UPSTREAM_API },
+      api: { base: provider === currentProvider() ? UPSTREAM_API : apiBaseOf(provider) },
       i18n: i18n.global,
-      sandbox: sandboxOptions(window.location.hostname, deps.session),
+      sandbox: sandboxOptions(window.location.hostname, { accessToken }, provider),
     });
     return stage.MoonStage;
   })();
