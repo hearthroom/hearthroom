@@ -1159,7 +1159,7 @@
   "library.conversations": "최근 대화",
   "library.favorites": "저장한 카드",
   "library.following": "팔로잉",
-  "library.conversationsHint": "이 사이트에서 연 대화가 목록에 저장됩니다. 선택하면 이어서 플레이할 수 있습니다.",
+  "library.conversationsHint": "이 사이트에서 대화를 나눈 카드를 저장합니다. 언제든 돌아와 이어서 플레이할 수 있습니다.",
   "library.favoritesHint": "저장한 카드에서 언제든 다음 이야기를 골라 보세요.",
   "library.followingHint": "팔로우한 작가의 새 카드는 홈의 ‘팔로잉 소식’에 표시됩니다.",
   "library.conversationsEmpty": "아직 대화가 없습니다",

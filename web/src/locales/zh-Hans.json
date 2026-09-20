@@ -1159,7 +1159,7 @@
   "library.conversations": "最近对话",
   "library.favorites": "收藏卡片",
   "library.following": "关注作者",
-  "library.conversationsHint": "你在本站打开的对话都会保存在这个列表，点击即可继续游玩。",
+  "library.conversationsHint": "你在本站聊过的卡片会保存在这里，随时回来继续游玩。",
   "library.favoritesHint": "你收藏的卡片会留在这里，随时回来挑下一个故事。",
   "library.followingHint": "你关注的作者都在这里，新作品会出现在首页的“关注动态”。",
   "library.conversationsEmpty": "还没有对话记录",

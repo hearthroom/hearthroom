@@ -1,5 +1,7 @@
 # 社群對話清單與服務選擇隔離驗證
 
+> 後續入列規則已修正：只開卡不算遊玩，見 [library-played-only.md](library-played-only.md)。以下保留首批實作的驗證紀錄。
+
 2026-09-20；分支 `fix/community-owned-library`，來源 `4266312`。
 
 ## 需求及交付
