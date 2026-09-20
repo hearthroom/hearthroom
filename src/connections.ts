@@ -8,6 +8,12 @@ export const EMPTY_MEMBER = `
  AND age_verified_at IS NULL AND show_nsfw = 0 AND hidden_tags = '[]'
  AND NOT EXISTS (SELECT 1 FROM member_connections WHERE owner_member_id=members.id)
  AND (SELECT COUNT(*) FROM member_identities WHERE member_id=members.id)=1
+ AND NOT EXISTS (SELECT 1 FROM discord_links WHERE member_id=members.id)
+ AND NOT EXISTS (SELECT 1 FROM discord_link_attempts WHERE member_id=members.id)
+ AND NOT EXISTS (SELECT 1 FROM community_preferences WHERE member_id=members.id)
+ AND NOT EXISTS (SELECT 1 FROM community_awards WHERE member_id=members.id)
+ AND NOT EXISTS (SELECT 1 FROM community_notifications WHERE member_id=members.id)
+ AND NOT EXISTS (SELECT 1 FROM community_case_jobs WHERE member_id=members.id)
  AND NOT EXISTS (SELECT 1 FROM works WHERE member_id=members.id)
  AND NOT EXISTS (SELECT 1 FROM card_saves WHERE member_id=members.id)
  AND NOT EXISTS (SELECT 1 FROM member_conversations WHERE member_id=members.id)

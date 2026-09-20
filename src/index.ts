@@ -1,4 +1,6 @@
 import { moderationRoutes, reviewSummary } from "./moderation";
+import { communityMaintenance } from "./community/service";
+import { communityRoutes } from "./community/routes";
 import { libraryRoutes } from "./library";
 import { hostGateway, submitHosted, hostingDecision, beginHostedEdit } from "./hosting";
 import { saveCommunityProfile, cleanAvatars } from "./community-profile";
@@ -687,6 +689,7 @@ app.get('/v1/avatars/:handle/:file',async c=>{
  return new Response(image.body,{headers:{'Content-Type':'image/webp','Cache-Control':'public, max-age=300','X-Content-Type-Options':'nosniff'}});
 });
 
+app.route("/", communityRoutes);
 app.route("/", libraryRoutes);
 
 app.get("/v1/me", async (c) => {
@@ -1305,6 +1308,7 @@ app.get("*", async (c) => {
 export default {
   fetch: app.fetch,
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(communityMaintenance(env).catch(() => { console.warn("Community maintenance unavailable"); }));
     ctx.waitUntil(cleanAvatars(env));
     ctx.waitUntil(
       syncBatch(env).then((r) => {

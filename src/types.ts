@@ -5,6 +5,14 @@
  * 型別上就逼呼叫端判空，而不是等執行期炸），開關是任意字串（產生器把它縮成了字面值 "true"）。
  */
 export type Env = Omit<Cloudflare.Env, "EVENTS" | "ANALYTICS_ENABLED" | "REVIEW_ENABLED"> & {
+  COMMUNITY_ENABLED?: string;
+  COMMUNITY_GUILD_ID?: string;
+  COMMUNITY_SITE_URL?: string;
+  COMMUNITY_INVITE_URL?: string;
+  COMMUNITY_BRIDGE_KEY?: string;
+  COMMUNITY_XP_CHANNELS?: string;
+  DISCORD_CLIENT_ID?: string;
+  DISCORD_CLIENT_SECRET?: string;
   EVENTS?: AnalyticsEngineDataset;
   HOSTING_SERVICE_KEY?: string;
   ANALYTICS_ENABLED?: string;

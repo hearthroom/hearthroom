@@ -1,3 +1,4 @@
+import "./lib/community-return";
 import { currentProvider, setProvider } from "./lib/provider";
 import { useProviderUpstream } from "./lib/config";
 import { createPinia } from "pinia";
