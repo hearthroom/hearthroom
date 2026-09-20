@@ -16,3 +16,20 @@ Backend contracts: `test/community*.test.ts`. Frontend callback/retry contracts:
 Achievement migration contract: completed approved decisions backfill `first_work` once, while imported/unreviewed cards do not qualify. Replay must preserve the original award and use the existing role-sync dirty trigger. See `test/community-events.test.ts`; public consent and unlink contracts are in `test/community-routes.test.ts`, and author switching/level zero rendering in `web/test/community-badges.test.ts`.
 
 Case presentation: close a feedback fixture with Not adopted and a problem fixture with PASS. Both list and detail must show the actual resolution; archived/locked flags remain visible. Unfinished feedback locked alone is Paused; a problem needs both archived and locked. Refresh after a staff action to read the current case. `web/test/community-case-status.test.ts` covers this shared presentation rule.
+
+Profile badge placement regression: on `/me`, the identity header beside the
+avatar/name must show own level (including zero) and badges without scrolling to
+Discord settings. Public visibility off must not hide this own view. Follow “View
+public profile” and confirm public visibility remains independently respected.
+Every displayed badge has an SVG plus readable text, including the Discord-linked
+badge and first approved work. Verify tier boundaries 0/1/5/10/20 and a higher
+level using synthetic component fixtures, never production XP mutations. Unlink
+must remove the linked badge and header level immediately, retaining earned
+achievements. A missing/error response must not invent a level or badge.
+
+The Discord join links in settings/footer and the unlinked connect button all
+have the same Discord SVG. Verify accessible link labels and invite destinations
+without accepting a new invitation. Repeat the header, public strip and footer
+at desktop and 390px, zh-Hant and English; use both light and dark appearances.
+New frontend contracts: `web/test/me-community-badges.test.ts` and
+`web/test/community-badges.test.ts`.

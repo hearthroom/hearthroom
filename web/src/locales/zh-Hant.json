@@ -1324,6 +1324,7 @@
   "community.unlink": "解除綁定",
   "community.unlinkDetail": "解除 {name} 與網站的連結？跨端回報存取與通知會停止，綁定取得的身分組會移除。作品成就與發言經驗仍會保留。",
   "community.retry": "重新同步",
+  "community.badgeLabel": "社群徽章",
   "community.level": "等級 {level}",
   "community.progress": "下一級進度",
   "community.xpRule": "指定公開頻道每 60 秒最多 1 XP，每日最多 60 XP，以 UTC 計日。不讀取發言內容。",

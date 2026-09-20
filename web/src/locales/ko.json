@@ -1324,6 +1324,7 @@
   "community.unlink": "연결 해제",
   "community.unlinkDetail": "{name} 계정과 사이트의 연결을 해제할까요? 사이트에서 신고에 접근할 수 없게 되고 알림이 중단되며, 연결로 받은 역할이 제거됩니다. 작품 업적과 채팅 XP는 유지됩니다.",
   "community.retry": "다시 동기화",
+  "community.badgeLabel": "커뮤니티 배지",
   "community.level": "레벨 {level}",
   "community.progress": "다음 레벨까지",
   "community.xpRule": "지정된 공개 채널에서 60초당 최대 1 XP, UTC 기준 하루 최대 60 XP를 받습니다. 메시지 내용은 읽지 않습니다.",

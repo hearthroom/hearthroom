@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, ref } from "vue";
+import { computed, onMounted, onBeforeUnmount, ref, watch } from "vue";
+import CommunityBadgeList from "./CommunityBadgeList.vue";
+import CommunityIcon from "./CommunityIcon.vue";
 import { RouterLink, useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useSession } from "@/lib/session";
@@ -56,6 +58,8 @@ const caseAllowed = computed(
   () => linked.value && data.value?.preferences.case_access === 1,
 );
 const state = computed(() => data.value?.link?.state ?? "unlinked");
+const emit = defineEmits<{ change: [value: { badges: string[]; level: number | null } | null] }>();
+watch(data, value => emit("change", value?.enabled ? { badges: value.badges, level: linked.value ? value.level : null } : null), { immediate: true });
 let alive = true,
   timer: ReturnType<typeof setInterval> | undefined;
 const request = async <T,>(path = "", method = "GET", input?: unknown) => {
@@ -259,7 +263,7 @@ onBeforeUnmount(() => {
         target="_blank"
         rel="noopener noreferrer"
         class="btn"
-        >{{ t("community.join") }}</a
+        ><CommunityIcon name="discord" />{{ t("community.join") }}</a
       >
     </header>
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
@@ -285,14 +289,14 @@ onBeforeUnmount(() => {
             :disabled="busy"
             @click="connect"
           >
-            {{ t("community.link") }}</button
+            <CommunityIcon name="discord" />{{ t("community.link") }}</button
           ><button v-else class="btn" :disabled="busy" @click="retry">
             {{ t("community.retry") }}
           </button>
         </div>
         <div class="community__progress">
-          <strong>{{ t("community.level", { level: data.level }) }}</strong
-          ><span>{{ data.xp }} XP</span
+          <CommunityBadgeList :badges="[]" :level="data.level" />
+          <span>{{ data.xp }} XP</span
           ><progress
             :value="data.xp - data.level * data.level * 10"
             :max="((data.level + 1) ** 2 - data.level ** 2) * 10"
@@ -300,11 +304,7 @@ onBeforeUnmount(() => {
           /><small>{{ t("community.nextLevel", { xp: (data.level + 1) ** 2 * 10 - data.xp, level: data.level + 1 }) }}</small
           ><small>{{ t("community.xpRule") }}</small>
         </div>
-        <p v-if="data.badges.length" class="community__badges">
-          <span v-for="badge in data.badges" :key="badge">{{
-            t("community.badges." + badge)
-          }}</span>
-        </p>
+        <CommunityBadgeList :badges="data.badges" />
         <details>
           <summary>{{ t("community.preferences") }}</summary>
           <div class="community__preferences">
@@ -559,6 +559,7 @@ onBeforeUnmount(() => {
 }
 .community__progress {
   display: grid;
+  align-items: center;
   grid-template-columns: 1fr auto;
   gap: var(--s-2);
   padding: var(--s-4);
@@ -576,18 +577,6 @@ progress {
 }
 .community__progress small {
   grid-column: 1/-1;
-}
-.community__badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-2);
-}
-.community__badges span {
-  padding: var(--s-2) var(--s-3);
-  border-radius: var(--r-pill);
-  background: var(--accent-tint);
-  color: var(--accent-text);
-  font-size: 13px;
 }
 .community summary {
   cursor: pointer;
