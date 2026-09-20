@@ -38,6 +38,13 @@ export interface CommunityCase {
   events: { kind: string; body: string; seq: number }[];
   conversation: string | null;
 }
+export function communityCaseStatus(c: Pick<CommunityCase, "state" | "category" | "resolution" | "archived" | "locked">) {
+  if (c.state === "closed")
+    return c.resolution === "passed" || c.resolution === "not_adopted" ? c.resolution : "closed";
+  const feedback = c.category === "review" || c.category === "card_report";
+  if (c.locked && (feedback || c.archived)) return "paused";
+  return c.state;
+}
 export async function communityRequest<T>(
   path: string,
   token?: string | null,

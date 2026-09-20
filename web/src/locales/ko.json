@@ -1393,5 +1393,10 @@
   "resource.uploadDirectory": "폴더 업로드",
   "resource.directoryHint": "폴더의 이름과 구조가 유지됩니다. 예: 접두사/캐릭터/표정/기쁨.png.",
   "resource.uploadSummary": "파일 {total}개 중 {done}개 완료, {failed}개 실패",
-  "resource.uploadPages": "업로드 목록 페이지"
+  "resource.uploadPages": "업로드 목록 페이지",
+  "community.caseStates.passed": "PASS (완료)",
+  "community.caseStates.not_adopted": "미채택",
+  "community.caseStates.paused": "처리 보류",
+  "community.postArchived": "보관됨",
+  "community.postLocked": "잠김"
 }

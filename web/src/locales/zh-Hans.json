@@ -1393,5 +1393,10 @@
   "resource.uploadDirectory": "上传文件夹",
   "resource.directoryHint": "文件夹上传会保留原本的名称与层级，例如“前缀／立绘／表情／开心.png”。",
   "resource.uploadSummary": "已完成 {done}／{total} 个文件，{failed} 个失败",
-  "resource.uploadPages": "上传列表分页"
+  "resource.uploadPages": "上传列表分页",
+  "community.caseStates.passed": "PASS（已完成）",
+  "community.caseStates.not_adopted": "未采纳",
+  "community.caseStates.paused": "暂停处理",
+  "community.postArchived": "已归档",
+  "community.postLocked": "已锁定"
 }

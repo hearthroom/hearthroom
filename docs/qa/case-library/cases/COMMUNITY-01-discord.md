@@ -14,3 +14,5 @@ Use a local fixture account for UI checks. Use the real local D1 tests for autho
 Backend contracts: `test/community*.test.ts`. Frontend callback/retry contracts: `web/test/discord*.test.ts`. Bot ownership and role contracts: Hearthkeeper `test/community.test.ts`.
 
 Achievement migration contract: completed approved decisions backfill `first_work` once, while imported/unreviewed cards do not qualify. Replay must preserve the original award and use the existing role-sync dirty trigger. See `test/community-events.test.ts`; public consent and unlink contracts are in `test/community-routes.test.ts`, and author switching/level zero rendering in `web/test/community-badges.test.ts`.
+
+Case presentation: close a feedback fixture with Not adopted and a problem fixture with PASS. Both list and detail must show the actual resolution; archived/locked flags remain visible. Unfinished feedback locked alone is Paused; a problem needs both archived and locked. Refresh after a staff action to read the current case. `web/test/community-case-status.test.ts` covers this shared presentation rule.

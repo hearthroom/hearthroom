@@ -1393,5 +1393,10 @@
   "resource.uploadDirectory": "Upload folder",
   "resource.directoryHint": "Folder uploads keep your names and directory structure, for example prefix/portraits/expressions/happy.png.",
   "resource.uploadSummary": "{done} of {total} files complete; {failed} failed",
-  "resource.uploadPages": "Upload list pages"
+  "resource.uploadPages": "Upload list pages",
+  "community.caseStates.passed": "PASS (completed)",
+  "community.caseStates.not_adopted": "Not adopted",
+  "community.caseStates.paused": "Paused",
+  "community.postArchived": "Archived",
+  "community.postLocked": "Locked"
 }

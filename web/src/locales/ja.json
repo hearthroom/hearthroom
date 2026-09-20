@@ -1393,5 +1393,10 @@
   "resource.uploadDirectory": "フォルダーをアップロード",
   "resource.directoryHint": "フォルダー内の名前と階層はそのまま保持されます。例：接頭辞/立ち絵/表情/笑顔.png。",
   "resource.uploadSummary": "{total}件中{done}件完了・{failed}件失敗",
-  "resource.uploadPages": "アップロード一覧のページ"
+  "resource.uploadPages": "アップロード一覧のページ",
+  "community.caseStates.passed": "PASS（完了）",
+  "community.caseStates.not_adopted": "不採用",
+  "community.caseStates.paused": "対応保留",
+  "community.postArchived": "アーカイブ済み",
+  "community.postLocked": "ロック済み"
 }

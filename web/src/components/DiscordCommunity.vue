@@ -7,6 +7,7 @@ import { useLocalePath } from "@/lib/use-locale";
 import { confirmDialog } from "@/lib/confirm";
 import {
   communityRequest,
+  communityCaseStatus,
   takeDiscordReceipt,
   communityRequestId,
   forgetCommunityRequest,
@@ -432,7 +433,7 @@ onBeforeUnmount(() => {
               <li v-for="c in cases" :key="c.id">
                 <button :disabled="busy" @click="openCase(c)">
                   <strong>{{ c.title }}</strong
-                  ><small>{{ t("community.caseStates." + c.state) }}</small>
+                  ><small>{{ t("community.caseStates." + communityCaseStatus(c)) }}</small>
                 </button>
               </li>
             </ul>
@@ -455,7 +456,10 @@ onBeforeUnmount(() => {
             </div>
             <article v-if="selected" class="community__case">
               <h4>{{ selected.title }}</h4>
-              <p>{{ t("community.caseStates." + selected.state) }}</p>
+              <p>{{ t("community.caseStates." + communityCaseStatus(selected)) }}</p>
+              <p v-if="selected.archived || selected.locked" class="subtle">
+                {{ [selected.archived ? t("community.postArchived") : "", selected.locked ? t("community.postLocked") : ""].filter(Boolean).join(" · ") }}
+              </p>
               <p
                 v-for="event in selected.events"
                 :key="event.seq"
