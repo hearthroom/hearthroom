@@ -4,7 +4,8 @@ import CommunityAppearance from "./CommunityAppearance.vue";
 import { clearAppearanceCache, type AppearancePreferences, type EffectiveAppearance } from "@/lib/community-appearance";
 import CommunityBadgeList from "./CommunityBadgeList.vue";
 import CommunityIcon from "./CommunityIcon.vue";
-import { RouterLink, useRoute } from "vue-router";
+import AccountIcon from "./AccountIcon.vue";
+import { RouterLink, useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
@@ -19,8 +20,9 @@ import {
   type CommunityNotice,
   type CommunityCase,
 } from "@/lib/community";
-const props=defineProps<{refresh?:number}>();
-watch(()=>props.refresh,()=>{void run(load);});
+const props = defineProps<{ compact?: boolean; refresh?: number }>();
+const router = useRouter();
+watch(() => props.refresh, () => { void run(load); });
 const session = useSession(),
   { t } = useI18n(),
   { lp } = useLocalePath(),
@@ -63,6 +65,12 @@ const caseAllowed = computed(
   () => linked.value && data.value?.preferences.case_access === 1,
 );
 const state = computed(() => data.value?.link?.state ?? "unlinked");
+const needsJoin = computed(() => data.value?.enabled && state.value === "not_member" && !!data.value.invite);
+const entryStatus = computed(() => error.value ? t("community.failed") : !data.value ? t("state.loading") : !data.value.enabled ? t("community.unavailable") : state.value === "synced" ? t("community.connected") : t("community.states." + state.value));
+// Old report links and OAuth return paths stay valid after moving settings off the profile.
+watch(() => route.query.reportCard, value => {
+  if (props.compact && typeof value === "string" && value) void router.replace({ path: lp("/me/community"), query: route.query });
+}, { immediate: true });
 const emit = defineEmits<{ change: [value: { badges: string[]; level: number | null; appearance?: EffectiveAppearance } | null] }>();
 watch(data, value => emit("change", value?.enabled ? { badges: value.badges, level: linked.value ? value.level : null, appearance: value.appearance?.effective } : null), { immediate: true });
 let alive = true,
@@ -259,19 +267,25 @@ onBeforeUnmount(() => {
 });
 </script>
 <template>
-  <section
+  <RouterLink v-if="compact" :to="lp('/me/community')" class="community-entry">
+    <CommunityIcon name="discord" />
+    <span class="community-entry__text"><span>{{ t('community.title') }}</span><small v-if="unreadCount">{{ t('community.unreadCount', { count: unreadCount }) }}</small></span>
+    <span class="community-entry__state">{{ entryStatus }}</span>
+    <AccountIcon name="arrow" class="community-entry__arrow" />
+  </RouterLink>
+  <section v-else
     class="community"
     aria-labelledby="community-title"
     :aria-busy="busy"
   >
     <header>
       <div>
-        <h2 id="community-title">{{ t("community.title") }}</h2>
+        <h1 id="community-title">{{ t("community.title") }}</h1>
         <p class="subtle">{{ t("community.hint") }}</p>
       </div>
       <a
-        v-if="data?.invite"
-        :href="data.invite"
+        v-if="needsJoin"
+        :href="data!.invite!"
         target="_blank"
         rel="noopener noreferrer"
         class="btn btn--primary community__join"
@@ -306,9 +320,6 @@ onBeforeUnmount(() => {
             {{ t("community.retry") }}
           </button>
         </div>
-        <details class="community__details" :open="!!card">
-          <summary><span class="community__summary-text"><span>{{ t("community.activity") }}</span><span v-if="unreadCount" class="community__unread">{{ t("community.unreadCount", { count: unreadCount }) }}</span></span></summary>
-          <div class="community__details-body">
         <div class="community__progress">
           <CommunityBadgeList :badges="[]" :level="data.level" />
           <span>{{ data.xp }} XP</span
@@ -367,7 +378,7 @@ onBeforeUnmount(() => {
           v-if="data.preferences.notifications"
           class="community__section"
         >
-          <h3>{{ t("community.notificationsTitle") }}</h3>
+          <h2>{{ t("community.notificationsTitle") }}</h2>
           <p v-if="!notices.length" class="subtle">
             {{ t("community.noNotifications") }}
           </p>
@@ -386,7 +397,7 @@ onBeforeUnmount(() => {
           </ul>
         </section>
         <section class="community__section">
-          <h3>{{ t("community.cases") }}</h3>
+          <h2>{{ t("community.cases") }}</h2>
           <p v-if="!caseAllowed" class="subtle">
             {{ t("community.caseConsent") }}
           </p>
@@ -471,7 +482,7 @@ onBeforeUnmount(() => {
               </button>
             </div>
             <article v-if="selected" class="community__case">
-              <h4>{{ selected.title }}</h4>
+              <h3>{{ selected.title }}</h3>
               <p>{{ t("community.caseStates." + communityCaseStatus(selected)) }}</p>
               <p v-if="selected.archived || selected.locked" class="subtle">
                 {{ [selected.archived ? t("community.postArchived") : "", selected.locked ? t("community.postLocked") : ""].filter(Boolean).join(" · ") }}
@@ -534,13 +545,19 @@ onBeforeUnmount(() => {
             </article>
           </template>
         </section>
-          </div>
-        </details>
       </template>
     </template>
   </section>
 </template>
 <style scoped>
+.community-entry {display:flex;align-items:center;gap:var(--s-2);min-width:0;min-height:var(--h-lg);padding:var(--s-2);border-radius:var(--r-sm);color:var(--text-2);font-size:.875rem}
+.community-entry:hover {background:var(--surface-2);color:var(--text)}
+.community-entry__text {display:grid;gap:var(--s-1);min-width:0;flex:1}
+.community-entry__text small {font-size:.75rem;color:var(--accent-text);overflow-wrap:anywhere}
+.community-entry__state {font-size:.75rem;max-width:45%;overflow-wrap:anywhere;text-align:end;color:var(--text-3)}
+.community-entry__arrow {width:1rem;height:1rem;flex:none}
+.community-entry:focus-visible {outline:2px solid var(--accent);outline-offset:2px}
+
 .community {
   display: grid;
   gap: var(--s-5);
@@ -550,12 +567,7 @@ onBeforeUnmount(() => {
   background: var(--surface);
   min-width: 0;
 }
-.community__details {border-top:1px solid var(--line-strong);padding-top:var(--s-2);min-width:0}
-.community__details:not([open]) > .community__details-body {display:none}
-.community__details-body {display:grid;gap:var(--s-5);padding-top:var(--s-4)}
-.community__unread {font-size:.8125rem;color:var(--accent-text);background:var(--accent-tint);padding:var(--s-1) var(--s-2);border-radius:var(--r-pill)}
 .community summary {gap:var(--s-2)}
-.community__summary-text {display:flex;align-items:center;flex-wrap:wrap;gap:var(--s-2);min-width:0}
 .community__join {flex:none}
 .community header > div,.community__identity > div {min-width:0;overflow-wrap:anywhere}
 .community .btn {height:auto;white-space:normal;text-align:center}
@@ -567,16 +579,16 @@ onBeforeUnmount(() => {
   gap: var(--s-4);
   flex-wrap: wrap;
 }
+.community h1,
 .community h2,
 .community h3,
-.community h4,
 .community p {
   margin: 0;
 }
-.community h2 {
+.community h1 {
   font-size: 18px;
 }
-.community h3 {
+.community h2 {
   font-size: 16px;
 }
 .community header p,
