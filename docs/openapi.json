@@ -15302,9 +15302,9 @@
           "documentVersion": {
             "type": "string",
             "enum": [
-              "lunatalk.rolePatch.v1"
+              "rolePatch.v1"
             ],
-            "description": "Document format version."
+            "description": "Document format version. This names the format, not the service that produced it. Some providers still return a vendor-prefixed legacy value for this format; compare the suffix or treat the string as opaque."
           },
           "patchedFields": {
             "type": "array",
@@ -17885,8 +17885,9 @@
           "documentVersion": {
             "type": "string",
             "enum": [
-              "lunatalk.worldbookPatch.v1"
-            ]
+              "worldbookPatch.v1"
+            ],
+            "description": "Document format version. This names the format, not the service that produced it. Some providers still return a vendor-prefixed legacy value for this format; compare the suffix or treat the string as opaque."
           },
           "worldbookId": {
             "type": "string"
