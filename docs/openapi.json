@@ -5005,7 +5005,7 @@
           }
         },
         "x-harperharbor": {
-          "description": "Upload one image or font. Harbor validates file type, size, ownership and storage quota; stored media is immediately usable without content review. Responses do not include moderationState."
+          "description": "Upload one image, video, audio file or font. Harbor supports JPG, PNG, GIF, WebP, MP4, WebM, MP3, WAV, OGG, WOFF and WOFF2, up to 10 MiB per file. File-byte signatures and the declared media category must agree. Ownership and storage quota checks apply; stored media is immediately usable without content review. Responses do not include moderationState."
         }
       }
     },

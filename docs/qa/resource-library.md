@@ -1,6 +1,6 @@
 # Provider resource library
 
-需求：資源依使用者明確選取的託管商管理；單站自動選取，多站記住使用者上次選擇。
+需求：資源依資源託管商管理；單站自動選取，多站預設優先 HarperHarbor，明確網址或使用者上次選擇優先於初次預設。
 驗收：供應商與授權綁定、分頁失敗不跳頁、晚回應不覆蓋、預覽與批次管理、五語、桌面與手機、逐檔上傳與原站重試。
 範圍：Hearthroom 資源頁與 Harbor 公開圖片契約；不搬移不同供應商的檔案，不改全站登入供應商。
 
@@ -23,7 +23,7 @@ Harbor reuses `harbor_contract_authoring_total` (counter, `op=list|upload_comple
 
 ## QA matrix
 
-- One identity: label only; multiple identities: explicit selection; zero: link account.
+- One identity: label only; multiple identities: automatic HarperHarbor default with direct switching; zero: link account.
 - Slow first-provider response after switching is discarded; every read/write uses the selected issuer token.
 - 120+ files: 24/48/96 page sizes, successful page persisted, failed next page retry does not skip; filters start at page one; unknown quota is not zero.
 - Click preview, arrow navigation including page boundary, close restores focus; zoom/pan, unavailable preview, font/audio/video controls.
@@ -41,3 +41,15 @@ Harbor reuses `harbor_contract_authoring_total` (counter, `op=list|upload_comple
 - The unchanged legacy server offline suite passes with `LC_ALL=C`; its standalone checkout skips the sibling-spec checker. Running that checker explicitly reports the same three baseline Harbor-only route gaps (`/conversation/ws`, `/hosting/seal`, `/media/references`) on both origin/main and this change. This is existing legacy-router coverage debt, not a new route introduced here. The Provider's own contract tests and exact OpenAPI-copy comparison cover the deployed service.
 
 Release acceptance additionally requires successful CI deployment of the pushed source and independent live page/API readback; local and synthetic results alone are not production proof.
+
+## Resource hosting refinement
+
+The provider switch uses visible buttons, ordered HarperHarbor first. The format disclosure groups readable extensions by media kind and shows the per-file limit separately. Panels, thumbnails and menus share the 16px radius; controls use pills and nested menu rows use the existing 8px token.
+
+Harbor now accepts video (MP4, WebM) and audio (MP3, WAV, OGG), alongside its existing image and WOFF/WOFF2 formats. The shared media service validates actual byte signatures, category agreement, declared size, ownership and quota for multipart and direct uploads. The existing 10 MiB per-file, 2 GiB and 2000-item account limits remain unchanged; this does not claim every codec or container is supported. No migration or new permission is required.
+
+Regression coverage: default provider and explicit URL precedence; stale responses during switching; keyboard selection, Escape, outside click and disabled custom menus; PostgreSQL upload/store/list/idempotent completion for media formats; rejection of HTML, malformed headers and mismatched declared media categories. Public HTTP tests assert returned kinds and the four advertised capabilities.
+
+HTTP/MCP parity follows the shared media service; Harbor has no current MCP transport to extend. Existing `harbor_media_upload_total{result}` and `harbor_contract_authoring_total{op,result}` provide stored/rejected and API results without new labels.
+
+Follow-up execution: the real page with synthetic provider data was checked on desktop and at 390px. Traditional Chinese/English dark and Korean/Simplified Chinese light screenshots were inspected; Japanese labels and 390px layout geometry were checked. Provider and select controls are 44px high, with no horizontal overflow or clipped control content in the measured layouts. Expanded menus/disclosures, provider switching and 24-item pagination passed; MP4 playback reached a decoded ready state and WAV metadata/controls loaded. Final browser console errors: none. Transient browser-control timeouts were recovered through the documented UI APIs. The full frontend suites pass (366 Worker tests, 384 web tests, the existing optional external-fixture probe skipped), as do typecheck and the pinned-stage/web build. Provider full tests and deployment checks pass locally; production acceptance still requires CI and live readback.

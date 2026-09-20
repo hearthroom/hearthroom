@@ -25,15 +25,19 @@ import { confirmDialog } from "@/lib/confirm";
 import { pageTitle } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
 import ResourcePreview from "@/components/ResourcePreview.vue";
+import ResourceSelect from "@/components/ResourceSelect.vue";
+import AccountIcon from "@/components/AccountIcon.vue";
 const { lp } = useLocalePath();
 const session = useSession(),
   route = useRoute(),
   router = useRouter(),
   { t } = useI18n();
 const providers = computed(() =>
-  PROVIDERS.filter((p) =>
-    session.profile?.identities.some((i) => i.provider === p.id),
-  ),
+  [...PROVIDERS]
+    .sort((a, b) => Number(b.id === "harbor") - Number(a.id === "harbor"))
+    .filter((p) =>
+      session.profile?.identities.some((i) => i.provider === p.id),
+    ),
 );
 const provider = ref<ProviderId | "">("");
 const ready = ref(false),
@@ -65,6 +69,39 @@ const pageNumbers = computed(() =>
     .sort((a, b) => a - b),
 );
 const capabilities = ref<Capabilities | null>(null);
+const formatGroups = computed(() =>
+  ["image", "video", "audio", "font"]
+    .map((kind) => ({
+      kind,
+      formats: [
+        ...new Set(
+          (capabilities.value?.formats ?? [])
+            .filter((f) => f.startsWith(kind + "/"))
+            .map(
+              (f) =>
+                ({
+                  "image/jpeg": "JPG",
+                  "image/png": "PNG",
+                  "image/gif": "GIF",
+                  "image/webp": "WebP",
+                  "video/mp4": "MP4",
+                  "video/webm": "WebM",
+                  "audio/mpeg": "MP3",
+                  "audio/wav": "WAV",
+                  "audio/ogg": "OGG",
+                  "font/woff": "WOFF",
+                  "font/woff2": "WOFF2",
+                  "font/ttf": "TTF",
+                  "font/otf": "OTF",
+                })[f] ??
+                f.split("/")[1]?.toUpperCase() ??
+                f,
+            ),
+        ),
+      ],
+    }))
+    .filter((group) => group.formats.length),
+);
 const cap = computed(() => capabilities.value),
   activeFolder = computed(() =>
     folders.value.find((f) => f.folderId === scope.value),
@@ -241,7 +278,9 @@ onMounted(async () => {
   provider.value =
     providers.value.length === 1
       ? providers.value[0]!.id
-      : providers.value.find((p) => p.id === wanted)?.id || "";
+      : providers.value.find((p) => p.id === wanted)?.id ||
+        providers.value[0]?.id ||
+        "";
   ready.value = true;
   if (provider.value) await load(page.value, true);
 });
@@ -474,7 +513,15 @@ async function enqueue(files: File[]) {
     } else if (
       limits?.formats.length &&
       u.file.type &&
-      !limits.formats.includes(u.file.type)
+      !limits.formats.includes(
+        (
+          {
+            "audio/x-wav": "audio/wav",
+            "audio/wave": "audio/wav",
+            "application/ogg": "audio/ogg",
+          } as Record<string, string>
+        )[u.file.type] || u.file.type,
+      )
     ) {
       u.status = "failed";
       u.error = t("res.error.type");
@@ -596,48 +643,60 @@ async function previewMove(direction: number) {
         />
       </div>
     </header>
-    <section class="provider-bar panel">
-      <div v-if="providers.length === 1" class="provider-label">
-        <span class="provider-mark" aria-hidden="true">{{
-          providerName(provider).slice(0, 1)
-        }}</span
-        ><strong>{{
-          $t("resource.hosted", { provider: providerName(provider) })
-        }}</strong>
-      </div>
-      <label v-else-if="providers.length > 1" class="provider-label"
-        ><span>{{ $t("resource.host") }}</span
-        ><select
-          v-model="provider"
-          data-provider
-          class="input"
-          :disabled="busy"
-          @change="choose"
+    <section class="resource-overview panel">
+      <div class="provider-bar">
+        <div class="provider-heading">
+          <h2>{{ $t("resource.host") }}</h2>
+          <RouterLink :to="lp('/me')" class="resource-link">{{
+            $t("resource.connections")
+          }}</RouterLink>
+        </div>
+        <div v-if="providers.length === 1" class="provider-single">
+          <span class="provider-mark" aria-hidden="true">{{
+            providerName(provider).slice(0, 1)
+          }}</span>
+          <strong>{{
+            $t("resource.hosted", { provider: providerName(provider) })
+          }}</strong>
+        </div>
+        <div
+          v-else-if="providers.length > 1"
+          class="provider-choices"
+          role="group"
+          :aria-label="$t('resource.host')"
         >
-          <option disabled value="">{{ $t("resource.choose") }}</option>
-          <option v-for="p in providers" :key="p.id" :value="p.id">
-            {{ p.name }}
-          </option>
-        </select></label
-      >
-      <p v-else>
-        {{ ready ? $t("resource.noProvider") : $t("state.loading") }}
-      </p>
-      <RouterLink :to="lp('/me')" class="resource-link">{{
-        $t("resource.connections")
-      }}</RouterLink>
-    </section>
-    <div v-if="!provider && ready" class="empty panel">
-      <h2>
-        {{ $t(providers.length ? "resource.choose" : "resource.noProvider") }}
-      </h2>
-      <p class="subtle">{{ $t("resource.isolated") }}</p>
-    </div>
-    <template v-if="provider">
-      <section class="resource-summary panel">
+          <button
+            v-for="p in providers"
+            :key="p.id"
+            type="button"
+            :data-provider="p.id"
+            class="provider-choice"
+            :aria-pressed="provider === p.id"
+            :disabled="busy"
+            @click="
+              provider = p.id;
+              choose();
+            "
+          >
+            <span class="provider-mark" aria-hidden="true">{{
+              p.name.slice(0, 1)
+            }}</span
+            ><span>{{ p.name }}</span
+            ><AccountIcon v-if="provider === p.id" name="check" /><span
+              v-else
+              class="provider-check-space"
+              aria-hidden="true"
+            />
+          </button>
+        </div>
+        <p v-else class="subtle">
+          {{ $t(ready ? "resource.noProvider" : "state.loading") }}
+        </p>
+      </div>
+      <div v-if="provider" class="resource-summary">
         <div class="resource-usage">
-          <span class="subtle">{{ $t("res.quota.label") }}</span
-          ><strong
+          <span class="subtle">{{ $t("res.quota.label") }}</span>
+          <strong
             >{{ size(result?.usedBytes) }}
             <span class="subtle">/ {{ size(result?.byteQuota) }}</span></strong
           >
@@ -652,30 +711,54 @@ async function previewMove(direction: number) {
             <span :style="{ width: quotaRatio + '%' }" />
           </div>
         </div>
-        <details>
-          <summary>{{ $t("resource.rules") }}</summary>
-          <p>
-            {{
-              cap?.formats.length
-                ? cap.formats.join(" · ")
-                : $t("resource.rulesUnavailable")
-            }}
-          </p>
-          <p v-if="cap?.maxFileBytes">
-            {{ $t("resource.maxFile", { size: size(cap.maxFileBytes) }) }}
-          </p>
-        </details>
-        <details v-if="result?.libraryPrefix">
-          <summary>{{ $t("res.prefix.label") }}</summary>
-          <div class="prefix-row">
-            <code>{{ result.libraryPrefix }}/</code
-            ><button class="btn btn--sm" @click="copy(result.libraryPrefix)">
-              {{ $t("res.copy") }}
-            </button>
-          </div>
-          <p class="subtle">{{ $t("res.prefix.hint") }}</p>
-        </details>
-      </section>
+        <div class="resource-info">
+          <details class="resource-rules">
+            <summary>
+              <span>{{ $t("resource.rules") }}</span
+              ><AccountIcon name="arrow" />
+            </summary>
+            <div class="resource-rules-content">
+              <dl v-if="formatGroups.length" class="format-groups">
+                <div v-for="group in formatGroups" :key="group.kind">
+                  <dt>{{ $t("res.kind." + group.kind) }}</dt>
+                  <dd>
+                    <span v-for="format in group.formats" :key="format">{{
+                      format
+                    }}</span>
+                  </dd>
+                </div>
+              </dl>
+              <p v-else class="subtle">{{ $t("resource.rulesUnavailable") }}</p>
+              <div v-if="cap?.maxFileBytes" class="upload-limit">
+                <span class="subtle">{{ $t("resource.maxFileLabel") }}</span
+                ><strong>{{ size(cap.maxFileBytes) }}</strong>
+              </div>
+            </div>
+          </details>
+          <details
+            v-if="result?.libraryPrefix"
+            class="resource-rules resource-prefix"
+          >
+            <summary>
+              <span>{{ $t("res.prefix.label") }}</span
+              ><AccountIcon name="arrow" />
+            </summary>
+            <div class="prefix-row">
+              <code>{{ result.libraryPrefix }}/</code
+              ><button class="btn btn--sm" @click="copy(result.libraryPrefix)">
+                {{ $t("res.copy") }}
+              </button>
+            </div>
+            <p class="subtle">{{ $t("res.prefix.hint") }}</p>
+          </details>
+        </div>
+      </div>
+    </section>
+    <div v-if="!provider && ready" class="empty panel">
+      <h2>{{ $t("resource.noProvider") }}</h2>
+      <p class="subtle">{{ $t("resource.isolated") }}</p>
+    </div>
+    <template v-if="provider">
       <p v-if="quotaFull" class="notice notice--error">
         {{ $t("resource.quotaFull") }}
       </p>
@@ -696,8 +779,7 @@ async function previewMove(direction: number) {
         class="input"
         :aria-label="$t('res.copyManual')"
         :value="copyFallback"
-        @focus="($event.target as HTMLInputElement).select()"
-      />
+        @focus="($event.target as HTMLInputElement).select()" />
       <section v-if="uploads.length" class="upload-list panel">
         <header>
           <h2>
@@ -758,19 +840,18 @@ async function previewMove(direction: number) {
               {{ f.name }}
             </button>
           </nav>
-          <select
+          <ResourceSelect
             v-model="scope"
-            class="input mobile-folders"
-            :aria-label="$t('resource.folders')"
+            class="mobile-folders"
+            :label="$t('resource.folders')"
             :disabled="busy"
+            :options="[
+              { value: 'all', label: $t('res.scope.all') },
+              { value: 'unfiled', label: $t('res.scope.unfiled') },
+              ...folders.map((f) => ({ value: f.folderId, label: f.name })),
+            ]"
             @change="filter"
-          >
-            <option value="all">{{ $t("res.scope.all") }}</option>
-            <option value="unfiled">{{ $t("res.scope.unfiled") }}</option>
-            <option v-for="f in folders" :key="f.folderId" :value="f.folderId">
-              {{ f.name }}
-            </option>
-          </select>
+          />
           <button
             class="btn btn--ghost"
             :disabled="!result || busy || expired"
@@ -816,7 +897,7 @@ async function previewMove(direction: number) {
             </button>
           </form>
         </aside>
-        <main class="resource-content">
+        <section class="resource-content">
           <div ref="toolbar" class="resource-toolbar">
             <div class="seg" role="tablist" :aria-label="$t('resource.types')">
               <button
@@ -858,18 +939,20 @@ async function previewMove(direction: number) {
                 {{ $t("resource.find") }}
               </button>
             </form>
-            <select
+            <ResourceSelect
               v-if="cap?.sorts.length"
               v-model="sort"
-              class="input"
-              :aria-label="$t('resource.sort')"
+              class="resource-sort"
+              :label="$t('resource.sort')"
               :disabled="busy"
+              :options="
+                cap.sorts.map((s) => ({
+                  value: s,
+                  label: $t('resource.sort.' + s),
+                }))
+              "
               @change="filter"
-            >
-              <option v-for="s in cap.sorts" :key="s" :value="s">
-                {{ $t("resource.sort." + s) }}
-              </option>
-            </select>
+            />
           </div>
           <div v-if="managing" class="resource-batch panel">
             <label
@@ -884,22 +967,17 @@ async function previewMove(direction: number) {
                 "
               />{{ $t("resource.selectPage") }}</label
             ><span>{{ $t("res.selected", { n: selected.size }) }}</span
-            ><select
+            ><ResourceSelect
               v-model="moveTarget"
-              class="input"
-              :aria-label="$t('res.moveTo')"
+              :label="$t('res.moveTo')"
               :disabled="!selected.size || busy"
+              :options="
+                folders
+                  .filter((f) => f.folderId !== scope)
+                  .map((f) => ({ value: f.folderId, label: f.name }))
+              "
               @change="move"
-            >
-              <option value="" disabled>{{ $t("res.moveTo") }}</option>
-              <option
-                v-for="f in folders.filter((f) => f.folderId !== scope)"
-                :key="f.folderId"
-                :value="f.folderId"
-              >
-                {{ f.name }}
-              </option></select
-            ><button
+            /><button
               v-if="activeFolder"
               class="btn"
               :disabled="!selected.size || busy"
@@ -1039,21 +1117,21 @@ async function previewMove(direction: number) {
                 {{ $t("resource.next") }}
               </button>
             </div>
-            <select
-              v-model.number="pageSize"
-              class="input"
-              :aria-label="$t('resource.pageSize')"
+            <ResourceSelect
+              v-model="pageSize"
+              :label="$t('resource.pageSize')"
               :disabled="loading || busy"
+              :options="
+                [24, 48, 96].map((n) => ({
+                  value: n,
+                  label: $t('resource.perPage', { n }),
+                }))
+              "
               @change="filter"
-            >
-              <option v-for="n in [24, 48, 96]" :key="n" :value="n">
-                {{ $t("resource.perPage", { n }) }}
-              </option>
-            </select>
+            />
           </nav>
-        </main>
-      </div></template
-    >
+        </section></div
+    ></template>
     <ResourcePreview
       v-if="preview"
       :item="preview"
@@ -1074,8 +1152,6 @@ async function previewMove(direction: number) {
 <style scoped>
 .resource-head,
 .resource-actions,
-.provider-bar,
-.provider-label,
 .resource-toolbar,
 .resource-search,
 .resource-search form,
@@ -1090,7 +1166,6 @@ async function previewMove(direction: number) {
   flex-wrap: wrap;
 }
 .resource-head,
-.provider-bar,
 .resource-toolbar,
 .resource-pager {
   justify-content: space-between;
@@ -1106,57 +1181,116 @@ async function previewMove(direction: number) {
   margin: var(--s-2) 0 0;
   font-size: 0.9rem;
 }
+.resources .input {
+  border-radius: var(--r-pill);
+}
+.resource-overview {
+  margin-bottom: var(--s-5);
+}
 .provider-bar {
-  padding: var(--s-4);
+  padding: var(--s-5);
+}
+.provider-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s-3);
   margin-bottom: var(--s-3);
 }
-.provider-label {
-  flex-direction: row;
-  min-width: 0;
+.provider-heading h2 {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 0.85rem;
+  font-weight: 600;
 }
-.provider-label select {
-  min-width: 180px;
+.provider-choices {
+  display: flex;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+.provider-choice {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: var(--h-lg);
+  padding: var(--s-2) var(--s-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-pill);
+  color: var(--text);
+  background: transparent;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.provider-choice[aria-pressed="true"] {
+  color: var(--accent-text);
+  background: var(--accent-tint);
+  border-color: var(--accent);
+}
+.provider-choice:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+.provider-choice:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 .provider-mark {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  border-radius: var(--r-sm);
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 0.75rem;
   font-weight: 700;
 }
+.provider-choice[aria-pressed="true"] .provider-mark {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.provider-check-space {
+  width: 20px;
+  flex: none;
+}
+.provider-single {
+  display: flex;
+  gap: var(--s-2);
+  align-items: center;
+  font-size: 0.95rem;
+}
 .resource-link {
-  font-size: 0.85rem;
-  color: var(--muted);
+  font-size: 0.8rem;
+  color: var(--text-2);
+  text-underline-offset: 3px;
 }
 .resource-summary {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) minmax(0, 1.5fr);
   gap: var(--s-5);
-  padding: var(--s-4);
-  margin-bottom: var(--s-5);
+  padding: var(--s-5);
+  border-top: 1px solid var(--line);
   align-items: start;
-  flex-wrap: wrap;
 }
 .resource-usage {
   display: grid;
   gap: var(--s-2);
-  min-width: 240px;
-  flex: 1;
 }
-.resource-usage > span,
-details {
-  font-size: 0.85rem;
+.resource-usage > span {
+  font-size: 0.8rem;
 }
 .resource-usage strong {
-  font-size: 1.15rem;
+  font-size: 1.2rem;
 }
 .resource-usage strong span {
+  font-size: 0.85rem;
   font-weight: 400;
 }
 .resource-meter {
   height: 5px;
+  margin-top: var(--s-1);
   background: var(--surface-2);
   border-radius: var(--r-pill);
   overflow: hidden;
@@ -1166,19 +1300,95 @@ details {
   height: 100%;
   background: var(--accent);
 }
-details {
-  max-width: 100%;
-  padding-top: var(--s-1);
+.resource-info {
+  min-width: 0;
+  border-left: 1px solid var(--line);
+  padding-left: var(--s-5);
 }
-summary {
+.resource-rules {
+  font-size: 0.85rem;
+}
+.resource-rules summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  min-height: var(--h-lg);
   cursor: pointer;
+  list-style: none;
+  font-weight: 600;
 }
-details p,
-code {
+.resource-rules summary::-webkit-details-marker {
+  display: none;
+}
+.resource-rules summary :deep(svg) {
+  width: 16px;
+  height: 16px;
+  color: var(--text-3);
+  transform: rotate(90deg);
+  transition: transform var(--dur);
+}
+.resource-rules[open] summary :deep(svg) {
+  transform: rotate(-90deg);
+}
+.resource-rules-content {
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--line);
+}
+.format-groups {
+  margin: 0;
+  display: grid;
+  gap: var(--s-3);
+}
+.format-groups > div {
+  display: grid;
+  grid-template-columns: 4em minmax(0, 1fr);
+  gap: var(--s-3);
+}
+.format-groups dt {
+  color: var(--text-2);
+}
+.format-groups dd {
+  display: flex;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  font-weight: 600;
+}
+.upload-limit {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  border-top: 1px solid var(--line);
+  padding-top: var(--s-3);
+  margin-top: var(--s-4);
+}
+.upload-limit strong {
+  font-size: 0.95rem;
+}
+.resource-prefix {
+  border-top: 1px solid var(--line);
+  margin-top: var(--s-2);
+}
+.resource-rules p,
+.prefix-row code {
   overflow-wrap: anywhere;
 }
 .prefix-row {
   margin-top: var(--s-2);
+  flex-wrap: nowrap;
+}
+.prefix-row code {
+  min-width: 0;
+  flex: 1;
+  font-size: 0.75rem;
+}
+.resource-sort {
+  width: 190px;
+  flex: none;
 }
 .resource-layout {
   display: grid;
@@ -1203,7 +1413,7 @@ code {
   font-size: 0.9rem;
   text-align: left;
   padding: var(--s-2) var(--s-3);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-pill);
   cursor: pointer;
   overflow-wrap: anywhere;
 }
@@ -1236,7 +1446,7 @@ code {
 .resource-search input {
   width: 100%;
 }
-.resource-search > select {
+.resource-search > .resource-select {
   max-width: 180px;
 }
 .resource-grid {
@@ -1251,7 +1461,7 @@ code {
   position: relative;
   min-width: 0;
   border: 1px solid var(--line);
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
   overflow: hidden;
   background: var(--surface);
 }
@@ -1311,14 +1521,14 @@ code {
   margin-bottom: var(--s-3);
   font-size: 0.85rem;
 }
-.resource-batch select {
+.resource-batch .resource-select {
   max-width: 180px;
 }
 .resource-pager {
   margin-top: var(--s-5);
   font-size: 0.85rem;
 }
-.resource-pager select {
+.resource-pager .resource-select {
   width: auto;
 }
 .page-buttons {
@@ -1326,7 +1536,7 @@ code {
 }
 .resource-skeleton {
   aspect-ratio: 3/4;
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
 }
 .upload-list {
   padding: var(--s-4);
@@ -1419,9 +1629,37 @@ code {
   .resource-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .provider-bar,
   .resource-summary {
+    padding: var(--s-4);
+  }
+  .resource-summary {
+    grid-template-columns: 1fr;
     gap: var(--s-3);
   }
+  .resource-info {
+    padding-left: 0;
+    padding-top: var(--s-2);
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+  .provider-choice {
+    padding-inline: var(--s-3);
+    flex: 1;
+    justify-content: center;
+    font-size: 0.85rem;
+  }
+  .provider-choices {
+    flex-wrap: nowrap;
+    gap: var(--s-2);
+  }
+  .provider-heading {
+    align-items: baseline;
+  }
+  .resource-link {
+    text-align: right;
+  }
+
   .resource-usage {
     min-width: 100%;
   }
@@ -1441,13 +1679,6 @@ code {
   .page-buttons {
     width: 100%;
     justify-content: center;
-  }
-  .provider-label {
-    flex-direction: row;
-    flex-wrap: wrap;
-  }
-  .provider-bar {
-    align-items: start;
   }
 }
 </style>
