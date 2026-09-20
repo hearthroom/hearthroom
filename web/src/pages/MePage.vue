@@ -69,17 +69,17 @@ onMounted(() => {
         </div>
       </div>
      </div>
-     <CommunityBadgeList v-if="community" :badges="community.badges" :level="community.level" />
+     <CommunityBadgeList v-if="community" :badges="community.badges.filter(b => b !== 'discord_linked')" :level="community.level" />
      <p v-if="session.profile?.bio" class="me__bio">{{ session.profile.bio }}</p>
      <p v-if="session.profile" class="me__since"><AccountIcon name="calendar" />{{ $t("me.since", { date: dateOnly(Math.floor(session.profile.memberSince / 1000)) }) }}</p>
      <div class="me__profile-actions">
        <CommunityProfile @updated="profileUpdated" />
        <RouterLink v-if="handle" :to="lp(`/authors/${handle}`)" class="me__public">{{ $t('me.publicPage') }}<AccountIcon name="arrow" /></RouterLink>
      </div>
+     <DiscordCommunity v-if="handle" :key="handle" :refresh="communityRefresh" compact @change="community = $event" />
     </header>
 
     <div class="me__main">
-      <DiscordCommunity v-if="handle" :key="handle" :refresh="communityRefresh" @change="community = $event" />
       <section class="me__workspace" aria-labelledby="workspace-title">
         <h2 id="workspace-title">{{ $t('me.workspace') }}</h2>
         <nav class="me__destinations" :aria-label="$t('me.workspace')">
