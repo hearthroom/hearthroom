@@ -2,7 +2,6 @@ import { upstreamSyncError, syncStep } from "./sync-error";
 import { readBooks, writeBooks, type TransferProgress } from "./card-transfer-resources";
 import {
   imageReference,
-  registerImageReference,
   MEDIA_FIELDS,
   type CardMedia,
 } from "./card-media";
@@ -284,7 +283,7 @@ async function update(
   const images: Record<string, string> = {};
   for (const field of MEDIA_FIELDS)
     images[field] = c.media?.[field]
-      ? await registerImageReference(env, p, token, c.media[field]!, id)
+      ? imageReference(env, p, c.media[field]!)
       : "";
   await call(env, p, token, `/role/${encodeURIComponent(id)}/document`, {
     fields: {

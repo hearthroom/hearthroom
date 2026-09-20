@@ -755,3 +755,19 @@ it('a failed draft save never submits partial content for review',async()=>{
  expect(root.textContent).toContain('fixture save failed');
  expect($<HTMLInputElement>('#f-name').value).toBe('B');
 });
+
+
+it('saves Harbor external image URLs directly without creating media assets', async () => {
+ localStorage.setItem('hearthroom.provider', 'harbor');
+ const url = 'https://objects.lunatalk.ai/cards/synthetic.png';
+ api.fetchRoleDetail.mockResolvedValueOnce({roleName:'External image',roleAvatar:url});
+ const fetchSpy = vi.spyOn(globalThis, 'fetch');
+ try {
+  await mount('/cards/r1/edit');
+  await type($<HTMLInputElement>('#f-name'), 'Updated name');
+  await submit();
+  expect(api.patchRoleDocument).toHaveBeenCalled();
+  expect(fetchSpy.mock.calls.some(([url])=>String(url).endsWith('/media/references'))).toBe(false);
+  expect(root.querySelector(`img[src="${url}"]`)).not.toBeNull();
+ } finally {fetchSpy.mockRestore();}
+});
