@@ -4,6 +4,7 @@ import { buildSearchText } from "./upstream";
 import { HttpError, type Localized, pickLocale } from "./types";
 
 export interface CardRow {
+  favorite_count?: number;
   approved_version_id: string | null;
   approved_hosted_role_id: string | null;
   id: string;
@@ -48,7 +49,7 @@ const AUTHOR_JOIN = `LEFT JOIN member_identities ai ON ai.provider = c.provider 
   LEFT JOIN member_connections ac ON ac.provider=c.provider AND ac.external_id=CAST(c.author_num_id AS TEXT)
   LEFT JOIN members am ON am.id = COALESCE(ac.owner_member_id,ai.member_id)
   LEFT JOIN card_numbers cn ON cn.provider = c.provider AND cn.source_role_id = c.source_role_id`;
-const CARD_COLUMNS = "c.*, am.handle AS author_handle, am.display_name AS community_name, CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url END AS community_avatar, cn.num AS num";
+const CARD_COLUMNS = "c.*, am.handle AS author_handle, am.display_name AS community_name, CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url END AS community_avatar, cn.num AS num, (SELECT COUNT(*) FROM member_favorites mf WHERE mf.card_id=c.id) AS favorite_count";
 
 /** 卡號長什麼樣：純數字。網址與搜尋框裡看到這種形狀就當卡號查，其餘當上游的卡片 ID。 */
 export const CARD_NUMBER = /^[1-9]\d{0,11}$/;
@@ -90,6 +91,7 @@ export function toCard(row: CardRow, lang: string) {
     },
     talkNum: row.talk_num,
     followNum: row.follow_num,
+    favoriteCount: row.favorite_count ?? 0,
     trending: Math.max(0, row.hot_score),
     registeredAt: row.registered_at,
     syncedAt: row.last_synced_at,
@@ -119,6 +121,8 @@ export interface ListOptions {
   excludeTags?: string[];
   /** 作者頁：這個成員（本站 id）的卡 */
   authorMemberId?: string;
+  favoritedBy?: string;
+  followedBy?: string;
   /** relevance 只在有搜尋字時有意義；沒有搜尋字或走 LIKE 時退回 hot。 */
   /** 上榜時間下限（毫秒），日／週／月榜用。 */
   since?: number;
@@ -209,6 +213,14 @@ export async function listCards(db: D1Database, opts: ListOptions) {
     binds.push(opts.authorMemberId);
   }
 
+  if (opts.favoritedBy !== undefined) {
+    where.push("EXISTS (SELECT 1 FROM member_favorites f WHERE f.card_id=c.id AND f.member_id=?)");
+    binds.push(opts.favoritedBy);
+  }
+  if (opts.followedBy !== undefined) {
+    where.push("EXISTS (SELECT 1 FROM member_follows f WHERE f.author_id=am.id AND f.member_id=?)");
+    binds.push(opts.followedBy);
+  }
   const whereSql = where.join(" AND ");
   // hot 用「這個同步窗口的對話增量」，不是累積數——累積數等於 top，排出來永遠是老卡。
   // 三種排序都對應一個索引，沒有一種需要現算。
@@ -224,7 +236,7 @@ export async function listCards(db: D1Database, opts: ListOptions) {
           ? "bm25(cards_fts), c.talk_num DESC"
           : "c.talk_num DESC, c.follow_num DESC, c.registered_at DESC";
 
-  const filtered = Boolean(opts.q || opts.tags?.length || opts.tagGroups?.length || opts.authorMemberId !== undefined || opts.since !== undefined);
+  const filtered = Boolean(opts.favoritedBy !== undefined || opts.followedBy !== undefined || opts.q || opts.tags?.length || opts.tagGroups?.length || opts.authorMemberId !== undefined || opts.since !== undefined);
 
   // 多撈一筆就知道還有沒有下一頁，不必數完整組結果。
   const probe = await db

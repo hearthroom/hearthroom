@@ -59,6 +59,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
 
       <nav class="nav">
         <RouterLink :to="lp('/')" class="nav__item" :class="{ 'nav__item--on': route.path === lp('/') }">{{ $t("nav.board") }}</RouterLink>
+        <RouterLink :to="lp('/library')" class="nav__item" active-class="nav__item--on">{{ $t("library.title") }}</RouterLink>
         <RouterLink v-if="session.me" :to="lp('/mine')" class="nav__item" active-class="nav__item--on">{{ $t("nav.mine") }}</RouterLink>
         <!-- 只有審核人看得到這顆：是不是審核人由本站決定，登入後問一次 -->
         <RouterLink v-if="reviewerStore.reviewer" :to="lp('/review')" class="nav__item" active-class="nav__item--on">{{ $t("nav.review") }}</RouterLink>
@@ -102,6 +103,11 @@ onMounted(() => document.addEventListener("keydown", onSlash));
     </div>
   </header>
 
+  <nav v-if="!route.meta.bare" class="mobile-library-nav" :aria-label="$t('library.navigation')">
+    <RouterLink :to="lp('/')" :aria-current="route.path === lp('/') ? 'page' : undefined">{{ $t('nav.board') }}</RouterLink>
+    <RouterLink :to="lp('/library')" :aria-current="route.path === lp('/library') ? 'page' : undefined">{{ $t('library.title') }}</RouterLink>
+    <RouterLink :to="lp('/mine')" :aria-current="route.path === lp('/mine') ? 'page' : undefined">{{ $t('nav.mine') }}</RouterLink>
+  </nav>
   <main id="main" tabindex="-1" :class="{ 'main--bare': route.meta.bare }"><RouterView /></main>
   <ConfirmDialog />
   <!-- 裝到主畫面的提示：對話與遊戲頁是全螢幕的，不在那裡打擾 -->
@@ -224,5 +230,11 @@ onMounted(() => document.addEventListener("keydown", onSlash));
   .account :deep(.acct__credits) { display: none; }
   /* GitHub 圖示也讓位：頁尾每頁都有同一條連結，少它不少功能；留著字標會被擠成「Hearthro…」 */
   .gh { display: none; }
+}
+.mobile-library-nav { display:none; }
+@media(max-width:860px) {
+  .mobile-library-nav { display:flex; justify-content:center; gap:var(--s-3); padding:var(--s-2) var(--s-4); border-bottom:1px solid var(--border); }
+  .mobile-library-nav a { display:flex; align-items:center; justify-content:center; min-height:44px; flex:1; border-radius:var(--r-pill); font-size:.875rem; text-align:center; }
+  .mobile-library-nav a[aria-current=page] { color:var(--accent-text); background:var(--accent-tint); font-weight:600; }
 }
 </style>

@@ -27,7 +27,7 @@ not_found_handling = "single-page-application"
 # 「Worker 跑不跑得到」的唯一開關；漏掉的路徑在舊網域上會變成一個還能用的鏡像站。
 # 靜態檔在 /assets/ 底下，不在這個清單裡，所以不會多付一次 Worker 呼叫。
 run_worker_first = [
-  "/", "/v1/*", "/search*", "/mine*", "/wallet*", "/create*", "/auth/*",
+  "/", "/metrics", "/library*", "/v1/*", "/search*", "/mine*", "/wallet*", "/create*", "/auth/*",
   "/cards/*", "/authors/*", "/review*",
   # 站台 manifest 在卡片 App 網域（play.）上要 404，得先過 Worker（src/index.ts）
   "/manifest.webmanifest",

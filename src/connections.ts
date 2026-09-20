@@ -10,6 +10,8 @@ export const EMPTY_MEMBER = `
  AND (SELECT COUNT(*) FROM member_identities WHERE member_id=members.id)=1
  AND NOT EXISTS (SELECT 1 FROM works WHERE member_id=members.id)
  AND NOT EXISTS (SELECT 1 FROM card_saves WHERE member_id=members.id)
+ AND NOT EXISTS (SELECT 1 FROM member_favorites WHERE member_id=members.id)
+ AND NOT EXISTS (SELECT 1 FROM member_follows WHERE member_id=members.id OR author_id=members.id)
  AND NOT EXISTS (SELECT 1 FROM comments WHERE member_id=members.id)
  AND NOT EXISTS (SELECT 1 FROM comment_likes WHERE member_id=members.id)
  AND NOT EXISTS (SELECT 1 FROM reviewers WHERE member_id=members.id)
