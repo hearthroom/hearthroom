@@ -53,3 +53,47 @@ Regression coverage: default provider and explicit URL precedence; stale respons
 HTTP/MCP parity follows the shared media service; Harbor has no current MCP transport to extend. Existing `harbor_media_upload_total{result}` and `harbor_contract_authoring_total{op,result}` provide stored/rejected and API results without new labels.
 
 Follow-up execution: the real page with synthetic provider data was checked on desktop and at 390px. Traditional Chinese/English dark and Korean/Simplified Chinese light screenshots were inspected; Japanese labels and 390px layout geometry were checked. Provider and select controls are 44px high, with no horizontal overflow or clipped control content in the measured layouts. Expanded menus/disclosures, provider switching and 24-item pagination passed; MP4 playback reached a decoded ready state and WAV metadata/controls loaded. Final browser console errors: none. Transient browser-control timeouts were recovered through the documented UI APIs. The full frontend suites pass (366 Worker tests, 384 web tests, the existing optional external-fixture probe skipped), as do typecheck and the pinned-stage/web build. Provider full tests and deployment checks pass locally; production acceptance still requires CI and live readback.
+
+## Stable authored prefixes and directory uploads
+
+需求：固定前綴加作者自訂的資料夾／檔名即可拼接網址；同路徑重傳更新內容、網址不變。
+驗收：兩站前綴常駐顯示且複製含結尾斜線；Harbor 空庫也有公開 UID 前綴；保留原始相對路徑、中文與多層目錄；跨資料夾同名互不覆蓋；1000 個檔案的上傳清單與庫存分頁可用。
+範圍：Harbor 固定 UID 命名空間、原子替換與公開網址解析，加上 Hearthroom 目錄上傳；不共用不同供應商的網域、不搬移既有檔案，也不更動 LunaTalk 的獨立後端。
+
+Harbor advertises `relativePaths` and `overwrite`, and accepts an authored
+`relativePath` at completion or multipart upload. The first selected folder name
+prefixes the submitted path. The visible folder selector normalizes Harbor's `id`
+and `itemCount` fields to the client contract. Directory selection sends the
+browser's `webkitRelativePath` intact. Providers without the capability do not
+show a directory-upload control. Upload progress is paged in groups of 24, with
+whole-batch success/failure counts and failed-only retry; this avoids re-rendering
+1000 file rows for every completion.
+
+The stable prefix is `https://<API host>/u/<public UID>/`; the trailing slash is
+identical on screen and in copied text. The backend's public route resolves the
+current object with a non-cacheable redirect. Replacement preserves the original
+asset ID and bindings, accounts only for current content, and safely handles old
+completion retries. Existing unnamed links remain valid. Folder grouping changes
+retain already-published URLs; new uploads use the selected folder's current name.
+Uploads still reserve temporary space for the incoming file under existing quotas.
+
+MCP: no current Harbor MCP transport; the OpenAPI contract and shared HTTP service
+are updated. Observability: existing contract counter adds `op=library_resolve`,
+and the upload counter records `named`/`cleanup_error`, without identifiers or paths.
+
+Validation: PostgreSQL tests upload 1000 authored resources and verify the last
+page, account isolation, distinct same-name paths, replacement quota, old URL
+compatibility, public redirect cache policy, traversal rejection and completion
+retry behavior. Frontend tests exercise 1000 directory files after a single
+explicit overwrite confirmation, as well as exact prefix copying and normalized
+folder IDs. The initial bulk UI test exposed quadratic rendering; paging reduced
+that focused batch from a timeout to a passing run.
+
+Browser evidence: the real page with synthetic data shows both provider prefixes
+without expanding a disclosure. Desktop dark and 390px Traditional Chinese dark /
+English light layouts were inspected; document width stays 390px and prefix/action
+buttons measure 44px with no clipped control text. Browser console errors: none.
+Native directory-picker automation was attempted but `setFiles` was rejected by
+the Chrome extension's file-URL permission; that OS entry step remains unverified,
+while the file-input event, directory path transport and backend behavior are tested.
+No production files were uploaded, replaced or deleted for validation.

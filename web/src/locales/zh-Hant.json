@@ -962,8 +962,8 @@
   "error.invalidCursor": "這份清單已經變了，請重新整理再看。",
   "error.quotaExceeded": "額度已經用完了。",
   "error.assetNotPassedReview": "這張卡用到的圖還在審核，通過之後才能做這件事。",
-  "res.prefix.label": "圖庫網址前綴",
-  "res.prefix.hint": "上傳會保留原始檔名，網址就是「前綴／檔名」；同名再傳會直接換掉舊的那張，網址不變。卡片程式碼裡可以用前綴加檔名直接組網址。",
+  "res.prefix.label": "資源網址前綴",
+  "res.prefix.hint": "固定前綴加上檔案路徑，就能在卡片中拼接資源網址；同一路徑重新上傳會更新內容，網址不變。",
   "editor.chatPage": "聊天頁",
   "editor.chatPage.sandbox": "沙箱（推薦）",
   "editor.chatPage.classic": "傳統",
@@ -1389,5 +1389,9 @@
   "community.noCases": "目前沒有回報。",
   "community.publicLevel": "在個人頁公開等級",
   "community.badges.discord_linked": "Discord 已連結",
-  "community.nextLevel": "再累積 {xp} XP 升到等級 {level}"
+  "community.nextLevel": "再累積 {xp} XP 升到等級 {level}",
+  "resource.uploadDirectory": "上傳資料夾",
+  "resource.directoryHint": "資料夾上傳會保留原本的名稱與階層，例如「前綴／立繪／表情／開心.png」。",
+  "resource.uploadSummary": "已完成 {done}／{total} 個檔案，{failed} 個失敗",
+  "resource.uploadPages": "上傳清單分頁"
 }

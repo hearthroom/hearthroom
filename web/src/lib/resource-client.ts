@@ -26,6 +26,7 @@ export interface Capabilities {
   search: boolean;
   sorts: string[];
   overwrite: boolean | null;
+  relativePaths?: boolean;
 }
 export interface ResourceQuery {
   scope: string;
@@ -79,6 +80,7 @@ export function resourceClient(provider: ProviderId, token: string) {
   async function legacy(file: File, folderIds: string[]) {
     const form = new FormData();
     form.append("file", file);
+    if (provider === "harbor" && file.webkitRelativePath) form.append("relativePath", file.webkitRelativePath);
     for (const id of folderIds) form.append("folderIds", id);
     const r = await fetch(`${base}/open/v1/image/upload`, {
       method: "POST",
@@ -131,11 +133,14 @@ export function resourceClient(provider: ProviderId, token: string) {
           search: c?.search === true,
           sorts: c?.sorts ?? [],
           overwrite: typeof c?.overwrite === "boolean" ? c.overwrite : null,
+          relativePaths: c?.relativePaths === true,
         },
       };
     },
     async folders(): Promise<Folder[]> {
-      return (await request("folder/list")).folders ?? [];
+      return ((await request("folder/list")).folders ?? []).map((f: Record<string, unknown>) => ({
+        folderId: String(f.folderId ?? f.id), name: String(f.name), imageCount: Number(f.imageCount ?? f.itemCount ?? 0),
+      }));
     },
     async folder(
       action: "create" | "rename" | "delete" | "addItems" | "removeItems",
@@ -220,6 +225,7 @@ export function resourceClient(provider: ProviderId, token: string) {
             state.done = await request("uploadComplete", {
               uploadId: intent.uploadId,
               fileName: file.name,
+              ...(provider === "harbor" && file.webkitRelativePath ? {relativePath: file.webkitRelativePath} : {}),
               folderIds,
             });
         }
