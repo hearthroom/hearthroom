@@ -78,7 +78,8 @@ export async function appearanceMedia(env:Env,key:string) {
  if(!row)throw new HttpError(404,'not_found');
  const url=new URL(row.source_url);
  if(url.origin!=='https://cdn.discordapp.com'||!/^\/(avatars|guilds|embed\/avatars|avatar-decoration-presets)\//.test(url.pathname))throw new HttpError(404,'not_found');
- const response=await fetch(url,{redirect:'error',signal:AbortSignal.timeout(8000)});
+ // Workers supports manual/follow only. Reject all non-2xx responses below.
+ const response=await fetch(url,{redirect:'manual',signal:AbortSignal.timeout(8000)});
  if(!response.ok||!response.headers.get('content-type')?.startsWith('image/png'))throw new HttpError(502,'community_media_unavailable');
  const reader=response.body!.getReader();let size=0;const chunks:Uint8Array[]=[];
  try {for(;;){const {value,done}=await reader.read();if(done)break;size+=value.length;if(size>2*1024*1024)throw new HttpError(502,'community_media_unavailable');chunks.push(value);}}finally{await reader.cancel();}

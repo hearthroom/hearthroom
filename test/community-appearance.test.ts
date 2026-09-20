@@ -72,9 +72,15 @@ afterEach(()=>vi.restoreAllMocks());
 it('proxies only verified PNG assets and counts media failures without identity labels',async()=>{
  await syncAppearance(config(),await snapshot());
  const key=(await appearanceView(config(),member)).available.discordAvatar!.split('/').pop()!;
- const fetcher=vi.spyOn(globalThis,'fetch').mockResolvedValue(new Response(new Uint8Array([137,80,78,71,13,10,26,10]),{headers:{'Content-Type':'image/png'}}));
+ const fetcher=vi.spyOn(globalThis,'fetch').mockImplementation(async(input,init)=>{
+  // Use the runtime's Request validation: Workers rejects redirect:'error'.
+  new Request(input,init);
+  return new Response(new Uint8Array([137,80,78,71,13,10,26,10]),{headers:{'Content-Type':'image/png'}});
+ });
  const result=await appearanceMedia(config(),key);expect(result.status).toBe(200);expect(result.headers.get('Cache-Control')).toBe('private, max-age=300');
- expect(fetcher.mock.calls[0][1]).toMatchObject({redirect:'error'});
+ expect(fetcher.mock.calls[0][1]).toMatchObject({redirect:'manual'});
+ fetcher.mockResolvedValueOnce(new Response(null,{status:302,headers:{Location:'https://example.test/image.png'}}));
+ await expect(appearanceMedia(config(),key)).rejects.toThrow('community_media_unavailable');
  fetcher.mockResolvedValueOnce(new Response('<svg/>',{headers:{'Content-Type':'image/png'}}));
  await expect(appearanceMedia(config(),key)).rejects.toThrow('community_media_unavailable');
  const {communityRoutes}=await import('../src/community/routes');
