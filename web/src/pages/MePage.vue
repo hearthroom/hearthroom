@@ -8,10 +8,11 @@
  * 顯示名稱與頭像由社區保存，首次登入預填後即可獨立編輯。
  */
 import DiscordCommunity from "@/components/DiscordCommunity.vue";
+import CommunityBadgeList from "@/components/CommunityBadgeList.vue";
 import CommunityProfile from "@/components/CommunityProfile.vue";
 import AccountIcon from "@/components/AccountIcon.vue";
 import ConnectedAccounts from "@/components/ConnectedAccounts.vue";
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink } from "vue-router";
 import { dateOnly, hueFrom } from "@/lib/format";
@@ -28,6 +29,8 @@ const { t } = useI18n();
 const copied = ref(false);
 
 const handle = computed(() => session.profile?.handle ?? "");
+const community = ref<{ badges: string[]; level: number | null } | null>(null);
+watch(handle, () => { community.value = null; });
 
 async function copyHandle() {
   if (!handle.value) return;
@@ -62,6 +65,7 @@ onMounted(() => {
         </div>
       </div>
      </div>
+     <CommunityBadgeList v-if="community" :badges="community.badges" :level="community.level" />
      <p v-if="session.profile?.bio" class="me__bio">{{ session.profile.bio }}</p>
      <p v-if="session.profile" class="me__since"><AccountIcon name="calendar" />{{ $t("me.since", { date: dateOnly(Math.floor(session.profile.memberSince / 1000)) }) }}</p>
      <div class="me__profile-actions">
@@ -89,7 +93,7 @@ onMounted(() => {
         </nav>
       </section>
     <ConnectedAccounts />
-    <DiscordCommunity v-if="handle" :key="handle" />
+    <DiscordCommunity v-if="handle" :key="handle" @change="community = $event" />
     </div>
     <nav class="me__links" :aria-label="$t('me.title')">
       <RouterLink :to="lp('/wallet')" class="me__link"><AccountIcon name="wallet" />{{ $t("nav.wallet") }}<AccountIcon name="arrow" class="me__chevron" /></RouterLink>

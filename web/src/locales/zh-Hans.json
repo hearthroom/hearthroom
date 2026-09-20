@@ -1324,6 +1324,7 @@
   "community.unlink": "解除绑定",
   "community.unlinkDetail": "解除 {name} 与网站的连接？跨端反馈访问与通知会停止，绑定获得的身份组会移除。作品成就与发言经验仍会保留。",
   "community.retry": "重新同步",
+  "community.badgeLabel": "社区徽章",
   "community.level": "等级 {level}",
   "community.progress": "下一级进度",
   "community.xpRule": "指定公开频道每 60 秒最多 1 XP，每日最多 60 XP，按 UTC 计日。不读取发言内容。",

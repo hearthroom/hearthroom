@@ -1324,6 +1324,7 @@
   "community.unlink": "Unlink account",
   "community.unlinkDetail": "Unlink {name} from the website? Cross-platform report access and notifications will stop, and roles earned through linking will be removed. Work achievements and chat XP will remain.",
   "community.retry": "Sync again",
+  "community.badgeLabel": "Community badges",
   "community.level": "Level {level}",
   "community.progress": "Progress to next level",
   "community.xpRule": "Earn at most 1 XP per 60 seconds and 60 XP per UTC day in designated public channels. Message content is not read.",

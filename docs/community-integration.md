@@ -32,6 +32,24 @@ Register exactly `<COMMUNITY_SITE_URL>/v1/community/discord/callback` as the Dis
 
 An unset invitation is hidden. No production invitation, role ID, scoring channel, client secret or bridge key is invented by the source change. Enabling and validating the actual deployment remains a distinct operational step.
 
+## Profile badge presentation
+
+The signed-in `/me` identity header shows the member's own badge strip even when
+public visibility is off. It uses the existing authenticated community response,
+including immediate unlink updates, without a second public-profile fetch.
+Public author profiles still use only the opted-in public response. Exact XP and
+Discord identity remain private.
+
+The shared strip gives every visible badge an SVG icon and readable label. Level
+icons are Spark at 0, Flame at 1–4, Lantern at 5–9, Star at 10–19 and Crown at 20+;
+the exact numeric level is always shown. These are visual tiers, not new XP rules,
+awards or permissions. Discord links and the connected badge share the same brand
+mark ([Simple Icons, CC0](https://github.com/simple-icons/simple-icons/blob/develop/icons/discord.svg)).
+Unknown badge keys are omitted until a supported label/icon is available.
+
+MCP and new metrics are not applicable to this presentation-only change: it uses
+the existing authorized member/public HTTP responses and adds no mutation or job.
+
 ## Network boundary
 
 The browser uses the website's HTTPS Cloudflare Worker origin; Discord OAuth returns to that same origin. Hearthkeeper opens outbound Discord Gateway/API connections and signed HTTPS requests to the Worker. The website does not call a public Bot IP or inbound Bot endpoint. Bot metrics bind to loopback. This integration needs no extra public hostname or inbound server port.

@@ -1324,6 +1324,7 @@
   "community.unlink": "連携を解除",
   "community.unlinkDetail": "{name} とサイトの連携を解除しますか？サイトからの報告へのアクセスと通知が停止し、連携で取得したロールが削除されます。作品の実績とチャット XP は残ります。",
   "community.retry": "再同期",
+  "community.badgeLabel": "コミュニティバッジ",
   "community.level": "レベル {level}",
   "community.progress": "次のレベルまで",
   "community.xpRule": "指定された公開チャンネルで 60 秒につき最大 1 XP、UTC の 1 日につき最大 60 XP。メッセージ本文は読み取りません。",
