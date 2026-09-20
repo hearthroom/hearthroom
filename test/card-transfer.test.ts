@@ -253,3 +253,8 @@ it("makes a Harbor copy usable by ID after synchronization without community pub
  expect(body(requests.find(r=>r.url.endsWith('/role/target/visibility')))).toEqual({visibility:'unlisted'});
  expect(requests.some(r=>r.url.endsWith('/publish'))).toBe(false);
 });
+it("keeps LunaTalk publication separate from ID-access repair", async () => {
+ const requests=fakeUpstream({});
+ await transfers.ensurePlayable(env,"lunatalk","token","target");
+ expect(requests).toHaveLength(0);
+});
