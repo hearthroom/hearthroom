@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CommunityBadges from "@/components/CommunityBadges.vue";
 import LibraryToggle from "@/components/LibraryToggle.vue";
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -67,6 +68,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
       <div class="who__text">
         <p class="eyebrow">{{ $t("author.eyebrow") }}</p>
         <h1 class="who__name display">{{ author.name }}</h1>
+        <CommunityBadges v-if="author.handle" :handle="author.handle" />
         <p v-if="author.bio" class="who__bio">{{ author.bio }}</p>
         <p class="subtle who__id">
           <span class="mono">@{{ author.handle }}</span>
