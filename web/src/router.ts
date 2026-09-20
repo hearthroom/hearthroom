@@ -25,6 +25,7 @@ const pages: RouteRecordRaw[] = [
   { path: "cards/:roleId/edit", component: () => import("./pages/CardEditorPage.vue"), meta: { auth: true, feature: "editor" } },
   { path: "authors/:handle", component: () => import("./pages/AuthorPage.vue") },
   { path: "library", component: () => import("./pages/LibraryPage.vue"), meta: { auth: true } },
+  { path: "me/badges", component: () => import("./pages/BadgesPage.vue"), meta: { auth: true } },
   { path: "me/community", component: () => import("./pages/CommunityPage.vue"), meta: { auth: true } },
   { path: "me", component: () => import("./pages/MePage.vue"), meta: { auth: true } },
   { path: "login", component: () => import("./pages/LoginPage.vue") },

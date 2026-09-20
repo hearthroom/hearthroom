@@ -1,3 +1,4 @@
+import { activeAwardKeys } from './badges';
 import { appearanceView } from './appearance';
 import { HttpError, type Env } from "../types";
 import { digest, random } from "./crypto";
@@ -166,15 +167,7 @@ export async function projection(env: Env, user: string) {
     .bind(user)
     .first<{ xp: number }>();
   const linked = row.state === "active";
-  const badges = linked
-    ? (
-        await env.DB.prepare(
-          "SELECT badge FROM community_awards WHERE member_id=?",
-        )
-          .bind(row.member_id)
-          .all<{ badge: string }>()
-      ).results.map((r) => r.badge)
-    : [];
+  const badges = linked ? await activeAwardKeys(env,row.member_id!) : [];
   return {
     revision: row.revision,
     xp: xp!.xp,
@@ -219,12 +212,9 @@ export async function finishProjection(
   return !!result[1].meta.changes;
 }
 async function memberBadges(env: Env, member: string) {
-  const rows = await env.DB.prepare(
-    `SELECT 'discord_linked' AS badge WHERE EXISTS(SELECT 1 FROM discord_links WHERE member_id=? AND state='active')
-     UNION ALL SELECT badge FROM community_awards WHERE member_id=? ORDER BY badge`,
-  ).bind(member, member).all<{ badge: string }>();
-  const badges = rows.results.map(r => r.badge);
-  if ((await appearanceView(env,member)).supporter.active) badges.push("server_booster");
+  const badges = await activeAwardKeys(env,member);
+  if(await env.DB.prepare("SELECT 1 FROM discord_links WHERE member_id=? AND state='active'").bind(member).first()) badges.unshift('discord_linked');
+  if((await appearanceView(env,member)).supporter.active) badges.push('server_booster');
   return badges;
 }
 
@@ -402,6 +392,7 @@ export async function ingestXP(env: Env, event: XPEvent, now = Date.now()) {
 export async function communityMaintenance(env: Env) {
   const now = Date.now();
   await env.DB.batch([
+    env.DB.prepare("UPDATE community_awards SET expiry_notified=1 WHERE expires_at<=? AND expiry_notified=0").bind(now),
     env.DB.prepare("DELETE FROM community_case_jobs WHERE expires<?").bind(now),
     env.DB.prepare("DELETE FROM discord_link_attempts WHERE expires<?").bind(
       now,

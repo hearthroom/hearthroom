@@ -1,3 +1,4 @@
+import { badgeCollection, setFeaturedBadges, createEventBadge, changeBadgeAward, badgeManagement } from './badges';
 import { syncAppearance, saveAppearance, appearanceMedia } from './appearance';
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -40,7 +41,9 @@ for (const path of [
   "/v1/community/media/*",
 ])
   app.use(path, async (c, next) => {
-    const operation = c.req.path.startsWith("/internal/")
+    const operation = c.req.path.includes("/badges/manage") ? "badge_admin"
+      : c.req.path.includes("/badges") ? (c.req.method==="GET"?"badge_read":"badge_write")
+      : c.req.path.startsWith("/internal/")
       ? "bridge"
       : c.req.path.startsWith("/v1/community/media/") ? "media"
       : c.req.path.endsWith("/callback")
@@ -98,6 +101,20 @@ app.get("/v1/community/config", (c) =>
 app.get("/v1/me/community", async (c) =>
   c.json(await communityView(c.env, (await requireMember(c)).id)),
 );
+app.get('/v1/me/community/badges',async c=>c.json(await badgeCollection(c.env,(await requireMember(c)).id)));
+app.patch('/v1/me/community/badges/featured',async c=>{
+ const member=await requireMember(c);const b=await c.req.json();await setFeaturedBadges(c.env,member.id,b.featured,b.public);return c.json(await badgeCollection(c.env,member.id));
+});
+app.get('/v1/me/community/badges/manage',async c=>c.json(await badgeManagement(c.env,(await requireMember(c)).id)));
+app.post('/v1/me/community/badges/manage/definitions',async c=>{
+ const member=await requireMember(c);await createEventBadge(c.env,member.id,await c.req.json());return c.json(await badgeManagement(c.env,member.id));
+});
+app.post('/v1/me/community/badges/manage/awards',async c=>{
+ const member=await requireMember(c);await changeBadgeAward(c.env,member.id,await c.req.json());return c.json(await badgeManagement(c.env,member.id));
+});
+app.get('/v1/community/members/:handle/badges',async c=>{
+ c.header('Cache-Control','no-store');const member=await memberByHandle(c.env.DB,c.req.param('handle'));if(!member)throw new HttpError(404,'community_member_missing');return c.json(await badgeCollection(c.env,member,true));
+});
 app.patch("/v1/me/community/appearance", async c => {
   enabled(c.env);
   const member = await requireMember(c);

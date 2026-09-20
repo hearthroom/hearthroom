@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BadgeShowcase from "@/components/BadgeShowcase.vue";
 import CommunityAvatar from "@/components/CommunityAvatar.vue";
 import CommunityName from "@/components/CommunityName.vue";
 import CommunityBadges from "@/components/CommunityBadges.vue";
@@ -85,6 +86,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
     </header>
     <div v-else class="ghost who--ghost" aria-hidden="true" />
 
+    <BadgeShowcase v-if="author?.handle" :key="author.handle" :handle="author.handle" wall />
     <CardGrid
       :cards="page?.items ?? []"
       :loading="loading && !page"

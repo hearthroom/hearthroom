@@ -3,6 +3,7 @@ import { onMounted } from 'vue';
 import { RouterLink } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import DiscordCommunity from '@/components/DiscordCommunity.vue';
+import CommunityIcon from '@/components/CommunityIcon.vue';
 import AccountIcon from '@/components/AccountIcon.vue';
 import { useLocalePath } from '@/lib/use-locale';
 import { useSession } from '@/lib/session';
@@ -15,6 +16,7 @@ onMounted(() => { document.title = pageTitle(t('community.title')); });
 <template>
   <div v-if="session.me" class="page page--narrow community-page">
     <RouterLink :to="lp('/me')" class="community-page__back"><AccountIcon name="arrow" />{{ t('community.backToProfile') }}</RouterLink>
+    <RouterLink :to="lp('/me/badges')" class="btn"><CommunityIcon name="award" />{{ t('badgeWall.title') }}</RouterLink>
     <DiscordCommunity :key="session.profile?.handle" />
   </div>
 </template>

@@ -1,8 +1,14 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { useI18n } from "vue-i18n";
+import { BADGE_ICONS, badgeText, type CollectedBadge } from "../../../shared/community-badges";
+const { locale, t } = useI18n();
 import CommunityIcon from "./CommunityIcon.vue";
-const props = defineProps<{ badges: string[]; level?: number | null }>();
-const visibleBadges = computed(() => [...new Set(props.badges)].filter(b => b === "discord_linked" || b === "first_work" || b === "server_booster"));
+const props = defineProps<{ badges: string[]; level?: number | null; items?: CollectedBadge[] }>();
+const visibleBadges = computed(() => [...new Set(props.badges)].filter(b => b === "discord_linked" || b === "first_work" || b === "server_booster" || props.items?.some(item=>item.key===b && BADGE_ICONS.includes(item.icon))));
+const metadata=(key:string)=>props.items?.find(item=>item.key===key);
+const badgeIcon=(key:string)=>metadata(key)?.icon ?? (key==='discord_linked'?'discord':key==='server_booster'?'flame':'award');
+const badgeLabel=(key:string)=>metadata(key)?badgeText(metadata(key)!.titles,locale.value):t('community.badges.'+key);
 const validLevel = computed(() => typeof props.level === "number" && Number.isInteger(props.level) && props.level >= 0 ? props.level : null);
 const levelIcon = computed(() => validLevel.value === 0 ? "spark" : (validLevel.value ?? 0) < 5 ? "flame" : (validLevel.value ?? 0) < 10 ? "lantern" : (validLevel.value ?? 0) < 20 ? "star" : "crown");
 </script>
@@ -12,7 +18,7 @@ const levelIcon = computed(() => validLevel.value === 0 ? "spark" : (validLevel.
       <CommunityIcon :name="levelIcon" /><span>{{ $t('community.level', { level: validLevel }) }}</span>
     </span>
     <span v-for="badge in visibleBadges" :key="badge" class="community-badge" :class="{ 'community-badge--achievement': badge === 'first_work' || badge === 'server_booster' }" role="listitem">
-      <CommunityIcon :name="badge === 'discord_linked' ? 'discord' : badge === 'server_booster' ? 'flame' : 'award'" /><span>{{ $t('community.badges.' + badge) }}</span>
+      <CommunityIcon :name="badgeIcon(badge)" /><span>{{ badgeLabel(badge) }}</span>
     </span>
   </div>
 </template>
