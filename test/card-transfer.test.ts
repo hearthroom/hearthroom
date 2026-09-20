@@ -36,7 +36,7 @@ function fakeUpstream(routes: Record<string, (init?: RequestInit) => unknown>, f
 }
 afterEach(() => vi.unstubAllGlobals());
 
-it("keeps SaaS image URLs: registers a reference on Harbor and writes the original URL into the document", async () => {
+it("keeps SaaS image URLs directly in the card without registering media assets", async () => {
   const original = "https://objects.lunatalk.ai/avatar.png";
   const requests = fakeUpstream({
     "/role/detail": () => ({ ...role, roleAvatar: original }),
@@ -47,7 +47,7 @@ it("keeps SaaS image URLs: registers a reference on Harbor and writes the origin
   const source = await transfers.read(env, "lunatalk", "luna-token", "source", 1);
   await transfers.update(env, "harbor", "harbor-token", "target", source.card);
   expect(requests.some((r) => r.init?.method === "PUT" || r.url.includes("/uploads") || r.url === original)).toBe(false);
-  expect(body(requests.find((r) => r.url.endsWith("/media/references")))).toEqual({ url: original, roleId:"target" });
+  expect(requests.some((r) => r.url.endsWith("/media/references"))).toBe(false);
   const document = requests.find((r) => r.url.endsWith("/role/target/document"));
   expect(body(document).fields.roleAvatar).toBe(original);
   // 兩家走同一組契約路由：沒有 Harbor 專用的 /roles/… 路徑
