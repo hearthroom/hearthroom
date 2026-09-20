@@ -7,6 +7,7 @@
  *
  * 顯示名稱與頭像由社區保存，首次登入預填後即可獨立編輯。
  */
+import DiscordCommunity from "@/components/DiscordCommunity.vue";
 import CommunityProfile from "@/components/CommunityProfile.vue";
 import AccountIcon from "@/components/AccountIcon.vue";
 import ConnectedAccounts from "@/components/ConnectedAccounts.vue";
@@ -88,6 +89,7 @@ onMounted(() => {
         </nav>
       </section>
     <ConnectedAccounts />
+    <DiscordCommunity v-if="handle" :key="handle" />
     </div>
     <nav class="me__links" :aria-label="$t('me.title')">
       <RouterLink :to="lp('/wallet')" class="me__link"><AccountIcon name="wallet" />{{ $t("nav.wallet") }}<AccountIcon name="arrow" class="me__chevron" /></RouterLink>
