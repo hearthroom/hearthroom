@@ -1,0 +1,41 @@
+{
+  "rules": [
+    {
+      "allowed": {
+        "origins": [
+          "https://hearthroom.club",
+          "https://www.hearthroom.club",
+          "https://console.harperharbor.com",
+          "https://www.harperharbor.com",
+          "https://harperharbor.com",
+          "https://sukisuki.ai",
+          "https://play.hearthroom.club",
+          "https://playground.hearthroom.club",
+          "https://www.sukisuki.ai",
+          "https://play.sukisuki.ai",
+          "https://playground.sukisuki.ai",
+          "https://sukisuki.chat",
+          "https://www.sukisuki.chat",
+          "https://play.sukisuki.chat",
+          "https://playground.sukisuki.chat"
+        ],
+        "methods": [
+          "GET",
+          "HEAD",
+          "PUT"
+        ],
+        "headers": [
+          "Content-Type",
+          "Content-MD5",
+          "Cache-Control",
+          "x-amz-checksum-crc32",
+          "x-amz-sdk-checksum-algorithm"
+        ]
+      },
+      "exposeHeaders": [
+        "ETag"
+      ],
+      "maxAgeSeconds": 3600
+    }
+  ]
+}

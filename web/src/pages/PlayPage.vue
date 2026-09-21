@@ -21,7 +21,7 @@ import { track } from "@/lib/track";
 import { fetchCard, fetchMeAt } from "@/lib/api";
 import { applyCardHead } from "@/lib/card-manifest";
 import { requestInstallToast } from "@/lib/pwa";
-import { SITE, isPlayHost } from "@/lib/site";
+import { communityHost, isPlayHost } from "@/lib/site";
 
 const route = useRoute();
 const router = useRouter();
@@ -40,7 +40,7 @@ watch(roleId, () => { document.title = pageTitle(t("play.title")); }, { immediat
 // 裝下去的就是它（lib/card-manifest.ts）。在榜的卡才有資料；用 ID 直接玩的私有卡讀不到，就沒有。
 // 主站的對話頁不換：卡片只該有一個 App 身分，就是卡片 App 網域上那個。
 const playApp = isPlayHost();
-const cardPageUrl = computed(() => `https://${SITE.host}/${locale.value === "zh-Hant" ? "" : `${locale.value}/`}cards/${encodeURIComponent(roleId.value)}`);
+const cardPageUrl = computed(() => `https://${communityHost()}/${locale.value === "zh-Hant" ? "" : `${locale.value}/`}cards/${encodeURIComponent(roleId.value)}`);
 let headSeq = 0;
 if (playApp) {
   // 從主畫面圖示開進來的（standalone）舞台不畫返回鍵：lib/stage-host.ts 的 nav.canBack

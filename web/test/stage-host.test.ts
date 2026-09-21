@@ -76,3 +76,15 @@ describe("sandboxOptions", () => {
     expect(local.origin("abc")).toBe("null");
   });
 });
+
+for (const root of ['sukisuki.ai', 'sukisuki.chat']) {
+  it(`uses isolated per-card shells on ${root} and its card app`, async () => {
+    const { sandboxOptions } = await import('../src/lib/stage-host');
+    for (const host of [root, `www.${root}`, `play.${root}`]) {
+      const options = sandboxOptions(host, session);
+      expect(options.shellUrl('Role-1')).toBe(`https://crole-1.${root}/sandbox/`);
+      expect(options.origin('Role-1')).toBe(`https://crole-1.${root}`);
+    }
+    expect(sandboxOptions(`${root}.evil.test`, session).origin('1')).toBe('null');
+  });
+}

@@ -12,6 +12,7 @@ import {
   site,
   invite,
   beginLink,
+  linkReturnOrigin,
   acceptIdentity,
   completeLink,
   unlink,
@@ -119,7 +120,7 @@ app.get("/v1/community/media/:key", async c => appearanceMedia(c.env,c.req.param
 app.post("/v1/me/community/link", async (c) => {
   const m = await requireMember(c);
   const b = await c.req.json();
-  const started = await beginLink(c.env, m.id, b.nonce);
+  const started = await beginLink(c.env, m.id, b.nonce, new URL(c.req.url).origin);
   return c.json({ url: started.url });
 });
 app.post("/v1/me/community/complete", async (c) => {
@@ -229,7 +230,6 @@ app.get("/v1/community/discord/callback", async (c) => {
   if (
     state.length > 150 ||
     code.length > 2048 ||
-    !code ||
     !(await c.env.DB.prepare(
       "SELECT 1 FROM discord_link_attempts WHERE state=? AND receipt IS NULL AND expires>?",
     )
@@ -237,15 +237,16 @@ app.get("/v1/community/discord/callback", async (c) => {
       .first())
   )
     return c.redirect(site(c.env) + "/me#discord_error=expired");
+  if (!code) return c.redirect(linkReturnOrigin(c.env, state) + "/me#discord_error=oauth");
   try {
     const receipt = await acceptIdentity(
       c.env,
       state,
       await discordOAuth.identify(c.env, code),
     );
-    return c.redirect(site(c.env) + "/me#discord_receipt=" + receipt);
+    return c.redirect(linkReturnOrigin(c.env, state) + "/me#discord_receipt=" + receipt);
   } catch {
-    return c.redirect(site(c.env) + "/me#discord_error=oauth");
+    return c.redirect(linkReturnOrigin(c.env, state) + "/me#discord_error=oauth");
   }
 });
 app.get("/v1/me/community/notifications", async (c) => {

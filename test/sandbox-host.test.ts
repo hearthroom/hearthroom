@@ -97,3 +97,18 @@ it("does not reuse a stale shell or mask the SPA fallback with a 304", async () 
     expect(res.status).toBe(status);
   }
 });
+for (const root of ['sukisuki.ai', 'sukisuki.chat']) {
+  it(`serves isolated sandbox assets and denies app routes on ${root}`, async () => {
+    expect(isSelfHost(root)).toBe(true);
+    expect(isSandboxHost(`c1.${root}`)).toBe(true);
+    expect(sandboxRoleIdOf(`c1.${root}`)).toBe('1');
+    const page = await get(`https://c1.${root}/sandbox/`);
+    expect(page.status).toBe(200);
+    const csp = page.headers.get('content-security-policy')!;
+    expect(csp).toContain(`https://${root}`);
+    expect(csp).toContain(`https://play.${root}`);
+    expect(csp).not.toContain('https://*');
+    expect((await get(`https://c1.${root}/v1/cards`)).status).toBe(404);
+    expect(isSandboxHost(`c1.${root}.evil.test`)).toBe(false);
+  });
+}

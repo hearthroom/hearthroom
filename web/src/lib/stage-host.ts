@@ -1,3 +1,4 @@
+import { siteRootOf } from '../../../shared/site-hosts';
 /**
  * 舞台（Moonstage）的宿主接線。
  *
@@ -63,8 +64,6 @@ export function preloadStage(): Promise<typeof import('moonstage/stage')> {
   return modulePromise;
 }
 
-/** 本站的正本主機；殼子網域只在它底下才存在（Worker 的萬用路由與 DNS 都掛在這個 zone）。 */
-const SITE_HOST = "hearthroom.club";
 
 /**
  * 新版沙箱卡的殼在哪裡。正式站每張卡一個子網域 `c<roleId>.hearthroom.club`（Worker 出殼頁、
@@ -73,7 +72,8 @@ const SITE_HOST = "hearthroom.club";
  */
 export function sandboxOptions(hostname: string, session: Pick<Session, 'accessToken'>, provider: ProviderId = currentProvider()) {
   // 卡片 App 網域（play.<站台>）也在同一個 zone 底下，殼子網域一樣用得到
-  const production = hostname === SITE_HOST || hostname === `www.${SITE_HOST}` || hostname === `play.${SITE_HOST}`;
+  const root = siteRootOf(hostname);
+  const production = !!root;
   const token = () => session.accessToken();
   const withToken = async <T>(fn: (t: string) => Promise<T>): Promise<T> => {
     const t = await token();
@@ -105,8 +105,8 @@ export function sandboxOptions(hostname: string, session: Pick<Session, 'accessT
   };
   return {
     prefetch,
-    shellUrl: (roleId: string) => { const l = label(roleId); return l ? `https://c${l}.${SITE_HOST}/sandbox/` : "/sandbox/"; },
-    origin: (roleId: string) => { const l = label(roleId); return l ? `https://c${l}.${SITE_HOST}` : "null"; },
+    shellUrl: (roleId: string) => { const l = label(roleId); return l ? `https://c${l}.${root}/sandbox/` : "/sandbox/"; },
+    origin: (roleId: string) => { const l = label(roleId); return l ? `https://c${l}.${root}` : "null"; },
     saves: {
       load: (roleId: string) => withToken((t) => {
         const entry = pending;
