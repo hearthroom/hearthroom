@@ -75,3 +75,25 @@ describe("沙箱子網域", () => {
     expect(res.headers.get("content-security-policy")).toBeNull();
   });
 });
+
+it("validates the current shell before returning a bodyless 304 for matching weak/list ETags", async () => {
+  for (const tag of ['"x"', 'W/"x"', '"old", W/"x"', '*']) {
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(new Request("https://c1.hearthroom.club/sandbox/", {headers: {"If-None-Match": tag}}), testEnv, ctx);
+    await waitOnExecutionContext(ctx);
+    expect(res.status).toBe(304);
+    expect(await res.text()).toBe("");
+    expect(res.headers.get("etag")).toBe('"x"');
+    expect(res.headers.get("content-security-policy")).toContain("frame-ancestors");
+    expect(res.headers.get("cache-control")).toBe("no-cache");
+  }
+});
+
+it("does not reuse a stale shell or mask the SPA fallback with a 304", async () => {
+  for (const [e, tag, status] of [[testEnv, '"old"', 200], [envWithAssets({}, {etag: '"x"'}), '"x"', 503]] as const) {
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(new Request("https://c1.hearthroom.club/sandbox/", {headers: {"If-None-Match": tag}}), e, ctx);
+    await waitOnExecutionContext(ctx);
+    expect(res.status).toBe(status);
+  }
+});

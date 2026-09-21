@@ -13,3 +13,5 @@
 7. 存檔失敗／帳號變更／換卡／修改後失效由回歸測試驗證；確認沒有跨帳號共享私人 cache。
 
 結果與限制記錄於 [play-startup.md](../../play-startup.md)。正式改善必須在發布後另跑同條件 profile；本機合成結果不能替代正式驗收。
+
+第二輪補驗：同平台 models 授權與 profile 重疊；跨平台先等 profile 才查綁定 token；拒絕／離頁不安裝。快取驗收包含雜湊資源 immutable、沙箱相同 ETag 回 304 且保留 CSP、舊 ETag 回 200。紀錄見 [play-followup.md](../../play-followup.md)。

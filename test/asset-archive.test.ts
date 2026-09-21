@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import worker from "../src/index";
 import { envWithAssets, fakeAssets } from "./helpers";
 
-async function get(path: string, present: Record<string, string>) {
+async function get(path: string, present: Record<string, string | Response>) {
   const ctx = createExecutionContext();
   const res = await worker.fetch(new Request(`https://c.test${path}`), envWithAssets(present), ctx);
   await waitOnExecutionContext(ctx);
@@ -44,4 +44,17 @@ describe("/assets/* 回退到舊版歸檔", () => {
     expect(res.status).toBe(404);
     expect(res.headers.get("content-type") ?? "").not.toContain("text/html");
   });
+});
+
+it("current content-hashed assets are immutable, but mutable names and failures are not", async () => {
+  for (const path of ["/assets/moonstage-stage-B0Ynh6bx.js", "/assets/index-DVdwi_Qk.css"]) {
+    const res = await get(path, { [path]: "asset" });
+    expect(res.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
+  }
+  for (const [path, response] of [
+    ["/assets/runtime.js", new Response("runtime")],
+    ["/assets/index-B0Ynh6bx.js", new Response("unavailable", {status: 503})],
+  ] as const) {
+    expect((await get(path, {[path]: response})).headers.get("cache-control") ?? "").not.toContain("immutable");
+  }
 });

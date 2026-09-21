@@ -63,18 +63,28 @@ onMounted(async () => {
   try {
     // 與社群身分／遊玩授權並行下載；失敗仍由 ensureStage 的正常錯誤路徑處理。
     void preloadStage();
-    await session.ensureProfile();
-    if (disposed) return;
     const provider = playProvider(route.query.provider);
-    const identity = session.profile?.identities.find(i => i.provider === provider);
-    const accessToken = () => provider === currentProvider() ? session.accessToken() : accountToken(provider, identity?.externalId);
-    if (provider !== currentProvider() && !identity) { await connectAccount(provider, route.fullPath); return; }
-    const token = await accessToken();
-    if (!token) { await connectAccount(provider, route.fullPath); return; }
-    if (!await ensurePlayAuthorization(token, route.fullPath, provider)) return;
+    const sameProvider = provider === currentProvider();
+    const returnTo = route.fullPath;
+    const profileReady = session.ensureProfile();
+    // The current provider's token does not depend on the community bindings.
+    // Cross-provider credentials must still wait for the authoritative linked identity.
+    if (!sameProvider) await profileReady;
     if (disposed) return;
+    const identity = session.profile?.identities.find(i => i.provider === provider);
+    const accessToken = () => sameProvider ? session.accessToken() : accountToken(provider, identity?.externalId);
+    if (!sameProvider && !identity) { await connectAccount(provider, returnTo); return; }
+    const token = await accessToken();
+    if (disposed) return;
+    if (!token) { await connectAccount(provider, returnTo); return; }
+    const [authorized] = await Promise.all([
+      ensurePlayAuthorization(token, returnTo, provider),
+      profileReady,
+    ]);
+    if (!authorized || disposed) return;
     const player = provider === currentProvider() ? session.me : await fetchMeAt(apiBaseOf(provider), token);
-    Stage.value = await ensureStage({
+    if (disposed) return;
+    const stage = await ensureStage({
       app,
       router,
       session,
@@ -85,6 +95,8 @@ onMounted(async () => {
       currentRoleId: () => roleId.value,
       lp,
     });
+    if (disposed) return;
+    Stage.value = stage;
     track("play_open", { subject: roleId.value });
   } catch (e) {
     console.error("[play] stage failed to load", e);

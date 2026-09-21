@@ -37,31 +37,37 @@ export function newHandle(): string {
  * 兩個請求同時第一次登入：身分表的主鍵擋住第二個，重讀就拿到第一個建的。
  * handle 撞到唯一索引（機率極低）也會落到同一個 catch，所以重讀不到才換一個 handle 再試。
  */
-export async function resolveMember(db: D1Database, provider: ProviderId, externalId: number, now: number): Promise<string> {
+type ResolvedMember = { id: string; handle: string; display_name: string | null };
+
+async function resolveMemberRecord(db: D1Database, provider: ProviderId, externalId: number, now: number): Promise<ResolvedMember> {
   const ext = String(externalId);
-  const connected = await db.prepare("SELECT owner_member_id FROM member_connections WHERE provider=? AND external_id=?").bind(provider,ext).first<{owner_member_id:string}>();
-  if(connected) return connected.owner_member_id;
-  const lookup = () =>
-    db
-      .prepare("SELECT member_id FROM member_identities WHERE provider = ? AND external_id = ?")
-      .bind(provider, ext)
-      .first<{ member_id: string }>();
+  // Connections override the original identity, including during a concurrent first login.
+  const lookup = () => db.prepare(`
+    SELECT id, handle, display_name FROM members WHERE id = COALESCE(
+      (SELECT owner_member_id FROM member_connections WHERE provider=? AND external_id=?),
+      (SELECT member_id FROM member_identities WHERE provider=? AND external_id=?)
+    )`).bind(provider, ext, provider, ext).first<ResolvedMember>();
   const found = await lookup();
-  if (found) return found.member_id;
+  if (found) return found;
   for (let attempt = 0; attempt < 3; attempt++) {
     const id = crypto.randomUUID();
+    const handle = newHandle();
     try {
       await db.batch([
-        db.prepare("INSERT INTO members (id, handle, created_at) VALUES (?, ?, ?)").bind(id, newHandle(), now),
+        db.prepare("INSERT INTO members (id, handle, created_at) VALUES (?, ?, ?)").bind(id, handle, now),
         db.prepare("INSERT INTO member_identities (provider, external_id, member_id, linked_at) VALUES (?, ?, ?, ?)").bind(provider, ext, id, now),
       ]);
-      return id;
+      return { id, handle, display_name: null };
     } catch {
       const again = await lookup();
-      if (again) return again.member_id;
+      if (again) return again;
     }
   }
   throw new HttpError(502, "could not create member");
+}
+
+export async function resolveMember(db: D1Database, provider: ProviderId, externalId: number, now: number): Promise<string> {
+  return (await resolveMemberRecord(db, provider, externalId, now)).id;
 }
 
 /**
@@ -139,23 +145,22 @@ export function normalizeHiddenTags(input: unknown): string[] {
 
 /** 「我的」頁要的：公開 ID、加入時間、連結了哪些供應商帳號。沒有 token、沒有信箱。 */
 export async function memberProfile(db: D1Database, memberId: string): Promise<MemberProfile | null> {
-  const m = await db
-    .prepare("SELECT handle, display_name, avatar_url, bio, created_at, show_nsfw, age_verified_at, hidden_tags FROM members WHERE id = ?")
-    .bind(memberId)
-    .first<{ handle: string; display_name: string | null; avatar_url: string; bio: string; created_at: number; show_nsfw: number; age_verified_at: number | null; hidden_tags: string }>();
+  type ProfileRow = { handle: string; display_name: string | null; avatar_url: string; bio: string; created_at: number; show_nsfw: number; age_verified_at: number | null; hidden_tags: string };
+  type IdentityRow = { provider: string; external_id: string; linked_at: number };
+  const [members, founding, ids] = await db.batch<ProfileRow | { provider: string } | IdentityRow>([
+    db.prepare("SELECT handle, display_name, avatar_url, bio, created_at, show_nsfw, age_verified_at, hidden_tags FROM members WHERE id = ?").bind(memberId),
+    db.prepare("SELECT provider FROM member_identities WHERE member_id=?").bind(memberId),
+    db.prepare("SELECT provider, external_id, linked_at FROM member_connections WHERE owner_member_id = ? UNION SELECT provider, external_id, linked_at FROM member_identities WHERE member_id = ? AND NOT EXISTS (SELECT 1 FROM member_connections c WHERE c.provider=member_identities.provider AND c.external_id=member_identities.external_id) ORDER BY linked_at").bind(memberId, memberId),
+  ]);
+  const m = members.results[0] as ProfileRow | undefined;
   if (!m) return null;
-  const founding = await db.prepare("SELECT provider FROM member_identities WHERE member_id=?").bind(memberId).all<{provider:string}>();
-  const ids = await db
-    .prepare("SELECT provider, external_id, linked_at FROM member_connections WHERE owner_member_id = ? UNION SELECT provider, external_id, linked_at FROM member_identities WHERE member_id = ? AND NOT EXISTS (SELECT 1 FROM member_connections c WHERE c.provider=member_identities.provider AND c.external_id=member_identities.external_id) ORDER BY linked_at")
-    .bind(memberId, memberId)
-    .all<{ provider: string; external_id: string; linked_at: number }>();
   return {
     handle: m.handle,
     displayName: m.display_name ?? m.handle,
     avatarUrl: m.avatar_url,
     bio: m.bio,
     memberSince: m.created_at,
-    identities: ids.results.map((r) => ({ provider: r.provider, externalId: Number(r.external_id), linkedAt: r.linked_at, founding: founding.results.some(i=>i.provider===r.provider) })),
+    identities: (ids.results as IdentityRow[]).map((r) => ({ provider: r.provider, externalId: Number(r.external_id), linkedAt: r.linked_at, founding: (founding.results as { provider: string }[]).some(i=>i.provider===r.provider) })),
     showNsfw: m.show_nsfw === 1,
     ageVerified: m.age_verified_at !== null,
     hiddenTags: parseHiddenTags(m.hidden_tags),
@@ -281,16 +286,23 @@ function requestIdentity(c:Ctx,bearer:string,provider:ProviderId) {
 }
 
 /** 轉發 token 問供應商「你是誰」，再換成本站成員。token 不落庫、不進日誌。 */
-export async function requireMember(c: Ctx): Promise<Member> {
+export async function requireMember(c: Ctx, timing?: (phase: "identity" | "member", duration: number) => void): Promise<Member> {
   const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1];
   if (!bearer) throw new HttpError(401, "missing bearer token");
   // token 屬於哪一家由呼叫端明說，不從 token 反推：兩家的格式沒有互斥保證。
   const provider = providerOf(c);
+  const started = performance.now();
   const me = await requestIdentity(c, bearer, provider);
-  const id = await resolveMember(c.env.DB, provider, me.accountNumId, Date.now());
-  await c.env.DB.prepare("UPDATE members SET display_name=?, avatar_url=? WHERE id=? AND display_name IS NULL")
-    .bind(me.nickName?.trim().slice(0, 60) || (await memberProfile(c.env.DB, id))!.handle, safeAvatar(me.avatar), id).run();
-  return { id, provider, externalId: me.accountNumId };
+  timing?.("identity", performance.now() - started);
+  const memberStarted = performance.now();
+  const member = await resolveMemberRecord(c.env.DB, provider, me.accountNumId, Date.now());
+  if (member.display_name === null) {
+    // Keep the SQL guard: another request or the member may initialize it after our read.
+    await c.env.DB.prepare("UPDATE members SET display_name=?, avatar_url=? WHERE id=? AND display_name IS NULL")
+      .bind(me.nickName?.trim().slice(0, 60) || member.handle, safeAvatar(me.avatar), member.id).run();
+  }
+  timing?.("member", performance.now() - memberStarted);
+  return { id: member.id, provider, externalId: me.accountNumId };
 }
 
 /** 這個請求屬於哪一家供應商。沒帶標頭就是預設那家；不認得或這個部署沒設定的一律 400。 */

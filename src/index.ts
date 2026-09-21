@@ -677,10 +677,13 @@ app.route("/", communityRoutes);
 app.route("/", libraryRoutes);
 
 app.get("/v1/me", async (c) => {
-  const member = await requireMember(c);
-  const profile = await memberProfile(c.env.DB, member.id);
+  const timings: string[] = [];
+  const member = await requireMember(c, (phase, duration) => timings.push(`${phase};dur=${duration.toFixed(1)}`));
+  const started = performance.now();
+  const [profile, reviewer] = await Promise.all([memberProfile(c.env.DB, member.id), isReviewer(c.env.DB, member.id)]);
   if (!profile) throw new HttpError(404, "member not found");
-  return c.json({ ...profile, reviewer: await isReviewer(c.env.DB, member.id) }, 200, { "Cache-Control": "no-store" });
+  timings.push(`profile;dur=${(performance.now() - started).toFixed(1)}`);
+  return c.json({ ...profile, reviewer }, 200, { "Cache-Control": "no-store", "Server-Timing": timings.join(", ") });
 });
 
 /**
@@ -1226,8 +1229,16 @@ app.get("/assets/*", async (c) => {
   // 資源層配了 single-page-application：找不到檔不是 404，是 200 的 index.html。對 /assets/* 來說
   // 那就是「找不到」——一份 HTML 冒充 JS 正是瀏覽器報 dynamically imported module 失敗的原因。
   const missing = current.status === 404 || (current.headers.get("content-type") ?? "").includes("text/html");
-  if (!missing) return current;
   const key = new URL(c.req.url).pathname;
+  if (!missing) {
+    // Vite emits an eight-character content hash. Mutable names and errors must revalidate.
+    if ((current.status === 200 || current.status === 304) && /-[A-Za-z0-9_-]{8}\.[a-z0-9]+$/.test(key)) {
+      const headers = new Headers(current.headers);
+      headers.set("Cache-Control", "public, max-age=31536000, immutable");
+      return new Response(current.body, { status: current.status, headers });
+    }
+    return current;
+  }
   const archived = await c.env.ASSET_ARCHIVE.getWithMetadata<{ contentType?: string }>(key, "arrayBuffer");
   // 兩邊都沒有：回真正的 404，別再把 index.html 當 JS 交出去
   if (!archived.value) return new Response("not found", { status: 404 });

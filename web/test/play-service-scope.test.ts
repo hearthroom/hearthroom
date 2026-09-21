@@ -41,3 +41,36 @@ it('preloads static player code while profile is pending, without initializing p
  expect(mocks.stage).not.toHaveBeenCalled();expect(mocks.authorize).not.toHaveBeenCalled();
  app.unmount(); app=undefined as any; finish();
 });
+
+it('checks same-provider play permission while the community profile is pending, then waits before installing',async()=>{
+ setProvider('harbor');mocks.stage.mockClear();mocks.authorize.mockClear();mocks.authorize.mockResolvedValue(true);
+ const pinia=createPinia();setActivePinia(pinia);const session=useSession();
+ session.me={accountNumId:11,nickName:'Community account',avatar:''};
+ session.token={accessToken:'community-token',expiresAt:Date.now()+3600000} as any;
+ let finish!:()=>void;vi.spyOn(session,'ensureProfile').mockImplementation(()=>new Promise<void>(r=>{finish=r}));
+ const router=createRouter({history:createMemoryHistory(),routes:[{path:'/play/:roleId',component:PlayPage}]});await router.push('/play/fixture?provider=harbor');
+ root=document.createElement('div');document.body.append(root);app=createApp(PlayPage).use(pinia).use(i18n).use(router);app.mount(root);
+ for(let i=0;i<40;i++)await Promise.resolve();
+ expect(mocks.authorize).toHaveBeenCalledWith('community-token','/play/fixture?provider=harbor','harbor');
+ expect(mocks.stage).not.toHaveBeenCalled();finish();
+ for(let i=0;i<40;i++)await Promise.resolve();await nextTick();
+ expect(mocks.stage).toHaveBeenCalledTimes(1);
+});
+
+it.each(['denied','unmounted','cross-provider'])('never installs early for %s startup',async(mode)=>{
+ setProvider(mode==='cross-provider'?'lunatalk':'harbor');mocks.stage.mockClear();mocks.authorize.mockClear();mocks.connect.mockClear();mocks.token.mockClear();
+ mocks.authorize.mockResolvedValue(mode!=='denied');
+ const pinia=createPinia();setActivePinia(pinia);const session=useSession();
+ session.me={accountNumId:11,nickName:'Community account',avatar:''};
+ session.token={accessToken:'community-token',expiresAt:Date.now()+3600000} as any;
+ let finish!:()=>void;vi.spyOn(session,'ensureProfile').mockImplementation(()=>new Promise<void>(r=>{finish=r}));
+ const router=createRouter({history:createMemoryHistory(),routes:[{path:'/play/:roleId',component:PlayPage}]});await router.push('/play/fixture?provider=harbor');
+ root=document.createElement('div');document.body.append(root);app=createApp(PlayPage).use(pinia).use(i18n).use(router);app.mount(root);
+ for(let i=0;i<40;i++)await Promise.resolve();
+ expect(mocks.stage).not.toHaveBeenCalled();
+ if(mode==='cross-provider'){expect(mocks.authorize).not.toHaveBeenCalled();expect(mocks.token).not.toHaveBeenCalled();}
+ if(mode==='unmounted'){app.unmount();app=undefined as any;}
+ finish();for(let i=0;i<40;i++)await Promise.resolve();await nextTick();
+ expect(mocks.stage).not.toHaveBeenCalled();
+ if(mode==='cross-provider')expect(mocks.connect).toHaveBeenCalledWith('harbor','/play/fixture?provider=harbor');
+});
