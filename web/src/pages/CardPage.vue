@@ -63,6 +63,8 @@ const editedAt = ref<number | null>(null);
 
 type Tab = "home" | "comments";
 const tab = ref<Tab>("home");
+const commentsOpened = ref(false);
+watch(tab, value => { if (value === "comments") commentsOpened.value = true; }, { flush: "sync" });
 /** tab 的鍵盤慣例：左右鍵切換並把焦點帶過去 */
 function onTabKey(e: KeyboardEvent) {
   if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
@@ -199,7 +201,7 @@ async function share() {
 
 watch(() => route.params.id, () => {
   card.value = null; welcome.value = ""; welcomeHtml.value = ""; previewDoc.value = null; more.value = []; broken.value = false; tab.value = "home"; editedAt.value = null;
-  commentCount.value = null; showComments.value = true;
+  commentCount.value = null; showComments.value = true; commentsOpened.value = false;
   load();
 }, { immediate: true });
 watch(locale, load);
@@ -343,9 +345,9 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
             </template>
           </div>
 
-          <!-- 評論面板常駐（v-show），切回來不必重載；作者關掉評論就整個不掛 -->
+          <!-- 評論首次開啟才載入，之後以 v-show 保留；作者關掉評論就整個不掛 -->
           <div v-if="showComments" v-show="tab === 'comments'" id="panel-comments" class="panel role__comments" role="tabpanel" aria-labelledby="tab-comments">
-            <CommentPanel :card-id="card.id" :role-id="card.roleId" @count="commentCount = $event" />
+            <CommentPanel v-if="commentsOpened" :card-id="card.id" :role-id="card.roleId" @count="commentCount = $event" />
           </div>
 
           <section v-if="more.length" class="role__more">

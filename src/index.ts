@@ -1,3 +1,4 @@
+import { snapshot } from './snapshot-cache';
 import { boardKey, readBoardCache, writeBoardCache } from "./board-cache";
 export { boardCache } from "./board-cache";
 import { moderationRoutes, reviewSummary } from "./moderation";
@@ -540,9 +541,14 @@ app.get("/v1/me/cards", async (c) => {
  */
 app.get("/v1/authors/:handle", async (c) => {
   const handle = c.req.param("handle");
-  const memberId = await memberByHandle(c.env.DB, handle);
-  const allowNsfw = await viewerAllowsNsfw(c);
-  const author = memberId ? await getAuthor(c.env.DB, memberId, allowNsfw) : null;
+  const [member,allowNsfw,moderation]=await Promise.all([
+    c.env.DB.prepare('SELECT id,public_cache_revision FROM members WHERE handle=?').bind(handle).first<{id:string;public_cache_revision:string}>(),
+    viewerAllowsNsfw(c),moderationRevision(c),
+  ]);
+  c.header('Cache-Control',allowNsfw?'private, no-store':'no-store');
+  const result=await snapshot(c.env,['author',member?.id,handle,member?.public_cache_revision,moderation.revision,allowNsfw],300,()=>member?getAuthor(c.env.DB,member.id,allowNsfw):Promise.resolve(null),c.executionCtx);
+  c.header('X-Cache',result.layer==='origin'?'miss':'hit');c.header('X-Cache-Layer',result.layer);
+  const author=result.value;
   if (!author) throw new HttpError(404, "author has no registered cards");
   note(c, { event: "author_view", subject: handle, resultCount: author.card_count });
   if (allowNsfw) c.header("Cache-Control", "private, no-store");
@@ -765,7 +771,10 @@ app.get("/v1/cards/:id/comments", async (c) => {
 
 app.get("/v1/cards/:id/comments/count", async (c) => {
   const card = await commentCardFor(c);
-  return c.json({ count: await countTop(c.env.DB, card.id) }, 200, { "Cache-Control": "private, no-store" });
+  const revision=await c.env.DB.prepare('SELECT comment_revision FROM cards WHERE id=?').bind(card.id).first<{comment_revision:string}>();
+  const result=await snapshot(c.env,['comment-count',card.id,revision?.comment_revision],30,()=>countTop(c.env.DB,card.id),c.executionCtx);
+  c.header('X-Cache',result.layer==='origin'?'miss':'hit');
+  return c.json({ count: result.value }, 200, { "Cache-Control": "private, no-store" });
 });
 
 app.get("/v1/cards/:id/comments/:rootId/replies", async (c) => {

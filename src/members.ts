@@ -241,7 +241,7 @@ export async function viewerAllowsNsfw(c: Ctx & { req: { query: (k: string) => s
     const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1];
     if (!bearer) return false;
     const provider = providerOf(c);
-    const me = await upstream.fetchMe(c.env, bearer, provider);
+    const me = await requestIdentity(c, bearer, provider);
     // Viewing is read-only. Resolve linked identities and current preferences in one D1 trip;
     // a member who has never signed in cannot already have opted into adult content.
     const member = await c.env.DB.prepare(`
@@ -272,13 +272,21 @@ export async function externalIdOf(db: D1Database, memberId: string, provider: P
 
 type Ctx = { env: Env; req: { header: (k: string) => string | undefined } };
 
+// The context is unique to a request. Even rejected authentication is shared only here.
+const identities = new WeakMap<Ctx, Promise<Awaited<ReturnType<typeof upstream.fetchMe>>>>();
+function requestIdentity(c:Ctx,bearer:string,provider:ProviderId) {
+ let pending=identities.get(c);
+ if(!pending){pending=upstream.fetchMe(c.env,bearer,provider);identities.set(c,pending);}
+ return pending;
+}
+
 /** 轉發 token 問供應商「你是誰」，再換成本站成員。token 不落庫、不進日誌。 */
 export async function requireMember(c: Ctx): Promise<Member> {
   const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1];
   if (!bearer) throw new HttpError(401, "missing bearer token");
   // token 屬於哪一家由呼叫端明說，不從 token 反推：兩家的格式沒有互斥保證。
   const provider = providerOf(c);
-  const me = await upstream.fetchMe(c.env, bearer, provider);
+  const me = await requestIdentity(c, bearer, provider);
   const id = await resolveMember(c.env.DB, provider, me.accountNumId, Date.now());
   await c.env.DB.prepare("UPDATE members SET display_name=?, avatar_url=? WHERE id=? AND display_name IS NULL")
     .bind(me.nickName?.trim().slice(0, 60) || (await memberProfile(c.env.DB, id))!.handle, safeAvatar(me.avatar), id).run();

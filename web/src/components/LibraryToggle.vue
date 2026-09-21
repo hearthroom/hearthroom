@@ -6,7 +6,7 @@ import { useLocalePath } from '@/lib/use-locale';
 import { libraryRequest } from '@/lib/library';
 import { loginPath } from '@/lib/login-return';
 import { useI18n } from 'vue-i18n';
-const props = defineProps<{ kind: 'favorites' | 'following'; target: string }>();
+const props = withDefaults(defineProps<{ kind: 'favorites' | 'following'; target: string; initialActive?: boolean }>(), { initialActive: undefined });
 const emit = defineEmits<{ count: [value: number] }>();
 const session = useSession();
 const { lp } = useLocalePath();
@@ -19,6 +19,7 @@ async function load() {
   const seq = ++sequence;
   active.value = false; ready.value = false; error.value = '';
   if (!session.me) { ready.value = true; return; }
+  if (props.initialActive !== undefined) { active.value=props.initialActive; ready.value=true; return; }
   try {
     const token = await session.accessToken();
     if (!token) return;
@@ -39,7 +40,7 @@ async function toggle() {
   } catch { if (seq === sequence) error.value = t('library.saveFailed'); }
   finally { busy.value = false; }
 }
-watch([() => props.target, () => props.kind, () => session.me], load, { immediate: true });
+watch([() => props.target, () => props.kind, () => props.initialActive, () => session.me], load, { immediate: true });
 </script>
 <template>
   <div class="library-toggle">

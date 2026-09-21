@@ -25,3 +25,9 @@ it('blocks repeated writes while saving', async () => {
  const button = el.querySelector('button')!; button.click(); await settle(); expect(button.disabled).toBe(true); button.click(); expect(f.request).toHaveBeenCalledTimes(2);
  finish({ active: true }); await settle(); expect(button.disabled).toBe(false); expect(button.getAttribute('aria-pressed')).toBe('true');
 });
+it('uses the known followed state without a redundant status read',async()=>{
+ f.request.mockResolvedValue({active:false});
+ app=createApp(LibraryToggle,{kind:'following',target:'qaauthor',initialActive:true}).use(i18n);app.mount(el);await settle();
+ expect(f.request).not.toHaveBeenCalled();const button=el.querySelector('button')!;expect(button.getAttribute('aria-pressed')).toBe('true');
+ button.click();await settle();expect(f.request.mock.calls[0][2]).toBe('DELETE');expect(button.getAttribute('aria-pressed')).toBe('false');
+});

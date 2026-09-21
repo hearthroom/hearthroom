@@ -1,3 +1,4 @@
+import { snapshot } from '../snapshot-cache';
 import { HttpError, type Env } from '../types';
 import { memberByHandle } from '../members';
 import { appearanceView } from './appearance';
@@ -7,7 +8,8 @@ export async function activeAwardKeys(env:Env,member:string) {
  return (await env.DB.prepare(`SELECT badge FROM community_awards WHERE member_id=? AND ${ACTIVE_AWARD} ORDER BY badge`).bind(member,Date.now()).all<{badge:string}>()).results.map(r=>r.badge);
 }
 async function definitions(env:Env):Promise<BadgeDefinition[]> {
- return (await env.DB.prepare('SELECT * FROM community_badge_definitions ORDER BY created_at,key').all<{key:string;icon:BadgeDefinition['icon'];category:string;titles:string;descriptions:string}>()).results.map(r=>({key:r.key,icon:r.icon,category:r.category,titles:JSON.parse(r.titles),descriptions:JSON.parse(r.descriptions)}));
+ const revision=await env.DB.prepare('SELECT revision FROM public_catalog_clock WHERE id=1').first<{revision:string}>();
+ return (await snapshot(env,['badge-definitions',revision?.revision],1800,async()=> (await env.DB.prepare('SELECT * FROM community_badge_definitions ORDER BY created_at,key').all<{key:string;icon:BadgeDefinition['icon'];category:string;titles:string;descriptions:string}>()).results.map(r=>({key:r.key,icon:r.icon,category:r.category,titles:JSON.parse(r.titles),descriptions:JSON.parse(r.descriptions)})))).value;
 }
 export async function canManageBadges(env:Env,member:string) {
  return !!await env.DB.prepare("SELECT 1 FROM reviewers WHERE member_id=? AND revoked_at IS NULL AND role IN ('manager','owner')").bind(member).first();

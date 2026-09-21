@@ -1,3 +1,4 @@
+import { publicIdentities } from './public-cache';
 import { badgeCollection, setFeaturedBadges, createEventBadge, changeBadgeAward, badgeManagement } from './badges';
 import { syncAppearance, saveAppearance, appearanceMedia } from './appearance';
 import { Hono } from "hono";
@@ -15,7 +16,6 @@ import {
   completeLink,
   unlink,
   communityView,
-  publicCommunityView,
   setPreferences,
   projection,
   finishProjection,
@@ -62,15 +62,9 @@ for (const path of [
       outcome = e instanceof HttpError && e.status < 500 ? "denied" : "error";
       throw e;
     } finally {
-      try {
-        await c.env.DB.prepare(
-          "INSERT INTO community_metrics VALUES(?,?,1) ON CONFLICT(operation,outcome) DO UPDATE SET value=value+1",
-        )
-          .bind(operation, outcome)
-          .run();
-      } catch {
-        /* Metrics do not change the operation result. */
-      }
+      c.executionCtx.waitUntil(c.env.DB.prepare(
+        "INSERT INTO community_metrics VALUES(?,?,1) ON CONFLICT(operation,outcome) DO UPDATE SET value=value+1",
+      ).bind(operation,outcome).run().catch(() => { console.warn('Community request metric unavailable'); }));
     }
   });
 app.use("/v1/me/community*", async (c, next) => {
@@ -161,10 +155,19 @@ app.post("/v1/me/community/retry", async (c) => {
     .run();
   return c.json(await communityView(c.env, m.id));
 });
+app.get('/v1/community/members', async c => {
+ c.header('Cache-Control','no-store');
+ const handles=c.req.queries('handle')??[];
+ if(handles.length>50||handles.some(h=>!h||h.length>80))throw new HttpError(400,'community_input');
+ const result=await publicIdentities(c.env,handles,c.executionCtx);
+ c.header('X-Cache',result.layer==='origin'?'miss':'hit');c.header('X-Cache-Layer',result.layer);
+ return c.json({members:result.members});
+});
 app.get("/v1/community/members/:handle", async (c) => {
-  c.header("Cache-Control", "no-store");
-  const m = await memberByHandle(c.env.DB, c.req.param("handle"));
-  return c.json(await publicCommunityView(c.env, m ?? ""));
+ c.header('Cache-Control','no-store');const handle=c.req.param('handle');
+ const result=await publicIdentities(c.env,[handle],c.executionCtx);
+ c.header('X-Cache',result.layer==='origin'?'miss':'hit');c.header('X-Cache-Layer',result.layer);
+ return c.json(result.members[handle]);
 });
 // The OAuth access token is used only for identify and immediately revoked/discarded.
 export const discordOAuth = {

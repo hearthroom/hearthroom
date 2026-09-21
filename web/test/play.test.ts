@@ -11,8 +11,8 @@ import { createMemoryHistory, createRouter, type Router } from "vue-router";
 import { i18n } from "../src/lib/i18n";
 import { useSession } from "../src/lib/session";
 
-const recordConversation = vi.fn(async () => {});
-vi.mock('../src/lib/library', () => ({recordConversation}));
+const {recordConversation,clearLibraryCache} = vi.hoisted(() => ({recordConversation:vi.fn(async () => {}),clearLibraryCache:vi.fn()}));
+vi.mock('../src/lib/library', () => ({recordConversation,clearLibraryCache}));
 const installMoonStage = vi.fn(async () => {});
 const mergeStageMessages = vi.fn();
 const MoonStage = defineComponent({
