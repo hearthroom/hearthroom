@@ -312,3 +312,13 @@ describe("欄位過濾", () => {
     expect(clientKind(undefined)).toBe("server");
   });
 });
+
+it.each(['sukisuki.ai', 'sukisuki.chat'])('keeps %s pages and redirects www to that same root', async root => {
+ const res = await SELF.fetch(`https://www.${root}/login?returnTo=%2Fme`, {redirect:'manual'});
+ await res.arrayBuffer();
+ expect(res.status).toBe(301);
+ expect(res.headers.get('location')).toBe(`https://${root}/login?returnTo=%2Fme`);
+ const direct = await SELF.fetch(`https://${root}/v1/cards`, {redirect:'manual'});
+ await direct.arrayBuffer();
+ expect(direct.status).toBe(200);
+});

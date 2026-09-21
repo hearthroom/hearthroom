@@ -1,8 +1,8 @@
 /**
  * 站台的主機身分。
  *
- * 一個站只該有一個正本網址。`HOST` 是那一個；其餘進得來的主機一律 301 過去，
- * 兩個都服務等於把排名、分享數、快取全部切成兩半。
+ * `HOST` 是搜尋引擎正本；SITE_HOSTS 的站點各自提供服務、保留網址與登入來源。
+ * www 只轉到所屬根網域，不跨到另一個站點。
  *
  * 別名分兩類，機制一樣、壽命不同：
  * - `www` 這種永久別名，一直留著。
@@ -13,13 +13,10 @@
  * （DNS 衝突、憑證還沒簽），舊家的 API 就轉向一個連不通的地方，等於把還在服務的站台
  * 弄掛。這是 2026-09-05 實際踩過的坑。
  */
-export const HOST = "hearthroom.club";
-
-export const ALIAS_HOSTS: readonly string[] = [
-  // 永久別名
-  "www.hearthroom.club",
-  // 搬家前的舊主機已於 2026-09-06 連同路由一起拔掉；本站只掛自己的網域。
-];
+import { PRIMARY_HOST, SITE_HOSTS, siteRootOf, isCardAppHost, SANDBOX_HOST_RE } from '../shared/site-hosts';
+export const HOST = PRIMARY_HOST;
+export const ALIAS_HOSTS: readonly string[] = SITE_HOSTS.map(host => `www.${host}`);
+export const aliasTarget = (host: string): string | undefined => ALIAS_HOSTS.includes(host) ? siteRootOf(host) : undefined;
 
 /**
  * 卡片 App 的網域（play.<HOST>）：每張卡各自是一個可安裝的 App，範圍只有 /<roleId>/。
@@ -29,14 +26,13 @@ export const ALIAS_HOSTS: readonly string[] = [
  * 解到本機）。
  */
 export const PLAY_HOST = `play.${HOST}`;
-export const isPlayHost = (host: string): boolean => host.replace(/:\d+$/, "") === PLAY_HOST || host.replace(/:\d+$/, "") === "play.localhost";
+export const isPlayHost = (host: string): boolean => isCardAppHost(host.replace(/:\d+$/, "")) || host.replace(/:\d+$/, "") === "play.localhost";
 
 /** 這個主機是不是我們自己（含別名、搬家前的、卡片 App 網域）。用來判斷 referer 算不算站外來源。 */
-export const isSelfHost = (host: string): boolean => host === HOST || ALIAS_HOSTS.includes(host) || isSandboxSubdomain(host) || isPlayHost(host);
+export const isSelfHost = (host: string): boolean => !!siteRootOf(host) || SITE_HOSTS.some(root => host === `playground.${root}`) || isSandboxSubdomain(host) || isPlayHost(host);
 
 /** 沙箱卡的殼子網域（c<roleId>.<HOST>）：算自己人，不算站外來源。判式跟 src/sandbox.ts 同一條。 */
-const SANDBOX_SUBDOMAIN_RE = new RegExp(`^c[a-z0-9-]+\\.${HOST.replace(/\./g, "\\.")}$`, "i");
-export const isSandboxSubdomain = (host: string): boolean => SANDBOX_SUBDOMAIN_RE.test(host);
+export const isSandboxSubdomain = (host: string): boolean => SANDBOX_HOST_RE.test(host);
 
 /** 這一頁的正本網址。永遠指向 `HOST`，不跟著請求進來的主機走。 */
 export const canonicalUrl = (url: URL): string => `https://${HOST}${url.pathname}`;

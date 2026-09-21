@@ -8,6 +8,12 @@ compatibility_date = "2026-08-22"
 routes = [
   { pattern = "hearthroom.club", custom_domain = true },
   { pattern = "www.hearthroom.club", custom_domain = true },
+  { pattern = "sukisuki.ai", custom_domain = true },
+  { pattern = "www.sukisuki.ai", custom_domain = true },
+  { pattern = "sukisuki.chat", custom_domain = true },
+  { pattern = "www.sukisuki.chat", custom_domain = true },
+  { pattern = "*.sukisuki.ai/*", zone_name = "sukisuki.ai" },
+  { pattern = "*.sukisuki.chat/*", zone_name = "sukisuki.chat" },
   # 新版沙箱卡的殼：每張卡一個子網域 c<roleId>.hearthroom.club（src/sandbox.ts）。萬用網域不能當
   # custom_domain，走 zone 路由；DNS 另外要一筆代理的萬用記錄（`* AAAA 100::`，Proxied），
   # wrangler 不會替路由建 DNS。Universal SSL 蓋得到一層的 *.hearthroom.club。

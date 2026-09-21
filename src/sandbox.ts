@@ -13,10 +13,10 @@
  * 殼的檔案由 build:stage 從上游的 dist-sandbox/ 複製到 web/public/sandbox/（scripts/copy-sandbox.mjs），
  * 所以資源層裡的路徑是 /sandbox/index.html、/sandbox/sandbox.js、/sandbox/sandbox.css。
  */
-import { HOST } from "./site";
+import { SANDBOX_HOST_RE, SANDBOX_PARENT_ORIGINS } from "../shared/site-hosts";
+export { SANDBOX_HOST_RE } from "../shared/site-hosts";
 import type { Env } from "./types";
 
-export const SANDBOX_HOST_RE = new RegExp(`^c([a-z0-9-]+)\\.${HOST.replace(/\./g, "\\.")}$`, "i");
 export const SANDBOX_PATH = "/sandbox/";
 
 export function isSandboxHost(host: string): boolean {
@@ -47,7 +47,7 @@ export const SANDBOX_CSP = [
   "base-uri 'none'",
   "object-src 'none'",
   // 卡片 App 網域（play.<HOST>）也會嵌殼：同一份對話頁在那裡跑
-  `frame-ancestors https://${HOST} https://www.${HOST} https://play.${HOST}`,
+  `frame-ancestors ${SANDBOX_PARENT_ORIGINS.join(" ")}`,
 ].join("; ");
 
 // 殼頁向資源層要的是 /sandbox/（目錄），不是 /sandbox/index.html：資源層預設會把後者 3xx 到前者，

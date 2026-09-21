@@ -20,7 +20,7 @@ import {
   unlink,
 } from "../src/community/service";
 import type { Env } from "../src/types";
-import { afterEach } from "vitest";
+import { afterEach, vi } from "vitest";
 const e = () =>
   ({
     ...env,
@@ -226,4 +226,30 @@ it("shows an active link badge and publishes level only with separate consent", 
   await unlink(e(),m);
   expect(await pub()).toEqual({badges:[]});
   expect((await communityView(e(),m)).badges).toEqual([]);
+});
+
+it.each(['sukisuki.ai','sukisuki.chat'])('returns Discord linking to the initiating %s origin after validating state', async root => {
+ const m=await makeMember(1); whoAmI(1);
+ const started=await app.fetch(new Request(`https://${root}/v1/me/community/link`, {method:'POST',headers:{...bearer(),'Content-Type':'application/json'},body:JSON.stringify({nonce:'n'.repeat(40)})}),e(),createExecutionContext());
+ expect(started.status).toBe(200);
+ const {url}=await started.json() as {url:string};
+ const authorize=new URL(url), state=authorize.searchParams.get('state')!;
+ expect(authorize.searchParams.get('redirect_uri')).toBe('https://hearthroom.club/v1/community/discord/callback');
+ const {discordOAuth}=await import('../src/community/routes');
+ const identify=vi.spyOn(discordOAuth,'identify').mockResolvedValue({id:'423456789012345678',name:'QA'});
+ try {
+  const changed=state+'~https://evil.test';
+  const denied=await app.fetch(new Request(`https://hearthroom.club/v1/community/discord/callback?state=${encodeURIComponent(changed)}&code=synthetic`),e(),createExecutionContext());
+  expect(denied.headers.get('location')).toBe('https://hearthroom.club/me#discord_error=expired');
+  expect(identify).not.toHaveBeenCalled();
+  const callback=await app.fetch(new Request(`https://hearthroom.club/v1/community/discord/callback?state=${encodeURIComponent(state)}&code=synthetic`),e(),createExecutionContext());
+  expect(callback.headers.get('location')).toMatch(new RegExp(`^https://${root.replaceAll('.', '\\.')}/me#discord_receipt=`));
+ } finally {identify.mockRestore();}
+});
+
+it('returns a cancelled Discord authorization to the original official origin', async () => {
+ const m=await makeMember(1), started=await beginLink(e(),m,'n'.repeat(40),'https://sukisuki.chat');
+ const response=await app.fetch(new Request(`https://hearthroom.club/v1/community/discord/callback?state=${encodeURIComponent(started.state)}&error=access_denied`),e(),createExecutionContext());
+ expect(response.headers.get('location')).toBe('https://sukisuki.chat/me#discord_error=oauth');
+ await expect(beginLink(e(),m,'n'.repeat(40),'https://sukisuki.chat.evil.test')).rejects.toThrow('community_input');
 });

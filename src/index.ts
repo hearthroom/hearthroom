@@ -35,7 +35,7 @@ import {
   type EventFields, type Pending,
 } from "./analytics";
 import { authorLine, renderHead } from "./head";
-import { ALIAS_HOSTS, HOST, canonicalUrl, isPlayHost } from "./site";
+import { aliasTarget, HOST, canonicalUrl, isPlayHost } from "./site";
 import { loadMine, type MineFilter } from "./mine";
 import { tagNamesFor } from "../shared/tag-catalog";
 import { providerOf, isReviewer, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
@@ -112,9 +112,10 @@ app.use("*", async (c, next) => {
 
 app.use("*", async (c, next) => {
   const url = new URL(c.req.url);
-  if (!ALIAS_HOSTS.includes(url.host)) return next();
+  const target = aliasTarget(url.host);
+  if (!target) return next();
   note(c, { event: "host_redirect", detail: url.host, refHost: c.req.header("Referer") ? new URL(c.req.header("Referer")!).host : "" });
-  url.host = HOST;
+  url.host = target;
   url.port = "";
   return c.redirect(url.toString(), 301);
 });

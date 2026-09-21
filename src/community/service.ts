@@ -1,3 +1,4 @@
+import { SANDBOX_PARENT_ORIGINS } from '../../shared/site-hosts';
 import { activeAwardKeys } from './badges';
 import { appearanceView, projectAppearance, type AppearancePreferences } from './appearance';
 import { HttpError, type Env } from "../types";
@@ -28,8 +29,10 @@ export function site(env: Env) {
   return url.origin;
 }
 export const level = (xp: number) => Math.floor(Math.sqrt(xp / 10));
-export async function beginLink(env: Env, member: string, nonce: string) {
+export async function beginLink(env: Env, member: string, nonce: string, returnOrigin = site(env)) {
   enabled(env);
+  if (returnOrigin !== site(env) && !SANDBOX_PARENT_ORIGINS.includes(returnOrigin))
+    throw new HttpError(400, "community_input");
   if (
     !env.DISCORD_CLIENT_ID ||
     !env.DISCORD_CLIENT_SECRET ||
@@ -44,7 +47,7 @@ export async function beginLink(env: Env, member: string, nonce: string) {
       .first()
   )
     throw new HttpError(409, "community_link_conflict");
-  const state = random();
+  const state = random() + "~" + returnOrigin;
   const now = Date.now();
   await env.DB.batch([
     env.DB.prepare(
@@ -63,6 +66,11 @@ export async function beginLink(env: Env, member: string, nonce: string) {
     state,
   }).toString();
   return { state, url: url.toString() };
+}
+/** Use only after the complete state matched its stored digest; old attempts use the canonical site. */
+export function linkReturnOrigin(env: Env, state: string): string {
+  const origin = state.split('~')[1];
+  return origin === site(env) || SANDBOX_PARENT_ORIGINS.includes(origin) ? origin : site(env);
 }
 export async function acceptIdentity(
   env: Env,

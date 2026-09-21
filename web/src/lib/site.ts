@@ -1,3 +1,4 @@
+import { PRIMARY_HOST, siteRootOf, isCardAppHost } from '../../../shared/site-hosts';
 /* i18n-ignore：這個檔只留專有名詞。各語言都用同一個名字，不進翻譯檔。 */
 
 /**
@@ -20,7 +21,7 @@ export const SITE = {
   /** 授權條款名稱與檔案位置；條款本文就在倉庫裡。 */
   license: "AGPL-3.0",
   /** 站台的正本主機。 */
-  host: "hearthroom.club",
+  host: PRIMARY_HOST,
   /**
    * 卡片 App 的網域：每張卡各自是一個可安裝的 App，範圍只有 /<roleId>/。Android 判「已安裝」看的是
    * 這一頁在不在某個已裝 App 的範圍內，站台 App 的範圍是整站，所以卡片在主站上永遠裝不成第二個 App；
@@ -31,12 +32,15 @@ export const SITE = {
 
 /** 現在是不是跑在卡片 App 網域上（本機開發用 play.localhost，瀏覽器把 *.localhost 解到本機）。 */
 export const isPlayHost = (hostname: string = location.hostname): boolean =>
-  hostname === SITE.playHost || hostname === "play.localhost";
+  isCardAppHost(hostname) || hostname === "play.localhost";
 
 /** 一張卡在卡片 App 網域上的網址。結尾的斜線是 App 範圍的邊界，不能少。 */
 export function playAppUrl(roleId: string, locale: string, opts: { install?: boolean } = {}): string {
-  const origin = isPlayHost() ? location.origin : `https://${SITE.playHost}`;
+  const origin = isPlayHost() ? location.origin : `https://play.${siteRootOf(location.hostname) ?? PRIMARY_HOST}`;
   const q = new URLSearchParams({ lang: locale });
   if (opts.install) q.set("install", "1");
   return `${origin}/${encodeURIComponent(roleId)}/?${q}`;
 }
+
+/** Return from an installed card to the community in the same domain family. */
+export const communityHost = (hostname: string = location.hostname): string => siteRootOf(hostname) ?? PRIMARY_HOST;

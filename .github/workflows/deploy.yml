@@ -48,6 +48,7 @@ jobs:
           npm test
           npm run i18n:check
           npm run build:h5:prod
+          node scripts/copy-playground-sandbox.mjs
           bash scripts/check-build-output.sh
 
       - name: Deploy skipped (secrets not set)
