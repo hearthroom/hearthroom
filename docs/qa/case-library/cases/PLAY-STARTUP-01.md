@@ -15,3 +15,5 @@
 結果與限制記錄於 [play-startup.md](../../play-startup.md)。正式改善必須在發布後另跑同條件 profile；本機合成結果不能替代正式驗收。
 
 第二輪補驗：同平台 models 授權與 profile 重疊；跨平台先等 profile 才查綁定 token；拒絕／離頁不安裝。快取驗收包含雜湊資源 immutable、沙箱相同 ETag 回 304 且保留 CSP、舊 ETag 回 200。紀錄見 [play-followup.md](../../play-followup.md)。
+
+靜態資源補驗：用正式建置檢查模型圖示網址與實際顯示，重新整理時字典／五語命中快取；一般、沉浸及 Sandbox 卡片維持顯示。建置測試另驗證播放器改版不改變資料 chunk 雜湊，完整 OpenCC preset 比對保護兩方向轉換。紀錄見 [play-assets.md](../../play-assets.md)。
