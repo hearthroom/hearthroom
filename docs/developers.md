@@ -188,15 +188,27 @@ MCP: not applicable to community identity/linking, which requires interactive OA
 | Send | `POST /conversation/ws-ticket`, then `/conversation/ws?protocolVersion=2`; authenticate with a single-use ticket before sending a turn. |
 | History and status | `GET /conversation/messages`, `GET /conversation/operations`, and `GET /conversation/operations/{operationId}`. |
 | Stop and reconnect | `POST /conversation/stop`; durable chunks replay through `resumeStreamId` plus `lastEventId`, or `mode=tryResume` plus `conversationId`. |
-| Player settings | Name-only or custom persona, response preferences and custom instructions; global and per-conversation personas are not implemented. |
-| Prompt construction | Prompt V2 assembles agent instructions, examples, persona, history and matching bound Lorebook entries. Lorebook recall uses keywords and constant entries, not semantic embeddings. |
-| Billing | Reserve credits before generation; settle once from upstream token usage after a completed result. Failed, interrupted and stopped turns release their reservation without a charge in this initial implementation. |
+| Player settings | Name-only/custom, global and per-conversation personas, response preferences, standing instructions and player notebook. |
+| Prompt construction | Prompt V2 assembles agent instructions, examples, persona, history and matching bound Lorebook entries. Lorebook recall combines keywords, constant entries and semantic retrieval as described below. |
+| Billing | Ordinary turns retain their existing settlement rules. Agent executions reserve incrementally and settle aggregate actual token usage once; stopped/upstream-failed executions pay for reported usage, while internal persistence failures are waived. Continuation bills only new work. |
 
 A `clientOperationId` identifies one immutable send intent. Reusing it with different text or a different conversation is rejected. Reconnecting replays stored chunks rather than starting a new model request. Partial output and terminal state remain available in history. Provider balances and histories remain separate.
 
-HarperHarbor does not currently implement rewrite, continue, conversation archives, message editing/deletion, notepad, memory management, reply suggestions or multi-pass mode. The embedded player hides those controls for Harper; LunaTalk retains its existing capabilities. Public play still requires provider access and review approval. An author may preview their own private agent and author asset; this does not publish it or approve it for another account.
+HarperHarbor supports regenerate/rewrite, conversation archives and forks, message editing/deletion, player notebook, AI notebook memory, reply suggestions and Agent mode. Continue-response and the LunaTalk MOD marketplace remain separate unsupported capabilities; they are not prerequisites for Agent preparation. Public play still requires provider access and review approval. An author may preview their own private agent and author asset; this does not publish it or approve it for another account.
 
 The model relay must be configured before enabling Harper play on the community deployment. Local synthetic tests, live upstream verification and production deployment/readback are separate release checks.
+
+### Agent mode on HarperHarbor
+
+Agent mode runs the migrated LunaTalk preparation tool engine through the existing conversation API. It can list/search/read enabled Lorebook entries, original dialogue and chapter summaries; inspect requirements and the player's notebook; maintain AI notes and versioned state; establish sealed/random facts; fetch permitted public web content; and write, revise and deliver drafts. Role, response, persona and language requirements remain in the same prompt. State keeps a bounded 16 KiB version ring and follows rollback/fork boundaries.
+
+Read `/player/agent-mode?roleId=...&model=...` for the saved setting, runtime availability and selected model capability. Send `agentMode` only to override one execution. Free and non-tool model lanes are excluded. Treat `prepStep` as preparation progress, never as answer text. `agentTurn=true` marks a live Agent execution, which has heartbeat and idle detection rather than a five-minute total wall limit.
+
+For `agent_progress_preserved`, show the saved preparation trace and Continue. Continue sends a new idempotency key, the original message/model and `resumeFromOperationId`; it reuses saved drafts and tool results without duplicating the USER message. Continuations expire after 30 days, and changed history/model invalidates them. Invalid sources fail closed on Harbor. A transport reconnect instead replays the same execution using its existing stream identity. Agent stop ACK waits for durable settlement before the player reloads history.
+
+The Console ledger identifies these charges as Agent mode plus the actual model. Model-catalog estimates describe a single call and do not cap an Agent execution's total cost. Automatic memory jobs retain their separate billing lifecycle. Provider balances and data remain isolated. The OpenAI-compatible `/v1/chat/completions` endpoint still leaves tool execution to its caller; no Agent chat endpoint or implicit server tool execution is added there.
+
+These are source capabilities, not evidence of deployment. Verify runtime capability flags on the target provider. Local validation uses synthetic models and isolated data; real-provider and production readback remain separate checks.
 
 ### Cross-platform authoring results
 
