@@ -1217,10 +1217,11 @@ export async function deleteGameSpec(roleId: string, token: string): Promise<voi
   if (!res.ok) throw new ApiError(res.status, describeApiError(res.status, await res.text().catch(() => "")));
 }
 
-export async function fetchCardPlatforms(roleId:string,provider:import('./provider').ProviderId):Promise<{provider:import('./provider').ProviderId;roleId:string;playable:boolean}[]> {
+/** Discover by community card ID; the viewer's issuer authenticates community access, not the card's host. */
+export async function fetchCardPlatforms(cardId:string):Promise<{provider:import('./provider').ProviderId;roleId:string;playable:boolean}[]> {
   const viewer=await viewerAccess();
   const q=viewer.param?`?${viewer.param}`:'';
-  const body=await json<{platforms:{provider:import('./provider').ProviderId;roleId:string;playable:boolean}[]}>(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(roleId)}/platforms${q}`,{headers:{'X-Provider':provider,...viewer.headers}}));
+  const body=await json<{platforms:{provider:import('./provider').ProviderId;roleId:string;playable:boolean}[]}>(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(cardId)}/platforms${q}`,{headers:{...from(),...viewer.headers}}));
   return body.platforms;
 }
 

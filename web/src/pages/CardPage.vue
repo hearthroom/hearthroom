@@ -298,7 +298,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
           <div class="role__actions">
             <RouterLink :to="lp(`/me?reportCard=${encodeURIComponent(String(card.num || card.id))}`)" class="btn">{{$t("community.reportCard")}}</RouterLink>
             <!-- 站內玩：/play/:roleId 由舞台（stage/）整頁接管 -->
-            <CardPlatforms :role-id="card.roleId" :provider="card.provider" />
+            <CardPlatforms :card-id="card.id" :provider="card.provider" />
             <button class="btn btn--lg btn--icon role__share" :aria-label="$t('card.share')" :title="$t('card.share')" @click="share">
               <svg viewBox="0 0 20 20" aria-hidden="true">
                 <path d="M10 12.5V3.5M6.5 7 10 3.5 13.5 7M4 11v4.5a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
