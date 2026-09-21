@@ -3882,7 +3882,7 @@
               },
               "resumeFromOperationId": {
                 "type": "string",
-                "description": "Agent mode: continue an interrupted operation whose status has `reasonCode` `agent_progress_preserved`. Invalid values are ignored (fresh run)."
+                "description": "Agent mode: continue an interrupted operation with reasonCode agent_progress_preserved. Empty means a fresh run. HarperHarbor requires the same model/message, a current history epoch, an unused continuation source and a checkpoint no older than 30 days; invalid/stale sources are rejected rather than silently generating a paid fresh turn. LunaTalk may ignore invalid values and start fresh."
               },
               "supportsModExpiryAck": {
                 "type": "boolean",
@@ -4097,7 +4097,7 @@
           }
         },
         "x-harperharbor": {
-          "description": "Requires chat.play. Issues a random, single-use ticket with a 30-second lifetime. Connect to /open/v1/conversation/ws?protocolVersion=2 and send {\"type\":\"auth\",\"ticket\":\"...\"} as the first frame. Wait for ready before sending. The first turn contains conversationId, message and a stable clientOperationId; operationKind is send. Choose an available model from the provider catalog. Rewrite, continue, multi-pass and thinking-depth overrides are rejected. SSE-formatted WebSocket frames include streamMeta, accepted, messageMeta, answer/thinking deltas, operationStatus and done. Reconnect with resumeStreamId and lastEventId to replay durable chunks; mode=tryResume plus conversationId finds an active operation. Reusing a clientOperationId with different input returns a conflict. No bearer or ticket belongs in a URL. Automatic memory preparation emits compacting progress and compactDone/compactFailed phase events. Stop also cancels preparation. operationStatus includes phase, compacting, reasonCode and hasContextUsage. context_capacity_exceeded is terminal and not retryable without changing the input or model capacity; history is retained. Completed memory jobs settle independently of the foreground answer. A reconnect replays replies but does not start another summary.",
+          "description": "Requires chat.play. Issues a random, single-use ticket with a 30-second lifetime. Connect to /open/v1/conversation/ws?protocolVersion=2 and send {\"type\":\"auth\",\"ticket\":\"...\"} as the first frame. Wait for ready before sending. The first turn contains conversationId, message and a stable clientOperationId; operationKind is send. Choose an available model from the provider catalog. Regenerate the latest assistant turn with rewrite; resume an interrupted Agent preparation with retry_generation and resumeFromOperationId. Continue-response remains unsupported. SSE-formatted WebSocket frames include streamMeta, accepted, messageMeta, answer/thinking deltas, operationStatus and done. Reconnect with resumeStreamId and lastEventId to replay durable chunks; mode=tryResume plus conversationId finds an active operation. Reusing a clientOperationId with different input returns a conflict. No bearer or ticket belongs in a URL. Automatic memory preparation emits compacting progress and compactDone/compactFailed phase events. Stop also cancels preparation. operationStatus includes phase, compacting, reasonCode and hasContextUsage. context_capacity_exceeded is terminal and not retryable without changing the input or model capacity; history is retained. Completed memory jobs settle independently of the foreground answer. A reconnect replays replies but does not start another summary. Agent mode uses the saved /player/agent-mode preference or the per-turn agentMode override. Check runtimeEnabled and modelSupported for the selected model. Tool-capable paid models emit durable prepStep progress and agentTurn=true operation status. An interrupted preparation exposes reasonCode=agent_progress_preserved, state=failed_retryable and allowedActions including continue. Resume with a new clientOperationId, the same message and model, and resumeFromOperationId within 30 days; no second USER message is created. Stale or mismatched continuations fail closed; an empty resumeFromOperationId means a fresh turn. History edits invalidate continuations. Credits are reserved incrementally; each execution settles aggregate actual input/output/cache usage once, including usage before a user stop or upstream failure. Internal persistence failures are not charged. A continuation charges only new upstream work. Ordinary /v1/chat/completions remains a caller-managed tool API.",
           "security": [
             {
               "userToken": []
@@ -4197,7 +4197,9 @@
               "clientOperationId",
               "operationKind",
               "language",
-              "model"
+              "model",
+              "agentMode",
+              "resumeFromOperationId"
             ],
             "supportedOperations": [
               "send",
@@ -5307,7 +5309,7 @@
           }
         },
         "x-harperharbor": {
-          "description": "Returns configured model groups and variants. Requires chat.play. Rates are credits per 1,000,000 tokens (input, output and cached input). estMinScore/estMaxScore are conservative per-turn bounds from the minimum completed charge and maximum accepted input/output, not typical-use estimates. No uptime history, membership discounts or multi-pass pricing is implied.",
+          "description": "Returns configured model groups and variants. Requires chat.play. Rates are credits per 1,000,000 tokens (input, output and cached input). estMinScore/estMaxScore are conservative per-turn bounds from the minimum completed charge and maximum accepted input/output, not typical-use estimates. supportsMultiPass describes tool capability; runtime availability comes from /player/agent-mode. Agent preparation can make multiple model calls, so the displayed per-turn estimate is not an Agent execution price cap. No LunaTalk membership discounts are implied.",
           "security": [
             {
               "userToken": []
@@ -5994,6 +5996,9 @@
               }
             }
           }
+        },
+        "x-harperharbor": {
+          "description": "Agent mode uses the saved /player/agent-mode preference or the per-turn agentMode override. Check runtimeEnabled and modelSupported for the selected model. Tool-capable paid models emit durable prepStep progress and agentTurn=true operation status. An interrupted preparation exposes reasonCode=agent_progress_preserved, state=failed_retryable and allowedActions including continue. Resume with a new clientOperationId, the same message and model, and resumeFromOperationId within 30 days; no second USER message is created. Stale or mismatched continuations fail closed; an empty resumeFromOperationId means a fresh turn. History edits invalidate continuations. Credits are reserved incrementally; each execution settles aggregate actual input/output/cache usage once, including usage before a user stop or upstream failure. Internal persistence failures are not charged. A continuation charges only new upstream work. Ordinary /v1/chat/completions remains a caller-managed tool API."
         }
       },
       "post": {
@@ -6059,6 +6064,9 @@
               }
             }
           }
+        },
+        "x-harperharbor": {
+          "description": "Agent mode uses the saved /player/agent-mode preference or the per-turn agentMode override. Check runtimeEnabled and modelSupported for the selected model. Tool-capable paid models emit durable prepStep progress and agentTurn=true operation status. An interrupted preparation exposes reasonCode=agent_progress_preserved, state=failed_retryable and allowedActions including continue. Resume with a new clientOperationId, the same message and model, and resumeFromOperationId within 30 days; no second USER message is created. Stale or mismatched continuations fail closed; an empty resumeFromOperationId means a fresh turn. History edits invalidate continuations. Credits are reserved incrementally; each execution settles aggregate actual input/output/cache usage once, including usage before a user stop or upstream failure. Internal persistence failures are not charged. A continuation charges only new upstream work. Ordinary /v1/chat/completions remains a caller-managed tool API."
         }
       }
     },
@@ -6540,7 +6548,7 @@
           }
         },
         "x-harperharbor": {
-          "description": "Returns the caller's per-agent settings. Requires chat.play and access to the agent. Supported persona modes are name_only and custom. Global and conversation-specific personas, permanent memory, automatic compaction and multi-pass mode are not supported.",
+          "description": "Returns the caller's per-agent settings. Requires chat.play and access to the agent. Supported persona modes are name_only and custom. Global and conversation-specific personas, AI notebook memory, automatic compaction and Agent mode are supported by their dedicated player/conversation endpoints. Agent availability is resolved per model at runtime.",
           "security": [
             {
               "userToken": []
@@ -9746,9 +9754,9 @@
           "Conversation"
         ],
         "summary": "Connect an authenticated conversation stream",
-        "description": "Requires chat.play. Issues a random, single-use ticket with a 30-second lifetime. Connect to /open/v1/conversation/ws?protocolVersion=2 and send {\"type\":\"auth\",\"ticket\":\"...\"} as the first frame. Wait for ready before sending. The first turn contains conversationId, message and a stable clientOperationId; operationKind is send. Only the configured model is accepted. Rewrite, continue, multi-pass and thinking-depth overrides are rejected. SSE-formatted WebSocket frames include streamMeta, accepted, messageMeta, answer/thinking deltas, operationStatus and done. Reconnect with resumeStreamId and lastEventId to replay durable chunks; mode=tryResume plus conversationId finds an active operation. Reusing a clientOperationId with different input returns a conflict. No bearer or ticket belongs in a URL.",
+        "description": "Requires chat.play. Issues a random, single-use ticket with a 30-second lifetime. Connect to /open/v1/conversation/ws?protocolVersion=2 and send {\"type\":\"auth\",\"ticket\":\"...\"} as the first frame. Wait for ready before sending. The first turn contains conversationId, message and a stable clientOperationId; operationKind is send. Choose an available model and thinking depth from the provider catalog. Regenerate the latest assistant turn with rewrite; resume an interrupted Agent preparation with retry_generation and resumeFromOperationId. Continue-response remains unsupported. SSE-formatted WebSocket frames include streamMeta, accepted, messageMeta, answer/thinking deltas, operationStatus and done. Reconnect with resumeStreamId and lastEventId to replay durable chunks; mode=tryResume plus conversationId finds an active operation. Reusing a clientOperationId with different input returns a conflict. No bearer or ticket belongs in a URL. Agent mode uses the saved /player/agent-mode preference or the per-turn agentMode override. Check runtimeEnabled and modelSupported for the selected model. Tool-capable paid models emit durable prepStep progress and agentTurn=true operation status. An interrupted preparation exposes reasonCode=agent_progress_preserved, state=failed_retryable and allowedActions including continue. Resume with a new clientOperationId, the same message and model, and resumeFromOperationId within 30 days; no second USER message is created. Stale or mismatched continuations fail closed; an empty resumeFromOperationId means a fresh turn. History edits invalidate continuations. Credits are reserved incrementally; each execution settles aggregate actual input/output/cache usage once, including usage before a user stop or upstream failure. Internal persistence failures are not charged. A continuation charges only new upstream work. Ordinary /v1/chat/completions remains a caller-managed tool API.",
         "x-harperharbor": {
-          "description": "Requires chat.play. Issues a random, single-use ticket with a 30-second lifetime. Connect to /open/v1/conversation/ws?protocolVersion=2 and send {\"type\":\"auth\",\"ticket\":\"...\"} as the first frame. Wait for ready before sending. The first turn contains conversationId, message and a stable clientOperationId; operationKind is send. Only the configured model is accepted. Rewrite, continue, multi-pass and thinking-depth overrides are rejected. SSE-formatted WebSocket frames include streamMeta, accepted, messageMeta, answer/thinking deltas, operationStatus and done. Reconnect with resumeStreamId and lastEventId to replay durable chunks; mode=tryResume plus conversationId finds an active operation. Reusing a clientOperationId with different input returns a conflict. No bearer or ticket belongs in a URL.",
+          "description": "Requires chat.play. Issues a random, single-use ticket with a 30-second lifetime. Connect to /open/v1/conversation/ws?protocolVersion=2 and send {\"type\":\"auth\",\"ticket\":\"...\"} as the first frame. Wait for ready before sending. The first turn contains conversationId, message and a stable clientOperationId; operationKind is send. Choose an available model and thinking depth from the provider catalog. Regenerate the latest assistant turn with rewrite; resume an interrupted Agent preparation with retry_generation and resumeFromOperationId. Continue-response remains unsupported. SSE-formatted WebSocket frames include streamMeta, accepted, messageMeta, answer/thinking deltas, operationStatus and done. Reconnect with resumeStreamId and lastEventId to replay durable chunks; mode=tryResume plus conversationId finds an active operation. Reusing a clientOperationId with different input returns a conflict. No bearer or ticket belongs in a URL. Agent mode uses the saved /player/agent-mode preference or the per-turn agentMode override. Check runtimeEnabled and modelSupported for the selected model. Tool-capable paid models emit durable prepStep progress and agentTurn=true operation status. An interrupted preparation exposes reasonCode=agent_progress_preserved, state=failed_retryable and allowedActions including continue. Resume with a new clientOperationId, the same message and model, and resumeFromOperationId within 30 days; no second USER message is created. Stale or mismatched continuations fail closed; an empty resumeFromOperationId means a fresh turn. History edits invalidate continuations. Credits are reserved incrementally; each execution settles aggregate actual input/output/cache usage once, including usage before a user stop or upstream failure. Internal persistence failures are not charged. A continuation charges only new upstream work. Ordinary /v1/chat/completions remains a caller-managed tool API.",
           "security": [],
           "parameters": [
             {
