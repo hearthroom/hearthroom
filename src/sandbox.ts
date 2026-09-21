@@ -63,7 +63,7 @@ const FILES: Record<string, string> = {
  * 沙箱子網域上的請求：/sandbox/ 底下三個檔從資源層拿、補標頭；其餘 404。
  * 回 null 表示這不是沙箱子網域，交給後面的路由。
  */
-export async function serveSandbox(c: { req: { url: string }; env: Env }): Promise<Response | null> {
+export async function serveSandbox(c: { req: { url: string; header: (name: string) => string | undefined; method: string }; env: Env }): Promise<Response | null> {
   const url = new URL(c.req.url);
   if (!isSandboxHost(url.host)) return null;
   if (!url.pathname.startsWith(SANDBOX_PATH)) return new Response("not found", { status: 404 });
@@ -85,7 +85,18 @@ export async function serveSandbox(c: { req: { url: string }; env: Env }): Promi
   // 保留資源層的 ETag，重新驗證多半是 304，不會每次重抓整包。
   headers.set("Cache-Control", "no-cache");
   headers.delete("last-modified");
-  return new Response(asset.body, { status: 200, headers });
+  // Validate the actual shell first. Forwarding a conditional request could hide a
+  // missing shell behind the SPA fallback's 304, where there is no body to inspect.
+  const etag = headers.get("etag");
+  const condition = c.req.header("If-None-Match");
+  const safeMethod = c.req.method === "GET" || c.req.method === "HEAD";
+  const tags = condition?.match(/(?:W\/)?"[^"\r\n]*"|\*/g) ?? [];
+  if (safeMethod && etag && tags.some(tag => tag === "*" || tag.replace(/^W\//, "") === etag.replace(/^W\//, ""))) {
+    await asset.body?.cancel();
+    headers.delete("content-length");
+    return new Response(null, { status: 304, headers });
+  }
+  return new Response(c.req.method === "HEAD" ? null : asset.body, { status: 200, headers });
 }
 
 async function peekIsSandboxShell(res: Response): Promise<boolean> {

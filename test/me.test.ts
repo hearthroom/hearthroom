@@ -24,6 +24,7 @@ describe("GET /v1/me", () => {
     const res = await me();
     expect(res.status).toBe(200);
     expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect(res.headers.get("Server-Timing")).toMatch(/^identity;dur=[0-9.]+, member;dur=[0-9.]+, profile;dur=[0-9.]+$/);
     const body = (await res.json()) as { handle: string; memberSince: number; reviewer: boolean; identities: { provider: string; externalId: number; linkedAt: number }[] };
     expect(body.handle).toMatch(/^[a-z]{8}$/);
     expect(body.memberSince).toBeGreaterThan(0);
