@@ -11,7 +11,7 @@ import NotFoundPage from "@/pages/NotFoundPage.vue";
 import AdultGate from "@/components/AdultGate.vue";
 import PreviewDoc from "@/components/preview/PreviewDoc.vue";
 import HtmlCardFrame from "@/components/HtmlCardFrame.vue";
-import { ApiError, fetchBoard, fetchCard, fetchPlayerAsset, fetchPreviewPage, fetchRoleDetail } from "@/lib/api";
+import { ApiError, fetchBoard, fetchCard, fetchPlayerAsset, fetchPreviewPage, fetchReviewMe, fetchRoleDetail, setCardFeatured, type FeaturedStatus } from "@/lib/api";
 import { renderWelcome } from "@/lib/welcome-render";
 import { recallCard } from "@/lib/card-memory";
 import CardPlatforms from "@/components/CardPlatforms.vue";
@@ -60,6 +60,41 @@ const copiedWhat = ref<"link" | "id">("link");
  * 玩家靠它判斷「這張卡有沒有更新」（玩家回報 2026-09-17）；很早期建的卡沒有這個值，就不顯示。
  */
 const editedAt = ref<number | null>(null);
+/** HearthRoom 精選卡：只有在供應商那邊是本站管理員的審核人看得到開關；供應商會再驗一次。 */
+const featuredStatus = ref<FeaturedStatus | null>(null);
+const featuredBusy = ref(false);
+const featuredError = ref("");
+async function loadFeaturedStatus() {
+  featuredStatus.value = null;
+  const tok = await session.accessToken().catch(() => null);
+  if (!tok) return;
+  try {
+    const me = await fetchReviewMe(tok);
+    featuredStatus.value = me.reviewer && me.featured?.admin ? me.featured : null;
+  } catch {
+    featuredStatus.value = null;
+  }
+}
+async function toggleFeatured() {
+  if (!card.value || featuredBusy.value) return;
+  featuredBusy.value = true;
+  featuredError.value = "";
+  try {
+    const tok = await session.accessToken();
+    if (!tok) throw new Error(t("auth.expired"));
+    const next = !card.value.featured;
+    if (next && !(await confirmDialog({ title: t("card.featureAction"), message: t("card.featureConfirm") }))) return;
+    const out = await setCardFeatured(card.value.id, next, tok);
+    card.value = { ...card.value, featured: out.featured };
+    if (featuredStatus.value) featuredStatus.value = { ...featuredStatus.value, featuredUsed: featuredStatus.value.featuredUsed + (out.featured ? 1 : -1) };
+    track("featured", { subject: card.value.roleId, detail: out.featured ? "on" : "off" });
+  } catch (err) {
+    const code = err instanceof ApiError ? err.message : "";
+    featuredError.value = code.includes("featured_quota_exceeded") ? t("card.featureQuotaFull") : code.includes("not_community_admin") ? t("card.featureDenied") : err instanceof Error ? err.message : t("state.loadFailed");
+  } finally {
+    featuredBusy.value = false;
+  }
+}
 
 type Tab = "home" | "comments";
 const tab = ref<Tab>("home");
@@ -261,6 +296,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 
           <div class="role__id">
             <h1 class="role__name display">
+              <span v-if="card.featured" class="featured-badge" :title="$t('card.featuredHint')">{{ $t("card.featured") }}</span>
               <span v-if="card.nsfw" class="nsfw-badge" :title="$t('card.nsfwHint')">{{ $t("card.nsfw") }}</span>
               {{ card.name }}
             </h1>
@@ -314,6 +350,14 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
             </svg>
             {{ $t("card.addHome") }}
           </button>
+          <!-- 社群代表的管理列：只有在供應商那邊是本站管理員的審核人看得到 -->
+          <div v-if="featuredStatus" class="role__manage">
+            <button class="btn btn--sm" :class="{ 'btn--primary': !card.featured }" :disabled="featuredBusy" @click="toggleFeatured">
+              {{ card.featured ? $t("card.unfeatureAction") : $t("card.featureAction") }}
+            </button>
+            <span class="subtle">{{ $t("card.featureQuota", { used: featuredStatus.featuredUsed, quota: featuredStatus.featuredQuota }) }}</span>
+            <span v-if="featuredError" class="role__manage-error">{{ featuredError }}</span>
+          </div>
         </aside>
 
         <section class="role__main">
@@ -433,6 +477,8 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 
 .role__tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .role__actions { display: flex; gap: var(--s-2); }
+.role__manage { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.role__manage-error { color: var(--danger, #c0392b); }
 .role__cta { flex: 1; min-width: 0; }
 .role__via { margin: 6px 0 0; }
 .role__install { justify-self: start; gap: 6px; margin-top: 2px; }

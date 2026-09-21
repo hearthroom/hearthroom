@@ -13,6 +13,8 @@ export interface CommunityCard {
   nsfw?: boolean;
   /** 成人卡「加到主畫面」的鑰匙：只有過了成人門的人拿得到，帶在 manifest 與圖示網址上（lib/card-manifest.ts）。 */
   shortcutKey?: string;
+  /** HearthRoom 精選卡：社群代表標的；供應商那邊據此給作者較高的返點 */
+  featured?: boolean;
   name: string;
   summary: string;
   names: Localized;

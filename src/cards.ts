@@ -33,6 +33,8 @@ export interface CardRow {
   status: string;
   /** 過審時綁上的內容雜湊；空字串＝過審前登記的舊卡，同步時第一次看到就綁上。 */
   reviewed_hash: string;
+  /** HearthRoom 精選卡（0010 起）：社群代表標記的時間；NULL＝不是精選。 */
+  featured_at: number | null;
   /** 作者的本站公開 ID（members.handle，0005 起），從身分表接上來的；作者還沒成為成員時是 null。 */
   author_handle?: string | null;
   community_name?: string | null;
@@ -77,6 +79,8 @@ export function toCard(row: CardRow, lang: string) {
     /** 這張卡支援哪家供應商（拿那家的帳號、用那家的 AI 服務在本站玩）。不是來源、不是由誰提供——卡是作者的。 */
     provider: row.provider,
     nsfw: row.nsfw === 1,
+    /** HearthRoom 精選卡：社群代表標的，供應商那邊據此給作者較高的返點 */
+    featured: row.featured_at !== null && row.featured_at !== undefined,
     name: pickLocale(names, lang),
     summary: pickLocale(summaries, lang),
     names,
@@ -350,6 +354,11 @@ export async function setCardNsfw(db: D1Database, id: string, nsfw: boolean): Pr
 
 export async function setCardStatus(db: D1Database, id: string, status: string): Promise<void> {
   await db.prepare("UPDATE cards SET status = ? WHERE id = ?").bind(status, id).run();
+}
+
+/** 標記或取消精選。供應商那邊先成功了才會走到這裡，所以這裡只是記時間。 */
+export async function setCardFeatured(db: D1Database, cardId: string, featuredAt: number | null): Promise<void> {
+  await db.prepare("UPDATE cards SET featured_at = ? WHERE id = ?").bind(featuredAt, cardId).run();
 }
 
 /**

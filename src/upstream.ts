@@ -222,5 +222,52 @@ export function buildSearchText(role: UpstreamRole): string {
  * 也不綁在測試框架某個版本的 undici 內部。上游呼叫的 HTTP 形狀（路徑、標頭、
  * 錯誤碼對應）由 upstream.test.ts 直接測這兩個函式。
  */
-export const upstream = { fetchMe, fetchRole, fetchMyRoles, readForReview };
+/**
+ * 呼叫者在供應商那邊能不能代表本站（本站這個應用的 owner／admin）標精選，以及配額用量。
+ * 老版本的供應商沒有這條路（404）就當「不能」——畫面上只是少一個開關。
+ */
+async function fetchCommunityStatus(env: Env, bearer: string, provider: ProviderId = DEFAULT_PROVIDER): Promise<CommunityStatus | null> {
+  const res = await fetch(apiUrl(env, provider, "/open/v1/me/community"), {
+    headers: { Authorization: `Bearer ${bearer}`, "User-Agent": UA },
+  });
+  if (res.status === 404) return null;
+  const body = await readJson(res, "community status");
+  const featured = (body.featured ?? {}) as Record<string, unknown>;
+  return {
+    admin: body.communityAdmin === true,
+    featuredUsed: Number(featured.used ?? 0) || 0,
+    featuredQuota: Number(featured.quota ?? 0) || 0,
+  };
+}
+
+export interface CommunityStatus {
+  admin: boolean;
+  featuredUsed: number;
+  featuredQuota: number;
+}
+
+/**
+ * 把一張卡在供應商那邊標成精選（或取消）。用的是呼叫者自己的令牌：供應商那邊會再驗一次
+ * 他是不是本站應用的管理員、卡是不是公開且過審、配額夠不夠。回應碼直接翻成本站的錯誤，
+ * 畫面才說得出「你不是社群代表」還是「精選名額用完了」。
+ */
+async function setFeatured(env: Env, bearer: string, roleId: string, featured: boolean, provider: ProviderId = DEFAULT_PROVIDER): Promise<void> {
+  const res = await fetch(apiUrl(env, provider, `/open/v1/roles/${encodeURIComponent(roleId)}/rebate-tier`), {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${bearer}`, "User-Agent": UA, "Content-Type": "application/json" },
+    body: JSON.stringify({ tier: featured ? "featured" : "normal" }),
+  });
+  if (res.status === 204) return;
+  if (res.status === 401) throw new HttpError(401, "upstream rejected the token");
+  if (res.status === 403) throw new HttpError(403, "not_community_admin");
+  if (res.status === 404) throw new HttpError(404, "role not found");
+  if (res.status === 409) {
+    const body = (await res.json().catch(() => ({}))) as { code?: unknown };
+    throw new HttpError(409, body.code === "quota_exceeded" ? "featured_quota_exceeded" : "card_not_eligible");
+  }
+  throw new HttpError(502, `upstream featured failed with ${res.status}`);
+}
+
+
+export const upstream = { fetchMe, fetchRole, fetchMyRoles, readForReview, fetchCommunityStatus, setFeatured };
 export type Upstream = typeof upstream;

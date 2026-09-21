@@ -46,7 +46,7 @@ import {
   CLAIM_TTL_MS, STAMPS_REQUIRED, claim as claimSubmission, createSubmission, getSubmission, listQueue, needsReviewStatements,
   release as releaseSubmission, stamp as stampSubmission,
 } from "./review";
-import { setCardNsfw, setCardStatus } from "./cards";
+import { setCardFeatured, setCardNsfw, setCardStatus } from "./cards";
 import { PUBLIC_HASH_PREFIX, loadSnapshot, publicHash, saveSnapshotStatement, type ReviewSettings } from "./review-snapshot";
 import { type Env, HttpError } from "./types";
 import { gameRoutes } from "./game";
@@ -54,7 +54,7 @@ import { serveSandbox } from "./sandbox";
 import { listSaves, putSave, removeSave } from "./saves";
 import { commentCard, countTop, deleteComment, listReplies, listTop, postComment, setLike, type Viewer } from "./comments";
 import { IMAGE_HOSTS, SVG_WRAP_LIMIT, TOUCH_ICON_SIZE, allowedImageUrl, cardManifest, iconSize, signShortcutKey, svgWrap, verifyShortcutKey } from "./shortcut";
-import { upstream, ZONES, type Zone, CREATION_METHOD } from "./upstream";
+import { upstream, ZONES, type Zone, CREATION_METHOD, type CommunityStatus } from "./upstream";
 
 const app = new Hono<{ Bindings: Env; Variables: { ev: Pending } }>();
 
@@ -947,7 +947,38 @@ app.get('/v1/hosting/versions/:versionId/decision',async(c)=>{
 
 app.get("/v1/review/me", async (c) => {
   const member = await requireMember(c);
-  return c.json(await reviewSummary(c.env.DB,member), 200, { "Cache-Control": "private, no-store" });
+  const summary = await reviewSummary(c.env.DB, member);
+  // 精選開關要不要出現：問供應商「這個人能不能代表本站」。只對審核人問——別人不會看到管理面板。
+  let featured: CommunityStatus | null = null;
+  if (summary.reviewer) {
+    const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1] ?? "";
+    try {
+      featured = await upstream.fetchCommunityStatus(c.env, bearer, providerOf(c));
+    } catch {
+      featured = null;
+    }
+  }
+  return c.json({ ...summary, featured }, 200, { "Cache-Control": "private, no-store" });
+});
+
+/**
+ * HearthRoom 精選卡（owner 2026-09-22）：審核人裡在供應商那邊是本站管理員的人，替社群把一張在榜的卡
+ * 標成精選。標記先用他自己的令牌送到供應商（那邊決定作者的返點等級並管配額），成功了本站才記時間畫徽章。
+ */
+app.post("/v1/review/cards/:id/featured", async (c) => {
+  await requireReviewer(c);
+  const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1] ?? "";
+  const body = (await c.req.json().catch(() => ({}))) as { featured?: unknown };
+  if (typeof body.featured !== "boolean") throw new HttpError(400, "featured must be a boolean");
+  // 卡屬於哪家供應商就用那家的令牌去標：令牌與卡不同家，供應商那邊本來就認不得這張卡。
+  const provider = providerOf(c);
+  const row = await getCard(c.env.DB, c.req.param("id"), provider);
+  if (!row || row.status !== "approved" || row.provider !== provider) throw new HttpError(404, "card not found");
+  await upstream.setFeatured(c.env, bearer, row.source_role_id, body.featured, provider);
+  const featuredAt = body.featured ? Date.now() : null;
+  await setCardFeatured(c.env.DB, row.id, featuredAt);
+  note(c, { event: "card_featured", subject: row.source_role_id, detail: body.featured ? "on" : "off" });
+  return c.json({ id: row.id, featured: body.featured, featuredAt });
 });
 
 app.get("/v1/review/queue", async (c) => {

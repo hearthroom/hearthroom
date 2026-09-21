@@ -61,6 +61,7 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
 
     <div class="card__body">
       <h2 class="card__name">
+        <span v-if="card.featured" class="featured-badge" :title="$t('card.featuredHint')">{{ $t("card.featured") }}</span>
         <span v-if="card.nsfw" class="nsfw-badge" :title="$t('card.nsfwHint')">{{ $t("card.nsfw") }}</span>
         <RouterLink :to="href" class="card__link">{{ card.name }}</RouterLink>
       </h2>
