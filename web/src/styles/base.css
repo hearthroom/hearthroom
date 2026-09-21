@@ -313,4 +313,11 @@ select.input { height: var(--h-md); }
   color: var(--danger); font-size: 11px; font-weight: 700; letter-spacing: 0.02em; line-height: 1;
 }
 .chip--nsfw { color: var(--danger); border-color: var(--danger); }
+/* HearthRoom 精選卡：社群代表標的。跟成人標記同一套尺寸，用強調色而不是警示色 */
+.featured-badge {
+  display: inline-flex; align-items: center; vertical-align: middle;
+  height: 18px; padding: 0 6px; margin-right: 6px;
+  border-radius: 4px; border: 1px solid var(--accent);
+  color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: 0.02em; line-height: 1;
+}
 .card__badge--nsfw { left: auto; right: 8px; background: var(--danger); color: #fff; }
