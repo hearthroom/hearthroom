@@ -233,14 +233,24 @@ export async function updateMemberNsfw(
 
 /**
  * 看的人開了成人內容嗎。前端想看時帶 ?nsfw=1 加 token；token 驗不過或沒開，一律當沒開——
- * 不報錯、不洩漏。呼叫端要在查邊緣快取**之前**先問這個，開了的回應不進快取。
+ * 不報錯、不洩漏。呼叫端必須先驗權限，才能讀取對應內容分級的內部榜單快取。
  */
 export async function viewerAllowsNsfw(c: Ctx & { req: { query: (k: string) => string | undefined } }): Promise<boolean> {
   if (c.req.query("nsfw") !== "1") return false;
   try {
-    const member = await requireMember(c);
-    const { showNsfw, ageVerifiedAt } = await memberNsfw(c.env.DB, member.id);
-    return showNsfw && ageVerifiedAt !== null;
+    const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1];
+    if (!bearer) return false;
+    const provider = providerOf(c);
+    const me = await upstream.fetchMe(c.env, bearer, provider);
+    // Viewing is read-only. Resolve linked identities and current preferences in one D1 trip;
+    // a member who has never signed in cannot already have opted into adult content.
+    const member = await c.env.DB.prepare(`
+      SELECT show_nsfw, age_verified_at FROM members WHERE id = COALESCE(
+        (SELECT owner_member_id FROM member_connections WHERE provider=? AND external_id=?),
+        (SELECT member_id FROM member_identities WHERE provider=? AND external_id=?)
+      )`).bind(provider, String(me.accountNumId), provider, String(me.accountNumId))
+      .first<{ show_nsfw: number; age_verified_at: number | null }>();
+    return member?.show_nsfw === 1 && member.age_verified_at !== null;
   } catch {
     return false;
   }
