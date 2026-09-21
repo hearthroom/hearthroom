@@ -10332,6 +10332,134 @@
           }
         }
       }
+    },
+    "/open/v1/me/community": {
+      "get": {
+        "operationId": "getMeCommunity",
+        "tags": [
+          "Identity"
+        ],
+        "summary": "Whether the caller may mark featured cards for this app",
+        "description": "Returns `communityAdmin` — true when the caller's account is an owner or admin member of the app that issued this token on HarperHarbor — and the app's featured-card quota usage. A community site uses it to decide whether to show the featured toggle; the server re-checks membership on every write.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Community status for the token's app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommunityStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/roles/{roleId}/rebate-tier": {
+      "put": {
+        "operationId": "setRoleRebateTier",
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Mark or clear a featured card on behalf of the community",
+        "description": "Sets the card's rebate tier: `featured` raises the author's rebate rate for play on this card; `normal` clears it. The caller must be an owner or admin member of the app that issued the token, the card must belong to that app and be public and reviewed, and the app's featured quota applies. `popular` is computed by the provider and cannot be set here. Idempotent.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "roleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Role id."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RebateTierRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Tier updated."
+          },
+          "400": {
+            "description": "`invalid_request` — `tier` must be `featured` or `normal`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`forbidden` — the caller is not an owner/admin of the token's app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`role_not_found`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`quota_exceeded` — the app's featured slots are all in use; or `role_not_passed_review` — the card is not public and reviewed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -18957,6 +19085,51 @@
                   "pace"
                 ]
               }
+            ]
+          }
+        }
+      },
+      "CommunityStatus": {
+        "type": "object",
+        "required": [
+          "communityAdmin",
+          "featured"
+        ],
+        "properties": {
+          "communityAdmin": {
+            "type": "boolean",
+            "description": "The caller is an owner or admin member of the token's app."
+          },
+          "featured": {
+            "type": "object",
+            "required": [
+              "used",
+              "quota"
+            ],
+            "properties": {
+              "used": {
+                "type": "integer",
+                "description": "Cards currently featured by this app."
+              },
+              "quota": {
+                "type": "integer",
+                "description": "Maximum cards this app may feature at once."
+              }
+            }
+          }
+        }
+      },
+      "RebateTierRequest": {
+        "type": "object",
+        "required": [
+          "tier"
+        ],
+        "properties": {
+          "tier": {
+            "type": "string",
+            "enum": [
+              "featured",
+              "normal"
             ]
           }
         }
