@@ -37,5 +37,13 @@ export default defineConfig({
     // 本地開發時把 /v1 打到 wrangler dev；正式環境同一個 Worker 服務兩者，不需要代理。
     proxy: { "/v1": "http://127.0.0.1:8787" },
   },
-  build: { outDir: "dist", emptyOutDir: true },
+  build: {
+    outDir: "dist", emptyOutDir: true,
+    rollupOptions: { output: { manualChunks(id) {
+      // Preserve the library's data-only boundaries when rebundling it for the site.
+      if (/\/stage\/dist-stage\/chinese-dictionary-[^/]+\.mjs$/.test(id)) return "chinese-dictionary";
+      const locale = id.match(/\/stage\/dist-stage\/stage-locale-(en|ja|ko|zh-Hans|zh-Hant)-[^/]+\.mjs$/)?.[1];
+      if (locale) return `stage-locale-${locale}`;
+    } } },
+  },
 });

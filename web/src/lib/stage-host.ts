@@ -7,9 +7,11 @@ import { siteRootOf } from '../../../shared/site-hosts';
  * ConfirmDialog（站規：不用原生彈窗）、導頁走 vue-router、語系跟站台同步、文案只補站台沒有的 key。
  *
  * 套件只裝一次（installMoonStage 內部也擋重複），畫布元件由 PlayPage 掛在自己的路由裡。
- * 套件很大（3 MB），所以整個 import 都是動態的：不走 /play 的人一個位元組都不會下載。
+ * 播放器與字典使用動態 import，只在遊玩路由預載，不增加其他頁面的初始下載量。
  */
 import type { App, Component } from "vue";
+import { preloadStage } from "./stage-preload";
+export { preloadStage } from "./stage-preload";
 import { reactive } from "vue";
 import type { Router } from "vue-router";
 import { recordConversation } from '@/lib/library';
@@ -52,18 +54,6 @@ export interface StageDeps {
 }
 
 let stagePromise: Promise<Component> | null = null;
-let modulePromise: Promise<typeof import('moonstage/stage')> | null = null;
-
-/** 只載入靜態程式；不安裝宿主，也不使用玩家憑證。 */
-export function preloadStage(): Promise<typeof import('moonstage/stage')> {
-  if (!modulePromise) {
-    modulePromise = Promise.all([import('moonstage/stage'), import('moonstage/stage.css'), import('@/styles/stage.css')])
-      .then(([stage]) => stage);
-    modulePromise.catch(() => { modulePromise = null; });
-  }
-  return modulePromise;
-}
-
 
 /**
  * 新版沙箱卡的殼在哪裡。正式站每張卡一個子網域 `c<roleId>.hearthroom.club`（Worker 出殼頁、

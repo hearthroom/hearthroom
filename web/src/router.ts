@@ -1,4 +1,5 @@
 import { nextTick } from "vue";
+import { preloadStage } from "./lib/stage-preload";
 import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router";
 import { LOCALE_CODES, SOURCE_LOCALE, applyLocale, detectLocale, pageTitle, updateHreflang } from "./lib/i18n";
 import { useSession } from "./lib/session";
@@ -39,7 +40,7 @@ const pages: RouteRecordRaw[] = [
   { path: "developers", component: () => import("./pages/DevelopersPage.vue") },
   { path: "guide", component: () => import("./pages/GuidePage.vue") },
   // 站內玩卡：舞台整頁接管（bare = 不套站台頁首頁尾），對話要登入
-  { path: "play/:roleId", component: () => import("./pages/PlayPage.vue"), meta: { auth: true, bare: true } },
+  { path: "play/:roleId", component: () => import("./pages/PlayPage.vue"), meta: { auth: true, bare: true, preloadStage: true } },
   // 遊戲模式：同一張卡，回覆拆成敘事＋舞台狀態。開場白是公開的，遊客可看第一幕；行動時才要登入。
   { path: "game/:roleId", component: () => import("./pages/GamePage.vue"), meta: { bare: true } },
   // 社群管理共用工作台；資格與個別操作的權限由服務端檢查。
@@ -67,7 +68,7 @@ const pages: RouteRecordRaw[] = [
 const playAppPages = [
   { path: "/login", component: () => import("./pages/LoginPage.vue"), meta: { bare: true } },
   { path: "/auth/callback", component: () => import("./pages/CallbackPage.vue"), meta: { bare: true } },
-  { path: "/:roleId([^/]+)", component: () => import("./pages/PlayPage.vue"), meta: { auth: true, bare: true, playApp: true } },
+  { path: "/:roleId([^/]+)", component: () => import("./pages/PlayPage.vue"), meta: { auth: true, bare: true, playApp: true, preloadStage: true } },
   { path: "/:pathMatch(.*)*", component: () => import("./pages/NotFoundPage.vue"), meta: { bare: true } },
 ];
 
@@ -122,6 +123,9 @@ router.beforeEach(async (to) => {
     }
   }
 
+  // Static assets are public. Start before locale/session waits; the auth gate and
+  // player installation still run in their original order.
+  if (to.meta.preloadStage) void preloadStage();
   await applyLocale(locale);
   // 去掉語言前綴的路徑，才是各語言版本共同的那一頁（卡片 App 網域不進搜尋，沒有各語言版本）
   if (!isPlayHost()) updateHreflang(locale === SOURCE_LOCALE ? to.path : to.path.replace(`/${locale}`, "") || "/");
