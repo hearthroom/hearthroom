@@ -204,6 +204,8 @@ Agent mode runs the migrated LunaTalk preparation tool engine through the existi
 
 Read `/player/agent-mode?roleId=...&model=...` for the saved setting, runtime availability and selected model capability. Send `agentMode` only to override one execution. Free and non-tool model lanes are excluded. Treat `prepStep` as preparation progress, never as answer text. `agentTurn=true` marks a live Agent execution, which has heartbeat and idle detection rather than a five-minute total wall limit.
 
+History and operation-list `operations` arrays use chronological order within the latest 50-operation window. The last entry is the current continuation candidate; a completed continuation replaces its parent in that projection.
+
 For `agent_progress_preserved`, show the saved preparation trace and Continue. Continue sends a new idempotency key, the original message/model and `resumeFromOperationId`; it reuses saved drafts and tool results without duplicating the USER message. Continuations expire after 30 days, and changed history/model invalidates them. Invalid sources fail closed on Harbor. A transport reconnect instead replays the same execution using its existing stream identity. Agent stop ACK waits for durable settlement before the player reloads history.
 
 The Console ledger identifies these charges as Agent mode plus the actual model. Model-catalog estimates describe a single call and do not cap an Agent execution's total cost. Automatic memory jobs retain their separate billing lifecycle. Provider balances and data remain isolated. The OpenAI-compatible `/v1/chat/completions` endpoint still leaves tool execution to its caller; no Agent chat endpoint or implicit server tool execution is added there.
