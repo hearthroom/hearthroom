@@ -38,11 +38,13 @@ const CARD = {
 /** 卡片請求永遠不回來：畫面上有沒有東西，就完全由「上一屏記下的那份」決定。 */
 let cardRequests = 0;
 let commentRequests = 0;
+let platformRequests: string[] = [];
 function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
   const json = (body: unknown, status = 200) =>
     Promise.resolve(new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
   // 留言是本站的另一條請求，跟卡片請求無關：照常回空列表
+  if (url.includes('/platforms')) { platformRequests.push(url); return json({ platforms: [] }); }
   if (url.includes("/comments")) { commentRequests++; return json({ total: 0, comments: [], isRoleCreator: false }); }
   if (/\/v1\/cards\/[^?]+\?/.test(url)) { cardRequests++; return new Promise(() => {}); }
   if (url.includes("/v1/cards?")) return json({ items: [CARD], total: 1, hasNext: false, limit: 24, offset: 0, sort: "hot" });
@@ -71,7 +73,7 @@ async function mountCard(path: string) {
   return el;
 }
 
-beforeEach(() => { vi.stubGlobal("fetch", fakeFetch); cardRequests = 0; commentRequests = 0; setActivePinia(createPinia()); });
+beforeEach(() => { vi.stubGlobal("fetch", fakeFetch); cardRequests = 0; commentRequests = 0; platformRequests = []; setActivePinia(createPinia()); });
 afterEach(() => { app?.unmount(); el?.remove(); app = null; el = null; vi.unstubAllGlobals(); });
 
 describe("點榜單上的卡：立刻有內容", () => {
@@ -115,4 +117,9 @@ it("loads comments only on first open and preserves the panel across tabs", asyn
   (root.querySelector("#tab-home") as HTMLButtonElement).click(); await flush();
   (root.querySelector("#tab-comments") as HTMLButtonElement).click(); await flush();
   expect(commentRequests).toBe(1);
+});
+
+it('discovers play services by the community card ID, independently of its hosted role ID', async () => {
+  await fetchBoard(); await mountCard('/cards/role-abc');
+  expect(platformRequests).toEqual(['/v1/cards/abc/platforms']);
 });

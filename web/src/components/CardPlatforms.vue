@@ -10,7 +10,7 @@ import { connectionMessage, platformPath } from "@/lib/distribution";
 import { currentProvider, providerName, type ProviderId } from "@/lib/provider";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
-const props = defineProps<{ roleId: string; provider?: string }>();
+const props = defineProps<{ cardId: string; provider?: string }>();
 const session = useSession();
 const { lp } = useLocalePath();
 const platforms = ref<
@@ -39,14 +39,7 @@ async function load() {
   error.value = "";
   platforms.value = [];
   try {
-    const result = await fetchCardPlatforms(
-      props.roleId,
-      props.provider === "harbor"
-        ? "harbor"
-        : props.provider === "lunatalk"
-        ? "lunatalk"
-        : currentProvider()
-    );
+    const result = await fetchCardPlatforms(props.cardId);
     if (request !== generation) return;
     platforms.value = result;
     if (!result.some((p) => p.provider === selected.value && p.playable)) {
@@ -59,7 +52,7 @@ async function load() {
     if (request === generation) loading.value = false;
   }
 }
-watch(() => [props.roleId, props.provider], load, { immediate: true });
+watch(() => props.cardId, load, { immediate: true });
 watch(
   () => [platforms.value, session.profile],
   async () => {

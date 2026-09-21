@@ -44,6 +44,7 @@ function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respon
   if (url.includes("/v1/me/settings")) { const body = JSON.parse(String(init?.body)) as { showNsfw: boolean }; state.showNsfw = body.showNsfw; return json({ showNsfw: state.showNsfw, ageVerified: true }); }
   // 留言區跟卡片頁同一道門
   if (url.includes("/comments")) return url.includes("nsfw=1") && auth ? json({ total: 0, comments: [], isRoleCreator: false }) : json({ error: "adult_content" }, 403);
+  if (url.includes('/platforms')) return url.includes('nsfw=1') && auth ? json({ platforms: [] }) : json({ error: 'nsfw_gated' }, 403);
   if (url.includes("/v1/cards/abc")) return url.includes("nsfw=1") && auth ? json(CARD) : json({ error: "adult_content" }, 403);
   if (url.includes("/v1/cards?")) return json({ items: [], total: 0, hasNext: false, limit: 9, offset: 0, sort: "hot" });
   return json({ error: "not_found" }, 404);

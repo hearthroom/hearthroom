@@ -9,6 +9,8 @@ import {
 } from "./helpers";
 import { upsertCard } from "../src/cards";
 import { transfers } from "../src/card-sync";
+import { resolveMember } from '../src/members';
+import { upstream } from '../src/upstream';
 
 beforeEach(async () => {
   await resetDb();
@@ -104,4 +106,28 @@ it("never advertises failed copies or adult cards to unauthenticated readers", a
   expect(
     (await SELF.fetch("https://c.test/v1/cards/source/platforms")).status
   ).toBe(403);
+});
+
+it('uses the same community adult setting through either linked login, independently of the play service', async () => {
+  expect((await connect()).status).toBe(200);
+  const member = await resolveMember(env.DB, 'lunatalk', 11, Date.now());
+  await env.DB.prepare('UPDATE members SET show_nsfw=1,age_verified_at=1 WHERE id=?').bind(member).run();
+  await env.DB.prepare("UPDATE cards SET nsfw=1 WHERE source_role_id='source'").run();
+  const card = await env.DB.prepare("SELECT id FROM cards WHERE source_role_id='source'").first<{id:string}>();
+  const fetchMe = vi.spyOn(upstream, 'fetchMe');
+  const read = (provider: string, token: string) => SELF.fetch(`https://c.test/v1/cards/${card!.id}/platforms?nsfw=1`, {
+    headers: { 'X-Provider': provider, Authorization: `Bearer ${token}` },
+  });
+  for (const [provider, token] of [['harbor', 'target'], ['lunatalk', 'source']]) {
+    fetchMe.mockClear();
+    const response = await read(provider, token);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({platforms:[{provider:'lunatalk',roleId:'source',playable:true}]});
+    expect(fetchMe).toHaveBeenCalledTimes(1);
+    expect(fetchMe.mock.calls[0].slice(1)).toEqual([token, provider]);
+  }
+  await env.DB.prepare('UPDATE members SET show_nsfw=0 WHERE id=?').bind(member).run();
+  expect((await read('harbor', 'target')).status).toBe(403);
+  await env.DB.prepare('UPDATE members SET show_nsfw=1,age_verified_at=NULL WHERE id=?').bind(member).run();
+  expect((await read('harbor', 'target')).status).toBe(403);
 });

@@ -76,7 +76,7 @@ it("disables stored-only providers and never offers a play action for them", asy
   mocks.platforms.mockResolvedValue([
     { provider: "harbor", roleId: "copy", playable: false },
   ]);
-  await mount(CardPlatforms, { roleId: "copy", provider: "harbor" });
+  await mount(CardPlatforms, { cardId: "community-card", provider: "harbor" });
   expect(
     root.querySelector<HTMLInputElement>("input[type=radio]")?.disabled
   ).toBe(true);
@@ -89,7 +89,8 @@ it("selects a playable copy when the displayed card belongs to a storage-only pr
     { provider: "harbor", roleId: "copy", playable: false },
     { provider: "lunatalk", roleId: "original", playable: true },
   ]);
-  await mount(CardPlatforms, { roleId: "copy", provider: "harbor" });
+  await mount(CardPlatforms, { cardId: "community-card", provider: "harbor" });
+  expect(mocks.platforms).toHaveBeenCalledWith('community-card');
   expect(
     root.querySelector<HTMLInputElement>("input[value=lunatalk]")?.checked
   ).toBe(true);
