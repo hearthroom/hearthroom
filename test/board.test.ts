@@ -266,6 +266,36 @@ describe("每小時同步", () => {
 });
 
 describe("榜單邊緣快取", () => {
+  it("未帶 lang 時按 Accept-Language 分開快取", async () => {
+    await seed({ id: "b", name: "中文", nameEn: "English" });
+    const url = "https://c.test/v1/cards?zone=all";
+    await SELF.fetch(url, { headers: { "Accept-Language": "zh-TW" } });
+    const english = await SELF.fetch(url, { headers: { "Accept-Language": "en-US" } });
+    expect(((await english.json()) as any).items.find((item: any) => item.id === "b").name).toBe("English");
+  });
+  it("已快取的一般卡改為成人內容、退回重審或刪除時立即失效", async () => {
+    for (const mutation of [
+      "UPDATE cards SET nsfw=1 WHERE id='a'",
+      "UPDATE cards SET status='needs_review' WHERE id='a'",
+      "DELETE FROM cards WHERE id='a'",
+    ]) {
+      await env.DB.prepare("UPDATE cards SET nsfw=0,status='approved' WHERE id='a'").run();
+      const before = await hdr();
+      expect(before.body.items).toHaveLength(1);
+      expect((await hdr()).cache).toBe("hit");
+      await env.DB.prepare(mutation).run();
+      const after = await hdr();
+      expect(after.cache).toBe("miss");
+      expect(after.body.items).toHaveLength(0);
+    }
+  });
+  it("查詢參數順序與額外追蹤參數不會切碎快取", async () => {
+    const first = await SELF.fetch("https://c.test/v1/cards?zone=zh&sort=hot");
+    expect(first.headers.get("X-Cache")).toBe("miss");
+    const second = await SELF.fetch("https://c.test/v1/cards?utm_source=test&sort=hot&zone=zh");
+    expect(second.headers.get("X-Cache")).toBe("hit");
+    expect(second.headers.get("X-Cache-Layer")).toBe("edge");
+  });
   const hdr = async (query = "") => {
     const res = await SELF.fetch(`https://c.test/v1/cards${query}`);
     return { cache: res.headers.get("X-Cache"), body: (await res.json()) as any };

@@ -1,3 +1,5 @@
+import { boardKey, readBoardCache, writeBoardCache } from "./board-cache";
+export { boardCache } from "./board-cache";
 import { moderationRoutes, reviewSummary } from "./moderation";
 import { communityMaintenance } from "./community/service";
 import { communityRoutes } from "./community/routes";
@@ -217,56 +219,41 @@ app.get("/v1/image", async (c) => {
   return out;
 });
 
-/**
- * 榜單邊緣快取。
- *
- * 榜單對所有人完全一樣，而底層資料每小時才同步一次——同一份 SQL 重算幾千次沒有意義。
- * 命中就是零 DB 查詢。
- *
- * 代價是登記一張卡之後，榜單最多晚 BOARD_TTL 秒才看得到它。可以接受的理由是作者在
- * 自己的工作區立刻就看得到狀態變化（那條路不快取），所以不會覺得操作沒生效。
- *
- * 要做到「登記完榜單立刻更新」，得在寫入時遞增一個代際號並拼進快取鍵——那需要一個
- * 全域強一致的計數器（Durable Object）。等榜單真的大到值得為此加一個元件再說。
- */
-const BOARD_TTL = 60;
-
-/** 同 mineCache：Cache API 沒有「全部清掉」，測試靠換命名空間拿乾淨起點。 */
-export const boardCache = { namespace: "board" };
-
 /** zone 參數：四區之一、all（不分區）、或沒帶（中文）。 */
 function parseZone(raw: string | undefined): Zone | undefined {
   if (raw === "all") return undefined;
   return (ZONES as readonly string[]).includes(raw ?? "") ? (raw as Zone) : "zh";
 }
 
-/**
- * 邊緣快取的鍵。供應商必須進去：兩家看的是各自的卡，共用一份快取等於把一家的內容
- * 發給另一家的訪客。標頭不是快取鍵的一部分，所以要塞進網址。
- */
-async function cacheKeyFor(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>): Promise<Request> {
-  const revision = await c.env.DB.prepare("SELECT revision FROM moderation_clock WHERE id=1").first<{revision:number}>();
-  const url = new URL(c.req.url); url.searchParams.set("_moderation",String(revision?.revision ?? 0));
-  return new Request(url, { method: "GET", headers: c.req.raw.headers });
+/** Keep moderation authoritative: a removal changes the key immediately, including KV hits. */
+async function moderationRevision(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>): Promise<{ revision: number; timing: string }> {
+  const started = performance.now();
+  const revision = await c.env.DB.prepare("SELECT revision FROM moderation_clock WHERE id=1").first<{ revision: number }>();
+  return { revision: revision?.revision ?? 0, timing: `moderation;dur=${(performance.now() - started).toFixed(1)}` };
 }
 
-/** 公開、只讀、對所有人一樣的回應，都走這個邊緣快取。 */
-async function cachedJson(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, ttl: number, compute: () => Promise<unknown>) {
-  const cache = await caches.open(boardCache.namespace);
-  const key = await cacheKeyFor(c);
-  const hit = await cache.match(key);
-  if (hit) {
-    const res = new Response(hit.body, hit);
-    res.headers.set("X-Cache", "hit");
-    return res;
-  }
-  const res = c.json(await compute());
-  res.headers.set("Cache-Control", `public, max-age=${ttl}`);
-  res.headers.set("X-Cache", "miss");
-  const stored = res.clone();
-  stored.headers.set("X-Cache", "hit");
-  c.executionCtx.waitUntil(cache.put(key, stored));
-  return res;
+function boardResponse(body: string, adult: boolean, layer: "edge" | "kv" | "origin", timing: string): Response {
+  return new Response(body, { headers: {
+    "Content-Type": "application/json; charset=UTF-8",
+    "Cache-Control": adult ? "private, no-store" : "no-store",
+    "X-Cache": layer === "origin" ? "miss" : "hit",
+    "X-Cache-Layer": layer,
+    "Server-Timing": timing,
+  } });
+}
+
+/** Public author/tag lists share the same five-minute internal cache. */
+async function cachedJson(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, compute: () => Promise<unknown>) {
+  const moderation = await moderationRevision(c);
+  const key = await boardKey(c.req.url, moderation.revision, false);
+  const started = performance.now();
+  const hit = await readBoardCache(c.env, c.executionCtx, key);
+  const cacheTiming = `${moderation.timing}, cache;dur=${(performance.now() - started).toFixed(1)}`;
+  if (hit) return boardResponse(hit.body, false, hit.layer, cacheTiming);
+  const queryStarted = performance.now();
+  const body = JSON.stringify(await compute());
+  writeBoardCache(c.env, c.executionCtx, key, body);
+  return boardResponse(body, false, "origin", `${cacheTiming}, query;dur=${(performance.now() - queryStarted).toFixed(1)}`);
 }
 
 /** 榜單與搜尋。匿名可讀。 */
@@ -279,14 +266,17 @@ function parseBoardSort(raw: string | undefined): { sort: "hot" | "new" | "rando
 }
 
 app.get("/v1/cards", async (c) => {
-  // 開了成人內容的人：先驗身分再查資料，回應不進快取、也不從快取拿——
-  // 邊緣快取是公開的，一份帶成人內容的回應進了快取就會給下一個沒登入的人。
-  const allowNsfw = await viewerAllowsNsfw(c);
-  // 只有 GET 而且完全公開，所以整個 URL 就是快取鍵，不必自己組。推薦是隨機的，快取住就不隨機了。
-  // 榜單不分供應商（owner 2026-09-17）：X-Provider 只是「我用哪家的帳號」，不進快取鍵也不進查詢。
-  const cacheKey = await cacheKeyFor(c);
-  const cache = await caches.open(boardCache.namespace);
-  const hit = allowNsfw || c.req.query("sort") === "random" ? undefined : await cache.match(cacheKey);
+  // Permission is never cached. Authentication and the moderation clock are independent reads.
+  const accessStarted = performance.now();
+  let accessMs = 0;
+  const [allowNsfw, moderation] = await Promise.all([
+    viewerAllowsNsfw(c).then(value => { accessMs = performance.now() - accessStarted; return value; }),
+    moderationRevision(c),
+  ]);
+  const cacheKey = await boardKey(c.req.url, moderation.revision, allowNsfw, lang(c));
+  const cacheStarted = performance.now();
+  const hit = c.req.query("sort") === "random" ? null : await readBoardCache(c.env, c.executionCtx, cacheKey);
+  const timing = `${moderation.timing}, access;dur=${accessMs.toFixed(1)}, cache;dur=${(performance.now() - cacheStarted).toFixed(1)}`;
   if (hit) {
     // 快取命中一樣是一次瀏覽行為，只是結果數這種東西這條路上沒有
     const q0 = c.req.query("q")?.trim();
@@ -299,10 +289,9 @@ app.get("/v1/cards", async (c) => {
       zoneScope: c.req.query("zone") === "all" ? "all" : "current",
       offset: clamp(c.req.query("offset"), 0, 10_000),
     });
-    const res = new Response(hit.body, hit);
-    res.headers.set("X-Cache", "hit");
-    return res;
+    return boardResponse(hit.body, allowNsfw, hit.layer, timing);
   }
+  const queryStarted = performance.now();
   const { sort, since: sortSince, key: sortKey } = parseBoardSort(c.req.query("sort"));
   const periods: Record<string, number> = { week: 7, month: 30, quarter: 90, year: 365 };
   const period = c.req.query("period");
@@ -356,26 +345,14 @@ app.get("/v1/cards", async (c) => {
     offset,
     outcome: rows.length ? "ok" : "empty",
   });
-  const res = c.json({ items: rows.map((r) => toCard(r, l)), total, hasNext, limit, offset, sort: sortKey });
-  if (allowNsfw) {
-    res.headers.set("Cache-Control", "private, no-store");
-    res.headers.set("X-Cache", "bypass");
-    return res;
-  }
-  res.headers.set("Cache-Control", `public, max-age=${BOARD_TTL}`);
-  res.headers.set("X-Cache", "miss");
-  // 放進快取的副本不能帶 X-Cache: miss，否則下一個人會看到錯的標記。
-  if (sort !== "random") {
-    const stored = res.clone();
-    stored.headers.set("X-Cache", "hit");
-    c.executionCtx.waitUntil(cache.put(cacheKey, stored));
-  }
-  return res;
+  const body = JSON.stringify({ items: rows.map((r) => toCard(r, l)), total, hasNext, limit, offset, sort: sortKey });
+  if (sort !== "random") writeBoardCache(c.env, c.executionCtx, cacheKey, body);
+  return boardResponse(body, allowNsfw, "origin", `${timing}, query;dur=${(performance.now() - queryStarted).toFixed(1)}`);
 });
 
 /** 這一區最常見的標籤，給榜單的類型篩選列。標籤分佈變得慢，快取久一點。 */
 app.get("/v1/tags", (c) =>
-  cachedJson(c, 300, async () => {
+  cachedJson(c, async () => {
     const limit = Math.max(1, clamp(c.req.query("limit"), 24, 60));
     const offset = clamp(c.req.query("offset"), 0, 10_000);
     const rows = await topTags(c.env.DB, parseZone(c.req.query("zone")), limit + 1, c.req.query("q")?.trim(), offset);
@@ -385,7 +362,7 @@ app.get("/v1/tags", (c) =>
 
 /** 作者榜：按作品在本站的合計排。 */
 app.get("/v1/authors", (c) =>
-  cachedJson(c, BOARD_TTL, async () => {
+  cachedJson(c, async () => {
     const sortParam = c.req.query("sort");
     const sort = sortParam === "cards" || sortParam === "hot" ? sortParam : "talk";
     const limit = Math.max(1, clamp(c.req.query("limit"), 24, 100));

@@ -3,13 +3,15 @@
  *
  *   - 作者提交時必須宣告；在榜的卡改了宣告視同內容變了，要重審。
  *   - 預設全站不展示：榜單、標籤、作者榜、單一作者頁、卡片頁、分享預覽都當它不存在。
- *   - 成員驗過年齡並開了開關才看得到；開了的回應不進邊緣快取、也不從快取拿。
+ *   - 成員驗過年齡並開了開關才看得到；權限每次驗，內部快取按內容分級隔離。
  *   - 審核人要驗過年齡才能領成人內容的單。
  */
 import { SELF, createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import worker from "../src/index";
 import { boardCache } from "../src/index";
+import { upstream } from "../src/upstream";
+import { vi } from "vitest";
 import { bearer, envWithAssets, identities, makeMember, makeReviewer, resetDb, restoreUpstream, reviewOff, reviewOn, reviewUpstream, rolesOnMainSite, testHandle } from "./helpers";
 
 const AUTHOR = 10001;
@@ -25,7 +27,7 @@ beforeEach(async () => {
     { roleId: "role-adult", authorNumId: AUTHOR, name: "深夜的卡" },
   );
 });
-afterEach(restoreUpstream);
+afterEach(() => { vi.restoreAllMocks(); restoreUpstream(); });
 
 const submit = (roleId: string, body: Record<string, unknown>, token = "author-token") =>
   SELF.fetch("https://c.test/v1/cards", { method: "POST", headers: { "Content-Type": "application/json", ...bearer(token) }, body: JSON.stringify({ roleId, ...body }) });
@@ -70,6 +72,66 @@ describe("提交時的宣告", () => {
     await waitOnExecutionContext(ctx);
     expect(res.status).toBe(200);
     expect(await res.text()).not.toContain("深夜的卡");
+  });
+});
+
+describe("榜單權限與快取", () => {
+  it("成人榜單重用結果，但每次仍驗權限，關閉或失效立即只剩一般內容", async () => {
+    await listTwo();
+    await makeMember(VIEWER);
+    await settings({ showNsfw: true, birthdate: adultBirthdate() });
+    const url = "https://c.test/v1/cards?zone=all&nsfw=1";
+    const first = await SELF.fetch(url, { headers: bearer("viewer-token") });
+    expect(first.headers.get("X-Cache")).toBe("miss");
+    expect(ids(await json(first))).toEqual(["role-adult", "role-safe"]);
+    const second = await SELF.fetch(url, { headers: bearer("viewer-token") });
+    expect(second.headers.get("X-Cache")).toBe("hit");
+    expect(second.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(second.headers.get("Server-Timing")).toContain("access;dur=");
+    expect(second.headers.get("Server-Timing")).toContain("moderation;dur=");
+    expect(second.headers.get("Server-Timing")).toContain("cache;dur=");
+    expect(second.headers.get("Server-Timing")).not.toContain("query;dur=");
+    expect(ids(await json(second))).toEqual(["role-adult", "role-safe"]);
+    expect(ids(await json(await SELF.fetch(url)))).toEqual(["role-safe"]);
+    expect(ids(await json(await SELF.fetch(url, { headers: bearer("invalid") })))).toEqual(["role-safe"]);
+    await settings({ showNsfw: false });
+    expect(ids(await json(await SELF.fetch(url, { headers: bearer("viewer-token") })))).toEqual(["role-safe"]);
+  });
+
+  it("暖成人榜單只有兩次 D1 讀取，不重新排序，也不快取上游身分", async () => {
+    await listTwo();
+    await makeMember(VIEWER);
+    await settings({ showNsfw: true, birthdate: adultBirthdate() });
+    const req = new Request("https://c.test/v1/cards?nsfw=1", { headers: bearer("viewer-token") });
+    const warm = createExecutionContext();
+    await worker.fetch(req.clone(), env, warm);
+    await waitOnExecutionContext(warm);
+    const queries: string[] = [];
+    const measured = { ...env, DB: new Proxy(env.DB, { get(target, property) {
+      if (property === "prepare") return (sql: string) => { queries.push(sql); return target.prepare(sql); };
+      const value = Reflect.get(target, property);
+      return typeof value === "function" ? value.bind(target) : value;
+    } }) };
+    const identity = vi.spyOn(upstream, "fetchMe");
+    const ctx = createExecutionContext();
+    const result = await worker.fetch(req.clone(), measured, ctx);
+    await waitOnExecutionContext(ctx);
+    expect(result.headers.get("X-Cache")).toBe("hit");
+    expect(queries).toHaveLength(2);
+    expect(queries.every(sql => sql.trim().startsWith("SELECT"))).toBe(true);
+    expect(identity).toHaveBeenCalledTimes(1);
+  });
+
+  it("觀看榜單不更新會員資料", async () => {
+    await listTwo();
+    await makeMember(VIEWER);
+    await settings({ showNsfw: true, birthdate: adultBirthdate() });
+    await env.DB.prepare("UPDATE members SET display_name=NULL WHERE id=?").bind(`member-${VIEWER}`).run();
+    await env.DB.exec("CREATE TRIGGER board_no_member_write BEFORE UPDATE ON members BEGIN SELECT RAISE(ABORT, 'read only'); END;");
+    try {
+      const result = await SELF.fetch("https://c.test/v1/cards?nsfw=1", { headers: bearer("viewer-token") });
+      expect(ids(await json(result))).toEqual(["role-adult", "role-safe"]);
+    } finally { await env.DB.exec("DROP TRIGGER board_no_member_write"); }
   });
 });
 
@@ -122,13 +184,13 @@ describe("成人內容開關與年齡驗證", () => {
     expect(await json(await settings({ showNsfw: true, birthdate: adultBirthdate() }))).toEqual({ showNsfw: true, ageVerified: true, hiddenTags: ["r18g"] });
   });
 
-  it("開了的人看得到：榜單、單卡、作者頁都帶成人內容，而且回應不進快取", async () => {
+  it("開了的人看得到：榜單、單卡、作者頁都帶成人內容，而且回應禁止瀏覽器共用快取", async () => {
     await listTwo();
     await makeMember(VIEWER);
     await settings({ showNsfw: true, birthdate: adultBirthdate() });
     const list = await SELF.fetch("https://c.test/v1/cards?zone=all&nsfw=1&b=1", { headers: bearer("viewer-token") });
     expect(list.headers.get("Cache-Control")).toBe("private, no-store");
-    expect(list.headers.get("X-Cache")).toBe("bypass");
+    expect(list.headers.get("X-Cache")).toBe("miss");
     const body = await json(list);
     expect(ids(body)).toEqual(["role-adult", "role-safe"]);
     expect(body.items.find((i: any) => i.roleId === "role-adult").nsfw).toBe(true);

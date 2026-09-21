@@ -28,7 +28,13 @@ it('two independent votes remove a work from discovery while retaining direct sh
   expect((await request(`/cards/${card}`)).status).toBe(200);
 });
 it('one severe report immediately blocks public links, a dispute stays blocked until independent manager resolution',async()=>{
+  const listUrl='https://c.test/v1/cards?zone=all';
+  await SELF.fetch(listUrl);
+  expect((await SELF.fetch(listUrl)).headers.get('X-Cache')).toBe('hit');
   const res=await proposal('suspend');expect(res.status).toBe(201);const c=await res.json() as any;
+  const removed=await SELF.fetch(listUrl);
+  expect(removed.headers.get('X-Cache')).toBe('miss');
+  expect((await removed.json() as any).items).toHaveLength(0);
   expect((await SELF.fetch('https://c.test/v1/cards/reviewed')).status).toBe(404);
   expect((await SELF.fetch('https://c.test/v1/cards/reviewed/platforms')).status).toBe(404);
   expect((await request(`/cases/${c.id}/vote`,'r2',{vote:'oppose',reason:'Needs discussion'})).status).toBe(200);

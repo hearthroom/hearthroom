@@ -36,10 +36,9 @@ const submit = (roleId: string, token = "author-token") =>
     headers: { "Content-Type": "application/json", ...bearer(token) },
     body: JSON.stringify({ roleId, nsfw: false }),
   });
-// 榜單有邊緣快取（整個 URL 是鍵）：同一個測試裡多次看榜要換查詢字串，才不會讀到前一次的結果。
-let boardSeq = 0;
+// 同一個網址重讀，確認審核狀態變更會讓暖快取立即失效。
 const board = async () =>
-  ((await (await SELF.fetch(`https://c.test/v1/cards?_=${++boardSeq}`)).json()) as { items: { roleId: string }[] }).items;
+  ((await (await SELF.fetch("https://c.test/v1/cards")).json()) as { items: { roleId: string }[] }).items;
 const queue = async (token: string) => {
   const res = await SELF.fetch("https://c.test/v1/review/queue", { headers: bearer(token) });
   return { status: res.status, body: (await res.json()) as { items: any[] } };
@@ -233,7 +232,7 @@ describe("內容版本", () => {
   const registeredAt = async (roleId: string) =>
     (await env.DB.prepare("SELECT registered_at FROM cards WHERE source_role_id = ?").bind(roleId).first<{ registered_at: number }>())!.registered_at;
   const dayBoard = async () =>
-    ((await (await SELF.fetch(`https://c.test/v1/cards?sort=day&_=${++boardSeq}`)).json()) as { items: { roleId: string }[] }).items.map((i) => i.roleId);
+    ((await (await SELF.fetch("https://c.test/v1/cards?sort=day")).json()) as { items: { roleId: string }[] }).items.map((i) => i.roleId);
 
   it("昨天送審、今天才過審：上榜時間是過審那一刻，進日榜而不是直接落到週榜", async () => {
     await submit("role-1");
