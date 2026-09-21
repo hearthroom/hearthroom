@@ -6,8 +6,8 @@ import { i18n } from '../src/lib/i18n';
 import { useSession } from '../src/lib/session';
 import { currentProvider, setProvider } from '../src/lib/provider';
 import PlayPage from '../src/pages/PlayPage.vue';
-const mocks=vi.hoisted(()=>({stage:vi.fn(),token:vi.fn(),authorize:vi.fn(),connect:vi.fn()}));
-vi.mock('../src/lib/stage-host',()=>({ensureStage:mocks.stage,remergeStageMessages:vi.fn(),stageToasts:{list:[]}}));
+const mocks=vi.hoisted(()=>({stage:vi.fn(),preload:vi.fn(async()=>{}),token:vi.fn(),authorize:vi.fn(),connect:vi.fn()}));
+vi.mock('../src/lib/stage-host',()=>({ensureStage:mocks.stage,preloadStage:mocks.preload,remergeStageMessages:vi.fn(),stageToasts:{list:[]}}));
 vi.mock('../src/lib/connections',()=>({accountToken:mocks.token,connectAccount:mocks.connect}));
 vi.mock('../src/lib/play-authorization',()=>({ensurePlayAuthorization:mocks.authorize}));
 vi.mock('../src/lib/api',async original=>({...await original<typeof import('../src/lib/api')>(),fetchMeAt:async()=>({accountNumId:22,nickName:'Second account',avatar:''})}));
@@ -27,4 +27,17 @@ it('passes the selected service credentials to the player while keeping the comm
  expect(options.currentRoleId()).toBe('harbor-role');expect(await options.accessToken()).toBe('harbor-token');
  expect(mocks.authorize).toHaveBeenCalledWith('harbor-token','/play/harbor-role?provider=harbor','harbor');
  expect(currentProvider()).toBe('lunatalk');expect(session.me.accountNumId).toBe(11);expect(session.token.accessToken).toBe('community-token');expect(mocks.connect).not.toHaveBeenCalled();
+});
+
+it('preloads static player code while profile is pending, without initializing private APIs', async()=>{
+ mocks.stage.mockClear(); mocks.preload.mockClear(); mocks.authorize.mockClear();
+ const pinia=createPinia();setActivePinia(pinia);const session=useSession();
+ let finish!:()=>void;
+ vi.spyOn(session,'ensureProfile').mockImplementation(()=>new Promise<void>(resolve=>{finish=resolve}));
+ const router=createRouter({history:createMemoryHistory(),routes:[{path:'/play/:roleId',component:PlayPage}]});await router.push('/play/fixture');
+ root=document.createElement('div');document.body.append(root);app=createApp(PlayPage).use(pinia).use(i18n).use(router);app.mount(root);
+ await nextTick();
+ expect(mocks.preload).toHaveBeenCalledTimes(1);
+ expect(mocks.stage).not.toHaveBeenCalled();expect(mocks.authorize).not.toHaveBeenCalled();
+ app.unmount(); app=undefined as any; finish();
 });

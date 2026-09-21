@@ -51,6 +51,17 @@ export interface StageDeps {
 }
 
 let stagePromise: Promise<Component> | null = null;
+let modulePromise: Promise<typeof import('moonstage/stage')> | null = null;
+
+/** 只載入靜態程式；不安裝宿主，也不使用玩家憑證。 */
+export function preloadStage(): Promise<typeof import('moonstage/stage')> {
+  if (!modulePromise) {
+    modulePromise = Promise.all([import('moonstage/stage'), import('moonstage/stage.css'), import('@/styles/stage.css')])
+      .then(([stage]) => stage);
+    modulePromise.catch(() => { modulePromise = null; });
+  }
+  return modulePromise;
+}
 
 /** 本站的正本主機；殼子網域只在它底下才存在（Worker 的萬用路由與 DNS 都掛在這個 zone）。 */
 const SITE_HOST = "hearthroom.club";
@@ -69,6 +80,23 @@ export function sandboxOptions(hostname: string, session: Pick<Session, 'accessT
     if (!t) throw new Error("not signed in");
     return fn(t);
   };
+  // 只保留這次啟動的一份存檔；握手消耗後不再快取。憑證、卡片及期限都要吻合。
+  type Prefetch = { roleId: string; token: string; started: number; value: ReturnType<typeof fetchCardSaves> };
+  let pending: Prefetch | null = null;
+  let generation = 0;
+  const invalidate = () => { generation++; pending = null; };
+  const prefetch = async (roleId: string): Promise<void> => {
+    const version = ++generation;
+    pending = null;
+    try {
+      const t = await token();
+      if (!t || version !== generation) return;
+      const entry = { roleId, token: t, started: Date.now(), value: fetchCardSaves(roleId, t, provider) };
+      pending = entry;
+      try { await entry.value; }
+      catch { if (pending === entry) pending = null; }
+    } catch { /* 預取失敗由握手正常讀取重試，不以空存檔啟動。 */ }
+  };
   // 子網域標籤：瀏覽器把主機名一律小寫，postMessage 的 origin 也是小寫，這裡先小寫才對得上；
   // 不合 DNS 標籤（只許 a-z 0-9 -，最長 62）的 roleId 退回同站 opaque 殼，不硬湊一個連不上的主機名。
   const label = (roleId: string): string | null => {
@@ -76,12 +104,18 @@ export function sandboxOptions(hostname: string, session: Pick<Session, 'accessT
     return production && /^[a-z0-9-]{1,62}$/.test(l) ? l : null;
   };
   return {
+    prefetch,
     shellUrl: (roleId: string) => { const l = label(roleId); return l ? `https://c${l}.${SITE_HOST}/sandbox/` : "/sandbox/"; },
     origin: (roleId: string) => { const l = label(roleId); return l ? `https://c${l}.${SITE_HOST}` : "null"; },
     saves: {
-      load: (roleId: string) => withToken((t) => fetchCardSaves(roleId, t, provider)),
-      set: (roleId: string, key: string, value: unknown) => withToken((t) => putCardSave(roleId, key, value, t, provider)),
-      remove: (roleId: string, key: string) => withToken((t) => deleteCardSave(roleId, key, t, provider)),
+      load: (roleId: string) => withToken((t) => {
+        const entry = pending;
+        invalidate();
+        return entry && entry.roleId === roleId && entry.token === t && Date.now() - entry.started < 30_000
+          ? entry.value : fetchCardSaves(roleId, t, provider);
+      }),
+      set: (roleId: string, key: string, value: unknown) => { invalidate(); return withToken((t) => putCardSave(roleId, key, value, t, provider)); },
+      remove: (roleId: string, key: string) => { invalidate(); return withToken((t) => deleteCardSave(roleId, key, t, provider)); },
     },
   };
 }
@@ -90,8 +124,13 @@ export function sandboxOptions(hostname: string, session: Pick<Session, 'accessT
 export function ensureStage(deps: StageDeps): Promise<Component> {
   if (stagePromise) return stagePromise;
   stagePromise = (async () => {
+    const provider = deps.provider ?? currentProvider();
+    const accessToken = deps.accessToken ?? (() => deps.session.accessToken());
+    const sandbox = sandboxOptions(window.location.hostname, { accessToken }, provider);
+    const initialRoleId = deps.currentRoleId?.();
+    if (initialRoleId) void sandbox.prefetch(initialRoleId);
     // 套件的 CSS 之後再蓋站台的接線（styles/stage.css）：畫布的變數改接站台的 token，深淺與主題才跟得上
-    const [stage] = await Promise.all([import("moonstage/stage"), import("moonstage/stage.css"), import("@/styles/stage.css")]);
+    const stage = await preloadStage();
     const host = stage.browserHost({
       ui: {
         toast: (text, kind) => pushStageToast(text, kind),
@@ -121,8 +160,6 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
         set: (code) => { void applyLocale(code); },
       },
     });
-    const provider = deps.provider ?? currentProvider();
-    const accessToken = deps.accessToken ?? (() => deps.session.accessToken());
     const player = deps.player === undefined ? deps.session.me : deps.player;
     host.events.on('conversationActivity', async (payload: unknown) => {
       const activity = payload as { roleId?: unknown; conversationId?: unknown } | null;
@@ -148,7 +185,7 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
       },
       api: { base: provider === currentProvider() ? UPSTREAM_API : apiBaseOf(provider) },
       i18n: i18n.global,
-      sandbox: sandboxOptions(window.location.hostname, { accessToken }, provider),
+      sandbox,
     });
     return stage.MoonStage;
   })();
