@@ -13,7 +13,7 @@ import { playProvider } from '@/lib/play-context';
 import { accountToken, connectAccount } from '@/lib/connections';
 import { currentProvider, apiBaseOf } from '@/lib/provider';
 import { ensurePlayAuthorization } from "@/lib/play-authorization";
-import { ensureStage, remergeStageMessages, stageToasts } from "@/lib/stage-host";
+import { ensureStage, preloadStage, remergeStageMessages, stageToasts } from "@/lib/stage-host";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
 import { contentLang, pageTitle } from "@/lib/i18n";
@@ -55,11 +55,16 @@ if (playApp) {
   if (route.query.install === "1") requestInstallToast();
 }
 
+let disposed = false;
+onBeforeUnmount(() => { disposed = true; });
 onMounted(async () => {
   const app = getCurrentInstance()?.appContext.app;
   if (!app) return;
   try {
+    // 與社群身分／遊玩授權並行下載；失敗仍由 ensureStage 的正常錯誤路徑處理。
+    void preloadStage();
     await session.ensureProfile();
+    if (disposed) return;
     const provider = playProvider(route.query.provider);
     const identity = session.profile?.identities.find(i => i.provider === provider);
     const accessToken = () => provider === currentProvider() ? session.accessToken() : accountToken(provider, identity?.externalId);
@@ -67,6 +72,7 @@ onMounted(async () => {
     const token = await accessToken();
     if (!token) { await connectAccount(provider, route.fullPath); return; }
     if (!await ensurePlayAuthorization(token, route.fullPath, provider)) return;
+    if (disposed) return;
     const player = provider === currentProvider() ? session.me : await fetchMeAt(apiBaseOf(provider), token);
     Stage.value = await ensureStage({
       app,
