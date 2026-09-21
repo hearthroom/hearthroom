@@ -37,8 +37,8 @@ const EDGE_TTL_SECONDS = 60;
  * 就會把一個人的卡片清單送給另一個人。identity 先驗證、鍵在伺服器端組出來，
  * 兩件事都不能省。
  */
-const cacheKey = (accountNumId: number, page: number, pageSize: number) =>
-  new Request(`https://personae.internal/me/${accountNumId}/roles?p=${page}&n=${pageSize}`);
+const cacheKey = (provider: ProviderId, accountNumId: number, page: number, pageSize: number) =>
+  new Request(`https://personae.internal/me/${provider}/${accountNumId}/roles?p=${page}&n=${pageSize}`);
 
 export interface MinePage {
   /** registered＝本站有這張卡的登記（不論審到哪）；status 只在 registered 時有；note 是最近一次駁回的說明。 */
@@ -123,7 +123,7 @@ export async function loadMine(
     };
   }
 
-  const key = cacheKey(accountNumId, opts.page, opts.pageSize);
+  const key = cacheKey(provider, accountNumId, opts.page, opts.pageSize);
   const cache = await caches.open(mineCache.namespace);
 
   let roles: Awaited<ReturnType<typeof upstream.fetchMyRoles>> | null = null;

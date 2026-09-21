@@ -6,11 +6,18 @@ export interface AppearancePreferences { avatarSource: 'site'|'discord'|'guild';
 const defaults: AppearancePreferences = {avatarSource:'site',nameStyle:'none',frame:'none',publicAppearance:false};
 const plain = () => ({avatarUrl:null as string|null,decorationUrl:null as string|null,nameStyle:'none' as NameStyle,frame:'none' as AppearancePreferences['frame']});
 type Assets = {discordAvatar?:string;guildAvatar?:string;discordDecoration?:string;guildDecoration?:string};
-// A short outage preserves the last confirmed status, bounded to one day.
+type PreferenceRow={avatar_source:AppearancePreferences['avatarSource'];name_style:NameStyle;frame:AppearancePreferences['frame'];public_enabled:number};
+type AppearanceRow={verified_at:number;boosting_since:number|null;assets:string};
 export async function appearanceView(env:Env, member:string, publicOnly=false) {
- const pref=await env.DB.prepare('SELECT * FROM community_appearance_preferences WHERE member_id=?').bind(member).first<{avatar_source:AppearancePreferences['avatarSource'];name_style:NameStyle;frame:AppearancePreferences['frame'];public_enabled:number}>();
+ const [pref,row]=await Promise.all([
+  env.DB.prepare('SELECT * FROM community_appearance_preferences WHERE member_id=?').bind(member).first<PreferenceRow>(),
+  env.DB.prepare(`SELECT a.* FROM community_discord_appearance a JOIN discord_links l ON l.member_id=a.member_id AND l.version=a.link_version AND l.state='active' WHERE a.member_id=?`).bind(member).first<AppearanceRow>(),
+ ]);
+ return projectAppearance(env,pref,row,publicOnly);
+}
+// A short outage preserves the last confirmed status, bounded to one day.
+export function projectAppearance(env:Pick<Env,'COMMUNITY_ENABLED'>,pref:PreferenceRow|null,row:AppearanceRow|null,publicOnly=false) {
  const preferences:AppearancePreferences=pref?{avatarSource:pref.avatar_source,nameStyle:pref.name_style,frame:pref.frame,publicAppearance:!!pref.public_enabled}:{...defaults};
- const row=await env.DB.prepare(`SELECT a.* FROM community_discord_appearance a JOIN discord_links l ON l.member_id=a.member_id AND l.version=a.link_version AND l.state='active' WHERE a.member_id=?`).bind(member).first<{verified_at:number;boosting_since:number|null;assets:string}>();
  const fresh=!!row && row.verified_at>=Date.now()-86400000 && env.COMMUNITY_ENABLED==='true';
  const available:Assets=fresh?JSON.parse(row!.assets):{};
  const active=fresh && row!.boosting_since!==null;

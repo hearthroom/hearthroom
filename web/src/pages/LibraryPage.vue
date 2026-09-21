@@ -62,7 +62,7 @@ watch([tab, page, locale, () => session.me, () => session.profile?.showNsfw, () 
       </a>
     </div>
     <div v-else class="library__authors">
-      <article v-for="author in authors" :key="author.handle" class="followed panel"><RouterLink class="followed__identity" :to="lp(`/authors/${author.handle}`)"><img v-if="author.avatar" :src="author.avatar" alt="" /><span v-else class="mono" :style="{ '--h': hueFrom(author.name) }">{{ [...author.name][0] }}</span><div><h2>{{ author.name }}</h2><p class="muted">{{ author.bio || $t('library.authorHint') }}</p></div></RouterLink><LibraryToggle kind="following" :target="author.handle" /></article>
+      <article v-for="author in authors" :key="author.handle" class="followed panel"><RouterLink class="followed__identity" :to="lp(`/authors/${author.handle}`)"><img v-if="author.avatar" :src="author.avatar" alt="" /><span v-else class="mono" :style="{ '--h': hueFrom(author.name) }">{{ [...author.name][0] }}</span><div><h2>{{ author.name }}</h2><p class="muted">{{ author.bio || $t('library.authorHint') }}</p></div></RouterLink><LibraryToggle kind="following" :target="author.handle" :initial-active="true" /></article>
     </div>
     <nav v-if="!loading && !failed && (page > 1 || hasNext)" class="pager" :aria-label="$t('library.title')"><button class="btn" :disabled="page === 1" @click="navigate(tab, page - 1)">{{ $t('pager.prev') }}</button><span class="muted">{{ $t('pager.page', { n: page }) }}</span><button class="btn" :disabled="!hasNext" @click="navigate(tab, page + 1)">{{ $t('pager.next') }}</button></nav>
   </div>

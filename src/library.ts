@@ -14,9 +14,7 @@ libraryRoutes.use('/v1/me/*', async (c, next) => {
   await next();
   const operation = `${match[1]}_${c.req.method.toLowerCase()}`;
   const outcome = c.res.status < 400 ? 'success' : c.res.status < 500 ? 'denied' : 'error';
-  try {
-    await c.env.DB.prepare('INSERT INTO library_metrics(operation,outcome,value) VALUES(?,?,1) ON CONFLICT(operation,outcome) DO UPDATE SET value=value+1').bind(operation,outcome).run();
-  } catch { console.warn('Library request metric unavailable'); }
+  c.executionCtx.waitUntil(c.env.DB.prepare('INSERT INTO library_metrics(operation,outcome,value) VALUES(?,?,1) ON CONFLICT(operation,outcome) DO UPDATE SET value=value+1').bind(operation,outcome).run().catch(() => { console.warn('Library request metric unavailable'); }));
 });
 
 libraryRoutes.get('/metrics', async c => {

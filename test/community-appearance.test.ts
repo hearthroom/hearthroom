@@ -1,4 +1,4 @@
-import { env } from 'cloudflare:test';
+import { createExecutionContext, waitOnExecutionContext, env } from 'cloudflare:test';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { makeMember, resetDb } from './helpers';
 import { beginLink, acceptIdentity, completeLink, projection, unlink, communityView, publicCommunityView, setPreferences } from '../src/community/service';
@@ -84,14 +84,17 @@ it('proxies only verified PNG assets and counts media failures without identity 
  fetcher.mockResolvedValueOnce(new Response('<svg/>',{headers:{'Content-Type':'image/png'}}));
  await expect(appearanceMedia(config(),key)).rejects.toThrow('community_media_unavailable');
  const {communityRoutes}=await import('../src/community/routes');
- const response=await communityRoutes.fetch(new Request('https://hearthroom.club/v1/community/media/'+('0'.repeat(64))),config());expect(response.status).toBe(404);
+ const ctx=createExecutionContext();
+ const response=await communityRoutes.fetch(new Request('https://hearthroom.club/v1/community/media/'+('0'.repeat(64))),config(),ctx);await waitOnExecutionContext(ctx);expect(response.status).toBe(404);
  expect(await env.DB.prepare("SELECT value FROM community_metrics WHERE operation='media' AND outcome='denied'").first()).toEqual({value:1});
  const {libraryRoutes}=await import('../src/library');
  const metrics=await (await libraryRoutes.fetch(new Request('https://hearthroom.club/metrics'),config())).text();
  expect(metrics).toContain('hearthroom_community_requests_total{operation="media",outcome="denied"} 1');
 });
 it('requires member auth for saving and signed bridge auth for granting',async()=>{
+ const ctx=createExecutionContext();
  const {communityRoutes}=await import('../src/community/routes');
- expect((await communityRoutes.fetch(new Request('https://hearthroom.club/v1/me/community/appearance',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({avatarSource:'site',nameStyle:'glow',frame:'hearth',publicAppearance:true})}),config())).status).toBe(401);
- expect((await communityRoutes.fetch(new Request('https://hearthroom.club/internal/community/appearance-sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(await snapshot())}),config())).status).toBe(401);
+ expect((await communityRoutes.fetch(new Request('https://hearthroom.club/v1/me/community/appearance',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({avatarSource:'site',nameStyle:'glow',frame:'hearth',publicAppearance:true})}),config(),ctx)).status).toBe(401);
+ expect((await communityRoutes.fetch(new Request('https://hearthroom.club/internal/community/appearance-sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(await snapshot())}),config(),ctx)).status).toBe(401);
+ await waitOnExecutionContext(ctx);
 });

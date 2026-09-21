@@ -1,5 +1,5 @@
 import { activeAwardKeys } from './badges';
-import { appearanceView } from './appearance';
+import { appearanceView, projectAppearance, type AppearancePreferences } from './appearance';
 import { HttpError, type Env } from "../types";
 import { digest, random } from "./crypto";
 export const snowflake = (v: unknown): v is string =>
@@ -218,24 +218,36 @@ async function memberBadges(env: Env, member: string) {
   return badges;
 }
 
-export async function publicCommunityView(env: Env, member: string) {
-  const prefs = await env.DB.prepare(
-    "SELECT public_badges,public_level FROM community_preferences WHERE member_id=?",
-  ).bind(member).first<{public_badges:number;public_level:number}>();
-  const result: {badges:string[];level?:number;appearance?:Awaited<ReturnType<typeof appearanceView>>["effective"]} = {
-    badges: prefs?.public_badges ? await memberBadges(env, member) : [],
-  };
-  if (prefs?.public_level) {
-    const progress = await env.DB.prepare(
-      `SELECT COALESCE(SUM(x.points),0) AS xp FROM discord_links l
-       LEFT JOIN community_xp x ON x.discord_id=l.discord_id
-       WHERE l.member_id=? AND l.state='active' GROUP BY l.discord_id`,
-    ).bind(member).first<{xp:number}>();
-    if (progress) result.level = level(progress.xp);
-  }
-  const appearance = (await appearanceView(env,member,true)).effective;
-  if (appearance.avatarUrl || appearance.nameStyle !== "none" || appearance.frame !== "none") result.appearance = appearance;
-  return result;
+type PublicIdentity = {badges:string[];level?:number;appearance?:Awaited<ReturnType<typeof appearanceView>>['effective']};
+/** A cold page is one joined projection, rather than a chain of queries per author. */
+export async function publicCommunityViews(env:Env,members:string[]):Promise<Map<string,PublicIdentity>> {
+ if(!members.length)return new Map();
+ const rows=(await env.DB.prepare(`SELECT m.id,p.public_badges,p.public_level,l.member_id AS linked,
+ a.verified_at,a.boosting_since,a.assets,ap.avatar_source,ap.name_style,ap.frame,ap.public_enabled,
+ CASE WHEN p.public_badges=1 THEN (SELECT json_group_array(badge) FROM
+  (SELECT badge FROM community_awards WHERE member_id=m.id AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>?) ORDER BY badge)) ELSE '[]' END AS badges,
+ CASE WHEN p.public_level=1 AND l.member_id IS NOT NULL THEN
+  (SELECT COALESCE(SUM(points),0) FROM community_xp WHERE discord_id=l.discord_id) END AS xp
+ FROM members m LEFT JOIN community_preferences p ON p.member_id=m.id
+ LEFT JOIN discord_links l ON l.member_id=m.id AND l.state='active'
+ LEFT JOIN community_discord_appearance a ON a.member_id=m.id AND a.link_version=l.version
+ LEFT JOIN community_appearance_preferences ap ON ap.member_id=m.id
+ WHERE m.id IN (${members.map(()=>'?').join(',')})`).bind(Date.now(),...members).all<{
+ id:string;public_badges:number|null;public_level:number|null;linked:string|null;verified_at:number|null;boosting_since:number|null;assets:string|null;
+ avatar_source:AppearancePreferences['avatarSource']|null;name_style:AppearancePreferences['nameStyle'];frame:AppearancePreferences['frame'];public_enabled:number;badges:string;xp:number|null;
+ }>()).results;
+ return new Map(rows.map(row=>{
+  const appearance=projectAppearance(env,row.avatar_source?{...row,avatar_source:row.avatar_source}:null,row.verified_at===null?null:{verified_at:row.verified_at,boosting_since:row.boosting_since,assets:row.assets??'{}'},true);
+  const badges:string[]=JSON.parse(row.badges);
+  if(row.public_badges){if(row.linked)badges.unshift('discord_linked');if(appearance.supporter.active)badges.push('server_booster');}
+  const result:PublicIdentity={badges};
+  if(row.public_level&&row.xp!==null)result.level=level(row.xp);
+  if(appearance.effective.avatarUrl||appearance.effective.nameStyle!=='none'||appearance.effective.frame!=='none')result.appearance=appearance.effective;
+  return [row.id,result];
+ }));
+}
+export async function publicCommunityView(env: Env, member: string):Promise<PublicIdentity> {
+ return (await publicCommunityViews(env,[member])).get(member)??{badges:[]};
 }
 
 export async function communityView(env: Env, member: string) {

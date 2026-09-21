@@ -1,6 +1,7 @@
+import { clearLibraryCache } from './library';
 import { PROVIDERS } from "./provider";
 import { defineStore } from "pinia";
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { fetchMe, fetchSiteMe, fetchWallet, setLoginViewer, setNsfwViewer, setViewerHiddenTags } from "./api";
 import type { Me, SiteMe, Wallet } from "./api";
 import {
@@ -31,6 +32,7 @@ export const useSession = defineStore("session", () => {
   /** 本站的身分（公開 ID、連結的帳號）。登入後問一次就建好成員；讀不到不影響登入。 */
   const profile = ref<SiteMe | null>(null);
   const ready = ref(false);
+  watch([me, () => profile.value?.handle, () => profile.value?.showNsfw, () => profile.value?.ageVerified, () => profile.value?.hiddenTags?.join(',')], clearLibraryCache, {flush:'sync'});
   const displayName = computed(() => profile.value?.displayName || profile.value?.handle || "HearthRoom");
   const avatarUrl = computed(() => profile.value?.avatarUrl || "");
 
