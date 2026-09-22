@@ -78,6 +78,12 @@ if(mode==='target-manifest'){
   if(target)sql.push(`INSERT OR IGNORE INTO hosting_replicas(version_id,provider,source_role_id,hosted_revision_id,state,created_at) SELECT version_id,'harbor',${q(item.operationId)},${q(target.data.receipt.hostedRevisionId)},'ready',created_at FROM hosting_versions WHERE version_id=${q(item.versionId)};`);
   if(target)sql.push(`INSERT OR IGNORE INTO hosting_transfers(version_id,provider,external_id,operation_id,draft_role_id,hosted_revision_id,state,error,updated_at) SELECT version_id,'harbor',${q(item.targetAccount)},${q(item.operationId)},${q(item.operationId)},${q(target.data.receipt.hostedRevisionId)},'ready','',${now} FROM hosting_versions WHERE version_id=${q(item.versionId)};`);
   sql.push(`UPDATE review_submissions SET status='approved',decided_at=${now},note='Owner-authorized version cutover' WHERE id=${q(item.submissionId)} AND status='pending' AND EXISTS(SELECT 1 FROM cards WHERE ${predicate});`,`UPDATE cards SET reviewed_hash='version:'||approved_version_id WHERE id=${q(item.cardId)} AND approved_version_id=${q(item.versionId)};`);
+  // This is an identity migration of an existing approval, not a new release.
+  // Suppress only events produced by this manifest, inside the same D1 batch.
+  sql.push(
+   `DELETE FROM community_notifications WHERE event_key=${q('review:'+item.submissionId)} OR event_key IN(SELECT 'work:'||${q(item.workId)}||':'||${q(item.versionId)}||':'||member_id FROM member_follows WHERE author_id=${q(item.memberId)});`,
+   `DELETE FROM review_deliveries WHERE submission_id=${q(item.submissionId)};`,
+  );
   await save(`cutover-${String(++index).padStart(2,'0')}.sql`,sql.join('\n')+'\n');
  }
  console.log('prepared 18 guarded per-card cutovers; no database writes');
