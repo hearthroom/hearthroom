@@ -56,12 +56,12 @@ it('lists source and copies using the resolved card, including global ID and num
   }
 });
 
-it.each(['pending', 'rejected', 'needs_review', 'unshared'])('keeps %s cards private across providers with matching author numbers', async status => {
+it.each(['pending', 'rejected', 'needs_review', 'unshared'])('serves %s card links across providers without granting author access', async status => {
   await env.DB.prepare('UPDATE cards SET status=?').bind(status).run();
   const card = (await getCard(env.DB, 'source'))!;
   for (const id of ['source', card.id, String(card.num)]) {
-    expect((await read(id, 'harbor', 'unrelated')).status).toBe(404);
-    expect((await read(`${id}/platforms`, 'harbor', 'unrelated')).status).toBe(404);
+    expect((await read(id, 'harbor', 'unrelated')).status).toBe(200);
+    expect((await read(`${id}/platforms`, 'harbor', 'unrelated')).status).toBe(200);
   }
   expect((await read('source', 'lunatalk', 'author')).status).toBe(200);
 });

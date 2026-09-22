@@ -6,6 +6,7 @@ export type Zone = "zh" | "en" | "ja" | "ko";
 export interface CommunityCard {
   id: string;
   roleId: string;
+  sourceRoleId?: string;
   zone: Zone | "all";
   /** 支援哪家供應商（供應商代號）：拿那家的帳號在本站玩。 */
   provider?: string;
@@ -34,7 +35,7 @@ export interface CommunityCard {
   /** 本站卡號：登記過的卡才有，撤銷再登記不換號。作者看自己還沒登記的卡時沒有。 */
   num?: number;
   /**
-   * 只有作者看自己還沒上榜的卡時才有：這張卡在本站的狀態（unlisted＝還沒提交過）。
+   * 連結可讀、尚未上榜的卡也會帶回：這張卡在本站的狀態（unlisted＝還沒提交過）。
    * 在榜的卡沒有這個欄位。
    */
   status?: "unlisted" | "pending" | "rejected" | "needs_review" | "unshared" | "approved";

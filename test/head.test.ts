@@ -2,7 +2,7 @@ import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import worker from "../src/index";
 import { authorLine, oneLine } from "../src/head";
-import { envWithAssets, makeMember, resetDb, restoreUpstream, role, testHandle } from "./helpers";
+import { envWithAssets, makeMember, resetDb, restoreUpstream, rolesOnProviders, role, testHandle } from "./helpers";
 import { upsertCard } from "../src/cards";
 
 // 殼帶驗證器：測「改寫後要清 ETag／Last-Modified」那幾條
@@ -17,6 +17,7 @@ async function page(path: string) {
 
 beforeEach(async () => {
   await resetDb();
+  rolesOnProviders({});
   await upsertCard(env.DB, role({ roleId: "r-1", name: "夜行偵探 沈墨", nameEn: "Night Detective", desc: "民國二十四年的上海，租界的雨從不停。", authorNumId: 7, authorName: "月光" }), Date.now());
 });
 afterEach(restoreUpstream);

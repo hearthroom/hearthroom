@@ -1,6 +1,6 @@
 import { SELF, env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { bearer, resetDb, restoreUpstream, rolesOnMainSite, whoAmI } from "./helpers";
+import { bearer, resetDb, restoreUpstream, rolesOnMainSite, rolesOnProviders, whoAmI } from "./helpers";
 
 /**
  * 卡號與作者自看（玩家回報 2026-09-17）：
@@ -91,7 +91,7 @@ describe("卡號", () => {
 
 describe("作者看自己還沒上榜的卡", () => {
   it("沒提交過的卡：帶著作者的 token 開卡片頁，拿到從上游拼的預覽，狀態是 unlisted，不進快取", async () => {
-    rolesOnMainSite({ roleId: "role-draft", authorNumId: 10001, name: "草稿卡" });
+    rolesOnProviders({lunatalk:[{ roleId: "role-draft", authorNumId: 10001, name: "草稿卡" }]});
     const res = await card("role-draft", bearer());
     expect(res.status).toBe(200);
     expect(res.body.name).toBe("草稿卡");
@@ -100,14 +100,14 @@ describe("作者看自己還沒上榜的卡", () => {
     expect(res.cache).toBe("private, no-store");
   });
 
-  it("不是作者、或沒登入 → 照舊 404", async () => {
-    rolesOnMainSite({ roleId: "role-draft", authorNumId: 10001 });
-    expect((await card("role-draft")).status).toBe(404);
+  it("不是作者或沒登入，仍可透過連結查看草稿", async () => {
+    rolesOnProviders({lunatalk:[{ roleId: "role-draft", authorNumId: 10001 }]});
+    expect((await card("role-draft")).status).toBe(200);
     whoAmI(20002);
-    expect((await card("role-draft", bearer())).status).toBe(404);
+    expect((await card("role-draft", bearer())).status).toBe(200);
   });
 
-  it("提交了還在審的卡：作者看得到、附審核狀態；別人 404", async () => {
+  it("提交了還在審的卡：連結顯示審核狀態，訪客也能查看", async () => {
     rolesOnMainSite({ roleId: "role-a", authorNumId: 10001 });
     await register("role-a");
     await env.DB.prepare("UPDATE cards SET status = 'pending'").run();
@@ -115,7 +115,7 @@ describe("作者看自己還沒上榜的卡", () => {
     expect(mine.status).toBe(200);
     expect(mine.body.status).toBe("pending");
     expect(mine.body.num).toBe(100001);
-    expect((await card("role-a")).status).toBe(404);
-    expect((await card("100001")).status).toBe(404);
+    expect((await card("role-a")).status).toBe(200);
+    expect((await card("100001")).status).toBe(200);
   });
 });

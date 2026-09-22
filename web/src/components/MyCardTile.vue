@@ -37,7 +37,7 @@ function onArtError() {
   <article class="card rise">
     <div class="card__poster">
       <!-- 封面連到卡片頁：編輯有自己的鍵在下面（作者回報 2026-09-16：點自己的卡跳進編輯頁） -->
-      <a :href="platformPath(lp(`/cards/${sourceId}`),source)" class="card__art">
+      <a :href="lp(`/cards/${card.workId ?? card.detailId ?? sourceId}`)" class="card__art">
         <img v-if="artwork" :key="artwork" :src="artwork" :alt="card.name" loading="lazy" @error="onArtError" />
         <div v-else class="card__void">
           <span :aria-label="card.name">{{ initial }}</span>

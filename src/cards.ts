@@ -73,6 +73,7 @@ export function toCard(row: CardRow, lang: string) {
   return {
     id: row.id,
     roleId: row.approved_hosted_role_id ?? row.source_role_id,
+    sourceRoleId: row.source_role_id,
     /** 本站卡號：短、能唸出來、能在不准貼連結的地方報。撤銷再登記不換號（card_numbers）。 */
     num: row.num ?? undefined,
     zone: row.zone,
@@ -398,15 +399,15 @@ export async function getPublicCard(db: D1Database, id: string, provider: Provid
 }
 
 /**
- * 作者自己還沒登記（或還沒過審）的卡，照卡片頁的形狀從上游的公開資料拼一份。
+ * 尚未登記或過審的卡，從來源平台允許讀取的公開資料組成詳情。
  *
- * 只給作者本人看：卡片頁對別人是 404，作者點自己的封面卻掉進 404 是死路（玩家回報 2026-09-17）。
  * 沒有卡號、沒有登記時間，`status: "unlisted"` 讓前端知道這是預覽而不是在榜的卡。
  */
 export function previewCard(role: UpstreamRole, lang: string, provider: ProviderId) {
   return {
     id: role.roleId,
     roleId: role.roleId,
+    sourceRoleId: role.roleId,
     zone: role.zone,
     provider,
     nsfw: false,

@@ -7,7 +7,7 @@ import {
   connectAccount,
 } from "@/lib/connections";
 import { connectionMessage, platformPath } from "@/lib/distribution";
-import { currentProvider, providerName, type ProviderId } from "@/lib/provider";
+import { providerName, type ProviderId } from "@/lib/provider";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
 const props = defineProps<{ cardId: string; provider?: string }>();
@@ -16,13 +16,7 @@ const { lp } = useLocalePath();
 const platforms = ref<
   { provider: ProviderId; roleId: string; playable: boolean }[]
 >([]);
-const selected = ref<ProviderId>(
-  props.provider === "harbor"
-    ? "harbor"
-    : props.provider === "lunatalk"
-    ? "lunatalk"
-    : currentProvider()
-);
+const selected = ref<ProviderId | null>(null);
 const balances = ref<Partial<Record<ProviderId, number | null>>>({});
 const error = ref("");
 const loading = ref(true);
@@ -38,14 +32,11 @@ async function load() {
   loading.value = true;
   error.value = "";
   platforms.value = [];
+  selected.value = null;
   try {
     const result = await fetchCardPlatforms(props.cardId);
     if (request !== generation) return;
     platforms.value = result;
-    if (!result.some((p) => p.provider === selected.value && p.playable)) {
-      const first = result.find((p) => p.playable);
-      if (first) selected.value = first.provider;
-    }
   } catch {
     if (request === generation) error.value = "linked.platformLoadFailed";
   } finally {
@@ -164,6 +155,8 @@ legend {
   gap: var(--s-2);
   flex-wrap: wrap;
   padding: var(--s-2) 0;
+  min-height: 44px;
+  cursor: pointer;
 }
 .platform span {
   margin-left: auto;

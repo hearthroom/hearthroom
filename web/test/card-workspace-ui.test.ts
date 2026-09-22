@@ -30,7 +30,7 @@ it('uses the portrait background before the avatar and keeps the card destinatio
  mocks.fetch.mockImplementation(async (_t, {provider}) => result([{...fixture, roleId:provider==='harbor'?'original':'copy', backgroundUrl:'/portrait.png'}]));
  await mount();
  expect(root.querySelector('.card__art img')?.getAttribute('src')).toBe('/portrait.png');
- expect(root.querySelector('.card__art')?.getAttribute('href')).toBe('/cards/original?provider=harbor');
+ expect(root.querySelector('.card__art')?.getAttribute('href')).toBe('/cards/work');
 });
 it('falls back to the avatar for old cards and failed backgrounds, then to a placeholder', async () => {
  mocks.fetch.mockImplementation(async (_t, {provider}) => result([{...fixture, roleId:provider==='harbor'?'original':'copy', backgroundUrl:'/portrait.png'}]));

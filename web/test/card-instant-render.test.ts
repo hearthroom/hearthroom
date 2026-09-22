@@ -123,3 +123,20 @@ it('discovers play services by the community card ID, independently of its hoste
   await fetchBoard(); await mountCard('/cards/role-abc');
   expect(platformRequests).toEqual(['/v1/cards/abc/platforms']);
 });
+
+it('offers the owner a provider-scoped editor for the draft behind a neutral detail link', async () => {
+  const { rememberCard } = await import('../src/lib/card-memory');
+  const { useSession } = await import('../src/lib/session');
+  rememberCard({...CARD,roleId:'owner-draft',sourceRoleId:'editable-source',status:'unlisted'});
+  const root = await mountCard('/cards/owner-draft');
+  const session=useSession();
+  session.me={accountNumId:7,nickName:'Fixture author',avatar:''};
+  session.profile={identities:[{provider:'lunatalk',externalId:7}]} as any;
+  await flush();
+  expect(root.querySelector('a[href="/cards/editable-source/edit?provider=lunatalk"]')).not.toBeNull();
+  expect([...root.querySelectorAll('button')].some(e=>e.textContent?.trim()===i18n.global.t('mine.action.submit'))).toBe(true);
+  session.profile={identities:[{provider:'harbor',externalId:7}]} as any;
+  session.me=null;
+  await flush();
+  expect(root.querySelector('a[href*="/edit?"]')).toBeNull();
+});
