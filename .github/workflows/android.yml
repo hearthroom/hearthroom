@@ -1,0 +1,103 @@
+name: Android APK
+on:
+  push:
+    branches: [main]
+    paths: ['android/**', 'scripts/android/**', '.github/workflows/android.yml']
+  pull_request:
+    paths: ['android/**', 'scripts/android/**', '.github/workflows/android.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: android-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'stable' }}
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
+      - run: npm ci --no-audit --no-fund
+      - run: node --test scripts/android/*.test.mjs
+      - name: Verify Android app
+        run: ./android/gradlew -p android testDebugUnitTest lintDebug assembleDebug --console=plain
+      - name: Save test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: hearthroom-android-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
+  release:
+    needs: verify
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
+      - run: npm ci --no-audit --no-fund
+      - name: Build signed release
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: hearthroom
+        run: |
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          export ANDROID_KEYSTORE="$RUNNER_TEMP/hearthroom-release.jks"
+          trap 'rm -f "$ANDROID_KEYSTORE"' EXIT
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$ANDROID_KEYSTORE"
+          chmod 600 "$ANDROID_KEYSTORE"
+          ./android/gradlew -p android assembleRelease lintRelease -PreleaseCode="$((10000 + GITHUB_RUN_NUMBER))" -PreleaseName="1.0.$GITHUB_RUN_NUMBER" --console=plain
+          bash scripts/android/verify-apk.sh android/app/build/outputs/apk/release/app-release.apk
+      - name: Prepare or reuse GitHub release
+        id: release
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/android/prepare-release.mjs
+      - name: Verify selected APK
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: bash scripts/android/verify-apk.sh android/dist/latest.apk
+      - name: Verify live website signing association
+        run: node scripts/android/verify-origin.mjs
+      - name: Publish latest to R2 and read back
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.ANDROID_R2_API_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.ANDROID_CF_ACCOUNT_ID }}
+        run: node scripts/android/publish-release.mjs
+      - name: Make verified GitHub release public
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: gh release edit "$RELEASE_TAG" --draft=false --latest=false

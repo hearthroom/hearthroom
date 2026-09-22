@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Hearthroom</string>
+    <string name="installed_version">現在のバージョン %1$s</string>
+    <string name="checking">更新を確認しています…</string>
+    <string name="up_to_date">Hearthroom は最新です。</string>
+    <string name="check_again">もう一度確認</string>
+    <string name="open_site">Hearthroom を開く</string>
+    <string name="update_available">バージョン %1$s が利用できます</string>
+    <string name="download_update">更新をダウンロード</string>
+    <string name="downloading">更新をダウンロードしています…</string>
+    <string name="install_update">更新をインストール</string>
+    <string name="ready_to_install">更新をインストールできます。</string>
+    <string name="release_changed">新しいバージョンが公開されました。変更内容を確認してからダウンロードしてください。</string>
+    <string name="allow_install_title">Hearthroom の更新を許可</string>
+    <string name="allow_install_body">Hearthroom からの更新をインストールするには、Android の許可が必要です。</string>
+    <string name="open_settings">設定を開く</string>
+    <string name="not_now">後で</string>
+    <string name="finish_install">Android でインストールを完了するか、後でもう一度お試しください。</string>
+    <string name="update_failed">更新できませんでした。再試行するか、Hearthroom を開いてください。</string>
+    <string name="retry">再試行</string>
+    <string name="shortcut_updates">更新を確認</string>
+</resources>
