@@ -1,0 +1,7 @@
+{
+  "en": "Hearthroom now waits for the startup update check to finish, so a slower connection no longer skips an available update.\nYou can still choose Open Hearthroom to skip the check.",
+  "zh-Hant": "Hearthroom 現在會等啟動時的更新檢查完成，避免網路較慢時漏掉新版提示。\n你仍可選擇「開啟 Hearthroom」略過檢查。",
+  "zh-Hans": "Hearthroom 现在会等待启动时的更新检查完成，避免网络较慢时错过新版本提示。\n你仍可选择「打开 Hearthroom」跳过检查。",
+  "ja": "Hearthroom は起動時の更新確認が完了するまで待つようになり、接続が遅い場合も新しいバージョンの案内を見逃しにくくなりました。\n「Hearthroom を開く」を選ぶと、確認をスキップできます。",
+  "ko": "Hearthroom이 시작 시 업데이트 확인이 끝날 때까지 기다리므로, 연결이 느려도 새 버전 안내를 건너뛰지 않습니다.\n'Hearthroom 열기'를 선택하면 확인을 건너뛸 수 있습니다."
+}

@@ -57,7 +57,7 @@ public final class MainActivity extends LauncherActivity {
             try{release=UpdateManifest.parse(state.getString("release"));showRelease();waitingPermission=state.getBoolean("permission");return;}catch(Exception ignored){}
         }
         check();
-        if(!manual)main.postDelayed(()->{if(release==null&&!launched)openSite();},2500);
+        // Wait for the bounded network check; only the user may skip an unfinished check.
     }
     private boolean active(){return !isFinishing()&&!isDestroyed()&&!launched;}
     private void check(){
