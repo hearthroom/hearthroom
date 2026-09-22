@@ -2,7 +2,7 @@ import { apiBaseOf, type ProviderId } from "./providers";
 import { IMAGE_HOSTS } from "./shortcut";
 import { HttpError, type Env } from "./types";
 
-// Current SaaS asset domains are references only, not additions to the image proxy allowlist.
+// Community sync keeps SaaS asset references without fetching the image bytes.
 const REFERENCE_HOSTS = new Set([...IMAGE_HOSTS, "assets.lunatalk.ai", "assets.harperharbor.com"]);
 
 export const MEDIA_FIELDS = [

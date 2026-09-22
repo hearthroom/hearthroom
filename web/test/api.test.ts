@@ -165,6 +165,17 @@ describe("uploadImage", () => {
     expect(progress).toEqual([0.5, 1]);
   });
 
+  it("GIF 原檔直接送到儲存，保留檔名且不轉成靜態圖片", async () => {
+    const { uploadImage } = await import("../src/lib/api");
+    const animated = new File(["GIF89a synthetic animation bytes"], "avatar.gif", { type: "image/gif" });
+    stubFetch((url) => url.endsWith("/uploadIntent")
+      ? ok({ uploadId: "gif-upload", uploadUrl: "https://storage.test/put" })
+      : ok({ imageUrl: "https://assets.lunatalk.ai/u/test/avatar.gif" }));
+    await uploadImage(animated, "tok");
+    expect(FakeXHR.instances[0].body).toBe(animated);
+    expect(JSON.parse(String(calls[1].body)).fileName).toBe("avatar.gif");
+  });
+
   it("上游沒有這條路（404）就走舊的一次送上去", async () => {
     const { uploadImage } = await import("../src/lib/api");
     stubFetch((url) => url.endsWith("/uploadIntent") ? new Response("", { status: 404 }) : ok({ imageUrl: "https://cdn.test/legacy.wav" }));

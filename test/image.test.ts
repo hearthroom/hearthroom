@@ -16,6 +16,19 @@ beforeEach(() => { imageCache.namespace = `image-test-${++gen}`; });
 afterEach(() => vi.unstubAllGlobals());
 
 describe("圖片代抓（匯出 PNG 卡用）", () => {
+  it.each([
+    "lunatalk.ai", "assets.lunatalk.ai", "new.cdn.lunatalk.ai",
+    "harperharbor.com", "assets.harperharbor.com", "new.cdn.harperharbor.com",
+  ])("產品網域 %s：可匯出且保留 PNG 位元組", async (host) => {
+    const fetchSpy = vi.fn(async () => new Response(PNG, { headers: { "content-type": "image/png" } }));
+    vi.stubGlobal("fetch", fetchSpy);
+    const url = `https://${host}/u/test/avatar.png`;
+    const res = await get("/v1/image?u=" + encodeURIComponent(url));
+    expect(res.status).toBe(200);
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(PNG);
+    expect(fetchSpy).toHaveBeenCalledWith(url, expect.any(Object));
+  });
+
   it("放行的主機：原樣轉回位元組與 content-type，帶快取頭", async () => {
     const fetchSpy = vi.fn(async () => new Response(PNG, { headers: { "content-type": "image/png" } }));
     vi.stubGlobal("fetch", fetchSpy);
@@ -33,6 +46,11 @@ describe("圖片代抓（匯出 PNG 卡用）", () => {
     expect((await get("/v1/image?u=" + encodeURIComponent("https://evil.example/x.png"))).status).toBe(403);
     expect((await get("/v1/image?u=" + encodeURIComponent("http://objects.lunatalk.ai/x.png"))).status).toBe(403);
     expect((await get("/v1/image?u=not-a-url")).status).toBe(400);
+    expect((await get("/v1/image?u=" + encodeURIComponent("https://assets.lunatalk.ai.evil.example/a.png"))).status).toBe(403);
+    expect((await get("/v1/image?u=" + encodeURIComponent("http://assets.lunatalk.ai/a.png"))).status).toBe(403);
+    for (const host of ["notlunatalk.ai", "notharperharbor.com", "harperharbor.com.evil.example"]) {
+      expect((await get("/v1/image?u=" + encodeURIComponent(`https://${host}/a.png`))).status).toBe(403);
+    }
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
