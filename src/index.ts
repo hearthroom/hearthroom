@@ -666,12 +666,13 @@ app.put("/v1/me/profile", bodyLimit({maxSize: 2 * 1024 * 1024 + 16384, onError: 
 
 app.get('/v1/avatars/:handle/:file',async c=>{
  const handle=c.req.param('handle'), file=c.req.param('file');
- if(!/^[a-z]{8}$/.test(handle)||!/^[-a-f0-9]{36}\.webp$/.test(file))throw new HttpError(404,'avatar not found');
+ if(!/^[a-z]{8}$/.test(handle)||!/^[-a-f0-9]{36}\.(webp|gif|png)$/.test(file))throw new HttpError(404,'avatar not found');
  const key=`${handle}/${file}`;
  if(!await c.env.DB.prepare('SELECT 1 FROM members WHERE handle=? AND avatar_key=?').bind(handle,key).first())throw new HttpError(404,'avatar not found');
  const image=await c.env.AVATARS?.get(key);
  if(!image)throw new HttpError(404,'avatar not found');
- return new Response(image.body,{headers:{'Content-Type':'image/webp','Cache-Control':'public, max-age=300','X-Content-Type-Options':'nosniff'}});
+ const contentType=file.endsWith('.gif')?'image/gif':file.endsWith('.png')?'image/png':'image/webp';
+ return new Response(image.body,{headers:{'Content-Type':contentType,'Cache-Control':'public, max-age=300','X-Content-Type-Options':'nosniff'}});
 });
 
 app.route("/", communityRoutes);
