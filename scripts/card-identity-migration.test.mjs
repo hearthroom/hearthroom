@@ -16,6 +16,7 @@ function legacy() {
  INSERT INTO comments(id,card_id,member_id,content,created_at) VALUES('comment','old-card-uuid','member','A comment',1);
  INSERT INTO comment_likes VALUES('comment','member',1);
  INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,submitted_at) VALUES('review','old-card-uuid','lunatalk','source','first','approved',1);
+ INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,submitted_at) VALUES('frozen-review','old-card-uuid','lunatalk','frozen-source','re','superseded',1);
  INSERT INTO hosting_versions(version_id,work_id,member_id,operation_id,source_role_id,provider,nsfw,card_id,state,created_at) VALUES('version','work','member','op','source','lunatalk',0,'old-card-uuid','approved',1);
  INSERT INTO hosting_replicas VALUES('version','lunatalk','source','frozen-source','ready',1);
  INSERT INTO community_notifications(event_key,member_id,kind,path,created_at) VALUES('event','member','comment_reply','/cards/old-card-uuid',1);
@@ -36,6 +37,7 @@ test('migrates existing identities, references, FTS and notifications without lo
  assert.equal(db.prepare("SELECT id FROM cards WHERE rowid IN(SELECT rowid FROM cards_fts WHERE cards_fts MATCH 'lighthouse')").get().id,100001);
  assert.equal(db.prepare("SELECT path FROM community_notifications WHERE event_key='event'").get().path,'/cards/100001');
  assert.equal(db.prepare("SELECT num FROM card_numbers WHERE source_role_id='private-source'").get().num,100002);
+ assert.equal(db.prepare("SELECT count(*) AS n FROM card_numbers WHERE source_role_id='frozen-source'").get().n,0);
  assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(),[]);
  assert.deepEqual(db.prepare("SELECT type,name FROM sqlite_schema WHERE type IN ('trigger','view','index') AND sql IS NOT NULL ORDER BY type,name").all(),before);
  assert.throws(()=>db.exec("UPDATE review_submissions SET status='pending' WHERE id='review'"),/submission already decided/);
