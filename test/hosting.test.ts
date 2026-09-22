@@ -7,7 +7,7 @@ import { getCard } from '../src/cards';
 import { upstream } from '../src/upstream';
 
 beforeEach(resetDb);
-afterEach(()=>{vi.restoreAllMocks();reviewOff();delete (env as {HOSTING_SERVICE_KEY?:string}).HOSTING_SERVICE_KEY;});
+afterEach(()=>{vi.restoreAllMocks();reviewOff();delete (env as {HOSTING_SERVICE_KEY?:string}).HOSTING_SERVICE_KEY;delete (env as {HOSTING_SERVICE_KEY_LUNATALK?:string}).HOSTING_SERVICE_KEY_LUNATALK;});
 it('reviews the sealed revision once, keeps published version during updates, and revokes on withdrawal',async()=>{
  const memberId=await makeMember(10001);
  const me=role({roleId:'draft',authorNumId:10001});
@@ -58,7 +58,7 @@ it('a failed seal remains retryable and concurrent retries leave only one privat
 });
 
 it.each(['harbor','lunatalk'] as const)('HTTP submits a private %s draft and exposes only approved hosted choices',async(provider)=>{
- (env as {HOSTING_SERVICE_KEY?:string}).HOSTING_SERVICE_KEY='fixture';reviewOn();
+ (env as {HOSTING_SERVICE_KEY?:string}).HOSTING_SERVICE_KEY='fixture';(env as {HOSTING_SERVICE_KEY_LUNATALK?:string}).HOSTING_SERVICE_KEY_LUNATALK='luna-fixture';reviewOn();
  vi.spyOn(upstream,'fetchMe').mockResolvedValue({accountNumId:10001});
  vi.spyOn(upstream,'fetchRole').mockImplementation(async(_env,id)=>{if(id==='private-draft')throw new Error('private draft');return role({roleId:id,authorNumId:10001})});
  vi.spyOn(hostGateway,'seal').mockImplementation(async(_env,_token,_id,workId,versionId)=>({workId,versionId,hostedRevisionId:'sealed-'+versionId}));

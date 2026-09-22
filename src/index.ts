@@ -6,7 +6,7 @@ import { moderationRoutes, reviewSummary } from "./moderation";
 import { communityMaintenance } from "./community/service";
 import { communityRoutes } from "./community/routes";
 import { libraryRoutes } from "./library";
-import { hostGateway, submitHosted, hostingDecision, beginHostedEdit } from "./hosting";
+import { hostGateway, hostingKey, submitHosted, hostingDecision, beginHostedEdit } from "./hosting";
 import { distributeHosted, distributeWorkVersions, seedSavedHostingTargets } from "./hosting-distribution";
 import { saveCommunityProfile, cleanAvatars } from "./community-profile";
 import { AVATAR_MAX_BYTES } from '../shared/avatar';
@@ -590,7 +590,7 @@ app.post('/v1/me/card-sync', async (c) => {
  // not prevent the approved immutable version from reaching the same destination.
  const [draft,version]=await Promise.allSettled([
   syncCard(c.env,{memberId:member.id,sourceProvider,sourceRoleId:b.sourceRoleId,sourceAccount:source.accountNumId,sourceToken:b.sourceToken,targetProvider,targetAccount:target.accountNumId,targetToken:b.targetToken,publish:b.publish===true,updatePublished:b.updatePublished===true,recreateMissing:b.recreateMissing===true}),
-  c.env.HOSTING_SERVICE_KEY?distributeWorkVersions(c.env,{memberId:member.id,sourceProvider,sourceRoleId:b.sourceRoleId,sourceAccount:source.accountNumId,sourceToken:b.sourceToken,targetProvider,targetAccount:target.accountNumId,targetToken:b.targetToken}):Promise.resolve(),
+  distributeWorkVersions(c.env,{memberId:member.id,sourceProvider,sourceRoleId:b.sourceRoleId,sourceAccount:source.accountNumId,sourceToken:b.sourceToken,targetProvider,targetAccount:target.accountNumId,targetToken:b.targetToken}),
  ]);
  if(version.status==='rejected')throw version.reason;
  if(draft.status==='rejected')throw draft.reason;
@@ -861,7 +861,7 @@ app.post("/v1/cards", async (c) => {
   const nsfw = body.nsfw;
 
   const provider = providerOf(c);
-  const hosted = !!c.env.HOSTING_SERVICE_KEY;
+  const hosted = !!hostingKey(c.env,provider);
   const role = hosted ? await hostGateway.read(c.env,bearer,roleId,provider) : await upstream.fetchRole(c.env, roleId, provider);
   if (role.authorNumId !== me.accountNumId) throw new HttpError(403, "not the author of this card");
   // 登記的人一定是成員：作者頁與卡片上的作者連結都靠成員的公開 ID
@@ -963,7 +963,7 @@ app.post("/v1/cards", async (c) => {
 app.post('/v1/cards/:roleId/edit',async(c)=>{
  const me=await requireAuthor(c);
  const provider=providerOf(c);
- if(!c.env.HOSTING_SERVICE_KEY)throw new HttpError(503,'hosting_unavailable');
+ if(!hostingKey(c.env,provider))throw new HttpError(503,'hosting_unavailable');
  const memberId=await resolveMember(c.env.DB,provider,me.accountNumId,Date.now());
  const result=await beginHostedEdit(c.env.DB,memberId,c.req.param('roleId'),Date.now(),provider);
  note(c,{event:'register',detail:result.resubmit?'review_superseded':'draft_edit'});
