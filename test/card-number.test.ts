@@ -1,3 +1,4 @@
+import { getCard } from '../src/cards';
 import { SELF, env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { bearer, resetDb, restoreUpstream, rolesOnMainSite, rolesOnProviders, whoAmI } from "./helpers";
@@ -85,7 +86,7 @@ describe("卡號", () => {
     rolesOnMainSite({ roleId: "role-a", authorNumId: 10001 });
     await register("role-a");
     const html = await (await SELF.fetch("https://c.test/cards/100001")).text();
-    expect(html).toContain('<link rel="canonical" href="https://hearthroom.club/cards/role-a">');
+    expect(html).toContain(`<link rel="canonical" href="https://hearthroom.club/cards/${(await getCard(env.DB, 'role-a'))!.id}">`);
   });
 });
 
