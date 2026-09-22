@@ -116,7 +116,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
     <RouterLink :to="lp('/library')" :aria-current="route.path === lp('/library') ? 'page' : undefined">{{ $t('library.title') }}</RouterLink>
     <RouterLink :to="lp('/mine')" :aria-current="route.path === lp('/mine') ? 'page' : undefined">{{ $t('nav.mine') }}</RouterLink>
   </nav>
-  <main id="main" tabindex="-1" :class="{ 'main--bare': route.meta.bare }"><RouterView /></main>
+  <main id="main" tabindex="-1" :class="{ 'site-main': !route.meta.bare, 'main--bare': route.meta.bare }"><RouterView /></main>
   <ConfirmDialog />
   <!-- 裝到主畫面的提示：對話與遊戲頁是全螢幕的，不在那裡打擾 -->
   <!-- 卡片 App 網域的頁全是 bare，但「加到主畫面」的提示卡就在那裡 -->
@@ -143,7 +143,11 @@ onMounted(() => document.addEventListener("keydown", onSlash));
 </template>
 
 <style scoped>
+.site-main { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
 .header {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
   position: sticky; top: 0; z-index: 30;
   /* 半透明加模糊：捲動時內容從底下滑過去，頁首有厚度而不是一條實心的橫桿 */
   background: color-mix(in srgb, var(--surface) 84%, transparent);
@@ -212,7 +216,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
 
 .footer__discord { display:inline-flex;align-items:center;justify-content:center;gap:var(--s-2);min-height:44px; }
 .footer__discord svg { width:1rem;height:1rem; }
-.footer { border-top: 1px solid var(--border); margin-top: var(--s-7); }
+.footer { padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); border-top: 1px solid var(--border); margin-top: var(--s-7); }
 .footer__inner {
   max-width: var(--page); margin: 0 auto; padding: var(--s-5);
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3) var(--s-5);
