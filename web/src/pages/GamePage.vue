@@ -14,7 +14,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute, useRouter } from "vue-router";
-import { fetchGameSpec, fetchRoleDetail } from "@/lib/api";
+import { fetchCard, fetchGameSpec, fetchRoleDetail } from "@/lib/api";
 import { UPSTREAM_API } from "@/lib/config";
 import { loginPath } from "@/lib/login-return";
 import { pageTitle } from "@/lib/i18n";
@@ -49,6 +49,10 @@ const { locale, lp } = useLocalePath();
 const { t } = useI18n();
 
 const roleId = computed(() => String(route.params.roleId || ""));
+const communityId = ref("");
+watch(roleId, async id => {
+  try { const card = await fetchCard(id, locale.value, {quiet:true}); if (roleId.value === id) communityId.value = String(card.num ?? card.id); } catch { communityId.value = ""; }
+}, {immediate:true});
 const canvas = ref<HTMLCanvasElement | null>(null);
 const labels = ref<HTMLDivElement | null>(null);
 const minimap = ref<HTMLCanvasElement | null>(null);
@@ -798,7 +802,7 @@ function installTestHooks() {
     </div>
 
     <header class="game__top">
-      <RouterLink class="btn btn--ghost btn--sm game__back" :to="lp(`/cards/${roleId}`)">
+      <RouterLink class="btn btn--ghost btn--sm game__back" :to="lp(communityId ? `/cards/${communityId}` : '/')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
         <span class="game__role">{{ role?.name || $t("game.title") }}</span>
       </RouterLink>

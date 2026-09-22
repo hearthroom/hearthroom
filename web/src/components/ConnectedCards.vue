@@ -96,7 +96,7 @@ watch(
         <p>{{ card.summary }}</p>
         <a
           class="btn btn--sm"
-          :href="platformPath(lp(can('editor',card.provider) ? `/cards/${card.sourceRoleId ?? card.roleId}/edit` : '/mine?single=1'),(card.sourceProvider ?? card.provider)!)"
+          :href="platformPath(lp(can('editor',card.provider) ? `/cards/${card.num ?? card.detailId}/edit` : '/mine?single=1'),(card.sourceProvider ?? card.provider)!)"
           >{{
             $t("linked.manageOn", { provider: providerName(card.provider!) })
           }}</a

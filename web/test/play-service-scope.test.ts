@@ -10,7 +10,7 @@ const mocks=vi.hoisted(()=>({stage:vi.fn(),preload:vi.fn(async()=>{}),token:vi.f
 vi.mock('../src/lib/stage-host',()=>({ensureStage:mocks.stage,preloadStage:mocks.preload,remergeStageMessages:vi.fn(),stageToasts:{list:[]}}));
 vi.mock('../src/lib/connections',()=>({accountToken:mocks.token,connectAccount:mocks.connect}));
 vi.mock('../src/lib/play-authorization',()=>({ensurePlayAuthorization:mocks.authorize}));
-vi.mock('../src/lib/api',async original=>({...await original<typeof import('../src/lib/api')>(),fetchMeAt:async()=>({accountNumId:22,nickName:'Second account',avatar:''})}));
+vi.mock('../src/lib/api',async original=>({...await original<typeof import('../src/lib/api')>(),fetchCard:async()=>({id:'100021',num:100021}),fetchMeAt:async()=>({accountNumId:22,nickName:'Second account',avatar:''})}));
 let app:ReturnType<typeof createApp>;let root:HTMLElement;
 afterEach(()=>{app?.unmount();root?.remove();});
 it('passes the selected service credentials to the player while keeping the community session',async()=>{

@@ -40,6 +40,7 @@ watch(() => route.query.q, (v) => { q.value = (v as string) ?? ""; });
 function search() {
   const term = q.value.trim();
   if (!term) return;
+  if (/^#?[1-9]\d{0,11}$/.test(term)) { router.push(lp(`/cards/${term.replace(/^#/, "")}`)); return; }
   router.push({ path: lp("/search"), query: { q: term } });
 }
 function onSlash(e: KeyboardEvent) {

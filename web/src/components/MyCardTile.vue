@@ -37,7 +37,7 @@ function onArtError() {
   <article class="card rise">
     <div class="card__poster">
       <!-- 封面連到卡片頁：編輯有自己的鍵在下面（作者回報 2026-09-16：點自己的卡跳進編輯頁） -->
-      <a :href="lp(`/cards/${card.workId ?? card.detailId ?? sourceId}`)" class="card__art">
+      <a :href="lp(`/cards/${card.num ?? card.detailId ?? card.workId ?? sourceId}`)" class="card__art">
         <img v-if="artwork" :key="artwork" :src="artwork" :alt="card.name" loading="lazy" @error="onArtError" />
         <div v-else class="card__void">
           <span :aria-label="card.name">{{ initial }}</span>
@@ -60,7 +60,7 @@ function onArtError() {
         <div class="card__actions">
           <!-- 自己的卡不用登記也能玩：登記是上榜，不是能不能對話的門檻 -->
           <button class="btn btn--sm" :aria-expanded="choosingPlay" @click="choosingPlay=!choosingPlay">{{ $t("mine.action.play") }}</button>
-          <a v-if="can('editor',source)" class="btn btn--sm" :href="platformPath(lp(`/cards/${sourceId}/edit`),source)">{{ $t("mine.action.edit") }}</a>
+          <a v-if="can('editor',source)" class="btn btn--sm" :href="platformPath(lp(`/cards/${card.num ?? card.detailId ?? sourceId}/edit`),source)">{{ $t("mine.action.edit") }}</a>
           <!-- 被駁回、離榜重審、被收回授權的卡：主鍵是「重新提交」，取消登記退到次要 -->
           <button
             v-if="card.registered && (card.status === 'rejected' || card.status === 'needs_review' || card.status === 'unshared')"

@@ -51,12 +51,12 @@ describe("卡號", () => {
     expect(byId.body.num).toBe(100001);
   });
 
-  it("撤銷登記後號碼查不到卡；再登記回來還是原來的號", async () => {
+  it("撤銷登記後卡號仍可遊玩；再登記回來沿用原號", async () => {
     rolesOnMainSite({ roleId: "role-a", authorNumId: 10001 }, { roleId: "role-b", authorNumId: 10001 });
     await register("role-a");
     await register("role-b");
     expect((await unregister("role-a")).status).toBe(204);
-    expect((await card("100001")).status).toBe(404);
+    expect((await card("100001")).body.status).toBe("unlisted");
 
     expect(((await (await register("role-a")).json()) as any).num).toBe(100001);
     expect((await card("100001")).body.sourceRoleId).toBe("role-a");
@@ -100,7 +100,7 @@ describe("作者看自己還沒上榜的卡", () => {
     expect(res.status).toBe(200);
     expect(res.body.name).toBe("草稿卡");
     expect(res.body.status).toBe("unlisted");
-    expect(res.body.num).toBeUndefined();
+    expect(res.body.num).toBe(100001);
     expect(res.cache).toBe("private, no-store");
   });
 

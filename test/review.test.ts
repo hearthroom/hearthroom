@@ -185,6 +185,7 @@ describe("審核佇列", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("Cache-Control")).toContain("no-store");
     const body = (await res.json()) as any;
+    expect(body.card.id).toBe("100001");
     expect(body.detail.document.customInstructions).toBe("自訂指示");
     expect(body.submission).toMatchObject({ kind: "first", required: 2, claimedByMe: true });
     expect(JSON.stringify(body)).not.toContain(String(AUTHOR));

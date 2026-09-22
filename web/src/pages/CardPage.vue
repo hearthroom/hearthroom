@@ -146,6 +146,11 @@ async function load() {
   }
   try {
     card.value = await fetchCard(id, lang);
+    if (card.value.num && id !== String(card.value.num)) {
+      const url = new URL(window.location.href);
+      url.pathname = lp(`/cards/${card.value.num}`);
+      window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+    }
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) missing.value = true;
     else if (err instanceof ApiError && err.status === 403 && err.code === "adult_content") { gated.value = true; card.value = null; }
@@ -161,7 +166,7 @@ async function load() {
   if (!shown) loadDetails(card.value.roleId, card.value.author.handle, lang, (card.value.provider as ProviderId) ?? currentProvider());
 }
 
-// 卡號是本站發的短數字（登記過的卡才有）：作者對外報卡、玩家在不能貼連結的地方靠它找卡
+// 卡號是本站發的永久數字（私有卡也有）：作者對外報卡、玩家在不能貼連結的地方靠它找卡
 //（作者回報 2026-09-16 要 ID；2026-09-17 嫌一長串，改成短號）。搜尋框輸入卡號就會開這張卡。
 // 拿不到剪貼簿就把它攤開讓人自己選。
 async function copyId() {
@@ -417,9 +422,9 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 .role__by-arrow { width: 16px; height: 16px; margin-left: auto; color: var(--text-3); flex: none; transition: transform var(--dur) var(--ease), color var(--dur) var(--ease); }
 .role__by:hover .role__by-arrow { transform: translateX(3px); color: var(--accent-text); }
 
-/* 卡片 ID：一整列可按，按了複製。字用等寬、可換行，手機上 UUID 才不會撐破側欄 */
+/* 永久卡號：整列可複製，觸控區域沿用共用按鈕高度。 */
 .role__cid {
-  display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0;
+  display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; min-height: var(--h-lg);
   margin: 0; padding: 6px 10px; border: 0; border-radius: var(--r-md);
   background: transparent; color: var(--text-2); font: inherit; text-align: left; cursor: pointer;
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease);

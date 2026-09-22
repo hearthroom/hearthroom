@@ -28,6 +28,7 @@ vi.mock("moonstage/stage", () => ({
 }));
 vi.mock("moonstage/stage.css", () => ({}));
 vi.mock("../src/lib/api", () => ({
+  fetchCard: vi.fn(async () => ({id:"100021",num:100021})),
   fetchMe: vi.fn(async () => ({ accountNumId: 1, nickName: "測試", avatar: "" })),
   fetchWallet: vi.fn(async () => ({ score: 0, tempScore: 0, plans: [] })),
   fetchSiteMe: vi.fn(async () => ({ handle: "abcdefgh", memberSince: 0, reviewer: false, identities: [] })),

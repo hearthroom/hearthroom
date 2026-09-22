@@ -25,6 +25,7 @@ import {
   getCard,
   getPublicCard,
   previewCard,
+  ensureCardNumber,
   listAuthors,
   listCards,
   toAuthor,
@@ -395,7 +396,7 @@ async function ownCardView(c: Context<{ Bindings: Env; Variables: { ev: Pending 
   if (CARD_NUMBER.test(id)) return null;
   const role = await (provider==='harbor'?hostGateway.read(c.env,bearer,id):upstream.fetchRole(c.env,id,provider)).catch(() => null);
   if (!role || role.authorNumId !== me.accountNumId) return null;
-  return previewCard(role, lang(c), provider);
+  return previewCard(role, lang(c), provider, await ensureCardNumber(c.env.DB,provider,role.roleId));
 }
 
 app.get("/v1/cards/:id", async (c) => {
@@ -510,6 +511,22 @@ app.get("/v1/cards/:id/:file{(icon-[0-9]+|touch-icon)\\.png}", async (c) => {
  * 這條路刻意收到伺服器端而不是讓前端直接打上游：只有在這裡才有地方放邊緣快取，
  * 也才能把回應裁成畫面真的需要的欄位。細節見 src/mine.ts。
  */
+app.post('/v1/me/card-identities', async c => {
+  const me = await requireAuthor(c);
+  const provider = providerOf(c);
+  const body = await c.req.json().catch(() => null) as {roleId?:unknown}|null;
+  if (typeof body?.roleId !== 'string' || !body.roleId || body.roleId.length > 128) throw new HttpError(400,'invalid_arguments');
+  const token = c.req.header('Authorization')!.replace(/^Bearer\s+/i,'');
+  const role = await hostGateway.read(c.env,token,body.roleId,provider);
+  if (role.authorNumId !== me.accountNumId) throw new HttpError(403,'not the author of this card');
+  if (role.creationMethod !== CREATION_METHOD) throw new HttpError(403,'only cards created on this site can be listed');
+  const work = await workFor(c.env.DB,provider,role.roleId);
+  const sourceProvider = work?.source_provider ?? provider;
+  const sourceRoleId = work?.source_role_id ?? role.roleId;
+  const num = await ensureCardNumber(c.env.DB,sourceProvider,sourceRoleId);
+  return c.json({id:String(num),num,provider:sourceProvider,sourceRoleId},200,{'Cache-Control':'private, no-store'});
+});
+
 app.get("/v1/me/cards", async (c) => {
   const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1];
   if (!bearer) throw new HttpError(401, "missing bearer token");
@@ -531,8 +548,8 @@ app.get("/v1/me/cards", async (c) => {
   c.header("Cache-Control", "private, no-store");
   const items = await Promise.all(body.items.map(async item => {
     const work = await workFor(c.env.DB, provider, item.roleId);
-    const registered = item.registered ? await getCard(c.env.DB,item.roleId,provider) : null;
-    return {...item, detailId:registered?.id, provider, workId:work?.id, sourceProvider:work?.source_provider, sourceRoleId:work?.source_role_id};
+    const num = await ensureCardNumber(c.env.DB,work?.source_provider ?? provider,work?.source_role_id ?? item.roleId);
+    return {...item, num, detailId:String(num), provider, workId:work?.id, sourceProvider:work?.source_provider, sourceRoleId:work?.source_role_id};
   }));
   return c.json({...body, items});
 });
@@ -1063,7 +1080,7 @@ app.get("/v1/review/:id/detail", async (c) => {
         claimedByMe: s.claimed_by === member.id, claimGeneration:s.claim_generation, required: STAMPS_REQUIRED[s.kind],
         stamps: stamps.results.map((st) => ({ verdict: st.verdict, note: st.note, at: st.created_at })),
       },
-      card: { id: s.card_id, roleId: s.source_role_id },
+      card: { id: String(s.card_id), roleId: s.source_role_id },
       detail,
     },
     200,

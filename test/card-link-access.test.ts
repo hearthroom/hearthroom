@@ -36,7 +36,7 @@ it('resolves a neutral work link and its available copies', async () => {
   await env.DB.prepare("INSERT INTO work_copies(work_id,provider,external_id,role_id,status,updated_at) VALUES ('work','lunatalk',11,'copy','synced',1)").run();
   const card = await read('/v1/cards/work');
   expect(card.status).toBe(200);
-  expect(await card.json()).toMatchObject({ id: 'work', roleId: 'draft', provider: 'harbor' });
+  expect(await card.json()).toMatchObject({ id: '100001', roleId: 'draft', provider: 'harbor' });
   expect((await (await read('/v1/cards/work/platforms')).json() as any).platforms).toHaveLength(2);
 });
 
@@ -74,5 +74,5 @@ it('keeps a global card identity authoritative over a colliding work alias', asy
   await env.DB.prepare("INSERT INTO works VALUES (?,'member','lunatalk','other',1)").bind(row!.id).run();
   const res=await read(`/v1/cards/${row!.id}`);
   expect(res.status).toBe(200);
-  expect(await res.json()).toMatchObject({id:row!.id,provider:'harbor',roleId:'draft'});
+  expect(await res.json()).toMatchObject({id:String(row!.id),provider:'harbor',roleId:'draft'});
 });

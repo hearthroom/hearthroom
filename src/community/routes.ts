@@ -361,7 +361,7 @@ app.post("/v1/me/community/cases", async (c) => {
         "\n\n" +
         site(c.env) +
         "/cards/" +
-        String(b.card) +
+        String(card.id) +
         "\nWork: " +
         (canonical?.work_id ?? "") +
         "\nVersion: " +

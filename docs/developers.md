@@ -147,6 +147,14 @@ Connect at most one account per provider. LunaTalk and HarperHarbor may be conne
 
 These are **HearthRoom community endpoints** under `/v1`, separate from the provider Open API:
 
+Community card URLs use permanent numeric card numbers, for example `/cards/100001`.
+Card responses return the same identity as `id: "100001"` and `num: 100001`.
+Numbers are allocated independently of publication, including on an authenticated
+draft save or inventory read. Unlisted cards can be shared by number: visitors may
+read the host-authorized public presentation and play, but receive no authoring
+permissions. They do not appear in boards or recommendations. Provider `roleId`
+and `sourceRoleId` remain separate provider locators for playing and editing.
+
 | Endpoint | Contract |
 |---|---|
 | `GET /v1/me` | Returns the community profile, including `displayName`, `bio`, `avatarUrl` and linked identities. |
@@ -155,7 +163,8 @@ These are **HearthRoom community endpoints** under `/v1`, separate from the prov
 | `POST /v1/me/connections/preview` | Current bearer plus `X-Provider`, or managed site cookie with same-origin `Origin` and `X-Hearthroom-Request: 1`; body `{provider, token}` proves the additional account. Read-only source/target community preview. |
 | `POST /v1/me/connections` | Same proofs plus `{keepHandle, sourceHandle, targetHandle}` from preview. `keepHandle` must equal the current community's `sourceHandle`. An existing target must be provably empty and explicitly confirmed; its identity moves to the retained community and its empty community record is deleted atomically. SaaS accounts/assets are preserved. Managed-mode credential promotion commits in the same D1 transaction, guarded by the pending attempt, source session and credential generation. Stale previews fail closed. |
 | `DELETE /v1/me/connections/:provider` | Always rejects with 409 `connection_permanent`; identity unlinking is unavailable. Stopping OAuth authorization is a separate action under `/v1/auth/disconnect`. |
-| `GET /v1/me/cards` | List on the explicitly requested provider. Items include provider, portrait `backgroundUrl` (nullable; older cached responses may omit it), `avatarUrl`, and, when synchronized, canonical work/source identifiers. Workspace artwork prefers the portrait background and falls back to the avatar. The client combines connected lists and groups copies. |
+| `GET /v1/me/cards` | List on the explicitly requested provider. Every item includes permanent `num` and numeric-string `detailId`, including private cards. Items also include provider, portrait `backgroundUrl`, `avatarUrl`, and, when synchronized, work/source identifiers. The client combines connected lists and groups copies. |
+| `POST /v1/me/card-identities` | Bearer plus `X-Provider`; body `{roleId}`. Verifies source ownership and Hearthroom creation origin, then returns `{id, num, provider, sourceRoleId}`. Repeated calls keep the same number. Does not publish or consume publication quota. |
 | `GET /v1/me/card-copies/:roleId` | Verifies ownership on the requested provider, then returns synchronization states. |
 | `POST /v1/me/card-sync` | Body `{sourceProvider, sourceRoleId, sourceToken, targetProvider, targetToken, publish, updatePublished?, recreateMissing?}`. Both accounts must belong to the authenticated community; the source and existing destination must be owned by those accounts. Tokens are transient. `updatePublished: true` explicitly permits returning an unchanged published destination to draft before updating it; independently edited or pending-review copies remain protected. `recreateMissing: true` explicitly requests a new private copy only after the stored destination returns `404 role_not_found` on its card read. It requires `publish: false`, resets only the destination mapping, and never restores or deletes the old card or resources. Network, authorization and resource errors do not trigger replacement. |
 | `GET /v1/cards/:cardId/comments?page=` | Public. Top-level comments of a listed card, newest first, 20 per page, each with up to three replies (most liked first). Adult cards need the same `?nsfw=1` plus token as the card page. |
@@ -164,7 +173,7 @@ These are **HearthRoom community endpoints** under `/v1`, separate from the prov
 | `POST /v1/cards/:cardId/comments` | Member. Body `{content, rootId?, parentId?}`; 1–500 characters; six comments per member per minute (`429 comment_rate_limited`). The "replying to" name is resolved by the site. |
 | `DELETE /v1/comments/:id` | The commenter, the card's author, or a site reviewer. Deleting a top-level comment removes its replies. |
 | `PUT` / `DELETE /v1/comments/:id/like` | Member. One like per member per comment; repeats are no-ops. |
-| `GET /v1/cards/:roleId/platforms` | Public copies of an approved community card, after community age gating and upstream accessibility checks. `playable` distinguishes storage from an actual runtime. |
+| `GET /v1/cards/:cardId/platforms` | Available copies of a numbered card, including unlisted cards, after community age gating, moderation and upstream accessibility checks. `playable` distinguishes storage from an actual runtime. |
 
 A duplicate empty community is resolved by signing into the intended community and connecting the other verified SaaS account. Prior profile edits, preferences, community activity, publication history, owned works/copies, game saves or upstream cards prevent absorption. Older profiles without reliable edit history are conservatively protected by the migration. A different account on an already-connected provider is rejected. Populated-account merging and detaching identities are outside this release.
 

@@ -1,3 +1,4 @@
+import { ensureCardNumber } from "../src/cards";
 import { SELF, env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -30,8 +31,8 @@ describe("我的卡片", () => {
   it("回傳自己的卡，並標出哪些已登記", async () => {
     await env.DB.prepare(
       `INSERT INTO cards (id, source_role_id, author_num_id, names, summaries, tags, search_text, registered_at, last_synced_at)
-       VALUES ('x','a1',10001,'{}','{}','[]','',1,1)`,
-    ).run();
+       VALUES (?,'a1',10001,'{}','{}','[]','',1,1)`,
+    ).bind(await ensureCardNumber(env.DB,'lunatalk','a1')).run();
 
     const { status, body } = await mine();
     expect(status).toBe(200);
@@ -57,7 +58,7 @@ describe("我的卡片", () => {
   it("只回傳畫面用得到的欄位", async () => {
     const { body } = await mine();
     expect(Object.keys(body.items[0]).sort()).toEqual(
-      ["avatarUrl", "backgroundUrl", "game", "name", "provider", "registered", "roleId", "summary", "talkNum", "visibility", "zone"],
+      ["avatarUrl", "backgroundUrl", "detailId", "game", "name", "num", "provider", "registered", "roleId", "summary", "talkNum", "visibility", "zone"],
     );
   });
 });
@@ -135,8 +136,8 @@ describe("快取", () => {
 
     await env.DB.prepare(
       `INSERT INTO cards (id, source_role_id, author_num_id, names, summaries, tags, search_text, registered_at, last_synced_at)
-       VALUES ('x','a1',10001,'{}','{}','[]','',1,1)`,
-    ).run();
+       VALUES (?,'a1',10001,'{}','{}','[]','',1,1)`,
+    ).bind(await ensureCardNumber(env.DB,'lunatalk','a1')).run();
 
     const after = await mine();
     expect(after.cache).toBe("hit");
@@ -160,7 +161,7 @@ describe("篩選", () => {
       await env.DB.prepare(
         `INSERT INTO cards (id, source_role_id, author_num_id, names, summaries, tags, search_text, registered_at, last_synced_at)
          VALUES (?, ?, 10001, '{"zh":"登記過的"}', '{"zh":""}', '[]', '', 1, 1)`,
-      ).bind(id, roleId).run();
+      ).bind(await ensureCardNumber(env.DB,'lunatalk',roleId), roleId).run();
     }
   });
 
