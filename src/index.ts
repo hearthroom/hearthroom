@@ -1009,23 +1009,26 @@ app.post("/v1/review/:id/claim", async (c) => {
   }
   const s = await claimSubmission(c.env.DB, c.req.param("id"), member.id, Date.now());
   note(c, { event: "review_claim", subject: s.source_role_id });
-  return c.json({ id: s.id, claimedAt: s.claimed_at });
+  return c.json({ id: s.id, claimedAt: s.claimed_at, generation:s.claim_generation });
 });
 
 app.post("/v1/review/:id/release", async (c) => {
   const member = await requireReviewer(c);
-  await releaseSubmission(c.env.DB, c.req.param("id"), member.id);
+  const body=await c.req.json().catch(()=>({})) as {generation?:unknown};
+  if(typeof body.generation!=='string'||!body.generation)throw new HttpError(409,'claim changed');
+  await releaseSubmission(c.env.DB, c.req.param("id"), member.id,body.generation);
   return c.body(null, 204);
 });
 
 app.post("/v1/review/:id/stamp", async (c) => {
   const member = await requireReviewer(c);
-  const body = (await c.req.json().catch(() => ({}))) as { verdict?: unknown; note?: unknown };
+  const body = (await c.req.json().catch(() => ({}))) as { verdict?: unknown; note?: unknown; generation?:unknown };
   const verdict = body.verdict === "approve" || body.verdict === "reject" ? body.verdict : null;
   if (!verdict) throw new HttpError(400, "verdict must be approve or reject");
   const noteText = typeof body.note === "string" ? body.note : "";
   if (verdict === "reject" && !noteText.trim()) throw new HttpError(400, "a rejection needs a note for the author");
-  const result = await stampSubmission(c.env.DB, { submissionId: c.req.param("id"), memberId: member.id, verdict, note: noteText, now: Date.now() });
+  if(typeof body.generation!=='string'||!body.generation)throw new HttpError(409,'claim changed');
+  const result = await stampSubmission(c.env.DB, { submissionId: c.req.param("id"), memberId: member.id, verdict, note: noteText, now: Date.now(), generation:body.generation });
   note(c, { event: "review_stamp", subject: result.submission.source_role_id, detail: verdict === "reject" ? "reject" : result.cardStatus === "approved" ? "approved" : "approve" });
   return c.json({
     id: result.submission.id,
@@ -1040,7 +1043,8 @@ app.get("/v1/review/:id/detail", async (c) => {
   const member = await requireReviewer(c);
   const s = await getSubmission(c.env.DB, c.req.param("id"));
 
-  if(s.status!=='pending'||s.claimed_by!==member.id||s.claimed_at===null||Date.now()-s.claimed_at>=CLAIM_TTL_MS)throw new HttpError(409,'claim this submission first');
+  if(s.status!=='pending')throw new HttpError(410,'review no longer active');
+  if(s.claimed_by!==member.id||s.claimed_at===null||Date.now()-s.claimed_at>=CLAIM_TTL_MS)throw new HttpError(409,'claim this submission first');
   if(s.nsfw===1&&(await memberNsfw(c.env.DB,member.id)).ageVerifiedAt===null)throw new HttpError(403,'age_verification_required');
   let detail = await loadSnapshot(c.env.DB, s.id);
   if(!detail&&s.content_hash.startsWith('version:'))throw new HttpError(404,'snapshot not found');
@@ -1073,7 +1077,7 @@ app.get("/v1/review/:id/detail", async (c) => {
       submission: {
         id: s.id, kind: s.kind, status: s.status, contentHash: s.content_hash, submittedAt: s.submitted_at,
         nsfw: s.nsfw === 1,
-        claimedByMe: s.claimed_by === member.id, required: STAMPS_REQUIRED[s.kind],
+        claimedByMe: s.claimed_by === member.id, claimGeneration:s.claim_generation, required: STAMPS_REQUIRED[s.kind],
         stamps: stamps.results.map((st) => ({ verdict: st.verdict, note: st.note, at: st.created_at })),
       },
       card: { id: s.card_id, roleId: s.source_role_id },

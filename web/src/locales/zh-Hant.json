@@ -1499,5 +1499,10 @@
   "badgeWall.icon.lantern": "提燈",
   "badgeWall.icon.star": "星星",
   "badgeWall.icon.crown": "皇冠",
-  "badgeWall.icon.award": "勳章"
+  "badgeWall.icon.award": "勳章",
+  "community.notices.review_reminder": "你認領的作品即將到期，請繼續審核或放回待審清單",
+  "community.notices.review_reminder_expired": "這則認領提醒已失效",
+  "review.inactive": "這一輪審核已結束或被新版本取代，請回待審清單查看目前進度。",
+  "review.backToQueue": "返回待審清單",
+  "review.claimChanged": "認領狀態已變更，請重新整理頁面後再試。"
 }

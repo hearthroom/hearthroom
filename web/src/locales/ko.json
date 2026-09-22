@@ -1499,5 +1499,10 @@
   "badgeWall.icon.lantern": "등불",
   "badgeWall.icon.star": "별",
   "badgeWall.icon.crown": "왕관",
-  "badgeWall.icon.award": "메달"
+  "badgeWall.icon.award": "메달",
+  "community.notices.review_reminder": "검토 담당 시간이 곧 만료됩니다. 검토를 계속하거나 대기 목록으로 돌려보내세요.",
+  "community.notices.review_reminder_expired": "이 검토 알림은 더 이상 유효하지 않습니다",
+  "review.inactive": "이 검토는 종료되었거나 새 버전으로 대체되었습니다. 검토 목록에서 현재 상태를 확인하세요.",
+  "review.backToQueue": "검토 목록으로 돌아가기",
+  "review.claimChanged": "담당 상태가 변경되었습니다. 페이지를 새로고침한 후 다시 시도하세요."
 }

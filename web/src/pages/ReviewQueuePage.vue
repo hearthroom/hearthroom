@@ -52,7 +52,8 @@ async function claim(item: ReviewQueueItem) {
   try {
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
-    await claimReview(item.id, token);
+    const claimed=await claimReview(item.id, token);
+    item.claimGeneration=claimed.generation;
     item.claim = "mine";
   } catch (err) {
     error.value = err instanceof Error ? err.message : t("state.actionFailed");
@@ -67,7 +68,7 @@ async function release(item: ReviewQueueItem) {
   try {
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
-    await releaseReview(item.id, token);
+    await releaseReview(item.id, token,item.claimGeneration);
     item.claim = "free";
   } catch (err) {
     error.value = err instanceof Error ? err.message : t("state.actionFailed");

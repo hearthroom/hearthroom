@@ -1499,5 +1499,10 @@
   "badgeWall.icon.lantern": "ランタン",
   "badgeWall.icon.star": "星",
   "badgeWall.icon.crown": "王冠",
-  "badgeWall.icon.award": "メダル"
+  "badgeWall.icon.award": "メダル",
+  "community.notices.review_reminder": "担当の有効期限が近づいています。審査を続けるか、一覧に戻してください。",
+  "community.notices.review_reminder_expired": "この担当通知は無効になりました",
+  "review.inactive": "この審査は終了したか、新しい版に置き換えられました。審査一覧で現在の状況を確認してください。",
+  "review.backToQueue": "審査一覧に戻る",
+  "review.claimChanged": "担当状況が変わりました。ページを更新して再度お試しください。"
 }

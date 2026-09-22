@@ -24,7 +24,7 @@ const api = vi.hoisted(() => ({
     ],
     claimTtlMs: 2_700_000,
   })),
-  claimReview: vi.fn(async () => ({ id: "s1", claimedAt: Date.now() })),
+  claimReview: vi.fn(async () => ({ id: "s1", claimedAt: Date.now(), generation: "claim-v2" })),
   releaseReview: vi.fn(async () => undefined),
   fetchReviewMe: vi.fn(async () => ({ reviewer: true })),
   ApiError: class ApiError extends Error { constructor(readonly status: number, message: string, readonly code = "") { super(message); } },
@@ -71,11 +71,13 @@ describe("審核佇列頁", () => {
     expect(buttons[0]!.disabled).toBe(false);
   });
 
-  it("領取：打 claim，畫面改成「放回」", async () => {
+  it("領取後放回使用該次認領的 generation", async () => {
     const claimBtn = [...host.querySelectorAll("button")].find((b) => b.textContent?.trim() === i18n.global.t("review.action.claim") && !b.disabled)!;
     claimBtn.click();
     await vi.waitFor(() => expect(api.claimReview).toHaveBeenCalledWith("s1", "tok"));
     await vi.waitFor(() => expect(host.textContent).toContain(i18n.global.t("review.action.release")));
+    [...host.querySelectorAll("button")].find(b=>b.textContent?.trim()===i18n.global.t("review.action.release"))!.click();
+    await vi.waitFor(()=>expect(api.releaseReview).toHaveBeenCalledWith("s1","tok","claim-v2"));
   });
 });
 

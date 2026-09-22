@@ -54,7 +54,7 @@ async function load() {
     document.title = pageTitle(`${t("review.detail.title")} · ${data.value.detail.document.roleName}`);
   } catch (err) {
     needsClaim.value=err instanceof ApiError && err.status===409 && err.message==="claim this submission first";
-    error.value = needsClaim.value ? t("review.claimFirst") : err instanceof Error ? err.message : t("state.loadFailed");
+    error.value = needsClaim.value ? t("review.claimFirst") : err instanceof ApiError && err.status===410 ? t("review.inactive") : err instanceof Error ? err.message : t("state.loadFailed");
   } finally {
     loading.value = false;
   }
@@ -67,7 +67,7 @@ async function claim() {
     await claimReview(id.value, await token());
     await load();
   } catch (err) {
-    error.value = err instanceof Error ? err.message : t("state.actionFailed");
+    error.value = err instanceof ApiError && err.status===409 ? t("review.claimChanged") : err instanceof Error ? err.message : t("state.actionFailed");
   } finally {
     busy.value = false;
   }
@@ -76,10 +76,10 @@ async function claim() {
 async function release() {
   busy.value = true;
   try {
-    await releaseReview(id.value, await token());
+    await releaseReview(id.value, await token(),data.value?.submission.claimGeneration);
     if (data.value) data.value.submission.claimedByMe = false;
   } catch (err) {
-    error.value = err instanceof Error ? err.message : t("state.actionFailed");
+    error.value = err instanceof ApiError && err.status===409 ? t("review.claimChanged") : err instanceof Error ? err.message : t("state.actionFailed");
   } finally {
     busy.value = false;
   }
@@ -93,7 +93,7 @@ async function stamp(verdict: "approve" | "reject") {
   busy.value = true;
   error.value = "";
   try {
-    const res = await stampReview(id.value, await token(), { verdict, note: note.value });
+    const res = await stampReview(id.value, await token(), { verdict, note: note.value, generation:data.value?.submission.claimGeneration });
     done.value = verdict === "reject" ? t("review.done.rejected") : res.cardStatus === "approved" ? t("review.done.approved") : t("review.done.approve");
     if (data.value) {
       data.value.submission.status = res.status;
@@ -101,7 +101,7 @@ async function stamp(verdict: "approve" | "reject") {
       data.value.submission.stamps.push({ verdict, note: note.value, at: Date.now() });
     }
   } catch (err) {
-    error.value = err instanceof Error ? err.message : t("state.actionFailed");
+    error.value = err instanceof ApiError && err.status===409 ? t("review.claimChanged") : err instanceof Error ? err.message : t("state.actionFailed");
   } finally {
     busy.value = false;
   }
@@ -113,6 +113,7 @@ onMounted(() => { void load(); });
 <template>
   <section class="review-detail">
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
+    <RouterLink v-if="error && !data" :to="lp('/review')">{{ $t("review.backToQueue") }}</RouterLink>
     <button v-if="needsClaim" class="btn btn--primary" :disabled="busy" @click="claim">{{ $t("review.action.claim") }}</button>
     <p v-if="data?.detail.partial" class="notice" role="status">{{ $t("review.partial") }}</p>
     <p v-if="done" class="notice" role="status">{{ done }} <RouterLink :to="lp('/review')">← {{ $t("review.eyebrow") }}</RouterLink></p>

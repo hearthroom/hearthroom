@@ -30,6 +30,7 @@ export interface SubmissionRow {
   submitted_at: number;
   claimed_by: string | null;
   claimed_at: number | null;
+  claim_generation: string;
   decided_at: number | null;
   note: string;
   /** 作者提交這一版時宣告的分級：1＝成人內容。審核人對照內容，不符就駁回。 */
@@ -83,13 +84,14 @@ export interface QueueItem {
   claim: "free" | "mine" | "other";
   /** 我已經蓋過章：不能再領、也不能再蓋 */
   stampedByMe: boolean;
+  claimGeneration?: string;
 }
 
 /** 佇列：所有待審的單，最舊的在前。不帶作者。 */
 export async function listQueue(db: D1Database, memberId: string, now: number, lang: string): Promise<QueueItem[]> {
   const rows = await db
     .prepare(
-      `SELECT s.id, s.kind, s.submitted_at, s.claimed_by, s.claimed_at, s.nsfw,
+      `SELECT s.id, s.kind, s.submitted_at, s.claimed_by, s.claimed_at, s.claim_generation, s.nsfw,
               c.id AS card_id, c.source_role_id,
               COALESCE(json_extract(v.public_role,'$.names'),c.names) AS names,
               COALESCE(json_extract(v.public_role,'$.summaries'),c.summaries) AS summaries,
@@ -101,7 +103,7 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
     )
     .bind(memberId)
     .all<{
-      id: string; kind: SubmissionKind; submitted_at: number; claimed_by: string | null; claimed_at: number | null;
+      id: string; kind: SubmissionKind; submitted_at: number; claimed_by: string | null; claimed_at: number | null; claim_generation: string;
       card_id: string; source_role_id: string; names: string; summaries: string; avatar_url: string | null; zone: string; tags: string;
       approvals: number; mine: number; nsfw: number;
     }>();
@@ -122,6 +124,7 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
     nsfw: r.nsfw === 1,
     claim: claimIsLive(r, now) ? (r.claimed_by === memberId ? "mine" : "other") : "free",
     stampedByMe: r.mine > 0,
+    ...(r.claimed_by===memberId && claimIsLive(r,now)?{claimGeneration:r.claim_generation}:{}),
   }));
 }
 
@@ -145,19 +148,21 @@ export async function claim(db: D1Database, submissionId: string, memberId: stri
   if (row.status !== "pending") throw new HttpError(409, "submission already decided");
   if (await hasStamped(db, submissionId, memberId)) throw new HttpError(409, "you already reviewed this submission");
   if (claimIsLive(row, now) && row.claimed_by !== memberId) throw new HttpError(409, "claimed by another reviewer");
-  await db
-    .prepare("UPDATE review_submissions SET claimed_by = ?, claimed_at = ? WHERE id = ?")
-    .bind(memberId, now, submissionId)
-    .run();
-  return getSubmission(db, submissionId);
+  const result=await db.prepare(`UPDATE review_submissions SET claimed_by=?,claimed_at=?,claim_generation=?
+    WHERE id=? AND status='pending' AND claim_generation=?
+    AND (claimed_by IS NULL OR claimed_at<=? OR claimed_by=?)
+    AND NOT EXISTS(SELECT 1 FROM review_stamps WHERE submission_id=? AND member_id=?) RETURNING *`)
+    .bind(memberId,now,crypto.randomUUID(),submissionId,row.claim_generation,now-CLAIM_TTL_MS,memberId,submissionId,memberId).first<SubmissionRow>();
+  if(!result)throw new HttpError(409,'claim changed');
+  return result;
 }
 
 /** 放回。只有領的人能放；不是自己領的當成功（冪等）。 */
-export async function release(db: D1Database, submissionId: string, memberId: string): Promise<void> {
-  await db
-    .prepare("UPDATE review_submissions SET claimed_by = NULL, claimed_at = NULL WHERE id = ? AND claimed_by = ?")
-    .bind(submissionId, memberId)
-    .run();
+export async function release(db: D1Database, submissionId: string, memberId: string, generation?: string): Promise<void> {
+  const row=await getSubmission(db,submissionId);
+  if(generation!==undefined && row.claimed_by===memberId && row.claim_generation!==generation)throw new HttpError(409,'claim changed');
+  await db.prepare("UPDATE review_submissions SET claimed_by=NULL,claimed_at=NULL,claim_generation='' WHERE id=? AND claimed_by=? AND claim_generation=?")
+    .bind(submissionId,memberId,generation??row.claim_generation).run();
 }
 
 export interface StampResult {
@@ -173,20 +178,21 @@ export interface StampResult {
  */
 export async function stamp(
   db: D1Database,
-  input: { submissionId: string; memberId: string; verdict: "approve" | "reject"; note: string; now: number },
+  input: { submissionId: string; memberId: string; verdict: "approve" | "reject"; note: string; now: number; generation?: string },
 ): Promise<StampResult> {
   const row = await getSubmission(db, input.submissionId);
   if (row.status !== "pending") throw new HttpError(409, "submission already decided");
   if (!claimIsLive(row, input.now) || row.claimed_by !== input.memberId) throw new HttpError(409, "claim this submission first");
+  if (input.generation!==undefined && input.generation!==row.claim_generation) throw new HttpError(409,'claim changed');
   if (await hasStamped(db, input.submissionId, input.memberId)) throw new HttpError(409, "you already reviewed this submission");
   const note = input.note.trim().slice(0, 2000);
 
   const required = STAMPS_REQUIRED[row.kind];
   const writes: D1PreparedStatement[] = [
     db
-      .prepare("INSERT INTO review_stamps (submission_id, member_id, verdict, note, created_at) VALUES (?, ?, ?, ?, ?)")
-      .bind(row.id, input.memberId, input.verdict, note, input.now),
-    db.prepare("UPDATE review_submissions SET claimed_by = NULL, claimed_at = NULL WHERE id = ?").bind(row.id),
+      .prepare("INSERT INTO review_stamps (submission_id, member_id, verdict, note, created_at, claim_generation) VALUES (?, ?, ?, ?, ?, ?)")
+      .bind(row.id, input.memberId, input.verdict, note, input.now, row.claim_generation),
+    db.prepare("UPDATE review_submissions SET claimed_by = NULL, claimed_at = NULL, claim_generation = '' WHERE id = ?").bind(row.id),
   ];
 
   const prior = await db
@@ -219,7 +225,10 @@ export async function stamp(
       writes.push(db.prepare("UPDATE cards SET status = 'approved', reviewed_hash = ? WHERE id = ?").bind(row.content_hash, row.card_id));
     }
   }
-  await db.batch(writes);
+  try { await db.batch(writes); } catch (error) {
+    if(error instanceof Error && error.message.includes('claim changed')) throw new HttpError(409,'claim changed');
+    throw error;
+  }
   const finalCard = await db.prepare("SELECT status FROM cards WHERE id=?").bind(row.card_id).first<{status:CardStatus}>();
   return { submission: await getSubmission(db, row.id), cardStatus:finalCard?.status ?? cardStatus, approvals, required };
 }

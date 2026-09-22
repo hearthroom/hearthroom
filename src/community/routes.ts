@@ -1,3 +1,4 @@
+import { pendingReviewDeliveries, leaseReviewDelivery, checkReviewDelivery, finishReviewDelivery, reviewNotificationEligible } from './review-notifications';
 import { publicIdentities } from './public-cache';
 import { badgeCollection, setFeaturedBadges, createEventBadge, changeBadgeAward, badgeManagement } from './badges';
 import { syncAppearance, saveAppearance, appearanceMedia } from './appearance';
@@ -252,9 +253,9 @@ app.get("/v1/community/discord/callback", async (c) => {
 app.get("/v1/me/community/notifications", async (c) => {
   const m = await requireMember(c);
   const rows = await c.env.DB.prepare(
-    "SELECT id,kind,path,created_at,read_at FROM community_notifications WHERE member_id=? ORDER BY created_at DESC LIMIT 50",
+    `SELECT n.id,CASE WHEN ${reviewNotificationEligible} THEN n.kind ELSE 'review_reminder_expired' END AS kind,CASE WHEN ${reviewNotificationEligible} THEN n.path ELSE '/review' END AS path,n.created_at,n.read_at FROM community_notifications n WHERE n.member_id=? ORDER BY n.created_at DESC LIMIT 50`,
   )
-    .bind(m.id)
+    .bind(Date.now(),Date.now(),m.id)
     .all();
   return c.json({ items: rows.results });
 });
@@ -422,6 +423,11 @@ app.post("/internal/community/:operation", async (c) => {
     op = c.req.param("operation");
   if (b.guild !== c.env.COMMUNITY_GUILD_ID)
     throw new HttpError(403, "community_guild");
+  if (['review-pending-v2','review-project-v2','review-check-v2','review-ack-v2'].includes(op)) enabled(c.env);
+  if (op === 'review-pending-v2') return c.json(await pendingReviewDeliveries(c.env.DB,Date.now()));
+  if (op === 'review-project-v2') return c.json(await leaseReviewDelivery(c.env.DB,String(b.id),String(b.channel),String(b.lang??'zh-Hant'),Date.now()));
+  if (op === 'review-check-v2') return c.json({valid:await checkReviewDelivery(c.env.DB,String(b.id),String(b.lease),Number(b.revision),Date.now())});
+  if (op === 'review-ack-v2') return c.json(await finishReviewDelivery(c.env.DB,b,Date.now()));
   if (op === "appearance-sync") {
     enabled(c.env);
     return c.json({accepted:await syncAppearance(c.env,b)});
@@ -482,9 +488,9 @@ app.post("/internal/community/:operation", async (c) => {
       .bind(Date.now(), Date.now())
       .all();
     const notifications = await c.env.DB.prepare(
-      "SELECT n.id FROM community_notifications n JOIN community_preferences p ON p.member_id=n.member_id AND p.discord_dm=1 AND p.notifications=1 JOIN discord_links l ON l.member_id=n.member_id AND l.state='active' WHERE n.delivered=0 AND n.retry_at<? AND (n.author_id IS NULL OR EXISTS(SELECT 1 FROM member_follows f WHERE f.member_id=n.member_id AND f.author_id=n.author_id)) ORDER BY n.created_at LIMIT 10",
+      `SELECT n.id FROM community_notifications n JOIN community_preferences p ON p.member_id=n.member_id AND p.discord_dm=1 AND p.notifications=1 JOIN discord_links l ON l.member_id=n.member_id AND l.state='active' WHERE n.delivered=0 AND n.retry_at<? AND (n.author_id IS NULL OR EXISTS(SELECT 1 FROM member_follows f WHERE f.member_id=n.member_id AND f.author_id=n.author_id)) AND ${reviewNotificationEligible} AND (n.review_submission IS NULL OR n.review_link_version=l.version) ORDER BY n.created_at LIMIT 10`,
     )
-      .bind(Date.now())
+      .bind(Date.now(),Date.now())
       .all();
     const review = await c.env.DB.prepare(
       "SELECT revision FROM community_review_signal WHERE delivered=0",
@@ -562,9 +568,9 @@ app.post("/internal/community/:operation", async (c) => {
   }
   if (op === "notification") {
     const n = await c.env.DB.prepare(
-      "SELECT n.kind,n.path,l.discord_id FROM community_notifications n JOIN discord_links l ON l.member_id=n.member_id AND l.state='active' JOIN community_preferences p ON p.member_id=n.member_id AND p.discord_dm=1 AND p.notifications=1 WHERE n.id=? AND n.delivered=0 AND (n.author_id IS NULL OR EXISTS(SELECT 1 FROM member_follows f WHERE f.member_id=n.member_id AND f.author_id=n.author_id))",
+      `SELECT n.kind,n.path,l.discord_id FROM community_notifications n JOIN discord_links l ON l.member_id=n.member_id AND l.state='active' JOIN community_preferences p ON p.member_id=n.member_id AND p.discord_dm=1 AND p.notifications=1 WHERE n.id=? AND n.delivered=0 AND (n.author_id IS NULL OR EXISTS(SELECT 1 FROM member_follows f WHERE f.member_id=n.member_id AND f.author_id=n.author_id)) AND ${reviewNotificationEligible} AND (n.review_submission IS NULL OR n.review_link_version=l.version)`,
     )
-      .bind(String(b.id))
+      .bind(String(b.id),Date.now())
       .first();
     if (!n) throw new HttpError(404, "not_found");
     if (b.delivered === true)

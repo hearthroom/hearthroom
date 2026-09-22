@@ -1499,5 +1499,10 @@
   "badgeWall.icon.lantern": "Lantern",
   "badgeWall.icon.star": "Star",
   "badgeWall.icon.crown": "Crown",
-  "badgeWall.icon.award": "Medal"
+  "badgeWall.icon.award": "Medal",
+  "community.notices.review_reminder": "Your review claim expires soon. Continue reviewing or release it to the queue.",
+  "community.notices.review_reminder_expired": "This review reminder is no longer active",
+  "review.inactive": "This review has ended or was replaced by a newer version. Check the review queue for its current status.",
+  "review.backToQueue": "Back to review queue",
+  "review.claimChanged": "This claim has changed. Refresh the page and try again."
 }
