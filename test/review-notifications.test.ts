@@ -22,7 +22,10 @@ it('returns durable per-submission work and a blind projection, not just a globa
  const projected=await bridge('review-project-v2',{id:'review:s1',channel:'223456789012345678',lang:'zh-Hant'});
  expect(projected.status).toBe(200);const p=await projected.json() as any;
  expect(p.projection).toMatchObject({title:'雨夜書店',status:'pending',approvals:0,required:2,claimant:null,path:'/review/s1'});
- expect(JSON.stringify(p)).not.toContain('PRIVATE AUTHOR');expect(JSON.stringify(p)).not.toContain('999');
+ expect(JSON.stringify(p)).not.toContain('PRIVATE AUTHOR');
+ // A timestamp or random lease can contain 999; validate the blind projection schema instead.
+ expect(Object.keys(p.projection).sort()).toEqual(['adult','approvals','claimant','expiresAt','kind','path','required','status','submittedAt','title']);
+ expect(Object.keys(p).sort()).toEqual(['changed','digest','id','kind','lease','messageId','projection','revision','updatedAt']);
 });
 import { maintainReviewNotifications, pendingReviewDeliveries, leaseReviewDelivery, finishReviewDelivery, checkReviewDelivery } from '../src/community/review-notifications';
 import { release } from '../src/review';
