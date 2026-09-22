@@ -10,11 +10,16 @@ interface VersionRow {
  provider:ProviderId; version_id:string; work_id:string; member_id:string; source_role_id:string; nsfw:number;
  hosted_revision_id:string|null; card_id:string|null; submission_id:string|null;
 }
+/** Each provider trusts Hearthroom with its own secret. Providers never exchange keys. */
+export function hostingKey(env:Env,provider:ProviderId):string|undefined {
+ return provider==='lunatalk'?env.HOSTING_SERVICE_KEY_LUNATALK:env.HOSTING_SERVICE_KEY;
+}
 export const hostGateway = {
  async seal(env:Env,token:string,roleId:string,workId:string,versionId:string,provider:ProviderId='harbor'):Promise<Receipt> {
-  if(!env.HOSTING_SERVICE_KEY)throw new HttpError(503,'hosting_unavailable');
+  const key=hostingKey(env,provider);
+  if(!key)throw new HttpError(503,'hosting_unavailable');
   const res=await fetch(`${apiBaseOf(env,provider)}/open/v1/hosting/seal`,{
-   method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json','X-Hosting-Key':env.HOSTING_SERVICE_KEY},
+   method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json','X-Hosting-Key':key},
    body:JSON.stringify({roleId,workId,versionId}),redirect:'manual',signal:AbortSignal.timeout(60000),
   });
   if(!res.ok){
@@ -140,8 +145,9 @@ export async function hostingDecision(db:D1Database,versionId:string){
 }
 
 async function hostingCall(env:Env,provider:ProviderId,token:string,operation:string,body:unknown):Promise<Record<string,string>>{
- if(!env.HOSTING_SERVICE_KEY)throw new HttpError(503,'hosting_unavailable');
- const response=await fetch(`${apiBaseOf(env,provider)}/open/v1/hosting/${operation}`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'X-Hosting-Key':env.HOSTING_SERVICE_KEY,'Content-Type':'application/json'},body:JSON.stringify(body),redirect:'manual',signal:AbortSignal.timeout(60000)});
+ const key=hostingKey(env,provider);
+  if(!key)throw new HttpError(503,'hosting_unavailable');
+ const response=await fetch(`${apiBaseOf(env,provider)}/open/v1/hosting/${operation}`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'X-Hosting-Key':key,'Content-Type':'application/json'},body:JSON.stringify(body),redirect:'manual',signal:AbortSignal.timeout(60000)});
  if(!response.ok)throw new HttpError(502,'hosting_'+operation+'_failed');
  return await response.json() as Record<string,string>;
 }
