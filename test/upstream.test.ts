@@ -153,6 +153,14 @@ describe("上游呼叫的 HTTP 形狀", () => {
     }
   });
 
+  it("主站用 400 record not found 回答不存在的卡：算找不到，不算上游故障", async () => {
+    vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ error: "record not found" }), { status: 400 }));
+    await expect(upstream.fetchRole(env, "role-1")).rejects.toMatchObject({ status: 404 });
+    // 同一支處理函式連資料庫出錯也回 400；那種仍是上游故障，不能說成卡不存在。
+    vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ error: "dial tcp: connection refused" }), { status: 400 }));
+    await expect(upstream.fetchRole(env, "role-1")).rejects.toMatchObject({ status: 502 });
+  });
+
   it("上游沒回公開數字 ID 就不算通過驗證", async () => {
     vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ nickName: "月光" }), { status: 200 }));
     await expect(upstream.fetchMe(env, "t")).rejects.toBeInstanceOf(HttpError);

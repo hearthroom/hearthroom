@@ -203,6 +203,12 @@ async function fetchRole(env: Env, roleId: string, provider: ProviderId = DEFAUL
   const res = await fetch(apiUrl(env, provider, `/open/v1/role/detail?roleId=${encodeURIComponent(roleId)}`), {
     headers: { language: "zh-Hans", "User-Agent": UA },
   });
+  // 主站對不存在（或已刪除）的卡回 400 {"error":"record not found"}，不是 404；同一支處理
+  // 函式連資料庫出錯也回 400。只認這一句當「找不到」，其餘 400 仍算上游故障——
+  // 否則已刪除的卡會被說成「主機暫時無法使用」（2026-09-23 社群回報的卡片連結）。
+  if (res.status === 400 && (await res.clone().json().catch(() => null) as { error?: unknown } | null)?.error === "record not found") {
+    throw new HttpError(404, "role not found");
+  }
   const role = projectRole(await readJson(res, "role"));
   if (!role.roleId) throw new HttpError(404, "role not found");
   return role;
