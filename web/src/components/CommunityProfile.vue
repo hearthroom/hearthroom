@@ -4,6 +4,7 @@ import AccountIcon from './AccountIcon.vue';
 import {useI18n} from 'vue-i18n';
 import {useSession} from '@/lib/session';
 import {updateSiteProfile} from '@/lib/api';
+import {AVATAR_MAX_BYTES,AVATAR_MAX_MB} from '../../../shared/avatar';
 const emit=defineEmits<{updated:[]}>();
 const session=useSession();
 const {t}=useI18n();
@@ -15,7 +16,7 @@ function begin(){clearPreview();name.value=session.displayName;bio.value=session
 function selectAvatar(event:Event){
  const input=event.target as HTMLInputElement;const selected=input.files?.[0];if(!selected)return;
  error.value='';
- if(!['image/jpeg','image/png','image/webp','image/gif','image/apng'].includes(selected.type)||selected.size>2*1024*1024){error.value=t('community.avatarInvalid');input.value='';return;}
+ if(!['image/jpeg','image/png','image/webp','image/gif','image/apng'].includes(selected.type)||selected.size>AVATAR_MAX_BYTES){error.value=t('community.avatarInvalid',{maxMB:AVATAR_MAX_MB});input.value='';return;}
  clearPreview();file.value=selected;objectUrl=URL.createObjectURL(selected);preview.value=objectUrl;removeAvatar.value=false;
 }
 function remove(){clearPreview();preview.value='';removeAvatar.value=true;}
@@ -42,7 +43,7 @@ onBeforeUnmount(clearPreview);
      <button v-if="preview" type="button" class="btn btn--ghost" :disabled="busy" @click="remove">{{ $t('community.removeAvatar') }}</button>
     </div>
    </div>
-   <p id="avatar-hint" class="subtle">{{ $t('community.avatarHint') }}</p>
+   <p id="avatar-hint" class="subtle">{{ $t('community.avatarHint',{maxMB:AVATAR_MAX_MB}) }}</p>
    <label>{{ $t('community.name') }}<input v-model="name" required maxlength="60" autocomplete="nickname" :disabled="busy" /></label>
    <label>{{ $t('community.bio') }}<textarea v-model="bio" maxlength="500" rows="4" :disabled="busy" :placeholder="$t('community.bioHint')" /></label>
    <p class="subtle">{{ $t('community.publicHint') }}</p>

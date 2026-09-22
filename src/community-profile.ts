@@ -1,8 +1,8 @@
 import { memberProfile } from './members';
 import { HttpError, type Env } from './types';
 import { preservesOriginalAnimation } from './avatar-animation';
+import { AVATAR_MAX_BYTES } from '../shared/avatar';
 
-const MAX_IMAGE = 2 * 1024 * 1024;
 const RASTER_TYPES = new Set(['image/jpeg','image/png','image/webp','image/gif','image/apng']);
 
 /** Durable cleanup includes failed uploads; a live profile object is never collected. */
@@ -34,7 +34,7 @@ export async function saveCommunityProfile(env:Env, memberId:string, request:Req
  let key=remove?'':prior.avatar_key;
  let url=remove?'':prior.avatar_url;
  if(file) {
-  if(!file.size||file.size>MAX_IMAGE||!RASTER_TYPES.has(file.type))throw new HttpError(400,'avatar_invalid');
+  if(!file.size||file.size>AVATAR_MAX_BYTES||!RASTER_TYPES.has(file.type))throw new HttpError(400,'avatar_invalid');
   if(!env.AVATARS||!env.IMAGES)throw new HttpError(503,'avatar_unavailable');
   let output:ArrayBuffer;
   let contentType='image/webp', extension='webp';

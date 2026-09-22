@@ -1,5 +1,5 @@
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
-import {createApp,nextTick,type App} from 'vue';
+import {createApp,nextTick,toRaw,type App} from 'vue';
 import {i18n} from '../src/lib/i18n';
 const fixture=vi.hoisted(()=>({save:vi.fn(),session:{displayName:'Author',avatarUrl:'',profile:{displayName:'Author',bio:'Existing bio',avatarUrl:''},accessToken:async()=> 'test'}}));
 vi.mock('../src/lib/session',()=>({useSession:()=>fixture.session}));
@@ -27,23 +27,26 @@ it.each(['image/gif','image/apng','image/png','image/webp'])('previews and submi
  fixture.save.mockResolvedValue(fixture.session.profile);
  const input=el.querySelector<HTMLInputElement>('input[type=file]')!;
  expect(input.accept.split(',')).toContain(type);
- const selected=new File(['animated fixture'],'avatar.'+(type==='image/apng'?'apng':type.split('/')[1]),{type});
+ const selected=new File([new Uint8Array(10*1024*1024)],'avatar.'+(type==='image/apng'?'apng':type.split('/')[1]),{type});
  Object.defineProperty(input,'files',{value:[selected],configurable:true});
  input.dispatchEvent(new Event('change'));await settle();
  expect(el.querySelector('[role=alert]')).toBeNull();
  expect(el.querySelector('img')?.getAttribute('src')).toBe('blob:avatar-test');
  el.querySelector('form')!.dispatchEvent(new Event('submit',{cancelable:true}));await settle();
- expect(fixture.save).toHaveBeenCalledWith('test',expect.objectContaining({avatar:selected}));
+ expect(fixture.save).toHaveBeenCalledTimes(1);
+ expect(fixture.save.mock.calls[0][0]).toBe('test');
+ // happy-dom's File is reactive in Vue; compare the underlying selected object.
+ expect(toRaw(fixture.save.mock.calls[0][1].avatar)===selected).toBe(true);
  expect(revoke).toHaveBeenCalledWith('blob:avatar-test');create.mockRestore();revoke.mockRestore();
 });
 
 it.each([
- ['image/gif',2*1024*1024+1],
+ ['image/gif',10*1024*1024+1],
  ['image/svg+xml',32],
 ])('rejects invalid avatar %s (%i bytes) without submitting it',async(type,size)=>{
  const input=el.querySelector<HTMLInputElement>('input[type=file]')!;
  const selected=new File([new Uint8Array(size)],'avatar',{type});
  Object.defineProperty(input,'files',{value:[selected]});input.dispatchEvent(new Event('change'));await settle();
- expect(el.querySelector('[role=alert]')?.textContent).toContain('2 MB');
+ expect(el.querySelector('[role=alert]')?.textContent).toContain('10 MB');
  expect(el.querySelector('img')).toBeNull();expect(fixture.save).not.toHaveBeenCalled();
 });
