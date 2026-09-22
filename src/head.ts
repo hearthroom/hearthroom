@@ -1,5 +1,5 @@
 /**
- * 分享預覽：把卡片／作者的標題、簡介、圖片寫進 HTML 的 <head>。
+ * 分享預覽：把下載頁／卡片／作者的標題、簡介、圖片寫進 HTML 的 <head>。
  *
  * 這是個 SPA，Discord、LINE、X 的抓取器不跑 JS——它們看到的是 index.html 裡那幾行
  * 寫死的 meta，於是每一張卡分享出去長得一模一樣。這裡在邊緣把那幾行換掉；其餘的
@@ -68,4 +68,16 @@ export function renderHead(page: Response, meta: PageMeta): Response {
   res.headers.delete("etag");
   res.headers.delete("last-modified");
   return res;
+}
+
+/** Public download copy belongs in the initial HTML, before any client JS runs. */
+const DOWNLOAD_COPY: Record<string, {title:string;description:string}> = {
+  "zh-Hant": {title:"下載 Hearthroom",description:"Hearthroom Android App 與瀏覽器安裝指南：下載最新版 APK，查看手機安裝步驟與 App 更新方式。"},
+  "zh-Hans": {title:"下载 Hearthroom",description:"Hearthroom Android App 与浏览器安装指南：下载最新版 APK，查看手机安装步骤与 App 更新方式。"},
+  en: {title:"Download Hearthroom",description:"Get the latest Hearthroom Android APK, follow the installation guide, and learn how app updates work. Browser installation options are included."},
+  ja: {title:"Hearthroom をダウンロード",description:"Hearthroom の最新 Android APK とインストールガイド。スマートフォンへの導入、アプリの更新、ブラウザからの利用方法を確認できます。"},
+  ko: {title:"Hearthroom 다운로드",description:"Hearthroom 최신 Android APK와 설치 가이드입니다. 휴대폰 설치 단계, 앱 업데이트 및 브라우저 설치 방법을 확인하세요."},
+};
+export function downloadMeta(lang:string,url:string):PageMeta {
+  return {lang,...(DOWNLOAD_COPY[lang] ?? DOWNLOAD_COPY.en!),url,type:"website",image:"https://hearthroom.club/icons/icon-512.png"};
 }

@@ -37,7 +37,7 @@ import {
   BEACON_DETAILS, BEACON_EVENTS, clientKind, emit, note, refHostOf, safeSubject, shapeTerm, surfaceOf,
   type EventFields, type Pending,
 } from "./analytics";
-import { authorLine, renderHead } from "./head";
+import { authorLine, downloadMeta, renderHead } from "./head";
 import { aliasTarget, HOST, canonicalUrl, isPlayHost } from "./site";
 import { loadMine, type MineFilter } from "./mine";
 import { tagNamesFor } from "../shared/tag-catalog";
@@ -1279,13 +1279,13 @@ export async function syncBatch(env: Env): Promise<{ ok: number; failed: number;
 }
 
 /**
- * 卡片頁與作者頁的 HTML：把分享預覽寫進 <head>，其餘照 SPA 的 index.html。
+ * 下載頁、卡片頁與作者頁的 HTML：把分享預覽寫進 <head>，其餘照 SPA 的 index.html。
  *
  * 只有 wrangler.toml 裡 run_worker_first 列出的路徑會進到這裡；其他路徑直接由
  * 靜態資源層回應，不經過 Worker。找不到的卡回 404 狀態，但內容仍是 index.html——
  * 前端會畫自己的 404 頁，而抓取器與搜尋引擎得到正確的狀態碼。
  */
-const PAGE = /^(?:\/(zh-Hans|en|ja|ko))?\/(cards|authors)\/([^/]+)$/;
+const PAGE = /^(?:\/(zh-Hans|en|ja|ko))?\/(download|cards|authors)(?:\/([^/]+))?\/?$/;
 const SITE_NAME = "Hearthroom";
 const PAGE_TTL = 60;
 
@@ -1328,7 +1328,7 @@ app.get("*", async (c) => {
   const m = url.pathname.match(PAGE);
   // 不是要注入的頁面就原樣交回資源層——靜態檔給檔案本身，其餘走它的 SPA 回退。
   // 一律回殼的話，/assets/x.js 會拿到一份 HTML，整站直接掛。
-  if (!m) {
+  if (!m || (m[2] === "download" ? m[3] !== undefined : !m[3])) {
     const passthrough = await c.env.ASSETS.fetch(c.req.raw);
     note(c, { event: "page_html", refHost: refHostOf(c.req.header("Referer"), url.host), detail: "page" });
     return passthrough;
@@ -1340,7 +1340,9 @@ app.get("*", async (c) => {
   if (!shell.ok) return shell;
   const locale = m[1] ?? "zh-Hant";
   const l = locale.startsWith("zh") ? "zh" : locale;
-  const self = canonicalUrl(url);
+  const normalized = new URL(url);
+  normalized.pathname = normalized.pathname.replace(/\/$/, "");
+  const self = canonicalUrl(normalized);
 
   note(c, {
     event: "page_html",
@@ -1349,6 +1351,11 @@ app.get("*", async (c) => {
     subject: m[3] ?? "",
     detail: m[2],
   });
+  if (m[2] === "download") {
+    const res = renderHead(shell, downloadMeta(locale, self));
+    res.headers.set("Cache-Control", `public, max-age=${PAGE_TTL}`);
+    return res;
+  }
   if (m[2] === "cards") {
     let id: string;
     try { id = decodeURIComponent(m[3]!); } catch { return new Response(shell.body, { status: 404, headers: shell.headers }); }
@@ -1365,8 +1372,8 @@ app.get("*", async (c) => {
     // 成人內容不做分享預覽（抓取器沒有身分）：回沒有卡片資訊的殼，讓前端畫登入／驗年齡的門
     if (row.nsfw === 1) return new Response(shell.body, { status: 200, headers: shell.headers });
     const card = toCard(row, l);
-    // 用卡號開的頁（/cards/123）：canonical 仍指卡片 ID 那個網址，一張卡在搜尋引擎眼裡只有一個地址
-    const canonical = id === row.source_role_id ? self : canonicalUrl(new URL(url.pathname.replace(/[^/]+$/, encodeURIComponent(row.source_role_id)), url));
+    // Canonical uses the community-wide ID: provider-local IDs can collide.
+    const canonical = canonicalUrl(new URL(normalized.pathname.replace(/[^/]+$/, encodeURIComponent(row.id)), url));
     const res = renderHead(shell, {
       lang: locale, title: `${card.name} · ${SITE_NAME}`, description: card.summary, image: card.avatarUrl, url: canonical, type: "profile",
     });

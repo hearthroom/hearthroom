@@ -1,9 +1,9 @@
-import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
+import { createExecutionContext, env, SELF, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import worker from "../src/index";
 import { authorLine, oneLine } from "../src/head";
 import { envWithAssets, makeMember, resetDb, restoreUpstream, rolesOnProviders, role, testHandle } from "./helpers";
-import { upsertCard } from "../src/cards";
+import { getCard, upsertCard } from "../src/cards";
 
 // 殼帶驗證器：測「改寫後要清 ETag／Last-Modified」那幾條
 const testEnv = envWithAssets({}, { etag: '"shell-v1"', "last-modified": "Mon, 01 Sep 2025 00:00:00 GMT" });
@@ -31,7 +31,8 @@ describe("分享預覽", () => {
     expect(html).toContain('<meta property="og:title" content="夜行偵探 沈墨 · Hearthroom">');
     expect(html).toContain('<meta property="og:image" content="https://cdn.lunatalk.ai/cover.png">');
     // canonical 一律指向正牌主機：搬家期間兩個網域並存，搜尋引擎要知道哪個才算數
-    expect(html).toContain('<link rel="canonical" href="https://hearthroom.club/cards/r-1">');
+    const card = await getCard(env.DB, 'r-1');
+    expect(html).toContain(`<link rel="canonical" href="https://hearthroom.club/cards/${card!.id}">`);
     expect(html).toContain('<html lang="zh-Hant">');
     expect(headers.get("cache-control")).toBe("no-store");
     // 改寫過的內容不能沿用殼的驗證器：帶著它去重驗會拿到 304，卡改了也看不到
@@ -88,4 +89,63 @@ describe("分享預覽", () => {
     expect(html).toContain('content="She said &quot;hi&quot; &lt;b&gt; · Hearthroom"');
     expect(html).not.toContain("<b> · Hearthroom");
   });
+});
+
+it.each([
+  ['', '下載 Hearthroom', 'zh_TW'],
+  ['/zh-Hans', '下载 Hearthroom', 'zh_CN'],
+  ['/en', 'Download Hearthroom', 'en_US'],
+  ['/ja', 'Hearthroom をダウンロード', 'ja_JP'],
+  ['/ko', 'Hearthroom 다운로드', 'ko_KR'],
+])('serves localized download metadata in the initial HTML: %s', async (prefix, title, locale) => {
+  const {html,headers,status}=await page(`${prefix}/download/?ref=discord`);
+  expect(status).toBe(200);
+  expect(html).toContain(`<title>${title}</title>`);
+  expect(html).toContain(`<meta property="og:title" content="${title}">`);
+  expect(html).toContain(`<meta property="og:locale" content="${locale}">`);
+  expect(html).toContain(`<meta property="og:url" content="https://hearthroom.club${prefix}/download">`);
+  expect(html).toContain('<meta property="og:image" content="https://hearthroom.club/icons/icon-512.png">');
+  expect(html).toContain('<meta name="twitter:title"');
+  expect(html).toContain('Android');
+  expect(headers.get('etag')).toBeNull();
+});
+
+it('trailing slashes do not lose the card-specific preview',async()=>{
+  const {html}=await page('/en/cards/r-1/');
+  expect(html).toContain('<meta property="og:title" content="Night Detective · Hearthroom">');
+  expect(html).toContain(`content="https://hearthroom.club/en/cards/${(await getCard(env.DB,'r-1'))!.id}"`);
+});
+
+it('canonical social URLs preserve the global identity when providers have the same upstream ID',async()=>{
+  await upsertCard(env.DB,role({roleId:'r-1',name:'Harbor card'}),Date.now(),{status:'approved',provider:'harbor'});
+  const card=await getCard(env.DB,'r-1','harbor');
+  const expected=`https://hearthroom.club/cards/${encodeURIComponent(card!.id)}`;
+  for(const id of [encodeURIComponent(card!.id),String(card!.num)]){
+    const {html}=await page(`/cards/${id}`);
+    expect(html).toContain('content="Harbor card · Hearthroom"');
+    expect(html).toContain(`<meta property="og:url" content="${expected}">`);
+  }
+});
+
+it('does not expose restricted card details to sharing crawlers',async()=>{
+  for(const change of ["nsfw=1","nsfw=0,status='pending'","status='approved',public_blocked=1"]){
+    await env.DB.prepare(`UPDATE cards SET ${change} WHERE source_role_id='r-1'`).run();
+    const {html}=await page('/cards/r-1/');
+    expect(html).not.toContain('Night Detective');
+    expect(html).not.toContain('夜行偵探');
+    expect(html).not.toContain('cover.png');
+  }
+});
+
+
+it.each(['hearthroom.club','sukisuki.ai','sukisuki.chat'])('static asset routing invokes the metadata handler on %s',async host=>{
+  for(const path of ['/download','/download/','/en/download']){
+    const response=await SELF.fetch(`https://${host}${path}`,{headers:{'User-Agent':'Discordbot'}});
+    expect(response.status).toBe(200);
+    const html=await response.text();
+    expect(html).toContain('<meta property="og:type" content="website">');
+    expect(html).toContain('Android');
+    expect(html.match(/property="og:title"/g)).toHaveLength(1);
+    expect(html).toContain('<meta name="twitter:image"');
+  }
 });
