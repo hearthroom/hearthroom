@@ -2,7 +2,7 @@ import {readFileSync,writeFileSync,mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {execFileSync} from 'node:child_process';
-import {publishLatest,downloadBase} from './release.mjs';
+import {publishLatest,downloadBase,downloadBucket} from './release.mjs';
 if(process.env.GITHUB_REPOSITORY!=='hearthroom/hearthroom'||process.env.GITHUB_REF!=='refs/heads/main')throw Error('Only the authorized main workflow can publish.');
 const artifact=JSON.parse(readFileSync('android/dist/latest.json'));
 if(artifact.sourceSha!==process.env.GITHUB_SHA)throw Error('Source mismatch.');
@@ -19,7 +19,7 @@ try{
   },
   async write(key,bytes,type){
    const file=join(temp,key);writeFileSync(file,bytes);
-   execFileSync('npx',['--no-install','wrangler','r2','object','put',`hearthroom-android/${key}`,'--file',file,'--content-type',type,'--cache-control','no-store, max-age=0','--remote'],{stdio:'inherit'});
+   execFileSync('npx',['--no-install','wrangler','r2','object','put',`${downloadBucket}/${key}`,'--file',file,'--content-type',type,'--cache-control','no-store, max-age=0','--remote'],{stdio:'inherit'});
   }
  });
  console.log(`Android release ${artifact.versionName}: public APK and manifest verified.`);

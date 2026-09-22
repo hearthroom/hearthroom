@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute, useRouter } from "vue-router";
+import DownloadBanner from "@/components/DownloadBanner.vue";
 import FollowFeed from "@/components/FollowFeed.vue";
 import CardGrid from "@/components/CardGrid.vue";
 import { fetchBoard } from "@/lib/api";
@@ -94,6 +95,7 @@ watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (no
 <template>
   <div class="page">
     <h1 class="sr-only">{{ $t("site.tagline") }}</h1>
+    <DownloadBanner />
 
     <div class="bar">
       <!-- 左邊選看哪個榜，右邊選怎麼排 -->

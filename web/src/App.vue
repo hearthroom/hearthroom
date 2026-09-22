@@ -134,6 +134,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
         </a>
         <a :href="`${SITE.repoUrl}/issues`" target="_blank" rel="noopener">{{ $t("footer.issues") }}</a>
         <a :href="`${SITE.repoUrl}/blob/main/LICENSE`" target="_blank" rel="noopener">{{ $t("footer.license", { name: SITE.license }) }}</a>
+        <RouterLink class="footer__download" :to="lp('/download')">{{ $t("download.footer") }}</RouterLink>
         <RouterLink :to="lp('/guide')">{{ $t("footer.guide") }}</RouterLink>
         <RouterLink :to="lp('/developers')">{{ $t("footer.developers") }}</RouterLink>
         <a v-if="installPrompt.available && installPrompt.target === 'site'" href="#" @click.prevent="openInstall()">{{ $t("pwa.install.link") }}</a>
@@ -225,6 +226,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
 .footer__tagline { margin: 0; }
 .footer__links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-4); }
 .footer__links a { color: var(--text-2); }
+.footer__download { display: inline-flex; align-items: center; min-height: 44px; }
 .footer__links a:hover { color: var(--text); }
 .footer__gh { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
 .footer__gh svg { width: 16px; height: 16px; fill: currentColor; }

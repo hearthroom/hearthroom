@@ -38,6 +38,7 @@ const pages: RouteRecordRaw[] = [
   { path: "resources", component: () => import("./pages/ResourcesPage.vue"), meta: { auth: true, feature: "library" } },
   { path: "settings", component: () => import("./pages/SettingsPage.vue"), meta: { auth: true } },
   { path: "developers", component: () => import("./pages/DevelopersPage.vue") },
+  { path: "download", component: () => import("./pages/DownloadPage.vue") },
   { path: "guide", component: () => import("./pages/GuidePage.vue") },
   // 站內玩卡：舞台整頁接管（bare = 不套站台頁首頁尾），對話要登入
   { path: "play/:roleId", component: () => import("./pages/PlayPage.vue"), meta: { auth: true, bare: true, preloadStage: true } },

@@ -1,4 +1,7 @@
+import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+export const downloadBucket=JSON.parse(readFileSync(new URL('../../android/release-config.json',import.meta.url))).bucket;
+export const needsNativeRelease=paths=>paths.some(path=>/^android\/(app\/|gradle\/|changes\/|(?:build\.gradle|settings\.gradle|gradle\.properties|gradlew(?:\.bat)?)$)/.test(path));
 export const locales = ['en','zh-Hant','zh-Hans','ja','ko'];
 export const downloadBase = 'https://downloads.hearthroom.club';
 export function buildNotes(fragments) {
