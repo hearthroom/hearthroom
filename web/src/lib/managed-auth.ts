@@ -7,7 +7,16 @@ let epoch=0;
 let loggedOut=false;
 const stopped=new Set<ProviderId>();
 const versions=new Map<ProviderId,number>();
-const tokens=new Map<ProviderId,TokenPair>();
+const tokens=new Map<ProviderId,TokenPair&{issuedAt:number}>();
+/**
+ * 同一張 access token 在這段時間內直接重用，不再問伺服器。
+ * 每次都問的代價是每個請求前多一趟往返：內嵌聊天的每支 API 都會先要 token，開場十幾支
+ * 疊成十幾秒（玩家回報 2026-09-23）。供應商發的 token 以小時計，五分鐘內另一台設備換綁
+ * 才會讓這張過時；那時供應商會拒絕它，由 dropManagedToken 丟掉再換。
+ */
+export const MANAGED_TOKEN_REUSE_MS=300_000;
+/** 離到期不到這麼久就不重用，免得帶著一張馬上失效的 token 出門 */
+const EXPIRY_MARGIN_MS=60_000;
 const requests=new Map<ProviderId,Promise<TokenPair|null>>();
 export class ManagedAuthUnavailable extends Error {}
 export function isManagedAuth(){return mode===true;}
@@ -62,12 +71,17 @@ export async function authRequest<T>(path:string,body:unknown):Promise<T>{
 }
 export function rememberManaged(pair:TokenPair,provider:ProviderId){
   if(loggedOut||stopped.has(provider))return;
-  tokens.set(provider,{accessToken:pair.accessToken,expiresAt:pair.expiresAt});
+  tokens.set(provider,{accessToken:pair.accessToken,expiresAt:pair.expiresAt,issuedAt:Date.now()});
   clearLegacyCredentials();
 }
 export function restoreManaged(provider:ProviderId){
   const pair=tokens.get(provider);
-  return pair&&pair.expiresAt>Date.now()?pair:null;
+  return pair&&pair.expiresAt>Date.now()?{accessToken:pair.accessToken,expiresAt:pair.expiresAt}:null;
+}
+/** 供應商拒絕了手上這張：丟掉，下一次向伺服器拿目前那一份。不是斷開連結，不動版本號。 */
+export function dropManagedToken(provider:ProviderId,rejected?:string){
+  const pair=tokens.get(provider);
+  if(pair&&(rejected===undefined||pair.accessToken===rejected))tokens.delete(provider);
 }
 export function forgetManaged(provider?:ProviderId){
   if(provider){tokens.delete(provider);versions.set(provider,(versions.get(provider)||0)+1);requests.delete(provider);}
@@ -75,6 +89,8 @@ export function forgetManaged(provider?:ProviderId){
 }
 export async function managedToken(provider:ProviderId):Promise<TokenPair|null>{
   if(loggedOut||stopped.has(provider))return null;
+  const cached=tokens.get(provider),now=Date.now();
+  if(cached&&now-cached.issuedAt<MANAGED_TOKEN_REUSE_MS&&cached.expiresAt-now>EXPIRY_MARGIN_MS)return {accessToken:cached.accessToken,expiresAt:cached.expiresAt};
   const running=requests.get(provider);if(running)return running;
   const started=epoch,version=versions.get(provider)||0;
   const request=(async()=>{

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { fetchCardPlatforms } from "@/lib/api";
+import { fetchCardPlatforms, type CardPlatform } from "@/lib/api";
 import {
   accountToken,
   connectedBalance,
@@ -10,7 +10,13 @@ import { connectionMessage, platformPath } from "@/lib/distribution";
 import { providerName, type ProviderId } from "@/lib/provider";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
-const props = defineProps<{ cardId: string; provider?: string }>();
+const props = defineProps<{
+  cardId: string;
+  provider?: string;
+  cardNumber?: number | null;
+  /** 卡片頁一進來就先發出去的查詢：不必等卡片畫完才開始找可遊玩的平台。查的是這張卡才用 */
+  pending?: { id: string; request: Promise<CardPlatform[]> } | null;
+}>();
 const session = useSession();
 const { lp } = useLocalePath();
 const platforms = ref<
@@ -27,6 +33,11 @@ const choice = computed(() =>
 const linked = (p: ProviderId) =>
   session.profile?.identities.find((i) => i.provider === p);
 let generation = 0;
+let prefetched =
+  props.pending &&
+  (props.pending.id === props.cardId || props.pending.id === String(props.cardNumber ?? ""))
+    ? props.pending.request
+    : null;
 async function load() {
   const request = ++generation;
   loading.value = true;
@@ -34,7 +45,12 @@ async function load() {
   platforms.value = [];
   selected.value = null;
   try {
-    const result = await fetchCardPlatforms(props.cardId);
+    const early = prefetched;
+    prefetched = null;
+    // 預先發的那一趟可能早於身分載好（成人卡會被擋）：失敗就照常再查一次
+    const result = early
+      ? await early.catch(() => fetchCardPlatforms(props.cardId))
+      : await fetchCardPlatforms(props.cardId);
     if (request !== generation) return;
     platforms.value = result;
   } catch {

@@ -168,3 +168,25 @@ it('does not turn the card source or session into a selected play provider', asy
   await settle();
   expect(root.querySelector('button.btn--primary')).not.toBeNull();
 });
+it("uses the platform lookup the card page started early instead of asking again", async () => {
+  const early = Promise.resolve([{ provider: "harbor", roleId: "copy", playable: true }]);
+  await mount(CardPlatforms, { cardId: "community-card", cardNumber: 100019, provider: "harbor", pending: { id: "100019", request: early } });
+  expect(mocks.platforms).not.toHaveBeenCalled();
+  expect(root.textContent).toContain("HarperHarbor");
+});
+it("asks again when the early lookup failed before the viewer's settings arrived", async () => {
+  const early = Promise.reject(new Error("nsfw_gated"));
+  early.catch(() => {});
+  mocks.platforms.mockResolvedValue([{ provider: "harbor", roleId: "copy", playable: true }]);
+  await mount(CardPlatforms, { cardId: "community-card", provider: "harbor", pending: { id: "community-card", request: early } });
+  expect(mocks.platforms).toHaveBeenCalledWith("community-card");
+  expect(root.querySelector("[role=alert]")).toBeNull();
+  expect(root.textContent).toContain("HarperHarbor");
+});
+it("ignores an early lookup made for a different card", async () => {
+  mocks.platforms.mockResolvedValue([{ provider: "lunatalk", roleId: "original", playable: true }]);
+  const other = Promise.resolve([{ provider: "harbor", roleId: "elsewhere", playable: true }]);
+  await mount(CardPlatforms, { cardId: "community-card", cardNumber: 100019, provider: "harbor", pending: { id: "100020", request: other } });
+  expect(mocks.platforms).toHaveBeenCalledWith("community-card");
+  expect(root.textContent).not.toContain("HarperHarbor");
+});

@@ -1261,6 +1261,7 @@ export async function deleteGameSpec(roleId: string, token: string): Promise<voi
 }
 
 /** Discover by community card ID; the viewer's issuer authenticates community access, not the card's host. */
+export type CardPlatform={provider:import('./provider').ProviderId;roleId:string;playable:boolean};
 export async function fetchCardPlatforms(cardId:string):Promise<{provider:import('./provider').ProviderId;roleId:string;playable:boolean}[]> {
   const viewer=await viewerAccess();
   const q=viewer.param?`?${viewer.param}`:'';

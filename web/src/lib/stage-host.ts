@@ -22,6 +22,9 @@ import { deleteCardSave, fetchCardSaves, putCardSave } from "@/lib/api";
 import { confirmDialog } from "@/lib/confirm";
 import { useAppearance } from "@/lib/appearance";
 import { loginPath } from "@/lib/login-return";
+import { dropManagedToken } from "@/lib/managed-auth";
+import { restorePersisted } from "@/lib/oauth";
+import { forgetVerifiedAccount } from "@/lib/connections";
 import { applyLocale, i18n } from "@/lib/i18n";
 import { isPlayHost } from "@/lib/site";
 import { isStandalone } from "@/lib/pwa";
@@ -54,6 +57,19 @@ export interface StageDeps {
 }
 
 let stagePromise: Promise<Component> | null = null;
+
+/**
+ * 舞台被供應商拒絕時問一次：手上這張 token 是不是已經被換掉了。
+ * 託管模式會重用 token 幾分鐘（managed-auth.ts），另一台設備換綁後這裡拿的可能是舊的。
+ * 丟掉快取再拿一次：拿到另一張回 true（呼叫端重新載入即可），同一張或拿不到回 false（真的要重新登入）。
+ */
+export async function recoverRejectedToken(provider: ProviderId, accessToken: () => Promise<string | null>): Promise<boolean> {
+  const rejected = restorePersisted(provider)?.accessToken;
+  dropManagedToken(provider, rejected);
+  forgetVerifiedAccount(provider);
+  const fresh = await accessToken().catch(() => null);
+  return !!fresh && !!rejected && fresh !== rejected;
+}
 
 /**
  * 新版沙箱卡的殼在哪裡。正式站每張卡一個子網域 `c<roleId>.hearthroom.club`（Worker 出殼頁、
@@ -117,6 +133,7 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
     const provider = deps.provider ?? currentProvider();
     const accessToken = deps.accessToken ?? (() => deps.session.accessToken());
     const sandbox = sandboxOptions(window.location.hostname, { accessToken }, provider);
+    let recovering = false;
     const initialRoleId = deps.currentRoleId?.();
     if (initialRoleId) void sandbox.prefetch(initialRoleId);
     // 套件的 CSS 之後再蓋站台的接線（styles/stage.css）：畫布的變數改接站台的 token，深淺與主題才跟得上
@@ -167,7 +184,15 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
       host,
       auth: {
         getAccessToken: accessToken,
-        onUnauthorized: () => { void deps.router.push(deps.lp(loginPath(deps.currentPath()))); },
+        onUnauthorized: () => {
+          if (recovering) return;
+          recovering = true;
+          void recoverRejectedToken(provider, accessToken).then((replaced) => {
+            if (replaced) { window.location.reload(); return; }
+            recovering = false;
+            void deps.router.push(deps.lp(loginPath(deps.currentPath())));
+          });
+        },
         // 畫布送訊息前看的是「有沒有登入的人」；這頁本來就要登入才進得來（meta.auth）
         user: player
           ? { id: String(player.accountNumId), nickName: player.nickName, avatar: player.avatar }
