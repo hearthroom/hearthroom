@@ -9,3 +9,11 @@ scripts/fixtures/
 
 # 上游沙箱殼的複本（scripts/copy-sandbox.mjs 由 build:stage 產生）
 web/public/sandbox/
+
+# Android local state and signing material
+android/.gradle/
+android/**/build/
+android/local.properties
+*.jks
+*.keystore
+.android-tools/

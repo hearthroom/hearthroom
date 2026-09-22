@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "club.hearthroom.app",
+      "sha256_cert_fingerprints": [
+        "AF:43:22:E9:95:8B:1D:F1:40:59:4E:52:96:FA:99:10:64:BF:98:CF:70:D5:F1:8C:7F:5C:D3:01:BC:10:BB:F0"
+      ]
+    }
+  }
+]

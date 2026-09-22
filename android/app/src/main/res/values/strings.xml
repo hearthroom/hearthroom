@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Hearthroom</string>
+    <string name="installed_version">Installed version %1$s</string>
+    <string name="checking">Checking for updates…</string>
+    <string name="up_to_date">Hearthroom is up to date.</string>
+    <string name="check_again">Check again</string>
+    <string name="open_site">Open Hearthroom</string>
+    <string name="update_available">Version %1$s is available</string>
+    <string name="download_update">Download update</string>
+    <string name="downloading">Downloading update…</string>
+    <string name="install_update">Install update</string>
+    <string name="ready_to_install">Your update is ready to install.</string>
+    <string name="release_changed">A newer release is available. Review its changes before downloading.</string>
+    <string name="allow_install_title">Allow Hearthroom updates</string>
+    <string name="allow_install_body">Android needs your permission to install updates from Hearthroom.</string>
+    <string name="open_settings">Open settings</string>
+    <string name="not_now">Not now</string>
+    <string name="finish_install">Complete the installation in Android, or try again later.</string>
+    <string name="update_failed">The update could not be completed. You can retry or open Hearthroom.</string>
+    <string name="retry">Try again</string>
+    <string name="shortcut_updates">Check for updates</string>
+</resources>

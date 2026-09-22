@@ -1,0 +1,7 @@
+{
+  "packageId": "club.hearthroom.app",
+  "siteUrl": "https://hearthroom.club/",
+  "updateUrl": "https://downloads.hearthroom.club/latest.json",
+  "bucket": "hearthroom-android",
+  "signingCertificateSha256": "AF:43:22:E9:95:8B:1D:F1:40:59:4E:52:96:FA:99:10:64:BF:98:CF:70:D5:F1:8C:7F:5C:D3:01:BC:10:BB:F0"
+}
