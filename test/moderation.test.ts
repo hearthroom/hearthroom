@@ -156,3 +156,10 @@ it('atomically rejects a restoration inserted from a stale version read',async()
  expect((await request(`/cases/${restore.id}/vote`,'r2',{vote:'confirm',reason:'Stale evidence'})).status).toBe(409);
  expect((await SELF.fetch('https://c.test/v1/cards/reviewed')).status).toBe(404);
 });
+
+it('returns provider and durable featured state in workbench list and detail',async()=>{
+ await env.DB.prepare('UPDATE cards SET featured_at=123 WHERE id=?').bind(card).run();
+ const list=await request('/cards');expect(list.status).toBe(200);
+ expect((await list.json() as any).items[0]).toMatchObject({id:card,provider:'lunatalk',featured:true});
+ expect((await request(`/cards/${card}`).then(r=>r.json()) as any).card).toMatchObject({provider:'lunatalk',featured:true});
+});

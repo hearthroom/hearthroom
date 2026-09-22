@@ -1504,5 +1504,10 @@
   "community.notices.review_reminder_expired": "この担当通知は無効になりました",
   "review.inactive": "この審査は終了したか、新しい版に置き換えられました。審査一覧で現在の状況を確認してください。",
   "review.backToQueue": "審査一覧に戻る",
-  "review.claimChanged": "担当状況が変わりました。ページを更新して再度お試しください。"
+  "review.claimChanged": "担当状況が変わりました。ページを更新して再度お試しください。",
+  "moderation.featuredManage": "おすすめカード管理",
+  "moderation.featureIntro": "おすすめマークはランキングとカードページに表示され、コミュニティが推薦する作品を紹介します。",
+  "moderation.unfeatureConfirm": "おすすめを解除するとマークが消え、作者への還元にはその他の該当するランクが適用されます。",
+  "moderation.featureFailed": "おすすめの状態を確認できませんでした。再読み込みしてからお試しください。",
+  "moderation.featureSaved": "おすすめの状態を更新しました。"
 }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { RouterLink, RouterView, useRoute } from 'vue-router';
+import { currentProvider } from '@/lib/provider';
 import { useReviewer } from '@/lib/review';
 import { useLocalePath } from '@/lib/use-locale';
 import ReviewBadge from '@/components/ReviewBadge.vue';
@@ -29,10 +30,16 @@ const sections = [
         </a>
       </RouterLink>
     </nav>
+    <p v-if="reviewer.featured?.admin && reviewer.featuredProvider === currentProvider()" class="featured-entry">
+      <RouterLink data-featured-entry class="btn" :to="lp('/review/cards')">{{ $t('moderation.featuredManage') }}</RouterLink>
+      <span class="subtle">{{ $t('card.featureQuota', { used: reviewer.featured.featuredUsed, quota: reviewer.featured.featuredQuota }) }}</span>
+    </p>
     <RouterView />
   </div>
 </template>
 <style scoped>
+.featured-entry .btn { min-height: 44px; }
+.featured-entry { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-3); margin-bottom: var(--s-4); }
 .management-head { margin-bottom: var(--s-5); }
 .management-head h1 { font-size: clamp(24px, 3vw, 32px); margin: var(--s-1) 0 var(--s-2); }
 .management-nav { display: flex; gap: var(--s-2); flex-wrap: wrap; padding: var(--s-1); margin-bottom: var(--s-5); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-md); }

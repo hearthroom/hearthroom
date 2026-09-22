@@ -2,7 +2,7 @@ import { currentProvider } from './provider';
 import { ApiError } from './api';
 import { i18n } from './i18n';
 export interface ModerationCase {id:string;cardNumber:number;title:string;action:string;reason:string;status:string;createdAt:number;decidedAt:number|null;version:string;resolution?:string;canVote:boolean;canResolve:boolean;votes:{vote:string;reason:string;at:number}[]}
-export interface ManagedCard {id:string;name:string;tags:string[];status:string;boardHidden:boolean;publicBlocked:boolean;version:string}
+export interface ManagedCard {provider:import("./provider").ProviderId;featured:boolean;id:string;name:string;tags:string[];status:string;boardHidden:boolean;publicBlocked:boolean;version:string}
 export interface CardHistory {card:ManagedCard;cases:ModerationCase[];reviews:{id:string;kind:string;status:string;note:string;submittedAt:number;version:string}[];events:{action:string;reason:string;beforeValue:string;afterValue:string;at:number}[]}
 export async function moderationRequest<T>(path:string,token:string,body?:unknown):Promise<T>{
  const res=await fetch(`/v1/moderation${path}`,{method:body===undefined?'GET':'POST',headers:{Authorization:`Bearer ${token}`,'X-Provider':currentProvider(),'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});

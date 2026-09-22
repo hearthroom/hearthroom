@@ -7,7 +7,7 @@ export const moderationRoutes = new Hono<{ Bindings: Env }>();
 type Action = 'delist' | 'suspend' | 'restore_listing' | 'restore_public';
 type StaffRole = 'reviewer' | 'manager' | 'owner';
 interface CaseRow { card_number:number;nsfw:number;public_evidence:string;id:string; provider:string; source_role_id:string; version_id:string; title:string; author_member_id:string; action:Action; reason:string; created_by:string; status:string; created_at:number; decided_at:number|null; resolution:string|null }
-interface ManagedCard { summaries:string;avatar_url:string|null;search_text:string;card_number:number;id:string; provider:string; source_role_id:string; approved_version_id:string|null; reviewed_hash:string; names:string; tags:string; status:string; board_hidden:number; public_blocked:number; nsfw:number; author_member_id:string }
+interface ManagedCard { featured_at:number|null; summaries:string;avatar_url:string|null;search_text:string;card_number:number;id:string; provider:string; source_role_id:string; approved_version_id:string|null; reviewed_hash:string; names:string; tags:string; status:string; board_hidden:number; public_blocked:number; nsfw:number; author_member_id:string }
 const CARD = `SELECT c.*,(SELECT num FROM card_numbers WHERE provider=c.provider AND source_role_id=c.source_role_id) AS card_number,COALESCE(w.member_id,ac.owner_member_id,ai.member_id,'') AS author_member_id FROM cards c
  LEFT JOIN works w ON w.source_provider=c.provider AND w.source_role_id=c.source_role_id
  LEFT JOIN member_connections ac ON ac.provider=c.provider AND ac.external_id=CAST(c.author_num_id AS TEXT)
@@ -29,7 +29,7 @@ async function guardCase(db:D1Database,row:CaseRow,memberId:string){
  if(card)await guardCard(db,card,memberId);
 }
 const publicCase=(r:CaseRow,memberId:string)=>({id:r.id,cardNumber:r.card_number,action:r.action,title:r.title,reason:r.reason,status:r.status,createdAt:r.created_at,decidedAt:r.decided_at,version:r.version_id,createdByMe:r.created_by===memberId,resolution:r.resolution});
-const projection=(r:ManagedCard,lang:string)=>({id:r.id,name:pickLocale(JSON.parse(r.names) as Localized,lang),tags:JSON.parse(r.tags) as string[],status:r.status,boardHidden:!!r.board_hidden,publicBlocked:!!r.public_blocked,version:r.approved_version_id||r.reviewed_hash});
+const projection=(r:ManagedCard,lang:string)=>({id:r.id,provider:r.provider,featured:r.featured_at!=null,name:pickLocale(JSON.parse(r.names) as Localized,lang),tags:JSON.parse(r.tags) as string[],status:r.status,boardHidden:!!r.board_hidden,publicBlocked:!!r.public_blocked,version:r.approved_version_id||r.reviewed_hash});
 async function mutate<T>(run:()=>Promise<T>):Promise<T>{try{return await run();}catch(e){if(e instanceof HttpError)throw e;if(/moderation_conflict|UNIQUE constraint/.test(String(e)))throw new HttpError(409,'moderation_conflict');throw e;}}
 
 moderationRoutes.use('/v1/moderation/*',bodyLimit({maxSize:16000}));

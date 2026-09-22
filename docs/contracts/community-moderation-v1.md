@@ -44,3 +44,15 @@ HearthRoom 首頁與手機帳號選單統一使用「社群管理」入口，顯
 `hearthroom_moderation_requests_total` 為持久累計 counter，標籤僅 `operation`（read、propose、vote、resolve、tags、compensation、staff）及 `outcome`（success、denied、error）。路由回應完成後依 HTTP 狀態記錄；記錄失敗只輸出固定訊息，不含成員、案件、內容或 token。`/metrics` 可讀回；例如 `sum by (operation, outcome) (rate(hearthroom_moderation_requests_total[5m]))`。正式監控抓取與告警尚未部署。
 
 2026-09-20 導覽統整：僅調整既有前端工作台、五語名稱與待辦呈現，沒有新增 HTTP／MCP 能力或改變權限。可觀測性沿用既有 API 計數與部署資源讀回，不新增前端指標。
+
+## 2026-09-22 精選卡管理
+
+精選控制位於社群管理工作台的作品管理頁 `/review/cards`；具有精選資格的人在其他工作台分頁也可看到「精選卡管理」捷徑及名額。公開卡片頁只展示徽章。
+
+資格沿用既有規則：有效 Hearthroom 審核員，且目前登入平台的 `/v1/review/me` 回覆 `featured.admin=true`。Harbor 由 Hearthroom 應用的 `app.owner`／`app.admin` 身分判斷。一般審核員不顯示控制；不同平台的卡片不使用目前平台的管理權限。沒有自動升權或變更返點規則。
+
+`GET /v1/moderation/cards` 與詳情的 card projection 增加 `provider` 和 `featured`，來自同一張卡片的持久狀態。標記／取消沿用 `POST /v1/review/cards/:id/featured`；Provider 再次驗證管理權限、卡片資格與配額。前端兩個方向均確認對象與效果，成功後重新讀取卡片與配額；失敗、登出、切換帳號及過期回應不保留舊管理資格。
+
+HTTP／MCP：本次修正既有社群站務介面，沿用上述不適用作者 MCP 的決策；Provider API、MCP、Moonloom 及返點結算均未修改。
+
+可觀測性：Worker 只擴充既有管理讀取 projection，不增加寫入路徑或權限分支。沿用 `hearthroom_moderation_requests_total{operation="read",outcome="success"}` 和現有 featured 寫入路徑；不新增沒有額外診斷價值的計數器。發布以 CI、正式靜態資源、唯讀權限回應與 `/metrics` 驗證。

@@ -1504,5 +1504,10 @@
   "community.notices.review_reminder_expired": "這則認領提醒已失效",
   "review.inactive": "這一輪審核已結束或被新版本取代，請回待審清單查看目前進度。",
   "review.backToQueue": "返回待審清單",
-  "review.claimChanged": "認領狀態已變更，請重新整理頁面後再試。"
+  "review.claimChanged": "認領狀態已變更，請重新整理頁面後再試。",
+  "moderation.featuredManage": "精選卡管理",
+  "moderation.featureIntro": "精選標記會顯示在榜單與卡片頁，讓玩家看見社群推薦的作品。",
+  "moderation.unfeatureConfirm": "取消精選後，這張卡會移除精選標記，作者返點將依其餘適用等級計算。",
+  "moderation.featureFailed": "暫時無法確認精選結果，請重新整理後再試。",
+  "moderation.featureSaved": "精選狀態已更新。"
 }

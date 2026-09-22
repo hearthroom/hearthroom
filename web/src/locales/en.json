@@ -1504,5 +1504,10 @@
   "community.notices.review_reminder_expired": "This review reminder is no longer active",
   "review.inactive": "This review has ended or was replaced by a newer version. Check the review queue for its current status.",
   "review.backToQueue": "Back to review queue",
-  "review.claimChanged": "This claim has changed. Refresh the page and try again."
+  "review.claimChanged": "This claim has changed. Refresh the page and try again.",
+  "moderation.featuredManage": "Manage featured cards",
+  "moderation.featureIntro": "Featured badges appear on rankings and card pages to highlight community recommendations.",
+  "moderation.unfeatureConfirm": "Removing this feature clears the badge. The author’s rebate follows any other applicable tier.",
+  "moderation.featureFailed": "The featured status could not be confirmed. Refresh before trying again.",
+  "moderation.featureSaved": "Featured status updated."
 }
