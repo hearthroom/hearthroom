@@ -76,14 +76,22 @@ DROP TRIGGER moderation_suspend;
 
 INSERT OR IGNORE INTO card_numbers(provider,source_role_id)
 SELECT provider,source_role_id FROM cards
-UNION SELECT provider,source_role_id FROM review_submissions
+UNION SELECT s.provider,s.source_role_id FROM review_submissions s
+ WHERE NOT EXISTS (SELECT 1 FROM cards c WHERE c.id=s.card_id)
+ AND NOT EXISTS (SELECT 1 FROM hosting_versions v WHERE v.card_id=s.card_id)
 UNION SELECT provider,source_role_id FROM hosting_versions
 UNION SELECT source_provider,source_role_id FROM works;
 CREATE TABLE card_identity_migration (old_id TEXT PRIMARY KEY, num INTEGER NOT NULL);
 INSERT INTO card_identity_migration
-SELECT c.id,n.num FROM cards c JOIN card_numbers n USING(provider,source_role_id)
-UNION SELECT s.card_id,n.num FROM review_submissions s JOIN card_numbers n USING(provider,source_role_id)
-UNION SELECT v.card_id,n.num FROM hosting_versions v JOIN card_numbers n USING(provider,source_role_id) WHERE v.card_id IS NOT NULL;
+SELECT c.id,n.num FROM cards c JOIN card_numbers n USING(provider,source_role_id);
+-- Review source_role_id can identify an immutable hosted snapshot. The card's
+-- live source, then the hosting version's original source, owns its number.
+INSERT INTO card_identity_migration
+SELECT DISTINCT v.card_id,n.num FROM hosting_versions v JOIN card_numbers n USING(provider,source_role_id)
+ WHERE v.card_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM card_identity_migration m WHERE m.old_id=v.card_id);
+INSERT INTO card_identity_migration
+SELECT DISTINCT s.card_id,n.num FROM review_submissions s JOIN card_numbers n USING(provider,source_role_id)
+ WHERE NOT EXISTS (SELECT 1 FROM card_identity_migration m WHERE m.old_id=s.card_id);
 -- Unknown historical references abort the transaction rather than discard data.
 CREATE TABLE card_identity_migration_guard (ok INTEGER NOT NULL CHECK(ok=1));
 INSERT INTO card_identity_migration_guard SELECT NOT EXISTS (

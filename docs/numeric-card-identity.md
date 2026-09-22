@@ -138,3 +138,13 @@ after schema replacement. The deployment detector rejects missing/unknown/error
 schema results. The first full suite exposed a cold-binding query in the warm-board
 test; it now separately asserts the single schema query and retains the original
 two-query warm-request budget. Release testing includes these additional cases.
+
+The first production attempt rolled back atomically at the temporary mapping's
+unique constraint. Hosted review submissions can use a frozen role as their
+`source_role_id`, while sharing the original card's `card_id`. The mapping now
+prefers the live card, then the hosting version's original source, and only uses
+the review source for legacy records without either authority. Frozen snapshots
+do not receive additional public numbers. The migration fixture reproduces this
+conflict and verifies that all review references retain the original number.
+The maintenance Worker stayed closed during correction; no migration record or
+temporary mapping survived the failed transaction.
