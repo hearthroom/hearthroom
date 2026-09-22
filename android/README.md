@@ -28,7 +28,9 @@ Set `ANDROID_HOME` to the SDK. The debug build uses `club.hearthroom.app.debug` 
 
 ## Updates
 
-Normal launch checks for an app update briefly, then opens the website. A failed or slow check does not block access. When an update is available, the user can read its notes, download it, or continue to the website. Long-press the launcher icon and choose **Check for updates** for a manual check. The download has a progress bar; opening the website cancels an active download.
+Normal launch waits for the update check to complete before deciding whether to show a release or open the website. A slow check is no longer cancelled after 2.5 seconds. The request retains its connection/read timeouts; a failed check opens the website, and **Open Hearthroom** lets the user skip an unfinished check at any time. When an update is available, the user can read its notes, download it, or continue to the website. Long-press the launcher icon and choose **Check for updates** for a manual check. The download has a progress bar; opening the website cancels an active download. Resuming an already-open browser/WebView session is not a new launcher check; use the manual shortcut to check without leaving the app session to chance.
+
+`StartupUpdateTest` holds a controlled transport response for more than 2.5 seconds while exercising the real Activity lifecycle. It verifies the delayed release remains visible, an up-to-date/failed check requests the site, and the explicit skip cancels the check. An Activity monitor intercepts that destination so the live website cannot contaminate controlled page fixtures; `NoBrowserLaunchTest` separately verifies the actual WebView launch. It does not depend on the current public release or network timing.
 
 The updater accepts only `https://downloads.hearthroom.club/latest.json` and its fixed `latest.apk` URL. It bounds payload sizes, rejects downgrades, checks the APK's size/hash/package/version/signing certificate, and delegates installation to Android. Unknown-source permission is requested only when the user installs. Cancellation preserves the current app. Android's package installer performs final signature verification.
 

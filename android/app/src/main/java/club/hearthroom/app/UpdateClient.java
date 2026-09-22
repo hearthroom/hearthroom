@@ -4,7 +4,7 @@ import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
 
-final class UpdateClient {
+class UpdateClient {
     private volatile boolean cancelled;
     private volatile HttpURLConnection connection;
     void cancel() { cancelled=true; HttpURLConnection c=connection; if(c!=null)c.disconnect(); }

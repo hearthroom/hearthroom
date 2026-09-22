@@ -144,7 +144,8 @@ public class WebActivityTest {
         assertNotNull(device.wait(Until.findObject(By.text("issuer.example.test")),5000));
         assertEquals("\"undefined\"",js(web,"typeof window.HearthroomDownload"));
         device.wait(Until.findObject(By.text("Return to community")),5000).click();
-        assertNotNull(device.wait(Until.findObject(By.text("Returned")),5000));
+        androidx.test.uiautomator.UiObject2 returned=device.wait(Until.findObject(By.text("Returned")),5000);
+        assertNotNull(js(web,"JSON.stringify({url:location.href,ready:document.readyState,returned:document.body.innerText==='Returned',serviceWorker:!!navigator.serviceWorker.controller})"),returned);
         assertEquals("\"retained\"",js(web,"sessionStorage.getItem('test-oauth-state')"));
     }
     @Test public void iframeCannotOpenTheNativeSaveDialog() throws Exception {
