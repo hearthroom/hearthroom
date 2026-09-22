@@ -4,7 +4,7 @@ import { computed, ref, watch } from "vue";
 import { useSession } from "@/lib/session";
 import { playCopies } from "@/lib/card-workspace";
 import { platformPath, type CardCopy } from "@/lib/distribution";
-import { compact, hueFrom } from "@/lib/format";
+import { compact } from "@/lib/format";
 import { zoneLabel } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
 import { can, currentProvider, providerName, type ProviderId } from "@/lib/provider";
@@ -23,7 +23,6 @@ const choosingPlay=ref(false);
 const plays=computed(()=>playCopies(sourceId.value,source.value,stored.value,session.profile?.identities.map(i=>i.provider as ProviderId)??[source.value]));
 const accountLabel=(p:ProviderId)=>props.emails?.[p] || providerName(p);
 
-const hue = computed(() => hueFrom(props.card.name));
 const initial = computed(() => [...props.card.name][0] ?? "?");
 const failedArt = ref<string[]>([]);
 const artwork = computed(() => [props.card.backgroundUrl, props.card.avatarUrl]
@@ -40,11 +39,7 @@ function onArtError() {
       <!-- 封面連到卡片頁：編輯有自己的鍵在下面（作者回報 2026-09-16：點自己的卡跳進編輯頁） -->
       <a :href="platformPath(lp(`/cards/${sourceId}`),source)" class="card__art">
         <img v-if="artwork" :key="artwork" :src="artwork" :alt="card.name" loading="lazy" @error="onArtError" />
-        <div
-          v-else
-          class="card__void"
-          :style="{ background: `linear-gradient(160deg, hsl(${hue} 45% 78%), hsl(${(hue + 40) % 360} 40% 62%))` }"
-        >
+        <div v-else class="card__void">
           <span :aria-label="card.name">{{ initial }}</span>
         </div>
       </a>
@@ -114,29 +109,32 @@ function onArtError() {
 }
 .card:hover { box-shadow: 0 0 0 1px var(--line-strong), var(--shadow-md); }
 /* 封面與操作共同構成直式卡片；內容較長時自然長高，不裁掉按鈕。 */
-.card__poster { position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: space-between; aspect-ratio: 2 / 3; color: var(--on-accent); background: #17171c; }
+.card__poster { position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: space-between; aspect-ratio: 2 / 3; color: var(--poster-text); background: #17171c; --poster-text: #fff; --poster-muted: rgba(255,255,255,.85); --poster-meta: rgba(255,255,255,.75); --poster-button: rgba(255,255,255,.12); --poster-button-hover: rgba(255,255,255,.22); --poster-border: rgba(255,255,255,.24); }
 .card__art { position: absolute; inset: 0; display: block; z-index: -1; }
 .card__art img { width: 100%; height: 100%; display: block; object-fit: cover; object-position: center top; }
+/* 單一遮罩跨越整張封面，避免各內容區的漸層接出亮帶。 */
+.card__art:has(img)::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(16,16,24,.1) 0%, rgba(16,16,24,.32) 20%, rgba(16,16,24,.57) 40%, rgba(16,16,24,.8) 60%, rgba(16,16,24,.93) 80%, rgba(16,16,24,.98) 100%); }
 .card__art:focus-visible { outline-offset: -4px; }
-.card__void { display: grid; place-items: center; width: 100%; height: 100%; padding-bottom: 35%; }
-.card__void span { font-size: 56px; font-weight: 500; color: var(--on-accent); opacity: .8; }
-.card__badges { display: flex; flex-wrap: wrap; gap: var(--s-1); padding: var(--s-3) var(--s-3) var(--s-6); background: linear-gradient(to bottom, rgba(16,16,24,.65), transparent); pointer-events: none; }
+.card__void { display: grid; place-items: center; width: 100%; height: 100%; padding-bottom: 55%; background: var(--surface-2); }
+.card__void span { display: grid; place-items: center; width: 72px; height: 88px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); color: var(--text-3); font-size: 36px; font-weight: 500; box-shadow: var(--shadow-sm); }
+.card__poster:has(.card__void) { --poster-text: var(--text); --poster-muted: var(--text-2); --poster-meta: var(--text-3); --poster-button: var(--surface); --poster-button-hover: var(--border); --poster-border: var(--border-strong); background: var(--surface-2); }
+.card__poster:has(.card__void) .card__badge--muted { background: var(--surface); color: var(--text-2); box-shadow: 0 0 0 1px var(--line); }
+.card__badges { display: flex; flex-wrap: wrap; gap: var(--s-1); padding: var(--s-3) var(--s-3) var(--s-6); pointer-events: none; }
 .card__badge {
   min-height: 22px; max-width: 100%; padding: 2px var(--s-2); display: inline-flex; align-items: center;
   overflow-wrap: anywhere; border-radius: var(--r-pill);
   background: var(--accent-btn); color: var(--on-accent); font-size: 11.5px; font-weight: 600;
 }
 .card__badge--muted { background: rgba(16,16,24,.7); }
-.card__content { position: relative; display: grid; gap: var(--s-3); padding: var(--s-3); margin-top: var(--s-7); background: linear-gradient(to top, rgba(16,16,24,.97), rgba(16,16,24,.87) 65%, rgba(16,16,24,.7)); }
-.card__content::before { content: ""; position: absolute; bottom: 100%; left: 0; right: 0; height: var(--s-7); background: linear-gradient(to top, rgba(16,16,24,.7), transparent); pointer-events: none; }
+.card__content { position: relative; display: grid; gap: var(--s-3); padding: var(--s-3); margin-top: var(--s-7); }
 .card__intro { display: grid; min-width: 0; gap: var(--s-1); pointer-events: none; }
 .card__name { font-size: 18px; font-weight: 600; line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
-.card__hook { font-size: 13px; line-height: 1.5; color: rgba(255,255,255,.85); display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
-.card__meta { font-size: 12px; color: rgba(255,255,255,.75); font-variant-numeric: tabular-nums; }
+.card__hook { font-size: 13px; line-height: 1.5; color: var(--poster-muted); display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.card__meta { font-size: 12px; color: var(--poster-meta); font-variant-numeric: tabular-nums; }
 .card__actions { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: var(--s-2); }
 .card__actions > .btn { min-height: 44px; height: auto; white-space: normal; min-width: 0; padding-inline: var(--s-2); overflow-wrap: anywhere; }
-.card__actions > .btn:not(.btn--primary) { color: var(--on-accent); background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.24); }
-.card__actions > .btn:not(.btn--primary):hover { background: rgba(255,255,255,.22); }
+.card__actions > .btn:not(.btn--primary) { color: var(--poster-text); background: var(--poster-button); border-color: var(--poster-border); }
+.card__actions > .btn:not(.btn--primary):hover { background: var(--poster-button-hover); }
 .card__actions > .btn:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .card__actions > .card__withdraw { background: transparent; }
 .card__body { display: grid; min-width: 0; gap: var(--s-2); padding: var(--s-3); }
