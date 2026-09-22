@@ -10460,6 +10460,236 @@
           }
         }
       }
+    },
+    "/open/v1/hosting/draft": {
+      "post": {
+        "operationId": "createHostedTransferDraft",
+        "summary": "Seal an immutable HearthRoom hosting revision",
+        "description": "Issuer key and target author authorization create an idempotent private transfer draft. operationId is retained across retries. No public version is assigned.",
+        "security": [
+          {
+            "AuthorBearer": [],
+            "HostingIssuerKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "workId",
+                  "operationId",
+                  "name",
+                  "language"
+                ],
+                "properties": {
+                  "workId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "operationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "language": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed immutable revision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "workId",
+                    "roleId"
+                  ],
+                  "properties": {
+                    "workId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "roleId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid issuer or OAuth credential"
+          },
+          "403": {
+            "description": "Wrong owner or missing scope"
+          },
+          "409": {
+            "description": "hosting_version_conflict or hosting_requires_uploaded_media"
+          },
+          "503": {
+            "description": "hosting_unavailable"
+          }
+        },
+        "x-capability": "immutable-hosting-v1"
+      }
+    },
+    "/open/v1/hosting/stage": {
+      "post": {
+        "operationId": "stageHostedRevision",
+        "summary": "Seal an immutable HearthRoom hosting revision",
+        "description": "Freeze a complete transfer candidate under an internal operationId. Returns only workId and hostedRevisionId; the official version is bound after issuer readback verification. Index dependencies must be ready.",
+        "security": [
+          {
+            "AuthorBearer": [],
+            "HostingIssuerKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "roleId",
+                  "workId",
+                  "operationId"
+                ],
+                "properties": {
+                  "roleId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "workId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "operationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed immutable revision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "workId",
+                    "hostedRevisionId"
+                  ],
+                  "properties": {
+                    "workId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "hostedRevisionId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid issuer or OAuth credential"
+          },
+          "403": {
+            "description": "Wrong owner or missing scope"
+          },
+          "409": {
+            "description": "hosting_version_conflict or hosting_requires_uploaded_media"
+          },
+          "503": {
+            "description": "hosting_unavailable"
+          }
+        },
+        "x-capability": "immutable-hosting-v1"
+      }
+    },
+    "/open/v1/hosting/promote": {
+      "post": {
+        "operationId": "promoteHostedRevision",
+        "summary": "Seal an immutable HearthRoom hosting revision",
+        "description": "Bind a staged immutable candidate to the source versionId after issuer comparison of content and media bytes. Repeating the same binding is idempotent; conflicting work, owner or finalized version is rejected.",
+        "security": [
+          {
+            "AuthorBearer": [],
+            "HostingIssuerKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "roleId",
+                  "workId",
+                  "versionId"
+                ],
+                "properties": {
+                  "roleId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "workId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "versionId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed immutable revision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostedRevisionReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid issuer or OAuth credential"
+          },
+          "403": {
+            "description": "Wrong owner or missing scope"
+          },
+          "409": {
+            "description": "hosting_version_conflict or hosting_requires_uploaded_media"
+          },
+          "503": {
+            "description": "hosting_unavailable"
+          }
+        },
+        "x-capability": "immutable-hosting-v1"
+      }
     }
   },
   "components": {

@@ -16,7 +16,7 @@ import CardEditorPage from "../src/pages/CardEditorPage.vue";
 import { confirmState, settleConfirm } from "../src/lib/confirm";
 
 const platforms = vi.hoisted(()=>({profile:undefined as any, saveCopies:vi.fn(async()=>[] as any[])}));
-vi.mock("../src/lib/authoring-platforms",()=>({saveCopies:platforms.saveCopies}));
+vi.mock("../src/lib/authoring-platforms",()=>({saveCopies:platforms.saveCopies,savedDistributionTargets:async()=>[]}));
 const api = vi.hoisted(() => ({
   createRole: vi.fn(async () => ({ roleId: "r1" })),
   patchRoleDocument: vi.fn(async () => ({})),
@@ -454,10 +454,10 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     expect(doc.entries[0].triggerRegion).toBe("user_only");
   });
 
-  it("已公開的卡：頁上提示，儲存時先轉私有再存；審核中的卡只提示", async () => {
+  it("版本化卡片：儲存只修改草稿，頁上說明已發布版本繼續可玩", async () => {
     api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "北境", roleDesc: "舊簡介", roleVisibility: "public" });
     await mount("/cards/r1/edit");
-    expect(document.body.textContent).toContain("這張卡已經公開");
+    expect(document.body.textContent).toContain(i18n.global.t("workspace.editNotice"));
     api.unpublishRole.mockClear();
     api.patchRoleDocument.mockClear();
     const desc = $<HTMLTextAreaElement>("#f-desc");
@@ -480,7 +480,7 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
 
     api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "北境", roleVisibility: "waitReview" });
     await mount("/cards/r2/edit");
-    expect(document.body.textContent).toContain("正在審核中");
+    expect(document.body.textContent).toContain(i18n.global.t("workspace.editNotice"));
   });
 
   it("只調順序也存得下來：不送任何條目操作，只送新的順序", async () => {
@@ -719,15 +719,15 @@ it('HarperHarbor submits once to HearthRoom with an explicit rating and no hosti
  expect(router.currentRoute.value.path).toBe('/mine');
 });
 
-it('keeps private LunaTalk drafts on their existing upstream review path',async()=>{
+it('submits a private LunaTalk draft to the same immutable community review',async()=>{
  api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Legacy draft',roleDetailDesc:'Private instructions',roleWelcome:'Hello'});
  await mount('/cards/r1/edit');
- expect(root.textContent).toContain(i18n.global.t('workspace.legacyReviewHint'));
+ expect(root.textContent).toContain(i18n.global.t('workspace.editHint'));
  byText('發布').click();await flush();
  btnIn(root,i18n.global.t('editor.publish.submit')).click();await flush();
  settleConfirm(true,'','sfw');await flush();await flush();
- expect(api.submitRoleForReview).toHaveBeenCalledWith('r1',i18n.global.t('editor.publish.summary',{name:'Legacy draft'}),'tok');
- expect(api.registerCard).not.toHaveBeenCalled();
+ expect(api.submitRoleForReview).not.toHaveBeenCalled();
+ expect(api.registerCard).toHaveBeenCalledWith('r1','tok',false,[],'lunatalk');
  expect(router.currentRoute.value.path).toBe('/mine');
 });
 

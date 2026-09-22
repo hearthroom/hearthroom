@@ -57,14 +57,14 @@ it('a failed seal remains retryable and concurrent retries leave only one privat
  expect((await env.DB.prepare('SELECT count(*) n FROM review_submissions').first<{n:number}>())?.n).toBe(1);
 });
 
-it('HTTP submits a private Harbor draft and exposes only approved hosted choices',async()=>{
+it.each(['harbor','lunatalk'] as const)('HTTP submits a private %s draft and exposes only approved hosted choices',async(provider)=>{
  (env as {HOSTING_SERVICE_KEY?:string}).HOSTING_SERVICE_KEY='fixture';reviewOn();
  vi.spyOn(upstream,'fetchMe').mockResolvedValue({accountNumId:10001});
- vi.spyOn(upstream,'fetchRole').mockRejectedValue(new Error('private draft cannot be read anonymously'));
+ vi.spyOn(upstream,'fetchRole').mockImplementation(async(_env,id)=>{if(id==='private-draft')throw new Error('private draft');return role({roleId:id,authorNumId:10001})});
  vi.spyOn(hostGateway,'seal').mockImplementation(async(_env,_token,_id,workId,versionId)=>({workId,versionId,hostedRevisionId:'sealed-'+versionId}));
  vi.spyOn(hostGateway,'read').mockImplementation(async(_env,_token,id)=>role({roleId:id,authorNumId:10001}));
  vi.spyOn(upstream,'readForReview').mockResolvedValue({hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
- const headers={Authorization:'Bearer author','X-Provider':'harbor','Content-Type':'application/json'};
+ const headers={Authorization:'Bearer author','X-Provider':provider,'Content-Type':'application/json'};
  const response=await SELF.fetch('https://c.test/v1/cards',{method:'POST',headers,body:JSON.stringify({roleId:'private-draft',nsfw:false,operationId:crypto.randomUUID()})});
  expect(response.status).toBe(201);
  expect(upstream.fetchRole).not.toHaveBeenCalled();
@@ -75,7 +75,7 @@ it('HTTP submits a private Harbor draft and exposes only approved hosted choices
  expect(decision.headers.get('cache-control')).toContain('no-store');
  const receipt=await decision.json() as {hostedRevisionId:string};
  const choices=await SELF.fetch('https://c.test/v1/cards/'+receipt.hostedRevisionId+'/platforms',{headers});
- expect(await choices.json()).toEqual({platforms:[{provider:'harbor',roleId:receipt.hostedRevisionId,playable:true}]});
+ expect(await choices.json()).toEqual({platforms:[{provider,roleId:receipt.hostedRevisionId,playable:true}]});
  const publicCard=await SELF.fetch('https://c.test/v1/cards/'+receipt.hostedRevisionId,{headers});
  expect(publicCard.status).toBe(200);
  expect((await publicCard.json() as {roleId:string}).roleId).toBe(receipt.hostedRevisionId);

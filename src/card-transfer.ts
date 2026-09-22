@@ -16,6 +16,7 @@ import { HttpError, type Env } from "./types";
  * 不搬：目標站自己翻的多語譯文。
  */
 export interface TransferEntry {
+  priority?:number;
   name: string;
   content: string;
   keywords: string[];
@@ -34,6 +35,7 @@ export interface TransferWorldbook {
   entries: TransferEntry[];
 }
 export interface TransferAsset {
+  cardFormat?:string;
   rules: unknown[];
   mountTrigger: string;
   mountLayer: string;
@@ -135,6 +137,7 @@ function normalizeEntry(e: Record<string, any>): TransferEntry {
   const category = text(e.category);
   const region = text(e.triggerRegion);
   return {
+    ...(typeof e.priority==='number'?{priority:e.priority}:{}),
     name: text(e.name).trim(),
     content: text(e.content),
     keywords: words(e.keywords),
@@ -146,13 +149,14 @@ function normalizeEntry(e: Record<string, any>): TransferEntry {
     triggerRegion: region === "both" ? "" : region,
   };
 }
-async function readWorldbooks(env: Env, p: ProviderId, token: string, roleId: string): Promise<TransferWorldbook[]> {
-  const books = await readBooks((path,body,method)=>call(env,p,token,path,body,method),roleId);
-  return books.map(b=>({sourceId:b.sourceId,name:String(b.metadata.name),metadata:b.metadata,entries:b.entries.map(normalizeEntry)})).sort((a,b)=>a.name.localeCompare(b.name));
+async function readWorldbooks(env: Env, p: ProviderId, token: string, roleId: string, preserveOrder=false): Promise<TransferWorldbook[]> {
+  const books = await readBooks((path,body,method)=>call(env,p,token,path,body,method),roleId,preserveOrder);
+  const result=books.map(b=>({sourceId:b.sourceId,name:String(b.metadata.name),metadata:b.metadata,entries:b.entries.map(normalizeEntry)}));return preserveOrder?result:result.sort((a,b)=>a.name.localeCompare(b.name));
 }
-function normalizeAsset(a: Record<string, any> | null): TransferAsset | null {
+function normalizeAsset(a: Record<string, any> | null, hosted=false): TransferAsset | null {
   if (!a) return null;
   const asset = {
+    ...(hosted&&text(a.cardFormat)?{cardFormat:text(a.cardFormat)}:{}),
     rules: Array.isArray(a.rules) ? a.rules : [],
     mountTrigger: text(a.mountTrigger),
     mountLayer: text(a.mountLayer),
@@ -165,7 +169,8 @@ async function read(
   p: ProviderId,
   token: string,
   id: string,
-  owner: number
+  owner: number,
+  hosted=false
 ): Promise<TransferRead> {
   const r = await call(
     env,
@@ -177,6 +182,8 @@ async function read(
     throw new HttpError(403, "sync_not_owner");
   if (!("roleDetailDesc" in r))
     throw new HttpError(409, "sync_private_content_unavailable");
+  if(hosted&&Array.isArray(r.availableLocales)&&r.availableLocales.some((locale:unknown)=>locale!==r.language&&!['en','ja','ko'].includes(String(locale))))throw new HttpError(409,'sync_unsupported_content');
+  if(hosted&&(text(r.highDefined)||text(r.themeId)||Number(r.xmlV3MinFeatureLevel||1)>1||text(r.xmlV3Capabilities)))throw new HttpError(409,'sync_unsupported_content');
   // Transfer the common text and image contract. Reject richer fields that cannot be preserved.
   for (const key of [
     "roleSpeech",
@@ -228,8 +235,8 @@ async function read(
     alternates: strings(r.welcomeAlternates ?? r.roleWelcomeAlternates ?? r.alternates),
     prologue: strings(r.rolePrologue ?? r.prologue),
   };
-  const worldbooks = await readWorldbooks(env, p, token, id);
-  const authorAsset = normalizeAsset(await callOptional(env, p, token, `/role/author-asset?roleId=${encodeURIComponent(id)}`));
+  const worldbooks = await readWorldbooks(env, p, token, id,hosted);
+  const authorAsset = normalizeAsset(await callOptional(env, p, token, `/role/author-asset?roleId=${encodeURIComponent(id)}`),hosted);
   return {
     card: {
       fields,
@@ -285,6 +292,8 @@ async function update(
     images[field] = c.media?.[field]
       ? imageReference(env, p, c.media[field]!)
       : "";
+  const fields={...(c.fields??{})};
+  if(p==='lunatalk'&&'customInstructions' in fields){fields.jailbreak=fields.customInstructions;delete fields.customInstructions}
   await call(env, p, token, `/role/${encodeURIComponent(id)}/document`, {
     fields: {
       roleName: c.name,
@@ -294,7 +303,7 @@ async function update(
       roleAvatar: images.avatar,
       roleBackground: images.background,
       roleBackgroundLandscape: images.backgroundLandscape,
-      ...(c.fields ?? {}),
+      ...fields,
     },
   });
   await checkpoint?.();
@@ -343,4 +352,5 @@ async function publish(
 async function unpublish(env:Env,p:ProviderId,token:string,id:string) {
  await call(env,p,token,`/role/${encodeURIComponent(id)}/visibility`,{visibility:p==='harbor'?'unlisted':'private'});
 }
-export const transfers = { read, create, update, ensurePlayable, publish, unpublish };
+async function readHosted(env:Env,p:ProviderId,token:string,id:string,owner:number){return read(env,p,token,id,owner,true)}
+export const transfers = { readHosted, read, create, update, ensurePlayable, publish, unpublish };

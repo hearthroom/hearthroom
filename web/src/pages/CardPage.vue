@@ -298,10 +298,10 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
             </li>
           </ul>
 
+          <!-- 平台選擇與主行動獨占整列，避免被次要操作擠出側欄。 -->
+          <CardPlatforms class="role__platforms" :card-id="card.id" :provider="card.provider" />
           <div class="role__actions">
             <RouterLink :to="lp(`/me?reportCard=${encodeURIComponent(String(card.num || card.id))}`)" class="btn">{{$t("community.reportCard")}}</RouterLink>
-            <!-- 站內玩：/play/:roleId 由舞台（stage/）整頁接管 -->
-            <CardPlatforms :card-id="card.id" :provider="card.provider" />
             <button class="btn btn--lg btn--icon role__share" :aria-label="$t('card.share')" :title="$t('card.share')" @click="share">
               <svg viewBox="0 0 20 20" aria-hidden="true">
                 <path d="M10 12.5V3.5M6.5 7 10 3.5 13.5 7M4 11v4.5a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
@@ -391,7 +391,8 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 /* 左欄：這張卡的「身分證」——貼著頁首捲動時留在原地 */
 .role__side {
   position: sticky; top: calc(var(--header-h) + var(--s-4));
-  display: grid; gap: var(--s-4); padding: var(--s-4);
+  display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0;
+  gap: var(--s-4); padding: var(--s-4);
   background: color-mix(in srgb, var(--surface) 90%, transparent);
   backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
 }
@@ -401,7 +402,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 .role__void { display: grid; place-items: center; height: 100%; }
 .role__void span { font-size: 80px; font-weight: 600; color: rgba(255, 255, 255, 0.9); }
 
-.role__id { display: grid; gap: 6px; }
+.role__id { display: grid; min-width: 0; overflow-wrap: anywhere; gap: 6px; }
 .role__name { font-size: 22px; line-height: 1.25; }
 .role__by {
   display: flex; align-items: center; gap: 10px;
@@ -436,8 +437,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 .role__stats .stat dd.up { color: var(--accent-text); }
 
 .role__tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.role__actions { display: grid; grid-template-columns: 1fr auto; gap: var(--s-3); }
-.role__actions > .platforms { grid-column: 1 / -1; grid-row: 1; }
+.role__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
 .role__cta { flex: 1; min-width: 0; }
 .role__via { margin: 6px 0 0; }
 .role__install { justify-self: start; gap: 6px; margin-top: 2px; }
@@ -472,7 +472,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
   .role__layout { grid-template-columns: 1fr; }
   .role__side { position: static; grid-template-columns: 132px minmax(0, 1fr); align-items: start; column-gap: var(--s-4); }
   .role__art { grid-row: 1 / span 3; }
-  .role__stats, .role__tags, .role__actions, .role__install, .role__side > .library-toggle { grid-column: 1 / -1; }
+  .role__stats, .role__tags, .role__platforms, .role__actions, .role__install, .role__side > .library-toggle { grid-column: 1 / -1; }
   .role__home, .role__comments { padding: var(--s-4); }
 }
 </style>

@@ -12,6 +12,7 @@ import MyCardTile from "@/components/MyCardTile.vue";
 import { useSession } from "@/lib/session";
 import { connectionMessage } from "@/lib/distribution";
 import { apiBaseOf, can, currentProvider, providerName, type ProviderId } from "@/lib/provider";
+import { savedDistributionTargets } from "@/lib/authoring-platforms";
 import { accountToken } from "@/lib/connections";
 
 const route = useRoute();
@@ -80,7 +81,7 @@ async function submit(card: WorkspaceCard) {
   // 提交時必須宣告分級，而且刻意不預選：這是作者親手做的聲明，審核人會對照內容，不符會被駁回
   const rating = await confirmChoice({
     title: t("mine.consent.title"),
-    message: t(card.provider==='harbor'?"workspace.reviewConsent":"mine.consent.message"),
+    message: t("workspace.reviewConsent"),
     confirmText: t("mine.consent.confirm"),
     choiceLabel: t("mine.rating.label"),
     choices: [
@@ -97,7 +98,7 @@ async function submit(card: WorkspaceCard) {
   try {
     const token = await cardToken(card);
     // Community review is one publication. Platform distribution is an explicit, separate choice.
-    const res = await registerCard(card.roleId, token, nsfw, [], card.provider);
+    const res = await registerCard(card.roleId, token, nsfw, await savedDistributionTargets(card.roleId,card.provider), card.provider);
     card.registered = true;
     card.updateStatus = wasRegistered && res.status==='approved' ? 'pending' : undefined;
     card.status = res.status === "unlisted" ? undefined : res.status ?? "approved";

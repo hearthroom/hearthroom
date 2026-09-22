@@ -374,9 +374,9 @@ export async function workFor(
 ) {
   return db
     .prepare(
-      `SELECT id,source_provider,source_role_id FROM works WHERE (source_provider=? AND source_role_id=?) OR id IN (SELECT work_id FROM work_copies WHERE provider=? AND role_id=?)`
+      `SELECT id,source_provider,source_role_id FROM works WHERE (source_provider=? AND source_role_id=?) OR id IN (SELECT work_id FROM work_copies WHERE provider=? AND role_id=?) OR id IN (SELECT v.work_id FROM hosting_versions v JOIN hosting_replicas r ON r.version_id=v.version_id WHERE r.provider=? AND r.hosted_revision_id=?)`
     )
-    .bind(provider, roleId, provider, roleId)
+    .bind(provider, roleId, provider, roleId, provider, roleId)
     .first<{
       id: string;
       source_provider: ProviderId;
@@ -398,6 +398,24 @@ export async function copiesFor(
       .bind(work.id)
       .all<CopySummary>()
   ).results;
+  const versions = await db.prepare(`SELECT t.provider,t.draft_role_id AS roleId,
+    t.state,t.error,t.updated_at AS updatedAt,r.hosted_revision_id AS hostedRoleId,v.state AS versionState
+    FROM hosting_transfers t JOIN hosting_versions v ON v.version_id=t.version_id
+    LEFT JOIN hosting_replicas r ON r.version_id=t.version_id AND r.provider=t.provider
+    LEFT JOIN cards c ON c.id=v.card_id
+    WHERE v.work_id=? AND (v.state='pending' OR (v.state='approved' AND c.approved_version_id=v.version_id))
+    ORDER BY t.updated_at`).bind(work.id).all<{provider:ProviderId;roleId:string|null;state:string;error:string;updatedAt:number;hostedRoleId:string|null;versionState:string}>();
+  for(const transfer of versions.results) {
+    const existing=copies.find(copy=>copy.provider===transfer.provider);
+    const failed=['failed','mismatch','uncertain'].includes(transfer.state);
+    if(existing) {
+      if(failed){existing.status='failed';existing.error=transfer.error;existing.updatedAt=transfer.updatedAt;}
+    } else {
+      copies.push({provider:transfer.provider,roleId:transfer.hostedRoleId,
+        status:failed?'failed':transfer.state==='ready'?(transfer.versionState==='approved'?'published':'pending'):'syncing',
+        error:transfer.error,updatedAt:transfer.updatedAt});
+    }
+  }
   return [
     {
       provider: work.source_provider,
