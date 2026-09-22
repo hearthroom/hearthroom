@@ -57,7 +57,7 @@ describe("我的卡片", () => {
   it("只回傳畫面用得到的欄位", async () => {
     const { body } = await mine();
     expect(Object.keys(body.items[0]).sort()).toEqual(
-      ["avatarUrl", "game", "name", "provider", "registered", "roleId", "summary", "talkNum", "visibility", "zone"],
+      ["avatarUrl", "backgroundUrl", "game", "name", "provider", "registered", "roleId", "summary", "talkNum", "visibility", "zone"],
     );
   });
 });
@@ -174,6 +174,14 @@ describe("篩選", () => {
     const { body } = await mine("?filter=listed");
     expect(body.total).toBeNull();
     expect(body.registeredTotal).toBe(3);
+  });
+
+  it("已登記清單保留儲存的直式背景", async () => {
+    await env.DB.prepare("UPDATE cards SET background_url = ? WHERE source_role_id = ?")
+      .bind("https://cdn.example.test/portrait.png", "a1").run();
+    const { body } = await mine("?filter=listed");
+    expect(body.items.find((card: any) => card.roleId === "a1").backgroundUrl)
+      .toBe("https://cdn.example.test/portrait.png");
   });
 
   it("已登記那組不必問上游", async () => {

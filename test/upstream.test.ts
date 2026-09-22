@@ -158,3 +158,12 @@ describe("上游呼叫的 HTTP 形狀", () => {
     await expect(upstream.fetchMe(env, "t")).rejects.toBeInstanceOf(HttpError);
   });
 });
+
+
+it.each(['lunatalk', 'harbor'] as const)('keeps the portrait background in %s author lists without exposing private fields', async (provider) => {
+ vi.stubGlobal('fetch', async () => new Response(JSON.stringify({roleList:[{...mainSiteRole, roleBackgroundLandscape:'https://cdn.example.test/landscape.png'}], total:1, hasNextPage:false})));
+ const page = await upstream.fetchMyRoles(env, 'fixture-token', 1, 24, provider);
+ expect(page.items[0]).toMatchObject({avatarUrl:mainSiteRole.roleAvatar, backgroundUrl:mainSiteRole.roleBackground});
+ expect(page.items[0]).not.toHaveProperty('roleBackgroundLandscape');
+ expect(page.items[0]).not.toHaveProperty('roleDetailDesc');
+});

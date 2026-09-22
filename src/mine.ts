@@ -102,6 +102,7 @@ export async function loadMine(
             name: card.name,
             summary: card.summary,
             avatarUrl: card.avatarUrl,
+            backgroundUrl: card.backgroundUrl,
             // 上游的可見性不在本站的庫裡，而畫面上也不顯示它。
             visibility: "",
             talkNum: card.talkNum,

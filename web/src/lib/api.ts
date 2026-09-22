@@ -448,6 +448,8 @@ export interface MyCard {
   name: string;
   summary: string;
   avatarUrl: string | null;
+  /** Portrait background; optional for cached and older responses. */
+  backgroundUrl?: string | null;
   visibility: string;
   talkNum: number;
   registered: boolean;

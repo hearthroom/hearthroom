@@ -195,6 +195,7 @@ export function myRolesOnUpstream(byToken: Record<string, MyRoleFixture[]>): voi
         name: r.name ?? r.roleId,
         summary: "",
         avatarUrl: null,
+        backgroundUrl: null,
         visibility: r.visibility ?? "private",
         talkNum: r.talkNum ?? 0,
       })),
