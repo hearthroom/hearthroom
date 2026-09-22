@@ -54,7 +54,9 @@ it('clears tokens and embedded app state when another tab logs out',async()=>{
   expect(await managedToken('harbor')).toBeNull();
 });
 
-it('uses the current server grant after another device reconnects, even when a local access token has not expired',async()=>{
+// 重用只在五分鐘內、且離到期超過一分鐘（managed-token-reuse.test.ts）。另一台設備換綁後，
+// 快到期的那張不會再被拿出來用；還很新的那張由供應商拒絕後換掉（recoverRejectedToken）。
+it('uses the current server grant after another device reconnects once the local access token is near expiry',async()=>{
   const {createPinia,setActivePinia}=await import('pinia');
   const {useSession}=await import('@/lib/session');
   const {accountToken}=await import('@/lib/connections');

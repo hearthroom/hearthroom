@@ -11,7 +11,7 @@ import NotFoundPage from "@/pages/NotFoundPage.vue";
 import AdultGate from "@/components/AdultGate.vue";
 import PreviewDoc from "@/components/preview/PreviewDoc.vue";
 import HtmlCardFrame from "@/components/HtmlCardFrame.vue";
-import { ApiError, fetchBoard, fetchCard, fetchPlayerAsset, fetchPreviewPage, fetchRoleDetail } from "@/lib/api";
+import { ApiError, fetchBoard, fetchCard, fetchCardPlatforms, type CardPlatform, fetchPlayerAsset, fetchPreviewPage, fetchRoleDetail } from "@/lib/api";
 import { renderWelcome } from "@/lib/welcome-render";
 import { recallCard } from "@/lib/card-memory";
 import { accountToken } from "@/lib/connections";
@@ -207,7 +207,13 @@ async function share() {
   }
 }
 
+// 可遊玩平台和卡片本身同時查：原本要等卡片到了才掛上平台選單再查，兩趟往返疊在一起。
+// 只有卡號連結先查——卡號是本站發的永久編號，一定指向同一張卡；其他形式的 ID 等卡片到了再照卡片 ID 查。
+const platformsRequest = ref<{ id: string; request: Promise<CardPlatform[]> } | null>(null);
 watch(() => route.params.id, () => {
+  const id = String(route.params.id ?? "");
+  platformsRequest.value = /^[1-9]\d*$/.test(id) ? { id, request: fetchCardPlatforms(id) } : null;
+  platformsRequest.value?.request.catch(() => {});
   card.value = null; welcome.value = ""; welcomeHtml.value = ""; previewDoc.value = null; more.value = []; broken.value = false; tab.value = "home"; editedAt.value = null;
   commentCount.value = null; showComments.value = true; commentsOpened.value = false;
   load();
@@ -304,7 +310,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
           </ul>
 
           <!-- 平台選擇與主行動獨占整列，避免被次要操作擠出側欄。 -->
-          <CardPlatforms class="role__platforms" :card-id="card.id" :provider="card.provider" />
+          <CardPlatforms class="role__platforms" :card-id="card.id" :provider="card.provider" :card-number="card.num" :pending="platformsRequest" />
           <div class="role__actions">
             <RouterLink :to="lp(`/me?reportCard=${encodeURIComponent(String(card.num || card.id))}`)" class="btn">{{$t("community.reportCard")}}</RouterLink>
             <button class="btn btn--lg btn--icon role__share" :aria-label="$t('card.share')" :title="$t('card.share')" @click="share">

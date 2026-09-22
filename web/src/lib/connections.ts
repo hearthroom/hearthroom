@@ -1,4 +1,4 @@
-import { managedAuth } from './managed-auth';
+import { managedAuth, MANAGED_TOKEN_REUSE_MS } from './managed-auth';
 import {
   beginLogin,
   persist,
@@ -14,25 +14,44 @@ import {
 } from "./provider";
 import { useProviderUpstream } from "./config";
 import type { SiteMe } from "./api";
+/**
+ * 「這張 token 屬於這個帳號」的核對結果。內嵌聊天每個請求都會來要 token，
+ * 同一張 token 核對過就不再每次問 /me；並發的呼叫共用同一趟。只記成功的核對。
+ */
+const verified = new Map<string, { at: number; check: Promise<boolean> }>();
+export function forgetVerifiedAccount(provider: ProviderId): void {
+  for (const key of verified.keys()) if (key.startsWith(`${provider}\n`)) verified.delete(key);
+}
+function verifyAccount(provider: ProviderId, token: string, expectedAccount: number): Promise<boolean> {
+  const key = `${provider}\n${expectedAccount}\n${token}`;
+  const hit = verified.get(key);
+  if (hit && Date.now() - hit.at < MANAGED_TOKEN_REUSE_MS) return hit.check;
+  const check = (async () => {
+    try {
+      const r = await fetch(`${apiBaseOf(provider)}/open/v1/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(10000),
+      });
+      return r.ok && Number((await r.json()).accountNumId) === expectedAccount;
+    } catch {
+      return false;
+    }
+  })();
+  forgetVerifiedAccount(provider);
+  verified.set(key, { at: Date.now(), check });
+  void check.then((ok) => { if (!ok && verified.get(key)?.check === check) verified.delete(key); });
+  return check;
+}
 export async function accountToken(
   provider: ProviderId,
   expectedAccount?: number
 ): Promise<string | null> {
   const managed=await managedAuth();
-  // A different device may have replaced or revoked this grant before local expiry.
+  // Managed mode reuses a server-issued token for a few minutes (managed-auth.ts); a grant replaced
+  // on another device is picked up after that window or when the provider rejects the token.
   const token=(managed ? await refresh(provider) : restorePersisted(provider) ?? await refresh(provider))?.accessToken ?? null;
   if (!token || expectedAccount === undefined) return token;
-  try {
-    const r = await fetch(`${apiBaseOf(provider)}/open/v1/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(10000),
-    });
-    return r.ok && Number((await r.json()).accountNumId) === expectedAccount
-      ? token
-      : null;
-  } catch {
-    return null;
-  }
+  return (await verifyAccount(provider, token, expectedAccount)) ? token : null;
 }
 async function result(res: Response) {
   const body = await res.json();
