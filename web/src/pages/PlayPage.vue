@@ -123,10 +123,10 @@ watch(locale, () => { void remergeStageMessages(); });
 </template>
 
 <style scoped>
-.play { min-height: 100vh; }
+.play { min-height: 100vh; min-height: 100dvh; }
 .play__state { min-height: 60vh; display: grid; place-content: center; gap: var(--s-4); text-align: center; padding: var(--s-6); }
 .play__error { color: var(--danger); }
-.play__toasts { position: fixed; left: 50%; top: var(--s-4); transform: translateX(-50%); z-index: 1200; display: grid; gap: var(--s-2); pointer-events: none; }
+.play__toasts { position: fixed; left: 50%; top: calc(var(--s-4) + env(safe-area-inset-top, 0px)); transform: translateX(-50%); z-index: 1200; display: grid; gap: var(--s-2); pointer-events: none; }
 .play__toast { padding: var(--s-2) var(--s-4); border-radius: var(--r-md); background: var(--surface); color: var(--text); box-shadow: var(--shadow-2); font-size: 14px; max-width: min(90vw, 480px); }
 .play__toast--error { border-left: 3px solid var(--danger); }
 .play__toast--success { border-left: 3px solid var(--accent); }
