@@ -1,3 +1,4 @@
+import { managedAuth } from './managed-auth';
 import {
   beginLogin,
   persist,
@@ -17,9 +18,9 @@ export async function accountToken(
   provider: ProviderId,
   expectedAccount?: number
 ): Promise<string | null> {
-  const token =
-    (restorePersisted(provider) ?? (await refresh(provider)))?.accessToken ??
-    null;
+  const managed=await managedAuth();
+  // A different device may have replaced or revoked this grant before local expiry.
+  const token=(managed ? await refresh(provider) : restorePersisted(provider) ?? await refresh(provider))?.accessToken ?? null;
   if (!token || expectedAccount === undefined) return token;
   try {
     const r = await fetch(`${apiBaseOf(provider)}/open/v1/me`, {
@@ -47,15 +48,17 @@ export async function finishConnection(
   token: TokenPair,
   choice?: {keepHandle: string; sourceHandle: string; targetHandle: string | null}
 ): Promise<SiteMe> {
-  const source = await accountToken(from);
-  if (!source) throw new Error("connection_source_expired");
+  const managed = await managedAuth();
+  const source = managed ? null : await accountToken(from);
+  if (!managed && !source) throw new Error("connection_source_expired");
   const profile = await result(
     await fetch("/v1/me/connections", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${source}`,
+        ...(source ? {Authorization: `Bearer ${source}`} : {}),
         "X-Provider": from,
+        ...(managed ? {"X-Hearthroom-Request":"1"} : {}),
       },
       body: JSON.stringify({ provider, token: token.accessToken, ...choice }),
     })
@@ -74,10 +77,11 @@ export interface ConnectionAccount {
 }
 export interface ConnectionPreview { source: ConnectionAccount; target: ConnectionAccount }
 export async function previewConnection(provider: ProviderId, from: ProviderId, token: TokenPair): Promise<ConnectionPreview> {
-  const source = await accountToken(from);
-  if (!source) throw new Error('connection_source_expired');
+  const managed=await managedAuth();
+  const source = managed ? null : await accountToken(from);
+  if (!managed && !source) throw new Error('connection_source_expired');
   return result(await fetch('/v1/me/connections/preview', {
-    method: 'POST', headers: {'Content-Type':'application/json', Authorization:`Bearer ${source}`, 'X-Provider':from},
+    method: 'POST', headers: {'Content-Type':'application/json', ...(source?{Authorization:`Bearer ${source}`}:{'X-Hearthroom-Request':'1'}), 'X-Provider':from},
     body: JSON.stringify({provider, token:token.accessToken}),
   }));
 }

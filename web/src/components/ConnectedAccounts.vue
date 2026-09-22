@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import AuthorizationNotice from './AuthorizationNotice.vue';
+import { managedAuth, disconnectManaged } from '@/lib/managed-auth';
+import { confirmDialog } from '@/lib/confirm';
+import { currentProvider } from '@/lib/provider';
 import { computed, onMounted, ref, watch } from "vue";
 import AccountIcon from "./AccountIcon.vue";
 import { useSession } from "@/lib/session";
@@ -31,6 +35,21 @@ const providers = computed(() =>
 );
 const error = ref("");
 const busy = ref(false);
+const managed=ref(false);
+const notice=ref('');
+async function disconnect(provider:ProviderId){
+  if(!await confirmDialog({title:t('authorization.disconnect'),message:t('authorization.disconnectConfirm',{provider:providerName(provider)}),confirmText:t('authorization.disconnect'),cancelText:t('dialog.cancel'),danger:true}))return;
+  busy.value=true;error.value='';
+  try{
+    const result=await disconnectManaged(provider);
+    notice.value=t(result.pending?'authorization.pending':'authorization.stopped');
+    if(provider===currentProvider()){session.token=null;session.wallet=null;}
+    // Persist only a non-secret notice across the reload that destroys embedded token caches.
+    try{sessionStorage.setItem('hearthroom.authorization.notice',result.pending?'pending':'stopped');}catch{}
+    location.reload();
+  }catch(e){error.value=connectionMessage(e);}
+  finally{busy.value=false;}
+}
 // 每一家連的是哪個信箱。使用者要確認的是「這是我哪一個帳號」，公開編號回答不了這件事。
 // 舊授權可能未包含信箱權限；提供重新授權，不退回內部編號。
 const emails = ref<Partial<Record<ProviderId, string>>>({});
@@ -64,7 +83,9 @@ function accountPage(id: ProviderId): string | null {
 }
 
 onMounted(async () => {
+  try{const saved=sessionStorage.getItem('hearthroom.authorization.notice');sessionStorage.removeItem('hearthroom.authorization.notice');if(saved==='pending'||saved==='stopped')notice.value=t(`authorization.${saved}`);}catch{}
   configured.value = await availableProviders();
+  try{managed.value=await managedAuth();}catch{/* Unavailable state is shown by the account request. */}
 });
 watch(
   () => session.profile?.identities.map(i=>`${i.provider}:${i.externalId}`).join('|'),
@@ -88,6 +109,8 @@ async function connect(provider: ProviderId) {
       <h2 id="services-title">{{ $t("me.linked.title") }}</h2>
       <p>{{ $t("services.description") }}</p>
     </header>
+    <AuthorizationNotice />
+    <p v-if="notice" role="status" class="notice">{{ notice }}</p>
     <p v-if="error" role="alert" class="notice notice--error">{{ error }}</p>
     <div class="accounts__list">
       <div v-for="p in providers" :key="p.id" class="account" :class="{'account--connected':isConnected(p.id)}">
@@ -106,13 +129,14 @@ async function connect(provider: ProviderId) {
         <div class="account__actions" v-if="isConnected(p.id)">
           <a v-if="accountPage(p.id)" class="account__action" :href="accountPage(p.id)!" :aria-label="$t('linked.manage',{name:providerName(p.id)})" target="_blank" rel="noopener">{{ $t('services.manage') }}<AccountIcon name="external" /></a>
           <a class="account__action" :href="billingPage(p.id)" target="_blank" rel="noopener">{{ $t('services.billing') }}<AccountIcon name="external" /></a>
-          <button v-if="states[p.id]==='expired' || (states[p.id]==='ready' && !emails[p.id])" class="btn account__connect" :disabled="busy || !session.profile" @click="connect(p.id)">{{ $t('me.reauthorize') }}</button>
+          <button v-if="states[p.id]==='expired' || (managed && states[p.id]==='unavailable') || (states[p.id]==='ready' && !emails[p.id])" class="btn account__connect" :disabled="busy || !session.profile" @click="connect(p.id)">{{ $t('me.reauthorize') }}</button>
+          <button v-if="managed && states[p.id]!=='expired'" class="btn btn--ghost" :disabled="busy" @click="disconnect(p.id)">{{ $t('authorization.disconnect') }}</button>
           <button v-if="states[p.id]==='unavailable'" class="btn account__connect" :disabled="busy" @click="loadEmails">{{ $t('linked.retry') }}</button>
         </div>
         <button v-else class="btn account__connect" :disabled="busy || !session.profile" @click="connect(p.id)">{{ $t('linked.connect') }}</button>
       </div>
     </div>
-    <p class="accounts__note">{{ $t('services.permanent') }}</p>
+    <p class="accounts__note">{{ $t(managed?'authorization.identity':'services.permanent') }}</p>
   </section>
 </template>
 <style scoped>

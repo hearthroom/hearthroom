@@ -63,16 +63,17 @@ API 存取範圍，跟這個服務拿到的一模一樣。
 `/role/:id/publish`、`DELETE /role/:id`（刪卡，先撤本站登記再打）、`/role/validate`、`/image/upload`、`/worldbook*`。那些請求裡沒有本站的
 任何憑證，權限範圍就是作者自己授予的那些。
 
-**沒有服務帳號、沒有特殊金鑰、沒有私有介面。** 轉發的 token 只在那一個呼叫裡出現，
-用完即棄：不落 D1、不進 KV、不寫日誌。改掉 `PROVIDER_API_BASE` 就能指向別的部署。
+**沒有供應商服務帳號、沒有額外特權、沒有私有介面。** 權限仍來自使用者的 OAuth 授權。
+啟用託管模式時，憑證加密保存在 D1，金鑰由獨立 Worker secret 管理；瀏覽器只在記憶體持有短期 access token。
+token 不進 KV、日誌或公開快取。詳見[授權保存與操作](account-authorization.md)。
 
 為什麼登記非得問上游一次：「這張卡是我寫的」這個事實只存在於上游的資料庫，本地
 怎麼算都變不出來，任何在客戶端推導的方案都可偽造。但這不需要特權——轉發使用者
 自己授權的 token 去問「你是誰」，權限範圍不超過他本來就給出去的那些。
 
-登入走 OAuth（Authorization Code + PKCE）。這是瀏覽器應用，屬於 public client，
-沒有 client secret 也不能有——`client_id` 用動態註冊（RFC 7591）取得並存在瀏覽器本機，
-所以任何人 fork 這個站、換個網域部署都能直接跑，不必先來跟誰登記。
+登入走 OAuth（Authorization Code + PKCE）。目前供應商接受 public client；託管模式將
+動態註冊的 `client_id`、PKCE verifier 與長期授權保存在 Worker／D1，新的設備登入本站後可恢復已連結授權。
+未啟用託管的自架站維持原有瀏覽器憑證模式；兩種部署不能混稱。
 
 ## 成人內容分級
 

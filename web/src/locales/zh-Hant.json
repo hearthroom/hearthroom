@@ -1527,5 +1527,20 @@
   "download.bannerTitle": "Hearthroom Android App",
   "download.bannerBody": "安裝到手機，從主畫面回到社群。",
   "download.bannerAction": "下載與安裝",
-  "download.footer": "下載 App"
+  "download.footer": "下載 App",
+  "authorization.notice": "Hearthroom 會加密保存你同意的供應商授權，讓你在其他設備登入後繼續使用。",
+  "authorization.details": "授權與資料保存說明",
+  "authorization.storage": "Hearthroom 保存供應商帳號的連結關係及加密的存取、續期憑證；加密金鑰與資料庫分開管理，不會取得你的供應商密碼。",
+  "authorization.access": "Hearthroom 後端會在授權範圍內換發憑證，瀏覽器與播放器只在記憶體暫存短期存取憑證；具有後端執行權限的管理者仍有能力解密，因此這不是零風險的保存方式。",
+  "authorization.control": "你可以在這裡停止授權，或到供應商的已授權應用頁撤銷；停止後會清除使用中的授權憑證，撤銷失敗時保留加密資料供重試，帳號連結與社群紀錄仍會保留。",
+  "authorization.migration": "舊設備首次切換到這個流程時需要重新授權，原本只存在瀏覽器的憑證會清除，不會自動上傳。",
+  "authorization.disconnect": "停止授權",
+  "authorization.disconnectConfirm": "停止 {provider} 的授權後，所有設備都需要重新授權才能使用這家服務；社群帳號與紀錄會保留。",
+  "authorization.pending": "本站已停止使用這份授權，正在重試通知供應商撤銷。",
+  "authorization.stopped": "這份授權已停止。",
+  "authorization.identity": "帳號連結會保留；供應商授權可以停止或重新授予，社群發布上限不會因此增加。",
+  "linked.error.auth_provider_unavailable": "目前無法連接授權服務，請稍後再試。",
+  "linked.error.auth_configuration_unavailable": "目前無法連接授權服務，請稍後再試。",
+  "linked.error.site_session_required": "請先登入 Hearthroom，再連結其他服務。",
+  "linked.error.auth_reauthorization_required": "這份授權已失效，請重新授權。"
 }

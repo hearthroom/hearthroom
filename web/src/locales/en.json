@@ -1527,5 +1527,20 @@
   "download.bannerTitle": "Hearthroom for Android",
   "download.bannerBody": "Install the app and return to the community from your home screen.",
   "download.bannerAction": "Download & install",
-  "download.footer": "Download app"
+  "download.footer": "Download app",
+  "authorization.notice": "Hearthroom encrypts and saves the provider authorization you approve so you can use it after signing in on another device.",
+  "authorization.details": "Authorization and data storage",
+  "authorization.storage": "Hearthroom stores your linked provider identity and encrypted access and refresh credentials. Encryption keys are managed separately from the database. Your provider password is never received.",
+  "authorization.access": "The backend renews credentials within the permissions you grant. The browser and player hold short-lived access credentials in memory. Administrators with backend execution access can still decrypt stored credentials; this storage is not risk-free.",
+  "authorization.control": "You can stop authorization here or revoke it on the provider’s authorized apps page. Active credentials are removed after revocation; encrypted credentials are retained for retry if revocation fails. Account links and community records remain.",
+  "authorization.migration": "Your first sign-in through this flow requires authorization again. Old browser-only credentials are cleared rather than uploaded automatically.",
+  "authorization.disconnect": "Stop authorization",
+  "authorization.disconnectConfirm": "Stopping authorization for {provider} affects all devices. You must authorize it again to use this service. Your community account and records remain.",
+  "authorization.pending": "Hearthroom has stopped using this authorization and is retrying revocation with the provider.",
+  "authorization.stopped": "This authorization has stopped.",
+  "authorization.identity": "Account links remain. Provider authorization can be stopped or granted again without increasing community publishing limits.",
+  "linked.error.auth_provider_unavailable": "The authorization service is unavailable. Please try again later.",
+  "linked.error.auth_configuration_unavailable": "The authorization service is unavailable. Please try again later.",
+  "linked.error.site_session_required": "Sign in to Hearthroom before connecting another service.",
+  "linked.error.auth_reauthorization_required": "This authorization is no longer valid. Please authorize again."
 }

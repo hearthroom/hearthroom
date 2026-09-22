@@ -128,6 +128,8 @@ localStorage.setItem("hearthroom.oauth.access", JSON.stringify({ accessToken: "t
 
 ## 自架
 
+跨設備授權保存為選用功能。啟用前請閱讀[授權保存與操作](docs/account-authorization.md)，了解本站保存的憑證、隱私邊界及撤銷方式。
+
 站台在單一 Cloudflare 帳號上執行，小型社群使用免費方案即可。
 
 1. 建立資源並將 ID 填入 `wrangler.toml`：一個 D1 資料庫（`DB`）、兩個 KV 命名空間（`CACHE`、`ASSET_ARCHIVE`），以及選用的 Analytics Engine 資料集（`EVENTS`；設定 `ANALYTICS_ENABLED = "false"` 可停用）。

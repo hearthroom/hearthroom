@@ -1,4 +1,7 @@
+import { managedAuth, managedLogout, forgetManaged, isManagedAuth, authRequest } from './managed-auth';
 import { clearLibraryCache } from './library';
+import { currentProvider, setProvider, type ProviderId } from './provider';
+import {useProviderUpstream} from './config';
 import { PROVIDERS } from "./provider";
 import { defineStore } from "pinia";
 import { computed, ref, watch } from "vue";
@@ -16,9 +19,8 @@ import {
 /**
  * 登入狀態。
  *
- * 憑證放 localStorage 所以重新整理不會掉。access token 與 refresh token 一起放：
- * 兩者暴露面相同，而 refresh token 權限更大，只藏 access token 擋不住任何攻擊，
- * 卻讓每次重新整理都多跑一次換發。
+ * 託管模式由 HttpOnly 本站 session 恢復；access token 僅留記憶體。
+ * 未啟用託管的自架部署保留既有瀏覽器憑證模式。
  *
  * **restore() 與 accessToken() 都必須單飛。** refresh token 是一次性的，伺服器把
  * 重複使用視為重放並把整個 session 標成 revoked——所以兩個並發的換發不是慢一點，
@@ -37,20 +39,26 @@ export const useSession = defineStore("session", () => {
   const avatarUrl = computed(() => profile.value?.avatarUrl || "");
 
   async function loadWallet(accessToken: string) {
+    const expected=generation;
     try {
-      wallet.value = await fetchWallet(accessToken);
+      const value=await fetchWallet(accessToken);
+      if(expected===generation)wallet.value=value;
     } catch {
-      wallet.value = null;
+      if(expected===generation)wallet.value = null;
     }
   }
   /** 正在載的本站身分：公開讀取要等它到了再決定要不要帶成人內容，不然第一屏永遠是沒開的版本 */
   let profilePromise: Promise<void> | null = null;
   function loadProfile(bearerToken: string): Promise<void> {
+    const expected=generation;
     profilePromise = (async () => {
       try {
-        profile.value = await fetchSiteMe(bearerToken);
+        const value=isManagedAuth()
+          ? (await authRequest<{profile:SiteMe}>("session",{provider:currentProvider()})).profile
+          : await fetchSiteMe(bearerToken);
+        if(expected===generation)profile.value=value;
       } catch {
-        profile.value = null;
+        if(expected===generation)profile.value = null;
       }
     })();
     return profilePromise;
@@ -70,11 +78,14 @@ export const useSession = defineStore("session", () => {
   });
 
   let restoring: Promise<void> | null = null;
+  let generation=0;
 
-  async function adopt(pair: TokenPair) {
+  async function adopt(pair: TokenPair, expected=generation) {
+    const identity=await fetchMe(pair.accessToken);
+    if(expected!==generation)return;
     token.value = pair;
     persist(pair);
-    me.value = await fetchMe(pair.accessToken);
+    me.value = identity;
     void loadWallet(pair.accessToken);
     void loadProfile(pair.accessToken);
   }
@@ -85,22 +96,36 @@ export const useSession = defineStore("session", () => {
     // 並發的呼叫者會全部通過守衛。
     if (restoring) return restoring;
 
+    const expected=generation;
     restoring = (async () => {
       try {
+        if(await managedAuth()){
+          const site=await authRequest<{provider:ProviderId;me:Me;profile:SiteMe}>('session',{provider:currentProvider()});
+          if(expected!==generation)return;
+          setProvider(site.provider);useProviderUpstream();
+          me.value=site.me;profile.value=site.profile;
+          try{
+            const pair=await refresh();
+            if(pair&&expected===generation){token.value=pair;void loadWallet(pair.accessToken);}
+          }catch{/* The community session survives a disconnected provider. */}
+          return;
+        }
+        if(expected!==generation)return;
         // 還沒過期就直接用，一次網路都不用跑。
         const saved = restorePersisted();
         if (saved) {
+          const identity=await fetchMe(saved.accessToken);
+          if(expected!==generation)return;
           token.value = saved;
-          me.value = await fetchMe(saved.accessToken);
+          me.value = identity;
           void loadWallet(saved.accessToken);
           void loadProfile(saved.accessToken);
           return;
         }
         const pair = await refresh();
-        if (pair) await adopt(pair);
+        if (pair && expected===generation) await adopt(pair,expected);
       } catch {
-        token.value = null;
-        me.value = null;
+        if(expected===generation){token.value = null;me.value = null;}
       } finally {
         ready.value = true;
         restoring = null;
@@ -111,26 +136,32 @@ export const useSession = defineStore("session", () => {
 
   /** 每次用之前檢查有效期，過期就換新的；換不到就是真的登出了。 */
   async function accessToken(): Promise<string | null> {
-    if (token.value && token.value.expiresAt > Date.now()) return token.value.accessToken;
+    const expected=generation;
+    if (!isManagedAuth() && token.value && token.value.expiresAt > Date.now()) return token.value.accessToken;
     // refresh() 自己是單飛的，這裡並發呼叫也只會有一次換發。
     const pair = await refresh();
+    if(expected!==generation)return null;
     if (!pair) {
       token.value = null;
-      me.value = null;
+      if(!isManagedAuth())me.value = null;
       return null;
     }
-    await adopt(pair);
-    return pair.accessToken;
+    if(isManagedAuth())token.value=pair;
+    else await adopt(pair,expected);
+    return expected===generation?pair.accessToken:null;
   }
 
   async function logout() {
+    generation++;
+    forgetManaged();
     token.value = null;
     me.value = null;
     wallet.value = null;
     profile.value = null;
     setNsfwViewer(null);
     setLoginViewer(null);
-    await Promise.all(PROVIDERS.map(provider => revokeSession(provider.id)));
+    if(await managedAuth()){await managedLogout();location.reload();}
+    else await Promise.all(PROVIDERS.map(provider => revokeSession(provider.id)));
   }
 
   async function ensureProfile() { if (profilePromise) await profilePromise; }

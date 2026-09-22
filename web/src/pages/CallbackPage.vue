@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { cancelManaged, isManagedAuth } from '@/lib/managed-auth';
 import { onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, useRouter } from "vue-router";
@@ -29,9 +30,10 @@ async function confirmConnection() {
     location.replace(p.returnTo);
   } catch (e) { error.value = connectionMessage(e); busy.value = false }
 }
-function cancelConnection() {
+async function cancelConnection() {
   const p = pending.value;
   if (!p?.linkFrom) return;
+  try{if(isManagedAuth())await cancelManaged();}catch{/* Expiring pending credentials are revoked by server maintenance. */}
   setProvider(p.linkFrom); useProviderUpstream(); pending.value = null;
   location.replace(p.returnTo);
 }

@@ -36,11 +36,11 @@ export async function emptyCommunity(db:D1Database, id:string):Promise<boolean> 
 }
 
 /** Both issuers are verified by the caller. Only a blank target community may be absorbed. */
-export async function linkIdentity(db:D1Database, member:Member, provider:ProviderId, externalId:number, now:number) {
+export async function linkIdentity(db:D1Database, member:Member, provider:ProviderId, externalId:number, now:number, tail:D1PreparedStatement[] = []) {
  const existing=await db.prepare(`SELECT external_id FROM member_connections WHERE owner_member_id=? AND provider=?
  UNION SELECT external_id FROM member_identities WHERE member_id=? AND provider=?`).bind(member.id,provider,member.id,provider).first<{external_id:string}>();
  if(existing) {
-  if(existing.external_id===String(externalId))return;
+  if(existing.external_id===String(externalId)){if(tail.length)await db.batch(tail);return;}
   throw new HttpError(409,'provider_already_connected');
  }
  if(await db.prepare('SELECT 1 FROM member_connections WHERE provider=? AND external_id=?').bind(provider,String(externalId)).first())throw new HttpError(409,'account_already_connected');
@@ -59,6 +59,7 @@ export async function linkIdentity(db:D1Database, member:Member, provider:Provid
    db.prepare(`INSERT INTO member_identities(provider,external_id,member_id,linked_at) VALUES (?,?,?,?)
      ON CONFLICT(provider,external_id) DO UPDATE SET member_id=excluded.member_id`).bind(provider,String(externalId),member.id,now),
    db.prepare('DELETE FROM members WHERE id=? AND id<>? AND NOT EXISTS (SELECT 1 FROM member_identities WHERE member_id=members.id)').bind(target?.member_id??null,member.id),
+   ...tail,
   ]);
  }catch {throw new HttpError(409,'connection_conflict');}
 }

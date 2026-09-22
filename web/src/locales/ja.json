@@ -1527,5 +1527,20 @@
   "download.bannerTitle": "Hearthroom Android アプリ",
   "download.bannerBody": "スマホにインストールして、ホーム画面からコミュニティへ。",
   "download.bannerAction": "ダウンロード・インストール",
-  "download.footer": "アプリをダウンロード"
+  "download.footer": "アプリをダウンロード",
+  "authorization.notice": "Hearthroom は同意したプロバイダーの認可情報を暗号化して保存し、別の端末でログインした後も利用できるようにします。",
+  "authorization.details": "認可とデータ保存について",
+  "authorization.storage": "Hearthroom は連携先のアカウント情報と、暗号化したアクセス・更新用の認証情報を保存します。暗号鍵はデータベースと分けて管理し、連携先のパスワードは受け取りません。",
+  "authorization.access": "バックエンドは許可された範囲内で認証情報を更新します。ブラウザーとプレイヤーは短期のアクセス認証情報をメモリー内に保持します。バックエンドを実行できる管理者は保存情報を復号できるため、リスクがなくなるわけではありません。",
+  "authorization.control": "ここで認可を停止するか、連携先の認可済みアプリ画面で取り消せます。取り消し後に認証情報を削除し、失敗した場合は再試行のため暗号化して保持します。アカウントの連携とコミュニティの記録は残ります。",
+  "authorization.migration": "新しい方式を初めて使う際は再認可が必要です。ブラウザー内の古い認証情報は削除され、自動でアップロードされません。",
+  "authorization.disconnect": "認可を停止",
+  "authorization.disconnectConfirm": "{provider} の認可を停止すると、すべての端末で再認可が必要になります。コミュニティのアカウントと記録は残ります。",
+  "authorization.pending": "Hearthroom はこの認可の使用を停止し、連携先への取り消し要求を再試行しています。",
+  "authorization.stopped": "この認可を停止しました。",
+  "authorization.identity": "アカウントの連携は保持されます。認可の停止や再認可によってコミュニティの公開上限は増えません。",
+  "linked.error.auth_provider_unavailable": "認可サービスに接続できません。しばらくしてから再試行してください。",
+  "linked.error.auth_configuration_unavailable": "認可サービスに接続できません。しばらくしてから再試行してください。",
+  "linked.error.site_session_required": "別のサービスを連携する前に Hearthroom にログインしてください。",
+  "linked.error.auth_reauthorization_required": "この認可は無効です。再認可してください。"
 }

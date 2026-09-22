@@ -34,7 +34,7 @@ not_found_handling = "single-page-application"
 # 靜態檔在 /assets/ 底下，不在這個清單裡，所以不會多付一次 Worker 呼叫。
 run_worker_first = [
   "/", "/metrics", "/library*", "/v1/*", "/search*", "/mine*", "/wallet*", "/create*", "/auth/*",
-  "/download", "/download/", "/cards/*", "/authors/*", "/review*", "/internal/community/*",
+  "/download", "/download/", "/cards/*", "/authors/*", "/review*", "/internal/community/*", "/internal/auth/*",
   # 站台 manifest 在卡片 App 網域（play.）上要 404，得先過 Worker（src/index.ts）
   "/manifest.webmanifest",
   "/zh-Hans/*", "/en/*", "/ja/*", "/ko/*",

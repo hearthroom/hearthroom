@@ -1527,5 +1527,20 @@
   "download.bannerTitle": "Hearthroom Android 앱",
   "download.bannerBody": "휴대폰에 설치하고 홈 화면에서 커뮤니티로 돌아오세요.",
   "download.bannerAction": "다운로드 및 설치",
-  "download.footer": "앱 다운로드"
+  "download.footer": "앱 다운로드",
+  "authorization.notice": "Hearthroom은 동의한 제공업체의 승인 정보를 암호화하여 저장하므로 다른 기기에서 로그인한 후에도 사용할 수 있습니다.",
+  "authorization.details": "승인 및 데이터 보관 안내",
+  "authorization.storage": "Hearthroom은 연결된 제공업체 계정과 암호화된 접근 및 갱신 인증 정보를 저장합니다. 암호화 키는 데이터베이스와 별도로 관리하며 제공업체 비밀번호는 받지 않습니다.",
+  "authorization.access": "백엔드는 허용된 범위 내에서 인증 정보를 갱신합니다. 브라우저와 플레이어는 단기 접근 인증 정보를 메모리에 보관합니다. 백엔드를 실행할 수 있는 관리자는 저장 정보를 복호화할 수 있으므로 위험이 완전히 없어지는 것은 아닙니다.",
+  "authorization.control": "여기서 승인을 중지하거나 제공업체의 승인된 앱 화면에서 취소할 수 있습니다. 취소 후 인증 정보를 삭제하며 실패하면 재시도를 위해 암호화하여 보관합니다. 계정 연결과 커뮤니티 기록은 유지됩니다.",
+  "authorization.migration": "새 방식을 처음 사용할 때는 다시 승인해야 합니다. 브라우저에만 있던 기존 인증 정보는 삭제되며 자동 업로드되지 않습니다.",
+  "authorization.disconnect": "승인 중지",
+  "authorization.disconnectConfirm": "{provider} 승인을 중지하면 모든 기기에서 이 서비스를 다시 승인해야 합니다. 커뮤니티 계정과 기록은 유지됩니다.",
+  "authorization.pending": "Hearthroom이 이 승인의 사용을 중지했으며 제공업체에 취소 요청을 재시도하고 있습니다.",
+  "authorization.stopped": "이 승인이 중지되었습니다.",
+  "authorization.identity": "계정 연결은 유지됩니다. 승인을 중지하거나 다시 승인해도 커뮤니티 게시 한도는 늘어나지 않습니다.",
+  "linked.error.auth_provider_unavailable": "승인 서비스에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+  "linked.error.auth_configuration_unavailable": "승인 서비스에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+  "linked.error.site_session_required": "다른 서비스를 연결하기 전에 Hearthroom에 로그인해 주세요.",
+  "linked.error.auth_reauthorization_required": "이 승인은 더 이상 유효하지 않습니다. 다시 승인해 주세요."
 }
