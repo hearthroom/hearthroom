@@ -609,6 +609,7 @@ app.get('/v1/me/card-copies/:roleId',async(c)=>{
 app.get('/v1/cards/:roleId/platforms',async(c)=>{
  const link=await cardLink(c.env,c.req.param('roleId'),providerOf(c));
  const base=link.row;
+ if(base?.approved_version_id && base.status!=='approved')throw new HttpError(404,'card not found');
  if(base?.nsfw && !await viewerAllowsNsfw(c))throw new HttpError(403,'nsfw_gated');
  let source=link.source;
  if(!base || base.status!=='approved') {
