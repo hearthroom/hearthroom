@@ -23,7 +23,7 @@ R2 stores only `latest.apk` and `latest.json`. Both must bypass browser and CDN 
 
 ## Release workflow
 
-`.github/workflows/android.yml` verifies Android-related pull requests. A push to `main` affecting `android/`, `scripts/android/` or the workflow publishes an APK after verification. Web-only pushes continue through the website workflow and do not notify app users about an APK update. Manual dispatch also requires a new Android release-note fragment.
+`.github/workflows/android.yml` verifies Android-related pull requests. A push to `main` affecting `android/`, `scripts/android/` or the workflow runs verification. Publication compares the current source against the last successful R2 release: native app, Gradle/toolchain or release-note changes publish an APK. Documentation, bucket configuration and distribution-script maintenance alone keep the existing APK. Web-only pushes continue through the website workflow and do not notify app users about an APK update. Manual dispatch also requires a new Android release-note fragment.
 
 Version: `1.0.<workflow run number>`; versionCode: `10000 + run number`. Reruns reuse the exact APK and manifest saved in the release draft. GitHub keeps historical releases; R2 only keeps the latest pair. The published R2 manifest is the successful-release cursor.
 
@@ -39,7 +39,7 @@ Signing certificate identity is public in `release-config.json` and `web/public/
 
 ## Cloudflare routing
 
-The dedicated R2 bucket is `hearthroom-android`, with custom domain `downloads.hearthroom.club`. A zone Worker route for `downloads.hearthroom.club/*` with **no Worker** excludes this domain from the existing wildcard website Worker. Preserve that exclusion. The two latest paths must bypass cache; the publisher rejects cached readback.
+The shared download bucket is `hearthroom-downloads`, with custom domains `downloads.hearthroom.club`, `downloads.sukisuki.ai` and `downloads.sukisuki.chat`. Each download host has a `host/*` zone route with **no Worker** to exclude it from the wildcard website Worker. Preserve all three exclusions and cache bypass rules. The website `/download` page selects the download host in the visitor’s domain family; installed apps retain the stable `downloads.hearthroom.club` update URL. The two latest paths must bypass cache; the publisher rejects cached readback.
 
 ## Scope and evidence
 

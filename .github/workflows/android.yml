@@ -14,6 +14,8 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    outputs:
+      release-needed: ${{ steps.scope.outputs.release-needed }}
     permissions:
       contents: read
     steps:
@@ -36,6 +38,10 @@ jobs:
       - run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
       - run: npm ci --no-audit --no-fund
       - run: node --test scripts/android/*.test.mjs
+      - name: Determine whether the native app changed
+        id: scope
+        if: github.event_name != 'pull_request'
+        run: node scripts/android/release-scope.mjs
       - name: Verify Android app
         run: ./android/gradlew -p android testDebugUnitTest lintDebug assembleDebug --console=plain
       - name: Save test APK
@@ -46,7 +52,7 @@ jobs:
           retention-days: 7
   release:
     needs: verify
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.verify.outputs.release-needed == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
