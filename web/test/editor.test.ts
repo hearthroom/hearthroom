@@ -10,7 +10,7 @@ import { createApp, nextTick, type App } from "vue";
 import { createPinia } from "pinia";
 import { createMemoryHistory, createRouter, type Router } from "vue-router";
 import { i18n } from "../src/lib/i18n";
-import { embedIntoPng, type TavernCard } from "../src/lib/tavern";
+import { embedIntoPng, parseTavernFile, type TavernCard } from "../src/lib/tavern";
 import { writeChunks } from "../src/lib/png-chunks";
 import CardEditorPage from "../src/pages/CardEditorPage.vue";
 import { confirmState, settleConfirm } from "../src/lib/confirm";
@@ -163,9 +163,90 @@ afterEach(() => {
   document.querySelectorAll(".wbd").forEach((el) => el.remove());
   app = null;
   root.remove();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
+describe("卡片匯出", () => {
+  function captureDownload() {
+    const blobs: Blob[] = [];
+    const filenames: string[] = [];
+    vi.spyOn(URL, "createObjectURL").mockImplementation((blob) => {
+      blobs.push(blob as Blob);
+      return "blob:export-test";
+    });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      filenames.push(this.download);
+    });
+    return { blobs, filenames };
+  }
+
+  it("目前素材網域的 PNG 頭像可下載為含卡片設定的 PNG", async () => {
+    const avatar = "https://assets.lunatalk.ai/u/test/avatar.png";
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "Export test", roleAvatar: avatar, roleDetailDesc: "Synthetic settings" });
+    await mount("/cards/r1/edit");
+    const { blobs, filenames } = captureDownload();
+    const png = writeChunks([{ type: "IHDR", data: new Uint8Array(13) }, { type: "IEND", data: new Uint8Array() }]);
+    const fetchSpy = vi.fn(async () => new Response(png));
+    vi.stubGlobal("fetch", fetchSpy);
+    byText("匯出 PNG").click();
+    await flush();
+    expect(fetchSpy).toHaveBeenCalledWith(`/v1/image?u=${encodeURIComponent(avatar)}`);
+    expect(filenames).toEqual(["Export test.png"]);
+    const imported = await parseTavernFile(new File([blobs[0]], filenames[0], { type: "image/png" }));
+    expect(imported.card.data.name).toBe("Export test");
+    expect(imported.card.data.description).toContain("Synthetic settings");
+    expect(root.textContent).not.toContain(i18n.global.t("export.pngFallback"));
+  });
+
+  it("圖片讀取失敗會下載 JSON 並說明 PNG 匯出失敗", async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "Export test", roleAvatar: "https://assets.lunatalk.ai/u/test/avatar.png" });
+    await mount("/cards/r1/edit");
+    const { blobs, filenames } = captureDownload();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 403 })));
+    byText("匯出 PNG").click();
+    await flush();
+    expect(filenames).toEqual(["Export test.json"]);
+    expect(JSON.parse(await blobs[0].text()).data.name).toBe("Export test");
+    expect(root.textContent).toContain(i18n.global.t("export.pngFallback"));
+    expect(root.textContent).not.toContain("拿不到頭像");
+  });
+
+  it("沒有頭像也能直接匯出 JSON，且不發出圖片請求", async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "Export test" });
+    await mount("/cards/r1/edit");
+    const { blobs, filenames } = captureDownload();
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    byText("匯出 JSON").click();
+    await flush();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(filenames).toEqual(["Export test.json"]);
+    expect(JSON.parse(await blobs[0].text()).data.name).toBe("Export test");
+    expect(root.textContent).not.toContain(i18n.global.t("export.pngFallback"));
+  });
 });
 
 describe("匯入酒館卡 → 建立 → 編輯", () => {
+  it("替換卡片頭像時原樣上傳 GIF，儲存不改兩個游玩背景", async () => {
+    const avatar = "https://assets.lunatalk.ai/u/test/new.gif";
+    const background = "https://assets.lunatalk.ai/u/test/background.png";
+    const landscape = "https://assets.lunatalk.ai/u/test/landscape.png";
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "Avatar test", roleAvatar: "https://assets.lunatalk.ai/u/test/old.png", roleBackground: background, roleBackgroundLandscape: landscape });
+    api.uploadImage.mockResolvedValueOnce(avatar);
+    await mount("/cards/r1/edit");
+    const field = [...root.querySelectorAll(".field")].find((el) => el.querySelector("label")?.textContent === "頭像")!;
+    expect(field.textContent).toContain("卡片的頭像，建議使用正方形圖片。");
+    const file = new File(["GIF89a synthetic animation bytes"], "new.gif", { type: "image/gif" });
+    await pickFile(field.querySelector("input[type=file]")!, file);
+    expect(api.uploadImage).toHaveBeenCalledWith(file, "tok", "r1");
+    expect(field.querySelector("img")?.getAttribute("src")).toBe(avatar);
+    expect(root.querySelector(`img[src="${background}"]`)).not.toBeNull();
+    expect(root.querySelector(`img[src="${landscape}"]`)).not.toBeNull();
+    await submit();
+    expect(api.patchRoleDocument).toHaveBeenCalledWith("r1", { roleAvatar: avatar }, "tok");
+  });
+
   it("匯入把每一區都填好，儲存照順序打四個端點，內容對得上", async () => {
     await mount("/create");
     await pickFile($("input[type=file]"), new File([JSON.stringify(CARD)], "avra.json", { type: "application/json" }));

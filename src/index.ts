@@ -58,7 +58,7 @@ import { gameRoutes } from "./game";
 import { serveSandbox } from "./sandbox";
 import { listSaves, putSave, removeSave } from "./saves";
 import { commentCard, countTop, deleteComment, listReplies, listTop, postComment, setLike, type Viewer } from "./comments";
-import { IMAGE_HOSTS, SVG_WRAP_LIMIT, TOUCH_ICON_SIZE, allowedImageUrl, cardManifest, iconSize, signShortcutKey, svgWrap, verifyShortcutKey } from "./shortcut";
+import { SVG_WRAP_LIMIT, TOUCH_ICON_SIZE, allowedImageUrl, cardManifest, iconSize, signShortcutKey, svgWrap, verifyShortcutKey } from "./shortcut";
 import { upstream, ZONES, type Zone, CREATION_METHOD, type CommunityStatus } from "./upstream";
 
 const app = new Hono<{ Bindings: Env; Variables: { ev: Pending } }>();
@@ -193,7 +193,8 @@ app.get("/v1/providers", (c) =>
  * 只放行上游的圖片主機，不然這就是一個開放代理。回應用 Cache API 快取一天：同一張頭像
  * 被反覆匯出時不必每次都回上游拿。
  */
-export const IMAGE_PROXY_HOSTS = IMAGE_HOSTS;
+// 匯出接受兩個產品的主網域與子網域，素材主機更名時不必另加名單。
+const IMAGE_PROXY_DOMAINS = ["lunatalk.ai", "harperharbor.com"];
 export const imageCache = { namespace: "image" };
 
 app.get("/v1/image", async (c) => {
@@ -204,7 +205,7 @@ app.get("/v1/image", async (c) => {
   } catch {
     throw new HttpError(400, "invalid image url");
   }
-  if (target.protocol !== "https:" || !IMAGE_PROXY_HOSTS.has(target.hostname)) throw new HttpError(403, "image host not allowed");
+  if (target.protocol !== "https:" || !IMAGE_PROXY_DOMAINS.some((domain) => target.hostname === domain || target.hostname.endsWith(`.${domain}`))) throw new HttpError(403, "image host not allowed");
 
   const cache = await caches.open(imageCache.namespace);
   const key = new Request(target.toString());
