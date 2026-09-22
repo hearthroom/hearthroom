@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://hearthroom.club"><img src="https://img.shields.io/website?url=https%3A%2F%2Fhearthroom.club&label=hearthroom.club" alt="Website"></a>
-  <a href="https://discord.gg/FCEYZCFtR"><img src="https://img.shields.io/badge/Discord-join%20the%20community-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
+  <a href="https://discord.gg/C7m85YPHmK"><img src="https://img.shields.io/badge/Discord-join%20the%20community-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
   <a href="https://github.com/hearthroom/hearthroom/actions/workflows/deploy.yml"><img src="https://github.com/hearthroom/hearthroom/actions/workflows/deploy.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/hearthroom/hearthroom" alt="License: AGPL-3.0"></a>
   <a href="https://github.com/hearthroom/hearthroom/commits/main"><img src="https://img.shields.io/github/last-commit/hearthroom/hearthroom" alt="Last commit"></a>
@@ -146,7 +146,7 @@ npm run deploy              # 先运行部署前检查、类型检查、测试�
 
 ## 社区
 
-讨论、分享卡片与协调开发在 [Discord](https://discord.gg/FCEYZCFtR) 进行。错误报告与功能建议请开 [GitHub issue](https://github.com/hearthroom/hearthroom/issues)。
+讨论、分享卡片与协调开发在 [Discord](https://discord.gg/C7m85YPHmK) 进行。错误报告与功能建议请开 [GitHub issue](https://github.com/hearthroom/hearthroom/issues)。
 
 ## 贡献
 

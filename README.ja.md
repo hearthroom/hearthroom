@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://hearthroom.club"><img src="https://img.shields.io/website?url=https%3A%2F%2Fhearthroom.club&label=hearthroom.club" alt="Website"></a>
-  <a href="https://discord.gg/FCEYZCFtR"><img src="https://img.shields.io/badge/Discord-join%20the%20community-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
+  <a href="https://discord.gg/C7m85YPHmK"><img src="https://img.shields.io/badge/Discord-join%20the%20community-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
   <a href="https://github.com/hearthroom/hearthroom/actions/workflows/deploy.yml"><img src="https://github.com/hearthroom/hearthroom/actions/workflows/deploy.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/hearthroom/hearthroom" alt="License: AGPL-3.0"></a>
   <a href="https://github.com/hearthroom/hearthroom/commits/main"><img src="https://img.shields.io/github/last-commit/hearthroom/hearthroom" alt="Last commit"></a>
@@ -146,7 +146,7 @@ npm run deploy              # 事前チェック、型チェック、テスト�
 
 ## コミュニティ
 
-議論、カードの共有、開発の調整は [Discord](https://discord.gg/FCEYZCFtR) で行っています。バグ報告と機能要望は [GitHub issue](https://github.com/hearthroom/hearthroom/issues) へ。
+議論、カードの共有、開発の調整は [Discord](https://discord.gg/C7m85YPHmK) で行っています。バグ報告と機能要望は [GitHub issue](https://github.com/hearthroom/hearthroom/issues) へ。
 
 ## コントリビュート
 
