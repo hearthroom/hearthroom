@@ -113,6 +113,11 @@ describe("榜單權限與快取", () => {
       const value = Reflect.get(target, property);
       return typeof value === "function" ? value.bind(target) : value;
     } }) };
+    // The proxy is a new database binding: warm its one-time schema check too.
+    await worker.fetch(new Request('https://c.test/v1/providers'), measured, createExecutionContext());
+    expect(queries).toHaveLength(1);
+    expect(queries[0]).toContain('pragma_table_info');
+    queries.length = 0;
     const identity = vi.spyOn(upstream, "fetchMe");
     const ctx = createExecutionContext();
     const result = await worker.fetch(req.clone(), measured, ctx);

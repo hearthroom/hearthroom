@@ -1,6 +1,8 @@
 # Numeric card identity and unlisted sharing
 
-Status: implemented and verified locally on 2026-09-22. Production migration and release are not authorized or executed.
+Status: implemented and verified locally on 2026-09-22. Owner authorized production
+migration and deployment; cutover preparation on 2026-09-23. Live results are recorded
+separately after execution.
 
 ## Contract
 
@@ -43,9 +45,14 @@ Unmappable historical comments or favorites abort the migration instead of being
 deleted. Notification card paths are rewritten. Moderation cache state advances.
 
 This is a coordinated cutover, not a rolling schema-compatible change. The
-current main-branch CI applies migrations before deploying the Worker; the old
-Worker cannot insert UUIDs into the new INTEGER primary key. After explicit
-production approval, the release operator must:
+previous main-branch CI applied migrations before deploying the Worker; the old
+Worker cannot insert UUIDs into the new INTEGER primary key. The cutover workflow
+now detects the old TEXT primary key, deploys the new Worker first, drains requests
+for 120 seconds and records a recovery bookmark before applying migrations. While
+the old schema remains, the new Worker returns 503 with Retry-After and skips cron.
+It resumes only after the atomic migration commits. Successful schema detection is
+cached per database binding per isolate, so warm board requests add no query.
+The release operator must:
 
 1. Reconcile the migration number against current `origin/main`, commit intended
    paths, rebase, run the full trusted set, push and obtain CI success for that
@@ -53,9 +60,8 @@ production approval, the release operator must:
 2. Capture a D1 recovery bookmark/export and durable aggregate counts. Check for
    unmappable comment/favorite references using the migration's mapping query.
    A failure requires investigation; never delete the offending rows to proceed.
-3. Pause card/community writes and scheduled sync for the migration/deploy window.
-   Use an approved maintenance mechanism covering the Worker and cron, and drain
-   in-flight writes. Do not merge into auto-deploying main until this is arranged.
+3. Confirm CI includes the schema guard deployment before migration. The guard
+   pauses Worker HTTP handling and scheduled sync during the drain/migration window.
 4. Let source CI apply the migration and deploy the matching Worker; do not
    manually publish generated assets. Keep writes paused if deployment fails.
 5. Verify numeric column types, aggregate counts and `PRAGMA foreign_key_check`;
@@ -66,8 +72,9 @@ production approval, the release operator must:
    restore the matching pre-migration database and Worker together before opening
    traffic. Rolling back only the Worker is unsafe.
 
-No production bookmark, maintenance mechanism or live readback is claimed by the
-local implementation. These are release execution steps, not completed evidence.
+The preparation readback confirmed a D1 recovery bookmark, TEXT primary key and no
+foreign-key violations. Live migration and application acceptance still require
+the release execution steps above.
 
 ## API / MCP and observability decisions
 
@@ -124,3 +131,10 @@ foreign-key integrity, numeric response types and existing request/cache timing.
   and private access rules are covered by Worker/editor tests.
 
 The cross-repository reproducible case is `HEARTH-CARD-ID-01-numeric-private-card`.
+
+Cutover additions: the real legacy-schema HTTP test failed with 200 instead of 503
+before the guard, then passed with HTTP blocked, cron skipped and automatic resume
+after schema replacement. The deployment detector rejects missing/unknown/error
+schema results. The first full suite exposed a cold-binding query in the warm-board
+test; it now separately asserts the single schema query and retains the original
+two-query warm-request budget. Release testing includes these additional cases.

@@ -1344,9 +1344,28 @@ app.get("*", async (c) => {
   return res;
 });
 
+// One successful check per isolate. A legacy schema is never cached as ready:
+// the cutover Worker holds traffic until D1 commits the numeric migration.
+const numericDatabases = new WeakSet<D1Database>();
+async function numericSchemaReady(db: D1Database): Promise<boolean> {
+  if (numericDatabases.has(db)) return true;
+  try {
+    const column = await db.prepare("SELECT type FROM pragma_table_info('cards') WHERE name='id'").first<{type:string}>();
+    if (column?.type.toUpperCase() !== 'INTEGER') return false;
+    numericDatabases.add(db);
+    return true;
+  } catch { return false; }
+}
+
 export default {
-  fetch: app.fetch,
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    if (!(await numericSchemaReady(env.DB))) return Response.json({error:'maintenance'}, {
+      status:503, headers:{'Retry-After':'30','Cache-Control':'no-store'},
+    });
+    return app.fetch(request, env, ctx);
+  },
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
+    if (!(await numericSchemaReady(env.DB))) return;
     ctx.waitUntil(accountAuthMaintenance(env).catch(() => { console.warn('Account authorization maintenance unavailable'); }));
     ctx.waitUntil(communityMaintenance(env).catch(() => { console.warn("Community maintenance unavailable"); }));
     ctx.waitUntil(cleanAvatars(env));
