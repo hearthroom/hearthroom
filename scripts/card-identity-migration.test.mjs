@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 const files = readdirSync(new URL('../migrations/', import.meta.url)).filter(f=>f.endsWith('.sql')).sort();
 const sql = name => readFileSync(new URL('../migrations/'+name, import.meta.url),'utf8');
-const target = '0036_numeric_card_identity.sql';
+const target = '0037_numeric_card_identity.sql';
 function legacy() {
  const db = new DatabaseSync(':memory:');
  db.exec('PRAGMA foreign_keys=ON;');
