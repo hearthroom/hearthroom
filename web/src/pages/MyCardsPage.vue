@@ -257,10 +257,11 @@ watch(()=>route.query.fresh, fresh=>{
   .quota__when { margin-left: 0; text-align: left; flex-basis: 100%; }
 }
 
-.wall { display:grid; gap:var(--s-4); grid-template-columns:minmax(0,1fr); align-items:start; }
-@media(min-width:760px){.wall{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(min-width:1200px){.wall{grid-template-columns:repeat(3,minmax(0,1fr))}}
-.ghost--card { aspect-ratio: 4 / 5; }
+.wall { display:grid; gap:var(--s-4); grid-template-columns:minmax(0,320px); justify-content:center; align-items:start; }
+@media(min-width:600px){.wall{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(min-width:900px){.wall{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(min-width:1200px){.wall{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.ghost--card { aspect-ratio: 2 / 3.7; }
 
 .empty { padding: var(--s-8) var(--s-5); text-align: center; display: grid; gap: var(--s-4); justify-items: center; }
 .empty__title { font-size: 16px; font-weight: 600; }
