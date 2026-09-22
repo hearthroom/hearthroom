@@ -7,10 +7,10 @@
  * 點下去直接進對話，不經過首頁（owner 2026-09-15）。
  *
  * 兩種形式：
- * - 卡片 App 網域（play.<HOST>，見 src/site.ts）：id／scope／start_url 都是 /<roleId>/。每張卡的範圍互不重疊，
+ * - 卡片 App 網域（play.<HOST>，見 src/site.ts）：id／scope／start_url 都是 /<cardNumber>/。每張卡的範圍互不重疊，
  *   這個網域上也沒有範圍是根目錄的 App，所以每張卡都能各自裝成一個 App。結尾的斜線是範圍的邊界：
  *   /abc 不在 /abc/ 裡。語言放在查詢字串（?lang=），不能放路徑前綴，否則就跑出範圍。
- * - 主站：scope 維持「/」、start_url 是 /play/<roleId>。保留給不能另開網域的自架環境。
+ * - 主站：scope 維持「/」、start_url 是 /play/<cardNumber>。保留給不能另開網域的自架環境。
  *
  * 圖示：安裝條件要求 PNG／WebP／SVG、至少 192px，而頭像有 jpg 與 gif。/v1/cards/:id/icon-<size>.png 先試
  * Images 綁定轉成正方形 PNG；轉不了（帳號沒開 Images）就照原樣回 PNG，其他格式包成一層 SVG——
@@ -88,12 +88,12 @@ export async function verifyShortcutKey(secret: string | undefined, cardId: stri
 export function cardManifest(row: CardRow, lang: string, key?: string, opts: { playApp?: boolean } = {}) {
   const name = pickLocale(JSON.parse(row.names) as Localized, lang) || row.source_role_id;
   const icon = (size: IconSize) => ({ src: iconPath(row.id, size) + (key ? `?k=${encodeURIComponent(key)}` : ""), sizes: `${size}x${size}`, purpose: "any" });
-  const app = `/${encodeURIComponent(row.approved_hosted_role_id ?? row.source_role_id)}/`;
+  const app = `/${encodeURIComponent(String(row.num ?? row.id))}/`;
   return {
-    id: opts.playApp ? app : `/play/${row.approved_hosted_role_id ?? row.source_role_id}`,
+    id: opts.playApp ? app : `/play/${String(row.num ?? row.id)}`,
     name,
     short_name: name,
-    start_url: opts.playApp ? `${app}?lang=${encodeURIComponent(lang)}` : `${localePrefix(lang)}/play/${row.approved_hosted_role_id ?? row.source_role_id}`,
+    start_url: opts.playApp ? `${app}?lang=${encodeURIComponent(lang)}&provider=${row.provider}` : `${localePrefix(lang)}/play/${String(row.num ?? row.id)}?provider=${row.provider}`,
     scope: opts.playApp ? app : "/",
     // 卡片 App 全螢幕：Android 把狀態列與導覽列一起收掉，整個畫面都是卡（從頂端往下滑可暫時叫出狀態列）。
     // 不支援全螢幕的平台（iOS、桌面）自動退到 standalone。站台本身維持 standalone。

@@ -148,3 +148,54 @@ do not receive additional public numbers. The migration fixture reproduces this
 conflict and verifies that all review references retain the original number.
 The maintenance Worker stayed closed during correction; no migration record or
 temporary mapping survived the failed transaction.
+
+## Numeric play URLs (2026-09-23 follow-up)
+
+The first cutover missed `/play/`: its links still contained the provider role ID.
+The public play route now takes the same numeric identity as `/cards/`. It resolves
+that number through the existing card/platform APIs, selects the requested provider,
+and passes only that provider's role ID to Stage. Legacy source/hosted-role links
+are replaced in browser history with the numeric URL, preserving language, provider,
+other query parameters and fragment. Missing or non-playable providers fail closed;
+an in-document provider change reloads before reusing Stage's installed host.
+
+Card platform buttons, author workspaces, editor test frames, review links, library
+links and PWA entry points emit numeric identities when allocated. Compatibility
+fallbacks for old incomplete workspace/library records resolve at the play entrance.
+Author `mode=source` uses the ownership-checked copies API to retain draft playtests.
+Review links use an authenticated submission lookup and require its card ID to match,
+retaining the review snapshot rather than substituting an approved version.
+Library `resume` links use `GET /v1/me/conversations/:conversationId?provider=...`:
+`requireMember` and the exact provider scope the row; the resolved card number must
+match before Stage receives the previously played revision. This avoids silently
+starting a new conversation after a card update. Credentials remain issuer-scoped.
+No schema migration or role/conversation rewrite is needed for this follow-up.
+
+PWA manifests use numeric IDs/scopes/start URLs and explicitly select the source
+provider. Existing UUID shortcuts still enter the legacy resolver; their old
+installed scope may open the numeric destination in a browser until reinstalled.
+No installation or device state was changed during verification.
+
+MCP/Moonloom: not applicable to the provider MCP contract; this is Hearthroom's
+browser routing and private community conversation index. The read-only resume
+endpoint uses the same member authorization as the existing library and returns no
+chat text or credentials. Provider role IDs remain internal integration identifiers.
+Observability: the existing `hearthroom_library_requests_total` counter includes
+resume reads as `operation="conversations_get"` with `success|denied|error`; verify
+`sum by (outcome) (hearthroom_library_requests_total{operation="conversations_get"})`.
+No card, conversation or account identifiers are metric labels.
+
+Regression evidence: maintained tests reproduced UUID URL emission, raw numeric IDs
+reaching Stage, wrong-provider launch, missing canonicalization, review snapshot
+substitution, and resuming the latest revision instead of the recorded revision.
+They cover ownership denial, provider mismatch, delayed navigation and PWA scopes.
+Native Chrome exercised card -> Harbor selection -> numeric play URL, and an English
+legacy private-card link -> numeric URL while preserving query/fragment. The local
+fixture replaces login/player rendering only; the real route, resolver and platform
+button execute unchanged. It is not evidence of billed AI generation.
+
+The unrelated root harness run was not green: local checkout files for UI lint,
+Moonloom workflow and shared author assets are missing/drifted; socket and process
+fixtures hit sandbox restrictions, and case-index checks report missing rows. The
+Hearthroom trusted suite is evaluated independently. No unrelated repository or
+harness implementation was changed to hide those failures.

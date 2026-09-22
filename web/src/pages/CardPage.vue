@@ -221,7 +221,7 @@ function addToHome() {
   const c = card.value;
   if (!c) return;
   track("pwa_card_install_click", { subject: c.roleId });
-  location.assign(playAppUrl(c.roleId, locale.value, { install: true }));
+  location.assign(playAppUrl(String(c.num ?? c.id), locale.value, { install: true, provider: c.provider }));
 }
 // 開關剛載好（或改了）：成人內容的卡在那之前會是 404，重讀一次
 // 開關改了要重讀；身分剛載好、發現本來就開著（undefined → true）也要——第一次讀多半比身分早到

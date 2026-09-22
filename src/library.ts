@@ -99,19 +99,40 @@ libraryRoutes.get('/v1/me/conversations', async c => {
   const member = await requireMember(c);
   const access = await memberNsfw(c.env.DB, member.id);
   const page = Math.min(4000, Math.max(1, Math.floor(Number(c.req.query('pageNum')) || 1)));
-  const rows = await c.env.DB.prepare(`SELECT c.*, r.provider, r.role_id AS conversationRoleId,
+  const rows = await c.env.DB.prepare(`SELECT c.*, cn.num AS cardNumber, r.provider, r.role_id AS conversationRoleId,
     r.conversation_id AS conversationId, r.created_at AS createdAt, r.updated_at AS updatedAt FROM member_conversations r
     LEFT JOIN work_copies cp ON cp.provider=r.provider AND cp.role_id=r.role_id
     LEFT JOIN hosting_replicas hr ON hr.provider=r.provider AND hr.hosted_revision_id=r.role_id
     LEFT JOIN hosting_versions hv ON hv.version_id=hr.version_id
     LEFT JOIN works w ON w.id=COALESCE(hv.work_id,cp.work_id)
     LEFT JOIN cards c ON c.provider=COALESCE(w.source_provider,r.provider) AND (c.source_role_id=COALESCE(w.source_role_id,r.role_id) OR c.approved_hosted_role_id=r.role_id)
+    LEFT JOIN card_numbers cn ON cn.provider=COALESCE(w.source_provider,r.provider)
+      AND cn.source_role_id=COALESCE(w.source_role_id,c.source_role_id,r.role_id)
     WHERE r.member_id=? ORDER BY r.updated_at DESC,r.provider,r.role_id LIMIT 25 OFFSET ?`)
-    .bind(member.id, (page - 1) * 24).all<CardRow & { conversationRoleId: string; conversationId: string; createdAt: number; updatedAt: number }>();
+    .bind(member.id, (page - 1) * 24).all<CardRow & { cardNumber: number | null; conversationRoleId: string; conversationId: string; createdAt: number; updatedAt: number }>();
   return c.json({ conversations: rows.results.slice(0,24).map(row => {
     const card = row.id && row.status === 'approved' && !row.public_blocked && (!row.nsfw || (access.showNsfw && access.ageVerifiedAt)) ? toCard(row, c.req.query('lang') || 'zh-Hant') : null;
-    return { provider: row.provider, conversationRoleId: row.conversationRoleId, conversationId: row.conversationId,
+    return { provider: row.provider, cardNumber: row.cardNumber, conversationRoleId: row.conversationRoleId, conversationId: row.conversationId,
       roleName: card?.name || '', roleAvatar: card?.avatarUrl || '',
       lastChatTime: new Date(Number(row.updatedAt)).toISOString(), createTime: new Date(Number(row.createdAt)).toISOString() };
   }), hasNextPage: rows.results.length > 24 });
+});
+
+/** Resume the member's recorded host revision after public URLs switch to card numbers. */
+libraryRoutes.get('/v1/me/conversations/:conversationId', async c => {
+  const member = await requireMember(c);
+  const provider = c.req.query('provider');
+  if (provider !== 'harbor' && provider !== 'lunatalk') throw new HttpError(400, 'invalid_provider');
+  const row = await c.env.DB.prepare(`SELECT r.provider,r.role_id AS roleId,cn.num AS cardNumber
+    FROM member_conversations r
+    LEFT JOIN work_copies cp ON cp.provider=r.provider AND cp.role_id=r.role_id
+    LEFT JOIN hosting_replicas hr ON hr.provider=r.provider AND hr.hosted_revision_id=r.role_id
+    LEFT JOIN hosting_versions hv ON hv.version_id=hr.version_id
+    LEFT JOIN works w ON w.id=COALESCE(hv.work_id,cp.work_id)
+    LEFT JOIN cards c ON c.provider=COALESCE(w.source_provider,r.provider) AND (c.source_role_id=COALESCE(w.source_role_id,r.role_id) OR c.approved_hosted_role_id=r.role_id)
+    LEFT JOIN card_numbers cn ON cn.provider=COALESCE(w.source_provider,r.provider) AND cn.source_role_id=COALESCE(w.source_role_id,c.source_role_id,r.role_id)
+    WHERE r.member_id=? AND r.provider=? AND r.conversation_id=? LIMIT 1`)
+    .bind(member.id,provider,c.req.param('conversationId')).first<{provider:string;roleId:string;cardNumber:number|null}>();
+  if (!row) throw new HttpError(404, 'not_found');
+  return c.json(row);
 });

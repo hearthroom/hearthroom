@@ -35,10 +35,11 @@ export const isPlayHost = (hostname: string = location.hostname): boolean =>
   isCardAppHost(hostname) || hostname === "play.localhost";
 
 /** 一張卡在卡片 App 網域上的網址。結尾的斜線是 App 範圍的邊界，不能少。 */
-export function playAppUrl(roleId: string, locale: string, opts: { install?: boolean } = {}): string {
+export function playAppUrl(roleId: string, locale: string, opts: { install?: boolean; provider?: string } = {}): string {
   const origin = isPlayHost() ? location.origin : `https://play.${siteRootOf(location.hostname) ?? PRIMARY_HOST}`;
   const q = new URLSearchParams({ lang: locale });
   if (opts.install) q.set("install", "1");
+  if (opts.provider) q.set("provider", opts.provider);
   return `${origin}/${encodeURIComponent(roleId)}/?${q}`;
 }
 

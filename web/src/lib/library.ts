@@ -32,6 +32,7 @@ export interface ConversationSummary {
   provider: ProviderId;
   conversationId: string;
   conversationRoleId: string;
+  cardNumber?: number | null;
   conversationTitle: string | null;
   roleName: string;
   roleAvatar: string;
