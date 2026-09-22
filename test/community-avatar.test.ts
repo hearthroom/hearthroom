@@ -87,7 +87,7 @@ for(const [label,type,format,data,extension] of [
 it('rejects oversized animations and decoder failures without replacing the saved profile',async()=>{
  await profile();await save(form());const old=await profile();
  const f=form('Replacement','',false);
- f.set('avatar',new File([new Uint8Array(2*1024*1024+1)],'avatar.gif',{type:'image/gif'}));
+ f.set('avatar',new File([new Uint8Array(10*1024*1024+1)],'avatar.gif',{type:'image/gif'}));
  expect((await save(f)).status).toBe(400);
  images.info.mockRejectedValueOnce(new Error('invalid image'));
  f.set('avatar',new File(['not a GIF'],'avatar.gif',{type:'image/gif'}));
@@ -102,4 +102,21 @@ it.each([['image/gif',gif],['image/apng',png],['image/webp',webp]])('validates r
  const saved=await save(f);expect(saved.status).toBe(200);
  const read=await call((await saved.json() as any).avatarUrl);
  expect(new Uint8Array(await read.arrayBuffer())).toEqual(Uint8Array.from(atob(data),c=>c.charCodeAt(0)));
+});
+
+it.each([['image/gif',gif],['image/apng',png],['image/webp',webp]])('accepts a 10 MiB %s avatar through the multipart route and preserves its bytes',async(type,data)=>{
+ await profile();
+ const bytes=new Uint8Array(10*1024*1024);bytes.set(Uint8Array.from(atob(data),c=>c.charCodeAt(0)));
+ images.info.mockResolvedValue({format:type==='image/apng'?'image/png':type,width:16,height:16,fileSize:bytes.length});
+ const f=form('Large avatar','',false);f.set('avatar',new File([bytes],'avatar',{type}));
+ const response=await save(f);expect(response.status).toBe(200);
+ const read=await call((await response.json() as any).avatarUrl);expect(read.status).toBe(200);
+ const output=await read.arrayBuffer();expect(output.byteLength).toBe(bytes.byteLength);
+ const digest=async(b:BufferSource)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',b)));
+ expect(await digest(output)).toEqual(await digest(bytes));expect(images.input).not.toHaveBeenCalled();
+});
+it('rejects an oversized multipart body before decoding or writing an avatar',async()=>{
+ await profile();const f=form('Large body','',false);
+ f.set('avatar',new File([new Uint8Array(10*1024*1024+16384)],'large.gif',{type:'image/gif'}));
+ expect((await save(f)).status).toBe(400);expect(images.info).not.toHaveBeenCalled();expect(bucket.put).not.toHaveBeenCalled();
 });

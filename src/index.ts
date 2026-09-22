@@ -8,6 +8,7 @@ import { communityRoutes } from "./community/routes";
 import { libraryRoutes } from "./library";
 import { hostGateway, submitHosted, hostingDecision, beginHostedEdit } from "./hosting";
 import { saveCommunityProfile, cleanAvatars } from "./community-profile";
+import { AVATAR_MAX_BYTES } from '../shared/avatar';
 import { bodyLimit } from "hono/body-limit";
 import { syncCard, copiesFor, workFor, publishedCopiesFor, distributeCard, type DistributeTarget } from "./card-sync";
 import { apiBaseOf as providerApiBase } from "./providers";
@@ -669,7 +670,7 @@ app.delete('/v1/me/connections/:provider', async (c) => {
   return c.json(await memberProfile(c.env.DB, member.id), 200, { 'Cache-Control': 'no-store' });
 });
 
-app.put("/v1/me/profile", bodyLimit({maxSize: 2 * 1024 * 1024 + 16384, onError: c => c.json({error:"avatar_invalid"},400)}), async c => {
+app.put("/v1/me/profile", bodyLimit({maxSize: AVATAR_MAX_BYTES + 16384, onError: c => c.json({error:"avatar_invalid"},400)}), async c => {
   const member = await requireMember(c);
   const profile = await saveCommunityProfile(c.env, member.id, c.req.raw);
   return c.json({...profile, reviewer: await isReviewer(c.env.DB, member.id)}, 200, {"Cache-Control":"no-store"});
