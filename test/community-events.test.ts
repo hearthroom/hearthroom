@@ -64,12 +64,12 @@ it("awards the first approved work once and creates one private review-result no
     const row = await env.DB.prepare(
       "SELECT id FROM review_submissions WHERE source_role_id='reviewed-work'",
     ).first<{ id: string }>();
-    const act = (action: string, body = {}, token = "reviewer") =>
-      SELF.fetch("https://c.test/v1/review/" + row!.id + "/" + action, {
-        method: "POST",
-        headers: { ...bearer(token), "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+    const generations=new Map<string,string>();
+    const act = async(action:string,body={},token='reviewer')=>{
+      const res=await SELF.fetch('https://c.test/v1/review/'+row!.id+'/'+action,{method:'POST',headers:{...bearer(token),'Content-Type':'application/json'},body:JSON.stringify({...body,...(action==='claim'?{}:{generation:generations.get(token)})})});
+      if(action==='claim'&&res.ok)generations.set(token,(await res.clone().json() as any).generation);
+      return res;
+    };
     expect((await act("claim")).status).toBe(200);
     expect((await act("stamp", { verdict: "approve" })).status).toBe(200);
     expect(await env.DB.prepare("SELECT badge FROM community_awards WHERE member_id=?").bind(author).first()).toBeNull();

@@ -50,7 +50,7 @@ it('editing an approved draft does not start review, and another member cannot c
 it('the database refuses a stale stamp or decision after a pending revision is superseded',async()=>{
  const f=await setup();await f.submit();const old=await f.pending();
  await beginHostedEdit(env.DB,f.memberId,'draft',Date.now());
- await expect(env.DB.prepare("INSERT INTO review_stamps VALUES (?,'stale','approve','',0)").bind(old.id).run()).rejects.toThrow('submission already decided');
+ await expect(env.DB.prepare("INSERT INTO review_stamps(submission_id,member_id,verdict,note,created_at) VALUES (?,'stale','approve','',0)").bind(old.id).run()).rejects.toThrow('submission already decided');
  await expect(env.DB.prepare("UPDATE review_submissions SET status='approved' WHERE id=?").bind(old.id).run()).rejects.toThrow('submission already decided');
  expect((await getCard(env.DB,'draft','harbor'))!.approved_version_id).toBeNull();
 });

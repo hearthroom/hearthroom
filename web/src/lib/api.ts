@@ -287,6 +287,7 @@ export interface ReviewQueueItem {
   nsfw: boolean;
   claim: "free" | "mine" | "other";
   stampedByMe: boolean;
+  claimGeneration?: string;
 }
 
 /** 送審當下本站替這張單存的整份設定（快照）。作者身分不在裡面。partial＝同步開的重審單，只有公開資料。 */
@@ -295,7 +296,8 @@ export interface ReviewDetail {
     id: string; kind: "first" | "re"; status: string; contentHash: string; submittedAt: number;
     /** 作者宣告：成人內容 */
     nsfw: boolean;
-    claimedByMe: boolean; required: number;
+    claimedByMe: boolean;
+    claimGeneration?: string; required: number;
     stamps: { verdict: "approve" | "reject"; note: string; at: number }[];
   };
   card: { id: string; roleId: string };
@@ -359,9 +361,9 @@ export async function setCardFeatured(cardId: string, featured: boolean, token: 
   return json(res);
 }
 
-export const claimReview = (id: string, token: string) => reviewAction<{ id: string; claimedAt: number }>(id, "claim", token);
-export const releaseReview = (id: string, token: string) => reviewAction<void>(id, "release", token);
-export const stampReview = (id: string, token: string, body: { verdict: "approve" | "reject"; note?: string }) =>
+export const claimReview = (id: string, token: string) => reviewAction<{ id: string; claimedAt: number; generation: string }>(id, "claim", token);
+export const releaseReview = (id: string, token: string, generation?:string) => reviewAction<void>(id, "release", token, {generation});
+export const stampReview = (id: string, token: string, body: { verdict: "approve" | "reject"; note?: string; generation?:string }) =>
   reviewAction<{ id: string; status: string; cardStatus: CardStatus; stamps: { approve: number; required: number } }>(id, "stamp", token, body);
 
 export async function fetchReviewDetail(id: string, token: string): Promise<ReviewDetail> {

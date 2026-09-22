@@ -43,12 +43,13 @@ const queue = async (token: string) => {
   const res = await SELF.fetch("https://c.test/v1/review/queue", { headers: bearer(token) });
   return { status: res.status, body: (await res.json()) as { items: any[] } };
 };
-const act = (id: string, action: string, token: string, body?: unknown) =>
-  SELF.fetch(`https://c.test/v1/review/${id}/${action}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...bearer(token) },
-    body: body ? JSON.stringify(body) : undefined,
-  });
+const generations=new Map<string,string>();
+const act = async (id:string, action:string, token:string, body?:unknown) => {
+ const res=await SELF.fetch(`https://c.test/v1/review/${id}/${action}`,{method:'POST',headers:{'Content-Type':'application/json',...bearer(token)},body:JSON.stringify({...((body??{}) as object),...(action==='claim'?{}:{generation:generations.get(id+token)})})});
+ if(action==='claim'&&res.ok)generations.set(id+token,(await res.clone().json() as any).generation);
+ return res;
+};
+
 const cardStatus = async (roleId: string) =>
   (await env.DB.prepare("SELECT status, reviewed_hash FROM cards WHERE source_role_id = ?").bind(roleId).first<{ status: string; reviewed_hash: string }>())!;
 
