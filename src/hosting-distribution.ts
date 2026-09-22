@@ -3,7 +3,7 @@ import {apiBaseOf,type ProviderId} from './providers';
 import {hostGateway} from './hosting';
 import {transfers,type TransferCard} from './card-transfer';
 import {cardHash} from './card-sync';
-import {imageReference,MEDIA_FIELDS} from './card-media';
+import {imageReference,MEDIA_FIELDS,portraitMedia} from './card-media';
 import type {TransferProgress} from './card-transfer-resources';
 
 const digest=async(bytes:ArrayBuffer)=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(x=>x.toString(16).padStart(2,'0')).join('');
@@ -20,7 +20,7 @@ async function mediaBytes(env:Env,provider:ProviderId,url:string){
 export const hostingTransferMedia={
  async copy(env:Env,source:ProviderId,target:ProviderId,token:string,roleId:string,card:TransferCard):Promise<TransferCard>{
   const out=structuredClone(card);out.media={};const uploaded=new Map<string,string>();
-  for(const field of MEDIA_FIELDS){const url=card.media?.[field];if(!url)continue;
+  for(const field of MEDIA_FIELDS){const url=portraitMedia(card.media)[field];if(!url)continue;
    let targetURL=uploaded.get(url);
    if(!targetURL){const {bytes,mime}=await mediaBytes(env,source,url);const sha=await digest(bytes);
     const form=new FormData();form.append('file',new Blob([bytes],{type:mime}),`hosting-${sha}`);form.append('roleId',roleId);
@@ -33,7 +33,7 @@ export const hostingTransferMedia={
  },
  async hash(env:Env,provider:ProviderId,card:TransferCard):Promise<string>{
   const copy=structuredClone(card);copy.media={};const hashed=new Map<string,string>();
-  for(const field of MEDIA_FIELDS){const url=card.media?.[field];if(!url)continue;let sha=hashed.get(url);if(!sha){sha=await digest((await mediaBytes(env,provider,url)).bytes);hashed.set(url,sha)}copy.media[field]=sha}
+  for(const field of MEDIA_FIELDS){const url=portraitMedia(card.media)[field];if(!url)continue;let sha=hashed.get(url);if(!sha){sha=await digest((await mediaBytes(env,provider,url)).bytes);hashed.set(url,sha)}copy.media[field]=sha}
   return cardHash(copy);
  },
 };

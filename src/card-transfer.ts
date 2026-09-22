@@ -2,6 +2,7 @@ import { upstreamSyncError, syncStep } from "./sync-error";
 import { readBooks, writeBooks, type TransferProgress } from "./card-transfer-resources";
 import {
   imageReference,
+  portraitMedia,
   MEDIA_FIELDS,
   type CardMedia,
 } from "./card-media";
@@ -287,10 +288,11 @@ async function update(
   progress: TransferProgress | WorldbookMap = {books:{}},
   saveProgress: () => Promise<void> = async()=>{}
 ): Promise<WorldbookMap> {
+  const media = portraitMedia(c.media);
   const images: Record<string, string> = {};
   for (const field of MEDIA_FIELDS)
-    images[field] = c.media?.[field]
-      ? imageReference(env, p, c.media[field]!)
+    images[field] = media[field]
+      ? imageReference(env, p, media[field]!)
       : "";
   const fields={...(c.fields??{})};
   if(p==='lunatalk'&&'customInstructions' in fields){fields.jailbreak=fields.customInstructions;delete fields.customInstructions}

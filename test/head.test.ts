@@ -29,7 +29,7 @@ describe("分享預覽", () => {
     expect(html).toContain("<title>夜行偵探 沈墨 · Hearthroom</title>");
     expect(html).toContain('<meta name="description" content="民國二十四年的上海，租界的雨從不停。">');
     expect(html).toContain('<meta property="og:title" content="夜行偵探 沈墨 · Hearthroom">');
-    expect(html).toContain('<meta property="og:image" content="https://cdn.lunatalk.ai/cover.png">');
+    expect(html).toContain('<meta property="og:image" content="https://cdn.lunatalk.ai/bg.png">');
     // canonical 一律指向正牌主機：搬家期間兩個網域並存，搜尋引擎要知道哪個才算數
     const card = await getCard(env.DB, 'r-1');
     expect(html).toContain(`<link rel="canonical" href="https://hearthroom.club/cards/${card!.id}">`);

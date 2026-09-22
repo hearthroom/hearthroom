@@ -38,3 +38,9 @@ export function imageReference(
     throw new HttpError(409, "sync_image_reference_unavailable");
   return raw;
 }
+
+/** Wire aliases share one portrait; legacy avatar-only cards remain transferable. */
+export function portraitMedia(media: CardMedia = {}): CardMedia {
+  const portrait = media.background || media.avatar;
+  return { ...(portrait ? {avatar:portrait, background:portrait} : {}), ...(media.backgroundLandscape ? {backgroundLandscape:media.backgroundLandscape} : {}) };
+}

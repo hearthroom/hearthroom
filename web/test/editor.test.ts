@@ -181,9 +181,9 @@ describe("卡片匯出", () => {
     return { blobs, filenames };
   }
 
-  it("目前素材網域的 PNG 頭像可下載為含卡片設定的 PNG", async () => {
+  it("PNG 匯出使用直式背景，忽略舊的獨立頭像", async () => {
     const avatar = "https://assets.lunatalk.ai/u/test/avatar.png";
-    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "Export test", roleAvatar: avatar, roleDetailDesc: "Synthetic settings" });
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "Export test", roleAvatar: "https://assets.lunatalk.ai/old.png", roleBackground: avatar, roleDetailDesc: "Synthetic settings" });
     await mount("/cards/r1/edit");
     const { blobs, filenames } = captureDownload();
     const png = writeChunks([{ type: "IHDR", data: new Uint8Array(13) }, { type: "IEND", data: new Uint8Array() }]);
@@ -228,23 +228,23 @@ describe("卡片匯出", () => {
 });
 
 describe("匯入酒館卡 → 建立 → 編輯", () => {
-  it("替換卡片頭像時原樣上傳 GIF，儲存不改兩個游玩背景", async () => {
+  it("只保留直式與橫式圖片，直式 GIF 原樣上傳且不改橫圖", async () => {
     const avatar = "https://assets.lunatalk.ai/u/test/new.gif";
     const background = "https://assets.lunatalk.ai/u/test/background.png";
     const landscape = "https://assets.lunatalk.ai/u/test/landscape.png";
     api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "Avatar test", roleAvatar: "https://assets.lunatalk.ai/u/test/old.png", roleBackground: background, roleBackgroundLandscape: landscape });
     api.uploadImage.mockResolvedValueOnce(avatar);
     await mount("/cards/r1/edit");
-    const field = [...root.querySelectorAll(".field")].find((el) => el.querySelector("label")?.textContent === "頭像")!;
-    expect(field.textContent).toContain("卡片的頭像，建議使用正方形圖片。");
+    const field = [...root.querySelectorAll(".field")].find((el) => el.querySelector("label")?.textContent === i18n.global.t("editor.background"))!;
+    expect(root.querySelectorAll(".frame")).toHaveLength(2);
     const file = new File(["GIF89a synthetic animation bytes"], "new.gif", { type: "image/gif" });
     await pickFile(field.querySelector("input[type=file]")!, file);
     expect(api.uploadImage).toHaveBeenCalledWith(file, "tok", "r1");
     expect(field.querySelector("img")?.getAttribute("src")).toBe(avatar);
-    expect(root.querySelector(`img[src="${background}"]`)).not.toBeNull();
+    expect(root.querySelector(`img[src="${background}"]`)).toBeNull();
     expect(root.querySelector(`img[src="${landscape}"]`)).not.toBeNull();
     await submit();
-    expect(api.patchRoleDocument).toHaveBeenCalledWith("r1", { roleAvatar: avatar }, "tok");
+    expect(api.patchRoleDocument).toHaveBeenCalledWith("r1", { roleBackground: avatar, roleAvatar: avatar }, "tok");
   });
 
   it("匯入把每一區都填好，儲存照順序打四個端點，內容對得上", async () => {
@@ -380,7 +380,7 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     expect(api.patchWorldbookDocument).not.toHaveBeenCalled();
   });
 
-  it("PNG 卡：自帶的立繪上傳後當頭像", async () => {
+  it("PNG 卡：自帶的立繪上傳後當直式背景", async () => {
     await mount("/create");
     const ihdr = new Uint8Array(13);
     new DataView(ihdr.buffer).setUint32(0, 1);
@@ -395,7 +395,7 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     await flush();
     expect(api.uploadImage).toHaveBeenCalledTimes(1);
     expect((api.uploadImage.mock.calls[0] as unknown as [File])[0].name).toBe("card.png");
-    // 頭像現在就在「基本」分區、名稱底下，不用切分區
+    // 直式背景就在「基本」分區、名稱底下，不用切分區
     await flush();
     expect(root.querySelector("img[src='https://img.test/avatar.png']")).not.toBeNull();
   });

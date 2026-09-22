@@ -473,7 +473,7 @@ app.get("/v1/cards/:id/:file{(icon-[0-9]+|touch-icon)\\.png}", async (c) => {
   const file = c.req.param("file");
   const raster = file === "touch-icon.png";
   const size = raster ? TOUCH_ICON_SIZE : iconSize(file.slice("icon-".length, -".png".length));
-  const src = allowedImageUrl(row.avatar_url);
+  const src = allowedImageUrl(row.background_url);
   // 沒頭像（或頭像不在放行主機上）：退回站台自己的圖示，至少還裝得起來
   const siteIcon = () => c.redirect(new URL(`/icons/icon-${size >= 512 ? 512 : 192}.png`, c.req.url).toString(), 302);
   if (!src) return siteIcon();

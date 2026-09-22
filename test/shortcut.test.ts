@@ -178,7 +178,7 @@ describe("卡片 manifest", () => {
 });
 
 describe("卡片圖示", () => {
-  it("沒有 Images 綁定、頭像本來就是 PNG：原樣給，帶快取頭", async () => {
+  it("沒有 Images 綁定、直圖本來就是 PNG：原樣給，帶快取頭", async () => {
     const fetchSpy = vi.fn(async () => new Response(PNG, { headers: { "content-type": "image/png" } }));
     vi.stubGlobal("fetch", fetchSpy);
     const res = await get("/v1/cards/role-safe/icon-192.png", noImages());
@@ -187,10 +187,10 @@ describe("卡片圖示", () => {
     expect(res.headers.get("cache-control")).toBe("no-store");
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(PNG);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(String((fetchSpy.mock.calls[0] as unknown[])[0])).toBe("https://cdn.lunatalk.ai/cover.png");
+    expect(String((fetchSpy.mock.calls[0] as unknown[])[0])).toBe("https://cdn.lunatalk.ai/bg.png");
   });
 
-  it("沒有 Images 綁定、頭像是 JPEG：manifest 用的圖示包成 SVG，touch-icon 給原圖", async () => {
+  it("沒有 Images 綁定、直圖是 JPEG：manifest 用的圖示包成 SVG，touch-icon 給原圖", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JPG, { headers: { "content-type": "image/jpeg" } })));
     const svg = await get("/v1/cards/role-safe/icon-512.png", noImages());
     expect(svg.status).toBe(200);

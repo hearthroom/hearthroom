@@ -74,6 +74,7 @@ import {
   type RoleDraft,
   type WorldbookEntryDraft,
 } from "@/lib/role-draft";
+import { imageToPng } from "@/lib/export-image";
 import { ENTRY_CONTENT_MAX, draftToTavern, embedIntoPng, imageFetchUrl, worldbookToExport, type ImportResult } from "@/lib/tavern";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
@@ -108,7 +109,7 @@ async function choosePlatforms():Promise<ProviderId[]|null> {
  if(!defaults.length)defaults=linkedProviders.value;
  if(linkedProviders.value.length===1)return [...linkedProviders.value];
  selectingPlatforms.value=true;
- try {return await platformDialog.value!.choose(linkedProviders.value,defaults,roleId.value?editorProvider.value:undefined,{name:draft.value.roleName,avatarUrl:draft.value.roleAvatar});}
+ try {return await platformDialog.value!.choose(linkedProviders.value,defaults,roleId.value?editorProvider.value:undefined,{name:draft.value.roleName,avatarUrl:draft.value.roleBackground});}
  finally {selectingPlatforms.value=false;}
 }
 function rememberPlatforms(selected:ProviderId[]) {try{localStorage.setItem(preferenceKey(),JSON.stringify(selected));}catch{}}
@@ -451,7 +452,6 @@ function toggleTag(name: string) {
 }
 
 /** 剛從 PNG 卡帶進來、還在上傳的立繪。預覽先用本機那份，上傳完換成正式網址。 */
-const pendingAvatar = ref("");
 
 
 async function loadValidation() {
@@ -564,7 +564,6 @@ onBeforeUnmount(() => {
   clearTimeout(toastTimer);
   clearTimeout(draftTimer);
   storeDraft();
-  if (pendingAvatar.value) URL.revokeObjectURL(pendingAvatar.value);
 });
 
 /** 錯誤訊息放在表單頂端。作者多半在某一區的深處按下儲存，訊息要自己走到他眼前。 */
@@ -1093,36 +1092,17 @@ async function publish() {
 
 // ── 匯入 / 匯出 ────────────────────────────────────────────────────
 
-/**
- * PNG 卡自帶的立繪拿去當頭像。
- *
- * 上傳與套用表單是分開的兩步：套用是同步的、立刻看得到；上傳要等網路。中間預覽先用本機
- * 那張，傳好了換成正式網址。傳失敗不算匯入失敗——設定都進來了，只是圖要作者自己再選一次。
- */
-/** 匯入的卡自帶的圖：上傳後填進還空著的那一格（頭像，或 V3 卡的主背景）。 */
-async function adoptImage(image: Blob, slot: "avatar" | "background" = "avatar") {
-  if (slot === "avatar") {
-    if (pendingAvatar.value) URL.revokeObjectURL(pendingAvatar.value);
-    pendingAvatar.value = URL.createObjectURL(image);
-  }
+/** 匯入主背景；沒有主背景的 PNG 卡使用內嵌圖片。 */
+async function adoptImage(image: Blob) {
   try {
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
-    const ext = image.type === "image/jpeg" ? "jpg" : image.type === "image/webp" ? "webp" : "png";
+    const ext = image.type === "image/jpeg" ? "jpg" : image.type === "image/webp" ? "webp" : image.type === "image/gif" ? "gif" : "png";
     const file = new File([image], `card.${ext}`, { type: image.type || "image/png" });
     const url = await uploadImage(file, token, roleId.value || undefined);
-    if (slot === "background") {
-      if (!draft.value.roleBackground) draft.value.roleBackground = url;
-      return;
-    }
-    if (!draft.value.roleAvatar) draft.value.roleAvatar = url;
+    if (!draft.value.roleBackground) draft.value.roleBackground = url;
   } catch {
     error.value = t("import.avatarFailed");
-  } finally {
-    if (slot === "avatar") {
-      URL.revokeObjectURL(pendingAvatar.value);
-      pendingAvatar.value = "";
-    }
   }
 }
 
@@ -1138,8 +1118,8 @@ function applyImport(result: ImportResult) {
     // 匯入的條目一律沒有 entryId：它們在上游還不存在，儲存時要走 create。
     worldbookEntries.value = result.worldbook.entries.map((entry) => ({ ...entry, entryId: undefined }));
   }
-  if (result.image) void adoptImage(result.image);
-  if (result.background) void adoptImage(result.background, "background");
+  const portrait = result.background ?? result.image;
+  if (portrait) void adoptImage(portrait);
   if (result.regex) regexSet.value = result.regex;
   defaultChatPageForNew();
   goto("basic");
@@ -1159,7 +1139,7 @@ const safeName = () => (draft.value.roleName || "card").replace(/[/\\?%*:|"<>]/g
 /**
  * 匯出成酒館卡。
  *
- * 優先走 PNG：那是這個生態的通用載體，拖進任何客戶端都認得。頭像取不到（作者根本沒設、
+ * 優先走 PNG：那是這個生態的通用載體，拖進任何客戶端都認得。直圖取不到（作者根本沒設、
  * 或代抓失敗）就退回 JSON，而不是報錯——作者要的是那份設定，不是那張圖。
  */
 async function exportCard(format: "png" | "json") {
@@ -1171,11 +1151,11 @@ async function exportCard(format: "png" | "json") {
     return;
   }
   try {
-    if (!draft.value.roleAvatar) throw new Error("no_avatar");
-    // 頭像在上游的圖片主機上、沒開 CORS：經本站代抓，不然這裡永遠退回 JSON
-    const res = await fetch(imageFetchUrl(draft.value.roleAvatar, window.location.origin));
+    if (!draft.value.roleBackground) throw new Error("no_portrait");
+    // 直圖在上游的圖片主機上、沒開 CORS：經本站代抓，不然這裡永遠退回 JSON
+    const res = await fetch(imageFetchUrl(draft.value.roleBackground, window.location.origin));
     if (!res.ok) throw new Error("fetch_failed");
-    const png = embedIntoPng(new Uint8Array(await res.arrayBuffer()), card);
+    const png = embedIntoPng(await imageToPng(new Uint8Array(await res.arrayBuffer())), card);
     // slice() 是為了拿到一塊剛好這麼大、型別上也確定是 ArrayBuffer 的緩衝區：
     // 直接餵 .buffer 會依賴「輸出永遠不是 subarray」這個外部不變式，卡片大小的一次複製不值得賭。
     download(new Blob([png.slice().buffer], { type: "image/png" }), `${safeName()}.png`);
@@ -1271,10 +1251,6 @@ async function exportCard(format: "png" | "json") {
 
           <!-- 形象緊接在名稱後面：寫卡最先有的是名字跟圖，簡介之後才寫（社群管理員 2026-09-14） -->
           <p class="muted">{{ $t("editor.media.lede") }}</p>
-          <ImageField v-model="draft.roleAvatar" :label="$t('editor.avatar')" :hint="$t('editor.avatar.hint')"
-                      :pick-label="$t('editor.image.pick')" :clear-label="$t('editor.image.clear')"
-                      :library-label="$t('editor.image.library')"
-                      :uploading="$t('editor.image.uploading')" ratio="square" @pick="onPickImage" />
           <!-- 直式背景是基準（9:16），橫式選填；舞台依螢幕方向選圖，兩張都用 cover 裁邊，
                所以框上畫出中央 75% 安全區：重要元素放裡面，任何比例的螢幕都不會被裁掉。 -->
           <ImageField v-model="draft.roleBackground" :label="$t('editor.background')"

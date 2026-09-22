@@ -6,7 +6,7 @@ This guide covers what a character card consists of, the difference between the 
 
 | Field | Description |
 |---|---|
-| Name, avatar, background | Shown on the board and in the chat. Use a square image for the avatar. |
+| Name, portrait, optional landscape background | The portrait is also used for PNG export and the chat avatar. |
 | Summary | Short description shown on the board card. |
 | Persona | Who the character is, how they speak, and the rules of the world. |
 | Opening | The first message of a conversation. Multiple alternates can be defined. |
@@ -152,7 +152,7 @@ On the classic page, rules are applied onto the site's chat page. The selectors 
 
 | Source | How |
 |---|---|
-| SillyTavern | Drop a PNG or JSON character card into the "Basics" section. Persona, opening, lorebook and regex scripts are filled in; the portrait inside a PNG is uploaded as the avatar. |
+| SillyTavern | Drop a PNG or JSON character card into the "Basics" section. Persona, opening, lorebook and regex scripts are filled in; the embedded image becomes the portrait background; an explicit main background takes precedence. |
 | Meimo Island (MMD) three-file set | Import the rules file (with `chatVersion`), the opening and the persona separately. A rules file marked for the new sandbox selects the sandbox chat page automatically. |
 
 After importing, check the result in "Try it out", then save and publish.

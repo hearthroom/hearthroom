@@ -258,3 +258,12 @@ it("keeps LunaTalk publication separate from ID-access repair", async () => {
  await transfers.ensurePlayable(env,"lunatalk","token","target");
  expect(requests).toHaveLength(0);
 });
+
+it('exports the portrait to both legacy and current image fields when copying cards', async()=>{
+ const portrait='https://assets.lunatalk.ai/portrait.gif';
+ const requests=fakeUpstream({});
+ const card={name:'Example',summary:'',description:'',greeting:'',language:'en',media:{avatar:'https://assets.lunatalk.ai/old.png',background:portrait}};
+ await transfers.update(env,'harbor','fixture','target',card);
+ expect(body(requests.find(r=>r.url.endsWith('/document'))).fields).toMatchObject({roleAvatar:portrait,roleBackground:portrait});
+ expect(await cardHash(card)).toBe(await cardHash({...card,media:{avatar:portrait,background:portrait}}));
+});
