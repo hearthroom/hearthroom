@@ -17,7 +17,7 @@ HarperHarbor 移除 `role.avatar_asset_id`、不再保存 `externalMedia.avatar`
 
 ## 上線順序與回復
 
-採兩階段發布，避免先遷移再換程式時讓舊服務讀取失敗。第一階段 Harbor migration 59 與 Hearthroom migration 0038 搬移直圖並停用獨立頭像，但保留相容欄位；先部署新版 API、worker 與 Hearthroom。讀回版本、健康與圖片來源並等待舊請求排空後，第二階段另加遷移刪除欄位。LunaTalk schema 不變。
+採兩階段發布，避免先遷移再換程式時讓舊服務讀取失敗。第一階段 Harbor migration 59 與 Hearthroom migration 0038 搬移直圖並停用獨立頭像，但保留相容欄位；先部署新版 API、worker 與 Hearthroom。讀回版本、健康與圖片來源並等待舊請求排空後，第二階段使用 Harbor migration 60 與 Hearthroom migration 0039 刪除欄位。LunaTalk schema 不變。
 
 先推送被固定引用的 Moonstage commit，再發布 Hearthroom gitlink；所有部署來自已推送且驗證的來源，由 CI 執行。Harbor 部署保留遷移前備份，Hearthroom 使用 D1 Time Travel。第二階段的自動回退目標必須是已停用欄位的第一階段 binary／Worker。完整回退到舊的獨立頭像模型需備份，不能只換回早期程式。
 
