@@ -36,7 +36,7 @@ as requested. Existing numbers remain valid.
 
 ## Migration and cutover
 
-Migration `0036_numeric_card_identity.sql` recreates affected tables, indexes,
+Migration `0037_numeric_card_identity.sql` recreates affected tables, indexes,
 triggers, the ownership view and FTS. It maps old references inside one migration
 transaction and then drops its temporary mapping. Favorites are copied before
 dropping their referenced table: deferred foreign keys do not suppress cascade

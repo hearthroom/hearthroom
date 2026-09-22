@@ -41,7 +41,7 @@ export interface CardRow {
   community_avatar?: string | null;
   /** 成人內容（0006 起）：作者提交時宣告、審核人對照過的本站分級。預設不展示。 */
   nsfw: number;
-  /** 永久卡號，從 100001 起跳。私有卡也會分配，發布或撤銷不換號；0036 起同時是 cards 主鍵。 */
+  /** 永久卡號，從 100001 起跳。私有卡也會分配，發布或撤銷不換號；0037 起同時是 cards 主鍵。 */
   num?: number | null;
 }
 
