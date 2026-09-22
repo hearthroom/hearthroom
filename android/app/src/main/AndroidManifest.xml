@@ -1,8 +1,8 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <queries><intent><action android:name="android.support.customtabs.action.CustomTabsService" /></intent></queries>
-    <application android:name="android.app.Application" android:label="@string/app_name" android:icon="@drawable/icon" android:theme="@style/AppTheme" android:allowBackup="false" android:supportsRtl="true" android:usesCleartextTraffic="false">
+    <application android:name="android.app.Application" android:label="@string/app_name" android:icon="@drawable/icon" android:theme="@style/AppTheme" android:allowBackup="false" android:supportsRtl="true" android:usesCleartextTraffic="false" android:manageSpaceActivity="com.google.androidbrowserhelper.trusted.ManageDataLauncherActivity">
         <meta-data android:name="asset_statements" android:resource="@string/asset_statements" />
         <activity android:name=".MainActivity" android:exported="true" android:configChanges="orientation|screenSize|keyboardHidden" android:launchMode="singleTask">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
@@ -13,6 +13,14 @@
             <meta-data android:name="android.support.customtabs.trusted.FALLBACK_STRATEGY" android:value="customtabs" />
             <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
         </activity>
+        <activity android:name="com.google.androidbrowserhelper.trusted.ManageDataLauncherActivity" android:exported="false">
+            <meta-data android:name="android.support.customtabs.trusted.MANAGE_SPACE_URL" android:value="https://hearthroom.club/" />
+        </activity>
+        <activity android:name="com.google.androidbrowserhelper.trusted.FocusActivity" android:exported="false" />
+        <!-- Browser Helper validates the calling browser through its token store. -->
+        <service android:name="com.google.androidbrowserhelper.trusted.DelegationService" android:exported="true" tools:ignore="ExportedService">
+            <intent-filter><action android:name="android.support.customtabs.trusted.TRUSTED_WEB_ACTIVITY_SERVICE" /><category android:name="android.intent.category.DEFAULT" /></intent-filter>
+        </service>
         <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.files" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" /></provider>
     </application>
 </manifest>
