@@ -9,6 +9,7 @@ android {
         versionCode Integer.parseInt(providers.gradleProperty('releaseCode').getOrElse('1'))
         versionName providers.gradleProperty('releaseName').getOrElse('0.1.0-dev')
         buildConfigField 'String', 'UPDATE_URL', '"https://downloads.hearthroom.club/latest.json"'
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
     buildFeatures { buildConfig true }
     signingConfigs {
@@ -21,13 +22,20 @@ android {
             }
         }
     }
-    buildTypes { release { signingConfig signingConfigs.release } }
+    buildTypes {
+        debug { applicationIdSuffix '.debug'; resValue 'string', 'application_id', 'club.hearthroom.app.debug' }
+        release { signingConfig signingConfigs.release; resValue 'string', 'application_id', 'club.hearthroom.app' }
+    }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     lint { abortOnError true }
 }
 dependencies {
     implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.3'
     implementation 'androidx.core:core:1.15.0'
+    implementation 'androidx.webkit:webkit:1.12.1'
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.json:json:20250517'
+    androidTestImplementation 'androidx.test:runner:1.6.2'
+    androidTestImplementation 'androidx.test:rules:1.6.1'
+    androidTestImplementation 'androidx.test.uiautomator:uiautomator:2.3.0'
 }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { dismissWaitMs, isIosSafari, readDismissCount, readDismissedAt, recordVisit, shouldOffer } from "../src/lib/pwa";
 
 class Mem { m = new Map<string, string>(); getItem(k: string) { return this.m.has(k) ? this.m.get(k)! : null; } setItem(k: string, v: string) { this.m.set(k, v); } removeItem(k: string) { this.m.delete(k); } }
@@ -6,6 +6,13 @@ class Mem { m = new Map<string, string>(); getItem(k: string) { return this.m.ha
 const DAY = 24 * 60 * 60 * 1000;
 
 describe("pwa install prompt", () => {
+  it("does not offer installation inside our Android WebView", async () => {
+    const {isStandalone, canInstall} = await import('../src/lib/pwa');
+    const ua = 'Mozilla/5.0 (Linux; Android 15; wv) Chrome/133.0.0.0 Mobile Safari/537.36 HearthroomApp/1.0.9';
+    const spy = vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(ua);
+    try { expect(isStandalone()).toBe(true); expect(canInstall(ua)).toBe(false); }
+    finally { spy.mockRestore(); }
+  });
   it("counts distinct visit days, not visits", () => {
     const s = new Mem();
     const t0 = Date.UTC(2026, 8, 15, 10);

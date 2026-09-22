@@ -20,4 +20,14 @@
     <string name="update_failed">這次未能完成更新，你可以重試或繼續使用 Hearthroom。</string>
     <string name="retry">重新嘗試</string>
     <string name="shortcut_updates">檢查更新</string>
+    <string name="web_back">返回</string>
+    <string name="web_open_link">開啟連結</string>
+    <string name="web_load_failed">這個頁面無法載入，請確認網路連線後重試。</string>
+    <string name="web_unavailable">手機需要更新 Android System WebView 才能在 App 內開啟 Hearthroom，請檢查系統或 WebView 更新，或改用相容的瀏覽器。</string>
+    <string name="web_closed">頁面意外關閉，請重新開啟。</string>
+    <string name="web_open_browser">用瀏覽器開啟</string>
+    <string name="web_no_browser">手機沒有可用的瀏覽器，請安裝相容的瀏覽器或更新系統。</string>
+    <string name="web_file_failed">檔案無法儲存或選取，請重試；下載檔案需小於或等於 32 MB。</string>
+    <string name="web_saved">檔案已儲存。</string>
+    <string name="shortcut_webview">在 App 內開啟</string>
 </resources>

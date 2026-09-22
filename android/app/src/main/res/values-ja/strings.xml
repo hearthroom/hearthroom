@@ -20,4 +20,14 @@
     <string name="update_failed">更新できませんでした。再試行するか、Hearthroom を開いてください。</string>
     <string name="retry">再試行</string>
     <string name="shortcut_updates">更新を確認</string>
+    <string name="web_back">戻る</string>
+    <string name="web_open_link">リンクを開く</string>
+    <string name="web_load_failed">ページを読み込めませんでした。接続を確認して再試行してください。</string>
+    <string name="web_unavailable">アプリ内で Hearthroom を開くには Android System WebView の更新が必要です。システムや WebView を更新するか、対応ブラウザーをご利用ください。</string>
+    <string name="web_closed">ページが予期せず閉じました。もう一度開いてください。</string>
+    <string name="web_open_browser">ブラウザーで開く</string>
+    <string name="web_no_browser">利用できるブラウザーがありません。対応ブラウザーをインストールするか、システムを更新してください。</string>
+    <string name="web_file_failed">ファイルを保存または選択できませんでした。再試行してください。ダウンロードは 32 MB 以下にしてください。</string>
+    <string name="web_saved">ファイルを保存しました。</string>
+    <string name="shortcut_webview">アプリ内で開く</string>
 </resources>

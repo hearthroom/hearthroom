@@ -11,6 +11,7 @@ import android.view.View;
 import android.widget.*;
 import androidx.core.content.FileProvider;
 import com.google.androidbrowserhelper.trusted.LauncherActivity;
+import com.google.androidbrowserhelper.trusted.TwaLauncher;
 import java.io.File;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -27,13 +28,24 @@ public final class MainActivity extends LauncherActivity {
     private boolean launched, waitingPermission, downloading, manual;
     private File apk;
     @Override protected boolean shouldLaunchImmediately(){return false;}
+    @Override protected void onNewIntent(Intent intent){
+        super.onNewIntent(intent);
+        if("hearthroom".equals(intent.getScheme())&&intent.getData()!=null&&"webview".equals(intent.getData().getHost())){
+            setIntent(intent);openSite();
+        }
+    }
     @Override protected Uri getLaunchingUrl(){
-        Uri uri=getIntent().getData();
-        return uri!=null&&"https".equals(uri.getScheme())&&"hearthroom.club".equals(uri.getHost())&&uri.getUserInfo()==null&&(uri.getPort()==-1||uri.getPort()==443)?uri:Uri.parse("https://hearthroom.club/");
+        return Uri.parse(WebPolicy.launchUrl(getIntent().getDataString()));
+    }
+    @Override protected TwaLauncher.FallbackStrategy getFallbackStrategy(){
+        return (context,builder,provider,completed)->{
+            context.startActivity(new Intent(context,WebActivity.class).setData(getLaunchingUrl()));
+            completed.run();
+        };
     }
     @Override protected void onCreate(Bundle state){
         super.onCreate(state);if(isFinishing())return;
-        manual="hearthroom".equals(getIntent().getScheme());
+        manual="hearthroom".equals(getIntent().getScheme())&&"updates".equals(getIntent().getData().getHost());
         setContentView(R.layout.updater);
         View root=findViewById(R.id.update_root);
         root.setOnApplyWindowInsetsListener((v,insets)->{v.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());return insets;});
@@ -94,6 +106,11 @@ public final class MainActivity extends LauncherActivity {
     @Override protected void onResume(){super.onResume();if(waitingPermission){waitingPermission=false;if(getPackageManager().canRequestPackageInstalls())install();}}
     @Override protected void onSaveInstanceState(Bundle out){super.onSaveInstanceState(out);if(release!=null)out.putString("release",release.json);out.putBoolean("permission",waitingPermission);}
     private void showError(){status.setText(R.string.update_failed);progress.setVisibility(View.GONE);action.setEnabled(true);action.setVisibility(View.VISIBLE);action.setText(R.string.retry);action.setOnClickListener(v->{if(release==null)check();else download();});}
-    private void openSite(){if(!active())return;launched=true;client.cancel();worker.shutdownNow();launchTwa();}
+    private void openSite(){
+        if(!active())return;launched=true;client.cancel();worker.shutdownNow();
+        if("hearthroom".equals(getIntent().getScheme())&&"webview".equals(getIntent().getData().getHost())){
+            startActivity(new Intent(this,WebActivity.class).setData(getLaunchingUrl()));finish();
+        }else launchTwa();
+    }
     @Override protected void onDestroy(){client.cancel();worker.shutdownNow();main.removeCallbacksAndMessages(null);super.onDestroy();}
 }

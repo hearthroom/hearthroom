@@ -1,0 +1,7 @@
+{
+  "en": "Hearthroom now opens inside the app when no installed browser supports TWA.\nPhones with an unavailable or outdated WebView show recovery instructions.\nLong-press the app icon and choose Open inside app if browser controls still appear.",
+  "zh-Hant": "手機沒有支援 TWA 的瀏覽器時，Hearthroom 現在會在 App 內開啟。\nWebView 不可用或版本過舊時，會顯示更新與恢復使用的指引。\n若仍出現瀏覽器介面，可長按 App 圖示並選擇「在 App 內開啟」。",
+  "zh-Hans": "手机没有支持 TWA 的浏览器时，Hearthroom 现在会在 App 内打开。\nWebView 不可用或版本过旧时，会显示更新和恢复使用的指引。\n如果仍出现浏览器界面，可长按 App 图标并选择「在 App 内打开」。",
+  "ja": "TWA 対応ブラウザーがない端末でも、Hearthroom をアプリ内で開けるようになりました。\nWebView が使えない場合や古い場合は、更新と復旧の手順を表示します。\nブラウザーの操作バーが表示される場合は、アプリアイコンを長押しして「アプリ内で開く」を選んでください。",
+  "ko": "TWA를 지원하는 브라우저가 없는 기기에서도 Hearthroom이 앱 안에서 열립니다.\nWebView를 사용할 수 없거나 버전이 오래된 경우 업데이트 및 복구 안내를 표시합니다.\n브라우저 도구 모음이 계속 보이면 앱 아이콘을 길게 누른 뒤 '앱 안에서 열기'를 선택해 주세요."
+}
