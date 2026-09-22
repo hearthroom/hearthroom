@@ -47,7 +47,7 @@ are added to logs or labels.
   and `git diff --check` passed. Existing build warnings include large chunks,
   legacy Sass/Vite APIs and stage font references.
 
-## Browser case and remaining evidence
+## Browser case and evidence
 
 Use a non-production test account, with desktop and 390×844 mobile viewports:
 
@@ -64,7 +64,26 @@ synthetic API fixtures verified edit entry, updated hint, cancellation, and the
 390px English layout (44px controls, no horizontal overflow). The local fixture
 API is not a live Worker acceptance result.
 
-**BLOCKED:** Chrome extension fileChooser.setFiles returned `Not allowed`.
-Enable the extension's Allow access to file URLs, then rerun steps 2–5.
-No browser end-to-end upload, production upload, deployment or live readback is
-claimed. Release requires the repository's explicit production authorization.
+The initial Chrome file-access block was resolved by the user enabling the
+extension permission. A follow-up visible Chrome run completed:
+
+- Desktop/en: GIF and `.apng` selection through the native file chooser, blob
+  preview, save confirmation, reload, and visibly different red/blue frames.
+- Mobile/zh-Hant at 390×844: APNG named `.png` and animated WebP selection,
+  preview, save and reload; animated WebP showed different red/blue frames.
+- APNG and WebP read back from the local fixture API matched their input bytes
+  exactly, with `image/apng` and `image/webp` types respectively. Production
+  APNG normalization to `image/png` remains covered by the Worker tests above.
+- Selecting a GIF above 2 MiB displayed the format/size error. Reselecting a valid
+  WebP cleared the error and saved normally.
+- Cancelling a selected replacement preserved the prior saved avatar URL.
+- Removing an avatar and cancelling preserved it; removing and saving persisted
+  through reload and returned to the initial-letter fallback.
+- No console errors were recorded during the follow-up browser run.
+
+These browser checks use the real page and editor components with a local
+synthetic API fixture. Combined with the independent real-Images/Worker tests,
+they cover client behavior and server preservation separately; they are not a
+browser-through-deployed-Worker or production acceptance claim. No production
+upload, push or deployment was performed. Release still requires explicit
+production authorization.
