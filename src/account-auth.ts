@@ -81,8 +81,9 @@ async function readSession(c:C,required=true):Promise<Session|null>{
   writeCookie(c,SESSION,raw!,Math.floor(Math.min(SESSION_IDLE,row.created_at+SESSION_MAX-Date.now())/1000));
   return row;
 }
+// Workers supports manual redirects; callers reject non-2xx without forwarding credentials.
 async function upstreamPost(env:Env,provider:ProviderId,path:string,body:Record<string,string>):Promise<Response>{
-  return fetch(apiBaseOf(env,provider)+path,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams(body),redirect:'error',signal:AbortSignal.timeout(15000)});
+  return fetch(apiBaseOf(env,provider)+path,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams(body),redirect:'manual',signal:AbortSignal.timeout(15000)});
 }
 async function exchange(env:Env,provider:ProviderId,clientId:string,body:Record<string,string>):Promise<Pair>{
   let response:Response;
@@ -101,7 +102,7 @@ async function registeredClient(c:C,provider:ProviderId,origin:string){
   const scope=scopes[provider];
   let row=await c.env.DB.prepare('SELECT client_id FROM account_auth_clients WHERE origin=? AND provider=? AND scope=?').bind(origin,provider,scope).first<{client_id:string}>();
   if(row)return row.client_id;
-  const response=await fetch(apiBaseOf(c.env,provider)+'/oauth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({client_name:'Hearthroom',redirect_uris:[origin+'/auth/callback'],grant_types:['authorization_code','refresh_token'],token_endpoint_auth_method:'none',...(scope?{scope}:{})}),redirect:'error',signal:AbortSignal.timeout(15000)});
+  const response=await fetch(apiBaseOf(c.env,provider)+'/oauth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({client_name:'Hearthroom',redirect_uris:[origin+'/auth/callback'],grant_types:['authorization_code','refresh_token'],token_endpoint_auth_method:'none',...(scope?{scope}:{})}),redirect:'manual',signal:AbortSignal.timeout(15000)});
   if(!response.ok)throw new HttpError(503,'auth_provider_unavailable');
   const data=await response.json() as {client_id?:string};
   if(!data.client_id)throw new HttpError(503,'auth_provider_unavailable');

@@ -41,6 +41,8 @@ function providers(){
   });
   vi.spyOn(upstream,'fetchMyRoles').mockResolvedValue({items:[],hasNext:false} as any);
   const network=vi.spyOn(globalThis,'fetch').mockImplementation(async(input,init)=>{
+    // Match the production Workers fetch boundary: redirect:error throws before I/O.
+    if(init?.redirect==='error')throw new TypeError('Workers fetch only supports follow or manual redirects');
     const url=String(input);
     if(url.endsWith('/oauth/register'))return Response.json({client_id:url.includes('harperharbor')?'harbor-client':'luna-client'});
     if(url.endsWith('/oauth/revoke'))return new Response('',{status:200});
@@ -135,6 +137,36 @@ async function expire(provider='harbor'){
   await env.DB.prepare('UPDATE account_credentials SET expires_at=0,payload=? WHERE generation=?').bind(await sealAuth(authEnv(),purpose,pair),row.generation).run();
   return row;
 }
+it('uses edge-supported non-following requests for registration, exchange, refresh and revoke',async()=>{
+  const p=providers();await login('harbor',22);await expire();
+  expect((await request('token',{provider:'harbor'})).status).toBe(200);
+  expect((await request('disconnect',{provider:'harbor'})).status).toBe(200);
+  expect(p.network.mock.calls.map(([url])=>new URL(String(url)).pathname)).toEqual([
+    '/oauth/register','/oauth/token','/oauth/token','/oauth/revoke',
+  ]);
+  for(const [,init] of p.network.mock.calls)expect(init?.redirect).toBe('manual');
+});
+
+it('rejects a provider registration redirect without creating a flow or sending another request',async()=>{
+  const p=providers();
+  p.network.mockResolvedValue(new Response(null,{status:307,headers:{Location:'https://attacker.test/receive'}}));
+  expect((await request('start',{provider:'harbor'})).status).toBe(503);
+  expect(p.network).toHaveBeenCalledTimes(1);
+  expect(p.network.mock.calls[0][1]?.redirect).toBe('manual');
+  expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM account_auth_attempts').first<any>()).n).toBe(0);
+});
+
+it('rejects a token endpoint redirect without sending the authorization code to its destination',async()=>{
+  const p=providers();
+  const started=await request('start',{provider:'harbor'});
+  const state=new URL((await started.json() as any).url).searchParams.get('state');
+  p.network.mockResolvedValue(new Response(null,{status:307,headers:{Location:'https://attacker.test/receive'}}));
+  expect((await request('complete',{code:'private-code',state})).status).toBe(503);
+  expect(p.network).toHaveBeenCalledTimes(2);
+  expect(p.network.mock.calls[1][1]?.redirect).toBe('manual');
+  expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM account_credentials').first<any>()).n).toBe(0);
+});
+
 it('serializes refresh across requests and rejects a late response after logout',async()=>{
   const p=providers();await login('harbor',22);await expire();
   const real=p.network.getMockImplementation()!;
