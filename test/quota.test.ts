@@ -1,3 +1,4 @@
+import {approveFixtureResponse} from './hosted-fixture';
 import { SELF, env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { bearer, resetDb, restoreUpstream, rolesOnMainSite, whoAmI, identities, myRolesOnUpstream } from "./helpers";
@@ -5,12 +6,12 @@ import { WEEKLY_LIMIT, WEEK_MS, weekWindow } from "../src/quota";
 
 const DAY = 24 * 60 * 60 * 1000;
 
-const register = (roleId: string, token = "alice-token") =>
-  SELF.fetch("https://c.test/v1/cards", {
+const register = async (roleId: string, token = "alice-token") =>
+  approveFixtureResponse(await SELF.fetch("https://c.test/v1/cards", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...bearer(token) },
-    body: JSON.stringify({ roleId, nsfw: false }),
-  });
+    body: JSON.stringify({operationId:crypto.randomUUID(),...({ roleId, nsfw: false })}),
+  }));
 const unregister = (roleId: string, token = "alice-token") =>
   SELF.fetch(`https://c.test/v1/cards/${roleId}`, { method: "DELETE", headers: bearer(token) });
 

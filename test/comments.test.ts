@@ -1,3 +1,4 @@
+import {approveFixtureResponse} from './hosted-fixture';
 import { SELF, env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { bearer, identities, makeReviewer, resetDb, restoreUpstream, rolesOnMainSite } from "./helpers";
@@ -13,9 +14,9 @@ beforeEach(async () => {
   await resetDb();
   identities({ "author-token": AUTHOR, "fan": FAN, "other": OTHER, "mod": MOD });
   rolesOnMainSite({ roleId: "role-1", authorNumId: AUTHOR });
-  const res = await SELF.fetch("https://c.test/v1/cards", {
-    method: "POST", headers: { "Content-Type": "application/json", ...bearer("author-token") }, body: JSON.stringify({ roleId: "role-1", nsfw: false }),
-  });
+  const res = await approveFixtureResponse(await SELF.fetch("https://c.test/v1/cards", {
+    method: "POST", headers: { "Content-Type": "application/json", ...bearer("author-token") }, body: JSON.stringify({operationId:crypto.randomUUID(),...({ roleId: "role-1", nsfw: false })}),
+  }));
   cardId = ((await res.json()) as { id: string }).id;
 });
 afterEach(() => restoreUpstream());

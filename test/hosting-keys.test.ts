@@ -16,3 +16,14 @@ it('never falls back to the Harbor secret when LunaTalk is unconfigured',async()
  await expect(hostGateway.seal({...keys,HOSTING_SERVICE_KEY_LUNATALK:undefined} as Env,'owner','draft','work','version','lunatalk')).rejects.toThrow('hosting_unavailable');
  expect(fetcher).not.toHaveBeenCalled();
 });
+
+it('refuses registration without the selected hosting credential instead of falling back to legacy publication',async()=>{
+ const {SELF,env}=await import('cloudflare:test');
+ const {resetDb,whoAmI,rolesOnMainSite,restoreUpstream}=await import('./helpers');
+ await resetDb();delete (env as {HOSTING_SERVICE_KEY_LUNATALK?:string}).HOSTING_SERVICE_KEY_LUNATALK;whoAmI(10001);rolesOnMainSite({roleId:'draft',authorNumId:10001});
+ try {
+  const response=await SELF.fetch('https://c.test/v1/cards',{method:'POST',headers:{Authorization:'Bearer author-token','Content-Type':'application/json'},body:JSON.stringify({roleId:'draft',nsfw:false,operationId:crypto.randomUUID()})});
+  expect(response.status).toBe(503);
+  expect(await env.DB.prepare('SELECT count(*) AS n FROM cards').first()).toEqual({n:0});
+ } finally {restoreUpstream()}
+});

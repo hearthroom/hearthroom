@@ -1,3 +1,4 @@
+import {approveFixtureResponse} from './hosted-fixture';
 /**
  * 兩家供應商：身分不混、榜單相通（owner 2026-09-17，覆蓋 2026-09-16 的「完全不混」）。
  *
@@ -17,17 +18,18 @@ const ROLE_ID = "role-collide";
 const AUTHOR_ID = 10001;
 
 async function register(token: string, provider?: string, roleId = ROLE_ID) {
-  return SELF.fetch("https://c.test/v1/cards", {
+  return approveFixtureResponse(await SELF.fetch("https://c.test/v1/cards", {
     method: "POST",
     headers: { ...bearer(token), "content-type": "application/json", ...(provider ? { "X-Provider": provider } : {}) },
-    body: JSON.stringify({ roleId, nsfw: false }),
-  });
+    body: JSON.stringify({operationId:crypto.randomUUID(),...({ roleId, nsfw: false })}),
+  }));
 }
 
 /** 月光已經搬到 Harbor 成了 copy-1 並發布：works 一列、work_copies 一列。 */
 async function copyOnHarbor() {
-  await env.DB.prepare("INSERT INTO works VALUES ('w1','m1','lunatalk',?,1)").bind(ROLE_ID).run();
-  await env.DB.prepare("INSERT INTO work_copies(work_id,provider,external_id,role_id,status,updated_at) VALUES ('w1','harbor',?,'copy-1','published',1)").bind(AUTHOR_ID).run();
+  const work=await env.DB.prepare("SELECT id FROM works WHERE source_provider='lunatalk' AND source_role_id=?").bind(ROLE_ID).first<{id:string}>();
+  await env.DB.prepare("INSERT INTO work_copies(work_id,provider,external_id,role_id,status,updated_at) VALUES (?,'harbor',?,'copy-1','published',1)").bind(work!.id,AUTHOR_ID).run();
+  await env.DB.prepare("INSERT INTO hosting_replicas(version_id,provider,source_role_id,hosted_revision_id,state,created_at) SELECT approved_version_id,'harbor','copy-draft','copy-1','ready',1 FROM cards WHERE provider='lunatalk' AND source_role_id=?").bind(ROLE_ID).run();
 }
 async function hourlySync() {
   const ctx = createExecutionContext();
@@ -87,6 +89,7 @@ describe("身分不混、榜單相通", () => {
   it("熱度＝來源加上已發布副本的對話數，每小時同步時算", async () => {
     await register("luna-token");
     await copyOnHarbor();
+    await env.DB.prepare("UPDATE work_copies SET status='synced'").run();
     await hourlySync();
     const body = (await (await board()).json()) as { items: { name: string; talkNum: number }[] };
     expect(body.items).toHaveLength(1);

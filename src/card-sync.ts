@@ -3,7 +3,6 @@ import { MEDIA_FIELDS } from "./card-media";
 import { transfers, type TransferCard, type WorldbookMap } from "./card-transfer";
 import { HttpError, type Env } from "./types";
 import type { ProviderId } from "./providers";
-import { memberProfile } from "./members";
 export { transfers };
 export interface SyncInput {
   memberId: string;
@@ -54,7 +53,7 @@ interface Copy {
   transfer_state: string;
 }
 export async function syncCard(env: Env, i: SyncInput) {
-  if(i.recreateMissing && i.publish)throw new HttpError(400,"sync_proof_required");
+  if(i.publish)throw new HttpError(400,"sync_proof_required");
   if (i.sourceProvider === i.targetProvider)
     throw new HttpError(400, "sync_same_provider");
   const source = await transfers.read(
@@ -254,15 +253,6 @@ export async function syncCard(env: Env, i: SyncInput) {
     );
     if ((await cardHash(readback.card)) !== hash)
       throw new HttpError(409, "sync_readback_mismatch");
-    if (i.publish && status !== "published" && status !== "pending") {
-      await transfers.publish(
-        env,
-        i.targetProvider,
-        i.targetToken,
-        roleId
-      );
-      status = "pending";
-    }
     await env.DB.prepare(
       "UPDATE work_copies SET status=?,source_hash=?,target_hash=?,worldbooks=?,error='',operation=NULL,updated_at=? WHERE work_id=? AND provider=? AND operation=?"
     )
@@ -296,44 +286,6 @@ export interface DistributeTarget {
   token: string;
 }
 /**
- * 登記即分發（owner 2026-09-17）：作者按下登記，卡就排進其他已登入渠道的同步。
- * 這條在回應之後跑（executionCtx.waitUntil），登記本身不等它；結果落在 work_copies，
- * 「我的卡片」的分發面板讀那裡。一家失敗不影響另一家，也不影響登記。
- */
-export async function distributeCard(
-  env: Env,
-  memberId: string,
-  source: { provider: ProviderId; roleId: string; account: number; token: string },
-  targets: DistributeTarget[]
-): Promise<void> {
-  const profile = await memberProfile(env.DB, memberId);
-  for (const target of targets) {
-    if (target.provider === source.provider) continue;
-    try {
-      const who = await (await import("./upstream")).upstream.fetchMe(env, target.token, target.provider);
-      // 目標帳號要是這個成員綁過的：不能拿別人的 token 把卡寫進別人的帳號
-      if (!profile?.identities.some((x) => x.provider === target.provider && x.externalId === who.accountNumId)) {
-        console.error("distribute skipped: target account not connected", { provider: target.provider });
-        continue;
-      }
-      await syncCard(env, {
-        memberId,
-        sourceProvider: source.provider,
-        sourceRoleId: source.roleId,
-        sourceAccount: source.account,
-        sourceToken: source.token,
-        targetProvider: target.provider,
-        targetAccount: who.accountNumId,
-        targetToken: target.token,
-        publish: true,
-      });
-    } catch (err) {
-      // syncCard 已把失敗原因寫進 work_copies.error；這裡只留一行給日誌
-      console.error("distribute failed", { provider: target.provider, error: String(err) });
-    }
-  }
-}
-/**
  * 這一批卡在別家已發布的副本：`來源家:來源卡 id` → 副本們。每小時同步把副本的對話數加進來源那張。
  * 一次查完整批（json_each 展開），D1 呼叫也算子請求，逐張查會吃掉上游的額度。
  */
@@ -345,10 +297,10 @@ export async function publishedCopiesFor(
   if (!cards.length) return out;
   const rows = await db
     .prepare(
-      `SELECT w.source_provider, w.source_role_id, wc.provider, wc.role_id FROM works w
-         JOIN work_copies wc ON wc.work_id = w.id
-        WHERE wc.status = 'published' AND wc.role_id IS NOT NULL
-          AND w.source_role_id IN (SELECT value FROM json_each(?))`
+      `SELECT c.provider AS source_provider,c.source_role_id,r.provider,r.hosted_revision_id AS role_id
+         FROM cards c JOIN hosting_replicas r ON r.version_id=c.approved_version_id
+        WHERE c.status='approved' AND r.state='ready' AND r.provider<>c.provider
+          AND c.source_role_id IN (SELECT value FROM json_each(?))`
     )
     .bind(JSON.stringify(cards.map((c) => c.source_role_id)))
     .all<{ source_provider: string; source_role_id: string; provider: ProviderId; role_id: string }>();

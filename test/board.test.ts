@@ -51,6 +51,7 @@ async function seed(f: {
       buildSearchText(r), f.registeredAt ?? Date.now(), 0,
     )
     .run();
+  await env.DB.prepare("UPDATE cards SET approved_hosted_role_id=? WHERE id=?").bind(r.roleId,f.id).run();
 }
 
 const list = async (query = "") => {
@@ -222,7 +223,7 @@ describe("語言解析", () => {
 });
 
 describe("每小時同步", () => {
-  it("內容與熱度以上游為準，作者不必回來重新登記", async () => {
+  it("公開投影與熱度從已封存版本同步", async () => {
     await seed({ id: "a", name: "舊名字", talkNum: 100, talkPrev: 100 });
     rolesOnMainSite({ roleId: "role-a", name: "上游已改名", talkNum: 350 });
 
@@ -237,7 +238,7 @@ describe("每小時同步", () => {
     expect(card.trending).toBe(250);
   });
 
-  it("同步後搜尋跟著改名走", async () => {
+  it("修復封存版本的公開投影後，搜尋同步更新", async () => {
     await seed({ id: "a", name: "舊名字" });
     rolesOnMainSite({ roleId: "role-a", name: "全新標題" });
 

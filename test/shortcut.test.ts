@@ -1,3 +1,4 @@
+import {approveFixtureResponse} from './hosted-fixture';
 /**
  * 把一張卡加到主畫面：卡片專屬 manifest 與圖示（src/shortcut.ts）。
  */
@@ -12,6 +13,7 @@ const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const JPG = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0]);
 
 let gen = 0;
+let hostedSafe:string;
 beforeEach(async () => {
   await resetDb();
   boardCache.namespace = `board-${Math.random()}`;
@@ -23,11 +25,12 @@ beforeEach(async () => {
   );
   expect((await submit("role-safe", { nsfw: false })).status).toBe(201);
   expect((await submit("role-adult", { nsfw: true })).status).toBe(201);
+  hostedSafe=(await env.DB.prepare("SELECT approved_hosted_role_id AS id FROM cards WHERE source_role_id='role-safe'").first<{id:string}>())!.id;
 });
 afterEach(() => { vi.unstubAllGlobals(); restoreUpstream(); });
 
-const submit = (roleId: string, body: Record<string, unknown>) =>
-  SELF.fetch("https://c.test/v1/cards", { method: "POST", headers: { "Content-Type": "application/json", ...bearer("author-token") }, body: JSON.stringify({ roleId, ...body }) });
+const submit = async (roleId: string, body: Record<string, unknown>) =>
+  approveFixtureResponse(await SELF.fetch("https://c.test/v1/cards", { method: "POST", headers: { "Content-Type": "application/json", ...bearer("author-token") }, body: JSON.stringify({operationId:crypto.randomUUID(),...({ roleId, ...body })}) }));
 
 /** 直接呼叫 worker.fetch 才能換掉 env（拿掉 IMAGES 綁定，走退路）。 */
 async function get(path: string, e: typeof env = env) {
@@ -44,8 +47,8 @@ describe("卡片 manifest", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("application/manifest+json");
     const m = await res.json() as Record<string, unknown>;
-    expect(m.id).toBe("/play/role-safe");
-    expect(m.start_url).toBe("/en/play/role-safe");
+    expect(m.id).toBe(`/play/${hostedSafe}`);
+    expect(m.start_url).toBe(`/en/play/${hostedSafe}`);
     expect(m.scope).toBe("/");
     expect(m.name).toBe("Night Detective");
     expect(m.display).toBe("standalone");
@@ -61,16 +64,16 @@ describe("卡片 manifest", () => {
     await waitOnExecutionContext(ctx);
     expect(res.status).toBe(200);
     const m = await res.json() as Record<string, unknown>;
-    expect(m.id).toBe("/role-safe/");
-    expect(m.scope).toBe("/role-safe/");
-    expect(m.start_url).toBe("/role-safe/?lang=en");
+    expect(m.id).toBe(`/${hostedSafe}/`);
+    expect(m.scope).toBe(`/${hostedSafe}/`);
+    expect(m.start_url).toBe(`/${hostedSafe}/?lang=en`);
     expect(m.name).toBe("Night Detective");
     expect(m.display).toBe("fullscreen");
     // 本機開發用的 play.localhost 也算
     const ctx2 = createExecutionContext();
     const local = await worker.fetch(new Request("http://play.localhost:8787/v1/cards/role-safe/manifest.webmanifest"), env, ctx2);
     await waitOnExecutionContext(ctx2);
-    expect(((await local.json()) as Record<string, unknown>).scope).toBe("/role-safe/");
+    expect(((await local.json()) as Record<string, unknown>).scope).toBe(`/${hostedSafe}/`);
   });
 
   it("站台自己的 manifest 在卡片 App 網域上是 404，主站照常", async () => {
@@ -83,10 +86,10 @@ describe("卡片 manifest", () => {
 
   it("來源語言不帶前綴；沒有該語言的名字就退回中文", async () => {
     const m = await (await get("/v1/cards/role-safe/manifest.webmanifest?lang=zh-Hant")).json() as Record<string, unknown>;
-    expect(m.start_url).toBe("/play/role-safe");
+    expect(m.start_url).toBe(`/play/${hostedSafe}`);
     expect(m.name).toBe("夜行偵探");
     const ja = await (await get("/v1/cards/role-safe/manifest.webmanifest?lang=ja")).json() as Record<string, unknown>;
-    expect(ja.start_url).toBe("/ja/play/role-safe");
+    expect(ja.start_url).toBe(`/ja/play/${hostedSafe}`);
     expect(ja.name).toBe("夜行偵探");
   });
 

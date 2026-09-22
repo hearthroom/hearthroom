@@ -1,3 +1,4 @@
+import {frozenFixtureRoles,restoreHostedFixture,hostedFixture} from './hosted-fixture';
 import { env } from "cloudflare:test";
 import { type UpstreamRole, upstream } from "../src/upstream";
 import type { ProviderId } from "../src/providers";
@@ -12,6 +13,7 @@ let cacheGeneration = 0;
  * 邊緣快取也一樣——不換命名空間的話，後面的測試會讀到前一個測試留下的結果。
  */
 export async function resetDb(): Promise<void> {
+  frozenFixtureRoles.clear();hostedFixture();
 for (const table of ["review_deliveries", "community_badge_audit", "community_appearance_media", "community_discord_appearance", "community_appearance_preferences", "community_review_signal", "community_case_jobs", "community_notifications", "community_metrics", "community_nonces", "community_awards", "community_xp", "discord_link_attempts", "discord_links", "community_subjects", "community_preferences", "member_conversations", "library_metrics", "member_favorites", "member_follows", "hosting_transfers", "hosting_replicas", "hosting_versions", "avatar_cleanup", "work_copies", "works", "member_connections", "card_saves", "comment_likes", "comments", "game_worlds", "cards", "card_numbers", "card_registrations", "review_stamps", "review_snapshots", "review_submissions", "reviewers", "member_identities", "members", "moderation_blocked_versions", "moderation_votes", "moderation_cases", "moderation_compensation", "moderation_events", "moderation_state", "moderation_metrics"]) {
     await env.DB.prepare(`DELETE FROM ${table}`).run();
   }
@@ -27,6 +29,7 @@ for (const table of ["review_deliveries", "community_badge_audit", "community_ap
 const real = { ...upstream };
 export function restoreUpstream(): void {
   Object.assign(upstream, real);
+  restoreHostedFixture();
 }
 
 // ---- 審核的假上游 ----------------------------------------------------------------
@@ -34,7 +37,7 @@ export function restoreUpstream(): void {
 /** 記錄每次「用作者的 token 讀整份設定」：測試才驗得出提交真的讀了、而且是拿作者的 token 讀的。 */
 export const settingsReads: { token: string; roleId: string; provider: string }[] = [];
 
-/** 打開社群審核（測試環境預設是關的：大多數測試關心的是登記即上榜那條路）。 */
+/** 切換社群審核配置；公開測試資料同樣必須完成封存與審核。 */
 export function reviewOn(): void { (env as { REVIEW_ENABLED?: string }).REVIEW_ENABLED = "true"; }
 export function reviewOff(): void { (env as { REVIEW_ENABLED?: string }).REVIEW_ENABLED = "false"; }
 
@@ -124,7 +127,7 @@ export function whoAmI(accountNumId: number | null): void {
 export function rolesOnMainSite(...fixtures: RoleFixture[]): void {
   const byId = new Map(fixtures.map((f) => [f.roleId, role(f)]));
   upstream.fetchRole = async (_env, roleId) => {
-    const found = byId.get(roleId);
+    const found = frozenFixtureRoles.get(roleId) ?? byId.get(roleId);
     if (!found) throw new HttpError(404, "role not found");
     return found;
   };
@@ -139,7 +142,7 @@ export function rolesOnProviders(byProvider: Partial<Record<ProviderId, RoleFixt
     maps.set(id as ProviderId, new Map((fixtures ?? []).map((f) => [f.roleId, role(f)])));
   }
   upstream.fetchRole = async (_env, roleId, provider = "lunatalk") => {
-    const found = maps.get(provider)?.get(roleId);
+    const found = frozenFixtureRoles.get(roleId) ?? maps.get(provider)?.get(roleId);
     if (!found) throw new HttpError(404, "role not found");
     return found;
   };
