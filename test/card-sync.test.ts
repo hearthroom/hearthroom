@@ -169,3 +169,8 @@ it('keeps an uncertain replacement creation blocked instead of duplicating it',a
  await expect(syncCard(env,{...input,recreateMissing:true})).rejects.toThrow('sync_create_unconfirmed');
  expect(transfers.create).toHaveBeenCalledTimes(2);
 });
+
+it('never submits synchronized drafts to provider-specific publication review',async()=>{
+ await expect(syncCard(env,{...input,publish:true})).rejects.toThrow('sync_proof_required');
+ expect(transfers.publish).not.toHaveBeenCalled();
+});

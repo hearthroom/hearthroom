@@ -1,4 +1,5 @@
 import { getCard } from '../src/cards';
+import {approveFixtureResponse} from './hosted-fixture';
 import { SELF, env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { bearer, resetDb, restoreUpstream, rolesOnMainSite, rolesOnProviders, whoAmI } from "./helpers";
@@ -16,12 +17,12 @@ beforeEach(async () => {
 });
 afterEach(restoreUpstream);
 
-const register = (roleId: string, headers: Record<string, string> = bearer()) =>
-  SELF.fetch("https://c.test/v1/cards", {
+const register = async (roleId: string, headers: Record<string, string> = bearer()) =>
+  approveFixtureResponse(await SELF.fetch("https://c.test/v1/cards", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headers },
-    body: JSON.stringify({ roleId, nsfw: false }),
-  });
+    body: JSON.stringify({operationId:crypto.randomUUID(),...({ roleId, nsfw: false })}),
+  }));
 const unregister = (roleId: string) => SELF.fetch(`https://c.test/v1/cards/${roleId}`, { method: "DELETE", headers: bearer() });
 const card = async (id: string, headers: Record<string, string> = {}) => {
   const res = await SELF.fetch(`https://c.test/v1/cards/${id}`, { headers });
@@ -35,7 +36,7 @@ describe("卡號", () => {
     expect(((await (await register("role-b")).json()) as any).num).toBe(100002);
 
     const list = (await (await SELF.fetch("https://c.test/v1/cards?sort=new")).json()) as { items: any[] };
-    expect(list.items.map((i) => [i.roleId, i.num])).toEqual([["role-b", 100002], ["role-a", 100001]]);
+    expect(list.items.map((i) => [i.sourceRoleId, i.num])).toEqual([["role-b", 100002], ["role-a", 100001]]);
   });
 
   it("用卡號開卡片頁，拿到的是同一張卡；用卡片 ID 開也看得到卡號", async () => {
@@ -43,7 +44,9 @@ describe("卡號", () => {
     await register("role-a");
     const byNum = await card("100001");
     expect(byNum.status).toBe(200);
-    expect(byNum.body.roleId).toBe("role-a");
+    expect(byNum.body.sourceRoleId).toBe("role-a");
+    expect(byNum.body.roleId).toMatch(/^frozen-/);
+    expect(byNum.body.roleId).not.toBe(byNum.body.sourceRoleId);
     const byId = await card("role-a");
     expect(byId.body.num).toBe(100001);
   });
@@ -56,7 +59,7 @@ describe("卡號", () => {
     expect((await card("100001")).status).toBe(404);
 
     expect(((await (await register("role-a")).json()) as any).num).toBe(100001);
-    expect((await card("100001")).body.roleId).toBe("role-a");
+    expect((await card("100001")).body.sourceRoleId).toBe("role-a");
   });
 
   it("沒有這個號 → 404，不會誤認成卡片 ID 去問上游；平移前的小號也查不到", async () => {
@@ -78,7 +81,7 @@ describe("卡號", () => {
       env.DB.prepare("UPDATE sqlite_sequence SET seq = (SELECT COALESCE(MAX(num), 100000) FROM card_numbers) WHERE name = 'card_numbers'"),
       env.DB.prepare("INSERT INTO sqlite_sequence (name, seq) SELECT 'card_numbers', (SELECT COALESCE(MAX(num), 100000) FROM card_numbers) WHERE NOT EXISTS (SELECT 1 FROM sqlite_sequence WHERE name = 'card_numbers')"),
     ]);
-    expect((await card("100021")).body.roleId).toBe("role-a");
+    expect((await card("100021")).body.sourceRoleId).toBe("role-a");
     expect(((await (await register("role-b")).json()) as any).num).toBe(100022);
   });
 

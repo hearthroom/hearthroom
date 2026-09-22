@@ -1,3 +1,4 @@
+import {approveFixtureResponse} from './hosted-fixture';
 import { SELF, env } from 'cloudflare:test';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { bearer, resetDb, restoreUpstream, identitiesFor, rolesOnProviders, myRolesOnUpstream } from './helpers';
@@ -5,7 +6,7 @@ import { resolveMember } from '../src/members';
 
 const headers = (provider='lunatalk') => ({...bearer(provider), 'X-Provider':provider,'Content-Type':'application/json'});
 const profile = async (provider='lunatalk') => await (await SELF.fetch('https://c.test/v1/me',{headers:headers(provider)})).json() as any;
-const register = (roleId:string,provider='lunatalk') => SELF.fetch('https://c.test/v1/cards',{method:'POST',headers:headers(provider),body:JSON.stringify({roleId,nsfw:false})});
+const register = async (roleId:string,provider='lunatalk') => approveFixtureResponse(await SELF.fetch('https://c.test/v1/cards',{method:'POST',headers:headers(provider),body:JSON.stringify({operationId:crypto.randomUUID(),...({roleId,nsfw:false})})}));
 async function link() {
  const a=await profile(); const b=await profile('harbor');
  return SELF.fetch('https://c.test/v1/me/connections',{method:'POST',headers:headers(),body:JSON.stringify({provider:'harbor',token:'harbor',keepHandle:a.handle,sourceHandle:a.handle,targetHandle:b.handle})});
@@ -27,8 +28,8 @@ it('shares three weekly publications across all services of one community',async
 it('a mapped copy cannot become a second community publication',async()=>{
  await link(); await register('a');
  const member=await resolveMember(env.DB,'lunatalk',11,Date.now());
- await env.DB.prepare('INSERT INTO works VALUES (?,?,?,?,?)').bind('work',member,'lunatalk','a',Date.now()).run();
- await env.DB.prepare('INSERT INTO work_copies(work_id,provider,external_id,role_id,status,updated_at) VALUES (?,?,?,?,?,?)').bind('work','harbor',22,'copy','published',Date.now()).run();
+ const work=await env.DB.prepare("SELECT id FROM works WHERE source_provider='lunatalk' AND source_role_id='a'").first<{id:string}>();
+ await env.DB.prepare('INSERT INTO work_copies(work_id,provider,external_id,role_id,status,updated_at) VALUES (?,?,?,?,?,?)').bind(work!.id,'harbor',22,'copy','published',Date.now()).run();
  const duplicate=await register('copy','harbor');expect(duplicate.status).toBe(409);
  expect(await duplicate.json()).toEqual({error:'publication_use_original'});
  expect((await env.DB.prepare('SELECT * FROM cards').all()).results).toHaveLength(1);

@@ -11,7 +11,7 @@ import { distributeHosted, distributeWorkVersions, seedSavedHostingTargets } fro
 import { saveCommunityProfile, cleanAvatars } from "./community-profile";
 import { AVATAR_MAX_BYTES } from '../shared/avatar';
 import { bodyLimit } from "hono/body-limit";
-import { syncCard, copiesFor, workFor, publishedCopiesFor, distributeCard, type DistributeTarget } from "./card-sync";
+import { syncCard, copiesFor, workFor, publishedCopiesFor, type DistributeTarget } from "./card-sync";
 import { apiBaseOf as providerApiBase } from "./providers";
 import { linkIdentity, unlinkIdentity, connectedMemberId, emptyCommunity } from './connections';
 import { saveMemberId } from './members';
@@ -46,11 +46,11 @@ import { configuredProviders, hasChat, parseProvider, requireConfigured, DEFAULT
 import { providerApiBaseFor } from "./providers";
 import { WEEKLY_LIMIT, registeredThisWeek } from "./quota";
 import {
-  CLAIM_TTL_MS, STAMPS_REQUIRED, claim as claimSubmission, createSubmission, getSubmission, listQueue, needsReviewStatements,
+  CLAIM_TTL_MS, STAMPS_REQUIRED, claim as claimSubmission, getSubmission, listQueue,
   release as releaseSubmission, stamp as stampSubmission,
 } from "./review";
-import { setCardFeatured, setCardNsfw, setCardStatus } from "./cards";
-import { PUBLIC_HASH_PREFIX, loadSnapshot, publicHash, saveSnapshotStatement, type ReviewSettings } from "./review-snapshot";
+import { setCardFeatured } from "./cards";
+import { loadSnapshot } from "./review-snapshot";
 import { type Env, HttpError } from "./types";
 import { gameRoutes } from "./game";
 import { serveSandbox } from "./sandbox";
@@ -589,7 +589,7 @@ app.post('/v1/me/card-sync', async (c) => {
  // Both operations have their own durable status. A changed mutable copy must
  // not prevent the approved immutable version from reaching the same destination.
  const [draft,version]=await Promise.allSettled([
-  syncCard(c.env,{memberId:member.id,sourceProvider,sourceRoleId:b.sourceRoleId,sourceAccount:source.accountNumId,sourceToken:b.sourceToken,targetProvider,targetAccount:target.accountNumId,targetToken:b.targetToken,publish:b.publish===true,updatePublished:b.updatePublished===true,recreateMissing:b.recreateMissing===true}),
+  syncCard(c.env,{memberId:member.id,sourceProvider,sourceRoleId:b.sourceRoleId,sourceAccount:source.accountNumId,sourceToken:b.sourceToken,targetProvider,targetAccount:target.accountNumId,targetToken:b.targetToken,publish:false,updatePublished:b.updatePublished===true,recreateMissing:b.recreateMissing===true}),
   distributeWorkVersions(c.env,{memberId:member.id,sourceProvider,sourceRoleId:b.sourceRoleId,sourceAccount:source.accountNumId,sourceToken:b.sourceToken,targetProvider,targetAccount:target.accountNumId,targetToken:b.targetToken}),
  ]);
  if(version.status==='rejected')throw version.reason;
@@ -861,8 +861,8 @@ app.post("/v1/cards", async (c) => {
   const nsfw = body.nsfw;
 
   const provider = providerOf(c);
-  const hosted = !!hostingKey(c.env,provider);
-  const role = hosted ? await hostGateway.read(c.env,bearer,roleId,provider) : await upstream.fetchRole(c.env, roleId, provider);
+  if(!hostingKey(c.env,provider))throw new HttpError(503,"hosting_unavailable");
+  const role = await hostGateway.read(c.env,bearer,roleId,provider);
   if (role.authorNumId !== me.accountNumId) throw new HttpError(403, "not the author of this card");
   // 登記的人一定是成員：作者頁與卡片上的作者連結都靠成員的公開 ID
   const memberId = await resolveMember(c.env.DB, provider, me.accountNumId, Date.now());
@@ -893,7 +893,7 @@ app.post("/v1/cards", async (c) => {
     }
   }
 
-  if (hosted) {
+  {
     if (!reviewEnabled(c.env)) throw new HttpError(503,"hosting_review_required");
     const operationId=typeof body.operationId==='string'?body.operationId:'';
     if(!/^[0-9a-f-]{36}$/i.test(operationId))throw new HttpError(400,'hosting_operation_required');
@@ -912,52 +912,7 @@ app.post("/v1/cards", async (c) => {
     return c.json({...toCard(row,lang(c)),status:row.status,versionId:receipt.versionId},existing?200:201,{'Cache-Control':'private, no-store'});
   }
 
-  // 審核：作者提交＝同意本站用他自己的 token 讀一次整份設定，存成這張單的快照給審核人看
-  // （前端在按下之前已經明說）。讀不到就整個提交失敗——審核人什麼都看不到，排進佇列也只是卡住。
-  // 內容版本記的是公開指紋：排程同步匿名就能比對，過審後訪客看得到的東西變了就重審。
-  // 沒開審核的部署退回「登記即上榜」。
-  const reviewing = reviewEnabled(c.env);
-  let contentHash = "";
-  let settings: ReviewSettings | null = null;
-  if (reviewing) {
-    settings = await upstream.readForReview(c.env, bearer, roleId, provider);
-    contentHash = await publicHash(role);
-  }
 
-  const { id, created } = await upsertCard(c.env.DB, role, now, { status: reviewing ? "pending" : "approved", provider, nsfw, recordRegistration: true });
-  // 宣告跟著最新一次提交走；在榜的卡改了宣告視同內容變了（下面重審）
-  const declarationChanged = !!existing && (existing.nsfw === 1) !== nsfw;
-  if (existing && declarationChanged) await setCardNsfw(c.env.DB, id, nsfw);
-
-  let detail = created ? "new" : "again";
-  if (reviewing && settings) {
-    // 在榜的卡再送一次只是刷新；被駁回、離榜重審、被收回授權的卡再送＝重新排隊。
-    // 在榜但改了分級宣告：跟改內容一樣要重審，不能過審後把「成人」改成「一般」就直接生效。
-    // 過過審的走重審（一章），從沒過過的走初審（兩章）。
-    const current = existing?.status ?? "pending";
-    if (created || current === "rejected" || current === "needs_review" || current === "unshared" || (current === "approved" && declarationChanged)) {
-      const kind = existing?.reviewed_hash ? "re" : "first";
-      if (!created) await setCardStatus(c.env.DB, id, kind === "re" ? "needs_review" : "pending");
-      const sub = await createSubmission(c.env.DB, { cardId: id, provider, roleId, kind, contentHash, now, nsfw });
-      await saveSnapshotStatement(c.env.DB, sub.id, settings, now).run();
-      detail = created ? "submitted" : "resubmitted";
-    } else if (current === "pending") {
-      // 還在排隊：單子照舊；改了宣告的話 createSubmission 會把單上的宣告更新成最新的
-      const sub = await createSubmission(c.env.DB, { cardId: id, provider, roleId, kind: existing?.reviewed_hash ? "re" : "first", contentHash, now, nsfw });
-      // 還在排隊：快照換成最新送來的這一份，審核人看到的是作者現在的設定
-      await c.env.DB.batch([
-        saveSnapshotStatement(c.env.DB, sub.id, settings, now),
-        c.env.DB.prepare("UPDATE review_submissions SET content_hash = ? WHERE id = ? AND status = 'pending'").bind(contentHash, sub.id),
-      ]);
-      detail = "queued";
-    }
-  }
-  const row = await getCard(c.env.DB, id);
-  note(c, { event: "register", subject: roleId, detail });
-  if (distribute.length) {
-    c.executionCtx.waitUntil(distributeCard(c.env, memberId, { provider, roleId, account: me.accountNumId, token: bearer }, distribute));
-  }
-  return c.json(row ? { ...toCard(row, lang(c)), status: row.status, distributing: distribute.map((t) => t.provider) } : { id }, created ? 201 : 200);
 });
 
 app.post('/v1/cards/:roleId/edit',async(c)=>{
@@ -1198,8 +1153,7 @@ const SUBREQUEST_BUDGET = 48;
 export async function syncBatch(env: Env): Promise<{ ok: number; failed: number; delisted: number; ms: number }> {
   const started = Date.now();
   let spent = 0; // 這一輪已經用掉的子請求
-  // 比對內容版本用的是同一次匿名讀取算出來的公開指紋，不多花子請求。
-  const reviewing = reviewEnabled(env);
+  // 只讀取目前已核准的封存版本；草稿改動不觸發版本切換或重審。
   const limit = Math.max(1, Math.min(Number(env.SYNC_BATCH_SIZE) || 50, SUBREQUEST_BUDGET));
   const batch = await dueForSync(env.DB, limit);
   // 已發布到另一家的副本：熱度加總（owner 2026-09-17）。一次查完整批，D1 也算子請求。
@@ -1217,20 +1171,10 @@ export async function syncBatch(env: Env): Promise<{ ok: number; failed: number;
     try {
       const provider = row.provider as ProviderId;
       spent++;
-      if(row.reviewed_hash.startsWith('version:')&&!row.approved_hosted_role_id){
+      if(!row.approved_hosted_role_id){
         writes.push(env.DB.prepare('UPDATE cards SET last_synced_at=? WHERE id=?').bind(now,row.id));return;
       }
-      const role = { ...(await upstream.fetchRole(env, row.approved_hosted_role_id ?? row.source_role_id, provider)) };
-      const fingerprint = await publicHash(role);
-      // 榜單只收在本站建的卡。登記那條路早就這樣擋，但規則之前登記進來的主站老卡還在榜上
-      // （owner 2026-09-07：189 張要下架）——同步時看到來源不對就撤掉，之後也不會再有漏網的。
-      // 讀得到但來源不對才撤；讀不到走下面的 catch，保留。
-      if (!row.approved_version_id && role.creationMethod !== CREATION_METHOD) {
-        writes.push(env.DB.prepare("DELETE FROM cards WHERE id = ?").bind(row.id));
-        delisted++;
-        console.log("delisted: not created on this site", { roleId: row.source_role_id, creationMethod: role.creationMethod });
-        return;
-      }
+      const role = { ...(await upstream.fetchRole(env, row.approved_hosted_role_id, provider)) };
       // 副本的對話數加進來；預算內才抓，抓不到就這一輪少算它（下一輪再補）。
       for (const copy of copies.get(`${provider}:${row.source_role_id}`) ?? []) {
         if (spent >= SUBREQUEST_BUDGET) break;
@@ -1247,24 +1191,13 @@ export async function syncBatch(env: Env): Promise<{ ok: number; failed: number;
       // 作者一定要有成員列（公開 ID 從那裡來）。0005 之前登記、之後沒再登入過的作者會缺——
       // 先記下來，迴圈外一次查、缺的併進同一批寫入（D1 呼叫也算子請求，迴圈裡逐張查會吃掉上游的額度）。
       authorsSeen.set(`${row.provider}:${role.authorNumId}`, { provider: row.provider as ProviderId, externalId: role.authorNumId });
-      // 在榜的卡順手比對內容版本：作者過審後改了訪客看得到的東西就要重審（owner 2026-09-07）。
-      // 指紋要在加總副本熱度之前算——它只看這張卡自己的公開欄位。
-      // 舊版本綁的是供應商給的內容雜湊（沒有前綴）：那個比不了，這一輪改綁成公開指紋，不重審。
-      // 過審前登記的舊卡 reviewed_hash 是空的：留在榜上不比對，等作者下次提交才綁上版本。
-      if (!row.approved_version_id && reviewing && row.status === "approved" && row.reviewed_hash) {
-        if (!row.reviewed_hash.startsWith(PUBLIC_HASH_PREFIX)) {
-          writes.push(env.DB.prepare("UPDATE cards SET reviewed_hash = ? WHERE id = ?").bind(fingerprint, row.id));
-        } else if (fingerprint !== row.reviewed_hash) {
-          writes.push(...needsReviewStatements(env.DB, { cardId: row.id, provider: row.provider, roleId: row.source_role_id, contentHash: fingerprint, now }));
-        }
-      }
       ok++;
     } catch (err) {
       // 單張卡失敗不能拖垮整批（上游可能剛好在重啟）。下一輪它仍排在最前面。
       // 讀不到一律當成暫時性的（服務重啟、網路抖動都會這樣）：保留，下一輪重試。
       // 不因為一次讀不到就刪掉作者的登記——那個代價遠大於榜單短暫顯示舊資料。
       failed++;
-      console.error("sync failed", { roleId: row.source_role_id, error: String(err) });
+      console.error("sync failed", { provider:row.provider });
     }
   });
 

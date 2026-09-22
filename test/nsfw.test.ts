@@ -1,3 +1,4 @@
+import {approveFixtureResponse} from './hosted-fixture';
 /**
  * 成人內容（owner 2026-09-08）：本站自己的分級，不讀供應商的。
  *
@@ -30,16 +31,16 @@ beforeEach(async () => {
 afterEach(() => { vi.restoreAllMocks(); restoreUpstream(); });
 
 const submit = (roleId: string, body: Record<string, unknown>, token = "author-token") =>
-  SELF.fetch("https://c.test/v1/cards", { method: "POST", headers: { "Content-Type": "application/json", ...bearer(token) }, body: JSON.stringify({ roleId, ...body }) });
+  SELF.fetch("https://c.test/v1/cards", { method: "POST", headers: { "Content-Type": "application/json", ...bearer(token) }, body: JSON.stringify({operationId:crypto.randomUUID(),...({ roleId, ...body })}) });
 const settings = (body: Record<string, unknown>, token = "viewer-token") =>
   SELF.fetch("https://c.test/v1/me/settings", { method: "POST", headers: { "Content-Type": "application/json", ...bearer(token) }, body: JSON.stringify(body) });
 const json = async (res: Response) => (await res.json()) as any;
-const ids = (b: { items: { roleId: string }[] }) => b.items.map((i) => i.roleId).sort();
+const ids = (b: { items: { sourceRoleId: string }[] }) => b.items.map((i) => i.sourceRoleId).sort();
 
-/** 沒配審核機器人：登記即上榜，最快把兩張卡放上去 */
+/** 透過正式封存與審核流程建立兩張公開測試卡。 */
 async function listTwo() {
-  expect((await submit("role-safe", { nsfw: false })).status).toBe(201);
-  expect((await submit("role-adult", { nsfw: true })).status).toBe(201);
+  expect((await approveFixtureResponse(await submit("role-safe", { nsfw: false }))).status).toBe(201);
+  expect((await approveFixtureResponse(await submit("role-adult", { nsfw: true }))).status).toBe(201);
 }
 const adultBirthdate = () => { const d = new Date(); return `${d.getUTCFullYear() - 20}-01-01`; };
 const minorBirthdate = () => { const d = new Date(); return `${d.getUTCFullYear() - 15}-01-01`; };
@@ -193,7 +194,7 @@ describe("成人內容開關與年齡驗證", () => {
     expect(list.headers.get("X-Cache")).toBe("miss");
     const body = await json(list);
     expect(ids(body)).toEqual(["role-adult", "role-safe"]);
-    expect(body.items.find((i: any) => i.roleId === "role-adult").nsfw).toBe(true);
+    expect(body.items.find((i: any) => i.sourceRoleId === "role-adult").nsfw).toBe(true);
 
     const adult = await env.DB.prepare("SELECT id FROM cards WHERE source_role_id = 'role-adult'").first<{ id: string }>();
     const detail = await SELF.fetch(`https://c.test/v1/cards/${adult!.id}?nsfw=1`, { headers: bearer("viewer-token") });
@@ -245,25 +246,14 @@ describe("審核", () => {
     expect(detail.submission.nsfw).toBe(true);
   });
 
-  it("在榜的卡改了宣告：視同內容變了，離榜重審；排隊中的單改宣告只更新單子", async () => {
-    await makeReviewer(REVIEWER);
-    await makeMember(20002);
-    await submit("role-safe", { nsfw: false });
-    // 排隊中改宣告：同一張單，宣告跟著最新的
-    await submit("role-safe", { nsfw: true });
-    let subs = await env.DB.prepare("SELECT COUNT(*) AS n, MAX(nsfw) AS nsfw FROM review_submissions").first<any>();
-    expect(subs).toMatchObject({ n: 1, nsfw: 1 });
-    // 直接把它標成過審（兩章的流程另有測試），再改回一般內容
-    await env.DB.batch([
-      env.DB.prepare("UPDATE review_submissions SET status = 'approved', decided_at = 1"),
-      env.DB.prepare("UPDATE cards SET status = 'approved', reviewed_hash = 'sha256:role-safe-v1', nsfw = 1"),
-    ]);
-    const res = await submit("role-safe", { nsfw: false });
-    expect(res.status).toBe(200);
-    expect((await json(res)).status).toBe("needs_review");
-    subs = await env.DB.prepare("SELECT COUNT(*) AS n FROM review_submissions WHERE status = 'pending' AND kind = 're' AND nsfw = 0").first<any>();
-    expect(subs.n).toBe(1);
-    const card = await env.DB.prepare("SELECT status, nsfw FROM cards WHERE source_role_id = 'role-safe'").first<any>();
-    expect(card).toEqual({ status: "needs_review", nsfw: 0 });
+  it("內容分級跟著版本；待審版本不可改寫，已公開分級保留到新版本核准", async () => {
+    const first=await submit("role-safe",{nsfw:true}); expect(first.status).toBe(201);
+    expect((await submit("role-safe",{nsfw:false})).status).toBe(409);
+    await approveFixtureResponse(first);
+    const res=await submit("role-safe",{nsfw:false});expect(res.status).toBe(200);
+    expect(await env.DB.prepare("SELECT status,nsfw FROM cards WHERE source_role_id='role-safe'").first()).toEqual({status:'approved',nsfw:1});
+    expect(await env.DB.prepare("SELECT kind,nsfw FROM review_submissions WHERE status='pending'").first()).toEqual({kind:'re',nsfw:0});
+    await approveFixtureResponse(res);
+    expect(await env.DB.prepare("SELECT status,nsfw FROM cards WHERE source_role_id='role-safe'").first()).toEqual({status:'approved',nsfw:0});
   });
 });

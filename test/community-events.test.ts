@@ -1,3 +1,4 @@
+import {approveFixtureResponse} from './hosted-fixture';
 import { SELF, env } from "cloudflare:test";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import {
@@ -12,7 +13,7 @@ import { setPreferences } from "../src/community/service";
 import type { Env } from "../src/types";
 beforeEach(resetDb);
 afterEach(restoreUpstream);
-it("notifies followers on a public release even when this deployment has no review gate, once per work revision", async () => {
+it("notifies followers only after the sealed version is approved, once per work revision", async () => {
   const author = await makeMember(10001),
     fan = await makeMember(20001);
   identities({ author: 10001 });
@@ -24,7 +25,7 @@ it("notifies followers on a public release even when this deployment has no revi
   const r = await SELF.fetch("https://c.test/v1/cards", {
     method: "POST",
     headers: { ...bearer("author"), "Content-Type": "application/json" },
-    body: JSON.stringify({ roleId: "new-work", nsfw: false }),
+    body: JSON.stringify({operationId:crypto.randomUUID(),...({ roleId: "new-work", nsfw: false })}),
   });
   expect(r.status).toBe(201);
   const notifications = () =>
@@ -33,6 +34,8 @@ it("notifies followers on a public release even when this deployment has no revi
     )
       .bind(fan)
       .all<{ id: string }>();
+  expect((await notifications()).results).toHaveLength(0);
+  await approveFixtureResponse(r);
   expect((await notifications()).results).toHaveLength(1);
   await env.DB.prepare(
     "UPDATE cards SET last_synced_at=last_synced_at+1 WHERE source_role_id='new-work'",
@@ -58,11 +61,11 @@ it("awards the first approved work once and creates one private review-result no
     const submitted = await SELF.fetch("https://c.test/v1/cards", {
       method: "POST",
       headers: { ...bearer("author"), "Content-Type": "application/json" },
-      body: JSON.stringify({ roleId: "reviewed-work", nsfw: false }),
+      body: JSON.stringify({operationId:crypto.randomUUID(),...({ roleId: "reviewed-work", nsfw: false })}),
     });
     expect(submitted.status).toBe(201);
     const row = await env.DB.prepare(
-      "SELECT id FROM review_submissions WHERE source_role_id='reviewed-work'",
+      "SELECT s.id FROM review_submissions s JOIN cards c ON c.id=s.card_id WHERE c.source_role_id='reviewed-work'",
     ).first<{ id: string }>();
     const generations=new Map<string,string>();
     const act = async(action:string,body={},token='reviewer')=>{

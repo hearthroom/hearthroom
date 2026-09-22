@@ -1,3 +1,4 @@
+import {approveFixtureResponse} from './hosted-fixture';
 import { SELF, env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { bearer, mainSiteDown, resetDb, restoreUpstream, rolesOnMainSite, whoAmI } from "./helpers";
@@ -10,12 +11,12 @@ beforeEach(async () => {
 afterEach(restoreUpstream);
 
 // 提交必須宣告是不是成人內容（0006 起）；這裡的測試不管分級，一律帶「一般內容」
-const register = (body: unknown, headers: Record<string, string> = bearer()) =>
-  SELF.fetch("https://c.test/v1/cards", {
+const register = async (body: unknown, headers: Record<string, string> = bearer()) =>
+  approveFixtureResponse(await SELF.fetch("https://c.test/v1/cards", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headers },
-    body: JSON.stringify({ nsfw: false, ...(body as object) }),
-  });
+    body: JSON.stringify({operationId:crypto.randomUUID(),...({ nsfw: false, ...(body as object) })}),
+  }));
 
 const list = async (query = "") => {
   const res = await SELF.fetch(`https://c.test/v1/cards${query}`);
@@ -157,13 +158,19 @@ describe("作者主頁", () => {
 });
 
 describe("登記即分發（owner 2026-09-17）", () => {
-  it("登記時帶上其他已登入渠道的 token：登記立刻回應，同步在背景跑並落在 work_copies", async () => {
+  it("登記時帶上其他已登入渠道的 token：登記立刻回應，背景核對封存副本，平台不再各自送審", async () => {
     const { transfers } = await import("../src/card-sync");
     const { identitiesFor, rolesOnProviders } = await import("./helpers");
     const { vi } = await import("vitest");
     identitiesFor({ lunatalk: { "author-token": 10001 }, harbor: { "harbor-token": 22 } });
     rolesOnProviders({ lunatalk: [{ roleId: "role-1", authorNumId: 10001 }] });
-    vi.spyOn(transfers, "read").mockResolvedValue({ card: { name: "A", summary: "S", description: "D", greeting: "G", language: "zh" }, public: false });
+    const {hostGateway}=await import('../src/hosting');
+    const {hostingTransferMedia}=await import('../src/hosting-distribution');
+    vi.spyOn(transfers, "readHosted").mockResolvedValue({ card: { name: "A", summary: "S", description: "D", greeting: "G", language: "zh" }, public: false });
+    vi.spyOn(hostGateway,'draft').mockImplementation(async(_e,_t,workId)=>({workId,roleId:'copy-draft'}));
+    vi.spyOn(hostGateway,'stage').mockImplementation(async(_e,_t,_r,workId)=>({workId,hostedRevisionId:'copy-1'}));
+    vi.spyOn(hostGateway,'promote').mockImplementation(async(_e,_t,_r,workId,versionId)=>({workId,versionId,hostedRevisionId:'copy-1'}));
+    vi.spyOn(hostingTransferMedia,'copy').mockImplementation(async(_e,_sp,_tp,_t,_r,c)=>c);
     vi.spyOn(transfers, "create").mockResolvedValue("copy-1");
     vi.spyOn(transfers, "update").mockResolvedValue({});
     const publish = vi.spyOn(transfers, "publish").mockResolvedValue();
@@ -178,16 +185,17 @@ describe("登記即分發（owner 2026-09-17）", () => {
 
       const res = await register({ roleId: "role-1", distribute: [{ provider: "harbor", token: "harbor-token" }] }, bearer("author-token"));
       expect(res.status).toBe(201);
-      expect(((await res.json()) as any).distributing).toEqual(["harbor"]);
+      const receipt=await res.json() as any;expect(receipt.versionId).toBeTruthy();
 
-      // 背景工作在回應之後完成：等 work_copies 出現那一列
+      // 背景工作必須完成內容核對，才登記為可用的版本副本。
       let copy: { provider: string; role_id: string; status: string } | null = null;
       for (let i = 0; i < 40 && !copy; i++) {
-        copy = await env.DB.prepare("SELECT provider, role_id, status FROM work_copies WHERE provider = 'harbor'").first();
+        copy = await env.DB.prepare("SELECT provider, hosted_revision_id AS role_id, state AS status FROM hosting_replicas WHERE provider = 'harbor'").first();
         if (!copy) await new Promise((r) => setTimeout(r, 50));
       }
-      expect(copy).toMatchObject({ provider: "harbor", role_id: "copy-1", status: "pending" });
-      expect(publish).toHaveBeenCalledTimes(1);
+      expect(copy).toMatchObject({ provider: "harbor", role_id: "copy-1", status: "ready" });
+      expect(publish).not.toHaveBeenCalled();
+      expect(hostGateway.promote).toHaveBeenCalledWith(env,"harbor-token","copy-1",expect.any(String),receipt.versionId,"harbor");
     } finally {
       vi.restoreAllMocks();
     }

@@ -32,8 +32,11 @@ provider execution retains its established local ownership/deletion/takedown con
 and does not call HearthRoom for every generation. Community delisting is not deletion
 of provider assets or existing conversations.
 
-Runtime configuration: LunaTalk receives `LUNATALK_HOSTING_SERVICE_KEY`; Harbor and
-HearthRoom receive `HOSTING_SERVICE_KEY`. Missing configuration denies hosting writes.
+Runtime configuration: HearthRoom uses `HOSTING_SERVICE_KEY` only for Harbor and
+`HOSTING_SERVICE_KEY_LUNATALK` only for LunaTalk. The latter matches LunaTalk’s
+`LUNATALK_HOSTING_SERVICE_KEY`; the former matches Harbor’s `HOSTING_SERVICE_KEY`.
+These are independent secrets. Providers never exchange credentials, and a missing
+provider key must never fall back to another provider’s secret.
 Activate provider persistence/APIs before the issuer and migration. See
 [OpenAPI](hosting-versions-v1.openapi.json) for wire operations.
 

@@ -1,3 +1,4 @@
+import {approveFixtureResponse} from './hosted-fixture';
 import { createExecutionContext, env, waitOnExecutionContext } from 'cloudflare:test';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import app from '../src/index';
@@ -33,7 +34,8 @@ it('caches badge definitions while reading current personal award state',async()
 });
 it('validates adult comment identity only once per request, never across requests',async()=>{
  rolesOnMainSite({roleId:'cache-card',authorNumId:11});
- const ctx=createExecutionContext();const r=await app.fetch(new Request('https://c.test/v1/cards',{method:'POST',headers:{...bearer('valid'),'Content-Type':'application/json'},body:JSON.stringify({roleId:'cache-card',nsfw:true})}),env,ctx);await waitOnExecutionContext(ctx);
+ const ctx=createExecutionContext();const r=await app.fetch(new Request('https://c.test/v1/cards',{method:'POST',headers:{...bearer('valid'),'Content-Type':'application/json'},body:JSON.stringify({operationId:crypto.randomUUID(),roleId:'cache-card',nsfw:true})}),env,ctx);await waitOnExecutionContext(ctx);
+ await approveFixtureResponse(r);
  const {id}=await r.json() as {id:string};
  await env.DB.prepare('UPDATE members SET show_nsfw=1,age_verified_at=1 WHERE id=?').bind(member).run();
  const spy=vi.spyOn(upstream,'fetchMe');
@@ -49,7 +51,8 @@ it('separates same-number mine caches by verified provider',async()=>{
 });
 it('reuses author aggregates and invalidates profile and card visibility',async()=>{
  rolesOnMainSite({roleId:'author-card',authorNumId:11});
- const ctx=createExecutionContext();await app.fetch(new Request('https://c.test/v1/cards',{method:'POST',headers:{...bearer('valid'),'Content-Type':'application/json'},body:JSON.stringify({roleId:'author-card',nsfw:false})}),env,ctx);await waitOnExecutionContext(ctx);
+ const ctx=createExecutionContext();const registration=await app.fetch(new Request('https://c.test/v1/cards',{method:'POST',headers:{...bearer('valid'),'Content-Type':'application/json'},body:JSON.stringify({operationId:crypto.randomUUID(),roleId:'author-card',nsfw:false})}),env,ctx);await waitOnExecutionContext(ctx);
+ await approveFixtureResponse(registration);
  const path='/v1/authors/'+testHandle(11);await get(path);
  expect((await get(path)).headers.get('X-Cache')).toBe('hit');
  await env.DB.prepare("UPDATE members SET display_name='Updated' WHERE id=?").bind(member).run();
@@ -103,7 +106,8 @@ it('invalidates the badge catalogue when a definition changes',async()=>{
 });
 it('caches comment counts and invalidates on post and deletion while retaining the card guard',async()=>{
  rolesOnMainSite({roleId:'count-card',authorNumId:11});
- const ctx=createExecutionContext();const created=await app.fetch(new Request('https://c.test/v1/cards',{method:'POST',headers:{...bearer('valid'),'Content-Type':'application/json'},body:JSON.stringify({roleId:'count-card',nsfw:false})}),env,ctx);await waitOnExecutionContext(ctx);
+ const ctx=createExecutionContext();const created=await app.fetch(new Request('https://c.test/v1/cards',{method:'POST',headers:{...bearer('valid'),'Content-Type':'application/json'},body:JSON.stringify({operationId:crypto.randomUUID(),roleId:'count-card',nsfw:false})}),env,ctx);await waitOnExecutionContext(ctx);
+ await approveFixtureResponse(created);
  const {id}=await created.json() as {id:string};const path='/v1/cards/'+id+'/comments/count';
  expect(await (await get(path)).json()).toEqual({count:0});expect((await get(path)).headers.get('X-Cache')).toBe('hit');
  await env.DB.prepare("INSERT INTO comments(id,card_id,member_id,content,created_at) VALUES ('count-comment',?,?,'test',1)").bind(id,member).run();
