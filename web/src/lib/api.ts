@@ -441,6 +441,7 @@ export async function fetchSiteMe(token: string): Promise<SiteMe> {
 export interface MyCard {
   provider?: import("./provider").ProviderId;
   workId?: string;
+  detailId?: string;
   sourceProvider?: import("./provider").ProviderId;
   sourceRoleId?: string;
   roleId: string;
@@ -516,9 +517,9 @@ export async function fetchMeAt(apiBase: string, token: string): Promise<Me> {
 }
 
 /** 角色卡詳情。未登入的訪客也讀得到，所以 token 是選填的。 */
-export async function fetchRoleDetail(roleId: string, token?: string, lang = "zh-Hans"): Promise<Record<string, unknown>> {
+export async function fetchRoleDetail(roleId: string, token?: string, lang = "zh-Hans", provider: ProviderId = currentProvider()): Promise<Record<string, unknown>> {
   return json<Record<string, unknown>>(
-    await fetch(`${UPSTREAM_API}/open/v1/role/detail?roleId=${encodeURIComponent(roleId)}`, {
+    await fetch(`${provider === currentProvider() ? UPSTREAM_API : apiBaseOf(provider)}/open/v1/role/detail?roleId=${encodeURIComponent(roleId)}`, {
       headers: { language: lang, ...authHeaders(token) },
     }),
   );
@@ -529,8 +530,8 @@ export async function fetchRoleDetail(roleId: string, token?: string, lang = "zh
 export interface PreviewPage { doc: unknown; version: number; skinId?: string }
 
 /** 沒裝修或還沒過審時 doc 是 null，那就用預設版面。 */
-export async function fetchPreviewPage(roleId: string): Promise<PreviewPage> {
-  return json<PreviewPage>(await fetch(`${UPSTREAM_API}/open/v1/role/preview-page?roleId=${encodeURIComponent(roleId)}`));
+export async function fetchPreviewPage(roleId: string, provider: ProviderId = currentProvider()): Promise<PreviewPage> {
+  return json<PreviewPage>(await fetch(`${provider === currentProvider() ? UPSTREAM_API : apiBaseOf(provider)}/open/v1/role/preview-page?roleId=${encodeURIComponent(roleId)}`));
 }
 
 // ---- 留言：本站自己的資料，掛在本站的卡上 -------------------------------------------
@@ -894,8 +895,8 @@ export interface PlayerAsset {
   variants?: unknown;
 }
 
-export async function fetchPlayerAsset(roleId: string, token?: string): Promise<PlayerAsset | null> {
-  const res = await fetch(`${UPSTREAM_API}/open/v1/role/author-asset/serve?roleId=${encodeURIComponent(roleId)}`, {
+export async function fetchPlayerAsset(roleId: string, token?: string, provider: ProviderId = currentProvider()): Promise<PlayerAsset | null> {
+  const res = await fetch(`${provider === currentProvider() ? UPSTREAM_API : apiBaseOf(provider)}/open/v1/role/author-asset/serve?roleId=${encodeURIComponent(roleId)}`, {
     headers: authHeaders(token),
   });
   if (!res.ok) return null;
@@ -1236,7 +1237,8 @@ export async function deleteGameSpec(roleId: string, token: string): Promise<voi
 export async function fetchCardPlatforms(cardId:string):Promise<{provider:import('./provider').ProviderId;roleId:string;playable:boolean}[]> {
   const viewer=await viewerAccess();
   const q=viewer.param?`?${viewer.param}`:'';
-  const body=await json<{platforms:{provider:import('./provider').ProviderId;roleId:string;playable:boolean}[]}>(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(cardId)}/platforms${q}`,{headers:{...from(),...viewer.headers}}));
+  const login=viewer.headers.Authorization ? null : loginViewer ? await loginViewer().catch(()=>null) : null;
+  const body=await json<{platforms:{provider:import('./provider').ProviderId;roleId:string;playable:boolean}[]}>(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(cardId)}/platforms${q}`,{headers:{...from(),...authHeaders(login || undefined),...viewer.headers}}));
   return body.platforms;
 }
 

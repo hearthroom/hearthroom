@@ -1,4 +1,5 @@
 import { snapshot } from './snapshot-cache';
+import { cardLink, linkPreview } from './card-link';
 import { boardKey, readBoardCache, writeBoardCache } from "./board-cache";
 export { boardCache } from "./board-cache";
 import { moderationRoutes, reviewSummary } from "./moderation";
@@ -378,12 +379,7 @@ app.get("/v1/authors", (c) =>
   }),
 );
 
-/**
- * 作者看自己還沒上榜的卡：卡片頁對別人是 404，但作者從「我的角色卡」點封面進來不該掉進死路
- *（玩家回報 2026-09-17）。帶著 token、而且卡真是他的，就把卡片頁的資料給他，附上審核狀態；
- * 本站還沒有這張卡的列（沒提交過）就從上游的公開資料拼一份預覽。
- * 回 null 表示「不是作者本人」，呼叫端照舊 404——對外不透露這張卡存不存在。
- */
+/** Owner fallback for host-private legacy assets; never forwards credentials to a guessed provider. */
 async function ownCardView(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, id: string, row: Awaited<ReturnType<typeof getCard>>) {
   const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1];
   if (!bearer) return null;
@@ -399,12 +395,14 @@ async function ownCardView(c: Context<{ Bindings: Env; Variables: { ev: Pending 
 }
 
 app.get("/v1/cards/:id", async (c) => {
-  const row = await getPublicCard(c.env.DB, c.req.param("id"),providerOf(c));
-  // 還沒過審、被駁回、離榜重審中的卡對外都不存在；作者在「我的卡片」看得到狀態。
-  if (!row || row.status !== "approved" || row.public_blocked) {
-    // 作者本人例外：給他看，但不算一次瀏覽、不進任何快取
-    if (row?.public_blocked) throw new HttpError(404, "card not found");
-    const own = await ownCardView(c, c.req.param("id"), row);
+  const link = await cardLink(c.env, c.req.param('id'), providerOf(c));
+  const row = link.row;
+  // 榜單審核與連結存取分開；公開資料仍由來源平台授權。
+  if (!row || row.status !== 'approved') {
+    if (row?.nsfw === 1 && !(await viewerAllowsNsfw(c))) throw new HttpError(403,'adult_content');
+    const preview = await linkPreview(c.env,c.req.param('id'),link,lang(c));
+    if (preview) return c.json(preview,200,{'Cache-Control':'private, no-store'});
+    const own = await ownCardView(c, link.source?.roleId ?? c.req.param('id'), row);
     if (own) return c.json(own, 200, { "Cache-Control": "private, no-store" });
     throw new HttpError(404, "card not found");
   }
@@ -529,7 +527,8 @@ app.get("/v1/me/cards", async (c) => {
   c.header("Cache-Control", "private, no-store");
   const items = await Promise.all(body.items.map(async item => {
     const work = await workFor(c.env.DB, provider, item.roleId);
-    return {...item, provider, workId:work?.id, sourceProvider:work?.source_provider, sourceRoleId:work?.source_role_id};
+    const registered = item.registered ? await getCard(c.env.DB,item.roleId,provider) : null;
+    return {...item, detailId:registered?.id, provider, workId:work?.id, sourceProvider:work?.source_provider, sourceRoleId:work?.source_role_id};
   }));
   return c.json({...body, items});
 });
@@ -598,11 +597,23 @@ app.get('/v1/me/card-copies/:roleId',async(c)=>{
  return c.json({copies:await copiesFor(c.env.DB,provider,c.req.param('roleId'))},200,{'Cache-Control':'no-store'});
 });
 app.get('/v1/cards/:roleId/platforms',async(c)=>{
- const base=await getPublicCard(c.env.DB,c.req.param('roleId'),providerOf(c));
- if(!base||base.status!=='approved'||base.public_blocked)throw new HttpError(404,'card not registered');
- if(base.nsfw && !await viewerAllowsNsfw(c))throw new HttpError(403,'nsfw_gated');
- const provider=base.provider as ProviderId;const roleId=base.source_role_id;
- if(base.approved_version_id && base.approved_hosted_role_id) {
+ const link=await cardLink(c.env,c.req.param('roleId'),providerOf(c));
+ const base=link.row;
+ if(base?.nsfw && !await viewerAllowsNsfw(c))throw new HttpError(403,'nsfw_gated');
+ let source=link.source;
+ if(!base || base.status!=='approved') {
+  const preview=await linkPreview(c.env,c.req.param('roleId'),link,lang(c));
+  if(preview) source={provider:preview.provider,roleId:preview.sourceRoleId};
+  else {
+   const own=await ownCardView(c,source?.roleId ?? c.req.param('roleId'),base);
+   if(!own)throw new HttpError(404,'card not found');
+   source={provider:own.provider as ProviderId,roleId:source?.roleId ?? own.roleId};
+   return c.json({platforms:[{...source,playable:hasChat(source.provider)}]},200,{'Cache-Control':'private, no-store'});
+  }
+ }
+ if(!source)throw new HttpError(404,'card not found');
+ const {provider,roleId}=source;
+ if(base?.status==='approved' && base.approved_version_id && base.approved_hosted_role_id) {
   const decision=await hostingDecision(c.env.DB,base.approved_version_id);
   return c.json({platforms:decision.status==='approved'?[{provider:base.provider,roleId:base.approved_hosted_role_id,playable:hasChat(base.provider as ProviderId)}]:[]},200,{'Cache-Control':'no-store'});
  }
@@ -1313,8 +1324,16 @@ app.get("*", async (c) => {
   if (m[2] === "cards") {
     let id: string;
     try { id = decodeURIComponent(m[3]!); } catch { return new Response(shell.body, { status: 404, headers: shell.headers }); }
-    const row = await getPublicCard(c.env.DB, id);
-    if (!row || row.status !== "approved" || row.public_blocked) return new Response(shell.body, { status: 404, headers: shell.headers });
+    const link = await cardLink(c.env,id,DEFAULT_PROVIDER);
+    const row=link.row;
+    if (!row || row.status !== 'approved') {
+      const preview = row?.nsfw ? null : await linkPreview(c.env,id,link,l);
+      if (!preview && !row) return new Response(shell.body,{status:404,headers:shell.headers});
+      const res=new HTMLRewriter().on('head',{element(e){e.append('<meta name="robots" content="noindex, nofollow">',{html:true});}}).transform(shell);
+      res.headers.set('Cache-Control','private, no-store');
+      res.headers.set('X-Robots-Tag','noindex, nofollow');
+      return res;
+    }
     // 成人內容不做分享預覽（抓取器沒有身分）：回沒有卡片資訊的殼，讓前端畫登入／驗年齡的門
     if (row.nsfw === 1) return new Response(shell.body, { status: 200, headers: shell.headers });
     const card = toCard(row, l);

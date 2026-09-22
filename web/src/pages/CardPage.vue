@@ -14,6 +14,9 @@ import HtmlCardFrame from "@/components/HtmlCardFrame.vue";
 import { ApiError, fetchBoard, fetchCard, fetchPlayerAsset, fetchPreviewPage, fetchReviewMe, fetchRoleDetail, setCardFeatured, type FeaturedStatus } from "@/lib/api";
 import { renderWelcome } from "@/lib/welcome-render";
 import { recallCard } from "@/lib/card-memory";
+import { accountToken } from "@/lib/connections";
+import { currentProvider, type ProviderId } from "@/lib/provider";
+import CardOwnerActions from "@/components/CardOwnerActions.vue";
 import CardPlatforms from "@/components/CardPlatforms.vue";
 import { useSession } from "@/lib/session";
 import { contentLang, pageTitle, zoneLabel } from "@/lib/i18n";
@@ -116,8 +119,8 @@ const hasArt = computed(() => !!card.value?.avatarUrl && !broken.value);
  * 主頁其餘的資料：開場白、作者裝修的版面、同一位作者的其他作品。
  * 讀不到只是少一塊，不擋整頁；跟卡片本身分開，手上一有卡就可以開始拿。
  */
-function loadDetails(roleId: string, authorHandle: string | null, lang: string) {
-  void fetchRoleDetail(roleId, undefined, lang)
+function loadDetails(roleId: string, authorHandle: string | null, lang: string, provider: ProviderId) {
+  void fetchRoleDetail(roleId, undefined, lang, provider)
     .then((raw) => {
       const rawWelcome = String(raw.roleWelcome ?? "");
       const charName = card.value?.name ?? "";
@@ -127,16 +130,16 @@ function loadDetails(roleId: string, authorHandle: string | null, lang: string) 
       // 開場白照對話頁的方式畫：先套作者的正則規則（酒館／MMD 卡靠它把標記換成版面），
       // 再交給沙盒 iframe 用同一套元件庫畫（HtmlCardFrame）。功能欄那份整頁美化不放（見 welcome-render）。規則要登入才拿得到，
       // 遊客與沒規則的卡就只畫 HTML／markdown 本身；純文字的開場白照舊走氣泡。
-      void session.accessToken().catch(() => null)
-        .then((token) => fetchPlayerAsset(roleId, token || undefined).catch(() => null))
+      void accountToken(provider).catch(() => null)
+        .then((token) => fetchPlayerAsset(roleId, token || undefined, provider).catch(() => null))
         .then((asset) => {
           if (card.value?.roleId !== roleId) return;
           const out = renderWelcome(rawWelcome, { charName, userName: t("card.you"), asset });
           welcomeHtml.value = out.html;
         });
-      showComments.value = raw.previewShowComments !== false;
+      showComments.value = (!card.value?.status || card.value.status === "approved") && raw.previewShowComments !== false;
       if (raw.hasPreviewPage === true) {
-        return fetchPreviewPage(roleId).then((p) => {
+        return fetchPreviewPage(roleId, provider).then((p) => {
           previewDoc.value = p.doc ?? null;
           previewSkin.value = p.skinId ?? "";
         });
@@ -174,7 +177,7 @@ async function load() {
   const shown = card.value;
   if (shown) {
     applyHead(shown);
-    loadDetails(shown.roleId, shown.author.handle, lang);
+    loadDetails(shown.roleId, shown.author.handle, lang, (shown.provider as ProviderId) ?? currentProvider());
   }
   try {
     card.value = await fetchCard(id, lang);
@@ -190,7 +193,7 @@ async function load() {
   loading.value = false;
   revalidating.value = false;
   applyHead(card.value);
-  if (!shown) loadDetails(card.value.roleId, card.value.author.handle, lang);
+  if (!shown) loadDetails(card.value.roleId, card.value.author.handle, lang, (card.value.provider as ProviderId) ?? currentProvider());
 }
 
 // 卡號是本站發的短數字（登記過的卡才有）：作者對外報卡、玩家在不能貼連結的地方靠它找卡
@@ -210,7 +213,7 @@ async function copyId() {
 }
 
 async function share() {
-  const url = location.href;
+  const url = new URL(lp(`/cards/${card.value?.id ?? route.params.id}`),location.origin).href;
   const title = card.value?.name ?? "";
   const subject = card.value?.roleId ?? "";
   if (typeof navigator.share === "function") {
@@ -279,10 +282,9 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
       <!-- 背景圖只當氛圍：糊掉、壓淡，讓整頁有這張卡自己的色調 -->
       <div class="role__ambient" :style="{ backgroundImage: `url(${card.backgroundUrl || card.avatarUrl || ''})` }" aria-hidden="true" />
 
-      <!-- 作者看自己還沒上榜的卡：說清楚為什麼別人看不到，並給他去處理的路 -->
+      <!-- 社群審核影響榜單收錄，詳情連結仍可分享。 -->
       <p v-if="card.status && card.status !== 'approved'" class="notice role__own" role="status">
         {{ $t(`card.own.${card.status}`) }}
-        <RouterLink :to="lp('/mine')">{{ $t("card.own.manage") }}</RouterLink>
       </p>
 
       <div class="role__layout" :aria-busy="revalidating || undefined">
@@ -341,7 +343,8 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
               </svg>
             </button>
           </div>
-          <LibraryToggle kind="favorites" :target="card.id" @count="card.favoriteCount = $event" />
+          <CardOwnerActions :card="card" @submitted="load" />
+          <LibraryToggle v-if="!card.status || card.status === 'approved'" kind="favorites" :target="card.id" @count="card.favoriteCount = $event" />
           <!-- 加到主畫面：能裝網頁的瀏覽器才出現；成人卡要過了門（有鑰匙）才有 -->
           <button v-if="installable && (!card.nsfw || card.shortcutKey)" type="button" class="btn btn--sm btn--ghost role__install" @click="addToHome">
             <svg viewBox="0 0 20 20" aria-hidden="true">
@@ -476,7 +479,8 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 .role__stats .stat dd.up { color: var(--accent-text); }
 
 .role__tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.role__actions { display: flex; gap: var(--s-2); }
+.role__actions { display: grid; grid-template-columns: 1fr auto; gap: var(--s-3); }
+.role__actions > .platforms { grid-column: 1 / -1; grid-row: 1; }
 .role__manage { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
 .role__manage-error { color: var(--danger, #c0392b); }
 .role__cta { flex: 1; min-width: 0; }

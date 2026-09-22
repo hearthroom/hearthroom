@@ -4,7 +4,7 @@ import worker from "../src/index";
 import { BEACON_EVENTS, clientKind, refHostOf, safeSubject, shapeTerm, surfaceOf } from "../src/analytics";
 import { ALIAS_HOSTS, HOST, canonicalUrl, isSelfHost } from "../src/site";
 import { upsertCard } from "../src/cards";
-import { envWithAssets, resetDb, restoreUpstream, role } from "./helpers";
+import { envWithAssets, resetDb, restoreUpstream, rolesOnProviders, role } from "./helpers";
 
 /**
  * 埋點測的是「呼叫契約」：事件名、欄位、hit/miss。
@@ -26,6 +26,7 @@ const seen = (event: string) => points.map(F).filter((p) => p.event === event);
 
 beforeEach(async () => {
   await resetDb();
+  rolesOnProviders({});
   points = [];
   env.EVENTS = { writeDataPoint: (p: Point) => points.push(p) } as unknown as AnalyticsEngineDataset;
   await upsertCard(env.DB, role({ roleId: "r-1", name: "夜行偵探", tags: ["推理"], authorNumId: 7 }), Date.now());

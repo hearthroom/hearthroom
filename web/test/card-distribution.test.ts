@@ -84,16 +84,16 @@ it("disables stored-only providers and never offers a play action for them", asy
   expect(root.querySelector("button.btn--primary")).toBeNull();
   expect(mocks.balance).not.toHaveBeenCalled();
 });
-it("selects a playable copy when the displayed card belongs to a storage-only provider", async () => {
+it("waits for a choice even when only one copy is playable", async () => {
   mocks.platforms.mockResolvedValue([
     { provider: "harbor", roleId: "copy", playable: false },
     { provider: "lunatalk", roleId: "original", playable: true },
   ]);
   await mount(CardPlatforms, { cardId: "community-card", provider: "harbor" });
   expect(mocks.platforms).toHaveBeenCalledWith('community-card');
-  expect(
-    root.querySelector<HTMLInputElement>("input[value=lunatalk]")?.checked
-  ).toBe(true);
+  expect(root.querySelector<HTMLInputElement>("input[value=lunatalk]")?.checked).toBe(false);
+  root.querySelector<HTMLInputElement>("input[value=lunatalk]")!.click();
+  await settle();
   expect(
     root.querySelector<HTMLButtonElement>("button.btn--primary")?.disabled
   ).toBe(false);
@@ -154,4 +154,17 @@ it('offers explicit private-copy recovery for a persisted missing target',async(
  expect(mocks.sync).toHaveBeenLastCalledWith('original','lunatalk','harbor',false,false,true);
  expect(root.querySelector('.notice--error')).toBeNull();
  expect(root.textContent).not.toContain(i18n.global.t('linked.recreateCopy'));
+});
+
+it('does not turn the card source or session into a selected play provider', async () => {
+  mocks.platforms.mockResolvedValue([
+    {provider:'harbor',roleId:'copy',playable:true},
+    {provider:'lunatalk',roleId:'original',playable:true},
+  ]);
+  await mount(CardPlatforms,{cardId:'neutral-work',provider:'harbor'});
+  expect(root.querySelectorAll('input:checked')).toHaveLength(0);
+  expect(root.querySelector('button.btn--primary')).toBeNull();
+  root.querySelector<HTMLInputElement>('input[value=lunatalk]')!.click();
+  await settle();
+  expect(root.querySelector('button.btn--primary')).not.toBeNull();
 });
