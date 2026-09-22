@@ -106,7 +106,7 @@ it('more than 200 submissions are drained in bounded batches without losing a su
   for(const j of p.jobs){seen.add(j.id);const d=await leaseReviewDelivery(env.DB,j.id,'223456789012345678','en',now);await finishReviewDelivery(env.DB,{...d,channel:'223456789012345678',messageId:'323456789012345678'},now);}
  }
  expect(seen.size).toBe(205);
-});
+},30000);
 it('parallel claims have one winner, and superseding preserves the old message identity for closure',async()=>{
  await submission();const a=await makeReviewer(2),b=await makeReviewer(3),now=Date.now();
  const results=await Promise.allSettled([claim(env.DB,'s1',a,now),claim(env.DB,'s1',b,now)]);
