@@ -90,7 +90,7 @@ function onArtError() {
       <section v-if="choosingPlay" class="play-choices">
         <h4>{{ $t('workspace.playTitle') }}</h4>
         <p class="subtle">{{ $t('linked.playHint') }}</p>
-        <a v-for="copy in plays" :key="copy.provider" class="play-choice" :href="platformPath(lp(`/play/${copy.roleId}`),copy.provider)">
+        <a v-for="copy in plays" :key="copy.provider" class="play-choice" :href="platformPath(lp(`/play/${card.num ?? card.detailId ?? copy.roleId}?mode=source`),copy.provider)">
           <strong>{{ providerName(copy.provider) }}</strong><span>{{ accountLabel(copy.provider) }}</span><span aria-hidden="true">→</span>
         </a>
         <p v-if="!plays.length" class="subtle">{{ $t('workspace.noCopy') }}</p>

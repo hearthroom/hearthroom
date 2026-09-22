@@ -89,6 +89,7 @@ it('owns the recent conversation index across connected issuers, with private me
   expect(rows).toHaveLength(2);
   expect(rows.find((r: any) => r.conversationId === 'chat-2').provider).toBe('lunatalk');
   expect(rows.find((r: any) => r.conversationId === 'chat-3').provider).toBe('harbor');
+  expect(rows.find((r: any) => r.conversationId === 'chat-2').cardNumber).toBeGreaterThan(100000);
   expect(rows.find((r: any) => r.conversationId === 'chat-2').roleName).not.toBe('');
   expect(rows.map((r: any) => r.conversationId)).toEqual(expect.arrayContaining(['chat-2','chat-3']));
   expect((await body(await request('me/conversations','other'))).conversations).toEqual([]);
@@ -99,4 +100,13 @@ it('owns the recent conversation index across connected issuers, with private me
   const metrics = await (await SELF.fetch('https://c.test/metrics')).text();
   expect(metrics).toContain('operation="conversations_put",outcome="success"');
   expect(metrics).not.toContain('chat-2');
+});
+
+it('resumes a conversation only for its member and exact provider', async () => {
+  await SELF.fetch('https://c.test/v1/me/conversations', {method:'PUT',headers:{...bearer('fan'),'Content-Type':'application/json'},body:JSON.stringify({roleId:'library-role',conversationId:'resume-fixture'})});
+  const ok=await request('me/conversations/resume-fixture?provider=lunatalk');
+  expect(ok.status).toBe(200);
+  expect(await body(ok)).toMatchObject({provider:'lunatalk',roleId:'library-role',cardNumber:expect.any(Number)});
+  expect((await request('me/conversations/resume-fixture?provider=harbor')).status).toBe(404);
+  expect((await request('me/conversations/resume-fixture?provider=lunatalk','other')).status).toBe(404);
 });

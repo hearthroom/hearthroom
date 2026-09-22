@@ -14,11 +14,15 @@
  * 不然作者會改一句、測一輪，然後不明白為什麼沒變。
  */
 import { computed, ref, watch } from "vue";
+import { platformPath } from "@/lib/distribution";
+import { currentProvider, type ProviderId } from "@/lib/provider";
 import { useLocalePath } from "@/lib/use-locale";
 
 const props = defineProps<{
   /** 沒存過的新卡是空字串：那時候還沒有卡可以玩。 */
   roleId: string;
+  cardNumber?: number;
+  provider?: ProviderId;
   /** 畫面上有沒有還沒存的修改。 */
   dirty: boolean;
   saving: boolean;
@@ -30,7 +34,7 @@ const { lp } = useLocalePath();
 
 /** 換這個值就重載 iframe：存完之後要讓對話重新拿一次卡。 */
 const nonce = ref(0);
-const src = computed(() => (props.roleId ? lp(`/play/${props.roleId}`) : ""));
+const src = computed(() => (props.roleId ? platformPath(lp(`/play/${props.cardNumber ?? props.roleId}?mode=source`),props.provider ?? currentProvider()) : ""));
 
 /** 存完（dirty 由真轉假且有卡）自動重載一次，省得作者存完還要自己按一下。 */
 watch(

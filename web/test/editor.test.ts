@@ -597,7 +597,7 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     // 走的是站內既有的 /play/:roleId——那本來就是真 AI、真世界書、真正則，
     // 不必另外建試玩卡（那套是給 playground 沒有卡的情境用的）
     // 語系前綴由 lp() 決定，測試的 router 沒掛前綴；釘的是「指向這張卡的 /play」
-    expect(frame.getAttribute("src")).toMatch(/\/play\/r1$/);
+    expect(frame.getAttribute("src")).toBe("/play/r1?mode=source&provider=lunatalk");
     expect(root.querySelector(".ct__state")).toBeNull();
   });
 

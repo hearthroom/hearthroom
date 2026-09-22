@@ -62,7 +62,7 @@ async function play() {
   if (!choice.value || busy.value) return;
   busy.value = true;
   const destination = platformPath(
-    lp(`/play/${choice.value.roleId}`),
+    lp(`/play/${props.cardId}`),
     choice.value.provider
   );
   try {

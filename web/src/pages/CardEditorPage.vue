@@ -1504,7 +1504,7 @@ async function exportCard(format: "png" | "json") {
                 <path d="M13.9 2.2v3.2h-3.2" />
               </svg>
             </button>
-            <a class="btn btn--icon btn--sm btn--ghost" :href="lp(`/play/${roleId}`)" target="_blank" rel="noopener"
+            <a class="btn btn--icon btn--sm btn--ghost" :href="platformPath(lp(`/play/${cardNumber ?? roleId}?mode=source`),editorProvider)" target="_blank" rel="noopener"
                :title="$t('editor.test.newTab')" :aria-label="$t('editor.test.newTab')">
               <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6"
                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1529,7 +1529,7 @@ async function exportCard(format: "png" | "json") {
         </div>
 
         <div v-if="panelOpen || sheetOpen" class="rail__panel">
-          <ChatTestPanel v-if="panel === 'test'" ref="testPanel" :role-id="roleId" :dirty="dirty" :saving="saving" @save="save" />
+          <ChatTestPanel v-if="panel === 'test'" ref="testPanel" :role-id="roleId" :card-number="cardNumber" :provider="editorProvider" :dirty="dirty" :saving="saving" @save="save" />
           <ResourcePanel v-else />
         </div>
       </aside>

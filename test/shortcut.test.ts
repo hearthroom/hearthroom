@@ -14,6 +14,7 @@ const JPG = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0]);
 
 let gen = 0;
 let hostedSafe:string;
+let cardNumber:string;
 beforeEach(async () => {
   await resetDb();
   boardCache.namespace = `board-${Math.random()}`;
@@ -25,6 +26,7 @@ beforeEach(async () => {
   );
   expect((await submit("role-safe", { nsfw: false })).status).toBe(201);
   expect((await submit("role-adult", { nsfw: true })).status).toBe(201);
+  cardNumber=String((await env.DB.prepare("SELECT id FROM cards WHERE source_role_id='role-safe'").first<{id:number}>())!.id);
   hostedSafe=(await env.DB.prepare("SELECT approved_hosted_role_id AS id FROM cards WHERE source_role_id='role-safe'").first<{id:string}>())!.id;
 });
 afterEach(() => { vi.unstubAllGlobals(); restoreUpstream(); });
@@ -47,8 +49,8 @@ describe("卡片 manifest", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("application/manifest+json");
     const m = await res.json() as Record<string, unknown>;
-    expect(m.id).toBe(`/play/${hostedSafe}`);
-    expect(m.start_url).toBe(`/en/play/${hostedSafe}`);
+    expect(m.id).toBe(`/play/${cardNumber}`);
+    expect(m.start_url).toBe(`/en/play/${cardNumber}?provider=lunatalk`);
     expect(m.scope).toBe("/");
     expect(m.name).toBe("Night Detective");
     expect(m.display).toBe("standalone");
@@ -64,16 +66,16 @@ describe("卡片 manifest", () => {
     await waitOnExecutionContext(ctx);
     expect(res.status).toBe(200);
     const m = await res.json() as Record<string, unknown>;
-    expect(m.id).toBe(`/${hostedSafe}/`);
-    expect(m.scope).toBe(`/${hostedSafe}/`);
-    expect(m.start_url).toBe(`/${hostedSafe}/?lang=en`);
+    expect(m.id).toBe(`/${cardNumber}/`);
+    expect(m.scope).toBe(`/${cardNumber}/`);
+    expect(m.start_url).toBe(`/${cardNumber}/?lang=en&provider=lunatalk`);
     expect(m.name).toBe("Night Detective");
     expect(m.display).toBe("fullscreen");
     // 本機開發用的 play.localhost 也算
     const ctx2 = createExecutionContext();
     const local = await worker.fetch(new Request("http://play.localhost:8787/v1/cards/role-safe/manifest.webmanifest"), env, ctx2);
     await waitOnExecutionContext(ctx2);
-    expect(((await local.json()) as Record<string, unknown>).scope).toBe(`/${hostedSafe}/`);
+    expect(((await local.json()) as Record<string, unknown>).scope).toBe(`/${cardNumber}/`);
   });
 
   it("站台自己的 manifest 在卡片 App 網域上是 404，主站照常", async () => {
@@ -86,10 +88,10 @@ describe("卡片 manifest", () => {
 
   it("來源語言不帶前綴；沒有該語言的名字就退回中文", async () => {
     const m = await (await get("/v1/cards/role-safe/manifest.webmanifest?lang=zh-Hant")).json() as Record<string, unknown>;
-    expect(m.start_url).toBe(`/play/${hostedSafe}`);
+    expect(m.start_url).toBe(`/play/${cardNumber}?provider=lunatalk`);
     expect(m.name).toBe("夜行偵探");
     const ja = await (await get("/v1/cards/role-safe/manifest.webmanifest?lang=ja")).json() as Record<string, unknown>;
-    expect(ja.start_url).toBe(`/ja/play/${hostedSafe}`);
+    expect(ja.start_url).toBe(`/ja/play/${cardNumber}?provider=lunatalk`);
     expect(ja.name).toBe("夜行偵探");
   });
 
