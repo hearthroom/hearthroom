@@ -66,6 +66,8 @@ export function recordVisit(store: Storage | null, now = Date.now()): number {
 
 /** 是不是在已安裝的 App 視窗裡（standalone；卡片 App 是 fullscreen）。 */
 export function isStandalone(): boolean {
+  // Presentation only; the native marker never grants authentication or permissions.
+  if (/\bHearthroomApp\/[\d.]+\b/.test(navigator.userAgent)) return true;
   try {
     if (matchMedia("(display-mode: standalone), (display-mode: fullscreen)").matches) return true;
   } catch { /* 沒有 matchMedia 的環境 */ }
@@ -120,6 +122,7 @@ function refreshAvailable(): void {
 
 /** 這個瀏覽器有沒有辦法把網頁裝到主畫面／桌面（Chromium 系或 iOS Safari）。卡片頁的按鈕看它。 */
 export function canInstall(ua = navigator.userAgent): boolean {
+  if (/\bHearthroomApp\/[\d.]+\b/.test(ua)) return false;
   return isIosSafari(ua) || (/Chrome\//.test(ua) && !/Firefox|OPR\//.test(ua));
 }
 

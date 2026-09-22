@@ -1,0 +1,8 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/web_root" android:orientation="vertical" android:layout_width="match_parent" android:layout_height="match_parent" android:background="@color/background">
+    <LinearLayout android:id="@+id/origin_bar" android:orientation="horizontal" android:gravity="center_vertical" android:layout_width="match_parent" android:layout_height="wrap_content" android:visibility="gone" android:paddingHorizontal="8dp">
+        <Button android:id="@+id/return_to_site" style="?android:attr/borderlessButtonStyle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:minHeight="48dp" android:text="@string/web_back" android:textAllCaps="false" />
+        <TextView android:id="@+id/page_origin" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:padding="8dp" android:textSize="14sp" android:textColor="@color/text" android:breakStrategy="simple" />
+    </LinearLayout>
+    <ProgressBar android:id="@+id/page_progress" style="?android:attr/progressBarStyleHorizontal" android:layout_width="match_parent" android:layout_height="4dp" android:max="100" android:visibility="gone" />
+    <FrameLayout android:id="@+id/web_content" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" />
+</LinearLayout>

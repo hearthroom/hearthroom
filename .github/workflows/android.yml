@@ -44,6 +44,18 @@ jobs:
         run: node scripts/android/release-scope.mjs
       - name: Verify Android app
         run: ./android/gradlew -p android testDebugUnitTest lintDebug assembleDebug --console=plain
+      - name: Enable emulator acceleration
+        run: sudo chmod a+rw /dev/kvm
+      - name: Verify real WebView without Chrome
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          script: |
+            if adb shell pm path com.android.chrome | grep -q package:; then adb shell pm disable-user --user 0 com.android.chrome; fi
+            ./android/gradlew -p android connectedDebugAndroidTest --console=plain
       - name: Save test APK
         uses: actions/upload-artifact@v4
         with:

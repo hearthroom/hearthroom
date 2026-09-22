@@ -2,6 +2,18 @@
 
 This Android app opens the existing Hearthroom PWA using Google's Android Browser Helper (the TWA runtime also used by Bubblewrap). The small checked-in native project adds an APK updater; it is not regenerated on each build. Google Play is not a distribution channel for this build.
 
+## Browser compatibility
+
+The launch order is **TWA-capable installed browser → in-app Android System WebView**. A Custom Tabs-only browser does not qualify as TWA. Chrome is not required. The app does not bundle GeckoView or a Chromium engine, and does not assume that a phone without Google Play receives timely WebView updates.
+
+`MainActivity.getFallbackStrategy()` opens the non-exported `WebActivity` when Android Browser Helper cannot launch TWA. Browser-side Digital Asset Links validation failures can still produce browser controls after a TWA launch; they are not a reliable automatic fallback signal. Long-press the launcher icon and choose **Open inside app** to explicitly use WebView in that case. The normal icon continues to prefer TWA. Browser and WebView have separate cookie/storage profiles, so switching may require signing in again.
+
+WebView requires Chromium 111 or newer for the website's dynamic viewport units and `color-mix` theme, then checks required Web APIs in the actual page. This functional floor is not a security-update guarantee or certification of every version above it. Missing, disabled or unsupported WebView shows a localized recovery screen with settings, retry and an explicit browser option; it never silently sends the launch to a regular browser. The package remains Android 8.0+, but the installed web engine must also meet these requirements.
+
+WebView keeps HTTPS redirects and OAuth return navigation in the same view so session storage survives. Outside the three exact community origins it shows the current host in a native bar. Certificate errors are never ignored. File/content top-level navigation is blocked, file access is disabled, iframe sandbox/origin rules remain in force, and there is no `addJavascriptInterface` or credential bridge. A narrowly scoped WebMessage listener accepts Blob-save requests only from the top-level page on those exact origins; iframe messages and all other origins are rejected, and every save still requires the system document dialog. Third-party login providers may impose additional embedded-browser restrictions; an unauthenticated form check is not proof of an end-to-end account authorization.
+
+File uploads use the system document picker. Downloads use the system save dialog and are limited to 32 MiB; Blob exports are captured before the object URL expires and transferred in bounded chunks. HTTPS download redirects are bounded and cookies are never forwarded across origins. This file-saving path does not install APKs or bypass the existing updater's hash/signature/package checks. Camera/microphone/geolocation permissions are not added by this fallback.
+
 ## Build and verify
 
 JDK 17, Android SDK platform 36 and build tools 35 are required. The checked-in Gradle wrapper pins the toolchain and distribution checksum.
@@ -9,9 +21,10 @@ JDK 17, Android SDK platform 36 and build tools 35 are required. The checked-in 
 ```sh
 node --test scripts/android/*.test.mjs
 ./android/gradlew -p android testDebugUnitTest lintDebug assembleDebug
+./android/gradlew -p android connectedDebugAndroidTest
 ```
 
-Set `ANDROID_HOME` to the SDK. The debug build uses the normal Android debug signing identity; it cannot replace a release-signed installation. Release signing comes from `ANDROID_KEYSTORE`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`. Never commit the keystore or its passwords to this public repository.
+Set `ANDROID_HOME` to the SDK. The debug build uses `club.hearthroom.app.debug` and the normal Android debug signing identity; it installs alongside the release app and cannot update it. Device tests require an Android 10+ emulator for the MediaStore fixture; additionally test the supported Android versions and OEM devices before claiming broad coverage. Release signing comes from `ANDROID_KEYSTORE`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`. Never commit the keystore or its passwords to this public repository.
 
 ## Updates
 
