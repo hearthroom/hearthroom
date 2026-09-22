@@ -7,7 +7,7 @@ export const moderationRoutes = new Hono<{ Bindings: Env }>();
 type Action = 'delist' | 'suspend' | 'restore_listing' | 'restore_public';
 type StaffRole = 'reviewer' | 'manager' | 'owner';
 interface CaseRow { card_number:number;nsfw:number;public_evidence:string;id:string; provider:string; source_role_id:string; version_id:string; title:string; author_member_id:string; action:Action; reason:string; created_by:string; status:string; created_at:number; decided_at:number|null; resolution:string|null }
-interface ManagedCard { featured_at:number|null; summaries:string;avatar_url:string|null;search_text:string;card_number:number;id:string; provider:string; source_role_id:string; approved_version_id:string|null; reviewed_hash:string; names:string; tags:string; status:string; board_hidden:number; public_blocked:number; nsfw:number; author_member_id:string }
+interface ManagedCard { featured_at:number|null; summaries:string;background_url:string|null;search_text:string;card_number:number;id:string; provider:string; source_role_id:string; approved_version_id:string|null; reviewed_hash:string; names:string; tags:string; status:string; board_hidden:number; public_blocked:number; nsfw:number; author_member_id:string }
 const CARD = `SELECT c.*,(SELECT num FROM card_numbers WHERE provider=c.provider AND source_role_id=c.source_role_id) AS card_number,COALESCE(w.member_id,ac.owner_member_id,ai.member_id,'') AS author_member_id FROM cards c
  LEFT JOIN works w ON w.source_provider=c.provider AND w.source_role_id=c.source_role_id
  LEFT JOIN member_connections ac ON ac.provider=c.provider AND ac.external_id=CAST(c.author_num_id AS TEXT)
@@ -95,7 +95,7 @@ moderationRoutes.post('/v1/moderation/cases',async c=>{
  if(card.status!=='approved'||(action==='delist'&&card.board_hidden)||(action==='suspend'&&card.public_blocked)||(action==='restore_listing'&&!card.board_hidden)||(action==='restore_public'&&!card.public_blocked))throw new HttpError(409,'moderation_conflict');
  const frozen=card.approved_version_id?await db.prepare('SELECT public_role FROM hosting_versions WHERE version_id=?').bind(card.approved_version_id).first<{public_role:string}>():null;
  const published=frozen?JSON.parse(frozen.public_role):null;
- const evidence=JSON.stringify({names:JSON.parse(card.names),summaries:JSON.parse(card.summaries),tags:JSON.parse(card.tags),avatarUrl:card.avatar_url,nsfw:!!card.nsfw,welcome:published?.welcome??'',searchText:card.search_text??''});
+ const evidence=JSON.stringify({names:JSON.parse(card.names),summaries:JSON.parse(card.summaries),tags:JSON.parse(card.tags),avatarUrl:card.background_url,nsfw:!!card.nsfw,welcome:published?.welcome??'',searchText:card.search_text??''});
  const id=crypto.randomUUID();const now=Date.now();
  await mutate(()=>db.batch([
   db.prepare('INSERT OR IGNORE INTO moderation_state(provider,source_role_id) VALUES(?,?)').bind(card.provider,card.source_role_id),

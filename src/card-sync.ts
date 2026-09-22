@@ -1,5 +1,5 @@
 import type { TransferProgress } from "./card-transfer-resources";
-import { MEDIA_FIELDS } from "./card-media";
+import { MEDIA_FIELDS, portraitMedia } from "./card-media";
 import { transfers, type TransferCard, type WorldbookMap } from "./card-transfer";
 import { HttpError, type Env } from "./types";
 import type { ProviderId } from "./providers";
@@ -17,7 +17,7 @@ export interface SyncInput {
   updatePublished?: boolean;
   recreateMissing?: boolean;
 }
-export async function cardHash(card: TransferCard, legacy = false) {
+export async function cardHash(card: TransferCard, legacy = false, legacyImages = false) {
   const raw = await crypto.subtle.digest(
     "SHA-256",
     new TextEncoder().encode(
@@ -29,7 +29,7 @@ export async function cardHash(card: TransferCard, legacy = false) {
         language: card.language,
         fields: card.fields ?? {},
         ...(card.translations?{translations:card.translations}:{}),
-        media: MEDIA_FIELDS.map((key) => card.media?.[key] ?? ""),
+        media: MEDIA_FIELDS.map((key) => (legacyImages ? card.media : portraitMedia(card.media))?.[key] ?? ""),
         // 開場白備選／序章、世界書條目（不含兩邊各自的 id）、作者資產：改了任何一項都要再同步。
         welcome: card.welcome ?? null,
         worldbooks: (card.worldbooks ?? []).map((b) => ({ name: b.name, entries: b.entries, ...(b.metadata?{metadata:b.metadata}:{}) })),
@@ -177,7 +177,7 @@ export async function syncCard(env: Env, i: SyncInput) {
     if (roleId && existing) {
       if (!targetHash) throw new HttpError(409, "sync_target_unverified");
       const actual = await cardHash(existing.card);
-      if (targetHash && actual !== targetHash && actual !== hash && await cardHash(existing.card,true) !== targetHash)
+      if (targetHash && actual !== targetHash && actual !== hash && await cardHash(existing.card,false,true) !== targetHash && await cardHash(existing.card,true,true) !== targetHash)
         throw new HttpError(409, "sync_target_changed");
       if (actual === hash) {
         // Legacy Harbor copies may still be private even when their content

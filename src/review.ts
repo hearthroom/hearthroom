@@ -95,7 +95,7 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
               c.id AS card_id, c.source_role_id,
               COALESCE(json_extract(v.public_role,'$.names'),c.names) AS names,
               COALESCE(json_extract(v.public_role,'$.summaries'),c.summaries) AS summaries,
-              COALESCE(json_extract(v.public_role,'$.avatarUrl'),c.avatar_url) AS avatar_url, c.zone, c.tags,
+              COALESCE(NULLIF(json_extract(v.public_role,'$.backgroundUrl'),''),json_extract(v.public_role,'$.avatarUrl'),c.background_url) AS avatar_url, c.zone, c.tags,
               (SELECT COUNT(*) FROM review_stamps st WHERE st.submission_id = s.id AND st.verdict = 'approve') AS approvals,
               (SELECT COUNT(*) FROM review_stamps st WHERE st.submission_id = s.id AND st.member_id = ?) AS mine
        FROM review_submissions s JOIN cards c ON c.id = s.card_id LEFT JOIN hosting_versions v ON v.submission_id=s.id

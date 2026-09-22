@@ -11186,7 +11186,8 @@
           },
           "roleAvatar": {
             "type": "string",
-            "format": "uri"
+            "format": "uri",
+            "description": " HarperHarbor: compatibility alias for the portrait background of the agent configuration; no independent avatar is stored. LunaTalk retains its existing avatar field."
           },
           "roleBackground": {
             "type": "string",
@@ -12028,7 +12029,8 @@
           },
           "roleAvatar": {
             "type": "string",
-            "format": "uri"
+            "format": "uri",
+            "description": " HarperHarbor: compatibility alias for the portrait background of the agent configuration; no independent avatar is stored. LunaTalk retains its existing avatar field."
           },
           "lastChat": {
             "type": "string",
@@ -15640,7 +15642,7 @@
           },
           "roleAvatar": {
             "type": "string",
-            "description": "Avatar image URL."
+            "description": "Avatar image URL. HarperHarbor: compatibility alias for the portrait background of the agent configuration; no independent avatar is stored. LunaTalk retains its existing avatar field."
           },
           "roleBackground": {
             "type": "string",
@@ -16100,7 +16102,7 @@
           "roleAvatar": {
             "type": "string",
             "format": "uri",
-            "description": "http(s) URL; blank ignored."
+            "description": "http(s) URL; blank ignored. HarperHarbor: compatibility alias for the portrait background of the agent configuration; no independent avatar is stored. LunaTalk retains its existing avatar field. If roleBackground is also supplied, it takes precedence, including an empty string. An avatar-only write updates the portrait."
           },
           "roleBackground": {
             "type": "string",
@@ -16302,7 +16304,8 @@
           },
           "roleAvatar": {
             "type": "string",
-            "format": "uri"
+            "format": "uri",
+            "description": " HarperHarbor: compatibility alias for the portrait background of the agent configuration; no independent avatar is stored. LunaTalk retains its existing avatar field."
           },
           "roleBackground": {
             "type": "string",

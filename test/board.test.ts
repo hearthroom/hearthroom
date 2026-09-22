@@ -44,13 +44,13 @@ async function seed(f: {
   fixtureLabels.set(String(num), f.id);
   await env.DB.prepare(
     `INSERT INTO cards (id, source_role_id, zone, author_num_id, author_name, author_avatar, names, summaries,
-       avatar_url, background_url, slug, tags, talk_num, follow_num, talk_num_prev, search_text,
+       background_url, slug, tags, talk_num, follow_num, talk_num_prev, search_text,
        registered_at, last_synced_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
   )
     .bind(
       num, r.roleId, r.zone, r.authorNumId, r.authorName, r.authorAvatar,
-      JSON.stringify(r.names), JSON.stringify(r.summaries), r.avatarUrl, r.backgroundUrl, r.slug,
+      JSON.stringify(r.names), JSON.stringify(r.summaries), r.backgroundUrl, r.slug,
       JSON.stringify(r.tags), r.talkNum, r.followNum, f.talkPrev ?? r.talkNum,
       buildSearchText(r), f.registeredAt ?? Date.now(), 0,
     )

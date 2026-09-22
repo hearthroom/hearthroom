@@ -39,3 +39,7 @@ are repaired without introducing a new authoring operation or changing a
 provider API. Existing `card_export` success/failure telemetry is retained;
 no new Prometheus series is needed for this Worker host-validation correction.
 No production writes or deployment were performed.
+
+The independent-avatar behavior above records the first bugfix only. It is
+superseded by [the portrait-only contract](card-portrait.md), which also records
+the final test results and remaining browser acceptance.

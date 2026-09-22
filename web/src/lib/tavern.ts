@@ -780,7 +780,7 @@ export function toV2Card(card: TavernCard): TavernCard {
 }
 
 /**
- * 匯出時要抓頭像的位元組。同源（或 data:/blob:）直接抓；上游圖片主機沒開 CORS，
+ * 匯出時要抓直式背景的位元組。同源（或 data:/blob:）直接抓；上游圖片主機沒開 CORS，
  * 走本站 Worker 的同源代抓。
  */
 export function imageFetchUrl(src: string, origin: string): string {
@@ -796,7 +796,7 @@ export function imageFetchUrl(src: string, origin: string): string {
 }
 
 /**
- * 把卡寫進一張 PNG 的 tEXt。圖是作者自己的頭像，所以匯出的卡看起來就是那張立繪。
+ * 把卡寫進一張 PNG 的 tEXt。圖是作者的直式背景，所以匯出的卡看起來就是那張立繪。
  * 兩個 chunk 都寫：`chara` 放 V2（所有客戶端都讀得懂），`ccv3` 放 V3（認 V3 的優先讀它）。
  */
 export function embedIntoPng(imageBytes: Uint8Array, card: TavernCard): Uint8Array {

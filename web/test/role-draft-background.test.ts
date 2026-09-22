@@ -18,3 +18,11 @@ describe("roleBackgroundLandscape", () => {
     expect(documentPatch(draft, original)).toMatchObject({ roleBackgroundLandscape: "https://cdn/l.jpg" });
   });
 });
+
+it("uses a portrait first and imports legacy avatars without an independent draft slot",()=>{
+ const portrait=draftFromRoleDetail({roleAvatar:"old.png",roleBackground:"portrait.gif"},"en");
+ expect(portrait.roleBackground).toBe("portrait.gif");expect(portrait).not.toHaveProperty("roleAvatar");
+ const legacy=draftFromRoleDetail({roleAvatar:"old.png"},"en");expect(legacy.roleBackground).toBe("old.png");
+ expect(documentPatch(legacy,null)).toMatchObject({roleAvatar:"old.png",roleBackground:"old.png"});
+ const cleared={...legacy,roleBackground:""};expect(documentPatch(cleared,legacy)).toEqual({roleBackground:"",roleAvatar:""});
+});

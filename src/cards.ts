@@ -15,7 +15,6 @@ export interface CardRow {
   author_avatar: string;
   names: string;
   summaries: string;
-  avatar_url: string | null;
   background_url: string | null;
   slug: string | null;
   tags: string;
@@ -86,7 +85,7 @@ export function toCard(row: CardRow, lang: string) {
     summary: pickLocale(summaries, lang),
     names,
     summaries,
-    avatarUrl: row.avatar_url,
+    avatarUrl: row.background_url,
     backgroundUrl: row.background_url,
     slug: row.slug,
     tags: JSON.parse(row.tags) as string[],
@@ -305,8 +304,7 @@ export async function upsertCard(db: D1Database, role: UpstreamRole, now: number
     role.authorAvatar,
     JSON.stringify(role.names),
     JSON.stringify(role.summaries),
-    role.avatarUrl,
-    role.backgroundUrl,
+    role.backgroundUrl || role.avatarUrl,
     role.slug,
     JSON.stringify(role.tags),
     role.talkNum,
@@ -323,7 +321,7 @@ export async function upsertCard(db: D1Database, role: UpstreamRole, now: number
     await db
       .prepare(
         `UPDATE cards SET zone=?, author_num_id=?, author_name=?, author_avatar=?, names=?, summaries=?,
-           avatar_url=?, background_url=?, slug=?, tags=?, talk_num=?, follow_num=?, search_text=?,
+           background_url=?, slug=?, tags=?, talk_num=?, follow_num=?, search_text=?,
            last_synced_at=?, talk_num_prev=?
          WHERE id=?`,
       )
@@ -336,9 +334,9 @@ export async function upsertCard(db: D1Database, role: UpstreamRole, now: number
   const insert = db
     .prepare(
       `INSERT INTO cards (id, source_role_id, zone, author_num_id, author_name, author_avatar, names, summaries,
-         avatar_url, background_url, slug, tags, talk_num, follow_num, search_text, last_synced_at,
+         background_url, slug, tags, talk_num, follow_num, search_text, last_synced_at,
          talk_num_prev, registered_at, provider, status, nsfw)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     // 首次登記把 prev 設成當前值 → trending 從 0 起算。
     // 不這樣的話一張老熱卡剛登記就會用累積總量霸榜。
@@ -425,7 +423,7 @@ export function previewCard(role: UpstreamRole, lang: string, provider: Provider
     summary: pickLocale(role.summaries, lang),
     names: role.names,
     summaries: role.summaries,
-    avatarUrl: role.avatarUrl,
+    avatarUrl: role.backgroundUrl || role.avatarUrl,
     backgroundUrl: role.backgroundUrl,
     slug: role.slug,
     tags: role.tags,
@@ -500,7 +498,7 @@ export async function dueForSync(db: D1Database, limit: number) {
 export function syncStatement(db: D1Database, id: string, prevTalkNum: number, role: UpstreamRole, now: number) {
   return db
     .prepare(
-      `UPDATE cards SET zone=?, author_name=?, author_avatar=?, names=?, summaries=?, avatar_url=?, background_url=?,
+      `UPDATE cards SET zone=?, author_name=?, author_avatar=?, names=?, summaries=?, background_url=?,
          slug=?, tags=?, talk_num=?, follow_num=?, search_text=?, talk_num_prev=?, last_synced_at=?
        WHERE id=? AND (approved_hosted_role_id IS NULL OR approved_hosted_role_id=?)`,
     )
@@ -510,8 +508,7 @@ export function syncStatement(db: D1Database, id: string, prevTalkNum: number, r
       role.authorAvatar,
       JSON.stringify(role.names),
       JSON.stringify(role.summaries),
-      role.avatarUrl,
-      role.backgroundUrl,
+      role.backgroundUrl || role.avatarUrl,
       role.slug,
       JSON.stringify(role.tags),
       role.talkNum,

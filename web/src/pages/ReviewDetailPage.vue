@@ -157,7 +157,7 @@ onMounted(() => { void load(); });
           <label>{{ $t("review.tags") }}</label>
           <ul class="tags"><li v-for="tag in tags" :key="tag" class="chip">{{ tag }}</li></ul>
         </div>
-        <div v-if="doc.roleAvatar" class="field"><label>{{ $t("editor.section.media") }}</label><img class="art" :src="doc.roleAvatar" alt="" /></div>
+        <div v-if="doc.roleBackground || doc.roleAvatar" class="field"><label>{{ $t("editor.section.media") }}</label><img class="art" :src="doc.roleBackground || doc.roleAvatar" alt="" /></div>
       </section>
 
       <section v-show="section === 'persona'" class="pane panel">

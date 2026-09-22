@@ -79,7 +79,6 @@ export interface RoleDraft {
   roleSex: string;
   roleDesc: string;
   roleTag: string[];
-  roleAvatar: string;
   roleBackground: string;
   /** 橫式背景（選填）：舞台在橫向螢幕優先用它，沒有就退回直式的 roleBackground。 */
   roleBackgroundLandscape: string;
@@ -111,7 +110,6 @@ export const makeDraft = (language: string): RoleDraft => ({
   roleSex: "",
   roleDesc: "",
   roleTag: [],
-  roleAvatar: "",
   roleBackground: "",
   roleBackgroundLandscape: "",
   roleDetailDesc: "",
@@ -258,8 +256,7 @@ export function draftFromRoleDetail(raw: Record<string, unknown>, fallbackLangua
   draft.roleSex = str(raw.roleSex);
   draft.roleDesc = str(raw.roleDesc);
   draft.roleTag = readTags(raw.roleTag);
-  draft.roleAvatar = str(raw.roleAvatar);
-  draft.roleBackground = str(raw.roleBackground);
+  draft.roleBackground = str(raw.roleBackground) || str(raw.roleAvatar);
   draft.roleBackgroundLandscape = str(raw.roleBackgroundLandscape);
   draft.roleDetailDesc = str(raw.roleDetailDesc);
   draft.roleWelcome = str(raw.roleWelcome);
@@ -295,7 +292,6 @@ const TEXT_FIELDS = [
   "roleDesc",
   "userName",
   "roleSex",
-  "roleAvatar",
   "roleBackground",
   "roleBackgroundLandscape",
   "roleDetailDesc",
@@ -316,6 +312,9 @@ export function documentPatch(draft: RoleDraft, original: RoleDraft | null): Rol
   for (const key of TEXT_FIELDS) {
     if (!original || draft[key] !== original[key]) patch[key] = draft[key];
   }
+  // Keep LunaTalk's legacy avatar field in sync, including explicit clearing.
+  // Harbor treats this wire field as a portrait alias; there is no separate draft slot.
+  if (patch.roleBackground !== undefined) patch.roleAvatar = patch.roleBackground;
   if (!original || JSON.stringify(draft.roleTag) !== JSON.stringify(original.roleTag)) patch.roleTag = draft.roleTag;
   // 新卡沒有附帶資料就不送：上游本來就是空的，送一個 {} 只是多一次寫入
   if (original ? JSON.stringify(draft.cardMeta) !== JSON.stringify(original.cardMeta) : Object.keys(draft.cardMeta).length > 0) {
