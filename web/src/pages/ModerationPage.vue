@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useSession } from '@/lib/session';
 import { useReviewer } from '@/lib/review';
+import { ApiError, setCardFeatured } from '@/lib/api';
 import { currentProvider } from '@/lib/provider';
 import { confirmDialog, settleConfirm } from '@/lib/confirm';
 import { moderationRequest, type ModerationCase, type ManagedCard, type CardHistory } from '@/lib/moderation';
@@ -14,6 +15,8 @@ const tab=computed(() => route.meta.managementTab === 'cards' ? 'cards' : route.
 const selected=ref<ModerationCase|null>(null);const history=ref<CardHistory|null>(null);const q=ref('');const offset=ref(0);const hasNext=ref(false);
 const loading=ref(false);const busy=ref(false);const error=ref('');const done=ref('');const reason=ref('');
 const action=ref('delist');const tagText=ref('');const hours=ref(1);const board=ref('day');
+const canFeature=computed(()=>!!session.me && reviewer.reviewer===true && !!reviewer.featured?.admin && reviewer.featuredProvider===currentProvider() && history.value?.card.provider===currentProvider());
+const featureFull=computed(()=>!!reviewer.featured && reviewer.featured.featuredUsed>=reviewer.featured.featuredQuota);
 const isManager=computed(()=>reviewer.role==='manager'||reviewer.role==='owner');
 const actions=computed(()=>history.value?[history.value.card.boardHidden?'restore_listing':'delist',history.value.card.publicBlocked?'restore_public':'suspend']:[]);
 const operation=ref(crypto.randomUUID());
@@ -46,6 +49,33 @@ async function selectCard(item:ManagedCard){if(busy.value)return;clearSelection(
  if(!alive||gen!==selectionGeneration||who!==identity())return;
  history.value=data;tagText.value=data.card.tags.join(', ');action.value=data.card.boardHidden?'restore_listing':'delist';operation.value=crypto.randomUUID();
  }catch(e){if(gen===selectionGeneration)error.value=e instanceof Error?e.message:t('state.loadFailed');}finally{if(gen===selectionGeneration)loading.value=false;}}
+async function toggleFeatured(){
+ if(busy.value||!canFeature.value||!history.value)return;
+ const card=history.value.card, next=!card.featured;
+ if(card.provider!==currentProvider())return;
+ if(next&&featureFull.value)return;
+ const gen=selectionGeneration,who=identity(),provider=currentProvider();busy.value=true;ownConfirmation=true;error.value='';done.value='';
+ const valid=()=>alive&&gen===selectionGeneration&&who===identity();
+ try{
+  const label=t(next?'card.featureAction':'card.unfeatureAction');
+  const ok=await confirmDialog({title:label,message:t(next?'card.featureConfirm':'moderation.unfeatureConfirm'),detail:card.name,confirmText:label,cancelText:t('moderation.cancel')});
+  if(valid())ownConfirmation=false;
+  if(!ok||!valid()||!canFeature.value)return;
+  const access=await token();if(!valid()||!canFeature.value)return;
+  await setCardFeatured(card.id,next,access,provider);
+  if(!valid())return;
+  const fresh=await moderationRequest<CardHistory>(`/cards/${card.id}?lang=${locale.value}`,access);
+  if(!valid())return;
+  history.value=fresh;cards.value=cards.value.map(item=>item.id===card.id?fresh.card:item);
+  done.value=t('moderation.featureSaved');await reviewer.refresh();
+ }catch(e){
+  if(valid()){
+   const code=e instanceof ApiError?e.code||e.message:'';
+   error.value=t(code.includes('featured_quota_exceeded')?'card.featureQuotaFull':code.includes('not_community_admin')?'card.featureDenied':'moderation.featureFailed');
+   if(e instanceof ApiError&&(e.status===403||code.includes('featured_quota_exceeded')))await reviewer.refresh();
+  }
+ }finally{if(valid()){ownConfirmation=false;busy.value=false;}}
+}
 async function perform(path:string,body:unknown,label:string,effect:string){
  if(busy.value||!reason.value.trim())return;
  const origin=document.activeElement as HTMLElement|null;const who=identity(),gen=selectionGeneration;busy.value=true;ownConfirmation=true;
@@ -73,7 +103,7 @@ onMounted(()=>{document.title=pageTitle(t('moderation.title'));void reviewer.ref
   <div class="work-grid">
    <section class="work-list" :aria-busy="loading">
     <template v-if="loading"><div v-for="n in 3" :key="n" class="ghost work-ghost"/></template>
-    <template v-else-if="tab==='cards'"><button v-for="card in cards" :key="card.id" class="work-item panel" :disabled="busy" @click="selectCard(card)"><strong>{{card.name}}</strong><span class="subtle">{{t(card.publicBlocked?'moderation.blocked':card.boardHidden?'moderation.unlisted':'moderation.listed')}}</span></button></template>
+    <template v-else-if="tab==='cards'"><button v-for="card in cards" :key="card.id" class="work-item panel" :disabled="busy" @click="selectCard(card)"><strong>{{card.name}}</strong><span v-if="card.featured" class="chip">{{t('card.featured')}}</span><span class="subtle">{{t(card.publicBlocked?'moderation.blocked':card.boardHidden?'moderation.unlisted':'moderation.listed')}}</span></button></template>
     <template v-else><button v-for="item in cases" :key="item.id" :data-case="item.id" :disabled="busy" class="work-item panel" :class="{'work-item--urgent':item.action==='suspend'&&item.status==='pending'}" @click="selectCase(item)"><span class="work-line"><strong>{{item.title}}</strong><span class="chip">{{t(`moderation.status.${item.status}`)}}</span></span><span>{{t(`moderation.action.${item.action}`)}}</span><span class="subtle">{{dateTime(item.createdAt)}}</span></button></template>
     <div v-if="!loading&&!(tab==='cards'?cards.length:cases.length)" class="panel work-empty"><p>{{t(tab==='cards'?'moderation.noCards':'moderation.noCases')}}</p><button class="btn btn--sm" @click="q='';offset=0;load()">{{t('review.refresh')}}</button></div>
     <div class="work-pager"><button class="btn btn--sm" :disabled="offset===0||loading||busy" @click="page(-1)">{{t('moderation.previous')}}</button><button class="btn btn--sm" :disabled="!hasNext||loading||busy" @click="page(1)">{{t('moderation.next')}}</button></div>
@@ -90,6 +120,13 @@ onMounted(()=>{document.title=pageTitle(t('moderation.title'));void reviewer.ref
     </template>
     <template v-else-if="history">
      <h2>{{history.card.name}}</h2><p class="notice">{{t(history.card.publicBlocked?'moderation.blocked':history.card.boardHidden?'moderation.unlisted':'moderation.listed')}}</p>
+     <section v-if="canFeature" class="work-featured" :aria-label="t('moderation.featuredManage')">
+      <h3>{{t('moderation.featuredManage')}}</h3>
+      <p class="subtle">{{t('moderation.featureIntro')}}</p>
+      <p v-if="reviewer.featured" class="subtle">{{t('card.featureQuota',{used:reviewer.featured.featuredUsed,quota:reviewer.featured.featuredQuota})}}</p>
+      <button data-feature-card class="btn" :disabled="busy||(!history.card.featured&&featureFull)" @click="toggleFeatured">{{t(history.card.featured?'card.unfeatureAction':'card.featureAction')}}</button>
+      <p v-if="!history.card.featured&&featureFull" class="subtle">{{t('card.featureQuotaFull')}}</p>
+     </section>
      <label for="case-action">{{t('moderation.chooseAction')}}</label><select id="case-action" v-model="action" class="input" :disabled="busy"><option v-for="value in actions" :key="value" :value="value">{{t(`moderation.action.${value}`)}}</option></select>
      <p class="subtle">{{t(`moderation.proposal.${action}`)}}</p><label for="card-reason">{{t('moderation.reason')}}</label><textarea id="card-reason" v-model="reason" class="input" rows="4" maxlength="2000" :disabled="busy"/>
      <button class="btn btn--danger work-submit" :disabled="busy||!reason.trim()" @click="propose">{{t(`moderation.action.${action}`)}}</button>
@@ -102,6 +139,7 @@ onMounted(()=>{document.title=pageTitle(t('moderation.title'));void reviewer.ref
  </section>
 </template>
 <style scoped>
+.work-featured{display:grid;gap:var(--s-3);padding-block:var(--s-3);border-bottom:1px solid var(--line);}.work-featured h3{margin-top:0;}.work-featured .btn{justify-self:start;}
 .work-actions,.work-search,.work-pager{display:flex;gap:var(--s-2);flex-wrap:wrap;align-items:center;}
 .work-search{margin-bottom:var(--s-4);}.work-search .input{flex:1;min-width:180px;}
 .work-grid{display:grid;grid-template-columns:minmax(240px,0.85fr) minmax(0,1.4fr);gap:var(--s-4);align-items:start;}

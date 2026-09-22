@@ -332,8 +332,8 @@ export interface ReviewDetail {
 /** 精選：呼叫者在供應商那邊是不是本站的社群代表，以及本站精選名額用了多少。老供應商沒有這條路時是 null。 */
 export interface FeaturedStatus { admin: boolean; featuredUsed: number; featuredQuota: number }
 
-export async function fetchReviewMe(token: string): Promise<{ reviewer: boolean; pending?:number; reviews?:number; cases?:number; role?:"reviewer"|"manager"|"owner"; featured?: FeaturedStatus | null }> {
-  return json(await fetch(`${COMMUNITY_API}/review/me`, { headers: { ...from(), ...authHeaders(token) } }));
+export async function fetchReviewMe(token: string, provider = currentProvider()): Promise<{ reviewer: boolean; pending?:number; reviews?:number; cases?:number; role?:"reviewer"|"manager"|"owner"; featured?: FeaturedStatus | null }> {
+  return json(await fetch(`${COMMUNITY_API}/review/me`, { headers: { ...from(), "X-Provider": provider, ...authHeaders(token) } }));
 }
 
 export async function fetchReviewQueue(token: string, lang?: string): Promise<{ items: ReviewQueueItem[]; claimTtlMs: number }> {
@@ -352,10 +352,10 @@ async function reviewAction<T>(id: string, action: string, token: string, body?:
 }
 
 /** HearthRoom 精選卡：社群代表替社群把一張在榜的卡標成精選（或取消）；先同步到供應商，成功本站才記。 */
-export async function setCardFeatured(cardId: string, featured: boolean, token: string): Promise<{ id: string; featured: boolean; featuredAt: number | null }> {
+export async function setCardFeatured(cardId: string, featured: boolean, token: string, provider = currentProvider()): Promise<{ id: string; featured: boolean; featuredAt: number | null }> {
   const res = await fetch(`${COMMUNITY_API}/review/cards/${encodeURIComponent(cardId)}/featured`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...from(), ...authHeaders(token) },
+    headers: { "Content-Type": "application/json", ...from(), "X-Provider": provider, ...authHeaders(token) },
     body: JSON.stringify({ featured }),
   });
   return json(res);

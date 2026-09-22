@@ -1504,5 +1504,10 @@
   "community.notices.review_reminder_expired": "这条认领提醒已失效",
   "review.inactive": "本轮审核已结束或被新版本替代，请返回待审列表查看当前进度。",
   "review.backToQueue": "返回待审列表",
-  "review.claimChanged": "认领状态已变更，请刷新页面后重试。"
+  "review.claimChanged": "认领状态已变更，请刷新页面后重试。",
+  "moderation.featuredManage": "精选卡管理",
+  "moderation.featureIntro": "精选标记会显示在榜单与卡片页，让玩家看到社区推荐的作品。",
+  "moderation.unfeatureConfirm": "取消精选后，这张卡会移除精选标记，作者返点将按其他适用等级计算。",
+  "moderation.featureFailed": "暂时无法确认精选结果，请刷新后重试。",
+  "moderation.featureSaved": "精选状态已更新。"
 }
