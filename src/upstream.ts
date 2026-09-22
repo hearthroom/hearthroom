@@ -147,6 +147,8 @@ export interface MyRole {
   name: string;
   summary: string;
   avatarUrl: string | null;
+  /** Portrait artwork for the author workspace; landscape remains a stage-only choice. */
+  backgroundUrl?: string | null;
   visibility: string;
   talkNum: number;
 }
@@ -161,7 +163,7 @@ export interface MyRolePage {
  * 呼叫者自己的角色卡，一次一頁。
  *
  * 上游回的是整個角色物件（四語文案、給模型看的詳細設定、輸出契約⋯⋯），一頁 100 筆
- * 是好幾百 KB。這裡只取畫面真的會用到的六個欄位再往下傳——省的是使用者的下載流量，
+ * 是好幾百 KB。這裡只取畫面真的會用到的欄位再往下傳——省的是使用者的下載流量，
  * 不是我們的。
  */
 export async function fetchMyRoles(
@@ -186,6 +188,7 @@ export async function fetchMyRoles(
         name: str(r.roleName),
         summary: str(r.roleDesc),
         avatarUrl: str(r.roleAvatar) || null,
+        backgroundUrl: str(r.roleBackground) || null,
         visibility: str(r.roleVisibility),
         talkNum: num(r.talkNum),
       }))

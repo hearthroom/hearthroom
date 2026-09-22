@@ -24,3 +24,24 @@ it('offers the actual copies for playtesting without navigation or publication o
 it('retains available works when another service is unavailable',async()=>{mocks.fetch.mockImplementation(async(_t,{provider})=>{if(provider==='lunatalk')throw Error('offline');return result([{...fixture,roleId:'original'}]);});await mount();expect(root.querySelectorAll('article.card')).toHaveLength(1);expect(root.querySelector('[role=alert]')?.textContent).toContain('offline');});
 
 it('synchronizes hosting copies without offering a second platform review',async()=>{await mount();expect(root.textContent).not.toContain(i18n.global.t('linked.submitToo'));mocks.synchronize.mockResolvedValue({provider:'lunatalk',roleId:'copy',status:'synced'});button('linked.sync').click();await settle();expect(mocks.synchronize).toHaveBeenCalledWith('original','harbor','lunatalk',false);});
+
+
+it('uses the portrait background before the avatar and keeps the card destination', async () => {
+ mocks.fetch.mockImplementation(async (_t, {provider}) => result([{...fixture, roleId:provider==='harbor'?'original':'copy', backgroundUrl:'/portrait.png'}]));
+ await mount();
+ expect(root.querySelector('.card__art img')?.getAttribute('src')).toBe('/portrait.png');
+ expect(root.querySelector('.card__art')?.getAttribute('href')).toBe('/cards/original?provider=harbor');
+});
+it('falls back to the avatar for old cards and failed backgrounds, then to a placeholder', async () => {
+ mocks.fetch.mockImplementation(async (_t, {provider}) => result([{...fixture, roleId:provider==='harbor'?'original':'copy', backgroundUrl:'/portrait.png'}]));
+ await mount();
+ root.querySelector('.card__art img')!.dispatchEvent(new Event('error')); await settle();
+ expect(root.querySelector('.card__art img')?.getAttribute('src')).toBe('/fixture.png');
+ root.querySelector('.card__art img')!.dispatchEvent(new Event('error')); await settle();
+ expect(root.querySelector('.card__art img')).toBeNull();
+ expect(root.querySelector('.card__void')).not.toBeNull();
+});
+it('still shows an avatar when a legacy card has no background', async () => {
+ await mount();
+ expect(root.querySelector('.card__art img')?.getAttribute('src')).toBe('/fixture.png');
+});

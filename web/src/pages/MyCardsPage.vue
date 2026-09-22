@@ -258,10 +258,9 @@ watch(()=>route.query.fresh, fresh=>{
 }
 
 .wall { display:grid; gap:var(--s-4); grid-template-columns:minmax(0,1fr); align-items:start; }
-@media(min-width:640px){.wall{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(min-width:960px){.wall{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media(min-width:1200px){.wall{grid-template-columns:repeat(4,minmax(0,1fr))}}
-.ghost--card { aspect-ratio: 2 / 3; }
+@media(min-width:760px){.wall{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(min-width:1200px){.wall{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.ghost--card { aspect-ratio: 4 / 5; }
 
 .empty { padding: var(--s-8) var(--s-5); text-align: center; display: grid; gap: var(--s-4); justify-items: center; }
 .empty__title { font-size: 16px; font-weight: 600; }
