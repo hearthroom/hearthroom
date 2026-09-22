@@ -239,6 +239,19 @@ export async function fetchAuthor(handle: string): Promise<Author> {
   return json<Author>(await fetch(`${COMMUNITY_API}/authors/${encodeURIComponent(handle)}${q}`, { headers: { ...from(), ...viewer.headers } }));
 }
 
+// Persist only the opaque operation, never credentials. Reload/network retries
+// resume the same snapshot; beginning an edit explicitly retires that operation.
+const publicationOperations=new Map<string,string>();
+const publicationKey=(provider:ProviderId,roleId:string)=>`hearthroom:publication:${provider}:${roleId}`;
+function publicationOperation(key:string):string {
+ let id=publicationOperations.get(key);
+ try{id ||= localStorage.getItem(key)||undefined}catch{}
+ id ||= crypto.randomUUID();publicationOperations.set(key,id);
+ try{localStorage.setItem(key,id)}catch{}
+ return id;
+}
+function clearPublicationOperation(key:string){publicationOperations.delete(key);try{localStorage.removeItem(key)}catch{}}
+
 /** 登記只送 roleId：內容由服務端自己去上游取，作者塞不進任何欄位。 */
 /** 登記／提交。nsfw 是作者對這張卡的分級宣告，必填（沒宣告伺服器不收）。 */
 /** distribute：其他已登入渠道的 token，登記成功後站台在背景把卡同步過去（登記即分發）。 */
@@ -249,19 +262,24 @@ export async function registerCard(
   distribute: { provider: ProviderId; token: string }[] = [],
   provider: ProviderId = currentProvider(),
 ): Promise<CommunityCard> {
-  return json<CommunityCard>(
+  const key=publicationKey(provider,roleId);
+  const result=await json<CommunityCard>(
     await fetch(`${COMMUNITY_API}/cards`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...from(), "X-Provider": provider, ...authHeaders(token) },
-      body: JSON.stringify({ roleId, nsfw, operationId: crypto.randomUUID(), ...(distribute.length ? { distribute } : {}) }),
+      body: JSON.stringify({ roleId, nsfw, operationId: publicationOperation(key), ...(distribute.length ? { distribute } : {}) }),
     }),
   );
+  clearPublicationOperation(key);
+  return result;
 }
 
 export async function beginCardEdit(roleId:string,token:string,provider:ProviderId):Promise<{resubmit:boolean;nsfw?:boolean}> {
-  return json(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(roleId)}/edit`, {
+  const result=await json<{resubmit:boolean;nsfw?:boolean}>(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(roleId)}/edit`, {
     method:'POST',headers:{...from(),'X-Provider':provider,...authHeaders(token)},
   }));
+  clearPublicationOperation(publicationKey(provider,roleId));
+  return result;
 }
 
 export async function unregisterCard(roleId: string, token: string, provider: ProviderId = currentProvider()): Promise<void> {

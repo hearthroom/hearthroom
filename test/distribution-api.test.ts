@@ -131,3 +131,15 @@ it('uses the same community adult setting through either linked login, independe
   await env.DB.prepare('UPDATE members SET show_nsfw=1,age_verified_at=NULL WHERE id=?').bind(member).run();
   expect((await read('harbor', 'target')).status).toBe(403);
 });
+
+it('attempts version distribution even when mutable draft synchronization fails',async()=>{
+ await connect();
+ const hosted=await import('../src/hosting-distribution');
+ const sync=await import('../src/card-sync');
+ vi.spyOn(sync,'syncCard').mockRejectedValue(new Error('draft changed'));
+ const distribute=vi.spyOn(hosted,'distributeWorkVersions').mockResolvedValue();
+ const configured=env as typeof env & {HOSTING_SERVICE_KEY?:string};
+ const prior=configured.HOSTING_SERVICE_KEY;configured.HOSTING_SERVICE_KEY='test';
+ try {await request('/v1/me/card-sync',input);expect(distribute).toHaveBeenCalledTimes(1)}
+ finally {configured.HOSTING_SERVICE_KEY=prior}
+});

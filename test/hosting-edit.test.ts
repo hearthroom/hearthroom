@@ -57,6 +57,7 @@ it('the database refuses a stale stamp or decision after a pending revision is s
 
 it('HTTP edit requires the source author and preserves the public play choice',async()=>{
  const f=await setup();const a=await f.submit();await f.approve();await f.submit();
+ vi.spyOn(upstream,'fetchRole').mockImplementation(async(_env,id)=>role({roleId:id,authorNumId:10001}));
  await env.DB.prepare("INSERT INTO member_connections VALUES ('harbor','10001',?,0)").bind(f.memberId).run();
  (env as {HOSTING_SERVICE_KEY?:string}).HOSTING_SERVICE_KEY='fixture';
  const identity=vi.spyOn(upstream,'fetchMe').mockResolvedValue({accountNumId:10002});
@@ -82,4 +83,14 @@ it('a delayed sync of A cannot overwrite the public projection after B is approv
  f.draft.names.en='B';await f.submit();await f.approve();
  await delayed.run();
  expect(JSON.parse((await getCard(env.DB,'draft','harbor'))!.names).en).toBe('B');
+});
+
+it('rejects stale legacy review writes after migration supersedes the old submission',async()=>{
+ const {upsertCard}=await import('../src/cards');
+ const {createSubmission}=await import('../src/review');
+ const card=await upsertCard(env.DB,role({roleId:'legacy',authorNumId:10001}),1,{status:'approved'});
+ const sub=await createSubmission(env.DB,{cardId:card.id,provider:'lunatalk',roleId:'legacy',kind:'re',contentHash:'old',now:1,nsfw:false});
+ await env.DB.prepare("UPDATE review_submissions SET status='superseded' WHERE id=?").bind(sub.id).run();
+ await expect(env.DB.prepare("INSERT INTO review_stamps VALUES (?,'stale','approve','',0)").bind(sub.id).run()).rejects.toThrow('submission already decided');
+ await expect(env.DB.prepare("UPDATE review_submissions SET status='approved' WHERE id=?").bind(sub.id).run()).rejects.toThrow('submission already decided');
 });

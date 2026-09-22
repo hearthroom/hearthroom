@@ -7,6 +7,7 @@ import { communityMaintenance } from "./community/service";
 import { communityRoutes } from "./community/routes";
 import { libraryRoutes } from "./library";
 import { hostGateway, submitHosted, hostingDecision, beginHostedEdit } from "./hosting";
+import { distributeHosted, distributeWorkVersions, seedSavedHostingTargets } from "./hosting-distribution";
 import { saveCommunityProfile, cleanAvatars } from "./community-profile";
 import { AVATAR_MAX_BYTES } from '../shared/avatar';
 import { bodyLimit } from "hono/body-limit";
@@ -585,7 +586,15 @@ app.post('/v1/me/card-sync', async (c) => {
  for(const [provider,account] of [[sourceProvider,source.accountNumId],[targetProvider,target.accountNumId]] as const) {
   if(!profile?.identities.some(x=>x.provider===provider&&x.externalId===account))throw new HttpError(403,'sync_account_not_connected');
  }
- const result=await syncCard(c.env,{memberId:member.id,sourceProvider,sourceRoleId:b.sourceRoleId,sourceAccount:source.accountNumId,sourceToken:b.sourceToken,targetProvider,targetAccount:target.accountNumId,targetToken:b.targetToken,publish:b.publish===true,updatePublished:b.updatePublished===true,recreateMissing:b.recreateMissing===true});
+ // Both operations have their own durable status. A changed mutable copy must
+ // not prevent the approved immutable version from reaching the same destination.
+ const [draft,version]=await Promise.allSettled([
+  syncCard(c.env,{memberId:member.id,sourceProvider,sourceRoleId:b.sourceRoleId,sourceAccount:source.accountNumId,sourceToken:b.sourceToken,targetProvider,targetAccount:target.accountNumId,targetToken:b.targetToken,publish:b.publish===true,updatePublished:b.updatePublished===true,recreateMissing:b.recreateMissing===true}),
+  c.env.HOSTING_SERVICE_KEY?distributeWorkVersions(c.env,{memberId:member.id,sourceProvider,sourceRoleId:b.sourceRoleId,sourceAccount:source.accountNumId,sourceToken:b.sourceToken,targetProvider,targetAccount:target.accountNumId,targetToken:b.targetToken}):Promise.resolve(),
+ ]);
+ if(version.status==='rejected')throw version.reason;
+ if(draft.status==='rejected')throw draft.reason;
+ const result=draft.value;
  note(c,{event:'card_sync',detail:result.status});
  return c.json(result,200,{'Cache-Control':'no-store'});
 });
@@ -616,7 +625,11 @@ app.get('/v1/cards/:roleId/platforms',async(c)=>{
  const {provider,roleId}=source;
  if(base?.status==='approved' && base.approved_version_id && base.approved_hosted_role_id) {
   const decision=await hostingDecision(c.env.DB,base.approved_version_id);
-  return c.json({platforms:decision.status==='approved'?[{provider:base.provider,roleId:base.approved_hosted_role_id,playable:hasChat(base.provider as ProviderId)}]:[]},200,{'Cache-Control':'no-store'});
+  const replicas=decision.status==='approved'?await c.env.DB.prepare("SELECT provider,hosted_revision_id FROM hosting_replicas WHERE version_id=? AND state='ready' ORDER BY provider=? DESC,provider").bind(base.approved_version_id,base.provider).all<{provider:ProviderId;hosted_revision_id:string}>():{results:[]};
+  const available=await Promise.all(replicas.results.map(async r=>{
+   try{await upstream.fetchRole(c.env,r.hosted_revision_id,r.provider);return {provider:r.provider,roleId:r.hosted_revision_id,playable:hasChat(r.provider)}}catch{return null}
+  }));
+  return c.json({platforms:available.filter(r=>r!==null)},200,{'Cache-Control':'no-store'});
  }
  const candidates=[{provider,roleId},...(await copiesFor(c.env.DB,provider,roleId)).filter(x=>x.roleId && ['source','synced','pending','published'].includes(x.status)).map(x=>({provider:x.provider as ProviderId,roleId:x.roleId as string}))];
  const platforms=[];
@@ -847,8 +860,8 @@ app.post("/v1/cards", async (c) => {
   const nsfw = body.nsfw;
 
   const provider = providerOf(c);
-  const hosted = provider === "harbor" && !!c.env.HOSTING_SERVICE_KEY;
-  const role = hosted ? await hostGateway.read(c.env,bearer,roleId) : await upstream.fetchRole(c.env, roleId, provider);
+  const hosted = !!c.env.HOSTING_SERVICE_KEY;
+  const role = hosted ? await hostGateway.read(c.env,bearer,roleId,provider) : await upstream.fetchRole(c.env, roleId, provider);
   if (role.authorNumId !== me.accountNumId) throw new HttpError(403, "not the author of this card");
   // 登記的人一定是成員：作者頁與卡片上的作者連結都靠成員的公開 ID
   const memberId = await resolveMember(c.env.DB, provider, me.accountNumId, Date.now());
@@ -883,7 +896,16 @@ app.post("/v1/cards", async (c) => {
     if (!reviewEnabled(c.env)) throw new HttpError(503,"hosting_review_required");
     const operationId=typeof body.operationId==='string'?body.operationId:'';
     if(!/^[0-9a-f-]{36}$/i.test(operationId))throw new HttpError(400,'hosting_operation_required');
-    const receipt=await submitHosted(c.env,{memberId,account:me.accountNumId,role,token:bearer,nsfw,operationId,now});
+    const targets=[];
+    const profile=await memberProfile(c.env.DB,memberId);
+    for(const target of distribute){
+      const identity=await upstream.fetchMe(c.env,target.token,target.provider);
+      if(!profile?.identities.some(x=>x.provider===target.provider&&x.externalId===identity.accountNumId))throw new HttpError(403,'sync_account_not_connected');
+      targets.push({...target,account:identity.accountNumId});
+    }
+    const receipt=await submitHosted(c.env,{provider,memberId,account:me.accountNumId,role,token:bearer,nsfw,operationId,now});
+    await seedSavedHostingTargets(c.env,memberId,receipt.versionId,targets.map(t=>t.provider));
+    if(targets.length)c.executionCtx.waitUntil(Promise.allSettled(targets.map(target=>distributeHosted(c.env,{memberId,versionId:receipt.versionId,sourceToken:bearer,sourceAccount:me.accountNumId,targetProvider:target.provider,targetToken:target.token,targetAccount:target.account}))));
     const row=(await getCard(c.env.DB,roleId,provider))!;
     note(c,{event:"register",detail:"submitted"});
     return c.json({...toCard(row,lang(c)),status:row.status,versionId:receipt.versionId},existing?200:201,{'Cache-Control':'private, no-store'});
@@ -939,10 +961,10 @@ app.post("/v1/cards", async (c) => {
 
 app.post('/v1/cards/:roleId/edit',async(c)=>{
  const me=await requireAuthor(c);
- if(providerOf(c)!=='harbor')throw new HttpError(400,'hosting_provider_unsupported');
+ const provider=providerOf(c);
  if(!c.env.HOSTING_SERVICE_KEY)throw new HttpError(503,'hosting_unavailable');
- const memberId=await resolveMember(c.env.DB,'harbor',me.accountNumId,Date.now());
- const result=await beginHostedEdit(c.env.DB,memberId,c.req.param('roleId'),Date.now());
+ const memberId=await resolveMember(c.env.DB,provider,me.accountNumId,Date.now());
+ const result=await beginHostedEdit(c.env.DB,memberId,c.req.param('roleId'),Date.now(),provider);
  note(c,{event:'register',detail:result.resubmit?'review_superseded':'draft_edit'});
  return c.json(result,200,{'Cache-Control':'private, no-store'});
 });

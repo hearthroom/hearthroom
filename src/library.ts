@@ -102,7 +102,9 @@ libraryRoutes.get('/v1/me/conversations', async c => {
   const rows = await c.env.DB.prepare(`SELECT c.*, r.provider, r.role_id AS conversationRoleId,
     r.conversation_id AS conversationId, r.created_at AS createdAt, r.updated_at AS updatedAt FROM member_conversations r
     LEFT JOIN work_copies cp ON cp.provider=r.provider AND cp.role_id=r.role_id
-    LEFT JOIN works w ON w.id=cp.work_id
+    LEFT JOIN hosting_replicas hr ON hr.provider=r.provider AND hr.hosted_revision_id=r.role_id
+    LEFT JOIN hosting_versions hv ON hv.version_id=hr.version_id
+    LEFT JOIN works w ON w.id=COALESCE(hv.work_id,cp.work_id)
     LEFT JOIN cards c ON c.provider=COALESCE(w.source_provider,r.provider) AND (c.source_role_id=COALESCE(w.source_role_id,r.role_id) OR c.approved_hosted_role_id=r.role_id)
     WHERE r.member_id=? ORDER BY r.updated_at DESC,r.provider,r.role_id LIMIT 25 OFFSET ?`)
     .bind(member.id, (page - 1) * 24).all<CardRow & { conversationRoleId: string; conversationId: string; createdAt: number; updatedAt: number }>();

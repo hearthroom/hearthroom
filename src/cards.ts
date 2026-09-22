@@ -391,7 +391,7 @@ export async function getPublicCard(db: D1Database, id: string, provider: Provid
   return await db
     .prepare(`SELECT ${CARD_COLUMNS} FROM cards c ${AUTHOR_JOIN}
       WHERE c.id = ? OR c.source_role_id = ? OR c.approved_hosted_role_id = ? OR EXISTS (
-        SELECT 1 FROM hosting_versions v WHERE v.card_id=c.id AND v.hosted_revision_id=? AND v.state='approved'
+        SELECT 1 FROM hosting_versions v JOIN hosting_replicas r ON r.version_id=v.version_id WHERE v.card_id=c.id AND r.hosted_revision_id=? AND r.state='ready' AND v.state='approved'
       )
       ORDER BY (c.id = ?) DESC, (c.provider = ?) DESC, c.id LIMIT 1`)
     .bind(id, id, id, id, id, provider)

@@ -229,3 +229,12 @@ it('normalizes Harper wallet balances without treating reserved credits as spend
  await unregisterCard('original','harbor-token','harbor');
  for(const call of request.mock.calls){const headers=new Headers((call as unknown as [string,RequestInit])[1].headers);expect(headers.get('X-Provider')).toBe('harbor');expect(headers.get('Authorization')).toBe('Bearer harbor-token');}
  });
+
+it('reuses the publication operation after a lost response and starts a new one after success',async()=>{
+ const requests:string[]=[];
+ vi.stubGlobal('fetch',vi.fn(async(_url,init)=>{requests.push(JSON.parse(init.body).operationId);if(requests.length===1)throw new Error('network');return new Response('{}',{status:200})}));
+ await expect(registerCard('retry-operation','proof',false,[],'lunatalk')).rejects.toThrow('network');
+ await registerCard('retry-operation','proof',false,[],'lunatalk');
+ await registerCard('retry-operation','proof',false,[],'lunatalk');
+ expect(requests[1]).toBe(requests[0]);expect(requests[2]).not.toBe(requests[1]);
+});

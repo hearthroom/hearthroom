@@ -21,3 +21,9 @@ critical_payloads: 卡片標題、簡介、支援平台、可用的遊玩動作�
 自動化：`test/public-card.test.ts` 使用真實 D1 及 HTTP handler，涵蓋公開詳情／HTML／平台清單、卡號、本站 ID、平台 ID 碰撞、同號不同作者的拒絕、審核／封鎖／成人門。既有 `provider-isolation`、`distribution-api`、`hosting-edit` suites 保護登記、分發及 A/B 核准版本。
 
 目前狀態：API suites 通過；瀏覽器案例因工具用量限制未執行完成。見 [驗證紀錄](../../card-public-detail.md)。
+
+## Sidebar spacing regression
+
+On desktop and at 390 px viewport width, inspect the cover, identity section, platform selector, primary play action, report/share row and favorite control. Every control must stay within the sidebar's left and right padding. Platform selection must have a full row rather than being compressed between report and share actions. Repeat after choosing English through the language menu. Include a long card title to confirm wrapping. Do not start a paid conversation or submit a report.
+
+The original failing layout has a 300 px sidebar, 16 px padding, and a 288 px implicit grid track: the probe must detect its 20 px overflow past the content boundary. The corrected desktop track is 268 px. See [spacing verification](../../card-sidebar-spacing.md).

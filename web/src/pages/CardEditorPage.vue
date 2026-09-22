@@ -16,7 +16,7 @@
  * 上游沒有跨資源的交易，硬回滾只會在失敗之上再疊一次失敗。
  */
 import SavePlatformsDialog from "@/components/SavePlatformsDialog.vue";
-import { saveCopies, type PlatformResult } from "@/lib/authoring-platforms";
+import { savedDistributionTargets, saveCopies, type PlatformResult } from "@/lib/authoring-platforms";
 import { currentProvider, providerName, setProvider, type ProviderId } from "@/lib/provider";
 import { useProviderUpstream, UPSTREAM_API } from "@/lib/config";
 import { restorePersisted, refresh } from "@/lib/oauth";
@@ -41,7 +41,6 @@ import {
   patchWorldbookDocument,
   reorderWorldbookEntries,
   saveAuthorAsset,
-  submitRoleForReview,
   registerCard,
   beginCardEdit,
   unpublishRole,
@@ -931,7 +930,7 @@ async function save() {
     if (!token) throw new Error(t("auth.expired"));
 
     let targetRoleId = roleId.value;
-    const review = targetRoleId && editorProvider.value === 'harbor'
+    const review = targetRoleId
       ? await beginCardEdit(targetRoleId, token, editorProvider.value)
       : {resubmit:false, nsfw:false};
     reviewRetry.value = review.resubmit;
@@ -977,7 +976,7 @@ async function save() {
     await saveRegex(token, targetRoleId);
 
     if (review.resubmit) {
-      await registerCard(targetRoleId, token, review.nsfw === true, [], editorProvider.value);
+      await registerCard(targetRoleId, token, review.nsfw === true, await savedDistributionTargets(targetRoleId,editorProvider.value), editorProvider.value);
       reviewRetry.value = false;
       reviewResubmitted.value = true;
     }
@@ -1058,26 +1057,21 @@ async function remove() {
 
 async function publish() {
   if (!canPublish.value || selectingPlatforms.value || saving.value) return;
-  const rating = editorProvider.value === "harbor" ? await confirmChoice({
+  const rating = await confirmChoice({
     title: t("mine.consent.title"), message: t("workspace.reviewConsent"),
     confirmText: t("mine.consent.confirm"), choiceLabel: t("mine.rating.label"),
     choices: [
       {value: "sfw", label: t("mine.rating.sfw"), hint: t("mine.rating.sfwHint")},
       {value: "nsfw", label: t("mine.rating.nsfw"), hint: t("mine.rating.nsfwHint")},
     ],
-  }) : await confirmDialog({ message: t("editor.publish.confirm"), confirmText: t("editor.publish.submit") });
+  });
   if (!rating) return;
   saving.value = true;
   error.value = "";
   try {
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
-    if (editorProvider.value === "harbor") {
-      await registerCard(roleId.value, token, rating === "nsfw", [], editorProvider.value);
-    } else {
-      // Legacy LunaTalk drafts are not anonymously readable until its own review completes.
-      await submitRoleForReview(roleId.value, t("editor.publish.summary", { name: draft.value.roleName }), token);
-    }
+    await registerCard(roleId.value, token, rating === "nsfw", await savedDistributionTargets(roleId.value,editorProvider.value), editorProvider.value);
     saving.value = false;
     await router.push(lp("/mine?fresh=1"));
   } catch (err) {
@@ -1191,7 +1185,7 @@ async function exportCard(format: "png" | "json") {
     <header class="head">
       <p class="eyebrow">{{ $t("mine.eyebrow") }}</p>
       <h1 class="display">{{ isNew ? $t("editor.title.new") : $t("editor.title.edit") }}</h1>
-      <p class="muted lede">{{ isNew ? $t("editor.lede.new") : $t(editorProvider==='harbor'?"workspace.editHint":"editor.lede.edit") }}</p>
+      <p class="muted lede">{{ isNew ? $t("editor.lede.new") : $t("workspace.editHint") }}</p>
     </header>
 
     <div v-if="loading" class="ghosts" aria-hidden="true">
@@ -1232,7 +1226,7 @@ async function exportCard(format: "png" | "json") {
             <strong>{{ providerName(result.provider) }}</strong> · {{ result.error || $t(result.status === 'synced' ? 'edit.saved' : `linked.status.${result.status}`) }}
           </p>
         </section>
-        <p v-if="editorProvider === 'harbor' && !isNew" class="notice" role="status">{{ $t("workspace.editNotice") }}</p>
+        <p v-if="!isNew" class="notice" role="status">{{ $t("workspace.editNotice") }}</p>
         <p v-else-if="roleVisibility === 'public'" class="notice" role="status">{{ $t("editor.publicNotice") }}</p>
         <p v-else-if="roleVisibility === 'waitReview'" class="notice" role="status">{{ $t("editor.reviewNotice") }}</p>
         <p v-if="reviewResubmitted" class="notice" role="status">{{ $t("workspace.reviewRestarted") }}</p>
@@ -1431,8 +1425,8 @@ async function exportCard(format: "png" | "json") {
           </div>
 
           <div class="panel">
-            <h2>{{ $t(editorProvider === "harbor" ? "editor.publish" : "workspace.legacyReview") }}</h2>
-            <p class="muted">{{ $t(editorProvider === "harbor" ? "editor.publish.hint" : "workspace.legacyReviewHint") }}</p>
+            <h2>{{ $t("editor.publish") }}</h2>
+            <p class="muted">{{ $t("editor.publish.hint") }}</p>
             <p v-if="dirty || isNew" class="subtle">{{ $t("editor.publish.saveFirst") }}</p>
             <button type="button" class="btn btn--primary" :disabled="!canPublish || saving" @click="publish">
               {{ $t("editor.publish.submit") }}
