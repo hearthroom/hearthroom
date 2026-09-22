@@ -128,6 +128,8 @@ localStorage.setItem("hearthroom.oauth.access", JSON.stringify({ accessToken: "t
 
 ## Self-hosting
 
+Managed OAuth custody is optional. Read [authorization custody and operations](docs/account-authorization.md) before enabling cross-device authorization; it changes what credentials the site stores.
+
 The site runs on a single Cloudflare account. The free tier is sufficient for a small community.
 
 1. Create the resources and enter their IDs in `wrangler.toml`: a D1 database (`DB`), two KV namespaces (`CACHE`, `ASSET_ARCHIVE`) and, optionally, an Analytics Engine dataset (`EVENTS`; set `ANALYTICS_ENABLED = "false"` to disable).

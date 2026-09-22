@@ -9,6 +9,8 @@
  * 登入後回哪裡走網址參數（?returnTo=），只收站內路徑（safeReturnTo），擋開放轉址。
  * 已經登入的人來到這頁：直接送去 returnTo。
  */
+import AuthorizationNotice from '@/components/AuthorizationNotice.vue';
+import { connectionMessage } from '@/lib/connection-ui';
 import { onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
@@ -24,6 +26,7 @@ const router = useRouter();
 const session = useSession();
 const { t } = useI18n();
 
+const loginError=ref('');
 const returnTo = () => safeReturnTo(route.query.returnTo);
 
 /** 正在問「要換到另一家嗎」的那一家；null 表示沒有在問。 */
@@ -42,11 +45,12 @@ function start(provider: (typeof PROVIDERS)[number]) {
 
 async function go(id: (typeof PROVIDERS)[number]["id"]) {
   pendingSwitch.value = null;
-  await chooseProvider(id, {
+  loginError.value="";
+  try{await chooseProvider(id, {
     signedIn: !!session.me,
     logout: () => session.logout(),
     login: () => session.login(returnTo()),
-  });
+  });}catch(e){loginError.value=connectionMessage(e);}
 }
 
 onMounted(async () => {
@@ -65,6 +69,8 @@ watch(() => [session.ready, session.me], () => {
       <h1 class="login__title display">{{ $t("login.title") }}</h1>
       <p class="login__lead">{{ $t("login.lead") }}</p>
 
+      <AuthorizationNotice />
+      <p v-if="loginError" role="alert" class="notice notice--error">{{ loginError }}</p>
       <div class="login__providers">
         <button
           v-for="p in providers"

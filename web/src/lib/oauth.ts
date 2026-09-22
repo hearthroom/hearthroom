@@ -1,3 +1,4 @@
+import { managedAuth, isManagedAuth, authRequest, managedToken, rememberManaged, restoreManaged, forgetManaged, managedLogout } from './managed-auth';
 import { safeReturnTo } from './login-return';
 import { readCredential, writeCredential, removeCredential } from './credential-store';
 import { UPSTREAM_API } from "./config";
@@ -12,8 +13,8 @@ import { SITE } from "./site";
  * 這是個瀏覽器應用，屬於 public client：沒有 client secret，也不能有——原始碼是公開的。
  * 安全性靠 PKCE 與 redirect_uri 比對，不靠藏密鑰。
  *
- * client_id 用動態註冊（RFC 7591）取得並存在本機，所以任何人 fork 這個站、換個網域
- * 部署都能直接跑，不必先來跟我們登記。
+ * 託管模式由 Worker 保存 client_id、PKCE 與長期授權；前端只取得短期 access token。
+ * 未啟用託管的自架部署保留以下動態註冊及本機憑證相容流程。
  */
 
 const STORE = {
@@ -82,6 +83,10 @@ async function clientId(provider:ProviderId=currentProvider()): Promise<string> 
 
 export async function beginLogin(returnTo: string, options: {provider?:ProviderId; linkFrom?:ProviderId} = {}): Promise<void> {
   const provider=options.provider ?? currentProvider();
+  if(await managedAuth()){
+    const result=await authRequest<{url:string}>("start",{provider,linkFrom:options.linkFrom,returnTo:safeReturnTo(returnTo)});
+    location.assign(result.url);return;
+  }
   sessionStorage.setItem("hearthroom.oauth.pending",JSON.stringify({provider,linkFrom:options.linkFrom}));
   track("login_start");
   const verifier = randomString();
@@ -153,6 +158,11 @@ async function exchange(body: Record<string, string>, provider:ProviderId=curren
 }
 
 export async function completeLogin(query: URLSearchParams): Promise<{ token: TokenPair; returnTo: string; provider:ProviderId; linkFrom?:ProviderId }> {
+  if(await managedAuth()){
+    if(query.get("error")){await authRequest("cancel",{});throw new Error(t("auth.denied",{error:query.get("error")!}));}
+    forgetManaged();
+    return authRequest("complete",{code:query.get("code"),state:query.get("state")});
+  }
   const pending=JSON.parse(sessionStorage.getItem("hearthroom.oauth.pending") || "{}");
   const provider:ProviderId=pending.provider==='harbor'?'harbor':pending.provider==='lunatalk'?'lunatalk':currentProvider();
   const error = query.get("error");
@@ -191,7 +201,8 @@ export async function completeLogin(query: URLSearchParams): Promise<{ token: To
  */
 const inFlight = new Map<ProviderId, Promise<TokenPair|null>>();
 
-export function refresh(provider:ProviderId=currentProvider()): Promise<TokenPair | null> {
+export async function refresh(provider:ProviderId=currentProvider()): Promise<TokenPair | null> {
+  if(await managedAuth())return managedToken(provider);
   const running=inFlight.get(provider); if(running) return running;
   const task = (async () => {
     const refreshToken = readCredential(STORE.refresh,provider);
@@ -215,11 +226,11 @@ export function refresh(provider:ProviderId=currentProvider()): Promise<TokenPai
 /**
  * 把目前的憑證存起來 / 讀回來。
  *
- * access token 跟 refresh token 一起放 localStorage：兩者的暴露面本來就一樣，
- * 而 refresh token 權限更大（能無限換新的）。只藏 access token 擋不住任何攻擊，
- * 卻讓每次重新整理都得多跑一次換發——而每次換發都是一次輪替，也就是一次出錯的機會。
+ * 託管模式只存記憶體；以下 localStorage 分支僅供未啟用託管的自架部署。
+ * refresh token 的有效期與輪替規則由供應商決定。
  */
 export function persist(pair: TokenPair, provider:ProviderId=currentProvider()): void {
+  if(isManagedAuth()){rememberManaged(pair,provider);return;}
   try {
     if (pair.clientId) writeCredential(STORE.grantClient, pair.clientId, provider);
     writeCredential(STORE.access, JSON.stringify({accessToken:pair.accessToken,expiresAt:pair.expiresAt}),provider);
@@ -230,6 +241,7 @@ export function persist(pair: TokenPair, provider:ProviderId=currentProvider()):
 }
 
 export function restorePersisted(provider:ProviderId=currentProvider()): TokenPair | null {
+  if(isManagedAuth())return restoreManaged(provider);
   try {
     const raw = readCredential(STORE.access,provider);
     if (!raw) return null;
@@ -241,6 +253,7 @@ export function restorePersisted(provider:ProviderId=currentProvider()): TokenPa
 }
 
 export function forgetSession(provider:ProviderId=currentProvider()): void {
+  forgetManaged(provider);
   removeCredential(STORE.grantClient,provider);
   removeCredential(STORE.refresh,provider);
   removeCredential(STORE.access,provider);
@@ -248,6 +261,7 @@ export function forgetSession(provider:ProviderId=currentProvider()): void {
 
 /** 登出時順手告訴伺服器把 refresh token 作廢，不要留一顆到過期為止都還能用的憑證。 */
 export async function revokeSession(provider:ProviderId=currentProvider()): Promise<void> {
+  if(await managedAuth()){await managedLogout();return;}
   const refreshToken = readCredential(STORE.refresh,provider);
   const grantClient = refreshToken ? await grantClientId(provider) : null;
   forgetSession(provider);

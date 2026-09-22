@@ -1,3 +1,7 @@
+import { beforeEach } from 'vitest';
+import { resetManagedAuthForTest } from '../src/lib/managed-auth';
+// Existing suites exercise an unconfigured self-hosted deployment explicitly.
+beforeEach(()=>resetManagedAuthForTest(false));
 // Node 26 起，執行環境自己帶了一個 globalThis.localStorage；沒給 --localstorage-file
 // 時它讀不到也寫不進去。而這個測試環境的 window 也沒有自己的 Storage，於是程式裡
 // 每一處「存一下再讀回來」（選了哪一家供應商、成人閘門、登入憑證）在測試裡都靜默

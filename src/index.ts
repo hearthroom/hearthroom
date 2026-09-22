@@ -1,3 +1,4 @@
+import { accountAuthRoutes, accountAuthMaintenance, managedConnectionCommit, managedConnectionSource } from './account-auth';
 import { snapshot } from './snapshot-cache';
 import { cardLink, linkPreview } from './card-link';
 import { boardKey, readBoardCache, writeBoardCache } from "./board-cache";
@@ -124,6 +125,7 @@ app.use("*", async (c, next) => {
 });
 
 app.route("/", moderationRoutes);
+app.route("/", accountAuthRoutes);
 
 app.onError((err, c) => {
   const ev = c.get("ev") as Pending | undefined;
@@ -639,7 +641,7 @@ app.get('/v1/cards/:roleId/platforms',async(c)=>{
 });
 
 app.post('/v1/me/connections/preview', async (c) => {
-  const member = await requireMember(c);
+  const member = await managedConnectionSource(c) ?? await requireMember(c);
   const body = await c.req.json<{provider?: string; token?: string}>();
   if (!body || typeof body.provider !== 'string' || !body.provider.trim() || typeof body.token !== 'string' || !body.token || body.token.length > 16384) throw new HttpError(400, 'connection_proof_required');
   const provider = requireConfigured(c.env, parseProvider(body.provider));
@@ -659,11 +661,13 @@ app.post('/v1/me/connections/preview', async (c) => {
   }, 200, {'Cache-Control': 'no-store'});
 });
 app.post("/v1/me/connections", async (c) => {
-  const member = await requireMember(c);
+  const member = await managedConnectionSource(c) ?? await requireMember(c);
   const body = await c.req.json<{ provider?: string; token?: string; keepHandle?: string; sourceHandle?: string; targetHandle?: string | null }>();
   if (!body || typeof body.provider !== 'string' || !body.provider.trim() || typeof body.token !== 'string' || !body.token || body.token.length > 16384) throw new HttpError(400, 'connection_proof_required');
   const provider = requireConfigured(c.env, parseProvider(body.provider));
   const target = await upstream.fetchMe(c.env, body.token, provider);
+  const managed = await managedConnectionCommit(c,member.id,provider,target.accountNumId,body.token);
+  if(managed.completed)return c.json(await memberProfile(c.env.DB,member.id),200,{'Cache-Control':'no-store'});
   const targetId = await connectedMemberId(c.env.DB, provider, target.accountNumId);
   const sourceProfile = (await memberProfile(c.env.DB, member.id))!;
   const targetProfile = targetId ? await memberProfile(c.env.DB, targetId) : null;
@@ -675,7 +679,7 @@ app.post("/v1/me/connections", async (c) => {
     const drafts=await upstream.fetchMyRoles(c.env,body.token,1,1,provider);
     if(drafts.items.length || drafts.hasNext)throw new HttpError(409,'connection_target_not_empty');
   }
-  await linkIdentity(c.env.DB, member, provider, target.accountNumId, Date.now());
+  await linkIdentity(c.env.DB, member, provider, target.accountNumId, Date.now(), managed.tail);
   return c.json(await memberProfile(c.env.DB, member.id), 200, { 'Cache-Control': 'no-store' });
 });
 app.delete('/v1/me/connections/:provider', async (c) => {
@@ -1326,6 +1330,7 @@ app.get("*", async (c) => {
 export default {
   fetch: app.fetch,
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(accountAuthMaintenance(env).catch(() => { console.warn('Account authorization maintenance unavailable'); }));
     ctx.waitUntil(communityMaintenance(env).catch(() => { console.warn("Community maintenance unavailable"); }));
     ctx.waitUntil(cleanAvatars(env));
     ctx.waitUntil(

@@ -1527,5 +1527,20 @@
   "download.bannerTitle": "Hearthroom Android App",
   "download.bannerBody": "安装到手机，从主屏幕回到社区。",
   "download.bannerAction": "下载与安装",
-  "download.footer": "下载 App"
+  "download.footer": "下载 App",
+  "authorization.notice": "Hearthroom 会加密保存你同意的供应商授权，让你在其他设备登录后继续使用。",
+  "authorization.details": "授权与数据保存说明",
+  "authorization.storage": "Hearthroom 保存供应商账号的关联关系及加密的访问、续期凭证；加密密钥与数据库分开管理，不会获取你的供应商密码。",
+  "authorization.access": "Hearthroom 后端会在授权范围内更新凭证，浏览器与播放器只在内存中暂存短期访问凭证；具有后端执行权限的管理员仍有能力解密，因此这种保存方式并非没有风险。",
+  "authorization.control": "你可以在这里停止授权，或到供应商的已授权应用页面撤销；停止后会清除正在使用的授权凭证，撤销失败时保留加密数据以便重试，账号关联与社区记录仍会保留。",
+  "authorization.migration": "旧设备首次切换到这个流程时需要重新授权，原本只保存在浏览器的凭证会清除，不会自动上传。",
+  "authorization.disconnect": "停止授权",
+  "authorization.disconnectConfirm": "停止 {provider} 的授权后，所有设备都需要重新授权才能使用这家服务；社区账号与记录会保留。",
+  "authorization.pending": "本站已停止使用这份授权，正在重试通知供应商撤销。",
+  "authorization.stopped": "这份授权已停止。",
+  "authorization.identity": "账号关联会保留；供应商授权可以停止或重新授予，社区发布上限不会因此增加。",
+  "linked.error.auth_provider_unavailable": "目前无法连接授权服务，请稍后重试。",
+  "linked.error.auth_configuration_unavailable": "目前无法连接授权服务，请稍后重试。",
+  "linked.error.site_session_required": "请先登录 Hearthroom，再关联其他服务。",
+  "linked.error.auth_reauthorization_required": "这份授权已失效，请重新授权。"
 }
