@@ -21,7 +21,7 @@ const props = defineProps<{
 const { lp } = useLocalePath();
 const hue = computed(() => hueFrom(props.card.name));
 const initial = computed(() => [...props.card.name][0] ?? "?");
-const href = computed(() => lp(`/cards/${props.card.roleId}`));
+const href = computed(() => lp(`/cards/${props.card.num ?? props.card.id}`));
 /* 圖掛了（上游換圖、刪圖）就當沒圖：退回單字佔位，不留一個破圖 */
 const broken = ref(false);
 watch(() => props.card.avatarUrl, () => { broken.value = false; });

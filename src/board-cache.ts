@@ -1,7 +1,7 @@
 import type { Env } from "./types";
 
 export const BOARD_TTL = 300;
-export const boardCache = { namespace: "board-v2" };
+export const boardCache = { namespace: "board-numeric-v3" };
 interface Entry { body: string; expiresAt: number }
 interface Key { edge: Request; kv: string }
 

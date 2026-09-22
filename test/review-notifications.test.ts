@@ -1,3 +1,4 @@
+import { ensureCardNumber } from '../src/cards';
 import { env, createExecutionContext } from 'cloudflare:test';
 import { beforeEach, expect, it } from 'vitest';
 import app from '../src/index';
@@ -11,8 +12,9 @@ async function bridge(op:string,value:Record<string,unknown>={}, enabled=true) {
  return app.fetch(new Request('https://hearthroom.club'+path,{method:'POST',body,headers:{'X-Community-Time':time,'X-Community-Nonce':nonce,'X-Community-Signature':await sign(settings().COMMUNITY_BRIDGE_KEY!,'POST',path,time,nonce,body)}}),{...settings(),COMMUNITY_ENABLED:enabled?'true':'false'},createExecutionContext());
 }
 async function submission(id='s1',now=Date.now(),nsfw=0){
- await env.DB.prepare("INSERT INTO cards(id,source_role_id,author_num_id,author_name,names,registered_at,last_synced_at,status) VALUES(?,?,999,'PRIVATE AUTHOR',?, ?,?,'pending')").bind(id,id,JSON.stringify({zh:'雨夜書店',en:'Rainy Bookshop'}),now,now).run();
- await env.DB.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,submitted_at,nsfw) VALUES(?,?,'harbor',?,'first','pending',?,?)").bind(id,id,id,now,nsfw).run();
+ const num=await ensureCardNumber(env.DB,'harbor',id);
+ await env.DB.prepare("INSERT INTO cards(id,source_role_id,author_num_id,author_name,names,registered_at,last_synced_at,status) VALUES(?,?,999,'PRIVATE AUTHOR',?, ?,?,'pending')").bind(num,id,JSON.stringify({zh:'雨夜書店',en:'Rainy Bookshop'}),now,now).run();
+ await env.DB.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,submitted_at,nsfw) VALUES(?,?,'harbor',?,'first','pending',?,?)").bind(id,num,id,now,nsfw).run();
 }
 beforeEach(resetDb);
 it('returns durable per-submission work and a blind projection, not just a global signal',async()=>{
@@ -101,7 +103,7 @@ it('queued reminders cannot be delivered after a stamp; the website shows them a
 });
 it('more than 200 submissions are drained in bounded batches without losing a submission',async()=>{
  const now=Date.now();const writes=[];
- for(let i=0;i<205;i++)writes.push(env.DB.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,submitted_at) VALUES(?,?,'harbor',?,'first','pending',?)").bind('bulk-'+i,'missing','bulk-'+i,now));
+ for(let i=0;i<205;i++)writes.push(env.DB.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,submitted_at) VALUES(?,?,'harbor',?,'first','pending',?)").bind('bulk-'+i,999999,'bulk-'+i,now));
  await env.DB.batch(writes);
  const seen=new Set<string>();
  for(let round=0;round<11;round++){

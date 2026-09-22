@@ -41,7 +41,7 @@ export interface CardRow {
   community_avatar?: string | null;
   /** 成人內容（0006 起）：作者提交時宣告、審核人對照過的本站分級。預設不展示。 */
   nsfw: number;
-  /** 本站卡號（0014 起；0015 起固定 6 位數從 100001 起跳）：登記時發、撤銷再登記不換號。從 card_numbers 接上來的，列還沒補到號時是 null。 */
+  /** 永久卡號，從 100001 起跳。私有卡也會分配，發布或撤銷不換號；0036 起同時是 cards 主鍵。 */
   num?: number | null;
 }
 
@@ -53,7 +53,7 @@ const AUTHOR_JOIN = `LEFT JOIN member_identities ai ON ai.provider = c.provider 
   LEFT JOIN member_connections ac ON ac.provider=c.provider AND ac.external_id=CAST(c.author_num_id AS TEXT)
   LEFT JOIN members am ON am.id = COALESCE(ac.owner_member_id,ai.member_id)
   LEFT JOIN card_numbers cn ON cn.provider = c.provider AND cn.source_role_id = c.source_role_id`;
-const CARD_COLUMNS = "c.*, am.handle AS author_handle, am.display_name AS community_name, CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url END AS community_avatar, cn.num AS num, (SELECT COUNT(*) FROM member_favorites mf WHERE mf.card_id=c.id) AS favorite_count";
+const CARD_COLUMNS = "c.*, CAST(c.id AS TEXT) AS id, am.handle AS author_handle, am.display_name AS community_name, CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url END AS community_avatar, cn.num AS num, (SELECT COUNT(*) FROM member_favorites mf WHERE mf.card_id=c.id) AS favorite_count";
 
 /** 卡號長什麼樣：純數字。網址與搜尋框裡看到這種形狀就當卡號查，其餘當上游的卡片 ID。 */
 export const CARD_NUMBER = /^[1-9]\d{0,11}$/;
@@ -71,11 +71,11 @@ export function toCard(row: CardRow, lang: string) {
   const names = JSON.parse(row.names) as Localized;
   const summaries = JSON.parse(row.summaries) as Localized;
   return {
-    id: row.id,
+    id: String(row.id),
     roleId: row.approved_hosted_role_id ?? row.source_role_id,
     sourceRoleId: row.source_role_id,
     /** 本站卡號：短、能唸出來、能在不准貼連結的地方報。撤銷再登記不換號（card_numbers）。 */
-    num: row.num ?? undefined,
+    num: row.num ?? Number(row.id),
     zone: row.zone,
     /** 這張卡支援哪家供應商（拿那家的帳號、用那家的 AI 服務在本站玩）。不是來源、不是由誰提供——卡是作者的。 */
     provider: row.provider,
@@ -103,6 +103,17 @@ export function toCard(row: CardRow, lang: string) {
     registeredAt: row.registered_at,
     syncedAt: row.last_synced_at,
   };
+}
+
+/** Allocate identity independently of publication. Only call after verifying the
+ * provider returned the role or its authenticated owner inventory. */
+export async function ensureCardNumber(db: D1Database, provider: ProviderId, roleId: string): Promise<number> {
+  const existing = await db.prepare("SELECT num FROM card_numbers WHERE provider=? AND source_role_id=?").bind(provider, roleId).first<{num:number}>();
+  if (existing) return existing.num;
+  await db.prepare("INSERT OR IGNORE INTO card_numbers(provider,source_role_id) VALUES (?,?)").bind(provider,roleId).run();
+  const row = await db.prepare("SELECT num FROM card_numbers WHERE provider=? AND source_role_id=?").bind(provider,roleId).first<{num:number}>();
+  if (!row) throw new HttpError(503,"card_identity_unavailable");
+  return row.num;
 }
 
 /** trigram 至少要 3 個字元才有 token 可比；更短的查詢只能掃 LIKE。 */
@@ -283,7 +294,7 @@ export async function listCards(db: D1Database, opts: ListOptions) {
 export async function upsertCard(db: D1Database, role: UpstreamRole, now: number, opts: { status?: string; provider?: ProviderId; nsfw?: boolean; recordRegistration?: boolean; preserveExisting?: boolean; additionalWrites?: (id:string)=>D1PreparedStatement[] } = {}) {
   const provider: ProviderId = opts.provider ?? "lunatalk";
   const existing = await db
-    .prepare("SELECT id, talk_num FROM cards WHERE provider = ? AND source_role_id = ?")
+    .prepare("SELECT CAST(id AS TEXT) AS id, talk_num FROM cards WHERE provider = ? AND source_role_id = ?")
     .bind(provider, role.roleId)
     .first<{ id: string; talk_num: number }>();
 
@@ -321,9 +332,7 @@ export async function upsertCard(db: D1Database, role: UpstreamRole, now: number
     return { id: existing.id, created: false };
   }
 
-  const id = crypto.randomUUID();
-  // 卡號：第一次登記發號，之前登記過又撤掉的卡拿回原來的號（INSERT OR IGNORE 撞到唯一鍵就不動）。
-  await db.prepare("INSERT OR IGNORE INTO card_numbers (provider, source_role_id) VALUES (?, ?)").bind(provider, role.roleId).run();
+  const id = String(await ensureCardNumber(db, provider, role.roleId));
   const insert = db
     .prepare(
       `INSERT INTO cards (id, source_role_id, zone, author_num_id, author_name, author_avatar, names, summaries,
@@ -369,7 +378,7 @@ export async function setCardFeatured(db: D1Database, cardId: string, featuredAt
 export async function getCard(db: D1Database, id: string, provider: ProviderId = "lunatalk") {
   if (CARD_NUMBER.test(id)) {
     return await db
-      .prepare(`SELECT ${CARD_COLUMNS} FROM cards c ${AUTHOR_JOIN} WHERE cn.num = ?`)
+      .prepare(`SELECT ${CARD_COLUMNS} FROM cards c ${AUTHOR_JOIN} WHERE c.id = ?`)
       .bind(Number(id))
       .first<CardRow>();
   }
@@ -401,11 +410,12 @@ export async function getPublicCard(db: D1Database, id: string, provider: Provid
 /**
  * 尚未登記或過審的卡，從來源平台允許讀取的公開資料組成詳情。
  *
- * 沒有卡號、沒有登記時間，`status: "unlisted"` 讓前端知道這是預覽而不是在榜的卡。
+ * 卡號在第一次使用時分配，沒有登記時間，`status: "unlisted"` 讓前端知道這是預覽而不是在榜的卡。
  */
-export function previewCard(role: UpstreamRole, lang: string, provider: ProviderId) {
+export function previewCard(role: UpstreamRole, lang: string, provider: ProviderId, num: number) {
   return {
-    id: role.roleId,
+    id: String(num),
+    num,
     roleId: role.roleId,
     sourceRoleId: role.roleId,
     zone: role.zone,

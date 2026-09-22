@@ -1,5 +1,7 @@
 import { SELF, createScheduledController, createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { ensureCardNumber } from "../src/cards";
+const fixtureLabels = new Map<string,string>();
 import worker from "../src/index";
 import { buildSearchText } from "../src/upstream";
 import { HttpError } from "../src/types";
@@ -38,6 +40,8 @@ async function seed(f: {
     talkNum: f.talkNum,
     followNum: f.followNum,
   });
+  const num = await ensureCardNumber(env.DB,"lunatalk",r.roleId);
+  fixtureLabels.set(String(num), f.id);
   await env.DB.prepare(
     `INSERT INTO cards (id, source_role_id, zone, author_num_id, author_name, author_avatar, names, summaries,
        avatar_url, background_url, slug, tags, talk_num, follow_num, talk_num_prev, search_text,
@@ -45,23 +49,24 @@ async function seed(f: {
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
   )
     .bind(
-      f.id, r.roleId, r.zone, r.authorNumId, r.authorName, r.authorAvatar,
+      num, r.roleId, r.zone, r.authorNumId, r.authorName, r.authorAvatar,
       JSON.stringify(r.names), JSON.stringify(r.summaries), r.avatarUrl, r.backgroundUrl, r.slug,
       JSON.stringify(r.tags), r.talkNum, r.followNum, f.talkPrev ?? r.talkNum,
       buildSearchText(r), f.registeredAt ?? Date.now(), 0,
     )
     .run();
-  await env.DB.prepare("UPDATE cards SET approved_hosted_role_id=? WHERE id=?").bind(r.roleId,f.id).run();
+  await env.DB.prepare("UPDATE cards SET approved_hosted_role_id=? WHERE id=?").bind(r.roleId,num).run();
 }
 
 const list = async (query = "") => {
   const res = await SELF.fetch(`https://c.test/v1/cards${query}`);
   return { status: res.status, body: (await res.json()) as { items: any[]; total: number | null; hasNext: boolean } };
 };
-const ids = (b: { items: any[] }) => b.items.map((i) => i.id);
+const ids = (b: { items: any[] }) => b.items.map((i) => fixtureLabels.get(i.id));
 
 beforeEach(async () => {
   await resetDb();
+  fixtureLabels.clear();
   rolesOnMainSite();
 });
 afterEach(restoreUpstream);
@@ -190,7 +195,7 @@ describe("排名", () => {
 
   it("回應帶出 trending（同步窗口增量）供前端顯示，跟排序鍵無關", async () => {
     const { body } = await list("?sort=month");
-    expect(body.items.map((i: any) => [i.id, i.trending])).toEqual([["rising", 500], ["fresh", 2]]);
+    expect(body.items.map((i: any) => [fixtureLabels.get(i.id), i.trending])).toEqual([["rising", 500], ["fresh", 2]]);
   });
 
   it("分頁", async () => {
@@ -272,15 +277,15 @@ describe("榜單邊緣快取", () => {
     const url = "https://c.test/v1/cards?zone=all";
     await SELF.fetch(url, { headers: { "Accept-Language": "zh-TW" } });
     const english = await SELF.fetch(url, { headers: { "Accept-Language": "en-US" } });
-    expect(((await english.json()) as any).items.find((item: any) => item.id === "b").name).toBe("English");
+    expect(((await english.json()) as any).items.find((item: any) => fixtureLabels.get(item.id) === "b").name).toBe("English");
   });
   it("已快取的一般卡改為成人內容、退回重審或刪除時立即失效", async () => {
     for (const mutation of [
-      "UPDATE cards SET nsfw=1 WHERE id='a'",
-      "UPDATE cards SET status='needs_review' WHERE id='a'",
-      "DELETE FROM cards WHERE id='a'",
+      "UPDATE cards SET nsfw=1 WHERE source_role_id='role-a'",
+      "UPDATE cards SET status='needs_review' WHERE source_role_id='role-a'",
+      "DELETE FROM cards WHERE source_role_id='role-a'",
     ]) {
-      await env.DB.prepare("UPDATE cards SET nsfw=0,status='approved' WHERE id='a'").run();
+      await env.DB.prepare("UPDATE cards SET nsfw=0,status='approved' WHERE source_role_id='role-a'").run();
       const before = await hdr();
       expect(before.body.items).toHaveLength(1);
       expect((await hdr()).cache).toBe("hit");
@@ -369,7 +374,7 @@ describe("查詢成本", () => {
 describe("hot_score 衍生欄位", () => {
   it("由資料庫維護，寫入時不必自己算", async () => {
     await seed({ id: "a", talkNum: 900, talkPrev: 400 });
-    const row = (await env.DB.prepare("SELECT hot_score FROM cards WHERE id='a'").first()) as any;
+    const row = (await env.DB.prepare("SELECT hot_score FROM cards WHERE source_role_id='role-a'").first()) as any;
     expect(row.hot_score).toBe(500);
   });
 
@@ -381,7 +386,7 @@ describe("hot_score 衍生欄位", () => {
     await worker.scheduled(createScheduledController(), env, ctx);
     await waitOnExecutionContext(ctx);
 
-    const row = (await env.DB.prepare("SELECT hot_score, talk_num, talk_num_prev FROM cards WHERE id='a'").first()) as any;
+    const row = (await env.DB.prepare("SELECT hot_score, talk_num, talk_num_prev FROM cards WHERE source_role_id='role-a'").first()) as any;
     expect(row.talk_num).toBe(350);
     expect(row.talk_num_prev).toBe(100);
     expect(row.hot_score).toBe(250);
@@ -391,8 +396,8 @@ describe("hot_score 衍生欄位", () => {
     await seed({ id: "cold", talkNum: 50_000, talkPrev: 50_000 });
     await seed({ id: "rising", talkNum: 900, talkPrev: 400 });
     const items = (await list("?sort=hot")).body.items;
-    expect(items.map((i: any) => i.id)).toEqual(["cold", "rising"]);
-    expect(items.find((i: any) => i.id === "rising").trending).toBe(500);
+    expect(items.map((i: any) => fixtureLabels.get(i.id))).toEqual(["cold", "rising"]);
+    expect(items.find((i: any) => fixtureLabels.get(i.id) === "rising").trending).toBe(500);
   });
 });
 

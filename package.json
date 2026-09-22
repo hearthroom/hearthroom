@@ -10,7 +10,7 @@
     "dev:web": "npm run dev -w web",
     "types": "wrangler types",
     "typecheck": "wrangler types && tsc --noEmit && npm run typecheck -w web",
-    "test": "vitest run && npm run test -w web",
+    "test": "node --test scripts/card-identity-migration.test.mjs && vitest run && npm run test -w web",
     "test:api": "vitest run",
     "build": "npm run build:stage && npm run build -w web",
     "migrate:local": "wrangler d1 migrations apply DB --local",

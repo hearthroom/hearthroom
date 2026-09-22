@@ -18,6 +18,8 @@ import { confirmState, settleConfirm } from "../src/lib/confirm";
 const platforms = vi.hoisted(()=>({profile:undefined as any, saveCopies:vi.fn(async()=>[] as any[])}));
 vi.mock("../src/lib/authoring-platforms",()=>({saveCopies:platforms.saveCopies,savedDistributionTargets:async()=>[]}));
 const api = vi.hoisted(() => ({
+  registerCardIdentity: vi.fn(async () => ({id:"100021",num:100021,provider:"lunatalk",sourceRoleId:"r1"})),
+  fetchCard: vi.fn(async () => ({id:"100021",num:100021,provider:"lunatalk",sourceRoleId:"r1",roleId:"frozen-r1"})),
   createRole: vi.fn(async () => ({ roleId: "r1" })),
   patchRoleDocument: vi.fn(async () => ({})),
   patchRoleWelcome: vi.fn(async () => ({})),
@@ -237,7 +239,7 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     expect(asset.mountLayer).toBe("over");
     expect(asset.rules.map((r) => r.name)).toEqual(["status"]);
     // 建立完成 → 網址換成編輯頁，本機草稿清掉
-    expect(window.location.pathname).toBe("/cards/r1/edit");
+    expect(window.location.pathname).toBe("/cards/100021/edit");
     expect(localStorage.getItem("hearthroom.draft.create")).toBeNull();
 
     // 第二次儲存：只改簡介，就只送簡介；開場白與世界書一個請求都不該再發
@@ -677,7 +679,7 @@ describe("建卡成功、內容沒存進去", () => {
     await submit();
     expect(api.createRole).toHaveBeenCalledTimes(1);
     expect(api.patchRoleDocument).toHaveBeenLastCalledWith("r1", expect.objectContaining({ roleName: "半路失敗的卡" }), "tok");
-    expect(window.location.pathname).toBe("/cards/r1/edit");
+    expect(window.location.pathname).toBe("/cards/100021/edit");
     expect(localStorage.getItem("hearthroom.draft.create")).toBeNull();
   });
 });
@@ -770,4 +772,11 @@ it('saves Harbor external image URLs directly without creating media assets', as
   expect(fetchSpy.mock.calls.some(([url])=>String(url).endsWith('/media/references'))).toBe(false);
   expect(root.querySelector(`img[src="${url}"]`)).not.toBeNull();
  } finally {fetchSpy.mockRestore();}
+});
+
+it('opens a numeric editor URL using the author source, never the published revision', async () => {
+ await mount('/cards/100021/edit');
+ expect(api.fetchCard).toHaveBeenCalledWith('100021', expect.any(String));
+ expect(api.fetchRoleDetail).toHaveBeenCalledWith('r1','tok');
+ expect(api.fetchRoleDetail).not.toHaveBeenCalledWith('frozen-r1','tok');
 });

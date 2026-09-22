@@ -458,7 +458,14 @@ export async function fetchSiteMe(token: string): Promise<SiteMe> {
   return json<SiteMe>(await fetch(`${COMMUNITY_API}/me`, { headers: { ...from(), ...authHeaders(token) } }));
 }
 
+export async function registerCardIdentity(roleId: string, token: string, provider: ProviderId = currentProvider()): Promise<{id:string;num:number;provider:ProviderId;sourceRoleId:string}> {
+  return json(await fetch(`${COMMUNITY_API}/me/card-identities`, {
+    method:'POST', headers:{...from(),'X-Provider':provider,...authHeaders(token),'Content-Type':'application/json'}, body:JSON.stringify({roleId}),
+  }));
+}
+
 export interface MyCard {
+  num?: number;
   provider?: import("./provider").ProviderId;
   workId?: string;
   detailId?: string;

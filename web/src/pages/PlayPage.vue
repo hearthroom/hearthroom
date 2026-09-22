@@ -40,16 +40,18 @@ watch(roleId, () => { document.title = pageTitle(t("play.title")); }, { immediat
 // 裝下去的就是它（lib/card-manifest.ts）。在榜的卡才有資料；用 ID 直接玩的私有卡讀不到，就沒有。
 // 主站的對話頁不換：卡片只該有一個 App 身分，就是卡片 App 網域上那個。
 const playApp = isPlayHost();
-const cardPageUrl = computed(() => `https://${communityHost()}/${locale.value === "zh-Hant" ? "" : `${locale.value}/`}cards/${encodeURIComponent(roleId.value)}`);
+const cardNumber = shallowRef<string>("");
+const cardPageUrl = computed(() => `https://${communityHost()}/${locale.value === "zh-Hant" ? "" : `${locale.value}/`}${cardNumber.value ? `cards/${cardNumber.value}` : ""}`);
 let headSeq = 0;
+watch([roleId, locale], async ([id, loc]) => {
+  const seq = ++headSeq;
+  let card = null;
+  try { card = id ? await fetchCard(id, contentLang(String(loc)), {quiet:true}) : null; } catch { card = null; }
+  if (seq !== headSeq) return;
+  cardNumber.value = card?.num ? String(card.num) : '';
+  if (playApp) applyCardHead(card, String(loc));
+}, {immediate:true});
 if (playApp) {
-  // 從主畫面圖示開進來的（standalone）舞台不畫返回鍵：lib/stage-host.ts 的 nav.canBack
-  watch([roleId, locale], async ([id, loc]) => {
-    const seq = ++headSeq;
-    let card = null;
-    try { card = id ? await fetchCard(id, contentLang(String(loc)), { quiet: true }) : null; } catch { card = null; }
-    if (seq === headSeq) applyCardHead(card, String(loc));
-  }, { immediate: true });
   onBeforeUnmount(() => applyCardHead(null, String(locale.value)));
   // 卡片頁按了「加到主畫面」帶 ?install=1 過來：把提示卡拿出來
   if (route.query.install === "1") requestInstallToast();
@@ -114,7 +116,7 @@ watch(locale, () => { void remergeStageMessages(); });
       <p v-if="error" class="play__error" role="alert">{{ error }}</p>
       <p v-else class="subtle">{{ $t("play.loading") }}</p>
       <a v-if="error && playApp" class="btn" :href="cardPageUrl">{{ $t("play.backToCard") }}</a>
-      <RouterLink v-else-if="error" class="btn" :to="lp(`/cards/${roleId}`)">{{ $t("play.backToCard") }}</RouterLink>
+      <RouterLink v-else-if="error" class="btn" :to="lp(cardNumber ? `/cards/${cardNumber}` : '/')">{{ $t("play.backToCard") }}</RouterLink>
     </div>
     <div class="play__toasts" aria-live="polite">
       <div v-for="toast in stageToasts.list" :key="toast.id" class="play__toast" :class="`play__toast--${toast.kind}`">{{ toast.text }}</div>

@@ -133,7 +133,7 @@ it('offers the owner a provider-scoped editor for the draft behind a neutral det
   session.me={accountNumId:7,nickName:'Fixture author',avatar:''};
   session.profile={identities:[{provider:'lunatalk',externalId:7}]} as any;
   await flush();
-  expect(root.querySelector('a[href="/cards/editable-source/edit?provider=lunatalk"]')).not.toBeNull();
+  expect(root.querySelector('a[href="/cards/100021/edit?provider=lunatalk"]')).not.toBeNull();
   expect([...root.querySelectorAll('button')].some(e=>e.textContent?.trim()===i18n.global.t('mine.action.submit'))).toBe(true);
   session.profile={identities:[{provider:'harbor',externalId:7}]} as any;
   session.me=null;

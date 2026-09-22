@@ -112,7 +112,7 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
     kind: r.kind,
     submittedAt: r.submitted_at,
     card: {
-      id: r.card_id,
+      id: String(r.card_id),
       roleId: r.source_role_id,
       name: pickLocale(JSON.parse(r.names) as Localized, lang),
       summary: pickLocale(JSON.parse(r.summaries) as Localized, lang),

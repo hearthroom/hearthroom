@@ -45,3 +45,10 @@ it('still shows an avatar when a legacy card has no background', async () => {
  await mount();
  expect(root.querySelector('.card__art img')?.getAttribute('src')).toBe('/fixture.png');
 });
+
+it('links a private work and its editor by its numeric identity', async () => {
+ mocks.fetch.mockImplementation(async(_t,{provider})=>result([{...fixture,roleId:provider==='harbor'?'original':'copy',detailId:'100021',num:100021}]));
+ await mount();
+ expect(root.querySelector('.card__art')?.getAttribute('href')).toBe('/cards/100021');
+ expect(root.querySelector('a[href*="/edit"]')?.getAttribute('href')).toBe('/cards/100021/edit?provider=harbor');
+});

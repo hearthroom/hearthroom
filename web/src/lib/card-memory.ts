@@ -17,11 +17,12 @@ const seen = new Map<string, CommunityCard>();
 /** 記憶體上限：夠蓋住連續翻幾頁榜單，也不會在長時間瀏覽後把一整站的卡都留著。 */
 const LIMIT = 300;
 
-/** 卡號與卡片 ID 都要認得：網址兩種都能寫（/cards/100021 與 /cards/<uuid>）。 */
+/** 數字卡號是主要索引；供應商角色 ID 僅供既有遊玩入口回查。 */
 export function rememberCards(cards: readonly CommunityCard[]): void {
   for (const card of cards) {
     if (!card?.roleId) continue;
     seen.set(card.roleId, card);
+    seen.set(card.id, card);
     if (card.num) seen.set(String(card.num), card);
   }
   // 超過上限就從最舊的開始丟（Map 的順序就是寫入順序）

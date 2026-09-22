@@ -28,6 +28,8 @@ import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from "vue-router"
 import { useI18n } from "vue-i18n";
 import {
   createRole,
+  fetchCard,
+  registerCardIdentity,
   createWorldbook,
   deleteRole,
   fetchAuthorAsset,
@@ -122,6 +124,7 @@ async function useSavePlatform(provider:ProviderId) {
  catch(e) {setProvider(before);useProviderUpstream();throw e;}
 }
 const roleId = ref<string>((route.params.roleId as string) ?? "");
+const cardNumber = ref<number>();
 const isNew = computed(() => !roleId.value);
 /**
  * 網址還停在 /create。跟 isNew 不同：建卡成功、內容沒存進去時卡已經有編號（isNew 變 false），
@@ -507,6 +510,12 @@ onMounted(async () => {
   }
   try {
     const token = await session.accessToken();
+    if (/^[1-9]\d*$/.test(roleId.value)) {
+      const card = await fetchCard(roleId.value, locale.value);
+      if (card.provider !== editorProvider.value) throw new Error(t('state.loadFailed'));
+      cardNumber.value = card.num;
+      roleId.value = card.sourceRoleId ?? card.roleId;
+    }
     const raw = await fetchRoleDetail(roleId.value, token ?? undefined);
     roleVisibility.value = String((raw as { roleVisibility?: unknown }).roleVisibility ?? "");
     draft.value = draftFromRoleDetail(raw, locale.value);
@@ -981,6 +990,7 @@ async function save() {
       reviewResubmitted.value = true;
     }
 
+    cardNumber.value = (await registerCardIdentity(targetRoleId, token, editorProvider.value)).num;
     original.value = sent;
     saved.value = true;
     restoredDraft.value = false;
@@ -1000,8 +1010,8 @@ async function save() {
     //
     // 判斷用「網址還停在 /create」而不是 wasNew：上一次儲存若在建卡之後、寫世界書時失敗，roleId 已經有了，
     // 重試時 wasNew 是 false，網址卻還是 /create，不換的話重新整理照樣回到空表單。
-    if (wasNew || route.path.endsWith("/create")) {
-      window.history.replaceState(window.history.state, "", platformPath(lp(`/cards/${targetRoleId}/edit`),editorProvider.value));
+    if (cardNumber.value) {
+      window.history.replaceState(window.history.state, "", platformPath(lp(`/cards/${cardNumber.value}/edit`),editorProvider.value));
     }
   } catch (err) {
     track(wasNew ? "card_create" : "card_edit", { ok: false });

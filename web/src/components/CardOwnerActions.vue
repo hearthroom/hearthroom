@@ -49,7 +49,7 @@ async function submit() {
 </script>
 <template>
   <div v-if="owner" class="card-owner-actions">
-    <RouterLink class="btn" :to="platformPath(lp(`/cards/${sourceId}/edit`), provider)">{{ t('mine.action.edit') }}</RouterLink>
+    <RouterLink class="btn" :to="platformPath(lp(`/cards/${card.num ?? card.id}/edit`), provider)">{{ t('mine.action.edit') }}</RouterLink>
     <button v-if="card.status && !['approved','pending'].includes(card.status)" class="btn" :disabled="busy" @click="submit">{{ t('mine.action.submit') }}</button>
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
   </div>

@@ -32,7 +32,7 @@ export interface CommunityCard {
   trending: number;
   registeredAt: number;
   syncedAt: number;
-  /** 本站卡號：登記過的卡才有，撤銷再登記不換號。作者看自己還沒登記的卡時沒有。 */
+  /** 本站永久數字卡號，私有卡與公開卡共用同一套編號。 */
   num?: number;
   /**
    * 連結可讀、尚未上榜的卡也會帶回：這張卡在本站的狀態（unlisted＝還沒提交過）。
