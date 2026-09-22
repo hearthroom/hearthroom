@@ -1,8 +1,9 @@
 import { memberProfile } from './members';
 import { HttpError, type Env } from './types';
+import { preservesOriginalAnimation } from './avatar-animation';
 
 const MAX_IMAGE = 2 * 1024 * 1024;
-const RASTER_TYPES = new Set(['image/jpeg','image/png','image/webp']);
+const RASTER_TYPES = new Set(['image/jpeg','image/png','image/webp','image/gif','image/apng']);
 
 /** Durable cleanup includes failed uploads; a live profile object is never collected. */
 export async function cleanAvatars(env:Env, now=Date.now()) {
@@ -36,16 +37,25 @@ export async function saveCommunityProfile(env:Env, memberId:string, request:Req
   if(!file.size||file.size>MAX_IMAGE||!RASTER_TYPES.has(file.type))throw new HttpError(400,'avatar_invalid');
   if(!env.AVATARS||!env.IMAGES)throw new HttpError(503,'avatar_unavailable');
   let output:ArrayBuffer;
+  let contentType='image/webp', extension='webp';
   try {
    const info=await env.IMAGES.info(file.stream());
    if(!RASTER_TYPES.has(info.format)||!('width' in info)||info.width*info.height>40_000_000)throw new Error('invalid image');
-   const transformed=await env.IMAGES.input(file.stream()).transform({width:512,height:512,fit:'cover'}).output({format:'image/webp',quality:80,anim:false});
-   output=await transformed.response().arrayBuffer();
+   const bytes=await file.arrayBuffer();
+   if(preservesOriginalAnimation(bytes,info.format)) {
+    // APNG is not guaranteed to survive the image transformation service.
+    // Preserve animated rasters byte-for-byte; <img> supplies the visual crop.
+    output=bytes;contentType=info.format==='image/apng'?'image/png':info.format;
+    extension=contentType.slice('image/'.length);
+   } else {
+    const transformed=await env.IMAGES.input(file.stream()).transform({width:512,height:512,fit:'cover'}).output({format:'image/webp',quality:80,anim:true});
+    output=await transformed.response().arrayBuffer();
+   }
   }catch {throw new HttpError(400,'avatar_invalid');}
-  key=`${prior.handle}/${crypto.randomUUID()}.webp`;url=`/v1/avatars/${key}`;
+  key=`${prior.handle}/${crypto.randomUUID()}.${extension}`;url=`/v1/avatars/${key}`;
   // Register before R2 writes so interrupted requests leave a collectable object.
   await env.DB.prepare('INSERT INTO avatar_cleanup(key,delete_after) VALUES (?,?)').bind(key,Date.now()+3600000).run();
-  try {await env.AVATARS.put(key,output,{httpMetadata:{contentType:'image/webp'}});}
+  try {await env.AVATARS.put(key,output,{httpMetadata:{contentType}});}
   catch {throw new HttpError(503,'avatar_unavailable');}
  }
  const updated=await env.DB.prepare(`UPDATE members SET display_name=?,bio=?,avatar_url=?,avatar_key=?,profile_edited_at=? WHERE id=? AND avatar_key=?`).bind(name.trim(),bio.trim(),url,key,Date.now(),memberId,prior.avatar_key).run();

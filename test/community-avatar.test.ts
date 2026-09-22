@@ -1,3 +1,4 @@
+import {gif,png,webp} from './fixtures/animated-avatars';
 import { env, createExecutionContext } from 'cloudflare:test';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import worker from '../src/index';
@@ -5,7 +6,7 @@ import type { Env } from '../src/types';
 import { resetDb, restoreUpstream, whoAmI, bearer } from './helpers';
 const objects=new Map<string,ArrayBuffer>();
 const bucket={put:vi.fn(async(k:string,v:ArrayBuffer)=>{objects.set(k,v)}),delete:vi.fn(async(k:string)=>{objects.delete(k)}),get:vi.fn(async(k:string)=>objects.has(k)?{body:objects.get(k)}:null)};
-const images={info:vi.fn(async()=>({format:'image/png',width:10,height:10,fileSize:8})),input:vi.fn(()=>({transform:()=>({output:async()=>({response:()=>new Response('converted-webp')})})}))};
+const images={info:vi.fn(async(_stream:ReadableStream<Uint8Array>)=>({format:'image/png',width:10,height:10,fileSize:8})),input:vi.fn(()=>({transform:()=>({output:async()=>({response:()=>new Response('converted-webp')})})}))};
 const fixture=()=>({...env,AVATARS:bucket,IMAGES:images}) as unknown as Env;
 const call=(path:string,init:RequestInit={})=>worker.fetch(new Request('https://c.test'+path,init),fixture(),createExecutionContext());
 const profile=async()=>await (await call('/v1/me',{headers:bearer()})).json() as any;
@@ -56,4 +57,49 @@ it('switches to the newly uploaded avatar while preserving supporter style prefe
  await env.DB.prepare("INSERT INTO community_appearance_preferences(member_id,avatar_source,name_style,frame) VALUES(?,'discord','glow','hearth')").bind(m!.id).run();
  expect((await save(form())).status).toBe(200);
  expect(await env.DB.prepare('SELECT avatar_source,name_style,frame FROM community_appearance_preferences WHERE member_id=?').bind(m!.id).first()).toEqual({avatar_source:'site',name_style:'glow',frame:'hearth'});
+});
+
+for(const [label,type,format,data,extension] of [
+ ['GIF','image/gif','image/gif',gif,'gif'],
+ ['APNG','image/apng','image/png',png,'png'],
+ ['APNG saved as PNG','image/png','image/png',png,'png'],
+ ['animated WebP','image/webp','image/webp',webp,'webp'],
+])it(`preserves every byte of ${label} through upload and public delivery`,async()=>{
+ await profile();
+ images.info.mockResolvedValue({format,width:16,height:16,fileSize:200});
+ const bytes=Uint8Array.from(atob(data),c=>c.charCodeAt(0));
+ const f=form('Animated author','',false);f.set('avatar',new File([bytes],`avatar.${extension}`,{type}));
+ const response=await save(f);expect(response.status).toBe(200);
+ const current=await response.json() as any;
+ expect(current.avatarUrl).toMatch(new RegExp(`\\.${extension}$`));
+ expect(images.input).not.toHaveBeenCalled();
+ const read=await call(current.avatarUrl);expect(read.status).toBe(200);
+ expect(read.headers.get('content-type')).toBe(format);
+ expect(new Uint8Array(await read.arrayBuffer())).toEqual(bytes);
+ const replacement=await save(form('Next','',false));expect(replacement.status).toBe(200);
+ expect((await call(current.avatarUrl)).status).toBe(200);
+ images.info.mockResolvedValue({format:'image/png',width:10,height:10,fileSize:8});
+ const replaced=await save(form('Replacement'));expect(replaced.status).toBe(200);
+ expect((await call(current.avatarUrl)).status).toBe(404);expect(objects.size).toBe(1);
+ const remove=form('Next','',false);remove.set('removeAvatar','true');await save(remove);
+ expect((await call(current.avatarUrl)).status).toBe(404);expect(objects.size).toBe(0);
+});
+it('rejects oversized animations and decoder failures without replacing the saved profile',async()=>{
+ await profile();await save(form());const old=await profile();
+ const f=form('Replacement','',false);
+ f.set('avatar',new File([new Uint8Array(2*1024*1024+1)],'avatar.gif',{type:'image/gif'}));
+ expect((await save(f)).status).toBe(400);
+ images.info.mockRejectedValueOnce(new Error('invalid image'));
+ f.set('avatar',new File(['not a GIF'],'avatar.gif',{type:'image/gif'}));
+ expect((await save(f)).status).toBe(400);
+ expect((await profile()).avatarUrl).toBe(old.avatarUrl);expect(objects.size).toBe(1);
+});
+
+it.each([['image/gif',gif],['image/apng',png],['image/webp',webp]])('validates real %s bytes with the local Images binding',async(type,data)=>{
+ await profile();
+ images.info.mockImplementationOnce(async stream=>await env.IMAGES!.info(stream) as any);
+ const f=form('Real decoder','',false);f.set('avatar',new File([Uint8Array.from(atob(data),c=>c.charCodeAt(0))],'avatar',{type}));
+ const saved=await save(f);expect(saved.status).toBe(200);
+ const read=await call((await saved.json() as any).avatarUrl);
+ expect(new Uint8Array(await read.arrayBuffer())).toEqual(Uint8Array.from(atob(data),c=>c.charCodeAt(0)));
 });

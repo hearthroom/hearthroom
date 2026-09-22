@@ -15,7 +15,7 @@ function begin(){clearPreview();name.value=session.displayName;bio.value=session
 function selectAvatar(event:Event){
  const input=event.target as HTMLInputElement;const selected=input.files?.[0];if(!selected)return;
  error.value='';
- if(!['image/jpeg','image/png','image/webp'].includes(selected.type)||selected.size>2*1024*1024){error.value=t('community.avatarInvalid');input.value='';return;}
+ if(!['image/jpeg','image/png','image/webp','image/gif','image/apng'].includes(selected.type)||selected.size>2*1024*1024){error.value=t('community.avatarInvalid');input.value='';return;}
  clearPreview();file.value=selected;objectUrl=URL.createObjectURL(selected);preview.value=objectUrl;removeAvatar.value=false;
 }
 function remove(){clearPreview();preview.value='';removeAvatar.value=true;}
@@ -38,7 +38,7 @@ onBeforeUnmount(clearPreview);
    <div class="profile-avatar">
     <img v-if="preview" :src="preview" :alt="$t('community.avatarPreview')" />
     <div class="profile-avatar__controls">
-     <label class="avatar-picker"><AccountIcon name="image" />{{ $t('community.chooseAvatar') }}<input type="file" accept="image/jpeg,image/png,image/webp" :disabled="busy" @change="selectAvatar" aria-describedby="avatar-hint" /></label>
+     <label class="avatar-picker"><AccountIcon name="image" />{{ $t('community.chooseAvatar') }}<input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/apng,.apng" :disabled="busy" @change="selectAvatar" aria-describedby="avatar-hint" /></label>
      <button v-if="preview" type="button" class="btn btn--ghost" :disabled="busy" @click="remove">{{ $t('community.removeAvatar') }}</button>
     </div>
    </div>
