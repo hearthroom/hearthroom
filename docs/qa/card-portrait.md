@@ -33,10 +33,11 @@ HTTP 保留欄位名稱與授權規則，公開 OpenAPI 註明 Harbor 的別名�
 
 ### 本機驗證結果（2026-09-23）
 
-- Hearthroom：Worker 597 項、web 512 項通過；保留一個既有 skipped 檔案。typecheck 與 web build 通過，維持既有大型 chunk 警告。
+- Hearthroom：整合最新 main 後 Worker 620 項、web 521 項通過；保留一個既有 skipped 檔案。typecheck 與 web build 通過，維持既有大型 chunk 警告。
 - Moonstage：1,943 項通過；Node 26 內建 webstorage 與測試環境衝突，改用 `NODE_OPTIONS=--no-experimental-webstorage` 後全綠。stage、sandbox 建置及 sandbox boundary 通過；`check:stage-boundary` 指向既有缺失腳本，不能宣稱該項通過。i18n 檢查通過，仍有既有翻譯／複數形式警告。
 - Harbor Provider：真實 PostgreSQL 的 `go test -p 2 ./...` 全量通過；CI 分層、檔案大小、append-only migration、sqlc 機關與機關測試通過。工作樹布局使自動契約副本檢查略過，另以確切兩份 OpenAPI 位元組比對確認相同。
 - parent server 離線集：前 25 項通過，第 26 項仍有既有的跨 module 路由基線落差；功能修改前後的 spec 得到完全相同的 10 條缺口。初輪計時 watchdog 失敗，單獨 20 次與完整集重跑該項均通過。未修改 gate 或 baseline 掩蓋失敗。
 - 真實瀏覽器、本機合成資料：編輯器只見兩個圖片欄位；JPEG 直圖下載為同尺寸 PNG，讀回 `chara`／`ccv3` 均保留設定。先前驗證原檔 GIF 可顯示交替影格；新版 GIF 儲存路徑由回歸測試確認。
-- 尚未完成：瀏覽器連線中斷，聊天實際畫面、頭像按鈕互動與手機尺寸的視覺驗收待補。播放器投影與既有互動測試通過不能替代這項人工畫面證據。尚未執行正式發布或資料遷移。
+- 發布前補驗：Chrome 390×844 與桌面聊天畫面確認標頭及訊息圖片皆載入直圖 GIF，截圖可見紅／藍影格交替；`data-lt="avatar"` 與訊息 avatar DOM 仍保留。編輯器再次實際匯出 PNG／JSON，PNG 為 64×96 並含可讀 V2／V3 設定，無錯誤提示。自訂卡片的作者腳本逐卡互動未測。
+- 遷移採兩階段後已觀察到相容欄位測試 Red，再通過完整測試。Harbor 上游新增工具的兩處舊欄位編譯引用已修復。macOS 缺 flock 導致部署腳本測試失敗，移到 Linux 容器後全部通過；Prometheus 規則亦通過。
 - 舊同步基準若仍可由供應商讀回，接受其歷史雜湊。若 Harbor 舊的獨立頭像已被遷移捨棄，且目標內容與來源不同，仍保留安全的 `sync_target_changed` 拒絕；不為重設基準而自動覆寫使用者的不同版本。
