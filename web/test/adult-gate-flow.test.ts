@@ -119,4 +119,59 @@ describe("成人內容的門（整條路）", () => {
     expect(el.textContent, `calls:\n${calls.join("\n")}`).toContain("深夜的卡");
     expect(el.textContent).not.toContain(i18n.global.t("card.gate.title"));
   });
+
+  it("身分到之前發出的那次讀卡晚回來、拿到 403：不能把已經畫好的卡蓋成門", async () => {
+    state.showNsfw = true;
+    vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+      // 身分慢一點到；沒帶權限的那次讀卡更慢才回（被擋），帶了權限的立刻回
+      if (url.endsWith("/v1/me")) return new Promise<Response>((r) => setTimeout(() => r(fakeFetch(input, init) as unknown as Response), 20));
+      if (url.includes("/v1/cards/abc") && !url.includes("nsfw=1")) return new Promise<Response>((r) => setTimeout(() => r(fakeFetch(input, init) as unknown as Response), 120));
+      return fakeFetch(input, init);
+    });
+    el = document.createElement("div");
+    document.body.appendChild(el);
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/cards/:id", component: CardPage }, { path: "/:pathMatch(.*)*", component: { template: "<div />" } }] });
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const session = useSession();
+    void session.restore();
+    await router.push("/cards/abc");
+    await router.isReady();
+    app = createApp({ template: "<RouterView />" }).use(pinia).use(router).use(i18n);
+    app.mount(el);
+    await new Promise((r) => setTimeout(r, 200));
+    await flush();
+    expect(el.textContent, `calls:\n${calls.join("\n")}`).toContain("深夜的卡");
+    expect(el.textContent).not.toContain(i18n.global.t("card.gate.title"));
+  });
+
+  it("開關本來就開著、門卻出現了：按「顯示成人內容」也要重讀，不能沒反應", async () => {
+    state.showNsfw = true;
+    let refuse = true;
+    vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+      // 第一次讀卡被擋（例如 token 剛好過期），之後照常
+      if (refuse && url.includes("/v1/cards/abc?")) { refuse = false; return Promise.resolve(new Response(JSON.stringify({ error: "adult_content" }), { status: 403, headers: { "Content-Type": "application/json" } })); }
+      return fakeFetch(input, init);
+    });
+    el = document.createElement("div");
+    document.body.appendChild(el);
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/cards/:id", component: CardPage }, { path: "/:pathMatch(.*)*", component: { template: "<div />" } }] });
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const session = useSession();
+    await session.restore();
+    await flush();
+    await router.push("/cards/abc");
+    await router.isReady();
+    app = createApp({ template: "<RouterView />" }).use(pinia).use(router).use(i18n);
+    app.mount(el);
+    await flush();
+    expect(el.textContent).toContain(i18n.global.t("card.gate.title"));
+    el.querySelector<HTMLButtonElement>(".gate button.btn--primary")!.click();
+    await flush();
+    await flush();
+    expect(el.textContent, `calls:\n${calls.join("\n")}`).toContain("深夜的卡");
+  });
 });
