@@ -3,6 +3,7 @@ import { computed, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import CommunityAppearance from "./CommunityAppearance.vue";
 import { clearAppearanceCache, type AppearancePreferences, type EffectiveAppearance } from "@/lib/community-appearance";
 import CommunityBadgeList from "./CommunityBadgeList.vue";
+import BadgeShowcase from "./BadgeShowcase.vue";
 import CommunityIcon from "./CommunityIcon.vue";
 import AccountIcon from "./AccountIcon.vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
@@ -330,7 +331,9 @@ onBeforeUnmount(() => {
           /><small>{{ t("community.nextLevel", { xp: (data.level + 1) ** 2 * 10 - data.xp, level: data.level + 1 }) }}</small
           ><small>{{ t("community.xpRule") }}</small>
         </div>
-        <CommunityBadgeList :badges="data.badges" />
+        <!-- The badge strip only knows the three legacy keys; the showcase carries catalog metadata for every milestone and links to the full collection. -->
+        <BadgeShowcase v-if="session.profile?.handle" :key="session.profile.handle" :handle="session.profile.handle" own />
+        <CommunityBadgeList v-else :badges="data.badges" />
         <CommunityAppearance v-if="data.appearance" :appearance="data.appearance" :linked="linked" :busy="busy" :error="error" @save="saveAppearance" />
         <details>
           <summary>{{ t("community.preferences") }}</summary>

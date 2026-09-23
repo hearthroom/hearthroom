@@ -95,3 +95,30 @@ it('lets members feature up to five earned badges',async()=>{
  expect((await find(member,'member_profile'))!.state).toBe('earned');
  await expect(setFeaturedBadges(env,member,[...five,'member_profile'])).rejects.toThrow('community_badge_selection');
 });
+it('the hourly sweep evaluates every metric and agrees with the owner read',async()=>{
+ const fans:string[]=[];for(let i=0;i<10;i++)fans.push(await makeMember(100+i));
+ await env.DB.prepare('UPDATE members SET created_at=?').bind(FOUNDER_CUTOFF+1).run();
+ // creator side: three listed cards (one featured), ten followers, ten saves on those cards
+ await listedCard(100001,22);await listedCard(100002,22);await listedCard(100003,22,{featuredAt:5});
+ for(const fan of fans){await env.DB.prepare('INSERT INTO member_follows VALUES (?,?,1)').bind(fan,author).run();await env.DB.prepare('INSERT INTO member_favorites VALUES (?,100001,1)').bind(fan).run();}
+ // player side: one conversation, one save, ten favorites, five follows, one comment with ten likes
+ await conversations(member,1);
+ await env.DB.prepare("INSERT INTO card_saves VALUES (?,'role-1','slot','{}',1)").bind(member).run();
+ for(let i=0;i<10;i++){await listedCard(100010+i,33);await env.DB.prepare('INSERT INTO member_favorites VALUES (?,?,1)').bind(member,100010+i).run();}
+ for(const fan of fans.slice(0,5))await env.DB.prepare('INSERT INTO member_follows VALUES (?,?,1)').bind(member,fan).run();
+ await env.DB.prepare("INSERT INTO comments(id,card_id,member_id,content,like_count,created_at) VALUES ('c1',100001,?,'hi',10,1)").bind(member).run();
+ // membership side: profile edited, joined before the founding cutoff and more than a year ago, 250 XP on a linked Discord account
+ await env.DB.prepare('UPDATE members SET profile_edited_at=1,created_at=? WHERE id=?').bind(Math.min(FOUNDER_CUTOFF-1,Date.now()-366*86400000),member).run();
+ await env.DB.prepare("INSERT INTO community_subjects(discord_id) VALUES ('123456789012345678')").run();
+ await env.DB.prepare("INSERT INTO discord_links VALUES (?,'123456789012345678','member','version','active',0)").bind(member).run();
+ await env.DB.prepare("INSERT INTO community_xp VALUES ('e1','123456789012345678',1,250,'chat-v1')").run();
+ await communityMaintenance(env);
+ const awarded=async(who:string)=>(await env.DB.prepare('SELECT badge FROM community_awards WHERE member_id=? ORDER BY badge').bind(who).all<{badge:string}>()).results.map(r=>r.badge);
+ expect(await awarded(author)).toEqual(['creator_favorited_10','creator_featured','creator_followers_10','creator_works_3']);
+ expect(await awarded(member)).toEqual(['community_level_5','member_anniversary','member_founder','member_profile','player_commenter_1','player_favorites_10','player_first_play','player_follows_5','player_liked_10','player_saver'].sort());
+ // The owner read measures the same tables, so it finds nothing new to award.
+ const before=(await env.DB.prepare('SELECT COUNT(*) AS n FROM community_awards').first<{n:number}>())!.n;
+ // Live badges (Discord link, booster) are never awards, so they are left out of the comparison.
+ for(const who of [member,author]){const wall=await badgeCollection(env,who);expect(wall.items.filter(b=>b.state==='earned'&&!['discord_linked','server_booster'].includes(b.key)).map(b=>b.key).sort()).toEqual(await awarded(who));}
+ expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM community_awards').first<{n:number}>())!.n).toBe(before);
+});
