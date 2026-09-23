@@ -20,40 +20,33 @@ import { useProviderUpstream, UPSTREAM_API } from "@/lib/config";
 import { restorePersisted, refresh } from "@/lib/oauth";
 import { accountToken } from "@/lib/connections";
 import { platformPath } from "@/lib/distribution";
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRaw, watch } from "vue";
 import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import {
   createRole,
   fetchCard,
   registerCardIdentity,
-  createWorldbook,
   deleteRole,
   fetchAuthorAsset,
   fetchRoleDetail,
-  fetchMyWorldbooks,
-  fetchRoleWorldbooks,
   fetchRoleValidation,
-  fetchWorldbookEntries,
   patchRoleDocument,
   patchRoleWelcome,
-  patchWorldbookDocument,
   putRoleWorld,
   deleteRoleWorld,
-  reorderWorldbookEntries,
   saveAuthorAsset,
   registerCard,
   beginCardEdit,
   unpublishRole,
   unregisterCard,
   uploadImage,
-  type WorldbookDocumentEntry,
-  type WorldbookMetadataPatch,
   type WorldbookSummary,
 } from "@/lib/api";
 import { emptyRuleSet, ruleSetFromAuthorAsset, ruleSetFromImport, ruleSetToAuthorAsset, ruleSetToExport, validateRuleSet, type RegexRuleSet, chatPageOf, type ChatPageChoice } from "@/lib/regex-rules";
 import RegexRulesEditor from "@/components/editor/RegexRulesEditor.vue";
 import { can } from "@/lib/provider";
+import { useWorldbookDraft, type WorldbookDraft } from "@/lib/worldbook-draft";
 import ChatTestPanel from "@/components/editor/ChatTestPanel.vue";
 import ResourcePanel from "@/components/editor/ResourcePanel.vue";
 import {
@@ -78,6 +71,7 @@ import {
   worldProblem,
   type FieldLimits,
   type RoleDraft,
+  type WorldCharacterDraft,
   type WorldbookEntryDraft,
 } from "@/lib/role-draft";
 import { imageToPng } from "@/lib/export-image";
@@ -137,23 +131,57 @@ const cardCreator = metaField("creator");
 const cardVersion = metaField("characterVersion");
 const TAGS_MAX = 10;
 
-const worldbookId = ref("");
-const worldbookName = ref("");
-const worldbookDesc = ref("");
+
+/** 卡綁的那本世界書（世界卡上就是世界級世界書）。角色的私有書各自一份實例，見 memberBook。 */
+const wb = useWorldbookDraft({
+  untitled: () => t("wb.entry.untitled"),
+  fallbackName: () => draft.value.roleName || "",
+  language: () => draft.value.language,
+  onProgress: (p) => { saveProgress.value = p; },
+});
 /**
- * 這本書在上游現在長什麼樣。改書名或描述時，其餘欄位要照這份原樣送回去——
- * 上游的更新是整份覆蓋。拿不到就不送 metadata：寧可改名沒生效，也不要把別處
- * （站內 App、寫卡助手）填好的圖示、標籤、可見性清成空的。
+ * 角色的私有世界書：跟卡綁的那本同一套流程（新建／匯入／挑既有／改條目／存檔），只差不綁卡，
+ * 存完把書的 id 記進成員設定。以成員物件為鍵：成員被移除，它的實例就跟著沒人引用。
  */
-const worldbookMeta = ref<WorldbookSummary | null>(null);
-/** 匯入酒館／MMD 世界書時是 "tavern"：上游會讓這本書先走酒館自己的關鍵字規則。 */
-const worldbookFormat = ref<"tavern" | undefined>();
-const worldbookEntries = ref<WorldbookEntryDraft[]>([]);
-const worldbookOriginal = ref<WorldbookEntryDraft[]>([]);
-/** 剛匯入、還沒送出去的那本。儲存時要先建再寫。 */
-const worldbookPending = ref(false);
-/** 挑了作者已經有的一本：書已存在，缺的只有「綁到這張卡」那一步。 */
-const worldbookBindPending = ref(false);
+const memberBooks = new WeakMap<object, WorldbookDraft>();
+function memberBook(c: WorldCharacterDraft): WorldbookDraft {
+  const key = toRaw(c) as object;
+  let book = memberBooks.get(key);
+  if (!book) {
+    book = useWorldbookDraft({
+      untitled: () => t("wb.entry.untitled"),
+      fallbackName: () => c.name || draft.value.roleName || "",
+      language: () => draft.value.language,
+      onProgress: (p) => { saveProgress.value = p; },
+    });
+    if (c.lorebookId) book.id = c.lorebookId;
+    memberBooks.set(key, book);
+  }
+  return book;
+}
+function memberBooksDirty(): boolean {
+  return Boolean(draft.value.world?.characters.some((c) => memberBook(c).dirty()));
+}
+/** 頁面層的三個動作要用到登入、確認框與下載，composable 不碰這些。 */
+async function pickBook(book: WorldbookDraft, summary: WorldbookSummary) {
+  try {
+    const token = await session.accessToken();
+    if (!token) throw new Error(t("auth.expired"));
+    await book.pick(summary, token);
+    error.value = "";
+  } catch {
+    error.value = t("wb.reuse.failed");
+  }
+}
+async function releaseBook(book: WorldbookDraft) {
+  if (!(await confirmDialog({ message: t("wb.switch.confirm"), confirmText: t("wb.switch") }))) return;
+  book.release();
+}
+function exportBook(book: WorldbookDraft, fallback: string) {
+  const file = worldbookToExport(book.name.trim() || fallback || draft.value.roleName, book.entries);
+  download(new Blob([JSON.stringify(file, null, 2)], { type: "application/json" }), `${safeName()}-worldbook.json`);
+  track("card_export", { detail: "worldbook" });
+}
 
 /** 正則規則：整份存、整份換。version 是上游的樂觀鎖，沒規則時是 0。 */
 const regexSet = ref<RegexRuleSet>(emptyRuleSet());
@@ -292,30 +320,11 @@ function onScroll() {
 const dirty = computed(
   () =>
     JSON.stringify(draft.value) !== JSON.stringify(original.value ?? pristine.value) ||
-    JSON.stringify(worldbookEntries.value) !== JSON.stringify(worldbookOriginal.value) ||
-    worldbookPending.value ||
-    worldbookBindPending.value ||
-    metadataChanged() ||
+    wb.dirty() ||
+    memberBooksDirty() ||
     regexDirty.value,
 );
 
-/**
- * 條目順序跟上游存的不一樣。dirty 不必再問一次——換序本來就讓兩份陣列的 JSON 不同，
- * 那邊的比較已經算得到。這裡是給 saveWorldbook 用的：只換序時沒有任何條目操作，
- * 少了這個判斷會在「沒事可做」那一關直接 return，順序永遠送不出去。
- */
-function orderChanged() {
-  const now = worldbookEntries.value.map((entry) => entry.entryId).filter(Boolean).join(",");
-  const before = worldbookOriginal.value.map((entry) => entry.entryId).filter(Boolean).join(",");
-  return now !== before;
-}
-
-/** 書名或描述跟上游現在的值不一樣。拿不到上游那份就一律當沒改——沒有基準就沒有差分。 */
-function metadataChanged() {
-  const meta = worldbookMeta.value;
-  if (!meta || !meta.visibility) return false;
-  return worldbookName.value.trim() !== meta.name || worldbookDesc.value !== meta.description;
-}
 
 const missing = computed(() => missingRequired(draft.value));
 const canPublish = computed(() => !isNew.value && !missing.value.length && !dirty.value);
@@ -340,12 +349,6 @@ const lacks = (key: Section) => Boolean(REQUIRED_OF[key] && missing.value.includ
 // ── 世界模式 ──────────────────────────────────────────────────────────
 // 成員清單住在 draft.world；世界觀是 roleDetailDesc、世界級世界書是綁卡那本，都走原本的路。
 // 私有世界書的下拉從「我的世界書」撈；撈不到就只有「無」——作者仍能存，只是先綁不了書。
-const myWorldbooks = ref<WorldbookSummary[]>([]);
-async function loadMyWorldbooks() {
-  const token = await session.accessToken().catch(() => null);
-  if (!token) return;
-  myWorldbooks.value = await fetchMyWorldbooks(token).catch(() => []);
-}
 function enableWorld() {
   if (!draft.value.world) draft.value.world = makeWorld();
 }
@@ -367,7 +370,7 @@ const filled = computed<Record<Section, boolean>>(() => ({
   persona: Boolean(draft.value.roleDetailDesc.trim()),
   world: Boolean(draft.value.world),
   dialogue: Boolean(draft.value.roleWelcome.trim()),
-  worldbook: worldbookEntries.value.some((e) => e.content.trim()),
+  worldbook: wb.entries.some((e) => e.content.trim()),
   publish: false,
 }));
 
@@ -396,7 +399,7 @@ function storeDraft() {
     const stored: StoredDraft = {
       draft: draft.value,
       tagsText: tagsText.value,
-      worldbook: worldbookPending.value ? { name: worldbookName.value, format: worldbookFormat.value, entries: worldbookEntries.value } : null,
+      worldbook: wb.stored(),
       savedAt: Date.now(),
       // 建好但沒存完的卡：把編號一起記下來，下一次存回同一張
       ...(roleId.value ? { roleId: roleId.value } : {}),
@@ -416,12 +419,7 @@ function restoreDraft() {
     draft.value = { ...makeDraft(stored.draft.language || locale.value), ...stored.draft };
     tagsText.value = stored.tagsText ?? formatTags(draft.value.roleTag);
     if (stored.roleId) roleId.value = stored.roleId;
-    if (stored.worldbook?.entries?.length) {
-      worldbookPending.value = true;
-      worldbookName.value = stored.worldbook.name;
-      worldbookFormat.value = stored.worldbook.format;
-      worldbookEntries.value = stored.worldbook.entries;
-    }
+    wb.restore(stored.worldbook);
     restoredDraft.value = true;
   } catch {
     localStorage.removeItem(DRAFT_KEY);
@@ -430,17 +428,12 @@ function restoreDraft() {
 function discardDraft() {
   draft.value = makeDraft(locale.value);
   tagsText.value = "";
-  worldbookPending.value = false;
-  worldbookBindPending.value = false;
-  worldbookId.value = "";
-  worldbookName.value = "";
-  worldbookFormat.value = undefined;
-  worldbookEntries.value = [];
+  wb.reset();
   restoredDraft.value = false;
   localStorage.removeItem(DRAFT_KEY);
 }
 let draftTimer: ReturnType<typeof setTimeout> | undefined;
-watch([draft, worldbookEntries, worldbookName, worldbookPending], () => {
+watch([draft, wb], () => {
   clearTimeout(draftTimer);
   draftTimer = setTimeout(storeDraft, 400);
 }, { deep: true });
@@ -471,42 +464,8 @@ async function loadValidation() {
   }
 }
 
-/**
- * 這張卡綁著的世界書。只取第一本：介面一次只編一本，而上游允許綁多本——
- * 多綁的那幾本在這裡看不到也編不了，這是已知的天花板，不是漏掉。
- */
-async function loadWorldbook(token: string) {
-  const bound = await fetchRoleWorldbooks(roleId.value, token).catch(() => []);
-  const book = bound[0];
-  if (!book) return;
-  worldbookId.value = book.worldbookId;
-  worldbookName.value = book.name;
-  worldbookEntries.value = await fetchWorldbookEntries(book.worldbookId, token).catch(() => []);
-  worldbookOriginal.value = JSON.parse(JSON.stringify(worldbookEntries.value));
-  await loadWorldbookMeta(token, book.worldbookId);
-}
-
-/**
- * 這本書在上游的元資訊。綁定那條路只回名字與條數，描述、圖示、標籤、可見性得從
- * 「我的世界書」那份清單裡撈。撈不到（書多到翻頁之外、請求失敗）就留 null，
- * 書名與描述那兩格跟著變成看得到、改不動——改了也送不出去，不如別讓人白填。
- */
-async function loadWorldbookMeta(token: string, bookId: string) {
-  try {
-    const mine = await fetchMyWorldbooks(token);
-    const meta = mine.find((b) => b.worldbookId === bookId) ?? null;
-    worldbookMeta.value = meta;
-    if (meta) {
-      worldbookName.value = meta.name;
-      worldbookDesc.value = meta.description ?? "";
-    }
-  } catch {
-    worldbookMeta.value = null;
-  }
-}
 
 onMounted(async () => {
-  void loadMyWorldbooks();
   if (!roleId.value) {
     restoreDraft();
     defaultChatPageForNew();
@@ -526,7 +485,10 @@ onMounted(async () => {
     tagsText.value = formatTags(draft.value.roleTag);
     original.value = cloneDraft(draft.value);
     if (token) {
-      await loadWorldbook(token);
+      await wb.loadBound(token, roleId.value);
+      for (const c of draft.value.world?.characters ?? []) {
+        if (c.lorebookId) await memberBook(c).load(token, c.lorebookId).catch(() => {});
+      }
       await loadRegexRules(token);
     }
     void loadValidation();
@@ -645,256 +607,6 @@ function exportRegex() {
 
 // ── 世界書 ────────────────────────────────────────────────────────
 
-function createWorldbookDraft() {
-  worldbookPending.value = true;
-  worldbookName.value = draft.value.roleName || "";
-  if (!worldbookEntries.value.length) {
-    worldbookEntries.value = [{ name: "", content: "", keywords: [], secondaryKeywords: [], isEnabled: true, isConstant: false, category: "custom" }];
-  }
-}
-
-/**
- * 挑了作者已經有的一本：先把條目讀進來再認這本書。
- *
- * 讀不出來就整個放掉，不留一個「已綁定但看起來是空的」狀態——作者會照著那個空清單重打一遍，
- * 存下去就在原本那本書裡多出一整份重複的條目。
- */
-async function onWorldbookPick(book: WorldbookSummary) {
-  try {
-    const token = await session.accessToken();
-    if (!token) throw new Error(t("auth.expired"));
-    const entries = await fetchWorldbookEntries(book.worldbookId, token);
-    worldbookId.value = book.worldbookId;
-    worldbookName.value = book.name;
-    worldbookEntries.value = entries;
-    worldbookOriginal.value = JSON.parse(JSON.stringify(entries));
-    worldbookBindPending.value = true;
-    worldbookFormat.value = undefined;
-    worldbookMeta.value = book;
-    worldbookDesc.value = book.description ?? "";
-    error.value = "";
-  } catch {
-    error.value = t("wb.reuse.failed");
-  }
-}
-
-/**
- * 放掉手上這本，回到空狀態重挑。
- *
- * 上游的綁定是覆蓋式的（一張卡只留一本），所以「換一本」就是綁新的那一本，舊的自己會退下來；
- * 沒有「這張卡不要世界書了」這條路——上游那邊沒有對應的動作，這裡也就不假裝有。
- *
- * worldbookOriginal 一定要一起清空：留著的話，下一本書的差分會拿舊書的條目去算，
- * 送出去就是往新書裡刪一批根本不存在的條目。
- */
-async function onWorldbookRelease() {
-  if (!(await confirmDialog({ message: t("wb.switch.confirm"), confirmText: t("wb.switch") }))) return;
-  worldbookId.value = "";
-  worldbookName.value = "";
-  worldbookFormat.value = undefined;
-  worldbookEntries.value = [];
-  worldbookOriginal.value = [];
-  worldbookPending.value = false;
-  worldbookBindPending.value = false;
-  worldbookMeta.value = null;
-  worldbookDesc.value = "";
-}
-
-function exportWorldbook() {
-  const file = worldbookToExport(worldbookName.value.trim() || draft.value.roleName, worldbookEntries.value);
-  download(new Blob([JSON.stringify(file, null, 2)], { type: "application/json" }), `${safeName()}-worldbook.json`);
-  track("card_export", { detail: "worldbook" });
-}
-
-/** 從酒館世界書檔匯入的條目。還沒綁書就先把書建起來，名字用檔裡的、沒有就用角色名。 */
-function onWorldbookImported(payload: { name: string; entries: WorldbookEntryDraft[] }) {
-  if (!worldbookId.value && !worldbookPending.value) {
-    worldbookPending.value = true;
-    worldbookName.value = payload.name || draft.value.roleName || "";
-  }
-  worldbookEntries.value = payload.entries.map((entry) => ({ ...entry }));
-}
-
-/** 草稿與上次存下的樣子比對，算出要 create / update / delete 哪些條目。 */
-/** 一個要送出去的操作，連同它對應的本地條目（delete 沒有），送成功後拿來對齊本地狀態。 */
-interface WorldbookOp { op: WorldbookDocumentEntry; entry?: WorldbookEntryDraft }
-
-function worldbookOps(): WorldbookOp[] {
-  const ops: WorldbookOp[] = [];
-  const keptIds = new Set(worldbookEntries.value.map((e) => e.entryId).filter(Boolean) as string[]);
-  for (const before of worldbookOriginal.value) {
-    if (before.entryId && !keptIds.has(before.entryId)) ops.push({ op: { op: "delete", entryId: before.entryId } });
-  }
-  for (const entry of worldbookEntries.value) {
-    // 空條目不送：作者按了「新增」又沒填，那不是一條要存的資料。
-    if (!entry.content.trim()) continue;
-    const payload = {
-      name: entry.name.trim() || entry.keywords[0] || t("wb.entry.untitled"),
-      content: entry.content,
-      keywords: entry.keywords,
-      secondaryKeywords: entry.secondaryKeywords ?? [],
-      ...(entry.matchOptions ? { matchOptions: entry.matchOptions } : {}),
-      isEnabled: entry.isEnabled,
-      isConstant: entry.isConstant,
-      ...(entry.category ? { category: entry.category } : {}),
-      ...(entry.triggerRegion ? { triggerRegion: entry.triggerRegion } : {}),
-    };
-    if (!entry.entryId) ops.push({ op: { op: "create", ...payload }, entry });
-    else if (JSON.stringify(entry) !== JSON.stringify(worldbookOriginal.value.find((e) => e.entryId === entry.entryId))) {
-      ops.push({ op: { op: "update", entryId: entry.entryId, ...payload }, entry });
-    }
-  }
-  return ops;
-}
-
-/**
- * 一次送多少個操作。幾百條的匯入切成幾段送：每段幾秒內完成，不會撞到反向代理的逾時；
- * 每段成功就把本地狀態對齊伺服器，中途斷線再按一次儲存只會送剩下的，不會重建已經建好的條目。
- */
-const WORLDBOOK_OPS_PER_REQUEST = 100;
-
-/**
- * 條目順序。上游那邊常駐條目每輪有上限，擠不下時留的是排在前面的幾條——
- * 不送這一趟，順序在上游全是 0，實際留誰退到按條目 id 比大小。
- *
- * 排在條目增刪改之後：剛建的條目要先拿到 id 才排得進去。順序沒動就不送。
- */
-async function saveWorldbookOrder(bookId: string, token: string) {
-  const ids = worldbookEntries.value.map((entry) => entry.entryId).filter(Boolean) as string[];
-  if (ids.length < 2) return;
-  const before = worldbookOriginal.value.map((entry) => entry.entryId).filter(Boolean) as string[];
-  if (before.join(",") === ids.join(",")) return;
-  await reorderWorldbookEntries(bookId, ids, token);
-}
-
-/** 一段送成功之後：刪掉的從原始清單移除、改過的更新原始清單、新建的拿到 id 並加進原始清單。 */
-function reconcileWorldbookChunk(chunk: WorldbookOp[], createdIds: string[]) {
-  let k = 0;
-  for (const { op, entry } of chunk) {
-    if (op.op === "delete") {
-      worldbookOriginal.value = worldbookOriginal.value.filter((e) => e.entryId !== op.entryId);
-    } else if (op.op === "update" && entry) {
-      worldbookOriginal.value = worldbookOriginal.value.map((e) => (e.entryId === entry.entryId ? JSON.parse(JSON.stringify(entry)) : e));
-    } else if (op.op === "create" && entry) {
-      const id = createdIds[k++];
-      if (!id) continue;
-      entry.entryId = id;
-      worldbookOriginal.value.push(JSON.parse(JSON.stringify(entry)));
-    }
-  }
-}
-
-/**
- * 改書名／描述要送的那一份。上游是整份覆蓋，所以圖示、標籤、可見性照上游現況原樣帶回去。
- * 可見性缺值時上游會把它正規化成 private——那等於偷偷把一本公開的書收起來，所以
- * 讀不到現況就不送（metadataChanged 那邊已經擋掉，這裡是第二道）。
- */
-function metadataPatch(): WorldbookMetadataPatch | undefined {
-  const base = worldbookMeta.value;
-  if (!base || !base.visibility) return undefined;
-  return {
-    name: worldbookName.value.trim() || base.name,
-    description: worldbookDesc.value,
-    iconUrl: base.iconUrl ?? "",
-    visibility: base.visibility,
-    tags: (base.tags ?? "").split(",").map((tag) => tag.trim()).filter(Boolean),
-  };
-}
-
-/** 送成功了：基準跟著往前走，同一份不會在下次儲存又送一遍。 */
-function acceptMetadata(metadata: WorldbookMetadataPatch) {
-  if (!worldbookMeta.value) return;
-  worldbookMeta.value = { ...worldbookMeta.value, name: metadata.name, description: metadata.description };
-}
-
-async function saveWorldbook(token: string, targetRoleId: string) {
-  if (!can('worldbook')) return;
-  const ops = worldbookOps();
-  const needsBook = worldbookPending.value || Boolean(worldbookId.value);
-  const metaDirty = metadataChanged();
-  const orderDirty = orderChanged();
-  if (!needsBook || (!ops.length && worldbookId.value && !worldbookBindPending.value && !metaDirty && !orderDirty)) return;
-
-  let bookId = worldbookId.value;
-  let firstBind = worldbookBindPending.value;
-  if (!bookId) {
-    if (!ops.length) {
-      // 按了「建一本」卻一條都沒填：不建空書。
-      //
-      // 旗標與那幾條空條目要一起放掉。先前只清了旗標，空條目留在草稿裡跟原始清單
-      // （空的）永遠對不上，於是這張卡永遠算「有未儲存的修改」：儲存鍵一直亮著、
-      // 送不出審核，而畫面上完全看不出是為什麼——空條目在世界書那頁根本不顯示，
-      // 因為沒有書、那一區只畫得出「還沒有世界書」的空狀態。
-      worldbookPending.value = false;
-      worldbookEntries.value = [];
-      worldbookOriginal.value = [];
-      return;
-    }
-    const createdName = worldbookName.value.trim() || draft.value.roleName;
-    bookId = await createWorldbook(
-      {
-        name: createdName,
-        ...(worldbookDesc.value.trim() ? { description: worldbookDesc.value.trim() } : {}),
-        language: draft.value.language,
-        ...(worldbookFormat.value ? { format: worldbookFormat.value } : {}),
-      },
-      token,
-    );
-    // 新建的書上游一律落成 private；寫進基準，作者剛建完就能改名，不必先重新整理
-    worldbookMeta.value = {
-      worldbookId: bookId, name: createdName, description: worldbookDesc.value.trim(),
-      entryCount: 0, iconUrl: "", visibility: "private", tags: "",
-    };
-    // 書建好就記住：之後任何一段失敗，重試都寫同一本，不會每按一次就多一本孤兒書。
-    worldbookId.value = bookId;
-    worldbookPending.value = false;
-    firstBind = true;
-  }
-  // 挑了一本現成的、或只改了書名：條目一個字沒動也還是得送一次
-  if (!ops.length) {
-    const metadata = metaDirty ? metadataPatch() : undefined;
-    if (firstBind || metadata) {
-      await patchWorldbookDocument(
-        bookId,
-        { ...(metadata ? { metadata } : {}), ...(firstBind ? { binding: { roleId: targetRoleId } } : {}) },
-        token,
-      );
-      worldbookBindPending.value = false;
-      if (metadata) acceptMetadata(metadata);
-    }
-    await saveWorldbookOrder(bookId, token);
-    worldbookOriginal.value = JSON.parse(JSON.stringify(worldbookEntries.value));
-    return;
-  }
-  const metadata = metaDirty ? metadataPatch() : undefined;
-  saveProgress.value = { done: 0, total: ops.length };
-  try {
-    for (let i = 0; i < ops.length; i += WORLDBOOK_OPS_PER_REQUEST) {
-      const chunk = ops.slice(i, i + WORLDBOOK_OPS_PER_REQUEST);
-      // 綁定與書名跟第一段一起送；上游的綁定是覆蓋式的，重送也不會出事
-      const result = await patchWorldbookDocument(
-        bookId,
-        {
-          ...(i === 0 && metadata ? { metadata } : {}),
-          entries: chunk.map((c) => c.op),
-          ...(firstBind ? { binding: { roleId: targetRoleId } } : {}),
-        },
-        token,
-      );
-      if (i === 0 && metadata) acceptMetadata(metadata);
-      firstBind = false;
-      worldbookBindPending.value = false;
-      reconcileWorldbookChunk(chunk, result?.createdEntryIds ?? []);
-      saveProgress.value = { done: Math.min(i + chunk.length, ops.length), total: ops.length };
-    }
-  } finally {
-    saveProgress.value = null;
-  }
-  await saveWorldbookOrder(bookId, token);
-  // 全部送完再讀一次：順序與 id 以伺服器為準（舊版伺服器不回 createdEntryIds 時也靠這一步補上）。
-  worldbookEntries.value = await fetchWorldbookEntries(bookId, token).catch(() => worldbookEntries.value);
-  worldbookOriginal.value = JSON.parse(JSON.stringify(worldbookEntries.value));
-}
 
 // ── 儲存 ──────────────────────────────────────────────────────────
 
@@ -915,7 +627,7 @@ async function save() {
   }
   // 條目超長在送出前就攔下並點名：計數器只是變紅、不擋輸入，上游會整段拒收，
   // 而拒收訊息是英文散句，作者看不懂就重新整理——那條沒存過的條目就這樣「蒸發」了。
-  const oversize = worldbookEntries.value.find((e) => [...e.content].length > ENTRY_CONTENT_MAX);
+  const oversize = wb.entries.find((e) => [...e.content].length > ENTRY_CONTENT_MAX);
   if (oversize) {
     section.value = "worldbook";
     error.value = t("editor.worldbook.entryTooLong", { name: oversize.name.trim() || oversize.keywords[0] || t("wb.entry.untitled"), max: ENTRY_CONTENT_MAX });
@@ -976,11 +688,6 @@ async function save() {
     const sent = cloneDraft(draft.value);
     const fields = documentPatch(sent, original.value);
     if (hasAnyField(fields)) await patchRoleDocument(targetRoleId, fields, token);
-    // 世界模式的成員：整包寫入或整包移除。存過的成員代號在 worldPayload 裡保留，缺的才補。
-    if (worldChanged(sent, original.value)) {
-      if (sent.world) await putRoleWorld(targetRoleId, worldPayload(sent.world), token);
-      else if (original.value?.world) await deleteRoleWorld(targetRoleId, token);
-    }
 
     if (welcomeChanged(sent, original.value) && sent.roleWelcome.trim()) {
       await patchRoleWelcome(
@@ -994,7 +701,20 @@ async function save() {
       );
     }
 
-    await saveWorldbook(token, targetRoleId);
+    if (can("worldbook")) await wb.save(token, { bindRoleId: targetRoleId });
+    // 角色的私有世界書先存，拿到 id 才寫進成員；再整包寫入或移除成員。
+    // 注意：sent 是快照，書的 id 要同時寫回快照與現行草稿，兩邊才對得上。
+    if (draft.value.world && sent.world) {
+      for (const [i, c] of draft.value.world.characters.entries()) {
+        const id = await memberBook(c).save(token);
+        c.lorebookId = id || memberBook(c).id;
+        if (sent.world.characters[i]) sent.world.characters[i].lorebookId = c.lorebookId;
+      }
+    }
+    if (worldChanged(sent, original.value)) {
+      if (sent.world) await putRoleWorld(targetRoleId, worldPayload(sent.world), token);
+      else if (original.value?.world) await deleteRoleWorld(targetRoleId, token);
+    }
     await saveRegex(token, targetRoleId);
 
     if (review.resubmit) {
@@ -1122,13 +842,7 @@ function applyImport(result: ImportResult) {
   draft.value = { ...result.draft, language };
   tagsText.value = formatTags(draft.value.roleTag);
   track("card_import", { detail: result.spec === "mmd" ? "mmd" : result.image ? "png" : "json" });
-  if (result.worldbook) {
-    worldbookPending.value = true;
-    worldbookName.value = result.worldbook.name || draft.value.roleName;
-    worldbookFormat.value = result.worldbook.format;
-    // 匯入的條目一律沒有 entryId：它們在上游還不存在，儲存時要走 create。
-    worldbookEntries.value = result.worldbook.entries.map((entry) => ({ ...entry, entryId: undefined }));
-  }
+  if (result.worldbook) wb.imported({ name: result.worldbook.name || draft.value.roleName, entries: result.worldbook.entries, format: result.worldbook.format });
   const portrait = result.background ?? result.image;
   if (portrait) void adoptImage(portrait);
   if (result.regex) regexSet.value = result.regex;
@@ -1155,7 +869,7 @@ const safeName = () => (draft.value.roleName || "card").replace(/[/\\?%*:|"<>]/g
  */
 async function exportCard(format: "png" | "json") {
   error.value = "";
-  const card = draftToTavern(draft.value, worldbookEntries.value.filter((e) => e.content.trim()), { regex: regexSet.value });
+  const card = draftToTavern(draft.value, wb.entries.filter((e) => e.content.trim()), { regex: regexSet.value });
   if (format === "json") {
     download(new Blob([JSON.stringify(card, null, 2)], { type: "application/json" }), `${safeName()}.json`);
     track("card_export", { detail: "json" });
@@ -1208,7 +922,7 @@ async function exportCard(format: "png" | "json") {
         >
           <span class="side__label">{{ $t(`editor.section.${key}`) }}</span>
           <!-- 世界書條目數：一本六十條跟一本三條在導覽上就看得出來 -->
-          <span v-if="key === 'worldbook' && worldbookEntries.length" class="side__n">{{ worldbookEntries.length }}</span>
+          <span v-if="key === 'worldbook' && wb.entries.length" class="side__n">{{ wb.entries.length }}</span>
           <span v-if="lacks(key)" class="side__dot" role="img" :aria-label="$t('editor.section.missing')" />
           <svg v-else-if="filled[key]" class="side__check" viewBox="0 0 16 16" role="img"
                :aria-label="$t('editor.section.filled')" fill="none" stroke="currentColor" stroke-width="1.8"
@@ -1351,13 +1065,15 @@ async function exportCard(format: "png" | "json") {
                          :max="WORLD_LIMITS.profile" :hint="$t('editor.world.char.profile.hint')" />
               <FieldText :id="`f-wc-desc-${i}`" v-model="c.description" :label="$t('editor.world.char.description')" :rows="10"
                          :max="WORLD_LIMITS.description" :hint="$t('editor.world.char.description.hint')" />
-              <div class="field">
-                <label :for="`f-wc-book-${i}`">{{ $t("editor.world.char.lorebook") }}</label>
-                <select :id="`f-wc-book-${i}`" v-model="c.lorebookId">
-                  <option value="">{{ $t("editor.world.char.lorebook.none") }}</option>
-                  <option v-for="b in myWorldbooks" :key="b.worldbookId" :value="b.worldbookId">{{ b.name }}</option>
-                </select>
+              <div class="world-char__book">
+                <h4 class="world-char__sub">{{ $t("editor.world.char.lorebook") }}</h4>
                 <p class="hint">{{ $t("editor.world.char.lorebook.hint") }}</p>
+                <WorldbookEditor v-model="memberBook(c).entries" v-model:book-name="memberBook(c).name"
+                                 v-model:book-desc="memberBook(c).desc"
+                                 :meta-locked="Boolean(memberBook(c).id) && !memberBook(c).meta?.visibility"
+                                 :bound="Boolean(memberBook(c).id) || memberBook(c).pending" @create="memberBook(c).createDraft()"
+                                 @imported="memberBook(c).imported($event)" @pick="pickBook(memberBook(c), $event)"
+                                 @release="releaseBook(memberBook(c))" @export-book="exportBook(memberBook(c), c.name)" />
               </div>
               <div class="rxbar__acts">
                 <button type="button" class="btn btn--sm" @click="removeWorldCharacter(i)">{{ $t("editor.world.removeCharacter") }}</button>
@@ -1439,12 +1155,12 @@ async function exportCard(format: "png" | "json") {
         <section v-if="can('worldbook')" data-section="worldbook" class="pane">
           <h2 class="pane__title">{{ $t("editor.section.worldbook") }}</h2>
           <p class="muted">{{ $t("wb.lede") }}</p>
-          <WorldbookEditor v-model="worldbookEntries" v-model:book-name="worldbookName"
-                           v-model:book-desc="worldbookDesc"
-                           :meta-locked="Boolean(worldbookId) && !worldbookMeta?.visibility"
-                           :bound="Boolean(worldbookId) || worldbookPending" @create="createWorldbookDraft"
-                           @imported="onWorldbookImported" @pick="onWorldbookPick"
-                           @release="onWorldbookRelease" @export-book="exportWorldbook" />
+          <WorldbookEditor v-model="wb.entries" v-model:book-name="wb.name"
+                           v-model:book-desc="wb.desc"
+                           :meta-locked="Boolean(wb.id) && !wb.meta?.visibility"
+                           :bound="Boolean(wb.id) || wb.pending" @create="wb.createDraft()"
+                           @imported="wb.imported($event)" @pick="pickBook(wb, $event)"
+                           @release="releaseBook(wb)" @export-book="exportBook(wb, draft.roleName)" />
         </section>
 
         <!-- 发布 -->
@@ -1701,6 +1417,8 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .pane__sub { margin: var(--s-4) 0 var(--s-2); font-size: 1rem; }
 .world-char { border: 1px solid var(--line, rgba(127, 127, 127, 0.25)); border-radius: var(--r, 12px); padding: var(--s-3); margin: 0 0 var(--s-3); }
 .world-char__row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); }
+.world-char__book { margin-top: var(--s-3); padding-top: var(--s-3); border-top: 1px solid var(--line, rgba(127, 127, 127, 0.25)); }
+.world-char__sub { margin: 0 0 var(--s-1); font-size: 0.95rem; }
 @media (max-width: 640px) { .world-char__row { grid-template-columns: 1fr; } }
 .rxbar .chip { margin-left: 4px; height: 20px; padding: 0 7px; font-variant-numeric: tabular-nums; }
 .panel { padding: var(--s-4); display: grid; gap: var(--s-2); }
