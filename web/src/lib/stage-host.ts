@@ -28,6 +28,7 @@ import { forgetVerifiedAccount } from "@/lib/connections";
 import { applyLocale, i18n } from "@/lib/i18n";
 import { isPlayHost } from "@/lib/site";
 import { isStandalone } from "@/lib/pwa";
+import { onStageSignOut, stageStorageScope } from "@/lib/stage-storage";
 import type { useSession } from "@/lib/session";
 
 type Session = ReturnType<typeof useSession>;
@@ -168,6 +169,8 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
       },
     });
     const player = deps.player === undefined ? deps.session.me : deps.player;
+    // 作者規則快取綁在這個帳號上（雜湊，不是帳號 ID）；沒登入就不存。登出時由 stage-storage 叫舞台清掉。
+    const storageScope = await stageStorageScope(provider, player);
     host.events.on('conversationActivity', async (payload: unknown) => {
       const activity = payload as { roleId?: unknown; conversationId?: unknown } | null;
       const conversationId = activity?.conversationId;
@@ -197,11 +200,13 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
         user: player
           ? { id: String(player.accountNumId), nickName: player.nickName, avatar: player.avatar }
           : undefined,
+        storageScope,
       },
       api: { base: provider === currentProvider() ? UPSTREAM_API : apiBaseOf(provider) },
       i18n: i18n.global,
       sandbox,
     });
+    onStageSignOut(() => stage.clearAuthorRuleStorage?.());
     return stage.MoonStage;
   })();
   stagePromise.catch(() => { stagePromise = null; });

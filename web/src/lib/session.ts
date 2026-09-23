@@ -1,5 +1,6 @@
 import { managedAuth, managedLogout, forgetManaged, isManagedAuth, authRequest } from './managed-auth';
 import { clearLibraryCache } from './library';
+import { clearStageStorage } from './stage-storage';
 import { currentProvider, setProvider, type ProviderId } from './provider';
 import {useProviderUpstream} from './config';
 import { PROVIDERS } from "./provider";
@@ -160,6 +161,8 @@ export const useSession = defineStore("session", () => {
     profile.value = null;
     setNsfwViewer(null);
     setLoginViewer(null);
+    // 舞台存在這台裝置上的聊天快取（作者規則的定稿結果）：登出就刪，下一個用這台裝置的人讀不到。
+    await clearStageStorage();
     if(await managedAuth()){await managedLogout();location.reload();}
     else await Promise.all(PROVIDERS.map(provider => revokeSession(provider.id)));
   }
