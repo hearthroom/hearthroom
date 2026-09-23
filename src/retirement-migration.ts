@@ -1,4 +1,5 @@
 import {Hono} from 'hono';
+import {cutoverCard} from './retirement-cutover';
 import {bodyLimit} from 'hono/body-limit';
 import {delegatedAccess} from './account-auth';
 import {connectedMemberId} from './connections';
@@ -72,4 +73,10 @@ retirementRoutes.post('/internal/retirement/migrate',async c=>{
  if(sourceIdentity.accountNumId!==row.author_num_id||targetIdentity.accountNumId!==target.externalId)throw new HttpError(409,'migration_owner_changed');
  await distributeHosted(c.env,{memberId:row.member_id,versionId:row.version_id,sourceAccount:row.author_num_id,sourceToken:sourceAuth.accessToken,targetProvider:'harbor',targetAccount:target.externalId,targetToken:targetAuth.accessToken});
  return c.json({status:'ready'});
+});
+
+retirementRoutes.post('/internal/retirement/cutover',async c=>{
+ const body=await c.req.json().catch(()=>null) as {cardNumber?:number}|null;
+ if(!Number.isSafeInteger(body?.cardNumber)||body!.cardNumber!<=100000)throw new HttpError(400,'invalid_card_number');
+ return c.json(await cutoverCard(c.env,body!.cardNumber!));
 });

@@ -78,3 +78,8 @@ it('rejects a draft when the saved target grant belongs to another account',asyn
  expect(response.status).toBe(409);
  expect(sync).not.toHaveBeenCalled();
 });
+
+it('keeps canonical cutover behind the same operator key',async()=>{
+ const response=await SELF.fetch('https://c.test/internal/retirement/cutover',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cardNumber:100001})});
+ expect(response.status).toBe(403);
+});
