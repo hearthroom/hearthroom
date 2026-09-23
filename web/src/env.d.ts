@@ -37,6 +37,8 @@ declare module "moonstage/stage" {
         getAccessToken(): Promise<string | null>;
         onUnauthorized(): void;
         user?: { id: string; nickName?: string; avatar?: string };
+        /** 作者規則快取的帳號範圍：不可逆雜湊（lib/stage-storage.ts），沒給就不存。 */
+        storageScope?: string | null;
       };
       api: { base: string };
       i18n?: StageI18n;
@@ -53,6 +55,8 @@ declare module "moonstage/stage" {
     },
   ): Promise<void>;
   export function mergeStageMessages(i18n: StageI18n): void;
+  /** 刪掉這個 origin 上的作者規則快取、之後只用記憶體，並叫開著的沙箱卡也清掉（登出用）。 */
+  export function clearAuthorRuleStorage(): Promise<void>;
   export const MoonStage: Component;
 }
 declare module "moonstage/stage.css";
@@ -78,6 +82,11 @@ declare module "stage-canvas/style-scope" {
   export type CardFormat = "mmd" | "tavern";
   export function normalizeCardFormat(raw: unknown): CardFormat;
   export function scopeCardHtml(html: string, format: CardFormat, scope?: string): string;
+}
+/** 舞台作者規則快取（聊天原文＋套完的 HTML）的資料庫名與刪除（stage/src/common/author-rules/store.ts）。 */
+declare module "stage-author-rules/store" {
+  export const AUTHOR_RULE_DB_NAME: string;
+  export function deleteAuthorRuleStore(options?: { factory?: IDBFactory | null; name?: string; timeoutMs?: number }): Promise<boolean>;
 }
 declare module "stage-canvas/platform-defaults" {
   export function stripUnknownTags(html: string): string;

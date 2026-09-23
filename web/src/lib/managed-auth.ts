@@ -1,5 +1,6 @@
 import { PROVIDERS, type ProviderId } from './provider';
 import type { TokenPair } from './oauth';
+import { clearStageStorage } from './stage-storage';
 
 let mode: boolean | undefined;
 let loading: Promise<boolean> | undefined;
@@ -29,8 +30,13 @@ if(typeof window!=='undefined')window.addEventListener('storage',event=>{
   if(mode!==true||event.key!==changeKey||!event.newValue)return;
   try{
     const change=JSON.parse(event.newValue);
-    if(change.action==='logout'){loggedOut=true;forgetManaged();}
-    else if(change.action==='disconnect'&&PROVIDERS.some(p=>p.id===change.provider)){stopped.add(change.provider);forgetManaged(change.provider);}
+    if(change.action==='logout'){
+      loggedOut=true;forgetManaged();
+      // 另一個分頁登出：這個分頁也刪掉舞台存的聊天快取（這個分頁開著的連線會讓位），再重新載入。
+      void clearStageStorage().finally(()=>location.reload());
+      return;
+    }
+    if(change.action==='disconnect'&&PROVIDERS.some(p=>p.id===change.provider)){stopped.add(change.provider);forgetManaged(change.provider);}
     else return;
     // A full reload also destroys access-token caches owned by the embedded stage.
     location.reload();

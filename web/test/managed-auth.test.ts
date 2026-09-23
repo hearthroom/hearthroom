@@ -50,7 +50,8 @@ it('clears tokens and embedded app state when another tab logs out',async()=>{
   await managedAuth();persist({accessToken:'previous-tab',expiresAt:Date.now()+60000},'harbor');
   window.dispatchEvent(new StorageEvent('storage',{key:'hearthroom.auth.change',newValue:JSON.stringify({action:'logout',nonce:'test'})}));
   expect(restorePersisted('harbor')).toBeNull();
-  expect(reload).toHaveBeenCalledOnce();
+  // 重新載入前先刪掉舞台的聊天快取（stage-storage），所以 reload 是非同步的。
+  await vi.waitFor(()=>expect(reload).toHaveBeenCalledOnce());
   expect(await managedToken('harbor')).toBeNull();
 });
 

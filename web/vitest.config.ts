@@ -18,6 +18,8 @@ export default defineConfig({
       { find: "stage-canvas/platform-defaults", replacement: fileURLToPath(new URL("../stage/src/pages/canvas/canvas-platform-defaults.ts", import.meta.url)) },
       { find: "stage-canvas/memory", replacement: fileURLToPath(new URL("../stage/src/pages/canvas/canvas-memory.ts", import.meta.url)) },
       { find: "stage-canvas/components", replacement: fileURLToPath(new URL("../stage/src/pages/canvas/components", import.meta.url)) },
+      // 舞台作者規則快取的資料庫名與刪除（無依賴的小檔）：登出時刪掉，不必為此載入整個舞台。
+      { find: "stage-author-rules/store", replacement: fileURLToPath(new URL("../stage/src/common/author-rules/store.ts", import.meta.url)) },
       {
         find: /^@\/(.*)$/,
         replacement: "$1",
