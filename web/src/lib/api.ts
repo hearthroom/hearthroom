@@ -388,6 +388,21 @@ export async function fetchReviewDetail(id: string, token: string): Promise<Revi
   return json(await fetch(`${COMMUNITY_API}/review/${encodeURIComponent(id)}/detail`, { headers: { ...from(), ...authHeaders(token) } }));
 }
 
+export interface OriginalitySource {
+  cardId: string; name: string; status: "approved" | "pending" | "removed";
+  firstSeenAt: number; earlier: boolean; similarity: number;
+  /** 這張待審卡角色設定裡與該來源重複的原文區段 [start, end) */
+  segments: [number, number][];
+}
+export type ReviewOriginality =
+  | { available: false; reason: "no_snapshot" | "too_short" }
+  | { available: true; similarity: number; units: number; comparedCards: number; segments: [number, number][]; sources: OriginalitySource[] };
+
+/** 角色設定查重（只有審核人看得到）。 */
+export async function fetchReviewOriginality(id: string, token: string): Promise<ReviewOriginality> {
+  return json(await fetch(`${COMMUNITY_API}/review/${encodeURIComponent(id)}/originality`, { headers: { ...from(), ...authHeaders(token) } }));
+}
+
 // ---- 上游開放 API（跨網域）---------------------------------------------------
 
 export interface Me { accountNumId: number; nickName: string; avatar: string; email?: string }
