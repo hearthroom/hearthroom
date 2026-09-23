@@ -9,7 +9,7 @@
 import { computed, onMounted, ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { ApiError, claimReview, fetchReviewDetail, releaseReview, stampReview, type ReviewDetail } from "@/lib/api";
+import { ApiError, claimReview, fetchReviewDetail, fetchReviewOriginality, releaseReview, stampReview, type ReviewDetail, type ReviewOriginality } from "@/lib/api";
 import { dateTime } from "@/lib/format";
 import { pageTitle } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
@@ -29,8 +29,44 @@ const needsClaim = ref(false);
 const done = ref("");
 const busy = ref(false);
 const note = ref("");
-const section = ref<"basic" | "persona" | "dialogue" | "worldbook" | "display" | "cost">("basic");
-const SECTIONS = ["basic", "persona", "dialogue", "worldbook", "display", "cost"] as const;
+const section = ref<"basic" | "persona" | "originality" | "dialogue" | "worldbook" | "display" | "cost">("basic");
+const SECTIONS = ["basic", "persona", "originality", "dialogue", "worldbook", "display", "cost"] as const;
+const REVIEW_SECTIONS: readonly string[] = ["originality", "display", "cost"];
+
+// 查重只給審核人參考，不替審核人下結論；分開載入，查重慢或失敗都不擋審核頁。
+const originality = ref<ReviewOriginality | null>(null);
+const originalityError = ref("");
+/** 只看某一張來源的重複段落；null＝全部來源 */
+const picked = ref<string | null>(null);
+const percent = (x: number) => `${Math.round(x * 100)}%`;
+const marked = computed(() => {
+  const text = doc.value?.roleDetailDesc ?? "";
+  const r = originality.value;
+  if (!r?.available) return [{ text, hit: false }];
+  const segs = picked.value ? r.sources.find((x) => x.cardId === picked.value)?.segments ?? [] : r.segments;
+  const out: { text: string; hit: boolean }[] = [];
+  let at = 0;
+  for (const [a, b] of segs) {
+    if (a > at) out.push({ text: text.slice(at, a), hit: false });
+    out.push({ text: text.slice(a, b), hit: true });
+    at = b;
+  }
+  if (at < text.length) out.push({ text: text.slice(at), hit: false });
+  return out;
+});
+const sectionLabel = (s: (typeof SECTIONS)[number]) => {
+  const label = REVIEW_SECTIONS.includes(s) ? t(`review.section.${s}`) : t(`editor.section.${s}`);
+  return s === "originality" && originality.value?.available ? `${label} · ${percent(originality.value.similarity)}` : label;
+};
+
+async function loadOriginality() {
+  originalityError.value = "";
+  try {
+    originality.value = await fetchReviewOriginality(id.value, await token());
+  } catch (err) {
+    originalityError.value = err instanceof Error ? err.message : t("state.loadFailed");
+  }
+}
 
 const doc = computed(() => data.value?.detail.document);
 // 對話示例入庫是一串 JSON，作者在編輯頁看到的是一輪一輪的「誰說、說什麼」；審核頁照編輯頁的樣子畫，不倒原始字串。
@@ -51,6 +87,7 @@ async function load() {
   try {
     needsClaim.value=false;
     data.value = await fetchReviewDetail(id.value, await token());
+    void loadOriginality();
     document.title = pageTitle(`${t("review.detail.title")} · ${data.value.detail.document.roleName}`);
   } catch (err) {
     needsClaim.value=err instanceof ApiError && err.status===409 && err.message==="claim this submission first";
@@ -146,7 +183,7 @@ onMounted(() => { void load(); });
 
       <div class="seg tabs">
         <button v-for="s in SECTIONS" :key="s" class="seg__item" :class="{ 'seg__item--on': section === s }" :aria-pressed="section === s" @click="section = s">
-          {{ s === "display" || s === "cost" ? $t(`review.section.${s}`) : $t(`editor.section.${s}`) }}
+          {{ sectionLabel(s) }}
         </button>
       </div>
 
@@ -164,6 +201,47 @@ onMounted(() => { void load(); });
         <div class="field"><label>{{ $t("editor.detail") }}</label><pre class="text mono">{{ doc.roleDetailDesc }}</pre></div>
         <div class="field"><label>{{ $t("editor.contract") }}</label><pre class="text mono">{{ doc.roleOutputContract }}</pre></div>
         <div class="field"><label>{{ $t("editor.jailbreak") }}</label><pre class="text mono">{{ doc.customInstructions ?? doc.jailbreak }}</pre></div>
+      </section>
+
+      <section v-show="section === 'originality'" class="pane panel">
+        <p v-if="originalityError" class="notice notice--error" role="alert">{{ originalityError }}</p>
+        <div v-else-if="!originality" class="ghost originality-ghost" aria-hidden="true" />
+        <p v-else-if="!originality.available" class="subtle">{{ $t(`review.originality.unavailable.${originality.reason}`) }}</p>
+        <template v-else>
+          <div class="score">
+            <strong class="score__value">{{ percent(originality.similarity) }}</strong>
+            <span class="score__label">{{ $t("review.originality.similarity") }}</span>
+            <span class="subtle">{{ $t("review.originality.compared", { n: originality.comparedCards }) }}</span>
+          </div>
+          <p class="subtle small-note">{{ $t("review.originality.hint") }}</p>
+          <p v-if="!originality.sources.length" class="notice">{{ $t("review.originality.none") }}</p>
+          <div v-else class="field">
+            <label>{{ $t("review.originality.sources") }}</label>
+            <ul class="sources">
+              <li>
+                <button type="button" class="source" :class="{ 'source--on': picked === null }" :aria-pressed="picked === null" @click="picked = null">
+                  <span class="source__name">{{ $t("review.originality.all") }}</span>
+                  <span class="source__pct">{{ percent(originality.similarity) }}</span>
+                </button>
+              </li>
+              <li v-for="src in originality.sources" :key="src.cardId">
+                <button type="button" class="source" :class="{ 'source--on': picked === src.cardId }" :aria-pressed="picked === src.cardId" @click="picked = src.cardId">
+                  <span class="source__name">{{ src.name || $t("review.originality.untitled") }}</span>
+                  <span class="chip">{{ $t(`review.originality.status.${src.status}`) }}</span>
+                  <span class="subtle">{{ $t(src.earlier ? "review.originality.earlier" : "review.originality.later") }} · {{ dateTime(src.firstSeenAt) }}</span>
+                  <span class="source__pct">{{ percent(src.similarity) }}</span>
+                </button>
+                <!-- 只連已上榜的卡：審核中的卡還在盲審，公開頁不該成為認出作者的途徑 -->
+                <RouterLink v-if="src.status === 'approved'" class="source__open" :to="lp(`/cards/${src.cardId}`)" target="_blank">{{ $t("review.action.open") }}</RouterLink>
+              </li>
+            </ul>
+          </div>
+          <div class="field">
+            <label>{{ $t("editor.detail") }}</label>
+            <p v-if="originality.segments.length" class="subtle small-note">{{ $t("review.originality.marked") }}</p>
+            <pre class="text mono marked"><template v-for="(piece, i) in marked" :key="i"><mark v-if="piece.hit" class="hit">{{ piece.text }}</mark><template v-else>{{ piece.text }}</template></template></pre>
+          </div>
+        </template>
       </section>
 
       <section v-show="section === 'dialogue'" class="pane panel">
@@ -297,4 +375,18 @@ onMounted(() => { void load(); });
 .rating { margin: 6px 0 0; font-size: 13px; color: var(--text-2); }
 .rating--nsfw strong { color: var(--danger); }
 .detail-ghost { height: 60vh; border-radius: var(--r-md); }
+.originality-ghost { height: 120px; border-radius: var(--r-md); }
+.score { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2) var(--s-3); margin-bottom: var(--s-2); }
+.score__value { font-size: 32px; font-variant-numeric: tabular-nums; }
+.score__label { font-weight: 600; }
+.small-note { font-size: 13px; margin: 0 0 var(--s-3); }
+.sources { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); }
+.sources li { display: flex; align-items: center; gap: var(--s-2); }
+.source { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-3); border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.source--on { border-color: var(--accent); background: var(--surface-2); }
+.source__name { font-weight: 600; overflow-wrap: anywhere; }
+.source__pct { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 600; }
+.source__open { flex: none; font-size: 13px; }
+.marked { display: block; }
+.hit { display: inline; background: color-mix(in srgb, var(--accent) 30%, transparent); color: inherit; border-radius: 2px; }
 </style>

@@ -3,6 +3,7 @@ import { apiBaseOf, type ProviderId } from './providers';
 import { getCard, upsertCard } from './cards';
 import { pendingSubmissionOf } from './review';
 import { saveSnapshotStatement } from './review-snapshot';
+import { indexStatements } from './originality';
 import { buildSearchText, projectRole, upstream, type UpstreamRole } from './upstream';
 
 interface Receipt { workId: string; versionId: string; hostedRevisionId: string }
@@ -102,6 +103,7 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  if(sealed.authorNumId!==input.account||sealed.roleId!==receipt.hostedRevisionId)throw new HttpError(502,'hosting_receipt_invalid');
  const settings=await upstream.readForReview(env,input.token,receipt.hostedRevisionId,provider);
  const submissionId=crypto.randomUUID();
+ const privateDoc=(settings.document??{}) as Record<string,unknown>;
  // Validate size before any registry write. Snapshot creation joins the submission
  // transaction below, so reviewers never see an incomplete submitted revision.
  saveSnapshotStatement(db,submissionId,settings,input.now);
@@ -112,6 +114,8 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
     .bind(submissionId,cardId,provider,receipt.hostedRevisionId,existing?.approved_version_id?'re':'first','version:'+receipt.versionId,input.now,Number(input.nsfw),version!.version_id,submissionId),
    db.prepare("INSERT OR IGNORE INTO hosting_replicas(version_id,provider,source_role_id,hosted_revision_id,state,created_at) SELECT version_id,provider,source_role_id,hosted_revision_id,'ready',created_at FROM hosting_versions WHERE version_id=? AND submission_id=?").bind(version!.version_id,submissionId),
    snapshot,
+   // 查重指紋跟審核單同一批：單子沒寫成就不留指紋
+   ...indexStatements(db,{submissionId,cardId,memberId:input.memberId,text:String(privateDoc.roleDetailDesc??''),names:[String(privateDoc.roleName??''),String(privateDoc.userName??'')],now:input.now}),
    db.prepare("UPDATE cards SET status='pending' WHERE id=? AND approved_version_id IS NULL").bind(cardId),
  ];
  if(existing){await db.batch(finalize(existing.id));}

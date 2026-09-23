@@ -53,6 +53,7 @@ import {
 } from "./review";
 import { setCardFeatured } from "./cards";
 import { loadSnapshot } from "./review-snapshot";
+import { originalityReport } from "./originality";
 import { type Env, HttpError } from "./types";
 import { gameRoutes } from "./game";
 import { serveSandbox } from "./sandbox";
@@ -1039,14 +1040,29 @@ app.post("/v1/review/:id/stamp", async (c) => {
   });
 });
 
-/** 審核人讀整份設定。要先領著這張單：沒領就沒在看，不該讀得到別人的卡。 */
-app.get("/v1/review/:id/detail", async (c) => {
-  const member = await requireReviewer(c);
-  const s = await getSubmission(c.env.DB, c.req.param("id"));
+/**
+ * 角色設定查重（只給審核人，作者看不到）。跟審核頁同一道門；結果每次現算，見 src/originality.ts。
+ * 分開一支端點：查重慢或出錯都不拖累審核頁本身。
+ */
+app.get("/v1/review/:id/originality", async (c) => {
+  const { s } = await claimedSubmission(c);
+  const report = await originalityReport(c.env.DB, s, await loadSnapshot(c.env.DB, s.id), lang(c));
+  note(c, { event: "review_originality", subject: s.source_role_id, detail: !report.available ? report.reason : report.similarity >= 0.3 ? "high" : report.similarity > 0 ? "some" : "none" });
+  return c.json(report, 200, { "Cache-Control": "private, no-store" });
+});
 
+/** 審核人讀整份設定。要先領著這張單：沒領就沒在看，不該讀得到別人的卡。 */
+async function claimedSubmission(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>) {
+  const member = await requireReviewer(c);
+  const s = await getSubmission(c.env.DB, c.req.param("id")!);
   if(s.status!=='pending')throw new HttpError(410,'review no longer active');
   if(s.claimed_by!==member.id||s.claimed_at===null||Date.now()-s.claimed_at>=CLAIM_TTL_MS)throw new HttpError(409,'claim this submission first');
   if(s.nsfw===1&&(await memberNsfw(c.env.DB,member.id)).ageVerifiedAt===null)throw new HttpError(403,'age_verification_required');
+  return { member, s };
+}
+
+app.get("/v1/review/:id/detail", async (c) => {
+  const { member, s } = await claimedSubmission(c);
   let detail = await loadSnapshot(c.env.DB, s.id);
   if(!detail&&s.content_hash.startsWith('version:'))throw new HttpError(404,'snapshot not found');
   if (!detail) {
