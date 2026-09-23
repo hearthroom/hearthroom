@@ -1,6 +1,8 @@
 import {connectedMemberId} from './connections';
 import {memberProfile} from './members';
-import {buildSearchText,upstream} from './upstream';
+import {delegatedAccess} from './account-auth';
+import {apiBaseOf} from './providers';
+import {buildSearchText,projectRole,upstream} from './upstream';
 import {HttpError,type Env} from './types';
 
 /** One bounded operator transaction. Immutable review evidence is never rewritten. */
@@ -22,7 +24,20 @@ export async function cutoverCard(env:Env,cardNumber:number){
  if(await connectedMemberId(db,'harbor',targetAccount)!==row.member_id)throw new HttpError(409,'migration_owner_changed');
  const copy=await db.prepare("SELECT role_id,external_id FROM work_copies WHERE work_id=? AND provider='harbor' AND role_id IS NOT NULL").bind(row.work_id).first<{role_id:string;external_id:number}>();
  if(!copy||copy.external_id!==targetAccount)throw new HttpError(409,'migration_draft_unavailable');
- const draft=await upstream.fetchRole(env,copy.role_id,'harbor');
+ let draft;
+ try{draft=await upstream.fetchRole(env,copy.role_id,'harbor')}
+ catch(error){
+  if(!(error instanceof HttpError)||error.status!==404)throw error;
+  // A private editable copy stays private. Only its linked author grant can
+  // verify it; the approved immutable replica remains the public projection.
+  const auth=await delegatedAccess(env,'harbor',targetAccount,row.member_id);
+  if((await upstream.fetchMe(env,auth.accessToken,'harbor')).accountNumId!==targetAccount)throw new HttpError(409,'migration_owner_changed');
+  const response=await fetch(`${apiBaseOf(env,'harbor')}/open/v1/role/detail?roleId=${encodeURIComponent(copy.role_id)}`,{
+   headers:{Authorization:`Bearer ${auth.accessToken}`,'User-Agent':'Hearthroom-Retirement/1.0'},redirect:'manual',signal:AbortSignal.timeout(20000),
+  });
+  if(!response.ok)throw new HttpError(409,'migration_draft_unavailable');
+  draft=projectRole(await response.json() as Record<string,unknown>);
+ }
  if(draft.roleId!==copy.role_id||draft.authorNumId!==targetAccount)throw new HttpError(409,'migration_owner_changed');
  const replica=row.approved_version_id ? await db.prepare("SELECT r.hosted_revision_id FROM hosting_replicas r JOIN hosting_versions v ON v.version_id=r.version_id WHERE r.version_id=? AND r.provider='harbor' AND r.state='ready' AND v.state='approved' AND v.member_id=? AND v.work_id=?").bind(row.approved_version_id,row.member_id,row.work_id).first<{hosted_revision_id:string}>():null;
  const approved=replica?await upstream.fetchRole(env,replica.hosted_revision_id,'harbor'):null;

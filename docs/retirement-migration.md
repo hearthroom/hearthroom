@@ -39,7 +39,8 @@ migration receipts are separate from local verification.
 
 After synchronization, `POST /internal/retirement/cutover` with `{cardNumber}`
 uses the same operator gate. It resolves the editable Harper copy from the work
-record, verifies public ownership and the current ready approved replica, then
+record, verifies ownership (using the linked author grant if the draft is private)
+and the current ready approved replica, then
 atomically moves canonical locators while retaining the work/member/card number,
 favorites, immutable review evidence and moderation restrictions. Rechecks inside
 the transaction reject changed ownership, approvals, active preparations and target
