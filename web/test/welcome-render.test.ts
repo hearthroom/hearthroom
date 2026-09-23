@@ -44,3 +44,24 @@ describe("開場白渲染", () => {
     expect(renderWelcome("你好。\n坐吧。", { charName: "c", userName: "u", asset: null }).html).toBe("");
   });
 });
+
+// 卡片頁的開場白改走背景執行緒（寫得慢的作者正則不再卡住整頁）：結果必須跟同步那條一字不差。
+describe("renderWelcomeAsync", () => {
+  it("renders exactly what the synchronous path renders", async () => {
+    const { renderWelcomeAsync } = await import("../src/lib/welcome-render");
+    const rules = [{ id: "t", name: "標題", find: "/<zzt>(.*?)<\\/zzt>/g", replace: '<div class="zzt-title">$1</div>', enabled: true }];
+    const cases: [string, Parameters<typeof renderWelcome>[1]][] = [
+      ["<zzt>导览|身份登记</zzt>\n\n什亭之匣进入登记模式。<zzhud>[主角]\n名字=未登记</zzhud>", { charName: "優香", userName: "你", asset: asset(rules) }],
+      ["<b>嗨</b>", { charName: "c", userName: "u", asset: asset(rules, "《美1》《工1》") }],
+      ["第一行 **粗**\n第二行 {{char}} 看著 {{user}}", { charName: "林鏡", userName: "你", asset: null }],
+      ["你好。\n坐吧。", { charName: "c", userName: "u", asset: null }],
+    ];
+    for (const [raw, opts] of cases) expect(await renderWelcomeAsync(raw, opts)).toEqual(renderWelcome(raw, opts));
+  });
+  it("is what the card page uses", async () => {
+    const { readFileSync } = await import("node:fs");
+    const page = readFileSync("src/pages/CardPage.vue", "utf8");
+    expect(page).toContain("renderWelcomeAsync(");
+    expect(page).not.toMatch(/[^A-Za-z]renderWelcome\(/);
+  });
+});

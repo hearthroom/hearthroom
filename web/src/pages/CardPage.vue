@@ -12,7 +12,7 @@ import AdultGate from "@/components/AdultGate.vue";
 import PreviewDoc from "@/components/preview/PreviewDoc.vue";
 import HtmlCardFrame from "@/components/HtmlCardFrame.vue";
 import { ApiError, fetchBoard, fetchCard, fetchCardPlatforms, type CardPlatform, fetchPlayerAsset, fetchPreviewPage, fetchRoleDetail } from "@/lib/api";
-import { renderWelcome } from "@/lib/welcome-render";
+import { renderWelcomeAsync } from "@/lib/welcome-render";
 import { recallCard } from "@/lib/card-memory";
 import { accountToken } from "@/lib/connections";
 import { currentProvider, type ProviderId } from "@/lib/provider";
@@ -97,10 +97,10 @@ function loadDetails(roleId: string, authorHandle: string | null, lang: string, 
       // 遊客與沒規則的卡就只畫 HTML／markdown 本身；純文字的開場白照舊走氣泡。
       void accountToken(provider).catch(() => null)
         .then((token) => fetchPlayerAsset(roleId, token || undefined, provider).catch(() => null))
-        .then((asset) => {
-          if (card.value?.roleId !== roleId) return;
-          const out = renderWelcome(rawWelcome, { charName, userName: t("card.you"), asset });
-          welcomeHtml.value = out.html;
+        // 作者正則在背景執行緒跑：寫得慢的規則只讓開場白晚點換上版面，不卡住整頁
+        .then((asset) => (card.value?.roleId === roleId ? renderWelcomeAsync(rawWelcome, { charName, userName: t("card.you"), asset }) : null))
+        .then((out) => {
+          if (out && card.value?.roleId === roleId) welcomeHtml.value = out.html;
         });
       showComments.value = (!card.value?.status || card.value.status === "approved") && raw.previewShowComments !== false;
       if (raw.hasPreviewPage === true) {

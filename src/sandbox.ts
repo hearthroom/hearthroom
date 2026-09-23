@@ -32,6 +32,8 @@ export function sandboxRoleIdOf(host: string): string | null {
  * 殼頁的 CSP：殼自己只連自己（connect-src 'self'）、只能被主站嵌（frame-ancestors）；作者外鏈腳本與樣式走 https:。
  * frame-src 放行同源／srcdoc／blob：前端區塊協議（上游 common/frontend-block）把圍欄裡的整份 HTML 文件掛成各自的
  * iframe；作者自己寫的 <iframe> 標籤仍被淨化層剝掉。跟上游 src/sandbox/index.html 的 meta 同一份。
+ * worker-src 放行 blob：作者正則規則在殼裡改到背景執行緒跑，執行緒程式內嵌在 sandbox.js 裡以 blob 啟動；
+ * blob 執行緒沿用這份 CSP，連線仍只到自己。
  */
 export const SANDBOX_CSP = [
   "default-src 'self'",
@@ -41,7 +43,7 @@ export const SANDBOX_CSP = [
   "media-src 'self' data: blob: https:",
   "font-src 'self' data: https:",
   "connect-src 'self'",
-  "worker-src 'self'",
+  "worker-src 'self' blob:",
   "frame-src 'self' about: blob:",
   "form-action 'none'",
   "base-uri 'none'",
