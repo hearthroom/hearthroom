@@ -15,14 +15,11 @@
  * 後面每一步都需要前一步產生的 id。任何一步失敗就停下並保留草稿，不做局部回滾——
  * 上游沒有跨資源的交易，硬回滾只會在失敗之上再疊一次失敗。
  */
-import SavePlatformsDialog from "@/components/SavePlatformsDialog.vue";
-import { savedDistributionTargets, saveCopies, type PlatformResult } from "@/lib/authoring-platforms";
 import { currentProvider, providerName, setProvider, type ProviderId } from "@/lib/provider";
 import { useProviderUpstream, UPSTREAM_API } from "@/lib/config";
 import { restorePersisted, refresh } from "@/lib/oauth";
 import { accountToken } from "@/lib/connections";
 import { platformPath } from "@/lib/distribution";
-import CardSyncPanel from "@/components/CardSyncPanel.vue";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
@@ -104,35 +101,6 @@ const { t } = useI18n();
 
 /** 有 roleId 就是編輯既有的卡；沒有就是建立。 */
 const editorProvider=ref(currentProvider());
-const platformDialog=ref<InstanceType<typeof SavePlatformsDialog>|null>(null);
-const platformResults=ref<PlatformResult[]>([]);
-const selectingPlatforms=ref(false);
-const linkedProviders=computed<ProviderId[]>(()=> {
- const linked=session.profile?.identities.map(i=>i.provider).filter((p):p is ProviderId=>p==='lunatalk'||p==='harbor')??[];
- return linked.length?linked:[editorProvider.value];
-});
-const preferenceKey=()=>`hearthroom.save-platforms.${editorProvider.value}.${roleId.value||'new'}`;
-async function choosePlatforms():Promise<ProviderId[]|null> {
- let defaults=linkedProviders.value;
- try {const saved=JSON.parse(localStorage.getItem(preferenceKey())||'null');if(Array.isArray(saved))defaults=defaults.filter(p=>saved.includes(p));}catch{}
- if(!defaults.length)defaults=linkedProviders.value;
- if(linkedProviders.value.length===1)return [...linkedProviders.value];
- selectingPlatforms.value=true;
- try {return await platformDialog.value!.choose(linkedProviders.value,defaults,roleId.value?editorProvider.value:undefined,{name:draft.value.roleName,avatarUrl:draft.value.roleBackground});}
- finally {selectingPlatforms.value=false;}
-}
-function rememberPlatforms(selected:ProviderId[]) {try{localStorage.setItem(preferenceKey(),JSON.stringify(selected));}catch{}}
-async function useSavePlatform(provider:ProviderId) {
- if(provider===editorProvider.value)return;
- const expected=session.profile?.identities.find(i=>i.provider===provider)?.externalId;
- if(!await accountToken(provider,expected))throw new Error(t('auth.expired'));
- const pair=restorePersisted(provider)??await refresh(provider);
- if(!pair)throw new Error(t('auth.expired'));
- const before=editorProvider.value;
- setProvider(provider);useProviderUpstream();
- try {await session.adopt(pair);editorProvider.value=provider;}
- catch(e) {setProvider(before);useProviderUpstream();throw e;}
-}
 const roleId = ref<string>((route.params.roleId as string) ?? "");
 const cardNumber = ref<number>();
 const isNew = computed(() => !roleId.value);
@@ -936,11 +904,10 @@ async function saveWorldbook(token: string, targetRoleId: string) {
  * 頁上提示改完要再送審；已經拿到連結的人照樣能玩，不受影響（owner 2026-09-15）。
  * 審核中的卡連轉私有都不行，只能等審完。
  */
-const distribution = ref<InstanceType<typeof CardSyncPanel> | null>(null);
 const roleVisibility = ref("");
 
 async function save() {
-  if (saving.value || loading.value || selectingPlatforms.value) return;
+  if (saving.value || loading.value) return;
   if (!draft.value.roleName.trim()) {
     section.value = "basic";
     error.value = t("editor.needName");
@@ -971,14 +938,11 @@ async function save() {
       : t("editor.world.tooLong", { n, field: t(worldIssue.reason === "profile" ? "editor.world.char.profile" : "editor.world.char.description") });
     return;
   }
-  const selected=await choosePlatforms();
-  if(!selected?.length)return;
   const wasNew = isNew.value;
   saving.value = true;
   error.value = "";
   saved.value = false;
   try {
-    if(wasNew && !selected.includes(editorProvider.value))await useSavePlatform(selected[0]);
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
 
@@ -1034,7 +998,7 @@ async function save() {
     await saveRegex(token, targetRoleId);
 
     if (review.resubmit) {
-      await registerCard(targetRoleId, token, review.nsfw === true, await savedDistributionTargets(targetRoleId,editorProvider.value), editorProvider.value);
+      await registerCard(targetRoleId, token, review.nsfw === true, [], editorProvider.value);
       reviewRetry.value = false;
       reviewResubmitted.value = true;
     }
@@ -1044,10 +1008,7 @@ async function save() {
     saved.value = true;
     restoredDraft.value = false;
     if (onCreatePage.value) localStorage.removeItem(DRAFT_KEY);
-    rememberPlatforms(selected);
-    platformResults.value=[{provider:editorProvider.value,status:'synced'},...await saveCopies(targetRoleId,editorProvider.value,selected,false)];
-    void distribution.value?.load();
-    if(!platformResults.value.some(r=>r.error))flash(t("edit.saved"));
+    flash(t("edit.saved"));
     track("card_edit", { subject: targetRoleId });
     void loadValidation();
 
@@ -1115,7 +1076,7 @@ async function remove() {
 // ── 送審 ──────────────────────────────────────────────────────────
 
 async function publish() {
-  if (!canPublish.value || selectingPlatforms.value || saving.value) return;
+  if (!canPublish.value || saving.value) return;
   const rating = await confirmChoice({
     title: t("mine.consent.title"), message: t("workspace.reviewConsent"),
     confirmText: t("mine.consent.confirm"), choiceLabel: t("mine.rating.label"),
@@ -1130,7 +1091,7 @@ async function publish() {
   try {
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
-    await registerCard(roleId.value, token, rating === "nsfw", await savedDistributionTargets(roleId.value,editorProvider.value), editorProvider.value);
+    await registerCard(roleId.value, token, rating === "nsfw", [], editorProvider.value);
     saving.value = false;
     await router.push(lp("/mine?fresh=1"));
   } catch (err) {
@@ -1219,7 +1180,6 @@ async function exportCard(format: "png" | "json") {
 </script>
 
 <template>
-  <SavePlatformsDialog ref="platformDialog" />
 
   <div class="page editor layout" :style="layoutStyle">
     <header class="head">
@@ -1260,12 +1220,6 @@ async function exportCard(format: "png" | "json") {
 
       <!-- 中：表單 -->
       <form ref="body" class="body" @submit.prevent="save">
-        <section v-if="platformResults.length" class="platform-results panel" aria-live="polite">
-          <h2>{{ $t('editor.platforms.results') }}</h2>
-          <p v-for="result in platformResults" :key="result.provider" :role="result.error?'alert':'status'">
-            <strong>{{ providerName(result.provider) }}</strong> · {{ result.error || $t(result.status === 'synced' ? 'edit.saved' : `linked.status.${result.status}`) }}
-          </p>
-        </section>
         <p v-if="!isNew" class="notice" role="status">{{ $t("workspace.editNotice") }}</p>
         <p v-else-if="roleVisibility === 'public'" class="notice" role="status">{{ $t("editor.publicNotice") }}</p>
         <p v-else-if="roleVisibility === 'waitReview'" class="notice" role="status">{{ $t("editor.reviewNotice") }}</p>
@@ -1519,7 +1473,6 @@ async function exportCard(format: "png" | "json") {
             </button>
           </div>
 
-          <CardSyncPanel v-if="roleId" ref="distribution" :role-id="roleId" :disabled="dirty || isNew" />
 
           <!-- 刪卡：放在最後、跟其他動作隔開，紅色只用在這一顆 -->
           <div v-if="!isNew" class="panel panel--danger">
@@ -1547,7 +1500,7 @@ async function exportCard(format: "png" | "json") {
           右欄就整條讓給手機框。
         -->
         <div class="bar">
-          <button class="btn btn--primary" type="submit" :disabled="saving || (!dirty && !isNew && !reviewRetry && !platformResults.some(r => r.error))">
+          <button class="btn btn--primary" type="submit" :disabled="saving || (!dirty && !isNew && !reviewRetry)">
             {{ saveLabel }}
           </button>
           <button v-if="!isNew" type="button" class="btn" :disabled="!canPublish || saving" @click="publish">

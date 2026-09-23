@@ -13,9 +13,8 @@ describe("GET /v1/providers", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { providers: { id: string; name: string }[] };
     // 測試環境兩家都設了（見 vitest.config.ts）
-    expect(body.providers.map((p) => p.id)).toEqual(["lunatalk", "harbor"]);
-    expect(body.providers[0].name).toBe("LunaTalk");
-    expect(body.providers[1].name).toBe("HarperHarbor");
+    expect(body.providers.map((p) => p.id)).toEqual(["harbor"]);
+    expect(body.providers[0].name).toBe("HarperHarbor");
   });
 
   it("不需要登入就問得到：登入頁本來就還沒有身分", async () => {

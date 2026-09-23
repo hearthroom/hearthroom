@@ -16,9 +16,9 @@ it('does not repeatedly authorize on network or provider errors',async()=>{
  await expect(ensurePlayAuthorization('test-token','/play/a')).rejects.toThrow('unavailable');
  expect(beginLogin).not.toHaveBeenCalled();
 });
-it('keeps LunaTalk and already authorized Harper sessions unchanged',async()=>{
+it('keeps HarperHarbor and already authorized Harper sessions unchanged',async()=>{
  const fetch=vi.fn(async()=>new Response('[]'));vi.stubGlobal('fetch',fetch);
  expect(await ensurePlayAuthorization('test-token','/play/a')).toBe(true);
- setProvider('lunatalk');expect(await ensurePlayAuthorization('test-token','/play/a')).toBe(true);
- expect(fetch).toHaveBeenCalledTimes(1);expect(beginLogin).not.toHaveBeenCalled();
+ setProvider('harbor');expect(await ensurePlayAuthorization('test-token','/play/a')).toBe(true);
+ expect(fetch).toHaveBeenCalledTimes(2);expect(beginLogin).not.toHaveBeenCalled();
 });

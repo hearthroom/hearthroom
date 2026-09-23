@@ -59,52 +59,8 @@ async function result(res: Response) {
   return body;
 }
 export function connectAccount(provider: ProviderId, returnTo: string) {
-  return beginLogin(returnTo, { provider, linkFrom: currentProvider() });
+  return beginLogin(returnTo, { provider });
 }
-export async function finishConnection(
-  provider: ProviderId,
-  from: ProviderId,
-  token: TokenPair,
-  choice?: {keepHandle: string; sourceHandle: string; targetHandle: string | null}
-): Promise<SiteMe> {
-  const managed = await managedAuth();
-  const source = managed ? null : await accountToken(from);
-  if (!managed && !source) throw new Error("connection_source_expired");
-  const profile = await result(
-    await fetch("/v1/me/connections", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(source ? {Authorization: `Bearer ${source}`} : {}),
-        "X-Provider": from,
-        ...(managed ? {"X-Hearthroom-Request":"1"} : {}),
-      },
-      body: JSON.stringify({ provider, token: token.accessToken, ...choice }),
-    })
-  );
-  persist(token, provider);
-  setProvider(from);
-  useProviderUpstream();
-  return profile;
-}
-
-export interface ConnectionAccount {
-  provider: ProviderId;
-  name: string;
-  handle?: string;
-  memberSince?: number;
-}
-export interface ConnectionPreview { source: ConnectionAccount; target: ConnectionAccount }
-export async function previewConnection(provider: ProviderId, from: ProviderId, token: TokenPair): Promise<ConnectionPreview> {
-  const managed=await managedAuth();
-  const source = managed ? null : await accountToken(from);
-  if (!managed && !source) throw new Error('connection_source_expired');
-  return result(await fetch('/v1/me/connections/preview', {
-    method: 'POST', headers: {'Content-Type':'application/json', ...(source?{Authorization:`Bearer ${source}`}:{'X-Hearthroom-Request':'1'}), 'X-Provider':from},
-    body: JSON.stringify({provider, token:token.accessToken}),
-  }));
-}
-
 export async function connectedBalance(
   provider: ProviderId,
   expectedAccount: number
@@ -122,12 +78,7 @@ export async function connectedBalance(
     });
     if (!r.ok) return null;
     const b = await r.json();
-    const value =
-      provider === "harbor"
-        ? b.available
-        : typeof b.score === "number"
-        ? b.score + (typeof b.tempScore === "number" ? b.tempScore : 0)
-        : null;
+    const value = b.available;
     return typeof value === "number" ? value : null;
   } catch {
     return null;

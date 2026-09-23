@@ -36,7 +36,7 @@ export interface Quota {
 }
 
 /** 這週已經登記過的 role（去重）。 */
-export async function registeredThisWeek(db: D1Database, authorNumId: number, now: number, provider: ProviderId = "lunatalk"): Promise<Set<string>> {
+export async function registeredThisWeek(db: D1Database, authorNumId: number, now: number, provider: ProviderId = "harbor"): Promise<Set<string>> {
   const { start, end } = weekWindow(now);
   const memberId = await resolveMember(db, provider, authorNumId, now);
   const rows = await db.prepare("SELECT DISTINCT work_key FROM community_registration_usage WHERE member_id=? AND registered_at>=? AND registered_at<?")
@@ -44,13 +44,13 @@ export async function registeredThisWeek(db: D1Database, authorNumId: number, no
   return new Set(rows.results.map(r=>r.work_key));
 }
 
-export async function quotaFor(db: D1Database, authorNumId: number, now: number, provider: ProviderId = "lunatalk"): Promise<Quota> {
+export async function quotaFor(db: D1Database, authorNumId: number, now: number, provider: ProviderId = "harbor"): Promise<Quota> {
   const { start, end } = weekWindow(now);
   const used = (await registeredThisWeek(db, authorNumId, now, provider)).size;
   return { limit: WEEKLY_LIMIT, used: Math.min(used, WEEKLY_LIMIT), weekStart: start, weekEnd: end };
 }
 
-export async function recordRegistration(db: D1Database, authorNumId: number, roleId: string, now: number, provider: ProviderId = "lunatalk"): Promise<void> {
+export async function recordRegistration(db: D1Database, authorNumId: number, roleId: string, now: number, provider: ProviderId = "harbor"): Promise<void> {
   await db
     .prepare("INSERT INTO card_registrations (provider, author_num_id, source_role_id, registered_at) VALUES (?, ?, ?, ?)")
     .bind(provider, authorNumId, roleId, now)

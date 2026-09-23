@@ -5,7 +5,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { HttpError, type Env } from './types';
 import { apiBaseOf, parseProvider, requireConfigured, type ProviderId } from './providers';
 import { connectedMemberId } from './connections';
-import { memberProfile, resolveMember, isReviewer, type Member } from './members';
+import { memberProfile, resolveMember, isReviewer } from './members';
 import { upstream } from './upstream';
 
 /** Token-mediating backend. Only short-lived access tokens cross the browser boundary. */
@@ -13,7 +13,7 @@ type AuthContext={Bindings:Env;Variables:{ev:Pending}};
 type C = Context<AuthContext>;
 const DAY=86400000, ATTEMPT_TTL=10*60000, SESSION_IDLE=30*DAY, SESSION_MAX=180*DAY;
 const SESSION='__Host-hr-session', FLOW='__Host-hr-auth';
-const scopes:Record<ProviderId,string>={lunatalk:'',harbor:'profile.read email.read role.read role.write chat.play'};
+const scopes:Partial<Record<ProviderId,string>>={harbor:'profile.read email.read role.read role.write chat.play'};
 type Pair={accessToken:string;refreshToken:string;clientId:string;expiresAt:number};
 type Attempt={state_hash:string;browser_hash:string;origin:string;provider:ProviderId;source_session:string|null;payload:string;phase:string;expires_at:number};
 type Session={token_hash:string;member_id:string;provider:ProviderId;external_id:string;origin:string;created_at:number;expires_at:number};
@@ -73,7 +73,7 @@ async function metric(env:Env,operation:string,provider:string,outcome:string){
 async function readSession(c:C,required=true):Promise<Session|null>{
   const raw=getCookie(c,SESSION);
   const row=raw?await c.env.DB.prepare('SELECT * FROM account_sessions WHERE token_hash=? AND origin=? AND expires_at>? AND created_at>?').bind(await hash(raw),originOf(c),Date.now(),Date.now()-SESSION_MAX).first<Session>():null;
-  if(!row||await connectedMemberId(c.env.DB,row.provider,Number(row.external_id))!==row.member_id){
+  if(!row||row.provider!=='harbor'||await connectedMemberId(c.env.DB,row.provider,Number(row.external_id))!==row.member_id){
     if(required)throw new HttpError(401,'site_session_required');
     return null;
   }
@@ -99,7 +99,7 @@ async function exchange(env:Env,provider:ProviderId,clientId:string,body:Record<
   return {accessToken:data.access_token,refreshToken:data.refresh_token,clientId,expiresAt:Date.now()+Math.max(0,data.expires_in!-60)*1000};
 }
 async function registeredClient(c:C,provider:ProviderId,origin:string){
-  const scope=scopes[provider];
+  const scope=scopes[provider]!;
   let row=await c.env.DB.prepare('SELECT client_id FROM account_auth_clients WHERE origin=? AND provider=? AND scope=?').bind(origin,provider,scope).first<{client_id:string}>();
   if(row)return row.client_id;
   const response=await fetch(apiBaseOf(c.env,provider)+'/oauth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({client_name:'Hearthroom',redirect_uris:[origin+'/auth/callback'],grant_types:['authorization_code','refresh_token'],token_endpoint_auth_method:'none',...(scope?{scope}:{})}),redirect:'manual',signal:AbortSignal.timeout(15000)});
@@ -132,34 +132,13 @@ async function credentialStatements(env:Env,provider:ProviderId,externalId:numbe
   if(guard)statements.push(env.DB.prepare("UPDATE account_auth_attempts SET phase='committed' WHERE state_hash=?").bind(guard.attempt.state_hash));
   return statements;
 }
-/** A site session remains usable when one provider grant has been revoked. */
-export async function managedConnectionSource(c:C):Promise<Member|null>{
-  if(c.env.AUTH_ENABLED!=='true'||c.req.header('X-Hearthroom-Request')!=='1')return null;
-  enabled(c.env);originOf(c);
-  if(c.req.header('Origin')!==new URL(c.req.url).origin)throw new HttpError(403,'auth_origin_denied');
-  const session=(await readSession(c))!,provider=providerOf(c.req.header('X-Provider'),c.env);
-  const profile=await memberProfile(c.env.DB,session.member_id),identity=profile?.identities.find(i=>i.provider===provider);
-  if(!identity)throw new HttpError(403,'auth_connection_denied');
-  return {id:session.member_id,provider,externalId:identity.externalId};
-}
-/** Existing connection handler supplies BOTH verified identities and commits this tail in its D1 transaction. */
-export async function managedConnectionCommit(c:C,memberId:string,provider:ProviderId,externalId:number,token:string):Promise<{tail:D1PreparedStatement[];completed:boolean}> {
-  if(c.env.AUTH_ENABLED!=='true'||c.req.header('X-Hearthroom-Request')!=='1')return {tail:[],completed:false};
-  enabled(c.env);originOf(c);
-  if(c.req.header('Origin')!==new URL(c.req.url).origin)throw new HttpError(403,'auth_origin_denied');
-  const a=await attemptFor(c),session=(await readSession(c))!;
-  const flow=await openAuth<Flow>(c.env,'attempt:'+a.state_hash,a.payload);
-  if(session.member_id!==memberId||a.source_session!==session.token_hash||a.provider!==provider||!flow.pair||flow.pair.accessToken!==token||flow.externalId!==externalId||!['confirm','committed'].includes(a.phase))throw new HttpError(403,'auth_connection_denied');
-  if(a.phase==='committed')return {tail:[],completed:true};
-  return {tail:await credentialStatements(c.env,provider,externalId,flow.pair,{attempt:a,session}),completed:false};
-}
 async function attemptFor(c:C,state?:string):Promise<Attempt>{
   const browser=getCookie(c,FLOW);
   if(!browser)throw new HttpError(400,'auth_state_invalid');
   const query=state?'state_hash=? AND browser_hash=?':'browser_hash=?';
   const values=state?[await hash(state),await hash(browser)]:[await hash(browser)];
   const row=await c.env.DB.prepare(`SELECT * FROM account_auth_attempts WHERE ${query} AND origin=? AND expires_at>?`).bind(...values,originOf(c),Date.now()).first<Attempt>();
-  if(!row)throw new HttpError(400,'auth_state_invalid');
+  if(!row||row.provider!=='harbor'||row.source_session)throw new HttpError(400,'auth_state_invalid');
   if(row.source_session){const session=await readSession(c);if(session!.token_hash!==row.source_session)throw new HttpError(401,'site_session_required');}
   return row;
 }
@@ -197,19 +176,14 @@ accountAuthRoutes.get('/v1/auth/config',c=>{
 });
 accountAuthRoutes.post('/v1/auth/start',async c=>{
   const body=await c.req.json(),provider=providerOf(body.provider,c.env),origin=originOf(c);
-  const source=body.linkFrom?await readSession(c):null;
-  const linkFrom=body.linkFrom?providerOf(body.linkFrom,c.env):undefined;
-  if(source&&linkFrom){
-    const profile=await memberProfile(c.env.DB,source.member_id);
-    if(!profile?.identities.some(i=>i.provider===linkFrom))throw new HttpError(403,'auth_connection_denied');
-  }
+  if(body.linkFrom)throw new HttpError(410,'service_retired');
   const browser=random(),state=random(),stateHash=await hash(state),verifier=random();
   const clientId=await registeredClient(c,provider,origin),redirectUri=origin+'/auth/callback';
-  const flow:Flow={verifier,clientId,redirectUri,returnTo:safePath(body.returnTo),linkFrom};
-  await c.env.DB.prepare('INSERT INTO account_auth_attempts VALUES(?,?,?,?,?,?,?,?)').bind(stateHash,await hash(browser),origin,provider,source?.token_hash??null,await sealAuth(c.env,'attempt:'+stateHash,flow),'code',Date.now()+ATTEMPT_TTL).run();
+  const flow:Flow={verifier,clientId,redirectUri,returnTo:safePath(body.returnTo)};
+  await c.env.DB.prepare('INSERT INTO account_auth_attempts VALUES(?,?,?,?,?,?,?,?)').bind(stateHash,await hash(browser),origin,provider,null,await sealAuth(c.env,'attempt:'+stateHash,flow),'code',Date.now()+ATTEMPT_TTL).run();
   writeCookie(c,FLOW,browser,ATTEMPT_TTL/1000);
   const url=new URL(apiBaseOf(c.env,provider)+'/oauth/authorize');
-  url.search=new URLSearchParams({response_type:'code',client_id:clientId,redirect_uri:redirectUri,state,code_challenge:await hash(verifier),code_challenge_method:'S256',resource:apiBaseOf(c.env,provider)+'/open/v1',...(scopes[provider]?{scope:scopes[provider]}:{})}).toString();
+  url.search=new URLSearchParams({response_type:'code',client_id:clientId,redirect_uri:redirectUri,state,code_challenge:await hash(verifier),code_challenge_method:'S256',resource:apiBaseOf(c.env,provider)+'/open/v1',...(scopes[provider]!?{scope:scopes[provider]!}:{})}).toString();
   return c.json({url:url.toString()});
 });
 accountAuthRoutes.post('/v1/auth/complete',async c=>{
@@ -326,13 +300,13 @@ async function revokeQueued(env:Env,generation:string):Promise<boolean>{
 }
 export async function accountAuthMaintenance(env:Env){
   if(!env.AUTH_KEYRING)return;
-  const expired=await env.DB.prepare("UPDATE account_auth_attempts SET phase=CASE WHEN phase IN ('committed','closed') THEN 'closed' ELSE 'cancelled' END WHERE state_hash IN (SELECT state_hash FROM account_auth_attempts WHERE expires_at<=? ORDER BY expires_at LIMIT 50) RETURNING *").bind(Date.now()).all<Attempt>();
+  const expired=await env.DB.prepare("UPDATE account_auth_attempts SET phase=CASE WHEN phase IN ('committed','closed') THEN 'closed' ELSE 'cancelled' END WHERE state_hash IN (SELECT state_hash FROM account_auth_attempts WHERE provider='harbor' AND expires_at<=? ORDER BY expires_at LIMIT 50) RETURNING *").bind(Date.now()).all<Attempt>();
   for(const a of expired.results){
     const flow=await openAuth<Flow>(env,'attempt:'+a.state_hash,a.payload);
     if(flow.pair&&a.phase==='cancelled')await queueRevocation(env,a.provider,flow.pair,a.state_hash);
     await env.DB.prepare("DELETE FROM account_auth_attempts WHERE state_hash=? AND phase IN ('closed','cancelled')").bind(a.state_hash).run();
   }
-  const jobs=await env.DB.prepare('SELECT generation FROM account_auth_revocations WHERE retry_at<=? ORDER BY retry_at LIMIT 50').bind(Date.now()).all<{generation:string}>();
+  const jobs=await env.DB.prepare("SELECT generation FROM account_auth_revocations WHERE provider='harbor' AND retry_at<=? ORDER BY retry_at LIMIT 50").bind(Date.now()).all<{generation:string}>();
   for(const job of jobs.results)await revokeQueued(env,job.generation);
   await env.DB.prepare('DELETE FROM account_sessions WHERE expires_at<=? OR created_at<=?').bind(Date.now(),Date.now()-SESSION_MAX).run();
   await metric(env,'cleanup','site','ok');

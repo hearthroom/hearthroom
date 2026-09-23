@@ -75,7 +75,7 @@ describe("purchased-credit consumption policy", () => {
   });
 
   it("does not combine provider units even when their numbers match", () => {
-    expect(() => evaluatePaidPlay(receipt([purchased(), { ...gift(), unit: "lunatalk-credit-v1" }])))
+    expect(() => evaluatePaidPlay(receipt([purchased(), { ...gift(), unit: "other-credit-v1" }])))
       .toThrow("paid_play_input");
   });
 

@@ -142,7 +142,7 @@ describe("作者主頁", () => {
     expect(author.cardCount).toBe(2);
     expect(author.talkTotal).toBe(42);
     expect(author.name).toBe(me.displayName); // 社區個人檔案優先於卡片上游的作者快照。
-    expect(author.providers).toEqual(["lunatalk"]);
+    expect(author.providers).toEqual(["harbor"]);
 
     const own = await list(`?author=${me.handle}`);
     expect(own.body.items).toHaveLength(2);
@@ -157,54 +157,9 @@ describe("作者主頁", () => {
   });
 });
 
-describe("登記即分發（owner 2026-09-17）", () => {
-  it("登記時帶上其他已登入渠道的 token：登記立刻回應，背景核對封存副本，平台不再各自送審", async () => {
-    const { transfers } = await import("../src/card-sync");
-    const { identitiesFor, rolesOnProviders } = await import("./helpers");
-    const { vi } = await import("vitest");
-    identitiesFor({ lunatalk: { "author-token": 10001 }, harbor: { "harbor-token": 22 } });
-    rolesOnProviders({ lunatalk: [{ roleId: "role-1", authorNumId: 10001 }] });
-    const {hostGateway}=await import('../src/hosting');
-    const {hostingTransferMedia}=await import('../src/hosting-distribution');
-    vi.spyOn(transfers, "readHosted").mockResolvedValue({ card: { name: "A", summary: "S", description: "D", greeting: "G", language: "zh" }, public: false });
-    vi.spyOn(hostGateway,'draft').mockImplementation(async(_e,_t,workId)=>({workId,roleId:'copy-draft'}));
-    vi.spyOn(hostGateway,'stage').mockImplementation(async(_e,_t,_r,workId)=>({workId,hostedRevisionId:'copy-1'}));
-    vi.spyOn(hostGateway,'promote').mockImplementation(async(_e,_t,_r,workId,versionId)=>({workId,versionId,hostedRevisionId:'copy-1'}));
-    vi.spyOn(hostingTransferMedia,'copy').mockImplementation(async(_e,_sp,_tp,_t,_r,c)=>c);
-    vi.spyOn(transfers, "create").mockResolvedValue("copy-1");
-    vi.spyOn(transfers, "update").mockResolvedValue({});
-    const publish = vi.spyOn(transfers, "publish").mockResolvedValue();
-    try {
-      // 先把 Harbor 帳號綁到這個成員底下（登記的人一定是成員）
-      const link = await SELF.fetch("https://c.test/v1/me/connections", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...bearer("author-token") },
-        body: JSON.stringify({ provider: "harbor", token: "harbor-token" }),
-      });
-      expect(link.status).toBe(200);
-
-      const res = await register({ roleId: "role-1", distribute: [{ provider: "harbor", token: "harbor-token" }] }, bearer("author-token"));
-      expect(res.status).toBe(201);
-      const receipt=await res.json() as any;expect(receipt.versionId).toBeTruthy();
-
-      // 背景工作必須完成內容核對，才登記為可用的版本副本。
-      let copy: { provider: string; role_id: string; status: string } | null = null;
-      for (let i = 0; i < 40 && !copy; i++) {
-        copy = await env.DB.prepare("SELECT provider, hosted_revision_id AS role_id, state AS status FROM hosting_replicas WHERE provider = 'harbor'").first();
-        if (!copy) await new Promise((r) => setTimeout(r, 50));
-      }
-      expect(copy).toMatchObject({ provider: "harbor", role_id: "copy-1", status: "ready" });
-      expect(publish).not.toHaveBeenCalled();
-      expect(hostGateway.promote).toHaveBeenCalledWith(env,"harbor-token","copy-1",expect.any(String),receipt.versionId,"harbor");
-    } finally {
-      vi.restoreAllMocks();
-    }
-  });
-
-  it("distribute 形狀不對 → 400，登記不落庫", async () => {
-    rolesOnMainSite({ roleId: "role-1", authorNumId: 10001 });
-    const res = await register({ roleId: "role-1", distribute: [{ provider: "harbor" }] });
-    expect(res.status).toBe(400);
-    expect((await list()).body.items).toHaveLength(0);
-  });
+it("rejects retired distribution requests before registration", async () => {
+ rolesOnMainSite({roleId:"role-1",authorNumId:10001});
+ const response=await register({roleId:"role-1",distribute:[{provider:"lunatalk",token:"old"}]});
+ expect(response.status).toBe(410);
+ expect((await list()).body.items).toHaveLength(0);
 });

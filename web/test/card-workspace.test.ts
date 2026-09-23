@@ -16,7 +16,7 @@ describe('card workspace',()=>{
  it('only offers linked accounts with an existing usable copy and preserves private originals',()=>{
   expect(playCopies('original','lunatalk',[
    {provider:'harbor',roleId:'copy',status:'synced'},
-  ],['harbor','lunatalk'])).toEqual([{provider:'lunatalk',roleId:'original'},{provider:'harbor',roleId:'copy'}]);
+  ],['harbor','lunatalk'])).toEqual([{provider:'harbor',roleId:'copy'}]);
   expect(playCopies('original','lunatalk',[{provider:'harbor',roleId:'stale',status:'failed'}],['harbor'])).toEqual([]);
  });
 });

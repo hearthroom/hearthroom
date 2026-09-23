@@ -23,6 +23,7 @@ export async function boardKey(raw: string, revision: number, adult: boolean, lo
       url.searchParams.append("tag", tag);
     }
   }
+  url.searchParams.set("_host", "harbor");
   url.searchParams.set("_access", adult ? "adult" : "general");
   url.searchParams.set("_moderation", String(revision));
   // No bearer, cookie or viewer identity is stored in either cache.

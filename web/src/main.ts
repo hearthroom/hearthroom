@@ -19,7 +19,7 @@ import "./styles/base.css";
 // Existing authoring routes still carry their asset's issuer for the editor.
 const authoring = /\/cards\/[^/]+\/edit\/?$/.test(location.pathname);
 const selectedProvider = authoring ? new URLSearchParams(location.search).get('provider') : null;
-setProvider(selectedProvider === 'lunatalk' || selectedProvider === 'harbor' ? selectedProvider : currentProvider());
+setProvider(selectedProvider === 'harbor' ? selectedProvider : currentProvider());
 useProviderUpstream();
 installChunkReload(router);
 registerServiceWorker();

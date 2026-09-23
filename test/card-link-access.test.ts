@@ -37,7 +37,7 @@ it('resolves a neutral work link and its available copies', async () => {
   const card = await read('/v1/cards/work');
   expect(card.status).toBe(200);
   expect(await card.json()).toMatchObject({ id: '100001', roleId: 'draft', provider: 'harbor' });
-  expect((await (await read('/v1/cards/work/platforms')).json() as any).platforms).toHaveLength(2);
+  expect((await (await read('/v1/cards/work/platforms')).json() as any).platforms).toHaveLength(1);
 });
 
 it('serves a successful non-indexed HTML shell for a link-only draft', async () => {

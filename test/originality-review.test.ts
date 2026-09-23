@@ -152,7 +152,7 @@ describe("查重", () => {
     const rows = await env.DB.prepare("SELECT submission_id FROM originality_texts").all<{ submission_id: string }>();
     expect(rows.results.map((r) => r.submission_id)).toEqual([v2.id]);
 
-    await unregister(env.DB, "alice-1", ALICE, "lunatalk");
+    await unregister(env.DB, "alice-1", ALICE, "harbor");
     writes("乙", text);
     const bob = await submit("bob-1", "bob");
     expect((await report(bob.id)).sources[0]).toMatchObject({ cardId: String(v2.card_id), status: "removed" });
@@ -176,7 +176,7 @@ describe("查重", () => {
     writes("甲", prose(11));
     const v1 = await submit("alice-1", "alice");
     await decide(v1.id, "approve");
-    await env.DB.batch(needsReviewStatements(env.DB, { cardId: v1.card_id, provider: "lunatalk", roleId: "alice-1", contentHash: "pub1:x", now: Date.now() }));
+    await env.DB.batch(needsReviewStatements(env.DB, { cardId: v1.card_id, provider: "harbor", roleId: "alice-1", contentHash: "pub1:x", now: Date.now() }));
     const re = (await env.DB.prepare("SELECT id FROM review_submissions WHERE status = 'pending'").first<{ id: string }>())!;
     await claim(env.DB, re.id, "rev-x", Date.now());
     expect((await stamp(env.DB, { submissionId: re.id, memberId: "rev-x", verdict: "approve", note: "", now: Date.now() })).cardStatus).toBe("approved");

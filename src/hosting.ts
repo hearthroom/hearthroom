@@ -13,7 +13,8 @@ interface VersionRow {
 }
 /** Each provider trusts Hearthroom with its own secret. Providers never exchange keys. */
 export function hostingKey(env:Env,provider:ProviderId):string|undefined {
- return provider==='lunatalk'?env.HOSTING_SERVICE_KEY_LUNATALK:env.HOSTING_SERVICE_KEY;
+ apiBaseOf(env,provider);
+ return env.HOSTING_SERVICE_KEY;
 }
 export const hostGateway = {
  async seal(env:Env,token:string,roleId:string,workId:string,versionId:string,provider:ProviderId='harbor'):Promise<Receipt> {

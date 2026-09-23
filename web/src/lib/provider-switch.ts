@@ -33,7 +33,7 @@ export async function chooseProvider(id: ProviderId, opts: ChooseOptions): Promi
  * 問不到就只給預設那家：寧可少一顆按鈕，也不要一顆按了就報錯的按鈕。
  */
 export async function availableProviders(): Promise<{ id: ProviderId; name: string }[]> {
-  const fallback = [{ id: "lunatalk" as ProviderId, name: providerName("lunatalk") }];
+  const fallback = [{ id: "harbor" as ProviderId, name: providerName("harbor") }];
   try {
     const res = await fetch(`${COMMUNITY_API}/providers`,{signal:AbortSignal.timeout(10000)});
     if (!res.ok) return fallback;

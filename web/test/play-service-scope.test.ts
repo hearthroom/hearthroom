@@ -14,19 +14,19 @@ vi.mock('../src/lib/api',async original=>({...await original<typeof import('../s
 let app:ReturnType<typeof createApp>;let root:HTMLElement;
 afterEach(()=>{app?.unmount();root?.remove();});
 it('passes the selected service credentials to the player while keeping the community session',async()=>{
- setProvider('lunatalk');mocks.token.mockResolvedValue('harbor-token');mocks.authorize.mockResolvedValue(true);mocks.stage.mockResolvedValue({template:'<div>Fixture player</div>'});
+ setProvider('harbor');mocks.token.mockResolvedValue('harbor-token');mocks.authorize.mockResolvedValue(true);mocks.stage.mockResolvedValue({template:'<div>Fixture player</div>'});
  const pinia=createPinia();setActivePinia(pinia);const session=useSession();
  session.me={accountNumId:11,nickName:'Community account',avatar:''};
  session.token={accessToken:'community-token',expiresAt:Date.now()+3600000} as any;
- session.profile={identities:[{provider:'lunatalk',externalId:11},{provider:'harbor',externalId:22}]} as any;
+ session.profile={identities:[{provider:'harbor',externalId:11}]} as any;
  const router=createRouter({history:createMemoryHistory(),routes:[{path:'/play/:roleId',component:PlayPage}]});await router.push('/play/harbor-role?provider=harbor');
  root=document.createElement('div');document.body.append(root);app=createApp(PlayPage).use(pinia).use(i18n).use(router);app.mount(root);
  for(let i=0;i<40;i++)await Promise.resolve();await nextTick();
  const options=mocks.stage.mock.calls[0]![0];
- expect(options.provider).toBe('harbor');expect(options.player.accountNumId).toBe(22);
- expect(options.currentRoleId()).toBe('harbor-role');expect(await options.accessToken()).toBe('harbor-token');
- expect(mocks.authorize).toHaveBeenCalledWith('harbor-token','/play/harbor-role?provider=harbor','harbor');
- expect(currentProvider()).toBe('lunatalk');expect(session.me.accountNumId).toBe(11);expect(session.token.accessToken).toBe('community-token');expect(mocks.connect).not.toHaveBeenCalled();
+ expect(options.provider).toBe('harbor');expect(options.player.accountNumId).toBe(11);
+ expect(options.currentRoleId()).toBe('harbor-role');expect(await options.accessToken()).toBe('community-token');
+ expect(mocks.authorize).toHaveBeenCalledWith('community-token','/play/harbor-role?provider=harbor','harbor');
+ expect(currentProvider()).toBe('harbor');expect(session.me.accountNumId).toBe(11);expect(session.token.accessToken).toBe('community-token');expect(mocks.connect).not.toHaveBeenCalled();
 });
 
 it('preloads static player code while profile is pending, without initializing private APIs', async()=>{
@@ -57,8 +57,8 @@ it('checks same-provider play permission while the community profile is pending,
  expect(mocks.stage).toHaveBeenCalledTimes(1);
 });
 
-it.each(['denied','unmounted','cross-provider'])('never installs early for %s startup',async(mode)=>{
- setProvider(mode==='cross-provider'?'lunatalk':'harbor');mocks.stage.mockClear();mocks.authorize.mockClear();mocks.connect.mockClear();mocks.token.mockClear();
+it.each(['denied','unmounted'])('never installs early for %s startup',async(mode)=>{
+ setProvider(mode==='cross-provider'?'harbor':'harbor');mocks.stage.mockClear();mocks.authorize.mockClear();mocks.connect.mockClear();mocks.token.mockClear();
  mocks.authorize.mockResolvedValue(mode!=='denied');
  const pinia=createPinia();setActivePinia(pinia);const session=useSession();
  session.me={accountNumId:11,nickName:'Community account',avatar:''};

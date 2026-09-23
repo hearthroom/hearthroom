@@ -57,7 +57,7 @@ describe("提交", () => {
     expect(res.status).toBe(201);
     const receipt=await res.json() as any;
     expect(receipt.status).toBe("pending");
-    expect(settingsReads).toEqual([{ token: "author-token", roleId: "frozen-"+receipt.versionId, provider: "lunatalk" }]);
+    expect(settingsReads).toEqual([{ token: "author-token", roleId: "frozen-"+receipt.versionId, provider: "harbor" }]);
     expect(await board()).toHaveLength(0);
     const s = await env.DB.prepare("SELECT kind, status, content_hash FROM review_submissions").first<any>();
     expect(s).toMatchObject({ kind: "first", status: "pending" });

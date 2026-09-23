@@ -108,7 +108,7 @@ libraryRoutes.get('/v1/me/conversations', async c => {
     LEFT JOIN cards c ON c.provider=COALESCE(w.source_provider,r.provider) AND (c.source_role_id=COALESCE(w.source_role_id,r.role_id) OR c.approved_hosted_role_id=r.role_id)
     LEFT JOIN card_numbers cn ON cn.provider=COALESCE(w.source_provider,r.provider)
       AND cn.source_role_id=COALESCE(w.source_role_id,c.source_role_id,r.role_id)
-    WHERE r.member_id=? ORDER BY r.updated_at DESC,r.provider,r.role_id LIMIT 25 OFFSET ?`)
+    WHERE r.member_id=? AND r.provider='harbor' ORDER BY r.updated_at DESC,r.provider,r.role_id LIMIT 25 OFFSET ?`)
     .bind(member.id, (page - 1) * 24).all<CardRow & { cardNumber: number | null; conversationRoleId: string; conversationId: string; createdAt: number; updatedAt: number }>();
   return c.json({ conversations: rows.results.slice(0,24).map(row => {
     const card = row.id && row.status === 'approved' && !row.public_blocked && (!row.nsfw || (access.showNsfw && access.ageVerifiedAt)) ? toCard(row, c.req.query('lang') || 'zh-Hant') : null;
@@ -122,7 +122,7 @@ libraryRoutes.get('/v1/me/conversations', async c => {
 libraryRoutes.get('/v1/me/conversations/:conversationId', async c => {
   const member = await requireMember(c);
   const provider = c.req.query('provider');
-  if (provider !== 'harbor' && provider !== 'lunatalk') throw new HttpError(400, 'invalid_provider');
+  if (provider !== 'harbor') throw new HttpError(400, 'invalid_provider');
   const row = await c.env.DB.prepare(`SELECT r.provider,r.role_id AS roleId,cn.num AS cardNumber
     FROM member_conversations r
     LEFT JOIN work_copies cp ON cp.provider=r.provider AND cp.role_id=r.role_id

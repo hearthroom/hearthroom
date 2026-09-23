@@ -31,14 +31,14 @@ describe("送審時讀整份設定", () => {
     const seen = provider({
       "/open/v1/role/detail": own,
       "/open/v1/worldbook/bindings": { bindings: [{ worldbookId: "wb-1" }] },
-      "/open/v1/worldbook/detail": { name: "世界書", description: "說明", format: "lunatalk" },
+      "/open/v1/worldbook/detail": { name: "世界書", description: "說明", format: "harbor" },
       "/open/v1/worldbook/entry/list": { entries: [
         { name: "常駐", content: "常駐內容", keywords: ["a"], isConstant: true },
         { name: "停用", content: "停用內容", isEnabled: false },
       ] },
       "/open/v1/role/author-asset": 404,
     });
-    const d = (await readForReview(env, "author-token", "role-1", "lunatalk")) as any;
+    const d = (await readForReview(env, "author-token", "role-1", "harbor")) as any;
     expect(seen.every((r) => r.auth === "Bearer author-token")).toBe(true);
     expect(seen.map((r) => r.path)).toEqual([
       "/open/v1/role/detail", "/open/v1/worldbook/bindings", "/open/v1/worldbook/detail", "/open/v1/worldbook/entry/list", "/open/v1/role/author-asset",
@@ -57,11 +57,11 @@ describe("送審時讀整份設定", () => {
   it("同一份設定算兩次雜湊一樣；改了設定就不一樣", async () => {
     const routes = { "/open/v1/role/detail": own, "/open/v1/worldbook/bindings": { bindings: [] } };
     provider(routes);
-    const a = await readForReview(env, "t", "role-1", "lunatalk");
-    const b = await readForReview(env, "t", "role-1", "lunatalk");
+    const a = await readForReview(env, "t", "role-1", "harbor");
+    const b = await readForReview(env, "t", "role-1", "harbor");
     expect(a.hashes).toEqual(b.hashes);
     provider({ ...routes, "/open/v1/role/detail": { ...own, roleDetailDesc: "改過了" } });
-    const c = await readForReview(env, "t", "role-1", "lunatalk");
+    const c = await readForReview(env, "t", "role-1", "harbor");
     expect(c.hashes.content).not.toBe(a.hashes.content);
     expect(c.hashes.welcome).toBe(a.hashes.welcome);
   });
@@ -69,9 +69,9 @@ describe("送審時讀整份設定", () => {
   it("讀回來沒有私有設定（不是作者本人）→ 409；token 被拒 → 401", async () => {
     const { roleDetailDesc: _private, ...publicOnly } = own;
     provider({ "/open/v1/role/detail": publicOnly });
-    await expect(readForReview(env, "t", "role-1", "lunatalk")).rejects.toMatchObject({ status: 409 });
+    await expect(readForReview(env, "t", "role-1", "harbor")).rejects.toMatchObject({ status: 409 });
     provider({ "/open/v1/role/detail": 403 });
-    const err = await readForReview(env, "t", "role-1", "lunatalk").catch((e) => e);
+    const err = await readForReview(env, "t", "role-1", "harbor").catch((e) => e);
     expect(err).toBeInstanceOf(HttpError);
     expect(err.status).toBe(401);
   });
@@ -84,7 +84,7 @@ describe("公開指紋", () => {
     expect(h).toMatch(/^pub1:[0-9a-f]{64}$/);
     expect(await publicHash({ ...base, talkNum: 999, followNum: 9 })).toBe(h);
     expect(await publicHash({ ...base, names: { ...base.names, zh: "改名了" } })).not.toBe(h);
-    expect(await publicHash({ ...base, avatarUrl: "https://cdn.lunatalk.ai/other.png" })).not.toBe(h);
+    expect(await publicHash({ ...base, avatarUrl: "https://assets.harperharbor.com/other.png" })).not.toBe(h);
   });
 });
 

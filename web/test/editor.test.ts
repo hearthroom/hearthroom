@@ -18,8 +18,8 @@ import { confirmState, settleConfirm } from "../src/lib/confirm";
 const platforms = vi.hoisted(()=>({profile:undefined as any, saveCopies:vi.fn(async()=>[] as any[])}));
 vi.mock("../src/lib/authoring-platforms",()=>({saveCopies:platforms.saveCopies,savedDistributionTargets:async()=>[]}));
 const api = vi.hoisted(() => ({
-  registerCardIdentity: vi.fn(async () => ({id:"100021",num:100021,provider:"lunatalk",sourceRoleId:"r1"})),
-  fetchCard: vi.fn(async () => ({id:"100021",num:100021,provider:"lunatalk",sourceRoleId:"r1",roleId:"frozen-r1"})),
+  registerCardIdentity: vi.fn(async () => ({id:"100021",num:100021,provider:"harbor",sourceRoleId:"r1"})),
+  fetchCard: vi.fn(async () => ({id:"100021",num:100021,provider:"harbor",sourceRoleId:"r1",roleId:"frozen-r1"})),
   createRole: vi.fn(async () => ({ roleId: "r1" })),
   patchRoleDocument: vi.fn(async () => ({})),
   patchRoleWelcome: vi.fn(async () => ({})),
@@ -182,8 +182,8 @@ describe("卡片匯出", () => {
   }
 
   it("PNG 匯出使用直式背景，忽略舊的獨立頭像", async () => {
-    const avatar = "https://assets.lunatalk.ai/u/test/avatar.png";
-    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "Export test", roleAvatar: "https://assets.lunatalk.ai/old.png", roleBackground: avatar, roleDetailDesc: "Synthetic settings" });
+    const avatar = "https://assets.harbor.ai/u/test/avatar.png";
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "Export test", roleAvatar: "https://assets.harbor.ai/old.png", roleBackground: avatar, roleDetailDesc: "Synthetic settings" });
     await mount("/cards/r1/edit");
     const { blobs, filenames } = captureDownload();
     const png = writeChunks([{ type: "IHDR", data: new Uint8Array(13) }, { type: "IEND", data: new Uint8Array() }]);
@@ -200,7 +200,7 @@ describe("卡片匯出", () => {
   });
 
   it("圖片讀取失敗會下載 JSON 並說明 PNG 匯出失敗", async () => {
-    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "Export test", roleAvatar: "https://assets.lunatalk.ai/u/test/avatar.png" });
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "Export test", roleAvatar: "https://assets.harbor.ai/u/test/avatar.png" });
     await mount("/cards/r1/edit");
     const { blobs, filenames } = captureDownload();
     vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 403 })));
@@ -229,10 +229,10 @@ describe("卡片匯出", () => {
 
 describe("匯入酒館卡 → 建立 → 編輯", () => {
   it("只保留直式與橫式圖片，直式 GIF 原樣上傳且不改橫圖", async () => {
-    const avatar = "https://assets.lunatalk.ai/u/test/new.gif";
-    const background = "https://assets.lunatalk.ai/u/test/background.png";
-    const landscape = "https://assets.lunatalk.ai/u/test/landscape.png";
-    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "Avatar test", roleAvatar: "https://assets.lunatalk.ai/u/test/old.png", roleBackground: background, roleBackgroundLandscape: landscape });
+    const avatar = "https://assets.harbor.ai/u/test/new.gif";
+    const background = "https://assets.harbor.ai/u/test/background.png";
+    const landscape = "https://assets.harbor.ai/u/test/landscape.png";
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "Avatar test", roleAvatar: "https://assets.harbor.ai/u/test/old.png", roleBackground: background, roleBackgroundLandscape: landscape });
     api.uploadImage.mockResolvedValueOnce(avatar);
     await mount("/cards/r1/edit");
     const field = [...root.querySelectorAll(".field")].find((el) => el.querySelector("label")?.textContent === i18n.global.t("editor.background"))!;
@@ -597,7 +597,7 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     // 走的是站內既有的 /play/:roleId——那本來就是真 AI、真世界書、真正則，
     // 不必另外建試玩卡（那套是給 playground 沒有卡的情境用的）
     // 語系前綴由 lp() 決定，測試的 router 沒掛前綴；釘的是「指向這張卡的 /play」
-    expect(frame.getAttribute("src")).toBe("/play/r1?mode=source&provider=lunatalk");
+    expect(frame.getAttribute("src")).toBe("/play/r1?mode=source&provider=harbor");
     expect(root.querySelector(".ct__state")).toBeNull();
   });
 
@@ -767,28 +767,10 @@ describe("建卡成功、內容沒存進去", () => {
 
 
 
-it('writes first, then selects multiple save destinations and keeps a failed target visible',async()=>{
- platforms.profile={identities:[{provider:'lunatalk',externalId:7},{provider:'harbor',externalId:8}]};
- await mount('/create');
- await type($<HTMLInputElement>('#f-name'),'Synthetic multi-platform card');
- expect(root.querySelector('.platform-dialog')).toBeNull();
- await submit();
- expect(api.createRole).not.toHaveBeenCalled();
- const choices=root.querySelectorAll<HTMLInputElement>('.platform-dialog input[type=checkbox]');
- expect(choices.length).toBe(2);
- expect([...choices].every(x=>x.checked)).toBe(true);
- platforms.saveCopies.mockResolvedValueOnce([{provider:'harbor',status:'failed',error:'sync_permission_denied'}]);
- root.querySelector<HTMLButtonElement>('.platform-dialog .btn--primary')!.click();await flush();await flush();
- expect(api.createRole).toHaveBeenCalledTimes(1);
- expect(platforms.saveCopies).toHaveBeenCalledWith('r1','lunatalk',['lunatalk','harbor'],false);
- expect(root.textContent).toContain('sync_permission_denied');
- expect(root.querySelector<HTMLButtonElement>('button[type=submit]')!.disabled).toBe(false);
- expect(root.textContent).toContain('HarperHarbor');
-});
 
 it('HarperHarbor submits once to HearthRoom with an explicit rating and no hosting destination chooser',async()=>{
  localStorage.setItem('hearthroom.provider','harbor');
- platforms.profile={identities:[{provider:'lunatalk',externalId:7},{provider:'harbor',externalId:8}]};
+ platforms.profile={identities:[{provider:'harbor',externalId:7},{provider:'harbor',externalId:8}]};
  api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Synthetic card',roleDesc:'Summary',roleDetailDesc:'Private instructions',roleWelcome:'Hello',roleAvatar:'https://img.test/avatar.png'});
  await mount('/cards/r1/edit');
  byText('發布').click();await flush();
@@ -802,7 +784,7 @@ it('HarperHarbor submits once to HearthRoom with an explicit rating and no hosti
  expect(router.currentRoute.value.path).toBe('/mine');
 });
 
-it('submits a private LunaTalk draft to the same immutable community review',async()=>{
+it('submits a private HarperHarbor draft to the same immutable community review',async()=>{
  api.fetchRoleDetail.mockResolvedValueOnce({roleName:'Legacy draft',roleDetailDesc:'Private instructions',roleWelcome:'Hello'});
  await mount('/cards/r1/edit');
  expect(root.textContent).toContain(i18n.global.t('workspace.editHint'));
@@ -810,7 +792,7 @@ it('submits a private LunaTalk draft to the same immutable community review',asy
  btnIn(root,i18n.global.t('editor.publish.submit')).click();await flush();
  settleConfirm(true,'','sfw');await flush();await flush();
  expect(api.submitRoleForReview).not.toHaveBeenCalled();
- expect(api.registerCard).toHaveBeenCalledWith('r1','tok',false,[],'lunatalk');
+ expect(api.registerCard).toHaveBeenCalledWith('r1','tok',false,[],'harbor');
  expect(router.currentRoute.value.path).toBe('/mine');
 });
 
@@ -842,7 +824,7 @@ it('a failed draft save never submits partial content for review',async()=>{
 
 it('saves Harbor external image URLs directly without creating media assets', async () => {
  localStorage.setItem('hearthroom.provider', 'harbor');
- const url = 'https://objects.lunatalk.ai/cards/synthetic.png';
+ const url = 'https://objects.harbor.ai/cards/synthetic.png';
  api.fetchRoleDetail.mockResolvedValueOnce({roleName:'External image',roleAvatar:url});
  const fetchSpy = vi.spyOn(globalThis, 'fetch');
  try {

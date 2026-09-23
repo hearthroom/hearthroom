@@ -1,5 +1,4 @@
-import {retirementRoutes} from './retirement-migration';
-import { accountAuthRoutes, accountAuthMaintenance, managedConnectionCommit, managedConnectionSource } from './account-auth';
+import { accountAuthRoutes, accountAuthMaintenance } from './account-auth';
 import { snapshot } from './snapshot-cache';
 import { cardLink, linkPreview } from './card-link';
 import { boardKey, readBoardCache, writeBoardCache } from "./board-cache";
@@ -9,13 +8,12 @@ import { communityMaintenance } from "./community/service";
 import { communityRoutes } from "./community/routes";
 import { libraryRoutes } from "./library";
 import { hostGateway, hostingKey, submitHosted, hostingDecision, beginHostedEdit } from "./hosting";
-import { distributeHosted, distributeWorkVersions, seedSavedHostingTargets } from "./hosting-distribution";
 import { saveCommunityProfile, cleanAvatars } from "./community-profile";
 import { AVATAR_MAX_BYTES } from '../shared/avatar';
 import { bodyLimit } from "hono/body-limit";
-import { syncCard, copiesFor, workFor, publishedCopiesFor, type DistributeTarget } from "./card-sync";
+import { copiesFor, workFor } from "./card-sync";
 import { apiBaseOf as providerApiBase } from "./providers";
-import { linkIdentity, unlinkIdentity, connectedMemberId, emptyCommunity } from './connections';
+import { connectedMemberId } from './connections';
 import { saveMemberId } from './members';
 import { type Context, Hono } from "hono";
 import {
@@ -128,7 +126,10 @@ app.use("*", async (c, next) => {
 });
 
 app.route("/", moderationRoutes);
-app.route("/", retirementRoutes);
+app.use('/v1/*',async(c,next)=>{
+  if(c.req.header('X-Provider'))parseProvider(c.req.header('X-Provider'));
+  return next();
+});
 app.route("/", accountAuthRoutes);
 
 app.onError((err, c) => {
@@ -163,11 +164,7 @@ app.get("/v1/health", (c) => c.json({ ok: true }));
 // 遊戲模式：作者替自己的卡存一份世界配置（src/game.ts）
 gameRoutes(app);
 
-/**
- * 前端開頁時問一次「供應商該打哪個網址」。有些地區連不上供應商的主網域，那邊的人改走
- * 對應的閘道（PROVIDER_API_GATEWAYS）；國別是 Cloudflare 邊緣看連線來源判的（`cf.country`；
- * 沒有就看它塞的標頭，測試環境走這條）。回應依來源而異，不能被任何一層快取。
- */
+/** Compatibility discovery endpoint; only the configured Harper API is returned. */
 app.get("/v1/region", (c) => {
   const country = ((c.req.raw.cf?.country as string) || c.req.header("cf-ipcountry") || "").toUpperCase();
   const apiBase = providerApiBaseFor(c.env, country);
@@ -196,8 +193,8 @@ app.get("/v1/providers", (c) =>
  * 只放行上游的圖片主機，不然這就是一個開放代理。回應用 Cache API 快取一天：同一張頭像
  * 被反覆匯出時不必每次都回上游拿。
  */
-// 匯出接受兩個產品的主網域與子網域，素材主機更名時不必另加名單。
-const IMAGE_PROXY_DOMAINS = ["lunatalk.ai", "harperharbor.com"];
+// 匯出只接受 HarperHarbor 的主網域與子網域。
+const IMAGE_PROXY_DOMAINS = ["harperharbor.com"];
 export const imageCache = { namespace: "image" };
 
 app.get("/v1/image", async (c) => {
@@ -437,7 +434,7 @@ app.get("/v1/cards/:id", async (c) => {
  */
 async function shortcutCard(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>) {
   const row = await getCard(c.env.DB, c.req.param("id") ?? "");
-  if (!row || row.status !== "approved" || row.public_blocked) throw new HttpError(404, "card not found");
+  if (!row || row.provider !== "harbor" || row.status !== "approved" || row.public_blocked) throw new HttpError(404, "card not found");
   const key = c.req.query("k");
   if (row.nsfw === 1 && !(await verifyShortcutKey(c.env.SHORTCUT_SECRET, row.id, key))) throw new HttpError(404, "card not found");
   return { row, key: row.nsfw === 1 ? key : undefined };
@@ -593,34 +590,7 @@ app.get("/v1/authors/:handle", async (c) => {
  * 登入者在本站的身分：公開 ID、加入時間、連結了哪些供應商帳號、是不是審核人。
  * 第一次呼叫就建成員——所以登入後前端立刻問一次，「我的」頁才有 ID 可顯示。
  */
-app.post('/v1/me/card-sync', async (c) => {
- const member=await requireMember(c);
- const b=await c.req.json<{sourceProvider:string;sourceRoleId:string;sourceToken:string;targetProvider:string;targetToken:string;publish?:boolean;updatePublished?:boolean;recreateMissing?:boolean}>();
- if(!b || typeof b.sourceProvider!=='string' || !b.sourceProvider.trim() || typeof b.targetProvider!=='string' || !b.targetProvider.trim() || typeof b.sourceRoleId!=='string' || !b.sourceRoleId || b.sourceRoleId.length>200 || [b.sourceToken,b.targetToken].some(t=>typeof t!=='string'||!t||t.length>16384) || (b.publish!==undefined && typeof b.publish!=='boolean') || (b.updatePublished!==undefined && typeof b.updatePublished!=='boolean') || (b.recreateMissing!==undefined && typeof b.recreateMissing!=='boolean'))throw new HttpError(400,'sync_proof_required');
- const sourceProvider=requireConfigured(c.env,parseProvider(b.sourceProvider));
- const targetProvider=requireConfigured(c.env,parseProvider(b.targetProvider));
- const profile=await memberProfile(c.env.DB,member.id);
- const identity=async(provider:ProviderId,token:string)=> {
-  try{return await upstream.fetchMe(c.env,token,provider);}
-  catch(e){throw new HttpError(e instanceof HttpError?e.status:502,e instanceof HttpError&&e.status===401?'sync_authorization_expired':'sync_identity_failed',{provider,step:'identity'});}
- };
- const source=await identity(sourceProvider,b.sourceToken);
- const target=await identity(targetProvider,b.targetToken);
- for(const [provider,account] of [[sourceProvider,source.accountNumId],[targetProvider,target.accountNumId]] as const) {
-  if(!profile?.identities.some(x=>x.provider===provider&&x.externalId===account))throw new HttpError(403,'sync_account_not_connected');
- }
- // Both operations have their own durable status. A changed mutable copy must
- // not prevent the approved immutable version from reaching the same destination.
- const [draft,version]=await Promise.allSettled([
-  syncCard(c.env,{memberId:member.id,sourceProvider,sourceRoleId:b.sourceRoleId,sourceAccount:source.accountNumId,sourceToken:b.sourceToken,targetProvider,targetAccount:target.accountNumId,targetToken:b.targetToken,publish:false,updatePublished:b.updatePublished===true,recreateMissing:b.recreateMissing===true}),
-  distributeWorkVersions(c.env,{memberId:member.id,sourceProvider,sourceRoleId:b.sourceRoleId,sourceAccount:source.accountNumId,sourceToken:b.sourceToken,targetProvider,targetAccount:target.accountNumId,targetToken:b.targetToken}),
- ]);
- if(version.status==='rejected')throw version.reason;
- if(draft.status==='rejected')throw draft.reason;
- const result=draft.value;
- note(c,{event:'card_sync',detail:result.status});
- return c.json(result,200,{'Cache-Control':'no-store'});
-});
+app.post('/v1/me/card-sync', () => {throw new HttpError(410,'service_retired')});
 app.get('/v1/me/card-copies/:roleId',async(c)=>{
  const member=await requireMember(c);const provider=providerOf(c);const bearer=c.req.header('Authorization')!.slice(7);
  // Ownership is checked by the upstream even for a card not registered in the community.
@@ -649,7 +619,7 @@ app.get('/v1/cards/:roleId/platforms',async(c)=>{
  const {provider,roleId}=source;
  if(base?.status==='approved' && base.approved_version_id && base.approved_hosted_role_id) {
   const decision=await hostingDecision(c.env.DB,base.approved_version_id);
-  const replicas=decision.status==='approved'?await c.env.DB.prepare("SELECT provider,hosted_revision_id FROM hosting_replicas WHERE version_id=? AND state='ready' ORDER BY provider=? DESC,provider").bind(base.approved_version_id,base.provider).all<{provider:ProviderId;hosted_revision_id:string}>():{results:[]};
+  const replicas=decision.status==='approved'?await c.env.DB.prepare("SELECT provider,hosted_revision_id FROM hosting_replicas WHERE version_id=? AND provider='harbor' AND state='ready' ORDER BY provider=? DESC,provider").bind(base.approved_version_id,base.provider).all<{provider:ProviderId;hosted_revision_id:string}>():{results:[]};
   const available=await Promise.all(replicas.results.map(async r=>{
    try{await upstream.fetchRole(c.env,r.hosted_revision_id,r.provider);return {provider:r.provider,roleId:r.hosted_revision_id,playable:hasChat(r.provider)}}catch{return null}
   }));
@@ -661,53 +631,8 @@ app.get('/v1/cards/:roleId/platforms',async(c)=>{
  return c.json({platforms},200,{'Cache-Control':'no-store'});
 });
 
-app.post('/v1/me/connections/preview', async (c) => {
-  const member = await managedConnectionSource(c) ?? await requireMember(c);
-  const body = await c.req.json<{provider?: string; token?: string}>();
-  if (!body || typeof body.provider !== 'string' || !body.provider.trim() || typeof body.token !== 'string' || !body.token || body.token.length > 16384) throw new HttpError(400, 'connection_proof_required');
-  const provider = requireConfigured(c.env, parseProvider(body.provider));
-  const target = await upstream.fetchMe(c.env, body.token, provider);
-  const targetId = await connectedMemberId(c.env.DB, provider, target.accountNumId);
-  const sourceProfile = (await memberProfile(c.env.DB, member.id))!;
-  const targetProfile = targetId ? await memberProfile(c.env.DB, targetId) : null;
-  if (targetId && targetId !== member.id) {
-    if (!await emptyCommunity(c.env.DB,targetId)) throw new HttpError(409,'connection_target_not_empty');
-    const drafts=await upstream.fetchMyRoles(c.env,body.token,1,1,provider);
-    if (drafts.items.length || drafts.hasNext) throw new HttpError(409,'connection_target_not_empty');
-  }
-  const summary = (profile: typeof targetProfile) => profile ? {handle: profile.handle, memberSince: profile.memberSince} : null;
-  return c.json({
-    source: {...summary(sourceProfile), provider: member.provider, name: sourceProfile.displayName},
-    target: {...summary(targetProfile), provider, name: target.nickName || PROVIDER_NAMES[provider]},
-  }, 200, {'Cache-Control': 'no-store'});
-});
-app.post("/v1/me/connections", async (c) => {
-  const member = await managedConnectionSource(c) ?? await requireMember(c);
-  const body = await c.req.json<{ provider?: string; token?: string; keepHandle?: string; sourceHandle?: string; targetHandle?: string | null }>();
-  if (!body || typeof body.provider !== 'string' || !body.provider.trim() || typeof body.token !== 'string' || !body.token || body.token.length > 16384) throw new HttpError(400, 'connection_proof_required');
-  const provider = requireConfigured(c.env, parseProvider(body.provider));
-  const target = await upstream.fetchMe(c.env, body.token, provider);
-  const managed = await managedConnectionCommit(c,member.id,provider,target.accountNumId,body.token);
-  if(managed.completed)return c.json(await memberProfile(c.env.DB,member.id),200,{'Cache-Control':'no-store'});
-  const targetId = await connectedMemberId(c.env.DB, provider, target.accountNumId);
-  const sourceProfile = (await memberProfile(c.env.DB, member.id))!;
-  const targetProfile = targetId ? await memberProfile(c.env.DB, targetId) : null;
-  if (targetProfile && targetId !== member.id && !body.keepHandle) throw new HttpError(409, 'connection_choice_required');
-  if (body.keepHandle && (body.sourceHandle !== sourceProfile.handle || body.targetHandle !== (targetProfile?.handle ?? null))) throw new HttpError(409, 'connection_preview_changed');
-  if (body.keepHandle && body.keepHandle !== sourceProfile.handle) throw new HttpError(400, 'connection_choice_invalid');
-  if(targetId && targetId!==member.id) {
-    if(!await emptyCommunity(c.env.DB,targetId))throw new HttpError(409,'connection_target_not_empty');
-    const drafts=await upstream.fetchMyRoles(c.env,body.token,1,1,provider);
-    if(drafts.items.length || drafts.hasNext)throw new HttpError(409,'connection_target_not_empty');
-  }
-  await linkIdentity(c.env.DB, member, provider, target.accountNumId, Date.now(), managed.tail);
-  return c.json(await memberProfile(c.env.DB, member.id), 200, { 'Cache-Control': 'no-store' });
-});
-app.delete('/v1/me/connections/:provider', async (c) => {
-  const member = await requireMember(c);
-  await unlinkIdentity(c.env.DB, member, parseProvider(c.req.param('provider')));
-  return c.json(await memberProfile(c.env.DB, member.id), 200, { 'Cache-Control': 'no-store' });
-});
+for(const path of ['/v1/me/connections','/v1/me/connections/preview'])app.post(path,()=>{throw new HttpError(410,'service_retired')});
+app.delete('/v1/me/connections/:provider',()=>{throw new HttpError(410,'service_retired')});
 
 app.put("/v1/me/profile", bodyLimit({maxSize: AVATAR_MAX_BYTES + 16384, onError: c => c.json({error:"avatar_invalid"},400)}), async c => {
   const member = await requireMember(c);
@@ -891,14 +816,7 @@ app.post("/v1/cards", async (c) => {
   if (role.authorNumId !== me.accountNumId) throw new HttpError(403, "not the author of this card");
   // 登記的人一定是成員：作者頁與卡片上的作者連結都靠成員的公開 ID
   const memberId = await resolveMember(c.env.DB, provider, me.accountNumId, Date.now());
-  // 登記即分發：其他已登入渠道的 token 隨登記一起送來，登記成功後在背景同步過去（不等它）。
-  const distribute: DistributeTarget[] = [];
-  for (const item of Array.isArray(body.distribute) ? body.distribute : []) {
-    const target = item as { provider?: unknown; token?: unknown };
-    if (typeof target?.provider !== "string" || typeof target?.token !== "string" || !target.token || target.token.length > 16384) throw new HttpError(400, "sync_proof_required");
-    const targetProvider = requireConfigured(c.env, parseProvider(target.provider));
-    if (targetProvider !== provider) distribute.push({ provider: targetProvider, token: target.token });
-  }
+  if(Array.isArray(body.distribute)&&body.distribute.length)throw new HttpError(410,'service_retired');
   // 榜單只收在本站建的卡。作者在主站建的卡不是這裡的東西——「我的卡片」也不會列它，
   // 這條是防直接打 API 的那一手。
   if (role.creationMethod !== CREATION_METHOD) throw new HttpError(403, "only cards created on this site can be listed");
@@ -922,16 +840,7 @@ app.post("/v1/cards", async (c) => {
     if (!reviewEnabled(c.env)) throw new HttpError(503,"hosting_review_required");
     const operationId=typeof body.operationId==='string'?body.operationId:'';
     if(!/^[0-9a-f-]{36}$/i.test(operationId))throw new HttpError(400,'hosting_operation_required');
-    const targets=[];
-    const profile=await memberProfile(c.env.DB,memberId);
-    for(const target of distribute){
-      const identity=await upstream.fetchMe(c.env,target.token,target.provider);
-      if(!profile?.identities.some(x=>x.provider===target.provider&&x.externalId===identity.accountNumId))throw new HttpError(403,'sync_account_not_connected');
-      targets.push({...target,account:identity.accountNumId});
-    }
     const receipt=await submitHosted(c.env,{provider,memberId,account:me.accountNumId,role,token:bearer,nsfw,operationId,now});
-    await seedSavedHostingTargets(c.env,memberId,receipt.versionId,targets.map(t=>t.provider));
-    if(targets.length)c.executionCtx.waitUntil(Promise.allSettled(targets.map(target=>distributeHosted(c.env,{memberId,versionId:receipt.versionId,sourceToken:bearer,sourceAccount:me.accountNumId,targetProvider:target.provider,targetToken:target.token,targetAccount:target.account}))));
     const row=(await getCard(c.env.DB,roleId,provider))!;
     note(c,{event:"register",detail:"submitted"});
     return c.json({...toCard(row,lang(c)),status:row.status,versionId:receipt.versionId},existing?200:201,{'Cache-Control':'private, no-store'});
@@ -1197,7 +1106,6 @@ export async function syncBatch(env: Env): Promise<{ ok: number; failed: number;
   const limit = Math.max(1, Math.min(Number(env.SYNC_BATCH_SIZE) || 50, SUBREQUEST_BUDGET));
   const batch = await dueForSync(env.DB, limit);
   // 已發布到另一家的副本：熱度加總（owner 2026-09-17）。一次查完整批，D1 也算子請求。
-  const copies = await publishedCopiesFor(env.DB, batch);
   const concurrency = Math.max(1, Number(env.SYNC_CONCURRENCY) || 6);
   let ok = 0;
   let failed = 0;
@@ -1215,18 +1123,6 @@ export async function syncBatch(env: Env): Promise<{ ok: number; failed: number;
         writes.push(env.DB.prepare('UPDATE cards SET last_synced_at=? WHERE id=?').bind(now,row.id));return;
       }
       const role = { ...(await upstream.fetchRole(env, row.approved_hosted_role_id, provider)) };
-      // 副本的對話數加進來；預算內才抓，抓不到就這一輪少算它（下一輪再補）。
-      for (const copy of copies.get(`${provider}:${row.source_role_id}`) ?? []) {
-        if (spent >= SUBREQUEST_BUDGET) break;
-        spent++;
-        try {
-          const twin = await upstream.fetchRole(env, copy.roleId, copy.provider);
-          role.talkNum += twin.talkNum;
-          role.followNum += twin.followNum;
-        } catch {
-          /* 副本暫時讀不到：來源的數字照樣寫 */
-        }
-      }
       writes.push(syncStatement(env.DB, row.id, row.talk_num, role, now));
       // 作者一定要有成員列（公開 ID 從那裡來）。0005 之前登記、之後沒再登入過的作者會缺——
       // 先記下來，迴圈外一次查、缺的併進同一批寫入（D1 呼叫也算子請求，迴圈裡逐張查會吃掉上游的額度）。

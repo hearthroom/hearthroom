@@ -7,7 +7,7 @@ import { pageTitle } from '@/lib/i18n';
 import ServiceWallet from '@/components/ServiceWallet.vue';
 const session = useSession();
 const { t } = useI18n();
-const identities = computed(() => session.profile?.identities ?? (session.me ? [{provider: currentProvider(), externalId: session.me.accountNumId}] : []));
+const identities = computed(() => session.profile?.identities.filter(i=>i.provider==='harbor') ?? (session.me ? [{provider: currentProvider(), externalId: session.me.accountNumId}] : []));
 onMounted(() => { document.title = pageTitle(t('wallet.title')); });
 </script>
 <template>

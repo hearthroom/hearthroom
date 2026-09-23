@@ -13,6 +13,7 @@ import { useSession } from "../src/lib/session";
 
 const {recordConversation,clearLibraryCache} = vi.hoisted(() => ({recordConversation:vi.fn(async () => {}),clearLibraryCache:vi.fn()}));
 vi.mock('../src/lib/library', () => ({recordConversation,clearLibraryCache}));
+vi.mock('../src/lib/play-authorization',()=>({ensurePlayAuthorization:async()=>true}));
 const installMoonStage = vi.fn(async () => {});
 const mergeStageMessages = vi.fn();
 const MoonStage = defineComponent({
@@ -29,7 +30,7 @@ vi.mock("moonstage/stage", () => ({
 vi.mock("moonstage/stage.css", () => ({}));
 vi.mock("../src/lib/api", () => ({
   fetchCard: vi.fn(async (id:string) => ({id:`10000${id.slice(-1)}`,num:Number(`10000${id.slice(-1)}`)})),
-  fetchCardPlatforms: vi.fn(async (id:string) => [{provider:"lunatalk",roleId:`role-${id.slice(-1)}`,playable:true}]),
+  fetchCardPlatforms: vi.fn(async (id:string) => [{provider:"harbor",roleId:`role-${id.slice(-1)}`,playable:true}]),
   fetchMe: vi.fn(async () => ({ accountNumId: 1, nickName: "測試", avatar: "" })),
   fetchWallet: vi.fn(async () => ({ score: 0, tempScore: 0, plans: [] })),
   fetchSiteMe: vi.fn(async () => ({ handle: "abcdefgh", memberSince: 0, reviewer: false, identities: [] })),
@@ -103,7 +104,7 @@ describe("/play/:roleId", () => {
     const activity = (options.host as any).events.on.mock.calls.find((call: any[]) => call[0] === 'conversationActivity')?.[1];
     expect(activity).toBeTypeOf('function');
     await activity({roleId:'role-9',conversationId:'played-conversation'});
-    expect(recordConversation).toHaveBeenLastCalledWith('tok-1','lunatalk','role-9','played-conversation');
+    expect(recordConversation).toHaveBeenLastCalledWith('tok-1','harbor','role-9','played-conversation');
     recordConversation.mockClear();
     await handler?.({conversationId:'new-empty-conversation'});
     expect(recordConversation).not.toHaveBeenCalled();

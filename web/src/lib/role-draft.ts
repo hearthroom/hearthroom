@@ -413,7 +413,7 @@ export function documentPatch(draft: RoleDraft, original: RoleDraft | null): Rol
   for (const key of TEXT_FIELDS) {
     if (!original || draft[key] !== original[key]) patch[key] = draft[key];
   }
-  // Keep LunaTalk's legacy avatar field in sync, including explicit clearing.
+  // Keep the protocol avatar alias in sync, including explicit clearing.
   // Harbor treats this wire field as a portrait alias; there is no separate draft slot.
   if (patch.roleBackground !== undefined) patch.roleAvatar = patch.roleBackground;
   if (!original || JSON.stringify(draft.roleTag) !== JSON.stringify(original.roleTag)) patch.roleTag = draft.roleTag;

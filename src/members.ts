@@ -17,7 +17,7 @@ import { upstream } from "./upstream";
 export interface Member {
   id: string;
   provider: ProviderId;
-  /** 供應商上的公開 ID（lunatalk = accountNumId） */
+  /** 供應商上的公開 ID（HarperHarbor accountNumId） */
   externalId: number;
 }
 
@@ -160,7 +160,7 @@ export async function memberProfile(db: D1Database, memberId: string): Promise<M
     avatarUrl: m.avatar_url,
     bio: m.bio,
     memberSince: m.created_at,
-    identities: (ids.results as IdentityRow[]).map((r) => ({ provider: r.provider, externalId: Number(r.external_id), linkedAt: r.linked_at, founding: (founding.results as { provider: string }[]).some(i=>i.provider===r.provider) })),
+    identities: (ids.results as IdentityRow[]).filter(r=>r.provider==='harbor').map((r) => ({ provider: r.provider, externalId: Number(r.external_id), linkedAt: r.linked_at, founding: (founding.results as { provider: string }[]).some(i=>i.provider===r.provider) })),
     showNsfw: m.show_nsfw === 1,
     ageVerified: m.age_verified_at !== null,
     hiddenTags: parseHiddenTags(m.hidden_tags),

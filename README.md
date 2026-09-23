@@ -115,7 +115,7 @@ The editor requires OAuth with the provider, which does not work against `localh
 
 ```bash
 node scripts/mock-upstream.mjs                                  # :8899
-VITE_PROVIDER_API_BASE=http://127.0.0.1:8899 npm run dev:web
+VITE_HARBOR_API_BASE=http://127.0.0.1:8899 npm run dev:web
 ```
 
 Set a token in the browser console:
@@ -134,7 +134,7 @@ The site runs on a single Cloudflare account. The free tier is sufficient for a 
 
 1. Create the resources and enter their IDs in `wrangler.toml`: a D1 database (`DB`), two KV namespaces (`CACHE`, `ASSET_ARCHIVE`) and, optionally, an Analytics Engine dataset (`EVENTS`; set `ANALYTICS_ENABLED = "false"` to disable).
 2. Set the domain: `routes` in `wrangler.toml`, `HOST` in `src/site.ts`, and the site name in `web/src/lib/site.ts`. A custom domain cannot be attached to a hostname that already has a DNS record; delete any parking record first. Card apps live on `play.<host>` and sandbox shells on `c<id>.<host>`; both are served by the same wildcard route, so the zone needs a proxied wildcard DNS record.
-3. Set the provider: `PROVIDER_API_BASE` in `[vars]`. If the provider's main domain is unreachable from some countries, list per-country gateways in `PROVIDER_API_GATEWAYS` (`CC=url,…`); `/v1/region` returns the matching gateway to browsers from that country.
+3. Configure HarperHarbor with `PROVIDER_API_BASE_HARBOR` in `[vars]` and `VITE_HARBOR_API_BASE` for the web build. LunaTalk and regional provider gateways are retired.
 4. Choose whether to review: `REVIEW_ENABLED = "true"` in `[vars]` requires community review; any other value lists submissions without review. Review needs no key or account at the provider. Reviewers are granted with `node scripts/grant-reviewer.mjs <provider account id>`.
 5. Optionally set `wrangler secret put SHORTCUT_SECRET` (any random string). It signs the short-lived keys that let members who have enabled adult content add adult cards to their home screen; without it, adult cards simply have no such button.
 6. Deploy:

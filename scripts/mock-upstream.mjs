@@ -2,10 +2,10 @@
  * 假的上游（api.lunatalk.ai 的替身），只給本機開發建卡編輯器用。
  *
  * 建卡頁在 OAuth 後面，本機沒辦法走真的登入；這支腳本把編輯器會打到的上游端點全部用記憶體
- * 頂起來，前端只要把 VITE_PROVIDER_API_BASE 指過來、再往 localStorage 塞一組假 token：
+ * 頂起來，前端只要把 VITE_HARBOR_API_BASE 指過來、再往 localStorage 塞一組假 token：
  *
  *   node scripts/mock-upstream.mjs                      # :8899
- *   VITE_PROVIDER_API_BASE=http://127.0.0.1:8899 npm run dev:web
+ *   VITE_HARBOR_API_BASE=http://127.0.0.1:8899 npm run dev:web
  *   localStorage.setItem("hearthroom.oauth.access", JSON.stringify({ accessToken: "tok", expiresAt: Date.now() + 3600e3 }))
  *
  * 任何 Bearer token 都算登入。資料只在記憶體，重啟就沒。/__log 看收到的請求，/__reset 清空，

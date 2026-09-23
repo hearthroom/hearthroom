@@ -45,7 +45,7 @@ describe("provider-bound resources", () => {
       imageId: "asset-uuid",
     });
   });
-  it("keeps LunaTalk batch deletion and server-reported zero quota", async () => {
+  it("keeps HarperHarbor deletion and server-reported zero quota", async () => {
     const fetcher = vi.fn(async () =>
       response({
         imageList: [],
@@ -56,14 +56,14 @@ describe("provider-bound resources", () => {
       }),
     );
     vi.stubGlobal("fetch", fetcher);
-    const c = resourceClient("lunatalk", "luna-token");
+    const c = resourceClient("harbor", "luna-token");
     expect(
       (await c.list({ scope: "all", kind: "all", page: 1, pageSize: 24 }))
         .byteQuota,
     ).toBe(0);
     await c.remove([12]);
     expect(JSON.parse(fetcher.mock.calls[1][1].body)).toEqual({
-      imageIds: [12],
+      imageId: 12,
     });
   });
 });
@@ -113,7 +113,7 @@ it("uses the same issuer for legacy multipart fallback", async () => {
   );
   vi.stubGlobal("fetch", fetcher);
   await expect(
-    resourceClient("lunatalk", "token").upload(
+    resourceClient("harbor", "token").upload(
       new File(["x"], "a.png"),
       [],
       () => {},
@@ -121,7 +121,7 @@ it("uses the same issuer for legacy multipart fallback", async () => {
   ).resolves.toBe("https://cdn.test/legacy");
   expect(
     fetcher.mock.calls.every(([url]) =>
-      url.startsWith("https://api.lunatalk.ai/"),
+      url.startsWith("https://api.harperharbor.com/"),
     ),
   ).toBe(true);
 });

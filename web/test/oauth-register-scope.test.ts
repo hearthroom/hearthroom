@@ -33,7 +33,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
-  setProvider("lunatalk");
+  setProvider("harbor");
   useProviderUpstream();
 });
 
@@ -49,14 +49,14 @@ describe("動態註冊的權限範圍", () => {
     expect(registerBody(calls)?.scope).toContain("role.write");
   });
 
-  it("LunaTalk：沒有要求範圍就不帶，維持那一家的預設", async () => {
-    setProvider("lunatalk");
+  it("HarperHarbor：沒有要求範圍就不帶，維持那一家的預設", async () => {
+    setProvider("harbor");
     useProviderUpstream();
     const calls = captureRegister();
 
     await beginLogin("/");
 
-    expect(registerBody(calls)).not.toHaveProperty("scope");
+    expect(registerBody(calls)).toHaveProperty("scope", "profile.read email.read role.read role.write chat.play");
   });
 
   it("換範圍等於換一組客戶端：舊的唯讀 client 不會被拿來用", async () => {

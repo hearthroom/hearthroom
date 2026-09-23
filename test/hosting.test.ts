@@ -57,7 +57,7 @@ it('a failed seal remains retryable and concurrent retries leave only one privat
  expect((await env.DB.prepare('SELECT count(*) n FROM review_submissions').first<{n:number}>())?.n).toBe(1);
 });
 
-it.each(['harbor','lunatalk'] as const)('HTTP submits a private %s draft and exposes only approved hosted choices',async(provider)=>{
+it.each(['harbor','harbor'] as const)('HTTP submits a private %s draft and exposes only approved hosted choices',async(provider)=>{
  (env as {HOSTING_SERVICE_KEY?:string}).HOSTING_SERVICE_KEY='fixture';(env as {HOSTING_SERVICE_KEY_LUNATALK?:string}).HOSTING_SERVICE_KEY_LUNATALK='luna-fixture';reviewOn();
  vi.spyOn(upstream,'fetchMe').mockResolvedValue({accountNumId:10001});
  vi.spyOn(upstream,'fetchRole').mockImplementation(async(_env,id)=>{if(id==='private-draft')throw new Error('private draft');return role({roleId:id,authorNumId:10001})});

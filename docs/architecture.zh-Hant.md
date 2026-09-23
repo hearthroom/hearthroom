@@ -276,7 +276,7 @@ optional peer 圖會崩（`TypeError: reading 'edgesOut'`）。
 
 ```
 node scripts/mock-upstream.mjs                              # :8899
-VITE_PROVIDER_API_BASE=http://127.0.0.1:8899 npm run dev:web
+VITE_HARBOR_API_BASE=http://127.0.0.1:8899 npm run dev:web
 ```
 
 再在瀏覽器 console 塞一組假 token：
@@ -296,7 +296,7 @@ npm run deploy              # predeploy 會先跑 typecheck + 測試 + 前端 bu
 ```
 
 自架時要改的只有 `wrangler.toml` 的 `routes`（換成你的網域）、`src/site.ts` 的 `HOST`、
-`PROVIDER_API_BASE`，以及 `web/src/lib/site.ts` 的站台名稱。
+`PROVIDER_API_BASE_HARBOR`，以及 `web/src/lib/site.ts` 的站台名稱。
 
 ### 一個正本，其餘都轉過去
 

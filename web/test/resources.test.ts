@@ -115,9 +115,7 @@ describe("provider resource library", () => {
     prefix().querySelector<HTMLButtonElement>("button")!.click();
     await flush();
     expect(writeText).toHaveBeenLastCalledWith("https://assets.example/harbor/u/test/");
-    root.querySelector<HTMLButtonElement>('[data-provider="lunatalk"]')!.click();
-    await flush();
-    expect(prefix().querySelector("code")?.textContent).toBe("https://assets.example/lunatalk/u/test/");
+    expect(root.querySelector('[data-provider="lunatalk"]')).toBeNull();
   });
   it("restores a linked sort before capabilities have loaded", async () => {
     await mount("/resources?provider=harbor&sort=name&page=2");
@@ -135,22 +133,10 @@ describe("provider resource library", () => {
     await flush();
     expect(document.querySelector("[role=dialog]")).not.toBeNull();
   });
-  it("defaults to HarperHarbor for multiple providers and discards a late response", async () => {
-    state.profile.identities.push({ provider: "lunatalk", externalId: 3 });
-    let resolve!: (v: unknown) => void;
-    mocks.list.mockImplementationOnce(() => new Promise((r) => (resolve = r)));
-    await mount();
-    expect(mocks.list.mock.calls[0][0]).toBe("harbor");
-    root.querySelector<HTMLButtonElement>('[data-provider="lunatalk"]')!.click();
-    await flush();
-    resolve(page("stale.png"));
-    await flush();
-    expect(root.textContent).not.toContain("stale.png");
-  });
-  it("honors an explicit provider URL before the default", async () => {
+  it("ignores a retired provider URL", async () => {
     state.profile.identities.push({ provider: "lunatalk", externalId: 3 });
     await mount("/resources?provider=lunatalk");
-    expect(mocks.list.mock.calls[0][0]).toBe("lunatalk");
+    expect(mocks.list.mock.calls[0][0]).toBe("harbor");
   });
   it("keeps the current page on failure and retries without skipping", async () => {
     const router = await mount();

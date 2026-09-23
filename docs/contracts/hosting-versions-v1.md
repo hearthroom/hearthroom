@@ -1,5 +1,9 @@
 # HearthRoom hosting version contract v1
 
+> Hearthroom retirement update: only HarperHarbor remains active. LunaTalk
+> protocol descriptions below are historical. Do not configure its issuer key or
+> restore cross-service hosting; see [the retirement runbook](../lunatalk-retirement.md).
+
 Decision accepted by the owner on 2026-09-19. **Implementation candidate; deployment evidence is recorded separately.** This supersedes the proposed portable SHA standard. The normative
 source is this file in HearthRoom; HarperHarbor keeps an identical contract copy.
 

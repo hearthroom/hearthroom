@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import CardSyncPanel from "./CardSyncPanel.vue";
 import { computed, ref, watch } from "vue";
 import { useSession } from "@/lib/session";
 import { playCopies } from "@/lib/card-workspace";
@@ -96,7 +95,6 @@ function onArtError() {
         <p v-if="!plays.length" class="subtle">{{ $t('workspace.noCopy') }}</p>
       </section>
       <p v-if="card.sourceAvailable===false" class="subtle">{{ $t('workspace.sourceLoading') }}</p>
-      <CardSyncPanel :role-id="sourceId" :provider="source" compact @updated="stored=$event" />
     </div>
   </article>
 </template>

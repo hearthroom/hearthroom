@@ -18,7 +18,7 @@ const session = vi.hoisted(() => ({
     handle: "kxxoxfyb",
     memberSince: Date.UTC(2026, 8, 1),
     reviewer: false,
-    identities: [{ provider: "lunatalk", externalId: 7, linkedAt: Date.UTC(2026, 8, 1) }],
+    identities: [{ provider: "harbor", externalId: 7, linkedAt: Date.UTC(2026, 8, 1) }],
   } as { handle: string; memberSince: number; reviewer: boolean; identities: { provider: string; externalId: number; linkedAt: number }[] } | null,
   login: vi.fn(async () => undefined),
   logout: vi.fn(async () => undefined),
@@ -59,12 +59,12 @@ async function mount(component: unknown, path: string): Promise<{ el: HTMLElemen
 afterEach(() => { app?.unmount(); el?.remove(); app = null; el = null; session.login.mockClear(); });
 
 describe("登入頁", () => {
-  it("沒登入：一顆「使用 LunaTalk 帳號繼續」按鈕，還有「更多登入方式準備中」；按下才開始向供應商授權", async () => {
+  it("沒登入：一顆「使用 HarperHarbor 帳號繼續」按鈕，還有「更多登入方式準備中」；按下才開始向供應商授權", async () => {
     session.me = null;
     const { el } = await mount(LoginPage, "/login?returnTo=%2Fplay%2Fr1");
     const btn = el.querySelector<HTMLButtonElement>("button.login__provider")!;
     expect(btn).not.toBeNull();
-    expect(btn.textContent?.trim()).toBe(i18n.global.t("login.continueWith", { provider: "LunaTalk" }));
+    expect(btn.textContent?.trim()).toBe(i18n.global.t("login.continueWith", { provider: "HarperHarbor" }));
     expect(el.textContent).toContain(i18n.global.t("login.moreComing"));
     expect(session.login).not.toHaveBeenCalled();
     btn.click();
@@ -91,7 +91,7 @@ describe("「我的」頁", () => {
     session.me = { accountNumId: 7, nickName: "月光", avatar: "" };
     const { el } = await mount(MePage, "/me");
     expect(el.querySelector(".me__handle")?.textContent).toBe("kxxoxfyb");
-    expect(el.textContent).toContain("LunaTalk");
+    expect(el.textContent).toContain("HarperHarbor");
     expect(el.querySelector("h1")?.textContent).toBe("社區暱稱");
     expect(el.textContent).not.toContain(i18n.global.t("linked.account",{id:7}));
     expect(el.textContent).toContain(i18n.global.t("services.emailUnavailable"));
@@ -105,6 +105,6 @@ describe("「我的」頁", () => {
     const { el } = await mount(MePage, "/me");
     const btn = [...el.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.trim() === i18n.global.t("me.reauthorize"))!;
     btn.click();
-    expect(connect).toHaveBeenCalledWith("lunatalk","/me");
+    expect(connect).toHaveBeenCalledWith("harbor","/me");
   });
 });

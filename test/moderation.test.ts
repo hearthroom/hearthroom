@@ -160,6 +160,6 @@ it('atomically rejects a restoration inserted from a stale version read',async()
 it('returns provider and durable featured state in workbench list and detail',async()=>{
  await env.DB.prepare('UPDATE cards SET featured_at=123 WHERE id=?').bind(card).run();
  const list=await request('/cards');expect(list.status).toBe(200);
- expect((await list.json() as any).items[0]).toMatchObject({id:card,provider:'lunatalk',featured:true});
- expect((await request(`/cards/${card}`).then(r=>r.json()) as any).card).toMatchObject({provider:'lunatalk',featured:true});
+ expect((await list.json() as any).items[0]).toMatchObject({id:card,provider:'harbor',featured:true});
+ expect((await request(`/cards/${card}`).then(r=>r.json()) as any).card).toMatchObject({provider:'harbor',featured:true});
 });

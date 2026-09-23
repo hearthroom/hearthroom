@@ -18,7 +18,7 @@ it('uses the existing public number as the integer primary key and board identit
 });
 
 it('gives an unlisted card a stable number without publishing it or using registration quota', async () => {
-  rolesOnProviders({ lunatalk: [{ roleId: 'private-draft', authorNumId: 10001 }] });
+  rolesOnProviders({ harbor: [{ roleId: 'private-draft', authorNumId: 10001 }] });
   const first = await (await read('private-draft', bearer())).json() as any;
   expect(first).toMatchObject({ id: '100001', num: 100001, status: 'unlisted' });
   const second = await read(first.id);
@@ -32,13 +32,13 @@ it('gives an unlisted card a stable number without publishing it or using regist
 
 it('never exposes host-private content by guessing its assigned number', async () => {
   await env.DB.prepare("INSERT INTO card_numbers(provider,source_role_id) VALUES ('harbor','hidden')").run();
-  rolesOnProviders({ lunatalk: [], harbor: [] });
+  rolesOnProviders({ harbor: [] });
   expect((await read('100001')).status).toBe(404);
   expect((await SELF.fetch('https://c.test/v1/cards/100001/platforms')).status).toBe(404);
 });
 
 it('allocates a number on an authenticated draft save, without allowing another author to claim it', async () => {
-  rolesOnProviders({ lunatalk: [{ roleId: 'saved-draft', authorNumId: 10001 }] });
+  rolesOnProviders({ harbor: [{ roleId: 'saved-draft', authorNumId: 10001 }] });
   const save = () => SELF.fetch('https://c.test/v1/me/card-identities', { method:'POST', headers:{...bearer(),'Content-Type':'application/json'}, body:JSON.stringify({roleId:'saved-draft'}) });
   const response = await save();
   expect(response.status).toBe(200);
@@ -49,9 +49,9 @@ it('allocates a number on an authenticated draft save, without allowing another 
 });
 
 it('keeps an unlisted numbered card blocked when a durable moderation block exists', async () => {
-  rolesOnProviders({ lunatalk:[{roleId:'blocked-draft'}] });
-  const num = await ensureCardNumber(env.DB,'lunatalk','blocked-draft');
-  await env.DB.prepare("INSERT INTO moderation_state(provider,source_role_id,public_blocked) VALUES ('lunatalk','blocked-draft',1)").run();
+  rolesOnProviders({ harbor:[{roleId:'blocked-draft'}] });
+  const num = await ensureCardNumber(env.DB,'harbor','blocked-draft');
+  await env.DB.prepare("INSERT INTO moderation_state(provider,source_role_id,public_blocked) VALUES ('harbor','blocked-draft',1)").run();
   expect((await read(String(num))).status).toBe(404);
   expect((await SELF.fetch(`https://c.test/v1/cards/${num}/platforms`)).status).toBe(404);
 });

@@ -27,7 +27,7 @@ it('existing initialized identity needs one read and no write, even without an u
 });
 it('loads a member profile and linked identities in one D1 batch',async()=>{
  const id=await makeMember(11);const {db,trips}=measuredDb();
- expect((await memberProfile(db,id))?.identities).toEqual([{provider:'lunatalk',externalId:11,linkedAt:expect.any(Number),founding:true}]);
+ expect((await memberProfile(db,id))?.identities).toEqual([{provider:'harbor',externalId:11,linkedAt:expect.any(Number),founding:true}]);
  expect(trips).toEqual(['batch']);
  expect(await memberProfile(db,'missing')).toBeNull();
 });

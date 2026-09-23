@@ -42,11 +42,11 @@ it('validates adult comment identity only once per request, never across request
  expect((await get('/v1/cards/'+id+'/comments?nsfw=1',bearer('valid'))).status).toBe(200);expect(spy).toHaveBeenCalledTimes(1);
  expect((await get('/v1/cards/'+id+'/comments?nsfw=1',bearer('valid'))).status).toBe(200);expect(spy).toHaveBeenCalledTimes(2);
 });
-it('separates same-number mine caches by verified provider',async()=>{
+it('separates mine caches by verified Harbor account',async()=>{
  myRolesOnUpstream({'one':[{roleId:'one'}],'two':[{roleId:'two'}]});
  const options={page:1,pageSize:24,fresh:false,filter:'all' as const};
- await loadMine(env,'one',11,{...options,provider:'lunatalk'});
- const other=await loadMine(env,'two',11,{...options,provider:'harbor'});
+ await loadMine(env,'one',11,{...options,provider:'harbor'});
+ const other=await loadMine(env,'two',22,{...options,provider:'harbor'});
  expect(other.body.items[0].roleId).toBe('two');
 });
 it('reuses author aggregates and invalidates profile and card visibility',async()=>{

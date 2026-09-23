@@ -26,7 +26,7 @@ export interface CardRow {
   board_hidden: number;
   public_blocked: number;
   last_synced_at: number;
-  /** 供應商代號（0004 起）。現在只有 lunatalk。 */
+  /** 供應商代號（0004 起）。目前只接受 harbor。 */
   provider: string;
   /** 審核狀態（0004 起）：pending / approved / rejected / needs_review / unshared。榜單只算 approved。 */
   status: string;
@@ -183,7 +183,7 @@ const inList = (table: string) => `EXISTS (SELECT 1 FROM json_each(${table}.tags
 const excludeClause = (table: string) => `NOT ${inList(table)}`;
 
 export async function listCards(db: D1Database, opts: ListOptions) {
-  const where: string[] = opts.anyStatus ? ["1=1"] : [`c.${listed(!!opts.allowNsfw)}`, NOT_A_COPY("c")];
+  const where: string[] = opts.anyStatus ? ["1=1"] : [`c.${listed(!!opts.allowNsfw)}`, NOT_A_COPY("c"), "c.provider = 'harbor'"];
   const binds: unknown[] = [];
   if (opts.provider) {
     where.push("c.provider = ?");
@@ -269,7 +269,7 @@ export async function listCards(db: D1Database, opts: ListOptions) {
   if (!filtered) {
     // 語區條件走索引，數起來便宜；只有搜尋與標籤過濾才貴到不值得數。
     // 「不想看的類型」不算篩選：它是這個人的常態視角，「共 N 張」要照他看得到的數，所以數的時候一起排除。
-    const countWhere = [listed(!!opts.allowNsfw), NOT_A_COPY("cards")];
+    const countWhere = [listed(!!opts.allowNsfw), NOT_A_COPY("cards"), "provider = 'harbor'"];
     const countBinds: unknown[] = [];
     if (opts.provider) { countWhere.push("provider = ?"); countBinds.push(opts.provider); }
     if (opts.zone) { countWhere.push("zone IN (?, 'all')"); countBinds.push(opts.zone); }
@@ -291,7 +291,7 @@ export async function listCards(db: D1Database, opts: ListOptions) {
  * 在結構上不可能發生的原因。
  */
 export async function upsertCard(db: D1Database, role: UpstreamRole, now: number, opts: { status?: string; provider?: ProviderId; nsfw?: boolean; recordRegistration?: boolean; preserveExisting?: boolean; additionalWrites?: (id:string)=>D1PreparedStatement[] } = {}) {
-  const provider: ProviderId = opts.provider ?? "lunatalk";
+  const provider: ProviderId = opts.provider ?? "harbor";
   const existing = await db
     .prepare("SELECT CAST(id AS TEXT) AS id, talk_num FROM cards WHERE provider = ? AND source_role_id = ?")
     .bind(provider, role.roleId)
@@ -340,7 +340,7 @@ export async function upsertCard(db: D1Database, role: UpstreamRole, now: number
     )
     // 首次登記把 prev 設成當前值 → trending 從 0 起算。
     // 不這樣的話一張老熱卡剛登記就會用累積總量霸榜。
-    .bind(id, role.roleId, ...shared, role.talkNum, now, opts.provider ?? "lunatalk", opts.status ?? "approved", opts.nsfw ? 1 : 0);
+    .bind(id, role.roleId, ...shared, role.talkNum, now, opts.provider ?? "harbor", opts.status ?? "approved", opts.nsfw ? 1 : 0);
   try {
     await db.batch([
       ...(opts.recordRegistration ? [db.prepare("INSERT INTO card_registrations(provider,author_num_id,source_role_id,registered_at) VALUES (?,?,?,?)").bind(provider,role.authorNumId,role.roleId,now)] : []),
@@ -373,7 +373,7 @@ export async function setCardFeatured(db: D1Database, cardId: string, featuredAt
  * 找一張卡：卡號（純數字）、上游的卡片 ID、或本站列的 id 都認。
  * 卡號是站內唯一的，不看供應商；另外兩種在兩家會撞號，要帶供應商。
  */
-export async function getCard(db: D1Database, id: string, provider: ProviderId = "lunatalk") {
+export async function getCard(db: D1Database, id: string, provider: ProviderId = "harbor") {
   if (CARD_NUMBER.test(id)) {
     return await db
       .prepare(`SELECT ${CARD_COLUMNS} FROM cards c ${AUTHOR_JOIN} WHERE c.id = ?`)
@@ -393,7 +393,7 @@ export async function getCard(db: D1Database, id: string, provider: ProviderId =
  * 撞號時才以 provider 消歧。呼叫端仍須檢查審核、封鎖、成人內容與作者權限。
  * 身分綁定的編輯／登記路徑繼續使用 getCard，不可改用這個跨平台查詢。
  */
-export async function getPublicCard(db: D1Database, id: string, provider: ProviderId = "lunatalk") {
+export async function getPublicCard(db: D1Database, id: string, provider: ProviderId = "harbor") {
   if (CARD_NUMBER.test(id)) return getCard(db, id, provider);
   return await db
     .prepare(`SELECT ${CARD_COLUMNS} FROM cards c ${AUTHOR_JOIN}
@@ -438,14 +438,14 @@ export function previewCard(role: UpstreamRole, lang: string, provider: Provider
 }
 
 /** 一個成員的公開作者頁：把他在各家供應商上、登記在本站且在榜的卡彙總。沒有在榜的卡就是 null。 */
-export async function getAuthor(db: D1Database, memberId: string, allowNsfw = false, provider: ProviderId = "lunatalk") {
+export async function getAuthor(db: D1Database, memberId: string, allowNsfw = false, provider: ProviderId = "harbor") {
   const row = await db
     .prepare(
       `SELECT am.handle AS handle, MAX(COALESCE(am.display_name,c.author_name)) AS author_name, MAX(CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url ELSE c.author_avatar END) AS author_avatar,
               MAX(am.bio) AS bio, COUNT(*) AS card_count, SUM(c.talk_num) AS talk_total, MIN(c.registered_at) AS joined_at,
               GROUP_CONCAT(DISTINCT c.provider) AS providers
        FROM cards c ${AUTHOR_JOIN}
-       WHERE am.id = ? AND ${NOT_A_COPY("c")} AND c.${listed(allowNsfw)}`,
+       WHERE am.id = ? AND ${NOT_A_COPY("c")} AND c.${listed(allowNsfw)} AND c.provider='harbor'`,
     )
     .bind(memberId)
     .first<{
@@ -465,7 +465,7 @@ export async function getAuthor(db: D1Database, memberId: string, allowNsfw = fa
   return { ...row, providers: (row.providers ?? "").split(",").filter(Boolean) };
 }
 
-export async function unregister(db: D1Database, roleId: string, authorNumId: number, provider: ProviderId = "lunatalk") {
+export async function unregister(db: D1Database, roleId: string, authorNumId: number, provider: ProviderId = "harbor") {
   const row = await db
     .prepare("SELECT id, author_num_id FROM cards WHERE provider = ? AND (source_role_id = ? OR id = ?)")
     .bind(provider, roleId, roleId)
@@ -483,7 +483,7 @@ export async function unregister(db: D1Database, roleId: string, authorNumId: nu
 /** 排程同步挑最久沒更新的一批。帶著審核狀態與已過審的內容版本，同步順手比對內容有沒有變。 */
 export async function dueForSync(db: D1Database, limit: number) {
   const rows = await db
-    .prepare("SELECT id, source_role_id, talk_num, provider, status, reviewed_hash, approved_version_id, approved_hosted_role_id FROM cards ORDER BY last_synced_at ASC LIMIT ?")
+    .prepare("SELECT id, source_role_id, talk_num, provider, status, reviewed_hash, approved_version_id, approved_hosted_role_id FROM cards WHERE provider='harbor' ORDER BY last_synced_at ASC LIMIT ?")
     .bind(limit)
     .all<{ id: string; source_role_id: string; talk_num: number; provider: string; status: string; reviewed_hash: string; approved_version_id: string|null; approved_hosted_role_id: string|null }>();
   return rows.results;
@@ -528,7 +528,7 @@ export function syncStatement(db: D1Database, id: string, prevTalkNum: number, r
  * 「已登記」不能靠掃上游那一頁來數：作者可能有一百多張卡，一頁只看得到二十幾張，
  * 數出來的是「這一頁裡有幾張」而不是「一共有幾張」。本站的 D1 才是登記這件事的權威。
  */
-export async function countByAuthor(db: D1Database, authorNumId: number, provider: ProviderId = "lunatalk"): Promise<number> {
+export async function countByAuthor(db: D1Database, authorNumId: number, provider: ProviderId = "harbor"): Promise<number> {
   const row = await db
     .prepare("SELECT COUNT(*) AS n FROM cards WHERE provider = ? AND author_num_id = ?")
     .bind(provider, authorNumId)
@@ -537,7 +537,7 @@ export async function countByAuthor(db: D1Database, authorNumId: number, provide
 }
 
 /** 這批 roleId 裡，哪些已經登記在本站。永遠直接查庫，不快取——見 src/mine.ts 的說明。 */
-export async function registeredAmong(db: D1Database, roleIds: string[], provider: ProviderId = "lunatalk"): Promise<Set<string>> {
+export async function registeredAmong(db: D1Database, roleIds: string[], provider: ProviderId = "harbor"): Promise<Set<string>> {
   if (!roleIds.length) return new Set();
   const holes = roleIds.map(() => "?").join(",");
   const rows = await db
@@ -553,8 +553,8 @@ export async function registeredAmong(db: D1Database, roleIds: string[], provide
  */
 export async function topTags(db: D1Database, zone: Zone | undefined, limit: number, q?: string, offset = 0) {
   let where = zone
-    ? `WHERE c.${listed(false)} AND ${NOT_A_COPY("c")} AND c.zone IN (?, 'all')`
-    : `WHERE c.${listed(false)} AND ${NOT_A_COPY("c")}`;
+    ? `WHERE c.${listed(false)} AND c.provider='harbor' AND ${NOT_A_COPY("c")} AND c.zone IN (?, 'all')`
+    : `WHERE c.${listed(false)} AND c.provider='harbor' AND ${NOT_A_COPY("c")}`;
   const binds: unknown[] = zone ? [zone] : [];
   if (q) { where += " AND j.value LIKE ? ESCAPE '\\'"; binds.push(likeTerm(q)); }
   binds.push(limit, offset);
@@ -588,7 +588,7 @@ export async function listAuthors(
   db: D1Database,
   opts: { zone?: Zone; q?: string; sort: "talk" | "cards" | "hot"; limit: number; offset: number },
 ) {
-  const where: string[] = [`c.${listed(false)}`, NOT_A_COPY("c")];
+  const where: string[] = [`c.${listed(false)}`, NOT_A_COPY("c"), "c.provider = 'harbor'"];
   const binds: unknown[] = [];
   if (opts.zone) { where.push("c.zone IN (?, 'all')"); binds.push(opts.zone); }
   if (opts.q) { where.push(`COALESCE(am.display_name,c.author_name) LIKE ? ESCAPE '\\'`); binds.push(likeTerm(opts.q)); }

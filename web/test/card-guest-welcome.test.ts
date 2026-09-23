@@ -10,7 +10,7 @@ vi.mock('moonstage/stage', () => ({}));
 vi.mock('moonstage/stage.css', () => ({}));
 import CardPage from '../src/pages/CardPage.vue';
 
-const card = { id: '900001', num: 900001, roleId: 'luna-hosted', provider: 'lunatalk', zone: 'zh', name: 'Fixture', summary: 'Fixture', tags: [], author: { handle: null, accountNumId: 7, name: 'Author', avatar: '' }, talkNum: 0, followNum: 0, registeredAt: 1, syncedAt: 1, nsfw: false };
+const card = { id: '900001', num: 900001, roleId: 'luna-hosted', provider: 'harbor', zone: 'zh', name: 'Fixture', summary: 'Fixture', tags: [], author: { handle: null, accountNumId: 7, name: 'Author', avatar: '' }, talkNum: 0, followNum: 0, registeredAt: 1, syncedAt: 1, nsfw: false };
 const raw = '<zzt>Welcome</zzt>';
 const asset = { rules: [{ id: 'title', find: '/<zzt>(.*?)<\\/zzt>/g', replace: '<div class="guest-decoration">$1</div>', enabled: true }], cardFormat: 'mmd' };
 let app: App | undefined;
@@ -23,10 +23,10 @@ async function mount(options: { replicaStatus?: number; replicaWelcome?: string;
     requests.push({ url, auth: new Headers(init?.headers).get('Authorization') });
     let body: unknown = { error: 'not_found' }, status = 404;
     if (url.pathname === '/v1/cards/900001') { body = card; status = 200; }
-    if (url.pathname.endsWith('/platforms')) { status = options.platformsStatus ?? 200; body = { platforms: [{ provider: 'lunatalk', roleId: 'luna-hosted', playable: true }, { provider: 'harbor', roleId: 'harbor-hosted', playable: true }] }; }
-    if (url.pathname === '/open/v1/role/detail') { body = { roleWelcome: url.hostname.includes('harperharbor') ? options.replicaWelcome ?? raw : raw }; status = 200; }
+    if (url.pathname.endsWith('/platforms')) { status = options.platformsStatus ?? 200; body = { platforms: [{ provider: 'harbor', roleId: 'luna-hosted', playable: true }, { provider: 'harbor', roleId: 'harbor-hosted', playable: true }] }; }
+    if (url.pathname === '/open/v1/role/detail') { body = { roleWelcome: url.searchParams.get('roleId')==='harbor-hosted' ? options.replicaWelcome ?? raw : raw }; status = 200; }
     if (url.pathname.endsWith('/author-asset/serve')) {
-      if (url.hostname.includes('harperharbor')) { status = options.replicaStatus ?? 200; body = asset; }
+      if (url.searchParams.get('roleId')==='harbor-hosted') { status = options.replicaStatus ?? 200; body = asset; }
       else { status = options.sourceAsset ? 200 : 403; body = options.sourceAsset ?? {}; }
     }
     return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
