@@ -4097,7 +4097,7 @@
           }
         },
         "x-harperharbor": {
-          "description": "Requires chat.play. Issues a random, single-use ticket with a 30-second lifetime. Connect to /open/v1/conversation/ws?protocolVersion=2 and send {\"type\":\"auth\",\"ticket\":\"...\"} as the first frame. Wait for ready before sending. The first turn contains conversationId, message and a stable clientOperationId; operationKind is send. Choose an available model from the provider catalog. Regenerate the latest assistant turn with rewrite; resume an interrupted Agent preparation with retry_generation and resumeFromOperationId. Continue-response remains unsupported. SSE-formatted WebSocket frames include streamMeta, accepted, messageMeta, answer/thinking deltas, operationStatus and done. Reconnect with resumeStreamId and lastEventId to replay durable chunks; mode=tryResume plus conversationId finds an active operation. Reusing a clientOperationId with different input returns a conflict. No bearer or ticket belongs in a URL. Automatic memory preparation emits compacting progress and compactDone/compactFailed phase events. Stop also cancels preparation. operationStatus includes phase, compacting, reasonCode and hasContextUsage. context_capacity_exceeded is terminal and not retryable without changing the input or model capacity; history is retained. Completed memory jobs settle independently of the foreground answer. A reconnect replays replies but does not start another summary. Agent mode uses the saved /player/agent-mode preference or the per-turn agentMode override. Check runtimeEnabled and modelSupported for the selected model. Tool-capable paid models emit durable prepStep progress and agentTurn=true operation status. An interrupted preparation exposes reasonCode=agent_progress_preserved, state=failed_retryable and allowedActions including continue. Resume with a new clientOperationId, the same message and model, and resumeFromOperationId within 30 days; no second USER message is created. Stale or mismatched continuations fail closed; an empty resumeFromOperationId means a fresh turn. History edits invalidate continuations. Credits are reserved incrementally; each execution settles aggregate actual input/output/cache usage once, including usage before a user stop or upstream failure. Internal persistence failures are not charged. A continuation charges only new upstream work. Ordinary /v1/chat/completions remains a caller-managed tool API.",
+          "description": "Requires chat.play. Issues a random, single-use ticket with a 30-second lifetime. Connect to /open/v1/conversation/ws?protocolVersion=2 and send {\"type\":\"auth\",\"ticket\":\"...\"} as the first frame. Wait for ready before sending. The first turn contains conversationId, message and a stable clientOperationId; operationKind is send. Choose an available model from the provider catalog. Regenerate the latest assistant turn with rewrite; resume an interrupted Agent preparation with retry_generation and resumeFromOperationId. Continue-response remains unsupported. SSE-formatted WebSocket frames include streamMeta, accepted, messageMeta, answer/thinking deltas, operationStatus and done. Reconnect with resumeStreamId and lastEventId to replay durable chunks; mode=tryResume plus conversationId finds an active operation. Reusing a clientOperationId with different input returns a conflict. No bearer or ticket belongs in a URL. Automatic memory preparation emits compacting progress and compactDone/compactFailed phase events. Stop also cancels preparation. operationStatus includes phase, compacting, reasonCode and hasContextUsage. context_capacity_exceeded is terminal and not retryable without changing the input or context tier; history is retained. When a first turn does not fit, the error also carries required_context_tier/required_context_tokens (save it as the player's context and resend) and constant_lore_trim_fits (save trimConstantLore=true to play at the current tier with fewer constant lorebook entries). Completed memory jobs settle independently of the foreground answer. A reconnect replays replies but does not start another summary. Agent mode uses the saved /player/agent-mode preference or the per-turn agentMode override. Check runtimeEnabled and modelSupported for the selected model. Tool-capable paid models emit durable prepStep progress and agentTurn=true operation status. An interrupted preparation exposes reasonCode=agent_progress_preserved, state=failed_retryable and allowedActions including continue. Resume with a new clientOperationId, the same message and model, and resumeFromOperationId within 30 days; no second USER message is created. Stale or mismatched continuations fail closed; an empty resumeFromOperationId means a fresh turn. History edits invalidate continuations. Credits are reserved incrementally; each execution settles aggregate actual input/output/cache usage once, including usage before a user stop or upstream failure. Internal persistence failures are not charged. A continuation charges only new upstream work. Ordinary /v1/chat/completions remains a caller-managed tool API.",
           "security": [
             {
               "userToken": []
@@ -12553,6 +12553,20 @@
           "retryable": {
             "type": "boolean",
             "description": "Whether retrying may succeed. Present only on middleware errors, /me, /me/wallet and service/share routes."
+          },
+          "required_context_tier": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "Only on a first-turn `context_capacity_exceeded`: the smallest context tier that fits the whole card with room to talk. Save it as `context` in player settings and resend. Absent when no tier fits."
+          },
+          "required_context_tokens": {
+            "type": "integer",
+            "description": "The token budget of `required_context_tier` for the selected model, for display."
+          },
+          "constant_lore_trim_fits": {
+            "type": "boolean",
+            "description": "Only on a first-turn `context_capacity_exceeded`: whether saving `trimConstantLore=true` lets the card play at the current tier. Absent on mid-conversation capacity errors."
           }
         }
       },
@@ -14632,6 +14646,10 @@
             "type": "boolean",
             "description": "Agent mode switch (write via /player/agent-mode)."
           },
+          "trimConstantLore": {
+            "type": "boolean",
+            "description": "Play this card at the current context tier with constant lorebook entries trimmed to an eighth of the context budget (highest priority first). Default false sends every constant entry. Offered when a first turn returns `context_capacity_exceeded` with `constant_lore_trim_fits`."
+          },
           "promptStrategy": {
             "type": "string",
             "description": "\"\" or \"legacy\" (default) | \"v2\". Not validated."
@@ -14779,7 +14797,7 @@
           "context": {
             "type": "number",
             "minimum": 1,
-            "description": "Context tier (`contextBudgetOptions[].value`)."
+            "description": "Context tier (`contextBudgetOptions[].value`, 1-5). Saving any other field keeps the stored tier."
           },
           "systemPrompt": {
             "type": "string",
@@ -14787,6 +14805,10 @@
           },
           "autoCompactEnabled": {
             "type": "boolean"
+          },
+          "trimConstantLore": {
+            "type": "boolean",
+            "description": "Play this card at the current context tier with constant lorebook entries trimmed to an eighth of the context budget (highest priority first). Default false sends every constant entry. Offered when a first turn returns `context_capacity_exceeded` with `constant_lore_trim_fits`."
           },
           "promptStrategy": {
             "type": "string",
