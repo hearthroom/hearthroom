@@ -18,6 +18,9 @@ const session = useSession();
 const route = useRoute();
 const { lp } = useLocalePath();
 const { t } = useI18n();
+// 開關本來就開著、門卻出現時（例如那次讀卡剛好沒帶到權限），改開關不會觸發卡片頁的監聽——
+// 值沒變。所以按下去成功就明說一聲，由卡片頁重讀，不然這顆鍵看起來按了沒反應。
+const emit = defineEmits<{ enabled: [] }>();
 
 const birthdate = ref("");
 const busy = ref(false);
@@ -32,6 +35,7 @@ async function enable() {
   try {
     const result = await updateSiteSettings({ showNsfw: true, ...(verified.value ? {} : { birthdate: birthdate.value }) }, (await session.accessToken()) ?? "");
     if (session.profile) { session.profile.showNsfw = result.showNsfw; session.profile.ageVerified = result.ageVerified; }
+    emit("enabled");
   } catch (err) {
     error.value = err instanceof ApiError || err instanceof Error ? err.message : t("state.actionFailed");
   } finally {

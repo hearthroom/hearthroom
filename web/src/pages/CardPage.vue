@@ -127,7 +127,12 @@ function applyHead(c: { name: string; summary: string }) {
   document.querySelector<HTMLMetaElement>('meta[name="description"]')?.setAttribute("content", c.summary);
 }
 
+// 同一頁可能同時有好幾次讀卡在路上（進頁一次、身分到了再一次、開關改了又一次）。
+// 只認最後一次：身分到之前發出的那次沒帶成人權限，它的 403 常常比後面那次的卡片晚回來，
+// 照單全收就把已經畫好的卡蓋成門（玩家回報 2026-09-23，重新整理才好）。
+let loadGeneration = 0;
 async function load() {
+  const request = ++loadGeneration;
   // 換語言時手上還有卡：留著變淡，資料到了再換，不退回骨架
   revalidating.value = !!card.value;
   const id = route.params.id as string;
@@ -145,13 +150,16 @@ async function load() {
     loadDetails(shown.roleId, shown.author.handle, lang, (shown.provider as ProviderId) ?? currentProvider());
   }
   try {
-    card.value = await fetchCard(id, lang);
+    const fetched = await fetchCard(id, lang);
+    if (request !== loadGeneration) return;
+    card.value = fetched;
     if (card.value.num && id !== String(card.value.num)) {
       const url = new URL(window.location.href);
       url.pathname = lp(`/cards/${card.value.num}`);
       window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
     }
   } catch (err) {
+    if (request !== loadGeneration) return;
     if (err instanceof ApiError && err.status === 404) missing.value = true;
     else if (err instanceof ApiError && err.status === 403 && err.code === "adult_content") { gated.value = true; card.value = null; }
     else if (!shown) error.value = err instanceof Error ? err.message : t("state.loadFailed");
@@ -236,7 +244,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 
 <template>
   <NotFoundPage v-if="missing" :title="$t('card.notFound.title')" :hint="$t('card.notFound.hint')" />
-  <div v-else-if="gated" class="page"><AdultGate /></div>
+  <div v-else-if="gated" class="page"><AdultGate @enabled="load" /></div>
 
   <div v-else class="page role">
     <!-- 骨架照著真的版面畫：左邊一張身分證、右邊一塊面板，資料來了不跳版 -->
