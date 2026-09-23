@@ -45,7 +45,14 @@ historical database rows; active requests and network routing accept only Harper
    registration timestamps and moderation mappings forward. Remove the Harper
    `work_copies` row once that draft becomes canonical. Supersede pending Luna reviews
    without promoting their edited content. Read the resulting cards back.
-6. Only after every eligible attempt has a receipt, deploy this removal release and
+6. Before the removal release, refund all attributable paid play on the retired
+   original cards and their hosted revisions, including deleted conversations when
+   durable billing/revenue receipts establish attribution. Reconcile prior matching
+   refunds; use actual applied charges, per-account atomic balance/ledger/audit
+   updates and deterministic operation markers. Verify durable totals and a same-key
+   no-op replay. Check for new consumption through the final cutoff and refund any
+   remaining delta. Keep private cohort identifiers and receipts outside git.
+7. Only after migration receipts and refund readback are complete, deploy this removal release and
    remove the temporary migration route. Remove retired grants, site sessions,
    OAuth clients/attempts and the Luna issuer secret through the authorized operator
    path. Preserve necessary identity history. No conversation-body or wallet transfer
