@@ -913,7 +913,7 @@ export interface WorldbookSummary {
   tags?: string;
 }
 
-/** 玩家面的作者資產（正則規則、功能欄、簡繁對照）。目前上游要登入才給；沒 token 或被拒就當沒有資產。 */
+/** 玩家面的作者資產（正則規則、功能欄、簡繁對照）。各平台決定是否允許訪客讀取；被拒就回 null。 */
 export interface PlayerAsset {
   rules: unknown[];
   mountTrigger: string;

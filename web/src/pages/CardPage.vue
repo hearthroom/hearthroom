@@ -11,10 +11,10 @@ import NotFoundPage from "@/pages/NotFoundPage.vue";
 import AdultGate from "@/components/AdultGate.vue";
 import PreviewDoc from "@/components/preview/PreviewDoc.vue";
 import HtmlCardFrame from "@/components/HtmlCardFrame.vue";
-import { ApiError, fetchBoard, fetchCard, fetchCardPlatforms, type CardPlatform, fetchPlayerAsset, fetchPreviewPage, fetchRoleDetail } from "@/lib/api";
+import { ApiError, fetchBoard, fetchCard, fetchCardPlatforms, type CardPlatform, fetchPreviewPage, fetchRoleDetail } from "@/lib/api";
 import { renderWelcomeAsync } from "@/lib/welcome-render";
 import { recallCard } from "@/lib/card-memory";
-import { accountToken } from "@/lib/connections";
+import { fetchWelcomeAsset } from "@/lib/welcome-asset";
 import { currentProvider, type ProviderId } from "@/lib/provider";
 import CardOwnerActions from "@/components/CardOwnerActions.vue";
 import CardPlatforms from "@/components/CardPlatforms.vue";
@@ -85,6 +85,8 @@ const hasArt = computed(() => !!card.value?.avatarUrl && !broken.value);
  * 讀不到只是少一塊，不擋整頁；跟卡片本身分開，手上一有卡就可以開始拿。
  */
 function loadDetails(roleId: string, authorHandle: string | null, lang: string, provider: ProviderId) {
+  const cardId = card.value!.id;
+  const pending = platformsRequest.value?.id === cardId ? platformsRequest.value.request : undefined;
   void fetchRoleDetail(roleId, undefined, lang, provider)
     .then((raw) => {
       const rawWelcome = String(raw.roleWelcome ?? "");
@@ -93,15 +95,14 @@ function loadDetails(roleId: string, authorHandle: string | null, lang: string, 
       editedAt.value = Number.isFinite(edited) ? edited : null;
       welcome.value = plainText(rawWelcome, charName, t("card.you"));
       // 開場白照對話頁的方式畫：先套作者的正則規則（酒館／MMD 卡靠它把標記換成版面），
-      // 再交給沙盒 iframe 用同一套元件庫畫（HtmlCardFrame）。功能欄那份整頁美化不放（見 welcome-render）。規則要登入才拿得到，
-      // 遊客與沒規則的卡就只畫 HTML／markdown 本身；純文字的開場白照舊走氣泡。
-      void accountToken(provider).catch(() => null)
-        .then((token) => fetchPlayerAsset(roleId, token || undefined, provider).catch(() => null))
+      // 再交給沙盒 iframe 用同一套元件庫畫（HtmlCardFrame）。功能欄那份整頁美化不放（見 welcome-render）。
+      // 來源不提供訪客規則時，使用同卡、相同開場白的公開副本；兩邊都拿不到才退回純文字。
+      void fetchWelcomeAsset(cardId, { roleId, provider }, rawWelcome, lang, pending)
         // 作者正則在背景執行緒跑：寫得慢的規則只讓開場白晚點換上版面，不卡住整頁
         .then((asset) => (card.value?.roleId === roleId ? renderWelcomeAsync(rawWelcome, { charName, userName: t("card.you"), asset }) : null))
         .then((out) => {
           if (out && card.value?.roleId === roleId) welcomeHtml.value = out.html;
-        });
+        }).catch(() => { /* 規則失敗仍保留開場白文字 */ });
       showComments.value = (!card.value?.status || card.value.status === "approved") && raw.previewShowComments !== false;
       if (raw.hasPreviewPage === true) {
         return fetchPreviewPage(roleId, provider).then((p) => {

@@ -199,3 +199,28 @@ Moonloom workflow and shared author assets are missing/drifted; socket and proce
 fixtures hit sandbox restrictions, and case-index checks report missing rows. The
 Hearthroom trusted suite is evaluated independently. No unrelated repository or
 harness implementation was changed to hide those failures.
+
+## Guest opening decoration follow-up
+
+The card page previously requested display rules only from its source provider;
+that provider's anonymous refusal silently reduced the opening to plain text even
+when an approved public replica supplied those rules. Numeric IDs still resolve to
+provider role IDs before either request; the regex engine itself was not removed.
+
+The preview now tries the source's public player asset, then its own scoped login
+if available, then publicly discoverable replicas. Replica assets are read without
+credentials and only when their opening matches the displayed opening. Discovery
+keeps existing moderation and visibility checks; author-only settings are never
+read. An accessible empty rule list is authoritative. Denied/missing assets still
+fall back to text. Full-page mount triggers remain excluded from card previews.
+
+MCP/Moonloom: not applicable, because this repairs an existing browser-only display
+path using unchanged public APIs. Observability: no new server operation or metric;
+HTTP refusal and browser rendering remain the relevant diagnostics, without logging
+card content or identifiers. No user-facing copy or locale changes.
+
+Regression: a mounted visitor CardPage initially failed to render the expected
+rule-generated frame, then passed along with denied discovery, denied replica,
+mismatched opening, and intentionally empty source rules. Native Chrome's synthetic
+visitor journey rendered the expected 3px author-defined border inside the sandbox
+iframe while showing the login link and both providers as unconnected.
