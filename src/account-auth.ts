@@ -277,33 +277,12 @@ accountAuthRoutes.post('/v1/auth/token',async c=>{
   const session=(await readSession(c))!,body=await c.req.json(),provider=providerOf(body.provider,c.env);
   const profile=await memberProfile(c.env.DB,session.member_id),identity=profile?.identities.find(i=>i.provider===provider);
   if(!identity)throw new HttpError(403,'auth_connection_denied');
-  const id=String(identity.externalId);
-  const row=await c.env.DB.prepare('SELECT * FROM account_credentials WHERE provider=? AND external_id=?').bind(provider,id).first<Credential>();
-  if(!row||row.state==='revoked')throw new HttpError(401,'auth_reauthorization_required');
-  if(row.state!=='active'||row.refresh_started!==null)throw new HttpError(503,'auth_provider_unavailable');
-  let pair=await openAuth<Pair>(c.env,credentialPurpose(provider,id,row.generation),row.payload);
-  if(pair.expiresAt<=Date.now()){
-    const claimed=await c.env.DB.prepare("UPDATE account_credentials SET refresh_started=? WHERE provider=? AND external_id=? AND generation=? AND state='active' AND refresh_started IS NULL RETURNING generation").bind(Date.now(),provider,id,row.generation).first();
-    if(!claimed)throw new HttpError(503,'auth_provider_unavailable');
-    try{
-      pair=await exchange(c.env,provider,pair.clientId,{grant_type:'refresh_token',refresh_token:pair.refreshToken});
-      const saved=await c.env.DB.prepare("UPDATE account_credentials SET payload=?,expires_at=?,refresh_started=NULL,updated_at=? WHERE provider=? AND external_id=? AND generation=? AND state='active' RETURNING generation").bind(await sealAuth(c.env,credentialPurpose(provider,id,row.generation),pair),pair.expiresAt,Date.now(),provider,id,row.generation).first();
-      if(!saved){await queueRevocation(c.env,provider,pair,random());throw new HttpError(401,'auth_reauthorization_required');}
-      await metric(c.env,'refresh',provider,'ok');
-    }catch(e){
-      const denied=e instanceof HttpError&&e.status===401;
-      if(denied)await c.env.DB.prepare('DELETE FROM account_credentials WHERE generation=?').bind(row.generation).run();
-      else await c.env.DB.prepare("UPDATE account_credentials SET state='uncertain' WHERE generation=? AND state='active'").bind(row.generation).run();
-      await metric(c.env,'refresh',provider,denied?'denied':'unavailable');throw e;
-    }
-  }
+  const pair=await delegatedAccess(c.env,provider,identity.externalId,session.member_id);
   // Logout may have completed while the provider was rotating its token.
   if(!await c.env.DB.prepare('SELECT 1 FROM account_sessions WHERE token_hash=? AND expires_at>?').bind(session.token_hash,Date.now()).first())throw new HttpError(401,'site_session_required');
   // Recheck membership and generation after the network wait; never release another account's token.
   if(await connectedMemberId(c.env.DB,provider,identity.externalId)!==session.member_id)throw new HttpError(403,'auth_connection_denied');
-  const stillValid=await c.env.DB.prepare("SELECT 1 FROM account_credentials WHERE provider=? AND external_id=? AND generation=? AND state='active'").bind(provider,id,row.generation).first();
-  if(!stillValid)throw new HttpError(401,'auth_reauthorization_required');
-  return c.json(publicPair(pair));
+  return c.json(pair);
 });
 accountAuthRoutes.post('/v1/auth/logout',async c=>{
   await cancelAttempt(c,true);
@@ -364,3 +343,32 @@ accountAuthRoutes.get('/internal/auth/metrics',async c=>{
   c.header('Cache-Control','no-store');
   return c.text('# TYPE hearthroom_auth_operations_total counter\n'+rows.results.map(r=>`hearthroom_auth_operations_total{operation="${r.operation}",provider="${r.provider}",outcome="${r.outcome}"} ${r.value}`).join('\n')+'\n');
 });
+
+/** Internal operator reuse of the same fenced credential refresh; never an HTTP token export. */
+export async function delegatedAccess(env:Env,provider:ProviderId,externalId:number,memberId:string){
+  if(await connectedMemberId(env.DB,provider,externalId)!==memberId)throw new HttpError(403,'auth_connection_denied');
+  const id=String(externalId);
+  const row=await env.DB.prepare('SELECT * FROM account_credentials WHERE provider=? AND external_id=?').bind(provider,id).first<Credential>();
+  if(!row||row.state==='revoked')throw new HttpError(401,'auth_reauthorization_required');
+  if(row.state!=='active'||row.refresh_started!==null)throw new HttpError(503,'auth_provider_unavailable');
+  let pair=await openAuth<Pair>(env,credentialPurpose(provider,id,row.generation),row.payload);
+  if(pair.expiresAt<=Date.now()){
+    const claimed=await env.DB.prepare("UPDATE account_credentials SET refresh_started=? WHERE provider=? AND external_id=? AND generation=? AND state='active' AND refresh_started IS NULL RETURNING generation").bind(Date.now(),provider,id,row.generation).first();
+    if(!claimed)throw new HttpError(503,'auth_provider_unavailable');
+    try{
+      pair=await exchange(env,provider,pair.clientId,{grant_type:'refresh_token',refresh_token:pair.refreshToken});
+      const saved=await env.DB.prepare("UPDATE account_credentials SET payload=?,expires_at=?,refresh_started=NULL,updated_at=? WHERE provider=? AND external_id=? AND generation=? AND state='active' RETURNING generation").bind(await sealAuth(env,credentialPurpose(provider,id,row.generation),pair),pair.expiresAt,Date.now(),provider,id,row.generation).first();
+      if(!saved){await queueRevocation(env,provider,pair,random());throw new HttpError(401,'auth_reauthorization_required');}
+      await metric(env,'refresh',provider,'ok');
+    }catch(e){
+      const denied=e instanceof HttpError&&e.status===401;
+      if(denied)await env.DB.prepare('DELETE FROM account_credentials WHERE generation=?').bind(row.generation).run();
+      else await env.DB.prepare("UPDATE account_credentials SET state='uncertain' WHERE generation=? AND state='active'").bind(row.generation).run();
+      await metric(env,'refresh',provider,denied?'denied':'unavailable');throw e;
+    }
+  }
+  if(await connectedMemberId(env.DB,provider,externalId)!==memberId)throw new HttpError(403,'auth_connection_denied');
+  const stillValid=await env.DB.prepare("SELECT 1 FROM account_credentials WHERE provider=? AND external_id=? AND generation=? AND state='active'").bind(provider,id,row.generation).first();
+  if(!stillValid)throw new HttpError(401,'auth_reauthorization_required');
+  return publicPair(pair);
+}

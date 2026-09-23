@@ -1,3 +1,4 @@
+import {retirementRoutes} from './retirement-migration';
 import { accountAuthRoutes, accountAuthMaintenance, managedConnectionCommit, managedConnectionSource } from './account-auth';
 import { snapshot } from './snapshot-cache';
 import { cardLink, linkPreview } from './card-link';
@@ -127,6 +128,7 @@ app.use("*", async (c, next) => {
 });
 
 app.route("/", moderationRoutes);
+app.route("/", retirementRoutes);
 app.route("/", accountAuthRoutes);
 
 app.onError((err, c) => {
