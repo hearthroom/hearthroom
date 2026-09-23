@@ -36,3 +36,18 @@ Validation: operator denial, approved-version selection, account mismatch reject
 existing-copy idempotency, and unpublished draft synchronization; existing OAuth
 and hosting suites plus the full Worker/web trusted sets. Deployment and actual
 migration receipts are separate from local verification.
+
+After synchronization, `POST /internal/retirement/cutover` with `{cardNumber}`
+uses the same operator gate. It resolves the editable Harper copy from the work
+record, verifies public ownership and the current ready approved replica, then
+atomically moves canonical locators while retaining the work/member/card number,
+favorites, immutable review evidence and moderation restrictions. Rechecks inside
+the transaction reject changed ownership, approvals, active preparations and target
+number collisions. The original Luna locator remains an inert retired-copy receipt.
+A draft without an equivalent approved Harper replica becomes `needs_review`; it
+never inherits approval. Existing Harper edits are retained. Run only for verified
+linked-author copies; read canonical locators back before retiring provider access.
+
+Existing image URLs remain on the Luna CDN by owner decision. Do not force an
+image migration or re-upload; retain image reading and export support after provider
+retirement. Future author uploads use Harper.
