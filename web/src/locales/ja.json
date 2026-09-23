@@ -243,7 +243,7 @@
   "editor.world.char.description.hint": "長くて構いません。このキャラクター自身のコンテキストにだけ入り、世界や他のキャラクターには見えません。",
   "editor.world.char.lorebook": "専用の世界設定",
   "editor.world.char.lorebook.none": "なし",
-  "editor.world.char.lorebook.hint": "自分の世界設定から一冊選びます。このキャラクターが発言するときだけ参照されます。世界設定に正規表現は含まれません。",
+  "editor.world.char.lorebook.hint": "このカードの世界設定と同じ：新規作成、ファイルの読み込み、既存のものから選択ができます。このキャラクターが発言するときだけ参照され、他のキャラクターや世界には見えません。",
   "editor.world.needName": "{n} 番目のキャラクターに名前がありません。",
   "editor.world.tooMany": "キャラクターは最大 {max} 人です。",
   "editor.world.tooLong": "{n} 番目のキャラクターの{field}が上限を超えています。",

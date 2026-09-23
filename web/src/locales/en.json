@@ -243,7 +243,7 @@
   "editor.world.char.description.hint": "Can be long. It enters only this character's own context; the world and the other characters never see it.",
   "editor.world.char.lorebook": "Private Lorebook",
   "editor.world.char.lorebook.none": "None",
-  "editor.world.char.lorebook.hint": "Pick one of your Lorebooks; it is recalled only when this character speaks. Lorebooks carry no regex.",
+  "editor.world.char.lorebook.hint": "Same as the card's Lorebook: create one, import a file, or pick one you already have. It is recalled only when this character speaks; the other characters and the world never see it.",
   "editor.world.needName": "Character {n} has no name yet.",
   "editor.world.tooMany": "At most {max} characters.",
   "editor.world.tooLong": "Character {n}: {field} is over the limit.",

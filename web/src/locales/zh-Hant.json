@@ -243,7 +243,7 @@
   "editor.world.char.description.hint": "可以很長。只進這個角色自己的上下文，世界層與其他角色都看不到。",
   "editor.world.char.lorebook": "私有世界書",
   "editor.world.char.lorebook.none": "無",
-  "editor.world.char.lorebook.hint": "從你的世界書裡挑一本，只在這個角色開口時召回；世界書不含正則。",
+  "editor.world.char.lorebook.hint": "跟這張卡的世界書一樣：建一本、匯入檔案或挑一本既有的。只在這個角色開口時召回，其他角色與世界層都看不到。",
   "editor.world.needName": "第 {n} 個角色還沒有名字。",
   "editor.world.tooMany": "角色最多 {max} 個。",
   "editor.world.tooLong": "第 {n} 個角色的{field}超過上限。",
