@@ -1,3 +1,4 @@
+import {connectedMemberId} from './connections';
 import {HttpError,type Env} from './types';
 import {apiBaseOf,type ProviderId} from './providers';
 import {hostGateway} from './hosting';
@@ -46,8 +47,7 @@ export async function distributeHosted(env:Env,i:Input){
  const version=await db.prepare("SELECT * FROM hosting_versions WHERE version_id=? AND member_id=? AND hosted_revision_id IS NOT NULL AND state IN ('pending','approved')").bind(i.versionId,i.memberId).first<{provider:ProviderId;work_id:string;hosted_revision_id:string}>();
  if(!version)throw new HttpError(404,'version_not_found');
  if(version.provider===i.targetProvider)return;
- const identity=await db.prepare('SELECT member_id FROM member_identities WHERE provider=? AND external_id=?').bind(i.targetProvider,String(i.targetAccount)).first<{member_id:string}>();
- if(identity?.member_id!==i.memberId)throw new HttpError(403,'sync_account_not_linked');
+ if(await connectedMemberId(db,i.targetProvider,i.targetAccount)!==i.memberId)throw new HttpError(403,'sync_account_not_linked');
  await db.prepare("INSERT OR IGNORE INTO hosting_transfers(version_id,provider,external_id,operation_id,updated_at) VALUES (?,?,?,?,?)").bind(i.versionId,i.targetProvider,i.targetAccount,crypto.randomUUID(),Date.now()).run();
  const get=()=>db.prepare('SELECT * FROM hosting_transfers WHERE version_id=? AND provider=?').bind(i.versionId,i.targetProvider).first<TransferRow>();
  let row=(await get())!;if(row.external_id!==i.targetAccount)throw new HttpError(409,'sync_account_changed');
