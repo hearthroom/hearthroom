@@ -51,11 +51,14 @@ const FEATURES: Record<ProviderId, Record<string, boolean>> = {
     editor: true, worldbook: true, regex: true, library: true, persona: true,
     validation: true, deleteRole: true, tags: true, welcomeExtras: true,
     outputContract: true, chatTest: true, previewPage: true, review: true, membership: true,
+    // 世界模式（一張卡多個角色）只有 Harbor 有這條 API。
+    world: false,
   },
   harbor: {
     editor: true, worldbook: true, regex: true, library: true, persona: true,
     validation: true, deleteRole: true, tags: true, welcomeExtras: true,
     outputContract: true, chatTest: true, previewPage: true, review: true, membership: false,
+    world: true,
   },
 };
 

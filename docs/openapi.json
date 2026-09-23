@@ -10690,6 +10690,173 @@
         },
         "x-capability": "immutable-hosting-v1"
       }
+    },
+    "/open/v1/role/{roleId}/world": {
+      "put": {
+        "operationId": "putRoleWorld",
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Set the members of a world card",
+        "description": "Writes the whole member list of an owned card, turning it into a world card (or replacing its members). The card's `roleDetailDesc` is the shared world description and its bound worldbooks are the world-level Lorebook, both written through the existing routes; this route only owns the members. Each member has a stable lowercase `id`, a `name`, a short public `profile` everyone in the world knows, a private `description` only that member's turns see, and an optional `lorebookId` naming a worldbook the author owns (its entries are recalled only for that member; worldbooks carry no regex, the card's response formatting rules stay world-level). Limits: 1..12 members, `maxSpeakers` 1..3 (default 2), `strictness` one of `lenient`, `balanced`, `strict`. Turns of a world card carry an optional `mention` (a member id) on the WebSocket send frame and produce one composite assistant message per turn: narration followed by one `<section class=\"hh-speaker hh-speaker--{id}\">` block per member who spoke.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "roleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Role id."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleWorld"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The stored members, as the author sees them.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleWorldOutput"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid JSON body`, or `invalid_arguments` when a member id, limit or lorebook is not acceptable (including a Lorebook the author does not own).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`permission_denied`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`role_not_found`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-harperharbor": {
+          "summary": "World mode members",
+          "description": "A world card is one agent configuration whose instructions describe a shared world and whose members each carry their own long description and, optionally, a private Lorebook the author owns. Every turn the service runs one world pass (a hidden judgment plus the visible narration) and then at most maxSpeakers member replies, all inside one operation and one charge. Authentication, role.write scope and authorship are required; a member's lorebookId must be a Lorebook the author owns. Changing members changes the card's content hash."
+        }
+      },
+      "delete": {
+        "operationId": "deleteRoleWorld",
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Remove the members of a world card",
+        "description": "Turns a world card back into an ordinary single-character card. The world description, bound worldbooks and formatting rules are untouched; only the member list is removed. Idempotent.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "roleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Role id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ \"world\": null }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "world": {
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`permission_denied`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`role_not_found`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-harperharbor": {
+          "summary": "World mode members",
+          "description": "A world card is one agent configuration whose instructions describe a shared world and whose members each carry their own long description and, optionally, a private Lorebook the author owns. Every turn the service runs one world pass (a hidden judgment plus the visible narration) and then at most maxSpeakers member replies, all inside one operation and one charge. Authentication, role.write scope and authorship are required; a member's lorebookId must be a Lorebook the author owns. Changing members changes the card's content hash."
+        }
+      }
     }
   },
   "components": {
@@ -15546,7 +15713,13 @@
               }
             }
           }
-        ]
+        ],
+        "properties": {
+          "world": {
+            "$ref": "#/components/schemas/RoleWorld",
+            "description": "Present only on world cards. Viewers get each member's id, name, avatar and profile plus maxSpeakers; the author also gets description, lorebookId, sex and strictness."
+          }
+        }
       },
       "RoleDocumentRequest": {
         "type": "object",
@@ -19386,6 +19559,91 @@
               "featured",
               "normal"
             ]
+          }
+        }
+      },
+      "RoleWorldCharacter": {
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$",
+            "description": "Stable member id; used by `mention` and by the speaker blocks."
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "avatar": {
+            "type": "string",
+            "description": "https URL, optional."
+          },
+          "sex": {
+            "type": "string"
+          },
+          "profile": {
+            "type": "string",
+            "maxLength": 600,
+            "description": "Short public side note everyone in the world knows; shown to viewers."
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 60000,
+            "description": "Private full definition; only this member's own turns see it. Author only in responses."
+          },
+          "lorebookId": {
+            "type": "string",
+            "description": "A worldbook the author owns, recalled only for this member. Author only in responses."
+          }
+        }
+      },
+      "RoleWorld": {
+        "type": "object",
+        "required": [
+          "version",
+          "characters"
+        ],
+        "properties": {
+          "version": {
+            "type": "integer",
+            "enum": [
+              1
+            ]
+          },
+          "maxSpeakers": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3,
+            "description": "Members that may reply in one turn; default 2."
+          },
+          "strictness": {
+            "type": "string",
+            "enum": [
+              "lenient",
+              "balanced",
+              "strict"
+            ],
+            "description": "How far the world honours outcomes the player declares."
+          },
+          "characters": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 12,
+            "items": {
+              "$ref": "#/components/schemas/RoleWorldCharacter"
+            }
+          }
+        }
+      },
+      "RoleWorldOutput": {
+        "type": "object",
+        "properties": {
+          "world": {
+            "$ref": "#/components/schemas/RoleWorld"
           }
         }
       }

@@ -92,6 +92,105 @@ export interface RoleDraft {
   roleOutputContract: string;
   jailbreak: string;
   cardMeta: CardMeta;
+  /** 世界模式的成員；null＝普通單卡。世界觀是 roleDetailDesc、世界級世界書是綁卡的那本，都不在這裡。 */
+  world: WorldDraft | null;
+}
+
+export interface WorldCharacterDraft {
+  /** 穩定代號：小寫英數、底線、連字號；訊息裡的發言者區塊與 @ 都用它指人。 */
+  id: string;
+  name: string;
+  avatar: string;
+  sex: string;
+  /** 所有人都知道的側寫（世界層與其他角色看得到）。 */
+  profile: string;
+  /** 角色自己的完整設定，只進它自己的上下文。 */
+  description: string;
+  /** 角色私有世界書（作者自己的 worldbook id），空＝沒有。 */
+  lorebookId: string;
+}
+
+export interface WorldDraft {
+  maxSpeakers: number;
+  strictness: "" | "lenient" | "balanced" | "strict";
+  characters: WorldCharacterDraft[];
+}
+
+export const WORLD_LIMITS = { characters: 12, maxSpeakers: 3, name: 60, profile: 600, description: 60000 } as const;
+export const WORLD_STRICTNESS = ["balanced", "lenient", "strict"] as const;
+
+export const makeWorldCharacter = (): WorldCharacterDraft => ({ id: "", name: "", avatar: "", sex: "", profile: "", description: "", lorebookId: "" });
+export const makeWorld = (): WorldDraft => ({ maxSpeakers: 2, strictness: "balanced", characters: [makeWorldCharacter()] });
+
+const WORLD_ID_RE = /^[a-z0-9][a-z0-9_-]{0,31}$/;
+
+/**
+ * 從名字生代號：拉丁字母與數字留下、其餘丟掉；中文名生不出東西就用 c1、c2…；撞名補數字。
+ * 代號一旦存過就別再改：舊訊息裡的發言者區塊與延後的後果都靠它指人。
+ */
+export function worldCharacterId(name: string, taken: Iterable<string>, fallbackIndex: number): string {
+  const used = new Set(taken);
+  let base = name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 24);
+  if (!base || !/^[a-z0-9]/.test(base)) base = `c${fallbackIndex}`;
+  let id = base;
+  for (let n = 2; used.has(id); n++) id = `${base}-${n}`;
+  return id;
+}
+
+export function readWorld(raw: unknown): WorldDraft | null {
+  if (!raw || typeof raw !== "object") return null;
+  const w = raw as Record<string, unknown>;
+  const list = Array.isArray(w.characters) ? w.characters : [];
+  const characters: WorldCharacterDraft[] = [];
+  for (const item of list) {
+    if (!item || typeof item !== "object") continue;
+    const c = item as Record<string, unknown>;
+    const id = str(c.id);
+    if (!WORLD_ID_RE.test(id)) continue;
+    characters.push({ id, name: str(c.name), avatar: str(c.avatar), sex: str(c.sex), profile: str(c.profile), description: str(c.description), lorebookId: str(c.lorebookId) });
+  }
+  if (!characters.length) return null;
+  const speakers = Number(w.maxSpeakers);
+  const strictness = str(w.strictness);
+  return {
+    maxSpeakers: Number.isInteger(speakers) && speakers >= 1 && speakers <= WORLD_LIMITS.maxSpeakers ? speakers : 2,
+    strictness: (WORLD_STRICTNESS as readonly string[]).includes(strictness) ? (strictness as WorldDraft["strictness"]) : "balanced",
+    characters,
+  };
+}
+
+/** 存檔時送給上游的整包（缺代號的成員在這裡補上）。 */
+export function worldPayload(world: WorldDraft): Record<string, unknown> {
+  const taken: string[] = [];
+  const characters = world.characters.map((c, i) => {
+    const id = WORLD_ID_RE.test(c.id) ? c.id : worldCharacterId(c.name, taken, i + 1);
+    taken.push(id);
+    const out: Record<string, unknown> = { id, name: c.name.trim(), profile: c.profile, description: c.description };
+    if (c.avatar.trim()) out.avatar = c.avatar.trim();
+    if (c.sex) out.sex = c.sex;
+    if (c.lorebookId) out.lorebookId = c.lorebookId;
+    return out;
+  });
+  return { version: 1, maxSpeakers: world.maxSpeakers, strictness: world.strictness || "balanced", characters };
+}
+
+/** 成員清單有沒有動過（含開關世界模式本身）。 */
+export function worldChanged(draft: RoleDraft, original: RoleDraft | null): boolean {
+  if (!original) return draft.world !== null;
+  return JSON.stringify(draft.world) !== JSON.stringify(original.world);
+}
+
+/** 存檔前的本地檢查：回第一個問題的成員索引與原因；null＝沒問題。 */
+export function worldProblem(world: WorldDraft | null): { index: number; reason: "name" | "tooMany" | "profile" | "description" } | null {
+  if (!world) return null;
+  if (world.characters.length > WORLD_LIMITS.characters) return { index: WORLD_LIMITS.characters, reason: "tooMany" };
+  for (let i = 0; i < world.characters.length; i++) {
+    const c = world.characters[i];
+    if (!c.name.trim() || [...c.name.trim()].length > WORLD_LIMITS.name) return { index: i, reason: "name" };
+    if ([...c.profile].length > WORLD_LIMITS.profile) return { index: i, reason: "profile" };
+    if ([...c.description].length > WORLD_LIMITS.description) return { index: i, reason: "description" };
+  }
+  return null;
 }
 
 export const LANGUAGES = [
@@ -120,6 +219,7 @@ export const makeDraft = (language: string): RoleDraft => ({
   roleOutputContract: "",
   jailbreak: "",
   cardMeta: {},
+  world: null,
 });
 
 /**
@@ -265,6 +365,7 @@ export function draftFromRoleDetail(raw: Record<string, unknown>, fallbackLangua
   draft.talkExample = readTalkExample(raw.talkExample);
   draft.roleOutputContract = str(raw.roleOutputContract);
   draft.jailbreak = str(raw.customInstructions ?? raw.jailbreak);
+  draft.world = readWorld(raw.world);
   return draft;
 }
 

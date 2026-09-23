@@ -41,6 +41,8 @@ import {
   patchRoleDocument,
   patchRoleWelcome,
   patchWorldbookDocument,
+  putRoleWorld,
+  deleteRoleWorld,
   reorderWorldbookEntries,
   saveAuthorAsset,
   registerCard,
@@ -70,6 +72,13 @@ import {
   parseTags,
   resolveLimits,
   welcomeChanged,
+  WORLD_LIMITS,
+  WORLD_STRICTNESS,
+  makeWorld,
+  makeWorldCharacter,
+  worldChanged,
+  worldPayload,
+  worldProblem,
   type FieldLimits,
   type RoleDraft,
   type WorldbookEntryDraft,
@@ -271,7 +280,7 @@ function flash(message: string) {
   toastTimer = setTimeout(() => { toast.value = ""; }, 2600);
 }
 
-const SECTIONS = ["basic", "persona", "dialogue", "worldbook", "publish"] as const;
+const SECTIONS = ["basic", "persona", "world", "dialogue", "worldbook", "publish"] as const;
 type Section = (typeof SECTIONS)[number];
 const section = ref<Section>("basic");
 const body = ref<HTMLElement | null>(null);
@@ -359,10 +368,36 @@ const REQUIRED_OF: Partial<Record<Section, string>> = {
   dialogue: "roleWelcome",
 };
 const lacks = (key: Section) => Boolean(REQUIRED_OF[key] && missing.value.includes(REQUIRED_OF[key] as string));
+
+// ── 世界模式 ──────────────────────────────────────────────────────────
+// 成員清單住在 draft.world；世界觀是 roleDetailDesc、世界級世界書是綁卡那本，都走原本的路。
+// 私有世界書的下拉從「我的世界書」撈；撈不到就只有「無」——作者仍能存，只是先綁不了書。
+const myWorldbooks = ref<WorldbookSummary[]>([]);
+async function loadMyWorldbooks() {
+  const token = await session.accessToken().catch(() => null);
+  if (!token) return;
+  myWorldbooks.value = await fetchMyWorldbooks(token).catch(() => []);
+}
+function enableWorld() {
+  if (!draft.value.world) draft.value.world = makeWorld();
+}
+function disableWorld() {
+  draft.value.world = null;
+}
+function addWorldCharacter() {
+  if (!draft.value.world || draft.value.world.characters.length >= WORLD_LIMITS.characters) return;
+  draft.value.world.characters.push(makeWorldCharacter());
+}
+function removeWorldCharacter(index: number) {
+  if (!draft.value.world) return;
+  draft.value.world.characters.splice(index, 1);
+  if (!draft.value.world.characters.length) draft.value.world = null;
+}
 /** 這一區已經有東西了。給導覽畫一個勾，作者才知道自己走到哪。 */
 const filled = computed<Record<Section, boolean>>(() => ({
   basic: Boolean(draft.value.roleName.trim()),
   persona: Boolean(draft.value.roleDetailDesc.trim()),
+  world: Boolean(draft.value.world),
   dialogue: Boolean(draft.value.roleWelcome.trim()),
   worldbook: worldbookEntries.value.some((e) => e.content.trim()),
   publish: false,
@@ -503,6 +538,7 @@ async function loadWorldbookMeta(token: string, bookId: string) {
 }
 
 onMounted(async () => {
+  void loadMyWorldbooks();
   if (!roleId.value) {
     restoreDraft();
     defaultChatPageForNew();
@@ -926,6 +962,15 @@ async function save() {
     error.value = t("editor.fieldTooLong", { label: t(overLimit[1]), n: [...draft.value[overLimit[0]]].length, max: limits.value[overLimit[0]] });
     return;
   }
+  const worldIssue = worldProblem(draft.value.world);
+  if (worldIssue) {
+    section.value = "world";
+    const n = worldIssue.index + 1;
+    error.value = worldIssue.reason === "name" ? t("editor.world.needName", { n })
+      : worldIssue.reason === "tooMany" ? t("editor.world.tooMany", { max: WORLD_LIMITS.characters })
+      : t("editor.world.tooLong", { n, field: t(worldIssue.reason === "profile" ? "editor.world.char.profile" : "editor.world.char.description") });
+    return;
+  }
   const selected=await choosePlatforms();
   if(!selected?.length)return;
   const wasNew = isNew.value;
@@ -967,6 +1012,11 @@ async function save() {
     const sent = cloneDraft(draft.value);
     const fields = documentPatch(sent, original.value);
     if (hasAnyField(fields)) await patchRoleDocument(targetRoleId, fields, token);
+    // 世界模式的成員：整包寫入或整包移除。存過的成員代號在 worldPayload 裡保留，缺的才補。
+    if (worldChanged(sent, original.value)) {
+      if (sent.world) await putRoleWorld(targetRoleId, worldPayload(sent.world), token);
+      else if (original.value?.world) await deleteRoleWorld(targetRoleId, token);
+    }
 
     if (welcomeChanged(sent, original.value) && sent.roleWelcome.trim()) {
       await patchRoleWelcome(
@@ -1316,6 +1366,56 @@ async function exportCard(format: "png" | "json") {
                      :max="limits.jailbreak" :hint="$t('editor.jailbreak.hint')" />
         </section>
 
+        <!-- 世界模式：一張卡多個角色 -->
+        <section v-if="can('world')" data-section="world" class="pane">
+          <h2 class="pane__title">{{ $t("editor.section.world") }}</h2>
+          <p class="muted">{{ $t("editor.world.lede") }}</p>
+          <div v-if="!draft.world" class="rxbar__acts">
+            <button type="button" class="btn btn--sm btn--primary" @click="enableWorld">{{ $t("editor.world.enable") }}</button>
+          </div>
+          <template v-else>
+            <div class="field">
+              <label for="f-world-speakers">{{ $t("editor.world.maxSpeakers") }}</label>
+              <select id="f-world-speakers" v-model.number="draft.world.maxSpeakers">
+                <option v-for="n in WORLD_LIMITS.maxSpeakers" :key="n" :value="n">{{ n }}</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="f-world-strictness">{{ $t("editor.world.strictness") }}</label>
+              <select id="f-world-strictness" v-model="draft.world.strictness">
+                <option v-for="s in WORLD_STRICTNESS" :key="s" :value="s">{{ $t(`editor.world.strictness.${s}`) }}</option>
+              </select>
+            </div>
+            <h3 class="pane__sub">{{ $t("editor.world.characters") }} ({{ draft.world.characters.length }}/{{ WORLD_LIMITS.characters }})</h3>
+            <div v-for="(c, i) in draft.world.characters" :key="i" class="world-char">
+              <div class="world-char__row">
+                <FieldText :id="`f-wc-name-${i}`" v-model="c.name" :label="$t('editor.world.char.name')" required :max="WORLD_LIMITS.name" />
+                <FieldText :id="`f-wc-id-${i}`" v-model="c.id" :label="$t('editor.world.char.id')" :hint="$t('editor.world.char.id.hint')" :placeholder="'auto'" />
+              </div>
+              <FieldText :id="`f-wc-avatar-${i}`" v-model="c.avatar" :label="$t('editor.world.char.avatar')" placeholder="https://" />
+              <FieldText :id="`f-wc-profile-${i}`" v-model="c.profile" :label="$t('editor.world.char.profile')" :rows="2"
+                         :max="WORLD_LIMITS.profile" :hint="$t('editor.world.char.profile.hint')" />
+              <FieldText :id="`f-wc-desc-${i}`" v-model="c.description" :label="$t('editor.world.char.description')" :rows="10"
+                         :max="WORLD_LIMITS.description" :hint="$t('editor.world.char.description.hint')" />
+              <div class="field">
+                <label :for="`f-wc-book-${i}`">{{ $t("editor.world.char.lorebook") }}</label>
+                <select :id="`f-wc-book-${i}`" v-model="c.lorebookId">
+                  <option value="">{{ $t("editor.world.char.lorebook.none") }}</option>
+                  <option v-for="b in myWorldbooks" :key="b.worldbookId" :value="b.worldbookId">{{ b.name }}</option>
+                </select>
+                <p class="hint">{{ $t("editor.world.char.lorebook.hint") }}</p>
+              </div>
+              <div class="rxbar__acts">
+                <button type="button" class="btn btn--sm" @click="removeWorldCharacter(i)">{{ $t("editor.world.removeCharacter") }}</button>
+              </div>
+            </div>
+            <div class="rxbar__acts">
+              <button type="button" class="btn btn--sm btn--primary" :disabled="draft.world.characters.length >= WORLD_LIMITS.characters" @click="addWorldCharacter">{{ $t("editor.world.addCharacter") }}</button>
+              <button type="button" class="btn btn--sm" @click="disableWorld">{{ $t("editor.world.disable") }}</button>
+            </div>
+          </template>
+        </section>
+
         <!-- 对话 -->
         <section data-section="dialogue" class="pane">
           <h2 class="pane__title">{{ $t("editor.section.dialogue") }}</h2>
@@ -1645,6 +1745,10 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 }
 .rxbar__hint { margin: 0; font-size: 13px; color: var(--text-3); }
 .rxbar__acts { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }
+.pane__sub { margin: var(--s-4) 0 var(--s-2); font-size: 1rem; }
+.world-char { border: 1px solid var(--line, rgba(127, 127, 127, 0.25)); border-radius: var(--r, 12px); padding: var(--s-3); margin: 0 0 var(--s-3); }
+.world-char__row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); }
+@media (max-width: 640px) { .world-char__row { grid-template-columns: 1fr; } }
 .rxbar .chip { margin-left: 4px; height: 20px; padding: 0 7px; font-variant-numeric: tabular-nums; }
 .panel { padding: var(--s-4); display: grid; gap: var(--s-2); }
 .panel h2 { margin: 0; font-size: 15px; }
