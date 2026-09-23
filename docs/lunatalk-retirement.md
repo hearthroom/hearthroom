@@ -5,6 +5,10 @@ HarperHarbor accounts, then permanently retire all LunaTalk sign-in, hosting,
 synchronization and play wiring. An unavailable migration is recorded as a failure;
 it is never treated as permission to publish a different draft.
 
+Existing images remain at their Luna CDN URLs by owner decision (2026-09-24).
+Retain image display, export and installation-icon reads; do not force image
+migration or author re-uploads. Future uploads use Harper.
+
 ## Source changes
 
 Harper is the sole configured and advertised provider. Old explicit provider requests

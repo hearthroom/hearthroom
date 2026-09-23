@@ -193,8 +193,8 @@ app.get("/v1/providers", (c) =>
  * 只放行上游的圖片主機，不然這就是一個開放代理。回應用 Cache API 快取一天：同一張頭像
  * 被反覆匯出時不必每次都回上游拿。
  */
-// 匯出只接受 HarperHarbor 的主網域與子網域。
-const IMAGE_PROXY_DOMAINS = ["harperharbor.com"];
+// 既有 Luna 圖片繼續保留；這份圖片白名單不啟用 Luna 的登入或遊玩接線。
+const IMAGE_PROXY_DOMAINS = ["harperharbor.com", "lunatalk.ai"];
 export const imageCache = { namespace: "image" };
 
 app.get("/v1/image", async (c) => {
