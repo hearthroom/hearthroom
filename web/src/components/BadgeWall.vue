@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import CommunityIcon from './CommunityIcon.vue';
-import { badgeText, BADGE_ICONS, type CollectedBadge } from '../../../shared/community-badges';
+import { badgeText, BADGE_ICONS, FEATURED_LIMIT, type CollectedBadge } from '../../../shared/community-badges';
 const props=withDefaults(defineProps<{items:CollectedBadge[];selected?:string[];editable?:boolean;busy?:boolean}>(),{selected:()=>[],editable:false,busy:false});
 const emit=defineEmits<{change:[keys:string[]]}>();
 const {t,locale}=useI18n();
@@ -16,11 +16,11 @@ function toggle(key:string){emit('change',props.selected.includes(key)?props.sel
    <div class="badge-tile__top"><span class="badge-tile__icon"><CommunityIcon :name="badge.icon" /></span><span class="badge-tile__state">{{ t('badgeWall.state.'+badge.state) }}</span></div>
    <div><h3>{{ badgeText(badge.titles,locale) }}</h3><p class="badge-tile__condition">{{ badgeText(badge.descriptions,locale) }}</p></div>
    <div class="badge-tile__details">
-    <template v-if="badge.progress && badge.state==='locked'"><label>{{ t('badgeWall.progress',{value:badge.progress.value,target:badge.progress.target}) }}<progress :value="badge.progress.value" :max="badge.progress.target" /></label></template>
+    <template v-if="badge.progress && badge.state==='locked'"><label>{{ t(badge.progress.unit?'badgeWall.progress.'+badge.progress.unit:'badgeWall.progress',{value:badge.progress.value,target:badge.progress.target}) }}<progress :value="badge.progress.value" :max="badge.progress.target" /></label></template>
     <p v-if="badge.earnedAt!==null">{{ t('badgeWall.earnedAt',{date:date(badge.earnedAt)}) }}</p>
     <p v-if="badge.expiresAt!==null">{{ t('badgeWall.expiresAt',{date:date(badge.expiresAt)}) }}</p>
    </div>
-   <button v-if="editable && badge.state==='earned'" type="button" class="btn" data-feature :aria-pressed="selected.includes(badge.key)" :disabled="busy || (!selected.includes(badge.key) && selected.length>=3)" @click="toggle(badge.key)">{{ t(selected.includes(badge.key)?'badgeWall.unfeature':'badgeWall.feature') }}</button>
+   <button v-if="editable && badge.state==='earned'" type="button" class="btn" data-feature :aria-pressed="selected.includes(badge.key)" :disabled="busy || (!selected.includes(badge.key) && selected.length>=FEATURED_LIMIT)" @click="toggle(badge.key)">{{ t(selected.includes(badge.key)?'badgeWall.unfeature':'badgeWall.feature') }}</button>
   </article>
  </div>
 </template>

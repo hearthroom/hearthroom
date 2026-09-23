@@ -23,6 +23,14 @@ it('retains the selection after failure and supports discard without writing',as
  const reset=[...el.querySelectorAll('button')].find(b=>b.textContent==='Discard changes')!;reset.click();await settle();expect(el.querySelector('[data-feature]')?.getAttribute('aria-pressed')).toBe('false');
 });
 it('does not expose management controls to normal members',()=>{expect(el.querySelector('.badge-manager')).toBeNull();});
+it('groups the catalog under category headings in catalog order',async()=>{
+ const badge=(key:string,category:string)=>({key,icon:'star',category,titles:{en:key},descriptions:{en:'How'},state:'locked',earnedAt:null,expiresAt:null});
+ app.unmount();mock.request.mockResolvedValue({...wall(),items:[badge('discord_linked','connection'),badge('creator_works_3','creation'),badge('creator_works_10','creation'),badge('player_first_play','play')]});
+ const router=createRouter({history:createMemoryHistory(),routes:[{path:'/:pathMatch(.*)*',component:BadgesPage}]});await router.push('/me/badges');app=createApp(BadgesPage).use(router).use(i18n);app.mount(el);await settle();
+ const headings=[...el.querySelectorAll('.badge-section__title')].map(h=>h.textContent);
+ expect(headings).toEqual(['Connection','Creation','Play']);
+ expect(el.querySelectorAll('.badge-section')[1].querySelectorAll('.badge-tile')).toHaveLength(2);
+});
 
 it('preserves unsaved visibility when a management action refreshes the collection',async()=>{
  el.querySelector<HTMLButtonElement>('[data-feature]')!.click();await settle();

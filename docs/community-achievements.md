@@ -67,3 +67,32 @@ Website and Bot projections exclude expired/revoked awards immediately on read. 
 MCP decision: not applicable to these session-owned community settings and manager-only event administration. HearthRoom has no community MCP authorization surface; provider MCP credentials do not carry community consent or manager scope. Existing Discord bridge remains the role consumer. A future community MCP must use the same service logic and introduce an explicit matching authorization contract.
 
 Creator-impact and purchased-consumption rules remain separate extensibility points. New certified producers can add catalog definitions and audited awards without redesigning the wall. No author tiers, paid tiers, fake counts or unverified source classifications are activated in this release.
+
+## Milestone catalog (migration 0040)
+
+The catalog now carries generic milestone definitions next to the original six badges. Each milestone row names a `metric` and a `threshold`; the badge service owns the counter queries, so adding a tier is a catalog row, not code. Categories render as sections in this order: connection, community activity, support, creation, play, conversation, membership, events. Members may feature up to five earned badges.
+
+| Metric | Counted from | Tiers |
+|---|---|---|
+| `works_listed` | listed cards the member owns (same ownership rule as the author page, copies excluded, adult cards included) | 3 / 10 / 30 |
+| `works_featured` | owned listed cards picked as HearthRoom Featured | 1 |
+| `followers` | members following the author | 10 / 100 |
+| `favorites_received` | saves on the author's listed cards | 10 / 100 |
+| `cards_played` | distinct characters the member has continued a conversation with | 1 / 10 / 50 |
+| `saves` | characters with at least one archived conversation | 1 |
+| `favorites` | cards the member saved | 10 / 50 |
+| `follows` | creators the member follows | 5 |
+| `comments` | the member's undeleted comments | 1 / 10 / 100 |
+| `likes_received` | likes on those comments | 10 / 100 |
+| `profile` | profile edited at least once | — |
+| `founder` | member joined before 2026-10-01 UTC | — |
+| `tenure_days` | days since joining | 365 |
+| `xp` | linked Discord chat XP (existing level badges, now expressed as thresholds) | 250 / 1000 / 4000 |
+
+Milestones are one-way: the award persists even when the counter later drops, and `changeBadgeAward` still refuses to grant or revoke anything outside the `event_` namespace. Awards land on two paths that read the same tables: the owner's own collection read evaluates every metric in one query and records newly crossed tiers, and the hourly maintenance job runs one set-based `INSERT OR IGNORE … SELECT` per metric so members who never open the page still receive their badges within the hour. Public collection reads never evaluate counters; they show recorded awards only, with no progress. This sweep is also the backfill for existing members, so the migration inserts no awards.
+
+Provider display counters remain outside the catalog. `cards.talk_num` is not a verified player count, so no milestone reads it; the 說書人 creator tiers described above stay reserved until a verified feed exists. Reviewer activity is intentionally not a badge.
+
+Discord: the projection already carries every active award key. Only a few top badges deserve a role; the recommended mapping for Hearthkeeper's `COMMUNITY_ROLES` is `creator_featured`, `creator_works_30`, `creator_followers_100`, `creator_favorited_100` and `member_anniversary`, each as a `{ "id": "<role id>", "badge": "<key>" }` rule. Creating the roles and setting that configuration is a Bot deployment change, not a website release.
+
+Verification: Worker suite (real D1 migrations) covers catalog completeness in five locales, owner-read awarding with progress, one-way persistence, public reads without evaluation, the sweep awarding without a visit, creator ownership/copy/hidden-card rules, social/profile/tenure counters and the five-badge feature limit. Web suite covers unit-aware progress labels, the six-badge guard and category headings. Observability is unchanged: badge routes still emit `hearthroom_community_requests_total{operation="badge_read"|"badge_write"|"badge_admin"}`; the sweep runs inside the existing maintenance job and writes only `community_awards` rows with `source='metric-v1'`, which is the durable readback (`SELECT COUNT(*) FROM community_awards WHERE source='metric-v1'`).

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-defineProps<{ name: "discord" | "spark" | "flame" | "lantern" | "star" | "crown" | "award" }>();
+import type { BadgeIcon } from "../../../shared/community-badges";
+defineProps<{ name: BadgeIcon }>();
 </script>
 <template>
   <svg :data-icon="name" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
@@ -11,6 +12,16 @@ defineProps<{ name: "discord" | "spark" | "flame" | "lantern" | "star" | "crown"
     <path v-else-if="name === 'star'" d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z"/>
     <template v-else-if="name === 'crown'"><path d="m3 6 5 4 4-7 4 7 5-4-2 12H5ZM6 21h12"/><circle cx="12" cy="13" r="1"/></template>
     <template v-else-if="name === 'award'"><circle cx="12" cy="9" r="6"/><path d="m8 14-2 7 6-3 6 3-2-7m-7-6 2 2 4-4"/></template>
+    <template v-else-if="name === 'book'"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2Z"/><path d="M4 19a2 2 0 0 0 2 2h13M8 7h7"/></template>
+    <template v-else-if="name === 'trophy'"><path d="M8 4h8v6a4 4 0 0 1-8 0Z"/><path d="M8 6H5a3 3 0 0 0 3 5M16 6h3a3 3 0 0 1-3 5M12 14v4m-4 3h8m-4-3v3"/></template>
+    <path v-else-if="name === 'heart'" d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z"/>
+    <template v-else-if="name === 'users'"><circle cx="9" cy="8" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0M16 5a3.5 3.5 0 0 1 0 7M21 20a6 6 0 0 0-4-5.7"/></template>
+    <template v-else-if="name === 'compass'"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5Z"/></template>
+    <path v-else-if="name === 'bookmark'" d="M7 4h10v17l-5-3.5L7 21Z"/>
+    <path v-else-if="name === 'chat'" d="M5 5h14v10H9l-4 4Z"/>
+    <template v-else-if="name === 'pen'"><path d="m4 20 4-1 10-10-3-3L5 16Z"/><path d="m13 8 3 3"/></template>
+    <template v-else-if="name === 'seedling'"><path d="M12 21v-8"/><path d="M12 13c0-4 3-6 7-6 0 4-3 6-7 6ZM12 13c0-3-2-5-6-5 0 3 2 5 6 5Z"/></template>
+    <template v-else-if="name === 'clock'"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></template>
   </svg>
 </template>
 <style scoped>
