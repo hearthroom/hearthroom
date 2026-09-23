@@ -3,6 +3,8 @@ import {beforeEach,afterEach,it,expect,vi} from 'vitest';
 import {resetDb,makeMember,role} from './helpers';
 import {upsertCard} from '../src/cards';
 import {upstream} from '../src/upstream';
+import * as auth from '../src/account-auth';
+import {HttpError} from '../src/types';
 import {cutoverCard} from '../src/retirement-cutover';
 beforeEach(resetDb);afterEach(()=>vi.restoreAllMocks());
 async function fixture(){
@@ -57,4 +59,33 @@ it('rolls back earlier mutations if a late historical-locator insert fails',asyn
  expect(await env.DB.prepare('SELECT provider FROM cards').first()).toEqual({provider:'lunatalk'});
  expect(await env.DB.prepare('SELECT provider FROM hosting_versions').first()).toEqual({provider:'lunatalk'});
  expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM work_copies WHERE provider='harbor'").first()).toEqual({n:1});
+});
+
+it('uses the linked author grant to verify a private draft without publishing it',async()=>{
+ const f=await fixture();
+ vi.mocked(upstream.fetchRole).mockImplementation(async(_env,id)=>{if(id==='target')throw new HttpError(404,'role not found');return role({roleId:id,authorNumId:22})});
+ const access=vi.spyOn(auth,'delegatedAccess').mockResolvedValue({accessToken:'private-test',expiresAt:Date.now()+60000});
+ vi.spyOn(upstream,'fetchMe').mockResolvedValue({accountNumId:22});
+ const network=vi.spyOn(globalThis,'fetch').mockResolvedValue(Response.json({characterRoleId:'target',accountNumId:22,authorName:'Author'}));
+ expect(await cutoverCard(env,f.card)).toEqual({status:'cut_over'});
+ expect(access).toHaveBeenCalledWith(env,'harbor',22,f.member);
+ expect(network).toHaveBeenCalledTimes(1);
+ expect(network).toHaveBeenCalledWith(expect.stringContaining('/open/v1/role/detail?roleId=target'),expect.objectContaining({redirect:'manual',headers:expect.objectContaining({Authorization:'Bearer private-test'})}));
+});
+it('never forwards an unrelated saved grant or changes private draft visibility',async()=>{
+ const f=await fixture();vi.mocked(upstream.fetchRole).mockRejectedValue(new HttpError(404,'role not found'));
+ vi.spyOn(auth,'delegatedAccess').mockResolvedValue({accessToken:'wrong',expiresAt:Date.now()+60000});
+ vi.spyOn(upstream,'fetchMe').mockResolvedValue({accountNumId:99});
+ const network=vi.spyOn(globalThis,'fetch');
+ await expect(cutoverCard(env,f.card)).rejects.toThrow('migration_owner_changed');
+ expect(network).not.toHaveBeenCalled();
+ expect(await env.DB.prepare('SELECT source_provider FROM works').first()).toEqual({source_provider:'lunatalk'});
+});
+it('does not follow a private-draft redirect with the author credential',async()=>{
+ const f=await fixture();vi.mocked(upstream.fetchRole).mockRejectedValue(new HttpError(404,'role not found'));
+ vi.spyOn(auth,'delegatedAccess').mockResolvedValue({accessToken:'private-test',expiresAt:Date.now()+60000});
+ vi.spyOn(upstream,'fetchMe').mockResolvedValue({accountNumId:22});
+ vi.spyOn(globalThis,'fetch').mockResolvedValue(new Response(null,{status:307,headers:{Location:'https://elsewhere.test'}}));
+ await expect(cutoverCard(env,f.card)).rejects.toThrow('migration_draft_unavailable');
+ expect(await env.DB.prepare('SELECT source_provider FROM works').first()).toEqual({source_provider:'lunatalk'});
 });
