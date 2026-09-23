@@ -243,7 +243,7 @@
   "editor.world.char.description.hint": "길어도 됩니다. 이 캐릭터 자신의 컨텍스트에만 들어가며 세계와 다른 캐릭터는 보지 못합니다.",
   "editor.world.char.lorebook": "전용 세계관",
   "editor.world.char.lorebook.none": "없음",
-  "editor.world.char.lorebook.hint": "내 세계관 중 하나를 고릅니다. 이 캐릭터가 말할 때만 불러옵니다. 세계관에는 정규식이 없습니다.",
+  "editor.world.char.lorebook.hint": "이 카드의 세계관과 같습니다: 새로 만들거나, 파일을 불러오거나, 이미 있는 것을 고르세요. 이 캐릭터가 말할 때만 불러오며 다른 캐릭터와 세계는 보지 못합니다.",
   "editor.world.needName": "{n}번째 캐릭터에 이름이 없습니다.",
   "editor.world.tooMany": "캐릭터는 최대 {max}명입니다.",
   "editor.world.tooLong": "{n}번째 캐릭터의 {field}이(가) 한도를 넘었습니다.",
