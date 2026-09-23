@@ -1,5 +1,5 @@
 import type { Env } from './types';
-export const snapshotCache = { namespace: 'public-snapshot-v1' };
+export const snapshotCache = { namespace: 'public-snapshot-harbor-v2' };
 type Entry<T> = { value:T; expires:number };
 type Context = Pick<ExecutionContext,'waitUntil'>;
 /** Public projections only. Callers read the authoritative revision/access before this helper. */

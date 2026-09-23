@@ -95,7 +95,7 @@ describe("卡號", () => {
 
 describe("作者看自己還沒上榜的卡", () => {
   it("沒提交過的卡：帶著作者的 token 開卡片頁，拿到從上游拼的預覽，狀態是 unlisted，不進快取", async () => {
-    rolesOnProviders({lunatalk:[{ roleId: "role-draft", authorNumId: 10001, name: "草稿卡" }]});
+    rolesOnProviders({harbor:[{ roleId: "role-draft", authorNumId: 10001, name: "草稿卡" }]});
     const res = await card("role-draft", bearer());
     expect(res.status).toBe(200);
     expect(res.body.name).toBe("草稿卡");
@@ -105,7 +105,7 @@ describe("作者看自己還沒上榜的卡", () => {
   });
 
   it("不是作者或沒登入，仍可透過連結查看草稿", async () => {
-    rolesOnProviders({lunatalk:[{ roleId: "role-draft", authorNumId: 10001 }]});
+    rolesOnProviders({harbor:[{ roleId: "role-draft", authorNumId: 10001 }]});
     expect((await card("role-draft")).status).toBe(200);
     whoAmI(20002);
     expect((await card("role-draft", bearer())).status).toBe(200);

@@ -50,7 +50,7 @@ describe("卡片 manifest", () => {
     expect(res.headers.get("content-type")).toContain("application/manifest+json");
     const m = await res.json() as Record<string, unknown>;
     expect(m.id).toBe(`/play/${cardNumber}`);
-    expect(m.start_url).toBe(`/en/play/${cardNumber}?provider=lunatalk`);
+    expect(m.start_url).toBe(`/en/play/${cardNumber}?provider=harbor`);
     expect(m.scope).toBe("/");
     expect(m.name).toBe("Night Detective");
     expect(m.display).toBe("standalone");
@@ -68,7 +68,7 @@ describe("卡片 manifest", () => {
     const m = await res.json() as Record<string, unknown>;
     expect(m.id).toBe(`/${cardNumber}/`);
     expect(m.scope).toBe(`/${cardNumber}/`);
-    expect(m.start_url).toBe(`/${cardNumber}/?lang=en&provider=lunatalk`);
+    expect(m.start_url).toBe(`/${cardNumber}/?lang=en&provider=harbor`);
     expect(m.name).toBe("Night Detective");
     expect(m.display).toBe("fullscreen");
     // 本機開發用的 play.localhost 也算
@@ -88,10 +88,10 @@ describe("卡片 manifest", () => {
 
   it("來源語言不帶前綴；沒有該語言的名字就退回中文", async () => {
     const m = await (await get("/v1/cards/role-safe/manifest.webmanifest?lang=zh-Hant")).json() as Record<string, unknown>;
-    expect(m.start_url).toBe(`/play/${cardNumber}?provider=lunatalk`);
+    expect(m.start_url).toBe(`/play/${cardNumber}?provider=harbor`);
     expect(m.name).toBe("夜行偵探");
     const ja = await (await get("/v1/cards/role-safe/manifest.webmanifest?lang=ja")).json() as Record<string, unknown>;
-    expect(ja.start_url).toBe(`/ja/play/${cardNumber}?provider=lunatalk`);
+    expect(ja.start_url).toBe(`/ja/play/${cardNumber}?provider=harbor`);
     expect(ja.name).toBe("夜行偵探");
   });
 
@@ -189,7 +189,7 @@ describe("卡片圖示", () => {
     expect(res.headers.get("cache-control")).toBe("no-store");
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(PNG);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(String((fetchSpy.mock.calls[0] as unknown[])[0])).toBe("https://cdn.lunatalk.ai/bg.png");
+    expect(String((fetchSpy.mock.calls[0] as unknown[])[0])).toBe("https://assets.harperharbor.com/bg.png");
   });
 
   it("沒有 Images 綁定、直圖是 JPEG：manifest 用的圖示包成 SVG，touch-icon 給原圖", async () => {

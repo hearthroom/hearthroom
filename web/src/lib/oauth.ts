@@ -104,11 +104,10 @@ export async function beginLogin(returnTo: string, options: {provider?:ProviderI
     code_challenge_method: "S256",
     resource: `${apiBaseOf(provider)}/open/v1`,
   });
-  // Harbor 不給 scope 只會拿到唯讀，寫不了卡；LunaTalk 的客戶端不帶（它的預設就是全部）。
+  // Harbor 不給 scope 只會拿到唯讀，寫不了卡。
   const scope = scopeOf(provider);
   if (scope) params.set("scope", scope);
   // 走備用網域時，登入頁也要換成備用網域的（邊緣代理會把 Host 改寫，伺服器光看 Host 判不出來）
-  if (provider === "lunatalk" && /\/\/api\.lunatalk\.pro(?::\d+)?$/i.test(UPSTREAM_API)) params.set("login_site", "pro");
   location.assign(`${baseFor(provider)}/oauth/authorize?${params}`);
 }
 
@@ -164,7 +163,8 @@ export async function completeLogin(query: URLSearchParams): Promise<{ token: To
     return authRequest("complete",{code:query.get("code"),state:query.get("state")});
   }
   const pending=JSON.parse(sessionStorage.getItem("hearthroom.oauth.pending") || "{}");
-  const provider:ProviderId=pending.provider==='harbor'?'harbor':pending.provider==='lunatalk'?'lunatalk':currentProvider();
+  if(pending.provider!=='harbor'||pending.linkFrom)throw new Error(t('auth.badState'));
+  const provider:ProviderId='harbor';
   const error = query.get("error");
   if (error) throw new Error(t("auth.denied", { error }));
 

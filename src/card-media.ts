@@ -3,7 +3,7 @@ import { IMAGE_HOSTS } from "./shortcut";
 import { HttpError, type Env } from "./types";
 
 // Community sync keeps SaaS asset references without fetching the image bytes.
-const REFERENCE_HOSTS = new Set([...IMAGE_HOSTS, "assets.lunatalk.ai", "assets.harperharbor.com"]);
+const REFERENCE_HOSTS = new Set([...IMAGE_HOSTS]);
 
 export const MEDIA_FIELDS = [
   "avatar",

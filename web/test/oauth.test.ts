@@ -28,6 +28,7 @@ function upstreamWithRotatingRefresh() {
 
 beforeEach(() => {
   localStorage.clear();
+  localStorage.setItem("hearthroom.provider","harbor");
   vi.unstubAllGlobals();
 });
 

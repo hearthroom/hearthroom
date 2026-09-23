@@ -12,7 +12,7 @@ vi.mock('../src/lib/connections',()=>({accountToken:mocks.token}));
 let app:ReturnType<typeof createApp>;let root:HTMLElement;
 afterEach(()=>{app?.unmount();root?.remove();vi.clearAllMocks();});
 it('shows both balances and histories without a global provider switch',async()=>{
-  setProvider('lunatalk');
+  setProvider('harbor');
   mocks.token.mockImplementation(async p=>`token-${p}`);
   mocks.wallet.mockImplementation(async (_t,p)=>({score:p==='harbor'?222:111,tempScore:0,plans:[]}));
   mocks.records.mockImplementation(async (_t,_page,_size,p)=>({records:[{id:1,record:`${p} entry`,score:5,recordType:'sub',createTime:'2026-09-20T00:00:00Z'}],total:1}));
@@ -21,10 +21,10 @@ it('shows both balances and histories without a global provider switch',async()=
   const router=createRouter({history:createMemoryHistory(),routes:[{path:'/wallet',component:WalletPage}]});await router.push('/wallet');
   root=document.createElement('div');document.body.append(root);app=createApp(WalletPage).use(pinia).use(router).use(i18n);app.mount(root);
   for(let i=0;i<40;i++)await Promise.resolve();await nextTick();
-  expect(root.textContent).toContain('111');expect(root.textContent).toContain('222');
-  expect(root.textContent).toContain('lunatalk entry');expect(root.textContent).toContain('harbor entry');
+  expect(root.textContent).not.toContain('111');expect(root.textContent).toContain('222');
+  expect(root.textContent).not.toContain('lunatalk entry');expect(root.textContent).toContain('harbor entry');
   expect(root.querySelector('a[href*="provider="]')).toBeNull();
   for(const button of root.querySelectorAll('.seg button'))button.dispatchEvent(new MouseEvent('click',{bubbles:true}));
-  expect(currentProvider()).toBe('lunatalk');
+  expect(currentProvider()).toBe('harbor');
   expect(mocks.token).toHaveBeenCalledWith('harbor',2);
 });

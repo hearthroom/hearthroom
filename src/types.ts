@@ -18,9 +18,8 @@ export type Env = Omit<Cloudflare.Env, "EVENTS" | "ANALYTICS_ENABLED" | "REVIEW_
   DISCORD_CLIENT_ID?: string;
   DISCORD_CLIENT_SECRET?: string;
   EVENTS?: AnalyticsEngineDataset;
-  /** Hearthroom → Harbor issuer credential; never sent to LunaTalk. */
+  /** Hearthroom → Harbor issuer credential. */
   HOSTING_SERVICE_KEY?: string;
-  HOSTING_SERVICE_KEY_LUNATALK?: string;
   ANALYTICS_ENABLED?: string;
   /** 社群審核開關："true" 才審；其餘退回「登記即上榜」，見 src/providers.ts。 */
   REVIEW_ENABLED?: string;

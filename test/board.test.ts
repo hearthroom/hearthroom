@@ -40,7 +40,7 @@ async function seed(f: {
     talkNum: f.talkNum,
     followNum: f.followNum,
   });
-  const num = await ensureCardNumber(env.DB,"lunatalk",r.roleId);
+  const num = await ensureCardNumber(env.DB,"harbor",r.roleId);
   fixtureLabels.set(String(num), f.id);
   await env.DB.prepare(
     `INSERT INTO cards (id, source_role_id, zone, author_num_id, author_name, author_avatar, names, summaries,
@@ -55,7 +55,7 @@ async function seed(f: {
       buildSearchText(r), f.registeredAt ?? Date.now(), 0,
     )
     .run();
-  await env.DB.prepare("UPDATE cards SET approved_hosted_role_id=? WHERE id=?").bind(r.roleId,num).run();
+  await env.DB.prepare("UPDATE cards SET provider='harbor',approved_hosted_role_id=? WHERE id=?").bind(r.roleId,num).run();
 }
 
 const list = async (query = "") => {
@@ -472,7 +472,7 @@ describe("同步並發", () => {
     );
     await runSync();
     const ids = await env.DB.prepare("SELECT provider, external_id, member_id FROM member_identities ORDER BY external_id").all<{ provider: string; external_id: string; member_id: string }>();
-    expect(ids.results.map((r) => [r.provider, r.external_id])).toEqual([["lunatalk", "4242"], ["lunatalk", "5151"]]);
+    expect(ids.results.map((r) => [r.provider, r.external_id])).toEqual([["harbor", "4242"], ["harbor", "5151"]]);
     const members = await env.DB.prepare("SELECT handle FROM members").all<{ handle: string }>();
     expect(members.results).toHaveLength(2);
     expect(members.results.every((m) => /^[a-z]{8}$/.test(m.handle))).toBe(true);

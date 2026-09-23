@@ -8,7 +8,7 @@ const mainSiteRole = {
   characterRoleId: "role-1",
   accountNumId: 10001,
   authorName: "月光",
-  authorAvatar: "https://cdn.lunatalk.ai/author.png",
+  authorAvatar: "https://assets.harperharbor.com/author.png",
   roleName: "夜行偵探",
   roleNameEn: "Night Detective",
   roleNameJa: "夜行探偵",
@@ -17,8 +17,8 @@ const mainSiteRole = {
   roleDescEn: "Republic-era mystery",
   roleDescJa: "",
   roleDescKo: "",
-  roleAvatar: "https://cdn.lunatalk.ai/cover.png",
-  roleBackground: "https://cdn.lunatalk.ai/bg.png",
+  roleAvatar: "https://assets.harperharbor.com/cover.png",
+  roleBackground: "https://assets.harperharbor.com/bg.png",
   slug: "night-detective",
   roleTag: ["推理", "民國"],
   talkNum: 1200,
@@ -105,10 +105,10 @@ describe("上游呼叫的 HTTP 形狀", () => {
     await upstream.fetchMe(env, "secret-token");
     await upstream.fetchRole(env, "role-1");
 
-    expect(calls[0].url).toBe(`${env.PROVIDER_API_BASE}/open/v1/me`);
+    expect(calls[0].url).toBe(`${env.PROVIDER_API_BASE_HARBOR}/open/v1/me`);
     expect(calls[0].headers.Authorization).toBe("Bearer secret-token");
     // 同步跑在排程裡，那時沒有使用者在線——讀卡片這條路不該需要任何人的憑證。
-    expect(calls[1].url).toBe(`${env.PROVIDER_API_BASE}/open/v1/role/detail?roleId=role-1`);
+    expect(calls[1].url).toBe(`${env.PROVIDER_API_BASE_HARBOR}/open/v1/role/detail?roleId=role-1`);
     expect(calls[1].headers.Authorization).toBeUndefined();
     // 上游掛在 Cloudflare 後面，沒有 User-Agent 會被 bot 防護擋成 403。
     for (const call of calls) expect(call.headers["User-Agent"]).toContain("Personae");
@@ -121,7 +121,7 @@ describe("上游呼叫的 HTTP 形狀", () => {
       return new Response(JSON.stringify({ roleList: [], total: 0, hasNextPage: false }), { status: 200, headers: { "Content-Type": "application/json" } });
     });
     await upstream.fetchMyRoles(env, "tok", 1, 24);
-    expect(calls[0]).toBe(`${env.PROVIDER_API_BASE}/open/v1/role/mine?pageNum=1&pageSize=24&creationMethod=hearthroom`);
+    expect(calls[0]).toBe(`${env.PROVIDER_API_BASE_HARBOR}/open/v1/role/mine?pageNum=1&pageSize=24&creationMethod=hearthroom`);
   });
 
   it("角色詳情帶出建卡來源，登記時靠它分本站與主站", () => {
@@ -168,7 +168,7 @@ describe("上游呼叫的 HTTP 形狀", () => {
 });
 
 
-it.each(['lunatalk', 'harbor'] as const)('keeps the portrait background in %s author lists without exposing private fields', async (provider) => {
+it.each(['harbor', 'harbor'] as const)('keeps the portrait background in %s author lists without exposing private fields', async (provider) => {
  vi.stubGlobal('fetch', async () => new Response(JSON.stringify({roleList:[{...mainSiteRole, roleBackgroundLandscape:'https://cdn.example.test/landscape.png'}], total:1, hasNextPage:false})));
  const page = await upstream.fetchMyRoles(env, 'fixture-token', 1, 24, provider);
  expect(page.items[0]).toMatchObject({avatarUrl:mainSiteRole.roleBackground, backgroundUrl:mainSiteRole.roleBackground});

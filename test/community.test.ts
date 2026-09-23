@@ -172,10 +172,3 @@ it("caps XP by UTC event day even when a delayed batch arrives together", async 
     ),
   ).rejects.toThrow();
 });
-it("a community preference or achievement prevents a provider identity from being absorbed as empty", async () => {
-  const { emptyCommunity } = await import("../src/connections");
-  const m = await makeMember(50);
-  expect(await emptyCommunity(env.DB, m)).toBe(true);
-  await setPreferences(config(), m, { notifications: true });
-  expect(await emptyCommunity(env.DB, m)).toBe(false);
-});

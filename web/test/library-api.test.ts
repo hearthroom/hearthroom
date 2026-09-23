@@ -3,13 +3,13 @@ import { clearLibraryCache, fetchConversations, libraryRequest } from "../src/li
 
 import {setProvider} from '../src/lib/provider';
 beforeEach(()=>clearLibraryCache());
-afterEach(() => {vi.unstubAllGlobals();vi.restoreAllMocks();setProvider('lunatalk');clearLibraryCache();});
+afterEach(() => {vi.unstubAllGlobals();vi.restoreAllMocks();setProvider('harbor');clearLibraryCache();});
 it("reads only the community conversation index with explicit paging and language", async () => {
   const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ conversations: [], hasNextPage: false })));
   vi.stubGlobal("fetch", fetcher);
   expect((await fetchConversations("test-token", "en", 2)).conversations).toEqual([]);
   expect(fetcher.mock.calls[0][0]).toContain("/v1/me/conversations?pageNum=2&lang=en");
-  expect(fetcher.mock.calls[0][1].headers).toMatchObject({ Authorization: "Bearer test-token", 'X-Provider': 'lunatalk' });
+  expect(fetcher.mock.calls[0][1].headers).toMatchObject({ Authorization: "Bearer test-token", 'X-Provider': 'harbor' });
 });
 it("does not turn an authentication failure into an empty library", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response('{"error":"unauthorized"}', { status: 401 })));
@@ -38,7 +38,7 @@ it('expires private responses and never retains failed reads',async()=>{
 
 it('isolates providers even with identical credential text and clears on logout',async()=>{
  const fetcher=vi.fn().mockImplementation(async()=>new Response(JSON.stringify({items:[]})));vi.stubGlobal('fetch',fetcher);
- await libraryRequest('following','same-token');setProvider('harbor');await libraryRequest('following','same-token');
+ await libraryRequest('following','first-account');await libraryRequest('following','same-token');
  expect(fetcher).toHaveBeenCalledTimes(2);expect(fetcher.mock.calls[1][1].headers['X-Provider']).toBe('harbor');
  clearLibraryCache();await libraryRequest('following','same-token');expect(fetcher).toHaveBeenCalledTimes(3);
 });

@@ -29,6 +29,7 @@ export async function cardLink(env: Env, id: string, preferred: ProviderId) {
     ORDER BY id LIMIT 2`).bind(id,id).all<Work>()
     .then(r => r.results.length === 1 ? r.results[0] : null));
   if (!row && neutralWork) row = await getCard(env.DB, neutralWork.source_role_id, neutralWork.source_provider);
+  if ((row && row.provider!=='harbor') || (numbered && numbered.provider!=='harbor') || (neutralWork && neutralWork.source_provider!=='harbor')) throw new HttpError(404, 'card not found');
   if (row?.public_blocked) throw new HttpError(404, 'card not found');
   return {
     row,

@@ -89,7 +89,7 @@ it('rejects stale legacy review writes after migration supersedes the old submis
  const {upsertCard}=await import('../src/cards');
  const {createSubmission}=await import('../src/review');
  const card=await upsertCard(env.DB,role({roleId:'legacy',authorNumId:10001}),1,{status:'approved'});
- const sub=await createSubmission(env.DB,{cardId:card.id,provider:'lunatalk',roleId:'legacy',kind:'re',contentHash:'old',now:1,nsfw:false});
+ const sub=await createSubmission(env.DB,{cardId:card.id,provider:'harbor',roleId:'legacy',kind:'re',contentHash:'old',now:1,nsfw:false});
  await env.DB.prepare("UPDATE review_submissions SET status='superseded' WHERE id=?").bind(sub.id).run();
  await expect(env.DB.prepare("INSERT INTO review_stamps(submission_id,member_id,verdict,note,created_at) VALUES (?,'stale','approve','',0)").bind(sub.id).run()).rejects.toThrow('submission already decided');
  await expect(env.DB.prepare("UPDATE review_submissions SET status='approved' WHERE id=?").bind(sub.id).run()).rejects.toThrow('submission already decided');

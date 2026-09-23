@@ -115,7 +115,7 @@ npm run dev:web             # Vite，:8850，/v1 代理到 :8787
 
 ```bash
 node scripts/mock-upstream.mjs                                  # :8899
-VITE_PROVIDER_API_BASE=http://127.0.0.1:8899 npm run dev:web
+VITE_HARBOR_API_BASE=http://127.0.0.1:8899 npm run dev:web
 ```
 
 在浏览器控制台设置 token：
@@ -132,7 +132,7 @@ localStorage.setItem("hearthroom.oauth.access", JSON.stringify({ accessToken: "t
 
 1. 创建资源并将 ID 填入 `wrangler.toml`：一个 D1 数据库（`DB`）、两个 KV 命名空间（`CACHE`、`ASSET_ARCHIVE`），以及可选的 Analytics Engine 数据集（`EVENTS`；设置 `ANALYTICS_ENABLED = "false"` 可停用）。
 2. 设置域名：`wrangler.toml` 的 `routes`、`src/site.ts` 的 `HOST`、`web/src/lib/site.ts` 的站名。已有 DNS 记录的主机名无法绑定自定义域名，须先删除停放记录。 卡片 App 在 `play.<域名>`、沙箱壳在 `c<id>.<域名>`，都由同一条通配路由服务，zone 需要一条代理的通配 DNS 记录。
-3. 设置提供方：`[vars]` 中的 `PROVIDER_API_BASE`。若部分国家无法连上提供方的主域名，在 `PROVIDER_API_GATEWAYS` 列出各国网关（`CC=网址,…`）；`/v1/region` 会把对应的网关返回给该国的浏览器。
+3. 在 `[vars]` 设置 `PROVIDER_API_BASE_HARBOR`，网页构建使用 `VITE_HARBOR_API_BASE`。Hearthroom 仅连接 HarperHarbor；LunaTalk 与区域网关已退役。
 4. 决定要不要审核：`[vars]` 中的 `REVIEW_ENABLED = "true"` 表示提交要经社区审核；其他值则不经审核直接上榜。审核不需要在提供方那边持有任何密钥或账号。以 `node scripts/grant-reviewer.mjs <提供方账号 ID>` 授权审核人。
 5. 可选的 `wrangler secret put SHORTCUT_SECRET`（任意随机字符串）：用来签发短效钥匙，让开启了成人内容的成员也能把成人卡添加到主屏幕；不设的话成人卡就没有这个按钮。
 6. 部署：

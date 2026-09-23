@@ -4,14 +4,14 @@ import { setProvider } from '../src/lib/provider';
 
 afterEach(() => {
   setNsfwViewer(null);
-  setProvider('lunatalk');
+  setProvider('harbor');
   vi.unstubAllGlobals();
 });
 
-it.each(['harbor', 'lunatalk'] as const)('uses the %s community login to discover another service without a second adult preference', async provider => {
+it.each(['harbor', 'harbor'] as const)('uses the %s community login to discover another service without a second adult preference', async provider => {
   setProvider(provider);
   setNsfwViewer(async () => 'community-session');
-  const other = provider === 'harbor' ? 'lunatalk' : 'harbor';
+  const other = provider === 'harbor' ? 'harbor' : 'harbor';
   const platforms = [{ provider: other, roleId: 'play-copy', playable: true }];
   const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
     const headers = new Headers(init?.headers);

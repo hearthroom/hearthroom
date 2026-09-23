@@ -49,12 +49,12 @@ it('clears featured access when refreshing the login fails',async()=>{
  session.accessToken=async()=>{throw new Error('login expired');};
  await expect(store.refresh()).resolves.toBe(false);expect(store.featured).toBeNull();
 });
-it('discards a capability reply when the provider changed during the request',async()=>{
+it('discards a capability reply when the account changed during the request',async()=>{
  const {setProvider}=await import('../src/lib/provider');setProvider('harbor');
  mock.summary.mockResolvedValue({reviewer:true,featured:{admin:true,featuredUsed:0,featuredQuota:50}});
  const store=useReviewer();await store.refresh();
  let finish!:(data:unknown)=>void;mock.summary.mockImplementationOnce(()=>new Promise(r=>{finish=r;}));
- const pending=store.refresh();await nextTick();setProvider('lunatalk');
+ const pending=store.refresh();await nextTick();mock.summary.mockResolvedValue({reviewer:false});session.me={accountNumId:2};await nextTick();
  finish({reviewer:true,featured:{admin:true,featuredUsed:0,featuredQuota:50}});await pending;
  expect(store.featured).toBeNull();
 });

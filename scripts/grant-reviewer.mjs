@@ -24,11 +24,11 @@ if (!id) {
 const memberId = crypto.randomUUID();
 const now = Date.now();
 const sql = revoke
-  ? `UPDATE reviewers SET revoked_at = ${now} WHERE member_id IN (SELECT member_id FROM member_identities WHERE provider = 'lunatalk' AND external_id = '${id}') AND revoked_at IS NULL;`
+  ? `UPDATE reviewers SET revoked_at = ${now} WHERE member_id IN (SELECT member_id FROM member_identities WHERE provider = 'harbor' AND external_id = '${id}') AND revoked_at IS NULL;`
   : [
-      `INSERT INTO members (id, created_at) SELECT '${memberId}', ${now} WHERE NOT EXISTS (SELECT 1 FROM member_identities WHERE provider = 'lunatalk' AND external_id = '${id}');`,
-      `INSERT OR IGNORE INTO member_identities (provider, external_id, member_id, linked_at) VALUES ('lunatalk', '${id}', '${memberId}', ${now});`,
-      `INSERT INTO reviewers (member_id, granted_at, granted_by) SELECT member_id, ${now}, 'manual' FROM member_identities WHERE provider = 'lunatalk' AND external_id = '${id}' ON CONFLICT(member_id) DO UPDATE SET revoked_at = NULL, granted_at = ${now};`,
+      `INSERT INTO members (id, created_at) SELECT '${memberId}', ${now} WHERE NOT EXISTS (SELECT 1 FROM member_identities WHERE provider = 'harbor' AND external_id = '${id}');`,
+      `INSERT OR IGNORE INTO member_identities (provider, external_id, member_id, linked_at) VALUES ('harbor', '${id}', '${memberId}', ${now});`,
+      `INSERT INTO reviewers (member_id, granted_at, granted_by) SELECT member_id, ${now}, 'manual' FROM member_identities WHERE provider = 'harbor' AND external_id = '${id}' ON CONFLICT(member_id) DO UPDATE SET revoked_at = NULL, granted_at = ${now};`,
     ].join(" ");
 
 const r = spawnSync("npx", ["wrangler", "d1", "execute", "DB", local ? "--local" : "--remote", "--command", sql], { stdio: "inherit" });

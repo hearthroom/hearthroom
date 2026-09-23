@@ -1,6 +1,6 @@
 # Developer documentation
 
-Hearthroom is a community-maintained, open-source character-card board. The site itself stores **no cards, runs no models and keeps no passwords**: accounts, card content and conversations live with a *provider*. The site owns what belongs to the community: who listed which card, how far it got in review and who stamped it, and the comments under each card. The only card content it ever holds is the review copy an author submits, and that copy is deleted when the review ends. LunaTalk and HarperHarbor implement the shared Open API (`/open/v1`) with different capability sets; see the provider matrix below.
+Hearthroom is a community-maintained, open-source character-card board. The site itself stores **no cards, runs no models and keeps no passwords**: accounts, card content and conversations live with a *provider*. The site owns what belongs to the community: who listed which card, how far it got in review and who stamped it, and the comments under each card. The only card content it ever holds is the review copy an author submits, and that copy is deleted when the review ends. Hearthroom uses HarperHarbor for identity, agent configuration hosting and conversations. LunaTalk integration is permanently retired.
 
 This page has two parts:
 
@@ -14,7 +14,7 @@ The documentation lives next to the code. A test in the repository (`web/test/pr
 | Topic | Rule |
 |---|---|
 | Base URL | Every resource lives under `<API_BASE>/open/v1/...`. `<API_BASE>` is configured per deployment (see *Plugging in a provider*). |
-| Authentication | `Authorization: Bearer <token>`. The token is a user access token obtained through OAuth. The site holds no key of its own at any provider. |
+| Authentication | `Authorization: Bearer <token>`. The token is a user access token obtained through OAuth. Hosting operations additionally use the server-held Harper issuer key. |
 | Language | Requests may send a `language` header (`zh-Hant`, `zh-Hans`, `en`, `ja`, `ko`). The provider uses it for human-readable text in responses. |
 | Guest-readable | A small set of read endpoints accept requests without a token; they are marked **no auth** in the reference. A token, when present, is still honoured. |
 | Error envelope | The canonical shape for non-2xx responses is `{ "error": "<snake_case_code>", "message": "<human sentence>", "retryable": <bool> }`; the identity middleware and the newer endpoints use it. Several older endpoints return narrower legacy shapes (for example `{ "error": "<code>" }` only, or `{ "errorCode", "messageKey" }`). The reference documents the exact shape per endpoint and the *Notes* section lists every shape and code found. HTTP status follows the semantics (400 / 401 / 403 / 404 / 409 / 429 / 5xx). |
@@ -64,9 +64,9 @@ The authorization server must support:
 
 A user token carries exactly the scopes the user granted. Optional managed authorization (`AUTH_ENABLED=true`) encrypts access and refresh credentials in D1, with the keyring held separately as a Worker secret. The browser keeps only access tokens in memory and an HttpOnly site session cookie. Tokens are never written to logs or public caches. See [authorization custody and operations](account-authorization.md) for privacy boundaries, configuration and rollback. Without managed mode, self-hosted deployments retain the legacy browser credential flow.
 
-`GET /open/v1/me` returns the caller's public identity. The site has its own member id (an 8-letter handle shown on author pages); the provider's `accountNumId` is only the mapping key inside the site's identity table, so one member can later be linked to more than one provider.
+`GET /open/v1/me` returns the caller's public identity. The site has its own member id (an 8-letter handle shown on author pages); the provider's `accountNumId` is only the mapping key inside the site's identity table, and preserves the existing community identity after migration.
 
-Sign-in starts on the site's own `/login` page, where the user picks a provider; only then is the browser sent to that provider's `/oauth/authorize`.
+Sign-in starts on the site's own `/login` page, which starts HarperHarbor authorization through `/oauth/authorize`.
 
 ### Level 1 — Read & list
 
@@ -123,27 +123,19 @@ The provider must resolve `{{user}}` (and how the character addresses the player
 
 Content rating is the **site's own** decision and is never read from the provider. Authors declare a rating when they submit; reviewers compare it with the content and reject mismatches; cards marked adult are hidden from everyone who has not opted in and confirmed their age. None of this is part of the provider contract.
 
-## Plugging in a provider
+## HarperHarbor configuration
 
-Today a second provider is configuration plus a small code change, not a runtime plug-in.
-
-| Where | Setting |
-|---|---|
-| Web build | `VITE_PROVIDER_API_BASE` — the `<API_BASE>` the browser talks to; the OAuth `resource` is `<API_BASE>/open/v1`. |
-| Site server (Worker) | `PROVIDER_API_BASE` — the `<API_BASE>` used for sync, identity checks and review calls; `PROVIDER_API_GATEWAYS` — optional per-country gateways (`CC=url,…`) handed to browsers by `/v1/region`. |
-| Review | `REVIEW_ENABLED` — `"true"` requires community review; any other value runs the site in "listing is publishing" mode. There is no provider-side key. |
-| Code | `src/providers.ts` — the provider id union and the review switch. Members, identities, cards and review submissions all carry a provider column, so adding a provider needs no schema change. |
-
-## Open items
-
-- Semantics of a partially implemented level 4.
-- No second provider has been integrated end to end yet; the section above describes the code as it is, not a verified port.
+The Worker uses `PROVIDER_API_BASE_HARBOR`; web builds use `VITE_HARBOR_API_BASE`.
+Only `harbor` is accepted in provider headers and play URLs. Retired regional
+gateways cannot override the Harper API. `HOSTING_SERVICE_KEY` stays server-side
+and authorizes the existing immutable hosting contract. Cross-service account
+linking and synchronization endpoints return 410 `service_retired`.
 
 ## Community identity and connected platforms
 
 A HearthRoom member has one community handle, display name, bio and avatar. The name and avatar are seeded once from the first verified sign-in and can then be edited independently. Uploaded community avatars are processed and stored in HearthRoom's own R2 bucket. Changing the platform used for an action never changes that community profile.
 
-Connect at most one account per provider. LunaTalk and HarperHarbor may be connected simultaneously. There is no global active-account choice. Credits, conversations and source assets remain on their respective platforms.
+HarperHarbor is the only active account service. Community identity and existing social records remain in Hearthroom. Retired LunaTalk records do not provide sign-in or play access.
 
 These are **HearthRoom community endpoints** under `/v1`, separate from the provider Open API:
 
@@ -160,13 +152,13 @@ and `sourceRoleId` remain separate provider locators for playing and editing.
 | `GET /v1/me` | Returns the community profile, including `displayName`, `bio`, `avatarUrl` and linked identities. |
 | `PUT /v1/me/profile` | Authenticated multipart update: `displayName` (1–60 characters), `bio` (up to 500), optional `avatar` (JPEG/PNG/GIF/APNG/WebP, up to 10 MiB), or `removeAvatar=true`. Images are validated and stored in owned R2; still images are cropped to 512×512 WebP, while GIF, APNG (including `.png` files) and animated WebP retain their original bytes and animation, with cropping applied only by the avatar display; replacement schedules the old object for deletion. JSON supports name/bio only; `avatarUrl` input is rejected. |
 | `GET /v1/avatars/:handle/:file` | Public current community avatar. Retired object URLs return 404. Author responses also include `bio`, including for authors without listed cards. |
-| `POST /v1/me/connections/preview` | Current bearer plus `X-Provider`, or managed site cookie with same-origin `Origin` and `X-Hearthroom-Request: 1`; body `{provider, token}` proves the additional account. Read-only source/target community preview. |
-| `POST /v1/me/connections` | Same proofs plus `{keepHandle, sourceHandle, targetHandle}` from preview. `keepHandle` must equal the current community's `sourceHandle`. An existing target must be provably empty and explicitly confirmed; its identity moves to the retained community and its empty community record is deleted atomically. SaaS accounts/assets are preserved. Managed-mode credential promotion commits in the same D1 transaction, guarded by the pending attempt, source session and credential generation. Stale previews fail closed. |
-| `DELETE /v1/me/connections/:provider` | Always rejects with 409 `connection_permanent`; identity unlinking is unavailable. Stopping OAuth authorization is a separate action under `/v1/auth/disconnect`. |
-| `GET /v1/me/cards` | List on the explicitly requested provider. Every item includes permanent `num` and numeric-string `detailId`, including private cards. Items also include provider, portrait `backgroundUrl`, `avatarUrl`, and, when synchronized, work/source identifiers. The client combines connected lists and groups copies. |
+| `POST /v1/me/connections/preview` | Retired; returns 410 `service_retired`. |
+| `POST /v1/me/connections` | Retired; returns 410 `service_retired`. |
+| `DELETE /v1/me/connections/:provider` | Retired; returns 410 `service_retired`. |
+| `GET /v1/me/cards` | List on the explicitly requested provider. Every item includes permanent `num` and numeric-string `detailId`, including private cards. Items also include provider, portrait `backgroundUrl`, `avatarUrl`, and, when synchronized, work/source identifiers. The client lists the Harper account inventory. |
 | `POST /v1/me/card-identities` | Bearer plus `X-Provider`; body `{roleId}`. Verifies source ownership and Hearthroom creation origin, then returns `{id, num, provider, sourceRoleId}`. Repeated calls keep the same number. Does not publish or consume publication quota. |
 | `GET /v1/me/card-copies/:roleId` | Verifies ownership on the requested provider, then returns synchronization states. |
-| `POST /v1/me/card-sync` | Body `{sourceProvider, sourceRoleId, sourceToken, targetProvider, targetToken, publish, updatePublished?, recreateMissing?}`. Both accounts must belong to the authenticated community; the source and existing destination must be owned by those accounts. Tokens are transient. `updatePublished: true` explicitly permits returning an unchanged published destination to draft before updating it; independently edited or pending-review copies remain protected. `recreateMissing: true` explicitly requests a new private copy only after the stored destination returns `404 role_not_found` on its card read. It requires `publish: false`, resets only the destination mapping, and never restores or deletes the old card or resources. Network, authorization and resource errors do not trigger replacement. |
+| `POST /v1/me/card-sync` | Retired; returns 410 `service_retired`. |
 | `GET /v1/cards/:cardId/comments?page=` | Public. Top-level comments of a listed card, newest first, 20 per page, each with up to three replies (most liked first). Adult cards need the same `?nsfw=1` plus token as the card page. |
 | `GET /v1/cards/:cardId/comments/:rootId/replies?page=` | Public. Replies under one comment, oldest first. |
 | `GET /v1/cards/:cardId/comments/count` | Public. Number of top-level comments. |
@@ -175,20 +167,20 @@ and `sourceRoleId` remain separate provider locators for playing and editing.
 | `PUT` / `DELETE /v1/comments/:id/like` | Member. One like per member per comment; repeats are no-ops. |
 | `GET /v1/cards/:cardId/platforms` | Available copies of a numbered card, including unlisted cards, after community age gating, moderation and upstream accessibility checks. `playable` distinguishes storage from an actual runtime. |
 
-A duplicate empty community is resolved by signing into the intended community and connecting the other verified SaaS account. Prior profile edits, preferences, community activity, publication history, owned works/copies, game saves or upstream cards prevent absorption. Older profiles without reliable edit history are conservatively protected by the migration. A different account on an already-connected provider is rejected. Populated-account merging and detaching identities are outside this release.
-
 Community publication permits three distinct works per community per UTC week (Monday reset), shared across every connected provider. Copies map to the original work and do not add usage; registering a mapped copy separately fails with `publication_use_original`. Unlisting does not erase usage/history. The database enforces the limit within the publication transaction, including concurrent submissions. Existing listed cards may be refreshed without new usage.
 
-Authors choose the initial platform when creating a card and select additional destinations per card. Synchronization preserves common text, instructions, examples, tags, identity settings, image references, bound Lorebooks, author assets, translated variants, alternate openings and metadata. Voice-specific content (`roleSpeech`) and incomplete paginated upstream documents are rejected before creation. Lorebooks are recreated as owned private resources on the destination; uncertain creates are retained for reconciliation instead of creating duplicates. This is an explicit transfer limitation, not a claim that the provider cannot store those features. Destination edits stop overwrite; uncertain creation results require reconciliation instead of blind retry. Publication requires an explicit action and follows each provider's review. Community content ratings are not sent to providers.
+Authors save cards to HarperHarbor. Additional hosting destinations and cross-service
+synchronization are retired. Publication remains a separate community review action.
+Card media and Lorebooks follow Harper ownership, quota and moderation rules.
+Players use their Harper account for both HTTP requests and WebSocket connections.
+Existing authoring grants must approve `chat.play` before playing; refreshing an
+older grant preserves its original OAuth client and scope.
 
-Card images retain the original SaaS URL. HarperHarbor stores owned references using `POST /open/v1/media/references`; card synchronization does not download or re-upload image bytes. An image reference remains subject to ownership, quota and media review. This is separate from uploaded community profile avatars.
+MCP is not applicable: Hearthroom has no community MCP transport. This retirement
+removes workflows; it adds no public authoring API. Existing HTTP/auth/library
+outcome counters remain in use, with no identifiers, content or tokens in labels.
 
-Players select a published copy and its linked platform account for each play action. The destination contains both the provider and that platform's role ID. Balances and conversations never combine. HarperHarbor supports the core conversation flow listed below when its model runtime is configured. The browser uses the selected provider for both HTTP requests and WebSocket connections. Existing Harper authoring grants must approve the additional `chat.play` scope before playing; refreshing an older grant retains its original OAuth client.
-
-MCP: not applicable to community identity/linking, which requires interactive OAuth proofs and has no community MCP transport. Card operations reuse the provider's existing authenticated service APIs; they do not add a second privileged authoring path. Observability uses existing HTTP outcomes, durable `work_copies` state and `card_sync` result events, with no tokens, account IDs or content in event fields.
-
-
-### HarperHarbor conversation capability
+## HarperHarbor conversation capability
 
 | Capability | HarperHarbor implementation |
 |---|---|
@@ -203,13 +195,13 @@ MCP: not applicable to community identity/linking, which requires interactive OA
 
 A `clientOperationId` identifies one immutable send intent. Reusing it with different text or a different conversation is rejected. Reconnecting replays stored chunks rather than starting a new model request. Partial output and terminal state remain available in history. Provider balances and histories remain separate.
 
-HarperHarbor supports regenerate/rewrite, conversation archives and forks, message editing/deletion, player notebook, AI notebook memory, reply suggestions and Agent mode. Continue-response and the LunaTalk MOD marketplace remain separate unsupported capabilities; they are not prerequisites for Agent preparation. Public play still requires provider access and review approval. An author may preview their own private agent and author asset; this does not publish it or approve it for another account.
+HarperHarbor supports regenerate/rewrite, conversation archives and forks, message editing/deletion, player notebook, AI notebook memory, reply suggestions and Agent mode. Continue-response and the MOD marketplace remain separate unsupported capabilities; they are not prerequisites for Agent preparation. Public play still requires provider access and review approval. An author may preview their own private agent and author asset; this does not publish it or approve it for another account.
 
 The model relay must be configured before enabling Harper play on the community deployment. Local synthetic tests, live upstream verification and production deployment/readback are separate release checks.
 
 ### Agent mode on HarperHarbor
 
-Agent mode runs the migrated LunaTalk preparation tool engine through the existing conversation API. It can list/search/read enabled Lorebook entries, original dialogue and chapter summaries; inspect requirements and the player's notebook; maintain AI notes and versioned state; establish sealed/random facts; fetch permitted public web content; and write, revise and deliver drafts. Role, response, persona and language requirements remain in the same prompt. State keeps a bounded 16 KiB version ring and follows rollback/fork boundaries.
+Agent mode runs the preparation tool engine through the existing conversation API. It can list/search/read enabled Lorebook entries, original dialogue and chapter summaries; inspect requirements and the player's notebook; maintain AI notes and versioned state; establish sealed/random facts; fetch permitted public web content; and write, revise and deliver drafts. Role, response, persona and language requirements remain in the same prompt. State keeps a bounded 16 KiB version ring and follows rollback/fork boundaries.
 
 Read `/player/agent-mode?roleId=...&model=...` for the saved setting, runtime availability and selected model capability. Send `agentMode` only to override one execution. Free and non-tool model lanes are excluded. Treat `prepStep` as preparation progress, never as answer text. `agentTurn=true` marks a live Agent execution, which has heartbeat and idle detection rather than a five-minute total wall limit.
 
@@ -220,14 +212,6 @@ For `agent_progress_preserved`, show the saved preparation trace and Continue. C
 The Console ledger identifies these charges as Agent mode plus the actual model. Model-catalog estimates describe a single call and do not cap an Agent execution's total cost. Automatic memory jobs retain their separate billing lifecycle. Provider balances and data remain isolated. The OpenAI-compatible `/v1/chat/completions` endpoint still leaves tool execution to its caller; no Agent chat endpoint or implicit server tool execution is added there.
 
 These are source capabilities, not evidence of deployment. Verify runtime capability flags on the target provider. Local validation uses synthetic models and isolated data; real-provider and production readback remain separate checks.
-
-### Cross-platform authoring results
-
-The editor starts with the content, then asks which connected platforms to save to. All connected platforms are selected initially. Later saves keep the source and update selected copies. The selection is remembered in the current browser; it is not an account-wide preference. Publication has a separate multi-platform confirmation.
-
-Each platform returns its own result; a failed destination does not roll back a saved source. Retrying reuses the source and previously created copies. The combined card list opens the source editor for an existing distribution.
-
-Sync errors may include `detail: {provider, step, upstreamStatus, upstreamCode}`. Only fixed step names and allowlisted upstream codes are exposed. Never include upstream prose, request bodies, tokens or private content in reports. Stored copy failures retain the same safe diagnostic envelope.
 
 ### Context usage for individual replies
 

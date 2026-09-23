@@ -49,7 +49,7 @@ export function clearLegacyCredentials(){
   try {
     for(const key of ['hearthroom.oauth.access','hearthroom.oauth.refresh','hearthroom.oauth.grant_client']){
       localStorage.removeItem(key);
-      for(const p of PROVIDERS)localStorage.removeItem(`${key}.${p.id}`);
+      for(const id of ['harbor','lunatalk'])localStorage.removeItem(`${key}.${id}`);
     }
   }catch{/* Storage may be disabled; managed credentials are never written here. */}
 }

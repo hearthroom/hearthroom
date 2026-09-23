@@ -75,7 +75,7 @@ async function loadEmails() {
 
 /** 管完帳號要回得來，所以把現在這一頁帶過去。 */
 function billingPage(id:ProviderId):string {
- return id==='harbor'?'https://console.harperharbor.com/me/wallet':'https://lunatalk.ai/pages/mine/vippay';
+ return 'https://console.harperharbor.com/me/wallet';
 }
 function accountPage(id: ProviderId): string | null {
   const base = ACCOUNT_PAGE[id];
@@ -115,7 +115,7 @@ async function connect(provider: ProviderId) {
     <div class="accounts__list">
       <div v-for="p in providers" :key="p.id" class="account" :class="{'account--connected':isConnected(p.id)}">
         <div class="account__identity">
-          <span class="account__mark" :class="{'account__mark--harbor':p.id==='harbor'}" aria-hidden="true">{{ p.id==='harbor'?'H':'L' }}</span>
+          <span class="account__mark" :class="{'account__mark--harbor':p.id==='harbor'}" aria-hidden="true">H</span>
           <div class="account__text">
             <h3>{{ providerName(p.id) }}</h3>
             <p v-if="!isConnected(p.id)">{{ $t('linked.notConnected') }}</p>

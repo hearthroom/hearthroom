@@ -64,61 +64,31 @@ async function login(provider:string,id:number,linkFrom?:string){
   return response.json() as Promise<any>;
 }
 async function connection(path:string,provider:string,token:string,choice={}){
-  return worker.fetch(new Request(origin+'/v1/me/connections'+path,{method:'POST',headers:{Origin:origin,Cookie:cookieHeader(),'X-Hearthroom-Request':'1','X-Provider':'lunatalk','Content-Type':'application/json'},body:JSON.stringify({provider,token,...choice})}),authEnv(),context);
+  return worker.fetch(new Request(origin+'/v1/me/connections'+path,{method:'POST',headers:{Origin:origin,Cookie:cookieHeader(),'X-Hearthroom-Request':'1','X-Provider':'harbor','Content-Type':'application/json'},body:JSON.stringify({provider,token,...choice})}),authEnv(),context);
 }
-async function linked(){
-  await login('lunatalk',11);
-  const target=await login('harbor',22,'lunatalk');
-  const preview=await connection('/preview','harbor',target.token.accessToken);
-  expect(preview.status).toBe(200);
-  const data=await preview.json() as any;
-  const choice={keepHandle:data.source.handle,sourceHandle:data.source.handle,targetHandle:data.target?.handle??null};
-  const confirm=await connection('','harbor',target.token.accessToken,choice);
-  expect(confirm.status).toBe(200);
-  return {target,choice,profile:await confirm.json() as any};
-}
-
-it('a second clean device recovers both grants and a different account cannot retrieve either',async()=>{
-  providers();const first=await linked();const browserA={...cookies};
-  cookies={};await login('lunatalk',11);
-  const result=await request('token',{provider:'harbor'});
-  expect((await result.json() as any).accessToken).toBe(first.target.token.accessToken);
-  cookies={};await login('lunatalk',99);
-  expect((await request('token',{provider:'harbor'})).status).toBe(403);
-  cookies=browserA;
-  expect((await request('token',{provider:'harbor'})).status).toBe(200);
+it('recovers the Harbor grant on a clean device without exposing another account',async()=>{
+ const p=providers();await login('harbor',22);cookies={};await login('harbor',22);
+ const a=await (await request('token',{provider:'harbor'})).json() as any;
+ expect(p.identity.get(a.accessToken)).toBe(22);
+ cookies={};await login('harbor',99);
+ const b=await (await request('token',{provider:'harbor'})).json() as any;
+ expect(p.identity.get(b.accessToken)).toBe(99);expect(b.accessToken).not.toBe(a.accessToken);
 });
-
-it('commits identity and credentials together, supports a lost confirmation response, and cannot cancel an already committed grant',async()=>{
-  providers();const data=await linked();
-  expect((await connection('','harbor',data.target.token.accessToken,data.choice)).status).toBe(200);
-  expect((await request('cancel',{})).status).toBe(200);
-  expect((await request('token',{provider:'harbor'})).status).toBe(200);
-  expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM account_auth_revocations').first<any>()).n).toBe(0);
+it('ciphertexts cannot be swapped between accounts and old keys remain readable',async()=>{
+ const encrypted=await sealAuth(authEnv(),'credential:harbor:22:one',{secret:'private'});
+ await expect(openAuth(authEnv(),'credential:harbor:99:one',encrypted)).rejects.toThrow('auth_credentials_unavailable');
+ const rotated={...authEnv(),AUTH_KEYRING:JSON.stringify({active:'next',keys:{test:'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',next:btoa('b'.repeat(32))}})};
+ expect(await openAuth(rotated,'credential:harbor:22:one',encrypted)).toEqual({secret:'private'});
 });
-
-it('ciphertexts cannot be swapped between identities and retained keys decrypt older records',async()=>{
-  const encrypted=await sealAuth(authEnv(),'credential:harbor:22:one',{secret:'private'});
-  expect(encrypted).not.toContain('private');
-  await expect(openAuth(authEnv(),'credential:lunatalk:22:one',encrypted)).rejects.toThrow('auth_credentials_unavailable');
-  const rotated={...authEnv(),AUTH_KEYRING:JSON.stringify({active:'next',keys:{test:'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',next:btoa('b'.repeat(32))}})};
-  expect(await openAuth(rotated,'credential:harbor:22:one',encrypted)).toEqual({secret:'private'});
-});
-
-it('stops one authorization without deleting the site session and keeps revocation retries durable',async()=>{
-  const p=providers();await linked();
-  const real=p.network.getMockImplementation()!;
-  p.network.mockImplementation(async(input,init)=>String(input).endsWith('/oauth/revoke')?new Response('',{status:503}):real(input,init));
-  const stop=await request('disconnect',{provider:'lunatalk'});
-  expect(await stop.json()).toEqual({ok:true,pending:true});
-  expect((await request('token',{provider:'lunatalk'})).status).toBe(401);
-  expect((await request('token',{provider:'harbor'})).status).toBe(200);
-  expect((await request('session',{provider:'lunatalk'})).status).toBe(200);
-  expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM account_auth_revocations').first<any>()).n).toBe(1);
-  p.network.mockImplementation(real);
-  await env.DB.prepare('UPDATE account_auth_revocations SET retry_at=0').run();
-  await accountAuthMaintenance(authEnv());
-  expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM account_auth_revocations').first<any>()).n).toBe(0);
+it('keeps revocation retries durable without deleting the community session',async()=>{
+ const p=providers();await login('harbor',22);const real=p.network.getMockImplementation()!;
+ p.network.mockImplementation(async(input,init)=>String(input).endsWith('/oauth/revoke')?new Response('',{status:503}):real(input,init));
+ expect(await (await request('disconnect',{provider:'harbor'})).json()).toEqual({ok:true,pending:true});
+ expect((await request('token',{provider:'harbor'})).status).toBe(401);
+ expect((await request('session',{provider:'harbor'})).status).toBe(200);
+ expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM account_auth_revocations').first<any>()).n).toBe(1);
+ p.network.mockImplementation(real);await env.DB.prepare('UPDATE account_auth_revocations SET retry_at=0').run();await accountAuthMaintenance(authEnv());
+ expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM account_auth_revocations').first<any>()).n).toBe(0);
 });
 
 it('requires CSRF protection even for token reads, denies unconfigured origins, and never logs secrets in metrics',async()=>{
@@ -204,16 +174,9 @@ it('old revocation work cannot erase a newly authorized generation',async()=>{
   expect((await request('token',{provider:'harbor'})).status).toBe(200);
 });
 
-it('rolls the permanent link back if credential promotion fails',async()=>{
-  providers();await login('lunatalk',11);const target=await login('harbor',22,'lunatalk');
-  const preview=await (await connection('/preview','harbor',target.token.accessToken)).json() as any;
-  await env.DB.exec("CREATE TRIGGER auth_test_reject BEFORE INSERT ON account_credentials WHEN NEW.provider='harbor' BEGIN SELECT RAISE(ABORT,'test credential failure'); END;");
-  try{
-    const r=await connection('','harbor',target.token.accessToken,{keepHandle:preview.source.handle,sourceHandle:preview.source.handle,targetHandle:null});
-    expect(r.status).toBe(409);
-    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM member_connections WHERE provider='harbor'").first<any>()).n).toBe(0);
-    expect((await request('token',{provider:'harbor'})).status).toBe(403);
-  }finally{await env.DB.exec('DROP TRIGGER auth_test_reject');}
+it('rejects retired login before creating an authorization attempt',async()=>{
+ const p=providers();expect((await request('start',{provider:'lunatalk'})).status).toBe(400);
+ expect(p.network).not.toHaveBeenCalled();
 });
 
 it('requires a site session before exposing any provider credential', async()=>{

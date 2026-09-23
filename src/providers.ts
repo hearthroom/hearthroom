@@ -1,112 +1,24 @@
 import { HttpError } from "./types";
-import type { Env } from "./types";
 
-/**
- * 供應商。
- *
- * 本站是社群站，卡片內容、登入、對話都住在供應商那邊，這裡只擁有「誰登記了哪張卡、
- * 審到哪一步、誰蓋了章」。成員、身分、卡片與審核單全部都帶著供應商代號，所以接第二家
- * 是加一列設定，不是改資料表。
- *
- * 身分不混、榜單相通（owner 2026-09-17，覆蓋 2026-09-16 的「完全不混」）：同一個外部數字 ID
- * 在兩家是兩個人，登記、「我的卡片」、審核都鎖在一家；榜單、搜尋、標籤、作者榜則把兩家的卡
- * 列在一起，X-Provider 在那些路徑上只代表「我用哪家的帳號」。
- *
- * 契約分兩級：
- *   基本級：OAuth 登入＋「你是誰」、讀卡片公開資料 → 能預覽與管理草稿
- *   完整級：獨立 issuer 金鑰、不可變封存、授權讀整份設定及對話介面 → 能送審與公開試玩
- *
- * 審核：本站自己的事。作者提交時，本站用作者自己的 token 讀一次整份設定存成快照，審核人看快照
- * （src/review-snapshot.ts）；不需要供應商提供分享介面或服務帳號，所以每一家都能審。
- * REVIEW_ENABLED 不是 "true" 或該 host 未配置封存金鑰時，提交明確失敗，不能繞過版本審核。
- */
-export type ProviderId = "lunatalk" | "harbor";
-
-export const PROVIDER_IDS: readonly ProviderId[] = ["lunatalk", "harbor"];
-
-export const DEFAULT_PROVIDER: ProviderId = "lunatalk";
-
-/** 給人看的名字。專有名詞，各語言都一樣，不進翻譯檔。 */
-export const PROVIDER_NAMES: Record<ProviderId, string> = { lunatalk: "LunaTalk", harbor: "HarperHarbor" };
-
-/** 這個部署有沒有設定這家：API 位址的環境變數名。第二家起加後綴，第一家維持原名不動。 */
-const API_BASE_VAR: Record<ProviderId, keyof ProviderEnv> = {
-  lunatalk: "PROVIDER_API_BASE",
-  harbor: "PROVIDER_API_BASE_HARBOR",
-};
-
-/**
- * 哪幾家有對話引擎（契約的 conversation／streaming 那一級）。沒有的那家存得了卡、上得了榜，
- * 但玩不了——卡片頁把它列成「只存放」。Harper 使用已配置的模型對話服務。
- */
-const HAS_CHAT: Record<ProviderId, boolean> = { lunatalk: true, harbor: true };
-
-/** 這家能不能在站內玩這張卡。 */
-export function hasChat(provider: ProviderId): boolean {
-  return HAS_CHAT[provider] === true;
-}
-
-export interface ProviderEnv {
-  PROVIDER_API_BASE: string;
-  PROVIDER_API_GATEWAYS?: string;
-  PROVIDER_API_BASE_HARBOR?: string;
-}
-
-/**
- * 這個請求屬於哪一家。呼叫端用 X-Provider 明說；沒帶就是預設那家，已部署的舊客戶端照常。
- *
- * 不認得的值一律擋下，**不退回預設**：退回預設等於拿 A 家的 token 去問 B 家的資料，
- * 而兩家的 token 格式沒有互斥保證，猜錯就是把一個人當成另一個人。
- */
+/** Historical receipts may name a retired issuer; runtime requests accept Harbor only. */
+export type ProviderId = "harbor" | "lunatalk";
+export const PROVIDER_IDS = ["harbor"] as const;
+export const DEFAULT_PROVIDER: ProviderId = "harbor";
+export const PROVIDER_NAMES: Partial<Record<ProviderId,string>> = {harbor:"HarperHarbor"};
+export interface ProviderEnv { PROVIDER_API_BASE_HARBOR?: string }
 export function parseProvider(header: string | undefined | null): ProviderId {
-  const raw = (header ?? "").trim().toLowerCase();
-  if (!raw) return DEFAULT_PROVIDER;
-  const hit = PROVIDER_IDS.find((id) => id === raw);
-  if (!hit) throw new HttpError(400, "unknown provider");
-  return hit;
+ const raw=(header??"harbor").trim().toLowerCase()||"harbor";
+ if(raw!=="harbor")throw new HttpError(400,"unknown provider");
+ return "harbor";
 }
-
-/**
- * 依來源國別挑供應商的 API 網址。`PROVIDER_API_GATEWAYS` 是 `CC=網址` 的逗號清單：某些地區連不上
- * 供應商的主網域，那邊的瀏覽器改打對應的閘道。閘道只作用在預設那家——它是為了繞開特定網域的封鎖，
- * 不是通用轉送。沒有對應項、或清單為空，就是主網址。
- */
-export function parseGateways(spec: string | undefined): Map<string, string> {
-  const out = new Map<string, string>();
-  for (const item of (spec ?? "").split(/[,\s]+/)) {
-    const eq = item.indexOf("=");
-    if (eq <= 0) continue;
-    const cc = item.slice(0, eq).trim().toUpperCase();
-    const url = item.slice(eq + 1).trim().replace(/\/+$/, "");
-    if (cc && /^https?:\/\//.test(url)) out.set(cc, url);
-  }
-  return out;
+export function apiBaseOf(env:ProviderEnv,provider:ProviderId=DEFAULT_PROVIDER,_country=""):string {
+ parseProvider(provider);
+ const base=(env.PROVIDER_API_BASE_HARBOR??"").trim();
+ if(!base)throw new HttpError(400,"provider not configured");
+ return base;
 }
-
-/** 這家供應商的 API 位址。沒設定就是這個部署沒有這家。 */
-export function apiBaseOf(env: ProviderEnv, provider: ProviderId = DEFAULT_PROVIDER, country = ""): string {
-  const base = (env[API_BASE_VAR[provider]] ?? "").toString().trim();
-  if (!base) throw new HttpError(400, "provider not configured");
-  if (provider !== DEFAULT_PROVIDER) return base;
-  return parseGateways(env.PROVIDER_API_GATEWAYS).get(country.toUpperCase()) ?? base;
-}
-
-/** 這個部署設定了哪幾家。登入頁照這個列按鈕，自架只接一家的人就只看到一顆。 */
-export function configuredProviders(env: ProviderEnv): ProviderId[] {
-  return PROVIDER_IDS.filter((id) => ((env[API_BASE_VAR[id]] ?? "").toString().trim() !== ""));
-}
-
-/** 要求這個請求的供應商已經設定過；沒有就當成不認得的值擋下。 */
-export function requireConfigured(env: ProviderEnv, provider: ProviderId): ProviderId {
-  apiBaseOf(env, provider);
-  return provider;
-}
-
-export function providerApiBaseFor(env: ProviderEnv, country: string): string {
-  return apiBaseOf(env, DEFAULT_PROVIDER, country);
-}
-
-/** 這個部署要不要社群審核。沒開就是「登記即上榜」。 */
-export function reviewEnabled(env: { REVIEW_ENABLED?: string }): boolean {
-  return (env.REVIEW_ENABLED ?? "").trim().toLowerCase() === "true";
-}
+export function configuredProviders(env:ProviderEnv):ProviderId[]{return env.PROVIDER_API_BASE_HARBOR?.trim()?["harbor"]:[]}
+export function requireConfigured(env:ProviderEnv,provider:ProviderId):ProviderId {apiBaseOf(env,provider);return provider}
+export function providerApiBaseFor(env:ProviderEnv,_country:string):string{return apiBaseOf(env)}
+export function hasChat(provider:ProviderId):boolean{return provider==="harbor"}
+export function reviewEnabled(env:{REVIEW_ENABLED?:string}):boolean{return (env.REVIEW_ENABLED??"").trim().toLowerCase()==="true"}

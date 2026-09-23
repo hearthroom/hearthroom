@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "LunaTalk Open API",
+    "title": "HarperHarbor Open API",
     "version": "1",
     "description": "The provider API this site runs against. Base path `/open/v1`; see the overview for capability levels, authentication and conventions."
   },
@@ -165,7 +165,7 @@
           "OAuth"
         ],
         "summary": "Start the authorization-code flow (PKCE S256 required)",
-        "description": "Validates the request, stores it for 10 minutes and redirects (302) the browser to the LunaTalk login/consent page (the provider's login page with `oauth_request=<id>` (an alternate domain is used when `login_site=pro` or the request host is the `.pro` API). After the user logs in and approves/denies (the consent page uses the internal endpoints `POST /oauth/authorize/context` and `POST /oauth/authorize/complete`, which require a LunaTalk web session and are not part of the client-facing contract), the browser is redirected to `redirect_uri` with `code` and `state` (approve), or `error=access_denied` and `state` (deny), or `error=temporarily_unavailable` if the request expired. The authorization code is valid for 10 minutes and single-use. Validation failures of this endpoint itself are returned as 400 JSON, not as an error redirect.",
+        "description": "Validates the request, stores it for 10 minutes and redirects (302) the browser to the HarperHarbor login/consent page (the provider's Console with `oauth_request=<id>`. After the user logs in and approves/denies (the consent page uses the internal endpoints `POST /oauth/authorize/context` and `POST /oauth/authorize/complete`, which require a HarperHarbor Console session and are not part of the client-facing contract), the browser is redirected to `redirect_uri` with `code` and `state` (approve), or `error=access_denied` and `state` (deny), or `error=temporarily_unavailable` if the request expired. The authorization code is valid for 10 minutes and single-use. Validation failures of this endpoint itself are returned as 400 JSON, not as an error redirect.",
         "security": [],
         "parameters": [
           {
@@ -3882,7 +3882,7 @@
               },
               "resumeFromOperationId": {
                 "type": "string",
-                "description": "Agent mode: continue an interrupted operation with reasonCode agent_progress_preserved. Empty means a fresh run. HarperHarbor requires the same model/message, a current history epoch, an unused continuation source and a checkpoint no older than 30 days; invalid/stale sources are rejected rather than silently generating a paid fresh turn. LunaTalk may ignore invalid values and start fresh."
+                "description": "Agent mode: continue an interrupted operation with reasonCode agent_progress_preserved. Empty means a fresh run. HarperHarbor requires the same model/message, a current history epoch, an unused continuation source and a checkpoint no older than 30 days; invalid/stale sources are rejected rather than silently generating a paid fresh turn."
               },
               "supportsModExpiryAck": {
                 "type": "boolean",
@@ -5309,7 +5309,7 @@
           }
         },
         "x-harperharbor": {
-          "description": "Returns configured model groups and variants. Requires chat.play. Rates are credits per 1,000,000 tokens (input, output and cached input). estMinScore/estMaxScore are conservative per-turn bounds from the minimum completed charge and maximum accepted input/output, not typical-use estimates. supportsMultiPass describes tool capability; runtime availability comes from /player/agent-mode. Agent preparation can make multiple model calls, so the displayed per-turn estimate is not an Agent execution price cap. No LunaTalk membership discounts are implied.",
+          "description": "Returns configured model groups and variants. Requires chat.play. Rates are credits per 1,000,000 tokens (input, output and cached input). estMinScore/estMaxScore are conservative per-turn bounds from the minimum completed charge and maximum accepted input/output, not typical-use estimates. supportsMultiPass describes tool capability; runtime availability comes from /player/agent-mode. Agent preparation can make multiple model calls, so the displayed per-turn estimate is not an Agent execution price cap.",
           "security": [
             {
               "userToken": []
@@ -10869,7 +10869,7 @@
       "serviceKey": {
         "type": "http",
         "scheme": "bearer",
-        "description": "Long-lived personal API key, created and revoked by its owner in the provider's own console. It authenticates as that user. The prefix is provider-specific (LunaTalk `lsk_`, HarperHarbor `hh_live_`)."
+        "description": "Long-lived personal API key, created and revoked by its owner in the provider's own console. It authenticates as that user. HarperHarbor uses the `hh_live_` prefix."
       },
       "AuthorBearer": {
         "type": "http",
@@ -11354,7 +11354,7 @@
           "roleAvatar": {
             "type": "string",
             "format": "uri",
-            "description": " HarperHarbor: compatibility alias for the portrait background of the agent configuration; no independent avatar is stored. LunaTalk retains its existing avatar field."
+            "description": " HarperHarbor: compatibility alias for the portrait background of the agent configuration; no independent avatar is stored."
           },
           "roleBackground": {
             "type": "string",
@@ -12197,7 +12197,7 @@
           "roleAvatar": {
             "type": "string",
             "format": "uri",
-            "description": " HarperHarbor: compatibility alias for the portrait background of the agent configuration; no independent avatar is stored. LunaTalk retains its existing avatar field."
+            "description": " HarperHarbor: compatibility alias for the portrait background of the agent configuration; no independent avatar is stored."
           },
           "lastChat": {
             "type": "string",
@@ -13253,7 +13253,7 @@
               },
               "libraryPrefix": {
                 "type": "string",
-                "description": "Account-fixed library URL prefix without a trailing slash. LunaTalk uses https://<objects host>/u/<numeric user id>; Harbor uses https://<API host>/u/<public UID>. Combine it with / and the authored relative path, URL-encoding individual segments. Do not derive one provider prefix from another provider UID."
+                "description": "Account-fixed library URL prefix without a trailing slash. HarperHarbor uses https://<API host>/u/<public UID>. Combine it with / and the authored relative path, URL-encoding individual segments. Do not derive one provider prefix from another provider UID."
               },
               "capabilities": {
                 "type": "object",
@@ -15837,7 +15837,7 @@
           },
           "roleAvatar": {
             "type": "string",
-            "description": "Avatar image URL. HarperHarbor: compatibility alias for the portrait background of the agent configuration; no independent avatar is stored. LunaTalk retains its existing avatar field."
+            "description": "Avatar image URL. HarperHarbor: compatibility alias for the portrait background of the agent configuration; no independent avatar is stored."
           },
           "roleBackground": {
             "type": "string",
@@ -16297,7 +16297,7 @@
           "roleAvatar": {
             "type": "string",
             "format": "uri",
-            "description": "http(s) URL; blank ignored. HarperHarbor: compatibility alias for the portrait background of the agent configuration; no independent avatar is stored. LunaTalk retains its existing avatar field. If roleBackground is also supplied, it takes precedence, including an empty string. An avatar-only write updates the portrait."
+            "description": "http(s) URL; blank ignored. HarperHarbor: compatibility alias for the portrait background of the agent configuration; no independent avatar is stored. If roleBackground is also supplied, it takes precedence, including an empty string. An avatar-only write updates the portrait."
           },
           "roleBackground": {
             "type": "string",
@@ -16500,7 +16500,7 @@
           "roleAvatar": {
             "type": "string",
             "format": "uri",
-            "description": " HarperHarbor: compatibility alias for the portrait background of the agent configuration; no independent avatar is stored. LunaTalk retains its existing avatar field."
+            "description": " HarperHarbor: compatibility alias for the portrait background of the agent configuration; no independent avatar is stored."
           },
           "roleBackground": {
             "type": "string",
@@ -19661,7 +19661,7 @@
       "GET /open/v1/role/preview-page"
     ],
     "guestNote": "Guest routes are matched on the route pattern (not the raw path). On a guest request the identity is empty. If a valid bearer is sent it is used normally.",
-    "serviceKeyFormat": "Provider-specific prefix followed by random characters (LunaTalk: `lsk_` plus 43 base64url characters; HarperHarbor: `hh_live_`). A personal API key is shown once at creation; only a short prefix is retrievable afterwards."
+    "serviceKeyFormat": "HarperHarbor uses `hh_live_` followed by random characters. A personal API key is shown once at creation; only a short prefix is retrievable afterwards."
   },
   "x-error-envelope": {
     "shapes": [

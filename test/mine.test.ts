@@ -30,9 +30,9 @@ afterEach(restoreUpstream);
 describe("我的卡片", () => {
   it("回傳自己的卡，並標出哪些已登記", async () => {
     await env.DB.prepare(
-      `INSERT INTO cards (id, source_role_id, author_num_id, names, summaries, tags, search_text, registered_at, last_synced_at)
-       VALUES (?,'a1',10001,'{}','{}','[]','',1,1)`,
-    ).bind(await ensureCardNumber(env.DB,'lunatalk','a1')).run();
+      `INSERT INTO cards (id, source_role_id, author_num_id, names, summaries, tags, search_text, registered_at, last_synced_at,provider)
+       VALUES (?,'a1',10001,'{}','{}','[]','',1,1,'harbor')`,
+    ).bind(await ensureCardNumber(env.DB,'harbor','a1')).run();
 
     const { status, body } = await mine();
     expect(status).toBe(200);
@@ -135,9 +135,9 @@ describe("快取", () => {
     expect(before.body.items[0].registered).toBe(false);
 
     await env.DB.prepare(
-      `INSERT INTO cards (id, source_role_id, author_num_id, names, summaries, tags, search_text, registered_at, last_synced_at)
-       VALUES (?,'a1',10001,'{}','{}','[]','',1,1)`,
-    ).bind(await ensureCardNumber(env.DB,'lunatalk','a1')).run();
+      `INSERT INTO cards (id, source_role_id, author_num_id, names, summaries, tags, search_text, registered_at, last_synced_at,provider)
+       VALUES (?,'a1',10001,'{}','{}','[]','',1,1,'harbor')`,
+    ).bind(await ensureCardNumber(env.DB,'harbor','a1')).run();
 
     const after = await mine();
     expect(after.cache).toBe("hit");
@@ -159,9 +159,9 @@ describe("篩選", () => {
     });
     for (const [id, roleId] of [["r1", "a1"], ["r2", "a25"], ["r3", "a26"]] as const) {
       await env.DB.prepare(
-        `INSERT INTO cards (id, source_role_id, author_num_id, names, summaries, tags, search_text, registered_at, last_synced_at)
-         VALUES (?, ?, 10001, '{"zh":"登記過的"}', '{"zh":""}', '[]', '', 1, 1)`,
-      ).bind(await ensureCardNumber(env.DB,'lunatalk',roleId), roleId).run();
+        `INSERT INTO cards (id, source_role_id, author_num_id, names, summaries, tags, search_text, registered_at, last_synced_at,provider)
+         VALUES (?, ?, 10001, '{"zh":"登記過的"}', '{"zh":""}', '[]', '', 1, 1,'harbor')`,
+      ).bind(await ensureCardNumber(env.DB,'harbor',roleId), roleId).run();
     }
   });
 

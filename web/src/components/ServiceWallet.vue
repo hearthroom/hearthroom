@@ -85,7 +85,7 @@ watch(() => [props.provider, props.externalId], () => load(true), { immediate: t
             <span v-else class="subtle">{{ $t("linked.balanceUnknown") }}</span>
           </p>
           <p v-if="wallet?.tempScore" class="subtle">{{ $t("wallet.temp", { n: whole(wallet.tempScore) }) }}</p>
-          <a class="btn btn--primary btn--lg balance__cta" :href="provider === 'harbor' ? 'https://console.harperharbor.com/me/wallet' : `${apiBaseOf('lunatalk').replace('api.', '')}/pages/mine/vippay`" target="_blank" rel="noopener" @click="track('topup_click')">{{ $t("wallet.topUp") }} ↗</a>
+          <a class="btn btn--primary btn--lg balance__cta" href="https://console.harperharbor.com/me/wallet" target="_blank" rel="noopener" @click="track('topup_click')">{{ $t("wallet.topUp") }} ↗</a>
         </section>
 
         <section v-if="can('membership', provider)" class="panel plans">

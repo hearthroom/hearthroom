@@ -6,7 +6,6 @@ import { accountToken } from "@/lib/connections";
 import { connectionMessage, platformPath } from "@/lib/distribution";
 import { can, providerName, type ProviderId } from "@/lib/provider";
 import { useLocalePath } from "@/lib/use-locale";
-import CardSyncPanel from "./CardSyncPanel.vue";
 const session = useSession();
 const quota=ref<MyCardPage["quota"]|null>(null);
 const { lp } = useLocalePath();
@@ -101,11 +100,6 @@ watch(
             $t("linked.manageOn", { provider: providerName(card.provider!) })
           }}</a
         >
-        <CardSyncPanel
-          :role-id="card.sourceRoleId ?? card.roleId"
-          :provider="card.sourceProvider ?? card.provider"
-          :initial-open="true"
-        />
       </article>
     </div>
     <p

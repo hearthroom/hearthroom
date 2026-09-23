@@ -13,9 +13,9 @@ beforeEach(async()=>{
 });
 afterEach(restoreUpstream);
 const find=async(who:string,key:string,publicOnly=false)=>(await badgeCollection(env,who,publicOnly)).items.find(b=>b.key===key);
-async function conversations(who:string,n:number){for(let i=0;i<n;i++)await env.DB.prepare("INSERT INTO member_conversations VALUES (?,'lunatalk',?,?,1,1)").bind(who,'role-'+i,'conv-'+i).run();}
+async function conversations(who:string,n:number){for(let i=0;i<n;i++)await env.DB.prepare("INSERT INTO member_conversations VALUES (?,'harbor',?,?,1,1)").bind(who,'role-'+i,'conv-'+i).run();}
 async function listedCard(id:number,authorNumId:number,extra:Record<string,unknown>={}){
- await env.DB.prepare("INSERT INTO cards(id,source_role_id,author_num_id,names,summaries,registered_at,last_synced_at,status,featured_at) VALUES (?,?,?,'{}','{}',1,1,'approved',?)").bind(id,'role-'+id,authorNumId,extra.featuredAt??null).run();
+ await env.DB.prepare("INSERT INTO cards(id,source_role_id,author_num_id,names,summaries,registered_at,last_synced_at,status,featured_at,provider) VALUES (?,?,?,'{}','{}',1,1,'approved',?,'harbor')").bind(id,'role-'+id,authorNumId,extra.featuredAt??null).run();
 }
 it('ships a catalog with every locale, an allowlisted icon and a known category',async()=>{
  const wall=await badgeCollection(env,member);
@@ -53,7 +53,7 @@ it('counts creator milestones by listed, owned, non-copy cards and featured pick
  await listedCard(100001,22);await listedCard(100002,22);await listedCard(100003,22,{featuredAt:5});
  await env.DB.prepare("INSERT INTO cards(id,source_role_id,author_num_id,names,summaries,registered_at,last_synced_at,status) VALUES (100004,'role-4',22,'{}','{}',1,1,'pending')").run();
  await listedCard(100005,22);await env.DB.prepare('UPDATE cards SET board_hidden=1 WHERE id=100005').run();
- await env.DB.prepare("INSERT INTO works VALUES ('w1',?,'lunatalk','role-100001',1)").bind(author).run();
+ await env.DB.prepare("INSERT INTO works VALUES ('w1',?,'harbor','role-100001',1)").bind(author).run();
  await env.DB.prepare("INSERT INTO work_copies(work_id,provider,external_id,role_id,updated_at) VALUES ('w1','harbor',22,'copy-1',1)").run();
  await env.DB.prepare("INSERT INTO cards(id,source_role_id,author_num_id,names,summaries,registered_at,last_synced_at,status,provider) VALUES (100006,'copy-1',22,'{}','{}',1,1,'approved','harbor')").run();
  for(const [n,who] of [[100001,member],[100002,author],[100003,member]] as const)await env.DB.prepare('INSERT INTO member_favorites VALUES (?,?,1)').bind(who,n).run();

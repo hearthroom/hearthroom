@@ -55,11 +55,7 @@ it('removes media access immediately on unlink and rejects unknown media',async(
  await expect(appearanceMedia(config(),key)).rejects.toThrow('not_found');
  await expect(appearanceMedia(config(),'0'.repeat(64))).rejects.toThrow('not_found');
 });
-it('saved cosmetic choices prevent an account from being absorbed as empty',async()=>{
- const {emptyCommunity}=await import('../src/connections');const other=await makeMember(88);
- await saveAppearance(config(),other,{avatarSource:'site',nameStyle:'none',frame:'none',publicAppearance:false});
- expect(await emptyCommunity(env.DB,other)).toBe(false);
-});
+
 it('an identical observation cannot replace media independently of its entitlement receipt',async()=>{
  const s=await snapshot();await syncAppearance(config(),s);const before=await appearanceView(config(),member);
  expect(await syncAppearance(config(),{...s,avatar:'c'.repeat(32)})).toBe(false);

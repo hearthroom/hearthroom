@@ -27,13 +27,13 @@ beforeEach(async () => {
     admins.has(token) ? { admin: true, featuredUsed: featuredCalls.filter((c) => c.featured).length, featuredQuota: 50 } : { admin: false, featuredUsed: 0, featuredQuota: 50 };
   upstream.setFeatured = async (_env, token, roleId, featured, provider) => {
     if (!admins.has(token)) throw new HttpError(403, "not_community_admin");
-    featuredCalls.push({ token, roleId, featured, provider: provider ?? "lunatalk" });
+    featuredCalls.push({ token, roleId, featured, provider: provider ?? "harbor" });
   };
   await makeReviewer(ADMIN);
   await makeReviewer(REVIEWER);
   const now = Date.now();
-  await upsertCard(env.DB, role({ roleId: "role-1" }), now, { status: "approved", provider: "lunatalk" });
-  await upsertCard(env.DB, role({ roleId: "role-2" }), now, { status: "pending", provider: "lunatalk" });
+  await upsertCard(env.DB, role({ roleId: "role-1" }), now, { status: "approved", provider: "harbor" });
+  await upsertCard(env.DB, role({ roleId: "role-2" }), now, { status: "pending", provider: "harbor" });
 });
 afterEach(restoreUpstream);
 
@@ -57,7 +57,7 @@ describe("HearthRoom 精選卡", () => {
     const res = await mark("role-1", true, "admin-token");
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ featured: true });
-    expect(featuredCalls).toEqual([{ token: "admin-token", roleId: "role-1", featured: true, provider: "lunatalk" }]);
+    expect(featuredCalls).toEqual([{ token: "admin-token", roleId: "role-1", featured: true, provider: "harbor" }]);
     expect((await cardOf("role-1")).featured).toBe(true);
     expect((await mark("role-1", false, "admin-token")).status).toBe(200);
     expect((await cardOf("role-1")).featured).toBe(false);

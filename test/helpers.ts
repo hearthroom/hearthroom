@@ -66,7 +66,7 @@ export async function makeMember(accountNumId: number): Promise<string> {
   const now = Date.now();
   await env.DB.batch([
     env.DB.prepare("INSERT OR IGNORE INTO members (id, handle, created_at) VALUES (?, ?, ?)").bind(id, testHandle(accountNumId), now),
-    env.DB.prepare("INSERT OR IGNORE INTO member_identities (provider, external_id, member_id, linked_at) VALUES ('lunatalk', ?, ?, ?)").bind(String(accountNumId), id, now),
+    env.DB.prepare("INSERT OR IGNORE INTO member_identities (provider, external_id, member_id, linked_at) VALUES ('harbor', ?, ?, ?)").bind(String(accountNumId), id, now),
   ]);
   return id;
 }
@@ -101,11 +101,11 @@ export function role(f: RoleFixture): UpstreamRole {
     zone: f.zone ?? "zh",
     authorNumId: f.authorNumId ?? 10001,
     authorName: f.authorName ?? "月光",
-    authorAvatar: "https://cdn.lunatalk.ai/author.png",
+    authorAvatar: "https://assets.harperharbor.com/author.png",
     names: { zh: f.name ?? "夜行偵探", en: f.nameEn ?? "", ja: f.nameJa ?? "", ko: "" },
     summaries: { zh: f.desc ?? "民國背景推理", en: "", ja: "", ko: "" },
-    avatarUrl: "https://cdn.lunatalk.ai/cover.png",
-    backgroundUrl: "https://cdn.lunatalk.ai/bg.png",
+    avatarUrl: "https://assets.harperharbor.com/cover.png",
+    backgroundUrl: "https://assets.harperharbor.com/bg.png",
     slug: null,
     tags: f.tags ?? ["推理"],
     welcome: f.welcome ?? "",
@@ -141,7 +141,7 @@ export function rolesOnProviders(byProvider: Partial<Record<ProviderId, RoleFixt
   for (const [id, fixtures] of Object.entries(byProvider)) {
     maps.set(id as ProviderId, new Map((fixtures ?? []).map((f) => [f.roleId, role(f)])));
   }
-  upstream.fetchRole = async (_env, roleId, provider = "lunatalk") => {
+  upstream.fetchRole = async (_env, roleId, provider = "harbor") => {
     const found = frozenFixtureRoles.get(roleId) ?? maps.get(provider)?.get(roleId);
     if (!found) throw new HttpError(404, "role not found");
     return found;
@@ -158,7 +158,7 @@ export const bearer = (t = "author-token") => ({ Authorization: `Bearer ${t}` })
 
 /** token → 公開數字 ID 的對照，用來模擬「不同的人拿著不同的 token」。 */
 export function identities(map: Record<string, number>): void {
-  identitiesFor({ lunatalk: map });
+  identitiesFor({ harbor: map });
 }
 
 /**
@@ -166,7 +166,7 @@ export function identities(map: Record<string, number>): void {
  * 假上游也必須照這個規矩答，否則測不出資料有沒有混。
  */
 export function identitiesFor(byProvider: Partial<Record<ProviderId, Record<string, number>>>): void {
-  upstream.fetchMe = async (_env, token, provider = "lunatalk") => {
+  upstream.fetchMe = async (_env, token, provider = "harbor") => {
     const id = byProvider[provider]?.[token];
     if (!id) throw new HttpError(401, "upstream rejected the token");
     return { accountNumId: id };

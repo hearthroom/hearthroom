@@ -1,18 +1,9 @@
-import { apiBaseOf, currentProvider, DEFAULT_PROVIDER } from "./provider";
+import { apiBaseOf } from "./provider";
 
-/**
- * 角色卡來源服務的 API 位址。
- *
- * 預設是主網址；有些地區連不上供應商的主網域，所以開頁時先問本站 `/v1/region`（Cloudflare 邊緣依
- * 連線來源判國別），那些地區改用對應的閘道。結果記在這個分頁的 sessionStorage，重新整理不用再問。
- * 自架時改 VITE_PROVIDER_API_BASE 就能指向別的供應商部署。
- */
-const DEFAULT_API: string = apiBaseOf("lunatalk");
+/** HarperHarbor API; self-hosted builds use VITE_HARBOR_API_BASE. */
+const DEFAULT_API: string = apiBaseOf("harbor");
 
-/**
- * 目前這個會話打的上游。它跟著會話的供應商走（見 lib/provider.ts）：換一家等於換一個帳號，
- * 連帶換一個上游。地區閘道只作用在預設那家——那是為了繞開特定網域的封鎖，不是通用轉送。
- */
+/** Runtime API base for the active Harper account. */
 export let UPSTREAM_API: string = apiBaseOf();
 
 /** 換過供應商之後重新指向那一家；換家的流程要叫一次，否則請求還打在舊的那家。 */
@@ -33,41 +24,10 @@ export const COMMUNITY_API = "/v1";
 
 const REGION_KEY = "hr.apiBase";
 
-/**
- * 問一次該打哪個上游，然後把 UPSTREAM_API 換成答案。問不到（逾時、邊緣沒回）就維持預設，
- * 頁面照常開。呼叫端要在第一個上游請求之前 await 它。
- */
-export async function resolveUpstream(fetcher: typeof fetch = fetch, timeoutMs = 2500): Promise<string> {
-  // 閘道是為了繞開**預設那家**主網域被封鎖的地區，不是通用轉送。接的是別家時整條跳過：
-  // 套下去等於把另一家的請求送進第一家的網域，登入會被送到錯的授權頁。
-  if (currentProvider() !== DEFAULT_PROVIDER) return useProviderUpstream();
-  try {
-    const cached = sessionStorage.getItem(REGION_KEY);
-    if (cached && /^https?:\/\//.test(cached)) {
-      UPSTREAM_API = cached;
-      return cached;
-    }
-  } catch {
-    /* 私密視窗等情況讀不到，往下問 */
-  }
-  try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-    const res = await fetcher(`${COMMUNITY_API}/region`, { signal: ctrl.signal });
-    clearTimeout(timer);
-    const data = (await res.json()) as { apiBase?: unknown };
-    if (typeof data.apiBase === "string" && /^https?:\/\//.test(data.apiBase)) {
-      UPSTREAM_API = data.apiBase.replace(/\/+$/, "");
-      try {
-        sessionStorage.setItem(REGION_KEY, UPSTREAM_API);
-      } catch {
-        /* 存不了就下次再問 */
-      }
-    }
-  } catch {
-    /* 邊緣沒回：用預設 */
-  }
-  return UPSTREAM_API;
+/** Discard retired regional gateways before any credential-bearing request. */
+export async function resolveUpstream(_fetcher:typeof fetch=fetch,_timeoutMs=2500):Promise<string>{
+  try{sessionStorage.removeItem(REGION_KEY)}catch{}
+  return useProviderUpstream();
 }
 
 /** 測試用：清掉分頁內記住的答案並回到預設。 */
