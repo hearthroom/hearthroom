@@ -85,6 +85,9 @@ export async function readForReview(env: Env, bearer: string, roleId: string, pr
     customInstructions: text(r.customInstructions) || text(r.jailbreak),
     talkExample: typeof r.talkExample === "string" ? r.talkExample : JSON.stringify(r.talkExample ?? []),
     roleOutputContract: text(r.roleOutputContract),
+    // 世界卡的成員（作者 token 讀回的完整版）。只在有的時候才進指紋：普通卡的指紋一個位元都不變，
+    // 已上榜的卡不會因此被當成改過；世界卡改了成員就是改了內容。
+    ...(r.world ? { world: JSON.stringify(r.world) } : {}),
   };
   const greetings = {
     welcome: text(r.roleWelcome),

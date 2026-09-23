@@ -1293,3 +1293,24 @@ export async function updateSiteProfile(token:string, profile:{displayName:strin
  if(profile.removeAvatar)body.set('removeAvatar','true');
  return json<SiteMe>(await fetch(`${COMMUNITY_API}/me/profile`,{method:'PUT',headers:{...from(),...authHeaders(token)},body}));
 }
+
+/** 世界模式的成員：整包寫入（作者），卡片因此成為世界卡。 */
+export async function putRoleWorld(roleId: string, world: Record<string, unknown>, token: string): Promise<unknown> {
+  return json<unknown>(
+    await fetch(`${UPSTREAM_API}/open/v1/role/${encodeURIComponent(roleId)}/world`, {
+      method: "PUT",
+      headers: writeHeaders(token),
+      body: JSON.stringify(world),
+    }),
+  );
+}
+
+/** 拿掉世界模式的成員：卡片回到普通單卡；世界觀與世界書不動。 */
+export async function deleteRoleWorld(roleId: string, token: string): Promise<unknown> {
+  return json<unknown>(
+    await fetch(`${UPSTREAM_API}/open/v1/role/${encodeURIComponent(roleId)}/world`, {
+      method: "DELETE",
+      headers: writeHeaders(token),
+    }),
+  );
+}
