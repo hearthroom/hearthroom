@@ -1,5 +1,5 @@
 import { SANDBOX_PARENT_ORIGINS } from '../../shared/site-hosts';
-import { activeAwardKeys } from './badges';
+import { activeAwardKeys, sweepMilestones } from './badges';
 import { appearanceView, projectAppearance, type AppearancePreferences } from './appearance';
 import { HttpError, type Env } from "../types";
 import { digest, random } from "./crypto";
@@ -422,4 +422,7 @@ export async function communityMaintenance(env: Env) {
       "DELETE FROM community_notifications WHERE created_at<?",
     ).bind(now - 2592000000),
   ]);
+  // Milestones cross without anyone opening a badge page; the sweep is set-based so
+  // its cost does not grow with membership as a per-member loop would.
+  await sweepMilestones(env);
 }

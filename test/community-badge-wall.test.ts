@@ -1,10 +1,12 @@
 import { SELF, env } from 'cloudflare:test';
 import { beforeEach, afterEach, expect, it } from 'vitest';
 import { resetDb, makeMember, bearer, whoAmI, restoreUpstream } from './helpers';
-import { badgeCollection, setFeaturedBadges, createEventBadge, changeBadgeAward } from '../src/community/badges';
+import { badgeCollection, setFeaturedBadges, createEventBadge, changeBadgeAward, FOUNDER_CUTOFF } from '../src/community/badges';
 import { projection, communityMaintenance } from '../src/community/service';
 let member:string, manager:string;
-beforeEach(async()=>{await resetDb();member=await makeMember(11);manager=await makeMember(22);await env.DB.prepare("INSERT INTO reviewers(member_id,granted_at,granted_by,role) VALUES (?,0,'test','manager')").bind(manager).run();});
+beforeEach(async()=>{await resetDb();member=await makeMember(11);manager=await makeMember(22);await env.DB.prepare("INSERT INTO reviewers(member_id,granted_at,granted_by,role) VALUES (?,0,'test','manager')").bind(manager).run();
+ // Fixtures join after the founding window; the founder milestone has its own test.
+ await env.DB.prepare('UPDATE members SET created_at=?').bind(FOUNDER_CUTOFF+1).run();});
 afterEach(restoreUpstream);
 const definition=()=>({key:'event_summer',icon:'star',titles:{'zh-Hant':'夏日旅人',en:'Summer traveler'},descriptions:{'zh-Hant':'參與夏日活動。',en:'Join the summer event.'}});
 async function grant(action='grant',requestId=crypto.randomUUID(),extra={}){return changeBadgeAward(env,manager,{handle:'aaaaaabb',badge:'event_summer',action,requestId,reason:'Event participation',...extra});}
@@ -17,9 +19,9 @@ it('preserves first-work awards and hides all collection data by default',async(
  const own=await badgeCollection(env,member);expect(own.items.find(b=>b.key==='first_work')).toMatchObject({state:'earned',earnedAt:100});
  expect(await badgeCollection(env,member,true)).toEqual({items:[],featured:[]});
 });
-it('persists selected badges, rejects unearned/duplicate/more-than-three picks, and respects public consent',async()=>{
+it('persists selected badges, rejects unearned/duplicate/more-than-five picks, and respects public consent',async()=>{
  await env.DB.prepare("INSERT INTO community_awards(member_id,badge,source,created_at) VALUES (?, 'first_work','work',100)").bind(member).run();
- for(const keys of [['server_booster'],['first_work','first_work'],['a','b','c','d']])await expect(setFeaturedBadges(env,member,keys)).rejects.toThrow('community_badge_selection');
+ for(const keys of [['server_booster'],['first_work','first_work'],['a','b','c','d','e','f']])await expect(setFeaturedBadges(env,member,keys)).rejects.toThrow('community_badge_selection');
  await setFeaturedBadges(env,member,['first_work']);expect((await badgeCollection(env,member)).featured).toEqual(['first_work']);
  await env.DB.prepare('UPDATE community_preferences SET public_badges=1 WHERE member_id=?').bind(member).run();
  const publicWall=await badgeCollection(env,member,true);expect(publicWall.items).toHaveLength(1);expect(publicWall).not.toHaveProperty('xp');expect(publicWall).not.toHaveProperty('canManage');
