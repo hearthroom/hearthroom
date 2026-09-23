@@ -1,5 +1,7 @@
 import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { allowedImageUrl } from "../src/shortcut";
+import { imageReference } from "../src/card-media";
 import worker, { imageCache } from "../src/index";
 
 const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -18,6 +20,7 @@ afterEach(() => vi.unstubAllGlobals());
 describe("圖片代抓（匯出 PNG 卡用）", () => {
   it.each([
     "harperharbor.com", "assets.harperharbor.com", "new.cdn.harperharbor.com",
+    "assets.lunatalk.ai", "objects.lunatalk.ai", "cdn.lunatalk.ai",
   ])("產品網域 %s：可匯出且保留 PNG 位元組", async (host) => {
     const fetchSpy = vi.fn(async () => new Response(PNG, { headers: { "content-type": "image/png" } }));
     vi.stubGlobal("fetch", fetchSpy);
@@ -26,6 +29,14 @@ describe("圖片代抓（匯出 PNG 卡用）", () => {
     expect(res.status).toBe(200);
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(PNG);
     expect(fetchSpy).toHaveBeenCalledWith(url, expect.any(Object));
+  });
+
+  it.each(["assets.lunatalk.ai", "objects.lunatalk.ai", "cdn.lunatalk.ai"])("Harper 卡保留既有 %s 圖片參照與安裝圖示", (host) => {
+    const url = `https://${host}/existing/portrait.png`;
+    expect(imageReference(env, "harbor", url)).toBe(url);
+    expect(allowedImageUrl(url)?.href).toBe(url);
+    expect(allowedImageUrl(`https://${host}.evil.example/image.png`)).toBeNull();
+    expect(() => imageReference(env, "harbor", `https://${host}.evil.example/image.png`)).toThrow();
   });
 
   it("放行的主機：原樣轉回位元組與 content-type，帶快取頭", async () => {

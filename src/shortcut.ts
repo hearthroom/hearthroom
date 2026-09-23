@@ -29,7 +29,7 @@ import type { CardRow } from "./cards";
 import { type Localized, pickLocale } from "./types";
 
 /** 圖片代抓放行的主機：頭像與素材所在。匯出 PNG 卡與主畫面圖示共用。 */
-export const IMAGE_HOSTS = new Set(["assets.harperharbor.com"]);
+export const IMAGE_HOSTS = new Set(["assets.harperharbor.com", "assets.lunatalk.ai", "objects.lunatalk.ai", "cdn.lunatalk.ai"]);
 
 /** 帶語言前綴的路徑（與 web/src/router.ts 的 PREFIXED 一致；zh-Hant 是不帶前綴的來源語言）。 */
 const PREFIXED_LOCALES = ["zh-Hans", "en", "ja", "ko"];
