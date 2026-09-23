@@ -14,7 +14,7 @@
  * 塞進卡片頁的一個框裡只會蓋住文字（2026-09-07 正式站實測兩種變體）。
  */
 import MarkdownIt from "markdown-it";
-import { applyTavernRules } from "stage-canvas/rule-engine";
+import { applyTavernRules, applyTavernRulesAsync } from "stage-canvas/rule-engine";
 import { normalizeCardFormat, scopeCardHtml } from "stage-canvas/style-scope";
 import { stripUnknownTags } from "stage-canvas/platform-defaults";
 import type { PlayerAsset } from "@/lib/api";
@@ -47,19 +47,35 @@ export interface RenderedWelcome {
   html: string;
 }
 
-export function renderWelcome(raw: string, opts: { charName: string; userName: string; asset: PlayerAsset | null }): RenderedWelcome {
+type WelcomeOptions = { charName: string; userName: string; asset: PlayerAsset | null };
+type RuleApply = (text: string, rules: unknown[], options: { macros: { char: string; user: string }; variants?: unknown }) => string;
+
+function welcomeSteps(raw: string, opts: WelcomeOptions) {
   const macros = { char: opts.charName, user: opts.userName };
   const rules = opts.asset?.rules ?? [];
   const format = normalizeCardFormat(opts.asset?.cardFormat);
   const ruleOptions = { macros, variants: opts.asset?.variants ?? undefined };
+  const text = raw.replace(/\{\{\s*char\s*\}\}/gi, opts.charName).replace(/\{\{\s*user\s*\}\}/gi, opts.userName);
+  const finish = (applied: string | null): RenderedWelcome => {
+    let out = applied === null ? text : scopeCardHtml(applied, format);
+    out = stripUnknownTags(out);
+    if (!hasHtml(out)) return { html: "" };
+    return { html: isHeavyHtml(out) ? out : markdown().render(out) };
+  };
+  return { text, rules, ruleOptions, finish };
+}
 
-  let text = raw.replace(/\{\{\s*char\s*\}\}/gi, opts.charName).replace(/\{\{\s*user\s*\}\}/gi, opts.userName);
-  if (rules.length) {
-    text = applyTavernRules(text, rules, ruleOptions).html;
-    text = scopeCardHtml(text, format);
-  }
-  text = stripUnknownTags(text);
+export function renderWelcome(raw: string, opts: WelcomeOptions): RenderedWelcome {
+  const { text, rules, ruleOptions, finish } = welcomeSteps(raw, opts);
+  return finish(rules.length ? applyTavernRules(text, rules, ruleOptions).html : null);
+}
 
-  if (!hasHtml(text)) return { html: "" };
-  return { html: isHeavyHtml(text) ? text : markdown().render(text) };
+/**
+ * 同一份結果，但作者的正則在背景執行緒跑（舞台的 applyTavernRulesAsync）。寫得慢的規則
+ * （2026-09-23 一張卡的規則災難性回溯，卡片頁整頁卡住 11 秒）只會讓開場白晚一點出現，
+ * 頁面照常能捲、能點；規則一定跑完，輸出跟同步那條一字不差。
+ */
+export async function renderWelcomeAsync(raw: string, opts: WelcomeOptions): Promise<RenderedWelcome> {
+  const { text, rules, ruleOptions, finish } = welcomeSteps(raw, opts);
+  return finish(rules.length ? (await applyTavernRulesAsync(text, rules, ruleOptions)).html : null);
 }

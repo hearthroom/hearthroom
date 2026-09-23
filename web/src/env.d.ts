@@ -67,6 +67,12 @@ declare module "stage-canvas/rule-engine" {
     rules: unknown[],
     options?: { macros?: { char?: string; user?: string }; variants?: unknown },
   ): { html: string; rollbacks: { ruleId: string; reason: string }[] };
+  /** Same result, computed in a Web Worker so a slow author regex never blocks the page. */
+  export function applyTavernRulesAsync(
+    text: string,
+    rules: unknown[],
+    options?: { macros?: { char?: string; user?: string }; variants?: unknown },
+  ): Promise<{ html: string; rollbacks: { ruleId: string; reason: string }[] }>;
 }
 declare module "stage-canvas/style-scope" {
   export type CardFormat = "mmd" | "tavern";
