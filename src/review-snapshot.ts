@@ -15,7 +15,7 @@ import { type Env, HttpError } from "./types";
 import type { UpstreamRole } from "./upstream";
 
 const UA = "Personae/0.1 (open-source role-card community client)";
-/** D1 單列上限 2 MB；留餘裕給其他欄位。超過就請作者精簡世界書再送。 */
+/** 寫進 D1 的審核副本（壓縮後）上限。D1 單列上限 2 MB，留餘裕給其他欄位。 */
 export const SNAPSHOT_MAX_BYTES = 1_500_000;
 /** 公開指紋的版本前綴：舊的 reviewed_hash（供應商給的內容雜湊）沒有這個前綴，同步時改綁、不重審。 */
 export const PUBLIC_HASH_PREFIX = "pub1:";
@@ -141,25 +141,44 @@ export async function readForReview(env: Env, bearer: string, roleId: string, pr
   };
 }
 
+/**
+ * 審核副本以 gzip 壓縮後存（前綴 gz1:，base64）。D1 單列上限 2 MB；大型世界模擬卡的原文常超過 1.5 MB
+ * （幾百條世界書加上作者版面），但文字壓縮後通常只剩三到五分之一。上限檢查看的是壓縮後實際寫進去的大小。
+ * 沒有前綴的是壓縮前存的舊副本，照原樣解析。
+ */
+const GZ_PREFIX = "gz1:";
+function toBase64(bytes: Uint8Array): string {
+  let out = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) out += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(out);
+}
+async function pipe(bytes: Uint8Array, stream: CompressionStream | DecompressionStream): Promise<Uint8Array> {
+  return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
+}
+export async function encodeSnapshot(detail: ReviewSettings): Promise<string> {
+  const packed = GZ_PREFIX + toBase64(await pipe(new TextEncoder().encode(JSON.stringify(detail)), new CompressionStream("gzip")));
+  if (packed.length > SNAPSHOT_MAX_BYTES) throw new HttpError(400, "card_too_large_for_review");
+  return packed;
+}
+async function decodeSnapshot(stored: string): Promise<Record<string, unknown>> {
+  if (!stored.startsWith(GZ_PREFIX)) return JSON.parse(stored) as Record<string, unknown>;
+  const bytes = Uint8Array.from(atob(stored.slice(GZ_PREFIX.length)), (c) => c.charCodeAt(0));
+  return JSON.parse(new TextDecoder().decode(await pipe(bytes, new DecompressionStream("gzip")))) as Record<string, unknown>;
+}
+
 /** 存這張單的快照；還在排隊時重送就覆寫，審核人看到的是作者最新送來的那一份。 */
-export function saveSnapshotStatement(db: D1Database, submissionId: string, detail: ReviewSettings, now: number): D1PreparedStatement {
-  const json = JSON.stringify(detail);
-  if (new TextEncoder().encode(json).length > SNAPSHOT_MAX_BYTES) throw new HttpError(400, "card_too_large_for_review");
+export async function saveSnapshotStatement(db: D1Database, submissionId: string, detail: ReviewSettings, now: number): Promise<D1PreparedStatement> {
+  const stored = await encodeSnapshot(detail);
   return db
     .prepare(
       `INSERT INTO review_snapshots (submission_id, detail, created_at) VALUES (?, ?, ?)
        ON CONFLICT (submission_id) DO UPDATE SET detail = excluded.detail, created_at = excluded.created_at`,
     )
-    .bind(submissionId, json, now);
+    .bind(submissionId, stored, now);
 }
 
 export async function loadSnapshot(db: D1Database, submissionId: string): Promise<Record<string, unknown> | null> {
   const row = await db.prepare("SELECT detail FROM review_snapshots WHERE submission_id = ?").bind(submissionId).first<{ detail: string }>();
   if (!row) return null;
-  try { return JSON.parse(row.detail) as Record<string, unknown>; } catch { return null; }
-}
-
-/** 單子定案就刪：本站不留任何卡片的私有設定。 */
-export function dropSnapshotStatement(db: D1Database, submissionId: string): D1PreparedStatement {
-  return db.prepare("DELETE FROM review_snapshots WHERE submission_id = ?").bind(submissionId);
+  try { return await decodeSnapshot(row.detail); } catch { return null; }
 }

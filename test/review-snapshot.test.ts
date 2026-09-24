@@ -95,3 +95,25 @@ describe("token 估算", () => {
     expect(estimateTokens("")).toBe(0);
   });
 });
+
+// 審核副本存進 D1（單列上限 2 MB）。大型世界模擬卡的原文超過 1.5 MB 很常見（例：205 條世界書 + 作者版面），
+// 但文字壓縮後遠小於此；以前存原文，這類卡一送審就 card_too_large_for_review。
+import { loadSnapshot, saveSnapshotStatement, SNAPSHOT_MAX_BYTES } from "../src/review-snapshot";
+describe("審核副本的大小", () => {
+  const big = () => ({ document: { roleDetailDesc: "角色設定".repeat(20_000) }, worldbooks: [{ entries: Array.from({ length: 200 }, (_, i) => ({ name: `條目${i}`, content: "世界設定的一段描述，".repeat(400) })) }] });
+  it("存得下原文超過上限、但壓縮後不大的卡，讀回完全一樣", async () => {
+    const detail = big();
+    expect(new TextEncoder().encode(JSON.stringify(detail)).length).toBeGreaterThan(SNAPSHOT_MAX_BYTES);
+    await env.DB.prepare("DELETE FROM review_snapshots").run();
+    await (await saveSnapshotStatement(env.DB, "sub-big", detail as never, 1)).run();
+    expect(await loadSnapshot(env.DB, "sub-big")).toEqual(detail);
+  });
+  it("舊的未壓縮副本照樣讀得回來", async () => {
+    await env.DB.prepare("INSERT INTO review_snapshots (submission_id, detail, created_at) VALUES ('sub-old', ?, 1)").bind(JSON.stringify({ a: 1 })).run();
+    expect(await loadSnapshot(env.DB, "sub-old")).toEqual({ a: 1 });
+  });
+  it("壓縮後仍然太大才拒絕", async () => {
+    const noise = Array.from({ length: 1_600_000 }, () => String.fromCharCode(33 + Math.floor(Math.random() * 90))).join("");
+    await expect(saveSnapshotStatement(env.DB, "sub-noise", { document: { roleDetailDesc: noise } } as never, 1)).rejects.toMatchObject({ message: "card_too_large_for_review" });
+  });
+});

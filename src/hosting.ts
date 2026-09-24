@@ -3,7 +3,7 @@ import { apiBaseOf, type ProviderId } from './providers';
 import { getCard, upsertCard } from './cards';
 import { adoptRetiredWork } from './card-sync';
 import { pendingSubmissionOf } from './review';
-import { saveSnapshotStatement } from './review-snapshot';
+import { encodeSnapshot } from './review-snapshot';
 import { indexStatements } from './originality';
 import { buildSearchText, projectRole, upstream, type UpstreamRole } from './upstream';
 
@@ -110,8 +110,8 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  const privateDoc=(settings.document??{}) as Record<string,unknown>;
  // Validate size before any registry write. Snapshot creation joins the submission
  // transaction below, so reviewers never see an incomplete submitted revision.
- saveSnapshotStatement(db,submissionId,settings,input.now);
- const snapshot=db.prepare('INSERT INTO review_snapshots(submission_id,detail,created_at) SELECT ?,?,? WHERE EXISTS(SELECT 1 FROM review_submissions WHERE id=?)').bind(submissionId,JSON.stringify(settings),input.now,submissionId);
+ const packedSnapshot=await encodeSnapshot(settings);
+ const snapshot=db.prepare('INSERT INTO review_snapshots(submission_id,detail,created_at) SELECT ?,?,? WHERE EXISTS(SELECT 1 FROM review_submissions WHERE id=?)').bind(submissionId,packedSnapshot,input.now,submissionId);
  const finalize=(cardId:string):D1PreparedStatement[]=>[
    db.prepare("UPDATE hosting_versions SET hosted_revision_id=?,card_id=?,submission_id=?,public_role=?,state='pending' WHERE version_id=? AND submission_id IS NULL").bind(receipt.hostedRevisionId,cardId,submissionId,JSON.stringify({...sealed,searchText:buildSearchText(sealed)}),version!.version_id),
    db.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,content_hash,submitted_at,nsfw) SELECT ?,?,?,?,?,'pending',?,?,? WHERE EXISTS(SELECT 1 FROM hosting_versions WHERE version_id=? AND submission_id=?)")
