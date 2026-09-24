@@ -11,7 +11,7 @@ import { hostGateway, hostingKey, submitHosted, hostingDecision, beginHostedEdit
 import { saveCommunityProfile, cleanAvatars } from "./community-profile";
 import { AVATAR_MAX_BYTES } from '../shared/avatar';
 import { bodyLimit } from "hono/body-limit";
-import { copiesFor, workFor } from "./card-sync";
+import { authoringSource, copiesFor, workFor } from "./card-sync";
 import { apiBaseOf as providerApiBase } from "./providers";
 import { connectedMemberId } from './connections';
 import { saveMemberId } from './members';
@@ -550,7 +550,8 @@ app.get("/v1/me/cards", async (c) => {
   const items = await Promise.all(body.items.map(async item => {
     const work = await workFor(c.env.DB, provider, item.roleId);
     const num = await ensureCardNumber(c.env.DB,work?.source_provider ?? provider,work?.source_role_id ?? item.roleId);
-    return {...item, num, detailId:String(num), provider, workId:work?.id, sourceProvider:work?.source_provider, sourceRoleId:work?.source_role_id};
+    const source = work ? authoringSource(work, provider, item.roleId) : null;
+    return {...item, num, detailId:String(num), provider, workId:work?.id, sourceProvider:source?.provider, sourceRoleId:source?.roleId};
   }));
   return c.json({...body, items});
 });
@@ -826,7 +827,8 @@ app.post("/v1/cards", async (c) => {
   if (role.creationMethod !== CREATION_METHOD) throw new HttpError(403, "only cards created on this site can be listed");
 
   const mapped = await workFor(c.env.DB, provider, roleId);
-  if (mapped && (mapped.source_provider !== provider || mapped.source_role_id !== roleId)) throw new HttpError(409, 'publication_use_original');
+  const original = mapped ? authoringSource(mapped, provider, roleId) : null;
+  if (original && (original.provider !== provider || original.roleId !== roleId)) throw new HttpError(409, 'publication_use_original');
 
   // 每週額度（見 quota.ts）。已經在榜上的卡再送一次是「刷新」，不佔額度；
   // 這週登記過又撤掉的同一張卡再登也不佔——它已經算過了。

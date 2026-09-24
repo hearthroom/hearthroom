@@ -1,6 +1,7 @@
 import { type Env, HttpError } from './types';
 import { apiBaseOf, type ProviderId } from './providers';
 import { getCard, upsertCard } from './cards';
+import { adoptRetiredWork } from './card-sync';
 import { pendingSubmissionOf } from './review';
 import { saveSnapshotStatement } from './review-snapshot';
 import { indexStatements } from './originality';
@@ -59,6 +60,7 @@ const receiptOf=(r:VersionRow):Receipt=>({workId:r.work_id,versionId:r.version_i
 // first so a reviewer holding its snapshot cannot publish it during the save.
 // Keep the obligation durable across partial saves and browser/network failures.
 export async function beginHostedEdit(db:D1Database,memberId:string,roleId:string,now:number,provider:ProviderId='harbor'):Promise<{resubmit:boolean;nsfw?:boolean}> {
+ await adoptRetiredWork(db,provider,roleId);
  const work=await db.prepare("SELECT id,member_id FROM works WHERE source_provider=? AND source_role_id=?").bind(provider,roleId).first<{id:string;member_id:string}>();
  if(!work)return {resubmit:false};
  if(work.member_id!==memberId)throw new HttpError(403,'not the author of this card');
@@ -86,6 +88,7 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
   const retry=await existingOperation();if(retry?.submission_id)return receiptOf(retry);
   throw new HttpError(409,'submission_pending');
  }
+ await adoptRetiredWork(db,provider,input.role.roleId);
  await db.prepare('INSERT OR IGNORE INTO works VALUES (?,?,?,?,?)').bind(crypto.randomUUID(),input.memberId,provider,input.role.roleId,input.now).run();
  const work=await db.prepare("SELECT id,member_id FROM works WHERE source_provider=? AND source_role_id=?").bind(provider,input.role.roleId).first<{id:string;member_id:string}>();
  if(!work||work.member_id!==input.memberId)throw new HttpError(403,'not the author of this card');
