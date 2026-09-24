@@ -1,5 +1,5 @@
 import { apiBaseOf, DEFAULT_PROVIDER, type ProviderId } from "./providers";
-import { readForReview } from "./review-snapshot";
+import { readForReview, readSealedForReview } from "./review-snapshot";
 import { type Env, HttpError, type Localized } from "./types";
 
 /**
@@ -278,5 +278,5 @@ async function setFeatured(env: Env, bearer: string, roleId: string, featured: b
 }
 
 
-export const upstream = { fetchMe, fetchRole, fetchMyRoles, readForReview, fetchCommunityStatus, setFeatured };
+export const upstream = { fetchMe, fetchRole, fetchMyRoles, readForReview, readSealedForReview, fetchCommunityStatus, setFeatured };
 export type Upstream = typeof upstream;

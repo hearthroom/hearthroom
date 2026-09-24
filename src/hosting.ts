@@ -3,7 +3,7 @@ import { apiBaseOf, type ProviderId } from './providers';
 import { getCard, upsertCard } from './cards';
 import { adoptRetiredWork } from './card-sync';
 import { pendingSubmissionOf } from './review';
-import { encodeSnapshot } from './review-snapshot';
+import { encodeSnapshot, reviewRecord } from './review-snapshot';
 import { indexStatements } from './originality';
 import { buildSearchText, projectRole, upstream, type UpstreamRole } from './upstream';
 
@@ -110,7 +110,8 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  const privateDoc=(settings.document??{}) as Record<string,unknown>;
  // Validate size before any registry write. Snapshot creation joins the submission
  // transaction below, so reviewers never see an incomplete submitted revision.
- const packedSnapshot=await encodeSnapshot(settings);
+ // 本站只留查重原文與統計；完整設定審核時向 Harbor 封存版讀，不在這裡抄一份（見 readSealedForReview）。
+ const packedSnapshot=await encodeSnapshot(reviewRecord(settings));
  const snapshot=db.prepare('INSERT INTO review_snapshots(submission_id,detail,created_at) SELECT ?,?,? WHERE EXISTS(SELECT 1 FROM review_submissions WHERE id=?)').bind(submissionId,packedSnapshot,input.now,submissionId);
  const finalize=(cardId:string):D1PreparedStatement[]=>[
    db.prepare("UPDATE hosting_versions SET hosted_revision_id=?,card_id=?,submission_id=?,public_role=?,state='pending' WHERE version_id=? AND submission_id IS NULL").bind(receipt.hostedRevisionId,cardId,submissionId,JSON.stringify({...sealed,searchText:buildSearchText(sealed)}),version!.version_id),

@@ -1619,5 +1619,11 @@
   "df1ae34edf992": "Media library",
   "d1d432f58690c": "Conversations",
   "dd357175cfe89": "Media",
-  "df97e9da0e3b8": "Other"
+  "df97e9da0e3b8": "Other",
+  "d676ca492151d": "Read a sealed HearthRoom revision for community review",
+  "d1369100e50e1": "Backend issuer key only, no user token. Returns the full configuration of one sealed revision as the verbatim responses of the read endpoints the issuer already uses, keyed by path: /role/detail (author view), /worldbook/bindings, /worldbook/detail and /worldbook/entry/list for each bound Lorebook, and /role/author-asset (absent when the card has none). Only sealed revisions resolve; drafts, staging revisions and unknown IDs return 404. The issuer reads this during review instead of storing its own copy, so review capacity matches the provider's.",
+  "d769d805a8cda": "hostedRevisionId from the seal receipt",
+  "da76acabd876e": "Read responses keyed by path",
+  "d52649548381b": "Invalid issuer key",
+  "d5d6345b3acbb": "Not a sealed revision"
 }

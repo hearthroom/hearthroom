@@ -2,7 +2,7 @@ import { SELF, createExecutionContext, env, waitOnExecutionContext } from "cloud
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import worker from "../src/index";
 import {
-  bearer, identities, makeReviewer, resetDb, restoreUpstream, reviewOff, reviewOn, reviewUpstream, rolesOnMainSite, settingsReads,
+  bearer, identities, makeReviewer, resetDb, restoreUpstream, reviewOff, reviewOn, reviewUpstream, rolesOnMainSite, sealedReads, settingsReads,
 } from "./helpers";
 import { CLAIM_TTL_MS } from "../src/review";
 
@@ -50,6 +50,28 @@ const act = async (id:string, action:string, token:string, body?:unknown) => {
 
 const cardStatus = async (roleId: string) =>
   (await env.DB.prepare("SELECT status, reviewed_hash FROM cards WHERE source_role_id = ?").bind(roleId).first<{ status: string; reviewed_hash: string }>())!;
+
+describe("審核副本不在本站", () => {
+  // 本站（Cloudflare D1）單列只有 2 MB；大型世界卡的完整設定存不下。完整內容留在 Harbor 的封存版，
+  // 審核時直接讀；本站只存查重要用的原文（角色描述、名字）與統計數字。
+  it("本站只存查重原文，審核頁的完整內容向 Harbor 封存版讀", async () => {
+    reviewUpstream((roleId) => ({ roleId, document: { roleName: "夜行偵探", userName: "助手", roleDetailDesc: "角色描述原文", customInstructions: "自訂指示" }, worldbooks: [{ name: "世界書", entries: [{ content: "世界書條目" }] }] }));
+    const receipt = await (await submit("role-1")).json() as any;
+    const stored = (await env.DB.prepare("SELECT detail FROM review_snapshots").first<{ detail: string }>())!.detail;
+    const { loadSnapshot } = await import("../src/review-snapshot");
+    const slim = await loadSnapshot(env.DB, (await env.DB.prepare("SELECT submission_id FROM review_snapshots").first<{ submission_id: string }>())!.submission_id) as any;
+    expect(slim.document).toEqual({ roleName: "夜行偵探", userName: "助手", roleDetailDesc: "角色描述原文" });
+    expect(slim.worldbooks).toBeUndefined();
+    expect(stored).not.toContain("世界書條目");
+    await makeReviewer(REVIEWER_A);
+    const id = (await queue("rev-a")).body.items[0].id as string;
+    await act(id, "claim", "rev-a");
+    const body = await (await SELF.fetch(`https://c.test/v1/review/${id}/detail`, { headers: bearer("rev-a") })).json() as any;
+    expect(body.detail.document.customInstructions).toBe("自訂指示");
+    expect(body.detail.worldbooks[0].entries[0].content).toBe("世界書條目");
+    expect(sealedReads).toEqual([{ roleId: "frozen-" + receipt.versionId, provider: "harbor" }]);
+  });
+});
 
 describe("提交", () => {
   it("用作者的 token 讀整份設定存成快照、綁定封存版本、排進佇列；卡不上榜", async () => {
