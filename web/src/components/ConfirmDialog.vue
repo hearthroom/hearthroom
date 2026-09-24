@@ -7,7 +7,20 @@ const box = ref<HTMLElement | null>(null);
 const typed = ref("");
 /** 必選項：每次開新彈窗清空，刻意不預選 */
 const choice = ref<string | null>(null);
-const typedOk = computed(() => !!confirmState.current && confirmTextMatches(confirmState.current, typed.value) && confirmChoiceOk(confirmState.current, choice.value));
+const typedOk = computed(() => !!confirmState.current && confirmTextMatches(confirmState.current, typed.value));
+/** 按了確認但必選項沒選：顯示缺什麼，不要讓確認鍵看起來能按卻「按了沒反應」 */
+const missingChoice = ref(false);
+function confirm() {
+  const cur = confirmState.current;
+  if (!cur || !typedOk.value) return;
+  if (!confirmChoiceOk(cur, choice.value)) {
+    missingChoice.value = true;
+    box.value?.querySelector<HTMLElement>("[data-choice]")?.focus();
+    return;
+  }
+  settleConfirm(true, typed.value, choice.value);
+}
+watch(choice, () => { missingChoice.value = false; });
 /** 開啟前的焦點：關掉時還回去，鍵盤使用者不會掉到頁面開頭 */
 let restore: HTMLElement | null = null;
 
@@ -16,6 +29,7 @@ watch(() => confirmState.current, async (cur) => {
   restore = document.activeElement as HTMLElement | null;
   typed.value = "";
   choice.value = null;
+  missingChoice.value = false;
   await nextTick();
   // 要照打的字：焦點直接進打字框。其他破壞性動作先站在取消鍵上：按錯 Enter 也不會刪掉東西
   const pick = cur.requireText ? "[data-typed]" : cur.danger && !cur.single ? "[data-cancel]" : "[data-confirm]";
@@ -54,7 +68,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
           <span class="dlg__typed-hint">{{ $t("dialog.typeToConfirm", { text: confirmState.current.requireText }) }}</span>
           <input v-model="typed" class="input" type="text" autocomplete="off" spellcheck="false" data-typed
                  :placeholder="confirmState.current.placeholder ?? confirmState.current.requireText"
-                 @keydown.enter.prevent="settleConfirm(true, typed, choice)" />
+                 @keydown.enter.prevent="confirm" />
         </label>
         <!-- 必選項：沒選就按不了確認 -->
         <fieldset v-if="confirmState.current.choices?.length" class="dlg__choices">
@@ -66,13 +80,14 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
               <span v-if="opt.hint" class="subtle">{{ opt.hint }}</span>
             </span>
           </label>
+          <p v-if="missingChoice" class="dlg__missing" role="alert">{{ $t("dialog.choiceRequired", { label: confirmState.current.choiceLabel ?? "" }) }}</p>
         </fieldset>
         <div class="dlg__actions">
           <button v-if="!confirmState.current.single" class="btn" data-cancel @click="settleConfirm(false)">
             {{ confirmState.current.cancelText ?? $t("dialog.cancel") }}
           </button>
           <button class="btn" :class="confirmState.current.danger ? 'btn--danger-solid' : 'btn--primary'" data-confirm
-                  :disabled="!typedOk" @click="settleConfirm(true, typed, choice)">
+                  :disabled="!typedOk" @click="confirm">
             {{ confirmState.current.confirmText ?? $t("dialog.confirm") }}
           </button>
         </div>
@@ -109,6 +124,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 .dlg__typed { display: grid; gap: 6px; }
 .dlg__typed-hint { font-size: 12.5px; color: var(--text-3); }
 .dlg__typed .input { width: 100%; }
+.dlg__missing { margin-top: var(--s-2); font-size: 13px; color: var(--danger); }
 .dlg__actions { display: flex; justify-content: flex-end; gap: var(--s-2); margin-top: var(--s-1); }
 
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }

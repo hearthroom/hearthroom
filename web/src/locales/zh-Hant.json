@@ -206,6 +206,7 @@
   "appearance.theme.ink": "墨",
   "author.notFound.hint": "這位作者還沒有上架任何作品，或連結有誤。",
   "dialog.cancel": "取消",
+  "dialog.choiceRequired": "請先選擇「{label}」。",
   "dialog.confirm": "確定",
   "dialog.delete": "刪除",
   "dialog.leave": "離開",
