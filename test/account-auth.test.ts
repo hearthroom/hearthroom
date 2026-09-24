@@ -9,7 +9,8 @@ const origin = 'https://hearthroom.club';
 const authEnv = () => ({ ...env, AUTH_ENABLED: 'true', AUTH_ALLOWED_ORIGINS: origin,
   AUTH_KEYRING: JSON.stringify({ active: 'test', keys: { test: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=' } }),
   AUTH_METRICS_SECRET: 'metrics-test-only', ...envOverride });
-let envOverride: Record<string, string> = {};
+// 預設模擬沒設固定客戶端的自架部署（動態註冊路徑）；固定客戶端的測試自己設。
+let envOverride: Record<string, string> = {HARBOR_CLIENT_ID:''};
 const context = { waitUntil: (_p: Promise<unknown>) => {}, passThroughOnException() {} } as ExecutionContext;
 let cookies: Record<string, string> = {};
 function cookieHeader() { return Object.entries(cookies).map(([k,v])=>`${k}=${v}`).join('; '); }
@@ -24,7 +25,7 @@ async function request(path: string, body?: unknown, extra: Record<string,string
   }
   return response;
 }
-beforeEach(async()=>{ await resetDb(); cookies={}; envOverride={}; });
+beforeEach(async()=>{ await resetDb(); cookies={}; envOverride={HARBOR_CLIENT_ID:''}; });
 afterEach(()=>vi.restoreAllMocks());
 
 it('advertises managed auth only with complete configuration and rejects cross-origin starts', async()=>{

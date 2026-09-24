@@ -62,6 +62,9 @@ dataset = "hearthroom_events"
 [vars]
 # HarperHarbor is the sole account, hosting and play service.
 PROVIDER_API_BASE_HARBOR = "https://api.harperharbor.com"
+# Hearthroom 在 Harbor 的固定 OAuth 客戶端（hearthroom 應用底下；公開識別，不是密鑰）。
+# 每個網域都用它登入，授權與建的卡才都歸 Hearthroom。新網域：在 Console 替它加回呼網址。
+HARBOR_CLIENT_ID = "hh_client_-NKwAmvtBNqnFCGm5rFv9AGkiVShUem80nkRoy3GIco"
 # 每輪排程同步幾張卡。Worker 一次執行最多 50 個對外請求（實測 2026-09-07：批量 200 只成功 50 張，
 # 其餘全部失敗保留），所以一輪最多 50，留一點餘裕給其他請求。
 SYNC_BATCH_SIZE = "45"
