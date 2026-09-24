@@ -115,6 +115,8 @@ async function submit(card: WorkspaceCard) {
     error.value =
       err instanceof ApiError && err.code === "weekly_quota_exceeded"
         ? t("mine.quota.exceeded")
+        : err instanceof ApiError && err.code === "card_too_large_for_review"
+        ? t("mine.tooLargeForReview")
         : err instanceof Error ? err.message : t("state.actionFailed");
   } finally {
     busy.value = null;

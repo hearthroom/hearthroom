@@ -564,6 +564,7 @@
   "mine.consent.message": "After you submit, this site uses your current sign-in to read this card's full definition (persona, openings, worldbook, regex rules and layout, extra instructions) and keeps a copy for review. Only reviewers see it, for review only. The copy is deleted as soon as the review ends (approved or rejected) or you withdraw the card. It goes on the board once approved; changing its name, summary, cover, tags or opening later means another review.",
   "mine.consent.confirm": "Submit",
   "mine.submitted": "Submitted. It goes on the board once approved.",
+  "mine.tooLargeForReview": "This card is too large to submit for review. Trim its lorebook or custom layout and try again.",
   "mine.distributing": "Copies for your other connected platforms are being prepared in the background.",
   "review.title": "Card review",
   "review.eyebrow": "Card review",
