@@ -206,6 +206,7 @@
   "appearance.theme.ink": "Ink",
   "author.notFound.hint": "This creator hasn’t listed any cards yet, or the link is wrong.",
   "dialog.cancel": "Cancel",
+  "dialog.choiceRequired": "Choose {label} first.",
   "dialog.confirm": "OK",
   "dialog.delete": "Delete",
   "dialog.leave": "Leave",

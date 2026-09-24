@@ -206,6 +206,7 @@
   "appearance.theme.ink": "インク",
   "author.notFound.hint": "この作者はまだ作品を掲載していないか、リンクが正しくありません。",
   "dialog.cancel": "キャンセル",
+  "dialog.choiceRequired": "先に「{label}」を選んでください。",
   "dialog.confirm": "OK",
   "dialog.delete": "削除",
   "dialog.leave": "移動する",

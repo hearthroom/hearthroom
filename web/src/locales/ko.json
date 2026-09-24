@@ -206,6 +206,7 @@
   "appearance.theme.ink": "잉크",
   "author.notFound.hint": "이 작가는 아직 작품을 게시하지 않았거나 링크가 잘못되었습니다.",
   "dialog.cancel": "취소",
+  "dialog.choiceRequired": "먼저 {label}을(를) 선택하세요.",
   "dialog.confirm": "확인",
   "dialog.delete": "삭제",
   "dialog.leave": "나가기",
