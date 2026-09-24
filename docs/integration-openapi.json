@@ -535,7 +535,7 @@
             }
           },
           "403": {
-            "description": "..`) cannot call this route.",
+            "description": "The caller is not permitted to use this route.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5341,7 +5341,7 @@
           "Player settings"
         ],
         "summary": "Client display preferences",
-        "description": "Free-form JSON preferences stored per scope: account level (no `roleId`: font size, line height, text colour, bubble colour/opacity, volume) or account x card level (`roleId` given: that card's background image). The server does not interpret keys. Never saved -> `{\"prefs\": {}}`.",
+        "description": "Free-form JSON preferences stored per scope: account level (no `roleId`: font size, line height, text color, bubble color/opacity, volume) or account x card level (`roleId` given: that card's background image). The server does not interpret keys. Never saved -> `{\"prefs\": {}}`.",
         "security": [
           {
             "userToken": []
@@ -5908,7 +5908,7 @@
             }
           },
           "403": {
-            "description": "..`) cannot call this route.",
+            "description": "The caller is not permitted to use this route.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6193,7 +6193,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Role id. Only the path parameter is honoured."
+            "description": "Role id. Only the path parameter is honored."
           }
         ],
         "requestBody": {
@@ -6553,7 +6553,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Role id. Only the path parameter is honoured; a `roleId` inside the body is ignored."
+            "description": "Role id. Only the path parameter is honored; a `roleId` inside the body is ignored."
           }
         ],
         "requestBody": {
@@ -7871,7 +7871,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Worldbook id. Only the path parameter is honoured."
+            "description": "Worldbook id. Only the path parameter is honored."
           }
         ],
         "requestBody": {
@@ -12209,7 +12209,7 @@
               "error",
               "no_data"
             ],
-            "description": "Server-assigned colour class; `no_data` when fewer than 5 samples."
+            "description": "Server-assigned color class; `no_data` when fewer than 5 samples."
           }
         }
       },
@@ -18050,7 +18050,7 @@
               "balanced",
               "strict"
             ],
-            "description": "How far the world honours outcomes the player declares."
+            "description": "How far the world honors outcomes the player declares."
           },
           "characters": {
             "type": "array",

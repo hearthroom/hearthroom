@@ -131,15 +131,15 @@ export function typeLabel(doc: OpenApiDocument, schema: OpenApiSchema | undefine
 }
 
 /** 值域的一句話：enum、範圍、長度、格式、預設。給參數表的「限制」欄。 */
-export function constraintLabel(schema: OpenApiSchema | undefined): string {
+export function constraintLabel(schema: OpenApiSchema | undefined, copy = { length: "len", defaultValue: "default", nullable: "nullable" }): string {
   if (!schema) return "";
   const parts: string[] = [];
   if (schema.enum) parts.push(schema.enum.map((v) => JSON.stringify(v)).join(" · "));
   if (schema.minimum !== undefined || schema.maximum !== undefined) parts.push(`${schema.minimum ?? "…"}–${schema.maximum ?? "…"}`);
-  if (schema.minLength !== undefined || schema.maxLength !== undefined) parts.push(`len ${schema.minLength ?? 0}–${schema.maxLength ?? "…"}`);
+  if (schema.minLength !== undefined || schema.maxLength !== undefined) parts.push(`${copy.length} ${schema.minLength ?? 0}–${schema.maxLength ?? "…"}`);
   if (schema.pattern) parts.push(`/${schema.pattern}/`);
-  if (schema.default !== undefined) parts.push(`default ${JSON.stringify(schema.default)}`);
-  if (schema.nullable || (Array.isArray(schema.type) && schema.type.includes("null"))) parts.push("nullable");
+  if (schema.default !== undefined) parts.push(`${copy.defaultValue} ${JSON.stringify(schema.default)}`);
+  if (schema.nullable || (Array.isArray(schema.type) && schema.type.includes("null"))) parts.push(copy.nullable);
   return parts.join("; ");
 }
 

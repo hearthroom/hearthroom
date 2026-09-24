@@ -6,13 +6,16 @@
 import { computed } from "vue";
 import { constraintLabel, refName, resolveRef, typeLabel, type OpenApiDocument, type OpenApiSchema } from "@/lib/openapi";
 
-const props = defineProps<{
+import { ENGLISH_API_COPY, type ApiDocCopy } from '@/lib/developer-docs';
+
+const props = withDefaults(defineProps<{
+  copy?: ApiDocCopy;
   doc: OpenApiDocument;
   schema: OpenApiSchema;
   /** 已經在上層展開過的 $ref 名字（防環） */
   trail?: string[];
   depth?: number;
-}>();
+}>(), { copy: () => ENGLISH_API_COPY });
 
 const resolved = computed(() => resolveRef(props.doc, props.schema));
 const ref = computed(() => (props.schema.$ref ? refName(props.schema.$ref) : ""));
@@ -51,22 +54,22 @@ const isObject = computed(() => fields.value.length > 0);
       <p v-if="resolved.description && depth === 0" class="st__desc">{{ resolved.description }}</p>
       <!-- 物件：欄位表 -->
       <table v-if="isObject" class="st__table">
-        <thead v-if="depth === 0"><tr><th>Field</th><th>Type</th><th>Constraints</th><th>Description</th></tr></thead>
+        <thead v-if="depth === 0"><tr><th>{{ copy.field }}</th><th>{{ copy.type }}</th><th>{{ copy.constraints }}</th><th>{{ copy.description }}</th></tr></thead>
         <tbody>
           <template v-for="f in fields" :key="f.name">
             <tr>
-              <td class="st__name"><code>{{ f.name }}</code><span v-if="f.required" class="st__req" title="required">*</span></td>
+              <td class="st__name"><code>{{ f.name }}</code><span v-if="f.required" class="st__req" :title="copy.required">*</span></td>
               <td class="st__type"><code>{{ typeLabel(doc, f.schema) }}</code></td>
-              <td class="st__cons">{{ constraintLabel(resolveRef(doc, f.schema)) }}</td>
+              <td class="st__cons">{{ constraintLabel(resolveRef(doc, f.schema), copy) }}</td>
               <td class="st__doc">
                 {{ f.schema.description ?? resolveRef(doc, f.schema).description ?? "" }}
-                <span v-if="f.schema['x-unverified'] || resolveRef(doc, f.schema)['x-unverified']" class="st__unv">unverified</span>
+                <span v-if="f.schema['x-unverified'] || resolveRef(doc, f.schema)['x-unverified']" class="st__unv">{{ copy.unverified }}</span>
               </td>
             </tr>
             <!-- 欄位本身是物件、陣列或 $ref：往下縮一層 -->
             <tr v-if="resolveRef(doc, f.schema).properties || resolveRef(doc, f.schema).items || resolveRef(doc, f.schema).oneOf || resolveRef(doc, f.schema).anyOf || resolveRef(doc, f.schema).allOf" class="st__child">
               <td colspan="4">
-                <SchemaTree :doc="doc" :schema="f.schema" :trail="trail" :depth="depth + 1" />
+                <SchemaTree :doc="doc" :copy="copy" :schema="f.schema" :trail="trail" :depth="depth + 1" />
               </td>
             </tr>
           </template>
@@ -74,18 +77,18 @@ const isObject = computed(() => fields.value.length > 0);
       </table>
       <!-- 陣列：畫元素 -->
       <div v-else-if="isArray" class="st__array">
-        <p class="subtle st__label">array of <code>{{ typeLabel(doc, resolved.items) }}</code></p>
-        <SchemaTree v-if="itemsExpandable && resolved.items" :doc="doc" :schema="resolved.items" :trail="trail" :depth="depth + 1" />
+        <p class="subtle st__label">{{ copy.arrayOf }} <code>{{ typeLabel(doc, resolved.items) }}</code></p>
+        <SchemaTree v-if="itemsExpandable && resolved.items" :doc="doc" :copy="copy" :schema="resolved.items" :trail="trail" :depth="depth + 1" />
       </div>
       <!-- oneOf / anyOf：逐個列 -->
       <div v-else-if="variants" class="st__variants">
         <div v-for="(v, i) in variants" :key="i" class="st__variant">
-          <p class="subtle st__label">{{ resolved.oneOf ? "one of" : "any of" }} #{{ i + 1 }} · <code>{{ typeLabel(doc, v) }}</code></p>
-          <SchemaTree :doc="doc" :schema="v" :trail="trail" :depth="depth + 1" />
+          <p class="subtle st__label">{{ resolved.oneOf ? copy.oneOf : copy.anyOf }} #{{ i + 1 }} · <code>{{ typeLabel(doc, v) }}</code></p>
+          <SchemaTree :doc="doc" :copy="copy" :schema="v" :trail="trail" :depth="depth + 1" />
         </div>
       </div>
       <!-- 純量 -->
-      <p v-else class="st__scalar"><code>{{ typeLabel(doc, resolved) }}</code> <span class="subtle">{{ constraintLabel(resolved) }}</span></p>
+      <p v-else class="st__scalar"><code>{{ typeLabel(doc, resolved) }}</code> <span class="subtle">{{ constraintLabel(resolved, copy) }}</span></p>
     </template>
   </div>
 </template>
