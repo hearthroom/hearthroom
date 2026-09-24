@@ -597,7 +597,11 @@ app.get('/v1/me/card-copies/:roleId',async(c)=>{
  const r=await fetch(`${providerApiBase(c.env,provider)}/open/v1/role/detail?roleId=${encodeURIComponent(c.req.param('roleId'))}`,{headers:{Authorization:`Bearer ${bearer}`},signal:AbortSignal.timeout(20000)});
  if(!r.ok)throw new HttpError(404,'card not found');const role=await r.json() as {accountNumId:number};
  if(role.accountNumId!==member.externalId)throw new HttpError(403,'not the author of this card');
- return c.json({copies:await copiesFor(c.env.DB,provider,c.req.param('roleId'))},200,{'Cache-Control':'no-store'});
+ // A saved draft gets its works row only on first submission; the editor's chat test
+ // still needs the verified role itself as the playable source before that.
+ const copies=await copiesFor(c.env.DB,provider,c.req.param('roleId'));
+ if(!copies.length)copies.push({provider,roleId:c.req.param('roleId'),status:'source',error:'',updatedAt:0});
+ return c.json({copies},200,{'Cache-Control':'no-store'});
 });
 app.get('/v1/cards/:roleId/platforms',async(c)=>{
  const link=await cardLink(c.env,c.req.param('roleId'),providerOf(c));
