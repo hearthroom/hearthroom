@@ -136,6 +136,7 @@ async function stamp(verdict: "approve" | "reject") {
     if (data.value) {
       data.value.submission.status = res.status;
       data.value.submission.claimedByMe = false;
+      data.value.submission.stampedByMe = true;
       data.value.submission.stamps.push({ verdict, note: note.value, at: Date.now() });
     }
   } catch (err) {
