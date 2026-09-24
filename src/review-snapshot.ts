@@ -73,6 +73,47 @@ export async function readForReview(env: Env, bearer: string, roleId: string, pr
     return (await res.json()) as Record<string, any>;
   };
 
+  return projectForReview(call, roleId);
+}
+
+/**
+ * 審核時向 Harbor 讀作者送審的那一版（封存版）完整設定。本站只拿發行方服務金鑰、不用作者 token；
+ * Harbor 回的是同一組唯讀端點的原樣回應，以路徑為鍵，所以沿用同一套投影。
+ * 完整設定不存在本站：它可能很大（幾百條世界書加作者版面），本站資料庫單列只有 2 MB。
+ */
+export async function readSealedForReview(env: Env, roleId: string, provider: ProviderId): Promise<ReviewSettings> {
+  if (!env.HOSTING_SERVICE_KEY) throw new HttpError(503, "hosting_unavailable");
+  const res = await fetch(`${apiBaseOf(env, provider)}/open/v1/hosting/revisions/${encodeURIComponent(roleId)}/review`, {
+    headers: { "X-Hosting-Key": env.HOSTING_SERVICE_KEY, "User-Agent": UA },
+    redirect: "manual",
+    signal: AbortSignal.timeout(30000),
+  }).catch(() => { throw new HttpError(502, "sealed revision read failed"); });
+  if (res.status === 404) throw new HttpError(404, "settings not found");
+  if (!res.ok) throw new HttpError(502, `sealed revision read failed with ${res.status}`);
+  const { responses } = (await res.json()) as { responses?: Record<string, Record<string, any>> };
+  const call: TransferCall = async (path) => {
+    const hit = responses?.[path];
+    if (!hit) throw new HttpError(404, "settings not found");
+    return hit;
+  };
+  return projectForReview(call, roleId);
+}
+
+/**
+ * 本站留下的審核紀錄：查重要用的原文（角色描述、名字）與審核頁的統計數字。
+ * 其他完整設定審核時向 Harbor 封存版讀（readSealedForReview）。
+ */
+export function reviewRecord(settings: ReviewSettings): ReviewSettings {
+  const doc = (settings.document ?? {}) as Record<string, unknown>;
+  return {
+    slim: true,
+    document: { roleName: doc.roleName ?? "", userName: doc.userName ?? "", roleDetailDesc: doc.roleDetailDesc ?? "" },
+    ...(settings.costProfile ? { costProfile: settings.costProfile } : {}),
+    hashes: settings.hashes,
+  };
+}
+
+async function projectForReview(call: TransferCall, roleId: string): Promise<ReviewSettings> {
   const r = await call(`/role/detail?roleId=${encodeURIComponent(roleId)}`);
   if (!("roleDetailDesc" in r)) throw new HttpError(409, "private settings unavailable");
   const document = {

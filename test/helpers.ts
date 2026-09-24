@@ -29,6 +29,7 @@ for (const table of ["originality_prints", "originality_texts", "account_auth_at
 const real = { ...upstream };
 export function restoreUpstream(): void {
   Object.assign(upstream, real);
+  sealed.clear();
   restoreHostedFixture();
 }
 
@@ -36,6 +37,10 @@ export function restoreUpstream(): void {
 
 /** 記錄每次「用作者的 token 讀整份設定」：測試才驗得出提交真的讀了、而且是拿作者的 token 讀的。 */
 export const settingsReads: { token: string; roleId: string; provider: string }[] = [];
+/** 記錄每次「審核時向 Harbor 讀封存版」：審核頁的完整內容來自這裡，不是本站存的副本。 */
+export const sealedReads: { roleId: string; provider: string }[] = [];
+/** 封存版不可變：同一個封存版 ID 永遠讀到封存當下的內容，跟 Harbor 一樣。每個測試結束時清空。 */
+const sealed = new Map<string, Record<string, unknown>>();
 
 /** 切換社群審核配置；公開測試資料同樣必須完成封存與審核。 */
 export function reviewOn(): void { (env as { REVIEW_ENABLED?: string }).REVIEW_ENABLED = "true"; }
@@ -50,7 +55,14 @@ export function reviewUpstream(detailFor: (roleId: string) => Record<string, unk
   settingsReads.length = 0;
   upstream.readForReview = async (_env, token, roleId, provider) => {
     settingsReads.push({ token, roleId, provider });
-    return { ...blankSettings(roleId), ...detailFor(roleId) } as Awaited<ReturnType<typeof real.readForReview>>;
+    const settings = { ...blankSettings(roleId), ...detailFor(roleId) } as Awaited<ReturnType<typeof real.readForReview>>;
+    if (!sealed.has(roleId)) sealed.set(roleId, structuredClone(settings));
+    return settings;
+  };
+  sealedReads.length = 0;
+  upstream.readSealedForReview = async (_env, roleId, provider) => {
+    sealedReads.push({ roleId, provider });
+    return structuredClone(sealed.get(roleId) ?? { ...blankSettings(roleId), ...detailFor(roleId) }) as Awaited<ReturnType<typeof real.readSealedForReview>>;
   };
 }
 

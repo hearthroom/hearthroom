@@ -1199,7 +1199,7 @@
   "workspace.alreadyPending": "这张卡片已在等待审核。",
   "workspace.submitUnavailable": "这次未能提交审核，请稍后再试。",
   "workspace.submitConflict": "提交内容已变更，请刷新后再试。",
-  "workspace.reviewConsent": "HearthRoom 会读取这一版的完整设定供审核，包括角色设定、开场白、世界书、额外指示与版面规则；审核结束或撤回后删除审核副本。托管服务会保留这一版，草稿修改不会改变已发布的内容，新版需另行送审。",
+  "workspace.reviewConsent": "审核人会在审核期间读取这一版的完整设定，包括角色设定、开场白、世界书、额外指示与版面规则；完整内容由托管服务保存，HearthRoom 只保留角色描述与名称供查重，审核结束或撤回后删除。草稿修改不会改变已发布的内容，新版需另行送审。",
   "workspace.editHint": "保存会更新草稿，已发布的版本不会改变。",
   "workspace.editNotice": "已发布版本会继续开放游玩；待审版本修改后保存，会重新开始审核。",
   "workspace.reviewRestarted": "修改已保存并重新送审，已发布版本仍可游玩。",

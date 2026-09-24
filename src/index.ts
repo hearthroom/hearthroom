@@ -1005,6 +1005,8 @@ async function claimedSubmission(c: Context<{ Bindings: Env; Variables: { ev: Pe
 app.get("/v1/review/:id/detail", async (c) => {
   const { member, s, stampedByMe } = await claimedSubmission(c);
   let detail = await loadSnapshot(c.env.DB, s.id);
+  // 本站只留了查重原文：完整設定向 Harbor 讀作者送審的那一版。定案後就不再讀（只給公開資料）。
+  if (detail?.slim) detail = s.status === 'pending' ? await upstream.readSealedForReview(c.env, s.source_role_id, s.provider as ProviderId) : null;
   if (!detail && s.status !== 'pending') {
     // 定案時快照已刪（本站不留私有設定）：回頭看的審核人只拿得到社群登記的公開資料。
     const row = await getCard(c.env.DB, String(s.card_id));

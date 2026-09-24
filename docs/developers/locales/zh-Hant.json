@@ -1619,5 +1619,11 @@
   "df1ae34edf992": "媒體庫",
   "d1d432f58690c": "對話",
   "dd357175cfe89": "媒體",
-  "df97e9da0e3b8": "其他"
+  "df97e9da0e3b8": "其他",
+  "d676ca492151d": "讀取已封存的 HearthRoom 版本供社群審核",
+  "d1369100e50e1": "只需後端發行方金鑰，不需使用者 token。以路徑為鍵，原樣回傳發行方本來就會呼叫的讀取端點的回應，組成一個封存版的完整設定：/role/detail（作者視角）、每本綁定 Lorebook 的 /worldbook/bindings、/worldbook/detail 與 /worldbook/entry/list，以及 /role/author-asset（卡片沒有時不含）。只有封存版可讀；草稿、暫存版與未知 ID 回 404。發行方在審核期間讀取這裡，而不是自己存一份副本，因此審核容量與服務提供方一致。",
+  "d769d805a8cda": "封存回執中的 hostedRevisionId",
+  "da76acabd876e": "以路徑為鍵的讀取回應",
+  "d52649548381b": "發行方金鑰無效",
+  "d5d6345b3acbb": "不是封存版"
 }

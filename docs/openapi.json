@@ -9876,6 +9876,63 @@
         "x-capability": "immutable-hosting-v1"
       }
     },
+    "/open/v1/hosting/revisions/{roleId}/review": {
+      "get": {
+        "operationId": "readHostedRevisionForReview",
+        "summary": "Read a sealed HearthRoom revision for community review",
+        "description": "Backend issuer key only, no user token. Returns the full configuration of one sealed revision as the verbatim responses of the read endpoints the issuer already uses, keyed by path: /role/detail (author view), /worldbook/bindings, /worldbook/detail and /worldbook/entry/list for each bound Lorebook, and /role/author-asset (absent when the card has none). Only sealed revisions resolve; drafts, staging revisions and unknown IDs return 404. The issuer reads this during review instead of storing its own copy, so review capacity matches the provider's.",
+        "security": [
+          {
+            "HostingIssuerKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "roleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "hostedRevisionId from the seal receipt"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read responses keyed by path",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "responses"
+                  ],
+                  "properties": {
+                    "responses": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid issuer key"
+          },
+          "404": {
+            "description": "Not a sealed revision"
+          },
+          "503": {
+            "description": "hosting_unavailable"
+          }
+        },
+        "x-capability": "immutable-hosting-v1"
+      }
+    },
     "/open/v1/media/references": {
       "post": {
         "operationId": "createHarborMediaReference",

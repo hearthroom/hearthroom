@@ -1199,7 +1199,7 @@
   "workspace.alreadyPending": "This card is already waiting for review.",
   "workspace.submitUnavailable": "The card could not be submitted; please try again later.",
   "workspace.submitConflict": "The submission changed; refresh the page and try again.",
-  "workspace.reviewConsent": "HearthRoom reads this version’s full configuration for review, including character instructions, greetings, Lorebooks, additional instructions and presentation rules, then deletes its review copy when review ends or you withdraw. The hosting service retains this version; draft edits leave published content unchanged and updates require a new review.",
+  "workspace.reviewConsent": "Reviewers read this version’s full configuration during review, including character instructions, greetings, Lorebooks, additional instructions and presentation rules. The hosting service keeps the full content; HearthRoom keeps only the character description and names for originality checks and deletes them when review ends or you withdraw. Draft edits leave published content unchanged and updates require a new review.",
   "workspace.editHint": "Saving updates the draft and leaves the published version unchanged.",
   "workspace.editNotice": "The published version stays playable; saving changes to a pending update restarts its review.",
   "workspace.reviewRestarted": "Your changes are saved and back in review; the published version stays playable.",
