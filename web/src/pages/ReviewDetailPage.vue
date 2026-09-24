@@ -179,7 +179,7 @@ onMounted(() => { void load(); });
         <div class="head__acts">
           <RouterLink class="btn btn--sm" :to="lp(`/play/${data.card.id}?review=${encodeURIComponent(id)}`)" target="_blank">{{ $t("review.action.play") }}</RouterLink>
           <button v-if="claimedByMe" class="btn btn--sm" :disabled="busy || decided" @click="release">{{ $t("review.action.release") }}</button>
-          <button v-else class="btn btn--sm btn--primary" :disabled="busy || decided" @click="claim">{{ $t("review.action.claim") }}</button>
+          <button v-else-if="!stampedByMe" class="btn btn--sm btn--primary" :disabled="busy || decided" @click="claim">{{ $t("review.action.claim") }}</button>
         </div>
       </header>
 
