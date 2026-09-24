@@ -2,7 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { ApiError, fetchMeAt, fetchMyCards, registerCard, unregisterCard, type MyCard, type MyCardPage } from "@/lib/api";
+import { ApiError, fetchMyCards, registerCard, unregisterCard, type MyCard, type MyCardPage } from "@/lib/api";
 import { confirmChoice } from "@/lib/confirm";
 import { daysUntilReset, remaining, weekRange } from "@/lib/quota";
 import { useLocalePath } from "@/lib/use-locale";
@@ -11,7 +11,7 @@ import MyCardTile from "@/components/MyCardTile.vue";
 
 import { useSession } from "@/lib/session";
 import { connectionMessage } from "@/lib/distribution";
-import { apiBaseOf, can, currentProvider, providerName, type ProviderId } from "@/lib/provider";
+import { can, currentProvider, providerName, type ProviderId } from "@/lib/provider";
 import { accountToken } from "@/lib/connections";
 
 const route = useRoute();
@@ -20,7 +20,6 @@ const session = useSession();
 const { lp } = useLocalePath();
 const { t, locale } = useI18n();
 
-const emails=ref<Partial<Record<ProviderId,string>>>({});
 const rows = ref<Partial<Record<ProviderId, MyCard[]>>>({});
 const pages = ref<Partial<Record<ProviderId, number>>>({});
 const more = ref<Partial<Record<ProviderId, boolean>>>({});
@@ -44,7 +43,6 @@ async function loadProvider(provider:ProviderId, append=false, version=generatio
   const token=await accountToken(provider,identity?.externalId);
   if(!token)throw new Error("connection_source_expired");
   const page=append?(pages.value[provider]??0)+1:1;
-  if(!append) {const me=await fetchMeAt(apiBaseOf(provider),token).catch(()=>null);if(version===generation && me?.email)emails.value[provider]=me.email;}
   const result=await fetchMyCards(token,{provider,page,fresh:true});
   if(version!==generation)return;
   rows.value[provider]=append?[...(rows.value[provider]??[]),...result.items]:result.items;
@@ -145,7 +143,7 @@ function persistCard(card:WorkspaceCard) {
  if(original)Object.assign(original,card);
 }
 watch(()=>[session.me?.accountNumId,providers.value.join(',')],()=>{
- generation++;emails.value={};rows.value={};pages.value={};more.value={};failures.value={};quota.value=null;
+ generation++;rows.value={};pages.value={};more.value={};failures.value={};quota.value=null;
  void load();
 },{immediate:true});
 watch(()=>route.query.fresh, fresh=>{
@@ -210,7 +208,6 @@ watch(()=>route.query.fresh, fresh=>{
         :key="workKey(card)"
         :card="card"
         :locked="quotaFull"
-        :emails="emails"
         :busy="busy === workKey(card)"
         @toggle="toggle(card)"
         @resubmit="submit(card)"

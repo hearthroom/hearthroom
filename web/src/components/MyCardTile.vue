@@ -1,26 +1,24 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { useSession } from "@/lib/session";
-import { playCopies } from "@/lib/card-workspace";
-import { platformPath, type CardCopy } from "@/lib/distribution";
+import { platformPath } from "@/lib/distribution";
 import { compact } from "@/lib/format";
 import { zoneLabel } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
-import { can, currentProvider, providerName, type ProviderId } from "@/lib/provider";
+import { can, currentProvider } from "@/lib/provider";
 import type { MyCard } from "@/lib/api";
 
 /** locked：這週的登記額度用完了。只鎖「登記」，撤銷登記照常——撤掉不佔額度。 */
-const props = defineProps<{ card: MyCard & {sourceAvailable?:boolean}; busy: boolean; locked?: boolean; emails?:Partial<Record<ProviderId,string>> }>();
+const props = defineProps<{ card: MyCard & {sourceAvailable?:boolean}; busy: boolean; locked?: boolean }>();
 defineEmits<{ toggle: []; resubmit: [] }>();
 
 const { lp } = useLocalePath();
-const session=useSession();
 const source=computed(()=>props.card.sourceProvider??props.card.provider??currentProvider());
 const sourceId=computed(()=>props.card.sourceRoleId??props.card.roleId);
-const stored=ref<CardCopy[]>([]);
-const choosingPlay=ref(false);
-const plays=computed(()=>playCopies(sourceId.value,source.value,stored.value,session.profile?.identities.map(i=>i.provider as ProviderId)??[source.value]));
-const accountLabel=(p:ProviderId)=>props.emails?.[p] || providerName(p);
+const hasDetails = computed(() =>
+  ['pending', 'rejected', 'superseded'].includes(props.card.updateStatus ?? '') ||
+  (props.card.status === 'rejected' && !!props.card.note) ||
+  props.card.sourceAvailable === false
+);
 
 const initial = computed(() => [...props.card.name][0] ?? "?");
 const failedArt = ref<string[]>([]);
@@ -58,7 +56,7 @@ function onArtError() {
         <!-- 工作區的操作不能藏在 hover 底下：觸控裝置根本碰不到 -->
         <div class="card__actions">
           <!-- 自己的卡不用登記也能玩：登記是上榜，不是能不能對話的門檻 -->
-          <button class="btn btn--sm" :aria-expanded="choosingPlay" @click="choosingPlay=!choosingPlay">{{ $t("mine.action.play") }}</button>
+          <a class="btn btn--sm" :href="platformPath(lp(`/play/${card.num ?? card.detailId ?? sourceId}?mode=source`),source)">{{ $t("mine.action.play") }}</a>
           <a v-if="can('editor',source)" class="btn btn--sm" :href="platformPath(lp(`/cards/${card.num ?? card.detailId ?? sourceId}/edit`),source)">{{ $t("mine.action.edit") }}</a>
           <!-- 被駁回、離榜重審、被收回授權的卡：主鍵是「重新提交」，取消登記退到次要 -->
           <button
@@ -81,19 +79,11 @@ function onArtError() {
         </div>
       </div>
     </div>
-    <div class="card__body">
+    <div v-if="hasDetails" class="card__body">
       <p v-if="card.updateStatus==='pending'" class="card__note">{{ $t("workspace.updatePending") }}</p>
       <p v-if="card.updateStatus==='rejected'" class="card__note">{{ $t("workspace.updateRejected") }}</p>
       <p v-if="card.updateStatus==='superseded'" class="card__note">{{ $t("workspace.reviewSaveRetry") }}</p>
       <p v-if="(card.status === 'rejected' || card.updateStatus==='rejected') && card.note" class="card__note">{{ $t("mine.note.rejected", { note: card.note }) }}</p>
-      <section v-if="choosingPlay" class="play-choices">
-        <h4>{{ $t('workspace.playTitle') }}</h4>
-        <p class="subtle">{{ $t('linked.playHint') }}</p>
-        <a v-for="copy in plays" :key="copy.provider" class="play-choice" :href="platformPath(lp(`/play/${card.num ?? card.detailId ?? copy.roleId}?mode=source`),copy.provider)">
-          <strong>{{ providerName(copy.provider) }}</strong><span>{{ accountLabel(copy.provider) }}</span><span aria-hidden="true">→</span>
-        </a>
-        <p v-if="!plays.length" class="subtle">{{ $t('workspace.noCopy') }}</p>
-      </section>
       <p v-if="card.sourceAvailable===false" class="subtle">{{ $t('workspace.sourceLoading') }}</p>
     </div>
   </article>
@@ -137,14 +127,4 @@ function onArtError() {
 .card__actions > .card__withdraw { background: transparent; }
 .card__body { display: grid; min-width: 0; gap: var(--s-2); padding: var(--s-3); }
 .card__note { font-size: 12px; color: var(--danger); line-height: 1.5; overflow-wrap: anywhere; }
-.card__body :deep(.copy-summary) { margin-top: 0; padding-top: 0; border-top: 0; gap: var(--s-2); }
-.card__body :deep(.copy-summary + .distribution) { padding-top: 0; }
-.card__body :deep(.target > a) { display: inline-flex; align-items: center; min-height: 44px; }
-.play-choices { display: grid; gap: var(--s-2); padding: var(--s-3); background: var(--surface-2); border-radius: var(--r-sm); }
-.play-choices h4 { font-size: 14px; }
-.play-choices p { font-size: 12px; line-height: 1.6; }
-.play-choice { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 2px var(--s-2); padding: var(--s-3); border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); font-size: 13px; }
-.play-choice span { overflow-wrap: anywhere; color: var(--text-2); }
-.play-choice span:nth-child(2) { grid-column: 1; }
-.play-choice span:last-child { grid-column: 2; grid-row: 1/3; align-self: center; }
 </style>
