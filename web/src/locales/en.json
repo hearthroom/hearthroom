@@ -593,6 +593,7 @@
   "review.claimFirst": "Claim this card for review before approving or rejecting.",
   "review.revoked": "The author revoked access; the card left the board.",
   "review.partial": "This re-review was opened automatically after the card's public details changed. The author has not resubmitted, so only the current public content is shown (name, summary, cover, tags, opening).",
+  "review.closedPartial": "This review is closed. The full settings were deleted when it was decided; only the public details and the review record remain.",
   "review.done.approved": "On the board.",
   "review.done.approve": "Approved. One more reviewer must approve before it is listed.",
   "review.done.rejected": "Rejected.",

@@ -7,13 +7,14 @@ import { HttpError, type Localized, pickLocale } from "./types";
  * 規則（owner 2026-09-07）：
  *   - 共享佇列，不派工：審核人自己領（claim），領了就是「我正在看」。逾時（CLAIM_TTL_MS）
  *     自動視為放回——沒有排程，讀取與動作時懶惰判定。
- *   - 初審兩章、重審一章；蓋章的人要不同；任何一個駁回即駁回。
+ *   - 初審、重審都是一章（owner 2026-09-24：審核人手不夠，先降成 1/1；恢復兩章只改 STAMPS_REQUIRED）；
+ *     任何一個駁回即駁回。
  *   - 盲審：佇列與詳情都不帶作者身分。卡片名稱與封面會露出，那是內容本身，擋不了。
  *   - 過審綁內容版本：approved 時把提交當下的雜湊寫進 cards.reviewed_hash；同步時發現
  *     主站雜湊變了就開重審單、卡片離榜。
  */
 export const CLAIM_TTL_MS = 45 * 60 * 1000;
-export const STAMPS_REQUIRED: Record<SubmissionKind, number> = { first: 2, re: 1 };
+export const STAMPS_REQUIRED: Record<SubmissionKind, number> = { first: 1, re: 1 };
 
 export type SubmissionKind = "first" | "re";
 export type SubmissionStatus = "pending" | "approved" | "rejected" | "superseded";
@@ -134,7 +135,7 @@ export async function getSubmission(db: D1Database, id: string): Promise<Submiss
   return row;
 }
 
-async function hasStamped(db: D1Database, submissionId: string, memberId: string): Promise<boolean> {
+export async function hasStamped(db: D1Database, submissionId: string, memberId: string): Promise<boolean> {
   const row = await db
     .prepare("SELECT 1 AS ok FROM review_stamps WHERE submission_id = ? AND member_id = ?")
     .bind(submissionId, memberId)

@@ -593,6 +593,7 @@
   "review.claimFirst": "先领取审核任务才能通过或驳回。",
   "review.revoked": "作者已收回授权，这张卡已离榜。",
   "review.partial": "这张单是公开资料变更后自动开的重审：作者没有重新送审，所以这里只有现在的公开内容（名称、简介、封面、标签、开场白）。",
+  "review.closedPartial": "这一轮审核已定案。完整设定在定案时就删除了，这里只剩公开资料与审核记录。",
   "review.done.approved": "已上榜。",
   "review.done.approve": "已通过，还需要另一位审核人通过才会上榜。",
   "review.done.rejected": "已驳回。",

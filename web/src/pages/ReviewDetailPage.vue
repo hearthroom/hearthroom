@@ -72,6 +72,7 @@ const doc = computed(() => data.value?.detail.document);
 // 對話示例入庫是一串 JSON，作者在編輯頁看到的是一輪一輪的「誰說、說什麼」；審核頁照編輯頁的樣子畫，不倒原始字串。
 const talkTurns = computed(() => readTalkExample(doc.value?.talkExample));
 const claimedByMe = computed(() => !!data.value?.submission.claimedByMe);
+const stampedByMe = computed(() => !!data.value?.submission.stampedByMe);
 const tags = computed(() => readTags(doc.value?.roleTag));
 const decided = computed(() => !!data.value && data.value.submission.status !== "pending");
 
@@ -152,7 +153,8 @@ onMounted(() => { void load(); });
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
     <RouterLink v-if="error && !data" :to="lp('/review')">{{ $t("review.backToQueue") }}</RouterLink>
     <button v-if="needsClaim" class="btn btn--primary" :disabled="busy" @click="claim">{{ $t("review.action.claim") }}</button>
-    <p v-if="data?.detail.partial" class="notice" role="status">{{ $t("review.partial") }}</p>
+    <p v-if="data?.detail.closed" class="notice" role="status">{{ $t("review.closedPartial") }}</p>
+    <p v-else-if="data?.detail.partial" class="notice" role="status">{{ $t("review.partial") }}</p>
     <p v-if="done" class="notice" role="status">{{ done }} <RouterLink :to="lp('/review')">← {{ $t("review.eyebrow") }}</RouterLink></p>
 
     <div v-if="loading" class="ghost detail-ghost" aria-hidden="true" />
@@ -330,7 +332,8 @@ onMounted(() => { void load(); });
           <!-- 常見的駁回理由一鍵填入；審核人不改作者的宣告，只駁回 -->
           <button type="button" class="btn btn--sm btn--ghost" :disabled="decided" @click="note = $t('review.rating.mismatch')">{{ $t("review.rating.mismatchFill") }}</button>
         </div>
-        <p v-if="!claimedByMe && !decided" class="subtle">{{ $t("review.claimFirst") }}</p>
+        <p v-if="stampedByMe" class="subtle">{{ $t("review.stampedByMe") }}</p>
+        <p v-else-if="!claimedByMe && !decided" class="subtle">{{ $t("review.claimFirst") }}</p>
         <div class="verdict__acts">
           <button class="btn btn--danger" :disabled="busy || decided || !claimedByMe || !note.trim()" @click="stamp('reject')">{{ $t("review.action.reject") }}</button>
           <button class="btn btn--primary" :disabled="busy || decided || !claimedByMe" @click="stamp('approve')">{{ $t("review.action.approve") }}</button>

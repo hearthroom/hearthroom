@@ -74,10 +74,8 @@ it("awards the first approved work once and creates one private review-result no
       return res;
     };
     expect((await act("claim")).status).toBe(200);
-    expect((await act("stamp", { verdict: "approve" })).status).toBe(200);
     expect(await env.DB.prepare("SELECT badge FROM community_awards WHERE member_id=?").bind(author).first()).toBeNull();
-    expect((await act("claim", {}, "secondReviewer")).status).toBe(200);
-    const decision = await act("stamp", { verdict: "approve" }, "secondReviewer");
+    const decision = await act("stamp", { verdict: "approve" });
     expect(decision.status).toBe(200);
     expect(await decision.json()).toMatchObject({ status: "approved" });
     expect(

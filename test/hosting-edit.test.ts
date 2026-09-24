@@ -16,7 +16,7 @@ async function setup() {
  vi.spyOn(upstream,'readForReview').mockResolvedValue({document:{roleDetailDesc:'fixture'},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
  const submit = (nsfw=false) => submitHosted(env,{memberId,account:10001,role:draft,token:'fixture',nsfw,operationId:crypto.randomUUID(),now:Date.now()});
  const pending = async () => (await pendingSubmissionOf(env.DB,(await getCard(env.DB,'draft','harbor'))!.id))!;
- const approve = async () => { const s=await pending(); for(const memberId of s.kind==='first'?['a','b']:['c']) {await claim(env.DB,s.id,memberId,Date.now());await stamp(env.DB,{submissionId:s.id,memberId,verdict:'approve',note:'',now:Date.now()});} };
+ const approve = async () => { const s=await pending(); for(const memberId of s.kind==='first'?['a','b']:['c']) {await claim(env.DB,s.id,memberId,Date.now());if((await stamp(env.DB,{submissionId:s.id,memberId,verdict:'approve',note:'',now:Date.now()})).submission.status!=='pending')break;} };
  return {memberId,draft,submit,pending,approve};
 }
 it('editing a pending update retires its review, preserves A, and a fresh review promotes B',async()=>{

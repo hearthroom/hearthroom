@@ -593,6 +593,7 @@
   "review.claimFirst": "先領取審核任務才能通過或駁回。",
   "review.revoked": "作者已收回授權，這張卡已離榜。",
   "review.partial": "這張單是公開資料變更後自動開的重審：作者沒有重新送審，所以這裡只有現在的公開內容（名稱、簡介、封面、標籤、開場白）。",
+  "review.closedPartial": "這一輪審核已定案。完整設定在定案時就刪除了，這裡只剩公開資料與審核紀錄。",
   "review.done.approved": "已上榜。",
   "review.done.approve": "已通過，還需要另一位審核人通過才會上榜。",
   "review.done.rejected": "已駁回。",

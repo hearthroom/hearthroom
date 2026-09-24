@@ -14,7 +14,7 @@ async function approved(provider: 'lunatalk'|'harbor') {
  vi.spyOn(upstream,'readForReview').mockResolvedValue({hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
  const receipt=await submitHosted(env,{provider,memberId,account:10001,role:role({roleId:'draft',authorNumId:10001}),token:'author',nsfw:false,operationId:crypto.randomUUID(),now:Date.now()});
  const sub=await env.DB.prepare('SELECT id FROM review_submissions').first<{id:string}>();
- for(const reviewer of ['one','two']){await claim(env.DB,sub!.id,reviewer,Date.now());await stamp(env.DB,{submissionId:sub!.id,memberId:reviewer,verdict:'approve',note:'',now:Date.now()});}
+ for(const reviewer of ['one','two']){await claim(env.DB,sub!.id,reviewer,Date.now());if((await stamp(env.DB,{submissionId:sub!.id,memberId:reviewer,verdict:'approve',note:'',now:Date.now()})).submission.status!=='pending')break;}
  return receipt;
 }
 it('lists all ready copies of the approved version without testing mutable draft visibility',async()=>{

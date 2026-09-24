@@ -103,13 +103,13 @@ describe("審核佇列", () => {
     expect(q.body.items).toHaveLength(1);
     const item = q.body.items[0];
     expect(item.card.name).toBe("夜行偵探");
-    expect(item.stamps).toEqual({ approve: 0, required: 2 });
+    expect(item.stamps).toEqual({ approve: 0, required: 1 });
     expect(item.claim).toBe("free");
     expect(JSON.stringify(item)).not.toContain(String(AUTHOR));
     expect(item).not.toHaveProperty("author");
   });
 
-  it("初審兩章上榜：領→蓋→放回→另一人領→蓋；同一人不能蓋兩次；沒領不能蓋", async () => {
+  it("初審一章上榜：領→蓋即定案；沒領不能蓋；別人領著不能搶", async () => {
     await submit("role-1");
     await makeReviewer(REVIEWER_A);
     await makeReviewer(REVIEWER_B);
@@ -124,21 +124,49 @@ describe("審核佇列", () => {
     expect((await queue("rev-b")).body.items[0].claim).toBe("other");
 
     const first = (await (await act(id, "stamp", "rev-a", { verdict: "approve" })).json()) as any;
-    expect(first).toMatchObject({ status: "pending", cardStatus: "pending", stamps: { approve: 1, required: 2 } });
-    expect(await board()).toHaveLength(0);
-
-    // 蓋完自動放回；同一人不能再領
-    expect((await act(id, "claim", "rev-a")).status).toBe(409);
-    expect((await queue("rev-a")).body.items[0].stampedByMe).toBe(true);
-
-    expect((await act(id, "claim", "rev-b")).status).toBe(200);
-    const second = (await (await act(id, "stamp", "rev-b", { verdict: "approve" })).json()) as any;
-    expect(second).toMatchObject({ status: "approved", cardStatus: "approved", stamps: { approve: 2, required: 2 } });
+    expect(first).toMatchObject({ status: "approved", cardStatus: "approved", stamps: { approve: 1, required: 1 } });
     expect(await board()).toHaveLength(1);
     expect(await cardStatus("role-1")).toMatchObject({ status: "approved", reviewed_hash: expect.stringMatching(/^version:/) });
     // 上榜＝定案：快照刪掉，本站不留私有設定
     expect(await snapshots()).toBe(0);
     expect((await queue("rev-a")).body.items).toHaveLength(0);
+    // 定案後不能再領、再蓋
+    expect((await act(id, "claim", "rev-a")).status).toBe(409);
+    expect((await act(id, "stamp", "rev-b", { verdict: "approve" })).status).toBe(409);
+  });
+
+  it("蓋過章的審核人回頭看：不必再領，唯讀；定案後只剩公開資料，仍不帶作者；沒蓋過的人看不到", async () => {
+    reviewUpstream((roleId) => ({ roleId, authorNumId: AUTHOR, document: { roleName: "夜行偵探", customInstructions: "自訂指示" } }));
+    await submit("role-1");
+    await makeReviewer(REVIEWER_A);
+    await makeReviewer(REVIEWER_B);
+    const id = (await queue("rev-a")).body.items[0].id as string;
+    const detail = (who: string) => SELF.fetch(`https://c.test/v1/review/${id}/detail`, { headers: bearer(who) });
+
+    // 還在等的單（例如重審前的舊單）：蓋過章的人不必領就看得到完整快照
+    await env.DB.prepare("INSERT INTO review_stamps (submission_id, member_id, verdict, note, created_at) VALUES (?, ?, 'approve', '', ?)")
+      .bind(id, `member-${REVIEWER_A}`, Date.now()).run();
+    const pending = await detail("rev-a");
+    expect(pending.status).toBe(200);
+    const pendingBody = (await pending.json()) as any;
+    expect(pendingBody.submission).toMatchObject({ status: "pending", claimedByMe: false, stampedByMe: true });
+    expect(pendingBody.detail.document.customInstructions).toBe("自訂指示");
+    expect((await detail("rev-b")).status).toBe(409);
+    await env.DB.prepare("DELETE FROM review_stamps WHERE submission_id = ?").bind(id).run();
+
+    await act(id, "claim", "rev-a");
+    expect((await act(id, "stamp", "rev-a", { verdict: "approve" })).status).toBe(200);
+    const closed = await detail("rev-a");
+    expect(closed.status).toBe(200);
+    const body = (await closed.json()) as any;
+    expect(body.submission).toMatchObject({ status: "approved", stampedByMe: true, claimedByMe: false });
+    expect(body.submission.stamps).toHaveLength(1);
+    expect(body.detail).toMatchObject({ partial: true, closed: true });
+    expect(body.detail.document.roleName).toBe("夜行偵探");
+    expect(body.detail.document.customInstructions).toBeUndefined();
+    expect(JSON.stringify(body)).not.toContain(String(AUTHOR));
+    // 沒蓋過章的審核人：定案的單照舊看不到
+    expect((await detail("rev-b")).status).toBe(410);
   });
 
   it("任何一個駁回即駁回，駁回要附說明，作者在我的卡片看得到", async () => {
@@ -187,7 +215,7 @@ describe("審核佇列", () => {
     const body = (await res.json()) as any;
     expect(body.card.id).toBe("100001");
     expect(body.detail.document.customInstructions).toBe("自訂指示");
-    expect(body.submission).toMatchObject({ kind: "first", required: 2, claimedByMe: true });
+    expect(body.submission).toMatchObject({ kind: "first", required: 1, claimedByMe: true, stampedByMe: false });
     expect(JSON.stringify(body)).not.toContain(String(AUTHOR));
     expect((await SELF.fetch(`https://c.test/v1/review/${id}/detail`, { headers: bearer("stranger") })).status).toBe(403);
     // 審核頁不再回頭問供應商：快照是唯一來源
