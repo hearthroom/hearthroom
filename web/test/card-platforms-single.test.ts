@@ -27,6 +27,7 @@ it('skips the platform choice when the card has a single playable source', async
   expect(root.querySelector('fieldset')).toBeNull();
   expect(root.textContent).not.toContain(i18n.global.t('linked.playWith'));
   expect(playButton()).toBeDefined();
+  expect(root.textContent).not.toContain(i18n.global.t('linked.playHint'));
 });
 
 it('still asks which platform when several sources exist', async () => {

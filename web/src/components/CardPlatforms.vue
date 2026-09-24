@@ -139,7 +139,7 @@ async function play() {
     <p v-else-if="!loading && !error && !choice" class="subtle">
       {{ $t("linked.noPlayable") }}
     </p>
-    <p v-if="choice" class="subtle note">{{ $t("linked.playHint") }}</p>
+    <p v-if="choice && !single" class="subtle note">{{ $t("linked.playHint") }}</p>
     <button
       v-if="choice"
       class="btn btn--primary btn--lg"
