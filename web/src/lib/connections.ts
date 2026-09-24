@@ -58,6 +58,11 @@ async function result(res: Response) {
   if (!res.ok) throw new Error(body.error || "connection_failed");
   return body;
 }
+/** 這個失敗只要重新授權就能解：授權過期、或平台要求重新同意。 */
+export function needsReauthorization(error: unknown): boolean {
+  const code = error instanceof Error ? error.message : "";
+  return code === "connection_source_expired" || code === "auth_reauthorization_required";
+}
 export function connectAccount(provider: ProviderId, returnTo: string) {
   return beginLogin(returnTo, { provider });
 }

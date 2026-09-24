@@ -1045,7 +1045,7 @@
   "linked.error.provider_already_connected": "このプラットフォームには別のアカウントが連携済みです。連携済みのアカウントで再認証してください。",
   "linked.error.account_already_connected": "このアカウントは別の連携グループに属しています。元の HearthRoom アカウントで連携を解除してください。",
   "linked.error.connection_conflict": "連携状態が変わりました。再読み込みしてからやり直してください。",
-  "linked.error.connection_source_expired": "再認証が必要です。アカウントページからサービスを再連携してください。",
+  "linked.error.connection_source_expired": "認証の有効期限が切れました。再認証すると続けられます。",
   "linked.error.cannot_disconnect_current_account": "別の連携済みアカウントに切り替えてから解除してください。",
   "linked.error.cannot_disconnect_founding_account": "HearthRoom メンバーを作成したアカウントは現在解除できません。",
   "linked.error.connection_proof_required": "再認証が必要です。アカウントページからサービスを再連携してください。",
