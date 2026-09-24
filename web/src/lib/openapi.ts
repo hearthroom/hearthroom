@@ -63,7 +63,7 @@ export interface OpenApiDocument {
   [key: string]: unknown;
 }
 
-export const HTTP_METHODS = ["get", "post", "put", "patch", "delete"] as const;
+export const HTTP_METHODS = ["get", "head", "post", "put", "patch", "delete"] as const;
 export type HttpMethod = (typeof HTTP_METHODS)[number];
 
 export interface Endpoint {
@@ -89,7 +89,7 @@ export function groupByTag(doc: OpenApiDocument): TagGroup[] {
   const declared = doc.tags ?? [];
   const groups = new Map<string, TagGroup>();
   for (const t of declared) groups.set(t.name, { name: t.name, description: t.description, endpoints: [] });
-  const methodOrder: Record<string, number> = { get: 0, post: 1, put: 2, patch: 3, delete: 4 };
+  const methodOrder: Record<string, number> = { get: 0, head: 1, post: 2, put: 3, patch: 4, delete: 5 };
   for (const [path, item] of Object.entries(doc.paths).sort(([a], [b]) => a.localeCompare(b))) {
     for (const method of HTTP_METHODS) {
       const op = item[method];

@@ -10,7 +10,8 @@ import { computed, onMounted, ref, watch } from "vue";
 import SchemaTree from "@/components/SchemaTree.vue";
 import { authLabel, groupByTag, typeLabel, type Endpoint, type OpenApiDocument } from "@/lib/openapi";
 
-const props = defineProps<{ doc: OpenApiDocument }>();
+const props = withDefaults(defineProps<{ doc: OpenApiDocument; idPrefix?: string }>(), { idPrefix: "" });
+const anchorId = (id: string) => `${props.idPrefix}${id}`;
 const groups = computed(() => groupByTag(props.doc));
 const open = ref<Set<string>>(new Set());
 const securitySchemes = computed(() =>
@@ -25,7 +26,7 @@ function toggle(id: string) {
 function openFromHash() {
   const id = decodeURIComponent(location.hash.replace(/^#/, ""));
   if (!id) return;
-  for (const g of groups.value) for (const e of g.endpoints) if (e.id === id) { open.value = new Set([...open.value, id]); }
+  for (const g of groups.value) for (const e of g.endpoints) if (anchorId(e.id) === id) { open.value = new Set([...open.value, e.id]); }
 }
 onMounted(() => { openFromHash(); window.addEventListener("hashchange", openFromHash); });
 watch(groups, openFromHash);
@@ -52,18 +53,18 @@ const topNotes = computed(() => Object.entries(props.doc).filter(([k]) => k.star
 <template>
   <div class="ref">
     <section v-for="g in groups" :key="g.name" class="ref__group">
-      <h2 :id="`tag-${g.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`">{{ g.name }}</h2>
+      <h2 :id="anchorId(`tag-${g.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`)">{{ g.name }}</h2>
       <p v-if="g.description" class="ref__tagdesc">{{ g.description }}</p>
 
       <article v-for="e in g.endpoints" :key="e.id" class="ep" :class="{ 'ep--open': open.has(e.id), 'ep--deprecated': e.op.deprecated }">
-        <h3 :id="e.id" class="ep__head" @click="toggle(e.id)">
+        <h3 :id="anchorId(e.id)" class="ep__head" @click="toggle(e.id)">
           <span class="ep__method" :class="`ep__method--${e.method}`">{{ e.method.toUpperCase() }}</span>
           <code class="ep__path">{{ e.path }}</code>
           <span class="ep__summary">{{ e.op.summary }}</span>
           <span class="ep__auth">
             <span v-for="a in authOf(e)" :key="a" class="ep__auth-chip" :class="{ 'ep__auth-chip--none': a === 'none' }">{{ a === "none" ? "no auth" : a }}</span>
           </span>
-          <a :href="`#${e.id}`" class="ep__anchor" aria-label="link" @click.stop>#</a>
+          <a :href="`#${anchorId(e.id)}`" class="ep__anchor" aria-label="link" @click.stop>#</a>
         </h3>
 
         <div v-if="open.has(e.id)" class="ep__body">
@@ -111,7 +112,7 @@ const topNotes = computed(() => Object.entries(props.doc).filter(([k]) => k.star
     </section>
 
     <section v-if="topNotes.length" class="ref__group">
-      <h2 id="notes">Notes</h2>
+      <h2 :id="anchorId('notes')">Notes</h2>
       <details v-for="n in topNotes" :key="n.key" class="ep__ext">
         <summary><h4>{{ n.key.replace(/^x-/, "").replace(/-/g, " ") }}</h4></summary>
         <pre class="ep__example"><code>{{ pretty(n.value) }}</code></pre>
@@ -119,7 +120,7 @@ const topNotes = computed(() => Object.entries(props.doc).filter(([k]) => k.star
     </section>
 
     <section v-if="securitySchemes.length" class="ref__group">
-      <h2 id="security-schemes">Security schemes</h2>
+      <h2 :id="anchorId('security-schemes')">Security schemes</h2>
       <dl class="ref__sec">
         <template v-for="s in securitySchemes" :key="s.name">
           <dt><code>{{ s.name }}</code></dt>
@@ -142,7 +143,7 @@ const topNotes = computed(() => Object.entries(props.doc).filter(([k]) => k.star
 }
 .ep__head:hover { background: var(--surface-2); }
 .ep__method { display: inline-block; min-width: 56px; text-align: center; padding: 2px 6px; border-radius: 5px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; color: #fff; }
-.ep__method--get { background: #2f855a; }
+.ep__method--get, .ep__method--head { background: #2f855a; }
 .ep__method--post { background: #2b6cb0; }
 .ep__method--put { background: #b7791f; }
 .ep__method--patch { background: #6b46c1; }

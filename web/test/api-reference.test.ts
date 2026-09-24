@@ -78,3 +78,25 @@ describe("ApiReference", () => {
     el.remove();
   });
 });
+
+
+describe("multiple references", () => {
+  it("renders HEAD operations and prefixes every anchor and deep link", async () => {
+    const data: OpenApiDocument = { ...doc, 'x-notes': {}, paths: { '/u/{uid}/{path}': {
+      head: { summary: 'Inspect a media alias', responses: { '302': { description: 'Redirect' } } },
+    } } };
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    window.location.hash = '#integration-head-u-uid-path';
+    const app = createApp(ApiReference, { doc: data, idPrefix: 'integration-' });
+    try {
+      app.mount(el);
+      await nextTick();
+      expect(el.querySelector('#integration-head-u-uid-path')).not.toBeNull();
+      expect(el.querySelector('.ep__body')?.textContent).toContain('302');
+      expect(el.querySelector('#integration-notes')).not.toBeNull();
+      expect(el.querySelector('#integration-security-schemes')).not.toBeNull();
+      expect([...el.querySelectorAll('[id]')].every(e => e.id.startsWith('integration-'))).toBe(true);
+    } finally { app.unmount(); el.remove(); window.location.hash = ''; }
+  });
+});

@@ -634,7 +634,7 @@
   "footer.guide": "Authoring guide",
   "developers.title": "Developer docs",
   "guide.title": "Card authoring guide",
-  "developers.source": "The spec lives in the repository next to the code. View community-openapi.json on GitHub",
+  "developers.source": "View the OpenAPI specification on GitHub",
   "board.sort.day": "Today",
   "board.sort.week": "This week",
   "board.sort.month": "This month",

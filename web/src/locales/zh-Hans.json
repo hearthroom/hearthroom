@@ -634,7 +634,7 @@
   "footer.guide": "写卡指南",
   "developers.title": "开发者文档",
   "guide.title": "写卡指南",
-  "developers.source": "规格文件与代码同仓库维护，在 GitHub 上查看 community-openapi.json",
+  "developers.source": "在 GitHub 上查看 OpenAPI 规范",
   "board.sort.day": "日榜",
   "board.sort.week": "周榜",
   "board.sort.month": "月榜",
