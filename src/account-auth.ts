@@ -98,7 +98,13 @@ async function exchange(env:Env,provider:ProviderId,clientId:string,body:Record<
   if(!data.access_token||!data.refresh_token||!Number.isFinite(data.expires_in)||data.expires_in!<=0)throw new HttpError(503,'auth_provider_unavailable');
   return {accessToken:data.access_token,refreshToken:data.refresh_token,clientId,expiresAt:Date.now()+Math.max(0,data.expires_in!-60)*1000};
 }
+// 客戶端決定授權與建的卡歸哪個應用。動態註冊一律落在開放生態，而且每個網域註冊出來都是
+// 另一個應用（2026-09-24：加了 sukisuki 兩個網域後，授權多出好幾張、卡片全掉進 open）。
+// 設了 HARBOR_CLIENT_ID 就只用它，任何網域都一樣，絕不退回註冊；新網域加在它的回呼網址上。
+// 沒設（分叉自架）才維持逐網域動態註冊。
 async function registeredClient(c:C,provider:ProviderId,origin:string){
+  const fixed=provider==='harbor'?(c.env.HARBOR_CLIENT_ID??'').trim():'';
+  if(fixed)return fixed;
   const scope=scopes[provider]!;
   let row=await c.env.DB.prepare('SELECT client_id FROM account_auth_clients WHERE origin=? AND provider=? AND scope=?').bind(origin,provider,scope).first<{client_id:string}>();
   if(row)return row.client_id;

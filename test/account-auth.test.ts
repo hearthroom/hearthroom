@@ -8,7 +8,8 @@ import { accountAuthMaintenance, openAuth, sealAuth } from '../src/account-auth'
 const origin = 'https://hearthroom.club';
 const authEnv = () => ({ ...env, AUTH_ENABLED: 'true', AUTH_ALLOWED_ORIGINS: origin,
   AUTH_KEYRING: JSON.stringify({ active: 'test', keys: { test: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=' } }),
-  AUTH_METRICS_SECRET: 'metrics-test-only' });
+  AUTH_METRICS_SECRET: 'metrics-test-only', ...envOverride });
+let envOverride: Record<string, string> = {};
 const context = { waitUntil: (_p: Promise<unknown>) => {}, passThroughOnException() {} } as ExecutionContext;
 let cookies: Record<string, string> = {};
 function cookieHeader() { return Object.entries(cookies).map(([k,v])=>`${k}=${v}`).join('; '); }
@@ -23,7 +24,7 @@ async function request(path: string, body?: unknown, extra: Record<string,string
   }
   return response;
 }
-beforeEach(async()=>{ await resetDb(); cookies={}; });
+beforeEach(async()=>{ await resetDb(); cookies={}; envOverride={}; });
 afterEach(()=>vi.restoreAllMocks());
 
 it('advertises managed auth only with complete configuration and rejects cross-origin starts', async()=>{
@@ -252,4 +253,23 @@ it('keeps authorization callback URLs out of referrers and caches',async()=>{
   const response=await worker.fetch(new Request(origin+'/auth/callback?code=synthetic&state=synthetic'),authEnv(),context);
   expect(response.headers.get('Referrer-Policy')).toBe('no-referrer');
   expect(response.headers.get('Cache-Control')).toContain('no-store');
+});
+
+// 客戶端決定授權與建的卡歸哪個應用。動態註冊一律落在開放生態，而且每個網域註冊出來都算
+// 另一個應用：多一個網域，使用者的授權就多一張，建的卡也掉到別處。設了固定客戶端就只用它。
+it('uses the configured Harbor client for every origin and never registers one',async()=>{
+  envOverride={HARBOR_CLIENT_ID:'hh_client_hearthroom'};
+  const {network}=providers();
+  // 以前替這個網域註冊過的那顆還在表裡，也不能再拿來用
+  await env.DB.prepare('INSERT INTO account_auth_clients VALUES(?,?,?,?)').bind(origin,'harbor','profile.read email.read role.read role.write chat.play','client-old-open').run();
+  const start=await request('start',{provider:'harbor',returnTo:'/me'});
+  expect(start.status).toBe(200);
+  const url=new URL((await start.json() as any).url);
+  expect(url.searchParams.get('client_id')).toBe('hh_client_hearthroom');
+  const complete=await request('complete',{code:'22',state:url.searchParams.get('state')});
+  expect(complete.status).toBe(200);
+  const urls=network.mock.calls.map(([input])=>String(input));
+  expect(urls.some(u=>u.endsWith('/oauth/register'))).toBe(false);
+  const token=network.mock.calls.find(([input])=>String(input).endsWith('/oauth/token'));
+  expect(new URLSearchParams(String(token?.[1]?.body)).get('client_id')).toBe('hh_client_hearthroom');
 });
