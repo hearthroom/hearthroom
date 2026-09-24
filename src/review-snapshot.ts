@@ -182,3 +182,8 @@ export async function loadSnapshot(db: D1Database, submissionId: string): Promis
   if (!row) return null;
   try { return await decodeSnapshot(row.detail); } catch { return null; }
 }
+
+/** 單子定案就刪：本站不留任何卡片的私有設定。 */
+export function dropSnapshotStatement(db: D1Database, submissionId: string): D1PreparedStatement {
+  return db.prepare("DELETE FROM review_snapshots WHERE submission_id = ?").bind(submissionId);
+}
