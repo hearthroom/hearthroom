@@ -30,6 +30,8 @@ const busy = ref(false);
 const choice = computed(() =>
   platforms.value.find((p) => p.provider === selected.value && p.playable)
 );
+// 只有一個平台時整個選擇區不顯示：沒有可選的東西，就不該出現「選擇」。
+const single = computed(() => platforms.value.length === 1);
 const linked = (p: ProviderId) =>
   session.profile?.identities.find((i) => i.provider === p);
 let generation = 0;
@@ -53,6 +55,9 @@ async function load() {
       : await fetchCardPlatforms(props.cardId);
     if (request !== generation) return;
     platforms.value = result;
+    // 只有一個能玩的平台就直接選它，不讓人多按一步；多個能玩的才讓使用者自己選。
+    const playable = result.filter((p) => p.playable);
+    if (playable.length === 1) selected.value = playable[0].provider;
   } catch {
     if (request === generation) error.value = "linked.platformLoadFailed";
   } finally {
@@ -109,7 +114,7 @@ async function play() {
         {{ $t("linked.retry") }}
       </button>
     </p>
-    <fieldset v-if="platforms.length">
+    <fieldset v-if="platforms.length && !single">
       <legend>{{ $t("linked.playWith") }}</legend>
       <label v-for="p in platforms" :key="p.provider" class="platform">
         <input
@@ -131,7 +136,7 @@ async function play() {
         }}</span>
       </label>
     </fieldset>
-    <p v-else-if="!loading && !error" class="subtle">
+    <p v-else-if="!loading && !error && !choice" class="subtle">
       {{ $t("linked.noPlayable") }}
     </p>
     <p v-if="choice" class="subtle note">{{ $t("linked.playHint") }}</p>
