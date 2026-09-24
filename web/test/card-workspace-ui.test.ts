@@ -20,7 +20,35 @@ afterEach(()=>{app?.unmount();root?.remove();});
 async function mount(){const router=createRouter({history:createMemoryHistory(),routes:[{path:'/:pathMatch(.*)*',component:{template:'<div />'}}]});await router.push('/mine');const pinia=createPinia();setActivePinia(pinia);const session=useSession();session.me={accountNumId:11,nickName:'Fixture',avatar:''};session.profile={identities:[{provider:'lunatalk',externalId:11},{provider:'harbor',externalId:22}]} as any;root=document.createElement('div');document.body.append(root);app=createApp(MyCardsPage).use(pinia).use(i18n).use(router);app.mount(root);await settle();}
 function button(key:string){return [...root.querySelectorAll('button')].find(b=>b.textContent?.trim()===i18n.global.t(key))!;}
 it('shows one work with direct actions and sends community review only to its original account',async()=>{await mount();expect(root.querySelectorAll('article.card')).toHaveLength(1);expect(root.textContent).toContain(fixture.summary);expect(root.querySelector('a[href*="single=1"]')).toBeNull();expect(root.querySelector('a[href*="100021/edit"]')?.getAttribute('href')).toContain('provider=harbor');button('mine.action.submit').click();await settle();expect(mocks.register).toHaveBeenCalledWith('original','token-harbor',false,[],'harbor');expect(root.textContent).toContain(i18n.global.t('mine.badge.pending'));});
-it('offers the actual copies for playtesting without navigation or publication on open',async()=>{await mount();button('mine.action.play').click();await settle();const choices=root.querySelectorAll('.play-choices a');expect(choices).toHaveLength(1);expect([...choices].map(a=>a.getAttribute('href'))).toEqual(expect.arrayContaining(['/play/100021?mode=source&provider=harbor']));expect(mocks.register).not.toHaveBeenCalled();});
+it('links directly to the only playable provider without a chooser or empty footer', async () => {
+ await mount();
+ const play=[...root.querySelectorAll('.card__actions a')].find(a=>a.textContent?.trim()===i18n.global.t('mine.action.play'));
+ expect(play?.getAttribute('href')).toBe('/play/100021?mode=source&provider=harbor');
+ expect(root.querySelector('.play-choices')).toBeNull();
+ expect(root.querySelector('.card__body')).toBeNull();
+ expect(mocks.register).not.toHaveBeenCalled();
+});
+it('does not render a blank footer below ordinary draft or submitted cards', async () => {
+ mocks.fetch.mockResolvedValue(result([
+  {...fixture,roleId:'original'},
+  {...fixture,roleId:'submitted',workId:'submitted-work',sourceRoleId:'submitted',num:100022,registered:true,status:'pending'},
+ ]));
+ await mount();
+ expect(root.querySelectorAll('article.card')).toHaveLength(2);
+ expect(root.querySelectorAll('.card__body')).toHaveLength(0);
+});
+it.each(['pending','rejected','superseded'])('keeps the review feedback footer for %s updates', async updateStatus => {
+ mocks.fetch.mockResolvedValue(result([{...fixture,roleId:'original',registered:true,status:'approved',updateStatus,note:'Please revise the opening.'}]));
+ await mount();
+ expect(root.querySelector('.card__body .card__note')?.textContent?.trim()).toBeTruthy();
+ if(updateStatus==='rejected')expect(root.querySelector('.card__body')?.textContent).toContain('Please revise the opening.');
+});
+it('keeps the rejection reason and resubmission action', async () => {
+ mocks.fetch.mockResolvedValue(result([{...fixture,roleId:'original',registered:true,status:'rejected',note:'Please revise the opening.'}]));
+ await mount();
+ expect(root.querySelector('.card__body')?.textContent).toContain('Please revise the opening.');
+ expect(button('mine.action.submit')).toBeDefined();
+});
 it('retains available works when another service is unavailable',async()=>{mocks.fetch.mockImplementation(async(_t,{provider})=>{if(provider==='lunatalk')throw Error('offline');return result([{...fixture,roleId:'original'}]);});await mount();expect(root.querySelectorAll('article.card')).toHaveLength(1);expect(mocks.fetch.mock.calls.every(c=>c[1].provider==='harbor')).toBe(true);});
 
 it('has no cross-service synchronization action',async()=>{await mount();expect(button('linked.sync')).toBeUndefined();expect(mocks.synchronize).not.toHaveBeenCalled();});
