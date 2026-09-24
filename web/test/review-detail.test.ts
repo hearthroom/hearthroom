@@ -28,3 +28,21 @@ it('terminal review link explains expiry and returns to the queue',async()=>{
  await vi.waitFor(()=>expect(el.textContent).toContain(i18n.global.t('review.inactive')));
  expect(el.querySelector('a')?.getAttribute('href')).toBe('/review');inactive=false;
 });
+
+it('a reviewer reopening a card they already decided sees it read-only, without a claim prompt',async()=>{
+ app.unmount();
+ const empty={personaChars:0,worldbookEntryCount:0,worldbookEnabledCount:0,worldbookConstantCount:0,worldbookChars:0,worldbookConstantChars:0,estimatedConstantTokens:0,estimatedMaxTokens:0};
+ api.fetchReviewDetail.mockReset().mockResolvedValue({
+  submission:{id:'s1',kind:'first',status:'approved',contentHash:'version:v1',submittedAt:1,nsfw:false,claimedByMe:false,stampedByMe:true,required:1,stamps:[{verdict:'approve',note:'',at:2}]},
+  card:{id:'100001',roleId:'r1'},
+  detail:{partial:true,closed:true,document:{roleName:'Night Detective',roleDesc:'',roleAvatar:'',roleBackground:'',roleTag:'[]',userName:'',roleDetailDesc:'',roleType:'',roleSex:'',roleSpeech:'',language:'',talkExample:'',roleOutputContract:''},
+   greetings:{welcome:'',alternates:[],prologue:[]},worldbook:null,worldbookAvailable:false,
+   authorAsset:{rules:[],mountTrigger:'',mountLayer:'',pageMode:'classic',status:'',version:0},
+   hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:'version:v1'},costProfile:empty},
+ });
+ const router=createRouter({history:createMemoryHistory(),routes:[{path:'/review/:id',component:Page}]});await router.push('/review/s1');app=createApp(Page).use(router).use(i18n);app.mount(el);
+ await vi.waitFor(()=>expect(el.textContent).toContain(i18n.global.t('review.closedPartial')));
+ expect(el.textContent).toContain(i18n.global.t('review.stampedByMe'));
+ expect(el.textContent).not.toContain(i18n.global.t('review.claimFirst'));
+ expect([...el.querySelectorAll('button')].some(b=>b.textContent===i18n.global.t('review.action.claim'))).toBe(false);
+});
