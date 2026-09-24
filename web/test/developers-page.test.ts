@@ -1,6 +1,7 @@
 import { createApp, nextTick } from 'vue';
 import { createI18n } from 'vue-i18n';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import en from '../src/locales/en.json';
 import spec from '../../docs/community-openapi.json';
 import integrationSpec from '../../docs/integration-openapi.json';
 import sourceSpec from '../../docs/openapi.json';
@@ -40,13 +41,11 @@ describe('community developer documentation', () => {
     const el = document.createElement('div');
     document.body.appendChild(el);
     const app = createApp(DevelopersPage);
-    app.use(createI18n({ legacy: false, locale: 'en', messages: { en: {
-      'developers.title': 'Developer docs', 'developers.toc': 'On this page',
-      'developers.source': 'View OpenAPI on GitHub',
-    } } }));
+    app.use(createI18n({ legacy: false, locale: 'en', messages: { en } }));
     try {
       app.mount(el);
       await nextTick();
+      await vi.waitFor(() => expect(el.querySelector('.doc-body')).not.toBeNull());
       const article = el.querySelector('.doc-body')!;
       expect(article.textContent).toContain('Hearthroom Community API');
       expect(article.textContent).toContain('Service integration API');

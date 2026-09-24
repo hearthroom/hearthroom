@@ -1,14 +1,13 @@
 <script setup lang="ts">
 /**
- * 開發者文件：總覽（docs/developers.md，英文，唯一一份）加社群與接入兩份 API 參考。
+ * 開發者文件：總覽（依介面語言載入）加社群與接入兩份 API 參考。
  *
  * 文件住在倉庫裡、跟程式碼同一次提交改（test/developers-page.test.ts 守著），這頁只是它的視窗——
  * 不另外維護一份站上的版本。左邊是目錄：總覽的 h2／h3，接著參考的每個分組與端點；
  * 捲到哪一節就亮哪一條；窄螢幕時目錄收成頂端一個可展開的區塊。
  */
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import overview from "../../../docs/developers.md?raw";
 import communitySpec from "../../../docs/community-openapi.json";
 import integrationSpec from "../../../docs/integration-openapi.json";
 import ApiReference from "@/components/ApiReference.vue";
@@ -17,26 +16,36 @@ import { renderDoc, type TocItem } from "@/lib/markdown-toc";
 import { groupByTag, type OpenApiDocument } from "@/lib/openapi";
 import { SITE } from "@/lib/site";
 
-const { t } = useI18n();
-const references = [
+import { apiDocCopy, developerLocale, documentTranslator, ENGLISH_DEVELOPER_COPY, loadDeveloperCopy, mapDocumentation } from '@/lib/developer-docs';
+
+const { t, locale } = useI18n();
+const content = shallowRef(ENGLISH_DEVELOPER_COPY);
+const ready = ref(developerLocale(locale.value) === 'en');
+const loadError = ref(false);
+const copy = computed(() => apiDocCopy(t));
+const translate = computed(() => documentTranslator(content.value.dictionary));
+const sources = [
   { id: "community", title: "Hearthroom Community API", file: "community-openapi.json", doc: communitySpec as unknown as OpenApiDocument },
   { id: "integration", title: "Service integration API", file: "integration-openapi.json", doc: integrationSpec as unknown as OpenApiDocument },
 ];
-const rendered = computed(() => renderDoc(overview));
+const references = computed(() => sources.map(reference => ({
+  ...reference, title: translate.value(reference.title), doc: mapDocumentation(reference.doc, translate.value),
+})));
+const rendered = computed(() => renderDoc(content.value.overview));
 const sourceUrl = (file: string) => `${SITE.repoUrl}/blob/main/docs/${file}`;
 
 /** Each reference owns its anchors, including shared tag names and security sections. */
 const toc = computed<TocItem[]>(() => {
   const items: TocItem[] = [...rendered.value.toc];
-  for (const reference of references) {
+  for (const reference of references.value) {
     const { id, title, doc } = reference;
     items.push({ level: 2, id: `${id}-api`, text: title });
     for (const g of groupByTag(doc)) {
-      items.push({ level: 2, id: `${id}-tag-${g.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`, text: g.name });
+      items.push({ level: 2, id: `${id}-tag-${g.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`, text: translate.value(g.name) });
       for (const e of g.endpoints) items.push({ level: 3, id: `${id}-${e.id}`, text: `${e.method.toUpperCase()} ${e.path}` });
     }
-    if (Object.keys(doc).some((k) => k.startsWith("x-"))) items.push({ level: 2, id: `${id}-notes`, text: "Notes" });
-    items.push({ level: 2, id: `${id}-security-schemes`, text: "Security schemes" });
+    if (Object.keys(doc).some((k) => k.startsWith("x-"))) items.push({ level: 2, id: `${id}-notes`, text: copy.value.notes });
+    items.push({ level: 2, id: `${id}-security-schemes`, text: copy.value.security });
   }
   return items;
 });
@@ -47,9 +56,9 @@ const tocOpen = ref(true);
 const activeId = ref("");
 let observer: IntersectionObserver | undefined;
 
-onMounted(async () => {
-  document.title = pageTitle(t("developers.title"));
-  if (window.matchMedia?.("(max-width: 900px)").matches) tocOpen.value = false;
+let generation = 0;
+async function observeHeadings() {
+  observer?.disconnect();
   await nextTick();
   const headings = [...(article.value?.querySelectorAll<HTMLElement>("h2[id], h3[id]") ?? [])];
   if (!headings.length || typeof IntersectionObserver === "undefined") return;
@@ -60,14 +69,47 @@ onMounted(async () => {
     },
     { rootMargin: "-72px 0px -70% 0px", threshold: 0 },
   );
-  for (const h of headings) observer.observe(h);
+  for (const heading of headings) observer.observe(heading);
+}
+watch(locale, async code => {
+  const current = ++generation;
+  ready.value = false;
+  loadError.value = false;
+  document.title = pageTitle(t("developers.title"));
+  try {
+    const loaded = await loadDeveloperCopy(code);
+    if (current !== generation) return;
+    content.value = loaded;
+    activeId.value = "";
+    ready.value = true;
+    await observeHeadings();
+    if (current !== generation) return;
+    // A lazy locale chunk can finish after the browser's initial hash navigation.
+    let id = location.hash.slice(1);
+    try { id = decodeURIComponent(id); } catch { /* A malformed hash has no matching heading. */ }
+    const target = id ? document.getElementById(id) : null;
+    if (target && article.value?.contains(target)) target.scrollIntoView();
+  } catch {
+    if (current === generation) loadError.value = true;
+  }
+}, { immediate: true });
+onMounted(() => {
+  if (window.matchMedia?.("(max-width: 900px)").matches) tocOpen.value = false;
+  if (ready.value) void observeHeadings();
 });
-onBeforeUnmount(() => observer?.disconnect());
+onBeforeUnmount(() => { generation++; observer?.disconnect(); });
+const reload = () => window.location.reload();
+
 </script>
 
 <template>
   <div class="page page--doc">
-    <div class="doc-layout">
+    <div v-if="loadError" class="doc-load" role="alert">
+      <p>{{ t("developers.loadError") }}</p>
+      <button type="button" class="btn" @click="reload">{{ t("developers.reload") }}</button>
+    </div>
+    <p v-else-if="!ready" class="subtle" role="status">{{ t("developers.loading") }}</p>
+    <div v-else class="doc-layout">
       <aside class="toc">
         <details class="toc__fold" :open="tocOpen">
           <summary class="toc__title eyebrow">{{ $t("developers.toc") }}</summary>
@@ -86,8 +128,8 @@ onBeforeUnmount(() => observer?.disconnect());
         <article class="doc doc--md" v-html="rendered.html" />
         <section v-for="reference in references" :key="reference.id" class="doc doc--ref">
           <h2 :id="`${reference.id}-api`">{{ reference.title }}</h2>
-          <p class="subtle">version {{ reference.doc.info.version }} · {{ Object.keys(reference.doc.paths).length }} paths. Click an endpoint to expand it. <code>*</code> marks a required field.</p>
-          <ApiReference :doc="reference.doc" :id-prefix="`${reference.id}-`" />
+          <p class="subtle">{{ t("developers.referenceIntro", { version: reference.doc.info.version, count: Object.keys(reference.doc.paths).length }) }}</p>
+          <ApiReference :doc="reference.doc" :copy="copy" :translate="translate" :id-prefix="`${reference.id}-`" />
         </section>
       </div>
     </div>

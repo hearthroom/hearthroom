@@ -91,7 +91,7 @@ Public card access does not grant editing or private export. A community member 
 
 1. `POST /open/v1/conversation/start` opens or resumes a conversation. It does not generate a model reply.
 2. `POST /open/v1/conversation/ws-ticket` obtains a short-lived, single-use ticket with the user's bearer token.
-3. The client opens `/open/v1/conversation/ws` and sends the authentication frame, followed by the turn frame. The ticket endpoint's **websocket** section documents frames, events, completion and replay fields.
+3. The client opens `/open/v1/conversation/ws` and sends the authentication frame, followed by the turn frame. The ticket endpoint's **WebSocket protocol** section documents frames, events, completion and replay fields.
 4. History and operation-status endpoints provide the durable result. `POST /open/v1/conversation/stop` requests cancellation; clients use the final operation state to determine the outcome.
 
 A reconnect must reuse the stream identity and replay position instead of submitting another paid turn. Optional Agent continuation uses `resumeFromOperationId` only when the service reports preserved progress. A rejected continuation must not silently become a fresh paid request.

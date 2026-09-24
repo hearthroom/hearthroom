@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { createApp, nextTick } from "vue";
 import ApiReference from "../src/components/ApiReference.vue";
+import { ENGLISH_API_COPY } from "../src/lib/developer-docs";
 import { endpointId, groupByTag, typeLabel, type OpenApiDocument } from "../src/lib/openapi";
 
 const doc: OpenApiDocument = {
@@ -99,4 +100,22 @@ describe("multiple references", () => {
       expect([...el.querySelectorAll('[id]')].every(e => e.id.startsWith('integration-'))).toBe(true);
     } finally { app.unmount(); el.remove(); window.location.hash = ''; }
   });
+});
+
+it('localizes reference controls, tag labels and nested schema labels without changing anchors', async () => {
+  const el = document.createElement('div'); document.body.appendChild(el);
+  const app = createApp(ApiReference, { doc,
+    copy: { ...ENGLISH_API_COPY, noAuth: '無須驗證', parameters: '參數', name: '名稱', location: '位置', type: '型別', constraints: '限制', description: '說明', field: '欄位', required: '必填', responses: '回應', security: '驗證方式' },
+    translate: (s: string) => s === 'Roles' ? '角色卡' : s,
+  });
+  try {
+    app.mount(el); await nextTick();
+    expect(el.querySelector('#tag-roles')?.textContent).toBe('角色卡');
+    expect(el.querySelector('#get-role-detail .ep__auth-chip')?.textContent).toBe('無須驗證');
+    (el.querySelector('#get-role-detail') as HTMLElement).click(); await nextTick();
+    expect(el.querySelector('.ep__params th')?.textContent).toBe('名稱');
+    expect(el.querySelector('.st__table th')?.textContent).toBe('欄位');
+    expect(el.querySelector('#security-schemes')?.textContent).toBe('驗證方式');
+    expect(el.textContent).toContain('characterRoleId');
+  } finally { app.unmount(); el.remove(); }
 });

@@ -6,11 +6,12 @@
  * 請求本體、回應。細節預設收起，點標題展開；網址帶 #錨點 進來就把那一個展開並捲過去。
  * 內容全部來自規格檔，這裡不寫任何一句契約——文字改了要改規格檔，站上跟著變。
  */
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import SchemaTree from "@/components/SchemaTree.vue";
 import { authLabel, groupByTag, typeLabel, type Endpoint, type OpenApiDocument } from "@/lib/openapi";
 
-const props = withDefaults(defineProps<{ doc: OpenApiDocument; idPrefix?: string }>(), { idPrefix: "" });
+import { ENGLISH_API_COPY, extensionTitle, type ApiDocCopy } from '@/lib/developer-docs';
+const props = withDefaults(defineProps<{ doc: OpenApiDocument; idPrefix?: string; copy?: ApiDocCopy; translate?: (text: string) => string }>(), { idPrefix: "", copy: () => ENGLISH_API_COPY, translate: (text: string) => text });
 const anchorId = (id: string) => `${props.idPrefix}${id}`;
 const groups = computed(() => groupByTag(props.doc));
 const open = ref<Set<string>>(new Set());
@@ -30,6 +31,7 @@ function openFromHash() {
 }
 onMounted(() => { openFromHash(); window.addEventListener("hashchange", openFromHash); });
 watch(groups, openFromHash);
+onBeforeUnmount(() => window.removeEventListener("hashchange", openFromHash));
 
 const bodySchema = (e: Endpoint) => {
   const content = e.op.requestBody?.content ?? {};
@@ -53,7 +55,7 @@ const topNotes = computed(() => Object.entries(props.doc).filter(([k]) => k.star
 <template>
   <div class="ref">
     <section v-for="g in groups" :key="g.name" class="ref__group">
-      <h2 :id="anchorId(`tag-${g.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`)">{{ g.name }}</h2>
+      <h2 :id="anchorId(`tag-${g.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`)">{{ translate(g.name) }}</h2>
       <p v-if="g.description" class="ref__tagdesc">{{ g.description }}</p>
 
       <article v-for="e in g.endpoints" :key="e.id" class="ep" :class="{ 'ep--open': open.has(e.id), 'ep--deprecated': e.op.deprecated }">
@@ -62,25 +64,25 @@ const topNotes = computed(() => Object.entries(props.doc).filter(([k]) => k.star
           <code class="ep__path">{{ e.path }}</code>
           <span class="ep__summary">{{ e.op.summary }}</span>
           <span class="ep__auth">
-            <span v-for="a in authOf(e)" :key="a" class="ep__auth-chip" :class="{ 'ep__auth-chip--none': a === 'none' }">{{ a === "none" ? "no auth" : a }}</span>
+            <span v-for="a in authOf(e)" :key="a" class="ep__auth-chip" :class="{ 'ep__auth-chip--none': a === 'none' }">{{ a === "none" ? copy.noAuth : a }}</span>
           </span>
-          <a :href="`#${anchorId(e.id)}`" class="ep__anchor" aria-label="link" @click.stop>#</a>
+          <a :href="`#${anchorId(e.id)}`" class="ep__anchor" :aria-label="copy.link" @click.stop>#</a>
         </h3>
 
         <div v-if="open.has(e.id)" class="ep__body">
           <p v-if="e.op.description" class="ep__desc">{{ e.op.description }}</p>
-          <p v-if="e.op.deprecated" class="ep__deprecated">Deprecated.</p>
+          <p v-if="e.op.deprecated" class="ep__deprecated">{{ copy.deprecated }}</p>
 
           <template v-if="e.op.parameters?.length">
-            <h4>Parameters</h4>
+            <h4>{{ copy.parameters }}</h4>
             <table class="ep__params">
-              <thead><tr><th>Name</th><th>In</th><th>Type</th><th>Constraints</th><th>Description</th></tr></thead>
+              <thead><tr><th>{{ copy.name }}</th><th>{{ copy.location }}</th><th>{{ copy.type }}</th><th>{{ copy.constraints }}</th><th>{{ copy.description }}</th></tr></thead>
               <tbody>
                 <tr v-for="p in e.op.parameters" :key="`${p.in}-${p.name}`">
-                  <td><code>{{ p.name }}</code><span v-if="p.required" class="ep__req" title="required">*</span></td>
+                  <td><code>{{ p.name }}</code><span v-if="p.required" class="ep__req" :title="copy.required">*</span></td>
                   <td class="subtle">{{ p.in }}</td>
                   <td><code>{{ typeLabel(doc, p.schema) }}</code></td>
-                  <td class="ep__cons">{{ p.schema?.enum ? p.schema.enum.map((v) => JSON.stringify(v)).join(" · ") : "" }}{{ p.schema?.default !== undefined ? ` default ${JSON.stringify(p.schema.default)}` : "" }}</td>
+                  <td class="ep__cons">{{ p.schema?.enum ? p.schema.enum.map((v) => JSON.stringify(v)).join(" · ") : "" }}{{ p.schema?.default !== undefined ? ` ${copy.defaultValue} ${JSON.stringify(p.schema.default)}` : "" }}</td>
                   <td>{{ p.description }}</td>
                 </tr>
               </tbody>
@@ -89,22 +91,22 @@ const topNotes = computed(() => Object.entries(props.doc).filter(([k]) => k.star
 
           <template v-for="body in [bodySchema(e)]" :key="'body'">
             <template v-if="body">
-              <h4>Request body <span class="subtle">{{ body.mediaType }}{{ e.op.requestBody?.required ? " · required" : "" }}</span></h4>
+              <h4>{{ copy.requestBody }} <span class="subtle">{{ body.mediaType }}{{ e.op.requestBody?.required ? ` · ${copy.required}` : "" }}</span></h4>
               <p v-if="e.op.requestBody?.description" class="ep__desc">{{ e.op.requestBody.description }}</p>
-              <SchemaTree v-if="body.schema" :doc="doc" :schema="body.schema" />
+              <SchemaTree v-if="body.schema" :doc="doc" :copy="copy" :schema="body.schema" />
               <pre v-if="body.example !== undefined" class="ep__example"><code>{{ pretty(body.example) }}</code></pre>
             </template>
           </template>
 
-          <h4>Responses</h4>
+          <h4>{{ copy.responses }}</h4>
           <div v-for="r in responses(e)" :key="r.status" class="ep__resp">
             <p class="ep__status"><code :class="`ep__code ep__code--${r.status[0]}xx`">{{ r.status }}</code> <span>{{ r.description }}</span></p>
-            <SchemaTree v-if="r.schema" :doc="doc" :schema="r.schema" />
+            <SchemaTree v-if="r.schema" :doc="doc" :copy="copy" :schema="r.schema" />
             <pre v-if="r.example !== undefined" class="ep__example"><code>{{ pretty(r.example) }}</code></pre>
           </div>
 
           <details v-for="x in extensions(e)" :key="x.key" class="ep__ext">
-            <summary><h4>{{ x.key.replace(/^x-/, "").replace(/-/g, " ") }}</h4></summary>
+            <summary><h4>{{ extensionTitle(x.key, copy) }}</h4></summary>
             <pre class="ep__example"><code>{{ pretty(x.value) }}</code></pre>
           </details>
         </div>
@@ -112,15 +114,15 @@ const topNotes = computed(() => Object.entries(props.doc).filter(([k]) => k.star
     </section>
 
     <section v-if="topNotes.length" class="ref__group">
-      <h2 :id="anchorId('notes')">Notes</h2>
+      <h2 :id="anchorId('notes')">{{ copy.notes }}</h2>
       <details v-for="n in topNotes" :key="n.key" class="ep__ext">
-        <summary><h4>{{ n.key.replace(/^x-/, "").replace(/-/g, " ") }}</h4></summary>
+        <summary><h4>{{ extensionTitle(n.key, copy) }}</h4></summary>
         <pre class="ep__example"><code>{{ pretty(n.value) }}</code></pre>
       </details>
     </section>
 
     <section v-if="securitySchemes.length" class="ref__group">
-      <h2 :id="anchorId('security-schemes')">Security schemes</h2>
+      <h2 :id="anchorId('security-schemes')">{{ copy.security }}</h2>
       <dl class="ref__sec">
         <template v-for="s in securitySchemes" :key="s.name">
           <dt><code>{{ s.name }}</code></dt>
