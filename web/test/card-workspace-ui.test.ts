@@ -5,9 +5,9 @@ import { createMemoryHistory, createRouter } from 'vue-router';
 import { i18n } from '../src/lib/i18n';
 import { useSession } from '../src/lib/session';
 import MyCardsPage from '../src/pages/MyCardsPage.vue';
-const mocks=vi.hoisted(()=>({fetch:vi.fn(),register:vi.fn(),token:vi.fn(),copies:vi.fn(),synchronize:vi.fn(),confirm:vi.fn()}));
+const mocks=vi.hoisted(()=>({connect:vi.fn(),fetch:vi.fn(),register:vi.fn(),token:vi.fn(),copies:vi.fn(),synchronize:vi.fn(),confirm:vi.fn()}));
 vi.mock('../src/lib/api',async original=>({...await original<typeof import('../src/lib/api')>(),fetchMeAt:async()=>({email:"fixture@example.test"}),fetchMyCards:mocks.fetch,registerCard:mocks.register}));
-vi.mock('../src/lib/connections',()=>({accountToken:mocks.token}));
+vi.mock('../src/lib/connections',async original=>({...await original<typeof import('../src/lib/connections')>(),accountToken:mocks.token,connectAccount:mocks.connect}));
 vi.mock('../src/lib/confirm',()=>({confirmChoice:mocks.confirm}));
 vi.mock('../src/lib/distribution',async original=>({...await original<typeof import('../src/lib/distribution')>(),copies:mocks.copies,synchronize:mocks.synchronize}));
 vi.mock('../src/lib/provider-switch',()=>({availableProviders:async()=>[{id:'lunatalk',name:'LunaTalk'},{id:'harbor',name:'HarperHarbor'}]}));
@@ -79,4 +79,22 @@ it('links a private work and its editor by its numeric identity', async () => {
  await mount();
  expect(root.querySelector('.card__art')?.getAttribute('href')).toBe('/cards/100021');
  expect(root.querySelector('a[href*="/edit"]')?.getAttribute('href')).toBe('/cards/100021/edit?provider=harbor');
+});
+
+// 授權掉了就在原地重新授權，不要叫人去別的頁面找——找不到就卡住了。
+it('offers one-tap reauthorization in place when the platform grant expired', async () => {
+ mocks.token.mockResolvedValue(null);
+ await mount();
+ const alert=root.querySelector('[role=alert]')!;
+ expect(alert.textContent).not.toContain(i18n.global.t('linked.retry'));
+ expect(alert.querySelector('a')).toBeNull();
+ const reauth=[...alert.querySelectorAll('button')].find(b=>b.textContent?.trim()===i18n.global.t('me.reauthorize'))!;
+ reauth.click();await settle();
+ expect(mocks.connect).toHaveBeenCalledWith('harbor','/mine');
+});
+it('keeps retry for failures that are not about authorization', async () => {
+ mocks.fetch.mockRejectedValue(new Error('network_down'));
+ await mount();
+ const alert=root.querySelector('[role=alert]')!;
+ expect([...alert.querySelectorAll('button')].map(b=>b.textContent?.trim())).toEqual([i18n.global.t('linked.retry')]);
 });

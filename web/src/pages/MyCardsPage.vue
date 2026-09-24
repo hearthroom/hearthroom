@@ -12,7 +12,7 @@ import MyCardTile from "@/components/MyCardTile.vue";
 import { useSession } from "@/lib/session";
 import { connectionMessage } from "@/lib/distribution";
 import { can, currentProvider, providerName, type ProviderId } from "@/lib/provider";
-import { accountToken } from "@/lib/connections";
+import { accountToken, connectAccount, needsReauthorization } from "@/lib/connections";
 
 const route = useRoute();
 const router = useRouter();
@@ -24,6 +24,7 @@ const rows = ref<Partial<Record<ProviderId, MyCard[]>>>({});
 const pages = ref<Partial<Record<ProviderId, number>>>({});
 const more = ref<Partial<Record<ProviderId, boolean>>>({});
 const failures = ref<Partial<Record<ProviderId, string>>>({});
+const reauth = ref<Partial<Record<ProviderId, boolean>>>({});
 const quota = ref<MyCardPage["quota"] | null>(null);
 const loading = ref(true);
 const error = ref("");
@@ -47,8 +48,12 @@ async function loadProvider(provider:ProviderId, append=false, version=generatio
   if(version!==generation)return;
   rows.value[provider]=append?[...(rows.value[provider]??[]),...result.items]:result.items;
   pages.value[provider]=page;more.value[provider]=result.hasNext;
-  quota.value=result.quota;delete failures.value[provider];
- }catch(e){if(version===generation)failures.value[provider]=connectionMessage(e);}
+  quota.value=result.quota;delete failures.value[provider];delete reauth.value[provider];
+ }catch(e){if(version===generation){failures.value[provider]=connectionMessage(e);reauth.value[provider]=needsReauthorization(e);}}
+}
+// 授權掉了就在原地重新授權，授權完回到這一頁；不要叫人去別的頁面找入口。
+async function reconnect(provider:ProviderId){
+ try{await connectAccount(provider,route.fullPath);}catch(e){failures.value[provider]=connectionMessage(e);}
 }
 async function load(append=false) {
  if(!providers.value.length)return;
@@ -186,8 +191,8 @@ watch(()=>route.query.fresh, fresh=>{
 
     <div v-for="(message, provider) in failures" :key="provider" class="notice notice--error" role="alert">
       {{ providerName(provider as ProviderId) }} · {{ message }}
-      <button class="btn btn--sm" :disabled="loading" @click="load()">{{ $t('linked.retry') }}</button>
-      <RouterLink :to="lp('/me')">{{ $t('me.reauthorize') }}</RouterLink>
+      <button v-if="reauth[provider]" class="btn btn--sm btn--primary" @click="reconnect(provider as ProviderId)">{{ $t('me.reauthorize') }}</button>
+      <button v-else class="btn btn--sm" :disabled="loading" @click="load()">{{ $t('linked.retry') }}</button>
     </div>
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
     <p v-else-if="notice" class="notice" role="status">{{ notice }}</p>

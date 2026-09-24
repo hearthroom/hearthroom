@@ -1045,7 +1045,7 @@
   "linked.error.provider_already_connected": "這個平台已連接另一個帳號。請使用已連接的帳號重新授權。",
   "linked.error.account_already_connected": "這個帳號已屬於另一組連接。請先在原來的 HearthRoom 帳號解除連接。",
   "linked.error.connection_conflict": "連接狀態已變更，請重新整理後再試。",
-  "linked.error.connection_source_expired": "需要重新授權。請到「我的帳號」重新連接該平台。",
+  "linked.error.connection_source_expired": "授權已過期，重新授權後就能繼續。",
   "linked.error.cannot_disconnect_current_account": "請先切換到另一個已連接的帳號，再解除這個連接。",
   "linked.error.cannot_disconnect_founding_account": "這是建立 HearthRoom 成員身分的帳號，目前不能解除。",
   "linked.error.connection_proof_required": "需要重新授權。請到「我的帳號」重新連接該平台。",

@@ -1045,7 +1045,7 @@
   "linked.error.provider_already_connected": "Another account is already connected for this platform. Reauthorize the connected account.",
   "linked.error.account_already_connected": "This account belongs to another connected group. Disconnect it from that HearthRoom account first.",
   "linked.error.connection_conflict": "The connection changed. Refresh the page and retry.",
-  "linked.error.connection_source_expired": "Authorization is needed. Reconnect the platform from your account page.",
+  "linked.error.connection_source_expired": "Your authorization expired. Reauthorize to continue.",
   "linked.error.cannot_disconnect_current_account": "Switch to another connected account before disconnecting this one.",
   "linked.error.cannot_disconnect_founding_account": "This account established your HearthRoom membership and cannot be disconnected yet.",
   "linked.error.connection_proof_required": "Authorization is needed. Reconnect the platform from your account page.",

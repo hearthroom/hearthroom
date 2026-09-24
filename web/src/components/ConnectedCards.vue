@@ -2,7 +2,8 @@
 import { computed, ref, watch } from "vue";
 import { useSession } from "@/lib/session";
 import { fetchMyCards, type MyCard, type MyCardPage } from "@/lib/api";
-import { accountToken } from "@/lib/connections";
+import { accountToken, connectAccount, needsReauthorization } from "@/lib/connections";
+import { useRoute } from "vue-router";
 import { connectionMessage, platformPath } from "@/lib/distribution";
 import { can, providerName, type ProviderId } from "@/lib/provider";
 import { useLocalePath } from "@/lib/use-locale";
@@ -14,6 +15,12 @@ const pages = ref<Partial<Record<ProviderId, number>>>({});
 const more = ref<Partial<Record<ProviderId, boolean>>>({});
 const busy = ref<Partial<Record<ProviderId, boolean>>>({});
 const errors = ref<Partial<Record<ProviderId, string>>>({});
+const reauth = ref<Partial<Record<ProviderId, boolean>>>({});
+const route = useRoute();
+// 授權掉了就在原地重新授權，授權完回到這一頁。
+async function reconnect(provider: ProviderId) {
+  try { await connectAccount(provider, route.fullPath); } catch (e) { errors.value[provider] = connectionMessage(e); }
+}
 const providers = computed(
   () => session.profile?.identities.map((i) => i.provider as ProviderId) ?? []
 );
@@ -31,6 +38,7 @@ async function load(provider: ProviderId, append = false) {
   if (busy.value[provider]) return;
   busy.value[provider] = true;
   errors.value[provider] = "";
+  reauth.value[provider] = false;
   try {
     const token = await accountToken(
       provider,
@@ -48,6 +56,7 @@ async function load(provider: ProviderId, append = false) {
     more.value[provider] = result.hasNext;
   } catch (e) {
     errors.value[provider] = connectionMessage(e);
+    reauth.value[provider] = needsReauthorization(e);
   } finally {
     busy.value[provider] = false;
   }
@@ -72,9 +81,12 @@ watch(
         }}</a>
         <span v-if="busy[p]" role="status">{{ $t("linked.loading") }}</span>
         <p v-if="errors[p]" role="alert">
-          {{ errors[p] }} <a :href="lp('/me')">{{ $t("me.reauthorize") }}</a>
+          {{ errors[p] }}
         </p>
-        <button v-if="errors[p]" class="btn btn--sm" @click="load(p)">
+        <button v-if="errors[p] && reauth[p]" class="btn btn--sm btn--primary" @click="reconnect(p)">
+          {{ $t("me.reauthorize") }}
+        </button>
+        <button v-else-if="errors[p]" class="btn btn--sm" @click="load(p)">
           {{ $t("linked.retry") }}
         </button>
       </div>
