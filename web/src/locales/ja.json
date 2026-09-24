@@ -634,7 +634,7 @@
   "footer.guide": "カード作成ガイド",
   "developers.title": "開発者向けドキュメント",
   "guide.title": "カード作成ガイド",
-  "developers.source": "仕様はコードと同じリポジトリで管理しています。GitHub で community-openapi.json を見る",
+  "developers.source": "GitHub で OpenAPI 仕様を見る",
   "board.sort.day": "日間",
   "board.sort.week": "週間",
   "board.sort.month": "月間",

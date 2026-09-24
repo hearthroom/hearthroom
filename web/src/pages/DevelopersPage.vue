@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 開發者文件：總覽（docs/developers.md，英文，唯一一份）加 API 參考（docs/community-openapi.json 攤開）。
+ * 開發者文件：總覽（docs/developers.md，英文，唯一一份）加社群與接入兩份 API 參考。
  *
  * 文件住在倉庫裡、跟程式碼同一次提交改（test/developers-page.test.ts 守著），這頁只是它的視窗——
  * 不另外維護一份站上的版本。左邊是目錄：總覽的 h2／h3，接著參考的每個分組與端點；
@@ -9,7 +9,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import overview from "../../../docs/developers.md?raw";
-import spec from "../../../docs/community-openapi.json";
+import communitySpec from "../../../docs/community-openapi.json";
+import integrationSpec from "../../../docs/integration-openapi.json";
 import ApiReference from "@/components/ApiReference.vue";
 import { pageTitle } from "@/lib/i18n";
 import { renderDoc, type TocItem } from "@/lib/markdown-toc";
@@ -17,19 +18,26 @@ import { groupByTag, type OpenApiDocument } from "@/lib/openapi";
 import { SITE } from "@/lib/site";
 
 const { t } = useI18n();
-const doc = spec as unknown as OpenApiDocument;
+const references = [
+  { id: "community", title: "Hearthroom Community API", file: "community-openapi.json", doc: communitySpec as unknown as OpenApiDocument },
+  { id: "integration", title: "Service integration API", file: "integration-openapi.json", doc: integrationSpec as unknown as OpenApiDocument },
+];
 const rendered = computed(() => renderDoc(overview));
-const sourceUrl = `${SITE.repoUrl}/blob/main/docs/community-openapi.json`;
+const sourceUrl = (file: string) => `${SITE.repoUrl}/blob/main/docs/${file}`;
 
-/** 目錄：總覽的標題 + 參考的分組（h2）與端點（h3） */
+/** Each reference owns its anchors, including shared tag names and security sections. */
 const toc = computed<TocItem[]>(() => {
-  const items: TocItem[] = [...rendered.value.toc, { level: 2, id: "api-reference", text: "API reference" }];
-  for (const g of groupByTag(doc)) {
-    items.push({ level: 2, id: `tag-${g.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`, text: g.name });
-    for (const e of g.endpoints) items.push({ level: 3, id: e.id, text: `${e.method.toUpperCase()} ${e.path.replace(/^\/open\/v1/, "")}` });
+  const items: TocItem[] = [...rendered.value.toc];
+  for (const reference of references) {
+    const { id, title, doc } = reference;
+    items.push({ level: 2, id: `${id}-api`, text: title });
+    for (const g of groupByTag(doc)) {
+      items.push({ level: 2, id: `${id}-tag-${g.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`, text: g.name });
+      for (const e of g.endpoints) items.push({ level: 3, id: `${id}-${e.id}`, text: `${e.method.toUpperCase()} ${e.path}` });
+    }
+    if (Object.keys(doc).some((k) => k.startsWith("x-"))) items.push({ level: 2, id: `${id}-notes`, text: "Notes" });
+    items.push({ level: 2, id: `${id}-security-schemes`, text: "Security schemes" });
   }
-  if (Object.keys(doc).some((k) => k.startsWith("x-"))) items.push({ level: 2, id: "notes", text: "Notes" });
-  items.push({ level: 2, id: "security-schemes", text: "Security schemes" });
   return items;
 });
 
@@ -70,16 +78,16 @@ onBeforeUnmount(() => observer?.disconnect());
               </li>
             </ul>
           </nav>
-          <a :href="sourceUrl" target="_blank" rel="noopener" class="toc__source subtle">{{ $t("developers.source") }}</a>
+          <a v-for="reference in references" :key="reference.id" :href="sourceUrl(reference.file)" target="_blank" rel="noopener" class="toc__source subtle">{{ reference.title }} · {{ $t("developers.source") }}</a>
         </details>
       </aside>
 
       <div ref="article" class="doc-body">
         <article class="doc doc--md" v-html="rendered.html" />
-        <section class="doc doc--ref">
-          <h2 id="api-reference">API reference</h2>
-          <p class="subtle">{{ doc.info.title }} · version {{ doc.info.version }} · {{ Object.keys(doc.paths).length }} paths. Click an endpoint to expand it. <code>*</code> marks a required field.</p>
-          <ApiReference :doc="doc" />
+        <section v-for="reference in references" :key="reference.id" class="doc doc--ref">
+          <h2 :id="`${reference.id}-api`">{{ reference.title }}</h2>
+          <p class="subtle">version {{ reference.doc.info.version }} · {{ Object.keys(reference.doc.paths).length }} paths. Click an endpoint to expand it. <code>*</code> marks a required field.</p>
+          <ApiReference :doc="reference.doc" :id-prefix="`${reference.id}-`" />
         </section>
       </div>
     </div>
