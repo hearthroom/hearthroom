@@ -20,6 +20,8 @@ export type Env = Omit<Cloudflare.Env, "EVENTS" | "ANALYTICS_ENABLED" | "REVIEW_
   EVENTS?: AnalyticsEngineDataset;
   /** Hearthroom → Harbor issuer credential. */
   HOSTING_SERVICE_KEY?: string;
+  /** Hearthroom 在 Harbor 的固定 OAuth 客戶端（公開識別，非密鑰）；設了就不再動態註冊。 */
+  HARBOR_CLIENT_ID?: string;
   ANALYTICS_ENABLED?: string;
   /** 社群審核開關："true" 才審；其餘退回「登記即上榜」，見 src/providers.ts。 */
   REVIEW_ENABLED?: string;
