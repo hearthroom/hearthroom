@@ -14,6 +14,7 @@ The five interface locales link to both specifications. The technical reference 
 - Contract inspection: all 19 documented paths exist in the community handlers, including library route loops. Path parameters match; schema references resolve. Checked request and response fields against the board, member, comment, library and notification handlers. Response schemas intentionally permit additional fields.
 - Full Worker suite: 58 files, 570 tests passed. Initial sandbox run could not bind localhost (`listen EPERM`); the same suite passed with local test-service access.
 - Initial community-only web suite: 95 files, 537 tests passed; one existing real-card probe suite skipped because its external fixture directory was not configured. The suite logs existing happy-dom localhost iframe connection errors without failing assertions.
+- Release-check sequencing: a Worker could not start when the concurrent web build briefly removed `web/dist/assets` (`ENOENT`). The build and Worker suite must run sequentially; this failed attempt is not a pass. Final rerun results are part of the release receipt.
 - `npm run typecheck`: passed.
 - Pinned stage build and `npm run build:web`: passed. Existing large-chunk, Sass deprecation and runtime font-path warnings remain.
 - `git diff --check`: passed.
