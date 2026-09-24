@@ -25,7 +25,7 @@ it('reviews the sealed revision once, keeps published version during updates, an
  const sub=await env.DB.prepare('SELECT id FROM review_submissions').first<{id:string}>();
  for (const reviewer of ['first','second']){
   await claim(env.DB,sub!.id,reviewer,Date.now());
-  await stamp(env.DB,{submissionId:sub!.id,memberId:reviewer,verdict:'approve',note:'',now:Date.now()});
+  if((await stamp(env.DB,{submissionId:sub!.id,memberId:reviewer,verdict:'approve',note:'',now:Date.now()})).submission.status!=='pending')break;
  }
  expect((await hostingDecision(env.DB,first.versionId)).status).toBe('approved');
  const second=await submitHosted(env,{...input,operationId:crypto.randomUUID(),nsfw:true});
@@ -70,7 +70,7 @@ it.each(['harbor','harbor'] as const)('HTTP submits a private %s draft and expos
  expect(upstream.fetchRole).not.toHaveBeenCalled();
  const result=await response.json() as {versionId:string};
  const sub=await env.DB.prepare('SELECT id FROM review_submissions').first<{id:string}>();
- for(const memberId of ['a','b']){await claim(env.DB,sub!.id,memberId,Date.now());await stamp(env.DB,{submissionId:sub!.id,memberId,verdict:'approve',note:'',now:Date.now()});}
+ for(const memberId of ['a','b']){await claim(env.DB,sub!.id,memberId,Date.now());if((await stamp(env.DB,{submissionId:sub!.id,memberId,verdict:'approve',note:'',now:Date.now()})).submission.status!=='pending')break;}
  const decision=await SELF.fetch('https://c.test/v1/hosting/versions/'+result.versionId+'/decision');
  expect(decision.headers.get('cache-control')).toContain('no-store');
  const receipt=await decision.json() as {hostedRevisionId:string};

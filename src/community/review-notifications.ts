@@ -78,7 +78,7 @@ export async function leaseReviewDelivery(db:D1Database,id:string,channel:string
 async function reviewDeliveryProjection(db:D1Database,d:Delivery,lang:string,now:number){
  if(d.kind==='main'){
   const row=await db.prepare(select+' WHERE s.id=?').bind(d.submission_id).first<Row>();
-  return {projection:row?project(row,now,lang):{title:'',status:'superseded',kind:'first',adult:false,submittedAt:now,approvals:0,required:2,claimant:null,expiresAt:null,path:'/review/'+encodeURIComponent(d.submission_id??d.id)},digest:null};
+  return {projection:row?project(row,now,lang):{title:'',status:'superseded',kind:'first',adult:false,submittedAt:now,approvals:0,required:STAMPS_REQUIRED.first,claimant:null,expiresAt:null,path:'/review/'+encodeURIComponent(d.submission_id??d.id)},digest:null};
  }
  // Aggregate across the entire queue; only the displayed examples are capped.
  const rows=await db.prepare(`SELECT COUNT(*) AS total,

@@ -47,7 +47,7 @@ import { configuredProviders, hasChat, parseProvider, requireConfigured, DEFAULT
 import { providerApiBaseFor } from "./providers";
 import { WEEKLY_LIMIT, registeredThisWeek } from "./quota";
 import {
-  CLAIM_TTL_MS, STAMPS_REQUIRED, claim as claimSubmission, getSubmission, listQueue,
+  CLAIM_TTL_MS, STAMPS_REQUIRED, claim as claimSubmission, getSubmission, hasStamped, listQueue,
   release as releaseSubmission, stamp as stampSubmission,
 } from "./review";
 import { setCardFeatured } from "./cards";
@@ -966,19 +966,50 @@ app.get("/v1/review/:id/originality", async (c) => {
   return c.json(report, 200, { "Cache-Control": "private, no-store" });
 });
 
-/** 審核人讀整份設定。要先領著這張單：沒領就沒在看，不該讀得到別人的卡。 */
+/** 定案後的審核頁內容：只放登記的公開欄位，不帶作者（盲審），跟重審的 partial 同一個形狀。 */
+function closedDetail(card: ReturnType<typeof toCard>, contentHash: string) {
+  return {
+    partial: true,
+    closed: true,
+    document: {
+      roleName: card.name, roleDesc: card.summary,
+      roleAvatar: card.avatarUrl ?? "", roleBackground: card.backgroundUrl ?? "", roleTag: JSON.stringify(card.tags),
+      userName: "", roleDetailDesc: "", roleType: "", roleSex: "", roleSpeech: "", language: "", talkExample: "", roleOutputContract: "",
+    },
+    greetings: { welcome: "", alternates: [], prologue: [] },
+    worldbook: null, worldbookAvailable: false,
+    authorAsset: { rules: [], mountTrigger: "", mountLayer: "", pageMode: "classic", status: "", version: 0 },
+    hashes: { card: "", welcome: "", worldbook: "", authorAsset: "", content: contentHash },
+    costProfile: { personaChars: 0, worldbookEntryCount: 0, worldbookEnabledCount: 0, worldbookConstantCount: 0, worldbookChars: 0, worldbookConstantChars: 0, estimatedConstantTokens: 0, estimatedMaxTokens: 0 },
+  };
+}
+
+/**
+ * 審核人讀整份設定。要先領著這張單：沒領就沒在看，不該讀得到別人的卡。
+ * 蓋過章的人例外：回頭看自己審過的單（等下一章、或已定案）是唯讀，不必再領。
+ */
 async function claimedSubmission(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>) {
   const member = await requireReviewer(c);
   const s = await getSubmission(c.env.DB, c.req.param("id")!);
-  if(s.status!=='pending')throw new HttpError(410,'review no longer active');
-  if(s.claimed_by!==member.id||s.claimed_at===null||Date.now()-s.claimed_at>=CLAIM_TTL_MS)throw new HttpError(409,'claim this submission first');
+  const stampedByMe = await hasStamped(c.env.DB, s.id, member.id);
+  if(!stampedByMe){
+    if(s.status!=='pending')throw new HttpError(410,'review no longer active');
+    if(s.claimed_by!==member.id||s.claimed_at===null||Date.now()-s.claimed_at>=CLAIM_TTL_MS)throw new HttpError(409,'claim this submission first');
+  }
   if(s.nsfw===1&&(await memberNsfw(c.env.DB,member.id)).ageVerifiedAt===null)throw new HttpError(403,'age_verification_required');
-  return { member, s };
+  return { member, s, stampedByMe };
 }
 
 app.get("/v1/review/:id/detail", async (c) => {
-  const { member, s } = await claimedSubmission(c);
+  const { member, s, stampedByMe } = await claimedSubmission(c);
   let detail = await loadSnapshot(c.env.DB, s.id);
+  if (!detail && s.status !== 'pending') {
+    // 定案時快照已刪（本站不留私有設定）：回頭看的審核人只拿得到社群登記的公開資料。
+    const row = await getCard(c.env.DB, String(s.card_id));
+    if (!row) throw new HttpError(404, 'card not found');
+    const card = toCard(row, lang(c));
+    detail = closedDetail(card, s.content_hash);
+  }
   if(!detail&&s.content_hash.startsWith('version:'))throw new HttpError(404,'snapshot not found');
   if (!detail) {
     // 沒有快照：同步發現公開資料變了而開的重審單。變的就是公開資料，審核人看現在的公開版本。
@@ -1009,7 +1040,7 @@ app.get("/v1/review/:id/detail", async (c) => {
       submission: {
         id: s.id, kind: s.kind, status: s.status, contentHash: s.content_hash, submittedAt: s.submitted_at,
         nsfw: s.nsfw === 1,
-        claimedByMe: s.claimed_by === member.id, claimGeneration:s.claim_generation, required: STAMPS_REQUIRED[s.kind],
+        claimedByMe: s.claimed_by === member.id, stampedByMe, claimGeneration:s.claim_generation, required: STAMPS_REQUIRED[s.kind],
         stamps: stamps.results.map((st) => ({ verdict: st.verdict, note: st.note, at: st.created_at })),
       },
       card: { id: String(s.card_id), roleId: s.source_role_id },

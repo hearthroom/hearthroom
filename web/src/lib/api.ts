@@ -315,12 +315,16 @@ export interface ReviewDetail {
     /** 作者宣告：成人內容 */
     nsfw: boolean;
     claimedByMe: boolean;
+    /** 我在這張單上蓋過章：可以回頭唯讀查看，不必再領 */
+    stampedByMe?: boolean;
     claimGeneration?: string; required: number;
     stamps: { verdict: "approve" | "reject"; note: string; at: number }[];
   };
   card: { id: string; roleId: string };
   detail: {
     partial?: boolean;
+    /** 已定案：私有設定已刪，只剩公開資料 */
+    closed?: boolean;
     document: {
       roleName: string; userName: string; roleDesc: string; roleAvatar: string; roleBackground: string;
       roleDetailDesc: string; roleTag: string; roleType: string; roleSex: string; roleSpeech: string;
