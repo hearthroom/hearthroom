@@ -4,7 +4,7 @@
  * 文件的價值在於「照它實作就能接上本站」；程式碼多打了一條上游路徑而規格沒寫，文件就在說謊。
  * 這裡把站台前端、站台伺服器、舞台端點表裡每一條 /open/v1 與 /oauth 路徑撈出來，逐條要求
  * 在規格檔的 paths 裡出現。路徑參數的寫法統一成 {name}（程式碼裡是 ${…}、{…} 或 :name）。
- * 總覽（docs/developers.md）另外要列出前端會翻譯的錯誤碼。
+ * 總覽（docs/provider-integration.md）另外要列出前端會翻譯的錯誤碼。
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
 
 const at = (rel: string) => fileURLToPath(new URL(rel, import.meta.url));
 const spec = JSON.parse(readFileSync(at("../../docs/openapi.json"), "utf8")) as { openapi: string; paths: Record<string, Record<string, unknown>> };
-const overview = readFileSync(at("../../docs/developers.md"), "utf8");
+const overview = readFileSync(at("../../docs/provider-integration.md"), "utf8");
 const specPaths = new Set(Object.keys(spec.paths));
 
 /** 程式碼裡出現的上游路徑，正規化後去重。 */

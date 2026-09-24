@@ -1,15 +1,15 @@
 <script setup lang="ts">
 /**
- * 開發者文件：總覽（docs/developers.md，英文，唯一一份）加 API 參考（docs/openapi.json 攤開）。
+ * 開發者文件：總覽（docs/developers.md，英文，唯一一份）加 API 參考（docs/community-openapi.json 攤開）。
  *
- * 文件住在倉庫裡、跟程式碼同一次提交改（test/protocol-doc.test.ts 守著），這頁只是它的視窗——
+ * 文件住在倉庫裡、跟程式碼同一次提交改（test/developers-page.test.ts 守著），這頁只是它的視窗——
  * 不另外維護一份站上的版本。左邊是目錄：總覽的 h2／h3，接著參考的每個分組與端點；
  * 捲到哪一節就亮哪一條；窄螢幕時目錄收成頂端一個可展開的區塊。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import overview from "../../../docs/developers.md?raw";
-import spec from "../../../docs/openapi.json";
+import spec from "../../../docs/community-openapi.json";
 import ApiReference from "@/components/ApiReference.vue";
 import { pageTitle } from "@/lib/i18n";
 import { renderDoc, type TocItem } from "@/lib/markdown-toc";
@@ -19,7 +19,7 @@ import { SITE } from "@/lib/site";
 const { t } = useI18n();
 const doc = spec as unknown as OpenApiDocument;
 const rendered = computed(() => renderDoc(overview));
-const sourceUrl = `${SITE.repoUrl}/blob/main/docs/openapi.json`;
+const sourceUrl = `${SITE.repoUrl}/blob/main/docs/community-openapi.json`;
 
 /** 目錄：總覽的標題 + 參考的分組（h2）與端點（h3） */
 const toc = computed<TocItem[]>(() => {

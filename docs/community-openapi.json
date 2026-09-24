@@ -1,0 +1,2132 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Hearthroom Community API",
+    "version": "1",
+    "description": "Community browsing and member social features. Schemas describe the documented fields; responses may include additional fields."
+  },
+  "servers": [
+    {
+      "url": "https://hearthroom.club",
+      "description": "Hearthroom"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Service"
+    },
+    {
+      "name": "Cards"
+    },
+    {
+      "name": "Authors"
+    },
+    {
+      "name": "Members"
+    },
+    {
+      "name": "Comments"
+    },
+    {
+      "name": "Library"
+    },
+    {
+      "name": "Notifications"
+    }
+  ],
+  "paths": {
+    "/v1/health": {
+      "get": {
+        "tags": [
+          "Service"
+        ],
+        "summary": "Check service health",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/cards": {
+      "get": {
+        "tags": [
+          "Cards"
+        ],
+        "summary": "Browse and search cards",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Card"
+                      }
+                    },
+                    "hasNext": {
+                      "type": "boolean"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    },
+                    "offset": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "sort": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Anonymous results exclude adult content. Authenticated visibility follows member settings. total may be null; use hasNext.",
+        "parameters": [
+          {
+            "name": "zone",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "zh",
+                "en",
+                "ja",
+                "ko",
+                "all"
+              ],
+              "default": "zh"
+            },
+            "description": "Content language filter."
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Display language; falls back to Accept-Language, then Chinese."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Search text."
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "hot",
+                "top",
+                "new",
+                "random",
+                "relevance",
+                "day",
+                "week",
+                "month"
+              ],
+              "default": "hot"
+            },
+            "description": ""
+          },
+          {
+            "name": "period",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "week",
+                "month",
+                "quarter",
+                "year"
+              ]
+            },
+            "description": "Restrict listing age; overrides the sort window."
+          },
+          {
+            "name": "author",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Public author handle; ignores zone."
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "Repeat this parameter to require every selected tag group; at most 60 distinct tags.",
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "hide",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated hidden category keys; selected tags take precedence."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 24
+            },
+            "description": "Entries per page."
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000,
+              "default": 0
+            },
+            "description": "Pagination offset."
+          }
+        ]
+      }
+    },
+    "/v1/cards/{id}": {
+      "get": {
+        "tags": [
+          "Cards"
+        ],
+        "summary": "Read a card",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Card"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Returns a listed card or an accessible direct-link preview. Additional preview fields may be present. A preview does not imply review approval.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Public card ID."
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Display language; falls back to Accept-Language, then Chinese."
+          },
+          {
+            "name": "view",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "0"
+              ]
+            },
+            "description": "Use 0 to avoid counting a card-detail view."
+          }
+        ]
+      }
+    },
+    "/v1/tags": {
+      "get": {
+        "tags": [
+          "Cards"
+        ],
+        "summary": "Find community tags",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "tag": {
+                            "type": "string"
+                          },
+                          "n": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "hasNext": {
+                      "type": "boolean"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    },
+                    "offset": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "zone",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "zh",
+                "en",
+                "ja",
+                "ko",
+                "all"
+              ],
+              "default": "zh"
+            },
+            "description": "Content language filter."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Tag search text."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 60,
+              "default": 24
+            },
+            "description": ""
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000,
+              "default": 0
+            },
+            "description": "Pagination offset."
+          }
+        ]
+      }
+    },
+    "/v1/authors": {
+      "get": {
+        "tags": [
+          "Authors"
+        ],
+        "summary": "Browse authors",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Author"
+                      }
+                    },
+                    "hasNext": {
+                      "type": "boolean"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    },
+                    "offset": {
+                      "type": "integer"
+                    },
+                    "sort": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "zone",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "zh",
+                "en",
+                "ja",
+                "ko",
+                "all"
+              ],
+              "default": "zh"
+            },
+            "description": "Content language filter."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Author search text."
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "talk",
+                "cards",
+                "hot"
+              ],
+              "default": "talk"
+            },
+            "description": ""
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 24
+            },
+            "description": "Entries per page."
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000,
+              "default": 0
+            },
+            "description": "Pagination offset."
+          }
+        ]
+      }
+    },
+    "/v1/authors/{handle}": {
+      "get": {
+        "tags": [
+          "Authors"
+        ],
+        "summary": "Read an author profile",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorProfile"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Returns authors with registered cards visible to the caller.",
+        "parameters": [
+          {
+            "name": "handle",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource identifier."
+          }
+        ]
+      }
+    },
+    "/v1/me": {
+      "get": {
+        "tags": [
+          "Members"
+        ],
+        "summary": "Read your community profile",
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Member"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/cards/{id}/comments": {
+      "get": {
+        "tags": [
+          "Comments"
+        ],
+        "summary": "Read top-level comments",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "total": {
+                      "type": "integer"
+                    },
+                    "comments": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Comment"
+                      }
+                    },
+                    "isRoleCreator": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Listed cards only. Includes up to three preview replies per comment. Optional authentication supplies viewer permissions and liked state.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Public card ID."
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 1
+            },
+            "description": "Page number; page size is 20."
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Comments"
+        ],
+        "summary": "Post a comment or reply",
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "commentId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "At most six comments per member per minute. Replies must belong to the same card and thread.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Public card ID."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "content": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500,
+                    "description": "Trimmed before validation; limit counts Unicode characters."
+                  },
+                  "rootId": {
+                    "type": "string",
+                    "description": "Top-level comment ID when replying."
+                  },
+                  "parentId": {
+                    "type": "string",
+                    "description": "Comment being replied to in that thread. For a reply to a top-level comment, parentId alone is sufficient."
+                  }
+                },
+                "required": [
+                  "content"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/cards/{id}/comments/count": {
+      "get": {
+        "tags": [
+          "Comments"
+        ],
+        "summary": "Count top-level comments",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Public card ID."
+          }
+        ]
+      }
+    },
+    "/v1/cards/{id}/comments/{rootId}/replies": {
+      "get": {
+        "tags": [
+          "Comments"
+        ],
+        "summary": "Read a comment thread",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "total": {
+                      "type": "integer"
+                    },
+                    "replies": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Comment"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Public card ID."
+          },
+          {
+            "name": "rootId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource identifier."
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 1
+            },
+            "description": "Page number; page size is 20."
+          }
+        ]
+      }
+    },
+    "/v1/comments/{id}": {
+      "delete": {
+        "tags": [
+          "Comments"
+        ],
+        "summary": "Delete a comment",
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Success; no response body."
+          },
+          "401": {
+            "description": "Authentication required or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Allowed for the comment author, card author or authorized moderator. Deleting a top-level comment also hides its replies.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource identifier."
+          }
+        ]
+      }
+    },
+    "/v1/comments/{id}/like": {
+      "put": {
+        "tags": [
+          "Comments"
+        ],
+        "summary": "Like a comment",
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Success; no response body."
+          },
+          "401": {
+            "description": "Authentication required or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Idempotent: repeating the request does not add another vote.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource identifier."
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Comments"
+        ],
+        "summary": "Remove a comment like",
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Success; no response body."
+          },
+          "401": {
+            "description": "Authentication required or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Idempotent: repeating the request does not add another vote.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource identifier."
+          }
+        ]
+      }
+    },
+    "/v1/me/favorites/{target}": {
+      "get": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "Read a favorite",
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MembershipState"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "target is the card's public id.",
+        "parameters": [
+          {
+            "name": "target",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource identifier."
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "Add a favorite",
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MembershipState"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "target is the card's public id.",
+        "parameters": [
+          {
+            "name": "target",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource identifier."
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "Remove a favorite",
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MembershipState"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "target is the card's public id.",
+        "parameters": [
+          {
+            "name": "target",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource identifier."
+          }
+        ]
+      }
+    },
+    "/v1/me/following/{target}": {
+      "get": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "Read a follow",
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MembershipState"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "target is the author's public handle.",
+        "parameters": [
+          {
+            "name": "target",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource identifier."
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "Add a follow",
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MembershipState"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "target is the author's public handle.",
+        "parameters": [
+          {
+            "name": "target",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource identifier."
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "Remove a follow",
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MembershipState"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "target is the author's public handle.",
+        "parameters": [
+          {
+            "name": "target",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource identifier."
+          }
+        ]
+      }
+    },
+    "/v1/me/favorites": {
+      "get": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "List your favorite cards",
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Card"
+                      }
+                    },
+                    "hasNext": {
+                      "type": "boolean"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    },
+                    "offset": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Returns up to 24 cards, filtered by your visibility and hidden-category settings. lang defaults to zh-Hant.",
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100000,
+              "default": 0
+            },
+            "description": "Pagination offset; page size is 24."
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Display language; defaults to zh-Hant."
+          }
+        ]
+      }
+    },
+    "/v1/me/feed": {
+      "get": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "Read your followed-author feed",
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Card"
+                      }
+                    },
+                    "hasNext": {
+                      "type": "boolean"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    },
+                    "offset": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Returns up to 24 cards, filtered by your visibility and hidden-category settings. lang defaults to zh-Hant.",
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100000,
+              "default": 0
+            },
+            "description": "Pagination offset; page size is 24."
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Display language; defaults to zh-Hant."
+          }
+        ]
+      }
+    },
+    "/v1/me/following": {
+      "get": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "List authors you follow",
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "handle": {
+                            "type": "string",
+                            "description": "Public member handle."
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "avatar": {
+                            "type": "string"
+                          },
+                          "bio": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "hasNext": {
+                      "type": "boolean"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    },
+                    "offset": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100000,
+              "default": 0
+            },
+            "description": "Pagination offset; page size is 24."
+          }
+        ]
+      }
+    },
+    "/v1/me/community/notifications": {
+      "get": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Read your notifications",
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Notification"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Latest 50 notifications, newest first. Expired review reminders use a generic destination."
+      }
+    },
+    "/v1/me/community/notifications/read": {
+      "post": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Mark a notification read",
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Only a notification owned by the caller can be updated. A missing or unowned ID makes no change.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "Notification ID from your own notification list."
+                  }
+                },
+                "required": [
+                  "id"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "memberToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Current access token from an authorized Hearthroom sign-in. Cookie authentication alone is not accepted by these endpoints."
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "Card": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Public card ID. Use this for card detail, comments and favorites."
+          },
+          "num": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "names": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "summaries": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "zone": {
+            "type": "string"
+          },
+          "nsfw": {
+            "type": "boolean"
+          },
+          "featured": {
+            "type": "boolean"
+          },
+          "avatarUrl": {
+            "type": "string"
+          },
+          "backgroundUrl": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "author": {
+            "type": "object",
+            "properties": {
+              "handle": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "name": {
+                "type": "string"
+              },
+              "avatar": {
+                "type": "string"
+              }
+            }
+          },
+          "talkNum": {
+            "type": "integer"
+          },
+          "followNum": {
+            "type": "integer"
+          },
+          "favoriteCount": {
+            "type": "integer"
+          },
+          "trending": {
+            "type": "number"
+          },
+          "registeredAt": {
+            "type": "integer",
+            "description": "Unix milliseconds."
+          },
+          "syncedAt": {
+            "type": "integer",
+            "description": "Unix milliseconds."
+          }
+        }
+      },
+      "Author": {
+        "type": "object",
+        "properties": {
+          "handle": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "avatar": {
+            "type": "string"
+          },
+          "cardCount": {
+            "type": "integer"
+          },
+          "talkTotal": {
+            "type": "integer"
+          },
+          "trending": {
+            "type": "number"
+          },
+          "joinedAt": {
+            "type": "integer",
+            "description": "Unix milliseconds."
+          }
+        }
+      },
+      "AuthorProfile": {
+        "type": "object",
+        "properties": {
+          "handle": {
+            "type": "string",
+            "description": "Public member handle."
+          },
+          "name": {
+            "type": "string"
+          },
+          "avatar": {
+            "type": "string"
+          },
+          "bio": {
+            "type": "string"
+          },
+          "cardCount": {
+            "type": "integer"
+          },
+          "talkTotal": {
+            "type": "integer"
+          },
+          "joinedAt": {
+            "type": "integer",
+            "description": "Unix milliseconds."
+          }
+        }
+      },
+      "Comment": {
+        "type": "object",
+        "properties": {
+          "commentId": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "parentId": {
+            "type": "string"
+          },
+          "rootId": {
+            "type": "string"
+          },
+          "replyToNickName": {
+            "type": "string"
+          },
+          "likeCount": {
+            "type": "integer"
+          },
+          "replyCount": {
+            "type": "integer"
+          },
+          "createTime": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "accountNickName": {
+            "type": "string"
+          },
+          "accountAvatar": {
+            "type": "string"
+          },
+          "handle": {
+            "type": "string",
+            "description": "Public member handle."
+          },
+          "isLiked": {
+            "type": "boolean"
+          },
+          "isOwner": {
+            "type": "boolean"
+          },
+          "isCreator": {
+            "type": "boolean"
+          },
+          "canDelete": {
+            "type": "boolean"
+          },
+          "replies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Comment"
+            }
+          }
+        }
+      },
+      "Notification": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "integer",
+            "description": "Unix milliseconds."
+          },
+          "read_at": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Unix milliseconds, or null when unread."
+          }
+        }
+      },
+      "Member": {
+        "type": "object",
+        "properties": {
+          "handle": {
+            "type": "string",
+            "description": "Public member handle."
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "avatarUrl": {
+            "type": "string"
+          },
+          "bio": {
+            "type": "string"
+          },
+          "memberSince": {
+            "type": "integer",
+            "description": "Unix milliseconds."
+          },
+          "showNsfw": {
+            "type": "boolean"
+          },
+          "ageVerified": {
+            "type": "boolean"
+          },
+          "hiddenTags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reviewer": {
+            "type": "boolean"
+          }
+        }
+      },
+      "MembershipState": {
+        "type": "object",
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "count": {
+            "type": "integer",
+            "description": "Present for favorites; total favorites for the card."
+          }
+        },
+        "required": [
+          "active"
+        ]
+      }
+    }
+  }
+}
