@@ -36,6 +36,23 @@ Rules are applied directly onto the site's chat page. Use it only when an existi
 
 Use the "Chat page" option in the "Basics" section of the editor. After switching an existing card to the sandbox, open "Try it out" and check that the function bar, panels inside the opening, floating buttons, menus and panels look the same as before. Most cards need no changes; if an effect is missing, see "Migrating from classic".
 
+### Sidebars
+
+When a fixed button bar pinned to the left or right edge overlaps the messages, the chat page moves the message column inward so nothing is covered. This applies to both sandbox and classic chat pages.
+
+Automatic detection only handles bars flush with the screen edge and about 48px wide or less. Full-screen dialogs, floating panels in the middle, and wider bars are left alone. Set the CSS variable `--lt-dock` on the sidebar's outermost element to override detection. Setting it in the element's `style` attribute works for every card format:
+
+| Value | Effect |
+|---|---|
+| `left` / `right` | Treated as a sidebar docked on that side. It need not touch the edge, and the width limit rises to 30% of the message column. |
+| `none` | No space is made for this element. Set it on `:root` to turn off the adjustment for the whole card (SillyTavern-format card styles apply only inside messages, so `:root` has no effect there). |
+
+```html
+<div id="my-sidebar" style="position: fixed; left: 0; top: 30%; --lt-dock: left;">…</div>
+```
+
+If making room would leave the column narrower than 75% of its original width, nothing is adjusted. The space actually reserved is exposed on `<html>` as `--lt-canvas-dock-left` and `--lt-canvas-dock-right` (absent when no adjustment is made), so the card can align its own elements to it.
+
 ## Rules
 
 A rule consists of a "find" part and a "replace" part. Reply text passes through all rules, in order, before it is displayed.
@@ -165,3 +182,4 @@ After importing, check the result in "Try it out", then save and publish.
 | The card's tour or overlay covers the screen and blocks scrolling | This is the card's own tutorial layer. Press its skip button. |
 | Scripts do nothing | Append `?sdkDebug=1` to the URL to open the debug panel, which shows script errors and `sdk.debug.log` output. |
 | Saves fail | Check that keys contain only letters, digits, `_` and `-`, that the value is under 64 KB, and that the card has fewer than 10 keys. |
+| Messages are narrower than expected | An element flush with the screen edge was detected as a sidebar. Add `--lt-dock: none` to that element. |
