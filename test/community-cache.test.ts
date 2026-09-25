@@ -37,7 +37,7 @@ it('validates adult comment identity only once per request, never across request
  const ctx=createExecutionContext();const r=await app.fetch(new Request('https://c.test/v1/cards',{method:'POST',headers:{...bearer('valid'),'Content-Type':'application/json'},body:JSON.stringify({operationId:crypto.randomUUID(),roleId:'cache-card',nsfw:true})}),env,ctx);await waitOnExecutionContext(ctx);
  await approveFixtureResponse(r);
  const {id}=await r.json() as {id:string};
- await env.DB.prepare('UPDATE members SET show_nsfw=1,age_verified_at=1 WHERE id=?').bind(member).run();
+ await env.DB.prepare('UPDATE members SET show_nsfw=1,age_verified_at=1,adult_consent_version=1 WHERE id=?').bind(member).run();
  const spy=vi.spyOn(upstream,'fetchMe');
  expect((await get('/v1/cards/'+id+'/comments?nsfw=1',bearer('valid'))).status).toBe(200);expect(spy).toHaveBeenCalledTimes(1);
  expect((await get('/v1/cards/'+id+'/comments?nsfw=1',bearer('valid'))).status).toBe(200);expect(spy).toHaveBeenCalledTimes(2);

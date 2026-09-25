@@ -109,6 +109,7 @@ const SITE_CODE_KEY: Record<string, string> = {
   birthdate_required: "error.birthdateRequired",
   invalid_birthdate: "error.invalidBirthdate",
   underage: "error.underage",
+  consent_required: "error.consentRequired",
   age_verification_required: "error.ageVerificationRequired",
 };
 const looksLikeCode = (raw: string): boolean => /^[a-z][a-z0-9_]*$/.test(raw);
@@ -423,17 +424,20 @@ export interface SiteMe {
   /** 成人內容開關（要先驗過年齡） */
   showNsfw: boolean;
   ageVerified: boolean;
+  /** 同意過目前這一版成人內容聲明；沒有的話打開前要先走聲明窗 */
+  adultConsent: boolean;
   /** 不想看的類型（目錄鍵）：榜單與搜尋不列這些類型的卡 */
   hiddenTags: string[];
 }
 
-export interface SiteSettings { showNsfw: boolean; ageVerified: boolean; hiddenTags: string[] }
+export interface SiteSettings { showNsfw: boolean; ageVerified: boolean; adultConsent: boolean; hiddenTags: string[] }
 
 /**
- * 本站的個人設定，可以只送其中一樣：成人內容開關（第一次開要帶生日 YYYY-MM-DD，伺服器只看一眼、不存）、
+ * 本站的個人設定，可以只送其中一樣：成人內容開關（第一次開要帶生日 YYYY-MM-DD，伺服器只看一眼、不存；
+ * 沒同意過目前這一版聲明要帶 consentVersion）、
  * 不想看的類型（完整清單，整份換掉）。回應永遠是三樣齊的現況。
  */
-export async function updateSiteSettings(input: { showNsfw?: boolean; birthdate?: string; hiddenTags?: string[] }, token: string): Promise<SiteSettings> {
+export async function updateSiteSettings(input: { showNsfw?: boolean; birthdate?: string; consentVersion?: number; hiddenTags?: string[] }, token: string): Promise<SiteSettings> {
   return json(
     await fetch(`${COMMUNITY_API}/me/settings`, {
       method: "POST",

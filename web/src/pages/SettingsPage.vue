@@ -17,9 +17,11 @@ import { useI18n } from "vue-i18n";
 import { ApiError, fetchPlayerPersona, savePlayerPersona, updateSiteSettings, type PlayerPersona } from "@/lib/api";
 import { can } from "@/lib/provider";
 import { pageTitle } from "@/lib/i18n";
+import { applyAdultSettings, needsAdultConsent } from "@/lib/adult-consent";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
 import { TAG_CATALOG, tagLabel } from "../../../shared/tag-catalog";
+import AdultConsentDialog from "@/components/AdultConsentDialog.vue";
 
 const session = useSession();
 const { t } = useI18n();
@@ -90,24 +92,25 @@ async function save() {
 // ---- 成人內容開關 ----
 const showNsfw = computed(() => !!session.profile?.showNsfw);
 const ageVerified = computed(() => !!session.profile?.ageVerified);
-const askingAge = ref(false);
-const birthdate = ref("");
+/** 年齡沒驗過或沒同意這一版聲明：打開前先走聲明窗（跟首頁、卡片頁同一個） */
+const askingConsent = ref(false);
 const nsfwBusy = ref(false);
 const nsfwError = ref("");
-const today = new Date().toISOString().slice(0, 10);
 
-async function setNsfw(on: boolean) {
+async function setNsfw(on: boolean, input?: HTMLInputElement) {
   nsfwError.value = "";
-  // 還沒驗過年齡：先要生日，按「確認並開啟」才真的送
-  if (on && !ageVerified.value && !askingAge.value) { askingAge.value = true; return; }
+  if (on && needsAdultConsent(session.profile)) {
+    // 開關還沒真的打開：勾選框退回關著，送出聲明窗才會變
+    if (input) input.checked = false;
+    askingConsent.value = true;
+    return;
+  }
   if (nsfwBusy.value) return;
   nsfwBusy.value = true;
   try {
-    const result = await updateSiteSettings({ showNsfw: on, ...(on && !ageVerified.value ? { birthdate: birthdate.value } : {}) }, await token());
-    if (session.profile) { session.profile.showNsfw = result.showNsfw; session.profile.ageVerified = result.ageVerified; }
-    askingAge.value = false;
-    birthdate.value = "";
+    applyAdultSettings(session.profile, await updateSiteSettings({ showNsfw: on }, await token()));
   } catch (err) {
+    if (input) input.checked = showNsfw.value;
     nsfwError.value = err instanceof ApiError || err instanceof Error ? err.message : t("state.saveFailed");
   } finally {
     nsfwBusy.value = false;
@@ -194,17 +197,9 @@ onMounted(() => {
           <span class="subtle">{{ $t("settings.content.nsfwDesc") }}</span>
           <span v-if="ageVerified" class="subtle content__verified">{{ $t("settings.content.verified") }}</span>
         </span>
-        <input type="checkbox" class="content__switch" :checked="showNsfw" :disabled="nsfwBusy" @change="setNsfw(($event.target as HTMLInputElement).checked)" />
+        <input type="checkbox" class="content__switch" :checked="showNsfw" :disabled="nsfwBusy" @change="setNsfw(($event.target as HTMLInputElement).checked, $event.target as HTMLInputElement)" />
       </label>
-      <form v-if="askingAge && !ageVerified" class="content__age" @submit.prevent="setNsfw(true)">
-        <label for="birthdate">{{ $t("settings.content.birthdate") }}</label>
-        <input id="birthdate" v-model="birthdate" type="date" class="input" :max="today" required />
-        <p class="subtle">{{ $t("settings.content.birthdateHint") }}</p>
-        <div class="persona__acts">
-          <button type="button" class="btn btn--sm" @click="askingAge = false">{{ $t("dialog.cancel") }}</button>
-          <button type="submit" class="btn btn--sm btn--primary" :disabled="nsfwBusy || !birthdate">{{ $t("settings.content.confirmAge") }}</button>
-        </div>
-      </form>
+      <AdultConsentDialog v-if="askingConsent" @close="askingConsent = false" @done="askingConsent = false" />
       <p v-if="nsfwError" class="notice notice--error" role="alert">{{ nsfwError }}</p>
     </section>
 
@@ -237,7 +232,6 @@ onMounted(() => {
 .content__text { display: grid; gap: 2px; }
 .content__verified { color: var(--accent-text); }
 .content__switch { width: 22px; height: 22px; flex: none; accent-color: var(--accent); }
-.content__age { display: grid; gap: var(--s-2); padding: var(--s-3); border: 1px solid var(--line); border-radius: var(--r-md); }
 .hidden { scroll-margin-top: calc(var(--header-h, 56px) + var(--s-3)); }
 .hidden__desc { margin: 0; }
 .hidden__chips { display: flex; flex-wrap: wrap; gap: 6px; }

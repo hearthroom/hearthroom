@@ -672,13 +672,14 @@ app.get("/v1/me", async (c) => {
 /**
  * 本站的個人設定，兩樣，各自可單獨送：
  *   - showNsfw 成人內容開關。開要驗年齡：沒驗過要帶生日（YYYY-MM-DD）且滿 18；生日只看一眼、不落庫、不寫日誌。
- *     未滿 18 回 403 underage，什麼都不存。關只關開關，驗證留著。
+ *     未滿 18 回 403 underage，什麼都不存。還要同意目前這一版聲明：沒同意過或同意的是舊版，
+ *     要帶 consentVersion（shared/adult-consent.ts），不符回 400 consent_required。關只關開關，驗證與同意留著。
  *   - hiddenTags 不想看的類型：完整清單（目錄鍵），整份換掉。
- * 兩樣都沒給回 400。已部署的舊客戶端只送 showNsfw，照樣能用。回應永遠是三樣齊的現況。
+ * 兩樣都沒給回 400。回應永遠是完整的現況（showNsfw、ageVerified、adultConsent、hiddenTags）。
  */
 app.post("/v1/me/settings", async (c) => {
   const member = await requireMember(c);
-  const body = (await c.req.json().catch(() => ({}))) as { showNsfw?: unknown; birthdate?: unknown; hiddenTags?: unknown };
+  const body = (await c.req.json().catch(() => ({}))) as { showNsfw?: unknown; birthdate?: unknown; consentVersion?: unknown; hiddenTags?: unknown };
   if (typeof body.showNsfw !== "boolean" && body.hiddenTags === undefined) throw new HttpError(400, "showNsfw_required");
   let hiddenTags: string[];
   if (body.hiddenTags !== undefined) {
@@ -687,14 +688,15 @@ app.post("/v1/me/settings", async (c) => {
   } else {
     hiddenTags = await memberHiddenTags(c.env.DB, member.id);
   }
-  let nsfw: { showNsfw: boolean; ageVerified: boolean };
+  let nsfw: { showNsfw: boolean; ageVerified: boolean; adultConsent: boolean };
   if (typeof body.showNsfw === "boolean") {
     const birthdate = typeof body.birthdate === "string" ? body.birthdate : undefined;
-    nsfw = await updateMemberNsfw(c.env.DB, member.id, { showNsfw: body.showNsfw, birthdate }, Date.now());
+    const consentVersion = typeof body.consentVersion === "number" ? body.consentVersion : undefined;
+    nsfw = await updateMemberNsfw(c.env.DB, member.id, { showNsfw: body.showNsfw, birthdate, consentVersion }, Date.now());
     note(c, { event: "settings", detail: nsfw.showNsfw ? "nsfw_on" : "nsfw_off" });
   } else {
     const current = await memberNsfw(c.env.DB, member.id);
-    nsfw = { showNsfw: current.showNsfw && current.ageVerifiedAt !== null, ageVerified: current.ageVerifiedAt !== null };
+    nsfw = { showNsfw: current.showNsfw && current.ageVerifiedAt !== null, ageVerified: current.ageVerifiedAt !== null, adultConsent: current.adultConsent };
   }
   return c.json({ ...nsfw, hiddenTags }, 200, { "Cache-Control": "no-store" });
 });
