@@ -61,9 +61,25 @@ function keepLetterSpacingTogether(text: string): string {
   return text.replace(new RegExp(LETTER_SPACED.source, "gu"), (run) => run.replace(/(?<=\p{L}) (?=\p{L})/gu, "\u00A0"));
 }
 
+/**
+ * 中文一段、英文一段的招牌：在最後一個中日韓字之後的第一個空格換行，右邊不能再有中日韓字。
+ * 作者沒傳換行，但這就是他在來源平台上要的兩行；不這樣做，寬欄位會把英文的前幾個字接到第一行。
+ */
+function splitPair(text: string): string {
+  if (text.includes("\n")) return text;
+  let lastCjk = -1;
+  for (const m of text.matchAll(new RegExp(CJK.source, "gu"))) lastCjk = m.index;
+  if (lastCjk < 0) return text;
+  const gap = text.slice(lastCjk).search(/[ \t]/);
+  if (gap < 0) return text;
+  const left = text.slice(0, lastCjk + gap).trimEnd();
+  const right = text.slice(lastCjk + gap).trim();
+  return /\p{L}/u.test(right) ? `${left}\n${right}` : text;
+}
+
 export interface TitleLayout {
   text: string;
-  /** 排過版：置中、只在作者留的空格換行 */
+  /** 排過版：置中、只在作者留的空格換行；中英兩段的招牌已在 text 裡換好行 */
   designed: boolean;
   /** 最寬一段（兩個換行點之間）估計有幾個字寬；欄位放不下這一段時，把字級縮到剛好放得下 */
   widestEm: number;
@@ -72,7 +88,7 @@ export interface TitleLayout {
 export function titleLayout(name: string): TitleLayout {
   const trimmed = name.trim();
   const designed = trimmed.includes("\n") || hasDecoration(trimmed) || LETTER_SPACED.test(trimmed) || isBilingualLockup(trimmed);
-  const text = designed ? keepLetterSpacingTogether(trimmed) : trimmed;
+  const text = designed ? splitPair(keepLetterSpacingTogether(trimmed)) : trimmed;
   const widestEm = designed
     ? Math.max(0, ...text.split(/[ \t\n]+/).map((part) => [...part].reduce((sum, ch) => sum + glyphWidth(ch), 0)))
     : 0;

@@ -152,6 +152,8 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
   text-align: center; word-break: keep-all; letter-spacing: 0;
   /* 最寬的一段放不下就把字縮到剛好放下（最小 11px），不讓它在裝飾符號中間被切開 */
   font-size: clamp(11px, 100cqi / var(--title-em, 1), 14px);
+  /* 行高釘在 14px 的兩行高：字縮小時行高跟著縮，兩行就比固定高度矮，第三行的頂端會從底下露出來 */
+  line-height: calc(14px * 1.35);
 }
 /* 名字的連結撐滿整張卡；沒有 z-index 的東西都在它底下，標籤與作者有 z-index 所以在它上面 */
 .card__link::after { content: ""; position: absolute; inset: 0; }
@@ -164,6 +166,8 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
 }
 
 .card__tags { display: flex; gap: 4px; margin: 1px 0 0; padding: 0; list-style: none; overflow: hidden; }
+/* 包著連結的 li 若是一般的 list-item，會多一條文字基線把標籤往下推 2px，跟直接當 li 的「+N」對不齊 */
+.card__tags > li { display: flex; min-width: 0; }
 .tag {
   position: relative; z-index: 1;
   display: inline-flex; align-items: center; height: 20px; padding: 0 7px;

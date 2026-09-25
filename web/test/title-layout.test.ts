@@ -38,7 +38,22 @@ describe("titleLayout", () => {
   });
 
   it("字母拉開的那段不在字母間斷行", () => {
-    expect(titleLayout("19弾丸论破•催眠学园01 D A N G A N R O N P A").text).toBe("19弾丸论破•催眠学园01 D\u00A0A\u00A0N\u00A0G\u00A0A\u00A0N\u00A0R\u00A0O\u00A0N\u00A0P\u00A0A");
+    expect(titleLayout("19弾丸论破•催眠学园01 D A N G A N R O N P A").text).toBe("19弾丸论破•催眠学园01\nD\u00A0A\u00A0N\u00A0G\u00A0A\u00A0N\u00A0R\u00A0O\u00A0N\u00A0P\u00A0A");
+  });
+
+  it.each([
+    ["꧁⟆崩坏✦星穹铁道⟅꧂ 𝓗𝓸𝓷𝓴𝓪𝓲: 𝓢𝓽𝓪𝓻 𝓡𝓪𝓲𝓵 ｜2.9", "꧁⟆崩坏✦星穹铁道⟅꧂\n𝓗𝓸𝓷𝓴𝓪𝓲: 𝓢𝓽𝓪𝓻 𝓡𝓪𝓲𝓵 ｜2.9"],
+    ["❖┆原神✦提瓦特┆❖ 𝕲𝖊𝖓𝖘𝖍𝖎𝖓 𝕴𝖒𝖕𝖆𝖈𝖙", "❖┆原神✦提瓦特┆❖\n𝕲𝖊𝖓𝖘𝖍𝖎𝖓 𝕴𝖒𝖕𝖆𝖈𝖙"],
+    ["弹丸论破 Danganronpa", "弹丸论破\nDanganronpa"],
+  ])("中文一段、英文一段的標題固定排成上下兩行，欄位再寬也一樣：%s", (name, text) => {
+    expect(titleLayout(name).text).toBe(text);
+  });
+
+  it.each([
+    ["✧ Luna ✧"],
+    ["第一行\n第二行"],
+  ])("分不出中英兩段就不硬換行：%s", (name) => {
+    expect(titleLayout(name).text).toBe(name.trim());
   });
 
   it("估計最寬一段不比實際窄：實際量到 ꧁⟆崩坏✦星穹铁道⟅꧂ 約 11.1 字寬、19弾丸论破•催眠学园01 約 10.6", () => {
