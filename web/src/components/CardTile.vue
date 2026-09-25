@@ -123,7 +123,7 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
 
 .card__body { display: grid; gap: 5px; padding: 10px 12px 11px; }
 .card__flag {
-  position: absolute; top: 8px; right: 8px; z-index: 1;
+  position: absolute; top: 8px; right: 8px; z-index: 1; pointer-events: none;
   display: inline-flex; align-items: center; height: 20px; padding: 0 7px;
   border-radius: 4px; background: var(--danger); color: #fff;
   font-size: 11px; font-weight: 700; letter-spacing: 0.02em; line-height: 1;
@@ -133,6 +133,8 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
 .card__name {
   font-size: 14px; font-weight: 600; line-height: 1.35; letter-spacing: -0.01em; overflow-wrap: anywhere;
   display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  /* 固定兩行高：短名字的卡不該讓整排的簡介與標籤參差 */
+  min-height: calc(14px * 1.35 * 2);
 }
 /* 名字的連結撐滿整張卡；沒有 z-index 的東西都在它底下，標籤與作者有 z-index 所以在它上面 */
 .card__link::after { content: ""; position: absolute; inset: 0; }
