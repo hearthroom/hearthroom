@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker, { boardCache, iconCache } from "../src/index";
 import { cardManifest, iconSize, localePrefix, svgWrap } from "../src/shortcut";
 import { bearer, identities, resetDb, restoreUpstream, rolesOnMainSite } from "./helpers";
+import { ADULT_CONSENT_VERSION } from "../shared/adult-consent";
 
 const AUTHOR = 10001;
 const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -108,7 +109,7 @@ describe("卡片 manifest", () => {
     const settings = (body: Record<string, unknown>) =>
       SELF.fetch("https://c.test/v1/me/settings", { method: "POST", headers: { "Content-Type": "application/json", ...bearer("viewer-token") }, body: JSON.stringify(body) });
     const y = new Date().getUTCFullYear() - 20;
-    expect((await settings({ showNsfw: true, birthdate: `${y}-01-01` })).status).toBe(200);
+    expect((await settings({ showNsfw: true, birthdate: `${y}-01-01`, consentVersion: ADULT_CONSENT_VERSION })).status).toBe(200);
     const adult = await env.DB.prepare("SELECT id FROM cards WHERE source_role_id = 'role-adult'").first<{ id: string }>();
     // 沒開開關的人：卡片本身就 403，自然沒有鑰匙
     expect((await SELF.fetch(`https://c.test/v1/cards/${adult!.id}`)).status).toBe(403);
@@ -148,7 +149,7 @@ describe("卡片 manifest", () => {
   it("沒設密鑰：成人卡不發鑰匙，端點也照樣 404", async () => {
     identities({ "author-token": AUTHOR, "viewer-token": 40004 });
     const y = new Date().getUTCFullYear() - 20;
-    await SELF.fetch("https://c.test/v1/me/settings", { method: "POST", headers: { "Content-Type": "application/json", ...bearer("viewer-token") }, body: JSON.stringify({ showNsfw: true, birthdate: `${y}-01-01` }) });
+    await SELF.fetch("https://c.test/v1/me/settings", { method: "POST", headers: { "Content-Type": "application/json", ...bearer("viewer-token") }, body: JSON.stringify({ showNsfw: true, birthdate: `${y}-01-01`, consentVersion: ADULT_CONSENT_VERSION }) });
     const adult = await env.DB.prepare("SELECT id FROM cards WHERE source_role_id = 'role-adult'").first<{ id: string }>();
     const noSecret = { ...env, SHORTCUT_SECRET: undefined } as unknown as typeof env;
     const ctx = createExecutionContext();

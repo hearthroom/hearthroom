@@ -1,7 +1,8 @@
 /**
  * 首頁榜單上的 R18 開關，整條路走一遍：真的 session store、真的 api 客戶端、假的 fetch。
  *   - 訪客看不到開關；
- *   - 沒驗過年齡：點下去先要出生日期，這時候什麼都不送；驗過才打開，榜單帶 ?nsfw=1 與 token 重讀；
+ *   - 沒驗過年齡：點下去先開聲明窗，要勾同意、填出生日期，這時候什麼都不送；送出才打開，榜單帶 ?nsfw=1 與 token 重讀；
+ *   - 驗過年齡但沒同意目前這一版聲明：聲明窗只要勾同意，不再問生日；
  *   - 驗過了：點一下就關，榜單不帶 nsfw 重讀。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -24,8 +25,9 @@ vi.mock("moonstage/stage.css", () => ({}));
 
 import BoardPage from "../src/pages/BoardPage.vue";
 import { useSession } from "../src/lib/session";
+import { ADULT_CONSENT_VERSION } from "../../shared/adult-consent";
 
-const state = { showNsfw: false, ageVerified: false };
+const state = { showNsfw: false, ageVerified: false, adultConsent: false };
 const calls: string[] = [];
 const bodies: Record<string, unknown>[] = [];
 
@@ -37,11 +39,13 @@ function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respon
   if (url.includes("/open/v1/me")) return json({ accountNumId: 7, nickName: "月光", avatar: "" });
   if (url.endsWith("/v1/me")) return json({ handle: "abcdefgh", memberSince: 0, reviewer: false, identities: [], hiddenTags: [], ...state });
   if (url.includes("/v1/me/settings")) {
-    const body = JSON.parse(String(init?.body)) as { showNsfw: boolean; birthdate?: string };
+    const body = JSON.parse(String(init?.body)) as { showNsfw: boolean; birthdate?: string; consentVersion?: number };
     bodies.push(body);
+    if (body.showNsfw && !state.adultConsent && body.consentVersion !== ADULT_CONSENT_VERSION) return json({ error: "consent_required" }, 400);
     if (body.birthdate) state.ageVerified = true;
+    if (body.consentVersion === ADULT_CONSENT_VERSION) state.adultConsent = true;
     state.showNsfw = body.showNsfw;
-    return json({ showNsfw: state.showNsfw, ageVerified: state.ageVerified, hiddenTags: [] });
+    return json({ showNsfw: state.showNsfw, ageVerified: state.ageVerified, adultConsent: state.adultConsent, hiddenTags: [] });
   }
   if (url.includes("/v1/board") || url.includes("/v1/cards?")) return json({ items: [], total: 0, hasNext: false, limit: 20, offset: 0, sort: "day" });
   return json({ error: "not_found" }, 404);
@@ -70,11 +74,18 @@ async function mountBoard() {
 }
 
 const toggle = () => document.querySelector<HTMLButtonElement>("button.r18");
+const agree = () => document.querySelector<HTMLInputElement>('.dlg input[type="checkbox"]');
+const confirmBtn = () => document.querySelector<HTMLButtonElement>('.dlg button[type="submit"]');
+async function tick(box: HTMLInputElement, value: string | boolean) {
+  if (typeof value === "boolean") { box.checked = value; box.dispatchEvent(new Event("change")); }
+  else { box.value = value; box.dispatchEvent(new Event("input")); }
+  await nextTick();
+}
 
 beforeEach(() => {
   vi.stubGlobal("fetch", fakeFetch);
   calls.length = 0; bodies.length = 0;
-  signedIn = true; state.showNsfw = false; state.ageVerified = false;
+  signedIn = true; state.showNsfw = false; state.ageVerified = false; state.adultConsent = false;
   setActivePinia(createPinia());
 });
 afterEach(() => { app?.unmount(); el?.remove(); app = null; el = null; document.body.innerHTML = ""; vi.unstubAllGlobals(); });
@@ -87,24 +98,27 @@ describe("首頁 R18 開關", () => {
     expect(toggle()).toBeNull();
   });
 
-  it("沒驗過年齡：先要出生日期，確認後才打開，榜單帶 nsfw 重讀", async () => {
+  it("沒驗過年齡：聲明窗要勾同意又填出生日期，確認後才打開，榜單帶 nsfw 重讀", async () => {
     const session = await mountBoard();
     expect(toggle()?.getAttribute("aria-checked")).toBe("false");
 
     toggle()!.click();
     await flush();
     expect(bodies).toHaveLength(0);
+    expect(document.querySelector(".dlg")?.textContent).toContain(i18n.global.t("adultConsent.noMinors"));
     const input = document.querySelector<HTMLInputElement>('.dlg input[type="date"]');
     expect(input).not.toBeNull();
+    expect(agree()).not.toBeNull();
 
-    input!.value = "1990-01-01";
-    input!.dispatchEvent(new Event("input"));
-    await nextTick();
+    await tick(input!, "1990-01-01");
+    expect(confirmBtn()!.disabled, "沒勾同意不能送").toBe(true);
+    await tick(agree()!, true);
+    expect(confirmBtn()!.disabled).toBe(false);
     const before = boardCalls().length;
     document.querySelector<HTMLFormElement>("form.dlg")!.dispatchEvent(new Event("submit", { cancelable: true }));
     await flush();
 
-    expect(bodies).toEqual([{ showNsfw: true, birthdate: "1990-01-01" }]);
+    expect(bodies).toEqual([{ showNsfw: true, birthdate: "1990-01-01", consentVersion: ADULT_CONSENT_VERSION }]);
     expect(session.profile?.showNsfw).toBe(true);
     expect(document.querySelector(".dlg")).toBeNull();
     expect(toggle()?.getAttribute("aria-checked")).toBe("true");
@@ -123,8 +137,24 @@ describe("首頁 R18 開關", () => {
     expect(toggle()?.getAttribute("aria-checked")).toBe("false");
   });
 
+  it("驗過年齡但沒同意目前這一版聲明：聲明窗只要勾同意，不再問生日", async () => {
+    state.ageVerified = true;
+    const session = await mountBoard();
+    toggle()!.click();
+    await flush();
+    expect(bodies).toHaveLength(0);
+    expect(document.querySelector('.dlg input[type="date"]')).toBeNull();
+    expect(confirmBtn()!.disabled).toBe(true);
+    await tick(agree()!, true);
+    document.querySelector<HTMLFormElement>("form.dlg")!.dispatchEvent(new Event("submit", { cancelable: true }));
+    await flush();
+    expect(bodies).toEqual([{ showNsfw: true, consentVersion: ADULT_CONSENT_VERSION }]);
+    expect(session.profile?.adultConsent).toBe(true);
+    expect(toggle()?.getAttribute("aria-checked")).toBe("true");
+  });
+
   it("驗過且開著：點一下就關，不再問年齡，榜單不帶 nsfw 重讀", async () => {
-    state.showNsfw = true; state.ageVerified = true;
+    state.showNsfw = true; state.ageVerified = true; state.adultConsent = true;
     await mountBoard();
     expect(toggle()?.getAttribute("aria-checked")).toBe("true");
     const before = boardCalls().length;
@@ -138,8 +168,8 @@ describe("首頁 R18 開關", () => {
     expect(after.every((c) => !c.includes("nsfw=1"))).toBe(true);
   });
 
-  it("驗過但關著：點一下直接打開，不再問年齡", async () => {
-    state.ageVerified = true;
+  it("驗過也同意過但關著：點一下直接打開，不再跳聲明", async () => {
+    state.ageVerified = true; state.adultConsent = true;
     await mountBoard();
     toggle()!.click();
     await flush();

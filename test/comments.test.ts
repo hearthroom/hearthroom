@@ -2,6 +2,7 @@ import {approveFixtureResponse} from './hosted-fixture';
 import { SELF, env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { bearer, identities, makeReviewer, resetDb, restoreUpstream, rolesOnMainSite } from "./helpers";
+import { ADULT_CONSENT_VERSION } from "../shared/adult-consent";
 
 // 留言是本站自己的資料：掛在本站的卡上、寫的人是本站成員，供應商不參與。
 const AUTHOR = 10001;
@@ -160,7 +161,7 @@ describe("成人內容", () => {
     expect((await SELF.fetch(`https://c.test/v1/cards/${cardId}/comments/count`)).status).toBe(403);
     // 驗過年齡、開了展示的人帶 ?nsfw=1 就讀得到、也寫得了
     const birthdate = `${new Date().getUTCFullYear() - 20}-01-01`;
-    await SELF.fetch("https://c.test/v1/me/settings", { method: "POST", headers: { "Content-Type": "application/json", ...bearer("other") }, body: JSON.stringify({ showNsfw: true, birthdate }) });
+    await SELF.fetch("https://c.test/v1/me/settings", { method: "POST", headers: { "Content-Type": "application/json", ...bearer("other") }, body: JSON.stringify({ showNsfw: true, birthdate, consentVersion: ADULT_CONSENT_VERSION }) });
     const open = await SELF.fetch(`https://c.test/v1/cards/${cardId}/comments?page=1&nsfw=1`, { headers: bearer("other") });
     expect(open.status).toBe(200);
     expect((await json(open)).total).toBe(1);

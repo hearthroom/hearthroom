@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import worker from "../src/index";
 import { boardCache } from "../src/index";
 import { upstream } from "../src/upstream";
+import { ADULT_CONSENT_VERSION } from "../shared/adult-consent";
 import { vi } from "vitest";
 import { bearer, envWithAssets, identities, makeMember, makeReviewer, resetDb, restoreUpstream, reviewOff, reviewOn, reviewUpstream, rolesOnMainSite, testHandle } from "./helpers";
 
@@ -80,7 +81,7 @@ describe("榜單權限與快取", () => {
   it("成人榜單重用結果，但每次仍驗權限，關閉或失效立即只剩一般內容", async () => {
     await listTwo();
     await makeMember(VIEWER);
-    await settings({ showNsfw: true, birthdate: adultBirthdate() });
+    await settings({ showNsfw: true, birthdate: adultBirthdate(), consentVersion: ADULT_CONSENT_VERSION });
     const url = "https://c.test/v1/cards?zone=all&nsfw=1";
     const first = await SELF.fetch(url, { headers: bearer("viewer-token") });
     expect(first.headers.get("X-Cache")).toBe("miss");
@@ -102,7 +103,7 @@ describe("榜單權限與快取", () => {
   it("暖成人榜單只有兩次 D1 讀取，不重新排序，也不快取上游身分", async () => {
     await listTwo();
     await makeMember(VIEWER);
-    await settings({ showNsfw: true, birthdate: adultBirthdate() });
+    await settings({ showNsfw: true, birthdate: adultBirthdate(), consentVersion: ADULT_CONSENT_VERSION });
     const req = new Request("https://c.test/v1/cards?nsfw=1", { headers: bearer("viewer-token") });
     const warm = createExecutionContext();
     await worker.fetch(req.clone(), env, warm);
@@ -131,7 +132,7 @@ describe("榜單權限與快取", () => {
   it("觀看榜單不更新會員資料", async () => {
     await listTwo();
     await makeMember(VIEWER);
-    await settings({ showNsfw: true, birthdate: adultBirthdate() });
+    await settings({ showNsfw: true, birthdate: adultBirthdate(), consentVersion: ADULT_CONSENT_VERSION });
     await env.DB.prepare("UPDATE members SET display_name=NULL WHERE id=?").bind(`member-${VIEWER}`).run();
     await env.DB.exec("CREATE TRIGGER board_no_member_write BEFORE UPDATE ON members BEGIN SELECT RAISE(ABORT, 'read only'); END;");
     try {
@@ -144,37 +145,71 @@ describe("榜單權限與快取", () => {
 describe("成人內容開關與年齡驗證", () => {
   it("沒生日開不了；未滿 18 回 403 且什麼都不存；滿 18 才開，之後關掉再開不用再填", async () => {
     await makeMember(VIEWER);
-    let res = await settings({ showNsfw: true });
+    let res = await settings({ showNsfw: true, consentVersion: ADULT_CONSENT_VERSION });
     expect(res.status).toBe(400);
     expect((await json(res)).error).toBe("birthdate_required");
 
-    res = await settings({ showNsfw: true, birthdate: minorBirthdate() });
+    res = await settings({ showNsfw: true, birthdate: minorBirthdate(), consentVersion: ADULT_CONSENT_VERSION });
     expect(res.status).toBe(403);
     expect((await json(res)).error).toBe("underage");
-    const row = await env.DB.prepare("SELECT show_nsfw, age_verified_at FROM members WHERE id = ?").bind(`member-${VIEWER}`).first<any>();
-    expect(row).toMatchObject({ show_nsfw: 0, age_verified_at: null });
+    const row = await env.DB.prepare("SELECT show_nsfw, age_verified_at, adult_consent_version FROM members WHERE id = ?").bind(`member-${VIEWER}`).first<any>();
+    expect(row).toMatchObject({ show_nsfw: 0, age_verified_at: null, adult_consent_version: null });
 
-    expect((await settings({ showNsfw: true, birthdate: "not-a-date" })).status).toBe(400);
+    expect((await settings({ showNsfw: true, birthdate: "not-a-date", consentVersion: ADULT_CONSENT_VERSION })).status).toBe(400);
 
-    res = await settings({ showNsfw: true, birthdate: adultBirthdate() });
+    res = await settings({ showNsfw: true, birthdate: adultBirthdate(), consentVersion: ADULT_CONSENT_VERSION });
     expect(res.status).toBe(200);
-    expect(await json(res)).toEqual({ showNsfw: true, ageVerified: true, hiddenTags: [] });
-    // 生日不落庫：成員表只有驗證時間
+    expect(await json(res)).toEqual({ showNsfw: true, ageVerified: true, adultConsent: true, hiddenTags: [] });
+    // 生日不落庫：成員表只有驗證時間；同意記版本與時間
     const cols = await env.DB.prepare("SELECT * FROM members WHERE id = ?").bind(`member-${VIEWER}`).first<Record<string, unknown>>();
     expect(Object.keys(cols!)).not.toContain("birthdate");
     expect(cols!.age_verified_at).toBeGreaterThan(0);
+    expect(cols!.adult_consent_version).toBe(ADULT_CONSENT_VERSION);
+    expect(cols!.adult_consented_at).toBeGreaterThan(0);
 
-    expect(await json(await settings({ showNsfw: false }))).toEqual({ showNsfw: false, ageVerified: true, hiddenTags: [] });
-    expect(await json(await settings({ showNsfw: true }))).toEqual({ showNsfw: true, ageVerified: true, hiddenTags: [] });
+    // 關掉再開：年齡與同意都留著，不必再帶
+    expect(await json(await settings({ showNsfw: false }))).toEqual({ showNsfw: false, ageVerified: true, adultConsent: true, hiddenTags: [] });
+    expect(await json(await settings({ showNsfw: true }))).toEqual({ showNsfw: true, ageVerified: true, adultConsent: true, hiddenTags: [] });
     const me = await json(await SELF.fetch("https://c.test/v1/me", { headers: bearer("viewer-token") }));
-    expect(me).toMatchObject({ showNsfw: true, ageVerified: true, hiddenTags: [] });
+    expect(me).toMatchObject({ showNsfw: true, ageVerified: true, adultConsent: true, hiddenTags: [] });
+  });
+
+  it("沒同意聲明開不了：只帶生日回 400 consent_required，年齡也不記", async () => {
+    await makeMember(VIEWER);
+    let res = await settings({ showNsfw: true, birthdate: adultBirthdate() });
+    expect(res.status).toBe(400);
+    expect((await json(res)).error).toBe("consent_required");
+    res = await settings({ showNsfw: true, birthdate: adultBirthdate(), consentVersion: ADULT_CONSENT_VERSION - 1 });
+    expect((await json(res)).error).toBe("consent_required");
+    const row = await env.DB.prepare("SELECT show_nsfw, age_verified_at, adult_consent_version FROM members WHERE id = ?").bind(`member-${VIEWER}`).first<any>();
+    expect(row).toMatchObject({ show_nsfw: 0, age_verified_at: null, adult_consent_version: null });
+  });
+
+  it("驗過年齡但同意的是舊版聲明：視同沒開，看不到成人卡；重新同意（不必再填生日）才打開", async () => {
+    await listTwo();
+    await makeMember(VIEWER);
+    await env.DB.prepare("UPDATE members SET show_nsfw = 1, age_verified_at = 1, adult_consent_version = NULL WHERE id = ?").bind(`member-${VIEWER}`).run();
+
+    const me = await json(await SELF.fetch("https://c.test/v1/me", { headers: bearer("viewer-token") }));
+    expect(me).toMatchObject({ showNsfw: false, ageVerified: true, adultConsent: false });
+    const list = await json(await SELF.fetch("https://c.test/v1/cards?zone=all&nsfw=1", { headers: bearer("viewer-token") }));
+    expect(ids(list)).toEqual(["role-safe"]);
+
+    let res = await settings({ showNsfw: true });
+    expect(res.status).toBe(400);
+    expect((await json(res)).error).toBe("consent_required");
+
+    res = await settings({ showNsfw: true, consentVersion: ADULT_CONSENT_VERSION });
+    expect(await json(res)).toEqual({ showNsfw: true, ageVerified: true, adultConsent: true, hiddenTags: [] });
+    const after = await json(await SELF.fetch("https://c.test/v1/cards?zone=all&nsfw=1&b=2", { headers: bearer("viewer-token") }));
+    expect(ids(after)).toEqual(["role-adult", "role-safe"]);
   });
 
   it("不想看的類型：只收目錄裡的鍵、去重排序；存在成員上、/v1/me 帶回；不動成人開關；兩樣都沒給回 400", async () => {
     await makeMember(VIEWER);
     let res = await settings({ hiddenTags: ["womens-fiction", "r18g", "womens-fiction"] });
     expect(res.status).toBe(200);
-    expect(await json(res)).toEqual({ showNsfw: false, ageVerified: false, hiddenTags: ["r18g", "womens-fiction"] });
+    expect(await json(res)).toEqual({ showNsfw: false, ageVerified: false, adultConsent: false, hiddenTags: ["r18g", "womens-fiction"] });
     const me = await json(await SELF.fetch("https://c.test/v1/me", { headers: bearer("viewer-token") }));
     expect(me.hiddenTags).toEqual(["r18g", "womens-fiction"]);
 
@@ -184,16 +219,16 @@ describe("成人內容開關與年齡驗證", () => {
     expect((await settings({ hiddenTags: "r18g" })).status).toBe(400);
     expect((await settings({})).status).toBe(400);
     // 沒動成人開關；清空也行
-    expect(await json(await settings({ hiddenTags: [] }))).toEqual({ showNsfw: false, ageVerified: false, hiddenTags: [] });
+    expect(await json(await settings({ hiddenTags: [] }))).toEqual({ showNsfw: false, ageVerified: false, adultConsent: false, hiddenTags: [] });
     // 開成人開關時隱藏名單留著
     await settings({ hiddenTags: ["r18g"] });
-    expect(await json(await settings({ showNsfw: true, birthdate: adultBirthdate() }))).toEqual({ showNsfw: true, ageVerified: true, hiddenTags: ["r18g"] });
+    expect(await json(await settings({ showNsfw: true, birthdate: adultBirthdate(), consentVersion: ADULT_CONSENT_VERSION }))).toEqual({ showNsfw: true, ageVerified: true, adultConsent: true, hiddenTags: ["r18g"] });
   });
 
   it("開了的人看得到：榜單、單卡、作者頁都帶成人內容，而且回應禁止瀏覽器共用快取", async () => {
     await listTwo();
     await makeMember(VIEWER);
-    await settings({ showNsfw: true, birthdate: adultBirthdate() });
+    await settings({ showNsfw: true, birthdate: adultBirthdate(), consentVersion: ADULT_CONSENT_VERSION });
     const list = await SELF.fetch("https://c.test/v1/cards?zone=all&nsfw=1&b=1", { headers: bearer("viewer-token") });
     expect(list.headers.get("Cache-Control")).toBe("private, no-store");
     expect(list.headers.get("X-Cache")).toBe("miss");
@@ -222,7 +257,7 @@ describe("成人內容開關與年齡驗證", () => {
     expect(ids(await json(anon))).toEqual(["role-safe"]);
     // 開了的人打同一個網址：拿到成人內容而不是剛剛進快取的那份
     await makeMember(VIEWER);
-    await settings({ showNsfw: true, birthdate: adultBirthdate() });
+    await settings({ showNsfw: true, birthdate: adultBirthdate(), consentVersion: ADULT_CONSENT_VERSION });
     const ok = await SELF.fetch("https://c.test/v1/cards?zone=all&nsfw=1&d=1", { headers: bearer("viewer-token") });
     expect(ids(await json(ok))).toEqual(["role-adult", "role-safe"]);
   });
@@ -244,7 +279,7 @@ describe("審核", () => {
     expect(claim.status).toBe(403);
     expect((await json(claim)).error).toBe("age_verification_required");
     // 驗過年齡（不必開展示開關）就能領
-    await settings({ showNsfw: true, birthdate: adultBirthdate() }, "rev-token");
+    await settings({ showNsfw: true, birthdate: adultBirthdate(), consentVersion: ADULT_CONSENT_VERSION }, "rev-token");
     await settings({ showNsfw: false }, "rev-token");
     expect((await SELF.fetch(`https://c.test/v1/review/${q.items[0].id}/claim`, { method: "POST", headers: bearer("rev-token") })).status).toBe(200);
     const detail = await json(await SELF.fetch(`https://c.test/v1/review/${q.items[0].id}/detail`, { headers: bearer("rev-token") }));

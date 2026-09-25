@@ -30,7 +30,7 @@ const CARD = {
   summaries: { zh: "s", en: "", ja: "", ko: "" }, avatarUrl: null, backgroundUrl: null, slug: null, tags: [],
   author: { handle: "abcdefgh", accountNumId: 7, name: "月光", avatar: "" }, talkNum: 0, followNum: 0, trending: 0, registeredAt: 0, syncedAt: 0, provider: "lunatalk", nsfw: true,
 };
-const state = { showNsfw: false, ageVerified: true };
+const state = { showNsfw: false, ageVerified: true, adultConsent: true };
 const calls: string[] = [];
 
 function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
@@ -41,7 +41,7 @@ function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respon
   const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
   if (url.includes("/open/v1/me")) return json({ accountNumId: 7, nickName: "月光", avatar: "" });
   if (url.endsWith("/v1/me")) return json({ handle: "abcdefgh", memberSince: 0, reviewer: false, identities: [], ...state });
-  if (url.includes("/v1/me/settings")) { const body = JSON.parse(String(init?.body)) as { showNsfw: boolean }; state.showNsfw = body.showNsfw; return json({ showNsfw: state.showNsfw, ageVerified: true }); }
+  if (url.includes("/v1/me/settings")) { const body = JSON.parse(String(init?.body)) as { showNsfw: boolean }; state.showNsfw = body.showNsfw; return json({ showNsfw: state.showNsfw, ageVerified: true, adultConsent: true }); }
   // 留言區跟卡片頁同一道門
   if (url.includes("/comments")) return url.includes("nsfw=1") && auth ? json({ total: 0, comments: [], isRoleCreator: false }) : json({ error: "adult_content" }, 403);
   if (url.includes('/platforms')) return url.includes('nsfw=1') && auth ? json({ platforms: [] }) : json({ error: 'nsfw_gated' }, 403);

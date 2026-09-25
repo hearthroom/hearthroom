@@ -1,3 +1,4 @@
+import { ADULT_CONSENT_VERSION } from "../shared/adult-consent";
 import { DEFAULT_PROVIDER, parseProvider, type ProviderId, requireConfigured } from "./providers";
 import { tagNamesFor } from "../shared/tag-catalog";
 import { type Env, HttpError } from "./types";
@@ -118,6 +119,8 @@ export interface MemberProfile {
   showNsfw: boolean;
   /** 驗過年齡了（只記有沒有，不記生日） */
   ageVerified: boolean;
+  /** 同意過目前這一版成人內容聲明（舊版或沒同意過＝false，成人內容視同沒開） */
+  adultConsent: boolean;
   /** 不想看的類型（目錄鍵，排序去重）：榜單與搜尋不列這些類型的卡 */
   hiddenTags: string[];
 }
@@ -145,10 +148,10 @@ export function normalizeHiddenTags(input: unknown): string[] {
 
 /** 「我的」頁要的：公開 ID、加入時間、連結了哪些供應商帳號。沒有 token、沒有信箱。 */
 export async function memberProfile(db: D1Database, memberId: string): Promise<MemberProfile | null> {
-  type ProfileRow = { handle: string; display_name: string | null; avatar_url: string; bio: string; created_at: number; show_nsfw: number; age_verified_at: number | null; hidden_tags: string };
+  type ProfileRow = { handle: string; display_name: string | null; avatar_url: string; bio: string; created_at: number; show_nsfw: number; age_verified_at: number | null; adult_consent_version: number | null; hidden_tags: string };
   type IdentityRow = { provider: string; external_id: string; linked_at: number };
   const [members, founding, ids] = await db.batch<ProfileRow | { provider: string } | IdentityRow>([
-    db.prepare("SELECT handle, display_name, avatar_url, bio, created_at, show_nsfw, age_verified_at, hidden_tags FROM members WHERE id = ?").bind(memberId),
+    db.prepare("SELECT handle, display_name, avatar_url, bio, created_at, show_nsfw, age_verified_at, adult_consent_version, hidden_tags FROM members WHERE id = ?").bind(memberId),
     db.prepare("SELECT provider FROM member_identities WHERE member_id=?").bind(memberId),
     db.prepare("SELECT provider, external_id, linked_at FROM member_connections WHERE owner_member_id = ? UNION SELECT provider, external_id, linked_at FROM member_identities WHERE member_id = ? AND NOT EXISTS (SELECT 1 FROM member_connections c WHERE c.provider=member_identities.provider AND c.external_id=member_identities.external_id) ORDER BY linked_at").bind(memberId, memberId),
   ]);
@@ -161,8 +164,9 @@ export async function memberProfile(db: D1Database, memberId: string): Promise<M
     bio: m.bio,
     memberSince: m.created_at,
     identities: (ids.results as IdentityRow[]).filter(r=>r.provider==='harbor').map((r) => ({ provider: r.provider, externalId: Number(r.external_id), linkedAt: r.linked_at, founding: (founding.results as { provider: string }[]).some(i=>i.provider===r.provider) })),
-    showNsfw: m.show_nsfw === 1,
+    showNsfw: m.show_nsfw === 1 && m.adult_consent_version === ADULT_CONSENT_VERSION,
     ageVerified: m.age_verified_at !== null,
+    adultConsent: m.adult_consent_version === ADULT_CONSENT_VERSION,
     hiddenTags: parseHiddenTags(m.hidden_tags),
   };
 }
@@ -180,13 +184,17 @@ export async function updateMemberHiddenTags(db: D1Database, memberId: string, i
   return keys;
 }
 
-/** 成人內容相關的設定：開關與年齡驗證時間。 */
-export async function memberNsfw(db: D1Database, memberId: string): Promise<{ showNsfw: boolean; ageVerifiedAt: number | null }> {
+/**
+ * 成人內容相關的設定：開關、年齡驗證時間、有沒有同意目前這一版聲明。
+ * showNsfw 已經把聲明算進去：開關開著但同意的是舊版（或沒同意過），一律當沒開。
+ */
+export async function memberNsfw(db: D1Database, memberId: string): Promise<{ showNsfw: boolean; ageVerifiedAt: number | null; adultConsent: boolean }> {
   const m = await db
-    .prepare("SELECT show_nsfw, age_verified_at FROM members WHERE id = ?")
+    .prepare("SELECT show_nsfw, age_verified_at, adult_consent_version FROM members WHERE id = ?")
     .bind(memberId)
-    .first<{ show_nsfw: number; age_verified_at: number | null }>();
-  return { showNsfw: m?.show_nsfw === 1, ageVerifiedAt: m?.age_verified_at ?? null };
+    .first<{ show_nsfw: number; age_verified_at: number | null; adult_consent_version: number | null }>();
+  const adultConsent = m?.adult_consent_version === ADULT_CONSENT_VERSION;
+  return { showNsfw: m?.show_nsfw === 1 && adultConsent, ageVerifiedAt: m?.age_verified_at ?? null, adultConsent };
 }
 
 const BIRTHDATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -211,18 +219,20 @@ export function isAdultBirthdate(birthdate: string, now: number): boolean | null
 
 /**
  * 改成人內容開關。開：要驗過年齡——已經驗過就直接開，沒驗過要帶生日且滿 18；未滿不存任何東西。
- * 關：只關開關，驗證留著（下次開不必再填）。
+ * 還要同意目前這一版聲明：同意過就不必再帶，沒同意過或同意的是舊版要帶 consentVersion，
+ * 不符回 400 consent_required，年齡也不記。
+ * 關：只關開關，驗證與同意都留著（下次開不必再填）。
  */
 export async function updateMemberNsfw(
   db: D1Database,
   memberId: string,
-  input: { showNsfw: boolean; birthdate?: string },
+  input: { showNsfw: boolean; birthdate?: string; consentVersion?: number },
   now: number,
-): Promise<{ showNsfw: boolean; ageVerified: boolean }> {
+): Promise<{ showNsfw: boolean; ageVerified: boolean; adultConsent: boolean }> {
   const current = await memberNsfw(db, memberId);
   if (!input.showNsfw) {
     await db.prepare("UPDATE members SET show_nsfw = 0 WHERE id = ?").bind(memberId).run();
-    return { showNsfw: false, ageVerified: current.ageVerifiedAt !== null };
+    return { showNsfw: false, ageVerified: current.ageVerifiedAt !== null, adultConsent: current.adultConsent };
   }
   let verifiedAt = current.ageVerifiedAt;
   if (verifiedAt === null) {
@@ -232,8 +242,14 @@ export async function updateMemberNsfw(
     if (!adult) throw new HttpError(403, "underage");
     verifiedAt = now;
   }
-  await db.prepare("UPDATE members SET show_nsfw = 1, age_verified_at = ? WHERE id = ?").bind(verifiedAt, memberId).run();
-  return { showNsfw: true, ageVerified: true };
+  if (!current.adultConsent) {
+    if (input.consentVersion !== ADULT_CONSENT_VERSION) throw new HttpError(400, "consent_required");
+    await db.prepare("UPDATE members SET show_nsfw = 1, age_verified_at = ?, adult_consent_version = ?, adult_consented_at = ? WHERE id = ?")
+      .bind(verifiedAt, ADULT_CONSENT_VERSION, now, memberId).run();
+  } else {
+    await db.prepare("UPDATE members SET show_nsfw = 1, age_verified_at = ? WHERE id = ?").bind(verifiedAt, memberId).run();
+  }
+  return { showNsfw: true, ageVerified: true, adultConsent: true };
 }
 
 /**
@@ -250,12 +266,12 @@ export async function viewerAllowsNsfw(c: Ctx & { req: { query: (k: string) => s
     // Viewing is read-only. Resolve linked identities and current preferences in one D1 trip;
     // a member who has never signed in cannot already have opted into adult content.
     const member = await c.env.DB.prepare(`
-      SELECT show_nsfw, age_verified_at FROM members WHERE id = COALESCE(
+      SELECT show_nsfw, age_verified_at, adult_consent_version FROM members WHERE id = COALESCE(
         (SELECT owner_member_id FROM member_connections WHERE provider=? AND external_id=?),
         (SELECT member_id FROM member_identities WHERE provider=? AND external_id=?)
       )`).bind(provider, String(me.accountNumId), provider, String(me.accountNumId))
-      .first<{ show_nsfw: number; age_verified_at: number | null }>();
-    return member?.show_nsfw === 1 && member.age_verified_at !== null;
+      .first<{ show_nsfw: number; age_verified_at: number | null; adult_consent_version: number | null }>();
+    return member?.show_nsfw === 1 && member.age_verified_at !== null && member.adult_consent_version === ADULT_CONSENT_VERSION;
   } catch {
     return false;
   }
