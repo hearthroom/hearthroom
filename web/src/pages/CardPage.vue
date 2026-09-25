@@ -279,12 +279,12 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
             <div v-else class="role__void" :style="{ background: `linear-gradient(160deg, hsl(${hue} 45% 78%), hsl(${(hue + 40) % 360} 40% 62%))` }">
               <span>{{ [...card.name][0] }}</span>
             </div>
+            <span v-if="card.nsfw" class="role__flag" :title="$t('card.nsfwHint')">{{ $t("card.nsfw") }}</span>
           </div>
 
           <div class="role__id">
             <h1 class="role__name display">
               <span v-if="card.featured" class="featured-badge" :title="$t('card.featuredHint')">{{ $t("card.featured") }}</span>
-              <span v-if="card.nsfw" class="nsfw-badge" :title="$t('card.nsfwHint')">{{ $t("card.nsfw") }}</span>
               {{ card.name }}
             </h1>
             <!-- 作者是一張可點的名片，不只是一行灰字 -->
@@ -417,8 +417,14 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
   backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
 }
 .role__side--ghost { background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
-.role__art { aspect-ratio: 3 / 4; border-radius: var(--r-md); overflow: hidden; background: var(--surface-2); box-shadow: 0 0 0 1px var(--line); }
+.role__art { position: relative; aspect-ratio: 3 / 4; border-radius: var(--r-md); overflow: hidden; background: var(--surface-2); box-shadow: 0 0 0 1px var(--line); }
 .role__art img { width: 100%; height: 100%; object-fit: cover; }
+.role__flag {
+  position: absolute; top: 8px; right: 8px;
+  display: inline-flex; align-items: center; height: 20px; padding: 0 7px;
+  border-radius: 4px; background: var(--danger); color: #fff;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.02em; line-height: 1;
+}
 .role__void { display: grid; place-items: center; height: 100%; }
 .role__void span { font-size: 80px; font-weight: 600; color: rgba(255, 255, 255, 0.9); }
 
