@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute, useRouter } from "vue-router";
+import AdultToggle from "@/components/AdultToggle.vue";
 import DownloadBanner from "@/components/DownloadBanner.vue";
 import FollowFeed from "@/components/FollowFeed.vue";
 import CardGrid from "@/components/CardGrid.vue";
@@ -98,10 +99,13 @@ watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (no
     <DownloadBanner />
 
     <div class="bar">
-      <!-- 左邊選看哪個榜，右邊選怎麼排 -->
-      <div class="seg seg--mode">
-        <button class="seg__item" :class="{ 'seg__item--on': mode === 'cards' }" :aria-pressed="mode === 'cards'" @click="switchMode('cards')">{{ $t("board.mode.cards") }}</button>
-        <button class="seg__item" :class="{ 'seg__item--on': mode === 'following' }" :aria-pressed="mode === 'following'" @click="switchMode('following')">{{ $t("library.feed") }}</button>
+      <!-- 左邊選看哪個榜（旁邊是 R18 開關，窄螢幕它推到同一行的最右），右邊選怎麼排 -->
+      <div class="bar__lead">
+        <div class="seg seg--mode">
+          <button class="seg__item" :class="{ 'seg__item--on': mode === 'cards' }" :aria-pressed="mode === 'cards'" @click="switchMode('cards')">{{ $t("board.mode.cards") }}</button>
+          <button class="seg__item" :class="{ 'seg__item--on': mode === 'following' }" :aria-pressed="mode === 'following'" @click="switchMode('following')">{{ $t("library.feed") }}</button>
+        </div>
+        <AdultToggle v-if="mode === 'cards'" />
       </div>
 
       <div v-if="mode === 'cards'" class="sorts" role="group" :aria-label="$t('board.sorts')">
@@ -147,6 +151,11 @@ watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (no
 <style scoped>
 .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3); margin-bottom: var(--s-3); }
 .seg--mode .seg__item { padding: 0 16px; }
+.bar__lead { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); }
+@media (max-width: 640px) {
+  .bar__lead { width: 100%; }
+  .bar__lead :deep(.r18) { margin-left: auto; }
+}
 
 /* 排序做成細字頁籤，跟左邊的分段控制拉開層級：一個是「看哪個榜」，一個是「怎麼排」 */
 .sorts { display: flex; gap: 2px; }
