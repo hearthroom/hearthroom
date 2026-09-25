@@ -56,13 +56,14 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
         <span>{{ initial }}</span>
       </div>
       <!-- 名次是個小徽章，前三名用慣例的金銀銅；不搶立繪的戲 -->
+      <!-- 分級標在立繪角上：不跟名字搶那一行的寬度 -->
+      <span v-if="card.nsfw" class="card__flag" :title="$t('card.nsfwHint')">{{ $t("card.nsfw") }}</span>
       <span v-if="rank" class="medal card__rank" :class="rank <= 3 && `medal--${rank}`" role="img" :aria-label="$t('board.rank', { n: rank })">{{ rank }}</span>
     </div>
 
     <div class="card__body">
       <h2 class="card__name">
         <span v-if="card.featured" class="featured-badge" :title="$t('card.featuredHint')">{{ $t("card.featured") }}</span>
-        <span v-if="card.nsfw" class="nsfw-badge" :title="$t('card.nsfwHint')">{{ $t("card.nsfw") }}</span>
         <RouterLink :to="href" class="card__link">{{ card.name }}</RouterLink>
       </h2>
       <p class="card__hook">{{ card.summary || $t("card.noSummary") }}</p>
@@ -121,7 +122,18 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
 .card__rank { position: absolute; top: 8px; left: 8px; z-index: 1; }
 
 .card__body { display: grid; gap: 5px; padding: 10px 12px 11px; }
-.card__name { font-size: 15px; font-weight: 600; line-height: 1.35; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card__flag {
+  position: absolute; top: 8px; right: 8px; z-index: 1;
+  display: inline-flex; align-items: center; height: 20px; padding: 0 7px;
+  border-radius: 4px; background: var(--danger); color: #fff;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.02em; line-height: 1;
+}
+
+/* 名字最多兩行：窄欄位一行只放得下幾個字，長名字至少要看得出是哪張卡 */
+.card__name {
+  font-size: 14px; font-weight: 600; line-height: 1.35; letter-spacing: -0.01em; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
 /* 名字的連結撐滿整張卡；沒有 z-index 的東西都在它底下，標籤與作者有 z-index 所以在它上面 */
 .card__link::after { content: ""; position: absolute; inset: 0; }
 .card__link:hover { color: var(--accent-text); }
