@@ -97,6 +97,7 @@
 | `[data-chat="message"]` | 1 件のメッセージ。`data-from` は `ai`／`user`、`data-state` は `pending`／`streaming`／`done`、`data-msg-id` はサーバー側のメッセージ ID。 |
 | `[data-chat="message-body"]` | メッセージ本文（ルール適用後の HTML）。 |
 | `[data-slot="statusbar"]` | 機能バー。 |
+| `[data-slot="left"]`／`[data-slot="right"]` | 左右のサイドバーの位置。ここに置いた内容はその側にドッキングしたサイドバーとして扱われ、メッセージ列がスペースを空けます（「サイドバー」を参照）。 |
 | `[data-chat="author-stage"]` | 作者ステージ。`sdk.stage.open('content')` はメッセージ領域を、`open('full')` はページ全体を覆います。 |
 | `[data-chat="input"]` | 入力ボックス。 |
 | `[data-chat="composer"]` | 入力欄。 |
