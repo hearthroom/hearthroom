@@ -97,6 +97,7 @@
 | `[data-chat="message"]` | 메시지 하나. `data-from`은 `ai`/`user`, `data-state`는 `pending`/`streaming`/`done`, `data-msg-id`는 서버 측 메시지 ID. |
 | `[data-chat="message-body"]` | 메시지 본문(규칙 적용 후의 HTML). |
 | `[data-slot="statusbar"]` | 기능 바. |
+| `[data-slot="left"]`／`[data-slot="right"]` | 좌우 사이드바 위치. 여기에 둔 내용은 해당 쪽에 도킹된 사이드바로 취급되며, 메시지 열이 공간을 비웁니다(「사이드바」 참고). |
 | `[data-chat="author-stage"]` | 작성자 스테이지. `sdk.stage.open('content')`는 메시지 영역을, `open('full')`은 페이지 전체를 덮습니다. |
 | `[data-chat="input"]` | 입력 상자. |
 | `[data-chat="composer"]` | 입력창. |

@@ -97,6 +97,7 @@
 | `[data-chat="message"]` | 一則訊息。`data-from` 為 `ai`／`user`；`data-state` 為 `pending`／`streaming`／`done`；`data-msg-id` 為伺服器端的訊息 ID。 |
 | `[data-chat="message-body"]` | 訊息正文（套用規則後的 HTML）。 |
 | `[data-slot="statusbar"]` | 功能欄。 |
+| `[data-slot="left"]`／`[data-slot="right"]` | 左右側邊欄的位置。放在這裡的內容視為停靠在該側的側邊欄，對話欄會讓出空間（見「側邊欄」）。 |
 | `[data-chat="author-stage"]` | 作者舞台。`sdk.stage.open('content')` 覆蓋訊息區，`open('full')` 覆蓋整頁。 |
 | `[data-chat="input"]` | 輸入框。 |
 | `[data-chat="composer"]` | 輸入區。 |

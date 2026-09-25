@@ -97,6 +97,7 @@
 | `[data-chat="message"]` | 一条消息。`data-from` 为 `ai`／`user`；`data-state` 为 `pending`／`streaming`／`done`；`data-msg-id` 为服务器端的消息 ID。 |
 | `[data-chat="message-body"]` | 消息正文（应用规则后的 HTML）。 |
 | `[data-slot="statusbar"]` | 功能栏。 |
+| `[data-slot="left"]`／`[data-slot="right"]` | 左右侧边栏的位置。放在这里的内容视为停靠在该侧的侧边栏，对话栏会让出空间（见“侧边栏”）。 |
 | `[data-chat="author-stage"]` | 作者舞台。`sdk.stage.open('content')` 覆盖消息区，`open('full')` 覆盖整页。 |
 | `[data-chat="input"]` | 输入框。 |
 | `[data-chat="composer"]` | 输入区。 |

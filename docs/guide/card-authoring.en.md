@@ -97,6 +97,7 @@ Select nodes by their `data-chat` attributes, not by class names.
 | `[data-chat="message"]` | One message. `data-from` is `ai` or `user`; `data-state` is `pending`, `streaming` or `done`; `data-msg-id` is the server-side message ID. |
 | `[data-chat="message-body"]` | Message body (the HTML after rules are applied). |
 | `[data-slot="statusbar"]` | Function bar. |
+| `[data-slot="left"]` / `[data-slot="right"]` | Left and right sidebar positions. Content placed here is treated as a sidebar docked on that side, and the message column makes room for it (see "Sidebars"). |
 | `[data-chat="author-stage"]` | Author stage. `sdk.stage.open('content')` covers the message area; `open('full')` covers the whole page. |
 | `[data-chat="input"]` | Input box. |
 | `[data-chat="composer"]` | Composer. |
