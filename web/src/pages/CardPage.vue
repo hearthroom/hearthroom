@@ -22,6 +22,7 @@ import { useSession } from "@/lib/session";
 import { contentLang, pageTitle, zoneLabel } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
 import { compact, dateOnly, dateTime, hueFrom, plainText } from "@/lib/format";
+import { titleLayout } from "@/lib/title-layout";
 import { confirmDialog } from "@/lib/confirm";
 import { track } from "@/lib/track";
 import { canInstall } from "@/lib/pwa";
@@ -33,6 +34,7 @@ const { locale, lp } = useLocalePath();
 const { t } = useI18n();
 
 const card = ref<CommunityCard | null>(null);
+const title = computed(() => titleLayout(card.value?.name ?? ""));
 const loading = ref(true);
 /** 手上有卡、在背景換語言重抓：舊卡留著變淡，不退回骨架 */
 const revalidating = ref(false);
@@ -279,13 +281,13 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
             <div v-else class="role__void" :style="{ background: `linear-gradient(160deg, hsl(${hue} 45% 78%), hsl(${(hue + 40) % 360} 40% 62%))` }">
               <span>{{ [...card.name][0] }}</span>
             </div>
+            <span v-if="card.featured" class="role__featured" :title="$t('card.featuredHint')">{{ $t("card.featured") }}</span>
             <span v-if="card.nsfw" class="role__flag" :title="$t('card.nsfwHint')">{{ $t("card.nsfw") }}</span>
           </div>
 
           <div class="role__id">
-            <h1 class="role__name display">
-              <span v-if="card.featured" class="featured-badge" :title="$t('card.featuredHint')">{{ $t("card.featured") }}</span>
-              {{ card.name }}
+            <h1 class="role__name display" :class="{ 'role__name--designed': title.designed }" :style="title.designed ? { '--title-em': title.widestEm } : undefined">
+              {{ title.text }}
             </h1>
             <!-- 作者是一張可點的名片，不只是一行灰字 -->
             <component :is="card.author.handle ? RouterLink : 'div'" :to="card.author.handle ? lp(`/authors/${card.author.handle}`) : undefined" class="role__by">
@@ -419,6 +421,13 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 .role__side--ghost { background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
 .role__art { position: relative; aspect-ratio: 3 / 4; border-radius: var(--r-md); overflow: hidden; background: var(--surface-2); box-shadow: 0 0 0 1px var(--line); }
 .role__art img { width: 100%; height: 100%; object-fit: cover; }
+.role__featured {
+  position: absolute; left: 8px; bottom: 8px; max-width: calc(100% - 16px);
+  display: inline-flex; align-items: center; height: 20px; padding: 0 7px;
+  border-radius: 4px; background: var(--accent); color: #fff;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.02em; line-height: 1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .role__flag {
   position: absolute; top: 8px; right: 8px;
   display: inline-flex; align-items: center; height: 20px; padding: 0 7px;
@@ -428,8 +437,10 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 .role__void { display: grid; place-items: center; height: 100%; }
 .role__void span { font-size: 80px; font-weight: 600; color: rgba(255, 255, 255, 0.9); }
 
-.role__id { display: grid; min-width: 0; overflow-wrap: anywhere; gap: 6px; }
-.role__name { font-size: 22px; line-height: 1.25; }
+.role__id { display: grid; min-width: 0; overflow-wrap: anywhere; gap: 6px; container-type: inline-size; }
+/* 名字與榜單卡片同一套規則（見 title-layout.ts）：留作者的換行、先在空格換行 */
+.role__name { font-size: 22px; line-height: 1.25; white-space: pre-line; overflow-wrap: break-word; }
+.role__name--designed { text-align: center; word-break: keep-all; font-size: clamp(16px, 100cqi / var(--title-em, 1), 22px); }
 .role__by {
   display: flex; align-items: center; gap: 10px;
   margin-top: 4px; padding: 8px 10px; border-radius: var(--r-md);

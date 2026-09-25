@@ -5,6 +5,7 @@ import { computed, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 import { compact, hueFrom } from "@/lib/format";
 import { zoneLabel } from "@/lib/i18n";
+import { titleLayout } from "@/lib/title-layout";
 import { useLocalePath } from "@/lib/use-locale";
 import type { CommunityCard } from "@/lib/types";
 
@@ -21,6 +22,7 @@ const props = defineProps<{
 const { lp } = useLocalePath();
 const hue = computed(() => hueFrom(props.card.name));
 const initial = computed(() => [...props.card.name][0] ?? "?");
+const title = computed(() => titleLayout(props.card.name));
 const href = computed(() => lp(`/cards/${props.card.num ?? props.card.id}`));
 /* 圖掛了（上游換圖、刪圖）就當沒圖：退回單字佔位，不留一個破圖 */
 const broken = ref(false);
@@ -56,15 +58,15 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
         <span>{{ initial }}</span>
       </div>
       <!-- 名次是個小徽章，前三名用慣例的金銀銅；不搶立繪的戲 -->
-      <!-- 分級標在立繪角上：不跟名字搶那一行的寬度 -->
+      <!-- 分級與精選都標在立繪角上：不跟名字搶那兩行的寬度 -->
+      <span v-if="card.featured" class="card__featured" :title="$t('card.featuredHint')">{{ $t("card.featured") }}</span>
       <span v-if="card.nsfw" class="card__flag" :title="$t('card.nsfwHint')">{{ $t("card.nsfw") }}</span>
       <span v-if="rank" class="medal card__rank" :class="rank <= 3 && `medal--${rank}`" role="img" :aria-label="$t('board.rank', { n: rank })">{{ rank }}</span>
     </div>
 
     <div class="card__body">
-      <h2 class="card__name">
-        <span v-if="card.featured" class="featured-badge" :title="$t('card.featuredHint')">{{ $t("card.featured") }}</span>
-        <RouterLink :to="href" class="card__link">{{ card.name }}</RouterLink>
+      <h2 class="card__name" :class="{ 'card__name--designed': title.designed }" :style="title.designed ? { '--title-em': title.widestEm } : undefined">
+        <RouterLink :to="href" class="card__link">{{ title.text }}</RouterLink>
       </h2>
       <p class="card__hook">{{ card.summary || $t("card.noSummary") }}</p>
 
@@ -121,7 +123,14 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
 
 .card__rank { position: absolute; top: 8px; left: 8px; z-index: 1; }
 
-.card__body { display: grid; gap: 5px; padding: 10px 12px 11px; }
+.card__body { display: grid; gap: 5px; padding: 10px 12px 11px; container-type: inline-size; }
+.card__featured {
+  position: absolute; left: 8px; bottom: 8px; z-index: 1; pointer-events: none;
+  display: inline-flex; align-items: center; height: 20px; padding: 0 7px; max-width: calc(100% - 16px);
+  border-radius: 4px; background: var(--accent); color: #fff;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.02em; line-height: 1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .card__flag {
   position: absolute; top: 8px; right: 8px; z-index: 1; pointer-events: none;
   display: inline-flex; align-items: center; height: 20px; padding: 0 7px;
@@ -129,12 +138,20 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
   font-size: 11px; font-weight: 700; letter-spacing: 0.02em; line-height: 1;
 }
 
-/* 名字最多兩行：窄欄位一行只放得下幾個字，長名字至少要看得出是哪張卡 */
+/* 名字最多兩行：窄欄位一行只放得下幾個字，長名字至少要看得出是哪張卡。
+   pre-line：作者自己換的行要留著。break-word 而不是 anywhere：先在空格換行，一段比欄位寬才段內斷。 */
 .card__name {
-  font-size: 14px; font-weight: 600; line-height: 1.35; letter-spacing: -0.01em; overflow-wrap: anywhere;
+  font-size: 14px; font-weight: 600; line-height: 1.35; letter-spacing: -0.01em;
+  white-space: pre-line; overflow-wrap: break-word;
   display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   /* 固定兩行高：短名字的卡不該讓整排的簡介與標籤參差 */
   min-height: calc(14px * 1.35 * 2);
+}
+/* 排過版的標題（見 title-layout.ts）：置中，中日韓字不在段內斷，換行只落在作者留的空格上 */
+.card__name--designed {
+  text-align: center; word-break: keep-all; letter-spacing: 0;
+  /* 最寬的一段放不下就把字縮到剛好放下（最小 11px），不讓它在裝飾符號中間被切開 */
+  font-size: clamp(11px, 100cqi / var(--title-em, 1), 14px);
 }
 /* 名字的連結撐滿整張卡；沒有 z-index 的東西都在它底下，標籤與作者有 z-index 所以在它上面 */
 .card__link::after { content: ""; position: absolute; inset: 0; }
