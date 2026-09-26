@@ -274,24 +274,41 @@ accountAuthRoutes.post('/v1/auth/cancel',async c=>{
 async function issueToken(c:C,session:Session,provider:ProviderId,externalId:number){
   const pair=await delegatedAccess(c.env,provider,externalId,session.member_id);
   // Logout may have completed while the provider was rotating its token.
-  if(!await c.env.DB.prepare('SELECT 1 FROM account_sessions WHERE token_hash=? AND expires_at>?').bind(session.token_hash,Date.now()).first())throw new HttpError(401,'site_session_required');
   // Recheck membership and generation after the network wait; never release another account's token.
-  if(await connectedMemberId(c.env.DB,provider,externalId)!==session.member_id)throw new HttpError(403,'auth_connection_denied');
+  const [alive,owner]=await Promise.all([
+    c.env.DB.prepare('SELECT 1 FROM account_sessions WHERE token_hash=? AND expires_at>?').bind(session.token_hash,Date.now()).first(),
+    connectedMemberId(c.env.DB,provider,externalId),
+  ]);
+  if(!alive)throw new HttpError(401,'site_session_required');
+  if(owner!==session.member_id)throw new HttpError(403,'auth_connection_denied');
   return pair;
 }
 accountAuthRoutes.post('/v1/auth/session',async c=>{
+  const started=Date.now(),phases:string[]=[];
   const session=(await readSession(c))!,body=await c.req.json();
-  const profile=(await memberProfile(c.env.DB,session.member_id))!;
-  const selected=profile.identities.find(i=>i.provider===body.provider)??profile.identities.find(i=>i.provider===session.provider);
-  if(!selected)throw new HttpError(401,'site_session_required');
+  phases.push(`session;dur=${Date.now()-started}`);
   // 前端要求時把授權一起帶回：開頁本來是 session 回來才去要 token，兩趟往返串在一起。
   // 換不到授權（供應商那邊斷了）不影響本站 session，token 就是 null，前端照舊處理。
+  const tokenFor=async(provider:string,externalId:number)=>{
+    try{return await issueToken(c,session,providerOf(provider,c.env),externalId);}
+    catch(e){if(e instanceof HttpError&&e.status>=500)throw e;return null;}
+  };
+  // 成員資料、審核人身分、授權三件事同時問。授權先用 session 上的身分開始換；
+  // 成員資料回來後選出的身分若不是它（極少見：前端指定了別的供應商），再用選出的那個重換。
+  const guess=body.token===true?tokenFor(session.provider,Number(session.external_id)):null;
+  guess?.catch(()=>{});
+  const [profile,reviewer]=await Promise.all([memberProfile(c.env.DB,session.member_id),isReviewer(c.env.DB,session.member_id)]);
+  phases.push(`profile;dur=${Date.now()-started}`);
+  const selected=profile!.identities.find(i=>i.provider===body.provider)??profile!.identities.find(i=>i.provider===session.provider);
+  if(!selected)throw new HttpError(401,'site_session_required');
   let token:{accessToken:string;expiresAt:number}|null|undefined;
-  if(body.token===true){
-    try{token=await issueToken(c,session,providerOf(selected.provider,c.env),selected.externalId);}
-    catch(e){if(e instanceof HttpError&&e.status>=500)throw e;token=null;}
+  if(guess){
+    token=selected.provider===session.provider&&selected.externalId===Number(session.external_id)?await guess:await tokenFor(selected.provider,selected.externalId);
+    phases.push(`token;dur=${Date.now()-started}`);
   }
-  return c.json({provider:selected.provider,me:{accountNumId:selected.externalId,nickName:profile.displayName,avatar:profile.avatarUrl},profile:{...profile,reviewer:await isReviewer(c.env.DB,session.member_id)},...(token===undefined?{}:{token})});
+  // 各段耗時（從請求開始算的毫秒數，不含任何資料），給量測開頁用。
+  c.header('Server-Timing',phases.join(', '));
+  return c.json({provider:selected.provider,me:{accountNumId:selected.externalId,nickName:profile!.displayName,avatar:profile!.avatarUrl},profile:{...profile!,reviewer},...(token===undefined?{}:{token})});
 });
 accountAuthRoutes.post('/v1/auth/token',async c=>{
   const session=(await readSession(c))!,body=await c.req.json(),provider=providerOf(body.provider,c.env);
@@ -361,10 +378,12 @@ accountAuthRoutes.get('/internal/auth/metrics',async c=>{
 
 /** Internal operator reuse of the same fenced credential refresh; never an HTTP token export. */
 export async function delegatedAccess(env:Env,provider:ProviderId,externalId:number,memberId:string){
-  if(await connectedMemberId(env.DB,provider,externalId)!==memberId)throw new HttpError(403,'auth_connection_denied');
   const id=String(externalId);
   const read=()=>env.DB.prepare('SELECT * FROM account_credentials WHERE provider=? AND external_id=?').bind(provider,id).first<Credential>();
-  let row=await read();
+  // 兩件互不相依的讀取同時問，少一趟往返。
+  const [owner,first]=await Promise.all([connectedMemberId(env.DB,provider,externalId),read()]);
+  if(owner!==memberId)throw new HttpError(403,'auth_connection_denied');
+  let row=first;
   if(!row||row.state==='revoked')throw new HttpError(401,'auth_reauthorization_required');
   if(row.state!=='active')throw new HttpError(503,'auth_provider_unavailable');
   let pair=await openAuth<Pair>(env,credentialPurpose(provider,id,row.generation),row.payload);
@@ -402,8 +421,11 @@ export async function delegatedAccess(env:Env,provider:ProviderId,externalId:num
       await metric(env,'refresh',provider,denied?'denied':'unavailable');throw e;
     }
   }
-  if(await connectedMemberId(env.DB,provider,externalId)!==memberId)throw new HttpError(403,'auth_connection_denied');
-  const stillValid=await env.DB.prepare("SELECT 1 FROM account_credentials WHERE provider=? AND external_id=? AND generation=? AND state='active'").bind(provider,id,row.generation).first();
+  const [ownerAfter,stillValid]=await Promise.all([
+    connectedMemberId(env.DB,provider,externalId),
+    env.DB.prepare("SELECT 1 FROM account_credentials WHERE provider=? AND external_id=? AND generation=? AND state='active'").bind(provider,id,row.generation).first(),
+  ]);
+  if(ownerAfter!==memberId)throw new HttpError(403,'auth_connection_denied');
   if(!stillValid)throw new HttpError(401,'auth_reauthorization_required');
   return publicPair(pair);
 }
