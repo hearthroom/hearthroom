@@ -18251,7 +18251,7 @@
       },
       "ReferralTerms": {
         "type": "object",
-        "description": "Current reward rules. All rewards are credits usable for agent conversations only.",
+        "description": "Current reward rules. All rewards are credits usable for agent conversations only. If a rewarded top-up is refunded, the unused part of its reward is withdrawn.",
         "required": [
           "welcomeCredits",
           "welcomeDays",
@@ -18260,8 +18260,7 @@
           "inviteePercent",
           "rebatePercent",
           "rebateDays",
-          "bindDays",
-          "holdDays"
+          "bindDays"
         ],
         "properties": {
           "welcomeCredits": {
@@ -18274,7 +18273,7 @@
           },
           "firstPercent": {
             "type": "number",
-            "description": "Percentage of the referred user's first top-up credited to the referrer, `holdDays` days after that payment if it was not refunded."
+            "description": "Percentage of the referred user's first top-up credited to the referrer as soon as the payment succeeds."
           },
           "firstCap": {
             "type": "integer",
@@ -18286,7 +18285,7 @@
           },
           "rebatePercent": {
             "type": "number",
-            "description": "Percentage of each later top-up by the referred user credited to the referrer, `holdDays` days after that payment if it was not refunded."
+            "description": "Percentage of each later top-up by the referred user credited to the referrer as soon as the payment succeeds."
           },
           "rebateDays": {
             "type": "integer",
@@ -18295,10 +18294,6 @@
           "bindDays": {
             "type": "integer",
             "description": "How many days after sign-up a new account can still enter a code."
-          },
-          "holdDays": {
-            "type": "integer",
-            "description": "Waiting period before the first top-up reward is paid."
           }
         }
       },
@@ -18313,7 +18308,6 @@
           "canRedeem",
           "invited",
           "purchased",
-          "pending",
           "earned"
         ],
         "properties": {
@@ -18353,18 +18347,9 @@
             "type": "integer",
             "description": "How many of them have topped up."
           },
-          "pending": {
-            "type": "integer",
-            "description": "Top-up rewards still inside the waiting period."
-          },
           "earned": {
             "type": "integer",
             "description": "Credits the caller has received as a referrer so far."
-          },
-          "nextRewardAt": {
-            "type": "string",
-            "format": "date-time",
-            "description": "When the next pending top-up reward is due. Present only when `pending` is above 0."
           }
         }
       }
