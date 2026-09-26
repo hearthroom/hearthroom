@@ -47,6 +47,11 @@ export function authorLine(lang: string, cards: number, talks: number): string {
 
 const OG_LOCALE: Record<string, string> = { "zh-Hant": "zh_TW", "zh-Hans": "zh_CN", en: "en_US", ja: "ja_JP", ko: "ko_KR" };
 
+/** 頁面主圖一進 HTML 就開始下載（見 PageMeta.preloadImage）。 */
+export function preloadImageTag(url: string): string {
+  return `<link rel="preload" as="image" href="${esc(url)}" fetchpriority="high">`;
+}
+
 export function renderHead(page: Response, meta: PageMeta): Response {
   const description = oneLine(meta.description);
   const tags = [
@@ -57,7 +62,7 @@ export function renderHead(page: Response, meta: PageMeta): Response {
     `<meta property="og:url" content="${esc(meta.url)}">`,
     `<meta property="og:locale" content="${OG_LOCALE[meta.lang] ?? "en_US"}">`,
     meta.image ? `<meta property="og:image" content="${esc(meta.image)}">` : "",
-    meta.image && meta.preloadImage ? `<link rel="preload" as="image" href="${esc(meta.image)}" fetchpriority="high">` : "",
+    meta.image && meta.preloadImage ? preloadImageTag(meta.image) : "",
     `<meta name="twitter:card" content="${meta.image ? "summary_large_image" : "summary"}">`,
     `<meta name="twitter:title" content="${esc(meta.title)}">`,
     `<meta name="twitter:description" content="${esc(description)}">`,

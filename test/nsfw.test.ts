@@ -346,6 +346,31 @@ describe("本站登入 cookie 直接放行單卡", () => {
     expect((await read(`/v1/cards/${id}`, cookie)).status).toBe(403);
   });
 
+  it("開了成人內容的人打開成人卡的網頁：HTML 殼先把卡片圖下載起來；這份不進任何快取", async () => {
+    await listTwo();
+    const cookie = await siteSession(VIEWER);
+    await settings({ showNsfw: true, birthdate: adultBirthdate(), consentVersion: ADULT_CONSENT_VERSION });
+    const id = await adultId();
+    const page = async (cookieHeader?: string) => {
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(new Request(`${origin}/cards/${id}`, { headers: cookieHeader ? { Cookie: cookieHeader } : {} }), { ...envWithAssets(), AUTH_ENABLED: "true", AUTH_ALLOWED_ORIGINS: origin }, ctx);
+      await waitOnExecutionContext(ctx);
+      return { res, html: await res.text() };
+    };
+    const mine = await page(cookie);
+    expect(mine.res.status).toBe(200);
+    expect(mine.html).toContain('rel="preload" as="image"');
+    expect(mine.res.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(mine.res.headers.get("Vary")).toBe("Cookie");
+    // 只多那一行：標題與分享資訊照樣不給
+    expect(mine.html).not.toContain("深夜的卡");
+    // 沒登入、或開關關著：原本那份沒有任何卡片資訊的殼
+    const anon = await page();
+    expect(anon.html).not.toContain('rel="preload" as="image"');
+    await settings({ showNsfw: false });
+    expect((await page(cookie)).html).not.toContain('rel="preload" as="image"');
+  });
+
   it("榜單沒帶 ?nsfw=1 仍是一般版本：cookie 只回答「能不能看這張」，不改變列表", async () => {
     await listTwo();
     const cookie = await siteSession(VIEWER);
