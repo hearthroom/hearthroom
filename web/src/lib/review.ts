@@ -4,6 +4,15 @@ import { fetchReviewMe, type FeaturedStatus } from "./api";
 import { currentProvider, type ProviderId } from "./provider";
 import { useSession } from "./session";
 
+const LAYOUT_KEY = "hearthroom.header.review";
+/** 上次開頁時頁首有沒有社群管理入口。只影響第一眼的排版，權限永遠以伺服器為準。 */
+function rememberedLayout(): boolean {
+  try { return localStorage.getItem(LAYOUT_KEY) === "1"; } catch { return false; }
+}
+function rememberLayout(on: boolean) {
+  try { if (on) localStorage.setItem(LAYOUT_KEY, "1"); else localStorage.removeItem(LAYOUT_KEY); } catch { /* 存不了就每次等身分 */ }
+}
+
 /** 社群管理資格與待辦摘要；首頁、帳號選單和工作台共用。 */
 export const useReviewer = defineStore("reviewer", () => {
   const session = useSession();
@@ -63,7 +72,17 @@ export const useReviewer = defineStore("reviewer", () => {
    * 登入狀態本身就帶了同一個旗標，先照它排版，查詢回來再以它為準。
    * 不然管理員每次開頁，頁首都會在畫面出來之後才折成兩行，把整頁往下推。
    */
-  const likely = computed(() => reviewer.value ?? (session.me ? session.profile?.reviewer === true : false));
+  const likely = computed(() => {
+    if (reviewer.value !== null) return reviewer.value;
+    if (session.me) return session.profile?.reviewer === true;
+    // 登入狀態也還沒到（要將近一秒）：先照這個瀏覽器上次的樣子排版，到了再改
+    return !session.ready && rememberedLayout();
+  });
+  // 記下這次的結果給下次開頁用；確定沒登入就清掉
+  watch(() => [likely.value, session.ready, session.me] as const, ([value, ready, me]) => {
+    if (reviewer.value !== null || me) rememberLayout(value);
+    else if (ready) rememberLayout(false);
+  }, { immediate: true });
 
   return { reviewer, likely, featured, featuredProvider, pending, pendingReviews, pendingCases, role, refresh };
 });
