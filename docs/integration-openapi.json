@@ -5927,7 +5927,7 @@
           "Roles"
         ],
         "summary": "List the caller's own role cards",
-        "description": "Lists role cards owned by the bearer account, newest `lastUpdateTime` first. Only the caller's cards are ever returned; identity comes from the bearer, not from any parameter. Trial cards (created through `/trial-cards`) are excluded. Cards are filtered by the platform scope `from` header (default `app`): rows whose `from` is the header value or `all` are listed (cards created through this API are stored with `from=all`, so they always appear). Note: `roleDetailDesc`, `roleDetailDescEn`, `roleDetailDescJa` and `roleDetailDescKo` are always returned as empty strings on this route (the owner comparison is made against a cleared value); fetch the definition with `GET /role/detail` using the bearer. `roleTag` and `talkExample` are raw JSON strings in list items (not parsed). Text localization is applied to list items according to the `language` header (default `zh-Hans`): for `zh-Hant` the name/desc/welcome are converted to Traditional Chinese; for cards whose `language` is `all` the en/ja/ko localized variants are substituted when the viewer language is en/ja/ko. `pageSize` must be a positive integer — the handler divides by it to compute `pages`, so omitting it or sending 0 causes a server error.",
+        "description": "Lists role cards owned by the bearer account, newest first (by creation time). Only the caller's cards are ever returned; identity comes from the bearer, not from any parameter. Requires the `role.read` capability. Cards that are hosted revisions or pending hosting transfers are excluded. Name and summary are returned in the card's origin language (`language`). `q` searches the name and summary in every language of the card, case-insensitively and as a plain substring (no pattern syntax); Traditional and Simplified Chinese characters match each other, so `夜行侦探` finds `夜行偵探`. `total` counts every card matching the filters, and `hasNextPage` tells whether a later page has more.",
         "security": [
           {
             "userToken": []
@@ -5941,33 +5941,22 @@
             "schema": {
               "type": "integer",
               "minimum": 1,
+              "maximum": 1000000,
               "default": 1
             },
-            "description": "1-based page number. Values < 1 are treated as 1; non-numeric is treated as 1."
+            "description": "1-based page number. Out-of-range or non-numeric values are clamped to 1..1000000."
           },
           {
             "name": "pageSize",
             "in": "query",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "description": "Items per page. Effectively required (>= 1): a missing/zero value causes a divide-by-zero in the handler. No upper bound is enforced."
-          },
-          {
-            "name": "roleVisibility",
-            "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "enum": [
-                "private",
-                "public",
-                "waitReview"
-              ]
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
             },
-            "description": "Filter by visibility. `public` also matches `waitReview` cards. Empty = all."
+            "description": "Items per page. Out-of-range or non-numeric values are clamped to 1..100; the default is 20."
           },
           {
             "name": "creationMethod",
@@ -5976,53 +5965,26 @@
             "schema": {
               "type": "string"
             },
-            "description": "Filter by the stored creation method (e.g. `hearthroom`, `open_api`, `mcp`, `manual`, `ai_summarize`, `import`, `clone`). Not validated against a whitelist: an unknown value simply yields an empty list. Cards created via `POST /role` store the whitelisted `origin` if given, otherwise `open_api`."
+            "description": "Only cards created through this origin (for example `hearthroom`). Empty = every origin. Not validated: an unknown value yields an empty list."
           },
           {
-            "name": "language",
-            "in": "header",
+            "name": "q",
+            "in": "query",
             "required": false,
             "schema": {
               "type": "string",
-              "enum": [
-                "zh-Hant",
-                "zh-Hans",
-                "en",
-                "ja",
-                "ko"
-              ],
-              "default": "zh-Hans"
+              "maxLength": 100
             },
-            "description": "Viewer language used for text conversion of list items."
-          },
-          {
-            "name": "from",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "app"
-            },
-            "description": "Platform scope. Cards with `from` equal to this value or `all` are listed. Clients normally omit it."
+            "description": "Keyword matched against the card name and summary in any of its languages: case-insensitive substring, Traditional and Simplified Chinese interchangeable. Surrounding spaces are ignored and only the first 100 characters are used. Empty = no keyword filter."
           }
         ],
         "responses": {
           "200": {
-            "description": "Page of role cards.",
+            "description": "Page of the caller's role cards.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RoleListResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Database error; body `{\"error\": \"<raw error string>\"}`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -14590,92 +14552,88 @@
         }
       },
       "RoleListItem": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/RoleRecord"
+        "type": "object",
+        "required": [
+          "characterRoleId",
+          "roleNumId",
+          "language",
+          "roleName",
+          "roleDesc",
+          "roleAvatar",
+          "roleVisibility",
+          "reviewStatus",
+          "talkNum",
+          "creationMethod"
+        ],
+        "properties": {
+          "characterRoleId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Card id."
           },
-          {
-            "type": "object",
-            "properties": {
-              "roleTag": {
-                "type": "string",
-                "description": "Raw JSON string of `RoleTagItem[]` (not parsed on this route)."
-              },
-              "talkExample": {
-                "type": "string",
-                "description": "Raw JSON string of `TalkExampleEntry[]` (not parsed on this route)."
-              },
-              "roleEntry": {
-                "type": "string",
-                "enum": [
-                  "chat",
-                  "home"
-                ],
-                "description": "Where a client should land when the card is opened; absent/empty means `chat`."
-              },
-              "roleDetailDesc": {
-                "type": "string",
-                "enum": [
-                  ""
-                ],
-                "description": "Always empty on this route; read it via `GET /role/detail`."
-              },
-              "roleDetailDescEn": {
-                "type": "string",
-                "enum": [
-                  ""
-                ],
-                "description": "Always empty on this route; read it via `GET /role/detail`."
-              },
-              "roleDetailDescJa": {
-                "type": "string",
-                "enum": [
-                  ""
-                ],
-                "description": "Always empty on this route; read it via `GET /role/detail`."
-              },
-              "roleDetailDescKo": {
-                "type": "string",
-                "enum": [
-                  ""
-                ],
-                "description": "Always empty on this route; read it via `GET /role/detail`."
-              }
-            }
+          "roleNumId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Public card number."
+          },
+          "language": {
+            "type": "string",
+            "description": "Origin language of the card; name and summary are in this language."
+          },
+          "roleName": {
+            "type": "string"
+          },
+          "roleDesc": {
+            "type": "string",
+            "description": "Summary in the origin language."
+          },
+          "roleAvatar": {
+            "type": "string",
+            "enum": [
+              ""
+            ],
+            "description": "Always empty on this route; read images through `GET /role/detail`."
+          },
+          "roleVisibility": {
+            "type": "string",
+            "description": "Card visibility, e.g. `unlisted`, `public`."
+          },
+          "reviewStatus": {
+            "type": "string"
+          },
+          "talkNum": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Chat count."
+          },
+          "creationMethod": {
+            "type": "string",
+            "description": "Where the card was created, e.g. `hearthroom`."
           }
-        ]
+        }
       },
       "RoleListResponse": {
         "type": "object",
         "required": [
+          "roleList",
           "total",
-          "size",
-          "pages",
-          "hasNextPage",
-          "roleList"
+          "hasNextPage"
         ],
         "properties": {
-          "total": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Total matching cards."
-          },
-          "size": {
-            "type": "integer",
-            "description": "Items on this page."
-          },
-          "pages": {
-            "type": "integer",
-            "description": "Total pages at this pageSize."
-          },
-          "hasNextPage": {
-            "type": "boolean"
-          },
           "roleList": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/RoleListItem"
             }
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Cards matching the filters across all pages."
+          },
+          "hasNextPage": {
+            "type": "boolean",
+            "description": "Whether a later page has more cards."
           }
         }
       },

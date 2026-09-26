@@ -56,7 +56,7 @@ describe.each(DEVELOPER_LOCALES)('%s developer documentation', locale => {
       await vi.waitFor(() => expect(el.querySelector('.doc-body')).not.toBeNull());
       expect(el.querySelector('#community-api')?.textContent).toBe(t(community.info.title));
       expect(el.querySelector('#integration-api')?.textContent).toBe(t(integration.info.title));
-      expect(el.querySelectorAll('h3.ep__head')).toHaveLength(137);
+      expect(el.querySelectorAll('h3.ep__head')).toHaveLength(138);
       const heading = el.querySelector<HTMLElement>('#community-get-v1-cards')!;
       expect(heading.textContent).toContain(t(community.paths['/v1/cards'].get.summary));
       heading.click(); await nextTick();

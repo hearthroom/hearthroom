@@ -165,9 +165,10 @@ describe("篩選", () => {
     expect(body.items.every((i: any) => i.registered)).toBe(true);
   });
 
-  it("已登記那組不知道作者一共有幾張——那個數字只有上游有，這條路不問它", async () => {
+  // total 是「符合目前篩選的張數」（翻頁用）：已上架那組就是已上架的張數，由本站的庫算，不問上游
+  it("已登記那組的總數是已上架的張數——翻頁算得出來，而且不問上游", async () => {
     const { body } = await mine("?filter=listed");
-    expect(body.total).toBeNull();
+    expect(body.total).toBe(3);
     expect(body.registeredTotal).toBe(3);
   });
 
@@ -265,5 +266,46 @@ describe("我的卡片：資料庫查詢不隨卡片張數變多", () => {
     const two = await count(2);
     const six = await count(6);
     expect(six, `2 張 ${two} 次、6 張 ${six} 次`).toBe(two);
+  });
+});
+
+describe("我的卡片：搜尋", () => {
+  it("關鍵字帶給供應商（全部／未上架由供應商比對）；總數跟著篩選；不同關鍵字不共用快取", async () => {
+    myRolesOnUpstream({ "alice-token": [{ roleId: "a1", name: "夜行偵探" }, { roleId: "a2", name: "星海旅人" }, { roleId: "a3", name: "夜行偵探 番外" }] });
+    const hit = await mine("?q=" + encodeURIComponent("  夜行偵探 "));
+    expect(hit.status).toBe(200);
+    expect(hit.body.items.map((i: any) => i.roleId)).toEqual(["a1", "a3"]);
+    expect(hit.body.total).toBe(2);
+    expect(upstreamCalls.at(-1)?.q).toBe("夜行偵探");
+    // 同一頁、換一個關鍵字：不能拿到上一個關鍵字的快取
+    const other = await mine("?q=" + encodeURIComponent("星海"));
+    expect(other.body.items.map((i: any) => i.roleId)).toEqual(["a2"]);
+    // 沒有關鍵字：照舊全部
+    expect((await mine()).body.total).toBe(3);
+  });
+
+  it("已上架的卡用關鍵字找：繁簡互通、比對四語卡名與簡介，總數與翻頁跟著篩選", async () => {
+    const { makeMember } = await import("./helpers");
+    await makeMember(10001);
+    const insert = async (roleId: string, names: Record<string, string>, summaries: Record<string, string>) => {
+      await env.DB.prepare(
+        `INSERT INTO cards (id, source_role_id, author_num_id, names, summaries, tags, search_text, registered_at, last_synced_at, provider)
+         VALUES (?,?,10001,?,?,'[]','',1,1,'harbor')`,
+      ).bind(await ensureCardNumber(env.DB, "harbor", roleId), roleId, JSON.stringify(names), JSON.stringify(summaries)).run();
+    };
+    await insert("a1", { zh: "夜行偵探", en: "Night Detective", ja: "", ko: "" }, { zh: "", en: "", ja: "", ko: "" });
+    await insert("a2", { zh: "星海旅人", en: "", ja: "", ko: "" }, { zh: "一个侦探的故事", en: "", ja: "", ko: "" });
+    await insert("a3", { zh: "花園", en: "", ja: "", ko: "" }, { zh: "", en: "", ja: "", ko: "" });
+    const simplified = await mine("?filter=listed&q=" + encodeURIComponent("侦探"));
+    expect(simplified.status).toBe(200);
+    expect(simplified.body.items.map((i: any) => i.roleId).sort()).toEqual(["a1", "a2"]);
+    expect(simplified.body.total).toBe(2);
+    expect((await mine("?filter=listed&q=" + encodeURIComponent("night"))).body.items.map((i: any) => i.roleId)).toEqual(["a1"]);
+    const paged = await mine("?filter=listed&pageSize=1&page=2&q=" + encodeURIComponent("偵探"));
+    expect(paged.body.items).toHaveLength(1);
+    expect(paged.body.total).toBe(2);
+    expect(paged.body.hasNext).toBe(false);
+    // 沒有關鍵字：總數就是已上架的張數，頁碼算得出來
+    expect((await mine("?filter=listed")).body.total).toBe(3);
   });
 });

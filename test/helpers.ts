@@ -194,13 +194,14 @@ export interface MyRoleFixture {
 }
 
 /** 記錄每次上游清單呼叫，測試才驗得出快取到底有沒有省掉請求。 */
-export const upstreamCalls: { token: string; page: number; pageSize: number }[] = [];
+export const upstreamCalls: { token: string; page: number; pageSize: number; q: string }[] = [];
 
 export function myRolesOnUpstream(byToken: Record<string, MyRoleFixture[]>): void {
   upstreamCalls.length = 0;
-  upstream.fetchMyRoles = async (_env, token, page, pageSize) => {
-    upstreamCalls.push({ token, page, pageSize });
-    const all = byToken[token] ?? [];
+  upstream.fetchMyRoles = async (_env, token, page, pageSize, _provider, q = "") => {
+    upstreamCalls.push({ token, page, pageSize, q });
+    // 供應商照關鍵字篩（這裡只比卡名，夠驗本站有沒有把 q 帶過去）
+    const all = (byToken[token] ?? []).filter((r) => !q || (r.name ?? r.roleId).includes(q));
     const start = (page - 1) * pageSize;
     const slice = all.slice(start, start + pageSize);
     return {

@@ -1531,6 +1531,114 @@
         ]
       }
     },
+    "/v1/me/cards": {
+      "get": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "List your own cards",
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "description": "Your cards on the connected service, one page at a time, with their community listing state and this week's submission quota. `filter=all` and `filter=unlisted` read your cards from the service (`q` is matched there); `filter=listed` reads the cards you have listed on this site. `q` searches card names and descriptions, case-insensitively, with Traditional and Simplified Chinese matching each other; surrounding spaces are ignored and only the first 100 characters are used. `total` counts every card matching the filter and keyword, so `ceil(total / pageSize)` is the number of pages. Responses are private and never shared-cached; add `fresh=1` right after changing a card to skip this site's short cache of the service list.",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 1
+            },
+            "description": "1-based page number."
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 24
+            },
+            "description": "Cards per page."
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "listed",
+                "unlisted"
+              ],
+              "default": "all"
+            },
+            "description": "Which cards: all of them, those listed on this site, or those not listed. `unlisted` is applied within the page read from the service."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "description": "Keyword for card names and descriptions; Traditional and Simplified Chinese interchangeable. Empty = no keyword filter."
+          },
+          {
+            "name": "fresh",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            },
+            "description": "`1` skips this site's short cache of the service list."
+          },
+          {
+            "name": "X-Provider",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Which connected service the bearer token belongs to."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyCardPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/me/feed": {
       "get": {
         "tags": [
@@ -2126,6 +2234,163 @@
         "required": [
           "active"
         ]
+      },
+      "MyCard": {
+        "type": "object",
+        "required": [
+          "roleId",
+          "zone",
+          "name",
+          "summary",
+          "avatarUrl",
+          "visibility",
+          "talkNum",
+          "registered",
+          "num",
+          "detailId",
+          "provider"
+        ],
+        "properties": {
+          "roleId": {
+            "type": "string",
+            "description": "Card id on the connected service."
+          },
+          "num": {
+            "type": "integer",
+            "description": "This site's card number."
+          },
+          "detailId": {
+            "type": "string",
+            "description": "Id for this site's card page (`/cards/{detailId}`)."
+          },
+          "provider": {
+            "type": "string"
+          },
+          "workId": {
+            "type": "string",
+            "description": "The work this card belongs to, when it has one."
+          },
+          "sourceProvider": {
+            "type": "string",
+            "description": "Service holding the work's original, when different."
+          },
+          "sourceRoleId": {
+            "type": "string"
+          },
+          "zone": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "avatarUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "backgroundUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "visibility": {
+            "type": "string",
+            "description": "Visibility on the service; empty for `filter=listed`."
+          },
+          "talkNum": {
+            "type": "integer"
+          },
+          "registered": {
+            "type": "boolean",
+            "description": "Whether the card is submitted to or listed on this site."
+          },
+          "status": {
+            "type": "string",
+            "description": "Review state on this site; only when registered."
+          },
+          "updateStatus": {
+            "type": "string",
+            "description": "Review state of a pending update to a listed card."
+          },
+          "note": {
+            "type": "string",
+            "description": "The latest rejection note."
+          },
+          "nsfw": {
+            "type": "boolean",
+            "description": "The rating you declared; only when registered."
+          }
+        }
+      },
+      "MyCardPage": {
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "registeredTotal",
+          "quota",
+          "page",
+          "pageSize",
+          "hasNext"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MyCard"
+            }
+          },
+          "total": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Cards matching the filter and keyword across all pages."
+          },
+          "registeredTotal": {
+            "type": "integer",
+            "description": "How many of your cards are submitted to or listed on this site, overall."
+          },
+          "quota": {
+            "type": "object",
+            "required": [
+              "limit",
+              "used",
+              "weekStart",
+              "weekEnd"
+            ],
+            "properties": {
+              "limit": {
+                "type": "integer"
+              },
+              "used": {
+                "type": "integer"
+              },
+              "weekStart": {
+                "type": "integer",
+                "description": "Milliseconds; UTC Monday."
+              },
+              "weekEnd": {
+                "type": "integer",
+                "description": "Milliseconds; the next UTC Monday."
+              }
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "hasNext": {
+            "type": "boolean"
+          }
+        }
       }
     }
   }

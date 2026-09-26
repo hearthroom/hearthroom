@@ -540,11 +540,13 @@ app.get("/v1/me/cards", async (c) => {
   const fresh = c.req.query("fresh") === "1";
   const filterParam = c.req.query("filter");
   const filter: MineFilter = filterParam === "listed" || filterParam === "unlisted" ? filterParam : "all";
+  // 搜尋關鍵字（卡名或簡介，繁簡互通）；太長的只取前 100 個字
+  const q = [...(c.req.query("q") ?? "").trim()].slice(0, 100).join("");
 
   const provider = providerOf(c);
   // 讀取時本站 session 就認得出是誰，不必先跨洋問供應商（約 0.4 s）；卡片清單仍用這個人的 token 讀
   const me = await requestIdentity(c, bearer, provider);
-  const { body, source } = await loadMine(c.env, bearer, me.accountNumId, { page, pageSize, fresh, filter, provider });
+  const { body, source } = await loadMine(c.env, bearer, me.accountNumId, { page, pageSize, fresh, filter, provider, q });
 
   note(c, { event: "mine_view", resultCount: body.items.length, offset: (page - 1) * pageSize, detail: filter });
   c.header("X-Cache", source);
