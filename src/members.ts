@@ -3,7 +3,7 @@ import { DEFAULT_PROVIDER, parseProvider, type ProviderId, requireConfigured } f
 import { tagNamesFor } from "../shared/tag-catalog";
 import { type Env, HttpError } from "./types";
 import { upstream } from "./upstream";
-import { siteSessionIdentity } from "./account-auth";
+import { siteSessionIdentity, siteSessionReader } from "./account-auth";
 
 /**
  * 成員與身分。
@@ -257,23 +257,30 @@ export async function updateMemberNsfw(
  * 看的人開了成人內容嗎。token 驗不過或沒開，一律當沒開——不報錯、不洩漏。
  * 呼叫端必須先驗權限，才能讀取對應內容分級的內部榜單快取。
  *
- * 身分兩條路：前端帶 Bearer token，或同源讀取自動帶上的本站登入 cookie（siteSessionIdentity）。
+ * 身分兩條路：前端帶 Bearer token，或同源讀取自動帶上的本站登入 cookie（siteSessionReader，一次查完）。
  * cookie 那條讓卡片頁第一次讀卡就拿得到權限，不必先等登入狀態與 token
  * （實測重新整理成人卡要 2 秒才出卡，中間還閃一下成人門，玩家回報 2026-09-26）。
  *
- * 榜單類要帶 ?nsfw=1 才算「想看」：沒帶就是一般版本，公開快取照走。
+ * 帶 token 的榜單類讀取要帶 ?nsfw=1 才算「想看」；只靠 cookie 的讀取照帳號設定（開關就存在帳號上）。
  * 單卡（opts.card）不必帶：卡片本身已經是成人內容，問的只是這個人能不能看。
+ * 沒有 cookie 的匿名讀取在查資料庫之前就回 false，公開快取照走。
  */
 export async function viewerAllowsNsfw(
   c: Ctx & { req: { query: (k: string) => string | undefined; url: string; method: string } },
   opts: { card?: boolean } = {},
 ): Promise<boolean> {
-  if (!opts.card && c.req.query("nsfw") !== "1") return false;
+  const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1];
+  // 帶 token 的呼叫端（自架前端、舊版）自己說想不想看：沒帶 ?nsfw=1 就是一般版本。
+  // 只靠 cookie 的讀取由這個人的帳號設定決定——開頁第一次讀榜時前端還不知道開關，問了也白問。
+  if (bearer && !opts.card && c.req.query("nsfw") !== "1") return false;
   try {
-    const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1];
     const provider = providerOf(c);
-    const me = bearer ? await requestIdentity(c, bearer, provider) : await siteSessionIdentity(c, provider);
-    if (!me) return false;
+    if (!bearer) {
+      // 本站 session：讀者與他的設定一次查完
+      const reader = await siteSessionReader(c, provider);
+      return !!reader && reader.showNsfw === 1 && reader.ageVerifiedAt !== null && reader.adultConsentVersion === ADULT_CONSENT_VERSION;
+    }
+    const me = await requestIdentity(c, bearer, provider);
     // Viewing is read-only. Resolve linked identities and current preferences in one D1 trip;
     // a member who has never signed in cannot already have opted into adult content.
     const member = await c.env.DB.prepare(`
@@ -309,7 +316,7 @@ type Identity = Awaited<ReturnType<typeof upstream.fetchMe>>;
 const identities = new WeakMap<Ctx, Promise<Identity>>();
 /** 由本站 session 認出來的身分：沒有供應商那邊的暱稱與頭像。 */
 const sessionIdentities = new WeakSet<Identity>();
-function requestIdentity(c:Ctx,bearer:string,provider:ProviderId) {
+export function requestIdentity(c:Ctx,bearer:string,provider:ProviderId) {
  let pending=identities.get(c);
  if(!pending){
   pending=(async()=>{

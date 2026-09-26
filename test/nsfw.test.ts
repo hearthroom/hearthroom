@@ -371,10 +371,56 @@ describe("本站登入 cookie 直接放行單卡", () => {
     expect((await page(cookie)).html).not.toContain('rel="preload" as="image"');
   });
 
-  it("榜單沒帶 ?nsfw=1 仍是一般版本：cookie 只回答「能不能看這張」，不改變列表", async () => {
+  it("靠 cookie 認人的暖成人榜單：總共兩次 D1 讀取（審核時鐘、讀者一次查完），不問供應商", async () => {
     await listTwo();
     const cookie = await siteSession(VIEWER);
     await settings({ showNsfw: true, birthdate: adultBirthdate(), consentVersion: ADULT_CONSENT_VERSION });
-    expect(ids(await json(await read("/v1/cards?zone=all", cookie)))).toEqual(["role-safe"]);
+    const req = () => new Request(`${origin}/v1/cards?zone=all&nsfw=1`, { headers: { Cookie: cookie } });
+    const warm = createExecutionContext();
+    await worker.fetch(req(), cookieEnv(), warm);
+    await waitOnExecutionContext(warm);
+    const { queries, db } = recordD1(env.DB);
+    const measured = { ...cookieEnv(), DB: db };
+    await worker.fetch(new Request(`${origin}/v1/providers`), measured, createExecutionContext());
+    queries.length = 0;
+    const identity = vi.spyOn(upstream, "fetchMe");
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(req(), measured, ctx);
+    await waitOnExecutionContext(ctx);
+    expect(ids(await json(res))).toEqual(["role-adult", "role-safe"]);
+    expect(res.headers.get("X-Cache")).toBe("hit");
+    expect(queries, queries.join("\n---\n")).toHaveLength(2);
+    expect(identity).not.toHaveBeenCalled();
+  });
+
+  it("只靠 cookie 的榜單讀取照帳號開關：開頁第一次讀就是對的版本，並標明含不含成人內容", async () => {
+    await listTwo();
+    const cookie = await siteSession(VIEWER);
+    await settings({ showNsfw: true, birthdate: adultBirthdate(), consentVersion: ADULT_CONSENT_VERSION });
+    const on = await read("/v1/cards?zone=all", cookie);
+    expect(ids(await json(on))).toEqual(["role-adult", "role-safe"]);
+    expect(on.headers.get("X-Adult-Content")).toBe("1");
+    expect(on.headers.get("Cache-Control")).toBe("private, no-store");
+    // 匿名：一般版本，照走公開快取
+    const anon = await read("/v1/cards?zone=all");
+    expect(ids(await json(anon))).toEqual(["role-safe"]);
+    expect(anon.headers.get("X-Adult-Content")).toBe("0");
+    // 帶 token 的呼叫端自己說想不想看：沒帶 ?nsfw=1 仍是一般版本
+    const ctx = createExecutionContext();
+    const withToken = await worker.fetch(new Request(`${origin}/v1/cards?zone=all&b=1`, { headers: { Cookie: cookie, ...bearer("viewer-token") } }), cookieEnv(), ctx);
+    await waitOnExecutionContext(ctx);
+    expect(ids(await json(withToken))).toEqual(["role-safe"]);
+    // 關掉開關：cookie 讀到的也立刻只剩一般內容
+    await settings({ showNsfw: false });
+    expect(ids(await json(await read("/v1/cards?zone=all&c=1", cookie)))).toEqual(["role-safe"]);
+  });
+
+  it("沒有 cookie 的匿名榜單讀取不碰身分查詢", async () => {
+    await listTwo();
+    const { queries, db } = recordD1(env.DB);
+    const ctx = createExecutionContext();
+    await worker.fetch(new Request(`${origin}/v1/cards?zone=all`), { ...cookieEnv(), DB: db }, ctx);
+    await waitOnExecutionContext(ctx);
+    expect(queries.some((q) => q.includes("account_sessions"))).toBe(false);
   });
 });

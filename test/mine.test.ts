@@ -220,3 +220,30 @@ describe("篩選", () => {
     expect(body.items).toHaveLength(24);
   });
 });
+
+describe("我的卡片：認人不必跨洋", () => {
+  // 讀取時本站 session 就認得出是誰：不再先問供應商「你是誰」（那一趟從亞洲要約 0.4 s）。
+  // 卡片清單本身仍用這個人的 token 向供應商讀。
+  it("帶著本站登入 cookie 的讀取，身分從 session 來；清單照樣用 token 讀", async () => {
+    const { makeMember } = await import("./helpers");
+    const { default: worker } = await import("../src/index");
+    const { createExecutionContext, waitOnExecutionContext } = await import("cloudflare:test");
+    const { upstream } = await import("../src/upstream");
+    const { vi } = await import("vitest");
+    const origin = "https://c.test";
+    const memberId = await makeMember(10001);
+    const raw = "session-alice";
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw)));
+    const tokenHash = btoa(String.fromCharCode(...digest)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    await env.DB.prepare("INSERT INTO account_sessions VALUES (?,?,?,?,?,?,?)").bind(tokenHash, memberId, "harbor", "10001", origin, Date.now(), Date.now() + 86400000).run();
+    const whoIs = vi.spyOn(upstream, "fetchMe");
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(new Request(`${origin}/v1/me/cards?fresh=1`, { headers: { ...bearer("alice-token"), Cookie: `__Host-hr-session=${raw}` } }), { ...env, AUTH_ENABLED: "true", AUTH_ALLOWED_ORIGINS: origin }, ctx);
+    await waitOnExecutionContext(ctx);
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as any).items.map((i: any) => i.roleId)).toEqual(["a1", "a2"]);
+    expect(whoIs).not.toHaveBeenCalled();
+    expect(upstreamCalls.at(-1)?.token).toBe("alice-token");
+    whoIs.mockRestore();
+  });
+});

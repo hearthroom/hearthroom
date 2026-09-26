@@ -42,7 +42,7 @@ import { authorLine, downloadMeta, preloadImageTag, renderHead } from "./head";
 import { aliasTarget, HOST, canonicalUrl, isPlayHost } from "./site";
 import { loadMine, type MineFilter } from "./mine";
 import { tagNamesFor } from "../shared/tag-catalog";
-import { providerOf, isReviewer, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
+import { providerOf, requestIdentity, isReviewer, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
 import { configuredProviders, hasChat, parseProvider, requireConfigured, DEFAULT_PROVIDER, PROVIDER_NAMES, type ProviderId, reviewEnabled } from "./providers";
 import { providerApiBaseFor } from "./providers";
 import { WEEKLY_LIMIT, registeredThisWeek } from "./quota";
@@ -248,6 +248,8 @@ function boardResponse(body: string, adult: boolean, layer: "edge" | "kv" | "ori
     "Cache-Control": adult ? "private, no-store" : "no-store",
     "X-Cache": layer === "origin" ? "miss" : "hit",
     "X-Cache-Layer": layer,
+    // 這份清單含不含成人內容：前端開頁時還不知道帳號開關，靠它判斷不必等身分到了再讀一次
+    "X-Adult-Content": adult ? "1" : "0",
     "Server-Timing": timing,
   } });
 }
@@ -541,7 +543,8 @@ app.get("/v1/me/cards", async (c) => {
   const filter: MineFilter = filterParam === "listed" || filterParam === "unlisted" ? filterParam : "all";
 
   const provider = providerOf(c);
-  const me = await upstream.fetchMe(c.env, bearer, provider);
+  // 讀取時本站 session 就認得出是誰，不必先跨洋問供應商（約 0.4 s）；卡片清單仍用這個人的 token 讀
+  const me = await requestIdentity(c, bearer, provider);
   const { body, source } = await loadMine(c.env, bearer, me.accountNumId, { page, pageSize, fresh, filter, provider });
 
   note(c, { event: "mine_view", resultCount: body.items.length, offset: (page - 1) * pageSize, detail: filter });
