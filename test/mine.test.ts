@@ -309,3 +309,11 @@ describe("我的卡片：搜尋", () => {
     expect((await mine("?filter=listed")).body.total).toBe(3);
   });
 });
+
+describe("我的卡片：各段耗時", () => {
+  it("回應帶 Server-Timing（認人、讀清單、補作品與卡號），部署後在瀏覽器就能看出慢在哪一段", async () => {
+    const res = await SELF.fetch("https://c.test/v1/me/cards", { headers: bearer("alice-token") });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Server-Timing")).toMatch(/^identity;dur=[\d.]+, list;dur=[\d.]+, works;dur=[\d.]+$/);
+  });
+});

@@ -545,9 +545,12 @@ app.get("/v1/me/cards", async (c) => {
 
   const provider = providerOf(c);
   // 讀取時本站 session 就認得出是誰，不必先跨洋問供應商（約 0.4 s）；卡片清單仍用這個人的 token 讀
+  const started = performance.now();
   const me = await requestIdentity(c, bearer, provider);
+  const identified = performance.now();
   const { body, source } = await loadMine(c.env, bearer, me.accountNumId, { page, pageSize, fresh, filter, provider, q });
 
+  const listedAt = performance.now();
   note(c, { event: "mine_view", resultCount: body.items.length, offset: (page - 1) * pageSize, detail: filter });
   c.header("X-Cache", source);
   // 這是私人資料：可以放進使用者自己的瀏覽器，但任何共用快取都不准碰。
@@ -562,6 +565,8 @@ app.get("/v1/me/cards", async (c) => {
     const source = work ? authoringSource(work, provider, item.roleId) : null;
     return {...item, num, detailId:String(num), provider, workId:work?.id, sourceProvider:source?.provider, sourceRoleId:source?.roleId};
   });
+  // 各段耗時（毫秒，不含任何資料）：認人、讀清單（含上游與登記狀態）、補作品與卡號
+  c.header("Server-Timing", `identity;dur=${(identified - started).toFixed(1)}, list;dur=${(listedAt - identified).toFixed(1)}, works;dur=${(performance.now() - listedAt).toFixed(1)}`);
   return c.json({...body, items});
 });
 
