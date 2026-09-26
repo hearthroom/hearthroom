@@ -43,12 +43,6 @@ describe("我的卡片", () => {
     expect(body.total).toBe(2);
   });
 
-  it("有啟用中的遊戲配置的卡標 game=true，停用的不算", async () => {
-    await env.DB.prepare("INSERT INTO game_worlds (role_id, author_num_id, spec, updated_at) VALUES ('a1', 10001, '{\"version\":2,\"enabled\":true}', 1), ('a2', 10001, '{\"version\":2,\"enabled\":false}', 1)").run();
-    const { body } = await mine();
-    expect(body.items.map((i: any) => [i.roleId, i.game])).toEqual([["a1", true], ["a2", false]]);
-  });
-
   it("沒帶 token → 401，不打上游", async () => {
     const res = await SELF.fetch("https://c.test/v1/me/cards");
     expect(res.status).toBe(401);
@@ -58,7 +52,7 @@ describe("我的卡片", () => {
   it("只回傳畫面用得到的欄位", async () => {
     const { body } = await mine();
     expect(Object.keys(body.items[0]).sort()).toEqual(
-      ["avatarUrl", "backgroundUrl", "detailId", "game", "name", "num", "provider", "registered", "roleId", "summary", "talkNum", "visibility", "zone"],
+      ["avatarUrl", "backgroundUrl", "detailId", "name", "num", "provider", "registered", "roleId", "summary", "talkNum", "visibility", "zone"],
     );
   });
 });

@@ -47,7 +47,6 @@ const pages: RouteRecordRaw[] = [
   // 站內玩卡：舞台整頁接管（bare = 不套站台頁首頁尾），對話要登入
   { path: "play/:roleId", component: () => import("./pages/PlayPage.vue"), meta: { auth: true, bare: true, preloadStage: true } },
   // 遊戲模式：同一張卡，回覆拆成敘事＋舞台狀態。開場白是公開的，遊客可看第一幕；行動時才要登入。
-  { path: "game/:roleId", component: () => import("./pages/GamePage.vue"), meta: { bare: true } },
   // 社群管理共用工作台；資格與個別操作的權限由服務端檢查。
   {
     path: "review", component: () => import("./pages/CommunityManagementLayout.vue"), meta: { auth: true },
@@ -178,7 +177,6 @@ function surfaceOf(path: string): string {
   if (bare.startsWith("/create")) return "create";
   if (bare.startsWith("/wallet")) return "wallet";
   if (bare.startsWith("/play")) return "play";
-  if (bare.startsWith("/game")) return "game";
   if (bare.startsWith("/review")) return "review";
   return "404";
 }

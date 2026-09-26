@@ -507,8 +507,6 @@ export interface MyCard {
   visibility: string;
   talkNum: number;
   registered: boolean;
-  /** 有啟用中的遊戲模式配置：多一顆「遊戲模式」鍵 */
-  game: boolean;
   /** 本站的審核狀態；只有 registered 時才有。 */
   status?: CardStatus;
   updateStatus?: string;
@@ -1250,43 +1248,6 @@ export async function deleteLibraryImages(imageIds: number[], token: string): Pr
   await libraryJson(await libraryPost("delete", { imageIds }, token));
 }
 
-// ---- 遊戲模式：作者替卡存的世界配置（本站 D1，形狀見 shared/game-spec.ts） ------------------
-
-import { validateGameSpec, type GameSpecJson } from "../../../shared/game-spec";
-
-export interface GameSpecRecord { roleId: string; spec: GameSpecJson; updatedAt: number }
-
-/**
- * 沒存過回 null（404），不當錯誤。
- * 讀回來一律再過一次驗證器：庫裡存的可能是作者只寫了幾層的稀疏配置（遷移進來的那兩筆就是），
- * 頁面要的是補滿預設的完整形狀；壞掉的配置當成沒有配置，不讓整個遊戲頁打不開。
- */
-export async function fetchGameSpec(roleId: string): Promise<GameSpecRecord | null> {
-  const res = await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(roleId)}/game`, { headers: from() });
-  if (res.status === 404) return null;
-  const rec = await json<GameSpecRecord>(res);
-  const v = validateGameSpec(rec.spec);
-  if (!v.ok) { console.warn("[game] stored config rejected by validator", v.errors); return null; }
-  return { ...rec, spec: v.spec };
-}
-
-export async function saveGameSpec(roleId: string, spec: GameSpecJson, token: string): Promise<GameSpecRecord> {
-  const res = await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(roleId)}/game`, {
-    method: "PUT", headers: { "content-type": "application/json", ...from(), ...authHeaders(token) }, body: JSON.stringify({ spec }),
-  });
-  if (res.status === 400) {
-    const body = (await res.json().catch(() => ({}))) as { errors?: string[] };
-    throw new ApiError(400, (body.errors || ["invalid spec"]).join("\n"));
-  }
-  return json<GameSpecRecord>(res);
-}
-
-export async function deleteGameSpec(roleId: string, token: string): Promise<void> {
-  const res = await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(roleId)}/game`, { method: "DELETE", headers: { ...from(), ...authHeaders(token) } });
-  if (!res.ok) throw new ApiError(res.status, describeApiError(res.status, await res.text().catch(() => "")));
-}
-
-/** Discover by community card ID; the viewer's issuer authenticates community access, not the card's host. */
 export type CardPlatform={provider:import('./provider').ProviderId;roleId:string;playable:boolean};
 export async function fetchCardPlatforms(cardId:string):Promise<{provider:import('./provider').ProviderId;roleId:string;playable:boolean}[]> {
   const viewer=await viewerAccess();
