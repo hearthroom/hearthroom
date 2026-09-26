@@ -22,7 +22,11 @@ function onOurSite(): boolean {
   return !!siteRootOf(host) || isCardAppHost(host);
 }
 
-export function cardThumb(url: string, width = 480): string {
+/**
+ * 卡片在清單上約 170–180 px 寬，2 倍密度的螢幕要 360 px。只出這一個尺寸：每多一個尺寸就多算一次轉換。
+ * 實測（6.4 MB、83 格的 GIF）：480/q80 是 2.8 MB，360/q70 是 1.16 MB，畫面上看不出差別。
+ */
+export function cardThumb(url: string, width = 360): string {
   if (!onOurSite()) return url;
   let source: URL;
   try {
@@ -32,5 +36,5 @@ export function cardThumb(url: string, width = 480): string {
   }
   const key = SOURCES[source.host];
   if (!key) return url;
-  return `https://${PRIMARY_HOST}/cdn-cgi/image/width=${width},fit=scale-down,format=auto,anim=true,quality=80/v1/art/${key}${source.pathname}${source.search}`;
+  return `https://${PRIMARY_HOST}/cdn-cgi/image/width=${width},fit=scale-down,format=auto,anim=true,quality=70/v1/art/${key}${source.pathname}${source.search}`;
 }
