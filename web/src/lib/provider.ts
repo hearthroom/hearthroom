@@ -35,7 +35,7 @@ const API_BASE: Record<ProviderId, string> = {
  * Harbor 不給 scope 只會拿到唯讀，寫不了卡。
  */
 const SCOPES: Record<ProviderId, string> = {
-  harbor: "profile.read email.read role.read role.write chat.play",
+  harbor: "profile.read email.read role.read role.write chat.play referral",
 };
 
 /**

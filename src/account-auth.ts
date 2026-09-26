@@ -13,7 +13,7 @@ type AuthContext={Bindings:Env;Variables:{ev:Pending}};
 type C = Context<AuthContext>;
 const DAY=86400000, ATTEMPT_TTL=10*60000, SESSION_IDLE=30*DAY, SESSION_MAX=180*DAY, SESSION_TOUCH=DAY;
 const SESSION='__Host-hr-session', FLOW='__Host-hr-auth';
-const scopes:Partial<Record<ProviderId,string>>={harbor:'profile.read email.read role.read role.write chat.play'};
+const scopes:Partial<Record<ProviderId,string>>={harbor:'profile.read email.read role.read role.write chat.play referral'};
 type Pair={accessToken:string;refreshToken:string;clientId:string;expiresAt:number};
 type Attempt={state_hash:string;browser_hash:string;origin:string;provider:ProviderId;source_session:string|null;payload:string;phase:string;expires_at:number};
 type Session={token_hash:string;member_id:string;provider:ProviderId;external_id:string;origin:string;created_at:number;expires_at:number};

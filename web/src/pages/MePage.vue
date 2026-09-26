@@ -102,6 +102,7 @@ onMounted(() => {
     </div>
     <nav class="me__links" :aria-label="$t('me.title')">
       <RouterLink :to="lp('/wallet')" class="me__link"><AccountIcon name="wallet" />{{ $t("nav.wallet") }}<AccountIcon name="arrow" class="me__chevron" /></RouterLink>
+      <RouterLink :to="lp('/me/referral')" class="me__link"><AccountIcon name="gift" />{{ $t("referral.title") }}<AccountIcon name="arrow" class="me__chevron" /></RouterLink>
       <RouterLink v-if="reviewerStore.reviewer" :to="lp('/review')" class="me__link"><AccountIcon name="check" />{{ $t("nav.review") }}<AccountIcon name="arrow" class="me__chevron" /></RouterLink>
       <RouterLink :to="lp('/settings')" class="me__link"><AccountIcon name="settings" />{{ $t("nav.settings") }}<AccountIcon name="arrow" class="me__chevron" /></RouterLink>
     </nav>
