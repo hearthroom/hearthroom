@@ -12,14 +12,14 @@
 type Paint = (doc: Document, top: string | null, bottom?: string | null) => void;
 
 const VARIANTS = [
-  ['0', 'shipped', '目前上線'],
-  ['1', 'off', '全關'],
-  ['2', 'html', 'html 背景'],
-  ['3', 'body', 'body 背景'],
-  ['4', 'root', '畫布根底色'],
-  ['5', 'probes', '細條（現行）'],
-  ['6', 'probes-jahir', '細條（文章寫法）'],
-  ['7', 'root-single', '畫布根＋底部同頂'],
+  ['0', 'shipped', 'shipped'],
+  ['1', 'off', 'off'],
+  ['2', 'html', 'html bg'],
+  ['3', 'body', 'body bg'],
+  ['4', 'root', 'canvas-root bg'],
+  ['5', 'probes', 'strips (shipped)'],
+  ['6', 'probes-jahir', 'strips (blog)'],
+  ['7', 'root-single', 'canvas-root, one color'],
 ] as const;
 type Variant = (typeof VARIANTS)[number][1];
 
@@ -70,7 +70,7 @@ export function createTintLab(paint: Paint | undefined) {
         case 'root-single': root?.style.setProperty('background-color', top); break;
       }
     }
-    if (status) status.textContent = `${variant}\ntop ${top ?? '-'}\nbottom ${bottom ?? '-'}\n改完請捲動一下再截圖`;
+    if (status) status.textContent = `${variant}\ntop ${top ?? '-'}\nbottom ${bottom ?? '-'}\nscroll a little, then screenshot`;
     panel?.querySelectorAll('button').forEach((btn) => { btn.style.outline = btn.dataset.variant === variant ? '2px solid #fff' : 'none'; });
   };
   const mount = () => {
