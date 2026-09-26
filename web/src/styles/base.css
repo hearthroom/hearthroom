@@ -278,6 +278,13 @@ select.input { height: var(--h-md); }
 
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 .rise { animation: fade var(--dur-slow) var(--ease) backwards; }
+/*
+ * 首屏主要內容（卡片、卡片頁的兩塊面板）的進場：一出現就看得見（六成不透明），再輕輕落定。
+ * 從全透明淡入的話，首屏在那 0.36 s 裡其實是看不見的，實測首屏晚約 0.4 s 才算畫好；
+ * 完全不動又顯得生硬（owner 2026-09-26）。這個版本跟不動畫只差約 0.02–0.05 s。
+ */
+@keyframes settle { from { opacity: 0.6; transform: translateY(4px); } }
+.settle { animation: settle var(--dur) var(--ease) backwards; }
 
 /* 換頁時舊內容留在原地變淡，新內容到了再換——不退回骨架，版面不跳 */
 [aria-busy="true"] { opacity: 0.55; transition: opacity var(--dur) var(--ease); pointer-events: none; }
