@@ -82,7 +82,7 @@ curl 'https://hearthroom.club/v1/tags?zone=en&limit=12'
 
 用戶端透過 `/oauth/register` 註冊允許的回呼網址，向 `/oauth/authorize` 傳送 PKCE `S256`、`state` 與目標資源，再於 `/oauth/token` 交換回傳的授權碼。服務 API 存取資源為 `<API_BASE>/open/v1`。更新與撤銷使用參考文件中的端點；權杖僅對已授權 scope 與資源有效。
 
-使用者呼叫傳送 `Authorization: Bearer <access_token>`。`role.read` 可能包含作者私人的角色卡指示與 Lorebook；`role.write` 允許變更資源，包含適用的媒體操作。`chat.play` 允許可能消耗點數的對話操作。整合端必須在授權時說明這些影響，並對每個私人操作強制檢查擁有權。
+使用者呼叫傳送 `Authorization: Bearer <access_token>`。`role.read` 可能包含作者私人的角色卡指示與 Lorebook；`role.write` 允許變更資源，包含適用的媒體操作。`chat.play` 允許可能消耗點數的對話操作。`referral` 允許讀取使用者的推薦碼，並替新註冊的使用者填入推薦碼；綁定是永久的，請先向使用者確認。整合端必須在授權時說明這些影響，並對每個私人操作強制檢查擁有權。
 
 公開角色卡存取權不授予編輯或私人匯出權限。社群會員 handle、角色卡編號與服務資源 ID 分別識別不同事物；用戶端必須使用各端點要求的識別碼。需要 `X-Hosting-Key` 時，此值為伺服器持有的核發者憑證，絕不可傳給瀏覽器程式碼。個人 API 金鑰為選用功能；格式與核發方式不在此參考文件範圍。
 

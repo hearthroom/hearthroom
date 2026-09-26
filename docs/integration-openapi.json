@@ -9299,6 +9299,159 @@
           }
         }
       }
+    },
+    "/open/v1/me/referral": {
+      "get": {
+        "operationId": "getMeReferral",
+        "tags": [
+          "Identity"
+        ],
+        "summary": "Referral code, rules and results",
+        "description": "Returns the caller's own referral code, the current reward rules and how many people the caller has referred. The code is created on first request and never changes. Results contain counts and credit totals only; they never identify the people referred. `canRedeem` tells whether the caller may still enter someone else's code, and `redeemUntil` until when. Show `terms` to users instead of hard-coding reward numbers: the values can change. Requires the `referral` scope.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Referral page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReferralSummary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`forbidden` — the token was not granted `referral`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`referral_disabled` — referral rewards are not available right now; `temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/me/referral/redeem": {
+      "post": {
+        "operationId": "redeemReferral",
+        "tags": [
+          "Identity"
+        ],
+        "summary": "Enter a referral code",
+        "description": "Binds the caller to the account that owns `code`. Only new accounts can do this: within `terms.bindDays` days of sign-up and before their first top-up. A binding is permanent. Sending the same code again returns success without changing anything; sending a different code afterwards returns `referral_already_bound`. Codes are case-insensitive and surrounding spaces are ignored. On success the caller may receive `terms.welcomeCredits` credits at once, usable for agent conversations only and valid for `terms.welcomeDays` days; `welcomeCredits` in the response shows what was actually received (0 when none was available). Ask the user to confirm before calling this: the referrer receives rewards from the caller's later purchases. Requires the `referral` scope. Returns the caller's referral page after binding.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "code"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "description": "The referral code to enter, for example `K7M2Q9XA`."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Bound; the caller's referral page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReferralSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`referral_code_invalid` — no account uses this code; `invalid_request` — `code` is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`forbidden` — the token was not granted `referral`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`referral_self` — the caller's own code, or an account the caller referred; `referral_already_bound` — the caller already has a referrer; `referral_window_closed` — the caller signed up more than `terms.bindDays` days ago or has already topped up.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`referral_disabled` — referral rewards are not available right now; `temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -18093,6 +18246,125 @@
         "properties": {
           "world": {
             "$ref": "#/components/schemas/RoleWorld"
+          }
+        }
+      },
+      "ReferralTerms": {
+        "type": "object",
+        "description": "Current reward rules. All rewards are credits usable for agent conversations only.",
+        "required": [
+          "welcomeCredits",
+          "welcomeDays",
+          "firstPercent",
+          "firstCap",
+          "inviteePercent",
+          "rebatePercent",
+          "rebateDays",
+          "bindDays",
+          "holdDays"
+        ],
+        "properties": {
+          "welcomeCredits": {
+            "type": "integer",
+            "description": "Credits a new user receives when entering a code. Not guaranteed: each code can hand out a limited number per 30 days."
+          },
+          "welcomeDays": {
+            "type": "integer",
+            "description": "How many days the welcome credits stay valid."
+          },
+          "firstPercent": {
+            "type": "number",
+            "description": "Percentage of the referred user's first top-up credited to the referrer, `holdDays` days after that payment if it was not refunded."
+          },
+          "firstCap": {
+            "type": "integer",
+            "description": "Maximum credits the referrer receives for one first top-up."
+          },
+          "inviteePercent": {
+            "type": "number",
+            "description": "Extra percentage the referred user receives on their own first top-up. 0 when not offered."
+          },
+          "rebatePercent": {
+            "type": "number",
+            "description": "Percentage of the referred user's purchased credits spent in agent conversations that is credited to the referrer."
+          },
+          "rebateDays": {
+            "type": "integer",
+            "description": "How many days after binding the `rebatePercent` reward continues."
+          },
+          "bindDays": {
+            "type": "integer",
+            "description": "How many days after sign-up a new account can still enter a code."
+          },
+          "holdDays": {
+            "type": "integer",
+            "description": "Waiting period before the first top-up reward is paid."
+          }
+        }
+      },
+      "ReferralSummary": {
+        "type": "object",
+        "required": [
+          "enabled",
+          "code",
+          "terms",
+          "referred",
+          "welcomeCredits",
+          "canRedeem",
+          "invited",
+          "purchased",
+          "pending",
+          "earned"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether codes can be entered and rewards are paid. When false the code and rules can still be shown."
+          },
+          "code": {
+            "type": "string",
+            "description": "The caller's own referral code."
+          },
+          "terms": {
+            "$ref": "#/components/schemas/ReferralTerms"
+          },
+          "referred": {
+            "type": "boolean",
+            "description": "Whether the caller has entered someone's code."
+          },
+          "welcomeCredits": {
+            "type": "integer",
+            "description": "Welcome credits the caller received when entering a code; 0 when none."
+          },
+          "canRedeem": {
+            "type": "boolean",
+            "description": "Whether the caller can still enter a code."
+          },
+          "redeemUntil": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last moment the caller can enter a code. Present only when `canRedeem` is true."
+          },
+          "invited": {
+            "type": "integer",
+            "description": "How many accounts entered the caller's code."
+          },
+          "purchased": {
+            "type": "integer",
+            "description": "How many of them have topped up."
+          },
+          "pending": {
+            "type": "integer",
+            "description": "First top-up rewards still inside the waiting period."
+          },
+          "earned": {
+            "type": "integer",
+            "description": "Credits the caller has received as a referrer so far."
+          },
+          "nextRewardAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the next pending first top-up reward is due. Present only when `pending` is above 0."
           }
         }
       }
