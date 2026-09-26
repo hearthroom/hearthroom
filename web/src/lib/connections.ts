@@ -50,7 +50,10 @@ export async function accountToken(
   // Managed mode reuses a server-issued token for a few minutes (managed-auth.ts); a grant replaced
   // on another device is picked up after that window or when the provider rejects the token.
   const token=(managed ? await refresh(provider) : restorePersisted(provider) ?? await refresh(provider))?.accessToken ?? null;
-  if (!token || expectedAccount === undefined) return token;
+  // 託管模式的 token 是本站伺服器替這個成員換的：伺服器換發前後都核對過帳號仍歸他（issueToken），
+  // 不必再跨洋問一次 /me。開「我的卡片」時這一趟串在讀清單前面，實測約 0.7 s（2026-09-26）。
+  // 自架（非託管）模式的 token 存在瀏覽器裡，照舊核對。
+  if (!token || expectedAccount === undefined || managed) return token;
   return (await verifyAccount(provider, token, expectedAccount)) ? token : null;
 }
 async function result(res: Response) {
