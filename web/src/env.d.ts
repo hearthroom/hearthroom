@@ -29,8 +29,6 @@ declare module "moonstage/stage" {
     mergeLocaleMessage(locale: string, message: Record<string, unknown>): void;
   }
   export function browserHost(overrides?: Partial<StageHost>): StageHost;
-  /** iOS 26 Safari 的頂部／底部染色（它不看 theme-color）：html 背景＋底邊同色細條；top 為 null 還原。 */
-  export function paintBrowserChrome(doc: Document, top: string | null, bottom?: string | null): void;
   export function installMoonStage(
     app: App,
     options: {
