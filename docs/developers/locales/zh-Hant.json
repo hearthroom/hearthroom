@@ -1663,7 +1663,7 @@
   "df5f45b59d9ee": "`referral_code_invalid` — 沒有帳號使用這個推薦碼；`invalid_request` — 缺少 `code`。",
   "decad3f4885a0": "`referral_self` — 呼叫者自己的推薦碼，或呼叫者推薦來的帳號；`referral_already_bound` — 呼叫者已經有推薦人；`referral_window_closed` — 呼叫者註冊已超過 `terms.bindDays` 天或已經儲值過。",
   "d1007e569893f": "目前的獎勵規則。所有獎勵都是只能用於智慧體對話的 credits。",
-  "d480d75d841dd": "新使用者填入推薦碼時獲得的 credits。不保證一定獲得：每個推薦碼每 30 天能送出的份數有限。",
+  "d5c18060b55ab": "新使用者填入推薦碼時獲得的 credits。每個登入身分只會獲得一次，拋棄式信箱不會獲得。",
   "d6bc14ac66b49": "歡迎禮 credits 的有效天數。",
   "d015684abcda3": "被推薦人第一次儲值中，撥給推薦人的百分比；在那筆付款 `holdDays` 天後、未退款時入帳。",
   "d43b6b730e2fb": "推薦人每一筆首充最多獲得的 credits。",

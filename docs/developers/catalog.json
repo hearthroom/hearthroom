@@ -1663,7 +1663,7 @@
   "df5f45b59d9ee": "`referral_code_invalid` — no account uses this code; `invalid_request` — `code` is missing.",
   "decad3f4885a0": "`referral_self` — the caller's own code, or an account the caller referred; `referral_already_bound` — the caller already has a referrer; `referral_window_closed` — the caller signed up more than `terms.bindDays` days ago or has already topped up.",
   "d1007e569893f": "Current reward rules. All rewards are credits usable for agent conversations only.",
-  "d480d75d841dd": "Credits a new user receives when entering a code. Not guaranteed: each code can hand out a limited number per 30 days.",
+  "d5c18060b55ab": "Credits a new user receives when entering a code. Each sign-in identity receives them once, and disposable email addresses receive none.",
   "d6bc14ac66b49": "How many days the welcome credits stay valid.",
   "d015684abcda3": "Percentage of the referred user's first top-up credited to the referrer, `holdDays` days after that payment if it was not refunded.",
   "d43b6b730e2fb": "Maximum credits the referrer receives for one first top-up.",
