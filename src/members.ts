@@ -3,6 +3,7 @@ import { DEFAULT_PROVIDER, parseProvider, type ProviderId, requireConfigured } f
 import { tagNamesFor } from "../shared/tag-catalog";
 import { type Env, HttpError } from "./types";
 import { upstream } from "./upstream";
+import { siteSessionIdentity } from "./account-auth";
 
 /**
  * 成員與身分。
@@ -291,13 +292,26 @@ export async function externalIdOf(db: D1Database, memberId: string, provider: P
   return profile?.identities.find(i=>i.provider===provider)?.externalId ?? null;
 }
 
-type Ctx = { env: Env; req: { header: (k: string) => string | undefined } };
+type Ctx = { env: Env; req: { header: (k: string) => string | undefined; url?: string; method?: string } };
+type Identity = Awaited<ReturnType<typeof upstream.fetchMe>>;
 
 // The context is unique to a request. Even rejected authentication is shared only here.
-const identities = new WeakMap<Ctx, Promise<Awaited<ReturnType<typeof upstream.fetchMe>>>>();
+const identities = new WeakMap<Ctx, Promise<Identity>>();
+/** 由本站 session 認出來的身分：沒有供應商那邊的暱稱與頭像。 */
+const sessionIdentities = new WeakSet<Identity>();
 function requestIdentity(c:Ctx,bearer:string,provider:ProviderId) {
  let pending=identities.get(c);
- if(!pending){pending=upstream.fetchMe(c.env,bearer,provider);identities.set(c,pending);}
+ if(!pending){
+  pending=(async()=>{
+   // 讀取請求先問本站 session（就近的 D1 複本），認得出來就不必跨洋問供應商；見 siteSessionIdentity。
+   if(c.req.url&&c.req.method){
+    const site=await siteSessionIdentity(c as Ctx&{req:{url:string;method:string}},provider);
+    if(site){const me={accountNumId:site.accountNumId,nickName:'',avatar:''} as Identity;sessionIdentities.add(me);return me;}
+   }
+   return upstream.fetchMe(c.env,bearer,provider);
+  })();
+  identities.set(c,pending);
+ }
  return pending;
 }
 
@@ -312,7 +326,8 @@ export async function requireMember(c: Ctx, timing?: (phase: "identity" | "membe
   timing?.("identity", performance.now() - started);
   const memberStarted = performance.now();
   const member = await resolveMemberRecord(c.env.DB, provider, me.accountNumId, Date.now());
-  if (member.display_name === null) {
+  // 由本站 session 認出來的沒有供應商暱稱；顯示名稱留給下一個走供應商驗證的請求補上。
+  if (member.display_name === null && !sessionIdentities.has(me)) {
     // Keep the SQL guard: another request or the member may initialize it after our read.
     await c.env.DB.prepare("UPDATE members SET display_name=?, avatar_url=? WHERE id=? AND display_name IS NULL")
       .bind(me.nickName?.trim().slice(0, 60) || member.handle, safeAvatar(me.avatar), member.id).run();

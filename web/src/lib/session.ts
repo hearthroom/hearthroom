@@ -1,4 +1,4 @@
-import { managedAuth, managedLogout, forgetManaged, isManagedAuth, authRequest } from './managed-auth';
+import { managedAuth, managedLogout, forgetManaged, isManagedAuth, authRequest, rememberManaged } from './managed-auth';
 import { clearLibraryCache } from './library';
 import { clearStageStorage } from './stage-storage';
 import { currentProvider, setProvider, type ProviderId } from './provider';
@@ -101,8 +101,11 @@ export const useSession = defineStore("session", () => {
     restoring = (async () => {
       try {
         if(await managedAuth()){
-          const site=await authRequest<{provider:ProviderId;me:Me;profile:SiteMe}>('session',{provider:currentProvider()});
+          // 授權跟著 session 一起回來：少一趟串在開頁路上的往返。放進授權暫存之後，
+          // 下面的 refresh() 直接命中，不再另外問伺服器。
+          const site=await authRequest<{provider:ProviderId;me:Me;profile:SiteMe;token?:TokenPair|null}>('session',{provider:currentProvider(),token:true});
           if(expected!==generation)return;
+          if(site.token)rememberManaged(site.token,site.provider);
           setProvider(site.provider);useProviderUpstream();
           me.value=site.me;profile.value=site.profile;
           try{
