@@ -148,7 +148,11 @@ onMounted(() => document.addEventListener("keydown", onSlash));
 </template>
 
 <style scoped>
-.site-main { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
+/*
+ * 內容區至少一整個螢幕高：頁尾永遠不在第一屏。不然頁面程式碼到之前頁尾在畫面底部，
+ * 骨架一出現把它推走、空狀態又拉回來，手機上實測版面位移 0.46（2026-09-26，首頁）。
+ */
+.site-main { min-height: 100vh; min-height: 100dvh; padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
 .header {
   padding-top: env(safe-area-inset-top, 0px);
   padding-left: env(safe-area-inset-left, 0px);

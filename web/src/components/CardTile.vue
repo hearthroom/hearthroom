@@ -7,6 +7,7 @@ import { compact, hueFrom } from "@/lib/format";
 import { zoneLabel } from "@/lib/i18n";
 import { titleLayout } from "@/lib/title-layout";
 import { useLocalePath } from "@/lib/use-locale";
+import { cardThumb } from "@/lib/card-thumb";
 import type { CommunityCard } from "@/lib/types";
 
 const props = defineProps<{
@@ -24,10 +25,20 @@ const hue = computed(() => hueFrom(props.card.name));
 const initial = computed(() => [...props.card.name][0] ?? "?");
 const title = computed(() => titleLayout(props.card.name));
 const href = computed(() => lp(`/cards/${props.card.num ?? props.card.id}`));
-/* 圖掛了（上游換圖、刪圖）就當沒圖：退回單字佔位，不留一個破圖 */
-const broken = ref(false);
-watch(() => props.card.avatarUrl, () => { broken.value = false; });
-const hasArt = computed(() => !!props.card.avatarUrl && !broken.value);
+/*
+ * 先用縮到卡片大小的圖（動圖照樣會動，見 card-thumb）；縮圖拿不到就用原圖；
+ * 原圖也掛了（上游換圖、刪圖）就當沒圖：退回單字佔位，不留一個破圖
+ */
+const art = ref<"thumb" | "original" | "broken">("thumb");
+watch(() => props.card.avatarUrl, () => { art.value = "thumb"; });
+const hasArt = computed(() => !!props.card.avatarUrl && art.value !== "broken");
+const artSrc = computed(() => {
+  const url = props.card.avatarUrl ?? "";
+  return art.value === "thumb" ? cardThumb(url) : url;
+});
+function onArtError() {
+  art.value = art.value === "thumb" && artSrc.value !== props.card.avatarUrl ? "original" : "broken";
+}
 
 /** 卡片上只放兩個標籤，多的用 +N 帶過——標籤是給人掃的，不是給人讀的。 */
 const TAGS_SHOWN = 2;
@@ -44,11 +55,11 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
     <div class="card__art">
       <img
         v-if="hasArt"
-        :src="card.avatarUrl!"
+        :src="artSrc"
         alt=""
         :loading="eager ? 'eager' : 'lazy'"
         :fetchpriority="eager ? 'high' : undefined"
-        @error="broken = true"
+        @error="onArtError"
       />
       <div
         v-else
