@@ -1662,16 +1662,15 @@
   "d8a5e0590ea0f": "Bound; the caller's referral page.",
   "df5f45b59d9ee": "`referral_code_invalid` — no account uses this code; `invalid_request` — `code` is missing.",
   "decad3f4885a0": "`referral_self` — the caller's own code, or an account the caller referred; `referral_already_bound` — the caller already has a referrer; `referral_window_closed` — the caller signed up more than `terms.bindDays` days ago or has already topped up.",
-  "d1007e569893f": "Current reward rules. All rewards are credits usable for agent conversations only.",
+  "d1a61545ca114": "Current reward rules. All rewards are credits usable for agent conversations only. If a rewarded top-up is refunded, the unused part of its reward is withdrawn.",
   "d5c18060b55ab": "Credits a new user receives when entering a code. Each sign-in identity receives them once, and disposable email addresses receive none.",
   "d6bc14ac66b49": "How many days the welcome credits stay valid.",
-  "d015684abcda3": "Percentage of the referred user's first top-up credited to the referrer, `holdDays` days after that payment if it was not refunded.",
+  "dcf7f9a7e1f46": "Percentage of the referred user's first top-up credited to the referrer as soon as the payment succeeds.",
   "d43b6b730e2fb": "Maximum credits the referrer receives for one first top-up.",
   "d597f8c4ca0bd": "Extra percentage the referred user receives on their own first top-up. 0 when not offered.",
-  "d4bce522098d5": "Percentage of each later top-up by the referred user credited to the referrer, `holdDays` days after that payment if it was not refunded.",
+  "d44800d5dd13c": "Percentage of each later top-up by the referred user credited to the referrer as soon as the payment succeeds.",
   "d56d7dfdab7ad": "How many days after binding the referred user's top-ups keep earning the referrer rewards.",
   "d67f99e70cff9": "How many days after sign-up a new account can still enter a code.",
-  "da13d06ff010b": "Waiting period before the first top-up reward is paid.",
   "dd7645af19e8e": "Whether codes can be entered and rewards are paid. When false the code and rules can still be shown.",
   "d4a85878c7e58": "The caller's own referral code.",
   "d92757f539818": "Whether the caller has entered someone's code.",
@@ -1680,7 +1679,5 @@
   "d471ebdb22033": "Last moment the caller can enter a code. Present only when `canRedeem` is true.",
   "d2fa5e0cd2e77": "How many accounts entered the caller's code.",
   "d5478849d1a13": "How many of them have topped up.",
-  "da78420a1c155": "Top-up rewards still inside the waiting period.",
-  "d8d435e682371": "Credits the caller has received as a referrer so far.",
-  "d3f248bbd312d": "When the next pending top-up reward is due. Present only when `pending` is above 0."
+  "d8d435e682371": "Credits the caller has received as a referrer so far."
 }
