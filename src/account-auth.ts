@@ -70,6 +70,28 @@ function safePath(raw:unknown):string {
 async function metric(env:Env,operation:string,provider:string,outcome:string){
   await env.DB.prepare('INSERT INTO account_auth_metrics VALUES(?,?,?,1) ON CONFLICT(operation,provider,outcome) DO UPDATE SET value=value+1').bind(operation,provider,outcome).run();
 }
+/**
+ * 讀取請求由本站登入 session 認人，不必再跨洋問供應商「你是誰」。
+ *
+ * 本站 session 就是簽發供應商授權的依據（見 /v1/auth/token），所以它認出的人跟 token 是同一個；
+ * 登出會當場刪掉 session，沒有「撤銷後還能用一陣子」的空窗。只給 GET／HEAD 用：寫入照舊驗
+ * bearer，cookie 認人不會替寫入打開跨站請求的路。條件不符（沒開託管登入、沒 cookie、網域不對、
+ * 供應商不同、綁定已換人）一律回 null，由呼叫端走原本的供應商驗證。只讀、不續期、不改 cookie。
+ */
+export async function siteSessionIdentity(c:{env:Env;req:{header:(k:string)=>string|undefined;url:string;method:string}},provider:ProviderId):Promise<{accountNumId:number}|null>{
+  try{
+    if(c.req.method!=='GET'&&c.req.method!=='HEAD')return null;
+    if(c.env.AUTH_ENABLED!=='true')return null;
+    const origin=new URL(c.req.url).origin;
+    if(!origins(c.env).includes(origin))return null;
+    const raw=(c.req.header('Cookie')||'').split(';').map(s=>s.trim()).find(s=>s.startsWith(SESSION+'='))?.slice(SESSION.length+1);
+    if(!raw)return null;
+    const row=await c.env.DB.prepare('SELECT * FROM account_sessions WHERE token_hash=? AND origin=? AND expires_at>? AND created_at>?').bind(await hash(raw),origin,Date.now(),Date.now()-SESSION_MAX).first<Session>();
+    if(!row||row.provider!==provider)return null;
+    if(await connectedMemberId(c.env.DB,row.provider,Number(row.external_id))!==row.member_id)return null;
+    return {accountNumId:Number(row.external_id)};
+  }catch{return null;}
+}
 async function readSession(c:C,required=true):Promise<Session|null>{
   const raw=getCookie(c,SESSION);
   const row=raw?await c.env.DB.prepare('SELECT * FROM account_sessions WHERE token_hash=? AND origin=? AND expires_at>? AND created_at>?').bind(await hash(raw),originOf(c),Date.now(),Date.now()-SESSION_MAX).first<Session>():null;
@@ -249,23 +271,33 @@ async function cancelAttempt(c:C,logout=false){
 accountAuthRoutes.post('/v1/auth/cancel',async c=>{
   await cancelAttempt(c);return c.json({ok:true});
 });
+async function issueToken(c:C,session:Session,provider:ProviderId,externalId:number){
+  const pair=await delegatedAccess(c.env,provider,externalId,session.member_id);
+  // Logout may have completed while the provider was rotating its token.
+  if(!await c.env.DB.prepare('SELECT 1 FROM account_sessions WHERE token_hash=? AND expires_at>?').bind(session.token_hash,Date.now()).first())throw new HttpError(401,'site_session_required');
+  // Recheck membership and generation after the network wait; never release another account's token.
+  if(await connectedMemberId(c.env.DB,provider,externalId)!==session.member_id)throw new HttpError(403,'auth_connection_denied');
+  return pair;
+}
 accountAuthRoutes.post('/v1/auth/session',async c=>{
   const session=(await readSession(c))!,body=await c.req.json();
   const profile=(await memberProfile(c.env.DB,session.member_id))!;
   const selected=profile.identities.find(i=>i.provider===body.provider)??profile.identities.find(i=>i.provider===session.provider);
   if(!selected)throw new HttpError(401,'site_session_required');
-  return c.json({provider:selected.provider,me:{accountNumId:selected.externalId,nickName:profile.displayName,avatar:profile.avatarUrl},profile:{...profile,reviewer:await isReviewer(c.env.DB,session.member_id)}});
+  // 前端要求時把授權一起帶回：開頁本來是 session 回來才去要 token，兩趟往返串在一起。
+  // 換不到授權（供應商那邊斷了）不影響本站 session，token 就是 null，前端照舊處理。
+  let token:{accessToken:string;expiresAt:number}|null|undefined;
+  if(body.token===true){
+    try{token=await issueToken(c,session,providerOf(selected.provider,c.env),selected.externalId);}
+    catch(e){if(e instanceof HttpError&&e.status>=500)throw e;token=null;}
+  }
+  return c.json({provider:selected.provider,me:{accountNumId:selected.externalId,nickName:profile.displayName,avatar:profile.avatarUrl},profile:{...profile,reviewer:await isReviewer(c.env.DB,session.member_id)},...(token===undefined?{}:{token})});
 });
 accountAuthRoutes.post('/v1/auth/token',async c=>{
   const session=(await readSession(c))!,body=await c.req.json(),provider=providerOf(body.provider,c.env);
   const profile=await memberProfile(c.env.DB,session.member_id),identity=profile?.identities.find(i=>i.provider===provider);
   if(!identity)throw new HttpError(403,'auth_connection_denied');
-  const pair=await delegatedAccess(c.env,provider,identity.externalId,session.member_id);
-  // Logout may have completed while the provider was rotating its token.
-  if(!await c.env.DB.prepare('SELECT 1 FROM account_sessions WHERE token_hash=? AND expires_at>?').bind(session.token_hash,Date.now()).first())throw new HttpError(401,'site_session_required');
-  // Recheck membership and generation after the network wait; never release another account's token.
-  if(await connectedMemberId(c.env.DB,provider,identity.externalId)!==session.member_id)throw new HttpError(403,'auth_connection_denied');
-  return c.json(pair);
+  return c.json(await issueToken(c,session,provider,identity.externalId));
 });
 accountAuthRoutes.post('/v1/auth/logout',async c=>{
   await cancelAttempt(c,true);

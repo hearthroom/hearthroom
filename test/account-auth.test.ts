@@ -344,3 +344,48 @@ it('still reports a refresh that is really in progress as temporarily unavailabl
   await env.DB.prepare('UPDATE account_credentials SET refresh_started=?').bind(Date.now()).run();
   expect((await request('token',{provider:'harbor'})).status).toBe(503);
 });
+
+async function member(path:string,token:string,init:RequestInit={}){
+  return worker.fetch(new Request(origin+path,{...init,headers:{Origin:origin,Cookie:cookieHeader(),Authorization:`Bearer ${token}`,'X-Provider':'harbor','Content-Type':'application/json',...(init.headers||{})}}),authEnv(),context);
+}
+it('identifies signed-in readers by the site session instead of asking the provider on every read',async()=>{
+  providers();await login('harbor',22);
+  const token=(await (await request('token',{provider:'harbor'})).json() as any).accessToken;
+  const fetchMe=vi.mocked(upstream.fetchMe);fetchMe.mockClear();
+  // 讀取：本站 session 就認得出來，不跨洋問供應商。
+  expect((await member('/v1/review/me',token)).status).toBe(200);
+  expect(fetchMe).not.toHaveBeenCalled();
+  // 寫入：照舊驗 bearer，cookie 不替寫入認人。
+  await member('/v1/me/cards/role-x/saves/slot',token,{method:'PUT',body:JSON.stringify({value:{a:1}})});
+  expect(fetchMe).toHaveBeenCalledTimes(1);
+  // 沒有 session 的讀取：照舊驗 bearer。
+  fetchMe.mockClear();const saved=cookies;cookies={};
+  expect((await member('/v1/review/me',token)).status).toBe(200);
+  expect(fetchMe).toHaveBeenCalledTimes(1);
+  // 登出之後，舊 cookie 不再認人。
+  cookies=saved;expect((await request('logout',{})).status).toBe(200);cookies=saved;fetchMe.mockClear();
+  await member('/v1/review/me',token);
+  expect(fetchMe).toHaveBeenCalledTimes(1);
+});
+it('does not name a member after the handle when the reader was identified by the site session',async()=>{
+  providers();await login('harbor',22);
+  const token=(await (await request('token',{provider:'harbor'})).json() as any).accessToken;
+  await env.DB.prepare('UPDATE members SET display_name=NULL').run();
+  expect((await member('/v1/review/me',token)).status).toBe(200);
+  expect((await env.DB.prepare('SELECT display_name FROM members').first<any>()).display_name).toBeNull();
+});
+it('returns the access token with the session only when asked, and not after the provider link is gone',async()=>{
+  const p=providers();await login('harbor',22);
+  const plain=await (await request('session',{provider:'harbor'})).json() as any;
+  expect('token' in plain).toBe(false);
+  const withToken=await (await request('session',{provider:'harbor',token:true})).json() as any;
+  expect(p.identity.get(withToken.token.accessToken)).toBe(22);
+  expect(withToken.token.refreshToken).toBeUndefined();
+  // 供應商那邊的授權沒了：session 照樣回來，token 是 null，前端照舊處理。
+  const real=p.network.getMockImplementation()!;
+  p.network.mockImplementation(async(input,init)=>String(input).endsWith('/oauth/revoke')?new Response('',{status:200}):real(input,init));
+  expect((await request('disconnect',{provider:'harbor'})).status).toBe(200);
+  const after=await request('session',{provider:'harbor',token:true});
+  expect(after.status).toBe(200);
+  expect((await after.json() as any).token).toBeNull();
+});
