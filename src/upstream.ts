@@ -172,10 +172,13 @@ export async function fetchMyRoles(
   page: number,
   pageSize: number,
   provider: ProviderId = DEFAULT_PROVIDER,
+  q = "",
 ): Promise<MyRolePage> {
+  // q：卡名或簡介的關鍵字，由供應商比對（繁簡互通）；空字串不過濾
+  const search = q ? `&q=${encodeURIComponent(q)}` : "";
   const res = await fetch(
     // 只要本站建的那一組：作者在主站建的卡不進這裡，也登記不上榜。
-    apiUrl(env, provider, `/open/v1/role/mine?pageNum=${page}&pageSize=${pageSize}&creationMethod=${CREATION_METHOD}`),
+    apiUrl(env, provider, `/open/v1/role/mine?pageNum=${page}&pageSize=${pageSize}&creationMethod=${CREATION_METHOD}${search}`),
     { headers: { Authorization: `Bearer ${bearer}`, language: "zh-Hans", "User-Agent": UA } },
   );
   const body = await readJson(res, "role list");

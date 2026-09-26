@@ -527,7 +527,7 @@ export interface ListingQuota {
 
 export interface MyCardPage {
   items: MyCard[];
-  /** 一共有幾張。看「已登記」那組時是 null——那條路不問上游，也就不知道這個數字。 */
+  /** 符合目前搜尋與篩選的張數（翻頁用）。 */
   total: number | null;
   /** 已登記幾張。全域的數字，不是這一頁數出來的。 */
   registeredTotal: number;
@@ -546,13 +546,14 @@ export interface MyCardPage {
  */
 export async function fetchMyCards(
   token: string,
-  opts: { provider?: import("./provider").ProviderId; page?: number; pageSize?: number; fresh?: boolean; filter?: "all" | "listed" | "unlisted" } = {},
+  opts: { provider?: import("./provider").ProviderId; page?: number; pageSize?: number; fresh?: boolean; filter?: "all" | "listed" | "unlisted"; q?: string } = {},
 ): Promise<MyCardPage> {
   const params = new URLSearchParams();
   if (opts.page) params.set("page", String(opts.page));
   if (opts.pageSize) params.set("pageSize", String(opts.pageSize));
   if (opts.fresh) params.set("fresh", "1");
   if (opts.filter && opts.filter !== "all") params.set("filter", opts.filter);
+  if (opts.q) params.set("q", opts.q);
   return json<MyCardPage>(
     await fetch(`${COMMUNITY_API}/me/cards?${params}`, { headers: { ...from(), ...(opts.provider ? {"X-Provider":opts.provider} : {}), ...authHeaders(token) } }),
   );

@@ -124,3 +124,45 @@ it('does not show another account\'s cards from memory', async () => {
  expect(root.querySelectorAll('article.card')).toHaveLength(0);
  expect(root.querySelector('.ghost')).not.toBeNull();
 });
+
+// 作者卡多（幾百張）時靠搜尋、篩選、頁碼找卡；三樣都放在網址上（owner 2026-09-26）
+async function mountAt(path:string){
+ const router=createRouter({history:createMemoryHistory(),routes:[{path:'/:pathMatch(.*)*',component:{template:'<div />'}}]});await router.push(path);
+ const pinia=createPinia();setActivePinia(pinia);const session=useSession();session.me={accountNumId:11,nickName:'Fixture',avatar:''};session.profile={identities:[{provider:'harbor',externalId:22}]} as any;
+ root=document.createElement('div');document.body.append(root);app=createApp(MyCardsPage).use(pinia).use(i18n).use(router);app.mount(root);await settle();
+ return router;
+}
+const lastCall=()=>mocks.fetch.mock.calls.at(-1)![1];
+it('searches by keyword after typing stops, back on page 1, and keeps it in the address', async () => {
+ const router=await mountAt('/mine?page=3');
+ const input=root.querySelector<HTMLInputElement>('input[type="search"]')!;
+ input.value='  夜行偵探 ';input.dispatchEvent(new Event('input'));
+ await new Promise(r=>setTimeout(r,350));await settle();
+ await vi.waitFor(()=>expect(router.currentRoute.value.query).toEqual({q:'夜行偵探'}));
+ await vi.waitFor(()=>expect(lastCall()).toMatchObject({q:'夜行偵探',page:1,pageSize:24,filter:'all',fresh:true}));
+});
+it('filters listed or unlisted cards from the address', async () => {
+ const router=await mountAt('/mine');
+ [...root.querySelectorAll('.seg__item')].find(b=>b.textContent?.trim()===i18n.global.t('mine.filter.listed'))!.dispatchEvent(new Event('click'));
+ await settle();
+ await vi.waitFor(()=>expect(router.currentRoute.value.query).toEqual({filter:'listed'}));
+ await vi.waitFor(()=>expect(lastCall()).toMatchObject({filter:'listed',page:1}));
+});
+it('pages with numbers, folds the middle, and jumps straight to a page', async () => {
+ mocks.fetch.mockImplementation(async()=>({...result([{...fixture,roleId:'original'}]),total:24*10}));
+ const router=await mountAt('/mine?page=5');
+ const labels=[...root.querySelectorAll('.pager .pager__num, .pager .pager__gap')].map(e=>e.textContent?.trim());
+ expect(labels).toEqual(['1','…','4','5','6','…','10']);
+ expect(root.querySelector('.pager__num[aria-current="page"]')?.textContent?.trim()).toBe('5');
+ [...root.querySelectorAll('.pager__num')].find(b=>b.textContent?.trim()==='10')!.dispatchEvent(new Event('click'));
+ await settle();
+ await vi.waitFor(()=>expect(router.currentRoute.value.query).toEqual({page:'10'}));
+ await vi.waitFor(()=>expect(lastCall()).toMatchObject({page:10}));
+});
+it('says what the search found nothing for, and offers to clear it', async () => {
+ mocks.fetch.mockImplementation(async()=>({...result([]),total:0}));
+ await mountAt('/mine?q=%E4%B8%8D%E5%AD%98%E5%9C%A8');
+ expect(root.textContent).toContain(i18n.global.t('mine.searchEmpty',{q:'不存在'}));
+ expect(button('mine.clearFilters')).toBeDefined();
+ expect(root.querySelector('.pager')).toBeNull();
+});

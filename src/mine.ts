@@ -1,3 +1,4 @@
+import { TO_HANS } from "./originality-hans";
 import { countByAuthor, listCards, toCard, registeredAmong } from "./cards";
 import { resolveMember } from "./members";
 import { type ProviderId, DEFAULT_PROVIDER } from "./providers";
@@ -36,13 +37,18 @@ const EDGE_TTL_SECONDS = 60;
  * 就會把一個人的卡片清單送給另一個人。identity 先驗證、鍵在伺服器端組出來，
  * 兩件事都不能省。
  */
-const cacheKey = (provider: ProviderId, accountNumId: number, page: number, pageSize: number) =>
-  new Request(`https://personae.internal/me/${provider}/${accountNumId}/roles?p=${page}&n=${pageSize}`);
+const cacheKey = (provider: ProviderId, accountNumId: number, page: number, pageSize: number, q: string) =>
+  new Request(`https://personae.internal/me/${provider}/${accountNumId}/roles?p=${page}&n=${pageSize}&q=${encodeURIComponent(q)}`);
+
+/** 已上架的卡最多幾張一起拿來比對關鍵字（作者每週只能送審幾張，實際遠少於這個數）。 */
+const LISTED_SEARCH_LIMIT = 1000;
+/** 繁體轉簡體、不分大小寫：搜尋時兩邊都先轉成這個樣子再比，繁簡互通。 */
+const searchForm = (text: string) => [...text].map((ch) => TO_HANS.get(ch) ?? ch).join("").toLowerCase();
 
 export interface MinePage {
   /** registered＝本站有這張卡的登記（不論審到哪）；status 只在 registered 時有；note 是最近一次駁回的說明。 */
   items: (MyRole & { registered: boolean; status?: CardStatus; updateStatus?: string; note?: string; nsfw?: boolean })[];
-  /** 作者一共有幾張卡。這個數字只有上游知道，「已登記」那條路不問上游，所以是 null。 */
+  /** 符合條件的卡一共幾張（翻頁用）。全部／未上架由上游算；已上架由本站的庫算。 */
   total: number | null;
   /** 已登記幾張。**全域**的數字，不是這一頁數出來的——見 countByAuthor。 */
   registeredTotal: number;
@@ -66,7 +72,7 @@ export async function loadMine(
   env: Env,
   bearer: string,
   accountNumId: number,
-  opts: { page: number; pageSize: number; fresh: boolean; filter: MineFilter; provider?: ProviderId },
+  opts: { page: number; pageSize: number; fresh: boolean; filter: MineFilter; provider?: ProviderId; q?: string },
 ): Promise<MineResult> {
   const provider: ProviderId = opts.provider ?? DEFAULT_PROVIDER;
   const registeredTotal = await countByAuthor(env.DB, accountNumId, provider);
@@ -77,16 +83,33 @@ export async function loadMine(
   if (opts.filter === "listed") {
     // 作者條件是本站成員 id（0005 起）；第一次來就建成員，跟登記那條路一致
     const memberId = await resolveMember(env.DB, provider, accountNumId, Date.now());
-    const { rows, hasNext } = await listCards(env.DB, {
-      provider,
-      authorMemberId: memberId,
-      sort: "new",
-      limit: opts.pageSize,
-      offset: (opts.page - 1) * opts.pageSize,
-      // 作者要看到自己每一張登記過的卡，包括待審、被駁回、離榜重審中的。
-      anyStatus: true,
-      allowNsfw: true,
-    });
+    const q = opts.q ?? "";
+    const offset = (opts.page - 1) * opts.pageSize;
+    let rows: Awaited<ReturnType<typeof listCards>>["rows"];
+    let hasNext: boolean;
+    let total: number;
+    if (q) {
+      // 有關鍵字：這位作者已上架的卡整組拿來，繁簡都轉成同一種寫法再比（本站的全文索引不認繁簡）。
+      // 一位作者已上架的卡受每週額度限制，不會多到撐不住。
+      const all = await listCards(env.DB, { provider, authorMemberId: memberId, sort: "new", limit: LISTED_SEARCH_LIMIT, offset: 0, anyStatus: true, allowNsfw: true });
+      const needle = searchForm(q);
+      const matched = all.rows.filter((row) => searchForm(`${row.names} ${row.summaries}`).includes(needle));
+      total = matched.length;
+      rows = matched.slice(offset, offset + opts.pageSize);
+      hasNext = offset + opts.pageSize < total;
+    } else {
+      ({ rows, hasNext } = await listCards(env.DB, {
+        provider,
+        authorMemberId: memberId,
+        sort: "new",
+        limit: opts.pageSize,
+        offset,
+        // 作者要看到自己每一張登記過的卡，包括待審、被駁回、離榜重審中的。
+        anyStatus: true,
+        allowNsfw: true,
+      }));
+      total = registeredTotal;
+    }
     const notes = await statusAmong(env.DB, rows.map((r) => r.source_role_id));
     return {
       source: "bypass",
@@ -110,7 +133,7 @@ export async function loadMine(
             nsfw: card.nsfw,
           };
         }),
-        total: null,
+        total,
         registeredTotal,
         quota,
         page: opts.page,
@@ -120,7 +143,7 @@ export async function loadMine(
     };
   }
 
-  const key = cacheKey(provider, accountNumId, opts.page, opts.pageSize);
+  const key = cacheKey(provider, accountNumId, opts.page, opts.pageSize, opts.q ?? "");
   const cache = await caches.open(mineCache.namespace);
 
   let roles: Awaited<ReturnType<typeof upstream.fetchMyRoles>> | null = null;
@@ -137,7 +160,7 @@ export async function loadMine(
   }
 
   if (!roles) {
-    roles = await upstream.fetchMyRoles(env, bearer, opts.page, opts.pageSize, provider);
+    roles = await upstream.fetchMyRoles(env, bearer, opts.page, opts.pageSize, provider, opts.q ?? "");
     // 快取的是上游那一份原始清單，不含登記狀態——登記狀態下面才查，才不會連同被凍住。
     await cache.put(
       key,
