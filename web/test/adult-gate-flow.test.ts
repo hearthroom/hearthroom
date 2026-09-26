@@ -148,11 +148,11 @@ describe("成人內容的門（整條路）", () => {
 
   it("開關本來就開著、門卻出現了：按「顯示成人內容」也要重讀，不能沒反應", async () => {
     state.showNsfw = true;
-    let refuse = true;
+    let refusals = 2;
     vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
-      // 第一次讀卡被擋（例如 token 剛好過期），之後照常
-      if (refuse && url.includes("/v1/cards/abc?")) { refuse = false; return Promise.resolve(new Response(JSON.stringify({ error: "adult_content" }), { status: 403, headers: { "Content-Type": "application/json" } })); }
+      // 讀卡被擋（例如 token 剛好過期）：頁面自己會帶身分再讀一次，這裡連那次也擋，門才會出現；之後照常
+      if (refusals > 0 && url.includes("/v1/cards/abc?")) { refusals--; return Promise.resolve(new Response(JSON.stringify({ error: "adult_content" }), { status: 403, headers: { "Content-Type": "application/json" } })); }
       return fakeFetch(input, init);
     });
     el = document.createElement("div");

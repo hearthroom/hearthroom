@@ -134,7 +134,8 @@ function applyHead(c: { name: string; summary: string }) {
 // 只認最後一次：身分到之前發出的那次沒帶成人權限，它的 403 常常比後面那次的卡片晚回來，
 // 照單全收就把已經畫好的卡蓋成門（玩家回報 2026-09-23，重新整理才好）。
 let loadGeneration = 0;
-async function load() {
+/** afterIdentity：身分載好後的那次重讀。再被擋就是真的沒權限，畫門，不再重試。 */
+async function load(afterIdentity = false) {
   const request = ++loadGeneration;
   // 換語言時手上還有卡：留著變淡，資料到了再換，不退回骨架
   revalidating.value = !!card.value;
@@ -164,7 +165,16 @@ async function load() {
   } catch (err) {
     if (request !== loadGeneration) return;
     if (err instanceof ApiError && err.status === 404) missing.value = true;
-    else if (err instanceof ApiError && err.status === 403 && err.code === "adult_content") { gated.value = true; card.value = null; }
+    else if (err instanceof ApiError && err.status === 403 && err.code === "adult_content") {
+      // 被擋時身分可能還在路上：先留在骨架等它，開著就帶權限再讀一次，確定沒開才畫門。
+      // 直接畫門的話，開了成人內容的人每次重新整理都會先看到門閃一下（玩家回報 2026-09-26）。
+      if (!afterIdentity) {
+        await session.restore();
+        if (request !== loadGeneration) return;
+        if (session.profile?.showNsfw) { void load(true); return; }
+      }
+      gated.value = true; card.value = null;
+    }
     else if (!shown) error.value = err instanceof Error ? err.message : t("state.loadFailed");
     // 手上那份是剛才那一屏帶過來的：背景更新失敗就讓它繼續顯示，不要把已經畫好的頁面換成錯誤
     loading.value = false;
@@ -229,7 +239,7 @@ watch(() => route.params.id, () => {
   commentCount.value = null; showComments.value = true; commentsOpened.value = false;
   load();
 }, { immediate: true });
-watch(locale, load);
+watch(locale, () => load());
 
 // 加到主畫面：每張卡在卡片 App 網域上各自是一個 App（lib/site.ts），安裝要在那個網域的頁面上做，
 // 所以按下去先過去那張卡的對話頁（帶 install=1，那邊會把提示卡拿出來）。
@@ -240,14 +250,18 @@ function addToHome() {
   track("pwa_card_install_click", { subject: c.roleId });
   location.assign(playAppUrl(String(c.num ?? c.id), locale.value, { install: true, provider: c.provider }));
 }
-// 開關剛載好（或改了）：成人內容的卡在那之前會是 404，重讀一次
-// 開關改了要重讀；身分剛載好、發現本來就開著（undefined → true）也要——第一次讀多半比身分早到
-watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && (now === true || before !== undefined)) load(); });
+// 開關改了要重讀。身分第一次載好（undefined → 值）只在門已經畫出來時重讀：
+// 讀卡被擋時自己會等身分（見 load），卡已經讀到就不必再讀一次
+watch(() => session.profile?.showNsfw, (now, before) => {
+  if (now === before) return;
+  if (before === undefined && !gated.value) return;
+  void load();
+});
 </script>
 
 <template>
   <NotFoundPage v-if="missing" :title="$t('card.notFound.title')" :hint="$t('card.notFound.hint')" />
-  <div v-else-if="gated" class="page"><AdultGate @enabled="load" /></div>
+  <div v-else-if="gated" class="page"><AdultGate @enabled="load()" /></div>
 
   <div v-else class="page role">
     <!-- 骨架照著真的版面畫：左邊一張身分證、右邊一塊面板，資料來了不跳版 -->

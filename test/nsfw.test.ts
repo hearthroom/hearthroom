@@ -293,3 +293,63 @@ describe("審核", () => {
     expect(await env.DB.prepare("SELECT status,nsfw FROM cards WHERE source_role_id='role-safe'").first()).toEqual({status:'approved',nsfw:0});
   });
 });
+
+describe("本站登入 cookie 直接放行單卡", () => {
+  // 卡片頁第一次讀卡時還沒有 token：同源請求自動帶的登入 cookie 就要夠用，
+  // 否則開了成人內容的人重新整理會先看到成人門、等兩趟往返才出卡（玩家回報 2026-09-26）。
+  const origin = "https://c.test";
+  const cookieEnv = () => ({ ...env, AUTH_ENABLED: "true", AUTH_ALLOWED_ORIGINS: origin });
+  async function siteSession(accountNumId: number, raw = `session-${accountNumId}`): Promise<string> {
+    const memberId = await makeMember(accountNumId);
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw)));
+    const tokenHash = btoa(String.fromCharCode(...digest)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    await env.DB.prepare("INSERT INTO account_sessions VALUES (?,?,?,?,?,?,?)")
+      .bind(tokenHash, memberId, "harbor", String(accountNumId), origin, Date.now(), Date.now() + 86400000).run();
+    return `__Host-hr-session=${raw}`;
+  }
+  async function read(path: string, cookie?: string) {
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(new Request(`${origin}${path}`, { headers: cookie ? { Cookie: cookie } : {} }), cookieEnv(), ctx);
+    await waitOnExecutionContext(ctx);
+    return res;
+  }
+  const adultId = async () => (await env.DB.prepare("SELECT id FROM cards WHERE source_role_id = 'role-adult'").first<{ id: string }>())!.id;
+
+  it("開了成人內容的人：不帶 token 也不帶 ?nsfw=1，第一次讀卡與平台就拿得到，回應不進任何快取", async () => {
+    await listTwo();
+    const cookie = await siteSession(VIEWER);
+    await settings({ showNsfw: true, birthdate: adultBirthdate(), consentVersion: ADULT_CONSENT_VERSION });
+    const id = await adultId();
+    const card = await read(`/v1/cards/${id}`, cookie);
+    expect(card.status).toBe(200);
+    expect((await json(card)).name).toBe("深夜的卡");
+    expect(card.headers.get("Cache-Control")).toBe("private, no-store");
+    expect((await read(`/v1/cards/${id}/platforms`, cookie)).status).toBe(200);
+    // 讀取不續期、不改 cookie：讀取複本上不能觸發寫入
+    expect(card.headers.get("Set-Cookie")).toBeNull();
+  });
+
+  it("沒開、沒驗年齡、cookie 不對或網域不在允許清單：一律照舊是成人門", async () => {
+    await listTwo();
+    const id = await adultId();
+    const cookie = await siteSession(VIEWER);
+    const off = await read(`/v1/cards/${id}`, cookie);
+    expect(off.status).toBe(403);
+    expect((await json(off)).error).toBe("adult_content");
+    await settings({ showNsfw: true, birthdate: adultBirthdate(), consentVersion: ADULT_CONSENT_VERSION });
+    expect((await read(`/v1/cards/${id}`, "__Host-hr-session=forged")).status).toBe(403);
+    const elsewhere = createExecutionContext();
+    const res = await worker.fetch(new Request(`${origin}/v1/cards/${id}`, { headers: { Cookie: cookie } }), { ...env, AUTH_ENABLED: "true", AUTH_ALLOWED_ORIGINS: "https://other.test" }, elsewhere);
+    await waitOnExecutionContext(elsewhere);
+    expect(res.status).toBe(403);
+    await settings({ showNsfw: false });
+    expect((await read(`/v1/cards/${id}`, cookie)).status).toBe(403);
+  });
+
+  it("榜單沒帶 ?nsfw=1 仍是一般版本：cookie 只回答「能不能看這張」，不改變列表", async () => {
+    await listTwo();
+    const cookie = await siteSession(VIEWER);
+    await settings({ showNsfw: true, birthdate: adultBirthdate(), consentVersion: ADULT_CONSENT_VERSION });
+    expect(ids(await json(await read("/v1/cards?zone=all", cookie)))).toEqual(["role-safe"]);
+  });
+});
