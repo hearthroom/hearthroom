@@ -7,6 +7,7 @@
  * 確定 Safari 實際認哪一種之後就拿掉或只留結論。
  *
  * 只在網址帶 tintLab=1 時出現；其餘情況完全不動。
+ * i18n-ignore：這是給 owner 在手機上比對用的臨時實驗面板，字不給一般使用者看，不進翻譯檔。
  */
 type Paint = (doc: Document, top: string | null, bottom?: string | null) => void;
 
