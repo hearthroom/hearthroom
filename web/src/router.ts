@@ -17,10 +17,14 @@ import { setSurface } from "./lib/track";
  * 預設語言不帶前綴（/ 而不是 /zh-Hant/），其餘是 /en/、/ja/⋯⋯
  * 這是多數多語言站的做法：預設語言的網址保持乾淨，也不必為了上線而做一次全站轉址。
  */
+import BoardPage from "./pages/BoardPage.vue";
+
 const PREFIXED = LOCALE_CODES.filter((c) => c !== SOURCE_LOCALE);
 
 const pages: RouteRecordRaw[] = [
-  { path: "", component: () => import("./pages/BoardPage.vue") },
+  // 首頁直接打包進主程式：它是大多數人的第一頁。拆成一包的話，冷開要等主程式跑完才去抓
+  // 九個小檔（合計約 15 KB），實測白白多一波 0.57 s（2026-09-26）。
+  { path: "", component: BoardPage },
   { path: "search", component: () => import("./pages/SearchPage.vue") },
   { path: "cards/:id", component: () => import("./pages/CardPage.vue") },
   { path: "cards/:roleId/edit", component: () => import("./pages/CardEditorPage.vue"), meta: { auth: true, feature: "editor" } },
