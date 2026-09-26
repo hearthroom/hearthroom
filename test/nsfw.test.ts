@@ -14,7 +14,7 @@ import { boardCache } from "../src/index";
 import { upstream } from "../src/upstream";
 import { ADULT_CONSENT_VERSION } from "../shared/adult-consent";
 import { vi } from "vitest";
-import { bearer, envWithAssets, identities, makeMember, makeReviewer, resetDb, restoreUpstream, reviewOff, reviewOn, reviewUpstream, rolesOnMainSite, testHandle } from "./helpers";
+import { bearer, envWithAssets, identities, makeMember, makeReviewer, resetDb, restoreUpstream, reviewOff, reviewOn, reviewUpstream, rolesOnMainSite, testHandle, recordD1 } from "./helpers";
 
 const AUTHOR = 10001;
 const VIEWER = 40004;
@@ -108,12 +108,8 @@ describe("榜單權限與快取", () => {
     const warm = createExecutionContext();
     await worker.fetch(req.clone(), env, warm);
     await waitOnExecutionContext(warm);
-    const queries: string[] = [];
-    const measured = { ...env, DB: new Proxy(env.DB, { get(target, property) {
-      if (property === "prepare") return (sql: string) => { queries.push(sql); return target.prepare(sql); };
-      const value = Reflect.get(target, property);
-      return typeof value === "function" ? value.bind(target) : value;
-    } }) };
+    const { queries, db } = recordD1(env.DB);
+    const measured = { ...env, DB: db };
     // The proxy is a new database binding: warm its one-time schema check too.
     await worker.fetch(new Request('https://c.test/v1/providers'), measured, createExecutionContext());
     expect(queries).toHaveLength(1);

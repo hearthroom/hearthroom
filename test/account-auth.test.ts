@@ -274,3 +274,53 @@ it('uses the configured Harbor client for every origin and never registers one',
   const token=network.mock.calls.find(([input])=>String(input).endsWith('/oauth/token'));
   expect(new URLSearchParams(String(token?.[1]?.body)).get('client_id')).toBe('hh_client_hearthroom');
 });
+
+// 讀取複寫：第一次讀授權可能讀到複本上的舊版（src/d1-session.ts）。
+function staleCredentialRead(db:D1Database,stale:Record<string,unknown>):D1Database{
+  let served=false;
+  const wrap=(target:any):any=>({
+    prepare(query:string){
+      if(!served&&query.startsWith('SELECT * FROM account_credentials')){
+        served=true;
+        return {bind:()=>({first:async()=>stale})};
+      }
+      return target.prepare(query);
+    },
+    batch:(statements:D1PreparedStatement[])=>target.batch(statements),
+    getBookmark:()=>target.getBookmark?.()??null,
+    withSession:(constraint:string)=>wrap(target.withSession(constraint)),
+  });
+  return wrap(db);
+}
+it('does not spend a rotated refresh token when a replica returns the credential from before another refresh',async()=>{
+  const p=providers();await login('harbor',22);
+  const current=await env.DB.prepare('SELECT * FROM account_credentials WHERE provider=?').bind('harbor').first<any>();
+  const purpose=`credential:harbor:${current.external_id}:${current.generation}`;
+  const live=await openAuth<any>(authEnv(),purpose,current.payload);
+  // 舊版：已過期、帶著已經被換掉的 refresh token。主庫上的是換發後那份。
+  const stale={...current,expires_at:0,payload:await sealAuth(authEnv(),purpose,{...live,refreshToken:'rotated-away',expiresAt:0})};
+  const real=p.network.getMockImplementation()!;
+  p.network.mockImplementation(async(input,init)=>{
+    if(String(input).endsWith('/oauth/token')&&new URLSearchParams(String(init?.body)).get('refresh_token')==='rotated-away')
+      return Response.json({error:'invalid_grant'},{status:400});
+    return real(input,init);
+  });
+  const before=p.network.mock.calls.length;
+  const response=await worker.fetch(new Request(origin+'/v1/auth/token',{method:'POST',
+    headers:{Origin:origin,'X-Hearthroom-Request':'1',Cookie:cookieHeader(),'Content-Type':'application/json'},body:JSON.stringify({provider:'harbor'})}),
+    {...authEnv(),DB:staleCredentialRead(env.DB,stale)} as any,context);
+  expect(response.status).toBe(200);
+  expect((await response.json() as any).accessToken).toBe(live.accessToken);
+  expect(p.network.mock.calls.length).toBe(before);
+  expect(await env.DB.prepare('SELECT 1 FROM account_credentials WHERE generation=?').bind(current.generation).first()).not.toBeNull();
+});
+it('extends the idle session deadline at most once a day',async()=>{
+  providers();await login('harbor',22);
+  const read=async()=>(await env.DB.prepare('SELECT expires_at FROM account_sessions').first<any>()).expires_at as number;
+  const first=await read();
+  expect((await request('session',{provider:'harbor'})).status).toBe(200);
+  expect(await read()).toBe(first);
+  await env.DB.prepare('UPDATE account_sessions SET expires_at=expires_at-?').bind(2*86400000).run();
+  expect((await request('session',{provider:'harbor'})).status).toBe(200);
+  expect(await read()).toBeGreaterThanOrEqual(first);
+});

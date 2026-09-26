@@ -248,3 +248,18 @@ export function fakeAssets(files: Record<string, string | Response> = {}, shellH
 /** 帶假資源層的 env，直接餵 worker.fetch。 */
 export const envWithAssets = (files?: Record<string, string | Response>, shellHeaders?: Record<string, string>): typeof env =>
   ({ ...env, ASSETS: fakeAssets(files, shellHeaders) });
+
+/**
+ * 記下送進 D1 的每一句 SQL，包括經過讀取複寫工作階段的（src/d1-session.ts）。
+ * 請求裡的查詢都走 withSession 開出來的工作階段，只盯 env.DB.prepare 會數到零。
+ */
+export function recordD1(db: D1Database): { queries: string[]; db: D1Database } {
+  const queries: string[] = [];
+  const wrap = <T extends object>(target: T): T => new Proxy(target, { get(t, property) {
+    if (property === "prepare") return (sql: string) => { queries.push(sql); return (t as unknown as D1Database).prepare(sql); };
+    if (property === "withSession") return (c?: string) => wrap((t as unknown as D1Database).withSession(c as never));
+    const value = Reflect.get(t, property);
+    return typeof value === "function" ? value.bind(t) : value;
+  } });
+  return { queries, db: wrap(db) };
+}
