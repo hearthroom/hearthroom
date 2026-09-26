@@ -1625,5 +1625,7 @@
   "d769d805a8cda": "封存回执中的 hostedRevisionId",
   "da76acabd876e": "以路径为键的读取响应",
   "d52649548381b": "发行方密钥无效",
-  "d5d6345b3acbb": "不是封存版"
+  "d5d6345b3acbb": "不是封存版",
+  "d9467b7511217": "大于 0 且返回的是既有对话时，响应会同时带上 `firstPage`：按这个每页条数取的第 1 页历史，与 `GET /open/v1/conversation/messages?pageNum=1&pageSize=<value>` 完全相同。继续对话的客户端因此不必再单独请求历史。0 或省略 = 不带 `firstPage`。范围 0–100；更大的值返回 400。",
+  "d54fd988a7c8a": "只有请求把 `firstPageSize` 设为大于 0 且 `historyConversation` 为 `true` 时才会出现：历史第一页，与相同 `pageSize`、`pageNum=1` 的 `/conversation/messages` 响应完全相同。没有这个字段时，照常请求 `/conversation/messages`。"
 }

@@ -1625,5 +1625,7 @@
   "d769d805a8cda": "hostedRevisionId from the seal receipt",
   "da76acabd876e": "Read responses keyed by path",
   "d52649548381b": "Invalid issuer key",
-  "d5d6345b3acbb": "Not a sealed revision"
+  "d5d6345b3acbb": "Not a sealed revision",
+  "d9467b7511217": "When greater than 0 and an existing conversation is returned, the response also carries `firstPage`: history page 1 with this page size, identical to `GET /open/v1/conversation/messages?pageNum=1&pageSize=<value>`. A resuming client then needs no separate history request. 0 or omitted = no `firstPage`. Range 0–100; larger values are rejected with 400.",
+  "d54fd988a7c8a": "Present only when the request set `firstPageSize` above 0 and `historyConversation` is `true`: the first history page, identical to the `/conversation/messages` response for `pageNum=1` with the same `pageSize`. When it is absent, fetch `/conversation/messages` as usual."
 }

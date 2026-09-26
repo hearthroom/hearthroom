@@ -10851,6 +10851,13 @@
             "minimum": 0,
             "default": 0,
             "description": "Which greeting to use as the first AI message when a new conversation is created: 0 = main greeting, 1..n = alternate greetings. Out-of-range, negative or unparsable values fall back to the main greeting. Ignored for an existing conversation. A numeric string is also accepted."
+          },
+          "firstPageSize": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "default": 0,
+            "description": "When greater than 0 and an existing conversation is returned, the response also carries `firstPage`: history page 1 with this page size, identical to `GET /open/v1/conversation/messages?pageNum=1&pageSize=<value>`. A resuming client then needs no separate history request. 0 or omitted = no `firstPage`. Range 0–100; larger values are rejected with 400."
           }
         }
       },
@@ -10882,6 +10889,10 @@
           },
           "xmlV3Compatibility": {
             "$ref": "#/components/schemas/XMLV3Compatibility"
+          },
+          "firstPage": {
+            "$ref": "#/components/schemas/ConversationMessagesResponse",
+            "description": "Present only when the request set `firstPageSize` above 0 and `historyConversation` is `true`: the first history page, identical to the `/conversation/messages` response for `pageNum=1` with the same `pageSize`. When it is absent, fetch `/conversation/messages` as usual."
           }
         }
       },
