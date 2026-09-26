@@ -1286,7 +1286,7 @@ app.get("*", async (c) => {
     // Canonical uses the community-wide ID: provider-local IDs can collide.
     const canonical = canonicalUrl(new URL(normalized.pathname.replace(/[^/]+$/, encodeURIComponent(row.id)), url));
     const res = renderHead(shell, {
-      lang: locale, title: `${card.name} · ${SITE_NAME}`, description: card.summary, image: card.avatarUrl, url: canonical, type: "profile",
+      lang: locale, title: `${card.name} · ${SITE_NAME}`, description: card.summary, image: card.avatarUrl, url: canonical, type: "profile", preloadImage: true,
     });
     res.headers.set("Cache-Control", `public, max-age=${PAGE_TTL}`);
     return res;

@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { fetchReviewMe, type FeaturedStatus } from "./api";
 import { currentProvider, type ProviderId } from "./provider";
 import { useSession } from "./session";
@@ -58,5 +58,12 @@ export const useReviewer = defineStore("reviewer", () => {
     { immediate: true },
   );
 
-  return { reviewer, featured, featuredProvider, pending, pendingReviews, pendingCases, role, refresh };
+  /**
+   * 畫面上要不要留社群管理的入口。上面的查詢要等 token，比登入狀態晚到將近一秒；
+   * 登入狀態本身就帶了同一個旗標，先照它排版，查詢回來再以它為準。
+   * 不然管理員每次開頁，頁首都會在畫面出來之後才折成兩行，把整頁往下推。
+   */
+  const likely = computed(() => reviewer.value ?? (session.me ? session.profile?.reviewer === true : false));
+
+  return { reviewer, likely, featured, featuredProvider, pending, pendingReviews, pendingCases, role, refresh };
 });
