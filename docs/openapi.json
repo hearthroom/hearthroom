@@ -708,7 +708,7 @@
           "Conversation"
         ],
         "summary": "Delete one message from a conversation",
-        "description": "Deletes the row (`conversationId`, `chatId`) and bumps the conversation history epoch in the same transaction, so any in-flight generation or compaction for the conversation fails closed. Afterwards the prompt ledger is reset (a snapshot restore is attempted when the deleted row was the latest row). Both keys are read with unchecked type assertions: a body where either is missing or not a string results in HTTP 500 with an empty body (panic recovery). The handler does not check that the conversation belongs to the caller; deleting an unknown pair is a no-op returning 200.",
+        "description": "Deletes the row (`conversationId`, `chatId`) and bumps the conversation history epoch in the same transaction, so any in-flight generation or compaction for the conversation fails closed. Deleting an assistant reply removes only that reply. Deleting the only user message of a turn also removes that turn's assistant replies (the assistant rows after it, up to the next user message); when another user message of the same turn remains, the replies stay. Reload the message list afterwards. Afterwards the prompt ledger is reset (a snapshot restore is attempted when the deleted row was the latest row). Both keys are read with unchecked type assertions: a body where either is missing or not a string results in HTTP 500 with an empty body (panic recovery). The handler does not check that the conversation belongs to the caller; deleting an unknown pair is a no-op returning 200.",
         "security": [
           {
             "userToken": []
