@@ -145,11 +145,12 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
         confirm: (o) => confirmDialog({ title: o.title, message: o.content, confirmText: o.confirmText, cancelText: o.cancelText }),
         loading: () => {},
         // 手機的系統狀態列跟著頁面的 theme-color 塗色：對話頁上塗成舞台頂欄的實際底色（作者換配色會再叫），
-        // 離開對話頁（null）還原成站台自己的底色（lib/appearance.ts）
-        themeColor: (color) => {
-          const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-          if (color && meta) meta.content = color;
-          else useAppearance().init();
+        // 離開對話頁（null）還原成站台自己的底色（lib/appearance.ts）。
+        // iOS 26 起的 Safari 不看 theme-color，看頁面背景與貼邊的 fixed 元素：交給舞台的 paintBrowserChrome
+        // （html 背景塗頂欄色、底邊放一條輸入區色的細條）。舊版舞台沒有這個匯出就只塗 theme-color。
+        themeColor: (color, bottom) => {
+          stage.paintBrowserChrome?.(document, color, bottom);
+          useAppearance().setChromeColor(color);
         },
       },
       nav: {
