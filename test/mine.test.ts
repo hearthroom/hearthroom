@@ -241,3 +241,29 @@ describe("我的卡片：認人不必跨洋", () => {
     whoIs.mockRestore();
   });
 });
+
+describe("我的卡片：資料庫查詢不隨卡片張數變多", () => {
+  // 原本每張卡各查兩次（屬於哪個作品、卡號），一頁 24 張就是 48 次；作者卡多時這一頁跟著變慢
+  it("2 張與 6 張的查詢次數一樣", async () => {
+    const { recordD1 } = await import("./helpers");
+    const { default: worker } = await import("../src/index");
+    const { createExecutionContext, waitOnExecutionContext } = await import("cloudflare:test");
+    const count = async (n: number) => {
+      const token = `many-${n}`;
+      identities({ [token]: 30000 + n });
+      myRolesOnUpstream({ [token]: Array.from({ length: n }, (_, i) => ({ roleId: `m${n}-${i}`, name: `卡 ${i}` })) });
+      // 卡號先發好：第一次見到的卡要寫入一次，那不是這裡要量的
+      for (let i = 0; i < n; i++) await ensureCardNumber(env.DB, "harbor", `m${n}-${i}`);
+      const { queries, db } = recordD1(env.DB);
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(new Request("https://c.test/v1/me/cards?fresh=1", { headers: bearer(token) }), { ...env, DB: db }, ctx);
+      await waitOnExecutionContext(ctx);
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as any).items).toHaveLength(n);
+      return queries.length;
+    };
+    const two = await count(2);
+    const six = await count(6);
+    expect(six, `2 張 ${two} 次、6 張 ${six} 次`).toBe(two);
+  });
+});

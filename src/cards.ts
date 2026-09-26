@@ -115,6 +115,26 @@ export async function ensureCardNumber(db: D1Database, provider: ProviderId, rol
   return row.num;
 }
 
+/**
+ * ensureCardNumber 的整頁版：已經發過的卡號每家供應商一趟查完，還沒發過的（第一次被看到）才逐張發。
+ * 鍵是 `${provider}\n${roleId}`。
+ */
+export async function ensureCardNumbers(db: D1Database, pairs: readonly { provider: ProviderId; roleId: string }[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  const byProvider = new Map<ProviderId, string[]>();
+  for (const { provider, roleId } of pairs) byProvider.set(provider, [...(byProvider.get(provider) ?? []), roleId]);
+  for (const [provider, roleIds] of byProvider) {
+    const { results } = await db.prepare("SELECT source_role_id, num FROM card_numbers WHERE provider=? AND source_role_id IN (SELECT value FROM json_each(?))")
+      .bind(provider, JSON.stringify(roleIds)).all<{ source_role_id: string; num: number }>();
+    for (const row of results) out.set(`${provider}\n${row.source_role_id}`, row.num);
+  }
+  for (const { provider, roleId } of pairs) {
+    const key = `${provider}\n${roleId}`;
+    if (!out.has(key)) out.set(key, await ensureCardNumber(db, provider, roleId));
+  }
+  return out;
+}
+
 /** trigram 至少要 3 個字元才有 token 可比；更短的查詢只能掃 LIKE。 */
 const FTS_MIN_CHARS = 3;
 /** 包成 phrase，順便讓使用者輸入的 AND/OR/NEAR/* 失去 FTS 語法意義。 */

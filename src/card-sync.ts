@@ -54,6 +54,31 @@ export async function workFor(
       source_role_id: string;
     }>();
 }
+/**
+ * workFor 的整頁版：一次查完一頁的卡各自屬於哪個作品。規則跟 workFor 一樣（原作、副本、託管版本三條路）。
+ * 「我的卡片」原本每張卡各查一次，一頁 24 張就是 24 趟（作者卡多時這一頁跟著變慢）。
+ */
+export async function worksFor(
+  db: D1Database,
+  provider: ProviderId,
+  roleIds: readonly string[]
+): Promise<Map<string, { id: string; source_provider: ProviderId; source_role_id: string }>> {
+  const out = new Map<string, { id: string; source_provider: ProviderId; source_role_id: string }>();
+  if (!roleIds.length) return out;
+  const { results } = await db
+    .prepare(
+      `WITH ids(role_id) AS (SELECT value FROM json_each(?1))
+       SELECT ids.role_id AS rid, w.id, w.source_provider, w.source_role_id FROM ids JOIN works w ON
+         (w.source_provider=?2 AND w.source_role_id=ids.role_id)
+         OR w.id IN (SELECT work_id FROM work_copies WHERE provider=?2 AND role_id=ids.role_id)
+         OR w.id IN (SELECT v.work_id FROM hosting_versions v JOIN hosting_replicas r ON r.version_id=v.version_id WHERE r.provider=?2 AND r.hosted_revision_id=ids.role_id)`
+    )
+    .bind(JSON.stringify(roleIds), provider)
+    .all<{ rid: string; id: string; source_provider: ProviderId; source_role_id: string }>();
+  for (const row of results) if (!out.has(row.rid)) out.set(row.rid, { id: row.id, source_provider: row.source_provider, source_role_id: row.source_role_id });
+  return out;
+}
+
 export async function copiesFor(
   db: D1Database,
   provider: ProviderId,
