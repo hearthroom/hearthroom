@@ -406,7 +406,7 @@ app.get("/v1/cards/:id", async (c) => {
   const row = link.row;
   // 榜單審核與連結存取分開；公開資料仍由來源平台授權。
   if (!row || row.status !== 'approved') {
-    if (row?.nsfw === 1 && !(await viewerAllowsNsfw(c))) throw new HttpError(403,'adult_content');
+    if (row?.nsfw === 1 && !(await viewerAllowsNsfw(c, { card: true }))) throw new HttpError(403,'adult_content');
     const preview = await linkPreview(c.env,c.req.param('id'),link,lang(c));
     if (preview) return c.json(preview,200,{'Cache-Control':'private, no-store'});
     const own = await ownCardView(c, link.source?.roleId ?? c.req.param('id'), row);
@@ -415,7 +415,7 @@ app.get("/v1/cards/:id", async (c) => {
   }
   // 成人內容：沒開（或沒登入、沒驗年齡）的人拿不到內容，但要知道「這是成人內容、要登入／驗年齡」
   // 才能引導（owner 2026-09-08 改成 Steam 式的門，不是 404）。403 只透露這一件事，內容一個欄位都不給。
-  const allowNsfw = row.nsfw === 1 ? await viewerAllowsNsfw(c) : false;
+  const allowNsfw = row.nsfw === 1 ? await viewerAllowsNsfw(c, { card: true }) : false;
   if (row.nsfw === 1 && !allowNsfw) throw new HttpError(403, "adult_content");
   // 卡片瀏覽只在這裡記一次。HTML 殼那條路（page_html）多半是抓取器，卡片頁替作者發的
   // 「其他作品」副請求則是 /v1/cards?author=，兩者都不算一次瀏覽，否則分母會被灌水三倍。
@@ -609,7 +609,7 @@ app.get('/v1/cards/:roleId/platforms',async(c)=>{
  const link=await cardLink(c.env,c.req.param('roleId'),providerOf(c));
  const base=link.row;
  if(base?.approved_version_id && base.status!=='approved')throw new HttpError(404,'card not found');
- if(base?.nsfw && !await viewerAllowsNsfw(c))throw new HttpError(403,'nsfw_gated');
+ if(base?.nsfw && !await viewerAllowsNsfw(c, { card: true }))throw new HttpError(403,'nsfw_gated');
  let source=link.source;
  if(!base || base.status!=='approved') {
   const preview=await linkPreview(c.env,c.req.param('roleId'),link,lang(c));
@@ -747,7 +747,7 @@ async function commentViewer(c: Context<{ Bindings: Env; Variables: { ev: Pendin
 }
 async function commentCardFor(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>) {
   const card = await commentCard(c.env.DB, c.req.param("id") ?? "");
-  if (card.nsfw && !(await viewerAllowsNsfw(c))) throw new HttpError(403, "adult_content");
+  if (card.nsfw && !(await viewerAllowsNsfw(c, { card: true }))) throw new HttpError(403, "adult_content");
   return card;
 }
 const pageOf = (raw: string | undefined) => Math.min(500, Math.max(1, Math.floor(Number(raw)) || 1));

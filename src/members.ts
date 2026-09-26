@@ -254,16 +254,26 @@ export async function updateMemberNsfw(
 }
 
 /**
- * 看的人開了成人內容嗎。前端想看時帶 ?nsfw=1 加 token；token 驗不過或沒開，一律當沒開——
- * 不報錯、不洩漏。呼叫端必須先驗權限，才能讀取對應內容分級的內部榜單快取。
+ * 看的人開了成人內容嗎。token 驗不過或沒開，一律當沒開——不報錯、不洩漏。
+ * 呼叫端必須先驗權限，才能讀取對應內容分級的內部榜單快取。
+ *
+ * 身分兩條路：前端帶 Bearer token，或同源讀取自動帶上的本站登入 cookie（siteSessionIdentity）。
+ * cookie 那條讓卡片頁第一次讀卡就拿得到權限，不必先等登入狀態與 token
+ * （實測重新整理成人卡要 2 秒才出卡，中間還閃一下成人門，玩家回報 2026-09-26）。
+ *
+ * 榜單類要帶 ?nsfw=1 才算「想看」：沒帶就是一般版本，公開快取照走。
+ * 單卡（opts.card）不必帶：卡片本身已經是成人內容，問的只是這個人能不能看。
  */
-export async function viewerAllowsNsfw(c: Ctx & { req: { query: (k: string) => string | undefined } }): Promise<boolean> {
-  if (c.req.query("nsfw") !== "1") return false;
+export async function viewerAllowsNsfw(
+  c: Ctx & { req: { query: (k: string) => string | undefined; url: string; method: string } },
+  opts: { card?: boolean } = {},
+): Promise<boolean> {
+  if (!opts.card && c.req.query("nsfw") !== "1") return false;
   try {
     const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1];
-    if (!bearer) return false;
     const provider = providerOf(c);
-    const me = await requestIdentity(c, bearer, provider);
+    const me = bearer ? await requestIdentity(c, bearer, provider) : await siteSessionIdentity(c, provider);
+    if (!me) return false;
     // Viewing is read-only. Resolve linked identities and current preferences in one D1 trip;
     // a member who has never signed in cannot already have opted into adult content.
     const member = await c.env.DB.prepare(`
