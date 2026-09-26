@@ -50,14 +50,17 @@ export const resolvedMode = computed<"light" | "dark">(() =>
   mode.value === "system" ? (systemDark.value ? "dark" : "light") : mode.value,
 );
 
+/** 對話頁把系統狀態列塗成卡片頂欄色的期間，站台的深淺切換不能把它蓋回紙色。 */
+let chromeOverride: string | null = null;
+
 function apply(): void {
   const d = document.documentElement;
   d.dataset.mode = resolvedMode.value;
   if (theme.value === DEFAULT_THEME) delete d.dataset.theme;
   else d.dataset.theme = theme.value;
-  // 瀏覽器的視窗外框（手機的網址列）跟著紙的顏色走，不然深色頁面頂著一條白
+  // 瀏覽器的視窗外框（手機的網址列）跟著紙的顏色走，不然深色頁面頂著一條白；對話頁上跟卡片頂欄走。
   const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-  if (meta) meta.content = getComputedStyle(d).getPropertyValue("--bg").trim() || meta.content;
+  if (meta) meta.content = chromeOverride || getComputedStyle(d).getPropertyValue("--bg").trim() || meta.content;
 }
 
 export function useAppearance() {
@@ -78,5 +81,10 @@ export function useAppearance() {
     },
     /** 掛載時呼叫一次：inline script 已經寫過屬性，這裡補 theme-color 與系統監聽。 */
     init: apply,
+    /** 對話頁的頂欄色（null＝離開對話頁，回到站台紙色）。系統切換深淺時也保持這個顏色。 */
+    setChromeColor(color: string | null) {
+      chromeOverride = color;
+      apply();
+    },
   };
 }
