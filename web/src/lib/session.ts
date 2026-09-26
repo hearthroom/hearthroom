@@ -1,6 +1,8 @@
 import { managedAuth, managedLogout, forgetManaged, isManagedAuth, authRequest, rememberManaged } from './managed-auth';
 import { clearLibraryCache } from './library';
 import { clearStageStorage } from './stage-storage';
+import { rememberSignedIn } from './signin-hint';
+import { lastShown } from './mine-memory';
 import { currentProvider, setProvider, type ProviderId } from './provider';
 import {useProviderUpstream} from './config';
 import { PROVIDERS } from "./provider";
@@ -132,6 +134,8 @@ export const useSession = defineStore("session", () => {
         if(expected===generation){token.value = null;me.value = null;}
       } finally {
         ready.value = true;
+        // 記下這個瀏覽器目前是誰登入（或沒人）：「我的卡片」下次可以先開頁、身分在背景確認
+        if (expected === generation) rememberSignedIn(me.value?.accountNumId ?? null);
         restoring = null;
       }
     })();
@@ -164,6 +168,8 @@ export const useSession = defineStore("session", () => {
     profile.value = null;
     setNsfwViewer(null);
     setLoginViewer(null);
+    rememberSignedIn(null);
+    lastShown.clear();
     // 舞台存在這台裝置上的聊天快取（作者規則的定稿結果）：登出就刪，下一個用這台裝置的人讀不到。
     await clearStageStorage();
     if(await managedAuth()){await managedLogout();location.reload();}

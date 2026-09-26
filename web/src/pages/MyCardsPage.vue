@@ -14,6 +14,7 @@ import { connectionMessage } from "@/lib/distribution";
 import { can, currentProvider, providerName, type ProviderId } from "@/lib/provider";
 import { accountToken, connectAccount, needsReauthorization } from "@/lib/connections";
 import { lastShown } from "@/lib/mine-memory";
+import { signedInHint } from "@/lib/signin-hint";
 
 const route = useRoute();
 const router = useRouter();
@@ -97,7 +98,8 @@ async function reconnect(provider:ProviderId){
  try{await connectAccount(provider,route.fullPath);}catch(e){failures.value[provider]=connectionMessage(e);}
 }
 /** 這個分頁上次看到的自己的卡：回到這頁先畫它，背景照常重讀（fresh）再換上 */
-const shownKey=()=>`${session.me?.accountNumId??''}:${providers.value.join(',')}:${filter.value}:${page.value}:${q.value}`;
+// 身分還在背景確認時（見 router 的 optimisticAuth）用上次登入的帳號與預設供應商找上次那份
+const shownKey=()=>`${session.me?.accountNumId??signedInHint()??''}:${(providers.value.length?providers.value:[currentProvider()]).join(',')}:${filter.value}:${page.value}:${q.value}`;
 async function load(quiet=false) {
  if(!providers.value.length)return;
  if(!quiet)loading.value=true;
@@ -197,7 +199,7 @@ function persistCard(card:WorkspaceCard) {
 watch(()=>[session.me?.accountNumId,providers.value.join(','),q.value,filter.value,page.value],()=>{
  generation++;failures.value={};
  // 看過這一頁（同一個人、同樣的搜尋與篩選）就先畫上次那份，重讀不讓畫面變淡；沒看過才等伺服器
- const shown=session.me?lastShown.get(shownKey()):undefined;
+ const shown=(session.me||signedInHint())?lastShown.get(shownKey()):undefined;
  if(shown){rows.value=shown.rows;totals.value=shown.totals;quota.value=shown.quota;loading.value=false;}
  void load(!!shown);
 },{immediate:true});
