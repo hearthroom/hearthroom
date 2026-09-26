@@ -88,7 +88,7 @@ curl 'https://hearthroom.club/v1/tags?zone=en&limit=12'
 
 ### 對話生命週期
 
-1. `POST /open/v1/conversation/start` 開啟或繼續對話，不生成模型回覆。
+1. `POST /open/v1/conversation/start` 開啟或繼續對話，不生成模型回覆。繼續對話時帶上 `firstPageSize`，同一個回應就會附上歷史第一頁（`firstPage`），不必再另外請求歷史。
 2. `POST /open/v1/conversation/ws-ticket` 使用使用者 bearer 權杖取得短效、一次性票證。
 3. 用戶端開啟 `/open/v1/conversation/ws`，傳送驗證訊框，再傳送回合訊框。票證端點的 **WebSocket 協定** 區段說明訊框、事件、完成與重播欄位。
 4. 歷史紀錄與操作狀態端點提供持久化結果。`POST /open/v1/conversation/stop` 要求取消；用戶端依操作最終狀態判斷結果。

@@ -1625,5 +1625,7 @@
   "d769d805a8cda": "封存回執中的 hostedRevisionId",
   "da76acabd876e": "以路徑為鍵的讀取回應",
   "d52649548381b": "發行方金鑰無效",
-  "d5d6345b3acbb": "不是封存版"
+  "d5d6345b3acbb": "不是封存版",
+  "d9467b7511217": "大於 0 且回傳的是既有對話時，回應會一併帶上 `firstPage`：以這個每頁筆數取的第 1 頁歷史，與 `GET /open/v1/conversation/messages?pageNum=1&pageSize=<value>` 完全相同。繼續對話的用戶端因此不必另外請求歷史。0 或省略 = 不帶 `firstPage`。範圍 0–100；更大的值回傳 400。",
+  "d54fd988a7c8a": "只有請求把 `firstPageSize` 設為大於 0 且 `historyConversation` 為 `true` 時才會出現：歷史第一頁，與相同 `pageSize`、`pageNum=1` 的 `/conversation/messages` 回應完全相同。沒有這個欄位時，照常請求 `/conversation/messages`。"
 }

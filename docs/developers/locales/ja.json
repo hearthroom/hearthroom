@@ -1625,5 +1625,7 @@
   "d769d805a8cda": "封印レシートの hostedRevisionId",
   "da76acabd876e": "パスをキーとした読み取り応答",
   "d52649548381b": "発行者キーが無効です",
-  "d5d6345b3acbb": "封印版ではありません"
+  "d5d6345b3acbb": "封印版ではありません",
+  "d9467b7511217": "0 より大きく、既存の会話が返される場合、レスポンスに `firstPage` も含まれます。このページサイズで取得した履歴の 1 ページ目で、`GET /open/v1/conversation/messages?pageNum=1&pageSize=<value>` と完全に同じ内容です。会話を再開するクライアントは履歴を別途リクエストする必要がありません。0 または省略時は `firstPage` を含みません。範囲は 0–100 で、それより大きい値は 400 で拒否されます。",
+  "d54fd988a7c8a": "リクエストで `firstPageSize` を 0 より大きくし、かつ `historyConversation` が `true` の場合にのみ含まれます。履歴の 1 ページ目で、同じ `pageSize` と `pageNum=1` を指定した `/conversation/messages` のレスポンスと完全に同じです。含まれない場合は、通常どおり `/conversation/messages` を取得してください。"
 }

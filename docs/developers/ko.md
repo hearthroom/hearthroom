@@ -89,7 +89,7 @@ curl 'https://hearthroom.club/v1/tags?zone=en&limit=12'
 
 ### 대화 생명주기
 
-1. `POST /open/v1/conversation/start`는 대화를 열거나 재개합니다. 모델 응답을 생성하지는 않습니다.
+1. `POST /open/v1/conversation/start`는 대화를 열거나 재개합니다. 모델 응답을 생성하지는 않습니다. 대화를 이어 갈 때 `firstPageSize`를 함께 보내면 같은 응답에 기록 첫 페이지(`firstPage`)가 포함되어 기록을 따로 요청할 필요가 없습니다.
 2. `POST /open/v1/conversation/ws-ticket`은 사용자 bearer 토큰으로 수명이 짧은 일회용 티켓을 받습니다.
 3. 클라이언트는 `/open/v1/conversation/ws`를 열고 인증 프레임을 보낸 뒤 턴 프레임을 보냅니다. 티켓 엔드포인트의 **WebSocket 프로토콜** 섹션에서 프레임, 이벤트, 완료 및 재생 필드를 설명합니다.
 4. 기록 및 작업 상태 엔드포인트에서 영속적으로 저장된 결과를 확인합니다. `POST /open/v1/conversation/stop`은 취소를 요청합니다. 클라이언트는 최종 작업 상태로 결과를 판단합니다.

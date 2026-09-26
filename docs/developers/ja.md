@@ -88,7 +88,7 @@ curl 'https://hearthroom.club/v1/tags?zone=en&limit=12'
 
 ### 会話のライフサイクル
 
-1. `POST /open/v1/conversation/start` は会話を開くか再開します。モデルの返信は生成しません。
+1. `POST /open/v1/conversation/start` は会話を開くか再開します。モデルの返信は生成しません。 再開時に `firstPageSize` を指定すると、履歴の 1 ページ目（`firstPage`）が同じレスポンスに含まれ、履歴を別途リクエストする必要がなくなります。
 2. `POST /open/v1/conversation/ws-ticket` はユーザーの Bearer トークンで、短期間有効な使い捨てチケットを取得します。
 3. クライアントは `/open/v1/conversation/ws` を開き、認証フレーム、ターンのフレームの順で送ります。フレーム、イベント、完了、再送のフィールドは、チケットエンドポイントの **WebSocket プロトコル** 節に記載しています。
 4. 履歴と操作状態のエンドポイントで永続的な結果を取得できます。`POST /open/v1/conversation/stop` はキャンセルを要求します。最終的な操作状態から結果を判断してください。

@@ -1625,5 +1625,7 @@
   "d769d805a8cda": "봉인 영수증의 hostedRevisionId",
   "da76acabd876e": "경로를 키로 한 읽기 응답",
   "d52649548381b": "발행자 키가 유효하지 않음",
-  "d5d6345b3acbb": "봉인 버전이 아님"
+  "d5d6345b3acbb": "봉인 버전이 아님",
+  "d9467b7511217": "0보다 크고 기존 대화가 반환되면 응답에 `firstPage`도 함께 포함됩니다. 이 페이지 크기로 가져온 기록의 1페이지이며, `GET /open/v1/conversation/messages?pageNum=1&pageSize=<value>`와 완전히 같습니다. 대화를 이어 가는 클라이언트는 기록을 따로 요청할 필요가 없습니다. 0이거나 생략하면 `firstPage`가 포함되지 않습니다. 범위는 0–100이며, 더 큰 값은 400으로 거부됩니다.",
+  "d54fd988a7c8a": "요청에서 `firstPageSize`를 0보다 크게 설정하고 `historyConversation`이 `true`일 때만 포함됩니다. 기록의 첫 페이지이며, 같은 `pageSize`와 `pageNum=1`로 요청한 `/conversation/messages` 응답과 완전히 같습니다. 포함되지 않으면 평소처럼 `/conversation/messages`를 요청하세요."
 }
