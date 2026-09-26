@@ -41,12 +41,20 @@ const BREAKS_SCRIPT = `
   });
 })();`;
 
+/**
+ * 作者圖片改成捲到附近才載：開場白常塞上百張圖，而卡片頁只露出開頭一小段（其餘收在「展開」後面）。
+ * 實測一張卡的開場白一次拉了約 120 張圖、其中一張 4 MB。作者自己寫了 loading 的照他的。
+ */
+export function lazyImages(html: string): string {
+  return html.replace(/<img\b(?![^>]*\sloading\s*=)/gi, '<img loading="lazy" decoding="async"');
+}
+
 export function buildSrcdoc(html: string, tokens: { color: string; font: string }): string {
   return (
     `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">` +
     `<style>${hcCss}</style>` +
     `<style>html,body{margin:0;background:transparent;color:${tokens.color};font:14px/1.7 ${tokens.font};word-break:break-word}` +
-    `img,video{max-width:100%}</style></head><body><div id="hc-welcome">${html}</div>` +
+    `img,video{max-width:100%}</style></head><body><div id="hc-welcome">${lazyImages(html)}</div>` +
     `<script>${BREAKS_SCRIPT}${END}<script type="module">${hcJs}${END}<script>${SIZE_SCRIPT}${END}</body></html>`
   );
 }

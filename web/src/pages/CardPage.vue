@@ -11,6 +11,8 @@ import NotFoundPage from "@/pages/NotFoundPage.vue";
 import AdultGate from "@/components/AdultGate.vue";
 import PreviewDoc from "@/components/preview/PreviewDoc.vue";
 import HtmlCardFrame from "@/components/HtmlCardFrame.vue";
+import ClampBlock from "@/components/ClampBlock.vue";
+import CommentPreview from "@/components/CommentPreview.vue";
 import { ApiError, fetchBoard, fetchCard, fetchCardPlatforms, type CardPlatform, fetchPreviewPage, fetchRoleDetail } from "@/lib/api";
 import { renderWelcomeAsync } from "@/lib/welcome-render";
 import { recallCard } from "@/lib/card-memory";
@@ -47,6 +49,14 @@ const error = ref("");
 const welcome = ref("");
 /** 開場白照對話頁畫出來的 HTML（作者的正則規則 → HTML／markdown）；純文字的開場白這裡是空字串。 */
 const welcomeHtml = ref("");
+/** HTML 版開場白量好高度了沒；量好之前純文字那份留著撐版面 */
+const welcomeSized = ref(false);
+watch(welcomeHtml, () => { welcomeSized.value = false; });
+/** 開場白在主頁上露出的高度：夠看出語氣與版面，又不把評論擠出畫面 */
+const narrow = typeof matchMedia === "function" && matchMedia("(max-width: 820px)").matches;
+const welcomeMax = narrow ? 280 : 360;
+/** 簡介約露出五、六行 */
+const aboutMax = narrow ? 180 : 150;
 /** 這張卡能不能用遊戲模式玩（有精修世界，或開場白照 zzroles 協定寫） */
 const session = useSession();
 // 這一家有沒有評論這件事：Harbor 那邊沒有這條 API，掛上去只會對著空氣轉圈。
@@ -370,19 +380,30 @@ watch(() => session.profile?.showNsfw, (now, before) => {
             <template v-else>
               <section class="role__block">
                 <h2 class="eyebrow">{{ $t("card.about") }}</h2>
-                <p class="role__text">{{ card.summary || $t("card.noSummary") }}</p>
+                <!-- 簡介也可能長達好幾段：露出開頭，跟開場白、評論分享主頁 -->
+                <ClampBlock :max="aboutMax" :more-label="$t('card.aboutMore')" :less-label="$t('card.aboutLess')">
+                  <p class="role__text">{{ card.summary || $t("card.noSummary") }}</p>
+                </ClampBlock>
               </section>
               <section v-if="welcome" class="role__block">
                 <h2 class="eyebrow">{{ $t("card.welcome") }}</h2>
-                <!-- 開場白是角色開口說的第一句：畫成它在說話，跟作者裝修頁的氣泡同一種語言 -->
-                <div class="role__welcome">
-                  <img v-if="hasArt" :src="card.avatarUrl!" alt="" class="role__welcome-face" />
-                  <span v-else class="role__welcome-face mono" :style="{ '--h': hue }">{{ [...card.name][0] }}</span>
-                  <HtmlCardFrame v-if="welcomeHtml" class="role__bubble role__bubble--card" :html="welcomeHtml" :title="$t('card.welcome')" />
-                  <blockquote v-else class="role__bubble">{{ welcome }}</blockquote>
-                </div>
+                <!-- 開場白是角色開口說的第一句：畫成它在說話，跟作者裝修頁的氣泡同一種語言。
+                     這裡只露出開頭一段（長的開場白可以有好幾千像素），其餘收在「展開」後面，主頁留位置給評論 -->
+                <ClampBlock :max="welcomeMax" :more-label="$t('card.welcomeMore')" :less-label="$t('card.welcomeLess')">
+                  <div class="role__welcome">
+                    <img v-if="hasArt" :src="card.avatarUrl!" alt="" class="role__welcome-face" />
+                    <span v-else class="role__welcome-face mono" :style="{ '--h': hue }">{{ [...card.name][0] }}</span>
+                    <!-- HTML 版先在純文字底下量好高度再換上，不用預設高度佔位再一路長高 -->
+                    <div class="role__bubble-slot">
+                      <HtmlCardFrame v-if="welcomeHtml" class="role__bubble role__bubble--card" :class="{ 'role__bubble--pending': !welcomeSized }" :html="welcomeHtml" :title="$t('card.welcome')" @sized="welcomeSized = true" />
+                      <blockquote v-if="!welcomeHtml || !welcomeSized" class="role__bubble">{{ welcome }}</blockquote>
+                    </div>
+                  </div>
+                </ClampBlock>
               </section>
             </template>
+            <!-- 評論摘要：作者裝修過的主頁也放，玩家開卡前最想看的除了開場白就是別人怎麼說 -->
+            <CommentPreview v-if="showComments" :key="card.id" :card-id="card.id" @open="tab = 'comments'" @count="commentCount = $event" />
           </div>
 
           <!-- 評論首次開啟才載入，之後以 v-show 保留；作者關掉評論就整個不掛 -->
@@ -513,6 +534,9 @@ watch(() => session.profile?.showNsfw, (now, before) => {
 }
 /* HTML 卡自己帶底色與內距，氣泡只留形狀 */
 .role__bubble--card { padding: 0; background: transparent; white-space: normal; overflow: hidden; }
+.role__bubble-slot { position: relative; flex: 1; min-width: 0; display: grid; justify-items: start; }
+.role__bubble-slot > .role__bubble--card { width: 100%; }
+.role__bubble--pending { position: absolute; inset: 0 0 auto; visibility: hidden; }
 .role__comments { padding: var(--s-5); }
 
 .role__more { display: grid; gap: var(--s-3); margin-top: var(--s-3); }

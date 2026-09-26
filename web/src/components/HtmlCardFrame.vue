@@ -12,9 +12,12 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { SIZE_MESSAGE, buildSrcdoc } from "@/lib/html-card-frame";
 
 const props = defineProps<{ html: string; title?: string }>();
+/** 第一次量到高度：外面可以等它量好再換上，不先用預設高度佔位、再一路長高把版面往下推 */
+const emit = defineEmits<{ sized: [height: number] }>();
 
 const frame = ref<HTMLIFrameElement | null>(null);
 const height = ref(120);
+let sized = false;
 
 /** 本頁當下的文字色與字體，讓沒帶自己配色的卡跟頁面同一個底。 */
 function pageTokens(): { color: string; font: string } {
@@ -30,7 +33,10 @@ function onMessage(event: MessageEvent) {
   if (!frame.value || event.source !== frame.value.contentWindow) return;
   const data = event.data as { type?: unknown; height?: unknown } | null;
   if (!data || data.type !== SIZE_MESSAGE || typeof data.height !== "number") return;
+  const first = !sized;
+  sized = true;
   height.value = Math.max(48, Math.min(4000, Math.ceil(data.height)));
+  if (first) emit("sized", height.value);
 }
 
 onMounted(() => window.addEventListener("message", onMessage));
