@@ -13,6 +13,7 @@ import { useSession } from "@/lib/session";
 import { connectionMessage } from "@/lib/distribution";
 import { can, currentProvider, providerName, type ProviderId } from "@/lib/provider";
 import { accountToken, connectAccount, needsReauthorization } from "@/lib/connections";
+import { lastShown } from "@/lib/mine-memory";
 
 const route = useRoute();
 const router = useRouter();
@@ -55,12 +56,16 @@ async function loadProvider(provider:ProviderId, append=false, version=generatio
 async function reconnect(provider:ProviderId){
  try{await connectAccount(provider,route.fullPath);}catch(e){failures.value[provider]=connectionMessage(e);}
 }
-async function load(append=false) {
+/** 這個分頁上次看到的自己的卡：回到這頁先畫它，背景照常重讀（fresh）再換上 */
+const shownKey=()=>`${session.me?.accountNumId??''}:${providers.value.join(',')}`;
+async function load(append=false,quiet=false) {
  if(!providers.value.length)return;
- loading.value=true;
+ if(!quiet)loading.value=true;
  const version=generation;
  await Promise.all(providers.value.filter(p=>!append||more.value[p]||failures.value[p]).map(p=>loadProvider(p,append,version)));
- if(version===generation)loading.value=false;
+ if(version!==generation)return;
+ loading.value=false;
+ if(!Object.keys(failures.value).length)lastShown.set(shownKey(),{rows:rows.value,pages:pages.value,more:more.value,quota:quota.value});
 }
 async function cardToken(card:WorkspaceCard) {
  const provider=card.sourceProvider??card.provider;
@@ -151,7 +156,10 @@ function persistCard(card:WorkspaceCard) {
 }
 watch(()=>[session.me?.accountNumId,providers.value.join(',')],()=>{
  generation++;rows.value={};pages.value={};more.value={};failures.value={};quota.value=null;
- void load();
+ // 每次進這頁都要等伺服器（實測 0.6–0.9 s 的骨架）：看過就先畫上次那份，重讀不讓畫面變淡
+ const shown=session.me?lastShown.get(shownKey()):undefined;
+ if(shown){rows.value=shown.rows;pages.value=shown.pages;more.value=shown.more;quota.value=shown.quota;loading.value=false;}
+ void load(false,!!shown);
 },{immediate:true});
 watch(()=>route.query.fresh, fresh=>{
  if(fresh!=="1")return;

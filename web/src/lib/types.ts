@@ -49,6 +49,8 @@ export interface CardPage {
   limit: number;
   offset: number;
   sort: Sort;
+  /** 伺服器回的這一份含不含成人內容（X-Adult-Content）。舊伺服器沒有這個標頭時是 undefined。 */
+  adult?: boolean;
 }
 /** 榜的種類（照魅魔島）：日／週／月榜開窗、最熱、最新、推薦（隨機）；relevance 只給搜尋。 */
 export type Sort = "day" | "week" | "month" | "hot" | "new" | "random" | "relevance";

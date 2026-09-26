@@ -193,7 +193,10 @@ export async function fetchBoard(query: BoardQuery = {}): Promise<CardPage> {
   if (viewer.param) params.set("nsfw", "1");
   // 作者頁不套：看一個人的作品時，口味不是篩選條件
   if (!query.author) { const hide = await viewerHide(); if (hide) params.set("hide", hide); }
-  const page = await json<CardPage>(await fetch(`${COMMUNITY_API}/cards?${params}`, { headers: { ...from(), ...viewer.headers } }));
+  const res = await fetch(`${COMMUNITY_API}/cards?${params}`, { headers: { ...from(), ...viewer.headers } });
+  const adult = res.headers.get("X-Adult-Content");
+  const page = await json<CardPage>(res);
+  if (adult !== null) page.adult = adult === "1";
   // 列出來的卡先記著：點進卡片頁時直接畫，不必再等一次往返（見 card-memory）
   rememberCards(page.items);
   return page;

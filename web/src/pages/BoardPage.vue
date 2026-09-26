@@ -7,6 +7,7 @@ import DownloadBanner from "@/components/DownloadBanner.vue";
 import FollowFeed from "@/components/FollowFeed.vue";
 import CardGrid from "@/components/CardGrid.vue";
 import { fetchBoard } from "@/lib/api";
+import { recallBoard, rememberBoard } from "@/lib/board-memory";
 import { contentLang, defaultZone } from "@/lib/i18n";
 import DiscoveryTags from "@/components/DiscoveryTags.vue";
 import { selectedTags } from "@/lib/discovery";
@@ -49,24 +50,58 @@ const hidden = computed(() => session.profile?.hiddenTags ?? []);
 const zone = computed(() => defaultZone(locale.value));
 
 let loadId = 0;
+/** 身分在第一次讀榜還在路上時才到：等那一份回來再看它是不是照帳號開關讀的 */
+let recheckAfterLoad = false;
+
+/**
+ * 這一份榜單是不是已經照看的人的開關讀好了。伺服器用 cookie 判斷時會在回應上標明；
+ * 舊伺服器沒標，退回原本的規則（開關開著才需要重讀）。
+ */
+function servedFor(p: CardPage | null, showNsfw: boolean | undefined): boolean {
+  if (!p) return false;
+  return p.adult === undefined ? !showNsfw : p.adult === !!showNsfw;
+}
+
+/** 看過的分頁記在記憶體的鍵。身分還沒到時不記也不取：還不知道這一份是給誰看的。推薦每次都要重洗，不記。 */
+function memoryKey(query: Record<string, unknown>): string | null {
+  // 知道是誰了（登入的人資料到了，或確定是訪客）才記
+  if (!(session.profile || session.ready) || query.sort === "random") return null;
+  const p = session.profile;
+  return JSON.stringify([query, session.me?.accountNumId ?? null, p?.showNsfw ?? null, p?.ageVerified ?? null, p?.adultConsent ?? null, hidden.value]);
+}
+
+const currentQuery = () => ({ zone: zone.value, tag: tags.value, sort: sort.value, offset: offset.value, lang: contentLang(locale.value) });
+/** 身分到了、確認畫面上這份就是給他的：現在才知道該記在誰的名下 */
+function adoptShown() {
+  const key = memoryKey(currentQuery());
+  if (key && page.value) rememberBoard(key, page.value);
+}
+
 async function load() {
   const id = ++loadId;
-  loading.value = true;
   error.value = "";
+  if (mode.value !== "cards") { loading.value = false; return; }
+  const query = currentQuery();
+  const key = memoryKey(query);
+  const remembered = key ? recallBoard(key) : null;
+  // 看過的分頁先畫出來，背景照常重讀；沒看過的才讓舊畫面變淡等它
+  if (remembered) page.value = remembered;
+  loading.value = !remembered;
   try {
-    if (mode.value === "cards") {
-      const result = await fetchBoard({
-        zone: zone.value,
-        tag: tags.value,
-        sort: sort.value,
-        offset: offset.value,
-        lang: contentLang(locale.value),
-      });
-      if (id === loadId) page.value = result;
+    const result = await fetchBoard(query);
+    if (id !== loadId) return;
+    page.value = result;
+    const storeKey = memoryKey(query);
+    if (storeKey) rememberBoard(storeKey, result);
+    if (recheckAfterLoad && session.profile) {
+      recheckAfterLoad = false;
+      if (!servedFor(result, session.profile.showNsfw)) void load();
+      else adoptShown();
     }
   } catch (err) {
     if (id !== loadId) return;
-    error.value = err instanceof Error ? err.message : t("state.loadFailed");
+    // 畫面上已經有這一分頁的內容：背景重讀失敗就讓它留著
+    if (!remembered) error.value = err instanceof Error ? err.message : t("state.loadFailed");
   } finally {
     if (id === loadId) loading.value = false;
   }
@@ -86,9 +121,16 @@ function navigate(patch: Record<string, string | string[] | undefined>) {
 const switchMode = (m: "cards" | "following") => navigate({ mode: m === "following" ? "following" : undefined, sort: undefined, tag: undefined });
 
 watch([() => route.query, locale], load, { immediate: true });
-// 成人內容開關載好（登入後才知道）或改了：重讀，否則第一屏永遠是沒開的版本
-// 開關改了要重讀；身分剛載好、發現本來就開著（undefined → true）也要——第一次讀多半比身分早到
-watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && (now === true || before !== undefined)) load(); });
+// 開關改了要重讀。身分第一次載好（undefined → 值）時，第一屏多半已經照帳號開關讀好了
+// （伺服器用 cookie 判斷並標明），對得上就不再讀一次；那一份還在路上就等它回來再比。
+watch(() => session.profile?.showNsfw, (now, before) => {
+  if (now === before) return;
+  if (before === undefined) {
+    if (loading.value) { recheckAfterLoad = true; return; }
+    if (servedFor(page.value, now)) { adoptShown(); return; }
+  }
+  void load();
+});
 // 不想看的類型載好或改了（設定頁改完回來）：同樣重讀
 watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (now !== "" || before !== undefined)) load(); });
 </script>
