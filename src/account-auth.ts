@@ -11,7 +11,7 @@ import { upstream } from './upstream';
 /** Token-mediating backend. Only short-lived access tokens cross the browser boundary. */
 type AuthContext={Bindings:Env;Variables:{ev:Pending}};
 type C = Context<AuthContext>;
-const DAY=86400000, ATTEMPT_TTL=10*60000, SESSION_IDLE=30*DAY, SESSION_MAX=180*DAY;
+const DAY=86400000, ATTEMPT_TTL=10*60000, SESSION_IDLE=30*DAY, SESSION_MAX=180*DAY, SESSION_TOUCH=DAY;
 const SESSION='__Host-hr-session', FLOW='__Host-hr-auth';
 const scopes:Partial<Record<ProviderId,string>>={harbor:'profile.read email.read role.read role.write chat.play'};
 type Pair={accessToken:string;refreshToken:string;clientId:string;expiresAt:number};
@@ -77,7 +77,10 @@ async function readSession(c:C,required=true):Promise<Session|null>{
     if(required)throw new HttpError(401,'site_session_required');
     return null;
   }
-  await c.env.DB.prepare('UPDATE account_sessions SET expires_at=? WHERE token_hash=?').bind(Math.min(Date.now()+SESSION_IDLE,row.created_at+SESSION_MAX),row.token_hash).run();
+  // 閒置期限一天最多往後推一次。每個請求都寫的話，讀取複寫的工作階段一寫就得跟主庫對齊，
+  // 後面的查詢全都回到跨洋往返（d1-session.ts）。30 天的閒置期，晚一天推不影響任何人。
+  const extended=Math.min(Date.now()+SESSION_IDLE,row.created_at+SESSION_MAX);
+  if(extended-row.expires_at>=SESSION_TOUCH)await c.env.DB.prepare('UPDATE account_sessions SET expires_at=? WHERE token_hash=?').bind(extended,row.token_hash).run();
   writeCookie(c,SESSION,raw!,Math.floor(Math.min(SESSION_IDLE,row.created_at+SESSION_MAX-Date.now())/1000));
   return row;
 }
@@ -328,13 +331,30 @@ accountAuthRoutes.get('/internal/auth/metrics',async c=>{
 export async function delegatedAccess(env:Env,provider:ProviderId,externalId:number,memberId:string){
   if(await connectedMemberId(env.DB,provider,externalId)!==memberId)throw new HttpError(403,'auth_connection_denied');
   const id=String(externalId);
-  const row=await env.DB.prepare('SELECT * FROM account_credentials WHERE provider=? AND external_id=?').bind(provider,id).first<Credential>();
+  const read=()=>env.DB.prepare('SELECT * FROM account_credentials WHERE provider=? AND external_id=?').bind(provider,id).first<Credential>();
+  let row=await read();
   if(!row||row.state==='revoked')throw new HttpError(401,'auth_reauthorization_required');
   if(row.state!=='active'||row.refresh_started!==null)throw new HttpError(503,'auth_provider_unavailable');
   let pair=await openAuth<Pair>(env,credentialPurpose(provider,id,row.generation),row.payload);
   if(pair.expiresAt<=Date.now()){
-    const claimed=await env.DB.prepare("UPDATE account_credentials SET refresh_started=? WHERE provider=? AND external_id=? AND generation=? AND state='active' AND refresh_started IS NULL RETURNING generation").bind(Date.now(),provider,id,row.generation).first();
+    // 這一列可能是複本上的舊版（讀取複寫，見 d1-session.ts）：別的請求也許已經換發過了。
+    // 拿著舊的 refresh token 去換會被供應商拒絕，下面的 denied 分支就會把整份授權刪掉。
+    // 所以認領時連 expires_at 一起比對——主庫上的已經不是我們讀到的那份，就認領不到；
+    // 認領寫過主庫之後，同一個工作階段再讀一定是最新的，那份還有效就直接用。
+    const claim=async(r:Credential)=>!!await env.DB.prepare("UPDATE account_credentials SET refresh_started=? WHERE provider=? AND external_id=? AND generation=? AND state='active' AND refresh_started IS NULL AND expires_at=? RETURNING generation").bind(Date.now(),provider,id,r.generation,r.expires_at).first();
+    let claimed=await claim(row);
+    if(!claimed){
+      const fresh=await read();
+      if(!fresh||fresh.state==='revoked')throw new HttpError(401,'auth_reauthorization_required');
+      if(fresh.state!=='active'||fresh.refresh_started!==null||fresh.generation!==row.generation)throw new HttpError(503,'auth_provider_unavailable');
+      row=fresh;
+      pair=await openAuth<Pair>(env,credentialPurpose(provider,id,row.generation),row.payload);
+      if(pair.expiresAt<=Date.now())claimed=await claim(row);
+      else claimed=true;
+    }
     if(!claimed)throw new HttpError(503,'auth_provider_unavailable');
+  }
+  if(pair.expiresAt<=Date.now()){
     try{
       pair=await exchange(env,provider,pair.clientId,{grant_type:'refresh_token',refresh_token:pair.refreshToken});
       const saved=await env.DB.prepare("UPDATE account_credentials SET payload=?,expires_at=?,refresh_started=NULL,updated_at=? WHERE provider=? AND external_id=? AND generation=? AND state='active' RETURNING generation").bind(await sealAuth(env,credentialPurpose(provider,id,row.generation),pair),pair.expiresAt,Date.now(),provider,id,row.generation).first();

@@ -60,6 +60,7 @@ import { listSaves, putSave, removeSave } from "./saves";
 import { commentCard, countTop, deleteComment, listReplies, listTop, postComment, setLike, type Viewer } from "./comments";
 import { SVG_WRAP_LIMIT, TOUCH_ICON_SIZE, allowedImageUrl, cardManifest, iconSize, signShortcutKey, svgWrap, verifyShortcutKey } from "./shortcut";
 import { upstream, ZONES, type Zone, CREATION_METHOD, type CommunityStatus } from "./upstream";
+import { withD1Session } from "./d1-session";
 
 const app = new Hono<{ Bindings: Env; Variables: { ev: Pending } }>();
 
@@ -1318,7 +1319,8 @@ export default {
     if (!(await numericSchemaReady(env.DB))) return Response.json({error:'maintenance'}, {
       status:503, headers:{'Retry-After':'30','Cache-Control':'no-store'},
     });
-    return app.fetch(request, env, ctx);
+    const d1 = withD1Session(request, env);
+    return d1.finish(await app.fetch(request, d1.env, ctx));
   },
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
     if (!(await numericSchemaReady(env.DB))) return;

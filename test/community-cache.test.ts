@@ -2,7 +2,7 @@ import {approveFixtureResponse} from './hosted-fixture';
 import { createExecutionContext, env, waitOnExecutionContext } from 'cloudflare:test';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import app from '../src/index';
-import { resetDb, makeMember, testHandle, whoAmI, restoreUpstream, bearer, rolesOnMainSite, myRolesOnUpstream } from './helpers';
+import { resetDb, makeMember, testHandle, whoAmI, restoreUpstream, bearer, rolesOnMainSite, myRolesOnUpstream, recordD1 } from './helpers';
 import { upstream } from '../src/upstream';
 import { loadMine } from '../src/mine';
 import { badgeCollection } from '../src/community/badges';
@@ -15,9 +15,12 @@ it('reuses public identities and immediately invalidates privacy and award chang
  await env.DB.prepare("INSERT INTO community_awards(member_id,badge,source,created_at) VALUES (?,'first_work','work',1)").bind(member).run();
  const path='/v1/community/members/'+testHandle(11);
  expect(await (await get(path)).json()).toMatchObject({badges:['first_work']});
- const spy=vi.spyOn(env.DB,'prepare');
- const warm=await get(path);expect(warm.headers.get('X-Cache')).toBe('hit');
- expect(spy.mock.calls.length).toBe(1);
+ const recorded=recordD1(env.DB);
+ // 新包的一層 DB 也是新的綁定：先讓它把一次性的結構檢查做掉。
+ await app.fetch(new Request('https://c.test/v1/providers'),{...env,DB:recorded.db},createExecutionContext());recorded.queries.length=0;
+ const ctx=createExecutionContext();const warm=await app.fetch(new Request('https://c.test'+path),{...env,COMMUNITY_ENABLED:'true',DB:recorded.db},ctx);await waitOnExecutionContext(ctx);
+ expect(warm.headers.get('X-Cache')).toBe('hit');
+ expect(recorded.queries.length).toBe(1);
  await env.DB.prepare('UPDATE community_preferences SET public_badges=0 WHERE member_id=?').bind(member).run();
  expect(await (await get(path)).json()).toEqual({badges:[]});
 });
