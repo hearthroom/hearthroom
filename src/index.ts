@@ -38,7 +38,7 @@ import {
   BEACON_DETAILS, BEACON_EVENTS, clientKind, emit, note, refHostOf, safeSubject, shapeTerm, surfaceOf,
   type EventFields, type Pending,
 } from "./analytics";
-import { authorLine, downloadMeta, renderHead } from "./head";
+import { authorLine, downloadMeta, preloadImageTag, renderHead } from "./head";
 import { aliasTarget, HOST, canonicalUrl, isPlayHost } from "./site";
 import { loadMine, type MineFilter } from "./mine";
 import { tagNamesFor } from "../shared/tag-catalog";
@@ -1281,7 +1281,22 @@ app.get("*", async (c) => {
       return res;
     }
     // 成人內容不做分享預覽（抓取器沒有身分）：回沒有卡片資訊的殼，讓前端畫登入／驗年齡的門
-    if (row.nsfw === 1) return new Response(shell.body, { status: 200, headers: shell.headers });
+    if (row.nsfw === 1) {
+      const card = toCard(row, l);
+      // 開了成人內容的人（本站登入 cookie 認得出來）：跟一般卡一樣，卡片圖一進 HTML 就開始下載。
+      // 只加這一行，不放標題與分享資訊；這份因人而異，任何快取都不能留。
+      if (card.avatarUrl && await viewerAllowsNsfw(c, { card: true })) {
+        const res = new HTMLRewriter()
+          .on("head", { element(e) { e.append(preloadImageTag(card.avatarUrl!), { html: true }); } })
+          .transform(shell);
+        res.headers.set("Cache-Control", "private, no-store");
+        res.headers.set("Vary", "Cookie");
+        res.headers.delete("etag");
+        res.headers.delete("last-modified");
+        return res;
+      }
+      return new Response(shell.body, { status: 200, headers: shell.headers });
+    }
     const card = toCard(row, l);
     // Canonical uses the community-wide ID: provider-local IDs can collide.
     const canonical = canonicalUrl(new URL(normalized.pathname.replace(/[^/]+$/, encodeURIComponent(row.id)), url));
