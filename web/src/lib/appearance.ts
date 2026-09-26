@@ -60,7 +60,26 @@ function apply(): void {
   else d.dataset.theme = theme.value;
   // 瀏覽器的視窗外框（手機的網址列）跟著紙的顏色走，不然深色頁面頂著一條白；對話頁上跟卡片頂欄走。
   const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-  if (meta) meta.content = chromeOverride || getComputedStyle(d).getPropertyValue("--bg").trim() || meta.content;
+  const color = chromeOverride || getComputedStyle(d).getPropertyValue("--bg").trim() || meta?.content || "";
+  if (color) replaceThemeColor(color);
+  // 對話頁期間 body 也塗成同色：iOS 狀態列的半透明、下拉回彈、畫布沒蓋滿的邊緣都會透出 body。
+  if (chromeOverride) document.body.style.backgroundColor = chromeOverride;
+  else document.body.style.removeProperty("background-color");
+}
+
+/**
+ * 換掉整個 <meta name="theme-color">，不改它的 content：iOS Safari 對既有標籤改屬性不保證重新染色，
+ * 開頁之後就不再變（2026-09-26 owner iPhone 實測：改 content 無效）。LunaTalk mobile 的
+ * utils/theme-color.js 用同一招（移除舊的、插入新的），動態換色在 iOS 上可行。
+ */
+function replaceThemeColor(color: string): void {
+  const old = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+  if (old?.content === color) return;
+  old?.remove();
+  const meta = document.createElement("meta");
+  meta.name = "theme-color";
+  meta.content = color;
+  document.head.appendChild(meta);
 }
 
 export function useAppearance() {
@@ -83,6 +102,7 @@ export function useAppearance() {
     init: apply,
     /** 對話頁的頂欄色（null＝離開對話頁，回到站台紙色）。系統切換深淺時也保持這個顏色。 */
     setChromeColor(color: string | null) {
+      if (color === chromeOverride) return;
       chromeOverride = color;
       apply();
     },
