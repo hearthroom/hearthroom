@@ -31,7 +31,8 @@ function onArtError() {
 </script>
 
 <template>
-  <article class="card rise">
+  <!-- 不淡入：清單的卡就是首屏最大的內容，從透明淡入會讓首屏晚約 0.4 s 才算畫好（2026-09-26 實測 891 → 496 ms） -->
+  <article class="card">
     <div class="card__poster">
       <!-- 封面連到卡片頁：編輯有自己的鍵在下面（作者回報 2026-09-16：點自己的卡跳進編輯頁） -->
       <a :href="lp(`/cards/${card.num ?? card.detailId ?? card.workId ?? sourceId}`)" class="card__art">
