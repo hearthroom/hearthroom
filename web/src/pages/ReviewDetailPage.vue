@@ -76,12 +76,12 @@ const claimedByMe = computed(() => !!data.value?.submission.claimedByMe);
 const stampedByMe = computed(() => !!data.value?.submission.stampedByMe);
 /** 作者送審時勾的標籤。 */
 const authorTags = computed(() => readTags(doc.value?.roleTag));
-/** 榜上會用的標籤：審核人改過就是改過的那份。 */
+/** 這一版過審後會上榜的標籤：審核人改過就是改過的那份。 */
 const tags = computed(() => data.value?.card.tags ?? authorTags.value);
 const tagsChanged = computed(() => JSON.stringify(tags.value) !== JSON.stringify(authorTags.value));
 
 /**
- * 審核時直接改標籤：作者少勾、勾錯不值得退件，領著單的審核人改對再過審。
+ * 審核時直接改標籤：作者少勾、勾錯不值得退件，領著單的審核人改對再過審。只改這一次送審的版本。
  * 分類目錄裡的籤用點的；作者自己打的、目錄裡沒有的籤可以拿掉。
  */
 const TAGS_MAX = 20;

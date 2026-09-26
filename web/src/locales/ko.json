@@ -613,7 +613,7 @@
   "review.tags.save": "태그 저장",
   "review.tags.remove": "'{tag}' 빼기",
   "review.tags.failed": "태그를 저장하지 못했어요. 다시 시도해 주세요.",
-  "review.tags.hint": "저장한 태그가 랭킹에 쓰여요. 나중에 작가가 태그를 바꿔도 이번 조정은 덮어쓰지 않아요.",
+  "review.tags.hint": "이번에 심사하는 버전만 고칩니다. 승인되면 랭킹에 이 태그가 쓰여요. 작가가 나중에 카드를 수정하면 다시 심사를 받고, 그때는 작가가 단 태그를 따릅니다.",
   "review.tags.author": "작가가 원래 단 태그: {tags}",
   "review.section.originality": "중복 검사",
   "review.originality.similarity": "전체 중복률",

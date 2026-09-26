@@ -613,7 +613,7 @@
   "review.tags.save": "Save tags",
   "review.tags.remove": "Remove \"{tag}\"",
   "review.tags.failed": "Couldn't save the tags. Try again.",
-  "review.tags.hint": "These become the card's tags on the board. Later tag changes by the author won't override this adjustment.",
+  "review.tags.hint": "Changes only this submitted version; the board uses these tags once it's approved. If the author edits the card later, it's reviewed again with the author's own tags.",
   "review.tags.author": "Author's original tags: {tags}",
   "review.section.originality": "Similarity",
   "review.originality.similarity": "Overall overlap",

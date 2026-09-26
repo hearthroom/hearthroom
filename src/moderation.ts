@@ -141,13 +141,12 @@ for(const action of ['tags','compensation'] as const)moderationRoutes.post(`/v1/
  }
  const existing=await db.prepare('SELECT * FROM moderation_events WHERE actor=? AND operation_id=?').bind(member.id,op).first<{action:string;provider:string;source_role_id:string;after_value:string;reason:string}>();
  if(existing){if(existing.action!==action||existing.provider!==card.provider||existing.source_role_id!==card.source_role_id||existing.after_value!==after||existing.reason!==reason)throw new HttpError(409,'moderation_conflict');return c.json({ok:true});}
- const id=crypto.randomUUID();
- if(action==='tags'){await mutate(()=>db.batch(tagOverrideStatements(db,card,{id,actor:member.id,reason,tags:after,operationId:op})));return c.json({ok:true});}
- const statements=[
+ const id=crypto.randomUUID();const statements=[
   db.prepare('INSERT OR IGNORE INTO moderation_state(provider,source_role_id) VALUES(?,?)').bind(card.provider,card.source_role_id),
   db.prepare('INSERT INTO moderation_events(id,provider,source_role_id,actor,action,reason,before_value,after_value,created_at,operation_id) SELECT ?,provider,source_role_id,?,?,?,tags,?,?,? FROM cards WHERE id=?').bind(id,member.id,action,reason,after,Date.now(),op,card.id),
  ];
- const comp=JSON.parse(after) as {board:string;milliseconds:number};statements.push(db.prepare('INSERT INTO moderation_compensation VALUES(?,?,?,?,?)').bind(id,card.provider,card.source_role_id,comp.board,comp.milliseconds));
+ if(action==='tags')statements.push(db.prepare('UPDATE moderation_state SET tags_override=? WHERE provider=? AND source_role_id=?').bind(after,card.provider,card.source_role_id));
+ else{const comp=JSON.parse(after) as {board:string;milliseconds:number};statements.push(db.prepare('INSERT INTO moderation_compensation VALUES(?,?,?,?,?)').bind(id,card.provider,card.source_role_id,comp.board,comp.milliseconds));}
  await mutate(()=>db.batch(statements));return c.json({ok:true});
 });
 
@@ -157,14 +156,3 @@ export function normalizeTags(raw:unknown):string[]{
  return [...new Set((raw as string[]).map(t=>t.trim()))];
 }
 
-/**
- * 站方改一張卡的標籤：寫進覆蓋值（之後作者的同步與新版本都不會蓋掉它），並留一筆稽核事件。
- * 管理後台與審核頁共用這一段，兩邊的紀錄長得一樣。卡一律用 cards 那一列認，不用審核單上的版本 ID。
- */
-export function tagOverrideStatements(db:D1Database,card:{id:string;provider:string;source_role_id:string},input:{id:string;actor:string;reason:string;tags:string;operationId:string}):D1PreparedStatement[]{
- return [
-  db.prepare('INSERT OR IGNORE INTO moderation_state(provider,source_role_id) VALUES(?,?)').bind(card.provider,card.source_role_id),
-  db.prepare('INSERT INTO moderation_events(id,provider,source_role_id,actor,action,reason,before_value,after_value,created_at,operation_id) SELECT ?,provider,source_role_id,?,?,?,tags,?,?,? FROM cards WHERE id=?').bind(input.id,input.actor,'tags',input.reason,input.tags,Date.now(),input.operationId,card.id),
-  db.prepare('UPDATE moderation_state SET tags_override=? WHERE provider=? AND source_role_id=?').bind(input.tags,card.provider,card.source_role_id),
- ];
-}
