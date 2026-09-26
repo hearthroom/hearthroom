@@ -15,7 +15,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("縮圖網址", () => {
   it("不管從哪個網域進來，都在主網域轉、來源走主網域的 /v1/art：同一張圖只轉一次、只收一次錢", () => {
-    const expected = `https://${PRIMARY_HOST}/cdn-cgi/image/width=480,fit=scale-down,format=auto,anim=true,quality=80/v1/art/harbor/versions/cover-1`;
+    const expected = `https://${PRIMARY_HOST}/cdn-cgi/image/width=360,fit=scale-down,format=auto,anim=true,quality=70/v1/art/harbor/versions/cover-1`;
     for (const hostname of ["sukisuki.ai", "hearthroom.club", "www.sukisuki.chat", "play.hearthroom.club"]) {
       vi.stubGlobal("location", { hostname });
       expect(cardThumb(GIF), hostname).toBe(expected);
