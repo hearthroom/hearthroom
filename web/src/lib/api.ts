@@ -324,7 +324,8 @@ export interface ReviewDetail {
     claimGeneration?: string; required: number;
     stamps: { verdict: "approve" | "reject"; note: string; at: number }[];
   };
-  card: { id: string; roleId: string };
+  /** tags：榜上會用的那一份（審核人可能改過）；舊版伺服器不帶就退回作者勾的 */
+  card: { id: string; roleId: string; tags?: string[] };
   detail: {
     partial?: boolean;
     /** 已定案：私有設定已刪，只剩公開資料 */
@@ -391,6 +392,10 @@ export const claimReview = (id: string, token: string) => reviewAction<{ id: str
 export const releaseReview = (id: string, token: string, generation?:string) => reviewAction<void>(id, "release", token, {generation});
 export const stampReview = (id: string, token: string, body: { verdict: "approve" | "reject"; note?: string; generation?:string }) =>
   reviewAction<{ id: string; status: string; cardStatus: CardStatus; stamps: { approve: number; required: number } }>(id, "stamp", token, body);
+
+/** 審核時直接改標籤：要領著這張單。回傳存下去的那一份（去空白、去重後）。 */
+export const updateReviewTags = (id: string, token: string, body: { tags: string[]; generation?: string }) =>
+  reviewAction<{ tags: string[] }>(id, "tags", token, body);
 
 export async function fetchReviewDetail(id: string, token: string): Promise<ReviewDetail> {
   return json(await fetch(`${COMMUNITY_API}/review/${encodeURIComponent(id)}/detail`, { headers: { ...from(), ...authHeaders(token) } }));
@@ -952,6 +957,8 @@ export interface WorldbookSummary {
   iconUrl?: string;
   visibility?: string;
   tags?: string;
+  /** 綁在幾張卡上。只有「我的書」清單帶；還綁著卡的書刪不掉。 */
+  usedByCards?: number;
 }
 
 /** 玩家面的作者資產（正則規則、功能欄、簡繁對照）。各平台決定是否允許訪客讀取；被拒就回 null。 */
@@ -1140,6 +1147,35 @@ export async function patchWorldbookDocument(
       method: "POST",
       headers: writeHeaders(token),
       body: JSON.stringify(document),
+    }),
+  );
+}
+
+/** 作者自己叫這個名字的那本（書名不重複：匯入同名的書就是覆蓋它）。沒有回 null。 */
+export async function findWorldbookByName(token: string, name: string): Promise<WorldbookSummary | null> {
+  const wanted = name.trim();
+  if (!wanted) return null;
+  const books = await fetchMyWorldbooks(token, wanted);
+  return books.find((b) => b.name.trim() === wanted) ?? null;
+}
+
+/** 刪掉作者自己的一本書。還綁在卡上的會被拒絕（asset_in_use），要先從卡上拿掉。 */
+export async function deleteWorldbook(worldbookId: string, token: string): Promise<void> {
+  await json(
+    await fetch(`${UPSTREAM_API}/open/v1/worldbook/${encodeURIComponent(worldbookId)}`, {
+      method: "DELETE",
+      headers: authHeaders(token),
+    }),
+  );
+}
+
+/** 把一本書從作者自己的卡上拿掉；書本身留著。已經沒綁的照樣成功。 */
+export async function unbindWorldbook(worldbookId: string, roleId: string, token: string): Promise<void> {
+  await json(
+    await fetch(`${UPSTREAM_API}/open/v1/worldbook/${encodeURIComponent(worldbookId)}/unbind`, {
+      method: "POST",
+      headers: writeHeaders(token),
+      body: JSON.stringify({ roleId }),
     }),
   );
 }

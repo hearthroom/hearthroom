@@ -135,6 +135,7 @@ const TAGS_MAX = 10;
 /** 卡綁的那本世界書（世界卡上就是世界級世界書）。角色的私有書各自一份實例，見 memberBook。 */
 const wb = useWorldbookDraft({
   untitled: () => t("wb.entry.untitled"),
+  nameTaken: (name) => t("wb.name.taken", { name }),
   fallbackName: () => draft.value.roleName || "",
   language: () => draft.value.language,
   onProgress: (p) => { saveProgress.value = p; },
@@ -150,6 +151,7 @@ function memberBook(c: WorldCharacterDraft): WorldbookDraft {
   if (!book) {
     book = useWorldbookDraft({
       untitled: () => t("wb.entry.untitled"),
+      nameTaken: (name) => t("wb.name.taken", { name }),
       fallbackName: () => c.name || draft.value.roleName || "",
       language: () => draft.value.language,
       onProgress: (p) => { saveProgress.value = p; },
@@ -172,6 +174,10 @@ async function pickBook(book: WorldbookDraft, summary: WorldbookSummary) {
   } catch {
     error.value = t("wb.reuse.failed");
   }
+}
+/** 匯入世界書檔：整本覆蓋；還沒有書而作者已經有同名的一本，就覆蓋那一本，不再多建一本。 */
+async function importBook(book: WorldbookDraft, payload: { name: string; entries: WorldbookEntryDraft[]; format?: "tavern" }) {
+  await book.importReplacing(payload, await session.accessToken().catch(() => null));
 }
 async function releaseBook(book: WorldbookDraft) {
   if (!(await confirmDialog({ message: t("wb.switch.confirm"), confirmText: t("wb.switch") }))) return;
@@ -842,7 +848,7 @@ function applyImport(result: ImportResult) {
   draft.value = { ...result.draft, language };
   tagsText.value = formatTags(draft.value.roleTag);
   track("card_import", { detail: result.spec === "mmd" ? "mmd" : result.image ? "png" : "json" });
-  if (result.worldbook) wb.imported({ name: result.worldbook.name || draft.value.roleName, entries: result.worldbook.entries, format: result.worldbook.format });
+  if (result.worldbook) void importBook(wb, { name: result.worldbook.name || draft.value.roleName, entries: result.worldbook.entries, format: result.worldbook.format });
   const portrait = result.background ?? result.image;
   if (portrait) void adoptImage(portrait);
   if (result.regex) regexSet.value = result.regex;
@@ -1072,7 +1078,7 @@ async function exportCard(format: "png" | "json") {
                                  v-model:book-desc="memberBook(c).desc"
                                  :meta-locked="Boolean(memberBook(c).id) && !memberBook(c).meta?.visibility"
                                  :bound="Boolean(memberBook(c).id) || memberBook(c).pending" @create="memberBook(c).createDraft()"
-                                 @imported="memberBook(c).imported($event)" @pick="pickBook(memberBook(c), $event)"
+                                 @imported="importBook(memberBook(c), $event)" @pick="pickBook(memberBook(c), $event)"
                                  @release="releaseBook(memberBook(c))" @export-book="exportBook(memberBook(c), c.name)" />
               </div>
               <div class="rxbar__acts">
@@ -1159,7 +1165,7 @@ async function exportCard(format: "png" | "json") {
                            v-model:book-desc="wb.desc"
                            :meta-locked="Boolean(wb.id) && !wb.meta?.visibility"
                            :bound="Boolean(wb.id) || wb.pending" @create="wb.createDraft()"
-                           @imported="wb.imported($event)" @pick="pickBook(wb, $event)"
+                           @imported="importBook(wb, $event)" @pick="pickBook(wb, $event)"
                            @release="releaseBook(wb)" @export-book="exportBook(wb, draft.roleName)" />
         </section>
 

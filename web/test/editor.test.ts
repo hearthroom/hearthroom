@@ -27,6 +27,9 @@ const api = vi.hoisted(() => ({
   createWorldbook: vi.fn(async () => "wb1"),
   patchWorldbookDocument: vi.fn(async () => ({})),
   reorderWorldbookEntries: vi.fn(async () => {}),
+  unbindWorldbook: vi.fn(async () => {}),
+  findWorldbookByName: vi.fn(async (): Promise<{ worldbookId: string; name: string; description: string; entryCount: number } | null> => null),
+  deleteWorldbook: vi.fn(async () => {}),
   fetchWorldbookEntries: vi.fn(async () => [
     { entryId: "e1", name: "黑麥鎮", content: "北境小鎮。", keywords: ["黑麥鎮"], secondaryKeywords: [], isEnabled: true, isConstant: true, category: "location" },
     { entryId: "e2", name: "採石場", content: "廢棄了。", keywords: ["採石場"], secondaryKeywords: ["排水渠"], isEnabled: true, isConstant: false },
@@ -400,7 +403,7 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     expect(root.querySelector("img[src='https://img.test/avatar.png']")).not.toBeNull();
   });
 
-  it("世界書檔匯入：接在原有條目後面，沒綁書就順手建", async () => {
+  it("世界書檔匯入：沒綁書、也沒有同名的書就順手建", async () => {
     await mount("/create");
     await type($("#f-name"), "測試");
     byText("世界書").click();
@@ -415,6 +418,90 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     expect(document.querySelectorAll(".wbd__row-keys")[1].textContent).toContain("+ safe");
     await submit();
     expect(api.createWorldbook).toHaveBeenCalledWith({ name: "測試", language: "zh-Hant" }, "tok");
+  });
+
+  it("世界書檔匯入：整本覆蓋手上這本，舊條目全刪、檔案裡的全建", async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "北境", roleWelcome: "雨還在下。" });
+    await mount("/cards/r1/edit");
+    byText("世界書").click();
+    await flush();
+    api.patchWorldbookDocument.mockClear();
+    const info = { entries: { "0": { key: ["eldoria"], content: "A forest.", comment: "eldoria" } } };
+    const inputs = root.querySelectorAll<HTMLInputElement>("input[type=file]");
+    await pickFile(inputs[inputs.length - 1], new File([JSON.stringify(info)], "eldoria.json"));
+    await submit();
+    const [id, doc] = api.patchWorldbookDocument.mock.calls[0] as unknown as [string, { entries: { op: string; entryId?: string }[] }];
+    expect(id).toBe("wb-bound");
+    expect(doc.entries.map((e) => e.op + (e.entryId ?? ""))).toEqual(["deletee1", "deletee2", "create"]);
+    expect(api.createWorldbook).not.toHaveBeenCalled();
+  });
+
+  it("世界書檔匯入：作者已經有同名的一本就覆蓋那一本，不再多建一本", async () => {
+    api.findWorldbookByName.mockResolvedValueOnce({ worldbookId: "wb9", name: "Eldoria", description: "", entryCount: 2 });
+    await mount("/create");
+    await type($("#f-name"), "測試");
+    byText("世界書").click();
+    await flush();
+    const info = { name: "Eldoria", entries: { "0": { key: ["eldoria"], content: "A forest.", comment: "eldoria" } } };
+    const inputs = root.querySelectorAll<HTMLInputElement>("input[type=file]");
+    await pickFile(inputs[inputs.length - 1], new File([JSON.stringify(info)], "eldoria.json"));
+    await flush();
+    await submit();
+    expect(api.findWorldbookByName).toHaveBeenCalledWith("tok", "Eldoria");
+    expect(api.createWorldbook).not.toHaveBeenCalled();
+    const [id, doc] = api.patchWorldbookDocument.mock.calls[0] as unknown as [string, { entries: { op: string }[]; binding?: unknown }];
+    expect(id).toBe("wb9");
+    expect(doc.entries.map((e) => e.op)).toEqual(["delete", "delete", "create"]);
+    expect(doc.binding).toEqual({ roleId: "r1" });
+  });
+
+  it("書名不重複：建新書撞到自己另一本的名字就不建，告訴作者怎麼辦", async () => {
+    await mount("/create");
+    await type($("#f-name"), "測試");
+    byText("世界書").click();
+    await flush();
+    byText("建一本").click();
+    await flush();
+    await openEntries();
+    await type($d<HTMLTextAreaElement>("#wbd-content"), "北境的規矩。");
+    btnIn(document.querySelector(".wbd")!, "編好了").click();
+    await flush();
+    api.findWorldbookByName.mockResolvedValueOnce({ worldbookId: "wb-other", name: "測試", description: "", entryCount: 3 });
+    await submit();
+    expect(api.createWorldbook).not.toHaveBeenCalled();
+    expect(root.textContent).toContain("你已經有一本叫「測試」的世界書");
+  });
+
+  it("刪除舊世界書：在「用已經有的一本」選了就能刪；還綁著卡的不給刪", async () => {
+    api.fetchMyWorldbooks.mockResolvedValue([
+      { worldbookId: "wb9", name: "北境設定", description: "", entryCount: 2, visibility: "private", tags: "", usedByCards: 0 },
+      { worldbookId: "wb-used", name: "在用", description: "", entryCount: 5, visibility: "private", tags: "", usedByCards: 2 },
+    ] as never);
+    await mount("/create");
+    await type($("#f-name"), "測試");
+    byText("世界書").click();
+    await flush();
+    const select = $<HTMLSelectElement>("#wb-reuse");
+    const del = () => [...root.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.trim() === "刪除")!;
+    select.value = "wb-used";
+    select.dispatchEvent(new Event("change"));
+    await flush();
+    expect(del().disabled).toBe(true);
+    expect(root.textContent).toContain("這本還綁在 2 張卡上");
+
+    select.value = "wb9";
+    select.dispatchEvent(new Event("change"));
+    await flush();
+    del().click();
+    await flush();
+    const { settleConfirm } = await import("../src/lib/confirm");
+    settleConfirm(true);
+    await flush();
+    expect(api.deleteWorldbook).toHaveBeenCalledWith("wb9", "tok");
+    api.fetchMyWorldbooks.mockReset();
+    api.fetchMyWorldbooks.mockImplementation(async () => [
+      { worldbookId: "wb9", name: "北境設定", description: "舊描述", entryCount: 2, iconUrl: "https://img.test/wb.png", visibility: "private", tags: "北境,懸疑" },
+    ] as never);
   });
 
   it("條目分類：選了就跟著送出去，上游讀回來的分類不會在下次儲存掉了", async () => {
@@ -477,6 +564,7 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     await flush();
 
     // 換掉之後從頭建一本：舊書那兩條的 id 不能跟著跑進新書的差分
+    api.createWorldbook.mockResolvedValueOnce("wb2");
     byText("建一本").click();
     await flush();
     await openEntries();
@@ -488,6 +576,8 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     expect(api.createWorldbook).toHaveBeenCalledTimes(2);
     const [, doc] = api.patchWorldbookDocument.mock.calls[0] as unknown as [string, { entries: { op: string }[] }];
     expect(doc.entries.map((e) => e.op)).toEqual(["create"]);
+    // 綁定是追加的：換掉的舊書要明確解綁，不然重新進來讀到的還是它
+    expect(api.unbindWorldbook).toHaveBeenCalledWith("wb1", "r1", "tok");
   });
 
   it("改書名：送 metadata，圖示標籤可見性原樣帶回去，不會被清成空的", async () => {
@@ -586,6 +676,38 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
 
     expect(api.patchWorldbookDocument).not.toHaveBeenCalled();
     expect(api.reorderWorldbookEntries).toHaveBeenCalledWith("wb-bound", ["e2", "e1"], "tok");
+  });
+
+  it("換綁既有的書：讀最後綁上的那本，換成別本存檔後舊的解綁", async () => {
+    // 修之前換書只追加綁定：卡上會掛著兩本，最後綁上的才是作者最近選的
+    api.fetchRoleWorldbooks.mockResolvedValueOnce([
+      { worldbookId: "wb-old", name: "舊設定", description: "", entryCount: 1 },
+      { worldbookId: "wb-bound", name: "北境設定", description: "", entryCount: 2 },
+    ]);
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "北境", roleWelcome: "雨還在下。" });
+    await mount("/cards/r1/edit");
+    byText("世界書").click();
+    await flush();
+    expect(api.fetchWorldbookEntries).toHaveBeenLastCalledWith("wb-bound", "tok");
+    api.patchWorldbookDocument.mockClear();
+    api.unbindWorldbook.mockClear();
+
+    const { settleConfirm } = await import("../src/lib/confirm");
+    [...root.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.trim() === "換一本")!.click();
+    await flush();
+    settleConfirm(true);
+    await flush();
+    const select = $<HTMLSelectElement>("#wb-reuse");
+    select.value = "wb9";
+    select.dispatchEvent(new Event("change"));
+    await flush();
+    byText("用這一本").click();
+    await flush();
+    await submit();
+
+    expect(api.patchWorldbookDocument).toHaveBeenCalledWith("wb9", { binding: { roleId: "r1" } }, "tok");
+    expect(api.unbindWorldbook).toHaveBeenCalledWith("wb-bound", "r1", "tok");
+    expect(api.unbindWorldbook).toHaveBeenCalledTimes(1);
   });
 
   it("對話測試：存過的卡才載入舞台，載的是這張卡自己的 /play", async () => {

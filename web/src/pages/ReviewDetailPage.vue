@@ -9,7 +9,8 @@
 import { computed, onMounted, ref } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { ApiError, claimReview, fetchReviewDetail, fetchReviewOriginality, releaseReview, stampReview, type ReviewDetail, type ReviewOriginality } from "@/lib/api";
+import { ApiError, claimReview, fetchReviewDetail, fetchReviewOriginality, releaseReview, stampReview, updateReviewTags, type ReviewDetail, type ReviewOriginality } from "@/lib/api";
+import TagPicker from "@/components/editor/TagPicker.vue";
 import { dateTime } from "@/lib/format";
 import { pageTitle } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
@@ -73,7 +74,43 @@ const doc = computed(() => data.value?.detail.document);
 const talkTurns = computed(() => readTalkExample(doc.value?.talkExample));
 const claimedByMe = computed(() => !!data.value?.submission.claimedByMe);
 const stampedByMe = computed(() => !!data.value?.submission.stampedByMe);
-const tags = computed(() => readTags(doc.value?.roleTag));
+/** 作者送審時勾的標籤。 */
+const authorTags = computed(() => readTags(doc.value?.roleTag));
+/** 榜上會用的標籤：審核人改過就是改過的那份。 */
+const tags = computed(() => data.value?.card.tags ?? authorTags.value);
+const tagsChanged = computed(() => JSON.stringify(tags.value) !== JSON.stringify(authorTags.value));
+
+/**
+ * 審核時直接改標籤：作者少勾、勾錯不值得退件，領著單的審核人改對再過審。
+ * 分類目錄裡的籤用點的；作者自己打的、目錄裡沒有的籤可以拿掉。
+ */
+const TAGS_MAX = 20;
+const editingTags = ref(false);
+const draftTags = ref<string[]>([]);
+const tagsBusy = ref(false);
+const tagsError = ref("");
+function editTags() {
+  draftTags.value = [...tags.value];
+  tagsError.value = "";
+  editingTags.value = true;
+}
+function toggleDraftTag(name: string) {
+  draftTags.value = draftTags.value.includes(name) ? draftTags.value.filter((x) => x !== name) : [...draftTags.value, name];
+}
+async function saveTags() {
+  if (!data.value) return;
+  tagsBusy.value = true;
+  tagsError.value = "";
+  try {
+    const res = await updateReviewTags(id.value, await token(), { tags: draftTags.value, generation: data.value.submission.claimGeneration });
+    data.value.card.tags = res.tags;
+    editingTags.value = false;
+  } catch (err) {
+    tagsError.value = err instanceof ApiError && err.status === 409 ? t("review.claimChanged") : t("review.tags.failed");
+  } finally {
+    tagsBusy.value = false;
+  }
+}
 const decided = computed(() => !!data.value && data.value.submission.status !== "pending");
 
 async function token() {
@@ -195,7 +232,28 @@ onMounted(() => { void load(); });
         <div class="field"><label>{{ $t("editor.summary") }}</label><pre class="text">{{ doc.roleDesc }}</pre></div>
         <div class="field">
           <label>{{ $t("review.tags") }}</label>
-          <ul class="tags"><li v-for="tag in tags" :key="tag" class="chip">{{ tag }}</li></ul>
+          <template v-if="!editingTags">
+            <div class="tags-row">
+              <ul class="tags"><li v-for="tag in tags" :key="tag" class="chip">{{ tag }}</li></ul>
+              <button v-if="claimedByMe && !decided" type="button" class="btn btn--sm btn--ghost" @click="editTags">{{ $t("review.tags.edit") }}</button>
+            </div>
+            <span v-if="tagsChanged" class="subtle">{{ $t("review.tags.author", { tags: authorTags.join("、") || "—" }) }}</span>
+          </template>
+          <template v-else>
+            <ul class="tags">
+              <li v-for="tag in draftTags" :key="tag" class="chip">
+                {{ tag }}
+                <button type="button" class="chip__x" :aria-label="$t('review.tags.remove', { tag })" @click="toggleDraftTag(tag)">×</button>
+              </li>
+            </ul>
+            <TagPicker :selected="draftTags" :language="doc.language || 'zh-Hant'" :max="TAGS_MAX" @toggle="toggleDraftTag" />
+            <span class="subtle">{{ $t("review.tags.hint") }}</span>
+            <p v-if="tagsError" class="notice notice--error" role="alert">{{ tagsError }}</p>
+            <div class="tags-acts">
+              <button type="button" class="btn btn--sm btn--ghost" :disabled="tagsBusy" @click="editingTags = false">{{ $t("dialog.cancel") }}</button>
+              <button type="button" class="btn btn--sm btn--primary" :disabled="tagsBusy" @click="saveTags">{{ $t("review.tags.save") }}</button>
+            </div>
+          </template>
         </div>
         <div v-if="doc.roleBackground || doc.roleAvatar" class="field"><label>{{ $t("editor.section.media") }}</label><img class="art" :src="doc.roleBackground || doc.roleAvatar" alt="" /></div>
       </section>
@@ -321,12 +379,19 @@ onMounted(() => { void load(); });
       </section>
 
       <section class="verdict panel">
-        <p v-if="data.submission.stamps.length" class="subtle">
-          {{ $t("review.stampsList") }}：
-          <span v-for="(s, i) in data.submission.stamps" :key="i" class="chip" :class="{ 'chip--reject': s.verdict === 'reject' }">
-            {{ $t(`review.action.${s.verdict}`) }} · {{ dateTime(s.at) }}<template v-if="s.note">：{{ s.note }}</template>
-          </span>
-        </p>
+        <!-- 駁回說明可能很長（逐條列問題）：不能塞進固定高度的 chip，會溢出去壓到下面的輸入框 -->
+        <div v-if="data.submission.stamps.length" class="records">
+          <p class="subtle records__title">{{ $t("review.stampsList") }}</p>
+          <ul class="records__list">
+            <li v-for="(s, i) in data.submission.stamps" :key="i" class="record">
+              <span class="record__head">
+                <span class="chip" :class="{ 'chip--reject': s.verdict === 'reject' }">{{ $t(`review.action.${s.verdict}`) }}</span>
+                <span class="subtle">{{ dateTime(s.at) }}</span>
+              </span>
+              <p v-if="s.note" class="text record__note">{{ s.note }}</p>
+            </li>
+          </ul>
+        </div>
         <div class="field">
           <label for="review-note">{{ $t("review.note.label") }}</label>
           <textarea id="review-note" v-model="note" class="input" rows="3" :disabled="decided" />
@@ -375,6 +440,15 @@ onMounted(() => { void load(); });
 .cost dd { margin: 0; font-variant-numeric: tabular-nums; }
 .verdict { padding: var(--s-4); display: grid; gap: var(--s-3); }
 .verdict__acts { display: flex; justify-content: flex-end; gap: var(--s-2); }
+.tags-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.tags-acts { display: flex; justify-content: flex-end; gap: var(--s-2); }
+.chip__x { border: 0; background: none; color: inherit; font: inherit; line-height: 1; padding: 0 0 0 2px; cursor: pointer; }
+.records { display: grid; gap: var(--s-2); }
+.records__title { margin: 0; }
+.records__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); }
+.record { display: grid; gap: var(--s-1); min-width: 0; }
+.record__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); font-size: 13px; }
+.record__note { max-height: 240px; overflow-y: auto; font-size: 13px; }
 .chip--reject { background: color-mix(in srgb, var(--danger) 12%, var(--surface)); color: var(--danger); }
 .rating { margin: 6px 0 0; font-size: 13px; color: var(--text-2); }
 .rating--nsfw strong { color: var(--danger); }

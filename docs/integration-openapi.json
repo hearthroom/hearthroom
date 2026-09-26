@@ -9452,6 +9452,192 @@
           }
         }
       }
+    },
+    "/open/v1/worldbook/{worldbookId}/unbind": {
+      "post": {
+        "operationId": "unbindWorldbook",
+        "tags": [
+          "Worldbooks"
+        ],
+        "summary": "Remove a worldbook from one of your cards",
+        "description": "Removes the binding between this worldbook and the card. The worldbook itself and its entries are kept. Bindings are additive: when a card switches to another worldbook, unbind the previous one, otherwise both stay active in conversations. Unbinding a book that is not bound succeeds with `unbound: false`. The caller must own both the worldbook and the card.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "worldbookId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Worldbook id."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorldbookUnbindRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Binding removed, or it was already absent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorldBookUnbindOutput"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid JSON body`, `roleId is required`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`permission_denied`: not the owner of the worldbook or the card.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`, `role_not_found`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/worldbook/{worldbookId}": {
+      "delete": {
+        "operationId": "deleteWorldbook",
+        "tags": [
+          "Worldbooks"
+        ],
+        "summary": "Delete one of your worldbooks",
+        "description": "Deletes the worldbook and all of its entries. A worldbook that is still bound to any card returns `asset_in_use`; unbind it from those cards first (`usedByCards` in `/open/v1/worldbook/mine` shows how many). Deletion cannot be undone.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "worldbookId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Worldbook id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorldBookDeleteOutput"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`permission_denied`: not the owner.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`asset_in_use`: still bound to a card.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -17642,6 +17828,10 @@
               "",
               "tavern"
             ]
+          },
+          "usedByCards": {
+            "type": "integer",
+            "description": "How many cards this worldbook is bound to. Present in `/open/v1/worldbook/mine`."
           }
         }
       },
@@ -18350,6 +18540,53 @@
           "earned": {
             "type": "integer",
             "description": "Credits the caller has received as a referrer so far."
+          }
+        }
+      },
+      "WorldbookUnbindRequest": {
+        "type": "object",
+        "required": [
+          "roleId"
+        ],
+        "properties": {
+          "roleId": {
+            "type": "string",
+            "description": "The card to remove the worldbook from."
+          }
+        }
+      },
+      "WorldBookUnbindOutput": {
+        "type": "object",
+        "required": [
+          "worldbookId",
+          "roleId",
+          "unbound"
+        ],
+        "properties": {
+          "worldbookId": {
+            "type": "string"
+          },
+          "roleId": {
+            "type": "string"
+          },
+          "unbound": {
+            "type": "boolean",
+            "description": "`false` when the worldbook was not bound to the card."
+          }
+        }
+      },
+      "WorldBookDeleteOutput": {
+        "type": "object",
+        "required": [
+          "worldbookId",
+          "deleted"
+        ],
+        "properties": {
+          "worldbookId": {
+            "type": "string"
+          },
+          "deleted": {
+            "type": "boolean"
           }
         }
       }

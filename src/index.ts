@@ -3,7 +3,7 @@ import { snapshot } from './snapshot-cache';
 import { cardLink, linkPreview } from './card-link';
 import { boardKey, readBoardCache, writeBoardCache } from "./board-cache";
 export { boardCache } from "./board-cache";
-import { moderationRoutes, reviewSummary } from "./moderation";
+import { moderationRoutes, normalizeTags, reviewSummary, tagOverrideStatements } from "./moderation";
 import { communityMaintenance } from "./community/service";
 import { communityRoutes } from "./community/routes";
 import { libraryRoutes } from "./library";
@@ -1005,6 +1005,26 @@ app.get("/v1/review/:id/originality", async (c) => {
   return c.json(report, 200, { "Cache-Control": "private, no-store" });
 });
 
+/**
+ * 審核時改標籤（owner 2026-09-27）：作者少勾或勾錯標籤不值得退件，領著這張單的審核人直接改對再過審。
+ * 跟管理後台的改標籤同一套覆蓋值與稽核紀錄；卡用審核單上的 card_id 認（版本 ID 不是卡的原始 ID）。
+ * 覆蓋值會一直留著：作者之後改自己的標籤也不會蓋掉它，要改回去得由站方再改一次。
+ */
+app.post("/v1/review/:id/tags", async (c) => {
+  const { member, s } = await claimedSubmission(c);
+  if (s.status !== "pending") throw new HttpError(410, "review no longer active");
+  if (s.claimed_by !== member.id || s.claimed_at === null || Date.now() - s.claimed_at >= CLAIM_TTL_MS) throw new HttpError(409, "claim this submission first");
+  const body = (await c.req.json().catch(() => ({}))) as { tags?: unknown; generation?: unknown };
+  if (typeof body.generation === "string" && body.generation !== s.claim_generation) throw new HttpError(409, "claim changed");
+  const tags = normalizeTags(body.tags);
+  const card = await c.env.DB.prepare("SELECT CAST(id AS TEXT) AS id, provider, source_role_id FROM cards WHERE id = ?").bind(s.card_id)
+    .first<{ id: string; provider: string; source_role_id: string }>();
+  if (!card) throw new HttpError(404, "card not found");
+  await c.env.DB.batch(tagOverrideStatements(c.env.DB, card, { id: crypto.randomUUID(), actor: member.id, reason: "review", tags: JSON.stringify(tags), operationId: crypto.randomUUID() }));
+  note(c, { event: "review_tags", subject: s.source_role_id });
+  return c.json({ tags });
+});
+
 /** 定案後的審核頁內容：只放登記的公開欄位，不帶作者（盲審），跟重審的 partial 同一個形狀。 */
 function closedDetail(card: ReturnType<typeof toCard>, contentHash: string) {
   return {
@@ -1084,7 +1104,8 @@ app.get("/v1/review/:id/detail", async (c) => {
         claimedByMe: s.claimed_by === member.id, stampedByMe, claimGeneration:s.claim_generation, required: STAMPS_REQUIRED[s.kind],
         stamps: stamps.results.map((st) => ({ verdict: st.verdict, note: st.note, at: st.created_at })),
       },
-      card: { id: String(s.card_id), roleId: s.source_role_id },
+      // 站方可能改過標籤（見 /v1/review/:id/tags）：審核頁要看到的是榜上會用的那一份
+      card: { id: String(s.card_id), roleId: s.source_role_id, tags: JSON.parse((await c.env.DB.prepare("SELECT tags FROM cards WHERE id = ?").bind(s.card_id).first<{ tags: string }>())?.tags ?? "[]") as string[] },
       detail,
     },
     200,
