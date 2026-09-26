@@ -613,7 +613,7 @@
   "review.tags.save": "タグを保存",
   "review.tags.remove": "「{tag}」を外す",
   "review.tags.failed": "タグを保存できませんでした。もう一度お試しください。",
-  "review.tags.hint": "保存したタグがランキングで使われます。あとで作者がタグを変えても、この調整は上書きされません。",
+  "review.tags.hint": "今回審査するバージョンだけを直します。承認後はこのタグがランキングで使われます。作者があとでカードを編集すると再審査になり、作者自身のタグが使われます。",
   "review.tags.author": "作者が付けたタグ：{tags}",
   "review.section.originality": "重複チェック",
   "review.originality.similarity": "全体の重複率",

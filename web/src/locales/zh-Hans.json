@@ -613,7 +613,7 @@
   "review.tags.save": "存标签",
   "review.tags.remove": "拿掉「{tag}」",
   "review.tags.failed": "标签没存成功，再试一次。",
-  "review.tags.hint": "存下去就是榜单上用的标签。作者之后自己改标签，也不会盖掉这次的调整。",
+  "review.tags.hint": "只改这一次送审的版本，过审后榜单上用这一份。作者之后编辑卡片会重新送审，到时以作者自己的标签为准。",
   "review.tags.author": "作者原本勾的：{tags}",
   "review.section.originality": "查重",
   "review.originality.similarity": "整体重复率",
