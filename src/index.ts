@@ -56,7 +56,6 @@ import { setCardFeatured } from "./cards";
 import { loadSnapshot } from "./review-snapshot";
 import { originalityReport } from "./originality";
 import { type Env, HttpError } from "./types";
-import { gameRoutes } from "./game";
 import { serveSandbox } from "./sandbox";
 import { listSaves, putSave, removeSave } from "./saves";
 import { commentCard, countTop, deleteComment, listReplies, listTop, postComment, setLike, type Viewer } from "./comments";
@@ -163,9 +162,6 @@ async function requireAuthor(c: { env: Env; req: { header: (k: string) => string
 }
 
 app.get("/v1/health", (c) => c.json({ ok: true }));
-
-// 遊戲模式：作者替自己的卡存一份世界配置（src/game.ts）
-gameRoutes(app);
 
 /** Compatibility discovery endpoint; only the configured Harper API is returned. */
 app.get("/v1/region", (c) => {

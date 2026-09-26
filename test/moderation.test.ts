@@ -140,13 +140,15 @@ it('keeps the reported public version available only to eligible reviewers after
  expect(await request(`/cases/${c.id}/evidence`,'r2').then(r=>r.json())).toEqual(original);
  expect((await SELF.fetch('https://c.test/v1/cards/reviewed')).status).toBe(404);
 });
-it('does not expose the game configuration of a suspended work',async()=>{
+// 遊戲模式已整個下線（2026-09-26 刪除程式；2026-09-13 起就沒有入口）：留著的配置不再從任何地方讀得到
+it('no longer serves game configurations, even for a card that still has one stored',async()=>{
  const roleId='99999999-1234-1234-1234-123456789abc';
  card=(await upsertCard(env.DB,role({roleId}),Date.now())).id;
  await env.DB.prepare('INSERT INTO game_worlds VALUES(?,?,?,?)').bind(roleId,10001,'{"enabled":true}',Date.now()).run();
- expect((await SELF.fetch(`https://c.test/v1/cards/${roleId}/game`)).status).toBe(200);
- expect((await proposal('suspend')).status).toBe(201);
- expect((await SELF.fetch(`https://c.test/v1/cards/${roleId}/game`)).status).toBe(404);
+ // 那條 API 已經不存在：沒有一份 JSON、更不會有配置內容（未知的路徑照舊落到站台的殼頁）
+ const res=await SELF.fetch(`https://c.test/v1/cards/${roleId}/game`);
+ expect(res.headers.get('content-type')??'').not.toContain('application/json');
+ expect(await res.text()).not.toContain('"enabled"');
 });
 it('atomically rejects a restoration inserted from a stale version read',async()=>{
  const c=await proposal('suspend').then(r=>r.json()) as any;await request(`/cases/${c.id}/vote`,'r2',{vote:'confirm',reason:'Checked'});
