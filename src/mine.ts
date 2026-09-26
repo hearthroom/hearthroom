@@ -75,14 +75,14 @@ export async function loadMine(
   opts: { page: number; pageSize: number; fresh: boolean; filter: MineFilter; provider?: ProviderId; q?: string },
 ): Promise<MineResult> {
   const provider: ProviderId = opts.provider ?? DEFAULT_PROVIDER;
-  const registeredTotal = await countByAuthor(env.DB, accountNumId, provider);
-  const quota = await quotaFor(env.DB, accountNumId, Date.now(), provider);
+  // 已登記張數與本週額度只看是誰，跟下面讀清單互不相依：一起問，不一趟接一趟（每趟 D1 約 40 ms）
+  const counted = Promise.all([countByAuthor(env.DB, accountNumId, provider), quotaFor(env.DB, accountNumId, Date.now(), provider)]);
 
   // 「已登記」整組直接從本站的庫出：那是完整的一組，翻頁也對，而且不必問上游。
   // 走上游那條路的話，篩的只會是「這一頁裡已登記的」——作者卡多的時候差很多。
   if (opts.filter === "listed") {
     // 作者條件是本站成員 id（0005 起）；第一次來就建成員，跟登記那條路一致
-    const memberId = await resolveMember(env.DB, provider, accountNumId, Date.now());
+    const [memberId, [registeredTotal, quota]] = await Promise.all([resolveMember(env.DB, provider, accountNumId, Date.now()), counted]);
     const q = opts.q ?? "";
     const offset = (opts.page - 1) * opts.pageSize;
     let rows: Awaited<ReturnType<typeof listCards>>["rows"];
@@ -144,23 +144,13 @@ export async function loadMine(
   }
 
   const key = cacheKey(provider, accountNumId, opts.page, opts.pageSize, opts.q ?? "");
-  const cache = await caches.open(mineCache.namespace);
-
-  let roles: Awaited<ReturnType<typeof upstream.fetchMyRoles>> | null = null;
-  let source: MineResult["source"] = "bypass";
-
-  if (!opts.fresh) {
-    const cached = await cache.match(key);
-    if (cached) {
-      roles = (await cached.json()) as typeof roles;
-      source = "hit";
-    } else {
-      source = "miss";
+  const listed = (async () => {
+    const cache = await caches.open(mineCache.namespace);
+    if (!opts.fresh) {
+      const cached = await cache.match(key);
+      if (cached) return { roles: (await cached.json()) as Awaited<ReturnType<typeof upstream.fetchMyRoles>>, source: "hit" as const };
     }
-  }
-
-  if (!roles) {
-    roles = await upstream.fetchMyRoles(env, bearer, opts.page, opts.pageSize, provider, opts.q ?? "");
+    const roles = await upstream.fetchMyRoles(env, bearer, opts.page, opts.pageSize, provider, opts.q ?? "");
     // 快取的是上游那一份原始清單，不含登記狀態——登記狀態下面才查，才不會連同被凍住。
     await cache.put(
       key,
@@ -168,10 +158,13 @@ export async function loadMine(
         headers: { "Content-Type": "application/json", "Cache-Control": `max-age=${EDGE_TTL_SECONDS}` },
       }),
     );
-  }
+    return { roles, source: (opts.fresh ? "bypass" : "miss") as MineResult["source"] };
+  })();
+  // 上游清單（或它的快取）與張數、額度同時問
+  const [[registeredTotal, quota], { roles, source }] = await Promise.all([counted, listed]);
 
-  const registered = await registeredAmong(env.DB, roles.items.map((r) => r.roleId), provider);
-  const statuses = await statusAmong(env.DB, roles.items.map((r) => r.roleId));
+  const ids = roles.items.map((r) => r.roleId);
+  const [registered, statuses] = await Promise.all([registeredAmong(env.DB, ids, provider), statusAmong(env.DB, ids)]);
   const items = roles.items
     .map((r) => {
       const s = statuses.get(r.roleId);
