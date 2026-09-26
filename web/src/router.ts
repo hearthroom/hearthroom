@@ -3,6 +3,7 @@ import { preloadStage } from "./lib/stage-preload";
 import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router";
 import { LOCALE_CODES, SOURCE_LOCALE, applyLocale, detectLocale, pageTitle, updateHreflang } from "./lib/i18n";
 import { useSession } from "./lib/session";
+import { signedInHint } from "./lib/signin-hint";
 import { can } from "./lib/provider";
 import { isPlayHost } from "./lib/site";
 import { setSurface } from "./lib/track";
@@ -34,7 +35,8 @@ const pages: RouteRecordRaw[] = [
   { path: "me/community", component: () => import("./pages/CommunityPage.vue"), meta: { auth: true } },
   { path: "me", component: () => import("./pages/MePage.vue"), meta: { auth: true } },
   { path: "login", component: () => import("./pages/LoginPage.vue") },
-  { path: "mine", component: () => import("./pages/MyCardsPage.vue"), meta: { auth: true } },
+  // optimisticAuth：這個瀏覽器上次是登入的，就先開頁（畫上次那份）、身分在背景確認（見下面的守衛）
+  { path: "mine", component: () => import("./pages/MyCardsPage.vue"), meta: { auth: true, optimisticAuth: true } },
   // 建立與編輯是同一頁：差別只有有沒有 roleId。
   { path: "create", component: () => import("./pages/CardEditorPage.vue"), meta: { auth: true, feature: "editor" } },
   { path: "wallet", component: () => import("./pages/WalletPage.vue"), meta: { auth: true } },
@@ -151,14 +153,22 @@ router.beforeEach(async (to) => {
 
   if (!to.meta.auth) return true;
   const session = useSession();
-  await session.restore();
-  if (session.me) return true;
   // 先到本站的登入頁，不直接跳去供應商：登入方式是這個站的事，供應商只是其中一種。
   // query 要分開給：物件位置的 path 不帶查詢字串（vue-router 只讀 path 本身），塞在 path 裡會被丟掉
   const query: Record<string, string> = to.fullPath === "/" ? {} : { returnTo: to.fullPath };
   // 卡片 App 網域的語言在查詢字串裡，不在路徑上：得放進 query 物件，放在 path 裡會被丟掉
-  if (isPlayHost()) return { path: "/login", query: { ...query, lang: locale }, replace: true };
-  return { path: withLocale("/login", locale), query, replace: true };
+  const login = isPlayHost() ? { path: "/login", query: { ...query, lang: locale }, replace: true } : { path: withLocale("/login", locale), query, replace: true };
+  // 上次在這個瀏覽器是登入的：先開頁，身分在背景確認，不讓整頁等那一趟（約 0.6 s）；
+  // 確認下來不是登入狀態就換到登入頁。只給會自己處理「身分還沒到」的頁面用。
+  if (to.meta.optimisticAuth && !session.ready && signedInHint() !== null) {
+    void session.restore().then(() => {
+      if (!session.me && router.currentRoute.value.fullPath === to.fullPath) void router.replace(login);
+    });
+    return true;
+  }
+  await session.restore();
+  if (session.me) return true;
+  return login;
 });
 
 /**
