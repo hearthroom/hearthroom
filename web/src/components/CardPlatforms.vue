@@ -7,7 +7,7 @@ import {
   connectAccount,
 } from "@/lib/connections";
 import { connectionMessage, platformPath } from "@/lib/distribution";
-import { providerName, type ProviderId } from "@/lib/provider";
+import { currentProvider, providerName, type ProviderId } from "@/lib/provider";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
 const props = defineProps<{
@@ -66,15 +66,19 @@ async function load() {
 }
 watch(() => props.cardId, load, { immediate: true });
 watch(
-  () => [platforms.value, session.profile],
+  () => [platforms.value, session.profile, session.wallet],
   async () => {
+    // 餘額只在「選平台」的清單裡顯示；只有一個能玩的平台就沒有清單，不必去問
+    if (single.value) return;
     for (const p of platforms.value) {
       const identity = linked(p.provider);
-      if (identity && p.playable)
-        balances.value[p.provider] = await connectedBalance(
-          p.provider,
-          identity.externalId
-        );
+      if (!identity || !p.playable) continue;
+      // 登入的這一家（Harbor 的錢包餘額就是 available）：頁首早就讀過同一個帳號的餘額，直接用，不再依序問一次「我是誰」和錢包
+      if (p.provider === 'harbor' && p.provider === currentProvider() && session.me?.accountNumId === identity.externalId) {
+        if (session.wallet) balances.value[p.provider] = session.wallet.score;
+        continue;
+      }
+      balances.value[p.provider] = await connectedBalance(p.provider, identity.externalId);
     }
   },
   { immediate: true }
