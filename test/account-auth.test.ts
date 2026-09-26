@@ -324,3 +324,23 @@ it('extends the idle session deadline at most once a day',async()=>{
   expect((await request('session',{provider:'harbor'})).status).toBe(200);
   expect(await read()).toBeGreaterThanOrEqual(first);
 });
+it('uses the refreshed credential when a replica still shows another refresh in progress',async()=>{
+  const p=providers();await login('harbor',22);
+  const current=await env.DB.prepare('SELECT * FROM account_credentials WHERE provider=?').bind('harbor').first<any>();
+  const purpose=`credential:harbor:${current.external_id}:${current.generation}`;
+  const live=await openAuth<any>(authEnv(),purpose,current.payload);
+  // 複本停在別的請求換發到一半：舊的那份已過期、正在換。主庫上已經換好了。
+  const stale={...current,expires_at:0,refresh_started:Date.now()-1000,payload:await sealAuth(authEnv(),purpose,{...live,refreshToken:'rotated-away',expiresAt:0})};
+  const before=p.network.mock.calls.length;
+  const response=await worker.fetch(new Request(origin+'/v1/auth/token',{method:'POST',
+    headers:{Origin:origin,'X-Hearthroom-Request':'1',Cookie:cookieHeader(),'Content-Type':'application/json'},body:JSON.stringify({provider:'harbor'})}),
+    {...authEnv(),DB:staleCredentialRead(env.DB,stale)} as any,context);
+  expect(response.status).toBe(200);
+  expect((await response.json() as any).accessToken).toBe(live.accessToken);
+  expect(p.network.mock.calls.length).toBe(before);
+});
+it('still reports a refresh that is really in progress as temporarily unavailable',async()=>{
+  providers();await login('harbor',22);await expire();
+  await env.DB.prepare('UPDATE account_credentials SET refresh_started=?').bind(Date.now()).run();
+  expect((await request('token',{provider:'harbor'})).status).toBe(503);
+});

@@ -334,8 +334,11 @@ export async function delegatedAccess(env:Env,provider:ProviderId,externalId:num
   const read=()=>env.DB.prepare('SELECT * FROM account_credentials WHERE provider=? AND external_id=?').bind(provider,id).first<Credential>();
   let row=await read();
   if(!row||row.state==='revoked')throw new HttpError(401,'auth_reauthorization_required');
-  if(row.state!=='active'||row.refresh_started!==null)throw new HttpError(503,'auth_provider_unavailable');
+  if(row.state!=='active')throw new HttpError(503,'auth_provider_unavailable');
   let pair=await openAuth<Pair>(env,credentialPurpose(provider,id,row.generation),row.payload);
+  // 「換發中」只會出現在已過期的那份上。複本可能停在別人換到一半的時候，主庫其實早就換好了：
+  // 交給下面的認領去問主庫——換好了就認領不到、重讀拿新的；真的還在換，重讀一樣是 503。
+  if(row.refresh_started!==null&&pair.expiresAt>Date.now())throw new HttpError(503,'auth_provider_unavailable');
   if(pair.expiresAt<=Date.now()){
     // 這一列可能是複本上的舊版（讀取複寫，見 d1-session.ts）：別的請求也許已經換發過了。
     // 拿著舊的 refresh token 去換會被供應商拒絕，下面的 denied 分支就會把整份授權刪掉。
