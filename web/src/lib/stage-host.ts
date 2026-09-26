@@ -11,6 +11,7 @@ import { siteRootOf } from '../../../shared/site-hosts';
  */
 import type { App, Component } from "vue";
 import { preloadStage } from "./stage-preload";
+import { createTintLab, tintLabEnabled } from "./tint-lab";
 export { preloadStage } from "./stage-preload";
 import { reactive } from "vue";
 import type { Router } from "vue-router";
@@ -139,6 +140,7 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
     if (initialRoleId) void sandbox.prefetch(initialRoleId);
     // 套件的 CSS 之後再蓋站台的接線（styles/stage.css）：畫布的變數改接站台的 token，深淺與主題才跟得上
     const stage = await preloadStage();
+    const tintLab = tintLabEnabled() ? createTintLab(stage.paintBrowserChrome) : null;
     const host = stage.browserHost({
       ui: {
         toast: (text, kind) => pushStageToast(text, kind),
@@ -149,7 +151,9 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
         // iOS 26 起的 Safari 不看 theme-color，看頁面背景與貼邊的 fixed 元素：交給舞台的 paintBrowserChrome
         // （html 背景塗頂欄色、底邊放一條輸入區色的細條）。舊版舞台沒有這個匯出就只塗 theme-color。
         themeColor: (color, bottom) => {
-          stage.paintBrowserChrome?.(document, color, bottom);
+          // ?tintLab=1：在手機上切換各種染色做法，找出 Safari 實際認哪一種（lib/tint-lab.ts）。
+          if (tintLab) tintLab.update(color, bottom);
+          else stage.paintBrowserChrome?.(document, color, bottom);
           useAppearance().setChromeColor(color);
         },
       },
