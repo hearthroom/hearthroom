@@ -1296,7 +1296,8 @@ async function landingPage(c: Context<{ Bindings: Env; Variables: { ev: Pending 
     .replace(/</g, "\\u003c").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
   const first = board.body.items.find((item) => item.avatarUrl)?.avatarUrl;
   const thumb = first ? cardThumbUrl(PRIMARY_HOST, first) : null;
-  const tags = `<script id="board-inline" type="application/json">${payload}</script>${thumb ? preloadImageTag(thumb) : ""}`;
+  // 縮圖先下載，但不搶主程式：慢網路上一張動圖可能上 MB，跟主程式平分頻寬反而讓整頁更晚能動（Slow 4G 實測）
+  const tags = `<script id="board-inline" type="application/json">${payload}</script>${thumb ? preloadImageTag(thumb, "auto") : ""}`;
   const res = new HTMLRewriter().on("head", { element(e) { e.append(tags, { html: true }); } }).transform(shell);
   res.headers.set("Cache-Control", cookie.includes("__Host-hr-session=") ? "private, no-store" : "no-store");
   res.headers.delete("etag");
