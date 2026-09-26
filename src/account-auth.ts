@@ -78,7 +78,12 @@ async function metric(env:Env,operation:string,provider:string,outcome:string){
  * bearer，cookie 認人不會替寫入打開跨站請求的路。條件不符（沒開託管登入、沒 cookie、網域不對、
  * 供應商不同、綁定已換人）一律回 null，由呼叫端走原本的供應商驗證。只讀、不續期、不改 cookie。
  */
-export async function siteSessionIdentity(c:{env:Env;req:{header:(k:string)=>string|undefined;url:string;method:string}},provider:ProviderId):Promise<{accountNumId:number}|null>{
+/**
+ * 本站 session 認得出的讀者，連同他的成人內容設定，一次查完：session 有效、帳號仍歸這個成員、成員設定。
+ * 分開問是三趟往返（每趟約 40 ms），而開頁的每支讀取都要先過這一關。
+ * 只給讀取用（GET/HEAD）：寫入一律驗 Bearer，cookie 不開跨站寫入的路。
+ */
+export async function siteSessionReader(c:{env:Env;req:{header:(k:string)=>string|undefined;url:string;method:string}},provider:ProviderId):Promise<{accountNumId:number;memberId:string;showNsfw:number|null;ageVerifiedAt:number|null;adultConsentVersion:number|null}|null>{
   try{
     if(c.req.method!=='GET'&&c.req.method!=='HEAD')return null;
     if(c.env.AUTH_ENABLED!=='true')return null;
@@ -86,11 +91,22 @@ export async function siteSessionIdentity(c:{env:Env;req:{header:(k:string)=>str
     if(!origins(c.env).includes(origin))return null;
     const raw=(c.req.header('Cookie')||'').split(';').map(s=>s.trim()).find(s=>s.startsWith(SESSION+'='))?.slice(SESSION.length+1);
     if(!raw)return null;
-    const row=await c.env.DB.prepare('SELECT * FROM account_sessions WHERE token_hash=? AND origin=? AND expires_at>? AND created_at>?').bind(await hash(raw),origin,Date.now(),Date.now()-SESSION_MAX).first<Session>();
-    if(!row||row.provider!==provider)return null;
-    if(await connectedMemberId(c.env.DB,row.provider,Number(row.external_id))!==row.member_id)return null;
-    return {accountNumId:Number(row.external_id)};
+    // 歸屬的判斷跟 connectedMemberId 一樣：連結覆寫優先，沒有才用原始身分
+    const row=await c.env.DB.prepare(`SELECT s.external_id,s.member_id,m.show_nsfw,m.age_verified_at,m.adult_consent_version
+      FROM account_sessions s LEFT JOIN members m ON m.id=s.member_id
+      WHERE s.token_hash=? AND s.origin=? AND s.expires_at>? AND s.created_at>? AND s.provider=?
+        AND s.member_id=COALESCE(
+          (SELECT owner_member_id FROM member_connections WHERE provider=s.provider AND external_id=s.external_id),
+          (SELECT member_id FROM member_identities WHERE provider=s.provider AND external_id=s.external_id))`)
+      .bind(await hash(raw),origin,Date.now(),Date.now()-SESSION_MAX,provider)
+      .first<{external_id:string;member_id:string;show_nsfw:number|null;age_verified_at:number|null;adult_consent_version:number|null}>();
+    if(!row)return null;
+    return {accountNumId:Number(row.external_id),memberId:row.member_id,showNsfw:row.show_nsfw,ageVerifiedAt:row.age_verified_at,adultConsentVersion:row.adult_consent_version};
   }catch{return null;}
+}
+export async function siteSessionIdentity(c:{env:Env;req:{header:(k:string)=>string|undefined;url:string;method:string}},provider:ProviderId):Promise<{accountNumId:number}|null>{
+  const reader=await siteSessionReader(c,provider);
+  return reader?{accountNumId:reader.accountNumId}:null;
 }
 async function readSession(c:C,required=true):Promise<Session|null>{
   const raw=getCookie(c,SESSION);
