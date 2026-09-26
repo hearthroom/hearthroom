@@ -49,6 +49,11 @@ const error = ref("");
 const welcome = ref("");
 /** 開場白照對話頁畫出來的 HTML（作者的正則規則 → HTML／markdown）；純文字的開場白這裡是空字串。 */
 const welcomeHtml = ref("");
+/**
+ * 開場白還在路上（來源端的詳情要約一秒）。這段時間先畫一塊跟收合後同高的骨架占位，
+ * 不然開場白一到，下面的評論就整塊被往下推（部署後實測版面位移 0.03）。
+ */
+const detailsPending = ref(false);
 /** HTML 版開場白量好高度了沒；量好之前純文字那份留著撐版面 */
 const welcomeSized = ref(false);
 watch(welcomeHtml, () => { welcomeSized.value = false; });
@@ -98,6 +103,7 @@ const hasArt = computed(() => !!card.value?.avatarUrl && !broken.value);
  */
 function loadDetails(roleId: string, authorHandle: string | null, lang: string, provider: ProviderId) {
   const cardId = card.value!.id;
+  detailsPending.value = true;
   const pending = platformsRequest.value?.id === cardId ? platformsRequest.value.request : undefined;
   void fetchRoleDetail(roleId, undefined, lang, provider)
     .then((raw) => {
@@ -123,7 +129,8 @@ function loadDetails(roleId: string, authorHandle: string | null, lang: string, 
         });
       }
     })
-    .catch(() => { /* 預設版面照樣能看 */ });
+    .catch(() => { /* 預設版面照樣能看 */ })
+    .finally(() => { if (card.value?.roleId === roleId) detailsPending.value = false; });
   // 「其他作品」要作者的本站公開 ID；作者還沒成為成員（很早期登記過、之後沒再登入）就不列
   if (authorHandle) {
     void fetchBoard({ author: authorHandle, sort: "hot", limit: 9, lang })
@@ -245,7 +252,7 @@ watch(() => route.params.id, () => {
   const id = String(route.params.id ?? "");
   platformsRequest.value = /^[1-9]\d*$/.test(id) ? { id, request: fetchCardPlatforms(id) } : null;
   platformsRequest.value?.request.catch(() => {});
-  card.value = null; welcome.value = ""; welcomeHtml.value = ""; previewDoc.value = null; more.value = []; broken.value = false; tab.value = "home"; editedAt.value = null;
+  card.value = null; welcome.value = ""; detailsPending.value = false; welcomeHtml.value = ""; previewDoc.value = null; more.value = []; broken.value = false; tab.value = "home"; editedAt.value = null;
   commentCount.value = null; showComments.value = true; commentsOpened.value = false;
   load();
 }, { immediate: true });
@@ -385,7 +392,12 @@ watch(() => session.profile?.showNsfw, (now, before) => {
                   <p class="role__text">{{ card.summary || $t("card.noSummary") }}</p>
                 </ClampBlock>
               </section>
-              <section v-if="welcome" class="role__block">
+              <!-- 開場白還沒到：照收合後的高度先占位（多數卡都有開場白；沒有的卡骨架收掉時評論會往上一次） -->
+              <section v-if="!welcome && detailsPending" class="role__block" aria-hidden="true">
+                <h2 class="eyebrow">{{ $t("card.welcome") }}</h2>
+                <div class="ghost role__welcome-ghost" :style="{ height: `calc(${welcomeMax + 48}px + var(--s-2) + var(--h-sm))` }" />
+              </section>
+              <section v-else-if="welcome" class="role__block">
                 <h2 class="eyebrow">{{ $t("card.welcome") }}</h2>
                 <!-- 開場白是角色開口說的第一句：畫成它在說話，跟作者裝修頁的氣泡同一種語言。
                      這裡只露出開頭一段（長的開場白可以有好幾千像素），其餘收在「展開」後面，主頁留位置給評論 -->
@@ -534,6 +546,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
 }
 /* HTML 卡自己帶底色與內距，氣泡只留形狀 */
 .role__bubble--card { padding: 0; background: transparent; white-space: normal; overflow: hidden; }
+.role__welcome-ghost { max-width: 64ch; border-radius: var(--r-lg); }
 .role__bubble-slot { position: relative; flex: 1; min-width: 0; display: grid; justify-items: start; }
 .role__bubble-slot > .role__bubble--card { width: 100%; }
 .role__bubble--pending { position: absolute; inset: 0 0 auto; visibility: hidden; }

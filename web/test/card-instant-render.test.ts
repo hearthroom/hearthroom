@@ -141,3 +141,32 @@ it('offers the owner a provider-scoped editor for the draft behind a neutral det
   await flush();
   expect(root.querySelector('a[href*="/edit?"]')).toBeNull();
 });
+
+describe("開場白還在路上", () => {
+  it("先照收合後的高度占位，開場白到了換上；下面的評論不會被整塊往下推", async () => {
+    let answer!: (r: Response) => void;
+    vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+      if (url.includes("/role/detail")) return new Promise<Response>((r) => { answer = r; });
+      if (url.includes("/v1/cards?")) return Promise.resolve(new Response(JSON.stringify({ items: [{ ...CARD, provider: "harbor" }], total: 1, hasNext: false, limit: 24, offset: 0, sort: "hot" }), { status: 200, headers: { "Content-Type": "application/json" } }));
+      return fakeFetch(input, init);
+    });
+    await fetchBoard();
+    const root = await mountCard("/cards/role-abc");
+    const ghost = root.querySelector<HTMLElement>(".role__welcome-ghost");
+    expect(ghost, "開場白到之前要有占位").not.toBeNull();
+    expect(ghost!.style.height).toContain("px");
+    // 評論摘要已經排在占位下面，不必等開場白
+    expect(root.querySelector(".cprev")).not.toBeNull();
+    answer(new Response(JSON.stringify({ roleWelcome: "雨夜，你推開了偵探社的門。" }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    await flush();
+    expect(root.querySelector(".role__welcome-ghost")).toBeNull();
+    expect(root.textContent).toContain("雨夜，你推開了偵探社的門。");
+  });
+
+  it("讀不到開場白：占位收掉，不留一塊空白", async () => {
+    await fetchBoard();
+    const root = await mountCard("/cards/role-abc");
+    expect(root.querySelector(".role__welcome-ghost")).toBeNull();
+  });
+});

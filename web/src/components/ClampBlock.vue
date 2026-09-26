@@ -18,9 +18,12 @@ const open = ref(false);
 const SLACK = 48;
 
 let observer: ResizeObserver | null = null;
+function measure() { tall.value = (inner.value?.offsetHeight ?? 0) > props.max + SLACK; }
 onMounted(() => {
+  // 掛上就先量一次：等 ResizeObserver 回報會晚一格，「展開」鍵晚出現就把下面整塊往下推
+  measure();
   if (!inner.value || typeof ResizeObserver === "undefined") return;
-  observer = new ResizeObserver(() => { tall.value = (inner.value?.offsetHeight ?? 0) > props.max + SLACK; });
+  observer = new ResizeObserver(measure);
   observer.observe(inner.value);
 });
 onBeforeUnmount(() => observer?.disconnect());
