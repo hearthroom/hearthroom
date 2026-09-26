@@ -4,7 +4,7 @@
  */
 import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, beforeEach, expect, it } from "vitest";
-import worker from "../src/index";
+import worker, { boardCache } from "../src/index";
 import { envWithAssets, resetDb, restoreUpstream, rolesOnProviders, role } from "./helpers";
 import { upsertCard } from "../src/cards";
 import { cardThumbUrl } from "../shared/card-thumb";
@@ -57,4 +57,35 @@ it("其他語言用自己的語區；帶了篩選、不是正式網域、或卡�
   for (const url of ["https://hearthroom.club/?sort=week", "https://hearthroom.club/?tag=x", "https://hearthroom.club/?mode=following", "https://c.test/", "https://play.hearthroom.club/"]) {
     expect(inline((await page(url)).html), url).toBeNull();
   }
+});
+
+it("讀榜趕不上（快取沒命中）：馬上回純殼，但那次讀取照樣在背景跑完、填進快取", async () => {
+  const slow = (db: D1Database): D1Database => new Proxy(db, { get(target, prop) {
+    if (prop === "prepare") return (sql: string) => {
+      const statement = target.prepare(sql);
+      return new Proxy(statement, { get(st, p) {
+        const value = Reflect.get(st, p);
+        if (p === "bind") return (...args: unknown[]) => slowStatement((value as (...a: unknown[]) => D1PreparedStatement).apply(st, args));
+        return typeof value === "function" ? value.bind(st) : value;
+      } });
+    };
+    if (prop === "withSession") return (c?: string) => slow(target.withSession(c as never) as unknown as D1Database);
+    const value = Reflect.get(target, prop);
+    return typeof value === "function" ? value.bind(target) : value;
+  } });
+  const slowStatement = (st: D1PreparedStatement): D1PreparedStatement => new Proxy(st, { get(t, p) {
+    const value = Reflect.get(t, p);
+    if (p === "all" || p === "first") return async (...args: unknown[]) => { await new Promise((r) => setTimeout(r, 400)); return (value as (...a: unknown[]) => unknown).apply(t, args); };
+    return typeof value === "function" ? value.bind(t) : value;
+  } });
+  boardCache.namespace = `board-${Math.random()}`;
+  const ctx = createExecutionContext();
+  const started = Date.now();
+  const res = await worker.fetch(new Request("https://hearthroom.club/"), { ...testEnv, DB: slow(env.DB) }, ctx);
+  const html = await res.text();
+  expect(Date.now() - started).toBeLessThan(1000);
+  expect(inline(html)).toBeNull();
+  await waitOnExecutionContext(ctx);
+  // 背景那次填好了快取：下一個人的 HTML 就帶得到
+  expect(inline((await page("https://hearthroom.club/")).html)?.page.items.length).toBe(1);
 });
