@@ -1,5 +1,10 @@
-/** Official serving domains. Keep routing, sandboxes and card apps in one family. */
-export const SITE_HOSTS = ['hearthroom.club', 'sukisuki.ai', 'sukisuki.chat'] as const;
+/**
+ * Official serving domains. Keep routing, sandboxes and card apps in one family.
+ * The first one is the primary: search-engine canonical, default card-app host, and the one zone
+ * that converts card thumbnails for every domain (owner 2026-09-26: primary moves to sukisuki.ai;
+ * the others keep serving, no cross-domain redirect, so nobody is signed out).
+ */
+export const SITE_HOSTS = ['sukisuki.ai', 'hearthroom.club', 'sukisuki.chat'] as const;
 export const PRIMARY_HOST = SITE_HOSTS[0];
 export function siteRootOf(hostname: string): string | undefined {
   return SITE_HOSTS.find(root => [root, `www.${root}`, `play.${root}`].includes(hostname.toLowerCase()));

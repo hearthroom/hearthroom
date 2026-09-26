@@ -608,6 +608,27 @@ app.get('/v1/me/card-copies/:roleId',async(c)=>{
  if(!copies.length)copies.push({provider,roleId:c.req.param('roleId'),status:'source',error:'',updatedAt:0});
  return c.json({copies},200,{'Cache-Control':'no-store'});
 });
+/**
+ * 卡片封面的同網域來源，給主網域的圖片轉換用（web/src/lib/card-thumb.ts）。
+ * 縮圖只在主網域轉一次、邊緣快取後所有網域共用：每個網域各轉一次就各收一次錢（owner 2026-09-26）。
+ * 來源放在自己的網域上，轉換設定的「來源」只需允許本網域。只轉發白名單上的來源與路徑形狀，而且必須是圖。
+ */
+const ART_SOURCES: Record<string, { origin: string; path: RegExp }> = {
+  harbor: { origin: "https://assets.harperharbor.com", path: /^(?:versions|media)\/[A-Za-z0-9-]{1,80}$/ },
+  lunatalk: { origin: "https://objects.lunatalk.ai", path: /^hosting\/[A-Za-z0-9-]{1,80}$/ },
+};
+app.get("/v1/art/:source/*", async (c) => {
+  const source = ART_SOURCES[c.req.param("source")];
+  const path = new URL(c.req.url).pathname.split("/").slice(4).join("/");
+  if (!source || !source.path.test(path)) throw new HttpError(404, "not found");
+  const raw = new URL(c.req.url).searchParams.get("raw") === "1" ? "?raw=1" : "";
+  const upstream = await fetch(`${source.origin}/${path}${raw}`, { cf: { cacheEverything: true, cacheTtl: 31536000 } } as RequestInit);
+  if (!upstream.ok) throw new HttpError(upstream.status === 404 ? 404 : 502, "art unavailable");
+  const type = upstream.headers.get("content-type") ?? "";
+  if (!type.startsWith("image/")) throw new HttpError(404, "not found");
+  return new Response(upstream.body, { headers: { "Content-Type": type, "Cache-Control": "public, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff" } });
+});
+
 app.get('/v1/cards/:roleId/platforms',async(c)=>{
  const link=await cardLink(c.env,c.req.param('roleId'),providerOf(c));
  const base=link.row;
