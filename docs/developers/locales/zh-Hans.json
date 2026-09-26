@@ -1663,7 +1663,7 @@
   "df5f45b59d9ee": "`referral_code_invalid` — 没有账号使用这个推荐码；`invalid_request` — 缺少 `code`。",
   "decad3f4885a0": "`referral_self` — 调用者自己的推荐码，或调用者推荐来的账号；`referral_already_bound` — 调用者已经有推荐人；`referral_window_closed` — 调用者注册已超过 `terms.bindDays` 天或已经充值过。",
   "d1007e569893f": "当前的奖励规则。所有奖励都是只能用于智能体对话的 credits。",
-  "d480d75d841dd": "新用户填写推荐码时获得的 credits。不保证一定获得：每个推荐码每 30 天能送出的份数有限。",
+  "d5c18060b55ab": "新用户填写推荐码时获得的 credits。每个登录身份只会获得一次，一次性邮箱不会获得。",
   "d6bc14ac66b49": "欢迎礼 credits 的有效天数。",
   "d015684abcda3": "被推荐人首次充值中，拨给推荐人的百分比；在该笔付款 `holdDays` 天后、未退款时到账。",
   "d43b6b730e2fb": "推荐人每一笔首充最多获得的 credits。",

@@ -19989,7 +19989,7 @@
         "properties": {
           "welcomeCredits": {
             "type": "integer",
-            "description": "Credits a new user receives when entering a code. Not guaranteed: each code can hand out a limited number per 30 days."
+            "description": "Credits a new user receives when entering a code. Each sign-in identity receives them once, and disposable email addresses receive none."
           },
           "welcomeDays": {
             "type": "integer",
