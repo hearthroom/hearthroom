@@ -38,7 +38,8 @@ it("首頁的 HTML 帶著第一屏的榜單與第一張縮圖的 preload；沒�
   expect(data.page.adult).toBe(false);
   const thumb = cardThumbUrl(PRIMARY_HOST, data.page.items[0].avatarUrl);
   expect(thumb).not.toBeNull();
-  expect(html).toContain(`<link rel="preload" as="image" href="${thumb}" fetchpriority="high">`);
+  // 先下載但不搶主程式的頻寬（慢網路上動圖可能上 MB）
+  expect(html).toContain(`<link rel="preload" as="image" href="${thumb}">`);
   expect(res.headers.get("Cache-Control")).toBe("no-store");
   expect(html).toContain('<div id="app"></div>');
 });

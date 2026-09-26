@@ -49,8 +49,8 @@ export function authorLine(lang: string, cards: number, talks: number): string {
 const OG_LOCALE: Record<string, string> = { "zh-Hant": "zh_TW", "zh-Hans": "zh_CN", en: "en_US", ja: "ja_JP", ko: "ko_KR" };
 
 /** 頁面主圖一進 HTML 就開始下載（見 PageMeta.preloadImage）。 */
-export function preloadImageTag(url: string): string {
-  return `<link rel="preload" as="image" href="${esc(url)}" fetchpriority="high">`;
+export function preloadImageTag(url: string, priority: "high" | "auto" = "high"): string {
+  return `<link rel="preload" as="image" href="${esc(url)}"${priority === "high" ? ' fetchpriority="high"' : ""}>`;
 }
 
 export function renderHead(page: Response, meta: PageMeta): Response {
