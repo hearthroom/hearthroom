@@ -81,10 +81,17 @@ function memoryKey(query: Record<string, unknown>): string | null {
 }
 
 const currentQuery = () => ({ zone: zone.value, tag: tags.value, sort: sort.value, offset: offset.value, lang: contentLang(locale.value) });
+/** 身分還沒到時就先讀好的週榜：等身分到了、確認是照他的開關讀的，才記起來 */
+let earlyWeek: CardPage | null = null;
+
 /** 身分到了、確認畫面上這份就是給他的：現在才知道該記在誰的名下 */
 function adoptShown() {
-  const key = memoryKey(currentQuery());
+  const query = currentQuery();
+  const key = memoryKey(query);
   if (key && page.value) rememberBoard(key, page.value);
+  const weekKey = memoryKey({ ...query, sort: "week" });
+  if (earlyWeek && weekKey && servedFor(earlyWeek, session.profile?.showNsfw)) rememberBoard(weekKey, earlyWeek);
+  earlyWeek = null;
 }
 
 async function load() {
@@ -98,15 +105,24 @@ async function load() {
   // 看過的分頁先畫出來，背景照常重讀；沒看過的才讓舊畫面變淡等它
   if (remembered) { page.value = remembered; fallbackSort.value = remembered.sort !== query.sort ? remembered.sort : null; }
   loading.value = !remembered;
+  // 一進首頁就同時讀週榜：日榜空著時不必再多等一趟（實測 0.54 s）；日榜有卡時它記起來，點週榜就是現成的
+  const weekEarly = landing && query.sort === "day" ? fetchBoard({ ...query, sort: "week" }).catch(() => null) : null;
   try {
     let result = await fetchBoard(query);
     if (landing && !result.items.length) {
       for (const next of LANDING_FALLBACK) {
-        const alternative = await fetchBoard({ ...query, sort: next });
+        const alternative = (next === "week" ? await weekEarly : null) ?? await fetchBoard({ ...query, sort: next });
         if (id !== loadId) return;
         result = alternative;
         if (alternative.items.length) break;
       }
+    } else if (weekEarly) {
+      void weekEarly.then((week) => {
+        if (!week) return;
+        const weekKey = memoryKey({ ...query, sort: "week" });
+        if (weekKey) rememberBoard(weekKey, week);
+        else earlyWeek = week;
+      });
     }
     if (id !== loadId) return;
     page.value = result;
