@@ -2,7 +2,7 @@ import {beforeEach,afterEach,it,expect,vi} from 'vitest';
 import {createApp,type App} from 'vue';
 import {createRouter,createMemoryHistory} from 'vue-router';
 import {i18n} from '../src/lib/i18n';
-const api=vi.hoisted(()=>({claimReview:vi.fn(async()=>({})),fetchReviewDetail:vi.fn(),releaseReview:vi.fn(),stampReview:vi.fn(),ApiError:class extends Error{constructor(readonly status:number,message:string){super(message);}}}));
+const api=vi.hoisted(()=>({claimReview:vi.fn(async()=>({})),fetchReviewDetail:vi.fn(),releaseReview:vi.fn(),stampReview:vi.fn(),updateReviewTags:vi.fn(),ApiError:class extends Error{constructor(readonly status:number,message:string){super(message);}}}));
 vi.mock('../src/lib/api',()=>api);
 vi.mock('../src/lib/session',()=>({useSession:()=>({accessToken:async()=> 'local-reviewer'})}));
 import Page from '../src/pages/ReviewDetailPage.vue';
@@ -45,4 +45,41 @@ it('a reviewer reopening a card they already decided sees it read-only, without 
  expect(el.textContent).toContain(i18n.global.t('review.stampedByMe'));
  expect(el.textContent).not.toContain(i18n.global.t('review.claimFirst'));
  expect([...el.querySelectorAll('button')].some(b=>b.textContent===i18n.global.t('review.action.claim'))).toBe(false);
+});
+
+const pendingDetail=(stamps:{verdict:'approve'|'reject';note:string;at:number}[]=[])=>({
+ submission:{id:'s1',kind:'re',status:'pending',contentHash:'version:v2',submittedAt:1,nsfw:false,claimedByMe:true,stampedByMe:false,claimGeneration:'g1',required:1,stamps},
+ card:{id:'100001',roleId:'r1',tags:['冒險']},
+ detail:{partial:false,document:{roleName:'Night Detective',roleDesc:'',roleAvatar:'',roleBackground:'',roleTag:'["冒險"]',userName:'',roleDetailDesc:'',roleType:'',roleSex:'',roleSpeech:'',language:'zh-Hant',talkExample:'',roleOutputContract:''},
+  greetings:{welcome:'',alternates:[],prologue:[]},worldbook:null,worldbookAvailable:false,
+  authorAsset:{rules:[],mountTrigger:'',mountLayer:'',pageMode:'classic',status:'',version:0},
+  hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:'version:v2'},
+  costProfile:{personaChars:0,worldbookEntryCount:0,worldbookEnabledCount:0,worldbookConstantCount:0,worldbookChars:0,worldbookConstantChars:0,estimatedConstantTokens:0,estimatedMaxTokens:0}},
+});
+const remount=async()=>{
+ app.unmount();
+ const router=createRouter({history:createMemoryHistory(),routes:[{path:'/review/:id',component:Page}]});await router.push('/review/s1');app=createApp(Page).use(router).use(i18n);app.mount(el);
+};
+
+it('the reviewer holding the claim fixes a missing tag and the page shows the saved tags',async()=>{
+ api.fetchReviewDetail.mockReset().mockResolvedValue(pendingDetail());
+ api.updateReviewTags.mockResolvedValue({tags:['冒險','倫理']});
+ await remount();
+ await vi.waitFor(()=>expect(el.textContent).toContain(i18n.global.t('review.tags.edit')));
+ [...el.querySelectorAll('button')].find(b=>b.textContent?.trim()===i18n.global.t('review.tags.edit'))!.click();
+ await vi.waitFor(()=>expect(el.querySelector('.picker')).toBeTruthy());
+ [...el.querySelectorAll<HTMLButtonElement>('.picker button')].find(b=>b.textContent?.trim()==='倫理')!.click();
+ await vi.waitFor(()=>expect([...el.querySelectorAll('button')].some(b=>b.textContent?.trim()===i18n.global.t('review.tags.save'))).toBe(true));
+ [...el.querySelectorAll('button')].find(b=>b.textContent?.trim()===i18n.global.t('review.tags.save'))!.click();
+ await vi.waitFor(()=>expect(api.updateReviewTags).toHaveBeenCalledWith('s1','local-reviewer',{tags:['冒險','倫理'],generation:'g1'}));
+ await vi.waitFor(()=>expect(el.textContent).toContain(i18n.global.t('review.tags.author',{tags:'冒險'})));
+});
+
+it('a long rejection note sits in its own block instead of a fixed-height chip',async()=>{
+ const long='第一點：數值要整數化。\n'.repeat(40);
+ api.fetchReviewDetail.mockReset().mockResolvedValue(pendingDetail([{verdict:'reject',note:long,at:2}]));
+ await remount();
+ await vi.waitFor(()=>expect(el.querySelector('.record__note')).toBeTruthy());
+ expect(el.querySelector('.record__note')!.textContent).toBe(long);
+ expect([...el.querySelectorAll('.chip')].some(c=>c.textContent?.includes('第一點'))).toBe(false);
 });

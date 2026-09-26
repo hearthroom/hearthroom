@@ -13,6 +13,8 @@ import {
   fetchMyWorldbooks,
   fetchRoleWorldbooks,
   fetchWorldbookEntries,
+  findWorldbookByName,
+  unbindWorldbook,
   patchWorldbookDocument,
   reorderWorldbookEntries,
   type WorldbookDocumentEntry,
@@ -28,6 +30,8 @@ export interface WorldbookDraftDeps {
   fallbackName: () => string;
   /** 建新書的語區。 */
   language: () => string;
+  /** 書名撞到作者另一本書時的錯誤訊息。 */
+  nameTaken?: (name: string) => string;
   /** 分段送出時的進度（null＝結束）。 */
   onProgress?: (progress: { done: number; total: number } | null) => void;
 }
@@ -62,14 +66,20 @@ export function useWorldbookDraft(deps: WorldbookDraftDeps) {
     pending: false,
     /** 挑了作者已經有的一本：書已存在，缺的只有「綁到這張卡」那一步。 */
     bindPending: false,
+    /**
+     * 上游現在綁在卡上的那本。上游的綁定是追加的：換成別本時舊的要明確解綁，否則重新進編輯頁
+     * 讀到的還是舊書，對話也兩本一起用（2026-09-27 作者回報）。放掉手上那本時這個值留著，存檔時才解。
+     */
+    boundId: "",
 
     reset() {
       book.id = ""; book.name = ""; book.desc = ""; book.meta = null; book.format = undefined;
-      book.entries = []; book.original = []; book.pending = false; book.bindPending = false;
+      book.entries = []; book.original = []; book.pending = false; book.bindPending = false; book.boundId = "";
     },
     /** 有沒有沒存的改動。 */
     dirty(): boolean {
-      return JSON.stringify(book.entries) !== JSON.stringify(book.original) || book.pending || book.bindPending || book.metadataChanged();
+      return JSON.stringify(book.entries) !== JSON.stringify(book.original) || book.pending || book.bindPending || book.metadataChanged()
+        || (Boolean(book.boundId) && book.boundId !== book.id);
     },
     hasContent(): boolean {
       return book.entries.some((e) => e.content.trim());
@@ -114,9 +124,23 @@ export function useWorldbookDraft(deps: WorldbookDraftDeps) {
      * 條目去算，送出去就是往新書裡刪一批根本不存在的條目。
      */
     release() {
+      const bound = book.boundId;
       book.reset();
+      book.boundId = bound;
     },
-    /** 從酒館世界書檔匯入的條目。還沒綁書就先把書建起來，名字用檔裡的、沒有就用預設名。 */
+    /**
+     * 匯入一本世界書：整本覆蓋，不併入。手上有書就覆蓋手上這本；還沒有書、而作者已經有一本同名的，
+     * 覆蓋那一本——每匯入一次就多一本同名書，作者的書單很快就是一排分不出來的重複（2026-09-27 回報）。
+     * 作者要的是「照檔案來」，幾百條逐條確認不可能，所以不做合併。
+     */
+    async importReplacing(payload: { name: string; entries: WorldbookEntryDraft[]; format?: "tavern" }, token: string | null) {
+      if (!book.id && !book.pending && token) {
+        const same = await findWorldbookByName(token, payload.name || deps.fallbackName()).catch(() => null);
+        if (same) await book.pick(same, token);
+      }
+      book.imported(payload);
+    },
+    /** 從酒館世界書檔匯入的條目，取代手上的條目。還沒綁書就先把書建起來，名字用檔裡的、沒有就用預設名。 */
     imported(payload: { name: string; entries: WorldbookEntryDraft[]; format?: "tavern" }) {
       if (!book.id && !book.pending) {
         book.pending = true;
@@ -127,12 +151,16 @@ export function useWorldbookDraft(deps: WorldbookDraftDeps) {
       book.entries = payload.entries.map((entry) => ({ ...entry, entryId: undefined }));
     },
 
-    /** 這張卡綁著的世界書。只取第一本：介面一次只編一本，而上游允許綁多本。 */
+    /**
+     * 這張卡綁著的世界書。介面一次只編一本，而上游允許綁多本：取最後綁上的那本，
+     * 那是作者最近一次選的（清單照綁定時間排）。
+     */
     async loadBound(token: string, roleId: string) {
       const bound = await fetchRoleWorldbooks(roleId, token).catch(() => []);
-      const first = bound[0];
-      if (!first) return;
-      await book.load(token, first.worldbookId, first.name);
+      const latest = bound[bound.length - 1];
+      if (!latest) return;
+      await book.load(token, latest.worldbookId, latest.name);
+      book.boundId = latest.worldbookId;
     },
     /** 用 id 讀一本（角色的私有書）。讀不到條目就當空書，讀不到元資訊就鎖住書名。 */
     async load(token: string, bookId: string, name = "") {
@@ -153,6 +181,11 @@ export function useWorldbookDraft(deps: WorldbookDraftDeps) {
       }
     },
 
+    /** 書名不重複：作者另一本已經叫這個名字就不建、不改名，請作者換名或直接用那一本。查不到就放行。 */
+    async assertNameFree(token: string, name: string) {
+      const same = await findWorldbookByName(token, name).catch(() => null);
+      if (same && same.worldbookId !== book.id) throw new Error(deps.nameTaken?.(name.trim()) ?? "worldbook_name_taken");
+    },
     /** 條目順序跟上游存的不一樣。 */
     orderChanged(): boolean {
       const now = book.entries.map((entry) => entry.entryId).filter(Boolean).join(",");
@@ -199,6 +232,16 @@ export function useWorldbookDraft(deps: WorldbookDraftDeps) {
      * bindRoleId：存檔時順手綁到這張卡（卡綁的那本才給；角色的私有書不給）。
      */
     async save(token: string, options: { bindRoleId?: string } = {}): Promise<string> {
+      const id = await book.saveBook(token, options);
+      // 先綁新的再解舊的：解綁失敗最多是多綁一本，下次存檔再解，不會讓卡一本都沒有
+      if (options.bindRoleId && book.boundId && book.boundId !== id) {
+        await unbindWorldbook(book.boundId, options.bindRoleId, token);
+        book.boundId = "";
+      }
+      if (options.bindRoleId && id) book.boundId = id;
+      return id;
+    },
+    async saveBook(token: string, options: { bindRoleId?: string }): Promise<string> {
       const ops = book.ops();
       const needsBook = book.pending || Boolean(book.id);
       const metaDirty = book.metadataChanged();
@@ -217,6 +260,7 @@ export function useWorldbookDraft(deps: WorldbookDraftDeps) {
           return "";
         }
         const createdName = book.name.trim() || deps.fallbackName();
+        await book.assertNameFree(token, createdName);
         bookId = await createWorldbook(
           {
             name: createdName,
@@ -237,6 +281,7 @@ export function useWorldbookDraft(deps: WorldbookDraftDeps) {
       // 挑了一本現成的、或只改了書名：條目一個字沒動也還是得送一次
       if (!ops.length) {
         const metadata = metaDirty ? book.metadataPatch() : undefined;
+        if (metadata) await book.assertNameFree(token, metadata.name);
         if (firstBind || metadata) {
           await patchWorldbookDocument(bookId, { ...(metadata ? { metadata } : {}), ...(firstBind ? binding : {}) }, token);
           book.bindPending = false;
@@ -247,6 +292,7 @@ export function useWorldbookDraft(deps: WorldbookDraftDeps) {
         return bookId;
       }
       const metadata = metaDirty ? book.metadataPatch() : undefined;
+      if (metadata) await book.assertNameFree(token, metadata.name);
       deps.onProgress?.({ done: 0, total: ops.length });
       try {
         for (let i = 0; i < ops.length; i += OPS_PER_REQUEST) {

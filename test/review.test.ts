@@ -157,6 +157,37 @@ describe("審核佇列", () => {
     expect((await act(id, "stamp", "rev-b", { verdict: "approve" })).status).toBe(409);
   });
 
+  it("審核時改標籤：領著的審核人直接改對，過審後榜上是改過的標籤，留下稽核紀錄", async () => {
+    await submit("role-1");
+    await makeReviewer(REVIEWER_A);
+    await makeReviewer(REVIEWER_B);
+    const id = (await queue("rev-a")).body.items[0].id as string;
+    const tags = (token: string, body: unknown) => act(id, "tags", token, body);
+
+    // 沒領不能改；不是審核人不能改
+    expect((await tags("rev-a", { tags: ["推理", "倫理"] })).status).toBe(409);
+    expect((await tags("author-token", { tags: ["倫理"] })).status).toBe(403);
+    await act(id, "claim", "rev-a");
+    // 別人領著不能改
+    expect((await tags("rev-b", { tags: ["倫理"] })).status).toBe(409);
+    expect((await tags("rev-a", { tags: "倫理" })).status).toBe(400);
+
+    const res = await tags("rev-a", { tags: [" 推理 ", "倫理", "倫理"] });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ tags: ["推理", "倫理"] });
+    // 審核頁讀到的是改過的標籤
+    const detail = (await (await SELF.fetch(`https://c.test/v1/review/${id}/detail`, { headers: bearer("rev-a") })).json()) as any;
+    expect(detail.card.tags).toEqual(["推理", "倫理"]);
+
+    await act(id, "stamp", "rev-a", { verdict: "approve" });
+    const listed = (await (await SELF.fetch("https://c.test/v1/cards")).json()) as { items: { tags: string[] }[] };
+    expect(listed.items[0].tags).toEqual(["推理", "倫理"]);
+    const event = await env.DB.prepare("SELECT action, before_value, after_value FROM moderation_events WHERE source_role_id='role-1'").first<{ action: string; before_value: string; after_value: string }>();
+    expect(event).toMatchObject({ action: "tags", before_value: JSON.stringify(["推理"]), after_value: JSON.stringify(["推理", "倫理"]) });
+    // 定案後不能再改
+    expect((await tags("rev-a", { tags: ["推理"] })).status).toBe(410);
+  });
+
   it("蓋過章的審核人回頭看：不必再領，唯讀；定案後只剩公開資料，仍不帶作者；沒蓋過的人看不到", async () => {
     reviewUpstream((roleId) => ({ roleId, authorNumId: AUTHOR, document: { roleName: "夜行偵探", customInstructions: "自訂指示" } }));
     await submit("role-1");

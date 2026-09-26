@@ -1679,5 +1679,18 @@
   "d471ebdb22033": "Last moment the caller can enter a code. Present only when `canRedeem` is true.",
   "d2fa5e0cd2e77": "How many accounts entered the caller's code.",
   "d5478849d1a13": "How many of them have topped up.",
-  "d8d435e682371": "Credits the caller has received as a referrer so far."
+  "d8d435e682371": "Credits the caller has received as a referrer so far.",
+  "db74fc015bf01": "Remove a worldbook from one of your cards",
+  "d24322e4bb347": "Removes the binding between this worldbook and the card. The worldbook itself and its entries are kept. Bindings are additive: when a card switches to another worldbook, unbind the previous one, otherwise both stay active in conversations. Unbinding a book that is not bound succeeds with `unbound: false`. The caller must own both the worldbook and the card.",
+  "dc3b334e81cdd": "Binding removed, or it was already absent.",
+  "db0dc70a06eeb": "`invalid JSON body`, `roleId is required`.",
+  "d104a9675f1a4": "`permission_denied`: not the owner of the worldbook or the card.",
+  "d08cf84ec8c52": "`not_found`, `role_not_found`.",
+  "d84ffc25db8e6": "Delete one of your worldbooks",
+  "d86b2f6289e2b": "Deletes the worldbook and all of its entries. A worldbook that is still bound to any card returns `asset_in_use`; unbind it from those cards first (`usedByCards` in `/open/v1/worldbook/mine` shows how many). Deletion cannot be undone.",
+  "d0f9b9867c2ec": "`permission_denied`: not the owner.",
+  "d5885b8f64496": "`asset_in_use`: still bound to a card.",
+  "dba51c8963fa6": "How many cards this worldbook is bound to. Present in `/open/v1/worldbook/mine`.",
+  "dd38332c96499": "The card to remove the worldbook from.",
+  "ddbe270a19e0a": "`false` when the worldbook was not bound to the card."
 }

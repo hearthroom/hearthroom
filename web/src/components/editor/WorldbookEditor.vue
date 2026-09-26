@@ -19,7 +19,8 @@
  */
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { fetchMyWorldbooks, type WorldbookSummary } from "@/lib/api";
+import { deleteWorldbook, fetchMyWorldbooks, type WorldbookSummary } from "@/lib/api";
+import { confirmDialog } from "@/lib/confirm";
 import { useSession } from "@/lib/session";
 import type { WorldbookEntryDraft } from "@/lib/role-draft";
 import { parseWorldbookFile, type DropNote } from "@/lib/tavern";
@@ -44,7 +45,7 @@ const emit = defineEmits<{
   imported: [{ name: string; entries: WorldbookEntryDraft[] }];
   /** 挑了自己已經有的一本。條目與綁定由外面處理——條目住在頁面上。 */
   pick: [WorldbookSummary];
-  /** 放掉手上這本，回到空狀態重挑。上游的綁定是覆蓋式的，存下去新的就取代舊的。 */
+  /** 放掉手上這本，回到空狀態重挑。存檔時綁上新的那本，舊的從卡上解綁。 */
   release: [];
   /** 把這本存成檔案。下載那一步在頁面上，跟角色卡與正則規則共用同一支。 */
   exportBook: [];
@@ -57,8 +58,8 @@ const session = useSession();
 const open = ref(false);
 
 /**
- * 匯入酒館的世界書檔。條目接在現有條目後面，不覆蓋——作者可能已經手寫了幾條，
- * 而世界書本來就是可以一本一本併起來的東西。丟掉的欄位跟卡片匯入一樣列出來。
+ * 匯入酒館的世界書檔：整本覆蓋手上這本（跟正則規則的匯入一樣）。作者改完檔再匯入，要的是
+ * 「照檔案來」；併進去的話同一條會出現兩次，幾百條也不可能逐條確認。丟掉的欄位跟卡片匯入一樣列出來。
  */
 const fileInput = ref<HTMLInputElement | null>(null);
 const importError = ref("");
@@ -80,10 +81,7 @@ async function onImportFile(event: Event) {
   try {
     const parsed = await parseWorldbookFile(file);
     if (!parsed.entries.length) throw new Error("worldbook_invalid");
-    // 空條目（按了「加一條」還沒填的）讓位給匯入的，不然會夾一格空的在中間
-    const kept = props.modelValue.filter((e) => e.content.trim() || e.entryId);
-    const entries = [...kept, ...parsed.entries];
-    emit("imported", { name: parsed.name, entries });
+    emit("imported", { name: parsed.name, entries: parsed.entries });
     importedCount.value = parsed.entries.length;
     importReport.value = parsed.dropped;
   } catch (err) {
@@ -98,22 +96,45 @@ async function onImportFile(event: Event) {
  */
 const mine = ref<WorldbookSummary[]>([]);
 const reuseId = ref("");
+async function loadMine() {
+  reuseId.value = "";
+  try {
+    const token = await session.accessToken();
+    if (!token) return;
+    mine.value = await fetchMyWorldbooks(token);
+  } catch {
+    mine.value = [];
+  }
+}
 // 掛載時抓一次，放掉手上那本之後再抓一次——中間可能在別的地方多了幾本
-watch(
-  () => props.bound,
-  async (bound) => {
-    if (bound) return;
-    reuseId.value = "";
-    try {
-      const token = await session.accessToken();
-      if (!token) return;
-      mine.value = await fetchMyWorldbooks(token);
-    } catch {
-      mine.value = [];
-    }
-  },
-  { immediate: true },
-);
+watch(() => props.bound, (bound) => { if (!bound) void loadMine(); }, { immediate: true });
+
+/**
+ * 刪掉選中的那本。社群站沒有另外的世界書管理頁，作者累積的舊書就在這個清單裡清。
+ * 還綁在卡上的不給刪（上游也會拒絕）：刪了那些卡會靜靜少一份設定。
+ */
+const selected = computed(() => mine.value.find((b) => b.worldbookId === reuseId.value) ?? null);
+const deleteError = ref("");
+async function removeSelected() {
+  const book = selected.value;
+  if (!book || book.usedByCards) return;
+  deleteError.value = "";
+  const ok = await confirmDialog({
+    title: t("wb.delete.confirmTitle", { name: book.name }),
+    message: t("wb.delete.confirmMessage", { n: book.entryCount }),
+    confirmText: t("wb.delete"),
+    danger: true,
+  });
+  if (!ok) return;
+  try {
+    const token = await session.accessToken();
+    if (!token) throw new Error(t("auth.expired"));
+    await deleteWorldbook(book.worldbookId, token);
+    await loadMine();
+  } catch {
+    deleteError.value = t("wb.delete.failed");
+  }
+}
 function pickExisting() {
   const book = mine.value.find((b) => b.worldbookId === reuseId.value);
   if (book) emit("pick", book);
@@ -149,8 +170,11 @@ const preview = computed(() =>
           </option>
         </select>
         <button type="button" class="btn btn--sm" :disabled="!reuseId" @click="pickExisting">{{ $t("wb.reuse.pick") }}</button>
+        <button type="button" class="btn btn--sm btn--ghost" :disabled="!selected || Boolean(selected.usedByCards)" @click="removeSelected">{{ $t("wb.delete") }}</button>
       </div>
-      <span class="subtle">{{ $t("wb.reuse.hint") }}</span>
+      <span v-if="selected?.usedByCards" class="subtle">{{ $t("wb.delete.inUse", { n: selected.usedByCards }) }}</span>
+      <span v-else class="subtle">{{ $t("wb.reuse.hint") }}</span>
+      <p v-if="deleteError" class="notice notice--error" role="alert">{{ deleteError }}</p>
     </div>
 
     <template v-else-if="bound">
