@@ -11,7 +11,7 @@ import { hostGateway, hostingKey, submitHosted, hostingDecision, beginHostedEdit
 import { saveCommunityProfile, cleanAvatars } from "./community-profile";
 import { AVATAR_MAX_BYTES } from '../shared/avatar';
 import { bodyLimit } from "hono/body-limit";
-import { authoringSource, copiesFor, workFor } from "./card-sync";
+import { authoringSource, copiesFor, workFor, worksFor } from "./card-sync";
 import { apiBaseOf as providerApiBase } from "./providers";
 import { connectedMemberId } from './connections';
 import { saveMemberId } from './members';
@@ -25,6 +25,7 @@ import {
   getPublicCard,
   previewCard,
   ensureCardNumber,
+  ensureCardNumbers,
   listAuthors,
   listCards,
   toAuthor,
@@ -549,12 +550,16 @@ app.get("/v1/me/cards", async (c) => {
   c.header("X-Cache", source);
   // 這是私人資料：可以放進使用者自己的瀏覽器，但任何共用快取都不准碰。
   c.header("Cache-Control", "private, no-store");
-  const items = await Promise.all(body.items.map(async item => {
-    const work = await workFor(c.env.DB, provider, item.roleId);
-    const num = await ensureCardNumber(c.env.DB,work?.source_provider ?? provider,work?.source_role_id ?? item.roleId);
+  // 一頁的卡一起查（屬於哪個作品、卡號），不是每張各查兩趟：作者卡多時這一頁不該跟著張數變慢
+  const works = await worksFor(c.env.DB, provider, body.items.map((item) => item.roleId));
+  const numbered = body.items.map((item) => { const work = works.get(item.roleId); return { provider: work?.source_provider ?? provider, roleId: work?.source_role_id ?? item.roleId }; });
+  const numbers = await ensureCardNumbers(c.env.DB, numbered);
+  const items = body.items.map((item, i) => {
+    const work = works.get(item.roleId);
+    const num = numbers.get(`${numbered[i]!.provider}\n${numbered[i]!.roleId}`)!;
     const source = work ? authoringSource(work, provider, item.roleId) : null;
     return {...item, num, detailId:String(num), provider, workId:work?.id, sourceProvider:source?.provider, sourceRoleId:source?.roleId};
-  }));
+  });
   return c.json({...body, items});
 });
 
