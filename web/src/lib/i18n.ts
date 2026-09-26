@@ -71,8 +71,10 @@ export async function loadLocale(code: string): Promise<void> {
 
 /** 切語言時把回退鏈上的語言也載進來，否則缺 key 會退到一份還沒下載的訊息。 */
 export async function applyLocale(code: string): Promise<void> {
-  const chain = [code, ...(FALLBACK[code] ?? FALLBACK.default)];
-  await Promise.all(chain.map(loadLocale));
+  // 只等這個語言本身；回退鏈在背景載。每種語言都要求 100% 覆蓋（scripts/i18n-check），回退幾乎用不到，
+  // 卻讓每次冷開都多等一個語言包、頁面程式碼才開始下載（2026-09-26 實測首頁多 0.2 s 以上）。
+  await loadLocale(code);
+  for (const fallback of FALLBACK[code] ?? FALLBACK.default) void loadLocale(fallback).catch(() => {});
   i18n.global.locale.value = code as never;
 
   const def = LOCALES.find((l) => l.code === code);
