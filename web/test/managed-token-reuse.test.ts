@@ -41,14 +41,15 @@ it('does not reuse a token that is about to expire', async () => {
   expect(issued).toBe(2);
 });
 
-it('checks the account behind a token once, even when the stage asks for it concurrently', async () => {
+// 伺服器換發時已核對帳號歸屬（issueToken）：託管模式不再另外問 /me（那一趟串在「我的卡片」前面約 0.7 s）
+it('trusts a server-issued token for its account without asking the provider who it belongs to', async () => {
   const { accountToken } = await import('@/lib/connections');
   const tokens = await Promise.all(Array.from({ length: 6 }, () => accountToken('harbor', 22)));
   expect(new Set(tokens)).toEqual(new Set(['grant-1']));
   expect(issued).toBe(1);
-  expect(meCalls).toBe(1);
+  expect(meCalls).toBe(0);
   expect(await accountToken('harbor', 22)).toBe('grant-1');
-  expect(meCalls).toBe(1);
+  expect(meCalls).toBe(0);
 });
 
 it('after the provider rejects the reused token, fetches the current grant and reports whether it changed', async () => {
@@ -59,7 +60,7 @@ it('after the provider rejects the reused token, fetches the current grant and r
   // 另一台設備換綁：伺服器現在發的是另一張
   expect(await recoverRejectedToken('harbor', token)).toBe(true);
   expect(await token()).toBe('grant-2');
-  expect(meCalls).toBe(2);
+  expect(meCalls).toBe(0);
 });
 
 it('sends the player to sign in again when the server still has the same rejected token', async () => {
