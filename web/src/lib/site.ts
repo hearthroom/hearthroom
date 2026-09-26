@@ -27,7 +27,7 @@ export const SITE = {
    * 這一頁在不在某個已裝 App 的範圍內，站台 App 的範圍是整站，所以卡片在主站上永遠裝不成第二個 App；
    * 這個網域上沒有範圍是根目錄的 App。Worker 那邊的對應在 src/site.ts。
    */
-  playHost: "play.hearthroom.club",
+  playHost: `play.${PRIMARY_HOST}`,
 } as const;
 
 /** 現在是不是跑在卡片 App 網域上（本機開發用 play.localhost，瀏覽器把 *.localhost 解到本機）。 */

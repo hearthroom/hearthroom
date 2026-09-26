@@ -1,3 +1,4 @@
+import { PRIMARY_HOST } from "../shared/site-hosts";
 import { getCard } from '../src/cards';
 import {approveFixtureResponse} from './hosted-fixture';
 import { SELF, env } from "cloudflare:test";
@@ -89,7 +90,7 @@ describe("卡號", () => {
     rolesOnMainSite({ roleId: "role-a", authorNumId: 10001 });
     await register("role-a");
     const html = await (await SELF.fetch("https://c.test/cards/100001")).text();
-    expect(html).toContain(`<link rel="canonical" href="https://hearthroom.club/cards/${(await getCard(env.DB, 'role-a'))!.id}">`);
+    expect(html).toContain(`<link rel="canonical" href="https://${PRIMARY_HOST}/cards/${(await getCard(env.DB, 'role-a'))!.id}">`);
   });
 });
 

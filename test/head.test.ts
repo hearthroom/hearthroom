@@ -1,3 +1,4 @@
+import { PRIMARY_HOST } from "../shared/site-hosts";
 import { createExecutionContext, env, SELF, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import worker from "../src/index";
@@ -34,7 +35,7 @@ describe("分享預覽", () => {
     expect(html).toContain('<link rel="preload" as="image" href="https://assets.harperharbor.com/bg.png" fetchpriority="high">');
     // canonical 一律指向正牌主機：搬家期間兩個網域並存，搜尋引擎要知道哪個才算數
     const card = await getCard(env.DB, 'r-1');
-    expect(html).toContain(`<link rel="canonical" href="https://hearthroom.club/cards/${card!.id}">`);
+    expect(html).toContain(`<link rel="canonical" href="https://${PRIMARY_HOST}/cards/${card!.id}">`);
     expect(html).toContain('<html lang="zh-Hant">');
     expect(headers.get("cache-control")).toBe("no-store");
     // 改寫過的內容不能沿用殼的驗證器：帶著它去重驗會拿到 304，卡改了也看不到
@@ -107,8 +108,8 @@ it.each([
   expect(html).toContain(`<title>${title}</title>`);
   expect(html).toContain(`<meta property="og:title" content="${title}">`);
   expect(html).toContain(`<meta property="og:locale" content="${locale}">`);
-  expect(html).toContain(`<meta property="og:url" content="https://hearthroom.club${prefix}/download">`);
-  expect(html).toContain('<meta property="og:image" content="https://hearthroom.club/icons/icon-512.png">');
+  expect(html).toContain(`<meta property="og:url" content="https://${PRIMARY_HOST}${prefix}/download">`);
+  expect(html).toContain(`<meta property="og:image" content="https://${PRIMARY_HOST}/icons/icon-512.png">`);
   expect(html).toContain('<meta name="twitter:title"');
   expect(html).toContain('Android');
   expect(headers.get('etag')).toBeNull();
@@ -117,13 +118,13 @@ it.each([
 it('trailing slashes do not lose the card-specific preview',async()=>{
   const {html}=await page('/en/cards/r-1/');
   expect(html).toContain('<meta property="og:title" content="Night Detective · Hearthroom">');
-  expect(html).toContain(`content="https://hearthroom.club/en/cards/${(await getCard(env.DB,'r-1'))!.id}"`);
+  expect(html).toContain(`content="https://${PRIMARY_HOST}/en/cards/${(await getCard(env.DB,'r-1'))!.id}"`);
 });
 
 it('canonical social URLs preserve the global identity when providers have the same upstream ID',async()=>{
   await upsertCard(env.DB,role({roleId:'r-1',name:'Harbor card'}),Date.now(),{status:'approved',provider:'harbor'});
   const card=await getCard(env.DB,'r-1','harbor');
-  const expected=`https://hearthroom.club/cards/${encodeURIComponent(card!.id)}`;
+  const expected=`https://${PRIMARY_HOST}/cards/${encodeURIComponent(card!.id)}`;
   for(const id of [encodeURIComponent(card!.id),String(card!.num)]){
     const {html}=await page(`/cards/${id}`);
     expect(html).toContain('content="Harbor card · Hearthroom"');

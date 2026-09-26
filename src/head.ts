@@ -1,3 +1,4 @@
+import { PRIMARY_HOST } from "../shared/site-hosts";
 /**
  * 分享預覽：把下載頁／卡片／作者的標題、簡介、圖片寫進 HTML 的 <head>。
  *
@@ -90,5 +91,5 @@ const DOWNLOAD_COPY: Record<string, {title:string;description:string}> = {
   ko: {title:"Hearthroom 다운로드",description:"Hearthroom 최신 Android APK와 설치 가이드입니다. 휴대폰 설치 단계, 앱 업데이트 및 브라우저 설치 방법을 확인하세요."},
 };
 export function downloadMeta(lang:string,url:string):PageMeta {
-  return {lang,...(DOWNLOAD_COPY[lang] ?? DOWNLOAD_COPY.en!),url,type:"website",image:"https://hearthroom.club/icons/icon-512.png"};
+  return {lang,...(DOWNLOAD_COPY[lang] ?? DOWNLOAD_COPY.en!),url,type:"website",image:`https://${PRIMARY_HOST}/icons/icon-512.png`};
 }
