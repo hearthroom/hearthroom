@@ -29,6 +29,8 @@ const boardCalls: string[] = [];
 let boardDelay = 10;
 /** 伺服器依 cookie 判斷：開了的人拿到成人版並標明 */
 let cookieAdult = true;
+/** 哪些榜是空的（新站日榜常常整天空著） */
+let empty = new Set<string>();
 
 const later = <T,>(ms: number, value: () => T) => new Promise<T>((r) => setTimeout(() => r(value()), ms));
 function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
@@ -41,7 +43,8 @@ function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respon
     boardCalls.push(url + (auth ? " [auth]" : ""));
     const adult = auth ? url.includes("nsfw=1") : cookieAdult;
     const sort = new URL(url, "https://x").searchParams.get("sort") ?? "day";
-    return later(boardDelay, () => json({ items: [card(`${sort}-1`, `${sort}${adult ? "（成人版）" : ""}`)], total: 1, hasNext: false, limit: 20, offset: 0, sort }, { "X-Adult-Content": adult ? "1" : "0" }));
+    const items = empty.has(sort) ? [] : [card(`${sort}-1`, `${sort}${adult ? "（成人版）" : ""}`)];
+    return later(boardDelay, () => json({ items, total: items.length, hasNext: false, limit: 20, offset: 0, sort }, { "X-Adult-Content": adult ? "1" : "0" }));
   }
   return Promise.resolve(json({}));
 }
@@ -49,7 +52,7 @@ function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respon
 let app: App | null = null;
 let el: HTMLElement | null = null;
 let router: Router;
-beforeEach(() => { resetManagedAuthForTest(true); forgetBoards(); vi.stubGlobal("fetch", fakeFetch); boardCalls.length = 0; boardDelay = 10; cookieAdult = true; });
+beforeEach(() => { resetManagedAuthForTest(true); forgetBoards(); vi.stubGlobal("fetch", fakeFetch); boardCalls.length = 0; boardDelay = 10; cookieAdult = true; empty = new Set(); });
 afterEach(() => { app?.unmount(); el?.remove(); app = null; el = null; vi.unstubAllGlobals(); });
 
 async function open(path = "/") {
@@ -118,5 +121,38 @@ describe("切換分頁", () => {
     await nextTick();
     await nextTick();
     expect(el!.textContent).not.toContain("random-1");
+  });
+});
+
+describe("日榜是空的", () => {
+  const on = () => el!.querySelector(".sorts__item--on")?.textContent?.trim();
+  it("一進首頁日榜空著：改放週榜、週榜那顆亮起來，並說一句為什麼", async () => {
+    empty = new Set(["day"]);
+    await open();
+    expect(el!.textContent).toContain("week（成人版）");
+    expect(on()).toBe(i18n.global.t("board.sort.week"));
+    expect(el!.textContent).toContain(i18n.global.t("board.fallback.week"));
+  });
+
+  it("週榜也空：改放最熱", async () => {
+    empty = new Set(["day", "week"]);
+    await open();
+    expect(el!.textContent).toContain("hot（成人版）");
+    expect(on()).toBe(i18n.global.t("board.sort.hot"));
+    expect(el!.textContent).toContain(i18n.global.t("board.fallback.hot"));
+  });
+
+  it("自己點了日榜：照實給空的日榜，不偷換", async () => {
+    empty = new Set(["day"]);
+    await open("/?sort=day");
+    expect(el!.textContent).not.toContain("week");
+    expect(on()).toBe(i18n.global.t("board.sort.day"));
+    expect(el!.textContent).not.toContain(i18n.global.t("board.fallback.week"));
+  });
+
+  it("日榜有卡就照常是日榜", async () => {
+    await open();
+    expect(on()).toBe(i18n.global.t("board.sort.day"));
+    expect(boardCalls.every((c) => c.includes("sort=day"))).toBe(true);
   });
 });

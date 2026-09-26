@@ -16,6 +16,8 @@
   "board.sort.hot": "最热",
   "board.sort.new": "最新",
   "board.count": "{n} 张",
+  "board.fallback.week": "今天的日榜还是空的，这里先放本周榜单。",
+  "board.fallback.hot": "这周还没有新上榜的卡，这里先放最热门的卡。",
   "board.empty.title": "这一区还没有作品",
   "board.empty.hint": "换一区看看，或到「我的卡片」把你的作品放上来。",
   "board.empty.search.title": "没有符合的卡片",
