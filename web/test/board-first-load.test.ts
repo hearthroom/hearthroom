@@ -18,6 +18,8 @@ import BoardPage from "../src/pages/BoardPage.vue";
 import { useSession } from "../src/lib/session";
 import { resetManagedAuthForTest } from "../src/lib/managed-auth";
 import { forgetBoards } from "../src/lib/board-memory";
+import { resetInlineBoardForTest } from "../src/lib/board-inline";
+import { recallCard } from "../src/lib/card-memory";
 
 const PROFILE = { handle: "abcdefgh", memberSince: 0, reviewer: false, identities: [], showNsfw: true, ageVerified: true, adultConsent: true, hiddenTags: [] };
 const card = (id: string, name: string) => ({
@@ -54,7 +56,7 @@ function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respon
 let app: App | null = null;
 let el: HTMLElement | null = null;
 let router: Router;
-beforeEach(() => { resetManagedAuthForTest(true); forgetBoards(); vi.stubGlobal("fetch", fakeFetch); boardCalls.length = 0; boardDelay = 10; cookieAdult = true; empty = new Set(); });
+beforeEach(() => { resetManagedAuthForTest(true); forgetBoards(); resetInlineBoardForTest(); document.getElementById("board-inline")?.remove(); vi.stubGlobal("fetch", fakeFetch); boardCalls.length = 0; boardDelay = 10; cookieAdult = true; empty = new Set(); });
 afterEach(() => { app?.unmount(); el?.remove(); app = null; el = null; vi.unstubAllGlobals(); });
 
 async function open(path = "/") {
@@ -172,5 +174,48 @@ describe("日榜是空的", () => {
     const weekCalls = boardCalls.filter((c) => c.includes("sort=week"));
     expect(weekCalls, boardCalls.join("\n")).toHaveLength(1);
     expect(Date.now() - started).toBeLessThan(400);
+  });
+});
+
+describe("首頁 HTML 裡已經放好第一屏的榜單", () => {
+  function plant(page: unknown, query = { zone: "zh", lang: "zh", sort: "day", offset: 0 }) {
+    const node = document.createElement("script");
+    node.id = "board-inline";
+    node.type = "application/json";
+    node.textContent = JSON.stringify({ query, page });
+    document.head.appendChild(node);
+  }
+  const inlinePage = (sort: string, name: string) => ({ items: [card(`inline-${sort}`, name)], total: 1, hasNext: false, limit: 20, offset: 0, sort, adult: true });
+
+  it("直接畫出來、不再讀日榜；用過就拿掉；卡片記住了，點進去立刻有", async () => {
+    plant(inlinePage("day", "預先放好的卡"));
+    await open();
+    expect(el!.textContent).toContain("預先放好的卡");
+    expect(dayCalls(), boardCalls.join("\n")).toHaveLength(0);
+    expect(document.getElementById("board-inline")).toBeNull();
+    expect(recallCard("inline-day")?.name).toBe("預先放好的卡");
+  });
+
+  it("預先放的是週榜（日榜空著）：亮週榜、說一句為什麼", async () => {
+    plant(inlinePage("week", "本週的卡"));
+    await open();
+    expect(el!.textContent).toContain("本週的卡");
+    expect(el!.querySelector(".sorts__item--on")?.textContent?.trim()).toBe(i18n.global.t("board.sort.week"));
+    expect(el!.textContent).toContain(i18n.global.t("board.fallback.week"));
+    expect(dayCalls()).toHaveLength(0);
+  });
+
+  it("條件對不上（例如另一個語區）就不用，照常讀", async () => {
+    plant(inlinePage("day", "英文區的卡"), { zone: "en", lang: "en", sort: "day", offset: 0 });
+    await open();
+    expect(el!.textContent).not.toContain("英文區的卡");
+    expect(dayCalls()).toHaveLength(1);
+  });
+
+  it("身分到了、發現開關對不上（HTML 裡是一般版）：照舊重讀一次", async () => {
+    plant({ ...inlinePage("day", "一般版"), adult: false });
+    await open();
+    expect(el!.textContent).toContain("day（成人版）");
+    expect(dayCalls()).toHaveLength(1);
   });
 });

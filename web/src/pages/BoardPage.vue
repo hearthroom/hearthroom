@@ -8,6 +8,8 @@ import FollowFeed from "@/components/FollowFeed.vue";
 import CardGrid from "@/components/CardGrid.vue";
 import { fetchBoard } from "@/lib/api";
 import { recallBoard, rememberBoard } from "@/lib/board-memory";
+import { takeInlineBoard } from "@/lib/board-inline";
+import { rememberCards } from "@/lib/card-memory";
 import { contentLang, defaultZone } from "@/lib/i18n";
 import DiscoveryTags from "@/components/DiscoveryTags.vue";
 import { selectedTags } from "@/lib/discovery";
@@ -104,6 +106,26 @@ async function load() {
   const landing = route.query.sort === undefined && !tags.value.length && offset.value === 0;
   // 看過的分頁先畫出來，背景照常重讀；沒看過的才讓舊畫面變淡等它
   if (remembered) { page.value = remembered; fallbackSort.value = remembered.sort !== query.sort ? remembered.sort : null; }
+  // 新開的首頁：HTML 裡已經放好第一屏的榜單（照看的人的 cookie 讀的，日榜空著時已改放週榜／最熱），
+  // 直接畫、不再讀一次。身分到了由下面的 watch 比對開關，對不上照舊重讀。
+  const inline = landing && !remembered ? takeInlineBoard(query) : null;
+  if (inline) {
+    rememberCards(inline.items);
+    page.value = inline;
+    fallbackSort.value = inline.sort !== query.sort && inline.items.length ? inline.sort : null;
+    loading.value = false;
+    if (key) rememberBoard(key, inline);
+    // 日榜有卡：週榜照樣在背景讀好記起來（點過去不必等）；改放的是週榜：它本身就是週榜
+    if (inline.sort === "week") earlyWeek = inline;
+    else if (query.sort === "day") {
+      void fetchBoard({ ...query, sort: "week" }).then((week) => {
+        const weekKey = memoryKey({ ...query, sort: "week" });
+        if (weekKey) rememberBoard(weekKey, week);
+        else earlyWeek = week;
+      }).catch(() => {});
+    }
+    return;
+  }
   loading.value = !remembered;
   // 一進首頁就同時讀週榜：日榜空著時不必再多等一趟（實測 0.54 s）；日榜有卡時它記起來，點週榜就是現成的
   const weekEarly = landing && query.sort === "day" ? fetchBoard({ ...query, sort: "week" }).catch(() => null) : null;

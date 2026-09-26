@@ -299,12 +299,12 @@ describe("本站登入 cookie 直接放行單卡", () => {
   // 否則開了成人內容的人重新整理會先看到成人門、等兩趟往返才出卡（玩家回報 2026-09-26）。
   const origin = "https://c.test";
   const cookieEnv = () => ({ ...env, AUTH_ENABLED: "true", AUTH_ALLOWED_ORIGINS: origin });
-  async function siteSession(accountNumId: number, raw = `session-${accountNumId}`): Promise<string> {
+  async function siteSession(accountNumId: number, raw = `session-${accountNumId}`, at = origin): Promise<string> {
     const memberId = await makeMember(accountNumId);
     const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw)));
     const tokenHash = btoa(String.fromCharCode(...digest)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
     await env.DB.prepare("INSERT INTO account_sessions VALUES (?,?,?,?,?,?,?)")
-      .bind(tokenHash, memberId, "harbor", String(accountNumId), origin, Date.now(), Date.now() + 86400000).run();
+      .bind(tokenHash, memberId, "harbor", String(accountNumId), at, Date.now(), Date.now() + 86400000).run();
     return `__Host-hr-session=${raw}`;
   }
   async function read(path: string, cookie?: string) {
@@ -413,6 +413,21 @@ describe("本站登入 cookie 直接放行單卡", () => {
     // 關掉開關：cookie 讀到的也立刻只剩一般內容
     await settings({ showNsfw: false });
     expect(ids(await json(await read("/v1/cards?zone=all&c=1", cookie)))).toEqual(["role-safe"]);
+  });
+
+  it("首頁 HTML 裡的第一屏榜單照看的人的開關：開了的人直接拿到成人版，這份不進任何快取", async () => {
+    await listTwo();
+    const site = "https://hearthroom.club";
+    const cookie = await siteSession(VIEWER, "session-landing", site);
+    await settings({ showNsfw: true, birthdate: adultBirthdate(), consentVersion: ADULT_CONSENT_VERSION });
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(new Request(`${site}/`, { headers: { Cookie: cookie } }), { ...envWithAssets(), AUTH_ENABLED: "true", AUTH_ALLOWED_ORIGINS: site }, ctx);
+    await waitOnExecutionContext(ctx);
+    const html = await res.text();
+    const data = JSON.parse(/<script id="board-inline" type="application\/json">([\s\S]*?)<\/script>/.exec(html)![1]!);
+    expect(data.page.adult).toBe(true);
+    expect(data.page.items.map((i: { sourceRoleId: string }) => i.sourceRoleId).sort()).toEqual(["role-adult", "role-safe"]);
+    expect(res.headers.get("Cache-Control")).toBe("private, no-store");
   });
 
   it("沒有 cookie 的匿名榜單讀取不碰身分查詢", async () => {

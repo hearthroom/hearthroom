@@ -40,6 +40,8 @@ import {
 } from "./analytics";
 import { authorLine, downloadMeta, preloadImageTag, renderHead } from "./head";
 import { aliasTarget, HOST, canonicalUrl, isPlayHost } from "./site";
+import { cardThumbUrl, landingZone } from "../shared/card-thumb";
+import { PRIMARY_HOST, siteRootOf } from "../shared/site-hosts";
 import { loadMine, type MineFilter } from "./mine";
 import { tagNamesFor } from "../shared/tag-catalog";
 import { providerOf, requestIdentity, isReviewer, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
@@ -1258,8 +1260,62 @@ app.get("/assets/*", async (c) => {
   });
 });
 
+/**
+ * 首頁：把第一屏的榜單直接放進 HTML，第一張卡的縮圖也先叫瀏覽器下載。
+ *
+ * 新訪客冷開首頁原本是一串接一串：HTML → 主程式 → 讀榜（約 0.5 s）→ 圖。榜單在 HTML 裡的話，
+ * 主程式一跑起來就有卡可畫，縮圖也跟主程式同時下載（2026-09-26，首頁要激進地快）。
+ *
+ * 用看的人自己的 cookie 讀，所以登入、開了成人內容的人拿到的也是他的版本；有 cookie 的回應不進任何快取。
+ * 日榜空著就照前端的規則改放週榜、再不行放最熱。只做沒帶任何篩選的首頁、只在正式網域上；
+ * 讀榜超過 LANDING_BUDGET_MS（快取沒命中）就照舊回純殼，前端自己讀——HTML 不能因此變慢。
+ */
+const LANDING = /^(?:\/(zh-Hans|en|ja|ko))?\/?$/;
+const LANDING_FILTERS = ["sort", "tag", "offset", "mode", "q", "period"];
+const LANDING_SORTS = ["day", "week", "hot"] as const;
+const LANDING_BUDGET_MS = 400;
+type LandingBoard = { body: { items: { avatarUrl?: string | null }[] } & Record<string, unknown>; adult: boolean };
+
+async function landingPage(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, url: URL, locale: string): Promise<Response | null> {
+  const zone = landingZone(locale);
+  const cookie = c.req.header("Cookie") ?? "";
+  const read = async (): Promise<LandingBoard | null> => {
+    for (const sort of LANDING_SORTS) {
+      const res = await app.request(new URL(`/v1/cards?zone=${zone}&sort=${sort}&offset=0&lang=${zone}`, url).toString(), { headers: { Cookie: cookie } }, c.env, c.executionCtx);
+      if (!res.ok) return null;
+      const body = (await res.json()) as LandingBoard["body"];
+      if (body.items.length || sort === "hot") return { body, adult: res.headers.get("X-Adult-Content") === "1" };
+    }
+    return null;
+  };
+  const board = await Promise.race([
+    read().catch(() => null),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), LANDING_BUDGET_MS)),
+  ]);
+  if (!board) return null;
+  const shell = await c.env.ASSETS.fetch(new Request(new URL("/", url).toString()));
+  if (!shell.ok) return null;
+  // 卡名、簡介是作者寫的字：放進 <script> 之前把 < 與兩個 JS 換行字元跳脫，作者寫了 </script> 也關不掉這一段
+  const payload = JSON.stringify({ query: { zone, lang: zone, sort: "day", offset: 0 }, page: { ...board.body, adult: board.adult } })
+    .replace(/</g, "\\u003c").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
+  const first = board.body.items.find((item) => item.avatarUrl)?.avatarUrl;
+  const thumb = first ? cardThumbUrl(PRIMARY_HOST, first) : null;
+  const tags = `<script id="board-inline" type="application/json">${payload}</script>${thumb ? preloadImageTag(thumb) : ""}`;
+  const res = new HTMLRewriter().on("head", { element(e) { e.append(tags, { html: true }); } }).transform(shell);
+  res.headers.set("Cache-Control", cookie.includes("__Host-hr-session=") ? "private, no-store" : "no-store");
+  res.headers.delete("etag");
+  res.headers.delete("last-modified");
+  return res;
+}
+
 app.get("*", async (c) => {
   const url = new URL(c.req.url);
+  const landing = url.pathname.match(LANDING);
+  if (landing && siteRootOf(url.hostname) && !isPlayHost(url.host) && !LANDING_FILTERS.some((key) => url.searchParams.has(key))) {
+    const page = await landingPage(c, url, landing[1] ?? "zh-Hant");
+    note(c, { event: "page_html", refHost: refHostOf(c.req.header("Referer"), url.host), detail: page ? "landing" : "page" });
+    if (page) return page;
+  }
   const m = url.pathname.match(PAGE);
   // 不是要注入的頁面就原樣交回資源層——靜態檔給檔案本身，其餘走它的 SPA 回退。
   // 一律回殼的話，/assets/x.js 會拿到一份 HTML，整站直接掛。
