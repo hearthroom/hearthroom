@@ -26,6 +26,8 @@ const card = (id: string, name: string) => ({
   talkNum: 0, followNum: 0, trending: 0, registeredAt: 0, syncedAt: 0, provider: "harbor", nsfw: false,
 });
 const boardCalls: string[] = [];
+/** 日榜讀了幾次（一進首頁會同時讀週榜，那一趟不算） */
+const dayCalls = () => boardCalls.filter((c) => c.includes("sort=day"));
 let boardDelay = 10;
 /** 伺服器依 cookie 判斷：開了的人拿到成人版並標明 */
 let cookieAdult = true;
@@ -75,14 +77,14 @@ describe("首頁第一次讀榜", () => {
   it("第一次就照帳號開關讀到成人版：身分到了不再讀第二次", async () => {
     await open();
     expect(el!.textContent).toContain("day（成人版）");
-    expect(boardCalls, boardCalls.join("\n")).toHaveLength(1);
+    expect(dayCalls(), boardCalls.join("\n")).toHaveLength(1);
   });
 
   it("第一次拿到的跟開關對不上（伺服器沒認出來）：身分到了照舊重讀一次", async () => {
     cookieAdult = false;
     await open();
     expect(el!.textContent).toContain("day（成人版）");
-    expect(boardCalls, boardCalls.join("\n")).toHaveLength(2);
+    expect(dayCalls(), boardCalls.join("\n")).toHaveLength(2);
   });
 
   it("身分比榜單先到也一樣：榜單回來時才比對，對得上就不重讀", async () => {
@@ -90,7 +92,7 @@ describe("首頁第一次讀榜", () => {
     await open();
     await later(100, () => null);
     expect(el!.textContent).toContain("day（成人版）");
-    expect(boardCalls, boardCalls.join("\n")).toHaveLength(1);
+    expect(dayCalls(), boardCalls.join("\n")).toHaveLength(1);
   });
 });
 
@@ -150,9 +152,25 @@ describe("日榜是空的", () => {
     expect(el!.textContent).not.toContain(i18n.global.t("board.fallback.week"));
   });
 
-  it("日榜有卡就照常是日榜", async () => {
+  it("日榜有卡就照常是日榜；同時讀好的週榜記起來，點過去不必等", async () => {
     await open();
     expect(on()).toBe(i18n.global.t("board.sort.day"));
-    expect(boardCalls.every((c) => c.includes("sort=day"))).toBe(true);
+    expect(el!.textContent).toContain("day（成人版）");
+    boardDelay = 500;
+    await router.push("/?sort=week");
+    await nextTick();
+    await nextTick();
+    expect(el!.textContent).toContain("week");
+  });
+
+  it("日榜空著時，週榜那一趟早就跟日榜一起出門，不是等日榜回來才讀", async () => {
+    empty = new Set(["day"]);
+    boardDelay = 80;
+    const started = Date.now();
+    await open();
+    expect(el!.textContent).toContain("week");
+    const weekCalls = boardCalls.filter((c) => c.includes("sort=week"));
+    expect(weekCalls, boardCalls.join("\n")).toHaveLength(1);
+    expect(Date.now() - started).toBeLessThan(400);
   });
 });
