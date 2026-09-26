@@ -14,8 +14,8 @@ declare module "moonstage/stage" {
       toast(text: string, kind?: "info" | "success" | "error" | "warning"): void;
       confirm(options: { title?: string; content: string; confirmText?: string; cancelText?: string }): Promise<boolean>;
       loading(on: boolean): void;
-      /** 對話頁頂欄的實際底色，塗到系統狀態列；bottom 是輸入區底色（底部工具列）；null＝離開對話頁，還原。 */
-      themeColor?(color: string | null, bottom?: string | null): void;
+      /** 對話頁頂欄的實際底色，塗到系統狀態列；null＝離開對話頁，還原。 */
+      themeColor?(color: string | null): void;
     };
     storage: { get(key: string): string | null; set(key: string, value: string): void; remove(key: string): void };
     nav: { back(): void; toEntry(): void; toLogin(returnTo?: string): void; canBack?(): boolean };
