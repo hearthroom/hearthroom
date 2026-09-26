@@ -22,6 +22,10 @@ const session = useSession();
 const { t } = useI18n();
 
 const page = ref<CardPage | null>(null);
+/** 日榜是空的、畫面上改放的是哪個榜；沒有改放時是 null */
+const fallbackSort = ref<Sort | null>(null);
+/** 分頁列亮哪一個、增量要不要顯示：跟著畫面上實際是哪個榜 */
+const shownSort = computed<Sort>(() => fallbackSort.value ?? sort.value);
 const loading = ref(true);
 const error = ref("");
 
@@ -29,6 +33,12 @@ const error = ref("");
 const SORTS: Sort[] = ["day", "week", "month", "hot", "new", "random"];
 /** 三個開窗的榜才顯示「正在被聊」的增量：最熱是累積量，增量在那裡沒意義。 */
 const WINDOWED = new Set<Sort>(["day", "week", "month"]);
+/**
+ * 一進首頁（沒指定榜、沒篩類型、第一頁）而日榜是空的：新站人少，日榜常常整天空著，
+ * 第一屏一張卡都沒有看起來像沒人的站（owner 2026-09-26）。依序改放週榜（還是「最近」，有正在被聊的增量），
+ * 再不行放最熱（累積量，站上有卡就不會空）。自己點了日榜的人照實看日榜。
+ */
+const LANDING_FALLBACK: Sort[] = ["week", "hot"];
 
 
 /** 角色卡探索或關注動態；相容舊作者榜連結。 */
@@ -84,13 +94,23 @@ async function load() {
   const query = currentQuery();
   const key = memoryKey(query);
   const remembered = key ? recallBoard(key) : null;
+  const landing = route.query.sort === undefined && !tags.value.length && offset.value === 0;
   // 看過的分頁先畫出來，背景照常重讀；沒看過的才讓舊畫面變淡等它
-  if (remembered) page.value = remembered;
+  if (remembered) { page.value = remembered; fallbackSort.value = remembered.sort !== query.sort ? remembered.sort : null; }
   loading.value = !remembered;
   try {
-    const result = await fetchBoard(query);
+    let result = await fetchBoard(query);
+    if (landing && !result.items.length) {
+      for (const next of LANDING_FALLBACK) {
+        const alternative = await fetchBoard({ ...query, sort: next });
+        if (id !== loadId) return;
+        result = alternative;
+        if (alternative.items.length) break;
+      }
+    }
     if (id !== loadId) return;
     page.value = result;
+    fallbackSort.value = result.sort !== query.sort && result.items.length ? result.sort : null;
     const storeKey = memoryKey(query);
     if (storeKey) rememberBoard(storeKey, result);
     if (recheckAfterLoad && session.profile) {
@@ -151,7 +171,7 @@ watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (no
       </div>
 
       <div v-if="mode === 'cards'" class="sorts" role="group" :aria-label="$t('board.sorts')">
-        <button v-for="s in SORTS" :key="s" class="sorts__item" :class="{ 'sorts__item--on': sort === s }" :aria-pressed="sort === s" @click="navigate({ sort: s })">
+        <button v-for="s in SORTS" :key="s" class="sorts__item" :class="{ 'sorts__item--on': shownSort === s }" :aria-pressed="shownSort === s" @click="navigate({ sort: s })">
           {{ $t(`board.sort.${s}`) }}
         </button>
       </div>
@@ -164,6 +184,7 @@ watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (no
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
 
     <template v-if="mode === 'cards'">
+      <p v-if="fallbackSort" class="subtle count" role="status">{{ $t(`board.fallback.${fallbackSort}`) }}</p>
       <p v-if="page && page.total !== null" class="subtle count">{{ $t("board.count", { n: page.total }) }}</p>
       <CardGrid
         :cards="page?.items ?? []"
@@ -171,7 +192,7 @@ watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (no
         :busy="loading"
         :ranked="!tags.length"
         :rank-offset="page?.offset ?? 0"
-        :show-trending="WINDOWED.has(sort)"
+        :show-trending="WINDOWED.has(shownSort)"
         :empty-title="$t(tags.length ? 'board.empty.search.title' : 'board.empty.title')"
         :empty-hint="$t(tags.length ? 'board.empty.search.hint' : 'board.empty.hint')"
       />

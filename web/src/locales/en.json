@@ -16,6 +16,8 @@
   "board.sort.hot": "Top",
   "board.sort.new": "Newest",
   "board.count": "{n} cards",
+  "board.fallback.week": "Today's chart is still empty, so here is this week's.",
+  "board.fallback.hot": "No new cards this week yet, so here are the most popular ones.",
   "board.empty.title": "Nothing here yet",
   "board.empty.hint": "Try another language, or list your own from “My cards”.",
   "board.empty.search.title": "Nothing matched",

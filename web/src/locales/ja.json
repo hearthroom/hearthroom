@@ -16,6 +16,8 @@
   "board.sort.hot": "人気",
   "board.sort.new": "新着",
   "board.count": "{n} 件",
+  "board.fallback.week": "今日のランキングはまだ空なので、今週のランキングを表示しています。",
+  "board.fallback.hot": "今週はまだ新しいカードがないので、人気のカードを表示しています。",
   "board.empty.title": "このエリアにはまだ作品がありません",
   "board.empty.hint": "他の言語を見るか、「マイカード」から自分の作品を提出してください。",
   "board.empty.search.title": "該当するカードがありません",
