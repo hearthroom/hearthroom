@@ -127,6 +127,12 @@ router.beforeEach(async (to) => {
   // Static assets are public. Start before locale/session waits; the auth gate and
   // player installation still run in their original order.
   if (to.meta.preloadStage) void preloadStage();
+  // 這一頁的程式碼跟語言包同時下載。原本要等語言包與整串守衛跑完，vue-router 才開始抓頁面，
+  // 冷開首頁時頁面程式碼晚了約 0.6 s 才出發（2026-09-26 實測）。同一個 import 之後再呼叫會拿到同一份。
+  for (const record of to.matched) {
+    const view = record.components?.default;
+    if (typeof view === "function") void (view as () => Promise<unknown>)().catch(() => {});
+  }
   await applyLocale(locale);
   // 去掉語言前綴的路徑，才是各語言版本共同的那一頁（卡片 App 網域不進搜尋，沒有各語言版本）
   if (!isPlayHost()) updateHreflang(locale === SOURCE_LOCALE ? to.path : to.path.replace(`/${locale}`, "") || "/");
