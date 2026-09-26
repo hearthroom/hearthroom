@@ -20009,11 +20009,11 @@
           },
           "rebatePercent": {
             "type": "number",
-            "description": "Percentage of the referred user's purchased credits spent in agent conversations that is credited to the referrer."
+            "description": "Percentage of each later top-up by the referred user credited to the referrer, `holdDays` days after that payment if it was not refunded."
           },
           "rebateDays": {
             "type": "integer",
-            "description": "How many days after binding the `rebatePercent` reward continues."
+            "description": "How many days after binding the referred user's top-ups keep earning the referrer rewards."
           },
           "bindDays": {
             "type": "integer",
@@ -20078,7 +20078,7 @@
           },
           "pending": {
             "type": "integer",
-            "description": "First top-up rewards still inside the waiting period."
+            "description": "Top-up rewards still inside the waiting period."
           },
           "earned": {
             "type": "integer",
@@ -20087,7 +20087,7 @@
           "nextRewardAt": {
             "type": "string",
             "format": "date-time",
-            "description": "When the next pending first top-up reward is due. Present only when `pending` is above 0."
+            "description": "When the next pending top-up reward is due. Present only when `pending` is above 0."
           }
         }
       }
