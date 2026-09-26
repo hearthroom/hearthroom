@@ -1265,11 +1265,14 @@ app.get("/assets/*", async (c) => {
  * 用看的人自己的 cookie 讀，所以登入、開了成人內容的人拿到的也是他的版本；有 cookie 的回應不進任何快取。
  * 日榜空著就照前端的規則改放週榜、再不行放最熱。只做沒帶任何篩選的首頁、只在正式網域上；
  * 讀榜超過 LANDING_BUDGET_MS（快取沒命中）就照舊回純殼，前端自己讀——HTML 不能因此變慢。
+ * 快取命中約 50 ms；沒命中要 0.3–0.5 s（部署後與冷門語區常見，快取 5 分鐘）。預算放寬到 400 ms 時，
+ * 沒命中的人反而比原本多等 0.4 s（2026-09-26 部署後實測），所以壓到 150 ms，
+ * 而且沒趕上的那次讀取照樣在背景跑完、填進快取，前端緊接著自己讀時就是命中。
  */
 const LANDING = /^(?:\/(zh-Hans|en|ja|ko))?\/?$/;
 const LANDING_FILTERS = ["sort", "tag", "offset", "mode", "q", "period"];
 const LANDING_SORTS = ["day", "week", "hot"] as const;
-const LANDING_BUDGET_MS = 400;
+const LANDING_BUDGET_MS = 150;
 type LandingBoard = { body: { items: { avatarUrl?: string | null }[] } & Record<string, unknown>; adult: boolean };
 
 async function landingPage(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, url: URL, locale: string): Promise<Response | null> {
@@ -1284,8 +1287,10 @@ async function landingPage(c: Context<{ Bindings: Env; Variables: { ev: Pending 
     }
     return null;
   };
+  const reading = read().catch(() => null);
+  c.executionCtx.waitUntil(reading);
   const board = await Promise.race([
-    read().catch(() => null),
+    reading,
     new Promise<null>((resolve) => setTimeout(() => resolve(null), LANDING_BUDGET_MS)),
   ]);
   if (!board) return null;
