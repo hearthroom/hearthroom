@@ -51,8 +51,8 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
     整張卡都可以點，但標籤與作者各自是連結——所以外層不是 <a>（連結不能套連結）。
     名字的連結用 ::after 撐滿整張卡，標籤與作者疊在它上面。
   -->
-  <!-- 不淡入：清單的卡就是首屏最大的內容，從透明淡入會讓首屏晚約 0.4 s 才算畫好（2026-09-26 實測 891 → 496 ms） -->
-  <article class="card">
+  <!-- 進場用 settle 不用 rise：卡片就是首屏最大的內容，要一出現就看得見（見 base.css） -->
+  <article class="card settle">
     <div class="card__art">
       <img
         v-if="hasArt"

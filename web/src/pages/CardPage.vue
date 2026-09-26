@@ -306,8 +306,8 @@ watch(() => session.profile?.showNsfw, (now, before) => {
       </p>
 
       <div class="role__layout" :aria-busy="revalidating || undefined">
-        <!-- 不淡入：卡片大圖在這一塊，淡入會讓首屏晚約 0.4 s 才算畫好 -->
-        <aside class="role__side panel">
+        <!-- 進場用 settle：卡片大圖在這一塊，要一出現就看得見（見 base.css） -->
+        <aside class="role__side panel settle">
           <div class="role__art">
             <img v-if="hasArt" :src="card.avatarUrl!" alt="" fetchpriority="high" @error="broken = true" />
             <div v-else class="role__void" :style="{ background: `linear-gradient(160deg, hsl(${hue} 45% 78%), hsl(${(hue + 40) % 360} 40% 62%))` }">
@@ -383,7 +383,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
           </div>
 
           <!-- 主頁：作者裝修過就照他的版面；沒有就是簡介＋開場白 -->
-          <div v-show="tab === 'home'" id="panel-home" class="panel role__home" role="tabpanel" aria-labelledby="tab-home">
+          <div v-show="tab === 'home'" id="panel-home" class="panel role__home settle" role="tabpanel" aria-labelledby="tab-home">
             <PreviewDoc v-if="previewDoc" :doc="previewDoc" :skin-id="previewSkin" @fallback="previewDoc = null" />
             <template v-else>
               <section class="role__block">
