@@ -1574,7 +1574,7 @@
           }
         },
         "x-harperharbor": {
-          "description": "Returns stored messages, newest first, plus durable operation outcomes. Requires chat.play and conversation ownership. page starts at 1; pageSize defaults to 50 and is limited to 100. chats contains public chat IDs, message text, thinking text, model, turnStatus and completion state. Partial output remains visible after interruption. HarperHarbor advertises responseSettingsVersion=1 for conversation response preferences.",
+          "description": "Returns stored messages, newest first, plus durable operation outcomes. Requires chat.play and conversation ownership. pageNum starts at 1 (page is accepted as an older alias); pageSize defaults to 50 and is limited to 100. chats contains public chat IDs, message text, thinking text, model, turnStatus and completion state. Partial output remains visible after interruption. HarperHarbor advertises responseSettingsVersion=1 for conversation response preferences.",
           "security": [
             {
               "userToken": []
@@ -1591,7 +1591,7 @@
               }
             },
             {
-              "name": "page",
+              "name": "pageNum",
               "in": "query",
               "required": false,
               "schema": {
@@ -1599,6 +1599,17 @@
                 "minimum": 1,
                 "default": 1
               }
+            },
+            {
+              "name": "page",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "integer",
+                "minimum": 1,
+                "default": 1
+              },
+              "description": "Older alias of pageNum; used only when pageNum is absent."
             },
             {
               "name": "pageSize",
@@ -3037,7 +3048,7 @@
           }
         },
         "x-harperharbor": {
-          "description": "Opens or resumes the current conversation for the caller and agent. Requires chat.play and agent access. Inserts the selected greeting only when creating the conversation; this endpoint does not call a model. Returns conversationId, defaultRelay (greeting text), historyConversation, roleInfo and xmlV3Compatibility=false. Missing or invalid roleId returns 400. Shareable configurations can be used across application tenants without community review. The conversation, player settings and subsequent charges remain scoped to the calling application and player; the source configuration and its Lorebooks remain in their storage tenant. HarperHarbor advertises responseSettingsVersion=1 for conversation response preferences.",
+          "description": "Opens or resumes the current conversation for the caller and agent. Requires chat.play and agent access. Inserts the selected greeting only when creating the conversation; this endpoint does not call a model. Returns conversationId, defaultRelay (greeting text), historyConversation, roleInfo and xmlV3Compatibility=false. With firstPageSize above 0 (limit 100), a resumed conversation also returns firstPage, the same object as conversation/messages with pageNum=1 and that pageSize; a new conversation returns none. Missing or invalid roleId returns 400. Shareable configurations can be used across application tenants without community review. The conversation, player settings and subsequent charges remain scoped to the calling application and player; the source configuration and its Lorebooks remain in their storage tenant. HarperHarbor advertises responseSettingsVersion=1 for conversation response preferences.",
           "security": [
             {
               "userToken": []
@@ -3146,6 +3157,135 @@
                       "responseSettingsVersion": {
                         "type": "integer",
                         "const": 1
+                      },
+                      "firstPage": {
+                        "type": "object",
+                        "properties": {
+                          "total": {
+                            "type": "integer"
+                          },
+                          "size": {
+                            "type": "integer"
+                          },
+                          "pages": {
+                            "type": "integer"
+                          },
+                          "hasNextPage": {
+                            "type": "boolean"
+                          },
+                          "chats": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "chatId": {
+                                  "type": "string",
+                                  "format": "uuid"
+                                },
+                                "chatRole": {
+                                  "type": "string",
+                                  "enum": [
+                                    "USER",
+                                    "AI"
+                                  ]
+                                },
+                                "chatMessage": {
+                                  "type": "string"
+                                },
+                                "contentThinking": {
+                                  "type": "string"
+                                },
+                                "isComplete": {
+                                  "type": "boolean"
+                                },
+                                "isFirst": {
+                                  "type": "boolean"
+                                },
+                                "model": {
+                                  "type": "string"
+                                },
+                                "turnStatus": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          },
+                          "operations": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "operationId": {
+                                  "type": "string",
+                                  "format": "uuid"
+                                },
+                                "clientOperationId": {
+                                  "type": "string"
+                                },
+                                "conversationId": {
+                                  "type": "string",
+                                  "format": "uuid"
+                                },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "send"
+                                  ]
+                                },
+                                "state": {
+                                  "type": "string",
+                                  "enum": [
+                                    "accepted",
+                                    "generating",
+                                    "completed",
+                                    "failed_retryable",
+                                    "interrupted",
+                                    "stopped"
+                                  ]
+                                },
+                                "version": {
+                                  "type": "integer"
+                                },
+                                "outputDisposition": {
+                                  "type": "string"
+                                },
+                                "retryable": {
+                                  "type": "boolean"
+                                },
+                                "assistantChatId": {
+                                  "type": "string",
+                                  "format": "uuid"
+                                },
+                                "sourceChatId": {
+                                  "type": "string",
+                                  "format": "uuid"
+                                },
+                                "chargeCredits": {
+                                  "type": "integer"
+                                },
+                                "settled": {
+                                  "type": "boolean"
+                                },
+                                "allowedActions": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "operationStatusAvailable": {
+                            "type": "boolean"
+                          },
+                          "schemaVersion": {
+                            "type": "string"
+                          },
+                          "responseSettingsVersion": {
+                            "type": "integer",
+                            "const": 1
+                          }
+                        }
                       }
                     }
                   }
@@ -3173,6 +3313,12 @@
                     "greetingIndex": {
                       "type": "integer",
                       "minimum": 0
+                    },
+                    "firstPageSize": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 100,
+                      "default": 0
                     }
                   },
                   "required": [
