@@ -109,14 +109,15 @@ describe("點榜單上的卡：立刻有內容", () => {
   });
 });
 
-it("loads comments only on first open and preserves the panel across tabs", async () => {
+it("loads the full comments panel only on first open and preserves it across tabs", async () => {
   await fetchBoard(); const root = await mountCard("/cards/role-abc");
-  expect(commentRequests).toBe(0);
-  (root.querySelector("#tab-comments") as HTMLButtonElement).click(); await flush();
+  // 主頁的評論摘要讀一次第一頁；完整的評論區要到打開分頁才載
   expect(commentRequests).toBe(1);
+  (root.querySelector("#tab-comments") as HTMLButtonElement).click(); await flush();
+  expect(commentRequests).toBe(2);
   (root.querySelector("#tab-home") as HTMLButtonElement).click(); await flush();
   (root.querySelector("#tab-comments") as HTMLButtonElement).click(); await flush();
-  expect(commentRequests).toBe(1);
+  expect(commentRequests).toBe(2);
 });
 
 it('discovers play services by the community card ID, independently of its hosted role ID', async () => {

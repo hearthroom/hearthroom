@@ -37,6 +37,7 @@ function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respon
   if (url.endsWith("/v1/auth/session")) return later(40, () => json({ provider: "harbor", me: { accountNumId: 7, nickName: "月光", avatar: "" }, profile: PROFILE }));
   if (url.endsWith("/v1/auth/token")) return later(40, () => json({ accessToken: "tok", expiresAt: Date.now() + 3_600_000 }));
   if (url.includes("/v1/cards/abc/platforms")) return Promise.resolve(json({ platforms: [] }));
+  if (url.includes("/v1/cards/abc/comments")) return Promise.resolve(json({ total: 0, comments: [], isRoleCreator: false }));
   if (url.includes("/v1/cards/abc")) {
     cardReads.push(url + (auth ? " [auth]" : ""));
     const allowed = cookieGrants || (url.includes("nsfw=1") && auth);
