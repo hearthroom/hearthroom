@@ -170,3 +170,25 @@ describe("開場白還在路上", () => {
     expect(root.querySelector(".role__welcome-ghost")).toBeNull();
   });
 });
+
+/**
+ * 左欄比視窗高時，開始對話不能要捲到右欄底才出現（玩家回報 2026-09-27）。
+ * 主行動排在名字與作者正下方；左欄量好自己的高度交給 CSS，放不下就先跟著頁面捲再貼住。
+ */
+describe("左欄的主行動搆得到", () => {
+  it("遊玩區排在統計與標籤之前，左欄的高度寫進 --side-h", async () => {
+    let resize: (() => void) | null = null;
+    vi.stubGlobal("ResizeObserver", class { constructor(cb: () => void) { resize = cb; } observe() {} disconnect() {} });
+    await fetchBoard();
+    const root = await mountCard("/cards/role-abc");
+    const side = root.querySelector<HTMLElement>(".role__side")!;
+    const order = [...side.children].map((c) => c.className);
+    const at = (name: string) => order.findIndex((c) => c.includes(name));
+    expect(at("role__platforms")).toBeGreaterThan(at("role__id"));
+    expect(at("role__platforms")).toBeLessThan(at("role__stats"));
+    Object.defineProperty(side, "offsetHeight", { configurable: true, get: () => 1240 });
+    expect(resize, "左欄要被量高度").not.toBeNull();
+    resize!();
+    expect(side.style.getPropertyValue("--side-h")).toBe("1240px");
+  });
+});
