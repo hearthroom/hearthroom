@@ -1,4 +1,6 @@
 /**
+ * 等轉換器的測試給 15 秒：它刻意等頁面網路安靜才下載（最多 6 秒＋瀏覽器空閒 2 秒）。
+ *
  * 卡片標題跟著介面字形顯示：簡體介面看到繁體標題要轉成簡體，反之亦然——跟對話頁同一套規則。
  * 轉換器與字典跟對話頁共用（moonstage/display-script），只有中文介面、而且標題有漢字時才載入。
  */
@@ -15,14 +17,14 @@ describe("卡片標題的字形", () => {
     await displayScriptReady();
     expect(displayName("魔法少女與黑貓", "zh-Hans")).toBe("魔法少女与黑猫");
     expect(displayName("简体标题的学园", "zh-Hant")).toBe("簡體標題的學園");
-  });
+  }, 15000);
   it("已經是目標字形、非中文介面、沒有漢字的標題原樣", async () => {
     await displayScriptReady();
     expect(displayName("魔法少女与黑猫", "zh-Hans")).toBe("魔法少女与黑猫");
     expect(displayName("魔法少女與黑貓", "en")).toBe("魔法少女與黑貓");
     expect(displayName("魔法少女與黑貓", "ja")).toBe("魔法少女與黑貓");
     expect(displayName("𝓗𝓸𝓷𝓴𝓪𝓲 Star Rail", "zh-Hans")).toBe("𝓗𝓸𝓷𝓴𝓪𝓲 Star Rail");
-  });
+  }, 15000);
 });
 
 describe("榜單卡片", () => {
@@ -42,5 +44,5 @@ describe("榜單卡片", () => {
     expect(el.querySelector(".card__name")?.textContent).toContain("龙与魔法学园");
     expect(el.querySelector(".card__void")?.textContent).toContain("龙");
     expect(el.textContent).toContain("作者與貓");
-  });
+  }, 15000);
 });
