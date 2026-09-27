@@ -25,10 +25,11 @@ import { loginPath } from "@/lib/login-return";
 import { dropManagedToken } from "@/lib/managed-auth";
 import { restorePersisted } from "@/lib/oauth";
 import { forgetVerifiedAccount } from "@/lib/connections";
-import { applyLocale, i18n } from "@/lib/i18n";
+import { applyLocale, contentLang, i18n } from "@/lib/i18n";
 import { isPlayHost } from "@/lib/site";
 import { isStandalone } from "@/lib/pwa";
 import { onStageSignOut, stageStorageScope } from "@/lib/stage-storage";
+import { playSocialHost } from "@/lib/play-social";
 import type { useSession } from "@/lib/session";
 
 type Session = ReturnType<typeof useSession>;
@@ -165,6 +166,12 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
         get: () => i18n.global.locale.value,
         set: (code) => { void applyLocale(code); },
       },
+      // 頁首的收藏與評論：記在本站帳號上（跟卡片頁同一份），不是遊玩用的供應商帳號。
+      card: playSocialHost({
+        signedIn: () => !!deps.session.me,
+        token: () => deps.session.accessToken(),
+        lang: () => contentLang(i18n.global.locale.value),
+      }),
     });
     const player = deps.player === undefined ? deps.session.me : deps.player;
     // 作者規則快取綁在這個帳號上（雜湊，不是帳號 ID）；沒登入就不存。登出時由 stage-storage 叫舞台清掉。

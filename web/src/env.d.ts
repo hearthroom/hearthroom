@@ -23,6 +23,12 @@ declare module "moonstage/stage" {
     clipboard: { write(text: string): Promise<void> };
     events: { on(name: string, fn: (payload: unknown) => void): () => void; emit(name: string, payload?: unknown): void };
     scrollTo(el: Element | null, options?: { offset?: number }): void;
+    /** 對話頁頁首的收藏與評論（lib/play-social.ts）；social() 回 null 兩顆都不畫。 */
+    card?: {
+      social(roleId: string): Promise<{ favorite: boolean; favorited: boolean; comments: boolean } | null>;
+      setFavorite(roleId: string, on: boolean): Promise<boolean>;
+      openComments(roleId: string): void;
+    };
   }
   export interface StageI18n {
     getLocaleMessage(locale: string): Record<string, unknown>;

@@ -23,6 +23,8 @@ import { resolvePlayCard } from "@/lib/play-card";
 import { applyCardHead } from "@/lib/card-manifest";
 import { requestInstallToast } from "@/lib/pwa";
 import { communityHost, isPlayHost } from "@/lib/site";
+import { registerPlayCard } from "@/lib/play-social";
+import PlayComments from "@/components/PlayComments.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -53,7 +55,7 @@ if (playApp) {
 let generation = 0;
 let canonicalNavigation = "";
 let playerProvider = "";
-onBeforeUnmount(() => { generation++; });
+onBeforeUnmount(() => { generation++; registerPlayCard(null); });
 onMounted(() => {
   const app = getCurrentInstance()?.appContext.app;
   if (!app) return;
@@ -65,6 +67,7 @@ onMounted(() => {
     roleId.value = "";
     cardNumber.value = "";
     error.value = "";
+    registerPlayCard(null);
     try {
       void preloadStage();
       const provider = playProvider(route.query.provider);
@@ -90,6 +93,10 @@ onMounted(() => {
       if (!authorized || stale()) return;
       cardNumber.value = resolved.number;
       roleId.value = resolved.roleId;
+      // 頁首的收藏與評論只給上架中的公開卡：作者試玩的是草稿、審核的還沒上架，都不登記。
+      const listed = resolved.card && route.query.mode !== "source" && typeof route.query.review !== "string"
+        && (!resolved.card.status || resolved.card.status === "approved");
+      registerPlayCard(listed ? { roleId: resolved.roleId, cardId: String(resolved.card!.id), provider } : null);
       if (playApp) applyCardHead(resolved.card, locale.value);
       if (routeId.value !== resolved.number) {
         const destination = { path: playApp ? `/${resolved.number}/` : route.path.replace(/[^/]+\/?$/, resolved.number), query: route.query, hash: route.hash };
@@ -124,6 +131,7 @@ watch(locale, () => { void remergeStageMessages(); });
       <a v-if="error && playApp" class="btn" :href="cardPageUrl">{{ $t("play.backToCard") }}</a>
       <RouterLink v-else-if="error" class="btn" :to="lp(cardNumber ? `/cards/${cardNumber}` : '/')">{{ $t("play.backToCard") }}</RouterLink>
     </div>
+    <PlayComments />
     <div class="play__toasts" aria-live="polite">
       <div v-for="toast in stageToasts.list" :key="toast.id" class="play__toast" :class="`play__toast--${toast.kind}`">{{ toast.text }}</div>
     </div>
