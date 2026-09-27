@@ -10369,7 +10369,7 @@
         },
         "operationId": "saveConversationResponseSettings",
         "summary": "Save conversation response preferences",
-        "description": "HarperHarbor only. Partial patch: omitted fields remain unchanged; null removes the override. Empty or unchanged patches preserve the revision. Invalid enums, types, unknown keys and custom styles over 1000 Unicode code points reject the entire patch. Custom style requires nonblank customStyle; switching away must clear customStyle with null. A new generation snapshots settings once; changes apply to the next operation, while replay of an existing clientId retains its original snapshot. Forks copy preferences independently; new conversations use defaults. This call performs no inference and charges no credits.",
+        "description": "HarperHarbor only. Partial patch: omitted fields remain unchanged; null removes the override. Empty or unchanged patches preserve the revision. Invalid enums, types, unknown keys and custom styles over 1000 Unicode code points reject the entire patch. Custom style requires nonblank customStyle; switching away must clear customStyle with null. A new generation snapshots settings once; changes apply to the next operation, while replay of an existing clientId retains its original snapshot. Forks copy preferences independently; a new conversation copies the player's most recent preferences on the same card, or uses defaults when there are none. Each axis also accepts an optional note (agencyNote, styleNote, perspectiveNote, lengthNote, paceNote) that refines the selected option for that axis only and takes precedence over it where they differ; notes must be nonblank and at most 200 Unicode code points, and null removes one. This call performs no inference and charges no credits.",
         "requestBody": {
           "required": true,
           "content": {
@@ -10480,6 +10480,71 @@
                           {
                             "type": "string",
                             "maxLength": 1000
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "agencyNote": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200,
+                            "description": "Optional refinement of the selected option for this axis only; where it differs from the option, the note takes precedence. Nonblank, at most 200 Unicode code points."
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "styleNote": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200,
+                            "description": "Optional refinement of the selected option for this axis only; where it differs from the option, the note takes precedence. Nonblank, at most 200 Unicode code points."
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "perspectiveNote": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200,
+                            "description": "Optional refinement of the selected option for this axis only; where it differs from the option, the note takes precedence. Nonblank, at most 200 Unicode code points."
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "lengthNote": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200,
+                            "description": "Optional refinement of the selected option for this axis only; where it differs from the option, the note takes precedence. Nonblank, at most 200 Unicode code points."
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "paceNote": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200,
+                            "description": "Optional refinement of the selected option for this axis only; where it differs from the option, the note takes precedence. Nonblank, at most 200 Unicode code points."
                           },
                           {
                             "type": "null"
@@ -20068,6 +20133,36 @@
           "customStyle": {
             "type": "string",
             "maxLength": 1000
+          },
+          "agencyNote": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Optional refinement of the selected option for this axis only; where it differs from the option, the note takes precedence. Nonblank, at most 200 Unicode code points."
+          },
+          "styleNote": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Optional refinement of the selected option for this axis only; where it differs from the option, the note takes precedence. Nonblank, at most 200 Unicode code points."
+          },
+          "perspectiveNote": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Optional refinement of the selected option for this axis only; where it differs from the option, the note takes precedence. Nonblank, at most 200 Unicode code points."
+          },
+          "lengthNote": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Optional refinement of the selected option for this axis only; where it differs from the option, the note takes precedence. Nonblank, at most 200 Unicode code points."
+          },
+          "paceNote": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Optional refinement of the selected option for this axis only; where it differs from the option, the note takes precedence. Nonblank, at most 200 Unicode code points."
           }
         }
       },
