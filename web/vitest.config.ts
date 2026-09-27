@@ -28,6 +28,7 @@ export default defineConfig({
           return this.resolve(base + source, importer, { skipSelf: true });
         },
       },
+      { find: "moonstage/display-script", replacement: fileURLToPath(new URL("../stage/dist-stage/display-script.js", import.meta.url)) },
       { find: "moonstage/stage.css", replacement: fileURLToPath(new URL("../stage/dist-stage/moonstage-stage.css", import.meta.url)) },
       { find: "moonstage/stage", replacement: fileURLToPath(new URL("../stage/dist-stage/moonstage-stage.js", import.meta.url)) },
     ],
