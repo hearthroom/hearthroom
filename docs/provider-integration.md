@@ -70,7 +70,7 @@ Sign-in starts on the site's own `/login` page, which starts HarperHarbor author
 
 ### Level 1 — Read & list
 
-Public read: `GET /open/v1/role/detail`, `GET /open/v1/role/preview-page`. Authenticated: `GET /open/v1/role/mine` (with a `creationMethod` filter so the site can show only cards created through it), `GET /open/v1/role/author-asset/serve`, `GET /open/v1/me/wallet`, `GET /open/v1/me/score/records`.
+Public read: `GET /open/v1/role/detail`, `GET /open/v1/role/preview-page`. Authenticated: `GET /open/v1/role/mine` (with a `creationMethod` filter so the site can show only cards created through it), `GET /open/v1/role/author-asset/serve`, `GET /open/v1/me/wallet`, `GET /open/v1/me/score/records`, `GET /open/v1/me/score/summary` (HarperHarbor: per-day totals for the wallet page).
 
 Fields the site reads from `role/detail` are listed in the reference; extra fields are ignored. Language codes map to board zones: `zh*` → Chinese, `en`/`ja`/`ko` → their own zone, anything else → "all zones".
 

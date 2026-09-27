@@ -5337,6 +5337,93 @@
         }
       }
     },
+    "/open/v1/me/score/summary": {
+      "get": {
+        "operationId": "summarizeMyScoreDays",
+        "tags": [
+          "Identity"
+        ],
+        "summary": "Daily points summary",
+        "description": "Per-day points spent and earned for the caller, scoped like the points ledger (only entries made through the calling application). Days are cut in the requested IANA timezone, oldest first, and every day in the range has an entry even when nothing happened. HarperHarbor only.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 7,
+              "maximum": 90,
+              "default": 30
+            },
+            "description": "How many days back, including today. Values outside 7–90 are clamped."
+          },
+          {
+            "name": "timezone",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "UTC",
+              "maxLength": 64
+            },
+            "description": "IANA timezone name used to cut days, e.g. `Asia/Taipei`."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One entry per day.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "timezone",
+                    "days"
+                  ],
+                  "properties": {
+                    "timezone": {
+                      "type": "string"
+                    },
+                    "days": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ScoreDay"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request`: unknown timezone.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/open/v1/me/wallet": {
       "get": {
         "operationId": "getMeWallet",
@@ -20310,6 +20397,34 @@
           },
           "deleted": {
             "type": "boolean"
+          }
+        }
+      },
+      "ScoreDay": {
+        "type": "object",
+        "required": [
+          "date",
+          "spent",
+          "earned",
+          "count"
+        ],
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "Calendar day in the requested timezone."
+          },
+          "spent": {
+            "type": "integer",
+            "description": "Points spent that day, as a positive number."
+          },
+          "earned": {
+            "type": "integer",
+            "description": "Points received that day."
+          },
+          "count": {
+            "type": "integer",
+            "description": "Number of ledger entries that day."
           }
         }
       }
