@@ -10402,6 +10402,7 @@
                             "enum": [
                               "protect",
                               "assist",
+                              "lines",
                               "coauthor"
                             ]
                           },
@@ -20024,6 +20025,7 @@
             "enum": [
               "protect",
               "assist",
+              "lines",
               "coauthor"
             ]
           },
