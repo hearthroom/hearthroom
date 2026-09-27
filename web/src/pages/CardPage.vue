@@ -2,7 +2,7 @@
 import CommunityAvatar from "@/components/CommunityAvatar.vue";
 import CommunityName from "@/components/CommunityName.vue";
 import LibraryToggle from "@/components/LibraryToggle.vue";
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute } from "vue-router";
 import CardGrid from "@/components/CardGrid.vue";
@@ -261,6 +261,22 @@ watch(locale, () => load());
 // 加到主畫面：每張卡在卡片 App 網域上各自是一個 App（lib/site.ts），安裝要在那個網域的頁面上做，
 // 所以按下去先過去那張卡的對話頁（帶 install=1，那邊會把提示卡拿出來）。
 const installable = canInstall();
+
+/**
+ * 左欄常常比視窗高（大圖加上主行動、收藏就超過一個筆電螢幕）。只貼在頁首下，底部就永遠露不出來，
+ * 要等右欄捲到底才被推上來（玩家回報 2026-09-27：開場白長的卡要捲到底才看得到開始對話）。
+ * 把左欄高度交給 CSS：放得下就貼頁首，放不下就先跟著頁面捲，底部露出來再貼住。
+ */
+const side = ref<HTMLElement | null>(null);
+let sideObserver: ResizeObserver | null = null;
+watch(side, (el) => {
+  sideObserver?.disconnect();
+  sideObserver = null;
+  if (!el || typeof ResizeObserver === "undefined") return;
+  sideObserver = new ResizeObserver(() => el.style.setProperty("--side-h", `${el.offsetHeight}px`));
+  sideObserver.observe(el);
+});
+onBeforeUnmount(() => sideObserver?.disconnect());
 function addToHome() {
   const c = card.value;
   if (!c) return;
@@ -307,7 +323,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
 
       <div class="role__layout" :aria-busy="revalidating || undefined">
         <!-- 進場用 settle：卡片大圖在這一塊，要一出現就看得見（見 base.css） -->
-        <aside class="role__side panel settle">
+        <aside ref="side" class="role__side panel settle">
           <div class="role__art">
             <img v-if="hasArt" :src="card.avatarUrl!" alt="" fetchpriority="high" @error="broken = true" />
             <div v-else class="role__void" :style="{ background: `linear-gradient(160deg, hsl(${hue} 45% 78%), hsl(${(hue + 40) % 360} 40% 62%))` }">
@@ -340,6 +356,9 @@ watch(() => session.profile?.showNsfw, (now, before) => {
             </p>
           </div>
 
+          <!-- 主行動緊跟在名字與作者後面：一進頁面就看得到，不必先捲過統計與標籤。獨占整列，不被次要操作擠出側欄。 -->
+          <CardPlatforms class="role__platforms" :card-id="card.id" :provider="card.provider" :card-number="card.num" :pending="platformsRequest" />
+
           <dl class="role__stats">
             <div class="stat"><dt>{{ $t("card.stat.talk") }}</dt><dd>{{ compact(card.talkNum) }}</dd></div>
             <div class="stat"><dt>{{ $t("card.stat.follow") }}</dt><dd>{{ compact(card.favoriteCount ?? 0) }}</dd></div>
@@ -352,8 +371,6 @@ watch(() => session.profile?.showNsfw, (now, before) => {
             </li>
           </ul>
 
-          <!-- 平台選擇與主行動獨占整列，避免被次要操作擠出側欄。 -->
-          <CardPlatforms class="role__platforms" :card-id="card.id" :provider="card.provider" :card-number="card.num" :pending="platformsRequest" />
           <div class="role__actions">
             <RouterLink :to="lp(`/me?reportCard=${encodeURIComponent(String(card.num || card.id))}`)" class="btn">{{$t("community.reportCard")}}</RouterLink>
             <button class="btn btn--lg btn--icon role__share" :aria-label="$t('card.share')" :title="$t('card.share')" @click="share">
@@ -458,9 +475,12 @@ watch(() => session.profile?.showNsfw, (now, before) => {
   align-items: start;
 }
 
-/* 左欄：這張卡的「身分證」——貼著頁首捲動時留在原地 */
+/* 左欄：這張卡的「身分證」——捲動時留在原地。
+   比視窗高時 top 變成負值：先跟著頁面捲到底部露出來，再貼住（--side-h 由頁面量好寫進來） */
 .role__side {
-  position: sticky; top: calc(var(--header-h) + var(--s-4));
+  position: sticky;
+  top: min(calc(var(--header-h) + var(--s-4)), calc(100vh - var(--side-h, 0px) - var(--s-4)));
+  top: min(calc(var(--header-h) + var(--s-4)), calc(100dvh - var(--side-h, 0px) - var(--s-4)));
   display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0;
   gap: var(--s-4); padding: var(--s-4);
   background: color-mix(in srgb, var(--surface) 90%, transparent);
