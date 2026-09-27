@@ -61,6 +61,14 @@ declare module "moonstage/stage" {
 }
 declare module "moonstage/stage.css";
 
+/** 舞台的簡繁字形轉換出口（跟對話頁同一套規則與字典）；本站只拿來轉卡片標題。 */
+declare module "moonstage/display-script" {
+  export type ScriptDirection = "none" | "s2t" | "t2s";
+  export function directionForLocale(locale: string | null | undefined): ScriptDirection;
+  export function createDisplayScriptConverter(direction: ScriptDirection): (text: string) => string;
+  export function convertPlainText(text: string, convert: (text: string) => string): string;
+}
+
 /**
  * 舞台的規則引擎（stage/src/pages/canvas/canvas-rule-engine.ts 等，vite alias 指過去）。
  * 型別在這裡自己宣告、只宣告本站用到的表面：舞台的 tsconfig 沒開嚴格模式，讓 vue-tsc 讀它的原始檔會報不是本站的錯。

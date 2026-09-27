@@ -25,6 +25,7 @@ import { contentLang, pageTitle, zoneLabel } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
 import { compact, dateOnly, dateTime, hueFrom, plainText } from "@/lib/format";
 import { titleLayout } from "@/lib/title-layout";
+import { displayName } from "@/lib/display-name";
 import { confirmDialog } from "@/lib/confirm";
 import { track } from "@/lib/track";
 import { canInstall } from "@/lib/pwa";
@@ -36,7 +37,9 @@ const { locale, lp } = useLocalePath();
 const { t } = useI18n();
 
 const card = ref<CommunityCard | null>(null);
-const title = computed(() => titleLayout(card.value?.name ?? ""));
+// 標題照介面字形顯示（跟榜單、對話頁同一套規則）；佔位色與分享出去的標題用原文。
+const shownName = computed(() => displayName(card.value?.name ?? "", locale.value));
+const title = computed(() => titleLayout(shownName.value));
 const loading = ref(true);
 /** 手上有卡、在背景換語言重抓：舊卡留著變淡，不退回骨架 */
 const revalidating = ref(false);
@@ -143,9 +146,11 @@ function loadDetails(roleId: string, authorHandle: string | null, lang: string, 
 
 /** 標題與描述跟著手上這份卡走；先畫的那份就先寫，伺服器那份回來再寫一次。 */
 function applyHead(c: { name: string; summary: string }) {
-  document.title = pageTitle(c.name);
+  document.title = pageTitle(displayName(c.name, locale.value));
   document.querySelector<HTMLMetaElement>('meta[name="description"]')?.setAttribute("content", c.summary);
 }
+// 字典在標題寫進分頁之後才載好時，再把分頁標題換成轉換後的寫法。
+watch(shownName, (name) => { if (card.value) document.title = pageTitle(name); });
 
 // 同一頁可能同時有好幾次讀卡在路上（進頁一次、身分到了再一次、開關改了又一次）。
 // 只認最後一次：身分到之前發出的那次沒帶成人權限，它的 403 常常比後面那次的卡片晚回來，
@@ -327,7 +332,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
           <div class="role__art">
             <img v-if="hasArt" :src="card.avatarUrl!" alt="" fetchpriority="high" @error="broken = true" />
             <div v-else class="role__void" :style="{ background: `linear-gradient(160deg, hsl(${hue} 45% 78%), hsl(${(hue + 40) % 360} 40% 62%))` }">
-              <span>{{ [...card.name][0] }}</span>
+              <span>{{ [...shownName][0] }}</span>
             </div>
             <span v-if="card.featured" class="role__featured" :title="$t('card.featuredHint')">{{ $t("card.featured") }}</span>
             <span v-if="card.nsfw" class="role__flag" :title="$t('card.nsfwHint')">{{ $t("card.nsfw") }}</span>
@@ -422,7 +427,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
                 <ClampBlock :max="welcomeMax" :more-label="$t('card.welcomeMore')" :less-label="$t('card.welcomeLess')">
                   <div class="role__welcome">
                     <img v-if="hasArt" :src="card.avatarUrl!" alt="" class="role__welcome-face" />
-                    <span v-else class="role__welcome-face mono" :style="{ '--h': hue }">{{ [...card.name][0] }}</span>
+                    <span v-else class="role__welcome-face mono" :style="{ '--h': hue }">{{ [...shownName][0] }}</span>
                     <!-- HTML 版先在純文字底下量好高度再換上，不用預設高度佔位再一路長高 -->
                     <div class="role__bubble-slot">
                       <HtmlCardFrame v-if="welcomeHtml" class="role__bubble role__bubble--card" :class="{ 'role__bubble--pending': !welcomeSized }" :html="welcomeHtml" :title="$t('card.welcome')" @sized="welcomeSized = true" />

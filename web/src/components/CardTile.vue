@@ -8,6 +8,7 @@ import { zoneLabel } from "@/lib/i18n";
 import { titleLayout } from "@/lib/title-layout";
 import { useLocalePath } from "@/lib/use-locale";
 import { cardThumb } from "@/lib/card-thumb";
+import { displayName } from "@/lib/display-name";
 import type { CommunityCard } from "@/lib/types";
 
 const props = defineProps<{
@@ -20,10 +21,12 @@ const props = defineProps<{
 }>();
 
 // 沒封面的卡用角色名決定色相：同一張卡永遠同一個顏色，一排佔位卡也彼此可辨。
-const { lp } = useLocalePath();
+const { lp, locale } = useLocalePath();
 const hue = computed(() => hueFrom(props.card.name));
-const initial = computed(() => [...props.card.name][0] ?? "?");
-const title = computed(() => titleLayout(props.card.name));
+// 標題照介面字形顯示；佔位色照原標題算，同一張卡換語言也是同一個顏色。
+const name = computed(() => displayName(props.card.name, locale.value));
+const initial = computed(() => [...name.value][0] ?? "?");
+const title = computed(() => titleLayout(name.value));
 const href = computed(() => lp(`/cards/${props.card.num ?? props.card.id}`));
 /*
  * 先用縮到卡片大小的圖（動圖照樣會動，見 card-thumb）；縮圖拿不到就用原圖；

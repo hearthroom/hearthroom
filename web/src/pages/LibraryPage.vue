@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useSession } from '@/lib/session';
 import { useLocalePath } from '@/lib/use-locale';
+import { displayName } from '@/lib/display-name';
 import { fetchConversations, libraryRequest, type ConversationSummary } from '@/lib/library';
 import { platformPath } from '@/lib/connection-ui';
 import { contentLang, pageTitle } from '@/lib/i18n';
@@ -57,7 +58,7 @@ watch([tab, page, locale, () => session.me, () => session.profile?.showNsfw, () 
     <div v-else-if="tab === 'conversations'" class="library__rows">
       <a v-for="chat in chats" :key="`${chat.provider}:${chat.conversationRoleId}`" :href="platformPath(lp(`/play/${encodeURIComponent(chat.cardNumber ?? chat.conversationRoleId)}?resume=${encodeURIComponent(chat.conversationId)}`), chat.provider)" class="conversation panel">
         <img v-if="chat.roleAvatar" class="conversation__avatar" :src="chat.roleAvatar" alt="" loading="lazy" /><span v-else class="conversation__avatar mono" :style="{ '--h': hueFrom(chat.roleName) }"><AccountIcon name="cards" /></span>
-        <div class="conversation__body"><div class="conversation__heading"><h2>{{ chat.conversationTitle || chat.roleName || $t('library.untitled') }}</h2><time v-if="time(chat)" :datetime="chat.lastChatTime || chat.createTime">{{ time(chat) }}</time></div><p v-if="chat.conversationTitle" class="conversation__role muted">{{ chat.roleName }}</p><p class="conversation__preview muted">{{ $t('library.resumeHint') }}</p></div>
+        <div class="conversation__body"><div class="conversation__heading"><h2>{{ chat.conversationTitle || displayName(chat.roleName, locale) || $t('library.untitled') }}</h2><time v-if="time(chat)" :datetime="chat.lastChatTime || chat.createTime">{{ time(chat) }}</time></div><p v-if="chat.conversationTitle" class="conversation__role muted">{{ displayName(chat.roleName, locale) }}</p><p class="conversation__preview muted">{{ $t('library.resumeHint') }}</p></div>
         <span class="conversation__continue">{{ $t('library.resume') }} <AccountIcon name="arrow" /></span>
       </a>
     </div>
