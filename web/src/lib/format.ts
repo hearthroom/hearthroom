@@ -79,3 +79,15 @@ export function dayLabel(input: string | number): string {
 export function clock(input: string): string {
   return new Intl.DateTimeFormat(locale(), { timeStyle: "short" }).format(Date.parse(input));
 }
+
+/** 日曆日（YYYY-MM-DD，已經是使用者那一天）的短標籤：9/27、9月27日，給圖表軸用。 */
+export function monthDay(date: string): string {
+  const [y, m, d] = date.split("-").map(Number);
+  return new Intl.DateTimeFormat(locale(), { month: "numeric", day: "numeric" }).format(new Date(y, m - 1, d));
+}
+
+/** 本地時區的日曆日（YYYY-MM-DD），用來跟伺服器按同一個時區切好的日子對上。 */
+export function localDate(input: string | number | Date): string {
+  const d = input instanceof Date ? input : new Date(typeof input === "number" ? (input > 1e12 ? input : input * 1000) : Date.parse(input));
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}

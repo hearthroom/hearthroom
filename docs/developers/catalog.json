@@ -1692,5 +1692,15 @@
   "d5885b8f64496": "`asset_in_use`: still bound to a card.",
   "dba51c8963fa6": "How many cards this worldbook is bound to. Present in `/open/v1/worldbook/mine`.",
   "dd38332c96499": "The card to remove the worldbook from.",
-  "ddbe270a19e0a": "`false` when the worldbook was not bound to the card."
+  "ddbe270a19e0a": "`false` when the worldbook was not bound to the card.",
+  "d9b917fbf728b": "Daily points summary",
+  "d5a635cd15edb": "Per-day points spent and earned for the caller, scoped like the points ledger (only entries made through the calling application). Days are cut in the requested IANA timezone, oldest first, and every day in the range has an entry even when nothing happened.",
+  "d4c0327e1fa5a": "How many days back, including today. Values outside 7–90 are clamped.",
+  "d280b2a010b17": "IANA timezone name used to cut days, e.g. `Asia/Taipei`.",
+  "d8fe6f7c6525f": "One entry per day.",
+  "d53a0c4be400b": "`invalid_request`: unknown timezone.",
+  "d2661f53f60dc": "Calendar day in the requested timezone.",
+  "de419ed0b2d40": "Points spent that day, as a positive number.",
+  "d5ad9e6892725": "Points received that day.",
+  "d3b31cfc7c305": "Number of ledger entries that day."
 }

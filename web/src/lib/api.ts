@@ -763,6 +763,20 @@ export async function fetchScoreRecords(token: string, page = 1, pageSize = 20, 
   );
 }
 
+/** 某一天在本站的收支：spent／earned 都是正數，count 是那天的流水筆數。 */
+export interface ScoreDay { date: string; spent: number; earned: number; count: number }
+
+/** 最近幾天的每日收支，按瀏覽器所在時區切日，最舊的在前、沒有動靜的日子也有一格。範圍跟積分流水一致。 */
+export async function fetchScoreSummary(token: string, days = 30, provider: ProviderId = currentProvider()): Promise<ScoreDay[]> {
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const raw = await json<{ days: ScoreDay[] }>(
+    await fetch(`${provider === currentProvider() ? UPSTREAM_API : apiBaseOf(provider)}/open/v1/me/score/summary?days=${days}&timezone=${encodeURIComponent(timezone)}`, {
+      headers: authHeaders(token),
+    }),
+  );
+  return raw.days;
+}
+
 /** 原站的充值頁。本站不碰付款，只把人送過去。 */
 export const TOP_UP_URL = `${UPSTREAM_API.replace("api.", "")}/pages/mine/vippay`;
 

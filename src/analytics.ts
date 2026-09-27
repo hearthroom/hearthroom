@@ -146,6 +146,8 @@ export const BEACON_EVENTS = new Set([
   "card_create", "card_edit", "card_import", "card_export",
   // 钱包与变现
   "wallet_view", "topup_click",
+  // 邀請獎勵入口（積分頁）：detail 分辨是去填碼、看自己的碼、複製推薦碼，還是讀不到資料時的普通入口
+  "invite_click",
   // 偏好（纯客户端，没有请求）
   "appearance", "locale_switch",
   // 其他
@@ -166,6 +168,7 @@ export const BEACON_DETAILS = new Set([
   "mode", "theme",
   // 卡片檔案格式：匯入匯出的載體，看得出作者手上的卡多半長什麼樣
   "png", "json",
+  "invite_redeem", "invite_mine", "invite_copy", "invite_fallback",
 ]);
 
 /**
