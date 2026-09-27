@@ -192,17 +192,22 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
 a.tag:hover { background: var(--accent-soft); color: var(--accent-text); }
 .tag--more { color: var(--text-3); padding: 0 5px; }
 
+/* min-width: 0：卡片內文是 grid，Safari 會拿作者名整行的寬度當這一列的最小寬，
+   名字一長整列就撐出卡片外，右邊的對話數被裁掉（玩家回報 2026-09-27）。 */
 .card__meta {
+  min-width: 0;
   display: flex; align-items: center; justify-content: space-between; gap: var(--s-2);
   margin-top: 3px; padding-top: 8px;
   box-shadow: 0 -1px 0 var(--line);
   font-size: 12px; color: var(--text-3);
 }
-.card__by { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.card__by { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; }
 .card__by--link { position: relative; z-index: 1; transition: color var(--dur) var(--ease); }
 .card__by--link:hover { color: var(--accent-text); }
 .card__face { width: 16px; height: 16px; border-radius: var(--r-pill); object-fit: cover; flex: none; }
 .card__author { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 省略號要加在名字文字那一層（CommunityName 外層是 flex，自己不會出現「…」） */
+.card__author > :deep(span:first-child) { overflow: hidden; text-overflow: ellipsis; }
 .card__num { display: inline-flex; align-items: center; gap: 3px; flex: none; font-variant-numeric: tabular-nums; }
 .card__num svg { width: 13px; height: 13px; }
 .card__num--up { color: var(--accent-text); font-weight: 600; }
