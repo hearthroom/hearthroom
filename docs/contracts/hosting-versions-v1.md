@@ -62,7 +62,7 @@ outside that sequence. Clients must not label such edits as an updated submissio
 
 Approval switches the public projection, rating, search text and hosted revision in
 one D1 transaction. Previously approved revision links resolve to the current listing;
-existing conversations keep their pinned approved revision. A delayed background sync
+existing conversations continue on the newly approved revision (see below). A delayed background sync
 of an older revision cannot overwrite the new projection. Explicit withdrawal remains
 separate and removes old versions from community discovery. There is no historical-version browsing UI or
 unreferenced snapshot garbage collection in this release.
@@ -180,7 +180,12 @@ immutable revision must never be repaired by attaching its old ID to a different
 
 ## Playback and review lifecycle
 
-Each new community conversation pins the chosen immutable hosted revision. Provider
+A community conversation runs on one immutable hosted revision at a time. Opening a
+newer revision of the same work moves the player's conversations from older revisions
+onto it at conversation start, so an author update reaches existing players the next
+time they play. Resuming from the member's conversation index opens the card's current
+approved revision, and falls back to the recorded revision only when no current copy is
+playable on that provider. The index lists one entry per card. Provider
 reads and new generation enforce local durable deletion/revocation controls, including
 on cached role reads. They do not depend on a per-message community decision request.
 Retrieving existing conversation history retains the player's existing ownership rules.

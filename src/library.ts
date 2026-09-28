@@ -99,8 +99,11 @@ libraryRoutes.get('/v1/me/conversations', async c => {
   const member = await requireMember(c);
   const access = await memberNsfw(c.env.DB, member.id);
   const page = Math.min(4000, Math.max(1, Math.floor(Number(c.req.query('pageNum')) || 1)));
-  const rows = await c.env.DB.prepare(`SELECT c.*, cn.num AS cardNumber, r.provider, r.role_id AS conversationRoleId,
-    r.conversation_id AS conversationId, r.created_at AS createdAt, r.updated_at AS updatedAt FROM member_conversations r
+  // 紀錄一個版本一列；作者更新後玩家玩到新版，同一張卡就有好幾列。續玩一律開目前的版本，
+  // 所以每張卡只列最近的那一列。對不到卡號的紀錄各自成一列。
+  const rows = await c.env.DB.prepare(`SELECT * FROM (SELECT c.*, cn.num AS cardNumber, r.provider AS conversationProvider, r.role_id AS conversationRoleId,
+    r.conversation_id AS conversationId, r.created_at AS createdAt, r.updated_at AS updatedAt,
+    ROW_NUMBER() OVER (PARTITION BY COALESCE('n'||cn.num,'r'||r.role_id) ORDER BY r.updated_at DESC,r.role_id) AS cardRank FROM member_conversations r
     LEFT JOIN work_copies cp ON cp.provider=r.provider AND cp.role_id=r.role_id
     LEFT JOIN hosting_replicas hr ON hr.provider=r.provider AND hr.hosted_revision_id=r.role_id
     LEFT JOIN hosting_versions hv ON hv.version_id=hr.version_id
@@ -108,11 +111,11 @@ libraryRoutes.get('/v1/me/conversations', async c => {
     LEFT JOIN cards c ON c.provider=COALESCE(w.source_provider,r.provider) AND (c.source_role_id=COALESCE(w.source_role_id,r.role_id) OR c.approved_hosted_role_id=r.role_id)
     LEFT JOIN card_numbers cn ON cn.provider=COALESCE(w.source_provider,r.provider)
       AND cn.source_role_id=COALESCE(w.source_role_id,c.source_role_id,r.role_id)
-    WHERE r.member_id=? AND r.provider='harbor' ORDER BY r.updated_at DESC,r.provider,r.role_id LIMIT 25 OFFSET ?`)
-    .bind(member.id, (page - 1) * 24).all<CardRow & { cardNumber: number | null; conversationRoleId: string; conversationId: string; createdAt: number; updatedAt: number }>();
+    WHERE r.member_id=? AND r.provider='harbor') WHERE cardRank=1 ORDER BY updatedAt DESC,conversationRoleId LIMIT 25 OFFSET ?`)
+    .bind(member.id, (page - 1) * 24).all<CardRow & { cardNumber: number | null; conversationProvider: string; conversationRoleId: string; conversationId: string; createdAt: number; updatedAt: number }>();
   return c.json({ conversations: rows.results.slice(0,24).map(row => {
     const card = row.id && row.status === 'approved' && !row.public_blocked && (!row.nsfw || (access.showNsfw && access.ageVerifiedAt)) ? toCard(row, c.req.query('lang') || 'zh-Hant') : null;
-    return { provider: row.provider, cardNumber: row.cardNumber, conversationRoleId: row.conversationRoleId, conversationId: row.conversationId,
+    return { provider: row.conversationProvider, cardNumber: row.cardNumber, conversationRoleId: row.conversationRoleId, conversationId: row.conversationId,
       roleName: card?.name || '', roleAvatar: card?.avatarUrl || '',
       lastChatTime: new Date(Number(row.updatedAt)).toISOString(), createTime: new Date(Number(row.createdAt)).toISOString() };
   }), hasNextPage: rows.results.length > 24 });
