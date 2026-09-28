@@ -168,7 +168,7 @@
   "wallet.invite.redeemGift": "友だちのコードを入力すると {credits} ポイントもらえます。",
   "wallet.invite.own": "自分のコードを見る",
   "wallet.invite.share": "友だちが初めてチャージすると、その {percent}% がポイントで届きます。",
-  "wallet.invite.shareEvery": "友だち一人ひとりの初回チャージの {first}%、以降は毎回 {rate}% が届きます。",
+  "wallet.invite.shareEvery": "友だち一人ひとりの初回チャージで {first}%、以降は毎回 {rate}% の特典が届きます。",
   "wallet.invite.details": "招待特典を見る",
   "wallet.invite.earned": "招待で {credits} ポイント獲得済み",
   "wallet.reason.purchase": "チャージ",
