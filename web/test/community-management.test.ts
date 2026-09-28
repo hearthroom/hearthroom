@@ -27,11 +27,11 @@ const links = () => [...host.querySelectorAll<HTMLAnchorElement>('.management-na
 it('keeps card review, cases, works and history inside one management workspace with separate counts', async () => {
   expect(host.querySelectorAll('h1')).toHaveLength(1);
   expect(host.querySelector('h1')!.textContent).toBe(i18n.global.t('moderation.title'));
-  expect(links().map(a => a.getAttribute('href'))).toEqual(['/review', '/review/cases', '/review/cards', '/review/history']);
+  expect(links().map(a => a.getAttribute('href'))).toEqual(['/review', '/review/cases', '/review/cards', '/review/members', '/review/history']);
   await vi.waitFor(() => expect(links()[0]!.querySelector('.review-badge')?.textContent).toBe('2'));
   expect(links()[1]!.querySelector('.review-badge')?.textContent).toBe('3');
   const shell = host.querySelector('.community-management');
-  for (const [index, path] of ['/review', '/review/cases', '/review/cards', '/review/history'].entries()) {
+  for (const [index, path] of ['/review', '/review/cases', '/review/cards', '/review/members', '/review/history'].entries()) {
     await router.push(path); await nextTick();
     expect(host.querySelector('.community-management')).toBe(shell);
     expect(host.querySelectorAll('h1')).toHaveLength(1);
@@ -47,15 +47,11 @@ it('keeps card review, cases, works and history inside one management workspace 
 it('keeps legacy management bookmarks and all navigation in the selected language', async () => {
   await router.push('/en/review/manage?from=bookmark#pending'); await nextTick();
   expect(router.currentRoute.value.fullPath).toBe('/en/review/cases?from=bookmark#pending');
-  expect(links().map(a => a.getAttribute('href'))).toEqual(['/en/review', '/en/review/cases', '/en/review/cards', '/en/review/history']);
+  expect(links().map(a => a.getAttribute('href'))).toEqual(['/en/review', '/en/review/cases', '/en/review/cards', '/en/review/members', '/en/review/history']);
   expect(router.currentRoute.value.meta.auth).toBe(true);
 });
-it('shows the Members tab only to managers and owners, between works and history', async () => {
-  app.unmount(); mocks.summary.role = 'manager';
-  app = createApp({ render: () => h(RouterView) }).use(createPinia()).use(router).use(i18n); app.mount(host);
-  await vi.waitFor(() => expect(links().map(a => a.getAttribute('href'))).toEqual(['/review', '/review/cases', '/review/cards', '/review/members', '/review/history']));
+it('opens the Members tab for any reviewer, between works and history', async () => {
   await router.push('/review/members'); await nextTick();
   expect(links().filter(a => a.getAttribute('aria-current') === 'page').map(a => a.getAttribute('href'))).toEqual(['/review/members']);
   expect(host.querySelectorAll('h1')).toHaveLength(1);
-  mocks.summary.role = 'reviewer';
 });

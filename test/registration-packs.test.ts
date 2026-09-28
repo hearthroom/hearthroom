@@ -23,18 +23,19 @@ beforeEach(async () => {
 });
 afterEach(restoreUpstream);
 
-it('只有 manager 能發；審核人和作者本人都 403，發給不存在的人 404', async () => {
-  expect((await grant(2, 'r1')).status).toBe(403);
+it('能審卡的人就能發（跟審卡同一個權限等級）；作者本人 403，發給不存在的人 404', async () => {
   expect((await grant(2, 'author')).status).toBe(403);
+  expect((await grant(1, 'r1')).status).toBe(201);
   expect((await request('/members/nobodyhere/packs', 'manager', { granted: 1, reason: 'x', operationId: crypto.randomUUID() })).status).toBe(404);
-  expect((await request(`/members/${author}`, 'r1')).status).toBe(403);
+  expect((await request(`/members/${author}`, 'r1')).status).toBe(200);
   const res = await grant(2);
   expect(res.status).toBe(201);
   const body = await res.json() as any;
   expect(body.member).toMatchObject({ handle: author, role: null });
-  expect(body.quota).toMatchObject({ limit: WEEKLY_LIMIT, used: 0, packRemaining: 2 });
-  expect(body.packs).toHaveLength(1);
+  expect(body.quota).toMatchObject({ limit: WEEKLY_LIMIT, used: 0 });
+  expect(body.packs).toHaveLength(2);
   expect(body.packs[0]).toMatchObject({ granted: 2, remaining: 2, reason: 'Contest winner', grantedBy: testHandle(4) });
+  expect(body.quota.packRemaining).toBe(3);
 });
 
 it('張數要是 1–100 的整數、理由必填；manager 不能發給自己', async () => {
@@ -80,5 +81,7 @@ it('發包計入管理請求指標，不帶任何成員識別', async () => {
   await grant(1);
   const metrics = await SELF.fetch('https://c.test/metrics').then(r => r.text());
   expect(metrics).toContain('hearthroom_moderation_requests_total{operation="packs",outcome="success"} 1');
+  expect((await grant(1, 'author')).status).toBe(403);
+  expect(await SELF.fetch('https://c.test/metrics').then(r => r.text())).toContain('hearthroom_moderation_requests_total{operation="packs",outcome="denied"} 1');
   expect(metrics).not.toContain(author);
 });
