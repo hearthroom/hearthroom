@@ -5,7 +5,6 @@ import {i18n,applyLocale} from '../src/lib/i18n';
 const mock=vi.hoisted(()=>({request:vi.fn()}));
 vi.mock('../src/lib/community',async original=>({...await original<object>(),communityRequest:mock.request}));
 vi.mock('../src/lib/session',()=>({useSession:()=>({profile:{handle:'fixture'},accessToken:async()=>'fixture'})}));
-vi.mock('../src/components/BadgeManager.vue',()=>({default:{emits:['changed'],template:'<button data-manager-refresh @click="$emit(\'changed\')">Refresh manager results</button>'}}));
 import BadgesPage from '../src/pages/BadgesPage.vue';
 let app:App,el:HTMLDivElement;
 const settle=async()=>{await nextTick();await new Promise(r=>setTimeout(r,0));};
@@ -32,10 +31,8 @@ it('groups the catalog under category headings in catalog order',async()=>{
  expect(el.querySelectorAll('.badge-section')[1].querySelectorAll('.badge-tile')).toHaveLength(2);
 });
 
-it('preserves unsaved visibility when a management action refreshes the collection',async()=>{
- el.querySelector<HTMLButtonElement>('[data-feature]')!.click();await settle();
- mock.request.mockResolvedValueOnce({...wall(),canManage:true});el.querySelector<HTMLButtonElement>('.btn--primary')!.click();await settle();
- const input=el.querySelector<HTMLInputElement>('input[type=checkbox]')!;input.checked=true;input.dispatchEvent(new Event('change',{bubbles:true}));await settle();
- mock.request.mockResolvedValueOnce({...wall(),canManage:true});el.querySelector<HTMLButtonElement>('[data-manager-refresh]')!.click();await settle();
- expect(el.querySelector<HTMLInputElement>('input[type=checkbox]')!.checked).toBe(true);expect(el.textContent).toContain('unsaved changes');
+it('never shows management controls here: badge management lives in the community management workspace',async()=>{
+ app.unmount();mock.request.mockResolvedValue(wall());
+ const router=createRouter({history:createMemoryHistory(),routes:[{path:'/:pathMatch(.*)*',component:BadgesPage}]});await router.push('/me/badges');app=createApp(BadgesPage).use(router).use(i18n);app.mount(el);await settle();
+ expect(el.querySelector('.badge-manager')).toBeNull();expect(el.querySelector('[data-badge-award]')).toBeNull();
 });

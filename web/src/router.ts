@@ -58,6 +58,9 @@ const pages: RouteRecordRaw[] = [
       { path: "cases", component: () => import("./pages/ModerationPage.vue"), meta: { managementTab: "cases" } },
       { path: "cards", component: () => import("./pages/ModerationPage.vue"), meta: { managementTab: "cards" } },
       { path: "history", component: () => import("./pages/ModerationPage.vue"), meta: { managementTab: "history" } },
+      // 成員：補充包、活動徽章這類「發給人」的工具；分頁只給 manager/owner 看，權限仍由服務端判
+      { path: "members", component: () => import("./pages/MembersPage.vue"), meta: { managementTab: "members" } },
+      { path: "members/:handle", component: () => import("./pages/MembersPage.vue"), meta: { managementTab: "members" } },
       { path: "manage", redirect: (to) => ({ path: withLocale("/review/cases", localeOf(to)), query: to.query, hash: to.hash }) },
       { path: ":id", component: () => import("./pages/ReviewDetailPage.vue"), meta: { managementTab: "reviews" } },
     ],

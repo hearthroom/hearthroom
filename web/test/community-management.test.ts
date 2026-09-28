@@ -50,3 +50,12 @@ it('keeps legacy management bookmarks and all navigation in the selected languag
   expect(links().map(a => a.getAttribute('href'))).toEqual(['/en/review', '/en/review/cases', '/en/review/cards', '/en/review/history']);
   expect(router.currentRoute.value.meta.auth).toBe(true);
 });
+it('shows the Members tab only to managers and owners, between works and history', async () => {
+  app.unmount(); mocks.summary.role = 'manager';
+  app = createApp({ render: () => h(RouterView) }).use(createPinia()).use(router).use(i18n); app.mount(host);
+  await vi.waitFor(() => expect(links().map(a => a.getAttribute('href'))).toEqual(['/review', '/review/cases', '/review/cards', '/review/members', '/review/history']));
+  await router.push('/review/members'); await nextTick();
+  expect(links().filter(a => a.getAttribute('aria-current') === 'page').map(a => a.getAttribute('href'))).toEqual(['/review/members']);
+  expect(host.querySelectorAll('h1')).toHaveLength(1);
+  mocks.summary.role = 'reviewer';
+});

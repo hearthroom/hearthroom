@@ -77,7 +77,9 @@ function goPage(p: number) {
   if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
 }
 const quotaLeft = computed(() => quota.value ? remaining(quota.value) : 0);
-const quotaFull = computed(() => !!quota.value && quotaLeft.value === 0);
+const packLeft = computed(() => quota.value?.packRemaining ?? 0);
+// 免費額度跟補充包都用完才鎖；免費用完但還有包，登記照走（服務端會扣包）
+const quotaFull = computed(() => !!quota.value && quotaLeft.value === 0 && packLeft.value === 0);
 const quotaRange = computed(() => quota.value ? weekRange(quota.value, String(locale.value)) : null);
 const quotaResetText = computed(() => !quota.value ? "" : daysUntilReset(quota.value)<=1 ? t("mine.quota.resetSoon") : t("mine.quota.reset",{n:daysUntilReset(quota.value)}));
 let generation=0;
@@ -155,7 +157,7 @@ async function submit(card: WorkspaceCard) {
     card.nsfw = nsfw;
 
     // 登記成功就多用掉一格；撤銷不還——額度數的是「這週登記過幾張不同的卡」
-    if (!wasRegistered && quota.value) quota.value.used = Math.min(quota.value.limit, quota.value.used + 1);
+    if (!wasRegistered && quota.value) { if (quota.value.used < quota.value.limit) quota.value.used += 1; else quota.value.packRemaining = Math.max(0, quota.value.packRemaining - 1); }
     notice.value = t("mine.submitted");
     persistCard(card);
   } catch (err) {
@@ -235,9 +237,10 @@ watch(()=>route.query.fresh, fresh=>{
       <div class="quota__when">
         <span class="quota__range">{{ $t("mine.quota.range", quotaRange) }}</span>
         <span class="quota__state" :class="{ 'quota__state--full': quotaFull }">
-          {{ quotaFull ? $t("mine.quota.full") : $t("mine.quota.left", { n: quotaLeft }) }}
+          {{ quotaLeft === 0 ? $t("mine.quota.full") : $t("mine.quota.left", { n: quotaLeft }) }}
           <span class="quota__dot">·</span>{{ quotaResetText }}
         </span>
+        <span v-if="packLeft > 0" class="quota__packs" data-quota-packs>{{ $t("mine.quota.packs", { n: packLeft }) }}</span>
       </div>
     </section>
 
@@ -328,6 +331,7 @@ watch(()=>route.query.fresh, fresh=>{
 .quota__range { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .quota__state { font-size: 12.5px; color: var(--text-3); }
 .quota__state--full { color: var(--text-2); font-weight: 500; }
+.quota__packs { font-size: 12.5px; font-weight: 600; color: var(--accent-text); }
 .quota__dot { margin: 0 6px; }
 @media (max-width: 520px) {
   .quota__when { margin-left: 0; text-align: left; flex-basis: 100%; }

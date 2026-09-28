@@ -48,7 +48,7 @@ import { tagNamesFor } from "../shared/tag-catalog";
 import { providerOf, requestIdentity, isReviewer, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
 import { configuredProviders, hasChat, parseProvider, requireConfigured, DEFAULT_PROVIDER, PROVIDER_NAMES, type ProviderId, reviewEnabled } from "./providers";
 import { providerApiBaseFor } from "./providers";
-import { WEEKLY_LIMIT, registeredThisWeek } from "./quota";
+import { WEEKLY_LIMIT, registeredThisWeek, openPack } from "./quota";
 import {
   CLAIM_TTL_MS, STAMPS_REQUIRED, claim as claimSubmission, getSubmission, hasStamped, listQueue,
   release as releaseSubmission, stamp as stampSubmission,
@@ -869,13 +869,18 @@ app.post("/v1/cards", async (c) => {
 
   // 每週額度（見 quota.ts）。已經在榜上的卡再送一次是「刷新」，不佔額度；
   // 這週登記過又撤掉的同一張卡再登也不佔——它已經算過了。
+  // 免費額度用完，有補充包就扣一個包；扣包跟登記同一批寫入，資料庫的 trigger 再驗一次。
   const now = Date.now();
   const existing = await getCard(c.env.DB, roleId, provider);
+  let packId: string | null = null;
   if (!existing) {
     const thisWeek = await registeredThisWeek(c.env.DB, me.accountNumId, now, provider);
     if (!thisWeek.has(`${provider}:${roleId}`) && thisWeek.size >= WEEKLY_LIMIT) {
-      note(c, { event: "register", subject: roleId, detail: "quota" });
-      throw new HttpError(403, "weekly_quota_exceeded");
+      packId = await openPack(c.env.DB, memberId);
+      if (!packId) {
+        note(c, { event: "register", subject: roleId, detail: "quota" });
+        throw new HttpError(403, "weekly_quota_exceeded");
+      }
     }
   }
 
@@ -883,9 +888,9 @@ app.post("/v1/cards", async (c) => {
     if (!reviewEnabled(c.env)) throw new HttpError(503,"hosting_review_required");
     const operationId=typeof body.operationId==='string'?body.operationId:'';
     if(!/^[0-9a-f-]{36}$/i.test(operationId))throw new HttpError(400,'hosting_operation_required');
-    const receipt=await submitHosted(c.env,{provider,memberId,account:me.accountNumId,role,token:bearer,nsfw,operationId,now});
+    const receipt=await submitHosted(c.env,{provider,memberId,account:me.accountNumId,role,token:bearer,nsfw,operationId,now,packId});
     const row=(await getCard(c.env.DB,roleId,provider))!;
-    note(c,{event:"register",detail:"submitted"});
+    note(c,{event:"register",detail:packId?"pack_submitted":"submitted"});
     return c.json({...toCard(row,lang(c)),status:row.status,versionId:receipt.versionId},existing?200:201,{'Cache-Control':'private, no-store'});
   }
 
