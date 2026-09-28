@@ -106,3 +106,16 @@ it('resumes a conversation only for its member and exact provider', async () => 
   expect((await request('me/conversations/resume-fixture?provider=lunatalk')).status).toBe(400);
   expect((await request('me/conversations/resume-fixture?provider=harbor','other')).status).toBe(404);
 });
+
+it('lists one row per card after the member played more than one approved version of it', async () => {
+  const put = (roleId: string, conversationId: string) => SELF.fetch('https://c.test/v1/me/conversations', {
+    method: 'PUT', headers: { ...bearer('fan'), 'Content-Type': 'application/json' }, body: JSON.stringify({ roleId, conversationId }),
+  });
+  await put('library-role', 'old-version-chat');
+  await env.DB.prepare("UPDATE cards SET approved_hosted_role_id='library-role-v2' WHERE id=?").bind(cardId).run();
+  await put('library-role-v2', 'new-version-chat');
+  await put('another-role', 'other-card-chat');
+  await env.DB.prepare("UPDATE member_conversations SET updated_at=CASE role_id WHEN 'library-role' THEN 1000 WHEN 'library-role-v2' THEN 3000 ELSE 2000 END").run();
+  const rows = (await body(await request('me/conversations'))).conversations;
+  expect(rows.map((r: any) => r.conversationId)).toEqual(['new-version-chat', 'other-card-chat']);
+});

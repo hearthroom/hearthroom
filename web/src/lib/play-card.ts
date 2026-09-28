@@ -17,7 +17,7 @@ export async function resolvePlayCard(id: string, provider: ProviderId, language
     ? libraryRequest<{ cardNumber: number; provider: ProviderId; roleId: string }>(
       `conversations/${encodeURIComponent(resume.id)}?provider=${provider}`, resume.token)
     : null;
-  const platformRequest = !resume && !source && early ? fetchCardPlatforms(id) : null;
+  const platformRequest = !source && early ? fetchCardPlatforms(id) : null;
   // 卡片那一步先失敗時，這兩個結果沒人等；先掛上處理，免得變成未處理的拒絕。
   previousRequest?.catch(() => {});
   platformRequest?.catch(() => {});
@@ -27,7 +27,11 @@ export async function resolvePlayCard(id: string, provider: ProviderId, language
   if (previousRequest) {
     const previous = await previousRequest;
     if (String(previous.cardNumber) !== number || previous.provider !== provider) throw new Error('conversation_card_mismatch');
-    return {card, number, roleId: previous.roleId};
+    // 紀錄記的是當時玩的版本；作者更新後改開目前上架的版本，伺服器開局時會把舊版上的對話接過來，
+    // 像遊戲更新一樣接著玩。卡片下架或這個平台暫時不能玩時，才回到紀錄上的版本。
+    const current = await (platformRequest && number === id ? platformRequest : fetchCardPlatforms(number)).catch(() => []);
+    const copy = current.find(p => p.provider === provider && p.playable && p.roleId);
+    return {card, number, roleId: copy?.roleId || previous.roleId};
   }
   // Author playtests use the saved source, not the approved snapshot. This API
   // verifies source ownership before returning any draft copy.
