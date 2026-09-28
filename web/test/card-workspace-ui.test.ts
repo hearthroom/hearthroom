@@ -20,7 +20,14 @@ beforeEach(()=>{vi.clearAllMocks();lastShown.clear();mocks.token.mockImplementat
 afterEach(()=>{app?.unmount();root?.remove();});
 async function mount(){const router=createRouter({history:createMemoryHistory(),routes:[{path:'/:pathMatch(.*)*',component:{template:'<div />'}}]});await router.push('/mine');const pinia=createPinia();setActivePinia(pinia);const session=useSession();session.me={accountNumId:11,nickName:'Fixture',avatar:''};session.profile={identities:[{provider:'lunatalk',externalId:11},{provider:'harbor',externalId:22}]} as any;root=document.createElement('div');document.body.append(root);app=createApp(MyCardsPage).use(pinia).use(i18n).use(router);app.mount(root);await settle();}
 function button(key:string){return [...root.querySelectorAll('button')].find(b=>b.textContent?.trim()===i18n.global.t(key))!;}
-it('shows one work with direct actions and sends community review only to its original account',async()=>{await mount();expect(root.querySelectorAll('article.card')).toHaveLength(1);expect(root.textContent).toContain(fixture.summary);expect(root.querySelector('a[href*="single=1"]')).toBeNull();expect(root.querySelector('a[href*="100021/edit"]')?.getAttribute('href')).toContain('provider=harbor');button('mine.action.submit').click();await settle();expect(mocks.register).toHaveBeenCalledWith('original','token-harbor',false,[],'harbor');expect(root.textContent).toContain(i18n.global.t('mine.badge.pending'));});
+// 卡片上只有試玩與編輯：送審在編輯頁（owner 2026-09-29：外面那顆大「提交審核」拿掉）
+it('shows one work with only play and edit, and no review submission here',async()=>{await mount();expect(root.querySelectorAll('article.card')).toHaveLength(1);expect(root.textContent).toContain(fixture.summary);expect(root.querySelector('a[href*="single=1"]')).toBeNull();expect(root.querySelector('a[href*="100021/edit"]')?.getAttribute('href')).toContain('provider=harbor');expect([...root.querySelectorAll('.card__actions > *')].map(e=>e.textContent?.trim())).toEqual([i18n.global.t('mine.action.play'),i18n.global.t('mine.action.edit')]);expect(button('mine.action.submit')).toBeUndefined();expect(mocks.register).not.toHaveBeenCalled();});
+it('keeps withdrawing a listed card, the only place to do it', async () => {
+ mocks.fetch.mockResolvedValue(result([{...fixture,roleId:'original',registered:true,status:'approved'}]));
+ await mount();
+ expect(button('mine.action.unregister')).toBeDefined();
+ expect(button('mine.action.submit')).toBeUndefined();
+});
 it('links directly to the only playable provider without a chooser or empty footer', async () => {
  await mount();
  const play=[...root.querySelectorAll('.card__actions a')].find(a=>a.textContent?.trim()===i18n.global.t('mine.action.play'));
@@ -44,11 +51,12 @@ it.each(['pending','rejected','superseded'])('keeps the review feedback footer f
  expect(root.querySelector('.card__body .card__note')?.textContent?.trim()).toBeTruthy();
  if(updateStatus==='rejected')expect(root.querySelector('.card__body')?.textContent).toContain('Please revise the opening.');
 });
-it('keeps the rejection reason and resubmission action', async () => {
+it('keeps the rejection reason and sends resubmission through the editor', async () => {
  mocks.fetch.mockResolvedValue(result([{...fixture,roleId:'original',registered:true,status:'rejected',note:'Please revise the opening.'}]));
  await mount();
  expect(root.querySelector('.card__body')?.textContent).toContain('Please revise the opening.');
- expect(button('mine.action.submit')).toBeDefined();
+ expect(button('mine.action.submit')).toBeUndefined();
+ expect(root.querySelector('a[href*="100021/edit"]')).not.toBeNull();
 });
 it('retains available works when another service is unavailable',async()=>{mocks.fetch.mockImplementation(async(_t,{provider})=>{if(provider==='lunatalk')throw Error('offline');return result([{...fixture,roleId:'original'}]);});await mount();expect(root.querySelectorAll('article.card')).toHaveLength(1);expect(mocks.fetch.mock.calls.every(c=>c[1].provider==='harbor')).toBe(true);});
 
@@ -165,4 +173,21 @@ it('says what the search found nothing for, and offers to clear it', async () =>
  expect(root.textContent).toContain(i18n.global.t('mine.searchEmpty',{q:'不存在'}));
  expect(button('mine.clearFilters')).toBeDefined();
  expect(root.querySelector('.pager')).toBeNull();
+});
+
+// 封面用首頁同一個縮圖網址（同一個尺寸），Cloudflare 不會為這一頁多轉一份；縮圖掛了退回原圖
+it('uses the same thumbnail URL as the home page, then the original on failure', async () => {
+ const { cardThumbUrl } = await import('../../shared/card-thumb');
+ const { PRIMARY_HOST } = await import('../../shared/site-hosts');
+ const portrait='https://assets.harperharbor.com/media/portrait.png';
+ vi.stubGlobal('location',{...window.location,hostname:'sukisuki.ai'});
+ try{
+  mocks.fetch.mockImplementation(async (_t, {provider}) => result([{...fixture, roleId:provider==='harbor'?'original':'copy', avatarUrl:portrait, backgroundUrl:portrait}]));
+  await mount();
+  expect(root.querySelector('.card__art img')?.getAttribute('src')).toBe(cardThumbUrl(PRIMARY_HOST,portrait));
+  root.querySelector('.card__art img')!.dispatchEvent(new Event('error')); await settle();
+  expect(root.querySelector('.card__art img')?.getAttribute('src')).toBe(portrait);
+  root.querySelector('.card__art img')!.dispatchEvent(new Event('error')); await settle();
+  expect(root.querySelector('.card__void')).not.toBeNull();
+ }finally{vi.unstubAllGlobals();}
 });

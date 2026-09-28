@@ -15052,6 +15052,7 @@
           "roleName",
           "roleDesc",
           "roleAvatar",
+          "roleBackground",
           "roleVisibility",
           "reviewStatus",
           "talkNum",
@@ -15081,10 +15082,11 @@
           },
           "roleAvatar": {
             "type": "string",
-            "enum": [
-              ""
-            ],
-            "description": "Always empty on this route; read images through `GET /role/detail`."
+            "description": "Same as `roleBackground`; kept for older clients."
+          },
+          "roleBackground": {
+            "type": "string",
+            "description": "Portrait image URL; empty string when the card has none."
           },
           "roleVisibility": {
             "type": "string",

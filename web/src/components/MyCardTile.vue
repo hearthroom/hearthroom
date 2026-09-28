@@ -5,11 +5,12 @@ import { compact } from "@/lib/format";
 import { zoneLabel } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
 import { can, currentProvider } from "@/lib/provider";
+import { cardThumb } from "@/lib/card-thumb";
 import type { MyCard } from "@/lib/api";
 
-/** locked：這週的登記額度用完了。只鎖「登記」，撤銷登記照常——撤掉不佔額度。 */
-const props = defineProps<{ card: MyCard & {sourceAvailable?:boolean}; busy: boolean; locked?: boolean }>();
-defineEmits<{ toggle: []; resubmit: [] }>();
+/** eager：首屏那幾張，封面不等捲到才載（最大內容繪製就是它們） */
+const props = defineProps<{ card: MyCard & {sourceAvailable?:boolean}; busy: boolean; eager?: boolean }>();
+defineEmits<{ toggle: [] }>();
 
 const { lp } = useLocalePath();
 const source=computed(()=>props.card.sourceProvider??props.card.provider??currentProvider());
@@ -21,12 +22,20 @@ const hasDetails = computed(() =>
 );
 
 const initial = computed(() => [...props.card.name][0] ?? "?");
+/*
+ * 直式封面，沒有才用頭像。先用首頁同一個縮圖網址（同一個尺寸，Cloudflare 不會多轉一份，見 card-thumb）；
+ * 縮圖拿不到就用原圖；原圖也掛了就當沒圖，退回首字佔位。
+ */
 const failedArt = ref<string[]>([]);
 const artwork = computed(() => [props.card.backgroundUrl, props.card.avatarUrl]
   .find((url): url is string => !!url && !failedArt.value.includes(url)));
-watch(() => [props.card.roleId, props.card.backgroundUrl, props.card.avatarUrl], () => { failedArt.value = []; });
+const thumbFailed = ref(false);
+const artSrc = computed(() => artwork.value && !thumbFailed.value ? cardThumb(artwork.value) : artwork.value);
+watch(() => [props.card.roleId, props.card.backgroundUrl, props.card.avatarUrl], () => { failedArt.value = []; thumbFailed.value = false; });
 function onArtError() {
-  if (artwork.value) failedArt.value.push(artwork.value);
+  if (!artwork.value) return;
+  if (!thumbFailed.value && artSrc.value !== artwork.value) thumbFailed.value = true;
+  else { failedArt.value.push(artwork.value); thumbFailed.value = false; }
 }
 </script>
 
@@ -36,7 +45,7 @@ function onArtError() {
     <div class="card__poster">
       <!-- 封面連到卡片頁：編輯有自己的鍵在下面（作者回報 2026-09-16：點自己的卡跳進編輯頁） -->
       <a :href="lp(`/cards/${card.num ?? card.detailId ?? card.workId ?? sourceId}`)" class="card__art">
-        <img v-if="artwork" :key="artwork" :src="artwork" :alt="card.name" loading="lazy" @error="onArtError" />
+        <img v-if="artSrc" :key="artSrc" :src="artSrc" :alt="card.name" :loading="eager ? 'eager' : 'lazy'" :fetchpriority="eager ? 'high' : undefined" decoding="async" @error="onArtError" />
         <div v-else class="card__void">
           <span :aria-label="card.name">{{ initial }}</span>
         </div>
@@ -59,23 +68,14 @@ function onArtError() {
           <!-- 自己的卡不用登記也能玩：登記是上榜，不是能不能對話的門檻 -->
           <a class="btn btn--sm" :href="platformPath(lp(`/play/${card.num ?? card.detailId ?? sourceId}?mode=source`),source)">{{ $t("mine.action.play") }}</a>
           <a v-if="can('editor',source)" class="btn btn--sm" :href="platformPath(lp(`/cards/${card.num ?? card.detailId ?? sourceId}/edit`),source)">{{ $t("mine.action.edit") }}</a>
-          <!-- 被駁回、離榜重審、被收回授權的卡：主鍵是「重新提交」，取消登記退到次要 -->
+          <!-- 送審、重新送審都在編輯頁；這裡只留已上架卡的「取消登記」（別處沒有這個入口） -->
           <button
-            v-if="card.registered && (card.status === 'rejected' || card.status === 'needs_review' || card.status === 'unshared')"
-            class="btn btn--sm btn--primary"
+            v-if="card.registered"
+            class="btn btn--sm card__withdraw"
             :disabled="busy || card.sourceAvailable===false"
-            @click="$emit('resubmit')"
-          >
-            {{ busy ? "…" : $t("mine.action.submit") }}
-          </button>
-          <button
-            class="btn btn--sm"
-            :class="card.registered ? 'card__withdraw' : 'btn--primary'"
-            :disabled="busy || card.sourceAvailable===false || (locked && !card.registered)"
-            :title="locked && !card.registered ? $t('mine.quota.full') : undefined"
             @click="$emit('toggle')"
           >
-            {{ busy ? "…" : card.registered ? $t("mine.action.unregister") : $t("mine.action.submit") }}
+            {{ busy ? "…" : $t("mine.action.unregister") }}
           </button>
         </div>
       </div>
