@@ -168,6 +168,7 @@
   "wallet.invite.redeemGift": "填寫朋友的推薦碼就能領 {credits} 積分。",
   "wallet.invite.own": "查看我的推薦碼",
   "wallet.invite.share": "朋友首次儲值時，你會獲得 {percent}% 的積分。",
+  "wallet.invite.shareEvery": "朋友每次儲值都有你一份，首次 {first}%、之後 {rate}%。",
   "wallet.invite.details": "查看邀請獎勵",
   "wallet.invite.earned": "邀請已為你帶來 {credits} 積分",
   "wallet.reason.purchase": "儲值",

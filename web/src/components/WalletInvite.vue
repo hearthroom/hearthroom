@@ -61,7 +61,7 @@ async function copy() {
     </template>
 
     <template v-else-if="data">
-      <p class="invite__headline">{{ $t("wallet.invite.share", { percent: data.terms.firstPercent }) }}</p>
+      <p class="invite__headline">{{ data.terms.rebatePercent > 0 && data.terms.rebateDays > 0 ? $t("wallet.invite.shareEvery", { first: data.terms.firstPercent, rate: data.terms.rebatePercent }) : $t("wallet.invite.share", { percent: data.terms.firstPercent }) }}</p>
       <div class="invite__code">
         <code data-testid="wallet-invite-code">{{ data.code }}</code>
         <button type="button" class="btn btn--sm" @click="copy">{{ copied ? $t("referral.copiedCode") : $t("referral.copyCode") }}</button>
