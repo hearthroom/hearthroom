@@ -2,8 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { ApiError, fetchMyCards, registerCard, unregisterCard, type MyCard, type MyCardPage } from "@/lib/api";
-import { confirmChoice } from "@/lib/confirm";
+import { fetchMyCards, unregisterCard, type MyCard, type MyCardPage } from "@/lib/api";
 import { daysUntilReset, remaining, weekRange } from "@/lib/quota";
 import { useLocalePath } from "@/lib/use-locale";
 import { groupWorks, workKey, type WorkspaceCard } from "@/lib/card-workspace";
@@ -30,7 +29,6 @@ const reauth = ref<Partial<Record<ProviderId, boolean>>>({});
 const quota = ref<MyCardPage["quota"] | null>(null);
 const loading = ref(true);
 const error = ref("");
-const notice = ref("");
 const busy = ref<string | null>(null);
 const providers = computed(() => session.profile?.identities.filter(i=>i.provider==='harbor').map(i=>i.provider as ProviderId) ?? (session.me ? [currentProvider()] : []));
 const visible = computed(()=>groupWorks(rows.value));
@@ -117,64 +115,9 @@ async function cardToken(card:WorkspaceCard) {
  if(!token)throw new Error(t("auth.expired"));
  return token;
 }
-/**
- * 提交審核（登記）。
- *
- * 按下去之前先把話說清楚：提交等於把這張卡的完整設定授權給本站的審核帳號唯讀。
- * 這是作者的意思表示，服務端用他自己的 token 去主站授權，所以確認框不能省。
- */
-async function submit(card: WorkspaceCard) {
-  if (!card.sourceAvailable) return;
-  if (!card.registered && quotaFull.value) {
-    error.value = t("mine.quota.exceeded");
-    return;
-  }
-  // 提交時必須宣告分級，而且刻意不預選：這是作者親手做的聲明，審核人會對照內容，不符會被駁回
-  const rating = await confirmChoice({
-    title: t("mine.consent.title"),
-    message: t("workspace.reviewConsent"),
-    confirmText: t("mine.consent.confirm"),
-    choiceLabel: t("mine.rating.label"),
-    choices: [
-      { value: "sfw", label: t("mine.rating.sfw"), hint: t("mine.rating.sfwHint") },
-      { value: "nsfw", label: t("mine.rating.nsfw"), hint: t("mine.rating.nsfwHint") },
-    ],
-  });
-  if (!rating) return;
-  const nsfw = rating === "nsfw";
-  const wasRegistered = card.registered;
-  busy.value = workKey(card);
-  error.value = "";
-  notice.value = "";
-  try {
-    const token = await cardToken(card);
-    // Community review is one publication. Platform distribution is an explicit, separate choice.
-    const res = await registerCard(card.roleId, token, nsfw, [], card.provider);
-    card.registered = true;
-    card.updateStatus = wasRegistered && res.status==='approved' ? 'pending' : undefined;
-    card.status = res.status === "unlisted" ? undefined : res.status ?? "approved";
-    card.note = "";
-    card.nsfw = nsfw;
-
-    // 登記成功就多用掉一格；撤銷不還——額度數的是「這週登記過幾張不同的卡」
-    if (!wasRegistered && quota.value) { if (quota.value.used < quota.value.limit) quota.value.used += 1; else quota.value.packRemaining = Math.max(0, quota.value.packRemaining - 1); }
-    notice.value = t("mine.submitted");
-    persistCard(card);
-  } catch (err) {
-    error.value =
-      err instanceof ApiError && err.code === "weekly_quota_exceeded"
-        ? t("mine.quota.exceeded")
-        : err instanceof ApiError && err.code === "card_too_large_for_review"
-        ? t("mine.tooLargeForReview")
-        : err instanceof Error ? err.message : t("state.actionFailed");
-  } finally {
-    busy.value = null;
-  }
-}
-
-async function toggle(card: WorkspaceCard) {
-  if (!card.sourceAvailable) return;
-  if (!card.registered) return submit(card);
+/** 取消登記（下架）。送審與重新送審在編輯頁。 */
+async function withdraw(card: WorkspaceCard) {
+  if (!card.sourceAvailable || !card.registered) return;
   busy.value = workKey(card);
   error.value = "";
   // Keep the displayed card while the original provider handles the request.
@@ -262,7 +205,6 @@ watch(()=>route.query.fresh, fresh=>{
       <button v-else class="btn btn--sm" :disabled="loading" @click="load()">{{ $t('linked.retry') }}</button>
     </div>
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
-    <p v-else-if="notice" class="notice" role="status">{{ notice }}</p>
 
     <div v-if="loading && !visible.length" class="wall" aria-hidden="true">
       <div v-for="i in 12" :key="i" class="ghost ghost--card" />
@@ -281,13 +223,12 @@ watch(()=>route.query.fresh, fresh=>{
 
     <div v-else class="wall" :aria-busy="loading || undefined">
       <MyCardTile
-        v-for="card in visible"
+        v-for="(card, i) in visible"
         :key="workKey(card)"
         :card="card"
-        :locked="quotaFull"
         :busy="busy === workKey(card)"
-        @toggle="toggle(card)"
-        @resubmit="submit(card)"
+        :eager="i < 4"
+        @toggle="withdraw(card)"
       />
     </div>
 

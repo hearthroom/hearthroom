@@ -36,6 +36,7 @@ import {
   putRoleWorld,
   deleteRoleWorld,
   saveAuthorAsset,
+  ApiError,
   registerCard,
   beginCardEdit,
   unpublishRole,
@@ -821,7 +822,10 @@ async function publish() {
     saving.value = false;
     await router.push(lp("/mine?fresh=1"));
   } catch (err) {
-    error.value = err instanceof Error ? err.message : t("state.saveFailed");
+    error.value =
+      err instanceof ApiError && err.code === "weekly_quota_exceeded" ? t("mine.quota.exceeded")
+      : err instanceof ApiError && err.code === "card_too_large_for_review" ? t("mine.tooLargeForReview")
+      : err instanceof Error ? err.message : t("state.saveFailed");
   } finally {
     saving.value = false;
   }
