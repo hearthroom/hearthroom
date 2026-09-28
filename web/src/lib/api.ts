@@ -528,6 +528,8 @@ export interface ListingQuota {
   weekStart: number;
   /** 下週的起點，毫秒；額度在這一刻重置 */
   weekEnd: number;
+  /** 補充包還剩幾張：管理員發的額外登記次數，不隨週重置，免費額度用完才扣 */
+  packRemaining: number;
 }
 
 export interface MyCardPage {

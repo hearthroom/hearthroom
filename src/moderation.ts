@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import { requireReviewer, requireMember, isReviewer, memberNsfw } from './members';
+import { requireReviewer, requireMember, isReviewer, memberNsfw, memberByHandle, memberProfile } from './members';
+import { badgeCollection } from './community/badges';
+import { quotaForMember, PACK_MAX } from './quota';
 import { pickLocale, HttpError, type Env, type Localized } from './types';
 
 export const moderationRoutes = new Hono<{ Bindings: Env }>();
@@ -36,7 +38,7 @@ moderationRoutes.use('/v1/moderation/*',bodyLimit({maxSize:16000}));
 moderationRoutes.use('/v1/moderation/*',async(c,next)=>{
  c.header('Cache-Control','private, no-store');
  await next();
- const op=c.req.path.endsWith('/vote')?'vote':c.req.path.endsWith('/resolve')?'resolve':c.req.path.endsWith('/tags')?'tags':c.req.path.endsWith('/compensation')?'compensation':c.req.path.endsWith('/staff')?'staff':c.req.method==='POST'?'propose':'read';
+ const op=c.req.path.endsWith('/vote')?'vote':c.req.path.endsWith('/resolve')?'resolve':c.req.path.endsWith('/tags')?'tags':c.req.path.endsWith('/compensation')?'compensation':c.req.path.endsWith('/staff')?'staff':c.req.method==='POST'&&c.req.path.endsWith('/packs')?'packs':c.req.method==='POST'?'propose':'read';
  const outcome=c.res.status<400?'success':c.res.status<500?'denied':'error';
  try{await c.env.DB.prepare('INSERT INTO moderation_metrics VALUES(?,?,1) ON CONFLICT(operation,outcome) DO UPDATE SET value=value+1').bind(op,outcome).run();}catch{console.warn('Moderation request metric unavailable');}
 });
@@ -78,7 +80,8 @@ moderationRoutes.get('/v1/moderation/cards/:id',async c=>{
  const cases=await db.prepare('SELECT * FROM moderation_cases WHERE provider=? AND source_role_id=? ORDER BY created_at DESC LIMIT 100').bind(card.provider,card.source_role_id).all<CaseRow>();
  const events=await db.prepare('SELECT action,reason,before_value AS beforeValue,after_value AS afterValue,created_at AS at FROM moderation_events WHERE provider=? AND source_role_id=? ORDER BY created_at DESC LIMIT 100').bind(card.provider,card.source_role_id).all();
  const reviews=await db.prepare('SELECT id,kind,status,submitted_at AS submittedAt,decided_at AS decidedAt,note,content_hash AS version FROM review_submissions WHERE card_id=? ORDER BY submitted_at DESC LIMIT 100').bind(card.id).all();
- return c.json({card:projection(card,c.req.query('lang')||'zh-Hant'),cases:cases.results.map(r=>publicCase(r,member.id)),events:events.results,reviews:reviews.results});
+ const author=card.author_member_id?await db.prepare('SELECT handle FROM members WHERE id=?').bind(card.author_member_id).first<{handle:string}>():null;
+ return c.json({card:{...projection(card,c.req.query('lang')||'zh-Hant'),authorHandle:author?.handle??null},cases:cases.results.map(r=>publicCase(r,member.id)),events:events.results,reviews:reviews.results});
 });
 moderationRoutes.get('/v1/moderation/cases/:id/evidence',async c=>{
  const member=await requireReviewer(c);const row=await caseOf(c.env.DB,c.req.param('id'));
@@ -125,7 +128,7 @@ moderationRoutes.post('/v1/moderation/cases/:id/resolve',async c=>{
 
 export async function moderationMetrics(db:D1Database):Promise<string>{
  const rows=await db.prepare('SELECT operation,outcome,value FROM moderation_metrics ORDER BY operation,outcome').all<{operation:string;outcome:string;value:number}>();
- return '# HELP hearthroom_moderation_requests_total Community moderation requests.\n# TYPE hearthroom_moderation_requests_total counter\n'+rows.results.filter(r=>/^(read|propose|vote|resolve|tags|compensation|staff)$/.test(r.operation)&&/^(success|denied|error)$/.test(r.outcome)).map(r=>`hearthroom_moderation_requests_total{operation="${r.operation}",outcome="${r.outcome}"} ${r.value}`).join('\n')+'\n';
+ return '# HELP hearthroom_moderation_requests_total Community moderation requests.\n# TYPE hearthroom_moderation_requests_total counter\n'+rows.results.filter(r=>/^(read|propose|vote|resolve|tags|compensation|staff|packs)$/.test(r.operation)&&/^(success|denied|error)$/.test(r.outcome)).map(r=>`hearthroom_moderation_requests_total{operation="${r.operation}",outcome="${r.outcome}"} ${r.value}`).join('\n')+'\n';
 }
 
 for(const action of ['tags','compensation'] as const)moderationRoutes.post(`/v1/moderation/cards/:id/${action}`,async c=>{
@@ -156,3 +159,59 @@ export function normalizeTags(raw:unknown):string[]{
  return [...new Set((raw as string[]).map(t=>t.trim()))];
 }
 
+
+// ---- 成員 ----------------------------------------------------------------
+//
+// 上面的處置全部對「作品」；補充包、徽章這類是發給「人」的，走這一組。只有 manager/owner 進得來，
+// 每一筆都留發的人、理由與操作 ID（同一個操作重送不會多發一包）。
+const PACK=`SELECT p.id,p.granted,p.granted-(SELECT COUNT(*) FROM card_registrations r WHERE r.pack_id=p.id) AS remaining,p.reason,p.created_at,m.handle AS member,g.handle AS granted_by
+ FROM registration_packs p JOIN members m ON m.id=p.member_id JOIN members g ON g.id=p.granted_by`;
+interface PackRow{id:string;granted:number;remaining:number;reason:string;created_at:number;member:string;granted_by:string}
+const publicPack=(p:PackRow)=>({id:p.id,member:p.member,granted:p.granted,remaining:p.remaining,reason:p.reason,grantedBy:p.granted_by,at:p.created_at});
+async function targetOf(c:{env:Env;req:{param(k:'handle'):string}},actor:string){
+ const id=await memberByHandle(c.env.DB,c.req.param('handle').replace(/^@/,''));
+ if(!id)throw new HttpError(404,'community_member_missing');
+ if(id===actor)throw new HttpError(403,'moderation_self_review');
+ return id;
+}
+async function memberDetail(env:Env,memberId:string){
+ const db=env.DB;const profile=await memberProfile(db,memberId);if(!profile)throw new HttpError(404,'community_member_missing');
+ const [quota,packs,staff,badges,badgeAudit]=await Promise.all([
+  quotaForMember(db,memberId,Date.now()),
+  db.prepare(PACK+' WHERE p.member_id=? ORDER BY p.created_at DESC,p.id LIMIT 100').bind(memberId).all<PackRow>(),
+  db.prepare('SELECT role FROM reviewers WHERE member_id=? AND revoked_at IS NULL').bind(memberId).first<{role:StaffRole}>(),
+  badgeCollection(env,memberId),
+  db.prepare('SELECT a.request_id AS id,a.badge,d.titles,a.action,a.reason,a.created_at AS at,m.handle AS actor FROM community_badge_audit a JOIN members m ON m.id=a.actor LEFT JOIN community_badge_definitions d ON d.key=a.badge WHERE a.member_id=? ORDER BY a.created_at DESC LIMIT 100').bind(memberId).all<{id:string;badge:string;titles:string|null;action:string;reason:string;at:number;actor:string}>(),
+ ]);
+ return {
+  member:{handle:profile.handle,displayName:profile.displayName,avatarUrl:profile.avatarUrl,memberSince:profile.memberSince,providers:[...new Set(profile.identities.map(i=>i.provider))],role:staff?.role??null},
+  quota,packs:packs.results.map(publicPack),
+  badges:badges.items.filter(b=>b.state==='earned').map(b=>({key:b.key,icon:b.icon,titles:b.titles,earnedAt:b.earnedAt,expiresAt:b.expiresAt})),
+  badgeAudit:badgeAudit.results.map(a=>({...a,titles:a.titles?JSON.parse(a.titles) as Record<string,string>:null})),
+ };
+}
+moderationRoutes.get('/v1/moderation/members/:handle',async c=>{
+ const member=await requireReviewer(c);await manager(c.env.DB,member.id);
+ const id=await memberByHandle(c.env.DB,c.req.param('handle').replace(/^@/,''));if(!id)throw new HttpError(404,'community_member_missing');
+ return c.json(await memberDetail(c.env,id));
+});
+moderationRoutes.get('/v1/moderation/packs',async c=>{
+ const member=await requireReviewer(c);await manager(c.env.DB,member.id);const offset=Math.max(0,Math.floor(Number(c.req.query('offset'))||0));
+ const rows=await c.env.DB.prepare(PACK+' ORDER BY p.created_at DESC,p.id LIMIT 31 OFFSET ?').bind(offset).all<PackRow>();
+ return c.json({items:rows.results.slice(0,30).map(publicPack),hasNext:rows.results.length>30});
+});
+moderationRoutes.post('/v1/moderation/members/:handle/packs',async c=>{
+ const member=await requireReviewer(c);const db=c.env.DB;await manager(db,member.id);
+ const target=await targetOf(c,member.id);
+ const b=await c.req.json<Record<string,unknown>>();const reason=reasonOf(b.reason);const op=operationOf(b.operationId);const granted=b.granted;
+ if(typeof granted!=='number'||!Number.isInteger(granted)||granted<1||granted>PACK_MAX)throw new HttpError(400,'invalid_arguments');
+ const existing=await db.prepare('SELECT member_id,granted,reason FROM registration_packs WHERE granted_by=? AND operation_id=?').bind(member.id,op).first<{member_id:string;granted:number;reason:string}>();
+ if(existing){if(existing.member_id!==target||existing.granted!==granted||existing.reason!==reason)throw new HttpError(409,'moderation_conflict');return c.json(await memberDetail(c.env,target));}
+ const id=crypto.randomUUID();const now=Date.now();
+ await mutate(()=>db.batch([
+  db.prepare('INSERT INTO registration_packs(id,member_id,granted,reason,granted_by,operation_id,created_at) VALUES(?,?,?,?,?,?,?)').bind(id,target,granted,reason,member.id,op,now),
+  // 通知跟其他社群通知一樣尊重「要不要收通知」；帶他去「我的卡片」看額度
+  db.prepare("INSERT OR IGNORE INTO community_notifications(event_key,member_id,kind,path,created_at) SELECT ?,member_id,'registration_pack','/mine',? FROM community_preferences WHERE member_id=? AND notifications=1").bind('pack:'+id,now,target),
+ ]));
+ return c.json(await memberDetail(c.env,target),201);
+});

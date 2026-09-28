@@ -1,7 +1,7 @@
 import {approveFixtureResponse} from './hosted-fixture';
 import { SELF, env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { bearer, resetDb, restoreUpstream, rolesOnMainSite, whoAmI, identities, myRolesOnUpstream } from "./helpers";
+import { bearer, resetDb, restoreUpstream, rolesOnMainSite, whoAmI, identities, myRolesOnUpstream, makeMember } from "./helpers";
 import { WEEKLY_LIMIT, WEEK_MS, weekWindow } from "../src/quota";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -23,6 +23,8 @@ beforeEach(async () => {
     { roleId: "a2", authorNumId: 10001 },
     { roleId: "a3", authorNumId: 10001 },
     { roleId: "a4", authorNumId: 10001 },
+    { roleId: "a5", authorNumId: 10001 },
+    { roleId: "a6", authorNumId: 10001 },
     { roleId: "b1", authorNumId: 20002 },
   );
   myRolesOnUpstream({ "alice-token": [{ roleId: "a1", name: "一" }], "bob-token": [] });
@@ -89,8 +91,80 @@ describe("每週登記額度", () => {
     const res = await SELF.fetch("https://c.test/v1/me/cards", { headers: bearer("alice-token") });
     const body = (await res.json()) as any;
     const { start, end } = weekWindow(Date.now());
-    expect(body.quota).toEqual({ limit: WEEKLY_LIMIT, used: 2, weekStart: start, weekEnd: end });
+    expect(body.quota).toEqual({ limit: WEEKLY_LIMIT, used: 2, weekStart: start, weekEnd: end, packRemaining: 0 });
     const listed = await SELF.fetch("https://c.test/v1/me/cards?filter=listed", { headers: bearer("alice-token") });
     expect(((await listed.json()) as any).quota.used).toBe(2);
+  });
+});
+
+/** 管理員發的補充包：直接落表，端點另有測試（registration-packs.test.ts）。 */
+async function grantPack(memberId: string, granted: number, at = Date.now()): Promise<string> {
+  const id = crypto.randomUUID();
+  await env.DB.prepare("INSERT INTO registration_packs (id, member_id, granted, reason, granted_by, operation_id, created_at) VALUES (?, ?, ?, 'test', ?, ?, ?)")
+    .bind(id, memberId, granted, await makeMember(4), id, at).run();
+  return id;
+}
+const packRows = async () => (await env.DB.prepare("SELECT COUNT(*) AS n FROM card_registrations WHERE pack_id IS NOT NULL").first<{ n: number }>())!.n;
+
+describe("登記補充包", () => {
+  it("免費 3 張用完後，有補充包就能繼續登記，每張新卡扣一次；扣完回到 403", async () => {
+    const alice = await makeMember(10001);
+    await grantPack(alice, 2);
+    await register("a1"); await register("a2"); await register("a3");
+    expect((await register("a4")).status).toBe(201);
+    expect((await register("a5")).status).toBe(201);
+    expect(await packRows()).toBe(2);
+    const res = await register("a6");
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "weekly_quota_exceeded" });
+    expect(await packRows()).toBe(2);
+  });
+
+  it("免費額度還有就先用免費的，不動補充包", async () => {
+    const alice = await makeMember(10001);
+    await grantPack(alice, 1);
+    await register("a1");
+    expect(await packRows()).toBe(0);
+    const res = await SELF.fetch("https://c.test/v1/me/cards", { headers: bearer("alice-token") });
+    expect(((await res.json()) as any).quota).toMatchObject({ used: 1, packRemaining: 1 });
+  });
+
+  it("用補充包登過的卡撤掉再登同一張，不再扣一次", async () => {
+    const alice = await makeMember(10001);
+    await grantPack(alice, 1);
+    await register("a1"); await register("a2"); await register("a3");
+    expect((await register("a4")).status).toBe(201);
+    expect((await unregister("a4")).status).toBe(204);
+    expect((await register("a4")).status).toBe(201);
+    expect(await packRows()).toBe(1);
+  });
+
+  it("補充包不隨週重置：上週扣掉的這週不會回來，但沒用完的留著", async () => {
+    const alice = await makeMember(10001);
+    const pack = await grantPack(alice, 2, Date.now() - 20 * DAY);
+    await env.DB.prepare("INSERT INTO card_registrations (provider, author_num_id, source_role_id, registered_at, pack_id) VALUES ('harbor', ?, ?, ?, ?)").bind(10001, "old", Date.now() - 8 * DAY, pack).run();
+    await register("a1"); await register("a2"); await register("a3");
+    expect((await register("a4")).status).toBe(201);
+    expect((await register("a5")).status).toBe(403);
+  });
+
+  it("我的卡片帶著補充包餘額：免費用量不把補充包算進去", async () => {
+    const alice = await makeMember(10001);
+    await grantPack(alice, 3);
+    await register("a1"); await register("a2"); await register("a3"); await register("a4");
+    const res = await SELF.fetch("https://c.test/v1/me/cards", { headers: bearer("alice-token") });
+    expect(((await res.json()) as any).quota).toMatchObject({ limit: WEEKLY_LIMIT, used: 3, packRemaining: 2 });
+  });
+
+  it("資料庫擋住：別人的補充包、或已扣完的補充包，直接寫也寫不進去", async () => {
+    const alice = await makeMember(10001);
+    const bob = await makeMember(20002);
+    const bobs = await grantPack(bob, 1);
+    const insert = (roleId: string, pack: string, author = 10001) =>
+      env.DB.prepare("INSERT INTO card_registrations (provider, author_num_id, source_role_id, registered_at, pack_id) VALUES ('harbor', ?, ?, ?, ?)").bind(author, roleId, Date.now(), pack).run();
+    await expect(insert("x1", bobs)).rejects.toThrow(/registration_pack_unavailable/);
+    const own = await grantPack(alice, 1);
+    await insert("x2", own);
+    await expect(insert("x3", own)).rejects.toThrow(/registration_pack_unavailable/);
   });
 });

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, nextTick, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, RouterLink } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useSession } from '@/lib/session';
 import { useReviewer } from '@/lib/review';
@@ -10,7 +10,9 @@ import { confirmDialog, settleConfirm } from '@/lib/confirm';
 import { moderationRequest, type ModerationCase, type ManagedCard, type CardHistory } from '@/lib/moderation';
 import { dateTime } from '@/lib/format';
 import { pageTitle } from '@/lib/i18n';
-const {t,locale}=useI18n();const route=useRoute();const session=useSession();const reviewer=useReviewer();
+import { useLocalePath } from '@/lib/use-locale';
+const {t,locale}=useI18n();const route=useRoute();const session=useSession();const reviewer=useReviewer();const {lp}=useLocalePath();
+const featuredQuota=computed(()=>reviewer.featured?.admin&&reviewer.featuredProvider===currentProvider()?reviewer.featured:null);
 const tab=computed(() => route.meta.managementTab === 'cards' ? 'cards' : route.meta.managementTab === 'history' ? 'history' : 'cases');const cases=ref<ModerationCase[]>([]);const cards=ref<ManagedCard[]>([]);
 const selected=ref<ModerationCase|null>(null);const history=ref<CardHistory|null>(null);const q=ref('');const offset=ref(0);const hasNext=ref(false);
 const loading=ref(false);const busy=ref(false);const error=ref('');const done=ref('');const reason=ref('');
@@ -99,7 +101,7 @@ onMounted(()=>{document.title=pageTitle(t('moderation.title'));void reviewer.ref
  <section class="moderation" :aria-label="t(`moderation.tab.${tab}`)">
   <p v-if="error" class="notice notice--error" role="alert">{{error}} <button class="btn btn--sm" :disabled="busy" @click="load">{{t('review.refresh')}}</button></p>
   <p v-if="done" class="notice" role="status">{{done}}</p>
-  <form v-if="tab==='cards'" class="work-search" @submit.prevent="offset=0;load()"><input v-model="q" class="input" type="search" :placeholder="t('moderation.search')" :aria-label="t('moderation.search')"/><button class="btn btn--primary" :disabled="loading||busy">{{t('moderation.find')}}</button></form>
+  <form v-if="tab==='cards'" class="work-search" @submit.prevent="offset=0;load()"><input v-model="q" class="input" type="search" :placeholder="t('moderation.search')" :aria-label="t('moderation.search')"/><button class="btn btn--primary" :disabled="loading||busy">{{t('moderation.find')}}</button><span v-if="featuredQuota" data-featured-entry class="subtle work-search__quota">{{t('card.featureQuota',{used:featuredQuota.featuredUsed,quota:featuredQuota.featuredQuota})}}</span></form>
   <div class="work-grid">
    <section class="work-list" :aria-busy="loading">
     <template v-if="loading"><div v-for="n in 3" :key="n" class="ghost work-ghost"/></template>
@@ -120,6 +122,7 @@ onMounted(()=>{document.title=pageTitle(t('moderation.title'));void reviewer.ref
     </template>
     <template v-else-if="history">
      <h2>{{history.card.name}}</h2><p class="notice">{{t(history.card.publicBlocked?'moderation.blocked':history.card.boardHidden?'moderation.unlisted':'moderation.listed')}}</p>
+     <RouterLink v-if="isManager&&history.card.authorHandle" data-author-link class="btn btn--sm work-author" :to="lp('/review/members/'+history.card.authorHandle)">{{t('moderation.members.author')}} · @{{history.card.authorHandle}}</RouterLink>
      <section v-if="canFeature" class="work-featured" :aria-label="t('moderation.featuredManage')">
       <h3>{{t('moderation.featuredManage')}}</h3>
       <p class="subtle">{{t('moderation.featureIntro')}}</p>
@@ -141,7 +144,7 @@ onMounted(()=>{document.title=pageTitle(t('moderation.title'));void reviewer.ref
 <style scoped>
 .work-featured{display:grid;gap:var(--s-3);padding-block:var(--s-3);border-bottom:1px solid var(--line);}.work-featured h3{margin-top:0;}.work-featured .btn{justify-self:start;}
 .work-actions,.work-search,.work-pager{display:flex;gap:var(--s-2);flex-wrap:wrap;align-items:center;}
-.work-search{margin-bottom:var(--s-4);}.work-search .input{flex:1;min-width:180px;}
+.work-search{margin-bottom:var(--s-4);}.work-search .input{flex:1;min-width:180px;}.work-search__quota{flex-basis:100%;}.work-author{justify-self:start;}
 .work-grid{display:grid;grid-template-columns:minmax(240px,0.85fr) minmax(0,1.4fr);gap:var(--s-4);align-items:start;}
 .work-list{display:grid;gap:var(--s-3);}.work-item{display:grid;gap:var(--s-2);padding:var(--s-4);width:100%;text-align:start;color:var(--text);font:inherit;cursor:pointer;border:1px solid var(--line);}
 .work-item:hover,.work-item:focus-visible{border-color:var(--accent);background:var(--surface-2);}.work-item--urgent{border-inline-start:3px solid var(--danger);}

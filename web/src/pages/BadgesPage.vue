@@ -8,7 +8,6 @@ import { communityRequest } from '@/lib/community';
 import { pageTitle } from '@/lib/i18n';
 import { BADGE_CATEGORIES, FEATURED_LIMIT, type BadgeCollection } from '../../../shared/community-badges';
 import BadgeWall from '@/components/BadgeWall.vue';
-import BadgeManager from '@/components/BadgeManager.vue';
 import CommunityIcon from '@/components/CommunityIcon.vue';
 const {t}=useI18n(),{lp}=useLocalePath(),session=useSession();
 const data=ref<BadgeCollection|null>(null),selected=ref<string[]>([]),visible=ref(false),busy=ref(false),loading=ref(false),error=ref(''),saved=ref(false),filter=ref('all');
@@ -45,7 +44,6 @@ watch(()=>t('badgeWall.title'),value=>{document.title=pageTitle(value);},{immedi
    <section v-for="section in sections" :key="section.category" class="badge-section"><h3 class="badge-section__title">{{ categoryLabel(section.category) }}</h3><BadgeWall :items="section.items" :selected="selected" editable :busy="busy" @change="selected=$event;saved=false" /></section>
    <p v-if="!items.length" class="subtle">{{ t('badgeWall.empty') }}</p>
    <nav class="badge-next"><RouterLink :to="lp('/me/community')" class="btn"><CommunityIcon name="discord" />{{ t('badgeWall.connect') }}</RouterLink><RouterLink :to="lp('/mine')" class="btn">{{ t('badgeWall.create') }}</RouterLink></nav>
-   <BadgeManager v-if="data.canManage" @changed="load(true)" />
   </template>
  </div>
 </template>

@@ -110,7 +110,7 @@ export async function badgeCollection(env:Env,member:string,publicOnly=false):Pr
  const chosen:string[]=prefs?.featured_badges===null||prefs?.featured_badges===undefined?active.slice(0,FEATURED_LIMIT):JSON.parse(prefs.featured_badges);
  const featured=chosen.filter(key=>active.includes(key)).slice(0,FEATURED_LIMIT);
  if(publicOnly){items=items.filter(b=>b.state==='earned');return {items,featured};}
- return {items,featured,public:!!prefs?.public_badges,canManage:await canManageBadges(env,member)};
+ return {items,featured,public:!!prefs?.public_badges};
 }
 export async function setFeaturedBadges(env:Env,member:string,input:unknown,visibility?:unknown) {
  if(visibility!==undefined&&typeof visibility!=="boolean")throw new HttpError(400,"community_input");

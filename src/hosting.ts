@@ -75,7 +75,7 @@ export async function beginHostedEdit(db:D1Database,memberId:string,roleId:strin
 
 // Persist the issuer's operation before contacting the host: a lost HTTP reply can
 // resume the same seal without reading a later draft or creating another version.
-export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:string;account:number;role:UpstreamRole;token:string;nsfw:boolean;operationId:string;now:number}):Promise<Receipt>{
+export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:string;account:number;role:UpstreamRole;token:string;nsfw:boolean;operationId:string;now:number;packId?:string|null}):Promise<Receipt>{
  const db=env.DB;
  const provider=input.provider??'harbor';
  if(input.role.authorNumId!==input.account)throw new HttpError(403,'not the author of this card');
@@ -127,7 +127,7 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  else {
   try {
    await upsertCard(db,{...sealed,roleId:input.role.roleId,creationMethod:'hearthroom'},input.now,{
-    provider,status:'pending',nsfw:input.nsfw,recordRegistration:true,preserveExisting:true,additionalWrites:finalize,
+    provider,status:'pending',nsfw:input.nsfw,recordRegistration:true,packId:input.packId,preserveExisting:true,additionalWrites:finalize,
    });
   } catch(error) {
    const retry=await existingOperation();if(retry?.submission_id)return receiptOf(retry);throw error;

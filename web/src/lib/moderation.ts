@@ -2,7 +2,15 @@ import { currentProvider } from './provider';
 import { ApiError } from './api';
 import { i18n } from './i18n';
 export interface ModerationCase {id:string;cardNumber:number;title:string;action:string;reason:string;status:string;createdAt:number;decidedAt:number|null;version:string;resolution?:string;canVote:boolean;canResolve:boolean;votes:{vote:string;reason:string;at:number}[]}
-export interface ManagedCard {provider:import("./provider").ProviderId;featured:boolean;id:string;name:string;tags:string[];status:string;boardHidden:boolean;publicBlocked:boolean;version:string}
+export interface ManagedCard {provider:import("./provider").ProviderId;featured:boolean;id:string;name:string;tags:string[];status:string;boardHidden:boolean;publicBlocked:boolean;version:string;authorHandle?:string|null}
+export interface RegistrationPack {id:string;member:string;granted:number;remaining:number;reason:string;grantedBy:string;at:number}
+export interface MemberDetail {
+ member:{handle:string;displayName:string;avatarUrl:string;memberSince:number;providers:string[];role:'reviewer'|'manager'|'owner'|null};
+ quota:{limit:number;used:number;weekStart:number;weekEnd:number;packRemaining:number};
+ packs:RegistrationPack[];
+ badges:{key:string;icon:string;titles:Record<string,string>;earnedAt:number|null;expiresAt:number|null}[];
+ badgeAudit:{id:string;badge:string;titles:Record<string,string>|null;action:string;reason:string;at:number;actor:string}[];
+}
 export interface CardHistory {card:ManagedCard;cases:ModerationCase[];reviews:{id:string;kind:string;status:string;note:string;submittedAt:number;version:string}[];events:{action:string;reason:string;beforeValue:string;afterValue:string;at:number}[]}
 export async function moderationRequest<T>(path:string,token:string,body?:unknown):Promise<T>{
  const res=await fetch(`/v1/moderation${path}`,{method:body===undefined?'GET':'POST',headers:{Authorization:`Bearer ${token}`,'X-Provider':currentProvider(),'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});

@@ -1,7 +1,7 @@
 import { SELF, env } from 'cloudflare:test';
 import { beforeEach, afterEach, expect, it } from 'vitest';
 import { resetDb, makeMember, bearer, whoAmI, restoreUpstream } from './helpers';
-import { badgeCollection, setFeaturedBadges, createEventBadge, changeBadgeAward, FOUNDER_CUTOFF } from '../src/community/badges';
+import { badgeCollection, setFeaturedBadges, createEventBadge, changeBadgeAward, canManageBadges, FOUNDER_CUTOFF } from '../src/community/badges';
 import { projection, communityMaintenance } from '../src/community/service';
 let member:string, manager:string;
 beforeEach(async()=>{await resetDb();member=await makeMember(11);manager=await makeMember(22);await env.DB.prepare("INSERT INTO reviewers(member_id,granted_at,granted_by,role) VALUES (?,0,'test','manager')").bind(manager).run();
@@ -11,8 +11,8 @@ afterEach(restoreUpstream);
 const definition=()=>({key:'event_summer',icon:'star',titles:{'zh-Hant':'夏日旅人',en:'Summer traveler'},descriptions:{'zh-Hant':'參與夏日活動。',en:'Join the summer event.'}});
 async function grant(action='grant',requestId=crypto.randomUUID(),extra={}){return changeBadgeAward(env,manager,{handle:'aaaaaabb',badge:'event_summer',action,requestId,reason:'Event participation',...extra});}
 it('shows the catalog and honest locked conditions without granting anything',async()=>{
- const wall=await badgeCollection(env,member);expect(wall.items.length).toBeGreaterThanOrEqual(6);expect(wall.items.every(b=>b.state==='locked')).toBe(true);expect(wall.featured).toEqual([]);expect(wall.canManage).toBe(false);
- expect((await badgeCollection(env,manager)).canManage).toBe(true);
+ const wall=await badgeCollection(env,member);expect(wall.items.length).toBeGreaterThanOrEqual(6);expect(wall.items.every(b=>b.state==='locked')).toBe(true);expect(wall.featured).toEqual([]);expect(await canManageBadges(env,member)).toBe(false);
+ expect(await canManageBadges(env,manager)).toBe(true);
 });
 it('preserves first-work awards and hides all collection data by default',async()=>{
  await env.DB.prepare("INSERT INTO community_awards VALUES (?, 'first_work','work',100,NULL,NULL,0)").bind(member).run();

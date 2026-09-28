@@ -7,5 +7,5 @@ export const FEATURED_LIMIT = 5;
 export interface BadgeDefinition { key:string; icon:BadgeIcon; category:string; titles:Record<string,string>; descriptions:Record<string,string> }
 export interface BadgeProgress { value:number; target:number; unit?:'xp'|'days' }
 export interface CollectedBadge extends BadgeDefinition { state:'earned'|'locked'|'revoked'|'expired'; earnedAt:number|null; expiresAt:number|null; progress?:BadgeProgress }
-export interface BadgeCollection { items:CollectedBadge[]; featured:string[]; public?:boolean; canManage?:boolean }
+export interface BadgeCollection { items:CollectedBadge[]; featured:string[]; public?:boolean }
 export function badgeText(values:Record<string,string>,locale:string):string { return values[locale] || values.en || values['zh-Hant'] || Object.values(values)[0] || ''; }
