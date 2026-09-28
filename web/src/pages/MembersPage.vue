@@ -21,6 +21,7 @@ const q=ref('');const detail=ref<MemberDetail|null>(null);const recent=ref<Regis
 const loading=ref(false);const memberLoading=ref(false);const busy=ref(false);const error=ref('');const done=ref('');
 const granted=ref(1);const reason=ref('');const operation=ref(crypto.randomUUID());
 const handle=computed(()=>String(route.params.handle??'').replace(/^@/,''));
+const isManager=computed(()=>reviewer.role==='manager'||reviewer.role==='owner');
 const validAmount=computed(()=>Number.isInteger(granted.value)&&granted.value>=1&&granted.value<=100);
 /** 這位成員身上的管理動作，新的在前：補充包與徽章各自的紀錄併成一條時間軸 */
 const timeline=computed(()=>!detail.value?[]:[
@@ -90,7 +91,7 @@ onBeforeUnmount(()=>{alive=false;generation++;});
      <h3>{{t('moderation.members.badges')}}</h3>
      <ul v-if="detail.badges.length" class="member-badges"><li v-for="b in detail.badges" :key="b.key" class="chip"><CommunityIcon :name="iconOf(b.icon)"/>{{badgeText(b.titles,locale)}}</li></ul>
      <p v-else class="subtle">{{t('moderation.members.noBadges')}}</p>
-     <BadgeManager :handle="detail.member.handle" @changed="loadMember"/>
+     <BadgeManager v-if="isManager" :handle="detail.member.handle" @changed="loadMember"/>
      <h3>{{t('moderation.members.history')}}</h3>
      <ol v-if="timeline.length" class="work-timeline"><li v-for="item in timeline" :key="item.key"><strong>{{item.title}}</strong><p>{{item.reason}}</p><time>{{dateTime(item.at)}} · @{{item.actor}}</time></li></ol>
      <p v-else class="subtle">{{t('moderation.members.noHistory')}}</p>

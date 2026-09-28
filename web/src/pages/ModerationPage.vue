@@ -122,7 +122,7 @@ onMounted(()=>{document.title=pageTitle(t('moderation.title'));void reviewer.ref
     </template>
     <template v-else-if="history">
      <h2>{{history.card.name}}</h2><p class="notice">{{t(history.card.publicBlocked?'moderation.blocked':history.card.boardHidden?'moderation.unlisted':'moderation.listed')}}</p>
-     <RouterLink v-if="isManager&&history.card.authorHandle" data-author-link class="btn btn--sm work-author" :to="lp('/review/members/'+history.card.authorHandle)">{{t('moderation.members.author')}} · @{{history.card.authorHandle}}</RouterLink>
+     <RouterLink v-if="history.card.authorHandle" data-author-link class="btn btn--sm work-author" :to="lp('/review/members/'+history.card.authorHandle)">{{t('moderation.members.author')}} · @{{history.card.authorHandle}}</RouterLink>
      <section v-if="canFeature" class="work-featured" :aria-label="t('moderation.featuredManage')">
       <h3>{{t('moderation.featuredManage')}}</h3>
       <p class="subtle">{{t('moderation.featureIntro')}}</p>

@@ -162,8 +162,9 @@ export function normalizeTags(raw:unknown):string[]{
 
 // ---- 成員 ----------------------------------------------------------------
 //
-// 上面的處置全部對「作品」；補充包、徽章這類是發給「人」的，走這一組。只有 manager/owner 進得來，
-// 每一筆都留發的人、理由與操作 ID（同一個操作重送不會多發一包）。
+// 上面的處置全部對「作品」；補充包這類是發給「人」的，走這一組。發補充包跟審卡是同一個權限等級
+// （owner 2026-09-29）：能審卡的人都能發；每一筆都留發的人、理由與操作 ID（同一個操作重送不會多發一包）。
+// 徽章管理仍是 manager/owner（community/badges.ts）。
 const PACK=`SELECT p.id,p.granted,p.granted-(SELECT COUNT(*) FROM card_registrations r WHERE r.pack_id=p.id) AS remaining,p.reason,p.created_at,m.handle AS member,g.handle AS granted_by
  FROM registration_packs p JOIN members m ON m.id=p.member_id JOIN members g ON g.id=p.granted_by`;
 interface PackRow{id:string;granted:number;remaining:number;reason:string;created_at:number;member:string;granted_by:string}
@@ -191,17 +192,17 @@ async function memberDetail(env:Env,memberId:string){
  };
 }
 moderationRoutes.get('/v1/moderation/members/:handle',async c=>{
- const member=await requireReviewer(c);await manager(c.env.DB,member.id);
+ await requireReviewer(c);
  const id=await memberByHandle(c.env.DB,c.req.param('handle').replace(/^@/,''));if(!id)throw new HttpError(404,'community_member_missing');
  return c.json(await memberDetail(c.env,id));
 });
 moderationRoutes.get('/v1/moderation/packs',async c=>{
- const member=await requireReviewer(c);await manager(c.env.DB,member.id);const offset=Math.max(0,Math.floor(Number(c.req.query('offset'))||0));
+ await requireReviewer(c);const offset=Math.max(0,Math.floor(Number(c.req.query('offset'))||0));
  const rows=await c.env.DB.prepare(PACK+' ORDER BY p.created_at DESC,p.id LIMIT 31 OFFSET ?').bind(offset).all<PackRow>();
  return c.json({items:rows.results.slice(0,30).map(publicPack),hasNext:rows.results.length>30});
 });
 moderationRoutes.post('/v1/moderation/members/:handle/packs',async c=>{
- const member=await requireReviewer(c);const db=c.env.DB;await manager(db,member.id);
+ const member=await requireReviewer(c);const db=c.env.DB;
  const target=await targetOf(c,member.id);
  const b=await c.req.json<Record<string,unknown>>();const reason=reasonOf(b.reason);const op=operationOf(b.operationId);const granted=b.granted;
  if(typeof granted!=='number'||!Number.isInteger(granted)||granted<1||granted>PACK_MAX)throw new HttpError(400,'invalid_arguments');

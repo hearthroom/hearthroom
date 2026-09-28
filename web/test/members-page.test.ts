@@ -58,6 +58,14 @@ it('looks a member up by handle, shows quota and packs, and grants a pack with a
   expect(host.querySelectorAll('[data-pack]')).toHaveLength(1);
   expect(host.querySelector('[data-badge-award] input')).not.toBeNull();
 });
+it('lets a plain reviewer grant packs but keeps badge management for managers', async () => {
+  mocks.summary.role = 'reviewer';
+  const { useReviewer } = await import('../src/lib/review'); await useReviewer().refresh();
+  await router.push('/review/members/moonlight'); await nextTick();
+  await vi.waitFor(() => expect(host.querySelector('[data-grant-pack]')).not.toBeNull());
+  expect(host.querySelector('[data-badge-award]')).toBeNull();
+  mocks.summary.role = 'manager';
+});
 it('tells the manager when no member has that handle and keeps the search', async () => {
   await router.push('/review/members/nobody'); await nextTick();
   await vi.waitFor(() => expect(host.querySelector('[role=alert]')?.textContent).toContain(i18n.global.t('moderation.error.community_member_missing')));

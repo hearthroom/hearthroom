@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed } from 'vue';
 import { RouterLink, RouterView, useRoute } from 'vue-router';
 import { useReviewer } from '@/lib/review';
 import { useLocalePath } from '@/lib/use-locale';
@@ -7,17 +6,14 @@ import ReviewBadge from '@/components/ReviewBadge.vue';
 const route = useRoute();
 const reviewer = useReviewer();
 const { lp } = useLocalePath();
-/**
- * 前四個分頁對「作品」；「成員」對「人」（補充包、活動徽章）。發給人的工具只有 manager/owner
- * 看得到，權限仍由服務端判——這裡只決定要不要畫那個分頁。
- */
-const sections = computed(() => [
+/** 前四個分頁對「作品」；「成員」對「人」（補充包、活動徽章）。發補充包跟審卡同一個權限等級，所以每個審核人都看得到。 */
+const sections = [
   { key: 'reviews', path: '/review' },
   { key: 'cases', path: '/review/cases' },
   { key: 'cards', path: '/review/cards' },
-  ...(reviewer.role === 'manager' || reviewer.role === 'owner' ? [{ key: 'members', path: '/review/members' }] : []),
+  { key: 'members', path: '/review/members' },
   { key: 'history', path: '/review/history' },
-] as const);
+] as const;
 </script>
 <template>
   <div class="page community-management">
