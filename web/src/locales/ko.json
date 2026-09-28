@@ -168,7 +168,7 @@
   "wallet.invite.redeemGift": "친구의 코드를 입력하고 {credits} 포인트를 받으세요.",
   "wallet.invite.own": "내 코드 보기",
   "wallet.invite.share": "친구가 처음 충전하면 그 {percent}%를 포인트로 받을 수 있어요.",
-  "wallet.invite.shareEvery": "친구마다 첫 충전의 {first}%, 이후 충전은 매번 {rate}%를 받아요.",
+  "wallet.invite.shareEvery": "친구마다 첫 충전 시 {first}%, 이후 충전마다 {rate}%를 보상으로 받아요.",
   "wallet.invite.details": "초대 보상 보기",
   "wallet.invite.earned": "초대로 {credits} 포인트를 받았어요",
   "wallet.reason.purchase": "충전",

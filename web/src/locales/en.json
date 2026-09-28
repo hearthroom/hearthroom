@@ -168,7 +168,7 @@
   "wallet.invite.redeemGift": "Enter a friend's code to get {credits} points.",
   "wallet.invite.own": "See my invite code",
   "wallet.invite.share": "You get {percent}% of your friend's first top-up in points.",
-  "wallet.invite.shareEvery": "Earn {first}% of each friend's first top-up and {rate}% of every one after.",
+  "wallet.invite.shareEvery": "Get a {first}% bonus on each friend's first top-up and {rate}% on every one after.",
   "wallet.invite.details": "See invite rewards",
   "wallet.invite.earned": "Invites have earned you {credits} points",
   "wallet.reason.purchase": "Top-up",
