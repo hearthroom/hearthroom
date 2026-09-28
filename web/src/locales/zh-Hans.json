@@ -168,6 +168,7 @@
   "wallet.invite.redeemGift": "填写好友的推荐码就能领 {credits} 积分。",
   "wallet.invite.own": "查看我的推荐码",
   "wallet.invite.share": "好友首次充值时，你会获得 {percent}% 的积分。",
+  "wallet.invite.shareEvery": "好友每次充值都有你一份，首次 {first}%、之后 {rate}%。",
   "wallet.invite.details": "查看邀请奖励",
   "wallet.invite.earned": "邀请已为你带来 {credits} 积分",
   "wallet.reason.purchase": "充值",
