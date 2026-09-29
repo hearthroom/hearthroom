@@ -9,6 +9,8 @@
     <meta name="theme-color" content="#f5f5f7" />
     <!-- 可安裝：manifest 與圖示。快取不做，service worker 只提供離線頁（public/sw.js）。 -->
     <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- 給 AI agent 的站點索引（public/llms.txt）；文件頁另有 .md 孿生檔，由 lib/markdown-twin.ts 逐頁掛上 -->
+    <link rel="alternate" type="text/plain" title="llms.txt" href="/llms.txt" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
