@@ -1,12 +1,14 @@
 import vue from "@vitejs/plugin-vue";
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
+import { llmsDocsPlugin } from "./build/llms-docs";
 
 const STAGE_SRC = fileURLToPath(new URL("../stage/src/", import.meta.url));
 const WEB_SRC = fileURLToPath(new URL("./src/", import.meta.url));
 
 export default defineConfig({
-  plugins: [vue()],
+  // llmsDocsPlugin：給 AI agent 讀的 /guide.md、/developers.md、/llms-full.txt 等原文（web/build/llms-docs.ts）
+  plugins: [vue(), llmsDocsPlugin()],
   resolve: {
     // 陣列形式：順序即優先序。舞台原始碼（../stage/src）裡的 @/ 要解析回舞台自己的 src，本站的 @/ 才是本站 src；
     // 這樣舞台的面板元件（模型選單、人設、長期指令、存檔列表、彈層）能原樣在本站編譯，遊戲頁直接複用，不另寫一套。
