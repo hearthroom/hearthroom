@@ -6219,6 +6219,104 @@
         }
       }
     },
+    "/open/v1/role/render": {
+      "get": {
+        "operationId": "renderRole",
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Render an opening through the card's display rules",
+        "description": "Applies the author's display rules to one opening of a card owned by the bearer, using the same engine the play page runs, and returns the text the player's renderer receives before Markdown expansion. `{{char}}` and `{{user}}` are expanded first: `{{user}}` becomes the card's player name, or a language default when that name is a placeholder such as `你` or `user`. Each rule reports `applied`, `unmatched`, `disabled`, `empty` or `rolled_back` (with the engine's `reason`: `bad_regex`, `empty_match`, `replacement_alone`, `volume` or `timeout`). `{{random}}` always takes its first option, so two renders of the same card are identical. `report.unsupported` lists author-API identifiers the card's chat page does not provide, with a `hint`: on a classic-page card that is the sandbox `sdk`, `[data-chat]` nodes and `--chat-*` variables (switch the card to the sandbox page); on any page it is MMD's platform state variables. `capture` says what still needs a browser. The play page remains authoritative for Markdown, HTML card components, layout and contrast.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "roleId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Role id."
+          },
+          {
+            "name": "opening",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Which opening to render: `0` (default) is `roleWelcome`; `N` is `welcomeAlternates[N-1]`. Out of range is `invalid_param`."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Render report.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RenderReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`roleId is required`, or `invalid_param` when `opening` is not an index into the openings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`permission_denied`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`role_not_found`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` when the rules could not be evaluated within the render deadline; `retryable: true`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/open/v1/role/{roleId}": {
       "patch": {
         "operationId": "patchRole",
@@ -7245,7 +7343,7 @@
             }
           },
           "400": {
-            "description": "`trial_invalid_key`; `trial_invalid_body` (malformed JSON, or `name` missing on create) — `{error, message}`; `trial_unsupported` (unknown `authorAsset.mountLayer`, enabled entry without content, rule without `find`, invalid rules) — `{error, message, detail}`; `invalid_arguments` from the role service.",
+            "description": "`trial_invalid_key`; `trial_invalid_body` (malformed JSON, or `name` missing on create) — `{error, message}`; `trial_unsupported` (unknown `authorAsset.mountLayer`, `pageMode` or `cardFormat`, enabled entry without content, rule without `find`, invalid rules) — `{error, message, detail}`; `invalid_arguments` from the role service.",
             "content": {
               "application/json": {
                 "schema": {
@@ -16599,7 +16697,7 @@
         "required": [
           "mountLayer"
         ],
-        "description": "Display rules for the trial card (no `pageMode`; saved as `classic`).",
+        "description": "Display rules for the trial card, in the same shape as an owned card's author asset.",
         "properties": {
           "rules": {
             "type": "array",
@@ -16618,6 +16716,23 @@
               "cover"
             ],
             "description": "`trial_unsupported` when unknown."
+          },
+          "pageMode": {
+            "type": "string",
+            "enum": [
+              "classic",
+              "immersive",
+              "sandbox"
+            ],
+            "description": "Which chat page renders the card; omitted means `classic`. `trial_unsupported` when unknown."
+          },
+          "cardFormat": {
+            "type": "string",
+            "enum": [
+              "mmd",
+              "tavern"
+            ],
+            "description": "Origin dialect of the rules; `trial_unsupported` when unknown."
           }
         }
       },
@@ -18852,6 +18967,270 @@
           "count": {
             "type": "integer",
             "description": "Number of ledger entries that day."
+          }
+        }
+      },
+      "RenderReport": {
+        "type": "object",
+        "required": [
+          "roleId",
+          "opening",
+          "names",
+          "source",
+          "rendered",
+          "authorAsset",
+          "rules",
+          "report",
+          "warnings",
+          "capture"
+        ],
+        "properties": {
+          "roleId": {
+            "type": "string"
+          },
+          "opening": {
+            "type": "object",
+            "required": [
+              "index",
+              "count"
+            ],
+            "properties": {
+              "index": {
+                "type": "integer"
+              },
+              "count": {
+                "type": "integer",
+                "description": "Main opening plus alternates."
+              }
+            }
+          },
+          "names": {
+            "type": "object",
+            "required": [
+              "player",
+              "character"
+            ],
+            "properties": {
+              "player": {
+                "type": "string",
+                "description": "What `{{user}}` was expanded to."
+              },
+              "character": {
+                "type": "string",
+                "description": "What `{{char}}` was expanded to."
+              }
+            }
+          },
+          "source": {
+            "type": "string",
+            "description": "The chosen opening with `{{char}}` and `{{user}}` expanded, before any rule."
+          },
+          "rendered": {
+            "type": "string",
+            "description": "After the display rules: what the renderer receives. Markdown is not expanded."
+          },
+          "authorAsset": {
+            "type": "object",
+            "nullable": true,
+            "description": "Null when the card has no display rules.",
+            "properties": {
+              "version": {
+                "type": "integer"
+              },
+              "pageMode": {
+                "type": "string"
+              },
+              "mountLayer": {
+                "type": "string"
+              },
+              "mountTrigger": {
+                "type": "string"
+              },
+              "cardFormat": {
+                "type": "string"
+              },
+              "rules": {
+                "type": "integer",
+                "description": "Total rules."
+              },
+              "enabled": {
+                "type": "integer",
+                "description": "Enabled rules."
+              }
+            },
+            "required": [
+              "version",
+              "pageMode",
+              "mountLayer",
+              "mountTrigger",
+              "cardFormat",
+              "rules",
+              "enabled"
+            ]
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RenderRuleResult"
+            },
+            "description": "One entry per rule, in application order."
+          },
+          "report": {
+            "$ref": "#/components/schemas/RenderScan"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Human-readable notes: rolled-back rules and unsupported identifiers."
+          },
+          "capture": {
+            "type": "object",
+            "required": [
+              "serverCaptureAvailable",
+              "recommended"
+            ],
+            "description": "The provider takes no screenshots; `recommended` says what to check in a browser.",
+            "properties": {
+              "serverCaptureAvailable": {
+                "type": "boolean"
+              },
+              "recommended": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "RenderRuleResult": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "applied",
+              "unmatched",
+              "disabled",
+              "empty",
+              "rolled_back"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "bad_regex",
+              "empty_match",
+              "replacement_alone",
+              "volume",
+              "timeout"
+            ],
+            "description": "Only with `rolled_back`."
+          }
+        }
+      },
+      "RenderScan": {
+        "type": "object",
+        "required": [
+          "chars",
+          "estimatedTokens",
+          "tags",
+          "components",
+          "scripts",
+          "styles",
+          "inlineHandlers",
+          "externalUrls",
+          "unsupported",
+          "crossLineRules"
+        ],
+        "description": "Static scan of `rendered`; nothing here needs a browser.",
+        "properties": {
+          "chars": {
+            "type": "integer"
+          },
+          "estimatedTokens": {
+            "type": "integer"
+          },
+          "tags": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Count per HTML tag name."
+          },
+          "components": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "`hc-*` HTML card component classes found."
+          },
+          "scripts": {
+            "type": "integer"
+          },
+          "styles": {
+            "type": "integer"
+          },
+          "inlineHandlers": {
+            "type": "integer",
+            "description": "Inline `on*=` event handlers."
+          },
+          "externalUrls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "At most 50 distinct `http(s)` URLs."
+          },
+          "unsupported": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RenderUnsupported"
+            }
+          },
+          "crossLineRules": {
+            "type": "boolean",
+            "description": "Whether any enabled rule can match across lines; such rules disable the streaming render cache."
+          }
+        }
+      },
+      "RenderUnsupported": {
+        "type": "object",
+        "required": [
+          "api",
+          "count",
+          "where",
+          "hint"
+        ],
+        "description": "An author-API identifier the card's chat page does not provide.",
+        "properties": {
+          "api": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer"
+          },
+          "where": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "`rendered`, `welcome`, or `rule:<id>`."
+          },
+          "hint": {
+            "type": "string",
+            "description": "What to do: switch the card to the sandbox page, or drop the call because no chat page provides it."
           }
         }
       }
