@@ -8806,6 +8806,7 @@
                           {
                             "type": "string",
                             "enum": [
+                              "default",
                               "card",
                               "plain",
                               "dialogue",
@@ -18519,6 +18520,7 @@
           "style": {
             "type": "string",
             "enum": [
+              "default",
               "card",
               "plain",
               "dialogue",
