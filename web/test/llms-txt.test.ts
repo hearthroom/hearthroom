@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { LLMS_DOC_PATHS } from '../build/llms-docs';
 import llms from '../public/llms.txt?raw';
 import routerSource from '../src/router.ts?raw';
 
 /**
- * /llms.txt 是給 AI agent 看的站點索引（https://llmstxt.org）。它列的都是站外可直接抓的 Markdown／JSON
- * 原文，因為本站的 /guide 與 /developers 把文件打包進前端程式，沒有 raw 網址。這裡只守三件事：
+ * /llms.txt 是給 AI agent 看的站點索引（https://llmstxt.org）。它列的是本站建置時產出的 Markdown／JSON
+ * 原文（web/build/llms-docs.ts）、站內頁面、以及 CLI 倉的文件。這裡只守三件事：
  * 檔案照規範的形狀寫、每個連結指向真的存在的東西、沒有把內部名稱或別的品牌寫進去。
  */
 // 倉裡 docs/ 底下所有可被連結的檔案，路徑轉成相對倉根（跟 raw 網址的路徑段一致）
@@ -35,7 +36,9 @@ describe('llms.txt', () => {
     for (const { url } of links) {
       const u = new URL(url);
       if (u.host === 'hearthroom.club') {
-        expect(staticRoutes.has(u.pathname === '/' ? '/' : u.pathname.replace(/\/$/, '')), url).toBe(true);
+        // 站內連結：不是頁面路徑，就得是建置時產出的文件檔
+        const path = u.pathname === '/' ? '/' : u.pathname.replace(/\/$/, '');
+        expect(staticRoutes.has(path) || LLMS_DOC_PATHS.includes(path.slice(1)), url).toBe(true);
       } else if (u.host === 'raw.githubusercontent.com' && u.pathname.startsWith('/hearthroom/hearthroom/main/')) {
         // 本倉的檔案：連結存在 ⇔ 檔案在 main 上存在。這裡用工作樹當代理。
         expect(repoDocs.has(u.pathname.slice('/hearthroom/hearthroom/main/'.length)), url).toBe(true);
