@@ -32,14 +32,6 @@ Facts that matter before you act:
 ## Optional
 
 - [Everything in one file](https://hearthroom.club/llms-full.txt): this index followed by the English developer documentation and card authoring guide.
-- [Card authoring guide, 繁體中文](https://hearthroom.club/guide.md): Traditional Chinese edition.
-- [Card authoring guide, 简体中文](https://hearthroom.club/zh-Hans/guide.md): Simplified Chinese edition.
-- [Card authoring guide, 日本語](https://hearthroom.club/ja/guide.md): Japanese edition.
-- [Card authoring guide, 한국어](https://hearthroom.club/ko/guide.md): Korean edition.
-- [Developer documentation, 繁體中文](https://hearthroom.club/developers.md): Traditional Chinese overview; the OpenAPI sources stay in English.
-- [Developer documentation, 简体中文](https://hearthroom.club/zh-Hans/developers.md): Simplified Chinese overview.
-- [Developer documentation, 日本語](https://hearthroom.club/ja/developers.md): Japanese overview.
-- [Developer documentation, 한국어](https://hearthroom.club/ko/developers.md): Korean overview.
 - [Site source](https://github.com/hearthroom/hearthroom): the community site, AGPL-3.0.
 - [CLI source](https://github.com/hearthroom/cli): the command-line client, AGPL-3.0.
 - [Discord](https://discord.gg/C7m85YPHmK): community and support.

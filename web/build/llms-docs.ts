@@ -64,12 +64,23 @@ export function llmsDocs(): LlmsDoc[] {
 
 export const LLMS_DOC_PATHS: readonly string[] = llmsDocs().map(d => d.path);
 
+/**
+ * 資源層的 _headers：替這些檔補上 charset。沒有 charset 的 text/plain 會讓瀏覽器自己猜編碼
+ * （繁中系統猜 Big5），整頁中日韓文字都變亂碼（owner 2026-09-29 在瀏覽器開 /llms.txt 看到）。
+ * 一條路徑一條規則，不用萬用字元，避免猜 Cloudflare 的樣式語法。
+ */
+export function llmsHeaders(): string {
+  const rules = [{ path: "llms.txt", contentType: TEXT }, ...llmsDocs()].map(d => `/${d.path}\n  Content-Type: ${d.contentType}`);
+  return rules.join("\n\n") + "\n";
+}
+
 /** 建置時寫進 dist；dev server 直接從記憶體回，讓本機也能對 /en/guide.md 這種網址驗。 */
 export function llmsDocsPlugin(): Plugin {
   return {
     name: "hearthroom:llms-docs",
     generateBundle() {
       for (const d of llmsDocs()) this.emitFile({ type: "asset", fileName: d.path, source: d.content });
+      this.emitFile({ type: "asset", fileName: "_headers", source: llmsHeaders() });
     },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {

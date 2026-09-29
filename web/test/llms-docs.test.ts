@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { llmsDocs, LLMS_DOC_PATHS } from '../build/llms-docs';
+import { llmsDocs, llmsHeaders, LLMS_DOC_PATHS } from '../build/llms-docs';
 import llms from '../public/llms.txt?raw';
 import guideEn from '../../docs/guide/card-authoring.en.md?raw';
 import guideZhHant from '../../docs/guide/card-authoring.zh-Hant.md?raw';
@@ -42,6 +42,16 @@ describe('llms docs emitted at build', () => {
     expect(full.content).toContain(developersEn.trimEnd());
     expect(full.content).toContain(guideEn.trimEnd());
     expect(full.content.indexOf(developersEn.trimEnd())).toBeLessThan(full.content.indexOf(guideEn.trimEnd()));
+  });
+
+  it('declares a UTF-8 content type for every emitted file and for llms.txt itself', () => {
+    // 沒有 charset 的 text/plain 在瀏覽器裡會被猜成本機編碼，中日韓文字全部亂碼
+    const headers = llmsHeaders();
+    const rules = new Map([...headers.matchAll(/^(\/\S+)\n {2}Content-Type: (.+)$/gm)].map(m => [m[1]!, m[2]!]));
+    expect(rules.get('/llms.txt')).toBe('text/plain; charset=utf-8');
+    for (const d of docs.values()) expect(rules.get(`/${d.path}`), d.path).toBe(d.contentType);
+    for (const type of rules.values()) expect(type).toMatch(/; charset=utf-8$/);
+    expect(rules.size).toBeLessThanOrEqual(100); // 資源層 _headers 的規則上限
   });
 
   it('exposes the emitted paths so llms.txt can link to them', () => {
