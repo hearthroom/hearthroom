@@ -392,7 +392,7 @@
   "d04548fe9ffa3": "XMLV3 theme roles only: async image placeholder update. Sent as a raw JSON text frame (not SSE-formatted).",
   "d1159ec4321ba": "Referenced by the replay filter as a V3 typed event; no producer was found in the server source for this build.",
   "db222574a49b0": "Delete a library item",
-  "d53ac911a30b3": "Deletes one library item owned by the caller. `imageId` is the item id returned by the list endpoint (an opaque string). Unknown ids and items owned by someone else return 404. An item still used by one of your cards as portrait or background cannot be deleted; change the card's image first. Success body `{code:0,data:{imageId}}`.",
+  "d53ac911a30b3": "Deletes one library item owned by the caller. `imageId` is the item id returned by the list endpoint (an opaque string). Unknown ids and items owned by someone else return 404. An item still used by one of your cards as portrait or background is not deleted: the response is 400 `image_in_use` and `detail.cards` lists each card as `{roleId, name}` so you can change its image first. Success body `{code:0,data:{imageId}}`.",
   "d07b3f8ec7180": "Item id from the list endpoint.",
   "dc4e55bea4542": "Deleted item.",
   "df085b0ef6640": "`invalid_param` (empty list / bad JSON) or `image_in_use` with `imageUrls`.",

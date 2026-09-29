@@ -3304,7 +3304,7 @@
           "Media library"
         ],
         "summary": "Delete a library item",
-        "description": "Deletes one library item owned by the caller. `imageId` is the item id returned by the list endpoint (an opaque string). Unknown ids and items owned by someone else return 404. An item still used by one of your cards as portrait or background cannot be deleted; change the card's image first. Success body `{code:0,data:{imageId}}`.",
+        "description": "Deletes one library item owned by the caller. `imageId` is the item id returned by the list endpoint (an opaque string). Unknown ids and items owned by someone else return 404. An item still used by one of your cards as portrait or background is not deleted: the response is 400 `image_in_use` and `detail.cards` lists each card as `{roleId, name}` so you can change its image first. Success body `{code:0,data:{imageId}}`.",
         "security": [
           {
             "userToken": []
