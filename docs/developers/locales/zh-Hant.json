@@ -1735,5 +1735,6 @@
   "d5dfecee45715": "`rendered`、`welcome` 或 `rule:<id>`。",
   "da18163a67c21": "由哪種聊天頁渲染這張卡；省略即 `classic`。不認得時回 `trial_unsupported`。",
   "d0deb7d690eca": "規則的來源方言；不認得時回 `trial_unsupported`。",
-  "d2d6b63a8648e": "該怎麼辦：把卡切到沙盒頁，或拿掉這個呼叫，因為沒有任何聊天頁提供它。"
+  "d2d6b63a8648e": "該怎麼辦：把卡切到沙盒頁，或拿掉這個呼叫，因為沒有任何聊天頁提供它。",
+  "d88857262c337": "選填的失敗原因細節，僅使用允許的值，並保留於即時 operationStatus 與歷史讀取結果中。此欄位獨立於 reasonCode；續跑仍由 agent_progress_preserved 控制。空值或未提供表示原因未知，用戶端不可推斷為網路錯誤。此欄位不含供應商的原始錯誤文字。"
 }
