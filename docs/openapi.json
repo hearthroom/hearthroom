@@ -10513,10 +10513,8 @@
                             "type": "string",
                             "enum": [
                               "default",
+                              "guided",
                               "card",
-                              "plain",
-                              "dialogue",
-                              "descriptive",
                               "custom"
                             ]
                           },
@@ -20244,10 +20242,8 @@
             "type": "string",
             "enum": [
               "default",
+              "guided",
               "card",
-              "plain",
-              "dialogue",
-              "descriptive",
               "custom"
             ]
           },
