@@ -4374,8 +4374,8 @@
         "tags": [
           "Media library"
         ],
-        "summary": "Delete library items",
-        "description": "Deletes the given items (ids not owned by the caller are ignored). All-or-nothing: if any item is still referenced by a card (avatar/background/preview page) nothing is deleted and 400 `image_in_use` lists the offending URLs. Success body `{code:0,data:{deleted:n}}`.",
+        "summary": "Delete a library item",
+        "description": "Deletes one library item owned by the caller. `imageId` is the item id returned by the list endpoint (an opaque string). Unknown ids and items owned by someone else return 404. An item still used by one of your cards as portrait or background cannot be deleted; change the card's image first. Success body `{code:0,data:{imageId}}`.",
         "security": [
           {
             "userToken": []
@@ -4388,17 +4388,12 @@
               "schema": {
                 "type": "object",
                 "required": [
-                  "imageIds"
+                  "imageId"
                 ],
                 "properties": {
-                  "imageIds": {
-                    "type": "array",
-                    "minItems": 1,
-                    "items": {
-                      "type": "integer",
-                      "format": "int64"
-                    },
-                    "description": "Item ids from the list endpoint."
+                  "imageId": {
+                    "type": "string",
+                    "description": "Item id from the list endpoint."
                   }
                 }
               }
@@ -4407,7 +4402,7 @@
         },
         "responses": {
           "200": {
-            "description": "Deleted count.",
+            "description": "Deleted item.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4445,6 +4440,9 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Resource unavailable."
           }
         }
       }
@@ -13629,12 +13627,12 @@
           "data": {
             "type": "object",
             "required": [
-              "deleted"
+              "imageId"
             ],
             "properties": {
-              "deleted": {
-                "type": "integer",
-                "description": "Number of rows deleted (0 if none of the ids were owned)."
+              "imageId": {
+                "type": "string",
+                "description": "Id of the deleted item."
               }
             }
           }
