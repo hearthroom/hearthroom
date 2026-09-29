@@ -121,6 +121,8 @@ const reload = () => window.location.reload();
             </ul>
           </nav>
           <a v-for="reference in references" :key="reference.id" :href="sourceUrl(reference.file)" target="_blank" rel="noopener" class="toc__source subtle">{{ reference.title }} · {{ $t("developers.source") }}</a>
+          <!-- 給幫作者看文件的 AI：站點索引在 /llms.txt（這一頁本身也有 .md 孿生檔，在 <head> 裡） -->
+          <a href="/llms.txt" class="toc__source subtle">{{ $t("developers.agents") }}</a>
         </details>
       </aside>
 

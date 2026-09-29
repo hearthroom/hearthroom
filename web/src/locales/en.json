@@ -668,6 +668,7 @@
   "developers.title": "Developer docs",
   "guide.title": "Card authoring guide",
   "developers.source": "View the source OpenAPI specification on GitHub (English)",
+  "developers.agents": "AI agents start at llms.txt",
   "board.sort.day": "Today",
   "board.sort.week": "This week",
   "board.sort.month": "This month",

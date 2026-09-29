@@ -5,6 +5,7 @@ import { LOCALE_CODES, SOURCE_LOCALE, applyLocale, detectLocale, pageTitle, upda
 import { useSession } from "./lib/session";
 import { signedInHint } from "./lib/signin-hint";
 import { can } from "./lib/provider";
+import { updateMarkdownTwin } from "./lib/markdown-twin";
 import { isPlayHost } from "./lib/site";
 import { setSurface } from "./lib/track";
 
@@ -144,7 +145,12 @@ router.beforeEach(async (to) => {
   }
   await applyLocale(locale);
   // 去掉語言前綴的路徑，才是各語言版本共同的那一頁（卡片 App 網域不進搜尋，沒有各語言版本）
-  if (!isPlayHost()) updateHreflang(locale === SOURCE_LOCALE ? to.path : to.path.replace(`/${locale}`, "") || "/");
+  if (!isPlayHost()) {
+    const barePath = locale === SOURCE_LOCALE ? to.path : to.path.replace(`/${locale}`, "") || "/";
+    updateHreflang(barePath);
+    // 文件頁的 Markdown 孿生檔：讀 HTML 的 agent 從 <head> 就能找到原文
+    updateMarkdownTwin(barePath, locale);
+  }
   // 每次導航先給一個跟著語言走的預設標題；有自己標題的頁面（卡片、作者）掛載後會覆寫。
   // 少了這行，分頁標題會一直停在 index.html 裡那個寫死的中文。
   document.title = pageTitle();

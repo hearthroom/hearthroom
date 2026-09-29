@@ -668,6 +668,7 @@
   "developers.title": "開発者向けドキュメント",
   "guide.title": "カード作成ガイド",
   "developers.source": "GitHub で OpenAPI の原本を表示（英語）",
+  "developers.agents": "AI エージェントは llms.txt から",
   "board.sort.day": "日間",
   "board.sort.week": "週間",
   "board.sort.month": "月間",

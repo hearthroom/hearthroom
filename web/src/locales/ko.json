@@ -668,6 +668,7 @@
   "developers.title": "개발자 문서",
   "guide.title": "카드 작성 가이드",
   "developers.source": "GitHub에서 OpenAPI 원본 명세 보기(영어)",
+  "developers.agents": "AI 에이전트는 llms.txt부터",
   "board.sort.day": "일간",
   "board.sort.week": "주간",
   "board.sort.month": "월간",

@@ -668,6 +668,7 @@
   "developers.title": "開發者文件",
   "guide.title": "寫卡指南",
   "developers.source": "在 GitHub 上查看 OpenAPI 原始規格（英文）",
+  "developers.agents": "AI 代理請從 llms.txt 開始",
   "board.sort.day": "日榜",
   "board.sort.week": "週榜",
   "board.sort.month": "月榜",
