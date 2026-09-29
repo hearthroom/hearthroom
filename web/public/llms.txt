@@ -14,24 +14,24 @@ Facts that matter before you act:
 
 - [Hearthroom CLI](https://raw.githubusercontent.com/hearthroom/cli/main/README.md): install, `auth login` (or `HEARTHROOM_TOKEN` for unattended runs), `card init/import/push/validate/pull`, `play`, `search`; every command takes `--json` for stable output.
 - [Card folder format](https://raw.githubusercontent.com/hearthroom/cli/main/docs/card-folder.md): a card as a folder of Markdown and JSON files that any editor or coding agent can change and `card push` syncs; the format is versioned.
-- [Card authoring guide](https://hearthroom.club/en/guide.md): what each card field does, sandbox versus classic chat pages, display rules and macros, the sandbox author API for HTML cards, importing from other platforms, troubleshooting.
+- [Card authoring guide](https://sukisuki.ai/en/guide.md): what each card field does, sandbox versus classic chat pages, display rules and macros, the sandbox author API for HTML cards, importing from other platforms, troubleshooting.
 
 ## APIs
 
-- [Developer documentation](https://hearthroom.club/en/developers.md): request conventions, authentication, pagination, comment and collection rules, error codes, and how the community API and the connected card service fit together.
-- [Community API (OpenAPI 3.1)](https://hearthroom.club/developers/community-openapi.json): `https://hearthroom.club/v1` endpoints for the board, card details, tags, authors, comments, favorites, follows and notifications.
-- [Service integration API (OpenAPI 3.1)](https://hearthroom.club/developers/integration-openapi.json): the interface the site, the CLI and the embedded chat use for identity, card authoring, media and conversations; requests go to the connected service's API origin, and clients must check advertised capabilities before calling optional operations.
+- [Developer documentation](https://sukisuki.ai/en/developers.md): request conventions, authentication, pagination, comment and collection rules, error codes, and how the community API and the connected card service fit together.
+- [Community API (OpenAPI 3.1)](https://sukisuki.ai/developers/community-openapi.json): `https://sukisuki.ai/v1` endpoints for the board, card details, tags, authors, comments, favorites, follows and notifications.
+- [Service integration API (OpenAPI 3.1)](https://sukisuki.ai/developers/integration-openapi.json): the interface the site, the CLI and the embedded chat use for identity, card authoring, media and conversations; requests go to the connected service's API origin, and clients must check advertised capabilities before calling optional operations.
 
 ## Site pages
 
-- [Board](https://hearthroom.club/): ranked and newest cards; `/search` for text and tag search. Card pages are `/cards/{id}`, author pages `/authors/{handle}`, and `/play/{roleId}` opens a card's conversation (sign-in required).
-- [Card authoring guide](https://hearthroom.club/guide): the same guide rendered in the site's five languages.
-- [Developer documentation](https://hearthroom.club/developers): the API reference rendered with endpoint expansion, in five languages.
-- [Download](https://hearthroom.club/download): install the site as an app on phones and desktops.
+- [Board](https://sukisuki.ai/): ranked and newest cards; `/search` for text and tag search. Card pages are `/cards/{id}`, author pages `/authors/{handle}`, and `/play/{roleId}` opens a card's conversation (sign-in required).
+- [Card authoring guide](https://sukisuki.ai/guide): the same guide rendered in the site's five languages.
+- [Developer documentation](https://sukisuki.ai/developers): the API reference rendered with endpoint expansion, in five languages.
+- [Download](https://sukisuki.ai/download): install the site as an app on phones and desktops.
 
 ## Optional
 
-- [Everything in one file](https://hearthroom.club/llms-full.txt): this index followed by the English developer documentation and card authoring guide.
+- [Everything in one file](https://sukisuki.ai/llms-full.txt): this index followed by the English developer documentation and card authoring guide.
 - [Site source](https://github.com/hearthroom/hearthroom): the community site, AGPL-3.0.
 - [CLI source](https://github.com/hearthroom/cli): the command-line client, AGPL-3.0.
 - [Discord](https://discord.gg/C7m85YPHmK): community and support.
