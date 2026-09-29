@@ -1,0 +1,44 @@
+# Hearthroom
+
+> Hearthroom is an open community for AI character cards. Authors write cards, the community reviews them, and anyone can play a listed card in the browser. This file tells AI agents where the machine-readable material is and which actions need sign-in or spend credits.
+
+Facts that matter before you act:
+
+- A card has a name, portrait, summary, persona, one or more openings, an optional Lorebook (lore triggered by keywords), optional display rules, and a chat page setting (sandbox or classic). The web editor imports SillyTavern PNG or JSON cards and Meimo Island (MMD) three-file sets; the CLI also imports CHARX.
+- The site is a browser application. Page HTML carries little content; read cards, tags and authors through the JSON API or the CLI instead of scraping pages.
+- Site pages choose their display language by URL prefix (`/`, `/zh-Hans/`, `/en/`, `/ja/`, `/ko/`); API requests use the `lang` parameter. Content language is a separate `zone` filter (`zh`, `en`, `ja`, `ko`, `all`; default `zh`).
+- Browsing cards, tags, authors and comments needs no sign-in. Creating or editing cards, favorites, follows, comments, the library and the wallet act as a signed-in member with a bearer token from an authorized sign-in. The community API issues no standalone developer keys; the connected card service may offer personal API keys where it supports them.
+- Writing and validating a card is free. Sending a message in a conversation spends the member's credits, so the CLI refuses to do it without `--allow-spend`.
+
+## Authoring cards from a terminal or an agent
+
+- [Hearthroom CLI](https://raw.githubusercontent.com/hearthroom/cli/main/README.md): install, `auth login` (or `HEARTHROOM_TOKEN` for unattended runs), `card init/import/push/validate/pull`, `play`, `search`; every command takes `--json` for stable output.
+- [Card folder format](https://raw.githubusercontent.com/hearthroom/cli/main/docs/card-folder.md): a card as a folder of Markdown and JSON files that any editor or coding agent can change and `card push` syncs; the format is versioned.
+- [Card authoring guide](https://raw.githubusercontent.com/hearthroom/hearthroom/main/docs/guide/card-authoring.en.md): what each card field does, sandbox versus classic chat pages, display rules and macros, the sandbox author API for HTML cards, importing from other platforms, troubleshooting.
+
+## APIs
+
+- [Developer documentation](https://raw.githubusercontent.com/hearthroom/hearthroom/main/docs/developers.md): request conventions, authentication, pagination, comment and collection rules, error codes, and how the community API and the connected card service fit together.
+- [Community API (OpenAPI 3.1)](https://raw.githubusercontent.com/hearthroom/hearthroom/main/docs/community-openapi.json): `https://hearthroom.club/v1` endpoints for the board, card details, tags, authors, comments, favorites, follows and notifications.
+- [Service integration API (OpenAPI 3.1)](https://raw.githubusercontent.com/hearthroom/hearthroom/main/docs/integration-openapi.json): the interface the site, the CLI and the embedded chat use for identity, card authoring, media and conversations; requests go to the connected service's API origin, and clients must check advertised capabilities before calling optional operations.
+
+## Site pages
+
+- [Board](https://hearthroom.club/): ranked and newest cards; `/search` for text and tag search. Card pages are `/cards/{id}`, author pages `/authors/{handle}`, and `/play/{roleId}` opens a card's conversation (sign-in required).
+- [Card authoring guide](https://hearthroom.club/guide): the same guide rendered in the site's five languages.
+- [Developer documentation](https://hearthroom.club/developers): the API reference rendered with endpoint expansion, in five languages.
+- [Download](https://hearthroom.club/download): install the site as an app on phones and desktops.
+
+## Optional
+
+- [Card authoring guide, 繁體中文](https://raw.githubusercontent.com/hearthroom/hearthroom/main/docs/guide/card-authoring.zh-Hant.md): Traditional Chinese edition.
+- [Card authoring guide, 简体中文](https://raw.githubusercontent.com/hearthroom/hearthroom/main/docs/guide/card-authoring.zh-Hans.md): Simplified Chinese edition.
+- [Card authoring guide, 日本語](https://raw.githubusercontent.com/hearthroom/hearthroom/main/docs/guide/card-authoring.ja.md): Japanese edition.
+- [Card authoring guide, 한국어](https://raw.githubusercontent.com/hearthroom/hearthroom/main/docs/guide/card-authoring.ko.md): Korean edition.
+- [Developer documentation, 繁體中文](https://raw.githubusercontent.com/hearthroom/hearthroom/main/docs/developers/zh-Hant.md): Traditional Chinese overview; the OpenAPI sources stay in English.
+- [Developer documentation, 简体中文](https://raw.githubusercontent.com/hearthroom/hearthroom/main/docs/developers/zh-Hans.md): Simplified Chinese overview.
+- [Developer documentation, 日本語](https://raw.githubusercontent.com/hearthroom/hearthroom/main/docs/developers/ja.md): Japanese overview.
+- [Developer documentation, 한국어](https://raw.githubusercontent.com/hearthroom/hearthroom/main/docs/developers/ko.md): Korean overview.
+- [Site source](https://github.com/hearthroom/hearthroom): the community site, AGPL-3.0.
+- [CLI source](https://github.com/hearthroom/cli): the command-line client, AGPL-3.0.
+- [Discord](https://discord.gg/C7m85YPHmK): community and support.
