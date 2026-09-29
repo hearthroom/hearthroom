@@ -125,3 +125,62 @@ it("uses the same issuer for legacy multipart fallback", async () => {
     ),
   ).toBe(true);
 });
+
+describe("direct upload timing", () => {
+  // 模擬瀏覽器的 XHR：尊重 timeout 屬性，並依腳本在指定時間點回報進度或完成。
+  function scriptedXhr(steps: { at: number; loaded?: number; done?: boolean }[]) {
+    const aborted = vi.fn();
+    class Xhr {
+      status = 0;
+      timeout = 0;
+      upload: { onprogress?: (e: any) => void } = {};
+      onload = () => {};
+      onerror = () => {};
+      ontimeout = () => {};
+      onabort = () => {};
+      open() {}
+      setRequestHeader() {}
+      abort() { aborted(); this.onabort(); }
+      send() {
+        const timers = steps.map((s) =>
+          setTimeout(() => {
+            if (s.done) { this.status = 200; this.onload(); }
+            else this.upload.onprogress?.({ lengthComputable: true, loaded: s.loaded, total: 100 });
+          }, s.at),
+        );
+        if (this.timeout > 0)
+          setTimeout(() => { timers.forEach(clearTimeout); this.ontimeout(); }, this.timeout);
+      }
+    }
+    return { Xhr, aborted };
+  }
+  const fetcher = () => vi.fn(async (url: string) =>
+    url.endsWith("uploadIntent")
+      ? response({ uploadId: "u", uploadUrl: "https://storage.test/u" })
+      : response({ imageId: "i", imageUrl: "https://cdn.test/i" }),
+  );
+  afterEach(() => vi.useRealTimers());
+
+  it("lets a slow upload finish as long as bytes keep moving", async () => {
+    vi.useFakeTimers();
+    const steps = Array.from({ length: 10 }, (_, i) => ({ at: (i + 1) * 30_000, loaded: (i + 1) * 10 }));
+    const { Xhr } = scriptedXhr([...steps, { at: 330_000, done: true }]);
+    vi.stubGlobal("fetch", fetcher());
+    vi.stubGlobal("XMLHttpRequest", Xhr);
+    const done = resourceClient("harbor", "token").upload(new File(["x"], "big.mp4", { type: "video/mp4" }), [], () => {});
+    await vi.advanceTimersByTimeAsync(340_000);
+    await expect(done).resolves.toBe("https://cdn.test/i");
+  });
+
+  it("gives up when no bytes move for a minute", async () => {
+    vi.useFakeTimers();
+    const { Xhr, aborted } = scriptedXhr([{ at: 10_000, loaded: 5 }, { at: 600_000, done: true }]);
+    vi.stubGlobal("fetch", fetcher());
+    vi.stubGlobal("XMLHttpRequest", Xhr);
+    const done = resourceClient("harbor", "token").upload(new File(["x"], "big.mp4", { type: "video/mp4" }), [], () => {});
+    const settled = expect(done).rejects.toMatchObject({ status: 408 });
+    await vi.advanceTimersByTimeAsync(75_000);
+    await settled;
+    expect(aborted).toHaveBeenCalled();
+  });
+});
