@@ -11,6 +11,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Plugin } from "vite";
+import { PRIMARY_HOST } from "../../shared/site-hosts";
 
 /** 倉根：由本檔位置推；測試環境（happy-dom）的 import.meta.url 不是 file:，就從工作目錄往上找到 docs/。 */
 function repoRoot(): string {
@@ -43,8 +44,8 @@ const REFERENCE = [
   "",
   "## OpenAPI sources",
   "",
-  "- Community API: https://hearthroom.club/developers/community-openapi.json",
-  "- Service integration API: https://hearthroom.club/developers/integration-openapi.json",
+  `- Community API: https://${PRIMARY_HOST}/developers/community-openapi.json`,
+  `- Service integration API: https://${PRIMARY_HOST}/developers/integration-openapi.json`,
   "",
 ].join("\n");
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LLMS_DOC_PATHS } from '../build/llms-docs';
+import { PRIMARY_HOST, SITE_HOSTS } from '../../shared/site-hosts';
 import llms from '../public/llms.txt?raw';
 import routerSource from '../src/router.ts?raw';
 
@@ -35,8 +36,9 @@ describe('llms.txt', () => {
     expect(links.length).toBeGreaterThan(5);
     for (const { url } of links) {
       const u = new URL(url);
-      if (u.host === 'hearthroom.club') {
-        // 站內連結：不是頁面路徑，就得是建置時產出的文件檔
+      if ((SITE_HOSTS as readonly string[]).includes(u.host)) {
+        // 站內連結：一律用主網域（搜尋正本），不是頁面路徑就得是建置時產出的文件檔
+        expect(u.host, url).toBe(PRIMARY_HOST);
         const path = u.pathname === '/' ? '/' : u.pathname.replace(/\/$/, '');
         expect(staticRoutes.has(path) || LLMS_DOC_PATHS.includes(path.slice(1)), url).toBe(true);
       } else if (u.host === 'raw.githubusercontent.com' && u.pathname.startsWith('/hearthroom/hearthroom/main/')) {
