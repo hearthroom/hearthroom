@@ -1,5 +1,7 @@
 import { ApiError, describeApiError } from "./api";
 import { apiBaseOf, type ProviderId } from "./provider";
+// 直傳多久完全沒有進度就放棄。
+const UPLOAD_STALL_MS = 60_000;
 export type ResourceId = string | number;
 export interface Resource {
   id: ResourceId;
@@ -191,23 +193,33 @@ export function resourceClient(provider: ProviderId, token: string) {
                   "Content-Type",
                   intent.contentType || contentType,
                 );
-                xhr.timeout = 120000;
+                // 不設總時限：100 MiB 在慢網路上可能要好幾分鐘，只要位元組還在走就等。
+                // 一分鐘完全沒有進度才算卡住，放棄這次上傳。
+                let stall: ReturnType<typeof setTimeout> | undefined;
+                const watch = () => {
+                  clearTimeout(stall);
+                  stall = setTimeout(() => {
+                    xhr.abort();
+                    reject(new ApiError(408, describeApiError(503, "")));
+                  }, UPLOAD_STALL_MS);
+                };
                 xhr.upload.onprogress = (e) => {
+                  watch();
                   if (e.lengthComputable) progress(e.loaded / e.total);
                 };
-                xhr.onload = () =>
-                  xhr.status >= 200 && xhr.status < 300
-                    ? resolve()
-                    : reject(
-                        new ApiError(
-                          xhr.status,
-                          describeApiError(xhr.status, ""),
-                        ),
-                      );
-                xhr.onerror = () =>
+                xhr.onload = () => {
+                  clearTimeout(stall);
+                  if (xhr.status >= 200 && xhr.status < 300) resolve();
+                  else
+                    reject(
+                      new ApiError(xhr.status, describeApiError(xhr.status, "")),
+                    );
+                };
+                xhr.onerror = () => {
+                  clearTimeout(stall);
                   reject(new ApiError(0, describeApiError(503, "")));
-                xhr.ontimeout = () =>
-                  reject(new ApiError(408, describeApiError(503, "")));
+                };
+                watch();
                 xhr.send(file);
               });
               state.stored = true;
