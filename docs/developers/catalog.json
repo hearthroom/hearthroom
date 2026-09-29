@@ -1733,7 +1733,6 @@
   "d7361e98a85c2": "Whether any enabled rule can match across lines; such rules disable the streaming render cache.",
   "d048387924042": "An author-API identifier the card's chat page does not provide.",
   "d5dfecee45715": "`rendered`, `welcome`, or `rule:<id>`.",
-  "d0f43b79d48d3": "Display rules for the trial card, in the same shape as an owned card's author asset.",
   "da18163a67c21": "Which chat page renders the card; omitted means `classic`. `trial_unsupported` when unknown.",
   "d0deb7d690eca": "Origin dialect of the rules; `trial_unsupported` when unknown.",
   "d2d6b63a8648e": "What to do: switch the card to the sandbox page, or drop the call because no chat page provides it."
