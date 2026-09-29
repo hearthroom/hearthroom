@@ -8663,7 +8663,7 @@
         },
         "operationId": "saveConversationResponseSettings",
         "summary": "Save conversation response preferences",
-        "description": "Available when responseSettingsVersion=1 is advertised. Partial patch: omitted fields remain unchanged; null removes the override. Empty or unchanged patches preserve the revision. Invalid enums, types, unknown keys and custom styles over 1000 Unicode code points reject the entire patch. Custom style requires nonblank customStyle; switching away must clear customStyle with null. A new generation snapshots settings once; changes apply to the next operation, while replay of an existing clientId retains its original snapshot. Forks copy preferences independently; a new conversation copies the player's most recent preferences on the same card, or uses defaults when there are none. Each axis also accepts an optional note (agencyNote, styleNote, perspectiveNote, lengthNote, paceNote) that refines the selected option for that axis only and takes precedence over it where they differ; notes must be nonblank and at most 200 Unicode code points, and null removes one. This call performs no inference and charges no credits.",
+        "description": "Available when responseSettingsVersion=1 is advertised. Partial patch: omitted fields remain unchanged; null removes the override. Empty or unchanged patches preserve the revision. Invalid enums, types, unknown keys and custom styles over 1000 Unicode code points reject the entire patch. Custom style requires nonblank customStyle; switching away must clear customStyle with null. A new generation snapshots settings once; changes apply to the next operation, while replay of an existing clientId retains its original snapshot. Forks copy preferences independently; a new conversation copies the player's most recent preferences on the same card, or uses defaults when there are none. Each axis also accepts an optional note (agencyNote, styleNote, perspectiveNote, lengthNote, paceNote) that refines the selected option for that axis only and takes precedence over it where they differ; notes must be nonblank and at most 200 Unicode code points, and null removes one. length accepts target together with a lengthTarget from the documented ladder; the model is then asked for about that many characters (words in English) per reply and the per-turn output token cap follows the target. This call performs no inference and charges no credits.",
         "requestBody": {
           "required": true,
           "content": {
@@ -8746,8 +8746,38 @@
                               "auto",
                               "brief",
                               "balanced",
-                              "detailed"
+                              "detailed",
+                              "target"
                             ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "lengthTarget": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "200",
+                              "300",
+                              "400",
+                              "500",
+                              "600",
+                              "800",
+                              "1000",
+                              "1200",
+                              "1500",
+                              "2000",
+                              "2500",
+                              "3000",
+                              "4000",
+                              "5000",
+                              "7000",
+                              "10000"
+                            ],
+                            "description": "Reply length target, required with length=target and rejected otherwise; null removes it. A string holding one ladder value: 200, 300, 400, 500, 600, 800, 1000, 1200, 1500, 2000, 2500, 3000, 4000, 5000, 7000, 10000. Counted in characters for Chinese, Japanese and Korean replies and in words for English. brief, balanced and detailed stay accepted and mean 300, 800 and 1500."
                           },
                           {
                             "type": "null"
@@ -18398,8 +18428,31 @@
               "auto",
               "brief",
               "balanced",
-              "detailed"
+              "detailed",
+              "target"
             ]
+          },
+          "lengthTarget": {
+            "type": "integer",
+            "enum": [
+              200,
+              300,
+              400,
+              500,
+              600,
+              800,
+              1000,
+              1200,
+              1500,
+              2000,
+              2500,
+              3000,
+              4000,
+              5000,
+              7000,
+              10000
+            ],
+            "description": "Effective reply length target when length is target, absent otherwise. Characters for Chinese, Japanese and Korean replies, words for English."
           },
           "pace": {
             "type": "string",
