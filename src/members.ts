@@ -198,7 +198,16 @@ export async function memberNsfw(db: D1Database, memberId: string): Promise<{ sh
   return { showNsfw: m?.show_nsfw === 1 && adultConsent, ageVerifiedAt: m?.age_verified_at ?? null, adultConsent };
 }
 
-const BIRTHDATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+/**
+ * 「對話與收藏」裡的成人卡：開過一次（驗過年齡、同意目前這一版聲明）就一直看得到。
+ * 開關只管以後發現新卡（榜單、搜尋、關注動態）；關掉不該把已經聊過、收藏過的東西變成「未命名」
+ * （owner 2026-09-30）。聲明改版後沒重新同意的人，跟從沒開過一樣看不到。
+ */
+export function libraryAllowsNsfw(access: { ageVerifiedAt: number | null; adultConsent: boolean }): boolean {
+  return access.ageVerifiedAt !== null && access.adultConsent;
+}
+
+const BIRTHDATE_RE =/^(\d{4})-(\d{2})-(\d{2})$/;
 
 /**
  * 生日 → 今天（UTC）滿 18 歲了沒。格式不對或日期不存在都算沒填；未來的日期也是。
