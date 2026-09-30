@@ -18496,6 +18496,10 @@
           "cacheWriteTokens": {
             "type": "integer",
             "minimum": 0
+          },
+          "outputEstimated": {
+            "type": "boolean",
+            "description": "Present and true when `outputTokens` is the provider's own count of the streamed reply because the upstream reported zero output for a reply that has text; billing used this count."
           }
         }
       },
