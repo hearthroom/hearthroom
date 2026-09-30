@@ -10638,6 +10638,7 @@
                             "type": "string",
                             "enum": [
                               "auto",
+                              "recommended",
                               "brief",
                               "balanced",
                               "detailed",
@@ -20377,6 +20378,7 @@
             "type": "string",
             "enum": [
               "auto",
+              "recommended",
               "brief",
               "balanced",
               "detailed",
