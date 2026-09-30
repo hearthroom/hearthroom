@@ -20,6 +20,7 @@ import { fetchWelcomeAsset } from "@/lib/welcome-asset";
 import { currentProvider, type ProviderId } from "@/lib/provider";
 import CardOwnerActions from "@/components/CardOwnerActions.vue";
 import CardPlatforms from "@/components/CardPlatforms.vue";
+import ShareMenu from "@/components/ShareMenu.vue";
 import { useSession } from "@/lib/session";
 import { contentLang, pageTitle, zoneLabel } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
@@ -75,9 +76,8 @@ const previewSkin = ref("");
 const commentCount = ref<number | null>(null);
 /** 同一位作者的其他作品：看完一張想接著看，不必先繞去作者頁 */
 const more = ref<CommunityCard[]>([]);
+const shareUrl = computed(() => new URL(lp(`/cards/${card.value?.id ?? route.params.id}`), location.origin).href);
 const copied = ref(false);
-/** 剛複製的是連結還是卡號：同一個小提示，字不一樣 */
-const copiedWhat = ref<"link" | "id">("link");
 /**
  * 作者最後一次改內容的時間（來源端的資料，對話次數之類的統計不會動它）。
  * 玩家靠它判斷「這張卡有沒有更新」（玩家回報 2026-09-17）；很早期建的卡沒有這個值，就不顯示。
@@ -217,36 +217,10 @@ async function copyId() {
   if (!id) return;
   try {
     await navigator.clipboard.writeText(id);
-    copiedWhat.value = "id";
     copied.value = true;
     setTimeout(() => { copied.value = false; }, 1800);
   } catch {
     await confirmDialog({ title: t("card.id"), message: t("card.copyIdManual"), detail: id, single: true });
-  }
-}
-
-async function share() {
-  const url = new URL(lp(`/cards/${card.value?.id ?? route.params.id}`),location.origin).href;
-  const title = card.value?.name ?? "";
-  const subject = card.value?.roleId ?? "";
-  if (typeof navigator.share === "function") {
-    try { await navigator.share({ title, url }); track("share", { detail: "share_web", subject }); return; }
-    catch (e) {
-      // 使用者按了取消：什麼都不做。其他錯誤（這個環境其實不能分享）才退回複製
-      if ((e as DOMException).name === "AbortError") { track("share", { detail: "share_abort", subject }); return; }
-    }
-  }
-  try {
-    await navigator.clipboard.writeText(url);
-    copiedWhat.value = "link";
-    copied.value = true;
-    track("share", { detail: "share_clipboard", subject });
-    setTimeout(() => { copied.value = false; }, 1800);
-  } catch {
-    // 拿不到剪貼簿：把網址攤在使用者面前讓他自己複製，總比按了沒反應好
-    // 這條分支的出現頻率就是「分享按鈕在多少環境下是壞的」，值得單獨記一個值
-    track("share", { detail: "share_manual", subject, ok: false });
-    await confirmDialog({ title: t("card.share"), message: t("card.copyLink"), detail: url, single: true });
   }
 }
 
@@ -378,11 +352,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
 
           <div class="role__actions">
             <RouterLink :to="lp(`/me?reportCard=${encodeURIComponent(String(card.num || card.id))}`)" class="btn">{{$t("community.reportCard")}}</RouterLink>
-            <button class="btn btn--lg btn--icon role__share" :aria-label="$t('card.share')" :title="$t('card.share')" @click="share">
-              <svg viewBox="0 0 20 20" aria-hidden="true">
-                <path d="M10 12.5V3.5M6.5 7 10 3.5 13.5 7M4 11v4.5a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-            </button>
+            <ShareMenu :url="shareUrl" :title="card.name" :subject="card.roleId" />
           </div>
           <CardOwnerActions :card="card" @submitted="load" />
           <LibraryToggle v-if="!card.status || card.status === 'approved'" kind="favorites" :target="card.id" @count="card.favoriteCount = $event" />
@@ -458,7 +428,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
     </template>
 
     <!-- live region 要先存在再改內容，讀屏器才會唸；所以常駐、用 hidden 切 -->
-    <div class="toast" role="status" :hidden="!copied">{{ copied ? $t(copiedWhat === "id" ? "card.idCopied" : "card.copied") : "" }}</div>
+    <div class="toast" role="status" :hidden="!copied">{{ copied ? $t("card.idCopied") : "" }}</div>
   </div>
 </template>
 
@@ -552,8 +522,6 @@ watch(() => session.profile?.showNsfw, (now, before) => {
 .role__via { margin: 6px 0 0; }
 .role__install { justify-self: start; gap: 6px; margin-top: 2px; }
 .role__install svg { width: 16px; height: 16px; }
-.role__share { width: var(--h-lg); flex: none; }
-.role__share svg { width: 18px; height: 18px; }
 .role__foot { margin: 2px 0 0; line-height: 1.5; }
 
 .role__main { display: grid; gap: var(--s-3); min-width: 0; align-content: start; }
