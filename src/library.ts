@@ -2,9 +2,10 @@ import { moderationMetrics } from "./moderation";
 import { bodyLimit } from "hono/body-limit";
 import { Hono } from "hono";
 import { listCards, toCard, type CardRow } from "./cards";
-import { memberByHandle, memberHiddenTags, memberNsfw, requireMember } from "./members";
+import { upstream } from "./upstream";
+import { libraryAllowsNsfw, memberByHandle, memberHiddenTags, memberNsfw, requireMember } from "./members";
 import { tagNamesFor } from "../shared/tag-catalog";
-import { HttpError, type Env } from "./types";
+import { HttpError, pickLocale, type Env, type Localized } from "./types";
 
 export const libraryRoutes = new Hono<{ Bindings: Env }>();
 libraryRoutes.use('/v1/me/*', async (c, next) => {
@@ -41,7 +42,9 @@ for (const kind of kinds) {
     if (c.req.method !== "DELETE" && kind === "favorites") {
       const card = await c.env.DB.prepare('SELECT status,nsfw,public_blocked FROM cards WHERE id=?').bind(target).first<{status:string; nsfw:number; public_blocked:number}>();
       const access = await memberNsfw(c.env.DB, member.id);
-      if (!card || card.status !== "approved" || card.public_blocked || (card.nsfw && !(access.showNsfw && access.ageVerifiedAt))) throw new HttpError(404, "not_found");
+      // 看自己已經收藏的那一張照收藏區的規則；新收藏還是要現在開著成人內容才行（卡片頁本身也要）
+      const allowed = c.req.method === "GET" ? libraryAllowsNsfw(access) : access.showNsfw && !!access.ageVerifiedAt;
+      if (!card || card.status !== "approved" || card.public_blocked || (card.nsfw && !allowed)) throw new HttpError(404, "not_found");
     }
     if (c.req.method === "PUT") {
       await c.env.DB.prepare(`INSERT OR IGNORE INTO ${table}(member_id,${column},created_at) VALUES(?,?,?)`).bind(member.id, target, Date.now()).run();
@@ -65,7 +68,8 @@ for (const kind of ["favorites", "feed"] as const) {
     const result = await listCards(c.env.DB, {
       ...(kind === "favorites" ? { favoritedBy: member.id } : { followedBy: member.id }),
       sort: "new", limit, offset,
-      allowNsfw: access.showNsfw && !!access.ageVerifiedAt,
+      // 收藏是自己的東西，照收藏區的規則；關注動態是在發現新卡，跟著開關走
+      allowNsfw: kind === "favorites" ? libraryAllowsNsfw(access) : access.showNsfw && !!access.ageVerifiedAt,
       excludeTags: hidden.flatMap(k => tagNamesFor(k) ?? []),
     });
     return c.json({ items: result.rows.map(row => toCard(row, c.req.query("lang") || "zh-Hant")), hasNext: result.hasNext, total: result.total, offset, limit });
@@ -103,6 +107,7 @@ libraryRoutes.get('/v1/me/conversations', async c => {
   // 所以每張卡只列最近的那一列。對不到卡號的紀錄各自成一列。
   const rows = await c.env.DB.prepare(`SELECT * FROM (SELECT c.*, cn.num AS cardNumber, r.provider AS conversationProvider, r.role_id AS conversationRoleId,
     r.conversation_id AS conversationId, r.created_at AS createdAt, r.updated_at AS updatedAt,
+    COALESCE(w.source_role_id,c.source_role_id,r.role_id) AS hostRoleId, ms.public_blocked AS moderationBlocked,
     ROW_NUMBER() OVER (PARTITION BY COALESCE('n'||cn.num,'r'||r.role_id) ORDER BY r.updated_at DESC,r.role_id) AS cardRank FROM member_conversations r
     LEFT JOIN work_copies cp ON cp.provider=r.provider AND cp.role_id=r.role_id
     LEFT JOIN hosting_replicas hr ON hr.provider=r.provider AND hr.hosted_revision_id=r.role_id
@@ -111,15 +116,41 @@ libraryRoutes.get('/v1/me/conversations', async c => {
     LEFT JOIN cards c ON c.provider=COALESCE(w.source_provider,r.provider) AND (c.source_role_id=COALESCE(w.source_role_id,r.role_id) OR c.approved_hosted_role_id=r.role_id)
     LEFT JOIN card_numbers cn ON cn.provider=COALESCE(w.source_provider,r.provider)
       AND cn.source_role_id=COALESCE(w.source_role_id,c.source_role_id,r.role_id)
+    LEFT JOIN moderation_state ms ON ms.provider=COALESCE(w.source_provider,r.provider)
+      AND ms.source_role_id=COALESCE(w.source_role_id,c.source_role_id,r.role_id)
     WHERE r.member_id=? AND r.provider='harbor') WHERE cardRank=1 ORDER BY updatedAt DESC,conversationRoleId LIMIT 25 OFFSET ?`)
-    .bind(member.id, (page - 1) * 24).all<CardRow & { cardNumber: number | null; conversationProvider: string; conversationRoleId: string; conversationId: string; createdAt: number; updatedAt: number }>();
-  return c.json({ conversations: rows.results.slice(0,24).map(row => {
-    const card = row.id && row.status === 'approved' && !row.public_blocked && (!row.nsfw || (access.showNsfw && access.ageVerifiedAt)) ? toCard(row, c.req.query('lang') || 'zh-Hant') : null;
+    .bind(member.id, (page - 1) * 24).all<CardRow & { cardNumber: number | null; conversationProvider: string; conversationRoleId: string; conversationId: string; createdAt: number; updatedAt: number; hostRoleId: string; moderationBlocked: number | null }>();
+  const lang = c.req.query('lang') || 'zh-Hant';
+  return c.json({ conversations: await Promise.all(rows.results.slice(0,24).map(async row => {
+    const visible = !row.public_blocked && !row.moderationBlocked && (!row.nsfw || libraryAllowsNsfw(access));
+    const card = row.id && row.status === 'approved' && visible ? toCard(row, lang) : null;
+    // 不在榜上的卡（只靠分享連結玩、還在審、沒登記）這裡只有卡號，名字跟卡片頁一樣去託管平台拿
+    const hosted = !card && visible ? await hostedTitle(c.env, row.hostRoleId) : null;
     return { provider: row.conversationProvider, cardNumber: row.cardNumber, conversationRoleId: row.conversationRoleId, conversationId: row.conversationId,
-      roleName: card?.name || '', roleAvatar: card?.avatarUrl || '',
+      roleName: card?.name || (hosted ? pickLocale(hosted.names, lang) : ''), roleAvatar: card?.avatarUrl || hosted?.avatarUrl || '',
       lastChatTime: new Date(Number(row.updatedAt)).toISOString(), createTime: new Date(Number(row.createdAt)).toISOString() };
-  }), hasNextPage: rows.results.length > 24 });
+  })), hasNextPage: rows.results.length > 24 });
 });
+
+/**
+ * 不在榜上的卡的名字與封面，從託管平台讀。每張卡快取十分鐘：清單每次開都要列，
+ * 不必每次都問上游；作者改名晚幾分鐘出現沒關係。讀不到（刪了、上游掛了）就留空，
+ * 前端顯示「未命名對話」，整張清單不跟著失敗。
+ */
+async function hostedTitle(env: Env, roleId: string): Promise<{ names: Localized; avatarUrl: string } | null> {
+  const key = new Request(`https://library-title.internal/harbor/${encodeURIComponent(roleId)}`);
+  try {
+    const cache = await caches.open('library-titles');
+    const hit = await cache.match(key);
+    if (hit) return await hit.json();
+    const role = await upstream.fetchRole(env, roleId, 'harbor');
+    const title = { names: role.names, avatarUrl: role.backgroundUrl || role.avatarUrl || '' };
+    await cache.put(key, new Response(JSON.stringify(title), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'max-age=600' } }));
+    return title;
+  } catch {
+    return null;
+  }
+}
 
 /** Resume the member's recorded host revision after public URLs switch to card numbers. */
 libraryRoutes.get('/v1/me/conversations/:conversationId', async c => {

@@ -1,7 +1,7 @@
 import {approveFixtureResponse} from './hosted-fixture';
 import { SELF, env } from "cloudflare:test";
 import { beforeEach, afterEach, expect, it } from "vitest";
-import { resetDb, identities, identitiesFor, rolesOnMainSite, bearer, restoreUpstream } from "./helpers";
+import { resetDb, identities, identitiesFor, rolesOnMainSite, mainSiteDown, bearer, restoreUpstream } from "./helpers";
 
 let cardId = "";
 let handle = "";
@@ -118,4 +118,59 @@ it('lists one row per card after the member played more than one approved versio
   await env.DB.prepare("UPDATE member_conversations SET updated_at=CASE role_id WHEN 'library-role' THEN 1000 WHEN 'library-role-v2' THEN 3000 ELSE 2000 END").run();
   const rows = (await body(await request('me/conversations'))).conversations;
   expect(rows.map((r: any) => r.conversationId)).toEqual(['new-version-chat', 'other-card-chat']);
+});
+
+it('keeps adult cards a member already played or saved after they turn adult content off; only discovery follows the switch', async () => {
+  identitiesFor({ harbor: { fan: 20001 } });
+  await request(`me/favorites/${cardId}`, 'fan', 'PUT');
+  await request(`me/following/${handle}`, 'fan', 'PUT');
+  await SELF.fetch('https://c.test/v1/me/conversations', { method: 'PUT', headers: { ...bearer('fan'), 'X-Provider': 'harbor', 'Content-Type': 'application/json' }, body: JSON.stringify({ roleId: 'library-role', conversationId: 'adult-chat' }) });
+  await env.DB.prepare('UPDATE cards SET nsfw=1 WHERE id=?').bind(cardId).run();
+  const fan = await env.DB.prepare("SELECT member_id AS id FROM member_identities WHERE external_id='20001'").first<{ id: string }>();
+  const library = async () => ({
+    conversation: (await body(await request('me/conversations'))).conversations[0],
+    favorites: (await body(await request('me/favorites'))).items.map((c: any) => c.id),
+    favorite: await body(await request(`me/favorites/${cardId}`)),
+    feed: (await body(await request('me/feed'))).items.map((c: any) => c.id),
+  });
+
+  // Opted in once (age verified, current statement agreed), then switched off.
+  await env.DB.prepare('UPDATE members SET show_nsfw=0,age_verified_at=1,adult_consent_version=1 WHERE id=?').bind(fan!.id).run();
+  const off = await library();
+  expect(off.conversation.roleName).not.toBe('');
+  expect(off.conversation.roleAvatar).not.toBe('');
+  expect(off.favorites).toEqual([cardId]);
+  expect(off.favorite.active).toBe(true);
+  expect(off.feed).toEqual([]);
+
+  // Never opted in: the library does not reveal adult cards.
+  await env.DB.prepare('UPDATE members SET show_nsfw=0,age_verified_at=NULL,adult_consent_version=NULL WHERE id=?').bind(fan!.id).run();
+  const never = await library();
+  expect(never.conversation.roleName).toBe('');
+  expect(never.favorites).toEqual([]);
+});
+
+it('names a conversation with a card that is not on the board from its host, like the card page does', async () => {
+  identitiesFor({ harbor: { fan: 20001 } });
+  rolesOnMainSite({ roleId: 'library-role', authorNumId: 10001 }, { roleId: 'unlisted-role', name: '天道非要我成仙' }, { roleId: 'withdrawn-role', name: '已下架' });
+  const put = (roleId: string, conversationId: string) => SELF.fetch('https://c.test/v1/me/conversations', {
+    method: 'PUT', headers: { ...bearer('fan'), 'X-Provider': 'harbor', 'Content-Type': 'application/json' }, body: JSON.stringify({ roleId, conversationId }),
+  });
+  // Opening a share link gives the card a number; nothing else about it is kept here.
+  await env.DB.prepare("INSERT INTO card_numbers(provider,source_role_id) VALUES('harbor','unlisted-role'),('harbor','withdrawn-role')").run();
+  await env.DB.prepare("INSERT INTO moderation_state(provider,source_role_id,public_blocked) VALUES('harbor','withdrawn-role',1)").run();
+  await put('unlisted-role', 'unlisted-chat');
+  await put('withdrawn-role', 'withdrawn-chat');
+  await put('gone-role', 'gone-chat');
+  const rows = (await body(await request('me/conversations'))).conversations;
+  const by = (id: string) => rows.find((r: any) => r.conversationId === id);
+  expect(by('unlisted-chat')).toMatchObject({ roleName: '天道非要我成仙', roleAvatar: 'https://assets.harperharbor.com/bg.png' });
+  expect(by('gone-chat').roleName).toBe('');
+  expect(by('withdrawn-chat').roleName).toBe('');
+
+  // The host being down leaves the row untitled instead of failing the whole list.
+  mainSiteDown();
+  const down = await request('me/conversations?pageNum=1&lang=en');
+  expect(down.status).toBe(200);
+  expect((await body(down)).conversations).toHaveLength(3);
 });
