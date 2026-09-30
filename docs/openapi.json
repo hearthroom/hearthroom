@@ -5216,6 +5216,99 @@
             }
           }
         }
+      },
+      "patch": {
+        "operationId": "setMyNickname",
+        "tags": [
+          "Identity"
+        ],
+        "summary": "Set my nickname in this app",
+        "description": "Sets the caller's nickname in the application that owns the token. Nicknames are kept per application: other applications keep reading their own. Use it when your application is where the user chooses a display name, so the provider's console shows the same name. Requires the `profile.write` scope; long-lived personal API keys cannot carry it. Leading and trailing spaces are removed; an empty string clears the nickname.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "nickName"
+                ],
+                "properties": {
+                  "nickName": {
+                    "type": "string",
+                    "maxLength": 60,
+                    "description": "At most 60 characters, no control characters. Empty clears it."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved nickname.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "nickName"
+                  ],
+                  "properties": {
+                    "nickName": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request` — missing, too long, or contains control characters.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope` — the token was granted without `profile.write`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`account_not_found` — the account behind the token no longer exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/open/v1/me/score/records": {

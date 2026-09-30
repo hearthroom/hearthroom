@@ -1738,5 +1738,12 @@
   "d2d6b63a8648e": "What to do: switch the card to the sandbox page, or drop the call because no chat page provides it.",
   "dc24714ed3f83": "Optional landscape (16:9) background URL. The chat page uses it on wide screens and falls back to `roleBackground`; keep important elements in the central 75%.",
   "d496df634ddd9": "Optional landscape (16:9) background: http(s) URL; blank ignored. `roleBackground` (portrait) stays the baseline.",
-  "d8bdbd23e1d7f": "Present and true when `outputTokens` is the provider's own count of the streamed reply because the upstream reported zero output for a reply that has text; billing used this count."
+  "d8bdbd23e1d7f": "Present and true when `outputTokens` is the provider's own count of the streamed reply because the upstream reported zero output for a reply that has text; billing used this count.",
+  "d629198a9e6c8": "Set my nickname in this app",
+  "de5424050a0f1": "Sets the caller's nickname in the application that owns the token. Nicknames are kept per application: other applications keep reading their own. Use it when your application is where the user chooses a display name, so the provider's console shows the same name. Requires the `profile.write` scope; long-lived personal API keys cannot carry it. Leading and trailing spaces are removed; an empty string clears the nickname.",
+  "d0e189d73c7c4": "At most 60 characters, no control characters. Empty clears it.",
+  "dfbd76ec38f51": "Saved nickname.",
+  "de0c23c84b563": "`invalid_request` — missing, too long, or contains control characters.",
+  "d3b2d330512fe": "`insufficient_scope` — the token was granted without `profile.write`.",
+  "d016f54b0eedd": "`account_not_found` — the account behind the token no longer exists."
 }
