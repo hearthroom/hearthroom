@@ -10419,6 +10419,11 @@
             "type": "string",
             "format": "uri"
           },
+          "roleBackgroundLandscape": {
+            "type": "string",
+            "format": "uri",
+            "description": "Optional landscape (16:9) background URL. The chat page uses it on wide screens and falls back to `roleBackground`; keep important elements in the central 75%."
+          },
           "roleSex": {
             "type": "string"
           },
@@ -14913,6 +14918,11 @@
             "type": "string",
             "description": "Chat background image URL."
           },
+          "roleBackgroundLandscape": {
+            "type": "string",
+            "format": "uri",
+            "description": "Optional landscape (16:9) background URL. The chat page uses it on wide screens and falls back to `roleBackground`; keep important elements in the central 75%."
+          },
           "roleSex": {
             "type": "string",
             "description": "Declared gender of the character."
@@ -15372,6 +15382,11 @@
             "format": "uri",
             "description": "http(s) URL; blank ignored."
           },
+          "roleBackgroundLandscape": {
+            "type": "string",
+            "format": "uri",
+            "description": "Optional landscape (16:9) background: http(s) URL; blank ignored. `roleBackground` (portrait) stays the baseline."
+          },
           "roleDetailDesc": {
             "type": "string",
             "description": "Private definition; limit 10000 chars (English 50000)."
@@ -15573,6 +15588,11 @@
           "roleBackground": {
             "type": "string",
             "format": "uri"
+          },
+          "roleBackgroundLandscape": {
+            "type": "string",
+            "format": "uri",
+            "description": "Optional landscape (16:9) background URL. The chat page uses it on wide screens and falls back to `roleBackground`; keep important elements in the central 75%."
           },
           "roleSex": {
             "type": "string",
