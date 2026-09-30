@@ -56,7 +56,7 @@ describe("動態註冊的權限範圍", () => {
 
     await beginLogin("/");
 
-    expect(registerBody(calls)).toHaveProperty("scope", "profile.read email.read role.read role.write chat.play referral");
+    expect(registerBody(calls)).toHaveProperty("scope", "profile.read profile.write email.read role.read role.write chat.play referral");
   });
 
   it("換範圍等於換一組客戶端：舊的唯讀 client 不會被拿來用", async () => {

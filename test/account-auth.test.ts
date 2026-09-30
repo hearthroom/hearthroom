@@ -389,3 +389,16 @@ it('returns the access token with the session only when asked, and not after the
   expect(after.status).toBe(200);
   expect((await after.json() as any).token).toBeNull();
 });
+
+// 登入時本站的顯示名稱跟 Harbor 那邊的暱稱不一樣，就用剛拿到的 token 寫回去（舊授權沒有
+// profile.write 會被拒，重新授權後就補上）。一樣就不打。
+it('pushes the community display name to Harbor on sign-in when they differ',async()=>{
+  providers();
+  const push=vi.spyOn(upstream,'setNickname').mockResolvedValue('ok');
+  await login('harbor',22);
+  expect(push).not.toHaveBeenCalled();
+  await env.DB.prepare("UPDATE members SET display_name='Community name' WHERE id=(SELECT member_id FROM member_identities WHERE provider='harbor' AND external_id='22')").run();
+  cookies={};
+  await login('harbor',22);
+  expect(push).toHaveBeenCalledWith(expect.anything(),expect.stringMatching(/^test-access-/),'harbor','Community name');
+});

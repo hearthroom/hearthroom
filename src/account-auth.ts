@@ -13,7 +13,9 @@ type AuthContext={Bindings:Env;Variables:{ev:Pending}};
 type C = Context<AuthContext>;
 const DAY=86400000, ATTEMPT_TTL=10*60000, SESSION_IDLE=30*DAY, SESSION_MAX=180*DAY, SESSION_TOUCH=DAY;
 const SESSION='__Host-hr-session', FLOW='__Host-hr-auth';
-const scopes:Partial<Record<ProviderId,string>>={harbor:'profile.read email.read role.read role.write chat.play referral'};
+// profile.write：把本站的顯示名稱寫回 Harbor 當暱稱（見 syncNickname）。加這項之前，Harbor 那邊的固定客戶端要先登記它，
+// 否則授權請求會因為超出客戶端的範圍被拒。
+const scopes:Partial<Record<ProviderId,string>>={harbor:'profile.read profile.write email.read role.read role.write chat.play referral'};
 type Pair={accessToken:string;refreshToken:string;clientId:string;expiresAt:number};
 type Attempt={state_hash:string;browser_hash:string;origin:string;provider:ProviderId;source_session:string|null;payload:string;phase:string;expires_at:number};
 type Session={token_hash:string;member_id:string;provider:ProviderId;external_id:string;origin:string;created_at:number;expires_at:number};
@@ -67,7 +69,7 @@ function providerOf(value:unknown,env:Env):ProviderId {
 function safePath(raw:unknown):string {
   return typeof raw==='string'&&/^\/(?![\/\\])/.test(raw)&&!/[\x00-\x20\\]/.test(raw)?raw:'/';
 }
-async function metric(env:Env,operation:string,provider:string,outcome:string){
+export async function metric(env:Env,operation:string,provider:string,outcome:string){
   await env.DB.prepare('INSERT INTO account_auth_metrics VALUES(?,?,?,1) ON CONFLICT(operation,provider,outcome) DO UPDATE SET value=value+1').bind(operation,provider,outcome).run();
 }
 /**
@@ -260,6 +262,12 @@ accountAuthRoutes.post('/v1/auth/complete',async c=>{
       c.env.DB.prepare('UPDATE account_auth_attempts SET payload=? WHERE state_hash=?').bind(await sealAuth(c.env,'attempt:'+a.state_hash,{...flow,pair,resultSession:sessionHash}),a.state_hash),
     );
     try{await c.env.DB.batch(statements);}catch{throw new HttpError(400,'auth_state_invalid');}
+    // 本站的顯示名稱跟 Harbor 的暱稱對不上就寫回去；舊授權沒有 profile.write 會被拒，重新授權後才補得上。
+    if(a.provider==='harbor'){
+      const shown=await c.env.DB.prepare('SELECT display_name FROM members WHERE id=?').bind(member).first<{display_name:string|null}>();
+      const name=shown?.display_name?.trim();
+      if(name&&name!==(me.nickName??'').trim())syncNickname(c,pair.accessToken,name);
+    }
     writeCookie(c,SESSION,raw,SESSION_IDLE/1000);
     // Keep the receipt cookie until expiry: a concurrent logout must also invalidate this session.
   }
@@ -393,6 +401,12 @@ accountAuthRoutes.get('/internal/auth/metrics',async c=>{
 });
 
 /** Internal operator reuse of the same fenced credential refresh; never an HTTP token export. */
+/** 背景寫回暱稱，不擋回應；結果記進 hearthroom_auth_operations_total{operation="nickname_sync"}。 */
+export function syncNickname(c:{env:Env;executionCtx:{waitUntil(p:Promise<unknown>):void}},token:string,name:string){
+  const done=upstream.setNickname(c.env,token,'harbor',name).then(outcome=>metric(c.env,'nickname_sync','harbor',outcome)).catch(()=>{});
+  try{c.executionCtx.waitUntil(done);}catch{/* 沒有執行環境（測試）就讓它自己跑完 */}
+}
+
 export async function delegatedAccess(env:Env,provider:ProviderId,externalId:number,memberId:string){
   const id=String(externalId);
   const read=()=>env.DB.prepare('SELECT * FROM account_credentials WHERE provider=? AND external_id=?').bind(provider,id).first<Credential>();
