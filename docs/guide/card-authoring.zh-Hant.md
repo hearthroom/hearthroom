@@ -118,7 +118,8 @@
 | `sdk.cache.get(key)` / `set(key, value)` / `remove(key)` | 暫存。僅在本次頁面載入期間有效。 |
 | `sdk.stage.open(mode)` / `close()` / `el()` / `visible()` | 作者舞台。 |
 | `sdk.role.get()` | 角色名稱與頭像。 |
-| `sdk.user.get()` | 玩家稱呼與頭像。 |
+| `sdk.user.get()` | 玩家稱呼、頭像與介面語言（`locale`，例如 `zh-Hans`）。 |
+| `sdk.text.convert(text)` / `sdk.text.ready()` | 把腳本自己畫的字轉成玩家的簡繁，跟頁面轉回覆的方式相同。字典載好之前 `convert` 原樣回；`ready()` 在載好時完成，不需要轉時立刻完成。 |
 | `sdk.on(event, handler)` | 訂閱事件。 |
 | `sdk.debug.log(...args)` | 寫入除錯面板。在網址加上 `?sdkDebug=1` 可顯示面板。 |
 

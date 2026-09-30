@@ -118,7 +118,8 @@ Colours and sizes are defined by `--chat-*` variables (for example `--chat-bg`, 
 | `sdk.cache.get(key)` / `set(key, value)` / `remove(key)` | Scratch storage for the current page load only. |
 | `sdk.stage.open(mode)` / `close()` / `el()` / `visible()` | Author stage. |
 | `sdk.role.get()` | Character name and avatar. |
-| `sdk.user.get()` | Player name and avatar. |
+| `sdk.user.get()` | Player name, avatar and interface language (`locale`, such as `zh-Hans`). |
+| `sdk.text.convert(text)` / `sdk.text.ready()` | Convert text your script draws to the player's Chinese script (Simplified or Traditional), the same way the page converts replies. `convert` returns the text unchanged until the dictionary has loaded; `ready()` resolves once it has, or at once when no conversion is needed. |
 | `sdk.on(event, handler)` | Subscribe to an event. |
 | `sdk.debug.log(...args)` | Write to the debug panel. Append `?sdkDebug=1` to the URL to show the panel. |
 

@@ -17,6 +17,7 @@ const testEnv = envWithAssets({
   "/sandbox/": new Response(SHELL, { headers: { "content-type": "text/html; charset=utf-8", etag: '"x"' } }),
   "/sandbox/sandbox.js": new Response("console.log(1)", { headers: { "content-type": "text/javascript; charset=utf-8" } }),
   "/sandbox/sandbox.css": new Response("body{}", { headers: { "content-type": "text/css; charset=utf-8" } }),
+  "/sandbox/sandbox-zh.js": new Response("window.__msDisplayScript={}", { headers: { "content-type": "text/javascript; charset=utf-8" } }),
 });
 
 async function get(url: string, e = testEnv) {
@@ -57,6 +58,11 @@ describe("沙箱子網域", () => {
     expect(js.headers.get("cache-control")).toBe("no-cache");
     const css = await get("https://c1.hearthroom.club/sandbox/sandbox.css");
     expect(css.headers.get("content-type")).toContain("css");
+    // 簡繁字典：殼只在玩家介面語言需要轉時才載，同樣補標頭、每次重新驗證
+    const zh = await get("https://c1.hearthroom.club/sandbox/sandbox-zh.js");
+    expect(zh.status).toBe(200);
+    expect(zh.headers.get("content-type")).toContain("javascript");
+    expect(zh.headers.get("cache-control")).toBe("no-cache");
   });
 
   it("沙箱子網域上其餘路徑一律 404：主站不在別的源上多一個鏡像", async () => {

@@ -118,7 +118,8 @@
 | `sdk.cache.get(key)` / `set(key, value)` / `remove(key)` | 임시 저장. 현재 페이지 로드 동안만 유효합니다. |
 | `sdk.stage.open(mode)` / `close()` / `el()` / `visible()` | 작성자 스테이지. |
 | `sdk.role.get()` | 캐릭터 이름과 아바타. |
-| `sdk.user.get()` | 플레이어 호칭과 아바타. |
+| `sdk.user.get()` | 플레이어 호칭, 아바타, 인터페이스 언어(`locale`, 예: `zh-Hans`). |
+| `sdk.text.convert(text)` / `sdk.text.ready()` | 스크립트가 직접 그리는 글자를 답장과 같은 방식으로 플레이어의 중국어 자형(간체·번체)으로 바꿉니다. 사전을 불러오기 전에는 `convert`가 그대로 돌려주고, `ready()`는 불러오면(변환이 필요 없으면 즉시) 완료됩니다. |
 | `sdk.on(event, handler)` | 이벤트 구독. |
 | `sdk.debug.log(...args)` | 디버그 패널에 기록합니다. URL에 `?sdkDebug=1`을 붙이면 패널이 표시됩니다. |
 

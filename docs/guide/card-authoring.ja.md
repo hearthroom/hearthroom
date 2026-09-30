@@ -118,7 +118,8 @@
 | `sdk.cache.get(key)` / `set(key, value)` / `remove(key)` | 一時保存。現在のページ読み込み中のみ有効です。 |
 | `sdk.stage.open(mode)` / `close()` / `el()` / `visible()` | 作者ステージ。 |
 | `sdk.role.get()` | キャラクター名とアバター。 |
-| `sdk.user.get()` | プレイヤーの呼び名とアバター。 |
+| `sdk.user.get()` | プレイヤーの呼び名、アバター、表示言語（`locale`、例：`zh-Hans`）。 |
+| `sdk.text.convert(text)` / `sdk.text.ready()` | スクリプトが描く文字を、返信と同じ方法でプレイヤーの中国語字形（簡体・繁体）に変換します。辞書の読み込み前は `convert` がそのまま返し、`ready()` は読み込み完了時（変換不要なら即時）に完了します。 |
 | `sdk.on(event, handler)` | イベントの購読。 |
 | `sdk.debug.log(...args)` | デバッグパネルに出力します。URL に `?sdkDebug=1` を付けるとパネルが表示されます。 |
 
