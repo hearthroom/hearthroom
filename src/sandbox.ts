@@ -59,10 +59,12 @@ const FILES: Record<string, string> = {
   "index.html": "",
   "sandbox.js": "sandbox.js",
   "sandbox.css": "sandbox.css",
+  // 簡繁轉換字典（上游另打的一個檔，約 1 MB）：殼只在玩家介面語言需要轉時才用 <script> 載
+  "sandbox-zh.js": "sandbox-zh.js",
 };
 
 /**
- * 沙箱子網域上的請求：/sandbox/ 底下三個檔從資源層拿、補標頭；其餘 404。
+ * 沙箱子網域上的請求：/sandbox/ 底下的殼檔（頁、js、css、簡繁字典）從資源層拿、補標頭；其餘 404。
  * 回 null 表示這不是沙箱子網域，交給後面的路由。
  */
 export async function serveSandbox(c: { req: { url: string; header: (name: string) => string | undefined; method: string }; env: Env }): Promise<Response | null> {

@@ -118,7 +118,8 @@
 | `sdk.cache.get(key)` / `set(key, value)` / `remove(key)` | 暂存。仅在本次页面加载期间有效。 |
 | `sdk.stage.open(mode)` / `close()` / `el()` / `visible()` | 作者舞台。 |
 | `sdk.role.get()` | 角色名称与头像。 |
-| `sdk.user.get()` | 玩家称呼与头像。 |
+| `sdk.user.get()` | 玩家称呼、头像与界面语言（`locale`，例如 `zh-Hans`）。 |
+| `sdk.text.convert(text)` / `sdk.text.ready()` | 把脚本自己画的字转成玩家的简繁，跟页面转换回复的方式相同。字典载入之前 `convert` 原样返回；`ready()` 在载入完成时完成，不需要转换时立刻完成。 |
 | `sdk.on(event, handler)` | 订阅事件。 |
 | `sdk.debug.log(...args)` | 写入调试面板。在网址加上 `?sdkDebug=1` 可显示面板。 |
 
