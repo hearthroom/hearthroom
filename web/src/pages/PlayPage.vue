@@ -25,6 +25,7 @@ import { requestInstallToast } from "@/lib/pwa";
 import { communityHost, isPlayHost } from "@/lib/site";
 import { registerPlayCard } from "@/lib/play-social";
 import PlayComments from "@/components/PlayComments.vue";
+import StageLoader from "@/components/StageLoader.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -127,7 +128,10 @@ watch(locale, () => { void remergeStageMessages(); });
     <component :is="Stage" v-if="Stage" :key="roleId" :role-id="roleId" />
     <div v-else class="play__state">
       <p v-if="error" class="play__error" role="alert">{{ error }}</p>
-      <p v-else class="subtle">{{ $t("play.loading") }}</p>
+      <template v-else>
+        <StageLoader />
+        <p class="subtle">{{ $t("play.loading") }}</p>
+      </template>
       <a v-if="error && playApp" class="btn" :href="cardPageUrl">{{ $t("play.backToCard") }}</a>
       <RouterLink v-else-if="error" class="btn" :to="lp(cardNumber ? `/cards/${cardNumber}` : '/')">{{ $t("play.backToCard") }}</RouterLink>
     </div>
