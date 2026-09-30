@@ -931,6 +931,7 @@ async function exportCard(format: "png" | "json") {
           @click="goto(key)"
         >
           <span class="side__label">{{ $t(`editor.section.${key}`) }}</span>
+          <span v-if="key === 'world'" class="exp-tag">{{ $t("editor.experimental") }}</span>
           <!-- 世界書條目數：一本六十條跟一本三條在導覽上就看得出來 -->
           <span v-if="key === 'worldbook' && wb.entries.length" class="side__n">{{ wb.entries.length }}</span>
           <span v-if="lacks(key)" class="side__dot" role="img" :aria-label="$t('editor.section.missing')" />
@@ -1046,7 +1047,9 @@ async function exportCard(format: "png" | "json") {
 
         <!-- 世界模式：一張卡多個角色 -->
         <section v-if="can('world')" data-section="world" class="pane">
-          <h2 class="pane__title">{{ $t("editor.section.world") }}</h2>
+          <h2 class="pane__title">{{ $t("editor.section.world") }}<span class="exp-tag">{{ $t("editor.experimental") }}</span></h2>
+          <!-- 世界模式還沒做完：先講清楚只適合試玩，免得作者拿它寫正式卡 -->
+          <p class="notice">{{ $t("editor.world.experimental") }}</p>
           <p class="muted">{{ $t("editor.world.lede") }}</p>
           <div v-if="!draft.world" class="rxbar__acts">
             <button type="button" class="btn btn--sm btn--primary" @click="enableWorld">{{ $t("editor.world.enable") }}</button>
@@ -1054,13 +1057,13 @@ async function exportCard(format: "png" | "json") {
           <template v-else>
             <div class="field">
               <label for="f-world-speakers">{{ $t("editor.world.maxSpeakers") }}</label>
-              <select id="f-world-speakers" v-model.number="draft.world.maxSpeakers">
+              <select id="f-world-speakers" v-model.number="draft.world.maxSpeakers" class="input">
                 <option v-for="n in WORLD_LIMITS.maxSpeakers" :key="n" :value="n">{{ n }}</option>
               </select>
             </div>
             <div class="field">
               <label for="f-world-strictness">{{ $t("editor.world.strictness") }}</label>
-              <select id="f-world-strictness" v-model="draft.world.strictness">
+              <select id="f-world-strictness" v-model="draft.world.strictness" class="input">
                 <option v-for="s in WORLD_STRICTNESS" :key="s" :value="s">{{ $t(`editor.world.strictness.${s}`) }}</option>
               </select>
             </div>
@@ -1425,6 +1428,14 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
 .rxbar__hint { margin: 0; font-size: 13px; color: var(--text-3); }
 .rxbar__acts { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }
 .pane__sub { margin: var(--s-4) 0 var(--s-2); font-size: 1rem; }
+/* 還沒做完的分區：導覽和標題上掛一個小標籤 */
+.exp-tag {
+  flex: none; display: inline-flex; align-items: center; vertical-align: middle;
+  height: 18px; padding: 0 6px; margin-left: var(--s-2);
+  border: 1px solid currentColor; border-radius: 4px;
+  color: var(--text-3); font-size: 11px; font-weight: 600; line-height: 1;
+}
+.side__item .exp-tag { margin-left: 0; }
 .world-char { border: 1px solid var(--line, rgba(127, 127, 127, 0.25)); border-radius: var(--r, 12px); padding: var(--s-3); margin: 0 0 var(--s-3); }
 .world-char__row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); }
 .world-char__book { margin-top: var(--s-3); padding-top: var(--s-3); border-top: 1px solid var(--line, rgba(127, 127, 127, 0.25)); }
