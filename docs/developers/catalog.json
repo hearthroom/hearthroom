@@ -1735,6 +1735,5 @@
   "d5dfecee45715": "`rendered`, `welcome`, or `rule:<id>`.",
   "da18163a67c21": "Which chat page renders the card; omitted means `classic`. `trial_unsupported` when unknown.",
   "d0deb7d690eca": "Origin dialect of the rules; `trial_unsupported` when unknown.",
-  "d2d6b63a8648e": "What to do: switch the card to the sandbox page, or drop the call because no chat page provides it.",
-  "d88857262c337": "Optional allowlisted failure detail, retained in live operationStatus and history/readback. Independent of reasonCode: agent_progress_preserved still controls continuation. Empty or absent means unknown; clients must not infer a network error. Contains no raw provider error text."
+  "d2d6b63a8648e": "What to do: switch the card to the sandbox page, or drop the call because no chat page provides it."
 }
