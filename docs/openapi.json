@@ -12569,26 +12569,6 @@
             ],
             "description": "Public reason (empty for non-terminal states and `completed`)."
           },
-          "failureCause": {
-            "type": "string",
-            "enum": [
-              "",
-              "stopped",
-              "tool_rejections",
-              "empty_turn",
-              "no_answer",
-              "no_final_answer",
-              "empty_response",
-              "service_unavailable",
-              "rate_limit",
-              "upstream_timeout",
-              "stream_incomplete",
-              "usage_invalid",
-              "context_capacity_exceeded",
-              "insufficient_credits"
-            ],
-            "description": "Optional allowlisted failure detail, retained in live operationStatus and history/readback. Independent of reasonCode: agent_progress_preserved still controls continuation. Empty or absent means unknown; clients must not infer a network error. Contains no raw provider error text."
-          },
           "messageKey": {
             "type": "string",
             "enum": [

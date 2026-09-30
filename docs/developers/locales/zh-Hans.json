@@ -1735,6 +1735,5 @@
   "d5dfecee45715": "`rendered`、`welcome` 或 `rule:<id>`。",
   "da18163a67c21": "由哪种聊天页渲染这张卡；省略即 `classic`。不认得时返回 `trial_unsupported`。",
   "d0deb7d690eca": "规则的来源方言；不认得时返回 `trial_unsupported`。",
-  "d2d6b63a8648e": "该怎么办：把卡切到沙盒页，或去掉这个调用，因为没有任何聊天页提供它。",
-  "d88857262c337": "可选的失败原因详情，仅使用允许的值，并保留在实时 operationStatus 与历史读取结果中。此字段独立于 reasonCode；续跑仍由 agent_progress_preserved 控制。空值或未提供表示原因未知，客户端不可推断为网络错误。此字段不含供应商的原始错误文本。"
+  "d2d6b63a8648e": "该怎么办：把卡切到沙盒页，或去掉这个调用，因为没有任何聊天页提供它。"
 }
