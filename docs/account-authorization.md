@@ -15,7 +15,7 @@ Hearthroom 可將使用者授予的 OAuth 憑證加密保存在本站資料庫�
 
 這是 token-mediating backend。供應商密碼不會交給本站，但有 Worker 執行權限及金鑰的營運者有能力解密被託管的憑證。瀏覽器同源 JavaScript 仍能使用短期 access token；不應宣稱所有 token 對前端不可見、只有唯讀權限或零洩漏風險。
 
-權限仍以供應商同意頁為準。HarperHarbor 沿用 `profile.read email.read role.read role.write chat.play`：包含身分／信箱、私有智慧體設定與 Lorebook 的讀取、設定寫入，以及會消耗 credits 的對話。這次不增加 scope，也不擴大既有 API 的 ownership、計費或審核權限。LunaTalk 沿用其既有預設 scope。
+權限仍以供應商同意頁為準。HarperHarbor 申請 `profile.read profile.write email.read role.read role.write chat.play referral`：包含身分／信箱、私有智慧體設定與 Lorebook 的讀取、設定寫入、會消耗 credits 的對話與推薦碼。`profile.write` 只用來把本站的顯示名稱寫回 HarperHarbor，當作使用者在本站這個應用裡的暱稱（改名時與登入發現不一致時各寫一次）；它不改使用者在其他應用的暱稱。舊授權沒有這一項時寫回會被拒，使用者重新授權後才補上。啟用前，HarperHarbor 上本站的固定客戶端必須先登記 `profile.write`，否則授權請求會因超出客戶端範圍被拒。LunaTalk 沿用其既有預設 scope。
 
 長期保留連結不等於永久有效 token。HarperHarbor 目前預設 access token 8 小時、refresh token 30 天滾動換發；由供應商配置決定，本站不覆寫期限。本站 session 有 30 天閒置及 180 天絕對上限。持續使用時由後端換發；被撤銷、長期未使用、或無法安全判斷 refresh 是否已消耗時，仍可能需要重新授權。
 
