@@ -1,4 +1,4 @@
-import { accountAuthRoutes, accountAuthMaintenance } from './account-auth';
+import { accountAuthRoutes, accountAuthMaintenance, syncNickname } from './account-auth';
 import { snapshot } from './snapshot-cache';
 import { cardLink, linkPreview } from './card-link';
 import { boardKey, readBoardCache, writeBoardCache } from "./board-cache";
@@ -737,6 +737,9 @@ app.delete('/v1/me/connections/:provider',()=>{throw new HttpError(410,'service_
 app.put("/v1/me/profile", bodyLimit({maxSize: AVATAR_MAX_BYTES + 16384, onError: c => c.json({error:"avatar_invalid"},400)}), async c => {
   const member = await requireMember(c);
   const profile = await saveCommunityProfile(c.env, member.id, c.req.raw);
+  // 本站是暱稱的來源：改名後寫回 Harbor，控制台的「我的用戶」才看得到名字。
+  const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1];
+  if (member.provider === "harbor" && bearer && profile?.displayName) syncNickname(c, bearer, profile.displayName);
   return c.json({...profile, reviewer: await isReviewer(c.env.DB, member.id)}, 200, {"Cache-Control":"no-store"});
 });
 

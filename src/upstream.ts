@@ -49,6 +49,28 @@ async function fetchMe(env: Env, bearer: string, provider: ProviderId = DEFAULT_
   return { accountNumId, ...(typeof body.avatar === "string" ? {avatar: body.avatar} : {}), ...(typeof body.nickName === "string" ? {nickName: body.nickName} : {}) };
 }
 
+/**
+ * 把本站的顯示名稱寫回供應商，當作使用者在本站這個應用裡的暱稱（本站是暱稱的來源）。
+ *
+ * 只有 HarperHarbor 有這個接口，而且要使用者授權過 profile.write：舊授權沒有這項會被拒，
+ * 重新授權之後才寫得進去。用的是使用者自己的 token，不落庫、不進日誌。回結果給呼叫端記指標。
+ */
+async function setNickname(env: Env, bearer: string, provider: ProviderId, name: string): Promise<"ok" | "denied" | "failed"> {
+  if (provider !== "harbor") return "failed";
+  try {
+    const res = await fetch(apiUrl(env, provider, "/open/v1/me"), {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${bearer}`, "Content-Type": "application/json", "User-Agent": UA },
+      body: JSON.stringify({ nickName: name.trim().slice(0, 60) }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (res.ok) return "ok";
+    return res.status === 401 || res.status === 403 ? "denied" : "failed";
+  } catch {
+    return "failed";
+  }
+}
+
 /** 語區：榜單按這個分開列。all 是來源標成「不分語言」的卡，每區都出現。 */
 export type Zone = "zh" | "en" | "ja" | "ko";
 export const ZONES: readonly Zone[] = ["zh", "en", "ja", "ko"];
@@ -353,5 +375,5 @@ async function setFeatured(env: Env, bearer: string, roleId: string, featured: b
 }
 
 
-export const upstream = { fetchMe, fetchRole, fetchMyRoles, fetchContentHashes, readForReview, readSealedForReview, fetchCommunityStatus, setFeatured };
+export const upstream = { fetchMe, setNickname, fetchRole, fetchMyRoles, fetchContentHashes, readForReview, readSealedForReview, fetchCommunityStatus, setFeatured };
 export type Upstream = typeof upstream;

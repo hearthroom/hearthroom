@@ -27,3 +27,16 @@ it('shows the community profile on public cards and the author page',async()=>{
  const author=await (await SELF.fetch('https://c.test/v1/authors/'+profile.handle)).json() as any;
  expect(author.name).toBe('Community author');
 });
+// 社群站是暱稱的來源：改了顯示名稱就寫回 HarperHarbor，控制台的「我的用戶」才看得到名字。
+// 寫回失敗不影響本站存檔。
+it('writes the new display name back to Harbor without blocking the save',async()=>{
+ await me();
+ const push=vi.spyOn(upstream,'setNickname').mockResolvedValue('ok');
+ const r=await SELF.fetch('https://c.test/v1/me/profile',{method:'PUT',headers:{...bearer('valid'),'X-Provider':'harbor','Content-Type':'application/json'},body:JSON.stringify({displayName:'  Night ferry  ',bio:''})});
+ expect(r.status).toBe(200);
+ expect(push).toHaveBeenCalledWith(expect.anything(),'valid','harbor','Night ferry');
+ push.mockClear();push.mockRejectedValue(new Error('upstream down'));
+ const again=await SELF.fetch('https://c.test/v1/me/profile',{method:'PUT',headers:{...bearer('valid'),'X-Provider':'harbor','Content-Type':'application/json'},body:JSON.stringify({displayName:'Another',bio:''})});
+ expect(again.status).toBe(200);
+ expect((await me()).displayName).toBe('Another');
+});
