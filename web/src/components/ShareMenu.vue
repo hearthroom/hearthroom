@@ -29,6 +29,8 @@ const open = ref(false);
 const up = ref(false);
 /** 那一邊能給的高度。上下都不夠時挑大的那邊，面板自己捲——寧可捲，也不要有一條看不到也按不到的項目 */
 const maxH = ref(0);
+/** 往右挪回畫面裡的距離：面板靠按鈕右緣對齊，按鈕離左邊太近時這樣會把它推出畫面外 */
+const shift = ref(0);
 const copied = ref(false);
 const root = ref<HTMLElement | null>(null);
 const panel = ref<HTMLElement | null>(null);
@@ -115,6 +117,9 @@ function place() {
   up.value = below < wanted && above > below;
   // 不留人為下限：兩邊都很擠的時候寧可面板變矮自己捲，也不要長到頁首或視窗外面去
   maxH.value = Math.max(0, up.value ? above : below);
+  // 卡片頁的側欄貼著畫面左邊：面板右緣對齊按鈕時，左緣會探出畫面。差多少就往右挪多少。
+  const panelW = el ? el.offsetWidth : 216;
+  shift.value = Math.max(0, 12 - (box.right - panelW));
 }
 
 function close(focusBack = false) {
@@ -177,7 +182,7 @@ onBeforeUnmount(() => {
     </button>
 
     <!-- 非模態：Tab 走得出去、點外面就收，不裝成對話框 -->
-    <div v-if="open" ref="panel" class="sh__panel panel" :class="{ 'sh__panel--up': up }" :style="{ '--sh-max': maxH + 'px' }" role="group" :aria-label="$t('card.share')">
+    <div v-if="open" ref="panel" class="sh__panel panel" :class="{ 'sh__panel--up': up }" :style="{ '--sh-max': maxH + 'px', '--sh-shift': shift + 'px' }" role="group" :aria-label="$t('card.share')">
       <button type="button" class="sh__item" :class="{ 'is-done': copied }" @click="copy">
         <span class="sh__icon" aria-hidden="true">
           <svg v-if="copied" viewBox="0 0 24 24"><path d="M5 12.5 9.5 17 19 7.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></svg>
@@ -226,7 +231,7 @@ onBeforeUnmount(() => {
 .sh__btn svg { width: 18px; height: 18px; }
 
 .sh__panel {
-  position: absolute; top: calc(100% + 8px); right: 0; z-index: 40;
+  position: absolute; top: calc(100% + 8px); right: calc(0px - var(--sh-shift, 0px)); z-index: 40;
   transform-origin: top right;
   width: 216px; padding: 6px;
   max-height: var(--sh-max, none); overflow-y: auto; overscroll-behavior: contain;

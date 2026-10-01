@@ -107,6 +107,7 @@ afterEach(() => {
   // 量版面的那幾個假動作會留在原型上，不收掉會污染後面的案例
   vi.restoreAllMocks();
   delete (HTMLElement.prototype as Partial<HTMLElement>).scrollHeight;
+  delete (HTMLElement.prototype as Partial<HTMLElement>).offsetWidth;
   document.documentElement.style.removeProperty("--header-h");
 });
 
@@ -193,13 +194,15 @@ describe("卡片頁的分享面板", () => {
     expect(items.length).toBe(5);
   });
 
-  /** 按鈕在畫面上的位置，決定面板往哪邊開。jsdom 量不出版面，這裡直接給答案。 */
-  function pretendButtonAt(top: number, height = 44, contentHeight = 232) {
+  /** 按鈕在畫面上的位置，決定面板往哪邊開、要不要往右挪。jsdom 量不出版面，這裡直接給答案。 */
+  function pretendButtonAt(top: number, height = 44, contentHeight = 232, right = 44) {
     vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
-      top, bottom: top + height, left: 0, right: 44, width: 44, height, x: 0, y: top, toJSON: () => ({}),
+      top, bottom: top + height, left: right - 44, right, width: 44, height, x: right - 44, y: top, toJSON: () => ({}),
     } as DOMRect);
     Object.defineProperty(HTMLElement.prototype, "scrollHeight", { get: () => contentHeight, configurable: true });
+    Object.defineProperty(HTMLElement.prototype, "offsetWidth", { get: () => 216, configurable: true });
     vi.stubGlobal("innerHeight", 768);
+    vi.stubGlobal("innerWidth", 1024);
     // 頁首浮在內容上，高度是站上的一個變數：往上開要讓開它
     document.documentElement.style.setProperty("--header-h", "60px");
   }
@@ -236,6 +239,29 @@ describe("卡片頁的分享面板", () => {
     const p = root.querySelector(".sh__panel") as HTMLElement;
     expect(p.className).toContain("sh__panel--up");
     expect(Number.parseInt(p.style.getPropertyValue("--sh-max"), 10)).toBe(328);
+  });
+
+  it("按鈕貼著畫面左邊時，面板往右挪回畫面裡", async () => {
+    pretendDevice(false, 0);
+    // 卡片頁的側欄就在畫面左邊：按鈕右緣只到 44，面板 216 寬，對齊右緣會讓左緣掉到 -172
+    pretendButtonAt(100, 44, 232, 44);
+    await fetchBoard();
+    const root = await mountCard();
+    await openPanel(root);
+
+    const p = root.querySelector(".sh__panel") as HTMLElement;
+    expect(p.style.getPropertyValue("--sh-shift"), "挪到左緣離畫面邊 12px").toBe("184px");
+  });
+
+  it("按鈕本來就離左邊夠遠時不要亂挪", async () => {
+    pretendDevice(false, 0);
+    pretendButtonAt(100, 44, 232, 800);
+    await fetchBoard();
+    const root = await mountCard();
+    await openPanel(root);
+
+    const p = root.querySelector(".sh__panel") as HTMLElement;
+    expect(p.style.getPropertyValue("--sh-shift")).toBe("0px");
   });
 
   it("按 Esc 收起面板", async () => {
