@@ -2,7 +2,6 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute, useRouter } from "vue-router";
-import AdultToggle from "@/components/AdultToggle.vue";
 import DownloadBanner from "@/components/DownloadBanner.vue";
 import FollowFeed from "@/components/FollowFeed.vue";
 import CardGrid from "@/components/CardGrid.vue";
@@ -176,7 +175,7 @@ function navigate(patch: Record<string, string | string[] | undefined>) {
   router.push({ query });
 }
 /** 換榜的時候排序鍵不通用，一起清掉。 */
-const switchMode = (m: "cards" | "following") => navigate({ mode: m === "following" ? "following" : undefined, sort: undefined, tag: undefined });
+const switchMode = (m: "following") => navigate({ mode: m, sort: undefined, tag: undefined });
 
 watch([() => route.query, locale], load, { immediate: true });
 // 開關改了要重讀。身分第一次載好（undefined → 值）時，第一屏多半已經照帳號開關讀好了
@@ -198,26 +197,20 @@ watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (no
     <h1 class="sr-only">{{ $t("site.tagline") }}</h1>
     <DownloadBanner />
 
-    <div class="bar">
-      <!-- 左邊選看哪個榜（旁邊是 R18 開關，窄螢幕它推到同一行的最右），右邊選怎麼排 -->
-      <div class="bar__lead">
-        <div class="seg seg--mode">
-          <button class="seg__item" :class="{ 'seg__item--on': mode === 'cards' }" :aria-pressed="mode === 'cards'" @click="switchMode('cards')">{{ $t("board.mode.cards") }}</button>
-          <button class="seg__item" :class="{ 'seg__item--on': mode === 'following' }" :aria-pressed="mode === 'following'" @click="switchMode('following')">{{ $t("library.feed") }}</button>
-        </div>
-        <AdultToggle v-if="mode === 'cards'" />
-      </div>
-
-      <div v-if="mode === 'cards'" class="sorts" role="group" :aria-label="$t('board.sorts')">
-        <button v-for="s in SORTS" :key="s" class="sorts__item" :class="{ 'sorts__item--on': shownSort === s }" :aria-pressed="shownSort === s" @click="navigate({ sort: s })">
-          {{ $t(`board.sort.${s}`) }}
-        </button>
-      </div>
-
+    <!--
+      一列解決「看哪個榜」與「怎麼排」：六個排序在左，最右一顆「關注」是另一個榜（關注作者的新卡），
+      不是排法——選中它時六個排序全部不亮。原本的分段控制與 R18 開關各佔一列，手機上第一屏只剩兩張卡（成員意見，owner 2026-10-02）；
+      R18 開關搬進頁首（App.vue）。
+    -->
+    <div class="sorts" role="group" :aria-label="$t('board.sorts')">
+      <button v-for="s in SORTS" :key="s" class="sorts__item" :class="{ 'sorts__item--on': mode === 'cards' && shownSort === s }" :aria-pressed="mode === 'cards' && shownSort === s" @click="navigate({ mode: undefined, sort: s })">
+        {{ $t(`board.sort.${s}`) }}
+      </button>
+      <button class="sorts__item sorts__mode" :class="{ 'sorts__item--on': mode === 'following' }" :aria-pressed="mode === 'following'" @click="switchMode('following')">{{ $t("board.mode.following") }}</button>
     </div>
 
-    <!-- 類型列：固定的一排（照魅魔島），鍵進網址、名字跟介面語言走。摺成幾行，全部看得到 -->
-    <DiscoveryTags v-if="mode === 'cards'" :selected="tags" :hidden="hidden" scroll @change="navigate({ tag: $event.length ? $event : undefined })" />
+    <!-- 類型列：固定的一排（照魅魔島），鍵進網址、名字跟介面語言走。寬螢幕摺成幾行全部看得到；窄螢幕收成兩行，點開才全展 -->
+    <DiscoveryTags v-if="mode === 'cards'" :selected="tags" :hidden="hidden" collapsible @change="navigate({ tag: $event.length ? $event : undefined })" />
 
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
 
@@ -250,16 +243,8 @@ watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (no
 </template>
 
 <style scoped>
-.bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3); margin-bottom: var(--s-3); }
-.seg--mode .seg__item { padding: 0 16px; }
-.bar__lead { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); }
-@media (max-width: 640px) {
-  .bar__lead { width: 100%; }
-  .bar__lead :deep(.r18) { margin-left: auto; }
-}
-
-/* 排序做成細字頁籤，跟左邊的分段控制拉開層級：一個是「看哪個榜」，一個是「怎麼排」 */
-.sorts { display: flex; gap: 2px; }
+/* 排序做成細字頁籤；最右那顆「關注」字重重一點、推到最右，跟排序拉開：一個是「看哪個榜」，一個是「怎麼排」。擠不下就換行，不裁字 */
+.sorts { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-bottom: var(--s-3); }
 .sorts__item {
   height: var(--h-sm); padding: 0 10px; border: 0; border-radius: var(--r-pill);
   background: transparent; font-size: 13px; font-weight: 500; color: var(--text-3); cursor: pointer;
@@ -267,6 +252,10 @@ watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (no
 }
 .sorts__item:hover { color: var(--text); }
 .sorts__item--on { color: var(--accent-text); background: var(--accent-tint); }
+.sorts__mode { margin-left: auto; font-weight: 600; color: var(--text-2); }
+.sorts__mode.sorts__item--on { color: var(--accent-text); }
+/* 360px 的 Android：六個排序加「關注」是 334px，內容區只有 328px，差 6px 就要多一整行——把每顆的左右內距收 2px */
+@media (max-width: 400px) { .sorts__item { padding: 0 8px; } }
 
 .count { margin-bottom: var(--s-3); font-variant-numeric: tabular-nums; }
 .ghosts { display: grid; gap: 6px; }
