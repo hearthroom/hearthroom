@@ -1,5 +1,6 @@
 /**
- * 首頁榜單上的 R18 開關，整條路走一遍：真的 session store、真的 api 客戶端、假的 fetch。
+ * 首頁的 R18 開關，整條路走一遍：真的 session store、真的 api 客戶端、假的 fetch。
+ * 開關住在頁首（App.vue 只在首頁畫它），榜單頁靠同一份 session 重讀——這裡把兩個元件並排掛起來，照正式站的關係。
  *   - 訪客看不到開關；
  *   - 沒驗過年齡：點下去先開聲明窗，要勾同意、填出生日期，這時候什麼都不送；送出才打開，榜單帶 ?nsfw=1 與 token 重讀；
  *   - 驗過年齡但沒同意目前這一版聲明：聲明窗只要勾同意，不再問生日；
@@ -24,6 +25,7 @@ vi.mock("moonstage/stage", () => ({}));
 vi.mock("moonstage/stage.css", () => ({}));
 
 import BoardPage from "../src/pages/BoardPage.vue";
+import AdultToggle from "../src/components/AdultToggle.vue";
 import { useSession } from "../src/lib/session";
 import { ADULT_CONSENT_VERSION } from "../../shared/adult-consent";
 
@@ -64,7 +66,7 @@ async function mountBoard() {
   setActivePinia(pinia);
   const session = useSession();
   await session.restore();
-  app = createApp({ template: "<RouterView />" });
+  app = createApp({ components: { AdultToggle }, template: "<AdultToggle /><RouterView />" });
   app.use(pinia).use(router).use(i18n);
   await router.push("/");
   await router.isReady();
