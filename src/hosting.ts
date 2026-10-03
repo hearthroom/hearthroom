@@ -6,6 +6,7 @@ import { pendingSubmissionOf } from './review';
 import { encodeSnapshot, reviewRecord } from './review-snapshot';
 import { indexStatements } from './originality';
 import { buildSearchBody, buildSearchName, buildSearchText, projectRole, upstream, type UpstreamRole } from './upstream';
+import { fandomKey, normalizeFandom } from './fandom';
 
 interface Receipt { workId: string; versionId: string; hostedRevisionId: string }
 interface VersionRow {
@@ -59,7 +60,7 @@ const receiptOf=(r:VersionRow):Receipt=>({workId:r.work_id,versionId:r.version_i
 // Called before the editor writes any part of a draft. Retire the old review
 // first so a reviewer holding its snapshot cannot publish it during the save.
 // Keep the obligation durable across partial saves and browser/network failures.
-export async function beginHostedEdit(db:D1Database,memberId:string,roleId:string,now:number,provider:ProviderId='harbor'):Promise<{resubmit:boolean;nsfw?:boolean}> {
+export async function beginHostedEdit(db:D1Database,memberId:string,roleId:string,now:number,provider:ProviderId='harbor'):Promise<{resubmit:boolean;nsfw?:boolean;fandom?:string}> {
  await adoptRetiredWork(db,provider,roleId);
  const work=await db.prepare("SELECT id,member_id FROM works WHERE source_provider=? AND source_role_id=?").bind(provider,roleId).first<{id:string;member_id:string}>();
  if(!work)return {resubmit:false};
@@ -69,14 +70,16 @@ export async function beginHostedEdit(db:D1Database,memberId:string,roleId:strin
   db.prepare("DELETE FROM review_snapshots WHERE submission_id IN (SELECT s.id FROM review_submissions s JOIN hosting_versions v ON v.submission_id=s.id WHERE v.work_id=? AND s.status='superseded')").bind(work.id),
   db.prepare("UPDATE cards SET status='needs_review' WHERE approved_version_id IS NULL AND id IN (SELECT card_id FROM hosting_versions WHERE work_id=? AND state='superseded')").bind(work.id),
  ]);
- const latest=await db.prepare('SELECT state,nsfw FROM hosting_versions WHERE work_id=? AND submission_id IS NOT NULL ORDER BY created_at DESC,rowid DESC LIMIT 1').bind(work.id).first<{state:string;nsfw:number}>();
- return latest?.state==='superseded'?{resubmit:true,nsfw:latest.nsfw===1}:{resubmit:false};
+ const latest=await db.prepare("SELECT state,nsfw,COALESCE(json_extract(public_role,'$.fandom'),'') AS fandom FROM hosting_versions WHERE work_id=? AND submission_id IS NOT NULL ORDER BY created_at DESC,rowid DESC LIMIT 1").bind(work.id).first<{state:string;nsfw:number;fandom:string}>();
+ // 原作跟著上一版走：作者改卡重送時不必再填一次
+ return latest?.state==='superseded'?{resubmit:true,nsfw:latest.nsfw===1,...(latest.fandom?{fandom:latest.fandom}:{})}:{resubmit:false};
 }
 
 // Persist the issuer's operation before contacting the host: a lost HTTP reply can
 // resume the same seal without reading a later draft or creating another version.
-export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:string;account:number;role:UpstreamRole;token:string;nsfw:boolean;operationId:string;now:number;packId?:string|null}):Promise<Receipt>{
+export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:string;account:number;role:UpstreamRole;token:string;nsfw:boolean;/** 原作；沒給或空字串＝沒有。同一個 operation 重試時以第一次送的為準。 */fandom?:string;operationId:string;now:number;packId?:string|null}):Promise<Receipt>{
  const db=env.DB;
+ const fandom=normalizeFandom(input.fandom)??'';
  const provider=input.provider??'harbor';
  if(input.role.authorNumId!==input.account)throw new HttpError(403,'not the author of this card');
  const existingOperation=()=>db.prepare('SELECT * FROM hosting_versions WHERE member_id=? AND operation_id=?').bind(input.memberId,input.operationId).first<VersionRow>();
@@ -114,7 +117,7 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  const packedSnapshot=await encodeSnapshot(reviewRecord(settings));
  const snapshot=db.prepare('INSERT INTO review_snapshots(submission_id,detail,created_at) SELECT ?,?,? WHERE EXISTS(SELECT 1 FROM review_submissions WHERE id=?)').bind(submissionId,packedSnapshot,input.now,submissionId);
  const finalize=(cardId:string):D1PreparedStatement[]=>[
-   db.prepare("UPDATE hosting_versions SET hosted_revision_id=?,card_id=?,submission_id=?,public_role=?,state='pending' WHERE version_id=? AND submission_id IS NULL").bind(receipt.hostedRevisionId,cardId,submissionId,JSON.stringify({...sealed,searchName:buildSearchName(sealed),searchText:buildSearchText(sealed),searchBody:buildSearchBody(sealed)}),version!.version_id),
+   db.prepare("UPDATE hosting_versions SET hosted_revision_id=?,card_id=?,submission_id=?,public_role=?,state='pending' WHERE version_id=? AND submission_id IS NULL").bind(receipt.hostedRevisionId,cardId,submissionId,JSON.stringify({...sealed,fandom,fandomKey:fandomKey(fandom),searchName:buildSearchName({...sealed,fandom}),searchText:buildSearchText(sealed),searchBody:buildSearchBody(sealed)}),version!.version_id),
    db.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,content_hash,submitted_at,nsfw) SELECT ?,?,?,?,?,'pending',?,?,? WHERE EXISTS(SELECT 1 FROM hosting_versions WHERE version_id=? AND submission_id=?)")
     .bind(submissionId,cardId,provider,receipt.hostedRevisionId,existing?.approved_version_id?'re':'first','version:'+receipt.versionId,input.now,Number(input.nsfw),version!.version_id,submissionId),
    db.prepare("INSERT OR IGNORE INTO hosting_replicas(version_id,provider,source_role_id,hosted_revision_id,state,created_at) SELECT version_id,provider,source_role_id,hosted_revision_id,'ready',created_at FROM hosting_versions WHERE version_id=? AND submission_id=?").bind(version!.version_id,submissionId),

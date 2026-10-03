@@ -4,7 +4,8 @@ import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import AuthorList from "@/components/AuthorList.vue";
 import CardGrid from "@/components/CardGrid.vue";
-import { fetchAuthors, fetchBoard, fetchTags, searchTags } from "@/lib/api";
+import { fetchAuthors, fetchBoard, fetchFandoms, fetchTags, searchTags } from "@/lib/api";
+import SearchSuggest from "@/components/SearchSuggest.vue";
 import { contentLang, defaultZone, pageTitle } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
@@ -23,7 +24,7 @@ const { t } = useI18n();
 const q = computed(() => (typeof route.query.q === "string" ? route.query.q.trim() : ""));
 const draft = ref(q.value);
 /* 焦點自己接：換頁後 router 會先把焦點放到 main，瀏覽器的 autofocus 就不生效了 */
-const box = ref<HTMLInputElement | null>(null);
+const box = ref<InstanceType<typeof SearchSuggest> | null>(null);
 onMounted(() => { void nextTick(() => box.value?.focus()); });
 /** 預設搜目前語言那一區；明說 all 才跨語區。 */
 const allZones = computed(() => route.query.zone === "all");
@@ -32,6 +33,8 @@ const offset = computed(() => Number(route.query.offset ?? 0) || 0);
 const zone = computed(() => (allZones.value ? "all" : defaultZone(locale.value)));
 
 const selected = computed(() => selectedTags(route.query.tag));
+/** 原作篩選（卡片頁的原作連結、建議清單、熱門原作都走這裡） */
+const fandom = computed(() => (typeof route.query.fandom === "string" ? route.query.fandom.trim() : ""));
 const filtersOpen = ref(false);
 const PERIODS = ["all", "week", "month", "quarter", "year"];
 const period = computed(() => typeof route.query.period === "string" && PERIODS.includes(route.query.period) ? route.query.period : "all");
@@ -47,7 +50,7 @@ const sort = computed(() => {
 const voucher = computed(() => /^HH[A-Z2-7]{32}$/.test(q.value.toUpperCase().replace(/[-\s]/g, "")));
 const WALLET_URL = "https://console.harperharbor.com/me/wallet";
 const adultOff = computed(() => !!session.me && !!session.profile && !session.profile.showNsfw && cards.value?.adult === false);
-const hasQuery = computed(() => !!q.value || selected.value.length > 0 || kind.value !== "cards" || period.value !== "all" || route.query.sort !== undefined);
+const hasQuery = computed(() => !!q.value || !!fandom.value || selected.value.length > 0 || kind.value !== "cards" || period.value !== "all" || route.query.sort !== undefined);
 const tagResults = ref<TagPage | null>(null);
 const selectedLabel = (tag: string) => { const entry = TAG_CATALOG.find(x => x.key === tag); return entry ? tagLabel(entry, locale.value) : tag; };
 const cards = ref<CardPage | null>(null);
@@ -56,6 +59,7 @@ const loading = ref(false);
 const error = ref("");
 /** 沒輸入字時給人一排熱門類型當起點；結果很少時底下接一排熱門卡，畫面不會只剩一張卡配一片空白 */
 const tags = ref<{ tag: string; n: number }[]>([]);
+const fandoms = ref<{ fandom: string; n: number }[]>([]);
 const hot = ref<CommunityCard[]>([]);
 
 let loadId = 0;
@@ -68,7 +72,7 @@ async function load() {
   try {
     // 三種結果一起抓，分頁數字維持同一組關鍵字與語區。
     const [c, a, tg] = await Promise.all([
-      fetchBoard({ zone: zone.value, q: q.value, tag: selected.value, period: period.value, sort: sort.value, offset: kind.value === "cards" ? offset.value : 0, lang: contentLang(locale.value) }),
+      fetchBoard({ zone: zone.value, q: q.value, tag: selected.value, fandom: fandom.value || undefined, period: period.value, sort: sort.value, offset: kind.value === "cards" ? offset.value : 0, lang: contentLang(locale.value) }),
       fetchAuthors({ zone: zone.value, q: q.value, offset: kind.value === "authors" ? offset.value : 0 }),
       searchTags(zone.value, q.value, kind.value === "tags" ? offset.value : 0),
     ]);
@@ -85,11 +89,13 @@ async function load() {
 }
 async function loadSide() {
   const z = defaultZone(locale.value);
-  const [tg, hb] = await Promise.all([
+  const [tg, fd, hb] = await Promise.all([
     fetchTags(z).catch(() => []),
+    fetchFandoms(z).catch(() => []),
     fetchBoard({ zone: z, sort: "hot", limit: 4, lang: contentLang(locale.value) }).then((b) => b.items).catch(() => []),
   ]);
   tags.value = tg.slice(0, 12);
+  fandoms.value = fd.slice(0, 12);
   hot.value = hb;
 }
 
@@ -115,6 +121,7 @@ function submit() {
   navigate({ q });
 }
 function searchTag(tag: string) { navigate({ kind: undefined, q: undefined, tag: [tag] }); }
+function searchFandom(name: string) { navigate({ kind: undefined, q: undefined, fandom: name }); }
 
 /** 結果數不確定（有篩選又還有下一頁）時只說「這一頁以上」，不假裝知道總數 */
 const countLabel = (page: { total: number | null; hasNext: boolean; limit: number; items: unknown[] } | null | undefined) => {
@@ -145,7 +152,7 @@ watch(q, (v) => { draft.value = v; });
         <circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.7" />
         <path d="M12.8 12.8 17 17" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
       </svg>
-      <input ref="box" v-model="draft" class="search__input" type="search" :placeholder="$t('search.placeholder')" :aria-label="$t('search.title')" enterkeyhint="search" />
+      <SearchSuggest ref="box" v-model="draft" input-class="search__input" :placeholder="$t('search.placeholder')" :label="$t('search.title')" @submit="submit" />
       </div>
       <button class="btn btn--primary btn--lg search__go" type="submit">{{ $t("board.search.submit") }}</button>
     </form>
@@ -186,6 +193,10 @@ watch(q, (v) => { draft.value = v; });
         <p class="muted">{{ $t('search.matchAll') }}</p>
         <DiscoveryTags :selected="selected" :hidden="hidden" @change="navigate({ tag: $event.length ? $event : undefined })" />
       </div>
+      <div v-if="kind === 'cards' && fandom" class="search__selected">
+        <span class="subtle">{{ $t("card.fandom") }}</span>
+        <button class="tagchip is-on" data-fandom-chip @click="navigate({ fandom: undefined })">{{ fandom }} <span aria-hidden="true">×</span></button>
+      </div>
       <div v-if="kind === 'cards' && selected.length && !filtersOpen" class="search__selected">
         <button v-for="tag in selected" :key="tag" class="tagchip" @click="navigate({ tag: toggleTag(selected, tag) })">{{ selectedLabel(tag) }} <span aria-hidden="true">×</span></button>
         <button class="btn btn--sm" @click="navigate({ tag: undefined })">{{ $t('search.clear') }}</button>
@@ -209,7 +220,7 @@ watch(q, (v) => { draft.value = v; });
           :loading="loading && !cards"
           :busy="loading"
           :show-zone="allZones"
-          :empty-title="q ? $t('search.empty', { q }) : $t('board.empty.search.title')"
+          :empty-title="q || fandom ? $t('search.empty', { q: q || fandom }) : $t('board.empty.search.title')"
           :empty-hint="$t('board.empty.search.hint')"
         />
         <nav v-if="cards && (cards.offset > 0 || cards.hasNext)" class="pager">
@@ -256,11 +267,17 @@ watch(q, (v) => { draft.value = v; });
           <button v-for="x in tags" :key="x.tag" class="tagchip" @click="searchTag(x.tag)">{{ x.tag }}<span class="tagchip__n">{{ x.n }}</span></button>
         </div>
       </section>
+      <section v-if="fandoms.length" class="zero" data-fandoms>
+        <h2 class="also__title">{{ $t("search.fandoms") }}</h2>
+        <div class="zero__tags">
+          <button v-for="x in fandoms" :key="x.fandom" class="tagchip" @click="searchFandom(x.fandom)">{{ x.fandom }}<span class="tagchip__n">{{ x.n }}</span></button>
+        </div>
+      </section>
       <section v-if="hot.length" class="also">
         <h2 class="also__title">{{ $t("search.alsoHot") }}</h2>
         <CardGrid :cards="hot" />
       </section>
-      <p v-if="!tags.length && !hot.length" class="muted search__hint">{{ $t("search.hint") }}</p>
+      <p v-if="!tags.length && !fandoms.length && !hot.length" class="muted search__hint">{{ $t("search.hint") }}</p>
     </template>
   </div>
 </template>
@@ -270,16 +287,21 @@ watch(q, (v) => { draft.value = v; });
 .page--search { max-width: 1100px; }
 .search__form { position: relative; display: flex; gap: var(--s-2); margin-bottom: var(--s-4); }
 .search__icon { position: absolute; left: 16px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%); color: var(--text-3); pointer-events: none; }
-.search__input {
+/* 輸入框住在 SearchSuggest 裡：scoped 規則要用 :deep 才打得到 */
+.search__field :deep(.search__input) {
   width: 100%; min-width: 0; height: var(--h-lg); padding: 0 var(--s-4) 0 46px;
   font: inherit; font-size: 16px; color: var(--text);
   background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r-pill);
   box-shadow: var(--shadow-sm);
   transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
-.search__input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.search__input::-webkit-search-cancel-button { -webkit-appearance: none; }
+.search__field :deep(.search__input):focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.search__field :deep(.search__input)::-webkit-search-cancel-button { -webkit-appearance: none; }
 .search__go { flex: none; }
+/* 窄螢幕上輸入框只剩中間一截：建議清單撐到整個版面寬，不然只有兩百多 px，卡名會被截掉 */
+@media (max-width: 640px) {
+  .search__field :deep(.suggest__list) { left: 50%; right: auto; width: calc(100vw - 32px); max-width: 520px; transform: translateX(-50%); }
+}
 .search__field { position: relative; flex: 1; min-width: 0; }
 .search__filter { gap: var(--s-2); }
 .search__filter svg { width: 1.15em; height: 1.15em; }

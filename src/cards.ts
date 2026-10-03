@@ -1,7 +1,7 @@
 import type { ProviderId } from "./providers";
 import type { UpstreamRole, Zone } from "./upstream";
 import { buildSearchBody, buildSearchName, buildSearchText } from "./upstream";
-import { expandTerm, hanziGlob, searchTerms } from "./search-text";
+import { expandTerm, hanziGlob, searchForm, searchTerms } from "./search-text";
 import { HttpError, type Localized, pickLocale } from "./types";
 
 export interface CardRow {
@@ -43,6 +43,9 @@ export interface CardRow {
   nsfw: number;
   /** 永久卡號，從 100001 起跳。私有卡也會分配，發布或撤銷不換號；0037 起同時是 cards 主鍵。 */
   num?: number | null;
+  /** 原作（0045 起）：作者宣告、審核人可改的作品名；fandom_key 是它的搜尋正規形，篩選與分組用。 */
+  fandom?: string;
+  fandom_key?: string;
 }
 
 /**
@@ -90,6 +93,8 @@ export function toCard(row: CardRow, lang: string) {
     backgroundUrl: row.background_url,
     slug: row.slug,
     tags: JSON.parse(row.tags) as string[],
+    /** 原作：改編或致敬的作品名；空字串＝沒有 */
+    fandom: row.fandom ?? "",
     author: {
       handle: row.author_handle ?? null,
       accountNumId: row.author_num_id,
@@ -160,6 +165,8 @@ export interface ListOptions {
   tagGroups?: string[][];
   /** 看的人不想看的標籤名字們（類型鍵展開後）；任一命中就不列。 */
   excludeTags?: string[];
+  /** 原作：寫法不拘（繁簡、大小寫、別名都算同一個） */
+  fandom?: string;
   /** 作者頁：這個成員（本站 id）的卡 */
   authorMemberId?: string;
   favoritedBy?: string;
@@ -265,6 +272,11 @@ export async function listCards(db: D1Database, opts: ListOptions) {
     where.push(excludeClause("c"));
     binds.push(JSON.stringify(opts.excludeTags));
   }
+  if (opts.fandom) {
+    // 原作用鍵比，別名展開成一組：「星鐵」「崩鐵」「星穹鐵道」篩出同一批
+    where.push("c.fandom_key IN (SELECT value FROM json_each(?))");
+    binds.push(JSON.stringify(expandTerm(searchForm(opts.fandom))));
+  }
   if (opts.since !== undefined) {
     // 日／週／月榜：只看上榜時間在窗口內的卡（owner 2026-09-07：時間是卡片上榜的那一刻）
     where.push("c.registered_at + COALESCE((SELECT SUM(milliseconds) FROM moderation_compensation mc WHERE mc.provider=c.provider AND mc.source_role_id=c.source_role_id AND mc.board=?),0) >= ?");
@@ -284,7 +296,7 @@ export async function listCards(db: D1Database, opts: ListOptions) {
     where.push("EXISTS (SELECT 1 FROM member_follows f WHERE f.author_id=am.id AND f.member_id=?)");
     binds.push(opts.followedBy);
   }
-  const filtered = Boolean(opts.favoritedBy !== undefined || opts.followedBy !== undefined || opts.q || opts.tags?.length || opts.tagGroups?.length || opts.authorMemberId !== undefined || opts.since !== undefined);
+  const filtered = Boolean(opts.favoritedBy !== undefined || opts.followedBy !== undefined || opts.q || opts.fandom || opts.tags?.length || opts.tagGroups?.length || opts.authorMemberId !== undefined || opts.since !== undefined);
 
   // hot 用「這個同步窗口的對話增量」，不是累積數——累積數等於 top，排出來永遠是老卡。
   // 三種排序都對應一個索引，沒有一種需要現算。相關度見 searchClause；沒有搜尋字就退回 hot。
@@ -540,9 +552,9 @@ export async function unregister(db: D1Database, roleId: string, authorNumId: nu
 /** 排程同步挑最久沒更新的一批。帶著審核狀態與已過審的內容版本，同步順手比對內容有沒有變。 */
 export async function dueForSync(db: D1Database, limit: number) {
   const rows = await db
-    .prepare("SELECT id, source_role_id, talk_num, provider, status, reviewed_hash, approved_version_id, approved_hosted_role_id FROM cards WHERE provider='harbor' ORDER BY last_synced_at ASC LIMIT ?")
+    .prepare("SELECT id, source_role_id, talk_num, provider, status, reviewed_hash, approved_version_id, approved_hosted_role_id, fandom FROM cards WHERE provider='harbor' ORDER BY last_synced_at ASC LIMIT ?")
     .bind(limit)
-    .all<{ id: string; source_role_id: string; talk_num: number; provider: string; status: string; reviewed_hash: string; approved_version_id: string|null; approved_hosted_role_id: string|null }>();
+    .all<{ id: string; source_role_id: string; talk_num: number; provider: string; status: string; reviewed_hash: string; approved_version_id: string|null; approved_hosted_role_id: string|null; fandom: string }>();
   return rows.results;
 }
 
@@ -626,6 +638,29 @@ export async function topTags(db: D1Database, zone: Zone | undefined, limit: num
     .bind(...binds)
     .all<{ tag: string; n: number }>();
   return rows.results;
+}
+
+/**
+ * 原作清單：按鍵分組（繁簡、標點不同的寫法算同一個），每組的名字用最多人寫的那一種。
+ * 只算一般內容、只算這一區；q 比的是鍵（已正規化），所以查詢字串也先正規化。
+ */
+export async function topFandoms(db: D1Database, zone: Zone | undefined, limit: number, q?: string, offset = 0) {
+  const where = [`c.${listed(false)}`, "c.provider='harbor'", NOT_A_COPY("c"), "c.fandom_key <> ''"];
+  const binds: unknown[] = [];
+  if (zone) { where.push("c.zone IN (?, 'all')"); binds.push(zone); }
+  if (q) { where.push(`c.fandom_key LIKE ? ESCAPE '\\'`); binds.push(likeTerm(searchForm(q))); }
+  const rows = await db
+    // 同一個鍵有幾種寫法時用最多人寫的那種，平手用最早上榜的那種——清單上的名字才不會隨機跳
+    .prepare(`SELECT c.fandom_key AS key, c.fandom AS fandom, COUNT(*) AS n, MIN(c.registered_at) AS first FROM cards c WHERE ${where.join(" AND ")} GROUP BY c.fandom_key, c.fandom ORDER BY n DESC, first ASC`)
+    .bind(...binds)
+    .all<{ key: string; fandom: string; n: number; first: number }>();
+  const byKey = new Map<string, { fandom: string; n: number; top: number }>();
+  for (const r of rows.results) {
+    const g = byKey.get(r.key);
+    if (!g) byKey.set(r.key, { fandom: r.fandom, n: r.n, top: r.n });
+    else { g.n += r.n; if (r.n > g.top) { g.top = r.n; g.fandom = r.fandom; } }
+  }
+  return [...byKey.values()].sort((a, b) => b.n - a.n || a.fandom.localeCompare(b.fandom)).slice(offset, offset + limit).map(({ fandom, n }) => ({ fandom, n }));
 }
 
 export interface AuthorRow {

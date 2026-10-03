@@ -7,6 +7,8 @@ const box = ref<HTMLElement | null>(null);
 const typed = ref("");
 /** 必選項：每次開新彈窗清空，刻意不預選 */
 const choice = ref<string | null>(null);
+/** 選填的那一格：開新彈窗時填上預設值 */
+const fieldText = ref("");
 const typedOk = computed(() => !!confirmState.current && confirmTextMatches(confirmState.current, typed.value));
 /** 按了確認但必選項沒選：顯示缺什麼，不要讓確認鍵看起來能按卻「按了沒反應」 */
 const missingChoice = ref(false);
@@ -18,7 +20,7 @@ function confirm() {
     box.value?.querySelector<HTMLElement>("[data-choice]")?.focus();
     return;
   }
-  settleConfirm(true, typed.value, choice.value);
+  settleConfirm(true, typed.value, choice.value, fieldText.value);
 }
 watch(choice, () => { missingChoice.value = false; });
 /** 開啟前的焦點：關掉時還回去，鍵盤使用者不會掉到頁面開頭 */
@@ -29,6 +31,7 @@ watch(() => confirmState.current, async (cur) => {
   restore = document.activeElement as HTMLElement | null;
   typed.value = "";
   choice.value = null;
+  fieldText.value = cur.field?.initial ?? "";
   missingChoice.value = false;
   await nextTick();
   // 要照打的字：焦點直接進打字框。其他破壞性動作先站在取消鍵上：按錯 Enter 也不會刪掉東西
@@ -82,6 +85,14 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
           </label>
           <p v-if="missingChoice" class="dlg__missing" role="alert">{{ $t("dialog.choiceRequired", { label: confirmState.current.choiceLabel ?? "" }) }}</p>
         </fieldset>
+        <!-- 選填的一格字（例如原作）：Enter 不送出，送出仍要按確認鍵——必選項還沒選的話得先選 -->
+        <label v-if="confirmState.current.field" class="dlg__field">
+          <span class="dlg__field-label">{{ confirmState.current.field.label }}</span>
+          <input v-model="fieldText" class="input" type="text" autocomplete="off" data-field :list="confirmState.current.field.suggestions?.length ? 'dlg-field-suggestions' : undefined"
+                 :placeholder="confirmState.current.field.placeholder" :maxlength="confirmState.current.field.maxlength" @keydown.enter.prevent="confirm" />
+          <datalist v-if="confirmState.current.field.suggestions?.length" id="dlg-field-suggestions"><option v-for="s in confirmState.current.field.suggestions" :key="s" :value="s" /></datalist>
+          <span v-if="confirmState.current.field.hint" class="subtle">{{ confirmState.current.field.hint }}</span>
+        </label>
         <div class="dlg__actions">
           <button v-if="!confirmState.current.single" class="btn" data-cancel @click="settleConfirm(false)">
             {{ confirmState.current.cancelText ?? $t("dialog.cancel") }}
@@ -137,6 +148,8 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
   .dlg__actions .btn { width: 100%; height: var(--h-lg); }
 }
 .dlg__choices { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; text-align: left; }
+.dlg__field { display: grid; gap: 6px; text-align: left; }
+.dlg__field-label { font-size: 13px; color: var(--text-2); }
 .dlg__choices-label { padding: 0; margin-bottom: 2px; font-size: 13px; color: var(--text-2); }
 .dlg__choice { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-md); cursor: pointer; }
 .dlg__choice:has(input:checked) { border-color: var(--accent); background: var(--accent-tint); }

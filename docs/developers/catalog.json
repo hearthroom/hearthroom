@@ -1745,5 +1745,12 @@
   "dfbd76ec38f51": "Saved nickname.",
   "de0c23c84b563": "`invalid_request` — missing, too long, or contains control characters.",
   "d3b2d330512fe": "`insufficient_scope` — the token was granted without `profile.write`.",
-  "d016f54b0eedd": "`account_not_found` — the account behind the token no longer exists."
+  "d016f54b0eedd": "`account_not_found` — the account behind the token no longer exists.",
+  "dc521b2a2fad7": "Fandom filter; spelling variants and known aliases match the same fandom.",
+  "d526d50be7fdc": "List community fandoms",
+  "dad71395f149b": "Fandom search text.",
+  "d9abba648327a": "Suggest search completions",
+  "dc0ddf095890f": "Partial search text.",
+  "da647790c445c": "Tags, fandoms and cards matching the text. Adult content is never included.",
+  "d79f07a6773f0": "Comma-separated tag keys to exclude."
 }
