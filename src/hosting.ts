@@ -5,7 +5,7 @@ import { adoptRetiredWork } from './card-sync';
 import { pendingSubmissionOf } from './review';
 import { encodeSnapshot, reviewRecord } from './review-snapshot';
 import { indexStatements } from './originality';
-import { buildSearchText, projectRole, upstream, type UpstreamRole } from './upstream';
+import { buildSearchBody, buildSearchName, buildSearchText, projectRole, upstream, type UpstreamRole } from './upstream';
 
 interface Receipt { workId: string; versionId: string; hostedRevisionId: string }
 interface VersionRow {
@@ -114,7 +114,7 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  const packedSnapshot=await encodeSnapshot(reviewRecord(settings));
  const snapshot=db.prepare('INSERT INTO review_snapshots(submission_id,detail,created_at) SELECT ?,?,? WHERE EXISTS(SELECT 1 FROM review_submissions WHERE id=?)').bind(submissionId,packedSnapshot,input.now,submissionId);
  const finalize=(cardId:string):D1PreparedStatement[]=>[
-   db.prepare("UPDATE hosting_versions SET hosted_revision_id=?,card_id=?,submission_id=?,public_role=?,state='pending' WHERE version_id=? AND submission_id IS NULL").bind(receipt.hostedRevisionId,cardId,submissionId,JSON.stringify({...sealed,searchText:buildSearchText(sealed)}),version!.version_id),
+   db.prepare("UPDATE hosting_versions SET hosted_revision_id=?,card_id=?,submission_id=?,public_role=?,state='pending' WHERE version_id=? AND submission_id IS NULL").bind(receipt.hostedRevisionId,cardId,submissionId,JSON.stringify({...sealed,searchName:buildSearchName(sealed),searchText:buildSearchText(sealed),searchBody:buildSearchBody(sealed)}),version!.version_id),
    db.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,content_hash,submitted_at,nsfw) SELECT ?,?,?,?,?,'pending',?,?,? WHERE EXISTS(SELECT 1 FROM hosting_versions WHERE version_id=? AND submission_id=?)")
     .bind(submissionId,cardId,provider,receipt.hostedRevisionId,existing?.approved_version_id?'re':'first','version:'+receipt.versionId,input.now,Number(input.nsfw),version!.version_id,submissionId),
    db.prepare("INSERT OR IGNORE INTO hosting_replicas(version_id,provider,source_role_id,hosted_revision_id,state,created_at) SELECT version_id,provider,source_role_id,hosted_revision_id,'ready',created_at FROM hosting_versions WHERE version_id=? AND submission_id=?").bind(version!.version_id,submissionId),

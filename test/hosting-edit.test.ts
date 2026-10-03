@@ -35,7 +35,7 @@ it('editing a pending update retires its review, preserves A, and a fresh review
  expect(card.approved_version_id).toBe(next.versionId);
  expect(JSON.parse(card.names).en).toBe('B revised');
  expect(card.nsfw).toBe(1);
- expect((await env.DB.prepare('SELECT search_text FROM cards WHERE id=?').bind(card.id).first<{search_text:string}>())?.search_text).toContain('B revised');
+ expect((await env.DB.prepare('SELECT search_name FROM cards WHERE id=?').bind(card.id).first<{search_name:string}>())?.search_name).toContain('b revised');
  expect((await getCard(env.DB,a.hostedRevisionId,'harbor'))?.approved_version_id).toBe(next.versionId);
  expect((await hostingDecision(env.DB,a.versionId)).status).toBe('approved');
 });

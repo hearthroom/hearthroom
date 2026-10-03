@@ -1,6 +1,7 @@
 import type { ProviderId } from "./providers";
 import type { UpstreamRole, Zone } from "./upstream";
-import { buildSearchText } from "./upstream";
+import { buildSearchBody, buildSearchName, buildSearchText } from "./upstream";
+import { expandTerm, hanziGlob, searchTerms } from "./search-text";
 import { HttpError, type Localized, pickLocale } from "./types";
 
 export interface CardRow {
@@ -135,11 +136,14 @@ export async function ensureCardNumbers(db: D1Database, pairs: readonly { provid
   return out;
 }
 
-/** trigram 至少要 3 個字元才有 token 可比；更短的查詢只能掃 LIKE。 */
+/** trigram 至少要 3 個字元才有 token 可比；有任何一個詞更短，整個查詢就只能掃 LIKE。 */
 const FTS_MIN_CHARS = 3;
 /** 包成 phrase，順便讓使用者輸入的 AND/OR/NEAR/* 失去 FTS 語法意義。 */
 const ftsPhrase = (q: string) => `"${q.replace(/"/g, '""')}"`;
 const likeTerm = (q: string) => `%${q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+/** 三欄的 bm25 權重：名稱、簡介／標籤／作者名、開場白（1）。bm25 越小越相關，權重大的欄位命中就更靠前。 */
+const FTS_NAME_WEIGHT = 10;
+const FTS_TEXT_WEIGHT = 3;
 
 export interface ListOptions {
   /**
@@ -184,6 +188,8 @@ export interface ListResult {
    * 未篩選的那次是掃一個小索引，便宜，而那也正是「共 N 張」最有意義的場合。
    */
   total: number | null;
+  /** 幾個詞全部命中的沒有、改列任一命中的：畫面要說清楚這不是全部符合。 */
+  partial?: boolean;
 }
 
 /**
@@ -209,24 +215,43 @@ export async function listCards(db: D1Database, opts: ListOptions) {
     where.push("c.provider = ?");
     binds.push(opts.provider);
   }
-  let from = "cards c";
-  let usingFts = false;
-
   if (opts.zone) {
     where.push("c.zone IN (?, 'all')");
     binds.push(opts.zone);
   }
-  if (opts.q) {
-    if ([...opts.q].length >= FTS_MIN_CHARS) {
-      usingFts = true;
-      from = "cards_fts JOIN cards c ON c.rowid = cards_fts.rowid";
-      where.push("cards_fts MATCH ?");
-      binds.push(ftsPhrase(opts.q));
-    } else {
-      where.push(`c.search_text LIKE ? ESCAPE '\\'`);
-      binds.push(likeTerm(opts.q));
+  // 查詢字串先正規化、按空白拆詞，每個詞再展開別名：一個詞＝一組寫法，組內任一命中就算這個詞命中。
+  const groups = opts.q ? searchTerms(opts.q).map(expandTerm) : [];
+  // 整串都是標點：什麼都不會命中，但也不該整個榜吐出來
+  if (opts.q && groups.length === 0) where.push("0");
+  // trigram 要每個寫法都 >= 3 字元才有 token；有一個更短就整個走 LIKE
+  const allLong = groups.every((g) => g.every((t) => [...t].length >= FTS_MIN_CHARS));
+  /**
+   * 搜尋條件與相關度鍵。and：每個詞都要命中；any：任一個詞命中（全部命中沒結果時退一步用）。
+   * 相關度：FTS 是三欄加權的 bm25（越小越相關）；LIKE 是名字命中幾個詞乘 4 加簡介命中幾個詞，取負數同樣越小越前。
+   */
+  const searchClause = (mode: "and" | "any") => {
+    if (!groups.length) return null;
+    if (allLong) {
+      const phrases = groups.map((g) => `(${g.map(ftsPhrase).join(" OR ")})`);
+      return {
+        from: "cards_fts JOIN cards c ON c.rowid = cards_fts.rowid",
+        where: "cards_fts MATCH ?",
+        binds: [phrases.join(mode === "and" ? " AND " : " OR ")],
+        relevance: { sql: `bm25(cards_fts, ${FTS_NAME_WEIGHT}, ${FTS_TEXT_WEIGHT}, 1)`, binds: [] as unknown[] },
+      };
     }
-  }
+    const hit = (col: string) => `(c.${col} LIKE ? ESCAPE '\\')`;
+    const anyColumn = `(${hit("search_name")} OR ${hit("search_text")} OR ${hit("search_body")})`;
+    return {
+      from: "cards c",
+      where: groups.map((g) => `(${g.map(() => anyColumn).join(" OR ")})`).join(mode === "and" ? " AND " : " OR "),
+      binds: groups.flatMap((g) => g.flatMap((t) => [likeTerm(t), likeTerm(t), likeTerm(t)])),
+      relevance: {
+        sql: `-(${groups.flatMap((g) => g.map(() => `${hit("search_name")} * 4 + ${hit("search_text")}`)).join(" + ")})`,
+        binds: groups.flatMap((g) => g.flatMap((t) => [likeTerm(t), likeTerm(t)])),
+      },
+    };
+  };
   if (opts.tags?.length) {
     // 類型鍵展開成幾種語言的名字，任一命中都算；字面標籤就是一個名字
     where.push(inList("c"));
@@ -259,31 +284,40 @@ export async function listCards(db: D1Database, opts: ListOptions) {
     where.push("EXISTS (SELECT 1 FROM member_follows f WHERE f.author_id=am.id AND f.member_id=?)");
     binds.push(opts.followedBy);
   }
-  const whereSql = where.join(" AND ");
-  // hot 用「這個同步窗口的對話增量」，不是累積數——累積數等於 top，排出來永遠是老卡。
-  // 三種排序都對應一個索引，沒有一種需要現算。
-  // 相關度是 FTS 的 bm25（越小越相關），再用熱度打破平手。LIKE 那條路沒有相關度可言。
-  // 榜的口徑照魅魔島：日／週／月榜與最熱都按累積對話數（窗口由 since 決定），最新按上榜時間，推薦隨機。
-  // 舊的 hot_score（同步窗口增量）不再當排序鍵，只留給前端顯示「正在被聊」。
-  const orderBy =
-    opts.sort === "new"
-      ? "c.registered_at DESC, c.id DESC"
-      : opts.sort === "random"
-        ? "RANDOM()"
-        : opts.sort === "relevance" && usingFts
-          ? "bm25(cards_fts), c.talk_num DESC"
-          : "c.talk_num DESC, c.follow_num DESC, c.registered_at DESC";
-
   const filtered = Boolean(opts.favoritedBy !== undefined || opts.followedBy !== undefined || opts.q || opts.tags?.length || opts.tagGroups?.length || opts.authorMemberId !== undefined || opts.since !== undefined);
 
-  // 多撈一筆就知道還有沒有下一頁，不必數完整組結果。
-  const probe = await db
-    .prepare(`SELECT ${CARD_COLUMNS} FROM ${from} ${AUTHOR_JOIN} WHERE ${whereSql} ORDER BY ${orderBy} LIMIT ? OFFSET ?`)
-    .bind(...binds, opts.limit + 1, opts.offset)
-    .all<CardRow>();
+  // hot 用「這個同步窗口的對話增量」，不是累積數——累積數等於 top，排出來永遠是老卡。
+  // 三種排序都對應一個索引，沒有一種需要現算。相關度見 searchClause；沒有搜尋字就退回 hot。
+  // 榜的口徑照魅魔島：日／週／月榜與最熱都按累積對話數（窗口由 since 決定），最新按上榜時間，推薦隨機。
+  // 舊的 hot_score（同步窗口增量）不再當排序鍵，只留給前端顯示「正在被聊」。
+  const run = async (mode: "and" | "any") => {
+    const search = searchClause(mode);
+    const whereSql = (search ? [...where, search.where] : where).join(" AND ");
+    const orderBinds: unknown[] = [];
+    let orderBy: string;
+    if (opts.sort === "new") orderBy = "c.registered_at DESC, c.id DESC";
+    else if (opts.sort === "random") orderBy = "RANDOM()";
+    else if (opts.sort === "relevance" && search) {
+      orderBy = `${search.relevance.sql}, c.talk_num DESC, c.follow_num DESC, c.registered_at DESC`;
+      orderBinds.push(...search.relevance.binds);
+    } else orderBy = "c.talk_num DESC, c.follow_num DESC, c.registered_at DESC";
+    // 多撈一筆就知道還有沒有下一頁，不必數完整組結果。
+    return db
+      .prepare(`SELECT ${CARD_COLUMNS} FROM ${search?.from ?? "cards c"} ${AUTHOR_JOIN} WHERE ${whereSql} ORDER BY ${orderBy} LIMIT ? OFFSET ?`)
+      .bind(...binds, ...(search?.binds ?? []), ...orderBinds, opts.limit + 1, opts.offset)
+      .all<CardRow>();
+  };
+  let probe = await run("and");
+  // 幾個詞全部命中的一張也沒有：退一步列任一命中的，並標 partial 讓畫面說清楚這不是全部符合。
+  // 只給一頁：翻頁的請求帶著 offset 回來時走的是「全部命中」那條，第二頁會是空的；一頁就夠人換個詞了。
+  let partial = false;
+  if (groups.length > 1 && opts.offset === 0 && probe.results.length === 0) {
+    probe = await run("any");
+    partial = probe.results.length > 0;
+  }
 
-  const hasNext = probe.results.length > opts.limit;
-  const rows = hasNext ? probe.results.slice(0, opts.limit) : probe.results;
+  const hasNext = !partial && probe.results.length > opts.limit;
+  const rows = probe.results.length > opts.limit ? probe.results.slice(0, opts.limit) : probe.results;
 
   let total: number | null = null;
   if (!filtered) {
@@ -301,7 +335,7 @@ export async function listCards(db: D1Database, opts: ListOptions) {
     total = opts.offset + rows.length;
   }
 
-  return { rows, hasNext, total };
+  return { rows, hasNext, total, partial };
 }
 
 /**
@@ -329,7 +363,9 @@ export async function upsertCard(db: D1Database, role: UpstreamRole, now: number
     JSON.stringify(role.tags),
     role.talkNum,
     role.followNum,
+    buildSearchName(role),
     buildSearchText(role),
+    buildSearchBody(role),
     now,
   ];
 
@@ -341,7 +377,7 @@ export async function upsertCard(db: D1Database, role: UpstreamRole, now: number
     await db
       .prepare(
         `UPDATE cards SET zone=?, author_num_id=?, author_name=?, author_avatar=?, names=?, summaries=?,
-           background_url=?, slug=?, tags=?, talk_num=?, follow_num=?, search_text=?,
+           background_url=?, slug=?, tags=?, talk_num=?, follow_num=?, search_name=?, search_text=?, search_body=?,
            last_synced_at=?, talk_num_prev=?
          WHERE id=?`,
       )
@@ -354,9 +390,9 @@ export async function upsertCard(db: D1Database, role: UpstreamRole, now: number
   const insert = db
     .prepare(
       `INSERT INTO cards (id, source_role_id, zone, author_num_id, author_name, author_avatar, names, summaries,
-         background_url, slug, tags, talk_num, follow_num, search_text, last_synced_at,
+         background_url, slug, tags, talk_num, follow_num, search_name, search_text, search_body, last_synced_at,
          talk_num_prev, registered_at, provider, status, nsfw)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     // 首次登記把 prev 設成當前值 → trending 從 0 起算。
     // 不這樣的話一張老熱卡剛登記就會用累積總量霸榜。
@@ -520,7 +556,7 @@ export function syncStatement(db: D1Database, id: string, prevTalkNum: number, r
   return db
     .prepare(
       `UPDATE cards SET zone=?, author_name=?, author_avatar=?, names=?, summaries=?, background_url=?,
-         slug=?, tags=?, talk_num=?, follow_num=?, search_text=?, talk_num_prev=?, last_synced_at=?
+         slug=?, tags=?, talk_num=?, follow_num=?, search_name=?, search_text=?, search_body=?, talk_num_prev=?, last_synced_at=?
        WHERE id=? AND (approved_hosted_role_id IS NULL OR approved_hosted_role_id=?)`,
     )
     .bind(
@@ -534,7 +570,9 @@ export function syncStatement(db: D1Database, id: string, prevTalkNum: number, r
       JSON.stringify(role.tags),
       role.talkNum,
       role.followNum,
+      buildSearchName(role),
       buildSearchText(role),
+      buildSearchBody(role),
       prevTalkNum,
       now,
       id,
@@ -577,7 +615,8 @@ export async function topTags(db: D1Database, zone: Zone | undefined, limit: num
     ? `WHERE c.${listed(false)} AND c.provider='harbor' AND ${NOT_A_COPY("c")} AND c.zone IN (?, 'all')`
     : `WHERE c.${listed(false)} AND c.provider='harbor' AND ${NOT_A_COPY("c")}`;
   const binds: unknown[] = zone ? [zone] : [];
-  if (q) { where += " AND j.value LIKE ? ESCAPE '\\'"; binds.push(likeTerm(q)); }
+  // 標籤名存的是作者寫的原文，沒有正規化欄位：用繁簡、大小寫展開的 GLOB 比，一樣互通
+  if (q) { where += " AND j.value GLOB ?"; binds.push(hanziGlob(q)); }
   binds.push(limit, offset);
   const rows = await db
     .prepare(
@@ -612,7 +651,7 @@ export async function listAuthors(
   const where: string[] = [`c.${listed(false)}`, NOT_A_COPY("c"), "c.provider = 'harbor'"];
   const binds: unknown[] = [];
   if (opts.zone) { where.push("c.zone IN (?, 'all')"); binds.push(opts.zone); }
-  if (opts.q) { where.push(`COALESCE(am.display_name,c.author_name) LIKE ? ESCAPE '\\'`); binds.push(likeTerm(opts.q)); }
+  if (opts.q) { where.push("COALESCE(am.display_name,c.author_name) GLOB ?"); binds.push(hanziGlob(opts.q)); }
   const orderBy =
     opts.sort === "cards" ? "card_count DESC, talk_total DESC" : opts.sort === "hot" ? "trending DESC, talk_total DESC" : "talk_total DESC, card_count DESC";
   const rows = await db

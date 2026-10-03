@@ -1,5 +1,5 @@
-import { TO_HANS } from "./originality-hans";
 import { countByAuthor, listCards, toCard, registeredAmong } from "./cards";
+import { searchForm } from "./search-text";
 import { resolveMember } from "./members";
 import { type ProviderId, DEFAULT_PROVIDER } from "./providers";
 import { quotaFor, type Quota } from "./quota";
@@ -42,9 +42,6 @@ const cacheKey = (provider: ProviderId, accountNumId: number, page: number, page
 
 /** 已上架的卡最多幾張一起拿來比對關鍵字（作者每週只能送審幾張，實際遠少於這個數）。 */
 const LISTED_SEARCH_LIMIT = 1000;
-/** 繁體轉簡體、不分大小寫：搜尋時兩邊都先轉成這個樣子再比，繁簡互通。 */
-const searchForm = (text: string) => [...text].map((ch) => TO_HANS.get(ch) ?? ch).join("").toLowerCase();
-
 export interface MinePage {
   /** registered＝本站有這張卡的登記（不論審到哪）；status 只在 registered 時有；note 是最近一次駁回的說明。 */
   items: (MyRole & { registered: boolean; status?: CardStatus; updateStatus?: string; note?: string; nsfw?: boolean })[];

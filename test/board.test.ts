@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ensureCardNumber } from "../src/cards";
 const fixtureLabels = new Map<string,string>();
 import worker from "../src/index";
-import { buildSearchText } from "../src/upstream";
+import { buildSearchBody, buildSearchName, buildSearchText } from "../src/upstream";
 import { HttpError } from "../src/types";
 import { upstream } from "../src/upstream";
 import { mainSiteDown, makeMember, resetDb, restoreUpstream, role, rolesOnMainSite, testHandle } from "./helpers";
@@ -44,15 +44,15 @@ async function seed(f: {
   fixtureLabels.set(String(num), f.id);
   await env.DB.prepare(
     `INSERT INTO cards (id, source_role_id, zone, author_num_id, author_name, author_avatar, names, summaries,
-       background_url, slug, tags, talk_num, follow_num, talk_num_prev, search_text,
+       background_url, slug, tags, talk_num, follow_num, talk_num_prev, search_name, search_text, search_body,
        registered_at, last_synced_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
   )
     .bind(
       num, r.roleId, r.zone, r.authorNumId, r.authorName, r.authorAvatar,
       JSON.stringify(r.names), JSON.stringify(r.summaries), r.backgroundUrl, r.slug,
       JSON.stringify(r.tags), r.talkNum, r.followNum, f.talkPrev ?? r.talkNum,
-      buildSearchText(r), f.registeredAt ?? Date.now(), 0,
+      buildSearchName(r), buildSearchText(r), buildSearchBody(r), f.registeredAt ?? Date.now(), 0,
     )
     .run();
   await env.DB.prepare("UPDATE cards SET provider='harbor',approved_hosted_role_id=? WHERE id=?").bind(r.roleId,num).run();
@@ -562,6 +562,104 @@ describe("搜尋：相關度與全文", () => {
   });
 });
 
+describe("搜尋：繁簡、大小寫、多詞、名稱先於開場白", () => {
+  beforeEach(async () => {
+    await seed({ id: "hant", name: "萬族創世錄", desc: "西幻世界模擬", tags: ["西幻"], talkNum: 10 });
+    await seed({ id: "hans", name: "区区小姨", desc: "日常", tags: ["银狼"], talkNum: 10 });
+    await seed({ id: "latin", name: "Cyber Noir", nameEn: "Cyber Noir Detective", tags: ["SFW"], talkNum: 10 });
+    await seed({ id: "wen", name: "問道錄 - 凡塵篇", desc: "修仙", talkNum: 10 });
+  });
+
+  it("繁體卡用簡體找得到，簡體卡用繁體找得到（FTS 與 LIKE 兩條路都是）", async () => {
+    expect(ids((await list("?q=万族创世录")).body)).toEqual(["hant"]);
+    expect(ids((await list("?q=區區小姨")).body)).toEqual(["hans"]);
+    expect(ids((await list("?q=进化")).body)).toEqual([]);
+    expect(ids((await list("?q=银狼")).body)).toEqual(["hans"]);
+    expect(ids((await list("?q=銀狼")).body)).toEqual(["hans"]);
+    expect(ids((await list("?q=创世")).body)).toEqual(["hant"]);
+  });
+
+  it("英文不分大小寫，短的也一樣", async () => {
+    expect(ids((await list("?q=CYBER")).body)).toEqual(["latin"]);
+    expect(ids((await list("?q=sfw")).body)).toEqual(["latin"]);
+  });
+
+  it("空白隔開的幾個詞各自命中即可，不必連在一起；尾端標點不算", async () => {
+    expect(ids((await list("?q=問道錄 凡塵")).body)).toEqual(["wen"]);
+    expect(ids((await list("?q=凡塵 問道")).body)).toEqual(["wen"]);
+    expect(ids((await list("?q=問道錄 不存在的詞")).body)).toEqual(["wen"]); // 全部命中沒有，退回任一命中（partial）
+    expect(ids((await list("?q=修仙,")).body)).toEqual(["wen"]);
+    expect(ids((await list("?q=「西幻」")).body)).toEqual(["hant"]);
+  });
+
+  it("相關度：名字命中的卡排在只有開場白命中的熱門卡前面，短查詢也一樣", async () => {
+    await seed({ id: "noise", name: "別的名字", welcome: "萬族創世錄 萬族創世錄 萬族創世錄 創世", talkNum: 9999 });
+    expect(ids((await list("?q=萬族創世錄&sort=relevance")).body)).toEqual(["hant", "noise"]);
+    expect(ids((await list("?q=創世&sort=relevance")).body)).toEqual(["hant", "noise"]);
+    expect(ids((await list("?q=萬族創世錄&sort=hot")).body)).toEqual(["noise", "hant"]);
+  });
+
+  it("名字命中排在簡介命中前面，簡介命中排在開場白命中前面", async () => {
+    await seed({ id: "inDesc", name: "別的", desc: "萬族創世錄的外傳", talkNum: 9999 });
+    await seed({ id: "inWelcome", name: "另一個", welcome: "萬族創世錄", talkNum: 9999 });
+    expect(ids((await list("?q=萬族創世錄&sort=relevance")).body)).toEqual(["hant", "inDesc", "inWelcome"]);
+  });
+
+  it("標點與全半形不擋路：末日·進化 用 末日進化 找得到，ＳＦＷ 等於 SFW", async () => {
+    await seed({ id: "dot", name: "末日·進化", talkNum: 1 });
+    expect(ids((await list("?q=末日進化")).body)).toEqual(["dot"]);
+    expect(ids((await list("?q=問道錄凡塵")).body)).toEqual(["wen"]);
+    expect(ids((await list("?q=ＳＦＷ")).body)).toEqual(["latin"]);
+  });
+
+  it("幾個詞全部符合的沒有時，退回任一符合並標 partial", async () => {
+    const all = (await list("?q=問道錄 創世錄")).body as { items: unknown[]; partial?: boolean };
+    expect(ids(all).sort()).toEqual(["hant", "wen"]);
+    expect(all.partial).toBe(true);
+    const strict = (await list("?q=問道錄 凡塵")).body as { partial?: boolean };
+    expect(strict.partial).toBeUndefined();
+    expect(ids((await list("?q=不存在 也不存在")).body)).toEqual([]);
+  });
+
+  it("退回任一命中時只給一頁：不會翻到第二頁變成空的", async () => {
+    for (let i = 0; i < 26; i++) await seed({ id: `p${i}`, name: i % 2 ? "甲甲甲" : "乙乙乙", talkNum: i });
+    const page = (await list("?q=甲甲甲 乙乙乙 丙丙丙&limit=24")).body as { items: unknown[]; partial?: boolean; hasNext: boolean; total: number | null };
+    expect(page.partial).toBe(true);
+    expect(page.items).toHaveLength(24);
+    expect(page.hasNext).toBe(false);
+  });
+
+  it("作者名也在索引裡：角色卡分頁用作者名找得到卡", async () => {
+    await seed({ id: "byLuna", name: "某卡", authorName: "鹿初", talkNum: 1 });
+    expect(ids((await list("?q=鹿初")).body)).toEqual(["byLuna"]);
+  });
+
+  it("別名：星鐵、崩鐵、星穹鐵道是同一個東西；SAO 找得到刀劍神域", async () => {
+    await seed({ id: "hsr", name: "崩壞：星穹鐵道同人", talkNum: 1 });
+    await seed({ id: "sao", name: "刀劍神域 桐人", talkNum: 1 });
+    expect(ids((await list("?q=星铁")).body)).toEqual(["hsr"]);
+    expect(ids((await list("?q=崩鐵")).body)).toEqual(["hsr"]);
+    expect(ids((await list("?q=sao")).body)).toEqual(["sao"]);
+  });
+
+  it("日文新字體跟中文字算同一個字：弾丸論破 找得到 彈丸論破 與 弹丸论破", async () => {
+    await seed({ id: "jp", zone: "ja", name: "弾丸論破の学園", talkNum: 1 });
+    await seed({ id: "hant2", name: "彈丸論破 同人", talkNum: 1 });
+    expect(ids((await list("?q=弹丸论破&zone=all")).body).sort()).toEqual(["hant2", "jp"]);
+    expect(ids((await list("?q=弾丸論破&zone=all")).body).sort()).toEqual(["hant2", "jp"]);
+  });
+
+  it("標籤搜尋繁簡互通、不分大小寫", async () => {
+    const tags = async (q: string) => {
+      const res = await SELF.fetch(`https://c.test/v1/tags?zone=zh&q=${encodeURIComponent(q)}`);
+      return ((await res.json()) as { items: { tag: string }[] }).items.map((x) => x.tag);
+    };
+    expect(await tags("银狼")).toEqual(["银狼"]);
+    expect(await tags("銀狼")).toEqual(["银狼"]);
+    expect(await tags("sfw")).toEqual(["SFW"]);
+  });
+});
+
 describe("熱門標籤", () => {
   it("按出現次數排，只算這一區", async () => {
     await seed({ id: "a", tags: ["推理", "民國"] });
@@ -603,6 +701,13 @@ describe("作者榜", () => {
 
   it("可以按名字搜", async () => {
     expect((await authors("?q=乙")).map((a) => a.accountNumId)).toEqual([2]);
+  });
+
+  it("按名字搜繁簡互通、不分大小寫", async () => {
+    await seed({ id: "d1", authorNumId: 4, authorName: "鹿初 Luna", talkNum: 1 });
+    await seed({ id: "e1", authorNumId: 5, authorName: "轻舟", talkNum: 1 });
+    expect((await authors("?q=luna")).map((a) => a.accountNumId)).toEqual([4]);
+    expect((await authors("?q=輕舟")).map((a) => a.accountNumId)).toEqual([5]);
   });
 });
 

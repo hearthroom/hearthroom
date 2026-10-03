@@ -35,7 +35,18 @@ const selected = computed(() => selectedTags(route.query.tag));
 const filtersOpen = ref(false);
 const PERIODS = ["all", "week", "month", "quarter", "year"];
 const period = computed(() => typeof route.query.period === "string" && PERIODS.includes(route.query.period) ? route.query.period : "all");
-const sort = computed(() => route.query.sort === "new" ? "new" : "hot");
+/** 有關鍵字時預設按相關度（名字命中的排前面）；只篩類型或時間時沒有相關度可言，退回最熱。 */
+const sort = computed(() => {
+  const s = route.query.sort;
+  if (s === "new" || s === "hot") return s;
+  // 清掉關鍵字後網址裡可能還留著 relevance：沒有關鍵字就當最熱，選單才不會指著一個不存在的選項
+  return q.value ? "relevance" : "hot";
+});
+/** 成人內容關著的成員：結果少的時候提一句，他才知道不是站上沒有，是沒開。訪客不提（無法確認年齡）。 */
+/** HarperHarbor 的點數兌換碼（HH 加 32 個 base32 字元，常見帶橫線）：有人拿到碼不知道去哪輸入就貼進搜尋框 */
+const voucher = computed(() => /^HH[A-Z2-7]{32}$/.test(q.value.toUpperCase().replace(/[-\s]/g, "")));
+const WALLET_URL = "https://console.harperharbor.com/me/wallet";
+const adultOff = computed(() => !!session.me && !!session.profile && !session.profile.showNsfw && cards.value?.adult === false);
 const hasQuery = computed(() => !!q.value || selected.value.length > 0 || kind.value !== "cards" || period.value !== "all" || route.query.sort !== undefined);
 const tagResults = ref<TagPage | null>(null);
 const selectedLabel = (tag: string) => { const entry = TAG_CATALOG.find(x => x.key === tag); return entry ? tagLabel(entry, locale.value) : tag; };
@@ -51,7 +62,7 @@ let loadId = 0;
 async function load() {
   const id = ++loadId;
   document.title = pageTitle(q.value ? `${q.value} · ${t("search.title")}` : t("search.title"));
-  if (!hasQuery.value) { cards.value = null; authors.value = null; tagResults.value = null; error.value = ""; loading.value = false; return; }
+  if (!hasQuery.value || voucher.value) { cards.value = null; authors.value = null; tagResults.value = null; error.value = ""; loading.value = false; return; }
   loading.value = true;
   error.value = "";
   try {
@@ -160,7 +171,7 @@ watch(q, (v) => { draft.value = v; });
             <label class="sr-only" for="search-sort">{{ $t('board.sorts') }}</label>
             <span class="search__select-wrap">
               <select id="search-sort" name="sort" class="search__select" :value="sort" @change="navigate({ sort: ($event.target as HTMLSelectElement).value })">
-                <option value="hot">{{ $t('board.sort.hot') }}</option><option value="new">{{ $t('board.sort.new') }}</option>
+                <option v-if="q" value="relevance">{{ $t('board.sort.relevance') }}</option><option value="hot">{{ $t('board.sort.hot') }}</option><option value="new">{{ $t('board.sort.new') }}</option>
               </select>
             </span>
           </template>
@@ -179,10 +190,17 @@ watch(q, (v) => { draft.value = v; });
         <button v-for="tag in selected" :key="tag" class="tagchip" @click="navigate({ tag: toggleTag(selected, tag) })">{{ selectedLabel(tag) }} <span aria-hidden="true">×</span></button>
         <button class="btn btn--sm" @click="navigate({ tag: undefined })">{{ $t('search.clear') }}</button>
       </div>
-    <template v-if="hasQuery">
+    <p v-if="voucher" class="notice search__voucher">
+      {{ $t("search.voucher") }} <a :href="WALLET_URL" target="_blank" rel="noopener">{{ $t("search.voucher.link") }} ↗</a>
+    </p>
+    <template v-if="hasQuery && !voucher">
       <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
+      <p v-if="kind === 'cards' && cards?.partial" class="muted search__hidden search__partial">{{ $t("search.partial") }}</p>
       <p v-if="kind === 'cards' && hidden.length" class="muted search__hidden">
         <RouterLink :to="lp('/settings') + '#hidden'">{{ $t("board.hidden", { n: hidden.length }) }}</RouterLink>
+      </p>
+      <p v-if="kind === 'cards' && adultOff && cards && cards.items.length < 4 && !loading" class="muted search__hidden search__adult">
+        {{ $t("search.adultHidden") }} <RouterLink :to="lp('/settings')">{{ $t("search.adultHidden.link") }}</RouterLink>
       </p>
 
       <template v-if="kind === 'cards'">

@@ -85,6 +85,9 @@
                         "$ref": "#/components/schemas/Card"
                       }
                     },
+                    "partial": {
+                      "type": "boolean"
+                    },
                     "hasNext": {
                       "type": "boolean"
                     },
