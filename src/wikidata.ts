@@ -19,8 +19,23 @@ export interface FandomEntity {
 const API = "https://www.wikidata.org/w/api.php";
 const UA = "Hearthroom/1.0 (https://hearthroom.club; community role-card board)";
 export const ENTITY_LANGUAGES = ["zh", "zh-hans", "zh-hant", "zh-tw", "zh-hk", "zh-cn", "ja", "en", "ko"];
-/** 候選搜尋同時用這幾種語言問，作者用哪種字打都找得到 */
-const SEARCH_LANGUAGES = ["zh-tw", "zh", "ja", "en", "ko"];
+/**
+ * 候選搜尋要問哪幾組（字, 語言）。Wikidata 的搜尋只比對該語言的名字與別名，不做繁簡轉換：
+ * 「星鐵」在 zh-tw 找不到（那邊只有「星穹鐵道」），「星铁」在 zh 才有。所以繁體原文問 zh-tw，
+ * 轉成簡體再問 zh，日文、英文照原文問；有韓文字才問 ko。同一組字與語言只問一次。
+ */
+export function searchPlan(q: string): { text: string; language: string }[] {
+  const simplified = searchForm(q);
+  const plan = [
+    { text: q, language: "zh-tw" },
+    { text: simplified || q, language: "zh" },
+    { text: q, language: "ja" },
+    { text: q, language: "en" },
+    ...(/[\p{Script=Hangul}]/u.test(q) ? [{ text: q, language: "ko" }] : []),
+  ];
+  const seen = new Set<string>();
+  return plan.filter((p) => { const k = `${p.language}\n${p.text}`; if (seen.has(k)) return false; seen.add(k); return true; });
+}
 export const QID = /^Q[1-9]\d{0,11}$/;
 
 async function call(params: Record<string, string>): Promise<Record<string, unknown>> {
@@ -34,8 +49,8 @@ export const wikidata = {
   /** 按字找候選：幾種語言同時搜，同一個編號只留第一次出現的那筆（名字與說明就用那個語言的）。 */
   async search(q: string, limit = 8): Promise<FandomCandidate[]> {
     const results = await Promise.all(
-      SEARCH_LANGUAGES.map((language) =>
-        call({ action: "wbsearchentities", search: q, language, uselang: language, type: "item", limit: String(limit) })
+      searchPlan(q).map(({ text, language }) =>
+        call({ action: "wbsearchentities", search: text, language, uselang: language, type: "item", limit: String(limit) })
           .then((body) => (body.search as { id: string; label?: string; description?: string }[] | undefined) ?? [])
           .catch(() => []),
       ),
