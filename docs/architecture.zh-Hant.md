@@ -231,9 +231,19 @@ new  登記時間
 ### 搜尋
 
 FTS5 + **trigram** tokenizer。`unicode61` 不切中日韓詞，整句會變成一個 token，中文搜尋
-等於全滅。trigram 的代價是查詢字串要 ≥ 3 字元，更短的（例如「修仙」）走 `LIKE` fallback
-掃同一批資料。四個語言版本的名稱與簡介合併成一個 `search_text` 欄位，所以一個索引就
-涵蓋中英日韓。
+等於全滅。trigram 的代價是每個查詢詞要 ≥ 3 字元，更短的（例如「修仙」）走 `LIKE` fallback
+掃同一批資料。
+
+索引分三欄，相關度（`sort=relevance`，搜尋頁有關鍵字時的預設）按欄位加權：`search_name`
+（四語名稱，權重 10）、`search_text`（四語簡介、標籤、作者名，權重 3）、`search_body`
+（開場白前 4000 字，權重 1）。三欄與查詢字串都先經 `src/search-text.ts` 的同一個正規化：
+NFKC 全半形統一、日文新字體→繁體→簡體逐字對照（OpenCC 字表）、小寫、去標點、中日文之間
+的空白去掉。所以「萬族創世錄」「万族创世录」「末日·進化」「末日進化」「ＳＡＯ」「sao」互相都找得到。
+
+查詢按空白拆詞，每個詞各自命中即可（AND）；全部命中一張也沒有時退回任一命中並在回應標
+`partial: true`，畫面據此說明；這種結果只給一頁（`hasNext` 永遠 false），翻頁回來走的是全部命中那條。詞若整個等於 `src/search-aliases.ts` 裡的某個別名（星鐵／崩鐵／
+星穹鐵道），展開成那一組任一命中。標籤名與作者名沒有正規化欄位，用把每個字展開成異體類別的
+`GLOB`（`*[轻輕][舟]*`）比對，互通規則一致。
 
 ## 對話舞台（stage/）
 
@@ -431,7 +441,7 @@ HTML 首次載入那條路的 `Referer` 網域。快取不受影響：鍵是 URL
 
 | 事件 | 來源 | 記什麼 |
 |---|---|---|
-| `list` / `search` | `/v1/cards` | 排序鍵、標籤、搜尋詞、結果數、翻頁深度、語言範圍 |
+| `list` / `search` | `/v1/cards` | 排序鍵、標籤、搜尋詞、結果數、翻頁深度、語言範圍；`outcome` 是 `ok`／`empty`（快取命中也標） |
 | `card_view` | `/v1/cards/:id` | roleId。**只有這一處**——HTML 殼多半是抓取器，卡片頁替作者發的「其他作品」副請求是 `/v1/cards?author=`，兩者都不算一次瀏覽，否則分母灌水三倍 |
 | `author_view` | `/v1/authors/:id` | 作者 id、作品數 |
 | `mine_view` | `/v1/me/cards` | 篩選、結果數 |
@@ -515,6 +525,24 @@ GROUP BY surface ORDER BY views DESC FORMAT JSON
 這是比值不是轉化率：分子來自不可信的 beacon，也無法確認哪次瀏覽產生了哪次點擊。用法是看趨勢與
 橫向對比（搜尋來的人比榜單來的人更愛點嗎），不是看絕對值。同理，排序鍵分布因為
 `Cache-Control: max-age=60` 會被瀏覽器快取截斷，它是「會話首次選擇分布」不是「點擊分布」。
+
+搜尋的空結果率與空手而回的詞，每週看一次（這是判斷搜尋改動有沒有用、以及缺哪些內容的唯一依據）：
+
+```sql
+SELECT blob12 AS outcome, blob13 AS cache, SUM(_sample_interval) AS n
+FROM hearthroom_events WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'search'
+GROUP BY outcome, cache FORMAT JSON
+```
+
+```sql
+SELECT blob10 AS term, blob12 AS outcome, SUM(_sample_interval) AS n
+FROM hearthroom_events WHERE timestamp > NOW() - INTERVAL '7' DAY AND blob1 = 'search' AND blob10 != ''
+GROUP BY term, outcome ORDER BY n DESC LIMIT 100 FORMAT JSON
+```
+
+`cache = bypass` 是開了成人內容的成員（回應不進公開快取），`miss`／`hit` 是其他人：同一個詞在
+這兩群人裡一邊空一邊有，說明差在成人閘門，不是比對。重複空手而回的詞分三類處理：叫法不同
+（加進 `search-aliases.ts`）、站上真的沒有（內容缺口）、貼錯東西（網址之類；兌換碼搜尋頁已攔下，不會進到這裡）。
 
 ### 啟用
 
