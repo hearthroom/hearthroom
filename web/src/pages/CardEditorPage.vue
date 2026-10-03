@@ -77,7 +77,7 @@ import {
   type WorldbookEntryDraft,
 } from "@/lib/role-draft";
 import { imageToPng } from "@/lib/export-image";
-import { ENTRY_CONTENT_MAX, draftToTavern, embedIntoPng, imageFetchUrl, worldbookToExport, type ImportResult } from "@/lib/tavern";
+import { draftToTavern, entryContentMax, embedIntoPng, imageFetchUrl, worldbookToExport, type ImportResult } from "@/lib/tavern";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
 import { confirmDialog, confirmForm } from "@/lib/confirm";
@@ -640,10 +640,11 @@ async function save() {
   }
   // 條目超長在送出前就攔下並點名：計數器只是變紅、不擋輸入，上游會整段拒收，
   // 而拒收訊息是英文散句，作者看不懂就重新整理——那條沒存過的條目就這樣「蒸發」了。
-  const oversize = wb.entries.find((e) => [...e.content].length > ENTRY_CONTENT_MAX);
+  const entryMax = entryContentMax(draft.value.language);
+  const oversize = wb.entries.find((e) => [...e.content].length > entryMax);
   if (oversize) {
     section.value = "worldbook";
-    error.value = t("editor.worldbook.entryTooLong", { name: oversize.name.trim() || oversize.keywords[0] || t("wb.entry.untitled"), max: ENTRY_CONTENT_MAX });
+    error.value = t("editor.worldbook.entryTooLong", { name: oversize.name.trim() || oversize.keywords[0] || t("wb.entry.untitled"), max: entryMax });
     return;
   }
   // 欄位超過語區上限也一樣先攔：計數器變紅不擋輸入，上游會拒收，而且之前拒收訊息是
@@ -1093,7 +1094,7 @@ async function exportCard(format: "png" | "json") {
                 <p class="hint">{{ $t("editor.world.char.lorebook.hint") }}</p>
                 <WorldbookEditor v-model="memberBook(c).entries" v-model:book-name="memberBook(c).name"
                                  v-model:book-desc="memberBook(c).desc"
-                                 :meta-locked="Boolean(memberBook(c).id) && !memberBook(c).meta?.visibility"
+                                 :meta-locked="Boolean(memberBook(c).id) && !memberBook(c).meta?.visibility" :language="draft.language"
                                  :bound="Boolean(memberBook(c).id) || memberBook(c).pending" @create="memberBook(c).createDraft()"
                                  @imported="importBook(memberBook(c), $event)" @pick="pickBook(memberBook(c), $event)"
                                  @release="releaseBook(memberBook(c))" @export-book="exportBook(memberBook(c), c.name)" />
@@ -1180,7 +1181,7 @@ async function exportCard(format: "png" | "json") {
           <p class="muted">{{ $t("wb.lede") }}</p>
           <WorldbookEditor v-model="wb.entries" v-model:book-name="wb.name"
                            v-model:book-desc="wb.desc"
-                           :meta-locked="Boolean(wb.id) && !wb.meta?.visibility"
+                           :meta-locked="Boolean(wb.id) && !wb.meta?.visibility" :language="draft.language"
                            :bound="Boolean(wb.id) || wb.pending" @create="wb.createDraft()"
                            @imported="importBook(wb, $event)" @pick="pickBook(wb, $event)"
                            @release="releaseBook(wb)" @export-book="exportBook(wb, draft.roleName)" />

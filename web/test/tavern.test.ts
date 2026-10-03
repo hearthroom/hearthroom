@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { base64FromUtf8, encodeText, isPng, readTextChunk, replaceTextChunks, utf8FromBase64, writeChunks } from "../src/lib/png-chunks";
 import { zipSync } from "fflate";
-import { bookEntriesToDrafts, draftToTavern, embedIntoPng, formatMesExample, imageFetchUrl, multilingualNote, parseDecorators, parseMesExample, parseTavernFile, parseWorldbookFile, regexKey, tavernToDraft, toV2Card, worldbookToExport, worldInfoToBook, type TavernCard } from "../src/lib/tavern";
+import { bookEntriesToDrafts, draftToTavern, embedIntoPng, entryContentMax, formatMesExample, imageFetchUrl, multilingualNote, parseDecorators, parseMesExample, parseTavernFile, parseWorldbookFile, regexKey, tavernToDraft, toV2Card, worldbookToExport, worldInfoToBook, type TavernCard } from "../src/lib/tavern";
 import { makeDraft } from "../src/lib/role-draft";
 
 const LABELS = { personality: "【性格】", scenario: "【場景】" };
@@ -357,8 +357,19 @@ describe("V3 世界書：use_regex 與修飾詞", () => {
   });
 });
 
+it("entry content limit follows the card language", () => {
+  expect(["", "zh", "zh-TW", "zh_Hant", "zh-HK", "zh-CN", "zh-Hans", "fr"].map(entryContentMax)).toEqual(Array(8).fill(4000));
+  expect(["ja", "ja-JP", "ko", "ko_KR"].map(entryContentMax)).toEqual(Array(4).fill(6000));
+  expect(["en", "en-US", "EN_gb"].map(entryContentMax)).toEqual(Array(3).fill(12000));
+  const entry = { content: "A".repeat(5000), keys: ["k"] };
+  expect(bookEntriesToDrafts([entry], undefined, "zh-Hant")).toHaveLength(2);
+  expect(bookEntriesToDrafts([entry], undefined, "ja")).toHaveLength(1);
+  expect(bookEntriesToDrafts([{ content: "A".repeat(12001), keys: ["k"] }], undefined, "en")).toHaveLength(2);
+  expect(bookEntriesToDrafts([{ content: "A".repeat(12000), keys: ["k"] }], undefined, "en")).toHaveLength(1);
+});
+
 it("preserves a split entry as one logical group and round trips author matching metadata", () => {
- const rows=bookEntriesToDrafts([{content:"A".repeat(6100),keys:["/code:(blue|green)/i"],secondary_keys:["approval"],selective:false,scan_depth:6,insertion_order:42,extensions:{source_flag:"kept"}}]);
+ const rows=bookEntriesToDrafts([{content:"A".repeat(9000),keys:["/code:(blue|green)/i"],secondary_keys:["approval"],selective:false,scan_depth:6,insertion_order:42,extensions:{source_flag:"kept"}}]);
  expect(rows).toHaveLength(3);
  expect(rows[0].matchOptions).toMatchObject({selective:false,scanDepth:6,order:42,extensions:{source_flag:"kept"}});
  expect(rows[0].matchOptions?.groupId).toBeTruthy();
