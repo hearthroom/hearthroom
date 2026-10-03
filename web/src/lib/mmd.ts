@@ -9,7 +9,7 @@
  * 少一兩個也行，缺的那部分留空給作者自己補。
  */
 
-import { bookEntriesToDrafts, bookEntryDrops, countSplitEntries, ENTRY_CONTENT_MAX, worldInfoToBook, type DropNote, type ImportResult, type TavernBook } from "./tavern";
+import { bookEntriesToDrafts, bookEntryDrops, countSplitEntries, entryContentMax, worldInfoToBook, type DropNote, type ImportResult, type TavernBook } from "./tavern";
 import { isMeimoRegexItem, loweredFromPageDepth, ruleSetFromImport, rulesFromMeimoList, type RegexRuleSet } from "./regex-rules";
 import { makeDraft } from "./role-draft";
 
@@ -102,10 +102,10 @@ export function mergeMmdFiles(files: MmdFile[], options: { language: string }): 
   let worldbook: ImportResult["worldbook"] = null;
   if (book) {
     const entries = book.book.entries ?? [];
-    worldbook = { name: str(book.book.name) || draft.roleName, description: str(book.book.description), format: "tavern", entries: bookEntriesToDrafts(entries) };
+    worldbook = { name: str(book.book.name) || draft.roleName, description: str(book.book.description), format: "tavern", entries: bookEntriesToDrafts(entries, undefined, options.language) };
     dropped.push(...bookEntryDrops(entries));
-    const split = countSplitEntries(entries);
-    if (split) dropped.push({ key: "import.split.entries", params: { n: split, max: ENTRY_CONTENT_MAX } });
+    const split = countSplitEntries(entries, options.language);
+    if (split) dropped.push({ key: "import.split.entries", params: { n: split, max: entryContentMax(options.language) } });
   }
 
   return {

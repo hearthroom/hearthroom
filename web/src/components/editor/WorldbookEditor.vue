@@ -34,6 +34,8 @@ const props = defineProps<{
   bound: boolean;
   /** 上游那份元資訊讀不到：書名與描述看得到、改不動。改了也送不出去，不讓人白填。 */
   metaLocked: boolean;
+  /** 這張卡的語區：條目內容上限與匯入時長條目怎麼拆都跟著它走。 */
+  language: string;
 }>();
 
 const emit = defineEmits<{
@@ -79,7 +81,7 @@ async function onImportFile(event: Event) {
   importReport.value = [];
   importedCount.value = 0;
   try {
-    const parsed = await parseWorldbookFile(file);
+    const parsed = await parseWorldbookFile(file, props.language);
     if (!parsed.entries.length) throw new Error("worldbook_invalid");
     emit("imported", { name: parsed.name, entries: parsed.entries });
     importedCount.value = parsed.entries.length;
@@ -227,7 +229,7 @@ const preview = computed(() =>
       </ul>
     </div>
 
-    <WorldbookEntriesDialog v-if="open" :model-value="modelValue"
+    <WorldbookEntriesDialog v-if="open" :model-value="modelValue" :language="language"
                             @update:model-value="emit('update:modelValue', $event)" @close="open = false" />
   </section>
 </template>

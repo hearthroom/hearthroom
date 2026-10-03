@@ -119,14 +119,23 @@ export interface ImportResult {
 
 /** 本站一張卡最多幾個標籤。多的丟掉並進報告，不靜默截斷。 */
 export const TAGS_MAX = 10;
-/** 上游一條世界書條目的內容上限（字元）。超過的條目在匯入時拆成幾條，同一組關鍵詞，不丟字。 */
-export const ENTRY_CONTENT_MAX = 3000;
+/**
+ * 上游一條世界書條目的內容上限（字元），跟著書所綁的卡的語區走（server role.NormalizeLocale +
+ * worldbook 條目上限）：中文 4000、日文與韓文 6000、英文 12000；空的或認不得的語區當繁中。
+ * 超過的條目在匯入時拆成幾條，同一組關鍵詞，不丟字。
+ */
+export function entryContentMax(language = ""): number {
+  const lang = language.toLowerCase().replace(/_/g, "-");
+  if (lang.startsWith("en")) return 12000;
+  if (lang.startsWith("ja") || lang.startsWith("ko")) return 6000;
+  return 4000;
+}
 
 /**
  * 把一段太長的內容拆成幾段，儘量在換行處切，每段都在上限內。
  * 拆成幾條同關鍵詞的條目，命中時一起進上下文，跟一條大的效果相同；不拆的話上游直接拒收整批。
  */
-export function splitEntryContent(content: string, max = ENTRY_CONTENT_MAX): string[] {
+export function splitEntryContent(content: string, max: number): string[] {
   const chars = [...content];
   if (chars.length <= max) return [content];
   // 留一點餘裕給名字後綴與換行
@@ -403,7 +412,8 @@ const entryKeywords = (entry: TavernBookEntry, raw: string[]): string[] =>
   entry.use_regex === true ? raw.map((k) => regexKey(k, entry.case_sensitive === true)) : raw;
 
 /** 酒館的條目 → 本站的條目。 */
-export function bookEntriesToDrafts(entries: TavernBookEntry[], scanDepth?: number): WorldbookEntryDraft[] {
+export function bookEntriesToDrafts(entries: TavernBookEntry[], scanDepth?: number, language = ""): WorldbookEntryDraft[] {
+  const max = entryContentMax(language);
   const drafts: WorldbookEntryDraft[] = [];
   entries.forEach((entry, index) => {
     const decorated = parseDecorators(text(entry.content));
@@ -412,7 +422,7 @@ export function bookEntriesToDrafts(entries: TavernBookEntry[], scanDepth?: numb
     // 條目要有名字才找得回來。酒館這兩個欄位常常都空，那就用第一個關鍵詞。
     const baseName = text(entry.name) || text(entry.comment) || keyList(entry.keys)[0] || `#${index + 1}`;
     const keywords = entryKeywords(entry, [...keyList(entry.keys), ...decorated.additionalKeys]);
-    const parts = splitEntryContent(content);
+    const parts = splitEntryContent(content, max);
     const options = entryMatchOptions({ ...entry, scan_depth: entry.scan_depth ?? scanDepth });
     const groupId = options.groupId || (parts.length > 1 ? crypto.randomUUID() : undefined);
     parts.forEach((part, i) => {
@@ -452,8 +462,9 @@ export function entryMatchOptions(entry: TavernBookEntry): WorldbookMatchOptions
 }
 
 /** 匯入報告用：有幾條因為太長被拆開。 */
-export function countSplitEntries(entries: TavernBookEntry[]): number {
-  return entries.filter((entry) => [...parseDecorators(text(entry.content)).content.trim()].length > ENTRY_CONTENT_MAX).length;
+export function countSplitEntries(entries: TavernBookEntry[], language = ""): number {
+  const max = entryContentMax(language);
+  return entries.filter((entry) => [...parseDecorators(text(entry.content)).content.trim()].length > max).length;
 }
 
 /**
@@ -501,9 +512,10 @@ export function worldInfoToBook(raw: unknown): TavernBook | null {
   };
 }
 
-/** 從檔案讀一本世界書：酒館的世界書檔，或一張卡（只取它的 book）。 */
+/** 從檔案讀一本世界書：酒館的世界書檔，或一張卡（只取它的 book）。language 是這本書所綁的卡的語區，決定長條目怎麼拆。 */
 export async function parseWorldbookFile(
   file: File,
+  language = "",
 ): Promise<{ name: string; format: "tavern"; entries: WorldbookEntryDraft[]; dropped: DropNote[] }> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   let raw: unknown;
@@ -522,9 +534,9 @@ export async function parseWorldbookFile(
   if (!book) throw new Error("worldbook_invalid");
   const entries = book.entries ?? [];
   const dropped = bookEntryDrops(entries);
-  const split = countSplitEntries(entries);
-  if (split) dropped.push({ key: "import.split.entries", params: { n: split, max: ENTRY_CONTENT_MAX } });
-  return { name: text(book.name), format: "tavern", entries: bookEntriesToDrafts(entries, book.scan_depth), dropped };
+  const split = countSplitEntries(entries, language);
+  if (split) dropped.push({ key: "import.split.entries", params: { n: split, max: entryContentMax(language) } });
+  return { name: text(book.name), format: "tavern", entries: bookEntriesToDrafts(entries, book.scan_depth, language), dropped };
 }
 
 /**
@@ -655,11 +667,11 @@ export function tavernToDraft(
       name: text(book?.name) || draft.roleName || "",
       description: text(book?.description),
       format: "tavern",
-      entries: bookEntriesToDrafts(bookEntries, data.character_book?.scan_depth),
+      entries: bookEntriesToDrafts(bookEntries, data.character_book?.scan_depth, options.language),
     };
     dropped.push(...bookEntryDrops(bookEntries));
-    const split = countSplitEntries(bookEntries);
-    if (split) dropped.push({ key: "import.split.entries", params: { n: split, max: ENTRY_CONTENT_MAX } });
+    const split = countSplitEntries(bookEntries, options.language);
+    if (split) dropped.push({ key: "import.split.entries", params: { n: split, max: entryContentMax(options.language) } });
     if (book?.scan_depth || book?.token_budget || book?.recursive_scanning) {
       dropped.push({ key: "import.drop.bookSettings" });
     }

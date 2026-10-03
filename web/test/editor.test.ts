@@ -365,7 +365,7 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     ]);
   });
 
-  it("條目超過上限：送出前就攔下並點名那一條，一個請求都不打", async () => {
+  it("條目超過上限（中文卡 4000）：送出前就攔下並點名那一條，一個請求都不打", async () => {
     await mount("/create");
     await pickFile($("input[type=file]"), new File([JSON.stringify(CARD)], "avra.json"));
     byText("套用到表單").click();
@@ -374,14 +374,39 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     await flush();
     await openEntries();
     await pickEntry(0);
-    await type($d<HTMLTextAreaElement>("#wbd-content"), "字".repeat(3001));
+    await type($d<HTMLTextAreaElement>("#wbd-content"), "字".repeat(4001));
     btnIn($d(".wbd"), "編好了").click();
     await flush();
     await submit();
     expect($("[role=alert]").textContent).toContain("黑麥鎮");
-    expect($("[role=alert]").textContent).toContain("3000");
+    expect($("[role=alert]").textContent).toContain("4000");
     expect(api.createRole).not.toHaveBeenCalled();
     expect(api.patchWorldbookDocument).not.toHaveBeenCalled();
+  });
+
+  it("條目上限跟著卡的語區：英文卡收 12000、12001 才攔", async () => {
+    await mount("/create");
+    await pickFile($("input[type=file]"), new File([JSON.stringify(CARD)], "avra.json"));
+    byText("套用到表單").click();
+    await flush();
+    const lang = $<HTMLSelectElement>("#f-lang");
+    lang.value = "en";
+    lang.dispatchEvent(new Event("change"));
+    await flush();
+    byText("世界書").click();
+    await flush();
+    await openEntries();
+    await pickEntry(0);
+    await type($d<HTMLTextAreaElement>("#wbd-content"), "a".repeat(12000));
+    expect($d(".wbd .count").textContent).toContain("12000 / 12000");
+    expect($d(".wbd .count").classList.contains("over")).toBe(false);
+    await type($d<HTMLTextAreaElement>("#wbd-content"), "a".repeat(12001));
+    expect($d(".wbd .count").classList.contains("over")).toBe(true);
+    btnIn($d(".wbd"), "編好了").click();
+    await flush();
+    await submit();
+    expect($("[role=alert]").textContent).toContain("12000");
+    expect(api.createRole).not.toHaveBeenCalled();
   });
 
   it("PNG 卡：自帶的立繪上傳後當直式背景", async () => {
