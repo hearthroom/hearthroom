@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { HttpError } from "../src/types";
-import { buildSearchText, projectRole, upstream } from "../src/upstream";
+import { buildSearchBody, buildSearchName, buildSearchText, projectRole, upstream } from "../src/upstream";
 
 /** 上游角色詳情的回應形狀。 */
 const mainSiteRole = {
@@ -60,9 +60,10 @@ describe("白名單投影", () => {
     expect(serialized).not.toContain("破限詞");
   });
 
-  it("開場白是公開的（訪客在角色頁就看得到），拿來當搜尋線索", () => {
+  it("開場白是公開的（訪客在角色頁就看得到），拿來當搜尋線索——放在開場白那一欄，正規化成簡體", () => {
     expect(projectRole(mainSiteRole).welcome).toBe("開場白");
-    expect(buildSearchText(projectRole(mainSiteRole))).toContain("開場白");
+    expect(buildSearchBody(projectRole(mainSiteRole))).toBe("开场白");
+    expect(buildSearchText(projectRole(mainSiteRole))).not.toContain("开场白");
   });
 
   it("四個語言版本各自保留", () => {
@@ -85,11 +86,13 @@ describe("白名單投影", () => {
     expect(p.followNum).toBe(0);
   });
 
-  it("搜尋字串涵蓋四語名稱、四語簡介與標籤", () => {
+  it("名稱一欄、簡介與標籤一欄；存的是正規化後的字（繁→簡、小寫）", () => {
+    const name = buildSearchName(projectRole(mainSiteRole));
+    for (const term of ["夜行侦探", "night detective", "夜行探侦"]) expect(name).toContain(term);
+    expect(name).not.toContain("夜行偵探");
     const text = buildSearchText(projectRole(mainSiteRole));
-    for (const term of ["夜行偵探", "Night Detective", "夜行探偵", "民國背景推理", "推理"]) {
-      expect(text).toContain(term);
-    }
+    for (const term of ["民国背景推理", "推理"]) expect(text).toContain(term);
+    expect(text).not.toContain("夜行侦探");
   });
 });
 

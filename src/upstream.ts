@@ -1,5 +1,6 @@
 import { apiBaseOf, DEFAULT_PROVIDER, type ProviderId } from "./providers";
 import { readForReview, readSealedForReview } from "./review-snapshot";
+import { searchForm } from "./search-text";
 import { type Env, HttpError, type Localized } from "./types";
 
 /**
@@ -221,10 +222,22 @@ async function fetchRole(env: Env, roleId: string, provider: ProviderId = DEFAUL
  * 餵給 FTS 的一團字：四語名稱 + 四語簡介 + 標籤 + 開場白，一個索引覆蓋所有語言。
  * 開場白截在四千字：它是搜尋的線索，不是要被整段索引的正文。
  */
+/**
+ * 搜尋索引分三欄：名稱是「這張卡叫什麼」，簡介、標籤、作者名是「它是什麼、誰寫的」，開場白是「它說了什麼」。
+ * 分開存，相關度才能把名字命中的卡排在簡介提到的前面、再排在只有開場白提到的前面——不分的話
+ * 一張熱門卡的開場白隨便提到一個詞就蓋過名字就是那個詞的卡。三欄都先正規化（見 searchForm），查詢端也一樣。
+ * 作者名用的是同步時上游給的名字：有人在找作者時，角色卡分頁就直接出他的卡，不必切到使用者分頁。
+ */
+export function buildSearchName(role: UpstreamRole): string {
+  return searchForm(Object.values(role.names).filter(Boolean).join(" "));
+}
+
 export function buildSearchText(role: UpstreamRole): string {
-  return [...Object.values(role.names), ...Object.values(role.summaries), ...role.tags, role.welcome.slice(0, 4000)]
-    .filter(Boolean)
-    .join(" ");
+  return searchForm([...Object.values(role.summaries), ...role.tags, role.authorName].filter(Boolean).join(" "));
+}
+
+export function buildSearchBody(role: UpstreamRole): string {
+  return searchForm(role.welcome.slice(0, 4000));
 }
 
 /**

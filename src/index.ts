@@ -289,10 +289,11 @@ app.get("/v1/cards", async (c) => {
   const hit = c.req.query("sort") === "random" ? null : await readBoardCache(c.env, c.executionCtx, cacheKey);
   const timing = `${moderation.timing}, access;dur=${accessMs.toFixed(1)}, cache;dur=${(performance.now() - cacheStarted).toFixed(1)}`;
   if (hit) {
-    // 快取命中一樣是一次瀏覽行為，只是結果數這種東西這條路上沒有
+    // 快取命中一樣是一次瀏覽行為；結果數這條路上沒有，但空不空看得出來——不標的話中間件會把每次命中都記成 ok，空結果率就偏低
     const q0 = c.req.query("q")?.trim();
     note(c, {
       event: q0 ? "search" : "list",
+      outcome: hit.body.startsWith('{"items":[]') ? "empty" : "ok",
       sortKey: c.req.query("sort") ?? "hot",
       tag: c.req.query("tag")?.trim() ?? "",
       term: q0 ? shapeTerm(q0) : "",
@@ -329,7 +330,7 @@ app.get("/v1/cards", async (c) => {
     for (const name of tagGroups.flat()) names.delete(name);
     return names.size ? [...names] : undefined;
   })();
-  const { rows, total, hasNext } = await listCards(c.env.DB, {
+  const { rows, total, hasNext, partial } = await listCards(c.env.DB, {
     zone,
     q: c.req.query("q")?.trim() || undefined,
     tagGroups,
@@ -356,7 +357,7 @@ app.get("/v1/cards", async (c) => {
     offset,
     outcome: rows.length ? "ok" : "empty",
   });
-  const body = JSON.stringify({ items: rows.map((r) => toCard(r, l)), total, hasNext, limit, offset, sort: sortKey });
+  const body = JSON.stringify({ items: rows.map((r) => toCard(r, l)), total, hasNext, limit, offset, sort: sortKey, ...(partial ? { partial } : {}) });
   if (sort !== "random") writeBoardCache(c.env, c.executionCtx, cacheKey, body);
   return boardResponse(body, allowNsfw, "origin", `${timing}, query;dur=${(performance.now() - queryStarted).toFixed(1)}`);
 });
@@ -1026,7 +1027,8 @@ app.post("/v1/review/:id/tags", async (c) => {
     .bind(s.id).first<{ version_id: string; public_role: string }>();
   // 舊流程由同步開的重審單沒有版本可改（公開資料跟著供應商走）
   if (!version?.public_role) throw new HttpError(409, "tags_not_editable");
-  const role = JSON.parse(version.public_role) as UpstreamRole & { searchText?: string };
+  const role = JSON.parse(version.public_role) as UpstreamRole & { searchName?: string; searchText?: string; searchBody?: string };
+  // 標籤在簡介那一欄：只有那一欄要重算
   const next = { ...role, tags, searchText: buildSearchText({ ...role, tags }) };
   await c.env.DB.batch([
     c.env.DB.prepare("UPDATE hosting_versions SET public_role = ? WHERE version_id = ? AND submission_id = ? AND state = 'pending'")
