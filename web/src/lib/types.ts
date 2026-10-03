@@ -24,6 +24,8 @@ export interface CommunityCard {
   backgroundUrl: string | null;
   slug: string | null;
   tags: string[];
+  /** 原作：改編或致敬的作品名；沒有就是空字串或不帶 */
+  fandom?: string;
   /** handle 是作者的本站公開 ID；作者還沒成為成員時是 null，畫成純文字。accountNumId 是上游的數字 ID，只給編輯器與快取鍵用。 */
   author: { handle: string | null; accountNumId: number; name: string; avatar: string };
   talkNum: number;

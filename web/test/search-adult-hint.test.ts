@@ -38,6 +38,8 @@ function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respon
     return json({ items: partial ? [{ id: "1", roleId: "r1", zone: "zh", name: "一", summary: "", names: {}, summaries: {}, avatarUrl: null, backgroundUrl: null, slug: null, tags: [], author: { handle: null, accountNumId: 1, name: "a", avatar: "" }, talkNum: 0, followNum: 0, trending: 0, registeredAt: 0, syncedAt: 0, provider: "harbor", nsfw: false }] : [], total: null, hasNext: false, limit: 24, offset: 0, sort: "relevance", ...(partial ? { partial: true } : {}) }, { "X-Adult-Content": state.showNsfw ? "1" : "0" });
   }
   if (url.includes("/v1/authors?")) return json({ items: [], hasNext: false, limit: 24, offset: 0, sort: "talk" });
+  if (url.includes("/v1/fandoms?")) return json({ items: [{ fandom: "原神", n: 3 }, { fandom: "崩壞三", n: 1 }], hasNext: false, limit: 24, offset: 0 });
+  if (url.includes("/v1/suggest?")) return json({ tags: [], fandoms: [], cards: [] });
   if (url.includes("/v1/tags?")) return json({ items: [], hasNext: false, limit: 24, offset: 0 });
   return json({ error: "not_found" });
 }
@@ -73,6 +75,15 @@ beforeEach(() => {
 afterEach(() => { app?.unmount(); el?.remove(); app = null; el = null; document.body.innerHTML = ""; vi.unstubAllGlobals(); });
 
 describe("搜尋頁", () => {
+  it("原作篩選：網址帶 fandom 就照它讀，上方有可以拿掉的籤；沒有條件時列熱門原作", async () => {
+    await mountSearch("/search?fandom=原神");
+    expect(cardCalls().some((c) => c.includes("fandom=") && c.includes("%E5%8E%9F%E7%A5%9E"))).toBe(true);
+    expect(document.querySelector("[data-fandom-chip]")?.textContent).toContain("原神");
+    app?.unmount(); el?.remove(); document.body.innerHTML = "";
+    await mountSearch("/search");
+    expect([...document.querySelectorAll("[data-fandoms] .tagchip")].map((b) => b.textContent)).toEqual(["原神3", "崩壞三1"]);
+  });
+
   it("貼進來的是點數兌換碼：不搜，告訴他去錢包兌換", async () => {
     await mountSearch("/search?q=HH-LH77-63RY-XB2V-D4TN-JUTX-ATKC-TJSU-HIO2");
     expect(cardCalls().some((c) => c.includes("q="))).toBe(false);

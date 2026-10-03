@@ -61,7 +61,9 @@ import { serveSandbox } from "./sandbox";
 import { listSaves, putSave, removeSave } from "./saves";
 import { commentCard, countTop, deleteComment, listReplies, listTop, postComment, setLike, type Viewer } from "./comments";
 import { SVG_WRAP_LIMIT, TOUCH_ICON_SIZE, allowedImageUrl, cardManifest, iconSize, signShortcutKey, svgWrap, verifyShortcutKey } from "./shortcut";
-import { buildSearchText, upstream, ZONES, type Zone, CREATION_METHOD, type CommunityStatus, type UpstreamRole } from "./upstream";
+import { buildSearchName, buildSearchText, upstream, ZONES, type Zone, CREATION_METHOD, type CommunityStatus, type UpstreamRole } from "./upstream";
+import { fandomKey, normalizeFandom } from "./fandom";
+import { topFandoms } from "./cards";
 import { withD1Session } from "./d1-session";
 
 const app = new Hono<{ Bindings: Env; Variables: { ev: Pending } }>();
@@ -335,6 +337,7 @@ app.get("/v1/cards", async (c) => {
     q: c.req.query("q")?.trim() || undefined,
     tagGroups,
     excludeTags,
+    fandom: c.req.query("fandom")?.trim() || undefined,
     authorMemberId,
     allowNsfw,
     sort,
@@ -371,6 +374,46 @@ app.get("/v1/tags", (c) =>
     return { items: rows.slice(0, limit), hasNext: rows.length > limit, limit, offset };
   }),
 );
+
+/** 這一區的原作清單，給搜尋頁的「熱門原作」與原作篩選。只算一般內容；分佈變得慢，快取久一點。 */
+app.get("/v1/fandoms", (c) =>
+  cachedJson(c, async () => {
+    const limit = Math.max(1, clamp(c.req.query("limit"), 24, 60));
+    const offset = clamp(c.req.query("offset"), 0, 10_000);
+    const rows = await topFandoms(c.env.DB, parseZone(c.req.query("zone")), limit + 1, c.req.query("q")?.trim(), offset);
+    return { items: rows.slice(0, limit), hasNext: rows.length > limit, limit, offset };
+  }),
+);
+
+/**
+ * 搜尋框打字時的建議：標籤、原作、卡名各幾個。只給一般內容（回應走公開快取，對所有人一樣）；
+ * 看的人藏起來的類型（?hide=）照榜單的規則排除。空字串回三個空清單。
+ */
+app.get("/v1/suggest", async (c) => {
+  const q = c.req.query("q")?.trim() ?? "";
+  const zone = parseZone(c.req.query("zone"));
+  const excludeTags = (() => {
+    const raw = c.req.query("hide")?.trim();
+    if (!raw) return undefined;
+    const names = new Set(raw.split(",").flatMap((k) => tagNamesFor(k.trim()) ?? []));
+    return names.size ? [...names] : undefined;
+  })();
+  const l = lang(c);
+  // 事件名與字在快取外先記：命中快取時也算一次建議（結果數只有算過才有，命中那次照中間件的預設記 ok）
+  note(c, { event: "suggest", term: shapeTerm(q), zoneScope: "current" });
+  return cachedJson(c, async () => {
+    if (!q) return { tags: [], fandoms: [], cards: [] };
+    const [tags, fandoms, cards] = await Promise.all([
+      topTags(c.env.DB, zone, 5, q),
+      topFandoms(c.env.DB, zone, 5, q),
+      listCards(c.env.DB, { zone, q, excludeTags, sort: "relevance", limit: 5, offset: 0, allowNsfw: false }),
+    ]);
+    const items = cards.rows.map((r) => { const card = toCard(r, l); return { num: card.num, name: card.name, avatarUrl: card.avatarUrl }; });
+    // 建議有沒有幫上忙，看的是空結果率有沒有跟著降：記成自己的事件，跟搜尋分開數
+    note(c, { resultCount: tags.length + fandoms.length + items.length, outcome: tags.length + fandoms.length + items.length ? "ok" : "empty" });
+    return { tags, fandoms, cards: items };
+  });
+});
 
 /** 作者榜：按作品在本站的合計排。 */
 app.get("/v1/authors", (c) =>
@@ -846,12 +889,14 @@ app.delete("/v1/comments/:id/like", async (c) => {
 app.post("/v1/cards", async (c) => {
   const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1] ?? "";
   const me = await requireAuthor(c);
-  const body = (await c.req.json().catch(() => ({}))) as { roleId?: unknown; nsfw?: unknown; distribute?: unknown; operationId?: unknown };
+  const body = (await c.req.json().catch(() => ({}))) as { roleId?: unknown; nsfw?: unknown; fandom?: unknown; distribute?: unknown; operationId?: unknown };
   const roleId = typeof body.roleId === "string" ? body.roleId.trim() : "";
   if (!roleId) throw new HttpError(400, "roleId is required");
   // 作者提交時必須宣告是不是成人內容（owner 2026-09-08）；沒宣告不收
   if (typeof body.nsfw !== "boolean") throw new HttpError(400, "nsfw_required");
   const nsfw = body.nsfw;
+  // 原作選填；形狀不對（網址、換行、太長）直接 400
+  const fandom = normalizeFandom(body.fandom);
 
   const provider = providerOf(c);
   if(!hostingKey(c.env,provider))throw new HttpError(503,"hosting_unavailable");
@@ -889,7 +934,7 @@ app.post("/v1/cards", async (c) => {
     if (!reviewEnabled(c.env)) throw new HttpError(503,"hosting_review_required");
     const operationId=typeof body.operationId==='string'?body.operationId:'';
     if(!/^[0-9a-f-]{36}$/i.test(operationId))throw new HttpError(400,'hosting_operation_required');
-    const receipt=await submitHosted(c.env,{provider,memberId,account:me.accountNumId,role,token:bearer,nsfw,operationId,now,packId});
+    const receipt=await submitHosted(c.env,{provider,memberId,account:me.accountNumId,role,token:bearer,nsfw,fandom,operationId,now,packId});
     const row=(await getCard(c.env.DB,roleId,provider))!;
     note(c,{event:"register",detail:packId?"pack_submitted":"submitted"});
     return c.json({...toCard(row,lang(c)),status:row.status,versionId:receipt.versionId},existing?200:201,{'Cache-Control':'private, no-store'});
@@ -1020,17 +1065,23 @@ app.post("/v1/review/:id/tags", async (c) => {
   const { member, s } = await claimedSubmission(c);
   if (s.status !== "pending") throw new HttpError(410, "review no longer active");
   if (s.claimed_by !== member.id || s.claimed_at === null || Date.now() - s.claimed_at >= CLAIM_TTL_MS) throw new HttpError(409, "claim this submission first");
-  const body = (await c.req.json().catch(() => ({}))) as { tags?: unknown; generation?: unknown };
+  const body = (await c.req.json().catch(() => ({}))) as { tags?: unknown; fandom?: unknown; generation?: unknown };
   if (typeof body.generation === "string" && body.generation !== s.claim_generation) throw new HttpError(409, "claim changed");
   const tags = normalizeTags(body.tags);
+  // 原作：沒帶就不動；帶了（含空字串）就換成那個
+  const fandomInput = normalizeFandom(body.fandom);
   const version = await c.env.DB.prepare("SELECT version_id, public_role FROM hosting_versions WHERE submission_id = ? AND state = 'pending'")
     .bind(s.id).first<{ version_id: string; public_role: string }>();
   // 舊流程由同步開的重審單沒有版本可改（公開資料跟著供應商走）
   if (!version?.public_role) throw new HttpError(409, "tags_not_editable");
-  const role = JSON.parse(version.public_role) as UpstreamRole & { searchName?: string; searchText?: string; searchBody?: string };
-  // 標籤在簡介那一欄：只有那一欄要重算
-  const next = { ...role, tags, searchText: buildSearchText({ ...role, tags }) };
+  const role = JSON.parse(version.public_role) as UpstreamRole & { searchName?: string; searchText?: string; searchBody?: string; fandomKey?: string };
+  const fandom = fandomInput ?? role.fandom ?? "";
+  // 標籤在簡介那一欄、原作在名稱那一欄：各自重算自己那一欄
+  const next = { ...role, tags, fandom, fandomKey: fandomKey(fandom), searchName: buildSearchName({ ...role, fandom }), searchText: buildSearchText({ ...role, tags }) };
+  const fandomChanged = fandomInput !== undefined && fandomInput !== (role.fandom ?? "");
   await c.env.DB.batch([
+    ...(fandomChanged ? [c.env.DB.prepare("INSERT INTO moderation_events(id,provider,source_role_id,actor,action,reason,before_value,after_value,created_at,operation_id) SELECT ?,provider,source_role_id,?,'fandom','review',?,?,?,? FROM cards WHERE id=?")
+      .bind(crypto.randomUUID(), member.id, role.fandom ?? "", fandom, Date.now(), crypto.randomUUID(), s.card_id)] : []),
     c.env.DB.prepare("UPDATE hosting_versions SET public_role = ? WHERE version_id = ? AND submission_id = ? AND state = 'pending'")
       .bind(JSON.stringify(next), version.version_id, s.id),
     // 稽核紀錄跟管理後台改標籤同一張表，卡片的管理頁看得到誰在什麼時候改了什麼
@@ -1038,12 +1089,14 @@ app.post("/v1/review/:id/tags", async (c) => {
       .bind(crypto.randomUUID(), member.id, JSON.stringify(role.tags ?? []), JSON.stringify(tags), Date.now(), crypto.randomUUID(), s.card_id),
   ]);
   note(c, { event: "review_tags", subject: s.source_role_id });
-  return c.json({ tags });
+  return c.json({ tags, fandom });
 });
 
-async function versionTags(db: D1Database, submissionId: string): Promise<{ tags?: string[] }> {
-  const row = await db.prepare("SELECT json_extract(public_role,'$.tags') AS tags FROM hosting_versions WHERE submission_id = ?").bind(submissionId).first<{ tags: string | null }>();
-  return row?.tags ? { tags: JSON.parse(row.tags) as string[] } : {};
+/** 這一版過審後會上榜的標籤與原作（審核人可能改過）。舊流程的單沒有版本：什麼都不回。 */
+async function versionMeta(db: D1Database, submissionId: string): Promise<{ tags?: string[]; fandom?: string }> {
+  const row = await db.prepare("SELECT json_extract(public_role,'$.tags') AS tags, json_extract(public_role,'$.fandom') AS fandom FROM hosting_versions WHERE submission_id = ?").bind(submissionId).first<{ tags: string | null; fandom: string | null }>();
+  if (!row?.tags) return {};
+  return { tags: JSON.parse(row.tags) as string[], fandom: row.fandom ?? "" };
 }
 
 /** 定案後的審核頁內容：只放登記的公開欄位，不帶作者（盲審），跟重審的 partial 同一個形狀。 */
@@ -1126,7 +1179,7 @@ app.get("/v1/review/:id/detail", async (c) => {
         stamps: stamps.results.map((st) => ({ verdict: st.verdict, note: st.note, at: st.created_at })),
       },
       // 審核人可能改過這一版的標籤（見 /v1/review/:id/tags）：審核頁看的是過審時會上榜的那一份
-      card: { id: String(s.card_id), roleId: s.source_role_id, ...(await versionTags(c.env.DB, s.id)) },
+      card: { id: String(s.card_id), roleId: s.source_role_id, ...(await versionMeta(c.env.DB, s.id)) },
       detail,
     },
     200,
@@ -1240,7 +1293,8 @@ export async function syncBatch(env: Env): Promise<{ ok: number; failed: number;
       if(!row.approved_hosted_role_id){
         writes.push(env.DB.prepare('UPDATE cards SET last_synced_at=? WHERE id=?').bind(now,row.id));return;
       }
-      const role = { ...(await upstream.fetchRole(env, row.approved_hosted_role_id, provider)) };
+      // 原作是本站的欄位，上游沒有：從卡上帶回來，重算的索引才不會把它洗掉
+      const role = { ...(await upstream.fetchRole(env, row.approved_hosted_role_id, provider)), fandom: row.fandom };
       writes.push(syncStatement(env.DB, row.id, row.talk_num, role, now));
       // 作者一定要有成員列（公開 ID 從那裡來）。0005 之前登記、之後沒再登入過的作者會缺——
       // 先記下來，迴圈外一次查、缺的併進同一批寫入（D1 呼叫也算子請求，迴圈裡逐張查會吃掉上游的額度）。

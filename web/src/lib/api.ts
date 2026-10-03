@@ -181,7 +181,7 @@ async function viewerAccess(): Promise<{ param: string; headers: Record<string, 
 
 // ---- 社群 API（同源）------------------------------------------------------
 
-export interface BoardQuery { zone?: Zone | "all"; q?: string; tag?: string | string[]; period?: string; sort?: Sort; /** 作者的本站公開 ID */ author?: string; limit?: number; offset?: number; lang?: string }
+export interface BoardQuery { zone?: Zone | "all"; q?: string; tag?: string | string[]; /** 原作（寫法不拘，繁簡與別名都算同一個） */ fandom?: string; period?: string; sort?: Sort; /** 作者的本站公開 ID */ author?: string; limit?: number; offset?: number; lang?: string }
 
 export async function fetchBoard(query: BoardQuery = {}): Promise<CardPage> {
   const params = new URLSearchParams();
@@ -221,6 +221,24 @@ export async function fetchCard(id: string, lang?: string, opts: { quiet?: boole
 export async function fetchTags(zone: Zone | "all"): Promise<{ tag: string; n: number }[]> {
   const res = await json<{ items: { tag: string; n: number }[] }>(await fetch(`${COMMUNITY_API}/tags?zone=${zone}`, { headers: from() }));
   return res.items;
+}
+
+/** 這一區的原作清單（最多人寫的那種寫法、有幾張卡）。 */
+export async function fetchFandoms(zone: Zone | "all", q = ""): Promise<{ fandom: string; n: number }[]> {
+  const params = new URLSearchParams({ zone });
+  if (q) params.set("q", q);
+  const res = await json<{ items: { fandom: string; n: number }[] }>(await fetch(`${COMMUNITY_API}/fandoms?${params}`, { headers: from() }));
+  return res.items;
+}
+
+export interface Suggestions { tags: { tag: string; n: number }[]; fandoms: { fandom: string; n: number }[]; cards: { num: number; name: string; avatarUrl: string | null }[] }
+/** 搜尋框打字時的建議。只有一般內容；看的人藏起來的類型照榜單的規則排除。 */
+export async function fetchSuggest(zone: Zone | "all", q: string, lang?: string): Promise<Suggestions> {
+  const params = new URLSearchParams({ zone, q });
+  if (lang) params.set("lang", lang);
+  const hide = await viewerHide();
+  if (hide) params.set("hide", hide);
+  return json<Suggestions>(await fetch(`${COMMUNITY_API}/suggest?${params}`, { headers: from() }));
 }
 
 export interface TagPage { items: { tag: string; n: number }[]; hasNext: boolean; limit: number; offset: number }
@@ -265,21 +283,23 @@ export async function registerCard(
   nsfw: boolean,
   distribute: { provider: ProviderId; token: string }[] = [],
   provider: ProviderId = currentProvider(),
+  /** 原作（選填）；沒給就是沒有 */
+  fandom?: string,
 ): Promise<CommunityCard> {
   const key=publicationKey(provider,roleId);
   const result=await json<CommunityCard>(
     await fetch(`${COMMUNITY_API}/cards`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...from(), "X-Provider": provider, ...authHeaders(token) },
-      body: JSON.stringify({ roleId, nsfw, operationId: publicationOperation(key), ...(distribute.length ? { distribute } : {}) }),
+      body: JSON.stringify({ roleId, nsfw, operationId: publicationOperation(key), ...(fandom !== undefined ? { fandom } : {}), ...(distribute.length ? { distribute } : {}) }),
     }),
   );
   clearPublicationOperation(key);
   return result;
 }
 
-export async function beginCardEdit(roleId:string,token:string,provider:ProviderId):Promise<{resubmit:boolean;nsfw?:boolean}> {
-  const result=await json<{resubmit:boolean;nsfw?:boolean}>(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(roleId)}/edit`, {
+export async function beginCardEdit(roleId:string,token:string,provider:ProviderId):Promise<{resubmit:boolean;nsfw?:boolean;fandom?:string}> {
+  const result=await json<{resubmit:boolean;nsfw?:boolean;fandom?:string}>(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(roleId)}/edit`, {
     method:'POST',headers:{...from(),'X-Provider':provider,...authHeaders(token)},
   }));
   clearPublicationOperation(publicationKey(provider,roleId));
@@ -324,8 +344,8 @@ export interface ReviewDetail {
     claimGeneration?: string; required: number;
     stamps: { verdict: "approve" | "reject"; note: string; at: number }[];
   };
-  /** tags：榜上會用的那一份（審核人可能改過）；舊版伺服器不帶就退回作者勾的 */
-  card: { id: string; roleId: string; tags?: string[] };
+  /** tags：榜上會用的那一份（審核人可能改過）；舊版伺服器不帶就退回作者勾的。fandom：作者宣告或審核人改過的原作。 */
+  card: { id: string; roleId: string; tags?: string[]; fandom?: string };
   detail: {
     partial?: boolean;
     /** 已定案：私有設定已刪，只剩公開資料 */
@@ -394,8 +414,8 @@ export const stampReview = (id: string, token: string, body: { verdict: "approve
   reviewAction<{ id: string; status: string; cardStatus: CardStatus; stamps: { approve: number; required: number } }>(id, "stamp", token, body);
 
 /** 審核時直接改標籤：要領著這張單。回傳存下去的那一份（去空白、去重後）。 */
-export const updateReviewTags = (id: string, token: string, body: { tags: string[]; generation?: string }) =>
-  reviewAction<{ tags: string[] }>(id, "tags", token, body);
+export const updateReviewTags = (id: string, token: string, body: { tags: string[]; fandom?: string; generation?: string }) =>
+  reviewAction<{ tags: string[]; fandom?: string }>(id, "tags", token, body);
 
 export async function fetchReviewDetail(id: string, token: string): Promise<ReviewDetail> {
   return json(await fetch(`${COMMUNITY_API}/review/${encodeURIComponent(id)}/detail`, { headers: { ...from(), ...authHeaders(token) } }));
