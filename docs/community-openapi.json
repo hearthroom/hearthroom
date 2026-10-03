@@ -166,7 +166,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Fandom filter; spelling variants and known aliases match the same fandom."
+            "description": "Fandom filter: a fandom key from the fandoms list, or a title in any language or spelling."
           },
           {
             "name": "sort",
@@ -2010,8 +2010,17 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "key": {
+                            "type": "string"
+                          },
                           "fandom": {
                             "type": "string"
+                          },
+                          "labels": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
                           },
                           "n": {
                             "type": "integer"
@@ -2107,8 +2116,17 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "key": {
+                            "type": "string"
+                          },
                           "fandom": {
                             "type": "string"
+                          },
+                          "labels": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
                           },
                           "n": {
                             "type": "integer"
@@ -2132,6 +2150,57 @@
                               "string",
                               "null"
                             ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/fandom-lookup": {
+      "get": {
+        "tags": [
+          "Cards"
+        ],
+        "summary": "Look up fandom candidates",
+        "security": [],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Partial work title in any language."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching works from Wikidata: id, label and a short description. Pass the id as fandomId when submitting.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
                           }
                         }
                       }
@@ -2260,6 +2329,15 @@
           },
           "fandom": {
             "type": "string"
+          },
+          "fandomKey": {
+            "type": "string"
+          },
+          "fandomLabels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
           }
         }
       },

@@ -24,8 +24,11 @@ export interface CommunityCard {
   backgroundUrl: string | null;
   slug: string | null;
   tags: string[];
-  /** 原作：改編或致敬的作品名；沒有就是空字串或不帶 */
+  /** 原作：改編或致敬的作品名（伺服器照 lang 挑過）；沒有就是空字串或不帶 */
   fandom?: string;
+  /** 原作的篩選鍵（對到 Wikidata 的是 wd:Q…）；fandomLabels 是它各語言的名字，照介面語言挑（lib/fandom.ts） */
+  fandomKey?: string;
+  fandomLabels?: Record<string, string>;
   /** handle 是作者的本站公開 ID；作者還沒成為成員時是 null，畫成純文字。accountNumId 是上游的數字 ID，只給編輯器與快取鍵用。 */
   author: { handle: string | null; accountNumId: number; name: string; avatar: string };
   talkNum: number;

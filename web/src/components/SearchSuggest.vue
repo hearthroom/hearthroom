@@ -12,13 +12,14 @@ import { useRouter } from "vue-router";
 import { fetchSuggest, type Suggestions } from "@/lib/api";
 import { contentLang, defaultZone } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
+import { fandomLabel } from "@/lib/fandom";
 
 const props = withDefaults(defineProps<{ modelValue: string; placeholder?: string; label?: string; inputClass?: string }>(), { placeholder: "", label: "", inputClass: "" });
 const emit = defineEmits<{ "update:modelValue": [value: string]; submit: [] }>();
 const router = useRouter();
 const { locale, lp } = useLocalePath();
 
-type Item = { kind: "search"; label: string } | { kind: "tag" | "fandom"; label: string; n: number } | { kind: "card"; label: string; num: number; avatar: string | null };
+type Item = { kind: "search"; label: string } | { kind: "tag"; label: string; n: number } | { kind: "fandom"; label: string; key: string; n: number } | { kind: "card"; label: string; num: number; avatar: string | null };
 const input = ref<HTMLInputElement | null>(null);
 const open = ref(false);
 const active = ref(0);
@@ -32,7 +33,7 @@ const items = computed<Item[]>(() => {
   return [
     { kind: "search", label: q },
     ...(f?.tags ?? []).map((t) => ({ kind: "tag" as const, label: t.tag, n: t.n })),
-    ...(f?.fandoms ?? []).map((t) => ({ kind: "fandom" as const, label: t.fandom, n: t.n })),
+    ...(f?.fandoms ?? []).map((t) => ({ kind: "fandom" as const, label: fandomLabel(t.labels, locale.value) || t.fandom, key: t.key, n: t.n })),
     ...(f?.cards ?? []).map((c) => ({ kind: "card" as const, label: c.name, num: c.num, avatar: c.avatarUrl })),
   ];
 });
@@ -72,7 +73,7 @@ function choose(i: number) {
   open.value = false;
   if (item.kind === "search") { emit("submit"); return; }
   if (item.kind === "card") { void router.push(lp(`/cards/${item.num}`)); return; }
-  void router.push({ path: lp("/search"), query: item.kind === "tag" ? { tag: item.label } : { fandom: item.label } });
+  void router.push({ path: lp("/search"), query: item.kind === "tag" ? { tag: item.label } : { fandom: item.key } });
 }
 function key(e: KeyboardEvent) {
   if (e.isComposing || composing) return;

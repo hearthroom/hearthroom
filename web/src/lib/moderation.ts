@@ -2,7 +2,7 @@ import { currentProvider } from './provider';
 import { ApiError } from './api';
 import { i18n } from './i18n';
 export interface ModerationCase {id:string;cardNumber:number;title:string;action:string;reason:string;status:string;createdAt:number;decidedAt:number|null;version:string;resolution?:string;canVote:boolean;canResolve:boolean;votes:{vote:string;reason:string;at:number}[]}
-export interface ManagedCard {provider:import("./provider").ProviderId;featured:boolean;id:string;name:string;tags:string[];status:string;boardHidden:boolean;publicBlocked:boolean;version:string;authorHandle?:string|null}
+export interface ManagedCard {provider:import("./provider").ProviderId;featured:boolean;id:string;name:string;tags:string[];status:string;boardHidden:boolean;publicBlocked:boolean;version:string;authorHandle?:string|null;fandom?:string;fandomId?:string|null}
 export interface RegistrationPack {id:string;member:string;granted:number;remaining:number;reason:string;grantedBy:string;at:number}
 export interface MemberDetail {
  member:{handle:string;displayName:string;avatarUrl:string;memberSince:number;providers:string[];role:'reviewer'|'manager'|'owner'|null};

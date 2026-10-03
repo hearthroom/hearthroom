@@ -4,12 +4,14 @@ import { requireReviewer, requireMember, isReviewer, memberNsfw, memberByHandle,
 import { badgeCollection } from './community/badges';
 import { quotaForMember, PACK_MAX } from './quota';
 import { pickLocale, HttpError, type Env, type Localized } from './types';
+import { resolveFandom } from './fandom';
+import { buildSearchName } from './upstream';
 
 export const moderationRoutes = new Hono<{ Bindings: Env }>();
 type Action = 'delist' | 'suspend' | 'restore_listing' | 'restore_public';
 type StaffRole = 'reviewer' | 'manager' | 'owner';
 interface CaseRow { card_number:number;nsfw:number;public_evidence:string;id:string; provider:string; source_role_id:string; version_id:string; title:string; author_member_id:string; action:Action; reason:string; created_by:string; status:string; created_at:number; decided_at:number|null; resolution:string|null }
-interface ManagedCard { featured_at:number|null; summaries:string;background_url:string|null;search_text:string;card_number:number;id:string; provider:string; source_role_id:string; approved_version_id:string|null; reviewed_hash:string; names:string; tags:string; status:string; board_hidden:number; public_blocked:number; nsfw:number; author_member_id:string }
+interface ManagedCard { fandom:string;fandom_qid:string|null;featured_at:number|null; summaries:string;background_url:string|null;search_text:string;card_number:number;id:string; provider:string; source_role_id:string; approved_version_id:string|null; reviewed_hash:string; names:string; tags:string; status:string; board_hidden:number; public_blocked:number; nsfw:number; author_member_id:string }
 const CARD = `SELECT c.*,(SELECT num FROM card_numbers WHERE provider=c.provider AND source_role_id=c.source_role_id) AS card_number,COALESCE(w.member_id,ac.owner_member_id,ai.member_id,'') AS author_member_id FROM cards c
  LEFT JOIN works w ON w.source_provider=c.provider AND w.source_role_id=c.source_role_id
  LEFT JOIN member_connections ac ON ac.provider=c.provider AND ac.external_id=CAST(c.author_num_id AS TEXT)
@@ -31,14 +33,14 @@ async function guardCase(db:D1Database,row:CaseRow,memberId:string){
  if(card)await guardCard(db,card,memberId);
 }
 const publicCase=(r:CaseRow,memberId:string)=>({id:r.id,cardNumber:r.card_number,action:r.action,title:r.title,reason:r.reason,status:r.status,createdAt:r.created_at,decidedAt:r.decided_at,version:r.version_id,createdByMe:r.created_by===memberId,resolution:r.resolution});
-const projection=(r:ManagedCard,lang:string)=>({id:String(r.id),provider:r.provider,featured:r.featured_at!=null,name:pickLocale(JSON.parse(r.names) as Localized,lang),tags:JSON.parse(r.tags) as string[],status:r.status,boardHidden:!!r.board_hidden,publicBlocked:!!r.public_blocked,version:r.approved_version_id||r.reviewed_hash});
+const projection=(r:ManagedCard,lang:string)=>({id:String(r.id),provider:r.provider,featured:r.featured_at!=null,name:pickLocale(JSON.parse(r.names) as Localized,lang),tags:JSON.parse(r.tags) as string[],fandom:r.fandom??'',fandomId:r.fandom_qid??null,status:r.status,boardHidden:!!r.board_hidden,publicBlocked:!!r.public_blocked,version:r.approved_version_id||r.reviewed_hash});
 async function mutate<T>(run:()=>Promise<T>):Promise<T>{try{return await run();}catch(e){if(e instanceof HttpError)throw e;if(/moderation_conflict|UNIQUE constraint/.test(String(e)))throw new HttpError(409,'moderation_conflict');throw e;}}
 
 moderationRoutes.use('/v1/moderation/*',bodyLimit({maxSize:16000}));
 moderationRoutes.use('/v1/moderation/*',async(c,next)=>{
  c.header('Cache-Control','private, no-store');
  await next();
- const op=c.req.path.endsWith('/vote')?'vote':c.req.path.endsWith('/resolve')?'resolve':c.req.path.endsWith('/tags')?'tags':c.req.path.endsWith('/compensation')?'compensation':c.req.path.endsWith('/staff')?'staff':c.req.method==='POST'&&c.req.path.endsWith('/packs')?'packs':c.req.method==='POST'?'propose':'read';
+ const op=c.req.path.endsWith('/vote')?'vote':c.req.path.endsWith('/resolve')?'resolve':c.req.path.endsWith('/tags')?'tags':c.req.path.endsWith('/fandom')?'fandom':c.req.path.endsWith('/compensation')?'compensation':c.req.path.endsWith('/staff')?'staff':c.req.method==='POST'&&c.req.path.endsWith('/packs')?'packs':c.req.method==='POST'?'propose':'read';
  const outcome=c.res.status<400?'success':c.res.status<500?'denied':'error';
  try{await c.env.DB.prepare('INSERT INTO moderation_metrics VALUES(?,?,1) ON CONFLICT(operation,outcome) DO UPDATE SET value=value+1').bind(op,outcome).run();}catch{console.warn('Moderation request metric unavailable');}
 });
@@ -128,7 +130,7 @@ moderationRoutes.post('/v1/moderation/cases/:id/resolve',async c=>{
 
 export async function moderationMetrics(db:D1Database):Promise<string>{
  const rows=await db.prepare('SELECT operation,outcome,value FROM moderation_metrics ORDER BY operation,outcome').all<{operation:string;outcome:string;value:number}>();
- return '# HELP hearthroom_moderation_requests_total Community moderation requests.\n# TYPE hearthroom_moderation_requests_total counter\n'+rows.results.filter(r=>/^(read|propose|vote|resolve|tags|compensation|staff|packs)$/.test(r.operation)&&/^(success|denied|error)$/.test(r.outcome)).map(r=>`hearthroom_moderation_requests_total{operation="${r.operation}",outcome="${r.outcome}"} ${r.value}`).join('\n')+'\n';
+ return '# HELP hearthroom_moderation_requests_total Community moderation requests.\n# TYPE hearthroom_moderation_requests_total counter\n'+rows.results.filter(r=>/^(read|propose|vote|resolve|tags|fandom|compensation|staff|packs)$/.test(r.operation)&&/^(success|denied|error)$/.test(r.outcome)).map(r=>`hearthroom_moderation_requests_total{operation="${r.operation}",outcome="${r.outcome}"} ${r.value}`).join('\n')+'\n';
 }
 
 for(const action of ['tags','compensation'] as const)moderationRoutes.post(`/v1/moderation/cards/:id/${action}`,async c=>{
@@ -151,6 +153,30 @@ for(const action of ['tags','compensation'] as const)moderationRoutes.post(`/v1/
  if(action==='tags')statements.push(db.prepare('UPDATE moderation_state SET tags_override=? WHERE provider=? AND source_role_id=?').bind(after,card.provider,card.source_role_id));
  else{const comp=JSON.parse(after) as {board:string;milliseconds:number};statements.push(db.prepare('INSERT INTO moderation_compensation VALUES(?,?,?,?,?)').bind(id,card.provider,card.source_role_id,comp.board,comp.milliseconds));}
  await mutate(()=>db.batch(statements));return c.json({ok:true});
+});
+
+/**
+ * 站方過審後改原作（owner 2026-10-03）：既有的卡沒填原作、或作者填錯，管理員直接對上去，不必作者重送。
+ * 寫進 moderation_state.fandom_override（再過審時優先於作者那一版）並直接改卡；名稱欄索引一併重算。
+ */
+moderationRoutes.post('/v1/moderation/cards/:id/fandom',async c=>{
+ const member=await requireReviewer(c);const db=c.env.DB;await manager(db,member.id);
+ const card=await cardOf(db,c.req.param('id'));await guardCard(db,card,member.id);
+ const b=await c.req.json<Record<string,unknown>>();const reason=reasonOf(b.reason);const op=operationOf(b.operationId);
+ const resolved=await resolveFandom(db,b);
+ if(!resolved)throw new HttpError(400,'invalid_arguments');
+ const after=JSON.stringify(resolved);
+ const existing=await db.prepare('SELECT * FROM moderation_events WHERE actor=? AND operation_id=?').bind(member.id,op).first<{action:string;provider:string;source_role_id:string;after_value:string;reason:string}>();
+ if(existing){if(existing.action!=='fandom'||existing.provider!==card.provider||existing.source_role_id!==card.source_role_id||existing.after_value!==after||existing.reason!==reason)throw new HttpError(409,'moderation_conflict');return c.json({ok:true});}
+ const names=JSON.parse(card.names) as Localized;
+ const searchName=buildSearchName({names,fandom:resolved.fandom,fandomSearch:resolved.search} as Parameters<typeof buildSearchName>[0]);
+ await mutate(()=>db.batch([
+  db.prepare('INSERT OR IGNORE INTO moderation_state(provider,source_role_id) VALUES(?,?)').bind(card.provider,card.source_role_id),
+  db.prepare('INSERT INTO moderation_events(id,provider,source_role_id,actor,action,reason,before_value,after_value,created_at,operation_id) SELECT ?,provider,source_role_id,?,?,?,fandom,?,?,? FROM cards WHERE id=?').bind(crypto.randomUUID(),member.id,'fandom',reason,after,Date.now(),op,card.id),
+  db.prepare('UPDATE moderation_state SET fandom_override=? WHERE provider=? AND source_role_id=?').bind(after,card.provider,card.source_role_id),
+  db.prepare('UPDATE cards SET fandom=?,fandom_qid=?,fandom_key=?,search_name=? WHERE id=?').bind(resolved.fandom,resolved.qid,resolved.key,searchName,card.id),
+ ]));
+ return c.json({ok:true,fandom:resolved.fandom,fandomId:resolved.qid??undefined});
 });
 
 /** 站方改標籤的輸入：字串陣列、去頭尾空白、去重。空的或過長的整批不收。 */

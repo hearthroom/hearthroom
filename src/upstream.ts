@@ -80,6 +80,8 @@ export interface UpstreamRole {
   welcome: string;
   /** 原作：本站自己的欄位（上游沒有），作者送審時宣告。同步時從卡上帶回來，索引才不會把它洗掉。 */
   fandom?: string;
+  /** 原作在索引裡的字：對到 Wikidata 的作品是所有語言的名字與別名；自由文字就是它自己 */
+  fandomSearch?: string;
   talkNum: number;
   followNum: number;
   /**
@@ -231,7 +233,7 @@ async function fetchRole(env: Env, roleId: string, provider: ProviderId = DEFAUL
  * 作者名用的是同步時上游給的名字：有人在找作者時，角色卡分頁就直接出他的卡，不必切到使用者分頁。
  */
 export function buildSearchName(role: UpstreamRole): string {
-  return searchForm([...Object.values(role.names), role.fandom ?? ""].filter(Boolean).join(" "));
+  return searchForm([...Object.values(role.names), role.fandom ?? "", role.fandomSearch ?? ""].filter(Boolean).join(" "));
 }
 
 export function buildSearchText(role: UpstreamRole): string {

@@ -36,10 +36,15 @@ export interface ConfirmOptions {
   /** 選項組的標題 */
   choiceLabel?: string;
   /** 一格選填的文字（例如原作）：有 initial 就先填好；suggestions 給瀏覽器的建議清單 */
-  field?: { label: string; placeholder?: string; hint?: string; maxlength?: number; initial?: string; suggestions?: string[] };
+  field?: {
+    label: string; placeholder?: string; hint?: string; maxlength?: number; initial?: string;
+    /** 有 lookup 就是「打字找候選」的一格：候選帶編號，選了回 id；initialId 是先填好的那個編號 */
+    initialId?: string;
+    lookup?: (q: string) => Promise<{ id: string; label: string; description?: string }[]>;
+  };
 }
 
-interface Pending extends ConfirmOptions { resolve: (ok: boolean, choice: string | null, text: string) => void }
+interface Pending extends ConfirmOptions { resolve: (ok: boolean, choice: string | null, text: string, id?: string) => void }
 
 export const confirmState = reactive<{ current: Pending | null }>({ current: null });
 
@@ -56,9 +61,9 @@ export function confirmChoice(opts: ConfirmOptions & { choices: NonNullable<Conf
 }
 
 /** 必選項加一格文字：確認回兩樣，取消回 null。 */
-export function confirmForm(opts: ConfirmOptions & { choices: NonNullable<ConfirmOptions["choices"]>; field: NonNullable<ConfirmOptions["field"]> }): Promise<{ choice: string; text: string } | null> {
+export function confirmForm(opts: ConfirmOptions & { choices: NonNullable<ConfirmOptions["choices"]>; field: NonNullable<ConfirmOptions["field"]> }): Promise<{ choice: string; text: string; id?: string } | null> {
   confirmState.current?.resolve(false, null, "");
-  return new Promise((resolve) => { confirmState.current = { ...opts, resolve: (ok, choice, text) => resolve(ok && choice !== null ? { choice, text } : null) }; });
+  return new Promise((resolve) => { confirmState.current = { ...opts, resolve: (ok, choice, text, id) => resolve(ok && choice !== null ? { choice, text, ...(id ? { id } : {}) } : null) }; });
 }
 
 /** 有必選項的彈窗，選了才算能確認。 */
@@ -77,11 +82,11 @@ export function confirmTextMatches(opts: Pick<ConfirmOptions, "requireText">, ty
  * 由彈窗元件呼叫：把答案交回去並關掉。
  * 有 requireText 的彈窗，確認時要帶使用者打的字；沒打對就當沒按——彈窗留著。
  */
-export function settleConfirm(ok: boolean, typed = "", choice: string | null = null, text = ""): void {
+export function settleConfirm(ok: boolean, typed = "", choice: string | null = null, text = "", id?: string): void {
   const c = confirmState.current;
   if (!c) return;
   if (ok && !confirmTextMatches(c, typed)) return;
   if (ok && !confirmChoiceOk(c, choice)) return;
   confirmState.current = null;
-  c.resolve(ok, choice, text.trim());
+  c.resolve(ok, choice, text.trim(), id);
 }

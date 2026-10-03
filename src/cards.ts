@@ -2,6 +2,7 @@ import type { ProviderId } from "./providers";
 import type { UpstreamRole, Zone } from "./upstream";
 import { buildSearchBody, buildSearchName, buildSearchText } from "./upstream";
 import { expandTerm, hanziGlob, searchForm, searchTerms } from "./search-text";
+import { fandomLabel } from "./wikidata";
 import { HttpError, type Localized, pickLocale } from "./types";
 
 export interface CardRow {
@@ -43,9 +44,12 @@ export interface CardRow {
   nsfw: number;
   /** 永久卡號，從 100001 起跳。私有卡也會分配，發布或撤銷不換號；0037 起同時是 cards 主鍵。 */
   num?: number | null;
-  /** 原作（0045 起）：作者宣告、審核人可改的作品名；fandom_key 是它的搜尋正規形，篩選與分組用。 */
+  /** 原作（0045 起）：作者宣告、審核人可改的作品名；fandom_key 是篩選與分組用的鍵（對到 Wikidata 的是 wd:Q…，自由文字是正規形）。 */
   fandom?: string;
   fandom_key?: string;
+  /** 對到的 Wikidata 編號與它各語言的名字（0046 起，JOIN fandom_entities 帶出來） */
+  fandom_qid?: string | null;
+  fandom_labels?: string | null;
 }
 
 /**
@@ -55,8 +59,9 @@ export interface CardRow {
 const AUTHOR_JOIN = `LEFT JOIN member_identities ai ON ai.provider = c.provider AND ai.external_id = CAST(c.author_num_id AS TEXT)
   LEFT JOIN member_connections ac ON ac.provider=c.provider AND ac.external_id=CAST(c.author_num_id AS TEXT)
   LEFT JOIN members am ON am.id = COALESCE(ac.owner_member_id,ai.member_id)
-  LEFT JOIN card_numbers cn ON cn.provider = c.provider AND cn.source_role_id = c.source_role_id`;
-const CARD_COLUMNS = "c.*, CAST(c.id AS TEXT) AS id, am.handle AS author_handle, am.display_name AS community_name, CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url END AS community_avatar, cn.num AS num, (SELECT COUNT(*) FROM member_favorites mf WHERE mf.card_id=c.id) AS favorite_count";
+  LEFT JOIN card_numbers cn ON cn.provider = c.provider AND cn.source_role_id = c.source_role_id
+  LEFT JOIN fandom_entities fe ON fe.qid = c.fandom_qid`;
+const CARD_COLUMNS = "c.*, CAST(c.id AS TEXT) AS id, fe.labels AS fandom_labels, am.handle AS author_handle, am.display_name AS community_name, CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url END AS community_avatar, cn.num AS num, (SELECT COUNT(*) FROM member_favorites mf WHERE mf.card_id=c.id) AS favorite_count";
 
 /** 卡號長什麼樣：純數字。網址與搜尋框裡看到這種形狀就當卡號查，其餘當上游的卡片 ID。 */
 export const CARD_NUMBER = /^[1-9]\d{0,11}$/;
@@ -93,8 +98,11 @@ export function toCard(row: CardRow, lang: string) {
     backgroundUrl: row.background_url,
     slug: row.slug,
     tags: JSON.parse(row.tags) as string[],
-    /** 原作：改編或致敬的作品名；空字串＝沒有 */
-    fandom: row.fandom ?? "",
+    /** 原作：改編或致敬的作品名，照看的人的語言出（對到 Wikidata 的才有多語）；空字串＝沒有 */
+    fandom: row.fandom_qid && row.fandom_labels ? fandomLabel(JSON.parse(row.fandom_labels) as Record<string, string>, lang) || row.fandom || "" : row.fandom ?? "",
+    /** 原作的篩選鍵（?fandom= 帶它）；fandomLabels 是各語言的名字，前端照介面語言挑 */
+    fandomKey: row.fandom_key || undefined,
+    fandomLabels: row.fandom_qid && row.fandom_labels ? (JSON.parse(row.fandom_labels) as Record<string, string>) : undefined,
     author: {
       handle: row.author_handle ?? null,
       accountNumId: row.author_num_id,
@@ -273,9 +281,16 @@ export async function listCards(db: D1Database, opts: ListOptions) {
     binds.push(JSON.stringify(opts.excludeTags));
   }
   if (opts.fandom) {
-    // 原作用鍵比，別名展開成一組：「星鐵」「崩鐵」「星穹鐵道」篩出同一批
-    where.push("c.fandom_key IN (SELECT value FROM json_each(?))");
-    binds.push(JSON.stringify(expandTerm(searchForm(opts.fandom))));
+    if (opts.fandom.startsWith("wd:")) {
+      // 鍵本身（卡片頁與清單帶的）
+      where.push("c.fandom_key = ?");
+      binds.push(opts.fandom);
+    } else {
+      // 打的字：自由文字的鍵直接比；對到 Wikidata 的作品用它的名字與別名比（「星铁」「HSR」都落到同一個作品）
+      const forms = expandTerm(searchForm(opts.fandom));
+      where.push(`(c.fandom_key IN (SELECT value FROM json_each(?)) OR c.fandom_qid IN (SELECT qid FROM fandom_entities WHERE ${forms.map(() => "(' ' || search_text || ' ') LIKE ?").join(" OR ")}))`);
+      binds.push(JSON.stringify(forms), ...forms.map((f) => `% ${f.replace(/[\\%_]/g, (ch) => `\\${ch}`)} %`));
+    }
   }
   if (opts.since !== undefined) {
     // 日／週／月榜：只看上榜時間在窗口內的卡（owner 2026-09-07：時間是卡片上榜的那一刻）
@@ -552,9 +567,9 @@ export async function unregister(db: D1Database, roleId: string, authorNumId: nu
 /** 排程同步挑最久沒更新的一批。帶著審核狀態與已過審的內容版本，同步順手比對內容有沒有變。 */
 export async function dueForSync(db: D1Database, limit: number) {
   const rows = await db
-    .prepare("SELECT id, source_role_id, talk_num, provider, status, reviewed_hash, approved_version_id, approved_hosted_role_id, fandom FROM cards WHERE provider='harbor' ORDER BY last_synced_at ASC LIMIT ?")
+    .prepare("SELECT c.id, c.source_role_id, c.talk_num, c.provider, c.status, c.reviewed_hash, c.approved_version_id, c.approved_hosted_role_id, c.fandom, COALESCE(fe.search_text, c.fandom_key) AS fandom_search FROM cards c LEFT JOIN fandom_entities fe ON fe.qid=c.fandom_qid WHERE c.provider='harbor' ORDER BY c.last_synced_at ASC LIMIT ?")
     .bind(limit)
-    .all<{ id: string; source_role_id: string; talk_num: number; provider: string; status: string; reviewed_hash: string; approved_version_id: string|null; approved_hosted_role_id: string|null; fandom: string }>();
+    .all<{ id: string; source_role_id: string; talk_num: number; provider: string; status: string; reviewed_hash: string; approved_version_id: string|null; approved_hosted_role_id: string|null; fandom: string; fandom_search: string }>();
   return rows.results;
 }
 
@@ -644,23 +659,28 @@ export async function topTags(db: D1Database, zone: Zone | undefined, limit: num
  * 原作清單：按鍵分組（繁簡、標點不同的寫法算同一個），每組的名字用最多人寫的那一種。
  * 只算一般內容、只算這一區；q 比的是鍵（已正規化），所以查詢字串也先正規化。
  */
-export async function topFandoms(db: D1Database, zone: Zone | undefined, limit: number, q?: string, offset = 0) {
+export async function topFandoms(db: D1Database, zone: Zone | undefined, limit: number, q?: string, offset = 0, lang = "zh") {
   const where = [`c.${listed(false)}`, "c.provider='harbor'", NOT_A_COPY("c"), "c.fandom_key <> ''"];
   const binds: unknown[] = [];
   if (zone) { where.push("c.zone IN (?, 'all')"); binds.push(zone); }
-  if (q) { where.push(`c.fandom_key LIKE ? ESCAPE '\\'`); binds.push(likeTerm(searchForm(q))); }
+  // q 比的是索引字：對到 Wikidata 的作品是所有語言的名字與別名，自由文字是它的正規形
+  if (q) { where.push(`COALESCE(fe.search_text, c.fandom_key) LIKE ? ESCAPE '\\'`); binds.push(likeTerm(searchForm(q))); }
   const rows = await db
-    // 同一個鍵有幾種寫法時用最多人寫的那種，平手用最早上榜的那種——清單上的名字才不會隨機跳
-    .prepare(`SELECT c.fandom_key AS key, c.fandom AS fandom, COUNT(*) AS n, MIN(c.registered_at) AS first FROM cards c WHERE ${where.join(" AND ")} GROUP BY c.fandom_key, c.fandom ORDER BY n DESC, first ASC`)
+    // 自由文字同一個鍵有幾種寫法時用最多人寫的那種，平手用最早上榜的那種——清單上的名字才不會隨機跳
+    .prepare(`SELECT c.fandom_key AS key, c.fandom AS fandom, fe.labels AS labels, COUNT(*) AS n, MIN(c.registered_at) AS first FROM cards c LEFT JOIN fandom_entities fe ON fe.qid=c.fandom_qid WHERE ${where.join(" AND ")} GROUP BY c.fandom_key, c.fandom ORDER BY n DESC, first ASC`)
     .bind(...binds)
-    .all<{ key: string; fandom: string; n: number; first: number }>();
-  const byKey = new Map<string, { fandom: string; n: number; top: number }>();
+    .all<{ key: string; fandom: string; labels: string | null; n: number; first: number }>();
+  const byKey = new Map<string, { key: string; fandom: string; labels?: Record<string, string>; n: number; top: number; first: number }>();
   for (const r of rows.results) {
     const g = byKey.get(r.key);
-    if (!g) byKey.set(r.key, { fandom: r.fandom, n: r.n, top: r.n });
-    else { g.n += r.n; if (r.n > g.top) { g.top = r.n; g.fandom = r.fandom; } }
+    if (!g) byKey.set(r.key, { key: r.key, fandom: r.fandom, labels: r.labels ? (JSON.parse(r.labels) as Record<string, string>) : undefined, n: r.n, top: r.n, first: r.first });
+    else { g.n += r.n; g.first = Math.min(g.first, r.first); if (r.n > g.top) { g.top = r.n; g.fandom = r.fandom; } }
   }
-  return [...byKey.values()].sort((a, b) => b.n - a.n || a.fandom.localeCompare(b.fandom)).slice(offset, offset + limit).map(({ fandom, n }) => ({ fandom, n }));
+  // 張數一樣多的，先上榜的在前：清單順序才穩定
+  return [...byKey.values()]
+    .sort((a, b) => b.n - a.n || a.first - b.first)
+    .slice(offset, offset + limit)
+    .map(({ key, fandom, labels, n }) => ({ key, fandom: labels ? fandomLabel(labels, lang) || fandom : fandom, labels, n }));
 }
 
 export interface AuthorRow {

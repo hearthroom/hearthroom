@@ -901,7 +901,7 @@ it('HarperHarbor submits once to HearthRoom with an explicit rating and no hosti
  expect(root.querySelector('.platform-dialog')).toBeNull();
  expect(confirmState.current?.choices?.map(c=>c.value)).toEqual(['sfw','nsfw']);
  settleConfirm(true,'','sfw');await flush();await flush();
- expect(api.registerCard).toHaveBeenCalledWith('r1','tok',false,[],'harbor','');
+ expect(api.registerCard).toHaveBeenCalledWith('r1','tok',false,[],'harbor','',undefined);
  expect(api.submitRoleForReview).not.toHaveBeenCalled();
  expect(platforms.saveCopies).not.toHaveBeenCalled();
  expect(router.currentRoute.value.path).toBe('/mine');
@@ -915,7 +915,7 @@ it('submits a private HarperHarbor draft to the same immutable community review'
  btnIn(root,i18n.global.t('editor.publish.submit')).click();await flush();
  settleConfirm(true,'','sfw');await flush();await flush();
  expect(api.submitRoleForReview).not.toHaveBeenCalled();
- expect(api.registerCard).toHaveBeenCalledWith('r1','tok',false,[],'harbor','');
+ expect(api.registerCard).toHaveBeenCalledWith('r1','tok',false,[],'harbor','',undefined);
  expect(router.currentRoute.value.path).toBe('/mine');
 });
 
@@ -928,7 +928,7 @@ it('retires a pending Harbor review before saving, then submits the completed dr
  expect(api.beginCardEdit).toHaveBeenCalledWith('r1','tok','harbor');
  expect(api.beginCardEdit.mock.invocationCallOrder[0]).toBeLessThan(api.patchRoleDocument.mock.invocationCallOrder[0]);
  expect(api.unpublishRole).toHaveBeenCalledWith('r1','tok');
- expect(api.registerCard).toHaveBeenCalledWith('r1','tok',true,[],'harbor','');
+ expect(api.registerCard).toHaveBeenCalledWith('r1','tok',true,[],'harbor','',undefined);
  expect(api.registerCard.mock.invocationCallOrder[0]).toBeGreaterThan(api.patchRoleDocument.mock.invocationCallOrder[0]);
 });
 
