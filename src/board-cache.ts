@@ -64,11 +64,15 @@ export async function readBoardCache(env: Env, ctx: Pick<ExecutionContext, "wait
   return null;
 }
 
-export function writeBoardCache(env: Env, ctx: Pick<ExecutionContext, "waitUntil">, key: Key, body: string): void {
+/**
+ * opts.edgeOnly：只進邊緣快取、不寫 KV。打字時的建議與候選查詢幾乎每個前綴都是一次 miss，
+ * 每次都寫 KV 會把寫入額度燒在沒人會再讀的鍵上；邊緣快取夠擋住同一個人連打的重複請求。
+ */
+export function writeBoardCache(env: Env, ctx: Pick<ExecutionContext, "waitUntil">, key: Key, body: string, opts: { edgeOnly?: boolean } = {}): void {
   const entry: Entry = { body, expiresAt: Date.now() + BOARD_TTL * 1000 };
   ctx.waitUntil(Promise.all([
     storeEdge(key, entry).catch(() => { console.warn("Board edge cache write unavailable"); }),
-    env.CACHE.put(key.kv, JSON.stringify(entry), { expirationTtl: BOARD_TTL })
-      .catch(() => { console.warn("Board KV cache write unavailable"); }),
+    ...(opts.edgeOnly ? [] : [env.CACHE.put(key.kv, JSON.stringify(entry), { expirationTtl: BOARD_TTL })
+      .catch(() => { console.warn("Board KV cache write unavailable"); })]),
   ]).then(() => {}));
 }

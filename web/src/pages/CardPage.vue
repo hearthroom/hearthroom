@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { cardFandom } from "@/lib/fandom";
 import CommunityAvatar from "@/components/CommunityAvatar.vue";
 import CommunityName from "@/components/CommunityName.vue";
 import LibraryToggle from "@/components/LibraryToggle.vue";
@@ -344,7 +345,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
             <div class="stat"><dt>{{ $t("card.stat.trending") }}</dt><dd :class="{ up: card.trending > 0 }">{{ card.trending > 0 ? `+${compact(card.trending)}` : "—" }}</dd></div>
           </dl>
 
-          <p v-if="card.fandom" class="role__fandom subtle">{{ $t("card.fandom") }} <RouterLink :to="{ path: lp('/search'), query: { fandom: card.fandom } }" class="role__fandom-link">{{ card.fandom }}</RouterLink></p>
+          <p v-if="card.fandom" class="role__fandom subtle">{{ $t("card.fandom") }} <RouterLink :to="{ path: lp('/search'), query: { fandom: card.fandomKey ?? card.fandom } }" class="role__fandom-link">{{ cardFandom(card, locale) }}</RouterLink></p>
           <ul v-if="card.tags.length" class="role__tags">
             <li v-for="tag in card.tags" :key="tag">
               <RouterLink :to="{ path: lp('/'), query: { tag } }" class="chip">#{{ tag }}</RouterLink>

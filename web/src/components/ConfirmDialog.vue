@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { confirmChoiceOk, confirmDialog, confirmState, confirmTextMatches, settleConfirm } from "@/lib/confirm";
+import LookupField, { type LookupValue } from "./LookupField.vue";
 
 const box = ref<HTMLElement | null>(null);
 /** 要照打的字：每次開新彈窗清空 */
 const typed = ref("");
 /** 必選項：每次開新彈窗清空，刻意不預選 */
 const choice = ref<string | null>(null);
-/** 選填的那一格：開新彈窗時填上預設值 */
+/** 選填的那一格：開新彈窗時填上預設值；有 lookup 的那種還帶著對上的編號 */
 const fieldText = ref("");
+const fieldPick = ref<LookupValue>({ label: "" });
 const typedOk = computed(() => !!confirmState.current && confirmTextMatches(confirmState.current, typed.value));
 /** 按了確認但必選項沒選：顯示缺什麼，不要讓確認鍵看起來能按卻「按了沒反應」 */
 const missingChoice = ref(false);
@@ -20,7 +22,8 @@ function confirm() {
     box.value?.querySelector<HTMLElement>("[data-choice]")?.focus();
     return;
   }
-  settleConfirm(true, typed.value, choice.value, fieldText.value);
+  if (cur.field?.lookup) settleConfirm(true, typed.value, choice.value, fieldPick.value.label, fieldPick.value.id);
+  else settleConfirm(true, typed.value, choice.value, fieldText.value);
 }
 watch(choice, () => { missingChoice.value = false; });
 /** 開啟前的焦點：關掉時還回去，鍵盤使用者不會掉到頁面開頭 */
@@ -32,6 +35,7 @@ watch(() => confirmState.current, async (cur) => {
   typed.value = "";
   choice.value = null;
   fieldText.value = cur.field?.initial ?? "";
+  fieldPick.value = { label: cur.field?.initial ?? "", ...(cur.field?.initialId ? { id: cur.field.initialId } : {}) };
   missingChoice.value = false;
   await nextTick();
   // 要照打的字：焦點直接進打字框。其他破壞性動作先站在取消鍵上：按錯 Enter 也不會刪掉東西
@@ -88,9 +92,9 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
         <!-- 選填的一格字（例如原作）：Enter 不送出，送出仍要按確認鍵——必選項還沒選的話得先選 -->
         <label v-if="confirmState.current.field" class="dlg__field">
           <span class="dlg__field-label">{{ confirmState.current.field.label }}</span>
-          <input v-model="fieldText" class="input" type="text" autocomplete="off" data-field :list="confirmState.current.field.suggestions?.length ? 'dlg-field-suggestions' : undefined"
+          <LookupField v-if="confirmState.current.field.lookup" v-model="fieldPick" :lookup="confirmState.current.field.lookup" :placeholder="confirmState.current.field.placeholder" :maxlength="confirmState.current.field.maxlength" :label="confirmState.current.field.label" />
+          <input v-else v-model="fieldText" class="input" type="text" autocomplete="off" data-field
                  :placeholder="confirmState.current.field.placeholder" :maxlength="confirmState.current.field.maxlength" @keydown.enter.prevent="confirm" />
-          <datalist v-if="confirmState.current.field.suggestions?.length" id="dlg-field-suggestions"><option v-for="s in confirmState.current.field.suggestions" :key="s" :value="s" /></datalist>
           <span v-if="confirmState.current.field.hint" class="subtle">{{ confirmState.current.field.hint }}</span>
         </label>
         <div class="dlg__actions">
