@@ -14,9 +14,13 @@ import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { confirmDialog } from "@/lib/confirm";
 import type { WorldbookEntryDraft, WorldbookMatchOptions } from "@/lib/role-draft";
-import { ENTRY_CONTENT_MAX } from "@/lib/tavern";
+import { entryContentMax } from "@/lib/tavern";
 
-const props = defineProps<{ modelValue: WorldbookEntryDraft[] }>();
+const props = defineProps<{
+  modelValue: WorldbookEntryDraft[];
+  /** 這本書所綁的卡的語區：條目內容上限跟著它走。 */
+  language: string;
+}>();
 const emit = defineEmits<{
   "update:modelValue": [WorldbookEntryDraft[]];
   close: [];
@@ -25,6 +29,7 @@ const emit = defineEmits<{
 const { t } = useI18n();
 
 const NAME_MAX = 20;
+const contentMax = computed(() => entryContentMax(props.language));
 const CATEGORIES = ["character", "location", "item", "event", "rule", "custom"];
 const TRIGGER_REGIONS = ["both", "user_only", "ai_only"];
 const SELECTIVE_LOGIC = [0, 1, 2, 3];
@@ -239,8 +244,8 @@ function onKeydown(event: KeyboardEvent) {
                         :placeholder="$t('wb.entry.content.placeholder')"
                         @input="patch({ content: ($event.target as HTMLTextAreaElement).value })" />
               <span class="field__foot">
-                <span class="subtle">{{ [...entry.content].length > ENTRY_CONTENT_MAX ? $t("wb.entry.content.over", { max: ENTRY_CONTENT_MAX }) : "" }}</span>
-                <span class="subtle count" :class="{ over: [...entry.content].length > ENTRY_CONTENT_MAX }">{{ [...entry.content].length }} / {{ ENTRY_CONTENT_MAX }}</span>
+                <span class="subtle">{{ [...entry.content].length > contentMax ? $t("wb.entry.content.over", { max: contentMax }) : "" }}</span>
+                <span class="subtle count" :class="{ over: [...entry.content].length > contentMax }">{{ [...entry.content].length }} / {{ contentMax }}</span>
               </span>
             </div>
 
