@@ -344,6 +344,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
             <div class="stat"><dt>{{ $t("card.stat.trending") }}</dt><dd :class="{ up: card.trending > 0 }">{{ card.trending > 0 ? `+${compact(card.trending)}` : "—" }}</dd></div>
           </dl>
 
+          <p v-if="card.fandom" class="role__fandom subtle">{{ $t("card.fandom") }} <RouterLink :to="{ path: lp('/search'), query: { fandom: card.fandom } }" class="role__fandom-link">{{ card.fandom }}</RouterLink></p>
           <ul v-if="card.tags.length" class="role__tags">
             <li v-for="tag in card.tags" :key="tag">
               <RouterLink :to="{ path: lp('/'), query: { tag } }" class="chip">#{{ tag }}</RouterLink>
@@ -517,6 +518,8 @@ watch(() => session.profile?.showNsfw, (now, before) => {
 .role__stats .stat dd.up { color: var(--accent-text); }
 
 .role__tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.role__fandom { margin: 0; font-size: 13px; }
+.role__fandom-link { color: var(--text); font-weight: 600; text-decoration: underline dashed; text-underline-offset: 3px; }
 .role__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
 .role__cta { flex: 1; min-width: 0; }
 .role__via { margin: 6px 0 0; }

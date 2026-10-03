@@ -71,7 +71,7 @@ it('the reviewer holding the claim fixes a missing tag and the page shows the sa
  [...el.querySelectorAll<HTMLButtonElement>('.picker button')].find(b=>b.textContent?.trim()==='倫理')!.click();
  await vi.waitFor(()=>expect([...el.querySelectorAll('button')].some(b=>b.textContent?.trim()===i18n.global.t('review.tags.save'))).toBe(true));
  [...el.querySelectorAll('button')].find(b=>b.textContent?.trim()===i18n.global.t('review.tags.save'))!.click();
- await vi.waitFor(()=>expect(api.updateReviewTags).toHaveBeenCalledWith('s1','local-reviewer',{tags:['冒險','倫理'],generation:'g1'}));
+ await vi.waitFor(()=>expect(api.updateReviewTags).toHaveBeenCalledWith('s1','local-reviewer',{tags:['冒險','倫理'],fandom:'',generation:'g1'}));
  await vi.waitFor(()=>expect(el.textContent).toContain(i18n.global.t('review.tags.author',{tags:'冒險'})));
 });
 

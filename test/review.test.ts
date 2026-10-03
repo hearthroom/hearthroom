@@ -174,7 +174,7 @@ describe("審核佇列", () => {
 
     const res = await tags(id, "rev-a", { tags: [" 推理 ", "倫理", "倫理"] });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ tags: ["推理", "倫理"] });
+    expect(await res.json()).toEqual({ tags: ["推理", "倫理"], fandom: "" });
     // 審核頁讀到的是改過的標籤
     const detail = (await (await SELF.fetch(`https://c.test/v1/review/${id}/detail`, { headers: bearer("rev-a") })).json()) as any;
     expect(detail.card.tags).toEqual(["推理", "倫理"]);

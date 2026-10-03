@@ -35,22 +35,30 @@ export interface ConfirmOptions {
   choices?: { value: string; label: string; hint?: string }[];
   /** 選項組的標題 */
   choiceLabel?: string;
+  /** 一格選填的文字（例如原作）：有 initial 就先填好；suggestions 給瀏覽器的建議清單 */
+  field?: { label: string; placeholder?: string; hint?: string; maxlength?: number; initial?: string; suggestions?: string[] };
 }
 
-interface Pending extends ConfirmOptions { resolve: (ok: boolean, choice: string | null) => void }
+interface Pending extends ConfirmOptions { resolve: (ok: boolean, choice: string | null, text: string) => void }
 
 export const confirmState = reactive<{ current: Pending | null }>({ current: null });
 
 export function confirmDialog(opts: ConfirmOptions): Promise<boolean> {
   // 前一個還沒回答就來了新的：舊的當取消，不讓兩個疊在一起
-  confirmState.current?.resolve(false, null);
+  confirmState.current?.resolve(false, null, "");
   return new Promise((resolve) => { confirmState.current = { ...opts, resolve: (ok) => resolve(ok) }; });
 }
 
 /** 帶必選項的確認：確認回選到的值，取消回 null。 */
 export function confirmChoice(opts: ConfirmOptions & { choices: NonNullable<ConfirmOptions["choices"]> }): Promise<string | null> {
-  confirmState.current?.resolve(false, null);
+  confirmState.current?.resolve(false, null, "");
   return new Promise((resolve) => { confirmState.current = { ...opts, resolve: (ok, choice) => resolve(ok ? choice : null) }; });
+}
+
+/** 必選項加一格文字：確認回兩樣，取消回 null。 */
+export function confirmForm(opts: ConfirmOptions & { choices: NonNullable<ConfirmOptions["choices"]>; field: NonNullable<ConfirmOptions["field"]> }): Promise<{ choice: string; text: string } | null> {
+  confirmState.current?.resolve(false, null, "");
+  return new Promise((resolve) => { confirmState.current = { ...opts, resolve: (ok, choice, text) => resolve(ok && choice !== null ? { choice, text } : null) }; });
 }
 
 /** 有必選項的彈窗，選了才算能確認。 */
@@ -69,11 +77,11 @@ export function confirmTextMatches(opts: Pick<ConfirmOptions, "requireText">, ty
  * 由彈窗元件呼叫：把答案交回去並關掉。
  * 有 requireText 的彈窗，確認時要帶使用者打的字；沒打對就當沒按——彈窗留著。
  */
-export function settleConfirm(ok: boolean, typed = "", choice: string | null = null): void {
+export function settleConfirm(ok: boolean, typed = "", choice: string | null = null, text = ""): void {
   const c = confirmState.current;
   if (!c) return;
   if (ok && !confirmTextMatches(c, typed)) return;
   if (ok && !confirmChoiceOk(c, choice)) return;
   confirmState.current = null;
-  c.resolve(ok, choice);
+  c.resolve(ok, choice, text.trim());
 }

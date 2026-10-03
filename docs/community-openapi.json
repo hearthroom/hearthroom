@@ -160,6 +160,15 @@
             "description": "Search text."
           },
           {
+            "name": "fandom",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Fandom filter; spelling variants and known aliases match the same fandom."
+          },
+          {
             "name": "sort",
             "in": "query",
             "required": false,
@@ -1928,6 +1937,212 @@
           }
         }
       }
+    },
+    "/v1/fandoms": {
+      "get": {
+        "tags": [
+          "Cards"
+        ],
+        "summary": "List community fandoms",
+        "security": [],
+        "parameters": [
+          {
+            "name": "zone",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "zh",
+                "en",
+                "ja",
+                "ko",
+                "all"
+              ],
+              "default": "zh"
+            },
+            "description": "Content language filter."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Fandom search text."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 60,
+              "default": 24
+            },
+            "description": ""
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000,
+              "default": 0
+            },
+            "description": "Pagination offset."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "fandom": {
+                            "type": "string"
+                          },
+                          "n": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "hasNext": {
+                      "type": "boolean"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    },
+                    "offset": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/suggest": {
+      "get": {
+        "tags": [
+          "Cards"
+        ],
+        "summary": "Suggest search completions",
+        "security": [],
+        "parameters": [
+          {
+            "name": "zone",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "zh",
+                "en",
+                "ja",
+                "ko",
+                "all"
+              ],
+              "default": "zh"
+            },
+            "description": "Content language filter."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Partial search text."
+          },
+          {
+            "name": "hide",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated tag keys to exclude."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tags, fandoms and cards matching the text. Adult content is never included.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tags": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "tag": {
+                            "type": "string"
+                          },
+                          "n": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "fandoms": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "fandom": {
+                            "type": "string"
+                          },
+                          "n": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "cards": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "num": {
+                            "type": "integer"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "avatarUrl": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2042,6 +2257,9 @@
           "syncedAt": {
             "type": "integer",
             "description": "Unix milliseconds."
+          },
+          "fandom": {
+            "type": "string"
           }
         }
       },

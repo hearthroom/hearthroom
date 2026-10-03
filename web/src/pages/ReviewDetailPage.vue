@@ -79,6 +79,9 @@ const authorTags = computed(() => readTags(doc.value?.roleTag));
 /** 這一版過審後會上榜的標籤：審核人改過就是改過的那份。 */
 const tags = computed(() => data.value?.card.tags ?? authorTags.value);
 const tagsChanged = computed(() => JSON.stringify(tags.value) !== JSON.stringify(authorTags.value));
+/** 這一版過審後會上的原作：作者宣告的，審核人改過就是改過的那個 */
+const fandom = computed(() => data.value?.card.fandom ?? "");
+const draftFandom = ref("");
 
 /**
  * 審核時直接改標籤：作者少勾、勾錯不值得退件，領著單的審核人改對再過審。只改這一次送審的版本。
@@ -91,6 +94,7 @@ const tagsBusy = ref(false);
 const tagsError = ref("");
 function editTags() {
   draftTags.value = [...tags.value];
+  draftFandom.value = fandom.value;
   tagsError.value = "";
   editingTags.value = true;
 }
@@ -102,8 +106,9 @@ async function saveTags() {
   tagsBusy.value = true;
   tagsError.value = "";
   try {
-    const res = await updateReviewTags(id.value, await token(), { tags: draftTags.value, generation: data.value.submission.claimGeneration });
+    const res = await updateReviewTags(id.value, await token(), { tags: draftTags.value, fandom: draftFandom.value.trim(), generation: data.value.submission.claimGeneration });
     data.value.card.tags = res.tags;
+    data.value.card.fandom = res.fandom ?? draftFandom.value.trim();
     editingTags.value = false;
   } catch (err) {
     tagsError.value = err instanceof ApiError && err.status === 409 ? t("review.claimChanged") : t("review.tags.failed");
@@ -230,6 +235,7 @@ onMounted(() => { void load(); });
       <section v-show="section === 'basic'" class="pane panel">
         <div class="field"><label>{{ $t("editor.name") }}</label><input class="input" :value="doc.roleName" readonly /></div>
         <div class="field"><label>{{ $t("editor.summary") }}</label><pre class="text">{{ doc.roleDesc }}</pre></div>
+        <div class="field"><label>{{ $t("review.fandom") }}</label><p class="text" data-fandom-shown>{{ fandom || $t("review.fandom.none") }}</p></div>
         <div class="field">
           <label>{{ $t("review.tags") }}</label>
           <template v-if="!editingTags">
@@ -248,6 +254,7 @@ onMounted(() => { void load(); });
             </ul>
             <TagPicker :selected="draftTags" :language="doc.language || 'zh-Hant'" :max="TAGS_MAX" @toggle="toggleDraftTag" />
             <span class="subtle">{{ $t("review.tags.hint") }}</span>
+            <label class="field"><span>{{ $t("review.fandom") }}</span><input v-model="draftFandom" class="input" type="text" maxlength="60" :placeholder="$t('editor.fandom.placeholder')" data-fandom /></label>
             <p v-if="tagsError" class="notice notice--error" role="alert">{{ tagsError }}</p>
             <div class="tags-acts">
               <button type="button" class="btn btn--sm btn--ghost" :disabled="tagsBusy" @click="editingTags = false">{{ $t("dialog.cancel") }}</button>

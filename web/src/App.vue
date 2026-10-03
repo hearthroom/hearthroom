@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SearchSuggest from "@/components/SearchSuggest.vue";
 import { communityRequest } from "./lib/community";
 import CommunityIcon from "@/components/CommunityIcon.vue";
 import ReviewBadge from "@/components/ReviewBadge.vue";
@@ -37,7 +38,7 @@ onBeforeUnmount(()=>{clearInterval(reviewTimer);window.removeEventListener('focu
 
 /** 搜尋放在頁首，全站都搜得到；結果落在搜尋頁。按 / 直接聚焦。搜尋頁自己有一個大的，頁首那個就收起來。 */
 const q = ref((route.query.q as string) ?? "");
-const box = ref<HTMLInputElement | null>(null);
+const box = ref<InstanceType<typeof SearchSuggest> | null>(null);
 const onSearchPage = computed(() => route.path === lp("/search"));
 watch(() => route.query.q, (v) => { q.value = (v as string) ?? ""; });
 
@@ -51,7 +52,7 @@ function onSlash(e: KeyboardEvent) {
   if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey || e.isComposing) return;
   if ((e.target as HTMLElement)?.closest("input, textarea, select, [contenteditable]")) return;
   e.preventDefault();
-  if (box.value?.offsetParent) box.value.focus();
+  if ((box.value?.$el as HTMLElement | undefined)?.offsetParent) box.value?.focus();
   else if (onSearchPage.value) document.querySelector<HTMLInputElement>("main input[type=search]")?.focus();
   else router.push(lp("/search"));
 }
@@ -83,14 +84,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
           <circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.7" />
           <path d="M12.8 12.8 17 17" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
         </svg>
-        <input
-          ref="box"
-          v-model="q"
-          class="search__input"
-          type="search"
-          :placeholder="$t('board.search.placeholder')"
-          :aria-label="$t('board.search.submit')"
-        />
+        <SearchSuggest ref="box" v-model="q" input-class="search__input" :placeholder="$t('board.search.placeholder')" :label="$t('board.search.submit')" @submit="search" />
         <kbd class="search__kbd" aria-hidden="true">/</kbd>
       </form>
 
@@ -194,16 +188,17 @@ onMounted(() => document.addEventListener("keydown", onSlash));
   position: absolute; left: 12px; top: 50%; width: 16px; height: 16px;
   transform: translateY(-50%); color: var(--text-3); pointer-events: none;
 }
-.search__input {
+/* 輸入框住在 SearchSuggest 裡：scoped 規則要用 :deep 才打得到 */
+.search :deep(.search__input) {
   width: 100%; height: var(--h-md); padding: 0 var(--s-4) 0 36px;
   font: inherit; font-size: 14px; color: var(--text);
   background: var(--surface-2);
   border: 1px solid transparent; border-radius: var(--r-pill);
   transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
-.search__input::placeholder { color: var(--text-3); }
-.search__input:focus { outline: none; background: var(--surface); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.search__input::-webkit-search-cancel-button { -webkit-appearance: none; }
+.search :deep(.search__input)::placeholder { color: var(--text-3); }
+.search :deep(.search__input):focus { outline: none; background: var(--surface); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.search :deep(.search__input)::-webkit-search-cancel-button { -webkit-appearance: none; }
 .search__kbd {
   position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
   padding: 1px 6px; border-radius: 5px;
