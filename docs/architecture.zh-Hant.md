@@ -240,11 +240,23 @@ FTS5 + **trigram** tokenizer。`unicode61` 不切中日韓詞，整句會變成�
 NFKC 全半形統一、日文新字體→繁體→簡體逐字對照（OpenCC 字表）、小寫、去標點、中日文之間
 的空白去掉。所以「萬族創世錄」「万族创世录」「末日·進化」「末日進化」「ＳＡＯ」「sao」互相都找得到。
 
-**原作（fandom）**是本站自己的欄位（供應商沒有）：作者送審時在分級彈窗裡填，審核人在審核頁可改（留
-`moderation_events` 的 `fandom` 稽核列），過審時由 `hosting_review_search` trigger 從版本的 `public_role`
-投影到 `cards.fandom`／`fandom_key`。`fandom_key` 是正規形（同 `searchForm`），`?fandom=` 篩選與
-`/v1/fandoms` 分組都用它，「刀劍神域」「刀剑神域」是同一個原作；清單上的名字取最多人寫的那種。原作同時
-進 `search_name` 那一欄（權重最高），每小時同步重算索引時從卡上帶回來，不會被上游的資料洗掉。
+**原作（fandom）**是本站自己的欄位（供應商沒有），以 **Wikidata** 的作品編號為準（owner 2026-10-03：
+站方不維護目錄）。作者送審時在分級彈窗裡打作品名，`/v1/fandom-lookup` 用繁中、簡中、日文、英文、韓文同時向
+Wikidata 搜候選，點選就對上一個 Q 編號；選定時 `src/fandom.ts` 把那筆的各語言正式名、別名、說明抓進
+`fandom_entities`，之後顯示與搜尋都不再問對方。找不到的照打，當自由文字（待歸類）。
+
+`cards.fandom_key` 是篩選與分組的鍵：對到編號的是 `wd:Q…`，自由文字是正規形（同 `searchForm`）。
+`?fandom=` 收鍵或任何語言、任何寫法的作品名（自由文字比鍵；對到編號的比 `fandom_entities.search_text`
+裡的名字與別名），`/v1/fandoms` 按鍵分組並照看的人的語言出名字（`labels` 一起回，前端照介面語言挑，
+`web/src/lib/fandom.ts`）。原作連同作品的所有名字與別名一起進 `search_name` 那一欄（權重最高），每小時
+同步重算索引時從卡上帶回來，不會被上游的資料洗掉。
+
+審核人在審核頁可改（留 `moderation_events` 的 `fandom` 稽核列），過審時由 `hosting_review_search` trigger
+從版本的 `public_role` 投影到卡上。社群管理員可對已上榜的卡改原作（`POST /v1/moderation/cards/:id/fandom`）：
+寫 `moderation_state.fandom_override` 並直接改卡，之後作者再送審也以它為準。
+
+同一部作品在 Wikidata 常有好幾條（小說、動畫、系列）；作者點了不同條就會分成兩組，管理員事後可併。
+不自動沿「所屬系列」合併：那會把崩壞三與星穹鐵道併成「崩壞系列」，粒度錯了。
 
 **搜尋建議**（`/v1/suggest?q=`）：標籤、原作、卡名各最多五個，只給一般內容、走公開快取；前端打字停 200ms
 才問，輸入法組字中不問。它的用意是讓人在按搜尋前就知道站上有沒有、該怎麼寫，別名表因此只需要收確定的縮寫。

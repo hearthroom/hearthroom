@@ -26,7 +26,7 @@ import { useI18n } from "vue-i18n";
 import {
   createRole,
   fetchCard,
-  fetchFandoms,
+  fetchFandomLookup,
   registerCardIdentity,
   deleteRole,
   fetchAuthorAsset,
@@ -81,7 +81,6 @@ import { ENTRY_CONTENT_MAX, draftToTavern, embedIntoPng, imageFetchUrl, worldboo
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
 import { confirmDialog, confirmForm } from "@/lib/confirm";
-import { defaultZone } from "@/lib/i18n";
 import { track } from "@/lib/track";
 import FieldText from "@/components/editor/FieldText.vue";
 import ListEditor from "@/components/editor/ListEditor.vue";
@@ -100,8 +99,9 @@ const { t } = useI18n();
 const editorProvider=ref(currentProvider());
 const roleId = ref<string>((route.params.roleId as string) ?? "");
 const cardNumber = ref<number>();
-/** 這張卡目前在榜上的原作：再送審時先填好，不必重打 */
+/** 這張卡目前在榜上的原作：再送審時先填好，不必重打；對到 Wikidata 的連編號一起帶 */
 const cardFandom = ref("");
+const cardFandomId = ref("");
 const isNew = computed(() => !roleId.value);
 /**
  * 網址還停在 /create。跟 isNew 不同：建卡成功、內容沒存進去時卡已經有編號（isNew 變 false），
@@ -489,6 +489,7 @@ onMounted(async () => {
       if (card.provider !== editorProvider.value) throw new Error(t('state.loadFailed'));
       cardNumber.value = card.num;
       cardFandom.value = card.fandom ?? "";
+      cardFandomId.value = card.fandomKey?.startsWith("wd:") ? card.fandomKey.slice(3) : "";
       roleId.value = card.sourceRoleId ?? card.roleId;
     }
     const raw = await fetchRoleDetail(roleId.value, token ?? undefined);
@@ -730,7 +731,7 @@ async function save() {
     await saveRegex(token, targetRoleId);
 
     if (review.resubmit) {
-      await registerCard(targetRoleId, token, review.nsfw === true, [], editorProvider.value, review.fandom ?? "");
+      await registerCard(targetRoleId, token, review.nsfw === true, [], editorProvider.value, review.fandom ?? "", review.fandomId);
       reviewRetry.value = false;
       reviewResubmitted.value = true;
     }
@@ -809,8 +810,6 @@ async function remove() {
 
 async function publish() {
   if (!canPublish.value || saving.value) return;
-  // 原作的建議清單：站上已有的寫法，作者照著選，同一部作品才不會各寫各的
-  const suggestions = await fetchFandoms(defaultZone(locale.value)).then((xs) => xs.map((x) => x.fandom)).catch(() => []);
   const answer = await confirmForm({
     title: t("mine.consent.title"), message: t("workspace.reviewConsent"),
     confirmText: t("mine.consent.confirm"), choiceLabel: t("mine.rating.label"),
@@ -818,7 +817,8 @@ async function publish() {
       {value: "sfw", label: t("mine.rating.sfw"), hint: t("mine.rating.sfwHint")},
       {value: "nsfw", label: t("mine.rating.nsfw"), hint: t("mine.rating.nsfwHint")},
     ],
-    field: { label: t("editor.fandom.label"), placeholder: t("editor.fandom.placeholder"), hint: t("editor.fandom.hint"), maxlength: 60, initial: cardFandom.value, suggestions },
+    // 打作品名去 Wikidata 找候選，點了就對上編號；找不到照打，當自由文字
+    field: { label: t("editor.fandom.label"), placeholder: t("editor.fandom.placeholder"), hint: t("editor.fandom.hint"), maxlength: 60, initial: cardFandom.value, initialId: cardFandomId.value || undefined, lookup: (q) => fetchFandomLookup(q) },
   });
   if (!answer) return;
   const rating = answer.choice;
@@ -827,12 +827,13 @@ async function publish() {
   try {
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
-    await registerCard(roleId.value, token, rating === "nsfw", [], editorProvider.value, answer.text);
+    await registerCard(roleId.value, token, rating === "nsfw", [], editorProvider.value, answer.text, answer.id);
     saving.value = false;
     await router.push(lp("/mine?fresh=1"));
   } catch (err) {
     error.value =
       err instanceof ApiError && err.code === "weekly_quota_exceeded" ? t("mine.quota.exceeded")
+      : err instanceof ApiError && (err.code === "fandom_lookup_failed" || err.code === "fandom_not_found") ? t("mine.fandomLookupFailed")
       : err instanceof ApiError && err.code === "card_too_large_for_review" ? t("mine.tooLargeForReview")
       : err instanceof Error ? err.message : t("state.saveFailed");
   } finally {

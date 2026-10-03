@@ -38,7 +38,7 @@ function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respon
     return json({ items: partial ? [{ id: "1", roleId: "r1", zone: "zh", name: "一", summary: "", names: {}, summaries: {}, avatarUrl: null, backgroundUrl: null, slug: null, tags: [], author: { handle: null, accountNumId: 1, name: "a", avatar: "" }, talkNum: 0, followNum: 0, trending: 0, registeredAt: 0, syncedAt: 0, provider: "harbor", nsfw: false }] : [], total: null, hasNext: false, limit: 24, offset: 0, sort: "relevance", ...(partial ? { partial: true } : {}) }, { "X-Adult-Content": state.showNsfw ? "1" : "0" });
   }
   if (url.includes("/v1/authors?")) return json({ items: [], hasNext: false, limit: 24, offset: 0, sort: "talk" });
-  if (url.includes("/v1/fandoms?")) return json({ items: [{ fandom: "原神", n: 3 }, { fandom: "崩壞三", n: 1 }], hasNext: false, limit: 24, offset: 0 });
+  if (url.includes("/v1/fandoms?")) return json({ items: [{ key: "原神", fandom: "原神", n: 3 }, { key: "wd:Q1", fandom: "崩壞三", labels: { "zh-hant": "崩壞三", "zh-hans": "崩坏三", en: "Honkai Impact 3rd" }, n: 1 }], hasNext: false, limit: 24, offset: 0 });
   if (url.includes("/v1/suggest?")) return json({ tags: [], fandoms: [], cards: [] });
   if (url.includes("/v1/tags?")) return json({ items: [], hasNext: false, limit: 24, offset: 0 });
   return json({ error: "not_found" });

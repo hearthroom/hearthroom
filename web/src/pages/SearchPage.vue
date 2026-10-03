@@ -6,6 +6,8 @@ import AuthorList from "@/components/AuthorList.vue";
 import CardGrid from "@/components/CardGrid.vue";
 import { fetchAuthors, fetchBoard, fetchFandoms, fetchTags, searchTags } from "@/lib/api";
 import SearchSuggest from "@/components/SearchSuggest.vue";
+import { cardFandom, fandomLabel } from "@/lib/fandom";
+import type { FandomItem } from "@/lib/api";
 import { contentLang, defaultZone, pageTitle } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
@@ -59,7 +61,9 @@ const loading = ref(false);
 const error = ref("");
 /** 沒輸入字時給人一排熱門類型當起點；結果很少時底下接一排熱門卡，畫面不會只剩一張卡配一片空白 */
 const tags = ref<{ tag: string; n: number }[]>([]);
-const fandoms = ref<{ fandom: string; n: number }[]>([]);
+const fandoms = ref<FandomItem[]>([]);
+/** 籤上的字：清單裡有這個鍵就用它的名字，沒有就用結果裡第一張卡的，再沒有就把鍵照出 */
+const fandomChip = computed(() => { const hit = fandoms.value.find((x) => x.key === fandom.value); if (hit) return fandomLabel(hit.labels, locale.value) || hit.fandom; const first = cards.value?.items[0]; return first?.fandom ? cardFandom(first, locale.value) : fandom.value.replace(/^wd:/, ""); });
 const hot = ref<CommunityCard[]>([]);
 
 let loadId = 0;
@@ -91,7 +95,7 @@ async function loadSide() {
   const z = defaultZone(locale.value);
   const [tg, fd, hb] = await Promise.all([
     fetchTags(z).catch(() => []),
-    fetchFandoms(z).catch(() => []),
+    fetchFandoms(z, "", contentLang(locale.value)).catch(() => []),
     fetchBoard({ zone: z, sort: "hot", limit: 4, lang: contentLang(locale.value) }).then((b) => b.items).catch(() => []),
   ]);
   tags.value = tg.slice(0, 12);
@@ -195,7 +199,7 @@ watch(q, (v) => { draft.value = v; });
       </div>
       <div v-if="kind === 'cards' && fandom" class="search__selected">
         <span class="subtle">{{ $t("card.fandom") }}</span>
-        <button class="tagchip is-on" data-fandom-chip @click="navigate({ fandom: undefined })">{{ fandom }} <span aria-hidden="true">×</span></button>
+        <button class="tagchip is-on" data-fandom-chip @click="navigate({ fandom: undefined })">{{ fandomChip }} <span aria-hidden="true">×</span></button>
       </div>
       <div v-if="kind === 'cards' && selected.length && !filtersOpen" class="search__selected">
         <button v-for="tag in selected" :key="tag" class="tagchip" @click="navigate({ tag: toggleTag(selected, tag) })">{{ selectedLabel(tag) }} <span aria-hidden="true">×</span></button>
@@ -220,7 +224,7 @@ watch(q, (v) => { draft.value = v; });
           :loading="loading && !cards"
           :busy="loading"
           :show-zone="allZones"
-          :empty-title="q || fandom ? $t('search.empty', { q: q || fandom }) : $t('board.empty.search.title')"
+          :empty-title="q || fandom ? $t('search.empty', { q: q || fandomChip }) : $t('board.empty.search.title')"
           :empty-hint="$t('board.empty.search.hint')"
         />
         <nav v-if="cards && (cards.offset > 0 || cards.hasNext)" class="pager">
@@ -270,7 +274,7 @@ watch(q, (v) => { draft.value = v; });
       <section v-if="fandoms.length" class="zero" data-fandoms>
         <h2 class="also__title">{{ $t("search.fandoms") }}</h2>
         <div class="zero__tags">
-          <button v-for="x in fandoms" :key="x.fandom" class="tagchip" @click="searchFandom(x.fandom)">{{ x.fandom }}<span class="tagchip__n">{{ x.n }}</span></button>
+          <button v-for="x in fandoms" :key="x.key" class="tagchip" @click="searchFandom(x.key)">{{ fandomLabel(x.labels, locale) || x.fandom }}<span class="tagchip__n">{{ x.n }}</span></button>
         </div>
       </section>
       <section v-if="hot.length" class="also">

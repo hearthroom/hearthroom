@@ -20,7 +20,7 @@ function fakeFetch(input: RequestInfo | URL): Promise<Response> {
   if (url.includes("/v1/suggest?")) {
     const q = decodeURIComponent(/[?&]q=([^&]*)/.exec(url)?.[1] ?? "");
     if (!q) return json({ tags: [], fandoms: [], cards: [] });
-    return json({ tags: [{ tag: "崩壞", n: 3 }], fandoms: [{ fandom: "崩壞三", n: 2 }], cards: [{ num: 100001, name: "崩壞三 琪亞娜", avatarUrl: null }] });
+    return json({ tags: [{ tag: "崩壞", n: 3 }], fandoms: [{ key: "wd:Q1", fandom: "崩壞三", labels: { "zh-hant": "崩壞三", en: "Honkai Impact 3rd" }, n: 2 }], cards: [{ num: 100001, name: "崩壞三 琪亞娜", avatarUrl: null }] });
   }
   return json({ error: "not_found" });
 }
@@ -73,7 +73,7 @@ describe("搜尋建議", () => {
     expect(input().getAttribute("aria-activedescendant")).toMatch(/-2$/);
     await press("Enter");
     expect(router.currentRoute.value.path).toBe("/search");
-    expect(router.currentRoute.value.query.fandom).toBe("崩壞三");
+    expect(router.currentRoute.value.query.fandom).toBe("wd:Q1");
     await type("崩壞");
     await settle();
     expect(input().getAttribute("aria-expanded")).toBe("true");

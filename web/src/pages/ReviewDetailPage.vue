@@ -11,6 +11,8 @@ import { RouterLink, useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { ApiError, claimReview, fetchReviewDetail, fetchReviewOriginality, releaseReview, stampReview, updateReviewTags, type ReviewDetail, type ReviewOriginality } from "@/lib/api";
 import TagPicker from "@/components/editor/TagPicker.vue";
+import LookupField, { type LookupValue } from "@/components/LookupField.vue";
+import { fetchFandomLookup } from "@/lib/api";
 import { dateTime } from "@/lib/format";
 import { pageTitle } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
@@ -81,7 +83,7 @@ const tags = computed(() => data.value?.card.tags ?? authorTags.value);
 const tagsChanged = computed(() => JSON.stringify(tags.value) !== JSON.stringify(authorTags.value));
 /** 這一版過審後會上的原作：作者宣告的，審核人改過就是改過的那個 */
 const fandom = computed(() => data.value?.card.fandom ?? "");
-const draftFandom = ref("");
+const draftFandom = ref<LookupValue>({ label: "" });
 
 /**
  * 審核時直接改標籤：作者少勾、勾錯不值得退件，領著單的審核人改對再過審。只改這一次送審的版本。
@@ -94,7 +96,7 @@ const tagsBusy = ref(false);
 const tagsError = ref("");
 function editTags() {
   draftTags.value = [...tags.value];
-  draftFandom.value = fandom.value;
+  draftFandom.value = { label: fandom.value, ...(data.value?.card.fandomId ? { id: data.value.card.fandomId } : {}) };
   tagsError.value = "";
   editingTags.value = true;
 }
@@ -106,9 +108,10 @@ async function saveTags() {
   tagsBusy.value = true;
   tagsError.value = "";
   try {
-    const res = await updateReviewTags(id.value, await token(), { tags: draftTags.value, fandom: draftFandom.value.trim(), generation: data.value.submission.claimGeneration });
+    const res = await updateReviewTags(id.value, await token(), { tags: draftTags.value, fandom: draftFandom.value.label.trim(), ...(draftFandom.value.id ? { fandomId: draftFandom.value.id } : {}), generation: data.value.submission.claimGeneration });
     data.value.card.tags = res.tags;
-    data.value.card.fandom = res.fandom ?? draftFandom.value.trim();
+    data.value.card.fandom = res.fandom ?? draftFandom.value.label.trim();
+    data.value.card.fandomId = res.fandomId;
     editingTags.value = false;
   } catch (err) {
     tagsError.value = err instanceof ApiError && err.status === 409 ? t("review.claimChanged") : t("review.tags.failed");
@@ -254,7 +257,7 @@ onMounted(() => { void load(); });
             </ul>
             <TagPicker :selected="draftTags" :language="doc.language || 'zh-Hant'" :max="TAGS_MAX" @toggle="toggleDraftTag" />
             <span class="subtle">{{ $t("review.tags.hint") }}</span>
-            <label class="field"><span>{{ $t("review.fandom") }}</span><input v-model="draftFandom" class="input" type="text" maxlength="60" :placeholder="$t('editor.fandom.placeholder')" data-fandom /></label>
+            <label class="field"><span>{{ $t("review.fandom") }}</span><LookupField v-model="draftFandom" :lookup="(q) => fetchFandomLookup(q)" :placeholder="$t('editor.fandom.placeholder')" :label="$t('review.fandom')" /></label>
             <p v-if="tagsError" class="notice notice--error" role="alert">{{ tagsError }}</p>
             <div class="tags-acts">
               <button type="button" class="btn btn--sm btn--ghost" :disabled="tagsBusy" @click="editingTags = false">{{ $t("dialog.cancel") }}</button>
