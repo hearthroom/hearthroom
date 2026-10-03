@@ -60,9 +60,9 @@ function toggle(entry: TagEntry) {
 .discovery-tags__toggle { gap: 4px; min-height: var(--h-sm); padding-block: 0; border-style: dashed; color: var(--text-3); }
 .discovery-tags__toggle svg { width: 12px; height: 12px; transition: transform var(--dur) var(--ease); }
 .discovery-tags__toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+/* 籤的高度各寬度一致（30px）：窄螢幕原本撐到 44px，字四周留白太多、一顆顆顯得胖，跟橫放時判若兩物（owner 2026-10-03） */
 @media (max-width: 640px) {
-  .tagchip { min-height: var(--h-lg); }
-  /* 收合＝兩行籤（44 ＋ 8 ＋ 44）加上下 4px 的內距；第三行從邊緣被切掉，看得出下面還有 */
-  .discovery-tags--collapsed .discovery-tags__inner { max-height: 104px; overflow: hidden; }
+  /* 收合＝兩行籤（30 ＋ 8 ＋ 30）加上下 4px 的內距；第三行從邊緣被切掉，看得出下面還有 */
+  .discovery-tags--collapsed .discovery-tags__inner { max-height: 76px; overflow: hidden; }
 }
 </style>
