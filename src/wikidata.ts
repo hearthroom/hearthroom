@@ -46,18 +46,16 @@ async function call(params: Record<string, string>): Promise<Record<string, unkn
 }
 
 export const wikidata = {
-  /** 按字找候選：幾種語言同時搜，同一個編號只留第一次出現的那筆（名字與說明就用那個語言的）。 */
+  /** 按字找候選：幾組（字, 語言）同時搜，同一個編號只留第一次出現的那筆（名字與說明就用那個語言的），整個名字或別名對上的排前面。 */
   async search(q: string, limit = 8): Promise<FandomCandidate[]> {
     const results = await Promise.all(
       searchPlan(q).map(({ text, language }) =>
         call({ action: "wbsearchentities", search: text, language, uselang: language, type: "item", limit: String(limit) })
-          .then((body) => (body.search as { id: string; label?: string; description?: string }[] | undefined) ?? [])
+          .then((body) => (body.search as SearchHit[] | undefined) ?? [])
           .catch(() => []),
       ),
     );
-    const seen = new Map<string, FandomCandidate>();
-    for (const list of results) for (const hit of list) if (!seen.has(hit.id)) seen.set(hit.id, { id: hit.id, label: hit.label ?? hit.id, description: hit.description ?? "" });
-    return [...seen.values()].slice(0, limit);
+    return rankCandidates(q, results.flat()).slice(0, limit);
   },
 
   /** 按編號取整筆。沒有這個編號就是 404。 */
@@ -71,6 +69,24 @@ export const wikidata = {
     return { qid, labels: text(raw.labels), aliases: lists(raw.aliases), descriptions: text(raw.descriptions) };
   },
 };
+
+interface SearchHit { id: string; label?: string; description?: string; match?: { text?: string } }
+/**
+ * 候選排序：Wikidata 的搜尋是前綴比對，「星鐵」會先吐出「星」開頭的無關東西。對上的那段字（match.text）
+ * 正規化後等於打的字的排最前，打的字是它開頭的次之，其餘照原順序；同一個編號只留第一次出現的。
+ */
+export function rankCandidates(q: string, hits: SearchHit[]): FandomCandidate[] {
+  const want = searchForm(q);
+  const score = (h: SearchHit) => { const got = searchForm(h.match?.text ?? h.label ?? ""); return got === want ? 0 : got.startsWith(want) ? 1 : 2; };
+  const seen = new Map<string, { score: number; order: number; c: FandomCandidate }>();
+  hits.forEach((hit, order) => {
+    const s = score(hit);
+    const prev = seen.get(hit.id);
+    if (!prev) seen.set(hit.id, { score: s, order, c: { id: hit.id, label: hit.label ?? hit.id, description: hit.description ?? "" } });
+    else if (s < prev.score) prev.score = s;
+  });
+  return [...seen.values()].sort((a, b) => a.score - b.score || a.order - b.order).map((x) => x.c);
+}
 
 /** 一筆原作在索引裡的樣子：所有語言的正式名與別名正規化後用空白接起來（查「HSR」「崩铁」「スターレイル」都中）。 */
 export function entitySearchText(e: FandomEntity): string {
