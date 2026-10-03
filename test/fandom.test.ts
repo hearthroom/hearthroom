@@ -207,6 +207,20 @@ describe("原作對到 Wikidata", () => {
   });
 });
 
+describe("Wikidata 候選排序", () => {
+  it("對上的字等於打的字排最前，前綴次之，其餘照原順序；同編號只留一筆", async () => {
+    const { rankCandidates } = await import("../src/wikidata");
+    const hits = [
+      { id: "Q482551", label: "肯普法", match: { text: "星鐵肯普法" } },
+      { id: "Q137163502", label: "Tetsutarō Hoshi", match: { text: "星鐵太郎" } },
+      { id: "Q108896777", label: "崩坏：星穹铁道", match: { text: "星铁" } },
+      { id: "Q482551", label: "Kämpfer", match: { text: "星鐵之翼" } },
+    ];
+    expect(rankCandidates("星鐵", hits).map((c) => c.id)).toEqual(["Q108896777", "Q482551", "Q137163502"]);
+    expect(rankCandidates("星鐵", hits)[1]!.label).toBe("肯普法");
+  });
+});
+
 describe("Wikidata 查詢計畫", () => {
   it("繁體原文問 zh-tw，轉簡體再問 zh；日英照原文；有韓文才問 ko；重複的不問", async () => {
     const { searchPlan } = await import("../src/wikidata");
