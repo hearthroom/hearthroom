@@ -207,6 +207,16 @@ describe("原作對到 Wikidata", () => {
   });
 });
 
+describe("Wikidata 查詢計畫", () => {
+  it("繁體原文問 zh-tw，轉簡體再問 zh；日英照原文；有韓文才問 ko；重複的不問", async () => {
+    const { searchPlan } = await import("../src/wikidata");
+    expect(searchPlan("星鐵")).toEqual([{ text: "星鐵", language: "zh-tw" }, { text: "星铁", language: "zh" }, { text: "星鐵", language: "ja" }, { text: "星鐵", language: "en" }]);
+    expect(searchPlan("Honkai").map((p) => p.language)).toEqual(["zh-tw", "zh", "ja", "en"]);
+    expect(new Set(searchPlan("honkai").map((p) => `${p.language}:${p.text}`)).size).toBe(searchPlan("honkai").length);
+    expect(searchPlan("붕괴").map((p) => p.language)).toContain("ko");
+  });
+});
+
 describe("搜尋建議", () => {
   it("列標籤、原作、卡名；只給一般內容", async () => {
     const a = await author("sug-a", { roleId: "sug-a", name: "崩壞三 琪亞娜", tags: ["崩壞", "同人"] });
