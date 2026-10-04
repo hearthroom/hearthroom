@@ -19,7 +19,7 @@
   "tags": [
     {
       "name": "OAuth",
-      "description": "Authorization server: dynamic client registration, authorization code + PKCE, token exchange, revocation."
+      "description": "Authorization server: dynamic client registration, authorization code + PKCE, device authorization (RFC 8628), token exchange, revocation."
     },
     {
       "name": "Identity",
@@ -280,6 +280,64 @@
         }
       }
     },
+    "/oauth/device_authorization": {
+      "post": {
+        "operationId": "oauthDeviceAuthorization",
+        "tags": [
+          "OAuth"
+        ],
+        "summary": "Start device sign-in with a one-time code (RFC 8628)",
+        "description": "For command-line tools and devices that cannot receive a browser redirect. Accepts `application/x-www-form-urlencoded` (or multipart form) fields only; no client authentication (public clients). Show `user_code` and `verification_uri` to the person: they open the verification page on any device, sign in, type the code the tool shows and approve. Meanwhile poll `POST /oauth/token` with `grant_type=urn:ietf:params:oauth:grant-type:device_code`, `device_code` and `client_id`, waiting at least `interval` seconds between polls, until it returns tokens or a final error. Both codes expire after 15 minutes. Device sign-in is off by default: the administrator of the application that owns the client turns it on per client. Other clients get `unauthorized_client` and should use `/oauth/authorize`.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthDeviceAuthorizationRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthDeviceAuthorizationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Codes for the person and for polling. Sent with `Cache-Control: no-store`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthDeviceAuthorizationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`unauthorized_client` — device sign-in is not turned on for this client (use `/oauth/authorize`); `invalid_client`; `client_not_active`; `invalid_scope`; `invalid_resource`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited`, with `retry_after` in seconds — too many codes requested from one address in the past hour, or too many pending requests for this client.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/oauth/register": {
       "post": {
         "operationId": "registerOAuthClient",
@@ -426,8 +484,8 @@
         "tags": [
           "OAuth"
         ],
-        "summary": "Exchange a code or refresh token for tokens",
-        "description": "Accepts `application/x-www-form-urlencoded` (or multipart form) fields only — a JSON body is NOT parsed and results in `unsupported_grant_type`. No client authentication (public clients). `authorization_code`: `code`, `client_id`, `redirect_uri` (must equal the one used at authorize), `code_verifier` (PKCE), `resource` (must equal the one used at authorize); the code is single-use and must be presented with exactly the same `client_id`, `redirect_uri` and `resource` as the authorize request and a `code_verifier` whose S256 challenge equals the registered `code_challenge`; any mismatch is `invalid_grant`. `refresh_token`: `refresh_token`, `client_id`, `resource` (must match the session), optional `scope` (must be `mcp:card-writer` if given). Refresh tokens are single-use and rotated: each successful refresh returns a new access token and a new refresh token; presenting an already-used refresh token revokes the whole session (all its tokens) and returns `invalid_grant`. Access tokens live 8 hours (`expires_in` 28800); the session/refresh token lives 30 days from the original grant. Clients registered without the `refresh_token` grant, and server-configured long-access fallback clients, receive no `refresh_token` (fallback clients get a 30-day access token, `expires_in` 2592000).",
+        "summary": "Exchange a code, refresh token or device code for tokens",
+        "description": "Accepts `application/x-www-form-urlencoded` (or multipart form) fields only — a JSON body is NOT parsed and results in `unsupported_grant_type`. No client authentication (public clients). `authorization_code`: `code`, `client_id`, `redirect_uri` (must equal the one used at authorize), `code_verifier` (PKCE), `resource` (must equal the one used at authorize); the code is single-use and must be presented with exactly the same `client_id`, `redirect_uri` and `resource` as the authorize request and a `code_verifier` whose S256 challenge equals the registered `code_challenge`; any mismatch is `invalid_grant`. `refresh_token`: `refresh_token`, `client_id`, `resource` (must match the session), optional `scope` (must be `mcp:card-writer` if given). Refresh tokens are single-use and rotated: each successful refresh returns a new access token and a new refresh token; presenting an already-used refresh token revokes the whole session (all its tokens) and returns `invalid_grant`. `urn:ietf:params:oauth:grant-type:device_code` (RFC 8628): `device_code`, `client_id` (the client that requested the code; any other is `invalid_grant`); poll no faster than the `interval` from `/oauth/device_authorization`. Until the person decides, the answer is `authorization_pending` (keep polling); polling too soon is `slow_down` (add 5 seconds to the interval and continue); `access_denied` means the person denied; `expired_token` means the code expired, so request a new one. The first poll after approval returns the tokens and uses up the device code; presenting it again is `invalid_grant` and revokes the tokens it issued. The tokens carry the scopes and resource of the device request. A server that does not offer device sign-in answers this grant with `unsupported_grant_type`. Access tokens live 8 hours (`expires_in` 28800); the session/refresh token lives 30 days from the original grant. Clients registered without the `refresh_token` grant, and server-configured long-access fallback clients, receive no `refresh_token` (fallback clients get a 30-day access token, `expires_in` 2592000). Successful responses are sent with `Cache-Control: no-store`.",
         "security": [],
         "requestBody": {
           "required": true,
@@ -446,7 +504,7 @@
         },
         "responses": {
           "200": {
-            "description": "Token response.",
+            "description": "Token response. Sent with `Cache-Control: no-store`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -456,7 +514,7 @@
             }
           },
           "400": {
-            "description": "`unsupported_grant_type`, `invalid_client`, `invalid_grant`.",
+            "description": "`unsupported_grant_type`, `invalid_client`, `client_not_active`, `invalid_grant`; for the device code grant also `authorization_pending`, `slow_down`, `access_denied`, `expired_token`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -15204,6 +15262,65 @@
           }
         }
       },
+      "OAuthDeviceAuthorizationRequest": {
+        "type": "object",
+        "required": [
+          "client_id",
+          "resource"
+        ],
+        "properties": {
+          "client_id": {
+            "type": "string",
+            "description": "A client with device sign-in turned on."
+          },
+          "scope": {
+            "type": "string",
+            "description": "Optional, space-separated. Defaults to every scope the client is allowed; each requested scope must be one of them. Device sign-in never grants `console`: asking for it, or a default that includes it, is `invalid_scope`."
+          },
+          "resource": {
+            "type": "string",
+            "enum": [
+              "<API_BASE>/open/v1",
+              "<API_BASE>/mcp/card-writer"
+            ],
+            "description": "Resource indicator (RFC 8707), same values as `/oauth/authorize`. The issued token is only valid on this resource."
+          }
+        }
+      },
+      "OAuthDeviceAuthorizationResponse": {
+        "type": "object",
+        "required": [
+          "device_code",
+          "user_code",
+          "verification_uri",
+          "expires_in",
+          "interval"
+        ],
+        "properties": {
+          "device_code": {
+            "type": "string",
+            "description": "Opaque secret for polling `/oauth/token`. Keep it in the client; never show it."
+          },
+          "user_code": {
+            "type": "string",
+            "pattern": "^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$",
+            "description": "Eight letters from `BCDFGHJKLMNPQRSTVWXZ`, formatted `XXXX-XXXX`. The verification page ignores case and any character that is not a letter."
+          },
+          "verification_uri": {
+            "type": "string",
+            "format": "uri",
+            "description": "Verification page. Show it next to `user_code`; the person opens it on any device and types the code there."
+          },
+          "expires_in": {
+            "type": "integer",
+            "description": "Seconds until both codes expire: 900."
+          },
+          "interval": {
+            "type": "integer",
+            "description": "Minimum seconds between polls of `/oauth/token`: 5. Add 5 after each `slow_down`."
+          }
+        }
+      },
       "OAuthError": {
         "type": "object",
         "required": [
@@ -15217,6 +15334,10 @@
           "redirect_url": {
             "type": "string",
             "description": "Only on the internal consent endpoints when the request expired."
+          },
+          "retry_after": {
+            "type": "integer",
+            "description": "Seconds to wait before trying again; only with `rate_limited`."
           }
         }
       },
@@ -15251,6 +15372,10 @@
           "revocation_endpoint": {
             "type": "string"
           },
+          "device_authorization_endpoint": {
+            "type": "string",
+            "description": "`<API_BASE>/oauth/device_authorization`. Present only when the server offers device sign-in."
+          },
           "response_types_supported": {
             "type": "array",
             "items": {
@@ -15263,7 +15388,7 @@
             "items": {
               "type": "string"
             },
-            "description": "`[\"authorization_code\",\"refresh_token\"]`."
+            "description": "`[\"authorization_code\",\"refresh_token\"]`, plus `urn:ietf:params:oauth:grant-type:device_code` when the server offers device sign-in."
           },
           "code_challenge_methods_supported": {
             "type": "array",
@@ -15299,7 +15424,8 @@
             "type": "string",
             "enum": [
               "authorization_code",
-              "refresh_token"
+              "refresh_token",
+              "urn:ietf:params:oauth:grant-type:device_code"
             ]
           },
           "client_id": {
@@ -15319,7 +15445,7 @@
           },
           "resource": {
             "type": "string",
-            "description": "Both grants; must match the authorized resource."
+            "description": "authorization_code and refresh_token grants; must match the authorized resource. The device code grant does not send it: the token is bound to the resource of the device request."
           },
           "refresh_token": {
             "type": "string",
@@ -15328,6 +15454,10 @@
           "scope": {
             "type": "string",
             "description": "refresh_token grant, optional; must be `mcp:card-writer` if present."
+          },
+          "device_code": {
+            "type": "string",
+            "description": "Device code grant: the `device_code` from `/oauth/device_authorization`."
           }
         }
       },
@@ -21152,10 +21282,17 @@
       "unsupported_response_type": "OAuth authorize: response_type != code (400).",
       "invalid_client": "OAuth: unknown client_id (400).",
       "unsupported_pkce": "OAuth authorize: code_challenge missing or method != S256 (400).",
-      "invalid_scope": "OAuth authorize: scope other than mcp:card-writer (400).",
-      "invalid_resource": "OAuth authorize: resource not one of the two allowed resources (400).",
-      "unsupported_grant_type": "OAuth token: grant_type not authorization_code/refresh_token (400).",
-      "invalid_grant": "OAuth token: bad/used/expired code, PKCE mismatch, redirect/resource/scope mismatch, unknown or replayed refresh token (400).",
+      "invalid_scope": "OAuth authorize: scope other than mcp:card-writer. OAuth device authorization: scope the client is not allowed, or console (400).",
+      "invalid_resource": "OAuth authorize and device authorization: resource not one of the two allowed resources (400).",
+      "unsupported_grant_type": "OAuth token: grant_type not authorization_code/refresh_token/urn:ietf:params:oauth:grant-type:device_code, or the device code grant on a server that does not offer device sign-in (400).",
+      "invalid_grant": "OAuth token: bad/used/expired code, PKCE mismatch, redirect/resource/scope mismatch, unknown or replayed refresh token, unknown or already used device code, device code of another client (400).",
+      "client_not_active": "OAuth: the client is not active (400).",
+      "unauthorized_client": "OAuth device authorization: device sign-in is not turned on for this client; use the authorization code flow (400).",
+      "authorization_pending": "OAuth token, device code grant: the person has not approved yet; keep polling (400).",
+      "slow_down": "OAuth token, device code grant: polled too soon; add 5 seconds to the interval (400).",
+      "access_denied": "OAuth token, device code grant: the person denied the request (400).",
+      "expired_token": "OAuth token, device code grant: the device code expired; request a new one (400).",
+      "rate_limited": "OAuth device authorization: too many codes from one address in an hour, or too many pending requests for the client; retry_after gives the seconds to wait (429).",
       "temporarily_unavailable": "OAuth token/revoke: storage failure (503).",
       "invalid_request": "OAuth revoke: missing token (400)."
     }
