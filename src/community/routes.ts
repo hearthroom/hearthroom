@@ -4,7 +4,7 @@ import { badgeCollection, setFeaturedBadges, createEventBadge, changeBadgeAward,
 import { syncAppearance, saveAppearance, appearanceMedia } from './appearance';
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import { HttpError, type Env } from "../types";
+import { HttpError, pickLocale, type Env } from "../types";
 import { requireMember, memberByHandle, memberNsfw } from "../members";
 import { getCard } from "../cards";
 import { random, digest, verifyBridge, seal, unseal } from "./crypto";
@@ -250,14 +250,48 @@ app.get("/v1/community/discord/callback", async (c) => {
     return c.redirect(linkReturnOrigin(c.env, state) + "/me#discord_error=oauth");
   }
 });
+/** Interface languages the website offers; anything else is ignored rather than stored. */
+const NOTICE_LOCALES = ["zh-Hant", "zh-Hans", "en", "ja", "ko"];
+const langOf = (c: { req: { query: (k: string) => string | undefined; header: (k: string) => string | undefined } }) =>
+  c.req.query("lang") || c.req.header("Accept-Language")?.split(",")[0] || "zh";
 app.get("/v1/me/community/notifications", async (c) => {
   const m = await requireMember(c);
+  const lang = langOf(c);
   const rows = await c.env.DB.prepare(
-    `SELECT n.id,CASE WHEN ${reviewNotificationEligible} THEN n.kind ELSE 'review_reminder_expired' END AS kind,CASE WHEN ${reviewNotificationEligible} THEN n.path ELSE '/review' END AS path,n.created_at,n.read_at FROM community_notifications n WHERE n.member_id=? ORDER BY n.created_at DESC LIMIT 50`,
+    `SELECT n.id,CASE WHEN ${reviewNotificationEligible} THEN n.kind ELSE 'review_reminder_expired' END AS kind,CASE WHEN ${reviewNotificationEligible} THEN n.path ELSE '/review' END AS path,n.created_at,n.read_at,n.extra,
+     a.handle AS actor_handle,a.display_name AS actor_name,c.id AS card_num,c.names AS card_names
+     FROM community_notifications n LEFT JOIN members a ON a.id=n.actor_id LEFT JOIN cards c ON c.id=n.card_id
+     WHERE n.member_id=? ORDER BY n.created_at DESC LIMIT 50`,
   )
     .bind(Date.now(),Date.now(),m.id)
-    .all();
-  return c.json({ items: rows.results });
+    .all<{ id: string; kind: string; path: string; created_at: number; read_at: number | null; extra: string | null; actor_handle: string | null; actor_name: string | null; card_num: number | null; card_names: string | null }>();
+  // Only public identity leaves here: the actor's handle and display name, the card's number and name.
+  const items = rows.results.map(({ extra, actor_handle, actor_name, card_num, card_names, ...n }) => ({
+    ...n,
+    actor: actor_handle ? { handle: actor_handle, name: actor_name || actor_handle } : null,
+    card: card_num !== null ? { id: card_num, name: pickLocale(JSON.parse(card_names || "{}"), lang) } : null,
+    extra: extra ? JSON.parse(extra) : null,
+  }));
+  return c.json({ items });
+});
+app.get("/v1/me/community/notifications/summary", async (c) => {
+  const m = await requireMember(c);
+  const locale = c.req.query("lang");
+  // The header bell polls this; it is also where the website learns which language the member
+  // reads in, so a Discord DM can speak it. Missing or unknown values leave the stored one alone.
+  if (locale && NOTICE_LOCALES.includes(locale))
+    await c.env.DB.prepare("UPDATE members SET locale=? WHERE id=? AND (locale IS NULL OR locale<>?)").bind(locale, m.id, locale).run();
+  const row = await c.env.DB.prepare("SELECT COUNT(*) AS unread FROM community_notifications WHERE member_id=? AND read_at IS NULL")
+    .bind(m.id)
+    .first<{ unread: number }>();
+  return c.json({ unread: row?.unread ?? 0 });
+});
+app.post("/v1/me/community/notifications/read-all", async (c) => {
+  const m = await requireMember(c);
+  await c.env.DB.prepare("UPDATE community_notifications SET read_at=? WHERE member_id=? AND read_at IS NULL")
+    .bind(Date.now(), m.id)
+    .run();
+  return c.json({ ok: true });
 });
 app.post("/v1/me/community/notifications/read", async (c) => {
   const m = await requireMember(c),
@@ -568,7 +602,7 @@ app.post("/internal/community/:operation", async (c) => {
   }
   if (op === "notification") {
     const n = await c.env.DB.prepare(
-      `SELECT n.kind,n.path,l.discord_id FROM community_notifications n JOIN discord_links l ON l.member_id=n.member_id AND l.state='active' JOIN community_preferences p ON p.member_id=n.member_id AND p.discord_dm=1 AND p.notifications=1 WHERE n.id=? AND n.delivered=0 AND (n.author_id IS NULL OR EXISTS(SELECT 1 FROM member_follows f WHERE f.member_id=n.member_id AND f.author_id=n.author_id)) AND ${reviewNotificationEligible} AND (n.review_submission IS NULL OR n.review_link_version=l.version)`,
+      `SELECT n.kind,n.path,l.discord_id,m.locale FROM community_notifications n JOIN members m ON m.id=n.member_id JOIN discord_links l ON l.member_id=n.member_id AND l.state='active' JOIN community_preferences p ON p.member_id=n.member_id AND p.discord_dm=1 AND p.notifications=1 WHERE n.id=? AND n.delivered=0 AND (n.author_id IS NULL OR EXISTS(SELECT 1 FROM member_follows f WHERE f.member_id=n.member_id AND f.author_id=n.author_id)) AND ${reviewNotificationEligible} AND (n.review_submission IS NULL OR n.review_link_version=l.version)`,
     )
       .bind(String(b.id),Date.now())
       .first();

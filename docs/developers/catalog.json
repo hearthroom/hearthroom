@@ -1757,5 +1757,18 @@
   "dad7ecb84404c": "Matching works from Wikidata: id, label and a short description. Pass the id as fandomId when submitting.",
   "d0244bb00a233": "Fandom filter: a fandom key from the fandoms list, or a title in any language or spelling.",
   "dab6d9360ba33": "At most the book's entry limit, `entryContentMax` on the worldbook detail (4000 chars for Chinese, 6000 for Japanese or Korean, 12000 for English).",
-  "dae5cf7ba4bcc": "Entry content limit: 4000 chars for Chinese, 6000 for Japanese or Korean, 12000 for English, following the language of the cards this book is bound to, the widest when there are several; an unbound book uses its own `language`."
+  "dae5cf7ba4bcc": "Entry content limit: 4000 chars for Chinese, 6000 for Japanese or Korean, 12000 for English, following the language of the cards this book is bound to, the widest when there are several; an unbound book uses its own `language`.",
+  "df32eecbd7076": "Who did it, when the event has a person behind it.",
+  "dc43277527e33": "Display name, or the handle when none is set.",
+  "dad71d142a03d": "Card number.",
+  "dcd82f0ee1c93": "Card name in the requested language.",
+  "d2e16f8f371a1": "The card involved.",
+  "dc01ee913b723": "Kind-specific detail: review verdict (status), like count (count), comment id (comment).",
+  "da70ae2dbacc0": "review_result, comment_reply, comment_like, followed_work, registration_pack, review_reminder or review_reminder_expired.",
+  "d5ac091a42bb8": "Count unread notifications",
+  "dd915d068e119": "Interface language to remember for Discord reminders.",
+  "d5e49bf3aee8c": "Unread notifications.",
+  "d44b0a9e03993": "Unread count for the header; also records the member interface language so Discord reminders use it.",
+  "d1bce87340bc1": "Mark all notifications read",
+  "d4b63d77c98b7": "Marks every unread notification of the caller read."
 }
