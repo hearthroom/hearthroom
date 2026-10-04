@@ -8,6 +8,7 @@ import { communityMaintenance } from "./community/service";
 import { communityRoutes } from "./community/routes";
 import { dispatchPush, queuePush } from "./community/push";
 import { libraryRoutes } from "./library";
+import { maintainUpdates, updatesRoutes } from "./updates";
 import { hostGateway, hostingKey, submitHosted, hostingDecision, beginHostedEdit } from "./hosting";
 import { saveCommunityProfile, cleanAvatars } from "./community-profile";
 import { AVATAR_MAX_BYTES } from '../shared/avatar';
@@ -40,7 +41,7 @@ import {
   BEACON_DETAILS, BEACON_EVENTS, clientKind, emit, note, refHostOf, safeSubject, shapeTerm, surfaceOf,
   type EventFields, type Pending,
 } from "./analytics";
-import { authorLine, downloadMeta, preloadImageTag, renderHead } from "./head";
+import { authorLine, downloadMeta, preloadImageTag, renderHead, updatesMeta } from "./head";
 import { aliasTarget, HOST, canonicalUrl, isPlayHost } from "./site";
 import { cardThumbUrl, landingZone } from "../shared/card-thumb";
 import { PRIMARY_HOST, siteRootOf } from "../shared/site-hosts";
@@ -751,6 +752,7 @@ app.get('/v1/avatars/:handle/:file',async c=>{
 
 app.route("/", communityRoutes);
 app.route("/", libraryRoutes);
+app.route("/", updatesRoutes);
 
 app.get("/v1/me", async (c) => {
   const timings: string[] = [];
@@ -1344,7 +1346,7 @@ export async function syncBatch(env: Env): Promise<{ ok: number; failed: number;
  * 靜態資源層回應，不經過 Worker。找不到的卡回 404 狀態，但內容仍是 index.html——
  * 前端會畫自己的 404 頁，而抓取器與搜尋引擎得到正確的狀態碼。
  */
-const PAGE = /^(?:\/(zh-Hans|en|ja|ko))?\/(download|cards|authors)(?:\/([^/]+))?\/?$/;
+const PAGE = /^(?:\/(zh-Hans|en|ja|ko))?\/(download|updates|cards|authors)(?:\/([^/]+))?\/?$/;
 const SITE_NAME = "Hearthroom";
 const PAGE_TTL = 60;
 
@@ -1447,7 +1449,7 @@ app.get("*", async (c) => {
   const m = url.pathname.match(PAGE);
   // 不是要注入的頁面就原樣交回資源層——靜態檔給檔案本身，其餘走它的 SPA 回退。
   // 一律回殼的話，/assets/x.js 會拿到一份 HTML，整站直接掛。
-  if (!m || (m[2] === "download" ? m[3] !== undefined : !m[3])) {
+  if (!m || (m[2] === "download" || m[2] === "updates" ? m[3] !== undefined : !m[3])) {
     const passthrough = await c.env.ASSETS.fetch(c.req.raw);
     note(c, { event: "page_html", refHost: refHostOf(c.req.header("Referer"), url.host), detail: "page" });
     return passthrough;
@@ -1472,6 +1474,11 @@ app.get("*", async (c) => {
   });
   if (m[2] === "download") {
     const res = renderHead(shell, downloadMeta(locale, self));
+    res.headers.set("Cache-Control", `public, max-age=${PAGE_TTL}`);
+    return res;
+  }
+  if (m[2] === "updates") {
+    const res = renderHead(shell, updatesMeta(locale, self));
     res.headers.set("Cache-Control", `public, max-age=${PAGE_TTL}`);
     return res;
   }
@@ -1552,6 +1559,8 @@ export default {
     // Backstop for notifications created outside a request hook (triggers fired by the sync job, reminders).
     ctx.waitUntil(dispatchPush(env).catch(() => { console.warn("push dispatch unavailable"); }));
     ctx.waitUntil(cleanAvatars(env));
+    // 更新說明：登記這個 build 的說明、台北晚上八點後建當天的 Discord 彙整
+    ctx.waitUntil(maintainUpdates(env, Date.now()).catch(() => { console.warn("updates maintenance unavailable"); }));
     ctx.waitUntil(
       syncBatch(env).then((r) => {
         console.log("sync done", r);

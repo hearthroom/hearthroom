@@ -15,6 +15,7 @@ import { selectedTags } from "@/lib/discovery";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
 import type { CardPage, Sort } from "@/lib/types";
+import UpdateStrip from "@/components/UpdateStrip.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -196,6 +197,7 @@ watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (no
   <div class="page">
     <h1 class="sr-only">{{ $t("site.tagline") }}</h1>
     <DownloadBanner />
+    <UpdateStrip />
 
     <!--
       一列解決「看哪個榜」與「怎麼排」：六個排序在左，最右一顆「關注」是另一個榜（關注作者的新卡），

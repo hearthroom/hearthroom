@@ -93,3 +93,15 @@ const DOWNLOAD_COPY: Record<string, {title:string;description:string}> = {
 export function downloadMeta(lang:string,url:string):PageMeta {
   return {lang,...(DOWNLOAD_COPY[lang] ?? DOWNLOAD_COPY.en!),url,type:"website",image:`https://${PRIMARY_HOST}/icons/icon-512.png`};
 }
+
+/** 更新頁的分享預覽：說明這一頁是什麼，不列內容（內容每天在變）。 */
+const UPDATES_COPY: Record<string, {title:string;description:string}> = {
+  "zh-Hant": {title:"Hearthroom 更新紀錄",description:"Hearthroom 每次上線了什麼新功能、修好了哪些問題，都記在這裡，每一項都附上去哪裡試。"},
+  "zh-Hans": {title:"Hearthroom 更新记录",description:"Hearthroom 每次上线了什么新功能、修好了哪些问题，都记在这里，每一项都附上去哪里试。"},
+  en: {title:"Hearthroom updates",description:"Every new feature and fix that went live on Hearthroom, with a link to try each one."},
+  ja: {title:"Hearthroom の更新履歴",description:"Hearthroom に追加された新機能と修正の一覧です。それぞれ試せる場所へのリンクも載せています。"},
+  ko: {title:"Hearthroom 업데이트 기록",description:"Hearthroom에 새로 추가된 기능과 수정 사항을 모았습니다. 항목마다 바로 써 볼 수 있는 링크가 있습니다."},
+};
+export function updatesMeta(lang:string,url:string):PageMeta {
+  return {lang,...(UPDATES_COPY[lang] ?? UPDATES_COPY.en!),url,type:"website",image:`https://${PRIMARY_HOST}/icons/icon-512.png`};
+}

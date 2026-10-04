@@ -1,0 +1,4 @@
+#!/bin/sh
+# 使用者感覺得到的 commit 要交代它屬於哪則更新說明，見 updates/README.md。
+command -v node >/dev/null 2>&1 || exit 0
+exec node "$(git rev-parse --show-toplevel)/scripts/updates/check-commits.mjs" --commit-msg "$1"

@@ -22,6 +22,8 @@ import { installPrompt, openInstall } from "@/lib/pwa";
 import { shouldShowDownloadEntry } from "@/lib/download";
 import { isPlayHost } from "@/lib/site";
 import { loginPath } from "@/lib/login-return";
+import NewMark from "@/components/NewMark.vue";
+import { useUpdates } from "@/lib/updates";
 
 const { lp, locale } = useLocalePath();
 // iOS 與我們自己的 App 裡不需要「下載 App」入口（lib/download.ts）。
@@ -34,6 +36,12 @@ const router = useRouter();
 const discordInvite = ref<string|null>(null);
 onMounted(()=>{void communityRequest<{invite:string|null}>("/community/config").then(r=>{discordInvite.value=r.invite;}).catch(()=>{});});
 const notifications = useNotifications();
+// 更新說明的摘要：首頁提示列與「新」標記用。閒置時才讀，不跟第一屏搶；換語言重讀。
+const updates = useUpdates();
+const idle = (cb: () => void) => (typeof requestIdleCallback === "function" ? requestIdleCallback(cb, { timeout: 3000 }) : setTimeout(cb, 1200));
+watch(locale, (l) => { if (!isPlayHost()) idle(() => { void updates.load(l); }); }, { immediate: true });
+// 到了某則說明「去試試」的那一頁，就當作用過它的入口，那裡的「新」收起來
+router.afterEach((to) => { updates.visited(to.path); });
 let reviewTimer: ReturnType<typeof setInterval> | undefined;
 // 審核待辦與通知未讀數同一個節奏：每分鐘一次，回到分頁再一次。通知那一趟順便告訴伺服器目前的介面語言。
 function refreshReview(){ if(session.me && document.visibilityState==='visible') { void reviewerStore.refresh(); void notifications.refresh(locale.value); } }
@@ -95,7 +103,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
 
       <div class="account">
         <!-- 手機沒有那一排搜尋框：一顆圖示進搜尋頁，那裡有大的 -->
-        <RouterLink v-if="!onSearchPage" :to="lp('/search')" class="search-go" :aria-label="$t('board.search.submit')">
+        <RouterLink v-if="!onSearchPage" :to="lp('/search')" class="search-go" :aria-label="$t('board.search.submit')"><NewMark k="header.search" dot />
           <svg viewBox="0 0 20 20" aria-hidden="true">
             <circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.7" />
             <path d="M12.8 12.8 17 17" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
@@ -143,6 +151,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
         <a :href="`${SITE.repoUrl}/blob/main/LICENSE`" target="_blank" rel="noopener">{{ $t("footer.license", { name: SITE.license }) }}</a>
         <RouterLink v-if="showDownloadEntry" class="footer__download" :to="lp('/download')">{{ $t("download.footer") }}</RouterLink>
         <RouterLink :to="lp('/guide')">{{ $t("footer.guide") }}</RouterLink>
+        <RouterLink :to="`${lp('/updates')}?from=footer`">{{ $t("nav.updates") }}<NewMark k="menu.updates" /></RouterLink>
         <RouterLink :to="lp('/developers')">{{ $t("footer.developers") }}</RouterLink>
         <a v-if="installPrompt.available && installPrompt.target === 'site'" href="#" @click.prevent="openInstall()">{{ $t("pwa.install.link") }}</a>
       </nav>
@@ -218,7 +227,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
 .account { display: flex; align-items: center; justify-content: flex-end; gap: var(--s-1); min-width: 150px; }
 .account > .btn { margin-left: var(--s-1); }
 .search-go {
-  display: none; align-items: center; justify-content: center; flex: none;
+  position: relative; display: none; align-items: center; justify-content: center; flex: none;
   width: 34px; height: 34px; border-radius: var(--r-pill); color: var(--text-2);
 }
 .search-go:hover { background: var(--surface-2); color: var(--text); }

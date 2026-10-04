@@ -9,6 +9,7 @@ import { useSession } from "@/lib/session";
 import { can } from "@/lib/provider";
 import { useReviewer } from "@/lib/review";
 import { track } from "@/lib/track";
+import NewMark from "@/components/NewMark.vue";
 
 const session = useSession();
 // 窄螢幕把頁首那排導覽整排藏起來，這個選單就是手機上唯一的路——審核入口也得在這裡有一份。
@@ -59,13 +60,14 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
       </div>
       <div class="menu__group">
         <RouterLink :to="lp('/mine')" class="menu__item" role="menuitem"><AccountIcon name="cards" />{{ $t("nav.mine") }}</RouterLink>
-        <RouterLink v-if="can('library')" :to="lp('/resources')" class="menu__item" role="menuitem"><AccountIcon name="folder" />{{ $t("nav.resources") }}</RouterLink>
+        <RouterLink v-if="can('library')" :to="lp('/resources')" class="menu__item" role="menuitem"><AccountIcon name="folder" />{{ $t("nav.resources") }}<NewMark k="menu.resources" /></RouterLink>
         <RouterLink v-if="reviewerStore.reviewer" :to="lp('/review')" class="menu__item" role="menuitem"><AccountIcon name="shield" />{{ $t("nav.review") }}<ReviewBadge /></RouterLink>
       </div>
       <div class="menu__group">
         <RouterLink :to="lp('/settings')" class="menu__item" role="menuitem"><AccountIcon name="settings" />{{ $t("nav.settings") }}</RouterLink>
         <!-- 開發者文件（相容供應商協議）：頁尾有，但登入的作者從頭像選單也走得到 -->
         <RouterLink :to="lp('/developers')" class="menu__item" role="menuitem"><AccountIcon name="code" />{{ $t("footer.developers") }}</RouterLink>
+        <RouterLink :to="`${lp('/updates')}?from=menu`" class="menu__item" role="menuitem"><AccountIcon name="spark" />{{ $t("nav.updates") }}<NewMark k="menu.updates" /></RouterLink>
       </div>
       <div class="menu__group">
         <button class="menu__item" role="menuitem" @click="track('logout'); session.logout()"><AccountIcon name="logout" />{{ $t("nav.logout") }}</button>
