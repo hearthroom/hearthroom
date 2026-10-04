@@ -55,6 +55,9 @@ export function llmsDocs(): LlmsDoc[] {
     docs.push({ path: `${prefix}guide.md`, content: read(`guide/card-authoring.${locale}.md`), contentType: MD });
     docs.push({ path: `${prefix}developers.md`, content: read(developersSource(locale)).trimEnd() + "\n" + REFERENCE, contentType: MD });
   }
+  // 「讓 AI Agent 幫你寫卡」按鈕複製的那句話叫 Agent 讀這份照做：裝 CLI、裝寫卡技能、登入。
+  // 只出英文、不分語言前綴：Agent 什麼語言都讀，英文最省 token；回話語言由使用者那句話決定。
+  docs.push({ path: "agent-setup.md", content: read("guide/agent-setup.md"), contentType: MD });
   docs.push({ path: "developers/community-openapi.json", content: read("community-openapi.json"), contentType: JSON_TYPE });
   docs.push({ path: "developers/integration-openapi.json", content: read("integration-openapi.json"), contentType: JSON_TYPE });
   // 全文版：索引在前，接英文開發者文件與寫卡指南。OpenAPI 太大，留連結就好。

@@ -156,6 +156,9 @@ export const BEACON_EVENTS = new Set([
   "asset_archive_hit",
   // 裝到主畫面：站台提示卡按了安裝／以後再說，以及卡片頁的「加到主畫面」（subject 是 roleId）
   "pwa_install_click", "pwa_install_later", "pwa_card_install_click",
+  // 「讓 AI Agent 幫你寫卡」：按鈕複製設定指令（subject 是按鈕所在的頁：guide／mine）。
+  // 對照資源層 /agent-setup.md 的請求數，看得出複製之後有多少真的交給了 Agent
+  "agent_onboard",
 ]);
 
 /** beacon 事件的 detail 小分类。同样白名单，避免自由字串进 blob。 */
@@ -169,6 +172,8 @@ export const BEACON_DETAILS = new Set([
   // 卡片檔案格式：匯入匯出的載體，看得出作者手上的卡多半長什麼樣
   "png", "json",
   "invite_redeem", "invite_mine", "invite_copy", "invite_fallback",
+  // 設定指令：剪貼簿寫入成功，或拿不到剪貼簿、讀者要自己選取
+  "onboard_copied", "onboard_manual",
 ]);
 
 /**

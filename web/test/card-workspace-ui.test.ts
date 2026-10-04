@@ -191,3 +191,22 @@ it('uses the same thumbnail URL as the home page, then the original on failure',
   expect(root.querySelector('.card__void')).not.toBeNull();
  }finally{vi.unstubAllGlobals();}
 });
+
+// 會來「我的卡片」的人多半想寫卡：標題上方放 AI Agent 那顆按鈕，空的時候指向寫卡指南
+it('offers the agent above the title, alongside New card', async () => {
+ await mount();
+ const pill = root.querySelector('.onboard__pill')!;
+ expect(pill).not.toBeNull();
+ expect(pill.compareDocumentPosition(root.querySelector('.head h1')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+ expect(root.querySelector('.head a[href$="/create"]')).not.toBeNull();
+});
+it('turns an empty list into a first-card start: the web editor and the guide', async () => {
+ mocks.fetch.mockResolvedValue({ ...result([]), total: 0 });
+ await mount();
+ const empty = root.querySelector('.empty')!;
+ expect(empty.textContent).toContain(i18n.global.t('mine.empty.title'));
+ // 頁首那顆一直都在，空狀態不再放第二顆
+ expect(root.querySelectorAll('.onboard__pill')).toHaveLength(1);
+ expect(empty.querySelector('a[href$="/create"]')).not.toBeNull();
+ expect(empty.querySelector('a[href$="/guide"]')).not.toBeNull();
+});
