@@ -1,6 +1,6 @@
 # Hearthroom agent setup
 
-These are Hearthroom's official instructions for setting up an AI agent to write, test and publish character cards on Hearthroom. Run every command yourself; the user only signs in through their browser and answers one optional question. Talk to the user in the language they wrote to you in.
+These are Hearthroom's official instructions for setting up an AI agent to write, test and publish character cards on Hearthroom. Run every command yourself; the user only signs in through a browser with the code you give them and answers one optional question. Talk to the user in the language they wrote to you in.
 
 Setup needs a shell. If you cannot run commands, tell the user to use an agent with a terminal, such as Claude Code or Codex, and stop.
 
@@ -80,13 +80,19 @@ If that directory already exists, run `git -C ~/.hearthroom/tavern-mmd pull` ins
 
 If `hearthroom auth status` already shows an account, skip this step.
 
+Sign-in uses a one-time code. Start it without waiting, so you can pass the code on before anything blocks:
+
 ```sh
-hearthroom auth login
+hearthroom auth login --no-wait --json
 ```
 
-It opens the browser. Ask the user to finish there; someone without an account gets one on the same page. When the command returns, run `hearthroom auth status` to confirm.
+It prints `user_code` and `verification_uri`. Ask the user to open that address in a browser on any device (it does not have to be this machine), sign in, and type the code; someone without an account gets one on the same page. Then run:
 
-Sign-in finishes in a browser on the same machine. If this machine has none, such as an SSH session or a cloud server, tell the user that sign-in has to be done from a computer with a browser, and report the rest of the setup as done.
+```sh
+hearthroom auth login --resume
+```
+
+It returns once the user approves. If it times out first, run it again. If the code expired or the user denied it, start over with `--no-wait`. Confirm with `hearthroom auth status`.
 
 ## 5. Report
 
