@@ -4,7 +4,7 @@
  * 兩處放寬：埋點的資料集綁定是可選的（分叉的人多半不會配，那時 env.EVENTS 就是 undefined，
  * 型別上就逼呼叫端判空，而不是等執行期炸），開關是任意字串（產生器把它縮成了字面值 "true"）。
  */
-export type Env = Omit<Cloudflare.Env, "EVENTS" | "ANALYTICS_ENABLED" | "REVIEW_ENABLED"> & {
+export type Env = Omit<Cloudflare.Env, "EVENTS" | "ANALYTICS_ENABLED" | "REVIEW_ENABLED" | "PUSH_VAPID_PUBLIC_KEY" | "PUSH_VAPID_SUBJECT"> & {
   AUTH_ENABLED?: string;
   AUTH_ALLOWED_ORIGINS?: string;
   AUTH_KEYRING?: string;
@@ -17,6 +17,10 @@ export type Env = Omit<Cloudflare.Env, "EVENTS" | "ANALYTICS_ENABLED" | "REVIEW_
   COMMUNITY_XP_CHANNELS?: string;
   DISCORD_CLIENT_ID?: string;
   DISCORD_CLIENT_SECRET?: string;
+  /** Web Push (VAPID): public key and subject are plain vars, the private key is a secret; unset = feature off. */
+  PUSH_VAPID_PUBLIC_KEY?: string;
+  PUSH_VAPID_PRIVATE_KEY?: string;
+  PUSH_VAPID_SUBJECT?: string;
   EVENTS?: AnalyticsEngineDataset;
   /** Hearthroom → Harbor issuer credential. */
   HOSTING_SERVICE_KEY?: string;
