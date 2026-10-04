@@ -126,14 +126,14 @@ it("opens a folder with a breadcrumb, child folders first and names relative to 
   openRow("art");
   await settle();
   expect(mocks.list.mock.lastCall?.[0]).toMatchObject({ scope: "folder", folderId: "f-art" });
-  expect(texts(".resource-crumbs .crumb")).toEqual(["All", "card", "art"]);
+  expect(texts(".resource-crumbs .crumb")).toEqual(["All files", "card", "art"]);
   expect(rows()).toEqual(["d:blur", "f:a.webp", "f:b.webp"]);
   openRow("blur");
   await settle();
   expect(mocks.list.mock.lastCall?.[0]).toMatchObject({ scope: "folder", folderId: "f-blur" });
   expect(rows()).toEqual(["f:a.webp"]);
   expect(texts(".resource-path-actions button")).toContain("Rename");
-  click(".resource-crumbs .crumb", "All");
+  click(".resource-crumbs .crumb", "All files");
   await settle();
   expect(mocks.list.mock.lastCall?.[0]).toMatchObject({ scope: "unfiled" });
 });

@@ -1270,6 +1270,8 @@
   "community.badges.discord_linked": "Discord connected",
   "community.nextLevel": "{xp} XP to reach level {level}",
   "resource.uploadDirectory": "Upload folder",
+  "resource.upload": "Upload",
+  "resource.root": "All files",
   "resource.colName": "Name",
   "resource.colSize": "Size",
   "resource.colType": "Type",

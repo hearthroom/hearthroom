@@ -1270,6 +1270,8 @@
   "community.badges.discord_linked": "Discord 連携済み",
   "community.nextLevel": "レベル {level} まであと {xp} XP",
   "resource.uploadDirectory": "フォルダーをアップロード",
+  "resource.upload": "アップロード",
+  "resource.root": "すべてのファイル",
   "resource.colName": "名前",
   "resource.colSize": "サイズ",
   "resource.colType": "種類",
