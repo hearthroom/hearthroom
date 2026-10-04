@@ -748,7 +748,7 @@
   "login.moreComing": "If you already use Hearthroom, sign in through your original platform, then connect another platform from My account.",
   "login.headline": "Start chatting with characters",
   "login.lead": "No sign-up form. One tap and you are in.",
-  "login.feature.chat": "Chat with any character on the board and keep your conversations",
+  "login.feature.chat": "Chat with any character on the board, with your history saved automatically",
   "login.feature.follow": "Save cards and follow the authors you like",
   "login.feature.create": "Make your own character cards and publish them to the board",
   "login.legal": "By continuing, you agree to {provider}'s {terms} and {privacy}.",

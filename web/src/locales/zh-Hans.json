@@ -748,7 +748,7 @@
   "login.moreComing": "已有 Hearthroom 账号，请先通过原来的平台登录，再到“我的”连接另一个平台。",
   "login.headline": "开始和角色聊天",
   "login.lead": "不用另外注册，点一下就开始。",
-  "login.feature.chat": "和榜单上的角色聊天，对话会保留",
+  "login.feature.chat": "和榜单上的角色聊天，记录自动保存",
   "login.feature.follow": "收藏卡片、关注喜欢的作者",
   "login.feature.create": "做自己的角色卡，发布上榜",
   "login.legal": "继续即表示你同意 {provider} 的{terms}与{privacy}。",
