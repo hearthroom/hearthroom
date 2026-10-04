@@ -161,6 +161,19 @@ describe("每日彙整", () => {
     expect(d.map((x) => [x.day, JSON.parse(x.entry_ids)])).toEqual([["2026-10-05", ["2026-10-05-hl"]], ["2026-10-06", ["2026-10-06-b", "2026-10-06-a"]]]);
   });
 
+  it("回填的說明只在更新頁，不進彙整；回填後再公告的照常收", async () => {
+    use(entry("2026-10-05-hl", { tier: "highlight" }), entry("2026-10-05-old", { live: "2026-10-05", tier: "highlight" }), entry("2026-10-04-old2", { live: "2026-10-04" }));
+    await listUpdates(env as Env, "zh-Hant", "full", EVENING - HOUR);
+    await maintainUpdates(env as Env, EVENING);
+    expect(JSON.parse((await digests()).results[0]!.entry_ids)).toEqual(["2026-10-05-hl"]);
+    use(entry("2026-10-04-old2", { live: "2026-10-04", announce: 2 }));
+    await listUpdates(env as Env, "zh-Hant", "full", EVENING + DAY - HOUR);
+    use(entry("2026-10-04-old2", { live: "2026-10-04", announce: 2 }), entry("2026-10-06-hl", { tier: "highlight" }));
+    await listUpdates(env as Env, "zh-Hant", "full", EVENING + DAY - HOUR);
+    await maintainUpdates(env as Env, EVENING + DAY);
+    expect(JSON.parse((await digests()).results[1]!.entry_ids)).toEqual(["2026-10-06-hl", "2026-10-04-old2"]);
+  });
+
   it("48 小時內說明改了字或被撤下，revision 加一；之後不再動", async () => {
     use(entry("2026-10-05-hl", { tier: "highlight" }), entry("2026-10-05-a"));
     await listUpdates(env as Env, "zh-Hant", "full", MORNING);
