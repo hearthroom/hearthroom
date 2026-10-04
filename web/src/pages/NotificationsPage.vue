@@ -12,7 +12,7 @@ import AccountIcon from "@/components/AccountIcon.vue";
 import { communityRequest, type CommunityNotice, type CommunityView } from "@/lib/community";
 import { pageTitle } from "@/lib/i18n";
 import { noticeText, useNotifications } from "@/lib/notifications";
-import { disablePush, enablePush, pushState, pushSupported, type PushState } from "@/lib/push";
+import { disablePush, enablePush, pushConfig, pushState, pushSupported, type PushConfig, type PushState } from "@/lib/push";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
 
@@ -22,6 +22,8 @@ const { t } = useI18n();
 const { lp, locale } = useLocalePath();
 const view = ref<CommunityView | null>(null);
 const push = ref<PushState>(pushSupported() ? "off" : "unsupported");
+// 公鑰在進頁面時先抓好：按下開關的第一件事必須是瀏覽器的詢問，中間不能再等網路。
+const config = ref<PushConfig>({ enabled: false, publicKey: null });
 const busy = ref(false);
 const error = ref("");
 
@@ -41,6 +43,7 @@ async function run(task: () => Promise<void>) {
   try { await task(); } catch (e) { error.value = e instanceof Error ? e.message : t("community.failed"); } finally { busy.value = false; }
 }
 async function load() {
+  void pushConfig().then(value => { config.value = value; });
   const value = await token();
   await store.load(locale.value);
   view.value = await communityRequest<CommunityView>("/me/community", value);
@@ -50,7 +53,7 @@ function preference(key: string, value: boolean) {
   void run(async () => { view.value = await communityRequest<CommunityView>("/me/community/preferences", await token(), "PATCH", { [key]: value }); });
 }
 function togglePush() {
-  void run(async () => { const value = await token(); push.value = push.value === "on" ? await disablePush(value) : await enablePush(value, locale.value); });
+  void run(async () => { push.value = push.value === "on" ? await disablePush(await token()) : await enablePush(token, locale.value, config.value); });
 }
 function pick(n: CommunityNotice) { void store.read(n); }
 const when = (n: CommunityNotice) => new Date(n.created_at).toLocaleDateString(locale.value);
@@ -86,10 +89,12 @@ onMounted(() => { document.title = pageTitle(t("nav.notifications")); void run(l
           <span>{{ t("community." + key) }}</span><strong>{{ t(view.preferences[column] ? "community.on" : "community.off") }}</strong>
         </button>
       </template>
-      <button type="button" class="notices__toggle" :aria-pressed="push === 'on'" :disabled="busy || push === 'unsupported' || push === 'blocked'" @click="togglePush">
+      <button type="button" class="notices__toggle" :aria-pressed="push === 'on'" :disabled="busy || push === 'unsupported'" @click="togglePush">
         <span>{{ t("community.push") }}</span>
-        <strong>{{ t(push === "on" ? "community.on" : push === "blocked" ? "community.pushBlocked" : push === "unsupported" ? "community.pushUnsupported" : "community.off") }}</strong>
+        <strong>{{ t(push === "on" ? "community.on" : push === "blocked" ? "community.pushBlocked" : push === "dismissed" ? "community.pushDismissed" : push === "unsupported" ? "community.pushUnsupported" : "community.off") }}</strong>
       </button>
+      <p v-if="push === 'blocked'" class="notice notice--error" role="status">{{ t("community.pushBlockedHint") }}</p>
+      <p v-else-if="push === 'dismissed'" class="notice" role="status">{{ t("community.pushDismissedHint") }}</p>
       <p class="subtle">{{ t("community.pushHint") }}</p>
       <div class="notices__discord">
         <p>{{ t(discordHint) }}</p>
