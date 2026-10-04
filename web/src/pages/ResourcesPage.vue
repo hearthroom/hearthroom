@@ -32,7 +32,7 @@ const { lp } = useLocalePath();
 const session = useSession(),
   route = useRoute(),
   router = useRouter(),
-  { t } = useI18n();
+  { t, locale } = useI18n();
 const providers = computed(() =>
   [...PROVIDERS]
     .sort((a, b) => Number(b.id === "harbor") - Number(a.id === "harbor"))
@@ -121,7 +121,9 @@ const activeNode = computed<FolderNode | undefined>(() =>
       : findByFolderId(tree.value, scope.value),
 );
 const currentPath = computed(() => activeNode.value?.path ?? "");
-const childNodes = computed(() => (scope.value === "all" ? [] : (activeNode.value?.children ?? [])));
+// 搜尋跨整個資源庫（像物件儲存的前綴搜尋），結果平鋪、顯示完整路徑，不再分資料夾。
+const childNodes = computed(() => (scope.value === "all" || search.value ? [] : (activeNode.value?.children ?? [])));
+const when = (v?: string) => (v ? new Date(v).toLocaleDateString(locale.value) : "");
 const crumbs = computed(() =>
   currentPath.value
     ? currentPath.value.split("/").map((name, i, parts) => ({ name, path: parts.slice(0, i + 1).join("/") }))
@@ -130,6 +132,8 @@ const crumbs = computed(() =>
 const folderRows = computed(() => flattenTree(tree.value));
 const scopeOf = (n: FolderNode) => n.folderId ?? DIR + n.path;
 const isVirtual = computed(() => scope.value.startsWith(DIR));
+// 像物件儲存那樣，一個只以路徑存在的夾只列它的子夾；裡面的檔案都屬於某個子夾，進去才看。
+const filesHidden = computed(() => isVirtual.value && !search.value);
 function enter(target: string) {
   scope.value = target;
   void filter();
@@ -163,7 +167,7 @@ const size = (v: number | null | undefined) =>
 const name = (r: Resource) =>
   relativeName(
     r.fileName || r.imageUrl.split("/").pop()?.split("?")[0] || t("resource.unnamed"),
-    scope.value === "all" ? "" : currentPath.value,
+    scope.value === "all" || search.value ? "" : currentPath.value,
   );
 const message = (e: unknown) =>
   e instanceof Error ? e.message : t("state.loadFailed");
@@ -173,17 +177,10 @@ let generation = 0,
 function query(targetPage = page.value) {
   // 虛擬的夾在伺服器上沒有 id：列它底下所有檔案（以路徑前綴搜尋），讓作者看得到裡面有什麼。
   const virtual = scope.value.startsWith(DIR);
+  const flat = scope.value === "all" || virtual || !!search.value;
   return {
-    scope:
-      scope.value === "all" || virtual
-        ? "all"
-        : scope.value === "root"
-          ? "unfiled"
-          : "folder",
-    folderId:
-      scope.value === "all" || scope.value === "root" || virtual
-        ? undefined
-        : scope.value,
+    scope: flat ? "all" : scope.value === "root" ? "unfiled" : "folder",
+    folderId: flat || scope.value === "root" ? undefined : scope.value,
     kind: kind.value,
     page: targetPage,
     pageSize: pageSize.value,
@@ -881,101 +878,7 @@ async function previewMove(direction: number) {
           <button class="btn" :disabled="uploading || uploadPage >= uploadPages" @click="uploadPage++">{{ $t('resource.next') }}</button>
         </nav>
       </section>
-      <div class="resource-layout">
-        <aside class="resource-sidebar">
-          <h2>{{ $t("resource.folders") }}</h2>
-          <p v-if="folderError" role="alert" class="error-text">
-            {{ folderError }}
-          </p>
-          <nav class="folder-tree" :aria-label="$t('resource.folders')">
-            <button
-              class="folder-row"
-              :class="{ 'is-active': scope === 'root' }"
-              :disabled="busy"
-              @click="enter('root')"
-            >
-              {{ $t("res.scope.all") }}
-            </button>
-            <button
-              class="folder-row"
-              :class="{ 'is-active': scope === 'all' }"
-              :disabled="busy"
-              @click="enter('all')"
-            >
-              {{ $t("resource.scope.flat") }}
-            </button>
-            <button
-              v-for="r in folderRows"
-              :key="r.node.path"
-              class="folder-row"
-              :class="{ 'is-active': scope === scopeOf(r.node), 'is-virtual': !r.node.folderId }"
-              :style="{ paddingLeft: 12 + r.depth * 16 + 'px' }"
-              :title="r.node.path"
-              :disabled="busy"
-              @click="enter(scopeOf(r.node))"
-            >
-              <span class="folder-name">{{ r.node.name }}</span
-              ><span v-if="r.node.count" class="folder-count subtle">&nbsp;{{ r.node.count }}</span>
-            </button>
-          </nav>
-          <ResourceSelect
-            v-model="scope"
-            class="mobile-folders"
-            :label="$t('resource.folders')"
-            :disabled="busy"
-            :options="[
-              { value: 'root', label: $t('res.scope.all') },
-              { value: 'all', label: $t('resource.scope.flat') },
-              ...folderRows.map((r) => ({ value: scopeOf(r.node), label: r.node.path })),
-            ]"
-            @change="filter"
-          />
-          <button
-            class="btn btn--ghost"
-            :disabled="!result || busy || expired"
-            @click="
-              editing = 'create';
-              folderName = '';
-            "
-          >
-            ＋ {{ $t("res.folder.new") }}</button
-          ><template v-if="activeFolder"
-            ><button
-              class="btn btn--ghost"
-              :disabled="busy"
-              @click="
-                editing = 'rename';
-                folderName = activeFolder!.name;
-              "
-            >
-              {{ $t("res.folder.rename") }}</button
-            ><button
-              class="btn btn--ghost"
-              :disabled="busy"
-              @click="deleteFolder"
-            >
-              {{ $t("res.folder.delete") }}
-            </button></template
-          >
-          <form v-if="editing" class="folder-form" @submit.prevent="saveFolder">
-            <input
-              v-model="folderName"
-              class="input"
-              maxlength="80"
-              :aria-label="$t('res.folder.placeholder')"
-              :placeholder="$t('res.folder.placeholder')"
-            /><button class="btn" :disabled="busy || !folderName.trim()">
-              {{ $t("dialog.confirm") }}</button
-            ><button
-              type="button"
-              class="btn btn--ghost"
-              @click="editing = null"
-            >
-              {{ $t("dialog.cancel") }}
-            </button>
-          </form>
-        </aside>
-        <section class="resource-content">
+      <section class="resource-content">
           <div ref="toolbar" class="resource-toolbar">
             <div class="seg" role="tablist" :aria-label="$t('resource.types')">
               <button
@@ -1083,43 +986,63 @@ async function previewMove(direction: number) {
               {{ $t("dialog.delete") }}
             </button>
           </div>
-          <nav v-if="crumbs.length" class="resource-crumbs" :aria-label="$t('resource.folders')">
-            <button class="crumb" :disabled="busy" @click="enter('root')">{{ $t("res.scope.all") }}</button>
-            <template v-for="c in crumbs" :key="c.path"
-              ><span aria-hidden="true">/</span
-              ><button
-                class="crumb"
-                :aria-current="c.path === currentPath ? 'page' : undefined"
-                :disabled="busy"
-                @click="enter(scopeOf(findNode(tree, c.path)!))"
+          <div class="resource-path panel">
+            <nav class="resource-crumbs" :aria-label="$t('resource.folders')">
+              <button class="crumb" :disabled="busy" @click="enter('root')">{{ $t("res.scope.all") }}</button>
+              <template v-for="c in crumbs" :key="c.path"
+                ><span aria-hidden="true">/</span
+                ><button
+                  class="crumb"
+                  :aria-current="c.path === currentPath ? 'page' : undefined"
+                  :disabled="busy"
+                  @click="enter(scopeOf(findNode(tree, c.path)!))"
+                >
+                  {{ c.name }}
+                </button></template
               >
-                {{ c.name }}
-              </button></template
-            >
-          </nav>
-          <div v-if="childNodes.length" class="resource-folders">
-            <span class="subtle">{{ $t("resource.subfolders") }}</span>
-            <button
-              v-for="n in childNodes"
-              :key="n.path"
-              class="folder-tile"
-              :disabled="busy"
-              @click="enter(scopeOf(n))"
-            >
-              <AccountIcon name="folder" /><span class="folder-tile-name">{{ n.name }}</span
-              ><span v-if="n.count" class="subtle">{{ n.count }}</span>
-            </button>
+              <span v-if="search" class="subtle crumb-note">{{ $t("resource.searchScope") }}</span>
+            </nav>
+            <div class="resource-path-actions">
+              <button
+                class="btn btn--sm btn--ghost"
+                :disabled="!result || busy || expired"
+                @click="
+                  editing = 'create';
+                  folderName = '';
+                "
+              >
+                ＋ {{ $t("res.folder.new") }}</button
+              ><template v-if="activeFolder"
+                ><button
+                  class="btn btn--sm btn--ghost"
+                  :disabled="busy"
+                  @click="
+                    editing = 'rename';
+                    folderName = activeFolder!.name;
+                  "
+                >
+                  {{ $t("res.folder.rename") }}</button
+                ><button class="btn btn--sm btn--ghost" :disabled="busy" @click="deleteFolder">
+                  {{ $t("res.folder.delete") }}
+                </button></template
+              >
+            </div>
+            <form v-if="editing" class="folder-form" @submit.prevent="saveFolder">
+              <input
+                v-model="folderName"
+                class="input"
+                maxlength="80"
+                :aria-label="$t('res.folder.placeholder')"
+                :placeholder="$t('res.folder.placeholder')"
+              /><button class="btn" :disabled="busy || !folderName.trim()">
+                {{ $t("dialog.confirm") }}</button
+              ><button type="button" class="btn btn--ghost" @click="editing = null">
+                {{ $t("dialog.cancel") }}
+              </button>
+            </form>
           </div>
-          <p v-if="scope === 'root' && childNodes.length && items.length" class="subtle resource-loose">
-            {{ $t("resource.looseFiles") }}
-          </p>
-          <div v-if="loading && !result" class="resource-grid" aria-busy="true">
-            <div v-for="i in 12" :key="i" class="resource-skeleton ghost" />
-          </div>
-          <div v-else-if="!items.length && !error && childNodes.length && !search" class="empty panel resource-folder-empty">
-            <p class="subtle">{{ $t("resource.folderEmpty") }}</p>
-          </div>
-          <div v-else-if="!items.length && !error" class="empty panel">
+          <div v-if="loading && !result" class="resource-table-skeleton ghost" aria-busy="true" />
+          <div v-else-if="!items.length && !childNodes.length && !error" class="empty panel">
             <h2>{{ $t(search ? "resource.noResults" : "res.empty") }}</h2>
             <p class="subtle">
               {{ $t(search ? "resource.changeSearch" : "resource.dropHint") }}
@@ -1135,69 +1058,71 @@ async function previewMove(direction: number) {
               {{ $t("resource.clearSearch") }}
             </button>
           </div>
-          <ul v-else class="resource-grid" :aria-busy="loading">
-            <li
-              v-for="r in items"
-              :key="r.id"
-              class="resource-card"
-              :class="{ 'is-selected': selected.has(r.id) }"
-            >
-              <button
-                data-preview
-                class="resource-thumb"
-                :aria-label="$t('resource.preview', { name: name(r) })"
-                @click="open(r)"
-              >
-                <img
-                  v-if="r.kind === 'image' && !thumbnailErrors.has(r.id)"
-                  :src="r.thumbnailUrl || r.imageUrl"
-                  :alt="name(r)"
-                  loading="lazy"
-                  @error="thumbnailErrors.add(r.id)"
-                /><span v-else class="resource-file">{{
-                  thumbnailErrors.has(r.id)
-                    ? $t("resource.thumbnailFailed")
-                    : (r.mimeType?.split("/")[1] || r.kind).toUpperCase()
-                }}</span></button
-              ><input
-                v-if="managing"
-                type="checkbox"
-                class="resource-check"
-                :checked="selected.has(r.id)"
-                :aria-label="$t('resource.select', { name: name(r) })"
-                @change="toggle(r.id)"
-              />
-              <div class="resource-card-meta">
-                <strong :title="name(r)">{{ name(r) }}</strong
-                ><span class="subtle"
-                  >{{ size(r.byteSize)
-                  }}<template v-if="r.pixelWidth">
-                    · {{ r.pixelWidth }}×{{ r.pixelHeight }}</template
-                  ></span
-                ><span
-                  v-if="
-                    r.moderationState === 'pending' ||
-                    r.moderationState === 'reject'
-                  "
-                  class="resource-state"
-                  >{{
-                    $t(
-                      r.moderationState === "pending"
-                        ? "res.state.pending"
-                        : "res.state.rejected",
-                    )
-                  }}</span
-                ><button
-                  class="btn btn--sm btn--ghost"
-                  @click="copy(r.imageUrl)"
+          <div v-else class="resource-table-wrap panel">
+            <table class="resource-table" :aria-busy="loading">
+              <thead>
+                <tr>
+                  <th v-if="managing" class="col-check"><span class="sr-only">{{ $t("res.manage") }}</span></th>
+                  <th>{{ $t("resource.colName") }}</th>
+                  <th class="col-size">{{ $t("resource.colSize") }}</th>
+                  <th class="col-type">{{ $t("resource.colType") }}</th>
+                  <th class="col-time">{{ $t("resource.colTime") }}</th>
+                  <th class="col-actions"><span class="sr-only">{{ $t("res.copy") }}</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="n in childNodes" :key="'d:' + n.path" class="row-folder">
+                  <td v-if="managing" class="col-check"></td>
+                  <td class="col-name">
+                    <button class="row-name" :disabled="busy" @click="enter(scopeOf(n))">
+                      <AccountIcon name="folder" /><span>{{ n.name }}</span>
+                    </button>
+                  </td>
+                  <td class="col-size subtle">{{ n.count ? $t("resource.itemCount", { n: n.count }) : "" }}</td>
+                  <td class="col-type subtle">{{ $t("resource.typeFolder") }}</td>
+                  <td class="col-time"></td>
+                  <td class="col-actions"></td>
+                </tr>
+                <tr
+                  v-for="r in filesHidden ? [] : items"
+                  :key="r.id"
+                  class="row-file"
+                  :class="{ 'is-selected': selected.has(r.id) }"
                 >
-                  {{ $t("res.copy") }}
-                </button>
-              </div>
-            </li>
-          </ul>
+                  <td v-if="managing" class="col-check">
+                    <input
+                      type="checkbox"
+                      class="resource-check"
+                      :checked="selected.has(r.id)"
+                      :aria-label="$t('resource.select', { name: name(r) })"
+                      @change="toggle(r.id)"
+                    />
+                  </td>
+                  <td class="col-name">
+                    <button data-preview class="row-name" :aria-label="$t('resource.preview', { name: name(r) })" @click="open(r)">
+                      <AccountIcon :name="r.kind === 'image' ? 'image' : 'cards'" /><span>{{ name(r) }}</span>
+                    </button>
+                    <span
+                      v-if="r.moderationState === 'pending' || r.moderationState === 'reject'"
+                      class="resource-state"
+                      >{{ $t(r.moderationState === "pending" ? "res.state.pending" : "res.state.rejected") }}</span
+                    >
+                  </td>
+                  <td class="col-size subtle">{{ size(r.byteSize) }}</td>
+                  <td class="col-type subtle">
+                    {{ (r.mimeType?.split("/")[1] || r.kind).toUpperCase()
+                    }}<template v-if="r.pixelWidth"> · {{ r.pixelWidth }}×{{ r.pixelHeight }}</template>
+                  </td>
+                  <td class="col-time subtle">{{ when(r.createTime) }}</td>
+                  <td class="col-actions">
+                    <button class="btn btn--sm btn--ghost" @click="copy(r.imageUrl)">{{ $t("res.copy") }}</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
           <nav
-            v-if="result"
+            v-if="result && !filesHidden"
             class="resource-pager"
             :aria-label="$t('resource.pagination')"
           >
@@ -1247,8 +1172,7 @@ async function previewMove(direction: number) {
               @change="filter"
             />
           </nav>
-        </section></div
-    ></template>
+        </section></template>
     <ResourcePreview
       v-if="preview"
       :item="preview"
@@ -1522,43 +1446,131 @@ async function previewMove(direction: number) {
   width: 190px;
   flex: none;
 }
-.resource-layout {
-  display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
-  gap: var(--s-5);
-}
-.resource-sidebar h2 {
-  font-size: 0.85rem;
-  color: var(--muted);
-  margin: 0 0 var(--s-3);
-}
-.resource-sidebar nav {
-  display: grid;
-  gap: var(--s-1);
-  margin-bottom: var(--s-3);
-}
-.folder-tree {
+.resource-path {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.folder-row .folder-name {
-  overflow-wrap: anywhere;
-}
-.folder-row .folder-count {
-  margin-left: 8px;
-  font-size: 0.8125rem;
-}
-.folder-row.is-virtual .folder-name {
-  opacity: 0.85;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  margin-bottom: var(--s-3);
 }
 .resource-crumbs {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  margin: 0 0 12px;
+  min-width: 0;
   font-size: 0.9375rem;
+}
+.crumb-note {
+  margin-left: var(--s-2);
+  font-size: 0.8125rem;
+}
+.resource-path-actions {
+  display: flex;
+  gap: var(--s-1);
+  flex-wrap: wrap;
+}
+.resource-path .folder-form {
+  width: 100%;
+  margin-top: 0;
+}
+.resource-table-wrap {
+  padding: 0;
+  overflow: hidden;
+}
+.resource-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  table-layout: fixed;
+}
+.resource-table th {
+  text-align: left;
+  font-weight: 500;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: var(--s-2) var(--s-3);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.resource-table td {
+  padding: var(--s-2) var(--s-3);
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+.resource-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.resource-table tbody tr:hover {
+  background: var(--surface-2);
+}
+.resource-table tr.is-selected {
+  background: var(--accent-tint);
+}
+.col-check {
+  width: 40px;
+}
+.col-size {
+  width: 110px;
+  white-space: nowrap;
+}
+.col-type {
+  width: 150px;
+  white-space: nowrap;
+}
+.col-time {
+  width: 120px;
+  white-space: nowrap;
+}
+.col-actions {
+  width: 110px;
+  text-align: right;
+}
+.col-name {
+  min-width: 0;
+}
+.row-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  max-width: 100%;
+  min-height: 36px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.row-name > span {
+  overflow-wrap: anywhere;
+}
+.row-folder .row-name {
+  font-weight: 600;
+}
+.row-name:hover > span {
+  text-decoration: underline;
+}
+.resource-check {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  vertical-align: middle;
+}
+.resource-state {
+  display: inline-block;
+  margin-left: var(--s-2);
+  font-size: 0.75rem;
+  color: var(--danger);
+}
+.resource-table-skeleton {
+  height: 280px;
+  border-radius: var(--r-lg);
 }
 .crumb {
   background: none;
@@ -1575,63 +1587,6 @@ async function previewMove(direction: number) {
 }
 .crumb[aria-current="page"] {
   font-weight: 600;
-}
-.resource-folders {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin: 0 0 16px;
-}
-.folder-tile {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 40px;
-  padding: 0 14px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: var(--surface-2);
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-  max-width: 100%;
-}
-.folder-tile:hover {
-  border-color: var(--line-strong);
-}
-.folder-tile-name {
-  overflow-wrap: anywhere;
-}
-.resource-loose {
-  margin: 0 0 8px;
-}
-.resource-folder-empty {
-  padding: 24px;
-}
-.folder-row {
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  font-size: 0.9rem;
-  text-align: left;
-  padding: var(--s-2) var(--s-3);
-  border-radius: var(--r-pill);
-  cursor: pointer;
-  overflow-wrap: anywhere;
-}
-.folder-row.is-active {
-  background: var(--surface-2);
-  font-weight: 700;
-}
-.resource-sidebar > .btn {
-  width: 100%;
-  justify-content: start;
-  margin-top: var(--s-1);
-}
-.mobile-folders {
-  display: none;
 }
 .resource-content {
   min-width: 0;
@@ -1653,73 +1608,6 @@ async function previewMove(direction: number) {
 .resource-search > .resource-select {
   max-width: 180px;
 }
-.resource-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
-  gap: var(--s-3);
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.resource-card {
-  position: relative;
-  min-width: 0;
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  overflow: hidden;
-  background: var(--surface);
-}
-.resource-card.is-selected {
-  outline: 2px solid var(--accent);
-}
-.resource-thumb {
-  display: grid;
-  place-items: center;
-  aspect-ratio: 1;
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: var(--surface-2);
-  cursor: zoom-in;
-  color: var(--muted);
-}
-.resource-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-.resource-file {
-  font-size: 0.85rem;
-  padding: var(--s-3);
-  overflow-wrap: anywhere;
-}
-.resource-card-meta {
-  padding: var(--s-3);
-  display: grid;
-  gap: var(--s-1);
-}
-.resource-card-meta strong {
-  font-size: 0.85rem;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.resource-card-meta > span {
-  font-size: 0.75rem;
-}
-.resource-card-meta .btn {
-  margin-top: var(--s-2);
-  width: 100%;
-  min-height: 36px;
-}
-.resource-check {
-  position: absolute;
-  left: var(--s-2);
-  top: var(--s-2);
-  width: 20px;
-  height: 20px;
-  accent-color: var(--accent);
-}
 .resource-batch {
   padding: var(--s-3);
   margin-bottom: var(--s-3);
@@ -1737,10 +1625,6 @@ async function previewMove(direction: number) {
 }
 .page-buttons {
   gap: var(--s-1);
-}
-.resource-skeleton {
-  aspect-ratio: 3/4;
-  border-radius: var(--r-lg);
 }
 .upload-list {
   padding: var(--s-4);
@@ -1805,33 +1689,19 @@ async function previewMove(direction: number) {
     min-height: var(--h-lg);
   }
 
-  .resource-layout {
-    grid-template-columns: 1fr;
-    gap: var(--s-3);
-  }
-  .resource-sidebar nav,
-  .resource-sidebar h2 {
-    display: none;
-  }
-  .mobile-folders {
-    display: block;
-    flex: 1;
-    min-width: 130px;
-  }
-  .resource-sidebar {
-    display: flex;
-    gap: var(--s-2);
-    flex-wrap: wrap;
-  }
-  .resource-sidebar > .btn {
-    width: auto;
-    margin: 0;
-  }
   .folder-form {
     width: 100%;
   }
-  .resource-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .col-type,
+  .col-time {
+    display: none;
+  }
+  .resource-table th.col-actions,
+  .resource-table td.col-actions {
+    width: 48px;
+  }
+  .col-actions .btn {
+    padding-inline: var(--s-2);
   }
   .resource-overview {
     padding: var(--s-3);

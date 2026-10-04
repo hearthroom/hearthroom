@@ -102,46 +102,52 @@ const click = (sel: string, text: string) => {
   el!.click();
 };
 
-it("lands on the folder view: top-level folders as tiles, loose files below, and a nested tree in the sidebar", async () => {
+const rows = () =>
+  [...root.querySelectorAll(".resource-table tbody tr")].map(
+    (r) => (r.classList.contains("row-folder") ? "d:" : "f:") + r.querySelector(".row-name")?.textContent?.trim(),
+  );
+const openRow = (label: string) => click(".resource-table .row-name", label);
+
+it("lands on a file-manager view: folders first, loose files below, no thumbnails", async () => {
   await mount();
   expect(mocks.list.mock.lastCall?.[0]).toMatchObject({ scope: "unfiled" });
-  expect(texts(".resource-folders .folder-tile-name")).toEqual(["card", "misc"]);
-  expect(texts(".resource-card-meta strong")).toEqual(["loose.png"]);
-  expect(texts(".folder-tree .folder-name")).toEqual(["card", "art", "blur", "misc"]);
-  expect(texts(".folder-tree .folder-row").some((t) => t?.startsWith("card/art"))).toBe(false);
+  expect(rows()).toEqual(["d:card", "d:misc", "f:loose.png"]);
+  expect(root.querySelector(".resource-table img")).toBeNull();
+  expect(root.querySelector(".resource-sidebar")).toBeNull();
 });
 
-it("opens a folder with a breadcrumb, child folder tiles and names relative to that folder", async () => {
+it("opens a folder with a breadcrumb, child folders first and names relative to that folder", async () => {
   await mount();
-  click(".folder-tree .folder-name", "art");
+  openRow("card");
+  await settle();
+  // card exists only as a path: it lists its subfolders, and nothing else
+  expect(rows()).toEqual(["d:art"]);
+  expect(root.querySelector(".resource-pager")).toBeNull();
+  openRow("art");
   await settle();
   expect(mocks.list.mock.lastCall?.[0]).toMatchObject({ scope: "folder", folderId: "f-art" });
   expect(texts(".resource-crumbs .crumb")).toEqual(["All", "card", "art"]);
-  expect(texts(".resource-folders .folder-tile-name")).toEqual(["blur"]);
-  expect(texts(".resource-card-meta strong")).toEqual(["a.webp", "b.webp"]);
-  click(".resource-folders .folder-tile-name", "blur");
+  expect(rows()).toEqual(["d:blur", "f:a.webp", "f:b.webp"]);
+  openRow("blur");
   await settle();
   expect(mocks.list.mock.lastCall?.[0]).toMatchObject({ scope: "folder", folderId: "f-blur" });
-  expect(texts(".resource-card-meta strong")).toEqual(["a.webp"]);
+  expect(rows()).toEqual(["f:a.webp"]);
+  expect(texts(".resource-path-actions button")).toContain("Rename");
+  click(".resource-crumbs .crumb", "All");
+  await settle();
+  expect(mocks.list.mock.lastCall?.[0]).toMatchObject({ scope: "unfiled" });
 });
 
-it("walks into a parent that exists only as a path and lists everything under it", async () => {
+it("searches across every file with full paths, and copies the selected URLs in one go", async () => {
   await mount();
-  click(".folder-tree .folder-name", "card");
+  const input = root.querySelector(".resource-search input") as HTMLInputElement;
+  input.value = "a.webp";
+  input.dispatchEvent(new Event("input"));
+  click(".resource-search button", "Search");
   await settle();
-  expect(mocks.list.mock.lastCall?.[0]).toMatchObject({ scope: "all", q: "card/" });
-  expect(texts(".resource-folders .folder-tile-name")).toEqual(["art"]);
-  expect(texts(".resource-card-meta strong")).toEqual(["art/a.webp", "art/b.webp", "art/blur/a.webp"]);
-  expect(root.querySelector(".folder-form")).toBeNull();
-});
-
-it("keeps a flat view of every file and copies the selected URLs in one go", async () => {
-  await mount();
-  click(".folder-tree .folder-row", "All files, no folders");
-  await settle();
-  expect(mocks.list.mock.lastCall?.[0]).toMatchObject({ scope: "all" });
-  expect(root.querySelector(".resource-folders")).toBeNull();
-  expect(texts(".resource-card-meta strong")).toContain("card/art/blur/a.webp");
+  expect(mocks.list.mock.lastCall?.[0]).toMatchObject({ scope: "all", q: "a.webp" });
+  expect(rows()).toEqual(["f:card/art/a.webp", "f:card/art/blur/a.webp"]);
+  expect(root.textContent).toContain("Results from all files");
   const writeText = vi.fn().mockResolvedValue(undefined);
   Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
   click(".resource-toolbar button", "Manage");
@@ -151,6 +157,6 @@ it("keeps a flat view of every file and copies the selected URLs in one go", asy
   click(".resource-batch button", "Copy selected URLs");
   await settle();
   expect(writeText).toHaveBeenCalledTimes(1);
-  expect(writeText.mock.calls[0]![0].split("\n")).toHaveLength(5);
-  expect(root.textContent).toContain("Copied 5 URLs");
+  expect(writeText.mock.calls[0]![0].split("\n")).toHaveLength(2);
+  expect(root.textContent).toContain("Copied 2 URLs");
 });
