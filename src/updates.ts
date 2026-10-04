@@ -251,7 +251,9 @@ async function buildDigest(env: Env, now: number): Promise<void> {
   // 第一則彙整沒有「上次」：往回看到最久會等的那天，被延後的那一則才不會因此掉出去
   const since = prev?.cutoff ?? now - DIGEST_MAX_WAIT - DAY;
   const live = await liveUpdates(env, now);
-  const fresh = live.filter((e) => e.announced_at > since && e.announced_at <= now);
+  // 回填的說明（live 早於寫說明的那天）只屬於更新頁：那些變化早就上線了，不該在今天的彙整裡當新消息。
+  // 回填之後又加 announce 再公告的，announced_at 會晚於第一次上線，照常收進來。
+  const fresh = live.filter((e) => e.announced_at > since && e.announced_at <= now && !(e.live && e.announced_at === e.first_live_at));
   if (!fresh.length) return;
   const oldest = Math.min(...fresh.map((e) => e.announced_at));
   if (fresh.length < 2 && !fresh.some((e) => e.tier === "highlight") && oldest > now - DIGEST_MAX_WAIT) return;
