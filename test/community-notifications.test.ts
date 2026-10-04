@@ -31,6 +31,7 @@ afterEach(() => restoreUpstream());
 const say = async (token: string, content: string, extra: Record<string, unknown> = {}) =>
  (await json(await SELF.fetch(`https://c.test/v1/cards/${cardId}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...bearer(token) }, body: JSON.stringify({ content, ...extra }) }))).commentId as string;
 const like = (token: string, id: string) => SELF.fetch(`https://c.test/v1/comments/${id}/like`, { method: 'PUT', headers: bearer(token) });
+const unlike = (token: string, id: string) => SELF.fetch(`https://c.test/v1/comments/${id}/like`, { method: 'DELETE', headers: bearer(token) });
 async function linkDiscord(member: string) {
  await env.DB.prepare('INSERT INTO community_subjects(discord_id) VALUES(?)').bind('323456789012345678').run();
  await env.DB.prepare("INSERT INTO discord_links(member_id,discord_id,name,state,version,created_at) VALUES(?,?,?,?,?,?)").bind(member, '323456789012345678', 'Author', 'active', 'v1', Date.now()).run();
@@ -78,23 +79,44 @@ it('points followers at the new card itself and records the author', async () =>
  expect(list.items[0]).toMatchObject({ kind: 'followed_work', card: { id: Number(second), name: '第二張' } });
  expect(list.items[0].actor.handle).toBe((await env.DB.prepare('SELECT handle FROM members WHERE id=?').bind(author).first<{ handle: string }>())!.handle);
 });
-it('aggregates likes per comment per day, skips self-likes, and keeps them off Discord', async () => {
+it('keeps one like notice per comment, counts real likers, and only re-alerts at milestones', async () => {
+ identities({ author: AUTHOR, fan: FAN, other: OTHER, third: 20003, fourth: 20004 });
+ await makeMember(20003); await makeMember(20004);
  const root = await say('author', '被讚的留言');
  await like('author', root);
  expect((await rows(author, 'comment_like')).results).toHaveLength(0);
+ const row = async () => (await rows(author, 'comment_like')).results[0];
+ const count = async () => JSON.parse((await row()).extra as string).count as number;
+ const settle = () => env.DB.prepare("UPDATE community_notifications SET read_at=?,push_at=? WHERE kind='comment_like'").bind(Date.now(), Date.now()).run();
+ // First like: a new unread, pushable notice; the author's own like is not counted.
  expect((await like('fan', root)).status).toBe(204);
+ expect(await row()).toMatchObject({ event_key: 'like:' + root, actor_id: fan, card_id: Number(cardId), delivered: 1, read_at: null, push_at: null });
+ expect(await count()).toBe(1);
+ // Second like reaches a milestone: same row, re-alerted.
+ await settle();
  expect((await like('other', root)).status).toBe(204);
- const stored = (await rows(author, 'comment_like')).results;
- expect(stored).toHaveLength(1);
- expect(stored[0]).toMatchObject({ actor_id: other, card_id: Number(cardId), delivered: 1, read_at: null });
- expect(JSON.parse(stored[0].extra as string)).toEqual({ comment: root, count: 2 });
+ expect((await rows(author, 'comment_like')).results).toHaveLength(1);
+ expect(await row()).toMatchObject({ actor_id: other, read_at: null, push_at: null });
+ expect(await count()).toBe(2);
+ // Toggling does not inflate the count or re-alert.
+ await settle();
+ await unlike('fan', root); await like('fan', root);
+ expect(await count()).toBe(2);
+ expect((await row()).read_at).not.toBeNull();
+ // Third liker is a milestone, the fourth is not.
+ await like('third', root);
+ expect(await count()).toBe(3); expect((await row()).read_at).toBeNull();
+ await settle();
+ await like('fourth', root);
+ expect(await count()).toBe(4); expect((await row()).read_at).not.toBeNull(); expect((await row()).push_at).not.toBeNull();
+ // Never a Discord DM, even with DMs on.
  await setPreferences(env as Env, author, { discordDm: true });
  await linkDiscord(author);
  const pending = await json(await bridge('pending'));
- expect(JSON.stringify(pending)).not.toContain(stored[0].id);
- expect((await bridge('notification', { id: stored[0].id })).status).toBe(404);
+ expect(JSON.stringify(pending)).not.toContain((await row()).id);
+ expect((await bridge('notification', { id: (await row()).id })).status).toBe(404);
  const list = await json(await api('?lang=en', 'author'));
- expect(list.items[0]).toMatchObject({ kind: 'comment_like', extra: { count: 2 }, actor: { name: expect.any(String) } });
+ expect(list.items.find((n: any) => n.kind === 'comment_like')).toMatchObject({ extra: { count: 4 }, actor: { name: expect.any(String) } });
  await setPreferences(env as Env, author, { likeNotifications: false });
  const another = await say('author', '第二則');
  await like('fan', another);
