@@ -124,3 +124,13 @@ it('parallel claims have one winner, and superseding preserves the old message i
 });
 
 it('disabled community integration refuses v2 notification polling',async()=>{expect((await bridge('review-pending-v2',{},false)).status).toBe(503);});
+it('claim reminders reach reviewers who never touched preferences; an explicit opt-out still silences them',async()=>{
+ const {setPreferences}=await import('../src/community/service');
+ await submission('s1');await submission('s2');
+ const quiet=await makeReviewer(2),fresh=await makeReviewer(3),now=Date.now();
+ await setPreferences(env as Env,quiet,{notifications:false});
+ await claim(env.DB,'s1',quiet,now-31*60000);await claim(env.DB,'s2',fresh,now-31*60000);
+ await maintainReviewNotifications(env.DB,now);
+ const notes=await env.DB.prepare("SELECT member_id FROM community_notifications WHERE kind='review_reminder'").all<{member_id:string}>();
+ expect(notes.results).toEqual([{member_id:fresh}]);
+});

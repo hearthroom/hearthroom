@@ -85,3 +85,14 @@ it('發包計入管理請求指標，不帶任何成員識別', async () => {
   expect(await SELF.fetch('https://c.test/metrics').then(r => r.text())).toContain('hearthroom_moderation_requests_total{operation="packs",outcome="denied"} 1');
   expect(metrics).not.toContain(author);
 });
+
+it('發包通知預設就送；只有明確關掉通知的人不收', async () => {
+  const { setPreferences } = await import('../src/community/service');
+  const notices = () => env.DB.prepare("SELECT path FROM community_notifications WHERE member_id='member-10001' AND kind='registration_pack'").all();
+  expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM community_preferences WHERE member_id='member-10001'").first<{ n: number }>()).toEqual({ n: 0 });
+  expect((await grant(1)).status).toBe(201);
+  expect((await notices()).results).toEqual([{ path: '/mine' }]);
+  await setPreferences(env as never, 'member-10001', { notifications: false });
+  expect((await grant(1)).status).toBe(201);
+  expect((await notices()).results).toHaveLength(1);
+});
