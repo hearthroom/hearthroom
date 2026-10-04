@@ -19,7 +19,7 @@ beforeEach(async()=>{
  vi.clearAllMocks();await applyLocale('en');view=structuredClone(base);
  mock.request.mockImplementation(async(path:string,_token:string,method:string)=>{
   if(path.endsWith('/badges'))return {items:[{key:'first_work',icon:'award',category:'creation',titles:{en:'First approved work'},descriptions:{en:'First approval'},state:'earned',earnedAt:1,expiresAt:null}],featured:['first_work'],public:false};
-  if(path.endsWith('/notifications'))return {items:[{id:'notice',kind:'review_result',path:'/me',created_at:1,read_at:null}]};
+  if(path.includes('/notifications?lang='))return {items:[{id:'notice',kind:'review_result',path:'/me',created_at:1,read_at:null}]};
   if(method==='DELETE')view={...view,link:null as any,badges:['first_work']};
   return view;
  });

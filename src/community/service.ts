@@ -266,13 +266,15 @@ export async function communityView(env: Env, member: string) {
     .first<{ discord_id: string; name: string; state: string }>();
   const p = link ? await projection(env, link.discord_id) : null;
   const preferences = (await env.DB.prepare(
-    "SELECT public_badges,public_level,notifications,discord_dm,case_access FROM community_preferences WHERE member_id=?",
+    "SELECT public_badges,public_level,notifications,like_notifications,discord_dm,case_access FROM community_preferences WHERE member_id=?",
   )
     .bind(member)
     .first()) ?? {
     public_badges: 0,
     public_level: 0,
-    notifications: 0,
+    // Website notifications are on unless the member turns them off (migration 0047); Discord DMs stay opt-in.
+    notifications: 1,
+    like_notifications: 1,
     discord_dm: 0,
     case_access: 0,
   };
@@ -323,6 +325,7 @@ export async function setPreferences(
     publicBadges: "public_badges",
     publicLevel: "public_level",
     notifications: "notifications",
+    likeNotifications: "like_notifications",
     discordDm: "discord_dm",
     caseAccess: "case_access",
   };

@@ -16,6 +16,7 @@ export interface CommunityView {
     public_badges: number;
     public_level: number;
     notifications: number;
+    like_notifications?: number;
     discord_dm: number;
     case_access: number;
   };
@@ -26,6 +27,12 @@ export interface CommunityNotice {
   path: string;
   created_at: number;
   read_at: number | null;
+  /** Who did it (public handle and display name), when the event has a person behind it. */
+  actor?: { handle: string; name: string } | null;
+  /** Which card, named in the requested language. */
+  card?: { id: number; name: string } | null;
+  /** Kind-specific detail: review verdict, like count, comment id. */
+  extra?: Record<string, unknown> | null;
 }
 export interface CommunityCase {
   id: string;

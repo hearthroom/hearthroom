@@ -1757,5 +1757,18 @@
   "dad7ecb84404c": "Wikidata から一致した作品：ID、名称、短い説明。提出時に ID を fandomId として渡します。",
   "d0244bb00a233": "原作で絞り込みます。原作一覧のキー、または任意の言語・表記の作品名。",
   "dab6d9360ba33": "この Lorebook のエントリー上限（Lorebook 詳細の `entryContentMax`）以内です（中国語 4000 文字、日本語・韓国語 6000 文字、英語 12000 文字）。",
-  "dae5cf7ba4bcc": "エントリー内容の上限：中国語 4000 文字、日本語・韓国語 6000 文字、英語 12000 文字。この Lorebook に紐づくカードの言語に従い、複数あれば最も広い上限を採用します。未紐づけの Lorebook は自身の `language` に従います。"
+  "dae5cf7ba4bcc": "エントリー内容の上限：中国語 4000 文字、日本語・韓国語 6000 文字、英語 12000 文字。この Lorebook に紐づくカードの言語に従い、複数あれば最も広い上限を採用します。未紐づけの Lorebook は自身の `language` に従います。",
+  "df32eecbd7076": "この出来事を起こしたメンバー。人が関わらない出来事では null。",
+  "dc43277527e33": "表示名。未設定の場合は handle。",
+  "dad71d142a03d": "カード番号。",
+  "dcd82f0ee1c93": "要求した言語でのカード名。",
+  "d2e16f8f371a1": "関係するカード。",
+  "dc01ee913b723": "種類ごとの詳細：審査結果（status）、いいね数（count）、コメント ID（comment）。",
+  "da70ae2dbacc0": "review_result、comment_reply、comment_like、followed_work、registration_pack、review_reminder、review_reminder_expired のいずれか。",
+  "d5ac091a42bb8": "未読の通知を数える",
+  "dd915d068e119": "Discord の通知に使うために記憶するインターフェース言語。",
+  "d5e49bf3aee8c": "未読の通知数。",
+  "d44b0a9e03993": "ヘッダー用の未読数。あわせてメンバーのインターフェース言語を記録し、Discord の通知に使います。",
+  "d1bce87340bc1": "すべての通知を既読にする",
+  "d4b63d77c98b7": "呼び出し元の未読通知をすべて既読にします。"
 }
