@@ -84,24 +84,25 @@ afterEach(() => {
   root?.remove();
 });
 describe("provider resource library", () => {
-  it("keeps the prefix available while upload details stay collapsed until requested", async () => {
+  it("keeps the prefix and upload limits folded away until requested", async () => {
     mocks.list.mockResolvedValue({ ...page(), libraryPrefix: "https://assets.example/u/author/" });
     await mount();
     const toggle = root.querySelector<HTMLButtonElement>('[aria-controls="resource-details"]');
     expect(toggle).not.toBeNull();
     expect(toggle?.getAttribute("aria-expanded")).toBe("false");
     expect(root.querySelector("#resource-details")).toBeNull();
-    expect(root.querySelector(".resource-prefix code")?.textContent).toContain("/u/author/");
+    expect(root.querySelector(".resource-prefix")).toBeNull();
     toggle!.click();
     await flush();
     expect(toggle?.getAttribute("aria-expanded")).toBe("true");
     expect(root.querySelector("#resource-details")?.textContent).toContain("PNG");
+    expect(root.querySelector(".resource-prefix code")?.textContent).toContain("/u/author/");
+    expect(root.querySelector(".resource-prefix button")).not.toBeNull();
     toggle!.click();
     await flush();
     expect(root.querySelector("#resource-details")).toBeNull();
-    expect(root.querySelector(".resource-prefix button")).not.toBeNull();
   });
-  it("shows each provider's prefix without expanding and copies exactly the displayed prefix", async () => {
+  it("shows each provider's prefix in the details and copies exactly the displayed prefix", async () => {
     state.profile.identities.push({ provider: "lunatalk", externalId: 3 });
     const writeText = vi.fn(async () => {});
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
@@ -109,8 +110,9 @@ describe("provider resource library", () => {
       ...page(), libraryPrefix: `https://assets.example/${provider}/u/test${provider === "harbor" ? "/" : ""}`,
     }));
     await mount();
+    root.querySelector<HTMLButtonElement>('[aria-controls="resource-details"]')!.click();
+    await flush();
     const prefix = () => root.querySelector<HTMLElement>(".resource-prefix")!;
-    expect(prefix().closest("details:not([open])")).toBeNull();
     expect(prefix().querySelector("code")?.textContent).toBe("https://assets.example/harbor/u/test/");
     prefix().querySelector<HTMLButtonElement>("button")!.click();
     await flush();

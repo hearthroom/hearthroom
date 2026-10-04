@@ -298,6 +298,7 @@ async function choose() {
   await load(1, true);
 }
 onMounted(async () => {
+  document.addEventListener("click", closeUploadMenu);
   document.title = pageTitle(t("res.title"));
   await session.ensureProfile();
   if (disposed) return;
@@ -344,6 +345,7 @@ watch(
   },
 );
 onBeforeUnmount(() => {
+  document.removeEventListener("click", closeUploadMenu);
   disposed = true;
   generation++;
 });
@@ -482,6 +484,17 @@ async function deleteFolder() {
 }
 const input = ref<HTMLInputElement | null>(null);
 const directoryInput = ref<HTMLInputElement | null>(null);
+const uploadMenu = ref<HTMLDetailsElement | null>(null);
+const uploadsBlocked = computed(() => !result.value || loading.value || busy.value || expired.value || uploading.value || quotaFull.value);
+// 原生 <details> 當選單用：點到外面就收起來，不然它會一直開著。
+function closeUploadMenu(e: Event) {
+  const menu = uploadMenu.value;
+  if (menu?.open && !menu.contains(e.target as Node)) menu.removeAttribute("open");
+}
+function chooseUpload(kind: "file" | "directory") {
+  uploadMenu.value?.removeAttribute("open");
+  (kind === "file" ? input.value : directoryInput.value)?.click();
+}
 type UploadEntry = {
   file: File;
   status: "waiting" | "uploading" | "done" | "failed";
@@ -671,146 +684,54 @@ async function previewMove(direction: number) {
     @drop.prevent="enqueue([...$event.dataTransfer!.files])"
   >
     <header class="resource-head">
-      <div>
-        <h1 class="display">{{ $t("res.title") }}</h1>
-      </div>
-      <div class="resource-actions">
+      <h1 class="display">{{ $t("res.title") }}</h1>
+      <div v-if="provider" class="resource-actions">
+        <button class="btn btn--ghost" :disabled="loading || busy" @click="load(page, true)">
+          {{ $t("res.refresh") }}
+        </button>
         <button
           class="btn"
-          :disabled="!provider || loading || busy"
-          @click="load(page, true)"
-        >
-          {{ $t("res.refresh") }}</button
-        ><button
-          v-if="cap?.relativePaths"
-          class="btn"
-          :disabled="!result || loading || busy || expired || uploading || quotaFull"
-          @click="directoryInput?.click()"
-        >{{ $t("resource.uploadDirectory") }}</button
-        ><button
-          class="btn btn--primary"
-          :disabled="
-            !result || loading || busy || expired || uploading || quotaFull
+          :disabled="!result || busy || expired"
+          @click="
+            editing = 'create';
+            folderName = '';
           "
-          @click="input?.click()"
         >
-          {{ $t("res.add") }}</button
-        ><input
-          ref="input"
+          {{ $t("res.folder.new") }}
+        </button>
+        <details v-if="cap?.relativePaths" ref="uploadMenu" class="menu">
+          <summary
+            class="btn btn--primary"
+            :class="{ 'is-disabled': uploadsBlocked }"
+            :aria-disabled="uploadsBlocked || undefined"
+          >
+            {{ $t("resource.upload") }}<AccountIcon name="arrow" class="menu-caret" />
+          </summary>
+          <div class="menu-list" role="menu">
+            <button type="button" role="menuitem" class="menu-item" :disabled="uploadsBlocked" @click="chooseUpload('file')">
+              {{ $t("res.add") }}
+            </button>
+            <button type="button" role="menuitem" class="menu-item" :disabled="uploadsBlocked" @click="chooseUpload('directory')">
+              {{ $t("resource.uploadDirectory") }}
+            </button>
+          </div>
+        </details>
+        <button v-else class="btn btn--primary" :disabled="uploadsBlocked" @click="input?.click()">
+          {{ $t("res.add") }}
+        </button>
+        <input ref="input" type="file" class="sr-only" multiple :accept="accept" @change="pick" />
+        <input
+          v-if="cap?.relativePaths"
+          ref="directoryInput"
           type="file"
           class="sr-only"
           multiple
-          :accept="accept"
+          webkitdirectory
+          :aria-label="$t('resource.uploadDirectory')"
           @change="pick"
         />
-        <input v-if="cap?.relativePaths" ref="directoryInput" type="file" class="sr-only" multiple webkitdirectory :aria-label="$t('resource.uploadDirectory')" @change="pick" />
       </div>
     </header>
-    <section class="resource-overview panel">
-      <div class="provider-bar">
-        <div class="provider-heading">
-          <h2>{{ $t("resource.host") }}</h2>
-        </div>
-        <div v-if="providers.length === 1" class="provider-single">
-          <span class="provider-mark" aria-hidden="true">{{
-            providerName(provider).slice(0, 1)
-          }}</span>
-          <strong>{{
-            $t("resource.hosted", { provider: providerName(provider) })
-          }}</strong>
-        </div>
-        <div
-          v-else-if="providers.length > 1"
-          class="provider-choices"
-          role="group"
-          :aria-label="$t('resource.host')"
-        >
-          <button
-            v-for="p in providers"
-            :key="p.id"
-            type="button"
-            :data-provider="p.id"
-            class="provider-choice"
-            :aria-pressed="provider === p.id"
-            :disabled="busy"
-            @click="
-              provider = p.id;
-              choose();
-            "
-          >
-            <span class="provider-mark" aria-hidden="true">{{
-              p.name.slice(0, 1)
-            }}</span
-            ><span>{{ p.name }}</span
-            ><AccountIcon v-if="provider === p.id" name="check" /><span
-              v-else
-              class="provider-check-space"
-              aria-hidden="true"
-            />
-          </button>
-        </div>
-        <p v-else class="subtle">
-          {{ $t(ready ? "resource.noProvider" : "state.loading") }}
-        </p>
-        <div v-if="provider" class="resource-usage">
-          <span class="subtle">{{ $t("res.quota.label") }}</span>
-          <strong
-            >{{ size(result?.usedBytes) }}
-            <span class="subtle">/ {{ size(result?.byteQuota) }}</span></strong
-          >
-          <div
-            class="resource-meter"
-            role="progressbar"
-            :aria-label="$t('res.quota.label')"
-            :aria-valuenow="result?.usedBytes ?? undefined"
-            :aria-valuemax="result?.byteQuota ?? undefined"
-            aria-valuemin="0"
-          >
-            <span :style="{ width: quotaRatio + '%' }" />
-          </div>
-        </div>
-      </div>
-      <div v-if="provider" class="resource-meta">
-        <section v-if="libraryPrefix" class="resource-prefix" :aria-label="$t('res.prefix.label')">
-          <h3>{{ $t("res.prefix.label") }}</h3>
-          <div class="prefix-row">
-            <code>{{ libraryPrefix }}</code>
-            <button class="btn btn--sm" @click="copy(libraryPrefix)">{{ $t("res.copy") }}</button>
-          </div>
-        </section>
-        <button
-          class="btn btn--ghost resource-details-toggle"
-          :aria-expanded="detailsOpen"
-          aria-controls="resource-details"
-          @click="detailsOpen = !detailsOpen"
-        >
-          {{ $t("resource.rules") }}<AccountIcon name="arrow" />
-        </button>
-      </div>
-      <div v-if="detailsOpen && provider" id="resource-details" class="resource-details">
-        <div class="resource-rules-content">
-          <dl v-if="formatGroups.length" class="format-groups">
-            <div v-for="group in formatGroups" :key="group.kind">
-              <dt>{{ $t("res.kind." + group.kind) }}</dt>
-              <dd><span v-for="format in group.formats" :key="format">{{ format }}</span></dd>
-            </div>
-          </dl>
-          <p v-else class="subtle">{{ $t("resource.rulesUnavailable") }}</p>
-          <div v-if="cap?.maxFileBytes" class="upload-limit">
-            <span class="subtle">{{ $t("resource.maxFileLabel") }}</span><strong>{{ size(cap.maxFileBytes) }}</strong>
-          </div>
-        </div>
-        <div class="resource-help">
-          <template v-if="libraryPrefix">
-            <h3>{{ $t("res.prefix.label") }}</h3>
-            <p class="subtle">{{ $t("res.prefix.hint") }}</p>
-            <p v-if="cap?.relativePaths" class="subtle">{{ $t("resource.directoryHint") }}</p>
-          </template>
-          <RouterLink :to="lp('/me')" class="resource-link">{{ $t("resource.connections") }}</RouterLink>
-        </div>
-      </div>
-      <RouterLink v-if="!provider" :to="lp('/me')" class="resource-link">{{ $t("resource.connections") }}</RouterLink>
-    </section>
     <div v-if="!provider && ready" class="empty panel">
       <h2>{{ $t("resource.noProvider") }}</h2>
       <p class="subtle">{{ $t("resource.isolated") }}</p>
@@ -897,8 +818,26 @@ async function previewMove(direction: number) {
                 {{ $t("res.kind." + k) }}
               </button>
             </div>
+            <form v-if="cap?.search" class="resource-search" @submit.prevent="find">
+              <input
+                v-model="searchDraft"
+                class="input"
+                maxlength="200"
+                :placeholder="$t('resource.search')"
+                :aria-label="$t('resource.search')"
+              /><button class="btn" :disabled="busy">{{ $t("resource.find") }}</button>
+            </form>
+            <ResourceSelect
+              v-if="cap?.sorts.length"
+              v-model="sort"
+              class="resource-sort"
+              :label="$t('resource.sort')"
+              :disabled="busy"
+              :options="cap.sorts.map((s) => ({ value: s, label: $t('resource.sort.' + s) }))"
+              @change="filter"
+            />
             <button
-              class="btn btn--sm"
+              class="btn"
               :disabled="!items.length || busy"
               @click="
                 managing = !managing;
@@ -907,33 +846,6 @@ async function previewMove(direction: number) {
             >
               {{ $t(managing ? "res.done" : "res.manage") }}
             </button>
-          </div>
-          <div v-if="cap?.search || cap?.sorts.length" class="resource-search">
-            <form v-if="cap.search" @submit.prevent="find">
-              <input
-                v-model="searchDraft"
-                class="input"
-                maxlength="200"
-                :placeholder="$t('resource.search')"
-                :aria-label="$t('resource.search')"
-              /><button class="btn" :disabled="busy">
-                {{ $t("resource.find") }}
-              </button>
-            </form>
-            <ResourceSelect
-              v-if="cap?.sorts.length"
-              v-model="sort"
-              class="resource-sort"
-              :label="$t('resource.sort')"
-              :disabled="busy"
-              :options="
-                cap.sorts.map((s) => ({
-                  value: s,
-                  label: $t('resource.sort.' + s),
-                }))
-              "
-              @change="filter"
-            />
           </div>
           <div v-if="managing" class="resource-batch panel">
             <label
@@ -986,9 +898,11 @@ async function previewMove(direction: number) {
               {{ $t("dialog.delete") }}
             </button>
           </div>
-          <div class="resource-path panel">
+          <div v-if="crumbs.length || editing || search" class="resource-path panel">
             <nav class="resource-crumbs" :aria-label="$t('resource.folders')">
-              <button class="crumb" :disabled="busy" @click="enter('root')">{{ $t("res.scope.all") }}</button>
+              <button class="crumb" :aria-current="!crumbs.length ? 'page' : undefined" :disabled="busy" @click="enter('root')">
+                {{ $t("resource.root") }}
+              </button>
               <template v-for="c in crumbs" :key="c.path"
                 ><span aria-hidden="true">/</span
                 ><button
@@ -1002,30 +916,19 @@ async function previewMove(direction: number) {
               >
               <span v-if="search" class="subtle crumb-note">{{ $t("resource.searchScope") }}</span>
             </nav>
-            <div class="resource-path-actions">
+            <div v-if="activeFolder" class="resource-path-actions">
               <button
                 class="btn btn--sm btn--ghost"
-                :disabled="!result || busy || expired"
+                :disabled="busy"
                 @click="
-                  editing = 'create';
-                  folderName = '';
+                  editing = 'rename';
+                  folderName = activeFolder!.name;
                 "
               >
-                ＋ {{ $t("res.folder.new") }}</button
-              ><template v-if="activeFolder"
-                ><button
-                  class="btn btn--sm btn--ghost"
-                  :disabled="busy"
-                  @click="
-                    editing = 'rename';
-                    folderName = activeFolder!.name;
-                  "
-                >
-                  {{ $t("res.folder.rename") }}</button
-                ><button class="btn btn--sm btn--ghost" :disabled="busy" @click="deleteFolder">
-                  {{ $t("res.folder.delete") }}
-                </button></template
-              >
+                {{ $t("res.folder.rename") }}</button
+              ><button class="btn btn--sm btn--ghost" :disabled="busy" @click="deleteFolder">
+                {{ $t("res.folder.delete") }}
+              </button>
             </div>
             <form v-if="editing" class="folder-form" @submit.prevent="saveFolder">
               <input
@@ -1115,7 +1018,9 @@ async function previewMove(direction: number) {
                   </td>
                   <td class="col-time subtle">{{ when(r.createTime) }}</td>
                   <td class="col-actions">
-                    <button class="btn btn--sm btn--ghost" @click="copy(r.imageUrl)">{{ $t("res.copy") }}</button>
+                    <button class="btn btn--sm btn--ghost copy-btn" :aria-label="$t('res.copy')" @click="copy(r.imageUrl)">
+                      <AccountIcon name="copy" /><span class="copy-label">{{ $t("res.copy") }}</span>
+                    </button>
                   </td>
                 </tr>
               </tbody>
@@ -1172,6 +1077,74 @@ async function previewMove(direction: number) {
               @change="filter"
             />
           </nav>
+          <div v-if="provider" class="resource-footer">
+            <div v-if="providers.length > 1" class="provider-choices" role="group" :aria-label="$t('resource.host')">
+              <button
+                v-for="p in providers"
+                :key="p.id"
+                type="button"
+                :data-provider="p.id"
+                class="provider-choice"
+                :aria-pressed="provider === p.id"
+                :disabled="busy"
+                @click="
+                  provider = p.id;
+                  choose();
+                "
+              >
+                <span>{{ p.name }}</span><AccountIcon v-if="provider === p.id" name="check" />
+              </button>
+            </div>
+            <span v-else class="subtle">{{ $t("resource.hosted", { provider: providerName(provider) }) }}</span>
+            <div class="resource-usage">
+              <span class="subtle">{{ $t("res.quota.label") }}</span>
+              <strong>{{ size(result?.usedBytes) }} <span class="subtle">/ {{ size(result?.byteQuota) }}</span></strong>
+              <div
+                class="resource-meter"
+                role="progressbar"
+                :aria-label="$t('res.quota.label')"
+                :aria-valuenow="result?.usedBytes ?? undefined"
+                :aria-valuemax="result?.byteQuota ?? undefined"
+                aria-valuemin="0"
+              >
+                <span :style="{ width: quotaRatio + '%' }" />
+              </div>
+            </div>
+            <button
+              class="btn btn--sm btn--ghost resource-details-toggle"
+              :aria-expanded="detailsOpen"
+              aria-controls="resource-details"
+              @click="detailsOpen = !detailsOpen"
+            >
+              {{ $t("resource.rules") }}<AccountIcon name="arrow" />
+            </button>
+          </div>
+          <div v-if="detailsOpen && provider" id="resource-details" class="resource-details panel">
+            <div class="resource-rules-content">
+              <dl v-if="formatGroups.length" class="format-groups">
+                <div v-for="group in formatGroups" :key="group.kind">
+                  <dt>{{ $t("res.kind." + group.kind) }}</dt>
+                  <dd><span v-for="format in group.formats" :key="format">{{ format }}</span></dd>
+                </div>
+              </dl>
+              <p v-else class="subtle">{{ $t("resource.rulesUnavailable") }}</p>
+              <div v-if="cap?.maxFileBytes" class="upload-limit">
+                <span class="subtle">{{ $t("resource.maxFileLabel") }}</span><strong>{{ size(cap.maxFileBytes) }}</strong>
+              </div>
+            </div>
+            <div class="resource-help">
+              <section v-if="libraryPrefix" class="resource-prefix" :aria-label="$t('res.prefix.label')">
+                <h3>{{ $t("res.prefix.label") }}</h3>
+                <div class="prefix-row">
+                  <code>{{ libraryPrefix }}</code>
+                  <button class="btn btn--sm" @click="copy(libraryPrefix)">{{ $t("res.copy") }}</button>
+                </div>
+                <p class="subtle">{{ $t("res.prefix.hint") }}</p>
+                <p v-if="cap?.relativePaths" class="subtle">{{ $t("resource.directoryHint") }}</p>
+              </section>
+              <RouterLink :to="lp('/me')" class="resource-link">{{ $t("resource.connections") }}</RouterLink>
+            </div>
+          </div>
         </section></template>
     <ResourcePreview
       v-if="preview"
@@ -1191,260 +1164,125 @@ async function previewMove(direction: number) {
   </div>
 </template>
 <style scoped>
-.resource-head,
-.resource-actions,
-.resource-toolbar,
-.resource-search,
-.resource-search form,
-.resource-batch,
-.resource-pager,
-.page-buttons,
-.upload-list header,
-.prefix-row {
+.resources {
   display: flex;
-  gap: var(--s-3);
-  align-items: center;
-  flex-wrap: wrap;
-}
-.resource-head,
-.resource-toolbar,
-.resource-pager {
-  justify-content: space-between;
+  flex-direction: column;
+  gap: var(--s-4);
 }
 .resource-head {
-  margin-bottom: var(--s-4);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
 }
 .resource-head h1 {
-  font-size: 1.5rem;
   margin: 0;
 }
-.resources .input {
-  border-radius: var(--r-pill);
-}
-.resource-overview {
-  margin-bottom: var(--s-4);
-  padding: var(--s-3) var(--s-4);
-}
-.provider-bar {
+.resource-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--s-3);
-}
-.provider-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--s-3);
-}
-.provider-heading h2 {
-  margin: 0;
-  color: var(--text-2);
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-.provider-choices {
-  display: flex;
   gap: var(--s-2);
-  flex-wrap: wrap;
 }
-.provider-choice {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-  min-height: var(--h-lg);
-  padding: var(--s-1) var(--s-3);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-pill);
-  color: var(--text);
-  background: transparent;
-  font: inherit;
-  font-size: 0.9rem;
-  font-weight: 600;
+.menu {
+  position: relative;
+}
+.menu > summary {
+  list-style: none;
   cursor: pointer;
 }
-.provider-choice[aria-pressed="true"] {
-  color: var(--accent-text);
-  background: var(--accent-tint);
-  border-color: var(--accent);
+.menu > summary::-webkit-details-marker {
+  display: none;
 }
-.provider-choice:hover:not(:disabled) {
+.menu > summary.is-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.menu-caret {
+  width: 14px;
+  height: 14px;
+  transform: rotate(90deg);
+}
+.menu[open] .menu-caret {
+  transform: rotate(-90deg);
+}
+.menu-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--s-1));
+  z-index: 40;
+  min-width: 160px;
+  padding: var(--s-1);
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  box-shadow: 0 0 0 1px var(--line), var(--shadow-md, var(--shadow-sm));
+}
+.menu-item {
+  display: block;
+  width: 100%;
+  min-height: var(--h-md);
+  padding: 0 var(--s-3);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.menu-item:hover,
+.menu-item:focus-visible {
   background: var(--surface-2);
 }
-.provider-choice:disabled {
+.menu-item:disabled {
   opacity: 0.5;
   cursor: default;
 }
-.provider-mark {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 24px;
-  height: 24px;
-  border-radius: var(--r-pill);
-  background: var(--surface-2);
-  color: var(--text-2);
-  font-size: 0.75rem;
-  font-weight: 700;
+.resources > .notice {
+  margin: 0;
 }
-.provider-choice[aria-pressed="true"] .provider-mark {
-  background: var(--accent-soft);
-  color: var(--accent-text);
+.resource-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  min-width: 0;
 }
-.provider-check-space {
-  width: 20px;
-  flex: none;
+.resource-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
 }
-.provider-single {
+.resource-search {
   display: flex;
   gap: var(--s-2);
-  align-items: center;
-  font-size: 0.95rem;
+  flex: 1 1 260px;
+  min-width: 0;
 }
-.resource-link {
-  font-size: 0.8rem;
-  color: var(--text-2);
-  text-underline-offset: 3px;
+.resource-search .input {
+  flex: 1;
+  min-width: 0;
 }
-.resource-usage {
-  margin-left: auto;
-  display: grid;
-  grid-template-columns: auto auto;
-  column-gap: var(--s-2);
-  align-items: baseline;
-  font-size: 0.8rem;
-}
-.resource-usage strong {
-  font-size: 0.85rem;
-  font-variant-numeric: tabular-nums;
-}
-.resource-usage strong span {
-  font-weight: 400;
-}
-.resource-meter {
-  grid-column: 1 / -1;
-  height: 3px;
-  margin-top: var(--s-1);
-  background: var(--surface-2);
-  border-radius: var(--r-pill);
-  overflow: hidden;
-}
-.resource-meter span {
-  display: block;
-  height: 100%;
-  background: var(--accent);
-}
-.resource-meta {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--s-2) var(--s-4);
-  margin-top: var(--s-2);
-  padding-top: var(--s-2);
-  border-top: 1px solid var(--line);
-}
-.resource-details-toggle {
-  margin-left: auto;
-  min-height: var(--h-lg);
-  font-size: 0.8rem;
+.resource-sort {
+  width: 170px;
   flex: none;
 }
-.resource-details-toggle :deep(svg) {
-  width: 16px;
-  height: 16px;
-  transform: rotate(90deg);
-  transition: transform var(--dur);
-}
-.resource-details-toggle[aria-expanded="true"] :deep(svg) {
-  transform: rotate(-90deg);
-}
-.resource-details {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: var(--s-5);
-  border-top: 1px solid var(--line);
-  margin-top: var(--s-2);
-  padding-block: var(--s-4) var(--s-2);
+.resource-batch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  padding: var(--s-2) var(--s-3);
   font-size: 0.85rem;
 }
-.resource-help p {
-  margin: var(--s-2) 0;
-  overflow-wrap: anywhere;
-}
-.resource-help h3 {
-  margin: 0;
-  font-size: inherit;
-}
-.resource-help .resource-link {
+.resource-batch label {
   display: inline-flex;
   align-items: center;
-  min-height: var(--h-lg);
-}
-.format-groups {
-  margin: 0;
-  display: grid;
-  gap: var(--s-3);
-}
-.format-groups > div {
-  display: grid;
-  grid-template-columns: 4em minmax(0, 1fr);
-  gap: var(--s-3);
-}
-.format-groups dt {
-  color: var(--text-2);
-}
-.format-groups dd {
-  display: flex;
-  gap: var(--s-2);
-  flex-wrap: wrap;
-  margin: 0;
-  font-size: 0.8rem;
-  line-height: 1.6;
-  font-weight: 600;
-}
-.upload-limit {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s-3);
-  border-top: 1px solid var(--line);
-  padding-top: var(--s-3);
-  margin-top: var(--s-4);
-}
-.upload-limit strong {
-  font-size: 0.95rem;
-}
-.resource-prefix {
-  display: flex;
-  align-items: center;
-  flex: 1;
-  min-width: 0;
-  gap: var(--s-3);
-}
-.resource-prefix h3 {
-  margin: 0;
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: var(--text-2);
-  flex: none;
-}
-.prefix-row {
-  min-width: 0;
-  flex: 1;
-  flex-wrap: nowrap;
   gap: var(--s-2);
 }
-.prefix-row .btn { min-height: var(--h-lg); flex: none; }
-.prefix-row code {
-  min-width: 0;
-  flex: 1;
-  overflow-wrap: anywhere;
-  font-size: 0.75rem;
-}
-.upload-pages { display: flex; align-items: center; justify-content: flex-end; gap: var(--s-3); }
-.resource-sort {
-  width: 190px;
-  flex: none;
+.resource-batch .resource-select {
+  max-width: 180px;
 }
 .resource-path {
   display: flex;
@@ -1453,7 +1291,6 @@ async function previewMove(direction: number) {
   justify-content: space-between;
   gap: var(--s-2);
   padding: var(--s-2) var(--s-3);
-  margin-bottom: var(--s-3);
 }
 .resource-crumbs {
   display: flex;
@@ -1463,6 +1300,23 @@ async function previewMove(direction: number) {
   min-width: 0;
   font-size: 0.9375rem;
 }
+.crumb {
+  background: none;
+  border: 0;
+  color: var(--text-2);
+  font: inherit;
+  padding: 4px 6px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.crumb:hover {
+  background: var(--surface-2);
+}
+.crumb[aria-current="page"] {
+  color: var(--text);
+  font-weight: 600;
+}
 .crumb-note {
   margin-left: var(--s-2);
   font-size: 0.8125rem;
@@ -1470,11 +1324,15 @@ async function previewMove(direction: number) {
 .resource-path-actions {
   display: flex;
   gap: var(--s-1);
-  flex-wrap: wrap;
 }
-.resource-path .folder-form {
+.folder-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
   width: 100%;
-  margin-top: 0;
+}
+.folder-form .input {
+  flex: 1 1 200px;
 }
 .resource-table-wrap {
   padding: 0;
@@ -1483,8 +1341,8 @@ async function previewMove(direction: number) {
 .resource-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9rem;
   table-layout: fixed;
+  font-size: 0.9rem;
 }
 .resource-table th {
   text-align: left;
@@ -1553,7 +1411,8 @@ async function previewMove(direction: number) {
 .row-folder .row-name {
   font-weight: 600;
 }
-.row-name:hover > span {
+.row-name:hover > span,
+.row-name:focus-visible > span {
   text-decoration: underline;
 }
 .resource-check {
@@ -1572,63 +1431,132 @@ async function previewMove(direction: number) {
   height: 280px;
   border-radius: var(--r-lg);
 }
-.crumb {
-  background: none;
-  border: 0;
-  color: inherit;
-  font: inherit;
-  padding: 4px 6px;
-  border-radius: var(--r-sm);
-  cursor: pointer;
-  overflow-wrap: anywhere;
-}
-.crumb:hover {
-  background: var(--surface-2);
-}
-.crumb[aria-current="page"] {
-  font-weight: 600;
-}
-.resource-content {
-  min-width: 0;
-}
-.resource-toolbar {
-  margin-bottom: var(--s-4);
-}
-.resource-search {
-  margin-bottom: var(--s-4);
-}
-.resource-search form {
-  flex: 1;
-  min-width: 180px;
-  flex-wrap: nowrap;
-}
-.resource-search input {
-  width: 100%;
-}
-.resource-search > .resource-select {
-  max-width: 180px;
-}
-.resource-batch {
-  padding: var(--s-3);
-  margin-bottom: var(--s-3);
-  font-size: 0.85rem;
-}
-.resource-batch .resource-select {
-  max-width: 180px;
-}
 .resource-pager {
-  margin-top: var(--s-5);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2) var(--s-3);
   font-size: 0.85rem;
+}
+.page-buttons {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
 }
 .resource-pager .resource-select {
   width: auto;
 }
-.page-buttons {
+.resource-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-4);
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--line);
+  font-size: 0.8125rem;
+}
+.resource-usage {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex: 1;
+  min-width: 220px;
+}
+.resource-meter {
+  width: 120px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.resource-meter span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.provider-choices {
+  display: inline-flex;
   gap: var(--s-1);
+}
+.provider-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-height: 32px;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.provider-choice[aria-pressed="true"] {
+  border-color: var(--accent);
+}
+.resource-details {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--s-4);
+  padding: var(--s-4);
+  font-size: 0.875rem;
+}
+.format-groups {
+  display: grid;
+  gap: var(--s-2);
+  margin: 0;
+}
+.format-groups div {
+  display: flex;
+  gap: var(--s-2);
+  align-items: baseline;
+}
+.format-groups dt {
+  color: var(--muted);
+  min-width: 3em;
+}
+.format-groups dd {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+}
+.upload-limit {
+  display: flex;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+}
+.resource-prefix h3 {
+  font-size: 0.875rem;
+  margin: 0 0 var(--s-1);
+}
+.prefix-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+.prefix-row code {
+  overflow-wrap: anywhere;
+  font-size: 0.8125rem;
+}
+.resource-prefix p {
+  margin: var(--s-2) 0 0;
+}
+.resource-link {
+  display: inline-block;
+  margin-top: var(--s-3);
 }
 .upload-list {
   padding: var(--s-4);
-  margin-bottom: var(--s-4);
+}
+.upload-list header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
 }
 .upload-list h2 {
   font-size: 1rem;
@@ -1636,6 +1564,7 @@ async function previewMove(direction: number) {
   flex: 1;
 }
 .upload-list ul {
+  margin: var(--s-2) 0 0;
   padding: 0;
   list-style: none;
   max-height: 240px;
@@ -1659,18 +1588,16 @@ async function previewMove(direction: number) {
   width: 100%;
   margin: 0;
 }
+.upload-pages {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s-3);
+  margin-top: var(--s-2);
+}
 .error-text {
   color: var(--danger);
   font-size: 0.85rem;
-}
-.folder-form {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-2);
-  margin-top: var(--s-3);
-}
-.folder-form input {
-  width: 100%;
 }
 .empty {
   text-align: center;
@@ -1679,18 +1606,20 @@ async function previewMove(direction: number) {
 .empty h2 {
   font-size: 1rem;
 }
-.resources > .notice {
-  margin-bottom: var(--s-3);
-}
 @media (max-width: 720px) {
   .resources .btn,
   .resources .seg__item,
   .resources .input {
     min-height: var(--h-lg);
   }
-
-  .folder-form {
-    width: 100%;
+  .resource-search {
+    flex-basis: 100%;
+    order: 3;
+  }
+  .resource-sort {
+    flex: 1;
+    width: auto;
+    order: 4;
   }
   .col-type,
   .col-time {
@@ -1703,85 +1632,14 @@ async function previewMove(direction: number) {
   .col-actions .btn {
     padding-inline: var(--s-2);
   }
-  .resource-overview {
-    padding: var(--s-3);
-  }
-  .provider-heading {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-  }
-  .provider-choice {
-    padding-inline: var(--s-2);
-    flex: 1;
-    justify-content: center;
-    font-size: 0.85rem;
-    gap: var(--s-1);
-  }
-  .provider-choices {
-    width: 100%;
-    gap: var(--s-2);
-  }
-  .resource-usage {
-    margin-left: 0;
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--s-2);
-    width: 100%;
-  }
-  .resource-meter {
-    min-width: 32px;
-    flex: 1;
-    align-self: center;
-    margin: 0;
-  }
-  .resource-prefix {
-    flex-basis: 100%;
-    display: block;
-  }
-  .resource-prefix h3 {
-    margin-bottom: var(--s-1);
-  }
-  .resource-details-toggle {
-    margin-left: 0;
-    padding-inline: 0;
+  .copy-label {
+    display: none;
   }
   .resource-details {
     grid-template-columns: 1fr;
-    gap: var(--s-4);
   }
-  .resource-head {
-    align-items: start;
-  }
-  .resource-actions {
-    gap: var(--s-2);
-  }
-  .resource-actions .btn {
-    padding-inline: var(--s-3);
-    font-size: 0.8rem;
-  }
-  .resource-toolbar {
-    flex-wrap: nowrap;
-    gap: var(--s-2);
-  }
-  .resource-toolbar .seg {
-    min-width: 0;
-    overflow: auto;
-  }
-  .resource-toolbar > .btn {
-    flex: none;
-  }
-  .resource-toolbar .seg__item {
-    padding-inline: var(--s-2);
-  }
-  .resource-pager {
-    gap: var(--s-3);
-  }
-  .page-buttons {
-    width: 100%;
-    justify-content: center;
+  .resource-usage {
+    flex-basis: 100%;
   }
 }
 </style>

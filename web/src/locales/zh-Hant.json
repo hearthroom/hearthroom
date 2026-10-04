@@ -1270,6 +1270,8 @@
   "community.badges.discord_linked": "Discord 已連結",
   "community.nextLevel": "再累積 {xp} XP 升到等級 {level}",
   "resource.uploadDirectory": "上傳資料夾",
+  "resource.upload": "上傳",
+  "resource.root": "所有檔案",
   "resource.colName": "名稱",
   "resource.colSize": "大小",
   "resource.colType": "類型",
