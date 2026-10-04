@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "try": "/library",
+  "live": "2026-10-01",
+  "title": {
+    "zh-Hant": "篇幅可以選自動、推薦或指定字數，回覆偏好也能在送出第一句話之前就設好。",
+    "zh-Hans": "篇幅可以选自动、推荐或指定字数，回复偏好也能在发出第一句话之前就设好。",
+    "en": "Reply length can be Automatic, Recommended or a set length, and preferences can be set before your first message.",
+    "ja": "文章量を自動、おすすめ、文字数指定から選べ、返信の好みは最初のメッセージを送る前に設定できます。",
+    "ko": "분량을 자동, 추천, 글자 수 지정 중에서 고를 수 있고, 답변 취향은 첫 메시지 전에 정할 수 있습니다."
+  },
+  "body": {
+    "zh-Hant": "文風有預設、精簡指引、跟隨角色卡和自訂四種，每種都附一句說明。",
+    "zh-Hans": "文风有默认、精简指引、跟随角色卡和自定义四种，每种都附有一句说明。",
+    "en": "Style has four options, Default, Light guide, Follow character and Custom, each with a one-line explanation.",
+    "ja": "文体は標準、簡潔ガイド、キャラクターに合わせる、カスタムの四つから選べ、それぞれに説明が付いています。",
+    "ko": "문체는 기본, 간결 가이드, 캐릭터에 맞춤, 직접 설정의 네 가지이며 각각 한 줄 설명이 붙어 있습니다."
+  }
+}

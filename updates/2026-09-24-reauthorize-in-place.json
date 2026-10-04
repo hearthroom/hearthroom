@@ -1,0 +1,13 @@
+{
+  "tier": "fix",
+  "audience": "authors",
+  "try": "/mine",
+  "live": "2026-09-24",
+  "title": {
+    "zh-Hant": "授權過期時，我的卡片以前只給一個沒用的重試，現在可以就地重新授權。",
+    "zh-Hans": "授权过期时，我的卡片以前只有一个没用的重试，现在可以直接重新授权。",
+    "en": "When your authorization expires, My cards now lets you reauthorize on the spot instead of retrying in vain.",
+    "ja": "認可の期限が切れたとき、マイカードからその場で認可し直せるようになりました。",
+    "ko": "권한이 만료되었을 때 이제 내 카드에서 바로 다시 권한을 부여할 수 있습니다."
+  }
+}

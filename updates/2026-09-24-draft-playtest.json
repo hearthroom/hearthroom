@@ -1,0 +1,13 @@
+{
+  "tier": "fix",
+  "audience": "authors",
+  "try": "/mine",
+  "live": "2026-09-24",
+  "title": {
+    "zh-Hant": "還沒送審的卡片以前試玩會顯示載入失敗，現在存好就能直接試玩。",
+    "zh-Hans": "还没送审的卡片以前试玩会显示加载失败，现在保存后就能直接试玩。",
+    "en": "Cards you haven't submitted no longer fail to load in a test chat, so you can playtest a draft once it's saved.",
+    "ja": "審査前のカードを試すと読み込みに失敗していた問題が直り、保存すればすぐに試せます。",
+    "ko": "심사 전 카드를 체험하면 불러오기에 실패하던 문제가 고쳐져, 저장하면 바로 체험할 수 있습니다."
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "try": "/",
+  "live": "2026-09-25",
+  "title": {
+    "zh-Hant": "榜單上的卡名最多顯示兩行，18+ 和精選標記也改放在封面上。",
+    "zh-Hans": "榜单上的卡名最多显示两行，18+ 和精选标记也改放在封面上。",
+    "en": "Card names on the board now show on up to two lines, and the 18+ and Featured marks sit on the cover.",
+    "ja": "ランキングのカード名は二行まで表示され、18+ と注目のマークは表紙の上に移りました。",
+    "ko": "랭킹의 카드 이름이 두 줄까지 보이고, 18+와 추천 표시는 표지 위로 옮겼습니다."
+  }
+}

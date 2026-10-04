@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "try": "/library",
+  "live": "2026-09-23",
+  "title": {
+    "zh-Hant": "卡片放不進上下文容量時，可以選擇調大容量，或只帶最重要的設定開始玩。",
+    "zh-Hans": "卡片放不进上下文容量时，可以选择调大容量，或只带最重要的设定开始玩。",
+    "en": "When a card doesn't fit your context capacity, you can raise it or play with just the card's key settings.",
+    "ja": "カードがコンテキスト容量に収まらないときは、容量を増やすか、重要な設定だけで遊ぶかを選べます。",
+    "ko": "카드가 컨텍스트 용량에 다 들어가지 않으면 용량을 늘리거나 중요한 설정만 넣고 플레이할 수 있습니다."
+  }
+}

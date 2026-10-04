@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "live": "2026-09-27",
+  "title": {
+    "zh-Hant": "上下文容量不夠時，以前只說伺服器不穩，現在會照實說明，還附上調整容量的按鈕。",
+    "zh-Hans": "上下文容量不够时，以前只说服务器不稳，现在会如实说明，还附上调整容量的按钮。",
+    "en": "When a chat runs out of context capacity, it now says so and offers a button to adjust it instead of blaming the server.",
+    "ja": "コンテキスト容量が足りないときは、サーバーの不調とせずに理由を伝え、容量を調整するボタンも出します。",
+    "ko": "컨텍스트 용량이 부족하면 서버 탓을 하지 않고 이유를 알려 주며, 용량 조정 버튼도 보여 줍니다."
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "tier": "fix",
+  "audience": "authors",
+  "try": "/resources",
+  "live": "2026-09-29",
+  "title": {
+    "zh-Hant": "上傳大檔案到我的資源，以前傳得慢會被中斷，現在只要還在傳就不會停。",
+    "zh-Hans": "上传大文件到我的资源，以前传得慢会被中断，现在只要还在传就不会停。",
+    "en": "Large uploads to My resources no longer get cut off on a slow connection as long as they keep moving.",
+    "ja": "マイリソースへの大きなファイルのアップロードは、通信が遅くても進んでいる限り止まりません。",
+    "ko": "내 리소스에 큰 파일을 올릴 때 속도가 느려도 전송이 계속되는 한 중간에 끊기지 않습니다."
+  }
+}

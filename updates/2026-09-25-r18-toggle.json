@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "try": "/",
+  "live": "2026-09-25",
+  "title": {
+    "zh-Hant": "榜單上多了 R18 開關，驗過年齡的成員點一下就能切換是否顯示成人內容。",
+    "zh-Hans": "榜单上多了 R18 开关，验证过年龄的成员点一下就能切换是否显示成人内容。",
+    "en": "The board now has an R18 switch, so age-verified members can show or hide adult content with one tap.",
+    "ja": "ランキングの R18 スイッチで、年齢確認済みなら成人向けの表示をすぐ切り替えられます。",
+    "ko": "랭킹에 R18 스위치가 생겨, 나이 확인을 마친 멤버는 한 번에 성인 콘텐츠 표시를 바꿀 수 있습니다."
+  }
+}

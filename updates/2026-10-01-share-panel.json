@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "try": "/",
+  "live": "2026-10-01",
+  "title": {
+    "zh-Hant": "分享卡片改用自己的面板，能複製連結或分享到 X、Telegram 和 LINE。",
+    "zh-Hans": "分享卡片改用自己的面板，能复制链接或分享到 X、Telegram 和 LINE。",
+    "en": "Sharing a card opens Hearthroom's own panel, where you can copy the link or post it to X, Telegram or LINE.",
+    "ja": "カードの共有は専用パネルになり、リンクのコピーや X、Telegram、LINE に送れます。",
+    "ko": "카드 공유는 전용 패널로 바뀌어 링크를 복사하거나 X, Telegram, LINE으로 보낼 수 있습니다."
+  }
+}

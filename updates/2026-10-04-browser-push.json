@@ -1,0 +1,15 @@
+{
+  "tier": "feature",
+  "try": "/me/notifications",
+  "spotlight": [
+    "notifications.push"
+  ],
+  "live": "2026-10-04",
+  "title": {
+    "zh-Hant": "通知也能用瀏覽器推播送達，沒開著網站也收得到。",
+    "zh-Hans": "通知也能通过浏览器推送送达，没打开网站也能收到。",
+    "en": "Notifications can also arrive as browser push, even when the site isn't open.",
+    "ja": "通知はブラウザのプッシュ通知でも受け取れ、サイトを開いていなくても届きます。",
+    "ko": "알림을 브라우저 푸시로도 받을 수 있어, 사이트를 열어 두지 않아도 도착합니다."
+  }
+}

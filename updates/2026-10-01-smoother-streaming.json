@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "live": "2026-10-01",
+  "title": {
+    "zh-Hant": "回覆逐字出現時畫面不再卡頓，捲動時也不會誤開長按選單。",
+    "zh-Hans": "回复逐字显示时画面不再卡顿，滚动时也不会误开长按菜单。",
+    "en": "Replies no longer stutter as they appear, and scrolling no longer opens the long-press menu by accident.",
+    "ja": "返信の表示中にカクつかなくなり、スクロールで長押しメニューが開くこともなくなりました。",
+    "ko": "답변이 나오는 동안 화면이 끊기지 않고, 스크롤하다가 길게 누르기 메뉴가 열리는 일도 없습니다."
+  }
+}

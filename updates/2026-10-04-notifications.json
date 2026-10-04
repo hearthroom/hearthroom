@@ -1,0 +1,22 @@
+{
+  "tier": "highlight",
+  "try": "/me/notifications",
+  "spotlight": [
+    "header.bell"
+  ],
+  "live": "2026-10-04",
+  "title": {
+    "zh-Hant": "通知鈴鐺會告訴你誰回覆了你、誰讚了你的留言，以及關注的作者發了新卡。",
+    "zh-Hans": "通知铃铛会告诉你谁回复了你、谁点赞了你的评论，以及关注的作者发了新卡。",
+    "en": "The bell now tells you who replied, who liked your comment, and when an author you follow posts a new card.",
+    "ja": "ベルの通知で、返信やいいねをくれた人と、フォロー中の作者の新しいカードがわかります。",
+    "ko": "알림 종에서 누가 답글을 달고 좋아요를 눌렀는지, 팔로우한 작가가 새 카드를 올렸는지 알 수 있습니다."
+  },
+  "body": {
+    "zh-Hant": "通知預設開啟，不想收的類型可以在通知頁關掉。",
+    "zh-Hans": "通知默认开启，不想收的类型可以在通知页关闭。",
+    "en": "Notifications are on by default, and you can turn off any kind you don't want on the notifications page.",
+    "ja": "通知は最初からオンになっていて、不要な種類は通知ページでオフにできます。",
+    "ko": "알림은 기본으로 켜져 있으며, 원하지 않는 종류는 알림 페이지에서 끌 수 있습니다."
+  }
+}

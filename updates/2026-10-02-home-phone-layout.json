@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "try": "/",
+  "live": "2026-10-02",
+  "title": {
+    "zh-Hant": "手機首頁的第一屏能看到更多卡片，R18 開關移到頁首，類型列也改成可收合。",
+    "zh-Hans": "手机首页的第一屏能看到更多卡片，R18 开关移到顶部，类型栏也可以收起。",
+    "en": "On phones, the home page fits more cards on the first screen, with R18 moved to the header and types folded away.",
+    "ja": "スマートフォンのトップページで最初に見えるカードが増え、R18 スイッチは上部に移りました。",
+    "ko": "휴대폰 홈 화면 첫 페이지에 카드가 더 많이 보이고, R18 스위치는 상단으로 옮겼습니다."
+  }
+}

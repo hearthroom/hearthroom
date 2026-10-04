@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "try": "/me",
+  "live": "2026-09-22",
+  "title": {
+    "zh-Hant": "社群頭像可以用 GIF 或 APNG 動圖，檔案上限也放寬到 10 MB。",
+    "zh-Hans": "社区头像可以使用 GIF 或 APNG 动图，文件上限也放宽到 10 MB。",
+    "en": "Your community avatar can now be an animated GIF or APNG of up to 10 MB.",
+    "ja": "コミュニティのプロフィール画像に、GIF や APNG の動く画像を 10 MB まで使えます。",
+    "ko": "커뮤니티 프로필 이미지로 움직이는 GIF나 APNG를 10MB까지 쓸 수 있습니다."
+  }
+}

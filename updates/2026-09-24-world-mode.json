@@ -1,0 +1,20 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/create",
+  "live": "2026-09-24",
+  "title": {
+    "zh-Hant": "世界模式讓一張卡裡有多個角色，每個角色都能有自己的私有世界書。",
+    "zh-Hans": "世界模式让一张卡里有多个角色，每个角色都能有自己的私有世界书。",
+    "en": "World mode puts several characters in one card, each with its own private Lorebook.",
+    "ja": "ワールドモードでは一枚のカードに複数のキャラクターを置け、それぞれに専用の世界設定を持たせられます。",
+    "ko": "월드 모드에서는 카드 하나에 여러 캐릭터를 넣고, 캐릭터마다 전용 세계관을 둘 수 있습니다."
+  },
+  "body": {
+    "zh-Hant": "玩家用 @ 就能指定要對誰說話，這項功能目前還在實驗階段。",
+    "zh-Hans": "玩家用 @ 就能指定要对谁说话，这项功能目前还在实验阶段。",
+    "en": "Players can use @ to choose who they're talking to, and the feature is still experimental.",
+    "ja": "プレイヤーは @ で話しかける相手を選べますが、この機能はまだ試験版です。",
+    "ko": "플레이어는 @로 말을 걸 상대를 고를 수 있으며, 이 기능은 아직 실험 단계입니다."
+  }
+}

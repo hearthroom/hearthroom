@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "live": "2026-09-30",
+  "title": {
+    "zh-Hant": "回覆失敗時以前一律說是網路問題，現在會說出真正的原因。",
+    "zh-Hans": "回复失败时以前一律说是网络问题，现在会说出真正的原因。",
+    "en": "When a reply fails, the message now gives the real reason instead of always blaming your network.",
+    "ja": "返信に失敗したとき、いつも通信のせいにせず、本当の理由を表示するようになりました。",
+    "ko": "답변이 실패했을 때 늘 네트워크 탓으로 돌리지 않고 실제 이유를 알려 줍니다."
+  }
+}

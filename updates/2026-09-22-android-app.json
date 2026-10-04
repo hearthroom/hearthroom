@@ -1,0 +1,19 @@
+{
+  "tier": "highlight",
+  "try": "/download",
+  "live": "2026-09-22",
+  "title": {
+    "zh-Hant": "Hearthroom 有 Android App 了，下載頁一步步教你安裝。",
+    "zh-Hans": "Hearthroom 推出了 Android App，下载页会一步步教你安装。",
+    "en": "Hearthroom now has an Android app, and the download page walks you through installing it.",
+    "ja": "Hearthroom の Android アプリが登場し、入れ方はダウンロードページで確認できます。",
+    "ko": "Hearthroom Android 앱이 나왔고, 다운로드 페이지에서 설치 방법을 차례대로 안내합니다."
+  },
+  "body": {
+    "zh-Hant": "App 會自己檢查新版本，有更新時直接在 App 裡下載。",
+    "zh-Hans": "App 会自己检查新版本，有更新时直接在 App 里下载。",
+    "en": "The app checks for new versions on its own and downloads updates right inside the app.",
+    "ja": "アプリは新しいバージョンを自動で確認し、更新はアプリの中でダウンロードできます。",
+    "ko": "앱이 새 버전을 스스로 확인하고, 업데이트는 앱 안에서 바로 내려받을 수 있습니다."
+  }
+}

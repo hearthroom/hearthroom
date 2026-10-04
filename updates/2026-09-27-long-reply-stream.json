@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "live": "2026-09-27",
+  "title": {
+    "zh-Hant": "很長的回覆以前會越寫越慢，甚至寫到一半就停住，現在能順利寫完。",
+    "zh-Hans": "很长的回复以前会越写越慢，甚至写到一半就停住，现在能顺利写完。",
+    "en": "Long replies used to slow down and sometimes stop halfway, and now they come through to the end.",
+    "ja": "長い返信がだんだん遅くなったり途中で止まったりしていた問題が直り、最後まで表示されます。",
+    "ko": "긴 답변이 점점 느려지거나 중간에 멈추던 문제가 고쳐져, 끝까지 출력됩니다."
+  }
+}

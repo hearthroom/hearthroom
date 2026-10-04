@@ -1,0 +1,13 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/mine",
+  "live": "2026-09-26",
+  "title": {
+    "zh-Hant": "我的卡片可以搜尋、篩選，也有頁碼，卡片再多也找得到。",
+    "zh-Hans": "我的卡片可以搜索、筛选，还有页码，卡片再多也找得到。",
+    "en": "My cards now has search, filters and page numbers, so you can find any card however many you have.",
+    "ja": "マイカードで検索や絞り込みができ、ページ番号も付いたので、カードが多くても見つけられます。",
+    "ko": "내 카드에서 검색과 필터를 쓸 수 있고 페이지 번호도 생겨, 카드가 많아도 쉽게 찾을 수 있습니다."
+  }
+}

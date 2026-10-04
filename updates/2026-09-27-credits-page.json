@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "try": "/wallet",
+  "live": "2026-09-27",
+  "title": {
+    "zh-Hant": "積分與會員頁改版了，餘額、邀請獎勵和每天的用量都在同一頁看得到。",
+    "zh-Hans": "积分与会员页改版了，余额、邀请奖励和每天的用量都能在同一页看到。",
+    "en": "The Credits & membership page now shows your balance, invite rewards and daily usage together.",
+    "ja": "ポイントと会員のページが新しくなり、残高と招待特典、毎日の利用量を一か所で確認できます。",
+    "ko": "포인트 및 멤버십 페이지가 새로워져 잔액과 초대 보상, 날짜별 사용량을 한곳에서 볼 수 있습니다."
+  }
+}

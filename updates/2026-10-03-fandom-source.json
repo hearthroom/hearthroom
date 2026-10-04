@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "try": "/search",
+  "live": "2026-10-03",
+  "title": {
+    "zh-Hant": "卡片可以標註原作，用任何語言的作品名或簡稱都搜得到同一部作品。",
+    "zh-Hans": "卡片可以标注原作，用任何语言的作品名或简称都能搜到同一部作品。",
+    "en": "Cards can name their fandom, and searching any language's title or a nickname finds the same work.",
+    "ja": "カードに原作を設定でき、どの言語の作品名や略称で検索しても同じ作品が見つかります。",
+    "ko": "카드에 원작을 표시할 수 있고, 어느 언어의 작품명이나 줄임말로 검색해도 같은 작품을 찾습니다."
+  }
+}

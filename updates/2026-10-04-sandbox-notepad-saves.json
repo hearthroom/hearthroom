@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "live": "2026-10-04",
+  "title": {
+    "zh-Hant": "沙箱卡的手帳和面板裡打的字，以前有時會存成空白，現在都會好好存下來。",
+    "zh-Hans": "沙箱卡的手账和面板里输入的内容，以前有时会保存成空白，现在都能正常保存。",
+    "en": "Text typed into a sandbox card's notebook and panels sometimes saved as blank, and now it saves properly.",
+    "ja": "サンドボックスのカードの手帳やパネルの入力が、空のまま保存されることはなくなりました。",
+    "ko": "샌드박스 카드의 메모장과 패널에 입력한 내용이 빈칸으로 저장되던 문제가 고쳐졌습니다."
+  }
+}

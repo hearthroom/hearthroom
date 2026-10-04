@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "live": "2026-09-25",
+  "title": {
+    "zh-Hant": "全螢幕對話時彈出鍵盤，輸入框以前會被推到最上面，現在會停在鍵盤上方。",
+    "zh-Hans": "全屏聊天时弹出键盘，输入框以前会被推到最上面，现在会停在键盘上方。",
+    "en": "In a fullscreen chat, opening the keyboard no longer pushes the message box to the top of the screen.",
+    "ja": "全画面の会話でキーボードを開いても、入力欄が画面の一番上に押し上げられなくなりました。",
+    "ko": "전체 화면 대화에서 키보드를 열어도 입력창이 화면 맨 위로 밀려 올라가지 않습니다."
+  }
+}

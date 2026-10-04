@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "try": "/",
+  "live": "2026-09-30",
+  "title": {
+    "zh-Hant": "沙箱卡的內容也會跟著介面語言，自動轉成繁體或簡體。",
+    "zh-Hans": "沙箱卡的内容也会跟着界面语言，自动转换成简体或繁体。",
+    "en": "Sandbox cards now switch between Traditional and Simplified Chinese to match your interface language.",
+    "ja": "サンドボックスのカードの中国語も、表示言語に合わせて繁体字か簡体字で表示されます。",
+    "ko": "샌드박스 카드의 중국어도 화면 언어에 맞춰 번체자나 간체자로 표시됩니다."
+  }
+}

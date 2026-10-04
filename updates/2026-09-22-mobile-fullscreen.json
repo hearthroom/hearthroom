@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "try": "/library",
+  "live": "2026-09-22",
+  "title": {
+    "zh-Hant": "在手機上對話可以進入全螢幕，彈出鍵盤時輸入框也會停在鍵盤上方。",
+    "zh-Hans": "在手机上聊天可以进入全屏，弹出键盘时输入框也会停在键盘上方。",
+    "en": "Chats on your phone can go fullscreen, and the message box stays above the keyboard when it opens.",
+    "ja": "スマートフォンでの会話を全画面表示にでき、キーボードを開いても入力欄はその上に表示されます。",
+    "ko": "휴대폰에서 대화를 전체 화면으로 볼 수 있고, 키보드가 올라와도 입력창이 키보드 위에 그대로 보입니다."
+  }
+}
