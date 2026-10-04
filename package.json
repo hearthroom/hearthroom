@@ -6,13 +6,14 @@
   "description": "Open role-card community: registry, search and ranking (Cloudflare Workers + D1)",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "npm run updates:build && wrangler dev",
     "dev:web": "npm run dev -w web",
     "types": "wrangler types",
-    "typecheck": "wrangler types && tsc --noEmit && npm run typecheck -w web",
-    "test": "node --test scripts/card-identity-migration.test.mjs scripts/card-cutover.test.mjs && vitest run && npm run test -w web",
-    "test:api": "vitest run",
-    "build": "npm run build:stage && npm run build -w web",
+    "typecheck": "npm run updates:build && wrangler types && tsc --noEmit && npm run typecheck -w web",
+    "test": "npm run updates:build && node --test scripts/card-identity-migration.test.mjs scripts/card-cutover.test.mjs scripts/updates/entries.test.mjs scripts/updates/check-commits.test.mjs && vitest run && npm run test -w web",
+    "test:api": "npm run updates:build && vitest run",
+    "build": "npm run updates:build && npm run build:stage && npm run build -w web",
+    "updates:build": "node scripts/updates/build.mjs",
     "migrate:local": "wrangler d1 migrations apply DB --local",
     "migrate:remote": "wrangler d1 migrations apply DB --remote",
     "preflight": "node scripts/deploy-preflight.mjs",
@@ -21,7 +22,8 @@
     "archive:assets": "node scripts/archive-assets.mjs",
     "deploy": "npm run archive:assets && wrangler deploy",
     "build:stage": "npm --prefix stage ci --no-audit --no-fund && npm --prefix stage run build:stage && npm --prefix stage run build:sandbox && node scripts/copy-sandbox.mjs",
-    "sync:stage": "node scripts/sync-stage.mjs"
+    "sync:stage": "node scripts/sync-stage.mjs",
+    "prepare": "git config core.hooksPath .githooks 2>/dev/null || true"
   },
   "dependencies": {
     "@block65/webcrypto-web-push": "^2.0.0",

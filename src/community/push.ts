@@ -1,5 +1,6 @@
 import { buildPushPayload, type PushSubscription } from "@block65/webcrypto-web-push";
 import { HttpError, pickLocale, type Env, type Localized } from "../types";
+import { updateTitle } from "../updates";
 
 /**
  * 瀏覽器推播。
@@ -23,12 +24,12 @@ type Row = { id: string; member_id: string; kind: string; path: string; extra: s
 type Sub = { id: string; endpoint: string; p256dh: string; auth: string; locale: string | null; failures: number };
 
 const quote = (locale: PushLocale, name: string) => (locale.startsWith("zh") ? `「${name}」` : locale === "ja" ? `『${name}』` : `“${name}”`);
-const copy: Record<PushLocale, { title: string; reply: string; work: string; approved: string; rejected: string; like: string; likes: string; pack: string; reminder: string; generic: string }> = {
-  "zh-Hant": { title: "HearthRoom", reply: "{actor} 回覆了你在{card}的留言", work: "{actor} 發佈或更新了{card}", approved: "{card}審核通過了", rejected: "{card}這次沒有通過審核", like: "{actor} 讚了你在{card}的留言", likes: "{actor} 和另外 {others} 人讚了你在{card}的留言", pack: "你收到了額外的登記次數", reminder: "你認領的作品即將到期，請繼續審核或放回待審清單", generic: "有新的通知" },
-  "zh-Hans": { title: "HearthRoom", reply: "{actor} 回复了你在{card}的评论", work: "{actor} 发布或更新了{card}", approved: "{card}审核通过了", rejected: "{card}这次没有通过审核", like: "{actor} 点赞了你在{card}的评论", likes: "{actor} 和另外 {others} 人点赞了你在{card}的评论", pack: "你收到了额外的登记次数", reminder: "你认领的作品即将到期，请继续审核或放回待审列表", generic: "有新的通知" },
-  en: { title: "HearthRoom", reply: "{actor} replied to your comment on {card}", work: "{actor} published or updated {card}", approved: "{card} passed review", rejected: "{card} did not pass review this time", like: "{actor} liked your comment on {card}", likes: "{actor} and {others} others liked your comment on {card}", pack: "You received extra registrations", reminder: "Your review claim expires soon. Continue reviewing or release it to the queue.", generic: "You have a new notification" },
-  ja: { title: "HearthRoom", reply: "{actor} さんが{card}へのコメントに返信しました", work: "{actor} さんが{card}を公開・更新しました", approved: "{card}が審査を通過しました", rejected: "{card}は今回審査を通過しませんでした", like: "{actor} さんが{card}へのコメントにいいねしました", likes: "{actor} さんと他 {others} 人が{card}へのコメントにいいねしました", pack: "追加の登録回数を受け取りました", reminder: "担当の有効期限が近づいています。審査を続けるか、一覧に戻してください。", generic: "新しいお知らせがあります" },
-  ko: { title: "HearthRoom", reply: "{actor} 님이 {card}에 남긴 내 댓글에 답글을 달았습니다", work: "{actor} 님이 {card}을(를) 공개하거나 업데이트했습니다", approved: "{card}이(가) 심사를 통과했습니다", rejected: "{card}이(가) 이번 심사를 통과하지 못했습니다", like: "{actor} 님이 {card}에 남긴 내 댓글을 좋아합니다", likes: "{actor} 님 외 {others}명이 {card}에 남긴 내 댓글을 좋아합니다", pack: "추가 등록 횟수를 받았습니다", reminder: "검토 담당 시간이 곧 만료됩니다. 검토를 계속하거나 대기 목록으로 돌려보내세요.", generic: "새 알림이 있습니다" },
+const copy: Record<PushLocale, { title: string; reply: string; work: string; approved: string; rejected: string; like: string; likes: string; pack: string; reminder: string; shipped: string; generic: string }> = {
+  "zh-Hant": { title: "HearthRoom", reply: "{actor} 回覆了你在{card}的留言", work: "{actor} 發佈或更新了{card}", approved: "{card}審核通過了", rejected: "{card}這次沒有通過審核", like: "{actor} 讚了你在{card}的留言", likes: "{actor} 和另外 {others} 人讚了你在{card}的留言", pack: "你收到了額外的登記次數", reminder: "你認領的作品即將到期，請繼續審核或放回待審清單", shipped: "你回報的事已經處理好了：{title}", generic: "有新的通知" },
+  "zh-Hans": { title: "HearthRoom", reply: "{actor} 回复了你在{card}的评论", work: "{actor} 发布或更新了{card}", approved: "{card}审核通过了", rejected: "{card}这次没有通过审核", like: "{actor} 点赞了你在{card}的评论", likes: "{actor} 和另外 {others} 人点赞了你在{card}的评论", pack: "你收到了额外的登记次数", reminder: "你认领的作品即将到期，请继续审核或放回待审列表", shipped: "你反馈的事已经处理好了：{title}", generic: "有新的通知" },
+  en: { title: "HearthRoom", reply: "{actor} replied to your comment on {card}", work: "{actor} published or updated {card}", approved: "{card} passed review", rejected: "{card} did not pass review this time", like: "{actor} liked your comment on {card}", likes: "{actor} and {others} others liked your comment on {card}", pack: "You received extra registrations", reminder: "Your review claim expires soon. Continue reviewing or release it to the queue.", shipped: "What you reported is now live: {title}", generic: "You have a new notification" },
+  ja: { title: "HearthRoom", reply: "{actor} さんが{card}へのコメントに返信しました", work: "{actor} さんが{card}を公開・更新しました", approved: "{card}が審査を通過しました", rejected: "{card}は今回審査を通過しませんでした", like: "{actor} さんが{card}へのコメントにいいねしました", likes: "{actor} さんと他 {others} 人が{card}へのコメントにいいねしました", pack: "追加の登録回数を受け取りました", reminder: "担当の有効期限が近づいています。審査を続けるか、一覧に戻してください。", shipped: "ご報告いただいた件が反映されました：{title}", generic: "新しいお知らせがあります" },
+  ko: { title: "HearthRoom", reply: "{actor} 님이 {card}에 남긴 내 댓글에 답글을 달았습니다", work: "{actor} 님이 {card}을(를) 공개하거나 업데이트했습니다", approved: "{card}이(가) 심사를 통과했습니다", rejected: "{card}이(가) 이번 심사를 통과하지 못했습니다", like: "{actor} 님이 {card}에 남긴 내 댓글을 좋아합니다", likes: "{actor} 님 외 {others}명이 {card}에 남긴 내 댓글을 좋아합니다", pack: "추가 등록 횟수를 받았습니다", reminder: "검토 담당 시간이 곧 만료됩니다. 검토를 계속하거나 대기 목록으로 돌려보내세요.", shipped: "제보하신 내용이 반영되었습니다: {title}", generic: "새 알림이 있습니다" },
 };
 const fill = (text: string, values: Record<string, string | number>) => text.replace(/\{(\w+)\}/g, (_, k: string) => String(values[k] ?? ""));
 
@@ -45,6 +46,10 @@ export function pushLine(row: Pick<Row, "kind" | "extra" | "actor_name" | "actor
   if (row.kind === "comment_like" && actor && card) return count > 1 ? fill(c.likes, { actor, card, others: count - 1 }) : fill(c.like, { actor, card });
   if (row.kind === "registration_pack") return c.pack;
   if (row.kind === "review_reminder") return c.reminder;
+  if (row.kind === "report_shipped" && typeof extra.entry === "string") {
+    const title = updateTitle(extra.entry, locale);
+    if (title) return fill(c.shipped, { title: title.replace(/[。.]$/, "") });
+  }
   return c.generic;
 }
 

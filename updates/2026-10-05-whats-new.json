@@ -1,0 +1,21 @@
+{
+  "tier": "highlight",
+  "try": "/updates",
+  "spotlight": [
+    "menu.updates"
+  ],
+  "title": {
+    "zh-Hant": "Hearthroom 有更新紀錄了，每天上線了什麼、去哪裡試都寫在這一頁。",
+    "zh-Hans": "Hearthroom 有更新记录了，每天上线了什么、去哪里试都写在这一页。",
+    "en": "Hearthroom now has an updates page listing what changed each day and where to try it.",
+    "ja": "Hearthroom に更新履歴ができ、毎日の変更点と試せる場所をこのページで確認できます。",
+    "ko": "Hearthroom에 업데이트 기록이 생겨, 날마다 바뀐 점과 써 볼 곳을 이 페이지에서 볼 수 있습니다."
+  },
+  "body": {
+    "zh-Hant": "有新功能時首頁會出現一行提示，功能入口旁也會標出「新」。",
+    "zh-Hans": "有新功能时首页会出现一行提示，功能入口旁也会标出「新」。",
+    "en": "When something new arrives, a one-line note appears on the home page and a New mark sits next to where it lives.",
+    "ja": "新しい機能が出るとトップページに一行の案内が表示され、入口の横にも印が付きます。",
+    "ko": "새 기능이 나오면 홈 화면에 한 줄 안내가 뜨고, 기능 입구 옆에도 표시가 붙습니다."
+  }
+}

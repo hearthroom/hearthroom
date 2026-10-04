@@ -5,6 +5,7 @@ import { useI18n } from "vue-i18n";
 import { noticeText, useNotifications } from "@/lib/notifications";
 import { useLocalePath } from "@/lib/use-locale";
 import type { CommunityNotice } from "@/lib/community";
+import NewMark from "@/components/NewMark.vue";
 
 // 頁首的通知入口。未讀數由 App.vue 的輪詢餵進 store；清單在打開浮層時才抓，
 // 點一則就標已讀並跳到它指的地方。完整清單仍在 /me/community。
@@ -36,6 +37,7 @@ const when = (n: CommunityNotice) => new Date(n.created_at).toLocaleDateString(l
         <path d="M6 9a6 6 0 0 1 12 0v4l2 3H4l2-3Z" /><path d="M10 19a2 2 0 0 0 4 0" />
       </svg>
       <span v-if="store.unread" class="bell__count" aria-hidden="true">{{ store.unread > 99 ? "99+" : store.unread }}</span>
+      <NewMark k="header.bell" dot />
     </button>
 
     <div v-if="open" ref="panel" class="bell__panel panel" role="dialog" :aria-label="t('nav.notifications')">

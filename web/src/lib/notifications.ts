@@ -79,6 +79,7 @@ export function noticeText(n: CommunityNotice): string {
   if (n.kind === "comment_reply" && actor && card) return t("community.noticeText.comment_reply", { actor, card });
   if (n.kind === "followed_work" && actor && card) return t("community.noticeText.followed_work", { actor, card });
   if (n.kind === "review_result" && card) return t(n.extra?.status === "rejected" ? "community.noticeText.review_rejected" : "community.noticeText.review_approved", { card });
+  if (n.kind === "report_shipped" && typeof n.extra?.title === "string") return t("community.noticeText.report_shipped", { title: n.extra.title.replace(/[。.]$/, "") });
   if (n.kind === "comment_like" && actor && card)
     return count > 1 ? t("community.noticeText.comment_like_many", { actor, card, others: count - 1 }) : t("community.noticeText.comment_like", { actor, card });
   return t("community.notices." + n.kind);
