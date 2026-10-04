@@ -13,7 +13,7 @@ Facts that matter before you act:
 ## Authoring cards from a terminal or an agent
 
 - [Agent setup](https://sukisuki.ai/agent-setup.md): step-by-step setup for an AI agent: install the CLI and the card-writing skills, then sign in. Follow it when the user asks you to set them up for writing Hearthroom cards.
-- [Hearthroom CLI](https://raw.githubusercontent.com/hearthroom/cli/main/README.md): install, `auth login` (or `HEARTHROOM_TOKEN` for unattended runs), `card init/import/push/validate/pull`, `play`, `search`; every command takes `--json` for stable output.
+- [Hearthroom CLI](https://raw.githubusercontent.com/hearthroom/cli/main/README.md): install, `auth login` (a one-time code typed in a browser on any device; agents run `--no-wait`, pass the code on, then `--resume`; `HEARTHROOM_TOKEN` for unattended runs), `card init/import/push/validate/pull`, `play`, `search`; every command takes `--json` for stable output.
 - [Card folder format](https://raw.githubusercontent.com/hearthroom/cli/main/docs/card-folder.md): a card as a folder of Markdown and JSON files that any editor or coding agent can change and `card push` syncs; the format is versioned.
 - [Card authoring guide](https://sukisuki.ai/en/guide.md): what each card field does, sandbox versus classic chat pages, display rules and macros, the sandbox author API for HTML cards, importing from other platforms, troubleshooting.
 
