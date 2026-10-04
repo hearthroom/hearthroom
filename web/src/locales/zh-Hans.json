@@ -1270,6 +1270,8 @@
   "community.badges.discord_linked": "已关联 Discord",
   "community.nextLevel": "再获得 {xp} XP 升到等级 {level}",
   "resource.uploadDirectory": "上传文件夹",
+  "resource.upload": "上传",
+  "resource.root": "所有文件",
   "resource.colName": "名称",
   "resource.colSize": "大小",
   "resource.colType": "类型",

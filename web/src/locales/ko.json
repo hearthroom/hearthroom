@@ -1270,6 +1270,8 @@
   "community.badges.discord_linked": "Discord 연결됨",
   "community.nextLevel": "레벨 {level}까지 {xp} XP 남음",
   "resource.uploadDirectory": "폴더 업로드",
+  "resource.upload": "업로드",
+  "resource.root": "모든 파일",
   "resource.colName": "이름",
   "resource.colSize": "크기",
   "resource.colType": "종류",
