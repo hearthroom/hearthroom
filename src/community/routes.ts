@@ -5,6 +5,7 @@ import { syncAppearance, saveAppearance, appearanceMedia } from './appearance';
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { HttpError, pickLocale, type Env } from "../types";
+import { hasSubscription, pushConfigured, removeSubscription, saveSubscription } from "./push";
 import { requireMember, memberByHandle, memberNsfw } from "../members";
 import { getCard } from "../cards";
 import { random, digest, verifyBridge, seal, unseal } from "./crypto";
@@ -285,6 +286,26 @@ app.get("/v1/me/community/notifications/summary", async (c) => {
     .bind(m.id)
     .first<{ unread: number }>();
   return c.json({ unread: row?.unread ?? 0 });
+});
+// Browser push: the public key lets a browser subscribe; the subscription lands on the signed-in member.
+app.get("/v1/push/config", (c) => {
+  c.header("Cache-Control", "no-store");
+  return c.json({ enabled: pushConfigured(c.env), publicKey: pushConfigured(c.env) ? c.env.PUSH_VAPID_PUBLIC_KEY : null });
+});
+app.get("/v1/me/push/subscription", async (c) => {
+  const m = await requireMember(c);
+  return c.json({ subscribed: await hasSubscription(c.env, m.id, c.req.query("endpoint")) });
+});
+app.put("/v1/me/push/subscription", async (c) => {
+  if (!pushConfigured(c.env)) throw new HttpError(503, "community_unavailable");
+  const m = await requireMember(c);
+  await saveSubscription(c.env, m.id, (await c.req.json()) as Record<string, unknown>);
+  return c.json({ ok: true });
+});
+app.delete("/v1/me/push/subscription", async (c) => {
+  const m = await requireMember(c);
+  await removeSubscription(c.env, m.id, ((await c.req.json().catch(() => ({}))) as { endpoint?: unknown }).endpoint);
+  return c.json({ ok: true });
 });
 app.post("/v1/me/community/notifications/read-all", async (c) => {
   const m = await requireMember(c);

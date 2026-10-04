@@ -6,6 +6,7 @@ export { boardCache } from "./board-cache";
 import { moderationRoutes, normalizeTags, reviewSummary } from "./moderation";
 import { communityMaintenance } from "./community/service";
 import { communityRoutes } from "./community/routes";
+import { dispatchPush, queuePush } from "./community/push";
 import { libraryRoutes } from "./library";
 import { hostGateway, hostingKey, submitHosted, hostingDecision, beginHostedEdit } from "./hosting";
 import { saveCommunityProfile, cleanAvatars } from "./community-profile";
@@ -869,6 +870,7 @@ app.post("/v1/cards/:id/comments", async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { content?: unknown; parentId?: unknown; rootId?: unknown };
   const created = await postComment(c.env.DB, { card, memberId: member.id, content: body.content, parentId: body.parentId, rootId: body.rootId, now: Date.now() });
   note(c, { event: "comment_create", subject: card.id, detail: body.rootId || body.parentId ? "reply" : "root" });
+  queuePush(c);
   return c.json(created, 201);
 });
 
@@ -881,6 +883,7 @@ app.delete("/v1/comments/:id", async (c) => {
 app.put("/v1/comments/:id/like", async (c) => {
   const member = await requireMember(c);
   await setLike(c.env.DB, c.req.param("id"), member.id, true, Date.now());
+  queuePush(c);
   return c.body(null, 204);
 });
 
@@ -950,6 +953,7 @@ app.post("/v1/cards", async (c) => {
     const receipt=await submitHosted(c.env,{provider,memberId,account:me.accountNumId,role,token:bearer,nsfw,fandom,operationId,now,packId});
     const row=(await getCard(c.env.DB,roleId,provider))!;
     note(c,{event:"register",detail:packId?"pack_submitted":"submitted"});
+    queuePush(c);
     return c.json({...toCard(row,lang(c)),status:row.status,versionId:receipt.versionId},existing?200:201,{'Cache-Control':'private, no-store'});
   }
 
@@ -1050,6 +1054,7 @@ app.post("/v1/review/:id/stamp", async (c) => {
   if(typeof body.generation!=='string'||!body.generation)throw new HttpError(409,'claim changed');
   const result = await stampSubmission(c.env.DB, { submissionId: c.req.param("id"), memberId: member.id, verdict, note: noteText, now: Date.now(), generation:body.generation });
   note(c, { event: "review_stamp", subject: result.submission.source_role_id, detail: verdict === "reject" ? "reject" : result.cardStatus === "approved" ? "approved" : "approve" });
+  queuePush(c);
   return c.json({
     id: result.submission.id,
     status: result.submission.status,
@@ -1544,6 +1549,8 @@ export default {
     if (!(await numericSchemaReady(env.DB))) return;
     ctx.waitUntil(accountAuthMaintenance(env).catch(() => { console.warn('Account authorization maintenance unavailable'); }));
     ctx.waitUntil(communityMaintenance(env).catch(() => { console.warn("Community maintenance unavailable"); }));
+    // Backstop for notifications created outside a request hook (triggers fired by the sync job, reminders).
+    ctx.waitUntil(dispatchPush(env).catch(() => { console.warn("push dispatch unavailable"); }));
     ctx.waitUntil(cleanAvatars(env));
     ctx.waitUntil(
       syncBatch(env).then((r) => {

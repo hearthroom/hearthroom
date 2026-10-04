@@ -24,6 +24,7 @@
     "sync:stage": "node scripts/sync-stage.mjs"
   },
   "dependencies": {
+    "@block65/webcrypto-web-push": "^2.0.0",
     "hono": "^4.13.5",
     "jose": "^6.2.10"
   },

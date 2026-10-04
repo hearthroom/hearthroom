@@ -75,6 +75,10 @@ ANALYTICS_ENABLED = "true"
 # 社群審核開關。"true"＝作者提交後要經審核人蓋章才上榜：本站用作者自己的 token 讀一次整份設定
 # 存成審核單的快照，定案就刪（src/review-snapshot.ts）。其餘值退回「登記即上榜」，分叉自架不想審核的人用。
 REVIEW_ENABLED = "true"
+# 瀏覽器推播（Web Push）的 VAPID 公鑰與聯絡人；私鑰是 secret `PUSH_VAPID_PRIVATE_KEY`（wrangler secret put）。
+# 三者缺一推播就關：/v1/push/config 回 enabled:false，站上不會出現推播開關。公鑰不是密鑰，換鑰要三者一起換。
+PUSH_VAPID_PUBLIC_KEY = "BPtnWqq9-GEcvvu8iLFiek-R2e0irBqzECbuvs8OeAYhRAk832IDbJh2f10ssltIXg5-Bb26zvc4R6JwK_Si0ro"
+PUSH_VAPID_SUBJECT = "mailto:contact@hearthroom.club"
 
 [[d1_databases]]
 binding = "DB"
