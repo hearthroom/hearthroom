@@ -59,13 +59,17 @@ async function mount(component: unknown, path: string): Promise<{ el: HTMLElemen
 afterEach(() => { app?.unmount(); el?.remove(); app = null; el = null; session.login.mockClear(); });
 
 describe("登入頁", () => {
-  it("沒登入：一顆「使用 HarperHarbor 帳號繼續」按鈕，還有「更多登入方式準備中」；按下才開始向供應商授權", async () => {
+  it("沒登入：一顆「使用 HarperHarbor 帳號繼續」按鈕；只有一家時不講換平台、不堆授權說明；按下才開始向供應商授權", async () => {
     session.me = null;
     const { el } = await mount(LoginPage, "/login?returnTo=%2Fplay%2Fr1");
     const btn = el.querySelector<HTMLButtonElement>("button.login__provider")!;
     expect(btn).not.toBeNull();
     expect(btn.textContent?.trim()).toBe(i18n.global.t("login.continueWith", { provider: "HarperHarbor" }));
-    expect(el.textContent).toContain(i18n.global.t("login.moreComing"));
+    expect(el.textContent).toContain(i18n.global.t("login.headline"));
+    expect(el.querySelectorAll(".login__features li").length).toBe(3);
+    // 換平台的提醒只在有第二家可選時才有對象；授權怎麼保存、怎麼停止講在「我的」頁。
+    expect(el.textContent).not.toContain(i18n.global.t("login.moreComing"));
+    expect(el.querySelector("details")).toBeNull();
     expect(session.login).not.toHaveBeenCalled();
     btn.click();
     expect(session.login).toHaveBeenCalledWith("/play/r1");

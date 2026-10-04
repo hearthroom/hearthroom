@@ -26,6 +26,15 @@ export const ACCOUNT_PAGE: Record<ProviderId, string | null> = {
   harbor: "https://console.harperharbor.com/me/account",
 };
 
+/**
+ * 那一家的服務條款與隱私政策。按「使用 X 帳號繼續」就是在那家開帳號，所以登入頁的同意行指向它家。
+ * 兩邊語言代碼一致（zh-Hant / zh-Hans / en / ja / ko），直接帶目前語言；那邊沒翻的語言會自己退回英文。
+ */
+export function legalPage(provider: ProviderId, slug: "terms" | "privacy", locale: string): string {
+  const base: Record<ProviderId, string> = { harbor: "https://www.harperharbor.com" };
+  return `${base[provider]}/${locale}/legal/${slug}/`;
+}
+
 const API_BASE: Record<ProviderId, string> = {
   harbor: import.meta.env.VITE_HARBOR_API_BASE ?? "https://api.harperharbor.com",
 };
