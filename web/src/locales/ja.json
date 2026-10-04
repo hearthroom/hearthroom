@@ -697,7 +697,7 @@
   "footer.guide": "カード作成ガイド",
   "developers.title": "開発者向けドキュメント",
   "guide.title": "カード作成ガイド",
-  "guide.lead": "書き方を選んで始めましょう。細かな仕様は下のリファレンスにあります。",
+  "guide.lead": "書き方を選ぶと、下の説明もそれに合わせて切り替わります。",
   "guide.start.title": "はじめる",
   "guide.start.label": "書き方",
   "guide.start.forAi": "AI 向け：",

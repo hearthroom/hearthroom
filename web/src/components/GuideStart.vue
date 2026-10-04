@@ -13,15 +13,14 @@
 import { ref } from "vue";
 import { RouterLink } from "vue-router";
 import AgentOnboard from "./AgentOnboard.vue";
-import { SKILLS_REPO, cliSiteUrl } from "@/lib/agent-setup";
+import { GUIDE_WAYS, SKILLS_REPO, cliSiteUrl, type GuideWay } from "@/lib/agent-setup";
 import { useLocalePath } from "@/lib/use-locale";
 
 /** fieldsAnchor：參考第一節（卡片的組成）的錨點；markdownHref：這一頁的 Markdown 孿生檔 */
 defineProps<{ fieldsAnchor: string; markdownHref: string }>();
-
-const WAYS = ["agent", "web"] as const;
-type Way = (typeof WAYS)[number];
-const way = ref<Way>("agent");
+/** way：選了哪一種寫法，由頁面持有（下方的說明跟著換，也寫進網址） */
+const way = defineModel<GuideWay>("way", { required: true });
+const WAYS = GUIDE_WAYS;
 const agentCopied = ref(false);
 const { lp } = useLocalePath();
 

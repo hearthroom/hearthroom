@@ -25,9 +25,9 @@ let app: App | undefined;
 let root: HTMLElement;
 const settle = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); await nextTick(); };
 
-async function mount(component: object, locale = 'en', props: Record<string, unknown> = {}) {
+async function mount(component: object, locale = 'en', props: Record<string, unknown> = {}, search = '') {
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:locale(zh-Hans|en|ja|ko)/:pathMatch(.*)*', component: { template: '<div />' } }, { path: '/:pathMatch(.*)*', component: { template: '<div />' } }] });
-  await router.push(locale === 'zh-Hant' ? '/guide' : `/${locale}/guide`);
+  await router.push((locale === 'zh-Hant' ? '/guide' : `/${locale}/guide`) + search);
   root = document.createElement('div');
   document.body.append(root);
   app = createApp(component, props).use(router).use(createI18n({ legacy: false, locale, fallbackLocale: 'en', messages: LOCALES }));
@@ -116,7 +116,17 @@ describe('the guide page', () => {
     expect(agent.querySelector('a[href="https://github.com/hearthroom/skills"]')).not.toBeNull();
   });
 
-  it('switches to the web editor with its own next steps', async () => {
+  // 兩種寫法下面接的內容不同：交給 AI Agent 的人要知道怎麼指揮它，參考細節 Agent 自己會讀
+  // （/guide.md、llms.txt、寫卡技能）；自己手寫的人才需要逐欄的參考。
+  it('shows how to direct the agent under the agent path, not the field reference', async () => {
+    await mount(GuidePage, 'en');
+    const headings = [...root.querySelectorAll('h2')].map(h => h.textContent);
+    expect(headings).toContain('What your agent can do');
+    expect(headings).toContain('Credits and boundaries');
+    expect(headings).not.toContain('Card fields');
+  });
+
+  it('switches to the web editor with its own next steps and the field reference', async () => {
     await mount(GuidePage, 'en');
     const tabs = [...root.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
     tabs[1]!.click();
@@ -124,18 +134,33 @@ describe('the guide page', () => {
     expect(tabs[1]!.getAttribute('aria-selected')).toBe('true');
     const web = root.querySelector('[role="tabpanel"]')!;
     expect(web.querySelector('a[href="/en/create"]')).not.toBeNull();
+    const headings = [...root.querySelectorAll('h2')].map(h => h.textContent);
+    expect(headings).toContain('Card fields');
+    expect(headings).not.toContain('What your agent can do');
     // 「各欄位怎麼寫」指向參考的第一節，不論語言都要找得到
     const field = web.querySelector<HTMLAnchorElement>('a[href^="#"]')!;
     expect(root.querySelector(field.getAttribute('href')!)).not.toBeNull();
+    // 選了哪一種寫在網址上，連結分享出去看到的是同一種
+    expect(new URLSearchParams(location.search).get('way')).toBe('web');
   });
 
-  it('lists the start section first in the contents, and every entry resolves', async () => {
+  it('opens on the web editor when the link asks for it', async () => {
+    await mount(GuidePage, 'en', {}, '?way=web');
+    const tabs = [...root.querySelectorAll('[role="tab"]')];
+    expect(tabs[1]!.getAttribute('aria-selected')).toBe('true');
+    expect([...root.querySelectorAll('h2')].map(h => h.textContent)).toContain('Card fields');
+  });
+
+  it('lists the start section first in the contents, and every entry resolves, on both paths', async () => {
     for (const locale of Object.keys(LOCALES)) {
-      await mount(GuidePage, locale);
-      const links = [...root.querySelectorAll<HTMLAnchorElement>('.toc__link')];
-      expect(links[0]!.getAttribute('href'), locale).toBe('#start');
-      for (const a of links) expect(root.querySelector(a.getAttribute('href')!), `${locale} ${a.textContent}`).not.toBeNull();
-      app!.unmount(); root.remove(); app = undefined;
+      for (const search of ['', '?way=web']) {
+        await mount(GuidePage, locale, {}, search);
+        const links = [...root.querySelectorAll<HTMLAnchorElement>('.toc__link')];
+        expect(links[0]!.getAttribute('href'), locale).toBe('#start');
+        expect(links.length, `${locale}${search}`).toBeGreaterThan(3);
+        for (const a of links) expect(root.querySelector(a.getAttribute('href')!), `${locale}${search} ${a.textContent}`).not.toBeNull();
+        app!.unmount(); root.remove(); app = undefined;
+      }
     }
   });
 });

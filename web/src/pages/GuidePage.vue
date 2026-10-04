@@ -1,10 +1,16 @@
 <script setup lang="ts">
 /**
- * 寫卡指南：開頭讓作者挑一種方式開始寫卡（GuideStart：AI Agent、CLI、網頁編輯器），
- * 下面是三種都用得到的參考（docs/guide/card-authoring.<語系>.md），跟開發者文件同一套目錄與排版。
+ * 寫卡指南：開頭讓作者挑一種寫法（GuideStart：AI Agent 或網頁編輯器），下面的內容跟著那種寫法換。
+ *
+ * - AI Agent：怎麼指揮它（docs/guide/agent-authoring.<語系>.md）。逐欄的參考 Agent 自己會讀：
+ *   /guide.md 孿生檔、llms.txt、寫卡技能都有，作者不必看（owner 2026-10-05）。
+ * - 網頁編輯器：自己手寫要用的參考（docs/guide/card-authoring.<語系>.md）。
+ *
+ * 選了哪一種寫在網址的 ?way=web 上（預設 AI Agent），連結分享出去看到同一種；編輯器裡的
+ * 「寫卡指南」連結直接帶 ?way=web。切換時只改網址不走路由：路由換 query 會捲回頁首。
  * 五種語系各一份；沒有對應檔的語系退回英文。
  *
- * Markdown 的標題與第一段只留在給 AI 讀的孿生檔（/guide.md）：頁面上的標題與導言由這裡出，
+ * 參考 Markdown 的標題與第一段只留在給 AI 讀的孿生檔（/guide.md）：頁面上的標題與導言由這裡出，
  * 參考從第一個 ## 開始，否則同一頁會有兩個 h1。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
@@ -14,11 +20,19 @@ import zhHans from "../../../docs/guide/card-authoring.zh-Hans.md?raw";
 import en from "../../../docs/guide/card-authoring.en.md?raw";
 import ja from "../../../docs/guide/card-authoring.ja.md?raw";
 import ko from "../../../docs/guide/card-authoring.ko.md?raw";
+import agentZhHant from "../../../docs/guide/agent-authoring.zh-Hant.md?raw";
+import agentZhHans from "../../../docs/guide/agent-authoring.zh-Hans.md?raw";
+import agentEn from "../../../docs/guide/agent-authoring.en.md?raw";
+import agentJa from "../../../docs/guide/agent-authoring.ja.md?raw";
+import agentKo from "../../../docs/guide/agent-authoring.ko.md?raw";
+import { useRoute } from "vue-router";
+import { guideWayOf, type GuideWay } from "@/lib/agent-setup";
 import { SOURCE_LOCALE, pageTitle } from "@/lib/i18n";
 import GuideStart from "@/components/GuideStart.vue";
 import { renderDoc, type TocItem } from "@/lib/markdown-toc";
 
 const SOURCES: Record<string, string> = { "zh-Hant": zhHant, "zh-Hans": zhHans, en, ja, ko };
+const AGENT_SOURCES: Record<string, string> = { "zh-Hant": agentZhHant, "zh-Hans": agentZhHans, en: agentEn, ja: agentJa, ko: agentKo };
 
 const { t, locale } = useI18n();
 const source = computed(() => SOURCES[String(locale.value)] ?? en);
@@ -26,7 +40,17 @@ const body = computed(() => {
   const at = source.value.search(/^## /m);
   return at < 0 ? source.value : source.value.slice(at);
 });
-const rendered = computed(() => renderDoc(body.value));
+const way = ref<GuideWay>(guideWayOf(useRoute().query.way));
+watch(way, (next) => {
+  const url = new URL(location.href);
+  if (next === "web") url.searchParams.set("way", "web");
+  else url.searchParams.delete("way");
+  url.hash = "";
+  const path = url.pathname + url.search;
+  // 只改網址列；路由狀態的 current 一起改，返回上一頁時才對得上
+  history.replaceState({ ...(history.state ?? {}), current: path }, "", path);
+});
+const rendered = computed(() => renderDoc(way.value === "agent" ? AGENT_SOURCES[String(locale.value)] ?? agentEn : body.value));
 const toc = computed<TocItem[]>(() => [{ level: 2, id: "start", text: t("guide.start.title") }, ...rendered.value.toc]);
 const fieldsAnchor = computed(() => rendered.value.toc[0]?.id ?? "start");
 const markdownHref = computed(() => `${locale.value === SOURCE_LOCALE ? "" : `/${locale.value}`}/guide.md`);
@@ -80,7 +104,7 @@ onBeforeUnmount(() => observer?.disconnect());
           <h1>{{ $t("guide.title") }}</h1>
           <p class="doc-head__lead">{{ $t("guide.lead") }}</p>
         </header>
-        <GuideStart :fields-anchor="fieldsAnchor" :markdown-href="markdownHref" />
+        <GuideStart v-model:way="way" :fields-anchor="fieldsAnchor" :markdown-href="markdownHref" />
         <article class="doc doc--md" v-html="rendered.html" />
       </div>
     </div>
@@ -123,6 +147,7 @@ onBeforeUnmount(() => observer?.disconnect());
 .doc :deep(pre) { margin: 0 0 var(--s-4); padding: var(--s-3) var(--s-4); overflow-x: auto; border-radius: var(--r-md); background: var(--surface-2); box-shadow: 0 0 0 1px var(--line); font-size: 13px; line-height: 1.6; }
 .doc :deep(pre code) { padding: 0; background: none; box-shadow: none; font-size: inherit; }
 .doc :deep(blockquote) { margin: 0 0 var(--s-3); padding: var(--s-2) var(--s-4); border-left: 3px solid var(--accent); background: var(--accent-tint); border-radius: 0 var(--r-sm) var(--r-sm) 0; color: var(--text-2); }
+.doc :deep(blockquote p:last-child) { margin-bottom: 0; }
 .doc--md :deep(table) { display: block; overflow-x: auto; border-collapse: collapse; width: 100%; font-size: 13.5px; margin: var(--s-2) 0 var(--s-4); }
 .doc--md :deep(th), .doc--md :deep(td) { padding: 8px 12px; border: 1px solid var(--line); text-align: left; vertical-align: top; line-height: 1.6; }
 .doc--md :deep(th) { background: var(--surface-2); font-weight: 600; }
