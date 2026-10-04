@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "try": "/",
+  "live": "2026-09-22",
+  "title": {
+    "zh-Hant": "社群選出的好卡會掛上「HearthRoom 精選卡」標記，在榜單上一眼就認得出。",
+    "zh-Hans": "社区选出的好卡会挂上「HearthRoom 精选卡」标记，在榜单上一眼就能认出。",
+    "en": "Cards picked by the community now carry a HearthRoom Featured badge you can spot on the board.",
+    "ja": "コミュニティが選んだカードに「HearthRoom 注目カード」のマークが付くようになりました。",
+    "ko": "커뮤니티가 고른 카드에 'HearthRoom 추천 카드' 표시가 붙어 랭킹에서 바로 알아볼 수 있습니다."
+  }
+}

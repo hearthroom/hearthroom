@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "live": "2026-10-02",
+  "title": {
+    "zh-Hant": "有些沙箱卡的版面以前會蓋住輸入框，現在只會占用訊息區。",
+    "zh-Hans": "有些沙箱卡的版面以前会盖住输入框，现在只会占用消息区。",
+    "en": "Some sandbox cards' layouts used to cover the message box, and now they stay within the message area.",
+    "ja": "一部のサンドボックスのカードでレイアウトが入力欄に重なっていた問題が直りました。",
+    "ko": "일부 샌드박스 카드의 레이아웃이 입력창을 가리던 문제가 고쳐졌습니다."
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "live": "2026-10-02",
+  "title": {
+    "zh-Hant": "部分沙箱卡的開場動畫和致謝名單以前不會出現，現在恢復正常。",
+    "zh-Hans": "部分沙箱卡的开场动画和致谢名单以前不会出现，现在恢复正常。",
+    "en": "Opening animations and credits on some sandbox cards were missing, and now they play again.",
+    "ja": "一部のサンドボックスのカードで出なかったオープニングの演出とクレジットが、再び表示されます。",
+    "ko": "일부 샌드박스 카드에서 보이지 않던 오프닝 애니메이션과 크레딧이 다시 나옵니다."
+  }
+}

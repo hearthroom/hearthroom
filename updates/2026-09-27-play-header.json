@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "try": "/library",
+  "live": "2026-09-27",
+  "title": {
+    "zh-Hant": "對話頁頁首可以直接收藏這張卡，也能拉出評論來看。",
+    "zh-Hans": "聊天页顶部可以直接收藏这张卡，也能拉出评论来看。",
+    "en": "The chat page header lets you save the card and open its comments without leaving the chat.",
+    "ja": "会話ページの上部から、カードをお気に入りに入れたりコメントを開いたりできます。",
+    "ko": "대화 페이지 상단에서 카드를 즐겨찾기에 넣거나 댓글을 바로 열어 볼 수 있습니다."
+  }
+}

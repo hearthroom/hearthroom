@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "try": "/",
+  "live": "2026-09-22",
+  "title": {
+    "zh-Hant": "把卡片連結貼到 Discord 或 LINE，會直接帶出卡名、簡介和封面。",
+    "zh-Hans": "把卡片链接发到 Discord 或 LINE，会直接显示卡名、简介和封面。",
+    "en": "A card link pasted into Discord or LINE now shows the card's name, summary and cover.",
+    "ja": "カードのリンクを Discord や LINE に貼ると、カード名と紹介文、表紙が表示されます。",
+    "ko": "카드 링크를 Discord나 LINE에 붙여 넣으면 카드 이름과 소개, 표지가 함께 보입니다."
+  }
+}

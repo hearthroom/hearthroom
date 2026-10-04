@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "live": "2026-09-25",
+  "title": {
+    "zh-Hant": "下載 App 的橫幅現在只在 Android 瀏覽器顯示，不想看也能關掉。",
+    "zh-Hans": "下载 App 的横幅现在只在 Android 浏览器显示，不想看也能关掉。",
+    "en": "The app download banner now appears only in Android browsers, and you can close it.",
+    "ja": "アプリのダウンロード案内は Android のブラウザだけに表示され、閉じることもできます。",
+    "ko": "앱 다운로드 배너는 이제 Android 브라우저에서만 보이고, 닫을 수도 있습니다."
+  }
+}

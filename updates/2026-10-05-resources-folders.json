@@ -1,0 +1,16 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/resources",
+  "spotlight": [
+    "menu.resources"
+  ],
+  "live": "2026-10-05",
+  "title": {
+    "zh-Hant": "我的資源改用資料夾樹整理，一進來就看到資料夾，還能一次複製多個檔案的網址。",
+    "zh-Hans": "我的资源改用文件夹树整理，一进来就能看到文件夹，还能一次复制多个文件的链接。",
+    "en": "My resources now organizes files in a folder tree, opens on your folders, and copies several file links at once.",
+    "ja": "マイリソースがフォルダのツリー表示になり、複数ファイルの URL もまとめてコピーできます。",
+    "ko": "내 리소스가 폴더 트리로 정리되고, 여러 파일의 주소를 한 번에 복사할 수 있습니다."
+  }
+}

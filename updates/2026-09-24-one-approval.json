@@ -1,0 +1,13 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/mine",
+  "live": "2026-09-24",
+  "title": {
+    "zh-Hant": "送審的卡片現在只要一位審核人通過就會上榜。",
+    "zh-Hans": "送审的卡片现在只要一位审核人通过就会上榜。",
+    "en": "A card you submit now goes on the board as soon as one reviewer approves it.",
+    "ja": "審査に出したカードは、審査員一人の承認でランキングに載るようになりました。",
+    "ko": "심사를 신청한 카드는 이제 심사자 한 명만 승인하면 랭킹에 올라갑니다."
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "try": "/library",
+  "live": "2026-10-02",
+  "title": {
+    "zh-Hant": "模型設定改版了，每個上下文容量都標出大約的積分，線路也標出官方與實惠。",
+    "zh-Hans": "模型设置改版了，每个上下文容量都标出大约的积分，线路也标出官方与实惠。",
+    "en": "The Model panel now shows roughly what each context capacity costs and marks Official and Good value lanes.",
+    "ja": "モデル設定が新しくなり、容量ごとのおおよそのポイントと、公式やお手頃の回線が表示されます。",
+    "ko": "모델 설정이 새로워져 컨텍스트 용량별 대략적인 포인트와 공식, 알뜰 회선을 함께 보여 줍니다."
+  },
+  "body": {
+    "zh-Hant": "寬螢幕上模型清單分成兩欄，第一屏就看得到要選的模型。",
+    "zh-Hans": "宽屏上模型列表分成两栏，第一屏就能看到要选的模型。",
+    "en": "On wide screens the model list splits into two columns, so the model you want is visible right away.",
+    "ja": "広い画面ではモデル一覧が二列になり、最初の画面から選びたいモデルが見つかります。",
+    "ko": "넓은 화면에서는 모델 목록이 두 열로 나뉘어, 첫 화면에서 원하는 모델을 바로 볼 수 있습니다."
+  }
+}

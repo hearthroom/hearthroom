@@ -1,0 +1,22 @@
+{
+  "tier": "highlight",
+  "try": "/search",
+  "spotlight": [
+    "header.search"
+  ],
+  "live": "2026-10-03",
+  "title": {
+    "zh-Hant": "搜尋更聰明了，繁簡、大小寫和標點都互通，打簡稱或別名也找得到卡片。",
+    "zh-Hans": "搜索更聪明了，简繁、大小写和标点都能互通，输入简称或别名也能找到卡片。",
+    "en": "Search now ignores Traditional or Simplified script, letter case and punctuation, and understands nicknames.",
+    "ja": "検索は繁体字と簡体字、大文字と小文字、記号の違いを区別せず、略称や別名でもカードが見つかります。",
+    "ko": "검색이 번체자와 간체자, 대소문자, 문장 부호를 구분하지 않고, 줄임말이나 별명으로도 카드를 찾습니다."
+  },
+  "body": {
+    "zh-Hant": "打字時會即時建議標籤、原作和卡名，名稱對上的卡片排在最前面。",
+    "zh-Hans": "输入时会即时推荐标签、原作和卡名，名称匹配的卡片排在最前面。",
+    "en": "Suggestions for tags, fandoms and card names appear as you type, and cards whose names match come first.",
+    "ja": "入力中にタグや原作、カード名の候補が出て、名前が一致するカードが先頭に並びます。",
+    "ko": "입력하는 동안 태그와 원작, 카드 이름을 추천하고, 이름이 맞는 카드를 맨 앞에 보여 줍니다."
+  }
+}

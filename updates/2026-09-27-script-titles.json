@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "try": "/",
+  "live": "2026-09-27",
+  "title": {
+    "zh-Hant": "卡片標題會跟著你的介面語言，自動轉成繁體或簡體顯示。",
+    "zh-Hans": "卡片标题会跟着你的界面语言，自动转换成简体或繁体显示。",
+    "en": "Chinese card titles now appear in Traditional or Simplified characters to match your interface language.",
+    "ja": "中国語のカード名は、表示言語に合わせて繁体字か簡体字で表示されます。",
+    "ko": "중국어 카드 이름은 화면 언어에 맞춰 번체자나 간체자로 표시됩니다."
+  }
+}

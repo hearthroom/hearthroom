@@ -1,0 +1,23 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/guide",
+  "spotlight": [
+    "mine.agent"
+  ],
+  "live": "2026-10-04",
+  "title": {
+    "zh-Hant": "寫卡指南可以帶你的 AI Agent 開始寫卡，複製一句話貼給它就好。",
+    "zh-Hans": "写卡指南可以带你的 AI Agent 开始写卡，复制一句话粘贴给它就行。",
+    "en": "The authoring guide can now get your AI agent writing cards, and all it takes is pasting one sentence.",
+    "ja": "カード作成ガイドの一文を AI エージェントに貼るだけで、カード作りを任せられます。",
+    "ko": "카드 작성 가이드의 한 문장을 AI Agent에 붙여 넣기만 하면 카드 작성을 맡길 수 있습니다."
+  },
+  "body": {
+    "zh-Hant": "我的卡片頁也有同一顆按鈕。",
+    "zh-Hans": "我的卡片页也有同一个按钮。",
+    "en": "The same button is on the My cards page.",
+    "ja": "マイカードのページにも同じボタンがあります。",
+    "ko": "내 카드 페이지에도 같은 버튼이 있습니다."
+  }
+}

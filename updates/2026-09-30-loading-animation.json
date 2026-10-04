@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "try": "/library",
+  "live": "2026-09-30",
+  "title": {
+    "zh-Hant": "對話載入時有提燈少女走路的動畫陪你等，不再只有一行灰字。",
+    "zh-Hans": "聊天加载时有提灯少女走路的动画陪你等，不再只有一行灰字。",
+    "en": "While a chat loads, a lantern girl now walks across the screen instead of a single line of gray text.",
+    "ja": "会話の読み込み中は、灰色の一行ではなくランタンを持った少女の歩くアニメーションが表示されます。",
+    "ko": "대화를 불러오는 동안 회색 글자 한 줄 대신 등불을 든 소녀가 걷는 애니메이션이 나옵니다."
+  }
+}
