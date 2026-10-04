@@ -748,7 +748,7 @@
   "login.moreComing": "Hearthroom을 이미 사용 중이라면 기존 플랫폼으로 로그인한 다음 내 계정에서 다른 플랫폼을 연결하세요.",
   "login.headline": "캐릭터와 대화를 시작하세요",
   "login.lead": "가입 절차 없이 한 번만 누르면 시작됩니다.",
-  "login.feature.chat": "보드의 캐릭터와 대화하고 기록을 남기세요",
+  "login.feature.chat": "보드의 캐릭터와 대화하고, 기록은 자동으로 저장",
   "login.feature.follow": "카드를 저장하고 좋아하는 작가를 팔로우",
   "login.feature.create": "나만의 캐릭터 카드를 만들어 보드에 공개",
   "login.legal": "계속하면 {provider}의 {terms} 및 {privacy}에 동의하는 것으로 간주됩니다.",
