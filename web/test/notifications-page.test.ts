@@ -6,7 +6,7 @@ import { i18n, applyLocale } from '../src/lib/i18n';
 const mock = vi.hoisted(() => ({ request: vi.fn(), push: { state: 'off' as string, enable: vi.fn(async () => 'on'), disable: vi.fn(async () => 'off') } }));
 vi.mock('../src/lib/community', async original => ({ ...await original<object>(), communityRequest: mock.request }));
 vi.mock('../src/lib/session', () => ({ useSession: () => ({ me: { accountNumId: 1 }, accessToken: async () => 'fixture' }) }));
-vi.mock('../src/lib/push', () => ({ pushSupported: () => true, pushState: async () => mock.push.state, enablePush: mock.push.enable, disablePush: mock.push.disable }));
+vi.mock('../src/lib/push', () => ({ pushSupported: () => true, pushConfig: async () => ({ enabled: true, publicKey: 'k' }), pushState: async () => mock.push.state, enablePush: mock.push.enable, disablePush: mock.push.disable }));
 import NotificationsPage from '../src/pages/NotificationsPage.vue';
 
 // 通知頁：清單、全部標為已讀、站內／按讚／推播開關，以及一句 Discord 引導（綁定或開私訊）。
@@ -54,7 +54,7 @@ it('flips the site, like and browser switches from this page', async () => {
   expect(mock.request).toHaveBeenCalledWith('/me/community/preferences', 'fixture', 'PATCH', { likeNotifications: false });
   expect(toggles()[1].getAttribute('aria-pressed')).toBe('false');
   toggles()[2].click(); await settle();
-  expect(mock.push.enable).toHaveBeenCalledWith('fixture', 'zh-Hant');
+  expect(mock.push.enable).toHaveBeenCalledWith(expect.any(Function), 'zh-Hant', { enabled: true, publicKey: 'k' });
   expect(toggles()[2].getAttribute('aria-pressed')).toBe('true');
 });
 it('tells linked members whether Discord reminders are on and sends them to the Discord settings', async () => {
