@@ -686,8 +686,8 @@ async function previewMove(direction: number) {
     <header class="resource-head">
       <h1 class="display">{{ $t("res.title") }}</h1>
       <div v-if="provider" class="resource-actions">
-        <button class="btn btn--ghost" :disabled="loading || busy" @click="load(page, true)">
-          {{ $t("res.refresh") }}
+        <button class="btn btn--ghost refresh-btn" :disabled="loading || busy" :aria-label="$t('res.refresh')" @click="load(page, true)">
+          <AccountIcon name="refresh" /><span class="refresh-label">{{ $t("res.refresh") }}</span>
         </button>
         <button
           class="btn"
@@ -821,11 +821,13 @@ async function previewMove(direction: number) {
             <form v-if="cap?.search" class="resource-search" @submit.prevent="find">
               <input
                 v-model="searchDraft"
+                type="search"
+                enterkeyhint="search"
                 class="input"
                 maxlength="200"
                 :placeholder="$t('resource.search')"
                 :aria-label="$t('resource.search')"
-              /><button class="btn" :disabled="busy">{{ $t("resource.find") }}</button>
+              /><button class="btn search-btn" :disabled="busy">{{ $t("resource.find") }}</button>
             </form>
             <ResourceSelect
               v-if="cap?.sorts.length"
@@ -903,10 +905,12 @@ async function previewMove(direction: number) {
               <button class="crumb" :aria-current="!crumbs.length ? 'page' : undefined" :disabled="busy" @click="enter('root')">
                 {{ $t("resource.root") }}
               </button>
-              <template v-for="c in crumbs" :key="c.path"
-                ><span aria-hidden="true">/</span
+              <span v-if="crumbs.length > 1" class="crumb-ellipsis" aria-hidden="true">/ …</span>
+              <template v-for="(c, i) in crumbs" :key="c.path"
+                ><span aria-hidden="true" :class="{ 'crumb-mid': i < crumbs.length - 1 }">/</span
                 ><button
                   class="crumb"
+                  :class="{ 'crumb-mid': i < crumbs.length - 1 }"
                   :aria-current="c.path === currentPath ? 'page' : undefined"
                   :disabled="busy"
                   @click="enter(scopeOf(findNode(tree, c.path)!))"
@@ -927,7 +931,7 @@ async function previewMove(direction: number) {
               >
                 {{ $t("res.folder.rename") }}</button
               ><button class="btn btn--sm btn--ghost" :disabled="busy" @click="deleteFolder">
-                {{ $t("res.folder.delete") }}
+                {{ $t("dialog.delete") }}
               </button>
             </div>
             <form v-if="editing" class="folder-form" @submit.prevent="saveFolder">
@@ -1297,6 +1301,7 @@ async function previewMove(direction: number) {
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
+  flex: 1 1 0;
   min-width: 0;
   font-size: 0.9375rem;
 }
@@ -1316,6 +1321,9 @@ async function previewMove(direction: number) {
 .crumb[aria-current="page"] {
   color: var(--text);
   font-weight: 600;
+}
+.crumb-ellipsis {
+  display: none;
 }
 .crumb-note {
   margin-left: var(--s-2);
@@ -1607,19 +1615,99 @@ async function previewMove(direction: number) {
   font-size: 1rem;
 }
 @media (max-width: 720px) {
-  .resources .btn,
-  .resources .seg__item,
-  .resources .input {
-    min-height: var(--h-lg);
+  .resources {
+    gap: var(--s-3);
   }
+  .resource-content {
+    gap: var(--s-2);
+  }
+  /* 標題與三顆動作鈕擠同一行：標題縮小，重新整理只留圖示。 */
+  .resource-head {
+    flex-wrap: nowrap;
+    gap: var(--s-2);
+  }
+  .resource-head h1 {
+    font-size: 1.25rem;
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .resource-actions {
+    flex: none;
+    flex-wrap: nowrap;
+  }
+  .resource-actions .btn {
+    height: 40px;
+    padding: 0 var(--s-3);
+  }
+  .refresh-btn {
+    width: 40px;
+    padding: 0;
+  }
+  .refresh-label {
+    display: none;
+  }
+  .resource-toolbar .seg__item,
+  .resource-toolbar .btn,
+  .resource-toolbar .input {
+    min-height: 40px;
+  }
+  .resource-toolbar .seg {
+    flex: 1;
+  }
+  /* 搜尋與排序同一行；手機鍵盤的搜尋鍵就是送出，不另放搜尋鈕。 */
   .resource-search {
-    flex-basis: 100%;
+    flex: 1 1 60%;
     order: 3;
   }
+  .search-btn {
+    display: none;
+  }
   .resource-sort {
-    flex: 1;
+    flex: 1 1 30%;
     width: auto;
     order: 4;
+  }
+  .resource-path {
+    flex-wrap: nowrap;
+    padding: var(--s-1) var(--s-2);
+  }
+  .resource-path .folder-form {
+    flex-basis: 100%;
+  }
+  .resource-crumbs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    font-size: 0.875rem;
+  }
+  .resource-crumbs::-webkit-scrollbar {
+    display: none;
+  }
+  /* 手機只留「所有檔案 / … / 目前所在」，中間層收起來。 */
+  .crumb-mid {
+    display: none;
+  }
+  .crumb-ellipsis {
+    display: inline;
+    color: var(--muted);
+  }
+  .crumb {
+    flex: none;
+    white-space: nowrap;
+    max-width: 14ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .crumb[aria-current="page"] {
+    flex: 1 1 auto;
+    min-width: 0;
+    text-align: left;
+  }
+  .resource-path-actions {
+    flex: none;
   }
   .col-type,
   .col-time {
