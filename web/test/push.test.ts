@@ -16,7 +16,7 @@ beforeEach(() => {
   vi.clearAllMocks(); subscription = null; permission = 'default';
   vi.stubGlobal('Notification', { get permission() { return permission; }, requestPermission: async () => { permission = 'granted'; return permission; } });
   vi.stubGlobal('PushManager', function PushManager() {});
-  Object.defineProperty(navigator, 'serviceWorker', { configurable: true, value: { ready: Promise.resolve({ pushManager: { getSubscription: async () => subscription, subscribe } }) } });
+  Object.defineProperty(navigator, 'serviceWorker', { configurable: true, value: { getRegistration: async () => ({ pushManager: { getSubscription: async () => subscription, subscribe } }) } });
   mock.request.mockImplementation(async (path: string, _token?: string, method = 'GET') => {
     if (path === '/push/config') return { enabled: true, publicKey: PUB };
     if (path.startsWith('/me/push/subscription?endpoint=')) return { subscribed: !!subscription };

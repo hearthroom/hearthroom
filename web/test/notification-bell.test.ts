@@ -45,7 +45,7 @@ it('opens a list that names who did what on which card, marks a picked notice re
   expect(links.map(a => a.textContent!.trim())).toEqual([expect.stringContaining('小雨 回覆了你在「雨夜書店」的留言'), expect.stringContaining('月光 發佈或更新了「第二張」')]);
   expect(links[0].classList.contains('bell__item--unread')).toBe(true);
   expect(links[1].classList.contains('bell__item--unread')).toBe(false);
-  expect(el.querySelector<HTMLAnchorElement>('.bell__all')!.getAttribute('href')).toBe('/me/community');
+  expect(el.querySelector<HTMLAnchorElement>('.bell__all')!.getAttribute('href')).toBe('/me/notifications');
   links[0].click(); await settle();
   expect(router.currentRoute.value.path).toBe('/cards/12');
   expect(mock.request).toHaveBeenCalledWith('/me/community/notifications/read', 'fixture', 'POST', { id: 'n1' });

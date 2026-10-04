@@ -53,7 +53,7 @@ const when = (n: CommunityNotice) => new Date(n.created_at).toLocaleDateString(l
           </RouterLink>
         </li>
       </ul>
-      <RouterLink :to="lp('/me/community')" class="bell__all" @click="open = false">{{ t("notifications.viewAll") }}</RouterLink>
+      <RouterLink :to="lp('/me/notifications')" class="bell__all" @click="open = false">{{ t("notifications.viewAll") }}</RouterLink>
     </div>
   </div>
 </template>

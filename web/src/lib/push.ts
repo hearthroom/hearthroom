@@ -13,9 +13,10 @@ export function pushSupported(): boolean {
   return typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
 }
 
+/** The site's service worker, or null when none is registered yet. `ready` would hang forever in that case. */
 async function registration(): Promise<ServiceWorkerRegistration | null> {
   if (!pushSupported()) return null;
-  try { return await navigator.serviceWorker.ready; } catch { return null; }
+  try { return (await navigator.serviceWorker.getRegistration("/")) ?? null; } catch { return null; }
 }
 
 function keyBytes(base64url: string): Uint8Array {

@@ -34,6 +34,7 @@ const pages: RouteRecordRaw[] = [
   { path: "library", component: () => import("./pages/LibraryPage.vue"), meta: { auth: true } },
   { path: "me/badges", component: () => import("./pages/BadgesPage.vue"), meta: { auth: true } },
   { path: "me/community", component: () => import("./pages/CommunityPage.vue"), meta: { auth: true } },
+  { path: "me/notifications", component: () => import("./pages/NotificationsPage.vue"), meta: { auth: true } },
   { path: "me/referral", component: () => import("./pages/ReferralPage.vue"), meta: { auth: true } },
   { path: "me", component: () => import("./pages/MePage.vue"), meta: { auth: true } },
   { path: "login", component: () => import("./pages/LoginPage.vue") },

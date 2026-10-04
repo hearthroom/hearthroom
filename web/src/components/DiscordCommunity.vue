@@ -18,40 +18,22 @@ import {
   communityRequestId,
   forgetCommunityRequest,
   type CommunityView,
-  type CommunityNotice,
   type CommunityCase,
 } from "@/lib/community";
-import { noticeText } from "@/lib/notifications";
-import { disablePush, enablePush, pushState, pushSupported, type PushState } from "@/lib/push";
 const props = defineProps<{ compact?: boolean; refresh?: number }>();
-// 瀏覽器推播：狀態以瀏覽器為準（支援／被封鎖／關／開），站台只確認訂閱綁在這個帳號上。
-const push = ref<PushState>(pushSupported() ? "off" : "unsupported");
-async function loadPush() {
-  const token = await session.accessToken();
-  if (token) push.value = await pushState(token);
-}
-async function togglePush() {
-  await run(async () => {
-    const token = await session.accessToken();
-    if (!token) throw new Error(t("auth.expired"));
-    push.value = push.value === "on" ? await disablePush(token) : await enablePush(token, locale.value);
-  });
-}
 const router = useRouter();
 watch(() => props.refresh, () => { void run(load); });
 const session = useSession(),
   { t } = useI18n(),
-  { lp, locale } = useLocalePath(),
+  { lp } = useLocalePath(),
   route = useRoute();
 const data = ref<CommunityView | null>(null),
   error = ref(""),
   busy = ref(false),
-  notices = ref<CommunityNotice[]>([]),
   cases = ref<CommunityCase[]>([]),
   selected = ref<CommunityCase | null>(null),
   reply = ref("");
 const caseLoaded = ref(false);
-const unreadCount = computed(() => notices.value.filter(n => !n.read_at).length);
 const showForm = ref(false),
   title = ref(""),
   body = ref(""),
@@ -70,8 +52,6 @@ const categories = [
 const prefs = [
   ["publicBadges", "public_badges"],
   ["publicLevel", "public_level"],
-  ["notifications", "notifications"],
-  ["likeNotifications", "like_notifications"],
   ["discordDm", "discord_dm"],
   ["caseAccess", "case_access"],
 ] as const;
@@ -99,12 +79,6 @@ const request = async <T,>(path = "", method = "GET", input?: unknown) => {
 };
 async function load() {
   data.value = await request<CommunityView>();
-  if (data.value.preferences.notifications)
-    notices.value = (
-      await request<{ items: CommunityNotice[] }>("/notifications?lang=" + encodeURIComponent(locale.value))
-    ).items;
-  else notices.value = [];
-  if (!props.compact) void loadPush();
 }
 async function run(task: () => Promise<void>) {
   if (busy.value) return;
@@ -245,14 +219,6 @@ async function act(action: string) {
     reply.value = "";
   });
 }
-async function readNotice(n: CommunityNotice) {
-  try {
-    await request("/notifications/read", "POST", { id: n.id });
-    n.read_at = Date.now();
-  } catch {
-    error.value = t("community.failed");
-  }
-}
 onMounted(
   () =>
     void run(async () => {
@@ -287,7 +253,7 @@ onBeforeUnmount(() => {
 <template>
   <RouterLink v-if="compact" :to="lp('/me/community')" class="community-entry">
     <CommunityIcon name="discord" />
-    <span class="community-entry__text"><span>{{ t('community.title') }}</span><small v-if="unreadCount">{{ t('community.unreadCount', { count: unreadCount }) }}</small></span>
+    <span class="community-entry__text"><span>{{ t('community.title') }}</span></span>
     <span class="community-entry__state">{{ entryStatus }}</span>
     <AccountIcon name="arrow" class="community-entry__arrow" />
   </RouterLink>
@@ -383,19 +349,6 @@ onBeforeUnmount(() => {
                 t(data.xpEnabled ? "community.on" : "community.off")
               }}</strong>
             </button>
-            <button
-              type="button"
-              class="community__toggle"
-              :aria-pressed="push === 'on'"
-              :disabled="busy || push === 'unsupported' || push === 'blocked'"
-              @click="togglePush"
-            >
-              <span>{{ t("community.push") }}</span
-              ><strong>{{
-                t(push === "on" ? "community.on" : push === "blocked" ? "community.pushBlocked" : push === "unsupported" ? "community.pushUnsupported" : "community.off")
-              }}</strong>
-            </button>
-            <p class="subtle">{{ t("community.pushHint") }}</p>
             <p class="subtle">{{ t("community.privacy") }}</p>
             <button
               v-if="linked"
@@ -407,28 +360,6 @@ onBeforeUnmount(() => {
             </button>
           </div>
         </details>
-        <section
-          v-if="data.preferences.notifications"
-          class="community__section"
-        >
-          <h2>{{ t("community.notificationsTitle") }}</h2>
-          <p v-if="!notices.length" class="subtle">
-            {{ t("community.noNotifications") }}
-          </p>
-          <ul v-else class="community__list">
-            <li v-for="n in notices" :key="n.id">
-              <RouterLink :to="lp(n.path)" @click="readNotice(n)"
-                ><span>{{ noticeText(n) }}</span
-                ><small
-                  >{{ new Date(n.created_at).toLocaleDateString() }} ·
-                  {{
-                    t(n.read_at ? "community.read" : "community.unread")
-                  }}</small
-                ></RouterLink
-              >
-            </li>
-          </ul>
-        </section>
         <section class="community__section">
           <h2>{{ t("community.cases") }}</h2>
           <p v-if="!caseAllowed" class="subtle">
