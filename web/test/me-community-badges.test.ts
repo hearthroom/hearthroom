@@ -1,6 +1,7 @@
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {createApp,nextTick,type App} from 'vue';
 import {createMemoryHistory,createRouter,RouterView,type Router} from 'vue-router';
+import {createPinia} from 'pinia';
 import {i18n,applyLocale} from '../src/lib/i18n';
 const mock=vi.hoisted(()=>({request:vi.fn(),confirm:vi.fn(async()=>true)}));
 vi.mock('../src/lib/community',async original=>({...await original<object>(),communityRequest:mock.request}));
@@ -24,7 +25,7 @@ beforeEach(async()=>{
   return view;
  });
  router=createRouter({history:createMemoryHistory(),routes:[{path:'/me',component:MePage},{path:'/me/community',component:CommunityPage}]});await router.push('/me');
- el=document.createElement('div');document.body.append(el);app=createApp(RouterView).use(router).use(i18n);app.mount(el);await settle();
+ el=document.createElement('div');document.body.append(el);app=createApp(RouterView).use(router).use(i18n).use(createPinia());app.mount(el);await settle();
 });
 afterEach(()=>{app?.unmount();el.remove();});
 it('keeps details off the profile while exposing a compact community entry',()=>{
@@ -34,7 +35,8 @@ it('keeps details off the profile while exposing a compact community entry',()=>
  expect(header.querySelector('a[href="/me/community"]')).not.toBeNull();
  expect(el.querySelector('.community')).toBeNull();expect(el.querySelector('progress')).toBeNull();
  expect(el.querySelector('a[href="https://discord.gg/fixture"]')).toBeNull();
- expect(header.textContent).toContain(i18n.global.t('community.unreadCount',{count:1}));
+ // Notifications live on their own page now; the community entry only shows link state.
+ expect(header.textContent).not.toContain(i18n.global.t('community.unreadCount',{count:1}));
 });
 it('opens settings through the profile entry and refreshes badges after unlinking',async()=>{
  el.querySelector<HTMLAnchorElement>('a[href="/me/community"]')!.click();await settle();
