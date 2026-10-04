@@ -21,6 +21,7 @@ import { useI18n } from "vue-i18n";
 import { RouterLink } from "vue-router";
 import { dateOnly, hueFrom } from "@/lib/format";
 import { pageTitle } from "@/lib/i18n";
+import { useNotifications } from "@/lib/notifications";
 import { useReviewer } from "@/lib/review";
 import { useSession } from "@/lib/session";
 import { can } from "@/lib/provider";
@@ -28,6 +29,7 @@ import { useLocalePath } from "@/lib/use-locale";
 
 const session = useSession();
 const reviewerStore = useReviewer();
+const notifications = useNotifications();
 const { lp } = useLocalePath();
 const { t } = useI18n();
 const copied = ref(false);
@@ -101,6 +103,7 @@ onMounted(() => {
     <ConnectedAccounts />
     </div>
     <nav class="me__links" :aria-label="$t('me.title')">
+      <RouterLink :to="lp('/me/notifications')" class="me__link"><AccountIcon name="bell" />{{ $t("nav.notifications") }}<span v-if="notifications.unread" class="me__count">{{ notifications.unread > 99 ? '99+' : notifications.unread }}</span><AccountIcon name="arrow" class="me__chevron" /></RouterLink>
       <RouterLink :to="lp('/wallet')" class="me__link"><AccountIcon name="wallet" />{{ $t("nav.wallet") }}<AccountIcon name="arrow" class="me__chevron" /></RouterLink>
       <RouterLink :to="lp('/me/referral')" class="me__link"><AccountIcon name="gift" />{{ $t("referral.title") }}<AccountIcon name="arrow" class="me__chevron" /></RouterLink>
       <RouterLink v-if="reviewerStore.reviewer" :to="lp('/review')" class="me__link"><AccountIcon name="check" />{{ $t("nav.review") }}<AccountIcon name="arrow" class="me__chevron" /></RouterLink>
@@ -137,6 +140,7 @@ onMounted(() => {
 .me__link {display:flex;align-items:center;gap:var(--s-3);min-height:44px;padding:var(--s-3) var(--s-2);font-size:14px;font-weight:500;border:0;background:transparent;color:var(--text-2);border-radius:var(--r-sm);cursor:pointer;text-align:start}
 .me__link:hover {background:var(--surface-2);color:var(--text)}
 .me__chevron {margin-left:auto;width:16px;height:16px;color:var(--text-3)}
+.me__count {display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:var(--r-pill);background:var(--danger);color:var(--on-danger);font-size:12px;font-weight:700}
 .me__logout {grid-column:1;grid-row:3;margin-top:0;font-weight:400;width:100%;color:var(--text-3)}
 .me__main {grid-column:2;grid-row:1 / span 3;display:grid;align-content:start;gap:var(--s-6)}
 .me__workspace h2 {margin:0 0 var(--s-4);font-size:18px;font-weight:650;letter-spacing:-.015em}

@@ -47,6 +47,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
         <strong class="menu__name">{{ session.displayName }}</strong>
       </div>
       <RouterLink :to="lp('/me')" class="menu__item" role="menuitem">{{ $t("nav.me") }}</RouterLink>
+      <RouterLink :to="lp('/me/notifications')" class="menu__item" role="menuitem">{{ $t("nav.notifications") }}</RouterLink>
       <RouterLink :to="lp('/library')" class="menu__item" role="menuitem">{{ $t("library.title") }}</RouterLink>
       <RouterLink :to="lp('/mine')" class="menu__item" role="menuitem">{{ $t("nav.mine") }}</RouterLink>
       <RouterLink v-if="reviewerStore.reviewer" :to="lp('/review')" class="menu__item" role="menuitem">{{ $t("nav.review") }}<ReviewBadge /></RouterLink>
