@@ -21,6 +21,7 @@ import {
   type Capabilities,
 } from "@/lib/resource-client";
 import { ApiError } from "@/lib/api";
+import { buildFolderTree, findByFolderId, findNode, flattenTree, relativeName, type FolderNode } from "@/lib/resource-tree";
 import { confirmDialog } from "@/lib/confirm";
 import { pageTitle } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
@@ -54,7 +55,9 @@ const result = ref<ResourcePage | null>(null),
 const page = ref(1),
   pageSize = ref(48),
   kind = ref("all"),
-  scope = ref("all"),
+  // 範圍：root（資料夾＋未歸檔的檔案，預設）、all（所有檔案平鋪）、某個夾的 id、或 dir:<路徑>
+  //（伺服器上沒有這個夾、只有它底下的子夾時用來往下走）。
+  scope = ref("root"),
   search = ref(""),
   searchDraft = ref(""),
   sort = ref("newest");
@@ -108,6 +111,29 @@ const cap = computed(() => capabilities.value),
   activeFolder = computed(() =>
     folders.value.find((f) => f.folderId === scope.value),
   );
+const DIR = "dir:";
+const tree = computed(() => buildFolderTree(folders.value));
+const activeNode = computed<FolderNode | undefined>(() =>
+  scope.value === "root" || scope.value === "all"
+    ? tree.value
+    : scope.value.startsWith(DIR)
+      ? findNode(tree.value, scope.value.slice(DIR.length))
+      : findByFolderId(tree.value, scope.value),
+);
+const currentPath = computed(() => activeNode.value?.path ?? "");
+const childNodes = computed(() => (scope.value === "all" ? [] : (activeNode.value?.children ?? [])));
+const crumbs = computed(() =>
+  currentPath.value
+    ? currentPath.value.split("/").map((name, i, parts) => ({ name, path: parts.slice(0, i + 1).join("/") }))
+    : [],
+);
+const folderRows = computed(() => flattenTree(tree.value));
+const scopeOf = (n: FolderNode) => n.folderId ?? DIR + n.path;
+const isVirtual = computed(() => scope.value.startsWith(DIR));
+function enter(target: string) {
+  scope.value = target;
+  void filter();
+}
 const quotaFull = computed(
   () =>
     result.value?.byteQuota != null &&
@@ -135,28 +161,33 @@ const size = (v: number | null | undefined) =>
         ? `${(v / 1024).toFixed(1)} KB`
         : `${v} B`;
 const name = (r: Resource) =>
-  r.fileName ||
-  r.imageUrl.split("/").pop()?.split("?")[0] ||
-  t("resource.unnamed");
+  relativeName(
+    r.fileName || r.imageUrl.split("/").pop()?.split("?")[0] || t("resource.unnamed"),
+    scope.value === "all" ? "" : currentPath.value,
+  );
 const message = (e: unknown) =>
   e instanceof Error ? e.message : t("state.loadFailed");
 const thumbnailErrors = ref(new Set<ResourceId>());
 let generation = 0,
   disposed = false;
 function query(targetPage = page.value) {
+  // 虛擬的夾在伺服器上沒有 id：列它底下所有檔案（以路徑前綴搜尋），讓作者看得到裡面有什麼。
+  const virtual = scope.value.startsWith(DIR);
   return {
     scope:
-      scope.value === "all" || scope.value === "unfiled"
-        ? scope.value
-        : "folder",
+      scope.value === "all" || virtual
+        ? "all"
+        : scope.value === "root"
+          ? "unfiled"
+          : "folder",
     folderId:
-      scope.value === "all" || scope.value === "unfiled"
+      scope.value === "all" || scope.value === "root" || virtual
         ? undefined
         : scope.value,
     kind: kind.value,
     page: targetPage,
     pageSize: pageSize.value,
-    q: search.value,
+    q: search.value || (virtual ? scope.value.slice(DIR.length) + "/" : ""),
     sort:
       sort.value !== "newest" || cap.value?.sorts.length
         ? sort.value
@@ -234,7 +265,9 @@ function restoreQuery() {
   page.value = Math.max(1, Number(route.query.page) || 1);
   kind.value = typeof route.query.kind === "string" ? route.query.kind : "all";
   scope.value =
-    typeof route.query.folder === "string" ? route.query.folder : "all";
+    typeof route.query.folder === "string" && route.query.folder !== "unfiled"
+      ? route.query.folder
+      : "root";
   search.value = typeof route.query.q === "string" ? route.query.q : "";
   searchDraft.value = search.value;
   sort.value =
@@ -253,7 +286,7 @@ async function choose() {
   managing.value = false;
   preview.value = null;
   kind.value = "all";
-  scope.value = "all";
+  scope.value = "root";
   editing.value = null;
   search.value = "";
   searchDraft.value = "";
@@ -295,7 +328,7 @@ watch(
     const navigation =
       Number(route.query.page || 1) !== page.value ||
       Number(route.query.pageSize || 48) !== pageSize.value ||
-      String(route.query.folder || "all") !== scope.value ||
+      String(route.query.folder || "root") !== scope.value ||
       String(route.query.kind || "all") !== kind.value ||
       String(route.query.q || "") !== search.value ||
       String(route.query.sort || "newest") !== sort.value;
@@ -355,6 +388,18 @@ async function copy(url: string) {
     copyFallback.value = url;
   }
 }
+// 一次拿走一批網址：一行一個，貼進卡片或文件就能用。
+async function copySelected() {
+  const urls = items.value.filter((r) => selected.value.has(r.id)).map((r) => r.imageUrl);
+  if (!urls.length) return;
+  const text = urls.join("\n");
+  try {
+    await navigator.clipboard.writeText(text);
+    notice.value = t("resource.copiedMany", { n: urls.length });
+  } catch {
+    copyFallback.value = text;
+  }
+}
 async function mutate(
   action: (c: Awaited<ReturnType<typeof client>>) => Promise<unknown>,
 ) {
@@ -397,7 +442,7 @@ async function move() {
   if (!target || !ids.length) return;
   await mutate(async (c) => {
     await c.folder("addItems", { folderId: target, imageIds: ids });
-    if (source !== "all" && source !== "unfiled" && source !== target)
+    if (source !== "all" && source !== "root" && !source.startsWith(DIR) && source !== target)
       await c.folder("removeItems", { folderId: source, imageIds: ids });
   });
   moveTarget.value = "";
@@ -412,8 +457,9 @@ async function saveFolder() {
       name: folderName.value.trim(),
       ...(action === "rename" ? { folderId: scope.value } : {}),
     });
-    if (action === "create" && d.folderId) {
-      scope.value = d.folderId;
+    const created = d.folderId ?? d.id;
+    if (action === "create" && created) {
+      scope.value = String(created);
       page.value = 1;
     }
   });
@@ -433,7 +479,7 @@ async function deleteFolder() {
     return;
   await mutate(async (c) => {
     await c.folder("delete", { folderId: f.folderId });
-    scope.value = "all";
+    scope.value = "root";
     page.value = 1;
   });
 }
@@ -455,6 +501,7 @@ const visibleUploads = computed(() => uploads.value.slice((uploadPage.value - 1)
 const uploadCounts = computed(() => ({ total: uploads.value.length, done: uploads.value.filter(u => u.status === "done").length, failed: uploads.value.filter(u => u.status === "failed").length }));
 let uploadClient: Awaited<ReturnType<typeof client>> | null = null;
 let uploadFolderIds: string[] = [];
+let uploadPrefix = "";
 const accept = computed(() => {
   const formats = cap.value?.formats ?? [];
   return formats.length
@@ -506,8 +553,10 @@ async function enqueue(files: File[]) {
   }
   uploadProvider.value = id;
   uploadPage.value = 1;
-  uploadFolder.value = folder?.name || t("res.scope.unfiled");
+  uploadFolder.value = folder?.name || currentPath.value || t("res.scope.unfiled");
   uploadFolderIds = folder ? [folder.folderId] : [];
+  // 真的存在的夾由伺服器補路徑前綴；虛擬的夾（只有子夾）由這裡補。
+  uploadPrefix = folder ? "" : currentPath.value;
   uploads.value = files.map((file) => ({
     file,
     status: "waiting",
@@ -555,6 +604,7 @@ async function runUploads(retry: boolean) {
           u.file,
           uploadFolderIds,
           (n) => (u.progress = Math.round(n * 100)),
+          uploadPrefix,
         );
         u.status = "done";
       } catch (e) {
@@ -837,23 +887,35 @@ async function previewMove(direction: number) {
           <p v-if="folderError" role="alert" class="error-text">
             {{ folderError }}
           </p>
-          <nav :aria-label="$t('resource.folders')">
+          <nav class="folder-tree" :aria-label="$t('resource.folders')">
             <button
-              v-for="f in [
-                { folderId: 'all', name: $t('res.scope.all') },
-                { folderId: 'unfiled', name: $t('res.scope.unfiled') },
-                ...folders,
-              ]"
-              :key="f.folderId"
               class="folder-row"
-              :class="{ 'is-active': scope === f.folderId }"
+              :class="{ 'is-active': scope === 'root' }"
               :disabled="busy"
-              @click="
-                scope = f.folderId;
-                filter();
-              "
+              @click="enter('root')"
             >
-              {{ f.name }}
+              {{ $t("res.scope.all") }}
+            </button>
+            <button
+              class="folder-row"
+              :class="{ 'is-active': scope === 'all' }"
+              :disabled="busy"
+              @click="enter('all')"
+            >
+              {{ $t("resource.scope.flat") }}
+            </button>
+            <button
+              v-for="r in folderRows"
+              :key="r.node.path"
+              class="folder-row"
+              :class="{ 'is-active': scope === scopeOf(r.node), 'is-virtual': !r.node.folderId }"
+              :style="{ paddingLeft: 12 + r.depth * 16 + 'px' }"
+              :title="r.node.path"
+              :disabled="busy"
+              @click="enter(scopeOf(r.node))"
+            >
+              <span class="folder-name">{{ r.node.name }}</span
+              ><span v-if="r.node.count" class="folder-count subtle">&nbsp;{{ r.node.count }}</span>
             </button>
           </nav>
           <ResourceSelect
@@ -862,9 +924,9 @@ async function previewMove(direction: number) {
             :label="$t('resource.folders')"
             :disabled="busy"
             :options="[
-              { value: 'all', label: $t('res.scope.all') },
-              { value: 'unfiled', label: $t('res.scope.unfiled') },
-              ...folders.map((f) => ({ value: f.folderId, label: f.name })),
+              { value: 'root', label: $t('res.scope.all') },
+              { value: 'all', label: $t('resource.scope.flat') },
+              ...folderRows.map((r) => ({ value: scopeOf(r.node), label: r.node.path })),
             ]"
             @change="filter"
           />
@@ -899,7 +961,7 @@ async function previewMove(direction: number) {
             <input
               v-model="folderName"
               class="input"
-              maxlength="60"
+              maxlength="80"
               :aria-label="$t('res.folder.placeholder')"
               :placeholder="$t('res.folder.placeholder')"
             /><button class="btn" :disabled="busy || !folderName.trim()">
@@ -988,12 +1050,18 @@ async function previewMove(direction: number) {
               :label="$t('res.moveTo')"
               :disabled="!selected.size || busy"
               :options="
-                folders
-                  .filter((f) => f.folderId !== scope)
-                  .map((f) => ({ value: f.folderId, label: f.name }))
+                folderRows
+                  .filter((r) => r.node.folderId && r.node.folderId !== scope)
+                  .map((r) => ({ value: r.node.folderId!, label: r.node.path }))
               "
               @change="move"
             /><button
+              class="btn"
+              :disabled="!selected.size || busy"
+              @click="copySelected"
+            >
+              {{ $t("resource.copySelected") }}</button
+            ><button
               v-if="activeFolder"
               class="btn"
               :disabled="!selected.size || busy"
@@ -1015,8 +1083,41 @@ async function previewMove(direction: number) {
               {{ $t("dialog.delete") }}
             </button>
           </div>
+          <nav v-if="crumbs.length" class="resource-crumbs" :aria-label="$t('resource.folders')">
+            <button class="crumb" :disabled="busy" @click="enter('root')">{{ $t("res.scope.all") }}</button>
+            <template v-for="c in crumbs" :key="c.path"
+              ><span aria-hidden="true">/</span
+              ><button
+                class="crumb"
+                :aria-current="c.path === currentPath ? 'page' : undefined"
+                :disabled="busy"
+                @click="enter(scopeOf(findNode(tree, c.path)!))"
+              >
+                {{ c.name }}
+              </button></template
+            >
+          </nav>
+          <div v-if="childNodes.length" class="resource-folders">
+            <span class="subtle">{{ $t("resource.subfolders") }}</span>
+            <button
+              v-for="n in childNodes"
+              :key="n.path"
+              class="folder-tile"
+              :disabled="busy"
+              @click="enter(scopeOf(n))"
+            >
+              <AccountIcon name="folder" /><span class="folder-tile-name">{{ n.name }}</span
+              ><span v-if="n.count" class="subtle">{{ n.count }}</span>
+            </button>
+          </div>
+          <p v-if="scope === 'root' && childNodes.length && items.length" class="subtle resource-loose">
+            {{ $t("resource.looseFiles") }}
+          </p>
           <div v-if="loading && !result" class="resource-grid" aria-busy="true">
             <div v-for="i in 12" :key="i" class="resource-skeleton ghost" />
+          </div>
+          <div v-else-if="!items.length && !error && childNodes.length && !search" class="empty panel resource-folder-empty">
+            <p class="subtle">{{ $t("resource.folderEmpty") }}</p>
           </div>
           <div v-else-if="!items.length && !error" class="empty panel">
             <h2>{{ $t(search ? "resource.noResults" : "res.empty") }}</h2>
@@ -1435,6 +1536,78 @@ async function previewMove(direction: number) {
   display: grid;
   gap: var(--s-1);
   margin-bottom: var(--s-3);
+}
+.folder-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.folder-row .folder-name {
+  overflow-wrap: anywhere;
+}
+.folder-row .folder-count {
+  margin-left: 8px;
+  font-size: 0.8125rem;
+}
+.folder-row.is-virtual .folder-name {
+  opacity: 0.85;
+}
+.resource-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 12px;
+  font-size: 0.9375rem;
+}
+.crumb {
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  padding: 4px 6px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.crumb:hover {
+  background: var(--surface-2);
+}
+.crumb[aria-current="page"] {
+  font-weight: 600;
+}
+.resource-folders {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+.folder-tile {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  max-width: 100%;
+}
+.folder-tile:hover {
+  border-color: var(--line-strong);
+}
+.folder-tile-name {
+  overflow-wrap: anywhere;
+}
+.resource-loose {
+  margin: 0 0 8px;
+}
+.resource-folder-empty {
+  padding: 24px;
 }
 .folder-row {
   border: 0;

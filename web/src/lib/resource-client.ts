@@ -79,10 +79,16 @@ export function resourceClient(provider: ProviderId, token: string) {
     attached: Set<string>;
   };
   const uploadStates = new WeakMap<File, UploadState>();
-  async function legacy(file: File, folderIds: string[]) {
+  // 目錄上傳保留瀏覽器給的相對路徑；在一個尚未真的存在的夾（只有子夾的路徑）裡上傳時，由頁面補上那段前綴。
+  const relativePath = (file: File, prefix: string) => {
+    const rel = file.webkitRelativePath || (prefix ? file.name : "");
+    return prefix && rel ? `${prefix}/${rel}` : rel;
+  };
+  async function legacy(file: File, folderIds: string[], prefix = "") {
     const form = new FormData();
     form.append("file", file);
-    if (provider === "harbor" && file.webkitRelativePath) form.append("relativePath", file.webkitRelativePath);
+    const rel = relativePath(file, prefix);
+    if (provider === "harbor" && rel) form.append("relativePath", rel);
     for (const id of folderIds) form.append("folderIds", id);
     const r = await fetch(`${base}/open/v1/image/upload`, {
       method: "POST",
@@ -159,6 +165,7 @@ export function resourceClient(provider: ProviderId, token: string) {
       file: File,
       folderIds: string[],
       progress: (n: number) => void,
+      prefix = "",
     ) {
       const contentType =
         file.type ||
@@ -178,7 +185,7 @@ export function resourceClient(provider: ProviderId, token: string) {
             });
           } catch (e) {
             if (e instanceof ApiError && e.status === 404)
-              state.done = await legacy(file, folderIds);
+              state.done = await legacy(file, folderIds, prefix);
             else throw e;
           }
         }
@@ -225,7 +232,7 @@ export function resourceClient(provider: ProviderId, token: string) {
               state.stored = true;
             } catch (e) {
               if (e instanceof ApiError && e.status === 0)
-                state.done = await legacy(file, folderIds);
+                state.done = await legacy(file, folderIds, prefix);
               else {
                 if (e instanceof ApiError && e.status === 403)
                   state.intent = undefined;
@@ -237,7 +244,7 @@ export function resourceClient(provider: ProviderId, token: string) {
             state.done = await request("uploadComplete", {
               uploadId: intent.uploadId,
               fileName: file.name,
-              ...(provider === "harbor" && file.webkitRelativePath ? {relativePath: file.webkitRelativePath} : {}),
+              ...(provider === "harbor" && relativePath(file, prefix) ? { relativePath: relativePath(file, prefix) } : {}),
               folderIds,
             });
         }
