@@ -17,3 +17,7 @@ export function cliSiteUrl(hostname = location.hostname): string {
   return `https://cli.${siteRootOf(hostname) ?? PRIMARY_HOST}/`;
 }
 
+/** 寫卡指南的兩條路。網址 ?way=web 是網頁編輯器；預設（不帶）是 AI Agent。 */
+export const GUIDE_WAYS = ["agent", "web"] as const;
+export type GuideWay = (typeof GUIDE_WAYS)[number];
+export const guideWayOf = (raw: unknown): GuideWay => (raw === "web" ? "web" : "agent");
