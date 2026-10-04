@@ -1,7 +1,11 @@
 <script setup lang="ts">
 /**
- * 寫卡指南：給作者的說明書（docs/guide/card-authoring.<語系>.md），跟開發者文件同一套目錄與排版。
+ * 寫卡指南：開頭讓作者挑一種方式開始寫卡（GuideStart：AI Agent、CLI、網頁編輯器），
+ * 下面是三種都用得到的參考（docs/guide/card-authoring.<語系>.md），跟開發者文件同一套目錄與排版。
  * 五種語系各一份；沒有對應檔的語系退回英文。
+ *
+ * Markdown 的標題與第一段只留在給 AI 讀的孿生檔（/guide.md）：頁面上的標題與導言由這裡出，
+ * 參考從第一個 ## 開始，否則同一頁會有兩個 h1。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -10,15 +14,22 @@ import zhHans from "../../../docs/guide/card-authoring.zh-Hans.md?raw";
 import en from "../../../docs/guide/card-authoring.en.md?raw";
 import ja from "../../../docs/guide/card-authoring.ja.md?raw";
 import ko from "../../../docs/guide/card-authoring.ko.md?raw";
-import { pageTitle } from "@/lib/i18n";
+import { SOURCE_LOCALE, pageTitle } from "@/lib/i18n";
+import GuideStart from "@/components/GuideStart.vue";
 import { renderDoc, type TocItem } from "@/lib/markdown-toc";
 
 const SOURCES: Record<string, string> = { "zh-Hant": zhHant, "zh-Hans": zhHans, en, ja, ko };
 
 const { t, locale } = useI18n();
 const source = computed(() => SOURCES[String(locale.value)] ?? en);
-const rendered = computed(() => renderDoc(source.value));
-const toc = computed<TocItem[]>(() => rendered.value.toc);
+const body = computed(() => {
+  const at = source.value.search(/^## /m);
+  return at < 0 ? source.value : source.value.slice(at);
+});
+const rendered = computed(() => renderDoc(body.value));
+const toc = computed<TocItem[]>(() => [{ level: 2, id: "start", text: t("guide.start.title") }, ...rendered.value.toc]);
+const fieldsAnchor = computed(() => rendered.value.toc[0]?.id ?? "start");
+const markdownHref = computed(() => `${locale.value === SOURCE_LOCALE ? "" : `/${locale.value}`}/guide.md`);
 
 const article = ref<HTMLElement | null>(null);
 const tocOpen = ref(true);
@@ -65,6 +76,11 @@ onBeforeUnmount(() => observer?.disconnect());
         </details>
       </aside>
       <div ref="article" class="doc-body">
+        <header class="doc doc-head">
+          <h1>{{ $t("guide.title") }}</h1>
+          <p class="doc-head__lead">{{ $t("guide.lead") }}</p>
+        </header>
+        <GuideStart :fields-anchor="fieldsAnchor" :markdown-href="markdownHref" />
         <article class="doc doc--md" v-html="rendered.html" />
       </div>
     </div>
@@ -94,6 +110,10 @@ onBeforeUnmount(() => observer?.disconnect());
 .doc :deep(h2) { font-size: 20px; line-height: 1.3; margin: var(--s-7) 0 var(--s-3); padding-top: var(--s-4); border-top: 1px solid var(--line); scroll-margin-top: calc(var(--header-h) + var(--s-4)); }
 .doc :deep(h3) { font-size: 16px; margin: var(--s-5) 0 var(--s-2); scroll-margin-top: calc(var(--header-h) + var(--s-4)); }
 .doc :deep(h1:first-child) { margin-top: 0; }
+.doc-head h1 { font-size: clamp(24px, 3vw, 32px); line-height: 1.25; margin: 0 0 var(--s-2); letter-spacing: -0.01em; }
+.doc-head__lead { margin: 0 0 var(--s-6); font-size: 16px; line-height: 1.7; color: var(--text-2); }
+/* 參考緊接在「開始寫卡」後面：第一節的分隔線與上方留白交給 GuideStart 的下緣 */
+.doc--md :deep(h2:first-child) { margin-top: 0; }
 .doc :deep(p) { margin: 0 0 var(--s-3); line-height: 1.8; }
 .doc :deep(ul), .doc :deep(ol) { margin: 0 0 var(--s-3); padding-left: 1.4em; }
 .doc :deep(li) { line-height: 1.8; margin: 2px 0; }

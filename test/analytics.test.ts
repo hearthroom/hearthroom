@@ -216,6 +216,14 @@ describe("beacon 端點", () => {
     expect(seen("pwa_card_install_click")[0]!.subject).toBe("r-1");
   });
 
+  it("「讓 AI Agent 幫你寫卡」收得下：detail 分複製成功與要手動複製，subject 是按鈕所在的頁", async () => {
+    await post([
+      { event: "agent_onboard", detail: "onboard_copied", subject: "guide" },
+      { event: "agent_onboard", detail: "onboard_manual", subject: "mine" },
+    ]);
+    expect(seen("agent_onboard").map((e) => [e.detail, e.subject])).toEqual([["onboard_copied", "guide"], ["onboard_manual", "mine"]]);
+  });
+
   it("跨站來的一律靜默丟棄", async () => {
     const res = await post([{ event: "cta" }], { Origin: "https://evil.example" });
     expect(res.status).toBe(204);

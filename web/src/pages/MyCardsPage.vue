@@ -7,6 +7,7 @@ import { daysUntilReset, remaining, weekRange } from "@/lib/quota";
 import { useLocalePath } from "@/lib/use-locale";
 import { groupWorks, workKey, type WorkspaceCard } from "@/lib/card-workspace";
 import MyCardTile from "@/components/MyCardTile.vue";
+import AgentOnboard from "@/components/AgentOnboard.vue";
 
 import { useSession } from "@/lib/session";
 import { connectionMessage } from "@/lib/distribution";
@@ -157,6 +158,8 @@ watch(()=>route.query.fresh, fresh=>{
 
 <template>
   <div class="page">
+    <!-- 來到這頁的人多半想寫卡：跟 Cloudflare 主控台一樣，標題上方放「讓 AI Agent 幫你寫卡」 -->
+    <AgentOnboard v-if="can('editor')" from="mine" class="onboard-cta" />
     <header class="head">
       <div class="head__text">
         <h1 class="head__title display">{{ $t("mine.title") }}</h1>
@@ -215,9 +218,14 @@ watch(()=>route.query.fresh, fresh=>{
       <button type="button" class="btn" @click="draft = ''; navigate({ q: undefined, filter: undefined, page: undefined })">{{ $t("mine.clearFilters") }}</button>
     </div>
 
+    <!-- 還沒有卡：指向寫卡指南的三種開始方式；AI Agent 那顆按鈕已在標題上方，這裡不放第二顆 -->
     <div v-else-if="!visible.length && !Object.keys(failures).length" class="empty panel">
-      <p class="empty__title">{{ $t("mine.empty") }}</p>
-      <RouterLink v-if="can('editor')" :to="lp('/create')" class="btn btn--primary">{{ $t("mine.empty.cta") }}</RouterLink>
+      <p class="empty__title">{{ $t("mine.empty.title") }}</p>
+      <p class="empty__body">{{ $t("mine.empty.body") }}</p>
+      <div class="empty__actions">
+        <RouterLink :to="lp('/guide')" class="btn">{{ $t("mine.empty.guide") }}</RouterLink>
+        <RouterLink v-if="can('editor')" :to="lp('/create')" class="btn btn--primary">{{ $t("mine.create") }}</RouterLink>
+      </div>
     </div>
 
 
@@ -294,4 +302,7 @@ watch(()=>route.query.fresh, fresh=>{
 
 .empty { padding: var(--s-8) var(--s-5); text-align: center; display: grid; gap: var(--s-4); justify-items: center; }
 .empty__title { font-size: 16px; font-weight: 600; }
+.empty__body { margin: calc(-1 * var(--s-2)) 0 0; font-size: 14px; color: var(--text-2); }
+.empty__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-2); }
+.onboard-cta { margin-bottom: var(--s-4); }
 </style>

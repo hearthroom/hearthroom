@@ -54,6 +54,17 @@ describe('llms docs emitted at build', () => {
     expect(rules.size).toBeLessThanOrEqual(100); // 資源層 _headers 的規則上限
   });
 
+  it('serves the agent setup instructions at the site root, and llms.txt points to them', () => {
+    // 「讓 AI Agent 幫你寫卡」按鈕複製的那句話叫 Agent 來讀這份；語言不分前綴，英文最省 token
+    const setup = docs.get('agent-setup.md')!;
+    expect(setup.contentType).toBe('text/markdown; charset=utf-8');
+    for (const step of ['claude plugin install hearthroom@hearthroom-skills', 'codex plugin add hearthroom@hearthroom-skills', 'hearthroom auth login', 'hearthroom version']) {
+      expect(setup.content, step).toContain(step);
+    }
+    expect(setup.content).not.toMatch(/HarperHarbor|\bHarbor\b|LunaTalk|owner/i);
+    expect(llms).toContain('(https://sukisuki.ai/agent-setup.md)');
+  });
+
   it('exposes the emitted paths so llms.txt can link to them', () => {
     expect(new Set(LLMS_DOC_PATHS)).toEqual(new Set(docs.keys()));
     for (const p of LLMS_DOC_PATHS) expect(p, p).not.toMatch(/^\//);
