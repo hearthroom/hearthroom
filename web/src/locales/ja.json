@@ -748,7 +748,7 @@
   "login.moreComing": "すでに Hearthroom をご利用の場合は、これまでのサービスでログインし、「マイページ」から別のサービスを連携してください。",
   "login.headline": "キャラクターと話しはじめよう",
   "login.lead": "登録フォームなし、ワンタップで始められます。",
-  "login.feature.chat": "ランキングのキャラクターと会話し、履歴を残せます",
+  "login.feature.chat": "ランキングのキャラクターと会話、履歴は自動で保存",
   "login.feature.follow": "カードを保存して、好きな作者をフォロー",
   "login.feature.create": "自分のキャラクターカードを作ってランキングに公開",
   "login.legal": "続行すると、{provider} の{terms}と{privacy}に同意したものとみなされます。",
