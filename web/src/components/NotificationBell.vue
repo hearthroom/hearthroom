@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { onBeforeUnmount, onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { noticeText, useNotifications } from "@/lib/notifications";
@@ -15,13 +15,9 @@ const open = ref(false);
 const root = ref<HTMLElement | null>(null);
 const panel = ref<HTMLElement | null>(null);
 
-async function toggle() {
+function toggle() {
   open.value = !open.value;
-  if (open.value) {
-    void store.load(locale.value);
-    await nextTick();
-    panel.value?.querySelector<HTMLElement>("a, button")?.focus();
-  }
+  if (open.value) void store.load(locale.value);
 }
 function pick(n: CommunityNotice) { void store.read(n); open.value = false; }
 function onDocClick(e: MouseEvent) { if (root.value && !root.value.contains(e.target as Node)) open.value = false; }
@@ -99,4 +95,9 @@ const when = (n: CommunityNotice) => new Date(n.created_at).toLocaleDateString(l
 .bell__when { color: var(--text-2); font-size: 11.5px; }
 .bell__all { display: block; margin-top: 4px; padding: 8px 10px; border-top: 1px solid var(--line); font-size: 13px; color: var(--accent-text); }
 @keyframes fade { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+/* 手機排版（與 App.vue 的頁首斷點相同）：鈴鐺不在最右邊，貼著它對齊會伸出左緣；改成固定在頁首下方、左右各留邊。 */
+@media (max-width: 860px) {
+  .bell__panel { position: fixed; top: calc(var(--header-h) + env(safe-area-inset-top, 0px) + 4px); left: var(--s-3); right: var(--s-3); width: auto; }
+  .bell__list { max-height: calc(100vh - var(--header-h) - 160px); }
+}
 </style>
