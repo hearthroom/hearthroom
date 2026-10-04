@@ -1,5 +1,5 @@
 <script setup lang="ts">
-defineProps<{ name: 'cards' | 'folder' | 'wallet' | 'settings' | 'arrow' | 'external' | 'edit' | 'copy' | 'check' | 'logout' | 'calendar' | 'image' | 'gift' | 'bell' | 'shield' | 'code' }>();
+defineProps<{ name: 'cards' | 'folder' | 'wallet' | 'settings' | 'arrow' | 'refresh' | 'external' | 'edit' | 'copy' | 'check' | 'logout' | 'calendar' | 'image' | 'gift' | 'bell' | 'shield' | 'code' }>();
 </script>
 <template>
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
@@ -7,6 +7,7 @@ defineProps<{ name: 'cards' | 'folder' | 'wallet' | 'settings' | 'arrow' | 'exte
     <path v-else-if="name === 'folder'" d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7h18"/>
     <template v-else-if="name === 'wallet'"><path d="M20 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h15V8H5a3 3 0 0 1-2-3"/><path d="M20 12h-5v5h5"/></template>
     <template v-else-if="name === 'settings'"><path d="M4 6h16M4 12h16M4 18h16"/><path d="M8 3v6M16 9v6M10 15v6"/></template>
+    <path v-else-if="name === 'refresh'" d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/>
     <path v-else-if="name === 'arrow'" d="m9 5 7 7-7 7"/>
     <path v-else-if="name === 'external'" d="M14 3h7v7M21 3 11 13M10 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/>
     <path v-else-if="name === 'edit'" d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-4-4L5 15l-1 5Z"/>
