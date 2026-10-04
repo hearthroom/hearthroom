@@ -46,9 +46,9 @@ export async function maintainReviewNotifications(db:D1Database,now:number){
    SELECT 'review-reminder:'||s.id||':'||s.claim_generation,s.claimed_by,'review_reminder','/review/'||s.id,?,s.id,s.claim_generation,l.version
    FROM review_submissions s JOIN reviewers r ON r.member_id=s.claimed_by AND r.revoked_at IS NULL
    JOIN cards c ON c.id=s.card_id AND c.status<>'unshared' AND c.public_blocked=0
-   JOIN community_preferences p ON p.member_id=s.claimed_by AND p.notifications=1
    LEFT JOIN discord_links l ON l.member_id=s.claimed_by AND l.state='active'
-   WHERE s.status='pending' AND s.claimed_at<=? AND s.claimed_at>? AND s.claim_generation<>''`).bind(now,now-REMINDER_MS,now-CLAIM_TTL_MS),
+   WHERE s.status='pending' AND s.claimed_at<=? AND s.claimed_at>? AND s.claim_generation<>''
+   AND NOT EXISTS (SELECT 1 FROM community_preferences p WHERE p.member_id=s.claimed_by AND p.notifications=0)`).bind(now,now-REMINDER_MS,now-CLAIM_TTL_MS),
   db.prepare('DELETE FROM review_deliveries WHERE terminal_at IS NOT NULL AND terminal_at<?').bind(now-30*DAY),
  ]);
  // One digest per Taipei calendar day, starting at 10:00. Never replay yesterday's digest.
