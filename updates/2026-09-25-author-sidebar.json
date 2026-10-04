@@ -1,0 +1,13 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/guide",
+  "live": "2026-09-25",
+  "title": {
+    "zh-Hant": "作者可以在卡片版面加上側邊欄，對話區會自動讓出位置。",
+    "zh-Hans": "作者可以在卡片版面加上侧边栏，对话区会自动让出位置。",
+    "en": "Authors can add a sidebar to a card's layout, and the chat column moves aside to make room.",
+    "ja": "作者はカードのレイアウトにサイドバーを置けるようになり、会話欄は自動でよけて表示されます。",
+    "ko": "작가는 카드 레이아웃에 사이드바를 넣을 수 있고, 대화 영역은 자동으로 자리를 비켜 줍니다."
+  }
+}

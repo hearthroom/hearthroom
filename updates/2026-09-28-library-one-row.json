@@ -1,0 +1,12 @@
+{
+  "tier": "fix",
+  "try": "/library",
+  "live": "2026-09-28",
+  "title": {
+    "zh-Hant": "作者更新卡片後，同一張卡以前會在對話與收藏裡出現兩次，現在只留一列並接上新版。",
+    "zh-Hans": "作者更新卡片后，同一张卡以前会在对话与收藏里出现两次，现在只留一行并接上新版。",
+    "en": "After an author updates a card, it no longer shows up twice in My library, and your chat continues on the new version.",
+    "ja": "作者がカードを更新しても、マイライブラリに同じカードが二つ並ばず、会話は新しい版で続きます。",
+    "ko": "작가가 카드를 업데이트해도 내 보관함에 같은 카드가 두 번 보이지 않고, 대화는 새 버전으로 이어집니다."
+  }
+}

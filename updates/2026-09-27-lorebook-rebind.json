@@ -1,0 +1,12 @@
+{
+  "tier": "fix",
+  "audience": "authors",
+  "live": "2026-09-27",
+  "title": {
+    "zh-Hant": "替卡片換綁世界書以前存完會跳回原本那本，現在會照你選的存下來。",
+    "zh-Hans": "给卡片换绑世界书以前保存后会跳回原来那本，现在会按你选的保存。",
+    "en": "Switching a card to a different Lorebook used to revert after saving, and now your choice sticks.",
+    "ja": "カードの世界設定を替えても保存後に元へ戻っていた問題が直り、選んだものが保存されます。",
+    "ko": "카드의 세계관을 바꿔도 저장 후 원래대로 돌아가던 문제가 고쳐져, 고른 세계관이 그대로 저장됩니다."
+  }
+}

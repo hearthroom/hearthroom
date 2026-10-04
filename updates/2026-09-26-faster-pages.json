@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "try": "/",
+  "live": "2026-09-26",
+  "title": {
+    "zh-Hant": "首頁一打開就看得到榜單，卡片頁和開始對話也都比以前快。",
+    "zh-Hans": "首页一打开就能看到榜单，卡片页和开始对话也都比以前快。",
+    "en": "The home page now opens with the board already showing, and card pages and new chats start faster too.",
+    "ja": "トップページは開いてすぐランキングが表示され、カードページや会話の開始も速くなりました。",
+    "ko": "홈 화면을 열면 랭킹이 바로 보이고, 카드 페이지와 대화 시작도 더 빨라졌습니다."
+  }
+}

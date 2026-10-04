@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "live": "2026-09-27",
+  "title": {
+    "zh-Hant": "卡片頁很長時，以前要捲到底才找得到開始對話，現在按鈕一直都在看得到的位置。",
+    "zh-Hans": "卡片页很长时，以前要滚到底才找得到开始对话，现在按钮一直都在看得到的位置。",
+    "en": "On long card pages, the Start a conversation button used to sit far below, and now it stays within reach.",
+    "ja": "長いカードページでも、「会話をはじめる」ボタンを探して下まで移動する必要がなくなりました。",
+    "ko": "긴 카드 페이지에서도 '대화 시작하기' 버튼을 찾으러 맨 아래까지 내려갈 필요가 없습니다."
+  }
+}

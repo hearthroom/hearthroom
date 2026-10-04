@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "live": "2026-10-01",
+  "title": {
+    "zh-Hant": "回覆還在產生時按回溯或刪除，現在會先停止生成再處理。",
+    "zh-Hans": "回复还在生成时点回溯或删除，现在会先停止生成再处理。",
+    "en": "Backtracking or deleting while a reply is still being written now stops the reply first.",
+    "ja": "返信の生成中に遡ったり削除したりすると、先に生成を止めてから処理するようになりました。",
+    "ko": "답변이 생성되는 중에 되돌리기나 삭제를 누르면 먼저 생성을 멈춘 뒤 처리합니다."
+  }
+}

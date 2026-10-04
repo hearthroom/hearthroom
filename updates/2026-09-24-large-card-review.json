@@ -1,0 +1,13 @@
+{
+  "tier": "fix",
+  "audience": "authors",
+  "try": "/mine",
+  "live": "2026-09-24",
+  "title": {
+    "zh-Hant": "世界書很多的大卡片以前送審會失敗，現在也能順利送出。",
+    "zh-Hans": "世界书很多的大卡片以前送审会失败，现在也能顺利提交。",
+    "en": "Large cards with many Lorebook entries used to fail when submitted for review, and now they go through.",
+    "ja": "世界設定の多い大きなカードは審査に出すと失敗していましたが、今は問題なく出せます。",
+    "ko": "세계관 항목이 많은 큰 카드는 심사 신청이 실패하곤 했지만, 이제는 문제없이 신청됩니다."
+  }
+}

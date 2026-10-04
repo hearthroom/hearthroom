@@ -1,0 +1,12 @@
+{
+  "tier": "fix",
+  "try": "/",
+  "live": "2026-09-26",
+  "title": {
+    "zh-Hant": "今天的日榜還沒有卡片時，首頁以前一片空白，現在會先列出這週的週榜。",
+    "zh-Hans": "今天的日榜还没有卡片时，首页以前空空荡荡，现在会先列出本周的周榜。",
+    "en": "When today's board is still empty, the home page now shows this week's board instead of an empty list.",
+    "ja": "今日の日間ランキングが空のときは、トップページに今週の週間ランキングが表示されます。",
+    "ko": "오늘 일간 랭킹이 비어 있으면 홈 화면에 이번 주 주간 랭킹이 대신 보입니다."
+  }
+}

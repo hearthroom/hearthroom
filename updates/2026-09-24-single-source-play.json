@@ -1,0 +1,12 @@
+{
+  "tier": "fix",
+  "try": "/",
+  "live": "2026-09-24",
+  "title": {
+    "zh-Hant": "只有一個來源的卡片，以前要先選平台才能開始，現在直接按「開始對話」就好。",
+    "zh-Hans": "只有一个来源的卡片，以前要先选平台才能开始，现在直接点「开始对话」就行。",
+    "en": "Cards with a single source no longer ask you to pick a platform first, so you can start the conversation right away.",
+    "ja": "提供元が一つのカードは、プラットフォームを選ばずにすぐ会話をはじめられます。",
+    "ko": "출처가 하나뿐인 카드는 이제 플랫폼을 고를 필요 없이 바로 대화를 시작할 수 있습니다."
+  }
+}

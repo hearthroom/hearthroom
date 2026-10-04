@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "try": "/library",
+  "live": "2026-09-27",
+  "title": {
+    "zh-Hant": "回覆偏好多了「只代寫台詞」，每一項也能補一句說明來微調 AI 的寫法。",
+    "zh-Hans": "回复偏好多了「只代写台词」，每一项也能补一句说明来微调 AI 的写法。",
+    "en": "Response preferences add Write my lines only, and every option takes a short note to fine-tune the AI's writing.",
+    "ja": "返信の好みに「セリフだけ任せる」が加わり、各項目に一言添えて AI の書き方を調整できます。",
+    "ko": "답변 취향에 '대사만 맡기기'가 추가되었고, 항목마다 한마디를 덧붙여 AI의 글쓰기를 조정할 수 있습니다."
+  }
+}

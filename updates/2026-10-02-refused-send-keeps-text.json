@@ -1,0 +1,18 @@
+{
+  "tier": "fix",
+  "live": "2026-10-02",
+  "title": {
+    "zh-Hant": "積分不夠被拒絕時，以前打好的訊息會不見，現在會放回輸入框並說明原因。",
+    "zh-Hans": "积分不够被拒绝时，以前写好的消息会不见，现在会放回输入框并说明原因。",
+    "en": "When a message is refused for lack of credits, your text now goes back into the message box with the reason.",
+    "ja": "ポイント不足で送信できなかったとき、書いた文章が入力欄に戻り、理由も表示されます。",
+    "ko": "포인트가 부족해 거절되면 이제 작성한 메시지가 입력창으로 돌아오고 이유도 알려 줍니다."
+  },
+  "body": {
+    "zh-Hant": "重新生成被拒絕時，原本的回覆也會保留。",
+    "zh-Hans": "重新生成被拒绝时，原来的回复也会保留。",
+    "en": "If a regenerate is refused, the previous reply stays.",
+    "ja": "再生成が断られたときも、元の返信はそのまま残ります。",
+    "ko": "재생성이 거절되어도 원래 답변은 그대로 남습니다."
+  }
+}

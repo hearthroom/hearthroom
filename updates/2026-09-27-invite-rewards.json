@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "try": "/me/referral",
+  "live": "2026-09-27",
+  "title": {
+    "zh-Hant": "邀請獎勵頁看得到你的推薦碼和邀請成果，朋友也能在這裡填入你的推薦碼。",
+    "zh-Hans": "邀请奖励页能看到你的推荐码和邀请成果，朋友也能在这里填写你的推荐码。",
+    "en": "The Invite rewards page shows your referral code and what your invites earned, and friends can enter your code there.",
+    "ja": "招待特典のページで自分の紹介コードと招待の成果を確認でき、友だちもここでコードを入力できます。",
+    "ko": "초대 보상 페이지에서 내 추천 코드와 초대 성과를 볼 수 있고, 친구도 여기서 코드를 입력할 수 있습니다."
+  }
+}

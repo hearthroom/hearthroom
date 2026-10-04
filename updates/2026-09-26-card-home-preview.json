@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "try": "/",
+  "live": "2026-09-26",
+  "title": {
+    "zh-Hant": "卡片頁會先讓你看開場白的開頭和前幾則評論，看完再決定要不要開始對話。",
+    "zh-Hans": "卡片页会先展示开场白的开头和前几条评论，看完再决定要不要开始对话。",
+    "en": "Card pages now show the start of the opening line and the first few comments, so you can decide before you start.",
+    "ja": "カードページで最初のひとことの冒頭とコメントを先に読んでから、会話をはじめるか決められます。",
+    "ko": "카드 페이지에서 첫 인사 앞부분과 댓글 몇 개를 먼저 보고 대화를 시작할지 정할 수 있습니다."
+  }
+}
