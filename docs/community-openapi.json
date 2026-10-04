@@ -32,6 +32,9 @@
     },
     {
       "name": "Notifications"
+    },
+    {
+      "name": "Updates"
     }
   ],
   "paths": {
@@ -2595,6 +2598,201 @@
           }
         }
       }
+    },
+    "/v1/updates": {
+      "get": {
+        "tags": [
+          "Updates"
+        ],
+        "summary": "List update notes",
+        "description": "Notes about changes that went live on the community site, newest first. Each note says what changed in one sentence and where to try it.",
+        "parameters": [
+          {
+            "name": "lang",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "zh-Hant",
+                "zh-Hans",
+                "en",
+                "ja",
+                "ko"
+              ]
+            },
+            "description": "Language of the note text."
+          },
+          {
+            "name": "view",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "summary",
+                "full"
+              ],
+              "default": "summary"
+            },
+            "description": "summary returns the last 14 days without descriptions; full returns every published note."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/UpdateItem"
+                      }
+                    },
+                    "stats": {
+                      "type": "object",
+                      "description": "Counts over the counting window.",
+                      "properties": {
+                        "features": {
+                          "type": "integer",
+                          "description": "Highlights and features that went live."
+                        },
+                        "fixes": {
+                          "type": "integer",
+                          "description": "Fixes that went live."
+                        },
+                        "days": {
+                          "type": "integer",
+                          "description": "Length of the counting window in days."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/updates/state": {
+      "get": {
+        "tags": [
+          "Updates"
+        ],
+        "summary": "Read update read state",
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "description": "Which update notes the member has seen, kept in sync across devices.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/UpdateState"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Saved read state, or null before the first save."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Updates"
+        ],
+        "summary": "Save update read state",
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "description": "Merges with the stored state: times keep the later value and used entry points are combined.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateState"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/UpdateState"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Saved read state, or null before the first save."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3113,6 +3311,93 @@
           },
           "hasNext": {
             "type": "boolean"
+          }
+        }
+      },
+      "UpdateItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Stable note identifier; also the anchor on the updates page."
+          },
+          "tier": {
+            "type": "string",
+            "enum": [
+              "highlight",
+              "feature",
+              "fix"
+            ],
+            "description": "How prominent the change is."
+          },
+          "audience": {
+            "type": "string",
+            "enum": [
+              "everyone",
+              "authors"
+            ],
+            "description": "Who the change is for."
+          },
+          "liveAt": {
+            "type": "integer",
+            "description": "When the note first went live, in milliseconds."
+          },
+          "announcedAt": {
+            "type": "integer",
+            "description": "When the note was last announced, in milliseconds."
+          },
+          "title": {
+            "type": "string",
+            "description": "One-sentence title in the requested language."
+          },
+          "body": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional one-sentence description; null in the summary view."
+          },
+          "try": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Site path where the change can be tried."
+          },
+          "spotlight": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Interface entry points marked as new."
+          }
+        }
+      },
+      "UpdateState": {
+        "type": "object",
+        "properties": {
+          "seenThrough": {
+            "type": "integer",
+            "description": "Notes announced at or before this time count as seen."
+          },
+          "stripClosedAt": {
+            "type": "integer",
+            "description": "When the home update hint was last closed or followed."
+          },
+          "stripDays": {
+            "type": "integer",
+            "description": "Days the home update hint has shown without being used."
+          },
+          "stripDay": {
+            "type": "string",
+            "description": "Local date of the last counted day, as YYYY-MM-DD."
+          },
+          "spotlights": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Entry points the member has already used."
           }
         }
       }

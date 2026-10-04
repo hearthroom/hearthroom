@@ -125,7 +125,7 @@ const BOT = /bot|crawler|spider|crawling|facebookexternalhit|slurp|bingpreview|d
 export const clientKind = (ua: string | undefined): "bot" | "server" => (ua && BOT.test(ua) ? "bot" : "server");
 
 /** 前端送来的来源标记。白名单挡住随手塞进来的任意字串。 */
-const SURFACES = new Set(["board", "search", "card", "author", "mine", "create", "wallet", "play", "game", "review", "direct", "404"]);
+const SURFACES = new Set(["board", "search", "card", "author", "mine", "create", "wallet", "play", "game", "review", "updates", "direct", "404"]);
 export const surfaceOf = (raw: string | undefined) => (raw && SURFACES.has(raw) ? raw : "direct");
 
 /**
@@ -159,6 +159,9 @@ export const BEACON_EVENTS = new Set([
   // 「讓 AI Agent 幫你寫卡」：按鈕複製設定指令（subject 是按鈕所在的頁：guide／mine）。
   // 對照資源層 /agent-setup.md 的請求數，看得出複製之後有多少真的交給了 Agent
   "agent_onboard",
+  // 更新說明：首頁提示列（detail 是 shown／dismissed／clicked，subject 是說明 id）、更新頁被打開（detail 是從哪來）、
+  // 按了「去試試」（detail 是從哪按的）、功能入口的「新」標記被點（subject 是入口鍵）
+  "updates_strip", "updates_page", "update_try", "spotlight_click",
 ]);
 
 /** beacon 事件的 detail 小分类。同样白名单，避免自由字串进 blob。 */
@@ -174,6 +177,8 @@ export const BEACON_DETAILS = new Set([
   "invite_redeem", "invite_mine", "invite_copy", "invite_fallback",
   // 設定指令：剪貼簿寫入成功，或拿不到剪貼簿、讀者要自己選取
   "onboard_copied", "onboard_manual",
+  // 更新說明：提示列的三種結果，與更新頁、「去試試」的來源
+  "shown", "dismissed", "clicked", "strip", "footer", "menu", "discord", "page", "spotlight", "notification", "direct",
 ]);
 
 /**

@@ -17,3 +17,4 @@ android/local.properties
 *.jks
 *.keystore
 .android-tools/
+src/generated/

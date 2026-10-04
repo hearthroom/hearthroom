@@ -5,9 +5,10 @@ import { syncAppearance, saveAppearance, appearanceMedia } from './appearance';
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { HttpError, pickLocale, type Env } from "../types";
-import { hasSubscription, pushConfigured, removeSubscription, saveSubscription } from "./push";
+import { hasSubscription, pushConfigured, queuePush, removeSubscription, saveSubscription } from "./push";
 import { requireMember, memberByHandle, memberNsfw } from "../members";
 import { getCard } from "../cards";
+import { updateBridge, updateTitle } from "../updates";
 import { random, digest, verifyBridge, seal, unseal } from "./crypto";
 import {
   enabled,
@@ -251,6 +252,11 @@ app.get("/v1/community/discord/callback", async (c) => {
     return c.redirect(linkReturnOrigin(c.env, state) + "/me#discord_error=oauth");
   }
 });
+/** A shipped-report notice names the update in the reader's language; the text lives with the release, not in the row. */
+function withUpdateTitle(kind: string, extra: Record<string, unknown> | null, lang: string) {
+  if (kind !== "report_shipped" || typeof extra?.entry !== "string") return extra;
+  return { ...extra, title: updateTitle(extra.entry, lang) };
+}
 /** Interface languages the website offers; anything else is ignored rather than stored. */
 const NOTICE_LOCALES = ["zh-Hant", "zh-Hans", "en", "ja", "ko"];
 const langOf = (c: { req: { query: (k: string) => string | undefined; header: (k: string) => string | undefined } }) =>
@@ -271,7 +277,7 @@ app.get("/v1/me/community/notifications", async (c) => {
     ...n,
     actor: actor_handle ? { handle: actor_handle, name: actor_name || actor_handle } : null,
     card: card_num !== null ? { id: card_num, name: pickLocale(JSON.parse(card_names || "{}"), lang) } : null,
-    extra: extra ? JSON.parse(extra) : null,
+    extra: withUpdateTitle(n.kind, extra ? JSON.parse(extra) : null, lang),
   }));
   return c.json({ items });
 });
@@ -483,6 +489,13 @@ app.post("/internal/community/:operation", async (c) => {
   if (op === 'review-project-v2') return c.json(await leaseReviewDelivery(c.env.DB,String(b.id),String(b.channel),String(b.lang??'zh-Hant'),Date.now()));
   if (op === 'review-check-v2') return c.json({valid:await checkReviewDelivery(c.env.DB,String(b.id),String(b.lease),Number(b.revision),Date.now())});
   if (op === 'review-ack-v2') return c.json(await finishReviewDelivery(c.env.DB,b,Date.now()));
+  if (op.startsWith('update-')) {
+    enabled(c.env);
+    const result = await updateBridge(c.env, op, b, Date.now());
+    // 回報者通知寫進了鈴鐺：跟其他通知一樣，回應送出後推給訂閱的瀏覽器
+    if (op === 'update-report-ack') queuePush(c);
+    return c.json(result);
+  }
   if (op === "appearance-sync") {
     enabled(c.env);
     return c.json({accepted:await syncAppearance(c.env,b)});

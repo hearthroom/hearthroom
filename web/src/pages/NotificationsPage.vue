@@ -15,6 +15,7 @@ import { noticeText, useNotifications } from "@/lib/notifications";
 import { disablePush, enablePush, pushConfig, pushState, pushSupported, type PushConfig, type PushState } from "@/lib/push";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
+import NewMark from "@/components/NewMark.vue";
 
 const session = useSession();
 const store = useNotifications();
@@ -90,7 +91,7 @@ onMounted(() => { document.title = pageTitle(t("nav.notifications")); void run(l
         </button>
       </template>
       <button type="button" class="notices__toggle" :aria-pressed="push === 'on'" :disabled="busy || push === 'unsupported'" @click="togglePush">
-        <span>{{ t("community.push") }}</span>
+        <span>{{ t("community.push") }}<NewMark k="notifications.push" /></span>
         <strong>{{ t(push === "on" ? "community.on" : push === "blocked" ? "community.pushBlocked" : push === "dismissed" ? "community.pushDismissed" : push === "unsupported" ? "community.pushUnsupported" : "community.off") }}</strong>
       </button>
       <p v-if="push === 'blocked'" class="notice notice--error" role="status">{{ t("community.pushBlockedHint") }}</p>

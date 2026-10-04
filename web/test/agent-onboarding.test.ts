@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp, nextTick, type App } from 'vue';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { createI18n } from 'vue-i18n';
+import { createPinia } from 'pinia';
 import zhHant from '../src/locales/zh-Hant.json';
 import zhHans from '../src/locales/zh-Hans.json';
 import en from '../src/locales/en.json';
@@ -30,7 +31,8 @@ async function mount(component: object, locale = 'en', props: Record<string, unk
   await router.push((locale === 'zh-Hant' ? '/guide' : `/${locale}/guide`) + search);
   root = document.createElement('div');
   document.body.append(root);
-  app = createApp(component, props).use(router).use(createI18n({ legacy: false, locale, fallbackLocale: 'en', messages: LOCALES }));
+  // 按鈕上掛著「新」標記（components/NewMark.vue），它讀更新說明的 store
+  app = createApp(component, props).use(createPinia()).use(router).use(createI18n({ legacy: false, locale, fallbackLocale: 'en', messages: LOCALES }));
   app.mount(root);
   await settle();
 }
