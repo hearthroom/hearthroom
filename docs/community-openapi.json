@@ -1865,7 +1865,18 @@
             }
           }
         },
-        "description": "Latest 50 notifications, newest first. Expired review reminders use a generic destination."
+        "description": "Latest 50 notifications, newest first. Expired review reminders use a generic destination.",
+        "parameters": [
+          {
+            "name": "lang",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Display language; falls back to Accept-Language, then Chinese."
+          }
+        ]
       }
     },
     "/v1/me/community/notifications/read": {
@@ -1936,6 +1947,120 @@
             }
           }
         }
+      }
+    },
+    "/v1/me/community/notifications/read-all": {
+      "post": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Mark all notifications read",
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Marks every unread notification of the caller read."
+      }
+    },
+    "/v1/me/community/notifications/summary": {
+      "get": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Count unread notifications",
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "lang",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Interface language to remember for Discord reminders."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "unread": {
+                      "type": "integer",
+                      "description": "Unread notifications."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Unread count for the header; also records the member interface language so Discord reminders use it."
       }
     },
     "/v1/fandoms": {
@@ -2464,7 +2589,8 @@
             "type": "string"
           },
           "kind": {
-            "type": "string"
+            "type": "string",
+            "description": "review_result, comment_reply, comment_like, followed_work, registration_pack, review_reminder or review_reminder_expired."
           },
           "path": {
             "type": "string"
@@ -2479,6 +2605,47 @@
               "null"
             ],
             "description": "Unix milliseconds, or null when unread."
+          },
+          "actor": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "handle": {
+                "type": "string",
+                "description": "Public member handle."
+              },
+              "name": {
+                "type": "string",
+                "description": "Display name, or the handle when none is set."
+              }
+            },
+            "description": "Who did it, when the event has a person behind it."
+          },
+          "card": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": "integer",
+                "description": "Card number."
+              },
+              "name": {
+                "type": "string",
+                "description": "Card name in the requested language."
+              }
+            },
+            "description": "The card involved."
+          },
+          "extra": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Kind-specific detail: review verdict (status), like count (count), comment id (comment)."
           }
         }
       },

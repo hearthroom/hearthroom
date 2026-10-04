@@ -6,6 +6,8 @@ import ReviewBadge from "@/components/ReviewBadge.vue";
 import { computed, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import AccountMenu from "@/components/AccountMenu.vue";
+import NotificationBell from "@/components/NotificationBell.vue";
+import { useNotifications } from "@/lib/notifications";
 import AdultToggle from "@/components/AdultToggle.vue";
 import AppearanceMenu from "@/components/AppearanceMenu.vue";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
@@ -21,7 +23,7 @@ import { shouldShowDownloadEntry } from "@/lib/download";
 import { isPlayHost } from "@/lib/site";
 import { loginPath } from "@/lib/login-return";
 
-const { lp } = useLocalePath();
+const { lp, locale } = useLocalePath();
 // iOS 與我們自己的 App 裡不需要「下載 App」入口（lib/download.ts）。
 const showDownloadEntry = shouldShowDownloadEntry({ ua: navigator.userAgent, touchPoints: navigator.maxTouchPoints || 0 });
 const session = useSession();
@@ -31,8 +33,11 @@ const router = useRouter();
 
 const discordInvite = ref<string|null>(null);
 onMounted(()=>{void communityRequest<{invite:string|null}>("/community/config").then(r=>{discordInvite.value=r.invite;}).catch(()=>{});});
+const notifications = useNotifications();
 let reviewTimer: ReturnType<typeof setInterval> | undefined;
-function refreshReview(){ if(session.me && document.visibilityState==='visible') void reviewerStore.refresh(); }
+// 審核待辦與通知未讀數同一個節奏：每分鐘一次，回到分頁再一次。通知那一趟順便告訴伺服器目前的介面語言。
+function refreshReview(){ if(session.me && document.visibilityState==='visible') { void reviewerStore.refresh(); void notifications.refresh(locale.value); } }
+watch(() => session.me?.accountNumId ?? null, (id) => { if (id) void notifications.refresh(locale.value); });
 onMounted(() => { session.restore(); useAppearance().init(); reviewTimer=setInterval(refreshReview,60000); window.addEventListener('focus',refreshReview); document.addEventListener('visibilitychange',refreshReview); });
 onBeforeUnmount(()=>{clearInterval(reviewTimer);window.removeEventListener('focus',refreshReview);document.removeEventListener('visibilitychange',refreshReview);document.removeEventListener('keydown',onSlash);});
 
@@ -104,6 +109,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
         </a>
         <AppearanceMenu />
         <LocaleSwitch />
+        <NotificationBell v-if="session.me" />
         <AccountMenu v-if="session.me" />
         <RouterLink v-else-if="session.ready" class="btn btn--primary btn--sm" :to="lp(loginPath(route.fullPath))">
           {{ $t("nav.login") }}

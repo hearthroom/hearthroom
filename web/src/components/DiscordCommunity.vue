@@ -21,12 +21,13 @@ import {
   type CommunityNotice,
   type CommunityCase,
 } from "@/lib/community";
+import { noticeText } from "@/lib/notifications";
 const props = defineProps<{ compact?: boolean; refresh?: number }>();
 const router = useRouter();
 watch(() => props.refresh, () => { void run(load); });
 const session = useSession(),
   { t } = useI18n(),
-  { lp } = useLocalePath(),
+  { lp, locale } = useLocalePath(),
   route = useRoute();
 const data = ref<CommunityView | null>(null),
   error = ref(""),
@@ -56,6 +57,7 @@ const prefs = [
   ["publicBadges", "public_badges"],
   ["publicLevel", "public_level"],
   ["notifications", "notifications"],
+  ["likeNotifications", "like_notifications"],
   ["discordDm", "discord_dm"],
   ["caseAccess", "case_access"],
 ] as const;
@@ -85,7 +87,7 @@ async function load() {
   data.value = await request<CommunityView>();
   if (data.value.preferences.notifications)
     notices.value = (
-      await request<{ items: CommunityNotice[] }>("/notifications")
+      await request<{ items: CommunityNotice[] }>("/notifications?lang=" + encodeURIComponent(locale.value))
     ).items;
   else notices.value = [];
 }
@@ -388,7 +390,7 @@ onBeforeUnmount(() => {
           <ul v-else class="community__list">
             <li v-for="n in notices" :key="n.id">
               <RouterLink :to="lp(n.path)" @click="readNotice(n)"
-                ><span>{{ t("community.notices." + n.kind) }}</span
+                ><span>{{ noticeText(n) }}</span
                 ><small
                   >{{ new Date(n.created_at).toLocaleDateString() }} ·
                   {{

@@ -1757,5 +1757,18 @@
   "dad7ecb84404c": "来自 Wikidata 的符合作品：编号、名称与一句说明。提交时把编号作为 fandomId 传入。",
   "d0244bb00a233": "原作筛选：原作清单里的键，或任何语言、任何写法的作品名。",
   "dab6d9360ba33": "不超过该世界书的条目上限，即世界书详情中的 `entryContentMax`（中文 4000 个字符，日文或韩文 6000，英文 12000）。",
-  "dae5cf7ba4bcc": "条目内容上限：中文 4000 个字符，日文或韩文 6000，英文 12000；按此世界书所绑定角色卡的语言计算，绑定多张时取最宽；未绑定的世界书按自身 `language`。"
+  "dae5cf7ba4bcc": "条目内容上限：中文 4000 个字符，日文或韩文 6000，英文 12000；按此世界书所绑定角色卡的语言计算，绑定多张时取最宽；未绑定的世界书按自身 `language`。",
+  "df32eecbd7076": "事件的行为者；没有人参与的事件为 null。",
+  "dc43277527e33": "显示名称；未设置时为 handle。",
+  "dad71d142a03d": "卡号。",
+  "dcd82f0ee1c93": "以请求的语言显示的卡名。",
+  "d2e16f8f371a1": "相关的卡片。",
+  "dc01ee913b723": "按类型而定的细节：审核结果（status）、点赞数（count）、评论 ID（comment）。",
+  "da70ae2dbacc0": "review_result、comment_reply、comment_like、followed_work、registration_pack、review_reminder 或 review_reminder_expired。",
+  "d5ac091a42bb8": "统计未读通知",
+  "dd915d068e119": "要记住的界面语言，Discord 提醒会使用它。",
+  "d5e49bf3aee8c": "未读通知数。",
+  "d44b0a9e03993": "给页首用的未读数；同时记录会员的界面语言，Discord 提醒会使用它。",
+  "d1bce87340bc1": "全部标为已读",
+  "d4b63d77c98b7": "把调用者所有未读通知标为已读。"
 }
