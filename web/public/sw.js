@@ -7,7 +7,7 @@
 
   fetch 處理器不能是空的：Chrome 會把空的處理器當成沒有，安裝性檢查照樣不過。
 */
-const VERSION = "hr-sw-2";
+const VERSION = "hr-sw-3";
 // 資源層會把 /offline.html 轉成 /offline（307）；導覽請求不能用轉址過的回應回，所以直接用乾淨網址
 const OFFLINE_URL = "/offline";
 
@@ -22,6 +22,38 @@ self.addEventListener("activate", (event) => {
     caches.keys()
       .then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
+  );
+});
+
+/*
+  推播：伺服器送來的是一句話加一個站內路徑（src/community/push.ts 組的），這裡只負責顯示、
+  點了就開到那個路徑。同一則通知的 tag 相同，重送不會疊兩個。
+*/
+self.addEventListener("push", (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch { /* 不是我們送的格式就顯示通用標題 */ }
+  const path = typeof data.path === "string" && data.path.startsWith("/") ? data.path : "/me/community";
+  event.waitUntil(
+    self.registration.showNotification(data.title || "HearthRoom", {
+      body: data.body || "",
+      tag: data.tag || path,
+      data: { path },
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const path = (event.notification.data && event.notification.data.path) || "/me/community";
+  const url = new URL(path, self.location.origin).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      const open = list.find((c) => "focus" in c);
+      if (open) return open.navigate(url).then((c) => c && c.focus()).catch(() => open.focus());
+      return self.clients.openWindow(url);
+    }),
   );
 });
 

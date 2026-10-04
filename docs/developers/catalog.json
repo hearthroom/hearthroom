@@ -1770,5 +1770,19 @@
   "d5e49bf3aee8c": "Unread notifications.",
   "d44b0a9e03993": "Unread count for the header; also records the member interface language so Discord reminders use it.",
   "d1bce87340bc1": "Mark all notifications read",
-  "d4b63d77c98b7": "Marks every unread notification of the caller read."
+  "d4b63d77c98b7": "Marks every unread notification of the caller read.",
+  "d7a2bb384d0e3": "The https push endpoint the browser issued.",
+  "df6689039278c": "The subscription keys exactly as the browser serialised them.",
+  "dd7b3957d788b": "Interface language for the pushed text: zh-Hant, zh-Hans, en, ja or ko.",
+  "d16486a548efe": "Read the browser push key",
+  "d705ab80ffb46": "VAPID public key to subscribe with, or null while push is off.",
+  "df7faa7d9a1fc": "Public. Browser push is off until the site is configured for it.",
+  "db690dca4348f": "Check a browser subscription",
+  "d43b6b8b68b20": "The push endpoint this browser holds.",
+  "dc1028d82e7b7": "Whether that endpoint is registered to the caller.",
+  "db6f3522ddec2": "Tells a browser whether its current subscription still belongs to the signed-in member.",
+  "daad38f9d5a2a": "Register a browser subscription",
+  "d53b66ff66c74": "Binds the browser subscription to the caller; an endpoint already registered to someone else moves to the caller.",
+  "dc461c4de1d11": "Remove a browser subscription",
+  "dd75e602b6d54": "Stops pushes to that endpoint for the caller."
 }

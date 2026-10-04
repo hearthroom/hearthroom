@@ -22,7 +22,21 @@ import {
   type CommunityCase,
 } from "@/lib/community";
 import { noticeText } from "@/lib/notifications";
+import { disablePush, enablePush, pushState, pushSupported, type PushState } from "@/lib/push";
 const props = defineProps<{ compact?: boolean; refresh?: number }>();
+// 瀏覽器推播：狀態以瀏覽器為準（支援／被封鎖／關／開），站台只確認訂閱綁在這個帳號上。
+const push = ref<PushState>(pushSupported() ? "off" : "unsupported");
+async function loadPush() {
+  const token = await session.accessToken();
+  if (token) push.value = await pushState(token);
+}
+async function togglePush() {
+  await run(async () => {
+    const token = await session.accessToken();
+    if (!token) throw new Error(t("auth.expired"));
+    push.value = push.value === "on" ? await disablePush(token) : await enablePush(token, locale.value);
+  });
+}
 const router = useRouter();
 watch(() => props.refresh, () => { void run(load); });
 const session = useSession(),
@@ -90,6 +104,7 @@ async function load() {
       await request<{ items: CommunityNotice[] }>("/notifications?lang=" + encodeURIComponent(locale.value))
     ).items;
   else notices.value = [];
+  if (!props.compact) void loadPush();
 }
 async function run(task: () => Promise<void>) {
   if (busy.value) return;
@@ -368,6 +383,19 @@ onBeforeUnmount(() => {
                 t(data.xpEnabled ? "community.on" : "community.off")
               }}</strong>
             </button>
+            <button
+              type="button"
+              class="community__toggle"
+              :aria-pressed="push === 'on'"
+              :disabled="busy || push === 'unsupported' || push === 'blocked'"
+              @click="togglePush"
+            >
+              <span>{{ t("community.push") }}</span
+              ><strong>{{
+                t(push === "on" ? "community.on" : push === "blocked" ? "community.pushBlocked" : push === "unsupported" ? "community.pushUnsupported" : "community.off")
+              }}</strong>
+            </button>
+            <p class="subtle">{{ t("community.pushHint") }}</p>
             <p class="subtle">{{ t("community.privacy") }}</p>
             <button
               v-if="linked"
