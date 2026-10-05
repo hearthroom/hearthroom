@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "audience": "authors",
+  "title": {
+    "zh-Hant": "卡片的橫式背景以前不會出現，現在橫屏或寬螢幕會換成它。",
+    "zh-Hans": "卡片的横版背景以前不显示，现在横屏或宽屏会换成它。",
+    "en": "A card's landscape background now shows on wide and rotated screens instead of the portrait one.",
+    "ja": "カードの横向き背景が、横画面やワイド画面で表示されるようになりました。",
+    "ko": "이제 가로 화면과 넓은 화면에서 카드의 가로 배경이 보여요."
+  }
+}
