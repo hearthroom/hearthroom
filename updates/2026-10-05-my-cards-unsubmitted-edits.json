@@ -1,0 +1,13 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/mine",
+  "draft": true,
+  "title": {
+    "zh-Hant": "已發布的卡改過卻還沒提交審核時，我的卡片會標出「有修改未提交」。",
+    "zh-Hans": "已发布的卡改过却还没提交审核时，我的卡片会标出“有修改未提交”。",
+    "en": "My cards now marks published cards you edited but haven't submitted for review yet.",
+    "ja": "公開中のカードを編集して審査に出していないと、マイカードに「未申請の変更あり」と表示されます。",
+    "ko": "게시된 카드를 수정하고 아직 심사에 제출하지 않았다면 내 카드에 「미제출 수정 있음」이 표시됩니다."
+  }
+}

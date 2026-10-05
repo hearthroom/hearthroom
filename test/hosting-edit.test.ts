@@ -2,6 +2,7 @@ import { env, SELF } from 'cloudflare:test';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { resetDb, role, makeMember } from './helpers';
 import { submitHosted, hostingDecision, hostGateway, beginHostedEdit } from '../src/hosting';
+import { syncBatch } from '../src/index';
 import { claim, stamp, pendingSubmissionOf } from '../src/review';
 import { getCard, syncStatement } from '../src/cards';
 import { upstream } from '../src/upstream';
@@ -38,6 +39,33 @@ it('editing a pending update retires its review, preserves A, and a fresh review
  expect((await env.DB.prepare('SELECT search_name FROM cards WHERE id=?').bind(card.id).first<{search_name:string}>())?.search_name).toContain('b revised');
  expect((await getCard(env.DB,a.hostedRevisionId,'harbor'))?.approved_version_id).toBe(next.versionId);
  expect((await hostingDecision(env.DB,a.versionId)).status).toBe('approved');
+});
+// 過審那一版的內容版本記在卡上（0052）：「我的卡片」拿它跟草稿現在的比，看得出作者改了沒送審。
+// 新版還在審時不動，新版過審才換成新那一版的。
+const approvedHash=async()=>(await env.DB.prepare("SELECT approved_content_hash h FROM cards WHERE source_role_id='draft'").first<{h:string|null}>())?.h;
+it('remembers the approved version\'s content hash, and replaces it only when a newer version is approved',async()=>{
+ const f=await setup();
+ f.draft.contentHash='h-a';await f.submit();await f.approve();
+ expect(await approvedHash()).toBe('h-a');
+ f.draft.contentHash='h-b';await f.submit();
+ expect(await approvedHash()).toBe('h-a');
+ await f.approve();
+ expect(await approvedHash()).toBe('h-b');
+});
+// 0052 之前封存的版本沒記到：同步讀的就是過審的封存版，順手補上；供應商沒回版本就保留原值。
+it('sync fills in the approved hash for versions sealed before it was recorded, and keeps it when the provider omits it',async()=>{
+ const f=await setup();await f.submit();await f.approve();
+ expect(await approvedHash()).toBeNull();
+ const sealedId=(await getCard(env.DB,'draft','harbor'))!.approved_hosted_role_id!;
+ vi.spyOn(upstream,'fetchRole').mockImplementation(async(_env,id)=>({...role({roleId:id,authorNumId:10001}),contentHash:'h-sealed'}));
+ await env.DB.prepare('UPDATE cards SET last_synced_at=0').run();
+ expect((await syncBatch(env)).failed).toBe(0);
+ expect(await approvedHash()).toBe('h-sealed');
+ vi.spyOn(upstream,'fetchRole').mockImplementation(async(_env,id)=>role({roleId:id,authorNumId:10001}));
+ await env.DB.prepare('UPDATE cards SET last_synced_at=0').run();
+ await syncBatch(env);
+ expect(await approvedHash()).toBe('h-sealed');
+ expect(sealedId).toMatch(/^sealed-/);
 });
 it('editing an approved draft does not start review, and another member cannot cancel a pending review',async()=>{
  const f=await setup();const a=await f.submit();await f.approve();

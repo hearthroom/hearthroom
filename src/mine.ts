@@ -42,9 +42,11 @@ const cacheKey = (provider: ProviderId, accountNumId: number, page: number, page
 
 /** 已上架的卡最多幾張一起拿來比對關鍵字（作者每週只能送審幾張，實際遠少於這個數）。 */
 const LISTED_SEARCH_LIMIT = 1000;
+/** 「已提交」那組一次最多替幾張卡逐張問草稿現在的內容版本（＝網頁一頁的張數）。 */
+const DRAFT_CHECK_LIMIT = 24;
 export interface MinePage {
   /** registered＝本站有這張卡的登記（不論審到哪）；status 只在 registered 時有；note 是最近一次駁回的說明。 */
-  items: (MyRole & { registered: boolean; status?: CardStatus; updateStatus?: string; note?: string; nsfw?: boolean })[];
+  items: (Omit<MyRole, "contentHash"> & { registered: boolean; status?: CardStatus; updateStatus?: string; note?: string; nsfw?: boolean; draftChanged?: boolean })[];
   /** 符合條件的卡一共幾張（翻頁用）。全部／未上架由上游算；已上架由本站的庫算。 */
   total: number | null;
   /** 已登記幾張。**全域**的數字，不是這一頁數出來的——見 countByAuthor。 */
@@ -55,6 +57,16 @@ export interface MinePage {
   pageSize: number;
   hasNext: boolean;
 }
+
+type ReviewState = { status: CardStatus; updateStatus?: string; approvedHash?: string };
+/**
+ * 這張卡比不比得出「改了沒送審」：已發布、記得過審那一版的內容版本（cards.approved_content_hash），
+ * 而且沒有新版在審（已經送了，不是忘了送）、新版也沒剛被退回（卡上已經有退回說明）。
+ */
+const comparable = (s: ReviewState | undefined): s is ReviewState & { approvedHash: string } =>
+  !!s && s.status === "approved" && !!s.approvedHash && s.updateStatus !== "pending" && s.updateStatus !== "rejected";
+/** 已發布、有修改還沒送審：草稿現在的版本跟過審那一版不同。任一邊不知道就不標，不猜；只回旗標，版本本身不往前端送。 */
+const draftChanged = (s: ReviewState | undefined, current: string | undefined) => comparable(s) && !!current && current !== s.approvedHash;
 
 /** 要看哪一組：全部、已登記、還沒登記。 */
 export type MineFilter = "all" | "listed" | "unlisted";
@@ -108,6 +120,11 @@ export async function loadMine(
       total = registeredTotal;
     }
     const notes = await statusAmong(env.DB, rows.map((r) => r.source_role_id));
+    // 這一組不經上游清單、拿不到草稿現在的版本：只替已發布、記得過審版本的卡逐張問。
+    // 一張一個對外請求，Worker 一次執行最多 50 個（見 syncBatch 的 SUBREQUEST_BUDGET）；API 的 pageSize 可到 100，
+    // 所以最多問 DRAFT_CHECK_LIMIT 張（網頁一頁就是這麼多），超過的那幾張這次不標。
+    const checked = rows.map((r) => r.source_role_id).filter((id) => comparable(notes.get(id))).slice(0, DRAFT_CHECK_LIMIT);
+    const current = checked.length ? await upstream.fetchContentHashes(env, bearer, checked, provider) : new Map<string, string>();
     return {
       source: "bypass",
       body: {
@@ -128,6 +145,7 @@ export async function loadMine(
             updateStatus: notes.get(row.source_role_id)?.updateStatus,
             note: notes.get(row.source_role_id)?.note ?? "",
             nsfw: card.nsfw,
+            ...(draftChanged(notes.get(row.source_role_id), current.get(row.source_role_id)) ? { draftChanged: true } : {}),
           };
         }),
         total,
@@ -163,9 +181,13 @@ export async function loadMine(
   const ids = roles.items.map((r) => r.roleId);
   const [registered, statuses] = await Promise.all([registeredAmong(env.DB, ids, provider), statusAmong(env.DB, ids)]);
   const items = roles.items
-    .map((r) => {
+    .map(({ contentHash, ...r }) => {
       const s = statuses.get(r.roleId);
-      return { ...r, registered: registered.has(r.roleId), ...(s ? { status: s.status, updateStatus: s.updateStatus, note: s.note, nsfw: s.nsfw } : {}) };
+      return {
+        ...r, registered: registered.has(r.roleId),
+        ...(s ? { status: s.status, updateStatus: s.updateStatus, note: s.note, nsfw: s.nsfw } : {}),
+        ...(draftChanged(s, contentHash) ? { draftChanged: true } : {}),
+      };
     })
     // 「還沒登記」是把這一頁裡已登記的挑掉。已登記的那組另有完整來源（見上面），
     // 這一組沒有——要全域篩就得把作者所有的頁都抓回來，每次看一頁都付那個代價不值得。

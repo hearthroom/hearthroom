@@ -191,6 +191,8 @@ export interface MyRoleFixture {
   name?: string;
   visibility?: string;
   talkNum?: number;
+  /** 草稿現在的內容版本（供應商的 contentHash）；沒給就當供應商還沒回這個欄位 */
+  contentHash?: string;
 }
 
 /** 記錄每次上游清單呼叫，測試才驗得出快取到底有沒有省掉請求。 */
@@ -214,10 +216,23 @@ export function myRolesOnUpstream(byToken: Record<string, MyRoleFixture[]>): voi
         backgroundUrl: null,
         visibility: r.visibility ?? "private",
         talkNum: r.talkNum ?? 0,
+        ...(r.contentHash ? { contentHash: r.contentHash } : {}),
       })),
       total: all.length,
       hasNext: start + pageSize < all.length,
     };
+  };
+}
+
+/** 記錄每次逐張問草稿內容版本的呼叫（「已提交」那組才會問，只問已發布的卡）。 */
+export const contentHashCalls: { token: string; roleIds: string[] }[] = [];
+
+/** 供應商上每張卡草稿現在的內容版本；沒列出的當成讀不到（不回）。 */
+export function contentHashesOnUpstream(byRoleId: Record<string, string>): void {
+  contentHashCalls.length = 0;
+  upstream.fetchContentHashes = async (_env, token, roleIds) => {
+    contentHashCalls.push({ token, roleIds: [...roleIds] });
+    return new Map(roleIds.filter((id) => byRoleId[id]).map((id) => [id, byRoleId[id]]));
   };
 }
 
