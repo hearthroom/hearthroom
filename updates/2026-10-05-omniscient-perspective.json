@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/library",
+  "title": {
+    "zh-Hant": "回覆偏好的敘事視角多了「第三人稱全知」，看得到你不在場時其他角色在做什麼。",
+    "zh-Hans": "回复偏好的叙事视角新增「第三人称全知」，能看到你不在场时其他角色在做什么。",
+    "en": "Response preferences add an omniscient third person that shows what others do while your character is away.",
+    "ja": "語りの視点に「三人称・全知」が加わり、あなたの役がいない間の出来事も読めます。",
+    "ko": "서술 시점에 「전지적 3인칭」이 추가되어, 내 역할이 없는 동안의 일도 볼 수 있습니다."
+  },
+  "body": {
+    "zh-Hant": "切過去的事你的角色不會知道，除非故事裡有人告訴他。",
+    "zh-Hans": "切过去的事你的角色不会知道，除非故事里有人告诉他。",
+    "en": "Your character still only knows what they witnessed, unless someone in the story tells them.",
+    "ja": "切り替わった先の出来事は、物語の中で誰かが伝えない限り、あなたの役は知りません。",
+    "ko": "넘어간 쪽의 일은 이야기 속에서 누군가 알려 주지 않는 한 내 역할은 모릅니다."
+  }
+}

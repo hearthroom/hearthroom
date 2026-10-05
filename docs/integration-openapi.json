@@ -8976,7 +8976,8 @@
                               "card",
                               "first_character",
                               "second_user",
-                              "third_limited"
+                              "third_limited",
+                              "third_omniscient"
                             ]
                           },
                           {
@@ -18784,7 +18785,8 @@
               "card",
               "first_character",
               "second_user",
-              "third_limited"
+              "third_limited",
+              "third_omniscient"
             ]
           },
           "length": {
