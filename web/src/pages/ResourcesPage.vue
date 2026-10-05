@@ -434,14 +434,50 @@ async function remove() {
     return;
   await mutate((c) => c.remove(ids));
 }
+type MovePreview = { moved?: number; usedBy?: { name?: string; published?: boolean }[] };
+// 這個資源庫裡，改名和搬動會連網址一起改。先試算一次，有檔案要搬就講清楚舊網址會失效、
+// 哪些卡片還寫著舊網址，作者同意後才真的搬。
+async function confirmMove(
+  run: (extra: { dryRun?: boolean; confirm?: boolean }) => Promise<MovePreview>,
+  title: string,
+  confirmText: string,
+): Promise<boolean> {
+  if (!cap.value?.moves) {
+    await run({});
+    return true;
+  }
+  const preview = await run({ dryRun: true });
+  const cards = preview.usedBy ?? [];
+  if (preview.moved || cards.length) {
+    const ok = await confirmDialog({
+      title,
+      message: cards.length
+        ? t("resource.moveBreaksCards", { n: preview.moved ?? 0, cards: cards.length })
+        : t("resource.moveChangesUrls", { n: preview.moved ?? 0 }),
+      detail: cards.length
+        ? cards.map((c) => (c.published ? t("resource.movePublished", { name: c.name || t("resource.unnamed") }) : c.name || t("resource.unnamed"))).join("\n")
+        : undefined,
+      confirmText,
+      danger: cards.length > 0,
+    });
+    if (!ok) return false;
+  }
+  await run({ confirm: true });
+  return true;
+}
 async function move() {
   const ids = [...selected.value],
     target = moveTarget.value,
     source = scope.value;
   if (!target || !ids.length) return;
+  const to = folders.value.find((f) => f.folderId === target)?.name ?? "";
   await mutate(async (c) => {
-    await c.folder("addItems", { folderId: target, imageIds: ids });
-    if (source !== "all" && source !== "root" && !source.startsWith(DIR) && source !== target)
+    const moved = await confirmMove(
+      (extra) => c.folder("addItems", { folderId: target, imageIds: ids, ...extra }),
+      t("resource.moveTitle", { n: ids.length, name: to }),
+      t("resource.moveConfirm"),
+    );
+    if (moved && !cap.value?.moves && source !== "all" && source !== "root" && !source.startsWith(DIR) && source !== target)
       await c.folder("removeItems", { folderId: source, imageIds: ids });
   });
   moveTarget.value = "";
@@ -450,14 +486,24 @@ const editing = ref<"create" | "rename" | null>(null),
   folderName = ref("");
 async function saveFolder() {
   if (!folderName.value.trim()) return;
-  const action = editing.value;
+  const action = editing.value,
+    name = folderName.value.trim(),
+    from = currentPath.value,
+    virtual = isVirtual.value;
   await mutate(async (c) => {
-    const d = await c.folder(action === "rename" ? "rename" : "create", {
-      name: folderName.value.trim(),
-      ...(action === "rename" ? { folderId: scope.value } : {}),
-    });
+    if (action === "rename") {
+      const target = virtual ? { path: from } : { folderId: scope.value };
+      const renamed = await confirmMove(
+        (extra) => c.folder("rename", { ...target, name, ...extra }),
+        t("resource.renameTitle", { from, to: name }),
+        t("res.folder.rename"),
+      );
+      if (renamed && virtual) scope.value = DIR + name;
+      return;
+    }
+    const d = await c.folder("create", { name });
     const created = d.folderId ?? d.id;
-    if (action === "create" && created) {
+    if (created) {
       scope.value = String(created);
       page.value = 1;
     }
@@ -470,7 +516,7 @@ async function deleteFolder() {
   if (!f) return;
   if (
     !(await confirmDialog({
-      message: t("resource.deleteFolder", { name: f.name }),
+      message: t(cap.value?.moves ? "resource.deleteEmptyFolder" : "resource.deleteFolder", { name: f.name }),
       confirmText: t("dialog.delete"),
       danger: true,
     }))
@@ -920,17 +966,17 @@ async function previewMove(direction: number) {
               >
               <span v-if="search" class="subtle crumb-note">{{ $t("resource.searchScope") }}</span>
             </nav>
-            <div v-if="activeFolder" class="resource-path-actions">
+            <div v-if="activeFolder || (isVirtual && cap?.moves)" class="resource-path-actions">
               <button
                 class="btn btn--sm btn--ghost"
                 :disabled="busy"
                 @click="
                   editing = 'rename';
-                  folderName = activeFolder!.name;
+                  folderName = currentPath;
                 "
               >
                 {{ $t("res.folder.rename") }}</button
-              ><button class="btn btn--sm btn--ghost" :disabled="busy" @click="deleteFolder">
+              ><button v-if="activeFolder" class="btn btn--sm btn--ghost" :disabled="busy" @click="deleteFolder">
                 {{ $t("dialog.delete") }}
               </button>
             </div>
@@ -938,7 +984,7 @@ async function previewMove(direction: number) {
               <input
                 v-model="folderName"
                 class="input"
-                maxlength="80"
+                maxlength="255"
                 :aria-label="$t('res.folder.placeholder')"
                 :placeholder="$t('res.folder.placeholder')"
               /><button class="btn" :disabled="busy || !folderName.trim()">
