@@ -26,6 +26,9 @@ const ERROR_KEY: Record<number, string> = { 401: "auth.expired", 403: "state.for
  * （2026-09-07 一位作者存卡失敗，畫面只有「請求失敗」，他以為是名字太長）。
  */
 const CODE_KEY: Record<string, string> = {
+  media_folder_not_empty: "resource.folderNotEmpty",
+  media_folder_exists: "resource.folderExists",
+  media_path_taken: "resource.pathTaken",
   invalid_arguments: "error.invalidArguments",
   invalid_argument: "error.invalidArguments",
   role_in_review: "error.roleInReview",

@@ -6,6 +6,7 @@ import { i18n, loadLocale } from "../src/lib/i18n";
 import { useSession } from "../src/lib/session";
 import { setProvider } from "../src/lib/provider";
 import ResourcesPage from "../src/pages/ResourcesPage.vue";
+import { confirmState, settleConfirm } from "../src/lib/confirm";
 
 // 我的資源頁：資料夾以路徑名歸類成樹，進夾看相對檔名，整批複製網址。
 const mocks = vi.hoisted(() => ({
@@ -27,7 +28,7 @@ vi.mock("../src/lib/resource-client", () => ({
   }),
 }));
 
-const capabilities = {
+const capabilities: Record<string, unknown> = {
   kinds: ["image", "font"],
   formats: ["image/png", "image/webp"],
   maxFileBytes: 104857600,
@@ -159,4 +160,37 @@ it("searches across every file with full paths, and copies the selected URLs in 
   expect(writeText).toHaveBeenCalledTimes(1);
   expect(writeText.mock.calls[0]![0].split("\n")).toHaveLength(2);
   expect(root.textContent).toContain("Copied 2 URLs");
+});
+
+// 這個資源庫裡改名會連網址一起改：先試算，講清楚哪些卡片會壞掉，作者同意才真的搬。
+it("previews a rename that moves URLs and names the cards that still use the old ones", async () => {
+  capabilities.moves = true;
+  try {
+    mocks.folder.mockImplementation(async (action: string, body: Record<string, unknown>) =>
+      action === "rename" && body.dryRun ? { moved: 3, usedBy: [{ name: "Faces", published: true }] } : { moved: 3 },
+    );
+    await mount();
+    openRow("card");
+    await settle();
+    // card exists only as a path, yet it can still be renamed
+    click(".resource-path-actions button", "Rename");
+    await settle();
+    const input = root.querySelector(".folder-form input") as HTMLInputElement;
+    expect(input.value).toBe("card");
+    input.value = "story";
+    input.dispatchEvent(new Event("input"));
+    (root.querySelector(".folder-form") as HTMLFormElement).dispatchEvent(new Event("submit"));
+    await settle();
+    expect(mocks.folder).toHaveBeenCalledTimes(1);
+    expect(mocks.folder.mock.calls[0]).toEqual(["rename", { path: "card", name: "story", dryRun: true }]);
+    expect(confirmState.current?.title).toContain("story");
+    expect(confirmState.current?.message).toContain("3 files");
+    expect(confirmState.current?.detail).toContain("Faces");
+    expect(confirmState.current?.danger).toBe(true);
+    settleConfirm(true);
+    await settle();
+    expect(mocks.folder.mock.calls[1]).toEqual(["rename", { path: "card", name: "story", confirm: true }]);
+  } finally {
+    delete capabilities.moves;
+  }
 });
