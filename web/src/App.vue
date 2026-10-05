@@ -24,6 +24,7 @@ import { isPlayHost } from "@/lib/site";
 import { loginPath } from "@/lib/login-return";
 import NewMark from "@/components/NewMark.vue";
 import { useUpdates } from "@/lib/updates";
+import { footerGroups, footerLegal, type FooterContext } from "@/lib/footer-nav";
 
 const { lp, locale } = useLocalePath();
 // iOS 與我們自己的 App 裡不需要「下載 App」入口（lib/download.ts）。
@@ -34,6 +35,12 @@ const route = useRoute();
 const router = useRouter();
 
 const discordInvite = ref<string|null>(null);
+const footerCtx = computed<FooterContext>(() => ({
+  repoUrl: SITE.repoUrl, license: SITE.license, discordInvite: discordInvite.value, showDownloadEntry,
+  canInstallSite: installPrompt.available && installPrompt.target === "site",
+}));
+const footerNav = computed(() => footerGroups(footerCtx.value));
+const legalNav = computed(() => footerLegal(footerCtx.value));
 onMounted(()=>{void communityRequest<{invite:string|null}>("/community/config").then(r=>{discordInvite.value=r.invite;}).catch(()=>{});});
 const notifications = useNotifications();
 // 更新說明的摘要：首頁提示列與「新」標記用。閒置時才讀，不跟第一屏搶；換語言重讀。
@@ -137,24 +144,35 @@ onMounted(() => document.addEventListener("keydown", onSlash));
   <!-- 卡片 App 網域的頁全是 bare，但「加到主畫面」的提示卡就在那裡 -->
   <InstallToast v-if="!route.meta.bare || isPlayHost()" />
 
-  <!-- 社群維護的開源站：頁尾照開源專案的慣例，把人導去倉庫——回報問題、看原始碼、看授權都在那裡 -->
+  <!--
+    社群維護的開源站：頁尾照開源專案的慣例，把人導去倉庫——回報問題、看原始碼、看授權都在那裡。
+    連結分組放在 lib/footer-nav.ts：新入口先決定屬於哪一組，不再往同一排後面接。
+  -->
   <footer v-if="SITE.repoUrl && !route.meta.bare" class="footer">
     <div class="footer__inner">
-      <p class="footer__tagline">{{ $t("footer.tagline") }}</p>
-      <nav class="footer__links" :aria-label="$t('footer.links')">
-        <a v-if="discordInvite" class="footer__discord" :href="discordInvite" target="_blank" rel="noopener noreferrer"><CommunityIcon name="discord" />{{$t("community.join")}}</a>
-        <a :href="SITE.repoUrl" target="_blank" rel="noopener" class="footer__gh" :title="$t('footer.github')">
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" /></svg>
-          GitHub
-        </a>
-        <a :href="`${SITE.repoUrl}/issues`" target="_blank" rel="noopener">{{ $t("footer.issues") }}</a>
-        <a :href="`${SITE.repoUrl}/blob/main/LICENSE`" target="_blank" rel="noopener">{{ $t("footer.license", { name: SITE.license }) }}</a>
-        <RouterLink v-if="showDownloadEntry" class="footer__download" :to="lp('/download')">{{ $t("download.footer") }}</RouterLink>
-        <RouterLink :to="lp('/guide')">{{ $t("footer.guide") }}</RouterLink>
-        <RouterLink :to="`${lp('/updates')}?from=footer`">{{ $t("nav.updates") }}<NewMark k="menu.updates" /></RouterLink>
-        <RouterLink :to="lp('/developers')">{{ $t("footer.developers") }}</RouterLink>
-        <a v-if="installPrompt.available && installPrompt.target === 'site'" href="#" @click.prevent="openInstall()">{{ $t("pwa.install.link") }}</a>
+      <div class="footer__about">
+        <p class="footer__name">{{ SITE.name }}</p>
+        <p class="footer__tagline">{{ $t("footer.tagline") }}</p>
+      </div>
+      <nav class="footer__groups" :aria-label="$t('footer.links')">
+        <section v-for="g in footerNav" :key="g.id" class="footer__group" :aria-labelledby="`footer-${g.id}`">
+          <p :id="`footer-${g.id}`" class="footer__title">{{ $t(g.title) }}</p>
+          <ul>
+            <li v-for="l in g.links" :key="l.id">
+              <RouterLink v-if="'to' in l" :to="{ path: lp(l.to), query: l.query }">{{ $t(l.label, l.labelArgs ?? {}) }}<NewMark v-if="l.newMark" :k="l.newMark" /></RouterLink>
+              <a v-else-if="'action' in l" href="#" @click.prevent="openInstall()">{{ $t(l.label) }}</a>
+              <a v-else :href="l.href" target="_blank" rel="noopener noreferrer" :title="l.id === 'github' ? $t('footer.github') : undefined">
+                <CommunityIcon v-if="l.icon === 'discord'" name="discord" />
+                <svg v-else-if="l.icon === 'github'" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" /></svg>
+                {{ $t(l.label, l.labelArgs ?? {}) }}
+              </a>
+            </li>
+          </ul>
+        </section>
       </nav>
+      <div class="footer__legal">
+        <a v-for="l in legalNav" :key="l.id" :href="'href' in l ? l.href : undefined" target="_blank" rel="noopener noreferrer">{{ $t(l.label, l.labelArgs ?? {}) }}</a>
+      </div>
     </div>
   </footer>
 </template>
@@ -236,21 +254,30 @@ onMounted(() => document.addEventListener("keydown", onSlash));
 .gh:hover { background: var(--surface-2); color: var(--text); }
 .gh svg { width: 18px; height: 18px; fill: currentColor; }
 
-.footer__discord { display:inline-flex;align-items:center;justify-content:center;gap:var(--s-2);min-height:44px; }
-.footer__discord svg { width:1rem;height:1rem; }
+/* 頁尾：左邊是站名與一句話，右邊是分組連結，最底下一條放授權。手機上分組排成兩欄，不摺疊——每組就幾個連結，收起來反而多點一下。 */
 .footer { padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); border-top: 1px solid var(--border); margin-top: var(--s-7); }
 .footer__inner {
-  max-width: var(--page); margin: 0 auto; padding: var(--s-5);
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3) var(--s-5);
-  font-size: 12.5px; color: var(--text-3);
+  max-width: var(--page); margin: 0 auto; padding: var(--s-6) var(--s-5) var(--s-4);
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: var(--s-5) var(--s-6);
+  font-size: 13px; color: var(--text-3);
 }
-.footer__tagline { margin: 0; }
-.footer__links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-4); }
-.footer__links a { color: var(--text-2); }
-.footer__download { display: inline-flex; align-items: center; min-height: 44px; }
-.footer__links a:hover { color: var(--text); }
-.footer__gh { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
-.footer__gh svg { width: 16px; height: 16px; fill: currentColor; }
+.footer__about { min-width: 0; }
+.footer__name { margin: 0 0 var(--s-2); font-weight: 600; color: var(--text); font-size: 14px; }
+.footer__tagline { margin: 0; line-height: 1.6; max-width: 22rem; }
+.footer__groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--s-4) var(--s-5); }
+.footer__title { margin: 0 0 var(--s-1); font-size: 12px; font-weight: 600; color: var(--text-3); }
+.footer__group ul { list-style: none; margin: 0; padding: 0; }
+.footer__group a { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; color: var(--text-2); }
+.footer__group a:hover, .footer__legal a:hover { color: var(--text); }
+.footer__group svg { width: 15px; height: 15px; flex: none; }
+.footer__group svg[viewBox="0 0 16 16"] { fill: currentColor; }
+.footer__legal { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-4); padding-top: var(--s-4); border-top: 1px solid var(--line); font-size: 12px; }
+.footer__legal a { color: var(--text-3); display: inline-flex; align-items: center; min-height: 32px; }
+@media (max-width: 720px) {
+  .footer__inner { grid-template-columns: minmax(0, 1fr); padding: var(--s-5) var(--s-4) var(--s-3); }
+  .footer__groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .footer__group a { min-height: 44px; }
+}
 
 /* 站務入口較長；窄桌面將導覽放第二列，避免擠壓搜尋與帳號控制項。 */
 .header__inner--reviewer .nav__item { white-space: nowrap; }

@@ -7,7 +7,7 @@ export const androidDownloadUrl=(hostname:string=location.hostname):string=>
 /*
   「裝 Android App」橫幅只對 Android 瀏覽器有意義：iOS、macOS、Windows、Linux 裝不了 APK；
   已經在 App 裡（UA 帶 HearthroomApp）或已安裝的 PWA 視窗裡，再叫人裝一次也沒意義（owner 2026-09-25）。
-  Android 上不想裝的人按 ✕ 關掉，這個瀏覽器之後就不再出現；想裝的人頁尾還有「下載 App」。
+  Android 上不想裝的人按 ✕ 關掉，這個瀏覽器之後就不再出現；想裝的人頁尾還有「下載 App」（lib/footer-nav.ts）。
 */
 export const ANDROID_BANNER_DISMISS_KEY='hearthroom.androidBanner.dismissedAt';
 
@@ -26,9 +26,10 @@ export function dismissAndroidBanner():void{
 }
 
 /*
-  頁尾的「下載 App」入口：電腦版（Windows、Mac、Linux）的人透過這裡知道有 Android App——
+  頁尾 App 那一組的「下載 App」入口：電腦版（Windows、Mac、Linux）的人透過這裡知道有 Android App——
   不在首頁頂端推，電腦不是從那個位置轉化的（owner 2026-09-25）。iOS 裝不了 APK；已經在我們的
-  App 裡也不需要。iPadOS 用桌面版 UA，靠觸控點數認。
+  App 裡也不需要。iPadOS 用桌面版 UA，靠觸控點數認。顯示它的時候頁尾就不另放「安裝 App」：
+  下載頁本身也講了加到主畫面，能一鍵安裝時按鈕在那頁上。
 */
 export function shouldShowDownloadEntry(input:{ua:string;touchPoints:number}):boolean{
   const {ua,touchPoints}=input;
