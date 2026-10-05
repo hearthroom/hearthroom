@@ -55,7 +55,8 @@ it('reminders are one per live generation and disappear from delivery after comp
  // The reminder names the claimed card and links to it, in the reviewer's language.
  expect(await delivered.json()).toMatchObject({path:'/review/s1',text:'你認領的「雨夜書店」即將到期，請繼續審核或放回待審清單 / Your claim on “Rainy Bookshop” expires soon. Continue reviewing or release it to the queue.'});
  await env.DB.prepare("UPDATE cards SET nsfw=1").run();
- expect((await (await bridge('notification',{id:notes.results[0].id})).json() as any).text).toBe('你認領的作品即將到期，請繼續審核或放回待審清單 / Your review claim expires soon. Continue reviewing or release it to the queue.');
+ // Reviewers are adults and already see the title in the review page, so an adult card is named too.
+ expect((await (await bridge('notification',{id:notes.results[0].id})).json() as any).text).toBe('你認領的「雨夜書店」即將到期，請繼續審核或放回待審清單 / Your claim on “Rainy Bookshop” expires soon. Continue reviewing or release it to the queue.');
  await env.DB.prepare("UPDATE discord_links SET version='link-v2' WHERE member_id=?").bind(m).run();
  expect((await bridge('notification',{id:notes.results[0].id})).status).toBe(404);
 });
