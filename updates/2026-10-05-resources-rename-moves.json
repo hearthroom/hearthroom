@@ -2,7 +2,6 @@
   "tier": "feature",
   "audience": "authors",
   "try": "/resources",
-  "draft": true,
   "title": {
     "zh-Hant": "資料夾改名後，檔案網址會跟著換成新名稱，改名前會先列出還在用舊網址的卡片。",
     "zh-Hans": "文件夹重命名后，文件链接会跟着换成新名称，重命名前会先列出还在用旧链接的卡片。",
