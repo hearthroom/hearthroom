@@ -1,0 +1,17 @@
+{
+  "tier": "fix",
+  "title": {
+    "zh-Hant": "卡片有動畫時，對話以前會一直被拉回同一處，現在能正常捲動。",
+    "zh-Hans": "卡片有动画时，对话以前会一直被拉回同一处，现在能正常滚动。",
+    "en": "When a card has animations, the chat used to keep snapping back to one spot, and now it scrolls normally.",
+    "ja": "動きのあるカードで会話が同じ位置に戻され続けていましたが、今は普通にスクロールできます。",
+    "ko": "움직이는 카드에서 대화가 같은 위치로 계속 되돌아가던 문제가 고쳐졌습니다."
+  },
+  "body": {
+    "zh-Hant": "回覆裡很長的程式碼也改成在框內左右滑動。",
+    "zh-Hans": "回复里很长的代码也改成在框内左右滑动。",
+    "en": "Long lines of code in replies now scroll sideways inside their box.",
+    "ja": "返信内の長いコードは枠の中で横にスクロールできます。",
+    "ko": "답변 속 긴 코드는 상자 안에서 옆으로 넘겨 볼 수 있습니다."
+  }
+}
