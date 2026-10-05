@@ -1763,7 +1763,7 @@
   "dad71d142a03d": "卡號。",
   "dcd82f0ee1c93": "以要求的語言顯示的卡名。",
   "d2e16f8f371a1": "相關的卡片。",
-  "dc01ee913b723": "依種類而定的細節：審核結果（status）、按讚數（count）、留言 ID（comment）。",
+  "dc01ee913b723": "依種類而定的細節：審核結果（status）、首次審核或更新（kind：first 或 re）、退件時審核員的說明（note）、新作品或更新（event：new 或 update）、按讚數（count）、留言 ID（comment）、發給的登記次數（granted）。",
   "da70ae2dbacc0": "review_result、comment_reply、comment_like、followed_work、registration_pack、review_reminder 或 review_reminder_expired。",
   "d5ac091a42bb8": "統計未讀通知",
   "dd915d068e119": "要記住的介面語言，Discord 提醒會用它。",

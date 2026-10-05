@@ -1763,7 +1763,7 @@
   "dad71d142a03d": "카드 번호.",
   "dcd82f0ee1c93": "요청한 언어의 카드 이름.",
   "d2e16f8f371a1": "관련 카드.",
-  "dc01ee913b723": "종류별 세부 정보: 검토 결과(status), 좋아요 수(count), 댓글 ID(comment).",
+  "dc01ee913b723": "종류별 세부 정보: 검토 결과(status), 첫 심사 또는 업데이트(kind: first 또는 re), 반려 시 검토자 의견(note), 새 작품 또는 업데이트(event: new 또는 update), 좋아요 수(count), 댓글 ID(comment), 받은 등록 횟수(granted).",
   "da70ae2dbacc0": "review_result, comment_reply, comment_like, followed_work, registration_pack, review_reminder, review_reminder_expired 중 하나.",
   "d5ac091a42bb8": "읽지 않은 알림 수 확인",
   "dd915d068e119": "Discord 알림에 사용하도록 기억할 인터페이스 언어.",
