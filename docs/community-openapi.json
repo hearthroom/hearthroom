@@ -3101,7 +3101,7 @@
               "object",
               "null"
             ],
-            "description": "Kind-specific detail: review verdict (status), like count (count), comment id (comment)."
+            "description": "Kind-specific detail: review verdict (status), first review or update (kind: first or re), reviewer's note on a rejection (note), new work or update (event: new or update), like count (count), comment id (comment), listings granted (granted)."
           }
         }
       },

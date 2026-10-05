@@ -78,6 +78,14 @@ it('points followers at the new card itself and records the author', async () =>
  const list = await json(await api('?lang=zh-Hant', 'fan'));
  expect(list.items[0]).toMatchObject({ kind: 'followed_work', card: { id: Number(second), name: '第二張' } });
  expect(list.items[0].actor.handle).toBe((await env.DB.prepare('SELECT handle FROM members WHERE id=?').bind(author).first<{ handle: string }>())!.handle);
+ expect(list.items[0].extra).toEqual({ event: 'new' });
+ // A new reviewed version of a listed card is an update, including a synced card coming back
+ // from re-review; only a card that never passed review before is new.
+ await env.DB.prepare("UPDATE cards SET approved_version_id='v2' WHERE id=?").bind(Number(second)).run();
+ await env.DB.prepare("UPDATE cards SET status='needs_review' WHERE id=?").bind(Number(second)).run();
+ await env.DB.prepare("UPDATE cards SET status='approved',approved_version_id='v3' WHERE id=?").bind(Number(second)).run();
+ const events = (await rows(fan, 'followed_work')).results.map(r => JSON.parse(String(r.extra)).event);
+ expect(events).toEqual(['new', 'update', 'update']);
 });
 it('keeps one like notice per comment, counts real likers, and only re-alerts at milestones', async () => {
  identities({ author: AUTHOR, fan: FAN, other: OTHER, third: 20003, fourth: 20004 });
@@ -150,22 +158,30 @@ it('carries the card and the verdict on review results', async () => {
   const submitted = await SELF.fetch('https://c.test/v1/cards', { method: 'POST', headers: { 'Content-Type': 'application/json', ...bearer('author') }, body: JSON.stringify({ operationId: crypto.randomUUID(), roleId: 'reviewed', nsfw: false }) });
   expect(submitted.status).toBe(201);
   const row = await env.DB.prepare("SELECT s.id,s.card_id FROM review_submissions s JOIN cards c ON c.id=s.card_id WHERE c.source_role_id='reviewed'").first<{ id: string; card_id: number }>();
-  await env.DB.prepare("UPDATE review_submissions SET status='rejected',decided_at=? WHERE id=?").bind(Date.now(), row!.id).run();
+  // Same statement shape as the reviewer's reject: verdict and note land together.
+  await env.DB.prepare("UPDATE review_submissions SET status='rejected',decided_at=?,note=? WHERE id=?").bind(Date.now(), '  開場太短，\n請補一段。 ', row!.id).run();
   // The first card's approval left its own notice; this one belongs to the rejected card.
   const stored = (await rows(author, 'review_result')).results.filter(r => r.card_id === row!.card_id);
   expect(stored).toHaveLength(1);
   expect(stored[0]).toMatchObject({ path: '/mine', card_id: row!.card_id });
   const list = await json(await api('?lang=en', 'author'));
-  expect(list.items.find((n: any) => n.card?.id === row!.card_id)).toMatchObject({ kind: 'review_result', path: '/mine', card: { id: row!.card_id, name: 'Reviewed' }, extra: { status: 'rejected' }, actor: null });
+  expect(list.items.find((n: any) => n.card?.id === row!.card_id)).toMatchObject({ kind: 'review_result', path: '/mine', card: { id: row!.card_id, name: 'Reviewed' }, extra: { status: 'rejected', kind: 'first', note: '開場太短，\n請補一段。' }, actor: null });
   expect(list.items.find((n: any) => n.card?.id === Number(cardId))).toMatchObject({ kind: 'review_result', extra: { status: 'approved' } });
   // The Discord DM says which card and which verdict, like the bell does.
   await setPreferences(env as Env, author, { discordDm: true });
   await linkDiscord(author);
   await env.DB.prepare("UPDATE members SET locale='en' WHERE id=?").bind(author).run();
   const rejected = await json(await bridge('notification', { id: stored[0].id }));
-  expect(rejected).toMatchObject({ kind: 'review_result', path: '/mine', locale: 'en', text: '“Reviewed” did not pass review this time' });
+  expect(rejected).toMatchObject({ kind: 'review_result', path: '/mine', locale: 'en', text: '“Reviewed” did not pass review this time. The reviewer wrote: 開場太短， 請補一段。' });
   const approved = (await rows(author, 'review_result')).results.find(r => r.card_id === Number(cardId))!;
   await env.DB.prepare('UPDATE members SET locale=NULL WHERE id=?').bind(author).run();
   expect((await json(await bridge('notification', { id: approved.id }))).text).toBe('「雨夜書店」審核通過了 / “Rainy Bookshop” passed review');
+  // A re-review of a card that is already listed is an update, in every channel.
+  const re = crypto.randomUUID();
+  await env.DB.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,content_hash,submitted_at) SELECT ?,id,provider,source_role_id,'re','pending','h2',? FROM cards WHERE id=?").bind(re, Date.now(), Number(cardId)).run();
+  await env.DB.prepare("UPDATE review_submissions SET status='approved',decided_at=? WHERE id=?").bind(Date.now(), re).run();
+  const update = (await rows(author, 'review_result')).results.find(r => r.event_key === 'review:' + re)!;
+  expect(JSON.parse(String(update.extra))).toEqual({ status: 'approved', kind: 're', note: null });
+  expect((await json(await bridge('notification', { id: update.id }))).text).toBe('「雨夜書店」的更新審核通過了 / Your update to “Rainy Bookshop” passed review');
  } finally { reviewOff(); }
 });
