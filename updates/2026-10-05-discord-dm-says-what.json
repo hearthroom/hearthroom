@@ -1,0 +1,10 @@
+{
+  "tier": "fix",
+  "title": {
+    "zh-Hant": "Discord 私訊通知現在會寫出是哪張卡、有沒有通過審核、誰回覆了你。",
+    "zh-Hans": "Discord 私信通知现在会写明是哪张卡、有没有通过审核、谁回复了你。",
+    "en": "Discord messages now name the card, say whether it passed review, and who replied to you.",
+    "ja": "Discord のお知らせに、どの作品か、審査の結果、誰が返信したかが書かれるようになりました。",
+    "ko": "Discord 알림에 어떤 작품인지, 심사를 통과했는지, 누가 답글을 달았는지가 적히게 되었습니다."
+  }
+}
