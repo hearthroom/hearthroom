@@ -637,7 +637,7 @@ app.post("/internal/community/:operation", async (c) => {
   }
   if (op === "notification") {
     const n = await c.env.DB.prepare(
-      `SELECT n.kind,n.path,n.extra,a.display_name AS actor_name,a.handle AS actor_handle,CASE WHEN c.nsfw=1 AND n.kind<>'review_result' THEN NULL ELSE c.names END AS card_names,l.discord_id,m.locale FROM community_notifications n JOIN members m ON m.id=n.member_id LEFT JOIN members a ON a.id=n.actor_id LEFT JOIN cards c ON c.id=n.card_id JOIN discord_links l ON l.member_id=n.member_id AND l.state='active' JOIN community_preferences p ON p.member_id=n.member_id AND p.discord_dm=1 AND p.notifications=1 WHERE n.id=? AND n.delivered=0 AND (n.author_id IS NULL OR EXISTS(SELECT 1 FROM member_follows f WHERE f.member_id=n.member_id AND f.author_id=n.author_id)) AND ${reviewNotificationEligible} AND (n.review_submission IS NULL OR n.review_link_version=l.version)`,
+      `SELECT n.kind,n.path,n.extra,a.display_name AS actor_name,a.handle AS actor_handle,CASE WHEN c.nsfw=1 AND n.kind NOT IN ('review_result','review_reminder') THEN NULL ELSE c.names END AS card_names,l.discord_id,m.locale FROM community_notifications n JOIN members m ON m.id=n.member_id LEFT JOIN members a ON a.id=n.actor_id LEFT JOIN cards c ON c.id=n.card_id JOIN discord_links l ON l.member_id=n.member_id AND l.state='active' JOIN community_preferences p ON p.member_id=n.member_id AND p.discord_dm=1 AND p.notifications=1 WHERE n.id=? AND n.delivered=0 AND (n.author_id IS NULL OR EXISTS(SELECT 1 FROM member_follows f WHERE f.member_id=n.member_id AND f.author_id=n.author_id)) AND ${reviewNotificationEligible} AND (n.review_submission IS NULL OR n.review_link_version=l.version)`,
     )
       .bind(String(b.id),Date.now())
       .first<Parameters<typeof pushLine>[0] & { path: string; discord_id: string; locale: string | null }>();
@@ -655,8 +655,9 @@ app.post("/internal/community/:operation", async (c) => {
         .bind(Date.now() + 300000, String(b.id))
         .run();
     // The DM carries the same sentence as the browser push. Without a recorded language it
-    // stays bilingual, as the bot's DMs always were. Adult card titles stay off Discord, except
-    // in the author's own review result.
+    // stays bilingual, as the bot's DMs always were. Adult card titles reach Discord only for
+    // the card's author (review result) and its claiming reviewer, who are adults by policy;
+    // followers and commenters are not guaranteed to be.
     const text = n.locale ? pushLine(n, pushLocale(n.locale)) : pushLine(n, "zh-Hant") + " / " + pushLine(n, "en");
     return c.json({ kind: n.kind, path: n.path, discord_id: n.discord_id, locale: n.locale, text });
   }

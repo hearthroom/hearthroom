@@ -144,6 +144,10 @@ it('summarises unread counts, remembers the interface language for Discord, and 
  const id = (await rows(author, 'comment_reply')).results[0].id;
  const delivered = await json(await bridge('notification', { id }));
  expect(delivered).toEqual({ kind: 'comment_reply', path: '/cards/' + cardId, discord_id: '323456789012345678', locale: 'ja', text: '小雨 さんが『雨夜の本屋』へのコメントに返信しました' });
+ // Members are not guaranteed adults, so an adult card is not named on Discord for them.
+ await env.DB.prepare('UPDATE cards SET nsfw=1 WHERE id=?').bind(Number(cardId)).run();
+ expect((await json(await bridge('notification', { id }))).text).toBe('コメントに返信がありました');
+ await env.DB.prepare('UPDATE cards SET nsfw=0 WHERE id=?').bind(Number(cardId)).run();
  expect((await api('/read-all', 'author', { method: 'POST' })).status).toBe(200);
  expect(await json(await api('/summary', 'author'))).toEqual({ unread: 0 });
  expect((await json(await api('', 'author'))).items.every((n: any) => n.read_at)).toBe(true);
