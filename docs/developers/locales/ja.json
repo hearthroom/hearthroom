@@ -1763,7 +1763,7 @@
   "dad71d142a03d": "カード番号。",
   "dcd82f0ee1c93": "要求した言語でのカード名。",
   "d2e16f8f371a1": "関係するカード。",
-  "dc01ee913b723": "種類ごとの詳細：審査結果（status）、いいね数（count）、コメント ID（comment）。",
+  "dc01ee913b723": "種類ごとの詳細：審査結果（status）、初回審査か更新か（kind：first または re）、差し戻し時の審査担当者のコメント（note）、新作か更新か（event：new または update）、いいね数（count）、コメント ID（comment）、付与された掲載枠（granted）。",
   "da70ae2dbacc0": "review_result、comment_reply、comment_like、followed_work、registration_pack、review_reminder、review_reminder_expired のいずれか。",
   "d5ac091a42bb8": "未読の通知を数える",
   "dd915d068e119": "Discord の通知に使うために記憶するインターフェース言語。",

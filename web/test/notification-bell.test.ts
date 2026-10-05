@@ -74,3 +74,15 @@ it('writes each notice in the reader language and falls back to the plain label 
   await applyLocale('ja');
   expect(noticeText(notice({ kind: 'followed_work' }))).toBe('小雨 さんが『雨夜書店』を公開・更新しました');
 });
+it('says whether it was an update, what the reviewer wrote, how many listings and which claim', async () => {
+  await applyLocale('en');
+  expect(noticeText(notice({ kind: 'review_result', actor: null, extra: { status: 'approved', kind: 're' } }))).toBe('Your update to “雨夜書店” passed review');
+  expect(noticeText(notice({ kind: 'review_result', actor: null, extra: { status: 'rejected', kind: 're', note: null } }))).toBe('Your update to “雨夜書店” did not pass review this time');
+  expect(noticeText(notice({ kind: 'followed_work', extra: { event: 'update' } }))).toBe('小雨 updated “雨夜書店”');
+  expect(noticeText({ id: 'x', kind: 'registration_pack', path: '/mine', created_at: 1, read_at: null, extra: { granted: 2 } })).toBe('You can now list 2 more beyond your weekly quota');
+  await applyLocale('zh-Hant');
+  expect(noticeText(notice({ kind: 'review_result', actor: null, extra: { status: 'rejected', kind: 'first', note: '開場太短，\n請補一段。' } }))).toBe('「雨夜書店」這次沒有通過審核，審核員說：開場太短， 請補一段。');
+  expect(noticeText(notice({ kind: 'followed_work', extra: { event: 'new' } }))).toBe('小雨 發佈了「雨夜書店」');
+  expect(noticeText(notice({ kind: 'review_reminder', actor: null, extra: null }))).toBe('你認領的「雨夜書店」即將到期，請繼續審核或放回待審清單');
+  expect(noticeText(notice({ kind: 'review_reminder_expired', actor: null, card: null, extra: null }))).toBe(i18n.global.t('community.notices.review_reminder_expired'));
+});

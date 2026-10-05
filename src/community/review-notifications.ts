@@ -42,8 +42,8 @@ export async function maintainReviewNotifications(db:D1Database,now:number){
   // Revocation is not a new grant; invalid ownership is released, never reassigned.
   db.prepare(`UPDATE review_submissions SET claimed_by=NULL,claimed_at=NULL,claim_generation=''
    WHERE claimed_by IS NOT NULL AND (claimed_at<=? OR NOT EXISTS(SELECT 1 FROM reviewers r WHERE r.member_id=claimed_by AND r.revoked_at IS NULL))`).bind(now-CLAIM_TTL_MS),
-  db.prepare(`INSERT OR IGNORE INTO community_notifications(event_key,member_id,kind,path,created_at,review_submission,review_generation,review_link_version)
-   SELECT 'review-reminder:'||s.id||':'||s.claim_generation,s.claimed_by,'review_reminder','/review/'||s.id,?,s.id,s.claim_generation,l.version
+  db.prepare(`INSERT OR IGNORE INTO community_notifications(event_key,member_id,kind,path,created_at,card_id,review_submission,review_generation,review_link_version)
+   SELECT 'review-reminder:'||s.id||':'||s.claim_generation,s.claimed_by,'review_reminder','/review/'||s.id,?,s.card_id,s.id,s.claim_generation,l.version
    FROM review_submissions s JOIN reviewers r ON r.member_id=s.claimed_by AND r.revoked_at IS NULL
    JOIN cards c ON c.id=s.card_id AND c.status<>'unshared' AND c.public_blocked=0
    LEFT JOIN discord_links l ON l.member_id=s.claimed_by AND l.state='active'

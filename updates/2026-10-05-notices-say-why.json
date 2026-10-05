@@ -1,0 +1,10 @@
+{
+  "tier": "fix",
+  "title": {
+    "zh-Hant": "通知現在會附上審核員的退件說明，也會分清楚是新作品還是更新。",
+    "zh-Hans": "通知现在会附上审核员的退回说明，也会分清楚是新作品还是更新。",
+    "en": "Notifications now include the reviewer's note on a rejection and say whether a card is new or updated.",
+    "ja": "お知らせに差し戻し時の審査担当者のコメントが付き、新作か更新かも分かるようになりました。",
+    "ko": "알림에 반려 시 검토자 의견이 함께 표시되고, 새 작품인지 업데이트인지도 구분됩니다."
+  }
+}

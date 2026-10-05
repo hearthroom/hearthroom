@@ -31,7 +31,7 @@ export interface CommunityNotice {
   actor?: { handle: string; name: string } | null;
   /** Which card, named in the requested language. */
   card?: { id: number; name: string } | null;
-  /** Kind-specific detail: review verdict, like count, comment id. */
+  /** Kind-specific detail: review verdict, first review or update, reviewer note, new work or update, like count, comment id, listings granted. */
   extra?: Record<string, unknown> | null;
 }
 export interface CommunityCase {

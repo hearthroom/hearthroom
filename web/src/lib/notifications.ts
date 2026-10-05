@@ -3,6 +3,7 @@ import { ref, watch } from "vue";
 import { communityRequest, type CommunityNotice } from "./community";
 import { i18n } from "./i18n";
 import { useSession } from "./session";
+import { noticeNote } from "../../../shared/notice-note";
 
 /**
  * 頁首鈴鐺的狀態：未讀數（每分鐘與回到分頁時輪詢）與打開浮層時才載入的清單。
@@ -75,12 +76,22 @@ export function noticeText(n: CommunityNotice): string {
   const locale = String(i18n.global.locale.value);
   const card = n.card?.name ? quote(locale, n.card.name) : "";
   const actor = n.actor?.name ?? "";
-  const count = Number(n.extra?.count ?? 1);
+  const extra = n.extra ?? {};
+  const count = Number(extra.count ?? 1);
   if (n.kind === "comment_reply" && actor && card) return t("community.noticeText.comment_reply", { actor, card });
-  if (n.kind === "followed_work" && actor && card) return t("community.noticeText.followed_work", { actor, card });
-  if (n.kind === "review_result" && card) return t(n.extra?.status === "rejected" ? "community.noticeText.review_rejected" : "community.noticeText.review_approved", { card });
-  if (n.kind === "report_shipped" && typeof n.extra?.title === "string") return t("community.noticeText.report_shipped", { title: n.extra.title.replace(/[。.]$/, "") });
+  if (n.kind === "followed_work" && actor && card)
+    return t(extra.event === "new" ? "community.noticeText.followed_work_new" : extra.event === "update" ? "community.noticeText.followed_work_update" : "community.noticeText.followed_work", { actor, card });
+  if (n.kind === "review_result" && card) {
+    const update = extra.kind === "re";
+    if (extra.status !== "rejected") return t(update ? "community.noticeText.review_update_approved" : "community.noticeText.review_approved", { card });
+    const note = noticeNote(extra.note);
+    const key = (update ? "community.noticeText.review_update_rejected" : "community.noticeText.review_rejected") + (note ? "_note" : "");
+    return t(key, { card, note });
+  }
+  if (n.kind === "report_shipped" && typeof extra.title === "string") return t("community.noticeText.report_shipped", { title: extra.title.replace(/[。.]$/, "") });
   if (n.kind === "comment_like" && actor && card)
     return count > 1 ? t("community.noticeText.comment_like_many", { actor, card, others: count - 1 }) : t("community.noticeText.comment_like", { actor, card });
+  if (n.kind === "registration_pack" && Number(extra.granted) > 0) return t("community.noticeText.registration_pack", { count: Number(extra.granted) });
+  if (n.kind === "review_reminder" && card) return t("community.noticeText.review_reminder", { card });
   return t("community.notices." + n.kind);
 }

@@ -79,6 +79,24 @@ it('words every kind in every language and falls back to a generic line', () => 
  expect(pushLine({ ...base, kind: 'comment_like', extra: JSON.stringify({ count: 3 }) }, 'zh-Hant')).toBe('小雨 和另外 2 人讚了你在「雨夜書店」的留言');
  expect(pushLine({ ...base, kind: 'review_result', extra: JSON.stringify({ status: 'rejected' }) }, 'ko')).toBe('「雨夜書店」이(가) 이번 심사를 통과하지 못했습니다'.replace('「雨夜書店」', '“雨夜書店”'));
  expect(pushLine({ ...base, kind: 'followed_work' }, 'zh-Hans')).toBe('小雨 发布或更新了「雨夜書店」');
- expect(pushLine({ kind: 'registration_pack', extra: null, actor_name: null, actor_handle: null, card_names: null }, 'en')).toBe('You received extra registrations');
+ expect(pushLine({ kind: 'registration_pack', extra: null, actor_name: null, actor_handle: null, card_names: null }, 'en')).toBe('You received extra listings');
  expect(pushLine({ kind: 'something_else', extra: null, actor_name: null, actor_handle: null, card_names: null }, 'ja')).toBe('新しいお知らせがあります');
+});
+it('says which kind of review, publication, grant and claim it was', () => {
+ const card = JSON.stringify({ zh: '雨夜書店', en: 'Rainy Bookshop' });
+ const row = (kind: string, extra: Record<string, unknown> | null, actor: string | null = null) => ({ kind, extra: extra && JSON.stringify(extra), actor_name: actor, actor_handle: null, card_names: card });
+ expect(pushLine(row('review_result', { status: 'approved', kind: 'first' }), 'zh-Hant')).toBe('「雨夜書店」審核通過了');
+ expect(pushLine(row('review_result', { status: 'approved', kind: 're' }), 'en')).toBe('Your update to “Rainy Bookshop” passed review');
+ expect(pushLine(row('review_result', { status: 'rejected', kind: 'first', note: '開場\n太短，\t請補一段' }), 'zh-Hant')).toBe('「雨夜書店」這次沒有通過審核，審核員說：開場 太短， 請補一段');
+ expect(pushLine(row('review_result', { status: 'rejected', kind: 're', note: null }), 'ja')).toBe('『雨夜書店』の更新は今回審査を通過しませんでした');
+ const long = pushLine(row('review_result', { status: 'rejected', kind: 're', note: '長'.repeat(500) }), 'zh-Hans');
+ expect(long.startsWith('「雨夜書店」的更新这次没有通过审核，审核员说：')).toBe(true);
+ expect(long.endsWith('…')).toBe(true);
+ expect(Array.from(long.split('：')[1]).length).toBe(120);
+ expect(pushLine(row('followed_work', { event: 'new' }, '小雨'), 'zh-Hant')).toBe('小雨 發佈了「雨夜書店」');
+ expect(pushLine(row('followed_work', { event: 'update' }, '小雨'), 'ko')).toBe('小雨 님이 “雨夜書店”을(를) 업데이트했습니다');
+ expect(pushLine({ ...row('registration_pack', { granted: 3 }), card_names: null }, 'zh-Hant')).toBe('你可以在每週額度之外再登記 3 次');
+ expect(pushLine(row('review_reminder', null), 'zh-Hant')).toBe('你認領的「雨夜書店」即將到期，請繼續審核或放回待審清單');
+ expect(pushLine({ ...row('review_result', { status: 'approved' }), card_names: null }, 'zh-Hant')).toBe('審核結果已更新');
+ expect(pushLine({ ...row('comment_reply', null), card_names: null }, 'en')).toBe('Someone replied to your comment');
 });

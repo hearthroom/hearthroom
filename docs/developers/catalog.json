@@ -1763,7 +1763,7 @@
   "dad71d142a03d": "Card number.",
   "dcd82f0ee1c93": "Card name in the requested language.",
   "d2e16f8f371a1": "The card involved.",
-  "dc01ee913b723": "Kind-specific detail: review verdict (status), like count (count), comment id (comment).",
+  "dc01ee913b723": "Kind-specific detail: review verdict (status), first review or update (kind: first or re), reviewer's note on a rejection (note), new work or update (event: new or update), like count (count), comment id (comment), listings granted (granted).",
   "da70ae2dbacc0": "review_result, comment_reply, comment_like, followed_work, registration_pack, review_reminder or review_reminder_expired.",
   "d5ac091a42bb8": "Count unread notifications",
   "dd915d068e119": "Interface language to remember for Discord reminders.",

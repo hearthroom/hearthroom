@@ -60,7 +60,9 @@ it('發包同時通知作者（有開通知的才通知），通知帶他去「�
   const rows = await env.DB.prepare("SELECT kind,path FROM community_notifications WHERE member_id='member-10001'").all();
   expect(rows.results).toEqual([{ kind: 'registration_pack', path: '/mine' }]);
   const seen = await SELF.fetch('https://c.test/v1/me/community/notifications', { headers: bearer('author') }).then(r => r.json()) as any;
-  expect(seen.items?.[0] ?? seen[0]).toMatchObject({ kind: 'registration_pack', path: '/mine' });
+  expect(seen.items?.[0] ?? seen[0]).toMatchObject({ kind: 'registration_pack', path: '/mine', extra: { granted: 1 } });
+  // The reason is a staff record and never reaches the author.
+  expect(JSON.stringify(seen)).not.toContain('Contest winner');
 });
 
 it('成員詳情看得到每個包還剩幾次；最近發放清單跨成員、新的在前', async () => {

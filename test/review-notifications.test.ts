@@ -51,7 +51,11 @@ it('reminders are one per live generation and disappear from delivery after comp
  await claim(env.DB,'s1',m,now-31*60000);
  await maintainReviewNotifications(env.DB,now);await maintainReviewNotifications(env.DB,now);
  const notes=await env.DB.prepare("SELECT id FROM community_notifications WHERE kind='review_reminder'").all<any>();expect(notes.results).toHaveLength(1);
- expect((await bridge('notification',{id:notes.results[0].id})).status).toBe(200);
+ const delivered=await bridge('notification',{id:notes.results[0].id});expect(delivered.status).toBe(200);
+ // The reminder names the claimed card and links to it, in the reviewer's language.
+ expect(await delivered.json()).toMatchObject({path:'/review/s1',text:'你認領的「雨夜書店」即將到期，請繼續審核或放回待審清單 / Your claim on “Rainy Bookshop” expires soon. Continue reviewing or release it to the queue.'});
+ await env.DB.prepare("UPDATE cards SET nsfw=1").run();
+ expect((await (await bridge('notification',{id:notes.results[0].id})).json() as any).text).toBe('你認領的作品即將到期，請繼續審核或放回待審清單 / Your review claim expires soon. Continue reviewing or release it to the queue.');
  await env.DB.prepare("UPDATE discord_links SET version='link-v2' WHERE member_id=?").bind(m).run();
  expect((await bridge('notification',{id:notes.results[0].id})).status).toBe(404);
 });
@@ -99,7 +103,7 @@ it('queued reminders cannot be delivered after a stamp; the website shows them a
  const n=await env.DB.prepare("SELECT id FROM community_notifications WHERE kind='review_reminder'").first<any>();
  expect((await bridge('notification',{id:n.id})).status).toBe(404);
  const r=await app.fetch(new Request('https://hearthroom.club/v1/me/community/notifications',{headers:bearer('reviewer-token')}),settings(),createExecutionContext());
- expect(r.status).toBe(200);expect((await r.json() as any).items[0]).toMatchObject({kind:'review_reminder_expired',path:'/review'});
+ expect(r.status).toBe(200);expect((await r.json() as any).items[0]).toMatchObject({kind:'review_reminder_expired',path:'/review',card:null});
 });
 it('more than 200 submissions are drained in bounded batches without losing a submission',async()=>{
  const now=Date.now();const writes=[];

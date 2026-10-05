@@ -239,7 +239,8 @@ moderationRoutes.post('/v1/moderation/members/:handle/packs',async c=>{
   db.prepare('INSERT INTO registration_packs(id,member_id,granted,reason,granted_by,operation_id,created_at) VALUES(?,?,?,?,?,?,?)').bind(id,target,granted,reason,member.id,op,now),
   // 通知跟其他社群通知一樣尊重「要不要收通知」；帶他去「我的卡片」看額度
   // 站內通知預設開（migration 0047）：只有明確關閉的人不收。
-  db.prepare("INSERT OR IGNORE INTO community_notifications(event_key,member_id,kind,path,created_at) SELECT ?,?,'registration_pack','/mine',? WHERE NOT EXISTS (SELECT 1 FROM community_preferences p WHERE p.member_id=? AND p.notifications=0)").bind('pack:'+id,target,now,target),
+  // 通知只說幾次；發放原因是寫給社管看的紀錄，不給作者。
+  db.prepare("INSERT OR IGNORE INTO community_notifications(event_key,member_id,kind,path,created_at,extra) SELECT ?,?,'registration_pack','/mine',?,json_object('granted',?) WHERE NOT EXISTS (SELECT 1 FROM community_preferences p WHERE p.member_id=? AND p.notifications=0)").bind('pack:'+id,target,now,granted,target),
  ]));
  return c.json(await memberDetail(c.env,target),201);
 });
