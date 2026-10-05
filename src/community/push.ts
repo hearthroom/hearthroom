@@ -10,7 +10,8 @@ import { updateTitle } from "../updates";
  * push_at 還是空的通知推出去。這樣 trigger 不必知道推播存在，推播掛了也只是晚一點收到。
  *
  * 推播內容在這裡組（五語），跟網站上鈴鐺的句子是同一套意思；網站那份在 web/src/locales，
- * 兩邊都改才算改完。送出去的只有一句話和落點路徑：名字與卡名已經是站內公開資訊。
+ * 兩邊都改才算改完。Discord 私訊也用 pushLine 這句（經 bridge 的 notification 交給 bot）。
+ * 送出去的只有一句話和落點路徑：名字與卡名已經是站內公開資訊。
  */
 export const PUSH_LOCALES = ["zh-Hant", "zh-Hans", "en", "ja", "ko"] as const;
 export type PushLocale = (typeof PUSH_LOCALES)[number];

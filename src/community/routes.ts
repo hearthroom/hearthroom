@@ -5,7 +5,7 @@ import { syncAppearance, saveAppearance, appearanceMedia } from './appearance';
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { HttpError, pickLocale, type Env } from "../types";
-import { hasSubscription, pushConfigured, queuePush, removeSubscription, saveSubscription } from "./push";
+import { hasSubscription, pushConfigured, pushLine, pushLocale, queuePush, removeSubscription, saveSubscription } from "./push";
 import { requireMember, memberByHandle, memberNsfw } from "../members";
 import { getCard } from "../cards";
 import { updateBridge, updateTitle } from "../updates";
@@ -636,10 +636,10 @@ app.post("/internal/community/:operation", async (c) => {
   }
   if (op === "notification") {
     const n = await c.env.DB.prepare(
-      `SELECT n.kind,n.path,l.discord_id,m.locale FROM community_notifications n JOIN members m ON m.id=n.member_id JOIN discord_links l ON l.member_id=n.member_id AND l.state='active' JOIN community_preferences p ON p.member_id=n.member_id AND p.discord_dm=1 AND p.notifications=1 WHERE n.id=? AND n.delivered=0 AND (n.author_id IS NULL OR EXISTS(SELECT 1 FROM member_follows f WHERE f.member_id=n.member_id AND f.author_id=n.author_id)) AND ${reviewNotificationEligible} AND (n.review_submission IS NULL OR n.review_link_version=l.version)`,
+      `SELECT n.kind,n.path,n.extra,a.display_name AS actor_name,a.handle AS actor_handle,c.names AS card_names,l.discord_id,m.locale FROM community_notifications n JOIN members m ON m.id=n.member_id LEFT JOIN members a ON a.id=n.actor_id LEFT JOIN cards c ON c.id=n.card_id JOIN discord_links l ON l.member_id=n.member_id AND l.state='active' JOIN community_preferences p ON p.member_id=n.member_id AND p.discord_dm=1 AND p.notifications=1 WHERE n.id=? AND n.delivered=0 AND (n.author_id IS NULL OR EXISTS(SELECT 1 FROM member_follows f WHERE f.member_id=n.member_id AND f.author_id=n.author_id)) AND ${reviewNotificationEligible} AND (n.review_submission IS NULL OR n.review_link_version=l.version)`,
     )
       .bind(String(b.id),Date.now())
-      .first();
+      .first<Parameters<typeof pushLine>[0] & { path: string; discord_id: string; locale: string | null }>();
     if (!n) throw new HttpError(404, "not_found");
     if (b.delivered === true)
       await c.env.DB.prepare(
@@ -653,7 +653,10 @@ app.post("/internal/community/:operation", async (c) => {
       )
         .bind(Date.now() + 300000, String(b.id))
         .run();
-    return c.json(n);
+    // The DM carries the same sentence as the browser push. Without a recorded language it
+    // stays bilingual, as the bot's DMs always were.
+    const text = n.locale ? pushLine(n, pushLocale(n.locale)) : pushLine(n, "zh-Hant") + " / " + pushLine(n, "en");
+    return c.json({ kind: n.kind, path: n.path, discord_id: n.discord_id, locale: n.locale, text });
   }
   if (op === "review-ack") {
     await c.env.DB.prepare(

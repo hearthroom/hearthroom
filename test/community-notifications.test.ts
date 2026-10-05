@@ -135,7 +135,7 @@ it('summarises unread counts, remembers the interface language for Discord, and 
  await linkDiscord(author);
  const id = (await rows(author, 'comment_reply')).results[0].id;
  const delivered = await json(await bridge('notification', { id }));
- expect(delivered).toEqual({ kind: 'comment_reply', path: '/cards/' + cardId, discord_id: '323456789012345678', locale: 'ja' });
+ expect(delivered).toEqual({ kind: 'comment_reply', path: '/cards/' + cardId, discord_id: '323456789012345678', locale: 'ja', text: '小雨 さんが『雨夜の本屋』へのコメントに返信しました' });
  expect((await api('/read-all', 'author', { method: 'POST' })).status).toBe(200);
  expect(await json(await api('/summary', 'author'))).toEqual({ unread: 0 });
  expect((await json(await api('', 'author'))).items.every((n: any) => n.read_at)).toBe(true);
@@ -158,5 +158,14 @@ it('carries the card and the verdict on review results', async () => {
   const list = await json(await api('?lang=en', 'author'));
   expect(list.items.find((n: any) => n.card?.id === row!.card_id)).toMatchObject({ kind: 'review_result', path: '/mine', card: { id: row!.card_id, name: 'Reviewed' }, extra: { status: 'rejected' }, actor: null });
   expect(list.items.find((n: any) => n.card?.id === Number(cardId))).toMatchObject({ kind: 'review_result', extra: { status: 'approved' } });
+  // The Discord DM says which card and which verdict, like the bell does.
+  await setPreferences(env as Env, author, { discordDm: true });
+  await linkDiscord(author);
+  await env.DB.prepare("UPDATE members SET locale='en' WHERE id=?").bind(author).run();
+  const rejected = await json(await bridge('notification', { id: stored[0].id }));
+  expect(rejected).toMatchObject({ kind: 'review_result', path: '/mine', locale: 'en', text: '“Reviewed” did not pass review this time' });
+  const approved = (await rows(author, 'review_result')).results.find(r => r.card_id === Number(cardId))!;
+  await env.DB.prepare('UPDATE members SET locale=NULL WHERE id=?').bind(author).run();
+  expect((await json(await bridge('notification', { id: approved.id }))).text).toBe('「雨夜書店」審核通過了 / “Rainy Bookshop” passed review');
  } finally { reviewOff(); }
 });
