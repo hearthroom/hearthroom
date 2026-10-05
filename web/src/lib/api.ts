@@ -552,6 +552,8 @@ export interface MyCard {
   note?: string;
   /** 作者宣告的分級；只有 registered 時才有。 */
   nsfw?: boolean;
+  /** 已發布，但作者之後改過、還沒送審（草稿的內容版本跟過審那一版不同）；只在是的時候才有。 */
+  draftChanged?: boolean;
 }
 
 export interface ListingQuota {

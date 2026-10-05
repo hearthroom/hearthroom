@@ -183,3 +183,32 @@ it("uses the portrait for card images and falls back for legacy avatar-only card
   expect(projectRole(mainSiteRole).avatarUrl).toBe(mainSiteRole.roleBackground);
   expect(projectRole({...mainSiteRole, roleBackground: ""}).backgroundUrl).toBe(mainSiteRole.roleAvatar);
 });
+
+// 內容版本（Harbor role.content_hash）：「我的卡片」靠它比過審那一版與草稿現在的版本。
+// 這裡驗的是兩個 repo 之間那一跳：供應商回的原始 JSON 真的被讀進來，沒回就不憑空生一個。
+describe("內容版本", () => {
+  it("我的卡片清單讀得到每張卡的 contentHash；供應商沒回就沒有這個欄位", async () => {
+    vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ roleList: [{ ...mainSiteRole, contentHash: "h-draft" }, { ...mainSiteRole, characterRoleId: "role-2" }], total: 2, hasNextPage: false })));
+    const page = await upstream.fetchMyRoles(env, "tok", 1, 24);
+    expect(page.items[0].contentHash).toBe("h-draft");
+    expect(page.items[1]).not.toHaveProperty("contentHash");
+  });
+
+  it("卡片詳情的投影帶著 contentHash（封存版過審時記下的就是它）", () => {
+    expect(projectRole({ ...mainSiteRole, contentHash: "h-sealed" }).contentHash).toBe("h-sealed");
+    expect(projectRole(mainSiteRole)).not.toHaveProperty("contentHash");
+  });
+
+  it("逐張讀草稿版本用作者自己的 token；讀不到的那張就不回", async () => {
+    const auth: (string | null)[] = [];
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      auth.push(new Headers(init?.headers).get("Authorization"));
+      const id = new URL(url).searchParams.get("roleId");
+      if (id === "broken") return new Response("{}", { status: 500 });
+      return new Response(JSON.stringify({ ...mainSiteRole, characterRoleId: id, contentHash: `h-${id}` }));
+    });
+    const found = await upstream.fetchContentHashes(env, "author-token", ["a", "broken", "b"]);
+    expect([...found]).toEqual([["a", "h-a"], ["b", "h-b"]]);
+    expect(auth.every((value) => value === "Bearer author-token")).toBe(true);
+  });
+});

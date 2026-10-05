@@ -3,6 +3,8 @@ import { SELF, env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   bearer,
+  contentHashCalls,
+  contentHashesOnUpstream,
   identities,
   myRolesOnUpstream,
   resetDb,
@@ -315,5 +317,87 @@ describe("我的卡片：各段耗時", () => {
     const res = await SELF.fetch("https://c.test/v1/me/cards", { headers: bearer("alice-token") });
     expect(res.status).toBe(200);
     expect(res.headers.get("Server-Timing")).toMatch(/^identity;dur=[\d.]+, list;dur=[\d.]+, works;dur=[\d.]+$/);
+  });
+});
+
+// 已發布的卡，作者之後改了卻沒送審：清單標出來（owner 2026-10-05：「改了忘記提交，自己都不知道」）。
+// 比的是供應商的內容版本（contentHash）：過審那一版記在 cards.approved_content_hash，草稿現在的版本清單帶回來。
+describe("已發布、有修改還沒送審", () => {
+  const publish = async (roleId: string, approvedHash: string | null) =>
+    env.DB.prepare(
+      `INSERT INTO cards (id, source_role_id, author_num_id, names, summaries, tags, search_text, registered_at, last_synced_at, provider, status, approved_version_id, approved_content_hash)
+       VALUES (?, ?, 10001, '{"zh":"已發布"}', '{"zh":""}', '[]', '', 1, 1, 'harbor', 'approved', ?, ?)`,
+    ).bind(await ensureCardNumber(env.DB, "harbor", roleId), roleId, `v-${roleId}`, approvedHash).run();
+  const flags = (body: any) => Object.fromEntries(body.items.map((i: any) => [i.roleId, i.draftChanged === true]));
+
+  beforeEach(() => {
+    myRolesOnUpstream({
+      "alice-token": [
+        { roleId: "edited", contentHash: "h-new" },
+        { roleId: "same", contentHash: "h-same" },
+        { roleId: "unknown", contentHash: "h-x" },
+        { roleId: "draft", contentHash: "h-d" },
+      ],
+    });
+  });
+
+  it("草稿的內容版本跟過審那一版不同才標；相同、沒記到過審版本、沒登記的都不標", async () => {
+    await publish("edited", "h-old");
+    await publish("same", "h-same");
+    await publish("unknown", null);
+    const { body } = await mine();
+    expect(flags(body)).toEqual({ edited: true, same: false, unknown: false, draft: false });
+  });
+
+  it("新版正在審核就不標：已經送了，不是忘了送", async () => {
+    await publish("edited", "h-old");
+    const cardId = (await env.DB.prepare("SELECT id FROM cards WHERE source_role_id='edited'").first<{ id: number }>())!.id;
+    await env.DB.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,submitted_at) VALUES('s1',?,'harbor','edited','re','pending',?)").bind(cardId, Date.now()).run();
+    const { body } = await mine();
+    expect(body.items.find((i: any) => i.roleId === "edited").updateStatus).toBe("pending");
+    expect(flags(body).edited).toBe(false);
+  });
+
+  it("供應商還沒回內容版本時不標（不猜）", async () => {
+    myRolesOnUpstream({ "alice-token": [{ roleId: "edited" }] });
+    await publish("edited", "h-old");
+    expect(flags((await mine()).body).edited).toBe(false);
+  });
+
+  it("不把內容版本本身往前端送", async () => {
+    await publish("edited", "h-old");
+    const { body } = await mine();
+    for (const item of body.items) expect(item).not.toHaveProperty("contentHash");
+  });
+
+  it("「已提交」那組不走上游清單：只替已發布、記得過審版本的卡逐張問現在的版本", async () => {
+    await publish("edited", "h-old");
+    await publish("same", "h-same");
+    await publish("unknown", null);
+    contentHashesOnUpstream({ edited: "h-new", same: "h-same", unknown: "h-x" });
+    upstreamCalls.length = 0;
+    const { body } = await mine("?filter=listed");
+    expect(upstreamCalls).toHaveLength(0);
+    expect(contentHashCalls).toHaveLength(1);
+    expect(contentHashCalls[0].token).toBe("alice-token");
+    expect(contentHashCalls[0].roleIds.sort()).toEqual(["edited", "same"]);
+    expect(flags(body)).toEqual({ edited: true, same: false, unknown: false });
+  });
+
+  it("「已提交」那組一次最多逐張問一頁的張數，擋住大 pageSize 吃光子請求額度", async () => {
+    myRolesOnUpstream({ "alice-token": [] });
+    const ids = Array.from({ length: 30 }, (_, i) => `p${i}`);
+    for (const id of ids) await publish(id, "h-old");
+    contentHashesOnUpstream(Object.fromEntries(ids.map((id) => [id, "h-new"])));
+    const { body } = await mine("?filter=listed&pageSize=100");
+    expect(body.items).toHaveLength(30);
+    expect(contentHashCalls[0].roleIds).toHaveLength(24);
+    expect(body.items.filter((i: any) => i.draftChanged)).toHaveLength(24);
+  });
+
+  it("「已提交」那組沒有已發布的卡就完全不問上游", async () => {
+    contentHashesOnUpstream({});
+    await mine("?filter=listed");
+    expect(contentHashCalls).toHaveLength(0);
   });
 });

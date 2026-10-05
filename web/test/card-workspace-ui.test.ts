@@ -6,10 +6,10 @@ import { i18n } from '../src/lib/i18n';
 import { useSession } from '../src/lib/session';
 import MyCardsPage from '../src/pages/MyCardsPage.vue';
 import { lastShown } from '../src/lib/mine-memory';
-const mocks=vi.hoisted(()=>({connect:vi.fn(),fetch:vi.fn(),register:vi.fn(),token:vi.fn(),copies:vi.fn(),synchronize:vi.fn(),confirm:vi.fn()}));
-vi.mock('../src/lib/api',async original=>({...await original<typeof import('../src/lib/api')>(),fetchMeAt:async()=>({email:"fixture@example.test"}),fetchMyCards:mocks.fetch,registerCard:mocks.register}));
+const mocks=vi.hoisted(()=>({connect:vi.fn(),fetch:vi.fn(),register:vi.fn(),unregister:vi.fn(),token:vi.fn(),copies:vi.fn(),synchronize:vi.fn(),confirm:vi.fn(),ask:vi.fn()}));
+vi.mock('../src/lib/api',async original=>({...await original<typeof import('../src/lib/api')>(),fetchMeAt:async()=>({email:"fixture@example.test"}),fetchMyCards:mocks.fetch,registerCard:mocks.register,unregisterCard:mocks.unregister}));
 vi.mock('../src/lib/connections',async original=>({...await original<typeof import('../src/lib/connections')>(),accountToken:mocks.token,connectAccount:mocks.connect}));
-vi.mock('../src/lib/confirm',()=>({confirmChoice:mocks.confirm}));
+vi.mock('../src/lib/confirm',()=>({confirmChoice:mocks.confirm,confirmDialog:mocks.ask}));
 vi.mock('../src/lib/distribution',async original=>({...await original<typeof import('../src/lib/distribution')>(),copies:mocks.copies,synchronize:mocks.synchronize}));
 vi.mock('../src/lib/provider-switch',()=>({availableProviders:async()=>[{id:'lunatalk',name:'LunaTalk'},{id:'harbor',name:'HarperHarbor'}]}));
 let app:App;let root:HTMLElement;
@@ -22,11 +22,46 @@ async function mount(){const router=createRouter({history:createMemoryHistory(),
 function button(key:string){return [...root.querySelectorAll('button')].find(b=>b.textContent?.trim()===i18n.global.t(key))!;}
 // 卡片上只有試玩與編輯：送審在編輯頁（owner 2026-09-29：外面那顆大「提交審核」拿掉）
 it('shows one work with only play and edit, and no review submission here',async()=>{await mount();expect(root.querySelectorAll('article.card')).toHaveLength(1);expect(root.textContent).toContain(fixture.summary);expect(root.querySelector('a[href*="single=1"]')).toBeNull();expect(root.querySelector('a[href*="100021/edit"]')?.getAttribute('href')).toContain('provider=harbor');expect([...root.querySelectorAll('.card__actions > *')].map(e=>e.textContent?.trim())).toEqual([i18n.global.t('mine.action.play'),i18n.global.t('mine.action.edit')]);expect(button('mine.action.submit')).toBeUndefined();expect(mocks.register).not.toHaveBeenCalled();});
-it('keeps withdrawing a listed card, the only place to do it', async () => {
+// 撤回收在「⋯」裡、按了先問一聲：一週只能登記幾張，撤了要重新送審才回得來
+it('keeps withdrawing a listed card, the only place to do it, behind ⋯ and a confirmation', async () => {
  mocks.fetch.mockResolvedValue(result([{...fixture,roleId:'original',registered:true,status:'approved'}]));
  await mount();
- expect(button('mine.action.unregister')).toBeDefined();
+ expect(button('mine.action.unregister')).toBeUndefined();
  expect(button('mine.action.submit')).toBeUndefined();
+ const more=root.querySelector<HTMLButtonElement>(`button[aria-label="${i18n.global.t('mine.action.more')}"]`)!;
+ more.click();await settle();
+ expect(more.getAttribute('aria-expanded')).toBe('true');
+ mocks.ask.mockResolvedValueOnce(false);
+ button('mine.action.unregister').click();await settle();
+ expect(mocks.ask).toHaveBeenCalledWith(expect.objectContaining({danger:true,title:i18n.global.t('mine.withdraw.title',{name:fixture.name})}));
+ expect(mocks.unregister).not.toHaveBeenCalled();
+ expect(root.querySelector('.card__status')?.textContent?.trim()).toBe(i18n.global.t('mine.badge.listed'));
+ more.click();await settle();
+ mocks.ask.mockResolvedValueOnce(true);
+ button('mine.action.unregister').click();await settle();
+ expect(mocks.unregister).toHaveBeenCalledWith('original','token-harbor','harbor');
+ expect(root.querySelector('.card__status')?.textContent?.trim()).toBe(i18n.global.t('workspace.draft'));
+ expect(root.querySelector('.card__more')).toBeNull();
+});
+// 已發布、改過沒送審（owner 2026-10-05）：封面多一盞「有修改未提交」、卡上一句說明、「編輯」換成主色
+it('flags a published card with unsubmitted edits, and only that card', async () => {
+ mocks.fetch.mockResolvedValue(result([
+  {...fixture,roleId:'original',registered:true,status:'approved',draftChanged:true},
+  {...fixture,roleId:'clean',workId:'clean-work',sourceRoleId:'clean',num:100022,registered:true,status:'approved'},
+ ]));
+ await mount();
+ const [edited,clean]=[...root.querySelectorAll('article.card')];
+ const badges=(card:Element)=>[...card.querySelectorAll('.card__status')].map(b=>b.textContent?.trim());
+ expect(badges(edited)).toEqual([i18n.global.t('mine.badge.listed'),i18n.global.t('mine.badge.draftChanged')]);
+ expect(edited.querySelector('.card__body')?.textContent).toContain(i18n.global.t('workspace.draftChanged'));
+ expect(edited.querySelector('a[href*="/edit"]')?.classList.contains('btn--primary')).toBe(true);
+ expect(badges(clean)).toEqual([i18n.global.t('mine.badge.listed')]);
+ expect(clean.querySelector('.card__body')).toBeNull();
+ expect(clean.querySelector('a[href*="/edit"]')?.classList.contains('btn--primary')).toBe(false);
+});
+it('has no ⋯ menu on cards that are not registered', async () => {
+ await mount();
+ expect(root.querySelector('.card__more')).toBeNull();
 });
 it('links directly to the only playable provider without a chooser or empty footer', async () => {
  await mount();
@@ -192,13 +227,17 @@ it('uses the same thumbnail URL as the home page, then the original on failure',
  }finally{vi.unstubAllGlobals();}
 });
 
-// 會來「我的卡片」的人多半想寫卡：標題上方放 AI Agent 那顆按鈕，空的時候指向寫卡指南
-it('offers the agent above the title, alongside New card', async () => {
+// 會來「我的卡片」的人多半想寫卡：AI Agent 那顆跟「建立新卡」並排在頁首右邊（主鍵在最右），空的時候指向寫卡指南
+// owner 2026-10-05：原本膠囊單獨擺在標題上方，跟標題、額度、搜尋框各一種寬度，對不齊
+it('offers the agent in the header, right before New card', async () => {
  await mount();
- const pill = root.querySelector('.onboard__pill')!;
+ const actions = root.querySelector('.head .head__actions')!;
+ const pill = actions.querySelector('.onboard__pill')!;
+ const create = actions.querySelector('a[href$="/create"]')!;
  expect(pill).not.toBeNull();
- expect(pill.compareDocumentPosition(root.querySelector('.head h1')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
- expect(root.querySelector('.head a[href$="/create"]')).not.toBeNull();
+ expect(create).not.toBeNull();
+ expect(pill.compareDocumentPosition(create) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+ expect(root.querySelector('.head h1')!.compareDocumentPosition(pill) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 it('turns an empty list into a first-card start: the web editor and the guide', async () => {
  mocks.fetch.mockResolvedValue({ ...result([]), total: 0 });

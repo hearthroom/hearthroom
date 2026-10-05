@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/mine",
+  "title": {
+    "zh-Hant": "我的卡片在手機上一排兩張，每張卡標出已發布、審核中、審核未通過或未提交審核。",
+    "zh-Hans": "我的卡片在手机上一排两张，每张卡标出已发布、审核中、审核未通过或未提交审核。",
+    "en": "My cards fits two cards per row on phones and labels each one Published, In review, Not approved or Not submitted.",
+    "ja": "マイカードがスマホで1列2枚になり、公開中・審査中・審査不承認・審査未申請がひと目でわかります。",
+    "ko": "내 카드가 휴대폰에서 한 줄에 두 장씩 보이고, 게시됨·심사 중·심사 반려·심사 미제출이 한눈에 보입니다."
+  }
+}
