@@ -4,6 +4,7 @@ import {useI18n} from 'vue-i18n';
 import {pageTitle} from '@/lib/i18n';
 import {androidDownloadUrl} from '@/lib/download';
 import {SITE} from '@/lib/site';
+import {installPrompt,openInstall} from '@/lib/pwa';
 const {t}=useI18n();
 const apkUrl=androidDownloadUrl();
 watchEffect(()=>{document.title=pageTitle(t('download.title'))});
@@ -31,6 +32,8 @@ watchEffect(()=>{document.title=pageTitle(t('download.title'))});
     <section class="download-section" aria-labelledby="browser-title">
       <h2 id="browser-title">{{ $t('download.browserTitle') }}</h2>
       <p>{{ $t('download.browserIntro') }}</p>
+      <!-- 頁尾只留「下載 App」一個入口；瀏覽器現在就能裝的話，一鍵安裝放在這裡（lib/footer-nav.ts） -->
+      <button v-if="installPrompt.available && installPrompt.target === 'site'" type="button" class="btn download-install" @click="openInstall()">{{ $t('pwa.install.link') }}</button>
       <p>{{ $t('download.ios') }}</p>
       <p>{{ $t('download.desktop') }}</p>
     </section>
@@ -50,5 +53,6 @@ watchEffect(()=>{document.title=pageTitle(t('download.title'))});
 .download-section p { color: var(--text-2); margin: var(--s-3) 0; }
 .download-section ol { padding-inline-start: 1.5rem; margin: 0 0 var(--s-4); }
 .download-section li { padding-inline-start: var(--s-1); margin: var(--s-3) 0; }
+.download-install { min-height: 44px; }
 .download-section a { color: var(--accent-text); display: inline-flex; align-items: center; min-height: 44px; }
 </style>

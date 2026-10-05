@@ -12,8 +12,9 @@
  * - Chromium 系：等瀏覽器發 beforeinstallprompt 才有得裝，按下去走原生的安裝框。
  * - iOS Safari：沒有事件也沒有 API，只能提示「分享 → 加入主畫面」。
  *
- * 提示卡之外，頁尾另有一條「安裝 App」的常駐入口（installAvailable）：關掉提示卡的人之後
- * 想裝，不必等三十天。
+ * 提示卡之外還有常駐入口：關掉提示卡的人之後想裝，不必等三十天。頁尾 App 那一組只放一個入口
+ *（lib/footer-nav.ts）：能下載 Android App 的裝置放「下載 App」，那頁有一鍵安裝的按鈕；
+ * iOS 這類裝不了 APK 的才在頁尾直接放「安裝 App」。
  *
  * beforeinstallprompt 在頁面載入很早就發，比 Vue 掛上去還早；監聽器放在模組頂層，
  * main.ts 在任何 await 之前就 import 這個檔。
