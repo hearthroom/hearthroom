@@ -4512,7 +4512,7 @@
           "Media library"
         ],
         "summary": "Add items to a folder",
-        "description": "Binds items to the folder. Ids not owned by the caller are silently ignored.",
+        "description": "Binds items to the folder. Ids not owned by the caller are silently ignored. With `capabilities.moves`, this moves the files into the folder (to `<folder>/<file name>`), changing their URLs; `dryRun` and `confirm` work as in folder rename.",
         "security": [
           {
             "userToken": []
@@ -4530,7 +4530,7 @@
         },
         "responses": {
           "200": {
-            "description": "`{code:0,data:{folderId}}`.",
+            "description": "`{code:0,data:{...,dryRun,moved,pending,folders,usedBy}}`. `moved` counts files whose path changes; `pending` files are still being copied and serve at the new URL within minutes; `usedBy` lists `{roleId,name,published}` for your cards whose text mentions an old URL (`published` versions can no longer be edited).",
             "content": {
               "application/json": {
                 "schema": {
@@ -4571,6 +4571,16 @@
           },
           "500": {
             "description": "`generic_error`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`media_move_in_use` (409) with `detail.cards` when cards still mention an old URL and `confirm` is not set; `media_path_taken` or `media_folder_exists` (409) when the target is already used.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4655,6 +4665,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "`media_folder_exists` when a folder with this name already exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -4666,7 +4686,7 @@
           "Media library"
         ],
         "summary": "Delete a folder",
-        "description": "Deletes the folder and its item bindings; the media items themselves are kept.",
+        "description": "Deletes the folder and its item bindings; the media items themselves are kept. With `capabilities.moves`, only an empty folder can be deleted.",
         "security": [
           {
             "userToken": []
@@ -4733,6 +4753,16 @@
           },
           "500": {
             "description": "`generic_error`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`media_folder_not_empty` when files or folders are still inside.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4815,7 +4845,7 @@
         },
         "responses": {
           "200": {
-            "description": "`{code:0,data:{folderId}}`.",
+            "description": "`{code:0,data:{...,dryRun,moved,pending,folders,usedBy}}`. `moved` counts files whose path changes; `pending` files are still being copied and serve at the new URL within minutes; `usedBy` lists `{roleId,name,published}` for your cards whose text mentions an old URL (`published` versions can no longer be edited).",
             "content": {
               "application/json": {
                 "schema": {
@@ -4863,8 +4893,19 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "`media_move_in_use` (409) with `detail.cards` when cards still mention an old URL and `confirm` is not set; `media_path_taken` or `media_folder_exists` (409) when the target is already used.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
-        }
+        },
+        "description": "With `capabilities.moves`, this moves the files out of the folder to the top level, changing their URLs; `dryRun` and `confirm` work as in folder rename."
       }
     },
     "/open/v1/image/folder/rename": {
@@ -4886,7 +4927,6 @@
               "schema": {
                 "type": "object",
                 "required": [
-                  "folderId",
                   "name"
                 ],
                 "properties": {
@@ -4896,6 +4936,18 @@
                   "name": {
                     "type": "string",
                     "maxLength": 60
+                  },
+                  "path": {
+                    "type": "string",
+                    "description": "Directory to rename when it has no folder id."
+                  },
+                  "dryRun": {
+                    "type": "boolean",
+                    "description": "Report what would move and which cards still mention the old URLs, without moving anything."
+                  },
+                  "confirm": {
+                    "type": "boolean",
+                    "description": "Move even though cards still mention the old URLs."
                   }
                 }
               }
@@ -4904,7 +4956,7 @@
         },
         "responses": {
           "200": {
-            "description": "`{code:0,data:{folderId,name}}`.",
+            "description": "`{code:0,data:{...,dryRun,moved,pending,folders,usedBy}}`. `moved` counts files whose path changes; `pending` files are still being copied and serve at the new URL within minutes; `usedBy` lists `{roleId,name,published}` for your cards whose text mentions an old URL (`published` versions can no longer be edited).",
             "content": {
               "application/json": {
                 "schema": {
@@ -4952,8 +5004,19 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "`media_move_in_use` (409) with `detail.cards` when cards still mention an old URL and `confirm` is not set; `media_path_taken` or `media_folder_exists` (409) when the target is already used.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
-        }
+        },
+        "description": "Renames a folder. Providers that report `capabilities.moves` treat a folder as the directory of its files: a file is in exactly one folder and its URL is its path, so moving it changes the URL and the old URL stops working. Renaming moves every file and folder below it; pass `path` instead of `folderId` for a directory that only exists as part of longer paths."
       }
     },
     "/open/v1/image/list": {
@@ -11792,6 +11855,114 @@
           }
         }
       }
+    },
+    "/open/v1/image/move": {
+      "post": {
+        "operationId": "moveMediaItem",
+        "tags": [
+          "Media library"
+        ],
+        "summary": "Rename or move a file",
+        "description": "Gives one library file a new path, renaming it or moving it to another folder (created when missing). Providers that report `capabilities.moves` treat a folder as the directory of its files: a file is in exactly one folder and its URL is its path, so moving it changes the URL and the old URL stops working. Only offered by providers that report `capabilities.moves`.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "imageId",
+                  "path"
+                ],
+                "properties": {
+                  "imageId": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string",
+                    "description": "New path below the library prefix, e.g. `my-card/expr/happy.webp`."
+                  },
+                  "dryRun": {
+                    "type": "boolean",
+                    "description": "Report what would move and which cards still mention the old URLs, without moving anything."
+                  },
+                  "confirm": {
+                    "type": "boolean",
+                    "description": "Move even though cards still mention the old URLs."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "`{code:0,data:{...,dryRun,moved,pending,folders,usedBy}}`. `moved` counts files whose path changes; `pending` files are still being copied and serve at the new URL within minutes; `usedBy` lists `{roleId,name,published}` for your cards whose text mentions an old URL (`published` versions can no longer be edited). Also returns `imageId`, `imageUrl` and `fileName` at the new path.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_param` for an unsafe path or a file without a path.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`media_move_in_use` (409) with `detail.cards` when cards still mention an old URL and `confirm` is not set; `media_path_taken` or `media_folder_exists` (409) when the target is already used.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`generic_error`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -13965,6 +14136,14 @@
               "format": "int64"
             },
             "description": "Item ids; may be empty (no-op)."
+          },
+          "dryRun": {
+            "type": "boolean",
+            "description": "Report what would move and which cards still mention the old URLs, without moving anything."
+          },
+          "confirm": {
+            "type": "boolean",
+            "description": "Move even though cards still mention the old URLs."
           }
         }
       },
@@ -14243,6 +14422,10 @@
                   "relativePaths": {
                     "type": "boolean",
                     "description": "Supports relativePath uploads preserving authored folder names and directory structure. Do not flatten directories for providers lacking this capability."
+                  },
+                  "moves": {
+                    "type": "boolean",
+                    "description": "Renaming or moving a folder or file moves its path and URL; see `POST /open/v1/image/move`."
                   }
                 }
               }

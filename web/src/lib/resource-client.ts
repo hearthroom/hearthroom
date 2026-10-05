@@ -29,6 +29,8 @@ export interface Capabilities {
   sorts: string[];
   overwrite: boolean | null;
   relativePaths?: boolean;
+  /** 改名／搬動會連路徑與網址一起改（一個檔案只在一個資料夾），舊網址隨即失效 */
+  moves?: boolean;
 }
 export interface ResourceQuery {
   scope: string;
@@ -142,6 +144,7 @@ export function resourceClient(provider: ProviderId, token: string) {
           sorts: c?.sorts ?? [],
           overwrite: typeof c?.overwrite === "boolean" ? c.overwrite : null,
           relativePaths: c?.relativePaths === true,
+          moves: c?.moves === true,
         },
       };
     },

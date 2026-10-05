@@ -1,0 +1,13 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/resources",
+  "draft": true,
+  "title": {
+    "zh-Hant": "資料夾改名後，檔案網址會跟著換成新名稱，改名前會先列出還在用舊網址的卡片。",
+    "zh-Hans": "文件夹重命名后，文件链接会跟着换成新名称，重命名前会先列出还在用旧链接的卡片。",
+    "en": "Renaming a folder now moves its files' links too, and first shows which cards still use the old ones.",
+    "ja": "フォルダー名を変えると中のファイルの URL も変わり、古い URL を使うカードを先に表示します。",
+    "ko": "폴더 이름을 바꾸면 파일 주소도 함께 바뀌고, 이전 주소를 쓰는 카드를 먼저 보여 줍니다."
+  }
+}
