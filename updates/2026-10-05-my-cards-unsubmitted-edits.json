@@ -2,7 +2,6 @@
   "tier": "feature",
   "audience": "authors",
   "try": "/mine",
-  "draft": true,
   "title": {
     "zh-Hant": "已發布的卡改過卻還沒提交審核時，我的卡片會標出「有修改未提交」。",
     "zh-Hans": "已发布的卡改过却还没提交审核时，我的卡片会标出“有修改未提交”。",
