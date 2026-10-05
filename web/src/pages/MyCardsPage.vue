@@ -14,6 +14,7 @@ import { connectionMessage } from "@/lib/distribution";
 import { can, currentProvider, providerName, type ProviderId } from "@/lib/provider";
 import { accountToken, connectAccount, needsReauthorization } from "@/lib/connections";
 import { lastShown } from "@/lib/mine-memory";
+import { confirmDialog } from "@/lib/confirm";
 import { signedInHint } from "@/lib/signin-hint";
 
 const route = useRoute();
@@ -81,6 +82,8 @@ const packLeft = computed(() => quota.value?.packRemaining ?? 0);
 const quotaFull = computed(() => !!quota.value && quotaLeft.value === 0 && packLeft.value === 0);
 const quotaRange = computed(() => quota.value ? weekRange(quota.value, String(locale.value)) : null);
 const quotaResetText = computed(() => !quota.value ? "" : daysUntilReset(quota.value)<=1 ? t("mine.quota.resetSoon") : t("mine.quota.reset",{n:daysUntilReset(quota.value)}));
+/** 額度那一行只放數字與重置；週起訖與還剩幾張收在提示裡（數字跟三格已經看得出剩多少） */
+const quotaHint = computed(() => !quotaRange.value ? "" : `${t("mine.quota.range", quotaRange.value)} · ${quotaLeft.value === 0 ? t("mine.quota.full") : t("mine.quota.left", { n: quotaLeft.value })}`);
 let generation=0;
 async function loadProvider(provider:ProviderId, version=generation) {
  try {
@@ -116,9 +119,16 @@ async function cardToken(card:WorkspaceCard) {
  if(!token)throw new Error(t("auth.expired"));
  return token;
 }
-/** 取消登記（下架）。送審與重新送審在編輯頁。 */
+/** 取消登記（下架）。送審與重新送審在編輯頁。撤了要重新送審才回得來，所以先問一聲。 */
 async function withdraw(card: WorkspaceCard) {
   if (!card.sourceAvailable || !card.registered) return;
+  const ok = await confirmDialog({
+    title: t("mine.withdraw.title", { name: card.name }),
+    message: t("mine.withdraw.message"),
+    confirmText: t("mine.action.unregister"),
+    danger: true,
+  });
+  if (!ok) return;
   busy.value = workKey(card);
   error.value = "";
   // Keep the displayed card while the original provider handles the request.
@@ -158,46 +168,41 @@ watch(()=>route.query.fresh, fresh=>{
 
 <template>
   <div class="page">
-    <!-- 來到這頁的人多半想寫卡：跟 Cloudflare 主控台一樣，標題上方放「讓 AI Agent 幫你寫卡」 -->
-    <AgentOnboard v-if="can('editor')" from="mine" class="onboard-cta" />
+    <!--
+      頁首只有一列：左邊標題與本週額度，右邊兩種開始寫卡的方式並排（AI Agent 在前、主鍵「建立新卡」在最右）。
+      手機上主鍵留在標題右邊，AI Agent 換到額度下面撐滿整列，跟底下的搜尋框、卡片牆同一條左右邊
+      （owner 2026-10-05：原本 AI Agent 膠囊單獨擺在標題上方，跟標題、額度卡、搜尋框各是一種寬度，對不齊）。
+    -->
     <header class="head">
       <div class="head__text">
         <h1 class="head__title display">{{ $t("mine.title") }}</h1>
-        <p class="subtle">{{ $t("workspace.hint") }}</p>
+        <!-- 額度從一整張卡收成一行：數字、三格、幾天後重置；週起訖與還剩幾張在提示裡 -->
+        <p class="quota" :class="{ 'quota--full': quotaFull }" :title="quotaHint || undefined" aria-live="polite">
+          <template v-if="quota && quotaRange">
+            <span class="quota__label">{{ quotaLeft === 0 ? $t("mine.quota.full") : $t("mine.quota.eyebrow") }}</span>
+            <span class="quota__num"><strong>{{ quota.used }}</strong>/{{ quota.limit }} {{ $t("mine.quota.unit") }}</span>
+            <span class="quota__pips" aria-hidden="true"><i v-for="i in quota.limit" :key="i" class="quota__pip" :class="{ 'quota__pip--on': i <= quota.used }" /></span>
+            <span class="quota__reset">{{ quotaResetText }}</span>
+            <span v-if="packLeft > 0" class="quota__packs" data-quota-packs>{{ $t("mine.quota.packs", { n: packLeft }) }}</span>
+          </template>
+        </p>
       </div>
-      <RouterLink v-if="can('editor')" :to="lp('/create')" class="btn btn--primary">{{ $t("mine.create") }}</RouterLink>
+      <div v-if="can('editor')" class="head__actions">
+        <AgentOnboard from="mine" class="head__agent" />
+        <RouterLink :to="lp('/create')" class="btn btn--primary head__create">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4.5v11M4.5 10h11" /></svg>{{ $t("mine.create") }}
+        </RouterLink>
+      </div>
     </header>
 
-
-    <section v-if="quota && quotaRange" class="quota panel" :class="{ 'quota--full': quotaFull }" aria-live="polite">
-      <div class="quota__count">
-        <span class="eyebrow">{{ $t("mine.quota.eyebrow") }}</span>
-        <span class="quota__num display">
-          <strong>{{ quota.used }}</strong><span class="quota__sep">/</span>{{ quota.limit }}
-          <span class="quota__unit">{{ $t("mine.quota.unit") }}</span>
-        </span>
-      </div>
-      <ol class="quota__pips" aria-hidden="true">
-        <li v-for="i in quota.limit" :key="i" class="quota__pip" :class="{ 'quota__pip--on': i <= quota.used }" />
-      </ol>
-      <div class="quota__when">
-        <span class="quota__range">{{ $t("mine.quota.range", quotaRange) }}</span>
-        <span class="quota__state" :class="{ 'quota__state--full': quotaFull }">
-          {{ quotaLeft === 0 ? $t("mine.quota.full") : $t("mine.quota.left", { n: quotaLeft }) }}
-          <span class="quota__dot">·</span>{{ quotaResetText }}
-        </span>
-        <span v-if="packLeft > 0" class="quota__packs" data-quota-packs>{{ $t("mine.quota.packs", { n: packLeft }) }}</span>
-      </div>
-    </section>
-
-    <!-- 找卡：搜尋卡名或簡介（繁簡互通）、全部／已上架／未上架 -->
+    <!-- 找卡：搜尋卡名或簡介（繁簡互通）、全部／已提交（含審核中、未通過）／未提交 -->
     <div class="tools">
       <label class="tools__search">
         <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5.5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M13 13l3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
         <span class="sr-only">{{ $t("mine.search.label") }}</span>
         <input v-model="draft" type="search" class="input" :placeholder="$t('mine.search.placeholder')" maxlength="100" enterkeyhint="search" />
       </label>
-      <div class="seg" role="group" :aria-label="$t('mine.filter.label')">
+      <div class="seg tools__seg" role="group" :aria-label="$t('mine.filter.label')">
         <button v-for="f in FILTERS" :key="f" type="button" class="seg__item" :class="{ 'seg__item--on': filter === f }" :aria-pressed="filter === f" @click="navigate({ filter: f, page: undefined })">{{ $t(`mine.filter.${f}`) }}</button>
       </div>
     </div>
@@ -218,7 +223,7 @@ watch(()=>route.query.fresh, fresh=>{
       <button type="button" class="btn" @click="draft = ''; navigate({ q: undefined, filter: undefined, page: undefined })">{{ $t("mine.clearFilters") }}</button>
     </div>
 
-    <!-- 還沒有卡：指向寫卡指南的三種開始方式；AI Agent 那顆按鈕已在標題上方，這裡不放第二顆 -->
+    <!-- 還沒有卡：指向寫卡指南的三種開始方式；AI Agent 那顆按鈕已在頁首，這裡不放第二顆 -->
     <div v-else-if="!visible.length && !Object.keys(failures).length" class="empty panel">
       <p class="empty__title">{{ $t("mine.empty.title") }}</p>
       <p class="empty__body">{{ $t("mine.empty.body") }}</p>
@@ -228,81 +233,112 @@ watch(()=>route.query.fresh, fresh=>{
       </div>
     </div>
 
-
+    <!-- 卡片牆跟首頁同一套欄數：手機兩欄、平板三到四欄、桌機六欄（都整除一頁 24 張，最後一列不缺角） -->
     <div v-else class="wall" :aria-busy="loading || undefined">
       <MyCardTile
         v-for="(card, i) in visible"
         :key="workKey(card)"
         :card="card"
         :busy="busy === workKey(card)"
-        :eager="i < 4"
+        :eager="i < 6"
         @toggle="withdraw(card)"
       />
     </div>
 
     <nav v-if="pageCount > 1" class="pager" :aria-label="$t('mine.pages')">
-      <button type="button" class="btn btn--sm" :disabled="page <= 1" @click="goPage(page - 1)">← {{ $t("pager.prev") }}</button>
+      <button type="button" class="btn btn--sm pager__step" :disabled="page <= 1" :aria-label="$t('pager.prev')" @click="goPage(page - 1)">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M12 5l-5 5 5 5" /></svg><span class="pager__label">{{ $t("pager.prev") }}</span>
+      </button>
       <template v-for="(p, i) in pageList" :key="i">
         <span v-if="p === 'gap'" class="subtle pager__gap">…</span>
         <button v-else type="button" class="btn btn--sm pager__num" :class="{ 'pager__num--on': p === page }" :aria-current="p === page ? 'page' : undefined" @click="goPage(p)">{{ p }}</button>
       </template>
-      <button type="button" class="btn btn--sm" :disabled="page >= pageCount" @click="goPage(page + 1)">{{ $t("pager.next") }} →</button>
+      <button type="button" class="btn btn--sm pager__step" :disabled="page >= pageCount" :aria-label="$t('pager.next')" @click="goPage(page + 1)">
+        <span class="pager__label">{{ $t("pager.next") }}</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8 5l5 5-5 5" /></svg>
+      </button>
     </nav>
   </div>
 </template>
 
 <style scoped>
-.head .btn { min-height:44px; }
-.create-platform {max-width:100%} .create-platform a {margin:var(--s-2)}
+/* ── 頁首：標題＋額度一塊、兩顆開始寫卡的鍵一塊；放不下時鍵換到下一列並撐滿 ── */
 .head {
-  display: flex; flex-wrap: wrap; gap: var(--s-4);
-  align-items: center; justify-content: space-between;
-  margin-bottom: var(--s-4);
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: var(--s-3) var(--s-5); margin-bottom: var(--s-4);
 }
-.head__title { font-size: clamp(20px, 2.6vw, 24px); margin-bottom: 2px; }
-.filters { margin-bottom: var(--s-4); }
+.head__text { flex: 1 1 auto; min-width: 0; display: grid; gap: 6px; }
+.head__title { font-size: clamp(20px, 2.6vw, 24px); margin: 0; }
+.head__actions { display: flex; align-items: center; gap: var(--s-2); flex: none; }
+.head__create { gap: 6px; padding-inline: var(--s-4) var(--s-5); }
+.head__create svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+/* 兩顆鍵一樣高：膠囊本身是 min-height，主鍵是 height */
+.head__actions .btn, .head__agent :deep(.onboard__pill) { min-height: var(--h-md); }
 
-/* 這週的額度：一張卡，左邊數字、中間三格、右邊週起訖與狀態。手機上三段自動換行。 */
-.quota {
-  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3) var(--s-5);
-  padding: var(--s-3) var(--s-4); margin-bottom: var(--s-4);
-}
-.quota__count { display: grid; gap: 2px; }
-.quota__num { font-size: 22px; line-height: 1.1; color: var(--text-2); font-variant-numeric: tabular-nums; }
-.quota__num strong { font-size: 28px; color: var(--text); }
-.quota__sep { margin: 0 3px; color: var(--text-3); font-weight: 500; }
-.quota__unit { margin-left: 4px; font-size: 12.5px; font-weight: 500; color: var(--text-3); }
-.quota__pips { list-style: none; margin: 0; padding: 0; display: flex; gap: 6px; }
-.quota__pip { width: 28px; height: 8px; border-radius: 999px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); }
+/* 本週額度：一行，放不下就整段換行（段與段之間只靠間距分開，換行後下一行開頭不會掛著分隔點）。
+   滿了（免費與補充包都沒了）標題轉成提醒色、三格轉灰 */
+.quota { margin: 0; min-height: 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 2px var(--s-3); font-size: 12.5px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.quota > * { white-space: nowrap; }
+.quota__label { color: var(--text-2); }
+.quota__num { color: var(--text-2); }
+.quota__num strong { color: var(--text); font-weight: 700; }
+.quota__pips { display: inline-flex; gap: 3px; }
+.quota__pip { width: 14px; height: 6px; border-radius: 999px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line-strong); }
 .quota__pip--on { background: var(--accent-grad); box-shadow: none; }
+.quota__packs { font-weight: 600; color: var(--accent-text); }
+.quota--full .quota__label { color: var(--danger); font-weight: 600; }
 .quota--full .quota__pip--on { background: var(--text-3); }
-.quota__when { margin-left: auto; display: grid; gap: 2px; text-align: right; }
-.quota__range { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.quota__state { font-size: 12.5px; color: var(--text-3); }
-.quota__state--full { color: var(--text-2); font-weight: 500; }
-.quota__packs { font-size: 12.5px; font-weight: 600; color: var(--accent-text); }
-.quota__dot { margin: 0 6px; }
-@media (max-width: 520px) {
-  .quota__when { margin-left: 0; text-align: left; flex-basis: 100%; }
-}
 
-.tools { display:flex; flex-wrap:wrap; gap:var(--s-3); align-items:center; margin-bottom:var(--s-4); }
-.tools__search { position:relative; flex:1 1 240px; max-width:420px; }
-.tools__search svg { position:absolute; left:var(--s-3); top:50%; width:16px; height:16px; transform:translateY(-50%); color:var(--text-3); pointer-events:none; }
-.tools__search .input { width:100%; padding-left:calc(var(--s-3) * 2 + 16px); border-radius:var(--r-pill); }
-.pager { display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:var(--s-2); margin-top:var(--s-5); }
-.pager__num { min-width:36px; justify-content:center; font-variant-numeric:tabular-nums; }
-.pager__num--on { background:var(--accent-tint); border-color:transparent; color:var(--accent-text); }
-.pager__gap { padding:0 var(--s-1); }
-.wall { display:grid; gap:var(--s-4); grid-template-columns:minmax(0,320px); justify-content:center; align-items:start; }
-@media(min-width:600px){.wall{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(min-width:900px){.wall{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media(min-width:1200px){.wall{grid-template-columns:repeat(4,minmax(0,1fr))}}
-.ghost--card { aspect-ratio: 2 / 3.7; }
+/* ── 搜尋與篩選：同一列；手機上各自撐滿 ── */
+.tools { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-3); align-items: center; margin-bottom: var(--s-4); }
+.tools__search { position: relative; flex: 0 1 360px; min-width: 0; }
+.tools__search svg { position: absolute; left: var(--s-3); top: 50%; width: 16px; height: 16px; transform: translateY(-50%); color: var(--text-3); pointer-events: none; }
+.tools__search .input { width: 100%; padding-left: calc(var(--s-3) * 2 + 16px); border-radius: var(--r-pill); }
+
+/* ── 卡片牆：欄數照首頁（CardGrid）2／3／4／6，同一排的卡等高，操作列對齊 ── */
+.wall { display: grid; gap: var(--s-4) var(--s-3); grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 600px) { .wall { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-5) var(--s-4); } }
+@media (min-width: 820px) { .wall { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (min-width: 1080px) { .wall { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+.ghost--card { aspect-ratio: 3 / 6.9; }
+
+.pager { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: var(--s-2); margin-top: var(--s-6); }
+.pager__step { gap: 2px; }
+.pager__step svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.pager__num { min-width: 36px; justify-content: center; font-variant-numeric: tabular-nums; }
+.pager__num--on { background: var(--accent-tint); border-color: transparent; color: var(--accent-text); }
+.pager__gap { padding: 0 var(--s-1); }
 
 .empty { padding: var(--s-8) var(--s-5); text-align: center; display: grid; gap: var(--s-4); justify-items: center; }
 .empty__title { font-size: 16px; font-weight: 600; }
 .empty__body { margin: calc(-1 * var(--s-2)) 0 0; font-size: 14px; color: var(--text-2); }
 .empty__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-2); }
-.onboard-cta { margin-bottom: var(--s-4); }
+
+/*
+ * ── 手機：標題｜建立新卡 一列、額度一列、AI Agent 撐滿一列；搜尋與篩選各一列撐滿；翻頁只留箭頭 ──
+ * 兩顆鍵擠一列在 360px 寬、英文或日文時膠囊會折成兩行，所以 AI Agent 自己一整列（五種語言都放得下）。
+ */
+@media (max-width: 599px) {
+  .head {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
+    grid-template-areas: "title create" "quota quota" "agent agent"; gap: var(--s-2) var(--s-3);
+  }
+  .head__text, .head__actions { display: contents; }
+  .head__title { grid-area: title; }
+  .quota { grid-area: quota; margin-top: calc(-1 * var(--s-1)); }
+  .head__create { grid-area: create; }
+  .head__agent { grid-area: agent; display: flex; margin-top: var(--s-1); }
+  .head__agent :deep(.onboard__pill) { flex: 1; justify-content: center; }
+  .tools__search { flex: 1 1 100%; }
+  .tools__seg { flex: 1 1 100%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .tools__seg .seg__item { padding-inline: var(--s-2); }
+  .pager { gap: var(--s-1); }
+  .pager__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .pager__num, .pager__step { min-width: 36px; padding-inline: var(--s-2); justify-content: center; }
+}
+/* 手指點的裝置：頁首兩顆鍵與翻頁鍵撐到 44px */
+@media (pointer: coarse) {
+  .head__actions .btn, .head__agent :deep(.onboard__pill) { min-height: var(--h-lg); }
+  .head__create { height: var(--h-lg); }
+  .pager .btn { height: var(--h-lg); min-width: var(--h-lg); }
+}
 </style>

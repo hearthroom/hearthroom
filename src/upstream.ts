@@ -89,6 +89,11 @@ export interface UpstreamRole {
    * 作者在主站建的是 manual／空字串。只有本站建的能登記上榜、能出現在「我的卡片」。
    */
   creationMethod: string;
+  /**
+   * 供應商的內容版本（Harbor role.content_hash）。封存版的雜湊照抄送審當下的草稿，
+   * 所以讀過審的封存版拿到的就是「過審那一版」的版本——跟草稿現在的比，看得出作者改了沒送審。
+   */
+  contentHash?: string;
 }
 
 /** 本站在上游登記的來源名。建卡時送出、讀回時比對，兩邊要同一個字。 */
@@ -143,6 +148,7 @@ export function projectRole(raw: Record<string, unknown>): UpstreamRole {
     talkNum: num(raw.talkNum),
     followNum: num(raw.followNum),
     creationMethod: str(raw.creationMethod),
+    ...(str(raw.contentHash) ? { contentHash: str(raw.contentHash) } : {}),
   };
 }
 
@@ -156,6 +162,8 @@ export interface MyRole {
   backgroundUrl?: string | null;
   visibility: string;
   talkNum: number;
+  /** 草稿現在的內容版本；供應商沒回就沒有（見 UpstreamRole.contentHash）。只在本站比對用，不送到前端。 */
+  contentHash?: string;
 }
 
 export interface MyRolePage {
@@ -199,11 +207,34 @@ export async function fetchMyRoles(
         backgroundUrl: str(r.roleBackground) || str(r.roleAvatar) || null,
         visibility: str(r.roleVisibility),
         talkNum: num(r.talkNum),
+        ...(str(r.contentHash) ? { contentHash: str(r.contentHash) } : {}),
       }))
       .filter((r) => r.roleId),
     total: num(body.total),
     hasNext: Boolean(body.hasNextPage),
   };
+}
+
+/**
+ * 作者這幾張卡草稿現在的內容版本，用作者自己的 token 逐張讀詳情（私人草稿匿名讀不到）。
+ *
+ * 只有「我的卡片」的「已提交」那組用：那組的清單從本站的庫出、不經上游清單，拿不到版本，
+ * 而呼叫端只替已發布、記得過審版本的卡問——一頁最多幾張，並行問完。讀不到的那張就不回，
+ * 清單上不標（不猜）。
+ */
+async function fetchContentHashes(env: Env, bearer: string, roleIds: string[], provider: ProviderId = DEFAULT_PROVIDER): Promise<Map<string, string>> {
+  const found = await Promise.all(roleIds.map(async (roleId) => {
+    try {
+      const res = await fetch(apiUrl(env, provider, `/open/v1/role/detail?roleId=${encodeURIComponent(roleId)}`), {
+        headers: { Authorization: `Bearer ${bearer}`, language: "zh-Hans", "User-Agent": UA },
+      });
+      const hash = str((await readJson(res, "role")).contentHash);
+      return hash ? ([roleId, hash] as const) : null;
+    } catch {
+      return null;
+    }
+  }));
+  return new Map(found.filter((entry): entry is readonly [string, string] => !!entry));
 }
 
 /** 匿名讀一張卡。同步跑在排程裡，那時沒有使用者在線，手上不會有任何人的 token。 */
@@ -298,5 +329,5 @@ async function setFeatured(env: Env, bearer: string, roleId: string, featured: b
 }
 
 
-export const upstream = { fetchMe, fetchRole, fetchMyRoles, readForReview, readSealedForReview, fetchCommunityStatus, setFeatured };
+export const upstream = { fetchMe, fetchRole, fetchMyRoles, fetchContentHashes, readForReview, readSealedForReview, fetchCommunityStatus, setFeatured };
 export type Upstream = typeof upstream;

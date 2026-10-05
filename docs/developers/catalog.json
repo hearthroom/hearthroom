@@ -1635,6 +1635,7 @@
   "d0e8907a965a3": "Review state of a pending update to a listed card.",
   "db2d7ce532452": "The latest rejection note.",
   "dbe00856bd19e": "The rating you declared; only when registered.",
+  "3edeca6f771b9": "Present and true when the card is published but its draft has edits that have not been submitted for review: the draft's content version differs from the approved one. Edits to the Lorebook or presentation rules alone are not detected.",
   "dffce49c8cc1c": "Cards matching the filter and keyword across all pages.",
   "d6c45965f3b31": "How many of your cards are submitted to or listed on this site, overall.",
   "da1fdf611391c": "Milliseconds; UTC Monday.",

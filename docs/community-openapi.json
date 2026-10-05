@@ -3246,6 +3246,10 @@
           "nsfw": {
             "type": "boolean",
             "description": "The rating you declared; only when registered."
+          },
+          "draftChanged": {
+            "type": "boolean",
+            "description": "Present and true when the card is published but its draft has edits that have not been submitted for review: the draft's content version differs from the approved one. Edits to the Lorebook or presentation rules alone are not detected."
           }
         }
       },
