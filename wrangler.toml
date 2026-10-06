@@ -37,6 +37,9 @@ run_worker_first = [
   "/download", "/download/", "/updates", "/updates/", "/updates.atom", "/cards/*", "/authors/*", "/review*", "/internal/community/*", "/internal/auth/*",
   # 站台 manifest 在卡片 App 網域（play.）上要 404，得先過 Worker（src/index.ts）
   "/manifest.webmanifest",
+  # 各語言的首頁有兩種寫法：/en/ 進得了下面的萬用字元，/en（hreflang 給搜尋引擎的那個）進不了——
+  # 不列出來的話，爬蟲拿到的是資源層的靜態殼，沒有 src/head.ts 寫進去的站名與分享預覽（2026-10-07 線上實測）。
+  "/zh-Hans", "/en", "/ja", "/ko",
   "/zh-Hans/*", "/en/*", "/ja/*", "/ko/*",
   # /assets/* 也過 Worker：資源層找不到（舊部署的 hash 檔）時回退到 ASSET_ARCHIVE。這些檔帶 immutable
   # 快取頭，邊緣命中時不會真的進 Worker，只有 miss 才付一次呼叫。
