@@ -1321,8 +1321,18 @@ export async function syncBatch(env: Env): Promise<{ ok: number; failed: number;
       authorsSeen.set(`${row.provider}:${role.authorNumId}`, { provider: row.provider as ProviderId, externalId: role.authorNumId });
       ok++;
     } catch (err) {
-      // 單張卡失敗不能拖垮整批（上游可能剛好在重啟）。下一輪它仍排在最前面。
-      // 讀不到一律當成暫時性的（服務重啟、網路抖動都會這樣）：保留，下一輪重試。
+      // 上游明說這張不在了（404）：下榜、排到隊尾，登記與審核紀錄都留著。
+      // 以前一律當暫時性失敗——不推進 last_synced_at，於是它每輪都排第一個、永遠佔一個名額，
+      // 榜上一直掛著舊資料（2026-09-28 起一張在 Harbor 已刪除的卡每小時重讀一次）。
+      // 只在讀的仍是過審那一份時才下榜：讀到一半剛好換了新的過審版，舊版消失是正常的。
+      // 'unshared' 是既有的「不上榜、卡片頁 404」狀態，改回 approved 就恢復，不刪任何東西。
+      if (err instanceof HttpError && err.status === 404) {
+        writes.push(env.DB.prepare("UPDATE cards SET status=CASE WHEN status='approved' THEN 'unshared' ELSE status END, last_synced_at=? WHERE id=? AND approved_hosted_role_id=?").bind(now, row.id, row.approved_hosted_role_id));
+        delisted++;
+        console.warn("sync delisted", { provider: row.provider });
+        return;
+      }
+      // 其餘失敗（服務重啟、網路抖動、5xx）當暫時性：保留，下一輪仍排在最前面重試。
       // 不因為一次讀不到就刪掉作者的登記——那個代價遠大於榜單短暫顯示舊資料。
       failed++;
       console.error("sync failed", { provider:row.provider });

@@ -257,8 +257,13 @@ describe("每小時同步", () => {
 
   it("單張卡失敗不會拖垮整批", async () => {
     await seed({ id: "good", name: "同步得到" });
-    await seed({ id: "gone", roleId: "role-unreachable", name: "上游已刪" });
+    await seed({ id: "gone", roleId: "role-unreachable", name: "上游暫時讀不到" });
     rolesOnMainSite({ roleId: "role-good", name: "更新成功" });
+    const found = upstream.fetchRole;
+    upstream.fetchRole = async (e, roleId, provider) => {
+      if (roleId === "role-unreachable") throw new HttpError(502, "upstream role failed with 500");
+      return found(e, roleId, provider);
+    };
 
     const ctx = createExecutionContext();
     await worker.scheduled(createScheduledController(), env, ctx);
@@ -266,8 +271,9 @@ describe("每小時同步", () => {
 
     const names = (await list()).body.items.map((i) => i.name).sort();
     expect(names).toContain("更新成功");
-    // 上游不刪卡，所以讀不到一律當成暫時性的：保留原樣，下一輪仍排在最前面重試。
-    expect(names).toContain("上游已刪");
+    // 暫時性的讀取失敗（5xx、網路）：保留原樣，下一輪仍排在最前面重試。
+    // 上游明說不在了（404）則下榜，見 sync-maintenance.test.ts。
+    expect(names).toContain("上游暫時讀不到");
   });
 });
 
