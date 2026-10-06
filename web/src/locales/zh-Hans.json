@@ -718,7 +718,7 @@
   "guide.start.agent.signin": "在浏览器输入代码",
   "guide.start.agent.signinNote": "打开 Agent 给的网址，登录后输入它给的代码。",
   "guide.start.agent.ask": "说出你想要的角色",
-  "guide.start.agent.askExample": "“把我推的角色写成校园 AU，嘴硬心软，加一个好感度状态栏，先做成试玩卡。”",
+  "guide.start.agent.askExample": "“把我推的角色写成校园 AU：全班最不想理我的人，每次我出事却都是他先到。语气短、不解释。先做成试玩卡。”",
   "guide.start.agent.more": "了解写卡技能",
   "guide.start.agent.cli": "了解 Hearthroom CLI",
   "guide.start.web.tab": "网页编辑器",
