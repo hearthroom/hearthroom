@@ -49,7 +49,6 @@ Your agent works from the official skills, so you do not need to explain how a c
 - The idea is not clear yet: [Ask for directions before a card](#ask-for-directions-before-a-card)
 - You have a source, setting notes or a card you like: [Hand over the material](#hand-over-the-material)
 - The language, register or forms of address are wrong: [State the language and forms of address](#state-the-language-and-forms-of-address)
-- The content goes further or less far than intended: [State the content boundaries](#state-the-content-boundaries)
 - The agent changed content you did not ask about: [One change per version](#one-change-per-version)
 - The agent reports a test, but the card runs dry after three turns: [Ask for a full playtest and read the working record](#ask-for-a-full-playtest-and-read-the-working-record)
 - A change made the card worse: [Report what you saw, not the edit](#report-what-you-saw-not-the-edit)
@@ -136,16 +135,6 @@ Write something like:
 
 ```text
 The whole card in English, British spelling. The character addresses the player by first name, never "sir" or "ma'am". The player's name is theirs to fill in; do not preset one.
-```
-
-### State the content boundaries
-
-"Not too spicy" or "don't go too far" gives the agent no range to work with. State the default rating, how far the character may follow when the player initiates, and the lines that are not crossed, so the agent can follow both the platform's rules and your intent.
-
-Write something like:
-
-```text
-All-ages by default; the character never initiates intimacy. If the player initiates, respond up to holding hands and an embrace, then turn the scene with the story. Platform rules are yours to enforce; where they conflict with this, follow the rules and tell me.
 ```
 
 ### One change per version
