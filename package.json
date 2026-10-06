@@ -10,7 +10,7 @@
     "dev:web": "npm run dev -w web",
     "types": "wrangler types",
     "typecheck": "npm run updates:build && wrangler types && tsc --noEmit && npm run typecheck -w web",
-    "test": "npm run updates:build && node --test scripts/card-identity-migration.test.mjs scripts/card-cutover.test.mjs scripts/updates/entries.test.mjs scripts/updates/check-commits.test.mjs && vitest run && npm run test -w web",
+    "test": "npm run updates:build && node --test scripts/card-identity-migration.test.mjs scripts/card-cutover.test.mjs scripts/deploy-workflow.test.mjs scripts/updates/entries.test.mjs scripts/updates/check-commits.test.mjs && vitest run && npm run test -w web",
     "test:api": "npm run updates:build && vitest run",
     "build": "npm run updates:build && npm run build:stage && npm run build -w web",
     "updates:build": "node scripts/updates/build.mjs",
