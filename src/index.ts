@@ -42,7 +42,7 @@ import {
   BEACON_DETAILS, BEACON_EVENTS, clientKind, emit, note, refHostOf, safeSubject, shapeTerm, surfaceOf,
   type EventFields, type Pending,
 } from "./analytics";
-import { authorLine, downloadMeta, preloadImageTag, renderHead, updatesMeta } from "./head";
+import { authorLine, downloadMeta, homeMeta, preloadImageTag, renderHead, updatesMeta } from "./head";
 import { aliasTarget, HOST, canonicalUrl, isPlayHost } from "./site";
 import { cardThumbUrl, landingZone } from "../shared/card-thumb";
 import { PRIMARY_HOST, siteRootOf } from "../shared/site-hosts";
@@ -1466,10 +1466,18 @@ async function landingPage(c: Context<{ Bindings: Env; Variables: { ev: Pending 
 app.get("*", async (c) => {
   const url = new URL(c.req.url);
   const landing = url.pathname.match(LANDING);
-  if (landing && siteRootOf(url.hostname) && !isPlayHost(url.host) && !LANDING_FILTERS.some((key) => url.searchParams.has(key))) {
-    const page = await landingPage(c, url, landing[1] ?? "zh-Hant");
+  if (landing && siteRootOf(url.hostname) && !isPlayHost(url.host)) {
+    const locale = landing[1] ?? "zh-Hant";
+    // 首頁的標題與分享預覽在這裡就寫進 <head>：不跑 JS 的爬蟲與連結預覽只看得到這份（src/head.ts）。
+    const meta = homeMeta(locale, new URL(locale === "zh-Hant" ? "/" : `/${locale}`, `https://${PRIMARY_HOST}`).toString());
+    const filtered = LANDING_FILTERS.some((key) => url.searchParams.has(key));
+    const page = filtered ? null : await landingPage(c, url, locale);
     note(c, { event: "page_html", refHost: refHostOf(c.req.header("Referer"), url.host), detail: page ? "landing" : "page" });
-    if (page) return page;
+    if (page) return renderHead(page, meta);
+    // 讀榜超時或帶著篩選：回純殼，<head> 一樣要有首頁的標題
+    const shell = await c.env.ASSETS.fetch(new Request(new URL("/", url).toString()));
+    if (!shell.ok) return shell;
+    return renderHead(shell, meta);
   }
   const m = url.pathname.match(PAGE);
   // 不是要注入的頁面就原樣交回資源層——靜態檔給檔案本身，其餘走它的 SPA 回退。
