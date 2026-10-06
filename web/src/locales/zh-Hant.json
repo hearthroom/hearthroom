@@ -718,7 +718,7 @@
   "guide.start.agent.signin": "在瀏覽器輸入代碼",
   "guide.start.agent.signinNote": "打開 Agent 給的網址，登入後輸入它給的代碼。",
   "guide.start.agent.ask": "說出你想要的角色",
-  "guide.start.agent.askExample": "「把我推的角色寫成校園 AU，嘴硬心軟，加一個好感度狀態欄，先做成試玩卡。」",
+  "guide.start.agent.askExample": "「把我推的角色寫成校園 AU：全班最不想理我的人，每次我出事卻都是他先到。語氣短、不解釋。先做成試玩卡。」",
   "guide.start.agent.more": "了解寫卡技能",
   "guide.start.agent.cli": "了解 Hearthroom CLI",
   "guide.start.web.tab": "網頁編輯器",

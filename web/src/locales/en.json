@@ -718,7 +718,7 @@
   "guide.start.agent.signin": "Enter the code in a browser",
   "guide.start.agent.signinNote": "Open the address your agent gives you, sign in, and type the code it shows.",
   "guide.start.agent.ask": "Describe your character",
-  "guide.start.agent.askExample": "“Write my favorite character as a high-school AU, tsundere, with an affection meter in the status bar. Make it a trial card first.”",
+  "guide.start.agent.askExample": "“Write my favorite character as a high-school AU: the one person in class who ignores me, yet the first to show up whenever I'm in trouble. Short lines, no explaining. Trial card first.”",
   "guide.start.agent.more": "About the card-writing skills",
   "guide.start.agent.cli": "About Hearthroom CLI",
   "guide.start.web.tab": "Web editor",

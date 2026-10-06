@@ -95,6 +95,6 @@ Tell the user, in their language, what you set up: the CLI version, which agent 
 
 Once loaded, the `using-hearthroom` skill is available and routes every card request. Offer two or three first requests in their language, for example:
 
-- Turn my favorite character into a high-school AU card: tsundere, with an affection meter in the status bar. Push it as a trial card.
-- Import this SillyTavern card and tell me why it runs out of things to say after three turns.
-- Render the opening and tell me whether the status bar shows.
+- Write my favorite character as a high-school AU: the one person in class who ignores me, yet the first to show up whenever I'm in trouble. Short lines, no explaining. Push it as a trial card and tell me the weakest layer.
+- Import this SillyTavern card and tell me why it runs out of things to say after three turns; then fix only that.
+- Play ten turns with the second opening and tell me at which turn a player would lose interest.
