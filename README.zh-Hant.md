@@ -2,7 +2,7 @@
   <img src="web/public/icons/icon-192.png" width="96" alt="">
 </p>
 
-<h1 align="center">Hearthroom</h1>
+<h1 align="center">綺夢社</h1>
 
 <p align="center">
   AI 角色卡的開放平台：社群榜單、瀏覽器內直接遊玩的對話，以及經社群審核的分發。<br>
@@ -27,18 +27,18 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/board-dark.png" width="800" alt="Hearthroom 榜單（深色）">
+  <img src="docs/screenshots/board-dark.png" width="800" alt="綺夢社榜單（深色）">
 </p>
 
 ## 概述
 
-Hearthroom 是 AI 角色卡的開源平台，由三個部分組成：
+綺夢社（開源專案名 Hearthroom）是 AI 角色卡的開源平台，由三個部分組成：
 
 - **榜單**——作者登記卡片；讀者瀏覽日榜、週榜、月榜，依名稱、簡介或標籤搜尋，查看作者頁。
 - **對話**——每張上榜的卡都能在瀏覽器裡直接遊玩。對話舞台（另一個開源專案，以 `stage/` 子模組納入）負責繪製對話、卡片的狀態欄與面板，並在沙箱中執行卡片的腳本。
 - **分發**——卡片上榜前經社群審核，開啟時連同規則、世界書與圖片一併載入。可匯入 SillyTavern 的 PNG／JSON 角色卡。
 
-Hearthroom 與 SillyTavern 的差別在於執行位置。使用者不需要在本機安裝任何東西，也不需要設定 API 金鑰。登入、卡片儲存與文字生成由**卡片供應商**負責，也就是一個提供開放 API 的聊天服務。Hearthroom 儲存的是登記資料（哪些卡上榜）、審核狀態、搜尋索引與站台設定。作者透過供應商登入，以卡片 ID 登記；站台每小時從供應商複製一次卡片的公開欄位。卡片內容不儲存在站台。
+綺夢社與 SillyTavern 的差別在於執行位置。使用者不需要在本機安裝任何東西，也不需要設定 API 金鑰。登入、卡片儲存與文字生成由**卡片供應商**負責，也就是一個提供開放 API 的聊天服務。綺夢社儲存的是登記資料（哪些卡上榜）、審核狀態、搜尋索引與站台設定。作者透過供應商登入，以卡片 ID 登記；站台每小時從供應商複製一次卡片的公開欄位。卡片內容不儲存在站台。
 
 審核流程：審核人從共享佇列領取提交；初審需要兩位通過，重審需要一位；任一駁回即駁回；審核頁不顯示作者。通過與卡片的內容版本綁定，作者修改卡片後會離榜並重新排隊。
 
@@ -134,7 +134,7 @@ localStorage.setItem("hearthroom.oauth.access", JSON.stringify({ accessToken: "t
 
 1. 建立資源並將 ID 填入 `wrangler.toml`：一個 D1 資料庫（`DB`）、兩個 KV 命名空間（`CACHE`、`ASSET_ARCHIVE`），以及選用的 Analytics Engine 資料集（`EVENTS`；設定 `ANALYTICS_ENABLED = "false"` 可停用）。
 2. 設定網域：`wrangler.toml` 的 `routes`、`src/site.ts` 的 `HOST`、`web/src/lib/site.ts` 的站名。已有 DNS 記錄的主機名無法綁定自訂網域，須先刪除停放記錄。 卡片 App 在 `play.<網域>`、沙箱殼在 `c<id>.<網域>`，都由同一條萬用路由服務，zone 要有一筆代理的萬用 DNS 記錄。
-3. 在 `[vars]` 設定 `PROVIDER_API_BASE_HARBOR`，網頁建置使用 `VITE_HARBOR_API_BASE`。Hearthroom 僅連接 HarperHarbor；LunaTalk 與區域閘道已退役。
+3. 在 `[vars]` 設定 `PROVIDER_API_BASE_HARBOR`，網頁建置使用 `VITE_HARBOR_API_BASE`。綺夢社僅連接 HarperHarbor；LunaTalk 與區域閘道已退役。
 4. 決定要不要審核：`[vars]` 中的 `REVIEW_ENABLED = "true"` 表示提交要經社群審核；其他值則不經審核直接上榜。審核不需要在供應商那邊持有任何金鑰或帳號。以 `node scripts/grant-reviewer.mjs <供應商帳號 ID>` 授權審核人。
 5. 選用的 `wrangler secret put SHORTCUT_SECRET`（任意隨機字串）：用來簽發短效鑰匙，讓開了成人內容的成員也能把成人卡加到主畫面；不設的話成人卡就沒有這個按鈕。
 6. 部署：
