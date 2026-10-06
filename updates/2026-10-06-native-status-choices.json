@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/guide",
+  "title": {
+    "zh-Hant": "[status]／[choices] 區塊不寫規則也會畫成面板和按鈕。",
+    "zh-Hans": "[status]／[choices] 区块不写规则也会画成面板和按钮。",
+    "en": "A reply ending with a [status] or [choices] block is now drawn as a panel and buttons without any display rule.",
+    "ja": "[status] と [choices] ブロックが表示ルールなしでもパネルとボタンになります。",
+    "ko": "답변 끝의 [status]와 [choices] 블록이 표시 규칙 없이도 패널과 버튼으로 그려집니다."
+  },
+  "body": {
+    "zh-Hant": "選項按下去會填進輸入框讓玩家改完再送，要自己的樣式就用寫卡工具包的 sandbox kit，它的規則先吃掉標記，平台就不再畫。",
+    "zh-Hans": "选项按下去会填进输入框让玩家改完再发，要自己的样式就用写卡工具包的 sandbox kit，它的规则先吃掉标记，平台就不再画。",
+    "en": "Tapping an option puts it in the composer for the player to edit and send, and a card that wants its own look uses the authoring toolkit's sandbox kit, whose rules consume the markers first so the page leaves them alone.",
+    "ja": "選択肢をタップすると入力欄に入り、独自の見た目が欲しいカードは執筆ツールキットの sandbox kit を使えば、そのルールが先にマーカーを処理します。",
+    "ko": "선택지를 누르면 입력창에 들어가 플레이어가 고쳐서 보낼 수 있고, 자신만의 모양이 필요한 카드는 작성 툴킷의 sandbox kit을 쓰면 그 규칙이 마커를 먼저 처리합니다."
+  }
+}
