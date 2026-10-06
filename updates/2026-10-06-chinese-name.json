@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/",
+  "title": {
+    "zh-Hant": "中文介面現在叫綺夢社，分頁標題寫成綺夢社・寢物語。",
+    "zh-Hans": "中文界面现在叫绮梦社，标签页标题写成绮梦社·寝物语。",
+    "en": "The Chinese pages now carry the site's Chinese name, 綺夢社.",
+    "ja": "中国語のページにサイトの中国語名「綺夢社」が付きました。",
+    "ko": "중국어 페이지에 사이트의 중국어 이름 綺夢社가 붙었습니다."
+  }
+}

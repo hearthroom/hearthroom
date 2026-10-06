@@ -12,6 +12,7 @@ import { maintainUpdates, updatesRoutes } from "./updates";
 import { hostGateway, hostingKey, submitHosted, hostingDecision, beginHostedEdit } from "./hosting";
 import { saveCommunityProfile, cleanAvatars } from "./community-profile";
 import { AVATAR_MAX_BYTES } from '../shared/avatar';
+import { siteName } from "../shared/site-name";
 import { bodyLimit } from "hono/body-limit";
 import { authoringSource, copiesFor, workFor, worksFor } from "./card-sync";
 import { apiBaseOf as providerApiBase } from "./providers";
@@ -1372,7 +1373,6 @@ export async function syncBatch(env: Env): Promise<{ ok: number; failed: number;
  * 前端會畫自己的 404 頁，而抓取器與搜尋引擎得到正確的狀態碼。
  */
 const PAGE = /^(?:\/(zh-Hans|en|ja|ko))?\/(download|updates|cards|authors)(?:\/([^/]+))?\/?$/;
-const SITE_NAME = "Hearthroom";
 const PAGE_TTL = 60;
 
 /**
@@ -1541,7 +1541,7 @@ app.get("*", async (c) => {
     // Canonical uses the community-wide ID: provider-local IDs can collide.
     const canonical = canonicalUrl(new URL(normalized.pathname.replace(/[^/]+$/, encodeURIComponent(row.id)), url));
     const res = renderHead(shell, {
-      lang: locale, title: `${card.name} · ${SITE_NAME}`, description: card.summary, image: card.avatarUrl, url: canonical, type: "profile", preloadImage: true,
+      lang: locale, title: `${card.name} · ${siteName(locale)}`, description: card.summary, image: card.avatarUrl, url: canonical, type: "profile", preloadImage: true,
     });
     res.headers.set("Cache-Control", `public, max-age=${PAGE_TTL}`);
     return res;
@@ -1550,7 +1550,7 @@ app.get("*", async (c) => {
   const author = memberId ? await getAuthor(c.env.DB, memberId) : null;
   if (!author) return new Response(shell.body, { status: 404, headers: shell.headers });
   const res = renderHead(shell, {
-    lang: locale, title: `${author.author_name} · ${SITE_NAME}`, description: authorLine(locale, author.card_count, author.talk_total ?? 0), image: author.author_avatar || null, url: self, type: "profile",
+    lang: locale, title: `${author.author_name} · ${siteName(locale)}`, description: authorLine(locale, author.card_count, author.talk_total ?? 0), image: author.author_avatar || null, url: self, type: "profile",
   });
   res.headers.set("Cache-Control", `public, max-age=${PAGE_TTL}`);
   return res;

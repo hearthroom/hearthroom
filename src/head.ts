@@ -84,8 +84,8 @@ export function renderHead(page: Response, meta: PageMeta): Response {
 
 /** Public download copy belongs in the initial HTML, before any client JS runs. */
 const DOWNLOAD_COPY: Record<string, {title:string;description:string}> = {
-  "zh-Hant": {title:"下載 Hearthroom",description:"Hearthroom Android App 與瀏覽器安裝指南：下載最新版 APK，查看手機安裝步驟與 App 更新方式。"},
-  "zh-Hans": {title:"下载 Hearthroom",description:"Hearthroom Android App 与浏览器安装指南：下载最新版 APK，查看手机安装步骤与 App 更新方式。"},
+  "zh-Hant": {title:"下載綺夢社",description:"綺夢社的 Android App 與瀏覽器安裝指南：下載最新版 APK，查看手機安裝步驟與 App 更新方式。"},
+  "zh-Hans": {title:"下载绮梦社",description:"绮梦社的 Android App 与浏览器安装指南：下载最新版 APK，查看手机安装步骤与 App 更新方式。"},
   en: {title:"Download Hearthroom",description:"Get the latest Hearthroom Android APK, follow the installation guide, and learn how app updates work. Browser installation options are included."},
   ja: {title:"Hearthroom をダウンロード",description:"Hearthroom の最新 Android APK とインストールガイド。スマートフォンへの導入、アプリの更新、ブラウザからの利用方法を確認できます。"},
   ko: {title:"Hearthroom 다운로드",description:"Hearthroom 최신 Android APK와 설치 가이드입니다. 휴대폰 설치 단계, 앱 업데이트 및 브라우저 설치 방법을 확인하세요."},
@@ -96,8 +96,8 @@ export function downloadMeta(lang:string,url:string):PageMeta {
 
 /** 更新頁的分享預覽：說明這一頁是什麼，不列內容（內容每天在變）。 */
 const UPDATES_COPY: Record<string, {title:string;description:string}> = {
-  "zh-Hant": {title:"Hearthroom 更新紀錄",description:"Hearthroom 每次上線了什麼新功能、修好了哪些問題，都記在這裡，每一項都附上去哪裡試。"},
-  "zh-Hans": {title:"Hearthroom 更新记录",description:"Hearthroom 每次上线了什么新功能、修好了哪些问题，都记在这里，每一项都附上去哪里试。"},
+  "zh-Hant": {title:"綺夢社更新紀錄",description:"綺夢社每次上線了什麼新功能、修好了哪些問題，都記在這裡，每一項都附上去哪裡試。"},
+  "zh-Hans": {title:"绮梦社更新记录",description:"绮梦社每次上线了什么新功能、修好了哪些问题，都记在这里，每一项都附上去哪里试。"},
   en: {title:"Hearthroom updates",description:"Every new feature and fix that went live on Hearthroom, with a link to try each one."},
   ja: {title:"Hearthroom の更新履歴",description:"Hearthroom に追加された新機能と修正の一覧です。それぞれ試せる場所へのリンクも載せています。"},
   ko: {title:"Hearthroom 업데이트 기록",description:"Hearthroom에 새로 추가된 기능과 수정 사항을 모았습니다. 항목마다 바로 써 볼 수 있는 링크가 있습니다."},

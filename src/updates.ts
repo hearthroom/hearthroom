@@ -293,8 +293,8 @@ export async function maintainUpdates(env: Env, now: number): Promise<void> {
 }
 
 const DIGEST_COPY: Record<UpdateLocale, { heading: (m: number, d: number) => string; fixes: string; more: string }> = {
-  "zh-Hant": { heading: (m, d) => `Hearthroom ${m}/${d} 的更新`, fixes: "修正", more: "看全部更新" },
-  "zh-Hans": { heading: (m, d) => `Hearthroom ${m}/${d} 的更新`, fixes: "修复", more: "查看全部更新" },
+  "zh-Hant": { heading: (m, d) => `綺夢社 ${m}/${d} 的更新`, fixes: "修正", more: "看全部更新" },
+  "zh-Hans": { heading: (m, d) => `绮梦社 ${m}/${d} 的更新`, fixes: "修复", more: "查看全部更新" },
   en: { heading: (m, d) => `What's new on Hearthroom, ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][m - 1]} ${d}`, fixes: "Fixes", more: "See all updates" },
   ja: { heading: (m, d) => `Hearthroom ${m}月${d}日の更新`, fixes: "修正", more: "すべての更新を見る" },
   ko: { heading: (m, d) => `Hearthroom ${m}월 ${d}일 업데이트`, fixes: "수정", more: "전체 업데이트 보기" },
@@ -454,8 +454,8 @@ export async function updateBridge(env: Env, op: string, b: Record<string, unkno
 // ---- Atom ------------------------------------------------------------------------
 
 const FEED_TITLE: Record<UpdateLocale, string> = {
-  "zh-Hant": "Hearthroom 更新紀錄",
-  "zh-Hans": "Hearthroom 更新记录",
+  "zh-Hant": "綺夢社更新紀錄",
+  "zh-Hans": "绮梦社更新记录",
   en: "Hearthroom updates",
   ja: "Hearthroom の更新履歴",
   ko: "Hearthroom 업데이트 기록",
