@@ -2,7 +2,7 @@
   <img src="web/public/icons/icon-192.png" width="96" alt="">
 </p>
 
-<h1 align="center">Hearthroom</h1>
+<h1 align="center">绮梦社</h1>
 
 <p align="center">
   AI 角色卡的开放平台：社区榜单、浏览器内直接游玩的对话，以及经社区审核的分发。<br>
@@ -27,18 +27,18 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/board-dark.png" width="800" alt="Hearthroom 榜单（深色）">
+  <img src="docs/screenshots/board-dark.png" width="800" alt="绮梦社榜单（深色）">
 </p>
 
 ## 概述
 
-Hearthroom 是 AI 角色卡的开源平台，由三个部分组成：
+绮梦社（开源项目名 Hearthroom）是 AI 角色卡的开源平台，由三个部分组成：
 
 - **榜单**——作者登记卡片；读者浏览日榜、周榜、月榜，按名称、简介或标签搜索，查看作者页。
 - **对话**——每张上榜的卡都能在浏览器里直接游玩。对话舞台（另一个开源项目，以 `stage/` 子模块纳入）负责绘制对话、卡片的状态栏与面板，并在沙箱中运行卡片的脚本。
 - **分发**——卡片上榜前经社区审核，打开时连同规则、世界书与图片一并加载。可导入 SillyTavern 的 PNG／JSON 角色卡。
 
-Hearthroom 与 SillyTavern 的差别在于运行位置。用户不需要在本地安装任何东西，也不需要配置 API 密钥。登录、卡片存储与文本生成由**卡片提供方**负责，也就是一个提供开放 API 的聊天服务。Hearthroom 存储的是登记数据（哪些卡上榜）、审核状态、搜索索引与站点设置。作者通过提供方登录，以卡片 ID 登记；站点每小时从提供方复制一次卡片的公开字段。卡片内容不存储在站点。
+绮梦社与 SillyTavern 的差别在于运行位置。用户不需要在本地安装任何东西，也不需要配置 API 密钥。登录、卡片存储与文本生成由**卡片提供方**负责，也就是一个提供开放 API 的聊天服务。绮梦社存储的是登记数据（哪些卡上榜）、审核状态、搜索索引与站点设置。作者通过提供方登录，以卡片 ID 登记；站点每小时从提供方复制一次卡片的公开字段。卡片内容不存储在站点。
 
 审核流程：审核人从共享队列领取提交；初审需要两位通过，复审需要一位；任一驳回即驳回；审核页不显示作者。通过与卡片的内容版本绑定，作者修改卡片后会离榜并重新排队。
 
@@ -132,7 +132,7 @@ localStorage.setItem("hearthroom.oauth.access", JSON.stringify({ accessToken: "t
 
 1. 创建资源并将 ID 填入 `wrangler.toml`：一个 D1 数据库（`DB`）、两个 KV 命名空间（`CACHE`、`ASSET_ARCHIVE`），以及可选的 Analytics Engine 数据集（`EVENTS`；设置 `ANALYTICS_ENABLED = "false"` 可停用）。
 2. 设置域名：`wrangler.toml` 的 `routes`、`src/site.ts` 的 `HOST`、`web/src/lib/site.ts` 的站名。已有 DNS 记录的主机名无法绑定自定义域名，须先删除停放记录。 卡片 App 在 `play.<域名>`、沙箱壳在 `c<id>.<域名>`，都由同一条通配路由服务，zone 需要一条代理的通配 DNS 记录。
-3. 在 `[vars]` 设置 `PROVIDER_API_BASE_HARBOR`，网页构建使用 `VITE_HARBOR_API_BASE`。Hearthroom 仅连接 HarperHarbor；LunaTalk 与区域网关已退役。
+3. 在 `[vars]` 设置 `PROVIDER_API_BASE_HARBOR`，网页构建使用 `VITE_HARBOR_API_BASE`。绮梦社仅连接 HarperHarbor；LunaTalk 与区域网关已退役。
 4. 决定要不要审核：`[vars]` 中的 `REVIEW_ENABLED = "true"` 表示提交要经社区审核；其他值则不经审核直接上榜。审核不需要在提供方那边持有任何密钥或账号。以 `node scripts/grant-reviewer.mjs <提供方账号 ID>` 授权审核人。
 5. 可选的 `wrangler secret put SHORTCUT_SECRET`（任意随机字符串）：用来签发短效钥匙，让开启了成人内容的成员也能把成人卡添加到主屏幕；不设的话成人卡就没有这个按钮。
 6. 部署：
