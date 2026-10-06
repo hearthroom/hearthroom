@@ -709,7 +709,7 @@
   "guide.start.title": "Get started",
   "guide.start.label": "Ways to write",
   "guide.start.forAi": "For AI readers:",
-  "guide.start.agent.tab": "AI agent",
+  "guide.start.agent.tab": "Agent",
   "guide.start.agent.note": "Recommended",
   "guide.start.agent.lead": "Your agent drafts, checks, plays and revises the card through Hearthroom CLI and the card-writing skills.",
   "guide.start.agent.copy": "Copy the setup prompt",
