@@ -144,7 +144,7 @@ onBeforeUnmount(() => observer?.disconnect());
 .doc :deep(a) { color: var(--accent-text); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent); }
 .doc :deep(strong) { font-weight: 600; }
 .doc :deep(code) { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.88em; padding: 1px 6px; border-radius: 5px; background: var(--surface-2); box-shadow: 0 0 0 1px var(--line); }
-.doc :deep(pre) { margin: 0 0 var(--s-4); padding: var(--s-3) var(--s-4); overflow-x: auto; border-radius: var(--r-md); background: var(--surface-2); box-shadow: 0 0 0 1px var(--line); font-size: 13px; line-height: 1.6; }
+.doc :deep(pre) { margin: 0 0 var(--s-4); padding: var(--s-3) var(--s-4); overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: var(--r-md); background: var(--surface-2); box-shadow: 0 0 0 1px var(--line); font-size: 13px; line-height: 1.6; }
 .doc :deep(pre code) { padding: 0; background: none; box-shadow: none; font-size: inherit; }
 .doc :deep(blockquote) { margin: 0 0 var(--s-3); padding: var(--s-2) var(--s-4); border-left: 3px solid var(--accent); background: var(--accent-tint); border-radius: 0 var(--r-sm) var(--r-sm) 0; color: var(--text-2); }
 .doc :deep(blockquote p:last-child) { margin-bottom: 0; }
