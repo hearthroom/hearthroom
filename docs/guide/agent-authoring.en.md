@@ -4,7 +4,7 @@ Your agent works from Hearthroom's card-writing skills: it works out what you wa
 
 ### Write a whole card from an idea
 
-> "A cultivation story: I'm the outer-sect disciple everyone wrote off, and my senior sister helps me in secret. Track my cultivation and her affection. Make it a trial card first."
+> "A cultivation card: I'm the disciple the sect expelled, my senior sister helps me in secret, and the tension is that she will be caught the moment she acts. Track my cultivation only. Make it a trial card first and tell me the weakest layer."
 
 A vague idea is fine. It works out the setting, the characters, the relationship and the opening with you before it writes.
 
@@ -24,7 +24,7 @@ The chat page itself is open source (`hearthroom/moonstage`, the `stage` submodu
 
 ### Playtest and find problems
 
-> "Play two turns with the second opening and tell me where a player would lose interest."
+> "Play ten turns with the second opening and tell me at which turn a player would lose interest, and why."
 
 ### Check before you publish
 

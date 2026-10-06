@@ -718,7 +718,7 @@
   "guide.start.agent.signin": "브라우저에서 코드 입력",
   "guide.start.agent.signinNote": "에이전트가 알려 준 주소를 열고, 로그인한 뒤 코드를 입력하세요.",
   "guide.start.agent.ask": "원하는 캐릭터 말하기",
-  "guide.start.agent.askExample": "“최애를 학원 AU로 만들어 줘. 츤데레에 호감도 상태 바도 넣고, 먼저 체험 카드로.”",
+  "guide.start.agent.askExample": "“최애를 학원 AU로: 반에서 나를 제일 상대 안 하는데, 무슨 일만 생기면 제일 먼저 오는 사람. 대사는 짧게, 설명 없이. 먼저 체험 카드로.”",
   "guide.start.agent.more": "카드 작성 스킬 알아보기",
   "guide.start.agent.cli": "Hearthroom CLI 알아보기",
   "guide.start.web.tab": "웹 편집기",
