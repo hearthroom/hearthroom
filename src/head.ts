@@ -1,4 +1,5 @@
 import { PRIMARY_HOST } from "../shared/site-hosts";
+import { siteLockup, siteName } from "../shared/site-name";
 /**
  * 分享預覽：把下載頁／卡片／作者的標題、簡介、圖片寫進 HTML 的 <head>。
  *
@@ -104,4 +105,25 @@ const UPDATES_COPY: Record<string, {title:string;description:string}> = {
 };
 export function updatesMeta(lang:string,url:string):PageMeta {
   return {lang,...(UPDATES_COPY[lang] ?? UPDATES_COPY.en!),url,type:"website",image:`https://${PRIMARY_HOST}/icons/icon-512.png`};
+}
+
+/**
+ * 首頁的 <head>：不跑 JS 的爬蟲與連結預覽只看得到這份，前端 pageTitle() 跑起來之後會再寫一次同樣的字。
+ * 中文的標題是品牌全名（shared/site-name.ts）；其他語言是站名接標語，跟前端 locales 的 site.tagline 同字。
+ */
+const HOME_TAGLINE: Record<string, string> = {
+  en: "Character Board",
+  ja: "キャラクターカード ランキング",
+  ko: "캐릭터 카드 랭킹",
+};
+const HOME_DESCRIPTION: Record<string, string> = {
+  "zh-Hant": "角色卡的開放社群：榜單、搜尋與作者頁。",
+  "zh-Hans": "角色卡的开放社区：榜单、搜索与作者页。",
+  en: "An open community for character cards: rankings, search, and creator pages.",
+  ja: "キャラクターカードのオープンコミュニティ：ランキング、検索、作者ページ。",
+  ko: "캐릭터 카드의 오픈 커뮤니티: 랭킹, 검색, 작성자 페이지.",
+};
+export function homeMeta(lang:string,url:string):PageMeta {
+  const title = siteLockup(lang) ?? `${siteName(lang)} · ${HOME_TAGLINE[lang] ?? HOME_TAGLINE.en!}`;
+  return {lang,title,description:HOME_DESCRIPTION[lang] ?? HOME_DESCRIPTION.en!,url,type:"website",image:`https://${PRIMARY_HOST}/icons/icon-512.png`};
 }
