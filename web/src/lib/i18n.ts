@@ -1,6 +1,6 @@
 import { createI18n } from "vue-i18n";
 import zhHant from "../locales/zh-Hant.json";
-import { SITE } from "./site";
+import { siteLockup, siteName } from "../../../shared/site-name";
 import type { Zone } from "./types";
 
 /**
@@ -147,7 +147,13 @@ export function contentLang(uiLocale: string): string {
   return uiLocale.startsWith("zh") ? "zh" : uiLocale;
 }
 
-/** 瀏覽器分頁標題。站名是專有名詞不翻譯，其餘的翻。 */
+/**
+ * 瀏覽器分頁標題。站名照語言取（shared/site-name.ts）：中文介面是綺夢社，首頁連副標寫成「綺夢社・寢物語」，
+ * 其他頁是「頁名 · 綺夢社」；其他語言是 Hearthroom 接標語，跟以前一樣。
+ */
 export function pageTitle(part?: string): string {
-  return part ? `${part} · ${SITE.name}` : `${SITE.name} · ${i18n.global.t("site.tagline")}`;
+  const locale = String(i18n.global.locale.value);
+  const name = siteName(locale);
+  if (part) return `${part} · ${name}`;
+  return siteLockup(locale) ?? `${name} · ${i18n.global.t("site.tagline")}`;
 }

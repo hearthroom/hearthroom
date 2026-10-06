@@ -27,9 +27,10 @@ describe("分享預覽", () => {
   it("卡片頁的 <head> 帶著這張卡的標題、簡介與圖", async () => {
     const { status, html, headers } = await page("/cards/r-1");
     expect(status).toBe(200);
-    expect(html).toContain("<title>夜行偵探 沈墨 · Hearthroom</title>");
+    // 無前綴＝繁體介面：站名是中文名（shared/site-name.ts）
+    expect(html).toContain("<title>夜行偵探 沈墨 · 綺夢社</title>");
     expect(html).toContain('<meta name="description" content="民國二十四年的上海，租界的雨從不停。">');
-    expect(html).toContain('<meta property="og:title" content="夜行偵探 沈墨 · Hearthroom">');
+    expect(html).toContain('<meta property="og:title" content="夜行偵探 沈墨 · 綺夢社">');
     expect(html).toContain('<meta property="og:image" content="https://assets.harperharbor.com/bg.png">');
     // 卡片圖是這頁最大的一張：HTML 一到就開始下載，不等 JS 讀完卡片資料
     expect(html).toContain('<link rel="preload" as="image" href="https://assets.harperharbor.com/bg.png" fetchpriority="high">');
@@ -91,14 +92,14 @@ describe("分享預覽", () => {
   it("名字裡的引號不會撐破屬性", async () => {
     await upsertCard(env.DB, role({ roleId: "r-2", name: 'She said "hi" <b>', authorNumId: 8 }), Date.now());
     const { html } = await page("/cards/r-2");
-    expect(html).toContain('content="She said &quot;hi&quot; &lt;b&gt; · Hearthroom"');
-    expect(html).not.toContain("<b> · Hearthroom");
+    expect(html).toContain('content="She said &quot;hi&quot; &lt;b&gt; · 綺夢社"');
+    expect(html).not.toContain("<b> · 綺夢社");
   });
 });
 
 it.each([
-  ['', '下載 Hearthroom', 'zh_TW'],
-  ['/zh-Hans', '下载 Hearthroom', 'zh_CN'],
+  ['', '下載綺夢社', 'zh_TW'],
+  ['/zh-Hans', '下载绮梦社', 'zh_CN'],
   ['/en', 'Download Hearthroom', 'en_US'],
   ['/ja', 'Hearthroom をダウンロード', 'ja_JP'],
   ['/ko', 'Hearthroom 다운로드', 'ko_KR'],
@@ -127,7 +128,7 @@ it('canonical social URLs preserve the global identity when providers have the s
   const expected=`https://${PRIMARY_HOST}/cards/${encodeURIComponent(card!.id)}`;
   for(const id of [encodeURIComponent(card!.id),String(card!.num)]){
     const {html}=await page(`/cards/${id}`);
-    expect(html).toContain('content="Harbor card · Hearthroom"');
+    expect(html).toContain('content="Harbor card · 綺夢社"');
     expect(html).toContain(`<meta property="og:url" content="${expected}">`);
   }
 });

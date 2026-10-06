@@ -2,6 +2,7 @@ import { nextTick } from "vue";
 import { preloadStage } from "./lib/stage-preload";
 import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router";
 import { LOCALE_CODES, SOURCE_LOCALE, applyLocale, detectLocale, pageTitle, updateHreflang } from "./lib/i18n";
+import { applyCardHead } from "./lib/card-manifest";
 import { useSession } from "./lib/session";
 import { signedInHint } from "./lib/signin-hint";
 import { can } from "./lib/provider";
@@ -146,6 +147,9 @@ router.beforeEach(async (to) => {
     if (typeof view === "function") void (view as () => Promise<unknown>)().catch(() => {});
   }
   await applyLocale(locale);
+  // 站台的 <head> 跟著語言走：中文介面裝到主畫面的名字與 manifest 是綺夢社那份（lib/card-manifest.ts）。
+  // 對話頁自己換成那張卡的，這裡不碰；卡片 App 網域上站台 manifest 本來就是 404，也不碰。
+  if (!isPlayHost() && !to.meta.preloadStage) applyCardHead(null, locale);
   // 去掉語言前綴的路徑，才是各語言版本共同的那一頁（卡片 App 網域不進搜尋，沒有各語言版本）
   if (!isPlayHost()) {
     const barePath = locale === SOURCE_LOCALE ? to.path : to.path.replace(`/${locale}`, "") || "/";

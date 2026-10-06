@@ -18,6 +18,7 @@ import { useLocalePath } from "@/lib/use-locale";
 import { useReviewer } from "@/lib/review";
 import { useSession } from "@/lib/session";
 import { SITE } from "@/lib/site";
+import { siteName } from "../../shared/site-name";
 import { installPrompt, openInstall } from "@/lib/pwa";
 import { shouldShowDownloadEntry } from "@/lib/download";
 import { isPlayHost } from "@/lib/site";
@@ -27,6 +28,8 @@ import { useUpdates } from "@/lib/updates";
 import { footerGroups, footerLegal, type FooterContext } from "@/lib/footer-nav";
 
 const { lp, locale } = useLocalePath();
+// 頁首與頁尾的品牌名跟著語言走（shared/site-name.ts）：中文介面是綺夢社，其他語言是 Hearthroom。副標只進分頁標題。
+const brandName = computed(() => siteName(String(locale.value)));
 // iOS 與我們自己的 App 裡不需要「下載 App」入口（lib/download.ts）。
 const showDownloadEntry = shouldShowDownloadEntry({ ua: navigator.userAgent, touchPoints: navigator.maxTouchPoints || 0 });
 const session = useSession();
@@ -84,11 +87,11 @@ onMounted(() => document.addEventListener("keydown", onSlash));
 
   <header v-if="!route.meta.bare" class="header">
     <div class="header__inner" :class="{ 'header__inner--nosearch': onSearchPage, 'header__inner--reviewer': reviewerStore.likely }">
-      <RouterLink :to="lp('/')" class="brand" :aria-label="SITE.name">
+      <RouterLink :to="lp('/')" class="brand" :aria-label="brandName">
         <svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M5 3h14a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3h-7.5L7 21.5V18H5a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3z" />
         </svg>
-        <span class="brand__name">{{ SITE.name }}</span>
+        <span class="brand__name">{{ brandName }}</span>
       </RouterLink>
 
       <nav class="nav">
@@ -151,7 +154,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
   <footer v-if="SITE.repoUrl && !route.meta.bare" class="footer">
     <div class="footer__inner">
       <div class="footer__about">
-        <p class="footer__name">{{ SITE.name }}</p>
+        <p class="footer__name">{{ brandName }}</p>
         <p class="footer__tagline">{{ $t("footer.tagline") }}</p>
       </div>
       <nav class="footer__groups" :aria-label="$t('footer.links')">
