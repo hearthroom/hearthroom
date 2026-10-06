@@ -321,7 +321,7 @@ describe("Atom、頁面與指標", () => {
     const zh = await get("/updates.atom");
     expect(zh.headers.get("Content-Type")).toContain("application/atom+xml");
     const body = await zh.text();
-    expect(body).toContain("<title>Hearthroom 更新紀錄</title>");
+    expect(body).toContain("<title>綺夢社更新紀錄</title>");
     expect(body).toContain("<link href=\"https://sukisuki.ai/updates#2026-10-05-a\"/>");
     expect(body).toContain("&lt;說明&gt;");
     const en = await (await get("/en/updates.atom")).text();

@@ -9,6 +9,8 @@
  * 換過之後一定要告訴 lib/pwa.ts：它手上留著的安裝事件屬於前一份 manifest，按下去會裝錯東西。
  */
 import { setInstallTarget } from "./pwa";
+import { isPlayHost } from "./site";
+import { siteName } from "../../../shared/site-name";
 
 export interface CardHead {
   id: string;
@@ -24,6 +26,20 @@ export const SITE_HEAD = {
   touchIcon: "/icons/apple-touch-icon.png",
   title: "Hearthroom",
 } as const;
+
+/**
+ * 站台自己的 <head>，照語言取：中文介面裝到主畫面的名字是綺夢社，manifest 也換成中文那份
+ * （public/manifest.zh-*.webmanifest；id 都是 "/"，裝的是同一個 App，只有名字與起始頁不同）。
+ * 卡片 App 網域上永遠給 SITE_HEAD——Worker 在那裡把站台 manifest 回 404，站台 App 在那個網域裝不成（lib/site.ts）。
+ */
+export function siteHead(locale: string): { manifest: string; touchIcon: string; title: string } {
+  const localized = !isPlayHost() && locale.startsWith("zh-");
+  return {
+    manifest: localized ? `/manifest.${locale}.webmanifest` : SITE_HEAD.manifest,
+    touchIcon: SITE_HEAD.touchIcon,
+    title: siteName(locale),
+  };
+}
 
 export function cardHead(card: CardHead, locale: string): { manifest: string; touchIcon: string; title: string } {
   const id = encodeURIComponent(card.id);
@@ -54,7 +70,7 @@ function setMeta(doc: Document, name: string, content: string): void {
  */
 export function applyCardHead(card: CardHead | null, locale: string, doc: Document = document): void {
   const usable = card && (!card.nsfw || card.shortcutKey) ? card : null;
-  const head = usable ? cardHead(usable, locale) : SITE_HEAD;
+  const head = usable ? cardHead(usable, locale) : siteHead(locale);
   setLink(doc, "manifest", head.manifest);
   setLink(doc, "apple-touch-icon", head.touchIcon);
   setMeta(doc, "apple-mobile-web-app-title", head.title);

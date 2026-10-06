@@ -45,6 +45,8 @@
         })(navigator.language);
         var s = L[lang];
         document.documentElement.lang = lang;
+        // 站名跟著語言走，跟 shared/site-name.ts 同一份：這頁不跑模組，就地寫。
+        document.title = lang === "zh-Hant" ? "綺夢社" : lang === "zh-Hans" ? "绮梦社" : "Hearthroom";
         document.getElementById("t").textContent = s[0];
         document.getElementById("d").textContent = s[1];
         document.getElementById("r").textContent = s[2];
