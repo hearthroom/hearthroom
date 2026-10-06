@@ -1,6 +1,6 @@
 ## What your agent can do
 
-Your agent works from Hearthroom's card-writing skills: it works out what you want (and asks only when different readings would make different cards), writes the card as a folder, pushes it as a trial card, checks and plays it, then tells you what could be better. Each item comes with a line you can say to it.
+Your agent works from Hearthroom's card-writing skills: it works out what you want (asking only when different readings would produce different cards), writes the card as a folder, pushes it as a trial card, checks and plays it, then tells you what could be better. Each item comes with a prompt you can enter as it is.
 
 ### Write a whole card from an idea
 
