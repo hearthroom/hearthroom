@@ -237,11 +237,26 @@ async function fetchContentHashes(env: Env, bearer: string, roleIds: string[], p
   return new Map(found.filter((entry): entry is readonly [string, string] => !!entry));
 }
 
+/**
+ * Harbor 的卡片處理函式親口說「沒有這張卡」：404 加上 `{"error":"role_not_found"}`。
+ *
+ * 跟一般的 404 分開，是因為邊緣、反向代理或部署中的路由也會回裸 404——那是上游出狀況，不是卡被刪了。
+ * 對其他呼叫端它仍然就是一個 404（HttpError 的子類），只有同步拿它決定下榜。
+ */
+export class RoleGone extends HttpError {
+  constructor() {
+    super(404, "role not found");
+  }
+}
+
 /** 匿名讀一張卡。同步跑在排程裡，那時沒有使用者在線，手上不會有任何人的 token。 */
 async function fetchRole(env: Env, roleId: string, provider: ProviderId = DEFAULT_PROVIDER): Promise<UpstreamRole> {
   const res = await fetch(apiUrl(env, provider, `/open/v1/role/detail?roleId=${encodeURIComponent(roleId)}`), {
     headers: { language: "zh-Hans", "User-Agent": UA },
   });
+  if (res.status === 404 && (await res.clone().json().catch(() => null) as { error?: unknown } | null)?.error === "role_not_found") {
+    throw new RoleGone();
+  }
   // 主站對不存在（或已刪除）的卡回 400 {"error":"record not found"}，不是 404；同一支處理
   // 函式連資料庫出錯也回 400。只認這一句當「找不到」，其餘 400 仍算上游故障——
   // 否則已刪除的卡會被說成「主機暫時無法使用」（2026-09-23 社群回報的卡片連結）。
