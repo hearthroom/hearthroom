@@ -18,7 +18,9 @@ SillyTavern PNG, JSON and CHARX cards and MMD three-file sets import directly.
 
 > "Add a status bar that shows affection and location, and render the opening for me."
 
-When needed it builds the interface with the open-source tavern-mmd skill, imports it into the card and renders it to check.
+When the screen matters it uses the toolkit's own sandbox kit (a status panel drawn from a block the model writes, choice buttons, a theme), checks the folder with `hearthroom card check`, and looks at the result with `hearthroom card preview` and `card render`.
+
+The chat page itself is open source (`hearthroom/moonstage`, the `stage` submodule of this site): the skills' sandbox contract is generated from its `src/sandbox/`, and the facts sheet names the files to read when something is undocumented.
 
 ### Playtest and find problems
 

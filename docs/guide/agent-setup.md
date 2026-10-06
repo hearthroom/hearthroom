@@ -62,19 +62,9 @@ If that directory already exists, run `git -C ~/.hearthroom/skills pull` instead
 When writing, reviewing or testing a Hearthroom character card, read ~/.hearthroom/skills/skills/using-hearthroom/SKILL.md first and follow its routing table.
 ```
 
-## 3. Optional: tavern-mmd
+## 3. Nothing else to install
 
-The open-source `tavern-mmd` skill builds status bars, themes, floating panels and fully custom chat pages, and `hearthroom card import` brings its output into a card. It also adds its own slash commands, such as `/mmd` and `/beautify`. Ask the user whether they want it. If they do not, skip this step.
-
-```sh
-git clone https://github.com/yofengi/tavern-mmd ~/.hearthroom/tavern-mmd
-```
-
-If that directory already exists, run `git -C ~/.hearthroom/tavern-mmd pull` instead. Then, creating the target directories if they are missing:
-
-- Claude Code: copy `skills/tavern-mmd` into `~/.claude/skills/` and `commands/*.md` into `~/.claude/commands/`.
-- Codex: copy `skills/tavern-mmd` into `~/.codex/skills/` and `commands/*.md` into `~/.codex/prompts/`.
-- Other agents: add a line to the instructions file to read `~/.hearthroom/tavern-mmd/skills/tavern-mmd/SKILL.md` before building status bars or themes.
+Status panels, choice buttons and themes are built by the toolkit's own sandbox kit (`assets/sandbox-kit` in the skills, with `hearthroom card check` and `hearthroom card preview` to verify them), so no second skill set is needed. Authors who also target SillyTavern or MMD's older chat page may install the open-source `tavern-mmd` skill for those platforms on their own; it is not part of this setup. The chat page is open source (`hearthroom/moonstage`); the skills say which of its files to read when a fact is missing.
 
 ## 4. Sign in
 
@@ -98,7 +88,7 @@ It returns once the user approves. If it times out first, run it again. If the c
 
 Setup spends nothing. Do not send a play turn now: `play -m … --allow-spend` spends the user's credits, and the skills ask the user before the first one.
 
-Tell the user, in their language, what you set up: the CLI version, which agent the skills went into, the account `hearthroom auth status` shows, and whether tavern-mmd was installed or skipped. Then tell them how to load the skills, which is the last thing they need to do:
+Tell the user, in their language, what you set up: the CLI version, which agent the skills went into, the account `hearthroom auth status` shows. Then tell them how to load the skills, which is the last thing they need to do:
 
 - Claude Code: run `/reload-plugins`.
 - Codex and other agents: start a new session.

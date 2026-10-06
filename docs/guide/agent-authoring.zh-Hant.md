@@ -18,7 +18,9 @@ SillyTavern 的 PNG、JSON、CHARX 和魅魔島三件套都能直接匯入。
 
 > 「加一個顯示好感度和所在地點的狀態欄，渲染開場白給我看。」
 
-需要時它會用開源的 tavern-mmd 技能做介面，匯入卡片後渲染出來確認。
+需要畫面時，它用工具包自己的沙盒套件（模型寫的狀態區塊畫成面板、選項鈕、主題），用 `hearthroom card check` 檢查資料夾，再用 `hearthroom card preview` 與 `card render` 看結果。
+
+聊天頁本身是開源的（`hearthroom/moonstage`，本站的 `stage` 子模組）：skills 的沙盒契約由它的 `src/sandbox/` 生成，文件沒寫到的事，平台事實頁列出該讀哪些檔案。
 
 ### 試玩並找出問題
 
