@@ -63,7 +63,7 @@ import { serveSandbox } from "./sandbox";
 import { listSaves, putSave, removeSave } from "./saves";
 import { commentCard, countTop, deleteComment, listReplies, listTop, postComment, setLike, type Viewer } from "./comments";
 import { SVG_WRAP_LIMIT, TOUCH_ICON_SIZE, allowedImageUrl, cardManifest, iconSize, signShortcutKey, svgWrap, verifyShortcutKey } from "./shortcut";
-import { buildSearchName, buildSearchText, upstream, ZONES, type Zone, CREATION_METHOD, type CommunityStatus, type UpstreamRole } from "./upstream";
+import { buildSearchName, buildSearchText, RoleGone, upstream, ZONES, type Zone, CREATION_METHOD, type CommunityStatus, type UpstreamRole } from "./upstream";
 import { resolveFandom } from "./fandom";
 import { topFandoms } from "./cards";
 import { wikidata } from "./wikidata";
@@ -1289,6 +1289,11 @@ async function pooled<T>(items: T[], limit: number, work: (item: T) => Promise<v
  */
 /** Worker 一次執行最多 50 個對外請求（見 wrangler.toml SYNC_BATCH_SIZE 的說明）；留兩個餘裕。 */
 const SUBREQUEST_BUDGET = 48;
+/**
+ * 一輪最多下榜幾張。真的刪卡是零星的；同一小時一批卡同時「不見了」，比較可能是上游出狀況
+ * （資料庫還原、租戶設定、權限）而不是作者們同時刪卡——那一輪一張都不下榜，當成暫時性失敗。
+ */
+const GONE_PER_ROUND = 3;
 
 export async function syncBatch(env: Env): Promise<{ ok: number; failed: number; delisted: number; ms: number }> {
   const started = Date.now();
@@ -1304,6 +1309,7 @@ export async function syncBatch(env: Env): Promise<{ ok: number; failed: number;
   const now = Date.now();
 
   const writes: D1PreparedStatement[] = [];
+  const gone: typeof batch = [];
   const authorsSeen = new Map<string, { provider: ProviderId; externalId: number }>();
 
   await pooled(batch, concurrency, async (row) => {
@@ -1321,23 +1327,32 @@ export async function syncBatch(env: Env): Promise<{ ok: number; failed: number;
       authorsSeen.set(`${row.provider}:${role.authorNumId}`, { provider: row.provider as ProviderId, externalId: role.authorNumId });
       ok++;
     } catch (err) {
-      // 上游明說這張不在了（404）：下榜、排到隊尾，登記與審核紀錄都留著。
-      // 以前一律當暫時性失敗——不推進 last_synced_at，於是它每輪都排第一個、永遠佔一個名額，
-      // 榜上一直掛著舊資料（2026-09-28 起一張在 Harbor 已刪除的卡每小時重讀一次）。
-      // 只在讀的仍是過審那一份時才下榜：讀到一半剛好換了新的過審版，舊版消失是正常的。
-      // 'unshared' 是既有的「不上榜、卡片頁 404」狀態，改回 approved 就恢復，不刪任何東西。
-      if (err instanceof HttpError && err.status === 404) {
-        writes.push(env.DB.prepare("UPDATE cards SET status=CASE WHEN status='approved' THEN 'unshared' ELSE status END, last_synced_at=? WHERE id=? AND approved_hosted_role_id=?").bind(now, row.id, row.approved_hosted_role_id));
-        delisted++;
-        console.warn("sync delisted", { provider: row.provider });
+      // Harbor 親口說這張不在了（role_not_found）：先記下來，迴圈外決定要不要下榜。
+      if (err instanceof RoleGone) {
+        gone.push(row);
         return;
       }
-      // 其餘失敗（服務重啟、網路抖動、5xx）當暫時性：保留，下一輪仍排在最前面重試。
+      // 其餘失敗（服務重啟、網路抖動、5xx、邊緣或路由的裸 404）當暫時性：保留，下一輪仍排在最前面重試。
       // 不因為一次讀不到就刪掉作者的登記——那個代價遠大於榜單短暫顯示舊資料。
       failed++;
       console.error("sync failed", { provider:row.provider });
     }
   });
+
+  // 下榜：排到隊尾，登記與審核紀錄都留著。以前一律當暫時性失敗——不推進 last_synced_at，
+  // 於是它每輪都排第一個、永遠佔一個名額，榜上一直掛著舊資料（2026-09-28 起一張在 Harbor 已刪除的卡每小時重讀一次）。
+  // 只在讀的仍是過審那一份時才下榜：讀到一半剛好換了新的過審版，舊版消失是正常的。
+  // 'unshared' 是既有的「不上榜、卡片頁 404」狀態，改回 approved 就恢復，不刪任何東西。
+  if (gone.length > GONE_PER_ROUND) {
+    failed += gone.length;
+    console.warn("sync: too many cards reported gone in one round; delisting none", { count: gone.length });
+  } else {
+    for (const row of gone) {
+      writes.push(env.DB.prepare("UPDATE cards SET status=CASE WHEN status='approved' THEN 'unshared' ELSE status END, last_synced_at=? WHERE id=? AND approved_hosted_role_id=?").bind(now, row.id, row.approved_hosted_role_id));
+      delisted++;
+    }
+    if (gone.length) console.warn("sync delisted", { count: gone.length });
+  }
 
   // 缺成員列的作者補上（一次查詢；id 與公開 ID 在這裡產生，寫入併進下面那一批）。
   writes.push(...(await missingMemberStatements(env.DB, [...authorsSeen.values()], now)));
