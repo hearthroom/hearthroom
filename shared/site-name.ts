@@ -10,9 +10,10 @@
  */
 export const SITE_NAME = "Hearthroom";
 
+// 副標帶 AI：這個品類的人搜的是「AI 角色扮演」，兩個直接競品都把 AI 寫在名字裡；味道留在主名，品類交給副標（2026-10-07 owner）。
 const CHINESE: Record<string, { name: string; subtitle: string }> = {
-  "zh-Hant": { name: "綺夢社", subtitle: "寢物語" },
-  "zh-Hans": { name: "绮梦社", subtitle: "寝物语" },
+  "zh-Hant": { name: "綺夢社", subtitle: "AI寢物語" },
+  "zh-Hans": { name: "绮梦社", subtitle: "AI寝物语" },
 };
 
 /** 這個語言的介面上，站台叫什麼。 */
@@ -25,7 +26,7 @@ export function siteSubtitle(locale: string): string | null {
   return CHINESE[locale]?.subtitle ?? null;
 }
 
-/** 首頁分頁標題的品牌全名：中文「綺夢社・寢物語」；其他語言回 null，呼叫端接標語。 */
+/** 首頁分頁標題的品牌全名：中文「綺夢社・AI寢物語」；其他語言回 null，呼叫端接標語。 */
 export function siteLockup(locale: string): string | null {
   const subtitle = siteSubtitle(locale);
   return subtitle ? `${siteName(locale)}・${subtitle}` : null;

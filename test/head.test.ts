@@ -144,6 +144,23 @@ it('does not expose restricted card details to sharing crawlers',async()=>{
 });
 
 
+it.each([
+  ['/', '綺夢社・AI寢物語', 'zh_TW', `https://${PRIMARY_HOST}/`],
+  ['/zh-Hans/', '绮梦社・AI寝物语', 'zh_CN', `https://${PRIMARY_HOST}/zh-Hans`],
+  ['/en/', 'Hearthroom · Character Board', 'en_US', `https://${PRIMARY_HOST}/en`],
+  ['/ja?sort=hot', 'Hearthroom · キャラクターカード ランキング', 'ja_JP', `https://${PRIMARY_HOST}/ja`],
+])('首頁的 <head> 帶著各語言的站名與副標，不跑 JS 的爬蟲也看得到：%s', async (path, title, locale, canonical) => {
+  const response = await SELF.fetch(`https://${PRIMARY_HOST}${path}`, { headers: { 'User-Agent': 'bingbot' } });
+  expect(response.status).toBe(200);
+  const html = await response.text();
+  expect(html).toContain(`<title>${title}</title>`);
+  expect(html).toContain(`<meta property="og:title" content="${title}">`);
+  expect(html).toContain(`<meta property="og:locale" content="${locale}">`);
+  expect(html).toContain(`<meta property="og:url" content="${canonical}">`);
+  expect(html).toContain('<meta property="og:type" content="website">');
+  expect(html.match(/property="og:title"/g)).toHaveLength(1);
+});
+
 it.each(['hearthroom.club','sukisuki.ai','sukisuki.chat'])('static asset routing invokes the metadata handler on %s',async host=>{
   for(const path of ['/download','/download/','/en/download']){
     const response=await SELF.fetch(`https://${host}${path}`,{headers:{'User-Agent':'Discordbot'}});
