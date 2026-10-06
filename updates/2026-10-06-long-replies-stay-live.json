@@ -1,0 +1,10 @@
+{
+  "tier": "fix",
+  "title": {
+    "zh-Hant": "很長的回覆不會再寫到一半就停住，離開再回來或換裝置打開，也會一路顯示到寫完。",
+    "zh-Hans": "很长的回复不会再写到一半就停住，离开再回来或换设备打开，也会一直显示到写完。",
+    "en": "Long replies no longer freeze partway, and they keep going when you come back later or open the chat on another device.",
+    "ja": "長い返信が途中で止まらなくなり、戻ったときや別の端末で開いたときも最後まで表示されます。",
+    "ko": "긴 답변이 중간에 멈추지 않고, 나갔다가 돌아오거나 다른 기기에서 열어도 끝까지 이어서 보입니다."
+  }
+}
