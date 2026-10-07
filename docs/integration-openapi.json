@@ -19719,7 +19719,7 @@
       "ResponseDefaults": {
         "type": "object",
         "additionalProperties": false,
-        "description": "Author defaults for response preferences. Same keys and values as the player's overrides, every value a string (`lengthTarget` as a decimal string). They apply only where the player has not chosen: an axis the player sets uses the player's option, and the author's note, custom style and length target for that axis then no longer apply. Legacy values (plain, dialogue, descriptive, brief, balanced, detailed) are rejected. `lengthTarget` is required exactly when `length` is target, `customStyle` exactly when `style` is custom.",
+        "description": "Author defaults for response preferences. Same keys and values as the player's overrides, every value a string (`lengthTarget` as a decimal string). They apply only where the player has not chosen otherwise: when the player picks a different option for an axis, the author's note, custom style and length target for that axis no longer apply; picking the author's own option keeps them. Legacy values (plain, dialogue, descriptive, brief, balanced, detailed) are rejected. `lengthTarget` is required exactly when `length` is target, `customStyle` exactly when `style` is custom.",
         "properties": {
           "agency": {
             "type": "string",
