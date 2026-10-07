@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/guide",
+  "title": {
+    "zh-Hant": "作者可以用 CLI 替卡片設定回覆偏好的預設值。",
+    "zh-Hans": "作者可以用 CLI 为卡片设定回复偏好的默认值。",
+    "en": "Authors can now set a card's default response preferences with the CLI.",
+    "ja": "作者は CLI でカードの返信の好みの初期値を設定できます。",
+    "ko": "작가는 CLI로 카드의 답변 취향 기본값을 정할 수 있습니다."
+  },
+  "body": {
+    "zh-Hant": "玩家打開回覆偏好時看到的就是作者的設定，自己改過的項目仍以玩家為準，恢復預設會回到作者的設定。",
+    "zh-Hans": "玩家打开回复偏好时看到的就是作者的设定，自己改过的项目仍以玩家为准，恢复默认会回到作者的设定。",
+    "en": "Players see the author's choices when they open response preferences, anything they change stays theirs, and reset returns to the author's choices.",
+    "ja": "プレイヤーが返信の好みを開くと作者の設定が選ばれていて、自分で変えた項目はプレイヤーの設定が優先され、初期値に戻すと作者の設定に戻ります。",
+    "ko": "플레이어가 답변 취향을 열면 작가의 설정이 선택되어 있고, 직접 바꾼 항목은 플레이어 설정을 따르며, 기본값으로 되돌리면 작가의 설정으로 돌아갑니다."
+  }
+}
