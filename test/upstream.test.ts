@@ -223,3 +223,9 @@ it("reads the author-drawn share image into the public role, and keeps it out of
   expect(page.items[0]).not.toHaveProperty('roleShareImage');
   expect(page.items[0]).not.toHaveProperty('shareImageUrl');
 });
+
+it("reads the landscape background into the public role only when the provider sets one", () => {
+  expect(projectRole({...mainSiteRole, roleBackgroundLandscape: "https://assets.harperharbor.com/land.png"}).backgroundLandscapeUrl).toBe("https://assets.harperharbor.com/land.png");
+  expect(projectRole({...mainSiteRole, roleBackgroundLandscape: ""})).not.toHaveProperty("backgroundLandscapeUrl");
+  expect(projectRole(mainSiteRole)).not.toHaveProperty("backgroundLandscapeUrl");
+});

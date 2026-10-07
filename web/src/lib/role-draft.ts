@@ -82,7 +82,7 @@ export interface RoleDraft {
   roleBackground: string;
   /** 橫式背景（選填）：舞台在橫向螢幕優先用它，沒有就退回直式的 roleBackground。 */
   roleBackgroundLandscape: string;
-  /** 分享圖（選填）：連結貼到 Discord、LINE、X 時的預覽大圖，1.91:1（1200×630）。沒有就用直式背景合成。 */
+  /** 分享圖（選填）：連結貼到 Discord、LINE、X 時的預覽大圖，1.91:1（1200×630）。沒有就用橫式背景，再沒有就用直式背景。 */
   roleShareImage: string;
   roleDetailDesc: string;
   roleWelcome: string;

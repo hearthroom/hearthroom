@@ -38,11 +38,13 @@ async function sha256(value: unknown): Promise<string> {
 
 /**
  * 訪客看得到的那幾個欄位的指紋。欄位順序固定，同一張卡算幾次都一樣。
- * 分享圖只在有的時候才接在最後：沒有分享圖的卡（包括加這個欄位之前的每一張）指紋一個位元都不變。
+ * 橫式背景與分享圖只在有的時候才接在最後（帶欄位名，同一個網址放在哪一欄算不同）：
+ * 兩張都沒有的卡（包括加這兩個欄位之前的每一張）指紋一個位元都不變。
  */
 export async function publicHash(role: UpstreamRole): Promise<string> {
   const fields: unknown[] = [role.names, role.summaries, role.avatarUrl, role.backgroundUrl, role.tags, role.welcome];
-  if (role.shareImageUrl) fields.push(role.shareImageUrl);
+  if (role.backgroundLandscapeUrl) fields.push({ landscape: role.backgroundLandscapeUrl });
+  if (role.shareImageUrl) fields.push({ share: role.shareImageUrl });
   return PUBLIC_HASH_PREFIX + (await sha256(fields));
 }
 
@@ -134,7 +136,8 @@ async function projectForReview(call: TransferCall, roleId: string): Promise<Rev
     // 世界卡的成員（作者 token 讀回的完整版）。只在有的時候才進指紋：普通卡的指紋一個位元都不變，
     // 已上榜的卡不會因此被當成改過；世界卡改了成員就是改了內容。
     ...(r.world ? { world: JSON.stringify(r.world) } : {}),
-    // 分享圖（選填）同理：有才進，沒設分享圖的卡指紋不變。
+    // 橫式背景與分享圖（選填）同理：有才進，沒設的卡指紋不變。
+    ...(text(r.roleBackgroundLandscape) ? { roleBackgroundLandscape: text(r.roleBackgroundLandscape) } : {}),
     ...(text(r.roleShareImage) ? { roleShareImage: text(r.roleShareImage) } : {}),
   };
   const greetings = {

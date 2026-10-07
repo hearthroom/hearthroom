@@ -98,6 +98,17 @@ describe("公開指紋", () => {
     expect(withShare).not.toBe(pinned);
     expect(await publicHash({ ...base, shareImageUrl: "https://assets.harperharbor.com/other-share.png" })).not.toBe(withShare);
   });
+
+  it("橫式背景同理：沒有就不進指紋，有才算", async () => {
+    const base = role({ roleId: "role-1" });
+    const pinned = "pub1:137d3e63e0a417b0852ce648af23eda094768a0eea54aa772ea1620c14a361a6";
+    expect(await publicHash({ ...base, backgroundLandscapeUrl: null })).toBe(pinned);
+    expect(await publicHash({ ...base, backgroundLandscapeUrl: "" })).toBe(pinned);
+    const withLandscape = await publicHash({ ...base, backgroundLandscapeUrl: "https://assets.harperharbor.com/land.png" });
+    expect(withLandscape).not.toBe(pinned);
+    // 兩個欄位各有各的位置：同一個網址放在分享圖或橫式背景，指紋不同
+    expect(await publicHash({ ...base, shareImageUrl: "https://assets.harperharbor.com/land.png" })).not.toBe(withLandscape);
+  });
 });
 
 describe("token 估算", () => {
