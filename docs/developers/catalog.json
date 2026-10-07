@@ -1850,5 +1850,7 @@
   "defc9e496b8b1": "New path below the library prefix, e.g. `my-card/expr/happy.webp`.",
   "d17a72e76d1d0": "`{code:0,data:{...,dryRun,moved,pending,folders,usedBy}}`. `moved` counts files whose path changes; `pending` files are still being copied and serve at the new URL within minutes; `usedBy` lists `{roleId,name,published}` for your cards whose text mentions an old URL (`published` versions can no longer be edited). Also returns `imageId`, `imageUrl` and `fileName` at the new path.",
   "d8fbaf325721b": "`invalid_param` for an unsafe path or a file without a path.",
-  "dc7b7c0879a28": "Renaming or moving a folder or file moves its path and URL; see `POST /open/v1/image/move`."
+  "dc7b7c0879a28": "Renaming or moving a folder or file moves its path and URL; see `POST /open/v1/image/move`.",
+  "d4a838aaa92d4": "Which greeting the new conversation opens with: 0 = main greeting (default), 1..n = alternate greetings. A negative value or one past the card's alternates is rejected with 400 before the old conversation is touched.",
+  "dd64eab6b3f09": "The greeting index the new conversation was opened with. Present only when this request created the conversation; absent when an existing current conversation was returned instead."
 }

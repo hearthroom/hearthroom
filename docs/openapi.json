@@ -13437,6 +13437,12 @@
           "save": {
             "type": "boolean",
             "description": "Required boolean. Recorded for metrics only; whether the old conversation is kept as history (it has at least one user message) or discarded (no user message) is decided by the server. Missing or non-boolean values cause an empty 500 response."
+          },
+          "greetingIndex": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0,
+            "description": "Which greeting the new conversation opens with: 0 = main greeting (default), 1..n = alternate greetings. A negative value or one past the card's alternates is rejected with 400 before the old conversation is touched."
           }
         }
       },
@@ -13463,6 +13469,11 @@
           },
           "xmlV3Compatibility": {
             "$ref": "#/components/schemas/XMLV3Compatibility"
+          },
+          "greetingIndex": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The greeting index the new conversation was opened with. Present only when this request created the conversation; absent when an existing current conversation was returned instead."
           }
         }
       },
