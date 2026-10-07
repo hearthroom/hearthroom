@@ -8875,7 +8875,7 @@
         },
         "operationId": "getConversationResponseSettings",
         "summary": "Read conversation response preferences",
-        "description": "HarperHarbor only, advertised by responseSettingsVersion=1 on conversation start and messages. Requires ownership and current agent configuration access. Platform defaults are protect agency, default style, card perspective, auto length and natural pace; the card's author defaults (`responseDefaults` on the agent configuration) replace those per axis, and the player's overrides replace both. This call performs no inference and charges no credits.",
+        "description": "Optional response preferences, available when responseSettingsVersion=1 is advertised on conversation start or messages. Requires conversation ownership and current card access. Platform defaults are protect, default style, card perspective, auto length and natural pace; the card's author defaults (`responseDefaults`) replace them per axis, and the player's overrides replace both. This operation performs no inference and charges no credits.",
         "parameters": [
           {
             "name": "conversationId",
@@ -19719,7 +19719,7 @@
       "ResponseDefaults": {
         "type": "object",
         "additionalProperties": false,
-        "description": "Author defaults for response preferences. Same keys and values as the player's overrides, every value a string (`lengthTarget` as a decimal string). They change only what applies where the player has not chosen: an axis the player sets uses the player's option, and the author's note, custom style and length target for that axis then no longer apply. Legacy values (plain, dialogue, descriptive, brief, balanced, detailed) are rejected. `lengthTarget` is required exactly when `length` is target, `customStyle` exactly when `style` is custom.",
+        "description": "Author defaults for response preferences. Same keys and values as the player's overrides, every value a string (`lengthTarget` as a decimal string). They apply only where the player has not chosen: an axis the player sets uses the player's option, and the author's note, custom style and length target for that axis then no longer apply. Legacy values (plain, dialogue, descriptive, brief, balanced, detailed) are rejected. `lengthTarget` is required exactly when `length` is target, `customStyle` exactly when `style` is custom.",
         "properties": {
           "agency": {
             "type": "string",
