@@ -122,3 +122,26 @@ it('rejects stale legacy review writes after migration supersedes the old submis
  await expect(env.DB.prepare("INSERT INTO review_stamps(submission_id,member_id,verdict,note,created_at) VALUES (?,'stale','approve','',0)").bind(sub.id).run()).rejects.toThrow('submission already decided');
  await expect(env.DB.prepare("UPDATE review_submissions SET status='approved' WHERE id=?").bind(sub.id).run()).rejects.toThrow('submission already decided');
 });
+// 分享圖（作者畫的 1.91:1 連結預覽圖）跟其他公開欄位一樣跟著過審那一版走：過審的觸發器從封存的 public_role 抄（0054），
+// 同步讀過審的封存版時也帶上；新的一版沒有分享圖，過審後就清掉，不殘留上一版的。
+const shareImage=async()=>(await env.DB.prepare("SELECT share_image_url s FROM cards WHERE source_role_id='draft'").first<{s:string|null}>())?.s;
+it('the approved version\'s share image reaches the card, and a later version without one clears it',async()=>{
+ const f=await setup();
+ f.draft.shareImageUrl='https://assets.harperharbor.com/share-a.png';await f.submit();await f.approve();
+ expect(await shareImage()).toBe('https://assets.harperharbor.com/share-a.png');
+ expect((await getCard(env.DB,'draft','harbor'))!.share_image_url).toBe('https://assets.harperharbor.com/share-a.png');
+ f.draft.shareImageUrl='https://assets.harperharbor.com/share-b.png';await f.submit();
+ expect(await shareImage()).toBe('https://assets.harperharbor.com/share-a.png');
+ await f.approve();
+ expect(await shareImage()).toBe('https://assets.harperharbor.com/share-b.png');
+ delete f.draft.shareImageUrl;await f.submit();await f.approve();
+ expect(await shareImage()).toBeNull();
+});
+it('sync writes the share image of the approved revision onto the card',async()=>{
+ const f=await setup();await f.submit();await f.approve();
+ expect(await shareImage()).toBeNull();
+ vi.spyOn(upstream,'fetchRole').mockImplementation(async(_env,id)=>({...role({roleId:id,authorNumId:10001}),shareImageUrl:'https://assets.harperharbor.com/share-sync.png'}));
+ await env.DB.prepare('UPDATE cards SET last_synced_at=0').run();
+ expect((await syncBatch(env)).failed).toBe(0);
+ expect(await shareImage()).toBe('https://assets.harperharbor.com/share-sync.png');
+});

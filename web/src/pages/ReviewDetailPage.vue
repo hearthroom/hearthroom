@@ -266,6 +266,8 @@ onMounted(() => { void load(); });
           </template>
         </div>
         <div v-if="doc.roleBackground || doc.roleAvatar" class="field"><label>{{ $t("editor.section.media") }}</label><img class="art" :src="doc.roleBackground || doc.roleAvatar" alt="" /></div>
+        <!-- 分享圖（選填）也是訪客看得到的內容：貼連結時的預覽大圖 -->
+        <div v-if="doc.roleShareImage" class="field"><label>{{ $t("editor.shareImage") }}</label><img class="art art--share" :src="doc.roleShareImage" alt="" /></div>
       </section>
 
       <section v-show="section === 'persona'" class="pane panel">
@@ -429,6 +431,7 @@ onMounted(() => { void load(); });
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
 .small { font-size: 12px; word-break: break-all; }
 .art { max-width: 200px; border-radius: var(--r-md); }
+.art--share { max-width: 320px; }
 .tags { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s-2); }
 .text { margin: 0; padding: var(--s-3); border-radius: var(--r-sm); background: var(--surface-2); font-size: 14px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
 .text + .text { margin-top: var(--s-2); }

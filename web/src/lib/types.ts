@@ -22,6 +22,8 @@ export interface CommunityCard {
   summaries: Localized;
   avatarUrl: string | null;
   backgroundUrl: string | null;
+  /** 作者畫的分享圖（1.91:1，連結預覽用）；null 或不帶＝沒有 */
+  shareImageUrl?: string | null;
   slug: string | null;
   tags: string[];
   /** 原作：改編或致敬的作品名（伺服器照 lang 挑過）；沒有就是空字串或不帶 */

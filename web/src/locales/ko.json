@@ -355,6 +355,8 @@
   "editor.background.hint": "세로 9:16. 채팅 프로필과 내보내기 이미지로도 사용됩니다. 중요한 부분은 점선 안전 영역 안에 배치해 주세요.",
   "editor.backgroundLandscape": "가로 배경 (선택)",
   "editor.backgroundLandscape.hint": "넓은 화면에서 쓰는 배경, 16:9. 없으면 세로 배경을 잘라서 씁니다.",
+  "editor.shareImage": "공유 이미지 (선택)",
+  "editor.shareImage.hint": "Discord, LINE, X에 링크를 올릴 때 보이는 미리보기 이미지, 1200×630. 제목과 캐릭터는 가운데에 두세요. 없으면 세로 배경으로 자동으로 만듭니다.",
   "editor.image.pick": "이미지 선택",
   "editor.image.clear": "제거",
   "editor.image.uploading": "올리는 중…",

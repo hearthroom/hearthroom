@@ -26,3 +26,15 @@ it("uses a portrait first and imports legacy avatars without an independent draf
  expect(documentPatch(legacy,null)).toMatchObject({roleAvatar:"old.png",roleBackground:"old.png"});
  const cleared={...legacy,roleBackground:""};expect(documentPatch(cleared,legacy)).toEqual({roleBackground:"",roleAvatar:""});
 });
+
+describe("roleShareImage", () => {
+  it("分享圖（選填）跟橫式背景一樣走 document 欄位：讀進草稿，改了才送，清空也送", () => {
+    expect(draftFromRoleDetail({ roleShareImage: "https://cdn/s.jpg" }, "en").roleShareImage).toBe("https://cdn/s.jpg");
+    expect(draftFromRoleDetail({}, "en").roleShareImage).toBe("");
+    const original = draftFromRoleDetail({ roleShareImage: "https://cdn/s.jpg" }, "en");
+    const draft = draftFromRoleDetail({ roleShareImage: "https://cdn/s.jpg" }, "en");
+    expect(documentPatch(draft, original)).not.toHaveProperty("roleShareImage");
+    draft.roleShareImage = "";
+    expect(documentPatch(draft, original)).toMatchObject({ roleShareImage: "" });
+  });
+});
