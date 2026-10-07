@@ -1850,5 +1850,7 @@
   "defc9e496b8b1": "资源库前缀之下的新路径，例如 `my-card/expr/happy.webp`。",
   "d17a72e76d1d0": "`{code:0,data:{...,dryRun,moved,pending,folders,usedBy}}`。`moved` 是路径会改变的文件数；`pending` 的文件仍在复制中，几分钟内就能用新网址读到；`usedBy` 列出文字里还提到旧网址的你的卡片 `{roleId,name,published}`（`published` 版本已无法再编辑）。另外返回新路径的 `imageId`、`imageUrl` 与 `fileName`。",
   "d8fbaf325721b": "路径不安全或文件没有路径时返回 `invalid_param`。",
-  "dc7b7c0879a28": "重命名或移动文件夹、文件会一并改变其路径与网址；见 `POST /open/v1/image/move`。"
+  "dc7b7c0879a28": "重命名或移动文件夹、文件会一并改变其路径与网址；见 `POST /open/v1/image/move`。",
+  "d4a838aaa92d4": "新对话使用哪一则开场白：0 = 主开场白（默认），1..n = 备选开场白。负值或超出这张卡备选数量的值会返回 400，且不会动到旧对话。",
+  "dd64eab6b3f09": "新对话所用开场白的序号。只在这次请求创建了对话时出现；改为返回现有的当前对话时不会出现。"
 }
