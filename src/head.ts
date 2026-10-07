@@ -17,7 +17,7 @@ export interface PageMeta {
   description: string;
   /** 分享預覽圖（og:image／twitter:image）。 */
   image?: string | null;
-  /** 分享預覽圖的尺寸：確定時才給（本站合成的 1200×630），抓取器不必先下載就能排版。 */
+  /** 分享預覽圖的尺寸：確定時才給（作者照 1200×630 畫的分享圖），抓取器不必先下載就能排版。 */
   imageSize?: { width: number; height: number };
   url: string;
   type: "profile" | "website";

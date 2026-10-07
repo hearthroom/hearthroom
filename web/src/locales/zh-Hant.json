@@ -356,7 +356,7 @@
   "editor.backgroundLandscape": "橫式背景（選填）",
   "editor.backgroundLandscape.hint": "寬螢幕用的底圖，橫式 16:9。沒有就沿用直式背景裁切。",
   "editor.shareImage": "分享圖（選填）",
-  "editor.shareImage.hint": "連結貼到 Discord、LINE、X 時的預覽大圖，1200×630，標題與主角放中間。沒有就用直式背景自動合成。",
+  "editor.shareImage.hint": "連結貼到 Discord、LINE、X 時的預覽大圖，1200×630，標題與主角放中間。沒有就用橫式背景，再沒有就用直式背景。",
   "editor.image.pick": "選圖片",
   "editor.image.clear": "移除",
   "editor.image.uploading": "上傳中…",

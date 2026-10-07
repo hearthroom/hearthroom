@@ -356,7 +356,7 @@
   "editor.backgroundLandscape": "横版背景（选填）",
   "editor.backgroundLandscape.hint": "宽屏幕用的底图，横版 16:9。没有就沿用竖版背景裁切。",
   "editor.shareImage": "分享图（选填）",
-  "editor.shareImage.hint": "链接发到 Discord、LINE、X 时的预览大图，1200×630，标题与主角放中间。没有就用竖版背景自动合成。",
+  "editor.shareImage.hint": "链接发到 Discord、LINE、X 时的预览大图，1200×630，标题与主角放中间。没有就用横版背景，再没有就用竖版背景。",
   "editor.image.pick": "选图片",
   "editor.image.clear": "移除",
   "editor.image.uploading": "上传中…",
