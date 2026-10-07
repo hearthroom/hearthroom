@@ -1850,5 +1850,7 @@
   "defc9e496b8b1": "資源庫前綴之下的新路徑，例如 `my-card/expr/happy.webp`。",
   "d17a72e76d1d0": "`{code:0,data:{...,dryRun,moved,pending,folders,usedBy}}`。`moved` 是路徑會改變的檔案數；`pending` 的檔案仍在複製中，幾分鐘內就能用新網址讀到；`usedBy` 列出文字裡還提到舊網址的你的卡片 `{roleId,name,published}`（`published` 版本已無法再編輯）。另外回傳新路徑的 `imageId`、`imageUrl` 與 `fileName`。",
   "d8fbaf325721b": "路徑不安全或檔案沒有路徑時回 `invalid_param`。",
-  "dc7b7c0879a28": "重新命名或搬動資料夾、檔案會一併改變其路徑與網址；見 `POST /open/v1/image/move`。"
+  "dc7b7c0879a28": "重新命名或搬動資料夾、檔案會一併改變其路徑與網址；見 `POST /open/v1/image/move`。",
+  "d4a838aaa92d4": "新對話使用哪一則開場白：0 = 主開場白（預設），1..n = 備選開場白。負值或超出這張卡備選數量的值會回傳 400，且不會動到舊對話。",
+  "dd64eab6b3f09": "新對話所用開場白的序號。只在這次請求建立了對話時出現；改為回傳既有的當前對話時不會出現。"
 }

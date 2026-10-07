@@ -1850,5 +1850,7 @@
   "defc9e496b8b1": "라이브러리 접두사 아래의 새 경로. 예: `my-card/expr/happy.webp`.",
   "d17a72e76d1d0": "`{code:0,data:{...,dryRun,moved,pending,folders,usedBy}}`. `moved`는 경로가 바뀌는 파일 수입니다. `pending` 파일은 아직 복사 중이며 몇 분 안에 새 URL로 제공됩니다. `usedBy`는 본문에 이전 URL이 남아 있는 내 카드 `{roleId,name,published}` 목록입니다(`published` 버전은 더 이상 편집할 수 없습니다). 새 경로의 `imageId`, `imageUrl`, `fileName`도 반환합니다.",
   "d8fbaf325721b": "안전하지 않은 경로나 경로가 없는 파일에는 `invalid_param`.",
-  "dc7b7c0879a28": "폴더나 파일의 이름을 바꾸거나 옮기면 경로와 URL도 바뀝니다. `POST /open/v1/image/move` 참고."
+  "dc7b7c0879a28": "폴더나 파일의 이름을 바꾸거나 옮기면 경로와 URL도 바뀝니다. `POST /open/v1/image/move` 참고.",
+  "d4a838aaa92d4": "새 대화를 시작할 인사말입니다. 0 = 기본 인사말(기본값), 1..n = 대체 인사말입니다. 음수나 카드의 대체 인사말 수를 넘는 값은 기존 대화를 건드리기 전에 400으로 거부됩니다.",
+  "dd64eab6b3f09": "새 대화를 시작한 인사말 번호입니다. 이 요청이 대화를 만든 경우에만 포함되며, 기존 현재 대화를 반환한 경우에는 포함되지 않습니다."
 }
