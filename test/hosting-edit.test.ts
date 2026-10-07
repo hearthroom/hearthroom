@@ -122,7 +122,7 @@ it('rejects stale legacy review writes after migration supersedes the old submis
  await expect(env.DB.prepare("INSERT INTO review_stamps(submission_id,member_id,verdict,note,created_at) VALUES (?,'stale','approve','',0)").bind(sub.id).run()).rejects.toThrow('submission already decided');
  await expect(env.DB.prepare("UPDATE review_submissions SET status='approved' WHERE id=?").bind(sub.id).run()).rejects.toThrow('submission already decided');
 });
-// 分享圖（作者畫的 1.91:1 連結預覽圖）跟其他公開欄位一樣跟著過審那一版走：過審的觸發器從封存的 public_role 抄（0054），
+// 分享圖（作者畫的 1.91:1 連結預覽圖）與橫式背景跟其他公開欄位一樣跟著過審那一版走：過審的觸發器從封存的 public_role 抄（0054），
 // 同步讀過審的封存版時也帶上；新的一版沒有分享圖，過審後就清掉，不殘留上一版的。
 const shareImage=async()=>(await env.DB.prepare("SELECT share_image_url s FROM cards WHERE source_role_id='draft'").first<{s:string|null}>())?.s;
 it('the approved version\'s share image reaches the card, and a later version without one clears it',async()=>{
@@ -144,4 +144,23 @@ it('sync writes the share image of the approved revision onto the card',async()=
  await env.DB.prepare('UPDATE cards SET last_synced_at=0').run();
  expect((await syncBatch(env)).failed).toBe(0);
  expect(await shareImage()).toBe('https://assets.harperharbor.com/share-sync.png');
+});
+const landscape=async()=>(await env.DB.prepare("SELECT landscape_url l FROM cards WHERE source_role_id='draft'").first<{l:string|null}>())?.l;
+it('the approved version\'s landscape background reaches the card, and a later version without one clears it',async()=>{
+ const f=await setup();
+ f.draft.backgroundLandscapeUrl='https://assets.harperharbor.com/land-a.png';await f.submit();await f.approve();
+ expect(await landscape()).toBe('https://assets.harperharbor.com/land-a.png');
+ f.draft.backgroundLandscapeUrl='https://assets.harperharbor.com/land-b.png';await f.submit();
+ expect(await landscape()).toBe('https://assets.harperharbor.com/land-a.png');
+ await f.approve();
+ expect(await landscape()).toBe('https://assets.harperharbor.com/land-b.png');
+ delete f.draft.backgroundLandscapeUrl;await f.submit();await f.approve();
+ expect(await landscape()).toBeNull();
+});
+it('sync writes the landscape background of the approved revision onto the card',async()=>{
+ const f=await setup();await f.submit();await f.approve();
+ vi.spyOn(upstream,'fetchRole').mockImplementation(async(_env,id)=>({...role({roleId:id,authorNumId:10001}),backgroundLandscapeUrl:'https://assets.harperharbor.com/land-sync.png'}));
+ await env.DB.prepare('UPDATE cards SET last_synced_at=0').run();
+ expect((await syncBatch(env)).failed).toBe(0);
+ expect(await landscape()).toBe('https://assets.harperharbor.com/land-sync.png');
 });

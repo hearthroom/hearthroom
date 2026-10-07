@@ -356,7 +356,7 @@
   "editor.backgroundLandscape": "Landscape background (optional)",
   "editor.backgroundLandscape.hint": "Used on wide screens, 16:9. If empty, the portrait background is cropped instead.",
   "editor.shareImage": "Share image (optional)",
-  "editor.shareImage.hint": "The large preview when a link is posted to Discord, LINE or X. 1200×630, keep the title and main character in the middle. If empty, one is made from the portrait background.",
+  "editor.shareImage.hint": "The large preview when a link is posted to Discord, LINE or X. 1200×630, keep the title and main character in the middle. If empty, the landscape background is used, then the portrait background.",
   "editor.image.pick": "Choose image",
   "editor.image.clear": "Remove",
   "editor.image.uploading": "Uploading…",

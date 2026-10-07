@@ -79,6 +79,8 @@ export interface UpstreamRole {
    * 這裡就不帶這個鍵——封存的 public_role 跟公開指紋都靠「沒有就沒有這個鍵」保持舊卡不變。
    */
   shareImageUrl?: string | null;
+  /** 橫式背景（選填，16:9）：舞台在寬螢幕用它；連結預覽沒有分享圖時也先用它。同樣沒有就不帶這個鍵。 */
+  backgroundLandscapeUrl?: string | null;
   slug: string | null;
   tags: string[];
   /** 開場白。公開的（訪客在角色頁就看得到），只進搜尋索引，不另存欄位。 */
@@ -148,6 +150,7 @@ export function projectRole(raw: Record<string, unknown>): UpstreamRole {
     avatarUrl: str(raw.roleBackground) || str(raw.roleAvatar) || null,
     backgroundUrl: str(raw.roleBackground) || str(raw.roleAvatar) || null,
     ...(str(raw.roleShareImage) ? { shareImageUrl: str(raw.roleShareImage) } : {}),
+    ...(str(raw.roleBackgroundLandscape) ? { backgroundLandscapeUrl: str(raw.roleBackgroundLandscape) } : {}),
     slug: str(raw.slug) || null,
     tags: tags.slice(0, 20),
     welcome: str(raw.roleWelcome),
@@ -164,7 +167,7 @@ export interface MyRole {
   name: string;
   summary: string;
   avatarUrl: string | null;
-  /** Portrait artwork for the author workspace; landscape remains a stage-only choice. */
+  /** Portrait artwork for the author workspace; the landscape background is not listed here. */
   backgroundUrl?: string | null;
   visibility: string;
   talkNum: number;
