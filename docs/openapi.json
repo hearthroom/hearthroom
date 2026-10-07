@@ -12473,8 +12473,7 @@
           },
           "roleShareImage": {
             "type": "string",
-            "format": "uri",
-            "description": "Optional share image URL for link previews (1.91:1, 1200×630); empty string when unset. Keep the title and main character in the middle."
+            "description": "Optional share image URL (1.91:1, 1200×630) used as the link-preview og:image. Empty string when unset; callers fall back to another image."
           },
           "roleSex": {
             "type": "string"
@@ -17076,8 +17075,7 @@
           },
           "roleShareImage": {
             "type": "string",
-            "format": "uri",
-            "description": "Optional share image URL for link previews (1.91:1, 1200×630); empty string when unset. Keep the title and main character in the middle."
+            "description": "Optional share image URL (1.91:1, 1200×630) used as the link-preview og:image. Empty string when unset; callers fall back to another image."
           },
           "roleSex": {
             "type": "string",
@@ -17545,8 +17543,7 @@
           },
           "roleShareImage": {
             "type": "string",
-            "format": "uri",
-            "description": "Optional share image for link previews (1.91:1, 1200×630): http(s) URL; blank ignored."
+            "description": "Optional share image (1.91:1, 1200×630) for link previews (og:image): http(s) URL; empty string clears it."
           },
           "roleDetailDesc": {
             "type": "string",
@@ -17768,8 +17765,7 @@
           },
           "roleShareImage": {
             "type": "string",
-            "format": "uri",
-            "description": "Optional share image URL for link previews (1.91:1, 1200×630); empty string when unset. Keep the title and main character in the middle."
+            "description": "Optional share image URL (1.91:1, 1200×630) used as the link-preview og:image. Empty string when unset; callers fall back to another image."
           },
           "roleSex": {
             "type": "string",
