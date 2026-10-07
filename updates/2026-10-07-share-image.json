@@ -2,7 +2,6 @@
   "tier": "feature",
   "audience": "authors",
   "try": "/create",
-  "draft": true,
   "title": {
     "zh-Hant": "作者可以替卡片放一張分享圖，連結貼出去時預覽大圖就用它。",
     "zh-Hans": "作者可以为卡片放一张分享图，链接发出去时预览大图就用它。",
