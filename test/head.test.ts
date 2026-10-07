@@ -31,7 +31,8 @@ describe("分享預覽", () => {
     expect(html).toContain("<title>夜行偵探 沈墨 · 綺夢社</title>");
     expect(html).toContain('<meta name="description" content="民國二十四年的上海，租界的雨從不停。">');
     expect(html).toContain('<meta property="og:title" content="夜行偵探 沈墨 · 綺夢社">');
-    expect(html).toContain('<meta property="og:image" content="https://assets.harperharbor.com/bg.png">');
+    // 預覽圖是用直式封面合成的 1200×630（test/share-image.test.ts）；直式封面直接給，抓取器會從中間裁掉標題
+    expect(html).toMatch(new RegExp(`<meta property="og:image" content="https://${PRIMARY_HOST.replace(/\./g, "\\.")}/og/cards/\\d+\\.jpg\\?v=[0-9a-z]+">`));
     // 卡片圖是這頁最大的一張：HTML 一到就開始下載，不等 JS 讀完卡片資料
     expect(html).toContain('<link rel="preload" as="image" href="https://assets.harperharbor.com/bg.png" fetchpriority="high">');
     // canonical 一律指向正牌主機：搬家期間兩個網域並存，搜尋引擎要知道哪個才算數

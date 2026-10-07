@@ -1001,6 +1001,11 @@ async function exportCard(format: "png" | "json") {
                       :hint="$t('editor.backgroundLandscape.hint')" :pick-label="$t('editor.image.pick')"
                       :clear-label="$t('editor.image.clear')" :library-label="$t('editor.image.library')"
                       :uploading="$t('editor.image.uploading')" ratio="wide" safe-zone @pick="onPickImage" />
+          <!-- 分享圖（選填）：連結預覽的大圖，1.91:1。沒有的話伺服器用直式背景合成一張（src/index.ts /og/cards）。 -->
+          <ImageField v-model="draft.roleShareImage" :label="$t('editor.shareImage')"
+                      :hint="$t('editor.shareImage.hint')" :pick-label="$t('editor.image.pick')"
+                      :clear-label="$t('editor.image.clear')" :library-label="$t('editor.image.library')"
+                      :uploading="$t('editor.image.uploading')" ratio="share" @pick="onPickImage" />
 
           <div v-if="isNew" class="field">
             <label for="f-lang">{{ $t("create.language") }}</label>

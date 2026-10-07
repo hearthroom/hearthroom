@@ -86,6 +86,18 @@ describe("公開指紋", () => {
     expect(await publicHash({ ...base, names: { ...base.names, zh: "改名了" } })).not.toBe(h);
     expect(await publicHash({ ...base, avatarUrl: "https://assets.harperharbor.com/other.png" })).not.toBe(h);
   });
+
+  it("分享圖只在有的時候才進指紋：沒有分享圖的卡，指紋一個位元都不變", async () => {
+    const base = role({ roleId: "role-1" });
+    // 釘死現有的值：加欄位之前就過審的卡，同步時算出來的指紋必須跟過審時記下的一樣，不然整批被當成改過
+    const pinned = "pub1:137d3e63e0a417b0852ce648af23eda094768a0eea54aa772ea1620c14a361a6";
+    expect(await publicHash(base)).toBe(pinned);
+    expect(await publicHash({ ...base, shareImageUrl: null })).toBe(pinned);
+    expect(await publicHash({ ...base, shareImageUrl: "" })).toBe(pinned);
+    const withShare = await publicHash({ ...base, shareImageUrl: "https://assets.harperharbor.com/share.png" });
+    expect(withShare).not.toBe(pinned);
+    expect(await publicHash({ ...base, shareImageUrl: "https://assets.harperharbor.com/other-share.png" })).not.toBe(withShare);
+  });
 });
 
 describe("token 估算", () => {

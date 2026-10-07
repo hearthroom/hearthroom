@@ -212,3 +212,14 @@ describe("內容版本", () => {
     expect(auth.every((value) => value === "Bearer author-token")).toBe(true);
   });
 });
+
+it("reads the author-drawn share image into the public role, and keeps it out of author lists", async () => {
+  expect(projectRole({...mainSiteRole, roleShareImage: "https://assets.harperharbor.com/share.png"}).shareImageUrl).toBe("https://assets.harperharbor.com/share.png");
+  // 供應商沒設時回 ""：當作沒有，不寫進封存的 public_role（指紋與觸發器都靠「沒有這個鍵」）
+  expect(projectRole({...mainSiteRole, roleShareImage: ""})).not.toHaveProperty("shareImageUrl");
+  expect(projectRole(mainSiteRole)).not.toHaveProperty("shareImageUrl");
+  vi.stubGlobal('fetch', async () => new Response(JSON.stringify({roleList:[{...mainSiteRole, roleShareImage:'https://cdn.example.test/share.png'}], total:1, hasNextPage:false})));
+  const page = await upstream.fetchMyRoles(env, 'fixture-token', 1, 24, 'harbor');
+  expect(page.items[0]).not.toHaveProperty('roleShareImage');
+  expect(page.items[0]).not.toHaveProperty('shareImageUrl');
+});

@@ -15,14 +15,18 @@ export interface PageMeta {
   lang: string;
   title: string;
   description: string;
+  /** 分享預覽圖（og:image／twitter:image）。 */
   image?: string | null;
+  /** 分享預覽圖的尺寸：確定時才給（本站合成的 1200×630），抓取器不必先下載就能排版。 */
+  imageSize?: { width: number; height: number };
   url: string;
   type: "profile" | "website";
   /**
-   * 頁面主圖一進 HTML 就開始下載。卡片頁最大的那張就是這張圖，
+   * 頁面主圖的網址，一進 HTML 就開始下載。卡片頁最大的那張是直式封面，
    * 不先講的話要等 JS 跑完、卡片資料回來才知道網址（實測 LCP 的載入延遲約 0.5 s）。
+   * 跟分享預覽圖分開：預覽圖是給抓取器的 1.91:1，不是頁面上畫的那張。
    */
-  preloadImage?: boolean;
+  preloadImage?: string | null;
 }
 
 const esc = (s: string) =>
@@ -64,7 +68,8 @@ export function renderHead(page: Response, meta: PageMeta): Response {
     `<meta property="og:url" content="${esc(meta.url)}">`,
     `<meta property="og:locale" content="${OG_LOCALE[meta.lang] ?? "en_US"}">`,
     meta.image ? `<meta property="og:image" content="${esc(meta.image)}">` : "",
-    meta.image && meta.preloadImage ? preloadImageTag(meta.image) : "",
+    meta.image && meta.imageSize ? `<meta property="og:image:width" content="${meta.imageSize.width}"><meta property="og:image:height" content="${meta.imageSize.height}">` : "",
+    meta.preloadImage ? preloadImageTag(meta.preloadImage) : "",
     `<meta name="twitter:card" content="${meta.image ? "summary_large_image" : "summary"}">`,
     `<meta name="twitter:title" content="${esc(meta.title)}">`,
     `<meta name="twitter:description" content="${esc(description)}">`,

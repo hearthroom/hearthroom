@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "try": "/create",
+  "draft": true,
+  "title": {
+    "zh-Hant": "卡片連結的預覽大圖不再切掉封面上的標題，作者也能另放一張分享圖。",
+    "zh-Hans": "卡片链接的预览大图不再切掉封面上的标题，作者也能另放一张分享图。",
+    "en": "Card link previews no longer cut off the title on the cover, and authors can add a share image of their own.",
+    "ja": "カードのリンクのプレビュー画像で表紙のタイトルが切れなくなり、作者は専用のシェア画像も設定できます。",
+    "ko": "카드 링크 미리보기에서 표지의 제목이 잘리지 않고, 작가는 공유 이미지를 따로 넣을 수 있습니다."
+  },
+  "body": {
+    "zh-Hant": "分享圖在寫卡的形象區，1200×630，標題與主角放中間；沒放的卡會用直式背景自動排成橫幅。",
+    "zh-Hans": "分享图在写卡的形象区，1200×630，标题与主角放中间；没放的卡会用竖版背景自动排成横幅。",
+    "en": "Add it under Images in the card editor at 1200×630 with the title and main character in the middle, or let cards without one get a wide preview made from the portrait background.",
+    "ja": "カード編集のビジュアル欄で 1200×630 の画像をタイトルとキャラクターを中央にして設定でき、設定していないカードは縦の背景から横長のプレビューを作ります。",
+    "ko": "카드 편집의 이미지 칸에서 제목과 캐릭터를 가운데에 둔 1200×630 이미지를 넣을 수 있고, 없는 카드는 세로 배경으로 가로 미리보기를 만듭니다."
+  }
+}

@@ -1739,6 +1739,8 @@
   "d2d6b63a8648e": "What to do: switch the card to the sandbox page, or drop the call because no chat page provides it.",
   "dc24714ed3f83": "Optional landscape (16:9) background URL. The chat page uses it on wide screens and falls back to `roleBackground`; keep important elements in the central 75%.",
   "d496df634ddd9": "Optional landscape (16:9) background: http(s) URL; blank ignored. `roleBackground` (portrait) stays the baseline.",
+  "d9fc8983e7fd1": "Optional share image URL for link previews (1.91:1, 1200×630); empty string when unset. Keep the title and main character in the middle.",
+  "d777f0896574f": "Optional share image for link previews (1.91:1, 1200×630): http(s) URL; blank ignored.",
   "d8bdbd23e1d7f": "Present and true when `outputTokens` is the provider's own count of the streamed reply because the upstream reported zero output for a reply that has text; billing used this count.",
   "d629198a9e6c8": "Set my nickname in this app",
   "de5424050a0f1": "Sets the caller's nickname in the application that owns the token. Nicknames are kept per application: other applications keep reading their own. Use it when your application is where the user chooses a display name, so the provider's console shows the same name. Requires the `profile.write` scope; long-lived personal API keys cannot carry it. Leading and trailing spaces are removed; an empty string clears the nickname.",
