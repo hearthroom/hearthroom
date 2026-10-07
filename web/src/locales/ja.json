@@ -355,6 +355,8 @@
   "editor.background.hint": "縦長 9:16。チャットのアイコンと書き出す画像にも使います。大切な部分は点線の安全領域内に収めてください。",
   "editor.backgroundLandscape": "横向き背景（任意）",
   "editor.backgroundLandscape.hint": "横長の画面で使う背景、16:9。未設定なら縦の背景を切り抜いて使います。",
+  "editor.shareImage": "シェア画像（任意）",
+  "editor.shareImage.hint": "Discord、LINE、X にリンクを貼ったときのプレビュー画像、1200×630。タイトルとキャラクターは中央に。未設定なら縦の背景から自動で作ります。",
   "editor.image.pick": "画像を選ぶ",
   "editor.image.clear": "外す",
   "editor.image.uploading": "アップロード中…",

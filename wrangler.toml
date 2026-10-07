@@ -37,6 +37,8 @@ run_worker_first = [
   "/download", "/download/", "/updates", "/updates/", "/updates.atom", "/cards/*", "/authors/*", "/review*", "/internal/community/*", "/internal/auth/*",
   # 站台 manifest 在卡片 App 網域（play.）上要 404，得先過 Worker（src/index.ts）
   "/manifest.webmanifest",
+  # 卡片連結預覽的合成分享圖（src/index.ts /og/cards）。不列的話資源層的 SPA 回退會回一份 index.html。
+  "/og/*",
   # 各語言的首頁有兩種寫法：/en/ 進得了下面的萬用字元，/en（hreflang 給搜尋引擎的那個）進不了——
   # 不列出來的話，爬蟲拿到的是資源層的靜態殼，沒有 src/head.ts 寫進去的站名與分享預覽（2026-10-07 線上實測）。
   "/zh-Hans", "/en", "/ja", "/ko",

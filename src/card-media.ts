@@ -9,6 +9,7 @@ export const MEDIA_FIELDS = [
   "avatar",
   "background",
   "backgroundLandscape",
+  "shareImage",
 ] as const;
 export type CardMedia = Partial<Record<(typeof MEDIA_FIELDS)[number], string>>;
 
@@ -42,5 +43,5 @@ export function imageReference(
 /** Wire aliases share one portrait; legacy avatar-only cards remain transferable. */
 export function portraitMedia(media: CardMedia = {}): CardMedia {
   const portrait = media.background || media.avatar;
-  return { ...(portrait ? {avatar:portrait, background:portrait} : {}), ...(media.backgroundLandscape ? {backgroundLandscape:media.backgroundLandscape} : {}) };
+  return { ...(portrait ? {avatar:portrait, background:portrait} : {}), ...(media.backgroundLandscape ? {backgroundLandscape:media.backgroundLandscape} : {}), ...(media.shareImage ? {shareImage:media.shareImage} : {}) };
 }

@@ -18,6 +18,8 @@ export interface CardRow {
   names: string;
   summaries: string;
   background_url: string | null;
+  /** 作者畫的分享圖（0054 起）：連結預覽的 og:image 先用它。NULL＝沒有，用直式封面合成。 */
+  share_image_url?: string | null;
   slug: string | null;
   tags: string;
   talk_num: number;
@@ -96,6 +98,8 @@ export function toCard(row: CardRow, lang: string) {
     summaries,
     avatarUrl: row.background_url,
     backgroundUrl: row.background_url,
+    /** 作者畫的分享圖（1.91:1）；null＝沒有 */
+    shareImageUrl: row.share_image_url ?? null,
     slug: row.slug,
     tags: JSON.parse(row.tags) as string[],
     /** 原作：改編或致敬的作品名，照看的人的語言出（對到 Wikidata 的才有多語）；空字串＝沒有 */
@@ -386,6 +390,7 @@ export async function upsertCard(db: D1Database, role: UpstreamRole, now: number
     JSON.stringify(role.names),
     JSON.stringify(role.summaries),
     role.backgroundUrl || role.avatarUrl,
+    role.shareImageUrl || null,
     role.slug,
     JSON.stringify(role.tags),
     role.talkNum,
@@ -404,7 +409,7 @@ export async function upsertCard(db: D1Database, role: UpstreamRole, now: number
     await db
       .prepare(
         `UPDATE cards SET zone=?, author_num_id=?, author_name=?, author_avatar=?, names=?, summaries=?,
-           background_url=?, slug=?, tags=?, talk_num=?, follow_num=?, search_name=?, search_text=?, search_body=?,
+           background_url=?, share_image_url=?, slug=?, tags=?, talk_num=?, follow_num=?, search_name=?, search_text=?, search_body=?,
            last_synced_at=?, talk_num_prev=?
          WHERE id=?`,
       )
@@ -417,9 +422,9 @@ export async function upsertCard(db: D1Database, role: UpstreamRole, now: number
   const insert = db
     .prepare(
       `INSERT INTO cards (id, source_role_id, zone, author_num_id, author_name, author_avatar, names, summaries,
-         background_url, slug, tags, talk_num, follow_num, search_name, search_text, search_body, last_synced_at,
+         background_url, share_image_url, slug, tags, talk_num, follow_num, search_name, search_text, search_body, last_synced_at,
          talk_num_prev, registered_at, provider, status, nsfw)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     // 首次登記把 prev 設成當前值 → trending 從 0 起算。
     // 不這樣的話一張老熱卡剛登記就會用累積總量霸榜。
@@ -509,6 +514,7 @@ export function previewCard(role: UpstreamRole, lang: string, provider: Provider
     summaries: role.summaries,
     avatarUrl: role.backgroundUrl || role.avatarUrl,
     backgroundUrl: role.backgroundUrl,
+    shareImageUrl: role.shareImageUrl || null,
     slug: role.slug,
     tags: role.tags,
     author: { handle: null, accountNumId: role.authorNumId, name: role.authorName, avatar: role.authorAvatar },
@@ -584,7 +590,7 @@ export function syncStatement(db: D1Database, id: string, prevTalkNum: number, r
     .prepare(
       // approved_content_hash：讀的是過審的封存版時順手記下它的內容版本（0052）；0052 之前過審的卡靠這裡補齊。
       // 只在讀的確實是過審那一份時寫，供應商沒回版本就保留原值。
-      `UPDATE cards SET zone=?, author_name=?, author_avatar=?, names=?, summaries=?, background_url=?,
+      `UPDATE cards SET zone=?, author_name=?, author_avatar=?, names=?, summaries=?, background_url=?, share_image_url=?,
          slug=?, tags=?, talk_num=?, follow_num=?, search_name=?, search_text=?, search_body=?, talk_num_prev=?, last_synced_at=?,
          approved_content_hash=CASE WHEN approved_hosted_role_id=? THEN COALESCE(?, approved_content_hash) ELSE approved_content_hash END
        WHERE id=? AND (approved_hosted_role_id IS NULL OR approved_hosted_role_id=?)`,
@@ -596,6 +602,7 @@ export function syncStatement(db: D1Database, id: string, prevTalkNum: number, r
       JSON.stringify(role.names),
       JSON.stringify(role.summaries),
       role.backgroundUrl || role.avatarUrl,
+      role.shareImageUrl || null,
       role.slug,
       JSON.stringify(role.tags),
       role.talkNum,

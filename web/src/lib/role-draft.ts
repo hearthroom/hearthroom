@@ -82,6 +82,8 @@ export interface RoleDraft {
   roleBackground: string;
   /** 橫式背景（選填）：舞台在橫向螢幕優先用它，沒有就退回直式的 roleBackground。 */
   roleBackgroundLandscape: string;
+  /** 分享圖（選填）：連結貼到 Discord、LINE、X 時的預覽大圖，1.91:1（1200×630）。沒有就用直式背景合成。 */
+  roleShareImage: string;
   roleDetailDesc: string;
   roleWelcome: string;
   /** 備選開場白：換一個開場，但仍是同一場故事。 */
@@ -211,6 +213,7 @@ export const makeDraft = (language: string): RoleDraft => ({
   roleTag: [],
   roleBackground: "",
   roleBackgroundLandscape: "",
+  roleShareImage: "",
   roleDetailDesc: "",
   roleWelcome: "",
   alternates: [],
@@ -358,6 +361,7 @@ export function draftFromRoleDetail(raw: Record<string, unknown>, fallbackLangua
   draft.roleTag = readTags(raw.roleTag);
   draft.roleBackground = str(raw.roleBackground) || str(raw.roleAvatar);
   draft.roleBackgroundLandscape = str(raw.roleBackgroundLandscape);
+  draft.roleShareImage = str(raw.roleShareImage);
   draft.roleDetailDesc = str(raw.roleDetailDesc);
   draft.roleWelcome = str(raw.roleWelcome);
   draft.alternates = strList(raw.roleWelcomeAlternates ?? raw.alternates);
@@ -379,6 +383,7 @@ export interface RoleDocumentFields {
   roleAvatar?: string;
   roleBackground?: string;
   roleBackgroundLandscape?: string;
+  roleShareImage?: string;
   roleDetailDesc?: string;
   talkExample?: TalkExampleEntry[];
   roleOutputContract?: string;
@@ -395,6 +400,7 @@ const TEXT_FIELDS = [
   "roleSex",
   "roleBackground",
   "roleBackgroundLandscape",
+  "roleShareImage",
   "roleDetailDesc",
   "roleOutputContract",
   "jailbreak",

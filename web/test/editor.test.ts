@@ -240,7 +240,8 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     api.uploadImage.mockResolvedValueOnce(avatar);
     await mount("/cards/r1/edit");
     const field = [...root.querySelectorAll(".field")].find((el) => el.querySelector("label")?.textContent === i18n.global.t("editor.background"))!;
-    expect(root.querySelectorAll(".frame")).toHaveLength(2);
+    // 直式、橫式、分享圖三格
+    expect(root.querySelectorAll(".frame")).toHaveLength(3);
     const file = new File(["GIF89a synthetic animation bytes"], "new.gif", { type: "image/gif" });
     await pickFile(field.querySelector("input[type=file]")!, file);
     expect(api.uploadImage).toHaveBeenCalledWith(file, "tok", "r1");
@@ -249,6 +250,22 @@ describe("匯入酒館卡 → 建立 → 編輯", () => {
     expect(root.querySelector(`img[src="${landscape}"]`)).not.toBeNull();
     await submit();
     expect(api.patchRoleDocument).toHaveBeenCalledWith("r1", { roleBackground: avatar, roleAvatar: avatar }, "tok");
+  });
+
+  it("分享圖是選填的第三格：讀得到上游的值，提示寫明 1200×630 與構圖，改了才送", async () => {
+    const share = "https://assets.harbor.ai/u/test/share.png";
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "Share test", roleBackground: "https://assets.harbor.ai/u/test/bg.png", roleShareImage: share });
+    await mount("/cards/r1/edit");
+    const field = [...root.querySelectorAll(".field")].find((el) => el.querySelector("label")?.textContent === i18n.global.t("editor.shareImage"))!;
+    expect(field).toBeDefined();
+    expect(field.querySelector("img")?.getAttribute("src")).toBe(share);
+    expect(field.textContent).toContain(i18n.global.t("editor.shareImage.hint"));
+    expect(i18n.global.t("editor.shareImage.hint")).toContain("1200×630");
+    const picked = "https://assets.harbor.ai/u/test/share2.png";
+    api.uploadImage.mockResolvedValueOnce(picked);
+    await pickFile(field.querySelector("input[type=file]")!, new File(["png"], "share2.png", { type: "image/png" }));
+    await submit();
+    expect(api.patchRoleDocument).toHaveBeenCalledWith("r1", { roleShareImage: picked }, "tok");
   });
 
   it("匯入把每一區都填好，儲存照順序打四個端點，內容對得上", async () => {

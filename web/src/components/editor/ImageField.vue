@@ -16,7 +16,8 @@ const props = defineProps<{
   pickLabel: string;
   clearLabel: string;
   uploading: string;
-  ratio?: "square" | "wide" | "tall";
+  /** share＝連結預覽的 1.91:1（1200×630） */
+  ratio?: "square" | "wide" | "tall" | "share";
   /** 畫出中央 75%×75% 的安全區虛線：背景在舞台用 cover 裁邊，重要元素要放在這裡面。 */
   safeZone?: boolean;
   libraryLabel: string;
@@ -121,6 +122,7 @@ function pick(file: File) {
 /* 背景是整頁的底圖，照實際比例看才知道會長怎樣；小方框判斷不了亮不亮 */
 .frame--wide { width: 256px; height: 144px; }
 .frame--tall { width: 144px; height: 256px; }
+.frame--share { width: 256px; height: 134px; }
 .frame { position: relative; }
 /* 安全區：外圍各 12.5% 是可能被裁掉的區域 */
 .safe { position: absolute; inset: 12.5%; border: 1px dashed rgba(255, 255, 255, 0.85); outline: 1px dashed rgba(0, 0, 0, 0.35); pointer-events: none; }

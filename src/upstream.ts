@@ -74,6 +74,11 @@ export interface UpstreamRole {
   summaries: Localized;
   avatarUrl: string | null;
   backgroundUrl: string | null;
+  /**
+   * 作者畫的分享圖（1.91:1，建議 1200×630），連結預覽的 og:image 先用它。選填：供應商沒設時回 ""，
+   * 這裡就不帶這個鍵——封存的 public_role 跟公開指紋都靠「沒有就沒有這個鍵」保持舊卡不變。
+   */
+  shareImageUrl?: string | null;
   slug: string | null;
   tags: string[];
   /** 開場白。公開的（訪客在角色頁就看得到），只進搜尋索引，不另存欄位。 */
@@ -142,6 +147,7 @@ export function projectRole(raw: Record<string, unknown>): UpstreamRole {
     },
     avatarUrl: str(raw.roleBackground) || str(raw.roleAvatar) || null,
     backgroundUrl: str(raw.roleBackground) || str(raw.roleAvatar) || null,
+    ...(str(raw.roleShareImage) ? { shareImageUrl: str(raw.roleShareImage) } : {}),
     slug: str(raw.slug) || null,
     tags: tags.slice(0, 20),
     welcome: str(raw.roleWelcome),

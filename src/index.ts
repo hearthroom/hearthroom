@@ -568,6 +568,70 @@ app.get("/v1/cards/:id/:file{(icon-[0-9]+|touch-icon)\\.png}", async (c) => {
   return out;
 });
 
+export const ogCache = { namespace: "card-og" };
+/** 連結預覽的標準尺寸（1.91:1）：Discord、LINE、X、Facebook 都照這個比例排大圖。 */
+const OG_WIDTH = 1200;
+const OG_HEIGHT = 630;
+
+/** 封面網址的短指紋。放進分享圖網址：抓取器照網址快取預覽圖，換了封面就要換網址。 */
+function ogVersion(src: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < src.length; i++) h = Math.imul(h ^ src.charCodeAt(i), 0x01000193);
+  return (h >>> 0).toString(36);
+}
+
+/** 本站合成的分享圖網址（正牌主機上的絕對網址）。封面不在放行主機上就沒有：合成要先讀得到原圖。 */
+function ogImageUrl(row: { id: string; background_url: string | null }): string | null {
+  const src = allowedImageUrl(row.background_url);
+  return src ? `https://${PRIMARY_HOST}/og/cards/${encodeURIComponent(row.id)}.jpg?v=${ogVersion(src.toString())}` : null;
+}
+
+/**
+ * 沒有作者畫的分享圖時，卡片連結預覽用的 1200×630：直式封面放大鋪滿、模糊壓暗當底，原圖等高置中疊上去。
+ * 直式封面直接當 og:image 的話，抓取器從中間裁 1.91:1，作者畫在圖上的標題常被切掉。
+ *
+ * 跟卡片頁的分享預覽同一道門：只有過審、非成人內容、沒被封鎖的卡（cardLink 已擋封鎖）。
+ * 合成失敗（帳號沒開 Images、原圖讀不到、格式不支援）不是錯誤：轉到原本的直式封面，預覽至少跟以前一樣。
+ */
+app.get("/og/cards/:file{[0-9]+\\.jpg}", async (c) => {
+  const { row } = await cardLink(c.env, c.req.param("file").slice(0, -".jpg".length), DEFAULT_PROVIDER);
+  if (!row || row.status !== "approved" || row.nsfw !== 0) throw new HttpError(404, "card not found");
+  const src = allowedImageUrl(row.background_url);
+  if (!src) throw new HttpError(404, "card has no image");
+  const portrait = () => c.redirect(src.toString(), 302);
+  const images = c.env.IMAGES;
+  if (!images) return portrait();
+
+  // 快取鍵含原圖網址：換了封面就重新合成，舊的那份自然沒人讀
+  const cache = await caches.open(ogCache.namespace);
+  const key = new Request(`https://og.invalid/${row.id}?src=${encodeURIComponent(src.toString())}`);
+  const hit = await cache.match(key);
+  if (hit) return hit;
+
+  try {
+    const res = await fetch(src.toString(), { headers: { "User-Agent": "Hearthroom/0.1 (share preview)" } });
+    if (!res.ok || !(res.headers.get("content-type") ?? "").startsWith("image/")) return portrait();
+    const bytes = await res.arrayBuffer();
+    const stream = () => new Blob([bytes]).stream();
+    const info = await images.info(stream());
+    if (!("width" in info) || !info.width || !info.height) return portrait();
+    // 原圖等高縮到 630，算出寬度再置中（draw 沒有「置中」選項，只有 top／left）
+    const width = Math.max(1, Math.min(OG_WIDTH, Math.round((OG_HEIGHT * info.width) / info.height)));
+    const backdrop = images.input(stream()).transform({ width: OG_WIDTH, height: OG_HEIGHT, fit: "cover", blur: 40, brightness: 0.6 });
+    const portraitLayer = images.input(stream()).transform({ width, height: OG_HEIGHT, fit: "contain" });
+    const out = await backdrop.draw(portraitLayer, { top: 0, left: Math.floor((OG_WIDTH - width) / 2) }).output({ format: "image/jpeg", quality: 85 });
+    const body = await out.response().arrayBuffer();
+    const response = new Response(body, {
+      status: 200,
+      headers: { "content-type": "image/jpeg", "cache-control": "public, max-age=86400", "x-content-type-options": "nosniff" },
+    });
+    c.executionCtx.waitUntil(cache.put(key, response.clone()));
+    return response;
+  } catch {
+    return portrait();
+  }
+});
+
 /**
  * 作者自己的卡片清單（含尚未登記的）。
  *
@@ -1548,8 +1612,13 @@ app.get("*", async (c) => {
     const card = toCard(row, l);
     // Canonical uses the community-wide ID: provider-local IDs can collide.
     const canonical = canonicalUrl(new URL(normalized.pathname.replace(/[^/]+$/, encodeURIComponent(row.id)), url));
+    // 分享預覽圖：作者畫的分享圖 → 本站用直式封面合成的 1200×630 → （封面不在放行主機上、合成不了）直式封面本身
+    const generated = card.shareImageUrl ? null : ogImageUrl(row);
     const res = renderHead(shell, {
-      lang: locale, title: `${card.name} · ${siteName(locale)}`, description: card.summary, image: card.avatarUrl, url: canonical, type: "profile", preloadImage: true,
+      lang: locale, title: `${card.name} · ${siteName(locale)}`, description: card.summary, url: canonical, type: "profile",
+      image: card.shareImageUrl || generated || card.avatarUrl,
+      ...(generated ? { imageSize: { width: OG_WIDTH, height: OG_HEIGHT } } : {}),
+      preloadImage: card.avatarUrl,
     });
     res.headers.set("Cache-Control", `public, max-age=${PAGE_TTL}`);
     return res;

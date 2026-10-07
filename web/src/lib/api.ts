@@ -367,6 +367,8 @@ export interface ReviewDetail {
       roleName: string; userName: string; roleDesc: string; roleAvatar: string; roleBackground: string;
       roleDetailDesc: string; roleTag: string; roleType: string; roleSex: string; roleSpeech: string;
       language: string; customInstructions?: string; jailbreak?: string; talkExample: string; roleOutputContract: string;
+      /** 分享圖（選填）：有才帶 */
+      roleShareImage?: string;
     };
     greetings: { welcome: string; alternates: string[]; prologue: string[] };
     worldbook: {
