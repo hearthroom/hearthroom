@@ -10578,7 +10578,7 @@
         },
         "operationId": "getConversationResponseSettings",
         "summary": "Read conversation response preferences",
-        "description": "HarperHarbor only, advertised by responseSettingsVersion=1 on conversation start and messages. Requires ownership and current agent configuration access. Defaults are protect, card style, card perspective, auto length and natural pace. This call performs no inference and charges no credits.",
+        "description": "HarperHarbor only, advertised by responseSettingsVersion=1 on conversation start and messages. Requires ownership and current agent configuration access. Platform defaults are protect agency, default style, card perspective, auto length and natural pace; the card's author defaults (`responseDefaults` on the agent configuration) replace those per axis, and the player's overrides replace both. This call performs no inference and charges no credits.",
         "parameters": [
           {
             "name": "conversationId",
@@ -16927,6 +16927,10 @@
               },
               "theme": {
                 "$ref": "#/components/schemas/ThemeSummary"
+              },
+              "responseDefaults": {
+                "$ref": "#/components/schemas/ResponseDefaults",
+                "description": "Author only; absent when the card has none."
               }
             }
           }
@@ -17561,6 +17565,17 @@
           "cardMeta": {
             "$ref": "#/components/schemas/CardMeta",
             "description": "Replaces the whole object; send `{}` to clear. Absent leaves it untouched."
+          },
+          "responseDefaults": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ResponseDefaults"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Replaces the whole object; send `null` or `{}` to clear. Absent leaves it untouched. Validated as a whole: one invalid value rejects the request."
           }
         }
       },
@@ -20792,6 +20807,7 @@
           "schemaVersion",
           "compilerVersion",
           "overrides",
+          "defaults",
           "effective"
         ],
         "properties": {
@@ -20830,6 +20846,23 @@
                 ]
               }
             ]
+          },
+          "defaults": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ResponsePreferences"
+              },
+              {
+                "required": [
+                  "agency",
+                  "style",
+                  "perspective",
+                  "length",
+                  "pace"
+                ]
+              }
+            ],
+            "description": "What applies when the player has chosen nothing: platform defaults with the card's author defaults on top. Show these for axes absent from overrides; resetting an axis returns to this value."
           }
         }
       },
@@ -21403,6 +21436,108 @@
           "hint": {
             "type": "string",
             "description": "What to do: switch the card to the sandbox page, or drop the call because no chat page provides it."
+          }
+        }
+      },
+      "ResponseDefaults": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Author defaults for response preferences. Same keys and values as the player's overrides, every value a string (`lengthTarget` as a decimal string). They change only what applies where the player has not chosen: an axis the player sets uses the player's option, and the author's note, custom style and length target for that axis then no longer apply. Legacy values (plain, dialogue, descriptive, brief, balanced, detailed) are rejected. `lengthTarget` is required exactly when `length` is target, `customStyle` exactly when `style` is custom.",
+        "properties": {
+          "agency": {
+            "type": "string",
+            "enum": [
+              "protect",
+              "assist",
+              "lines",
+              "coauthor"
+            ]
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "default",
+              "guided",
+              "card",
+              "custom"
+            ]
+          },
+          "perspective": {
+            "type": "string",
+            "enum": [
+              "card",
+              "first_character",
+              "second_user",
+              "third_limited",
+              "third_omniscient"
+            ]
+          },
+          "length": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "recommended",
+              "target"
+            ]
+          },
+          "lengthTarget": {
+            "type": "string",
+            "enum": [
+              "200",
+              "300",
+              "400",
+              "500",
+              "600",
+              "800",
+              "1000",
+              "1200",
+              "1500",
+              "2000",
+              "2500",
+              "3000",
+              "4000",
+              "5000",
+              "7000",
+              "10000"
+            ]
+          },
+          "pace": {
+            "type": "string",
+            "enum": [
+              "natural",
+              "linger",
+              "advance"
+            ]
+          },
+          "customStyle": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "agencyNote": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "styleNote": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "perspectiveNote": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "lengthNote": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "paceNote": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
           }
         }
       }
