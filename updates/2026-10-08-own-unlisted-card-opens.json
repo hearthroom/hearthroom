@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "audience": "authors",
+  "title": {
+    "zh-Hant": "從我的卡片點開自己還沒上榜的卡，以前會顯示找不到，現在會正常打開。",
+    "zh-Hans": "从我的卡片点开自己还没上榜的卡，以前会显示找不到，现在会正常打开。",
+    "en": "Opening your own unlisted card from My cards used to say it could not be found, and now it opens.",
+    "ja": "マイカードから自分の未掲載カードを開くと見つからないと表示されていましたが、今は開けます。",
+    "ko": "내 카드에서 아직 게시되지 않은 내 카드를 열면 찾을 수 없다고 나왔지만, 이제 제대로 열립니다."
+  }
+}

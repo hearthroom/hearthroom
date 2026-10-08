@@ -1,7 +1,7 @@
 import { managedAuth, managedLogout, forgetManaged, isManagedAuth, authRequest, rememberManaged } from './managed-auth';
 import { clearLibraryCache } from './library';
 import { clearStageStorage } from './stage-storage';
-import { rememberSignedIn } from './signin-hint';
+import { rememberSignedIn, signedInHint } from './signin-hint';
 import { lastShown } from './mine-memory';
 import { currentProvider, setProvider, type ProviderId } from './provider';
 import {useProviderUpstream} from './config';
@@ -72,8 +72,13 @@ export const useSession = defineStore("session", () => {
     if (profilePromise) await profilePromise;
     return profile.value?.showNsfw && profile.value.ageVerified ? await accessToken() : null;
   });
-  // 登入了就給卡片頁一把 token：作者看自己還沒上榜的卡要靠它（伺服器只對作者本人放行）
-  setLoginViewer(async () => (me.value ? await accessToken() : null));
+  // 登入了就給卡片頁一把 token：作者看自己還沒上榜的卡要靠它（伺服器只對作者本人放行）。
+  // 從「我的卡片」點進去是整頁載入，卡片頁讀卡常常比恢復登入早；那時 me 還是空的，讀卡沒帶 token
+  // 就被當陌生人回 404。這個瀏覽器登入過，就先等恢復登入再答；從沒登入過的訪客不等。
+  setLoginViewer(async () => {
+    if (!ready.value && signedInHint() !== null) await restore();
+    return me.value ? await accessToken() : null;
+  });
   // 不想看的類型：同樣等身分載好再答，第一屏就是過濾好的版本
   setViewerHiddenTags(async () => {
     if (profilePromise) await profilePromise;

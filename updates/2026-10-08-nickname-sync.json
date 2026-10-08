@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/me",
+  "title": {
+    "zh-Hant": "你在個人檔案設定的暱稱，現在也會同步成登入帳號在本站的暱稱。",
+    "zh-Hans": "你在个人资料设置的昵称，现在也会同步成登录账号在本站的昵称。",
+    "en": "The display name in your profile now also becomes your nickname here in the account you sign in with.",
+    "ja": "プロフィールの表示名が、ログイン用アカウントでの本サイトのニックネームにも反映されます。",
+    "ko": "프로필에 설정한 닉네임이 로그인 계정의 이 사이트 닉네임에도 반영됩니다."
+  },
+  "body": {
+    "zh-Hant": "下次登入時授權頁會多一項修改暱稱的權限，只用來同步這個名字。",
+    "zh-Hans": "下次登录时授权页会多一项修改昵称的权限，只用来同步这个名字。",
+    "en": "Next time you sign in, the permission screen asks for one more permission, used only to keep that name in sync.",
+    "ja": "次回ログイン時、許可画面にニックネームを変更する権限がひとつ加わりますが、この名前の同期にだけ使います。",
+    "ko": "다음 로그인 때 권한 화면에 닉네임 변경 권한이 하나 추가되며, 이 이름을 맞추는 데만 쓰입니다."
+  }
+}
