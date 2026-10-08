@@ -121,6 +121,7 @@
 | `sdk.user.get()` | 플레이어 호칭, 아바타, 인터페이스 언어(`locale`, 예: `zh-Hans`). |
 | `sdk.text.convert(text)` / `sdk.text.ready()` | 스크립트가 직접 그리는 글자를 답장과 같은 방식으로 플레이어의 중국어 자형(간체·번체)으로 바꿉니다. 사전을 불러오기 전에는 `convert`가 그대로 돌려주고, `ready()`는 불러오면(변환이 필요 없으면 즉시) 완료됩니다. |
 | `sdk.model.get()` | 플레이어가 고른 모델: `{name, cost}`. `name`은 모델 이름(헤더의 "모델 이름 · 경로 이름"), `cost`는 다음 턴의 예상 포인트(동적 요금은 범위, 예: `127–251`). 페이지가 알려 주기 전에는 둘 다 빈 문자열입니다. 모델 목록을 열려면 입력란의 모델 버튼을 누르세요. |
+| `sdk.archive.list()` / `save(title?)` / `fork(messageId)` / `open(id)` / `start(opening?)` / `rename(id, title)` / `remove(id)` | 플랫폼의 대화 저장(카드당 최대 20개, 현재 대화 포함, 기기 간 공유). `open`은 불러오기(현재 진행은 목록에 그대로 남음), `save`는 현재 진행을 이름 붙여 남기고 `{id, current}`를 돌려줌, `fork`는 특정 메시지(말풍선의 `serverId`)에서 분기, `start`는 새로 시작(0＝기본 오프닝, 1..＝다른 오프닝), `list`는 `{items, count, limit}`를 돌려주며 각 행에 `id, title, isCurrent, messageCount, lastMessage, createTime, lastUpdateTime`이 있습니다. 바꾸는 작업은 플레이어가 클릭한 순간에 호출하고 카드 자체 확인 화면을 쓰세요. 클릭 밖에서는 페이지가 먼저 묻습니다. |
 | `sdk.on(event, handler)` | 이벤트 구독. |
 | `sdk.debug.log(...args)` | 디버그 패널에 기록합니다. URL에 `?sdkDebug=1`을 붙이면 패널이 표시됩니다. |
 
@@ -135,7 +136,7 @@
 | `message:done` | 메시지가 완료됨. |
 | `message:unmount` | 메시지 노드가 제거됨. |
 | `input:change` | 입력 상자 내용이 바뀜. |
-| `conversation:switch` | 대화가 전환됨. |
+| `conversation:switch` | 대화가 전환됨(불러오기, 저장, 분기, 새로 시작 후). 페이로드 `{ conversationId }`. |
 | `theme:change` | 다크/라이트가 전환됨. |
 | `back` | 플레이어가 뒤로 가기를 누름. |
 | `stage:close` | 작성자 스테이지가 닫힘. |
@@ -158,6 +159,7 @@
 | `INVALID_ARGS` | 인자가 잘못됨. |
 | `HOST_DENIED` | 호스트 페이지가 동작을 거부함. |
 | `BUSY` | 생성 중. |
+| `LIMIT_REACHED` | 대화 저장이 가득 참. `err.data`는 `{ count, limit }`. 플레이어에게 하나를 지우도록 안내하세요. |
 | `NOT_SUPPORTED` | 현재 환경에서 지원하지 않는 기능. |
 
 ## 기존 페이지에서 이전
