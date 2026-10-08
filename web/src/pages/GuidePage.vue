@@ -143,7 +143,7 @@ onBeforeUnmount(() => observer?.disconnect());
 .doc :deep(li) { line-height: 1.8; margin: 2px 0; }
 .doc :deep(a) { color: var(--accent-text); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent); }
 .doc :deep(strong) { font-weight: 600; }
-.doc :deep(code) { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.88em; padding: 1px 6px; border-radius: 5px; background: var(--surface-2); box-shadow: 0 0 0 1px var(--line); }
+.doc :deep(code) { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.88em; padding: 1px 6px; border-radius: 5px; background: var(--surface-2); box-shadow: 0 0 0 1px var(--line); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .doc :deep(pre) { margin: 0 0 var(--s-4); padding: var(--s-3) var(--s-4); overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: var(--r-md); background: var(--surface-2); box-shadow: 0 0 0 1px var(--line); font-size: 13px; line-height: 1.6; }
 .doc :deep(pre code) { padding: 0; background: none; box-shadow: none; font-size: inherit; }
 .doc :deep(blockquote) { margin: 0 0 var(--s-3); padding: var(--s-2) var(--s-4); border-left: 3px solid var(--accent); background: var(--accent-tint); border-radius: 0 var(--r-sm) var(--r-sm) 0; color: var(--text-2); }
@@ -151,12 +151,24 @@ onBeforeUnmount(() => observer?.disconnect());
 .doc--md :deep(table) { display: block; overflow-x: auto; border-collapse: collapse; width: 100%; font-size: 13.5px; margin: var(--s-2) 0 var(--s-4); }
 .doc--md :deep(th), .doc--md :deep(td) { padding: 8px 12px; border: 1px solid var(--line); text-align: left; vertical-align: top; line-height: 1.6; }
 .doc--md :deep(th) { background: var(--surface-2); font-weight: 600; }
-.doc--md :deep(td:first-child code) { white-space: normal; overflow-wrap: anywhere; }
+/* 第一欄是方法名：每段代碼不在字中間斷（anywhere 會讓這一欄的最小寬度縮到一個字，整欄被擠成一條），
+   換行只落在代碼之間的「 / 」。最長的一段約 26 字元，桌機撐得下；手機改成上下疊（見下）。 */
+.doc--md :deep(td:first-child code) { white-space: nowrap; }
 .doc--md :deep(tr:nth-child(even) td) { background: color-mix(in srgb, var(--surface-2) 45%, transparent); }
 @media (max-width: 900px) {
   .doc-layout { grid-template-columns: minmax(0, 1fr); gap: var(--s-4); }
   .toc { position: static; max-height: none; }
   .toc__fold { padding: var(--s-3) var(--s-4); background: var(--surface); border-radius: var(--r-lg); box-shadow: 0 0 0 1px var(--line); }
   .toc__fold > summary { cursor: pointer; padding-left: 0; display: flex; align-items: center; justify-content: space-between; }
+}
+/* 手機：兩欄並排時說明欄只剩一百多 px，一行三四個字。指南的表都是「名稱｜說明」兩欄，改成每列上下疊，
+   名稱在上、說明在下，表頭收掉（兩欄的意思一看就懂）。 */
+@media (max-width: 600px) {
+  .doc--md :deep(table), .doc--md :deep(tbody), .doc--md :deep(tr), .doc--md :deep(td) { display: block; width: 100%; }
+  .doc--md :deep(thead) { display: none; }
+  .doc--md :deep(tr) { border: 1px solid var(--line); border-radius: var(--r-md); margin-bottom: var(--s-2); overflow: hidden; }
+  .doc--md :deep(td) { border: 0; }
+  .doc--md :deep(td:first-child) { padding-bottom: 0; }
+  .doc--md :deep(tr:nth-child(even) td) { background: none; }
 }
 </style>
