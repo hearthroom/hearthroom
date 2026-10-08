@@ -5,7 +5,7 @@ import { type ProviderId, DEFAULT_PROVIDER } from "./providers";
 import { quotaFor, type Quota } from "./quota";
 import { type CardStatus, statusAmong } from "./review";
 import type { Env } from "./types";
-import { type MyRole, upstream } from "./upstream";
+import { type DraftVersion, type MyRole, upstream } from "./upstream";
 
 /**
  * 作者自己的卡片清單。
@@ -58,15 +58,20 @@ export interface MinePage {
   hasNext: boolean;
 }
 
-type ReviewState = { status: CardStatus; updateStatus?: string; approvedHash?: string };
+type ReviewState = { status: CardStatus; updateStatus?: string; approvedHash?: string; approvedRevision?: string };
 /**
  * 這張卡比不比得出「改了沒送審」：已發布、記得過審那一版的內容版本（cards.approved_content_hash），
  * 而且沒有新版在審（已經送了，不是忘了送）、新版也沒剛被退回（卡上已經有退回說明）。
  */
 const comparable = (s: ReviewState | undefined): s is ReviewState & { approvedHash: string } =>
   !!s && s.status === "approved" && !!s.approvedHash && s.updateStatus !== "pending" && s.updateStatus !== "rejected";
-/** 已發布、有修改還沒送審：草稿現在的版本跟過審那一版不同。任一邊不知道就不標，不猜；只回旗標，版本本身不往前端送。 */
-const draftChanged = (s: ReviewState | undefined, current: string | undefined) => comparable(s) && !!current && current !== s.approvedHash;
+/**
+ * 已發布、有修改還沒送審：草稿現在的版本跟過審那一版不同。兩邊都有整份內容版本（revisionHash，含作者規則與世界書，0055）
+ * 就比它；否則退回比內容版本（contentHash，不含規則與世界書）。任一邊不知道就不標，不猜；只回旗標，版本本身不往前端送。
+ */
+export const draftChanged = (s: ReviewState | undefined, current: DraftVersion | undefined) =>
+  comparable(s) && !!current && !!current.content &&
+  (s.approvedRevision && current.revision ? current.revision !== s.approvedRevision : current.content !== s.approvedHash);
 
 /** 要看哪一組：全部、已登記、還沒登記。 */
 export type MineFilter = "all" | "listed" | "unlisted";
@@ -124,7 +129,7 @@ export async function loadMine(
     // 一張一個對外請求，Worker 一次執行最多 50 個（見 syncBatch 的 SUBREQUEST_BUDGET）；API 的 pageSize 可到 100，
     // 所以最多問 DRAFT_CHECK_LIMIT 張（網頁一頁就是這麼多），超過的那幾張這次不標。
     const checked = rows.map((r) => r.source_role_id).filter((id) => comparable(notes.get(id))).slice(0, DRAFT_CHECK_LIMIT);
-    const current = checked.length ? await upstream.fetchContentHashes(env, bearer, checked, provider) : new Map<string, string>();
+    const current = checked.length ? await upstream.fetchDraftVersions(env, bearer, checked, provider) : new Map<string, DraftVersion>();
     return {
       source: "bypass",
       body: {
@@ -180,13 +185,17 @@ export async function loadMine(
 
   const ids = roles.items.map((r) => r.roleId);
   const [registered, statuses] = await Promise.all([registeredAmong(env.DB, ids, provider), statusAmong(env.DB, ids)]);
+  // 清單只帶 contentHash：記得過審整份內容版本的卡另外逐張問 revisionHash（才看得出只改了規則或世界書），一頁最多 DRAFT_CHECK_LIMIT 張
+  const deep = ids.filter((id) => { const s = statuses.get(id); return comparable(s) && !!s.approvedRevision; }).slice(0, DRAFT_CHECK_LIMIT);
+  const versions = deep.length ? await upstream.fetchDraftVersions(env, bearer, deep, provider) : new Map<string, DraftVersion>();
   const items = roles.items
     .map(({ contentHash, ...r }) => {
       const s = statuses.get(r.roleId);
+      const current = versions.get(r.roleId) ?? (contentHash ? { content: contentHash } : undefined);
       return {
         ...r, registered: registered.has(r.roleId),
         ...(s ? { status: s.status, updateStatus: s.updateStatus, note: s.note, nsfw: s.nsfw } : {}),
-        ...(draftChanged(s, contentHash) ? { draftChanged: true } : {}),
+        ...(draftChanged(s, current) ? { draftChanged: true } : {}),
       };
     })
     // 「還沒登記」是把這一頁裡已登記的挑掉。已登記的那組另有完整來源（見上面），
@@ -205,4 +214,15 @@ export async function loadMine(
       hasNext: roles.hasNext,
     },
   };
+}
+
+/**
+ * 卡片頁給作者看的草稿狀態：審核狀態、新版在不在審、草稿有沒有改了還沒送審（跟「我的卡片」同一套比法）。
+ * 已發布、記得過審版本才逐張問草稿現在的版本；其餘直接回不標。
+ */
+export async function draftStateOf(env: Env, bearer: string, roleId: string, provider: ProviderId): Promise<{ status?: CardStatus; updateStatus?: string; draftChanged: boolean }> {
+  const s = (await statusAmong(env.DB, [roleId])).get(roleId);
+  if (!comparable(s)) return { ...(s ? { status: s.status } : {}), ...(s?.updateStatus ? { updateStatus: s.updateStatus } : {}), draftChanged: false };
+  const current = (await upstream.fetchDraftVersions(env, bearer, [roleId], provider)).get(roleId);
+  return { status: s.status, ...(s.updateStatus ? { updateStatus: s.updateStatus } : {}), draftChanged: draftChanged(s, current) };
 }

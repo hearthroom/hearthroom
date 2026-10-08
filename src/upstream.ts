@@ -123,6 +123,11 @@ export interface UpstreamRole {
    * 所以讀過審的封存版拿到的就是「過審那一版」的版本——跟草稿現在的比，看得出作者改了沒送審。
    */
   contentHash?: string;
+  /**
+   * 整份內容的版本（Harbor 卡片詳情的 revisionHash）：contentHash 再加作者規則與綁定世界書的條目，不算任何 id，
+   * 所以封存版與送審當下的草稿相同。只改了規則或世界書時 contentHash 不變、這個會變（見 0055）。
+   */
+  revisionHash?: string;
 }
 
 /** 本站在上游登記的來源名。建卡時送出、讀回時比對，兩邊要同一個字。 */
@@ -180,6 +185,7 @@ export function projectRole(raw: Record<string, unknown>): UpstreamRole {
     followNum: num(raw.followNum),
     creationMethod: str(raw.creationMethod),
     ...(str(raw.contentHash) ? { contentHash: str(raw.contentHash) } : {}),
+    ...(str(raw.revisionHash) ? { revisionHash: str(raw.revisionHash) } : {}),
   };
 }
 
@@ -266,6 +272,29 @@ async function fetchContentHashes(env: Env, bearer: string, roleIds: string[], p
     }
   }));
   return new Map(found.filter((entry): entry is readonly [string, string] => !!entry));
+}
+
+/** 草稿現在的兩種版本：content（contentHash）與 revision（revisionHash，供應商較舊時沒有）。 */
+export interface DraftVersion { content: string; revision?: string }
+
+/**
+ * 作者這幾張卡草稿現在的版本（內容版本與整份內容版本），用作者自己的 token 逐張讀詳情。
+ * 跟 fetchContentHashes 同一條路，多帶 revisionHash：「我的卡片」與卡片頁拿它跟過審那一版比（見 mine.ts 的 draftChanged）。
+ */
+async function fetchDraftVersions(env: Env, bearer: string, roleIds: string[], provider: ProviderId = DEFAULT_PROVIDER): Promise<Map<string, DraftVersion>> {
+  const found = await Promise.all(roleIds.map(async (roleId) => {
+    try {
+      const res = await fetch(apiUrl(env, provider, `/open/v1/role/detail?roleId=${encodeURIComponent(roleId)}`), {
+        headers: { Authorization: `Bearer ${bearer}`, language: "zh-Hans", "User-Agent": UA },
+      });
+      const role = await readJson(res, "role");
+      const content = str(role.contentHash), revision = str(role.revisionHash);
+      return content ? ([roleId, { content, ...(revision ? { revision } : {}) }] as const) : null;
+    } catch {
+      return null;
+    }
+  }));
+  return new Map(found.filter((entry): entry is readonly [string, DraftVersion] => !!entry));
 }
 
 /**
@@ -375,5 +404,5 @@ async function setFeatured(env: Env, bearer: string, roleId: string, featured: b
 }
 
 
-export const upstream = { fetchMe, setNickname, fetchRole, fetchMyRoles, fetchContentHashes, readForReview, readSealedForReview, fetchCommunityStatus, setFeatured };
+export const upstream = { fetchMe, setNickname, fetchRole, fetchMyRoles, fetchContentHashes, fetchDraftVersions, readForReview, readSealedForReview, fetchCommunityStatus, setFeatured };
 export type Upstream = typeof upstream;

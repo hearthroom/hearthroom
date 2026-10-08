@@ -67,6 +67,21 @@ it('sync fills in the approved hash for versions sealed before it was recorded, 
  expect(await approvedHash()).toBe('h-sealed');
  expect(sealedId).toMatch(/^sealed-/);
 });
+// 0055：整份內容版本（含作者規則與世界書）跟內容版本一樣記、一樣換、一樣由同步補齊。
+const approvedRevision=async()=>(await env.DB.prepare("SELECT approved_revision_hash h FROM cards WHERE source_role_id='draft'").first<{h:string|null}>())?.h;
+it('remembers the approved version\'s revision hash alongside the content hash, and sync fills it in',async()=>{
+ const f=await setup();
+ f.draft.contentHash='h-a';(f.draft as any).revisionHash='r-a';await f.submit();await f.approve();
+ expect(await approvedRevision()).toBe('r-a');
+ (f.draft as any).revisionHash='r-b';await f.submit();
+ expect(await approvedRevision()).toBe('r-a');
+ await f.approve();
+ expect(await approvedRevision()).toBe('r-b');
+ vi.spyOn(upstream,'fetchRole').mockImplementation(async(_env,id)=>({...role({roleId:id,authorNumId:10001}),contentHash:'h-a',revisionHash:'r-sealed'}));
+ await env.DB.prepare('UPDATE cards SET last_synced_at=0').run();
+ expect((await syncBatch(env)).failed).toBe(0);
+ expect(await approvedRevision()).toBe('r-sealed');
+});
 it('editing an approved draft does not start review, and another member cannot cancel a pending review',async()=>{
  const f=await setup();const a=await f.submit();await f.approve();
  expect(await beginHostedEdit(env.DB,f.memberId,'draft',Date.now())).toEqual({resubmit:false});
