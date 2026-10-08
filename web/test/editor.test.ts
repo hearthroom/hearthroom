@@ -1008,3 +1008,29 @@ it('opens a numeric editor URL using the author source, never the published revi
  expect(api.fetchRoleDetail).toHaveBeenCalledWith('r1','tok');
  expect(api.fetchRoleDetail).not.toHaveBeenCalledWith('frozen-r1','tok');
 });
+
+describe("世界模式（實驗中）只給原本就是世界卡的卡", () => {
+  it("新卡看不到世界這一區，導覽也沒有", async () => {
+    await mount("/create");
+    expect(root.querySelector('[data-section="world"]')).toBeNull();
+    expect(root.querySelector('[data-section="persona"]')).not.toBeNull();
+    expect(root.querySelectorAll(".side__item")).toHaveLength(5);
+  });
+
+  it("一般舊卡打開來也看不到", async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({ roleName: "單角色" });
+    await mount("/cards/r1/edit");
+    expect(root.querySelector('[data-section="world"]')).toBeNull();
+  });
+
+  it("原本就是世界卡的照常顯示成員", async () => {
+    api.fetchRoleDetail.mockResolvedValueOnce({
+      roleName: "櫻丘高中",
+      world: { version: 1, maxSpeakers: 2, strictness: "balanced", characters: [{ id: "ren", name: "蓮", profile: "", description: "同班同學" }] },
+    });
+    await mount("/cards/r1/edit");
+    expect(root.querySelector('[data-section="world"]')).not.toBeNull();
+    expect(root.querySelectorAll(".world-char")).toHaveLength(1);
+    expect(root.querySelectorAll(".side__item")).toHaveLength(6);
+  });
+});
