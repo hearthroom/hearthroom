@@ -290,6 +290,12 @@ function flash(message: string) {
 const SECTIONS = ["basic", "persona", "world", "dialogue", "worldbook", "publish"] as const;
 type Section = (typeof SECTIONS)[number];
 const section = ref<Section>("basic");
+/**
+ * 世界模式還在實驗、效果沒調好，先不讓新卡看到（owner，2026-10-09）。
+ * 只有打開時本來就是世界卡的才顯示這一區；開啟時記一次，作者在這頁關掉再存也不會讓它消失。
+ */
+const worldShown = ref(false);
+const sections = computed(() => SECTIONS.filter((key) => key !== "world" || (can("world") && worldShown.value)));
 const body = ref<HTMLElement | null>(null);
 
 /**
@@ -316,12 +322,12 @@ function spy() {
   const nav = body.value.parentElement?.querySelector(".side");
   const line = (nav ? nav.getBoundingClientRect().bottom : 60) + 12;
   let current: Section = SECTIONS[0];
-  for (const key of SECTIONS) {
+  for (const key of sections.value) {
     const el = paneOf(key);
     if (el && el.getBoundingClientRect().top <= line) current = key;
   }
   // 捲到頁底時最後一區未必過得了線（它可能比一屏短），到底就算它
-  if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) current = SECTIONS[SECTIONS.length - 1];
+  if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) current = sections.value[sections.value.length - 1];
   if (section.value !== current) section.value = current;
 }
 function onScroll() {
@@ -431,6 +437,8 @@ function restoreDraft() {
     tagsText.value = stored.tagsText ?? formatTags(draft.value.roleTag);
     if (stored.roleId) roleId.value = stored.roleId;
     wb.restore(stored.worldbook);
+    // 本機草稿裡已經寫了世界成員的，照樣給它看，不然存的時候會悄悄送出一份看不見的設定
+    worldShown.value = Boolean(draft.value.world);
     restoredDraft.value = true;
   } catch {
     localStorage.removeItem(DRAFT_KEY);
@@ -440,6 +448,7 @@ function discardDraft() {
   draft.value = makeDraft(locale.value);
   tagsText.value = "";
   wb.reset();
+  worldShown.value = false;
   restoredDraft.value = false;
   localStorage.removeItem(DRAFT_KEY);
 }
@@ -497,6 +506,7 @@ onMounted(async () => {
     draft.value = draftFromRoleDetail(raw, locale.value);
     tagsText.value = formatTags(draft.value.roleTag);
     original.value = cloneDraft(draft.value);
+    worldShown.value = Boolean(draft.value.world);
     if (token) {
       await wb.loadBound(token, roleId.value);
       for (const c of draft.value.world?.characters ?? []) {
@@ -933,7 +943,7 @@ async function exportCard(format: "png" | "json") {
       <!-- 左：分區導覽。紅點＝缺必填；勾＝已經有內容 -->
       <nav class="side" :aria-label="$t('editor.sections')">
         <button
-          v-for="key in SECTIONS"
+          v-for="key in sections"
           :key="key"
           type="button"
           class="side__item"
@@ -1062,7 +1072,7 @@ async function exportCard(format: "png" | "json") {
         </section>
 
         <!-- 世界模式：一張卡多個角色 -->
-        <section v-if="can('world')" data-section="world" class="pane">
+        <section v-if="sections.includes('world')" data-section="world" class="pane">
           <h2 class="pane__title">{{ $t("editor.section.world") }}<span class="exp-tag">{{ $t("editor.experimental") }}</span></h2>
           <!-- 世界模式還沒做完：先講清楚只適合試玩，免得作者拿它寫正式卡 -->
           <p class="notice">{{ $t("editor.world.experimental") }}</p>
