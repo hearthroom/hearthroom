@@ -1,0 +1,18 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "title": {
+    "zh-Hant": "卡片更新後，你在卡裡的設定、收藏與進度紀錄不再歸零。",
+    "zh-Hans": "卡片更新后，你在卡里的设置、收藏与进度记录不再归零。",
+    "en": "Your settings, collections and progress inside a card no longer reset when the card is updated.",
+    "ja": "カードが更新されても、カード内の設定・コレクション・進行記録がリセットされなくなりました。",
+    "ko": "카드가 업데이트되어도 카드 안의 설정·수집·진행 기록이 더 이상 초기화되지 않습니다."
+  },
+  "body": {
+    "zh-Hant": "以前每次過審都換一個新版本，卡片存的資料跟著舊版留在原地，所以更新公告也跳不出來；現在同一張卡的每一版共用一份，舊的也接回來了。",
+    "zh-Hans": "以前每次过审都换一个新版本，卡片存的数据跟着旧版留在原地，所以更新公告也弹不出来；现在同一张卡的每一版共用一份，旧的也接回来了。",
+    "en": "Each approved update used to start a fresh copy that could not see what the card had saved for you, which also hid the card's update notes; every version of a card now shares one save, older ones included.",
+    "ja": "以前は承認のたびに新しい版になり、カードが保存したデータが旧版に取り残されて更新のお知らせも出ませんでしたが、今は同じカードの全ての版で一つを共有し、古いデータも引き継がれます。",
+    "ko": "예전에는 승인될 때마다 새 버전이 되어 카드가 저장한 데이터가 이전 버전에 남고 업데이트 안내도 뜨지 않았지만, 이제 같은 카드의 모든 버전이 하나를 공유하며 예전 데이터도 이어집니다."
+  }
+}
