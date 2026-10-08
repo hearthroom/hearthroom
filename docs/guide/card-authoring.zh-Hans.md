@@ -121,7 +121,8 @@
 | `sdk.user.get()` | 玩家称呼、头像与界面语言（`locale`，例如 `zh-Hans`）。 |
 | `sdk.text.convert(text)` / `sdk.text.ready()` | 把脚本自己画的字转成玩家的简繁，跟页面转换回复的方式相同。字典载入之前 `convert` 原样返回；`ready()` 在载入完成时完成，不需要转换时立刻完成。 |
 | `sdk.model.get()` | 玩家当前选择的模型：`{name, cost}`，`name` 是模型名（顶栏那个「模型名 · 线路名」），`cost` 是下一轮预估的点数（动态计价是区间，例如 `127–251`）。平台还没提供时两个都是空字符串。打开模型列表请点输入区的模型键。 |
-| `sdk.generation.get()` | 这一轮在等什么：`{phase, since}`。`phase` 是 `idle`、`preparing`（刚发送、还没有任何响应）、`summarizing`（平台在整理剧情，挡在第一个字前，可能几十秒）、`thinking`（模型在思考、正文还没来；不思考的模型没有这段）或 `writing`（正文流式输出中）；`since` 是进入这个阶段的时间（毫秒）。只有阶段，不含思考内容。 |
+| `sdk.generation.get()` | 这一轮在等什么：`{phase, since}`。`phase` 是 `idle`、`preparing`（刚发送、还没有任何响应）、`summarizing`（平台在整理剧情，挡在第一个字前，可能几十秒）、`thinking`（模型在思考、正文还没来；不思考的模型没有这段）或 `writing`（正文流式输出中）；`since` 是进入这个阶段的时间（毫秒）。只有阶段，不含思考内容。另有 `outcome`：上一轮没正常写完时，聊天页在那一条下面画的那张卡，`{kind, label, sub, actions}`；正常结束或生成中是 `null`。`kind` 是 `model-error`、`network-error`、`server-error`、`rate-limit`、`quota`（积分不足）、`filtered`、`length-cap`、`stopped`、`compact-retryable`、`outcome-unconfirmed`（结果还在路上，没有按键，好了会自己出现）或 `interrupted`（Agent 这一轮还没跑完）；`label`、`sub` 是那张卡上玩家语言的文字；`actions` 是 `[{action, label}]`，`action` 只会是 `retry`、`continue`、`switch-model`、`model-settings`、`capacity`、`refresh`。 |
+| `sdk.generation.act(action)` | 按那张卡上的一个按键（`outcome.actions` 里的 `action`），效果跟玩家点平台那张卡一样：重试沿用同一句，不会多发一条。只能在玩家点击的当下调用（否则 `UNAUTHORIZED`，不会询问）；卡上没有这个按键 `INVALID_ARGS`；生成中 `BUSY`；每分钟 3 次。返回 Promise。 |
 | `sdk.archive.list()` / `save(title?)` / `fork(messageId)` / `open(id)` / `start(opening?)` / `rename(id, title)` / `remove(id)` | 平台的对话存档（每张卡最多 20 段，含当前这段，跨设备）。`open` 读档（原本的进度原样留在列表里）；`save` 把当前进度留一份并命名，返回 `{id, current}`；`fork` 从某一条（气泡的 `serverId`）另开一段；`start` 另开新档（0＝主开场、1..＝替代开场）；`list` 返回 `{items, count, limit}`，每行有 `id, title, isCurrent, messageCount, lastMessage, createTime, lastUpdateTime`。会改变存档的操作请在玩家点击当下调用，用卡片自己的确认画面；不在点击当下调用时，页面会先问玩家。 |
 | `sdk.on(event, handler)` | 订阅事件。 |
 | `sdk.debug.log(...args)` | 写入调试面板。在网址加上 `?sdkDebug=1` 可显示面板。 |
@@ -143,7 +144,8 @@
 | `stage:close` | 作者舞台关闭。 |
 | `dispose` | 页面即将卸载。 |
 | `model:change` | 玩家换了模型，或下一轮的点数变了（上下文长度、思考深度）。载荷同 `sdk.model.get()`。 |
-| `generation:phase` | 这一轮等待的阶段变了。载荷同 `sdk.generation.get()`；不补发，晚到的脚本请调用 `get()`。 |
+| `generation:phase` | 这一轮等待的阶段变了。载荷是 `{phase, since}`；不补发，晚到的脚本请调用 `get()`。 |
+| `generation:outcome` | 上一轮的结局变了（失败卡出现、玩家重试后收起）。载荷同 `sdk.generation.get().outcome`，可能是 `null`；不补发。 |
 
 ### 运行规则
 
