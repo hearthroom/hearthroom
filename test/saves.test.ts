@@ -62,4 +62,30 @@ describe("/v1/me/cards/:roleId/saves", () => {
     expect((await put("k0", "again")).status).toBe(200);
     expect((await list()).body.saves.k0).toBe("again");
   });
+
+  it("一張卡的每一版共用同一份存檔：舊版留下的接得上、寫進卡本身、刪掉每一版的同一個 key", async () => {
+    const now = Date.now();
+    await env.DB.prepare("INSERT INTO cards (id, source_role_id, author_num_id, registered_at, last_synced_at, provider, approved_hosted_role_id) VALUES (100077, 'src-1', 1, ?, ?, 'harbor', 'rev-2')").bind(now, now).run();
+    for (const [v, rev] of [["v1", "rev-1"], ["v2", "rev-2"]]) {
+      await env.DB.prepare("INSERT INTO hosting_versions (version_id, work_id, member_id, operation_id, source_role_id, provider, nsfw, hosted_revision_id, card_id, state, created_at) VALUES (?, 'w', 'm', ?, 'src-1', 'harbor', 0, ?, 100077, 'approved', ?)").bind(v, v, rev, now).run();
+    }
+    const member = (await env.DB.prepare("SELECT DISTINCT member_id FROM card_saves").first<{ member_id: string }>())?.member_id;
+    expect(member).toBeUndefined();
+    // a save written while the card was at its first version (the old per-roleId row)
+    const at = (rid: string) => `https://c.test/v1/me/cards/${rid}/saves`;
+    await SELF.fetch(`${at("rev-1")}/prefs`, { method: "PUT", headers: { "Content-Type": "application/json", ...bearer("a-token") }, body: JSON.stringify({ value: { seenVer: "1.0" } }) });
+    await env.DB.prepare("UPDATE card_saves SET role_id = 'rev-1'").run();
+    // the card is approved again: the player now opens rev-2 and still finds it
+    const read = async (rid: string) => ((await (await SELF.fetch(at(rid), { headers: bearer("a-token") })).json()) as { saves: Record<string, unknown> }).saves;
+    expect(await read("rev-2")).toEqual({ prefs: { seenVer: "1.0" } });
+    // writing goes to the card, and the newer value wins over the old version's row
+    await SELF.fetch(`${at("rev-2")}/prefs`, { method: "PUT", headers: { "Content-Type": "application/json", ...bearer("a-token") }, body: JSON.stringify({ value: { seenVer: "1.1" } }) });
+    expect(await read("rev-2")).toEqual({ prefs: { seenVer: "1.1" } });
+    expect(await read("src-1")).toEqual({ prefs: { seenVer: "1.1" } });
+    const keys = await env.DB.prepare("SELECT role_id FROM card_saves ORDER BY role_id").all<{ role_id: string }>();
+    expect(keys.results.map((r) => r.role_id)).toEqual(["card:100077", "rev-1"]);
+    // deleting removes the key from every version, so the old row does not come back
+    await SELF.fetch(`${at("rev-2")}/prefs`, { method: "DELETE", headers: bearer("a-token") });
+    expect(await read("rev-1")).toEqual({});
+  });
 });
