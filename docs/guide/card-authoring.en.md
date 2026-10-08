@@ -121,6 +121,7 @@ Colours and sizes are defined by `--chat-*` variables (for example `--chat-bg`, 
 | `sdk.user.get()` | Player name, avatar and interface language (`locale`, such as `zh-Hans`). |
 | `sdk.text.convert(text)` / `sdk.text.ready()` | Convert text your script draws to the player's Chinese script (Simplified or Traditional), the same way the page converts replies. `convert` returns the text unchanged until the dictionary has loaded; `ready()` resolves once it has, or at once when no conversion is needed. |
 | `sdk.model.get()` | The model the player has chosen: `{name, cost}`. `name` is the model's display name (the "model · route" shown in the header); `cost` is the estimated credits for the next turn (a range for dynamic pricing, such as `127–251`). Both are empty strings until the page provides them. To open the model list, click the model button in the composer. |
+| `sdk.archive.list()` / `save(title?)` / `fork(messageId)` / `open(id)` / `start(opening?)` / `rename(id, title)` / `remove(id)` | The platform's conversation saves (up to 20 per card, the current one included, across devices). `open` loads a save (the current progress stays in the list as it is); `save` keeps a named copy of the current progress and returns `{id, current}`; `fork` starts a new save from one message (a bubble's `serverId`); `start` begins a new save (0 = the main opening, 1.. = alternates); `list` returns `{items, count, limit}` with `id, title, isCurrent, messageCount, lastMessage, createTime, lastUpdateTime`. Call the changing ones inside the player's click and confirm with your own screen; outside a click the page asks the player first. |
 | `sdk.on(event, handler)` | Subscribe to an event. |
 | `sdk.debug.log(...args)` | Write to the debug panel. Append `?sdkDebug=1` to the URL to show the panel. |
 
@@ -135,7 +136,7 @@ Colours and sizes are defined by `--chat-*` variables (for example `--chat-bg`, 
 | `message:done` | A message is complete. |
 | `message:unmount` | A message node is removed. |
 | `input:change` | The input box content changes. |
-| `conversation:switch` | The conversation changes. |
+| `conversation:switch` | The conversation changes (after a load, save, fork or new save). Payload `{ conversationId }`. |
 | `theme:change` | The theme switches between dark and light. |
 | `back` | The player presses back. |
 | `stage:close` | The author stage closes. |
@@ -158,6 +159,7 @@ Colours and sizes are defined by `--chat-*` variables (for example `--chat-bg`, 
 | `INVALID_ARGS` | Invalid arguments. |
 | `HOST_DENIED` | The host page refused the action. |
 | `BUSY` | A reply is being generated. |
+| `LIMIT_REACHED` | The save list is full; `err.data` is `{ count, limit }`. Ask the player to delete one. |
 | `NOT_SUPPORTED` | The feature is not available in the current environment. |
 
 ## Migrating from classic

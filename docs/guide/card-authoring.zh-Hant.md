@@ -121,6 +121,7 @@
 | `sdk.user.get()` | 玩家稱呼、頭像與介面語言（`locale`，例如 `zh-Hans`）。 |
 | `sdk.text.convert(text)` / `sdk.text.ready()` | 把腳本自己畫的字轉成玩家的簡繁，跟頁面轉回覆的方式相同。字典載好之前 `convert` 原樣回；`ready()` 在載好時完成，不需要轉時立刻完成。 |
 | `sdk.model.get()` | 玩家目前選的模型：`{name, cost}`，`name` 是模型名（頂欄那個「模型名 · 線路名」），`cost` 是下一輪預估的點數（動態計價是區間，例如 `127–251`）。平台還沒給時兩個都是空字串。打開模型清單請點輸入區的模型鍵。 |
+| `sdk.archive.list()` / `save(title?)` / `fork(messageId)` / `open(id)` / `start(opening?)` / `rename(id, title)` / `remove(id)` | 平台的對話存檔（每張卡最多 20 段，含目前這段，跨裝置）。`open` 讀檔（原本的進度原樣留在清單裡）；`save` 把目前進度留一份並取名，回 `{id, current}`；`fork` 從某一則（氣泡的 `serverId`）另開一段；`start` 另開新檔（0＝主開場、1..＝替代開場）；`list` 回 `{items, count, limit}`，每列有 `id, title, isCurrent, messageCount, lastMessage, createTime, lastUpdateTime`。會改變存檔的操作請在玩家點擊當下呼叫，用卡片自己的確認畫面；不在點擊當下呼叫時，頁面會先問玩家。 |
 | `sdk.on(event, handler)` | 訂閱事件。 |
 | `sdk.debug.log(...args)` | 寫入除錯面板。在網址加上 `?sdkDebug=1` 可顯示面板。 |
 
@@ -135,7 +136,7 @@
 | `message:done` | 訊息完成。 |
 | `message:unmount` | 訊息節點移除。 |
 | `input:change` | 輸入框內容變更。 |
-| `conversation:switch` | 切換對話。 |
+| `conversation:switch` | 切換對話（讀檔、存檔、分叉、另開新檔之後）。載荷 `{ conversationId }`。 |
 | `theme:change` | 深淺色切換。 |
 | `back` | 玩家按下返回。 |
 | `stage:close` | 作者舞台關閉。 |
@@ -158,6 +159,7 @@
 | `INVALID_ARGS` | 參數不合法。 |
 | `HOST_DENIED` | 宿主頁拒絕此操作。 |
 | `BUSY` | 正在生成中。 |
+| `LIMIT_REACHED` | 對話存檔已滿；`err.data` 是 `{ count, limit }`，請玩家先刪一段。 |
 | `NOT_SUPPORTED` | 目前環境不支援此功能。 |
 
 ## 從傳統頁遷移
