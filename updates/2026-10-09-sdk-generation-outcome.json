@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/guide",
+  "title": {
+    "zh-Hant": "全頁介面的卡可以知道上一輪為什麼沒寫完，並在自己的介面上放重試鍵。",
+    "zh-Hans": "全页界面的卡可以知道上一轮为什么没写完，并在自己的界面上放重试键。",
+    "en": "Full-page cards can tell why the last turn didn't finish and put a retry button in their own interface.",
+    "ja": "全画面カードは前のターンが終わらなかった理由を知り、自分の画面に再試行ボタンを置けます。",
+    "ko": "전체 화면 카드는 지난 턴이 끝나지 않은 이유를 알고, 자체 화면에 다시 시도 버튼을 둘 수 있습니다."
+  },
+  "body": {
+    "zh-Hant": "sdk.generation 會給出斷線、積分不足、被中斷等情況與可用的按鍵，按下去跟點平台那張卡一樣，不會多送一則你的訊息。",
+    "zh-Hans": "sdk.generation 会给出断线、积分不足、被中断等情况与可用的按键，按下去跟点平台那张卡一样，不会多发一条你的消息。",
+    "en": "sdk.generation reports a dropped connection, too few credits or an interrupted turn along with the buttons it offers, and pressing one works like the platform's own card without sending your line twice.",
+    "ja": "sdk.generation は接続切れ、ポイント不足、中断などの状況と使えるボタンを伝え、押すとプラットフォームのカードと同じように動き、あなたのメッセージが二重に送られることはありません。",
+    "ko": "sdk.generation은 연결 끊김, 포인트 부족, 중단 같은 상황과 쓸 수 있는 버튼을 알려 주며, 누르면 플랫폼 카드와 똑같이 동작하고 내 메시지가 두 번 전송되지 않습니다."
+  }
+}
