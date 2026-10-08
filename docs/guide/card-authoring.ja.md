@@ -121,6 +121,7 @@
 | `sdk.user.get()` | プレイヤーの呼び名、アバター、表示言語（`locale`、例：`zh-Hans`）。 |
 | `sdk.text.convert(text)` / `sdk.text.ready()` | スクリプトが描く文字を、返信と同じ方法でプレイヤーの中国語字形（簡体・繁体）に変換します。辞書の読み込み前は `convert` がそのまま返し、`ready()` は読み込み完了時（変換不要なら即時）に完了します。 |
 | `sdk.model.get()` | プレイヤーが選んでいるモデル：`{name, cost}`。`name` はモデル名（ヘッダーの「モデル名 · ルート名」）、`cost` は次のターンの推定ポイント（動的料金では範囲、例：`127–251`）。ページから届くまではどちらも空文字列です。モデル一覧を開くには入力欄のモデルボタンを押します。 |
+| `sdk.archive.list()` / `save(title?)` / `fork(messageId)` / `open(id)` / `start(opening?)` / `rename(id, title)` / `remove(id)` | プラットフォームの会話セーブ（カードごとに最大 20 件、現在の会話を含む、端末をまたいで共有）。`open` はロード（現在の進行はそのまま一覧に残ります）、`save` は現在の進行に名前を付けて残し `{id, current}` を返す、`fork` は特定のメッセージ（吹き出しの `serverId`）から分岐、`start` は新規開始（0＝メインの開幕、1..＝別の開幕）、`list` は `{items, count, limit}` を返し、各行に `id, title, isCurrent, messageCount, lastMessage, createTime, lastUpdateTime` があります。変更する操作はプレイヤーのクリック中に呼び、カード自身の確認画面を使ってください。クリック外ではページが先に確認します。 |
 | `sdk.on(event, handler)` | イベントの購読。 |
 | `sdk.debug.log(...args)` | デバッグパネルに出力します。URL に `?sdkDebug=1` を付けるとパネルが表示されます。 |
 
@@ -135,7 +136,7 @@
 | `message:done` | メッセージが完了した。 |
 | `message:unmount` | メッセージノードが削除された。 |
 | `input:change` | 入力ボックスの内容が変わった。 |
-| `conversation:switch` | 会話が切り替わった。 |
+| `conversation:switch` | 会話が切り替わった（ロード、セーブ、分岐、新規開始の後）。ペイロードは `{ conversationId }`。 |
 | `theme:change` | ダーク／ライトが切り替わった。 |
 | `back` | プレイヤーが戻るを押した。 |
 | `stage:close` | 作者ステージが閉じた。 |
@@ -158,6 +159,7 @@
 | `INVALID_ARGS` | 引数が不正。 |
 | `HOST_DENIED` | ホストページが操作を拒否した。 |
 | `BUSY` | 生成中。 |
+| `LIMIT_REACHED` | 会話セーブが上限に達した。`err.data` は `{ count, limit }`。プレイヤーに一件削除してもらいます。 |
 | `NOT_SUPPORTED` | 現在の環境では利用できない機能。 |
 
 ## 従来ページからの移行

@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/guide",
+  "title": {
+    "zh-Hant": "全頁介面的卡可以用 sdk.archive 做自己的存檔、讀檔與分叉畫面。",
+    "zh-Hans": "全页界面的卡可以用 sdk.archive 做自己的存档、读档与分叉画面。",
+    "en": "Full-page cards can build their own save, load and fork screens with sdk.archive.",
+    "ja": "全画面カードは sdk.archive で独自のセーブ・ロード・分岐画面を作れます。",
+    "ko": "전체 화면 카드는 sdk.archive로 자체 저장·불러오기·분기 화면을 만들 수 있습니다."
+  },
+  "body": {
+    "zh-Hant": "它直接用平台的對話存檔（每張卡 20 段、跨裝置），讀檔時目前的進度會留在清單裡，滿了會回 LIMIT_REACHED 讓卡片提示玩家先刪一段。",
+    "zh-Hans": "它直接用平台的对话存档（每张卡 20 段、跨设备），读档时当前的进度会留在列表里，满了会返回 LIMIT_REACHED 让卡片提示玩家先删一段。",
+    "en": "It uses the platform's conversation saves (20 per card, across devices), keeps the current progress in the list when a save is loaded, and returns LIMIT_REACHED when the list is full.",
+    "ja": "プラットフォームの会話セーブ（カードごとに 20 件）をそのまま使い、ロード時も現在の進行は一覧に残り、満杯なら LIMIT_REACHED を返します。",
+    "ko": "플랫폼의 대화 저장(카드당 20개, 기기 간)을 그대로 쓰며, 불러올 때 현재 진행은 목록에 남고 가득 차면 LIMIT_REACHED를 돌려줍니다."
+  }
+}
