@@ -400,4 +400,46 @@ describe("已發布、有修改還沒送審", () => {
     await mine("?filter=listed");
     expect(contentHashCalls).toHaveLength(0);
   });
+  // 0055：只改了顯示規則或世界書時 contentHash 不變，要靠整份內容版本（revisionHash）才看得出來
+  const approveRevision = (roleId: string, revision: string) =>
+    env.DB.prepare("UPDATE cards SET approved_revision_hash=? WHERE source_role_id=?").bind(revision, roleId).run();
+
+  it("只改了規則或世界書（內容版本相同、整份內容版本不同）也標；兩組都一樣", async () => {
+    await publish("same", "h-same");
+    await approveRevision("same", "r-old");
+    contentHashesOnUpstream({ same: "h-same" }, { same: "r-new" });
+    expect(flags((await mine()).body).same).toBe(true);
+    expect(flags((await mine("?filter=listed")).body).same).toBe(true);
+  });
+
+  it("整份內容版本跟過審那一版相同就不標", async () => {
+    await publish("same", "h-same");
+    await approveRevision("same", "r-old");
+    contentHashesOnUpstream({ same: "h-same" }, { same: "r-old" });
+    expect(flags((await mine()).body).same).toBe(false);
+    expect(flags((await mine("?filter=listed")).body).same).toBe(false);
+  });
+
+  it("還沒記到過審的整份內容版本，或供應商沒回它，就退回只比內容版本", async () => {
+    await publish("edited", "h-old");
+    await publish("same", "h-same");
+    await approveRevision("same", "r-old");
+    contentHashesOnUpstream({ edited: "h-new", same: "h-same" });
+    const { body } = await mine("?filter=listed");
+    expect(flags(body)).toMatchObject({ edited: true, same: false });
+  });
+
+  it("卡片頁的草稿狀態只給作者本人，比法跟我的卡片相同", async () => {
+    await publish("same", "h-same");
+    await approveRevision("same", "r-old");
+    contentHashesOnUpstream({ same: "h-same" }, { same: "r-new" });
+    const own = await SELF.fetch("https://c.test/v1/me/cards/same/draft", { headers: bearer("alice-token") });
+    expect(own.status).toBe(200);
+    expect(own.headers.get("Cache-Control")).toContain("no-store");
+    expect(await own.json()).toEqual({ status: "approved", draftChanged: true });
+    const other = await SELF.fetch("https://c.test/v1/me/cards/same/draft", { headers: bearer("bob-token") });
+    expect(other.status).toBe(404);
+    const none = await SELF.fetch("https://c.test/v1/me/cards/same/draft");
+    expect(none.status).toBe(401);
+  });
 });

@@ -238,13 +238,13 @@ export async function stamp(
 export async function statusAmong(
   db: D1Database,
   roleIds: string[],
-): Promise<Map<string, { status: CardStatus; note: string; nsfw: boolean; updateStatus?: string; approvedHash?: string }>> {
-  const out = new Map<string, { status: CardStatus; note: string; nsfw: boolean; updateStatus?: string; approvedHash?: string }>();
+): Promise<Map<string, { status: CardStatus; note: string; nsfw: boolean; updateStatus?: string; approvedHash?: string; approvedRevision?: string }>> {
+  const out = new Map<string, { status: CardStatus; note: string; nsfw: boolean; updateStatus?: string; approvedHash?: string; approvedRevision?: string }>();
   if (!roleIds.length) return out;
   const holes = roleIds.map(() => "?").join(",");
   const rows = await db
     .prepare(
-      `SELECT c.source_role_id, c.status, c.nsfw, c.approved_content_hash,
+      `SELECT c.source_role_id, c.status, c.nsfw, c.approved_content_hash, c.approved_revision_hash,
               CASE WHEN c.approved_version_id IS NOT NULL THEN
                 (SELECT s.status FROM review_submissions s WHERE s.card_id=c.id ORDER BY s.submitted_at DESC,s.rowid DESC LIMIT 1)
               END AS update_status,
@@ -253,9 +253,9 @@ export async function statusAmong(
        FROM cards c WHERE c.source_role_id IN (${holes})`,
     )
     .bind(...roleIds)
-    .all<{ source_role_id: string; status: CardStatus; note: string | null; nsfw: number; update_status:string|null; approved_content_hash: string|null }>();
-  // approvedHash：過審那一版的內容版本（0052），「我的卡片」拿來跟草稿現在的比
-  for (const r of rows.results) out.set(r.source_role_id, { status: r.status, note: r.note ?? "", nsfw: r.nsfw === 1, ...(r.update_status && r.update_status!=="approved"?{updateStatus:r.update_status}:{}), ...(r.approved_content_hash?{approvedHash:r.approved_content_hash}:{}) });
+    .all<{ source_role_id: string; status: CardStatus; note: string | null; nsfw: number; update_status:string|null; approved_content_hash: string|null; approved_revision_hash: string|null }>();
+  // approvedHash：過審那一版的內容版本（0052）；approvedRevision：整份內容版本（0055）。「我的卡片」拿來跟草稿現在的比
+  for (const r of rows.results) out.set(r.source_role_id, { status: r.status, note: r.note ?? "", nsfw: r.nsfw === 1, ...(r.update_status && r.update_status!=="approved"?{updateStatus:r.update_status}:{}), ...(r.approved_content_hash?{approvedHash:r.approved_content_hash}:{}), ...(r.approved_revision_hash?{approvedRevision:r.approved_revision_hash}:{}) });
   return out;
 }
 

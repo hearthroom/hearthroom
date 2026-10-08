@@ -621,6 +621,8 @@
   "wb.order.hint": "拖着换顺序。常驻的条目一轮塞不下时，排在前面的先进去。",
   "nav.review": "社区管理",
   "mine.action.submit": "提交审核",
+  "card.owner.playDraft": "试玩草稿",
+  "card.owner.submitUpdate": "提交更新审核",
   "mine.badge.pending": "审核中",
   "mine.badge.approved": "已发布",
   "mine.badge.rejected": "审核未通过",

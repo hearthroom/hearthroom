@@ -621,6 +621,8 @@
   "wb.order.hint": "ドラッグで並べ替えられます。常に持ち込む項目が一度に入りきらないときは、上にあるものから入ります。",
   "nav.review": "コミュニティ管理",
   "mine.action.submit": "審査に出す",
+  "card.owner.playDraft": "下書きを試す",
+  "card.owner.submitUpdate": "更新を審査に出す",
   "mine.badge.pending": "審査中",
   "mine.badge.approved": "公開中",
   "mine.badge.rejected": "審査不承認",

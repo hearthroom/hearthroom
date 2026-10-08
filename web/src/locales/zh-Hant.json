@@ -621,6 +621,8 @@
   "wb.order.hint": "拖著換順序。常駐的條目一輪塞不下時，排在前面的先進去。",
   "nav.review": "社群管理",
   "mine.action.submit": "提交審核",
+  "card.owner.playDraft": "試玩草稿",
+  "card.owner.submitUpdate": "提交更新審核",
   "mine.badge.pending": "審核中",
   "mine.badge.approved": "已發布",
   "mine.badge.rejected": "審核未通過",

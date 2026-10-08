@@ -227,12 +227,19 @@ export function myRolesOnUpstream(byToken: Record<string, MyRoleFixture[]>): voi
 /** 記錄每次逐張問草稿內容版本的呼叫（「已提交」那組才會問，只問已發布的卡）。 */
 export const contentHashCalls: { token: string; roleIds: string[] }[] = [];
 
-/** 供應商上每張卡草稿現在的內容版本；沒列出的當成讀不到（不回）。 */
-export function contentHashesOnUpstream(byRoleId: Record<string, string>): void {
+/**
+ * 供應商上每張卡草稿現在的內容版本；沒列出的當成讀不到（不回）。revisions 是整份內容版本（revisionHash），
+ * 沒給的卡就像較舊的供應商一樣不回這個值。逐張讀詳情的兩個入口（fetchContentHashes／fetchDraftVersions）都記在 contentHashCalls。
+ */
+export function contentHashesOnUpstream(byRoleId: Record<string, string>, revisions: Record<string, string> = {}): void {
   contentHashCalls.length = 0;
   upstream.fetchContentHashes = async (_env, token, roleIds) => {
     contentHashCalls.push({ token, roleIds: [...roleIds] });
     return new Map(roleIds.filter((id) => byRoleId[id]).map((id) => [id, byRoleId[id]]));
+  };
+  upstream.fetchDraftVersions = async (_env, token, roleIds) => {
+    contentHashCalls.push({ token, roleIds: [...roleIds] });
+    return new Map(roleIds.filter((id) => byRoleId[id]).map((id) => [id, { content: byRoleId[id]!, ...(revisions[id] ? { revision: revisions[id] } : {}) }]));
   };
 }
 

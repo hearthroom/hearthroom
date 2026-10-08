@@ -46,7 +46,7 @@ import { authorLine, downloadMeta, homeMeta, preloadImageTag, renderHead, update
 import { aliasTarget, HOST, canonicalUrl, isPlayHost } from "./site";
 import { cardThumbUrl, landingZone } from "../shared/card-thumb";
 import { PRIMARY_HOST, siteRootOf } from "../shared/site-hosts";
-import { loadMine, type MineFilter } from "./mine";
+import { draftStateOf, loadMine, type MineFilter } from "./mine";
 import { tagNamesFor } from "../shared/tag-catalog";
 import { providerOf, requestIdentity, isReviewer, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
 import { configuredProviders, hasChat, parseProvider, requireConfigured, DEFAULT_PROVIDER, PROVIDER_NAMES, type ProviderId, reviewEnabled } from "./providers";
@@ -798,6 +798,21 @@ app.post("/v1/me/settings", async (c) => {
     nsfw = { showNsfw: current.showNsfw && current.ageVerifiedAt !== null, ageVerified: current.ageVerifiedAt !== null, adultConsent: current.adultConsent };
   }
   return c.json({ ...nsfw, hiddenTags }, 200, { "Cache-Control": "no-store" });
+});
+
+/**
+ * 卡片頁給作者本人的草稿狀態（owner 2026-10-08：改了卡、卡片頁沒說，按遊玩玩到的還是過審那一版）。
+ * 只回旗標與審核狀態；不是作者本人一律 404（不透露有沒有這張卡）。
+ */
+app.get("/v1/me/cards/:roleId/draft", async (c) => {
+  const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1];
+  if (!bearer) throw new HttpError(401, "missing bearer token");
+  const provider = providerOf(c);
+  const me = await requestIdentity(c, bearer, provider);
+  const roleId = c.req.param("roleId");
+  const row = await c.env.DB.prepare("SELECT author_num_id FROM cards WHERE provider = ? AND source_role_id = ?").bind(provider, roleId).first<{ author_num_id: number }>();
+  if (!row || row.author_num_id !== me.accountNumId) throw new HttpError(404, "card not found");
+  return c.json(await draftStateOf(c.env, bearer, roleId, provider), 200, { "Cache-Control": "private, no-store" });
 });
 
 /**
