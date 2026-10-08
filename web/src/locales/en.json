@@ -621,6 +621,8 @@
   "wb.order.hint": "Drag to reorder. When the always-on entries don't all fit in a turn, the ones nearer the top go in first.",
   "nav.review": "Community management",
   "mine.action.submit": "Submit for review",
+  "card.owner.playDraft": "Play draft",
+  "card.owner.submitUpdate": "Submit update for review",
   "mine.badge.pending": "In review",
   "mine.badge.approved": "Published",
   "mine.badge.rejected": "Not approved",

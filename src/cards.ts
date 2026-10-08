@@ -595,10 +595,11 @@ export function syncStatement(db: D1Database, id: string, prevTalkNum: number, r
   return db
     .prepare(
       // approved_content_hash：讀的是過審的封存版時順手記下它的內容版本（0052）；0052 之前過審的卡靠這裡補齊。
-      // 只在讀的確實是過審那一份時寫，供應商沒回版本就保留原值。
+      // 只在讀的確實是過審那一份時寫，供應商沒回版本就保留原值。approved_revision_hash 同理（0055，含作者規則與世界書）。
       `UPDATE cards SET zone=?, author_name=?, author_avatar=?, names=?, summaries=?, background_url=?, share_image_url=?, landscape_url=?,
          slug=?, tags=?, talk_num=?, follow_num=?, search_name=?, search_text=?, search_body=?, talk_num_prev=?, last_synced_at=?,
-         approved_content_hash=CASE WHEN approved_hosted_role_id=? THEN COALESCE(?, approved_content_hash) ELSE approved_content_hash END
+         approved_content_hash=CASE WHEN approved_hosted_role_id=? THEN COALESCE(?, approved_content_hash) ELSE approved_content_hash END,
+         approved_revision_hash=CASE WHEN approved_hosted_role_id=? THEN COALESCE(?, approved_revision_hash) ELSE approved_revision_hash END
        WHERE id=? AND (approved_hosted_role_id IS NULL OR approved_hosted_role_id=?)`,
     )
     .bind(
@@ -621,6 +622,8 @@ export function syncStatement(db: D1Database, id: string, prevTalkNum: number, r
       now,
       role.roleId,
       role.contentHash ?? null,
+      role.roleId,
+      role.revisionHash ?? null,
       id,
       role.roleId,
     );

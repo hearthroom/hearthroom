@@ -530,6 +530,12 @@ export async function registerCardIdentity(roleId: string, token: string, provid
   }));
 }
 
+/** 卡片頁給作者本人的草稿狀態（GET /v1/me/cards/:roleId/draft）：草稿有沒有改了還沒送審、新版在不在審。 */
+export interface DraftState { status?: string; updateStatus?: string; draftChanged: boolean }
+export async function fetchDraftState(roleId: string, token: string, provider: ProviderId = currentProvider()): Promise<DraftState> {
+  return json(await fetch(`${COMMUNITY_API}/me/cards/${encodeURIComponent(roleId)}/draft`, { headers: { ...from(), "X-Provider": provider, ...authHeaders(token) } }));
+}
+
 export interface MyCard {
   num?: number;
   provider?: import("./provider").ProviderId;

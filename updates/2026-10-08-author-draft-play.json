@@ -1,0 +1,18 @@
+{
+  "tier": "fix",
+  "audience": "authors",
+  "title": {
+    "zh-Hant": "已上架的卡改了之後，作者在卡片頁就能試玩自己的草稿。",
+    "zh-Hans": "已上架的卡改了之后，作者在卡片页就能试玩自己的草稿。",
+    "en": "After editing a listed card, its author can play the draft right from the card page.",
+    "ja": "公開中のカードを直したら、作者はカードページから下書きを試せます。",
+    "ko": "게시된 카드를 고친 뒤, 작가는 카드 페이지에서 초안을 바로 플레이할 수 있습니다."
+  },
+  "body": {
+    "zh-Hant": "卡片頁多了「試玩草稿」，只改了顯示規則或世界書也會提示「改過還沒提交審核」並可直接送審更新，玩家看到的仍是已發布那一版。",
+    "zh-Hans": "卡片页多了「试玩草稿」，只改了显示规则或世界书也会提示「改过还没提交审核」并可直接送审更新，玩家看到的仍是已发布那一版。",
+    "en": "The card page now has Play draft, flags unsubmitted edits even when only display rules or the Lorebook changed, and offers to submit the update, while players keep the published version.",
+    "ja": "カードページに「下書きを試す」が加わり、表示ルールや設定集だけの変更も未申請と表示して更新を審査に出せます。",
+    "ko": "카드 페이지에 '초안 플레이'가 생겼고, 표시 규칙이나 로어북만 바꿔도 미제출로 표시하며 업데이트 심사를 바로 요청할 수 있습니다."
+  }
+}
