@@ -121,6 +121,7 @@
 | `sdk.user.get()` | 玩家稱呼、頭像與介面語言（`locale`，例如 `zh-Hans`）。 |
 | `sdk.text.convert(text)` / `sdk.text.ready()` | 把腳本自己畫的字轉成玩家的簡繁，跟頁面轉回覆的方式相同。字典載好之前 `convert` 原樣回；`ready()` 在載好時完成，不需要轉時立刻完成。 |
 | `sdk.model.get()` | 玩家目前選的模型：`{name, cost}`，`name` 是模型名（頂欄那個「模型名 · 線路名」），`cost` 是下一輪預估的點數（動態計價是區間，例如 `127–251`）。平台還沒給時兩個都是空字串。打開模型清單請點輸入區的模型鍵。 |
+| `sdk.generation.get()` | 這一輪在等什麼：`{phase, since}`。`phase` 是 `idle`、`preparing`（剛送出、還沒有任何回應）、`summarizing`（平台在整理劇情，擋在第一個字前，可能幾十秒）、`thinking`（模型在思考、正文還沒來；不思考的模型沒有這段）或 `writing`（正文串流中）；`since` 是進入這個階段的時間（毫秒）。只有階段，不含思考內容。 |
 | `sdk.archive.list()` / `save(title?)` / `fork(messageId)` / `open(id)` / `start(opening?)` / `rename(id, title)` / `remove(id)` | 平台的對話存檔（每張卡最多 20 段，含目前這段，跨裝置）。`open` 讀檔（原本的進度原樣留在清單裡）；`save` 把目前進度留一份並取名，回 `{id, current}`；`fork` 從某一則（氣泡的 `serverId`）另開一段；`start` 另開新檔（0＝主開場、1..＝替代開場）；`list` 回 `{items, count, limit}`，每列有 `id, title, isCurrent, messageCount, lastMessage, createTime, lastUpdateTime`。會改變存檔的操作請在玩家點擊當下呼叫，用卡片自己的確認畫面；不在點擊當下呼叫時，頁面會先問玩家。 |
 | `sdk.on(event, handler)` | 訂閱事件。 |
 | `sdk.debug.log(...args)` | 寫入除錯面板。在網址加上 `?sdkDebug=1` 可顯示面板。 |
@@ -142,6 +143,7 @@
 | `stage:close` | 作者舞台關閉。 |
 | `dispose` | 頁面即將卸載。 |
 | `model:change` | 玩家換了模型，或下一輪的點數變了（上下文長度、思考深度）。載荷同 `sdk.model.get()`。 |
+| `generation:phase` | 這一輪等待的階段變了。載荷同 `sdk.generation.get()`；不補發，晚到的腳本請呼叫 `get()`。 |
 
 ### 執行規則
 

@@ -121,6 +121,7 @@ Colours and sizes are defined by `--chat-*` variables (for example `--chat-bg`, 
 | `sdk.user.get()` | Player name, avatar and interface language (`locale`, such as `zh-Hans`). |
 | `sdk.text.convert(text)` / `sdk.text.ready()` | Convert text your script draws to the player's Chinese script (Simplified or Traditional), the same way the page converts replies. `convert` returns the text unchanged until the dictionary has loaded; `ready()` resolves once it has, or at once when no conversion is needed. |
 | `sdk.model.get()` | The model the player has chosen: `{name, cost}`. `name` is the model's display name (the "model · route" shown in the header); `cost` is the estimated credits for the next turn (a range for dynamic pricing, such as `127–251`). Both are empty strings until the page provides them. To open the model list, click the model button in the composer. |
+| `sdk.generation.get()` | What this turn is waiting on: `{phase, since}`. `phase` is `idle`, `preparing` (just sent, nothing back yet), `summarizing` (the platform is summarising the story so far, before the first word; can take tens of seconds), `thinking` (the model is reasoning and the reply has not started; models that do not reason skip it) or `writing` (the reply is streaming); `since` is when the phase began (ms). Only the phase, never the reasoning text. |
 | `sdk.archive.list()` / `save(title?)` / `fork(messageId)` / `open(id)` / `start(opening?)` / `rename(id, title)` / `remove(id)` | The platform's conversation saves (up to 20 per card, the current one included, across devices). `open` loads a save (the current progress stays in the list as it is); `save` keeps a named copy of the current progress and returns `{id, current}`; `fork` starts a new save from one message (a bubble's `serverId`); `start` begins a new save (0 = the main opening, 1.. = alternates); `list` returns `{items, count, limit}` with `id, title, isCurrent, messageCount, lastMessage, createTime, lastUpdateTime`. Call the changing ones inside the player's click and confirm with your own screen; outside a click the page asks the player first. |
 | `sdk.on(event, handler)` | Subscribe to an event. |
 | `sdk.debug.log(...args)` | Write to the debug panel. Append `?sdkDebug=1` to the URL to show the panel. |
@@ -142,6 +143,7 @@ Colours and sizes are defined by `--chat-*` variables (for example `--chat-bg`, 
 | `stage:close` | The author stage closes. |
 | `dispose` | The page is about to unload. |
 | `model:change` | The player switched models, or the next turn's cost changed (context length, thinking depth). Same payload as `sdk.model.get()`. |
+| `generation:phase` | The phase of the current wait changed. Payload as `sdk.generation.get()`; not replayed, so a late script calls `get()`. |
 
 ### Execution model
 
