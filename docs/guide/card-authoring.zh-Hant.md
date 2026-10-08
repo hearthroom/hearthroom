@@ -120,6 +120,7 @@
 | `sdk.role.get()` | 角色名稱與頭像。 |
 | `sdk.user.get()` | 玩家稱呼、頭像與介面語言（`locale`，例如 `zh-Hans`）。 |
 | `sdk.text.convert(text)` / `sdk.text.ready()` | 把腳本自己畫的字轉成玩家的簡繁，跟頁面轉回覆的方式相同。字典載好之前 `convert` 原樣回；`ready()` 在載好時完成，不需要轉時立刻完成。 |
+| `sdk.model.get()` | 玩家目前選的模型：`{name, cost}`，`name` 是模型名（頂欄那個「模型名 · 線路名」），`cost` 是下一輪預估的點數（動態計價是區間，例如 `127–251`）。平台還沒給時兩個都是空字串。打開模型清單請點輸入區的模型鍵。 |
 | `sdk.on(event, handler)` | 訂閱事件。 |
 | `sdk.debug.log(...args)` | 寫入除錯面板。在網址加上 `?sdkDebug=1` 可顯示面板。 |
 
@@ -139,6 +140,7 @@
 | `back` | 玩家按下返回。 |
 | `stage:close` | 作者舞台關閉。 |
 | `dispose` | 頁面即將卸載。 |
+| `model:change` | 玩家換了模型，或下一輪的點數變了（上下文長度、思考深度）。載荷同 `sdk.model.get()`。 |
 
 ### 執行規則
 

@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/guide",
+  "title": {
+    "zh-Hant": "卡片腳本可以用 sdk.model.get() 讀到玩家目前的模型與下一輪點數。",
+    "zh-Hans": "卡片脚本可以用 sdk.model.get() 读到玩家当前的模型与下一轮点数。",
+    "en": "Card scripts can read the player's current model and the next turn's estimated cost with sdk.model.get().",
+    "ja": "カードのスクリプトは sdk.model.get() で現在のモデルと次のポイントを読めます。",
+    "ko": "카드 스크립트는 sdk.model.get()으로 현재 모델과 다음 턴 포인트를 읽을 수 있습니다."
+  },
+  "body": {
+    "zh-Hant": "回傳 {name, cost}，玩家換模型或點數變了會發 model:change，全頁介面的卡可以在自己的設定頁顯示目前模型與下一輪預估。",
+    "zh-Hans": "返回 {name, cost}，玩家换模型或点数变了会发 model:change，全页界面的卡可以在自己的设置页显示当前模型与下一轮预估。",
+    "en": "It returns {name, cost} and fires model:change when the player switches models or the cost changes, so full-page cards can show both on their own settings page.",
+    "ja": "{name, cost} を返し、モデルやポイントが変わると model:change が届くので、全画面のカードは自分の設定画面に表示できます。",
+    "ko": "{name, cost}를 돌려주고 모델이나 포인트가 바뀌면 model:change가 발생하므로 전체 화면 카드는 자체 설정 화면에 보여 줄 수 있습니다."
+  }
+}
