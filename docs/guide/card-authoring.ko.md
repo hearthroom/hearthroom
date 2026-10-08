@@ -121,6 +121,7 @@
 | `sdk.user.get()` | 플레이어 호칭, 아바타, 인터페이스 언어(`locale`, 예: `zh-Hans`). |
 | `sdk.text.convert(text)` / `sdk.text.ready()` | 스크립트가 직접 그리는 글자를 답장과 같은 방식으로 플레이어의 중국어 자형(간체·번체)으로 바꿉니다. 사전을 불러오기 전에는 `convert`가 그대로 돌려주고, `ready()`는 불러오면(변환이 필요 없으면 즉시) 완료됩니다. |
 | `sdk.model.get()` | 플레이어가 고른 모델: `{name, cost}`. `name`은 모델 이름(헤더의 "모델 이름 · 경로 이름"), `cost`는 다음 턴의 예상 포인트(동적 요금은 범위, 예: `127–251`). 페이지가 알려 주기 전에는 둘 다 빈 문자열입니다. 모델 목록을 열려면 입력란의 모델 버튼을 누르세요. |
+| `sdk.generation.get()` | 이번 턴이 무엇을 기다리는지: `{phase, since}`. `phase`는 `idle`, `preparing`(방금 보냄, 아직 응답 없음), `summarizing`(플랫폼이 지금까지의 이야기를 정리하는 중, 첫 글자 전이며 수십 초 걸릴 수 있음), `thinking`(모델이 생각하는 중이고 본문은 아직; 생각하지 않는 모델은 없음), `writing`(본문 스트리밍 중) 중 하나이고, `since`는 그 단계에 들어간 시각(ms)입니다. 단계만 전달되며 생각 내용은 포함하지 않습니다. |
 | `sdk.archive.list()` / `save(title?)` / `fork(messageId)` / `open(id)` / `start(opening?)` / `rename(id, title)` / `remove(id)` | 플랫폼의 대화 저장(카드당 최대 20개, 현재 대화 포함, 기기 간 공유). `open`은 불러오기(현재 진행은 목록에 그대로 남음), `save`는 현재 진행을 이름 붙여 남기고 `{id, current}`를 돌려줌, `fork`는 특정 메시지(말풍선의 `serverId`)에서 분기, `start`는 새로 시작(0＝기본 오프닝, 1..＝다른 오프닝), `list`는 `{items, count, limit}`를 돌려주며 각 행에 `id, title, isCurrent, messageCount, lastMessage, createTime, lastUpdateTime`이 있습니다. 바꾸는 작업은 플레이어가 클릭한 순간에 호출하고 카드 자체 확인 화면을 쓰세요. 클릭 밖에서는 페이지가 먼저 묻습니다. |
 | `sdk.on(event, handler)` | 이벤트 구독. |
 | `sdk.debug.log(...args)` | 디버그 패널에 기록합니다. URL에 `?sdkDebug=1`을 붙이면 패널이 표시됩니다. |
@@ -142,6 +143,7 @@
 | `stage:close` | 작성자 스테이지가 닫힘. |
 | `dispose` | 페이지가 언로드되기 직전. |
 | `model:change` | 플레이어가 모델을 바꾸었거나 다음 턴의 포인트가 바뀜(컨텍스트 길이, 생각 깊이). 페이로드는 `sdk.model.get()`과 같음. |
+| `generation:phase` | 대기 단계가 바뀜. 페이로드는 `sdk.generation.get()`과 같음. 다시 보내지 않으므로 늦게 실행되는 스크립트는 `get()`을 호출하세요. |
 
 ### 실행 모델
 

@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/guide",
+  "title": {
+    "zh-Hant": "全頁介面的卡可以用 sdk.generation 告訴玩家這一輪在等什麼。",
+    "zh-Hans": "全页界面的卡可以用 sdk.generation 告诉玩家这一轮在等什么。",
+    "en": "Full-page cards can show players what a turn is waiting on with sdk.generation.",
+    "ja": "全画面カードは sdk.generation でターンが何を待っているかを示せます。",
+    "ko": "전체 화면 카드는 sdk.generation으로 이번 턴이 무엇을 기다리는지 보여 줄 수 있습니다."
+  },
+  "body": {
+    "zh-Hant": "整理劇情、模型思考或正在寫正文，連同開始時間一起給卡片（generation:phase 事件），但不含思考內容。",
+    "zh-Hans": "整理剧情、模型思考或正在写正文，连同开始时间一起给卡片（generation:phase 事件），但不含思考内容。",
+    "en": "Summarising the story, the model thinking or writing the reply reaches the card with when it began (the generation:phase event), without the reasoning text.",
+    "ja": "物語の整理、モデルの思考、本文の執筆という段階が開始時刻とともにカードに届きます（generation:phase イベント、思考の内容は含みません）。",
+    "ko": "이야기 정리, 모델의 생각, 본문 작성 단계가 시작 시각과 함께 카드에 전달됩니다(generation:phase 이벤트, 생각 내용은 제외)."
+  }
+}
