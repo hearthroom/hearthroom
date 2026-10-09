@@ -240,3 +240,35 @@ it("uploads a thousand directory files with authored paths after one overwrite c
   expect(root.querySelectorAll(".upload-list li").length).toBeGreaterThan(0);
   expect(root.querySelectorAll(".upload-list li").length).toBeLessThanOrEqual(24);
 }, 30_000);
+
+it("takes code, data and SVG files and turns a QuickTime video away before uploading", async () => {
+  const formats = ["image/png", "image/svg+xml", "video/mp4", "text/javascript", "application/wasm", "application/json"];
+  mocks.list.mockImplementation(async () => ({
+    ...page(),
+    capabilities: { ...page().capabilities, kinds: ["image", "video", "code", "data"], formats, maxFileBytes: 1 << 20 },
+  }));
+  mocks.upload.mockResolvedValue("ok");
+  await mount();
+  const tabs = [...root.querySelectorAll<HTMLButtonElement>("[role=tab]")].map((b) => b.textContent?.trim());
+  expect(tabs).toContain(i18n.global.t("res.kind.code"));
+  expect(tabs).toContain(i18n.global.t("res.kind.data"));
+  expect(tabs.some((label) => label?.startsWith("res.kind"))).toBe(false);
+  root.querySelector<HTMLButtonElement>('[aria-controls="resource-details"]')!.click();
+  await flush();
+  const rules = root.querySelector("#resource-details")!.textContent!;
+  for (const label of ["SVG", "JS", "WASM", "JSON"]) expect(rules).toContain(label);
+  expect(rules).not.toContain("JAVASCRIPT");
+  const input = root.querySelector<HTMLInputElement>("input[type=file]:not([webkitdirectory])")!;
+  for (const ext of [".js", ".mjs", ".wasm", ".json", ".svg"]) expect(input.accept.split(",")).toContain(ext);
+  Object.defineProperty(input, "files", {
+    value: [
+      new File(["export {}"], "engine.mjs"),
+      new File(["{}"], "save.json", { type: "application/json" }),
+      new File(["x"], "clip.mov", { type: "video/quicktime" }),
+    ],
+  });
+  input.dispatchEvent(new Event("change"));
+  await flush();
+  expect(mocks.upload.mock.calls.map((c) => c[0].name)).toEqual(["engine.mjs", "save.json"]);
+  expect(root.textContent).toContain(i18n.global.t("res.error.mov"));
+});

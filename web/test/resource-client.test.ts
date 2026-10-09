@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { resourceClient } from "../src/lib/resource-client";
+import { i18n } from "../src/lib/i18n";
 const response = (data: unknown) =>
   new Response(JSON.stringify({ code: 0, data }), { status: 200 });
 afterEach(() => vi.unstubAllGlobals());
@@ -182,5 +183,46 @@ describe("direct upload timing", () => {
     await vi.advanceTimersByTimeAsync(75_000);
     await settled;
     expect(aborted).toHaveBeenCalled();
+  });
+});
+
+describe("code, data and SVG uploads", () => {
+  const xhr = () =>
+    vi.stubGlobal("XMLHttpRequest", class { status = 200; upload = {}; open() {} setRequestHeader() {} onload = () => {}; send() { this.onload(); } });
+  it.each([
+    ["card.js", "application/x-javascript", "text/javascript"],
+    ["module.mjs", "", "text/javascript"],
+    ["engine.wasm", "", "application/wasm"],
+    ["save.json", "application/json", "application/json"],
+    ["icon.svg", "", "image/svg+xml"],
+    ["clip.m4v", "video/x-m4v", "video/mp4"],
+  ])("declares %s (%s) as %s, the type the library accepts", async (name, type, want) => {
+    const fetcher = vi.fn(async (url: string) =>
+      url.endsWith("uploadIntent")
+        ? response({ uploadId: "u", uploadUrl: "https://storage.test/u" })
+        : response({ imageId: "i", imageUrl: "https://cdn.test/i" }),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    xhr();
+    await resourceClient("harbor", "token").upload(new File(["x"], name, { type }), [], () => {});
+    const intent = fetcher.mock.calls.find(([url]) => url.endsWith("uploadIntent"));
+    expect(JSON.parse(intent![1].body).contentType).toBe(want);
+  });
+
+  it("offers the code and data tabs when the library does not report its kinds", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => response({ imageList: [], total: 0 })));
+    const p = await resourceClient("harbor", "token").list({ scope: "all", kind: "all", page: 1, pageSize: 24 });
+    expect(p.capabilities.kinds).toEqual(["image", "video", "audio", "font", "code", "data"]);
+  });
+
+  it("tells the author to export MP4 when the library refuses a QuickTime video", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      new Response(JSON.stringify({ error: "invalid_param", detail: { reason: "quicktime", use: "video/mp4" } }), { status: 400 }),
+    ));
+    const err = await resourceClient("harbor", "token")
+      .upload(new File(["x"], "clip.mp4", { type: "video/mp4" }), [], () => {})
+      .catch((e) => e);
+    expect(err.message).toBe(i18n.global.t("res.error.mov"));
+    expect(err.message).toContain("MP4");
   });
 });

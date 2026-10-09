@@ -21,6 +21,7 @@ import {
   type Capabilities,
 } from "@/lib/resource-client";
 import { ApiError } from "@/lib/api";
+import { acceptFor, canonicalType, formatLabel, kindOf, QUICKTIME } from "@/lib/media-type";
 import { buildFolderTree, findByFolderId, findNode, flattenTree, relativeName, type FolderNode } from "@/lib/resource-tree";
 import { confirmDialog } from "@/lib/confirm";
 import { pageTitle } from "@/lib/i18n";
@@ -74,33 +75,14 @@ const pageNumbers = computed(() =>
 );
 const capabilities = ref<Capabilities | null>(null);
 const formatGroups = computed(() =>
-  ["image", "video", "audio", "font"]
+  ["image", "video", "audio", "font", "code", "data"]
     .map((kind) => ({
       kind,
       formats: [
         ...new Set(
           (capabilities.value?.formats ?? [])
-            .filter((f) => f.startsWith(kind + "/"))
-            .map(
-              (f) =>
-                ({
-                  "image/jpeg": "JPG",
-                  "image/png": "PNG",
-                  "image/gif": "GIF",
-                  "image/webp": "WebP",
-                  "video/mp4": "MP4",
-                  "video/webm": "WebM",
-                  "audio/mpeg": "MP3",
-                  "audio/wav": "WAV",
-                  "audio/ogg": "OGG",
-                  "font/woff": "WOFF",
-                  "font/woff2": "WOFF2",
-                  "font/ttf": "TTF",
-                  "font/otf": "OTF",
-                })[f] ??
-                f.split("/")[1]?.toUpperCase() ??
-                f,
-            ),
+            .filter((f) => kindOf(f) === kind)
+            .map(formatLabel),
         ),
       ],
     }))
@@ -558,18 +540,7 @@ const uploadCounts = computed(() => ({ total: uploads.value.length, done: upload
 let uploadClient: Awaited<ReturnType<typeof client>> | null = null;
 let uploadFolderIds: string[] = [];
 let uploadPrefix = "";
-const accept = computed(() => {
-  const formats = cap.value?.formats ?? [];
-  return formats.length
-    ? formats
-        .filter((f) => kind.value === "all" || f.startsWith(kind.value + "/"))
-        .join(",")
-    : kind.value === "all"
-      ? ""
-      : kind.value === "font"
-        ? ".woff,.woff2,.ttf,.otf"
-        : kind.value + "/*";
-});
+const accept = computed(() => acceptFor(cap.value?.formats ?? [], kind.value));
 async function pick(event: Event) {
   const el = event.target as HTMLInputElement;
   const files = [...(el.files ?? [])];
@@ -623,18 +594,12 @@ async function enqueue(files: File[]) {
     if (limits?.maxFileBytes != null && u.file.size > limits.maxFileBytes) {
       u.status = "failed";
       u.error = t("resource.maxFile", { size: size(limits.maxFileBytes) });
+    } else if (canonicalType(u.file) === QUICKTIME) {
+      u.status = "failed";
+      u.error = t("res.error.mov");
     } else if (
       limits?.formats.length &&
-      u.file.type &&
-      !limits.formats.includes(
-        (
-          {
-            "audio/x-wav": "audio/wav",
-            "audio/wave": "audio/wav",
-            "application/ogg": "audio/ogg",
-          } as Record<string, string>
-        )[u.file.type] || u.file.type,
-      )
+      !limits.formats.includes(canonicalType(u.file))
     ) {
       u.status = "failed";
       u.error = t("res.error.type");
@@ -1053,7 +1018,7 @@ async function previewMove(direction: number) {
                   </td>
                   <td class="col-name">
                     <button data-preview class="row-name" :aria-label="$t('resource.preview', { name: name(r) })" @click="open(r)">
-                      <AccountIcon :name="r.kind === 'image' ? 'image' : 'cards'" /><span>{{ name(r) }}</span>
+                      <AccountIcon :name="r.kind === 'image' ? 'image' : r.kind === 'code' ? 'code' : 'cards'" /><span>{{ name(r) }}</span>
                     </button>
                     <span
                       v-if="r.moderationState === 'pending' || r.moderationState === 'reject'"
@@ -1063,7 +1028,7 @@ async function previewMove(direction: number) {
                   </td>
                   <td class="col-size subtle">{{ size(r.byteSize) }}</td>
                   <td class="col-type subtle">
-                    {{ (r.mimeType?.split("/")[1] || r.kind).toUpperCase()
+                    {{ r.mimeType ? formatLabel(r.mimeType) : r.kind.toUpperCase()
                     }}<template v-if="r.pixelWidth"> · {{ r.pixelWidth }}×{{ r.pixelHeight }}</template>
                   </td>
                   <td class="col-time subtle">{{ when(r.createTime) }}</td>

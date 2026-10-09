@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/resources",
+  "title": {
+    "zh-Hant": "我的資源也收 SVG、JS、WASM 和 JSON，卡片能載入自己的程式與資料。",
+    "zh-Hans": "我的资源也收 SVG、JS、WASM 和 JSON，卡片能加载自己的代码与数据。",
+    "en": "My resources now takes SVG, JS, WASM and JSON files, so your cards can load their own code and data.",
+    "ja": "マイリソースが SVG、JS、WASM、JSON に対応し、カードが独自のコードやデータを使えます。",
+    "ko": "내 리소스에 SVG, JS, WASM, JSON도 올려 카드가 자체 코드와 데이터를 불러올 수 있습니다."
+  }
+}

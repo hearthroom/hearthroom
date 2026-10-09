@@ -3,6 +3,7 @@ import { apiBaseOf, currentProvider, type ProviderId } from "./provider";
 import { hideParam } from "./hidden-tags";
 import { currentSurface } from "./track";
 import { i18n } from "./i18n";
+import { canonicalType } from "./media-type";
 import { rememberCard, rememberCards } from "./card-memory";
 import type { Author, AuthorSort, CardPage, CommunityCard, MyRole, Sort, Zone } from "./types";
 import type { RoleDocumentFields, TalkExampleEntry, WorldbookEntryDraft } from "./role-draft";
@@ -118,6 +119,8 @@ const SITE_CODE_KEY: Record<string, string> = {
 const looksLikeCode = (raw: string): boolean => /^[a-z][a-z0-9_]*$/.test(raw);
 
 export function describeApiError(status: number, raw: string, detail?: LimitDetail): string {
+  // .mov：資源庫不收 QuickTime，請作者匯出成 MP4。上傳前的檢查也講同一句。
+  if (detail?.reason === "quicktime") return i18n.global.t("res.error.mov");
   const legacy = (raw || "").trim();
   const text = legacy === "jailbreak_too_long" ? "custom_instructions_too_long" : legacy;
   const byDetail = text ? describeLimit(text, detail) : null;
@@ -943,7 +946,8 @@ export async function unpublishRole(roleId: string, token: string): Promise<unkn
  * 擋掉）就改走舊的一次送上去。已經放進儲存但登記失敗**不**備援——那會傳兩次。
  */
 export async function uploadImage(file: File, token: string, roleId?: string, folderIds: string[] = [], onProgress?: (fraction: number) => void): Promise<string> {
-  const intentRes = await libraryPost("uploadIntent", { byteSize: file.size }, token);
+  // 型別要宣稱：不給的話上游當成 PNG，SVG 也就照 PNG 簽進儲存。
+  const intentRes = await libraryPost("uploadIntent", { byteSize: file.size, contentType: canonicalType(file) }, token);
   if (intentRes.status === 404) return uploadImageLegacy(file, token, roleId, folderIds);
   const intent = await libraryJson<{ uploadId?: string; uploadUrl?: string; contentType?: string }>(intentRes);
   if (!intent.uploadId || !intent.uploadUrl) return uploadImageLegacy(file, token, roleId, folderIds);
@@ -1260,8 +1264,8 @@ export type { TalkExampleEntry };
 // 上游的圖床：作者上傳的圖片與自訂資料夾。網址是公開的 CDN 位址，作者拿去寫進正則規則的
 // HTML 裡（狀態欄、頭像框、背景）。回應包在 {code, data} 裡，這裡拆掉。
 
-/** 素材的種類：表名還叫 image，但四種檔都住那裡。 */
-export type LibraryKind = "image" | "video" | "audio" | "font";
+/** 素材的種類：表名還叫 image，但每一種檔都住那裡。code 是卡片自己的程式（JS、WASM），data 是 JSON。 */
+export type LibraryKind = "image" | "video" | "audio" | "font" | "code" | "data";
 
 export interface LibraryImage {
   id: number;

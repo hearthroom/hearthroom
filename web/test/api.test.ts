@@ -165,6 +165,14 @@ describe("uploadImage", () => {
     expect(progress).toEqual([0.5, 1]);
   });
 
+  it("意向帶上檔案的型別，SVG 不會被當成 PNG", async () => {
+    const { uploadImage } = await import("../src/lib/api");
+    stubFetch((url) => url.endsWith("/uploadIntent") ? ok({ uploadId: "svg", uploadUrl: "https://storage.test/put", contentType: "image/svg+xml" }) : ok({ imageUrl: "https://cdn.test/icon.svg" }));
+    await uploadImage(new File(["<svg/>"], "icon.svg"), "tok");
+    expect(JSON.parse(String(calls[0].body))).toEqual({ byteSize: 6, contentType: "image/svg+xml" });
+    expect(FakeXHR.instances[0].headers["Content-Type"]).toBe("image/svg+xml");
+  });
+
   it("GIF 原檔直接送到儲存，保留檔名且不轉成靜態圖片", async () => {
     const { uploadImage } = await import("../src/lib/api");
     const animated = new File(["GIF89a synthetic animation bytes"], "avatar.gif", { type: "image/gif" });

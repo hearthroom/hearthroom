@@ -191,7 +191,7 @@ const stateLabel = (image: LibraryImage) =>
       <button type="button" class="btn btn--sm btn--primary" :disabled="busy" @click="fileInput?.click()">
         {{ uploading.count ? $t("res.uploadingPercent", { done: uploading.done + 1, count: uploading.count, percent: uploading.percent }) : $t("res.panel.upload") }}
       </button>
-      <input ref="fileInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple class="sr-only" @change="onFile" />
+      <input ref="fileInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml,.svg" multiple class="sr-only" @change="onFile" />
       <button v-if="!managing" type="button" class="btn btn--sm" :disabled="busy || !images.length" @click="managing = true">{{ $t("res.panel.manage") }}</button>
       <template v-else>
         <span class="subtle rp__count">{{ $t("res.selected", { n: selected.size }) }}</span>
