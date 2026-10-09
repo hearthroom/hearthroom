@@ -43,7 +43,7 @@ describe("沙箱子網域", () => {
     expect((await get("https://c1.hearthroom.club/sandbox/index.html")).status).toBe(200);
     expect(await page.text()).toContain("<title>chat sandbox</title>");
     const csp = page.headers.get("content-security-policy") ?? "";
-    expect(csp).toContain("connect-src 'self'");
+    expect(csp).toContain("connect-src 'self' https://assets.harperharbor.com;");
     // 每個正式網域（含 www、play）都能嵌這張卡；順序跟著主網域走，不寫死
     expect(csp).toMatch(/frame-ancestors [^;]*https:\/\/hearthroom\.club https:\/\/www\.hearthroom\.club/);
     for (const origin of ["https://sukisuki.ai", "https://sukisuki.chat", "https://play.hearthroom.club"]) expect(csp).toContain(origin);
