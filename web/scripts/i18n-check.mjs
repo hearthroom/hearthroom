@@ -63,7 +63,7 @@ for (const path of walk(SRC_DIR)) {
 
 // 簡體檔裡混進繁體字是最容易漏的一種錯：檔案本身完整、覆蓋率 100%，
 // 但使用者會看到一半繁一半簡。機器轉換之後尤其常見。
-const TRAD_ONLY = "繁體單語記標籤資檔預設儲尋顯結經歷總會來個為與從應無將並樣發點選項類變態進運動時間問題開關實現際還這麼頭";
+const TRAD_ONLY = "體單語記標籤資檔預設儲尋顯結經歷總會來個為與從應無將並樣發點選項類變態進運動時間問題開關實現際還這麼頭";
 const TW_TERMS = ["社群", "網路", "程式", "資訊", "品質", "影片", "螢幕", "軟體"];
 const hans = files.includes("zh-Hans.json") ? read("zh-Hans.json") : null;
 if (hans) {
