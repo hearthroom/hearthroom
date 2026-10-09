@@ -29,11 +29,14 @@ export function sandboxRoleIdOf(host: string): string | null {
 }
 
 /**
- * 殼頁的 CSP：殼自己只連自己（connect-src 'self'）、只能被主站嵌（frame-ancestors）；作者外鏈腳本與樣式走 https:。
+ * 殼頁的 CSP：殼自己只連自己、只能被主站嵌（frame-ancestors）；作者外鏈腳本（含模組腳本、import()）與樣式走 https:。
+ * connect-src 另外只放行媒體素材庫（https://assets.harperharbor.com）：卡片 fetch 自己的 JSON、WASM（WASM 編譯由
+ * 'unsafe-eval' 涵蓋），別的外站連不到。worker-src 不加素材庫：跨源網址本來就起不了 Worker，函式庫用 blob: 起執行緒、
+ * 在裡面從素材庫 import／fetch，受 script-src／connect-src 管。
  * frame-src 放行同源／srcdoc／blob：前端區塊協議（上游 common/frontend-block）把圍欄裡的整份 HTML 文件掛成各自的
  * iframe；作者自己寫的 <iframe> 標籤仍被淨化層剝掉。跟上游 src/sandbox/index.html 的 meta 同一份。
  * worker-src 放行 blob：作者正則規則在殼裡改到背景執行緒跑，執行緒程式內嵌在 sandbox.js 裡以 blob 啟動；
- * blob 執行緒沿用這份 CSP，連線仍只到自己。
+ * blob 執行緒沿用這份 CSP，連線同樣只到自己與素材庫。
  */
 export const SANDBOX_CSP = [
   "default-src 'self'",
@@ -42,7 +45,7 @@ export const SANDBOX_CSP = [
   "img-src 'self' data: blob: https:",
   "media-src 'self' data: blob: https:",
   "font-src 'self' data: https:",
-  "connect-src 'self'",
+  "connect-src 'self' https://assets.harperharbor.com",
   "worker-src 'self' blob:",
   "frame-src 'self' about: blob:",
   "form-action 'none'",
