@@ -119,7 +119,7 @@
 | `sdk.stage.open(mode)` / `close()` / `el()` / `visible()` | 作者ステージ。 |
 | `sdk.role.get()` | キャラクター名とアバター。 |
 | `sdk.user.get()` | プレイヤーの呼び名、アバター、表示言語（`locale`、例：`zh-Hans`）。 |
-| `sdk.text.convert(text)` / `sdk.text.ready()` | スクリプトが描く文字を、返信と同じ方法でプレイヤーの中国語字形（簡体・繁体）に変換します。辞書の読み込み前は `convert` がそのまま返し、`ready()` は読み込み完了時（変換不要なら即時）に完了します。 |
+| `sdk.text.convert(text)` / `sdk.text.ready()` | スクリプトが描く文字を、返信と同じ方法でプレイヤーの中国語字形（簡体・繁体）に変換します。カードの言語がプレイヤーと同じ字形なら、そのまま返します。辞書の読み込み前は `convert` がそのまま返し、`ready()` は読み込み完了時（変換不要なら即時）に完了します。 |
 | `sdk.model.get()` | プレイヤーが選んでいるモデル：`{name, cost}`。`name` はモデル名（ヘッダーの「モデル名 · ルート名」）、`cost` は次のターンの推定ポイント（動的料金では範囲、例：`127–251`）。ページから届くまではどちらも空文字列です。モデル一覧を開くには入力欄のモデルボタンを押します。 |
 | `sdk.generation.get()` | このターンが何を待っているか：`{phase, since}`。`phase` は `idle`、`preparing`（送信直後でまだ何も返っていない）、`summarizing`（プラットフォームがここまでの物語を整理中。最初の一文字より前で、数十秒かかることも）、`thinking`（モデルが思考中で本文はまだ。思考しないモデルにはない）、`writing`（本文をストリーミング中）のいずれか。`since` はその段階に入った時刻（ミリ秒）。段階だけで、思考の内容は含みません。ほかに `outcome`：前のターンが正常に終わらなかったとき、チャット画面がその下に出すカードを `{kind, label, sub, actions}` で返します。正常に終わったときや生成中は `null`。`kind` は `model-error`、`network-error`、`server-error`、`rate-limit`、`quota`（ポイント不足）、`filtered`、`length-cap`、`stopped`、`compact-retryable`、`outcome-unconfirmed`（結果が届くのを待っている。ボタンはなく、届けば自動で表示）、`interrupted`（Agent のターンが終わっていない）のいずれか。`label`・`sub` はそのカードに出るプレイヤーの言語の文。`actions` は `[{action, label}]` で、`action` は `retry`、`continue`、`switch-model`、`model-settings`、`capacity`、`refresh` のどれかです。 |
 | `sdk.generation.act(action)` | そのカードのボタン（`outcome.actions` の `action`）を押します。プレイヤーがプラットフォームのカードを押したのと同じ動きで、再試行は同じメッセージを使い、二重に送りません。プレイヤーがクリックしている最中にだけ呼べます（それ以外は `UNAUTHORIZED`、確認は出ません）。カードにないボタンは `INVALID_ARGS`、生成中は `BUSY`、1 分に 3 回まで。Promise を返します。 |

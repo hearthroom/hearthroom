@@ -119,7 +119,7 @@
 | `sdk.stage.open(mode)` / `close()` / `el()` / `visible()` | 作者舞台。 |
 | `sdk.role.get()` | 角色名称与头像。 |
 | `sdk.user.get()` | 玩家称呼、头像与界面语言（`locale`，例如 `zh-Hans`）。 |
-| `sdk.text.convert(text)` / `sdk.text.ready()` | 把脚本自己画的字转成玩家的简繁，跟页面转换回复的方式相同。字典载入之前 `convert` 原样返回；`ready()` 在载入完成时完成，不需要转换时立刻完成。 |
+| `sdk.text.convert(text)` / `sdk.text.ready()` | 把脚本自己画的字转成玩家的简繁，跟页面转换回复的方式相同；卡片语言跟玩家同一种字形时原样返回。字典载入之前 `convert` 原样返回；`ready()` 在载入完成时完成，不需要转换时立刻完成。 |
 | `sdk.model.get()` | 玩家当前选择的模型：`{name, cost}`，`name` 是模型名（顶栏那个「模型名 · 线路名」），`cost` 是下一轮预估的点数（动态计价是区间，例如 `127–251`）。平台还没提供时两个都是空字符串。打开模型列表请点输入区的模型键。 |
 | `sdk.generation.get()` | 这一轮在等什么：`{phase, since}`。`phase` 是 `idle`、`preparing`（刚发送、还没有任何响应）、`summarizing`（平台在整理剧情，挡在第一个字前，可能几十秒）、`thinking`（模型在思考、正文还没来；不思考的模型没有这段）或 `writing`（正文流式输出中）；`since` 是进入这个阶段的时间（毫秒）。只有阶段，不含思考内容。另有 `outcome`：上一轮没正常写完时，聊天页在那一条下面画的那张卡，`{kind, label, sub, actions}`；正常结束或生成中是 `null`。`kind` 是 `model-error`、`network-error`、`server-error`、`rate-limit`、`quota`（积分不足）、`filtered`、`length-cap`、`stopped`、`compact-retryable`、`outcome-unconfirmed`（结果还在路上，没有按键，好了会自己出现）或 `interrupted`（Agent 这一轮还没跑完）；`label`、`sub` 是那张卡上玩家语言的文字；`actions` 是 `[{action, label}]`，`action` 只会是 `retry`、`continue`、`switch-model`、`model-settings`、`capacity`、`refresh`。 |
 | `sdk.generation.act(action)` | 按那张卡上的一个按键（`outcome.actions` 里的 `action`），效果跟玩家点平台那张卡一样：重试沿用同一句，不会多发一条。只能在玩家点击的当下调用（否则 `UNAUTHORIZED`，不会询问）；卡上没有这个按键 `INVALID_ARGS`；生成中 `BUSY`；每分钟 3 次。返回 Promise。 |
