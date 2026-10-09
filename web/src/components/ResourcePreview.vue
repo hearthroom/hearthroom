@@ -8,6 +8,8 @@ import {
   watch,
 } from "vue";
 import type { Resource } from "@/lib/resource-client";
+import { canonicalType, formatLabel } from "@/lib/media-type";
+import AccountIcon from "@/components/AccountIcon.vue";
 const props = defineProps<{
   item: Resource;
   provider: string;
@@ -34,14 +36,59 @@ const name = computed(
     props.item.imageUrl.split("/").pop()?.split("?")[0] ||
     "",
 );
+const type = computed(
+  () => props.item.mimeType || canonicalType({ name: name.value, type: "" }),
+);
+// JS 與 JSON 只顯示開頭幾行文字，不執行；WASM 這類二進位檔只給檔案資訊。
+const textual = computed(
+  () =>
+    (props.item.kind === "code" || props.item.kind === "data") &&
+    (type.value === "text/javascript" || type.value === "application/json"),
+);
+const TEXT_PREVIEW_BYTES = 8 * 1024;
+const TEXT_PREVIEW_LINES = 60;
+const text = ref("");
+async function loadText(ticket: number) {
+  try {
+    const r = await fetch(props.item.imageUrl);
+    if (!r.ok || !r.body) throw new Error(String(r.status));
+    // 檔案可能很大：讀夠開頭就停，不把整份載下來。
+    const reader = r.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    while (size < TEXT_PREVIEW_BYTES) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      size += value.length;
+    }
+    void reader.cancel().catch(() => {});
+    const bytes = new Uint8Array(size);
+    let at = 0;
+    for (const c of chunks) {
+      bytes.set(c, at);
+      at += c.length;
+    }
+    const head = new TextDecoder()
+      .decode(bytes.subarray(0, TEXT_PREVIEW_BYTES))
+      .split("\n")
+      .slice(0, TEXT_PREVIEW_LINES)
+      .join("\n");
+    if (ticket === generation) text.value = head;
+  } catch {
+    if (ticket === generation) text.value = "";
+  }
+}
 let face: FontFace | undefined;
 let generation = 0;
-async function loadFont() {
+async function loadPreview() {
   const ticket = ++generation;
   zoom.value = false;
   broken.value = false;
   fontReady.value = false;
+  text.value = "";
   if (face) document.fonts.delete(face);
+  if (textual.value) return loadText(ticket);
   if (props.item.kind !== "font" || typeof FontFace === "undefined") return;
   try {
     const f = new FontFace(
@@ -57,7 +104,7 @@ async function loadFont() {
     broken.value = true;
   }
 }
-watch(() => props.item.imageUrl, loadFont, { immediate: true });
+watch(() => props.item.imageUrl, loadPreview, { immediate: true });
 function key(e: KeyboardEvent) {
   if (e.key === "Escape") {
     e.preventDefault();
@@ -179,6 +226,12 @@ onBeforeUnmount(() => {
           >
             {{ sample || $t("res.fontSample") }}
           </p>
+          <pre v-else-if="text" class="text-sample">{{ text }}</pre>
+          <div v-else class="file-sample">
+            <AccountIcon :name="item.kind === 'code' ? 'code' : 'cards'" />
+            <strong>{{ formatLabel(type) }}</strong>
+            <p class="subtle">{{ $t("resource.noPreview") }}</p>
+          </div>
         </div>
         <input
           v-if="item.kind === 'font'"
@@ -332,6 +385,35 @@ header p {
 .preview-meta {
   justify-content: flex-start;
   font-size: 0.8rem;
+}
+.text-sample {
+  align-self: stretch;
+  width: 100%;
+  margin: 0;
+  padding: var(--s-3);
+  overflow: auto;
+  background: var(--surface);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  white-space: pre;
+  user-select: text;
+}
+.file-sample {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-4);
+  text-align: center;
+}
+.file-sample svg {
+  width: 32px;
+  height: 32px;
+}
+.file-sample p {
+  margin: 0;
+  font-size: 0.85rem;
 }
 .font-sample {
   font-size: 2rem;
