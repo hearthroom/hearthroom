@@ -1,5 +1,6 @@
 import { ApiError, describeApiError } from "./api";
 import { apiBaseOf, type ProviderId } from "./provider";
+import { canonicalType } from "./media-type";
 // 直傳多久完全沒有進度就放棄。
 const UPLOAD_STALL_MS = 60_000;
 export type ResourceId = string | number;
@@ -69,7 +70,7 @@ export function resourceClient(provider: ProviderId, token: string) {
     if (!r.ok || (typeof b.code === "number" && b.code !== 0))
       throw new ApiError(
         r.status,
-        describeApiError(r.status, b.error || b.message || ""),
+        describeApiError(r.status, b.error || b.message || "", b.detail),
         b.error || "",
       );
     return b.data ?? {};
@@ -101,7 +102,7 @@ export function resourceClient(provider: ProviderId, token: string) {
     if (!r.ok)
       throw new ApiError(
         r.status,
-        describeApiError(r.status, b.error || ""),
+        describeApiError(r.status, b.error || "", b.detail),
         b.error || "",
       );
     const data = b.data ?? {};
@@ -136,7 +137,7 @@ export function resourceClient(provider: ProviderId, token: string) {
           kinds:
             c?.kinds ??
             (provider === "harbor"
-              ? ["image", "font"]
+              ? ["image", "video", "audio", "font", "code", "data"]
               : ["image", "video", "audio", "font"]),
           formats: c?.formats ?? [],
           maxFileBytes: numeric(c?.maxFileBytes),
@@ -170,13 +171,7 @@ export function resourceClient(provider: ProviderId, token: string) {
       progress: (n: number) => void,
       prefix = "",
     ) {
-      const contentType =
-        file.type ||
-        (/\.woff2$/i.test(file.name)
-          ? "font/woff2"
-          : /\.woff$/i.test(file.name)
-            ? "font/woff"
-            : "application/octet-stream");
+      const contentType = canonicalType(file);
       const state = uploadStates.get(file) ?? { attached: new Set<string>() };
       uploadStates.set(file, state);
       if (!state.done) {
