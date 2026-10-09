@@ -119,7 +119,7 @@
 | `sdk.stage.open(mode)` / `close()` / `el()` / `visible()` | 作者舞台。 |
 | `sdk.role.get()` | 角色名稱與頭像。 |
 | `sdk.user.get()` | 玩家稱呼、頭像與介面語言（`locale`，例如 `zh-Hans`）。 |
-| `sdk.text.convert(text)` / `sdk.text.ready()` | 把腳本自己畫的字轉成玩家的簡繁，跟頁面轉回覆的方式相同。字典載好之前 `convert` 原樣回；`ready()` 在載好時完成，不需要轉時立刻完成。 |
+| `sdk.text.convert(text)` / `sdk.text.ready()` | 把腳本自己畫的字轉成玩家的簡繁，跟頁面轉回覆的方式相同；卡片語言跟玩家同一種字形時原樣回。字典載好之前 `convert` 原樣回；`ready()` 在載好時完成，不需要轉時立刻完成。 |
 | `sdk.model.get()` | 玩家目前選的模型：`{name, cost}`，`name` 是模型名（頂欄那個「模型名 · 線路名」），`cost` 是下一輪預估的點數（動態計價是區間，例如 `127–251`）。平台還沒給時兩個都是空字串。打開模型清單請點輸入區的模型鍵。 |
 | `sdk.generation.get()` | 這一輪在等什麼：`{phase, since}`。`phase` 是 `idle`、`preparing`（剛送出、還沒有任何回應）、`summarizing`（平台在整理劇情，擋在第一個字前，可能幾十秒）、`thinking`（模型在思考、正文還沒來；不思考的模型沒有這段）或 `writing`（正文串流中）；`since` 是進入這個階段的時間（毫秒）。只有階段，不含思考內容。另有 `outcome`：上一輪沒正常寫完時，聊天頁在那一則底下畫的那張卡，`{kind, label, sub, actions}`；正常結束或生成中是 `null`。`kind` 是 `model-error`、`network-error`、`server-error`、`rate-limit`、`quota`（積分不足）、`filtered`、`length-cap`、`stopped`、`compact-retryable`、`outcome-unconfirmed`（結果還在路上，沒有按鍵，好了會自己出現）或 `interrupted`（Agent 這一輪還沒跑完）；`label`、`sub` 是那張卡上玩家語言的字；`actions` 是 `[{action, label}]`，`action` 只會是 `retry`、`continue`、`switch-model`、`model-settings`、`capacity`、`refresh`。 |
 | `sdk.generation.act(action)` | 按那張卡上的一顆鍵（`outcome.actions` 裡的 `action`），效果跟玩家點平台那張卡一樣：重試沿用同一句、不會多送一則。只能在玩家點擊的當下呼叫（否則 `UNAUTHORIZED`，不會詢問）；卡上沒有這顆鍵 `INVALID_ARGS`；生成中 `BUSY`；每分鐘 3 次。回傳 Promise。 |

@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "title": {
+    "zh-Hant": "跟你的介面同為繁體或同為簡體的卡，文字會照作者原本寫的顯示，不再經過簡繁轉換。",
+    "zh-Hans": "和你的界面同为简体或同为繁体的卡，文字会按作者原本写的显示，不再经过简繁转换。",
+    "en": "Cards in the same Chinese script as your interface now appear exactly as written, with no script conversion.",
+    "ja": "インターフェースと同じ字形（簡体・繁体）のカードは、変換されずに作者が書いたとおり表示されます。",
+    "ko": "인터페이스와 같은 중국어 자형(간체·번체)의 카드는 변환 없이 작성자가 쓴 그대로 표시됩니다."
+  }
+}
