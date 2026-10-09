@@ -717,7 +717,7 @@
   "deca06ecd5351": "브라우저용 `/image/upload` 대안입니다. 정해진 시간이 지나면 업로드를 끊는 공급자의 API 프록시를 거치지 않고, 수명이 짧은 서명 URL로 바이트를 객체 저장소에 직접 보냅니다. 선언한 크기를 기준으로 계정별 항목 및 바이트 할당량을 확인한 뒤 `uploadUrl`과 `uploadId`를 반환합니다. uploadUrl에는 원시 파일을 HTTP `PUT`으로 보내며 `Content-Type`을 반환된 `contentType`으로 설정하세요. 해당 헤더와 정확한 `byteSize`는 서명의 일부이므로 다른 유형이나 크기는 저장소에서 거부합니다. uploadId는 불투명하며 계정에 귀속되고 만료되는 자격 증명으로 `/image/uploadComplete`에 전달합니다. 파일당 한도는 `/image/upload`와 같은 100 MiB입니다. 성공 본문은 레거시 래퍼 `{code:0,data:{...}}`입니다.",
   "d861f09933f15": "파일의 정확한 바이트 수입니다. 저장된 객체 크기가 다르면 `uploadComplete`가 거부합니다.",
   "d01bc683a5967": "서명된 업로드 대상입니다.",
-  "d38b1b95040cc": "`invalid_param`(`byteSize`가 없거나 양수가 아님), `quota_image_exceeded`, `quota_bytes_exceeded`.",
+  "d38b1b95040cc": "`invalid_param`(`byteSize`가 없거나 양수가 아님, 또는 지원하지 않는 `contentType`. `video/quicktime`이면 오류에 `detail.reason` `quicktime`이 포함됩니다), `quota_image_exceeded`, `quota_bytes_exceeded`.",
   "d96d3c97b5a90": "`file_too_large` — 104857600바이트 초과입니다.",
   "dc9c0aa181ce8": "서명 URL로 PUT한 파일 등록",
   "d25c9610690da": "자격 증명을 검증하고 저장된 객체 크기를 선언한 `byteSize`와 비교합니다. 바이트에서 실제 유형을 판별하고(`/image/upload`와 같은 허용 목록), 이미지 크기를 읽은 뒤 객체를 영구 위치로 이동합니다. 심사 상태, 할당량, `roleId` 귀속 규칙 및 가능한 범위의 `folderIds` 연결까지 `/image/upload`와 동일하게 등록합니다. 거부된 객체는 삭제합니다. Open API로 올린 파일은 **심사하지 않으며** `moderationState=unreviewed`입니다. 작가 에셋 HTML용 파일입니다. 응답 형식은 `/image/upload`와 같습니다.",
@@ -1858,5 +1858,6 @@
   "d7a3c51e90b42": "응답 환경설정의 작가 기본값입니다. 키와 값은 플레이어의 재정의와 같고 모든 값은 문자열입니다(`lengthTarget`은 십진수 문자열). 플레이어가 따로 고르지 않은 곳에만 적용됩니다. 플레이어가 어떤 축에서 다른 선택지를 고르면 그 축의 작가 보충 설명, 사용자 지정 문체, 지정 길이는 더 이상 적용되지 않으며, 작가와 같은 선택지를 고르면 그대로 유지됩니다. 이전 값(plain, dialogue, descriptive, brief, balanced, detailed)은 거부됩니다. `lengthTarget`은 `length`가 target일 때만 필요하고, `customStyle`은 `style`이 custom일 때만 필요합니다.",
   "d3e8f02b6c71a": "작가에게만 제공되며, 카드에 설정이 없으면 포함되지 않습니다.",
   "d91b4d6e2a0f5": "객체 전체를 교체합니다. 지우려면 `null` 또는 `{}`를 보내세요. 생략하면 유지합니다. 전체를 한꺼번에 검증하며 값 하나라도 잘못되면 요청을 거부합니다.",
-  "d5c07a8e13d96": "플레이어가 아무것도 고르지 않았을 때 적용되는 값으로, 플랫폼 기본값 위에 카드의 작가 기본값을 얹은 것입니다. overrides에 없는 축은 이 값을 표시하세요. 축을 기본값으로 되돌리면 이 값으로 돌아갑니다."
+  "d5c07a8e13d96": "플레이어가 아무것도 고르지 않았을 때 적용되는 값으로, 플랫폼 기본값 위에 카드의 작가 기본값을 얹은 것입니다. overrides에 없는 축은 이 값을 표시하세요. 축을 기본값으로 되돌리면 이 값으로 돌아갑니다.",
+  "da91a35e25ae4": "업로드할 파일의 미디어 유형입니다(예: `image/png`, `text/javascript`, `application/json`). 기본값은 `image/png`입니다. 이미지, 동영상, 오디오, 글꼴, WASM은 여전히 `uploadComplete`에서 바이트로 판별합니다. JavaScript와 JSON은 바이트 서명이 없어 여기서 선언한 경우에만 받습니다. `video/quicktime`은 거부됩니다(MP4로 올려 주세요)."
 }

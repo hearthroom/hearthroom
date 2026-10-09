@@ -717,7 +717,7 @@
   "deca06ecd5351": "供瀏覽器替代 `/image/upload` 的方式：位元組透過短效簽署 URL 直接送至物件儲存，不經會在固定時間後中斷上傳的服務 API 代理。依宣告大小檢查帳號項目與位元組配額，然後回傳 `uploadUrl`（以 HTTP `PUT` 傳送原始檔案，`Content-Type` 設為回傳的 `contentType`；該標頭與精確 `byteSize` 都屬於簽章，儲存服務會拒絕其他類型或大小）與 `uploadId`（不透明、綁定帳號且會過期的憑證，傳給 `/image/uploadComplete`）。每檔上限與 `/image/upload` 相同，為 100 MiB。成功本文使用舊版包裝格式 `{code:0,data:{...}}`。",
   "d861f09933f15": "檔案的精確位元組大小；儲存物件大小不符時，`uploadComplete` 會拒絕上傳。",
   "d01bc683a5967": "簽署上傳目標。",
-  "d38b1b95040cc": "`invalid_param`（`byteSize` 缺少或非正數）；`quota_image_exceeded`；`quota_bytes_exceeded`。",
+  "d38b1b95040cc": "`invalid_param`（`byteSize` 缺少或不是正數，或 `contentType` 不支援；`video/quicktime` 的錯誤會帶 `detail.reason` `quicktime`）；`quota_image_exceeded`；`quota_bytes_exceeded`。",
   "d96d3c97b5a90": "`file_too_large`（超過 104857600 位元組）。",
   "dc9c0aa181ce8": "登錄已 PUT 至簽署 URL 的檔案",
   "d25c9610690da": "驗證憑證、比對儲存物件大小與宣告 `byteSize`、從位元組偵測真實類型（接受清單同 `/image/upload`）、讀取圖片尺寸、將物件移至永久位置，並以與 `/image/upload` 完全相同的方式登錄（審核狀態、配額、`roleId` 歸屬規則、盡力執行的 `folderIds` 綁定）。遭拒物件會刪除。Open API 上傳檔案**不會**審核（`moderationState=unreviewed`）；這些檔案供作者素材 HTML 使用。回應結構與 `/image/upload` 相同。",
@@ -1858,5 +1858,6 @@
   "d7a3c51e90b42": "回覆偏好的作者預設。鍵與值和玩家的覆寫相同，每個值都是字串（`lengthTarget` 為十進位字串）。只作用在玩家沒有另選的地方：玩家在某一軸選了不同的選項時，作者在該軸的補充、自訂文風與指定長度隨之失效；選的正是作者原本的選項時則保留。拒收舊值（plain、dialogue、descriptive、brief、balanced、detailed）。`length` 為 target 時才必須且只能有 `lengthTarget`，`style` 為 custom 時才必須且只能有 `customStyle`。",
   "d3e8f02b6c71a": "只給作者；角色卡沒有設定時不出現。",
   "d91b4d6e2a0f5": "取代整個物件；傳送 `null` 或 `{}` 可清除。未提供則不變更。整份一起驗證：任何一個值不合法就拒絕整個請求。",
-  "d5c07a8e13d96": "玩家什麼都沒選時套用的值：平台預設，再疊上角色卡的作者預設。overrides 裡沒有的軸請顯示這裡的值；某一軸恢復預設時會回到這個值。"
+  "d5c07a8e13d96": "玩家什麼都沒選時套用的值：平台預設，再疊上角色卡的作者預設。overrides 裡沒有的軸請顯示這裡的值；某一軸恢復預設時會回到這個值。",
+  "da91a35e25ae4": "即將上傳的檔案類型，例如 `image/png`、`text/javascript` 或 `application/json`，預設為 `image/png`。圖片、影片、音訊、字型與 WASM 仍在 `uploadComplete` 時由位元組判定；JavaScript 與 JSON 沒有位元組特徵，只有在這裡宣告才會接受。`video/quicktime` 會被拒絕（請改傳 MP4）。"
 }

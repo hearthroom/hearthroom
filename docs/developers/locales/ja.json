@@ -717,7 +717,7 @@
   "deca06ecd5351": "ブラウザー向けの `/image/upload` の代替です。一定時間でアップロードを打ち切るサービスの API プロキシを経由せず、短期間有効な署名付き URL でオブジェクトストレージへ直接バイト列を送ります。申告サイズでアカウント別の項目数・バイト容量を確認し、`uploadUrl` と `uploadId` を返します。uploadUrl には、生のファイルを HTTP `PUT` し、`Content-Type` を返された `contentType` に設定します。このヘッダーと正確な `byteSize` が署名に含まれるため、別の型やサイズはストレージが拒否します。uploadId はアカウントに紐付く期限付きの不透明な資格情報で、`/image/uploadComplete` に渡します。ファイル上限は `/image/upload` と同じ 100 MiB です。成功時の本文は旧ラッパー `{code:0,data:{...}}` です。",
   "d861f09933f15": "ファイルの正確なバイト数です。保存済みオブジェクトと異なる場合は `uploadComplete` が拒否します。",
   "d01bc683a5967": "署名付きアップロード先です。",
-  "d38b1b95040cc": "`invalid_param`（`byteSize` がないか正でない）、`quota_image_exceeded`、`quota_bytes_exceeded`。",
+  "d38b1b95040cc": "`invalid_param`（`byteSize` がない・正の数でない、または `contentType` が未対応。`video/quicktime` の場合はエラーに `detail.reason` `quicktime` が付きます）、`quota_image_exceeded`、`quota_bytes_exceeded`。",
   "d96d3c97b5a90": "`file_too_large`（104857600 バイト超）。",
   "dc9c0aa181ce8": "署名付き URL に PUT したファイルを登録する",
   "d25c9610690da": "資格情報を検証し、保存したオブジェクトのサイズを申告した `byteSize` と照合し、バイト列から実際の型を検出します（対応種類は `/image/upload` と同じ）。画像の寸法を読み、恒久的な保存先に移動して `/image/upload` と同じ規則で登録します（審査状態、容量、`roleId` の紐付け、可能な範囲の `folderIds` 紐付け）。拒否したオブジェクトは削除します。Open API 経由のファイルは**審査しません**（`moderationState=unreviewed`）。作者素材の HTML 用です。レスポンス形式は `/image/upload` と同じです。",
@@ -1858,5 +1858,6 @@
   "d7a3c51e90b42": "返信設定の作者既定値です。キーと値はプレイヤーの上書きと同じで、値はすべて文字列です（`lengthTarget` は十進数の文字列）。プレイヤーが別の選択をしていない部分にだけ適用されます。プレイヤーがある軸で異なる選択肢を選ぶと、その軸の作者の補足、カスタム文体、指定の長さは適用されなくなります。作者と同じ選択肢を選んだ場合はそのまま残ります。旧値（plain、dialogue、descriptive、brief、balanced、detailed）は拒否されます。`lengthTarget` は `length` が target のときにだけ必須で、`customStyle` は `style` が custom のときにだけ必須です。",
   "d3e8f02b6c71a": "作者のみ。カードに設定がない場合は含まれません。",
   "d91b4d6e2a0f5": "オブジェクト全体を置換します。消去するには `null` または `{}` を送信します。省略は変更しません。全体をまとめて検証し、不正な値が一つでもあればリクエストを拒否します。",
-  "d5c07a8e13d96": "プレイヤーが何も選んでいないときに適用される値で、プラットフォームの既定値にカードの作者既定値を重ねたものです。overrides にない軸はこの値を表示してください。軸を既定に戻すとこの値に戻ります。"
+  "d5c07a8e13d96": "プレイヤーが何も選んでいないときに適用される値で、プラットフォームの既定値にカードの作者既定値を重ねたものです。overrides にない軸はこの値を表示してください。軸を既定に戻すとこの値に戻ります。",
+  "da91a35e25ae4": "アップロードするファイルのメディアタイプ（例：`image/png`、`text/javascript`、`application/json`）。省略時は `image/png` です。画像・動画・音声・フォント・WASM は引き続き `uploadComplete` でバイト列から判定されます。JavaScript と JSON にはバイト署名がないため、ここで宣言した場合にのみ受け付けます。`video/quicktime` は拒否されます（MP4 をアップロードしてください）。"
 }
