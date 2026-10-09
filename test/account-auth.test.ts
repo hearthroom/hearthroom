@@ -156,14 +156,43 @@ it('serializes refresh across requests and rejects a late response after logout'
   expect(p.network.mock.calls.filter(([url])=>String(url).endsWith('/oauth/token'))).toHaveLength(2); // login + one refresh
 });
 
+// The refresh token may already have been spent upstream, so it is never replayed. The
+// credential cannot recover on its own either: say so (401 reauthorization) instead of a
+// 503 that looks temporary forever and keeps the player signed out until they log in again.
 it('does not replay an ambiguously consumed refresh token after network failure',async()=>{
   const p=providers();await login('harbor',22);const old=await expire();
   p.network.mockRejectedValue(new TypeError('network unavailable'));
   expect((await request('token',{provider:'harbor'})).status).toBe(503);
-  expect((await request('token',{provider:'harbor'})).status).toBe(503);
+  const next=await request('token',{provider:'harbor'});
+  expect(next.status).toBe(401);
+  expect((await next.json() as any).error).toBe('auth_reauthorization_required');
   const row=await env.DB.prepare('SELECT * FROM account_credentials WHERE generation=?').bind(old.generation).first<any>();
   expect(row.state).toBe('uncertain');expect(row.payload).not.toBe('');
   expect(p.network.mock.calls.filter(([url])=>String(url).endsWith('/oauth/token'))).toHaveLength(2);
+});
+
+// A refresh whose worker died between claiming and saving leaves refresh_started set for
+// good. After the claim window it is as ambiguous as a failed refresh: reauthorize.
+it('treats a refresh claim abandoned for over 30 seconds as needing reauthorization',async()=>{
+  const p=providers();await login('harbor',22);await expire();
+  await env.DB.prepare('UPDATE account_credentials SET refresh_started=?').bind(Date.now()-31_000).run();
+  const before=p.network.mock.calls.length;
+  const response=await request('token',{provider:'harbor'});
+  expect(response.status).toBe(401);
+  expect((await response.json() as any).error).toBe('auth_reauthorization_required');
+  expect(p.network.mock.calls.length).toBe(before);
+});
+
+// Opening a page asks for the site session and the token together. A token that cannot be
+// had must not fail the site session: the player is still signed in to the community.
+it('keeps the site session when the provider token cannot be refreshed right now',async()=>{
+  const p=providers();await login('harbor',22);await expire();
+  p.network.mockRejectedValue(new TypeError('network unavailable'));
+  const response=await request('session',{provider:'harbor',token:true});
+  expect(response.status).toBe(200);
+  const body=await response.json() as any;
+  expect(body.me.accountNumId).toBe(22);
+  expect(body.token).toBeNull();
 });
 
 it('old revocation work cannot erase a newly authorized generation',async()=>{

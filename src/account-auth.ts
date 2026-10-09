@@ -313,9 +313,10 @@ accountAuthRoutes.post('/v1/auth/session',async c=>{
   phases.push(`session;dur=${Date.now()-started}`);
   // 前端要求時把授權一起帶回：開頁本來是 session 回來才去要 token，兩趟往返串在一起。
   // 換不到授權（供應商那邊斷了）不影響本站 session，token 就是 null，前端照舊處理。
+  // 換不到授權（供應商斷線、要重新授權）一律回 null：本站 session 不能因此失敗，否則前端會把人當成登出。
   const tokenFor=async(provider:string,externalId:number)=>{
     try{return await issueToken(c,session,providerOf(provider,c.env),externalId);}
-    catch(e){if(e instanceof HttpError&&e.status>=500)throw e;return null;}
+    catch{return null;}
   };
   // 成員資料、審核人身分、授權三件事同時問。授權先用 session 上的身分開始換；
   // 成員資料回來後選出的身分若不是它（極少見：前端指定了別的供應商），再用選出的那個重換。
@@ -407,6 +408,8 @@ export function syncNickname(c:{env:Env;executionCtx:{waitUntil(p:Promise<unknow
   try{c.executionCtx.waitUntil(done);}catch{/* 沒有執行環境（測試）就讓它自己跑完 */}
 }
 
+/** 一次換發最久要多久；認領超過這個時間還沒放掉，就當那個請求已經死了。 */
+const REFRESH_CLAIM_MS=30_000;
 export async function delegatedAccess(env:Env,provider:ProviderId,externalId:number,memberId:string){
   const id=String(externalId);
   const read=()=>env.DB.prepare('SELECT * FROM account_credentials WHERE provider=? AND external_id=?').bind(provider,id).first<Credential>();
@@ -414,7 +417,9 @@ export async function delegatedAccess(env:Env,provider:ProviderId,externalId:num
   const [owner,first]=await Promise.all([connectedMemberId(env.DB,provider,externalId),read()]);
   if(owner!==memberId)throw new HttpError(403,'auth_connection_denied');
   let row=first;
-  if(!row||row.state==='revoked')throw new HttpError(401,'auth_reauthorization_required');
+  // uncertain：上一次換發送出去了卻沒拿到回應，refresh token 可能已被用掉，不能重放；它自己也好不了，
+  // 所以直接要求重新授權，而不是回一個看起來會好、其實永遠 503 的錯誤。
+  if(!row||row.state==='revoked'||row.state==='uncertain')throw new HttpError(401,'auth_reauthorization_required');
   if(row.state!=='active')throw new HttpError(503,'auth_provider_unavailable');
   let pair=await openAuth<Pair>(env,credentialPurpose(provider,id,row.generation),row.payload);
   // 「換發中」只會出現在已過期的那份上。複本可能停在別人換到一半的時候，主庫其實早就換好了：
@@ -429,7 +434,9 @@ export async function delegatedAccess(env:Env,provider:ProviderId,externalId:num
     let claimed=await claim(row);
     if(!claimed){
       const fresh=await read();
-      if(!fresh||fresh.state==='revoked')throw new HttpError(401,'auth_reauthorization_required');
+      if(!fresh||fresh.state==='revoked'||fresh.state==='uncertain')throw new HttpError(401,'auth_reauthorization_required');
+      // 認領超過換發的時限還沒放掉：那個請求死在半路，跟 uncertain 一樣不知道 refresh token 用掉沒。
+      if(fresh.refresh_started!==null&&Date.now()-fresh.refresh_started>REFRESH_CLAIM_MS)throw new HttpError(401,'auth_reauthorization_required');
       if(fresh.state!=='active'||fresh.refresh_started!==null||fresh.generation!==row.generation)throw new HttpError(503,'auth_provider_unavailable');
       row=fresh;
       pair=await openAuth<Pair>(env,credentialPurpose(provider,id,row.generation),row.payload);
