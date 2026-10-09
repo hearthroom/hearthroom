@@ -10094,6 +10094,10 @@
                   "byteSize": {
                     "type": "integer",
                     "description": "Exact size of the file in bytes; `uploadComplete` rejects the upload if the stored object differs."
+                  },
+                  "contentType": {
+                    "type": "string",
+                    "description": "Media type of the file you will upload, for example `image/png`, `text/javascript` or `application/json`. Defaults to `image/png`. Image, video, audio, font and WASM uploads are still identified from their bytes at `uploadComplete`; JavaScript and JSON have no byte signature, so they are accepted only when declared here. `video/quicktime` is refused (upload MP4)."
                   }
                 }
               }
@@ -10112,7 +10116,7 @@
             }
           },
           "400": {
-            "description": "`invalid_param` (missing or non-positive `byteSize`); `quota_image_exceeded`; `quota_bytes_exceeded`.",
+            "description": "`invalid_param` (missing or non-positive `byteSize`, or an unsupported `contentType`; for `video/quicktime` the error carries `detail.reason` `quicktime`); `quota_image_exceeded`; `quota_bytes_exceeded`.",
             "content": {
               "application/json": {
                 "schema": {
