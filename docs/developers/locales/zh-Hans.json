@@ -717,7 +717,7 @@
   "deca06ecd5351": "供浏览器替代 `/image/upload` 的方式：字节通过短期有效签名 URL 直接送至对象存储，不经会在固定时间后中断上传的服务 API 代理。依声明大小检查账号项目与字节配额，然后返回 `uploadUrl`（以 HTTP `PUT` 发送原始文件，`Content-Type` 设为返回的 `contentType`；该头部与精确 `byteSize` 都属于签名，存储服务会拒绝其他类型或大小）与 `uploadId`（不透明、绑定账号且会过期的凭据，传给 `/image/uploadComplete`）。每个文件上限与 `/image/upload` 相同，为 100 MiB。成功响应体使用旧版包装格式 `{code:0,data:{...}}`。",
   "d861f09933f15": "文件的精确字节大小；保存对象大小不符时，`uploadComplete` 会拒绝上传。",
   "d01bc683a5967": "签名上传目标。",
-  "d38b1b95040cc": "`invalid_param`（`byteSize` 缺少或非正数）；`quota_image_exceeded`；`quota_bytes_exceeded`。",
+  "d38b1b95040cc": "`invalid_param`（`byteSize` 缺失或不是正数，或 `contentType` 不受支持；`video/quicktime` 的错误会带 `detail.reason` `quicktime`）；`quota_image_exceeded`；`quota_bytes_exceeded`。",
   "d96d3c97b5a90": "`file_too_large`（超过 104857600 字节）。",
   "dc9c0aa181ce8": "登录已 PUT 至签名 URL 的文件",
   "d25c9610690da": "验证凭据、比对保存对象大小与声明 `byteSize`、从字节检测真实类型（接受列表同 `/image/upload`）、读取图片尺寸、将对象移至永久位置，并以与 `/image/upload` 完全相同的方式登录（审核状态、配额、`roleId` 归属规则、尽力运行的 `folderIds` 绑定）。遭拒对象会删除。Open API 上传文件**不会**审核（`moderationState=unreviewed`）；这些文件供作者素材 HTML 使用。响应结构与 `/image/upload` 相同。",
@@ -1858,5 +1858,6 @@
   "d7a3c51e90b42": "回复偏好的作者默认。键与值和玩家的覆写相同，每个值都是字符串（`lengthTarget` 为十进制字符串）。只作用在玩家没有另选的地方：玩家在某一轴选了不同的选项时，作者在该轴的补充、自定义文风与指定长度随之失效；选的正是作者原本的选项时则保留。拒收旧值（plain、dialogue、descriptive、brief、balanced、detailed）。`length` 为 target 时才必须且只能有 `lengthTarget`，`style` 为 custom 时才必须且只能有 `customStyle`。",
   "d3e8f02b6c71a": "只给作者；角色卡没有设定时不出现。",
   "d91b4d6e2a0f5": "替换整个对象；发送 `null` 或 `{}` 可清除。未提供则不变更。整份一起校验：任何一个值不合法就拒绝整个请求。",
-  "d5c07a8e13d96": "玩家什么都没选时应用的值：平台默认，再叠上角色卡的作者默认。overrides 里没有的轴请显示这里的值；某一轴恢复默认时会回到这个值。"
+  "d5c07a8e13d96": "玩家什么都没选时应用的值：平台默认，再叠上角色卡的作者默认。overrides 里没有的轴请显示这里的值；某一轴恢复默认时会回到这个值。",
+  "da91a35e25ae4": "即将上传的文件类型，例如 `image/png`、`text/javascript` 或 `application/json`，默认为 `image/png`。图片、视频、音频、字体和 WASM 仍在 `uploadComplete` 时按字节判定；JavaScript 和 JSON 没有字节特征，只有在这里声明才会接受。`video/quicktime` 会被拒绝（请改传 MP4）。"
 }
