@@ -1859,5 +1859,6 @@
   "d3e8f02b6c71a": "Author only; absent when the card has none.",
   "d91b4d6e2a0f5": "Replaces the whole object; send `null` or `{}` to clear. Absent leaves it untouched. Validated as a whole: one invalid value rejects the request.",
   "d5c07a8e13d96": "What applies when the player has chosen nothing: platform defaults with the card's author defaults on top. Show these for axes absent from overrides; resetting an axis returns to this value.",
-  "da91a35e25ae4": "Media type of the file you will upload, for example `image/png`, `text/javascript` or `application/json`. Defaults to `image/png`. Image, video, audio, font and WASM uploads are still identified from their bytes at `uploadComplete`; JavaScript and JSON have no byte signature, so they are accepted only when declared here. `video/quicktime` is refused (upload MP4)."
+  "da91a35e25ae4": "Media type of the file you will upload, for example `image/png`, `text/javascript` or `application/json`. Defaults to `image/png`. Image, video, audio, font and WASM uploads are still identified from their bytes at `uploadComplete`; JavaScript and JSON have no byte signature, so they are accepted only when declared here. `video/quicktime` is refused (upload MP4).",
+  "d5885726cd44c": "Card language. Only `zh-Hant` and `zh-Hans` can be swapped, and only on a card whose language is one of them: the original text moves to the new script, which the play page converts from. Other values, or any value on a card in another language, return `invalid_arguments`."
 }

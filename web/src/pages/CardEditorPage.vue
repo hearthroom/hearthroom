@@ -53,6 +53,7 @@ import ChatTestPanel from "@/components/editor/ChatTestPanel.vue";
 import ResourcePanel from "@/components/editor/ResourcePanel.vue";
 import {
   LANGUAGES,
+  scriptChoices,
   cloneDraft,
   documentPatch,
   draftFromRoleDetail,
@@ -103,6 +104,8 @@ const cardNumber = ref<number>();
 const cardFandom = ref("");
 const cardFandomId = ref("");
 const isNew = computed(() => !roleId.value);
+// 已建立的中文卡可以在繁簡之間互換；以載入時的語言決定給不給選，選了之後選單不會消失。
+const scriptOptions = computed(() => scriptChoices(pristine.value.language));
 /**
  * 網址還停在 /create。跟 isNew 不同：建卡成功、內容沒存進去時卡已經有編號（isNew 變 false），
  * 但作者還在建卡頁——本機草稿要繼續存、要記住那個編號，重開頁面再存才是同一張卡。
@@ -1023,6 +1026,13 @@ async function exportCard(format: "png" | "json") {
               <option v-for="l in LANGUAGES" :key="l.value" :value="l.value">{{ l.label }}</option>
             </select>
             <span class="subtle">{{ $t("editor.language.hint") }}</span>
+          </div>
+          <div v-else-if="scriptOptions.length" class="field">
+            <label for="f-lang">{{ $t("create.language") }}</label>
+            <select id="f-lang" v-model="draft.language" class="input">
+              <option v-for="l in scriptOptions" :key="l.value" :value="l.value">{{ l.label }}</option>
+            </select>
+            <span class="subtle">{{ $t("editor.language.scriptHint") }}</span>
           </div>
 
           <FieldText id="f-desc" v-model="draft.roleDesc" :label="$t('editor.summary')" :rows="3"

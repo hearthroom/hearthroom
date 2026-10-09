@@ -17507,6 +17507,11 @@
             "type": "string",
             "description": "Name; blank ignored."
           },
+          "language": {
+            "type": "string",
+            "enum": ["zh-Hant", "zh-Hans"],
+            "description": "Card language. Only `zh-Hant` and `zh-Hans` can be swapped, and only on a card whose language is one of them: the original text moves to the new script, which the play page converts from. Other values, or any value on a card in another language, return `invalid_arguments`."
+          },
           "roleDesc": {
             "type": "string",
             "description": "Intro; limit 500 chars (English 2500)."

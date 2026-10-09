@@ -1859,5 +1859,6 @@
   "d3e8f02b6c71a": "只给作者；角色卡没有设定时不出现。",
   "d91b4d6e2a0f5": "替换整个对象；发送 `null` 或 `{}` 可清除。未提供则不变更。整份一起校验：任何一个值不合法就拒绝整个请求。",
   "d5c07a8e13d96": "玩家什么都没选时应用的值：平台默认，再叠上角色卡的作者默认。overrides 里没有的轴请显示这里的值；某一轴恢复默认时会回到这个值。",
-  "da91a35e25ae4": "即将上传的文件类型，例如 `image/png`、`text/javascript` 或 `application/json`，默认为 `image/png`。图片、视频、音频、字体和 WASM 仍在 `uploadComplete` 时按字节判定；JavaScript 和 JSON 没有字节特征，只有在这里声明才会接受。`video/quicktime` 会被拒绝（请改传 MP4）。"
+  "da91a35e25ae4": "即将上传的文件类型，例如 `image/png`、`text/javascript` 或 `application/json`，默认为 `image/png`。图片、视频、音频、字体和 WASM 仍在 `uploadComplete` 时按字节判定；JavaScript 和 JSON 没有字节特征，只有在这里声明才会接受。`video/quicktime` 会被拒绝（请改传 MP4）。",
+  "d5885726cd44c": "卡片语言。只有 `zh-Hant` 和 `zh-Hans` 可以互换，而且只限语言本来就是其中之一的卡：原文会改记在新字形下，播放页以它为转换起点。其他值，或在其他语言的卡上发送任何值，都会返回 `invalid_arguments`。"
 }

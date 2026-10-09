@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "audience": "authors",
+  "title": {
+    "zh-Hant": "中文卡建立之後也能在繁體和簡體之間改語言，標錯字形的卡改對就會正確轉換。",
+    "zh-Hans": "中文卡创建之后也能在简体和繁体之间改语言，字形标错的卡改对就会正确转换。",
+    "en": "Chinese cards can switch between Traditional and Simplified after creation, so a mislabeled card converts correctly.",
+    "ja": "中国語カードは作成後も繁体字と簡体字を切り替えられ、正しく変換されます。",
+    "ko": "중국어 카드는 만든 뒤에도 번체와 간체를 바꿀 수 있어 올바르게 변환됩니다."
+  }
+}

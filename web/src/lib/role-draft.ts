@@ -203,6 +203,13 @@ export const LANGUAGES = [
   { value: "ko", label: "한국어" },
 ] as const;
 
+/** 已建立的卡能換成哪些語言：中文卡在繁簡之間互換，其他語言不給選。 */
+export function scriptChoices(language: string): { value: string; label: string }[] {
+  return language === "zh-Hant" || language === "zh-Hans"
+    ? LANGUAGES.filter((l) => l.value === "zh-Hant" || l.value === "zh-Hans")
+    : [];
+}
+
 export const makeDraft = (language: string): RoleDraft => ({
   roleName: "",
   nickname: "",
@@ -390,6 +397,8 @@ export interface RoleDocumentFields {
   jailbreak?: string;
   nickname?: string;
   cardMeta?: CardMeta;
+  /** 只有繁體與簡體可以互換；其他語言建立後不改。 */
+  language?: string;
 }
 
 const TEXT_FIELDS = [
@@ -427,6 +436,8 @@ export function documentPatch(draft: RoleDraft, original: RoleDraft | null): Rol
   if (original ? JSON.stringify(draft.cardMeta) !== JSON.stringify(original.cardMeta) : Object.keys(draft.cardMeta).length > 0) {
     patch.cardMeta = draft.cardMeta;
   }
+  // 卡片語言跟著建卡送；建立之後只在繁簡互換時送。
+  if (original && draft.language !== original.language) patch.language = draft.language;
   if (!original || JSON.stringify(draft.talkExample) !== JSON.stringify(original.talkExample)) {
     // 空陣列送過去會被服務層當成 invalid_talk_example 擋掉，而作者清空示例是合理操作。
     // 沒有東西可送時就不送——清空對話示例目前只能在原站做。
