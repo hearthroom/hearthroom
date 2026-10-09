@@ -1,4 +1,4 @@
-import { managedAuth, managedLogout, forgetManaged, isManagedAuth, authRequest, rememberManaged } from './managed-auth';
+import { managedAuth, managedLogout, forgetManaged, isManagedAuth, authRequest, rememberManaged, ManagedAuthUnavailable } from './managed-auth';
 import { clearLibraryCache } from './library';
 import { clearStageStorage } from './stage-storage';
 import { rememberSignedIn, signedInHint } from './signin-hint';
@@ -29,6 +29,21 @@ import {
  * 重複使用視為重放並把整個 session 標成 revoked——所以兩個並發的換發不是慢一點，
  * 是兩個都死。路由守衛與 App 的 onMounted 本來就會同時觸發，這不是罕見情況。
  */
+/** 伺服器暫時回不了（5xx、429、網路斷一下）：不是登出，等一下再問就好。 */
+function isTransient(e: unknown): boolean {
+  return e instanceof ManagedAuthUnavailable || e instanceof TypeError;
+}
+async function withTransientRetry<T>(call: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await call();
+    } catch (e) {
+      if (attempt >= 2 || !isTransient(e)) throw e;
+      await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+    }
+  }
+}
+
 export const useSession = defineStore("session", () => {
   const token = ref<TokenPair | null>(null);
   const me = ref<Me | null>(null);
@@ -105,12 +120,13 @@ export const useSession = defineStore("session", () => {
     if (restoring) return restoring;
 
     const expected=generation;
+    let unreachable = false;
     restoring = (async () => {
       try {
         if(await managedAuth()){
           // 授權跟著 session 一起回來：少一趟串在開頁路上的往返。放進授權暫存之後，
           // 下面的 refresh() 直接命中，不再另外問伺服器。
-          const site=await authRequest<{provider:ProviderId;me:Me;profile:SiteMe;token?:TokenPair|null}>('session',{provider:currentProvider(),token:true});
+          const site=await withTransientRetry(()=>authRequest<{provider:ProviderId;me:Me;profile:SiteMe;token?:TokenPair|null}>('session',{provider:currentProvider(),token:true}));
           if(expected!==generation)return;
           if(site.token)rememberManaged(site.token,site.provider);
           setProvider(site.provider);useProviderUpstream();
@@ -135,12 +151,14 @@ export const useSession = defineStore("session", () => {
         }
         const pair = await refresh();
         if (pair && expected===generation) await adopt(pair,expected);
-      } catch {
+      } catch (e) {
         if(expected===generation){token.value = null;me.value = null;}
+        unreachable = isTransient(e);
       } finally {
         ready.value = true;
-        // 記下這個瀏覽器目前是誰登入（或沒人）：「我的卡片」下次可以先開頁、身分在背景確認
-        if (expected === generation) rememberSignedIn(me.value?.accountNumId ?? null);
+        // 記下這個瀏覽器目前是誰登入（或沒人）：「我的卡片」下次可以先開頁、身分在背景確認。
+        // 伺服器暫時連不上不代表登出，那時不動這個記號。
+        if (expected === generation && !unreachable) rememberSignedIn(me.value?.accountNumId ?? null);
         restoring = null;
       }
     })();
