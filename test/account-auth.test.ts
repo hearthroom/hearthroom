@@ -431,3 +431,14 @@ it('pushes the community display name to Harbor on sign-in when they differ',asy
   await login('harbor',22);
   expect(push).toHaveBeenCalledWith(expect.anything(),expect.stringMatching(/^test-access-/),'harbor','Community name');
 });
+
+// Harbor 的登入／同意頁要用玩家在這裡用的語言：authorize 帶 ui_locales（OIDC），
+// Harbor 也據此記下成員的語言。只收像語言標籤的值，其餘不帶。
+it('asks Harbor for the sign-in page in the player\'s language',async()=>{
+  providers();
+  const start=await request('start',{provider:'harbor',returnTo:'/me',locale:'ja'});
+  expect(start.status).toBe(200);
+  expect(new URL((await start.json() as any).url).searchParams.get('ui_locales')).toBe('ja');
+  const odd=await request('start',{provider:'harbor',returnTo:'/me',locale:'ja"><script>'});
+  expect(new URL((await odd.json() as any).url).searchParams.has('ui_locales')).toBe(false);
+});
