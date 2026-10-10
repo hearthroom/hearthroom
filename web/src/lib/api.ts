@@ -502,6 +502,22 @@ export async function updateSiteSettings(input: { showNsfw?: boolean; birthdate?
 }
 
 /**
+ * 遊客的成人內容開關（伺服器發加密 cookie 憑證，見 src/account-auth.ts 的 guestAdult）。
+ * 沒帶 showNsfw 只回現況。跟其他 /v1/auth/* 一樣只收同源 POST、要帶 X-Hearthroom-Request。
+ */
+export async function updateGuestAdult(input: { showNsfw?: boolean; birthdate?: string; consentVersion?: number } = {}): Promise<Omit<SiteSettings, "hiddenTags">> {
+  return json(
+    await fetch("/v1/auth/adult", {
+      method: "POST",
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json", "X-Hearthroom-Request": "1" },
+      body: JSON.stringify(input),
+    }),
+  );
+}
+
+/**
  * 沙箱卡的存檔（舞台代作者腳本讀寫）：每個成員每張卡最多 10 個 key、單值 64 KB。
  * 錯誤碼 key_invalid／value_too_large／saves_full 由舞台那側翻成作者看得懂的 sdk 錯誤。
  */

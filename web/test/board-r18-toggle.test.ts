@@ -1,7 +1,8 @@
 /**
  * 首頁的 R18 開關，整條路走一遍：真的 session store、真的 api 客戶端、假的 fetch。
  * 開關住在頁首（App.vue 只在首頁畫它），榜單頁靠同一份 session 重讀——這裡把兩個元件並排掛起來，照正式站的關係。
- *   - 訪客看不到開關；
+ *   - 遊客也看得到開關（owner 2026-10-10），改的是伺服器發的遊客憑證；站上發不出遊客憑證（自架站）才看不到；
+ *   - 填了未滿 18 歲：這台裝置 24 小時內不能再填；
  *   - 沒驗過年齡：點下去先開聲明窗，要勾同意、填出生日期，這時候什麼都不送；送出才打開，榜單帶 ?nsfw=1 與 token 重讀；
  *   - 驗過年齡但沒同意目前這一版聲明：聲明窗只要勾同意，不再問生日；
  *   - 驗過了：點一下就關，榜單不帶 nsfw 重讀。
@@ -27,9 +28,12 @@ vi.mock("moonstage/stage.css", () => ({}));
 import BoardPage from "../src/pages/BoardPage.vue";
 import AdultToggle from "../src/components/AdultToggle.vue";
 import { useSession } from "../src/lib/session";
+import { forgetGuestAdult } from "../src/lib/adult-consent";
 import { ADULT_CONSENT_VERSION } from "../../shared/adult-consent";
 
 const state = { showNsfw: false, ageVerified: false, adultConsent: false };
+/** 遊客憑證；null＝站上沒開託管登入，/v1/auth/adult 不存在 */
+let guest: { showNsfw: boolean; ageVerified: boolean; adultConsent: boolean } | null = null;
 const calls: string[] = [];
 const bodies: Record<string, unknown>[] = [];
 
@@ -48,6 +52,18 @@ function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respon
     if (body.consentVersion === ADULT_CONSENT_VERSION) state.adultConsent = true;
     state.showNsfw = body.showNsfw;
     return json({ showNsfw: state.showNsfw, ageVerified: state.ageVerified, adultConsent: state.adultConsent, hiddenTags: [] });
+  }
+  if (url.endsWith("/v1/auth/adult")) {
+    if (!guest) return json({ error: "not_found" }, 404);
+    const body = JSON.parse(String(init?.body)) as { showNsfw?: boolean; birthdate?: string; consentVersion?: number };
+    if (body.showNsfw !== undefined) bodies.push(body);
+    if (body.showNsfw === true && !guest.ageVerified) {
+      if (!body.birthdate) return json({ error: "birthdate_required" }, 400);
+      if (Number(body.birthdate.slice(0, 4)) > new Date().getUTCFullYear() - 18) return json({ error: "underage" }, 403);
+      guest.ageVerified = true; guest.adultConsent = true;
+    }
+    if (body.showNsfw !== undefined) guest.showNsfw = body.showNsfw;
+    return json(guest);
   }
   if (url.includes("/v1/board") || url.includes("/v1/cards?")) return json({ items: [], total: 0, hasNext: false, limit: 20, offset: 0, sort: "day" });
   return json({ error: "not_found" }, 404);
@@ -87,17 +103,68 @@ async function tick(box: HTMLInputElement, value: string | boolean) {
 beforeEach(() => {
   vi.stubGlobal("fetch", fakeFetch);
   calls.length = 0; bodies.length = 0;
-  signedIn = true; state.showNsfw = false; state.ageVerified = false; state.adultConsent = false;
+  signedIn = true; state.showNsfw = false; state.ageVerified = false; state.adultConsent = false; guest = null;
+  localStorage.clear();
+  forgetGuestAdult();
   setActivePinia(createPinia());
 });
 afterEach(() => { app?.unmount(); el?.remove(); app = null; el = null; document.body.innerHTML = ""; vi.unstubAllGlobals(); });
 
 describe("首頁 R18 開關", () => {
-  it("訪客看不到開關", async () => {
+  it("站上發不出遊客憑證（自架站）：訪客看不到開關", async () => {
     signedIn = false;
     await mountBoard();
     expect(boardCalls().length).toBeGreaterThan(0);
     expect(toggle()).toBeNull();
+  });
+
+  it("遊客看得到開關：填生日、勾同意後打開，送到遊客憑證，榜單照 cookie 重讀（不帶 token）", async () => {
+    signedIn = false; guest = { showNsfw: false, ageVerified: false, adultConsent: false };
+    await mountBoard();
+    expect(toggle()?.getAttribute("aria-checked")).toBe("false");
+    toggle()!.click();
+    await flush();
+    await tick(document.querySelector<HTMLInputElement>('.dlg input[type="date"]')!, "1990-01-01");
+    await tick(agree()!, true);
+    const before = boardCalls().length;
+    document.querySelector<HTMLFormElement>("form.dlg")!.dispatchEvent(new Event("submit", { cancelable: true }));
+    await flush();
+    expect(bodies).toEqual([{ showNsfw: true, birthdate: "1990-01-01", consentVersion: ADULT_CONSENT_VERSION }]);
+    expect(calls.some((c) => c.includes("/v1/me/settings"))).toBe(false);
+    expect(toggle()?.getAttribute("aria-checked")).toBe("true");
+    const after = boardCalls().slice(before);
+    expect(after.length).toBeGreaterThan(0);
+    expect(after.every((c) => !c.endsWith("[auth]"))).toBe(true);
+
+    // 再點一下就關，不再問年齡
+    toggle()!.click();
+    await flush();
+    expect(document.querySelector(".dlg")).toBeNull();
+    expect(bodies.at(-1)).toEqual({ showNsfw: false });
+    expect(toggle()?.getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("填了未滿 18 歲：不打開，這台裝置之後再開聲明窗也不能送", async () => {
+    signedIn = false; guest = { showNsfw: false, ageVerified: false, adultConsent: false };
+    await mountBoard();
+    toggle()!.click();
+    await flush();
+    await tick(document.querySelector<HTMLInputElement>('.dlg input[type="date"]')!, `${new Date().getUTCFullYear() - 15}-01-01`);
+    await tick(agree()!, true);
+    document.querySelector<HTMLFormElement>("form.dlg")!.dispatchEvent(new Event("submit", { cancelable: true }));
+    await flush();
+    expect(document.querySelector(".dlg")?.textContent).toContain(i18n.global.t("error.underage"));
+    expect(confirmBtn()!.disabled).toBe(true);
+    expect(toggle()?.getAttribute("aria-checked")).toBe("false");
+
+    [...document.querySelectorAll<HTMLButtonElement>(".dlg button")].find((b) => b.type === "button")!.click();
+    await flush();
+    toggle()!.click();
+    await flush();
+    await tick(document.querySelector<HTMLInputElement>('.dlg input[type="date"]')!, "1990-01-01");
+    await tick(agree()!, true);
+    expect(confirmBtn()!.disabled, "鎖住期間不能換個日期再送").toBe(true);
+    expect(document.querySelector(".dlg")?.textContent).toContain(i18n.global.t("error.underage"));
   });
 
   it("沒驗過年齡：聲明窗要勾同意又填出生日期，確認後才打開，榜單帶 nsfw 重讀", async () => {

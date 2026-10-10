@@ -5,11 +5,13 @@
  *   - 年齡沒驗過才問出生日期（伺服器只看一眼、不存）；驗過但聲明是舊版，只要重新勾同意。
  *   - 送出就是「打開成人內容」：成功後寫回 session.profile 並 emit done；取消什麼都不送。
  * 已經驗過也同意過的人不會走到這裡——呼叫端用 needsAdultConsent 判斷，直接一鍵打開。
+ * 遊客一樣走這個窗（owner 2026-10-10），送到遊客憑證（lib/adult-consent 的 saveAdult 分流）。
+ * 填過未滿 18 歲的裝置在 UNDERAGE_LOCK_MS 內不能再送：直接說明、送出鍵不能按。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { ApiError, updateSiteSettings } from "@/lib/api";
-import { applyAdultSettings } from "@/lib/adult-consent";
+import { ApiError } from "@/lib/api";
+import { saveAdult, underageLocked, viewerAdult } from "@/lib/adult-consent";
 import { useSession } from "@/lib/session";
 import { ADULT_CONSENT_VERSION } from "../../../shared/adult-consent";
 
@@ -17,27 +19,25 @@ const emit = defineEmits<{ (e: "close"): void; (e: "done"): void }>();
 const session = useSession();
 const { t } = useI18n();
 
-const verified = computed(() => !!session.profile?.ageVerified);
+const verified = computed(() => !!viewerAdult(session)?.ageVerified);
+const locked = ref(!verified.value && underageLocked());
 const agreed = ref(false);
 const birthdate = ref("");
 const busy = ref(false);
-const error = ref("");
+const error = ref(locked.value ? t("error.underage") : "");
 const today = new Date().toISOString().slice(0, 10);
 const box = ref<HTMLFormElement | null>(null);
-const ready = computed(() => agreed.value && (verified.value || !!birthdate.value));
+const ready = computed(() => !locked.value && agreed.value && (verified.value || !!birthdate.value));
 
 async function submit() {
   if (busy.value || !ready.value) return;
   busy.value = true;
   error.value = "";
   try {
-    const result = await updateSiteSettings(
-      { showNsfw: true, ...(verified.value ? {} : { birthdate: birthdate.value }), consentVersion: ADULT_CONSENT_VERSION },
-      (await session.accessToken()) ?? "",
-    );
-    applyAdultSettings(session.profile, result);
+    await saveAdult(session, { showNsfw: true, ...(verified.value ? {} : { birthdate: birthdate.value }), consentVersion: ADULT_CONSENT_VERSION });
     emit("done");
   } catch (err) {
+    if (err instanceof ApiError && err.code === "underage") locked.value = true;
     error.value = err instanceof ApiError || err instanceof Error ? err.message : t("state.saveFailed");
   } finally {
     busy.value = false;

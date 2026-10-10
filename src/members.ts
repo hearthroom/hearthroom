@@ -3,7 +3,7 @@ import { DEFAULT_PROVIDER, parseProvider, type ProviderId, requireConfigured } f
 import { tagNamesFor } from "../shared/tag-catalog";
 import { type Env, HttpError } from "./types";
 import { upstream } from "./upstream";
-import { siteSessionIdentity, siteSessionReader } from "./account-auth";
+import { guestAdult, guestAllowsNsfw, siteSessionIdentity, siteSessionReader } from "./account-auth";
 
 /**
  * 成員與身分。
@@ -228,6 +228,28 @@ export function isAdultBirthdate(birthdate: string, now: number): boolean | null
 }
 
 /**
+ * 打開成人內容前的關卡，成員與遊客共用：沒驗過年齡要帶生日且滿 18；沒同意目前這一版聲明要帶 consentVersion。
+ * 不符就丟對應的錯（birthdate_required／invalid_birthdate／underage／consent_required），什麼都不該存。
+ * 回年齡驗證的時間：驗過的沿用，這次才驗的是 now。
+ */
+export function confirmAdult(
+  current: { ageVerifiedAt: number | null; adultConsent: boolean },
+  input: { birthdate?: string; consentVersion?: number },
+  now: number,
+): number {
+  let verifiedAt = current.ageVerifiedAt;
+  if (verifiedAt === null) {
+    if (!input.birthdate) throw new HttpError(400, "birthdate_required");
+    const adult = isAdultBirthdate(input.birthdate, now);
+    if (adult === null) throw new HttpError(400, "invalid_birthdate");
+    if (!adult) throw new HttpError(403, "underage");
+    verifiedAt = now;
+  }
+  if (!current.adultConsent && input.consentVersion !== ADULT_CONSENT_VERSION) throw new HttpError(400, "consent_required");
+  return verifiedAt;
+}
+
+/**
  * 改成人內容開關。開：要驗過年齡——已經驗過就直接開，沒驗過要帶生日且滿 18；未滿不存任何東西。
  * 還要同意目前這一版聲明：同意過就不必再帶，沒同意過或同意的是舊版要帶 consentVersion，
  * 不符回 400 consent_required，年齡也不記。
@@ -244,16 +266,8 @@ export async function updateMemberNsfw(
     await db.prepare("UPDATE members SET show_nsfw = 0 WHERE id = ?").bind(memberId).run();
     return { showNsfw: false, ageVerified: current.ageVerifiedAt !== null, adultConsent: current.adultConsent };
   }
-  let verifiedAt = current.ageVerifiedAt;
-  if (verifiedAt === null) {
-    if (!input.birthdate) throw new HttpError(400, "birthdate_required");
-    const adult = isAdultBirthdate(input.birthdate, now);
-    if (adult === null) throw new HttpError(400, "invalid_birthdate");
-    if (!adult) throw new HttpError(403, "underage");
-    verifiedAt = now;
-  }
+  const verifiedAt = confirmAdult({ ageVerifiedAt: current.ageVerifiedAt, adultConsent: current.adultConsent }, input, now);
   if (!current.adultConsent) {
-    if (input.consentVersion !== ADULT_CONSENT_VERSION) throw new HttpError(400, "consent_required");
     await db.prepare("UPDATE members SET show_nsfw = 1, age_verified_at = ?, adult_consent_version = ?, adult_consented_at = ? WHERE id = ?")
       .bind(verifiedAt, ADULT_CONSENT_VERSION, now, memberId).run();
   } else {
@@ -285,9 +299,11 @@ export async function viewerAllowsNsfw(
   try {
     const provider = providerOf(c);
     if (!bearer) {
-      // 本站 session：讀者與他的設定一次查完
+      // 本站 session：讀者與他的設定一次查完。登入的人照帳號設定，不看遊客憑證。
       const reader = await siteSessionReader(c, provider);
-      return !!reader && reader.showNsfw === 1 && reader.ageVerifiedAt !== null && reader.adultConsentVersion === ADULT_CONSENT_VERSION;
+      if (reader) return reader.showNsfw === 1 && reader.ageVerifiedAt !== null && reader.adultConsentVersion === ADULT_CONSENT_VERSION;
+      // 沒登入：看遊客自己確認過的成年憑證（加密 cookie，不查資料庫）
+      return guestAllowsNsfw(await guestAdult(c));
     }
     const me = await requestIdentity(c, bearer, provider);
     // Viewing is read-only. Resolve linked identities and current preferences in one D1 trip;
