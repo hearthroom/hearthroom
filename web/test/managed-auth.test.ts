@@ -72,3 +72,12 @@ it('uses the current server grant after another device reconnects once the local
   const session=useSession();session.token=old;
   expect(await session.accessToken()).toBe('new-generation');
 });
+// 邊緣或 Harbor 部署時回的 5xx 常常是 HTML，不是 JSON。那是「暫時連不上」，不是「授權不對」：
+// 以前先 parse JSON 就丟出 SyntaxError，手上的授權被當成無效丟掉，玩家看起來像被登出。
+it('treats a non-JSON server error as temporarily unavailable, not as a bad grant',async()=>{
+  vi.stubGlobal('fetch',vi.fn(async(url:string)=>{
+    if(url==='/v1/auth/config')return Response.json({managed:true});
+    return new Response('<html>502 Bad Gateway</html>',{status:502,headers:{'Content-Type':'text/html'}});
+  }));
+  await expect(managedToken('harbor')).rejects.toThrow('auth_provider_unavailable');
+});

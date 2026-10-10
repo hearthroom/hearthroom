@@ -100,6 +100,9 @@ function describeLimit(code: string, detail: LimitDetail | undefined): string | 
 }
 /** 本站自己的 API 回的碼（不是供應商契約的一部分，所以不進 docs/provider-protocol.md）。 */
 const SITE_CODE_KEY: Record<string, string> = {
+  comment_rate_limited: "comment.error.rateLimited",
+  comment_too_long: "comment.error.tooLong",
+  comment_required: "comment.error.required",
   hosting_requires_uploaded_media: "workspace.uploadMedia",
   submission_pending: "workspace.alreadyPending",
   hosting_unavailable: "workspace.submitUnavailable",
@@ -117,6 +120,11 @@ const SITE_CODE_KEY: Record<string, string> = {
   age_verification_required: "error.ageVerificationRequired",
 };
 const looksLikeCode = (raw: string): boolean => /^[a-z][a-z0-9_]*$/.test(raw);
+/**
+ * 伺服器寫給開發者的短語（「comment not found」「claim changed」）：全小寫英文、只有字母與空白。
+ * 給人看的句子（內容審核的原因等）會有大寫、標點或其他文字。前者按狀態碼講使用者的語言，不夾英文。
+ */
+const looksInternal = (raw: string): boolean => /^[a-z]+( [a-z]+)+$/.test(raw);
 
 export function describeApiError(status: number, raw: string, detail?: LimitDetail): string {
   // .mov：資源庫不收 QuickTime，請作者匯出成 MP4。上傳前的檢查也講同一句。
@@ -127,9 +135,9 @@ export function describeApiError(status: number, raw: string, detail?: LimitDeta
   if (byDetail) return byDetail;
   if (text && (CODE_KEY[text] || SITE_CODE_KEY[text])) return i18n.global.t((CODE_KEY[text] ?? SITE_CODE_KEY[text])!);
   // 不是錯誤碼的就是伺服器寫給人看的句子（例如內容審核的原因），原樣講。
-  if (text && !looksLikeCode(text)) return text;
+  if (text && !looksLikeCode(text) && !looksInternal(text)) return text;
   const msg = i18n.global.t(ERROR_KEY[status] ?? (status >= 500 ? "state.serverBusy" : "state.requestFailed"));
-  return text ? `${msg} (${text})` : msg;
+  return text && looksLikeCode(text) ? `${msg} (${text})` : msg;
 }
 
 async function json<T>(res: Response): Promise<T> {

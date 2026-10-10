@@ -68,11 +68,11 @@ export async function managedAuth():Promise<boolean>{
 }
 export async function authRequest<T>(path:string,body:unknown):Promise<T>{
   const response=await fetch('/v1/auth/'+path,{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json','X-Hearthroom-Request':'1'},body:JSON.stringify(body)});
-  const data=await response.json();
-  if(!response.ok){
-    if(response.status>=500||response.status===429)throw new ManagedAuthUnavailable('auth_provider_unavailable');
-    throw new Error(data.error||'auth_state_invalid');
-  }
+  // 先看狀態再讀內容：邊緣或部署中的 5xx 常是 HTML，先 parse 會丟 SyntaxError，被當成「授權不對」。
+  if(response.status>=500||response.status===429)throw new ManagedAuthUnavailable('auth_provider_unavailable');
+  const data=await response.json().catch(()=>null) as {error?:string}|null;
+  if(!response.ok)throw new Error(data?.error||'auth_state_invalid');
+  if(data===null)throw new ManagedAuthUnavailable('auth_provider_unavailable');
   return data as T;
 }
 export function rememberManaged(pair:TokenPair,provider:ProviderId){
