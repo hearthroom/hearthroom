@@ -77,10 +77,20 @@ describe("沙箱子網域", () => {
     expect((await get("https://c1.hearthroom.club/sandbox/sandbox.js", spa)).status).toBe(503);
   });
 
-  it("主站網域上的 /sandbox/ 不受影響（照 SPA 規則）", async () => {
-    const res = await get("https://hearthroom.club/sandbox/");
-    expect(res.status).not.toBe(404);
-    expect(res.headers.get("content-security-policy")).toBeNull();
+  // 主站上的同源殼是本機開發與非 DNS 標籤 roleId 的退路（宿主用不透明 iframe 嵌）。它跟主站同源：
+  // 別的網站直接嵌它、送一份帶腳本的規則進去，作者腳本就在主站的源上跑，讀得到登入令牌。
+  // 標頭的 sandbox 指令讓它無論怎麼被打開都是不透明源，frame-ancestors 只許主站自己嵌。
+  it("主站網域上的 /sandbox/ 一律是不透明源、只許主站自己嵌", async () => {
+    for (const url of ["https://hearthroom.club/sandbox/", "https://play.sukisuki.ai/sandbox/sandbox.js"]) {
+      const res = await get(url);
+      expect(res.status).toBe(200);
+      const csp = res.headers.get("content-security-policy") ?? "";
+      expect(csp).toMatch(/(^|; )sandbox allow-scripts allow-forms allow-modals allow-downloads(;|$)/);
+      expect(csp).not.toContain("allow-same-origin");
+      expect(csp).toContain("frame-ancestors 'self'");
+      expect(csp).not.toContain("frame-ancestors https:");
+    }
+    expect((await get("https://hearthroom.club/sandbox/other")).status).toBe(404);
   });
 });
 
