@@ -19,7 +19,6 @@ vi.mock("../src/lib/track", () => ({ track: () => {}, currentSurface: () => "car
 vi.mock("moonstage/stage", () => ({}));
 vi.mock("moonstage/stage.css", () => ({}));
 // 卡片頁會拉 HTML 卡的沙盒；它的樣式來自舞台子模組的 raw 匯入，測試環境的檔案系統白名單擋它——這條路跟門無關，整個換掉
-vi.mock("../src/lib/html-card-frame", () => ({ buildSrcdoc: () => "", SIZE_MESSAGE: "hc-card-size" }));
 
 import CardPage from "../src/pages/CardPage.vue";
 import { useSession } from "../src/lib/session";
@@ -43,6 +42,8 @@ function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respon
   if (url.endsWith("/v1/me")) return json({ handle: "abcdefgh", memberSince: 0, reviewer: false, identities: [], ...state });
   if (url.includes("/v1/me/settings")) { const body = JSON.parse(String(init?.body)) as { showNsfw: boolean }; state.showNsfw = body.showNsfw; return json({ showNsfw: state.showNsfw, ageVerified: true, adultConsent: true }); }
   // 留言區跟卡片頁同一道門
+  // 評分跟留言同一道門
+  if (url.includes("/score")) return url.includes("nsfw=1") && auth ? json({ average: null, count: 0, histogram: [0, 0, 0, 0, 0], mine: null }) : json({ error: "adult_content" }, 403);
   if (url.includes("/comments")) return url.includes("nsfw=1") && auth ? json({ total: 0, comments: [], isRoleCreator: false }) : json({ error: "adult_content" }, 403);
   if (url.includes('/platforms')) return url.includes('nsfw=1') && auth ? json({ platforms: [] }) : json({ error: 'nsfw_gated' }, 403);
   if (url.includes("/v1/cards/abc")) return url.includes("nsfw=1") && auth ? json(CARD) : json({ error: "adult_content" }, 403);

@@ -10,7 +10,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import { guestAdult, loadGuestAdult, viewerAdult } from "@/lib/adult-consent";
-import { PAGE_OF, TARGET_OF, isFirst, isLast, loadProgress, nextStep, prevStep, saveProgress, tourState, type TourPage, type TourStep } from "@/lib/coach-tour";
+import { PAGE_OF, TARGET_OF, isFirst, isLast, loadProgress, nextStep, prevStep, saveProgress, stepsOf, tourState, type TourPage, type TourStep } from "@/lib/coach-tour";
 import { finishTour, hasAdultStarter, isNewMember, starterFor, tourDone } from "@/lib/onboarding";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
@@ -22,7 +22,7 @@ const router = useRouter();
 const { lp } = useLocalePath();
 const { locale } = useI18n();
 
-const shape = reactive({ adult: false, sandbox: null as boolean | null, prologue: false });
+const shape = reactive({ adult: false, sandbox: null as boolean | null, prologue: false, missing: [] as TourStep[] });
 
 const restored = loadProgress();
 if (restored) { tourState.step = restored.step; tourState.card = restored.card; shape.adult = restored.adult; }
@@ -64,7 +64,7 @@ function next() {
   if (!step) return;
   if (step === "card") {
     tourState.card = starterFor(locale.value, !!viewerAdult(session)?.showNsfw) ?? 0;
-    go("intro");
+    go(firstCardStep());
     void router.push(lp(`/cards/${tourState.card}`));
     return;
   }
@@ -102,10 +102,10 @@ watch(() => route.path, (path) => {
   const card = Number(/\/cards\/(\d+)\/?$/.exec(path)?.[1] ?? 0);
   if ((step === "r18" || step === "card") && card && (card === starterFor(locale.value, false) || card === starterFor(locale.value, true))) {
     tourState.card = card;
-    go("intro");
+    go(firstCardStep());
   }
   const play = Number(/\/play\/(\d+)\/?$/.exec(path)?.[1] ?? 0);
-  if ((step === "intro" || step === "play") && play && play === tourState.card) go("opening");
+  if (step && PAGE_OF[step] === "card" && play && play === tourState.card) go("opening");
 });
 
 // ── 框的位置 ─────────────────────────────────────────────────────────────
@@ -114,6 +114,26 @@ const dialogOpen = ref(false);
 let timer: ReturnType<typeof setInterval> | undefined;
 let scrolledFor: TourStep | null = null;
 
+/** 卡片頁的第一步：還不知道這張卡缺哪幾塊，先從分級開始，畫好之後缺的會被跳過（readCard）。 */
+function firstCardStep(): TourStep {
+  shape.missing = [];
+  return "grade";
+}
+/**
+ * 卡片頁：「開始對話」出現時整頁已經畫好，這時才看得出這張卡缺哪幾塊（沒有評級、沒寫介紹、不在榜沒有評分）。
+ * 停在缺的那一步就跳到下一個有的。
+ */
+function readCard() {
+  if (page.value !== "card" || !document.querySelector('[data-tour="card-play"]')) return;
+  // 介紹還在路上（骨架）不算缺
+  const introPending = !!document.querySelector(".role__intro-ghost");
+  const missing = (["grade", "intro", "score"] as const).filter((s) =>
+    !document.querySelector(TARGET_OF[s]!) && !(s === "intro" && introPending));
+  if (missing.join() !== shape.missing.join()) shape.missing = missing;
+  // 上一步、下一步都照 stepsOf 走，不會停在缺的那一步；只有剛進卡片頁時的第一步可能落空
+  const step = tourState.step;
+  if (step && shape.missing.includes(step)) go(stepsOf(shape).find((s) => PAGE_OF[s] === "card") ?? "play");
+}
 /** 對話頁：舞台掛好才知道是同層卡還是一般卡、有沒有開場選項。 */
 function readStage() {
   if (page.value !== "play") return;
@@ -128,6 +148,7 @@ function readStage() {
 
 function measure() {
   dialogOpen.value = !!document.querySelector(".dlg-backdrop, .sheet-backdrop");
+  readCard();
   readStage();
   const step = tourState.step;
   const selector = step ? TARGET_OF[step] : null;

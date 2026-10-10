@@ -1,0 +1,19 @@
+{
+  "tier": "highlight",
+  "audience": "everyone",
+  "try": "/",
+  "title": {
+    "zh-Hant": "卡片頁新增星級評分，評論直接列在介紹下方。",
+    "zh-Hans": "卡片页新增星级评分，评论直接列在介绍下方。",
+    "en": "Card pages now have star ratings, with reviews right below the introduction.",
+    "ja": "カードページに星評価を追加、レビューは紹介のすぐ下に表示。",
+    "ko": "카드 페이지에 별점이 추가되고, 리뷰는 소개 바로 아래에 표시됩니다."
+  },
+  "body": {
+    "zh-Hant": "分享選單新增 Discord、QQ 與微信。",
+    "zh-Hans": "分享菜单新增 Discord、QQ 与微信。",
+    "en": "Sharing now includes Discord, QQ and WeChat.",
+    "ja": "共有メニューに Discord、QQ、WeChat を追加。",
+    "ko": "공유 메뉴에 Discord, QQ, WeChat이 추가되었습니다."
+  }
+}

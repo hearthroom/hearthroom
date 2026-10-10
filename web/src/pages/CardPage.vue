@@ -1,23 +1,28 @@
 <script setup lang="ts">
+/**
+ * 卡片頁：還沒開始對話之前看到的那一頁（2026-10-11 改版，owner 確認過版面模擬）。
+ *
+ *   身分列  橫幅（作者的橫式背景圖）、封面、卡名、一句話簡介、作者／評分／對話數、開始對話、分級標示、標籤
+ *   左欄    作者用 Markdown 寫的介紹，接著是評論
+ *   右欄    評分、卡片資訊、同一位作者的其他作品；黏在畫面上，介紹再長也一直看得到評分
+ *
+ * 開場白不放在這裡：它是開始對話之後才出現的東西，而且多半是給模型看的設定，放在預覽頁沒有意義。
+ * 「開始對話」一定在第一屏：桌機在身分列裡，手機固定在畫面最底部。
+ */
 import { cardFandom } from "@/lib/fandom";
 import CommunityAvatar from "@/components/CommunityAvatar.vue";
 import CommunityName from "@/components/CommunityName.vue";
 import LibraryToggle from "@/components/LibraryToggle.vue";
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { RouterLink, useRoute } from "vue-router";
-import CardGrid from "@/components/CardGrid.vue";
+import { RouterLink, useRoute, useRouter } from "vue-router";
 import CommentPanel from "@/components/CommentPanel.vue";
 import NotFoundPage from "@/pages/NotFoundPage.vue";
 import AdultGate from "@/components/AdultGate.vue";
-import PreviewDoc from "@/components/preview/PreviewDoc.vue";
-import HtmlCardFrame from "@/components/HtmlCardFrame.vue";
-import ClampBlock from "@/components/ClampBlock.vue";
-import CommentPreview from "@/components/CommentPreview.vue";
-import { ApiError, fetchBoard, fetchCard, fetchCardPlatforms, type CardPlatform, fetchPreviewPage, fetchRoleDetail } from "@/lib/api";
-import { renderWelcomeAsync } from "@/lib/welcome-render";
+import CardScore from "@/components/CardScore.vue";
+import { ApiError, fetchBoard, fetchCard, fetchCardPlatforms, fetchCardScore, fetchRoleDetail, saveCardScore, type CardPlatform, type CardScore as Score } from "@/lib/api";
 import { recallCard } from "@/lib/card-memory";
-import { fetchWelcomeAsset } from "@/lib/welcome-asset";
+import { renderReadme } from "@/lib/card-readme";
 import { currentProvider, type ProviderId } from "@/lib/provider";
 import CardOwnerActions from "@/components/CardOwnerActions.vue";
 import RatingMark from "@/components/RatingMark.vue";
@@ -26,16 +31,18 @@ import ShareMenu from "@/components/ShareMenu.vue";
 import { useSession } from "@/lib/session";
 import { contentLang, pageTitle, zoneLabel } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
-import { compact, dateOnly, dateTime, hueFrom, plainText } from "@/lib/format";
+import { compact, dateOnly, dateTime, hueFrom } from "@/lib/format";
 import { titleLayout } from "@/lib/title-layout";
 import { displayName } from "@/lib/display-name";
 import { confirmDialog } from "@/lib/confirm";
 import { track } from "@/lib/track";
 import { canInstall } from "@/lib/pwa";
 import { playAppUrl } from "@/lib/site";
+import { loginPath } from "@/lib/login-return";
 import type { CommunityCard } from "@/lib/types";
 
 const route = useRoute();
+const router = useRouter();
 const { locale, lp } = useLocalePath();
 const { t } = useI18n();
 
@@ -51,33 +58,22 @@ const missing = ref(false);
 const gated = ref(false);
 const error = ref("");
 
-/** 來源端的公開詳情：開場白、有沒有裝修主頁、作者有沒有關掉評論。 */
-const welcome = ref("");
-/** 開場白照對話頁畫出來的 HTML（作者的正則規則 → HTML／markdown）；純文字的開場白這裡是空字串。 */
-const welcomeHtml = ref("");
-/**
- * 開場白還在路上（來源端的詳情要約一秒）。這段時間先畫一塊跟收合後同高的骨架占位，
- * 不然開場白一到，下面的評論就整塊被往下推（部署後實測版面位移 0.03）。
- */
+/** 作者寫的介紹（Markdown 原文）；來源端的詳情約一秒才到 */
+const readme = ref("");
+/** 詳情還在路上：介紹那一塊先畫骨架，到了再換，評論不會整塊被往下推 */
 const detailsPending = ref(false);
-/** HTML 版開場白量好高度了沒；量好之前純文字那份留著撐版面 */
-const welcomeSized = ref(false);
-watch(welcomeHtml, () => { welcomeSized.value = false; });
-/** 開場白在主頁上露出的高度：夠看出語氣與版面，又不把評論擠出畫面 */
-const narrow = typeof matchMedia === "function" && matchMedia("(max-width: 820px)").matches;
-const welcomeMax = narrow ? 280 : 360;
-/** 簡介約露出五、六行 */
-const aboutMax = narrow ? 180 : 150;
-/** 這張卡能不能用遊戲模式玩（有精修世界，或開場白照 zzroles 協定寫） */
 const session = useSession();
-// 這一家有沒有評論這件事：Harbor 那邊沒有這條 API，掛上去只會對著空氣轉圈。
-// 留言是本站自己的功能，不看供應商；只有作者在裝修頁關掉時才收起來
+// 留言是本站自己的功能，不看供應商；只有作者在來源端關掉時才收起來
 const showComments = ref(true);
-const previewDoc = ref<unknown>(null);
-const previewSkin = ref("");
 const commentCount = ref<number | null>(null);
-/** 同一位作者的其他作品：看完一張想接著看，不必先繞去作者頁 */
+/**
+ * 伺服器那份卡已經拿到了：成人卡要等這個才讀留言。先畫的那份是上一屏帶過來的，身分可能還在路上，
+ * 這時讀留言會被成人內容的門擋下，錯誤就卡在留言區裡。一般卡不必等。
+ */
+const confirmed = ref(false);
+/** 同一位作者的其他作品：右欄最多四張，其餘在作者頁 */
 const more = ref<CommunityCard[]>([]);
+const MORE_MAX = 4;
 const shareUrl = computed(() => new URL(lp(`/cards/${card.value?.id ?? route.params.id}`), location.origin).href);
 const copied = ref(false);
 /**
@@ -86,60 +82,101 @@ const copied = ref(false);
  */
 const editedAt = ref<number | null>(null);
 
-type Tab = "home" | "comments";
-const tab = ref<Tab>("home");
-const commentsOpened = ref(false);
-watch(tab, value => { if (value === "comments") commentsOpened.value = true; }, { flush: "sync" });
-/** tab 的鍵盤慣例：左右鍵切換並把焦點帶過去 */
-function onTabKey(e: KeyboardEvent) {
-  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-  e.preventDefault();
-  tab.value = tab.value === "home" && showComments.value ? "comments" : "home";
-  (e.currentTarget as HTMLElement).querySelector<HTMLElement>(`#tab-${tab.value}`)?.focus();
-}
-
 const hue = computed(() => hueFrom(card.value?.name ?? ""));
 const broken = ref(false);
 const hasArt = computed(() => !!card.value?.avatarUrl && !broken.value);
+const bannerBroken = ref(false);
+/** 橫幅只用作者的橫式背景圖；分享圖上壓著標題字，跟頁面標題重複，不拿來用 */
+const banner = computed(() => (!bannerBroken.value && card.value?.landscapeUrl) || "");
+/** 在榜才有評分與評論（跟伺服器同一個條件） */
+const listed = computed(() => !card.value?.status || card.value.status === "approved");
 
 /**
- * 主頁其餘的資料：開場白、作者裝修的版面、同一位作者的其他作品。
+ * 介紹：作者寫了就照 Markdown 畫；沒寫的話，簡介夠長（舊卡多半把整段介紹塞在簡介裡）就把簡介當介紹，
+ * 短的簡介頁首已經顯示過，不再重複一次。
+ */
+const LONG_SUMMARY = 120;
+const readmeHtml = computed(() => (readme.value.trim() ? renderReadme(readme.value) : ""));
+const summaryAsIntro = computed(() => !readmeHtml.value && [...(card.value?.summary ?? "")].length > LONG_SUMMARY);
+const hasIntro = computed(() => !!readmeHtml.value || summaryAsIntro.value);
+
+/** 介紹超過約一屏才收起來、出現「展開全文」；短的完整顯示 */
+const INTRO_MAX = 900;
+const introBox = ref<HTMLElement | null>(null);
+const introLong = ref(false);
+const introOpen = ref(false);
+let introObserver: ResizeObserver | null = null;
+watch(introBox, (el) => {
+  introObserver?.disconnect();
+  introObserver = null;
+  if (!el || typeof ResizeObserver === "undefined") return;
+  introObserver = new ResizeObserver(() => { introLong.value = el.scrollHeight > INTRO_MAX + 120; });
+  introObserver.observe(el);
+});
+
+// ── 評分 ───────────────────────────────────────────────────────────────
+const score = ref<Score | null>(null);
+const scoreBusy = ref(false);
+const own = computed(() => !!session.profile?.handle && session.profile.handle === card.value?.author.handle);
+async function loadScore() {
+  const c = card.value;
+  if (!c || !listed.value) { score.value = null; return; }
+  try {
+    const token = session.me ? (await session.accessToken()) ?? undefined : undefined;
+    const got = await fetchCardScore(c.id, token);
+    // 回應形狀不對（代理回了別的東西）就當成沒有評分，不讓右欄崩掉
+    const valid = Array.isArray(got?.histogram) && got.histogram.length === 5 && typeof got.count === "number";
+    if (card.value?.id === c.id) score.value = valid ? got : null;
+  } catch { /* 讀不到評分只是少一塊，不擋整頁 */ }
+}
+async function rate(next: number | null) {
+  const c = card.value;
+  if (!c) return;
+  if (!session.me) { await router.push(lp(loginPath(route.fullPath))); return; }
+  scoreBusy.value = true;
+  try {
+    const token = await session.accessToken();
+    if (!token) { await router.push(lp(loginPath(route.fullPath))); return; }
+    await saveCardScore(c.id, next, token);
+    track("card_score", { detail: next === null ? "score_clear" : `score_${next}`, subject: c.roleId });
+    await loadScore();
+  } catch (err) {
+    track("card_score", { detail: "score_failed", subject: c.roleId, ok: false });
+    await confirmDialog({ title: t("score.title"), message: err instanceof Error ? err.message : t("state.actionFailed"), single: true });
+  } finally {
+    scoreBusy.value = false;
+  }
+}
+/** 「寫評論」：捲到評論、把游標放進輸入框（沒登入就停在登入鈕） */
+async function writeReview() {
+  const section = document.getElementById("comments");
+  section?.scrollIntoView({ behavior: "smooth", block: "start" });
+  await nextTick();
+  section?.querySelector<HTMLTextAreaElement>("textarea")?.focus({ preventScroll: true });
+}
+watch(() => session.me?.accountNumId, () => { void loadScore(); });
+
+/**
+ * 主頁其餘的資料：介紹、評論開關、同一位作者的其他作品。
  * 讀不到只是少一塊，不擋整頁；跟卡片本身分開，手上一有卡就可以開始拿。
  */
 function loadDetails(roleId: string, authorHandle: string | null, lang: string, provider: ProviderId) {
-  const cardId = card.value!.id;
   detailsPending.value = true;
-  const pending = platformsRequest.value?.id === cardId ? platformsRequest.value.request : undefined;
   void fetchRoleDetail(roleId, undefined, lang, provider)
     .then((raw) => {
-      const rawWelcome = String(raw.roleWelcome ?? "");
-      const charName = card.value?.name ?? "";
+      if (card.value?.roleId !== roleId) return;
       const edited = Date.parse(String(raw.contentLastEditedAt ?? ""));
       editedAt.value = Number.isFinite(edited) ? edited : null;
-      welcome.value = plainText(rawWelcome, charName, t("card.you"));
-      // 開場白照對話頁的方式畫：先套作者的正則規則（酒館／MMD 卡靠它把標記換成版面），
-      // 再交給沙盒 iframe 用同一套元件庫畫（HtmlCardFrame）。功能欄那份整頁美化不放（見 welcome-render）。
-      // 來源不提供訪客規則時，使用同卡、相同開場白的公開副本；兩邊都拿不到才退回純文字。
-      void fetchWelcomeAsset(cardId, { roleId, provider }, rawWelcome, lang, pending)
-        // 作者正則在背景執行緒跑：寫得慢的規則只讓開場白晚點換上版面，不卡住整頁
-        .then((asset) => (card.value?.roleId === roleId ? renderWelcomeAsync(rawWelcome, { charName, userName: t("card.you"), asset }) : null))
-        .then((out) => {
-          if (out && card.value?.roleId === roleId) welcomeHtml.value = out.html;
-        }).catch(() => { /* 規則失敗仍保留開場白文字 */ });
-      showComments.value = (!card.value?.status || card.value.status === "approved") && raw.previewShowComments !== false;
-      if (raw.hasPreviewPage === true) {
-        return fetchPreviewPage(roleId, provider).then((p) => {
-          previewDoc.value = p.doc ?? null;
-          previewSkin.value = p.skinId ?? "";
-        });
-      }
+      readme.value = typeof raw.roleReadme === "string" ? raw.roleReadme : "";
+      showComments.value = listed.value && raw.previewShowComments !== false;
     })
-    .catch(() => { /* 預設版面照樣能看 */ })
+    .catch(() => { /* 沒有介紹也能看 */ })
     .finally(() => { if (card.value?.roleId === roleId) detailsPending.value = false; });
+  void loadScore();
   // 「其他作品」要作者的本站公開 ID；作者還沒成為成員（很早期登記過、之後沒再登入）就不列
   if (authorHandle) {
-    void fetchBoard({ author: authorHandle, sort: "hot", limit: 9, lang })
-      .then((b) => { more.value = b.items.filter((c) => c.roleId !== roleId).slice(0, 8); })
+    void fetchBoard({ author: authorHandle, sort: "hot", limit: MORE_MAX + 1, lang })
+      .then((b) => { more.value = b.items.filter((c) => c.roleId !== roleId).slice(0, MORE_MAX); })
       .catch(() => { more.value = []; });
   } else {
     more.value = [];
@@ -181,6 +218,7 @@ async function load(afterIdentity = false) {
     const fetched = await fetchCard(id, lang);
     if (request !== loadGeneration) return;
     card.value = fetched;
+    confirmed.value = true;
     if (card.value.num && id !== String(card.value.num)) {
       const url = new URL(window.location.href);
       url.pathname = lp(`/cards/${card.value.num}`);
@@ -209,6 +247,8 @@ async function load(afterIdentity = false) {
   revalidating.value = false;
   applyHead(card.value);
   if (!shown) loadDetails(card.value.roleId, card.value.author.handle, lang, (card.value.provider as ProviderId) ?? currentProvider());
+  // 先畫的那份可能是別處帶過來的舊狀態（例如還沒上榜）：伺服器那份到了再讀一次評分
+  else if (listed.value && !score.value) void loadScore();
 }
 
 // 卡號是本站發的永久數字（私有卡也有）：作者對外報卡、玩家在不能貼連結的地方靠它找卡
@@ -233,8 +273,8 @@ watch(() => route.params.id, () => {
   const id = String(route.params.id ?? "");
   platformsRequest.value = /^[1-9]\d*$/.test(id) ? { id, request: fetchCardPlatforms(id) } : null;
   platformsRequest.value?.request.catch(() => {});
-  card.value = null; welcome.value = ""; detailsPending.value = false; welcomeHtml.value = ""; previewDoc.value = null; more.value = []; broken.value = false; tab.value = "home"; editedAt.value = null;
-  commentCount.value = null; showComments.value = true; commentsOpened.value = false;
+  card.value = null; readme.value = ""; detailsPending.value = false; more.value = []; broken.value = false; bannerBroken.value = false; editedAt.value = null;
+  commentCount.value = null; showComments.value = true; score.value = null; introOpen.value = false; confirmed.value = false;
   load();
 }, { immediate: true });
 watch(locale, () => load());
@@ -242,11 +282,16 @@ watch(locale, () => load());
 // 加到主畫面：每張卡在卡片 App 網域上各自是一個 App（lib/site.ts），安裝要在那個網域的頁面上做，
 // 所以按下去先過去那張卡的對話頁（帶 install=1，那邊會把提示卡拿出來）。
 const installable = canInstall();
+function addToHome() {
+  const c = card.value;
+  if (!c) return;
+  track("pwa_card_install_click", { subject: c.roleId });
+  location.assign(playAppUrl(String(c.num ?? c.id), locale.value, { install: true, provider: c.provider }));
+}
 
 /**
- * 左欄常常比視窗高（大圖加上主行動、收藏就超過一個筆電螢幕）。只貼在頁首下，底部就永遠露不出來，
- * 要等右欄捲到底才被推上來（玩家回報 2026-09-27：開場白長的卡要捲到底才看得到開始對話）。
- * 把左欄高度交給 CSS：放得下就貼頁首，放不下就先跟著頁面捲，底部露出來再貼住。
+ * 右欄常常比視窗高（評分、卡片資訊、其他作品加起來超過一個筆電螢幕）。只貼在頁首下，底部就永遠露不出來。
+ * 把右欄高度交給 CSS：放得下就貼頁首，放不下就先跟著頁面捲，底部露出來再貼住。
  */
 const side = ref<HTMLElement | null>(null);
 let sideObserver: ResizeObserver | null = null;
@@ -257,13 +302,8 @@ watch(side, (el) => {
   sideObserver = new ResizeObserver(() => el.style.setProperty("--side-h", `${el.offsetHeight}px`));
   sideObserver.observe(el);
 });
-onBeforeUnmount(() => sideObserver?.disconnect());
-function addToHome() {
-  const c = card.value;
-  if (!c) return;
-  track("pwa_card_install_click", { subject: c.roleId });
-  location.assign(playAppUrl(String(c.num ?? c.id), locale.value, { install: true, provider: c.provider }));
-}
+onBeforeUnmount(() => { sideObserver?.disconnect(); introObserver?.disconnect(); });
+
 // 開關改了要重讀。身分第一次載好（undefined → 值）只在門已經畫出來時重讀：
 // 讀卡被擋時自己會等身分（見 load），卡已經讀到就不必再讀一次
 watch(() => session.profile?.showNsfw, (now, before) => {
@@ -278,157 +318,162 @@ watch(() => session.profile?.showNsfw, (now, before) => {
   <div v-else-if="gated" class="page"><AdultGate @enabled="load()" /></div>
 
   <div v-else class="page role">
-    <!-- 骨架照著真的版面畫：左邊一張身分證、右邊一塊面板，資料來了不跳版 -->
-    <div v-if="loading" class="role__layout" aria-hidden="true">
-      <div class="role__side role__side--ghost">
+    <!-- 骨架照著真的版面畫：封面＋名字，下面左右兩欄，資料來了不跳版 -->
+    <div v-if="loading" aria-hidden="true">
+      <div class="role__hero role__hero--plain">
         <div class="ghost role__art" />
-        <div class="ghost" style="height: 26px; width: 60%" />
-        <div class="ghost" style="height: 48px" />
-        <div class="ghost" style="height: 44px" />
+        <div class="role__id">
+          <div class="ghost" style="height: 32px; width: 70%" />
+          <div class="ghost" style="height: 44px" />
+          <div class="ghost" style="height: 44px; width: 200px; border-radius: 999px" />
+        </div>
       </div>
-      <div class="role__main">
-        <div class="ghost" style="height: 36px; width: 140px; border-radius: 999px" />
-        <div class="ghost" style="height: 220px; border-radius: 16px" />
+      <div class="role__body">
+        <div class="role__main"><div class="ghost" style="height: 320px; border-radius: 16px" /></div>
+        <div class="role__side"><div class="ghost" style="height: 220px; border-radius: 16px" /></div>
       </div>
     </div>
     <p v-else-if="error" class="notice notice--error" role="alert">{{ error }}</p>
 
     <template v-else-if="card">
-      <!-- 背景圖只當氛圍：糊掉、壓淡，讓整頁有這張卡自己的色調 -->
-      <div class="role__ambient" :style="{ backgroundImage: `url(${card.backgroundUrl || card.avatarUrl || ''})` }" aria-hidden="true" />
+      <!-- 頂部橫幅：作者的橫式背景圖，下緣淡進頁面底色。沒有橫式圖就把直式圖糊掉當氛圍 -->
+      <div v-if="banner" class="role__banner" aria-hidden="true">
+        <img :src="banner" alt="" fetchpriority="high" @error="bannerBroken = true" />
+      </div>
+      <div v-else class="role__ambient" :style="{ backgroundImage: `url(${card.backgroundUrl || card.avatarUrl || ''})` }" aria-hidden="true" />
 
       <!-- 社群審核影響榜單收錄，詳情連結仍可分享。 -->
       <p v-if="card.status && card.status !== 'approved'" class="notice role__own" role="status">
         {{ $t(`card.own.${card.status}`) }}
       </p>
 
-      <div class="role__layout" :aria-busy="revalidating || undefined">
-        <!-- 進場用 settle：卡片大圖在這一塊，要一出現就看得見（見 base.css） -->
-        <aside ref="side" class="role__side panel settle">
-          <div class="role__art">
-            <img v-if="hasArt" :src="card.avatarUrl!" alt="" fetchpriority="high" @error="broken = true" />
-            <div v-else class="role__void" :style="{ background: `linear-gradient(160deg, hsl(${hue} 45% 78%), hsl(${(hue + 40) % 360} 40% 62%))` }">
-              <span>{{ [...shownName][0] }}</span>
-            </div>
-            <span v-if="card.featured" class="role__featured" :title="$t('card.featuredHint')">{{ $t("card.featured") }}</span>
+      <header class="role__hero settle" :class="{ 'role__hero--plain': !banner }" :aria-busy="revalidating || undefined">
+        <div class="role__art">
+          <img v-if="hasArt" :src="card.avatarUrl!" alt="" fetchpriority="high" @error="broken = true" />
+          <div v-else class="role__void" :style="{ background: `linear-gradient(160deg, hsl(${hue} 45% 78%), hsl(${(hue + 40) % 360} 40% 62%))` }">
+            <span>{{ [...shownName][0] }}</span>
           </div>
+          <span v-if="card.featured" class="role__featured" :title="$t('card.featuredHint')">{{ $t("card.featured") }}</span>
+        </div>
 
-          <div class="role__id">
-            <h1 class="role__name display" :class="{ 'role__name--designed': title.designed }" :style="title.designed ? { '--title-em': title.widestEm } : undefined">
-              {{ title.text }}
-            </h1>
-            <!-- 作者是一張可點的名片，不只是一行灰字 -->
-            <component :is="card.author.handle ? RouterLink : 'div'" :to="card.author.handle ? lp(`/authors/${card.author.handle}`) : undefined" class="role__by">
+        <div class="role__id">
+          <h1 class="role__name display" :class="{ 'role__name--designed': title.designed }" :style="title.designed ? { '--title-em': title.widestEm } : undefined">
+            {{ title.text }}
+          </h1>
+          <div class="role__meta">
+            <component :is="card.author.handle ? RouterLink : 'span'" :to="card.author.handle ? lp(`/authors/${card.author.handle}`) : undefined" class="role__by">
               <CommunityAvatar :handle="card.author.handle ?? undefined" :src="card.author.avatar" :name="card.author.name" class="role__by-avatar" />
-              <span class="role__by-text">
-                <strong><CommunityName :handle="card.author.handle ?? undefined" :name="card.author.name" /></strong>
-                <span v-if="card.author.handle" class="subtle">{{ $t("card.authorPage") }}</span>
-              </span>
-              <svg v-if="card.author.handle" class="role__by-arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
+              <CommunityName :handle="card.author.handle ?? undefined" :name="card.author.name" />
             </component>
-            <button v-if="card.num" type="button" class="role__cid" :title="$t('card.copyId')" @click="copyId">
-              <span class="role__cid-label">{{ $t("card.id") }}</span>
-              <code class="role__cid-value mono">#{{ card.num }}</code>
-              <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4" /><path d="M10.5 5.5V3.5a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2" fill="none" stroke="currentColor" stroke-width="1.4" /></svg>
-            </button>
-            <p class="subtle role__foot">
-              {{ zoneLabel(card.zone) }}<template v-if="editedAt"> · <span :title="dateTime(editedAt)">{{ $t("card.updated", { date: dateOnly(Math.floor(editedAt / 1000)) }) }}</span></template>
-            </p>
+            <a v-if="score && score.count" class="role__score" href="#score" @click.prevent="side?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })">
+              <span class="role__score-star" aria-hidden="true">★</span>
+              <strong>{{ score.average?.toFixed(1) }}</strong>
+              <span class="subtle">{{ $t("score.count", { n: score.count }) }}</span>
+            </a>
+            <span v-if="card.talkNum" class="subtle">{{ $t("card.talkCount", { n: compact(card.talkNum) }) }}</span>
           </div>
+          <!-- 一句話簡介；舊卡的簡介常常是一整段，頁首只露出三行，全文在下面的介紹或卡片的說明裡 -->
+          <p v-if="card.summary" class="role__tagline" :title="card.summary">{{ card.summary }}</p>
 
-          <!-- 主行動緊跟在名字與作者後面：一進頁面就看得到，不必先捲過統計與標籤。獨占整列，不被次要操作擠出側欄。 -->
-          <CardPlatforms class="role__platforms" :card-id="card.id" :provider="card.provider" :card-number="card.num" :pending="platformsRequest" />
-          <!-- 分級標示緊貼開始遊玩（遊戲軟體分級管理辦法第 11、12 條：標識與情節名稱放在說明或起始處旁）。
+          <!-- 主行動：桌機在這一列；手機固定在畫面最底部（見樣式），不會落到第一屏外 -->
+          <div class="role__actions">
+            <div class="role__cta">
+              <CardPlatforms class="role__platforms" :card-id="card.id" :provider="card.provider" :card-number="card.num" :pending="platformsRequest" />
+              <LibraryToggle v-if="listed" kind="favorites" :target="card.id" @count="card.favoriteCount = $event" />
+              <ShareMenu :url="shareUrl" :title="card.name" :subject="card.roleId" />
+            </div>
+          </div>
+          <!-- 分級標示緊貼開始對話（遊戲軟體分級管理辦法第 11、12 條：標識與情節名稱放在說明或起始處旁）。
                評級缺失的舊一般卡不標（owner 2026-10-10），作者下次送審時補上 -->
-          <RatingMark v-if="card.rating" class="role__rating" :rating="card.rating" :descriptors="card.ratingDescriptors ?? []" />
+          <div v-if="card.rating" class="role__grade" data-tour="card-grade">
+            <RatingMark :rating="card.rating" :descriptors="card.ratingDescriptors ?? []" />
+          </div>
+          <CardOwnerActions :card="card" @submitted="load" />
 
-          <dl class="role__stats">
-            <div class="stat"><dt>{{ $t("card.stat.talk") }}</dt><dd>{{ compact(card.talkNum) }}</dd></div>
-            <div class="stat"><dt>{{ $t("card.stat.follow") }}</dt><dd>{{ compact(card.favoriteCount ?? 0) }}</dd></div>
-            <div class="stat"><dt>{{ $t("card.stat.trending") }}</dt><dd :class="{ up: card.trending > 0 }">{{ card.trending > 0 ? `+${compact(card.trending)}` : "—" }}</dd></div>
-          </dl>
-
-          <p v-if="card.fandom" class="role__fandom subtle">{{ $t("card.fandom") }} <RouterLink :to="{ path: lp('/search'), query: { fandom: card.fandomKey ?? card.fandom } }" class="role__fandom-link">{{ cardFandom(card, locale) }}</RouterLink></p>
-          <ul v-if="card.tags.length" class="role__tags">
+          <ul v-if="card.fandom || card.tags.length" class="role__tags">
+            <li v-if="card.fandom">
+              <RouterLink :to="{ path: lp('/search'), query: { fandom: card.fandomKey ?? card.fandom } }" class="chip role__fandom">{{ $t("card.fandom") }} {{ cardFandom(card, locale) }}</RouterLink>
+            </li>
             <li v-for="tag in card.tags" :key="tag">
               <RouterLink :to="{ path: lp('/'), query: { tag } }" class="chip">#{{ tag }}</RouterLink>
             </li>
           </ul>
+        </div>
+      </header>
 
-          <div class="role__actions">
-            <RouterLink :to="lp(`/me?reportCard=${encodeURIComponent(String(card.num || card.id))}`)" class="btn">{{$t("community.reportCard")}}</RouterLink>
-            <ShareMenu :url="shareUrl" :title="card.name" :subject="card.roleId" />
-          </div>
-          <CardOwnerActions :card="card" @submitted="load" />
-          <LibraryToggle v-if="!card.status || card.status === 'approved'" kind="favorites" :target="card.id" @count="card.favoriteCount = $event" />
-          <!-- 加到主畫面：能裝網頁的瀏覽器才出現；成人卡要過了門（有鑰匙）才有 -->
-          <button v-if="installable && (card.rating !== 'R' || card.shortcutKey)" type="button" class="btn btn--sm btn--ghost role__install" @click="addToHome">
-            <svg viewBox="0 0 20 20" aria-hidden="true">
-              <rect x="3" y="3" width="14" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="1.6" />
-              <path d="M10 6.5v7M6.5 10h7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-            </svg>
-            {{ $t("card.addHome") }}
-          </button>
-        </aside>
-
-        <section class="role__main">
-          <div class="seg role__tabs" role="tablist" @keydown="onTabKey">
-            <button id="tab-home" class="seg__item" :class="{ 'seg__item--on': tab === 'home' }" role="tab" aria-controls="panel-home" :aria-selected="tab === 'home'" :tabindex="tab === 'home' ? 0 : -1" @click="tab = 'home'">{{ $t("card.tab.home") }}</button>
-            <button v-if="showComments" id="tab-comments" class="seg__item" :class="{ 'seg__item--on': tab === 'comments' }" role="tab" aria-controls="panel-comments" :aria-selected="tab === 'comments'" :tabindex="tab === 'comments' ? 0 : -1" @click="tab = 'comments'; track('comment_tab', { subject: card.roleId })">
-              {{ $t("card.tab.comments") }}<span v-if="commentCount" class="role__tab-n">{{ commentCount }}</span>
-            </button>
-          </div>
-
-          <!-- 主頁：作者裝修過就照他的版面；沒有就是簡介＋開場白 -->
-          <div v-show="tab === 'home'" id="panel-home" class="panel role__home settle" role="tabpanel" aria-labelledby="tab-home">
-            <PreviewDoc v-if="previewDoc" data-tour="card-intro" :doc="previewDoc" :skin-id="previewSkin" @fallback="previewDoc = null" />
-            <template v-else>
-              <section class="role__block" data-tour="card-intro">
-                <h2 class="eyebrow">{{ $t("card.about") }}</h2>
-                <!-- 簡介也可能長達好幾段：露出開頭，跟開場白、評論分享主頁 -->
-                <ClampBlock :max="aboutMax" :more-label="$t('card.aboutMore')" :less-label="$t('card.aboutLess')">
-                  <p class="role__text">{{ card.summary || $t("card.noSummary") }}</p>
-                </ClampBlock>
-              </section>
-              <!-- 開場白還沒到：照收合後的高度先占位（多數卡都有開場白；沒有的卡骨架收掉時評論會往上一次） -->
-              <section v-if="!welcome && detailsPending" class="role__block" aria-hidden="true">
-                <h2 class="eyebrow">{{ $t("card.welcome") }}</h2>
-                <div class="ghost role__welcome-ghost" :style="{ height: `calc(${welcomeMax + 48}px + var(--s-2) + var(--h-sm))` }" />
-              </section>
-              <section v-else-if="welcome" class="role__block">
-                <h2 class="eyebrow">{{ $t("card.welcome") }}</h2>
-                <!-- 開場白是角色開口說的第一句：畫成它在說話，跟作者裝修頁的氣泡同一種語言。
-                     這裡只露出開頭一段（長的開場白可以有好幾千像素），其餘收在「展開」後面，主頁留位置給評論 -->
-                <ClampBlock :max="welcomeMax" :more-label="$t('card.welcomeMore')" :less-label="$t('card.welcomeLess')">
-                  <div class="role__welcome">
-                    <img v-if="hasArt" :src="card.avatarUrl!" alt="" class="role__welcome-face" />
-                    <span v-else class="role__welcome-face mono" :style="{ '--h': hue }">{{ [...shownName][0] }}</span>
-                    <!-- HTML 版先在純文字底下量好高度再換上，不用預設高度佔位再一路長高 -->
-                    <div class="role__bubble-slot">
-                      <HtmlCardFrame v-if="welcomeHtml" class="role__bubble role__bubble--card" :class="{ 'role__bubble--pending': !welcomeSized }" :html="welcomeHtml" :title="$t('card.welcome')" @sized="welcomeSized = true" />
-                      <blockquote v-if="!welcomeHtml || !welcomeSized" class="role__bubble">{{ welcome }}</blockquote>
-                    </div>
-                  </div>
-                </ClampBlock>
-              </section>
-            </template>
-            <!-- 評論摘要：作者裝修過的主頁也放，玩家開卡前最想看的除了開場白就是別人怎麼說 -->
-            <CommentPreview v-if="showComments" :key="card.id" :card-id="card.id" @open="tab = 'comments'" @count="commentCount = $event" />
-          </div>
-
-          <!-- 評論首次開啟才載入，之後以 v-show 保留；作者關掉評論就整個不掛 -->
-          <div v-if="showComments" v-show="tab === 'comments'" id="panel-comments" class="panel role__comments" role="tabpanel" aria-labelledby="tab-comments">
-            <CommentPanel v-if="commentsOpened" :card-id="card.id" :role-id="card.roleId" @count="commentCount = $event" />
-          </div>
-
-          <section v-if="more.length" class="role__more">
-            <h2 class="role__more-title">
-              <RouterLink v-if="card.author.handle" :to="lp(`/authors/${card.author.handle}`)">{{ $t("card.moreBy", { name: card.author.name }) }}</RouterLink>
-              <template v-else>{{ $t("card.moreBy", { name: card.author.name }) }}</template>
-            </h2>
-            <CardGrid :cards="more" show-zone />
+      <div class="role__body" :aria-busy="revalidating || undefined">
+        <div class="role__main">
+          <!-- 介紹：沒有「介紹」標題（看到內容就知道），頂端跟右欄第一塊對齊 -->
+          <section v-if="detailsPending && !hasIntro" class="role__intro-wrap" aria-hidden="true">
+            <div class="ghost role__intro-ghost" />
           </section>
-        </section>
+          <section v-else-if="hasIntro" class="role__intro-wrap" aria-labelledby="intro-h" data-tour="card-intro">
+            <h2 id="intro-h" class="sr-only">{{ $t("card.about") }}</h2>
+            <div ref="introBox" class="role__intro panel" :class="{ 'role__intro--clamped': introLong && !introOpen }" :style="{ '--intro-max': `${INTRO_MAX}px` }">
+              <!-- eslint-disable-next-line vue/no-v-html -- 介紹只收 Markdown，不收內嵌 HTML（見 lib/card-readme.ts） -->
+              <div v-if="readmeHtml" class="readme" v-html="readmeHtml" />
+              <p v-else class="role__text">{{ card.summary }}</p>
+              <div v-if="introLong && !introOpen" class="role__intro-fade">
+                <button type="button" class="btn" @click="introOpen = true">{{ $t("card.aboutMore") }}</button>
+              </div>
+            </div>
+          </section>
+
+          <!-- 評論：接在介紹下面；作者關掉評論、或卡還沒上榜就不放 -->
+          <section v-if="showComments && listed" id="comments" class="role__comments-wrap" aria-labelledby="comments-h">
+            <h2 id="comments-h" class="role__h2">{{ $t("card.tab.comments") }}<span v-if="commentCount" class="role__h2-n">{{ commentCount }}</span></h2>
+            <div class="panel role__comments">
+              <CommentPanel v-if="confirmed || card.rating !== 'R'" :key="card.id" :card-id="card.id" :role-id="card.roleId" :my-score="score?.mine ?? null" @count="commentCount = $event" />
+            </div>
+          </section>
+        </div>
+
+        <aside ref="side" class="role__side">
+          <CardScore v-if="listed && score" id="score" class="role__score-box" :score="score" :own="own" :busy="scoreBusy" @rate="rate" @write="writeReview" />
+
+          <section class="panel role__info" :aria-label="$t('card.info')">
+            <dl class="role__stats">
+              <div class="stat"><dt>{{ $t("card.stat.talk") }}</dt><dd>{{ compact(card.talkNum) }}</dd></div>
+              <div class="stat"><dt>{{ $t("card.stat.follow") }}</dt><dd>{{ compact(card.favoriteCount ?? 0) }}</dd></div>
+              <div class="stat"><dt>{{ $t("card.stat.trending") }}</dt><dd :class="{ up: card.trending > 0 }">{{ card.trending > 0 ? `+${compact(card.trending)}` : "—" }}</dd></div>
+            </dl>
+            <dl class="role__kv">
+              <template v-if="card.num">
+                <dt>{{ $t("card.id") }}</dt>
+                <dd>
+                  <button type="button" class="role__cid" :title="$t('card.copyId')" @click="copyId">
+                    <code class="mono">#{{ card.num }}</code>
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4" /><path d="M10.5 5.5V3.5a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2" fill="none" stroke="currentColor" stroke-width="1.4" /></svg>
+                  </button>
+                </dd>
+              </template>
+              <dt>{{ $t("card.language") }}</dt><dd>{{ zoneLabel(card.zone) }}</dd>
+              <template v-if="editedAt">
+                <dt>{{ $t("card.contentUpdated") }}</dt><dd :title="dateTime(editedAt)">{{ dateOnly(Math.floor(editedAt / 1000)) }}</dd>
+              </template>
+            </dl>
+            <div class="role__links">
+              <RouterLink :to="lp(`/me?reportCard=${encodeURIComponent(String(card.num || card.id))}`)">{{ $t("community.reportCard") }}</RouterLink>
+              <!-- 加到主畫面：能裝網頁的瀏覽器才出現；成人卡要過了門（有鑰匙）才有 -->
+              <button v-if="installable && (card.rating !== 'R' || card.shortcutKey)" type="button" @click="addToHome">{{ $t("card.addHome") }}</button>
+            </div>
+          </section>
+
+          <section v-if="more.length" class="panel role__more" aria-labelledby="more-h">
+            <h2 id="more-h" class="role__more-title">
+              <span>{{ $t("card.moreBy", { name: card.author.name }) }}</span>
+              <RouterLink v-if="card.author.handle" :to="lp(`/authors/${card.author.handle}`)">{{ $t("card.moreAll") }}</RouterLink>
+            </h2>
+            <RouterLink v-for="m in more" :key="m.id" :to="lp(`/cards/${m.num ?? m.id}`)" class="role__mini">
+              <img v-if="m.avatarUrl" :src="m.avatarUrl" alt="" loading="lazy" />
+              <span v-else class="role__mini-void" :style="{ background: `hsl(${hueFrom(m.name)} 40% 62%)` }" />
+              <span class="role__mini-text">
+                <strong>{{ displayName(m.name, locale) }}</strong>
+                <span class="subtle">{{ m.summary }}</span>
+              </span>
+            </RouterLink>
+          </section>
+        </aside>
       </div>
     </template>
 
@@ -449,28 +494,35 @@ watch(() => session.profile?.showNsfw, (now, before) => {
   pointer-events: none;
 }
 
-.role__layout {
-  position: relative; z-index: 1;
-  display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: var(--s-5);
-  align-items: start;
+/* 橫幅滿版：上半保留原圖色彩（日間也不刷白），下緣才淡進頁面底色；文字一律排在橫幅之後，只有封面壓在圖上 */
+.role__banner {
+  --banner-h: 320px;
+  position: absolute; z-index: 0; top: calc(-1 * var(--s-5)); left: 50%; width: 100vw; height: var(--banner-h);
+  transform: translateX(-50%); overflow: hidden; pointer-events: none;
+}
+.role__banner img { width: 100%; height: 100%; object-fit: cover; object-position: center 20%; }
+.role__banner::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(to bottom, transparent 0%, transparent 45%, color-mix(in srgb, var(--bg) 70%, transparent) 75%, var(--bg) 97%);
 }
 
-/* 左欄：這張卡的「身分證」——捲動時留在原地。
-   比視窗高時 top 變成負值：先跟著頁面捲到底部露出來，再貼住（--side-h 由頁面量好寫進來） */
-.role__side {
-  position: sticky;
-  top: min(calc(var(--header-h) + var(--s-4)), calc(100vh - var(--side-h, 0px) - var(--s-4)));
-  top: min(calc(var(--header-h) + var(--s-4)), calc(100dvh - var(--side-h, 0px) - var(--s-4)));
-  display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0;
-  gap: var(--s-4); padding: var(--s-4);
-  background: color-mix(in srgb, var(--surface) 90%, transparent);
-  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+.role__own { position: relative; z-index: 1; margin-bottom: var(--s-4); }
+
+/* ── 身分列 ── */
+/* 疊在下半部之上：手機的「開始對話」固定在畫面底部，是身分列裡的元素，要蓋得過捲上來的評論 */
+.role__hero {
+  position: relative; z-index: 2;
+  display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: var(--s-6); align-items: start;
+  margin-top: 170px;
 }
-.role__side--ghost { background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
-.role__art { position: relative; aspect-ratio: 3 / 4; border-radius: var(--r-md); overflow: hidden; background: var(--surface-2); box-shadow: 0 0 0 1px var(--line); }
+.role__hero > .role__id { padding-top: 106px; }
+.role__hero--plain { margin-top: 0; }
+.role__hero--plain > .role__id { padding-top: var(--s-2); }
+
+.role__art { position: relative; aspect-ratio: 3 / 4; border-radius: var(--r-lg); overflow: hidden; background: var(--surface-2); box-shadow: 0 0 0 1px var(--line), var(--shadow-md); }
 .role__art img { width: 100%; height: 100%; object-fit: cover; }
 .role__featured {
-  position: absolute; left: 8px; bottom: 8px; max-width: calc(100% - 16px);
+  position: absolute; left: 8px; top: 8px; max-width: calc(100% - 16px);
   display: inline-flex; align-items: center; height: 20px; padding: 0 7px;
   border-radius: 4px; background: var(--accent); color: #fff;
   font-size: 11px; font-weight: 700; letter-spacing: 0.02em; line-height: 1;
@@ -479,83 +531,150 @@ watch(() => session.profile?.showNsfw, (now, before) => {
 .role__void { display: grid; place-items: center; height: 100%; }
 .role__void span { font-size: 80px; font-weight: 600; color: rgba(255, 255, 255, 0.9); }
 
-.role__id { display: grid; min-width: 0; overflow-wrap: anywhere; gap: 6px; container-type: inline-size; }
+.role__id { display: grid; gap: var(--s-3); min-width: 0; overflow-wrap: anywhere; container-type: inline-size; align-content: start; }
 /* 名字與榜單卡片同一套規則（見 title-layout.ts）：留作者的換行、先在空格換行 */
-.role__name { font-size: 22px; line-height: 1.25; white-space: pre-line; overflow-wrap: break-word; }
-.role__name--designed { text-align: center; word-break: keep-all; font-size: clamp(16px, 100cqi / var(--title-em, 1), 22px); }
-.role__by {
-  display: flex; align-items: center; gap: 10px;
-  margin-top: 4px; padding: 8px 10px; border-radius: var(--r-md);
-  background: var(--surface-2);
-  transition: background var(--dur) var(--ease);
+.role__name { font-size: 30px; line-height: 1.25; white-space: pre-line; overflow-wrap: break-word; text-wrap: balance; }
+.role__name--designed { word-break: keep-all; font-size: clamp(18px, 100cqi / var(--title-em, 1), 30px); }
+.role__meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-4); font-size: 13.5px; }
+.role__by { display: inline-flex; align-items: center; gap: 8px; min-width: 0; font-weight: 600; color: var(--text); }
+a.role__by:hover { color: var(--accent-text); }
+.role__by :deep(img), .role__by :deep(.role__by-avatar) { width: 24px; height: 24px; border-radius: var(--r-pill); object-fit: cover; flex: none; font-size: 11px; }
+.role__score { display: inline-flex; align-items: center; gap: 5px; color: var(--text); }
+.role__score-star { color: var(--gold); }
+.role__tagline {
+  margin: 0; max-width: 62ch; font-size: 16px; line-height: 1.65; color: var(--text-2); white-space: pre-line;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
 }
-.role__by:hover { background: var(--accent-soft); }
-.role__by img, .role__by-void { width: 32px; height: 32px; border-radius: var(--r-pill); object-fit: cover; flex: none; font-size: 13px; }
-.role__by-text { display: grid; line-height: 1.3; min-width: 0; }
-.role__by-text strong { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.role__by-arrow { width: 16px; height: 16px; margin-left: auto; color: var(--text-3); flex: none; transition: transform var(--dur) var(--ease), color var(--dur) var(--ease); }
-.role__by:hover .role__by-arrow { transform: translateX(3px); color: var(--accent-text); }
 
-/* 永久卡號：整列可複製，觸控區域沿用共用按鈕高度。 */
-.role__cid {
-  display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; min-height: var(--h-lg);
-  margin: 0; padding: 6px 10px; border: 0; border-radius: var(--r-md);
-  background: transparent; color: var(--text-2); font: inherit; text-align: left; cursor: pointer;
-  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
-}
-.role__cid:hover { background: var(--surface-2); color: var(--text); }
-.role__cid-label { flex: none; font-size: 12px; color: var(--text-3); }
-.role__cid-value { flex: 1; min-width: 0; font-size: 12px; overflow-wrap: anywhere; line-height: 1.4; }
-.role__cid svg { width: 14px; height: 14px; flex: none; color: var(--text-3); }
-.role__cid:hover svg { color: var(--accent-text); }
-.role__own { position: relative; z-index: 1; margin-bottom: var(--s-4); display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-3); align-items: center; }
-.role__own a { color: var(--accent-text); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
-
-.role__stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-2); padding: var(--s-3) 0; box-shadow: 0 1px 0 var(--line), 0 -1px 0 var(--line); }
-.role__stats .stat dd { font-size: 16px; }
-.role__stats .stat dd.up { color: var(--accent-text); }
-
-.role__tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.role__fandom { margin: 0; font-size: 13px; }
-.role__fandom-link { color: var(--text); font-weight: 600; text-decoration: underline dashed; text-underline-offset: 3px; }
 .role__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
-.role__cta { flex: 1; min-width: 0; }
-.role__via { margin: 6px 0 0; }
-.role__install { justify-self: start; gap: 6px; margin-top: 2px; }
-.role__install svg { width: 16px; height: 16px; }
-.role__foot { margin: 2px 0 0; line-height: 1.5; }
+.role__cta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.role__platforms { width: auto; min-width: 200px; }
+.role__platforms :deep(.btn--primary) { min-width: 200px; }
+.role__grade { display: flex; }
+.role__tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.role__fandom { color: var(--text); box-shadow: inset 0 0 0 1px var(--line-strong); background: transparent; }
 
-.role__main { display: grid; gap: var(--s-3); min-width: 0; align-content: start; }
-.role__tabs { width: fit-content; }
-.role__tab-n { margin-left: 5px; font-size: 11.5px; color: var(--text-3); font-variant-numeric: tabular-nums; }
-
-.role__home { display: grid; gap: var(--s-5); padding: var(--s-5); }
-.role__block { display: grid; gap: var(--s-2); }
-.role__text { max-width: 64ch; font-size: 14.5px; line-height: 1.8; white-space: pre-wrap; }
-.role__welcome { display: flex; gap: 10px; align-items: flex-start; max-width: 64ch; }
-.role__welcome-face { width: 34px; height: 34px; border-radius: var(--r-pill); object-fit: cover; flex: none; font-size: 14px; }
-.role__bubble {
-  margin: 0; padding: var(--s-3) var(--s-4); min-width: 0;
-  border-radius: 4px 16px 16px 16px; background: var(--surface-2);
-  font-size: 14.5px; line-height: 1.8; white-space: pre-wrap;
+/* ── 下半：左欄介紹＋評論，右欄黏住 ── */
+.role__body {
+  position: relative; z-index: 1;
+  display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: var(--s-6); align-items: start;
+  margin-top: var(--s-6);
 }
-/* HTML 卡自己帶底色與內距，氣泡只留形狀 */
-.role__bubble--card { padding: 0; background: transparent; white-space: normal; overflow: hidden; }
-.role__welcome-ghost { max-width: 64ch; border-radius: var(--r-lg); }
-.role__bubble-slot { position: relative; flex: 1; min-width: 0; display: grid; justify-items: start; }
-.role__bubble-slot > .role__bubble--card { width: 100%; }
-.role__bubble--pending { position: absolute; inset: 0 0 auto; visibility: hidden; }
+.role__main { display: grid; gap: var(--s-6); min-width: 0; align-content: start; }
+.role__side {
+  display: grid; gap: var(--s-4); min-width: 0;
+  position: sticky;
+  top: min(calc(var(--header-h) + var(--s-4)), calc(100vh - var(--side-h, 0px) - var(--s-4)));
+  top: min(calc(var(--header-h) + var(--s-4)), calc(100dvh - var(--side-h, 0px) - var(--s-4)));
+}
+
+.role__intro { position: relative; padding: var(--s-5) var(--s-6); overflow: hidden; }
+.role__intro--clamped { max-height: var(--intro-max); }
+.role__intro-fade {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 160px;
+  display: flex; align-items: flex-end; justify-content: center; padding-bottom: var(--s-4);
+  background: linear-gradient(to bottom, transparent, var(--surface) 70%);
+}
+.role__intro-ghost { height: 280px; border-radius: var(--r-lg); }
+.role__text { margin: 0; max-width: 68ch; font-size: 15px; line-height: 1.8; white-space: pre-wrap; }
+
+/* 作者寫的 Markdown：標題已經降兩級（h3 起），顏色全走設計變數，日夜模式一起換 */
+.readme { max-width: 72ch; font-size: 15px; line-height: 1.8; overflow-wrap: anywhere; }
+.readme :deep(> :first-child) { margin-top: 0; }
+.readme :deep(> :last-child) { margin-bottom: 0; }
+.readme :deep(p) { margin: 0.6em 0; }
+.readme :deep(h3) { margin: 1.4em 0 0.5em; padding-bottom: 0.3em; font-size: 20px; box-shadow: 0 1px 0 var(--line); }
+.readme :deep(h4) { margin: 1.2em 0 0.4em; font-size: 17px; }
+.readme :deep(h5), .readme :deep(h6) { margin: 1em 0 0.3em; font-size: 15px; }
+.readme :deep(ul), .readme :deep(ol) { margin: 0.5em 0; padding-left: 1.4em; }
+.readme :deep(a) { color: var(--accent-text); text-decoration: underline; text-underline-offset: 3px; }
+.readme :deep(img) { max-width: 100%; height: auto; border-radius: var(--r-md); }
+.readme :deep(blockquote) { margin: 1em 0; padding: 0.2em 1em; border-left: 3px solid var(--accent); border-radius: 0 var(--r-sm) var(--r-sm) 0; background: var(--surface-2); color: var(--text-2); }
+.readme :deep(code) { padding: 1px 6px; border-radius: 4px; background: var(--surface-2); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.88em; }
+.readme :deep(pre) { overflow-x: auto; padding: var(--s-3) var(--s-4); border-radius: var(--r-md); background: var(--surface-2); }
+.readme :deep(pre code) { padding: 0; background: none; }
+.readme :deep(hr) { height: 1px; margin: 1.5em 0; border: 0; background: var(--line); }
+.readme :deep(.readme__table) { margin: 1em 0; overflow-x: auto; }
+.readme :deep(table) { width: 100%; border-collapse: collapse; font-size: 14px; }
+.readme :deep(th), .readme :deep(td) { padding: 8px 12px; text-align: left; box-shadow: inset 0 -1px 0 var(--line); }
+.readme :deep(th) { color: var(--text-2); font-weight: 600; }
+
+.role__h2 { display: flex; align-items: baseline; gap: 8px; margin: 0 0 var(--s-3); font-size: 18px; }
+.role__h2-n { font-size: 13px; font-weight: 400; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .role__comments { padding: var(--s-5); }
+#comments { scroll-margin-top: calc(var(--header-h) + var(--s-4)); }
 
-.role__more { display: grid; gap: var(--s-3); margin-top: var(--s-3); }
-.role__more-title { font-size: 14px; font-weight: 600; }
-.role__more-title a:hover { color: var(--accent-text); }
+.role__info { display: grid; gap: var(--s-3); padding: var(--s-4); }
+.role__stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-2); margin: 0; padding-bottom: var(--s-3); box-shadow: 0 1px 0 var(--line); text-align: center; }
+.role__stats .stat dd { font-size: 17px; }
+.role__stats .stat dd.up { color: var(--accent-text); }
+.role__kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px var(--s-4); margin: 0; font-size: 13.5px; }
+.role__kv dt { color: var(--text-3); }
+.role__kv dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.role__cid { display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; background: none; color: var(--text); font: inherit; cursor: pointer; }
+.role__cid code { font-size: 12.5px; }
+.role__cid svg { width: 14px; height: 14px; color: var(--text-3); }
+.role__cid:hover svg { color: var(--accent-text); }
+.role__links { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-4); padding-top: var(--s-3); box-shadow: 0 -1px 0 var(--line); font-size: 13px; }
+.role__links a, .role__links button { padding: 0; border: 0; background: none; font: inherit; color: var(--text-2); cursor: pointer; }
+.role__links a:hover, .role__links button:hover { color: var(--accent-text); }
 
+.role__more { display: grid; gap: 2px; padding: var(--s-4) var(--s-3); }
+.role__more-title { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s-2); margin: 0 var(--s-1) var(--s-2); font-size: 13px; font-weight: 600; color: var(--text-2); }
+.role__more-title span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.role__more-title a { flex: none; font-size: 12.5px; color: var(--accent-text); }
+.role__mini { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: var(--s-3); align-items: center; padding: 6px; border-radius: var(--r-md); color: var(--text); transition: background var(--dur) var(--ease); }
+.role__mini:hover { background: var(--surface-2); }
+.role__mini img, .role__mini-void { width: 44px; aspect-ratio: 3 / 4; border-radius: var(--r-sm); object-fit: cover; }
+.role__mini-text { display: grid; min-width: 0; }
+.role__mini-text strong, .role__mini-text span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.role__mini-text strong { font-size: 13.5px; }
+.role__mini-text span { font-size: 12px; }
+
+/* ── 手機：單欄，介紹 → 評分 → 評論 → 卡片資訊 → 其他作品；開始對話固定在畫面最底部 ── */
 @media (max-width: 820px) {
-  .role__layout { grid-template-columns: 1fr; }
-  .role__side { position: static; grid-template-columns: 132px minmax(0, 1fr); align-items: start; column-gap: var(--s-4); }
-  .role__art { grid-row: 1 / span 3; }
-  .role__stats, .role__tags, .role__platforms, .role__actions, .role__install, .role__side > .library-toggle { grid-column: 1 / -1; }
-  .role__home, .role__comments { padding: var(--s-4); }
+  .role { padding-bottom: calc(var(--s-8) + 72px); }
+  .role__banner { --banner-h: 230px; top: calc(-1 * var(--s-4)); }
+  .role__hero {
+    grid-template-columns: 104px minmax(0, 1fr); column-gap: var(--s-4); row-gap: var(--s-3);
+    grid-template-areas: "art name" "meta meta" "tagline tagline" "grade grade" "owner owner" "tags tags";
+    align-items: end; margin-top: 120px;
+  }
+  .role__hero--plain { margin-top: 0; }
+  .role__hero > .role__id { display: contents; }
+  .role__art { grid-area: art; }
+  .role__name { grid-area: name; font-size: 21px; align-self: end; }
+  .role__name--designed { font-size: clamp(15px, 100cqi / var(--title-em, 1), 21px); }
+  .role__meta { grid-area: meta; }
+  .role__tagline { grid-area: tagline; font-size: 15px; }
+  /* 動作列整條搬到畫面底部（收藏、分享、開始對話），身分列裡不留一行空的 */
+  .role__actions { display: contents; }
+  .role__grade { grid-area: grade; }
+  .role__hero :deep(.card-owner-actions) { grid-area: owner; }
+  .role__tags { grid-area: tags; }
+  .role__cta {
+    position: fixed; z-index: 15; left: 0; right: 0; bottom: 0;
+    flex-wrap: nowrap; padding: 12px var(--s-4) calc(12px + env(safe-area-inset-bottom, 0px));
+    background: color-mix(in srgb, var(--bg) 84%, transparent);
+    backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2);
+    box-shadow: 0 -1px 0 var(--line);
+  }
+  .role__cta > .role__platforms { order: 2; flex: 1; min-width: 0; }
+  .role__cta > .role__platforms :deep(.btn--primary) { width: 100%; min-width: 0; }
+  .role__cta > .library-toggle { order: 1; flex: none; }
+  .role__cta > .sh { order: 1; }
+
+  .role__body { grid-template-columns: minmax(0, 1fr); grid-template-areas: "intro" "score" "comments" "info" "more"; gap: var(--s-5); margin-top: var(--s-5); }
+  .role__main, .role__side { display: contents; }
+  .role__intro-wrap { grid-area: intro; }
+  .role__score-box { grid-area: score; }
+  .role__comments-wrap { grid-area: comments; }
+  .role__info { grid-area: info; }
+  .role__more { grid-area: more; }
+  .role__intro { padding: var(--s-4); }
+  .role__comments { padding: var(--s-4); }
+}
+@media (max-width: 400px) {
+  .role__hero { grid-template-columns: 92px minmax(0, 1fr); }
 }
 </style>

@@ -13,7 +13,7 @@ import { track } from "@/lib/track";
 import { loginPath } from "@/lib/login-return";
 
 /** 本站的卡 id：留言掛在本站的卡上，不看這張卡住在哪一家供應商。roleId 只給埋點用。 */
-const props = defineProps<{ cardId: string; roleId: string }>();
+const props = defineProps<{ cardId: string; roleId: string; myScore?: number | null }>();
 const emit = defineEmits<{ count: [n: number] }>();
 
 const session = useSession();
@@ -37,6 +37,12 @@ const replyDraft = ref("");
 const expanded = ref<Record<string, { replies: Comment[]; page: number; hasMore: boolean }>>({});
 
 const MAX = 500;
+
+// 自己剛改了星數：自己那幾則留言上的星數跟著換，不必重讀整串
+watch(() => props.myScore, (score) => {
+  if (score === undefined) return;
+  for (const c of comments.value) if (c.isOwner) c.score = score;
+});
 
 async function tokenOrNull() {
   return session.me ? await session.accessToken() : null;
@@ -146,7 +152,7 @@ watch([() => props.cardId, () => session.me?.accountNumId], () => load(true), { 
       <div class="cmt__box">
         <textarea v-model="draft" class="input cmt__input" :maxlength="MAX" :placeholder="$t('comment.placeholder')" rows="2" />
         <div class="cmt__box-foot">
-          <span class="subtle">{{ draft.length }}/{{ MAX }}</span>
+          <span class="subtle">{{ draft.length }}/{{ MAX }}<template v-if="myScore"> · {{ $t("score.attached", { n: myScore }) }}</template></span>
           <button class="btn btn--primary btn--sm" :disabled="sending || !draft.trim()" @click="submit()">{{ $t("comment.submit") }}</button>
         </div>
       </div>
@@ -167,6 +173,7 @@ watch([() => props.cardId, () => session.me?.accountNumId], () => load(true), { 
             <CommunityName :handle="c.handle" :name="c.accountNickName" class="cmt__name" />
             <span v-if="c.isCreator" class="cmt__badge">{{ $t("comment.creator") }}</span>
             <span v-if="c.isPinned" class="cmt__badge cmt__badge--pin">{{ $t("comment.pinned") }}</span>
+            <span v-if="c.score" class="cmt__stars" role="img" :aria-label="$t('score.stars', { n: c.score })">{{ "★".repeat(c.score) }}<span class="cmt__stars-off">{{ "★".repeat(5 - c.score) }}</span></span>
             <span class="subtle">{{ relativeTime(Date.parse(c.createTime)) }}</span>
           </div>
           <p class="cmt__text">{{ c.content }}</p>
@@ -256,4 +263,6 @@ a.cmt__name:hover { color: var(--accent-text); }
 .cmt__reply { display: flex; gap: var(--s-2); }
 .cmt__more { width: fit-content; margin-top: 4px; padding: 0; background: none; border: 0; font-size: 12.5px; font-weight: 500; color: var(--accent-text); cursor: pointer; }
 .cmt__load { justify-self: center; }
+.cmt__stars { color: var(--gold); font-size: 12px; letter-spacing: 1px; line-height: 1; }
+.cmt__stars-off { color: var(--border-strong); }
 </style>

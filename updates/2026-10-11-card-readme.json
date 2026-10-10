@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/mine",
+  "title": {
+    "zh-Hant": "卡片新增 Markdown 介紹，顯示在卡片頁上。",
+    "zh-Hans": "卡片新增 Markdown 介绍，显示在卡片页上。",
+    "en": "Cards now have a Markdown About section shown on the card page.",
+    "ja": "カードに Markdown の紹介欄を追加、カードページに表示。",
+    "ko": "카드에 Markdown 소개가 추가되어 카드 페이지에 표시됩니다."
+  },
+  "body": {
+    "zh-Hant": "簡介改為首頁卡片上的一句話，玩法、角色與圖片寫在介紹裡。",
+    "zh-Hans": "简介改为首页卡片上的一句话，玩法、角色与图片写在介绍里。",
+    "en": "The summary becomes the one line on board tiles, and how to play, characters and images go in About.",
+    "ja": "概要はトップのカードに出るひとことになり、遊び方やキャラクター、画像は紹介に書けます。",
+    "ko": "요약은 홈 카드의 한 줄이 되고, 플레이 방법과 캐릭터, 이미지는 소개에 작성합니다."
+  }
+}

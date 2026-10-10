@@ -21,7 +21,6 @@ vi.mock("../src/lib/oauth", () => ({
 vi.mock("../src/lib/track", () => ({ track: () => {}, currentSurface: () => "card", setSurface: () => {} }));
 vi.mock("moonstage/stage", () => ({}));
 vi.mock("moonstage/stage.css", () => ({}));
-vi.mock("../src/lib/html-card-frame", () => ({ buildSrcdoc: () => "", SIZE_MESSAGE: "hc-card-size" }));
 
 import CardPage from "../src/pages/CardPage.vue";
 import { fetchBoard } from "../src/lib/api";
@@ -109,15 +108,11 @@ describe("點榜單上的卡：立刻有內容", () => {
   });
 });
 
-it("loads the full comments panel only on first open and preserves it across tabs", async () => {
+it("評論直接排在頁面上，不藏在分頁裡；進頁只讀一次", async () => {
   await fetchBoard(); const root = await mountCard("/cards/role-abc");
-  // 主頁的評論摘要讀一次第一頁；完整的評論區要到打開分頁才載
+  expect(root.querySelector("#comments")).not.toBeNull();
+  expect(root.querySelector('[role="tablist"]')).toBeNull();
   expect(commentRequests).toBe(1);
-  (root.querySelector("#tab-comments") as HTMLButtonElement).click(); await flush();
-  expect(commentRequests).toBe(2);
-  (root.querySelector("#tab-home") as HTMLButtonElement).click(); await flush();
-  (root.querySelector("#tab-comments") as HTMLButtonElement).click(); await flush();
-  expect(commentRequests).toBe(2);
 });
 
 it('discovers play services by the community card ID, independently of its hosted role ID', async () => {
@@ -142,52 +137,67 @@ it('offers the owner a provider-scoped editor for the draft behind a neutral det
   expect(root.querySelector('a[href*="/edit?"]')).toBeNull();
 });
 
-describe("開場白還在路上", () => {
-  it("先照收合後的高度占位，開場白到了換上；下面的評論不會被整塊往下推", async () => {
+function detailFetch(detail: Promise<Response>, card = CARD) {
+  return (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+    if (url.includes("/role/detail")) return detail;
+    if (url.includes("/v1/cards?")) return Promise.resolve(new Response(JSON.stringify({ items: [{ ...card, provider: "harbor" }], total: 1, hasNext: false, limit: 24, offset: 0, sort: "hot" }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    return fakeFetch(input, init);
+  };
+}
+const ok = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+
+describe("作者寫的介紹", () => {
+  it("詳情到之前先畫骨架；到了照 Markdown 畫，不顯示開場白", async () => {
     let answer!: (r: Response) => void;
-    vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
-      if (url.includes("/role/detail")) return new Promise<Response>((r) => { answer = r; });
-      if (url.includes("/v1/cards?")) return Promise.resolve(new Response(JSON.stringify({ items: [{ ...CARD, provider: "harbor" }], total: 1, hasNext: false, limit: 24, offset: 0, sort: "hot" }), { status: 200, headers: { "Content-Type": "application/json" } }));
-      return fakeFetch(input, init);
-    });
+    vi.stubGlobal("fetch", detailFetch(new Promise<Response>((r) => { answer = r; })));
     await fetchBoard();
     const root = await mountCard("/cards/role-abc");
-    const ghost = root.querySelector<HTMLElement>(".role__welcome-ghost");
-    expect(ghost, "開場白到之前要有占位").not.toBeNull();
-    expect(ghost!.style.height).toContain("px");
-    // 評論摘要已經排在占位下面，不必等開場白
-    expect(root.querySelector(".cprev")).not.toBeNull();
-    answer(new Response(JSON.stringify({ roleWelcome: "雨夜，你推開了偵探社的門。" }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    expect(root.querySelector(".role__intro-ghost"), "介紹到之前要有占位").not.toBeNull();
+    // 評論不必等介紹
+    expect(root.querySelector("#comments")).not.toBeNull();
+    answer(ok({ roleReadme: "# 怎麼玩\n\n每回合**選一個**線索。", roleWelcome: "雨夜，你推開了偵探社的門。" }));
     await flush();
-    expect(root.querySelector(".role__welcome-ghost")).toBeNull();
-    expect(root.textContent).toContain("雨夜，你推開了偵探社的門。");
+    expect(root.querySelector(".role__intro-ghost")).toBeNull();
+    expect(root.querySelector(".readme h3")?.textContent).toBe("怎麼玩");
+    expect(root.querySelector(".readme strong")?.textContent).toBe("選一個");
+    expect(root.textContent).not.toContain("雨夜，你推開了偵探社的門。");
   });
 
-  it("讀不到開場白：占位收掉，不留一塊空白", async () => {
+  it("沒寫介紹、簡介又短：不另外放一塊，簡介只在頁首出現一次", async () => {
+    vi.stubGlobal("fetch", detailFetch(Promise.resolve(ok({ roleReadme: "" }))));
     await fetchBoard();
     const root = await mountCard("/cards/role-abc");
-    expect(root.querySelector(".role__welcome-ghost")).toBeNull();
+    expect(root.querySelector(".role__intro-ghost")).toBeNull();
+    expect(root.querySelector("[data-tour='card-intro']")).toBeNull();
+    expect(root.textContent!.split("民國背景推理").length - 1).toBe(1);
+  });
+
+  it("沒寫介紹、簡介很長（舊卡把整段介紹塞在簡介裡）：把簡介當介紹顯示", async () => {
+    const long = "雨夜的上海，".repeat(30);
+    vi.stubGlobal("fetch", detailFetch(Promise.resolve(ok({})), { ...CARD, summary: long }));
+    await fetchBoard();
+    const root = await mountCard("/cards/role-abc");
+    expect(root.querySelector("[data-tour='card-intro'] .role__text")?.textContent).toBe(long);
   });
 });
 
 /**
- * 左欄比視窗高時，開始對話不能要捲到右欄底才出現（玩家回報 2026-09-27）。
- * 主行動排在名字與作者正下方；左欄量好自己的高度交給 CSS，放不下就先跟著頁面捲再貼住。
+ * 開始對話一定在第一屏（owner 2026-10-11）：排在身分列裡、名字與作者下面，不在可以很長的下半部。
+ * 右欄量好自己的高度交給 CSS，放不下就先跟著頁面捲再貼住。
  */
-describe("左欄的主行動搆得到", () => {
-  it("遊玩區排在統計與標籤之前，左欄的高度寫進 --side-h", async () => {
+describe("開始對話搆得到", () => {
+  it("遊玩區在身分列裡、分級標示緊跟在後；右欄的高度寫進 --side-h", async () => {
     let resize: (() => void) | null = null;
     vi.stubGlobal("ResizeObserver", class { constructor(cb: () => void) { resize = cb; } observe() {} disconnect() {} });
     await fetchBoard();
     const root = await mountCard("/cards/role-abc");
+    const hero = root.querySelector<HTMLElement>(".role__hero")!;
+    expect(hero.querySelector(".role__platforms")).not.toBeNull();
+    expect(root.querySelector(".role__body .role__platforms")).toBeNull();
     const side = root.querySelector<HTMLElement>(".role__side")!;
-    const order = [...side.children].map((c) => c.className);
-    const at = (name: string) => order.findIndex((c) => c.includes(name));
-    expect(at("role__platforms")).toBeGreaterThan(at("role__id"));
-    expect(at("role__platforms")).toBeLessThan(at("role__stats"));
     Object.defineProperty(side, "offsetHeight", { configurable: true, get: () => 1240 });
-    expect(resize, "左欄要被量高度").not.toBeNull();
+    expect(resize, "右欄要被量高度").not.toBeNull();
     resize!();
     expect(side.style.getPropertyValue("--side-h")).toBe("1240px");
   });

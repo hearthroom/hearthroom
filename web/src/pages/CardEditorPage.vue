@@ -363,8 +363,9 @@ const missing = computed(() => missingRequired(draft.value));
 const canPublish = computed(() => !isNew.value && !missing.value.length && !dirty.value);
 
 /** 有字數上限的欄位：欄位、標籤文案鍵、所在分區。存檔前逐一對上限，超過就點名。 */
-const FIELD_LIMIT_KEYS: Array<["roleDesc" | "roleDetailDesc" | "roleWelcome" | "roleOutputContract" | "jailbreak", string, Section]> = [
+const FIELD_LIMIT_KEYS: Array<["roleDesc" | "roleReadme" | "roleDetailDesc" | "roleWelcome" | "roleOutputContract" | "jailbreak", string, Section]> = [
   ["roleDesc", "editor.summary", "basic"],
+  ["roleReadme", "editor.readme", "basic"],
   ["roleDetailDesc", "editor.detail", "persona"],
   ["roleWelcome", "editor.welcome", "dialogue"],
   ["roleOutputContract", "editor.contract", "persona"],
@@ -1072,8 +1073,11 @@ async function exportCard(format: "png" | "json") {
             <span class="subtle">{{ $t("editor.language.scriptHint") }}</span>
           </div>
 
-          <FieldText id="f-desc" v-model="draft.roleDesc" :label="$t('editor.summary')" :rows="3"
+          <FieldText id="f-desc" v-model="draft.roleDesc" :label="$t('editor.summary')" :rows="2"
                      :max="limits.roleDesc" :hint="$t('edit.summary.hint')" />
+          <!-- 介紹：卡片頁上的 README（owner 2026-10-11）。只給訪客看，不送進對話 -->
+          <FieldText id="f-readme" v-model="draft.roleReadme" :label="$t('editor.readme')" :rows="10"
+                     :max="limits.roleReadme" :hint="$t('editor.readme.hint')" :placeholder="$t('editor.readme.placeholder')" />
 
           <!-- 角色卡 V3 的署名與版本：匯入的卡帶什麼就留什麼，作者也能自己填；匯出時原樣寫回 -->
           <div class="row2">

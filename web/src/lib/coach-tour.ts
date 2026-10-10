@@ -2,7 +2,8 @@
  * 新手引導的步驟（owner 2026-10-10，照魅魔島：一頁一頁框出要點的地方，「下一步」自動跳頁）。
  *
  *   首頁    r18（這組有成人版、頁首有 R18 鈕、還沒開）→ card（置頂的入門卡）
- *   卡片頁  intro（簡介與開場白）→ play（「開始對話」鈕）
+ *   卡片頁  grade（分級標示；沒有評級的卡略過）→ intro（作者寫的介紹；沒有就略過）
+ *           → score（評分；不在榜就略過）→ play（「開始對話」鈕）
  *   對話頁  一般卡：opening（開場）→ prologue（開場選項；卡沒有就略過）
  *           同層卡（整頁在沙箱裡，框不到裡面）：stage 一步，提示貼底
  *
@@ -10,18 +11,20 @@
  */
 import { reactive } from "vue";
 
-export type TourStep = "r18" | "card" | "intro" | "play" | "opening" | "prologue" | "stage";
+export type TourStep = "r18" | "card" | "grade" | "intro" | "score" | "play" | "opening" | "prologue" | "stage";
 export type TourPage = "home" | "card" | "play";
 
 export const PAGE_OF: Record<TourStep, TourPage> = {
-  r18: "home", card: "home", intro: "card", play: "card", opening: "play", prologue: "play", stage: "play",
+  r18: "home", card: "home", grade: "card", intro: "card", score: "card", play: "card", opening: "play", prologue: "play", stage: "play",
 };
 
 /** 每一步框的元件；null 是框不到（同層卡），提示貼底。對話頁的兩個是舞台公開給作者的 data-lt 標記。 */
 export const TARGET_OF: Record<TourStep, string | null> = {
   r18: "button.r18",
   card: '[data-tour="starter"]',
+  grade: '[data-tour="card-grade"]',
   intro: '[data-tour="card-intro"]',
+  score: '[data-tour="card-score"]',
   play: '[data-tour="card-play"]',
   opening: '[data-lt="message"]',
   prologue: '[data-lt="prologue"]',
@@ -35,10 +38,13 @@ export interface TourShape {
   sandbox: boolean | null;
   /** 一般卡有沒有開場選項 */
   prologue: boolean;
+  /** 卡片頁上這張卡沒有的區塊（沒有評級、沒寫介紹、不在榜）；卡片頁畫好之前是空的 */
+  missing?: TourStep[];
 }
 
 export function stepsOf(shape: TourShape): TourStep[] {
-  const head: TourStep[] = [...(shape.adult ? (["r18"] as const) : []), "card", "intro", "play"];
+  const card = (["grade", "intro", "score"] as const).filter((s) => !shape.missing?.includes(s));
+  const head: TourStep[] = [...(shape.adult ? (["r18"] as const) : []), "card", ...card, "play"];
   if (shape.sandbox === null) return [...head, "opening"];
   if (shape.sandbox) return [...head, "stage"];
   return [...head, "opening", ...(shape.prologue ? (["prologue"] as const) : [])];
