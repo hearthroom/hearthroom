@@ -141,7 +141,7 @@ export async function postComment(
   input: { card: CommentCard; memberId: string; content: unknown; parentId?: unknown; rootId?: unknown; now: number },
 ): Promise<{ commentId: string }> {
   const content = typeof input.content === "string" ? input.content.trim() : "";
-  if (!content) throw new HttpError(400, "content is required");
+  if (!content) throw new HttpError(400, "comment_required");
   if ([...content].length > COMMENT_MAX_CHARS) throw new HttpError(400, "comment_too_long");
   const recent = await db
     .prepare("SELECT COUNT(*) AS n FROM comments WHERE member_id = ? AND created_at > ?")
