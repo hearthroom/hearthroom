@@ -23,9 +23,15 @@ describe("需要登入的頁", () => {
 
   it("帶語言前綴與查詢字串也一樣", async () => {
     session.me = null;
-    await router.push("/en/play/r1?x=1");
+    await router.push("/en/mine?x=1");
     expect(router.currentRoute.value.path).toBe("/en/login");
-    expect(router.currentRoute.value.query.returnTo).toBe("/en/play/r1?x=1");
+    expect(router.currentRoute.value.query.returnTo).toBe("/en/mine?x=1");
+  });
+
+  it("對話頁遊客也進得來（owner 2026-10-10：送出時才請他登入，見 PlayPage）", async () => {
+    session.me = null;
+    await router.push("/en/play/r1?x=1");
+    expect(router.currentRoute.value.path).toBe("/en/play/r1");
   });
 
   it("登入了就放行", async () => {
