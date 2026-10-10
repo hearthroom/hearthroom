@@ -181,11 +181,20 @@ describe("上線前的送審紀錄", () => {
     const me = role({ roleId: "legacy-op", authorNumId: 10001 });
     const operationId = crypto.randomUUID();
     await env.DB.prepare("INSERT INTO works VALUES (?,?,?,?,?)").bind("w-legacy", memberId, "harbor", "legacy-op", 1).run();
-    await env.DB.prepare("INSERT INTO hosting_versions(version_id,work_id,member_id,operation_id,source_role_id,provider,nsfw,created_at,state) VALUES (?,?,?,?,?,?,0,?,'failed')")
+    await env.DB.prepare("INSERT INTO hosting_versions(version_id,work_id,member_id,operation_id,source_role_id,provider,created_at,state) VALUES (?,?,?,?,?,?,?,'failed')")
       .bind("v-legacy", "w-legacy", memberId, operationId, "legacy-op", "harbor", 1).run();
     const receipt = await submitHosted(env, { memberId, account: 10001, role: me, token: "author", rating: GENERAL_RATING, operationId, now: Date.now() });
     expect(receipt.versionId).toBe("v-legacy");
     const sub = await env.DB.prepare("SELECT rating FROM review_submissions").first<{ rating: string }>();
     expect(sub?.rating).toBe("G");
   });
+});
+
+// 0057：舊的成人旗標整個拿掉，成人內容只剩 rating = 'R' 一種說法
+it("舊的 nsfw 欄位已經刪除", async () => {
+  for (const table of ["cards", "review_submissions", "hosting_versions", "moderation_cases"]) {
+    const cols = await env.DB.prepare(`PRAGMA table_info(${table})`).all<{ name: string }>();
+    expect(cols.results.map((c) => c.name), table).not.toContain("nsfw");
+    expect(cols.results.map((c) => c.name), table).toContain("rating");
+  }
 });

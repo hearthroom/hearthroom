@@ -108,9 +108,8 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  if(!work||work.member_id!==input.memberId)throw new HttpError(403,'not the author of this card');
  if(!version){
   try{
-   await db.prepare('INSERT INTO hosting_versions(version_id,work_id,member_id,operation_id,source_role_id,provider,rating,rating_answers,created_at,nsfw) VALUES (?,?,?,?,?,?,?,?,?,?)')
-    // nsfw：舊欄位 NOT NULL 沒有預設值，0057 刪欄位時連同這一格拿掉
-    .bind(crypto.randomUUID(),work.id,input.memberId,input.operationId,input.role.roleId,provider,input.rating.rating,answers,input.now,Number(input.rating.rating==='R')).run();
+   await db.prepare('INSERT INTO hosting_versions(version_id,work_id,member_id,operation_id,source_role_id,provider,rating,rating_answers,created_at) VALUES (?,?,?,?,?,?,?,?,?)')
+    .bind(crypto.randomUUID(),work.id,input.memberId,input.operationId,input.role.roleId,provider,input.rating.rating,answers,input.now).run();
   }catch(error){if(!await existingOperation())throw new HttpError(409,'submission_pending');}
   version=await existingOperation();
  }
