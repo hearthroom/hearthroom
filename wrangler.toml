@@ -45,7 +45,7 @@ run_worker_first = [
   # 快取頭，邊緣命中時不會真的進 Worker，只有 miss 才付一次呼叫。
   "/assets/*",
   # 沙箱殼頁與它的 js/css：只在 c<roleId>.hearthroom.club 子網域上有意義，Worker 補 CSP／frame-ancestors
-  # 標頭再出（資源層直接出的話沒有這些標頭）；主站網域上這條路徑一樣進 Worker，然後照 SPA 規則回退。
+  # 標頭再出（資源層直接出的話沒有這些標頭）；主站網域上的同源殼也進 Worker，補不透明源的 sandbox 標頭。
   "/sandbox/*",
 ]
 
