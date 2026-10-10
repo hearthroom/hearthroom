@@ -22,3 +22,12 @@ it('keeps HarperHarbor and already authorized Harper sessions unchanged',async()
  setProvider('harbor');expect(await ensurePlayAuthorization('test-token','/play/a')).toBe(true);
  expect(fetch).toHaveBeenCalledTimes(2);expect(beginLogin).not.toHaveBeenCalled();
 });
+// 玩家在 HarperHarbor 控制台撤銷了這個應用：手上的 token 被拒（401）。以前只顯示「載入失敗」，
+// 玩家不知道要重新授權；現在直接帶去重新授權、回到同一張卡。剛重新授權過還是被拒就不再轉（不繞圈）。
+it('sends the player to authorize again when the app was revoked, but not in a loop',async()=>{
+ vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({error:'invalid_token'}),{status:401})));
+ expect(await ensurePlayAuthorization('revoked-token','/play/a?provider=harbor')).toBe(false);
+ expect(beginLogin).toHaveBeenCalledWith('/play/a?provider=harbor',{provider:'harbor'});
+ await expect(ensurePlayAuthorization('still-rejected','/play/a?provider=harbor')).rejects.toThrow('unavailable');
+ expect(beginLogin).toHaveBeenCalledTimes(1);
+});
