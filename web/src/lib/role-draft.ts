@@ -78,6 +78,8 @@ export interface RoleDraft {
   /** 性別：man / women / other，空字串＝未設定。拼法是站內既有的，不能改。 */
   roleSex: string;
   roleDesc: string;
+  /** 卡片頁上的介紹（Markdown，像 README）；只給訪客看，不會送進對話。 */
+  roleReadme: string;
   roleTag: string[];
   roleBackground: string;
   /** 橫式背景（選填）：舞台在橫向螢幕優先用它，沒有就退回直式的 roleBackground。 */
@@ -217,6 +219,7 @@ export const makeDraft = (language: string): RoleDraft => ({
   userName: "",
   roleSex: "",
   roleDesc: "",
+  roleReadme: "",
   roleTag: [],
   roleBackground: "",
   roleBackgroundLandscape: "",
@@ -251,12 +254,13 @@ export function missingRequired(draft: RoleDraft): string[] {
 export function fallbackLimits(language = ""): Record<string, number> {
   const lang = language.toLowerCase();
   const base = { roleName: 60, roleOutputContract: 2000 };
-  if (lang.startsWith("en")) return { ...base, roleDesc: 2500, roleDetailDesc: 50000, roleWelcome: 10000, jailbreak: 1500 };
-  return { ...base, roleDesc: 500, roleDetailDesc: 10000, roleWelcome: 8000, jailbreak: lang.startsWith("zh") ? 500 : 1500 };
+  if (lang.startsWith("en")) return { ...base, roleDesc: 2500, roleReadme: 40000, roleDetailDesc: 50000, roleWelcome: 10000, jailbreak: 1500 };
+  return { ...base, roleDesc: 500, roleReadme: 20000, roleDetailDesc: 10000, roleWelcome: 8000, jailbreak: lang.startsWith("zh") ? 500 : 1500 };
 }
 
 export interface FieldLimits {
   roleDescMaxChars?: number;
+  roleReadmeMaxChars?: number;
   roleDetailDescMaxChars?: number;
   roleWelcomeMaxChars?: number;
   roleOutputContractMaxChars?: number;
@@ -269,6 +273,7 @@ export function resolveLimits(remote: FieldLimits | null, language = ""): Record
   return {
     ...fallback,
     ...(remote.roleDescMaxChars ? { roleDesc: remote.roleDescMaxChars } : {}),
+    ...(remote.roleReadmeMaxChars ? { roleReadme: remote.roleReadmeMaxChars } : {}),
     ...(remote.roleDetailDescMaxChars ? { roleDetailDesc: remote.roleDetailDescMaxChars } : {}),
     ...(remote.roleWelcomeMaxChars ? { roleWelcome: remote.roleWelcomeMaxChars } : {}),
     ...(remote.roleOutputContractMaxChars ? { roleOutputContract: remote.roleOutputContractMaxChars } : {}),
@@ -365,6 +370,7 @@ export function draftFromRoleDetail(raw: Record<string, unknown>, fallbackLangua
   draft.userName = str(raw.userName);
   draft.roleSex = str(raw.roleSex);
   draft.roleDesc = str(raw.roleDesc);
+  draft.roleReadme = str(raw.roleReadme);
   draft.roleTag = readTags(raw.roleTag);
   draft.roleBackground = str(raw.roleBackground) || str(raw.roleAvatar);
   draft.roleBackgroundLandscape = str(raw.roleBackgroundLandscape);
@@ -384,6 +390,7 @@ export function draftFromRoleDetail(raw: Record<string, unknown>, fallbackLangua
 export interface RoleDocumentFields {
   roleName?: string;
   roleDesc?: string;
+  roleReadme?: string;
   roleTag?: string[];
   userName?: string;
   roleSex?: string;
@@ -405,6 +412,7 @@ const TEXT_FIELDS = [
   "roleName",
   "nickname",
   "roleDesc",
+  "roleReadme",
   "userName",
   "roleSex",
   "roleBackground",

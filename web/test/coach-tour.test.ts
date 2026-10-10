@@ -20,8 +20,8 @@ import CoachTour from "../src/components/CoachTour.vue";
 
 describe("步驟", () => {
   const base = { adult: false, sandbox: false, prologue: true };
-  it("一般卡：首頁 → 卡片頁 → 開場 → 開場選項", () => {
-    expect(stepsOf(base)).toEqual(["card", "intro", "play", "opening", "prologue"]);
+  it("一般卡：首頁 → 卡片頁（分級、介紹、評分、開始對話）→ 開場 → 開場選項", () => {
+    expect(stepsOf(base)).toEqual(["card", "grade", "intro", "score", "play", "opening", "prologue"]);
     expect(stepsOf({ ...base, adult: true })[0]).toBe("r18");
   });
   it("一般卡沒有開場選項：開場就是最後一步", () => {
@@ -30,18 +30,29 @@ describe("步驟", () => {
   it("同層卡：對話頁只有一步，提示貼底", () => {
     expect(stepsOf({ ...base, sandbox: true }).slice(-1)).toEqual(["stage"]);
   });
+  it("卡片頁缺的區塊（沒有評級、沒寫介紹、不在榜）整步略過", () => {
+    expect(stepsOf({ ...base, missing: ["grade", "score"] })).toEqual(["card", "intro", "play", "opening", "prologue"]);
+    expect(prevStep("intro", { ...base, missing: ["grade"] })).toBe("card");
+  });
   it("上一步可以回到上一頁那一步；第一步沒有上一步", () => {
-    expect(prevStep("intro", base)).toBe("card");
+    expect(prevStep("grade", base)).toBe("card");
     expect(prevStep("card", base)).toBeNull();
   });
 });
 
 let app: ReturnType<typeof createApp> | undefined; let root: HTMLElement | undefined; let router: Router;
 let sandboxPlay = false;
+/** 卡片頁替身沒有評級（舊一般卡）、沒寫介紹 */
+let plainCard = false;
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const settle = async () => { await wait(260); await nextTick(); };
 const Home = defineComponent({ render: () => h("div", [h("button", { class: "r18" }, "R18"), h("div", { "data-tour": "starter" }, "starter")]) });
-const Card = defineComponent({ render: () => h("div", [h("section", { "data-tour": "card-intro" }, "intro"), h("button", { "data-tour": "card-play" }, "play")]) });
+const Card = defineComponent({ render: () => h("div", [
+  plainCard ? null : h("div", { "data-tour": "card-grade" }, "grade"),
+  plainCard ? null : h("section", { "data-tour": "card-intro" }, "intro"),
+  h("section", { "data-tour": "card-score" }, "score"),
+  h("button", { "data-tour": "card-play" }, "play"),
+]) });
 const Play = defineComponent({ render: () => sandboxPlay ? h("iframe", { "data-lt": "sandbox-frame" }) : h("div", [h("div", { "data-lt": "message" }, "opening"), h("div", { "data-lt": "prologue" }, "options")]) });
 
 async function mount(path = "/") {
@@ -63,18 +74,22 @@ beforeEach(() => {
   localStorage.clear(); sessionStorage.clear(); i18n.global.locale.value = "zh-Hant";
   Element.prototype.scrollIntoView = () => {};
   starters.zh.general = 100001; starters.zh.adult = null;
-  session.me = null; session.profile = null; guest.showNsfw = false; guest.available = true; sandboxPlay = false;
+  session.me = null; session.profile = null; guest.showNsfw = false; guest.available = true; sandboxPlay = false; plainCard = false;
   tourState.step = null; tourState.card = 0;
 });
 afterEach(() => { app?.unmount(); root?.remove(); app = undefined; });
 
 describe("走一遍", () => {
-  it("一般卡：框入門卡 → 下一步跳卡片頁 → 簡介 → 開始對話 → 下一步跳對話頁 → 開場 → 開場選項 → 完成", async () => {
+  it("一般卡：框入門卡 → 下一步跳卡片頁 → 分級 → 介紹 → 評分 → 開始對話 → 下一步跳對話頁 → 開場 → 開場選項 → 完成", async () => {
     await mount();
     expect(title()).toBe(t("tour.card.title"));
     await press("tour.next");
     expect(router.currentRoute.value.path).toBe("/cards/100001");
+    expect(title()).toBe(t("tour.grade.title"));
+    await press("tour.next");
     expect(title()).toBe(t("tour.intro.title"));
+    await press("tour.next");
+    expect(title()).toBe(t("tour.score.title"));
     await press("tour.next");
     expect(title()).toBe(t("tour.play.title"));
     await press("tour.next");
@@ -107,7 +122,7 @@ describe("走一遍", () => {
   it("同層卡：對話頁只剩一步，按完成就結束", async () => {
     sandboxPlay = true;
     await mount();
-    await press("tour.next"); await press("tour.next"); await press("tour.next");
+    for (let i = 0; i < 5; i++) await press("tour.next");
     expect(title()).toBe(t("tour.stage.title"));
     await press("tour.done");
     expect(title()).toBeNull();
@@ -116,9 +131,19 @@ describe("走一遍", () => {
   it("直接點了入門卡或開始對話，不按下一步：一樣往下走", async () => {
     await mount();
     await router.push("/cards/100001"); await settle();
-    expect(title()).toBe(t("tour.intro.title"));
+    expect(title()).toBe(t("tour.grade.title"));
     await router.push("/play/100001"); await settle();
     expect(title()).toBe(t("tour.opening.title"));
+  });
+
+  it("卡片沒有評級、沒寫介紹：直接從評分開始，上一步回首頁", async () => {
+    plainCard = true;
+    await mount();
+    await press("tour.next");
+    expect(title()).toBe(t("tour.score.title"));
+    await press("tour.prev");
+    expect(router.currentRoute.value.path).toBe("/");
+    expect(title()).toBe(t("tour.card.title"));
   });
 
   it("上一步會跳回上一頁", async () => {

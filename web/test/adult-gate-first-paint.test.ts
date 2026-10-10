@@ -12,7 +12,6 @@ import { i18n } from "../src/lib/i18n";
 vi.mock("../src/lib/track", () => ({ track: () => {}, currentSurface: () => "card", setSurface: () => {} }));
 vi.mock("moonstage/stage", () => ({}));
 vi.mock("moonstage/stage.css", () => ({}));
-vi.mock("../src/lib/html-card-frame", () => ({ buildSrcdoc: () => "", SIZE_MESSAGE: "hc-card-size" }));
 
 import CardPage from "../src/pages/CardPage.vue";
 import { useSession } from "../src/lib/session";
@@ -37,6 +36,7 @@ function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respon
   if (url.endsWith("/v1/auth/session")) return later(40, () => json({ provider: "harbor", me: { accountNumId: 7, nickName: "月光", avatar: "" }, profile: PROFILE }));
   if (url.endsWith("/v1/auth/token")) return later(40, () => json({ accessToken: "tok", expiresAt: Date.now() + 3_600_000 }));
   if (url.includes("/v1/cards/abc/platforms")) return Promise.resolve(json({ platforms: [] }));
+  if (url.includes("/v1/cards/abc/score")) return Promise.resolve(json({ average: null, count: 0, histogram: [0, 0, 0, 0, 0], mine: null }));
   if (url.includes("/v1/cards/abc/comments")) return Promise.resolve(json({ total: 0, comments: [], isRoleCreator: false }));
   if (url.includes("/v1/cards/abc")) {
     cardReads.push(url + (auth ? " [auth]" : ""));
