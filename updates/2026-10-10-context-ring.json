@@ -1,0 +1,11 @@
+{
+  "tier": "feature",
+  "try": "/library",
+  "title": {
+    "zh-Hant": "輸入框旁的小圓環顯示這段對話的上下文用了多少，點開還能看到大約還能聊幾輪。",
+    "zh-Hans": "输入框旁的小圆环显示这段对话的上下文用了多少，点开还能看到大约还能聊几轮。",
+    "en": "A ring by the chat box shows how full this chat's context is and about how many turns it has left.",
+    "ja": "入力欄の横の円で、会話のコンテキストの使用量と、あと何ターンほど話せるかがわかります。",
+    "ko": "입력창 옆의 원으로 이 대화의 컨텍스트가 얼마나 찼는지와 남은 턴 수를 볼 수 있습니다."
+  }
+}
