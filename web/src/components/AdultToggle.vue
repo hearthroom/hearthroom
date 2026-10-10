@@ -1,8 +1,10 @@
 <script setup lang="ts">
 /**
  * 頁首的 R18 開關（owner 2026-09-25 從設定頁搬到首頁，2026-10-02 再搬進頁首、只在首頁畫）：
- * 設定頁那顆藏太深，大多數成員根本不知道有成人內容。跟設定頁是同一個帳號設定，改了 session.profile，榜單的 watch 會自己重讀。
- *   - 沒登入不畫：訪客無法確認年齡，對他標示「這裡有成人內容」本身就不該做。
+ * 設定頁那顆藏太深，大多數成員根本不知道有成人內容。登入的人改的是帳號設定（session.profile），榜單的 watch 會自己重讀。
+ *   - 遊客也畫（owner 2026-10-10，取代 2026-10-02「沒登入不畫」）：確認是成人就能看，確認不是成人就不能看，
+ *     跟有沒有帳號無關。遊客改的是伺服器發的遊客憑證（lib/adult-consent 的 guestAdult），登入時帶進帳號。
+ *     站上沒開託管登入（自架站）時遊客憑證發不出來，照舊不畫。
  *   - 沒驗過年齡、或沒同意目前這一版聲明：先開聲明窗（AdultConsentDialog），送出才真的打開。
  *   - 兩樣都齊了：點一下就切換，不再跳窗。
  *
@@ -10,17 +12,20 @@
  * 放進去會把字標擠成省略號。關的時候字上畫一道斜線（跟靜音、隱藏眼睛同一個慣例），開的時候紅底白字——
  * 兩個狀態各有自己的訊號，不是「有色／沒色」要比對才知道（owner 2026-10-02）。
  */
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { ApiError, updateSiteSettings } from "@/lib/api";
-import { applyAdultSettings, needsAdultConsent } from "@/lib/adult-consent";
+import { ApiError } from "@/lib/api";
+import { loadGuestAdult, needsAdultConsent, saveAdult, viewerAdult } from "@/lib/adult-consent";
 import { useSession } from "@/lib/session";
 import AdultConsentDialog from "./AdultConsentDialog.vue";
 
 const session = useSession();
 const { t } = useI18n();
 
-const on = computed(() => !!session.profile?.showNsfw && !!session.profile?.ageVerified);
+const state = computed(() => viewerAdult(session));
+const on = computed(() => !!state.value?.showNsfw && !!state.value?.ageVerified);
+// 確定是遊客了才問遊客憑證（登入的人看帳號設定，不必多問一趟）
+watch(() => session.ready && !session.me, (guest) => { if (guest) void loadGuestAdult(); }, { immediate: true });
 const busy = ref(false);
 const error = ref("");
 const asking = ref(false);
@@ -38,7 +43,7 @@ async function save(next: boolean) {
   busy.value = true;
   error.value = "";
   try {
-    applyAdultSettings(session.profile, await updateSiteSettings({ showNsfw: next }, (await session.accessToken()) ?? ""));
+    await saveAdult(session, { showNsfw: next });
   } catch (err) {
     showError(err instanceof ApiError || err instanceof Error ? err.message : t("state.saveFailed"));
   } finally {
@@ -48,14 +53,14 @@ async function save(next: boolean) {
 
 function toggle() {
   if (on.value) return save(false);
-  if (!needsAdultConsent(session.profile)) return save(true);
+  if (!needsAdultConsent(state.value)) return save(true);
   error.value = "";
   asking.value = true;
 }
 </script>
 
 <template>
-  <div v-if="session.me && session.profile" class="r18wrap">
+  <div v-if="state" class="r18wrap">
     <button type="button" class="r18" :class="{ 'r18--on': on }" role="switch" :aria-checked="on" :aria-label="$t('settings.content.nsfw')" :title="$t('settings.content.nsfw')" :disabled="busy" @click="toggle">
       <span class="r18__label">{{ $t("board.r18") }}</span>
     </button>

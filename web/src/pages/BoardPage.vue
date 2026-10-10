@@ -14,6 +14,7 @@ import DiscoveryTags from "@/components/DiscoveryTags.vue";
 import { selectedTags } from "@/lib/discovery";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
+import { guestAdult, viewerAdult } from "@/lib/adult-consent";
 import type { CardPage, Sort } from "@/lib/types";
 import UpdateStrip from "@/components/UpdateStrip.vue";
 
@@ -78,7 +79,8 @@ function servedFor(p: CardPage | null, showNsfw: boolean | undefined): boolean {
 function memoryKey(query: Record<string, unknown>): string | null {
   // 知道是誰了（登入的人資料到了，或確定是訪客）才記
   if (!(session.profile || session.ready) || query.sort === "random") return null;
-  const p = session.profile;
+  // 遊客的開關在遊客憑證上（頁首 R18 遊客也能開），一樣算進鍵裡
+  const p = session.me ? session.profile : viewerAdult(session);
   return JSON.stringify([query, session.me?.accountNumId ?? null, p?.showNsfw ?? null, p?.ageVerified ?? null, p?.adultConsent ?? null, hidden.value]);
 }
 
@@ -188,6 +190,10 @@ watch(() => session.profile?.showNsfw, (now, before) => {
     if (servedFor(page.value, now)) { adoptShown(); return; }
   }
   void load();
+});
+// 遊客在頁首開關 R18：伺服器換了遊客憑證，重讀。第一次問到現況（loaded 由 false 變 true）不算改。
+watch(() => (!session.me && guestAdult.loaded ? guestAdult.showNsfw : null), (now, before) => {
+  if (now !== null && before !== null && now !== before) void load();
 });
 // 不想看的類型載好或改了（設定頁改完回來）：同樣重讀
 watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (now !== "" || before !== undefined)) load(); });
