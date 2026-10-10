@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * 首頁的新手引導（owner 2026-10-10，參考魅魔島：第一次來就帶進一張卡）。
- * 只給第一次來、還沒登入的訪客；這個語言沒設入門卡（shared/starter-cards.ts）就不出現。
+ * 每個新用戶都看一遍：沒登入的訪客，或註冊不到 NEW_MEMBER_DAYS 天的成員（例如從邀請連結註冊完直接進來），
+ * 這台裝置沒看過就出現；這個語言沒設入門卡（shared/starter-cards.ts）就不出現。
  *   1. 這組有成人版：先指出頁首的 R18（頁首那顆會亮起來），確認年齡之後就看得到成人內容。
  *   2. 指向入門卡，「開始玩」直接進對話頁：開了成人內容進成人版，沒開進一般版。
  * 不擋畫面：貼底的一張小卡，榜單照樣能滑能點。略過或開始玩之後，這台裝置不再出現。
@@ -12,7 +13,7 @@ import { useRouter } from "vue-router";
 import { fetchCard } from "@/lib/api";
 import { guestAdult, loadGuestAdult, viewerAdult } from "@/lib/adult-consent";
 import { contentLang } from "@/lib/i18n";
-import { finishTour, hasAdultStarter, starterFor, tourDone, tourFocus } from "@/lib/onboarding";
+import { finishTour, hasAdultStarter, isNewMember, starterFor, tourDone, tourFocus } from "@/lib/onboarding";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
 import { track } from "@/lib/track";
@@ -26,13 +27,18 @@ const dismissed = ref(tourDone());
 /** R18 那一步要等知道頁首有沒有那顆鈕（站上發得出遊客憑證才有），沒有就不提它，直接指向入門卡。 */
 const step = ref<"adult" | "start" | null>(null);
 const general = computed(() => starterFor(locale.value, false));
-const open = computed(() => !dismissed.value && session.ready && !session.me && !!general.value);
+// 成員要等資料到了才知道是不是新來的
+const newcomer = computed(() => !session.me || (!!session.profile && isNewMember(session.profile.memberSince)));
+const open = computed(() => !dismissed.value && session.ready && newcomer.value && !!general.value);
 const name = ref("");
 
 watch(open, async (now) => {
   if (!now) { tourFocus.value = ""; return; }
-  await loadGuestAdult();
-  step.value = hasAdultStarter(locale.value) && guestAdult.available && !guestAdult.showNsfw ? "adult" : "start";
+  if (!session.me) await loadGuestAdult();
+  // R18 那顆鈕在不在：成員一定在，遊客要站上發得出遊客憑證。已經開了就不必再指。
+  const adult = viewerAdult(session);
+  const toggleShown = !!session.me || guestAdult.available;
+  step.value = hasAdultStarter(locale.value) && toggleShown && !!adult && !adult.showNsfw ? "adult" : "start";
   track("tour_open", { detail: step.value });
 }, { immediate: true });
 // 介紹的是「開始玩」會打開的那張：走到這一步時看他開了成人內容沒（R18 那一步可能剛開）。
@@ -42,7 +48,7 @@ watch(step, (now) => {
   name.value = "";
   void fetchCard(String(card), contentLang(locale.value), { quiet: true })
     .then((c) => { name.value = c.name ?? ""; }, () => {});
-});
+}, { immediate: true });
 watch([open, step], () => { tourFocus.value = open.value && step.value === "adult" ? "r18" : ""; }, { immediate: true });
 onBeforeUnmount(() => { tourFocus.value = ""; });
 

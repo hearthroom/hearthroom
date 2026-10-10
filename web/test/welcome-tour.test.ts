@@ -1,7 +1,8 @@
 /**
- * 首頁的新手引導（owner 2026-10-10）：第一次來、還沒登入的訪客，引導他進一張入門卡。
+ * 首頁的新手引導（owner 2026-10-10）：每個新用戶都看一遍，引導他進一張入門卡。
+ *   - 沒登入的訪客、註冊 7 天內的新成員，只要這台裝置沒看過就出現。
  *   - 這個語言沒設入門卡：不出現（入門卡由營運寫好再填設定）。
- *   - 登入的人、看過的人：不出現。
+ *   - 老成員、看過的人：不出現。
  *   - 這組有成人版：先指出頁首的 R18 在哪；開了成人內容就帶去成人版，沒開就帶去一般版。
  *   - 略過或開始玩之後，這台裝置不再出現。
  */
@@ -12,10 +13,10 @@ import { i18n } from "../src/lib/i18n";
 
 const starters = vi.hoisted(() => ({ zh: { general: null as number | null, adult: null as number | null }, en: { general: null, adult: null }, ja: { general: null, adult: null }, ko: { general: null, adult: null } }));
 vi.mock("../../shared/starter-cards", () => ({ STARTER_CARDS: starters }));
-const session = vi.hoisted(() => ({ ready: true, me: null as null | { accountNumId: number }, profile: null }));
+const session = vi.hoisted(() => ({ ready: true, me: null as null | { accountNumId: number }, profile: null as null | { memberSince: number; showNsfw: boolean; ageVerified: boolean; adultConsent: boolean } }));
 vi.mock("../src/lib/session", () => ({ useSession: () => session }));
 const guest = vi.hoisted(() => ({ loaded: true, available: true, showNsfw: false, ageVerified: false, adultConsent: false }));
-vi.mock("../src/lib/adult-consent", async (original) => ({ ...(await original<typeof import("../src/lib/adult-consent")>()), guestAdult: guest, loadGuestAdult: async () => {}, viewerAdult: () => (session.me ? null : guest) }));
+vi.mock("../src/lib/adult-consent", async (original) => ({ ...(await original<typeof import("../src/lib/adult-consent")>()), guestAdult: guest, loadGuestAdult: async () => {}, viewerAdult: () => (session.me ? session.profile : guest) }));
 vi.mock("../src/lib/api", async (original) => ({ ...(await original<typeof import("../src/lib/api")>()), fetchCard: async (id: string) => ({ id, num: Number(id), name: `卡${id}` }) }));
 
 import WelcomeTour from "../src/components/WelcomeTour.vue";
@@ -35,7 +36,7 @@ const tour = () => root!.querySelector(".tour");
 const button = (key: string) => [...root!.querySelectorAll("button")].find((b) => b.textContent?.trim() === i18n.global.t(key));
 beforeEach(() => {
   localStorage.clear(); i18n.global.locale.value = "zh-Hant";
-  starters.zh.general = null; starters.zh.adult = null; session.me = null; guest.showNsfw = false; guest.available = true; tourFocus.value = "";
+  starters.zh.general = null; starters.zh.adult = null; session.me = null; session.profile = null; guest.showNsfw = false; guest.available = true; tourFocus.value = "";
 });
 afterEach(() => { app?.unmount(); root?.remove(); app = undefined; });
 
@@ -44,10 +45,27 @@ it("這個語言沒設入門卡：不出現", async () => {
   expect(tour()).toBeNull();
 });
 
-it("登入的人不出現", async () => {
+const DAY = 86_400_000;
+it("老成員不出現", async () => {
   starters.zh.general = 100001; session.me = { accountNumId: 1 };
+  session.profile = { memberSince: Date.now() - 30 * DAY, showNsfw: false, ageVerified: false, adultConsent: false };
   await mount();
   expect(tour()).toBeNull();
+});
+
+it("新成員（例如從邀請連結註冊完直接進來）沒看過：一樣出現，R18 那一步照帳號設定", async () => {
+  starters.zh.general = 100001; starters.zh.adult = 100002; session.me = { accountNumId: 1 };
+  session.profile = { memberSince: Date.now() - DAY, showNsfw: false, ageVerified: false, adultConsent: false };
+  await mount();
+  expect(tour()?.textContent).toContain(i18n.global.t("tour.adult.title"));
+  expect(tourFocus.value).toBe("r18");
+});
+
+it("新成員帳號已經開了成人內容：跳過 R18，直接指向成人版", async () => {
+  starters.zh.general = 100001; starters.zh.adult = 100002; session.me = { accountNumId: 1 };
+  session.profile = { memberSince: Date.now() - DAY, showNsfw: true, ageVerified: true, adultConsent: true };
+  await mount();
+  expect(tour()?.textContent).toContain("卡100002");
 });
 
 it("只有一般版：直接指向入門卡，開始玩就進對話頁，之後不再出現", async () => {
