@@ -147,6 +147,7 @@ async function play() {
     <button
       v-if="choice"
       class="btn btn--primary btn--lg"
+      data-tour="card-play"
       :disabled="busy"
       @click="play"
     >
