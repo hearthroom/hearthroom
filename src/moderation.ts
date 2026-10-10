@@ -105,8 +105,7 @@ moderationRoutes.post('/v1/moderation/cases',async c=>{
  await mutate(()=>db.batch([
   db.prepare('INSERT OR IGNORE INTO moderation_state(provider,source_role_id) VALUES(?,?)').bind(card.provider,card.source_role_id),
   ... (action==='suspend'?[db.prepare("UPDATE moderation_cases SET status='dismissed',decided_at=?,resolution='Superseded by urgent suspension' WHERE provider=? AND source_role_id=? AND status IN ('pending','disputed') AND action IN ('delist','restore_listing')").bind(now,card.provider,card.source_role_id)]:[]),
-  // nsfw：舊欄位 NOT NULL 沒有預設值，0057 刪欄位時連同這一格拿掉
-  db.prepare('INSERT INTO moderation_cases(id,provider,source_role_id,version_id,title,author_member_id,action,reason,created_by,operation_id,created_at,card_number,rating,public_evidence,nsfw) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,card.provider,card.source_role_id,card.approved_version_id||card.reviewed_hash,pickLocale(JSON.parse(card.names),'zh-Hant'),card.author_member_id,action,reason,member.id,op,now,card.card_number,card.rating,evidence,Number(card.rating==='R')),
+   db.prepare('INSERT INTO moderation_cases(id,provider,source_role_id,version_id,title,author_member_id,action,reason,created_by,operation_id,created_at,card_number,rating,public_evidence) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,card.provider,card.source_role_id,card.approved_version_id||card.reviewed_hash,pickLocale(JSON.parse(card.names),'zh-Hant'),card.author_member_id,action,reason,member.id,op,now,card.card_number,card.rating,evidence),
   db.prepare("INSERT INTO moderation_votes VALUES(?,?,'confirm',?,?)").bind(id,member.id,reason,now),
  ]));
  return c.json(publicCase(await caseOf(db,id),member.id),201);
