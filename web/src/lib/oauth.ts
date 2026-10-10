@@ -84,7 +84,7 @@ async function clientId(provider:ProviderId=currentProvider()): Promise<string> 
 export async function beginLogin(returnTo: string, options: {provider?:ProviderId; linkFrom?:ProviderId} = {}): Promise<void> {
   const provider=options.provider ?? currentProvider();
   if(await managedAuth()){
-    const result=await authRequest<{url:string}>("start",{provider,linkFrom:options.linkFrom,returnTo:safeReturnTo(returnTo)});
+    const result=await authRequest<{url:string}>("start",{provider,linkFrom:options.linkFrom,returnTo:safeReturnTo(returnTo),locale:String(i18n.global.locale.value)});
     location.assign(result.url);return;
   }
   sessionStorage.setItem("hearthroom.oauth.pending",JSON.stringify({provider,linkFrom:options.linkFrom}));
@@ -107,6 +107,8 @@ export async function beginLogin(returnTo: string, options: {provider?:ProviderI
   // Harbor 不給 scope 只會拿到唯讀，寫不了卡。
   const scope = scopeOf(provider);
   if (scope) params.set("scope", scope);
+  // 登入／同意頁用玩家在這裡的介面語言（OIDC ui_locales）。
+  params.set("ui_locales", String(i18n.global.locale.value));
   // 走備用網域時，登入頁也要換成備用網域的（邊緣代理會把 Host 改寫，伺服器光看 Host 判不出來）
   location.assign(`${baseFor(provider)}/oauth/authorize?${params}`);
 }

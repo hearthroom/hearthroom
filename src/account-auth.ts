@@ -232,7 +232,9 @@ accountAuthRoutes.post('/v1/auth/start',async c=>{
   await c.env.DB.prepare('INSERT INTO account_auth_attempts VALUES(?,?,?,?,?,?,?,?)').bind(stateHash,await hash(browser),origin,provider,null,await sealAuth(c.env,'attempt:'+stateHash,flow),'code',Date.now()+ATTEMPT_TTL).run();
   writeCookie(c,FLOW,browser,ATTEMPT_TTL/1000);
   const url=new URL(apiBaseOf(c.env,provider)+'/oauth/authorize');
-  url.search=new URLSearchParams({response_type:'code',client_id:clientId,redirect_uri:redirectUri,state,code_challenge:await hash(verifier),code_challenge_method:'S256',resource:apiBaseOf(c.env,provider)+'/open/v1',...(scopes[provider]!?{scope:scopes[provider]!}:{})}).toString();
+  // 玩家在這裡用的介面語言：Harbor 的登入／同意頁用它，也記成成員的語言。只收像語言標籤的值。
+  const locale=typeof body.locale==='string'&&/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8}){0,2}$/.test(body.locale)?body.locale:'';
+  url.search=new URLSearchParams({response_type:'code',client_id:clientId,redirect_uri:redirectUri,state,code_challenge:await hash(verifier),code_challenge_method:'S256',resource:apiBaseOf(c.env,provider)+'/open/v1',...(scopes[provider]!?{scope:scopes[provider]!}:{}),...(locale?{ui_locales:locale}:{})}).toString();
   return c.json({url:url.toString()});
 });
 accountAuthRoutes.post('/v1/auth/complete',async c=>{
