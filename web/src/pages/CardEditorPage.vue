@@ -94,6 +94,8 @@ import ImageField from "@/components/editor/ImageField.vue";
 import ImportPanel from "@/components/editor/ImportPanel.vue";
 import WorldbookEditor from "@/components/editor/WorldbookEditor.vue";
 import TagPicker from "@/components/editor/TagPicker.vue";
+import ShowcaseGuide from "@/components/editor/ShowcaseGuide.vue";
+import ReadmeView from "@/components/ReadmeView.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -151,6 +153,15 @@ const metaField = (key: "creator" | "characterVersion") =>
 const cardCreator = metaField("creator");
 const cardVersion = metaField("characterVersion");
 const TAGS_MAX = 10;
+/**
+ * 一句話簡介的建議長度：卡片頁標題下露出三行，首頁卡片露出兩行，再長就被截掉。
+ * 中日韓一個字佔一格，英文按字母算，所以英文放寬。只提醒、不擋（上限照伺服器的 500／2500）。
+ */
+const SUMMARY_ADVISE = computed(() => (draft.value.language.toLowerCase().startsWith("en") ? 150 : 80));
+/** 「顯示在哪裡？」參考圖 */
+const guideOpen = ref(false);
+/** 介紹：撰寫或預覽（預覽跟卡片頁同一個元件畫） */
+const readmeTab = ref<"write" | "preview">("write");
 
 
 /** 卡綁的那本世界書（世界卡上就是世界級世界書）。角色的私有書各自一份實例，見 memberBook。 */
@@ -1073,11 +1084,58 @@ async function exportCard(format: "png" | "json") {
             <span class="subtle">{{ $t("editor.language.scriptHint") }}</span>
           </div>
 
-          <FieldText id="f-desc" v-model="draft.roleDesc" :label="$t('editor.summary')" :rows="2"
-                     :max="limits.roleDesc" :hint="$t('edit.summary.hint')" />
-          <!-- 介紹：卡片頁上的 README（owner 2026-10-11）。只給訪客看，不送進對話 -->
-          <FieldText id="f-readme" v-model="draft.roleReadme" :label="$t('editor.readme')" :rows="10"
-                     :max="limits.roleReadme" :hint="$t('editor.readme.hint')" :placeholder="$t('editor.readme.placeholder')" />
+          <!-- 卡片展示（owner 2026-10-11）：玩家開始對話前看到的三樣東西放在一起，旁邊說清楚各自出現在哪裡 -->
+          <div class="showcase" role="group" aria-labelledby="showcase-title">
+            <div class="showcase__head">
+              <h3 id="showcase-title" class="showcase__title">{{ $t("editor.showcase.title") }}</h3>
+              <button type="button" class="showcase__where" @click="guideOpen = true">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.4" /><path d="M6.4 6.3a1.7 1.7 0 0 1 3.2.6c0 1.1-1.6 1.4-1.6 2.4M8 11.2v.1" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" /></svg>
+                {{ $t("editor.showcase.where") }}
+              </button>
+            </div>
+            <p class="subtle showcase__lede">{{ $t("editor.showcase.lede") }}</p>
+
+            <FieldText id="f-desc" v-model="draft.roleDesc" :label="$t('editor.summary')" :rows="2"
+                       :max="limits.roleDesc" :hint="$t('edit.summary.hint')"
+                       :advise="SUMMARY_ADVISE" :advise-text="$t('editor.summary.advise', { n: SUMMARY_ADVISE })" />
+
+            <!-- 介紹：卡片頁上的 README。只給訪客看，不送進對話；預覽跟卡片頁同一個元件 -->
+            <div class="field">
+              <div class="readme-head">
+                <label for="f-readme">{{ $t("editor.readme") }}</label>
+                <div class="seg seg--sm" role="tablist" :aria-label="$t('editor.readme')">
+                  <button type="button" class="seg__item" :class="{ 'seg__item--on': readmeTab === 'write' }" role="tab" :aria-selected="readmeTab === 'write'" @click="readmeTab = 'write'">{{ $t("editor.readme.write") }}</button>
+                  <button type="button" class="seg__item" :class="{ 'seg__item--on': readmeTab === 'preview' }" role="tab" :aria-selected="readmeTab === 'preview'" @click="readmeTab = 'preview'">{{ $t("editor.readme.preview") }}</button>
+                </div>
+              </div>
+              <FieldText v-show="readmeTab === 'write'" id="f-readme" v-model="draft.roleReadme" label="" :rows="10"
+                         :max="limits.roleReadme" :hint="$t('editor.readme.hint')" :placeholder="$t('editor.readme.placeholder')" />
+              <div v-if="readmeTab === 'preview'" class="readme-preview">
+                <ReadmeView v-if="draft.roleReadme.trim()" :source="draft.roleReadme" />
+                <p v-else class="subtle">{{ $t("editor.readme.empty") }}</p>
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="f-tags">{{ $t("edit.tags") }}</label>
+              <input id="f-tags" v-model="tagsText" class="input" :placeholder="$t('edit.tags.placeholder')" />
+              <span class="field__foot">
+                <span class="subtle">{{ $t("edit.tags.hint") }}</span>
+                <span class="subtle count" :class="{ over: draft.roleTag.length > TAGS_MAX }">
+                  {{ draft.roleTag.length }} / {{ TAGS_MAX }}
+                </span>
+              </span>
+              <!-- 拆好的標籤：作者一眼確認分隔符有沒有被認出來 -->
+              <ul v-if="draft.roleTag.length" class="tags" aria-hidden="true">
+                <li v-for="(tag, i) in draft.roleTag" :key="i" class="chip" :class="{ 'chip--over': i >= TAGS_MAX }">{{ tag }}</li>
+              </ul>
+              <!-- 站內榜單認得的分類：點了就加進標籤，跟手打的是同一條 -->
+              <TagPicker :selected="draft.roleTag" :language="draft.language" :max="TAGS_MAX" @toggle="toggleTag" />
+            </div>
+          </div>
+          <ShowcaseGuide :open="guideOpen" :name="draft.roleName" :summary="draft.roleDesc" :tags="draft.roleTag"
+                         :cover="draft.roleBackground" :banner="draft.roleBackgroundLandscape" :advise="SUMMARY_ADVISE"
+                         @close="guideOpen = false" />
 
           <!-- 角色卡 V3 的署名與版本：匯入的卡帶什麼就留什麼，作者也能自己填；匯出時原樣寫回 -->
           <div class="row2">
@@ -1092,22 +1150,6 @@ async function exportCard(format: "png" | "json") {
           </div>
           <span class="subtle">{{ $t("editor.creator.hint") }}</span>
 
-          <div class="field">
-            <label for="f-tags">{{ $t("edit.tags") }}</label>
-            <input id="f-tags" v-model="tagsText" class="input" :placeholder="$t('edit.tags.placeholder')" />
-            <span class="field__foot">
-              <span class="subtle">{{ $t("edit.tags.hint") }}</span>
-              <span class="subtle count" :class="{ over: draft.roleTag.length > TAGS_MAX }">
-                {{ draft.roleTag.length }} / {{ TAGS_MAX }}
-              </span>
-            </span>
-            <!-- 拆好的標籤：作者一眼確認分隔符有沒有被認出來 -->
-            <ul v-if="draft.roleTag.length" class="tags" aria-hidden="true">
-              <li v-for="(tag, i) in draft.roleTag" :key="i" class="chip" :class="{ 'chip--over': i >= TAGS_MAX }">{{ tag }}</li>
-            </ul>
-            <!-- 站內榜單認得的分類：點了就加進標籤，跟手打的是同一條 -->
-            <TagPicker :selected="draft.roleTag" :language="draft.language" :max="TAGS_MAX" @toggle="toggleTag" />
-          </div>
 
         </section>
 
@@ -1643,4 +1685,17 @@ h1 { margin: 0 0 var(--s-1); font-size: 22px; }
   .side { margin: 0 calc(var(--s-4) * -1); padding: var(--s-2) var(--s-4); }
 }
 .panel--danger { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 40%, transparent); }
+/* 卡片展示：一組有外框的欄位，標題列右邊是「顯示在哪裡？」 */
+.showcase { display: grid; gap: var(--s-4); padding: var(--s-4) var(--s-5) var(--s-5); border-radius: var(--r-lg); box-shadow: 0 0 0 1px var(--line); min-width: 0; }
+.showcase__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; }
+.showcase__title { margin: 0; font-size: 15px; font-weight: 600; }
+.showcase__where { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 0; border-radius: var(--r-pill); background: var(--accent-soft); color: var(--accent-text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.showcase__where svg { width: 15px; height: 15px; }
+.showcase__where:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+.showcase__lede { margin: 0; }
+.readme-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
+.readme-head label { font-size: 13px; font-weight: 600; }
+.readme-head .seg__item { height: 28px; padding: 0 12px; font-size: 12.5px; }
+.showcase :deep(.field) { margin: 0; }
+.readme-preview { min-height: 180px; padding: var(--s-4); border-radius: var(--r-md); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); overflow: auto; }
 </style>

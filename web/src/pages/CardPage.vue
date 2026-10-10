@@ -20,6 +20,7 @@ import CommentPanel from "@/components/CommentPanel.vue";
 import NotFoundPage from "@/pages/NotFoundPage.vue";
 import AdultGate from "@/components/AdultGate.vue";
 import CardScore from "@/components/CardScore.vue";
+import ReadmeView from "@/components/ReadmeView.vue";
 import { ApiError, fetchBoard, fetchCard, fetchCardPlatforms, fetchCardScore, fetchRoleDetail, saveCardScore, type CardPlatform, type CardScore as Score } from "@/lib/api";
 import { recallCard } from "@/lib/card-memory";
 import { renderReadme } from "@/lib/card-readme";
@@ -410,8 +411,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
           <section v-else-if="hasIntro" class="role__intro-wrap" aria-labelledby="intro-h" data-tour="card-intro">
             <h2 id="intro-h" class="sr-only">{{ $t("card.about") }}</h2>
             <div ref="introBox" class="role__intro panel" :class="{ 'role__intro--clamped': introLong && !introOpen }" :style="{ '--intro-max': `${INTRO_MAX}px` }">
-              <!-- eslint-disable-next-line vue/no-v-html -- 介紹只收 Markdown，不收內嵌 HTML（見 lib/card-readme.ts） -->
-              <div v-if="readmeHtml" class="readme" v-html="readmeHtml" />
+              <ReadmeView v-if="readmeHtml" :html="readmeHtml" />
               <p v-else class="role__text">{{ card.summary }}</p>
               <div v-if="introLong && !introOpen" class="role__intro-fade">
                 <button type="button" class="btn" @click="introOpen = true">{{ $t("card.aboutMore") }}</button>
@@ -578,26 +578,6 @@ a.role__by:hover { color: var(--accent-text); }
 .role__intro-ghost { height: 280px; border-radius: var(--r-lg); }
 .role__text { margin: 0; max-width: 68ch; font-size: 15px; line-height: 1.8; white-space: pre-wrap; }
 
-/* 作者寫的 Markdown：標題已經降兩級（h3 起），顏色全走設計變數，日夜模式一起換 */
-.readme { max-width: 72ch; font-size: 15px; line-height: 1.8; overflow-wrap: anywhere; }
-.readme :deep(> :first-child) { margin-top: 0; }
-.readme :deep(> :last-child) { margin-bottom: 0; }
-.readme :deep(p) { margin: 0.6em 0; }
-.readme :deep(h3) { margin: 1.4em 0 0.5em; padding-bottom: 0.3em; font-size: 20px; box-shadow: 0 1px 0 var(--line); }
-.readme :deep(h4) { margin: 1.2em 0 0.4em; font-size: 17px; }
-.readme :deep(h5), .readme :deep(h6) { margin: 1em 0 0.3em; font-size: 15px; }
-.readme :deep(ul), .readme :deep(ol) { margin: 0.5em 0; padding-left: 1.4em; }
-.readme :deep(a) { color: var(--accent-text); text-decoration: underline; text-underline-offset: 3px; }
-.readme :deep(img) { max-width: 100%; height: auto; border-radius: var(--r-md); }
-.readme :deep(blockquote) { margin: 1em 0; padding: 0.2em 1em; border-left: 3px solid var(--accent); border-radius: 0 var(--r-sm) var(--r-sm) 0; background: var(--surface-2); color: var(--text-2); }
-.readme :deep(code) { padding: 1px 6px; border-radius: 4px; background: var(--surface-2); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.88em; }
-.readme :deep(pre) { overflow-x: auto; padding: var(--s-3) var(--s-4); border-radius: var(--r-md); background: var(--surface-2); }
-.readme :deep(pre code) { padding: 0; background: none; }
-.readme :deep(hr) { height: 1px; margin: 1.5em 0; border: 0; background: var(--line); }
-.readme :deep(.readme__table) { margin: 1em 0; overflow-x: auto; }
-.readme :deep(table) { width: 100%; border-collapse: collapse; font-size: 14px; }
-.readme :deep(th), .readme :deep(td) { padding: 8px 12px; text-align: left; box-shadow: inset 0 -1px 0 var(--line); }
-.readme :deep(th) { color: var(--text-2); font-weight: 600; }
 
 .role__h2 { display: flex; align-items: baseline; gap: 8px; margin: 0 0 var(--s-3); font-size: 18px; }
 .role__h2-n { font-size: 13px; font-weight: 400; color: var(--text-3); font-variant-numeric: tabular-nums; }
