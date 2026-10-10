@@ -3,10 +3,13 @@ import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import DownloadBanner from "@/components/DownloadBanner.vue";
-import WelcomeTour from "@/components/WelcomeTour.vue";
+import CardTile from "@/components/CardTile.vue";
+import { tourState } from "@/lib/coach-tour";
+import { starterFor } from "@/lib/onboarding";
+import type { CommunityCard } from "@/lib/types";
 import FollowFeed from "@/components/FollowFeed.vue";
 import CardGrid from "@/components/CardGrid.vue";
-import { fetchBoard } from "@/lib/api";
+import { fetchBoard, fetchCard } from "@/lib/api";
 import { recallBoard, rememberBoard } from "@/lib/board-memory";
 import { takeInlineBoard } from "@/lib/board-inline";
 import { rememberCards } from "@/lib/card-memory";
@@ -23,6 +26,13 @@ const route = useRoute();
 const router = useRouter();
 const { locale, lp } = useLocalePath();
 const session = useSession();
+
+/** 新手引導在首頁那兩步時置頂的入門卡：開了成人內容就是成人版（R18 那一步可能剛開）。 */
+const starterCard = ref<CommunityCard | null>(null);
+watch(() => (tourState.step === "r18" || tourState.step === "card") ? starterFor(locale.value, !!viewerAdult(session)?.showNsfw) : null, (num) => {
+  if (!num) { starterCard.value = null; return; }
+  void fetchCard(String(num), contentLang(locale.value), { quiet: true }).then((card) => { starterCard.value = card; }, () => { starterCard.value = null; });
+}, { immediate: true });
 const { t } = useI18n();
 
 const page = ref<CardPage | null>(null);
@@ -204,7 +214,6 @@ watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (no
   <div class="page">
     <h1 class="sr-only">{{ $t("site.tagline") }}</h1>
     <DownloadBanner />
-    <WelcomeTour />
     <UpdateStrip />
 
     <!--
@@ -227,6 +236,10 @@ watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (no
     <template v-if="mode === 'cards'">
       <p v-if="fallbackSort" class="subtle count" role="status">{{ $t(`board.fallback.${fallbackSort}`) }}</p>
       <p v-if="page && page.total !== null" class="subtle count">{{ $t("board.count", { n: page.total }) }}</p>
+      <!-- 新手引導走到首頁那兩步：入門卡置頂，讓引導框得到（不擠進榜單，名次不動） -->
+      <div v-if="starterCard" class="starter" data-tour="starter">
+        <CardTile :card="starterCard" eager />
+      </div>
       <CardGrid
         :cards="page?.items ?? []"
         :loading="loading && !page"
@@ -268,6 +281,10 @@ watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (no
 @media (max-width: 400px) { .sorts__item { padding: 0 8px; } }
 
 .count { margin-bottom: var(--s-3); font-variant-numeric: tabular-nums; }
+/* 置頂的入門卡跟榜單的卡同寬：照榜單的欄數取一欄 */
+.starter { width: calc((100% - var(--s-4)) / 2); margin-bottom: var(--s-5); }
+@media (min-width: 600px) { .starter { width: calc((100% - 2 * var(--s-4)) / 3); } }
+@media (min-width: 820px) { .starter { width: calc((100% - 3 * var(--s-4)) / 4); } }
 .ghosts { display: grid; gap: 6px; }
 .ghosts .ghost { height: 62px; }
 .empty { padding: var(--s-8) var(--s-5); text-align: center; }

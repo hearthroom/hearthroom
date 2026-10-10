@@ -378,9 +378,9 @@ watch(() => session.profile?.showNsfw, (now, before) => {
 
           <!-- 主頁：作者裝修過就照他的版面；沒有就是簡介＋開場白 -->
           <div v-show="tab === 'home'" id="panel-home" class="panel role__home settle" role="tabpanel" aria-labelledby="tab-home">
-            <PreviewDoc v-if="previewDoc" :doc="previewDoc" :skin-id="previewSkin" @fallback="previewDoc = null" />
+            <PreviewDoc v-if="previewDoc" data-tour="card-intro" :doc="previewDoc" :skin-id="previewSkin" @fallback="previewDoc = null" />
             <template v-else>
-              <section class="role__block">
+              <section class="role__block" data-tour="card-intro">
                 <h2 class="eyebrow">{{ $t("card.about") }}</h2>
                 <!-- 簡介也可能長達好幾段：露出開頭，跟開場白、評論分享主頁 -->
                 <ClampBlock :max="aboutMax" :more-label="$t('card.aboutMore')" :less-label="$t('card.aboutLess')">

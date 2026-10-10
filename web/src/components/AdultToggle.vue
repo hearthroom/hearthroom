@@ -16,7 +16,6 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { ApiError } from "@/lib/api";
 import { loadGuestAdult, needsAdultConsent, saveAdult, viewerAdult } from "@/lib/adult-consent";
-import { tourFocus } from "@/lib/onboarding";
 import { useSession } from "@/lib/session";
 import AdultConsentDialog from "./AdultConsentDialog.vue";
 
@@ -62,7 +61,7 @@ function toggle() {
 
 <template>
   <div v-if="state" class="r18wrap">
-    <button type="button" class="r18" :class="{ 'r18--on': on, 'r18--spot': tourFocus === 'r18' }" role="switch" :aria-checked="on" :aria-label="$t('settings.content.nsfw')" :title="$t('settings.content.nsfw')" :disabled="busy" @click="toggle">
+    <button type="button" class="r18" :class="{ 'r18--on': on }" role="switch" :aria-checked="on" :aria-label="$t('settings.content.nsfw')" :title="$t('settings.content.nsfw')" :disabled="busy" @click="toggle">
       <span class="r18__label">{{ $t("board.r18") }}</span>
     </button>
     <Teleport to="body"><p v-if="error" class="toast" role="alert">{{ error }}</p></Teleport>
@@ -91,6 +90,4 @@ function toggle() {
 .r18--on { background: var(--danger); border-color: var(--danger); color: var(--on-danger); }
 .r18--on:hover { color: var(--on-danger); border-color: var(--danger); }
 .r18--on::after { opacity: 0; }
-/* 新手引導指著它（WelcomeTour 第一步）：外面一圈強調色，告訴他「就是這顆」 */
-.r18--spot { box-shadow: 0 0 0 3px var(--accent); }
 </style>

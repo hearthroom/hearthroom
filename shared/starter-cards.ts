@@ -6,7 +6,7 @@
  */
 export type StarterGroup = "zh" | "en" | "ja" | "ko";
 export const STARTER_CARDS: Record<StarterGroup, { general: number | null; adult: number | null }> = {
-  zh: { general: null, adult: null },
+  zh: { general: 100188, adult: null },
   en: { general: null, adult: null },
   ja: { general: null, adult: null },
   ko: { general: null, adult: null },
