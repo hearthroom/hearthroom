@@ -84,6 +84,8 @@ async function clientId(provider:ProviderId=currentProvider()): Promise<string> 
 export async function beginLogin(returnTo: string, options: {provider?:ProviderId; linkFrom?:ProviderId} = {}): Promise<void> {
   const provider=options.provider ?? currentProvider();
   if(await managedAuth()){
+    // 回呼失敗時「重新登入」要回到同一頁：伺服器那份流程失敗就沒了，這裡自己也記一份。
+    sessionStorage.setItem(STORE.returnTo, safeReturnTo(returnTo));
     const result=await authRequest<{url:string}>("start",{provider,linkFrom:options.linkFrom,returnTo:safeReturnTo(returnTo),locale:String(i18n.global.locale.value)});
     location.assign(result.url);return;
   }
@@ -158,17 +160,24 @@ async function exchange(body: Record<string, string>, provider:ProviderId=curren
   };
 }
 
+/** 這次登入原本要回去的頁面（回呼失敗時給「重新登入」用）。 */
+export function pendingReturnTo(): string {
+  return safeReturnTo(sessionStorage.getItem(STORE.returnTo) || "/");
+}
+
 export async function completeLogin(query: URLSearchParams): Promise<{ token: TokenPair; returnTo: string; provider:ProviderId; linkFrom?:ProviderId }> {
   if(await managedAuth()){
-    if(query.get("error")){await authRequest("cancel",{});throw new Error(t("auth.denied",{error:query.get("error")!}));}
+    if(query.get("error")){await authRequest("cancel",{});throw new Error("oauth_denied");}
     forgetManaged();
-    return authRequest("complete",{code:query.get("code"),state:query.get("state")});
+    const done=await authRequest<{ token: TokenPair; returnTo: string; provider:ProviderId; linkFrom?:ProviderId }>("complete",{code:query.get("code"),state:query.get("state")});
+    sessionStorage.removeItem(STORE.returnTo);
+    return done;
   }
   const pending=JSON.parse(sessionStorage.getItem("hearthroom.oauth.pending") || "{}");
   if(pending.provider!=='harbor'||pending.linkFrom)throw new Error(t('auth.badState'));
   const provider:ProviderId='harbor';
-  const error = query.get("error");
-  if (error) throw new Error(t("auth.denied", { error }));
+  // 穩定的碼，由回呼頁翻成使用者的語言（翻好的句子沒辦法在畫面上判斷是哪一種失敗）。
+  if (query.get("error")) throw new Error("oauth_denied");
 
   const code = query.get("code");
   const state = query.get("state");
