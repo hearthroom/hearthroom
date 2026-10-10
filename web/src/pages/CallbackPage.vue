@@ -5,7 +5,8 @@ import { RouterLink, useRouter } from "vue-router";
 import { connectionMessage } from "@/lib/connection-ui";
 import { setProvider } from "@/lib/provider";
 import { useProviderUpstream } from "@/lib/config";
-import { completeLogin } from "@/lib/oauth";
+import { completeLogin, pendingReturnTo } from "@/lib/oauth";
+import { loginPath } from "@/lib/login-return";
 import { useSession } from "@/lib/session";
 import { track } from "@/lib/track";
 import { useLocalePath } from "@/lib/use-locale";
@@ -15,6 +16,8 @@ const session = useSession();
 const { lp } = useLocalePath();
 const { t } = useI18n();
 const error = ref("");
+// 失敗後「重新登入」回到原本要去的那頁；先記下來，成功的路徑會清掉這份記錄。
+const retryTo = ref(lp(loginPath(pendingReturnTo())));
 onMounted(async () => {
   try {
     const completed = await completeLogin(new URLSearchParams(location.search));
@@ -28,10 +31,10 @@ onMounted(async () => {
   } catch (err) {
     const code = String((err as Error)?.message ?? "");
     track("login_fail", {
-      detail: code.includes("denied") ? "oauth_denied" : code.includes("state") ? "oauth_state" : "oauth_exchange",
+      detail: code === "oauth_denied" ? "oauth_denied" : code.includes("state") ? "oauth_state" : "oauth_exchange",
       ok: false,
     });
-    error.value = connectionMessage(err);
+    error.value = code === "oauth_denied" ? t("auth.denied") : connectionMessage(err);
   }
 });
 </script>
@@ -40,7 +43,7 @@ onMounted(async () => {
   <div class="page page--narrow">
     <template v-if="error">
       <p class="notice notice--error" role="alert">{{ error }}</p>
-      <RouterLink class="btn" :to="lp('/login')">{{ $t("auth.retry") }}</RouterLink>
+      <RouterLink class="btn" :to="retryTo">{{ $t("auth.retry") }}</RouterLink>
     </template>
     <p v-else class="muted">{{ $t("auth.completing") }}</p>
   </div>
