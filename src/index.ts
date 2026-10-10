@@ -63,6 +63,7 @@ import { type Env, HttpError } from "./types";
 import { serveSandbox } from "./sandbox";
 import { listSaves, putSave, removeSave } from "./saves";
 import { commentCard, countTop, deleteComment, listReplies, listTop, postComment, setLike, type Viewer } from "./comments";
+import { clearScore, readScore, setScore } from "./card-scores";
 import { SVG_WRAP_LIMIT, TOUCH_ICON_SIZE, allowedImageUrl, cardManifest, iconSize, signShortcutKey, svgWrap, verifyShortcutKey } from "./shortcut";
 import { buildSearchName, buildSearchText, RoleGone, upstream, ZONES, type Zone, CREATION_METHOD, type CommunityStatus, type UpstreamRole } from "./upstream";
 import { resolveFandom } from "./fandom";
@@ -912,6 +913,30 @@ app.put("/v1/comments/:id/like", async (c) => {
 app.delete("/v1/comments/:id/like", async (c) => {
   const member = await requireMember(c);
   await setLike(c.env.DB, c.req.param("id"), member.id, false, Date.now());
+  return c.body(null, 204);
+});
+
+/** 評分（src/card-scores.ts）：讀不用登入，評與收回要登入。門跟留言一樣：只有在榜的卡、成人卡要過門。 */
+app.get("/v1/cards/:id/score", async (c) => {
+  const card = await commentCardFor(c);
+  const viewer = await commentViewer(c);
+  return c.json(await readScore(c.env.DB, card.id, viewer.memberId), 200, { "Cache-Control": "private, no-store" });
+});
+
+app.put("/v1/cards/:id/score", async (c) => {
+  const member = await requireMember(c);
+  const card = await commentCardFor(c);
+  const body = (await c.req.json().catch(() => ({}))) as { score?: unknown };
+  await setScore(c.env.DB, card, member.id, body.score, Date.now());
+  note(c, { event: "card_score", subject: card.id, detail: `set_${body.score}` });
+  return c.body(null, 204);
+});
+
+app.delete("/v1/cards/:id/score", async (c) => {
+  const member = await requireMember(c);
+  const card = await commentCardFor(c);
+  await clearScore(c.env.DB, card.id, member.id);
+  note(c, { event: "card_score", subject: card.id, detail: "clear" });
   return c.body(null, 204);
 });
 
