@@ -14,7 +14,7 @@ import { boardCache } from "../src/index";
 import { upstream } from "../src/upstream";
 import { ADULT_CONSENT_VERSION } from "../shared/adult-consent";
 import { vi } from "vitest";
-import { bearer, envWithAssets, identities, makeMember, makeReviewer, resetDb, restoreUpstream, reviewOff, reviewOn, reviewUpstream, rolesOnMainSite, testHandle, recordD1 } from "./helpers";
+import { ratingBody, bearer, envWithAssets, identities, makeMember, makeReviewer, resetDb, restoreUpstream, reviewOff, reviewOn, reviewUpstream, rolesOnMainSite, testHandle, recordD1 } from "./helpers";
 
 const AUTHOR = 10001;
 const VIEWER = 40004;
@@ -40,24 +40,24 @@ const ids = (b: { items: { sourceRoleId: string }[] }) => b.items.map((i) => i.s
 
 /** 透過正式封存與審核流程建立兩張公開測試卡。 */
 async function listTwo() {
-  expect((await approveFixtureResponse(await submit("role-safe", { nsfw: false }))).status).toBe(201);
-  expect((await approveFixtureResponse(await submit("role-adult", { nsfw: true }))).status).toBe(201);
+  expect((await approveFixtureResponse(await submit("role-safe", { ...ratingBody(false) }))).status).toBe(201);
+  expect((await approveFixtureResponse(await submit("role-adult", { ...ratingBody(true) }))).status).toBe(201);
 }
 const adultBirthdate = () => { const d = new Date(); return `${d.getUTCFullYear() - 20}-01-01`; };
 const minorBirthdate = () => { const d = new Date(); return `${d.getUTCFullYear() - 15}-01-01`; };
 
 describe("提交時的宣告", () => {
-  it("沒宣告不收", async () => {
+  it("沒附分級問卷不收", async () => {
     const res = await submit("role-safe", {});
     expect(res.status).toBe(400);
-    expect((await json(res)).error).toBe("nsfw_required");
+    expect((await json(res)).error).toBe("rating_required");
   });
 
   it("宣告寫進卡片；沒開開關的人看榜、看標籤、看作者頁、看單卡、看分享預覽都當它不存在", async () => {
     await listTwo();
     expect(ids(await json(await SELF.fetch("https://c.test/v1/cards?zone=all&a=1")))).toEqual(["role-safe"]);
-    const adult = await env.DB.prepare("SELECT id, nsfw FROM cards WHERE source_role_id = 'role-adult'").first<{ id: string; nsfw: number }>();
-    expect(adult?.nsfw).toBe(1);
+    const adult = await env.DB.prepare("SELECT id, rating FROM cards WHERE source_role_id = 'role-adult'").first<{ id: string; rating: string }>();
+    expect(adult?.rating).toBe('R');
     // 沒登入／沒開：403 adult_content，內容一個欄位都不給（前端據此畫登入或驗年齡的門）
     const anon = await SELF.fetch(`https://c.test/v1/cards/${adult!.id}`);
     expect(anon.status).toBe(403);
@@ -230,7 +230,7 @@ describe("成人內容開關與年齡驗證", () => {
     expect(list.headers.get("X-Cache")).toBe("miss");
     const body = await json(list);
     expect(ids(body)).toEqual(["role-adult", "role-safe"]);
-    expect(body.items.find((i: any) => i.sourceRoleId === "role-adult").nsfw).toBe(true);
+    expect(body.items.find((i: any) => i.sourceRoleId === "role-adult").rating).toBe("R");
 
     const adult = await env.DB.prepare("SELECT id FROM cards WHERE source_role_id = 'role-adult'").first<{ id: string }>();
     const detail = await SELF.fetch(`https://c.test/v1/cards/${adult!.id}?nsfw=1`, { headers: bearer("viewer-token") });
@@ -268,9 +268,9 @@ describe("審核", () => {
 
   it("佇列與詳情帶著作者的宣告；沒驗年齡的審核人領不了成人內容的單", async () => {
     await makeReviewer(REVIEWER);
-    expect((await submit("role-adult", { nsfw: true })).status).toBe(201);
+    expect((await submit("role-adult", { ...ratingBody(true) })).status).toBe(201);
     const q = await json(await SELF.fetch("https://c.test/v1/review/queue", { headers: bearer("rev-token") }));
-    expect(q.items[0].nsfw).toBe(true);
+    expect(q.items[0].rating).toBe('R');
     const claim = await SELF.fetch(`https://c.test/v1/review/${q.items[0].id}/claim`, { method: "POST", headers: bearer("rev-token") });
     expect(claim.status).toBe(403);
     expect((await json(claim)).error).toBe("age_verification_required");
@@ -279,18 +279,18 @@ describe("審核", () => {
     await settings({ showNsfw: false }, "rev-token");
     expect((await SELF.fetch(`https://c.test/v1/review/${q.items[0].id}/claim`, { method: "POST", headers: bearer("rev-token") })).status).toBe(200);
     const detail = await json(await SELF.fetch(`https://c.test/v1/review/${q.items[0].id}/detail`, { headers: bearer("rev-token") }));
-    expect(detail.submission.nsfw).toBe(true);
+    expect(detail.submission.rating).toBe('R');
   });
 
   it("內容分級跟著版本；待審版本不可改寫，已公開分級保留到新版本核准", async () => {
-    const first=await submit("role-safe",{nsfw:true}); expect(first.status).toBe(201);
-    expect((await submit("role-safe",{nsfw:false})).status).toBe(409);
+    const first=await submit("role-safe",{...ratingBody(true)}); expect(first.status).toBe(201);
+    expect((await submit("role-safe",{...ratingBody(false)})).status).toBe(409);
     await approveFixtureResponse(first);
-    const res=await submit("role-safe",{nsfw:false});expect(res.status).toBe(200);
-    expect(await env.DB.prepare("SELECT status,nsfw FROM cards WHERE source_role_id='role-safe'").first()).toEqual({status:'approved',nsfw:1});
-    expect(await env.DB.prepare("SELECT kind,nsfw FROM review_submissions WHERE status='pending'").first()).toEqual({kind:'re',nsfw:0});
+    const res=await submit("role-safe",{...ratingBody(false)});expect(res.status).toBe(200);
+    expect(await env.DB.prepare("SELECT status,rating FROM cards WHERE source_role_id='role-safe'").first()).toEqual({status:'approved',rating:'R'});
+    expect(await env.DB.prepare("SELECT kind,rating FROM review_submissions WHERE status='pending'").first()).toEqual({kind:'re',rating:'G'});
     await approveFixtureResponse(res);
-    expect(await env.DB.prepare("SELECT status,nsfw FROM cards WHERE source_role_id='role-safe'").first()).toEqual({status:'approved',nsfw:0});
+    expect(await env.DB.prepare("SELECT status,rating FROM cards WHERE source_role_id='role-safe'").first()).toEqual({status:'approved',rating:'G'});
   });
 });
 

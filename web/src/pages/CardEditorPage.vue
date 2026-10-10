@@ -39,6 +39,8 @@ import {
   saveAuthorAsset,
   ApiError,
   registerCard,
+  fetchRatingDraft,
+  saveRatingDraft,
   beginCardEdit,
   unpublishRole,
   unregisterCard,
@@ -82,6 +84,9 @@ import { draftToTavern, entryContentMax, embedIntoPng, imageFetchUrl, worldbookT
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
 import { confirmDialog, confirmForm } from "@/lib/confirm";
+import { askRating, rate, usable } from "@/lib/rating";
+import RatingMark from "@/components/RatingMark.vue";
+import type { RatingAnswers } from "../../../shared/content-rating";
 import { track } from "@/lib/track";
 import FieldText from "@/components/editor/FieldText.vue";
 import ListEditor from "@/components/editor/ListEditor.vue";
@@ -103,6 +108,14 @@ const cardNumber = ref<number>();
 /** 這張卡目前在榜上的原作：再送審時先填好，不必重打；對到 Wikidata 的連編號一起帶 */
 const cardFandom = ref("");
 const cardFandomId = ref("");
+/**
+ * 分級問卷（owner 2026-10-10）：每次送審都要附。可以提前填好，存在本站當草稿；
+ * 改卡時伺服器帶回上一版的答案，存完自動重送審就用它。
+ */
+const ratingAnswers = ref<RatingAnswers | null>(null);
+const ratingResult = computed(() => (ratingAnswers.value ? rate(ratingAnswers.value) : null));
+/** 存完要重送審，但上一版沒有可沿用的分級問卷（問卷上線前送的）：作者得先補 */
+const ratingNeeded = ref(false);
 const isNew = computed(() => !roleId.value);
 // 已建立的中文卡可以在繁簡之間互換；以載入時的語言決定給不給選，選了之後選單不會消失。
 const scriptOptions = computed(() => scriptChoices(pristine.value.language));
@@ -511,6 +524,8 @@ onMounted(async () => {
     original.value = cloneDraft(draft.value);
     worldShown.value = Boolean(draft.value.world);
     if (token) {
+      // 提前做好的評測：讀不到不擋編輯，送審時再填
+      fetchRatingDraft(roleId.value, token, editorProvider.value).then((a) => { ratingAnswers.value = usable(a); }).catch(() => {});
       await wb.loadBound(token, roleId.value);
       for (const c of draft.value.world?.characters ?? []) {
         if (c.lorebookId) await memberBook(c).load(token, c.lorebookId).catch(() => {});
@@ -688,8 +703,10 @@ async function save() {
     let targetRoleId = roleId.value;
     const review = targetRoleId
       ? await beginCardEdit(targetRoleId, token, editorProvider.value)
-      : {resubmit:false, nsfw:false};
+      : {resubmit:false};
     reviewRetry.value = review.resubmit;
+    ratingNeeded.value = false;
+    if (review.ratingAnswers && !ratingAnswers.value) ratingAnswers.value = usable(review.ratingAnswers);
     reviewResubmitted.value = false;
     if (!targetRoleId) {
       const created = await createRole(
@@ -745,9 +762,17 @@ async function save() {
     await saveRegex(token, targetRoleId);
 
     if (review.resubmit) {
-      await registerCard(targetRoleId, token, review.nsfw === true, [], editorProvider.value, review.fandom ?? "", review.fandomId);
-      reviewRetry.value = false;
-      reviewResubmitted.value = true;
+      // 重送審沿用上一版的分級問卷；上一版沒填過（問卷上線前送的）就請作者現在補，不補就先不送
+      const answers = usable(review.ratingAnswers) ?? (await askRating(ratingAnswers.value));
+      if (answers) {
+        ratingAnswers.value = answers;
+        await saveRatingDraft(targetRoleId, answers, token, editorProvider.value).catch(() => {});
+        await registerCard(targetRoleId, token, answers, [], editorProvider.value, review.fandom ?? "", review.fandomId);
+        reviewRetry.value = false;
+        reviewResubmitted.value = true;
+      } else {
+        ratingNeeded.value = true;
+      }
     }
 
     cardNumber.value = (await registerCardIdentity(targetRoleId, token, editorProvider.value)).num;
@@ -822,26 +847,36 @@ async function remove() {
 
 // ── 送審 ──────────────────────────────────────────────────────────
 
+/** 填或改分級問卷；已建立的卡順手存成草稿，下次送審直接帶出來。 */
+async function editRating(): Promise<RatingAnswers | null> {
+  const answers = await askRating(ratingAnswers.value);
+  if (!answers) return null;
+  ratingAnswers.value = answers;
+  if (roleId.value) {
+    const token = await session.accessToken();
+    if (token) await saveRatingDraft(roleId.value, answers, token, editorProvider.value).catch(() => {});
+  }
+  return answers;
+}
+
 async function publish() {
   if (!canPublish.value || saving.value) return;
+  // 先確認分級（填過的直接看結果），再確認送審與原作
+  const rated = await editRating();
+  if (!rated) return;
   const answer = await confirmForm({
     title: t("mine.consent.title"), message: t("workspace.reviewConsent"),
-    confirmText: t("mine.consent.confirm"), choiceLabel: t("mine.rating.label"),
-    choices: [
-      {value: "sfw", label: t("mine.rating.sfw"), hint: t("mine.rating.sfwHint")},
-      {value: "nsfw", label: t("mine.rating.nsfw"), hint: t("mine.rating.nsfwHint")},
-    ],
+    confirmText: t("mine.consent.confirm"),
     // 打作品名去 Wikidata 找候選，點了就對上編號；找不到照打，當自由文字
     field: { label: t("editor.fandom.label"), placeholder: t("editor.fandom.placeholder"), hint: t("editor.fandom.hint"), maxlength: 60, initial: cardFandom.value, initialId: cardFandomId.value || undefined, lookup: (q) => fetchFandomLookup(q) },
   });
   if (!answer) return;
-  const rating = answer.choice;
   saving.value = true;
   error.value = "";
   try {
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
-    await registerCard(roleId.value, token, rating === "nsfw", [], editorProvider.value, answer.text, answer.id);
+    await registerCard(roleId.value, token, rated, [], editorProvider.value, answer.text, answer.id);
     saving.value = false;
     await router.push(lp("/mine?fresh=1"));
   } catch (err) {
@@ -849,6 +884,7 @@ async function publish() {
       err instanceof ApiError && err.code === "weekly_quota_exceeded" ? t("mine.quota.exceeded")
       : err instanceof ApiError && (err.code === "fandom_lookup_failed" || err.code === "fandom_not_found") ? t("mine.fandomLookupFailed")
       : err instanceof ApiError && err.code === "card_too_large_for_review" ? t("mine.tooLargeForReview")
+      : err instanceof ApiError && err.code === "rating_version_outdated" ? t("error.ratingOutdated")
       : err instanceof Error ? err.message : t("state.saveFailed");
   } finally {
     saving.value = false;
@@ -973,7 +1009,8 @@ async function exportCard(format: "png" | "json") {
         <p v-else-if="roleVisibility === 'public'" class="notice" role="status">{{ $t("editor.publicNotice") }}</p>
         <p v-else-if="roleVisibility === 'waitReview'" class="notice" role="status">{{ $t("editor.reviewNotice") }}</p>
         <p v-if="reviewResubmitted" class="notice" role="status">{{ $t("workspace.reviewRestarted") }}</p>
-        <p v-if="reviewRetry && !saving" class="notice" role="status">{{ $t("workspace.reviewSaveRetry") }}</p>
+        <p v-if="ratingNeeded && !saving" class="notice" role="status">{{ $t("workspace.reviewNeedsRating") }}</p>
+        <p v-else-if="reviewRetry && !saving" class="notice" role="status">{{ $t("workspace.reviewSaveRetry") }}</p>
         <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
         <p v-else-if="restoredDraft" class="notice restored" role="status">
           <span>{{ $t("editor.draftRestored") }}</span>
@@ -1227,6 +1264,18 @@ async function exportCard(format: "png" | "json") {
               </li>
             </ul>
             <p v-if="blockers.length" class="subtle">{{ $t("editor.blockers", { n: blockers.length }) }}</p>
+          </div>
+
+          <!-- 分級：可以提前填，送審時會再給作者確認一次 -->
+          <div class="panel rating-panel" data-rating-panel>
+            <h2>{{ $t("rating.title") }}</h2>
+            <p class="muted">{{ $t("editor.rating.hint") }}</p>
+            <RatingMark v-if="ratingResult" :rating="ratingResult.rating" :descriptors="ratingResult.descriptors" />
+            <p v-else-if="isNew" class="subtle">{{ $t("editor.rating.saveFirst") }}</p>
+            <p v-else class="subtle">{{ $t("editor.rating.empty") }}</p>
+            <button type="button" class="btn" :disabled="isNew || saving" @click="editRating">
+              {{ ratingResult ? $t("editor.rating.change") : $t("editor.rating.start") }}
+            </button>
           </div>
 
           <div class="panel">

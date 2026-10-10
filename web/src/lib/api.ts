@@ -1,3 +1,4 @@
+import type { Rating, RatingAnswers, Topic } from "../../../shared/content-rating";
 import { COMMUNITY_API, UPSTREAM_API } from "./config";
 import { apiBaseOf, currentProvider, type ProviderId } from "./provider";
 import { hideParam } from "./hidden-tags";
@@ -112,7 +113,9 @@ const SITE_CODE_KEY: Record<string, string> = {
   hosting_operation_conflict: "workspace.submitConflict",
   publication_use_original: "error.publicationUseOriginal",
   adult_content: "card.gate.title",
-  nsfw_required: "error.nsfwRequired",
+  rating_required: "error.ratingRequired",
+  rating_answers_invalid: "error.ratingRequired",
+  rating_version_outdated: "error.ratingOutdated",
   birthdate_required: "error.birthdateRequired",
   invalid_birthdate: "error.invalidBirthdate",
   underage: "error.underage",
@@ -298,12 +301,13 @@ function publicationOperation(key:string):string {
 function clearPublicationOperation(key:string){publicationOperations.delete(key);try{localStorage.removeItem(key)}catch{}}
 
 /** 登記只送 roleId：內容由服務端自己去上游取，作者塞不進任何欄位。 */
-/** 登記／提交。nsfw 是作者對這張卡的分級宣告，必填（沒宣告伺服器不收）。 */
+/** 登記／提交。必附分級問卷（沒附伺服器不收）；成人旗標由伺服器從級別推導。 */
 /** distribute：其他已登入渠道的 token，登記成功後站台在背景把卡同步過去（登記即分發）。 */
 export async function registerCard(
   roleId: string,
   token: string,
-  nsfw: boolean,
+  /** 分級問卷答案（shared/content-rating.ts）；級別由伺服器算 */
+  ratingAnswers: RatingAnswers,
   distribute: { provider: ProviderId; token: string }[] = [],
   provider: ProviderId = currentProvider(),
   /** 原作（選填）；沒給就是沒有。fandomId 是對到的 Wikidata 編號，有它就以它為準 */
@@ -315,19 +319,36 @@ export async function registerCard(
     await fetch(`${COMMUNITY_API}/cards`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...from(), "X-Provider": provider, ...authHeaders(token) },
-      body: JSON.stringify({ roleId, nsfw, operationId: publicationOperation(key), ...(fandom !== undefined ? { fandom } : {}), ...(fandomId ? { fandomId } : {}), ...(distribute.length ? { distribute } : {}) }),
+      body: JSON.stringify({ roleId, ratingAnswers, operationId: publicationOperation(key), ...(fandom !== undefined ? { fandom } : {}), ...(fandomId ? { fandomId } : {}), ...(distribute.length ? { distribute } : {}) }),
     }),
   );
   clearPublicationOperation(key);
   return result;
 }
 
-export async function beginCardEdit(roleId:string,token:string,provider:ProviderId):Promise<{resubmit:boolean;nsfw?:boolean;fandom?:string;fandomId?:string}> {
-  const result=await json<{resubmit:boolean;nsfw?:boolean;fandom?:string;fandomId?:string}>(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(roleId)}/edit`, {
+/** 改卡前先通知本站：resubmit＝存完要重新送審；ratingAnswers＝上一版的分級問卷（沒有就要作者重填）。 */
+export async function beginCardEdit(roleId:string,token:string,provider:ProviderId):Promise<{resubmit:boolean;ratingAnswers?:RatingAnswers;fandom?:string;fandomId?:string}> {
+  const result=await json<{resubmit:boolean;ratingAnswers?:RatingAnswers;fandom?:string;fandomId?:string}>(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(roleId)}/edit`, {
     method:'POST',headers:{...from(),'X-Provider':provider,...authHeaders(token)},
   }));
   clearPublicationOperation(publicationKey(provider,roleId));
   return result;
+}
+
+/** 作者先存著的分級評測（每位作者、每張卡一份）；問卷改版後的舊草稿回 null。 */
+export async function fetchRatingDraft(roleId: string, token: string, provider: ProviderId = currentProvider()): Promise<RatingAnswers | null> {
+  const res = await json<{ answers: RatingAnswers | null }>(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(roleId)}/rating-draft`, {
+    headers: { ...from(), "X-Provider": provider, ...authHeaders(token) },
+  }));
+  return res.answers;
+}
+
+export async function saveRatingDraft(roleId: string, answers: RatingAnswers, token: string, provider: ProviderId = currentProvider()): Promise<void> {
+  await json(await fetch(`${COMMUNITY_API}/cards/${encodeURIComponent(roleId)}/rating-draft`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...from(), "X-Provider": provider, ...authHeaders(token) },
+    body: JSON.stringify(answers),
+  }));
 }
 
 export async function unregisterCard(roleId: string, token: string, provider: ProviderId = currentProvider()): Promise<void> {
@@ -349,8 +370,8 @@ export interface ReviewQueueItem {
   submittedAt: number;
   card: { id: string; roleId: string; name: string; summary: string; avatarUrl: string | null; zone: Zone | "all"; tags: string[] };
   stamps: { approve: number; required: number };
-  /** 作者宣告：成人內容 */
-  nsfw: boolean;
+  /** 作者問卷算出的級別；問卷上線前送的單是 null */
+  rating?: Rating | null;
   claim: "free" | "mine" | "other";
   stampedByMe: boolean;
   claimGeneration?: string;
@@ -360,8 +381,10 @@ export interface ReviewQueueItem {
 export interface ReviewDetail {
   submission: {
     id: string; kind: "first" | "re"; status: string; contentHash: string; submittedAt: number;
-    /** 作者宣告：成人內容 */
-    nsfw: boolean;
+    /** 作者問卷算出的級別、情節名稱與每題答案；問卷上線前送的單是 null */
+    rating?: Rating | null;
+    ratingDescriptors?: Topic[];
+    ratingAnswers?: RatingAnswers | null;
     claimedByMe: boolean;
     /** 我在這張單上蓋過章：可以回頭唯讀查看，不必再領 */
     stampedByMe?: boolean;
@@ -585,8 +608,8 @@ export interface MyCard {
   updateStatus?: string;
   /** 最近一次駁回給作者的說明。 */
   note?: string;
-  /** 作者宣告的分級；只有 registered 時才有。 */
-  nsfw?: boolean;
+  /** 過審那一版的級別（只有 registered 時才有）；null＝評級缺失（問卷上線前上架的一般卡），下次送審要補 */
+  rating?: Rating | null;
   /** 已發布，但作者之後改過、還沒送審（草稿的內容版本跟過審那一版不同）；只在是的時候才有。 */
   draftChanged?: boolean;
 }

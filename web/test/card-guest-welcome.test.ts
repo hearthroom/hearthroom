@@ -10,7 +10,7 @@ vi.mock('moonstage/stage', () => ({}));
 vi.mock('moonstage/stage.css', () => ({}));
 import CardPage from '../src/pages/CardPage.vue';
 
-const card = { id: '900001', num: 900001, roleId: 'luna-hosted', provider: 'harbor', zone: 'zh', name: 'Fixture', summary: 'Fixture', tags: [], author: { handle: null, accountNumId: 7, name: 'Author', avatar: '' }, talkNum: 0, followNum: 0, registeredAt: 1, syncedAt: 1, nsfw: false };
+const card = { id: '900001', num: 900001, roleId: 'luna-hosted', provider: 'harbor', zone: 'zh', name: 'Fixture', summary: 'Fixture', tags: [], author: { handle: null, accountNumId: 7, name: 'Author', avatar: '' }, talkNum: 0, followNum: 0, registeredAt: 1, syncedAt: 1, rating: null };
 const raw = '<zzt>Welcome</zzt>';
 const asset = { rules: [{ id: 'title', find: '/<zzt>(.*?)<\\/zzt>/g', replace: '<div class="guest-decoration">$1</div>', enabled: true }], cardFormat: 'mmd' };
 let app: App | undefined;

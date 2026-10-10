@@ -2,9 +2,10 @@
 import { computed, ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { ApiError, fetchDraftState, registerCard, type DraftState } from '@/lib/api';
+import { ApiError, fetchDraftState, fetchRatingDraft, registerCard, saveRatingDraft, type DraftState } from '@/lib/api';
 import { accountToken } from '@/lib/connections';
-import { confirmChoice } from '@/lib/confirm';
+import { confirmDialog } from '@/lib/confirm';
+import { askRating } from '@/lib/rating';
 import { currentProvider, type ProviderId } from '@/lib/provider';
 import { platformPath } from '@/lib/distribution';
 import { useSession } from '@/lib/session';
@@ -37,21 +38,23 @@ const approved = computed(() => props.card.status === 'approved');
 const canSubmitUpdate = computed(() => approved.value && !!draft.value?.draftChanged && draft.value.updateStatus !== 'pending');
 async function submit() {
   if (busy.value || !owner.value) return;
-  const rating = await confirmChoice({
+  // 每次送審都附分級問卷：先帶出作者存過的評測讓他確認，沒有就從頭填
+  let token: string | null = null;
+  try { token = await accountToken(provider.value, props.card.author.accountNumId); } catch { token = null; }
+  if (!token) { error.value = t('auth.expired'); return; }
+  const saved = await fetchRatingDraft(sourceId.value, token, provider.value).catch(() => null);
+  const answers = await askRating(saved);
+  if (!answers) return;
+  const ok = await confirmDialog({
     title: t('mine.consent.title'),
     message: t(provider.value === 'harbor' ? 'workspace.reviewConsent' : 'mine.consent.message'),
-    confirmText: t('mine.consent.confirm'), choiceLabel: t('mine.rating.label'),
-    choices: [
-      {value:'sfw',label:t('mine.rating.sfw'),hint:t('mine.rating.sfwHint')},
-      {value:'nsfw',label:t('mine.rating.nsfw'),hint:t('mine.rating.nsfwHint')},
-    ],
+    confirmText: t('mine.consent.confirm'),
   });
-  if (!rating) return;
+  if (!ok) return;
   busy.value = true; error.value = '';
   try {
-    const token = await accountToken(provider.value, props.card.author.accountNumId);
-    if (!token) throw new Error(t('auth.expired'));
-    await registerCard(sourceId.value, token, rating === 'nsfw', [], provider.value);
+    void saveRatingDraft(sourceId.value, answers, token, provider.value).catch(() => {});
+    await registerCard(sourceId.value, token, answers, [], provider.value);
     if (draft.value) draft.value = { ...draft.value, draftChanged: false, updateStatus: 'pending' };
     emit('submitted');
   } catch (err) {

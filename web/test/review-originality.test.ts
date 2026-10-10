@@ -9,7 +9,7 @@ import Page from '../src/pages/ReviewDetailPage.vue';
 
 const persona='AAAA重複的第一段BBBB另一段CCCC';
 const detail={
- submission:{id:'s1',kind:'first',status:'pending',contentHash:'version:v',submittedAt:0,nsfw:false,claimedByMe:true,claimGeneration:'g',required:2,stamps:[]},
+ submission:{id:'s1',kind:'first',status:'pending',contentHash:'version:v',submittedAt:0,rating:null,claimedByMe:true,claimGeneration:'g',required:2,stamps:[]},
  card:{id:'100001',roleId:'r'},
  detail:{document:{roleName:'Test',roleDesc:'',roleDetailDesc:persona,roleTag:'[]',talkExample:'[]'},greetings:{welcome:'',alternates:[],prologue:[]},worldbook:null,worldbooks:[],authorAsset:{rules:[]},costProfile:{}},
 };

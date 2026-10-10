@@ -134,7 +134,7 @@ it('canonical social URLs preserve the global identity when providers have the s
 });
 
 it('does not expose restricted card details to sharing crawlers',async()=>{
-  for(const change of ["nsfw=1","nsfw=0,status='pending'","status='approved',public_blocked=1"]){
+  for(const change of ["rating='R'","rating=NULL,status='pending'","status='approved',public_blocked=1"]){
     await env.DB.prepare(`UPDATE cards SET ${change} WHERE source_role_id='r-1'`).run();
     const {html}=await page('/cards/r-1/');
     expect(html).not.toContain('Night Detective');

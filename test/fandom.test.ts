@@ -4,7 +4,7 @@
 import { env, SELF, createScheduledController, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
-import { bearer, identities, makeMember, makeReviewer, resetDb, restoreUpstream, role, rolesOnMainSite } from "./helpers";
+import { ADULT_RATING, GENERAL_RATING, ratingBody, bearer, identities, makeMember, makeReviewer, resetDb, restoreUpstream, role, rolesOnMainSite } from "./helpers";
 import { beginHostedEdit, hostGateway, submitHosted } from "../src/hosting";
 import { claim, pendingSubmissionOf, stamp } from "../src/review";
 import { getCard } from "../src/cards";
@@ -23,8 +23,8 @@ async function author(roleId: string, f: Parameters<typeof role>[0] = { roleId }
   const snapshot = { document: { roleDetailDesc: "fixture" }, hashes: { card: "", welcome: "", worldbook: "", authorAsset: "", content: "" } } as never;
   vi.spyOn(upstream, "readForReview").mockResolvedValue(snapshot);
   vi.spyOn(upstream, "readSealedForReview").mockResolvedValue(snapshot);
-  const submit = async (opts: { nsfw?: boolean; fandom?: string; fandomId?: string } = {}) =>
-    submitHosted(env, { memberId, account: 10001, role: draft, token: "fixture", nsfw: opts.nsfw ?? false, fandom: await resolveFandom(env.DB, opts), operationId: crypto.randomUUID(), now: Date.now() });
+  const submit = async (opts: { adult?: boolean; fandom?: string; fandomId?: string } = {}) =>
+    submitHosted(env, { memberId, account: 10001, role: draft, token: "fixture", rating: opts.adult ? ADULT_RATING : GENERAL_RATING, fandom: await resolveFandom(env.DB, opts), operationId: crypto.randomUUID(), now: Date.now() });
   const pending = async () => (await pendingSubmissionOf(env.DB, (await getCard(env.DB, roleId, "harbor"))!.id))!;
   const approve = async () => {
     const s = await pending();
@@ -91,7 +91,7 @@ describe("原作欄位", () => {
     await a.submit({ fandom: "原神" });
     await a.approve();
     await a.submit({ fandom: "原神" });
-    expect(await beginHostedEdit(env.DB, a.memberId, "fan-edit", Date.now())).toEqual({ resubmit: true, nsfw: false, fandom: "原神" });
+    expect(await beginHostedEdit(env.DB, a.memberId, "fan-edit", Date.now())).toEqual({ resubmit: true, ...ratingBody(false), fandom: "原神" });
   });
 
   it("審核人可以改原作，留稽核；過審後上的是改過的", async () => {
@@ -237,7 +237,7 @@ describe("搜尋建議", () => {
     await a.submit({ fandom: "崩壞三" });
     await a.approve();
     const b = await author("sug-b", { roleId: "sug-b", name: "崩壞 成人卡", tags: ["崩壞"] });
-    await b.submit({ fandom: "崩壞三", nsfw: true });
+    await b.submit({ fandom: "崩壞三", adult: true });
     await b.approve();
     const res = await SELF.fetch("https://c.test/v1/suggest?zone=zh&q=崩坏");
     expect(res.status).toBe(200);

@@ -1,7 +1,7 @@
 import {approveFixtureResponse} from './hosted-fixture';
 import { SELF, env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { bearer, identities, makeReviewer, resetDb, restoreUpstream, rolesOnMainSite } from "./helpers";
+import { ratingBody, bearer, identities, makeReviewer, resetDb, restoreUpstream, rolesOnMainSite } from "./helpers";
 import { ADULT_CONSENT_VERSION } from "../shared/adult-consent";
 
 // 留言是本站自己的資料：掛在本站的卡上、寫的人是本站成員，供應商不參與。
@@ -16,7 +16,7 @@ beforeEach(async () => {
   identities({ "author-token": AUTHOR, "fan": FAN, "other": OTHER, "mod": MOD });
   rolesOnMainSite({ roleId: "role-1", authorNumId: AUTHOR });
   const res = await approveFixtureResponse(await SELF.fetch("https://c.test/v1/cards", {
-    method: "POST", headers: { "Content-Type": "application/json", ...bearer("author-token") }, body: JSON.stringify({operationId:crypto.randomUUID(),...({ roleId: "role-1", nsfw: false })}),
+    method: "POST", headers: { "Content-Type": "application/json", ...bearer("author-token") }, body: JSON.stringify({operationId:crypto.randomUUID(),...({ roleId: "role-1", ...ratingBody(false) })}),
   }));
   cardId = ((await res.json()) as { id: string }).id;
 });
@@ -154,7 +154,7 @@ describe("刪除", () => {
 describe("成人內容", () => {
   it("留言區跟卡片頁同一道門：沒過門的人讀不到", async () => {
     await say("fan", "成人卡底下的留言");
-    await env.DB.prepare("UPDATE cards SET nsfw = 1 WHERE id = ?").bind(cardId).run();
+    await env.DB.prepare("UPDATE cards SET rating='R' WHERE id = ?").bind(cardId).run();
     const res = await list();
     expect(res.status).toBe(403);
     expect((await json(res)).error).toBe("adult_content");

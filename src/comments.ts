@@ -25,17 +25,18 @@ export interface CommentCard {
   id: string;
   provider: ProviderId;
   authorNumId: number;
-  nsfw: boolean;
+  /** 成人內容（限制級）：留言區跟卡片頁同一道門 */
+  adult: boolean;
 }
 
 /** 這張卡在榜才有留言區；不在榜一律 404（跟卡片頁一致，不透露卡存不存在）。 */
 export async function commentCard(db: D1Database, cardId: string): Promise<CommentCard> {
   const row = await db
-    .prepare("SELECT id, provider, author_num_id, nsfw, status, public_blocked FROM cards WHERE id = ?")
+    .prepare("SELECT id, provider, author_num_id, rating, status, public_blocked FROM cards WHERE id = ?")
     .bind(cardId)
-    .first<{ id: string; provider: string; author_num_id: number; nsfw: number; status: string; public_blocked:number }>();
+    .first<{ id: string; provider: string; author_num_id: number; rating: string | null; status: string; public_blocked:number }>();
   if (!row || (row.status !== "approved" || row.public_blocked)) throw new HttpError(404, "card not found");
-  return { id: row.id, provider: row.provider as ProviderId, authorNumId: row.author_num_id, nsfw: row.nsfw === 1 };
+  return { id: row.id, provider: row.provider as ProviderId, authorNumId: row.author_num_id, adult: row.rating === "R" };
 }
 
 /** 這張卡的作者是哪個成員（連結過帳號的算擁有者那一個）；作者從沒登入過本站就是 null。 */
@@ -195,7 +196,7 @@ export async function deleteComment(db: D1Database, commentId: string, viewer: V
   if (!row) throw new HttpError(404, "comment not found");
   let allowed = viewer.moderator || viewer.memberId === row.member_id;
   if (!allowed && viewer.memberId) {
-    const author = await cardAuthorMemberId(db, { id: row.card_id, provider: row.provider as ProviderId, authorNumId: row.author_num_id, nsfw: false });
+    const author = await cardAuthorMemberId(db, { id: row.card_id, provider: row.provider as ProviderId, authorNumId: row.author_num_id, adult: false });
     allowed = author === viewer.memberId;
   }
   if (!allowed) throw new HttpError(403, "not allowed to delete this comment");

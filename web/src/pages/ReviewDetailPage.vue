@@ -18,9 +18,12 @@ import { pageTitle } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
 import { readTags, readTalkExample } from "@/lib/role-draft";
+import RatingMark from "@/components/RatingMark.vue";
+import { ratingLocale } from "@/lib/rating";
+import { RATING_OTHER, RATING_TOPICS } from "../../../shared/content-rating";
 
 const route = useRoute();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const { lp } = useLocalePath();
 const session = useSession();
 
@@ -32,9 +35,28 @@ const needsClaim = ref(false);
 const done = ref("");
 const busy = ref(false);
 const note = ref("");
-const section = ref<"basic" | "persona" | "originality" | "dialogue" | "worldbook" | "display" | "cost">("basic");
-const SECTIONS = ["basic", "persona", "originality", "dialogue", "worldbook", "display", "cost"] as const;
-const REVIEW_SECTIONS: readonly string[] = ["originality", "display", "cost"];
+const section = ref<"basic" | "rating" | "persona" | "originality" | "dialogue" | "worldbook" | "display" | "cost">("basic");
+const SECTIONS = ["basic", "rating", "persona", "originality", "dialogue", "worldbook", "display", "cost"] as const;
+const REVIEW_SECTIONS: readonly string[] = ["rating", "originality", "display", "cost"];
+
+/**
+ * 作者的分級問卷（owner 2026-10-10）：審核人看一眼答案，對照內容是不是他說的那樣。
+ * 每一類列出作者選的那一項與它對應的級別；沒勾的類型也列出來，審核人才看得出「他說沒有」。
+ */
+const ratingLang = computed(() => ratingLocale(String(locale.value)));
+const ratingRows = computed(() => {
+  const a = data.value?.submission.ratingAnswers;
+  if (!a) return [];
+  return RATING_TOPICS.map((topic) => {
+    const opt = topic.options.find((o) => o.id === a.topics[topic.id]);
+    return { id: topic.id, title: topic.title[ratingLang.value], answer: opt?.text[ratingLang.value] ?? null, rating: opt?.rating ?? null };
+  });
+});
+const ratingOther = computed(() => {
+  const a = data.value?.submission.ratingAnswers;
+  const opt = a ? RATING_OTHER.options.find((o) => o.id === a.other) : undefined;
+  return opt ? { text: opt.text[ratingLang.value], rating: opt.rating } : null;
+});
 
 // 查重只給審核人參考，不替審核人下結論；分開載入，查重慢或失敗都不擋審核頁。
 const originality = ref<ReviewOriginality | null>(null);
@@ -215,10 +237,11 @@ onMounted(() => { void load(); });
           </p>
           <h2 class="head__title display">{{ doc.roleName }}</h2>
           <p class="subtle">{{ doc.roleDesc }}</p>
-          <!-- 作者的分級宣告放最上面：審核人第一件事就是對照內容跟它符不符 -->
-          <p class="rating" :class="{ 'rating--nsfw': data.submission.nsfw }">
+          <!-- 作者的分級放最上面：審核人第一件事就是對照內容跟它符不符；問卷在「分級問卷」分頁 -->
+          <p class="rating">
             {{ $t("review.rating.declared") }}
-            <strong>{{ data.submission.nsfw ? $t("review.rating.nsfw") : $t("review.rating.sfw") }}</strong>
+            <RatingMark v-if="data.submission.rating" :rating="data.submission.rating" variant="chip" />
+            <strong v-else>{{ $t("review.rating.sfw") }}</strong>
             · {{ $t("review.rating.hint") }}
           </p>
         </div>
@@ -230,7 +253,7 @@ onMounted(() => { void load(); });
       </header>
 
       <div class="seg tabs">
-        <button v-for="s in SECTIONS" :key="s" class="seg__item" :class="{ 'seg__item--on': section === s }" :aria-pressed="section === s" @click="section = s">
+        <button v-for="s in SECTIONS" :key="s" class="seg__item" :class="{ 'seg__item--on': section === s }" :aria-pressed="section === s" @click="section = s; ($event.currentTarget as HTMLElement).scrollIntoView({ block: 'nearest', inline: 'nearest' })">
           {{ sectionLabel(s) }}
         </button>
       </div>
@@ -268,6 +291,27 @@ onMounted(() => { void load(); });
         <div v-if="doc.roleBackground || doc.roleAvatar" class="field"><label>{{ $t("editor.section.media") }}</label><img class="art" :src="doc.roleBackground || doc.roleAvatar" alt="" /></div>
         <!-- 分享圖（選填）也是訪客看得到的內容：貼連結時的預覽大圖 -->
         <div v-if="doc.roleShareImage" class="field"><label>{{ $t("editor.shareImage") }}</label><img class="art art--share" :src="doc.roleShareImage" alt="" /></div>
+      </section>
+
+      <section v-show="section === 'rating'" class="pane panel" data-rating-answers>
+        <template v-if="data.submission.rating && data.submission.ratingAnswers">
+          <RatingMark :rating="data.submission.rating" :descriptors="data.submission.ratingDescriptors ?? []" />
+          <p class="subtle small-note">{{ $t("review.rating.answersHint") }}</p>
+          <dl class="answers">
+            <template v-for="row in ratingRows" :key="row.id">
+              <dt>{{ row.title }}</dt>
+              <dd>
+                <template v-if="row.answer"><RatingMark :rating="row.rating!" variant="chip" /> {{ row.answer }}</template>
+                <span v-else class="subtle">{{ $t("review.rating.notPicked") }}</span>
+              </dd>
+            </template>
+            <template v-if="ratingOther">
+              <dt>{{ $t("review.rating.other") }}</dt>
+              <dd><RatingMark v-if="ratingOther.rating !== 'G'" :rating="ratingOther.rating" variant="chip" /> {{ ratingOther.text }}</dd>
+            </template>
+          </dl>
+        </template>
+        <p v-else class="subtle">{{ $t("review.rating.legacy") }}</p>
       </section>
 
       <section v-show="section === 'persona'" class="pane panel">
@@ -425,7 +469,11 @@ onMounted(() => { void load(); });
 .head { display: flex; flex-wrap: wrap; gap: var(--s-4); align-items: flex-start; justify-content: space-between; margin-bottom: var(--s-4); }
 .head__title { font-size: clamp(20px, 2.6vw, 24px); margin: 2px 0; }
 .head__acts { display: flex; gap: var(--s-2); }
-.tabs { margin-bottom: var(--s-4); overflow-x: auto; }
+/* 分段控制預設是 inline-flex，會照內容撐寬、自己永遠不捲；外層又把超出的部分裁掉，窄螢幕右邊的分頁就點不到。
+   這裡改成跟容器同寬、可以橫向滑動，每格不壓縮 */
+.tabs { display: flex; max-width: 100%; margin-bottom: var(--s-4); overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tabs .seg__item { flex: none; }
 .pane { padding: var(--s-4); margin-bottom: var(--s-4); }
 .pane .field:last-child { margin-bottom: 0; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
@@ -463,8 +511,11 @@ onMounted(() => { void load(); });
 .record__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); font-size: 13px; }
 .record__note { max-height: 240px; overflow-y: auto; font-size: 13px; }
 .chip--reject { background: color-mix(in srgb, var(--danger) 12%, var(--surface)); color: var(--danger); }
-.rating { margin: 6px 0 0; font-size: 13px; color: var(--text-2); }
-.rating--nsfw strong { color: var(--danger); }
+.rating { margin: 6px 0 0; font-size: 13px; color: var(--text-2); display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.answers { display: grid; grid-template-columns: max-content 1fr; gap: 10px var(--s-4); margin: 0; font-size: 14px; line-height: 1.5; }
+.answers dt { color: var(--text-2); }
+.answers dd { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+@media (max-width: 480px) { .answers { grid-template-columns: 1fr; gap: 4px; } .answers dd { margin-bottom: 8px; } }
 .detail-ghost { height: 60vh; border-radius: var(--r-md); }
 .originality-ghost { height: 120px; border-radius: var(--r-md); }
 .score { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2) var(--s-3); margin-bottom: var(--s-2); }

@@ -28,7 +28,7 @@ async function card(source: string, opts: { status?: string; hosted?: string | n
 }
 
 async function submissionFor(cardId: string, id = "s1", status = "approved") {
-  await env.DB.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,submitted_at,nsfw) VALUES(?,?,'harbor',?,'first',?,1,0)")
+  await env.DB.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,submitted_at) VALUES(?,?,'harbor',?,'first',?,1)")
     .bind(id, cardId, id, status).run();
 }
 

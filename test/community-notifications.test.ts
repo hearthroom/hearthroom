@@ -3,7 +3,7 @@ import { SELF, env, createExecutionContext } from 'cloudflare:test';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import app from '../src/index';
 import { sign } from '../src/community/crypto';
-import { bearer, identities, makeMember, resetDb, restoreUpstream, rolesOnMainSite } from './helpers';
+import { ratingBody, bearer, identities, makeMember, resetDb, restoreUpstream, rolesOnMainSite } from './helpers';
 import { setPreferences } from '../src/community/service';
 import type { Env } from '../src/types';
 
@@ -24,7 +24,7 @@ beforeEach(async () => {
  rolesOnMainSite({ roleId: 'role-1', authorNumId: AUTHOR, name: '雨夜書店', nameEn: 'Rainy Bookshop', nameJa: '雨夜の本屋' });
  author = await makeMember(AUTHOR); fan = await makeMember(FAN); other = await makeMember(OTHER);
  await env.DB.prepare('UPDATE members SET display_name=? WHERE id=?').bind('小雨', fan).run();
- const res = await approveFixtureResponse(await SELF.fetch('https://c.test/v1/cards', { method: 'POST', headers: { 'Content-Type': 'application/json', ...bearer('author') }, body: JSON.stringify({ operationId: crypto.randomUUID(), roleId: 'role-1', nsfw: false }) }));
+ const res = await approveFixtureResponse(await SELF.fetch('https://c.test/v1/cards', { method: 'POST', headers: { 'Content-Type': 'application/json', ...bearer('author') }, body: JSON.stringify({ operationId: crypto.randomUUID(), roleId: 'role-1', ...ratingBody(false) }) }));
  cardId = (await json(res)).id;
 });
 afterEach(() => restoreUpstream());
@@ -70,7 +70,7 @@ it('sends by default, honours an explicit opt-out, and never notifies yourself',
 it('points followers at the new card itself and records the author', async () => {
  await env.DB.prepare('INSERT INTO member_follows VALUES(?,?,?)').bind(fan, author, Date.now()).run();
  rolesOnMainSite({ roleId: 'role-2', authorNumId: AUTHOR, name: '第二張', nameEn: 'Second' });
- const res = await approveFixtureResponse(await SELF.fetch('https://c.test/v1/cards', { method: 'POST', headers: { 'Content-Type': 'application/json', ...bearer('author') }, body: JSON.stringify({ operationId: crypto.randomUUID(), roleId: 'role-2', nsfw: false }) }));
+ const res = await approveFixtureResponse(await SELF.fetch('https://c.test/v1/cards', { method: 'POST', headers: { 'Content-Type': 'application/json', ...bearer('author') }, body: JSON.stringify({ operationId: crypto.randomUUID(), roleId: 'role-2', ...ratingBody(false) }) }));
  const second = (await json(res)).id;
  const stored = (await rows(fan, 'followed_work')).results;
  expect(stored).toHaveLength(1);
@@ -145,9 +145,9 @@ it('summarises unread counts, remembers the interface language for Discord, and 
  const delivered = await json(await bridge('notification', { id }));
  expect(delivered).toEqual({ kind: 'comment_reply', path: '/cards/' + cardId, discord_id: '323456789012345678', locale: 'ja', text: '小雨 さんが『雨夜の本屋』へのコメントに返信しました' });
  // Members are not guaranteed adults, so an adult card is not named on Discord for them.
- await env.DB.prepare('UPDATE cards SET nsfw=1 WHERE id=?').bind(Number(cardId)).run();
+ await env.DB.prepare("UPDATE cards SET rating='R' WHERE id=?").bind(Number(cardId)).run();
  expect((await json(await bridge('notification', { id }))).text).toBe('コメントに返信がありました');
- await env.DB.prepare('UPDATE cards SET nsfw=0 WHERE id=?').bind(Number(cardId)).run();
+ await env.DB.prepare('UPDATE cards SET rating=NULL WHERE id=?').bind(Number(cardId)).run();
  expect((await api('/read-all', 'author', { method: 'POST' })).status).toBe(200);
  expect(await json(await api('/summary', 'author'))).toEqual({ unread: 0 });
  expect((await json(await api('', 'author'))).items.every((n: any) => n.read_at)).toBe(true);
@@ -159,7 +159,7 @@ it('carries the card and the verdict on review results', async () => {
  rolesOnMainSite({ roleId: 'reviewed', authorNumId: AUTHOR, name: '送審卡', nameEn: 'Reviewed' });
  reviewUpstream(); reviewOn();
  try {
-  const submitted = await SELF.fetch('https://c.test/v1/cards', { method: 'POST', headers: { 'Content-Type': 'application/json', ...bearer('author') }, body: JSON.stringify({ operationId: crypto.randomUUID(), roleId: 'reviewed', nsfw: false }) });
+  const submitted = await SELF.fetch('https://c.test/v1/cards', { method: 'POST', headers: { 'Content-Type': 'application/json', ...bearer('author') }, body: JSON.stringify({ operationId: crypto.randomUUID(), roleId: 'reviewed', ...ratingBody(false) }) });
   expect(submitted.status).toBe(201);
   const row = await env.DB.prepare("SELECT s.id,s.card_id FROM review_submissions s JOIN cards c ON c.id=s.card_id WHERE c.source_role_id='reviewed'").first<{ id: string; card_id: number }>();
   // Same statement shape as the reviewer's reject: verdict and note land together.
