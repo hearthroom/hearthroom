@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/",
+  "title": {
+    "zh-Hant": "第一次來的新朋友會有一段引導，一步步帶你從首頁走進第一張卡。",
+    "zh-Hans": "第一次来的新朋友会有一段引导，一步步带你从首页走进第一张卡。",
+    "en": "New visitors get a short guided tour that walks them from the home page into their first card.",
+    "ja": "初めての方には、ホームから最初のカードまで一歩ずつ案内するガイドが表示されます。",
+    "ko": "처음 오신 분께는 홈에서 첫 카드까지 한 단계씩 안내하는 가이드가 나옵니다."
+  }
+}

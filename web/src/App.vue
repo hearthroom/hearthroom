@@ -24,6 +24,7 @@ import { shouldShowDownloadEntry } from "@/lib/download";
 import { isPlayHost } from "@/lib/site";
 import { loginPath } from "@/lib/login-return";
 import NewMark from "@/components/NewMark.vue";
+import CoachTour from "@/components/CoachTour.vue";
 import { useUpdates } from "@/lib/updates";
 import { footerGroups, footerLegal, type FooterContext } from "@/lib/footer-nav";
 
@@ -142,6 +143,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
     <RouterLink :to="lp('/mine')" :aria-current="route.path === lp('/mine') ? 'page' : undefined">{{ $t('nav.mine') }}</RouterLink>
   </nav>
   <main id="main" tabindex="-1" :class="{ 'site-main': !route.meta.bare, 'main--bare': route.meta.bare }"><RouterView /></main>
+  <CoachTour />
   <ConfirmDialog />
   <!-- 裝到主畫面的提示：對話與遊戲頁是全螢幕的，不在那裡打擾 -->
   <!-- 卡片 App 網域的頁全是 bare，但「加到主畫面」的提示卡就在那裡 -->
