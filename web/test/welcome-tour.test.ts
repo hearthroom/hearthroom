@@ -95,6 +95,14 @@ it("站上發不出遊客憑證（頁首沒有 R18 鈕）：不提 R18，直接�
   expect(tourFocus.value).toBe("");
 });
 
+it("已經開了成人內容（例如在卡片頁確認過年齡）：不再問 R18，直接指向成人版", async () => {
+  starters.zh.general = 100001; starters.zh.adult = 100002; guest.showNsfw = true;
+  await mount();
+  expect(tour()?.textContent).toContain(i18n.global.t("tour.start.title"));
+  expect(tour()?.textContent).toContain("卡100002");
+  expect(tourFocus.value).toBe("");
+});
+
 it("略過：收起來，之後不再出現", async () => {
   starters.zh.general = 100001;
   await mount();
