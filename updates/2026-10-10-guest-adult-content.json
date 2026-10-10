@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/",
+  "title": {
+    "zh-Hant": "在首頁頁首按 R18 確認年齡，沒登入也能開啟成人內容。",
+    "zh-Hans": "在首页顶部点 R18 确认年龄，不登录也能开启成人内容。",
+    "en": "Tap R18 at the top of the home page and confirm your age to see adult content, no sign-in needed.",
+    "ja": "ホーム上部の R18 で年齢を確認すれば、ログインしなくても成人向けコンテンツを表示できます。",
+    "ko": "홈 상단의 R18에서 나이를 확인하면 로그인하지 않아도 성인 콘텐츠를 볼 수 있습니다."
+  },
+  "body": {
+    "zh-Hant": "確認過的年齡會在登入時帶進帳號，不必再填一次。",
+    "zh-Hans": "确认过的年龄会在登录时带进账号，不用再填一次。",
+    "en": "The age you confirmed carries over to your account when you sign in, so you won't be asked again.",
+    "ja": "確認した年齢はログイン時にアカウントへ引き継がれるので、もう一度入力する必要はありません。",
+    "ko": "확인한 나이는 로그인할 때 계정으로 옮겨지므로 다시 입력할 필요가 없습니다."
+  }
+}

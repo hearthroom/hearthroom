@@ -4,6 +4,7 @@ import worker from '../src/index';
 import { upstream } from '../src/upstream';
 import { resetDb } from './helpers';
 import { accountAuthMaintenance, openAuth, sealAuth } from '../src/account-auth';
+import { ADULT_CONSENT_VERSION } from '../shared/adult-consent';
 
 const origin = 'https://hearthroom.club';
 const authEnv = () => ({ ...env, AUTH_ENABLED: 'true', AUTH_ALLOWED_ORIGINS: origin,
@@ -441,4 +442,42 @@ it('asks Harbor for the sign-in page in the player\'s language',async()=>{
   expect(new URL((await start.json() as any).url).searchParams.get('ui_locales')).toBe('ja');
   const odd=await request('start',{provider:'harbor',returnTo:'/me',locale:'ja"><script>'});
   expect(new URL((await odd.json() as any).url).searchParams.has('ui_locales')).toBe(false);
+});
+
+// 遊客確認過成年再登入：帶進帳號，從此不必再填（owner 2026-10-10）
+async function guestConfirm(body:Record<string,unknown>){
+  const year=new Date().getUTCFullYear()-20;
+  return request('adult',{showNsfw:true,birthdate:`${year}-01-01`,consentVersion:ADULT_CONSENT_VERSION,...body});
+}
+const memberAdult=(id:number)=>env.DB.prepare(`SELECT m.show_nsfw,m.age_verified_at,m.adult_consent_version FROM members m
+  JOIN member_identities i ON i.member_id=m.id WHERE i.provider='harbor' AND i.external_id=?`).bind(String(id)).first<{show_nsfw:number;age_verified_at:number|null;adult_consent_version:number|null}>();
+it('carries a guest adult confirmation into the account and clears the guest credential',async()=>{
+  providers();
+  expect((await guestConfirm({})).status).toBe(200);
+  expect(cookies['__Host-hr-adult']).toBeTruthy();
+  await login('harbor',31);
+  const m=await memberAdult(31);
+  expect(m?.age_verified_at).toBeTypeOf('number');
+  expect(m?.adult_consent_version).toBe(ADULT_CONSENT_VERSION);
+  expect(m?.show_nsfw).toBe(1);
+  expect(cookies['__Host-hr-adult']||'').toBe('');
+});
+it('a guest who confirmed but switched off carries the verification, not the switch',async()=>{
+  providers();
+  await guestConfirm({});
+  expect((await request('adult',{showNsfw:false})).status).toBe(200);
+  await login('harbor',32);
+  const m=await memberAdult(32);
+  expect(m?.age_verified_at).toBeTypeOf('number');
+  expect(m?.show_nsfw).toBe(0);
+});
+it('a stale-consent guest credential is not carried; signing in without one changes nothing',async()=>{
+  providers();
+  cookies['__Host-hr-adult']=encodeURIComponent(await sealAuth(authEnv(),'guest-adult',{consentVersion:ADULT_CONSENT_VERSION-1,verifiedAt:Date.now(),show:true}));
+  await login('harbor',33);
+  const m=await memberAdult(33);
+  expect(m?.age_verified_at).toBeNull();
+  expect(m?.show_nsfw??0).toBe(0);
+  await login('harbor',34);
+  expect((await memberAdult(34))?.age_verified_at).toBeNull();
 });

@@ -5,7 +5,8 @@ import { bodyLimit } from 'hono/body-limit';
 import { HttpError, type Env } from './types';
 import { apiBaseOf, parseProvider, requireConfigured, type ProviderId } from './providers';
 import { connectedMemberId } from './connections';
-import { memberProfile, resolveMember, isReviewer } from './members';
+import { confirmAdult, memberProfile, resolveMember, isReviewer } from './members';
+import { ADULT_CONSENT_VERSION } from '../shared/adult-consent';
 import { upstream } from './upstream';
 
 /** Token-mediating backend. Only short-lived access tokens cross the browser boundary. */
@@ -106,6 +107,29 @@ export async function siteSessionReader(c:{env:Env;req:{header:(k:string)=>strin
     return {accountNumId:Number(row.external_id),memberId:row.member_id,showNsfw:row.show_nsfw,ageVerifiedAt:row.age_verified_at,adultConsentVersion:row.adult_consent_version};
   }catch{return null;}
 }
+/**
+ * 遊客的成年憑證（owner 2026-10-10：確認是成人就能看，確認不是成人就不能看，跟有沒有帳號無關）。
+ * 遊客自己填生日＋同意聲明後，伺服器用 AUTH_KEYRING 封一份 {聲明版本, 驗證時間, 開關} 放進 httpOnly cookie。
+ * 不放 localStorage 的旗標：榜單是伺服器在過濾，前端的旗標誰都能改。封裝帶用途（additionalData），
+ * 別的地方封的東西換進來也解不開。解不開、格式不對一律當沒有。不查資料庫。
+ * 生日只在確認那一下看一眼，不進憑證、不落庫。登入時帶進帳號，帶完就清掉（見 /v1/auth/complete）。
+ */
+const GUEST_ADULT='__Host-hr-adult', GUEST_ADULT_PURPOSE='guest-adult', GUEST_ADULT_MAX=SESSION_MAX;
+type GuestAdult={consentVersion:number;verifiedAt:number;show:boolean};
+export async function guestAdult(c:{env:Env;req:{header:(k:string)=>string|undefined}}):Promise<GuestAdult|null>{
+  try{
+    if(!c.env.AUTH_KEYRING)return null;
+    const raw=(c.req.header('Cookie')||'').split(';').map(s=>s.trim()).find(s=>s.startsWith(GUEST_ADULT+'='))?.slice(GUEST_ADULT.length+1);
+    if(!raw)return null;
+    const v=await openAuth<GuestAdult>(c.env,GUEST_ADULT_PURPOSE,decodeURIComponent(raw));
+    if(typeof v?.consentVersion!=='number'||typeof v.verifiedAt!=='number'||typeof v.show!=='boolean')return null;
+    return v;
+  }catch{return null;}
+}
+/** 遊客現在看不看得到成人內容：驗過年齡、同意的是目前這一版聲明、開關開著。 */
+export const guestAllowsNsfw=(g:GuestAdult|null)=>!!g&&g.show&&g.consentVersion===ADULT_CONSENT_VERSION;
+const guestAdultView=(g:GuestAdult|null)=>({showNsfw:guestAllowsNsfw(g),ageVerified:!!g,adultConsent:g?.consentVersion===ADULT_CONSENT_VERSION});
+
 export async function siteSessionIdentity(c:{env:Env;req:{header:(k:string)=>string|undefined;url:string;method:string}},provider:ProviderId):Promise<{accountNumId:number}|null>{
   const reader=await siteSessionReader(c,provider);
   return reader?{accountNumId:reader.accountNumId}:null;
@@ -263,7 +287,15 @@ accountAuthRoutes.post('/v1/auth/complete',async c=>{
       c.env.DB.prepare('INSERT INTO account_sessions VALUES(?,?,?,?,?,?,?)').bind(sessionHash,member,a.provider,String(me.accountNumId),originOf(c),Date.now(),Date.now()+SESSION_IDLE),
       c.env.DB.prepare('UPDATE account_auth_attempts SET payload=? WHERE state_hash=?').bind(await sealAuth(c.env,'attempt:'+a.state_hash,{...flow,pair,resultSession:sessionHash}),a.state_hash),
     );
+    // 登入前以遊客身份確認過成年：帶進帳號，帳號從此算驗過，不必再填。同意的是舊版聲明的不帶，讓他重新同意。
+    // 帳號原本就驗過的不覆寫驗證時間；遊客開著開關才替帳號打開，關著就保留帳號自己的開關。
+    const guest=await guestAdult(c);
+    const carried=guest&&guest.consentVersion===ADULT_CONSENT_VERSION;
+    if(carried)statements.push(c.env.DB.prepare(`UPDATE members SET age_verified_at=COALESCE(age_verified_at,?),adult_consent_version=?,
+      adult_consented_at=CASE WHEN adult_consent_version=? THEN adult_consented_at ELSE ? END,show_nsfw=CASE WHEN ? THEN 1 WHEN adult_consent_version=? THEN show_nsfw ELSE 0 END WHERE id=?`)
+      .bind(guest.verifiedAt,ADULT_CONSENT_VERSION,ADULT_CONSENT_VERSION,Date.now(),guest.show?1:0,ADULT_CONSENT_VERSION,member));
     try{await c.env.DB.batch(statements);}catch{throw new HttpError(400,'auth_state_invalid');}
+    if(guest)writeCookie(c,GUEST_ADULT,'',0);
     // 本站的顯示名稱跟 Harbor 的暱稱對不上就寫回去；舊授權沒有 profile.write 會被拒，重新授權後才補得上。
     if(a.provider==='harbor'){
       const shown=await c.env.DB.prepare('SELECT display_name FROM members WHERE id=?').bind(member).first<{display_name:string|null}>();
@@ -296,6 +328,36 @@ async function cancelAttempt(c:C,logout=false){
 }
 accountAuthRoutes.post('/v1/auth/cancel',async c=>{
   await cancelAttempt(c);return c.json({ok:true});
+});
+/**
+ * 遊客的成人內容開關，對應成員的 /v1/me/settings 那一段。沒帶 showNsfw 就只回現況。
+ * 開：沒驗過年齡要帶生日且滿 18，沒同意目前這一版聲明要帶 consentVersion，不符回對應的錯、不發憑證。
+ * 關：只關開關，驗證與同意留著，下次開不必再填。只收同源 POST（上面的中介層已擋）。
+ */
+accountAuthRoutes.post('/v1/auth/adult',async c=>{
+  const body=await c.req.json().catch(()=>({})) as {showNsfw?:unknown;birthdate?:unknown;consentVersion?:unknown};
+  const current=await guestAdult(c);
+  if(typeof body.showNsfw!=='boolean')return c.json(guestAdultView(current));
+  // 只記改開關的結果（account_auth_metrics，operation=adult：on／off／underage／invalid）。讀現況是每個訪客開首頁都會問的，不記。
+  let next:GuestAdult, outcome='off';
+  try{
+    if(!body.showNsfw){
+      if(!current)return c.json(guestAdultView(null));
+      next={...current,show:false};
+    }else{
+      const verifiedAt=confirmAdult({ageVerifiedAt:current?.verifiedAt??null,adultConsent:current?.consentVersion===ADULT_CONSENT_VERSION},
+        {birthdate:typeof body.birthdate==='string'?body.birthdate:undefined,consentVersion:typeof body.consentVersion==='number'?body.consentVersion:undefined},Date.now());
+      next={consentVersion:ADULT_CONSENT_VERSION,verifiedAt,show:true};
+      outcome='on';
+    }
+  }catch(error){
+    outcome=error instanceof HttpError&&error.message==='underage'?'underage':'invalid';
+    throw error;
+  }finally{
+    try{await metric(c.env,'adult','guest',outcome);}catch{console.warn('Guest adult metric unavailable');}
+  }
+  writeCookie(c,GUEST_ADULT,await sealAuth(c.env,GUEST_ADULT_PURPOSE,next),GUEST_ADULT_MAX/1000);
+  return c.json(guestAdultView(next));
 });
 async function issueToken(c:C,session:Session,provider:ProviderId,externalId:number){
   const pair=await delegatedAccess(c.env,provider,externalId,session.member_id);

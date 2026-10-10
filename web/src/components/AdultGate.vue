@@ -1,17 +1,18 @@
 <script setup lang="ts">
 /**
  * 成人內容的門（owner 2026-09-08，照 Steam 的做法，不是 404）：
- *   - 沒登入：「這張卡片需要登入才能查看」＋登入鍵（登入後回到這張卡）。
+ *   - 沒登入：跟登入的人一樣確認年齡（owner 2026-10-10，遊客憑證見 lib/adult-consent）。
+ *     站上沒開託管登入（自架站）發不了遊客憑證，才退回「這張卡片需要登入才能查看」＋登入鍵。
  *   - 登入了、還沒驗過年齡或沒同意目前這一版聲明：按鍵開聲明窗（AdultConsentDialog），
  *     勾同意（沒驗過再填出生日期）才打開開關；一次性的，之後不再問。
  *   - 兩樣都齊了但開關是關的：一顆「顯示成人內容」直接打開。
  * 開關一改，session.profile 跟著變，卡片頁看到就會重讀。
  */
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute } from "vue-router";
-import { ApiError, updateSiteSettings } from "@/lib/api";
-import { applyAdultSettings, needsAdultConsent } from "@/lib/adult-consent";
+import { ApiError } from "@/lib/api";
+import { guestAdult, loadGuestAdult, needsAdultConsent, saveAdult, viewerAdult } from "@/lib/adult-consent";
 import { loginPath } from "@/lib/login-return";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
@@ -26,8 +27,12 @@ const { t } = useI18n();
 const busy = ref(false);
 const error = ref("");
 const asking = ref(false);
-const verified = computed(() => !!session.profile?.ageVerified);
-const needsConsent = computed(() => needsAdultConsent(session.profile));
+const state = computed(() => viewerAdult(session));
+const verified = computed(() => !!state.value?.ageVerified);
+const needsConsent = computed(() => needsAdultConsent(state.value));
+/** 遊客而且站上發得出遊客憑證：照登入的人那樣確認；否則只能請他登入 */
+const guestLoginOnly = computed(() => !session.me && guestAdult.loaded && !guestAdult.available);
+watch(() => session.ready && !session.me, (guest) => { if (guest) void loadGuestAdult(); }, { immediate: true });
 
 async function enable() {
   if (busy.value) return;
@@ -35,7 +40,7 @@ async function enable() {
   busy.value = true;
   error.value = "";
   try {
-    applyAdultSettings(session.profile, await updateSiteSettings({ showNsfw: true }, (await session.accessToken()) ?? ""));
+    await saveAdult(session, { showNsfw: true });
     emit("enabled");
   } catch (err) {
     error.value = err instanceof ApiError || err instanceof Error ? err.message : t("state.actionFailed");
@@ -55,12 +60,12 @@ function consented() {
     <span class="nsfw-badge gate__badge">{{ $t("card.nsfw") }}</span>
     <h1 class="gate__title display">{{ $t("card.gate.title") }}</h1>
 
-    <template v-if="!session.me">
+    <template v-if="guestLoginOnly">
       <p class="gate__text">{{ $t("card.gate.login") }}</p>
       <RouterLink class="btn btn--primary" :to="lp(loginPath(route.fullPath))">{{ $t("nav.login") }}</RouterLink>
     </template>
 
-    <template v-else-if="!session.profile">
+    <template v-else-if="!state">
       <p class="subtle">{{ $t("state.loading") }}</p>
     </template>
 
@@ -70,7 +75,7 @@ function consented() {
     </template>
 
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
-    <p class="subtle gate__foot">{{ $t("card.gate.settingsHint") }}</p>
+    <p v-if="session.me" class="subtle gate__foot">{{ $t("card.gate.settingsHint") }}</p>
     <AdultConsentDialog v-if="asking" @close="asking = false" @done="consented" />
   </section>
 </template>
