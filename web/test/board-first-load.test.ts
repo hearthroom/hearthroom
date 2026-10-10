@@ -25,7 +25,7 @@ const PROFILE = { handle: "abcdefgh", memberSince: 0, reviewer: false, identitie
 const card = (id: string, name: string) => ({
   id, roleId: `role-${id}`, num: 0, zone: "zh", name, summary: "", names: { zh: name, en: "", ja: "", ko: "" }, summaries: { zh: "", en: "", ja: "", ko: "" },
   avatarUrl: null, backgroundUrl: null, slug: null, tags: [], author: { handle: null, accountNumId: 7, name: "月光", avatar: "" },
-  talkNum: 0, followNum: 0, trending: 0, registeredAt: 0, syncedAt: 0, provider: "harbor", nsfw: false,
+  talkNum: 0, followNum: 0, trending: 0, registeredAt: 0, syncedAt: 0, provider: "harbor", rating: null,
 });
 const boardCalls: string[] = [];
 /** 日榜讀了幾次（一進首頁會同時讀週榜，那一趟不算） */

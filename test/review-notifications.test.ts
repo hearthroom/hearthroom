@@ -11,10 +11,10 @@ async function bridge(op:string,value:Record<string,unknown>={}, enabled=true) {
  const path='/internal/community/'+op, time=String(Date.now()), nonce=crypto.randomUUID(), body=JSON.stringify({guild:settings().COMMUNITY_GUILD_ID,...value});
  return app.fetch(new Request('https://hearthroom.club'+path,{method:'POST',body,headers:{'X-Community-Time':time,'X-Community-Nonce':nonce,'X-Community-Signature':await sign(settings().COMMUNITY_BRIDGE_KEY!,'POST',path,time,nonce,body)}}),{...settings(),COMMUNITY_ENABLED:enabled?'true':'false'},createExecutionContext());
 }
-async function submission(id='s1',now=Date.now(),nsfw=0){
+async function submission(id='s1',now=Date.now(),rating:string|null=null){
  const num=await ensureCardNumber(env.DB,'harbor',id);
  await env.DB.prepare("INSERT INTO cards(id,source_role_id,author_num_id,author_name,names,registered_at,last_synced_at,status) VALUES(?,?,999,'PRIVATE AUTHOR',?, ?,?,'pending')").bind(num,id,JSON.stringify({zh:'雨夜書店',en:'Rainy Bookshop'}),now,now).run();
- await env.DB.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,submitted_at,nsfw) VALUES(?,?,'harbor',?,'first','pending',?,?)").bind(id,num,id,now,nsfw).run();
+ await env.DB.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,submitted_at,rating) VALUES(?,?,'harbor',?,'first','pending',?,?)").bind(id,num,id,now,rating).run();
 }
 beforeEach(resetDb);
 it('returns durable per-submission work and a blind projection, not just a global signal',async()=>{
@@ -54,14 +54,14 @@ it('reminders are one per live generation and disappear from delivery after comp
  const delivered=await bridge('notification',{id:notes.results[0].id});expect(delivered.status).toBe(200);
  // The reminder names the claimed card and links to it, in the reviewer's language.
  expect(await delivered.json()).toMatchObject({path:'/review/s1',text:'你認領的「雨夜書店」即將到期，請繼續審核或放回待審清單 / Your claim on “Rainy Bookshop” expires soon. Continue reviewing or release it to the queue.'});
- await env.DB.prepare("UPDATE cards SET nsfw=1").run();
+ await env.DB.prepare("UPDATE cards SET rating='R'").run();
  // Reviewers are adults and already see the title in the review page, so an adult card is named too.
  expect((await (await bridge('notification',{id:notes.results[0].id})).json() as any).text).toBe('你認領的「雨夜書店」即將到期，請繼續審核或放回待審清單 / Your claim on “Rainy Bookshop” expires soon. Continue reviewing or release it to the queue.');
  await env.DB.prepare("UPDATE discord_links SET version='link-v2' WHERE member_id=?").bind(m).run();
  expect((await bridge('notification',{id:notes.results[0].id})).status).toBe(404);
 });
 it('expired and revoked claims are released without generating reminders; adult titles stay private',async()=>{
- await submission('adult',Date.now(),1);const m=await makeReviewer(2),now=Date.now();
+ await submission('adult',Date.now(),'R');const m=await makeReviewer(2),now=Date.now();
  await claim(env.DB,'adult',m,now-46*60000);await maintainReviewNotifications(env.DB,now);
  const p=await leaseReviewDelivery(env.DB,'review:adult','223456789012345678','zh-Hant',now);
  expect(p.projection).toMatchObject({adult:true,title:'',claimant:null,expiresAt:null});

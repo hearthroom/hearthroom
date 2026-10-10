@@ -1,6 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { resetDb, role, makeMember } from './helpers';
+import { GENERAL_RATING, resetDb, role, makeMember } from './helpers';
 import { submitHosted, hostGateway } from '../src/hosting';
 import { upstream } from '../src/upstream';
 import { claim, stamp } from '../src/review';
@@ -12,7 +12,7 @@ async function approved(provider: 'lunatalk'|'harbor') {
  vi.spyOn(hostGateway,'seal').mockImplementation(async(_env,_token,_role,workId,versionId)=>({workId,versionId,hostedRevisionId:'sealed-'+versionId}));
  vi.spyOn(hostGateway,'read').mockImplementation(async(_env,_token,id)=>role({roleId:id,authorNumId:10001}));
  vi.spyOn(upstream,'readForReview').mockResolvedValue({hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
- const receipt=await submitHosted(env,{provider,memberId,account:10001,role:role({roleId:'draft',authorNumId:10001}),token:'author',nsfw:false,operationId:crypto.randomUUID(),now:Date.now()});
+ const receipt=await submitHosted(env,{provider,memberId,account:10001,role:role({roleId:'draft',authorNumId:10001}),token:'author',rating:GENERAL_RATING,operationId:crypto.randomUUID(),now:Date.now()});
  const sub=await env.DB.prepare('SELECT id FROM review_submissions').first<{id:string}>();
  for(const reviewer of ['one','two']){await claim(env.DB,sub!.id,reviewer,Date.now());if((await stamp(env.DB,{submissionId:sub!.id,memberId:reviewer,verdict:'approve',note:'',now:Date.now()})).submission.status!=='pending')break;}
  return receipt;

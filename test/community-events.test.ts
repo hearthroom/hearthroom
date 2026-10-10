@@ -1,7 +1,7 @@
 import {approveFixtureResponse} from './hosted-fixture';
 import { SELF, env } from "cloudflare:test";
 import { afterEach, beforeEach, expect, it } from "vitest";
-import {
+import { ratingBody,
   resetDb,
   identities,
   rolesOnMainSite,
@@ -25,7 +25,7 @@ it("notifies followers only after the sealed version is approved, once per work 
   const r = await SELF.fetch("https://c.test/v1/cards", {
     method: "POST",
     headers: { ...bearer("author"), "Content-Type": "application/json" },
-    body: JSON.stringify({operationId:crypto.randomUUID(),...({ roleId: "new-work", nsfw: false })}),
+    body: JSON.stringify({operationId:crypto.randomUUID(),...({ roleId: "new-work", ...ratingBody(false) })}),
   });
   expect(r.status).toBe(201);
   const notifications = () =>
@@ -61,7 +61,7 @@ it("awards the first approved work once and creates one private review-result no
     const submitted = await SELF.fetch("https://c.test/v1/cards", {
       method: "POST",
       headers: { ...bearer("author"), "Content-Type": "application/json" },
-      body: JSON.stringify({operationId:crypto.randomUUID(),...({ roleId: "reviewed-work", nsfw: false })}),
+      body: JSON.stringify({operationId:crypto.randomUUID(),...({ roleId: "reviewed-work", ...ratingBody(false) })}),
     });
     expect(submitted.status).toBe(201);
     const row = await env.DB.prepare(

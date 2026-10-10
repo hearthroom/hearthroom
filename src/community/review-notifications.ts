@@ -14,7 +14,7 @@ export interface ReviewProjection {
  approvals:number; required:number; claimant:string|null; expiresAt:number|null; path:string;
 }
 interface Row {
- id:string; kind:'first'|'re'; status:string; nsfw:number; submitted_at:number;
+ id:string; kind:'first'|'re'; status:string; rating:string|null; submitted_at:number;
  claimed_by:string|null; claimed_at:number|null; claim_generation:string;
  names:string|null; display_name:string|null; handle:string|null; reviewer:string|null;
  card_status:string|null; public_blocked:number|null; approvals:number; waiting_since:number;
@@ -31,8 +31,8 @@ const select=`SELECT s.*,c.status AS card_status,c.public_blocked,
 function live(r:Row,now:number){return r.status==='pending'&&!!r.reviewer&&!!r.claimed_by&&r.claimed_at!==null&&r.claimed_at+CLAIM_TTL_MS>now;}
 function project(r:Row,now:number,lang:string):ReviewProjection {
  const invalid=!r.card_status||r.card_status==='unshared'||r.public_blocked;
- return {title:r.nsfw?'':(pickLocale(JSON.parse(r.names??'{}') as Localized,lang)||'').slice(0,180),
- status:invalid?'superseded':r.status,kind:r.kind,adult:!!r.nsfw,submittedAt:r.submitted_at,
+ return {title:r.rating==='R'?'':(pickLocale(JSON.parse(r.names??'{}') as Localized,lang)||'').slice(0,180),
+ status:invalid?'superseded':r.status,kind:r.kind,adult:r.rating==='R',submittedAt:r.submitted_at,
  approvals:r.approvals,required:STAMPS_REQUIRED[r.kind],
  claimant:!invalid&&live(r,now)?(r.display_name||r.handle||'Reviewer').slice(0,80):null,
  expiresAt:!invalid&&live(r,now)?r.claimed_at!+CLAIM_TTL_MS:null,path:'/review/'+encodeURIComponent(r.id)};

@@ -17,6 +17,7 @@ import { loginPath } from "@/lib/login-return";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
 import AdultConsentDialog from "./AdultConsentDialog.vue";
+import RatingMark from "./RatingMark.vue";
 
 const emit = defineEmits<{ enabled: [] }>();
 const session = useSession();
@@ -57,7 +58,7 @@ function consented() {
 
 <template>
   <section class="gate panel">
-    <span class="nsfw-badge gate__badge">{{ $t("card.nsfw") }}</span>
+    <RatingMark rating="R" variant="chip" class="gate__badge" />
     <h1 class="gate__title display">{{ $t("card.gate.title") }}</h1>
 
     <template v-if="guestLoginOnly">

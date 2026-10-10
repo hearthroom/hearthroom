@@ -41,7 +41,7 @@ async function load(){if(busy.value)return;const gen=++generation,who=identity()
  }catch(e){if(gen===generation&&who===identity())error.value=e instanceof Error?e.message:t('state.loadFailed');}finally{if(gen===generation)loading.value=false;}}
 watch(tab,()=>{invalidate();offset.value=0;document.title=pageTitle(t('moderation.title'));void load();},{flush:'sync'});
 function selectCase(item:ModerationCase){if(busy.value)return;clearSelection();selected.value=item;done.value='';}
-const evidence=ref<{cardNumber:number;version:string;names:Record<string,string>;summaries:Record<string,string>;tags:string[];welcome:string;searchText:string;avatarUrl:string|null;nsfw:boolean}|null>(null);
+const evidence=ref<{cardNumber:number;version:string;names:Record<string,string>;summaries:Record<string,string>;tags:string[];welcome:string;searchText:string;avatarUrl:string|null;rating?:string|null}|null>(null);
 async function readEvidence(){if(!selected.value||busy.value)return;const gen=selectionGeneration,who=identity(),id=selected.value.id;error.value='';try{
  const access=await token();if(gen!==selectionGeneration||who!==identity())return;
  const data=await moderationRequest<NonNullable<typeof evidence.value>>(`/cases/${id}/evidence`,access);

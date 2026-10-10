@@ -3,7 +3,7 @@ import { getCard } from '../src/cards';
 import {approveFixtureResponse} from './hosted-fixture';
 import { SELF, env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { bearer, resetDb, restoreUpstream, rolesOnMainSite, rolesOnProviders, whoAmI } from "./helpers";
+import { ratingBody, bearer, resetDb, restoreUpstream, rolesOnMainSite, rolesOnProviders, whoAmI } from "./helpers";
 
 /**
  * 卡號與作者自看（玩家回報 2026-09-17）：
@@ -22,7 +22,7 @@ const register = async (roleId: string, headers: Record<string, string> = bearer
   approveFixtureResponse(await SELF.fetch("https://c.test/v1/cards", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headers },
-    body: JSON.stringify({operationId:crypto.randomUUID(),...({ roleId, nsfw: false })}),
+    body: JSON.stringify({operationId:crypto.randomUUID(),...({ roleId, ...ratingBody(false) })}),
   }));
 const unregister = (roleId: string) => SELF.fetch(`https://c.test/v1/cards/${roleId}`, { method: "DELETE", headers: bearer() });
 const card = async (id: string, headers: Record<string, string> = {}) => {

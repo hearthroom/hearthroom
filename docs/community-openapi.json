@@ -2850,8 +2850,25 @@
           "zone": {
             "type": "string"
           },
-          "nsfw": {
-            "type": "boolean"
+          "rating": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "G",
+              "P",
+              "PG12",
+              "PG15",
+              "R",
+              null
+            ]
+          },
+          "ratingDescriptors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "featured": {
             "type": "boolean"
@@ -3243,8 +3260,19 @@
             "type": "string",
             "description": "The latest rejection note."
           },
-          "nsfw": {
-            "type": "boolean",
+          "rating": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "G",
+              "P",
+              "PG12",
+              "PG15",
+              "R",
+              null
+            ],
             "description": "The rating you declared; only when registered."
           },
           "draftChanged": {

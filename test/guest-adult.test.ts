@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker, { boardCache } from "../src/index";
 import { sealAuth } from "../src/account-auth";
 import { ADULT_CONSENT_VERSION } from "../shared/adult-consent";
-import { bearer, identities, resetDb, restoreUpstream, rolesOnMainSite } from "./helpers";
+import { bearer, identities, ratingBody, resetDb, restoreUpstream, rolesOnMainSite } from "./helpers";
 
 const AUTHOR = 10001;
 const origin = "https://hearthroom.club";
@@ -44,7 +44,7 @@ const minorBirthdate = () => `${new Date().getUTCFullYear() - 15}-01-01`;
 
 const submit = (roleId: string, nsfw: boolean) =>
   SELF.fetch("https://c.test/v1/cards", { method: "POST", headers: { "Content-Type": "application/json", ...bearer("author-token") },
-    body: JSON.stringify({ operationId: crypto.randomUUID(), roleId, nsfw }) });
+    body: JSON.stringify({ operationId: crypto.randomUUID(), roleId, ...ratingBody(nsfw) }) });
 async function listTwo() {
   expect((await approveFixtureResponse(await submit("role-safe", false))).status).toBe(201);
   expect((await approveFixtureResponse(await submit("role-adult", true))).status).toBe(201);

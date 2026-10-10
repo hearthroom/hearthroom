@@ -11,7 +11,8 @@ it('migrates legacy-only images, preserves existing portraits and drops the reti
  await env.DB.prepare("UPDATE cards SET avatar_url='old.gif',background_url=NULL WHERE id=?").bind(a.id).run();
  await env.DB.prepare("UPDATE cards SET avatar_url='old.png',background_url='portrait.gif' WHERE id=?").bind(b.id).run();
  for(const migration of env.TEST_MIGRATIONS.filter(m=>m.name.includes('0038_card_portrait')||m.name.includes('0039_drop_card_avatar')))
-  for(const sql of migration.queries)await env.DB.prepare(sql).run();
+  // 只重播搬圖與刪欄位：0038 裡重建的 hosting_decision 是當時的版本，之後的 migration（0056）已換掉它引用的欄位
+  for(const sql of migration.queries.filter(q=>!/TRIGGER\s+hosting_decision/i.test(q)))await env.DB.prepare(sql).run();
  expect(await env.DB.prepare('SELECT background_url FROM cards WHERE id=?').bind(a.id).first()).toEqual({background_url:'old.gif'});
  expect(await env.DB.prepare('SELECT background_url FROM cards WHERE id=?').bind(b.id).first()).toEqual({background_url:'portrait.gif'});
  const columns=await env.DB.prepare('PRAGMA table_info(cards)').all<{name:string}>();

@@ -1,3 +1,4 @@
+import type { Rating, Topic } from "../../../shared/content-rating";
 export interface Localized { zh: string; en: string; ja: string; ko: string }
 
 /** 語區。榜單按這個分開列；all 是不分語言的卡，每區都出現。 */
@@ -10,8 +11,10 @@ export interface CommunityCard {
   zone: Zone | "all";
   /** 支援哪家供應商（供應商代號）：拿那家的帳號在本站玩。 */
   provider?: string;
-  /** 成人內容（本站的分級，作者宣告、審核人對照過） */
-  nsfw?: boolean;
+  /** 台灣遊戲分級五級之一；R＝成人內容；null＝評級缺失（問卷上線前上架的一般卡，不是成人卡） */
+  rating?: Rating | null;
+  /** 法規要標示的情節名稱，照級別由高到低 */
+  ratingDescriptors?: Topic[];
   /** 成人卡「加到主畫面」的鑰匙：只有過了成人門的人拿得到，帶在 manifest 與圖示網址上（lib/card-manifest.ts）。 */
   shortcutKey?: string;
   /** HearthRoom 精選卡：社群代表標的；供應商那邊據此給作者較高的返點 */

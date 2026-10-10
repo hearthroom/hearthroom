@@ -65,6 +65,6 @@ export async function linkPreview(env:Env,id:string,link:Awaited<ReturnType<type
   return {
     ...previewCard(role,lang,source.provider,num),
     sourceRoleId:source.roleId,
-    ...(link.row ? {num:link.row.num,status:link.row.status,nsfw:link.row.nsfw===1} : {}),
+    ...(link.row ? {num:link.row.num,status:link.row.status,rating:link.row.rating??null} : {}),
   };
 }

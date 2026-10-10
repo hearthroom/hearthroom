@@ -7,7 +7,7 @@ import { bodyLimit } from "hono/body-limit";
 import { HttpError, pickLocale, type Env } from "../types";
 import { hasSubscription, pushConfigured, pushLine, pushLocale, queuePush, removeSubscription, saveSubscription } from "./push";
 import { requireMember, memberByHandle, memberNsfw } from "../members";
-import { getCard } from "../cards";
+import { getCard, isAdult } from "../cards";
 import { updateBridge, updateTitle } from "../updates";
 import { random, digest, verifyBridge, seal, unseal } from "./crypto";
 import {
@@ -410,7 +410,7 @@ app.post("/v1/me/community/cases", async (c) => {
         !card ||
         card.status !== "approved" ||
         card.public_blocked ||
-        (card.nsfw && !(access.ageVerifiedAt && access.showNsfw))
+        (isAdult(card) && !(access.ageVerifiedAt && access.showNsfw))
       )
         throw new HttpError(404, "not_found");
       const canonical = await c.env.DB.prepare(
@@ -505,7 +505,7 @@ app.post("/internal/community/:operation", async (c) => {
     if (typeof b.card !== "string" || !/^[1-9]\d{0,11}$/.test(b.card))
       throw new HttpError(400, "community_input");
     const card = await getCard(c.env.DB, b.card);
-    if (!card || card.status !== "approved" || card.public_blocked || card.nsfw)
+    if (!card || card.status !== "approved" || card.public_blocked || isAdult(card))
       throw new HttpError(404, "not_found");
     const names = JSON.parse(card.names),
       summaries = JSON.parse(card.summaries);
@@ -637,7 +637,7 @@ app.post("/internal/community/:operation", async (c) => {
   }
   if (op === "notification") {
     const n = await c.env.DB.prepare(
-      `SELECT n.kind,n.path,n.extra,a.display_name AS actor_name,a.handle AS actor_handle,CASE WHEN c.nsfw=1 AND n.kind NOT IN ('review_result','review_reminder') THEN NULL ELSE c.names END AS card_names,l.discord_id,m.locale FROM community_notifications n JOIN members m ON m.id=n.member_id LEFT JOIN members a ON a.id=n.actor_id LEFT JOIN cards c ON c.id=n.card_id JOIN discord_links l ON l.member_id=n.member_id AND l.state='active' JOIN community_preferences p ON p.member_id=n.member_id AND p.discord_dm=1 AND p.notifications=1 WHERE n.id=? AND n.delivered=0 AND (n.author_id IS NULL OR EXISTS(SELECT 1 FROM member_follows f WHERE f.member_id=n.member_id AND f.author_id=n.author_id)) AND ${reviewNotificationEligible} AND (n.review_submission IS NULL OR n.review_link_version=l.version)`,
+      `SELECT n.kind,n.path,n.extra,a.display_name AS actor_name,a.handle AS actor_handle,CASE WHEN c.rating='R' AND n.kind NOT IN ('review_result','review_reminder') THEN NULL ELSE c.names END AS card_names,l.discord_id,m.locale FROM community_notifications n JOIN members m ON m.id=n.member_id LEFT JOIN members a ON a.id=n.actor_id LEFT JOIN cards c ON c.id=n.card_id JOIN discord_links l ON l.member_id=n.member_id AND l.state='active' JOIN community_preferences p ON p.member_id=n.member_id AND p.discord_dm=1 AND p.notifications=1 WHERE n.id=? AND n.delivered=0 AND (n.author_id IS NULL OR EXISTS(SELECT 1 FROM member_follows f WHERE f.member_id=n.member_id AND f.author_id=n.author_id)) AND ${reviewNotificationEligible} AND (n.review_submission IS NULL OR n.review_link_version=l.version)`,
     )
       .bind(String(b.id),Date.now())
       .first<Parameters<typeof pushLine>[0] & { path: string; discord_id: string; locale: string | null }>();

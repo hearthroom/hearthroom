@@ -3,7 +3,7 @@ import { sign } from "../src/community/crypto";
 import { env, createExecutionContext } from "cloudflare:test";
 import { beforeEach, expect, it } from "vitest";
 import app from "../src/index";
-import {
+import { ratingBody,
   makeMember,
   resetDb,
   whoAmI,
@@ -40,7 +40,7 @@ it("honors publication suspension in Discord previews and website report card co
   rolesOnMainSite({ roleId: "moderated-card", authorNumId: 1 });
   const published = await app.fetch(new Request("https://hearthroom.club/v1/cards", {
     method: "POST", headers: { ...bearer(), "Content-Type": "application/json" },
-    body: JSON.stringify({ operationId:crypto.randomUUID(), roleId: "moderated-card", nsfw: false }),
+    body: JSON.stringify({ operationId:crypto.randomUUID(), roleId: "moderated-card", ...ratingBody(false) }),
   }), e(), createExecutionContext());
   expect(published.status).toBe(201);
   await approveFixtureResponse(published);

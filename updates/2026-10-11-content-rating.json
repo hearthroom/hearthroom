@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/mine",
+  "title": {
+    "zh-Hant": "送審新增內容分級問卷，卡片頁顯示台灣遊戲軟體分級標示。",
+    "zh-Hans": "提交审核新增内容分级问卷，卡片页显示台湾游戏软件分级标示。",
+    "en": "Review submissions now include a content-rating questionnaire, and card pages show the Taiwan game rating.",
+    "ja": "審査申請にレーティング質問を追加、カードページに台湾のゲーム区分を表示。",
+    "ko": "심사 신청에 등급 설문 추가, 카드 페이지에 대만 게임 등급 표시."
+  },
+  "body": {
+    "zh-Hant": "已上架的一般卡於下次送審時補填；成人卡標示為限制級。",
+    "zh-Hans": "已上架的一般卡于下次提交审核时补填；成人卡标示为限制级。",
+    "en": "Listed general cards are rated at their next submission, and adult cards are marked Adults only.",
+    "ja": "公開中の一般カードは次回の審査申請時に設定、成人向けカードは18歳以上として表示。",
+    "ko": "공개 중인 일반 카드는 다음 심사 신청 때 설정하며, 성인 카드는 청소년 이용불가로 표시됩니다."
+  }
+}

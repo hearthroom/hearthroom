@@ -32,7 +32,7 @@ const CARD = {
   names: { zh: "夜行偵探", en: "", ja: "", ko: "" }, summaries: { zh: "民國背景推理", en: "", ja: "", ko: "" },
   avatarUrl: null, backgroundUrl: null, slug: null, tags: ["推理"],
   author: { handle: "abcdefgh", accountNumId: 7, name: "月光", avatar: "" },
-  talkNum: 12, followNum: 3, trending: 0, registeredAt: 1, syncedAt: 1, provider: "lunatalk", nsfw: false,
+  talkNum: 12, followNum: 3, trending: 0, registeredAt: 1, syncedAt: 1, provider: "lunatalk", rating: null,
 };
 
 /** 卡片請求永遠不回來：畫面上有沒有東西，就完全由「上一屏記下的那份」決定。 */

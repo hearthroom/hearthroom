@@ -28,13 +28,6 @@ export interface ConfirmOptions {
   requireText?: string;
   /** 打字框的提示；沒給就用 requireText 本身 */
   placeholder?: string;
-  /**
-   * 要使用者選一個才能按確認的選項（例如提交時宣告內容分級）。刻意不預選：
-   * 這種宣告要由人親手選，預設值會變成「沒看就過」。
-   */
-  choices?: { value: string; label: string; hint?: string }[];
-  /** 選項組的標題 */
-  choiceLabel?: string;
   /** 一格選填的文字（例如原作）：有 initial 就先填好；suggestions 給瀏覽器的建議清單 */
   field?: {
     label: string; placeholder?: string; hint?: string; maxlength?: number; initial?: string;
@@ -44,32 +37,20 @@ export interface ConfirmOptions {
   };
 }
 
-interface Pending extends ConfirmOptions { resolve: (ok: boolean, choice: string | null, text: string, id?: string) => void }
+interface Pending extends ConfirmOptions { resolve: (ok: boolean, text: string, id?: string) => void }
 
 export const confirmState = reactive<{ current: Pending | null }>({ current: null });
 
 export function confirmDialog(opts: ConfirmOptions): Promise<boolean> {
   // 前一個還沒回答就來了新的：舊的當取消，不讓兩個疊在一起
-  confirmState.current?.resolve(false, null, "");
+  confirmState.current?.resolve(false, "");
   return new Promise((resolve) => { confirmState.current = { ...opts, resolve: (ok) => resolve(ok) }; });
 }
 
-/** 帶必選項的確認：確認回選到的值，取消回 null。 */
-export function confirmChoice(opts: ConfirmOptions & { choices: NonNullable<ConfirmOptions["choices"]> }): Promise<string | null> {
-  confirmState.current?.resolve(false, null, "");
-  return new Promise((resolve) => { confirmState.current = { ...opts, resolve: (ok, choice) => resolve(ok ? choice : null) }; });
-}
-
-/** 必選項加一格文字：確認回兩樣，取消回 null。 */
-export function confirmForm(opts: ConfirmOptions & { choices: NonNullable<ConfirmOptions["choices"]>; field: NonNullable<ConfirmOptions["field"]> }): Promise<{ choice: string; text: string; id?: string } | null> {
-  confirmState.current?.resolve(false, null, "");
-  return new Promise((resolve) => { confirmState.current = { ...opts, resolve: (ok, choice, text, id) => resolve(ok && choice !== null ? { choice, text, ...(id ? { id } : {}) } : null) }; });
-}
-
-/** 有必選項的彈窗，選了才算能確認。 */
-export function confirmChoiceOk(opts: Pick<ConfirmOptions, "choices">, choice: string | null): boolean {
-  if (!opts.choices?.length) return true;
-  return choice !== null && opts.choices.some((c) => c.value === choice);
+/** 帶一格文字的確認：確認回填的字（有 lookup 時連對上的編號），取消回 null。 */
+export function confirmForm(opts: ConfirmOptions & { field: NonNullable<ConfirmOptions["field"]> }): Promise<{ text: string; id?: string } | null> {
+  confirmState.current?.resolve(false, "");
+  return new Promise((resolve) => { confirmState.current = { ...opts, resolve: (ok, text, id) => resolve(ok ? { text, ...(id ? { id } : {}) } : null) }; });
 }
 
 /** 要求照打的字有沒有打對。 */
@@ -82,11 +63,10 @@ export function confirmTextMatches(opts: Pick<ConfirmOptions, "requireText">, ty
  * 由彈窗元件呼叫：把答案交回去並關掉。
  * 有 requireText 的彈窗，確認時要帶使用者打的字；沒打對就當沒按——彈窗留著。
  */
-export function settleConfirm(ok: boolean, typed = "", choice: string | null = null, text = "", id?: string): void {
+export function settleConfirm(ok: boolean, typed = "", text = "", id?: string): void {
   const c = confirmState.current;
   if (!c) return;
   if (ok && !confirmTextMatches(c, typed)) return;
-  if (ok && !confirmChoiceOk(c, choice)) return;
   confirmState.current = null;
-  c.resolve(ok, choice, text.trim(), id);
+  c.resolve(ok, text.trim(), id);
 }

@@ -1,3 +1,4 @@
+import { ratingBody } from './helpers';
 import {afterEach,expect,it,vi} from 'vitest';
 import {hostGateway} from '../src/hosting';
 import type {Env} from '../src/types';
@@ -22,7 +23,7 @@ it('refuses registration without the selected hosting credential instead of fall
  const {resetDb,whoAmI,rolesOnMainSite,restoreUpstream}=await import('./helpers');
  await resetDb();delete (env as unknown as Env).HOSTING_SERVICE_KEY;whoAmI(10001);rolesOnMainSite({roleId:'draft',authorNumId:10001});
  try {
-  const response=await SELF.fetch('https://c.test/v1/cards',{method:'POST',headers:{Authorization:'Bearer author-token','Content-Type':'application/json'},body:JSON.stringify({roleId:'draft',nsfw:false,operationId:crypto.randomUUID()})});
+  const response=await SELF.fetch('https://c.test/v1/cards',{method:'POST',headers:{Authorization:'Bearer author-token','Content-Type':'application/json'},body:JSON.stringify({roleId:'draft',...ratingBody(false),operationId:crypto.randomUUID()})});
   expect(response.status).toBe(503);
   expect(await env.DB.prepare('SELECT count(*) AS n FROM cards').first()).toEqual({n:0});
  } finally {restoreUpstream()}

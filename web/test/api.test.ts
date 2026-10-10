@@ -216,7 +216,7 @@ describe("uploadImage", () => {
 
 it("建立上游設定只送協定欄位，不把社群分級一起帶去", async () => {
  const fetchMock=vi.fn(async()=>new Response(JSON.stringify({roleId:"r1"}),{status:200}));vi.stubGlobal("fetch",fetchMock);
- const draft={roleName:"Support",language:"en",contentRatingIntent:"r18",contentRating:"R18",isR18:true,nsfw:true};
+ const draft={roleName:"Support",language:"en",contentRatingIntent:"r18",contentRating:"R18",isR18:true,nsfw:true,rating:"R"};
  await createRole(draft,"token");
  const init=(fetchMock.mock.calls[0] as unknown as [string,RequestInit])[1];
  expect(JSON.parse(String(init.body))).toEqual({roleName:"Support",language:"en",origin:"hearthroom"});
