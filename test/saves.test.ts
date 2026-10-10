@@ -67,7 +67,7 @@ describe("/v1/me/cards/:roleId/saves", () => {
     const now = Date.now();
     await env.DB.prepare("INSERT INTO cards (id, source_role_id, author_num_id, registered_at, last_synced_at, provider, approved_hosted_role_id) VALUES (100077, 'src-1', 1, ?, ?, 'harbor', 'rev-2')").bind(now, now).run();
     for (const [v, rev] of [["v1", "rev-1"], ["v2", "rev-2"]]) {
-      await env.DB.prepare("INSERT INTO hosting_versions (version_id, work_id, member_id, operation_id, source_role_id, provider, nsfw, hosted_revision_id, card_id, state, created_at) VALUES (?, 'w', 'm', ?, 'src-1', 'harbor', 0, ?, 100077, 'approved', ?)").bind(v, v, rev, now).run();
+      await env.DB.prepare("INSERT INTO hosting_versions (version_id, work_id, member_id, operation_id, source_role_id, provider, hosted_revision_id, card_id, state, created_at) VALUES (?, 'w', 'm', ?, 'src-1', 'harbor', ?, 100077, 'approved', ?)").bind(v, v, rev, now).run();
     }
     const member = (await env.DB.prepare("SELECT DISTINCT member_id FROM card_saves").first<{ member_id: string }>())?.member_id;
     expect(member).toBeUndefined();
