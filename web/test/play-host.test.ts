@@ -22,12 +22,10 @@ describe("card app host", () => {
     expect(localeOf(router.currentRoute.value)).toBe("ja");
   });
 
-  it("signed out: goes to /login on this host and remembers the card path", async () => {
+  it("signed out: stays on the card (guests see the opening; PlayPage asks them to sign in when they send)", async () => {
     session.me = null;
     await router.push("/r2/?lang=en");
-    expect(router.currentRoute.value.path).toBe("/login");
-    expect(router.currentRoute.value.query.returnTo).toBe("/r2/?lang=en");
-    // 登入頁也要是同一個語言
+    expect(router.currentRoute.value.path).toBe("/r2/");
     expect(router.currentRoute.value.query.lang).toBe("en");
   });
 

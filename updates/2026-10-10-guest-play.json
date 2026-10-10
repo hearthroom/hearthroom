@@ -1,0 +1,19 @@
+{
+  "tier": "highlight",
+  "audience": "everyone",
+  "try": "/",
+  "title": {
+    "zh-Hant": "沒登入也能打開卡片看開場、挑開場選項，想說第一句時再登入就好。",
+    "zh-Hans": "不登录也能打开卡片看开场、挑开场选项，想说第一句时再登录就好。",
+    "en": "Open any card and read the opening without signing in, then sign in when you send your first message.",
+    "ja": "ログインしなくてもカードを開いて冒頭を読み、最初の一言を送るときにログインできます。",
+    "ko": "로그인 없이 카드를 열어 첫 장면을 읽고, 첫 메시지를 보낼 때 로그인하면 됩니다."
+  },
+  "body": {
+    "zh-Hant": "登入完會回到同一張卡，剛才打的字還在。",
+    "zh-Hans": "登录完会回到同一张卡，刚才打的字还在。",
+    "en": "After signing in you come back to the same card with what you typed still there.",
+    "ja": "ログイン後は同じカードに戻り、入力した文はそのまま残っています。",
+    "ko": "로그인하면 같은 카드로 돌아오고 입력하던 내용도 그대로 남아 있습니다."
+  }
+}
