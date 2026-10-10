@@ -15821,12 +15821,19 @@
           },
           "language": {
             "type": "string",
-            "enum": ["zh-Hant", "zh-Hans"],
+            "enum": [
+              "zh-Hant",
+              "zh-Hans"
+            ],
             "description": "Card language. Only `zh-Hant` and `zh-Hans` can be swapped, and only on a card whose language is one of them: the original text moves to the new script, which the play page converts from. Other values, or any value on a card in another language, return `invalid_arguments`."
           },
           "roleDesc": {
             "type": "string",
             "description": "Intro; limit 500 chars (English 2500)."
+          },
+          "roleReadme": {
+            "type": "string",
+            "description": "Detail introduction in Markdown for the card's public page (the summary stays in `roleDesc`). Presentation only: never sent to the model during chat. Empty string clears it. Limit 20000 chars (English 40000); over the limit returns `role_readme_too_long`."
           },
           "roleTag": {
             "type": "array",
@@ -15966,6 +15973,11 @@
             "maxLength": 2500,
             "description": "Short intro; limit 500 chars (2500 for English cards). Blank ignored."
           },
+          "roleReadme": {
+            "type": "string",
+            "maxLength": 40000,
+            "description": "Detail introduction in Markdown for the card's public page; never sent to the model during chat. Limit 20000 chars (40000 for English cards); over the limit returns `role_readme_too_long`. Blank ignored (clear it with `POST /role/{roleId}/document`)."
+          },
           "roleTag": {
             "type": "array",
             "items": {
@@ -16075,6 +16087,22 @@
           },
           "roleDescKo": {
             "type": "string"
+          },
+          "roleReadme": {
+            "type": "string",
+            "description": "Detail introduction in Markdown, shown on the card's public page like a README (base language). Empty string when the author wrote none. Readable by anyone who can see the card; never sent to the model during chat. Render it as sanitized Markdown."
+          },
+          "roleReadmeEn": {
+            "type": "string",
+            "description": "Detail introduction, English translation (present only when that translation exists)."
+          },
+          "roleReadmeJa": {
+            "type": "string",
+            "description": "Detail introduction, Japanese translation (present only when that translation exists)."
+          },
+          "roleReadmeKo": {
+            "type": "string",
+            "description": "Detail introduction, Korean translation (present only when that translation exists)."
           },
           "roleAvatar": {
             "type": "string",
@@ -17153,6 +17181,10 @@
           },
           "roleOutputContractMaxChars": {
             "type": "integer"
+          },
+          "roleReadmeMaxChars": {
+            "type": "integer",
+            "description": "Limit for `roleReadme`: 20000 (English cards 40000)."
           }
         }
       },
@@ -17172,6 +17204,10 @@
         "properties": {
           "roleDescChars": {
             "type": "integer"
+          },
+          "roleReadmeChars": {
+            "type": "integer",
+            "description": "Characters in `roleReadme`. Not part of `totalChars` or `estimatedTokens`, because the detail introduction is never sent to the model."
           },
           "roleDetailDescChars": {
             "type": "integer"
@@ -17411,7 +17447,8 @@
                   "roleDesc",
                   "roleDetailDesc",
                   "roleOutputContract",
-                  "customInstructions"
+                  "customInstructions",
+                  "roleReadme"
                 ]
               },
               "section": {

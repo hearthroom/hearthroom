@@ -972,6 +972,206 @@
         ]
       }
     },
+    "/v1/cards/{id}/score": {
+      "get": {
+        "tags": [
+          "Comments"
+        ],
+        "summary": "Read a card's ratings",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardScore"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Listed cards only. Returns the average, the 1–5 star breakdown and, with authentication, the viewer's own rating.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Public card ID."
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Comments"
+        ],
+        "summary": "Rate a card",
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "score"
+                ],
+                "properties": {
+                  "score": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5,
+                    "description": "Rating from 1 to 5 stars."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Success; no response body."
+          },
+          "400": {
+            "description": "Invalid input.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "One rating per member and card; rating again replaces the previous value. Authors cannot rate their own cards (`own_card`). `score` must be an integer from 1 to 5 (`score_invalid`).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Public card ID."
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Comments"
+        ],
+        "summary": "Remove your rating",
+        "security": [
+          {
+            "memberToken": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Success; no response body."
+          },
+          "401": {
+            "description": "Authentication required or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Idempotent: removing a rating that does not exist succeeds.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Public card ID."
+          }
+        ]
+      }
+    },
     "/v1/comments/{id}": {
       "delete": {
         "tags": [
@@ -3052,6 +3252,15 @@
             "items": {
               "$ref": "#/components/schemas/Comment"
             }
+          },
+          "score": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "maximum": 5,
+            "description": "The commenter's rating of this card; null when the commenter has not rated it."
           }
         }
       },
@@ -3430,6 +3639,39 @@
               "type": "string"
             },
             "description": "Entry points the member has already used."
+          }
+        }
+      },
+      "CardScore": {
+        "type": "object",
+        "properties": {
+          "average": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Average rating rounded to one decimal place; null when nobody has rated the card."
+          },
+          "count": {
+            "type": "integer"
+          },
+          "histogram": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 5,
+            "maxItems": 5,
+            "description": "Number of ratings for 1 to 5 stars, in that order."
+          },
+          "mine": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "maximum": 5,
+            "description": "The viewer's own rating; null for guests or when the viewer has not rated the card."
           }
         }
       }

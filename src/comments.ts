@@ -57,7 +57,7 @@ export async function cardAuthorMemberId(db: D1Database, card: CommentCard): Pro
 interface Row {
   id: string; card_id: string; member_id: string; parent_id: string | null; root_id: string | null;
   content: string; reply_to_name: string; like_count: number; reply_count: number; created_at: number;
-  handle: string; display_name: string | null; avatar_url: string; liked: number;
+  handle: string; display_name: string | null; avatar_url: string; liked: number; score: number | null;
 }
 
 export interface Viewer {
@@ -84,6 +84,8 @@ function view(r: Row, viewer: Viewer, authorMemberId: string | null) {
     isLiked: r.liked === 1,
     isOwner: mine,
     isCreator: !!authorMemberId && authorMemberId === r.member_id,
+    /** 留言者給這張卡的星數（card_scores）；沒評過是 null */
+    score: r.score ?? null,
     canDelete: mine || viewer.moderator || (!!viewer.memberId && viewer.memberId === authorMemberId),
   };
 }
@@ -91,7 +93,8 @@ export type CommentView = ReturnType<typeof view> & { replies?: ReturnType<typeo
 
 const SELECT = `SELECT c.id, c.card_id, c.member_id, c.parent_id, c.root_id, c.content, c.reply_to_name, c.like_count, c.reply_count, c.created_at,
   m.handle, m.display_name, m.avatar_url,
-  EXISTS (SELECT 1 FROM comment_likes l WHERE l.comment_id = c.id AND l.member_id = ?1) AS liked
+  EXISTS (SELECT 1 FROM comment_likes l WHERE l.comment_id = c.id AND l.member_id = ?1) AS liked,
+  (SELECT s.score FROM card_scores s WHERE s.card_id = c.card_id AND s.member_id = c.member_id) AS score
   FROM comments c JOIN members m ON m.id = c.member_id`;
 
 export async function listTop(db: D1Database, card: CommentCard, viewer: Viewer, page: number): Promise<{ total: number; comments: CommentView[]; isRoleCreator: boolean }> {
