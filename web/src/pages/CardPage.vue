@@ -20,6 +20,7 @@ import { recallCard } from "@/lib/card-memory";
 import { fetchWelcomeAsset } from "@/lib/welcome-asset";
 import { currentProvider, type ProviderId } from "@/lib/provider";
 import CardOwnerActions from "@/components/CardOwnerActions.vue";
+import RatingMark from "@/components/RatingMark.vue";
 import CardPlatforms from "@/components/CardPlatforms.vue";
 import ShareMenu from "@/components/ShareMenu.vue";
 import { useSession } from "@/lib/session";
@@ -310,7 +311,6 @@ watch(() => session.profile?.showNsfw, (now, before) => {
               <span>{{ [...shownName][0] }}</span>
             </div>
             <span v-if="card.featured" class="role__featured" :title="$t('card.featuredHint')">{{ $t("card.featured") }}</span>
-            <span v-if="card.nsfw" class="role__flag" :title="$t('card.nsfwHint')">{{ $t("card.nsfw") }}</span>
           </div>
 
           <div class="role__id">
@@ -338,6 +338,9 @@ watch(() => session.profile?.showNsfw, (now, before) => {
 
           <!-- 主行動緊跟在名字與作者後面：一進頁面就看得到，不必先捲過統計與標籤。獨占整列，不被次要操作擠出側欄。 -->
           <CardPlatforms class="role__platforms" :card-id="card.id" :provider="card.provider" :card-number="card.num" :pending="platformsRequest" />
+          <!-- 分級標示緊貼開始遊玩（遊戲軟體分級管理辦法第 11、12 條：標識與情節名稱放在說明或起始處旁）。
+               評級缺失的舊一般卡不標（owner 2026-10-10），作者下次送審時補上 -->
+          <RatingMark v-if="card.rating" class="role__rating" :rating="card.rating" :descriptors="card.ratingDescriptors ?? []" />
 
           <dl class="role__stats">
             <div class="stat"><dt>{{ $t("card.stat.talk") }}</dt><dd>{{ compact(card.talkNum) }}</dd></div>
@@ -359,7 +362,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
           <CardOwnerActions :card="card" @submitted="load" />
           <LibraryToggle v-if="!card.status || card.status === 'approved'" kind="favorites" :target="card.id" @count="card.favoriteCount = $event" />
           <!-- 加到主畫面：能裝網頁的瀏覽器才出現；成人卡要過了門（有鑰匙）才有 -->
-          <button v-if="installable && (!card.nsfw || card.shortcutKey)" type="button" class="btn btn--sm btn--ghost role__install" @click="addToHome">
+          <button v-if="installable && (card.rating !== 'R' || card.shortcutKey)" type="button" class="btn btn--sm btn--ghost role__install" @click="addToHome">
             <svg viewBox="0 0 20 20" aria-hidden="true">
               <rect x="3" y="3" width="14" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="1.6" />
               <path d="M10 6.5v7M6.5 10h7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
@@ -472,12 +475,6 @@ watch(() => session.profile?.showNsfw, (now, before) => {
   border-radius: 4px; background: var(--accent); color: #fff;
   font-size: 11px; font-weight: 700; letter-spacing: 0.02em; line-height: 1;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.role__flag {
-  position: absolute; top: 8px; right: 8px;
-  display: inline-flex; align-items: center; height: 20px; padding: 0 7px;
-  border-radius: 4px; background: var(--danger); color: #fff;
-  font-size: 11px; font-weight: 700; letter-spacing: 0.02em; line-height: 1;
 }
 .role__void { display: grid; place-items: center; height: 100%; }
 .role__void span { font-size: 80px; font-weight: 600; color: rgba(255, 255, 255, 0.9); }

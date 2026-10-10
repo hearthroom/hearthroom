@@ -1,7 +1,7 @@
 import {approveFixtureResponse} from './hosted-fixture';
 import { SELF, env } from "cloudflare:test";
 import { beforeEach, afterEach, expect, it } from "vitest";
-import { resetDb, identities, identitiesFor, rolesOnMainSite, mainSiteDown, bearer, restoreUpstream } from "./helpers";
+import { ratingBody, resetDb, identities, identitiesFor, rolesOnMainSite, mainSiteDown, bearer, restoreUpstream } from "./helpers";
 
 let cardId = "";
 let handle = "";
@@ -11,7 +11,7 @@ beforeEach(async () => {
   await resetDb();
   identities({ author: 10001, fan: 20001, other: 20002 });
   rolesOnMainSite({ roleId: "library-role", authorNumId: 10001 });
-  const r = await approveFixtureResponse(await SELF.fetch("https://c.test/v1/cards", { method: "POST", headers: { ...bearer("author"), "Content-Type": "application/json" }, body: JSON.stringify({operationId:crypto.randomUUID(),...({ roleId: "library-role", nsfw: false })}) }));
+  const r = await approveFixtureResponse(await SELF.fetch("https://c.test/v1/cards", { method: "POST", headers: { ...bearer("author"), "Content-Type": "application/json" }, body: JSON.stringify({operationId:crypto.randomUUID(),...({ roleId: "library-role", ...ratingBody(false) })}) }));
   cardId = (await body(r)).id;
   handle = (await body(await request("me", "author"))).handle;
 });
@@ -52,7 +52,7 @@ it("does not reveal adult or unavailable cards and rejects unknown targets", asy
   expect((await request("me/favorites/missing", "fan", "PUT")).status).toBe(404);
   expect((await request("me/following/zzzzzzzz", "fan", "PUT")).status).toBe(404);
   await request(`me/favorites/${cardId}`, "fan", "PUT");
-  await env.DB.prepare("UPDATE cards SET nsfw=1 WHERE id=?").bind(cardId).run();
+  await env.DB.prepare("UPDATE cards SET rating='R' WHERE id=?").bind(cardId).run();
   expect((await body(await request("me/favorites"))).items).toEqual([]);
   expect((await request(`me/favorites/${cardId}`, "other", "PUT")).status).toBe(404);
   expect((await request(`me/favorites/${cardId}`, "fan", "DELETE")).status).toBe(200);
@@ -125,7 +125,7 @@ it('keeps adult cards a member already played or saved after they turn adult con
   await request(`me/favorites/${cardId}`, 'fan', 'PUT');
   await request(`me/following/${handle}`, 'fan', 'PUT');
   await SELF.fetch('https://c.test/v1/me/conversations', { method: 'PUT', headers: { ...bearer('fan'), 'X-Provider': 'harbor', 'Content-Type': 'application/json' }, body: JSON.stringify({ roleId: 'library-role', conversationId: 'adult-chat' }) });
-  await env.DB.prepare('UPDATE cards SET nsfw=1 WHERE id=?').bind(cardId).run();
+  await env.DB.prepare("UPDATE cards SET rating='R' WHERE id=?").bind(cardId).run();
   const fan = await env.DB.prepare("SELECT member_id AS id FROM member_identities WHERE external_id='20001'").first<{ id: string }>();
   const library = async () => ({
     conversation: (await body(await request('me/conversations'))).conversations[0],

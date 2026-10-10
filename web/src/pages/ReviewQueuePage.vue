@@ -15,6 +15,7 @@ import { useReviewer } from "@/lib/review";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
 import { zoneLabel } from "@/lib/i18n";
+import RatingMark from "@/components/RatingMark.vue";
 
 const { t, locale } = useI18n();
 const { lp } = useLocalePath();
@@ -111,7 +112,7 @@ onMounted(() => {
               <RouterLink :to="lp(`/review/${item.id}`)" class="row__name">{{ item.card.name }}</RouterLink>
               <span class="chip" :class="{ 'chip--re': item.kind === 're' }">{{ $t(`review.kind.${item.kind}`) }}</span>
               <span class="chip">{{ $t("review.stamps", { n: item.stamps.approve, required: item.stamps.required }) }}</span>
-              <span v-if="item.nsfw" class="chip chip--nsfw">{{ $t("review.rating.nsfw") }}</span>
+              <RatingMark v-if="item.rating" :rating="item.rating" variant="chip" />
             </div>
             <p class="row__hook">{{ item.card.summary }}</p>
             <p class="row__meta">

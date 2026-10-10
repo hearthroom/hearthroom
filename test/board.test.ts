@@ -287,11 +287,11 @@ describe("榜單邊緣快取", () => {
   });
   it("已快取的一般卡改為成人內容、退回重審或刪除時立即失效", async () => {
     for (const mutation of [
-      "UPDATE cards SET nsfw=1 WHERE source_role_id='role-a'",
+      "UPDATE cards SET rating='R' WHERE source_role_id='role-a'",
       "UPDATE cards SET status='needs_review' WHERE source_role_id='role-a'",
       "DELETE FROM cards WHERE source_role_id='role-a'",
     ]) {
-      await env.DB.prepare("UPDATE cards SET nsfw=0,status='approved' WHERE source_role_id='role-a'").run();
+      await env.DB.prepare("UPDATE cards SET rating=NULL,status='approved' WHERE source_role_id='role-a'").run();
       const before = await hdr();
       expect(before.body.items).toHaveLength(1);
       expect((await hdr()).cache).toBe("hit");

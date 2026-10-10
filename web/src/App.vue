@@ -11,6 +11,7 @@ import { useNotifications } from "@/lib/notifications";
 import AdultToggle from "@/components/AdultToggle.vue";
 import AppearanceMenu from "@/components/AppearanceMenu.vue";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
+import RatingDialog from "@/components/RatingDialog.vue";
 import InstallToast from "@/components/InstallToast.vue";
 import LocaleSwitch from "@/components/LocaleSwitch.vue";
 import { useAppearance } from "@/lib/appearance";
@@ -145,6 +146,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
   <main id="main" tabindex="-1" :class="{ 'site-main': !route.meta.bare, 'main--bare': route.meta.bare }"><RouterView /></main>
   <CoachTour />
   <ConfirmDialog />
+  <RatingDialog />
   <!-- 裝到主畫面的提示：對話與遊戲頁是全螢幕的，不在那裡打擾 -->
   <!-- 卡片 App 網域的頁全是 bare，但「加到主畫面」的提示卡就在那裡 -->
   <InstallToast v-if="!route.meta.bare || isPlayHost()" />

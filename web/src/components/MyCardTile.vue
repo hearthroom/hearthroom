@@ -7,6 +7,8 @@ import { useLocalePath } from "@/lib/use-locale";
 import { can, currentProvider } from "@/lib/provider";
 import { cardThumb } from "@/lib/card-thumb";
 import type { MyCard } from "@/lib/api";
+import RatingMark from "./RatingMark.vue";
+import { ratingName } from "@/lib/rating";
 
 /** eager：首屏那幾張，封面不等捲到才載（最大內容繪製就是它們） */
 const props = defineProps<{ card: MyCard & {sourceAvailable?:boolean}; busy: boolean; eager?: boolean }>();
@@ -85,14 +87,14 @@ onBeforeUnmount(() => listen(false));
         <span class="card__status" :class="`card__status--${status.tone}`">{{ $t(status.key) }}</span>
         <span v-if="card.draftChanged" class="card__status card__status--wait">{{ $t("mine.badge.draftChanged") }}</span>
       </span>
-      <span v-if="card.registered && card.nsfw" class="card__flag">{{ $t("card.nsfw") }}</span>
+      <RatingMark v-if="card.registered && card.rating === 'R'" rating="R" variant="chip" class="card__flag" />
     </a>
 
     <div class="card__content">
       <div class="card__title">
         <h3 class="card__name"><a :href="detailHref" class="card__link">{{ card.name }}</a></h3>
         <!-- 封面那層對讀屏隱藏（跟名字是同一個連結），狀態標在這裡再念一次 -->
-        <span class="sr-only">{{ $t(status.key) }}<template v-if="card.draftChanged"> · {{ $t("mine.badge.draftChanged") }}</template><template v-if="card.registered && card.nsfw"> · {{ $t("card.nsfw") }}</template></span>
+        <span class="sr-only">{{ $t(status.key) }}<template v-if="card.draftChanged"> · {{ $t("mine.badge.draftChanged") }}</template><template v-if="card.registered && card.rating === 'R'"> · {{ ratingName("R", String($i18n.locale)) }}</template></span>
         <!-- 送審、重新送審都在編輯頁；這裡只留已登記卡的「撤回」（別處沒有這個入口）。
              放在名字旁邊而不是操作列：每張卡的操作列都是同樣兩顆鍵，排起來才整齊 -->
         <div v-if="card.registered" ref="more" class="card__more">
@@ -155,11 +157,11 @@ onBeforeUnmount(() => listen(false));
 .card__void { display: grid; place-items: center; width: 100%; height: 100%; }
 .card__void span { display: grid; place-items: center; width: 56px; height: 68px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); color: var(--text-3); font-size: 28px; font-weight: 500; box-shadow: var(--shadow-sm); }
 
-/* 左上一疊狀態標、右上 18+；兩邊都不吃點擊，點下去就是點封面 */
+/* 左上一疊狀態標、右上限制級；兩邊都不吃點擊，點下去就是點封面 */
 .card__badges, .card__flag { position: absolute; top: 8px; z-index: 1; pointer-events: none; }
 .card__badges { left: 8px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; max-width: calc(100% - 16px); }
 .card__badges:has(~ .card__flag) { max-width: calc(100% - 56px); }
-.card__status, .card__flag {
+.card__status {
   display: inline-flex; align-items: center; height: 20px; padding: 0 7px; max-width: 100%;
   border-radius: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.02em; line-height: 1;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -171,7 +173,7 @@ onBeforeUnmount(() => listen(false));
 .card__status--wait { --dot: var(--gold-light); }
 .card__status--alert { --dot: #ff6b66; }
 .card__status--muted { --dot-ring: inset 0 0 0 1.5px rgba(255, 255, 255, 0.7); }
-.card__flag { right: 8px; background: var(--danger); color: var(--on-danger); }
+.card__flag { right: 8px; }
 
 .card__content { flex: 1; display: flex; flex-direction: column; gap: 5px; min-width: 0; padding: 10px 10px 10px 12px; container-type: inline-size; }
 /* 名字最多兩行、固定兩行高：短名字的卡不該讓整排的簡介與按鈕參差 */

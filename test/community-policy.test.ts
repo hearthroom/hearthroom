@@ -1,12 +1,12 @@
 import {approveFixtureResponse} from './hosted-fixture';
 import { SELF, env } from 'cloudflare:test';
 import { afterEach, beforeEach, expect, it } from 'vitest';
-import { bearer, resetDb, restoreUpstream, identitiesFor, rolesOnProviders, myRolesOnUpstream } from './helpers';
+import { ratingBody, bearer, resetDb, restoreUpstream, identitiesFor, rolesOnProviders, myRolesOnUpstream } from './helpers';
 import { resolveMember } from '../src/members';
 
 const headers = (provider='harbor') => ({...bearer(provider), 'X-Provider':provider,'Content-Type':'application/json'});
 const profile = async (provider='harbor') => await (await SELF.fetch('https://c.test/v1/me',{headers:headers(provider)})).json() as any;
-const register = async (roleId:string,provider='harbor') => approveFixtureResponse(await SELF.fetch('https://c.test/v1/cards',{method:'POST',headers:headers(provider),body:JSON.stringify({operationId:crypto.randomUUID(),...({roleId,nsfw:false})})}));
+const register = async (roleId:string,provider='harbor') => approveFixtureResponse(await SELF.fetch('https://c.test/v1/cards',{method:'POST',headers:headers(provider),body:JSON.stringify({operationId:crypto.randomUUID(),...({roleId,...ratingBody(false)})})}));
 beforeEach(async()=>{
  await resetDb(); identitiesFor({harbor:{harbor:11}});
  rolesOnProviders({harbor:['a','b','c','d','copy'].map(roleId=>({roleId,authorNumId:11}))});

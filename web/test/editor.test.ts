@@ -14,6 +14,10 @@ import { embedIntoPng, parseTavernFile, type TavernCard } from "../src/lib/taver
 import { writeChunks } from "../src/lib/png-chunks";
 import CardEditorPage from "../src/pages/CardEditorPage.vue";
 import { confirmState, settleConfirm } from "../src/lib/confirm";
+import { ratingState } from "../src/lib/rating";
+
+const GENERAL = { version: 1, topics: {}, other: "other.none" };
+const ADULT = { version: 1, topics: { sex: "sex.explicit" }, other: "other.none" };
 
 const platforms = vi.hoisted(()=>({profile:undefined as any, saveCopies:vi.fn(async()=>[] as any[])}));
 vi.mock("../src/lib/authoring-platforms",()=>({saveCopies:platforms.saveCopies,savedDistributionTargets:async()=>[]}));
@@ -43,7 +47,9 @@ const api = vi.hoisted(() => ({
   submitRoleForReview: vi.fn(async () => ({})),
   registerCard: vi.fn(async () => ({status:'pending'})),
   fetchFandoms: vi.fn(async () => []),
-  beginCardEdit: vi.fn(async ():Promise<{resubmit:boolean;nsfw?:boolean}> => ({resubmit:false})),
+  beginCardEdit: vi.fn(async ():Promise<{resubmit:boolean;ratingAnswers?:unknown}> => ({resubmit:false})),
+  fetchRatingDraft: vi.fn(async ():Promise<unknown> => null),
+  saveRatingDraft: vi.fn(async () => {}),
   deleteRole: vi.fn(async () => {}),
   unregisterCard: vi.fn(async () => {}),
   uploadImage: vi.fn(async () => "https://img.test/avatar.png"),
@@ -153,6 +159,7 @@ async function submit() {
 }
 
 beforeEach(() => {
+  ratingState.current = null;
   localStorage.clear();
   sessionStorage.clear();
   platforms.profile=undefined; platforms.saveCopies.mockClear();
@@ -941,9 +948,13 @@ it('HarperHarbor submits once to HearthRoom with an explicit rating and no hosti
  byText('發布').click();await flush();
  btnIn(root,i18n.global.t('editor.publish.submit')).click();await flush();
  expect(root.querySelector('.platform-dialog')).toBeNull();
- expect(confirmState.current?.choices?.map(c=>c.value)).toEqual(['sfw','nsfw']);
- settleConfirm(true,'','sfw');await flush();await flush();
- expect(api.registerCard).toHaveBeenCalledWith('r1','tok',false,[],'harbor','',undefined);
+ // 先填分級問卷（沒填過就從頭來），再確認送審
+ expect(ratingState.current?.initial).toBeNull();
+ expect(confirmState.current).toBeNull();
+ ratingState.current!.resolve(GENERAL);await flush();await flush();
+ expect(api.saveRatingDraft).toHaveBeenCalledWith('r1',GENERAL,'tok','harbor');
+ settleConfirm(true);await flush();await flush();
+ expect(api.registerCard).toHaveBeenCalledWith('r1','tok',GENERAL,[],'harbor','',undefined);
  expect(api.submitRoleForReview).not.toHaveBeenCalled();
  expect(platforms.saveCopies).not.toHaveBeenCalled();
  expect(router.currentRoute.value.path).toBe('/mine');
@@ -955,29 +966,48 @@ it('submits a private HarperHarbor draft to the same immutable community review'
  expect(root.textContent).toContain(i18n.global.t('workspace.editHint'));
  byText('發布').click();await flush();
  btnIn(root,i18n.global.t('editor.publish.submit')).click();await flush();
- settleConfirm(true,'','sfw');await flush();await flush();
+ ratingState.current!.resolve(GENERAL);await flush();await flush();
+ settleConfirm(true);await flush();await flush();
  expect(api.submitRoleForReview).not.toHaveBeenCalled();
- expect(api.registerCard).toHaveBeenCalledWith('r1','tok',false,[],'harbor','',undefined);
+ expect(api.registerCard).toHaveBeenCalledWith('r1','tok',GENERAL,[],'harbor','',undefined);
  expect(router.currentRoute.value.path).toBe('/mine');
 });
 
 it('retires a pending Harbor review before saving, then submits the completed draft again',async()=>{
  localStorage.setItem('hearthroom.provider','harbor');
  api.fetchRoleDetail.mockResolvedValueOnce({roleName:'A',roleDetailDesc:'Private instructions',roleWelcome:'Hello',roleVisibility:'public'});
- api.beginCardEdit.mockResolvedValueOnce({resubmit:true,nsfw:true});
+ api.beginCardEdit.mockResolvedValueOnce({resubmit:true,ratingAnswers:ADULT});
  await mount('/cards/r1/edit');
  await type($<HTMLInputElement>('#f-name'),'B revised');await submit();
  expect(api.beginCardEdit).toHaveBeenCalledWith('r1','tok','harbor');
  expect(api.beginCardEdit.mock.invocationCallOrder[0]).toBeLessThan(api.patchRoleDocument.mock.invocationCallOrder[0]);
  expect(api.unpublishRole).toHaveBeenCalledWith('r1','tok');
- expect(api.registerCard).toHaveBeenCalledWith('r1','tok',true,[],'harbor','',undefined);
+ expect(api.registerCard).toHaveBeenCalledWith('r1','tok',ADULT,[],'harbor','',undefined);
  expect(api.registerCard.mock.invocationCallOrder[0]).toBeGreaterThan(api.patchRoleDocument.mock.invocationCallOrder[0]);
+ // 沿用上一版的問卷，不再問一次
+ expect(ratingState.current).toBeNull();
+});
+
+// owner 2026-10-10：問卷上線前上架的一般卡沒有級別，下次送審一定要補
+it('asks for the rating questionnaire when the previous submission has none, and holds the resubmission if the author skips it',async()=>{
+ localStorage.setItem('hearthroom.provider','harbor');
+ api.fetchRoleDetail.mockResolvedValueOnce({roleName:'A',roleDetailDesc:'Private instructions',roleWelcome:'Hello'});
+ api.beginCardEdit.mockResolvedValueOnce({resubmit:true});
+ await mount('/cards/r1/edit');
+ await type($<HTMLInputElement>('#f-name'),'B revised');
+ const saving=submit();await flush();await flush();
+ expect(ratingState.current?.initial).toBeNull();
+ ratingState.current!.resolve(null);await saving;
+ for(let i=0;i<10;i++)await flush();
+ expect(api.patchRoleDocument).toHaveBeenCalled();
+ expect(api.registerCard).not.toHaveBeenCalled();
+ expect(root.textContent).toContain(i18n.global.t('workspace.reviewNeedsRating'));
 });
 
 it('a failed draft save never submits partial content for review',async()=>{
  localStorage.setItem('hearthroom.provider','harbor');
  api.fetchRoleDetail.mockResolvedValueOnce({roleName:'A'});
- api.beginCardEdit.mockResolvedValueOnce({resubmit:true,nsfw:false});
+ api.beginCardEdit.mockResolvedValueOnce({resubmit:true,ratingAnswers:GENERAL});
  api.patchRoleDocument.mockRejectedValueOnce(new Error('fixture save failed'));
  await mount('/cards/r1/edit');await type($<HTMLInputElement>('#f-name'),'B');await submit();
  expect(api.beginCardEdit).toHaveBeenCalled();

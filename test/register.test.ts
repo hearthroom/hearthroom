@@ -1,7 +1,7 @@
 import {approveFixtureResponse} from './hosted-fixture';
 import { SELF, env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { bearer, mainSiteDown, resetDb, restoreUpstream, rolesOnMainSite, whoAmI } from "./helpers";
+import { ratingBody, bearer, mainSiteDown, resetDb, restoreUpstream, rolesOnMainSite, whoAmI } from "./helpers";
 
 beforeEach(async () => {
   await resetDb();
@@ -15,7 +15,7 @@ const register = async (body: unknown, headers: Record<string, string> = bearer(
   approveFixtureResponse(await SELF.fetch("https://c.test/v1/cards", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headers },
-    body: JSON.stringify({operationId:crypto.randomUUID(),...({ nsfw: false, ...(body as object) })}),
+    body: JSON.stringify({operationId:crypto.randomUUID(),...({ ...ratingBody(false), ...(body as object) })}),
   }));
 
 const list = async (query = "") => {

@@ -6,7 +6,7 @@ import { SELF, createExecutionContext, env, waitOnExecutionContext } from "cloud
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker, { boardCache, iconCache } from "../src/index";
 import { cardManifest, iconSize, localePrefix, svgWrap } from "../src/shortcut";
-import { bearer, identities, resetDb, restoreUpstream, rolesOnMainSite } from "./helpers";
+import { ratingBody, bearer, identities, resetDb, restoreUpstream, rolesOnMainSite } from "./helpers";
 import { ADULT_CONSENT_VERSION } from "../shared/adult-consent";
 
 const AUTHOR = 10001;
@@ -25,8 +25,8 @@ beforeEach(async () => {
     { roleId: "role-safe", authorNumId: AUTHOR, name: "夜行偵探", nameEn: "Night Detective" },
     { roleId: "role-adult", authorNumId: AUTHOR, name: "深夜的卡" },
   );
-  expect((await submit("role-safe", { nsfw: false })).status).toBe(201);
-  expect((await submit("role-adult", { nsfw: true })).status).toBe(201);
+  expect((await submit("role-safe", { ...ratingBody(false) })).status).toBe(201);
+  expect((await submit("role-adult", { ...ratingBody(true) })).status).toBe(201);
   cardNumber=String((await env.DB.prepare("SELECT id FROM cards WHERE source_role_id='role-safe'").first<{id:number}>())!.id);
   hostedSafe=(await env.DB.prepare("SELECT approved_hosted_role_id AS id FROM cards WHERE source_role_id='role-safe'").first<{id:string}>())!.id;
 });
@@ -113,8 +113,8 @@ describe("卡片 manifest", () => {
     const adult = await env.DB.prepare("SELECT id FROM cards WHERE source_role_id = 'role-adult'").first<{ id: string }>();
     // 沒開開關的人：卡片本身就 403，自然沒有鑰匙
     expect((await SELF.fetch(`https://c.test/v1/cards/${adult!.id}`)).status).toBe(403);
-    const detail = await (await SELF.fetch(`https://c.test/v1/cards/${adult!.id}?nsfw=1`, { headers: bearer("viewer-token") })).json() as { shortcutKey?: string; nsfw: boolean };
-    expect(detail.nsfw).toBe(true);
+    const detail = await (await SELF.fetch(`https://c.test/v1/cards/${adult!.id}?nsfw=1`, { headers: bearer("viewer-token") })).json() as { shortcutKey?: string; rating: string | null };
+    expect(detail.rating).toBe('R');
     expect(detail.shortcutKey).toMatch(/^\d+\.[A-Za-z0-9_-]+$/);
     // 一般卡不發鑰匙
     const safe = await (await SELF.fetch("https://c.test/v1/cards/role-safe")).json() as { shortcutKey?: string };

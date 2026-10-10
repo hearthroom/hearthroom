@@ -1,6 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
-import { resetDb, role, makeMember, reviewOn, reviewOff } from './helpers';
+import { GENERAL_RATING, ADULT_RATING, ratingBody, resetDb, role, makeMember, reviewOn, reviewOff } from './helpers';
 import { submitHosted, hostingDecision, hostGateway } from '../src/hosting';
 import { claim, stamp, statusAmong } from '../src/review';
 import { getCard } from '../src/cards';
@@ -14,13 +14,13 @@ it('reviews the sealed revision once, keeps published version during updates, an
  vi.spyOn(hostGateway,'seal').mockImplementation(async(_env,_token,roleId,workId,versionId)=>({workId,versionId,hostedRevisionId:'sealed-'+versionId}));
  vi.spyOn(hostGateway,'read').mockImplementation(async(_env,_token,id)=>({...me,roleId:id,names:{...me.names,zh:'Frozen title'}}));
  const read=vi.spyOn(upstream,'readForReview').mockResolvedValue({document:{roleDetailDesc:'PRIVATE'},hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
- const input={memberId,account:10001,role:me,token:'author',nsfw:false,operationId:crypto.randomUUID(),now:Date.now()};
+ const input={memberId,account:10001,role:me,token:'author',rating:GENERAL_RATING,operationId:crypto.randomUUID(),now:Date.now()};
  const first=await submitHosted(env,input);
  expect(read.mock.calls[0][2]).toBe(first.hostedRevisionId);
  expect((await hostingDecision(env.DB,first.versionId)).status).toBe('pending');
  expect(await submitHosted(env,input)).toEqual(first);
  expect(hostGateway.seal).toHaveBeenCalledTimes(1);
- await expect(submitHosted(env,{...input,nsfw:true})).rejects.toThrow('hosting_operation_conflict');
+ await expect(submitHosted(env,{...input,rating:ADULT_RATING})).rejects.toThrow('hosting_operation_conflict');
  await expect(submitHosted(env,{...input,operationId:crypto.randomUUID()})).rejects.toThrow('submission_pending');
  const sub=await env.DB.prepare('SELECT id FROM review_submissions').first<{id:string}>();
  for (const reviewer of ['first','second']){
@@ -28,7 +28,7 @@ it('reviews the sealed revision once, keeps published version during updates, an
   if((await stamp(env.DB,{submissionId:sub!.id,memberId:reviewer,verdict:'approve',note:'',now:Date.now()})).submission.status!=='pending')break;
  }
  expect((await hostingDecision(env.DB,first.versionId)).status).toBe('approved');
- const second=await submitHosted(env,{...input,operationId:crypto.randomUUID(),nsfw:true});
+ const second=await submitHosted(env,{...input,operationId:crypto.randomUUID(),rating:ADULT_RATING});
  expect(second.versionId).not.toBe(first.versionId);
  expect((await statusAmong(env.DB,['draft'])).get('draft')).toMatchObject({status:'approved',updateStatus:'pending'});
  expect((await getCard(env.DB,'draft','harbor'))?.status).toBe('approved');
@@ -38,7 +38,7 @@ it('reviews the sealed revision once, keeps published version during updates, an
  await stamp(env.DB,{submissionId:update!.id,memberId:'third',verdict:'reject',note:'revise',now:Date.now()});
  expect((await hostingDecision(env.DB,first.versionId)).status).toBe('approved');
  expect((await hostingDecision(env.DB,second.versionId)).status).toBe('rejected');
- expect((await getCard(env.DB,'draft','harbor'))?.nsfw).toBe(0);
+ expect((await getCard(env.DB,'draft','harbor'))?.rating).toBe('G');
  await env.DB.prepare("DELETE FROM cards WHERE source_role_id='draft'").run();
  expect((await hostingDecision(env.DB,first.versionId)).status).toBe('revoked');
 });
@@ -48,7 +48,7 @@ it('a failed seal remains retryable and concurrent retries leave only one privat
  vi.spyOn(hostGateway,'seal').mockRejectedValueOnce(new Error('offline')).mockImplementation(async(_env,_token,_id,workId,versionId)=>({workId,versionId,hostedRevisionId:'sealed-'+versionId}));
  vi.spyOn(hostGateway,'read').mockImplementation(async(_env,_token,id)=>({...me,roleId:id}));
  vi.spyOn(upstream,'readForReview').mockResolvedValue({hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
- const input={memberId,account:10001,role:me,token:'author',nsfw:false,operationId:crypto.randomUUID(),now:Date.now()};
+ const input={memberId,account:10001,role:me,token:'author',rating:GENERAL_RATING,operationId:crypto.randomUUID(),now:Date.now()};
  await expect(submitHosted(env,input)).rejects.toThrow('offline');
  const next={...input,operationId:crypto.randomUUID()};
  const results=await Promise.all([submitHosted(env,next),submitHosted(env,next)]);
@@ -65,7 +65,7 @@ it.each(['harbor','harbor'] as const)('HTTP submits a private %s draft and expos
  vi.spyOn(hostGateway,'read').mockImplementation(async(_env,_token,id)=>role({roleId:id,authorNumId:10001}));
  vi.spyOn(upstream,'readForReview').mockResolvedValue({hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
  const headers={Authorization:'Bearer author','X-Provider':provider,'Content-Type':'application/json'};
- const response=await SELF.fetch('https://c.test/v1/cards',{method:'POST',headers,body:JSON.stringify({roleId:'private-draft',nsfw:false,operationId:crypto.randomUUID()})});
+ const response=await SELF.fetch('https://c.test/v1/cards',{method:'POST',headers,body:JSON.stringify({roleId:'private-draft',...ratingBody(false),operationId:crypto.randomUUID()})});
  expect(response.status).toBe(201);
  expect(upstream.fetchRole).not.toHaveBeenCalled();
  const result=await response.json() as {versionId:string};
@@ -88,7 +88,7 @@ it('a failed review transaction cannot consume a listing slot or leave an empty 
  vi.spyOn(upstream,'readForReview').mockResolvedValue({hashes:{card:'',welcome:'',worldbook:'',authorAsset:'',content:''}});
  await env.DB.prepare("CREATE TRIGGER fixture_snapshot_failure BEFORE INSERT ON review_snapshots BEGIN SELECT RAISE(ABORT,'fixture_failure'); END").run();
  try {
-  await expect(submitHosted(env,{memberId,account:10001,role:me,token:'author',nsfw:false,operationId:crypto.randomUUID(),now:Date.now()})).rejects.toThrow();
+  await expect(submitHosted(env,{memberId,account:10001,role:me,token:'author',rating:GENERAL_RATING,operationId:crypto.randomUUID(),now:Date.now()})).rejects.toThrow();
   expect((await env.DB.prepare('SELECT count(*) n FROM cards').first<{n:number}>())?.n).toBe(0);
   expect((await env.DB.prepare('SELECT count(*) n FROM card_registrations').first<{n:number}>())?.n).toBe(0);
  } finally { await env.DB.prepare('DROP TRIGGER fixture_snapshot_failure').run(); }

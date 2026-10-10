@@ -1,7 +1,7 @@
 import { approveFixtureResponse } from './hosted-fixture';
 import { SELF, env } from 'cloudflare:test';
 import { afterEach, beforeEach, expect, it } from 'vitest';
-import { bearer, identities, makeMember, resetDb, restoreUpstream, rolesOnMainSite } from './helpers';
+import { ratingBody, bearer, identities, makeMember, resetDb, restoreUpstream, rolesOnMainSite } from './helpers';
 import { dispatchPush, pushLine, saveSubscription, type PushSender } from '../src/community/push';
 import type { Env } from '../src/types';
 
@@ -19,7 +19,7 @@ beforeEach(async () => {
  rolesOnMainSite({ roleId: 'role-1', authorNumId: AUTHOR, name: '雨夜書店', nameEn: 'Rainy Bookshop' });
  author = await makeMember(AUTHOR); fan = await makeMember(FAN);
  await env.DB.prepare('UPDATE members SET display_name=? WHERE id=?').bind('小雨', fan).run();
- const res = await approveFixtureResponse(await SELF.fetch('https://c.test/v1/cards', { method: 'POST', headers: { 'Content-Type': 'application/json', ...bearer('author') }, body: JSON.stringify({ operationId: crypto.randomUUID(), roleId: 'role-1', nsfw: false }) }));
+ const res = await approveFixtureResponse(await SELF.fetch('https://c.test/v1/cards', { method: 'POST', headers: { 'Content-Type': 'application/json', ...bearer('author') }, body: JSON.stringify({ operationId: crypto.randomUUID(), roleId: 'role-1', ...ratingBody(false) }) }));
  cardId = (await json(res)).id;
 });
 afterEach(() => restoreUpstream());

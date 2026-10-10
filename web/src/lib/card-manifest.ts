@@ -16,7 +16,7 @@ export interface CardHead {
   id: string;
   name: string;
   avatarUrl: string | null;
-  nsfw?: boolean;
+  rating?: string | null;
   /** 成人卡才有：伺服器發給過了門的人的短效鑰匙，manifest 與圖示網址都要帶。 */
   shortcutKey?: string;
 }
@@ -69,7 +69,7 @@ function setMeta(doc: Document, name: string, content: string): void {
  * manifest 對瀏覽器（沒登入狀態）是 404，換了只會讓安裝入口消失又不知道為什麼。
  */
 export function applyCardHead(card: CardHead | null, locale: string, doc: Document = document): void {
-  const usable = card && (!card.nsfw || card.shortcutKey) ? card : null;
+  const usable = card && (card.rating !== "R" || card.shortcutKey) ? card : null;
   const head = usable ? cardHead(usable, locale) : siteHead(locale);
   setLink(doc, "manifest", head.manifest);
   setLink(doc, "apple-touch-icon", head.touchIcon);

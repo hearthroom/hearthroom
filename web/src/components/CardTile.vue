@@ -10,6 +10,7 @@ import { useLocalePath } from "@/lib/use-locale";
 import { cardThumb } from "@/lib/card-thumb";
 import { displayName } from "@/lib/display-name";
 import type { CommunityCard } from "@/lib/types";
+import RatingMark from "./RatingMark.vue";
 
 const props = defineProps<{
   card: CommunityCard;
@@ -75,7 +76,7 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
       <!-- 名次是個小徽章，前三名用慣例的金銀銅；不搶立繪的戲 -->
       <!-- 分級與精選都標在立繪角上：不跟名字搶那兩行的寬度 -->
       <span v-if="card.featured" class="card__featured" :title="$t('card.featuredHint')">{{ $t("card.featured") }}</span>
-      <span v-if="card.nsfw" class="card__flag" :title="$t('card.nsfwHint')">{{ $t("card.nsfw") }}</span>
+      <RatingMark v-if="card.rating === 'R'" rating="R" variant="chip" class="card__flag" />
       <span v-if="rank" class="medal card__rank" :class="rank <= 3 && `medal--${rank}`" role="img" :aria-label="$t('board.rank', { n: rank })">{{ rank }}</span>
     </div>
 
@@ -146,12 +147,7 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
   font-size: 11px; font-weight: 700; letter-spacing: 0.02em; line-height: 1;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.card__flag {
-  position: absolute; top: 8px; right: 8px; z-index: 1; pointer-events: none;
-  display: inline-flex; align-items: center; height: 20px; padding: 0 7px;
-  border-radius: 4px; background: var(--danger); color: #fff;
-  font-size: 11px; font-weight: 700; letter-spacing: 0.02em; line-height: 1;
-}
+.card__flag { position: absolute; top: 8px; right: 8px; z-index: 1; pointer-events: none; }
 
 /* 名字最多兩行：窄欄位一行只放得下幾個字，長名字至少要看得出是哪張卡。
    pre-line：作者自己換的行要留著。break-word 而不是 anywhere：先在空格換行，一段比欄位寬才段內斷。 */

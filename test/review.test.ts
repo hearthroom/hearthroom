@@ -1,7 +1,7 @@
 import { SELF, createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import worker from "../src/index";
-import {
+import { ratingBody,
   bearer, identities, makeReviewer, resetDb, restoreUpstream, reviewOff, reviewOn, reviewUpstream, rolesOnMainSite, sealedReads, settingsReads,
 } from "./helpers";
 import { CLAIM_TTL_MS } from "../src/review";
@@ -32,7 +32,7 @@ const snapshots = async () => (await env.DB.prepare("SELECT COUNT(*) AS n FROM r
 
 const submit = async (roleId:string, token="author-token") => {
  const pending=await env.DB.prepare("SELECT v.operation_id FROM hosting_versions v JOIN review_submissions s ON s.id=v.submission_id WHERE v.source_role_id=? AND s.status='pending'").bind(roleId).first<{operation_id:string}>();
- return SELF.fetch("https://c.test/v1/cards",{method:"POST",headers:{"Content-Type":"application/json",...bearer(token)},body:JSON.stringify({roleId,nsfw:false,operationId:pending?.operation_id??crypto.randomUUID()})});
+ return SELF.fetch("https://c.test/v1/cards",{method:"POST",headers:{"Content-Type":"application/json",...bearer(token)},body:JSON.stringify({roleId,...ratingBody(false),operationId:pending?.operation_id??crypto.randomUUID()})});
 };
 // 同一個網址重讀，確認審核狀態變更會讓暖快取立即失效。
 const board = async () =>

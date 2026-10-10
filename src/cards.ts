@@ -44,8 +44,10 @@ export interface CardRow {
   author_handle?: string | null;
   community_name?: string | null;
   community_avatar?: string | null;
-  /** 成人內容（0006 起）：作者提交時宣告、審核人對照過的本站分級。預設不展示。 */
-  nsfw: number;
+  /** 分級（0056 起）：G／P／PG12／PG15／R；NULL＝評級缺失（這之前上架的一般卡，不是成人卡）。限制級＝成人內容，預設不展示。 */
+  rating: string | null;
+  /** 情節名稱（JSON 陣列），照級別由高到低 */
+  rating_descriptors?: string | null;
   /** 永久卡號，從 100001 起跳。私有卡也會分配，發布或撤銷不換號；0037 起同時是 cards 主鍵。 */
   num?: number | null;
   /** 原作（0045 起）：作者宣告、審核人可改的作品名；fandom_key 是篩選與分組用的鍵（對到 Wikidata 的是 wd:Q…，自由文字是正規形）。 */
@@ -70,13 +72,18 @@ const CARD_COLUMNS = "c.*, CAST(c.id AS TEXT) AS id, fe.labels AS fandom_labels,
 /** 卡號長什麼樣：純數字。網址與搜尋框裡看到這種形狀就當卡號查，其餘當上游的卡片 ID。 */
 export const CARD_NUMBER = /^[1-9]\d{0,11}$/;
 
+/** 成人內容＝限制級（0056 起取代舊的 nsfw 旗標）。評級缺失（NULL）的舊一般卡不是成人內容。 */
+export const isAdult = (row: { rating?: string | null }) => row.rating === "R";
+/** 同一件事的 SQL 版；IS NOT 讓 NULL 也算「不是成人內容」。 */
+export const NOT_ADULT = "rating IS NOT 'R'";
+
 /** 對外露出的卡片只有在榜的。榜單、標籤、作者榜、卡片頁都走這個條件。 */
 const LISTED = "status = 'approved' AND board_hidden = 0 AND public_blocked = 0";
 /**
  * 加上成人內容的門：沒開啟（或沒登入）的人只看得到一般內容。
  * 標籤列與作者榜永遠只算一般內容——它們走邊緣快取、對所有人一樣；只有榜單、卡片頁、單一作者頁有「開了才看得到」的版本。
  */
-const listed = (allowNsfw: boolean) => (allowNsfw ? LISTED : `${LISTED} AND nsfw = 0`);
+const listed = (allowNsfw: boolean) => (allowNsfw ? LISTED : `${LISTED} AND ${NOT_ADULT}`);
 
 /** 回應按請求語言解析好名稱與簡介，同時附上原始多語，讓客戶端能自己切換。 */
 export function toCard(row: CardRow, lang: string) {
@@ -91,7 +98,10 @@ export function toCard(row: CardRow, lang: string) {
     zone: row.zone,
     /** 這張卡支援哪家供應商（拿那家的帳號、用那家的 AI 服務在本站玩）。不是來源、不是由誰提供——卡是作者的。 */
     provider: row.provider,
-    nsfw: row.nsfw === 1,
+    /** 台灣遊戲分級五級之一；null＝評級缺失（作者還沒填問卷的舊一般卡），不是成人卡。R＝成人內容 */
+    rating: row.rating ?? null,
+    /** 法規第 12 條的情節名稱（性、暴力⋯⋯的代號），照級別由高到低 */
+    ratingDescriptors: row.rating_descriptors ? (JSON.parse(row.rating_descriptors) as string[]) : [],
     /** HearthRoom 精選卡：社群代表標的，供應商那邊據此給作者較高的返點 */
     featured: row.featured_at !== null && row.featured_at !== undefined,
     name: pickLocale(names, lang),
@@ -379,7 +389,7 @@ export async function listCards(db: D1Database, opts: ListOptions) {
  * 內容全部來自同步結果，作者送不進任何欄位——這是「登記完再偷換成別的東西」
  * 在結構上不可能發生的原因。
  */
-export async function upsertCard(db: D1Database, role: UpstreamRole, now: number, opts: { status?: string; provider?: ProviderId; nsfw?: boolean; recordRegistration?: boolean; /** 這次登記扣哪個補充包（見 quota.ts openPack）；沒帶就走週額度 */ packId?: string | null; preserveExisting?: boolean; additionalWrites?: (id:string)=>D1PreparedStatement[] } = {}) {
+export async function upsertCard(db: D1Database, role: UpstreamRole, now: number, opts: { status?: string; provider?: ProviderId; recordRegistration?: boolean; /** 這次登記扣哪個補充包（見 quota.ts openPack）；沒帶就走週額度 */ packId?: string | null; preserveExisting?: boolean; additionalWrites?: (id:string)=>D1PreparedStatement[] } = {}) {
   const provider: ProviderId = opts.provider ?? "harbor";
   const existing = await db
     .prepare("SELECT CAST(id AS TEXT) AS id, talk_num FROM cards WHERE provider = ? AND source_role_id = ?")
@@ -428,12 +438,12 @@ export async function upsertCard(db: D1Database, role: UpstreamRole, now: number
     .prepare(
       `INSERT INTO cards (id, source_role_id, zone, author_num_id, author_name, author_avatar, names, summaries,
          background_url, share_image_url, landscape_url, slug, tags, talk_num, follow_num, search_name, search_text, search_body, last_synced_at,
-         talk_num_prev, registered_at, provider, status, nsfw)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         talk_num_prev, registered_at, provider, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     // 首次登記把 prev 設成當前值 → trending 從 0 起算。
     // 不這樣的話一張老熱卡剛登記就會用累積總量霸榜。
-    .bind(id, role.roleId, ...shared, role.talkNum, now, opts.provider ?? "harbor", opts.status ?? "approved", opts.nsfw ? 1 : 0);
+    .bind(id, role.roleId, ...shared, role.talkNum, now, opts.provider ?? "harbor", opts.status ?? "approved");
   try {
     await db.batch([
       ...(opts.recordRegistration ? [db.prepare("INSERT INTO card_registrations(provider,author_num_id,source_role_id,registered_at,pack_id) VALUES (?,?,?,?,?)").bind(provider,role.authorNumId,role.roleId,now,opts.packId??null)] : []),
@@ -449,11 +459,6 @@ export async function upsertCard(db: D1Database, role: UpstreamRole, now: number
 }
 
 /** 改審核狀態。只有審核流程（index.ts 的提交、review.ts 的蓋章、同步的比對）會叫它。 */
-/** 作者再次提交時改了宣告。同步不碰這個欄位——分級是本站的事，不跟著供應商的資料走。 */
-export async function setCardNsfw(db: D1Database, id: string, nsfw: boolean): Promise<void> {
-  await db.prepare("UPDATE cards SET nsfw = ? WHERE id = ?").bind(nsfw ? 1 : 0, id).run();
-}
-
 export async function setCardStatus(db: D1Database, id: string, status: string): Promise<void> {
   await db.prepare("UPDATE cards SET status = ? WHERE id = ?").bind(status, id).run();
 }
@@ -512,7 +517,8 @@ export function previewCard(role: UpstreamRole, lang: string, provider: Provider
     sourceRoleId: role.roleId,
     zone: role.zone,
     provider,
-    nsfw: false,
+    rating: null,
+    ratingDescriptors: [] as string[],
     name: pickLocale(role.names, lang),
     summary: pickLocale(role.summaries, lang),
     names: role.names,

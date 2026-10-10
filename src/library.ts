@@ -43,11 +43,11 @@ for (const kind of kinds) {
     const target = kind === "favorites" ? raw : await memberByHandle(c.env.DB, raw);
     if (!target) throw new HttpError(404, "not_found");
     if (c.req.method !== "DELETE" && kind === "favorites") {
-      const card = await c.env.DB.prepare('SELECT status,nsfw,public_blocked FROM cards WHERE id=?').bind(target).first<{status:string; nsfw:number; public_blocked:number}>();
+      const card = await c.env.DB.prepare('SELECT status,rating,public_blocked FROM cards WHERE id=?').bind(target).first<{status:string; rating:string|null; public_blocked:number}>();
       const access = await memberNsfw(c.env.DB, member.id);
       // 看自己已經收藏的那一張照收藏區的規則；新收藏還是要現在開著成人內容才行（卡片頁本身也要）
       const allowed = c.req.method === "GET" ? libraryAllowsNsfw(access) : access.showNsfw && !!access.ageVerifiedAt;
-      if (!card || card.status !== "approved" || card.public_blocked || (card.nsfw && !allowed)) throw new HttpError(404, "not_found");
+      if (!card || card.status !== "approved" || card.public_blocked || (card.rating === 'R' && !allowed)) throw new HttpError(404, "not_found");
     }
     if (c.req.method === "PUT") {
       await c.env.DB.prepare(`INSERT OR IGNORE INTO ${table}(member_id,${column},created_at) VALUES(?,?,?)`).bind(member.id, target, Date.now()).run();
@@ -125,7 +125,7 @@ libraryRoutes.get('/v1/me/conversations', async c => {
     .bind(member.id, (page - 1) * 24).all<CardRow & { cardNumber: number | null; conversationProvider: string; conversationRoleId: string; conversationId: string; createdAt: number; updatedAt: number; hostRoleId: string; moderationBlocked: number | null }>();
   const lang = c.req.query('lang') || 'zh-Hant';
   return c.json({ conversations: await Promise.all(rows.results.slice(0,24).map(async row => {
-    const visible = !row.public_blocked && !row.moderationBlocked && (!row.nsfw || libraryAllowsNsfw(access));
+    const visible = !row.public_blocked && !row.moderationBlocked && (row.rating !== 'R' || libraryAllowsNsfw(access));
     const card = row.id && row.status === 'approved' && visible ? toCard(row, lang) : null;
     // 不在榜上的卡（只靠分享連結玩、還在審、沒登記）這裡只有卡號，名字跟卡片頁一樣去託管平台拿
     const hosted = !card && visible ? await hostedTitle(c.env, row.hostRoleId) : null;

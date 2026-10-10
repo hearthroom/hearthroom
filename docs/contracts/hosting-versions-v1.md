@@ -50,7 +50,9 @@ The HearthRoom editor calls `POST /v1/cards/{roleId}/edit` before any provider d
 write. A pending submission becomes `superseded`, loses its review claim and private
 snapshot, and cannot receive further stamps or approval even from an in-flight request.
 This does not revoke the approved revision. After every part of the draft is saved,
-`resubmit: true` causes a fresh submission with the prior author-declared rating.
+`resubmit: true` causes a fresh submission; the response carries the prior
+content-rating questionnaire answers (`ratingAnswers`) for the author to confirm, and
+omits them when that submission predates the questionnaire or used an older version.
 Partial saves never submit partial content. Retrying the edit endpoint recovers the
 re-review obligation; authors can change the rating through explicit submission.
 

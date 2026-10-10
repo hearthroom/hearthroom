@@ -173,9 +173,9 @@
                     "resubmit": {
                       "type": "boolean"
                     },
-                    "nsfw": {
-                      "type": "boolean",
-                      "description": "The retired submission rating; present when resubmit is true."
+                    "ratingAnswers": {
+                      "type": "object",
+                      "description": "The author's content-rating questionnaire answers for the retired submission, for the editor to prefill; present when resubmit is true and those answers still match the current questionnaire version."
                     }
                   },
                   "additionalProperties": false

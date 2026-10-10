@@ -7,10 +7,11 @@ import { encodeSnapshot, reviewRecord } from './review-snapshot';
 import { indexStatements } from './originality';
 import { buildSearchBody, buildSearchName, buildSearchText, projectRole, upstream, type UpstreamRole } from './upstream';
 import { resolveFandom, type ResolvedFandom } from './fandom';
+import { evaluateRating, type RatingAnswers, type RatingResult } from '../shared/content-rating';
 
 interface Receipt { workId: string; versionId: string; hostedRevisionId: string }
 interface VersionRow {
- provider:ProviderId; version_id:string; work_id:string; member_id:string; source_role_id:string; nsfw:number;
+ provider:ProviderId; version_id:string; work_id:string; member_id:string; source_role_id:string; rating_answers:string|null;
  hosted_revision_id:string|null; card_id:string|null; submission_id:string|null;
 }
 /** Each provider trusts Hearthroom with its own secret. Providers never exchange keys. */
@@ -60,7 +61,7 @@ const receiptOf=(r:VersionRow):Receipt=>({workId:r.work_id,versionId:r.version_i
 // Called before the editor writes any part of a draft. Retire the old review
 // first so a reviewer holding its snapshot cannot publish it during the save.
 // Keep the obligation durable across partial saves and browser/network failures.
-export async function beginHostedEdit(db:D1Database,memberId:string,roleId:string,now:number,provider:ProviderId='harbor'):Promise<{resubmit:boolean;nsfw?:boolean;fandom?:string;fandomId?:string}> {
+export async function beginHostedEdit(db:D1Database,memberId:string,roleId:string,now:number,provider:ProviderId='harbor'):Promise<{resubmit:boolean;ratingAnswers?:RatingAnswers;fandom?:string;fandomId?:string}> {
  await adoptRetiredWork(db,provider,roleId);
  const work=await db.prepare("SELECT id,member_id FROM works WHERE source_provider=? AND source_role_id=?").bind(provider,roleId).first<{id:string;member_id:string}>();
  if(!work)return {resubmit:false};
@@ -70,21 +71,31 @@ export async function beginHostedEdit(db:D1Database,memberId:string,roleId:strin
   db.prepare("DELETE FROM review_snapshots WHERE submission_id IN (SELECT s.id FROM review_submissions s JOIN hosting_versions v ON v.submission_id=s.id WHERE v.work_id=? AND s.status='superseded')").bind(work.id),
   db.prepare("UPDATE cards SET status='needs_review' WHERE approved_version_id IS NULL AND id IN (SELECT card_id FROM hosting_versions WHERE work_id=? AND state='superseded')").bind(work.id),
  ]);
- const latest=await db.prepare("SELECT state,nsfw,COALESCE(json_extract(public_role,'$.fandom'),'') AS fandom,json_extract(public_role,'$.fandomQid') AS fandom_qid FROM hosting_versions WHERE work_id=? AND submission_id IS NOT NULL ORDER BY created_at DESC,rowid DESC LIMIT 1").bind(work.id).first<{state:string;nsfw:number;fandom:string;fandom_qid:string|null}>();
- // 原作跟著上一版走：作者改卡重送時不必再填一次
- return latest?.state==='superseded'?{resubmit:true,nsfw:latest.nsfw===1,...(latest.fandom?{fandom:latest.fandom}:{}),...(latest.fandom_qid?{fandomId:latest.fandom_qid}:{})}:{resubmit:false};
+ const latest=await db.prepare("SELECT state,rating_answers,COALESCE(json_extract(public_role,'$.fandom'),'') AS fandom,json_extract(public_role,'$.fandomQid') AS fandom_qid FROM hosting_versions WHERE work_id=? AND submission_id IS NOT NULL ORDER BY created_at DESC,rowid DESC LIMIT 1").bind(work.id).first<{state:string;rating_answers:string|null;fandom:string;fandom_qid:string|null}>();
+ // 原作與分級問卷跟著上一版走：作者改卡重送時不必再填一次。問卷改版了或上一版沒填（問卷上線前送的），就不帶，作者得重填
+ return latest?.state==='superseded'?{resubmit:true,...currentAnswers(latest.rating_answers),...(latest.fandom?{fandom:latest.fandom}:{}),...(latest.fandom_qid?{fandomId:latest.fandom_qid}:{})}:{resubmit:false};
+}
+
+function currentAnswers(stored:string|null):{ratingAnswers?:RatingAnswers}{
+ if(!stored)return {};
+ try{return {ratingAnswers:evaluateRating(JSON.parse(stored)).answers};}catch{return {};}
 }
 
 // Persist the issuer's operation before contacting the host: a lost HTTP reply can
 // resume the same seal without reading a later draft or creating another version.
-export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:string;account:number;role:UpstreamRole;token:string;nsfw:boolean;/** 原作（已解析）；沒給＝沒有。同一個 operation 重試時以第一次送的為準。 */fandom?:ResolvedFandom;operationId:string;now:number;packId?:string|null}):Promise<Receipt>{
+export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:string;account:number;role:UpstreamRole;token:string;/** 作者問卷計分後的結果（限制級＝成人內容） */rating:RatingResult;/** 原作（已解析）；沒給＝沒有。同一個 operation 重試時以第一次送的為準。 */fandom?:ResolvedFandom;operationId:string;now:number;packId?:string|null}):Promise<Receipt>{
  const db=env.DB;
  const fandom:ResolvedFandom=input.fandom??{fandom:'',qid:null,key:'',search:''};
  const provider=input.provider??'harbor';
+ const answers=JSON.stringify(input.rating.answers);
  if(input.role.authorNumId!==input.account)throw new HttpError(403,'not the author of this card');
  const existingOperation=()=>db.prepare('SELECT * FROM hosting_versions WHERE member_id=? AND operation_id=?').bind(input.memberId,input.operationId).first<VersionRow>();
  let version=await existingOperation();
- if(version&&(version.provider!==provider||version.source_role_id!==input.role.roleId||version.nsfw!==Number(input.nsfw)))throw new HttpError(409,'hosting_operation_conflict');
+ // 問卷上線前開始的 operation 沒有答案（rating_answers 為 NULL）：重試時接著做並補上答案，不當成「答案不同」
+ if(version&&(version.provider!==provider||version.source_role_id!==input.role.roleId||(version.rating_answers!==null&&version.rating_answers!==answers)))throw new HttpError(409,'hosting_operation_conflict');
+ if(version&&version.rating_answers===null&&!version.submission_id){
+  await db.prepare('UPDATE hosting_versions SET rating_answers=?,rating=? WHERE version_id=? AND rating_answers IS NULL').bind(answers,input.rating.rating,version.version_id).run();
+ }
  if(version?.submission_id)return receiptOf(version);
  const existing=await getCard(db,input.role.roleId,provider);
  if(existing&&await pendingSubmissionOf(db,existing.id)){
@@ -97,8 +108,9 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  if(!work||work.member_id!==input.memberId)throw new HttpError(403,'not the author of this card');
  if(!version){
   try{
-   await db.prepare('INSERT INTO hosting_versions(version_id,work_id,member_id,operation_id,source_role_id,provider,nsfw,created_at) VALUES (?,?,?,?,?,?,?,?)')
-    .bind(crypto.randomUUID(),work.id,input.memberId,input.operationId,input.role.roleId,provider,Number(input.nsfw),input.now).run();
+   await db.prepare('INSERT INTO hosting_versions(version_id,work_id,member_id,operation_id,source_role_id,provider,rating,rating_answers,created_at,nsfw) VALUES (?,?,?,?,?,?,?,?,?,?)')
+    // nsfw：舊欄位 NOT NULL 沒有預設值，0057 刪欄位時連同這一格拿掉
+    .bind(crypto.randomUUID(),work.id,input.memberId,input.operationId,input.role.roleId,provider,input.rating.rating,answers,input.now,Number(input.rating.rating==='R')).run();
   }catch(error){if(!await existingOperation())throw new HttpError(409,'submission_pending');}
   version=await existingOperation();
  }
@@ -118,8 +130,8 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  const snapshot=db.prepare('INSERT INTO review_snapshots(submission_id,detail,created_at) SELECT ?,?,? WHERE EXISTS(SELECT 1 FROM review_submissions WHERE id=?)').bind(submissionId,packedSnapshot,input.now,submissionId);
  const finalize=(cardId:string):D1PreparedStatement[]=>[
    db.prepare("UPDATE hosting_versions SET hosted_revision_id=?,card_id=?,submission_id=?,public_role=?,state='pending' WHERE version_id=? AND submission_id IS NULL").bind(receipt.hostedRevisionId,cardId,submissionId,JSON.stringify({...sealed,fandom:fandom.fandom,fandomQid:fandom.qid,fandomKey:fandom.key,fandomSearch:fandom.search,searchName:buildSearchName({...sealed,fandom:fandom.fandom,fandomSearch:fandom.search}),searchText:buildSearchText(sealed),searchBody:buildSearchBody(sealed)}),version!.version_id),
-   db.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,content_hash,submitted_at,nsfw) SELECT ?,?,?,?,?,'pending',?,?,? WHERE EXISTS(SELECT 1 FROM hosting_versions WHERE version_id=? AND submission_id=?)")
-    .bind(submissionId,cardId,provider,receipt.hostedRevisionId,existing?.approved_version_id?'re':'first','version:'+receipt.versionId,input.now,Number(input.nsfw),version!.version_id,submissionId),
+   db.prepare("INSERT INTO review_submissions(id,card_id,provider,source_role_id,kind,status,content_hash,submitted_at,rating,rating_descriptors,rating_answers) SELECT ?,?,?,?,?,'pending',?,?,?,?,? WHERE EXISTS(SELECT 1 FROM hosting_versions WHERE version_id=? AND submission_id=?)")
+    .bind(submissionId,cardId,provider,receipt.hostedRevisionId,existing?.approved_version_id?'re':'first','version:'+receipt.versionId,input.now,input.rating.rating,JSON.stringify(input.rating.descriptors),answers,version!.version_id,submissionId),
    db.prepare("INSERT OR IGNORE INTO hosting_replicas(version_id,provider,source_role_id,hosted_revision_id,state,created_at) SELECT version_id,provider,source_role_id,hosted_revision_id,'ready',created_at FROM hosting_versions WHERE version_id=? AND submission_id=?").bind(version!.version_id,submissionId),
    snapshot,
    // 查重指紋跟審核單同一批：單子沒寫成就不留指紋
@@ -130,7 +142,7 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  else {
   try {
    await upsertCard(db,{...sealed,roleId:input.role.roleId,creationMethod:'hearthroom'},input.now,{
-    provider,status:'pending',nsfw:input.nsfw,recordRegistration:true,packId:input.packId,preserveExisting:true,additionalWrites:finalize,
+    provider,status:'pending',recordRegistration:true,packId:input.packId,preserveExisting:true,additionalWrites:finalize,
    });
   } catch(error) {
    const retry=await existingOperation();if(retry?.submission_id)return receiptOf(retry);throw error;

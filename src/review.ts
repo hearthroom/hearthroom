@@ -34,8 +34,10 @@ export interface SubmissionRow {
   claim_generation: string;
   decided_at: number | null;
   note: string;
-  /** 作者提交這一版時宣告的分級：1＝成人內容。審核人對照內容，不符就駁回。 */
-  nsfw: number;
+  /** 作者問卷算出的級別與情節名稱、問卷原答案（0056 起）。之前的單子只有成人宣告：成人＝R，一般＝NULL */
+  rating: string | null;
+  rating_descriptors: string | null;
+  rating_answers: string | null;
 }
 
 /** 這張卡有沒有還在排隊的單；有就回它（提交是冪等的）。 */
@@ -44,30 +46,6 @@ export async function pendingSubmissionOf(db: D1Database, cardId: string): Promi
     .prepare("SELECT * FROM review_submissions WHERE card_id = ? AND status = 'pending' ORDER BY submitted_at DESC LIMIT 1")
     .bind(cardId)
     .first<SubmissionRow>();
-}
-
-export async function createSubmission(
-  db: D1Database,
-  input: { cardId: string; provider: string; roleId: string; kind: SubmissionKind; contentHash: string; now: number; nsfw: boolean },
-): Promise<SubmissionRow> {
-  const existing = await pendingSubmissionOf(db, input.cardId);
-  if (existing) {
-    // 還在排隊就再送一次、只是改了宣告：單子照舊，宣告跟著最新的走——審核人看到的要是作者現在說的
-    if ((existing.nsfw === 1) !== input.nsfw) {
-      await db.prepare("UPDATE review_submissions SET nsfw = ? WHERE id = ?").bind(input.nsfw ? 1 : 0, existing.id).run();
-      existing.nsfw = input.nsfw ? 1 : 0;
-    }
-    return existing;
-  }
-  const id = crypto.randomUUID();
-  await db
-    .prepare(
-      `INSERT INTO review_submissions (id, card_id, provider, source_role_id, kind, status, content_hash, submitted_at, nsfw)
-       VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)`,
-    )
-    .bind(id, input.cardId, input.provider, input.roleId, input.kind, input.contentHash, input.now, input.nsfw ? 1 : 0)
-    .run();
-  return (await db.prepare("SELECT * FROM review_submissions WHERE id = ?").bind(id).first<SubmissionRow>())!;
 }
 
 const claimIsLive = (row: { claimed_by: string | null; claimed_at: number | null }, now: number) =>
@@ -79,8 +57,8 @@ export interface QueueItem {
   submittedAt: number;
   card: { id: string; roleId: string; name: string; summary: string; avatarUrl: string | null; zone: string; tags: string[] };
   stamps: { approve: number; required: number };
-  /** 作者宣告：成人內容 */
-  nsfw: boolean;
+  /** 作者問卷算出的級別；null＝問卷上線前送的一般卡 */
+  rating: string | null;
   /** free＝沒人在看；mine＝我領的；other＝別人領著（還沒逾時） */
   claim: "free" | "mine" | "other";
   /** 我已經蓋過章：不能再領、也不能再蓋 */
@@ -92,7 +70,7 @@ export interface QueueItem {
 export async function listQueue(db: D1Database, memberId: string, now: number, lang: string): Promise<QueueItem[]> {
   const rows = await db
     .prepare(
-      `SELECT s.id, s.kind, s.submitted_at, s.claimed_by, s.claimed_at, s.claim_generation, s.nsfw,
+      `SELECT s.id, s.kind, s.submitted_at, s.claimed_by, s.claimed_at, s.claim_generation, s.rating,
               c.id AS card_id, c.source_role_id,
               COALESCE(json_extract(v.public_role,'$.names'),c.names) AS names,
               COALESCE(json_extract(v.public_role,'$.summaries'),c.summaries) AS summaries,
@@ -106,7 +84,7 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
     .all<{
       id: string; kind: SubmissionKind; submitted_at: number; claimed_by: string | null; claimed_at: number | null; claim_generation: string;
       card_id: string; source_role_id: string; names: string; summaries: string; avatar_url: string | null; zone: string; tags: string;
-      approvals: number; mine: number; nsfw: number;
+      approvals: number; mine: number; rating: string | null;
     }>();
   return rows.results.map((r) => ({
     id: r.id,
@@ -122,7 +100,7 @@ export async function listQueue(db: D1Database, memberId: string, now: number, l
       tags: JSON.parse(r.tags) as string[],
     },
     stamps: { approve: r.approvals, required: STAMPS_REQUIRED[r.kind] },
-    nsfw: r.nsfw === 1,
+    rating: r.rating,
     claim: claimIsLive(r, now) ? (r.claimed_by === memberId ? "mine" : "other") : "free",
     stampedByMe: r.mine > 0,
     ...(r.claimed_by===memberId && claimIsLive(r,now)?{claimGeneration:r.claim_generation}:{}),
@@ -238,13 +216,13 @@ export async function stamp(
 export async function statusAmong(
   db: D1Database,
   roleIds: string[],
-): Promise<Map<string, { status: CardStatus; note: string; nsfw: boolean; updateStatus?: string; approvedHash?: string; approvedRevision?: string }>> {
-  const out = new Map<string, { status: CardStatus; note: string; nsfw: boolean; updateStatus?: string; approvedHash?: string; approvedRevision?: string }>();
+): Promise<Map<string, { status: CardStatus; note: string; rating: string | null; updateStatus?: string; approvedHash?: string; approvedRevision?: string }>> {
+  const out = new Map<string, { status: CardStatus; note: string; rating: string | null; updateStatus?: string; approvedHash?: string; approvedRevision?: string }>();
   if (!roleIds.length) return out;
   const holes = roleIds.map(() => "?").join(",");
   const rows = await db
     .prepare(
-      `SELECT c.source_role_id, c.status, c.nsfw, c.approved_content_hash, c.approved_revision_hash,
+      `SELECT c.source_role_id, c.status, c.rating, c.approved_content_hash, c.approved_revision_hash,
               CASE WHEN c.approved_version_id IS NOT NULL THEN
                 (SELECT s.status FROM review_submissions s WHERE s.card_id=c.id ORDER BY s.submitted_at DESC,s.rowid DESC LIMIT 1)
               END AS update_status,
@@ -253,9 +231,9 @@ export async function statusAmong(
        FROM cards c WHERE c.source_role_id IN (${holes})`,
     )
     .bind(...roleIds)
-    .all<{ source_role_id: string; status: CardStatus; note: string | null; nsfw: number; update_status:string|null; approved_content_hash: string|null; approved_revision_hash: string|null }>();
+    .all<{ source_role_id: string; status: CardStatus; note: string | null; rating: string | null; update_status:string|null; approved_content_hash: string|null; approved_revision_hash: string|null }>();
   // approvedHash：過審那一版的內容版本（0052）；approvedRevision：整份內容版本（0055）。「我的卡片」拿來跟草稿現在的比
-  for (const r of rows.results) out.set(r.source_role_id, { status: r.status, note: r.note ?? "", nsfw: r.nsfw === 1, ...(r.update_status && r.update_status!=="approved"?{updateStatus:r.update_status}:{}), ...(r.approved_content_hash?{approvedHash:r.approved_content_hash}:{}), ...(r.approved_revision_hash?{approvedRevision:r.approved_revision_hash}:{}) });
+  for (const r of rows.results) out.set(r.source_role_id, { status: r.status, note: r.note ?? "", rating: r.rating, ...(r.update_status && r.update_status!=="approved"?{updateStatus:r.update_status}:{}), ...(r.approved_content_hash?{approvedHash:r.approved_content_hash}:{}), ...(r.approved_revision_hash?{approvedRevision:r.approved_revision_hash}:{}) });
   return out;
 }
 

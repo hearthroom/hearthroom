@@ -38,7 +38,7 @@ const CARD = {
   names: { zh: "末日・進化", en: "", ja: "", ko: "" }, summaries: { zh: "廢土求生", en: "", ja: "", ko: "" },
   avatarUrl: null, backgroundUrl: null, slug: null, tags: ["末日"],
   author: { handle: "abcdefgh", accountNumId: 7, name: "月光", avatar: "" },
-  talkNum: 12, followNum: 3, trending: 0, registeredAt: 1, syncedAt: 1, provider: "lunatalk", nsfw: false,
+  talkNum: 12, followNum: 3, trending: 0, registeredAt: 1, syncedAt: 1, provider: "lunatalk", rating: null,
 };
 
 function fakeFetch(input: RequestInfo | URL): Promise<Response> {

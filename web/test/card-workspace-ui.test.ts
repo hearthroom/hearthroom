@@ -6,17 +6,17 @@ import { i18n } from '../src/lib/i18n';
 import { useSession } from '../src/lib/session';
 import MyCardsPage from '../src/pages/MyCardsPage.vue';
 import { lastShown } from '../src/lib/mine-memory';
-const mocks=vi.hoisted(()=>({connect:vi.fn(),fetch:vi.fn(),register:vi.fn(),unregister:vi.fn(),token:vi.fn(),copies:vi.fn(),synchronize:vi.fn(),confirm:vi.fn(),ask:vi.fn()}));
+const mocks=vi.hoisted(()=>({connect:vi.fn(),fetch:vi.fn(),register:vi.fn(),unregister:vi.fn(),token:vi.fn(),copies:vi.fn(),synchronize:vi.fn(),ask:vi.fn()}));
 vi.mock('../src/lib/api',async original=>({...await original<typeof import('../src/lib/api')>(),fetchMeAt:async()=>({email:"fixture@example.test"}),fetchMyCards:mocks.fetch,registerCard:mocks.register,unregisterCard:mocks.unregister}));
 vi.mock('../src/lib/connections',async original=>({...await original<typeof import('../src/lib/connections')>(),accountToken:mocks.token,connectAccount:mocks.connect}));
-vi.mock('../src/lib/confirm',()=>({confirmChoice:mocks.confirm,confirmDialog:mocks.ask}));
+vi.mock('../src/lib/confirm',()=>({confirmDialog:mocks.ask}));
 vi.mock('../src/lib/distribution',async original=>({...await original<typeof import('../src/lib/distribution')>(),copies:mocks.copies,synchronize:mocks.synchronize}));
 vi.mock('../src/lib/provider-switch',()=>({availableProviders:async()=>[{id:'lunatalk',name:'LunaTalk'},{id:'harbor',name:'HarperHarbor'}]}));
 let app:App;let root:HTMLElement;
 const settle=async()=>{for(let i=0;i<30;i++)await Promise.resolve();await nextTick();};
 const fixture={name:'Sample lighthouse',summary:'A quiet port at dawn.',avatarUrl:'/fixture.png',zone:'en',talkNum:0,visibility:'private',registered:false,game:false,workId:'work',num:100021,detailId:'100021',sourceProvider:'harbor',sourceRoleId:'original'};
 const result=(items:any[])=>({items,total:1,registeredTotal:0,hasNext:false,page:1,pageSize:24,quota:{used:0,limit:3,weekStart:0,weekEnd:9999999999999}});
-beforeEach(()=>{vi.clearAllMocks();lastShown.clear();mocks.token.mockImplementation(async p=>`token-${p}`);mocks.confirm.mockResolvedValue('sfw');mocks.register.mockResolvedValue({status:'pending'});mocks.copies.mockResolvedValue([{provider:'harbor',roleId:'original',status:'source'},{provider:'lunatalk',roleId:'copy',status:'synced'}]);mocks.fetch.mockImplementation(async(_t,{provider})=>result([{...fixture,roleId:provider==='harbor'?'original':'copy'}]));});
+beforeEach(()=>{vi.clearAllMocks();lastShown.clear();mocks.token.mockImplementation(async p=>`token-${p}`);mocks.register.mockResolvedValue({status:'pending'});mocks.copies.mockResolvedValue([{provider:'harbor',roleId:'original',status:'source'},{provider:'lunatalk',roleId:'copy',status:'synced'}]);mocks.fetch.mockImplementation(async(_t,{provider})=>result([{...fixture,roleId:provider==='harbor'?'original':'copy'}]));});
 afterEach(()=>{app?.unmount();root?.remove();});
 async function mount(){const router=createRouter({history:createMemoryHistory(),routes:[{path:'/:pathMatch(.*)*',component:{template:'<div />'}}]});await router.push('/mine');const pinia=createPinia();setActivePinia(pinia);const session=useSession();session.me={accountNumId:11,nickName:'Fixture',avatar:''};session.profile={identities:[{provider:'lunatalk',externalId:11},{provider:'harbor',externalId:22}]} as any;root=document.createElement('div');document.body.append(root);app=createApp(MyCardsPage).use(pinia).use(i18n).use(router);app.mount(root);await settle();}
 function button(key:string){return [...root.querySelectorAll('button')].find(b=>b.textContent?.trim()===i18n.global.t(key))!;}

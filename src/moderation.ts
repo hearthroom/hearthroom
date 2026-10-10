@@ -10,8 +10,8 @@ import { buildSearchName } from './upstream';
 export const moderationRoutes = new Hono<{ Bindings: Env }>();
 type Action = 'delist' | 'suspend' | 'restore_listing' | 'restore_public';
 type StaffRole = 'reviewer' | 'manager' | 'owner';
-interface CaseRow { card_number:number;nsfw:number;public_evidence:string;id:string; provider:string; source_role_id:string; version_id:string; title:string; author_member_id:string; action:Action; reason:string; created_by:string; status:string; created_at:number; decided_at:number|null; resolution:string|null }
-interface ManagedCard { fandom:string;fandom_qid:string|null;featured_at:number|null; summaries:string;background_url:string|null;search_text:string;card_number:number;id:string; provider:string; source_role_id:string; approved_version_id:string|null; reviewed_hash:string; names:string; tags:string; status:string; board_hidden:number; public_blocked:number; nsfw:number; author_member_id:string }
+interface CaseRow { card_number:number;rating:string|null;public_evidence:string;id:string; provider:string; source_role_id:string; version_id:string; title:string; author_member_id:string; action:Action; reason:string; created_by:string; status:string; created_at:number; decided_at:number|null; resolution:string|null }
+interface ManagedCard { fandom:string;fandom_qid:string|null;featured_at:number|null; summaries:string;background_url:string|null;search_text:string;card_number:number;id:string; provider:string; source_role_id:string; approved_version_id:string|null; reviewed_hash:string; names:string; tags:string; status:string; board_hidden:number; public_blocked:number; rating:string|null; author_member_id:string }
 const CARD = `SELECT c.*,(SELECT num FROM card_numbers WHERE provider=c.provider AND source_role_id=c.source_role_id) AS card_number,COALESCE(w.member_id,ac.owner_member_id,ai.member_id,'') AS author_member_id FROM cards c
  LEFT JOIN works w ON w.source_provider=c.provider AND w.source_role_id=c.source_role_id
  LEFT JOIN member_connections ac ON ac.provider=c.provider AND ac.external_id=CAST(c.author_num_id AS TEXT)
@@ -24,10 +24,10 @@ async function cardOf(db:D1Database,id:string){const row=await db.prepare(CARD+'
 async function caseOf(db:D1Database,id:string){const row=await db.prepare('SELECT * FROM moderation_cases WHERE id=?').bind(id).first<CaseRow>();if(!row)throw new HttpError(404,'not_found');return row;}
 async function guardCard(db:D1Database,card:ManagedCard,memberId:string){
  if(card.author_member_id===memberId)throw new HttpError(403,'moderation_self_review');
- if(card.nsfw===1&&(await memberNsfw(db,memberId)).ageVerifiedAt===null)throw new HttpError(403,'age_verification_required');
+ if(card.rating==='R'&&(await memberNsfw(db,memberId)).ageVerifiedAt===null)throw new HttpError(403,'age_verification_required');
 }
 async function guardCase(db:D1Database,row:CaseRow,memberId:string){
- if(row.nsfw===1&&(await memberNsfw(db,memberId)).ageVerifiedAt===null)throw new HttpError(403,'age_verification_required');
+ if(row.rating==='R'&&(await memberNsfw(db,memberId)).ageVerifiedAt===null)throw new HttpError(403,'age_verification_required');
  if(row.author_member_id===memberId)throw new HttpError(403,'moderation_self_review');
  const card=await db.prepare(CARD+' WHERE c.provider=? AND c.source_role_id=?').bind(row.provider,row.source_role_id).first<ManagedCard>();
  if(card)await guardCard(db,card,memberId);
@@ -49,11 +49,11 @@ export async function reviewSummary(db:D1Database,member:{id:string}){
  const role=await roleOf(db,member.id);const age=(await memberNsfw(db,member.id)).ageVerifiedAt!==null;
  const cases=await db.prepare(`SELECT count(*) n FROM moderation_cases k
  LEFT JOIN cards c ON c.provider=k.provider AND c.source_role_id=k.source_role_id
- WHERE k.author_member_id<>? AND (k.nsfw=0 OR ?) AND k.created_by<>?
+ WHERE k.author_member_id<>? AND (k.rating IS NOT 'R' OR ?) AND k.created_by<>?
  AND NOT EXISTS(SELECT 1 FROM moderation_votes v WHERE v.case_id=k.id AND v.member_id=?)
  AND (k.status='pending' OR (k.status='disputed' AND ?))`).bind(member.id,Number(age),member.id,member.id,Number(role!=='reviewer')).first<{n:number}>();
  const reviews=await db.prepare(`SELECT count(*) n FROM review_submissions s JOIN cards c ON c.id=s.card_id
- WHERE s.status='pending' AND (s.nsfw=0 OR ?) AND (s.claimed_by IS NULL OR s.claimed_by=? OR s.claimed_at<?)
+ WHERE s.status='pending' AND (s.rating IS NOT 'R' OR ?) AND (s.claimed_by IS NULL OR s.claimed_by=? OR s.claimed_at<?)
  AND NOT EXISTS(SELECT 1 FROM review_stamps st WHERE st.submission_id=s.id AND st.member_id=?)
  AND NOT EXISTS(SELECT 1 FROM member_identities i WHERE i.member_id=? AND i.provider=c.provider AND i.external_id=CAST(c.author_num_id AS TEXT))
  AND NOT EXISTS(SELECT 1 FROM member_connections i WHERE i.owner_member_id=? AND i.provider=c.provider AND i.external_id=CAST(c.author_num_id AS TEXT))`).bind(Number(age),member.id,Date.now()-45*60*1000,member.id,member.id,member.id).first<{n:number}>();
@@ -63,7 +63,7 @@ moderationRoutes.get('/v1/moderation/summary',async c=>c.json(await reviewSummar
 moderationRoutes.get('/v1/moderation/cases',async c=>{
  const member=await requireReviewer(c);const role=await roleOf(c.env.DB,member.id);const age=(await memberNsfw(c.env.DB,member.id)).ageVerifiedAt!==null;
  const history=c.req.query('history')==='1';const offset=Math.max(0,Math.floor(Number(c.req.query('offset'))||0));
- const rows=await c.env.DB.prepare(`SELECT * FROM moderation_cases WHERE (nsfw=0 OR ?) AND ${history?"status IN ('confirmed','dismissed')":"status IN ('pending','disputed')"} ORDER BY (action='suspend') DESC,created_at DESC LIMIT 31 OFFSET ?`).bind(Number(age),offset).all<CaseRow>();
+ const rows=await c.env.DB.prepare(`SELECT * FROM moderation_cases WHERE (rating IS NOT 'R' OR ?) AND ${history?"status IN ('confirmed','dismissed')":"status IN ('pending','disputed')"} ORDER BY (action='suspend') DESC,created_at DESC LIMIT 31 OFFSET ?`).bind(Number(age),offset).all<CaseRow>();
  const items=await Promise.all(rows.results.slice(0,30).map(async r=>({...publicCase(r,member.id),
    canVote:r.status==='pending'&&r.author_member_id!==member.id&&!await c.env.DB.prepare('SELECT 1 FROM moderation_votes WHERE case_id=? AND member_id=?').bind(r.id,member.id).first(),
    canResolve:role!=='reviewer'&&r.status==='disputed'&&r.author_member_id!==member.id&&r.created_by!==member.id&&!await c.env.DB.prepare('SELECT 1 FROM moderation_votes WHERE case_id=? AND member_id=?').bind(r.id,member.id).first(),
@@ -73,12 +73,12 @@ moderationRoutes.get('/v1/moderation/cases',async c=>{
 });
 moderationRoutes.get('/v1/moderation/cards',async c=>{
  const member=await requireReviewer(c);const age=(await memberNsfw(c.env.DB,member.id)).ageVerifiedAt!==null;const q=(c.req.query('q')??'').trim().slice(0,100);const offset=Math.max(0,Math.floor(Number(c.req.query('offset'))||0));
- const rows=await c.env.DB.prepare(CARD+` WHERE c.status='approved' AND (c.nsfw=0 OR ?) AND (?='' OR c.names LIKE ? ESCAPE '\\' OR c.id=? OR EXISTS(SELECT 1 FROM card_numbers n WHERE n.provider=c.provider AND n.source_role_id=c.source_role_id AND CAST(n.num AS TEXT)=?)) ORDER BY c.registered_at DESC LIMIT 31 OFFSET ?`).bind(Number(age),q,'%'+q.replace(/[\\%_]/g,'\\$&')+'%',q,q,offset).all<ManagedCard>();
+ const rows=await c.env.DB.prepare(CARD+` WHERE c.status='approved' AND (c.rating IS NOT 'R' OR ?) AND (?='' OR c.names LIKE ? ESCAPE '\\' OR c.id=? OR EXISTS(SELECT 1 FROM card_numbers n WHERE n.provider=c.provider AND n.source_role_id=c.source_role_id AND CAST(n.num AS TEXT)=?)) ORDER BY c.registered_at DESC LIMIT 31 OFFSET ?`).bind(Number(age),q,'%'+q.replace(/[\\%_]/g,'\\$&')+'%',q,q,offset).all<ManagedCard>();
  return c.json({items:rows.results.slice(0,30).map(r=>projection(r,c.req.query('lang')||'zh-Hant')),hasNext:rows.results.length>30});
 });
 moderationRoutes.get('/v1/moderation/cards/:id',async c=>{
  const member=await requireReviewer(c);const db=c.env.DB;const card=await cardOf(db,c.req.param('id'));
- if(card.nsfw===1&&(await memberNsfw(db,member.id)).ageVerifiedAt===null)throw new HttpError(403,'age_verification_required');
+ if(card.rating==='R'&&(await memberNsfw(db,member.id)).ageVerifiedAt===null)throw new HttpError(403,'age_verification_required');
  const cases=await db.prepare('SELECT * FROM moderation_cases WHERE provider=? AND source_role_id=? ORDER BY created_at DESC LIMIT 100').bind(card.provider,card.source_role_id).all<CaseRow>();
  const events=await db.prepare('SELECT action,reason,before_value AS beforeValue,after_value AS afterValue,created_at AS at FROM moderation_events WHERE provider=? AND source_role_id=? ORDER BY created_at DESC LIMIT 100').bind(card.provider,card.source_role_id).all();
  const reviews=await db.prepare('SELECT id,kind,status,submitted_at AS submittedAt,decided_at AS decidedAt,note,content_hash AS version FROM review_submissions WHERE card_id=? ORDER BY submitted_at DESC LIMIT 100').bind(card.id).all();
@@ -87,7 +87,7 @@ moderationRoutes.get('/v1/moderation/cards/:id',async c=>{
 });
 moderationRoutes.get('/v1/moderation/cases/:id/evidence',async c=>{
  const member=await requireReviewer(c);const row=await caseOf(c.env.DB,c.req.param('id'));
- if(row.nsfw===1&&(await memberNsfw(c.env.DB,member.id)).ageVerifiedAt===null)throw new HttpError(403,'age_verification_required');
+ if(row.rating==='R'&&(await memberNsfw(c.env.DB,member.id)).ageVerifiedAt===null)throw new HttpError(403,'age_verification_required');
  return c.json({...JSON.parse(row.public_evidence),cardNumber:row.card_number,version:row.version_id});
 });
 moderationRoutes.post('/v1/moderation/cases',async c=>{
@@ -100,12 +100,13 @@ moderationRoutes.post('/v1/moderation/cases',async c=>{
  if(card.status!=='approved'||(action==='delist'&&card.board_hidden)||(action==='suspend'&&card.public_blocked)||(action==='restore_listing'&&!card.board_hidden)||(action==='restore_public'&&!card.public_blocked))throw new HttpError(409,'moderation_conflict');
  const frozen=card.approved_version_id?await db.prepare('SELECT public_role FROM hosting_versions WHERE version_id=?').bind(card.approved_version_id).first<{public_role:string}>():null;
  const published=frozen?JSON.parse(frozen.public_role):null;
- const evidence=JSON.stringify({names:JSON.parse(card.names),summaries:JSON.parse(card.summaries),tags:JSON.parse(card.tags),avatarUrl:card.background_url,nsfw:!!card.nsfw,welcome:published?.welcome??'',searchText:card.search_text??''});
+ const evidence=JSON.stringify({names:JSON.parse(card.names),summaries:JSON.parse(card.summaries),tags:JSON.parse(card.tags),avatarUrl:card.background_url,rating:card.rating,welcome:published?.welcome??'',searchText:card.search_text??''});
  const id=crypto.randomUUID();const now=Date.now();
  await mutate(()=>db.batch([
   db.prepare('INSERT OR IGNORE INTO moderation_state(provider,source_role_id) VALUES(?,?)').bind(card.provider,card.source_role_id),
   ... (action==='suspend'?[db.prepare("UPDATE moderation_cases SET status='dismissed',decided_at=?,resolution='Superseded by urgent suspension' WHERE provider=? AND source_role_id=? AND status IN ('pending','disputed') AND action IN ('delist','restore_listing')").bind(now,card.provider,card.source_role_id)]:[]),
-  db.prepare('INSERT INTO moderation_cases(id,provider,source_role_id,version_id,title,author_member_id,action,reason,created_by,operation_id,created_at,card_number,nsfw,public_evidence) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,card.provider,card.source_role_id,card.approved_version_id||card.reviewed_hash,pickLocale(JSON.parse(card.names),'zh-Hant'),card.author_member_id,action,reason,member.id,op,now,card.card_number,card.nsfw,evidence),
+  // nsfw：舊欄位 NOT NULL 沒有預設值，0057 刪欄位時連同這一格拿掉
+  db.prepare('INSERT INTO moderation_cases(id,provider,source_role_id,version_id,title,author_member_id,action,reason,created_by,operation_id,created_at,card_number,rating,public_evidence,nsfw) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,card.provider,card.source_role_id,card.approved_version_id||card.reviewed_hash,pickLocale(JSON.parse(card.names),'zh-Hant'),card.author_member_id,action,reason,member.id,op,now,card.card_number,card.rating,evidence,Number(card.rating==='R')),
   db.prepare("INSERT INTO moderation_votes VALUES(?,?,'confirm',?,?)").bind(id,member.id,reason,now),
  ]));
  return c.json(publicCase(await caseOf(db,id),member.id),201);

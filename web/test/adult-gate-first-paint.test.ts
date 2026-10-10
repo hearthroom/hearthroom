@@ -21,7 +21,7 @@ import { resetManagedAuthForTest } from "../src/lib/managed-auth";
 const CARD = {
   id: "abc", num: 0, roleId: "role-abc", zone: "zh", name: "深夜的卡", summary: "s", names: { zh: "深夜的卡", en: "", ja: "", ko: "" },
   summaries: { zh: "s", en: "", ja: "", ko: "" }, avatarUrl: null, backgroundUrl: null, slug: null, tags: [],
-  author: { handle: null, accountNumId: 7, name: "月光", avatar: "" }, talkNum: 0, followNum: 0, trending: 0, registeredAt: 0, syncedAt: 0, provider: "harbor", nsfw: true,
+  author: { handle: null, accountNumId: 7, name: "月光", avatar: "" }, talkNum: 0, followNum: 0, trending: 0, registeredAt: 0, syncedAt: 0, provider: "harbor", rating: "R",
 };
 const PROFILE = { handle: "abcdefgh", memberSince: 0, reviewer: false, identities: [], showNsfw: true, ageVerified: true, adultConsent: true, hiddenTags: [] };
 /** 伺服器認不認同源帶的登入 cookie：舊伺服器不認，第一次讀卡一定被擋 */

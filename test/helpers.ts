@@ -5,6 +5,7 @@ import type { ProviderId } from "../src/providers";
 import { HttpError } from "../src/types";
 import { mineCache } from "../src/mine";
 import { boardCache } from "../src/index";
+import { evaluateRating, RATING_QUESTIONNAIRE_VERSION } from "../shared/content-rating";
 
 let cacheGeneration = 0;
 
@@ -286,3 +287,14 @@ export function recordD1(db: D1Database): { queries: string[]; db: D1Database } 
   } });
   return { queries, db: wrap(db) };
 }
+
+// ---- 分級問卷 ----------------------------------------------------------------
+
+/** 什麼都沒勾：普遍級。 */
+export const GENERAL_ANSWERS = { version: RATING_QUESTIONNAIRE_VERSION, topics: {}, other: "other.none" };
+/** 明確的性描寫：限制級（＝成人卡）。 */
+export const ADULT_ANSWERS = { version: RATING_QUESTIONNAIRE_VERSION, topics: { sex: "sex.explicit" }, other: "other.none" };
+export const GENERAL_RATING = evaluateRating(GENERAL_ANSWERS);
+export const ADULT_RATING = evaluateRating(ADULT_ANSWERS);
+/** 送審本文的分級部分：測試裡「成人卡／一般卡」對應限制級／普遍級的問卷。 */
+export const ratingBody = (adult: boolean) => ({ ratingAnswers: adult ? ADULT_ANSWERS : GENERAL_ANSWERS });

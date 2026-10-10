@@ -47,7 +47,7 @@ it.each(['pending', 'rejected', 'needs_review', 'unshared'])('serves %s card lin
 });
 
 it('retains the adult gate, moderation block and genuine not-found response', async () => {
-  await env.DB.prepare('UPDATE cards SET nsfw=1').run();
+  await env.DB.prepare("UPDATE cards SET rating='R'").run();
   expect((await read('source')).status).toBe(403);
   expect((await read('source/platforms')).status).toBe(403);
   await env.DB.prepare('UPDATE cards SET public_blocked=1').run();

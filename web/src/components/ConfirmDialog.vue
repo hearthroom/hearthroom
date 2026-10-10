@@ -1,31 +1,21 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { confirmChoiceOk, confirmDialog, confirmState, confirmTextMatches, settleConfirm } from "@/lib/confirm";
+import { confirmDialog, confirmState, confirmTextMatches, settleConfirm } from "@/lib/confirm";
 import LookupField, { type LookupValue } from "./LookupField.vue";
 
 const box = ref<HTMLElement | null>(null);
 /** 要照打的字：每次開新彈窗清空 */
 const typed = ref("");
-/** 必選項：每次開新彈窗清空，刻意不預選 */
-const choice = ref<string | null>(null);
 /** 選填的那一格：開新彈窗時填上預設值；有 lookup 的那種還帶著對上的編號 */
 const fieldText = ref("");
 const fieldPick = ref<LookupValue>({ label: "" });
 const typedOk = computed(() => !!confirmState.current && confirmTextMatches(confirmState.current, typed.value));
-/** 按了確認但必選項沒選：顯示缺什麼，不要讓確認鍵看起來能按卻「按了沒反應」 */
-const missingChoice = ref(false);
 function confirm() {
   const cur = confirmState.current;
   if (!cur || !typedOk.value) return;
-  if (!confirmChoiceOk(cur, choice.value)) {
-    missingChoice.value = true;
-    box.value?.querySelector<HTMLElement>("[data-choice]")?.focus();
-    return;
-  }
-  if (cur.field?.lookup) settleConfirm(true, typed.value, choice.value, fieldPick.value.label, fieldPick.value.id);
-  else settleConfirm(true, typed.value, choice.value, fieldText.value);
+  if (cur.field?.lookup) settleConfirm(true, typed.value, fieldPick.value.label, fieldPick.value.id);
+  else settleConfirm(true, typed.value, fieldText.value);
 }
-watch(choice, () => { missingChoice.value = false; });
 /** 開啟前的焦點：關掉時還回去，鍵盤使用者不會掉到頁面開頭 */
 let restore: HTMLElement | null = null;
 
@@ -33,10 +23,8 @@ watch(() => confirmState.current, async (cur) => {
   if (!cur) { restore?.focus?.(); restore = null; return; }
   restore = document.activeElement as HTMLElement | null;
   typed.value = "";
-  choice.value = null;
   fieldText.value = cur.field?.initial ?? "";
   fieldPick.value = { label: cur.field?.initial ?? "", ...(cur.field?.initialId ? { id: cur.field.initialId } : {}) };
-  missingChoice.value = false;
   await nextTick();
   // 要照打的字：焦點直接進打字框。其他破壞性動作先站在取消鍵上：按錯 Enter 也不會刪掉東西
   const pick = cur.requireText ? "[data-typed]" : cur.danger && !cur.single ? "[data-cancel]" : "[data-confirm]";
@@ -77,19 +65,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
                  :placeholder="confirmState.current.placeholder ?? confirmState.current.requireText"
                  @keydown.enter.prevent="confirm" />
         </label>
-        <!-- 必選項：沒選就按不了確認 -->
-        <fieldset v-if="confirmState.current.choices?.length" class="dlg__choices">
-          <legend v-if="confirmState.current.choiceLabel" class="dlg__choices-label">{{ confirmState.current.choiceLabel }}</legend>
-          <label v-for="opt in confirmState.current.choices" :key="opt.value" class="dlg__choice">
-            <input v-model="choice" type="radio" name="dlg-choice" :value="opt.value" data-choice />
-            <span class="dlg__choice-text">
-              <strong>{{ opt.label }}</strong>
-              <span v-if="opt.hint" class="subtle">{{ opt.hint }}</span>
-            </span>
-          </label>
-          <p v-if="missingChoice" class="dlg__missing" role="alert">{{ $t("dialog.choiceRequired", { label: confirmState.current.choiceLabel ?? "" }) }}</p>
-        </fieldset>
-        <!-- 選填的一格字（例如原作）：Enter 不送出，送出仍要按確認鍵——必選項還沒選的話得先選 -->
+        <!-- 選填的一格字（例如原作）：Enter 不送出，送出仍要按確認鍵 -->
         <label v-if="confirmState.current.field" class="dlg__field">
           <span class="dlg__field-label">{{ confirmState.current.field.label }}</span>
           <LookupField v-if="confirmState.current.field.lookup" v-model="fieldPick" :lookup="confirmState.current.field.lookup" :placeholder="confirmState.current.field.placeholder" :maxlength="confirmState.current.field.maxlength" :label="confirmState.current.field.label" />
@@ -139,7 +115,6 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 .dlg__typed { display: grid; gap: 6px; }
 .dlg__typed-hint { font-size: 12.5px; color: var(--text-3); }
 .dlg__typed .input { width: 100%; }
-.dlg__missing { margin-top: var(--s-2); font-size: 13px; color: var(--danger); }
 .dlg__actions { display: flex; justify-content: flex-end; gap: var(--s-2); margin-top: var(--s-1); }
 
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
@@ -151,12 +126,6 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
   .dlg__actions { flex-direction: column-reverse; }
   .dlg__actions .btn { width: 100%; height: var(--h-lg); }
 }
-.dlg__choices { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; text-align: left; }
 .dlg__field { display: grid; gap: 6px; text-align: left; }
 .dlg__field-label { font-size: 13px; color: var(--text-2); }
-.dlg__choices-label { padding: 0; margin-bottom: 2px; font-size: 13px; color: var(--text-2); }
-.dlg__choice { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-md); cursor: pointer; }
-.dlg__choice:has(input:checked) { border-color: var(--accent); background: var(--accent-tint); }
-.dlg__choice input { margin-top: 3px; accent-color: var(--accent); }
-.dlg__choice-text { display: grid; gap: 2px; font-size: 14px; }
 </style>

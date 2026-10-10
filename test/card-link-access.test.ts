@@ -54,7 +54,8 @@ it('never uses cached review metadata to expose a host-inaccessible draft', asyn
 });
 
 it('preserves adult gating and site blocks through work and copy aliases', async () => {
-  await upsertCard(env.DB, role({ roleId: 'draft' }), Date.now(), { provider: 'harbor', status: 'pending', nsfw: true });
+  await upsertCard(env.DB, role({ roleId: 'draft' }), Date.now(), { provider: 'harbor', status: 'pending' });
+  await env.DB.prepare("UPDATE cards SET rating='R' WHERE source_role_id='draft'").run();
   await env.DB.prepare("INSERT INTO works VALUES ('work','member','harbor','draft',1)").run();
   await env.DB.prepare("INSERT INTO work_copies(work_id,provider,external_id,role_id,status,updated_at) VALUES ('work','lunatalk',11,'copy','synced',1)").run();
   for (const id of ['draft', 'work', 'copy']) {

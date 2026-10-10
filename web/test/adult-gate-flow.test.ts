@@ -28,7 +28,7 @@ import { fetchCard } from "../src/lib/api";
 const CARD = {
   id: "abc", roleId: "role-abc", zone: "zh", name: "深夜的卡", summary: "s", names: { zh: "深夜的卡", en: "", ja: "", ko: "" },
   summaries: { zh: "s", en: "", ja: "", ko: "" }, avatarUrl: null, backgroundUrl: null, slug: null, tags: [],
-  author: { handle: "abcdefgh", accountNumId: 7, name: "月光", avatar: "" }, talkNum: 0, followNum: 0, trending: 0, registeredAt: 0, syncedAt: 0, provider: "lunatalk", nsfw: true,
+  author: { handle: "abcdefgh", accountNumId: 7, name: "月光", avatar: "" }, talkNum: 0, followNum: 0, trending: 0, registeredAt: 0, syncedAt: 0, provider: "lunatalk", rating: "R",
 };
 const state = { showNsfw: false, ageVerified: true, adultConsent: true };
 const calls: string[] = [];

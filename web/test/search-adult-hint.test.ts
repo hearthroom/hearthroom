@@ -35,7 +35,7 @@ function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respon
   if (url.endsWith("/v1/me")) return json({ handle: "abcdefgh", memberSince: 0, reviewer: false, identities: [], hiddenTags: [], ...state });
   if (url.includes("/v1/cards?")) {
     const partial = url.includes("partial");
-    return json({ items: partial ? [{ id: "1", roleId: "r1", zone: "zh", name: "一", summary: "", names: {}, summaries: {}, avatarUrl: null, backgroundUrl: null, slug: null, tags: [], author: { handle: null, accountNumId: 1, name: "a", avatar: "" }, talkNum: 0, followNum: 0, trending: 0, registeredAt: 0, syncedAt: 0, provider: "harbor", nsfw: false }] : [], total: null, hasNext: false, limit: 24, offset: 0, sort: "relevance", ...(partial ? { partial: true } : {}) }, { "X-Adult-Content": state.showNsfw ? "1" : "0" });
+    return json({ items: partial ? [{ id: "1", roleId: "r1", zone: "zh", name: "一", summary: "", names: {}, summaries: {}, avatarUrl: null, backgroundUrl: null, slug: null, tags: [], author: { handle: null, accountNumId: 1, name: "a", avatar: "" }, talkNum: 0, followNum: 0, trending: 0, registeredAt: 0, syncedAt: 0, provider: "harbor", rating: null }] : [], total: null, hasNext: false, limit: 24, offset: 0, sort: "relevance", ...(partial ? { partial: true } : {}) }, { "X-Adult-Content": state.showNsfw ? "1" : "0" });
   }
   if (url.includes("/v1/authors?")) return json({ items: [], hasNext: false, limit: 24, offset: 0, sort: "talk" });
   if (url.includes("/v1/fandoms?")) return json({ items: [{ key: "原神", fandom: "原神", n: 3 }, { key: "wd:Q1", fandom: "崩壞三", labels: { "zh-hant": "崩壞三", "zh-hans": "崩坏三", en: "Honkai Impact 3rd" }, n: 1 }], hasNext: false, limit: 24, offset: 0 });

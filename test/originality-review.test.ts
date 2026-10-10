@@ -1,6 +1,6 @@
 import { SELF, env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { bearer, identities, makeReviewer, resetDb, restoreUpstream, reviewOff, reviewOn, reviewUpstream, rolesOnMainSite } from "./helpers";
+import { ratingBody, bearer, identities, makeReviewer, resetDb, restoreUpstream, reviewOff, reviewOn, reviewUpstream, rolesOnMainSite } from "./helpers";
 import { originalityReport } from "../src/originality";
 import { unregister } from "../src/cards";
 import { claim, needsReviewStatements, stamp } from "../src/review";
@@ -42,7 +42,7 @@ afterEach(() => { restoreUpstream(); reviewOff(); });
 const submit = async (roleId: string, token: string) => {
   const res = await SELF.fetch("https://c.test/v1/cards", {
     method: "POST", headers: { "Content-Type": "application/json", ...bearer(token) },
-    body: JSON.stringify({ roleId, nsfw: false, operationId: crypto.randomUUID() }),
+    body: JSON.stringify({ roleId, ...ratingBody(false), operationId: crypto.randomUUID() }),
   });
   expect(res.ok).toBe(true);
   return (await env.DB.prepare(

@@ -5,14 +5,16 @@ import { createMemoryHistory, createRouter } from 'vue-router';
 import { i18n } from '../src/lib/i18n';
 import { useSession } from '../src/lib/session';
 import CardOwnerActions from '../src/components/CardOwnerActions.vue';
-const mocks=vi.hoisted(()=>({draft:vi.fn(),register:vi.fn(),token:vi.fn(),confirm:vi.fn()}));
-vi.mock('../src/lib/api',async original=>({...await original<typeof import('../src/lib/api')>(),fetchDraftState:mocks.draft,registerCard:mocks.register}));
+const mocks=vi.hoisted(()=>({draft:vi.fn(),register:vi.fn(),token:vi.fn(),confirm:vi.fn(),ask:vi.fn(),ratingDraft:vi.fn(),saveRating:vi.fn()}));
+const TEEN={version:1,topics:{romance:'romance.dating'},other:'other.none'};
+vi.mock('../src/lib/api',async original=>({...await original<typeof import('../src/lib/api')>(),fetchDraftState:mocks.draft,registerCard:mocks.register,fetchRatingDraft:mocks.ratingDraft,saveRatingDraft:mocks.saveRating}));
 vi.mock('../src/lib/connections',async original=>({...await original<typeof import('../src/lib/connections')>(),accountToken:mocks.token}));
-vi.mock('../src/lib/confirm',()=>({confirmChoice:mocks.confirm,confirmDialog:vi.fn()}));
+vi.mock('../src/lib/confirm',()=>({confirmDialog:mocks.confirm}));
+vi.mock('../src/lib/rating',async original=>({...await original<typeof import('../src/lib/rating')>(),askRating:mocks.ask}));
 let app:App;let root:HTMLElement;
 const settle=async()=>{for(let i=0;i<30;i++)await Promise.resolve();await nextTick();};
 const card={id:'100021',num:100021,provider:'harbor',roleId:'sealed',sourceRoleId:'draft',status:'approved',author:{accountNumId:22,name:'Fixture'}} as any;
-beforeEach(()=>{vi.clearAllMocks();mocks.token.mockResolvedValue('token-harbor');mocks.confirm.mockResolvedValue('sfw');mocks.register.mockResolvedValue({status:'approved'});});
+beforeEach(()=>{vi.clearAllMocks();mocks.token.mockResolvedValue('token-harbor');mocks.confirm.mockResolvedValue(true);mocks.ratingDraft.mockResolvedValue(TEEN);mocks.ask.mockImplementation(async(a:unknown)=>a);mocks.saveRating.mockResolvedValue(undefined);mocks.register.mockResolvedValue({status:'approved'});});
 afterEach(()=>{app?.unmount();root?.remove();});
 async function mount(c=card,me=22){const router=createRouter({history:createMemoryHistory(),routes:[{path:'/:p(.*)*',component:{template:'<div />'}}]});await router.push('/cards/100021');const pinia=createPinia();setActivePinia(pinia);const session=useSession();session.me={accountNumId:me,nickName:'F',avatar:''};session.profile={identities:[{provider:'harbor',externalId:me}]} as any;root=document.createElement('div');document.body.append(root);app=createApp({render:()=>h(CardOwnerActions,{card:c})}).use(pinia).use(i18n).use(router);app.mount(root);await settle();}
 const text=(key:string)=>i18n.global.t(key);
@@ -26,7 +28,9 @@ it('gives the owner a draft playtest link, and says the draft was edited with a 
  expect(play?.getAttribute('href')).toContain('/play/100021?mode=source');
  expect(root.textContent).toContain(text('workspace.draftChanged'));
  button('card.owner.submitUpdate')!.click();await settle();
- expect(mocks.register).toHaveBeenCalledWith('draft','token-harbor',false,[],'harbor');
+ // 送審前先確認分級：帶出作者存過的評測
+ expect(mocks.ask).toHaveBeenCalledWith(TEEN);
+ expect(mocks.register).toHaveBeenCalledWith('draft','token-harbor',TEEN,[],'harbor');
  expect(button('card.owner.submitUpdate')).toBeUndefined();
  expect(root.textContent).toContain(text('workspace.updatePending'));
 });
@@ -45,4 +49,12 @@ it('renders nothing and asks nothing for someone who is not the owner',async()=>
  await mount(card,99);
  expect(root.textContent?.trim()).toBe('');
  expect(mocks.draft).not.toHaveBeenCalled();
+});
+it('does not submit when the owner closes the rating questionnaire',async()=>{
+ mocks.draft.mockResolvedValue({status:'approved',draftChanged:true});
+ mocks.ask.mockResolvedValue(null);
+ await mount();
+ button('card.owner.submitUpdate')!.click();await settle();
+ expect(mocks.confirm).not.toHaveBeenCalled();
+ expect(mocks.register).not.toHaveBeenCalled();
 });
