@@ -55,6 +55,17 @@ export const SANDBOX_CSP = [
   `frame-ancestors ${SANDBOX_PARENT_ORIGINS.join(" ")}`,
 ].join("; ");
 
+/**
+ * 主站網域上的同源殼（本機開發、非 DNS 標籤 roleId 的退路，宿主用不透明 iframe 嵌）。它跟主站同源，
+ * 所以標頭補 sandbox 指令（與宿主的不透明 iframe 同一組權限，沒有 allow-same-origin）：被別人直接打開
+ * 或嵌進去也是不透明源，碰不到主站的 cookie 與 storage；frame-ancestors 只許主站自己嵌。
+ */
+export const SAME_SITE_SANDBOX_CSP = [
+  "sandbox allow-scripts allow-forms allow-modals allow-downloads",
+  ...SANDBOX_CSP.split("; ").filter(d => !d.startsWith("frame-ancestors ")),
+  "frame-ancestors 'self'",
+].join("; ");
+
 // 殼頁向資源層要的是 /sandbox/（目錄），不是 /sandbox/index.html：資源層預設會把後者 3xx 到前者，
 // 拿到的就不是 200。js/css 直接要檔名。
 const FILES: Record<string, string> = {
@@ -68,12 +79,13 @@ const FILES: Record<string, string> = {
 
 /**
  * 沙箱子網域上的請求：/sandbox/ 底下的殼檔（頁、js、css、簡繁字典）從資源層拿、補標頭；其餘 404。
- * 回 null 表示這不是沙箱子網域，交給後面的路由。
+ * 主站網域上的 /sandbox/ 出同一份殼，但套不透明源的 CSP（見 SAME_SITE_SANDBOX_CSP）。
+ * 回 null 表示不歸這裡管，交給後面的路由。
  */
 export async function serveSandbox(c: { req: { url: string; header: (name: string) => string | undefined; method: string }; env: Env }): Promise<Response | null> {
   const url = new URL(c.req.url);
-  if (!isSandboxHost(url.host)) return null;
-  if (!url.pathname.startsWith(SANDBOX_PATH)) return new Response("not found", { status: 404 });
+  const onSubdomain = isSandboxHost(url.host);
+  if (!url.pathname.startsWith(SANDBOX_PATH)) return onSubdomain ? new Response("not found", { status: 404 }) : null;
   const rest = url.pathname.slice(SANDBOX_PATH.length);
   const file = FILES[rest];
   if (file === undefined) return new Response("not found", { status: 404 });
@@ -85,7 +97,7 @@ export async function serveSandbox(c: { req: { url: string; header: (name: strin
     return new Response("sandbox shell not built", { status: 503 });
   }
   const headers = new Headers(asset.headers);
-  headers.set("Content-Security-Policy", SANDBOX_CSP);
+  headers.set("Content-Security-Policy", onSubdomain ? SANDBOX_CSP : SAME_SITE_SANDBOX_CSP);
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("Referrer-Policy", "no-referrer");
   // 三個檔都 no-cache（每次重新驗證）：檔名沒有雜湊，部署後若邊緣還抓著舊的 js，新的宿主就會配到舊殼。
