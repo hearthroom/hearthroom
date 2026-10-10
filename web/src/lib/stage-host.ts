@@ -56,6 +56,12 @@ export interface StageDeps {
   currentRoleId?: () => string;
   /** 站台的 locale 前綴工具（/zh-Hans/...）。 */
   lp: (path: string) => string;
+  /**
+   * 遊客（沒登入）在對話頁（owner 2026-10-10）：舞台只畫開場，不打要登入的請求；
+   * 萬一有請求被拒也不把他送去登入頁。按下送出時叫 onSignInRequired，由對話頁在原地請他登入。
+   */
+  guest?: boolean;
+  onSignInRequired?: () => void;
 }
 
 let stagePromise: Promise<Component> | null = null;
@@ -78,7 +84,7 @@ export async function recoverRejectedToken(provider: ProviderId, accessToken: ()
  * 補 CSP）；本機開發或別的主機上沒有那些子網域，退回不透明 origin 載同源的 /sandbox/index.html
  * （前端 build 會把上游的殼複製到 web/public/sandbox/）。
  */
-export function sandboxOptions(hostname: string, session: Pick<Session, 'accessToken'>, provider: ProviderId = currentProvider()) {
+export function sandboxOptions(hostname: string, session: Pick<Session, 'accessToken'>, provider: ProviderId = currentProvider(), guest = false) {
   // 卡片 App 網域（play.<站台>）也在同一個 zone 底下，殼子網域一樣用得到
   const root = siteRootOf(hostname);
   const production = !!root;
@@ -115,7 +121,12 @@ export function sandboxOptions(hostname: string, session: Pick<Session, 'accessT
     prefetch,
     shellUrl: (roleId: string) => { const l = label(roleId); return l ? `https://c${l}.${root}/sandbox/` : "/sandbox/"; },
     origin: (roleId: string) => { const l = label(roleId); return l ? `https://c${l}.${root}` : "null"; },
-    saves: {
+    // 遊客沒有存檔：讀到的是空的、寫的不留（沙箱卡照樣能從頭玩），不當錯誤丟給作者腳本。
+    saves: guest ? {
+      load: async (_roleId: string) => ({} as Record<string, unknown>),
+      set: async (_roleId: string, _key: string, _value: unknown) => {},
+      remove: async (_roleId: string, _key: string) => {},
+    } : {
       load: (roleId: string) => withToken((t) => {
         const entry = pending;
         invalidate();
@@ -134,7 +145,7 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
   stagePromise = (async () => {
     const provider = deps.provider ?? currentProvider();
     const accessToken = deps.accessToken ?? (() => deps.session.accessToken());
-    const sandbox = sandboxOptions(window.location.hostname, { accessToken }, provider);
+    const sandbox = sandboxOptions(window.location.hostname, { accessToken }, provider, !!deps.guest);
     let recovering = false;
     const initialRoleId = deps.currentRoleId?.();
     if (initialRoleId) void sandbox.prefetch(initialRoleId);
@@ -193,7 +204,8 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
       auth: {
         getAccessToken: accessToken,
         onUnauthorized: () => {
-          if (recovering) return;
+          // 遊客本來就沒有可以換的 token：被拒的請求就讓它失敗，不把他從這張卡帶走。
+          if (deps.guest || recovering) return;
           recovering = true;
           void recoverRejectedToken(provider, accessToken).then((replaced) => {
             if (replaced) { window.location.reload(); return; }
@@ -201,7 +213,8 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
             void deps.router.push(deps.lp(loginPath(deps.currentPath())));
           });
         },
-        // 畫布送訊息前看的是「有沒有登入的人」；這頁本來就要登入才進得來（meta.auth）
+        ...(deps.onSignInRequired ? { onSignInRequired: deps.onSignInRequired } : {}),
+        // 畫布送訊息前看的是「有沒有登入的人」；遊客沒有，送出時舞台會叫 onSignInRequired
         user: player
           ? { id: String(player.accountNumId), nickName: player.nickName, avatar: player.avatar }
           : undefined,

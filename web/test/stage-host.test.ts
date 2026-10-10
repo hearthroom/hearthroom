@@ -56,6 +56,21 @@ describe("sandboxOptions", () => {
     await expect(o.saves.load('role')).resolves.toEqual({ checkpoint: 7 });
     expect(fetchCardSaves).toHaveBeenCalledTimes(2);
   });
+  it('遊客（owner 2026-10-10）：存檔讀到空的、寫的不留，不打存檔 API 也不丟錯給作者腳本', async () => {
+    const { sandboxOptions } = await import('../src/lib/stage-host');
+    const o = sandboxOptions('localhost', { accessToken: async () => null }, 'harbor', true);
+    await o.prefetch('role');
+    await expect(o.saves.load('role')).resolves.toEqual({});
+    await expect(o.saves.set('role', 'checkpoint', 1)).resolves.toBeUndefined();
+    await expect(o.saves.remove('role', 'checkpoint')).resolves.toBeUndefined();
+    expect(fetchCardSaves).not.toHaveBeenCalled();
+    expect(putCardSave).not.toHaveBeenCalled();
+  });
+  it('登入的人 token 過期：照舊丟錯，不默默吞掉他的存檔', async () => {
+    const { sandboxOptions } = await import('../src/lib/stage-host');
+    const o = sandboxOptions('localhost', { accessToken: async () => null }, 'harbor');
+    await expect(o.saves.load('role')).rejects.toThrow('not signed in');
+  });
   it("正式站：子網域殼，標籤小寫", async () => {
     const { sandboxOptions } = await import("../src/lib/stage-host");
     const o = sandboxOptions("hearthroom.club", session);

@@ -51,9 +51,9 @@ const pages: RouteRecordRaw[] = [
   { path: "download", component: () => import("./pages/DownloadPage.vue") },
   { path: "guide", component: () => import("./pages/GuidePage.vue") },
   { path: "updates", component: () => import("./pages/UpdatesPage.vue") },
-  // 站內玩卡：舞台整頁接管（bare = 不套站台頁首頁尾），對話要登入
-  { path: "play/:roleId", component: () => import("./pages/PlayPage.vue"), meta: { auth: true, bare: true, preloadStage: true } },
-  // 遊戲模式：同一張卡，回覆拆成敘事＋舞台狀態。開場白是公開的，遊客可看第一幕；行動時才要登入。
+  // 站內玩卡：舞台整頁接管（bare = 不套站台頁首頁尾）。遊客進得來、看得到開場，送出時才請他登入
+  // （owner 2026-10-10，見 PlayPage）；續玩、審核、作者試玩由 PlayPage 自己要求登入。
+  { path: "play/:roleId", component: () => import("./pages/PlayPage.vue"), meta: { bare: true, preloadStage: true } },
   // 社群管理共用工作台；資格與個別操作的權限由服務端檢查。
   {
     path: "review", component: () => import("./pages/CommunityManagementLayout.vue"), meta: { auth: true },
@@ -82,7 +82,7 @@ const pages: RouteRecordRaw[] = [
 const playAppPages = [
   { path: "/login", component: () => import("./pages/LoginPage.vue"), meta: { bare: true } },
   { path: "/auth/callback", component: () => import("./pages/CallbackPage.vue"), meta: { bare: true } },
-  { path: "/:roleId([^/]+)", component: () => import("./pages/PlayPage.vue"), meta: { auth: true, bare: true, playApp: true, preloadStage: true } },
+  { path: "/:roleId([^/]+)", component: () => import("./pages/PlayPage.vue"), meta: { bare: true, playApp: true, preloadStage: true } },
   { path: "/:pathMatch(.*)*", component: () => import("./pages/NotFoundPage.vue"), meta: { bare: true } },
 ];
 
