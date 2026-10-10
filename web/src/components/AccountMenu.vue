@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import AccountIcon from "@/components/AccountIcon.vue";
 import ReviewBadge from "@/components/ReviewBadge.vue";
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
-import { hueFrom } from "@/lib/format";
+import { compact, hueFrom, whole } from "@/lib/format";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
 import { can } from "@/lib/provider";
@@ -16,6 +16,16 @@ const session = useSession();
 const reviewerStore = useReviewer();
 const { lp } = useLocalePath();
 const open = ref(false);
+/**
+ * 頁首的積分：顯示實際餘額（跟積分頁同一個數：一般＋限時）。只寫「積分與會員」幾個字沒有資訊量（owner 2026-10-11），
+ * 讀不到餘額就整顆不放；百萬以上縮寫，免得把頁首撐開。
+ */
+const balance = computed(() => {
+  const w = session.wallet;
+  if (!w) return null;
+  const n = w.score + w.tempScore;
+  return n >= 1_000_000 ? compact(n) : whole(n);
+});
 const root = ref<HTMLElement | null>(null);
 
 /** 點外面或按 Esc 就收起來。 */
@@ -33,9 +43,9 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
 <template>
   <div v-if="session.me" ref="root" class="acct">
     <!-- 餘額放在頁首：這是登入後最常想瞄一眼的數字 -->
-    <RouterLink :to="lp('/wallet')" class="acct__credits" :title="$t('wallet.balance')">
+    <RouterLink v-if="balance" :to="lp('/wallet')" class="acct__credits" :title="$t('wallet.balance')" :aria-label="`${$t('wallet.balance')} ${balance}`">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5l1.9 4.1 4.5.5-3.3 3.1.9 4.4L8 11.4l-3.9 2.2.9-4.4L1.6 6.1l4.5-.5z" /></svg>
-      {{ $t("nav.wallet") }}
+      {{ balance }}
     </RouterLink>
 
     <button class="acct__btn" :aria-label="$t('nav.menu')" aria-haspopup="menu" :aria-expanded="open" @click="open = !open">

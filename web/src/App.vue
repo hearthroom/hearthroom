@@ -65,6 +65,11 @@ onBeforeUnmount(()=>{clearInterval(reviewTimer);window.removeEventListener('focu
 const q = ref((route.query.q as string) ?? "");
 const box = ref<InstanceType<typeof SearchSuggest> | null>(null);
 const onSearchPage = computed(() => route.path === lp("/search"));
+/**
+ * 手機的第二排分頁（榜單／對話與收藏／我的卡片）只在這三頁出現：它是這三個頂層頁之間的切換，
+ * 進到卡片頁、編輯頁這類內頁就不該還掛著（owner 2026-10-11），想回去走返回或品牌鍵，跟桌機一樣。
+ */
+const onTabPage = computed(() => [lp("/"), lp("/library"), lp("/mine")].map((p) => p.replace(/\/+$/, "")).includes(route.path.replace(/\/+$/, "")));
 watch(() => route.query.q, (v) => { q.value = (v as string) ?? ""; });
 
 function search() {
@@ -138,7 +143,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
     </div>
   </header>
 
-  <nav v-if="!route.meta.bare" class="mobile-library-nav" :aria-label="$t('library.navigation')">
+  <nav v-if="!route.meta.bare && onTabPage" class="mobile-library-nav" :aria-label="$t('library.navigation')">
     <RouterLink :to="lp('/')" :aria-current="route.path === lp('/') ? 'page' : undefined">{{ $t('nav.board') }}</RouterLink>
     <RouterLink :to="lp('/library')" :aria-current="route.path === lp('/library') ? 'page' : undefined">{{ $t('library.title') }}</RouterLink>
     <RouterLink :to="lp('/mine')" :aria-current="route.path === lp('/mine') ? 'page' : undefined">{{ $t('nav.mine') }}</RouterLink>
@@ -286,9 +291,19 @@ onMounted(() => document.addEventListener("keydown", onSlash));
   .footer__group a { min-height: 44px; }
 }
 
+/* 平板（iPad 直放 744–834）跟桌機一樣：導覽留在頁首那一排，搜尋收成圖示讓出位置（owner 2026-10-11）。
+   只有手機寬度才把導覽拆成第二排分頁。 */
+@media (min-width: 701px) and (max-width: 1024px) {
+  .header__inner { grid-template-columns: auto auto minmax(0, 1fr); column-gap: var(--s-4); padding: 0 var(--s-4); }
+  .search { display: none; }
+  .search-go { display: inline-flex; }
+  .account { min-width: 0; }
+}
+.account :deep(.acct__credits) { white-space: nowrap; }
+
 /* 站務入口較長；窄桌面將導覽放第二列，避免擠壓搜尋與帳號控制項。 */
 .header__inner--reviewer .nav__item { white-space: nowrap; }
-@media (min-width: 861px) and (max-width: 1280px) {
+@media (min-width: 701px) and (max-width: 1280px) {
   .header__inner--reviewer { grid-template-columns: minmax(0, 1fr) auto; row-gap: 0; }
   .header__inner--reviewer .brand, .header__inner--reviewer .account { min-height: var(--header-h); }
   .header__inner--reviewer .nav { grid-column: 1 / -1; grid-row: 2; justify-content: center; padding-bottom: var(--s-2); }
@@ -299,22 +314,25 @@ onMounted(() => document.addEventListener("keydown", onSlash));
 /* 手機：一排收完。品牌與榜單同一個目的地，榜單那顆省掉；搜尋收成圖示。
    右邊那排（搜尋、外觀、語言、餘額、頭像）寬度由內容決定、不能疊；擠不下時讓位的是字標——
    品牌欄用 minmax(0, 1fr) 才會真的縮（grid 的 auto 欄不會低於內容寬），字標以省略號收尾，圖標永遠在。 */
-@media (max-width: 860px) {
+@media (max-width: 700px) {
   .header__inner { grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--s-3); padding: 0 var(--s-3); min-height: var(--header-h); }
   .nav, .search { display: none; }
   .search-go { display: inline-flex; }
   .account { min-width: 0; }
   .account > * { flex: none; }
 }
-/* 窄手機：餘額讓位（九位數的餘額會把字標擠成省略號）；帳號選單與錢包頁都還看得到它。
-   門檻由實測定：字標＋搜尋、外觀、語言、餘額、頭像一排要 490px 左右才放得下。 */
-@media (max-width: 500px) {
-  .account :deep(.acct__credits) { display: none; }
-  /* GitHub 圖示也讓位：頁尾每頁都有同一條連結，少它不少功能；留著字標會被擠成「Hearthro…」 */
+/* 頁首擠的時候誰先讓位（owner 2026-10-11）：GitHub 第一個走——頁尾每頁都有同一條連結，少它不少功能。
+   平板以下就收起來，把位置留給導覽與餘額。 */
+@media (max-width: 860px) {
   .gh { display: none; }
 }
+/* 再擠才輪到餘額（帳號選單與積分頁都還看得到它）。門檻由實測定：字標＋搜尋、外觀、語言、
+   五位數餘額、頭像一排要 418px，六位數多 8px；百萬以上已縮寫，不會更寬。 */
+@media (max-width: 430px) {
+  .account :deep(.acct__credits) { display: none; }
+}
 .mobile-library-nav { display:none; }
-@media(max-width:860px) {
+@media(max-width:700px) {
   .mobile-library-nav { display:flex; justify-content:center; gap:var(--s-3); padding:var(--s-2) var(--s-4); border-bottom:1px solid var(--border); }
   .mobile-library-nav a { display:flex; align-items:center; justify-content:center; min-height:44px; flex:1; border-radius:var(--r-pill); font-size:.875rem; text-align:center; }
   .mobile-library-nav a[aria-current=page] { color:var(--accent-text); background:var(--accent-tint); font-weight:600; }
