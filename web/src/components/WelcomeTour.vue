@@ -32,7 +32,7 @@ const name = ref("");
 watch(open, async (now) => {
   if (!now) { tourFocus.value = ""; return; }
   await loadGuestAdult();
-  step.value = hasAdultStarter(locale.value) && guestAdult.available ? "adult" : "start";
+  step.value = hasAdultStarter(locale.value) && guestAdult.available && !guestAdult.showNsfw ? "adult" : "start";
   track("tour_open", { detail: step.value });
 }, { immediate: true });
 // 介紹的是「開始玩」會打開的那張：走到這一步時看他開了成人內容沒（R18 那一步可能剛開）。
