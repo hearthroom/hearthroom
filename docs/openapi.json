@@ -8043,7 +8043,7 @@
           "Roles"
         ],
         "summary": "Patch profile fields and/or the definition of an owned private role",
-        "description": "Updates a subset of fields on a card owned by the bearer. Fields are pointers: a key that is absent is not touched. The role must be `private` (public/waitReview cards reject with `public_role_requires_clone`; use `POST /role/{roleId}/visibility` first). Profile block (`roleName`, `roleDesc`, `roleTag`, `userName`) and definition block (`roleDetailDesc`) are applied as two sequential writes; if the second fails after the first succeeded the profile change persists. Caveats of the profile block: an empty-string `roleName`/`roleDesc`/`userName` and an empty `roleTag` array are ignored (nothing is cleared) — to clear a field use `POST /role/{roleId}/document`. `roleDesc` is limited to the language budget (500 chars, 2500 for English cards). `roleDetailDesc` replaces the whole definition; an empty/blank value is rejected (`empty_field_patch`); limit 10000 chars (50000 for English cards). At least one key must be present or the request fails with `nothing to update`. Length-limit violations (`role_desc_too_long`, `role_detail_too_long`) and `public_role_requires_clone`/`empty_field_patch` are surfaced as HTTP 500 by the error mapper (their codes do not match the 400 substrings), with `retryable: true`. A missing role surfaces as 500 `record not found`.",
+        "description": "Updates a subset of fields on a card owned by the bearer. Fields are pointers: a key that is absent is not touched. The role must be `private` (public/waitReview cards reject with `public_role_requires_clone`; use `POST /role/{roleId}/visibility` first). Profile block (`roleName`, `roleDesc`, `roleTag`, `userName`) and definition block (`roleDetailDesc`) are applied as two sequential writes; if the second fails after the first succeeded the profile change persists. Caveats of the profile block: an empty-string `roleName`/`roleDesc`/`userName` and an empty `roleTag` array are ignored (nothing is cleared) — to clear a field use `POST /role/{roleId}/document`. `roleDesc` is limited to the language budget (500 chars, 2500 for English cards). `roleReadme` (Markdown detail introduction for the card page, never sent to the model) follows the same rules as `roleDesc` (blank ignored) with a limit of 20000 chars (40000 for English cards) and `role_readme_too_long`. `roleDetailDesc` replaces the whole definition; an empty/blank value is rejected (`empty_field_patch`); limit 10000 chars (50000 for English cards). At least one key must be present or the request fails with `nothing to update`. Length-limit violations (`role_desc_too_long`, `role_detail_too_long`) and `public_role_requires_clone`/`empty_field_patch` are surfaced as HTTP 500 by the error mapper (their codes do not match the 400 substrings), with `retryable: true`. A missing role surfaces as 500 `record not found`.",
         "security": [
           {
             "userToken": []
@@ -8407,7 +8407,7 @@
           "Roles"
         ],
         "summary": "Write many role fields in one request",
-        "description": "Applies a partial document to an owned private role in a single write. Every key under `fields` is optional; absent keys are untouched, present keys overwrite (an empty string clears the field where allowed). `fieldPatches` carries anchored text edits (`operations`) applied on top of the current value of the corresponding field and is the way to edit long text without resending it. At least one key under `fields` must be present (`nothing to update` otherwise); if nothing is effectively changed (e.g. only a blank `roleName`), the service answers `invalid_arguments`. Rules: `roleName` blank is ignored; `roleAvatar`/`roleBackground` blank is ignored, otherwise must be an http(s) URL (`invalid_asset_url`); `roleSex` accepts `man|women|other` and aliases (`male`, `female`, `woman`, `男`, `女`, `其他`; empty clears; else `invalid_role_sex`); `talkExample[].roleType` accepts `ai|user` (`assistant` maps to `ai`) and `content` must be non-blank (`invalid_talk_example`); `roleTag` replaces the whole tag list (each non-blank string becomes a platform tag `{icon:\"\", text, type:2}`); `customInstructions` is writable here but is never returned by v1 read routes. Character limits depend on the card language (see `GET /role/validate` → `tokenBudget.limits`): roleDesc 500 (English 2500), roleDetailDesc 10000 (English 50000), roleWelcome 8000 (English 10000), customInstructions 500 for zh-Hant/zh-Hans, 1500 otherwise, roleOutputContract 2000. Violations return `<field>_too_long` codes (`role_desc_too_long`, `role_detail_too_long`, `role_welcome_too_long`, `custom_instructions_too_long`, `role_output_contract_too_long`), which the error mapper surfaces as HTTP 500 with `retryable: true`. The role must be `private` (`public_role_requires_clone`). Alternates/prologue greetings are not part of this document — use `PATCH /role/{roleId}/welcome`.",
+        "description": "Applies a partial document to an owned private role in a single write. Every key under `fields` is optional; absent keys are untouched, present keys overwrite (an empty string clears the field where allowed). `fieldPatches` carries anchored text edits (`operations`) applied on top of the current value of the corresponding field and is the way to edit long text without resending it. At least one key under `fields` must be present (`nothing to update` otherwise); if nothing is effectively changed (e.g. only a blank `roleName`), the service answers `invalid_arguments`. Rules: `roleName` blank is ignored; `roleAvatar`/`roleBackground` blank is ignored, otherwise must be an http(s) URL (`invalid_asset_url`); `roleSex` accepts `man|women|other` and aliases (`male`, `female`, `woman`, `男`, `女`, `其他`; empty clears; else `invalid_role_sex`); `talkExample[].roleType` accepts `ai|user` (`assistant` maps to `ai`) and `content` must be non-blank (`invalid_talk_example`); `roleTag` replaces the whole tag list (each non-blank string becomes a platform tag `{icon:\"\", text, type:2}`); `customInstructions` is writable here but is never returned by v1 read routes. Character limits depend on the card language (see `GET /role/validate` → `tokenBudget.limits`): roleDesc 500 (English 2500), roleReadme 20000 (English 40000), roleDetailDesc 10000 (English 50000), roleWelcome 8000 (English 10000), customInstructions 500 for zh-Hant/zh-Hans, 1500 otherwise, roleOutputContract 2000. Violations return `<field>_too_long` codes (`role_desc_too_long`, `role_readme_too_long`, `role_detail_too_long`, `role_welcome_too_long`, `custom_instructions_too_long`, `role_output_contract_too_long`), which the error mapper surfaces as HTTP 500 with `retryable: true`. The role must be `private` (`public_role_requires_clone`). Alternates/prologue greetings are not part of this document — use `PATCH /role/{roleId}/welcome`.",
         "security": [
           {
             "userToken": []
@@ -9262,7 +9262,7 @@
             }
           },
           "413": {
-            "description": "`trial_payload_too_large` — body over 48 MiB, `name` too long, too many entries, an entry `content` too long, a rule `replace` too large, rules total too large, or a role field over its language limit (`reason` in `welcome|roleDesc|roleDetailDesc|roleOutputContract|customInstructions|body|name|entries|entryContent|ruleReplace|rulesTotal`). `detail` says which section/item and the limit.",
+            "description": "`trial_payload_too_large` — body over 48 MiB, `name` too long, too many entries, an entry `content` too long, a rule `replace` too large, rules total too large, or a role field over its language limit (`reason` in `welcome|roleDesc|roleDetailDesc|roleOutputContract|customInstructions|roleReadme|body|name|entries|entryContent|ruleReplace|rulesTotal`). `detail` says which section/item and the limit.",
             "content": {
               "application/json": {
                 "schema": {
@@ -17551,6 +17551,10 @@
             "type": "string",
             "description": "Intro; limit 500 chars (English 2500)."
           },
+          "roleReadme": {
+            "type": "string",
+            "description": "Detail introduction in Markdown for the card's public page (the summary stays in `roleDesc`). Presentation only: never sent to the model during chat. Empty string clears it. Limit 20000 chars (English 40000); over the limit returns `role_readme_too_long`."
+          },
           "roleTag": {
             "type": "array",
             "items": {
@@ -17689,6 +17693,11 @@
             "maxLength": 2500,
             "description": "Short intro; limit 500 chars (2500 for English cards). Blank ignored."
           },
+          "roleReadme": {
+            "type": "string",
+            "maxLength": 40000,
+            "description": "Detail introduction in Markdown for the card's public page; never sent to the model during chat. Limit 20000 chars (40000 for English cards); over the limit returns `role_readme_too_long`. Blank ignored (clear it with `POST /role/{roleId}/document`)."
+          },
           "roleTag": {
             "type": "array",
             "items": {
@@ -17798,6 +17807,22 @@
           },
           "roleDescKo": {
             "type": "string"
+          },
+          "roleReadme": {
+            "type": "string",
+            "description": "Detail introduction in Markdown, shown on the card's public page like a README (base language). Empty string when the author wrote none. Readable by anyone who can see the card; never sent to the model during chat. Render it as sanitized Markdown."
+          },
+          "roleReadmeEn": {
+            "type": "string",
+            "description": "Detail introduction, English translation (present only when that translation exists)."
+          },
+          "roleReadmeJa": {
+            "type": "string",
+            "description": "Detail introduction, Japanese translation (present only when that translation exists)."
+          },
+          "roleReadmeKo": {
+            "type": "string",
+            "description": "Detail introduction, Korean translation (present only when that translation exists)."
           },
           "roleAvatar": {
             "type": "string",
@@ -18876,6 +18901,10 @@
           },
           "roleOutputContractMaxChars": {
             "type": "integer"
+          },
+          "roleReadmeMaxChars": {
+            "type": "integer",
+            "description": "Limit for `roleReadme`: 20000 (English cards 40000)."
           }
         }
       },
@@ -18895,6 +18924,10 @@
         "properties": {
           "roleDescChars": {
             "type": "integer"
+          },
+          "roleReadmeChars": {
+            "type": "integer",
+            "description": "Characters in `roleReadme`. Not part of `totalChars` or `estimatedTokens`, because the detail introduction is never sent to the model."
           },
           "roleDetailDescChars": {
             "type": "integer"
@@ -19134,7 +19167,8 @@
                   "roleDesc",
                   "roleDetailDesc",
                   "roleOutputContract",
-                  "customInstructions"
+                  "customInstructions",
+                  "roleReadme"
                 ]
               },
               "section": {
