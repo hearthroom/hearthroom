@@ -677,15 +677,6 @@ export async function fetchRoleDetail(roleId: string, token?: string, lang = "zh
   );
 }
 
-// ---- 角色主頁：作者裝修過的版面 --------------------------------------------------
-
-export interface PreviewPage { doc: unknown; version: number; skinId?: string }
-
-/** 沒裝修或還沒過審時 doc 是 null，那就用預設版面。 */
-export async function fetchPreviewPage(roleId: string, provider: ProviderId = currentProvider()): Promise<PreviewPage> {
-  return json<PreviewPage>(await fetch(`${provider === currentProvider() ? UPSTREAM_API : apiBaseOf(provider)}/open/v1/role/preview-page?roleId=${encodeURIComponent(roleId)}`));
-}
-
 // ---- 留言：本站自己的資料，掛在本站的卡上 -------------------------------------------
 
 export interface Comment {
@@ -706,6 +697,8 @@ export interface Comment {
   isCreator: boolean;
   isPinned?: boolean;
   canDelete: boolean;
+  /** 留言者給這張卡的星數；沒評過是 null。舊版回應沒有這一欄。 */
+  score?: number | null;
   replies?: Comment[];
 }
 
@@ -743,6 +736,38 @@ export async function deleteComment(commentId: string, token: string): Promise<v
 
 export async function likeComment(commentId: string, like: boolean, token: string): Promise<void> {
   await json(await fetch(`${COMMUNITY_API}/comments/${encodeURIComponent(commentId)}/like`, { method: like ? "PUT" : "DELETE", headers: commentHeaders(token) }));
+}
+
+// ---- 評分：本站自己的資料，一位成員對一張卡一份 1–5 星 ----------------------------
+
+export interface CardScore {
+  /** 平均（小數一位）；沒人評過是 null */
+  average: number | null;
+  count: number;
+  /** 1 星到 5 星各幾筆 */
+  histogram: number[];
+  /** 自己給的分數；訪客或沒評過是 null */
+  mine: number | null;
+}
+
+async function scoreUrl(cardId: string): Promise<{ url: string; headers: Record<string, string> }> {
+  const access = await viewerAccess();
+  return { url: `${COMMUNITY_API}/cards/${encodeURIComponent(cardId)}/score${access.param ? `?${access.param}` : ""}`, headers: access.headers };
+}
+
+export async function fetchCardScore(cardId: string, token?: string): Promise<CardScore> {
+  const { url, headers } = await scoreUrl(cardId);
+  return json<CardScore>(await fetch(url, { headers: { ...headers, ...commentHeaders(token) } }));
+}
+
+/** score 為 null 是收回評分。 */
+export async function saveCardScore(cardId: string, score: number | null, token: string): Promise<void> {
+  const { url, headers } = await scoreUrl(cardId);
+  const res = await fetch(url, score === null
+    ? { method: "DELETE", headers: { ...headers, ...commentHeaders(token) } }
+    : { method: "PUT", headers: { "Content-Type": "application/json", ...headers, ...commentHeaders(token) }, body: JSON.stringify({ score }) });
+  // 成功是 204 沒有內文：只在失敗時讀錯誤
+  if (!res.ok) await json(res);
 }
 
 export interface RoleDraft {
@@ -1069,25 +1094,6 @@ export interface WorldbookSummary {
   tags?: string;
   /** 綁在幾張卡上。只有「我的書」清單帶；還綁著卡的書刪不掉。 */
   usedByCards?: number;
-}
-
-/** 玩家面的作者資產（正則規則、功能欄、簡繁對照）。各平台決定是否允許訪客讀取；被拒就回 null。 */
-export interface PlayerAsset {
-  rules: unknown[];
-  mountTrigger: string;
-  mountLayer: string;
-  cardFormat?: string;
-  variants?: unknown;
-}
-
-export async function fetchPlayerAsset(roleId: string, token?: string, provider: ProviderId = currentProvider()): Promise<PlayerAsset | null> {
-  const res = await fetch(`${provider === currentProvider() ? UPSTREAM_API : apiBaseOf(provider)}/open/v1/role/author-asset/serve?roleId=${encodeURIComponent(roleId)}`, {
-    headers: authHeaders(token),
-  });
-  if (!res.ok) return null;
-  const body = (await res.json().catch(() => null)) as Partial<PlayerAsset> | null;
-  if (!body || !Array.isArray(body.rules)) return null;
-  return { rules: body.rules, mountTrigger: String(body.mountTrigger ?? ""), mountLayer: String(body.mountLayer ?? ""), cardFormat: body.cardFormat, variants: body.variants ?? null };
 }
 
 export async function fetchMyWorldbooks(token: string, q = ""): Promise<WorldbookSummary[]> {

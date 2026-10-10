@@ -28,7 +28,6 @@ vi.mock("../src/lib/track", () => ({
 }));
 vi.mock("moonstage/stage", () => ({}));
 vi.mock("moonstage/stage.css", () => ({}));
-vi.mock("../src/lib/html-card-frame", () => ({ buildSrcdoc: () => "", SIZE_MESSAGE: "hc-card-size" }));
 
 import CardPage from "../src/pages/CardPage.vue";
 import { fetchBoard } from "../src/lib/api";
@@ -45,6 +44,7 @@ function fakeFetch(input: RequestInfo | URL): Promise<Response> {
   const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
   const json = (body: unknown, status = 200) =>
     Promise.resolve(new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
+  if (url.includes("/score")) return json({ average: null, count: 0, histogram: [0, 0, 0, 0, 0], mine: null });
   if (url.includes("/comments")) return json({ total: 0, comments: [], isRoleCreator: false });
   if (/\/v1\/cards\/[^?]+\?/.test(url)) return new Promise(() => {});
   if (url.includes("/v1/cards?")) return json({ items: [CARD], total: 1, hasNext: false, limit: 24, offset: 0, sort: "hot" });
@@ -119,39 +119,83 @@ describe("卡片頁的分享面板", () => {
 
     const items = await openPanel(root);
     expect(nativeShare, "桌面的系統面板只有本機去處，對分享卡片沒有用").not.toHaveBeenCalled();
-    expect(items.length, "複製連結 + 四個有網頁入口的去處").toBe(5);
-    expect(labelsOf(items).slice(1)).toEqual(["X", "Telegram", "Reddit", "LINE"]);
-    expect(labelsOf(items)[0], "複製連結排第一：微信、QQ、Discord 只能靠它").toBeTruthy();
+    expect(items.length, "六個去處 + 複製連結").toBe(7);
+    // 照玩家所在的地方排（owner 2026-10-11）：Discord 第一，QQ、微信、LINE 接著，Reddit 往後
+    expect(labelsOf(items).slice(0, 6)).toEqual(["Discord", "QQ", i18n.global.t("share.wechat"), "LINE", "Telegram", "Reddit"]);
+    expect(labelsOf(items)[6]).toBe(i18n.global.t("share.copyLink"));
   });
 
   it("每個去處都是一條帶著本頁網址的連結，而且開在新分頁", async () => {
     pretendDevice(false, 0);
     await fetchBoard();
     const root = await mountCard();
-    const links = (await openPanel(root)).filter((n): n is HTMLAnchorElement => n instanceof HTMLAnchorElement);
+    const links = (await openPanel(root)).filter((n): n is HTMLAnchorElement => n instanceof HTMLAnchorElement && n.getAttribute("target") === "_blank");
 
     const encoded = encodeURIComponent(SHARE_URL);
     expect(links.map((a) => a.getAttribute("href"))).toEqual([
-      expect.stringContaining(`https://x.com/intent/post?url=${encoded}&text=`),
+      "https://discord.com/app",
+      `https://social-plugins.line.me/lineit/share?url=${encoded}`,
       expect.stringContaining(`https://t.me/share/url?url=${encoded}&text=`),
       expect.stringContaining(`https://www.reddit.com/submit?url=${encoded}&title=`),
-      `https://social-plugins.line.me/lineit/share?url=${encoded}`,
     ]);
     for (const a of links) {
       expect(a.getAttribute("target")).toBe("_blank");
       expect(a.getAttribute("rel"), "開新分頁一定要切斷 opener").toContain("noopener");
     }
 
-    links[0].click();
+    links[3].click();
     await flush();
-    expect(tracked).toContainEqual({ detail: "share_x", subject: "role-abc" });
+    expect(tracked).toContainEqual({ detail: "share_reddit", subject: "role-abc" });
+  });
+
+  it("Discord：先複製連結，再照常開它的網頁版", async () => {
+    pretendDevice(false, 0);
+    await fetchBoard();
+    const root = await mountCard();
+    const [discord] = await openPanel(root);
+    const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+    discord.dispatchEvent(event);
+    await flush();
+    expect(event.defaultPrevented, "連結照常打開").toBe(false);
+    expect(writeText).toHaveBeenCalledWith(SHARE_URL);
+    expect(tracked).toContainEqual({ detail: "share_discord", subject: "role-abc" });
+  });
+
+  it("QQ：沒有網頁入口，複製連結並說一聲貼過去，不跳走", async () => {
+    pretendDevice(false, 0);
+    await fetchBoard();
+    const root = await mountCard();
+    const items = await openPanel(root);
+    const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+    items[1].dispatchEvent(event);
+    await flush();
+    expect(event.defaultPrevented).toBe(true);
+    expect(writeText).toHaveBeenCalledWith(SHARE_URL);
+    expect(root.querySelector(".sh__item.is-done")?.textContent).toContain(i18n.global.t("share.pasteTo", { name: "QQ" }));
+  });
+
+  it("微信（桌面）：面板換成一張 QR Code，返回回到清單", async () => {
+    pretendDevice(false, 0);
+    await fetchBoard();
+    const root = await mountCard();
+    const items = await openPanel(root);
+    items[2].click();
+    // QR Code 的產生器是按下去才載入的：等它出現，不賭載入時間
+    await vi.waitFor(() => expect(root.querySelector(".sh__qr")).not.toBeNull(), { timeout: 5000 });
+    expect(root.querySelector(".sh__qr svg path")?.getAttribute("d")).toMatch(/^M\d+ \d+h1v1h-1z/);
+    expect(writeText, "桌面給 QR Code，不必複製").not.toHaveBeenCalled();
+    (root.querySelector(".sh__qr button") as HTMLButtonElement).click();
+    await flush();
+    expect(root.querySelector(".sh__qr")).toBeNull();
+    expect(root.querySelectorAll(".sh__panel .sh__item").length).toBe(7);
   });
 
   it("複製連結：拿到的是本頁網址，而且當場看得到已複製", async () => {
     pretendDevice(false, 0);
     await fetchBoard();
     const root = await mountCard();
-    const [copy] = await openPanel(root);
+    const items = await openPanel(root);
+    const copy = items[items.length - 1];
 
     copy.click();
     await flush();
@@ -166,7 +210,7 @@ describe("卡片頁的分享面板", () => {
     const root = await mountCard();
     const items = await openPanel(root);
 
-    expect(items.length, "複製連結 + 四個去處 + 更多").toBe(6);
+    expect(items.length, "六個去處 + 複製連結 + 更多").toBe(8);
     items[items.length - 1].click();
     await flush();
     expect(nativeShare).toHaveBeenCalledWith({ title: "末日・進化", url: SHARE_URL });
@@ -191,7 +235,7 @@ describe("卡片頁的分享面板", () => {
     await fetchBoard();
     const root = await mountCard();
     const items = await openPanel(root);
-    expect(items.length).toBe(5);
+    expect(items.length).toBe(7);
   });
 
   /** 按鈕在畫面上的位置，決定面板往哪邊開、要不要往右挪。jsdom 量不出版面，這裡直接給答案。 */
