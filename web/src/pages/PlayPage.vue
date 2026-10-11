@@ -30,6 +30,10 @@ import { communityHost, isPlayHost } from "@/lib/site";
 import { registerPlayCard } from "@/lib/play-social";
 import PlayComments from "@/components/PlayComments.vue";
 import GuestSignInSheet from "@/components/GuestSignInSheet.vue";
+import PlayLoading from "@/components/PlayLoading.vue";
+import { readPlayIntro, type PlayIntro } from "@/lib/play-intro";
+import { stageContentSeq } from "@/lib/stage-ready";
+import { displayName } from "@/lib/display-name";
 
 const route = useRoute();
 const router = useRouter();
@@ -43,6 +47,30 @@ const Stage = shallowRef<Component | null>(null);
 const error = shallowRef("");
 /** 遊客按了送出：在原地請他登入 */
 const signInOpen = shallowRef(false);
+
+/**
+ * 載入畫面（PlayLoading）：從第一幀蓋到舞台喊「畫好了」（lib/stage-ready）。卡名與封面先用卡片頁
+ * 交過來的（lib/play-intro），直接開網址的等卡片解析好再補。舞台掛上之後一直沒喊（卡住、舊版舞台）
+ * 時限到了照樣收：沙箱殼握手逾時是 20 秒，到那時舞台自己會顯示提示，這一層不該再擋著。
+ * 時限從舞台掛上才開始算：還沒掛上就是還在載（失敗會走錯誤畫面），這時收掉只會留下一片空白。
+ */
+const COVER_MAX_MS = 22_000;
+const intro = shallowRef<PlayIntro | null>(readPlayIntro(routeId.value));
+const readyBaseline = shallowRef(stageContentSeq.value);
+const coverExpired = shallowRef(false);
+const covering = computed(() => !error.value && !coverExpired.value && stageContentSeq.value <= readyBaseline.value);
+let coverTimer: ReturnType<typeof setTimeout> | undefined;
+function resetCover() {
+  readyBaseline.value = stageContentSeq.value;
+  coverExpired.value = false;
+  clearTimeout(coverTimer);
+  if (!intro.value) intro.value = readPlayIntro(routeId.value);
+}
+watch(Stage, (stage) => {
+  clearTimeout(coverTimer);
+  if (stage) coverTimer = setTimeout(() => { coverExpired.value = true; }, COVER_MAX_MS);
+});
+onBeforeUnmount(() => clearTimeout(coverTimer));
 
 // 路由守衛每次導航都會把標題設回預設，換卡（同一個元件實例）之後要再蓋一次
 watch(roleId, () => { document.title = pageTitle(t("play.title")); }, { immediate: true });
@@ -65,6 +93,7 @@ if (playApp) {
  */
 async function adopt(resolved: Awaited<ReturnType<typeof resolvePlayCard>>, provider: ReturnType<typeof playProvider>, stale: () => boolean): Promise<boolean> {
   cardNumber.value = resolved.number;
+  if (resolved.card && !intro.value) intro.value = { name: displayName(resolved.card.name ?? "", locale.value), art: resolved.card.avatarUrl ?? "", backdrop: resolved.card.landscapeUrl ?? "" };
   roleId.value = resolved.roleId;
   // 頁首的收藏與評論只給上架中的公開卡：作者試玩的是草稿、審核的還沒上架，都不登記。
   const listed = resolved.card && route.query.mode !== "source" && typeof route.query.review !== "string"
@@ -92,6 +121,9 @@ onMounted(() => {
     if (route.fullPath === canonicalNavigation) return;
     const request = ++generation;
     const stale = () => request !== generation;
+    // 換卡（同一個元件實例）：上一張的封面不能留在新卡的載入畫面上
+    if (roleId.value) intro.value = null;
+    resetCover();
     Stage.value = null;
     roleId.value = "";
     cardNumber.value = "";
@@ -159,12 +191,14 @@ watch(locale, () => { void remergeStageMessages(); });
 <template>
   <div class="play">
     <component :is="Stage" v-if="Stage" :key="roleId" :role-id="roleId" />
-    <div v-else class="play__state">
-      <p v-if="error" class="play__error" role="alert">{{ error }}</p>
-      <p v-else class="subtle">{{ $t("play.loading") }}</p>
+    <div v-else-if="error" class="play__state">
+      <p class="play__error" role="alert">{{ error }}</p>
       <a v-if="error && playApp" class="btn" :href="cardPageUrl">{{ $t("play.backToCard") }}</a>
       <RouterLink v-else-if="error" class="btn" :to="lp(cardNumber ? `/cards/${cardNumber}` : '/')">{{ $t("play.backToCard") }}</RouterLink>
     </div>
+    <Transition name="play-cover">
+      <PlayLoading v-if="covering" :name="intro?.name" :art="intro?.art" :backdrop="intro?.backdrop" />
+    </Transition>
     <PlayComments />
     <GuestSignInSheet v-if="signInOpen" :return-to="route.fullPath" @close="signInOpen = false" />
     <div class="play__toasts" aria-live="polite">
@@ -177,6 +211,8 @@ watch(locale, () => { void remergeStageMessages(); });
 .play { min-height: 100vh; min-height: 100dvh; }
 .play__state { min-height: 60vh; display: grid; place-content: center; gap: var(--s-4); text-align: center; padding: var(--s-6); }
 .play__error { color: var(--danger); }
+.play-cover-leave-active { transition: opacity 250ms ease-out; }
+.play-cover-leave-to { opacity: 0; }
 .play__toasts { position: fixed; left: 50%; top: calc(var(--s-4) + env(safe-area-inset-top, 0px)); transform: translateX(-50%); z-index: 1200; display: grid; gap: var(--s-2); pointer-events: none; }
 .play__toast { padding: var(--s-2) var(--s-4); border-radius: var(--r-md); background: var(--surface); color: var(--text); box-shadow: var(--shadow-2); font-size: 14px; max-width: min(90vw, 480px); }
 .play__toast--error { border-left: 3px solid var(--danger); }
