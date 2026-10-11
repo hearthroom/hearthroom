@@ -57,6 +57,8 @@
   --bronze: #cf8d55;
   --success: #1f9d55;
   --success-soft: rgba(31, 157, 85, 0.12);
+  /* 提醒（可以照做、但要知道後果）：金色當字太淡，壓深到白底上過 4.5:1 */
+  --warning-text: #8a5a00;
   --danger: #c22f2b;
   --on-danger: #ffffff;
 
@@ -114,6 +116,7 @@
   --text-3: #8c8c97;
 
   --accent-text: #ff6f8c;
+  --warning-text: #f2b01e;
 
   --ambient-1: rgba(239, 79, 111, 0.14);
   --ambient-2: rgba(139, 92, 246, 0.12);

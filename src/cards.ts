@@ -42,6 +42,8 @@ export interface CardRow {
   featured_at: number | null;
   /** 作者的本站公開 ID（members.handle，0005 起），從身分表接上來的；作者還沒成為成員時是 null。 */
   author_handle?: string | null;
+  /** 作者的打賞連結（members.tip_links 原文）；只有單卡頁輸出，見 cardTips */
+  author_tip_links?: string | null;
   community_name?: string | null;
   community_avatar?: string | null;
   /** 分級（0056 起）：G／P／PG12／PG15／R；NULL＝評級缺失（這之前上架的一般卡，不是成人卡）。限制級＝成人內容，預設不展示。 */
@@ -67,7 +69,7 @@ const AUTHOR_JOIN = `LEFT JOIN member_identities ai ON ai.provider = c.provider 
   LEFT JOIN members am ON am.id = COALESCE(ac.owner_member_id,ai.member_id)
   LEFT JOIN card_numbers cn ON cn.provider = c.provider AND cn.source_role_id = c.source_role_id
   LEFT JOIN fandom_entities fe ON fe.qid = c.fandom_qid`;
-const CARD_COLUMNS = "c.*, CAST(c.id AS TEXT) AS id, fe.labels AS fandom_labels, am.handle AS author_handle, am.display_name AS community_name, CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url END AS community_avatar, cn.num AS num, (SELECT COUNT(*) FROM member_favorites mf WHERE mf.card_id=c.id) AS favorite_count";
+const CARD_COLUMNS = "c.*, CAST(c.id AS TEXT) AS id, fe.labels AS fandom_labels, am.handle AS author_handle, am.tip_links AS author_tip_links, am.display_name AS community_name, CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url END AS community_avatar, cn.num AS num, (SELECT COUNT(*) FROM member_favorites mf WHERE mf.card_id=c.id) AS favorite_count";
 
 /** 卡號長什麼樣：純數字。網址與搜尋框裡看到這種形狀就當卡號查，其餘當上游的卡片 ID。 */
 export const CARD_NUMBER = /^[1-9]\d{0,11}$/;
@@ -544,7 +546,7 @@ export async function getAuthor(db: D1Database, memberId: string, allowNsfw = fa
   const row = await db
     .prepare(
       `SELECT am.handle AS handle, MAX(COALESCE(am.display_name,c.author_name)) AS author_name, MAX(CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url ELSE c.author_avatar END) AS author_avatar,
-              MAX(am.bio) AS bio, COUNT(*) AS card_count, SUM(c.talk_num) AS talk_total, MIN(c.registered_at) AS joined_at,
+              MAX(am.bio) AS bio, MAX(am.tip_links) AS tip_links, COUNT(*) AS card_count, SUM(c.talk_num) AS talk_total, MIN(c.registered_at) AS joined_at,
               GROUP_CONCAT(DISTINCT c.provider) AS providers
        FROM cards c ${AUTHOR_JOIN}
        WHERE am.id = ? AND ${NOT_A_COPY("c")} AND c.${listed(allowNsfw)} AND c.provider='harbor'`,
@@ -553,6 +555,7 @@ export async function getAuthor(db: D1Database, memberId: string, allowNsfw = fa
     .first<{
       handle: string | null;
       bio: string;
+      tip_links: string | null;
       author_name: string;
       author_avatar: string;
       card_count: number;
@@ -561,7 +564,7 @@ export async function getAuthor(db: D1Database, memberId: string, allowNsfw = fa
       providers: string | null;
     }>();
   if (!row || !row.card_count) {
-    const member=await db.prepare("SELECT handle,display_name AS author_name,avatar_url AS author_avatar,bio,created_at FROM members WHERE id=?").bind(memberId).first<{handle:string;author_name:string;author_avatar:string;bio:string;created_at:number}>();
+    const member=await db.prepare("SELECT handle,display_name AS author_name,avatar_url AS author_avatar,bio,tip_links,created_at FROM members WHERE id=?").bind(memberId).first<{handle:string;author_name:string;author_avatar:string;bio:string;tip_links:string;created_at:number}>();
     return member?{...member,card_count:0,talk_total:0,joined_at:member.created_at,providers:[] as string[]}:null;
   }
   return { ...row, providers: (row.providers ?? "").split(",").filter(Boolean) };

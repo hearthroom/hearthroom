@@ -162,6 +162,9 @@ export const BEACON_EVENTS = new Set([
   // 更新說明：首頁提示列（detail 是 shown／dismissed／clicked，subject 是說明 id）、更新頁被打開（detail 是從哪來）、
   // 按了「去試試」（detail 是從哪按的）、功能入口的「新」標記被點（subject 是入口鍵）
   "updates_strip", "updates_page", "update_try", "spotlight_click",
+  // 打賞：打開作者的打賞面板、點了某個平台（subject 是平台代號）。不記哪位作者、哪張卡——
+  // 要看的是哪些平台真的有人點，作者自己的收入在那個平台上看
+  "tip_open", "tip_click",
 ]);
 
 /** beacon 事件的 detail 小分类。同样白名单，避免自由字串进 blob。 */

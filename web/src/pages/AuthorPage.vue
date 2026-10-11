@@ -4,6 +4,9 @@ import CommunityAvatar from "@/components/CommunityAvatar.vue";
 import CommunityName from "@/components/CommunityName.vue";
 import CommunityBadges from "@/components/CommunityBadges.vue";
 import LibraryToggle from "@/components/LibraryToggle.vue";
+import TipPlatformIcon from "@/components/TipPlatformIcon.vue";
+import { tipPlatform } from "../../../shared/tip-links";
+import { track } from "@/lib/track";
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
@@ -72,6 +75,14 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
         <h1 class="who__name display"><CommunityName :handle="author.handle ?? undefined" :name="author.name" /></h1>
         <CommunityBadges v-if="author.handle" :handle="author.handle" />
         <p v-if="author.bio" class="who__bio">{{ author.bio }}</p>
+        <!-- 打賞連結：每一條直接連到那個平台，錢在那邊付 -->
+        <ul v-if="author.tips?.length" class="who__tips" :aria-label="$t('tips.title')">
+          <li v-for="tip in author.tips" :key="tip.url">
+            <a :href="tip.url" target="_blank" rel="noopener noreferrer nofollow" class="who__tip" @click="track('tip_click', { subject: tip.platform })">
+              <TipPlatformIcon :platform="tip.platform" class="who__tip-icon" />{{ tipPlatform(tip.platform).name }}
+            </a>
+          </li>
+        </ul>
         <p class="subtle who__id">
           <span class="mono">@{{ author.handle }}</span>
           <span v-if="author.providers?.length"> · {{ $t("author.supports", { providers: author.providers.map(providerName).join("、") }) }}</span>
@@ -115,6 +126,14 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 .who--ghost { height: 112px; border-radius: var(--r-lg); margin-bottom: var(--s-5); }
 .who__face { width: 64px; height: 64px; border-radius: var(--r-pill); object-fit: cover; flex: none; font-size: 24px; }
 .who__bio {white-space:pre-wrap;overflow-wrap:anywhere;max-width:40rem}
+.who__tips { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: var(--s-3) 0 0; padding: 0; list-style: none; }
+.who__tip {
+  display: inline-flex; align-items: center; gap: var(--s-2); height: var(--h-md); padding: 0 var(--s-3) 0 4px;
+  border: 1px solid var(--line-strong); border-radius: var(--r-pill); background: var(--surface);
+  font-size: 13px; font-weight: 600; color: var(--text); transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.who__tip:hover { border-color: var(--accent); background: var(--accent-tint); }
+.who__tip-icon { width: 28px; height: 28px; }
 .who__text { min-width: 0; margin-right: auto; }
 .who__name { font-size: clamp(20px, 2.6vw, 26px); }
 .who__id { margin: 4px 0 0; }

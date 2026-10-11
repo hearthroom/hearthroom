@@ -1,4 +1,5 @@
 import type { Rating, Topic } from "../../../shared/content-rating";
+import type { TipLink } from "../../../shared/tip-links";
 export interface Localized { zh: string; en: string; ja: string; ko: string }
 
 /** 語區。榜單按這個分開列；all 是不分語言的卡，每區都出現。 */
@@ -37,7 +38,11 @@ export interface CommunityCard {
   fandomKey?: string;
   fandomLabels?: Record<string, string>;
   /** handle 是作者的本站公開 ID；作者還沒成為成員時是 null，畫成純文字。accountNumId 是上游的數字 ID，只給編輯器與快取鍵用。 */
-  author: { handle: string | null; accountNumId: number; name: string; avatar: string };
+  author: {
+    handle: string | null; accountNumId: number; name: string; avatar: string;
+    /** 作者的打賞連結，已照熟悉度排好；只有單卡頁帶（shared/tip-links.ts） */
+    tips?: TipLink[];
+  };
   talkNum: number;
   followNum: number;
   favoriteCount?: number;
@@ -83,6 +88,8 @@ export interface Author {
   joinedAt: number;
   /** 這位作者的卡發布在哪些供應商上；只有單人主頁帶。 */
   providers?: string[];
+  /** 作者的打賞連結；只有單人主頁帶 */
+  tips?: TipLink[];
 }
 export type AuthorSort = "talk" | "cards" | "hot";
 

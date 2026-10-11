@@ -3102,6 +3102,13 @@
               },
               "avatar": {
                 "type": "string"
+              },
+              "tips": {
+                "type": "array",
+                "description": "Only included when reading a single card.",
+                "items": {
+                  "$ref": "#/components/schemas/TipLink"
+                }
               }
             }
           },
@@ -3194,6 +3201,12 @@
           "joinedAt": {
             "type": "integer",
             "description": "Unix milliseconds."
+          },
+          "tips": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TipLink"
+            }
           }
         }
       },
@@ -3365,6 +3378,13 @@
           },
           "reviewer": {
             "type": "boolean"
+          },
+          "tipLinks": {
+            "type": "array",
+            "description": "The author's tip page URLs, in canonical form.",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -3672,6 +3692,30 @@
             "minimum": 1,
             "maximum": 5,
             "description": "The viewer's own rating; null for guests or when the viewer has not rated the card."
+          }
+        }
+      },
+      "TipLink": {
+        "type": "object",
+        "description": "An author's tip page on an external platform; the reader pays there.",
+        "properties": {
+          "platform": {
+            "type": "string",
+            "enum": [
+              "fanbox",
+              "onlyfans",
+              "patreon",
+              "fantia",
+              "kofi",
+              "buymeacoffee",
+              "subscribestar"
+            ]
+          },
+          "handle": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
           }
         }
       }
