@@ -199,7 +199,7 @@ PNG 卡自帶的立繪會上傳成頭像（匯入面板先給看縮圖）。標�
 | POST | `/v1/cards` | 作者 token | 登記，body 只收 `{roleId}` |
 | DELETE | `/v1/cards/:id` | 作者 token | 作者自己撤銷登記 |
 
-`GET /v1/cards` 參數：`zone=zh|en|ja|ko` `q` `tag` `author` `sort=hot|new|top` `lang` `limit`(≤100) `offset`。
+`GET /v1/cards` 參數：`zone=zh|en|ja|ko` `q` `tag` `author` `sort=hot|score|favorites|day|week|month|new|random`（`top` 是 `hot` 的舊名字） `lang` `limit`(≤100) `offset`。
 
 ### 語區
 

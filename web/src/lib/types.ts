@@ -72,7 +72,7 @@ export interface CardPage {
   partial?: boolean;
 }
 /** 榜的種類（照魅魔島）：日／週／月榜開窗、最熱、最新、推薦（隨機）；relevance 只給搜尋。 */
-export type Sort = "day" | "week" | "month" | "hot" | "new" | "random" | "relevance";
+export type Sort = "day" | "week" | "month" | "hot" | "score" | "favorites" | "new" | "random" | "relevance";
 
 export interface Author {
   bio?: string;
