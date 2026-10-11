@@ -104,7 +104,7 @@ describe("首頁：類型列在窄螢幕收合", () => {
     expect(tagsNav()?.classList.contains("discovery-tags--collapsed")).toBe(false);
     expect(button("催眠")?.getAttribute("aria-pressed")).toBe("true");
     expect(expander(), "清單被選擇撐開時沒有收合鈕可按").toBeNull();
-    button("全部")!.click(); await settle();
+    button("清除類型")!.click(); await settle();
     expect(expander()).not.toBeNull();
     expect(router.currentRoute.value.query.tag).toBeUndefined();
     expect(tagsNav()?.classList.contains("discovery-tags--collapsed")).toBe(true);
