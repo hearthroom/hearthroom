@@ -51,22 +51,31 @@ it.each([
  expect(el.querySelector('.profile-avatar img')).toBeNull();expect(fixture.save).not.toHaveBeenCalled();
 });
 
-// 打賞連結：貼網址就認出平台；認不得的擋在送出前，認得的照原樣送出（伺服器會再正規化一次）
+// 打賞連結：先選平台再填；只打帳號名也行，送出前組成那個平台的個人頁網址
 const tipInputs=()=>[...el.querySelectorAll<HTMLInputElement>('input[id^=tip-link-]')];
 const type=async(input:HTMLInputElement,value:string)=>{input.value=value;input.dispatchEvent(new Event('input'));await settle();};
-it('recognizes a pasted tip page and submits it with the profile',async()=>{
+const pickPlatform=async(name:string)=>{[...el.querySelectorAll<HTMLButtonElement>('.tips-pick__item')].find(b=>b.textContent!.includes(name))!.click();await settle();};
+it('lists the platforms with what each is for, then guides filling the chosen one',async()=>{
  fixture.save.mockResolvedValue(fixture.session.profile);
- await type(tipInputs()[0],'ko-fi.com/nightferry');
- expect(el.querySelector('#tip-link-0-msg')?.textContent).toContain('Ko-fi');
+ const items=[...el.querySelectorAll('.tips-pick__item')];
+ expect(items).toHaveLength(7);
+ expect(items[0].textContent).toContain('pixiv FANBOX');
+ await pickPlatform('Ko-fi');
+ expect(el.querySelector('.tips-row__caution')).not.toBeNull();
+ expect(el.querySelector<HTMLAnchorElement>('.tips-row__signup')?.href).toBe('https://ko-fi.com/');
+ await type(tipInputs()[0],'nightferry');
+ expect(el.querySelector('#tip-link-0-msg')?.textContent).toContain('nightferry');
  el.querySelector('form')!.dispatchEvent(new Event('submit',{cancelable:true}));await settle();
- expect(fixture.save.mock.calls[0][1].tipLinks).toEqual(['ko-fi.com/nightferry']);
+ expect(fixture.save.mock.calls[0][1].tipLinks).toEqual(['https://ko-fi.com/nightferry']);
 });
-it('blocks saving while a tip link is unrecognized and caps the list at three',async()=>{
+it('blocks saving while a tip link is unrecognized and stops offering platforms after three',async()=>{
+ await pickPlatform('pixiv FANBOX');
  await type(tipInputs()[0],'https://paypal.me/nightferry');
  expect(tipInputs()[0].getAttribute('aria-invalid')).toBe('true');
  el.querySelector('form')!.dispatchEvent(new Event('submit',{cancelable:true}));await settle();
  expect(fixture.save).not.toHaveBeenCalled();expect(el.querySelector('[role=alert]')).not.toBeNull();
  const add=()=>el.querySelector<HTMLButtonElement>('.tips-field__add');
- add()!.click();await settle();add()!.click();await settle();
- expect(tipInputs()).toHaveLength(3);expect(add()).toBeNull();
+ add()!.click();await settle();await pickPlatform('Patreon');
+ add()!.click();await settle();await pickPlatform('Fantia');
+ expect(tipInputs()).toHaveLength(3);expect(add()).toBeNull();expect(el.querySelector('.tips-pick')).toBeNull();
 });
