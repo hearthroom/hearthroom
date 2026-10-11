@@ -4,6 +4,7 @@ import { buildSearchBody, buildSearchName, buildSearchText } from "./upstream";
 import { expandTerm, hanziGlob, searchForm, searchTerms } from "./search-text";
 import { fandomLabel } from "./wikidata";
 import { TAG_CATALOG } from "../shared/tag-catalog";
+import { RATINGS, type Rating } from "../shared/content-rating";
 import { HttpError, type Localized, pickLocale } from "./types";
 
 export interface CardRow {
@@ -204,7 +205,9 @@ export interface ListOptions {
   /** 上榜時間下限（毫秒），日／週／月榜用。 */
   since?: number;
   boardWindow?: string;
-  sort: "hot" | "new" | "random" | "relevance" | "score" | "favorites";
+  sort: "hot" | "new" | "random" | "relevance" | "score" | "favorites" | "updated";
+  /** 分級最高到這一級（見 ratingClause）；不給就不篩 */
+  maxRating?: Rating;
   limit: number;
   offset: number;
   /** 不論審核狀態全列。只有作者看自己的「已登記」那一組用；對外的榜單永遠只列在榜的。 */
@@ -250,12 +253,41 @@ const excludeClause = (table: string) => `NOT ${inList(table)}`;
  * 目錄的五語名字整份當一個 JSON 綁進去，理由同 inList（D1 一條語句 100 個變數的上限）。
  * ponytail: 每次掃範圍內所有卡 × 標籤 × 目錄名字，靠榜單快取擋著；卡片上萬時改成預先算好的計數表。
  */
-export async function catalogTagCounts(db: D1Database, opts: { zone?: string; tagGroups?: string[][]; excludeTags?: string[]; allowNsfw: boolean }): Promise<Record<string, number>> {
+type CountScope = { zone?: string; tagGroups?: string[][]; excludeTags?: string[]; allowNsfw: boolean; maxRating?: Rating };
+/** 數量用的範圍條件：跟 listCards 同一組（在榜、不是副本、本站、語區、已選類型、不想看的類型、分級、成人門） */
+function countScope(opts: CountScope) {
   const where = [`c.${listed(opts.allowNsfw)}`, NOT_A_COPY("c"), "c.provider = 'harbor'"];
   const binds: unknown[] = [];
   if (opts.zone) { where.push("c.zone IN (?, 'all')"); binds.push(opts.zone); }
   for (const group of opts.tagGroups ?? []) { where.push(inList("c")); binds.push(JSON.stringify(group)); }
   if (opts.excludeTags?.length) { where.push(excludeClause("c")); binds.push(JSON.stringify(opts.excludeTags)); }
+  const rating = ratingClause(opts.maxRating);
+  if (rating) { where.push(rating.sql); binds.push(rating.bind); }
+  return { where, binds };
+}
+
+/**
+ * 分級篩選是「最高到這一級」：想看安全內容的人要的是「不超過 X」，不是一級一級勾。
+ * 沒標分級的舊卡只知道不是限制級（分級問卷之前的一般卡），具體幾級不知道：只算進「輔15級以下」。
+ * 限制級（或不給）＝不篩；限制級本來就由成人內容的門管。
+ */
+export function ratingClause(max: Rating | undefined): { sql: string; bind: string } | null {
+  if (!max || max === "R") return null;
+  const levels = RATINGS.slice(0, RATINGS.indexOf(max) + 1);
+  return { sql: `(c.rating IN (SELECT value FROM json_each(?))${max === "PG15" ? " OR c.rating IS NULL" : ""})`, bind: JSON.stringify(levels) };
+}
+
+/** 各級的張數（沒標分級的算 none），給分級選單標數字。條件跟類型數量一樣，只是不套分級本身。 */
+export async function ratingCounts(db: D1Database, opts: CountScope): Promise<Record<Rating | "none", number>> {
+  const { where, binds } = countScope({ ...opts, maxRating: undefined });
+  const { results } = await db.prepare(`SELECT COALESCE(c.rating, 'none') AS r, COUNT(*) AS n FROM cards c WHERE ${where.join(" AND ")} GROUP BY r`).bind(...binds).all<{ r: string; n: number }>();
+  const counts = Object.fromEntries([...RATINGS, "none"].map((r) => [r, 0])) as Record<Rating | "none", number>;
+  for (const row of results) if (row.r in counts) counts[row.r as Rating | "none"] = row.n;
+  return counts;
+}
+
+export async function catalogTagCounts(db: D1Database, opts: CountScope): Promise<Record<string, number>> {
+  const { where, binds } = countScope(opts);
   const names = TAG_CATALOG.flatMap((e) => [...new Set(Object.values(e.names))].map((n) => [e.key, n]));
   const { results } = await db.prepare(
     `SELECT json_extract(cat.value, '$[0]') AS k, COUNT(DISTINCT c.id) AS n
@@ -278,6 +310,12 @@ export async function catalogTagCounts(db: D1Database, opts: { zone?: string; ta
 const PRIOR_VOTES = 5;
 const PRIOR_MEAN = 3;
 const BAYES_SCORE = `(SELECT (${PRIOR_VOTES * PRIOR_MEAN} + COALESCE(SUM(s.score), 0)) * 1.0 / (${PRIOR_VOTES} + COUNT(*)) FROM card_scores s WHERE CAST(s.card_id AS INTEGER) = c.id)`;
+
+/**
+ * 最近更新的排序鍵：目前上線那一版審核通過的時刻——作者改了卡、新版過審，玩家才看得到新內容。
+ * 沒有審核紀錄（早期直接上線的版本）退回那一版建立的時間；沒有版本退回上榜時間。兩次查找都走主鍵。
+ */
+const UPDATED_AT = `COALESCE((SELECT COALESCE(r.decided_at, v.created_at) FROM hosting_versions v LEFT JOIN review_submissions r ON r.id = v.submission_id WHERE v.version_id = c.approved_version_id), c.registered_at)`;
 
 export async function listCards(db: D1Database, opts: ListOptions) {
   const where: string[] = opts.anyStatus ? ["1=1"] : [`c.${listed(!!opts.allowNsfw)}`, NOT_A_COPY("c"), "c.provider = 'harbor'"];
@@ -332,6 +370,11 @@ export async function listCards(db: D1Database, opts: ListOptions) {
     where.push(inList("c"));
     binds.push(JSON.stringify(group));
   }
+  const rating = ratingClause(opts.maxRating);
+  if (rating) {
+    where.push(rating.sql);
+    binds.push(rating.bind);
+  }
   if (opts.excludeTags?.length) {
     where.push(excludeClause("c"));
     binds.push(JSON.stringify(opts.excludeTags));
@@ -367,7 +410,7 @@ export async function listCards(db: D1Database, opts: ListOptions) {
     where.push("EXISTS (SELECT 1 FROM member_follows f WHERE f.author_id=am.id AND f.member_id=?)");
     binds.push(opts.followedBy);
   }
-  const filtered = Boolean(opts.favoritedBy !== undefined || opts.followedBy !== undefined || opts.q || opts.fandom || opts.tags?.length || opts.tagGroups?.length || opts.authorMemberId !== undefined || opts.since !== undefined);
+  const filtered = Boolean(opts.favoritedBy !== undefined || opts.followedBy !== undefined || opts.q || opts.fandom || opts.tags?.length || opts.tagGroups?.length || opts.authorMemberId !== undefined || opts.since !== undefined || !!rating);
 
   // hot 用「這個同步窗口的對話增量」，不是累積數——累積數等於 top，排出來永遠是老卡。
   // 三種排序都對應一個索引，沒有一種需要現算。相關度見 searchClause；沒有搜尋字就退回 hot。
@@ -380,6 +423,7 @@ export async function listCards(db: D1Database, opts: ListOptions) {
     let orderBy: string;
     if (opts.sort === "new") orderBy = "c.registered_at DESC, c.id DESC";
     else if (opts.sort === "score") orderBy = `${BAYES_SCORE} DESC, c.talk_num DESC, c.registered_at DESC`;
+    else if (opts.sort === "updated") orderBy = `${UPDATED_AT} DESC, c.id DESC`;
     else if (opts.sort === "favorites") orderBy = "(SELECT COUNT(*) FROM member_favorites mf WHERE mf.card_id=c.id) DESC, c.talk_num DESC, c.registered_at DESC";
     else if (opts.sort === "random") orderBy = "RANDOM()";
     else if (opts.sort === "relevance" && search) {

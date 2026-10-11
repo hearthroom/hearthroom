@@ -33,6 +33,7 @@ import {
   listAuthors,
   listCards,
   catalogTagCounts,
+  ratingCounts,
   toAuthor,
   toCard,
   topTags,
@@ -69,7 +70,7 @@ import { clearScore, readScore, setScore } from "./card-scores";
 import { SVG_WRAP_LIMIT, TOUCH_ICON_SIZE, allowedImageUrl, cardManifest, iconSize, signShortcutKey, svgWrap, verifyShortcutKey } from "./shortcut";
 import { buildSearchName, buildSearchText, RoleGone, upstream, ZONES, type Zone, CREATION_METHOD, type CommunityStatus, type UpstreamRole } from "./upstream";
 import { resolveFandom } from "./fandom";
-import { evaluateRating, questionnaireFor, RatingAnswersError, type RatingResult } from "../shared/content-rating";
+import { evaluateRating, questionnaireFor, RATINGS, RatingAnswersError, type Rating, type RatingResult } from "../shared/content-rating";
 import { topFandoms } from "./cards";
 import { wikidata } from "./wikidata";
 import { withD1Session } from "./d1-session";
@@ -278,11 +279,11 @@ async function cachedJson(c: Context<{ Bindings: Env; Variables: { ev: Pending }
 }
 
 /** 榜單與搜尋。匿名可讀。 */
-/** 榜的種類與各自的窗口。day／week／month 是「上榜時間在窗口內」，hot／new／random／score（評分）／favorites（收藏）不開窗。top 是 hot 的舊名字。 */
+/** 榜的種類與各自的窗口。day／week／month 是「上榜時間在窗口內」，hot／new／random／score（評分）／favorites（收藏）／updated（最近更新）不開窗。top 是 hot 的舊名字。 */
 const BOARD_WINDOW: Record<string, number> = { day: 86_400_000, week: 7 * 86_400_000, month: 30 * 86_400_000 };
-function parseBoardSort(raw: string | undefined): { sort: "hot" | "new" | "random" | "relevance" | "score" | "favorites"; since?: number; key: string } {
+function parseBoardSort(raw: string | undefined): { sort: "hot" | "new" | "random" | "relevance" | "score" | "favorites" | "updated"; since?: number; key: string } {
   if (raw && raw in BOARD_WINDOW) return { sort: "hot", since: Date.now() - BOARD_WINDOW[raw], key: raw };
-  if (raw === "new" || raw === "random" || raw === "relevance" || raw === "score" || raw === "favorites") return { sort: raw, key: raw };
+  if (raw === "new" || raw === "random" || raw === "relevance" || raw === "score" || raw === "favorites" || raw === "updated") return { sort: raw, key: raw };
   return { sort: "hot", key: "hot" };
 }
 
@@ -292,6 +293,12 @@ function parseBoardSort(raw: string | undefined): { sort: "hot" | "new" | "rando
  * 明確點了要看的類型（?tag=）永遠贏——分享來的連結、榜單上點的籤，不能因為在隱藏名單裡就變成空榜。
  * 這是查詢字串的一部分，所以回應照常進公開快取（同一組隱藏名單共用一份）。超過 60 個類型回 null。
  */
+/** ?rating= 分級最高到這一級（ratingClause）；不認得的值、限制級＝不篩。 */
+function maxRatingOf(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>): Rating | undefined {
+  const raw = c.req.query("rating");
+  return (RATINGS as readonly string[]).includes(raw ?? "") && raw !== "R" ? (raw as Rating) : undefined;
+}
+
 function tagFilters(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>): { tagGroups: string[][]; excludeTags?: string[] } | null {
   const selectedTags = [...new Set((c.req.queries("tag") ?? []).map(t => t.trim()).filter(Boolean))];
   if (selectedTags.length > 60) return null;
@@ -352,6 +359,7 @@ app.get("/v1/cards", async (c) => {
     q: c.req.query("q")?.trim() || undefined,
     tagGroups,
     excludeTags,
+    maxRating: maxRatingOf(c),
     fandom: c.req.query("fandom")?.trim() || undefined,
     authorMemberId,
     allowNsfw,
@@ -381,7 +389,7 @@ app.get("/v1/cards", async (c) => {
 });
 
 /**
- * 類型列每顆籤後面的張數（catalogTagCounts）：條件跟榜單一樣，快取也走榜單那一套
+ * 類型列每顆籤後面的張數（catalogTagCounts）與分級選單各級的張數（ratingCounts，不套分級本身）：條件跟榜單一樣，快取也走榜單那一套
  * （看的人開沒開成人內容分開放，審核一動就換一份）。
  */
 app.get("/v1/tags/counts", async (c) => {
@@ -391,8 +399,9 @@ app.get("/v1/tags/counts", async (c) => {
   if (hit) return boardResponse(hit.body, allowNsfw, hit.layer, moderation.timing);
   const filters = tagFilters(c);
   if (!filters) return c.json({ error: "too_many_tags" }, 400);
-  const counts = await catalogTagCounts(c.env.DB, { zone: parseZone(c.req.query("zone")), ...filters, allowNsfw });
-  const body = JSON.stringify({ counts });
+  const scope = { zone: parseZone(c.req.query("zone")), ...filters, allowNsfw, maxRating: maxRatingOf(c) };
+  const [counts, ratings] = await Promise.all([catalogTagCounts(c.env.DB, scope), ratingCounts(c.env.DB, scope)]);
+  const body = JSON.stringify({ counts, ratings });
   writeBoardCache(c.env, c.executionCtx, key, body);
   return boardResponse(body, allowNsfw, "origin", moderation.timing);
 });
