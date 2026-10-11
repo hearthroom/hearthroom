@@ -59,7 +59,8 @@ describe("首頁：關注併進排序列", () => {
     expect(modeButton()?.textContent?.trim()).toBe(i18n.global.t("board.mode.following"));
     expect(modeButton()?.getAttribute("aria-pressed")).toBe("false");
     expect(sortButtons()).toHaveLength(6);
-    expect(sortButtons()[0].classList.contains("sorts__item--on"), "日榜亮著").toBe(true);
+    // 預設最熱、排最左（2026-10-11：日榜常常只有一兩張）
+    expect(sortButtons()[0].classList.contains("sorts__item--on"), "最熱亮著").toBe(true);
     expect(root.querySelector(".r18")).toBeNull();
     expect(root.querySelector(".seg")).toBeNull();
   });
@@ -73,7 +74,7 @@ describe("首頁：關注併進排序列", () => {
     expect(tagsNav()).toBeNull();
     expect(root.querySelector(".feed")).not.toBeNull();
     // 點任一個排序就回到角色卡榜
-    sortButtons()[1].click(); await settle();
+    sortButtons()[2].click(); await settle();
     expect(router.currentRoute.value.query).toEqual({ sort: "week" });
     expect(tagsNav()).not.toBeNull();
   });
@@ -106,7 +107,7 @@ describe("首頁：類型列在窄螢幕收合", () => {
     expect(tagsNav()?.classList.contains("discovery-tags--collapsed")).toBe(true);
   });
 
-  it("「已隱藏 N 類」在標題列，收合時也看得到；寬螢幕沒有展開鈕、隱藏連結照舊排在籤尾", async () => {
+  it("「已隱藏 N 類」在標題列，收合時也看得到；寬螢幕沒有窄螢幕那顆收合鈕、隱藏連結排在籤尾那一行", async () => {
     await mount("/", ["loli", "ntr"]);
     const head = root.querySelector(".discovery-tags__head");
     expect(head?.querySelector("a")?.textContent?.trim()).toBe(i18n.global.t("board.hidden", { n: 2 }));
@@ -119,7 +120,9 @@ describe("首頁：類型列在窄螢幕收合", () => {
     expect(expander()).toBeNull();
     expect(root.querySelector(".discovery-tags__head")).toBeNull();
     expect(tagsNav()?.classList.contains("discovery-tags--collapsed")).toBe(false);
-    const inner = root.querySelector(".discovery-tags__inner")!;
-    expect(inner.lastElementChild?.classList.contains("tagchip--hidden")).toBe(true);
+    // 類型分組後（2026-10-11）籤尾自成一行：「更多類型」與「已隱藏 N 類」
+    const tail = root.querySelector(".discovery-tags__inner")!.lastElementChild!;
+    expect(tail.classList.contains("discovery-tags__tail")).toBe(true);
+    expect(tail.lastElementChild?.classList.contains("tagchip--hidden")).toBe(true);
   });
 });

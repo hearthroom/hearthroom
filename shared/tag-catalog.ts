@@ -74,6 +74,23 @@ export const TAG_CATALOG: TagEntry[] = [
   t("humiliation", "羞辱", "羞辱", "Humiliation", "羞辱", "굴욕"),
 ];
 
+/**
+ * 分組（2026-10-11）：52 顆平鋪佔掉半屏，找不到想要的。榜單預設只攤開前兩組（玩法、題材），
+ * 角色與偏好收進「更多類型」。偏好那組幾乎全是成人向：沒開成人內容的人數量都是 0，整組自然變灰。
+ */
+export type TagGroup = "play" | "setting" | "character" | "kink";
+export const TAG_GROUPS: TagGroup[] = ["play", "setting", "character", "kink"];
+const GROUP_KEYS: Record<TagGroup, string[]> = {
+  play: ["roleplay", "world-sim", "gameplay-sim", "management-sim", "game", "system", "tool", "story", "romance", "absurd", "sfw"],
+  setting: ["wuxia", "xianxia", "western-fantasy", "fantasy-scifi", "ancient", "school", "mystery", "fanwork", "aesthetic", "redemption", "womens-fiction", "female-pov"],
+  character: ["loli", "shota", "onee-san", "mature", "motherly", "femboy", "tomboy", "futanari", "gender-swap", "beastfolk", "furry", "yuri", "harem", "submissive", "gap"],
+  kink: ["hypnosis", "taboo", "training", "ntl", "ntr", "r18g", "bestiality", "blacked", "hardcore", "foot", "secret", "exhibition", "erotic", "humiliation"],
+};
+const GROUP_OF = new Map(TAG_GROUPS.flatMap((g) => GROUP_KEYS[g].map((k) => [k, g] as const)));
+export function tagGroupOf(key: string): TagGroup | null {
+  return GROUP_OF.get(key) ?? null;
+}
+
 const BY_KEY = new Map(TAG_CATALOG.map((e) => [e.key, e]));
 
 /** 一個類型鍵對應的所有名字（五語去重）；不是目錄裡的鍵就回 null，呼叫端照字面當標籤用。 */

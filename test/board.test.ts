@@ -156,6 +156,45 @@ describe("不想看的類型（hide）", () => {
   });
 });
 
+describe("類型數量（/v1/tags/counts）", () => {
+  // 類型列每顆籤後面標張數，0 張的變灰：跟榜單同一套條件（語區、成人內容、不想看的類型），
+  // 而且是「再加上這一類會剩幾張」——選了調教，劇情那顆的數字是兩個都有的卡。
+  beforeEach(async () => {
+    await seed({ id: "h1", tags: ["調教&強迫", "劇情"] });
+    await seed({ id: "h2", tags: ["调教&强迫"] });
+    await seed({ id: "h3", tags: ["劇情"] });
+    await seed({ id: "en1", zone: "en", tags: ["Story"] });
+  });
+  const counts = async (query: string) => {
+    const res = await SELF.fetch(`https://c.test/v1/tags/counts${query}`);
+    expect(res.status).toBe(200);
+    return ((await res.json()) as { counts: Record<string, number> }).counts;
+  };
+
+  it("每個類型都有數字（沒有就是 0）；五語名字都算同一類；只算這個語區", async () => {
+    const c = await counts("?zone=zh");
+    const { TAG_CATALOG } = await import("../shared/tag-catalog");
+    expect(Object.keys(c).sort()).toEqual(TAG_CATALOG.map((t) => t.key).sort());
+    expect(c.training).toBe(2);
+    expect(c.story).toBe(2);
+    expect(c.loli).toBe(0);
+    expect((await counts("?zone=en")).story).toBe(1);
+  });
+
+  it("選了類型：其他類型的數字是「兩個都有」的張數（快取按選了什麼分開放）", async () => {
+    expect((await counts("?zone=zh")).story).toBe(2);
+    const c = await counts("?zone=zh&tag=training");
+    expect(c.training).toBe(2);
+    expect(c.story).toBe(1);
+  });
+
+  it("成人卡不算進沒開成人內容的人的數字；不想看的類型照榜單的規則排除（快取按隱藏名單分開放）", async () => {
+    await env.DB.prepare("UPDATE cards SET rating='R' WHERE source_role_id='role-h2'").run();
+    expect((await counts("?zone=zh")).training).toBe(1);
+    expect((await counts("?zone=zh&hide=story")).training).toBe(0);
+  });
+});
+
 describe("排名", () => {
   const now = Date.now();
   const DAY = 86400_000;

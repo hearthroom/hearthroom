@@ -32,6 +32,7 @@ import {
   ensureCardNumbers,
   listAuthors,
   listCards,
+  catalogTagCounts,
   toAuthor,
   toCard,
   topTags,
@@ -285,6 +286,23 @@ function parseBoardSort(raw: string | undefined): { sort: "hot" | "new" | "rando
   return { sort: "hot", key: "hot" };
 }
 
+/**
+ * 榜單與類型數量共用的類型條件。?tag= 每一個都要有（類型鍵展開成五語名字，不是鍵照字面）；
+ * 看的人不想看的類型（?hide=鍵,鍵）：鍵展開成五語名字後排除；不是鍵的忽略。
+ * 明確點了要看的類型（?tag=）永遠贏——分享來的連結、榜單上點的籤，不能因為在隱藏名單裡就變成空榜。
+ * 這是查詢字串的一部分，所以回應照常進公開快取（同一組隱藏名單共用一份）。超過 60 個類型回 null。
+ */
+function tagFilters(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>): { tagGroups: string[][]; excludeTags?: string[] } | null {
+  const selectedTags = [...new Set((c.req.queries("tag") ?? []).map(t => t.trim()).filter(Boolean))];
+  if (selectedTags.length > 60) return null;
+  const tagGroups = selectedTags.map(tag => tagNamesFor(tag) ?? [tag]);
+  const raw = c.req.query("hide")?.trim();
+  if (!raw) return { tagGroups };
+  const names = new Set(raw.split(",").flatMap((k) => tagNamesFor(k.trim()) ?? []));
+  for (const name of tagGroups.flat()) names.delete(name);
+  return { tagGroups, excludeTags: names.size ? [...names] : undefined };
+}
+
 app.get("/v1/cards", async (c) => {
   // Permission is never cached. Authentication and the moderation clock are independent reads.
   const accessStarted = performance.now();
@@ -326,19 +344,9 @@ app.get("/v1/cards", async (c) => {
   const zone = author ? undefined : parseZone(c.req.query("zone"));
   const authorMemberId = author ? ((await memberByHandle(c.env.DB, author)) ?? "") : undefined;
 
-  const selectedTags = [...new Set((c.req.queries("tag") ?? []).map(t => t.trim()).filter(Boolean))];
-  if (selectedTags.length > 60) return c.json({ error: "too_many_tags" }, 400);
-  const tagGroups = selectedTags.map(tag => tagNamesFor(tag) ?? [tag]);
-  // 看的人不想看的類型（?hide=鍵,鍵）：鍵展開成五語名字後排除；不是鍵的忽略。
-  // 明確點了要看的類型（?tag=）永遠贏——分享來的連結、榜單上點的籤，不能因為在隱藏名單裡就變成空榜。
-  // 這是查詢字串的一部分，所以回應照常進公開快取（同一組隱藏名單共用一份）。
-  const excludeTags = (() => {
-    const raw = c.req.query("hide")?.trim();
-    if (!raw) return undefined;
-    const names = new Set(raw.split(",").flatMap((k) => tagNamesFor(k.trim()) ?? []));
-    for (const name of tagGroups.flat()) names.delete(name);
-    return names.size ? [...names] : undefined;
-  })();
+  const filters = tagFilters(c);
+  if (!filters) return c.json({ error: "too_many_tags" }, 400);
+  const { tagGroups, excludeTags } = filters;
   const { rows, total, hasNext, partial } = await listCards(c.env.DB, {
     zone,
     q: c.req.query("q")?.trim() || undefined,
@@ -370,6 +378,23 @@ app.get("/v1/cards", async (c) => {
   const body = JSON.stringify({ items: rows.map((r) => toCard(r, l)), total, hasNext, limit, offset, sort: sortKey, ...(partial ? { partial } : {}) });
   if (sort !== "random") writeBoardCache(c.env, c.executionCtx, cacheKey, body);
   return boardResponse(body, allowNsfw, "origin", `${timing}, query;dur=${(performance.now() - queryStarted).toFixed(1)}`);
+});
+
+/**
+ * 類型列每顆籤後面的張數（catalogTagCounts）：條件跟榜單一樣，快取也走榜單那一套
+ * （看的人開沒開成人內容分開放，審核一動就換一份）。
+ */
+app.get("/v1/tags/counts", async (c) => {
+  const [allowNsfw, moderation] = await Promise.all([viewerAllowsNsfw(c), moderationRevision(c)]);
+  const key = await boardKey(c.req.url, moderation.revision, allowNsfw);
+  const hit = await readBoardCache(c.env, c.executionCtx, key);
+  if (hit) return boardResponse(hit.body, allowNsfw, hit.layer, moderation.timing);
+  const filters = tagFilters(c);
+  if (!filters) return c.json({ error: "too_many_tags" }, 400);
+  const counts = await catalogTagCounts(c.env.DB, { zone: parseZone(c.req.query("zone")), ...filters, allowNsfw });
+  const body = JSON.stringify({ counts });
+  writeBoardCache(c.env, c.executionCtx, key, body);
+  return boardResponse(body, allowNsfw, "origin", moderation.timing);
 });
 
 /** 這一區最常見的標籤，給榜單的類型篩選列。標籤分佈變得慢，快取久一點。 */
@@ -1516,7 +1541,7 @@ app.get("/assets/*", async (c) => {
  * 主程式一跑起來就有卡可畫，縮圖也跟主程式同時下載（2026-09-26，首頁要激進地快）。
  *
  * 用看的人自己的 cookie 讀，所以登入、開了成人內容的人拿到的也是他的版本；有 cookie 的回應不進任何快取。
- * 日榜空著就照前端的規則改放週榜、再不行放最熱。只做沒帶任何篩選的首頁、只在正式網域上；
+ * 首頁預設的榜是最熱（前端 BoardPage 的 SORTS）。只做沒帶任何篩選的首頁、只在正式網域上；
  * 讀榜超過 LANDING_BUDGET_MS（快取沒命中）就照舊回純殼，前端自己讀——HTML 不能因此變慢。
  * 快取命中約 50 ms；沒命中要 0.3–0.5 s（部署後與冷門語區常見，快取 5 分鐘）。預算放寬到 400 ms 時，
  * 沒命中的人反而比原本多等 0.4 s（2026-09-26 部署後實測），所以壓到 150 ms，
@@ -1524,7 +1549,6 @@ app.get("/assets/*", async (c) => {
  */
 const LANDING = /^(?:\/(zh-Hans|en|ja|ko))?\/?$/;
 const LANDING_FILTERS = ["sort", "tag", "offset", "mode", "q", "period"];
-const LANDING_SORTS = ["day", "week", "hot"] as const;
 const LANDING_BUDGET_MS = 150;
 type LandingBoard = { body: { items: { avatarUrl?: string | null }[] } & Record<string, unknown>; adult: boolean };
 
@@ -1532,13 +1556,9 @@ async function landingPage(c: Context<{ Bindings: Env; Variables: { ev: Pending 
   const zone = landingZone(locale);
   const cookie = c.req.header("Cookie") ?? "";
   const read = async (): Promise<LandingBoard | null> => {
-    for (const sort of LANDING_SORTS) {
-      const res = await app.request(new URL(`/v1/cards?zone=${zone}&sort=${sort}&offset=0&lang=${zone}`, url).toString(), { headers: { Cookie: cookie } }, c.env, c.executionCtx);
-      if (!res.ok) return null;
-      const body = (await res.json()) as LandingBoard["body"];
-      if (body.items.length || sort === "hot") return { body, adult: res.headers.get("X-Adult-Content") === "1" };
-    }
-    return null;
+    const res = await app.request(new URL(`/v1/cards?zone=${zone}&sort=hot&offset=0&lang=${zone}`, url).toString(), { headers: { Cookie: cookie } }, c.env, c.executionCtx);
+    if (!res.ok) return null;
+    return { body: (await res.json()) as LandingBoard["body"], adult: res.headers.get("X-Adult-Content") === "1" };
   };
   const reading = read().catch(() => null);
   c.executionCtx.waitUntil(reading);
@@ -1550,7 +1570,7 @@ async function landingPage(c: Context<{ Bindings: Env; Variables: { ev: Pending 
   const shell = await c.env.ASSETS.fetch(new Request(new URL("/", url).toString()));
   if (!shell.ok) return null;
   // 卡名、簡介是作者寫的字：放進 <script> 之前把 < 與兩個 JS 換行字元跳脫，作者寫了 </script> 也關不掉這一段
-  const payload = JSON.stringify({ query: { zone, lang: zone, sort: "day", offset: 0 }, page: { ...board.body, adult: board.adult } })
+  const payload = JSON.stringify({ query: { zone, lang: zone, sort: "hot", offset: 0 }, page: { ...board.body, adult: board.adult } })
     .replace(/</g, "\\u003c").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
   const first = board.body.items.find((item) => item.avatarUrl)?.avatarUrl;
   const thumb = first ? cardThumbUrl(PRIMARY_HOST, first) : null;
