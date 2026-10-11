@@ -21,6 +21,7 @@ import { useSession } from "@/lib/session";
 import { guestAdult, viewerAdult } from "@/lib/adult-consent";
 import type { CardPage, Sort } from "@/lib/types";
 import UpdateStrip from "@/components/UpdateStrip.vue";
+import { RATINGS, RATING_NAMES, type Rating } from "../../../shared/content-rating";
 
 const route = useRoute();
 const router = useRouter();
@@ -43,11 +44,11 @@ const error = ref("");
 
 /**
  * 榜的種類照魅魔島：最熱、日榜（24h）、週榜（7 天）、月榜（30 天）、最新、推薦（隨機）。窗口看的是上榜時間。
- * 另加評分（貝氏平均，票少的不會一票衝頂）與收藏（2026-10-11）。
+ * 另加評分（貝氏平均，票少的不會一票衝頂）、收藏與最近更新（目前上線版本過審的時刻）（2026-10-11）。
  * 首頁預設最熱、排最左：新站一天上不了幾張卡，日榜（上榜 24 小時內）常常只有一兩張，
  * 第一屏看起來像沒人的站（2026-10-11 線上 34 張卡、日榜 2 張）。最熱是全站卡一起排，站上有卡就不會空。
  */
-const SORTS: Sort[] = ["hot", "score", "favorites", "day", "week", "month", "new", "random"];
+const SORTS: Sort[] = ["hot", "score", "favorites", "day", "week", "month", "new", "updated", "random"];
 /** 三個開窗的榜才顯示「正在被聊」的增量：最熱是累積量，增量在那裡沒意義。 */
 const WINDOWED = new Set<Sort>(["day", "week", "month"]);
 /** 開窗的榜第一頁不到這麼多張：下面接上最熱，最多接這麼多張 */
@@ -62,6 +63,12 @@ const sort = computed<Sort>(() => {
   return typeof s === "string" && (SORTS as string[]).includes(s) ? (s as Sort) : "hot";
 });
 const tags = computed(() => selectedTags(route.query.tag));
+/**
+ * 分級「最高到這一級」（?rating=）。選單沒有限制級：那一級由頁首的成人內容開關管。
+ * 沒標分級的舊卡只知道不是限制級，伺服器只把它們算進「輔15級以下」。
+ */
+const MENU_RATINGS = RATINGS.filter((r) => r !== "R");
+const maxRating = computed<Rating | undefined>(() => (MENU_RATINGS as readonly string[]).includes(String(route.query.rating)) ? route.query.rating as Rating : undefined);
 const offset = computed(() => Number(route.query.offset ?? 0) || 0);
 /** 不想看的類型（設定頁勾的）：類型列少畫那幾顆，排尾一顆「已隱藏 N 類」帶去設定頁；清單本身由伺服器過濾。 */
 const hidden = computed(() => session.profile?.hiddenTags ?? []);
@@ -95,7 +102,7 @@ function memoryKey(query: Record<string, unknown>): string | null {
   return JSON.stringify([query, session.me?.accountNumId ?? null, p?.showNsfw ?? null, p?.ageVerified ?? null, p?.adultConsent ?? null, hidden.value]);
 }
 
-const currentQuery = () => ({ zone: zone.value, tag: tags.value, sort: sort.value, offset: offset.value, lang: contentLang(locale.value) });
+const currentQuery = () => ({ zone: zone.value, tag: tags.value, sort: sort.value, offset: offset.value, lang: contentLang(locale.value), rating: maxRating.value });
 type BoardQuery = ReturnType<typeof currentQuery>;
 
 /** 身分到了、確認畫面上這份就是給他的：現在才知道該記在誰的名下 */
@@ -198,12 +205,27 @@ watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (no
  * 開關的依據跟榜單一樣：登入的人看帳號、遊客看遊客憑證。
  */
 const tagCounts = ref<Record<string, number> | null>(null);
+const ratingCounts = ref<Record<string, number> | null>(null);
 let countsId = 0;
-watch(() => mode.value === "cards" ? JSON.stringify([zone.value, tags.value, hidden.value, (session.me ? session.profile : viewerAdult(session))?.showNsfw ?? null]) : null, (now) => {
+watch(() => mode.value === "cards" ? JSON.stringify([zone.value, tags.value, maxRating.value, hidden.value, (session.me ? session.profile : viewerAdult(session))?.showNsfw ?? null]) : null, (now) => {
   if (!now) return;
   const id = ++countsId;
-  void fetchTagCounts({ zone: zone.value, tag: tags.value }).then((counts) => { if (id === countsId) tagCounts.value = counts; }, () => { if (id === countsId) tagCounts.value = null; });
+  void fetchTagCounts({ zone: zone.value, tag: tags.value, rating: maxRating.value }).then((got) => {
+    if (id !== countsId) return;
+    tagCounts.value = got.counts;
+    ratingCounts.value = got.ratings;
+  }, () => { if (id === countsId) { tagCounts.value = null; ratingCounts.value = null; } });
 }, { immediate: true });
+/** 分級選單：數字是累計的（最高到這一級共有幾張），輔15級以下再加上沒標分級的 */
+const ratingOptions = computed(() => {
+  let sum = 0;
+  return MENU_RATINGS.map((r) => {
+    sum += ratingCounts.value?.[r] ?? 0;
+    const n = ratingCounts.value ? sum + (r === "PG15" ? ratingCounts.value.none ?? 0 : 0) : null;
+    const name = RATING_NAMES[r][locale.value as keyof typeof RATING_NAMES[typeof r]] ?? RATING_NAMES[r]["zh-Hant"];
+    return { value: r, n, label: r === "G" ? name : t("board.rating.upTo", { level: name }) };
+  });
+});
 </script>
 
 <template>
@@ -230,7 +252,16 @@ watch(() => mode.value === "cards" ? JSON.stringify([zone.value, tags.value, hid
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
 
     <template v-if="mode === 'cards'">
-      <p v-if="page && page.total !== null" class="subtle count">{{ $t("board.count", { n: page.total }) }}</p>
+      <div class="count-row">
+        <p class="subtle count">{{ page && page.total !== null ? $t("board.count", { n: page.total }) : "" }}</p>
+        <label class="rating-filter">
+          <span class="sr-only">{{ $t("board.rating.label") }}</span>
+          <select :value="maxRating ?? ''" @change="navigate({ rating: ($event.target as HTMLSelectElement).value || undefined })">
+            <option value="">{{ $t("board.rating.all") }}</option>
+            <option v-for="o in ratingOptions" :key="o.value" :value="o.value" :disabled="o.n === 0 && maxRating !== o.value">{{ o.label }}{{ o.n === null ? "" : ` (${o.n})` }}</option>
+          </select>
+        </label>
+      </div>
       <!-- 新手引導走到首頁那兩步：入門卡置頂，讓引導框得到（不擠進榜單，名次不動） -->
       <div v-if="starterCard" class="starter" data-tour="starter">
         <CardTile :card="starterCard" eager />
@@ -279,7 +310,13 @@ watch(() => mode.value === "cards" ? JSON.stringify([zone.value, tags.value, hid
 /* 窄螢幕把每顆的左右內距收 2px：八個排序加「關注」在手機上會換成兩行，少一點內距第二行就短一些 */
 @media (max-width: 400px) { .sorts__item { padding: 0 8px; } }
 
-.count { margin-bottom: var(--s-3); font-variant-numeric: tabular-nums; }
+.count { margin: 0; font-variant-numeric: tabular-nums; }
+.count-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); margin-bottom: var(--s-3); }
+.rating-filter select {
+  height: var(--h-sm); padding: 0 var(--s-6) 0 var(--s-3); border: 1px solid var(--line); border-radius: var(--r-pill);
+  background: var(--surface); color: var(--text-2); font: inherit; font-size: 13px; cursor: pointer;
+}
+.rating-filter select:hover { border-color: var(--line-strong); color: var(--text); }
 .more { margin-top: var(--s-6); padding-top: var(--s-5); border-top: 1px solid var(--line); }
 .more__title { margin: 0 0 var(--s-3); font-size: 15px; font-weight: 600; color: var(--text-2); }
 /* 置頂的入門卡跟榜單的卡同寬：照榜單的欄數取一欄 */

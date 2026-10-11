@@ -195,6 +195,59 @@ describe("類型數量（/v1/tags/counts）", () => {
   });
 });
 
+describe("最近更新（sort=updated）", () => {
+  // 更新時間＝目前上線那一版審核通過的時刻（作者改了卡、新版過審，玩家才看得到新內容）；
+  // 沒有審核紀錄退回那一版建立的時間；沒有版本退回上榜時間。
+  const now = Date.now();
+  const DAY = 86_400_000;
+  const idOf = async (label: string) => (await env.DB.prepare("SELECT c.id FROM cards c WHERE source_role_id=?").bind(`role-${label}`).first<{ id: number }>())!.id;
+  async function version(label: string, createdAt: number, decidedAt?: number) {
+    const id = await idOf(label);
+    const v = `v-${label}`;
+    const submission = decidedAt === undefined ? null : `s-${label}`;
+    if (submission) await env.DB.prepare("INSERT INTO review_submissions (id, card_id, provider, source_role_id, kind, status, submitted_at, decided_at) VALUES (?, ?, 'harbor', ?, 'update', 'approved', ?, ?)").bind(submission, id, `role-${label}`, createdAt, decidedAt).run();
+    await env.DB.prepare("INSERT INTO hosting_versions (version_id, work_id, member_id, operation_id, source_role_id, provider, card_id, submission_id, state, created_at) VALUES (?, 'w', 'm', ?, ?, 'harbor', ?, ?, 'approved', ?)").bind(v, v, `role-${label}`, id, submission, createdAt).run();
+    await env.DB.prepare("UPDATE cards SET approved_version_id=? WHERE id=?").bind(v, id).run();
+  }
+
+  it("按目前上線版本的過審時間排，新的在前；沒有審核紀錄看版本建立時間，沒有版本看上榜時間", async () => {
+    await seed({ id: "a", registeredAt: now - 10 * DAY });
+    await seed({ id: "b", registeredAt: now - 5 * DAY });
+    await seed({ id: "c", registeredAt: now - 1 * DAY });
+    await version("a", now - 3 * DAY, now - 3_600_000);
+    await version("b", now - 2 * DAY);
+    expect(ids((await list("?sort=updated")).body)).toEqual(["a", "c", "b"]);
+  });
+});
+
+describe("分級（rating＝最高到這一級）", () => {
+  // 想看安全內容的人要的是「不超過 X」。沒標分級的舊卡只知道不是限制級：只算進「輔15級以下」。
+  beforeEach(async () => {
+    for (const [id, rating] of [["g", "G"], ["p12", "PG12"], ["p15", "PG15"], ["none", null], ["r", "R"]] as const) {
+      await seed({ id, tags: ["劇情"] });
+      await env.DB.prepare("UPDATE cards SET rating=? WHERE source_role_id=?").bind(rating, `role-${id}`).run();
+    }
+  });
+
+  it("只列不超過這一級的卡；輔15級以下才含沒標分級的；不認得的值不篩（快取按分級分開放）", async () => {
+    expect(ids((await list("?zone=zh")).body).sort()).toEqual(["g", "none", "p12", "p15"]);
+    expect(ids((await list("?zone=zh&rating=PG12")).body).sort()).toEqual(["g", "p12"]);
+    expect(ids((await list("?zone=zh&rating=G")).body)).toEqual(["g"]);
+    expect(ids((await list("?zone=zh&rating=PG15")).body).sort()).toEqual(["g", "none", "p12", "p15"]);
+    expect(ids((await list("?zone=zh&rating=bogus")).body).sort()).toEqual(["g", "none", "p12", "p15"]);
+  });
+
+  it("類型數量附上各級張數（不受分級篩選影響）；類型的數字跟著分級篩選", async () => {
+    const counts = async (q: string) => (await (await SELF.fetch(`https://c.test/v1/tags/counts${q}`)).json()) as { counts: Record<string, number>; ratings: Record<string, number> };
+    const all = await counts("?zone=zh");
+    expect(all.ratings).toEqual({ G: 1, P: 0, PG12: 1, PG15: 1, R: 0, none: 1 });
+    expect(all.counts.story).toBe(4);
+    const capped = await counts("?zone=zh&rating=PG12");
+    expect(capped.counts.story).toBe(2);
+    expect(capped.ratings).toEqual(all.ratings);
+  });
+});
+
 describe("排名", () => {
   const now = Date.now();
   const DAY = 86400_000;

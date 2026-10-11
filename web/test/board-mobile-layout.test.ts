@@ -58,8 +58,8 @@ describe("首頁：關注併進排序列", () => {
     await mount("/");
     expect(modeButton()?.textContent?.trim()).toBe(i18n.global.t("board.mode.following"));
     expect(modeButton()?.getAttribute("aria-pressed")).toBe("false");
-    // 最熱、評分、收藏、日榜、週榜、月榜、最新、推薦（2026-10-11 加了評分與收藏）
-    expect(sortButtons().map((b) => b.textContent?.trim())).toEqual(["hot", "score", "favorites", "day", "week", "month", "new", "random"].map((s) => i18n.global.t(`board.sort.${s}`)));
+    // 最熱、評分、收藏、日榜、週榜、月榜、最新、更新、推薦（2026-10-11 加了評分、收藏與最近更新）
+    expect(sortButtons().map((b) => b.textContent?.trim())).toEqual(["hot", "score", "favorites", "day", "week", "month", "new", "updated", "random"].map((s) => i18n.global.t(`board.sort.${s}`)));
     // 預設最熱、排最左（2026-10-11：日榜常常只有一兩張）
     expect(sortButtons()[0].classList.contains("sorts__item--on"), "最熱亮著").toBe(true);
     expect(root.querySelector(".r18")).toBeNull();

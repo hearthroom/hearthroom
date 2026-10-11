@@ -15,7 +15,7 @@ import * as api from "../src/lib/api";
 const counts: Record<string, number> = { roleplay: 12, story: 0, wuxia: 3, hypnosis: 2 };
 vi.mock("../src/lib/api", async (original) => ({ ...await original<typeof api>(),
   fetchBoard: vi.fn(async () => ({ items: [], total: 0, hasNext: false, limit: 24, offset: 0, sort: "hot" })),
-  fetchTagCounts: vi.fn(async () => counts),
+  fetchTagCounts: vi.fn(async () => ({ counts, ratings: { G: 0, P: 0, PG12: 0, PG15: 0, R: 0, none: 0 } })),
 }));
 vi.mock("../src/lib/track", () => ({ track: () => {}, currentSurface: () => "board", setSurface: () => {} }));
 vi.mock("moonstage/stage", () => ({}));
