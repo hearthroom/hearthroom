@@ -205,7 +205,7 @@
   "board.tagGroup.kink": "嗜好",
   "board.tags.more": "もっと見る {n}",
   "board.tags": "タイプ",
-  "board.tag.all": "すべて",
+  "board.tags.clear": "タイプを解除",
   "board.hidden": "{n} ジャンルを非表示中",
   "board.r18": "R18",
   "tour.r18.title": "成人向けコンテンツ",
