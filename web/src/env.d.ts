@@ -16,6 +16,8 @@ declare module "moonstage/stage" {
       loading(on: boolean): void;
       /** 對話頁頂欄的實際底色，塗到系統狀態列；null＝離開對話頁，還原。 */
       themeColor?(color: string | null): void;
+      /** 對話頁第一次畫出內容：收掉蓋在上面的載入畫面（lib/stage-ready）。 */
+      contentReady?(): void;
     };
     storage: { get(key: string): string | null; set(key: string, value: string): void; remove(key: string): void };
     nav: { back(): void; toEntry(): void; toLogin(returnTo?: string): void; canBack?(): boolean };

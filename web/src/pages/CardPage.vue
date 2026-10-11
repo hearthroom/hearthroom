@@ -51,6 +51,8 @@ const card = ref<CommunityCard | null>(null);
 // 標題照介面字形顯示（跟榜單、對話頁同一套規則）；佔位色與分享出去的標題用原文。
 const shownName = computed(() => displayName(card.value?.name ?? "", locale.value));
 const title = computed(() => titleLayout(shownName.value));
+/** 跳去對話頁時交給它的卡名與封面（lib/play-intro）：載入畫面第一幀就畫這張卡 */
+const playIntro = computed(() => card.value ? { name: shownName.value, art: card.value.avatarUrl ?? "", backdrop: card.value.landscapeUrl ?? "" } : null);
 const loading = ref(true);
 /** 手上有卡、在背景換語言重抓：舊卡留著變淡，不退回骨架 */
 const revalidating = ref(false);
@@ -379,7 +381,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
           <!-- 主行動：桌機在這一列；手機固定在畫面最底部（見樣式），不會落到第一屏外 -->
           <div class="role__actions">
             <div class="role__cta">
-              <CardPlatforms class="role__platforms" :card-id="card.id" :provider="card.provider" :card-number="card.num" :pending="platformsRequest" />
+              <CardPlatforms class="role__platforms" :card-id="card.id" :provider="card.provider" :card-number="card.num" :pending="platformsRequest" :intro="playIntro" />
               <LibraryToggle v-if="listed" kind="favorites" :target="card.id" @count="card.favoriteCount = $event" />
               <ShareMenu :url="shareUrl" :title="card.name" :subject="card.roleId" />
             </div>
