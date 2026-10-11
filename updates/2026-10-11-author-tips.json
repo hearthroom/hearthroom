@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "authors",
+  "try": "/me",
+  "title": {
+    "zh-Hant": "新增作者打賞連結，顯示於卡片頁與作者頁。",
+    "zh-Hans": "新增作者打赏链接，显示于卡片页与作者页。",
+    "en": "Author tip links, shown on card pages and author pages.",
+    "ja": "作者の投げ銭リンクを追加、カードページと作者ページに表示。",
+    "ko": "작가 후원 링크 추가, 카드 페이지와 작가 페이지에 표시."
+  },
+  "body": {
+    "zh-Hant": "支援 pixiv FANBOX、OnlyFans、Patreon 等平台，由外部平台收款，本站不收取任何費用。",
+    "zh-Hans": "支持 pixiv FANBOX、OnlyFans、Patreon 等平台，由外部平台收款，本站不收取任何费用。",
+    "en": "Supports pixiv FANBOX, OnlyFans, Patreon and more, with payments processed by those platforms and no site fees.",
+    "ja": "pixiv FANBOX・OnlyFans・Patreon などに対応し、支払いは各サービスで処理され当サイトの手数料はかかりません。",
+    "ko": "pixiv FANBOX, OnlyFans, Patreon 등을 지원하며 결제는 각 플랫폼에서 처리되고 사이트 수수료는 없습니다."
+  }
+}

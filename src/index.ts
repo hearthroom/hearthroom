@@ -13,6 +13,7 @@ import { hostGateway, hostingKey, submitHosted, hostingDecision, beginHostedEdit
 import { saveCommunityProfile, cleanAvatars } from "./community-profile";
 import { AVATAR_MAX_BYTES } from '../shared/avatar';
 import { siteName } from "../shared/site-name";
+import { readTipLinks } from "../shared/tip-links";
 import { bodyLimit } from "hono/body-limit";
 import { authoringSource, copiesFor, workFor, worksFor } from "./card-sync";
 import { apiBaseOf as providerApiBase } from "./providers";
@@ -487,7 +488,9 @@ app.get("/v1/cards/:id", async (c) => {
   // 過了成人門的人拿一把「加到主畫面」的鑰匙：manifest 與圖示是瀏覽器抓的，帶不了登入（src/shortcut.ts）
   const secret = c.env.SHORTCUT_SECRET;
   const shortcutKey = allowNsfw && secret ? await signShortcutKey(secret, row.id) : undefined;
-  return c.json({ ...toCard(row, lang(c)), ...(shortcutKey ? { shortcutKey } : {}) }, 200, allowNsfw ? { "Cache-Control": "private, no-store" } : {});
+  const card = toCard(row, lang(c));
+  // 打賞連結只在單卡頁給（卡片頁的作者區塊用）；榜單一頁幾十張卡，用不到也不該多帶
+  return c.json({ ...card, author: { ...card.author, tips: readTipLinks(row.author_tip_links) }, ...(shortcutKey ? { shortcutKey } : {}) }, 200, allowNsfw ? { "Cache-Control": "private, no-store" } : {});
 });
 
 /**
@@ -656,6 +659,7 @@ app.get("/v1/authors/:handle", async (c) => {
     name: author.author_name,
     avatar: author.author_avatar,
     bio: author.bio,
+    tips: readTipLinks(author.tip_links),
     cardCount: author.card_count,
     talkTotal: author.talk_total ?? 0,
     joinedAt: author.joined_at,

@@ -31,7 +31,7 @@ it.each(['image/gif','image/apng','image/png','image/webp'])('previews and submi
  Object.defineProperty(input,'files',{value:[selected],configurable:true});
  input.dispatchEvent(new Event('change'));await settle();
  expect(el.querySelector('[role=alert]')).toBeNull();
- expect(el.querySelector('img')?.getAttribute('src')).toBe('blob:avatar-test');
+ expect(el.querySelector('.profile-avatar img')?.getAttribute('src')).toBe('blob:avatar-test');
  el.querySelector('form')!.dispatchEvent(new Event('submit',{cancelable:true}));await settle();
  expect(fixture.save).toHaveBeenCalledTimes(1);
  expect(fixture.save.mock.calls[0][0]).toBe('test');
@@ -48,5 +48,25 @@ it.each([
  const selected=new File([new Uint8Array(size)],'avatar',{type});
  Object.defineProperty(input,'files',{value:[selected]});input.dispatchEvent(new Event('change'));await settle();
  expect(el.querySelector('[role=alert]')?.textContent).toContain('10 MB');
- expect(el.querySelector('img')).toBeNull();expect(fixture.save).not.toHaveBeenCalled();
+ expect(el.querySelector('.profile-avatar img')).toBeNull();expect(fixture.save).not.toHaveBeenCalled();
+});
+
+// 打賞連結：貼網址就認出平台；認不得的擋在送出前，認得的照原樣送出（伺服器會再正規化一次）
+const tipInputs=()=>[...el.querySelectorAll<HTMLInputElement>('input[id^=tip-link-]')];
+const type=async(input:HTMLInputElement,value:string)=>{input.value=value;input.dispatchEvent(new Event('input'));await settle();};
+it('recognizes a pasted tip page and submits it with the profile',async()=>{
+ fixture.save.mockResolvedValue(fixture.session.profile);
+ await type(tipInputs()[0],'ko-fi.com/nightferry');
+ expect(el.querySelector('#tip-link-0-msg')?.textContent).toContain('Ko-fi');
+ el.querySelector('form')!.dispatchEvent(new Event('submit',{cancelable:true}));await settle();
+ expect(fixture.save.mock.calls[0][1].tipLinks).toEqual(['ko-fi.com/nightferry']);
+});
+it('blocks saving while a tip link is unrecognized and caps the list at three',async()=>{
+ await type(tipInputs()[0],'https://paypal.me/nightferry');
+ expect(tipInputs()[0].getAttribute('aria-invalid')).toBe('true');
+ el.querySelector('form')!.dispatchEvent(new Event('submit',{cancelable:true}));await settle();
+ expect(fixture.save).not.toHaveBeenCalled();expect(el.querySelector('[role=alert]')).not.toBeNull();
+ const add=()=>el.querySelector<HTMLButtonElement>('.tips-field__add');
+ add()!.click();await settle();add()!.click();await settle();
+ expect(tipInputs()).toHaveLength(3);expect(add()).toBeNull();
 });

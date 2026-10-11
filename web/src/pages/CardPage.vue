@@ -6,6 +6,9 @@
  *   左欄    作者用 Markdown 寫的介紹，接著是評論
  *   右欄    評分、卡片資訊、同一位作者的其他作品；黏在畫面上，介紹再長也一直看得到評分
  *
+ * 打賞（作者綁了打賞連結才有，owner 2026-10-11）：署名旁一顆小膠囊，作者區塊（其他作品那塊）上一顆整寬按鈕。
+ * 不放動作列：開始對話是唯一的主要按鈕，手機底部那條也放不下第四個動作。
+ *
  * 開場白不放在這裡：它是開始對話之後才出現的東西，而且多半是給模型看的設定，放在預覽頁沒有意義。
  * 「開始對話」一定在第一屏：桌機在身分列裡，手機固定在畫面最底部。
  */
@@ -29,6 +32,7 @@ import CardOwnerActions from "@/components/CardOwnerActions.vue";
 import RatingMark from "@/components/RatingMark.vue";
 import CardPlatforms from "@/components/CardPlatforms.vue";
 import ShareMenu from "@/components/ShareMenu.vue";
+import TipMenu from "@/components/TipMenu.vue";
 import { useSession } from "@/lib/session";
 import { contentLang, pageTitle, zoneLabel } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
@@ -53,6 +57,8 @@ const shownName = computed(() => displayName(card.value?.name ?? "", locale.valu
 const title = computed(() => titleLayout(shownName.value));
 /** 跳去對話頁時交給它的卡名與封面（lib/play-intro）：載入畫面第一幀就畫這張卡 */
 const playIntro = computed(() => card.value ? { name: shownName.value, art: card.value.avatarUrl ?? "", backdrop: card.value.landscapeUrl ?? "" } : null);
+/** 作者的打賞連結（伺服器已照熟悉度排好）；沒綁就是空的，兩個入口都不出現 */
+const tips = computed(() => card.value?.author.tips ?? []);
 const loading = ref(true);
 /** 手上有卡、在背景換語言重抓：舊卡留著變淡，不退回骨架 */
 const revalidating = ref(false);
@@ -368,6 +374,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
               <CommunityAvatar :handle="card.author.handle ?? undefined" :src="card.author.avatar" :name="card.author.name" class="role__by-avatar" />
               <CommunityName :handle="card.author.handle ?? undefined" :name="card.author.name" />
             </component>
+            <TipMenu v-if="tips.length" :tips="tips" variant="pill" />
             <a v-if="score && score.count" class="role__score" href="#score" @click.prevent="side?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })">
               <span class="role__score-star" aria-hidden="true">★</span>
               <strong>{{ score.average?.toFixed(1) }}</strong>
@@ -461,11 +468,20 @@ watch(() => session.profile?.showNsfw, (now, before) => {
             </div>
           </section>
 
-          <section v-if="more.length" class="panel role__more" aria-labelledby="more-h">
-            <h2 id="more-h" class="role__more-title">
+          <section v-if="more.length || tips.length" class="panel role__more" :class="{ 'role__more--tips': tips.length }" aria-labelledby="more-h">
+            <!-- 作者綁了打賞：這塊變成作者區塊，頭上是作者與打賞按鈕，其他作品接在下面 -->
+            <div v-if="tips.length" class="role__author">
+              <component :is="card.author.handle ? RouterLink : 'span'" :to="card.author.handle ? lp(`/authors/${card.author.handle}`) : undefined" class="role__author-who">
+                <CommunityAvatar :handle="card.author.handle ?? undefined" :src="card.author.avatar" :name="card.author.name" class="role__author-avatar" />
+                <CommunityName :handle="card.author.handle ?? undefined" :name="card.author.name" />
+              </component>
+              <TipMenu :tips="tips" variant="block" />
+            </div>
+            <h2 v-if="more.length" id="more-h" class="role__more-title">
               <span>{{ $t("card.moreBy", { name: card.author.name }) }}</span>
               <RouterLink v-if="card.author.handle" :to="lp(`/authors/${card.author.handle}`)">{{ $t("card.moreAll") }}</RouterLink>
             </h2>
+            <h2 v-else id="more-h" class="sr-only">{{ card.author.name }}</h2>
             <RouterLink v-for="m in more" :key="m.id" :to="lp(`/cards/${m.num ?? m.id}`)" class="role__mini">
               <img v-if="m.avatarUrl" :src="m.avatarUrl" alt="" loading="lazy" />
               <span v-else class="role__mini-void" :style="{ background: `hsl(${hueFrom(m.name)} 40% 62%)` }" />
@@ -602,6 +618,11 @@ a.role__by:hover { color: var(--accent-text); }
 .role__links a:hover, .role__links button:hover { color: var(--accent-text); }
 
 .role__more { display: grid; gap: 2px; padding: var(--s-4) var(--s-3); }
+.role__author { display: grid; gap: var(--s-3); margin: 0 var(--s-1); }
+.role__more--tips .role__author + .role__more-title { margin-top: var(--s-3); padding-top: var(--s-4); box-shadow: 0 -1px 0 var(--line); }
+.role__author-who { display: flex; align-items: center; gap: var(--s-3); min-width: 0; font-size: 15px; font-weight: 600; color: var(--text); }
+a.role__author-who:hover { color: var(--accent-text); }
+.role__author-who :deep(img), .role__author-who :deep(.role__author-avatar) { width: 40px; height: 40px; border-radius: var(--r-pill); object-fit: cover; flex: none; font-size: 15px; }
 .role__more-title { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s-2); margin: 0 var(--s-1) var(--s-2); font-size: 13px; font-weight: 600; color: var(--text-2); }
 .role__more-title span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .role__more-title a { flex: none; font-size: 12.5px; color: var(--accent-text); }
@@ -653,6 +674,8 @@ a.role__by:hover { color: var(--accent-text); }
   .role__comments-wrap { grid-area: comments; }
   .role__info { grid-area: info; }
   .role__more { grid-area: more; }
+  /* 作者綁了打賞：作者區塊從最底下移到介紹正下方，讀完介紹就看得到（其他作品跟著上來） */
+  .role__body:has(.role__more--tips) { grid-template-areas: "intro" "more" "score" "comments" "info"; }
   .role__intro { padding: var(--s-4); }
   .role__comments { padding: var(--s-4); }
 }

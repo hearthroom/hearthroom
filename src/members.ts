@@ -1,6 +1,7 @@
 import { ADULT_CONSENT_VERSION } from "../shared/adult-consent";
 import { DEFAULT_PROVIDER, parseProvider, type ProviderId, requireConfigured } from "./providers";
 import { tagNamesFor } from "../shared/tag-catalog";
+import { readTipLinks } from "../shared/tip-links";
 import { type Env, HttpError } from "./types";
 import { upstream } from "./upstream";
 import { guestAdult, guestAllowsNsfw, siteSessionIdentity, siteSessionReader } from "./account-auth";
@@ -124,6 +125,8 @@ export interface MemberProfile {
   adultConsent: boolean;
   /** 不想看的類型（目錄鍵，排序去重）：榜單與搜尋不列這些類型的卡 */
   hiddenTags: string[];
+  /** 打賞連結（標準網址，作者排的順序）；編輯表單用 */
+  tipLinks: string[];
 }
 
 /** 成員存的隱藏名單讀出來：壞掉的 JSON 當空；目錄裡已經拿掉的鍵不算（別顯示「已隱藏 N 類」卻找不到那一類）。 */
@@ -149,10 +152,10 @@ export function normalizeHiddenTags(input: unknown): string[] {
 
 /** 「我的」頁要的：公開 ID、加入時間、連結了哪些供應商帳號。沒有 token、沒有信箱。 */
 export async function memberProfile(db: D1Database, memberId: string): Promise<MemberProfile | null> {
-  type ProfileRow = { handle: string; display_name: string | null; avatar_url: string; bio: string; created_at: number; show_nsfw: number; age_verified_at: number | null; adult_consent_version: number | null; hidden_tags: string };
+  type ProfileRow = { handle: string; display_name: string | null; avatar_url: string; bio: string; created_at: number; show_nsfw: number; age_verified_at: number | null; adult_consent_version: number | null; hidden_tags: string; tip_links: string };
   type IdentityRow = { provider: string; external_id: string; linked_at: number };
   const [members, founding, ids] = await db.batch<ProfileRow | { provider: string } | IdentityRow>([
-    db.prepare("SELECT handle, display_name, avatar_url, bio, created_at, show_nsfw, age_verified_at, adult_consent_version, hidden_tags FROM members WHERE id = ?").bind(memberId),
+    db.prepare("SELECT handle, display_name, avatar_url, bio, created_at, show_nsfw, age_verified_at, adult_consent_version, hidden_tags, tip_links FROM members WHERE id = ?").bind(memberId),
     db.prepare("SELECT provider FROM member_identities WHERE member_id=?").bind(memberId),
     db.prepare("SELECT provider, external_id, linked_at FROM member_connections WHERE owner_member_id = ? UNION SELECT provider, external_id, linked_at FROM member_identities WHERE member_id = ? AND NOT EXISTS (SELECT 1 FROM member_connections c WHERE c.provider=member_identities.provider AND c.external_id=member_identities.external_id) ORDER BY linked_at").bind(memberId, memberId),
   ]);
@@ -169,6 +172,7 @@ export async function memberProfile(db: D1Database, memberId: string): Promise<M
     ageVerified: m.age_verified_at !== null,
     adultConsent: m.adult_consent_version === ADULT_CONSENT_VERSION,
     hiddenTags: parseHiddenTags(m.hidden_tags),
+    tipLinks: readTipLinks(m.tip_links).map((l) => l.url),
   };
 }
 

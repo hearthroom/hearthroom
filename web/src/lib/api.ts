@@ -505,6 +505,8 @@ export interface SiteMe {
   adultConsent: boolean;
   /** 不想看的類型（目錄鍵）：榜單與搜尋不列這些類型的卡 */
   hiddenTags: string[];
+  /** 打賞連結（標準網址） */
+  tipLinks?: string[];
 }
 
 export interface SiteSettings { showNsfw: boolean; ageVerified: boolean; adultConsent: boolean; hiddenTags: string[] }
@@ -1428,8 +1430,9 @@ export async function fetchCardPlatforms(cardId:string):Promise<{provider:import
 
 
 
-export async function updateSiteProfile(token:string, profile:{displayName:string;bio:string;avatar?:File|null;removeAvatar?:boolean}):Promise<SiteMe> {
+export async function updateSiteProfile(token:string, profile:{displayName:string;bio:string;tipLinks?:string[];avatar?:File|null;removeAvatar?:boolean}):Promise<SiteMe> {
  const body=new FormData();body.set('displayName',profile.displayName);body.set('bio',profile.bio);
+ if(profile.tipLinks)body.set('tipLinks',JSON.stringify(profile.tipLinks));
  if(profile.avatar)body.set('avatar',profile.avatar);
  if(profile.removeAvatar)body.set('removeAvatar','true');
  return json<SiteMe>(await fetch(`${COMMUNITY_API}/me/profile`,{method:'PUT',headers:{...from(),...authHeaders(token)},body}));
