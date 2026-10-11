@@ -216,7 +216,10 @@ describe("最近更新（sort=updated）", () => {
     await seed({ id: "c", registeredAt: now - 1 * DAY });
     await version("a", now - 3 * DAY, now - 3_600_000);
     await version("b", now - 2 * DAY);
-    expect(ids((await list("?sort=updated")).body)).toEqual(["a", "c", "b"]);
+    const body = (await list("?sort=updated")).body;
+    expect(ids(body)).toEqual(["a", "c", "b"]);
+    // 卡片上「幾天前更新」用的就是這個時間：每張卡都帶著
+    expect(body.items.map((c) => c.updatedAt)).toEqual([now - 3_600_000, now - 1 * DAY, now - 2 * DAY]);
   });
 });
 
