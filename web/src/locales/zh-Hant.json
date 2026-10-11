@@ -17,6 +17,8 @@
   "board.search.placeholder": "搜尋角色名、簡介或標籤",
   "board.search.submit": "搜尋",
   "board.sort.hot": "最熱",
+  "board.sort.score": "評分",
+  "board.sort.favorites": "收藏",
   "board.sort.new": "最新",
   "board.sort.relevance": "最相關",
   "board.count": "{n} 張",

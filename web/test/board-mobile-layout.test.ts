@@ -58,7 +58,8 @@ describe("首頁：關注併進排序列", () => {
     await mount("/");
     expect(modeButton()?.textContent?.trim()).toBe(i18n.global.t("board.mode.following"));
     expect(modeButton()?.getAttribute("aria-pressed")).toBe("false");
-    expect(sortButtons()).toHaveLength(6);
+    // 最熱、評分、收藏、日榜、週榜、月榜、最新、推薦（2026-10-11 加了評分與收藏）
+    expect(sortButtons().map((b) => b.textContent?.trim())).toEqual(["hot", "score", "favorites", "day", "week", "month", "new", "random"].map((s) => i18n.global.t(`board.sort.${s}`)));
     // 預設最熱、排最左（2026-10-11：日榜常常只有一兩張）
     expect(sortButtons()[0].classList.contains("sorts__item--on"), "最熱亮著").toBe(true);
     expect(root.querySelector(".r18")).toBeNull();
@@ -74,8 +75,10 @@ describe("首頁：關注併進排序列", () => {
     expect(tagsNav()).toBeNull();
     expect(root.querySelector(".feed")).not.toBeNull();
     // 點任一個排序就回到角色卡榜
-    sortButtons()[2].click(); await settle();
+    sortButtons()[4].click(); await settle();
     expect(router.currentRoute.value.query).toEqual({ sort: "week" });
+    sortButtons()[1].click(); await settle();
+    expect(router.currentRoute.value.query).toEqual({ sort: "score" });
     expect(tagsNav()).not.toBeNull();
   });
 });

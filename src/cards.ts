@@ -204,7 +204,7 @@ export interface ListOptions {
   /** 上榜時間下限（毫秒），日／週／月榜用。 */
   since?: number;
   boardWindow?: string;
-  sort: "hot" | "new" | "random" | "relevance";
+  sort: "hot" | "new" | "random" | "relevance" | "score" | "favorites";
   limit: number;
   offset: number;
   /** 不論審核狀態全列。只有作者看自己的「已登記」那一組用；對外的榜單永遠只列在榜的。 */
@@ -267,6 +267,15 @@ export async function catalogTagCounts(db: D1Database, opts: { zone?: string; ta
   for (const row of results) counts[row.k] = row.n;
   return counts;
 }
+
+/**
+ * 評分最高的排序鍵：貝氏平均，先驗是每張卡先有 PRIOR_VOTES 票 PRIOR_MEAN 星。一票 5 星贏過沒人評的，
+ * 但贏不過好幾票 5 星的；評得差的排到沒人評的後面。沒人評的全是同一個值，再照累積對話數排，榜不會空。
+ * card_scores.card_id 存的是文字。
+ */
+const PRIOR_VOTES = 5;
+const PRIOR_MEAN = 3;
+const BAYES_SCORE = `(SELECT (${PRIOR_VOTES * PRIOR_MEAN} + COALESCE(SUM(s.score), 0)) * 1.0 / (${PRIOR_VOTES} + COUNT(*)) FROM card_scores s WHERE s.card_id = CAST(c.id AS TEXT))`;
 
 export async function listCards(db: D1Database, opts: ListOptions) {
   const where: string[] = opts.anyStatus ? ["1=1"] : [`c.${listed(!!opts.allowNsfw)}`, NOT_A_COPY("c"), "c.provider = 'harbor'"];
@@ -368,6 +377,8 @@ export async function listCards(db: D1Database, opts: ListOptions) {
     const orderBinds: unknown[] = [];
     let orderBy: string;
     if (opts.sort === "new") orderBy = "c.registered_at DESC, c.id DESC";
+    else if (opts.sort === "score") orderBy = `${BAYES_SCORE} DESC, c.talk_num DESC, c.registered_at DESC`;
+    else if (opts.sort === "favorites") orderBy = "(SELECT COUNT(*) FROM member_favorites mf WHERE mf.card_id=c.id) DESC, c.talk_num DESC, c.registered_at DESC";
     else if (opts.sort === "random") orderBy = "RANDOM()";
     else if (opts.sort === "relevance" && search) {
       orderBy = `${search.relevance.sql}, c.talk_num DESC, c.follow_num DESC, c.registered_at DESC`;

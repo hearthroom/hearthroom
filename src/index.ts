@@ -278,11 +278,11 @@ async function cachedJson(c: Context<{ Bindings: Env; Variables: { ev: Pending }
 }
 
 /** 榜單與搜尋。匿名可讀。 */
-/** 榜的種類與各自的窗口。day／week／month 是「上榜時間在窗口內」，hot／new／random 不開窗。top 是 hot 的舊名字。 */
+/** 榜的種類與各自的窗口。day／week／month 是「上榜時間在窗口內」，hot／new／random／score（評分）／favorites（收藏）不開窗。top 是 hot 的舊名字。 */
 const BOARD_WINDOW: Record<string, number> = { day: 86_400_000, week: 7 * 86_400_000, month: 30 * 86_400_000 };
-function parseBoardSort(raw: string | undefined): { sort: "hot" | "new" | "random" | "relevance"; since?: number; key: string } {
+function parseBoardSort(raw: string | undefined): { sort: "hot" | "new" | "random" | "relevance" | "score" | "favorites"; since?: number; key: string } {
   if (raw && raw in BOARD_WINDOW) return { sort: "hot", since: Date.now() - BOARD_WINDOW[raw], key: raw };
-  if (raw === "new" || raw === "random" || raw === "relevance") return { sort: raw, key: raw };
+  if (raw === "new" || raw === "random" || raw === "relevance" || raw === "score" || raw === "favorites") return { sort: raw, key: raw };
   return { sort: "hot", key: "hot" };
 }
 

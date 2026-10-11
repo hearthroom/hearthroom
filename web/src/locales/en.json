@@ -17,6 +17,8 @@
   "board.search.placeholder": "Search names, blurbs or tags",
   "board.search.submit": "Search",
   "board.sort.hot": "Top",
+  "board.sort.score": "Top rated",
+  "board.sort.favorites": "Most saved",
   "board.sort.new": "Newest",
   "board.sort.relevance": "Most relevant",
   "board.count": "{n} cards",

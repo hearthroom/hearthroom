@@ -43,10 +43,11 @@ const error = ref("");
 
 /**
  * 榜的種類照魅魔島：最熱、日榜（24h）、週榜（7 天）、月榜（30 天）、最新、推薦（隨機）。窗口看的是上榜時間。
+ * 另加評分（貝氏平均，票少的不會一票衝頂）與收藏（2026-10-11）。
  * 首頁預設最熱、排最左：新站一天上不了幾張卡，日榜（上榜 24 小時內）常常只有一兩張，
  * 第一屏看起來像沒人的站（2026-10-11 線上 34 張卡、日榜 2 張）。最熱是全站卡一起排，站上有卡就不會空。
  */
-const SORTS: Sort[] = ["hot", "day", "week", "month", "new", "random"];
+const SORTS: Sort[] = ["hot", "score", "favorites", "day", "week", "month", "new", "random"];
 /** 三個開窗的榜才顯示「正在被聊」的增量：最熱是累積量，增量在那裡沒意義。 */
 const WINDOWED = new Set<Sort>(["day", "week", "month"]);
 /** 開窗的榜第一頁不到這麼多張：下面接上最熱，最多接這麼多張 */
@@ -275,7 +276,7 @@ watch(() => mode.value === "cards" ? JSON.stringify([zone.value, tags.value, hid
 .sorts__item--on { color: var(--accent-text); background: var(--accent-tint); }
 .sorts__mode { margin-left: auto; font-weight: 600; color: var(--text-2); }
 .sorts__mode.sorts__item--on { color: var(--accent-text); }
-/* 360px 的 Android：六個排序加「關注」是 334px，內容區只有 328px，差 6px 就要多一整行——把每顆的左右內距收 2px */
+/* 窄螢幕把每顆的左右內距收 2px：八個排序加「關注」在手機上會換成兩行，少一點內距第二行就短一些 */
 @media (max-width: 400px) { .sorts__item { padding: 0 8px; } }
 
 .count { margin-bottom: var(--s-3); font-variant-numeric: tabular-nums; }
