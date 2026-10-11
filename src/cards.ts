@@ -3,6 +3,7 @@ import type { UpstreamRole, Zone } from "./upstream";
 import { buildSearchBody, buildSearchName, buildSearchText } from "./upstream";
 import { expandTerm, hanziGlob, searchForm, searchTerms } from "./search-text";
 import { fandomLabel } from "./wikidata";
+import { TAG_CATALOG } from "../shared/tag-catalog";
 import { HttpError, type Localized, pickLocale } from "./types";
 
 export interface CardRow {
@@ -242,6 +243,30 @@ const NOT_A_COPY = (table: string) =>
 const inList = (table: string) => `EXISTS (SELECT 1 FROM json_each(${table}.tags) WHERE json_each.value IN (SELECT value FROM json_each(?)))`;
 /** 「卡片標籤裡沒有任何一個在名單裡」：跟 tags 的 EXISTS 同一個形狀，反過來。 */
 const excludeClause = (table: string) => `NOT ${inList(table)}`;
+
+/**
+ * 類型列每顆籤後面的張數：跟 listCards 同一組範圍條件（在榜、不是副本、本站、語區、已選類型、不想看的類型、成人門），
+ * 每個類型再加上「有這一類」——選了調教，劇情那顆的數字就是兩個都有的卡。沒有命中的類型是 0。
+ * 目錄的五語名字整份當一個 JSON 綁進去，理由同 inList（D1 一條語句 100 個變數的上限）。
+ * ponytail: 每次掃範圍內所有卡 × 標籤 × 目錄名字，靠榜單快取擋著；卡片上萬時改成預先算好的計數表。
+ */
+export async function catalogTagCounts(db: D1Database, opts: { zone?: string; tagGroups?: string[][]; excludeTags?: string[]; allowNsfw: boolean }): Promise<Record<string, number>> {
+  const where = [`c.${listed(opts.allowNsfw)}`, NOT_A_COPY("c"), "c.provider = 'harbor'"];
+  const binds: unknown[] = [];
+  if (opts.zone) { where.push("c.zone IN (?, 'all')"); binds.push(opts.zone); }
+  for (const group of opts.tagGroups ?? []) { where.push(inList("c")); binds.push(JSON.stringify(group)); }
+  if (opts.excludeTags?.length) { where.push(excludeClause("c")); binds.push(JSON.stringify(opts.excludeTags)); }
+  const names = TAG_CATALOG.flatMap((e) => [...new Set(Object.values(e.names))].map((n) => [e.key, n]));
+  const { results } = await db.prepare(
+    `SELECT json_extract(cat.value, '$[0]') AS k, COUNT(DISTINCT c.id) AS n
+       FROM cards c, json_each(c.tags) t, json_each(?) cat
+      WHERE t.value = json_extract(cat.value, '$[1]') AND ${where.join(" AND ")}
+      GROUP BY k`,
+  ).bind(JSON.stringify(names), ...binds).all<{ k: string; n: number }>();
+  const counts: Record<string, number> = Object.fromEntries(TAG_CATALOG.map((e) => [e.key, 0]));
+  for (const row of results) counts[row.k] = row.n;
+  return counts;
+}
 
 export async function listCards(db: D1Database, opts: ListOptions) {
   const where: string[] = opts.anyStatus ? ["1=1"] : [`c.${listed(!!opts.allowNsfw)}`, NOT_A_COPY("c"), "c.provider = 'harbor'"];

@@ -33,7 +33,7 @@ it("首頁的 HTML 帶著第一屏的榜單與第一張縮圖的 preload；沒�
   const { res, html } = await page("https://hearthroom.club/");
   expect(res.status).toBe(200);
   const data = inline(html);
-  expect(data.query).toEqual({ zone: "zh", lang: "zh", sort: "day", offset: 0 });
+  expect(data.query).toEqual({ zone: "zh", lang: "zh", sort: "hot", offset: 0 });
   expect(data.page.items.map((i: { name: string }) => i.name)).toEqual(["夜行偵探"]);
   expect(data.page.adult).toBe(false);
   const thumb = cardThumbUrl(PRIMARY_HOST, data.page.items[0].avatarUrl);
@@ -53,7 +53,7 @@ it("作者寫的 </script> 關不掉那一段：原樣留在資料裡，HTML 裡
 });
 
 it("其他語言用自己的語區；帶了篩選、不是正式網域、或卡片 App 網域：不放", async () => {
-  expect(inline((await page("https://sukisuki.ai/en/")).html).query).toEqual({ zone: "en", lang: "en", sort: "day", offset: 0 });
+  expect(inline((await page("https://sukisuki.ai/en/")).html).query).toEqual({ zone: "en", lang: "en", sort: "hot", offset: 0 });
   for (const url of ["https://hearthroom.club/?sort=week", "https://hearthroom.club/?tag=x", "https://hearthroom.club/?mode=following", "https://c.test/", "https://play.hearthroom.club/"]) {
     expect(inline((await page(url)).html), url).toBeNull();
   }
