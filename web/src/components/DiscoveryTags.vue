@@ -14,6 +14,9 @@ import { toggleTag } from "@/lib/discovery";
  * 有選中的籤時一律展開——看不到自己開了什麼篩選就關不掉。收起來的組只是不顯示，籤仍在文件裡。
  * 搜尋頁不帶旗標：那裡的籤列在篩選面板裡，本來就是點開才看的，四組全攤開。
  *
+ * 沒選類型時不畫「全部」：分組之後它孤零零佔一行、永遠亮著又點不動，看不出是什麼（owner 2026-10-11）。
+ * 選了類型才出現「清除類型」，放在籤尾（窄螢幕在標題列，收合鈕的位置）。搜尋頁的篩選面板自己有清除鈕，不重複畫。
+ *
  * counts：每顆籤後面的張數（再加上這一類會剩幾張）；0 張的變灰、點不下去，已選中的照樣點得掉。沒給就不標。
  */
 const props = withDefaults(defineProps<{ selected: string[]; hidden?: string[]; collapsible?: boolean; counts?: Record<string, number> | null }>(), { hidden: () => [], collapsible: false, counts: null });
@@ -38,6 +41,7 @@ const canFold = computed(() => props.collapsible && foldedCount.value > 0);
 const forced = computed(() => groups.value.some(g => !OPEN_GROUPS.includes(g.group) && g.entries.some(active)));
 const open = computed(() => !props.collapsible || expanded.value || forced.value);
 const folded = (group: TagGroup) => !open.value && !OPEN_GROUPS.includes(group);
+const clearable = computed(() => props.collapsible && props.selected.length > 0);
 function toggle(entry: TagEntry) {
   emit('change', active(entry) ? props.selected.filter(tag => !matches(entry, tag)) : [...props.selected, entry.key]);
 }
@@ -50,14 +54,14 @@ function toggle(entry: TagEntry) {
         <template v-if="hidden.length"> · <RouterLink :to="lp('/settings') + '#hidden'" class="discovery-tags__hidden">{{ $t('board.hidden', { n: hidden.length }) }}</RouterLink></template>
       </span>
       <!-- 有選中的籤時清單被撐開，收合鈕沒有事可做，就不畫：一顆按不下去的灰鈕只會讓人猜 -->
-      <button v-if="!selected.length" type="button" class="tagchip discovery-tags__toggle" :aria-expanded="!collapsed" aria-controls="discovery-tags-list" @click="expanded = !expanded">
+      <button v-if="clearable" type="button" class="tagchip discovery-tags__clear" @click="emit('change', [])">{{ $t('board.tags.clear') }}</button>
+      <button v-else-if="!selected.length" type="button" class="tagchip discovery-tags__toggle" :aria-expanded="!collapsed" aria-controls="discovery-tags-list" @click="expanded = !expanded">
         {{ collapsed ? $t('board.tags.expand', { n: catalog.length }) : $t('board.tags.collapse') }}
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
       </button>
     </div>
     <div id="discovery-tags-list" class="discovery-tags__inner">
-      <div class="discovery-tags__row">
-        <button type="button" class="tagchip" :class="{ 'is-on': !selected.length }" :aria-pressed="!selected.length" @click="emit('change', [])">{{ $t('board.tag.all') }}</button>
+      <div v-if="extras.length" class="discovery-tags__row">
         <button v-for="tag in extras" :key="tag" type="button" class="tagchip is-on" aria-pressed="true" @click="emit('change', toggleTag(selected, tag))">{{ tag }}</button>
       </div>
       <div v-for="g in groups" v-show="!folded(g.group)" :key="g.group" class="discovery-tags__row" :data-group="g.group">
@@ -67,11 +71,12 @@ function toggle(entry: TagEntry) {
           <span v-if="counts" class="tagchip__n">{{ counts[x.key] ?? 0 }}</span>
         </button>
       </div>
-      <div v-if="!folding && ((canFold && !forced) || hidden.length)" class="discovery-tags__row discovery-tags__tail">
+      <div v-if="!folding && ((canFold && !forced) || hidden.length || clearable)" class="discovery-tags__row discovery-tags__tail">
         <button v-if="canFold && !forced" type="button" class="tagchip discovery-tags__more" :aria-expanded="open" aria-controls="discovery-tags-list" @click="expanded = !expanded">
           {{ open ? $t('board.tags.collapse') : $t('board.tags.more', { n: foldedCount }) }}
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
         </button>
+        <button v-if="clearable" type="button" class="tagchip discovery-tags__clear" @click="emit('change', [])">{{ $t('board.tags.clear') }}</button>
         <RouterLink v-if="hidden.length" :to="lp('/settings') + '#hidden'" class="tagchip tagchip--hidden">{{ $t('board.hidden', { n: hidden.length }) }}</RouterLink>
       </div>
     </div>
@@ -94,13 +99,13 @@ function toggle(entry: TagEntry) {
 .discovery-tags__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); min-height: var(--h-lg); }
 .discovery-tags__label { font-size: 12px; font-weight: 600; letter-spacing: 0.04em; color: var(--text-3); }
 .discovery-tags__hidden { font-weight: 500; text-decoration: underline dashed; text-underline-offset: 3px; }
-.discovery-tags__toggle, .discovery-tags__more { gap: 4px; min-height: var(--h-sm); padding-block: 0; border-style: dashed; color: var(--text-3); }
+.discovery-tags__toggle, .discovery-tags__more, .discovery-tags__clear { gap: 4px; min-height: var(--h-sm); padding-block: 0; border-style: dashed; color: var(--text-3); }
 .discovery-tags__toggle svg, .discovery-tags__more svg { width: 12px; height: 12px; transition: transform var(--dur) var(--ease); }
 .discovery-tags__toggle[aria-expanded="true"] svg, .discovery-tags__more[aria-expanded="true"] svg { transform: rotate(180deg); }
 /* 籤的高度各寬度一致（30px）：窄螢幕原本撐到 44px，字四周留白太多、一顆顆顯得胖，跟橫放時判若兩物（owner 2026-10-03） */
 @media (max-width: 640px) {
   .discovery-tags__group { min-width: 0; }
-  /* 收合＝「全部」那行加玩法的兩行籤（3 × 30 ＋ 2 × 8）加上下 4px 的內距；下一行從邊緣被切掉，看得出下面還有 */
+  /* 收合＝前三行籤（3 × 30 ＋ 2 × 8）加上下 4px 的內距；下一行從邊緣被切掉，看得出下面還有 */
   .discovery-tags--collapsed .discovery-tags__inner { max-height: 114px; overflow: hidden; }
 }
 </style>

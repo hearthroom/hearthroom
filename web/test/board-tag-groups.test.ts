@@ -57,6 +57,19 @@ describe("類型列分組", () => {
     expect(more()?.getAttribute("aria-expanded")).toBe("true");
   });
 
+  it("沒選類型時不畫一顆點不動的「全部」；選了才在籤尾出現「清除類型」，點了清空", async () => {
+    await mount("/");
+    const texts = () => [...root.querySelectorAll<HTMLButtonElement>(".discovery-tags button")].map((b) => b.textContent?.trim());
+    expect(texts()).not.toContain("全部");
+    expect(root.querySelector(".discovery-tags__clear")).toBeNull();
+    chip("角色扮演")!.click(); await settle();
+    const clear = root.querySelector<HTMLButtonElement>(".discovery-tags__tail .discovery-tags__clear");
+    expect(clear?.textContent?.trim()).toBe(i18n.global.t("board.tags.clear"));
+    clear!.click(); await settle();
+    expect(router.currentRoute.value.query.tag).toBeUndefined();
+    expect(root.querySelector(".discovery-tags__clear")).toBeNull();
+  });
+
   it("選中的類型在收起來的組裡：自動展開", async () => {
     await mount("/?tag=hypnosis");
     expect(visible(chip("催眠"))).toBe(true);

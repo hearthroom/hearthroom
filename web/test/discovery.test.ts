@@ -37,7 +37,7 @@ describe("社區探索自然操作", () => {
     expect(vi.mocked(api.fetchBoard).mock.lastCall?.[0]?.tag).toEqual(["roleplay", "story"]);
     button("角色扮演").click(); await settle();
     expect(router.currentRoute.value.query.tag).toEqual(["story"]);
-    button("全部").click(); await settle();
+    button("清除類型").click(); await settle();
     expect(router.currentRoute.value.query.tag).toBeUndefined();
   });
   it("搜尋的標籤、时间與排序進入真實查詢，標籤分頁可以點進結果", async () => {
