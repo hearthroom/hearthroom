@@ -17,6 +17,10 @@ export interface TipPlatform {
   name: string;
   /** 條款禁止成人內容：從本站連過去可能讓作者的帳號被停用。可以綁，綁定時提醒作者 */
   caution?: true;
+  /** 還沒有帳號的作者去哪裡開通 */
+  signup: string;
+  /** 個人頁網址的樣子，綁定時給作者對照 */
+  example: string;
 }
 
 /**
@@ -26,13 +30,13 @@ export interface TipPlatform {
  * SubscribeStar 最少人知道，成人規則 2026 年還在變動，放最後不主推。
  */
 export const TIP_PLATFORMS: readonly TipPlatform[] = [
-  { id: "fanbox", name: "pixiv FANBOX" },
-  { id: "onlyfans", name: "OnlyFans" },
-  { id: "patreon", name: "Patreon" },
-  { id: "fantia", name: "Fantia" },
-  { id: "kofi", name: "Ko-fi", caution: true },
-  { id: "buymeacoffee", name: "Buy Me a Coffee", caution: true },
-  { id: "subscribestar", name: "SubscribeStar" },
+  { id: "fanbox", name: "pixiv FANBOX", signup: "https://www.fanbox.cc/", example: "https://www.fanbox.cc/@yourname" },
+  { id: "onlyfans", name: "OnlyFans", signup: "https://onlyfans.com/", example: "https://onlyfans.com/yourname" },
+  { id: "patreon", name: "Patreon", signup: "https://www.patreon.com/create", example: "https://www.patreon.com/yourname" },
+  { id: "fantia", name: "Fantia", signup: "https://fantia.jp/", example: "https://fantia.jp/fanclubs/12345" },
+  { id: "kofi", name: "Ko-fi", caution: true, signup: "https://ko-fi.com/", example: "https://ko-fi.com/yourname" },
+  { id: "buymeacoffee", name: "Buy Me a Coffee", caution: true, signup: "https://buymeacoffee.com/", example: "https://buymeacoffee.com/yourname" },
+  { id: "subscribestar", name: "SubscribeStar", signup: "https://subscribestar.adult/", example: "https://subscribestar.adult/yourname" },
 ];
 
 /** 一位作者最多幾條：面板一眼看完，也不讓作者頁變成一排廣告 */
@@ -58,10 +62,13 @@ const SHORTENERS = /^(?:bit\.ly|t\.co|tinyurl\.com|linktr\.ee|lnk\.bio|beacons\.
 const isName = (s: string | undefined): s is string => !!s && NAME.test(s) && !RESERVED.has(s.toLowerCase());
 
 /** host 去掉 www. 之後比對；回傳平台與重組好的連結 */
-function recognize(host: string, segments: string[]): TipParse {
+function recognize(host: string, segments: string[], query: URLSearchParams): TipParse {
   const [first, second] = segments;
   switch (host) {
     case "patreon.com": {
+      // 沒設自訂網址的創作者，個人頁是 /user?u=<數字>
+      const id = query.get("u");
+      if (first === "user" && !second && id && /^\d{1,15}$/.test(id)) return hit("patreon", id, `https://www.patreon.com/user?u=${id}`);
       const name = first === "c" ? second : first;
       return isName(name) ? hit("patreon", name, `https://www.patreon.com/${name}`) : miss("patreon");
     }
@@ -100,10 +107,33 @@ export function parseTipLink(raw: string): TipParse {
   const host = url.hostname.toLowerCase().replace(/^www\./, "");
   if (SHORTENERS.test(host)) return { ok: false, reason: "shortener" };
   const segments = url.pathname.split("/").filter(Boolean).map((s) => { try { return decodeURIComponent(s); } catch { return s; } });
-  return recognize(host, segments);
+  return recognize(host, segments, url.searchParams);
 }
 
 export const tipPlatform = (id: TipPlatformId) => TIP_PLATFORMS.find((p) => p.id === id)!;
+
+/** 只給帳號名時，照平台組出個人頁網址 */
+const PROFILE: Record<TipPlatformId, (handle: string) => string> = {
+  fanbox: (h) => `https://www.fanbox.cc/@${h}`,
+  onlyfans: (h) => `https://onlyfans.com/${h}`,
+  patreon: (h) => (/^\d+$/.test(h) ? `https://www.patreon.com/user?u=${h}` : `https://www.patreon.com/${h}`),
+  fantia: (h) => `https://fantia.jp/fanclubs/${h}`,
+  kofi: (h) => `https://ko-fi.com/${h}`,
+  buymeacoffee: (h) => `https://buymeacoffee.com/${h}`,
+  subscribestar: (h) => `https://subscribestar.adult/${h}`,
+};
+
+/**
+ * 綁定表單的一格：作者先選了平台，再貼網址或只打帳號名。
+ * 看起來像網址（有斜線，或以網域開頭）就照網址認，認出來是別的平台也照收；否則當成這個平台的帳號名。
+ */
+export function resolveTipInput(platform: TipPlatformId, raw: string): TipParse {
+  const text = raw.trim();
+  if (/\//.test(text) || /^(?:https?:|www\.)/i.test(text) || /^[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|cc|jp|adult|net|ee|ly|co|gd|cn|io|me|ai|to|id)$/i.test(text)) return parseTipLink(text);
+  const handle = text.replace(/^@/, "");
+  if (!handle) return { ok: false, reason: "invalid" };
+  return parseTipLink(PROFILE[platform](handle));
+}
 
 /**
  * 存起來的標準網址（JSON 陣列）→ 公開輸出。壞掉的 JSON、不再支援的網址都略過。
