@@ -39,3 +39,11 @@ for (const name of ["localStorage", "sessionStorage"] as const) {
     Object.defineProperty(window, name, { value: store, configurable: true, writable: true });
   }
 }
+
+// 埋點用 navigator.sendBeacon 送出（lib/track）。瀏覽器的 sendBeacon 只是排隊、不回 Promise；
+// happy-dom 的版本底層是一個 fetch，連不上（測試裡沒有 localhost:3000）時那個 Promise 的失敗沒人接，
+// 變成「未處理的拒絕」，整套測試因此不定期紅在不相干的檔案上（updates、play-loading，2026-10-11）。
+// 這裡換成照瀏覽器語義的空實現：收下、回 true，不真的發請求。
+if (typeof navigator !== 'undefined') {
+  Object.defineProperty(navigator, 'sendBeacon', { configurable: true, writable: true, value: () => true });
+}

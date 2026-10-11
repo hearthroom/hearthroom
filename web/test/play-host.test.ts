@@ -20,7 +20,8 @@ describe("card app host", () => {
     expect(router.currentRoute.value.query.lang).toBe("ja");
     expect(router.currentRoute.value.meta.playApp).toBe(true);
     expect(localeOf(router.currentRoute.value)).toBe("ja");
-  });
+    // 第一次導航要動態載入並轉譯整個對話頁的模組樹：單獨跑約 3.6 s，整套平行跑時會超過預設的 5 s
+  }, 20_000);
 
   it("signed out: stays on the card (guests see the opening; PlayPage asks them to sign in when they send)", async () => {
     session.me = null;
