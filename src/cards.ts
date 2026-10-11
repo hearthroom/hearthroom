@@ -9,6 +9,7 @@ import { HttpError, type Localized, pickLocale } from "./types";
 
 export interface CardRow {
   favorite_count?: number;
+  updated_at?: number;
   approved_version_id: string | null;
   approved_hosted_role_id: string | null;
   id: string;
@@ -71,7 +72,13 @@ const AUTHOR_JOIN = `LEFT JOIN member_identities ai ON ai.provider = c.provider 
   LEFT JOIN members am ON am.id = COALESCE(ac.owner_member_id,ai.member_id)
   LEFT JOIN card_numbers cn ON cn.provider = c.provider AND cn.source_role_id = c.source_role_id
   LEFT JOIN fandom_entities fe ON fe.qid = c.fandom_qid`;
-const CARD_COLUMNS = "c.*, CAST(c.id AS TEXT) AS id, fe.labels AS fandom_labels, am.handle AS author_handle, am.tip_links AS author_tip_links, am.display_name AS community_name, CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url END AS community_avatar, cn.num AS num, (SELECT COUNT(*) FROM member_favorites mf WHERE mf.card_id=c.id) AS favorite_count";
+/**
+ * 最近更新的時間（「更新」那個榜的排序鍵，也是卡片上的「幾天前更新」）：目前上線那一版審核通過的時刻——作者改了卡、新版過審，玩家才看得到新內容。
+ * 沒有審核紀錄（早期直接上線的版本）退回那一版建立的時間；沒有版本退回上榜時間。兩次查找都走主鍵。
+ */
+const UPDATED_AT = `COALESCE((SELECT COALESCE(r.decided_at, v.created_at) FROM hosting_versions v LEFT JOIN review_submissions r ON r.id = v.submission_id WHERE v.version_id = c.approved_version_id), c.registered_at)`;
+
+const CARD_COLUMNS = "c.*, CAST(c.id AS TEXT) AS id, " + UPDATED_AT + " AS updated_at, fe.labels AS fandom_labels, am.handle AS author_handle, am.tip_links AS author_tip_links, am.display_name AS community_name, CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url END AS community_avatar, cn.num AS num, (SELECT COUNT(*) FROM member_favorites mf WHERE mf.card_id=c.id) AS favorite_count";
 
 /** 卡號長什麼樣：純數字。網址與搜尋框裡看到這種形狀就當卡號查，其餘當上游的卡片 ID。 */
 export const CARD_NUMBER = /^[1-9]\d{0,11}$/;
@@ -136,6 +143,7 @@ export function toCard(row: CardRow, lang: string) {
     favoriteCount: row.favorite_count ?? 0,
     trending: Math.max(0, row.hot_score),
     registeredAt: row.registered_at,
+    updatedAt: row.updated_at ?? row.registered_at,
     syncedAt: row.last_synced_at,
   };
 }
@@ -310,12 +318,6 @@ export async function catalogTagCounts(db: D1Database, opts: CountScope): Promis
 const PRIOR_VOTES = 5;
 const PRIOR_MEAN = 3;
 const BAYES_SCORE = `(SELECT (${PRIOR_VOTES * PRIOR_MEAN} + COALESCE(SUM(s.score), 0)) * 1.0 / (${PRIOR_VOTES} + COUNT(*)) FROM card_scores s WHERE CAST(s.card_id AS INTEGER) = c.id)`;
-
-/**
- * 最近更新的排序鍵：目前上線那一版審核通過的時刻——作者改了卡、新版過審，玩家才看得到新內容。
- * 沒有審核紀錄（早期直接上線的版本）退回那一版建立的時間；沒有版本退回上榜時間。兩次查找都走主鍵。
- */
-const UPDATED_AT = `COALESCE((SELECT COALESCE(r.decided_at, v.created_at) FROM hosting_versions v LEFT JOIN review_submissions r ON r.id = v.submission_id WHERE v.version_id = c.approved_version_id), c.registered_at)`;
 
 export async function listCards(db: D1Database, opts: ListOptions) {
   const where: string[] = opts.anyStatus ? ["1=1"] : [`c.${listed(!!opts.allowNsfw)}`, NOT_A_COPY("c"), "c.provider = 'harbor'"];

@@ -48,6 +48,8 @@ export interface CommunityCard {
   favoriteCount?: number;
   trending: number;
   registeredAt: number;
+  /** 目前上線那一版過審的時刻（卡片上的「幾天前更新」）；舊伺服器沒有 */
+  updatedAt?: number;
   syncedAt: number;
   /** 本站永久數字卡號，私有卡與公開卡共用同一套編號。 */
   num?: number;

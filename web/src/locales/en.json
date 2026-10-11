@@ -48,6 +48,7 @@
   "card.own.unshared": "Review access was withdrawn for this card. It is not listed on the board.",
   "card.own.manage": "Manage in My cards",
   "card.talkCount": "{n} chats",
+  "card.updatedAgo": "Updated {time}",
   "card.noSummary": "No blurb yet",
   "author.eyebrow": "Author",
   "author.stat.cards": "Cards listed",

@@ -3,7 +3,7 @@ import CommunityAvatar from "@/components/CommunityAvatar.vue";
 import CommunityName from "@/components/CommunityName.vue";
 import { computed, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
-import { compact, hueFrom } from "@/lib/format";
+import { compact, hueFrom, relativeTime } from "@/lib/format";
 import { zoneLabel } from "@/lib/i18n";
 import { titleLayout } from "@/lib/title-layout";
 import { useLocalePath } from "@/lib/use-locale";
@@ -77,6 +77,16 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
       <!-- 分級與精選都標在立繪角上：不跟名字搶那兩行的寬度 -->
       <span v-if="card.featured" class="card__featured" :title="$t('card.featuredHint')">{{ $t("card.featured") }}</span>
       <RatingMark v-if="card.rating === 'R'" rating="R" variant="chip" class="card__flag" />
+      <!-- 幾天前更新：目前上線那一版過審的時刻（跟「更新」榜同一個口徑）。標在立繪右下角（像影片縮圖的時長）：
+         底下那一行在手機上只有 140px，作者、時間、對話數三樣放不下。畫面只放時鐘與相對時間，整句給提示與讀屏 -->
+      <span v-if="card.updatedAt" class="card__updated" :title="$t('card.updatedAgo', { time: relativeTime(card.updatedAt) })">
+        <span class="sr-only">{{ $t("card.updatedAgo", { time: relativeTime(card.updatedAt) }) }}</span>
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.3" />
+          <path d="M8 4.8V8l2.2 1.4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <time :datetime="new Date(card.updatedAt).toISOString()" aria-hidden="true">{{ relativeTime(card.updatedAt) }}</time>
+      </span>
       <span v-if="rank" class="medal card__rank" :class="rank <= 3 && `medal--${rank}`" role="img" :aria-label="$t('board.rank', { n: rank })">{{ rank }}</span>
     </div>
 
@@ -207,6 +217,15 @@ a.tag:hover { background: var(--accent-soft); color: var(--accent-text); }
 .card__author { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* 省略號要加在名字文字那一層（CommunityName 外層是 flex，自己不會出現「…」） */
 .card__author > :deep(span:first-child) { overflow: hidden; text-overflow: ellipsis; }
+/* 立繪右下角的更新時間：半透明深底白字，任何立繪上都讀得到 */
+.card__updated {
+  position: absolute; right: 8px; bottom: 8px;
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 7px; border-radius: var(--r-pill);
+  background: rgba(16, 16, 19, 0.62); color: #fff;
+  font-size: 11px; line-height: 16px; white-space: nowrap; pointer-events: none;
+}
+.card__updated svg { width: 11px; height: 11px; }
 .card__num { display: inline-flex; align-items: center; gap: 3px; flex: none; font-variant-numeric: tabular-nums; }
 .card__num svg { width: 13px; height: 13px; }
 .card__num--up { color: var(--accent-text); font-weight: 600; }

@@ -48,6 +48,7 @@
   "card.own.unshared": "このカードの審査権限は取り消されているため、ランキングには掲載されません。",
   "card.own.manage": "マイカードで管理",
   "card.talkCount": "{n} 回の会話",
+  "card.updatedAgo": "{time}に更新",
   "card.noSummary": "紹介文はまだありません",
   "author.eyebrow": "作者",
   "author.stat.cards": "掲載したカード",
