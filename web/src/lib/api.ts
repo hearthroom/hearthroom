@@ -221,17 +221,18 @@ export async function fetchBoard(query: BoardQuery = {}): Promise<CardPage> {
 
 /**
  * 類型列每顆籤後面的張數：條件跟榜單一樣（語區、已選的類型、成人內容、不想看的類型），
- * 每個數字是「再加上這一類會剩幾張」。
+ * 每個數字是「再加上這一類會剩幾張」。ratings 是各級的張數（不套分級本身，給分級選單用；none＝沒標分級）。
  */
-export async function fetchTagCounts(query: { zone: string; tag: string[] }): Promise<Record<string, number>> {
+export async function fetchTagCounts(query: { zone: string; tag: string[]; rating?: string }): Promise<{ counts: Record<string, number>; ratings: Record<string, number> }> {
   const params = new URLSearchParams({ zone: query.zone });
   query.tag.forEach((tag) => params.append("tag", tag));
+  if (query.rating) params.set("rating", query.rating);
   const viewer = await viewerAccess();
   if (viewer.param) params.set("nsfw", "1");
   const hide = await viewerHide();
   if (hide) params.set("hide", hide);
   const res = await fetch(`${COMMUNITY_API}/tags/counts?${params}`, { headers: { ...from(), ...viewer.headers } });
-  return (await json<{ counts: Record<string, number> }>(res)).counts;
+  return json<{ counts: Record<string, number>; ratings: Record<string, number> }>(res);
 }
 
 /** opts.quiet：不算一次瀏覽（對話頁為了換 manifest 讀卡片資料時用）。 */
