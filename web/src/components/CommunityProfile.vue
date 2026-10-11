@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import {onBeforeUnmount, ref} from 'vue';
 import AccountIcon from './AccountIcon.vue';
+import TipLinksField from './TipLinksField.vue';
+import {parseTipLink} from '../../../shared/tip-links';
 import {useI18n} from 'vue-i18n';
 import {useSession} from '@/lib/session';
 import {updateSiteProfile} from '@/lib/api';
@@ -9,10 +11,10 @@ const emit=defineEmits<{updated:[]}>();
 const session=useSession();
 const {t}=useI18n();
 const editing=ref(false),busy=ref(false),error=ref(''),saved=ref(false);
-const name=ref(''),bio=ref(''),file=ref<File|null>(null),preview=ref(''),removeAvatar=ref(false);
+const name=ref(''),bio=ref(''),tips=ref<string[]>([]),file=ref<File|null>(null),preview=ref(''),removeAvatar=ref(false);
 let objectUrl='';
 function clearPreview(){if(objectUrl)URL.revokeObjectURL(objectUrl);objectUrl='';file.value=null;}
-function begin(){clearPreview();name.value=session.displayName;bio.value=session.profile?.bio??'';preview.value=session.avatarUrl;removeAvatar.value=false;editing.value=true;saved.value=false;error.value='';}
+function begin(){clearPreview();name.value=session.displayName;bio.value=session.profile?.bio??'';tips.value=[...(session.profile?.tipLinks??[])];if(!tips.value.length)tips.value=[''];preview.value=session.avatarUrl;removeAvatar.value=false;editing.value=true;saved.value=false;error.value='';}
 function selectAvatar(event:Event){
  const input=event.target as HTMLInputElement;const selected=input.files?.[0];if(!selected)return;
  error.value='';
@@ -22,10 +24,14 @@ function selectAvatar(event:Event){
 function remove(){clearPreview();preview.value='';removeAvatar.value=true;}
 function cancel(){clearPreview();editing.value=false;error.value='';}
 async function save(){
- if(busy.value)return;busy.value=true;error.value='';
+ if(busy.value)return;
+ // 認不得的連結先在這裡擋：伺服器整包拒收，作者只會看到一句籠統的失敗
+ const tipLinks=tips.value.map(v=>v.trim()).filter(Boolean);
+ if(tipLinks.some(v=>!parseTipLink(v).ok)){error.value=t('tips.field.fix');return;}
+ busy.value=true;error.value='';
  try {
   const token=await session.accessToken();if(!token)throw new Error('expired');
-  session.profile=await updateSiteProfile(token,{displayName:name.value,bio:bio.value,avatar:file.value,removeAvatar:removeAvatar.value});
+  session.profile=await updateSiteProfile(token,{displayName:name.value,bio:bio.value,tipLinks,avatar:file.value,removeAvatar:removeAvatar.value});
   clearPreview();editing.value=false;saved.value=true;emit("updated");
  }catch {error.value=t('community.failed');}finally{busy.value=false;}
 }
@@ -46,6 +52,7 @@ onBeforeUnmount(clearPreview);
    <p id="avatar-hint" class="subtle">{{ $t('community.avatarHint',{maxMB:AVATAR_MAX_MB}) }}</p>
    <label>{{ $t('community.name') }}<input v-model="name" required maxlength="60" autocomplete="nickname" :disabled="busy" /></label>
    <label>{{ $t('community.bio') }}<textarea v-model="bio" maxlength="500" rows="4" :disabled="busy" :placeholder="$t('community.bioHint')" /></label>
+   <TipLinksField v-model="tips" :disabled="busy" />
    <p class="subtle">{{ $t('community.publicHint') }}</p>
    <p v-if="error" role="alert" class="notice notice--error">{{ error }}</p>
    <div class="actions"><button class="btn btn--primary" :disabled="busy||!name.trim()">{{ busy?$t('community.saving'):$t('community.save') }}</button><button type="button" class="btn btn--ghost" :disabled="busy" @click="cancel">{{ $t('linked.cancel') }}</button></div>
