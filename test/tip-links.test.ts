@@ -2,7 +2,7 @@ import { SELF, env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { bearer, myRolesOnUpstream, resetDb, restoreUpstream, role } from "./helpers";
 import { upstream } from "../src/upstream";
-import { orderTipLinks, parseTipLink, readTipLinks } from "../shared/tip-links";
+import { orderTipLinks, parseTipLink, readTipLinks, resolveTipInput } from "../shared/tip-links";
 
 describe("parseTipLink", () => {
   it("recognizes each platform's profile page and rebuilds one canonical URL", () => {
@@ -21,6 +21,23 @@ describe("parseTipLink", () => {
     for (const [input, platform, handle, url] of cases) {
       expect(parseTipLink(input), input).toEqual({ ok: true, link: { platform, handle, url } });
     }
+  });
+
+  it("accepts a Patreon profile that has no custom name", () => {
+    expect(parseTipLink("https://www.patreon.com/user?u=12345678")).toEqual({ ok: true, link: { platform: "patreon", handle: "12345678", url: "https://www.patreon.com/user?u=12345678" } });
+    expect(parseTipLink("https://www.patreon.com/user")).toEqual({ ok: false, reason: "not_profile", platform: "patreon" });
+  });
+
+  it("builds the profile URL when the author types only a username for the chosen platform", () => {
+    expect(resolveTipInput("fanbox", "@nightferry")).toEqual({ ok: true, link: { platform: "fanbox", handle: "nightferry", url: "https://www.fanbox.cc/@nightferry" } });
+    expect(resolveTipInput("onlyfans", "night.ferry")).toEqual({ ok: true, link: { platform: "onlyfans", handle: "night.ferry", url: "https://onlyfans.com/night.ferry" } });
+    expect(resolveTipInput("fantia", "12345")).toMatchObject({ ok: true, link: { url: "https://fantia.jp/fanclubs/12345" } });
+    expect(resolveTipInput("subscribestar", "nightferry")).toMatchObject({ ok: true, link: { url: "https://subscribestar.adult/nightferry" } });
+    // 貼的是網址就照網址認，即使是另一個平台
+    expect(resolveTipInput("fanbox", "ko-fi.com/nightferry")).toMatchObject({ ok: true, link: { platform: "kofi" } });
+    expect(resolveTipInput("fanbox", "bit.ly")).toEqual({ ok: false, reason: "shortener" });
+    expect(resolveTipInput("fantia", "abc")).toEqual({ ok: false, reason: "not_profile", platform: "fantia" });
+    expect(resolveTipInput("kofi", "   ")).toEqual({ ok: false, reason: "invalid" });
   });
 
   it("refuses anything that is not a recognized profile page", () => {

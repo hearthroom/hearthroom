@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import {onBeforeUnmount, ref} from 'vue';
 import AccountIcon from './AccountIcon.vue';
-import TipLinksField from './TipLinksField.vue';
-import {parseTipLink} from '../../../shared/tip-links';
+import TipLinksField,{type TipRow} from './TipLinksField.vue';
+import {parseTipLink,resolveTipInput} from '../../../shared/tip-links';
 import {useI18n} from 'vue-i18n';
 import {useSession} from '@/lib/session';
 import {updateSiteProfile} from '@/lib/api';
@@ -11,10 +11,10 @@ const emit=defineEmits<{updated:[]}>();
 const session=useSession();
 const {t}=useI18n();
 const editing=ref(false),busy=ref(false),error=ref(''),saved=ref(false);
-const name=ref(''),bio=ref(''),tips=ref<string[]>([]),file=ref<File|null>(null),preview=ref(''),removeAvatar=ref(false);
+const name=ref(''),bio=ref(''),tips=ref<TipRow[]>([]),file=ref<File|null>(null),preview=ref(''),removeAvatar=ref(false);
 let objectUrl='';
 function clearPreview(){if(objectUrl)URL.revokeObjectURL(objectUrl);objectUrl='';file.value=null;}
-function begin(){clearPreview();name.value=session.displayName;bio.value=session.profile?.bio??'';tips.value=[...(session.profile?.tipLinks??[])];if(!tips.value.length)tips.value=[''];preview.value=session.avatarUrl;removeAvatar.value=false;editing.value=true;saved.value=false;error.value='';}
+function begin(){clearPreview();name.value=session.displayName;bio.value=session.profile?.bio??'';tips.value=(session.profile?.tipLinks??[]).flatMap(url=>{const p=parseTipLink(url);return p.ok?[{platform:p.link.platform,value:url}]:[];});preview.value=session.avatarUrl;removeAvatar.value=false;editing.value=true;saved.value=false;error.value='';}
 function selectAvatar(event:Event){
  const input=event.target as HTMLInputElement;const selected=input.files?.[0];if(!selected)return;
  error.value='';
@@ -26,8 +26,9 @@ function cancel(){clearPreview();editing.value=false;error.value='';}
 async function save(){
  if(busy.value)return;
  // 認不得的連結先在這裡擋：伺服器整包拒收，作者只會看到一句籠統的失敗
- const tipLinks=tips.value.map(v=>v.trim()).filter(Boolean);
- if(tipLinks.some(v=>!parseTipLink(v).ok)){error.value=t('tips.field.fix');return;}
+ const resolved=tips.value.filter(r=>r.value.trim()).map(r=>resolveTipInput(r.platform,r.value));
+ if(resolved.some(r=>!r.ok)){error.value=t('tips.field.fix');return;}
+ const tipLinks=resolved.map(r=>r.ok?r.link.url:'');
  busy.value=true;error.value='';
  try {
   const token=await session.accessToken();if(!token)throw new Error('expired');
