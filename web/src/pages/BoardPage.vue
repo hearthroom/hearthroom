@@ -9,7 +9,7 @@ import { starterFor } from "@/lib/onboarding";
 import type { CommunityCard } from "@/lib/types";
 import FollowFeed from "@/components/FollowFeed.vue";
 import CardGrid from "@/components/CardGrid.vue";
-import { fetchBoard, fetchCard } from "@/lib/api";
+import { fetchBoard, fetchCard, fetchTagCounts } from "@/lib/api";
 import { recallBoard, rememberBoard } from "@/lib/board-memory";
 import { takeInlineBoard } from "@/lib/board-inline";
 import { rememberCards } from "@/lib/card-memory";
@@ -36,30 +36,29 @@ watch(() => (tourState.step === "r18" || tourState.step === "card") ? starterFor
 const { t } = useI18n();
 
 const page = ref<CardPage | null>(null);
-/** 日榜是空的、畫面上改放的是哪個榜；沒有改放時是 null */
-const fallbackSort = ref<Sort | null>(null);
-/** 分頁列亮哪一個、增量要不要顯示：跟著畫面上實際是哪個榜 */
-const shownSort = computed<Sort>(() => fallbackSort.value ?? sort.value);
+/** 開窗的榜卡太少時接在下面的最熱（topUp） */
+const more = ref<CommunityCard[]>([]);
 const loading = ref(true);
 const error = ref("");
 
-/** 榜的種類照魅魔島：日榜（24h）、週榜（7 天）、月榜（30 天）、最熱、最新、推薦（隨機）。窗口看的是上榜時間。 */
-const SORTS: Sort[] = ["day", "week", "month", "hot", "new", "random"];
+/**
+ * 榜的種類照魅魔島：最熱、日榜（24h）、週榜（7 天）、月榜（30 天）、最新、推薦（隨機）。窗口看的是上榜時間。
+ * 首頁預設最熱、排最左：新站一天上不了幾張卡，日榜（上榜 24 小時內）常常只有一兩張，
+ * 第一屏看起來像沒人的站（2026-10-11 線上 34 張卡、日榜 2 張）。最熱是全站卡一起排，站上有卡就不會空。
+ */
+const SORTS: Sort[] = ["hot", "day", "week", "month", "new", "random"];
 /** 三個開窗的榜才顯示「正在被聊」的增量：最熱是累積量，增量在那裡沒意義。 */
 const WINDOWED = new Set<Sort>(["day", "week", "month"]);
-/**
- * 一進首頁（沒指定榜、沒篩類型、第一頁）而日榜是空的：新站人少，日榜常常整天空著，
- * 第一屏一張卡都沒有看起來像沒人的站（owner 2026-09-26）。依序改放週榜（還是「最近」，有正在被聊的增量），
- * 再不行放最熱（累積量，站上有卡就不會空）。自己點了日榜的人照實看日榜。
- */
-const LANDING_FALLBACK: Sort[] = ["week", "hot"];
+/** 開窗的榜第一頁不到這麼多張：下面接上最熱，最多接這麼多張 */
+const THIN = 8;
+const MORE_LIMIT = 12;
 
 
 /** 角色卡探索或關注動態；相容舊作者榜連結。 */
 const mode = computed(() => ["following", "authors"].includes(String(route.query.mode)) ? "following" : "cards");
 const sort = computed<Sort>(() => {
   const s = route.query.sort;
-  return typeof s === "string" && (SORTS as string[]).includes(s) ? (s as Sort) : "day";
+  return typeof s === "string" && (SORTS as string[]).includes(s) ? (s as Sort) : "hot";
 });
 const tags = computed(() => selectedTags(route.query.tag));
 const offset = computed(() => Number(route.query.offset ?? 0) || 0);
@@ -96,74 +95,58 @@ function memoryKey(query: Record<string, unknown>): string | null {
 }
 
 const currentQuery = () => ({ zone: zone.value, tag: tags.value, sort: sort.value, offset: offset.value, lang: contentLang(locale.value) });
-/** 身分還沒到時就先讀好的週榜：等身分到了、確認是照他的開關讀的，才記起來 */
-let earlyWeek: CardPage | null = null;
+type BoardQuery = ReturnType<typeof currentQuery>;
 
 /** 身分到了、確認畫面上這份就是給他的：現在才知道該記在誰的名下 */
 function adoptShown() {
-  const query = currentQuery();
-  const key = memoryKey(query);
+  const key = memoryKey(currentQuery());
   if (key && page.value) rememberBoard(key, page.value);
-  const weekKey = memoryKey({ ...query, sort: "week" });
-  if (earlyWeek && weekKey && servedFor(earlyWeek, session.profile?.showNsfw)) rememberBoard(weekKey, earlyWeek);
-  earlyWeek = null;
+}
+
+/**
+ * 開窗的榜第一頁不到一屏：下面接上最熱（去掉上面已有的），一屏不會只剩一兩張卡。
+ * 只在沒篩類型、第一頁時接——篩了類型、翻到後面是使用者自己要的範圍，不往裡塞別的。
+ */
+async function topUp(id: number, query: BoardQuery, shown: CardPage) {
+  if (!WINDOWED.has(query.sort) || query.tag.length || query.offset || shown.items.length >= THIN) return;
+  const hotQuery = { ...query, sort: "hot" as Sort };
+  const hotKey = memoryKey(hotQuery);
+  const hot = (hotKey ? recallBoard(hotKey) : null) ?? await fetchBoard(hotQuery).catch(() => null);
+  if (!hot || id !== loadId) return;
+  if (hotKey) rememberBoard(hotKey, hot);
+  const seen = new Set(shown.items.map((c) => c.id));
+  more.value = hot.items.filter((c) => !seen.has(c.id)).slice(0, MORE_LIMIT);
 }
 
 async function load() {
   const id = ++loadId;
   error.value = "";
+  more.value = [];
   if (mode.value !== "cards") { loading.value = false; return; }
   const query = currentQuery();
   const key = memoryKey(query);
   const remembered = key ? recallBoard(key) : null;
   const landing = route.query.sort === undefined && !tags.value.length && offset.value === 0;
   // 看過的分頁先畫出來，背景照常重讀；沒看過的才讓舊畫面變淡等它
-  if (remembered) { page.value = remembered; fallbackSort.value = remembered.sort !== query.sort ? remembered.sort : null; }
-  // 新開的首頁：HTML 裡已經放好第一屏的榜單（照看的人的 cookie 讀的，日榜空著時已改放週榜／最熱），
+  if (remembered) page.value = remembered;
+  // 新開的首頁：HTML 裡已經放好第一屏的榜單（照看的人的 cookie 讀的最熱），
   // 直接畫、不再讀一次。身分到了由下面的 watch 比對開關，對不上照舊重讀。
   const inline = landing && !remembered ? takeInlineBoard(query) : null;
   if (inline) {
     rememberCards(inline.items);
     page.value = inline;
-    fallbackSort.value = inline.sort !== query.sort && inline.items.length ? inline.sort : null;
     loading.value = false;
     if (key) rememberBoard(key, inline);
-    // 日榜有卡：週榜照樣在背景讀好記起來（點過去不必等）；改放的是週榜：它本身就是週榜
-    if (inline.sort === "week") earlyWeek = inline;
-    else if (query.sort === "day") {
-      void fetchBoard({ ...query, sort: "week" }).then((week) => {
-        const weekKey = memoryKey({ ...query, sort: "week" });
-        if (weekKey) rememberBoard(weekKey, week);
-        else earlyWeek = week;
-      }).catch(() => {});
-    }
     return;
   }
   loading.value = !remembered;
-  // 一進首頁就同時讀週榜：日榜空著時不必再多等一趟（實測 0.54 s）；日榜有卡時它記起來，點週榜就是現成的
-  const weekEarly = landing && query.sort === "day" ? fetchBoard({ ...query, sort: "week" }).catch(() => null) : null;
   try {
-    let result = await fetchBoard(query);
-    if (landing && !result.items.length) {
-      for (const next of LANDING_FALLBACK) {
-        const alternative = (next === "week" ? await weekEarly : null) ?? await fetchBoard({ ...query, sort: next });
-        if (id !== loadId) return;
-        result = alternative;
-        if (alternative.items.length) break;
-      }
-    } else if (weekEarly) {
-      void weekEarly.then((week) => {
-        if (!week) return;
-        const weekKey = memoryKey({ ...query, sort: "week" });
-        if (weekKey) rememberBoard(weekKey, week);
-        else earlyWeek = week;
-      });
-    }
+    const result = await fetchBoard(query);
     if (id !== loadId) return;
     page.value = result;
-    fallbackSort.value = result.sort !== query.sort && result.items.length ? result.sort : null;
     const storeKey = memoryKey(query);
     if (storeKey) rememberBoard(storeKey, result);
+    void topUp(id, query, result);
     if (recheckAfterLoad && session.profile) {
       recheckAfterLoad = false;
       if (!servedFor(result, session.profile.showNsfw)) void load();
@@ -208,6 +191,18 @@ watch(() => (!session.me && guestAdult.loaded ? guestAdult.showNsfw : null), (no
 });
 // 不想看的類型載好或改了（設定頁改完回來）：同樣重讀
 watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (now !== "" || before !== undefined)) load(); });
+
+/**
+ * 類型列每顆籤後面的張數。跟排序、翻頁無關，只看語區、選了什麼、看的人的開關；讀不到就不標（籤照常能點）。
+ * 開關的依據跟榜單一樣：登入的人看帳號、遊客看遊客憑證。
+ */
+const tagCounts = ref<Record<string, number> | null>(null);
+let countsId = 0;
+watch(() => mode.value === "cards" ? JSON.stringify([zone.value, tags.value, hidden.value, (session.me ? session.profile : viewerAdult(session))?.showNsfw ?? null]) : null, (now) => {
+  if (!now) return;
+  const id = ++countsId;
+  void fetchTagCounts({ zone: zone.value, tag: tags.value }).then((counts) => { if (id === countsId) tagCounts.value = counts; }, () => { if (id === countsId) tagCounts.value = null; });
+}, { immediate: true });
 </script>
 
 <template>
@@ -222,19 +217,18 @@ watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (no
       R18 開關搬進頁首（App.vue）。
     -->
     <div class="sorts" role="group" :aria-label="$t('board.sorts')">
-      <button v-for="s in SORTS" :key="s" class="sorts__item" :class="{ 'sorts__item--on': mode === 'cards' && shownSort === s }" :aria-pressed="mode === 'cards' && shownSort === s" @click="navigate({ mode: undefined, sort: s })">
+      <button v-for="s in SORTS" :key="s" class="sorts__item" :class="{ 'sorts__item--on': mode === 'cards' && sort === s }" :aria-pressed="mode === 'cards' && sort === s" @click="navigate({ mode: undefined, sort: s })">
         {{ $t(`board.sort.${s}`) }}
       </button>
       <button class="sorts__item sorts__mode" :class="{ 'sorts__item--on': mode === 'following' }" :aria-pressed="mode === 'following'" @click="switchMode('following')">{{ $t("board.mode.following") }}</button>
     </div>
 
     <!-- 類型列：固定的一排（照魅魔島），鍵進網址、名字跟介面語言走。寬螢幕摺成幾行全部看得到；窄螢幕收成兩行，點開才全展 -->
-    <DiscoveryTags v-if="mode === 'cards'" :selected="tags" :hidden="hidden" collapsible @change="navigate({ tag: $event.length ? $event : undefined })" />
+    <DiscoveryTags v-if="mode === 'cards'" :selected="tags" :hidden="hidden" :counts="tagCounts" collapsible @change="navigate({ tag: $event.length ? $event : undefined })" />
 
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
 
     <template v-if="mode === 'cards'">
-      <p v-if="fallbackSort" class="subtle count" role="status">{{ $t(`board.fallback.${fallbackSort}`) }}</p>
       <p v-if="page && page.total !== null" class="subtle count">{{ $t("board.count", { n: page.total }) }}</p>
       <!-- 新手引導走到首頁那兩步：入門卡置頂，讓引導框得到（不擠進榜單，名次不動） -->
       <div v-if="starterCard" class="starter" data-tour="starter">
@@ -246,10 +240,14 @@ watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (no
         :busy="loading"
         :ranked="!tags.length"
         :rank-offset="page?.offset ?? 0"
-        :show-trending="WINDOWED.has(shownSort)"
+        :show-trending="WINDOWED.has(sort)"
         :empty-title="$t(tags.length ? 'board.empty.search.title' : 'board.empty.title')"
         :empty-hint="$t(tags.length ? 'board.empty.search.hint' : 'board.empty.hint')"
       />
+      <section v-if="more.length" class="more" data-board-more>
+        <h2 class="more__title">{{ $t("board.more.title") }}</h2>
+        <CardGrid :cards="more" />
+      </section>
       <nav v-if="page && (page.offset > 0 || page.hasNext)" class="pager">
         <button class="btn btn--sm" :disabled="page.offset === 0" @click="navigate({ offset: String(Math.max(0, page.offset - page.limit)) })">← {{ $t("pager.prev") }}</button>
         <span class="subtle">
@@ -281,6 +279,8 @@ watch(() => hidden.value.join(","), (now, before) => { if (now !== before && (no
 @media (max-width: 400px) { .sorts__item { padding: 0 8px; } }
 
 .count { margin-bottom: var(--s-3); font-variant-numeric: tabular-nums; }
+.more { margin-top: var(--s-6); padding-top: var(--s-5); border-top: 1px solid var(--line); }
+.more__title { margin: 0 0 var(--s-3); font-size: 15px; font-weight: 600; color: var(--text-2); }
 /* 置頂的入門卡跟榜單的卡同寬：照榜單的欄數取一欄 */
 .starter { width: calc((100% - var(--s-4)) / 2); margin-bottom: var(--s-5); }
 @media (min-width: 600px) { .starter { width: calc((100% - 2 * var(--s-4)) / 3); } }

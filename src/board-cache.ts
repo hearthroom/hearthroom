@@ -9,9 +9,10 @@ interface Key { edge: Request; kv: string }
 export async function boardKey(raw: string, revision: number, adult: boolean, locale?: string): Promise<Key> {
   const source = new URL(raw);
   const url = new URL(source.pathname, source.origin);
+  const counts = source.pathname === "/v1/tags/counts";
   const fields = source.pathname === "/v1/cards"
     ? ["zone", "sort", "period", "q", "author", "limit", "offset", "lang", "hide"]
-    : ["zone", "sort", "q", "limit", "offset"];
+    : counts ? ["zone", "hide"] : ["zone", "sort", "q", "limit", "offset"];
   for (const field of fields) {
     const value = source.searchParams.get(field);
     if (value !== null) url.searchParams.set(field, value);
@@ -19,6 +20,8 @@ export async function boardKey(raw: string, revision: number, adult: boolean, lo
   if (source.pathname === "/v1/cards") {
     const language = locale ?? source.searchParams.get("lang") ?? "zh";
     url.searchParams.set("lang", ["en", "ja", "ko"].find(value => language.startsWith(value)) ?? "zh");
+  }
+  if (source.pathname === "/v1/cards" || counts) {
     for (const tag of [...new Set(source.searchParams.getAll("tag").map(t => t.trim()).filter(Boolean))].sort()) {
       url.searchParams.append("tag", tag);
     }
