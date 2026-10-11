@@ -30,6 +30,7 @@ import { isPlayHost } from "@/lib/site";
 import { isStandalone } from "@/lib/pwa";
 import { onStageSignOut, stageStorageScope } from "@/lib/stage-storage";
 import { playSocialHost } from "@/lib/play-social";
+import { markStageContentReady } from "@/lib/stage-ready";
 import type { useSession } from "@/lib/session";
 
 type Session = ReturnType<typeof useSession>;
@@ -161,6 +162,8 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
         themeColor: (color) => {
           useAppearance().setChromeColor(color);
         },
+        // 舞台第一次畫出內容：對話頁收掉蓋在上面的載入畫面（lib/stage-ready）
+        contentReady: () => markStageContentReady(),
       },
       nav: {
         // 卡片 App 網域上沒有站台可回：App 的入口就是這張卡自己（/<roleId>/），回到它就是「回到起點」

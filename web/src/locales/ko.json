@@ -533,6 +533,8 @@
   "play.title": "플레이",
   "play.loading": "무대를 불러오는 중…",
   "play.loadFailed": "무대를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+  "play.entering": "대화에 들어가는 중…",
+  "play.loadingSlow": "처음에는 조금 더 걸려요…",
   "play.backToCard": "카드로 돌아가기",
   "nav.resources": "내 리소스",
   "nav.settings": "사용자 설정",

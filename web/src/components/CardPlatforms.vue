@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { fetchCardPlatforms, type CardPlatform } from "@/lib/api";
 import {
   accountToken,
@@ -10,12 +10,15 @@ import { connectionMessage, platformPath } from "@/lib/distribution";
 import { currentProvider, providerName, type ProviderId } from "@/lib/provider";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
+import { savePlayIntro, type PlayIntro } from "@/lib/play-intro";
 const props = defineProps<{
   cardId: string;
   provider?: string;
   cardNumber?: number | null;
   /** 卡片頁一進來就先發出去的查詢：不必等卡片畫完才開始找可遊玩的平台。查的是這張卡才用 */
   pending?: { id: string; request: Promise<CardPlatform[]> } | null;
+  /** 卡名與封面：跳去對話頁前先交給它，載入畫面第一幀就畫得出這張卡（lib/play-intro） */
+  intro?: PlayIntro | null;
 }>();
 const session = useSession();
 const { lp } = useLocalePath();
@@ -83,9 +86,14 @@ watch(
   },
   { immediate: true }
 );
+// 從對話頁按返回：瀏覽器從往返快取原樣還原這一頁，連同按下時的忙碌狀態，按鈕會一直是灰的。
+const onPageShow = (event: PageTransitionEvent) => { if (event.persisted) busy.value = false; };
+onMounted(() => window.addEventListener("pageshow", onPageShow));
+onBeforeUnmount(() => window.removeEventListener("pageshow", onPageShow));
 async function play() {
   if (!choice.value || busy.value) return;
   busy.value = true;
+  if (props.intro) savePlayIntro([props.cardId, props.cardNumber], props.intro);
   const destination = platformPath(
     lp(`/play/${props.cardId}`),
     choice.value.provider

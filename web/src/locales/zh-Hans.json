@@ -533,6 +533,8 @@
   "play.title": "对话",
   "play.loading": "舞台加载中⋯",
   "play.loadFailed": "舞台加载不进来，请稍后再试。",
+  "play.entering": "正在进入对话⋯",
+  "play.loadingSlow": "第一次进入要多等一下⋯",
   "play.backToCard": "回到卡片",
   "nav.resources": "我的资源",
   "nav.settings": "用户设置",
