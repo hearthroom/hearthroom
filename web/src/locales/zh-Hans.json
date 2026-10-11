@@ -17,6 +17,8 @@
   "board.search.placeholder": "搜索角色名、简介或标签",
   "board.search.submit": "搜索",
   "board.sort.hot": "最热",
+  "board.sort.score": "评分",
+  "board.sort.favorites": "收藏",
   "board.sort.new": "最新",
   "board.sort.relevance": "最相关",
   "board.count": "{n} 张",

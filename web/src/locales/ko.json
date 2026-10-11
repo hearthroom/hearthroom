@@ -17,6 +17,8 @@
   "board.search.placeholder": "캐릭터 이름·소개·태그 검색",
   "board.search.submit": "검색",
   "board.sort.hot": "인기",
+  "board.sort.score": "평점순",
+  "board.sort.favorites": "찜 많은순",
   "board.sort.new": "최신",
   "board.sort.relevance": "관련도순",
   "board.count": "{n}개",
