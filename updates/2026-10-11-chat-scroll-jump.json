@@ -1,0 +1,17 @@
+{
+  "tier": "fix",
+  "title": {
+    "zh-Hant": "有狀態面板的卡片聊過幾輪後往上捲，畫面以前會突然跳開，現在會停在你正在讀的地方。",
+    "zh-Hans": "有状态面板的卡片聊过几轮后往上滑，画面以前会突然跳开，现在会停在你正在读的地方。",
+    "en": "Scrolling up in a chat with status panels used to jump you somewhere else, and now it stays where you are reading.",
+    "ja": "ステータスパネルのあるカードで上にスクロールしても、読んでいる位置から飛ばなくなりました。",
+    "ko": "상태 패널이 있는 카드에서 위로 스크롤하면 다른 곳으로 튀던 문제가 고쳐져, 이제 읽던 자리에 머뭅니다."
+  },
+  "body": {
+    "zh-Hant": "登入過期後打開卡片也不會再連跳「登入已過期」並卡在載入畫面，開場會照常顯示，送出時再請你登入。",
+    "zh-Hans": "登录过期后打开卡片也不会再连跳「登录已过期」并卡在加载画面，开场会照常显示，发送时再请你登录。",
+    "en": "Opening a card after your sign-in expired no longer stacks \"session expired\" messages on a stuck loading screen; the opening shows as usual and you sign in when you send.",
+    "ja": "ログインが切れた後にカードを開いても「ログインの有効期限切れ」が何度も出て読み込み画面で止まることはなくなり、冒頭がいつも通り表示され、送信時にログインを求めます。",
+    "ko": "로그인이 만료된 뒤 카드를 열어도 '로그인 만료' 알림이 여러 번 뜨며 로딩 화면에 멈추지 않고, 첫 장면이 그대로 보이며 보낼 때 로그인을 요청합니다."
+  }
+}
