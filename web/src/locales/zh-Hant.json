@@ -48,6 +48,7 @@
   "card.own.unshared": "這張卡已撤回審核授權，不會出現在榜單。",
   "card.own.manage": "到我的角色卡處理",
   "card.talkCount": "{n} 次對話",
+  "card.updatedAgo": "更新於 {time}",
   "card.noSummary": "還沒有簡介",
   "author.eyebrow": "作者",
   "author.stat.cards": "上架的卡",
