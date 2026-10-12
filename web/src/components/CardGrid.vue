@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import CardTile from "./CardTile.vue";
+import MascotSay from "./MascotSay.vue";
 import type { CommunityCard } from "@/lib/types";
 
 defineProps<{
@@ -15,6 +16,8 @@ defineProps<{
   showZone?: boolean;
   emptyTitle?: string;
   emptyHint?: string;
+  /** 空的時候讓看板娘出來說一句（只給站台自己的頁面，例如搜尋；作者頁不給） */
+  emptyMascot?: { src: string; line: string };
 }>();
 
 /** 首屏一排的張數上限：這幾張立刻載，其餘懶載入 */
@@ -28,8 +31,10 @@ const EAGER = 6;
   </div>
 
   <div v-else-if="!cards.length" class="empty panel">
+    <MascotSay v-if="emptyMascot" class="empty__mascot" :src="emptyMascot.src" :size="156" />
     <p class="empty__title">{{ emptyTitle ?? $t("board.empty.title") }}</p>
     <p class="empty__hint muted">{{ emptyHint ?? $t("board.empty.hint") }}</p>
+    <p v-if="emptyMascot" class="empty__say">{{ emptyMascot.line }}</p>
   </div>
 
   <div v-else class="grid" :aria-busy="busy || undefined">
@@ -64,4 +69,6 @@ const EAGER = 6;
 .empty { padding: var(--s-8) var(--s-5); text-align: center; }
 .empty__title { font-size: 16px; font-weight: 600; margin-bottom: var(--s-2); }
 .empty__hint { font-size: 13.5px; max-width: 40ch; margin: 0 auto; }
+.empty__mascot { margin-bottom: var(--s-3); }
+.empty__say { margin: var(--s-3) auto 0; font-size: 13px; color: var(--text-3); }
 </style>

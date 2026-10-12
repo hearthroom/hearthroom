@@ -52,6 +52,14 @@ export function authorLine(lang: string, cards: number, talks: number): string {
 }
 
 const OG_LOCALE: Record<string, string> = { "zh-Hant": "zh_TW", "zh-Hans": "zh_CN", en: "en_US", ja: "ja_JP", ko: "ko_KR" };
+const SITE_OG_LANGS = new Set(["zh-Hant", "zh-Hans", "en", "ja", "ko"]);
+export type SiteOgKind = "default" | "download" | "updates";
+
+/** 站台自己的分享圖；不認得的語言一律用英文版。 */
+export function siteOgImage(kind: SiteOgKind, lang: string): string {
+  const locale = SITE_OG_LANGS.has(lang) ? lang : "en";
+  return `https://${PRIMARY_HOST}/og/${kind}-${locale}.jpg`;
+}
 
 /** 頁面主圖一進 HTML 就開始下載（見 PageMeta.preloadImage）。 */
 export function preloadImageTag(url: string, priority: "high" | "auto" = "high"): string {
@@ -88,6 +96,30 @@ export function renderHead(page: Response, meta: PageMeta): Response {
   return res;
 }
 
+/**
+ * SPA 一般頁面只補分享標籤：不改分頁標題、description 或 canonical。
+ * 那些頁面由前端接手後自己設標題，這裡只服務不跑 JS 的分享抓取器。
+ */
+export function renderDefaultShareHead(page: Response, lang: string): Response {
+  const meta = defaultMeta(lang);
+  const tags = [
+    '<meta property="og:type" content="website">',
+    `<meta property="og:title" content="${esc(meta.title)}">`,
+    `<meta property="og:description" content="${esc(oneLine(meta.description))}">`,
+    `<meta property="og:image" content="${esc(meta.image)}">`,
+    '<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">',
+    `<meta property="og:locale" content="${OG_LOCALE[lang] ?? "en_US"}">`,
+    '<meta name="twitter:card" content="summary_large_image">',
+    `<meta name="twitter:title" content="${esc(meta.title)}">`,
+    `<meta name="twitter:description" content="${esc(oneLine(meta.description))}">`,
+    `<meta name="twitter:image" content="${esc(meta.image)}">`,
+  ].join("");
+  const res = new HTMLRewriter().on("head", { element: (e) => { e.append(tags, { html: true }); } }).transform(page);
+  res.headers.delete("etag");
+  res.headers.delete("last-modified");
+  return res;
+}
+
 /** Public download copy belongs in the initial HTML, before any client JS runs. */
 const DOWNLOAD_COPY: Record<string, {title:string;description:string}> = {
   "zh-Hant": {title:"下載綺夢社",description:"綺夢社的 Android App 與瀏覽器安裝指南：下載最新版 APK，查看手機安裝步驟與 App 更新方式。"},
@@ -97,7 +129,7 @@ const DOWNLOAD_COPY: Record<string, {title:string;description:string}> = {
   ko: {title:"Hearthroom 다운로드",description:"Hearthroom 최신 Android APK와 설치 가이드입니다. 휴대폰 설치 단계, 앱 업데이트 및 브라우저 설치 방법을 확인하세요."},
 };
 export function downloadMeta(lang:string,url:string):PageMeta {
-  return {lang,...(DOWNLOAD_COPY[lang] ?? DOWNLOAD_COPY.en!),url,type:"website",image:`https://${PRIMARY_HOST}/icons/icon-512.png`};
+  return {lang,...(DOWNLOAD_COPY[lang] ?? DOWNLOAD_COPY.en!),url,type:"website",image:siteOgImage("download", lang),imageSize:{width:1200,height:630}};
 }
 
 /** 更新頁的分享預覽：說明這一頁是什麼，不列內容（內容每天在變）。 */
@@ -109,7 +141,7 @@ const UPDATES_COPY: Record<string, {title:string;description:string}> = {
   ko: {title:"Hearthroom 업데이트 기록",description:"Hearthroom에 새로 추가된 기능과 수정 사항을 모았습니다. 항목마다 바로 써 볼 수 있는 링크가 있습니다."},
 };
 export function updatesMeta(lang:string,url:string):PageMeta {
-  return {lang,...(UPDATES_COPY[lang] ?? UPDATES_COPY.en!),url,type:"website",image:`https://${PRIMARY_HOST}/icons/icon-512.png`};
+  return {lang,...(UPDATES_COPY[lang] ?? UPDATES_COPY.en!),url,type:"website",image:siteOgImage("updates", lang),imageSize:{width:1200,height:630}};
 }
 
 /**
@@ -121,14 +153,17 @@ const HOME_TAGLINE: Record<string, string> = {
   ja: "キャラクターカード ランキング",
   ko: "캐릭터 카드 랭킹",
 };
-const HOME_DESCRIPTION: Record<string, string> = {
+export const HOME_DESCRIPTION: Record<string, string> = {
   "zh-Hant": "角色卡的開放社群：榜單、搜尋與作者頁。",
   "zh-Hans": "角色卡的开放社区：榜单、搜索与作者页。",
   en: "An open community for character cards: rankings, search, and creator pages.",
   ja: "キャラクターカードのオープンコミュニティ：ランキング、検索、作者ページ。",
   ko: "캐릭터 카드의 오픈 커뮤니티: 랭킹, 검색, 작성자 페이지.",
 };
-export function homeMeta(lang:string,url:string):PageMeta {
+export function defaultMeta(lang: string): { title: string; description: string; image: string } {
   const title = siteLockup(lang) ?? `${siteName(lang)} · ${HOME_TAGLINE[lang] ?? HOME_TAGLINE.en!}`;
-  return {lang,title,description:HOME_DESCRIPTION[lang] ?? HOME_DESCRIPTION.en!,url,type:"website",image:`https://${PRIMARY_HOST}/icons/icon-512.png`};
+  return { title, description: HOME_DESCRIPTION[lang] ?? HOME_DESCRIPTION.en!, image: siteOgImage("default", lang) };
+}
+export function homeMeta(lang:string,url:string):PageMeta {
+  return {lang,...defaultMeta(lang),url,type:"website",imageSize:{width:1200,height:630}};
 }

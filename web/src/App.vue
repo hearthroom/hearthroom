@@ -95,9 +95,8 @@ onMounted(() => document.addEventListener("keydown", onSlash));
   <header v-if="!route.meta.bare" class="header">
     <div class="header__inner" :class="{ 'header__inner--nosearch': onSearchPage, 'header__inner--reviewer': reviewerStore.likely }">
       <RouterLink :to="lp('/')" class="brand" :aria-label="brandName">
-        <svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M5 3h14a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3h-7.5L7 21.5V18H5a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3z" />
-        </svg>
+        <!-- 看板娘蘇綺的頭像（docs/design/hearthroom-mascot）；固定配色，不跟主題換色 -->
+        <img class="brand__mark" src="/mascot/suki-mark.webp" alt="" width="28" height="28" decoding="async" />
         <span class="brand__name">{{ brandName }}</span>
       </RouterLink>
 
@@ -215,7 +214,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
 .header__inner--nosearch { grid-template-columns: auto minmax(0, 1fr) auto; }
 
 .brand { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
-.brand__mark { width: 24px; height: 24px; flex: none; fill: var(--accent); }
+.brand__mark { width: 28px; height: 28px; flex: none; }
 .brand__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
 
 .nav { display: flex; gap: 2px; }

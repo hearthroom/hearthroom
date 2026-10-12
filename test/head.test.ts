@@ -2,7 +2,7 @@ import { PRIMARY_HOST } from "../shared/site-hosts";
 import { createExecutionContext, env, SELF, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import worker from "../src/index";
-import { authorLine, oneLine } from "../src/head";
+import { authorLine, oneLine, siteOgImage } from "../src/head";
 import { envWithAssets, makeMember, resetDb, restoreUpstream, rolesOnProviders, role, testHandle } from "./helpers";
 import { getCard, upsertCard } from "../src/cards";
 
@@ -110,7 +110,8 @@ it.each([
   expect(html).toContain(`<meta property="og:title" content="${title}">`);
   expect(html).toContain(`<meta property="og:locale" content="${locale}">`);
   expect(html).toContain(`<meta property="og:url" content="https://${PRIMARY_HOST}${prefix}/download">`);
-  expect(html).toContain(`<meta property="og:image" content="https://${PRIMARY_HOST}/icons/icon-512.png">`);
+  expect(html).toContain(`<meta property="og:image" content="${siteOgImage("download", prefix.slice(1) || "zh-Hant")}">`);
+  expect(html).toContain('<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">');
   expect(html).toContain('<meta name="twitter:title"');
   expect(html).toContain('Android');
   expect(headers.get('etag')).toBeNull();
@@ -145,11 +146,11 @@ it('does not expose restricted card details to sharing crawlers',async()=>{
 
 
 it.each([
-  ['/', '綺夢社・AI寢物語', 'zh_TW', `https://${PRIMARY_HOST}/`],
-  ['/zh-Hans/', '绮梦社・AI寝物语', 'zh_CN', `https://${PRIMARY_HOST}/zh-Hans`],
-  ['/en/', 'Hearthroom · Character Board', 'en_US', `https://${PRIMARY_HOST}/en`],
-  ['/ja?sort=hot', 'Hearthroom · キャラクターカード ランキング', 'ja_JP', `https://${PRIMARY_HOST}/ja`],
-])('首頁的 <head> 帶著各語言的站名與副標，不跑 JS 的爬蟲也看得到：%s', async (path, title, locale, canonical) => {
+  ['/', '綺夢社・AI寢物語', 'zh-Hant', 'zh_TW', `https://${PRIMARY_HOST}/`],
+  ['/zh-Hans/', '绮梦社・AI寝物语', 'zh-Hans', 'zh_CN', `https://${PRIMARY_HOST}/zh-Hans`],
+  ['/en/', 'Hearthroom · Character Board', 'en', 'en_US', `https://${PRIMARY_HOST}/en`],
+  ['/ja?sort=hot', 'Hearthroom · キャラクターカード ランキング', 'ja', 'ja_JP', `https://${PRIMARY_HOST}/ja`],
+])('首頁的 <head> 帶著各語言的站名與副標，不跑 JS 的爬蟲也看得到：%s', async (path, title, lang, locale, canonical) => {
   const response = await SELF.fetch(`https://${PRIMARY_HOST}${path}`, { headers: { 'User-Agent': 'bingbot' } });
   expect(response.status).toBe(200);
   const html = await response.text();
@@ -158,7 +159,49 @@ it.each([
   expect(html).toContain(`<meta property="og:locale" content="${locale}">`);
   expect(html).toContain(`<meta property="og:url" content="${canonical}">`);
   expect(html).toContain('<meta property="og:type" content="website">');
+  expect(html).toContain(`<meta property="og:image" content="${siteOgImage("default", lang)}">`);
+  expect(html).toContain('<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">');
   expect(html.match(/property="og:title"/g)).toHaveLength(1);
+});
+
+it.each([
+  ["/me", "zh-Hant", "綺夢社・AI寢物語"],
+  ["/en/me", "en", "Hearthroom · Character Board"],
+])("SPA 頁面的 HTML 殼有各語言的預設分享圖：%s", async (path, lang, title) => {
+  const response = await SELF.fetch(`https://${PRIMARY_HOST}${path}`);
+  expect(response.headers.get("content-type")).toContain("text/html");
+  const html = await response.text();
+  expect(html).toContain(`<meta property="og:title" content="${title}">`);
+  expect(html).toContain(`<meta name="twitter:title" content="${title}">`);
+  expect(html).toContain(`<meta property="og:image" content="${siteOgImage("default", lang)}">`);
+  expect(html).toContain('<meta name="twitter:card" content="summary_large_image">');
+  expect(html).toContain('<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">');
+  expect(html).not.toContain('rel="canonical"');
+  expect(html).toContain("<title>Hearthroom</title>");
+});
+
+it("靜態資源不會被加上分享標籤", async () => {
+  const ctx = createExecutionContext();
+  const assets = envWithAssets({ "/assets/site.js": "console.log('site')" });
+  const response = await worker.fetch(new Request(`https://${PRIMARY_HOST}/assets/site.js`), assets, ctx);
+  await waitOnExecutionContext(ctx);
+  const body = await response.text();
+  expect(response.headers.get("content-type")).toContain("text/javascript");
+  expect(body).toBe("console.log('site')");
+  expect(body).not.toContain("og:image");
+});
+
+it("站內 play 頁不會被加上站台分享圖", async () => {
+  const ctx = createExecutionContext();
+  const response = await worker.fetch(new Request(`https://${PRIMARY_HOST}/play/100001`), testEnv, ctx);
+  await waitOnExecutionContext(ctx);
+  const html = await response.text();
+  expect(response.headers.get("content-type")).toContain("text/html");
+  expect(html).not.toContain("/og/default-");
+});
+
+it("siteOgImage 不認得的語言退回英文", () => {
+  expect(siteOgImage("updates", "fr")).toBe(`https://${PRIMARY_HOST}/og/updates-en.jpg`);
 });
 
 it.each(['hearthroom.club','sukisuki.ai','sukisuki.chat'])('static asset routing invokes the metadata handler on %s',async host=>{

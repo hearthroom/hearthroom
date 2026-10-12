@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import DownloadBanner from "@/components/DownloadBanner.vue";
+import MascotWelcome from "@/components/MascotWelcome.vue";
+import MascotHome from "@/components/MascotHome.vue";
+import { useMascotWelcome } from "@/lib/mascot-home";
 import CardTile from "@/components/CardTile.vue";
 import { tourState } from "@/lib/coach-tour";
 import { starterFor } from "@/lib/onboarding";
@@ -182,6 +185,20 @@ function navigate(patch: Record<string, string | string[] | undefined>) {
 /** 換榜的時候排序鍵不通用，一起清掉。 */
 const switchMode = (m: "following") => navigate({ mode: m, sort: undefined, tag: undefined });
 
+/** 已登入的人頂端放蘇綺面板；新訪客的歡迎橫幅還在時先放橫幅，一次只放一塊。翻到後面幾頁不放。 */
+const welcome = useMascotWelcome();
+const showHome = computed(() => !!session.me && session.ready && !welcome.visible.value && offset.value === 0);
+const sortsEl = ref<HTMLElement | null>(null);
+/**
+ * 面板上的「找新卡」：不在面板裡列卡，切到日榜（上榜 24 小時內）、捲到榜單那一列。
+ * 換分頁時路由會先捲回頂端，等它捲完下一個畫格再捲下來。
+ */
+async function toNewCards() {
+  if (mode.value !== "cards" || sort.value !== "day") await router.push({ query: { ...route.query, mode: undefined, sort: "day", offset: undefined } });
+  await nextTick();
+  requestAnimationFrame(() => sortsEl.value?.scrollIntoView({ behavior: "smooth", block: "start" }));
+}
+
 watch([() => route.query, locale], load, { immediate: true });
 // 開關改了要重讀。身分第一次載好（undefined → 值）時，第一屏多半已經照帳號開關讀好了
 // （伺服器用 cookie 判斷並標明），對得上就不再讀一次；那一份還在路上就等它回來再比。
@@ -231,6 +248,8 @@ const ratingOptions = computed(() => {
 <template>
   <div class="page">
     <h1 class="sr-only">{{ $t("site.tagline") }}</h1>
+    <MascotWelcome />
+    <MascotHome v-if="showHome" @discover="toNewCards" />
     <DownloadBanner />
     <UpdateStrip />
 
@@ -239,7 +258,7 @@ const ratingOptions = computed(() => {
       不是排法——選中它時六個排序全部不亮。原本的分段控制與 R18 開關各佔一列，手機上第一屏只剩兩張卡（成員意見，owner 2026-10-02）；
       R18 開關搬進頁首（App.vue）。
     -->
-    <div class="sorts" role="group" :aria-label="$t('board.sorts')">
+    <div ref="sortsEl" class="sorts" role="group" :aria-label="$t('board.sorts')">
       <button v-for="s in SORTS" :key="s" class="sorts__item" :class="{ 'sorts__item--on': mode === 'cards' && sort === s }" :aria-pressed="mode === 'cards' && sort === s" @click="navigate({ mode: undefined, sort: s })">
         {{ $t(`board.sort.${s}`) }}
       </button>
@@ -297,7 +316,7 @@ const ratingOptions = computed(() => {
 
 <style scoped>
 /* 排序做成細字頁籤；最右那顆「關注」字重重一點、推到最右，跟排序拉開：一個是「看哪個榜」，一個是「怎麼排」。擠不下就換行，不裁字 */
-.sorts { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-bottom: var(--s-3); }
+.sorts { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-bottom: var(--s-3); scroll-margin-top: 76px; }
 .sorts__item {
   height: var(--h-sm); padding: 0 10px; border: 0; border-radius: var(--r-pill);
   background: transparent; font-size: 13px; font-weight: 500; color: var(--text-3); cursor: pointer;

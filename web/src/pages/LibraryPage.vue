@@ -13,6 +13,7 @@ import type { CommunityCard } from '@/lib/types';
 import CardGrid from '@/components/CardGrid.vue';
 import LibraryToggle from '@/components/LibraryToggle.vue';
 import AccountIcon from '@/components/AccountIcon.vue';
+import MascotSay from '@/components/MascotSay.vue';
 const session = useSession();
 const route = useRoute(), router = useRouter();
 const { locale, lp } = useLocalePath();
@@ -54,7 +55,7 @@ watch([tab, page, locale, () => session.me, () => session.profile?.showNsfw, () 
     <div v-if="failed" class="empty panel" role="alert"><p class="empty__title">{{ $t('library.loadFailed') }}</p><button class="btn" @click="load">{{ $t('library.retry') }}</button></div>
     <CardGrid v-else-if="tab === 'favorites' && (loading || !empty)" :cards="cards" :loading="loading" />
     <div v-else-if="loading" class="library__rows" aria-hidden="true"><div v-for="n in 4" :key="n" class="ghost library__ghost" /></div>
-    <div v-else-if="empty" class="empty panel library__empty"><span class="library__empty-icon"><AccountIcon :name="tab === 'conversations' ? 'calendar' : tab === 'favorites' ? 'cards' : 'folder'" /></span><h2 class="empty__title">{{ $t(`library.${tab}Empty`) }}</h2><p class="empty__hint muted">{{ $t(`library.${tab}Hint`) }}</p><RouterLink class="btn" :to="lp('/')">{{ $t('library.discover') }}</RouterLink></div>
+    <div v-else-if="empty" class="empty panel library__empty"><MascotSay src="/mascot/chuchu-sleep.webp" :size="132" /><h2 class="empty__title">{{ $t(`library.${tab}Empty`) }}</h2><p class="empty__hint muted">{{ $t(`library.${tab}Hint`) }}</p><RouterLink class="btn" :to="lp('/')">{{ $t('library.discover') }}</RouterLink></div>
     <div v-else-if="tab === 'conversations'" class="library__rows">
       <a v-for="chat in chats" :key="`${chat.provider}:${chat.conversationRoleId}`" :href="platformPath(lp(`/play/${encodeURIComponent(chat.cardNumber ?? chat.conversationRoleId)}?resume=${encodeURIComponent(chat.conversationId)}`), chat.provider)" class="conversation panel">
         <img v-if="chat.roleAvatar" class="conversation__avatar" :src="chat.roleAvatar" alt="" loading="lazy" /><span v-else class="conversation__avatar mono" :style="{ '--h': hueFrom(chat.roleName) }"><AccountIcon name="cards" /></span>
@@ -98,7 +99,6 @@ watch([tab, page, locale, () => session.me, () => session.profile?.showNsfw, () 
 .followed__identity div { min-width:0; }
 .followed__identity p { font-size:.875rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:var(--s-1); }
 .library__empty { display:grid; justify-items:center; gap:var(--s-3); padding:var(--s-7) var(--s-5); }
-.library__empty-icon { display:grid; place-items:center; width:64px; height:64px; border-radius:var(--r-lg); background:var(--surface-2); color:var(--text-3); margin-bottom:var(--s-2); }
 .empty .btn { min-height:44px; margin-top:var(--s-3); }
 @media(max-width:700px) { .library__header { align-items:flex-start; } .library__discover { display:none; } .library__tabs { gap:var(--s-4); } .library__tabs a { flex:1; justify-content:center; } .library__authors { grid-template-columns:minmax(0,1fr); } .conversation__continue { display:none; } .conversation__heading { display:block; } .conversation time { display:block; margin-top:var(--s-1); } .conversation__avatar { width:56px; height:72px; } }
 </style>
