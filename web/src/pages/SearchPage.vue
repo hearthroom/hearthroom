@@ -15,6 +15,7 @@ import DiscoveryTags from "@/components/DiscoveryTags.vue";
 import { selectedTags, toggleTag } from "@/lib/discovery";
 import { TAG_CATALOG, tagLabel } from "../../../shared/tag-catalog";
 import type { TagPage, AuthorPage } from "@/lib/api";
+import MascotSay from "@/components/MascotSay.vue";
 import type { CardPage, CommunityCard } from "@/lib/types";
 
 const route = useRoute();
@@ -226,6 +227,7 @@ watch(q, (v) => { draft.value = v; });
           :show-zone="allZones"
           :empty-title="q || fandom ? $t('search.empty', { q: q || fandomChip }) : $t('board.empty.search.title')"
           :empty-hint="$t('board.empty.search.hint')"
+          :empty-mascot="q || fandom ? { src: '/mascot/suki-hoard.webp', line: $t('mascot.say.searchEmpty') } : undefined"
         />
         <nav v-if="cards && (cards.offset > 0 || cards.hasNext)" class="pager">
           <button class="btn btn--sm" :disabled="cards.offset === 0" @click="navigate({ offset: String(Math.max(0, cards.offset - cards.limit)) })">← {{ $t("pager.prev") }}</button>
@@ -240,8 +242,10 @@ watch(q, (v) => { draft.value = v; });
       <template v-else-if="kind === 'authors'">
         <div v-if="loading && !authors" class="ghosts"><div v-for="i in 6" :key="i" class="ghost" /></div>
         <div v-else-if="!authors?.items.length" class="empty panel">
+          <MascotSay class="empty__mascot" src="/mascot/suki-hoard.webp" :size="156" />
           <p class="empty__title">{{ $t("search.empty", { q }) }}</p>
           <p class="empty__hint muted">{{ $t("board.empty.search.hint") }}</p>
+          <p class="empty__say">{{ $t("mascot.say.searchEmpty") }}</p>
         </div>
         <AuthorList v-else :authors="authors.items" />
         <nav v-if="authors && (authors.offset > 0 || authors.hasNext)" class="pager">
@@ -252,7 +256,7 @@ watch(q, (v) => { draft.value = v; });
       </template>
       <template v-else>
         <div v-if="loading && !tagResults" class="ghosts"><div v-for="i in 3" :key="i" class="ghost" /></div>
-        <div v-else-if="!tagResults?.items.length" class="empty panel"><p class="empty__title">{{ $t('search.empty', { q }) }}</p><p class="muted">{{ $t('board.empty.search.hint') }}</p></div>
+        <div v-else-if="!tagResults?.items.length" class="empty panel"><MascotSay class="empty__mascot" src="/mascot/suki-hoard.webp" :size="156" /><p class="empty__title">{{ $t('search.empty', { q }) }}</p><p class="muted">{{ $t('board.empty.search.hint') }}</p><p class="empty__say">{{ $t('mascot.say.searchEmpty') }}</p></div>
         <div v-else class="search__tag-results" :aria-busy="loading">
           <button v-for="x in tagResults.items" :key="x.tag" class="search__tag-result panel" @click="searchTag(x.tag)"><span># {{ x.tag }}</span><span class="muted">{{ $t('board.count', { n: x.n }) }} →</span></button>
         </div>
@@ -352,6 +356,8 @@ watch(q, (v) => { draft.value = v; });
 .empty { padding: var(--s-8) var(--s-5); text-align: center; }
 .empty__title { font-size: 16px; font-weight: 600; margin-bottom: var(--s-2); }
 .empty__hint { font-size: 13.5px; }
+.empty__mascot { margin-bottom: var(--s-3); }
+.empty__say { margin: var(--s-3) 0 0; font-size: 13px; color: var(--text-3); }
 .search__hint { padding: var(--s-7) 0; text-align: center; font-size: 13.5px; }
 
 .zero { display: grid; gap: var(--s-3); margin-bottom: var(--s-6); }

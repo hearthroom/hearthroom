@@ -335,6 +335,8 @@ describe("Atom、頁面與指標", () => {
     const html = await res.text();
     expect(html).toContain('<meta property="og:title" content="Hearthroom の更新履歴">');
     expect(html).toContain('<link rel="canonical" href="https://sukisuki.ai/ja/updates">');
+    expect(html).toContain('<meta property="og:image" content="https://sukisuki.ai/og/updates-ja.jpg">');
+    expect(html).toContain('<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">');
   });
 
   it("/metrics 數得到登記與彙整", async () => {

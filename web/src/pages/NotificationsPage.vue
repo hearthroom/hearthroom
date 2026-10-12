@@ -9,6 +9,7 @@ import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink } from "vue-router";
 import AccountIcon from "@/components/AccountIcon.vue";
+import MascotSay from "@/components/MascotSay.vue";
 import { communityRequest, type CommunityNotice, type CommunityView } from "@/lib/community";
 import { pageTitle } from "@/lib/i18n";
 import { noticeText, useNotifications } from "@/lib/notifications";
@@ -72,7 +73,10 @@ onMounted(() => { document.title = pageTitle(t("nav.notifications")); void run(l
 
     <section class="notices__card" :aria-label="t('nav.notifications')">
       <p v-if="store.busy && !store.loaded" class="subtle">{{ t("state.loading") }}</p>
-      <p v-else-if="!store.items.length" class="subtle">{{ t("notifications.empty") }}</p>
+      <div v-else-if="!store.items.length" class="notices__empty">
+        <MascotSay src="/mascot/chuchu-heart.webp" :size="112" />
+        <p class="subtle">{{ t("notifications.empty") }}</p>
+      </div>
       <ul v-else class="notices__list">
         <li v-for="n in store.items" :key="n.id">
           <RouterLink :to="lp(n.path)" class="notices__item" :class="{ 'notices__item--unread': !n.read_at }" @click="pick(n)">
@@ -126,4 +130,6 @@ onMounted(() => { document.title = pageTitle(t("nav.notifications")); void run(l
 .notices__discord p { margin: 0; color: var(--text-2); font-size: 14px; }
 .notices__discord .btn { display: inline-flex; align-items: center; gap: var(--s-2); }
 .notices__discord .btn svg { width: 1rem; height: 1rem; }
+.notices__empty { display: grid; justify-items: center; gap: var(--s-3); padding: var(--s-6) var(--s-4); text-align: center; }
+.notices__empty .subtle { max-width: 36ch; font-size: 13.5px; line-height: 1.6; }
 </style>

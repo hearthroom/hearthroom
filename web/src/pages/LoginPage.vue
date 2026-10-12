@@ -23,6 +23,10 @@ import { safeReturnTo } from "@/lib/login-return";
 import { currentProvider, legalPage, PROVIDERS } from "@/lib/provider";
 import { availableProviders, chooseProvider, needsSwitchConfirm } from "@/lib/provider-switch";
 import { useSession } from "@/lib/session";
+import { isPlayHost } from "@/lib/site";
+
+/** 看板娘只在站台本身出現；卡片 App 網域（play.*）上的登入頁不放（docs/design/hearthroom-mascot）。 */
+const withMascot = !isPlayHost();
 
 const route = useRoute();
 const router = useRouter();
@@ -67,7 +71,11 @@ watch(() => [session.ready, session.me], () => {
 
 <template>
   <div class="page page--narrow login">
-    <section class="panel login__card">
+    <section class="panel login__card" :class="{ 'login__card--mascot': withMascot }">
+      <template v-if="withMascot">
+        <img class="login__avatar" src="/mascot/suki-avatar.webp" alt="" width="96" height="96" decoding="async" />
+        <p class="login__say">{{ $t("mascot.say.login") }}</p>
+      </template>
       <h1 class="login__title display">{{ $t("login.headline") }}</h1>
       <p class="login__lead">{{ $t("login.lead") }}</p>
 
@@ -125,6 +133,13 @@ watch(() => [session.ready, session.me], () => {
 <style scoped>
 .login { display: grid; place-items: center; min-height: 60vh; }
 .login__card { width: 100%; max-width: 420px; padding: var(--s-6); display: grid; gap: var(--s-3); text-align: center; }
+.login__card--mascot { position: relative; margin-top: 48px; padding-top: calc(48px + var(--s-3)); }
+.login__avatar {
+  position: absolute; top: -48px; left: 50%; transform: translateX(-50%);
+  width: 96px; height: 96px; border-radius: var(--r-pill); object-fit: cover;
+  box-shadow: 0 0 0 4px var(--surface), var(--shadow-md);
+}
+.login__say { margin: 0; font-size: 13px; color: var(--accent-text); font-weight: 500; }
 .login__title { font-size: clamp(22px, 2.8vw, 26px); margin: 0; }
 .login__lead { margin: 0; color: var(--text-2); }
 .login__features { list-style: none; margin: var(--s-2) 0 0; padding: var(--s-4); display: grid; gap: var(--s-3); text-align: left; background: var(--surface-2); border-radius: var(--r-2); }
