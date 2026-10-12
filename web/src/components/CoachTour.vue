@@ -178,12 +178,16 @@ const bubbleStyle = computed(() => {
   return below ? { top: `${Math.min(r.bottom + PAD + 12, window.innerHeight - 200)}px` } : { bottom: `${Math.min(window.innerHeight - r.top + PAD + 12, window.innerHeight - 200)}px` };
 });
 const step = computed(() => tourState.step);
+/** 首頁與卡片頁由看板娘帶；進了對話頁（舞台）就是作者的地方，泡泡維持原樣（docs/design/hearthroom-mascot）。 */
+const withMascot = computed(() => page.value === "home" || page.value === "card");
 </script>
 
 <template>
   <div v-if="visible && step" class="coach" aria-live="polite">
     <div v-if="hole" class="coach__hole" :style="hole" />
-    <section class="coach__bubble panel" :style="bubbleStyle" role="dialog" aria-labelledby="coach-title">
+    <section class="coach__bubble panel" :class="{ 'coach__bubble--mascot': withMascot }" :style="bubbleStyle" role="dialog" aria-labelledby="coach-title">
+      <!-- 首頁與卡片頁：蘇綺站在泡泡左邊，泡泡的尖角指向她，像她在說這段話 -->
+      <img v-if="withMascot" class="coach__mascot" src="/mascot/suki-wave.webp" alt="" decoding="async" />
       <button type="button" class="coach__close" :aria-label="$t('tour.skip')" @click="finish('tour_skip')">×</button>
       <h2 id="coach-title" class="coach__title">{{ $t(`tour.${step}.title`) }}</h2>
       <p class="coach__body">{{ $t(`tour.${step}.body`) }}</p>
@@ -217,4 +221,26 @@ const step = computed(() => tourState.step);
 .coach__title { margin: 0; padding-right: var(--s-6); font-size: 16px; font-weight: 600; line-height: 1.4; }
 .coach__body { margin: 0; font-size: 14px; line-height: 1.6; color: var(--text-2); }
 .coach__actions { display: flex; justify-content: flex-end; gap: var(--s-2); margin-top: var(--s-1); }
+/*
+ * 看板娘說話：她站在泡泡外的左邊（整個人露出來，不被框住），泡泡往右挪出她的位置，
+ * 左邊一個小尖角指向她。泡泡本身的大小、文字、按鈕都不變。
+ */
+.coach__bubble--mascot {
+  --mascot-w: 132px;
+  overflow: visible;
+  width: min(360px, calc(100% - 2 * var(--s-4) - var(--mascot-w)));
+  transform: translateX(calc(-50% + var(--mascot-w) / 2));
+}
+.coach__bubble--mascot::before {
+  content: ""; position: absolute; left: -8px; top: 34px; width: 14px; height: 14px;
+  background: var(--surface); transform: rotate(45deg);
+  box-shadow: -1px 1px 0 0 var(--line);
+}
+.coach__mascot {
+  position: absolute; left: calc(-1 * var(--mascot-w) - 6px); top: 50%; transform: translateY(-50%);
+  width: var(--mascot-w); height: auto; pointer-events: none;
+}
+@media (max-width: 640px) {
+  .coach__bubble--mascot { --mascot-w: 92px; }
+}
 </style>

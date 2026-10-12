@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/",
+  "title": {
+    "zh-Hant": "看板娘蘇綺來了：在首頁接著上次的故事、隨便擲一張卡，或提筆寫新卡。",
+    "zh-Hans": "看板娘苏绮来了：在首页接着上次的故事、随便掷一张卡，或提笔写新卡。",
+    "en": "Meet Suki: on the home page she helps you pick up a story, roll a random card or start writing one.",
+    "ja": "看板娘のスキが登場、トップページからお話の続きやサイコロ、カード作りを始められます。",
+    "ko": "간판 아가씨 스키가 첫 화면에서 이야기 이어 가기, 카드 뽑기, 카드 쓰기를 도와줘요."
+  },
+  "body": {
+    "zh-Hant": "場景和她的樣子每天換一套，網站頁面分享到 Discord、LINE、X 時也會顯示預覽大圖了。",
+    "zh-Hans": "场景和她的样子每天换一套，网站页面分享到 Discord、LINE、X 时也会显示预览大图了。",
+    "en": "The scene and her pose change daily, and site pages shared to Discord, LINE or X now show a large preview image.",
+    "ja": "背景とスキの姿は毎日変わり、サイトのページを Discord、LINE、X に共有すると大きなプレビュー画像が出るようになりました。",
+    "ko": "배경과 스키의 모습은 매일 바뀌고, 사이트 페이지를 Discord, LINE, X에 공유하면 큰 미리보기 이미지가 보여요."
+  }
+}

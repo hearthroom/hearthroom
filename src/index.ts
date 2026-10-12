@@ -45,7 +45,7 @@ import {
   BEACON_DETAILS, BEACON_EVENTS, clientKind, emit, note, refHostOf, safeSubject, shapeTerm, surfaceOf,
   type EventFields, type Pending,
 } from "./analytics";
-import { authorLine, downloadMeta, homeMeta, preloadImageTag, renderHead, updatesMeta } from "./head";
+import { authorLine, downloadMeta, homeMeta, preloadImageTag, renderDefaultShareHead, renderHead, updatesMeta } from "./head";
 import { aliasTarget, HOST, canonicalUrl, isPlayHost } from "./site";
 import { cardThumbUrl, landingZone } from "../shared/card-thumb";
 import { PRIMARY_HOST, siteRootOf } from "../shared/site-hosts";
@@ -1508,6 +1508,10 @@ export async function syncBatch(env: Env): Promise<{ ok: number; failed: number;
  */
 const PAGE = /^(?:\/(zh-Hans|en|ja|ko))?\/(download|updates|cards|authors)(?:\/([^/]+))?\/?$/;
 const PAGE_TTL = 60;
+const SITE_ROUTE_LOCALE = /^\/(zh-Hans|en|ja|ko)(?:\/|$)/;
+const SITE_API_PATH = /^\/(?:v1|api)(?:\/|$)/;
+const SITE_PLAY_PATH = /^(?:\/(?:zh-Hans|en|ja|ko))?\/play(?:\/|$)/;
+const SITE_STATIC_PATH = /^\/(?:assets|icons|mascot|og|sandbox)(?:\/|$)|\.[a-z0-9]{1,8}$/i;
 
 /**
  * 靜態檔：先問資源層（當前版），找不到才回退到 ASSET_ARCHIVE（舊部署的 hash 檔，deploy 時歸檔、30 天到期）。
@@ -1614,7 +1618,11 @@ app.get("*", async (c) => {
   if (!m || (m[2] === "download" || m[2] === "updates" ? m[3] !== undefined : !m[3])) {
     const passthrough = await c.env.ASSETS.fetch(c.req.raw);
     note(c, { event: "page_html", refHost: refHostOf(c.req.header("Referer"), url.host), detail: "page" });
-    return passthrough;
+    const html = (passthrough.headers.get("content-type") ?? "").toLowerCase().includes("text/html");
+    const sitePage = !!siteRootOf(url.hostname) && !isPlayHost(url.host)
+      && !SITE_API_PATH.test(url.pathname) && !SITE_PLAY_PATH.test(url.pathname) && !SITE_STATIC_PATH.test(url.pathname);
+    if (!html || !sitePage) return passthrough;
+    return renderDefaultShareHead(passthrough, url.pathname.match(SITE_ROUTE_LOCALE)?.[1] ?? "zh-Hant");
   }
   // 用 "/" 而不是 "/index.html"：資源層預設會把後者 301 到前者。
   // 不轉發原請求的 headers：If-None-Match 是對 /cards/x 那份內容的驗證器，拿去驗殼會拿到 304，
