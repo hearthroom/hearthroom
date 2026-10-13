@@ -88,6 +88,13 @@ function dailyTag() {
   return { label: tagLabel(entry, locale.value), run: () => router.push({ path: lp("/"), query: { tag: entry.key } }) };
 }
 
+/** 穿哪一套：深色主題是睡衣，18+ 打開疊上小惡魔（設定集「模式」：時段 × 18+ 兩軸） */
+function skinNow(): string {
+  const night = resolvedMode.value === "dark";
+  const imp = !!viewerAdult(session)?.showNsfw;
+  return imp ? (night ? "night-imp" : "imp") : (night ? "night" : "day");
+}
+
 function guide(path: string): PageGuide | null {
   const g = guideFor(path);
   if (!g) return null;
@@ -104,7 +111,7 @@ async function start() {
   const mobile = matchMedia("(pointer: coarse)").matches || innerWidth < 640;
   const p = new SukiPet({
     base: "/mascot/pet",
-    skins: ["day"],
+    skin: skinNow(),
     line,
     label: t("mascot.name"),
     height: mobile ? 132 : 220,
@@ -166,8 +173,8 @@ watch(() => route.path, enter);
 // 首頁面板、歡迎橫幅、新手引導在的時候也不躲。
 
 // 網站的開關直接帶動她：深色主題、18+、語言
-watch(resolvedMode, (m) => pet.value?.on({ type: "theme", dark: m === "dark" }));
-watch(() => viewerAdult(session)?.showNsfw ?? false, (on, before) => { if (before !== undefined) pet.value?.on({ type: "adult", on }); });
+watch(resolvedMode, (m) => { void pet.value?.setSkin(skinNow()); pet.value?.on({ type: "theme", dark: m === "dark" }); });
+watch(() => viewerAdult(session)?.showNsfw ?? false, (on, before) => { void pet.value?.setSkin(skinNow()); if (before !== undefined) pet.value?.on({ type: "adult", on }); });
 watch(locale, (l) => pet.value?.on({ type: "locale", lang: String(l) }));
 
 // 有新通知：讀最新一則，照種類演（過審慶祝、退件安慰並轉述理由、關注的作者出新卡…）
@@ -223,6 +230,9 @@ watch(() => [session.wallet?.plans, pet.value] as const, ([plans, p]) => {
 /* 桌寵的外觀（全域：她掛在 body 上，不在這個元件的 DOM 裡）。泡泡與選單固定白底深字，不跟站台主題換色 */
 .suki-pet { position: fixed; left: 0; top: 0; z-index: 45; transition: transform var(--dur-base, 250ms) cubic-bezier(.25,.46,.45,.94), opacity var(--dur-base, 250ms); touch-action: none; user-select: none; -webkit-user-select: none; }
 .suki-pet--held { transition: none; cursor: grabbing; }
+/* 換衣服的那一下：縮一下再彈回來，遮住換部件的瞬間 */
+.suki-pet--poof .suki-pet__canvas { animation: suki-poof 300ms cubic-bezier(.34,1.56,.64,1); transform-origin: 50% 90%; }
+@keyframes suki-poof { 45% { scale: .82 1.12; opacity: .35; } }
 .suki-pet--walking { transition: none; }
 /* 第一次出現：先隱形放到位，再從原地彈出來 */
 .suki-pet--placing { transition: none !important; opacity: 0; }

@@ -17,9 +17,13 @@ const skeleton: PetSkeleton = JSON.parse(readFileSync(resolve(dir, "skeleton.jso
 const day: PetSkin = JSON.parse(readFileSync(resolve(dir, "skin-day.json"), "utf8"));
 
 describe("骨架與部件", () => {
-  it("綁定檔列到的貼圖都在", () => {
+  it("四套造型（白天、晚上、小惡魔、晚上小惡魔）綁定檔列到的貼圖都在", () => {
     expect(day.parts.filter((p) => !existsSync(resolve(dir, p.tex))).map((p) => p.tex)).toEqual([]);
-    expect(existsSync(resolve(dir, "hit.png"))).toBe(true);
+    for (const skin of ["day", "night", "imp", "night-imp"]) {
+      const parts: PetSkin = JSON.parse(readFileSync(resolve(dir, `skin-${skin}.json`), "utf8"));
+      expect(parts.parts.filter((p) => !existsSync(resolve(dir, p.tex))).map((p) => p.tex), skin).toEqual([]);
+      expect(existsSync(resolve(dir, `hit-${skin}.png`)), skin).toBe(true);
+    }
   });
 
   it("後面疊上的同名部件取代前面的，新的物理跟著帶進來", () => {
