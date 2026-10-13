@@ -20,6 +20,7 @@ import { useProviderUpstream, UPSTREAM_API } from "@/lib/config";
 import { restorePersisted, refresh } from "@/lib/oauth";
 import { accountToken } from "@/lib/connections";
 import { platformPath } from "@/lib/distribution";
+import { suki } from "@/pet/events";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRaw, watch } from "vue";
 import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
@@ -390,6 +391,13 @@ const REQUIRED_OF: Partial<Record<Section, string>> = {
   dialogue: "roleWelcome",
 };
 const lacks = (key: Section) => Boolean(REQUIRED_OF[key] && missing.value.includes(REQUIRED_OF[key] as string));
+// 桌寵嚮導：打開一張還缺必填的舊卡，她點名缺哪幾格（新卡一開始全空，不提醒）
+const FIELD_LABEL: Record<string, string> = { roleName: "editor.name", roleDetailDesc: "editor.detail", roleWelcome: "editor.welcome" };
+watch(loading, (now, before) => {
+  if (!before || now || isNew.value || !missing.value.length) return;
+  const names = missing.value.map((f) => FIELD_LABEL[f] ? t(FIELD_LABEL[f]) : "").filter(Boolean).join(t("mascot.pet.listSep"));
+  if (names) suki({ type: "hint", text: t("mascot.pet.editorMissing", { fields: names }) });
+});
 
 // ── 世界模式 ──────────────────────────────────────────────────────────
 // 成員清單住在 draft.world；世界觀是 roleDetailDesc、世界級世界書是綁卡那本，都走原本的路。

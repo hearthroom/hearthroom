@@ -16,6 +16,7 @@ import { accountToken, connectAccount, needsReauthorization } from "@/lib/connec
 import { lastShown } from "@/lib/mine-memory";
 import { confirmDialog } from "@/lib/confirm";
 import { signedInHint } from "@/lib/signin-hint";
+import { suki } from "@/pet/events";
 
 const route = useRoute();
 const router = useRouter();
@@ -84,6 +85,12 @@ const quotaRange = computed(() => quota.value ? weekRange(quota.value, String(lo
 const quotaResetText = computed(() => !quota.value ? "" : daysUntilReset(quota.value)<=1 ? t("mine.quota.resetSoon") : t("mine.quota.reset",{n:daysUntilReset(quota.value)}));
 /** 額度那一行只放數字與重置；週起訖與還剩幾張收在提示裡（數字跟三格已經看得出剩多少） */
 const quotaHint = computed(() => !quotaRange.value ? "" : `${t("mine.quota.range", quotaRange.value)} · ${quotaLeft.value === 0 ? t("mine.quota.full") : t("mine.quota.left", { n: quotaLeft.value })}`);
+// 桌寵嚮導：額度用完時說什麼時候重置；有被退件的卡時提醒去看原因
+watch(quota, (value) => { if (value && quotaFull.value) suki({ type: "hint", text: t("mascot.pet.quotaFull", { reset: quotaResetText.value }) }); });
+watch(rows, (value) => {
+  const card = Object.values(value).flat().find((c) => c?.status === "rejected");
+  if (card) suki({ type: "hint", text: t("mascot.pet.rejectedCard", { name: card.name }) });
+}, { deep: true });
 let generation=0;
 async function loadProvider(provider:ProviderId, version=generation) {
  try {

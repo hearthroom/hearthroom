@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/",
+  "title": {
+    "zh-Hant": "蘇綺會動了：她待在網站角落，點她、拖她、問她這頁怎麼用都可以。",
+    "zh-Hans": "苏绮会动了：她待在网站角落，点她、拖她、问她这页怎么用都可以。",
+    "en": "Suki now lives in the corner of the site: tap her, drag her around, or ask her how a page works.",
+    "ja": "サイトの隅にいるスキを、タップしたりドラッグしたり、ページの使い方を聞いたりできます。",
+    "ko": "사이트 구석의 스키를 눌러 보고 끌어 보고 이 페이지 사용법도 물어볼 수 있어요."
+  },
+  "body": {
+    "zh-Hant": "在任何一張卡上聊天就算餵她一個故事，每天來會越來越熟；不想看到她可以在設定裡關掉。",
+    "zh-Hans": "在任何一张卡上聊天就算喂她一个故事，每天来会越来越熟；不想看到她可以在设置里关掉。",
+    "en": "Chatting on any card feeds her a story and she warms up to you day by day; you can turn her off in Settings.",
+    "ja": "どのカードで会話してもスキにお話をあげたことになり、毎日来るほど仲良くなれて、表示は設定でオフにできます。",
+    "ko": "아무 카드에서나 대화하면 스키에게 이야기를 먹여 준 셈이고, 매일 올수록 더 친해지며, 설정에서 끌 수도 있어요."
+  }
+}

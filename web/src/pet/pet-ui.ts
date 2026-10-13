@@ -1,0 +1,548 @@
+/**
+ * 桌寵的互動層：把 Rig＋Driver 包成一個會被點、被拖、會看你、會冒泡泡的小人。
+ *
+ * 跟網站之間只靠頁面事件（window 的 "suki" CustomEvent）與 hover 提示（data-suki 屬性）：
+ * 網站各處不必知道她怎麼演，只要說發生了什麼；她自己決定反應。這樣加一種反應不用動到功能本身。
+ */
+import { compose, PetRenderer, Rig, type PetSkeleton, type PetSkin } from "./puppet";
+import { Driver } from "./driver";
+import { Care, type CareNews } from "./care";
+
+export type { SukiEvent } from "./events";
+import type { SukiEvent } from "./events";
+
+type Expr = "happy" | "surprised" | "pout" | "shy" | "sleepy" | "dizzy" | "wink" | "peek";
+
+interface Act { expr?: Expr; say?: string; ms?: number; hop?: boolean; talk?: boolean; action?: MenuItem }
+
+/** 選單的一項：她能直接幫你做的事 */
+export interface MenuItem { label: string; run: () => void }
+/** 每一頁的用途：第一次到這頁說的那句、選單裡「這頁怎麼用」的問答、還沒做完的事 */
+export interface PageGuide {
+  id: string;
+  hello?: string;
+  topics?: { q: string; a: string; action?: MenuItem }[];
+  todo?: () => string | null;
+}
+
+export interface PetOptions {
+  base: string;
+  skins: string[];
+  /** 照 key 取一句台詞（有好幾句時隨機一句）；網站用 i18n 實作 */
+  line: (key: string, params?: Record<string, string | number>) => string;
+  /** 給螢幕閱讀器的名字 */
+  label: string;
+  /** 畫面上的高度（px） */
+  height: number;
+  reducedMotion?: boolean;
+  /** 手機：預設收在右邊、長按開選單、讓路給鍵盤與往下捲 */
+  mobile?: boolean;
+  /** 選單上的常用動作（接著上次、擲一張、搜尋…），由網站提供 */
+  menu?: () => MenuItem[];
+  /** 每天第一次來擲的「今天的幸運類型」 */
+  dailyTag?: () => { label: string; run: () => void } | null;
+  /** 最近一次在任何卡上聊天的時間（餵食）；沒登入就沒有 */
+  /** 沒登入回 undefined：訪客還不能聊天，照顧循環不算（不然她會一直喊餓） */
+  lastStoryAt?: () => Promise<number | null | undefined>;
+  /** 熟了以後她怎麼叫你 */
+  nickname?: () => string | null;
+  /** 選單裡「接著上次」那一項，肚子餓時也拿來當按鈕 */
+  resume?: MenuItem;
+  /** 選單最後一項「不要出現」的字與動作（設定頁可以再打開） */
+  menuLabel?: () => string;
+  onOff?: () => void;
+}
+
+const EXPRS: Expr[] = ["happy", "surprised", "pout", "shy", "sleepy", "dizzy", "wink", "peek"];
+
+export class SukiPet {
+  readonly el: HTMLDivElement;
+  private canvas: HTMLCanvasElement;
+  private bubble: HTMLDivElement;
+  private menuEl: HTMLDivElement;
+  private guide: PageGuide | null = null;
+  private hidden = false;
+  readonly care = new Care();
+  private rig!: Rig;
+  private driver!: Driver;
+  private view!: PetRenderer;
+  private hit?: { data: Uint8ClampedArray; w: number; h: number; names: string[] };
+  private expr: Partial<Record<Expr, number>> = {};
+  private exprTarget: Partial<Record<Expr, number>> = {};
+  private actUntil = 0;
+  private bubbleUntil = 0;
+  private lastInput = performance.now();
+  private clicks: number[] = [];
+  private drag?: { dx: number; dy: number; x: number; y: number; vx: number; t: number; moved: boolean; shake: number };
+  private jumpT = -1;
+  private tucked = false;
+  private said = new Set<string>();
+  private hoverTimer = 0;
+  private lastScroll = { y: 0, t: 0 };
+  private typed = "";
+  private stopped = false;
+
+  constructor(private opts: PetOptions) {
+    this.el = document.createElement("div");
+    this.el.className = "suki-pet";
+    this.canvas = document.createElement("canvas");
+    this.canvas.setAttribute("aria-label", opts.label);
+    this.bubble = document.createElement("div");
+    this.bubble.className = "suki-pet__bubble";
+    this.bubble.hidden = true;
+    this.bubble.setAttribute("role", "status");
+    this.menuEl = document.createElement("div");
+    this.menuEl.className = "suki-pet__menu";
+    this.menuEl.hidden = true;
+    this.menuEl.setAttribute("role", "menu");
+    this.el.append(this.bubble, this.menuEl, this.canvas);
+    if (opts.mobile) this.el.classList.add("suki-pet--mobile");
+  }
+
+  async start(parent: HTMLElement) {
+    const { base, skins } = this.opts;
+    const skeleton: PetSkeleton & { regions?: string[] } = await (await fetch(`${base}/skeleton.json`)).json();
+    const layers: PetSkin[] = await Promise.all(skins.map(async (s) => (await fetch(`${base}/skin-${s}.json`)).json()));
+    this.rig = new Rig(compose(skeleton, ...layers));
+    const [W, H] = this.rig.model.size;
+    const cssH = this.opts.height, cssW = (cssH * W) / H;
+    const dpr = Math.min(2, devicePixelRatio || 1);
+    this.canvas.width = Math.round(cssW * dpr); this.canvas.height = Math.round(cssH * dpr);
+    this.canvas.style.width = `${cssW}px`; this.canvas.style.height = `${cssH}px`;
+    this.el.style.setProperty("--pw", `${cssW}px`);
+    this.view = new PetRenderer(this.canvas, this.rig);
+    await this.view.load(base);
+    this.driver = new Driver(this.rig);
+    await this.loadHit(`${base}/hit.png`, skeleton.regions ?? []);
+    parent.append(this.el);
+    this.bind();
+    const saved = this.restore();
+    if (saved) this.place(saved);
+    else if (this.opts.mobile) { this.place({ x: innerWidth - cssW, y: innerHeight - cssH - 96 }); this.tuck("right", true); }
+    else this.place({ x: innerWidth - cssW - 24, y: innerHeight - cssH - 8 });
+    if (!this.tucked) this.greet();
+    this.daily();
+    void this.opts.lastStoryAt?.().then((at) => { if (at !== undefined) this.careNews(this.care.visit(at)); }, () => undefined);
+    let last = performance.now();
+    const loop = (now: number) => {
+      if (this.stopped) return;
+      const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      if (!document.hidden) this.frame(dt, now);
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  }
+
+  stop() { this.stopped = true; this.el.remove(); }
+
+  /** 換頁時網站把這頁的用途交給她：第一次到這頁說一句，之後只在選單裡 */
+  setGuide(g: PageGuide | null) {
+    this.guide = g;
+    this.closeMenu();
+    if (!g || this.tucked || !this.ready) return;
+    const todo = g.todo?.();
+    if (todo && this.onceToday(`todo.${g.id}`)) return this.act({ say: todo, expr: "wink", ms: 3600 });
+    if (g.hello && this.onceEver(`hello.${g.id}`)) this.act({ say: g.hello, expr: "happy", ms: 3600 });
+  }
+  private get ready() { return !!this.rig; }
+
+  private openMenu() {
+    const items: MenuItem[] = [...(this.opts.menu?.() ?? [])];
+    for (const t of this.guide?.topics ?? []) items.push({ label: t.q, run: () => this.act({ say: t.a, talk: true, ms: 4200, action: t.action }, true) });
+    items.push({ label: this.line("menu.tuck"), run: () => this.tuck(this.box().left < innerWidth / 2 ? "left" : "right") });
+    if (this.opts.onOff) items.push({ label: this.opts.menuLabel?.() ?? "×", run: this.opts.onOff });
+    this.menuEl.replaceChildren(...items.map((it) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.setAttribute("role", "menuitem"); b.textContent = it.label;
+      b.addEventListener("click", (e) => { e.stopPropagation(); this.closeMenu(); it.run(); });
+      return b;
+    }));
+    this.bubble.hidden = true;
+    this.menuEl.hidden = false;
+    this.act({ expr: "happy" });
+    setTimeout(() => addEventListener("pointerdown", this.outside, { once: true }), 0);
+  }
+  private outside = (e: Event) => { if (!this.el.contains(e.target as Node)) this.closeMenu(); else addEventListener("pointerdown", this.outside, { once: true }); };
+  private closeMenu() {
+    if (this.menuEl.hidden) return;
+    this.menuEl.hidden = true;
+    const next = this.queue.shift();
+    if (next) setTimeout(() => this.act(next), 400);
+  }
+
+  /** 照顧的消息：餵飽了、餓了、升級、連續天數、好久不見；一次只講最重要的一件 */
+  private careNews(news: CareNews[]) {
+    const pick = news.find((n) => n.kind === "levelUp") ?? news.find((n) => n.kind === "streak") ?? news.find((n) => n.kind === "fed")
+      ?? news.find((n) => n.kind === "missed") ?? news.find((n) => n.kind === "hungry");
+    if (!pick) return;
+    const later = (a: Act) => setTimeout(() => this.act(a), this.tucked ? 0 : 3400);
+    switch (pick.kind) {
+      case "fed": return later({ expr: "happy", say: this.line("care.fed"), hop: true });
+      case "hungry": return later({ expr: "pout", say: this.line("care.hungry"), ms: 5000, action: this.opts.resume });
+      case "levelUp": return later({ expr: "happy", say: this.line(`care.level.${pick.level}`) || this.line("care.levelUp"), hop: true, ms: 4500 });
+      case "streak": return later({ expr: "wink", say: this.line("care.streak", { n: pick.days }), hop: true, ms: 4500 });
+      case "missed": return later({ expr: pick.days > 3 ? "shy" : "happy", say: this.line(pick.days > 3 ? "care.missedLong" : "care.missed"), ms: 4000 });
+    }
+  }
+
+  private daily() {
+    if (this.tucked) return;
+    const tag = this.opts.dailyTag?.();
+    if (!tag || !this.onceToday("daily")) return;
+    setTimeout(() => { this.kick("Die", 500); this.act({ expr: "wink", say: this.line("daily", { tag: tag.label }), ms: 6000, action: { label: this.line("dailyGo"), run: tag.run } }); }, 4200);
+  }
+  private onceToday(key: string): boolean {
+    const day = new Date().toDateString();
+    try { if (localStorage.getItem(`suki.${key}`) === day) return false; localStorage.setItem(`suki.${key}`, day); } catch { /* 存不了：每次都算第一次 */ }
+    return true;
+  }
+  private onceEver(key: string): boolean {
+    try { if (localStorage.getItem(`suki.${key}`)) return false; localStorage.setItem(`suki.${key}`, "1"); } catch { /* 同上 */ }
+    return true;
+  }
+
+  // ---- 網站事件 ----
+  on(e: SukiEvent) {
+    switch (e.type) {
+      case "favorite": return this.act({ expr: "happy", say: this.line("favorite"), hop: true });
+      case "searchEmpty": return this.act({ expr: "pout", say: this.line("searchEmpty") });
+      case "searching": this.driver.state.look = [-0.6, -0.4]; this.lastInput = performance.now(); return;
+      case "roll": this.kick("Die", 300); return this.act({ expr: "wink", say: this.line("roll") });
+      case "notifications": if (e.count > 0) this.once("notifications", { expr: "surprised", say: this.line("notifications"), ms: 2600 }); return;
+      case "update": return this.once("update", { expr: "happy", say: this.line("update"), ms: 4000 });
+      case "listEnd": return this.once("listEnd", { expr: "wink", say: this.line("listEnd") });
+      case "say": return this.act({ say: e.text, talk: true });
+      case "notice":
+        if (e.mood === "party") this.kick("Die", 400);
+        return this.act({ expr: e.mood === "party" ? "happy" : e.mood === "comfort" ? "shy" : "surprised", say: e.text, hop: e.mood === "party", ms: 5000, action: e.action });
+      case "daily": if (this.onceToday(`d.${e.key}`)) this.act({ expr: "wink", say: e.text, ms: 4500, action: e.action }); return;
+      case "hint": if (!this.said.has(`hint:${e.text}`)) { this.said.add(`hint:${e.text}`); this.act({ expr: "wink", say: e.text, ms: 4500, action: e.action }); } return;
+      case "adult": return this.act({ expr: e.on ? "wink" : "shy", say: this.line(e.on ? "adultOn" : "adultOff") });
+      case "theme": return this.act({ expr: e.dark ? "sleepy" : "happy", say: this.line(e.dark ? "night" : "day") });
+      case "locale": return this.act({ expr: "happy", say: this.line("hello"), hop: true });
+    }
+  }
+
+  // ---- 反應 ----
+  /** 一次說一句：前一句還在講，新的排隊；被點、被拖這種當下的反應插隊 */
+  private queue: Act[] = [];
+  private act(a: Act, urgent = false) {
+    const now = performance.now();
+    const busy = this.hidden || !this.menuEl.hidden || (!this.bubble.hidden && now < this.bubbleUntil - 400);
+    if (a.say && !urgent && busy) { if (this.queue.length < 3) this.queue.push(a); return; }
+    if (a.say && urgent) this.closeMenu();
+    if (urgent) this.queue = [];
+    if (a.expr) { for (const k of EXPRS) this.exprTarget[k] = 0; this.exprTarget[a.expr] = 1; }
+    this.actUntil = now + (a.ms ?? 1800);
+    if (a.say) this.speak(a.say, a.ms, a.action);
+    if (a.hop) this.hop();
+    if (a.talk || a.say) { this.driver.state.talking = true; setTimeout(() => { this.driver.state.talking = false; }, Math.min(1600, (a.say?.length ?? 6) * 90)); }
+  }
+  /** 同一件事每個人只主動說一次（這一頁的這次造訪） */
+  private once(key: string, a: Act) { if (this.said.has(key)) return; this.said.add(key); this.act(a); }
+  /** 網站直接要她說一句（例如選單動作找不到東西時） */
+  say(text: string) { if (text) this.act({ say: text, talk: true }, true); }
+  private speak(text: string, ms = 2600, action?: MenuItem) {
+    this.bubble.textContent = text;
+    if (action) {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "suki-pet__go"; b.textContent = action.label;
+      b.addEventListener("click", (e) => { e.stopPropagation(); this.bubble.hidden = true; action.run(); });
+      this.bubble.append(b);
+      ms = Math.max(ms, 6000);
+    }
+    this.bubble.hidden = false;
+    this.bubble.classList.remove("suki-pet__bubble--in"); void this.bubble.offsetWidth; this.bubble.classList.add("suki-pet__bubble--in");
+    this.bubbleUntil = performance.now() + Math.max(ms, 1400 + text.length * 70);
+  }
+  private line(key: string, params?: Record<string, string | number>): string { return this.opts.line(key, params); }
+
+  private hop() { if (!this.opts.reducedMotion) this.jumpT = 0; }
+  private kick(param: string, v: number) { this.rig.kick(param, v); }
+
+  private greet() {
+    const h = new Date().getHours();
+    if (h >= 2 && h < 5 && this.onceToday("late")) return this.act({ expr: "sleepy", say: this.line("bedtime"), ms: 4000 });
+    const nick = this.care.level >= 2 ? this.opts.nickname?.() : null;
+    const base = this.line(h < 5 ? "greet.late" : h < 11 ? "greet.morning" : h < 18 ? "greet.day" : "greet.night");
+    this.act({ expr: "happy", say: nick ? this.line("greet.nick", { name: nick }) + base : base, hop: true, ms: 3200 });
+  }
+
+  // ---- 每一格 ----
+  private frame(dt: number, now: number) {
+    const p = this.rig.params;
+    // 表情淡入淡出；演完回到平常
+    if (now > this.actUntil) for (const k of EXPRS) this.exprTarget[k] = 0;
+    const idle = (now - this.lastInput) / 1000;
+    if (idle > 40 && now > this.actUntil) { this.exprTarget.sleepy = 1; if (idle < 41) this.speak(this.line("sleepy"), 3000); }
+    for (const k of EXPRS) {
+      const cur = this.expr[k] ?? 0, tgt = this.exprTarget[k] ?? 0;
+      this.expr[k] = cur + (tgt - cur) * (1 - Math.exp(-dt * 14));
+      p[`Expr_${k}`] = this.expr[k]!;
+    }
+    // 跳一下：上升、落地壓扁、回彈
+    if (this.jumpT >= 0) {
+      this.jumpT += dt;
+      const t = this.jumpT;
+      if (t < 0.32) { p.Jump = -Math.sin((t / 0.32) * Math.PI) * 70; p.Squash = 0; }
+      else if (t < 0.5) { p.Jump = 0; p.Squash = -Math.sin(((t - 0.32) / 0.18) * Math.PI) * 0.08; }
+      else { p.Jump = 0; p.Squash = 0; this.jumpT = -1; }
+      if (t < 0.02) { this.kick("Ponytail", -120); this.kick("Skirt", 40); }
+    }
+    if (this.drag) {
+      // 拎著：馬尾、裙子跟著拖的方向甩；落地前腳懸空
+      p.DragX = this.drag.vx;
+    } else p.DragX = 0;
+    this.driver.update(dt);
+    if (this.opts.reducedMotion) { p.Ponytail = 0; p.HairFront = 0; p.HairBack = 0; p.Skirt = 0; p.Die = 0; p.Dangle = 0; }
+    if (!this.hidden) this.view.draw();
+    if (!this.bubble.hidden && now > this.bubbleUntil) { this.bubble.hidden = true; const next = this.queue.shift(); if (next) this.act(next); }
+  }
+
+  // ---- 輸入 ----
+  private bind() {
+    const head = () => {
+      const r = this.canvas.getBoundingClientRect();
+      return [r.left + r.width / 2, r.top + r.height * 0.22] as const;
+    };
+    addEventListener("pointermove", (e) => {
+      this.lastInput = performance.now();
+      if (this.drag) return this.dragMove(e);
+      const [hx, hy] = head();
+      const dx = (e.clientX - hx) / 300, dy = (e.clientY - hy) / 300;
+      this.driver.state.look = [Math.max(-1, Math.min(1, dx)), Math.max(-1, Math.min(1, dy))];
+    }, { passive: true });
+    document.addEventListener("pointerleave", () => { this.driver.state.look = null; });
+    addEventListener("scroll", () => {
+      const now = performance.now(), y = scrollY;
+      const v = (y - this.lastScroll.y) / Math.max(16, now - this.lastScroll.t);
+      this.lastScroll = { y, t: now };
+      if (Math.abs(v) > 2) { this.kick("Ponytail", v * 10); this.kick("HairFront", v * 3); this.kick("Skirt", v * 4); }
+      if (innerHeight + y >= document.documentElement.scrollHeight - 4) this.on({ type: "listEnd" });
+      this.lastInput = now;
+    }, { passive: true });
+    addEventListener("keydown", (e) => {
+      this.lastInput = performance.now();
+      this.typed = (this.typed + e.key).slice(-4).toLowerCase();
+      if (this.typed === "suki") this.act({ expr: "happy", say: this.line("suki"), hop: true, ms: 3000 });
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden && performance.now() - this.lastInput > 60_000) this.act({ expr: "happy", say: this.line("welcomeBack") });
+    });
+    addEventListener("offline", () => this.act({ expr: "pout", say: this.line("offline"), ms: 4000 }));
+    // hover 提示：游標停在 data-suki 的東西上 0.7 秒，她說一句；同一種提示只說一次
+    document.addEventListener("pointerover", (e) => {
+      const t = (e.target as HTMLElement | null)?.closest?.("[data-suki]") as HTMLElement | null;
+      clearTimeout(this.hoverTimer);
+      if (!t || this.drag) return;
+      this.hoverTimer = window.setTimeout(() => {
+        const key = t.dataset.suki!;
+        const text = t.dataset.sukiText || this.line(`hint.${key}`);
+        if (!text || this.said.has(`hint.${key}${t.dataset.sukiText ? ":" + text : ""}`)) return;
+        this.said.add(`hint.${key}${t.dataset.sukiText ? ":" + text : ""}`);
+        this.act({ say: text, expr: key === "adult" ? "wink" : undefined, ms: 3000 });
+      }, 700);
+    });
+    // 欄位說明：聚焦到 data-suki-help 的欄位時講那個欄位填什麼（手機沒有 hover 也能用）
+    document.addEventListener("focusin", (e) => {
+      const t = e.target as HTMLElement;
+      const help = (t.closest?.("[data-suki-help]") as HTMLElement | null)?.dataset.sukiHelp;
+      if (help && !this.said.has(`help:${help}`)) { this.said.add(`help:${help}`); this.act({ say: help, ms: 4200 }); }
+      if (t.matches?.("input,textarea")) { this.on({ type: "searching" }); if (this.opts.mobile) this.hide(true, "typing"); }
+    });
+    document.addEventListener("focusout", () => { if (this.opts.mobile) this.hide(false, "typing"); });
+    if (this.opts.mobile) this.bindMobile();
+    addEventListener("suki", (e) => this.on((e as CustomEvent<SukiEvent>).detail));
+
+    this.canvas.addEventListener("pointerdown", (e) => {
+      // 點在透明處：不攔，讓底下的東西照常被點到
+      if (this.region(e) === null) return;
+      e.preventDefault();
+      this.canvas.setPointerCapture(e.pointerId);
+      const r = this.box();
+      this.drag = { dx: e.clientX - r.left, dy: e.clientY - r.top, x: e.clientX, y: e.clientY, vx: 0, t: performance.now(), moved: false, shake: 0 };
+      // 長按 450ms 開選單（手機的主要入口；電腦也能用）
+      clearTimeout(this.pressTimer);
+      this.pressTimer = window.setTimeout(() => { if (this.drag && !this.drag.moved) { this.pressed = true; this.buzz(15); this.openMenu(); } }, 450);
+    });
+    this.canvas.addEventListener("contextmenu", (e) => { e.preventDefault(); this.openMenu(); });
+    this.canvas.addEventListener("pointerup", (e) => {
+      clearTimeout(this.pressTimer);
+      if (this.pressed) { this.pressed = false; this.drag = undefined; return; }
+      const d = this.drag; this.drag = undefined;
+      if (!d) return;
+      if (d.moved) return this.drop(e, d.shake);
+      this.poke(e);
+    });
+    this.canvas.addEventListener("dblclick", (e) => { e.preventDefault(); this.act({ expr: "happy", hop: true, say: this.line("jump") }, true); });
+    // 游標停在她身上太久：害羞
+    let rest = 0;
+    this.canvas.addEventListener("pointermove", () => { clearTimeout(rest); rest = window.setTimeout(() => this.act({ expr: "shy", say: this.line("stare"), ms: 2400 }), 3500); });
+    this.canvas.addEventListener("pointerleave", () => clearTimeout(rest));
+  }
+
+  private pressTimer = 0;
+  private pressed = false;
+  private buzz(ms: number) { try { navigator.vibrate?.(ms); } catch { /* 不支援就算了 */ } }
+
+  /** 手機：捲下去躲、捲上來出現；Android 跟手機傾斜看、搖手機會暈 */
+  private bindMobile() {
+    let lastY = scrollY;
+    addEventListener("scroll", () => {
+      const y = scrollY;
+      if (Math.abs(y - lastY) > 24) { if (!this.menuEl.hidden) this.closeMenu(); this.hide(y > lastY && y > 120, "scroll"); lastY = y; }
+    }, { passive: true });
+    visualViewport?.addEventListener("resize", () => this.hide((visualViewport?.height ?? innerHeight) < innerHeight * 0.75, "keyboard"));
+    // iOS 要使用者授權才給方向與動作感應：不要求，只在不需要授權的瀏覽器（Android）啟用
+    const needsPermission = typeof (DeviceOrientationEvent as unknown as { requestPermission?: unknown }).requestPermission === "function";
+    if (needsPermission) return;
+    addEventListener("deviceorientation", (e) => {
+      if (this.drag || e.gamma === null || e.beta === null) return;
+      this.driver.state.look = [Math.max(-1, Math.min(1, e.gamma / 30)), Math.max(-1, Math.min(1, (e.beta - 45) / 40))];
+    });
+    let shakes = 0, shakeAt = 0;
+    addEventListener("devicemotion", (e) => {
+      const a = e.acceleration; if (!a || a.x === null) return;
+      const m = Math.hypot(a.x ?? 0, a.y ?? 0, a.z ?? 0);
+      const now = performance.now();
+      if (m > 18) { shakes = now - shakeAt < 800 ? shakes + 1 : 1; shakeAt = now; this.kick("Ponytail", (a.x ?? 0) * 20); this.kick("Die", (a.x ?? 0) * 30); }
+      if (shakes >= 4) { shakes = 0; this.buzz(30); this.act({ expr: "dizzy", say: this.line("shake"), ms: 2600 }); }
+    });
+  }
+  /** 工作區這種滿版的頁面：她先收到最近的邊上，點一下再出來 */
+  tuckAside() { if (!this.tucked) this.tuck(this.pos.x + this.box().width / 2 < innerWidth / 2 ? "left" : "right", true); }
+  /** 讓路：新手引導、對話框之類正在用畫面時先躲開 */
+  setAway(on: boolean) { this.hide(on, "stage"); }
+  /** 躲起來的原因各記各的（畫面上已有她、往下捲、鍵盤打開）：全部解除才出來 */
+  private away = new Set<string>();
+  private hide(on: boolean, reason: string) {
+    if (on) this.away.add(reason); else this.away.delete(reason);
+    on = this.away.size > 0;
+    if (this.hidden === on) return;
+    this.hidden = on;
+    this.el.classList.toggle("suki-pet--away", on);
+    if (on) { this.bubble.hidden = true; this.closeMenu(); }
+    else { const next = this.queue.shift(); if (next) setTimeout(() => this.act(next), 500); }
+  }
+
+  private dragMove(e: PointerEvent) {
+    const d = this.drag!;
+    const now = performance.now(), dt = Math.max(8, now - d.t);
+    const vx = ((e.clientX - d.x) / dt) * 1000;
+    if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 6) return;
+    if (!d.moved) { clearTimeout(this.pressTimer); this.closeMenu(); d.moved = true; this.act({ expr: "surprised", say: this.line("lift"), ms: 60_000 }, true); this.el.classList.add("suki-pet--held"); }
+    // 甩：快速來回換方向才算，一路拖過去不算
+    if (Math.sign(vx) !== Math.sign(d.vx) && Math.abs(vx) > 900 && Math.abs(d.vx) > 900) d.shake += 1;
+    d.vx = vx; d.x = e.clientX; d.y = e.clientY; d.t = now;
+    this.place({ x: e.clientX - d.dx, y: e.clientY - d.dy });
+  }
+
+  private drop(e: PointerEvent, shake: number) {
+    this.el.classList.remove("suki-pet--held");
+    const r = this.box();
+    // 拖到螢幕邊：縮進去，只露半個頭
+    const edge = r.left < -r.width * 0.25 ? "left" : r.right > innerWidth + r.width * 0.25 ? "right" : null;
+    if (edge) return this.tuck(edge);
+    const pos = { x: Math.max(0, Math.min(innerWidth - r.width, r.left)), y: Math.max(0, Math.min(innerHeight - r.height, r.top)) };
+    this.place(pos); this.save(pos);
+    // 放在卡片上：讀出那張卡寫的原作與類型
+    this.el.style.pointerEvents = "none";
+    const under = (document.elementFromPoint(e.clientX, e.clientY + r.height * 0.4) as HTMLElement | null)?.closest?.("[data-suki-card]") as HTMLElement | null;
+    this.el.style.pointerEvents = "";
+    this.hop();
+    if (shake >= 4) return this.act({ expr: "dizzy", say: this.line("dizzy"), ms: 2600 }, true);
+    if (under) return this.act({ expr: "happy", say: under.dataset.sukiCard!, ms: 3600 }, true);
+    this.act({ expr: "happy", say: this.line("land") }, true);
+  }
+
+  private tuck(edge: "left" | "right", silent = false) {
+    this.tucked = true;
+    const r = this.box();
+    this.el.classList.add("suki-pet--tucked");
+    this.el.classList.toggle("suki-pet--edge-right", edge === "right");
+    this.place({ x: edge === "left" ? -r.width * 0.62 : innerWidth - r.width * 0.38, y: Math.max(0, Math.min(innerHeight - r.height, r.top)) });
+    this.save({ x: edge === "left" ? -1 : innerWidth, y: Math.max(0, Math.min(innerHeight - r.height, r.top)) });
+    if (!silent) this.act({ expr: "peek", say: this.line("tuck"), ms: 2600 }, true);
+  }
+
+  private poke(e: PointerEvent) {
+    this.buzz(8);
+    if (this.tucked) {
+      this.tucked = false; this.el.classList.remove("suki-pet--tucked");
+      const r = this.box();
+      const pos = { x: Math.max(8, Math.min(innerWidth - r.width - 8, r.left)), y: r.top };
+      this.place(pos); this.save(pos);
+      this.act({ expr: "happy", say: this.line("untuck"), hop: true }, true);
+      this.daily();
+      if (this.guide) this.setGuide(this.guide);
+      return;
+    }
+    const now = performance.now();
+    this.clicks = [...this.clicks.filter((t) => now - t < 2500), now];
+    this.care.touch(this.clicks.length >= 4 ? -0.08 : 0.03);
+    if (this.clicks.length >= 7) { this.clicks = []; return this.act({ expr: "pout", say: this.line("tooMany"), ms: 2600 }, true); }
+    if (this.clicks.length === 5) return this.act({ expr: "dizzy", say: this.line("dizzy"), ms: 2200 }, true);
+    const where = this.region(e);
+    switch (where) {
+      case "fronthair": case "backhair": this.kick("HairFront", 60);
+        return this.act({ expr: "happy", say: this.line("pat") }, true);
+      case "face": case "eyes": case "mouth":
+        return this.act({ expr: "pout", say: this.line("cheek") }, true);
+      case "ponytail": case "bow": this.kick("Ponytail", 260); this.rig.params.AngleZ = 10;
+        return this.act({ expr: "pout", say: this.line("ponytail") }, true);
+      case "die": this.kick("Die", 400);
+        return this.act({ expr: "wink", say: this.line("roll") }, true);
+      case "clip":
+        return this.act({ expr: "wink", say: this.line("clip") }, true);
+      default:
+        this.kick("Skirt", 30);
+        return this.act({ expr: "surprised", say: this.line("poke") }, true);
+    }
+  }
+
+  private region(e: PointerEvent): string | null {
+    if (!this.hit) return "body";
+    const r = this.canvas.getBoundingClientRect();
+    const x = Math.floor(((e.clientX - r.left) / r.width) * this.hit.w), y = Math.floor(((e.clientY - r.top) / r.height) * this.hit.h);
+    if (x < 0 || y < 0 || x >= this.hit.w || y >= this.hit.h) return null;
+    const v = this.hit.data[(y * this.hit.w + x) * 4];
+    return v ? this.hit.names[v - 1] ?? "body" : null;
+  }
+  private async loadHit(url: string, names: string[]) {
+    try {
+      const img = new Image(); img.src = url; await img.decode();
+      const c = document.createElement("canvas"); c.width = img.width; c.height = img.height;
+      const g = c.getContext("2d")!; g.drawImage(img, 0, 0);
+      this.hit = { data: g.getImageData(0, 0, c.width, c.height).data, w: c.width, h: c.height, names };
+    } catch { /* 沒有部位圖：整個人當身體 */ }
+  }
+
+  /** 她現在的位置與大小：自己記，不讀畫面（位移動畫進行中讀到的會是半路的座標） */
+  private pos = { x: 0, y: 0 };
+  private box() {
+    const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
+    return { left: this.pos.x, top: this.pos.y, width: w, height: h, right: this.pos.x + w };
+  }
+  private place(p: { x: number; y: number }) {
+    this.pos = { x: p.x, y: p.y };
+    this.el.style.transform = `translate(${Math.round(p.x)}px, ${Math.round(p.y)}px)`;
+    // 泡泡往畫面中間那一側展開，不會被螢幕邊緣切掉
+    const w = this.canvas.clientWidth || 0;
+    this.el.classList.toggle("suki-pet--right", p.x + w / 2 > innerWidth / 2);
+  }
+  private save(p: { x: number; y: number }) {
+    const x = p.x < 0 ? -1 : p.x >= innerWidth ? 2 : p.x / innerWidth;
+    try { localStorage.setItem("suki.pet.pos", JSON.stringify({ x, y: p.y / innerHeight })); } catch { /* 存不了就算了 */ }
+  }
+  private restore(): { x: number; y: number } | null {
+    try {
+      const v = JSON.parse(localStorage.getItem("suki.pet.pos") ?? "null");
+      if (!v) return null;
+      const r = { w: this.canvas.clientWidth || 120, h: this.canvas.clientHeight || 180 };
+      if (v.x < 0 || v.x > 1) { setTimeout(() => this.tuck(v.x < 0 ? "left" : "right", true), 0); return { x: v.x < 0 ? 0 : innerWidth - r.w, y: v.y * innerHeight }; }
+      return { x: v.x * innerWidth, y: v.y * innerHeight };
+    } catch { return null; }
+  }
+}
+
+export { suki } from "./events";
