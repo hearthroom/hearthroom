@@ -76,19 +76,67 @@
    }
   },
   {
-   "id": "legs",
-   "tex": "imp-legs.webp",
+   "id": "legR_up",
+   "tex": "imp-legR_up.webp",
    "rect": [
-    312,
-    933,
-    294,
-    552
+    323,
+    979,
+    129,
+    153
    ],
-   "node": "root",
+   "node": "legR",
    "z": 20,
    "grid": [
-    13,
-    23
+    6,
+    7
+   ]
+  },
+  {
+   "id": "legR_lo",
+   "tex": "imp-legR_lo.webp",
+   "rect": [
+    317,
+    1110,
+    128,
+    373
+   ],
+   "node": "legR_lo",
+   "z": 21,
+   "grid": [
+    6,
+    16
+   ]
+  },
+  {
+   "id": "legL_up",
+   "tex": "imp-legL_up.webp",
+   "rect": [
+    464,
+    980,
+    125,
+    152
+   ],
+   "node": "legL",
+   "z": 19,
+   "grid": [
+    6,
+    7
+   ]
+  },
+  {
+   "id": "legL_lo",
+   "tex": "imp-legL_lo.webp",
+   "rect": [
+    477,
+    1110,
+    127,
+    373
+   ],
+   "node": "legL_lo",
+   "z": 18,
+   "grid": [
+    6,
+    16
    ]
   },
   {
@@ -154,35 +202,99 @@
    ]
   },
   {
-   "id": "armR",
-   "tex": "imp-armR.webp",
+   "id": "armR_up",
+   "tex": "imp-armR_up.webp",
    "rect": [
-    117,
+    225,
     682,
-    221,
-    332
+    113,
+    110
    ],
    "node": "armR",
    "z": 36,
    "grid": [
-    10,
-    14
+    5,
+    5
    ]
   },
   {
-   "id": "armL",
-   "tex": "imp-armL.webp",
+   "id": "armR_lo",
+   "tex": "imp-armR_lo.webp",
+   "rect": [
+    142,
+    780,
+    187,
+    177
+   ],
+   "node": "armR_lo",
+   "z": 37,
+   "grid": [
+    8,
+    8
+   ]
+  },
+  {
+   "id": "handR",
+   "tex": "imp-handR.webp",
+   "rect": [
+    117,
+    945,
+    106,
+    69
+   ],
+   "node": "handR",
+   "z": 39,
+   "grid": [
+    5,
+    3
+   ]
+  },
+  {
+   "id": "armL_up",
+   "tex": "imp-armL_up.webp",
    "rect": [
     571,
     604,
-    221,
-    411
+    122,
+    188
    ],
    "node": "armL",
    "z": 36,
    "grid": [
-    10,
-    18
+    6,
+    8
+   ]
+  },
+  {
+   "id": "armL_lo",
+   "tex": "imp-armL_lo.webp",
+   "rect": [
+    588,
+    780,
+    181,
+    177
+   ],
+   "node": "armL_lo",
+   "z": 37,
+   "grid": [
+    8,
+    8
+   ]
+  },
+  {
+   "id": "handL",
+   "tex": "imp-handL.webp",
+   "rect": [
+    687,
+    945,
+    105,
+    70
+   ],
+   "node": "handL",
+   "z": 39,
+   "grid": [
+    5,
+    3
    ]
   },
   {
@@ -813,7 +925,7 @@
     167,
     230
    ],
-   "node": "body",
+   "node": "armR",
    "z": 5,
    "grid": [
     7,
@@ -829,8 +941,7 @@
      725.0
     ],
     "angle": {
-     "Tail": 1,
-     "BodyZ": -3
+     "Tail": 1
     },
     "power": 1.3
    }
