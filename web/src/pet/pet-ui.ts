@@ -127,15 +127,20 @@ export class SukiPet {
     Object.assign(this.touch.style, { width: `${cssW}px`, height: `${cssH}px` });
     this.el.style.setProperty("--pw", `${cssW}px`);
     this.view = new PetRenderer(this.canvas, this.rig, pad);
-    await this.view.load(base);
+    // 貼圖縮到畫面上的 1.5 倍（含螢幕密度）就夠清楚，再大只會讓 GPU 縮出鋸齒
+    await this.view.load(base, Math.min(1, k * dpr * 1.5));
     this.driver = new Driver(this.rig);
     await this.loadHit(`${base}/hit.png`, skeleton.regions ?? []);
     parent.append(this.el);
     this.bind();
+    // 先在定位好的地方隱形放好（不走位移動畫），再從那裡彈出來，不會從左上角飛過去
+    this.el.classList.add("suki-pet--placing");
     const saved = this.restore();
     if (saved) this.place(saved);
     else if (this.opts.mobile) { this.place({ x: innerWidth - cssW, y: innerHeight - cssH - 96 }); this.tuck("right", true); }
     else this.place({ x: innerWidth - cssW - 24, y: innerHeight - cssH - 8 });
+    void this.el.offsetWidth;
+    requestAnimationFrame(() => { this.el.classList.remove("suki-pet--placing"); this.el.classList.add("suki-pet--pop"); });
     if (!this.tucked) this.greet();
     this.daily();
     void this.opts.careVisit?.().then((got) => {
@@ -183,16 +188,27 @@ export class SukiPet {
     this.bubble.hidden = true;
     this.menuEl.hidden = false;
     this.act({ expr: "happy" });
+    clearTimeout(this.menuTimer);
+    this.menuTimer = window.setTimeout(() => this.closeMenu(), 10_000);
     setTimeout(() => {
       document.addEventListener("pointerdown", this.outside, true);
+      document.addEventListener("touchstart", this.outside, { capture: true, passive: true });
       document.addEventListener("keydown", this.escape, true);
     }, 0);
   }
   /** 點選單以外的任何地方（含她自己）都收起選單；點選單項目由項目自己收 */
-  private outside = (e: Event) => { if (!this.menuEl.contains(e.target as Node)) this.closeMenu(); };
+  private outside = (e: Event) => {
+    const t = e.target as Node;
+    // 點選單項目由項目自己收；點她本人由她的按下處理（收起選單、不另外起反應）
+    if (this.menuEl.contains(t) || this.touch.contains(t)) return;
+    this.closeMenu();
+  };
   private escape = (e: KeyboardEvent) => { if (e.key === "Escape") this.closeMenu(); };
+  private menuTimer = 0;
   private closeMenu() {
+    clearTimeout(this.menuTimer);
     document.removeEventListener("pointerdown", this.outside, true);
+    document.removeEventListener("touchstart", this.outside, true);
     document.removeEventListener("keydown", this.escape, true);
     if (this.menuEl.hidden) return;
     this.menuEl.hidden = true;
@@ -284,7 +300,8 @@ export class SukiPet {
     }
     this.bubble.hidden = false;
     this.bubble.classList.remove("suki-pet__bubble--in"); void this.bubble.offsetWidth; this.bubble.classList.add("suki-pet__bubble--in");
-    this.bubbleUntil = performance.now() + Math.max(ms, 1400 + text.length * 70);
+    // 沒人理她的話，最長十秒就收起來
+    this.bubbleUntil = performance.now() + Math.min(10_000, Math.max(ms, 1400 + text.length * 70));
   }
   private line(key: string, params?: Record<string, string | number>): string { return this.opts.line(key, params); }
 
@@ -395,19 +412,31 @@ export class SukiPet {
     this.touch.addEventListener("pointerdown", (e) => {
       // 右鍵交給 contextmenu 開選單，不算抓她
       if (e.button !== 0) return;
+      // 選單開著時點她：只是收起選單
+      if (!this.menuEl.hidden) { e.preventDefault(); this.closeMenu(); this.dismissTap = true; return; }
       // 點在透明處：不攔，讓底下的東西照常被點到
       if (this.region(e) === null) return;
       e.preventDefault();
-      this.touch.setPointerCapture(e.pointerId);
+      try { this.touch.setPointerCapture(e.pointerId); } catch { /* 拿不到也照常拖 */ }
       const r = this.box();
       this.drag = { dx: e.clientX - r.left, dy: e.clientY - r.top, x: e.clientX, y: e.clientY, vx: 0, t: performance.now(), moved: false, shake: 0 };
       // 長按 450ms 開選單（手機的主要入口；電腦也能用）
       clearTimeout(this.pressTimer);
       this.pressTimer = window.setTimeout(() => { if (this.drag && !this.drag.moved) { this.pressed = true; this.buzz(15); this.openMenu(); } }, 450);
     });
-    this.touch.addEventListener("contextmenu", (e) => { e.preventDefault(); this.openMenu(); });
+    this.touch.addEventListener("contextmenu", (e) => { e.preventDefault(); if (!this.pressed) this.openMenu(); });
+    // 系統接手手勢（長按選單、捲動）時會送 pointercancel：當作放手，不然她以為還被拎著
+    this.touch.addEventListener("pointercancel", () => {
+      clearTimeout(this.pressTimer);
+      const held = this.drag?.moved;
+      this.drag = undefined;
+      this.pressed = false;
+      this.el.classList.remove("suki-pet--held");
+      if (held) this.act({ expr: "happy", say: this.line("land") }, true);
+    });
     this.touch.addEventListener("pointerup", (e) => {
       clearTimeout(this.pressTimer);
+      if (this.dismissTap) { this.dismissTap = false; return; }
       if (this.pressed) { this.pressed = false; this.drag = undefined; return; }
       const d = this.drag; this.drag = undefined;
       if (!d) return;
@@ -422,6 +451,7 @@ export class SukiPet {
   }
 
   private pressTimer = 0;
+  private dismissTap = false;
   private pressed = false;
   private buzz(ms: number) { try { navigator.vibrate?.(ms); } catch { /* 不支援就算了 */ } }
 
@@ -473,7 +503,7 @@ export class SukiPet {
     // 一動就不是長按了
     if (dist >= 3) clearTimeout(this.pressTimer);
     if (!d.moved && dist < 6) return;
-    if (!d.moved) { clearTimeout(this.pressTimer); this.closeMenu(); d.moved = true; this.act({ expr: "surprised", say: this.line("lift"), ms: 60_000 }, true); this.el.classList.add("suki-pet--held"); }
+    if (!d.moved) { clearTimeout(this.pressTimer); this.closeMenu(); d.moved = true; this.act({ expr: "surprised", say: this.line("lift"), ms: 10_000 }, true); this.el.classList.add("suki-pet--held"); }
     // 甩：快速來回換方向才算，一路拖過去不算
     if (Math.sign(vx) !== Math.sign(d.vx) && Math.abs(vx) > 900 && Math.abs(d.vx) > 900) d.shake += 1;
     d.vx = vx; d.x = e.clientX; d.y = e.clientY; d.t = now;
