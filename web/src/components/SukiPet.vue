@@ -261,6 +261,8 @@ watch(() => [session.wallet?.plans, pet.value] as const, ([plans, p]) => {
   width: max-content; max-width: min(260px, calc(100vw - 32px)); box-sizing: border-box;
   border-radius: 16px; background: #fff; color: #2a1d24; box-shadow: 0 10px 28px -12px rgba(0, 0, 0, .5);
 }
+/* 泡泡與選單自己設了 display，會蓋掉 [hidden]：一定要明講，不然設成隱藏了畫面上還在 */
+.suki-pet__bubble[hidden], .suki-pet__menu[hidden] { display: none !important; }
 .suki-pet__bubble { padding: 10px 14px; font-size: 13.5px; line-height: 1.55; display: grid; gap: 8px; }
 .suki-pet__bubble::after { content: ""; position: absolute; left: 50%; bottom: -6px; width: 12px; height: 12px; background: #fff; transform: translateX(-50%) rotate(45deg); border-radius: 2px; }
 .suki-pet__bubble--in { animation: suki-in var(--dur-base, 250ms) cubic-bezier(.25,.46,.45,.94); }
