@@ -46,8 +46,6 @@ export interface PetOptions {
   careVisit?: () => Promise<{ news: SukiNews[]; level: number; recall: boolean; state: { fullness: number; affection: number; streak: number } } | undefined>;
   /** 熟了以後她問一次「可以想你的時候叫你嗎」，答應就打開召回 */
   enableRecall?: () => Promise<void>;
-  /** 姿勢圖所在（自己玩的時候換上） */
-  poses?: string;
   /** 熟了以後她怎麼叫你 */
   nickname?: () => string | null;
   /** 選單裡「接著上次」那一項，肚子餓時也拿來當按鈕 */
@@ -65,11 +63,8 @@ export class SukiPet {
   private touch: HTMLDivElement;
   private bubble: HTMLDivElement;
   private menuEl: HTMLDivElement;
-  private sprite: HTMLImageElement;
   private guide: PageGuide | null = null;
   private hidden = false;
-  /** 目前穿哪一套（決定自己玩時用哪一批姿勢圖） */
-  private skin = "day";
   /** 好感等級與召回開關：照顧狀態存在帳號裡，網站把它交給她 */
   private level = 0;
   private status: { fullness: number; affection: number; streak: number } | null = null;
@@ -109,16 +104,11 @@ export class SukiPet {
     this.bubble.className = "suki-pet__bubble";
     this.bubble.hidden = true;
     this.bubble.setAttribute("role", "status");
-    // 自己玩的時候換成整張姿勢圖（拓麻歌子、Shimeji 那種換圖）：讀書、望遠鏡、寫字、玩骰子…
-    this.sprite = document.createElement("img");
-    this.sprite.className = "suki-pet__sprite";
-    this.sprite.alt = "";
-    this.sprite.hidden = true;
     this.menuEl = document.createElement("div");
     this.menuEl.className = "suki-pet__menu";
     this.menuEl.hidden = true;
     this.menuEl.setAttribute("role", "menu");
-    this.el.append(this.canvas, this.sprite, this.touch, this.bubble, this.menuEl);
+    this.el.append(this.canvas, this.touch, this.bubble, this.menuEl);
     if (opts.mobile) this.el.classList.add("suki-pet--mobile");
   }
 
@@ -377,10 +367,7 @@ export class SukiPet {
       p.ArmR = -105 * up + Math.sin(this.waveT * 14) * 14 * up;
       if (this.waveT > 1.6) { this.waveT = -1; p.ArmR = 0; }
     }
-    if (this.sleeping) {
-      p.EyeOpen = 0;
-      if (now > this.zzzAt) { this.zzzAt = now + 9000; this.speak("Zzz…", 2400); }
-    }
+    if (this.sleeping && now > this.zzzAt) { this.zzzAt = now + 9000; this.speak("Zzz…", 2400); }
     this.brain(now);
     if (this.drag && now - this.drag.t > 60) this.drag.vx *= Math.exp(-dt * 8);
     const target = this.drag?.moved ? Math.max(-26, Math.min(26, -this.drag.vx * 0.02)) : 0;
@@ -391,7 +378,8 @@ export class SukiPet {
     this.driver.update(dt);
     p.Dangle = this.dangle;
     if (arm !== null) p.ArmR = arm;
-    if (this.sleeping) p.EyeOpen = 0;
+    // 睡著（骨架版）：閉眼、頭垂向一邊、呼吸變慢
+    if (this.sleeping) { p.EyeOpen = 0; p.AngleY = 0.9; p.AngleX = 0; p.EyeX = 0; p.EyeY = 0.6; p.AngleZ = 7 + Math.sin(now / 1400) * 1.5; p.Breath = (Math.sin(now / 900) + 1) / 2; }
     if (this.opts.reducedMotion) { p.Ponytail = 0; p.HairFront = 0; p.HairBack = 0; p.Skirt = 0; p.Die = 0; p.Dangle = 0; }
     if (!this.hidden) this.view.draw();
     if (!this.bubble.hidden && now > this.bubbleUntil) { this.bubble.hidden = true; const next = this.queue.shift(); if (next) this.act(next); }
@@ -401,32 +389,22 @@ export class SukiPet {
   /** 最後一次有人跟她互動（點、拖、開選單）；太近就不自己亂跑 */
   private touchedAt = performance.now();
   private nextMove = performance.now() + 9000;
-  private activity: { id: string; until: number } | null = null;
   private walk: { from: number; to: number; t: number; hops: number } | null = null;
   private waveT = -1;
   private sleeping = false;
   private zzzAt = 0;
 
-  /** 這套造型能用的姿勢圖（/mascot/home/pose-*.webp，跟首頁面板同一批）與她那時說的話 */
-  private static ACTS: Record<string, { pose: string; line: string }[]> = {
-    day: [
-      { pose: "resume-day-1", line: "act.read" }, { pose: "resume-day-2", line: "act.cocoa" },
-      { pose: "discover-1", line: "act.telescope" }, { pose: "write-1", line: "act.quill" },
-      { pose: "write-2", line: "act.notebook" }, { pose: "roll-1", line: "act.dice" }, { pose: "hoard", line: "act.hoard" },
-    ],
-  };
-
   private brain(now: number) {
     const quiet = !this.drag && !this.tucked && !this.hidden && this.menuEl.hidden && this.bubble.hidden && this.jumpT < 0;
-    if (this.activity && now > this.activity.until) this.endActivity(false);
-    if (!quiet || this.sleeping || this.activity || this.walk || now < this.nextMove || now - this.touchedAt < 12_000) return;
+    if (!quiet || this.sleeping || this.walk || now < this.nextMove || now - this.touchedAt < 12_000) return;
     this.nextMove = now + 9000 + Math.random() * 12_000;
+    // 睡覺：整頁太久沒人動就睡著（白天約四分鐘，深夜一分鐘）
     const h = new Date().getHours();
-    if ((h >= 23 || h < 5) && now - this.touchedAt > 90_000) return this.sleep();
+    if (now - Math.max(this.lastInput, this.touchedAt) > ((h >= 23 || h < 5) ? 60_000 : 240_000)) return this.sleep();
+    // 只用骨架能做的事（不換圖）：走一段、揮手、東張西望；坐下、讀書這些等坐姿骨架與道具部件做好再加
     const r = Math.random();
-    if (r < 0.38 && !this.opts.reducedMotion) return this.wander();
-    if (r < 0.78) return this.startActivity();
-    if (r < 0.9) { this.waveT = 0; return; }
+    if (r < 0.5 && !this.opts.reducedMotion) return this.wander();
+    if (r < 0.7) { this.waveT = 0; return; }
     // 東張西望
     this.driver.state.look = [-0.9, -0.2];
     setTimeout(() => { if (!this.drag) this.driver.state.look = [0.9, -0.1]; }, 1400);
@@ -444,35 +422,6 @@ export class SukiPet {
     if (Math.abs(to - b.left) < 30) return;
     this.walk = { from: b.left, to, t: 0, hops: Math.max(2, Math.round(Math.abs(to - b.left) / 34)) };
     this.el.classList.add("suki-pet--walking");
-  }
-
-  private startActivity() {
-    const list = SukiPet.ACTS[this.skin] ?? SukiPet.ACTS.day;
-    const a = list[Math.floor(Math.random() * list.length)];
-    this.sprite.src = `${this.opts.poses ?? "/mascot/home"}/pose-${a.pose}.webp`;
-    this.sprite.style.translate = "-50% 0";
-    this.sprite.hidden = false;
-    // 姿勢圖比站著寬（拿羽毛筆、趴著看書）：靠在畫面邊上時往內挪，不被切掉
-    void this.sprite.decode().then(() => {
-      const b = this.box();
-      const w = b.height * (this.sprite.naturalWidth / Math.max(1, this.sprite.naturalHeight));
-      const center = b.left + b.width / 2;
-      const shift = Math.min(0, innerWidth - 8 - (center + w / 2)) || Math.max(0, 8 - (center - w / 2));
-      this.sprite.style.translate = `calc(-50% + ${Math.round(shift)}px) 0`;
-    }, () => undefined);
-    this.el.classList.add("suki-pet--acting");
-    this.activity = { id: a.pose, until: performance.now() + 10_000 + Math.random() * 9000 };
-    const mine = this.activity;
-    if (Math.random() < 0.6) setTimeout(() => { if (this.activity === mine) this.act({ say: this.line(a.line), ms: 3200 }); }, 700);
-  }
-  /** 結束自己玩：被點到就說「被你發現了」 */
-  private endActivity(caught: boolean) {
-    if (!this.activity) return;
-    this.activity = null;
-    this.el.classList.remove("suki-pet--acting");
-    setTimeout(() => { if (!this.activity) this.sprite.hidden = true; }, 260);
-    this.hop();
-    if (caught) this.act({ expr: "surprised", say: this.line("act.caught") }, true);
   }
 
   /** 她的狀態（拓麻歌子的那一頁）：飽足、好感等級、陪了幾天，用愛心畫 */
@@ -494,17 +443,32 @@ export class SukiPet {
     }, 1100);
   }
 
-  /** 哄睡或深夜自己睡著：閉眼、偶爾冒 Zzz，點她才醒 */
+  private sleepStart = 0;
+  private stirs: number[] = [];
+
+  /** 睡著（骨架）：閉眼、頭垂向一邊、慢慢呼吸、偶爾冒 Zzz */
   sleep() {
-    this.endActivity(false);
+    this.closeMenu();
     this.sleeping = true;
+    this.sleepStart = performance.now();
     this.exprTarget = { sleepy: 1 };
-    this.zzzAt = performance.now() + 1500;
+    this.zzzAt = performance.now() + 2500;
   }
-  private wake() {
+  /**
+   * 醒來。gentle：你回來動了動頁面，她揉揉眼睛、撒嬌；poked：被戳醒、被拎起來，抱怨或耍賴。
+   */
+  private wake(how: "gentle" | "poked") {
+    if (!this.sleeping) return;
     this.sleeping = false;
     this.exprTarget = {};
-    this.act({ expr: "pout", say: this.line("act.wake"), hop: true }, true);
+    this.act({ expr: how === "poked" ? "pout" : "happy", say: this.line(`wake.${how}`), hop: how === "poked" }, true);
+  }
+  /** 睡著時頁面被捲動：翻個身、頭髮晃一下，不醒；兩秒內一直捲才醒 */
+  private stir() {
+    const now = performance.now();
+    this.stirs = [...this.stirs.filter((t) => now - t < 2000), now];
+    this.kick("Ponytail", 40); this.kick("HairBack", 20);
+    if (this.stirs.length >= 5) this.wake("gentle");
   }
 
   // ---- 輸入 ----
@@ -515,6 +479,8 @@ export class SukiPet {
     };
     addEventListener("pointermove", (e) => {
       this.lastInput = performance.now();
+      // 睡著時你回來動了滑鼠：她慢慢醒來（剛睡著的前幾秒不算，免得一睡就醒）
+      if (this.sleeping && performance.now() - this.sleepStart > 3000) this.wake("gentle");
       if (this.drag) return this.dragMove(e);
       const [hx, hy] = head();
       const dx = (e.clientX - hx) / 300, dy = (e.clientY - hy) / 300;
@@ -525,13 +491,15 @@ export class SukiPet {
       const now = performance.now(), y = scrollY;
       const v = (y - this.lastScroll.y) / Math.max(16, now - this.lastScroll.t);
       this.lastScroll = { y, t: now };
-      if (Math.abs(v) > 2) { this.kick("Ponytail", v * 10); this.kick("HairFront", v * 3); this.kick("Skirt", v * 4); }
+      if (this.sleeping) this.stir();
+      else if (Math.abs(v) > 2) { this.kick("Ponytail", v * 10); this.kick("HairFront", v * 3); this.kick("Skirt", v * 4); }
       if (innerHeight + y >= document.documentElement.scrollHeight - 4) this.on({ type: "listEnd" });
       this.lastInput = now;
     }, { passive: true });
     addEventListener("keydown", (e) => {
       this.lastInput = performance.now();
       this.typed = (this.typed + e.key).slice(-4).toLowerCase();
+      if (this.sleeping) this.wake("gentle");
       if (this.typed === "suki") this.act({ expr: "happy", say: this.line("suki"), hop: true, ms: 3000 });
     });
     // 分頁擺著好幾個鐘頭再回來：重新記一次來訪（不然她以為你沒來，會寄召回給正在網站上的人）
@@ -572,7 +540,7 @@ export class SukiPet {
       // 選單開著時點她：只是收起選單
       if (!this.menuEl.hidden) { e.preventDefault(); this.closeMenu(); this.dismissTap = true; return; }
       // 點在透明處：不攔，讓底下的東西照常被點到
-      if (this.region(e) === null && !this.activity) return;
+      if (this.region(e) === null && !this.sleeping) return;
       this.touchedAt = performance.now();
       if (this.walk) { this.walk = null; this.rig.params.Jump = 0; this.el.classList.remove("suki-pet--walking"); }
       e.preventDefault();
@@ -660,7 +628,7 @@ export class SukiPet {
     // 一動就不是長按了
     if (dist >= 3) clearTimeout(this.pressTimer);
     if (!d.moved && dist < 6) return;
-    if (!d.moved) { clearTimeout(this.pressTimer); this.closeMenu(); this.endActivity(false); this.sleeping = false; d.moved = true; this.act({ expr: "surprised", say: this.line("lift"), ms: 10_000 }, true); this.el.classList.add("suki-pet--held"); }
+    if (!d.moved) { clearTimeout(this.pressTimer); this.closeMenu(); if (this.sleeping) { this.sleeping = false; this.exprTarget = {}; } d.moved = true; this.act({ expr: "surprised", say: this.line("lift"), ms: 10_000 }, true); this.el.classList.add("suki-pet--held"); }
     // 甩：快速來回換方向才算，一路拖過去不算
     if (Math.sign(vx) !== Math.sign(d.vx) && Math.abs(vx) > 900 && Math.abs(d.vx) > 900) d.shake += 1;
     d.vx = vx; d.x = e.clientX; d.y = e.clientY; d.t = now;
@@ -698,8 +666,7 @@ export class SukiPet {
   private poke(e: PointerEvent) {
     this.buzz(8);
     this.touchedAt = performance.now();
-    if (this.sleeping) return this.wake();
-    if (this.activity) return this.endActivity(true);
+    if (this.sleeping) return this.wake("poked");
     if (this.tucked) {
       this.tucked = false; this.el.classList.remove("suki-pet--tucked");
       const r = this.box();
