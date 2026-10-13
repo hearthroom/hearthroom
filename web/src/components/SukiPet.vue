@@ -123,6 +123,8 @@ async function start() {
   try { await p.start(document.body); } catch { return; /* 沒有 WebGL 之類：她就不出來 */ }
   if (disposed) { p.stop(); return; }
   pet.value = p;
+  // 開發時方便在主控台看她的參數
+  if (import.meta.env.DEV) (window as unknown as { __suki: Pet }).__suki = p;
   enter(route.path);
 }
 
@@ -217,7 +219,12 @@ watch(() => [session.wallet?.plans, pet.value] as const, ([plans, p]) => {
 .suki-pet { position: fixed; left: 0; top: 0; z-index: 45; transition: transform var(--dur-base, 250ms) cubic-bezier(.25,.46,.45,.94), opacity var(--dur-base, 250ms); touch-action: none; user-select: none; -webkit-user-select: none; }
 .suki-pet--held { transition: none; cursor: grabbing; }
 .suki-pet--away { opacity: 0; pointer-events: none; }
-.suki-pet canvas { display: block; cursor: pointer; }
+.suki-pet__hit { position: relative; cursor: pointer; }
+/* 畫布比她大一圈（擺盪、跳起來用），只負責畫，不接點擊 */
+.suki-pet__canvas { position: absolute; display: block; pointer-events: none; }
+/* 手機長按、點她時不要出現系統的選取框與藍色高亮 */
+.suki-pet, .suki-pet * { -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
+.suki-pet__hit { -webkit-user-select: none; user-select: none; outline: none; }
 .suki-pet__bubble, .suki-pet__menu {
   position: absolute; bottom: calc(100% - 14px); right: 50%; transform: translateX(50%);
   width: max-content; max-width: min(260px, calc(100vw - 32px)); box-sizing: border-box;
