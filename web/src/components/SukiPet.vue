@@ -116,9 +116,9 @@ async function start() {
       for (let i = 0; i < 50 && !session.ready; i++) await new Promise((r) => setTimeout(r, 100));
       const token = session.me ? await session.accessToken() : null;
       if (!token) return undefined;
-      const got = await communityRequest<{ state: { affection: number } | null; news: SukiNews[]; recall: boolean }>("/me/suki/visit", token, "POST", { tzOffset: new Date().getTimezoneOffset() }).catch(() => null);
+      const got = await communityRequest<{ state: { affection: number; fullness: number; streak: number } | null; news: SukiNews[]; recall: boolean }>("/me/suki/visit", token, "POST", { tzOffset: new Date().getTimezoneOffset() }).catch(() => null);
       if (!got?.state) return undefined;
-      return { news: got.news, level: levelOf(got.state.affection), recall: got.recall };
+      return { news: got.news, level: levelOf(got.state.affection), recall: got.recall, state: got.state };
     },
     enableRecall: async () => {
       const token = await session.accessToken();
@@ -162,30 +162,8 @@ function enter(path: string) {
   pet.value?.setGuide(g);
 }
 watch(() => route.path, enter);
-// 畫面上已經有她（首頁面板、歡迎橫幅、新手引導框）時桌寵先躲開，一次只出現一個；捲過去她才從角落出來
-const stageVisible = shallowRef(false);
-let stageObserver: IntersectionObserver | null = null;
-const seen = new Set<Element>();
-function watchStages() {
-  stageObserver?.disconnect(); seen.clear();
-  stageObserver = new IntersectionObserver((entries) => {
-    for (const e of entries) { if (e.isIntersecting) seen.add(e.target); else seen.delete(e.target); }
-    stageVisible.value = seen.size > 0;
-  });
-  for (const el of document.querySelectorAll("[data-suki-stage]")) stageObserver.observe(el);
-  if (!document.querySelector("[data-suki-stage]")) stageVisible.value = false;
-}
-// 面板等登入狀態到了才畫出來：換頁、身分到了都重新找一次，晚一點再補找一次
-// 面板、引導框是之後才畫出來的：頁面上多了或少了這種東西就重新找（合併成一次）
-let rescan = 0;
-const domObserver = new MutationObserver((records) => {
-  // 她自己的泡泡在變，不算
-  if (records.every((r) => (r.target as Element).closest?.(".suki-pet"))) return;
-  clearTimeout(rescan); rescan = window.setTimeout(watchStages, 300);
-});
-watch(pet, (p) => { domObserver.disconnect(); if (p) { domObserver.observe(document.body, { childList: true, subtree: true }); watchStages(); } }, { immediate: true });
-onBeforeUnmount(() => { stageObserver?.disconnect(); domObserver.disconnect(); clearTimeout(rescan); });
-watch(() => [stageVisible.value, pet.value] as const, ([stage, p]) => p?.setAway(stage), { immediate: true });
+// 她是寵物，一直都在（owner 2026-10-13）：只有玩卡頁與沙盒不出現（那兩頁根本不掛這個元件），
+// 首頁面板、歡迎橫幅、新手引導在的時候也不躲。
 
 // 網站的開關直接帶動她：深色主題、18+、語言
 watch(resolvedMode, (m) => pet.value?.on({ type: "theme", dark: m === "dark" }));
@@ -245,6 +223,13 @@ watch(() => [session.wallet?.plans, pet.value] as const, ([plans, p]) => {
 /* 桌寵的外觀（全域：她掛在 body 上，不在這個元件的 DOM 裡）。泡泡與選單固定白底深字，不跟站台主題換色 */
 .suki-pet { position: fixed; left: 0; top: 0; z-index: 45; transition: transform var(--dur-base, 250ms) cubic-bezier(.25,.46,.45,.94), opacity var(--dur-base, 250ms); touch-action: none; user-select: none; -webkit-user-select: none; }
 .suki-pet--held { transition: none; cursor: grabbing; }
+/* 自己玩：整張姿勢圖站在同一個位置，底部對齊，輕輕呼吸；她的骨架先隱去 */
+.suki-pet__sprite { position: absolute; left: 50%; bottom: 0; height: var(--ph, 220px); width: auto; max-width: none; translate: -50% 0; pointer-events: none; transform-origin: 50% 100%; animation: suki-breathe 3.6s ease-in-out infinite; transition: opacity var(--dur-base, 250ms); }
+.suki-pet__sprite[hidden] { display: none !important; }
+.suki-pet__canvas { transition: opacity var(--dur-base, 250ms); }
+.suki-pet--acting .suki-pet__canvas { opacity: 0; }
+@keyframes suki-breathe { 50% { scale: 1 1.015; } }
+.suki-pet--walking { transition: none; }
 /* 第一次出現：先隱形放到位，再從原地彈出來 */
 .suki-pet--placing { transition: none !important; opacity: 0; }
 .suki-pet--pop .suki-pet__canvas, .suki-pet--pop .suki-pet__hit { animation: suki-pop var(--dur-slow, 500ms) cubic-bezier(.34,1.56,.64,1); transform-origin: 50% 100%; }
@@ -275,5 +260,5 @@ watch(() => [session.wallet?.plans, pet.value] as const, ([plans, p]) => {
 .suki-pet:not(.suki-pet--right) .suki-pet__bubble, .suki-pet:not(.suki-pet--right) .suki-pet__menu { right: auto; left: 8px; transform: none; }
 .suki-pet:not(.suki-pet--right) .suki-pet__bubble::after { left: calc(var(--pw, 120px) / 2 - 14px); transform: rotate(45deg); }
 @keyframes suki-in { from { opacity: 0; translate: 0 6px; scale: .96; } }
-@media (prefers-reduced-motion: reduce) { .suki-pet { transition: none; } .suki-pet__bubble--in, .suki-pet--pop .suki-pet__canvas, .suki-pet--pop .suki-pet__hit { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .suki-pet { transition: none; } .suki-pet__bubble--in, .suki-pet--pop .suki-pet__canvas, .suki-pet--pop .suki-pet__hit, .suki-pet__sprite { animation: none; } }
 </style>
