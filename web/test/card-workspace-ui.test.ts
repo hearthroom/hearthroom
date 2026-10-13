@@ -210,8 +210,8 @@ it('says what the search found nothing for, and offers to clear it', async () =>
  expect(root.querySelector('.pager')).toBeNull();
 });
 
-// 封面用首頁同一個縮圖網址（同一個尺寸），Cloudflare 不會為這一頁多轉一份；縮圖掛了退回原圖
-it('uses the same thumbnail URL as the home page, then the original on failure', async () => {
+// 封面用首頁同一個縮圖網址（同一個尺寸），Cloudflare 不會為這一頁多轉一份；縮圖掛了先用靜態縮圖，再不行才用原圖
+it('uses the same thumbnail URL as the home page, then the still thumbnail, then the original on failure', async () => {
  const { cardThumbUrl } = await import('../../shared/card-thumb');
  const { PRIMARY_HOST } = await import('../../shared/site-hosts');
  const portrait='https://assets.harperharbor.com/media/portrait.png';
@@ -220,6 +220,8 @@ it('uses the same thumbnail URL as the home page, then the original on failure',
   mocks.fetch.mockImplementation(async (_t, {provider}) => result([{...fixture, roleId:provider==='harbor'?'original':'copy', avatarUrl:portrait, backgroundUrl:portrait}]));
   await mount();
   expect(root.querySelector('.card__art img')?.getAttribute('src')).toBe(cardThumbUrl(PRIMARY_HOST,portrait));
+  root.querySelector('.card__art img')!.dispatchEvent(new Event('error')); await settle();
+  expect(root.querySelector('.card__art img')?.getAttribute('src')).toBe(cardThumbUrl(PRIMARY_HOST,portrait,undefined,true));
   root.querySelector('.card__art img')!.dispatchEvent(new Event('error')); await settle();
   expect(root.querySelector('.card__art img')?.getAttribute('src')).toBe(portrait);
   root.querySelector('.card__art img')!.dispatchEvent(new Event('error')); await settle();
