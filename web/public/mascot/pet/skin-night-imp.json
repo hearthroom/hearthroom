@@ -39,19 +39,67 @@
    }
   },
   {
-   "id": "legs",
-   "tex": "night-imp-legs.webp",
+   "id": "legR_up",
+   "tex": "night-imp-legR_up.webp",
    "rect": [
-    285,
-    892,
-    334,
-    591
+    330,
+    989,
+    122,
+    133
    ],
-   "node": "root",
+   "node": "legR",
    "z": 20,
    "grid": [
-    14,
-    25
+    6,
+    6
+   ]
+  },
+  {
+   "id": "legR_lo",
+   "tex": "night-imp-legR_lo.webp",
+   "rect": [
+    285,
+    1110,
+    164,
+    372
+   ],
+   "node": "legR_lo",
+   "z": 21,
+   "grid": [
+    7,
+    16
+   ]
+  },
+  {
+   "id": "legL_up",
+   "tex": "night-imp-legL_up.webp",
+   "rect": [
+    465,
+    1003,
+    111,
+    121
+   ],
+   "node": "legL",
+   "z": 19,
+   "grid": [
+    5,
+    6
+   ]
+  },
+  {
+   "id": "legL_lo",
+   "tex": "night-imp-legL_lo.webp",
+   "rect": [
+    464,
+    1110,
+    155,
+    373
+   ],
+   "node": "legL_lo",
+   "z": 18,
+   "grid": [
+    7,
+    16
    ]
   },
   {
@@ -117,35 +165,99 @@
    ]
   },
   {
-   "id": "armR",
-   "tex": "night-imp-armR.webp",
+   "id": "armR_up",
+   "tex": "night-imp-armR_up.webp",
    "rect": [
-    120,
+    232,
     712,
-    225,
-    303
+    113,
+    82
    ],
    "node": "armR",
    "z": 36,
    "grid": [
-    10,
-    13
+    5,
+    4
    ]
   },
   {
-   "id": "armL",
-   "tex": "night-imp-armL.webp",
+   "id": "armR_lo",
+   "tex": "night-imp-armR_lo.webp",
+   "rect": [
+    146,
+    780,
+    186,
+    185
+   ],
+   "node": "armR_lo",
+   "z": 37,
+   "grid": [
+    8,
+    8
+   ]
+  },
+  {
+   "id": "handR",
+   "tex": "night-imp-handR.webp",
+   "rect": [
+    120,
+    945,
+    110,
+    70
+   ],
+   "node": "handR",
+   "z": 39,
+   "grid": [
+    5,
+    3
+   ]
+  },
+  {
+   "id": "armL_up",
+   "tex": "night-imp-armL_up.webp",
    "rect": [
     575,
     697,
-    212,
-    317
+    117,
+    95
    ],
    "node": "armL",
    "z": 36,
    "grid": [
-    9,
-    14
+    5,
+    4
+   ]
+  },
+  {
+   "id": "armL_lo",
+   "tex": "night-imp-armL_lo.webp",
+   "rect": [
+    590,
+    780,
+    177,
+    177
+   ],
+   "node": "armL_lo",
+   "z": 37,
+   "grid": [
+    8,
+    8
+   ]
+  },
+  {
+   "id": "handL",
+   "tex": "night-imp-handL.webp",
+   "rect": [
+    687,
+    945,
+    100,
+    69
+   ],
+   "node": "handL",
+   "z": 39,
+   "grid": [
+    5,
+    3
    ]
   },
   {
@@ -776,7 +888,7 @@
     83,
     165
    ],
-   "node": "body",
+   "node": "armR",
    "z": 5,
    "grid": [
     6,
@@ -792,8 +904,7 @@
      876.0
     ],
     "angle": {
-     "Tail": 1,
-     "BodyZ": -3
+     "Tail": 1
     },
     "power": 1.3
    }

@@ -60,8 +60,8 @@
    "id": "armR",
    "parent": "body",
    "pivot": [
-    282.5,
-    618
+    323.3,
+    616.0
    ],
    "rotate": {
     "ArmR": 1,
@@ -69,15 +69,125 @@
    }
   },
   {
+   "id": "armR_lo",
+   "parent": "armR",
+   "pivot": [
+    268.6,
+    789.5
+   ],
+   "rotate": {
+    "ElbowR": 1
+   }
+  },
+  {
+   "id": "handR",
+   "parent": "armR_lo",
+   "pivot": [
+    177.0,
+    954.5
+   ],
+   "rotate": {
+    "WristR": 1
+   }
+  },
+  {
+   "id": "propR",
+   "parent": "handR",
+   "pivot": [
+    163.2,
+    978.1
+   ],
+   "rotate": {
+    "PropR": 1
+   }
+  },
+  {
    "id": "armL",
    "parent": "body",
    "pivot": [
-    631.8,
-    618
+    591.1,
+    616.0
    ],
    "rotate": {
     "ArmL": 1,
     "Breath": 1
+   }
+  },
+  {
+   "id": "armL_lo",
+   "parent": "armL",
+   "pivot": [
+    642.0,
+    789.5
+   ],
+   "rotate": {
+    "ElbowL": 1
+   }
+  },
+  {
+   "id": "handL",
+   "parent": "armL_lo",
+   "pivot": [
+    730.5,
+    954.5
+   ],
+   "rotate": {
+    "WristL": 1
+   }
+  },
+  {
+   "id": "propL",
+   "parent": "handL",
+   "pivot": [
+    743.6,
+    977.8
+   ],
+   "rotate": {
+    "PropL": 1
+   }
+  },
+  {
+   "id": "legR",
+   "parent": "root",
+   "pivot": [
+    361.8,
+    942.0
+   ],
+   "rotate": {
+    "LegR": 1
+   }
+  },
+  {
+   "id": "legR_lo",
+   "parent": "legR",
+   "pivot": [
+    391.1,
+    1119.5
+   ],
+   "rotate": {
+    "KneeR": 1
+   }
+  },
+  {
+   "id": "legL",
+   "parent": "root",
+   "pivot": [
+    538.6,
+    943.4
+   ],
+   "rotate": {
+    "LegL": 1
+   }
+  },
+  {
+   "id": "legL_lo",
+   "parent": "legL",
+   "pivot": [
+    524.7,
+    1119.5
+   ],
+   "rotate": {
+    "KneeL": 1
    }
   },
   {

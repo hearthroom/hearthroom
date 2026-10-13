@@ -39,19 +39,67 @@
    }
   },
   {
-   "id": "legs",
-   "tex": "night-legs.webp",
+   "id": "legR_up",
+   "tex": "night-legR_up.webp",
    "rect": [
-    287,
-    894,
-    332,
-    588
+    330,
+    990,
+    121,
+    132
    ],
-   "node": "root",
+   "node": "legR",
    "z": 20,
    "grid": [
-    14,
-    25
+    6,
+    6
+   ]
+  },
+  {
+   "id": "legR_lo",
+   "tex": "night-legR_lo.webp",
+   "rect": [
+    287,
+    1110,
+    163,
+    371
+   ],
+   "node": "legR_lo",
+   "z": 21,
+   "grid": [
+    7,
+    16
+   ]
+  },
+  {
+   "id": "legL_up",
+   "tex": "night-legL_up.webp",
+   "rect": [
+    465,
+    1004,
+    111,
+    120
+   ],
+   "node": "legL",
+   "z": 19,
+   "grid": [
+    5,
+    5
+   ]
+  },
+  {
+   "id": "legL_lo",
+   "tex": "night-legL_lo.webp",
+   "rect": [
+    466,
+    1110,
+    153,
+    372
+   ],
+   "node": "legL_lo",
+   "z": 18,
+   "grid": [
+    7,
+    16
    ]
   },
   {
@@ -117,35 +165,99 @@
    ]
   },
   {
-   "id": "armR",
-   "tex": "night-armR.webp",
+   "id": "armR_up",
+   "tex": "night-armR_up.webp",
    "rect": [
-    115,
+    221,
     696,
-    219,
-    319
+    113,
+    96
    ],
    "node": "armR",
    "z": 36,
    "grid": [
-    10,
-    14
+    5,
+    4
    ]
   },
   {
-   "id": "armL",
-   "tex": "night-armL.webp",
+   "id": "armR_lo",
+   "tex": "night-armR_lo.webp",
+   "rect": [
+    139,
+    780,
+    183,
+    181
+   ],
+   "node": "armR_lo",
+   "z": 37,
+   "grid": [
+    8,
+    8
+   ]
+  },
+  {
+   "id": "handR",
+   "tex": "night-handR.webp",
+   "rect": [
+    115,
+    945,
+    114,
+    70
+   ],
+   "node": "handR",
+   "z": 39,
+   "grid": [
+    5,
+    3
+   ]
+  },
+  {
+   "id": "armL_up",
+   "tex": "night-armL_up.webp",
    "rect": [
     577,
     698,
-    212,
-    318
+    115,
+    94
    ],
    "node": "armL",
    "z": 36,
    "grid": [
-    9,
-    14
+    5,
+    4
+   ]
+  },
+  {
+   "id": "armL_lo",
+   "tex": "night-armL_lo.webp",
+   "rect": [
+    586,
+    780,
+    180,
+    178
+   ],
+   "node": "armL_lo",
+   "z": 37,
+   "grid": [
+    8,
+    8
+   ]
+  },
+  {
+   "id": "handL",
+   "tex": "night-handL.webp",
+   "rect": [
+    679,
+    945,
+    110,
+    71
+   ],
+   "node": "handL",
+   "z": 39,
+   "grid": [
+    5,
+    3
    ]
   },
   {
