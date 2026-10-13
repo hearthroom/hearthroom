@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "try": "/me/referral",
+  "draft": true,
+  "title": {
+    "zh-Hant": "分享卡片的連結會帶上你的推薦碼，朋友點進來註冊後就自動算是你邀請的。",
+    "zh-Hans": "分享卡片的链接会带上你的推荐码，朋友点进来注册后就自动算是你邀请的。",
+    "en": "Card links you share now carry your referral code, so friends who sign up from them count as your invites automatically.",
+    "ja": "共有したカードのリンクに紹介コードが付き、そこから登録した友だちは自動であなたの招待になります。",
+    "ko": "공유한 카드 링크에 내 추천 코드가 담겨, 친구가 그 링크로 가입하면 자동으로 내 초대로 집계됩니다."
+  }
+}

@@ -32,6 +32,7 @@ import CardOwnerActions from "@/components/CardOwnerActions.vue";
 import RatingMark from "@/components/RatingMark.vue";
 import CardPlatforms from "@/components/CardPlatforms.vue";
 import ShareMenu from "@/components/ShareMenu.vue";
+import { currentReferralCode, withShareRef } from "@/lib/share-ref";
 import TipMenu from "@/components/TipMenu.vue";
 import { useSession } from "@/lib/session";
 import { contentLang, pageTitle, zoneLabel } from "@/lib/i18n";
@@ -83,7 +84,15 @@ const confirmed = ref(false);
 /** 同一位作者的其他作品：右欄最多四張，其餘在作者頁 */
 const more = ref<CommunityCard[]>([]);
 const MORE_MAX = 4;
-const shareUrl = computed(() => new URL(lp(`/cards/${card.value?.id ?? route.params.id}`), location.origin).href);
+/** 登入的人分享出去的網址帶自己的推薦碼：朋友點進來註冊，就算他邀請的（lib/share-ref.ts）。讀不到碼就照舊分享。 */
+const myRefCode = ref<string | null>(null);
+watch(() => session.me?.accountNumId ?? null, async (id) => {
+  myRefCode.value = null;
+  if (!id) return;
+  const code = await currentReferralCode(id);
+  if ((session.me?.accountNumId ?? null) === id) myRefCode.value = code;
+}, { immediate: true });
+const shareUrl = computed(() => withShareRef(new URL(lp(`/cards/${card.value?.id ?? route.params.id}`), location.origin).href, myRefCode.value));
 const copied = ref(false);
 /**
  * 作者最後一次改內容的時間（來源端的資料，對話次數之類的統計不會動它）。

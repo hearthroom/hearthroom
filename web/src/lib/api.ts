@@ -867,15 +867,18 @@ export async function fetchWallet(token: string, provider: ProviderId = currentP
 export interface ReferralTerms { welcomeCredits: number; welcomeDays: number; firstPercent: number; firstCap: number; inviteePercent: number; rebatePercent: number; rebateDays: number; bindDays: number }
 export interface ReferralSummary {
   enabled: boolean; code: string; terms: ReferralTerms; referred: boolean; welcomeCredits: number;
-  canRedeem: boolean; redeemUntil?: string; invited: number; purchased: number; earned: number;
+  canRedeem: boolean; redeemUntil?: string; registeredAt: string; invited: number; purchased: number; earned: number;
 }
 export async function fetchReferral(token: string, provider: ProviderId = currentProvider()): Promise<ReferralSummary> {
   return json<ReferralSummary>(await fetch(`${apiBaseOf(provider)}/open/v1/me/referral`, { headers: authHeaders(token) }));
 }
-/** 填別人的推薦碼。綁定後不能改，所以按鈕旁要講清楚。 */
-export async function redeemReferral(token: string, code: string, provider: ProviderId = currentProvider()): Promise<ReferralSummary> {
+/**
+ * 填別人的推薦碼。綁定後不能改，所以按鈕旁要講清楚。
+ * via=link 是註冊前點過的分享連結帶進來的碼：服務把它當暫定的，本人之後手動填一次可以換掉。
+ */
+export async function redeemReferral(token: string, code: string, provider: ProviderId = currentProvider(), via: "manual" | "link" = "manual"): Promise<ReferralSummary> {
   return json<ReferralSummary>(await fetch(`${apiBaseOf(provider)}/open/v1/me/referral/redeem`, {
-    method: "POST", headers: { ...authHeaders(token), "Content-Type": "application/json" }, body: JSON.stringify({ code }),
+    method: "POST", headers: { ...authHeaders(token), "Content-Type": "application/json" }, body: JSON.stringify(via === "link" ? { code, via } : { code }),
   }));
 }
 

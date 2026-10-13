@@ -76,3 +76,25 @@ it('asks to re-authorize when the sign-in predates the invite permission', async
   button.click();
   expect(mocks.login).toHaveBeenCalledWith('/me/referral', { provider: 'harbor' });
 });
+
+// 分享連結帶入的推薦人還能換：照樣給填碼欄，說明換的是推薦人、期限是換人的截止日。
+it('offers to replace a referrer that came from a shared link', async () => {
+  mocks.summary.mockResolvedValue(page({ referred: true, canRedeem: true, redeemUntil: '2026-10-14T08:00:00Z' }));
+  await mount('/me/referral?tab=enter');
+  expect(root.querySelector('form[data-testid="referral-form"]')).not.toBeNull();
+  const [before, after] = String(i18n.global.t('referral.switchHelp', { date: '§' })).split('§');
+  const help = root.querySelector('#referral-help')?.textContent ?? '';
+  expect(help.startsWith(before) && help.endsWith(after)).toBe(true);
+});
+
+// 邀請連結走分享連結那條路：朋友註冊後自動帶入，不用再填。
+it('copies an invite link that carries the code as a share reference', async () => {
+  const write = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, 'clipboard', { value: { writeText: write }, configurable: true });
+  mocks.summary.mockResolvedValue(page());
+  await mount();
+  const link = [...root.querySelectorAll('button')].find(b => b.textContent === String(i18n.global.t('referral.copyLink'))) as HTMLButtonElement;
+  link.click();
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+  expect(write).toHaveBeenCalledWith(`${location.origin}/?ref=K7M2Q9XA`);
+});

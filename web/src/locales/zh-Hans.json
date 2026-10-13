@@ -1826,6 +1826,7 @@
   "referral.rule.scope": "奖励积分仅可用于角色对话",
   "referral.redeemTitle": "填写推荐码",
   "referral.redeemHelp": "{date} 前可填写一次，填写后无法更改",
+  "referral.switchHelp": "已通过分享链接自动填写推荐码，{date} 前可改填一次",
   "referral.redeemClosed": "推荐码需在注册 {days} 天内、首次充值前填写",
   "referral.codeLabel": "推荐码",
   "referral.placeholder": "输入推荐码",

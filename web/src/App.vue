@@ -29,6 +29,7 @@ import CoachTour from "@/components/CoachTour.vue";
 import SukiPet from "@/components/SukiPet.vue";
 import { useUpdates } from "@/lib/updates";
 import { footerGroups, footerLegal, type FooterContext } from "@/lib/footer-nav";
+import { watchShareRefBinding } from "@/lib/share-ref";
 
 const { lp, locale } = useLocalePath();
 // 頁首與頁尾的品牌名跟著語言走（shared/site-name.ts）：中文介面是綺夢社，其他語言是 Hearthroom。副標只進分頁標題。
@@ -59,6 +60,8 @@ let reviewTimer: ReturnType<typeof setInterval> | undefined;
 // 審核待辦與通知未讀數同一個節奏：每分鐘一次，回到分頁再一次。通知那一趟順便告訴伺服器目前的介面語言。
 function refreshReview(){ if(session.me && document.visibilityState==='visible') { void reviewerStore.refresh(); void notifications.refresh(locale.value); } }
 watch(() => session.me?.accountNumId ?? null, (id) => { if (id) void notifications.refresh(locale.value); });
+// 點了分享連結之後在這裡註冊的人：登入後替他帶入分享者的推薦碼（lib/share-ref.ts）。
+watchShareRefBinding();
 onMounted(() => { session.restore(); useAppearance().init(); reviewTimer=setInterval(refreshReview,60000); window.addEventListener('focus',refreshReview); document.addEventListener('visibilitychange',refreshReview); });
 onBeforeUnmount(()=>{clearInterval(reviewTimer);window.removeEventListener('focus',refreshReview);document.removeEventListener('visibilitychange',refreshReview);document.removeEventListener('keydown',onSlash);});
 

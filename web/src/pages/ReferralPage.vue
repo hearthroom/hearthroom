@@ -16,9 +16,12 @@ import { beginLogin } from "@/lib/oauth";
 import { currentProvider } from "@/lib/provider";
 import { useSession } from "@/lib/session";
 import { pageTitle } from "@/lib/i18n";
-import { dateOnly, whole } from "@/lib/format";
+import { dateOnly, dateTime, whole } from "@/lib/format";
+import { withShareRef } from "@/lib/share-ref";
+import { useLocalePath } from "@/lib/use-locale";
 
 const { t } = useI18n();
+const { lp } = useLocalePath();
 const route = useRoute();
 const router = useRouter();
 const session = useSession();
@@ -56,7 +59,9 @@ function reauthorize() {
 }
 
 const copied = ref<"" | "code" | "link">("");
-const inviteLink = computed(() => data.value ? `${location.origin}${route.path}?code=${encodeURIComponent(data.value.code)}` : "");
+// 邀請連結跟分享卡片同一條路（lib/share-ref.ts）：朋友點進來先記下，註冊後自動帶入，不用自己再填。
+// 舊的 ?code= 連結照舊落在填碼頁。
+const inviteLink = computed(() => data.value ? withShareRef(new URL(lp("/"), location.origin).href, data.value.code) : "");
 async function copy(kind: "code" | "link") {
   if (!data.value) return;
   try {
@@ -148,7 +153,7 @@ onMounted(() => {
       <section v-else class="panel referral__card">
         <h2>{{ $t("referral.redeemTitle") }}</h2>
         <form v-if="data.enabled && data.canRedeem" class="referral__form" data-testid="referral-form" @submit.prevent="redeem">
-          <p id="referral-help" class="subtle">{{ $t("referral.redeemHelp", { date: data.redeemUntil ? dateOnly(Math.floor(Date.parse(data.redeemUntil) / 1000)) : "" }) }}</p>
+          <p id="referral-help" class="subtle">{{ data.referred ? $t("referral.switchHelp", { date: data.redeemUntil ? dateTime(data.redeemUntil) : "" }) : $t("referral.redeemHelp", { date: data.redeemUntil ? dateOnly(Math.floor(Date.parse(data.redeemUntil) / 1000)) : "" }) }}</p>
           <label class="field">
             <span>{{ $t("referral.codeLabel") }}</span>
             <span class="referral__controls">
