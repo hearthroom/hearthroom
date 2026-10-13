@@ -223,12 +223,6 @@ watch(() => [session.wallet?.plans, pet.value] as const, ([plans, p]) => {
 /* 桌寵的外觀（全域：她掛在 body 上，不在這個元件的 DOM 裡）。泡泡與選單固定白底深字，不跟站台主題換色 */
 .suki-pet { position: fixed; left: 0; top: 0; z-index: 45; transition: transform var(--dur-base, 250ms) cubic-bezier(.25,.46,.45,.94), opacity var(--dur-base, 250ms); touch-action: none; user-select: none; -webkit-user-select: none; }
 .suki-pet--held { transition: none; cursor: grabbing; }
-/* 自己玩：整張姿勢圖站在同一個位置，底部對齊，輕輕呼吸；她的骨架先隱去 */
-.suki-pet__sprite { position: absolute; left: 50%; bottom: 0; height: var(--ph, 220px); width: auto; max-width: none; translate: -50% 0; pointer-events: none; transform-origin: 50% 100%; animation: suki-breathe 3.6s ease-in-out infinite; transition: opacity var(--dur-base, 250ms); }
-.suki-pet__sprite[hidden] { display: none !important; }
-.suki-pet__canvas { transition: opacity var(--dur-base, 250ms); }
-.suki-pet--acting .suki-pet__canvas { opacity: 0; }
-@keyframes suki-breathe { 50% { scale: 1 1.015; } }
 .suki-pet--walking { transition: none; }
 /* 第一次出現：先隱形放到位，再從原地彈出來 */
 .suki-pet--placing { transition: none !important; opacity: 0; }
@@ -260,5 +254,5 @@ watch(() => [session.wallet?.plans, pet.value] as const, ([plans, p]) => {
 .suki-pet:not(.suki-pet--right) .suki-pet__bubble, .suki-pet:not(.suki-pet--right) .suki-pet__menu { right: auto; left: 8px; transform: none; }
 .suki-pet:not(.suki-pet--right) .suki-pet__bubble::after { left: calc(var(--pw, 120px) / 2 - 14px); transform: rotate(45deg); }
 @keyframes suki-in { from { opacity: 0; translate: 0 6px; scale: .96; } }
-@media (prefers-reduced-motion: reduce) { .suki-pet { transition: none; } .suki-pet__bubble--in, .suki-pet--pop .suki-pet__canvas, .suki-pet--pop .suki-pet__hit, .suki-pet__sprite { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .suki-pet { transition: none; } .suki-pet__bubble--in, .suki-pet--pop .suki-pet__canvas, .suki-pet--pop .suki-pet__hit { animation: none; } }
 </style>
