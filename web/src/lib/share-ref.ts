@@ -88,13 +88,19 @@ async function attempt(token: () => Promise<string | null>, provider: ProviderId
     forgetShareRef();
     return "bound";
   } catch (err) {
-    // 服務明確拒絕（碼停用、推薦自己、沒授權推薦）就不再試；其他是暫時的。
-    if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
+    // 只有服務說「這個碼不行」（找不到、推薦自己、已綁定、過了期限）才不再試。
+    // 限流（429）、憑證剛好失效（401）、還沒授權推薦（403）都不是碼的問題：留著，下次開站再試，不然就漏了這筆返點。
+    if (definitelyRejected(err)) {
       forgetShareRef();
       return "rejected";
     }
     return "retry";
   }
+}
+
+/** 400／409：碼或帳號資格被拒，再送一次結果也一樣。 */
+function definitelyRejected(err: unknown): boolean {
+  return err instanceof ApiError && (err.status === 400 || err.status === 409);
 }
 
 /** 推薦服務認的帳號編號：那一家的連結身分，沒有就用本站登入的編號（跟推薦頁同一套）。 */
@@ -127,7 +133,7 @@ const ownCodes = new Map<string, Promise<string | null>>();
 /**
  * 自己的推薦碼，給分享網址用。一個帳號的碼不會變，每個帳號只問一次；
  * 讀不到（舊的登入沒授權推薦、服務暫時不通）就回 null，分享照舊不帶碼，絕不為此要人重新登入。
- * 服務明確拒絕（沒授權推薦）的 null 也記住，免得每開一張卡就再被拒一次；暫時不通的下次再問。
+ * 沒授權推薦（403）的 null 也記住，免得每開一張卡就再被拒一次；限流、暫時不通的下次再問。
  */
 export function ownReferralCode(account: string, token: () => Promise<string | null>, provider: ProviderId): Promise<string | null> {
   const key = `${provider}:${account}`;
@@ -140,7 +146,7 @@ export function ownReferralCode(account: string, token: () => Promise<string | n
         const summary = await fetchReferral(t, provider);
         return summary.enabled ? summary.code : null;
       } catch (err) {
-        if (!(err instanceof ApiError && err.status >= 400 && err.status < 500)) ownCodes.delete(key);
+        if (!(err instanceof ApiError && err.status === 403)) ownCodes.delete(key);
         return null;
       }
     })();
