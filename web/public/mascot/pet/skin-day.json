@@ -1,0 +1,789 @@
+{
+ "parts": [
+  {
+   "id": "ponytail",
+   "tex": "day-ponytail.webp",
+   "rect": [
+    611,
+    153,
+    298,
+    634
+   ],
+   "node": "head",
+   "z": 10,
+   "grid": [
+    13,
+    27
+   ],
+   "bend": {
+    "root": [
+     624.5,
+     264.5
+    ],
+    "tip": [
+     799.0,
+     784.0
+    ],
+    "angle": {
+     "Ponytail": 1,
+     "AngleX": -4,
+     "AngleZ": 0.6
+    },
+    "power": 1.6
+   },
+   "depth": {
+    "x": {
+     "AngleX": -6
+    }
+   }
+  },
+  {
+   "id": "backhair",
+   "tex": "day-backhair.webp",
+   "rect": [
+    190,
+    162,
+    481,
+    433
+   ],
+   "node": "head",
+   "z": 12,
+   "grid": [
+    21,
+    19
+   ],
+   "depth": {
+    "x": {
+     "AngleX": -5
+    },
+    "y": {
+     "AngleY": -3
+    }
+   },
+   "bend": {
+    "root": [
+     447.0,
+     302
+    ],
+    "tip": [
+     447.0,
+     525
+    ],
+    "angle": {
+     "HairBack": 1
+    },
+    "power": 2
+   }
+  },
+  {
+   "id": "legs",
+   "tex": "day-legs.webp",
+   "rect": [
+    312,
+    933,
+    294,
+    552
+   ],
+   "node": "root",
+   "z": 20,
+   "grid": [
+    13,
+    23
+   ]
+  },
+  {
+   "id": "body",
+   "tex": "day-body.webp",
+   "rect": [
+    286,
+    530,
+    369,
+    408
+   ],
+   "node": "body",
+   "z": 30,
+   "grid": [
+    16,
+    17
+   ]
+  },
+  {
+   "id": "skirt",
+   "tex": "day-skirt.webp",
+   "rect": [
+    254,
+    895,
+    400,
+    129
+   ],
+   "node": "body",
+   "z": 32,
+   "grid": [
+    17,
+    6
+   ],
+   "bend": {
+    "root": [
+     454.0,
+     897
+    ],
+    "tip": [
+     454.0,
+     1022
+    ],
+    "angle": {
+     "Skirt": 1
+    },
+    "power": 1.4
+   }
+  },
+  {
+   "id": "die",
+   "tex": "day-die.webp",
+   "rect": [
+    492,
+    726,
+    62,
+    82
+   ],
+   "node": "die",
+   "z": 34,
+   "grid": [
+    3,
+    4
+   ]
+  },
+  {
+   "id": "armR",
+   "tex": "day-armR.webp",
+   "rect": [
+    114,
+    608,
+    226,
+    408
+   ],
+   "node": "armR",
+   "z": 36,
+   "grid": [
+    10,
+    17
+   ]
+  },
+  {
+   "id": "armL",
+   "tex": "day-armL.webp",
+   "rect": [
+    576,
+    608,
+    219,
+    408
+   ],
+   "node": "armL",
+   "z": 36,
+   "grid": [
+    10,
+    17
+   ]
+  },
+  {
+   "id": "face",
+   "tex": "day-face.webp",
+   "rect": [
+    275,
+    164,
+    396,
+    431
+   ],
+   "node": "head",
+   "z": 50,
+   "grid": [
+    33,
+    36
+   ],
+   "depth": {
+    "x": {
+     "AngleX": 4
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     447.0,
+     425.5
+    ],
+    "radius": [
+     122.0,
+     123.5
+    ]
+   }
+  },
+  {
+   "id": "eyewhite",
+   "tex": "day-eyewhite.webp",
+   "rect": [
+    312,
+    370,
+    270,
+    99
+   ],
+   "node": "head",
+   "z": 52,
+   "grid": [
+    23,
+    9
+   ],
+   "depth": {
+    "x": {
+     "AngleX": 6
+    },
+    "y": {
+     "AngleY": 4
+    }
+   },
+   "sphere": {
+    "center": [
+     447.0,
+     425.5
+    ],
+    "radius": [
+     122.0,
+     123.5
+    ]
+   }
+  },
+  {
+   "id": "iris",
+   "tex": "day-iris.webp",
+   "rect": [
+    315,
+    372,
+    265,
+    95
+   ],
+   "node": "head",
+   "z": 54,
+   "grid": [
+    23,
+    8
+   ],
+   "clipTo": "eyewhite",
+   "depth": {
+    "x": {
+     "AngleX": 7,
+     "EyeX": 7
+    },
+    "y": {
+     "AngleY": 4,
+     "EyeY": 5
+    }
+   }
+  },
+  {
+   "id": "eyeline",
+   "tex": "day-eyeline.webp",
+   "rect": [
+    314,
+    372,
+    266,
+    84
+   ],
+   "node": "head",
+   "z": 56,
+   "grid": [
+    23,
+    7
+   ],
+   "depth": {
+    "x": {
+     "AngleX": 6
+    },
+    "y": {
+     "AngleY": 4
+    }
+   },
+   "sphere": {
+    "center": [
+     447.0,
+     425.5
+    ],
+    "radius": [
+     122.0,
+     123.5
+    ]
+   }
+  },
+  {
+   "id": "eyeclosed",
+   "tex": "day-eyeclosed.webp",
+   "rect": [
+    308,
+    366,
+    278,
+    107
+   ],
+   "node": "head",
+   "z": 58,
+   "grid": [
+    24,
+    9
+   ],
+   "opacity": {
+    "base": 1,
+    "by": {
+     "EyeOpen": -1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 6
+    },
+    "y": {
+     "AngleY": 4
+    }
+   },
+   "sphere": {
+    "center": [
+     447.0,
+     425.5
+    ],
+    "radius": [
+     122.0,
+     123.5
+    ]
+   }
+  },
+  {
+   "id": "mouthopen",
+   "tex": "day-mouthopen.webp",
+   "rect": [
+    419,
+    480,
+    66,
+    33
+   ],
+   "node": "head",
+   "z": 59,
+   "grid": [
+    6,
+    3
+   ],
+   "opacity": {
+    "by": {
+     "MouthOpen": 1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 5
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     447.0,
+     425.5
+    ],
+    "radius": [
+     122.0,
+     123.5
+    ]
+   }
+  },
+  {
+   "id": "expr-dizzy",
+   "tex": "day-expr-dizzy.webp",
+   "rect": [
+    292,
+    347,
+    320,
+    207
+   ],
+   "node": "head",
+   "z": 60,
+   "grid": [
+    14,
+    9
+   ],
+   "opacity": {
+    "by": {
+     "Expr_dizzy": 1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 5
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     447.0,
+     425.5
+    ],
+    "radius": [
+     122.0,
+     123.5
+    ]
+   }
+  },
+  {
+   "id": "expr-happy",
+   "tex": "day-expr-happy.webp",
+   "rect": [
+    291,
+    348,
+    317,
+    209
+   ],
+   "node": "head",
+   "z": 60,
+   "grid": [
+    14,
+    9
+   ],
+   "opacity": {
+    "by": {
+     "Expr_happy": 1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 5
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     447.0,
+     425.5
+    ],
+    "radius": [
+     122.0,
+     123.5
+    ]
+   }
+  },
+  {
+   "id": "expr-peek",
+   "tex": "day-expr-peek.webp",
+   "rect": [
+    291,
+    347,
+    316,
+    209
+   ],
+   "node": "head",
+   "z": 60,
+   "grid": [
+    14,
+    9
+   ],
+   "opacity": {
+    "by": {
+     "Expr_peek": 1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 5
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     447.0,
+     425.5
+    ],
+    "radius": [
+     122.0,
+     123.5
+    ]
+   }
+  },
+  {
+   "id": "expr-pout",
+   "tex": "day-expr-pout.webp",
+   "rect": [
+    291,
+    349,
+    319,
+    206
+   ],
+   "node": "head",
+   "z": 60,
+   "grid": [
+    14,
+    9
+   ],
+   "opacity": {
+    "by": {
+     "Expr_pout": 1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 5
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     447.0,
+     425.5
+    ],
+    "radius": [
+     122.0,
+     123.5
+    ]
+   }
+  },
+  {
+   "id": "expr-shy",
+   "tex": "day-expr-shy.webp",
+   "rect": [
+    292,
+    349,
+    318,
+    202
+   ],
+   "node": "head",
+   "z": 60,
+   "grid": [
+    14,
+    9
+   ],
+   "opacity": {
+    "by": {
+     "Expr_shy": 1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 5
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     447.0,
+     425.5
+    ],
+    "radius": [
+     122.0,
+     123.5
+    ]
+   }
+  },
+  {
+   "id": "expr-sleepy",
+   "tex": "day-expr-sleepy.webp",
+   "rect": [
+    292,
+    347,
+    318,
+    207
+   ],
+   "node": "head",
+   "z": 60,
+   "grid": [
+    14,
+    9
+   ],
+   "opacity": {
+    "by": {
+     "Expr_sleepy": 1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 5
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     447.0,
+     425.5
+    ],
+    "radius": [
+     122.0,
+     123.5
+    ]
+   }
+  },
+  {
+   "id": "expr-surprised",
+   "tex": "day-expr-surprised.webp",
+   "rect": [
+    291,
+    349,
+    318,
+    207
+   ],
+   "node": "head",
+   "z": 60,
+   "grid": [
+    14,
+    9
+   ],
+   "opacity": {
+    "by": {
+     "Expr_surprised": 1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 5
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     447.0,
+     425.5
+    ],
+    "radius": [
+     122.0,
+     123.5
+    ]
+   }
+  },
+  {
+   "id": "expr-wink",
+   "tex": "day-expr-wink.webp",
+   "rect": [
+    291,
+    352,
+    317,
+    205
+   ],
+   "node": "head",
+   "z": 60,
+   "grid": [
+    14,
+    9
+   ],
+   "opacity": {
+    "by": {
+     "Expr_wink": 1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 5
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     447.0,
+     425.5
+    ],
+    "radius": [
+     122.0,
+     123.5
+    ]
+   }
+  },
+  {
+   "id": "fronthair",
+   "tex": "day-fronthair.webp",
+   "rect": [
+    195,
+    77,
+    463,
+    512
+   ],
+   "node": "head",
+   "z": 70,
+   "grid": [
+    20,
+    22
+   ],
+   "depth": {
+    "x": {
+     "AngleX": 9
+    },
+    "y": {
+     "AngleY": 5
+    }
+   },
+   "bend": {
+    "root": [
+     447.0,
+     252.6
+    ],
+    "tip": [
+     447.0,
+     549
+    ],
+    "angle": {
+     "HairFront": 1
+    },
+    "power": 2
+   }
+  },
+  {
+   "id": "clip",
+   "tex": "day-clip.webp",
+   "rect": [
+    545,
+    254,
+    86,
+    94
+   ],
+   "node": "head",
+   "z": 72,
+   "grid": [
+    4,
+    4
+   ],
+   "depth": {
+    "x": {
+     "AngleX": 7
+    }
+   }
+  },
+  {
+   "id": "bow",
+   "tex": "day-bow.webp",
+   "rect": [
+    543,
+    154,
+    163,
+    221
+   ],
+   "node": "head",
+   "z": 74,
+   "grid": [
+    7,
+    10
+   ],
+   "depth": {
+    "x": {
+     "AngleX": -2
+    }
+   }
+  }
+ ]
+}

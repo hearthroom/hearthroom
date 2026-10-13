@@ -6,6 +6,7 @@ import { useLocalePath } from '@/lib/use-locale';
 import { libraryRequest } from '@/lib/library';
 import { loginPath } from '@/lib/login-return';
 import { useI18n } from 'vue-i18n';
+import { suki } from '@/pet/events';
 const props = withDefaults(defineProps<{ kind: 'favorites' | 'following'; target: string; initialActive?: boolean }>(), { initialActive: undefined });
 const emit = defineEmits<{ count: [value: number] }>();
 const session = useSession();
@@ -37,6 +38,7 @@ async function toggle() {
     if (!token) { await router.push(lp(loginPath(route.fullPath))); return; }
     const result = await libraryRequest<{ active: boolean; count?: number }>(`${props.kind}/${encodeURIComponent(props.target)}`, token, active.value ? 'DELETE' : 'PUT');
     if (seq === sequence) { active.value = result.active; if (result.count !== undefined) emit('count', result.count); }
+    if (result.active && props.kind === 'favorites') suki({ type: 'favorite' });
   } catch { if (seq === sequence) error.value = t('library.saveFailed'); }
   finally { busy.value = false; }
 }

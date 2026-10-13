@@ -22,6 +22,7 @@ import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
 import { TAG_CATALOG, tagLabel } from "../../../shared/tag-catalog";
 import AdultConsentDialog from "@/components/AdultConsentDialog.vue";
+import { petEnabled } from "@/pet/enabled";
 
 const session = useSession();
 const { t } = useI18n();
@@ -201,6 +202,17 @@ onMounted(() => {
       </label>
       <AdultConsentDialog v-if="askingConsent" @close="askingConsent = false" @done="askingConsent = false" />
       <p v-if="nsfwError" class="notice notice--error" role="alert">{{ nsfwError }}</p>
+    </section>
+
+    <section class="panel content">
+      <p class="eyebrow">{{ $t("settings.pet.title") }}</p>
+      <label class="content__row">
+        <span class="content__text">
+          <strong>{{ $t("settings.pet.label") }}</strong>
+          <span class="subtle">{{ $t("settings.pet.desc") }}</span>
+        </span>
+        <input v-model="petEnabled" type="checkbox" class="content__switch" />
+      </label>
     </section>
 
     <section id="hidden" class="panel content hidden">
