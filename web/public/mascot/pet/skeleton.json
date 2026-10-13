@@ -1,0 +1,173 @@
+{
+ "size": [
+  1024,
+  1536
+ ],
+ "nodes": [
+  {
+   "id": "hold",
+   "pivot": [
+    447.0,
+    79
+   ],
+   "rotate": {
+    "Dangle": 1
+   }
+  },
+  {
+   "id": "root",
+   "parent": "hold",
+   "pivot": [
+    459.0,
+    1481
+   ],
+   "moveY": {
+    "Jump": 1
+   },
+   "scaleY": {
+    "Squash": 1
+   }
+  },
+  {
+   "id": "body",
+   "parent": "root",
+   "pivot": [
+    454.0,
+    897
+   ],
+   "rotate": {
+    "BodyZ": 1
+   },
+   "scaleY": {
+    "Breath": 0.0
+   }
+  },
+  {
+   "id": "head",
+   "parent": "body",
+   "pivot": [
+    447.0,
+    529.2
+   ],
+   "rotate": {
+    "AngleZ": 1
+   },
+   "moveY": {
+    "Breath": -2
+   }
+  },
+  {
+   "id": "armR",
+   "parent": "body",
+   "pivot": [
+    282.5,
+    618
+   ],
+   "rotate": {
+    "ArmR": 1,
+    "Breath": -1
+   }
+  },
+  {
+   "id": "armL",
+   "parent": "body",
+   "pivot": [
+    631.8,
+    618
+   ],
+   "rotate": {
+    "ArmL": 1,
+    "Breath": 1
+   }
+  },
+  {
+   "id": "die",
+   "parent": "body",
+   "pivot": [
+    523.0,
+    728
+   ],
+   "rotate": {
+    "Die": 1
+   }
+  }
+ ],
+ "physics": [
+  {
+   "param": "Ponytail",
+   "drive": {
+    "AngleX": 1.5,
+    "AngleZ": -2,
+    "BodyZ": -3
+   },
+   "stiffness": 30,
+   "damping": 4,
+   "limit": 14
+  },
+  {
+   "param": "HairFront",
+   "drive": {
+    "AngleX": -0.4,
+    "AngleZ": -0.6
+   },
+   "stiffness": 60,
+   "damping": 7,
+   "limit": 4
+  },
+  {
+   "param": "HairBack",
+   "drive": {
+    "AngleZ": -1,
+    "BodyZ": -1.5
+   },
+   "stiffness": 40,
+   "damping": 5,
+   "limit": 6
+  },
+  {
+   "param": "Skirt",
+   "drive": {
+    "BodyZ": -2
+   },
+   "stiffness": 50,
+   "damping": 6,
+   "limit": 5
+  },
+  {
+   "param": "Dangle",
+   "drive": {
+    "DragX": -0.0
+   },
+   "stiffness": 14,
+   "damping": 2.2,
+   "limit": 28
+  },
+  {
+   "param": "Die",
+   "drive": {
+    "BodyZ": -6,
+    "AngleZ": -2
+   },
+   "stiffness": 25,
+   "damping": 3,
+   "limit": 25
+  }
+ ],
+ "regions": [
+  "fronthair",
+  "backhair",
+  "ponytail",
+  "bow",
+  "clip",
+  "face",
+  "eyes",
+  "mouth",
+  "neck",
+  "torso",
+  "armR",
+  "armL",
+  "skirt",
+  "legs",
+  "die"
+ ]
+}
