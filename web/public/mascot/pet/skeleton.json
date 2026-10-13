@@ -98,7 +98,8 @@
    "drive": {
     "AngleX": 1.5,
     "AngleZ": -2,
-    "BodyZ": -3
+    "BodyZ": -3,
+    "Dangle": -1.4
    },
    "stiffness": 30,
    "damping": 4,
@@ -118,7 +119,8 @@
    "param": "HairBack",
    "drive": {
     "AngleZ": -1,
-    "BodyZ": -1.5
+    "BodyZ": -1.5,
+    "Dangle": -0.6
    },
    "stiffness": 40,
    "damping": 5,
@@ -127,26 +129,19 @@
   {
    "param": "Skirt",
    "drive": {
-    "BodyZ": -2
+    "BodyZ": -2,
+    "Dangle": -0.8
    },
    "stiffness": 50,
    "damping": 6,
    "limit": 5
   },
   {
-   "param": "Dangle",
-   "drive": {
-    "DragX": -0.0
-   },
-   "stiffness": 14,
-   "damping": 2.2,
-   "limit": 28
-  },
-  {
    "param": "Die",
    "drive": {
     "BodyZ": -6,
-    "AngleZ": -2
+    "AngleZ": -2,
+    "Dangle": -2
    },
    "stiffness": 25,
    "damping": 3,
