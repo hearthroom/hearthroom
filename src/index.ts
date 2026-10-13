@@ -737,8 +737,35 @@ app.get("/v1/art/:source/*", async (c) => {
   if (!upstream.ok) throw new HttpError(upstream.status === 404 ? 404 : 502, "art unavailable");
   const type = upstream.headers.get("content-type") ?? "";
   if (!type.startsWith("image/")) throw new HttpError(404, "not found");
-  return new Response(upstream.body, { headers: { "Content-Type": type, "Cache-Control": "public, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff" } });
+  const art = (body: BodyInit | null, contentType: string, cache = "public, max-age=31536000, immutable") =>
+    new Response(body, { headers: { "Content-Type": contentType, "Cache-Control": cache, "X-Content-Type-Options": "nosniff" } });
+  if (c.req.param("source") !== "harbor" || type !== "image/webp" || raw) return art(upstream.body, type);
+  // 動圖所有格子加起來超過 Cloudflare 轉換的上限就轉不了（連動的縮圖都出不來），改向 Harbor 要一份縮小、
+  // 照樣會動的（見 Harbor media.Service.Preview）。Harbor 還沒縮好（正在縮別張、出錯）就先給原圖、只快取十分鐘，之後再來要。
+  const bytes = new Uint8Array(await upstream.arrayBuffer());
+  if (animatedArea(bytes) <= CF_ANIMATION_LIMIT) return art(bytes, type);
+  const base = (c.env.PROVIDER_API_BASE_HARBOR ?? "").trim().replace(/\/$/, "");
+  const preview = base ? await fetch(`${base}/preview/${path}`, { cf: { cacheEverything: true, cacheTtl: 31536000 } } as RequestInit).catch(() => null) : null;
+  if (preview?.ok && preview.headers.get("content-type") === "image/webp") return art(preview.body, "image/webp");
+  return art(bytes, type, "public, max-age=600");
 });
+
+/** Cloudflare 圖片轉換對動圖的上限：所有格子加起來的像素數 */
+const CF_ANIMATION_LIMIT = 50_000_000;
+/** 動態 WebP 標頭裡的畫布 × 格數；不是動態 WebP 回 0。只讀 chunk 標頭，不解碼 */
+function animatedArea(b: Uint8Array): number {
+  const tag = (at: number) => String.fromCharCode(b[at], b[at + 1], b[at + 2], b[at + 3]);
+  if (b.length < 30 || tag(0) !== "RIFF" || tag(8) !== "WEBP" || tag(12) !== "VP8X") return 0;
+  const le24 = (at: number) => b[at] | (b[at + 1] << 8) | (b[at + 2] << 16);
+  const width = 1 + le24(24), height = 1 + le24(27);
+  let frames = 0;
+  for (let at = 12; at + 8 <= b.length;) {
+    const size = (b[at + 4] | (b[at + 5] << 8) | (b[at + 6] << 16) | (b[at + 7] << 24)) >>> 0;
+    if (tag(at) === "ANMF") frames++;
+    at += 8 + size + (size & 1);
+  }
+  return frames > 1 ? width * height * frames : 0;
+}
 
 app.get('/v1/cards/:roleId/platforms',async(c)=>{
  const link=await cardLink(c.env,c.req.param('roleId'),providerOf(c));
