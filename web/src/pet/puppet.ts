@@ -225,7 +225,7 @@ export class PetRenderer {
    * pad：畫布比人四周多留的邊（模型座標）。被拎起來傾斜、跳起來時身體會超出站直的範圍，
    * 沒有這圈邊就會被畫布切掉。
    */
-  constructor(readonly canvas: HTMLCanvasElement, readonly rig: Rig, readonly pad: [number, number] = [0, 0]) {
+  constructor(readonly canvas: HTMLCanvasElement, public rig: Rig, readonly pad: [number, number] = [0, 0]) {
     const gl = canvas.getContext("webgl", { premultipliedAlpha: true, alpha: true, stencil: true, antialias: true });
     if (!gl) throw new Error("webgl unavailable");
     this.gl = gl;
@@ -241,10 +241,10 @@ export class PetRenderer {
    * scale：貼圖縮到畫面上實際大小的幾倍再上傳。原圖約 1000px 寬、畫出來只有一百多 px，
    * 直接交給 GPU 縮（WebGL1 非 2 的次方貼圖不能做 mipmap）黑線會鋸齒；先用畫布高品質縮小。
    */
-  async load(base: string, scale = 1) {
+  async load(base: string, scale = 1, parts: PetPart[] = this.rig.model.parts) {
     const gl = this.gl;
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
-    await Promise.all(this.rig.model.parts.map(async (part) => {
+    await Promise.all(parts.map(async (part) => {
       if (this.tex.has(part.tex)) return;
       const img = new Image();
       img.src = `${base}/${part.tex}`;
@@ -258,6 +258,13 @@ export class PetRenderer {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       this.tex.set(part.tex, t);
     }));
+  }
+  /** 換一套造型：新的骨架實例（同一副骨架、不同部件），用不到的舊貼圖放掉 */
+  swap(rig: Rig) {
+    this.rig = rig;
+    this.order = [...rig.model.parts].sort((a, b) => a.z - b.z);
+    const keep = new Set(rig.model.parts.map((p) => p.tex));
+    for (const [name, t] of this.tex) if (!keep.has(name)) { this.gl.deleteTexture(t); this.tex.delete(name); }
   }
   private drawPart(part: PetPart, alpha: number) {
     const gl = this.gl, m = this.rig.mesh(part);

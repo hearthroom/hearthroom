@@ -1,0 +1,860 @@
+{
+ "parts": [
+  {
+   "id": "ponytail",
+   "tex": "imp-ponytail.webp",
+   "rect": [
+    612,
+    159,
+    297,
+    626
+   ],
+   "node": "head",
+   "z": 10,
+   "grid": [
+    13,
+    27
+   ],
+   "bend": {
+    "root": [
+     636.5,
+     266.0
+    ],
+    "tip": [
+     801.0,
+     782.0
+    ],
+    "angle": {
+     "Ponytail": 1,
+     "AngleX": -4,
+     "AngleZ": 0.6
+    },
+    "power": 1.6
+   },
+   "depth": {
+    "x": {
+     "AngleX": -6
+    }
+   }
+  },
+  {
+   "id": "backhair",
+   "tex": "imp-backhair.webp",
+   "rect": [
+    206,
+    162,
+    467,
+    435
+   ],
+   "node": "head",
+   "z": 12,
+   "grid": [
+    20,
+    19
+   ],
+   "depth": {
+    "x": {
+     "AngleX": -5
+    },
+    "y": {
+     "AngleY": -3
+    }
+   },
+   "bend": {
+    "root": [
+     435.0,
+     296
+    ],
+    "tip": [
+     435.0,
+     581
+    ],
+    "angle": {
+     "HairBack": 1
+    },
+    "power": 2
+   }
+  },
+  {
+   "id": "legs",
+   "tex": "imp-legs.webp",
+   "rect": [
+    312,
+    933,
+    294,
+    552
+   ],
+   "node": "root",
+   "z": 20,
+   "grid": [
+    13,
+    23
+   ]
+  },
+  {
+   "id": "body",
+   "tex": "imp-body.webp",
+   "rect": [
+    219,
+    88,
+    682,
+    1227
+   ],
+   "node": "body",
+   "z": 30,
+   "grid": [
+    29,
+    52
+   ]
+  },
+  {
+   "id": "skirt",
+   "tex": "imp-skirt.webp",
+   "rect": [
+    258,
+    898,
+    394,
+    123
+   ],
+   "node": "body",
+   "z": 32,
+   "grid": [
+    17,
+    6
+   ],
+   "bend": {
+    "root": [
+     455.0,
+     900
+    ],
+    "tip": [
+     455.0,
+     1019
+    ],
+    "angle": {
+     "Skirt": 1
+    },
+    "power": 1.4
+   }
+  },
+  {
+   "id": "die",
+   "tex": "imp-die.webp",
+   "rect": [
+    372,
+    610,
+    183,
+    197
+   ],
+   "node": "die",
+   "z": 34,
+   "grid": [
+    8,
+    9
+   ]
+  },
+  {
+   "id": "armR",
+   "tex": "imp-armR.webp",
+   "rect": [
+    117,
+    682,
+    221,
+    332
+   ],
+   "node": "armR",
+   "z": 36,
+   "grid": [
+    10,
+    14
+   ]
+  },
+  {
+   "id": "armL",
+   "tex": "imp-armL.webp",
+   "rect": [
+    571,
+    604,
+    221,
+    411
+   ],
+   "node": "armL",
+   "z": 36,
+   "grid": [
+    10,
+    18
+   ]
+  },
+  {
+   "id": "face",
+   "tex": "imp-face.webp",
+   "rect": [
+    275,
+    164,
+    392,
+    506
+   ],
+   "node": "head",
+   "z": 50,
+   "grid": [
+    33,
+    43
+   ],
+   "depth": {
+    "x": {
+     "AngleX": 4
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     435.0,
+     479.0
+    ],
+    "radius": [
+     136.0,
+     183.0
+    ]
+   }
+  },
+  {
+   "id": "eyewhite",
+   "tex": "imp-eyewhite.webp",
+   "rect": [
+    342,
+    373,
+    209,
+    96
+   ],
+   "node": "head",
+   "z": 52,
+   "grid": [
+    18,
+    8
+   ],
+   "depth": {
+    "x": {
+     "AngleX": 6
+    },
+    "y": {
+     "AngleY": 4
+    }
+   },
+   "sphere": {
+    "center": [
+     435.0,
+     479.0
+    ],
+    "radius": [
+     136.0,
+     183.0
+    ]
+   }
+  },
+  {
+   "id": "iris",
+   "tex": "imp-iris.webp",
+   "rect": [
+    347,
+    375,
+    200,
+    92
+   ],
+   "node": "head",
+   "z": 54,
+   "grid": [
+    17,
+    8
+   ],
+   "clipTo": "eyewhite",
+   "depth": {
+    "x": {
+     "AngleX": 7,
+     "EyeX": 7
+    },
+    "y": {
+     "AngleY": 4,
+     "EyeY": 5
+    }
+   }
+  },
+  {
+   "id": "eyeline",
+   "tex": "imp-eyeline.webp",
+   "rect": [
+    349,
+    375,
+    191,
+    36
+   ],
+   "node": "head",
+   "z": 56,
+   "grid": [
+    16,
+    3
+   ],
+   "depth": {
+    "x": {
+     "AngleX": 6
+    },
+    "y": {
+     "AngleY": 4
+    }
+   },
+   "sphere": {
+    "center": [
+     435.0,
+     479.0
+    ],
+    "radius": [
+     136.0,
+     183.0
+    ]
+   }
+  },
+  {
+   "id": "eyeclosed",
+   "tex": "imp-eyeclosed.webp",
+   "rect": [
+    338,
+    369,
+    217,
+    104
+   ],
+   "node": "head",
+   "z": 58,
+   "grid": [
+    19,
+    9
+   ],
+   "opacity": {
+    "base": 1,
+    "by": {
+     "EyeOpen": -1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 6
+    },
+    "y": {
+     "AngleY": 4
+    }
+   },
+   "sphere": {
+    "center": [
+     435.0,
+     479.0
+    ],
+    "radius": [
+     136.0,
+     183.0
+    ]
+   }
+  },
+  {
+   "id": "mouthopen",
+   "tex": "imp-mouthopen.webp",
+   "rect": [
+    418,
+    477,
+    68,
+    39
+   ],
+   "node": "head",
+   "z": 59,
+   "grid": [
+    6,
+    4
+   ],
+   "opacity": {
+    "by": {
+     "MouthOpen": 1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 5
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     435.0,
+     479.0
+    ],
+    "radius": [
+     136.0,
+     183.0
+    ]
+   }
+  },
+  {
+   "id": "expr-dizzy",
+   "tex": "imp-expr-dizzy.webp",
+   "rect": [
+    309,
+    311,
+    278,
+    242
+   ],
+   "node": "head",
+   "z": 60,
+   "grid": [
+    12,
+    11
+   ],
+   "opacity": {
+    "by": {
+     "Expr_dizzy": 1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 5
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     435.0,
+     479.0
+    ],
+    "radius": [
+     136.0,
+     183.0
+    ]
+   }
+  },
+  {
+   "id": "expr-happy",
+   "tex": "imp-expr-happy.webp",
+   "rect": [
+    309,
+    310,
+    278,
+    248
+   ],
+   "node": "head",
+   "z": 60,
+   "grid": [
+    12,
+    11
+   ],
+   "opacity": {
+    "by": {
+     "Expr_happy": 1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 5
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     435.0,
+     479.0
+    ],
+    "radius": [
+     136.0,
+     183.0
+    ]
+   }
+  },
+  {
+   "id": "expr-peek",
+   "tex": "imp-expr-peek.webp",
+   "rect": [
+    309,
+    311,
+    278,
+    243
+   ],
+   "node": "head",
+   "z": 60,
+   "grid": [
+    12,
+    11
+   ],
+   "opacity": {
+    "by": {
+     "Expr_peek": 1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 5
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     435.0,
+     479.0
+    ],
+    "radius": [
+     136.0,
+     183.0
+    ]
+   }
+  },
+  {
+   "id": "expr-pout",
+   "tex": "imp-expr-pout.webp",
+   "rect": [
+    309,
+    311,
+    278,
+    243
+   ],
+   "node": "head",
+   "z": 60,
+   "grid": [
+    12,
+    11
+   ],
+   "opacity": {
+    "by": {
+     "Expr_pout": 1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 5
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     435.0,
+     479.0
+    ],
+    "radius": [
+     136.0,
+     183.0
+    ]
+   }
+  },
+  {
+   "id": "expr-shy",
+   "tex": "imp-expr-shy.webp",
+   "rect": [
+    309,
+    311,
+    278,
+    243
+   ],
+   "node": "head",
+   "z": 60,
+   "grid": [
+    12,
+    11
+   ],
+   "opacity": {
+    "by": {
+     "Expr_shy": 1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 5
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     435.0,
+     479.0
+    ],
+    "radius": [
+     136.0,
+     183.0
+    ]
+   }
+  },
+  {
+   "id": "expr-sleepy",
+   "tex": "imp-expr-sleepy.webp",
+   "rect": [
+    309,
+    311,
+    278,
+    243
+   ],
+   "node": "head",
+   "z": 60,
+   "grid": [
+    12,
+    11
+   ],
+   "opacity": {
+    "by": {
+     "Expr_sleepy": 1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 5
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     435.0,
+     479.0
+    ],
+    "radius": [
+     136.0,
+     183.0
+    ]
+   }
+  },
+  {
+   "id": "expr-surprised",
+   "tex": "imp-expr-surprised.webp",
+   "rect": [
+    309,
+    311,
+    278,
+    243
+   ],
+   "node": "head",
+   "z": 60,
+   "grid": [
+    12,
+    11
+   ],
+   "opacity": {
+    "by": {
+     "Expr_surprised": 1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 5
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     435.0,
+     479.0
+    ],
+    "radius": [
+     136.0,
+     183.0
+    ]
+   }
+  },
+  {
+   "id": "expr-wink",
+   "tex": "imp-expr-wink.webp",
+   "rect": [
+    309,
+    310,
+    278,
+    248
+   ],
+   "node": "head",
+   "z": 60,
+   "grid": [
+    12,
+    11
+   ],
+   "opacity": {
+    "by": {
+     "Expr_wink": 1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 5
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     435.0,
+     479.0
+    ],
+    "radius": [
+     136.0,
+     183.0
+    ]
+   }
+  },
+  {
+   "id": "fronthair",
+   "tex": "imp-fronthair.webp",
+   "rect": [
+    207,
+    79,
+    460,
+    514
+   ],
+   "node": "head",
+   "z": 70,
+   "grid": [
+    20,
+    22
+   ],
+   "depth": {
+    "x": {
+     "AngleX": 9
+    },
+    "y": {
+     "AngleY": 5
+    }
+   },
+   "bend": {
+    "root": [
+     435.0,
+     222.8
+    ],
+    "tip": [
+     435.0,
+     662
+    ],
+    "angle": {
+     "HairFront": 1
+    },
+    "power": 2
+   }
+  },
+  {
+   "id": "clip",
+   "tex": "imp-clip.webp",
+   "rect": [
+    545,
+    252,
+    85,
+    95
+   ],
+   "node": "head",
+   "z": 72,
+   "grid": [
+    4,
+    4
+   ],
+   "depth": {
+    "x": {
+     "AngleX": 7
+    }
+   }
+  },
+  {
+   "id": "horns",
+   "tex": "imp-horns.webp",
+   "rect": [
+    287,
+    138,
+    289,
+    126
+   ],
+   "node": "head",
+   "z": 73,
+   "grid": [
+    13,
+    6
+   ],
+   "depth": {
+    "x": {
+     "AngleX": 6
+    },
+    "y": {
+     "AngleY": 3
+    }
+   }
+  },
+  {
+   "id": "collar",
+   "tex": "imp-collar.webp",
+   "rect": [
+    309,
+    370,
+    274,
+    207
+   ],
+   "node": "body",
+   "z": 31,
+   "grid": [
+    12,
+    9
+   ]
+  },
+  {
+   "id": "tail",
+   "tex": "imp-tail.webp",
+   "rect": [
+    142,
+    708,
+    167,
+    230
+   ],
+   "node": "body",
+   "z": 5,
+   "grid": [
+    7,
+    10
+   ],
+   "bend": {
+    "root": [
+     306.0,
+     877.0
+    ],
+    "tip": [
+     147.0,
+     725.0
+    ],
+    "angle": {
+     "Tail": 1,
+     "BodyZ": -3
+    },
+    "power": 1.3
+   }
+  },
+  {
+   "id": "bow",
+   "tex": "imp-bow.webp",
+   "rect": [
+    566,
+    156,
+    141,
+    220
+   ],
+   "node": "head",
+   "z": 74,
+   "grid": [
+    6,
+    10
+   ],
+   "depth": {
+    "x": {
+     "AngleX": -2
+    }
+   }
+  }
+ ]
+}

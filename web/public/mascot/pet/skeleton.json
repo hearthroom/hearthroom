@@ -137,6 +137,27 @@
    "limit": 5
   },
   {
+   "param": "Ears",
+   "drive": {
+    "AngleX": 1.2,
+    "AngleZ": -2,
+    "Dangle": -1
+   },
+   "stiffness": 35,
+   "damping": 4,
+   "limit": 12
+  },
+  {
+   "param": "Tail",
+   "drive": {
+    "BodyZ": -4,
+    "Dangle": -1.5
+   },
+   "stiffness": 18,
+   "damping": 2.5,
+   "limit": 22
+  },
+  {
    "param": "Die",
    "drive": {
     "BodyZ": -6,
@@ -163,6 +184,10 @@
   "armL",
   "skirt",
   "legs",
-  "die"
+  "die",
+  "hood",
+  "horns",
+  "tail",
+  "collar"
  ]
 }
