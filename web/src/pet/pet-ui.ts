@@ -385,17 +385,23 @@ export class SukiPet {
       const hop = Math.min(w.hops, w.t), k = hop / w.hops;
       const x = w.from + (w.to - w.from) * k;
       this.place({ x, y: this.pos.y });
-      p.Jump = -Math.abs(Math.sin(Math.PI * (w.t % 1))) * 16;
+      p.Jump = -Math.abs(Math.sin(Math.PI * (w.t % 1))) * 10;
+      // 左右腳交替：抬起的那條腿往前、膝蓋彎；手跟腳反方向擺
+      const ph = Math.sin(Math.PI * w.t);
+      // Q 版蹦跳走：腿只微微擺，不彎膝（彎膝會在襪套、裙下露出接縫）
+      p.LegR = ph * 3; p.LegL = ph * 3;
+      p.ArmR = -ph * 6; p.ArmL = -ph * 6;
       p.Squash = w.t % 1 > 0.85 ? -0.04 : 0;
       this.driver.state.look = [Math.sign(w.to - w.from) * 0.8, 0.1];
       p.Dangle = 0;
-      if (w.t >= w.hops) { this.walk = null; p.Jump = 0; p.Squash = 0; this.driver.state.look = null; this.el.classList.remove("suki-pet--walking"); this.save(this.pos); }
+      if (w.t >= w.hops) { this.walk = null; p.Jump = 0; p.Squash = 0; p.LegR = 0; p.LegL = 0; this.driver.state.look = null; this.el.classList.remove("suki-pet--walking"); this.save(this.pos); }
     }
     // 揮手：右手舉起來晃一晃
     if (this.waveT >= 0) {
       this.waveT += dt;
       const up = Math.min(1, this.waveT / 0.25) * Math.min(1, Math.max(0, (1.6 - this.waveT) / 0.25));
-      p.ArmR = -105 * up + Math.sin(this.waveT * 14) * 14 * up;
+      // 小幅擺手：整隻手從肩膀輕輕擺，不舉高（舉高要換揮手的手臂組）
+      p.ArmR = (Math.sin(this.waveT * 12) * 10 + 4) * up;
       if (this.waveT > 1.6) { this.waveT = -1; p.ArmR = 0; }
     }
     if (this.sleeping && now > this.zzzAt) { this.zzzAt = now + 9000; this.speak("Zzz…", 2400); }
@@ -409,6 +415,13 @@ export class SukiPet {
     this.driver.update(dt);
     p.Dangle = this.dangle;
     if (arm !== null) p.ArmR = arm;
+    for (const k in SukiPet.LIMITS) if (p[k] !== undefined) p[k] = Math.max(SukiPet.LIMITS[k][0], Math.min(SukiPet.LIMITS[k][1], p[k]));
+    // 小惡魔的尾巴梗藏在右手後面、沒畫：右手與手肘只往外、尾巴先不擺，不然梗會斷（等整條尾巴補畫好再放寬）
+    if (this.skin.includes("imp")) {
+      if (p.ArmR !== undefined) p.ArmR = Math.max(0, p.ArmR);
+      if (p.ElbowR !== undefined) p.ElbowR = Math.max(0, p.ElbowR);
+      if (p.Tail !== undefined) p.Tail = 0;
+    }
     // 睡著（骨架版）：閉眼、頭垂向一邊、呼吸變慢
     if (this.sleeping) { p.EyeOpen = 0; p.AngleY = 0.9; p.AngleX = 0; p.EyeX = 0; p.EyeY = 0.6; p.AngleZ = 7 + Math.sin(now / 1400) * 1.5; p.Breath = (Math.sin(now / 900) + 1) / 2; }
     if (this.opts.reducedMotion) { p.Ponytail = 0; p.HairFront = 0; p.HairBack = 0; p.Skirt = 0; p.Die = 0; p.Dangle = 0; }
@@ -425,6 +438,16 @@ export class SukiPet {
   private sleeping = false;
   private zzzAt = 0;
 
+  /**
+   * 骨架能動的範圍（度）：只能在原畫撐得住的幅度內動。轉超過，袖口切口、手形就會露餡（穿模）。
+   * 大動作（捧書、喝可可、揮手、伸懶腰）要換那個姿勢專門畫的手臂組，不是把同一雙手硬轉過去。
+   */
+  private static LIMITS: Record<string, [number, number]> = {
+    // 手只往外擺（露出的是補畫過的身側）；往內轉會露出手臂後面沒畫的東西（尾巴、衣服），最多 3 度
+    ArmR: [-3, 12], ArmL: [-12, 3], ElbowR: [-15, 15], ElbowL: [-15, 15], WristR: [-15, 15], WristL: [-15, 15],
+    LegR: [-8, 8], LegL: [-8, 8], KneeR: [-10, 10], KneeL: [-10, 10],
+  };
+
   private brain(now: number) {
     const quiet = !this.drag && !this.tucked && !this.hidden && this.menuEl.hidden && this.bubble.hidden && this.jumpT < 0;
     if (!quiet || this.sleeping || this.walk || now < this.nextMove || now - this.touchedAt < 12_000) return;
@@ -432,10 +455,10 @@ export class SukiPet {
     // 睡覺：整頁太久沒人動就睡著（白天約四分鐘，深夜一分鐘）
     const h = new Date().getHours();
     if (now - Math.max(this.lastInput, this.touchedAt) > ((h >= 23 || h < 5) ? 60_000 : 240_000)) return this.sleep();
-    // 只用骨架能做的事（不換圖）：走一段、揮手、東張西望；坐下、讀書這些等坐姿骨架與道具部件做好再加
+    // 在原畫撐得住的範圍內自己動：走一段、擺擺手、東張西望（捧書、喝可可這些大動作等專門畫的手臂組）
     const r = Math.random();
     if (r < 0.5 && !this.opts.reducedMotion) return this.wander();
-    if (r < 0.7) { this.waveT = 0; return; }
+    if (r < 0.75) { this.waveT = 0; return; }
     // 東張西望
     this.driver.state.look = [-0.9, -0.2];
     setTimeout(() => { if (!this.drag) this.driver.state.look = [0.9, -0.1]; }, 1400);

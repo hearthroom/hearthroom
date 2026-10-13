@@ -76,19 +76,67 @@
    }
   },
   {
-   "id": "legs",
-   "tex": "day-legs.webp",
+   "id": "legR_up",
+   "tex": "day-legR_up.webp",
    "rect": [
-    312,
-    933,
-    294,
-    552
+    324,
+    979,
+    128,
+    143
    ],
-   "node": "root",
+   "node": "legR",
    "z": 20,
    "grid": [
-    13,
-    23
+    6,
+    6
+   ]
+  },
+  {
+   "id": "legR_lo",
+   "tex": "day-legR_lo.webp",
+   "rect": [
+    313,
+    1110,
+    132,
+    373
+   ],
+   "node": "legR_lo",
+   "z": 21,
+   "grid": [
+    6,
+    16
+   ]
+  },
+  {
+   "id": "legL_up",
+   "tex": "day-legL_up.webp",
+   "rect": [
+    464,
+    982,
+    125,
+    143
+   ],
+   "node": "legL",
+   "z": 19,
+   "grid": [
+    6,
+    6
+   ]
+  },
+  {
+   "id": "legL_lo",
+   "tex": "day-legL_lo.webp",
+   "rect": [
+    475,
+    1110,
+    130,
+    373
+   ],
+   "node": "legL_lo",
+   "z": 18,
+   "grid": [
+    6,
+    16
    ]
   },
   {
@@ -154,35 +202,99 @@
    ]
   },
   {
-   "id": "armR",
-   "tex": "day-armR.webp",
+   "id": "armR_up",
+   "tex": "day-armR_up.webp",
    "rect": [
-    114,
+    216,
     608,
-    226,
-    408
+    124,
+    184
    ],
    "node": "armR",
    "z": 36,
    "grid": [
-    10,
-    17
+    6,
+    8
    ]
   },
   {
-   "id": "armL",
-   "tex": "day-armL.webp",
+   "id": "armR_lo",
+   "tex": "day-armR_lo.webp",
+   "rect": [
+    137,
+    780,
+    191,
+    177
+   ],
+   "node": "armR_lo",
+   "z": 37,
+   "grid": [
+    8,
+    8
+   ]
+  },
+  {
+   "id": "handR",
+   "tex": "day-handR.webp",
+   "rect": [
+    114,
+    945,
+    109,
+    71
+   ],
+   "node": "handR",
+   "z": 39,
+   "grid": [
+    5,
+    3
+   ]
+  },
+  {
+   "id": "armL_up",
+   "tex": "day-armL_up.webp",
    "rect": [
     576,
     608,
-    219,
-    408
+    118,
+    184
    ],
    "node": "armL",
    "z": 36,
    "grid": [
-    10,
-    17
+    5,
+    8
+   ]
+  },
+  {
+   "id": "armL_lo",
+   "tex": "day-armL_lo.webp",
+   "rect": [
+    584,
+    780,
+    187,
+    177
+   ],
+   "node": "armL_lo",
+   "z": 37,
+   "grid": [
+    8,
+    8
+   ]
+  },
+  {
+   "id": "handL",
+   "tex": "day-handL.webp",
+   "rect": [
+    684,
+    945,
+    111,
+    71
+   ],
+   "node": "handL",
+   "z": 39,
+   "grid": [
+    5,
+    3
    ]
   },
   {
