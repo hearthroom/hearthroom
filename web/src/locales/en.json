@@ -1826,6 +1826,7 @@
   "referral.rule.scope": "Reward points can be used for character chats",
   "referral.redeemTitle": "Enter a referral code",
   "referral.redeemHelp": "You can enter one code before {date}. It can't be changed later",
+  "referral.switchHelp": "A code was added automatically from a shared link. You can change it once before {date}",
   "referral.redeemClosed": "Referral codes can be entered within {days} days of signing up, before your first top-up",
   "referral.codeLabel": "Referral code",
   "referral.placeholder": "Enter code",

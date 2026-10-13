@@ -1826,6 +1826,7 @@
   "referral.rule.scope": "特典ポイントはキャラクターとの会話に使えます",
   "referral.redeemTitle": "紹介コードを入力",
   "referral.redeemHelp": "{date} までに 1 回だけ入力でき、あとから変更できません",
+  "referral.switchHelp": "共有リンクから紹介コードが自動で入力されました。{date} までに 1 回だけ変更できます",
   "referral.redeemClosed": "紹介コードは登録から {days} 日以内、初回チャージ前に入力できます",
   "referral.codeLabel": "紹介コード",
   "referral.placeholder": "コードを入力",

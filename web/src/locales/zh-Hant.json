@@ -1826,6 +1826,7 @@
   "referral.rule.scope": "獎勵積分僅可用於角色對話",
   "referral.redeemTitle": "填寫推薦碼",
   "referral.redeemHelp": "{date} 前可填寫一次，填寫後無法更改",
+  "referral.switchHelp": "已透過分享連結自動填入推薦碼，{date} 前可改填一次",
   "referral.redeemClosed": "推薦碼需在註冊 {days} 天內、首次儲值前填寫",
   "referral.codeLabel": "推薦碼",
   "referral.placeholder": "輸入推薦碼",

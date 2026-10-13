@@ -9,6 +9,7 @@ import { can } from "./lib/provider";
 import { updateMarkdownTwin } from "./lib/markdown-twin";
 import { isPlayHost } from "./lib/site";
 import { setSurface } from "./lib/track";
+import { refFromQuery, rememberShareRef } from "./lib/share-ref";
 
 /**
  * 語言放在網址路徑裡，不是 localStorage。
@@ -114,6 +115,16 @@ export function withLocale(path: string, locale: string): string {
   if (isPlayHost()) return `${clean}${clean.includes("?") ? "&" : "?"}lang=${encodeURIComponent(locale)}`;
   return locale === SOURCE_LOCALE ? clean : `/${locale}${clean === "/" ? "" : clean}`;
 }
+
+// 分享連結的 ?ref=：沒登入的訪客記下來（註冊後自動帶入，lib/share-ref.ts），然後從網址拿掉——
+// 不然他再轉發這張卡，帶出去的還是原分享者的碼。登入中的人本來就不是新註冊，不記。
+router.beforeEach((to) => {
+  if (!("ref" in to.query)) return true;
+  const code = refFromQuery(to.query.ref);
+  if (code && signedInHint() === null) rememberShareRef(code);
+  const { ref: _ref, ...query } = to.query;
+  return { path: to.path, query, hash: to.hash, replace: true };
+});
 
 let firstNavigation = true;
 
