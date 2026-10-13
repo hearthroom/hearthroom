@@ -88,6 +88,7 @@ it('owns the recent conversation index across connected issuers, with private me
   expect(rows.find((r: any) => r.conversationId === 'chat-3').provider).toBe('harbor');
   expect(rows.find((r: any) => r.conversationId === 'chat-2').cardNumber).toBeGreaterThan(100000);
   expect(rows.find((r: any) => r.conversationId === 'chat-2').roleName).not.toBe('');
+  expect(rows.every((r: any) => r.adult === false)).toBe(true);
   expect(rows.map((r: any) => r.conversationId)).toEqual(expect.arrayContaining(['chat-2','chat-3']));
   expect((await body(await request('me/conversations','other'))).conversations).toEqual([]);
   const viaHarbor = await SELF.fetch('https://c.test/v1/me/conversations',{headers:{...bearer('fan'),'X-Provider':'harbor'}});
@@ -139,6 +140,8 @@ it('keeps adult cards a member already played or saved after they turn adult con
   const off = await library();
   expect(off.conversation.roleName).not.toBe('');
   expect(off.conversation.roleAvatar).not.toBe('');
+  // The home panel is a discovery surface: it needs to know which rows are adult so it can follow the switch.
+  expect(off.conversation.adult).toBe(true);
   expect(off.favorites).toEqual([cardId]);
   expect(off.favorite.active).toBe(true);
   expect(off.feed).toEqual([]);
@@ -147,6 +150,7 @@ it('keeps adult cards a member already played or saved after they turn adult con
   await env.DB.prepare('UPDATE members SET show_nsfw=0,age_verified_at=NULL,adult_consent_version=NULL WHERE id=?').bind(fan!.id).run();
   const never = await library();
   expect(never.conversation.roleName).toBe('');
+  expect(never.conversation.adult).toBe(true);
   expect(never.favorites).toEqual([]);
 });
 

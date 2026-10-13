@@ -132,7 +132,8 @@ libraryRoutes.get('/v1/me/conversations', async c => {
     const card = row.id && row.status === 'approved' && visible ? toCard(row, lang) : null;
     // 不在榜上的卡（只靠分享連結玩、還在審、沒登記）這裡只有卡號，名字跟卡片頁一樣去託管平台拿
     const hosted = !card && visible ? await hostedTitle(c.env, row.hostRoleId) : null;
-    return { provider: row.conversationProvider, cardNumber: row.cardNumber, conversationRoleId: row.conversationRoleId, conversationId: row.conversationId,
+    // 首頁面板是發現面，要照開關藏成人卡；清單本身照上面的收藏區規則，所以把等級一起給前端
+    return { provider: row.conversationProvider, cardNumber: row.cardNumber, conversationRoleId: row.conversationRoleId, conversationId: row.conversationId, adult: row.rating === 'R',
       roleName: card?.name || (hosted ? pickLocale(hosted.names, lang) : ''), roleAvatar: card?.avatarUrl || hosted?.avatarUrl || '',
       lastChatTime: new Date(Number(row.updatedAt)).toISOString(), createTime: new Date(Number(row.createdAt)).toISOString() };
   })), hasNextPage: rows.results.length > 24 });
