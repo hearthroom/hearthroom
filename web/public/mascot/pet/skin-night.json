@@ -1,0 +1,791 @@
+{
+ "parts": [
+  {
+   "id": "backhair",
+   "tex": "night-backhair.webp",
+   "rect": [
+    144,
+    213,
+    700,
+    684
+   ],
+   "node": "head",
+   "z": 12,
+   "grid": [
+    30,
+    29
+   ],
+   "depth": {
+    "x": {
+     "AngleX": -5
+    },
+    "y": {
+     "AngleY": -3
+    }
+   },
+   "bend": {
+    "root": [
+     445.5,
+     304
+    ],
+    "tip": [
+     445.5,
+     895
+    ],
+    "angle": {
+     "HairBack": 1
+    },
+    "power": 2
+   }
+  },
+  {
+   "id": "legs",
+   "tex": "night-legs.webp",
+   "rect": [
+    287,
+    894,
+    332,
+    588
+   ],
+   "node": "root",
+   "z": 20,
+   "grid": [
+    14,
+    25
+   ]
+  },
+  {
+   "id": "body",
+   "tex": "night-body.webp",
+   "rect": [
+    200,
+    522,
+    506,
+    440
+   ],
+   "node": "body",
+   "z": 30,
+   "grid": [
+    22,
+    19
+   ]
+  },
+  {
+   "id": "skirt",
+   "tex": "night-skirt.webp",
+   "rect": [
+    218,
+    900,
+    474,
+    151
+   ],
+   "node": "body",
+   "z": 32,
+   "grid": [
+    20,
+    7
+   ],
+   "bend": {
+    "root": [
+     455.0,
+     902
+    ],
+    "tip": [
+     455.0,
+     1049
+    ],
+    "angle": {
+     "Skirt": 1
+    },
+    "power": 1.4
+   }
+  },
+  {
+   "id": "die",
+   "tex": "night-die.webp",
+   "rect": [
+    425,
+    707,
+    58,
+    80
+   ],
+   "node": "die",
+   "z": 34,
+   "grid": [
+    3,
+    4
+   ]
+  },
+  {
+   "id": "armR",
+   "tex": "night-armR.webp",
+   "rect": [
+    115,
+    696,
+    219,
+    319
+   ],
+   "node": "armR",
+   "z": 36,
+   "grid": [
+    10,
+    14
+   ]
+  },
+  {
+   "id": "armL",
+   "tex": "night-armL.webp",
+   "rect": [
+    577,
+    698,
+    212,
+    318
+   ],
+   "node": "armL",
+   "z": 36,
+   "grid": [
+    9,
+    14
+   ]
+  },
+  {
+   "id": "face",
+   "tex": "night-face.webp",
+   "rect": [
+    171,
+    205,
+    676,
+    698
+   ],
+   "node": "head",
+   "z": 50,
+   "grid": [
+    57,
+    59
+   ],
+   "depth": {
+    "x": {
+     "AngleX": 4
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     445.5,
+     425.0
+    ],
+    "radius": [
+     125.5,
+     121.0
+    ]
+   }
+  },
+  {
+   "id": "eyewhite",
+   "tex": "night-eyewhite.webp",
+   "rect": [
+    339,
+    381,
+    210,
+    88
+   ],
+   "node": "head",
+   "z": 52,
+   "grid": [
+    18,
+    8
+   ],
+   "depth": {
+    "x": {
+     "AngleX": 6
+    },
+    "y": {
+     "AngleY": 4
+    }
+   },
+   "sphere": {
+    "center": [
+     445.5,
+     425.0
+    ],
+    "radius": [
+     125.5,
+     121.0
+    ]
+   }
+  },
+  {
+   "id": "iris",
+   "tex": "night-iris.webp",
+   "rect": [
+    345,
+    387,
+    199,
+    80
+   ],
+   "node": "head",
+   "z": 54,
+   "grid": [
+    17,
+    7
+   ],
+   "clipTo": "eyewhite",
+   "depth": {
+    "x": {
+     "AngleX": 7,
+     "EyeX": 7
+    },
+    "y": {
+     "AngleY": 4,
+     "EyeY": 5
+    }
+   }
+  },
+  {
+   "id": "eyeline",
+   "tex": "night-eyeline.webp",
+   "rect": [
+    342,
+    383,
+    202,
+    37
+   ],
+   "node": "head",
+   "z": 56,
+   "grid": [
+    17,
+    4
+   ],
+   "depth": {
+    "x": {
+     "AngleX": 6
+    },
+    "y": {
+     "AngleY": 4
+    }
+   },
+   "sphere": {
+    "center": [
+     445.5,
+     425.0
+    ],
+    "radius": [
+     125.5,
+     121.0
+    ]
+   }
+  },
+  {
+   "id": "eyeclosed",
+   "tex": "night-eyeclosed.webp",
+   "rect": [
+    335,
+    377,
+    218,
+    96
+   ],
+   "node": "head",
+   "z": 58,
+   "grid": [
+    19,
+    8
+   ],
+   "opacity": {
+    "base": 1,
+    "by": {
+     "EyeOpen": -1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 6
+    },
+    "y": {
+     "AngleY": 4
+    }
+   },
+   "sphere": {
+    "center": [
+     445.5,
+     425.0
+    ],
+    "radius": [
+     125.5,
+     121.0
+    ]
+   }
+  },
+  {
+   "id": "mouthopen",
+   "tex": "night-mouthopen.webp",
+   "rect": [
+    415,
+    477,
+    68,
+    36
+   ],
+   "node": "head",
+   "z": 59,
+   "grid": [
+    6,
+    3
+   ],
+   "opacity": {
+    "by": {
+     "MouthOpen": 1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 5
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     445.5,
+     425.0
+    ],
+    "radius": [
+     125.5,
+     121.0
+    ]
+   }
+  },
+  {
+   "id": "expr-dizzy",
+   "tex": "night-expr-dizzy.webp",
+   "rect": [
+    304,
+    311,
+    283,
+    242
+   ],
+   "node": "head",
+   "z": 60,
+   "grid": [
+    12,
+    11
+   ],
+   "opacity": {
+    "by": {
+     "Expr_dizzy": 1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 5
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     445.5,
+     425.0
+    ],
+    "radius": [
+     125.5,
+     121.0
+    ]
+   }
+  },
+  {
+   "id": "expr-happy",
+   "tex": "night-expr-happy.webp",
+   "rect": [
+    304,
+    310,
+    283,
+    244
+   ],
+   "node": "head",
+   "z": 60,
+   "grid": [
+    12,
+    11
+   ],
+   "opacity": {
+    "by": {
+     "Expr_happy": 1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 5
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     445.5,
+     425.0
+    ],
+    "radius": [
+     125.5,
+     121.0
+    ]
+   }
+  },
+  {
+   "id": "expr-peek",
+   "tex": "night-expr-peek.webp",
+   "rect": [
+    304,
+    311,
+    283,
+    242
+   ],
+   "node": "head",
+   "z": 60,
+   "grid": [
+    12,
+    11
+   ],
+   "opacity": {
+    "by": {
+     "Expr_peek": 1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 5
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     445.5,
+     425.0
+    ],
+    "radius": [
+     125.5,
+     121.0
+    ]
+   }
+  },
+  {
+   "id": "expr-pout",
+   "tex": "night-expr-pout.webp",
+   "rect": [
+    304,
+    311,
+    283,
+    243
+   ],
+   "node": "head",
+   "z": 60,
+   "grid": [
+    12,
+    11
+   ],
+   "opacity": {
+    "by": {
+     "Expr_pout": 1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 5
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     445.5,
+     425.0
+    ],
+    "radius": [
+     125.5,
+     121.0
+    ]
+   }
+  },
+  {
+   "id": "expr-shy",
+   "tex": "night-expr-shy.webp",
+   "rect": [
+    304,
+    311,
+    283,
+    242
+   ],
+   "node": "head",
+   "z": 60,
+   "grid": [
+    12,
+    11
+   ],
+   "opacity": {
+    "by": {
+     "Expr_shy": 1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 5
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     445.5,
+     425.0
+    ],
+    "radius": [
+     125.5,
+     121.0
+    ]
+   }
+  },
+  {
+   "id": "expr-sleepy",
+   "tex": "night-expr-sleepy.webp",
+   "rect": [
+    304,
+    311,
+    283,
+    242
+   ],
+   "node": "head",
+   "z": 60,
+   "grid": [
+    12,
+    11
+   ],
+   "opacity": {
+    "by": {
+     "Expr_sleepy": 1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 5
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     445.5,
+     425.0
+    ],
+    "radius": [
+     125.5,
+     121.0
+    ]
+   }
+  },
+  {
+   "id": "expr-surprised",
+   "tex": "night-expr-surprised.webp",
+   "rect": [
+    304,
+    311,
+    283,
+    242
+   ],
+   "node": "head",
+   "z": 60,
+   "grid": [
+    12,
+    11
+   ],
+   "opacity": {
+    "by": {
+     "Expr_surprised": 1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 5
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     445.5,
+     425.0
+    ],
+    "radius": [
+     125.5,
+     121.0
+    ]
+   }
+  },
+  {
+   "id": "expr-wink",
+   "tex": "night-expr-wink.webp",
+   "rect": [
+    304,
+    310,
+    283,
+    244
+   ],
+   "node": "head",
+   "z": 60,
+   "grid": [
+    12,
+    11
+   ],
+   "opacity": {
+    "by": {
+     "Expr_wink": 1
+    }
+   },
+   "depth": {
+    "x": {
+     "AngleX": 5
+    },
+    "y": {
+     "AngleY": 3
+    }
+   },
+   "sphere": {
+    "center": [
+     445.5,
+     425.0
+    ],
+    "radius": [
+     125.5,
+     121.0
+    ]
+   }
+  },
+  {
+   "id": "fronthair",
+   "tex": "night-fronthair.webp",
+   "rect": [
+    271,
+    211,
+    394,
+    622
+   ],
+   "node": "head",
+   "z": 70,
+   "grid": [
+    17,
+    26
+   ],
+   "depth": {
+    "x": {
+     "AngleX": 9
+    },
+    "y": {
+     "AngleY": 5
+    }
+   },
+   "bend": {
+    "root": [
+     445.5,
+     255.6
+    ],
+    "tip": [
+     445.5,
+     546
+    ],
+    "angle": {
+     "HairFront": 1
+    },
+    "power": 2
+   }
+  },
+  {
+   "id": "clip",
+   "tex": "night-clip.webp",
+   "rect": [
+    532,
+    253,
+    88,
+    95
+   ],
+   "node": "head",
+   "z": 72,
+   "grid": [
+    4,
+    4
+   ],
+   "depth": {
+    "x": {
+     "AngleX": 7
+    }
+   }
+  },
+  {
+   "id": "hood",
+   "tex": "night-hood.webp",
+   "rect": [
+    205,
+    14,
+    530,
+    523
+   ],
+   "node": "head",
+   "z": 71,
+   "grid": [
+    23,
+    22
+   ],
+   "depth": {
+    "x": {
+     "AngleX": 7
+    },
+    "y": {
+     "AngleY": 4
+    }
+   },
+   "bend": {
+    "root": [
+     445.5,
+     304
+    ],
+    "tip": [
+     445.5,
+     16
+    ],
+    "angle": {
+     "Ears": 1,
+     "AngleX": 3
+    },
+    "power": 2.2
+   }
+  },
+  {
+   "id": "bow",
+   "tex": "night-bow.webp",
+   "rect": [
+    366,
+    614,
+    167,
+    135
+   ],
+   "node": "head",
+   "z": 74,
+   "grid": [
+    7,
+    6
+   ],
+   "depth": {
+    "x": {
+     "AngleX": -2
+    }
+   }
+  }
+ ]
+}

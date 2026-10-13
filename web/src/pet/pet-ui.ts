@@ -27,7 +27,8 @@ export interface PageGuide {
 
 export interface PetOptions {
   base: string;
-  skins: string[];
+  /** 一開始穿哪一套（day、night、imp、night-imp；四套共用一副骨架） */
+  skin: string;
   /** 照 key 取一句台詞（有好幾句時隨機一句）；網站用 i18n 實作 */
   line: (key: string, params?: Record<string, string | number>) => string;
   /** 給螢幕閱讀器的名字 */
@@ -113,10 +114,11 @@ export class SukiPet {
   }
 
   async start(parent: HTMLElement) {
-    const { base, skins } = this.opts;
+    const { base, skin } = this.opts;
     const skeleton: PetSkeleton & { regions?: string[] } = await (await fetch(`${base}/skeleton.json`)).json();
-    const layers: PetSkin[] = await Promise.all(skins.map(async (s) => (await fetch(`${base}/skin-${s}.json`)).json()));
-    this.rig = new Rig(compose(skeleton, ...layers));
+    this.skeleton = skeleton;
+    this.skin = skin;
+    this.rig = new Rig(compose(skeleton, await (await fetch(`${base}/skin-${skin}.json`)).json() as PetSkin));
     const [W, H] = this.rig.model.size;
     const cssH = this.opts.height, cssW = (cssH * W) / H;
     const dpr = Math.min(2, devicePixelRatio || 1);
@@ -130,9 +132,10 @@ export class SukiPet {
     this.el.style.setProperty("--ph", `${cssH}px`);
     this.view = new PetRenderer(this.canvas, this.rig, pad);
     // 貼圖縮到畫面上的 1.5 倍（含螢幕密度）就夠清楚，再大只會讓 GPU 縮出鋸齒
-    await this.view.load(base, Math.min(1, k * dpr * 1.5));
+    this.texScale = Math.min(1, k * dpr * 1.5);
+    await this.view.load(base, this.texScale);
     this.driver = new Driver(this.rig);
-    await this.loadHit(`${base}/hit.png`, skeleton.regions ?? []);
+    await this.loadHit(`${base}/hit-${skin}.png`, skeleton.regions ?? []);
     parent.append(this.el);
     this.bind();
     // 先在定位好的地方隱形放好（不走位移動畫），再從那裡彈出來，不會從左上角飛過去
@@ -296,6 +299,34 @@ export class SukiPet {
   }
   /** 同一件事每個人只主動說一次（這一頁的這次造訪） */
   private once(key: string, a: Act) { if (this.said.has(key)) return; this.said.add(key); this.act(a); }
+  private skeleton!: PetSkeleton & { regions?: string[] };
+  private skin = "";
+  private texScale = 1;
+  private swapping: Promise<void> | null = null;
+  /**
+   * 換衣服（深色主題換睡衣、18+ 疊小惡魔）：同一副骨架換一套部件。新貼圖先載好，
+   * 再「噗」一下換上，參數（她正在看哪裡、頭髮擺到哪）照接，動作不中斷。
+   */
+  async setSkin(name: string) {
+    if (!this.rig || name === this.skin) return;
+    const run = async () => {
+      const base = this.opts.base;
+      const skin = await (await fetch(`${base}/skin-${name}.json`)).json() as PetSkin;
+      const rig = new Rig(compose(this.skeleton, skin));
+      await this.view.load(base, this.texScale, rig.model.parts);
+      await this.loadHit(`${base}/hit-${name}.png`, this.skeleton.regions ?? []);
+      Object.assign(rig.params, this.rig.params);
+      this.el.classList.remove("suki-pet--poof"); void this.el.offsetWidth; this.el.classList.add("suki-pet--poof");
+      await new Promise((r) => setTimeout(r, 140));
+      this.rig = rig;
+      this.view.swap(rig);
+      this.driver = new Driver(rig);
+      this.skin = name;
+    };
+    this.swapping = (this.swapping ?? Promise.resolve()).then(run, run).catch(() => undefined);
+    return this.swapping;
+  }
+
   /** 網站直接要她說一句（例如選單動作找不到東西時） */
   say(text: string) { if (text) this.act({ say: text, talk: true }, true); }
   private speak(text: string, ms = 2600, action?: MenuItem) {

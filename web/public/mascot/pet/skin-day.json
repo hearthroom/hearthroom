@@ -397,16 +397,16 @@
    "id": "expr-dizzy",
    "tex": "day-expr-dizzy.webp",
    "rect": [
+    300,
+    311,
     292,
-    347,
-    320,
-    207
+    242
    ],
    "node": "head",
    "z": 60,
    "grid": [
-    14,
-    9
+    13,
+    11
    ],
    "opacity": {
     "by": {
@@ -436,16 +436,16 @@
    "id": "expr-happy",
    "tex": "day-expr-happy.webp",
    "rect": [
-    291,
-    348,
-    317,
-    209
+    301,
+    310,
+    289,
+    246
    ],
    "node": "head",
    "z": 60,
    "grid": [
-    14,
-    9
+    13,
+    11
    ],
    "opacity": {
     "by": {
@@ -475,16 +475,16 @@
    "id": "expr-peek",
    "tex": "day-expr-peek.webp",
    "rect": [
-    291,
-    347,
-    316,
-    209
+    301,
+    311,
+    289,
+    241
    ],
    "node": "head",
    "z": 60,
    "grid": [
-    14,
-    9
+    13,
+    11
    ],
    "opacity": {
     "by": {
@@ -514,16 +514,16 @@
    "id": "expr-pout",
    "tex": "day-expr-pout.webp",
    "rect": [
-    291,
-    349,
-    319,
-    206
+    300,
+    311,
+    292,
+    243
    ],
    "node": "head",
    "z": 60,
    "grid": [
-    14,
-    9
+    13,
+    11
    ],
    "opacity": {
     "by": {
@@ -553,16 +553,16 @@
    "id": "expr-shy",
    "tex": "day-expr-shy.webp",
    "rect": [
-    292,
-    349,
-    318,
-    202
+    301,
+    311,
+    291,
+    241
    ],
    "node": "head",
    "z": 60,
    "grid": [
-    14,
-    9
+    13,
+    11
    ],
    "opacity": {
     "by": {
@@ -592,16 +592,16 @@
    "id": "expr-sleepy",
    "tex": "day-expr-sleepy.webp",
    "rect": [
-    292,
-    347,
-    318,
-    207
+    301,
+    311,
+    291,
+    242
    ],
    "node": "head",
    "z": 60,
    "grid": [
-    14,
-    9
+    13,
+    11
    ],
    "opacity": {
     "by": {
@@ -631,16 +631,16 @@
    "id": "expr-surprised",
    "tex": "day-expr-surprised.webp",
    "rect": [
-    291,
-    349,
-    318,
-    207
+    301,
+    311,
+    289,
+    241
    ],
    "node": "head",
    "z": 60,
    "grid": [
-    14,
-    9
+    13,
+    11
    ],
    "opacity": {
     "by": {
@@ -670,16 +670,16 @@
    "id": "expr-wink",
    "tex": "day-expr-wink.webp",
    "rect": [
-    291,
-    352,
-    317,
-    205
+    301,
+    310,
+    290,
+    246
    ],
    "node": "head",
    "z": 60,
    "grid": [
-    14,
-    9
+    13,
+    11
    ],
    "opacity": {
     "by": {
