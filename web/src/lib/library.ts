@@ -33,6 +33,8 @@ export interface ConversationSummary {
   conversationId: string;
   conversationRoleId: string;
   cardNumber?: number | null;
+  /** 成人卡：清單照收藏區規則照列，首頁面板要自己照開關藏 */
+  adult?: boolean;
   conversationTitle: string | null;
   roleName: string;
   roleAvatar: string;

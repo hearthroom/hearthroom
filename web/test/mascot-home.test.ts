@@ -21,9 +21,10 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { POSES, SCENES, isNight, poseOf, sceneOf, slotOf, type Slot } from "../src/lib/mascot-home";
 
-const PROFILE = { handle: "abcdefgh", memberSince: 0, reviewer: false, identities: [], showNsfw: false, ageVerified: false, adultConsent: false, hiddenTags: [] };
+const BASE_PROFILE = { handle: "abcdefgh", memberSince: 0, reviewer: false, identities: [], showNsfw: false, ageVerified: false, adultConsent: false, hiddenTags: [] };
 const chat = (n: number) => ({ provider: "harbor", conversationId: `c${n}`, conversationRoleId: `r${n}`, cardNumber: n, conversationTitle: null, roleName: `角色${n}`, roleAvatar: "", lastChatTime: new Date(Date.now() - n * 3_600_000).toISOString() });
 let conversations: unknown[] = [];
+let profile = { ...BASE_PROFILE };
 const calls: string[] = [];
 
 function fakeFetch(input: RequestInfo | URL): Promise<Response> {
@@ -31,7 +32,7 @@ function fakeFetch(input: RequestInfo | URL): Promise<Response> {
   calls.push(url);
   const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
   if (url.endsWith("/v1/auth/config")) return Promise.resolve(json({ managed: true }));
-  if (url.endsWith("/v1/auth/session")) return Promise.resolve(json({ provider: "harbor", me: { accountNumId: 7, nickName: "小月", avatar: "" }, profile: PROFILE, token: { accessToken: "tok", expiresAt: Date.now() + 3_600_000 } }));
+  if (url.endsWith("/v1/auth/session")) return Promise.resolve(json({ provider: "harbor", me: { accountNumId: 7, nickName: "小月", avatar: "" }, profile, token: { accessToken: "tok", expiresAt: Date.now() + 3_600_000 } }));
   if (url.includes("/me/conversations")) return Promise.resolve(json({ conversations, hasNextPage: false }));
   if (url.includes("/v1/cards?")) return Promise.resolve(json({ items: [{ id: "x", num: 42, name: "夜班便利店", summary: "凌晨三點", avatarUrl: null }], total: 1, hasNext: false, limit: 1, offset: 0 }));
   return Promise.resolve(json({}));
@@ -60,7 +61,7 @@ async function open() {
 const chips = () => [...el!.querySelectorAll<HTMLButtonElement>(".home__intent")];
 const chip = (text: string) => chips().find((b) => b.textContent?.includes(text));
 
-beforeEach(() => { resetManagedAuthForTest(true); clearLibraryCache(); vi.stubGlobal("fetch", fakeFetch); conversations = []; calls.length = 0; discovered = 0; i18n.global.locale.value = "zh-Hant"; });
+beforeEach(() => { resetManagedAuthForTest(true); clearLibraryCache(); vi.stubGlobal("fetch", fakeFetch); conversations = []; profile = { ...BASE_PROFILE }; calls.length = 0; discovered = 0; i18n.global.locale.value = "zh-Hant"; });
 afterEach(() => { app?.unmount(); el?.remove(); app = null; el = null; vi.unstubAllGlobals(); });
 
 describe("蘇綺面板", () => {
@@ -72,6 +73,25 @@ describe("蘇綺面板", () => {
     expect(rows[0].getAttribute("href")).toContain("/play/1?resume=c1");
     expect(chips()[0].getAttribute("aria-pressed")).toBe("true");
     expect(calls.some((u) => u.includes("/v1/cards?"))).toBe(false);
+  });
+
+  it("成人內容關著：最近的對話裡的成人卡不列在面板上；只剩成人卡就不出「接著」", async () => {
+    conversations = [{ ...chat(1), adult: true }, chat(2), chat(3), chat(4)];
+    await open();
+    const rows = [...el!.querySelectorAll<HTMLAnchorElement>(".home__row")];
+    expect(rows.map((r) => r.getAttribute("href"))).toEqual([expect.stringContaining("/play/2?"), expect.stringContaining("/play/3?"), expect.stringContaining("/play/4?")]);
+    app!.unmount(); el!.remove();
+    conversations = [{ ...chat(1), adult: true }];
+    await open();
+    expect(chips().some((b) => b.textContent?.includes("接著"))).toBe(false);
+    expect(el!.querySelectorAll(".home__row")).toHaveLength(0);
+  });
+
+  it("成人內容開著：成人卡照列", async () => {
+    profile = { ...BASE_PROFILE, showNsfw: true, ageVerified: true, adultConsent: true };
+    conversations = [{ ...chat(1), adult: true }, chat(2)];
+    await open();
+    expect([...el!.querySelectorAll(".home__row")]).toHaveLength(2);
   });
 
   it("一段對話都沒有：不出「接著」那個選項，也不列卡", async () => {

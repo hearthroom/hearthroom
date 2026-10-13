@@ -46,8 +46,10 @@ const mine = ref<MyCard | null>(null);
 const writeState = ref<"idle" | "busy" | "done" | "failed">("idle");
 
 const canWrite = computed(() => can("editor"));
+/** 首頁是發現面：成人內容關著就不把聊過的成人卡擺在這裡（收藏區另有規則，那裡照列） */
+const shown = computed(() => (chats.value ?? []).filter((c) => !c.adult || viewerAdult(session)?.showNsfw));
 const intents = computed<HomeIntent[]>(() => [
-  ...(chats.value?.length ? ["resume" as const] : []),
+  ...(shown.value.length ? ["resume" as const] : []),
   "discover", "roll",
   ...(canWrite.value ? ["write" as const] : []),
 ]);
@@ -79,7 +81,7 @@ const line = computed(() => {
   return "";
 });
 
-const resumes = computed(() => (chats.value ?? []).slice(0, 3).map((c) => ({
+const resumes = computed(() => shown.value.slice(0, 3).map((c) => ({
   key: `${c.provider}:${c.conversationRoleId}`,
   href: platformPath(lp(`/play/${encodeURIComponent(c.cardNumber ?? c.conversationRoleId)}?resume=${encodeURIComponent(c.conversationId)}`), c.provider),
   title: c.conversationTitle || displayName(c.roleName, locale.value) || t("library.untitled"),
@@ -94,7 +96,7 @@ async function loadChats() {
     const got = await fetchConversations(token, contentLang(locale.value), 1);
     chats.value = Array.isArray(got?.conversations) ? got.conversations : [];
   } catch { chats.value = []; }
-  if (chats.value.length) intent.value = "resume";
+  if (shown.value.length) intent.value = "resume";
 }
 
 async function roll() {
