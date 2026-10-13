@@ -130,7 +130,7 @@ watch(() => session.me?.accountNumId, (now, before) => { if (before !== undefine
 </script>
 
 <template>
-  <section class="home" :class="{ 'home--dark': dark }" :aria-label="$t('mascot.name')" data-suki-stage>
+  <section class="home" :class="{ 'home--dark': dark }" :aria-label="$t('mascot.name')">
     <img class="home__scene" :src="`/mascot/home/scene-${scene.id}.webp`" alt="" decoding="async" />
     <div class="home__veil" aria-hidden="true" />
 

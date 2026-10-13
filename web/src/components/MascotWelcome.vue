@@ -25,7 +25,7 @@ function close(source: "close" | "browse") {
 </script>
 
 <template>
-  <aside v-if="visible" class="welcome" :aria-label="$t('mascot.name')" data-suki-stage>
+  <aside v-if="visible" class="welcome" :aria-label="$t('mascot.name')">
     <img class="welcome__art" src="/mascot/suki-banner.webp" alt="" width="1500" height="600" decoding="async" />
     <div class="welcome__text">
       <h2 class="welcome__title">{{ $t("mascot.welcome.title") }}</h2>
