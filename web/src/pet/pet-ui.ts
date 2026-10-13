@@ -230,12 +230,13 @@ export class SukiPet {
 
   /** 照顧的消息：餵飽了、餓了、升級、連續天數、好久不見；一次只講最重要的一件 */
   private careNews(news: SukiNews[]) {
-    const pick = news.find((n) => n.kind === "levelUp") ?? news.find((n) => n.kind === "streak") ?? news.find((n) => n.kind === "fed")
+    const pick = news.find((n) => n.kind === "levelUp") ?? news.find((n) => n.kind === "craved") ?? news.find((n) => n.kind === "streak") ?? news.find((n) => n.kind === "fed")
       ?? news.find((n) => n.kind === "missed") ?? news.find((n) => n.kind === "checkIn" && n.days > 1) ?? news.find((n) => n.kind === "hungry");
     if (!pick) return;
     const later = (a: Act) => setTimeout(() => this.act(a), this.tucked ? 0 : 3400);
     switch (pick.kind) {
       case "fed": return later({ expr: "happy", say: this.line("care.fed"), hop: true });
+      case "craved": return later({ expr: "happy", say: this.line("care.craved"), hop: true, ms: 4000 });
       case "hungry": return later({ expr: "pout", say: this.line("care.hungry"), ms: 5000, action: this.opts.resume });
       case "levelUp": return later({ expr: "happy", say: this.line(`care.level.${pick.level}`) || this.line("care.levelUp"), hop: true, ms: 4500 });
       case "streak": return later({ expr: "wink", say: this.line("care.streak", { n: pick.days }), hop: true, ms: 4500 });

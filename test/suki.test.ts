@@ -11,7 +11,8 @@ import { resetDb, identities, bearer, restoreUpstream, rolesOnMainSite, ratingBo
 import { approveFixtureResponse } from "./hosted-fixture";
 import { sukiRecall } from "../src/suki";
 import { pushLine } from "../src/community/push";
-import { freshState, recallDue, usualHour, visit, localHour } from "../shared/suki-care";
+import { cravingKey, freshState, localDay, recallDue, usualHour, visit, localHour } from "../shared/suki-care";
+import { tagGroupOf, tagNamesFor } from "../shared/tag-catalog";
 
 const HOUR = 3_600_000;
 const api = (path: string, token = "fan", init: RequestInit = {}) =>
@@ -147,5 +148,51 @@ describe("算法", () => {
     const a = visit(null, Date.UTC(2026, 9, 13, 15, 30), null, tpe);
     const b = visit(a.state, Date.UTC(2026, 9, 13, 16, 30), null, tpe);
     expect(b.state.streak).toBe(2);
+  });
+});
+
+// 嘴饞（owner 2026-10-13：只是加分）：她每天想吃一種口味（玩法或題材類型），那天玩到帶這個標籤的卡，好感多 +1；
+// 玩別的類型照樣算吃飽，不強迫；不挑成人向與隱藏的類型
+describe("嘴饞", () => {
+  it("每天固定一種口味，只從玩法與題材挑，日期不同會換", () => {
+    const days = ["2026-10-13", "2026-10-14", "2026-10-15", "2026-11-02"];
+    for (const d of days) {
+      expect(cravingKey(d)).toBe(cravingKey(d));
+      expect(["play", "setting"]).toContain(tagGroupOf(cravingKey(d)));
+    }
+    expect(new Set(days.map(cravingKey)).size).toBeGreaterThan(1);
+  });
+
+  it("吃到想吃的那天多 +1，同一天不重複", () => {
+    const now = Date.UTC(2026, 9, 13, 12);
+    const a = visit(null, now, now, 0, true);
+    expect(a.news.map((n) => n.kind)).toContain("craved");
+    expect(a.state.affection).toBe(3);
+    const b = visit(a.state, now + 60_000, now + 60_000, 0, true);
+    expect(b.news.map((n) => n.kind)).not.toContain("craved");
+    expect(b.state.affection).toBe(3);
+  });
+
+  it("今天玩過帶那個標籤的卡才算；別的類型照樣吃飽，但沒有加分", async () => {
+    identities({ fan: 20001, author: 10001 });
+    rolesOnMainSite({ roleId: "craving-role", authorNumId: 10001 });
+    const r = await approveFixtureResponse(await SELF.fetch("https://c.test/v1/cards", { method: "POST", headers: { ...bearer("author"), "Content-Type": "application/json" }, body: JSON.stringify({ operationId: crypto.randomUUID(), roleId: "craving-role", ...ratingBody(false) }) }));
+    const cardId = (await json(r)).id as string;
+    await api("me/suki/visit", "fan", { method: "POST", body: JSON.stringify({ tzOffset: -480 }) });
+    const id = await memberId();
+    await env.DB.prepare("INSERT INTO member_conversations(member_id,provider,role_id,conversation_id,created_at,updated_at) VALUES(?,?,?,?,?,?)")
+      .bind(id, "harbor", "craving-role", "conv-c", Date.now(), Date.now()).run();
+    await env.DB.prepare("UPDATE cards SET tags=? WHERE id=?").bind(JSON.stringify(["完全無關的標籤"]), cardId).run();
+    const plain = await json(await api("me/suki/visit", "fan", { method: "POST", body: JSON.stringify({ tzOffset: -480 }) }));
+    expect(plain.news.map((n: any) => n.kind)).toContain("fed");
+    expect(plain.news.map((n: any) => n.kind)).not.toContain("craved");
+    const key = cravingKey(localDay(Date.now(), -480));
+    await env.DB.prepare("UPDATE cards SET tags=? WHERE id=?").bind(JSON.stringify([tagNamesFor(key)![0]]), cardId).run();
+    await env.DB.prepare("UPDATE member_conversations SET updated_at=? WHERE member_id=?").bind(Date.now() + 1000, id).run();
+    const craved = await json(await api("me/suki/visit", "fan", { method: "POST", body: JSON.stringify({ tzOffset: -480 }) }));
+    expect(craved.news.map((n: any) => n.kind)).toContain("craved");
+    expect(craved.state.affection).toBe(plain.state.affection + 1);
+    const text = await (await SELF.fetch("https://c.test/metrics")).text();
+    expect(text).toMatch(/hearthroom_suki_operations_total\{operation="craving",outcome="met"\} 1/);
   });
 });

@@ -29,8 +29,8 @@ libraryRoutes.get('/metrics', async c => {
   lines.push('# HELP hearthroom_updates_operations_total Update announcement work: registering a build, building the daily digest, digest delivery acks, reporter notices, read-state writes.','# TYPE hearthroom_updates_operations_total counter',
     ...updates.results.filter(r=>/^(register|digest_build|delivery_ack|report_notify|state_write)$/.test(r.operation)&&/^(success|error)$/.test(r.outcome)).map(r=>`hearthroom_updates_operations_total{operation="${r.operation}",outcome="${r.outcome}"} ${r.value}`));
   const suki = await c.env.DB.prepare('SELECT operation,outcome,value FROM suki_metrics ORDER BY operation,outcome').all<{operation:string;outcome:string;value:number}>().catch(() => ({ results: [] as {operation:string;outcome:string;value:number}[] }));
-  lines.push('# HELP hearthroom_suki_operations_total Desk pet Suki: visits, recall opt-in changes, recall notices written.','# TYPE hearthroom_suki_operations_total counter',
-    ...suki.results.filter(r=>/^(visit|recall_on|recall_off|recall)$/.test(r.operation)&&/^(success|sent|card_error)$/.test(r.outcome)).map(r=>`hearthroom_suki_operations_total{operation="${r.operation}",outcome="${r.outcome}"} ${r.value}`));
+  lines.push('# HELP hearthroom_suki_operations_total Desk pet Suki: visits, recall opt-in changes, recall notices written, cravings met.','# TYPE hearthroom_suki_operations_total counter',
+    ...suki.results.filter(r=>/^(visit|recall_on|recall_off|recall|craving)$/.test(r.operation)&&/^(success|sent|card_error|met|error)$/.test(r.outcome)).map(r=>`hearthroom_suki_operations_total{operation="${r.operation}",outcome="${r.outcome}"} ${r.value}`));
   return c.text('# HELP hearthroom_library_requests_total Community library requests.\n# TYPE hearthroom_library_requests_total counter\n' + lines.join('\n') + '\n' + await moderationMetrics(c.env.DB), 200, { 'Content-Type': 'text/plain; version=0.0.4', 'Cache-Control': 'no-store' });
 });
 const kinds = ["favorites", "following"] as const;

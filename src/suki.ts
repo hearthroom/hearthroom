@@ -11,7 +11,8 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { requireMember } from "./members";
 import { HttpError, type Env } from "./types";
-import { localDay, recallDue, visit, type SukiState } from "../shared/suki-care";
+import { cravingKey, localDay, recallDue, visit, type SukiState } from "../shared/suki-care";
+import { tagNamesFor } from "../shared/tag-catalog";
 
 type Row = { member_id: string; state: string; recall: number; tz_offset: number; last_seen: number; last_recall: number };
 
@@ -23,6 +24,19 @@ async function count(db: D1Database, operation: string, outcome: string, n = 1):
 }
 
 const tzOf = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && Math.abs(v) <= 14 * 60 ? Math.round(v) : 0);
+
+/** 今天（她那邊的日期）玩過的卡裡，有沒有帶她想吃的口味；標籤存的是各語言的名稱，拿目錄裡的全部名稱比 */
+async function cravingMet(db: D1Database, member: string, now: number, tz: number): Promise<boolean> {
+  const day = localDay(now, tz);
+  const names = tagNamesFor(cravingKey(day)) ?? [];
+  if (!names.length) return false;
+  const start = Date.parse(`${day}T00:00:00Z`) + tz * 60_000;
+  const row = await db.prepare(`SELECT 1 AS ok FROM member_conversations r
+      JOIN cards c ON c.provider=r.provider AND (c.source_role_id=r.role_id OR c.approved_hosted_role_id=r.role_id), json_each(c.tags) t
+      WHERE r.member_id=? AND r.updated_at>=? AND t.value IN (SELECT value FROM json_each(?)) LIMIT 1`)
+    .bind(member, start, JSON.stringify(names)).first<{ ok: number }>().catch(async () => { await count(db, "craving", "error"); return null; });
+  return !!row;
+}
 
 async function lastStory(db: D1Database, member: string): Promise<number | null> {
   const row = await db.prepare("SELECT MAX(updated_at) AS at FROM member_conversations WHERE member_id=?").bind(member).first<{ at: number | null }>();
@@ -44,11 +58,12 @@ sukiRoutes.post("/v1/me/suki/visit", bodyLimit({ maxSize: 512 }), async (c) => {
   const tz = tzOf(input.tzOffset);
   const now = Date.now();
   const row = await c.env.DB.prepare("SELECT state,recall FROM suki_states WHERE member_id=?").bind(member.id).first<Pick<Row, "state" | "recall">>();
-  const { state, news } = visit(row ? (JSON.parse(row.state) as SukiState) : null, now, await lastStory(c.env.DB, member.id), tz);
+  const { state, news } = visit(row ? (JSON.parse(row.state) as SukiState) : null, now, await lastStory(c.env.DB, member.id), tz, await cravingMet(c.env.DB, member.id, now, tz));
   await c.env.DB.prepare(`INSERT INTO suki_states(member_id,state,tz_offset,last_seen,updated_at) VALUES(?,?,?,?,?)
     ON CONFLICT(member_id) DO UPDATE SET state=excluded.state,tz_offset=excluded.tz_offset,last_seen=excluded.last_seen,updated_at=excluded.updated_at`)
     .bind(member.id, JSON.stringify(state), tz, now, now).run();
   await count(c.env.DB, "visit", "success");
+  if (news.some((n) => n.kind === "craved")) await count(c.env.DB, "craving", "met");
   return c.json({ state, news, recall: !!row?.recall });
 });
 
