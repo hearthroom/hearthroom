@@ -64,7 +64,7 @@ it("超過轉換上限的動圖：改給 Harbor 縮好的那份；Harbor 還沒�
   expect(res.status).toBe(200);
   expect([...new Uint8Array(await res.arrayBuffer())]).toEqual([9, 9]);
   expect(res.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
-  expect(calls).toEqual(["https://assets.harperharbor.com/versions/01a12f5a-b7d5-7eee-a403-fc80e84bafa6", "https://api.harperharbor.com/preview/versions/01a12f5a-b7d5-7eee-a403-fc80e84bafa6"]);
+  expect(calls).toEqual(["https://assets.harperharbor.com/versions/01a12f5a-b7d5-7eee-a403-fc80e84bafa6", "https://api.harperharbor.com/preview/versions/01a12f5a-b7d5-7eee-a403-fc80e84bafa6?v=1"]);
 
   previewReady = false;
   const fallback = await SELF.fetch("https://c.test/v1/art/harbor/versions/01a12f5a-b7d5-7eee-a403-fc80e84bafa6");

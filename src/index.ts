@@ -745,7 +745,8 @@ app.get("/v1/art/:source/*", async (c) => {
   const bytes = new Uint8Array(await upstream.arrayBuffer());
   if (animatedArea(bytes) <= CF_ANIMATION_LIMIT) return art(bytes, type);
   const base = (c.env.PROVIDER_API_BASE_HARBOR ?? "").trim().replace(/\/$/, "");
-  const preview = base ? await fetch(`${base}/preview/${path}`, { cf: { cacheEverything: true, cacheTtl: 31536000 } } as RequestInit).catch(() => null) : null;
+  // 縮好的那份快取一年；404／出錯只快取一下（Harbor 剛上線、正在縮別張時會這樣），之後自己好。v＝快取版本，改規則時換一個
+  const preview = base ? await fetch(`${base}/preview/${path}?v=1`, { cf: { cacheEverything: true, cacheTtlByStatus: { "200-299": 31536000, "404": 60, "500-599": 0 } } } as RequestInit).catch(() => null) : null;
   if (preview?.ok && preview.headers.get("content-type") === "image/webp") return art(preview.body, "image/webp");
   return art(bytes, type, "public, max-age=600");
 });
