@@ -404,6 +404,7 @@ export class SukiPet {
       p.ArmR = (Math.sin(this.waveT * 12) * 10 + 4) * up;
       if (this.waveT > 1.6) { this.waveT = -1; p.ArmR = 0; }
     }
+    this.playActivity(dt);
     if (this.sleeping && now > this.zzzAt) { this.zzzAt = now + 9000; this.speak("Zzz…", 2400); }
     this.brain(now);
     if (this.drag && now - this.drag.t > 60) this.drag.vx *= Math.exp(-dt * 8);
@@ -415,6 +416,8 @@ export class SukiPet {
     this.driver.update(dt);
     p.Dangle = this.dangle;
     if (arm !== null) p.ArmR = arm;
+    // 拿望遠鏡時頭不轉：鏡筒畫在眼睛前面、掛在身體上，頭一轉就對不上；改成整個上身慢慢掃
+    if (this.activity?.set === "scope") { p.AngleX = 0; p.AngleY = 0; p.AngleZ = 0; p.EyeX = 0; p.EyeY = 0; p.BodyZ = Math.sin(this.activity.t * 0.9) * 3; }
     for (const k in SukiPet.LIMITS) if (p[k] !== undefined) p[k] = Math.max(SukiPet.LIMITS[k][0], Math.min(SukiPet.LIMITS[k][1], p[k]));
     // 小惡魔的尾巴梗藏在右手後面、沒畫：右手與手肘只往外、尾巴先不擺，不然梗會斷（等整條尾巴補畫好再放寬）
     if (this.skin.includes("imp")) {
@@ -446,19 +449,70 @@ export class SukiPet {
     // 手只往外擺（露出的是補畫過的身側）；往內轉會露出手臂後面沒畫的東西（尾巴、衣服），最多 3 度
     ArmR: [-3, 12], ArmL: [-12, 3], ElbowR: [-15, 15], ElbowL: [-15, 15], WristR: [-15, 15], WristL: [-15, 15],
     LegR: [-8, 8], LegL: [-8, 8], KneeR: [-10, 10], KneeL: [-10, 10],
+    // 手臂組自己的小動作：手掌只往外揮（往內會蓋到臉）、書本輕晃、杯子舉到嘴邊
+    WaveHand: [-14, 0], SetTilt: [-3, 3], SetY: [-16, 0],
   };
+
+  /**
+   * 手臂組（Live2D 的腕差分）：拿書、捧可可、舉手揮、叉腰、望遠鏡，各是那個姿勢專門畫的一整副手臂，
+   * 掛在同一副骨架的身體上，切換時 0.12 秒淡入淡出、原本的手同時淡出。只用目前這套造型有畫的。
+   * 小動作都在原畫撐得住的範圍：書輕晃、杯子往上舉一點、手掌從手肘往外揮。
+   */
+  private static SETS = ["book", "mug", "wave", "hips", "scope"] as const;
+  private activity: { set: (typeof SukiPet.SETS)[number]; t: number; until: number } | null = null;
+  private setW: Record<string, number> = {};
+  private hasSet(name: string) { return this.rig.model.parts.some((p) => p.id === `set-${name}`); }
+  private startActivity(set: (typeof SukiPet.SETS)[number], seconds: number) {
+    if (!this.hasSet(set)) return false;
+    this.activity = { set, t: 0, until: seconds };
+    return true;
+  }
+  private playActivity(dt: number) {
+    const p = this.rig.params, a = this.activity;
+    if (a && (this.drag || this.sleeping || this.walk || this.hidden || this.tucked || !this.menuEl.hidden || a.t > a.until || !this.hasSet(a.set))) this.activity = null;
+    const cur = this.activity;
+    for (const k of SukiPet.SETS) {
+      const w = this.setW[k] ?? 0, tgt = cur?.set === k ? 1 : 0;
+      this.setW[k] = tgt > w ? Math.min(tgt, w + dt / 0.12) : Math.max(tgt, w - dt / 0.12);
+      p[`Set_${k}`] = this.setW[k]!;
+    }
+    p.SetTilt = 0; p.SetY = 0; p.WaveHand = 0;
+    // 演完或被打斷：視線還給滑鼠
+    if (!cur) { if (this.activityLook) { this.activityLook = false; this.driver.state.look = null; } return; }
+    cur.t += dt;
+    const t = cur.t;
+    if (cur.set === "wave") p.WaveHand = (Math.sin(t * 11) - 1) * 7;
+    if (cur.set === "book") { p.SetTilt = Math.sin(t * 0.8) * 1.5; this.driver.state.look = [0.1, 0.7]; this.activityLook = true; }
+    if (cur.set === "mug") {
+      // 每三秒多喝一口：舉到嘴邊、閉眼、放回去
+      const ph = (t % 3.2) / 0.9, sip = ph < 1 ? Math.sin(ph * Math.PI) : 0;
+      p.SetY = -14 * sip;
+      if (sip > 0.3) this.act({ expr: "happy", ms: 120 });
+      this.driver.state.look = [0, 0.2]; this.activityLook = true;
+    }
+  }
+  private activityLook = false;
 
   private brain(now: number) {
     const quiet = !this.drag && !this.tucked && !this.hidden && this.menuEl.hidden && this.bubble.hidden && this.jumpT < 0;
-    if (!quiet || this.sleeping || this.walk || now < this.nextMove || now - this.touchedAt < 12_000) return;
+    if (!quiet || this.sleeping || this.walk || this.activity || now < this.nextMove || now - this.touchedAt < 12_000) return;
     this.nextMove = now + 9000 + Math.random() * 12_000;
     // 睡覺：整頁太久沒人動就睡著（白天約四分鐘，深夜一分鐘）
     const h = new Date().getHours();
     if (now - Math.max(this.lastInput, this.touchedAt) > ((h >= 23 || h < 5) ? 60_000 : 240_000)) return this.sleep();
-    // 在原畫撐得住的範圍內自己動：走一段、擺擺手、東張西望（捧書、喝可可這些大動作等專門畫的手臂組）
+    // 自己玩：走一段、揮手、看書、喝可可、拿望遠鏡偷看、叉腰；這套造型沒畫那副手臂就退回小幅擺手
     const r = Math.random();
-    if (r < 0.5 && !this.opts.reducedMotion) return this.wander();
-    if (r < 0.75) { this.waveT = 0; return; }
+    if (r < 0.35 && !this.opts.reducedMotion) return this.wander();
+    if (r < 0.5) { if (!this.startActivity("wave", 1.8)) this.waveT = 0; return; }
+    if (r < 0.85) {
+      const pick = (["book", "mug", "scope", "hips"] as const)[Math.floor(Math.random() * 4)];
+      const sec = { book: 9, mug: 7, scope: 5, hips: 2.5 }[pick];
+      if (this.startActivity(pick, sec)) {
+        const say = { book: "act.read", mug: "act.cocoa", scope: "act.telescope", hips: "act.proud" }[pick];
+        if (Math.random() < 0.5) this.act({ expr: pick === "hips" ? "happy" : undefined, say: this.line(say), ms: 3000 });
+        return;
+      }
+    }
     // 東張西望
     this.driver.state.look = [-0.9, -0.2];
     setTimeout(() => { if (!this.drag) this.driver.state.look = [0.9, -0.1]; }, 1400);
@@ -731,6 +785,8 @@ export class SukiPet {
       if (this.guide) this.setGuide(this.guide);
       return;
     }
+    // 正在看書、喝可可、偷看榜單時被戳：手放下來，被抓包
+    if (this.activity && this.activity.set !== "wave") { this.activity = null; return this.act({ expr: "surprised", say: this.line("act.caught") }, true); }
     const now = performance.now();
     this.clicks = [...this.clicks.filter((t) => now - t < 2500), now];
     if (this.clicks.length >= 7) { this.clicks = []; return this.act({ expr: "pout", say: this.line("tooMany"), ms: 2600 }, true); }
