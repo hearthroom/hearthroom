@@ -14,8 +14,10 @@ export const THUMB_SOURCES: Readonly<Record<string, string>> = {
  * 卡片在清單上約 170–180 px 寬，2 倍密度的螢幕要 360 px。只出這一個尺寸：每多一個尺寸就多算一次轉換。
  * 實測（6.4 MB、83 格的 GIF）：480/q80 是 2.8 MB，360/q70 是 1.16 MB，畫面上看不出差別。
  * 來源不在白名單或網址壞了回 null（照用原圖）。
+ * still：只取第一格。動圖總面積超過轉換上限（例：110 格 1024×1792 的 WebP，err 9413）轉不了動的，
+ * 縮好的第一格還是轉得出來；比退回好幾 MB 的原圖好——手機每一格都要全尺寸解碼，整頁會閃。
  */
-export function cardThumbUrl(primaryHost: string, url: string, width = 360): string | null {
+export function cardThumbUrl(primaryHost: string, url: string, width = 360, still = false): string | null {
   let source: URL;
   try {
     source = new URL(url);
@@ -24,7 +26,7 @@ export function cardThumbUrl(primaryHost: string, url: string, width = 360): str
   }
   const key = THUMB_SOURCES[source.host];
   if (!key) return null;
-  return `https://${primaryHost}/cdn-cgi/image/width=${width},fit=scale-down,format=auto,anim=true,quality=70/v1/art/${key}${source.pathname}${source.search}`;
+  return `https://${primaryHost}/cdn-cgi/image/width=${width},fit=scale-down,format=auto,anim=${still ? "false" : "true"},quality=70/v1/art/${key}${source.pathname}${source.search}`;
 }
 
 /** 介面語言 → 首頁預設的語區與內容語言（卡片內容只有四個語言槽，繁簡共用 zh）。前端與 Worker 共用。 */

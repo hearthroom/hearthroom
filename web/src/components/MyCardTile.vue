@@ -5,7 +5,7 @@ import { compact } from "@/lib/format";
 import { zoneLabel } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
 import { can, currentProvider } from "@/lib/provider";
-import { cardThumb } from "@/lib/card-thumb";
+import { cardStill, cardThumb } from "@/lib/card-thumb";
 import type { MyCard } from "@/lib/api";
 import RatingMark from "./RatingMark.vue";
 import { ratingName } from "@/lib/rating";
@@ -42,18 +42,20 @@ const status = computed<{ key: string; tone: "on" | "wait" | "alert" | "muted" }
 const initial = computed(() => [...props.card.name][0] ?? "?");
 /*
  * 直式封面，沒有才用頭像。先用首頁同一個縮圖網址（同一個尺寸，Cloudflare 不會多轉一份，見 card-thumb）；
- * 縮圖拿不到就用原圖；原圖也掛了就當沒圖，退回首字佔位。
+ * 縮圖拿不到先用縮好的第一格（動圖太大轉不了動的），再不行才用原圖；原圖也掛了就當沒圖，退回首字佔位。
  */
 const failedArt = ref<string[]>([]);
 const artwork = computed(() => [props.card.backgroundUrl, props.card.avatarUrl]
   .find((url): url is string => !!url && !failedArt.value.includes(url)));
-const thumbFailed = ref(false);
-const artSrc = computed(() => artwork.value && !thumbFailed.value ? cardThumb(artwork.value) : artwork.value);
-watch(() => [props.card.roleId, props.card.backgroundUrl, props.card.avatarUrl], () => { failedArt.value = []; thumbFailed.value = false; });
+/** 0：會動的縮圖、1：靜態縮圖、2：原圖 */
+const thumbStep = ref(0);
+const artSrc = computed(() => !artwork.value ? artwork.value
+  : thumbStep.value === 0 ? cardThumb(artwork.value) : thumbStep.value === 1 ? cardStill(artwork.value) : artwork.value);
+watch(() => [props.card.roleId, props.card.backgroundUrl, props.card.avatarUrl], () => { failedArt.value = []; thumbStep.value = 0; });
 function onArtError() {
   if (!artwork.value) return;
-  if (!thumbFailed.value && artSrc.value !== artwork.value) thumbFailed.value = true;
-  else { failedArt.value.push(artwork.value); thumbFailed.value = false; }
+  if (thumbStep.value < 2 && artSrc.value !== artwork.value) thumbStep.value += 1;
+  else { failedArt.value.push(artwork.value); thumbStep.value = 0; }
 }
 
 /*
