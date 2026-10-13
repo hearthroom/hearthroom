@@ -458,11 +458,10 @@ export class SukiPet {
    * 頭、頭髮、裙子、腿照舊由骨架帶。換上時新的上半身先在原圖上淡入，蓋滿了才收掉原本的手；
    * 收回時反過來，中間不會有兩層半透明疊在一起。上半身整塊不能單獨移動（會跟脖子、裙子錯開），
    * 小動作改用視線與表情。只用目前這套造型有畫的。
-   * 坐下（sit）與抱膝打瞌睡（doze）換的是脖子以下整個身體；坐下時整個人往下沉 SIT_LIFT（兩張圖腳底的高度差，
-   * 對位時量的），跟淡入同時發生。
+   * 坐下（sit）與抱膝打瞌睡（doze）換的是脖子以下整個身體；坐下時整個人往下沉兩張圖腳底的高度差，
+   * 跟淡入同時發生（寫在各造型自己的 root 節點上：Set_sit 每 1 沉多少，每套造型各量各的）。
    */
   private static SETS = ["book", "mug", "wave", "hips", "scope", "sit", "doze"] as const;
-  private static SIT_LIFT: Record<string, number> = { sit: 290, doze: 288 };
   private activity: { set: (typeof SukiPet.SETS)[number]; t: number; until: number } | null = null;
   private setW: Record<string, number> = {};
   private hasSet(name: string) { return this.rig.model.parts.some((p) => p.id === `set-${name}`); }
@@ -486,7 +485,6 @@ export class SukiPet {
     p.HideArms = SukiPet.SETS.some((k) => this.setW[k]! >= 1) ? 1 : 0;
     p.HideLocks = p.HideArms;
     p.HideBody = this.setW.sit! >= 1 || this.setW.doze! >= 1 ? 1 : 0;
-    p.SitY = (this.setW.sit ?? 0) * SukiPet.SIT_LIFT.sit! + (this.setW.doze ?? 0) * SukiPet.SIT_LIFT.doze!;
     // 演完或被打斷：視線還給滑鼠
     if (!cur) { if (this.activityLook) { this.activityLook = false; this.driver.state.look = null; } return; }
     cur.t += dt;
@@ -824,7 +822,9 @@ export class SukiPet {
     if (!this.hit) return "body";
     const r = this.touch.getBoundingClientRect();
     // 坐著時整個人往下沉了：往上對回站姿的判定圖，戳頭還是算戳頭
-    const sunk = ((this.rig.params.SitY ?? 0) / this.rig.model.size[1]) * this.hit.h;
+    const root = this.rig.model.nodes.find((n) => n.id === "root");
+    const down = Object.entries(root?.moveY ?? {}).reduce((v, [k, c]) => (k.startsWith("Set_") ? v + (this.rig.params[k] ?? 0) * c : v), 0);
+    const sunk = (down / this.rig.model.size[1]) * this.hit.h;
     const x = Math.floor(((e.clientX - r.left) / r.width) * this.hit.w), y = Math.floor(((e.clientY - r.top) / r.height) * this.hit.h - sunk);
     if (x < 0 || y < 0 || x >= this.hit.w || y >= this.hit.h) return null;
     const v = this.hit.data[(y * this.hit.w + x) * 4];
