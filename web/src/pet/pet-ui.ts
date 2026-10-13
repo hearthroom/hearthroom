@@ -420,11 +420,12 @@ export class SukiPet {
     // 拿望遠鏡時頭不轉：鏡筒畫在眼睛前面、掛在身體上，頭一轉就對不上；改成整個上身慢慢掃
     if (this.activity?.set === "scope") { p.AngleX = 0; p.AngleY = 0; p.AngleZ = 0; p.EyeX = 0; p.EyeY = 0; p.BodyZ = Math.sin(this.activity.t * 0.9) * 3; }
     for (const k in SukiPet.LIMITS) if (p[k] !== undefined) p[k] = Math.max(SukiPet.LIMITS[k][0], Math.min(SukiPet.LIMITS[k][1], p[k]));
-    // 小惡魔的尾巴梗藏在右手後面、沒畫：右手與手肘只往外、尾巴先不擺，不然梗會斷（等整條尾巴補畫好再放寬）
+    // 小惡魔：右手與手肘只往外（滑肩的衣服在右手後面沒補畫，往內會露出一條黑縫）。
+    // 尾巴梗藏在右手後面、沒畫的那種（尾巴掛在右手上）也不擺，不然梗會斷；整條補畫好的尾巴掛在身體上，照物理擺
     if (this.skin.includes("imp")) {
       if (p.ArmR !== undefined) p.ArmR = Math.max(0, p.ArmR);
       if (p.ElbowR !== undefined) p.ElbowR = Math.max(0, p.ElbowR);
-      if (p.Tail !== undefined) p.Tail = 0;
+      if (p.Tail !== undefined && this.rig.model.parts.find((q) => q.id === "tail")?.node === "armR") p.Tail = 0;
     }
     // 睡著（骨架版）：閉眼、頭垂向一邊、呼吸變慢
     if (this.sleeping) { p.EyeOpen = 0; p.AngleY = 0.9; p.AngleX = 0; p.EyeX = 0; p.EyeY = 0.6; p.AngleZ = 7 + Math.sin(now / 1400) * 1.5; p.Breath = (Math.sin(now / 900) + 1) / 2; }
