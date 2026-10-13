@@ -26,6 +26,7 @@ import { viewerAdult } from "@/lib/adult-consent";
 import { track } from "@/lib/track";
 import { greetingOf, isNight, poseOf, sceneOf, slotOf, type HomeIntent } from "@/lib/mascot-home";
 import type { CommunityCard } from "@/lib/types";
+import CoverImg from "@/components/CoverImg.vue";
 
 const emit = defineEmits<{ discover: [] }>();
 const session = useSession();
@@ -149,7 +150,7 @@ watch(() => session.me?.accountNumId, (now, before) => { if (before !== undefine
 
       <div v-if="intent === 'resume'" class="home__rows">
         <a v-for="r in resumes" :key="r.key" :href="r.href" class="home__row">
-          <img v-if="r.avatar" class="home__thumb" :src="r.avatar" alt="" loading="lazy" />
+          <CoverImg v-if="r.avatar" class="home__thumb" :src="r.avatar" loading="lazy" />
           <span v-else class="home__thumb" />
           <span class="home__rowtext"><b>{{ r.title }}</b><small v-if="r.when">{{ r.when }}</small></span>
           <span class="home__go">{{ $t("mascot.home.action.continue") }}</span>
@@ -162,7 +163,7 @@ watch(() => session.me?.accountNumId, (now, before) => { if (before !== undefine
 
       <template v-else-if="intent === 'roll'">
         <RouterLink v-if="rolled" :to="lp(`/cards/${rolled.num ?? rolled.id}`)" class="home__rolled">
-          <img v-if="rolled.avatarUrl" class="home__cover" :src="rolled.avatarUrl" alt="" />
+          <CoverImg v-if="rolled.avatarUrl" class="home__cover" :src="rolled.avatarUrl" />
           <span v-else class="home__cover" />
           <span class="home__rolledtext"><b>{{ displayName(rolled.name, locale) }}</b><small>{{ rolled.summary }}</small></span>
         </RouterLink>
@@ -174,7 +175,7 @@ watch(() => session.me?.accountNumId, (now, before) => { if (before !== undefine
 
       <template v-else-if="intent === 'write'">
         <RouterLink v-if="mine" :to="lp(`/cards/${encodeURIComponent(mine.roleId)}/edit`)" class="home__row">
-          <img v-if="mine.avatarUrl" class="home__thumb" :src="mine.avatarUrl" alt="" />
+          <CoverImg v-if="mine.avatarUrl" class="home__thumb" :src="mine.avatarUrl" />
           <span v-else class="home__thumb" />
           <span class="home__rowtext"><b>{{ displayName(mine.name, locale) }}</b></span>
           <span class="home__go">{{ $t("mascot.home.action.keepWriting") }}</span>

@@ -14,6 +14,7 @@ import CardGrid from '@/components/CardGrid.vue';
 import LibraryToggle from '@/components/LibraryToggle.vue';
 import AccountIcon from '@/components/AccountIcon.vue';
 import MascotSay from '@/components/MascotSay.vue';
+import CoverImg from '@/components/CoverImg.vue';
 const session = useSession();
 const route = useRoute(), router = useRouter();
 const { locale, lp } = useLocalePath();
@@ -58,7 +59,7 @@ watch([tab, page, locale, () => session.me, () => session.profile?.showNsfw, () 
     <div v-else-if="empty" class="empty panel library__empty"><MascotSay src="/mascot/chuchu-sleep.webp" :size="132" /><h2 class="empty__title">{{ $t(`library.${tab}Empty`) }}</h2><p class="empty__hint muted">{{ $t(`library.${tab}Hint`) }}</p><RouterLink class="btn" :to="lp('/')">{{ $t('library.discover') }}</RouterLink></div>
     <div v-else-if="tab === 'conversations'" class="library__rows">
       <a v-for="chat in chats" :key="`${chat.provider}:${chat.conversationRoleId}`" :href="platformPath(lp(`/play/${encodeURIComponent(chat.cardNumber ?? chat.conversationRoleId)}?resume=${encodeURIComponent(chat.conversationId)}`), chat.provider)" class="conversation panel">
-        <img v-if="chat.roleAvatar" class="conversation__avatar" :src="chat.roleAvatar" alt="" loading="lazy" /><span v-else class="conversation__avatar mono" :style="{ '--h': hueFrom(chat.roleName) }"><AccountIcon name="cards" /></span>
+        <CoverImg v-if="chat.roleAvatar" class="conversation__avatar" :src="chat.roleAvatar" loading="lazy" /><span v-else class="conversation__avatar mono" :style="{ '--h': hueFrom(chat.roleName) }"><AccountIcon name="cards" /></span>
         <div class="conversation__body"><div class="conversation__heading"><h2>{{ chat.conversationTitle || displayName(chat.roleName, locale) || $t('library.untitled') }}</h2><time v-if="time(chat)" :datetime="chat.lastChatTime || chat.createTime">{{ time(chat) }}</time></div><p v-if="chat.conversationTitle" class="conversation__role muted">{{ displayName(chat.roleName, locale) }}</p><p class="conversation__preview muted">{{ $t('library.resumeHint') }}</p></div>
         <span class="conversation__continue">{{ $t('library.resume') }} <AccountIcon name="arrow" /></span>
       </a>
