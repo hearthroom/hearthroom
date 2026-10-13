@@ -8,6 +8,7 @@ import { communityMaintenance } from "./community/service";
 import { communityRoutes } from "./community/routes";
 import { dispatchPush, queuePush } from "./community/push";
 import { libraryRoutes } from "./library";
+import { sukiRoutes, sukiRecall } from "./suki";
 import { maintainUpdates, updatesRoutes } from "./updates";
 import { hostGateway, hostingKey, submitHosted, hostingDecision, beginHostedEdit } from "./hosting";
 import { saveCommunityProfile, cleanAvatars } from "./community-profile";
@@ -796,6 +797,7 @@ app.get('/v1/avatars/:handle/:file',async c=>{
 
 app.route("/", communityRoutes);
 app.route("/", libraryRoutes);
+app.route("/", sukiRoutes);
 app.route("/", updatesRoutes);
 
 app.get("/v1/me", async (c) => {
@@ -1732,7 +1734,9 @@ export default {
     ctx.waitUntil(accountAuthMaintenance(env).catch(() => { console.warn('Account authorization maintenance unavailable'); }));
     ctx.waitUntil(communityMaintenance(env).catch(() => { console.warn("Community maintenance unavailable"); }));
     // Backstop for notifications created outside a request hook (triggers fired by the sync job, reminders).
-    ctx.waitUntil(dispatchPush(env).catch(() => { console.warn("push dispatch unavailable"); }));
+    // 蘇綺的召回先寫進通知，同一輪就推出去
+    ctx.waitUntil(sukiRecall(env).catch(() => { console.warn("Suki recall unavailable"); return 0; })
+      .then(() => dispatchPush(env)).catch(() => { console.warn("push dispatch unavailable"); }));
     ctx.waitUntil(cleanAvatars(env));
     // 更新說明：登記這個 build 的說明、台北晚上八點後建當天的 Discord 彙整
     ctx.waitUntil(maintainUpdates(env, Date.now()).catch(() => { console.warn("updates maintenance unavailable"); }));

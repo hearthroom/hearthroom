@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/settings",
+  "title": {
+    "zh-Hant": "蘇綺會記得你：每天來陪她、聊一個故事，你們會越來越熟。",
+    "zh-Hans": "苏绮会记得你：每天来陪她、聊一个故事，你们会越来越熟。",
+    "en": "Suki remembers you now: drop by each day and tell her a story, and you'll grow closer.",
+    "ja": "毎日会いに来てお話を聞かせると、スキとどんどん仲良くなれます。",
+    "ko": "매일 와서 이야기를 들려주면 스키와 점점 더 친해져요."
+  },
+  "body": {
+    "zh-Hant": "換手機或電腦也記得；熟了以後可以在設定裡讓她在你一天沒來時，用推播或 Discord 私訊叫你。",
+    "zh-Hans": "换手机或电脑也记得；熟了以后可以在设置里让她在你一天没来时，用推送或 Discord 私信叫你。",
+    "en": "She remembers you across devices, and once you're close you can let her call you by push or Discord DM when you've been away a day.",
+    "ja": "スマホやパソコンを変えても覚えていて、仲良くなったら、1日来なかったときにプッシュ通知や Discord の DM で呼んでもらうよう設定できます。",
+    "ko": "기기를 바꿔도 기억하고, 친해지면 하루 동안 오지 않았을 때 푸시나 Discord DM으로 부르도록 설정할 수 있어요."
+  }
+}

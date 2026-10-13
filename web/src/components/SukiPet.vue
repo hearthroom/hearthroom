@@ -16,6 +16,9 @@ import { useReviewer } from "@/lib/review";
 import { resolvedMode } from "@/lib/appearance";
 import { viewerAdult } from "@/lib/adult-consent";
 import { fetchConversations } from "@/lib/library";
+import { communityRequest } from "@/lib/community";
+import { pushState } from "@/lib/push";
+import { levelOf, type SukiNews } from "../../../shared/suki-care";
 import { fetchBoard } from "@/lib/api";
 import { contentLang, defaultZone } from "@/lib/i18n";
 import { platformPath } from "@/lib/connection-ui";
@@ -109,13 +112,25 @@ async function start() {
     reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
     menu,
     dailyTag,
-    lastStoryAt: async () => {
+    careVisit: async () => {
       for (let i = 0; i < 50 && !session.ready; i++) await new Promise((r) => setTimeout(r, 100));
-      if (!session.me) return undefined;
-      const c = await latestChat(); const at = Date.parse(c?.lastChatTime || c?.createTime || "");
-      return Number.isFinite(at) ? at : null;
+      const token = session.me ? await session.accessToken() : null;
+      if (!token) return undefined;
+      const got = await communityRequest<{ state: { affection: number } | null; news: SukiNews[]; recall: boolean }>("/me/suki/visit", token, "POST", { tzOffset: new Date().getTimezoneOffset() }).catch(() => null);
+      if (!got?.state) return undefined;
+      return { news: got.news, level: levelOf(got.state.affection), recall: got.recall };
     },
-    nickname: () => session.me?.nickName?.trim() || null,
+    enableRecall: async () => {
+      const token = await session.accessToken();
+      if (!token) return;
+      await communityRequest("/me/suki", token, "PATCH", { recall: true }).catch(() => null);
+      // 召回走推播或 Discord 私訊：兩個都沒開的話，帶他去通知頁打開
+      const push = await pushState(token).catch(() => "off");
+      const community = await communityRequest<{ link: { state: string } | null; preferences?: { discord_dm?: number } }>("/me/community", token).catch(() => null);
+      const dm = community?.link?.state === "active" && !!community.preferences?.discord_dm;
+      if (push === "on" || dm) pet.value?.say(line("recallOn"));
+      else pet.value?.on({ type: "hint", text: line("recallNeedsChannel"), action: { label: line("go.look"), run: () => router.push(lp("/me/notifications")) } });
+    },    nickname: () => session.me?.nickName?.trim() || null,
     resume: { label: line("menu.resume"), run: () => void resume() },
     menuLabel: () => line("menu.off"),
     onOff: () => { petEnabled.value = false; },
@@ -196,6 +211,18 @@ watch(() => [notifications.unread, pet.value] as const, async ([n, p], before) =
   const approved = fresh.kind === "review_result" && !rejected;
   p.on({ type: "notice", text: (approved ? line("notice.approved") : rejected ? line("notice.rejected") : "") + noticeText(fresh), mood: approved ? "party" : rejected ? "comfort" : "news", action: go });
 }, { immediate: true });
+
+// 她叫你（站內）：分頁在背景時有新通知，標題前面亮出數字；裝到主畫面的話，圖示上也標未讀數
+const baseTitle = { value: "" };
+watch(() => notifications.unread, (n) => {
+  const nav = navigator as Navigator & { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
+  try { void (n > 0 ? nav.setAppBadge?.(n) : nav.clearAppBadge?.())?.catch(() => undefined); } catch { /* 不支援就算了 */ }
+  if (!document.hidden) return;
+  const title = document.title.replace(/^\(\d+\) /, "");
+  baseTitle.value = title;
+  document.title = n > 0 ? `(${n}) ${title}` : title;
+});
+document.addEventListener("visibilitychange", () => { if (!document.hidden && baseTitle.value) { document.title = document.title.replace(/^\(\d+\) /, ""); baseTitle.value = ""; } });
 
 // 審核員：佇列有卡在等，一天說一次
 watch(() => [reviewer.pending, pet.value] as const, ([n, p]) => {

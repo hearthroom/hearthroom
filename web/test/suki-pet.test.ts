@@ -1,15 +1,15 @@
 /**
  * 桌寵蘇綺（設定集「桌寵」各節，2026-10-13）：
  *   - 骨架：四套造型共用一副，後面疊上的同名部件取代前面的；頭轉、頭髮彎、眼珠夾在眼白裡都是頂點算出來的
- *   - 照顧：故事是她的飯——在別處聊過天就算餵過；一天最多加一次好感；連續天數；她不會死、不會走
+ *   - 照顧：故事是她的飯——在別處聊過天就算餵過；一天最多加一次好感；連續天數；她不會死、不會走（算法在 shared/，排程也用同一份）
  *   - 嚮導：除了玩卡與沙盒每頁都有用途；語言前綴不影響對到哪一頁；每一頁的文案五種語言都齊
  *   - 圖：綁定檔裡列到的每一張貼圖都在
  */
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { compose, Rig, type PetSkeleton, type PetSkin } from "../src/pet/puppet";
-import { Care, levelOf, LEVELS } from "../src/pet/care";
+import { feed, levelOf, LEVELS, visit } from "../../shared/suki-care";
 import { GUIDES, guideFor } from "../src/pet/guides";
 
 const dir = resolve("public/mascot/pet");
@@ -75,50 +75,42 @@ describe("骨架與部件", () => {
   });
 });
 
-describe("照顧與羈絆", () => {
-  let now = new Date(2026, 9, 13, 21, 0).getTime();
-  const clock = () => now;
-  const H = 3_600_000;
-  beforeEach(() => { localStorage.clear(); now = new Date(2026, 9, 13, 21, 0).getTime(); });
-  afterEach(() => localStorage.clear());
-
-  it("在別處聊過天就算餵過：吃飽、好感 +1；同一天再餵不再加", () => {
-    const care = new Care(clock);
-    const news = care.visit(now - H);
-    expect(news.map((n) => n.kind)).toContain("fed");
-    expect(care.state.fullness).toBe(1);
-    expect(care.state.affection).toBe(1);
-    now += 2 * H;
-    care.visit(now - H / 2);
-    expect(care.state.affection).toBe(1);
+describe("照顧與羈絆（網站與排程共用的算法）", () => {
+  const TPE = -480, H = 3_600_000;
+  const at = (d: number, h: number) => Date.UTC(2026, 9, d, h - 8);
+  it("每天第一次來是簽到 +1；那天聊了故事再 +1；同一天再來、再聊都不重複加", () => {
+    const a = visit(null, at(13, 21), at(13, 20), TPE);
+    expect(a.news.map((n) => n.kind)).toEqual(expect.arrayContaining(["checkIn", "fed"]));
+    expect(a.state.fullness).toBe(1);
+    expect(a.state.affection).toBe(2);
+    const b = visit(a.state, at(13, 23), at(13, 22), TPE);
+    expect(b.state.affection).toBe(2);
+    expect(b.news.map((n) => n.kind)).not.toContain("checkIn");
+    const c = visit(b.state, at(14, 9), null, TPE);
+    expect(c.state.affection).toBe(3);
+    expect(c.news.find((n) => n.kind === "checkIn")).toMatchObject({ days: 2 });
   });
-
   it("一天沒聊會餓；她不會死，飽足度最低就是 0", () => {
-    const care = new Care(clock);
-    care.visit(now - H);
-    now += 5 * 24 * H;
-    const news = new Care(clock).visit(null);
-    expect(news.map((n) => n.kind)).toContain("hungry");
-    expect(new Care(clock).state.fullness).toBe(0);
+    const a = visit(null, at(13, 21), at(13, 20), TPE);
+    const b = visit(a.state, at(18, 21), null, TPE);
+    expect(b.news.map((n) => n.kind)).toContain("hungry");
+    expect(b.state.fullness).toBe(0);
   });
-
   it("連續天數：隔天來 +1；斷了從 1 重來並說好久不見", () => {
-    const care = new Care(clock);
-    care.visit(null);
-    for (let d = 1; d < 7; d++) { now += 24 * H; care.visit(null); }
-    expect(care.state.streak).toBe(7);
-    now += 5 * 24 * H;
-    const news = care.visit(null);
-    expect(care.state.streak).toBe(1);
-    expect(news.find((n) => n.kind === "missed")).toMatchObject({ days: 5 });
+    let s = visit(null, at(1, 21), null, TPE).state;
+    for (let d = 2; d <= 7; d++) s = visit(s, at(d, 21), null, TPE).state;
+    expect(s.streak).toBe(7);
+    const back = visit(s, at(12, 21), null, TPE);
+    expect(back.state.streak).toBe(1);
+    expect(back.news.find((n) => n.kind === "missed")).toMatchObject({ days: 5 });
   });
-
   it("好感度等級照門檻算，升級會通知", () => {
     expect(levelOf(0)).toBe(0);
     expect(levelOf(LEVELS[2])).toBe(2);
-    const care = new Care(clock);
-    care.state.affection = LEVELS[1] - 1;
-    expect(care.feed(now).map((n) => n.kind)).toContain("levelUp");
+    const s = visit(null, at(13, 21), null, TPE).state;
+    s.affection = LEVELS[1] - 1; // 今天已經簽到過，聊故事這一分讓她升級
+    expect(feed(s, at(13, 22), at(13, 22), TPE).map((n) => n.kind)).toContain("levelUp");
+    void H;
   });
 });
 

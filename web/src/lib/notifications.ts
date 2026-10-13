@@ -93,5 +93,6 @@ export function noticeText(n: CommunityNotice): string {
     return count > 1 ? t("community.noticeText.comment_like_many", { actor, card, others: count - 1 }) : t("community.noticeText.comment_like", { actor, card });
   if (n.kind === "registration_pack" && Number(extra.granted) > 0) return t("community.noticeText.registration_pack", { count: Number(extra.granted) });
   if (n.kind === "review_reminder" && card) return t("community.noticeText.review_reminder", { card });
+  if (n.kind === "suki_recall") return extra.variant === "postcard" && card ? t("community.noticeText.suki_postcard", { card }) : t("community.noticeText.suki_hungry");
   return t("community.notices." + n.kind);
 }
