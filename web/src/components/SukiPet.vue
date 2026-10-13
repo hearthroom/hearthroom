@@ -18,12 +18,12 @@ import { viewerAdult } from "@/lib/adult-consent";
 import { fetchConversations } from "@/lib/library";
 import { communityRequest } from "@/lib/community";
 import { pushState } from "@/lib/push";
-import { levelOf, type SukiNews } from "../../../shared/suki-care";
+import { cravingKey, levelOf, localDay, type SukiNews } from "../../../shared/suki-care";
 import { fetchBoard } from "@/lib/api";
 import { contentLang, defaultZone } from "@/lib/i18n";
 import { platformPath } from "@/lib/connection-ui";
 import { can } from "@/lib/provider";
-import { TAG_CATALOG, tagGroupOf, tagLabel } from "../../../shared/tag-catalog";
+import { TAG_CATALOG, tagLabel } from "../../../shared/tag-catalog";
 import { guideFor } from "@/pet/guides";
 import { petEnabled } from "@/pet/enabled";
 import type { MenuItem, PageGuide, SukiPet as Pet } from "@/pet/pet-ui";
@@ -79,12 +79,11 @@ function menu(): MenuItem[] {
   return items;
 }
 
-/** 今天的幸運類型：只從玩法與題材兩組挑（不挑成人向那組），每天固定 */
+/** 今天想吃的口味：跟伺服器算嘴饞加分的是同一個（shared/suki-care 的 cravingKey，照本地日期） */
 function dailyTag() {
-  const pool = TAG_CATALOG.filter((e) => ["play", "setting"].includes(tagGroupOf(e.key) ?? ""));
-  if (!pool.length) return null;
-  const d = new Date();
-  const entry = pool[(d.getFullYear() * 372 + d.getMonth() * 31 + d.getDate()) % pool.length];
+  const key = cravingKey(localDay(Date.now(), new Date().getTimezoneOffset()));
+  const entry = TAG_CATALOG.find((e) => e.key === key);
+  if (!entry) return null;
   return { label: tagLabel(entry, locale.value), run: () => router.push({ path: lp("/"), query: { tag: entry.key } }) };
 }
 

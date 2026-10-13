@@ -7,7 +7,11 @@
  * 每天第一次來就是簽到（owner 2026-10-13：本質是簽到，換成「回來陪她」的樣子）：好感 +1、連續天數 +1；
  * 那天聊了故事再 +1。養她是手段，目的是讓人回來玩卡，所以聊故事的加成比單純簽到多。
  * 底線：她不會死、不會走，最多餓了、寂寞；不情緒勒索；不跟點數或付費掛鉤。
+ *
+ * 嘴饞只是加分（owner 2026-10-13）：她每天想吃一種口味（玩法或題材類型），那天玩到帶這個標籤的卡，好感多 +1。
+ * 玩別的類型照樣算吃飽；只說口味、不指名哪張卡（不是推薦）；不挑成人向與隱藏的類型。
  */
+import { TAG_CATALOG, tagGroupOf } from "./tag-catalog";
 
 export interface SukiState {
   /** 0–1：故事飽足度 */
@@ -22,13 +26,22 @@ export interface SukiState {
   at: number;
   fedAt: number;
   creditedDay: string;
+  /** 今天想吃的口味吃到了的日期（嘴饞的加分一天一次） */
+  cravedDay?: string;
   /** 每個鐘點來過幾次（本地時間，舊的會慢慢淡掉）：用來挑「你平常上站的時段」寄召回 */
   hours: number[];
 }
 
 export type SukiNews =
   | { kind: "fed" } | { kind: "hungry" } | { kind: "levelUp"; level: number }
-  | { kind: "streak"; days: number } | { kind: "missed"; days: number } | { kind: "checkIn"; days: number };
+  | { kind: "streak"; days: number } | { kind: "missed"; days: number } | { kind: "checkIn"; days: number } | { kind: "craved" };
+
+/** 這天想吃的口味（類型代碼）：只從玩法與題材兩組挑，每天固定；網站上她說的與伺服器算加分的是同一個 */
+export function cravingKey(day: string): string {
+  const pool = TAG_CATALOG.filter((e) => ["play", "setting"].includes(tagGroupOf(e.key) ?? ""));
+  const [y, m, d] = day.split("-").map(Number);
+  return pool[(y! * 372 + (m! - 1) * 31 + d!) % pool.length]!.key;
+}
 
 /** 好感度等級的門檻（點數） */
 export const LEVELS = [0, 5, 12, 25, 50, 100] as const;
@@ -57,7 +70,7 @@ export function freshState(now: number): SukiState {
  * 打開網站：時間流逝、算連續天數、看有沒有在別處聊過故事（餵過）。
  * lastStoryAt：最近一次開故事的時間（站上的對話紀錄）；沒有就是 null。
  */
-export function visit(prev: SukiState | null, now: number, lastStoryAt: number | null, tzOffset: number): { state: SukiState; news: SukiNews[] } {
+export function visit(prev: SukiState | null, now: number, lastStoryAt: number | null, tzOffset: number, cravingMet = false): { state: SukiState; news: SukiNews[] } {
   const s: SukiState = prev ? { ...prev, hours: [...(prev.hours ?? Array(24).fill(0))] } : freshState(now);
   const news: SukiNews[] = [];
   const hours = Math.max(0, (now - s.at) / HOUR);
@@ -83,6 +96,14 @@ export function visit(prev: SukiState | null, now: number, lastStoryAt: number |
   }
   if (lastStoryAt && lastStoryAt > s.fedAt) news.push(...feed(s, lastStoryAt, now, tzOffset));
   else if (s.fullness < 0.25) news.push({ kind: "hungry" });
+  // 今天玩到她想吃的口味（cravingMet 由呼叫端查：今天的對話裡有帶那個標籤的卡）
+  if (cravingMet && s.cravedDay !== day) {
+    const before = levelOf(s.affection);
+    s.affection += 1;
+    s.cravedDay = day;
+    news.push({ kind: "craved" });
+    if (levelOf(s.affection) > before) news.push({ kind: "levelUp", level: levelOf(s.affection) });
+  }
   return { state: s, news };
 }
 
