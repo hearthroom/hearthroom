@@ -194,6 +194,26 @@ export class Rig {
 const VS = `attribute vec2 p;attribute vec2 t;uniform vec2 s;uniform vec2 o;varying vec2 v;void main(){v=t;vec2 q=p+o;gl_Position=vec4(q.x/s.x*2.-1.,1.-q.y/s.y*2.,0,1);}`;
 const FS = `precision mediump float;varying vec2 v;uniform sampler2D tex;uniform float a;void main(){gl_FragColor=texture2D(tex,v)*a;}`;
 
+/** 高品質縮小：每次最多縮一半，一路縮到目標大小（一次縮很多倍會掉線條） */
+function shrink(img: HTMLImageElement, scale: number): TexImageSource {
+  if (scale >= 0.99) return img;
+  let src: HTMLImageElement | HTMLCanvasElement = img;
+  let w = img.naturalWidth, h = img.naturalHeight;
+  const tw = Math.max(1, Math.round(w * scale)), th = Math.max(1, Math.round(h * scale));
+  while (w > tw || h > th) {
+    const nw = Math.max(tw, Math.round(w / 2)), nh = Math.max(th, Math.round(h / 2));
+    const c = document.createElement("canvas");
+    c.width = nw; c.height = nh;
+    const g = c.getContext("2d");
+    if (!g) return img;
+    g.imageSmoothingEnabled = true;
+    g.imageSmoothingQuality = "high";
+    g.drawImage(src, 0, 0, nw, nh);
+    src = c; w = nw; h = nh;
+  }
+  return src;
+}
+
 /** WebGL 繪圖：預乘 alpha、照 z 排序、眼珠用 stencil 夾在眼白裡 */
 export class PetRenderer {
   private gl: WebGLRenderingContext;
@@ -217,7 +237,11 @@ export class PetRenderer {
     this.buf = { p: gl.createBuffer()!, t: gl.createBuffer()!, i: gl.createBuffer()! };
     this.order = [...rig.model.parts].sort((a, b) => a.z - b.z);
   }
-  async load(base: string) {
+  /**
+   * scale：貼圖縮到畫面上實際大小的幾倍再上傳。原圖約 1000px 寬、畫出來只有一百多 px，
+   * 直接交給 GPU 縮（WebGL1 非 2 的次方貼圖不能做 mipmap）黑線會鋸齒；先用畫布高品質縮小。
+   */
+  async load(base: string, scale = 1) {
     const gl = this.gl;
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
     await Promise.all(this.rig.model.parts.map(async (part) => {
@@ -227,7 +251,7 @@ export class PetRenderer {
       await img.decode();
       const t = gl.createTexture()!;
       gl.bindTexture(gl.TEXTURE_2D, t);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, shrink(img, scale));
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
