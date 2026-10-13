@@ -23,8 +23,27 @@ import { useLocalePath } from "@/lib/use-locale";
 import { TAG_CATALOG, tagLabel } from "../../../shared/tag-catalog";
 import AdultConsentDialog from "@/components/AdultConsentDialog.vue";
 import { petEnabled } from "@/pet/enabled";
+import { communityRequest } from "@/lib/community";
 
 const session = useSession();
+
+/** 蘇綺的召回：存在帳號裡，預設關閉（設定集「一個角色，三個存在」） */
+const recall = ref<boolean | null>(null);
+const recallBusy = ref(false);
+onMounted(async () => {
+  const token = await session.accessToken().catch(() => null);
+  if (!token) return;
+  const got = await communityRequest<{ recall: boolean }>("/me/suki", token).catch(() => null);
+  recall.value = got ? got.recall : null;
+});
+async function setRecall(on: boolean) {
+  const token = await session.accessToken().catch(() => null);
+  if (!token) return;
+  recallBusy.value = true;
+  const got = await communityRequest<{ recall: boolean }>("/me/suki", token, "PATCH", { recall: on }).catch(() => null);
+  if (got) recall.value = got.recall;
+  recallBusy.value = false;
+}
 const { t } = useI18n();
 const { locale } = useLocalePath();
 
@@ -212,6 +231,13 @@ onMounted(() => {
           <span class="subtle">{{ $t("settings.pet.desc") }}</span>
         </span>
         <input v-model="petEnabled" type="checkbox" class="content__switch" />
+      </label>
+      <label v-if="recall !== null" class="content__row">
+        <span class="content__text">
+          <strong>{{ $t("settings.pet.recall") }}</strong>
+          <span class="subtle">{{ $t("settings.pet.recallDesc") }}</span>
+        </span>
+        <input type="checkbox" class="content__switch" :checked="recall" :disabled="recallBusy" @change="setRecall(($event.target as HTMLInputElement).checked)" />
       </label>
     </section>
 
