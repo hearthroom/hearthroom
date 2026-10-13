@@ -4,7 +4,7 @@ import { cardThumbUrl } from "../../../shared/card-thumb";
 /**
  * 卡片清單用的縮圖：同一張圖縮到卡片的大小，會動的照樣會動。網址規則在 shared/card-thumb.ts
  * （Worker 在首頁 HTML 裡 preload 第一張也用同一個）。只在我們自己的網域上用；本機開發照用原圖。
- * 轉不了（動畫超過轉換上限之類）就退回原圖，見 CardTile。
+ * 轉不了（動畫超過轉換上限之類）先用縮好的第一格，再不行才退回原圖，見 CardTile。
  */
 function onOurSite(): boolean {
   if (typeof location === "undefined") return false;
@@ -15,4 +15,10 @@ function onOurSite(): boolean {
 export function cardThumb(url: string, width?: number): string {
   if (!onOurSite()) return url;
   return cardThumbUrl(PRIMARY_HOST, url, width) ?? url;
+}
+
+/** 同一個尺寸的靜態縮圖（只取第一格） */
+export function cardStill(url: string, width?: number): string {
+  if (!onOurSite()) return url;
+  return cardThumbUrl(PRIMARY_HOST, url, width, true) ?? url;
 }

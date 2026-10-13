@@ -7,7 +7,7 @@ import { compact, hueFrom, relativeTime } from "@/lib/format";
 import { zoneLabel } from "@/lib/i18n";
 import { titleLayout } from "@/lib/title-layout";
 import { useLocalePath } from "@/lib/use-locale";
-import { cardThumb } from "@/lib/card-thumb";
+import { cardStill, cardThumb } from "@/lib/card-thumb";
 import { displayName } from "@/lib/display-name";
 import type { CommunityCard } from "@/lib/types";
 import RatingMark from "./RatingMark.vue";
@@ -30,18 +30,21 @@ const initial = computed(() => [...name.value][0] ?? "?");
 const title = computed(() => titleLayout(name.value));
 const href = computed(() => lp(`/cards/${props.card.num ?? props.card.id}`));
 /*
- * 先用縮到卡片大小的圖（動圖照樣會動，見 card-thumb）；縮圖拿不到就用原圖；
- * 原圖也掛了（上游換圖、刪圖）就當沒圖：退回單字佔位，不留一個破圖
+ * 先用縮到卡片大小的圖（動圖照樣會動，見 card-thumb）；動圖太大轉不了就用縮好的第一格（不動）；
+ * 那也拿不到才用原圖；原圖也掛了（上游換圖、刪圖）就當沒圖：退回單字佔位，不留一個破圖
  */
-const art = ref<"thumb" | "original" | "broken">("thumb");
+const art = ref<"thumb" | "still" | "original" | "broken">("thumb");
 watch(() => props.card.avatarUrl, () => { art.value = "thumb"; });
 const hasArt = computed(() => !!props.card.avatarUrl && art.value !== "broken");
 const artSrc = computed(() => {
   const url = props.card.avatarUrl ?? "";
-  return art.value === "thumb" ? cardThumb(url) : url;
+  return art.value === "thumb" ? cardThumb(url) : art.value === "still" ? cardStill(url) : url;
 });
 function onArtError() {
-  art.value = art.value === "thumb" && artSrc.value !== props.card.avatarUrl ? "original" : "broken";
+  const url = props.card.avatarUrl;
+  if (art.value === "thumb" && artSrc.value !== url) art.value = "still";
+  else if (art.value === "still" && artSrc.value !== url) art.value = "original";
+  else art.value = "broken";
 }
 
 /** 卡片上只放兩個標籤，多的用 +N 帶過——標籤是給人掃的，不是給人讀的。 */
