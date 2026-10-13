@@ -449,14 +449,14 @@ export class SukiPet {
     // 手只往外擺（露出的是補畫過的身側）；往內轉會露出手臂後面沒畫的東西（尾巴、衣服），最多 3 度
     ArmR: [-3, 12], ArmL: [-12, 3], ElbowR: [-15, 15], ElbowL: [-15, 15], WristR: [-15, 15], WristL: [-15, 15],
     LegR: [-8, 8], LegL: [-8, 8], KneeR: [-10, 10], KneeL: [-10, 10],
-    // 手臂組自己的小動作：手掌只往外揮（往內會蓋到臉）、書本輕晃、杯子舉到嘴邊
-    WaveHand: [-14, 0], SetTilt: [-3, 3], SetY: [-16, 0],
   };
 
   /**
-   * 手臂組（Live2D 的腕差分）：拿書、捧可可、舉手揮、叉腰、望遠鏡，各是那個姿勢專門畫的一整副手臂，
-   * 掛在同一副骨架的身體上，切換時 0.12 秒淡入淡出、原本的手同時淡出。只用目前這套造型有畫的。
-   * 小動作都在原畫撐得住的範圍：書輕晃、杯子往上舉一點、手掌從手肘往外揮。
+   * 姿勢組（Live2D 的腕差分）：拿書、捧可可、舉手揮、叉腰、望遠鏡，各是那個姿勢整個人一起畫的一張圖，
+   * 切出「上半身＋手臂」整塊換上——肩膀用同一張圖畫的，才接得上（只畫手臂的話肩膀對不準）。
+   * 頭、頭髮、裙子、腿照舊由骨架帶。換上時新的上半身先在原圖上淡入，蓋滿了才收掉原本的手；
+   * 收回時反過來，中間不會有兩層半透明疊在一起。上半身整塊不能單獨移動（會跟脖子、裙子錯開），
+   * 小動作改用視線與表情。只用目前這套造型有畫的。
    */
   private static SETS = ["book", "mug", "wave", "hips", "scope"] as const;
   private activity: { set: (typeof SukiPet.SETS)[number]; t: number; until: number } | null = null;
@@ -476,19 +476,17 @@ export class SukiPet {
       this.setW[k] = tgt > w ? Math.min(tgt, w + dt / 0.12) : Math.max(tgt, w - dt / 0.12);
       p[`Set_${k}`] = this.setW[k]!;
     }
-    p.SetTilt = 0; p.SetY = 0; p.WaveHand = 0;
+    // 換上的上半身完全蓋住了才收掉原本的手
+    p.HideArms = SukiPet.SETS.some((k) => this.setW[k]! >= 1) ? 1 : 0;
     // 演完或被打斷：視線還給滑鼠
     if (!cur) { if (this.activityLook) { this.activityLook = false; this.driver.state.look = null; } return; }
     cur.t += dt;
     const t = cur.t;
-    if (cur.set === "wave") p.WaveHand = (Math.sin(t * 11) - 1) * 7;
-    if (cur.set === "book") { p.SetTilt = Math.sin(t * 0.8) * 1.5; this.driver.state.look = [0.1, 0.7]; this.activityLook = true; }
+    if (cur.set === "book") { this.driver.state.look = [0.1, 0.7]; this.activityLook = true; }
     if (cur.set === "mug") {
-      // 每三秒多喝一口：舉到嘴邊、閉眼、放回去
-      const ph = (t % 3.2) / 0.9, sip = ph < 1 ? Math.sin(ph * Math.PI) : 0;
-      p.SetY = -14 * sip;
-      if (sip > 0.3) this.act({ expr: "happy", ms: 120 });
-      this.driver.state.look = [0, 0.2]; this.activityLook = true;
+      // 每三秒多喝一口：低頭、瞇眼
+      if (t % 3.2 < 0.9) this.act({ expr: "happy", ms: 120 });
+      this.driver.state.look = [0, t % 3.2 < 0.9 ? 0.5 : 0.2]; this.activityLook = true;
     }
   }
   private activityLook = false;
