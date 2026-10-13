@@ -183,7 +183,7 @@ const withMascot = computed(() => page.value === "home" || page.value === "card"
 </script>
 
 <template>
-  <div v-if="visible && step" class="coach" aria-live="polite">
+  <div v-if="visible && step" class="coach" aria-live="polite" data-suki-stage>
     <div v-if="hole" class="coach__hole" :style="hole" />
     <section class="coach__bubble panel" :class="{ 'coach__bubble--mascot': withMascot }" :style="bubbleStyle" role="dialog" aria-labelledby="coach-title">
       <!-- 首頁與卡片頁：蘇綺站在泡泡左邊，泡泡的尖角指向她，像她在說這段話 -->

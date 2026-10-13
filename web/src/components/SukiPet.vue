@@ -6,7 +6,7 @@
  * 首屏畫完才載入（動態 import＋閒置時），不拖慢第一眼；可在設定裡關掉。
  * 這裡只做「網站 → 她」的接線：她怎麼演在 pet/pet-ui.ts，各頁的用途在 pet/guides.ts。
  */
-import { nextTick, onBeforeUnmount, onMounted, shallowRef, watch } from "vue";
+import { onBeforeUnmount, onMounted, shallowRef, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useSession } from "@/lib/session";
@@ -22,7 +22,6 @@ import { platformPath } from "@/lib/connection-ui";
 import { can } from "@/lib/provider";
 import { TAG_CATALOG, tagGroupOf, tagLabel } from "../../../shared/tag-catalog";
 import { guideFor } from "@/pet/guides";
-import { tourState } from "@/lib/coach-tour";
 import { petEnabled } from "@/pet/enabled";
 import type { MenuItem, PageGuide, SukiPet as Pet } from "@/pet/pet-ui";
 
@@ -146,7 +145,7 @@ function enter(path: string) {
   pet.value?.setGuide(g);
 }
 watch(() => route.path, enter);
-// 畫面上已經有她（首頁面板、歡迎橫幅、新手引導）時桌寵先躲開，一次只出現一個；捲過去她才從角落出來
+// 畫面上已經有她（首頁面板、歡迎橫幅、新手引導框）時桌寵先躲開，一次只出現一個；捲過去她才從角落出來
 const stageVisible = shallowRef(false);
 let stageObserver: IntersectionObserver | null = null;
 const seen = new Set<Element>();
@@ -160,11 +159,16 @@ function watchStages() {
   if (!document.querySelector("[data-suki-stage]")) stageVisible.value = false;
 }
 // 面板等登入狀態到了才畫出來：換頁、身分到了都重新找一次，晚一點再補找一次
-watch(() => [route.fullPath, pet.value, session.ready, session.me?.accountNumId] as const, () => {
-  void nextTick(() => { setTimeout(watchStages, 300); setTimeout(watchStages, 1500); });
-}, { immediate: true });
-onBeforeUnmount(() => stageObserver?.disconnect());
-watch(() => [tourState.step, stageVisible.value, pet.value] as const, ([step, stage, p]) => p?.setAway(!!step || stage), { immediate: true });
+// 面板、引導框是之後才畫出來的：頁面上多了或少了這種東西就重新找（合併成一次）
+let rescan = 0;
+const domObserver = new MutationObserver((records) => {
+  // 她自己的泡泡在變，不算
+  if (records.every((r) => (r.target as Element).closest?.(".suki-pet"))) return;
+  clearTimeout(rescan); rescan = window.setTimeout(watchStages, 300);
+});
+watch(pet, (p) => { domObserver.disconnect(); if (p) { domObserver.observe(document.body, { childList: true, subtree: true }); watchStages(); } }, { immediate: true });
+onBeforeUnmount(() => { stageObserver?.disconnect(); domObserver.disconnect(); clearTimeout(rescan); });
+watch(() => [stageVisible.value, pet.value] as const, ([stage, p]) => p?.setAway(stage), { immediate: true });
 
 // 網站的開關直接帶動她：深色主題、18+、語言
 watch(resolvedMode, (m) => pet.value?.on({ type: "theme", dark: m === "dark" }));
