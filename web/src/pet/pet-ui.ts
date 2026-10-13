@@ -476,8 +476,9 @@ export class SukiPet {
       this.setW[k] = tgt > w ? Math.min(tgt, w + dt / 0.12) : Math.max(tgt, w - dt / 0.12);
       p[`Set_${k}`] = this.setW[k]!;
     }
-    // 換上的上半身完全蓋住了才收掉原本的手
+    // 換上的上半身完全蓋住了才收掉原本的手；睡衣那套連胸前的長髮下段與蝴蝶結一起換成同一張圖畫的
     p.HideArms = SukiPet.SETS.some((k) => this.setW[k]! >= 1) ? 1 : 0;
+    p.HideLocks = p.HideArms;
     // 演完或被打斷：視線還給滑鼠
     if (!cur) { if (this.activityLook) { this.activityLook = false; this.driver.state.look = null; } return; }
     cur.t += dt;
