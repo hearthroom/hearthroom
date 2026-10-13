@@ -191,7 +191,7 @@ export class Rig {
   mesh(part: PetPart) { return this.meshes.get(part.id)!; }
 }
 
-const VS = `attribute vec2 p;attribute vec2 t;uniform vec2 s;varying vec2 v;void main(){v=t;gl_Position=vec4(p.x/s.x*2.-1.,1.-p.y/s.y*2.,0,1);}`;
+const VS = `attribute vec2 p;attribute vec2 t;uniform vec2 s;uniform vec2 o;varying vec2 v;void main(){v=t;vec2 q=p+o;gl_Position=vec4(q.x/s.x*2.-1.,1.-q.y/s.y*2.,0,1);}`;
 const FS = `precision mediump float;varying vec2 v;uniform sampler2D tex;uniform float a;void main(){gl_FragColor=texture2D(tex,v)*a;}`;
 
 /** WebGL 繪圖：預乘 alpha、照 z 排序、眼珠用 stencil 夾在眼白裡 */
@@ -201,7 +201,11 @@ export class PetRenderer {
   private tex = new Map<string, WebGLTexture>();
   private buf: { p: WebGLBuffer; t: WebGLBuffer; i: WebGLBuffer };
   private order: PetPart[];
-  constructor(readonly canvas: HTMLCanvasElement, readonly rig: Rig) {
+  /**
+   * pad：畫布比人四周多留的邊（模型座標）。被拎起來傾斜、跳起來時身體會超出站直的範圍，
+   * 沒有這圈邊就會被畫布切掉。
+   */
+  constructor(readonly canvas: HTMLCanvasElement, readonly rig: Rig, readonly pad: [number, number] = [0, 0]) {
     const gl = canvas.getContext("webgl", { premultipliedAlpha: true, alpha: true, stencil: true, antialias: true });
     if (!gl) throw new Error("webgl unavailable");
     this.gl = gl;
@@ -249,7 +253,8 @@ export class PetRenderer {
     gl.clearColor(0, 0, 0, 0); gl.clearStencil(0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
     gl.useProgram(this.prog);
-    gl.uniform2f(gl.getUniformLocation(this.prog, "s"), W, H);
+    gl.uniform2f(gl.getUniformLocation(this.prog, "s"), W + this.pad[0] * 2, H + this.pad[1] * 2);
+    gl.uniform2f(gl.getUniformLocation(this.prog, "o"), this.pad[0], this.pad[1]);
     gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     const masks = new Map<string, number>();
     for (const part of this.order) if (part.clipTo && !masks.has(part.clipTo)) masks.set(part.clipTo, masks.size + 1);

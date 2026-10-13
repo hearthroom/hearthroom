@@ -58,12 +58,13 @@ const EXPRS: Expr[] = ["happy", "surprised", "pout", "shy", "sleepy", "dizzy", "
 export class SukiPet {
   readonly el: HTMLDivElement;
   private canvas: HTMLCanvasElement;
+  private touch: HTMLDivElement;
   private bubble: HTMLDivElement;
   private menuEl: HTMLDivElement;
   private guide: PageGuide | null = null;
   private hidden = false;
   readonly care = new Care();
-  private rig!: Rig;
+  rig!: Rig;
   private driver!: Driver;
   private view!: PetRenderer;
   private hit?: { data: Uint8ClampedArray; w: number; h: number; names: string[] };
@@ -75,6 +76,8 @@ export class SukiPet {
   private clicks: number[] = [];
   private drag?: { dx: number; dy: number; x: number; y: number; vx: number; t: number; moved: boolean; shake: number };
   private jumpT = -1;
+  private dangle = 0;
+  private dangleV = 0;
   private tucked = false;
   private said = new Set<string>();
   private hoverTimer = 0;
@@ -86,7 +89,13 @@ export class SukiPet {
     this.el = document.createElement("div");
     this.el.className = "suki-pet";
     this.canvas = document.createElement("canvas");
-    this.canvas.setAttribute("aria-label", opts.label);
+    this.canvas.className = "suki-pet__canvas";
+    this.canvas.setAttribute("aria-hidden", "true");
+    // 接點擊的是跟她站直時一樣大的區塊；畫布比她大一圈（擺盪用），那圈透明邊不擋網頁
+    this.touch = document.createElement("div");
+    this.touch.className = "suki-pet__hit";
+    this.touch.setAttribute("role", "img");
+    this.touch.setAttribute("aria-label", opts.label);
     this.bubble = document.createElement("div");
     this.bubble.className = "suki-pet__bubble";
     this.bubble.hidden = true;
@@ -95,7 +104,7 @@ export class SukiPet {
     this.menuEl.className = "suki-pet__menu";
     this.menuEl.hidden = true;
     this.menuEl.setAttribute("role", "menu");
-    this.el.append(this.bubble, this.menuEl, this.canvas);
+    this.el.append(this.canvas, this.touch, this.bubble, this.menuEl);
     if (opts.mobile) this.el.classList.add("suki-pet--mobile");
   }
 
@@ -107,10 +116,14 @@ export class SukiPet {
     const [W, H] = this.rig.model.size;
     const cssH = this.opts.height, cssW = (cssH * W) / H;
     const dpr = Math.min(2, devicePixelRatio || 1);
-    this.canvas.width = Math.round(cssW * dpr); this.canvas.height = Math.round(cssH * dpr);
-    this.canvas.style.width = `${cssW}px`; this.canvas.style.height = `${cssH}px`;
+    // 四周多留：左右各 40%、上下各 12%（被拎起來最多傾斜約 26 度、跳起來 70px）
+    const pad: [number, number] = [W * 0.4, H * 0.12];
+    const k = cssH / H;
+    this.canvas.width = Math.round((W + pad[0] * 2) * k * dpr); this.canvas.height = Math.round((H + pad[1] * 2) * k * dpr);
+    Object.assign(this.canvas.style, { width: `${(W + pad[0] * 2) * k}px`, height: `${(H + pad[1] * 2) * k}px`, left: `${-pad[0] * k}px`, top: `${-pad[1] * k}px` });
+    Object.assign(this.touch.style, { width: `${cssW}px`, height: `${cssH}px` });
     this.el.style.setProperty("--pw", `${cssW}px`);
-    this.view = new PetRenderer(this.canvas, this.rig);
+    this.view = new PetRenderer(this.canvas, this.rig, pad);
     await this.view.load(base);
     this.driver = new Driver(this.rig);
     await this.loadHit(`${base}/hit.png`, skeleton.regions ?? []);
@@ -160,10 +173,17 @@ export class SukiPet {
     this.bubble.hidden = true;
     this.menuEl.hidden = false;
     this.act({ expr: "happy" });
-    setTimeout(() => addEventListener("pointerdown", this.outside, { once: true }), 0);
+    setTimeout(() => {
+      document.addEventListener("pointerdown", this.outside, true);
+      document.addEventListener("keydown", this.escape, true);
+    }, 0);
   }
-  private outside = (e: Event) => { if (!this.el.contains(e.target as Node)) this.closeMenu(); else addEventListener("pointerdown", this.outside, { once: true }); };
+  /** 點選單以外的任何地方（含她自己）都收起選單；點選單項目由項目自己收 */
+  private outside = (e: Event) => { if (!this.menuEl.contains(e.target as Node)) this.closeMenu(); };
+  private escape = (e: KeyboardEvent) => { if (e.key === "Escape") this.closeMenu(); };
   private closeMenu() {
+    document.removeEventListener("pointerdown", this.outside, true);
+    document.removeEventListener("keydown", this.escape, true);
     if (this.menuEl.hidden) return;
     this.menuEl.hidden = true;
     const next = this.queue.shift();
@@ -289,11 +309,14 @@ export class SukiPet {
       else { p.Jump = 0; p.Squash = 0; this.jumpT = -1; }
       if (t < 0.02) { this.kick("Ponytail", -120); this.kick("Skirt", 40); }
     }
-    if (this.drag) {
-      // 拎著：馬尾、裙子跟著拖的方向甩；落地前腳懸空
-      p.DragX = this.drag.vx;
-    } else p.DragX = 0;
+    // 拎著：整個人照拖的速度往反方向傾（像被拎著的布偶），手停下來速度就慢慢歸零；放開後盪回來
+    if (this.drag && now - this.drag.t > 60) this.drag.vx *= Math.exp(-dt * 8);
+    const target = this.drag?.moved ? Math.max(-26, Math.min(26, -this.drag.vx * 0.02)) : 0;
+    this.dangleV += ((target - this.dangle) * 60 - this.dangleV * (this.drag ? 9 : 4)) * dt;
+    this.dangle += this.dangleV * dt;
+    p.Dangle = this.dangle;
     this.driver.update(dt);
+    p.Dangle = this.dangle;
     if (this.opts.reducedMotion) { p.Ponytail = 0; p.HairFront = 0; p.HairBack = 0; p.Skirt = 0; p.Die = 0; p.Dangle = 0; }
     if (!this.hidden) this.view.draw();
     if (!this.bubble.hidden && now > this.bubbleUntil) { this.bubble.hidden = true; const next = this.queue.shift(); if (next) this.act(next); }
@@ -302,7 +325,7 @@ export class SukiPet {
   // ---- 輸入 ----
   private bind() {
     const head = () => {
-      const r = this.canvas.getBoundingClientRect();
+      const r = this.touch.getBoundingClientRect();
       return [r.left + r.width / 2, r.top + r.height * 0.22] as const;
     };
     addEventListener("pointermove", (e) => {
@@ -354,19 +377,21 @@ export class SukiPet {
     if (this.opts.mobile) this.bindMobile();
     addEventListener("suki", (e) => this.on((e as CustomEvent<SukiEvent>).detail));
 
-    this.canvas.addEventListener("pointerdown", (e) => {
+    this.touch.addEventListener("pointerdown", (e) => {
+      // 右鍵交給 contextmenu 開選單，不算抓她
+      if (e.button !== 0) return;
       // 點在透明處：不攔，讓底下的東西照常被點到
       if (this.region(e) === null) return;
       e.preventDefault();
-      this.canvas.setPointerCapture(e.pointerId);
+      this.touch.setPointerCapture(e.pointerId);
       const r = this.box();
       this.drag = { dx: e.clientX - r.left, dy: e.clientY - r.top, x: e.clientX, y: e.clientY, vx: 0, t: performance.now(), moved: false, shake: 0 };
       // 長按 450ms 開選單（手機的主要入口；電腦也能用）
       clearTimeout(this.pressTimer);
       this.pressTimer = window.setTimeout(() => { if (this.drag && !this.drag.moved) { this.pressed = true; this.buzz(15); this.openMenu(); } }, 450);
     });
-    this.canvas.addEventListener("contextmenu", (e) => { e.preventDefault(); this.openMenu(); });
-    this.canvas.addEventListener("pointerup", (e) => {
+    this.touch.addEventListener("contextmenu", (e) => { e.preventDefault(); this.openMenu(); });
+    this.touch.addEventListener("pointerup", (e) => {
       clearTimeout(this.pressTimer);
       if (this.pressed) { this.pressed = false; this.drag = undefined; return; }
       const d = this.drag; this.drag = undefined;
@@ -374,23 +399,23 @@ export class SukiPet {
       if (d.moved) return this.drop(e, d.shake);
       this.poke(e);
     });
-    this.canvas.addEventListener("dblclick", (e) => { e.preventDefault(); this.act({ expr: "happy", hop: true, say: this.line("jump") }, true); });
+    this.touch.addEventListener("dblclick", (e) => { e.preventDefault(); this.act({ expr: "happy", hop: true, say: this.line("jump") }, true); });
     // 游標停在她身上太久：害羞
     let rest = 0;
-    this.canvas.addEventListener("pointermove", () => { clearTimeout(rest); rest = window.setTimeout(() => this.act({ expr: "shy", say: this.line("stare"), ms: 2400 }), 3500); });
-    this.canvas.addEventListener("pointerleave", () => clearTimeout(rest));
+    this.touch.addEventListener("pointermove", () => { clearTimeout(rest); rest = window.setTimeout(() => this.act({ expr: "shy", say: this.line("stare"), ms: 2400 }), 3500); });
+    this.touch.addEventListener("pointerleave", () => clearTimeout(rest));
   }
 
   private pressTimer = 0;
   private pressed = false;
   private buzz(ms: number) { try { navigator.vibrate?.(ms); } catch { /* 不支援就算了 */ } }
 
-  /** 手機：捲下去躲、捲上來出現；Android 跟手機傾斜看、搖手機會暈 */
+  /** 手機：捲動時收起選單、鍵盤打開時讓路；Android 跟手機傾斜看、搖手機會暈 */
   private bindMobile() {
     let lastY = scrollY;
     addEventListener("scroll", () => {
       const y = scrollY;
-      if (Math.abs(y - lastY) > 24) { if (!this.menuEl.hidden) this.closeMenu(); this.hide(y > lastY && y > 120, "scroll"); lastY = y; }
+      if (Math.abs(y - lastY) > 24) { if (!this.menuEl.hidden) this.closeMenu(); lastY = y; }
     }, { passive: true });
     visualViewport?.addEventListener("resize", () => this.hide((visualViewport?.height ?? innerHeight) < innerHeight * 0.75, "keyboard"));
     // iOS 要使用者授權才給方向與動作感應：不要求，只在不需要授權的瀏覽器（Android）啟用
@@ -429,7 +454,10 @@ export class SukiPet {
     const d = this.drag!;
     const now = performance.now(), dt = Math.max(8, now - d.t);
     const vx = ((e.clientX - d.x) / dt) * 1000;
-    if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 6) return;
+    const dist = Math.hypot(e.clientX - d.x, e.clientY - d.y);
+    // 一動就不是長按了
+    if (dist >= 3) clearTimeout(this.pressTimer);
+    if (!d.moved && dist < 6) return;
     if (!d.moved) { clearTimeout(this.pressTimer); this.closeMenu(); d.moved = true; this.act({ expr: "surprised", say: this.line("lift"), ms: 60_000 }, true); this.el.classList.add("suki-pet--held"); }
     // 甩：快速來回換方向才算，一路拖過去不算
     if (Math.sign(vx) !== Math.sign(d.vx) && Math.abs(vx) > 900 && Math.abs(d.vx) > 900) d.shake += 1;
@@ -502,7 +530,7 @@ export class SukiPet {
 
   private region(e: PointerEvent): string | null {
     if (!this.hit) return "body";
-    const r = this.canvas.getBoundingClientRect();
+    const r = this.touch.getBoundingClientRect();
     const x = Math.floor(((e.clientX - r.left) / r.width) * this.hit.w), y = Math.floor(((e.clientY - r.top) / r.height) * this.hit.h);
     if (x < 0 || y < 0 || x >= this.hit.w || y >= this.hit.h) return null;
     const v = this.hit.data[(y * this.hit.w + x) * 4];
@@ -520,14 +548,14 @@ export class SukiPet {
   /** 她現在的位置與大小：自己記，不讀畫面（位移動畫進行中讀到的會是半路的座標） */
   private pos = { x: 0, y: 0 };
   private box() {
-    const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
+    const w = this.touch.clientWidth, h = this.touch.clientHeight;
     return { left: this.pos.x, top: this.pos.y, width: w, height: h, right: this.pos.x + w };
   }
   private place(p: { x: number; y: number }) {
     this.pos = { x: p.x, y: p.y };
     this.el.style.transform = `translate(${Math.round(p.x)}px, ${Math.round(p.y)}px)`;
     // 泡泡往畫面中間那一側展開，不會被螢幕邊緣切掉
-    const w = this.canvas.clientWidth || 0;
+    const w = this.touch.clientWidth || 0;
     this.el.classList.toggle("suki-pet--right", p.x + w / 2 > innerWidth / 2);
   }
   private save(p: { x: number; y: number }) {
@@ -538,7 +566,7 @@ export class SukiPet {
     try {
       const v = JSON.parse(localStorage.getItem("suki.pet.pos") ?? "null");
       if (!v) return null;
-      const r = { w: this.canvas.clientWidth || 120, h: this.canvas.clientHeight || 180 };
+      const r = { w: this.touch.clientWidth || 120, h: this.touch.clientHeight || 180 };
       if (v.x < 0 || v.x > 1) { setTimeout(() => this.tuck(v.x < 0 ? "left" : "right", true), 0); return { x: v.x < 0 ? 0 : innerWidth - r.w, y: v.y * innerHeight }; }
       return { x: v.x * innerWidth, y: v.y * innerHeight };
     } catch { return null; }
