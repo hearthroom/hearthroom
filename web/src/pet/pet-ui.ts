@@ -457,8 +457,11 @@ export class SukiPet {
    * 頭、頭髮、裙子、腿照舊由骨架帶。換上時新的上半身先在原圖上淡入，蓋滿了才收掉原本的手；
    * 收回時反過來，中間不會有兩層半透明疊在一起。上半身整塊不能單獨移動（會跟脖子、裙子錯開），
    * 小動作改用視線與表情。只用目前這套造型有畫的。
+   * 坐下（sit）與抱膝打瞌睡（doze）換的是脖子以下整個身體；坐下時整個人往下沉 SIT_LIFT（兩張圖腳底的高度差，
+   * 對位時量的），跟淡入同時發生。
    */
-  private static SETS = ["book", "mug", "wave", "hips", "scope"] as const;
+  private static SETS = ["book", "mug", "wave", "hips", "scope", "sit", "doze"] as const;
+  private static SIT_LIFT: Record<string, number> = { sit: 290, doze: 288 };
   private activity: { set: (typeof SukiPet.SETS)[number]; t: number; until: number } | null = null;
   private setW: Record<string, number> = {};
   private hasSet(name: string) { return this.rig.model.parts.some((p) => p.id === `set-${name}`); }
@@ -469,7 +472,9 @@ export class SukiPet {
   }
   private playActivity(dt: number) {
     const p = this.rig.params, a = this.activity;
-    if (a && (this.drag || this.sleeping || this.walk || this.hidden || this.tucked || !this.menuEl.hidden || a.t > a.until || !this.hasSet(a.set))) this.activity = null;
+    // 打瞌睡只在睡著時；其他的睡著就收
+    const fits = a && (a.set === "doze" ? this.sleeping : !this.sleeping);
+    if (a && (!fits || this.drag || this.walk || this.hidden || this.tucked || !this.menuEl.hidden || a.t > a.until || !this.hasSet(a.set))) this.activity = null;
     const cur = this.activity;
     for (const k of SukiPet.SETS) {
       const w = this.setW[k] ?? 0, tgt = cur?.set === k ? 1 : 0;
@@ -479,6 +484,8 @@ export class SukiPet {
     // 換上的上半身完全蓋住了才收掉原本的手；睡衣那套連胸前的長髮下段與蝴蝶結一起換成同一張圖畫的
     p.HideArms = SukiPet.SETS.some((k) => this.setW[k]! >= 1) ? 1 : 0;
     p.HideLocks = p.HideArms;
+    p.HideBody = this.setW.sit! >= 1 || this.setW.doze! >= 1 ? 1 : 0;
+    p.SitY = (this.setW.sit ?? 0) * SukiPet.SIT_LIFT.sit! + (this.setW.doze ?? 0) * SukiPet.SIT_LIFT.doze!;
     // 演完或被打斷：視線還給滑鼠
     if (!cur) { if (this.activityLook) { this.activityLook = false; this.driver.state.look = null; } return; }
     cur.t += dt;
@@ -503,7 +510,7 @@ export class SukiPet {
     const r = Math.random();
     if (r < 0.35 && !this.opts.reducedMotion) return this.wander();
     if (r < 0.5) { if (!this.startActivity("wave", 1.8)) this.waveT = 0; return; }
-    if (r < 0.85) {
+    if (r < 0.8) {
       const pick = (["book", "mug", "scope", "hips"] as const)[Math.floor(Math.random() * 4)];
       const sec = { book: 9, mug: 7, scope: 5, hips: 2.5 }[pick];
       if (this.startActivity(pick, sec)) {
@@ -512,6 +519,8 @@ export class SukiPet {
         return;
       }
     }
+    // 坐下來歇一會兒
+    if (r < 0.9 && this.startActivity("sit", 20 + Math.random() * 15)) return;
     // 東張西望
     this.driver.state.look = [-0.9, -0.2];
     setTimeout(() => { if (!this.drag) this.driver.state.look = [0.9, -0.1]; }, 1400);
@@ -560,6 +569,8 @@ export class SukiPet {
     this.sleepStart = performance.now();
     this.exprTarget = { sleepy: 1 };
     this.zzzAt = performance.now() + 2500;
+    // 抱著膝蓋坐著睡（這套造型有畫的話）；醒來、被拎起來就站起來
+    this.startActivity("doze", Infinity);
   }
   /**
    * 醒來。gentle：你回來動了動頁面，她揉揉眼睛、撒嬌；poked：被戳醒、被拎起來，抱怨或耍賴。
@@ -785,7 +796,7 @@ export class SukiPet {
       return;
     }
     // 正在看書、喝可可、偷看榜單時被戳：手放下來，被抓包
-    if (this.activity && this.activity.set !== "wave") { this.activity = null; return this.act({ expr: "surprised", say: this.line("act.caught") }, true); }
+    if (this.activity && ["book", "mug", "scope"].includes(this.activity.set)) { this.activity = null; return this.act({ expr: "surprised", say: this.line("act.caught") }, true); }
     const now = performance.now();
     this.clicks = [...this.clicks.filter((t) => now - t < 2500), now];
     if (this.clicks.length >= 7) { this.clicks = []; return this.act({ expr: "pout", say: this.line("tooMany"), ms: 2600 }, true); }
@@ -811,7 +822,9 @@ export class SukiPet {
   private region(e: PointerEvent): string | null {
     if (!this.hit) return "body";
     const r = this.touch.getBoundingClientRect();
-    const x = Math.floor(((e.clientX - r.left) / r.width) * this.hit.w), y = Math.floor(((e.clientY - r.top) / r.height) * this.hit.h);
+    // 坐著時整個人往下沉了：往上對回站姿的判定圖，戳頭還是算戳頭
+    const sunk = ((this.rig.params.SitY ?? 0) / this.rig.model.size[1]) * this.hit.h;
+    const x = Math.floor(((e.clientX - r.left) / r.width) * this.hit.w), y = Math.floor(((e.clientY - r.top) / r.height) * this.hit.h - sunk);
     if (x < 0 || y < 0 || x >= this.hit.w || y >= this.hit.h) return null;
     const v = this.hit.data[(y * this.hit.w + x) * 4];
     return v ? this.hit.names[v - 1] ?? "body" : null;
