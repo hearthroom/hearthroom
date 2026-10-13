@@ -6,7 +6,7 @@
  */
 import { compose, PetRenderer, Rig, type PetSkeleton, type PetSkin } from "./puppet";
 import { Driver } from "./driver";
-import { Care, type CareNews } from "./care";
+import type { SukiNews } from "../../../shared/suki-care";
 
 export type { SukiEvent } from "./events";
 import type { SukiEvent } from "./events";
@@ -42,8 +42,10 @@ export interface PetOptions {
   /** 每天第一次來擲的「今天的幸運類型」 */
   dailyTag?: () => { label: string; run: () => void } | null;
   /** 最近一次在任何卡上聊天的時間（餵食）；沒登入就沒有 */
-  /** 沒登入回 undefined：訪客還不能聊天，照顧循環不算（不然她會一直喊餓） */
-  lastStoryAt?: () => Promise<number | null | undefined>;
+  /** 打開網站時記一次來訪、拿回她要說的事（照顧狀態在帳號裡）；沒登入回 undefined——訪客還不能聊天，照顧不算 */
+  careVisit?: () => Promise<{ news: SukiNews[]; level: number; recall: boolean } | undefined>;
+  /** 熟了以後她問一次「可以想你的時候叫你嗎」，答應就打開召回 */
+  enableRecall?: () => Promise<void>;
   /** 熟了以後她怎麼叫你 */
   nickname?: () => string | null;
   /** 選單裡「接著上次」那一項，肚子餓時也拿來當按鈕 */
@@ -63,7 +65,8 @@ export class SukiPet {
   private menuEl: HTMLDivElement;
   private guide: PageGuide | null = null;
   private hidden = false;
-  readonly care = new Care();
+  /** 好感等級與召回開關：照顧狀態存在帳號裡，網站把它交給她 */
+  private level = 0;
   rig!: Rig;
   private driver!: Driver;
   private view!: PetRenderer;
@@ -135,7 +138,14 @@ export class SukiPet {
     else this.place({ x: innerWidth - cssW - 24, y: innerHeight - cssH - 8 });
     if (!this.tucked) this.greet();
     this.daily();
-    void this.opts.lastStoryAt?.().then((at) => { if (at !== undefined) this.careNews(this.care.visit(at)); }, () => undefined);
+    void this.opts.careVisit?.().then((got) => {
+      if (!got) return;
+      this.level = got.level;
+      this.careNews(got.news);
+      if (got.level >= 2 && !got.recall && this.opts.enableRecall && this.onceEver("askRecall")) {
+        setTimeout(() => this.act({ expr: "shy", say: this.line("askRecall"), ms: 9000, action: { label: this.line("askRecallYes"), run: () => void this.opts.enableRecall!() } }), 9000);
+      }
+    }, () => undefined);
     let last = performance.now();
     const loop = (now: number) => {
       if (this.stopped) return;
@@ -191,9 +201,9 @@ export class SukiPet {
   }
 
   /** 照顧的消息：餵飽了、餓了、升級、連續天數、好久不見；一次只講最重要的一件 */
-  private careNews(news: CareNews[]) {
+  private careNews(news: SukiNews[]) {
     const pick = news.find((n) => n.kind === "levelUp") ?? news.find((n) => n.kind === "streak") ?? news.find((n) => n.kind === "fed")
-      ?? news.find((n) => n.kind === "missed") ?? news.find((n) => n.kind === "hungry");
+      ?? news.find((n) => n.kind === "missed") ?? news.find((n) => n.kind === "checkIn" && n.days > 1) ?? news.find((n) => n.kind === "hungry");
     if (!pick) return;
     const later = (a: Act) => setTimeout(() => this.act(a), this.tucked ? 0 : 3400);
     switch (pick.kind) {
@@ -201,6 +211,7 @@ export class SukiPet {
       case "hungry": return later({ expr: "pout", say: this.line("care.hungry"), ms: 5000, action: this.opts.resume });
       case "levelUp": return later({ expr: "happy", say: this.line(`care.level.${pick.level}`) || this.line("care.levelUp"), hop: true, ms: 4500 });
       case "streak": return later({ expr: "wink", say: this.line("care.streak", { n: pick.days }), hop: true, ms: 4500 });
+      case "checkIn": return later({ expr: "happy", say: this.line("care.checkIn", { n: pick.days }), hop: true, ms: 3600 });
       case "missed": return later({ expr: pick.days > 3 ? "shy" : "happy", say: this.line(pick.days > 3 ? "care.missedLong" : "care.missed"), ms: 4000 });
     }
   }
@@ -283,7 +294,7 @@ export class SukiPet {
   private greet() {
     const h = new Date().getHours();
     if (h >= 2 && h < 5 && this.onceToday("late")) return this.act({ expr: "sleepy", say: this.line("bedtime"), ms: 4000 });
-    const nick = this.care.level >= 2 ? this.opts.nickname?.() : null;
+    const nick = this.level >= 2 ? this.opts.nickname?.() : null;
     const base = this.line(h < 5 ? "greet.late" : h < 11 ? "greet.morning" : h < 18 ? "greet.day" : "greet.night");
     this.act({ expr: "happy", say: nick ? this.line("greet.nick", { name: nick }) + base : base, hop: true, ms: 3200 });
   }
@@ -349,8 +360,12 @@ export class SukiPet {
       this.typed = (this.typed + e.key).slice(-4).toLowerCase();
       if (this.typed === "suki") this.act({ expr: "happy", say: this.line("suki"), hop: true, ms: 3000 });
     });
+    // 分頁擺著好幾個鐘頭再回來：重新記一次來訪（不然她以為你沒來，會寄召回給正在網站上的人）
+    let hiddenAt = 0;
     document.addEventListener("visibilitychange", () => {
-      if (!document.hidden && performance.now() - this.lastInput > 60_000) this.act({ expr: "happy", say: this.line("welcomeBack") });
+      if (document.hidden) { hiddenAt = Date.now(); return; }
+      if (hiddenAt && Date.now() - hiddenAt > 3_600_000) void this.opts.careVisit?.().then((got) => { if (got) { this.level = got.level; this.careNews(got.news); } }, () => undefined);
+      if (performance.now() - this.lastInput > 60_000) this.act({ expr: "happy", say: this.line("welcomeBack") });
     });
     addEventListener("offline", () => this.act({ expr: "pout", say: this.line("offline"), ms: 4000 }));
     // hover 提示：游標停在 data-suki 的東西上 0.7 秒，她說一句；同一種提示只說一次
@@ -507,7 +522,6 @@ export class SukiPet {
     }
     const now = performance.now();
     this.clicks = [...this.clicks.filter((t) => now - t < 2500), now];
-    this.care.touch(this.clicks.length >= 4 ? -0.08 : 0.03);
     if (this.clicks.length >= 7) { this.clicks = []; return this.act({ expr: "pout", say: this.line("tooMany"), ms: 2600 }, true); }
     if (this.clicks.length === 5) return this.act({ expr: "dizzy", say: this.line("dizzy"), ms: 2200 }, true);
     const where = this.region(e);

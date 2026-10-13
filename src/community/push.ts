@@ -30,6 +30,8 @@ type Copy = {
   title: string; reply: string; replyPlain: string; work: string; workNew: string; workUpdate: string; workPlain: string;
   approved: string; approvedUpdate: string; rejected: string; rejectedNote: string; rejectedUpdate: string; rejectedUpdateNote: string; reviewPlain: string;
   like: string; likes: string; pack: string; packCount: string; reminder: string; reminderCard: string; shipped: string; generic: string;
+  /** 蘇綺的召回：標題是她的名字，內容是她的口吻 */
+  sukiTitle: string; sukiHungry: string; sukiPostcard: string;
 };
 const copy: Record<PushLocale, Copy> = {
   "zh-Hant": {
@@ -42,6 +44,7 @@ const copy: Record<PushLocale, Copy> = {
     pack: "你收到了額外的登記次數", packCount: "你可以在每週額度之外再登記 {count} 次",
     reminder: "你認領的作品即將到期，請繼續審核或放回待審清單", reminderCard: "你認領的{card}即將到期，請繼續審核或放回待審清單",
     shipped: "你回報的事已經處理好了：{title}", generic: "有新的通知",
+    sukiTitle: "蘇綺", sukiHungry: "肚子餓了……今晚講一個故事給我聽好不好？", sukiPostcard: "我去{card}的世界逛了一圈，那邊的人在問你什麼時候回去～",
   },
   "zh-Hans": {
     title: "HearthRoom", reply: "{actor} 回复了你在{card}的评论", replyPlain: "有人回复你的评论",
@@ -53,6 +56,7 @@ const copy: Record<PushLocale, Copy> = {
     pack: "你收到了额外的登记次数", packCount: "你可以在每周额度之外再登记 {count} 次",
     reminder: "你认领的作品即将到期，请继续审核或放回待审列表", reminderCard: "你认领的{card}即将到期，请继续审核或放回待审列表",
     shipped: "你反馈的事已经处理好了：{title}", generic: "有新的通知",
+    sukiTitle: "苏绮", sukiHungry: "肚子饿了……今晚讲一个故事给我听好不好？", sukiPostcard: "我去{card}的世界逛了一圈，那边的人在问你什么时候回去～",
   },
   en: {
     title: "HearthRoom", reply: "{actor} replied to your comment on {card}", replyPlain: "Someone replied to your comment",
@@ -64,6 +68,7 @@ const copy: Record<PushLocale, Copy> = {
     pack: "You received extra listings", packCount: "You can now list {count} more beyond your weekly quota",
     reminder: "Your review claim expires soon. Continue reviewing or release it to the queue.", reminderCard: "Your claim on {card} expires soon. Continue reviewing or release it to the queue.",
     shipped: "What you reported is now live: {title}", generic: "You have a new notification",
+    sukiTitle: "Suki", sukiHungry: "I'm hungry… tell me a story tonight?", sukiPostcard: "I took a trip into the world of {card}. Everyone there is asking when you'll be back~",
   },
   ja: {
     title: "HearthRoom", reply: "{actor} さんが{card}へのコメントに返信しました", replyPlain: "コメントに返信がありました",
@@ -75,6 +80,7 @@ const copy: Record<PushLocale, Copy> = {
     pack: "追加の掲載枠を受け取りました", packCount: "週ごとの枠とは別に、あと {count} 件掲載できるようになりました",
     reminder: "担当の有効期限が近づいています。審査を続けるか、一覧に戻してください。", reminderCard: "担当中の{card}の有効期限が近づいています。審査を続けるか、一覧に戻してください。",
     shipped: "ご報告いただいた件が反映されました：{title}", generic: "新しいお知らせがあります",
+    sukiTitle: "スキ", sukiHungry: "おなかすいた……今夜、お話ひとつ聞かせてくれる？", sukiPostcard: "{card}の世界をひとまわりしてきたよ。みんな、あなたはいつ戻るのって聞いてた～",
   },
   ko: {
     title: "HearthRoom", reply: "{actor} 님이 {card}에 남긴 내 댓글에 답글을 달았습니다", replyPlain: "내 댓글에 답글이 달렸습니다",
@@ -86,6 +92,7 @@ const copy: Record<PushLocale, Copy> = {
     pack: "추가 등록 횟수를 받았습니다", packCount: "주간 한도와 별도로 {count}번 더 등록할 수 있습니다",
     reminder: "검토 담당 시간이 곧 만료됩니다. 검토를 계속하거나 대기 목록으로 돌려보내세요.", reminderCard: "담당한 {card}의 검토 시간이 곧 만료됩니다. 검토를 계속하거나 대기 목록으로 돌려보내세요.",
     shipped: "제보하신 내용이 반영되었습니다: {title}", generic: "새 알림이 있습니다",
+    sukiTitle: "스키", sukiHungry: "배고파… 오늘 밤에 이야기 하나 들려줄래?", sukiPostcard: "{card}의 세계에 잠깐 다녀왔어. 다들 너 언제 돌아오냐고 묻더라~",
   },
 };
 const fill = (text: string, values: Record<string, string | number>) => text.replace(/\{(\w+)\}/g, (_, k: string) => String(values[k] ?? ""));
@@ -108,6 +115,7 @@ export function pushLine(row: Pick<Row, "kind" | "extra" | "actor_name" | "actor
     const note = noticeNote(extra.note);
     return fill(note ? (update ? c.rejectedUpdateNote : c.rejectedNote) : update ? c.rejectedUpdate : c.rejected, { card, note });
   }
+  if (row.kind === "suki_recall") return extra.variant === "postcard" && card ? fill(c.sukiPostcard, { card }) : c.sukiHungry;
   if (row.kind === "comment_like" && actor && card) return count > 1 ? fill(c.likes, { actor, card, others: count - 1 }) : fill(c.like, { actor, card });
   if (row.kind === "registration_pack") return Number(extra.granted) > 0 ? fill(c.packCount, { count: Number(extra.granted) }) : c.pack;
   if (row.kind === "review_reminder") return card ? fill(c.reminderCard, { card }) : c.reminder;
@@ -177,7 +185,7 @@ export async function dispatchPush(env: Env, send: PushSender = sendWebPush): Pr
       const locale = pushLocale(sub.locale);
       let status = 0;
       try {
-        status = await send({ endpoint: sub.endpoint, expirationTime: null, keys: { p256dh: sub.p256dh, auth: sub.auth } }, { title: copy[locale].title, body: pushLine(row, locale), path: site, tag: row.id }, env);
+        status = await send({ endpoint: sub.endpoint, expirationTime: null, keys: { p256dh: sub.p256dh, auth: sub.auth } }, { title: row.kind === "suki_recall" ? copy[locale].sukiTitle : copy[locale].title, body: pushLine(row, locale), path: site, tag: row.id }, env);
       } catch { status = 0; }
       if (status >= 200 && status < 300) {
         sent++;
