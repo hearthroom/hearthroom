@@ -92,6 +92,22 @@ describe("登入後自動帶入", () => {
     expect(pendingShareRef()?.code).toBe("FRIEND23");
   });
 
+  // 限流、憑證剛好失效、還沒授權推薦都不是「這個碼不行」：留著，下次開站再試，不然就漏了這筆返點。
+  it.each([
+    ["限流", new ApiError(429, "x", "rate_limited")],
+    ["憑證失效", new ApiError(401, "x", "unauthorized")],
+    ["還沒授權推薦", new ApiError(403, "x", "insufficient_scope")],
+  ])("%s不清掉紀錄", async (_label, err) => {
+    rememberShareRef("FRIEND23", clicked);
+    api.summary.mockResolvedValue(summary());
+    api.redeem.mockRejectedValueOnce(err);
+    expect(await bindShareRef(token, "harbor")).toBe("retry");
+    expect(pendingShareRef()?.code).toBe("FRIEND23");
+    api.summary.mockRejectedValueOnce(err);
+    expect(await bindShareRef(token, "harbor")).toBe("retry");
+    expect(pendingShareRef()?.code).toBe("FRIEND23");
+  });
+
   it("沒有記下的碼就不打任何請求", async () => {
     expect(await bindShareRef(token, "harbor")).toBe("none");
     expect(api.summary).not.toHaveBeenCalled();
@@ -111,6 +127,13 @@ describe("分享網址帶自己的碼", () => {
     expect(await ownReferralCode("7", token, "harbor")).toBe("MINE2345");
     expect(await ownReferralCode("7", token, "harbor")).toBe("MINE2345");
     expect(api.summary).toHaveBeenCalledTimes(2);
+  });
+
+  it("限流時不把「沒有碼」記住：下次分享再問", async () => {
+    api.summary.mockRejectedValueOnce(new ApiError(429, "x", "rate_limited"));
+    expect(await ownReferralCode("9", token, "harbor")).toBeNull();
+    api.summary.mockResolvedValue(summary());
+    expect(await ownReferralCode("9", token, "harbor")).toBe("MINE2345");
   });
 
   it("舊的登入沒授權推薦：照舊不帶碼，也不每開一張卡就再問一次", async () => {
