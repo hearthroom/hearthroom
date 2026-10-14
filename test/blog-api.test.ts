@@ -111,6 +111,7 @@ describe("文章生命週期", () => {
     const read = await json(page);
     expect(read.post.title).toBe("改標題");
     expect(read.post.official).toBe(true);
+    expect(read.post.readMinutes).toBeGreaterThanOrEqual(1);
     expect(JSON.stringify(read)).not.toContain("member-");
     expect(read.adjacent).toEqual({ prev: null, next: null });
     expect(read.related).toEqual([]);

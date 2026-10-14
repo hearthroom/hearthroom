@@ -5,7 +5,7 @@ import ReportCommentDialog from "@/components/ReportCommentDialog.vue";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
-import { createComment, deleteComment, fetchComments, fetchReplies, likeComment, type Comment } from "@/lib/api";
+import { ApiError, createComment, deleteComment, fetchComments, fetchReplies, likeComment, type Comment, type CommentOn, type CommentSort } from "@/lib/api";
 import { hueFrom, relativeTime } from "@/lib/format";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
@@ -13,8 +13,12 @@ import { confirmDialog } from "@/lib/confirm";
 import { track } from "@/lib/track";
 import { loginPath } from "@/lib/login-return";
 
-/** 本站的卡 id：留言掛在本站的卡上，不看這張卡住在哪一家供應商。roleId 只給埋點用。 */
-const props = defineProps<{ cardId: string; roleId: string; myScore?: number | null }>();
+/**
+ * 卡片：本站的卡 id（留言掛在本站的卡上，不看這張卡住在哪一家供應商），roleId 只給埋點用。
+ * 卡片頁照舊傳 cardId／roleId；文章頁傳 target。文章多了熱門／最新、官方徽章、置頂留言與關閉留言。
+ */
+export type CommentTarget = { kind: "card"; cardId: string; roleId: string } | { kind: "post"; postId: string; commentsClosed?: boolean };
+const props = defineProps<{ cardId?: string; roleId?: string; target?: CommentTarget; myScore?: number | null }>();
 const emit = defineEmits<{ count: [n: number] }>();
 
 const session = useSession();
@@ -45,6 +49,24 @@ const expanded = ref<Record<string, { replies: Comment[]; page: number; hasMore:
 
 const MAX = 500;
 
+const on = computed<CommentTarget>(() => props.target ?? { kind: "card", cardId: props.cardId ?? "", roleId: props.roleId ?? "" });
+const isPost = computed(() => on.value.kind === "post");
+const where = computed<CommentOn>(() => (on.value.kind === "post" ? { postId: on.value.postId } : on.value.cardId));
+/** 埋點的對象：卡片是 roleId，文章是文章 id */
+const subject = computed(() => (on.value.kind === "post" ? on.value.postId : on.value.roleId));
+// ponytail: 文章預設看熱門（讀者先看到大家按讚的），要改預設只動這裡
+const sort = ref<CommentSort>("hot");
+const SORTS: CommentSort[] = ["hot", "new"];
+const pinnedId = ref<string | null>(null);
+/** 送出時才知道文章剛被關了留言：跟一開始就關著一樣收起發表區 */
+const closedLate = ref(false);
+const closed = computed(() => on.value.kind === "post" && (!!on.value.commentsClosed || closedLate.value));
+function sortBy(next: CommentSort) {
+  if (sort.value === next) return;
+  sort.value = next;
+  void load(true);
+}
+
 // 自己剛改了星數：自己那幾則留言上的星數跟著換，不必重讀整串
 watch(() => props.myScore, (score) => {
   if (score === undefined) return;
@@ -60,11 +82,12 @@ async function load(reset = false) {
   loading.value = true;
   error.value = "";
   try {
-    const res = await fetchComments(props.cardId, page.value, (await tokenOrNull()) ?? undefined);
+    const res = await fetchComments(where.value, page.value, (await tokenOrNull()) ?? undefined, isPost.value ? sort.value : undefined);
     // 回應形狀不對（代理回了別的東西）就當成沒有留言，不讓整個面板崩掉
     const got = Array.isArray(res.comments) ? res.comments : [];
     comments.value = reset || page.value === 1 ? got : [...comments.value, ...got];
     total.value = Number(res.total) || 0;
+    pinnedId.value = res.pinnedCommentId ?? null;
     emit("count", total.value);
   } catch (err) {
     error.value = err instanceof Error ? err.message : t("state.loadFailed");
@@ -83,7 +106,7 @@ async function submit(root?: Comment, target?: Comment) {
   try {
     const token = await session.accessToken();
     if (!token) throw new Error(t("auth.expired"));
-    const created = await createComment(props.cardId, { content: text, parentId: target?.commentId, rootId: root?.commentId }, token);
+    const created = await createComment(where.value, { content: text, parentId: target?.commentId, rootId: root?.commentId }, token);
     if (root) { replyDraft.value = ""; replyTo.value = null; delete expanded.value[root.commentId]; } else draft.value = "";
     await load(true);
     // 列表裡的回覆預覽只放讚數前幾則；新回覆零讚擠不進去，翻回覆串本身把它找出來，留在原位（審核中的也是，只有本人看得到）
@@ -95,9 +118,10 @@ async function submit(root?: Comment, target?: Comment) {
     const held = created.status === "held";
     // 審核中的留言別人看不到——說一聲，不然像是已經公開了
     if (held) say(t("comment.submitted"));
-    track("comment_post", { detail: root ? "comment_reply" : "comment_root", subject: props.roleId, ok: !held });
+    track("comment_post", { detail: root ? "comment_reply" : "comment_root", subject: subject.value, ok: !held });
   } catch (err) {
-    track("comment_post", { detail: root ? "comment_reply" : "comment_root", subject: props.roleId, ok: false });
+    track("comment_post", { detail: root ? "comment_reply" : "comment_root", subject: subject.value, ok: false });
+    if (err instanceof ApiError && err.code === "blog_comments_closed") { closedLate.value = true; replyTo.value = null; return; }
     error.value = err instanceof Error ? err.message : t("state.actionFailed");
   } finally {
     sending.value = false;
@@ -113,7 +137,7 @@ async function toggleLike(c: Comment) {
   c.likeCount += c.isLiked ? 1 : -1;
   try {
     await likeComment(c.commentId, c.isLiked, token);
-    track("comment_like", { detail: c.isLiked ? "like_on" : "like_off", subject: props.roleId });
+    track("comment_like", { detail: c.isLiked ? "like_on" : "like_off", subject: subject.value });
   } catch { c.isLiked = !c.isLiked; c.likeCount += c.isLiked ? 1 : -1; }
 }
 
@@ -134,10 +158,10 @@ async function remove(c: Comment) {
   if (!token) return;
   try {
     await deleteComment(c.commentId, token);
-    track("comment_delete", { subject: props.roleId });
+    track("comment_delete", { subject: subject.value });
     await load(true);
   } catch (err) {
-    track("comment_delete", { subject: props.roleId, ok: false });
+    track("comment_delete", { subject: subject.value, ok: false });
     error.value = err instanceof Error ? err.message : t("state.actionFailed");
   }
 }
@@ -145,7 +169,7 @@ async function remove(c: Comment) {
 async function showAllReplies(root: Comment) {
   const cur = expanded.value[root.commentId];
   const page = cur ? cur.page + 1 : 1;
-  const res = await fetchReplies(props.cardId, root.commentId, page, (await tokenOrNull()) ?? undefined);
+  const res = await fetchReplies(where.value, root.commentId, page, (await tokenOrNull()) ?? undefined);
   const got = Array.isArray(res.replies) ? res.replies : [];
   const replies = cur ? [...cur.replies, ...got] : got;
   expanded.value[root.commentId] = { replies, page, hasMore: replies.length < root.replyCount && got.length > 0 };
@@ -153,13 +177,15 @@ async function showAllReplies(root: Comment) {
 const repliesOf = (root: Comment) => expanded.value[root.commentId]?.replies ?? root.replies ?? [];
 const moreReplies = (root: Comment) => (expanded.value[root.commentId] ? expanded.value[root.commentId]!.hasMore : root.replyCount > repliesOf(root).length);
 
-watch([() => props.cardId, () => session.me?.accountNumId], () => load(true), { immediate: true });
+const targetKey = computed(() => (on.value.kind === "post" ? `post:${on.value.postId}` : `card:${on.value.cardId}`));
+watch([targetKey, () => session.me?.accountNumId], () => { closedLate.value = false; void load(true); }, { immediate: true });
 </script>
 
 <template>
   <section class="cmt">
     <!-- 發表區：登入才能寫；沒登入放一顆登入鍵，不藏 -->
-    <div v-if="session.me" class="cmt__composer">
+    <p v-if="closed" class="notice cmt__closed">{{ $t("comment.closed") }}</p>
+    <div v-else-if="session.me" class="cmt__composer">
       <img v-if="session.me.avatar" :src="session.me.avatar" alt="" class="cmt__face" />
       <div class="cmt__box">
         <textarea v-model="draft" class="input cmt__input" :maxlength="MAX" :placeholder="$t('comment.placeholder')" rows="2" />
@@ -170,6 +196,10 @@ watch([() => props.cardId, () => session.me?.accountNumId], () => load(true), { 
       </div>
     </div>
     <RouterLink v-else-if="session.ready" class="btn cmt__login" :to="lp(loginPath(route.fullPath))">{{ $t("comment.login") }}</RouterLink>
+
+    <div v-if="isPost" class="seg cmt__sort" role="group" :aria-label="$t('comment.sortLabel')">
+      <button v-for="s in SORTS" :key="s" type="button" class="seg__item" :class="{ 'seg__item--on': sort === s }" :aria-pressed="sort === s" @click="sortBy(s)">{{ $t(s === "hot" ? "comment.sortHot" : "comment.sortNew") }}</button>
+    </div>
 
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
 
@@ -186,7 +216,8 @@ watch([() => props.cardId, () => session.me?.accountNumId], () => load(true), { 
           <div class="cmt__head">
             <CommunityName :handle="c.handle" :name="c.accountNickName" class="cmt__name" />
             <span v-if="c.isCreator" class="cmt__badge">{{ $t("comment.creator") }}</span>
-            <span v-if="c.isPinned" class="cmt__badge cmt__badge--pin">{{ $t("comment.pinned") }}</span>
+            <span v-if="c.official" class="cmt__badge">{{ $t("comment.official") }}</span>
+            <span v-if="c.isPinned || (pinnedId && c.commentId === pinnedId)" class="cmt__badge cmt__badge--pin">{{ $t("comment.pinned") }}</span>
             <span v-if="c.status === 'held'" class="cmt__badge cmt__badge--held">{{ $t("comment.held") }}</span>
             <span v-if="c.score" class="cmt__stars" role="img" :aria-label="$t('score.stars', { n: c.score })">{{ "★".repeat(c.score) }}<span class="cmt__stars-off">{{ "★".repeat(5 - c.score) }}</span></span>
             <span class="subtle">{{ relativeTime(Date.parse(c.createTime)) }}</span>
@@ -199,7 +230,7 @@ watch([() => props.cardId, () => session.me?.accountNumId], () => load(true), { 
                 <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6S2.5 10.2 2.5 6.4A2.9 2.9 0 0 1 8 4.9a2.9 2.9 0 0 1 5.5 1.5c0 3.8-5.5 7.2-5.5 7.2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" /></svg>
                 {{ c.likeCount || "" }}
               </button>
-              <button v-if="session.me && c.status === 'visible'" class="cmt__act" @click="replyTo = { root: c, target: c }; replyDraft = ''">{{ $t("comment.reply") }}</button>
+              <button v-if="session.me && !closed && c.status === 'visible'" class="cmt__act" @click="replyTo = { root: c, target: c }; replyDraft = ''">{{ $t("comment.reply") }}</button>
             </template>
             <button v-if="c.canDelete" class="cmt__act cmt__act--danger" @click="remove(c)">{{ $t("comment.delete") }}</button>
             <button v-if="reportable(c)" class="cmt__act cmt__act--report" @click="report(c)">{{ $t("comment.report") }}</button>
@@ -213,6 +244,7 @@ watch([() => props.cardId, () => session.me?.accountNumId], () => load(true), { 
                 <div class="cmt__head">
                   <CommunityName :handle="r.handle" :name="r.accountNickName" class="cmt__name" />
                   <span v-if="r.isCreator" class="cmt__badge">{{ $t("comment.creator") }}</span>
+                  <span v-if="r.official" class="cmt__badge">{{ $t("comment.official") }}</span>
                   <span v-if="r.status === 'held'" class="cmt__badge cmt__badge--held">{{ $t("comment.held") }}</span>
                   <span class="subtle">{{ relativeTime(Date.parse(r.createTime)) }}</span>
                 </div>
@@ -224,7 +256,7 @@ watch([() => props.cardId, () => session.me?.accountNumId], () => load(true), { 
                       {{ r.likeCount || "" }}
                     </button>
                     <!-- 只有公開的頂層收得到回覆：被移除或自己待審中的頂層底下不給回 -->
-                    <button v-if="session.me && c.status === 'visible'" class="cmt__act" @click="replyTo = { root: c, target: r }; replyDraft = ''">{{ $t("comment.reply") }}</button>
+                    <button v-if="session.me && !closed && c.status === 'visible'" class="cmt__act" @click="replyTo = { root: c, target: r }; replyDraft = ''">{{ $t("comment.reply") }}</button>
                   </template>
                   <button v-if="r.canDelete" class="cmt__act cmt__act--danger" @click="remove(r)">{{ $t("comment.delete") }}</button>
                   <button v-if="reportable(r)" class="cmt__act cmt__act--report" @click="report(r)">{{ $t("comment.report") }}</button>
@@ -234,7 +266,7 @@ watch([() => props.cardId, () => session.me?.accountNumId], () => load(true), { 
           </ul>
           <button v-if="moreReplies(c)" class="cmt__more" @click="showAllReplies(c)">{{ expanded[c.commentId] ? $t("comment.loadMore") : $t("comment.viewReplies", { n: c.replyCount }) }}</button>
 
-          <div v-if="replyTo?.root.commentId === c.commentId" class="cmt__box cmt__box--reply">
+          <div v-if="!closed && replyTo?.root.commentId === c.commentId" class="cmt__box cmt__box--reply">
             <textarea v-model="replyDraft" class="input cmt__input" :maxlength="MAX" :placeholder="$t('comment.replyTo', { name: replyTo!.target.accountNickName })" rows="2" autofocus />
             <div class="cmt__box-foot">
               <button class="btn btn--ghost btn--sm" @click="replyTo = null">{{ $t("comment.cancel") }}</button>
@@ -264,6 +296,8 @@ watch([() => props.cardId, () => session.me?.accountNumId], () => load(true), { 
 .cmt__box-foot { display: flex; justify-content: flex-end; align-items: center; gap: var(--s-2); }
 .cmt__box-foot .subtle { margin-right: auto; font-variant-numeric: tabular-nums; }
 .cmt__login { width: fit-content; }
+.cmt__closed { margin: 0; }
+.cmt__sort { justify-self: start; }
 .cmt__ghosts { display: grid; gap: var(--s-3); }
 .cmt__ghosts .ghost { height: 64px; }
 .cmt__empty { padding: var(--s-6) 0; text-align: center; font-size: 13.5px; }

@@ -60,7 +60,7 @@ describe("頁尾分組", () => {
 
   it("沒有 Discord 邀請時社群組照樣在，只少那一個", () => {
     const community = footerGroups({ ...base, discordInvite: null }).find((g) => g.id === "community");
-    expect(community?.links.map((l) => l.id)).toEqual(["github", "issues"]);
+    expect(community?.links.map((l) => l.id)).toEqual(["blog", "github", "issues"]);
   });
 
   it("授權在最底下那一條，不在分組裡", () => {
