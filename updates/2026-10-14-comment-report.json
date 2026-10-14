@@ -1,0 +1,20 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/",
+  "draft": true,
+  "title": {
+    "zh-Hant": "留言可以檢舉了，可疑的留言會先送審",
+    "zh-Hans": "留言可以举报了，可疑的留言会先送审",
+    "en": "You can now report comments, and suspicious ones are held for review first",
+    "ja": "コメントを通報できるようになり、怪しいコメントは先に確認されます",
+    "ko": "댓글을 신고할 수 있고, 의심스러운 댓글은 먼저 검토해요"
+  },
+  "body": {
+    "zh-Hant": "看到廣告、騷擾或洩露個資的留言，按留言旁的「檢舉」；有連結或疑似洗版的留言會先由管理員確認再公開。",
+    "zh-Hans": "看到广告、骚扰或泄露个人信息的留言，点留言旁的“举报”；有链接或疑似刷屏的留言会先由管理员确认再公开。",
+    "en": "To flag an ad, harassment or leaked personal info, tap Report next to the comment, and comments with links or signs of spam are checked by an admin before they show.",
+    "ja": "広告や嫌がらせ、個人情報の流出を見つけたらコメント横の「通報」を押してください、リンク付きや連投が疑われるコメントは管理者が確認してから公開されます。",
+    "ko": "광고, 괴롭힘, 개인정보 노출 댓글은 댓글 옆의 '신고'를 누르면 되고, 링크가 있거나 도배로 의심되는 댓글은 관리자가 확인한 뒤 공개돼요."
+  }
+}
