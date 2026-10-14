@@ -46,6 +46,7 @@ import {
   BEACON_DETAILS, BEACON_EVENTS, clientKind, emit, note, refHostOf, safeSubject, shapeTerm, surfaceOf,
   type EventFields, type Pending,
 } from "./analytics";
+import { blogIndexMeta, blogUrl, postMeta } from "./blog-head";
 import { authorLine, downloadMeta, homeMeta, preloadImageTag, renderDefaultShareHead, renderHead, updatesMeta } from "./head";
 import { aliasTarget, HOST, canonicalUrl, isPlayHost } from "./site";
 import { cardThumbUrl, landingZone } from "../shared/card-thumb";
@@ -1684,6 +1685,35 @@ async function landingPage(c: Context<{ Bindings: Env; Variables: { ev: Pending 
   return res;
 }
 
+/**
+ * 部落格頁面：/blog、/blog/:column、/blog/:column/:slug。文章與欄目的 <head> 由 blog-head.ts 算；
+ * 找不到或未公開的文章回殼＋noindex＋404（照卡片不在榜的處理），定時發布的文章時間到前一律當不存在。
+ */
+const BLOG_PAGE = /^(?:\/(zh-Hans|en|ja|ko))?\/blog(?:\/([^/]+))?(?:\/([^/]+))?\/?$/;
+async function blogPage(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, url: URL, m: RegExpMatchArray): Promise<Response> {
+  const shell = await c.env.ASSETS.fetch(new Request(new URL("/", url).toString()));
+  if (!shell.ok) return shell;
+  const locale = m[1] ?? "zh-Hant";
+  note(c, { event: "page_html", refHost: refHostOf(c.req.header("Referer"), url.host), locale, subject: m[3] ?? m[2] ?? "", detail: "blog" });
+  let meta: Awaited<ReturnType<typeof blogIndexMeta>> = null;
+  try {
+    const column = m[2] === undefined ? undefined : decodeURIComponent(m[2]);
+    const slug = m[3] === undefined ? undefined : decodeURIComponent(m[3]);
+    meta = column && slug ? await postMeta(c.env.DB, column, slug, Date.now()) : await blogIndexMeta(c.env.DB, locale, column, blogUrl(locale, column));
+  } catch { /* 網址編碼壞掉＝找不到 */ }
+  if (!meta) {
+    const res = new HTMLRewriter().on("head", { element(e) { e.append('<meta name="robots" content="noindex, nofollow">', { html: true }); } }).transform(new Response(shell.body, { status: 404, headers: shell.headers }));
+    res.headers.set("Cache-Control", "no-store");
+    res.headers.set("X-Robots-Tag", "noindex, nofollow");
+    res.headers.delete("etag");
+    res.headers.delete("last-modified");
+    return res;
+  }
+  const res = renderHead(shell, meta);
+  res.headers.set("Cache-Control", `public, max-age=${PAGE_TTL}`);
+  return res;
+}
+
 app.get("*", async (c) => {
   const url = new URL(c.req.url);
   const landing = url.pathname.match(LANDING);
@@ -1700,6 +1730,8 @@ app.get("*", async (c) => {
     if (!shell.ok) return shell;
     return renderHead(shell, meta);
   }
+  const blog = url.pathname.match(BLOG_PAGE);
+  if (blog) return blogPage(c, url, blog);
   const m = url.pathname.match(PAGE);
   // 不是要注入的頁面就原樣交回資源層——靜態檔給檔案本身，其餘走它的 SPA 回退。
   // 一律回殼的話，/assets/x.js 會拿到一份 HTML，整站直接掛。

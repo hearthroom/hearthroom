@@ -6,6 +6,7 @@ import {
   publicPostById, publicPosts, publicView, relatedPosts, restoreRevision, saveColumn, savePost, setPostState, uploadImage,
   type Actor, type ColumnInput, type Post, type PostInput, type StateChange,
 } from "./blog";
+import { blogFeed } from "./blog-head";
 import { requireMember } from "./members";
 import { operationOf } from "./moderation";
 import { bumpOp } from "./ops-metrics";
@@ -183,3 +184,11 @@ blogRoutes.post("/v1/blog/admin/images", bodyLimit({ maxSize: IMAGE_MAX_BYTES + 
   });
   return c.json(await uploadImage(c.env, form.get("file"), Date.now()));
 });
+
+// ---- Atom（最新 20 篇公開文章）---------------------------------------------------
+
+const feed = async (c: Ctx, locale: string) => c.body(await blogFeed(c.env, locale, Date.now()), 200, {
+  "Content-Type": "application/atom+xml; charset=utf-8", "Cache-Control": "public, max-age=600",
+});
+blogRoutes.get("/blog.atom", (c) => feed(c, "zh-Hant"));
+blogRoutes.get("/:locale{zh-Hans|en|ja|ko}/blog.atom", (c) => feed(c, c.req.param("locale")));
