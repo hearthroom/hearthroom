@@ -425,7 +425,7 @@ export async function relatedPosts(db: D1Database, post: Post, now: number, limi
 
 /** 公開回應不帶成員 id 與原始 key：作者一律是官方。 */
 export function publicView({ authorMemberId: _a, coverKey: _c, shareCoverKey: _s, ...p }: Post) {
-  return { ...p, official: true as const };
+  return { ...p, official: true as const, readMinutes: readMinutes(p.bodyMd) };
 }
 
 /** 管理回應：作者換成公開 ID（handle），不給成員 id。 */

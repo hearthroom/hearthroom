@@ -78,6 +78,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
         <!-- 開發者文件（相容供應商協議）：頁尾有，但登入的作者從頭像選單也走得到 -->
         <RouterLink :to="lp('/developers')" class="menu__item" role="menuitem"><AccountIcon name="code" />{{ $t("footer.developers") }}</RouterLink>
         <RouterLink :to="`${lp('/updates')}?from=menu`" class="menu__item" role="menuitem"><AccountIcon name="spark" />{{ $t("nav.updates") }}<NewMark k="menu.updates" /></RouterLink>
+        <RouterLink :to="lp('/blog')" class="menu__item" role="menuitem"><AccountIcon name="news" />{{ $t("blog.title") }}</RouterLink>
       </div>
       <div class="menu__group">
         <button class="menu__item" role="menuitem" @click="track('logout'); session.logout()"><AccountIcon name="logout" />{{ $t("nav.logout") }}</button>

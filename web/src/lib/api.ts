@@ -108,6 +108,7 @@ const SITE_CODE_KEY: Record<string, string> = {
   comment_muted: "comment.error.muted",
   invalid_report_reason: "error.invalidArguments",
   cannot_report_own_comment: "comment.error.reportOwn",
+  blog_comments_closed: "comment.closed",
   // 留言審核（/v1/moderation 底下的留言佇列、禁言、關鍵詞、運營設定）
   moderation_reason_required: "moderation.error.moderation_reason_required",
   moderation_conflict: "moderation.error.moderation_conflict",
@@ -734,6 +735,8 @@ export interface Comment {
   /** held＝只有本人看得到、等審核；removed＝頂層被移除但還有回覆，只留佔位（content 是空的）。 */
   status: "visible" | "held" | "removed";
   removed: boolean;
+  /** 文章留言：留言者是官方（寫文章的人）。卡片留言沒有這一欄。 */
+  official?: boolean;
   replies?: Comment[];
 }
 
@@ -742,24 +745,29 @@ export interface Comment {
  * 成人內容的卡：留言區跟卡片頁同一道門，過了門的人帶 ?nsfw=1（見 viewerAccess）。
  */
 const commentHeaders = (token?: string) => ({ ...from(), ...(token ? authHeaders(token) : {}) });
-async function commentUrl(cardId: string, tail = "", query = ""): Promise<{ url: string; headers: Record<string, string> }> {
+/** 留言掛在哪：本站的卡 id，或一篇部落格文章（文章沒有成人門，不帶 viewerAccess）。 */
+export type CommentOn = string | { postId: string };
+export type CommentSort = "hot" | "new";
+async function commentUrl(on: CommentOn, tail = "", query = ""): Promise<{ url: string; headers: Record<string, string> }> {
+  if (typeof on !== "string") return { url: `${COMMUNITY_API}/blog/posts/${encodeURIComponent(on.postId)}/comments${tail}${query ? `?${query}` : ""}`, headers: {} };
+  const cardId = on;
   const access = await viewerAccess();
   const q = [query, access.param].filter(Boolean).join("&");
   return { url: `${COMMUNITY_API}/cards/${encodeURIComponent(cardId)}/comments${tail}${q ? `?${q}` : ""}`, headers: access.headers };
 }
 
-export async function fetchComments(cardId: string, page: number, token?: string) {
-  const { url, headers } = await commentUrl(cardId, "", `page=${page}`);
-  return json<{ total: number; comments: Comment[]; isRoleCreator: boolean }>(await fetch(url, { headers: { ...headers, ...commentHeaders(token) } }));
+export async function fetchComments(on: CommentOn, page: number, token?: string, sort?: CommentSort) {
+  const { url, headers } = await commentUrl(on, "", sort ? `page=${page}&sort=${sort}` : `page=${page}`);
+  return json<{ total: number; comments: Comment[]; isRoleCreator: boolean; pinnedCommentId?: string | null }>(await fetch(url, { headers: { ...headers, ...commentHeaders(token) } }));
 }
 
-export async function fetchReplies(cardId: string, rootId: string, page: number, token?: string) {
-  const { url, headers } = await commentUrl(cardId, `/${encodeURIComponent(rootId)}/replies`, `page=${page}`);
+export async function fetchReplies(on: CommentOn, rootId: string, page: number, token?: string) {
+  const { url, headers } = await commentUrl(on, `/${encodeURIComponent(rootId)}/replies`, `page=${page}`);
   return json<{ total: number; replies: Comment[] }>(await fetch(url, { headers: { ...headers, ...commentHeaders(token) } }));
 }
 
-export async function createComment(cardId: string, body: { content: string; parentId?: string; rootId?: string }, token: string): Promise<{ commentId: string; status: "visible" | "held" }> {
-  const { url } = await commentUrl(cardId);
+export async function createComment(on: CommentOn, body: { content: string; parentId?: string; rootId?: string }, token: string): Promise<{ commentId: string; status: "visible" | "held" }> {
+  const { url } = await commentUrl(on);
   return json<{ commentId: string; status: "visible" | "held" }>(
     await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", ...commentHeaders(token) }, body: JSON.stringify(body) }),
   );

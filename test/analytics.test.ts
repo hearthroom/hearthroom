@@ -295,6 +295,7 @@ describe("欄位過濾", () => {
 
   it("來源標記走白名單", () => {
     expect(surfaceOf("board")).toBe("board");
+    expect(surfaceOf("blog")).toBe("blog");
     expect(surfaceOf("<script>")).toBe("direct");
     expect(surfaceOf(undefined)).toBe("direct");
   });
