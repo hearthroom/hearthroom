@@ -1,7 +1,7 @@
 import { auditStmt, auditStmtIfChanged, type ActorKind } from "./audit";
 import { bumpOp } from "./ops-metrics";
 import { isReviewAgent } from "./members";
-import { HttpError } from "./types";
+import { HttpError, type Env } from "./types";
 
 /**
  * 官方部落格（開業活動設計 §6）。寫的人＝manager／owner 審核人（不含 AI 帳號）。
@@ -211,6 +211,7 @@ async function writeContent(db: D1Database, before: PostRow | null, c: Content, 
   const done = await commit(db, writes, actor, operationId, "blog_post", "blog_slug_taken");
   if ("replay" in done) return mustPost(db, done.replay);
   if (!done.changes) await conflict(db, id);
+  await keepImages(db, c);
   await bumpOp(db, "blog", action === "restore" ? "restore" : "save", "success");
   return mustPost(db, id);
 }
@@ -371,10 +372,20 @@ export async function publicPosts(db: D1Database, opts: { columnSlug?: string; p
 
 /** 單篇：欄目停用也能開（舊連結不失效），只看公開判定。 */
 export async function publicPost(db: D1Database, columnSlug: string, slug: string, now: number): Promise<Post | null> {
+  const post = await postBySlug(db, columnSlug, slug);
+  return post && isPublic(post, now) ? post : null;
+}
+
+/** 不看公開與否（預覽用）。 */
+export async function postBySlug(db: D1Database, columnSlug: string, slug: string): Promise<Post | null> {
   const r = await db.prepare(`${POST_SELECT} WHERE col.slug = ? AND p.slug = ?`).bind(columnSlug, slug).first<PostRow>();
-  if (!r) return null;
-  const post = toPost(r);
-  return isPublic(post, now) ? post : null;
+  return r ? toPost(r) : null;
+}
+
+/** 短網址：公開文章的欄目與 slug。 */
+export async function publicPostById(db: D1Database, id: string, now: number): Promise<{ column: string; slug: string } | null> {
+  const r = await postRow(db, id);
+  return r && isPublic({ status: r.status, publishAt: r.publish_at }, now) ? { column: r.column_slug, slug: r.slug } : null;
 }
 
 /** 同欄目已公開的前一篇（較舊）與後一篇（較新）。 */
@@ -391,4 +402,100 @@ export async function adjacentPosts(db: D1Database, post: Post, now: number): Pr
 export async function relatedPosts(db: D1Database, post: Post, now: number, limit = 3): Promise<PostCard[]> {
   const rows = await db.prepare(`${CARD_SELECT} WHERE ${LIVE} AND p.column_id = ?2 AND p.id <> ?3 ORDER BY p.publish_at DESC, p.id DESC LIMIT ?4`).bind(now, post.columnId, post.id, limit).all<CardRow>();
   return rows.results.map(toCard);
+}
+
+// ---- 對外形狀 -----------------------------------------------------------------
+
+/** 公開回應不帶成員 id 與原始 key：作者一律是官方。 */
+export function publicView({ authorMemberId: _a, coverKey: _c, shareCoverKey: _s, ...p }: Post) {
+  return { ...p, official: true as const };
+}
+
+/** 管理回應：作者換成公開 ID（handle），不給成員 id。 */
+export async function adminView(db: D1Database, { authorMemberId, ...p }: Post) {
+  const m = await db.prepare("SELECT handle FROM members WHERE id = ?").bind(authorMemberId).first<{ handle: string }>();
+  return { ...p, authorHandle: m?.handle ?? "" };
+}
+
+export async function adminPost(db: D1Database, id: string) {
+  return adminView(db, await mustPost(db, id));
+}
+
+const STATUSES: readonly string[] = ["draft", "pending_review", "published", "unpublished"];
+type AdminRow = Pick<PostRow, "id" | "column_id" | "column_slug" | "slug" | "locale" | "title" | "status" | "publish_at" | "first_published_at" | "pinned" | "comments_closed" | "version" | "updated_at"> & { author_handle: string };
+
+/** 管理列表：所有狀態，最近改過的在前。column 可以是欄目 id 或 slug。 */
+export async function adminPosts(db: D1Database, opts: { status?: string; column?: string; page: number }) {
+  const status = opts.status || null;
+  if (status !== null && !STATUSES.includes(status)) invalid("status");
+  const where = "(?1 IS NULL OR p.status = ?1) AND (?2 IS NULL OR col.id = ?2 OR col.slug = ?2)";
+  const from = "FROM blog_posts p JOIN blog_columns col ON col.id = p.column_id";
+  const page = Math.max(1, Math.floor(opts.page) || 1);
+  const binds = [status, opts.column || null];
+  const [count, rows] = await db.batch<AdminRow & { n: number }>([
+    db.prepare(`SELECT COUNT(*) AS n ${from} WHERE ${where}`).bind(...binds),
+    db.prepare(`SELECT p.id, p.column_id, col.slug AS column_slug, p.slug, p.locale, p.title, p.status, p.publish_at, p.first_published_at, p.pinned, p.comments_closed, p.version, p.updated_at,
+      COALESCE((SELECT handle FROM members WHERE id = p.author_member_id), '') AS author_handle ${from} WHERE ${where} ORDER BY p.updated_at DESC, p.id DESC LIMIT ?3 OFFSET ?4`).bind(...binds, PAGE_SIZE, (page - 1) * PAGE_SIZE),
+  ]);
+  return {
+    total: (count!.results[0] as { n: number }).n,
+    items: (rows!.results as AdminRow[]).map((r) => ({
+      id: r.id, columnId: r.column_id, columnSlug: r.column_slug, slug: r.slug, locale: r.locale, title: r.title, status: r.status, publishAt: r.publish_at,
+      firstPublishedAt: r.first_published_at, pinned: !!r.pinned, commentsClosed: !!r.comments_closed, version: r.version, updatedAt: r.updated_at, authorHandle: r.author_handle,
+    })),
+  };
+}
+
+// ---- 圖片 ---------------------------------------------------------------------
+
+const RASTER = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/apng"]);
+export const IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+const IMAGE_GRACE = 24 * 3600_000;
+const INLINE_IMAGE = /\/v1\/blog\/images\/([A-Za-z0-9-]{1,64}\.webp)/g;
+
+/**
+ * 上傳一張文章圖片：轉 WebP、最長邊 1600，存 AVATARS 的 blog/<uuid>.webp。
+ * 先登記 24 小時後清理（沿用頭像的清理表與排程），文章存檔引用到它時才除名；沒被用上的自然被清掉。
+ */
+export async function uploadImage(env: Env, file: unknown, now: number): Promise<{ key: string; url: string }> {
+  if (!(file instanceof File) || !file.size || file.size > IMAGE_MAX_BYTES || !RASTER.has(file.type)) throw new HttpError(400, "blog_image_invalid");
+  if (!env.AVATARS || !env.IMAGES) throw new HttpError(503, "blog_image_unavailable");
+  let output: ArrayBuffer;
+  try {
+    const info = await env.IMAGES.info(file.stream());
+    if (!RASTER.has(info.format) || !("width" in info) || info.width * info.height > 40_000_000) throw new Error("invalid image");
+    const out = await env.IMAGES.input(file.stream()).transform({ width: 1600, height: 1600, fit: "scale-down" }).output({ format: "image/webp", quality: 82, anim: true });
+    output = await out.response().arrayBuffer();
+  } catch {
+    throw new HttpError(400, "blog_image_invalid");
+  }
+  const key = `blog/${crypto.randomUUID()}.webp`;
+  await env.DB.prepare("INSERT INTO avatar_cleanup (key, delete_after) VALUES (?, ?)").bind(key, now + IMAGE_GRACE).run();
+  try {
+    await env.AVATARS.put(key, output, { httpMetadata: { contentType: "image/webp" } });
+  } catch {
+    throw new HttpError(503, "blog_image_unavailable");
+  }
+  await bumpOp(env.DB, "blog", "image", "success");
+  return { key, url: imageUrl(key)! };
+}
+
+/** 這個 key（SQL 運算式）被某篇文章引用：封面、分享封面或內文。圖片路由與清理排程共用。 */
+export const imageReferenced = (key: string) =>
+  `EXISTS (SELECT 1 FROM blog_posts WHERE cover_key = ${key} OR share_cover_key = ${key} OR instr(body_md, '/v1/blog/images/' || substr(${key}, 6)) > 0)`;
+
+/** 圖片可以對外：被某篇文章引用，或上傳不到 24 小時。 */
+export async function imageServable(db: D1Database, key: string, now: number): Promise<boolean> {
+  if (!IMAGE_KEY.test(key)) return false;
+  const r = await db.prepare(`SELECT 1 AS ok WHERE ${imageReferenced("?1")} OR EXISTS (SELECT 1 FROM avatar_cleanup WHERE key = ?1 AND delete_after > ?2)`).bind(key, now).first();
+  return !!r;
+}
+
+/**
+ * 存檔用到的圖從清理表除名。之後就算文章不再引用也留著：修訂紀錄還原時要讀得到。
+ * ponytail: 不再被任何版本引用的圖會留在 bucket；量大時改成掃修訂再清。
+ */
+async function keepImages(db: D1Database, c: Content): Promise<void> {
+  const keys = [c.cover_key, c.share_cover_key, ...[...c.body_md.matchAll(INLINE_IMAGE)].map((m) => `blog/${m[1]}`)].filter((k): k is string => !!k);
+  if (keys.length) await db.prepare("DELETE FROM avatar_cleanup WHERE key IN (SELECT value FROM json_each(?))").bind(JSON.stringify(keys)).run();
 }

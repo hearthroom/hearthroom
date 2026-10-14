@@ -69,6 +69,7 @@ import { listSaves, putSave, removeSave } from "./saves";
 import { commentCard, countTop, deleteComment, listReplies, listTop, postComment, setLike, type Viewer } from "./comments";
 import { reportComment } from "./comment-moderation";
 import { commentModerationRoutes } from "./comment-moderation-routes";
+import { blogRoutes } from "./blog-routes";
 import { readSettings } from "./community-settings";
 import { clearScore, readScore, setScore } from "./card-scores";
 import { SVG_WRAP_LIMIT, TOUCH_ICON_SIZE, allowedImageUrl, cardManifest, iconSize, signShortcutKey, svgWrap, verifyShortcutKey } from "./shortcut";
@@ -828,6 +829,7 @@ app.get('/v1/avatars/:handle/:file',async c=>{
 });
 
 app.route("/", communityRoutes);
+app.route("/", blogRoutes);
 app.route("/", libraryRoutes);
 app.route("/", sukiRoutes);
 app.route("/", updatesRoutes);

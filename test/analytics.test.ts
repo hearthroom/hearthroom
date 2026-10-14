@@ -310,7 +310,8 @@ describe("欄位過濾", () => {
   it("白名單涵蓋所有打上游或純前端的功能", () => {
     for (const e of ["comment_post", "comment_like", "comment_delete", "comment_tab",
       "card_create", "card_edit", "wallet_view", "topup_click",
-      "appearance", "locale_switch", "logout", "page_404"]) {
+      "appearance", "locale_switch", "logout", "page_404",
+      "blog_view", "blog_read_end", "blog_share", "blog_cta"]) {
       expect(BEACON_EVENTS.has(e)).toBe(true);
     }
   });

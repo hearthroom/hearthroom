@@ -165,6 +165,8 @@ export const BEACON_EVENTS = new Set([
   // 打賞：打開作者的打賞面板、點了某個平台（subject 是平台代號）。不記哪位作者、哪張卡——
   // 要看的是哪些平台真的有人點，作者自己的收入在那個平台上看
   "tip_open", "tip_click",
+  // 官方部落格：進文章頁、讀到文末、分享、文內行動按鈕（subject 是文章 slug，不放成員 id）
+  "blog_view", "blog_read_end", "blog_share", "blog_cta",
 ]);
 
 /** beacon 事件的 detail 小分类。同样白名单，避免自由字串进 blob。 */
