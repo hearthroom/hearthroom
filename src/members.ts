@@ -402,3 +402,9 @@ function safeAvatar(value: unknown): string {
   if (typeof value !== "string" || !value) return "";
   try { const url = new URL(value); return url.protocol === "https:" && !url.username && !url.password && value.length <= 2048 ? url.href : ""; } catch { return ""; }
 }
+
+/** AI 審核帳號：本身是審核人，再多一列代理標記。actor_kind 一律由這裡推出。 */
+export async function isReviewAgent(db: D1Database, memberId: string): Promise<boolean> {
+  const row = await db.prepare("SELECT 1 AS ok FROM review_agents a JOIN reviewers r ON r.member_id = a.member_id WHERE a.member_id = ? AND a.revoked_at IS NULL AND r.revoked_at IS NULL").bind(memberId).first<{ ok: number }>();
+  return !!row;
+}

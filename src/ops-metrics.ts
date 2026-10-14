@@ -1,0 +1,36 @@
+/**
+ * 各功能的操作計數，共用一張表、依 metric 分開輸出。每個 metric 列舉自己的合法值，
+ * 表裡多出來的列（舊版本、手動寫入）不會變成 Prometheus 標籤。
+ */
+const METRICS = {
+  comment_moderation: {
+    name: "hearthroom_comment_moderation_total",
+    help: "Comment moderation: holds, releases, removals, mutes, reports, AI flags, keyword and settings changes.",
+    label: "action",
+    operations: ["hold", "release", "remove", "mute", "unmute", "report", "flag", "dismiss", "keyword", "settings"],
+    outcomes: ["success", "denied", "error"],
+  },
+} as const;
+export type OpsMetric = keyof typeof METRICS;
+
+export async function bumpOp(db: D1Database, metric: OpsMetric, operation: string, outcome: "success" | "denied" | "error"): Promise<void> {
+  try {
+    await db.prepare("INSERT INTO ops_metrics VALUES (?, ?, ?, 1) ON CONFLICT(metric, operation, outcome) DO UPDATE SET value = value + 1").bind(metric, operation, outcome).run();
+  } catch {
+    console.warn("Ops metric unavailable");
+  }
+}
+
+export async function opsMetrics(db: D1Database): Promise<string> {
+  const rows = await db.prepare("SELECT metric, operation, outcome, value FROM ops_metrics ORDER BY metric, operation, outcome").all<{ metric: string; operation: string; outcome: string; value: number }>();
+  const out: string[] = [];
+  for (const [key, m] of Object.entries(METRICS)) {
+    out.push(`# HELP ${m.name} ${m.help}`, `# TYPE ${m.name} counter`);
+    for (const r of rows.results) {
+      if (r.metric === key && (m.operations as readonly string[]).includes(r.operation) && (m.outcomes as readonly string[]).includes(r.outcome)) {
+        out.push(`${m.name}{${m.label}="${r.operation}",outcome="${r.outcome}"} ${r.value}`);
+      }
+    }
+  }
+  return out.join("\n") + "\n";
+}
