@@ -78,6 +78,16 @@ describe("骨架與部件", () => {
     rig.params.Expr_happy = 1;
     expect(rig.opacity(rig.model.parts.find((p) => p.id === "expr-happy")!)).toBe(1);
   });
+
+  it("閉眼時眼白、眼珠、眼線收起來，只剩閉眼那層（底下是乾淨皮膚，眼角才不會露出睜眼的碎片）", () => {
+    for (const name of ["day", "night", "imp", "night-imp"]) {
+      const rig = new Rig(compose(skeleton, JSON.parse(readFileSync(resolve(dir, `skin-${name}.json`), "utf8")) as PetSkin));
+      const op = (id: string) => rig.opacity(rig.model.parts.find((p) => p.id === id)!);
+      expect(["eyewhite", "iris", "eyeline", "eyeclosed"].map(op), name).toEqual([1, 1, 1, 0]);
+      rig.params.EyeOpen = 0;
+      expect(["eyewhite", "iris", "eyeline", "eyeclosed"].map(op), name).toEqual([0, 0, 0, 1]);
+    }
+  });
 });
 
 describe("表情", () => {
