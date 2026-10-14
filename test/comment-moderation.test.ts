@@ -2,6 +2,7 @@ import {approveFixtureResponse} from './hosted-fixture';
 import { SELF, env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ratingBody, bearer, identities, resetDb, restoreUpstream, rolesOnMainSite } from "./helpers";
+import { holdVisible } from "../src/comment-moderation";
 import { ADULT_CONSENT_VERSION } from "../shared/adult-consent";
 
 // 留言是本站自己的資料：掛在本站的卡上、寫的人是本站成員，供應商不參與。
@@ -210,5 +211,39 @@ describe("檢舉", () => {
     identities({ "author-token": AUTHOR, fan: FAN, other: OTHER, third: 20003 });
     expect((await json(await report("third", reply, { reason: "spam" }))).folded).toBe(true);
     expect((await json(await list())).comments[0].replyCount).toBe(0);
+  });
+
+  describe("holdVisible 只生效一次", () => {
+    const setup = async () => {
+      const root = await say("fan", "頂層");
+      const reply = await say("other", "回覆", { rootId: root });
+      return { root, reply };
+    };
+    const holds = (id: string) => env.DB.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE subject_id=? AND action='hold'").bind(id).first<{ n: number }>().then((r) => r!.n);
+    const replyCount = (root: string) => env.DB.prepare("SELECT reply_count AS n FROM comments WHERE id=?").bind(root).first<{ n: number }>().then((r) => r!.n);
+
+    it("連續呼叫兩次：一筆稽核、回覆數只減一次、第二次回 false", async () => {
+      const { root, reply } = await setup();
+      expect(await holdVisible(env.DB, reply, "reports", null, "system", "op-1", Date.now())).toBe(true);
+      expect(await holdVisible(env.DB, reply, "reports", null, "system", "op-2", Date.now())).toBe(false);
+      expect(await holds(reply)).toBe(1);
+      expect(await replyCount(root)).toBe(0);
+    });
+
+    it("同時呼叫：只有一個贏，一筆稽核、回覆數只減一次", async () => {
+      const { root, reply } = await setup();
+      const out = await Promise.all([1, 2, 3].map((i) => holdVisible(env.DB, reply, "reports", null, "system", "op-" + i, Date.now())));
+      expect(out.filter(Boolean)).toHaveLength(1);
+      expect(await holds(reply)).toBe(1);
+      expect(await replyCount(root)).toBe(0);
+    });
+
+    it("已被移除的留言：回 false、沒有稽核、不動回覆數", async () => {
+      const { root, reply } = await setup();
+      await env.DB.prepare("UPDATE comments SET status='removed', deleted_at=? WHERE id=?").bind(Date.now(), reply).run();
+      expect(await holdVisible(env.DB, reply, "reports", null, "system", "op-1", Date.now())).toBe(false);
+      expect(await holds(reply)).toBe(0);
+      expect(await replyCount(root)).toBe(1);
+    });
   });
 });
