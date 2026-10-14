@@ -86,3 +86,18 @@ it("reports someone else's comment with the chosen reason", async () => {
   await vi.waitFor(() => expect(host.textContent).toContain(t("comment.reportThanks")));
   expect(document.querySelector("[role=dialog]")).toBeNull();
 });
+
+it("keeps Tab inside the report dialog: the last control wraps to the first and back", async () => {
+  api.list = [comment("c1")];
+  await mount();
+  buttons(host.querySelector(".cmt__item")!, t("comment.report"))[0]!.click();
+  await nextTick(); await nextTick();
+  const dialog = document.querySelector<HTMLElement>("[role=dialog]")!;
+  const first = dialog.querySelector<HTMLInputElement>("input[value=spam]")!;
+  const last = buttons(dialog, t("dialog.cancel"))[0]!; // 還沒選理由：送出鍵停用，不算在內
+  const tab = (shiftKey: boolean) => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey, bubbles: true, cancelable: true }));
+  last.focus(); tab(false);
+  expect(document.activeElement).toBe(first);
+  tab(true);
+  expect(document.activeElement).toBe(last);
+});
