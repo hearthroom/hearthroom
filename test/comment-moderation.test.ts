@@ -106,6 +106,21 @@ describe("被攔的回覆", () => {
     expect((await notes())!.n).toBe(1);
   });
 
+  it("頂層沒有公開回覆時，本人仍看得到自己被攔的回覆；別人與訪客看不到", async () => {
+    const root = await say("fan", "頂層");
+    await env.DB.prepare("INSERT INTO comment_keywords VALUES ('k1','違禁','test',1)").run();
+    await post("other", { content: "違禁回覆", rootId: root, parentId: root });
+    const mine = (await json(await list("other"))).comments[0];
+    expect(mine.replyCount).toBe(0);
+    expect(mine.replies).toHaveLength(1);
+    expect(mine.replies[0]).toMatchObject({ content: "違禁回覆", status: "held" });
+    for (const t of [undefined, "fan"]) {
+      const top = (await json(await list(t))).comments[0];
+      expect(top.replyCount).toBe(0);
+      expect(top.replies).toBeUndefined();
+    }
+  });
+
   it("不能回覆被攔或被移除的留言", async () => {
     await env.DB.prepare("INSERT INTO comment_keywords VALUES ('k1','違禁','test',1)").run();
     const held = (await json(await post("fan", { content: "違禁" }))).commentId;
