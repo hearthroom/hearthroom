@@ -86,6 +86,32 @@ describe("部落格分享資訊", () => {
     }
   });
 
+  it("?preview= 的草稿網址：照樣是 404 殼＋noindex，沒有分享標籤", async () => {
+    await post({ slug: "wip" }, null);
+    const { status, text } = await get("/blog/news/wip?preview=anything");
+    expect(status).toBe(404);
+    expect(text).toContain('name="robots" content="noindex');
+    expect(text).not.toContain('property="og:title"');
+  });
+
+  it("資料庫讀取出錯不是 404／noindex，壞掉的網址編碼才是", async () => {
+    await post({}, 1000);
+    const failing = (db: D1Database): D1Database => new Proxy(db, { get(t, k) {
+      if (k === "prepare") return (sql: string) => { if (sql.includes("blog_")) throw new Error("d1 down"); return t.prepare(sql); };
+      if (k === "withSession") return (c?: string) => failing(t.withSession(c as never) as unknown as D1Database);
+      const v = Reflect.get(t, k);
+      return typeof v === "function" ? v.bind(t) : v;
+    } });
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(new Request("https://c.test/blog/news/hello"), { ...testEnv, DB: failing(env.DB) }, ctx);
+    await waitOnExecutionContext(ctx);
+    expect(res.status).toBeGreaterThanOrEqual(500);
+    expect(await res.text()).not.toContain("noindex");
+    const bad = await get("/blog/%E0%A4%A");
+    expect(bad.status).toBe(404);
+    expect(bad.text).toContain("noindex");
+  });
+
   it("/blog 與欄目頁：站名接標題、website 型、站台預設圖；不存在的欄目 404", async () => {
     const home = await get("/blog");
     expect(home.status).toBe(200);

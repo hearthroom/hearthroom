@@ -1695,12 +1695,16 @@ async function blogPage(c: Context<{ Bindings: Env; Variables: { ev: Pending } }
   if (!shell.ok) return shell;
   const locale = m[1] ?? "zh-Hant";
   note(c, { event: "page_html", refHost: refHostOf(c.req.header("Referer"), url.host), locale, subject: m[3] ?? m[2] ?? "", detail: "blog" });
-  let meta: Awaited<ReturnType<typeof blogIndexMeta>> = null;
-  try {
-    const column = m[2] === undefined ? undefined : decodeURIComponent(m[2]);
-    const slug = m[3] === undefined ? undefined : decodeURIComponent(m[3]);
-    meta = column && slug ? await postMeta(c.env.DB, column, slug, Date.now()) : await blogIndexMeta(c.env.DB, locale, column, blogUrl(locale, column));
-  } catch { /* 網址編碼壞掉＝找不到 */ }
+  // 網址編碼壞掉＝找不到；資料庫讀取出錯不吞掉，照一般錯誤路徑回 5xx（爬蟲不會把暫時的錯當成文章下架）
+  const decode = (part: string | undefined): string | undefined | null => {
+    if (part === undefined) return undefined;
+    try { return decodeURIComponent(part); } catch { return null; }
+  };
+  const column = decode(m[2]);
+  const slug = decode(m[3]);
+  const meta = column === null || slug === null ? null
+    : column && slug ? await postMeta(c.env.DB, column, slug, Date.now())
+    : await blogIndexMeta(c.env.DB, locale, column, blogUrl(locale, column));
   if (!meta) {
     const res = new HTMLRewriter().on("head", { element(e) { e.append('<meta name="robots" content="noindex, nofollow">', { html: true }); } }).transform(new Response(shell.body, { status: 404, headers: shell.headers }));
     res.headers.set("Cache-Control", "no-store");
