@@ -20,7 +20,9 @@ export interface PageMeta {
   /** 分享預覽圖的尺寸：確定時才給（作者照 1200×630 畫的分享圖），抓取器不必先下載就能排版。 */
   imageSize?: { width: number; height: number };
   url: string;
-  type: "profile" | "website";
+  type: "profile" | "website" | "article";
+  /** 文章型頁面：發布與修改時間（ISO 8601），另附 JSON-LD。 */
+  article?: { published: string; modified: string; jsonLd: unknown };
   /**
    * 頁面主圖的網址，一進 HTML 就開始下載。卡片頁最大的那張是直式封面，
    * 不先講的話要等 JS 跑完、卡片資料回來才知道網址（實測 LCP 的載入延遲約 0.5 s）。
@@ -31,6 +33,10 @@ export interface PageMeta {
 
 const esc = (s: string) =>
   s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
+
+/** JSON-LD 放進 <script>：< 與兩個 JS 換行字元跳脫，標題寫了 </script> 也關不掉這一段。 */
+export const jsonLdText = (v: unknown) =>
+  JSON.stringify(v).replace(/</g, "\\u003c").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
 
 /** 簡介壓成一行、截到抓取器會顯示的長度；多的只是浪費位元組 */
 export const oneLine = (s: string, max = 200) => {
@@ -78,6 +84,8 @@ export function renderHead(page: Response, meta: PageMeta): Response {
     meta.image ? `<meta property="og:image" content="${esc(meta.image)}">` : "",
     meta.image && meta.imageSize ? `<meta property="og:image:width" content="${meta.imageSize.width}"><meta property="og:image:height" content="${meta.imageSize.height}">` : "",
     meta.preloadImage ? preloadImageTag(meta.preloadImage) : "",
+    meta.article ? `<meta property="article:published_time" content="${esc(meta.article.published)}"><meta property="article:modified_time" content="${esc(meta.article.modified)}">` : "",
+    meta.article ? `<script type="application/ld+json">${jsonLdText(meta.article.jsonLd)}</script>` : "",
     `<meta name="twitter:card" content="${meta.image ? "summary_large_image" : "summary"}">`,
     `<meta name="twitter:title" content="${esc(meta.title)}">`,
     `<meta name="twitter:description" content="${esc(description)}">`,
