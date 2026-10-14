@@ -52,7 +52,7 @@ import { cardThumbUrl, landingZone } from "../shared/card-thumb";
 import { PRIMARY_HOST, siteRootOf } from "../shared/site-hosts";
 import { draftStateOf, loadMine, type MineFilter } from "./mine";
 import { tagNamesFor } from "../shared/tag-catalog";
-import { providerOf, requestIdentity, isReviewer, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
+import { providerOf, requestIdentity, isReviewer, isHumanReviewer, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
 import { configuredProviders, hasChat, parseProvider, requireConfigured, DEFAULT_PROVIDER, PROVIDER_NAMES, type ProviderId, reviewEnabled } from "./providers";
 import { providerApiBaseFor } from "./providers";
 import { WEEKLY_LIMIT, registeredThisWeek, openPack } from "./quota";
@@ -156,7 +156,7 @@ app.onError((err, c) => {
   if (err instanceof HttpError) {
     if(c.req.path==='/v1/me/card-sync')console.error('card_sync_failed',{code:err.message.startsWith('sync_')?err.message:'sync_identity_failed',...err.detail});
     if (ev) ev.outcome = err.status === 404 ? "not_found" : err.status === 403 ? "forbidden" : err.status === 502 ? "upstream_error" : "rejected";
-    return c.json({ error: err.message, ...(err.detail ? {detail:err.detail} : {}) }, err.status);
+    return c.json({ error: err.message, ...err.extra, ...(err.detail ? {detail:err.detail} : {}) }, err.status);
   }
   if (ev) ev.outcome = "internal";
   console.error("unhandled error", err);
@@ -925,7 +925,7 @@ async function commentViewer(c: Context<{ Bindings: Env; Variables: { ev: Pendin
   if (!c.req.header("Authorization")) return { memberId: null, moderator: false };
   try {
     const member = await requireMember(c);
-    return { memberId: member.id, moderator: await isReviewer(c.env.DB, member.id) };
+    return { memberId: member.id, moderator: await isHumanReviewer(c.env.DB, member.id) };
   } catch (err) {
     // 讀留言不該因為 token 過期就整個失敗：當成訪客
     if (err instanceof HttpError && err.status === 401) return { memberId: null, moderator: false };
@@ -971,7 +971,7 @@ app.post("/v1/cards/:id/comments", async (c) => {
 
 app.delete("/v1/comments/:id", async (c) => {
   const member = await requireMember(c);
-  await deleteComment(c.env.DB, c.req.param("id"), { memberId: member.id, moderator: await isReviewer(c.env.DB, member.id) }, Date.now());
+  await deleteComment(c.env.DB, c.req.param("id"), { memberId: member.id, moderator: await isHumanReviewer(c.env.DB, member.id) }, Date.now());
   return c.body(null, 204);
 });
 

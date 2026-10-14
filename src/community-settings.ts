@@ -19,7 +19,7 @@ const KEYS: Record<keyof CommunitySettings, { min: number; max: number }> = {
 export async function readSettings(db: D1Database): Promise<CommunitySettings> {
   const rows = await db.prepare("SELECT key, value FROM community_settings").all<{ key: string; value: string }>();
   const out: CommunitySettings = { commentNewAccountDays: null, commentMaxLinks: null, commentReportFoldThreshold: null };
-  for (const r of rows.results) if (r.key in KEYS) out[r.key as keyof CommunitySettings] = Number(JSON.parse(r.value));
+  for (const r of rows.results) if (Object.hasOwn(KEYS, r.key)) out[r.key as keyof CommunitySettings] = Number(JSON.parse(r.value));
   return out;
 }
 
@@ -27,7 +27,7 @@ export async function writeSettings(db: D1Database, patch: Partial<CommunitySett
   const before = await readSettings(db);
   const writes: D1PreparedStatement[] = [];
   for (const [key, value] of Object.entries(patch) as [keyof CommunitySettings, number | null][]) {
-    const rule = KEYS[key];
+    const rule = Object.hasOwn(KEYS, key) ? KEYS[key] : undefined;
     if (!rule) throw new HttpError(400, "invalid_settings");
     if (value === null) { writes.push(db.prepare("DELETE FROM community_settings WHERE key = ?").bind(key)); continue; }
     if (!Number.isInteger(value) || value < rule.min || value > rule.max) throw new HttpError(400, "invalid_settings");

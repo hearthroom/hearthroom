@@ -140,6 +140,16 @@ describe("移除與刪除", () => {
     expect(body.comments[0].replies[0].content).toBe("回覆一");
   });
 
+  it("被移除的頂層佔位不帶留言者的名字、頭像、星數與讚數", async () => {
+    const root = await say("fan", "頂層");
+    await say("other", "回覆一", { rootId: root, parentId: root });
+    await env.DB.prepare("INSERT INTO card_scores VALUES (?, ?, 5, 1, 1)").bind(cardId, await memberIdOf(FAN)).run();
+    await env.DB.prepare("UPDATE members SET avatar_url='https://img.test/a.png' WHERE id=?").bind(await memberIdOf(FAN)).run();
+    await env.DB.prepare("UPDATE comments SET status='removed', deleted_at=?, like_count=4 WHERE id=?").bind(Date.now(), root).run();
+    const top = (await json(await list("other"))).comments[0];
+    expect(top).toMatchObject({ removed: true, handle: "", accountNickName: "", accountAvatar: "", score: null, likeCount: 0, isCreator: false });
+  });
+
   it("本人刪除照舊連同回覆一起消失；被攔的留言本人也能刪", async () => {
     await env.DB.prepare("INSERT INTO comment_keywords VALUES ('k1','違禁','test',1)").run();
     const held = (await json(await post("fan", { content: "違禁" }))).commentId;
