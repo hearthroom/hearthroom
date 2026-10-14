@@ -35,10 +35,10 @@ beforeEach(async () => {
 });
 afterEach(() => { app?.unmount(); host.remove(); document.body.innerHTML = ""; vi.clearAllMocks(); });
 
-async function mount() {
+async function mount(props: Record<string, unknown> = { cardId: "1", roleId: "r1" }) {
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/:p(.*)*", component: { render: () => null } }] });
   await router.push("/cards/1");
-  app = createApp(CommentPanel, { cardId: "1", roleId: "r1" }).use(router).use(i18n);
+  app = createApp(CommentPanel, props).use(router).use(i18n);
   app.mount(host);
   await vi.waitFor(() => expect(api.fetchComments).toHaveBeenCalled());
   await nextTick();
@@ -114,4 +114,48 @@ it("offers reply only under a public top-level comment, not under a removed one 
   expect(buttons(gone!, t("comment.reply"))).toHaveLength(0);
   expect(buttons(folded!, t("comment.reply"))).toHaveLength(0);
   expect(buttons(open!, t("comment.reply"))).toHaveLength(2);
+});
+
+it("reads card comments from the card, without a sort", async () => {
+  await mount();
+  expect(api.fetchComments).toHaveBeenCalledWith("1", 1, "synthetic", undefined);
+  expect(host.querySelector(".cmt__sort")).toBeNull();
+});
+
+const postTarget = (extra: Record<string, unknown> = {}) => ({ target: { kind: "post", postId: "p1", ...extra } });
+
+it("on a post, marks official commenters and the pinned comment, and switches between hot and new", async () => {
+  api.list = [comment("pin", { official: true }), comment("c2")];
+  api.fetchComments.mockImplementation(async () => ({ total: 2, comments: api.list, isRoleCreator: false, pinnedCommentId: "pin" }));
+  await mount(postTarget());
+  expect(api.fetchComments).toHaveBeenLastCalledWith({ postId: "p1" }, 1, "synthetic", "hot");
+  const [pin, other] = [...host.querySelectorAll(".cmt__item")];
+  expect(pin!.textContent).toContain(t("comment.official"));
+  expect(pin!.textContent).toContain(t("comment.pinned"));
+  expect(other!.textContent).not.toContain(t("comment.official"));
+  expect(other!.textContent).not.toContain(t("comment.pinned"));
+  buttons(host, t("comment.sortNew"))[0]!.click();
+  await vi.waitFor(() => expect(api.fetchComments).toHaveBeenLastCalledWith({ postId: "p1" }, 1, "synthetic", "new"));
+  expect(buttons(host, t("comment.sortNew"))[0]!.getAttribute("aria-pressed")).toBe("true");
+});
+
+it("on a post with comments closed, keeps the comments but offers no composer or reply", async () => {
+  api.list = [comment("c1")];
+  await mount(postTarget({ commentsClosed: true }));
+  expect(host.textContent).toContain(t("comment.closed"));
+  expect(host.querySelector(".cmt__composer")).toBeNull();
+  expect(host.textContent).toContain("text c1");
+  expect(buttons(host, t("comment.reply"))).toHaveLength(0);
+});
+
+it("closes the composer when the post is closed while someone is writing", async () => {
+  await mount(postTarget());
+  const { ApiError } = await import("../src/lib/api");
+  api.createComment.mockRejectedValue(new ApiError(403, "closed", "blog_comments_closed"));
+  const box = host.querySelector<HTMLTextAreaElement>(".cmt__composer textarea")!;
+  box.value = "hello"; box.dispatchEvent(new Event("input")); await nextTick();
+  buttons(host, t("comment.submit"))[0]!.click();
+  await vi.waitFor(() => expect(host.textContent).toContain(t("comment.closed")));
+  expect(api.createComment).toHaveBeenCalledWith({ postId: "p1" }, { content: "hello", parentId: undefined, rootId: undefined }, "synthetic");
+  expect(host.querySelector(".cmt__composer")).toBeNull();
 });

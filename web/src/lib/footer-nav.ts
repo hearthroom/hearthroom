@@ -51,7 +51,7 @@ export function footerGroups(ctx: FooterContext): FooterGroup[] {
   else if (ctx.canInstallSite) app.push({ id: "install", label: "pwa.install.link", action: "install" });
   app.push({ id: "updates", label: "nav.updates", to: "/updates", query: { from: "footer" }, newMark: "menu.updates" });
 
-  const community: FooterLink[] = [];
+  const community: FooterLink[] = [{ id: "blog", label: "blog.title", to: "/blog" }];
   if (ctx.discordInvite) community.push({ id: "discord", label: "community.join", href: ctx.discordInvite, icon: "discord" });
   community.push(
     { id: "github", label: "footer.githubShort", href: ctx.repoUrl, icon: "github" },

@@ -52,6 +52,21 @@ const pages: RouteRecordRaw[] = [
   { path: "download", component: () => import("./pages/DownloadPage.vue") },
   { path: "guide", component: () => import("./pages/GuidePage.vue") },
   { path: "updates", component: () => import("./pages/UpdatesPage.vue") },
+  // 官方部落格：/blog 全部、/blog/<欄目>、/blog/<欄目>/<文章>。/blog/p/<id> 是短網址，問到正式網址就換過去，問不到是 404。
+  { path: "blog/:column?", component: () => import("./pages/BlogListPage.vue") },
+  {
+    path: "blog/p/:id", component: () => import("./pages/NotFoundPage.vue"),
+    beforeEnter: async (to) => {
+      try {
+        const { resolveShortLink } = await import("./lib/blog");
+        const { column, slug } = await resolveShortLink(String(to.params.id));
+        return { path: withLocale(`/blog/${column}/${slug}`, localeOf(to)), query: to.query, hash: to.hash, replace: true };
+      } catch {
+        return true;
+      }
+    },
+  },
+  { path: "blog/:column/:slug", component: () => import("./pages/BlogPostPage.vue") },
   // 站內玩卡：舞台整頁接管（bare = 不套站台頁首頁尾）。遊客進得來、看得到開場，送出時才請他登入
   // （owner 2026-10-10，見 PlayPage）；續玩、審核、作者試玩由 PlayPage 自己要求登入。
   { path: "play/:roleId", component: () => import("./pages/PlayPage.vue"), meta: { bare: true, preloadStage: true } },
@@ -218,6 +233,7 @@ function surfaceOf(path: string): string {
   if (bare.startsWith("/play")) return "play";
   if (bare.startsWith("/review")) return "review";
   if (bare.startsWith("/updates")) return "updates";
+  if (bare.startsWith("/blog")) return "blog";
   return "404";
 }
 
