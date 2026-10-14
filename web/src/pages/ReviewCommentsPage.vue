@@ -45,6 +45,8 @@ let generation = 0, alive = true;
 
 type DialogKind = 'remove' | 'dismiss' | 'mute';
 const dialogBox = ref<HTMLElement | null>(null);
+const listBox = ref<HTMLElement | null>(null);
+const tabsBox = ref<HTMLElement | null>(null);
 /** 打開對話框的那顆鍵：怎麼關（完成、取消、Esc、點背景）焦點都還給它 */
 let opener: HTMLElement | null = null;
 const dialog = ref<{ kind: DialogKind; item: QueuedComment; reason: string; days: 7 | 30 | null; operationId: string; busy: boolean; error: string } | null>(null);
@@ -76,9 +78,23 @@ async function afterDecision() {
   await load();
   await reviewer.refresh();
 }
+/**
+ * 佇列重讀之後把焦點放回來：按下去的那顆鍵還在就回它；那一則已經離開佇列（放行、移除、駁回）就落到補上同一個位置的那一則
+ * 的第一顆鍵，最後一則就往前一則；佇列空了落到目前的分頁鍵。不然焦點掉回頁首，鍵盤使用者得從頭 Tab 一遍。
+ */
+async function refocus(origin: HTMLElement | null, index: number) {
+  await nextTick();
+  if (origin?.isConnected) return origin.focus();
+  const rows = [...(listBox.value?.querySelectorAll<HTMLElement>('.cmod-item') ?? [])];
+  const row = rows[Math.min(Math.max(index, 0), rows.length - 1)];
+  (row?.querySelector<HTMLElement>('.cmod-item__actions button:not(:disabled)') ?? tabsBox.value?.querySelector<HTMLElement>('.seg__item--on'))?.focus();
+}
+const rowOf = (item: QueuedComment) => items.value.findIndex((i) => i.id === item.id);
 
-async function release(item: QueuedComment) {
+async function release(item: QueuedComment, e: Event) {
   if (busyId.value) return;
+  const origin = e.currentTarget as HTMLElement | null, index = rowOf(item);
+  let ok = false;
   const operationId = releaseOps.get(item.id) ?? crypto.randomUUID();
   releaseOps.set(item.id, operationId);
   busyId.value = item.id; error.value = ''; done.value = '';
@@ -86,12 +102,15 @@ async function release(item: QueuedComment) {
     await decideComment(item.id, { action: 'release', reason: '', operationId }, await token());
     releaseOps.delete(item.id);
     await afterDecision();
+    ok = true;
   } catch (e) { error.value = message(e, 'moderation.error.retry'); } finally { busyId.value = ''; }
+  if (ok) await refocus(origin, index);
 }
 
-async function open(kind: DialogKind, item: QueuedComment) {
+async function open(kind: DialogKind, item: QueuedComment, e: Event) {
   done.value = '';
-  opener = document.activeElement as HTMLElement | null;
+  // 從點擊本身拿：macOS 的 Safari、Firefox 用滑鼠點按鈕不會讓它取得焦點
+  opener = e.currentTarget as HTMLElement | null;
   dialog.value = { kind, item, reason: '', days: 7, operationId: crypto.randomUUID(), busy: false, error: '' };
   await nextTick();
   dialogBox.value?.querySelector<HTMLElement>('textarea')?.focus();
@@ -116,8 +135,10 @@ async function confirmDialog() {
     const reason = d.reason.trim();
     if (d.kind === 'mute') await muteMember(d.item.author.handle, { days: d.days, reason, operationId: d.operationId }, access);
     else await decideComment(d.item.id, { action: d.kind, reason, operationId: d.operationId }, access);
+    const origin = opener, index = rowOf(d.item);
     await close();
     await afterDecision();
+    await refocus(origin, index);
   } catch (e) {
     if (codeOf(e) === 'agent_not_allowed') agent.value = true;
     d.error = message(e, 'moderation.error.retry');
@@ -170,14 +191,14 @@ onBeforeUnmount(() => { alive = false; document.removeEventListener('keydown', o
       <div class="stat"><dt>{{ t('moderation.comments.stats.median') }}</dt><dd>{{ duration(stats.medianHandleMs7d) }}</dd></div>
     </dl>
 
-    <div class="seg cmod-tabs">
+    <div ref="tabsBox" class="seg cmod-tabs">
       <button v-for="key in TABS" :key="key" type="button" class="seg__item" :class="{ 'seg__item--on': tab === key }" :aria-pressed="tab === key" @click="pick(key)">{{ t(`moderation.comments.${key}`) }}</button>
     </div>
 
     <p v-if="error" class="notice notice--error" role="alert">{{ error }} <button class="btn btn--sm" :disabled="loading" @click="load">{{ t('review.refresh') }}</button></p>
     <p v-if="done" class="notice" role="status">{{ done }}</p>
 
-    <div class="cmod-list" :aria-busy="loading">
+    <div ref="listBox" class="cmod-list" :aria-busy="loading">
       <template v-if="loading && !items.length"><div v-for="n in 3" :key="n" class="ghost cmod-ghost" /></template>
       <p v-else-if="!items.length" class="panel cmod-empty muted">{{ t('moderation.comments.empty') }}</p>
       <article v-for="item in items" :key="item.id" class="panel cmod-item" :data-comment="item.id">
@@ -195,11 +216,11 @@ onBeforeUnmount(() => { alive = false; document.removeEventListener('keydown', o
         <!-- AI 標記時寫的理由；已移除的留言是審核人寫的移除原因 -->
         <p v-if="item.moderationReason && (item.suggestedBy === 'ai' || tab === 'removed')" class="notice cmod-item__reason">{{ item.moderationReason }}</p>
         <div v-if="tab !== 'removed'" class="cmod-item__actions">
-          <button v-if="tab === 'held'" data-action="release" class="btn btn--sm btn--primary" :disabled="!!busyId" @click="release(item)">{{ t('moderation.comments.release') }}</button>
+          <button v-if="tab === 'held'" data-action="release" class="btn btn--sm btn--primary" :disabled="!!busyId" @click="release(item, $event)">{{ t('moderation.comments.release') }}</button>
           <template v-if="!agent">
-            <button v-if="tab === 'reported'" data-action="dismiss" class="btn btn--sm" :disabled="!!busyId" @click="open('dismiss', item)">{{ t('moderation.comments.dismiss') }}</button>
-            <button data-action="remove" class="btn btn--sm btn--danger" :disabled="!!busyId" @click="open('remove', item)">{{ t('moderation.comments.remove') }}</button>
-            <button data-action="mute" class="btn btn--sm btn--ghost" :disabled="!!busyId" @click="open('mute', item)">{{ t('moderation.comments.mute') }}</button>
+            <button v-if="tab === 'reported'" data-action="dismiss" class="btn btn--sm" :disabled="!!busyId" @click="open('dismiss', item, $event)">{{ t('moderation.comments.dismiss') }}</button>
+            <button data-action="remove" class="btn btn--sm btn--danger" :disabled="!!busyId" @click="open('remove', item, $event)">{{ t('moderation.comments.remove') }}</button>
+            <button data-action="mute" class="btn btn--sm btn--ghost" :disabled="!!busyId" @click="open('mute', item, $event)">{{ t('moderation.comments.mute') }}</button>
           </template>
         </div>
       </article>
