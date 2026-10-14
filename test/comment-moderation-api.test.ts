@@ -1,0 +1,170 @@
+import {approveFixtureResponse} from './hosted-fixture';
+import { SELF, env } from "cloudflare:test";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { ratingBody, bearer, identities, makeAgent, makeMember, makeReviewer, resetDb, restoreUpstream, rolesOnMainSite, testHandle } from "./helpers";
+import { upstream } from "../src/upstream";
+
+// 審核人（含 AI 審核帳號）處理留言：佇列、放行／移除／駁回／標記、禁言、關鍵詞、運營設定、統計。
+const AUTHOR = 10001;
+const FAN = 20001;
+const OTHER = 20002;
+const MOD = 30001;
+const AGENT = 30002;
+const MOD2 = 30003;
+
+let cardId = "";
+beforeEach(async () => {
+  await resetDb();
+  identities({ "author-token": AUTHOR, "fan": FAN, "other": OTHER, "mod": MOD, "agent": AGENT });
+  rolesOnMainSite({ roleId: "role-1", authorNumId: AUTHOR });
+  upstream.fetchCommunityStatus = async () => ({ admin: false, featuredUsed: 0, featuredQuota: 50 });
+  await makeReviewer(MOD);
+  await makeAgent(AGENT);
+  await makeMember(FAN);
+  const res = await approveFixtureResponse(await SELF.fetch("https://c.test/v1/cards", {
+    method: "POST", headers: { "Content-Type": "application/json", ...bearer("author-token") }, body: JSON.stringify({operationId:crypto.randomUUID(),...({ roleId: "role-1", ...ratingBody(false) })}),
+  }));
+  cardId = ((await res.json()) as { id: string }).id;
+});
+afterEach(() => restoreUpstream());
+
+const json = async (r: Response) => (await r.json()) as any;
+const list = (token?: string, page = 1) => SELF.fetch(`https://c.test/v1/cards/${cardId}/comments?page=${page}`, { headers: token ? bearer(token) : {} });
+const post = (token: string, body: Record<string, unknown>) =>
+  SELF.fetch(`https://c.test/v1/cards/${cardId}/comments`, { method: "POST", headers: { "Content-Type": "application/json", ...bearer(token) }, body: JSON.stringify(body) });
+const say = async (token: string, content: string, extra: Record<string, unknown> = {}) => (await json(await post(token, { content, ...extra }))).commentId as string;
+const report = (token: string, id: string, body: Record<string, unknown>) =>
+  SELF.fetch(`https://c.test/v1/comments/${id}/report`, { method: "POST", headers: { "Content-Type": "application/json", ...bearer(token) }, body: JSON.stringify(body) });
+const decide = (token: string, id: string, action: string, reason = "理由") =>
+  SELF.fetch(`https://c.test/v1/moderation/comments/${id}/decision`, { method: "POST", headers: { "Content-Type": "application/json", ...bearer(token) }, body: JSON.stringify({ action, reason, operationId: crypto.randomUUID() }) });
+const count = async (sql: string, ...binds: unknown[]) => (await env.DB.prepare(sql).bind(...binds).first<{ n: number }>())!.n;
+
+describe("處理", () => {
+  it("放行：本人以外的人看得到、回覆數補上、被回覆者收到通知、留稽核", async () => {
+    const root = await say("fan", "頂層");
+    await env.DB.prepare("INSERT INTO comment_keywords VALUES ('k1','違禁','test',1)").run();
+    const reply = (await json(await post("other", { content: "違禁回覆", rootId: root, parentId: root }))).commentId;
+    expect((await json(await SELF.fetch("https://c.test/v1/moderation/summary", { headers: bearer("mod") }))).comments).toBe(1);
+    expect((await decide("mod", reply, "release")).status).toBe(200);
+    const top = (await json(await list())).comments[0];
+    expect(top.replyCount).toBe(1);
+    expect(top.replies[0].content).toBe("違禁回覆");
+    const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM community_notifications WHERE kind='comment_reply'").first<{ n: number }>();
+    expect(n!.n).toBe(1);
+    const a = await env.DB.prepare("SELECT actor_kind, action FROM audit_log WHERE subject_id=? AND action='release'").bind(reply).first();
+    expect(a).toEqual({ actor_kind: "human", action: "release" });
+  });
+
+  it("兩個人同時放行同一則：一個成功一個衝突，回覆數、稽核、通知都只有一次", async () => {
+    const root = await say("fan", "頂層");
+    await env.DB.prepare("INSERT INTO comment_keywords VALUES ('k1','違禁','test',1)").run();
+    const reply = (await json(await post("other", { content: "違禁回覆", rootId: root, parentId: root }))).commentId;
+    const codes = (await Promise.all([decide("mod", reply, "release"), decide("mod", reply, "release")])).map((r) => r.status).sort();
+    expect(codes).toEqual([200, 409]);
+    expect(await count("SELECT reply_count AS n FROM comments WHERE id=?", root)).toBe(1);
+    expect(await count("SELECT COUNT(*) AS n FROM audit_log WHERE subject_id=? AND action='release'", reply)).toBe(1);
+    expect(await count("SELECT COUNT(*) AS n FROM community_notifications WHERE kind='comment_reply'")).toBe(1);
+  });
+
+  it("移除要理由；留言者收到站內通知；未結檢舉一起結案", async () => {
+    const id = await say("fan", "廣告");
+    await report("other", id, { reason: "spam" });
+    expect((await decide("mod", id, "remove", "")).status).toBe(400);
+    expect((await decide("mod", id, "remove", "廣告")).status).toBe(200);
+    const note = await env.DB.prepare("SELECT kind, delivered FROM community_notifications WHERE event_key=?").bind("removed:" + id).first();
+    expect(note).toEqual({ kind: "comment_removed", delivered: 1 });
+    const r = await env.DB.prepare("SELECT resolution FROM comment_reports WHERE comment_id=?").bind(id).first<{ resolution: string }>();
+    expect(r!.resolution).toBe("removed");
+    expect((await decide("mod", id, "release")).status).toBe(409);
+    const q = await json(await SELF.fetch("https://c.test/v1/moderation/comments?tab=removed", { headers: bearer("mod") }));
+    expect(q.items[0]).toMatchObject({ id, status: "removed", moderationReason: "廣告", reports: { total: 1, byReason: { spam: 1 } }, author: { handle: testHandle(FAN) } });
+  });
+
+  it("駁回檢舉：因檢舉被摺疊的留言恢復公開，檢舉結案", async () => {
+    await env.DB.prepare("INSERT INTO community_settings VALUES ('commentReportFoldThreshold','1',NULL,1)").run();
+    const id = await say("fan", "正常的話");
+    expect((await json(await report("other", id, { reason: "abuse" }))).folded).toBe(true);
+    expect((await json(await SELF.fetch("https://c.test/v1/moderation/comments?tab=held", { headers: bearer("mod") }))).items[0]).toMatchObject({ id, holdReason: "reports", reports: { total: 1, byReason: { abuse: 1 } } });
+    expect((await decide("mod", id, "dismiss", "")).status).toBe(400);
+    expect(await json(await decide("mod", id, "dismiss", "沒問題"))).toEqual({ id, status: "visible" });
+    expect((await json(await list())).total).toBe(1);
+    expect(await count("SELECT COUNT(*) AS n FROM comment_reports WHERE comment_id=? AND resolution='dismissed'", id)).toBe(1);
+  });
+
+  it("AI 只能放行或標記；移除、禁言、改設定 403 且什麼都不寫", async () => {
+    const id = await say("fan", "看起來可疑");
+    expect((await decide("agent", id, "remove")).status).toBe(403);
+    expect((await env.DB.prepare("SELECT status FROM comments WHERE id=?").bind(id).first<{ status: string }>())!.status).toBe("visible");
+    expect((await decide("agent", id, "flag", "疑似廣告")).status).toBe(200);
+    const q = await json(await SELF.fetch("https://c.test/v1/moderation/comments?tab=held", { headers: bearer("mod") }));
+    expect(q.items[0]).toMatchObject({ id, suggestedBy: "ai", holdReason: "ai" });
+    const a = await env.DB.prepare("SELECT actor_kind FROM audit_log WHERE subject_id=? AND action='flag'").bind(id).first<{ actor_kind: string }>();
+    expect(a!.actor_kind).toBe("ai");
+    const handle = (await json(await list("mod"))).comments[0]?.handle ?? testHandle(FAN);
+    const mute = await SELF.fetch(`https://c.test/v1/moderation/members/${handle}/comment-mute`, { method: "PUT", headers: { "Content-Type": "application/json", ...bearer("agent") }, body: JSON.stringify({ days: 7, reason: "x", operationId: crypto.randomUUID() }) });
+    expect(mute.status).toBe(403);
+    expect((await json(mute)).error).toBe("agent_not_allowed");
+    const settings = await SELF.fetch("https://c.test/v1/moderation/settings", { method: "PUT", headers: { "Content-Type": "application/json", ...bearer("agent") }, body: JSON.stringify({ settings: { commentMaxLinks: 1 }, operationId: crypto.randomUUID() }) });
+    expect(settings.status).toBe(403);
+    expect(await count("SELECT COUNT(*) AS n FROM community_settings")).toBe(0);
+    const metrics = await (await SELF.fetch("https://c.test/metrics")).text();
+    expect(metrics).toContain('hearthroom_comment_moderation_total{action="remove",outcome="denied"} 1');
+  });
+
+  it("不能處理自己的留言；非審核人 403", async () => {
+    const id = await say("mod", "我自己的");
+    expect((await decide("mod", id, "remove", "x")).status).toBe(403);
+    expect((await decide("fan", id, "remove", "x")).status).toBe(403);
+  });
+});
+
+describe("禁言與關鍵詞", () => {
+  it("禁言 7 天後不能留言；解除後可以；兩次都有稽核", async () => {
+    const handle = testHandle(FAN);
+    await say("fan", "先說一句");
+    const put = await SELF.fetch(`https://c.test/v1/moderation/members/${handle}/comment-mute`, { method: "PUT", headers: { "Content-Type": "application/json", ...bearer("mod") }, body: JSON.stringify({ days: 7, reason: "洗版", operationId: crypto.randomUUID() }) });
+    expect(put.status).toBe(200);
+    expect((await post("fan", { content: "還能說？" })).status).toBe(403);
+    const delRes = await SELF.fetch(`https://c.test/v1/moderation/members/${handle}/comment-mute`, { method: "DELETE", headers: { "Content-Type": "application/json", ...bearer("mod") }, body: JSON.stringify({ reason: "誤判", operationId: crypto.randomUUID() }) });
+    expect(delRes.status).toBe(204);
+    expect((await post("fan", { content: "恢復了" })).status).toBe(201);
+    const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE subject_kind='member'").first<{ n: number }>();
+    expect(n!.n).toBe(2);
+  });
+
+  it("關鍵詞新增後立刻生效", async () => {
+    const add = await SELF.fetch("https://c.test/v1/moderation/comment-keywords", { method: "POST", headers: { "Content-Type": "application/json", ...bearer("mod") }, body: JSON.stringify({ pattern: "代儲", operationId: crypto.randomUUID() }) });
+    expect(add.status).toBe(200);
+    expect((await json(await post("fan", { content: "有人要代儲嗎" }))).status).toBe("held");
+  });
+});
+
+describe("運營設定", () => {
+  it("只有應用管理員能改；別的審核人只讀", async () => {
+    upstream.fetchCommunityStatus = async (_env, token) => ({ admin: token === "mod", featuredUsed: 0, featuredQuota: 50 });
+    identities({ "author-token": AUTHOR, fan: FAN, other: OTHER, mod: MOD, mod2: MOD2 });
+    await makeReviewer(MOD2);
+    const put = (token: string) => SELF.fetch("https://c.test/v1/moderation/settings", { method: "PUT", headers: { "Content-Type": "application/json", ...bearer(token) }, body: JSON.stringify({ settings: { commentMaxLinks: 1 }, operationId: crypto.randomUUID() }) });
+    expect((await put("mod2")).status).toBe(403);
+    expect((await put("mod")).status).toBe(200);
+    const read = await json(await SELF.fetch("https://c.test/v1/moderation/settings", { headers: bearer("mod2") }));
+    expect(read).toEqual({ settings: { commentNewAccountDays: null, commentMaxLinks: 1, commentReportFoldThreshold: null }, canEdit: false });
+  });
+});
+
+describe("統計與指標", () => {
+  it("統計算得出待審與處理時間；/metrics 有固定標籤", async () => {
+    await env.DB.prepare("INSERT INTO comment_keywords VALUES ('k1','違禁','test',1)").run();
+    const id = (await json(await post("fan", { content: "違禁" }))).commentId;
+    let s = await json(await SELF.fetch("https://c.test/v1/moderation/comments/stats", { headers: bearer("mod") }));
+    expect(s.held).toBe(1);
+    expect(s.holdReasons7d.keyword).toBe(1);
+    await decide("mod", id, "release");
+    s = await json(await SELF.fetch("https://c.test/v1/moderation/comments/stats", { headers: bearer("mod") }));
+    expect(s.held).toBe(0);
+    expect(s.medianHandleMs7d).toBeGreaterThanOrEqual(0);
+    const metrics = await (await SELF.fetch("https://c.test/metrics")).text();
+    expect(metrics).toContain('hearthroom_comment_moderation_total{action="hold",outcome="success"} 1');
+    expect(metrics).toContain('hearthroom_comment_moderation_total{action="release",outcome="success"} 1');
+  });
+});
