@@ -9,6 +9,8 @@ export type AuditSubject = (typeof AUDIT_SUBJECTS)[number];
 export type ActorKind = "human" | "ai" | "system";
 
 export interface AuditEntry {
+  /** 呼叫端自己給 id，同一個 batch 的後續語句才能以「這一次的稽核列存在」為條件。沒給就產生一個。 */
+  id?: string;
   subjectKind: AuditSubject;
   subjectId: string;
   actorMemberId: string | null;
@@ -25,7 +27,7 @@ const AUDIT_COLUMNS = "(id, subject_kind, subject_id, actor_member_id, actor_kin
 
 function auditValues(e: AuditEntry): unknown[] {
   if (!(AUDIT_SUBJECTS as readonly string[]).includes(e.subjectKind)) throw new Error(`unknown audit subject: ${e.subjectKind}`);
-  return [crypto.randomUUID(), e.subjectKind, e.subjectId, e.actorMemberId, e.actorKind, e.action, e.reason ?? "", JSON.stringify(e.before ?? {}), JSON.stringify(e.after ?? {}), e.operationId, e.now];
+  return [e.id ?? crypto.randomUUID(), e.subjectKind, e.subjectId, e.actorMemberId, e.actorKind, e.action, e.reason ?? "", JSON.stringify(e.before ?? {}), JSON.stringify(e.after ?? {}), e.operationId, e.now];
 }
 
 export function auditStmt(db: D1Database, e: AuditEntry): D1PreparedStatement {
