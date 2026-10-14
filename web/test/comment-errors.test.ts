@@ -3,11 +3,12 @@
  * 或只說「請求失敗 (comment_rate_limited)」。留言的碼要有自己的一句；
  * 伺服器寫給開發者的小寫英文短語按狀態碼講他的語言，不夾英文。
  */
-import { afterEach, describe, expect, it } from "vitest";
-import { describeApiError } from "@/lib/api";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createComment, describeApiError } from "@/lib/api";
+import { dateTime } from "@/lib/format";
 import { i18n } from "@/lib/i18n";
 
-afterEach(() => { i18n.global.locale.value = "en"; });
+afterEach(() => { i18n.global.locale.value = "en"; vi.unstubAllGlobals(); });
 
 describe("comment and publish errors", () => {
   it("names the comment codes in the player's language", () => {
@@ -29,5 +30,20 @@ describe("comment and publish errors", () => {
   it("still shows a sentence written for people", () => {
     expect(describeApiError(400, "內容包含不適當字詞")).toBe("內容包含不適當字詞");
     expect(describeApiError(400, "Contains a link to an external site.")).toBe("Contains a link to an external site.");
+  });
+});
+
+describe("muted commenter", () => {
+  const muted = (until: number | null) => vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: "comment_muted", until }), { status: 403 })));
+  it("says until when a timed mute ends", async () => {
+    i18n.global.locale.value = "zh-Hant";
+    const until = Date.UTC(2026, 9, 21, 8, 30);
+    muted(until);
+    await expect(createComment("1", { content: "hi" }, "t")).rejects.toThrow(i18n.global.t("comment.error.mutedUntil", { date: dateTime(until) }));
+  });
+  it("says it is permanent when there is no end", async () => {
+    i18n.global.locale.value = "en";
+    muted(null);
+    await expect(createComment("1", { content: "hi" }, "t")).rejects.toThrow(i18n.global.t("comment.error.mutedPermanent"));
   });
 });
