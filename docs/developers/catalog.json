@@ -1922,7 +1922,7 @@
   "d84675f3d21ed": "Days a paid reward stays valid. `null` means it does not expire.",
   "d5606936bf6cc": "Largest `amount` one payout may carry, in credits. 0 until the platform sets it.",
   "d626f2c71cd60": "True once the platform has set a usage scope and a per-payout limit. Payouts need it.",
-  "df5cb88327909": "When the pool or its rules last changed.",
+  "df5cb88327909": "When the pool or its rules last changed. `null` until the platform first funds or configures the pool.",
   "d0d7cf0856ca3": "The payout `key`.",
   "d697568a2dd37": "Public account number of the player who was credited.",
   "d25852ba3af0d": "Credits paid.",
@@ -1930,5 +1930,6 @@
   "de58567cf6a43": "When the credits were paid.",
   "d76df754c98d0": "When the paid credits expire. `null` when they do not.",
   "dd458c5fc21be": "What the paid credits can be spent on: `all` or `agent_only`.",
-  "d9b13182e63b7": "True when this response repeats an earlier payout of the same `key`; no new credits were paid."
+  "d9b13182e63b7": "True when this response repeats an earlier payout of the same `key`; no new credits were paid.",
+  "d3c1a0e7b5f42": "`invalid_request` — `key` is not 1 to 128 letters, digits, `_` or `-`."
 }
