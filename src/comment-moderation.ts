@@ -1,4 +1,7 @@
+import { auditStmt } from "./audit";
 import type { CommunitySettings } from "./community-settings";
+import { bumpOp } from "./ops-metrics";
+import { HttpError } from "./types";
 
 /**
  * 留言審核（開業活動設計 §7）：大部分留言直接公開，命中風險規則的先攔下、只給本人看。
@@ -37,4 +40,45 @@ export async function holdReason(db: D1Database, input: { memberId: string; cont
   const removed = await db.prepare("SELECT 1 AS ok FROM comments WHERE member_id = ? AND status = 'removed' AND moderated_at > ? LIMIT 1").bind(input.memberId, input.now - 30 * DAY).first();
   if (removed) return "recent_removal";
   return null;
+}
+
+export const REPORT_REASONS = ["spam", "abuse", "sexual", "privacy", "other"] as const;
+export type ReportReason = (typeof REPORT_REASONS)[number];
+
+/** 檢舉：一人一則一次（重複按不重複算）。檢舉人數達到設定門檻，公開的留言轉成待審並摺疊。 */
+export async function reportComment(
+  db: D1Database,
+  input: { commentId: string; targetKind: "card"; reporterId: string; reason: unknown; note: unknown; now: number },
+  s: CommunitySettings,
+): Promise<{ folded: boolean }> {
+  if (typeof input.reason !== "string" || !(REPORT_REASONS as readonly string[]).includes(input.reason)) throw new HttpError(400, "invalid_report_reason");
+  const note = typeof input.note === "string" ? input.note.trim().slice(0, 300) : "";
+  const c = await db.prepare("SELECT member_id, status FROM comments WHERE id = ? AND deleted_at IS NULL").bind(input.commentId).first<{ member_id: string; status: string }>();
+  if (!c || c.status === "removed") throw new HttpError(404, "comment not found");
+  if (c.member_id === input.reporterId) throw new HttpError(403, "cannot_report_own_comment");
+  const res = await db.prepare("INSERT OR IGNORE INTO comment_reports (id, target_kind, comment_id, reporter_member_id, reason, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .bind(crypto.randomUUID(), input.targetKind, input.commentId, input.reporterId, input.reason, note, input.now).run();
+  if (!res.meta.changes) return { folded: c.status === "held" };
+  await bumpOp(db, "comment_moderation", "report", "success");
+  if (c.status !== "visible" || s.commentReportFoldThreshold === null) return { folded: c.status === "held" };
+  const open = await db.prepare("SELECT COUNT(*) AS n FROM comment_reports WHERE target_kind = ? AND comment_id = ? AND resolved_at IS NULL").bind(input.targetKind, input.commentId).first<{ n: number }>();
+  if ((open?.n ?? 0) < s.commentReportFoldThreshold) return { folded: false };
+  await holdVisible(db, input.commentId, "reports", null, "system", "fold:" + input.commentId, input.now);
+  return { folded: true };
+}
+
+/**
+ * 把一則公開留言轉成待審（檢舉達門檻、AI 標記）。回覆數同步減一；條件式 UPDATE 讓並發只生效一次。
+ */
+export async function holdVisible(db: D1Database, commentId: string, reason: "reports" | "ai", actorId: string | null, actorKind: "system" | "ai", operationId: string, now: number, note = ""): Promise<boolean> {
+  const row = await db.prepare("SELECT root_id FROM comments WHERE id = ? AND status = 'visible'").bind(commentId).first<{ root_id: string | null }>();
+  if (!row) return false;
+  const writes = [
+    db.prepare("UPDATE comments SET status = 'held', hold_reason = ?, moderation_reason = ?, moderated_by = ?, moderated_at = ? WHERE id = ? AND status = 'visible'").bind(reason, note || null, actorId, now, commentId),
+    auditStmt(db, { subjectKind: "comment", subjectId: commentId, actorMemberId: actorId, actorKind, action: reason === "ai" ? "flag" : "hold", reason: note || reason, before: { status: "visible" }, after: { status: "held", holdReason: reason }, operationId, now }),
+  ];
+  if (row.root_id) writes.push(db.prepare("UPDATE comments SET reply_count = MAX(0, reply_count - 1) WHERE id = ?").bind(row.root_id));
+  await db.batch(writes);
+  await bumpOp(db, "comment_moderation", reason === "ai" ? "flag" : "hold", "success");
+  return true;
 }

@@ -174,3 +174,41 @@ describe("移除與刪除", () => {
     expect((await json(await list())).comments[0].replyCount).toBe(0);
   });
 });
+
+const report = (token: string, id: string, body: Record<string, unknown>) =>
+  SELF.fetch(`https://c.test/v1/comments/${id}/report`, { method: "POST", headers: { "Content-Type": "application/json", ...bearer(token) }, body: JSON.stringify(body) });
+
+describe("檢舉", () => {
+  it("一人一則一次；自己不能檢舉自己；理由要在列舉裡", async () => {
+    const id = await say("fan", "可疑");
+    expect((await report("", id, { reason: "spam" })).status).toBe(401);
+    expect((await report("fan", id, { reason: "spam" })).status).toBe(403);
+    expect((await report("other", id, { reason: "bogus" })).status).toBe(400);
+    expect((await report("other", id, { reason: "spam", note: "加群" })).status).toBe(200);
+    expect((await report("other", id, { reason: "abuse" })).status).toBe(200);
+    const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM comment_reports WHERE comment_id=?").bind(id).first<{ n: number }>();
+    expect(n!.n).toBe(1);
+  });
+
+  it("達到摺疊門檻轉成待審並寫稽核；沒設門檻就只記檢舉", async () => {
+    const id = await say("fan", "可疑");
+    expect((await json(await report("other", id, { reason: "spam" }))).folded).toBe(false);
+    await env.DB.prepare("INSERT INTO community_settings VALUES ('commentReportFoldThreshold','2',NULL,1)").run();
+    identities({ "author-token": AUTHOR, fan: FAN, other: OTHER, third: 20003 });
+    expect((await json(await report("third", id, { reason: "abuse" }))).folded).toBe(true);
+    const row = await env.DB.prepare("SELECT status, hold_reason FROM comments WHERE id=?").bind(id).first<{ status: string; hold_reason: string }>();
+    expect(row).toEqual({ status: "held", hold_reason: "reports" });
+    expect((await json(await list())).total).toBe(0);
+    const a = await env.DB.prepare("SELECT actor_kind, action FROM audit_log WHERE subject_id=?").bind(id).first<{ actor_kind: string; action: string }>();
+    expect(a).toEqual({ actor_kind: "system", action: "hold" });
+  });
+
+  it("摺疊一則公開回覆時，頂層的回覆數同步減一", async () => {
+    const root = await say("fan", "頂層");
+    const reply = await say("other", "回覆", { rootId: root });
+    await env.DB.prepare("INSERT INTO community_settings VALUES ('commentReportFoldThreshold','1',NULL,1)").run();
+    identities({ "author-token": AUTHOR, fan: FAN, other: OTHER, third: 20003 });
+    expect((await json(await report("third", reply, { reason: "spam" }))).folded).toBe(true);
+    expect((await json(await list())).comments[0].replyCount).toBe(0);
+  });
+});
