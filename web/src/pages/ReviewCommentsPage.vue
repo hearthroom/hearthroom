@@ -15,6 +15,7 @@ import { useReviewer } from '@/lib/review';
 import { useLocalePath } from '@/lib/use-locale';
 import { dateTime } from '@/lib/format';
 import { pageTitle } from '@/lib/i18n';
+import { wrapTab } from '@/lib/focus-trap';
 
 const { t, locale } = useI18n();
 const session = useSession();
@@ -43,6 +44,9 @@ const busyId = ref('');
 let generation = 0, alive = true;
 
 type DialogKind = 'remove' | 'dismiss' | 'mute';
+const dialogBox = ref<HTMLElement | null>(null);
+/** 打開對話框的那顆鍵：怎麼關（完成、取消、Esc、點背景）焦點都還給它 */
+let opener: HTMLElement | null = null;
 const dialog = ref<{ kind: DialogKind; item: QueuedComment; reason: string; days: 7 | 30 | null; operationId: string; busy: boolean; error: string } | null>(null);
 
 const hasNext = computed(() => page.value * PAGE < total.value);
@@ -87,9 +91,16 @@ async function release(item: QueuedComment) {
 
 async function open(kind: DialogKind, item: QueuedComment) {
   done.value = '';
+  opener = document.activeElement as HTMLElement | null;
   dialog.value = { kind, item, reason: '', days: 7, operationId: crypto.randomUUID(), busy: false, error: '' };
   await nextTick();
-  document.querySelector<HTMLElement>('.modal textarea')?.focus();
+  dialogBox.value?.querySelector<HTMLElement>('textarea')?.focus();
+}
+async function close() {
+  dialog.value = null;
+  await nextTick();
+  if (opener?.isConnected) opener.focus();
+  opener = null;
 }
 const dialogTitle = computed(() => {
   const d = dialog.value;
@@ -105,14 +116,18 @@ async function confirmDialog() {
     const reason = d.reason.trim();
     if (d.kind === 'mute') await muteMember(d.item.author.handle, { days: d.days, reason, operationId: d.operationId }, access);
     else await decideComment(d.item.id, { action: d.kind, reason, operationId: d.operationId }, access);
-    dialog.value = null;
+    await close();
     await afterDecision();
   } catch (e) {
     if (codeOf(e) === 'agent_not_allowed') agent.value = true;
     d.error = message(e, 'moderation.error.retry');
   } finally { d.busy = false; }
 }
-function onKey(e: KeyboardEvent) { if (e.key === 'Escape' && dialog.value && !dialog.value.busy) dialog.value = null; }
+function onKey(e: KeyboardEvent) {
+  if (!dialog.value) return;
+  if (e.key === 'Escape') { if (!dialog.value.busy) void close(); return; }
+  wrapTab(e, dialogBox.value);
+}
 
 async function add() {
   const pattern = keywordDraft.value.trim();
@@ -210,8 +225,8 @@ onBeforeUnmount(() => { alive = false; document.removeEventListener('keydown', o
     </section>
 
     <Teleport to="body">
-      <div v-if="dialog" class="modal-backdrop" @click.self="!dialog.busy && (dialog = null)">
-        <form class="modal panel" role="dialog" aria-modal="true" aria-labelledby="cmod-dialog-title" @submit.prevent="confirmDialog">
+      <div v-if="dialog" class="modal-backdrop" @click.self="!dialog.busy && close()">
+        <form ref="dialogBox" class="modal panel" role="dialog" aria-modal="true" aria-labelledby="cmod-dialog-title" @submit.prevent="confirmDialog">
           <h2 id="cmod-dialog-title" class="modal__title">{{ dialogTitle }}</h2>
           <p class="cmod-dialog__quote">{{ dialog.item.content }}</p>
           <div v-if="dialog.kind === 'mute'" class="seg">
@@ -223,7 +238,7 @@ onBeforeUnmount(() => { alive = false; document.removeEventListener('keydown', o
           </label>
           <p v-if="dialog.error" class="notice notice--error" role="alert">{{ dialog.error }}</p>
           <div class="modal__actions">
-            <button type="button" class="btn" :disabled="dialog.busy" @click="dialog = null">{{ t('dialog.cancel') }}</button>
+            <button type="button" class="btn" :disabled="dialog.busy" @click="close">{{ t('dialog.cancel') }}</button>
             <button type="submit" class="btn" :class="dialog.kind === 'dismiss' ? 'btn--primary' : 'btn--danger-solid'" :disabled="dialog.busy || !dialog.reason.trim()">{{ t(`moderation.comments.${dialog.kind}`) }}</button>
           </div>
         </form>

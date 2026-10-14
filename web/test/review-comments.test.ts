@@ -73,6 +73,29 @@ it('removes a held comment only with a reason, and a retry reuses the same opera
   await vi.waitFor(() => expect(document.querySelector('[role=dialog]')).toBeNull());
 });
 
+it('returns focus to the button that opened the reason dialog, whichever way it closes', async () => {
+  await mount('/review/comments');
+  await vi.waitFor(() => expect(host.querySelector('[data-action="remove"]')).not.toBeNull());
+  const opener = host.querySelector<HTMLButtonElement>('[data-action="remove"]')!;
+  const openIt = async () => { opener.focus(); opener.click(); await nextTick(); await nextTick(); expect(document.activeElement).not.toBe(opener); };
+  await openIt();
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await vi.waitFor(() => expect(document.activeElement).toBe(opener));
+  expect(document.querySelector('[role=dialog]')).toBeNull();
+  await openIt();
+  [...document.querySelectorAll<HTMLButtonElement>('[role=dialog] button')].find(b => b.textContent === t('dialog.cancel'))!.click();
+  await vi.waitFor(() => expect(document.activeElement).toBe(opener));
+  await openIt();
+  document.querySelector<HTMLElement>('.modal-backdrop')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  await vi.waitFor(() => expect(document.activeElement).toBe(opener));
+  // 框內 Tab 也繞回來：最後一個（取消；原因還沒填，確認鍵停用）往下回到原因欄
+  await openIt();
+  const dialog = document.querySelector<HTMLElement>('[role=dialog]')!;
+  const cancel = [...dialog.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent === t('dialog.cancel'))!;
+  cancel.focus(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+  expect(document.activeElement).toBe(dialog.querySelector('textarea'));
+});
+
 it('shows an AI reviewer only the release action', async () => {
   mocks.keywords.mockRejectedValue(new mocks.ApiError(403, 'no', 'agent_not_allowed'));
   mocks.decide.mockResolvedValue({ id: 'c1', status: 'visible' });

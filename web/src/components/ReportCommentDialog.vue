@@ -7,6 +7,7 @@ import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { REPORT_REASONS, reportComment, type ReportReason } from "@/lib/api";
 import { useSession } from "@/lib/session";
+import { wrapTab } from "@/lib/focus-trap";
 
 const props = defineProps<{ commentId: string }>();
 const emit = defineEmits<{ close: []; reported: [folded: boolean] }>();
@@ -39,7 +40,8 @@ async function submit() {
 /** 開啟前的焦點：關掉時還回去 */
 let restore: HTMLElement | null = null;
 function onKey(e: KeyboardEvent) {
-  if (e.key === "Escape") { e.preventDefault(); emit("close"); }
+  if (e.key === "Escape") { e.preventDefault(); emit("close"); return; }
+  wrapTab(e, box.value);
 }
 onMounted(async () => {
   restore = document.activeElement as HTMLElement | null;
