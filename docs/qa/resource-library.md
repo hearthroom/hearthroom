@@ -51,13 +51,28 @@ Browser checkpoint: select two synthetic PNGs into one folder, let the first fin
 expire authorization before the second completes, then press failed-only retry after
 authorization recovers. Both files should finish at the original paths, with one byte
 upload per file. Repeat with an account change and verify no upload to the new account.
-Native Chrome and the in-app browser are unavailable in the current runtime, so this
-browser checkpoint remains unverified; component/API-client tests are separate evidence.
+Chrome DevTools browser validation now passes in an isolated test context, using the
+actual ResourcesPage, Pinia session, managed authorization and resource client, with
+only account/token, media API and storage services replaced by local mocks.
+The fixture injects two synthetic PNGs into the actual file input; native file chooser
+selection and real production OAuth/storage are not claimed as covered.
+
+| Browser case | Result | Observable evidence |
+| --- | --- | --- |
+| Second completion returns 401 | PASS | Both files complete; two intents and two PUTs; second completion reuses its original upload ID with renewed authorization |
+| Completion fails and sign-in temporarily expires | PASS | Page retains one success and one failure; after mock sign-in recovery, the actual failed-only retry button completes the second file without another PUT or repeating the first completion |
+| Renewed token belongs to another account | PASS | Second file remains failed, including after pressing retry; no completion uses the other account's token |
+| English at 390px width | PASS | Automatic renewal completes both files; no horizontal document overflow; completion status and controls inspected in a screenshot |
+
+Browser console errors are limited to the deliberately injected HTTP 401/503 responses;
+no JavaScript runtime errors were observed. Synthetic request counters and screenshots
+were captured as local verification artifacts, without production accounts or content.
 
 HTTP/MCP/Moonloom: no API/schema or external-client capability changes; this repairs the
 browser's use of existing authenticated endpoints. Observability: no new server work
 or metrics; existing API success/rejection metrics remain applicable. No user-facing
-copy or locale keys change. No production write, release or deployment is included.
+resource-page copy or locale keys change; a five-language update note describes the fix.
+The owner authorized CI deployment after verification; no user-data repair is included.
 
 Verification: focused Red/Green covers the expiry/retry, account-change and ownership
 checks. Final focused pack: 41 passed. Script checks: 23 passed; Worker suite: 706
@@ -69,6 +84,13 @@ test-environment debt, and the unchanged full web set passed when concurrency wa
 Initial sandbox loopback/log permissions and missing shared dependencies were resolved
 using approved local test execution and a lockfile install confined to this worktree.
 Existing build warnings cover unresolved font paths, deprecated tooling and chunk sizes.
+
+Release-source verification after rebasing onto current main: 23 script checks, 804
+Worker tests and 958 web tests pass with default parallelism; one optional real-card
+fixture suite remains skipped. The current main already includes the sendBeacon test
+isolation fix. Full typecheck and full pinned-stage/web build pass. Browser checks above
+exercise the same executable changes; subsequent receipt/update-note edits add no runtime
+behavior. Deployment and public-asset readback are separate release evidence.
 
 ## Execution evidence — 2026-09-20
 
