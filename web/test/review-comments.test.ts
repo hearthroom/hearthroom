@@ -118,6 +118,15 @@ it('after a removal reloads the queue, focus lands on the next item, then on the
   await vi.waitFor(() => expect(document.activeElement).toBe(host.querySelector('.cmod-tabs .seg__item--on')));
 });
 
+it('says the comment was already handled when a release conflicts, not the card-review vote message', async () => {
+  await mount('/review/comments');
+  await vi.waitFor(() => expect(host.querySelector('[data-action="release"]')).not.toBeNull());
+  mocks.decide.mockRejectedValueOnce(new mocks.ApiError(409, t('moderation.error.moderation_conflict'), 'moderation_conflict'));
+  host.querySelector<HTMLButtonElement>('[data-action="release"]')!.click();
+  await vi.waitFor(() => expect(host.textContent).toContain(t('moderation.comments.conflict')));
+  expect(host.textContent).not.toContain(t('moderation.error.moderation_conflict'));
+});
+
 it('shows an AI reviewer only the release action', async () => {
   mocks.keywords.mockRejectedValue(new mocks.ApiError(403, 'no', 'agent_not_allowed'));
   mocks.decide.mockResolvedValue({ id: 'c1', status: 'visible' });
