@@ -102,7 +102,7 @@ async function mustPost(db: D1Database, id: string): Promise<Post> {
 
 const SLUG = /^[a-z0-9][a-z0-9-]*$/;
 const isStr = (v: unknown, max: number, min = 0): v is string => typeof v === "string" && v.length >= min && v.length <= max;
-const invalid = (code: string, field: string): never => { throw new HttpError(400, code, undefined, { field }); };
+const invalid = (field: string): never => { throw new HttpError(400, "blog_invalid", undefined, { field }); };
 const optional = <T>(v: T | undefined) => (v === undefined ? null : v);
 
 /** 文章內容（存進文章列與修訂的部分）。欄位名就是資料表欄名。 */
@@ -113,7 +113,7 @@ type Content = {
 const CONTENT_COLUMNS = ["column_id", "slug", "locale", "title", "excerpt", "body_md", "cover_key", "share_title", "share_description", "share_cover_key", "campaign_id"] as const;
 
 function cleanPost(input: PostInput): Content {
-  const bad = (field: string) => invalid("blog_invalid_post", field);
+  const bad = invalid;
   if (!isStr(input.columnId, 64, 1)) bad("columnId");
   if (!isStr(input.slug, 80, 1) || !SLUG.test(input.slug)) bad("slug");
   if (!(LOCALES as readonly unknown[]).includes(input.locale)) bad("locale");
@@ -136,24 +136,43 @@ function cleanPost(input: PostInput): Content {
 }
 
 function cleanLocalized(v: unknown, field: string, max: number, required: boolean): Localized {
-  if (!v || typeof v !== "object" || Array.isArray(v)) invalid("blog_invalid_column", field);
+  if (!v || typeof v !== "object" || Array.isArray(v)) invalid(field);
   const out: Localized = {};
   for (const [k, s] of Object.entries(v as Record<string, unknown>)) {
-    if (!(LOCALES as readonly string[]).includes(k) || !isStr(s, max)) invalid("blog_invalid_column", field);
+    if (!(LOCALES as readonly string[]).includes(k) || !isStr(s, max)) invalid(field);
     if ((s as string).trim()) out[k as Locale] = s as string;
   }
-  if (required && !out["zh-Hant"]) invalid("blog_invalid_column", field);
+  if (required && !out["zh-Hant"]) invalid(field);
   return out;
 }
 
-/** D1 batch 的唯一鍵衝突轉成可讀的 409；同一個操作編號重送（稽核的 UNIQUE）也是 409。 */
-async function runBatch(db: D1Database, writes: D1PreparedStatement[], slugTaken: string): Promise<D1Result[]> {
+/**
+ * 同一個操作編號已經做過（連點、斷線重試）：回那一次的主體 id，呼叫端照原樣回現況、不再寫。
+ * 編號被別種主體用過不是重送，回衝突。
+ */
+async function priorSubject(db: D1Database, actor: Actor, operationId: string, kind: "blog_post" | "blog_column"): Promise<string | null> {
+  const r = await db.prepare("SELECT subject_kind, subject_id FROM audit_log WHERE actor_member_id = ? AND operation_id = ?").bind(actor.memberId, operationId).first<{ subject_kind: string; subject_id: string }>();
+  if (!r) return null;
+  if (r.subject_kind !== kind) throw new HttpError(409, "blog_operation_repeated");
+  return r.subject_id;
+}
+
+/**
+ * 執行 batch。並發的同一次重送會在唯一鍵（稽核、slug）或版本條件上輸掉：先看是不是已經做過，是就回 replay；
+ * 不是才把 slug 衝突轉成 409。第一條是條件式 UPDATE 而改到 0 列時，同樣先排除重送，剩下的才是版本衝突。
+ */
+async function commit(db: D1Database, writes: D1PreparedStatement[], actor: Actor, operationId: string, kind: "blog_post" | "blog_column", slugTaken: string): Promise<{ replay: string } | { changes: number }> {
   try {
-    return await db.batch(writes);
+    const [first] = await db.batch(writes);
+    const changes = first!.meta.changes;
+    const prior = changes ? null : await priorSubject(db, actor, operationId, kind);
+    return prior ? { replay: prior } : { changes };
   } catch (e) {
     const msg = String(e);
-    if (/UNIQUE constraint failed: audit_log/.test(msg)) throw new HttpError(409, "blog_operation_repeated");
-    if (/UNIQUE constraint failed: blog_(posts|columns)/.test(msg)) throw new HttpError(409, slugTaken);
+    if (!/UNIQUE constraint failed/.test(msg)) throw e;
+    const prior = await priorSubject(db, actor, operationId, kind);
+    if (prior) return { replay: prior };
+    if (/blog_(posts|columns)/.test(msg)) throw new HttpError(409, slugTaken);
     throw e;
   }
 }
@@ -189,17 +208,20 @@ async function writeContent(db: D1Database, before: PostRow | null, c: Content, 
         db.prepare(`${revision} VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(crypto.randomUUID(), id, actor.memberId, c.title, c.body_md, meta, version, now),
         auditStmt(db, audit),
       ];
-  const [first] = await runBatch(db, writes, "blog_slug_taken");
-  if (!first!.meta.changes) await conflict(db, id);
+  const done = await commit(db, writes, actor, operationId, "blog_post", "blog_slug_taken");
+  if ("replay" in done) return mustPost(db, done.replay);
+  if (!done.changes) await conflict(db, id);
   await bumpOp(db, "blog", action === "restore" ? "restore" : "save", "success");
   return mustPost(db, id);
 }
 
 export async function savePost(db: D1Database, input: PostInput & { id?: string; expectedVersion?: number }, actor: Actor, operationId: string, now: number): Promise<Post> {
+  const prior = await priorSubject(db, actor, operationId, "blog_post");
+  if (prior) return mustPost(db, prior);
   const c = cleanPost(input);
-  if (!(await db.prepare("SELECT 1 AS ok FROM blog_columns WHERE id = ?").bind(c.column_id).first())) invalid("blog_invalid_post", "columnId");
+  if (!(await db.prepare("SELECT 1 AS ok FROM blog_columns WHERE id = ?").bind(c.column_id).first())) invalid("columnId");
   if (input.id === undefined) return writeContent(db, null, c, actor, operationId, now, "create");
-  if (!Number.isInteger(input.expectedVersion)) invalid("blog_invalid_post", "expectedVersion");
+  if (!Number.isInteger(input.expectedVersion)) invalid("expectedVersion");
   const before = await postRow(db, input.id);
   if (!before) throw new HttpError(404, "blog_post_not_found");
   if (before.version !== input.expectedVersion) await conflict(db, before.id);
@@ -207,6 +229,8 @@ export async function savePost(db: D1Database, input: PostInput & { id?: string;
 }
 
 export async function restoreRevision(db: D1Database, postId: string, revisionId: string, actor: Actor, operationId: string, now: number): Promise<Post> {
+  const prior = await priorSubject(db, actor, operationId, "blog_post");
+  if (prior) return mustPost(db, prior);
   const before = await postRow(db, postId);
   if (!before) throw new HttpError(404, "blog_post_not_found");
   const rev = await db.prepare("SELECT title, body_md, meta_json FROM blog_post_revisions WHERE id = ? AND post_id = ?").bind(revisionId, postId).first<{ title: string; body_md: string; meta_json: string }>();
@@ -223,10 +247,12 @@ export async function restoreRevision(db: D1Database, postId: string, revisionId
 
 /** 每次只改一種狀態：發布（可帶時間）、撤下、置頂、留言開關、置頂留言。版本號 +1。 */
 export async function setPostState(db: D1Database, id: string, change: StateChange, actor: Actor, operationId: string, now: number): Promise<Post> {
+  const prior = await priorSubject(db, actor, operationId, "blog_post");
+  if (prior) return mustPost(db, prior);
   const before = await postRow(db, id);
   if (!before) throw new HttpError(404, "blog_post_not_found");
   const keys = Object.keys(change).filter((k) => change[k as keyof StateChange] !== undefined);
-  const bad = () => invalid("blog_invalid_change", keys.join(","));
+  const bad = () => invalid(keys.join(","));
   let set: string, binds: unknown[], action: string, metric: "publish" | "unpublish" | "pin" | "comments", from: object, to: object;
   if (change.status === "published") {
     if (keys.some((k) => k !== "status" && k !== "publishAt")) bad();
@@ -252,18 +278,19 @@ export async function setPostState(db: D1Database, id: string, change: StateChan
     const cid = change.pinnedCommentId ?? null;
     if (cid !== null) {
       const ok = typeof cid === "string" && (await db.prepare("SELECT 1 AS ok FROM comments WHERE id = ? AND post_id = ? AND root_id IS NULL AND deleted_at IS NULL AND status = 'visible'").bind(cid, id).first());
-      if (!ok) invalid("blog_invalid_change", "pinnedCommentId");
+      if (!ok) invalid("pinnedCommentId");
     }
     [set, binds, action, metric] = ["pinned_comment_id = ?", [cid], "pin_comment", "pin"];
     [from, to] = [{ pinnedCommentId: before.pinned_comment_id }, { pinnedCommentId: cid }];
   } else {
     return bad();
   }
-  const [first] = await runBatch(db, [
+  const done = await commit(db, [
     db.prepare(`UPDATE blog_posts SET ${set}, version = version + 1, updated_at = ? WHERE id = ? AND version = ?`).bind(...binds, now, id, before.version),
     auditStmtIfChanged(db, { subjectKind: "blog_post", subjectId: id, actorMemberId: actor.memberId, actorKind: actor.kind, action, before: { ...from, version: before.version }, after: { ...to, version: before.version + 1 }, operationId, now }),
-  ], "blog_slug_taken");
-  if (!first!.meta.changes) await conflict(db, id);
+  ], actor, operationId, "blog_post", "blog_slug_taken");
+  if ("replay" in done) return mustPost(db, done.replay);
+  if (!done.changes) await conflict(db, id);
   await bumpOp(db, "blog", metric, "success");
   return mustPost(db, id);
 }
@@ -279,11 +306,13 @@ export async function listRevisions(db: D1Database, postId: string): Promise<{ i
 // ---- 欄目 ---------------------------------------------------------------------
 
 export async function saveColumn(db: D1Database, input: ColumnInput, actor: Actor, operationId: string, now: number): Promise<Column> {
-  if (!isStr(input.slug, 40, 1) || !SLUG.test(input.slug)) invalid("blog_invalid_column", "slug");
+  const prior = await priorSubject(db, actor, operationId, "blog_column");
+  if (prior) return mustColumn(db, prior);
+  if (!isStr(input.slug, 40, 1) || !SLUG.test(input.slug)) invalid("slug");
   const name = cleanLocalized(input.name, "name", 40, true);
   const description = cleanLocalized(input.description, "description", 300, false);
-  if (!Number.isSafeInteger(input.sort)) invalid("blog_invalid_column", "sort");
-  if (typeof input.enabled !== "boolean") invalid("blog_invalid_column", "enabled");
+  if (!Number.isSafeInteger(input.sort)) invalid("sort");
+  if (typeof input.enabled !== "boolean") invalid("enabled");
   const values = [input.slug, JSON.stringify(name), JSON.stringify(description), input.sort, input.enabled ? 1 : 0];
   const after = { slug: input.slug, name, description, sort: input.sort, enabled: input.enabled };
   let id: string, writes: D1PreparedStatement[];
@@ -303,9 +332,16 @@ export async function saveColumn(db: D1Database, input: ColumnInput, actor: Acto
       auditStmtIfChanged(db, { subjectKind: "blog_column", subjectId: id, actorMemberId: actor.memberId, actorKind: actor.kind, action: "column_save", before: prev, after, operationId, now }),
     ];
   }
-  await runBatch(db, writes, "blog_column_slug_taken");
+  const done = await commit(db, writes, actor, operationId, "blog_column", "blog_column_slug_taken");
+  if ("replay" in done) return mustColumn(db, done.replay);
   await bumpOp(db, "blog", "column", "success");
   return { id, ...after };
+}
+
+async function mustColumn(db: D1Database, id: string): Promise<Column> {
+  const r = await db.prepare("SELECT * FROM blog_columns WHERE id = ?").bind(id).first<ColumnRow>();
+  if (!r) throw new HttpError(404, "blog_column_not_found");
+  return toColumn(r);
 }
 
 export async function listColumns(db: D1Database, opts: { includeDisabled: boolean }): Promise<Column[]> {
