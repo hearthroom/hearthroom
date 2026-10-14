@@ -54,6 +54,8 @@ const dialog = ref<{ kind: DialogKind; item: QueuedComment; reason: string; days
 const hasNext = computed(() => page.value * PAGE < total.value);
 const codeOf = (e: unknown) => (e instanceof ApiError ? e.code : '');
 const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : t(fallback));
+/** 處理一則留言時撞到衝突：別人先處理了。共用的衝突碼對應的是卡片審核的說法，這裡換成留言的。 */
+const decisionMessage = (e: unknown) => (codeOf(e) === 'moderation_conflict' ? t('moderation.comments.conflict') : message(e, 'moderation.error.retry'));
 
 async function token() {
   const value = await session.accessToken();
@@ -103,7 +105,7 @@ async function release(item: QueuedComment, e: Event) {
     releaseOps.delete(item.id);
     await afterDecision();
     ok = true;
-  } catch (e) { error.value = message(e, 'moderation.error.retry'); } finally { busyId.value = ''; }
+  } catch (e) { error.value = decisionMessage(e); } finally { busyId.value = ''; }
   if (ok) await refocus(origin, index);
 }
 
@@ -141,7 +143,7 @@ async function confirmDialog() {
     await refocus(origin, index);
   } catch (e) {
     if (codeOf(e) === 'agent_not_allowed') agent.value = true;
-    d.error = message(e, 'moderation.error.retry');
+    d.error = d.kind === 'mute' ? message(e, 'moderation.error.retry') : decisionMessage(e);
   } finally { d.busy = false; }
 }
 function onKey(e: KeyboardEvent) {

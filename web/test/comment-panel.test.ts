@@ -101,3 +101,17 @@ it("keeps Tab inside the report dialog: the last control wraps to the first and 
   tab(true);
   expect(document.activeElement).toBe(last);
 });
+
+it("offers reply only under a public top-level comment, not under a removed one or the viewer's own held one", async () => {
+  const child = (id: string, root: string) => comment(id, { rootId: root, parentId: root });
+  api.list = [
+    comment("gone", { removed: true, status: "removed", content: "", replyCount: 1, replies: [child("c1", "gone")] }),
+    comment("folded", { status: "held", isOwner: true, canDelete: true, replyCount: 1, replies: [child("c2", "folded")] }),
+    comment("open", { replyCount: 1, replies: [child("c3", "open")] }),
+  ];
+  await mount();
+  const [gone, folded, open] = [...host.querySelectorAll(".cmt__item")];
+  expect(buttons(gone!, t("comment.reply"))).toHaveLength(0);
+  expect(buttons(folded!, t("comment.reply"))).toHaveLength(0);
+  expect(buttons(open!, t("comment.reply"))).toHaveLength(2);
+});

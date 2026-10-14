@@ -4,6 +4,7 @@ import { apiBaseOf, currentProvider, type ProviderId } from "./provider";
 import { hideParam } from "./hidden-tags";
 import { currentSurface } from "./track";
 import { i18n } from "./i18n";
+import { dateTime } from "./format";
 import { canonicalType } from "./media-type";
 import { rememberCard, rememberCards } from "./card-memory";
 import type { Author, AuthorSort, CardPage, CommunityCard, MyRole, Sort, Zone } from "./types";
@@ -154,10 +155,14 @@ export function describeApiError(status: number, raw: string, detail?: LimitDeta
 
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string; detail?: LimitDetail };
+    const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string; detail?: LimitDetail; until?: number | null };
     if (body.detail?.field === "customInstructions") body.detail.field = "jailbreak";
     const raw = body.error ?? body.message ?? "";
-    throw new ApiError(res.status, describeApiError(res.status, raw, body.detail), body.error ?? "");
+    // 禁言帶著到期時間：null＝永久。沒帶（舊回應）就用不講期限的那一句。
+    const said = raw === "comment_muted" && body.until !== undefined
+      ? body.until === null ? i18n.global.t("comment.error.mutedPermanent") : i18n.global.t("comment.error.mutedUntil", { date: dateTime(body.until) })
+      : describeApiError(res.status, raw, body.detail);
+    throw new ApiError(res.status, said, body.error ?? "");
   }
   return (await res.json()) as T;
 }
