@@ -106,15 +106,15 @@ const SELECT = `SELECT c.id, c.card_id, c.member_id, c.parent_id, c.root_id, c.c
   FROM comments c JOIN members m ON m.id = c.member_id`;
 
 /** 看得到的留言：公開的，加上本人自己被攔下的（?1 是看的人）；頂層被移除但還有回覆時留佔位。 */
-const SHOWN = "(c.status = 'visible' OR (c.status = 'held' AND c.member_id = ?1))";
-const TOP_SHOWN = "(c.status = 'visible' OR (c.status = 'held' AND c.member_id = ?1) OR (c.status = 'removed' AND c.reply_count > 0))";
+const SHOWN = "(c.deleted_at IS NULL AND (c.status = 'visible' OR (c.status = 'held' AND c.member_id = ?1)))";
+const TOP_SHOWN = "((c.deleted_at IS NULL AND (c.status = 'visible' OR (c.status = 'held' AND c.member_id = ?1))) OR (c.status = 'removed' AND c.reply_count > 0))";
 
 export async function listTop(db: D1Database, card: CommentCard, viewer: Viewer, page: number): Promise<{ total: number; comments: CommentView[]; isRoleCreator: boolean }> {
   const author = await cardAuthorMemberId(db, card);
   const offset = (Math.max(1, page) - 1) * COMMENT_PAGE_SIZE;
   const me = viewer.memberId ?? "";
   const [count, tops] = await db.batch<Row & { n: number }>([
-    db.prepare("SELECT COUNT(*) AS n FROM comments WHERE card_id = ? AND root_id IS NULL AND (status = 'visible' OR (status = 'removed' AND reply_count > 0))").bind(card.id),
+    db.prepare("SELECT COUNT(*) AS n FROM comments WHERE card_id = ? AND root_id IS NULL AND ((deleted_at IS NULL AND status = 'visible') OR (status = 'removed' AND reply_count > 0))").bind(card.id),
     db.prepare(`${SELECT} WHERE c.card_id = ?2 AND c.root_id IS NULL AND ${TOP_SHOWN} ORDER BY c.created_at DESC, c.id DESC LIMIT ?3 OFFSET ?4`)
       .bind(me, card.id, COMMENT_PAGE_SIZE, offset),
   ]);
@@ -141,7 +141,7 @@ export async function listReplies(db: D1Database, card: CommentCard, rootId: str
   const author = await cardAuthorMemberId(db, card);
   const offset = (Math.max(1, page) - 1) * COMMENT_PAGE_SIZE;
   const [count, rows] = await db.batch<Row & { n: number }>([
-    db.prepare("SELECT COUNT(*) AS n FROM comments WHERE card_id = ? AND root_id = ? AND status = 'visible'").bind(card.id, rootId),
+    db.prepare("SELECT COUNT(*) AS n FROM comments WHERE card_id = ? AND root_id = ? AND deleted_at IS NULL AND status = 'visible'").bind(card.id, rootId),
     db.prepare(`${SELECT} WHERE c.card_id = ?2 AND c.root_id = ?3 AND ${SHOWN} ORDER BY c.created_at ASC, c.id ASC LIMIT ?4 OFFSET ?5`)
       .bind(viewer.memberId ?? "", card.id, rootId, COMMENT_PAGE_SIZE, offset),
   ]);
@@ -149,7 +149,7 @@ export async function listReplies(db: D1Database, card: CommentCard, rootId: str
 }
 
 export async function countTop(db: D1Database, cardId: string): Promise<number> {
-  const row = await db.prepare("SELECT COUNT(*) AS n FROM comments WHERE card_id = ? AND root_id IS NULL AND status = 'visible'").bind(cardId).first<{ n: number }>();
+  const row = await db.prepare("SELECT COUNT(*) AS n FROM comments WHERE card_id = ? AND root_id IS NULL AND deleted_at IS NULL AND status = 'visible'").bind(cardId).first<{ n: number }>();
   return row?.n ?? 0;
 }
 
