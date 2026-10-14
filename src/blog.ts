@@ -381,6 +381,12 @@ export async function publicPost(db: D1Database, columnSlug: string, slug: strin
   return post && isPublic(post, now) ? post : null;
 }
 
+/** 最新的公開文章（Atom 用）：停用欄目的不列，與公開列表一致。 */
+export async function recentPosts(db: D1Database, now: number, limit: number): Promise<Post[]> {
+  const rows = await db.prepare(`${POST_SELECT} WHERE ${LIVE} AND col.enabled = 1 ORDER BY p.publish_at DESC, p.id DESC LIMIT ?2`).bind(now, limit).all<PostRow>();
+  return rows.results.map(toPost);
+}
+
 /** 不看公開與否（預覽用）。 */
 export async function postBySlug(db: D1Database, columnSlug: string, slug: string): Promise<Post | null> {
   const r = await db.prepare(`${POST_SELECT} WHERE col.slug = ? AND p.slug = ?`).bind(columnSlug, slug).first<PostRow>();
