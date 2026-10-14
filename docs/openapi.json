@@ -8133,7 +8133,7 @@
           "Roles"
         ],
         "summary": "Delete an owned role card",
-        "description": "Permanently deletes a role card owned by the bearer, cascading to follows, search/tag indexes, worldbook bindings, conversations and memories. Not reversible. Ownership is checked before the cascade.",
+        "description": "Deletes an agent configuration owned by the bearer from authoring and player access using a soft deletion. Sealed hosted revisions are not author-deletable targets and return 404. Deleting an editable source does not delete its sealed revisions or their existing conversations. This operation does not physically purge conversation or memory records.",
         "security": [
           {
             "userToken": []
@@ -9376,7 +9376,7 @@
           "Trial cards"
         ],
         "summary": "Delete a trial card immediately",
-        "description": "Purges the trial card: display rules, the worldbook created by the trial flow (unless it has since been bound to another role), the role with its conversations/messages/memories, and the registry row. If the card was adopted by the author (submitted for review or made non-private), only the registry row is removed and the role is kept (`released: true`, `deleted: false`). Any step failing leaves the registry row so the background sweep retries.",
+        "description": "Removes the trial configuration from authoring and player access, deletes its display rules, removes its Lorebook binding, and releases the registry row. Its dedicated Lorebook and entries are deleted. A Lorebook still used by another live configuration is kept with its entries unchanged. If the configuration was adopted by the author (submitted for review or made non-private), only the registry row is removed (`released: true`, `deleted: false`). Any step failing leaves the registry row so the background sweep retries.",
         "security": [
           {
             "userToken": []
