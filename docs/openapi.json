@@ -12172,6 +12172,16 @@
               }
             }
           },
+          "400": {
+            "description": "`invalid_request` — `key` is not 1 to 128 letters, digits, `_` or `-`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "401": {
             "description": "`unauthorized` — missing or invalid bearer.",
             "content": {
@@ -21937,9 +21947,12 @@
             "description": "True once the platform has set a usage scope and a per-payout limit. Payouts need it."
           },
           "updatedAt": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
-            "description": "When the pool or its rules last changed."
+            "description": "When the pool or its rules last changed. `null` until the platform first funds or configures the pool."
           }
         }
       },
