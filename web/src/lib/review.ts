@@ -23,10 +23,12 @@ export const useReviewer = defineStore("reviewer", () => {
   const pending = ref(0);
   const pendingReviews = ref(0);
   const pendingCases = ref(0);
+  /** 待審留言；不混進 pending（卡片審核的徽章數）。 */
+  const pendingComments = ref(0);
   const role = ref<"reviewer"|"manager"|"owner">("reviewer");
   let generation = 0;
 
-  function resetCounts() { featured.value = null; featuredProvider.value = null; pending.value = 0; pendingReviews.value = 0; pendingCases.value = 0; role.value = "reviewer"; }
+  function resetCounts() { featured.value = null; featuredProvider.value = null; pending.value = 0; pendingReviews.value = 0; pendingCases.value = 0; pendingComments.value = 0; role.value = "reviewer"; }
 
   async function refresh(): Promise<boolean> {
     const requestGeneration = ++generation;
@@ -49,6 +51,7 @@ export const useReviewer = defineStore("reviewer", () => {
         pending.value = result.pending ?? 0;
         pendingReviews.value = result.reviews ?? 0;
         pendingCases.value = result.cases ?? 0;
+        pendingComments.value = result.comments ?? 0;
         role.value = result.role ?? "reviewer";
       } else resetCounts();
     } catch {
@@ -84,5 +87,5 @@ export const useReviewer = defineStore("reviewer", () => {
     else if (ready) rememberLayout(false);
   }, { immediate: true });
 
-  return { reviewer, likely, featured, featuredProvider, pending, pendingReviews, pendingCases, role, refresh };
+  return { reviewer, likely, featured, featuredProvider, pending, pendingReviews, pendingCases, pendingComments, role, refresh };
 });

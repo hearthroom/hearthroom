@@ -9,7 +9,12 @@ const mocks = vi.hoisted(() => ({
   moderation: vi.fn(async (_path: string) => ({ items: [], hasNext: false })),
 }));
 vi.mock('../src/lib/session', () => ({ useSession: () => ({ me: { accountNumId: 7 }, accessToken: async () => 'synthetic' }) }));
-vi.mock('../src/lib/api', async (original) => ({ ...await original<object>(), fetchReviewMe: async () => mocks.summary, fetchReviewQueue: mocks.queue }));
+vi.mock('../src/lib/api', async (original) => ({
+  ...await original<object>(), fetchReviewMe: async () => mocks.summary, fetchReviewQueue: mocks.queue,
+  // 留言與運營設定分頁：只驗分頁本身，不打網路
+  fetchCommentQueue: async () => ({ total: 0, items: [] }), fetchCommentStats: async () => ({ held: 0, openReports: 0, removed7d: 0, medianHandleMs7d: null, holdReasons7d: {} }),
+  fetchKeywords: async () => ({ items: [] }), fetchSettings: async () => ({ settings: { commentNewAccountDays: null, commentMaxLinks: null, commentReportFoldThreshold: null }, canEdit: false }),
+}));
 vi.mock('../src/lib/moderation', () => ({ moderationRequest: mocks.moderation }));
 vi.mock('../src/pages/ReviewDetailPage.vue', () => ({ default: { template: '<h2>Review detail fixture</h2>' } }));
 import { router as siteRouter } from '../src/router';
@@ -24,14 +29,14 @@ beforeEach(async () => {
 });
 afterEach(() => { app?.unmount(); host?.remove(); vi.clearAllMocks(); });
 const links = () => [...host.querySelectorAll<HTMLAnchorElement>('.management-nav a')];
-it('keeps card review, cases, works and history inside one management workspace with separate counts', async () => {
+it('keeps card review, cases, works, comments, members, history and settings inside one management workspace with separate counts', async () => {
   expect(host.querySelectorAll('h1')).toHaveLength(1);
   expect(host.querySelector('h1')!.textContent).toBe(i18n.global.t('moderation.title'));
-  expect(links().map(a => a.getAttribute('href'))).toEqual(['/review', '/review/cases', '/review/cards', '/review/members', '/review/history']);
+  expect(links().map(a => a.getAttribute('href'))).toEqual(['/review', '/review/cases', '/review/cards', '/review/comments', '/review/members', '/review/history', '/review/settings']);
   await vi.waitFor(() => expect(links()[0]!.querySelector('.review-badge')?.textContent).toBe('2'));
   expect(links()[1]!.querySelector('.review-badge')?.textContent).toBe('3');
   const shell = host.querySelector('.community-management');
-  for (const [index, path] of ['/review', '/review/cases', '/review/cards', '/review/members', '/review/history'].entries()) {
+  for (const [index, path] of ['/review', '/review/cases', '/review/cards', '/review/comments', '/review/members', '/review/history', '/review/settings'].entries()) {
     await router.push(path); await nextTick();
     expect(host.querySelector('.community-management')).toBe(shell);
     expect(host.querySelectorAll('h1')).toHaveLength(1);
@@ -47,7 +52,7 @@ it('keeps card review, cases, works and history inside one management workspace 
 it('keeps legacy management bookmarks and all navigation in the selected language', async () => {
   await router.push('/en/review/manage?from=bookmark#pending'); await nextTick();
   expect(router.currentRoute.value.fullPath).toBe('/en/review/cases?from=bookmark#pending');
-  expect(links().map(a => a.getAttribute('href'))).toEqual(['/en/review', '/en/review/cases', '/en/review/cards', '/en/review/members', '/en/review/history']);
+  expect(links().map(a => a.getAttribute('href'))).toEqual(['/en/review', '/en/review/cases', '/en/review/cards', '/en/review/comments', '/en/review/members', '/en/review/history', '/en/review/settings']);
   expect(router.currentRoute.value.meta.auth).toBe(true);
 });
 it('opens the Members tab for any reviewer, between works and history', async () => {
