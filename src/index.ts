@@ -960,7 +960,7 @@ app.post("/v1/cards/:id/comments", async (c) => {
   const card = await commentCardFor(c);
   const body = (await c.req.json().catch(() => ({}))) as { content?: unknown; parentId?: unknown; rootId?: unknown };
   const created = await postComment(c.env.DB, { card, memberId: member.id, content: body.content, parentId: body.parentId, rootId: body.rootId, now: Date.now() });
-  note(c, { event: "comment_create", subject: card.id, detail: body.rootId || body.parentId ? "reply" : "root" });
+  note(c, { event: "comment_create", subject: card.id, detail: created.status === "held" ? "held" : body.rootId || body.parentId ? "reply" : "root" });
   queuePush(c);
   return c.json(created, 201);
 });
