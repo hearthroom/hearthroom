@@ -94,7 +94,7 @@ describe("編輯", () => {
   });
 
   it("封面只收本站 blog/ 的 key", async () => {
-    await expect(draft({ coverKey: "avatars/x.webp" })).rejects.toMatchObject({ status: 400 });
+    await expect(draft({ coverKey: "avatars/x.webp" })).rejects.toMatchObject({ status: 400, message: "blog_invalid", extra: { field: "coverKey" } });
     expect((await draft({ coverKey: "blog/0b6f.webp" })).coverUrl).toBe("/v1/blog/images/0b6f.webp");
   });
 
@@ -142,5 +142,79 @@ describe("留言目標", () => {
       { event_key: "comment:r2", path: "/blog/p/p1", card_id: null, created_at: 9 },
       { event_key: "like:top", path: "/blog/p/p1", card_id: null, created_at: 4 },
     ]);
+  });
+});
+
+describe("同一個操作編號重送", () => {
+  const actor = () => ({ memberId: editor, kind: "human" as const });
+  const body = () => ({ columnId, slug: "hello", locale: "zh-Hant" as const, title: "開站了", excerpt: "", bodyMd: "內容" });
+  const counts = async () => {
+    const one = async (sql: string) => (await env.DB.prepare(sql).first<{ n: number }>())!.n;
+    return {
+      revisions: await one("SELECT COUNT(*) AS n FROM blog_post_revisions"),
+      audits: await one("SELECT COUNT(*) AS n FROM audit_log"),
+      metric: await one("SELECT COALESCE(SUM(value), 0) AS n FROM ops_metrics WHERE metric = 'blog'"),
+    };
+  };
+  const same = (a: { id: string; version: number }, b: { id: string; version: number }) => expect([b.id, b.version]).toEqual([a.id, a.version]);
+
+  it("建立：第一次成功，重送回同一篇、不多寫", async () => {
+    const id = op();
+    const a = await savePost(env.DB, body(), actor(), id, 10);
+    const n = await counts();
+    same(a, await savePost(env.DB, body(), actor(), id, 11));
+    expect(await counts()).toEqual(n);
+  });
+
+  it("儲存：重送不會因為版本號已經前進而回衝突", async () => {
+    const p = await draft();
+    const id = op();
+    const a = await savePost(env.DB, { ...body(), id: p.id, expectedVersion: p.version, title: "改" }, actor(), id, 20);
+    const n = await counts();
+    same(a, await savePost(env.DB, { ...body(), id: p.id, expectedVersion: p.version, title: "改" }, actor(), id, 21));
+    expect(await counts()).toEqual(n);
+  });
+
+  it("還原：重送不再多一筆修訂", async () => {
+    const p = await draft();
+    await savePost(env.DB, { ...body(), id: p.id, expectedVersion: p.version, title: "改" }, actor(), op(), 20);
+    const rev = (await listRevisions(env.DB, p.id)).at(-1)!;
+    const id = op();
+    const a = await restoreRevision(env.DB, p.id, rev.id, actor(), id, 30);
+    const n = await counts();
+    same(a, await restoreRevision(env.DB, p.id, rev.id, actor(), id, 31));
+    expect(await counts()).toEqual(n);
+  });
+
+  it("狀態：重送不再改版本號", async () => {
+    const p = await draft();
+    const id = op();
+    const a = await setPostState(env.DB, p.id, { pinned: true }, actor(), id, 40);
+    const n = await counts();
+    same(a, await setPostState(env.DB, p.id, { pinned: true }, actor(), id, 41));
+    expect(await counts()).toEqual(n);
+  });
+
+  it("欄目：重送回同一個欄目", async () => {
+    const id = op();
+    const input = { slug: "events", name: { "zh-Hant": "活動" }, description: {}, sort: 1, enabled: true };
+    const a = await saveColumn(env.DB, input, actor(), id, 50);
+    const n = await counts();
+    expect((await saveColumn(env.DB, input, actor(), id, 51)).id).toBe(a.id);
+    expect(await counts()).toEqual(n);
+    expect(await listColumns(env.DB, { includeDisabled: true })).toHaveLength(2);
+  });
+
+  it("同時送出兩次：只留一次，兩邊都拿到同一篇", async () => {
+    const id = op();
+    const [a, b] = await Promise.all([savePost(env.DB, body(), actor(), id, 60), savePost(env.DB, body(), actor(), id, 60)]);
+    expect(b.id).toBe(a.id);
+    expect((await counts()).revisions).toBe(1);
+  });
+
+  it("編號已經用在別的東西上：回衝突", async () => {
+    const id = op();
+    await savePost(env.DB, body(), actor(), id, 70);
+    await expect(saveColumn(env.DB, { slug: "x", name: { "zh-Hant": "x" }, description: {}, sort: 0, enabled: true }, actor(), id, 71)).rejects.toMatchObject({ status: 409, message: "blog_operation_repeated" });
   });
 });
