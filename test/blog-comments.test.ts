@@ -107,6 +107,16 @@ describe("文章留言", () => {
     expect(n).toEqual({ path: `/blog/p/${postId}`, card_id: null });
   });
 
+  it("待審的文章留言算進其他審核人的徽章數，自己的不算", async () => {
+    const summary = async (token: string) => (await json(await send("/v1/moderation/summary", token))).comments;
+    await env.DB.prepare("INSERT INTO comment_keywords VALUES ('k1','違禁','test',1)").run();
+    expect((await json(await post("fan", { content: "違禁一" }))).status).toBe("held");
+    expect(await summary("mod")).toBe(1);
+    expect((await json(await post("mod", { content: "違禁二" }))).status).toBe("held");
+    expect(await summary("mod")).toBe(1);
+    expect(await summary("editor")).toBe(2);
+  });
+
   it("檢舉記成文章目標；移除通知指向文章，卡片的留言版本號不動", async () => {
     const id = await say("fan", "要被檢舉的");
     const before = await revision();
