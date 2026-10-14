@@ -66,7 +66,8 @@ import { originalityReport } from "./originality";
 import { type Env, HttpError } from "./types";
 import { serveSandbox } from "./sandbox";
 import { listSaves, putSave, removeSave } from "./saves";
-import { commentCard, countTop, deleteComment, listReplies, listTop, postComment, setLike, type Viewer } from "./comments";
+import { commentCard, countTop, deleteComment, listReplies, listTop, postComment, setLike, sortOf, type CommentTarget, type Viewer } from "./comments";
+import { livePost } from "./blog";
 import { reportComment } from "./comment-moderation";
 import { commentModerationRoutes } from "./comment-moderation-routes";
 import { blogRoutes } from "./blog-routes";
@@ -828,6 +829,49 @@ app.get('/v1/avatars/:handle/:file',async c=>{
  return new Response(image.body,{headers:{'Content-Type':contentType,'Cache-Control':'public, max-age=300','X-Content-Type-Options':'nosniff'}});
 });
 
+/**
+ * 文章留言：跟卡片留言同一套（src/comments.ts），只有公開文章有留言區，未公開一律 404。
+ * 要登記在 blogRoutes 之前：列表的路徑跟單篇文章的 /v1/blog/posts/:column/:slug 同形，
+ * 不是公開文章的 id 就交給下一個路由（slug 剛好叫 comments 的文章照常讀得到）。
+ */
+async function commentPostFor(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>): Promise<CommentTarget | null> {
+  const post = await livePost(c.env.DB, c.req.param("postId") ?? "", Date.now());
+  return post ? { kind: "post", post } : null;
+}
+async function mustCommentPost(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>): Promise<CommentTarget> {
+  const target = await commentPostFor(c);
+  if (!target) throw new HttpError(404, "blog_post_not_found");
+  return target;
+}
+
+app.get("/v1/blog/posts/:postId/comments", async (c, next) => {
+  const target = await commentPostFor(c);
+  if (!target) return next();
+  const res = await listTop(c.env.DB, target, await commentViewer(c), pageOf(c.req.query("page")), sortOf(c.req.query("sort")));
+  return c.json(res, 200, { "Cache-Control": "private, no-store" });
+});
+
+app.get("/v1/blog/posts/:postId/comments/count", async (c) => {
+  const count = await countTop(c.env.DB, await mustCommentPost(c));
+  return c.json({ count }, 200, { "Cache-Control": "private, no-store" });
+});
+
+app.get("/v1/blog/posts/:postId/comments/:rootId/replies", async (c) => {
+  const target = await mustCommentPost(c);
+  const res = await listReplies(c.env.DB, target, c.req.param("rootId"), await commentViewer(c), pageOf(c.req.query("page")));
+  return c.json(res, 200, { "Cache-Control": "private, no-store" });
+});
+
+app.post("/v1/blog/posts/:postId/comments", async (c) => {
+  const member = await requireMember(c);
+  const target = await mustCommentPost(c);
+  const body = (await c.req.json().catch(() => ({}))) as { content?: unknown; parentId?: unknown; rootId?: unknown };
+  const created = await postComment(c.env.DB, { target, memberId: member.id, content: body.content, parentId: body.parentId, rootId: body.rootId, now: Date.now() });
+  note(c, { event: "comment_create", subject: c.req.param("postId"), detail: created.status === "held" ? "held" : body.rootId || body.parentId ? "reply" : "root" });
+  queuePush(c);
+  return c.json(created, 201);
+});
+
 app.route("/", communityRoutes);
 app.route("/", blogRoutes);
 app.route("/", libraryRoutes);
@@ -943,21 +987,21 @@ const pageOf = (raw: string | undefined) => Math.min(500, Math.max(1, Math.floor
 
 app.get("/v1/cards/:id/comments", async (c) => {
   const card = await commentCardFor(c);
-  const res = await listTop(c.env.DB, card, await commentViewer(c), pageOf(c.req.query("page")));
+  const res = await listTop(c.env.DB, { kind: "card", card }, await commentViewer(c), pageOf(c.req.query("page")), sortOf(c.req.query("sort")));
   return c.json(res, 200, { "Cache-Control": "private, no-store" });
 });
 
 app.get("/v1/cards/:id/comments/count", async (c) => {
   const card = await commentCardFor(c);
   const revision=await c.env.DB.prepare('SELECT comment_revision FROM cards WHERE id=?').bind(card.id).first<{comment_revision:string}>();
-  const result=await snapshot(c.env,['comment-count',card.id,revision?.comment_revision],30,()=>countTop(c.env.DB,card.id),c.executionCtx);
+  const result=await snapshot(c.env,['comment-count',card.id,revision?.comment_revision],30,()=>countTop(c.env.DB,{kind:"card",card}),c.executionCtx);
   c.header('X-Cache',result.layer==='origin'?'miss':'hit');
   return c.json({ count: result.value }, 200, { "Cache-Control": "private, no-store" });
 });
 
 app.get("/v1/cards/:id/comments/:rootId/replies", async (c) => {
   const card = await commentCardFor(c);
-  const res = await listReplies(c.env.DB, card, c.req.param("rootId"), await commentViewer(c), pageOf(c.req.query("page")));
+  const res = await listReplies(c.env.DB, { kind: "card", card }, c.req.param("rootId"), await commentViewer(c), pageOf(c.req.query("page")));
   return c.json(res, 200, { "Cache-Control": "private, no-store" });
 });
 
@@ -965,7 +1009,7 @@ app.post("/v1/cards/:id/comments", async (c) => {
   const member = await requireMember(c);
   const card = await commentCardFor(c);
   const body = (await c.req.json().catch(() => ({}))) as { content?: unknown; parentId?: unknown; rootId?: unknown };
-  const created = await postComment(c.env.DB, { card, memberId: member.id, content: body.content, parentId: body.parentId, rootId: body.rootId, now: Date.now() });
+  const created = await postComment(c.env.DB, { target: { kind: "card", card }, memberId: member.id, content: body.content, parentId: body.parentId, rootId: body.rootId, now: Date.now() });
   note(c, { event: "comment_create", subject: card.id, detail: created.status === "held" ? "held" : body.rootId || body.parentId ? "reply" : "root" });
   queuePush(c);
   return c.json(created, 201);
@@ -993,7 +1037,7 @@ app.delete("/v1/comments/:id/like", async (c) => {
 app.post("/v1/comments/:id/report", async (c) => {
   const member = await requireMember(c);
   const body = (await c.req.json().catch(() => ({}))) as { reason?: unknown; note?: unknown };
-  const out = await reportComment(c.env.DB, { commentId: c.req.param("id"), targetKind: "card", reporterId: member.id, reason: body.reason, note: body.note, now: Date.now() }, await readSettings(c.env.DB));
+  const out = await reportComment(c.env.DB, { commentId: c.req.param("id"), reporterId: member.id, reason: body.reason, note: body.note, now: Date.now() }, await readSettings(c.env.DB));
   note(c, { event: "comment_report", detail: out.folded ? "folded" : "recorded" });
   return c.json({ ok: true, folded: out.folded }, 200, { "Cache-Control": "no-store" });
 });
