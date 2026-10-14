@@ -11,6 +11,7 @@ import { i18n } from '../src/lib/i18n';
 const held = { id: 'c1', target: { kind: 'card', id: '12', title: '雨夜書店', cardNumber: 3 }, author: { handle: 'rainy', displayName: '小雨' }, content: 'buy now', status: 'held', holdReason: 'keyword', reports: { total: 0, byReason: {} }, createdAt: 1, moderatedAt: 1, moderationReason: null, suggestedBy: null };
 const mocks = vi.hoisted(() => ({
   ApiError: null as unknown as new (s: number, m: string, c: string) => Error,
+  queue: [] as unknown[],
   decide: vi.fn(),
   keywords: vi.fn(),
   settings: vi.fn(),
@@ -23,7 +24,7 @@ vi.mock('../src/lib/api', async (original) => {
   return {
     ...real,
     fetchReviewMe: async () => ({ reviewer: true, pending: 0, reviews: 0, cases: 0, comments: 4, role: 'reviewer' }),
-    fetchCommentQueue: async () => ({ total: 1, items: [held] }),
+    fetchCommentQueue: async () => ({ total: mocks.queue.length, items: mocks.queue }),
     fetchCommentStats: async () => ({ held: 4, openReports: 1, removed7d: 2, medianHandleMs7d: 30 * 60_000, holdReasons7d: {} }),
     fetchKeywords: mocks.keywords,
     decideComment: mocks.decide,
@@ -46,6 +47,7 @@ beforeEach(() => {
   i18n.global.locale.value = 'zh-Hant';
   mocks.keywords.mockReset().mockResolvedValue({ items: [{ id: 'k1', pattern: 'buy now', createdAt: 1 }] });
   mocks.decide.mockReset();
+  mocks.queue = [held];
 });
 afterEach(() => { app?.unmount(); document.body.innerHTML = ''; });
 
@@ -77,7 +79,7 @@ it('returns focus to the button that opened the reason dialog, whichever way it 
   await mount('/review/comments');
   await vi.waitFor(() => expect(host.querySelector('[data-action="remove"]')).not.toBeNull());
   const opener = host.querySelector<HTMLButtonElement>('[data-action="remove"]')!;
-  const openIt = async () => { opener.focus(); opener.click(); await nextTick(); await nextTick(); expect(document.activeElement).not.toBe(opener); };
+  const openIt = async () => { (document.activeElement as HTMLElement | null)?.blur(); opener.click(); await nextTick(); await nextTick(); expect(document.activeElement).not.toBe(opener); };
   await openIt();
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   await vi.waitFor(() => expect(document.activeElement).toBe(opener));
@@ -94,6 +96,26 @@ it('returns focus to the button that opened the reason dialog, whichever way it 
   const cancel = [...dialog.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent === t('dialog.cancel'))!;
   cancel.focus(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
   expect(document.activeElement).toBe(dialog.querySelector('textarea'));
+});
+
+it('after a removal reloads the queue, focus lands on the next item, then on the tab once the queue is empty', async () => {
+  const next = { ...held, id: 'c2', content: 'second' };
+  mocks.queue = [held, next];
+  await mount('/review/comments');
+  await vi.waitFor(() => expect(host.querySelector('[data-comment="c1"] [data-action="remove"]')).not.toBeNull());
+  const removeVia = async (id: string) => {
+    host.querySelector<HTMLButtonElement>(`[data-comment="${id}"] [data-action="remove"]`)!.click(); await nextTick(); await nextTick();
+    const dialog = document.querySelector<HTMLFormElement>('[role=dialog]')!;
+    const reason = dialog.querySelector('textarea')!; reason.value = 'Spam'; reason.dispatchEvent(new Event('input')); await nextTick();
+    dialog.requestSubmit();
+  };
+  mocks.decide.mockImplementation(async (id: string) => { mocks.queue = mocks.queue.filter((c: any) => c.id !== id); return { id, status: 'removed' }; });
+  await removeVia('c1');
+  await vi.waitFor(() => expect(host.querySelector('[data-comment="c1"]')).toBeNull());
+  await vi.waitFor(() => expect(document.activeElement).toBe(host.querySelector('[data-comment="c2"] [data-action="release"]')));
+  await removeVia('c2');
+  await vi.waitFor(() => expect(host.querySelector('[data-comment="c2"]')).toBeNull());
+  await vi.waitFor(() => expect(document.activeElement).toBe(host.querySelector('.cmod-tabs .seg__item--on')));
 });
 
 it('shows an AI reviewer only the release action', async () => {
