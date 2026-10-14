@@ -68,6 +68,7 @@ import { serveSandbox } from "./sandbox";
 import { listSaves, putSave, removeSave } from "./saves";
 import { commentCard, countTop, deleteComment, listReplies, listTop, postComment, setLike, type Viewer } from "./comments";
 import { reportComment } from "./comment-moderation";
+import { commentModerationRoutes } from "./comment-moderation-routes";
 import { readSettings } from "./community-settings";
 import { clearScore, readScore, setScore } from "./card-scores";
 import { SVG_WRAP_LIMIT, TOUCH_ICON_SIZE, allowedImageUrl, cardManifest, iconSize, signShortcutKey, svgWrap, verifyShortcutKey } from "./shortcut";
@@ -143,6 +144,7 @@ app.use("*", async (c, next) => {
 });
 
 app.route("/", moderationRoutes);
+app.route("/", commentModerationRoutes);
 app.use('/v1/*',async(c,next)=>{
   if(c.req.header('X-Provider'))parseProvider(c.req.header('X-Provider'));
   return next();
