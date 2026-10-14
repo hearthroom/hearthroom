@@ -1,4 +1,4 @@
-import { auditStmt } from "./audit";
+import { auditStmtIfChanged } from "./audit";
 import type { CommunitySettings } from "./community-settings";
 import { bumpOp } from "./ops-metrics";
 import { HttpError } from "./types";
@@ -73,12 +73,14 @@ export async function reportComment(
 export async function holdVisible(db: D1Database, commentId: string, reason: "reports" | "ai", actorId: string | null, actorKind: "system" | "ai", operationId: string, now: number, note = ""): Promise<boolean> {
   const row = await db.prepare("SELECT root_id FROM comments WHERE id = ? AND status = 'visible'").bind(commentId).first<{ root_id: string | null }>();
   if (!row) return false;
+  // 三條寫入同一個 batch、用 changes() 串起來：只有第一條條件式 UPDATE 真的改到列，稽核與回覆數才會跟著動。
   const writes = [
     db.prepare("UPDATE comments SET status = 'held', hold_reason = ?, moderation_reason = ?, moderated_by = ?, moderated_at = ? WHERE id = ? AND status = 'visible'").bind(reason, note || null, actorId, now, commentId),
-    auditStmt(db, { subjectKind: "comment", subjectId: commentId, actorMemberId: actorId, actorKind, action: reason === "ai" ? "flag" : "hold", reason: note || reason, before: { status: "visible" }, after: { status: "held", holdReason: reason }, operationId, now }),
+    auditStmtIfChanged(db, { subjectKind: "comment", subjectId: commentId, actorMemberId: actorId, actorKind, action: reason === "ai" ? "flag" : "hold", reason: note || reason, before: { status: "visible" }, after: { status: "held", holdReason: reason }, operationId, now }),
   ];
-  if (row.root_id) writes.push(db.prepare("UPDATE comments SET reply_count = MAX(0, reply_count - 1) WHERE id = ?").bind(row.root_id));
-  await db.batch(writes);
+  if (row.root_id) writes.push(db.prepare("UPDATE comments SET reply_count = MAX(0, reply_count - 1) WHERE id = ? AND changes() > 0").bind(row.root_id));
+  const results = await db.batch(writes);
+  if (!results[0].meta.changes) return false;
   await bumpOp(db, "comment_moderation", reason === "ai" ? "flag" : "hold", "success");
   return true;
 }
