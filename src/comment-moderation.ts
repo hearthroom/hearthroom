@@ -1,7 +1,8 @@
-import { auditStmtIfChanged } from "./audit";
+import { auditStmt, auditStmtIfChanged, type AuditEntry } from "./audit";
 import type { CommunitySettings } from "./community-settings";
+import { memberNsfw } from "./members";
 import { bumpOp } from "./ops-metrics";
-import { HttpError } from "./types";
+import { HttpError, pickLocale, type Localized } from "./types";
 
 /**
  * 留言審核（開業活動設計 §7）：大部分留言直接公開，命中風險規則的先攔下、只給本人看。
@@ -83,4 +84,208 @@ export async function holdVisible(db: D1Database, commentId: string, reason: "re
   if (!results[0].meta.changes) return false;
   await bumpOp(db, "comment_moderation", reason === "ai" ? "flag" : "hold", "success");
   return true;
+}
+
+// ---- 審核人處理 -------------------------------------------------------------------
+
+/** 同一個操作編號重送（稽核的 UNIQUE）＝別人或自己已經做過，回衝突，不寫第二次。 */
+export async function conflictOnDuplicate<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (e) {
+    if (/UNIQUE constraint/.test(String(e))) throw new HttpError(409, "moderation_conflict");
+    throw e;
+  }
+}
+
+export type Decision = "release" | "remove" | "dismiss" | "flag";
+
+/**
+ * 審核人對一則留言的決定。改狀態的動作是條件式 UPDATE（狀態要跟讀到的一樣）＋同一個 batch 的後續寫入：
+ * 稽核用 changes() 跟在 UPDATE 後面，其餘寫入以「這次的稽核列存在」為條件，所以並發時輸的那一方什麼都不寫，回 409。
+ */
+export async function decide(
+  db: D1Database,
+  i: { commentId: string; actorId: string; actorKind: "human" | "ai"; action: Decision; reason: string; operationId: string; now: number },
+): Promise<{ id: string; status: string }> {
+  const c = await db.prepare("SELECT c.id, c.member_id, c.card_id, c.root_id, c.status, c.hold_reason, k.rating FROM comments c JOIN cards k ON k.id = c.card_id WHERE c.id = ?")
+    .bind(i.commentId).first<{ id: string; member_id: string; card_id: string; root_id: string | null; status: string; hold_reason: string | null; rating: string | null }>();
+  if (!c || c.status === "deleted") throw new HttpError(404, "comment not found");
+  if (c.member_id === i.actorId) throw new HttpError(403, "moderation_self_review");
+  if (c.rating === "R" && (await memberNsfw(db, i.actorId)).ageVerifiedAt === null) throw new HttpError(403, "age_verification_required");
+  const entry = (action: string, before: unknown, after: unknown): AuditEntry =>
+    ({ subjectKind: "comment", subjectId: c.id, actorMemberId: i.actorId, actorKind: i.actorKind, action, reason: i.reason, before, after, operationId: i.operationId, now: i.now });
+  const MINE = "EXISTS (SELECT 1 FROM audit_log WHERE actor_member_id = ? AND operation_id = ?)";
+  const closeReports = (resolution: "released" | "removed" | "dismissed", gated: boolean) =>
+    db.prepare(`UPDATE comment_reports SET resolved_at = ?, resolution = ?, resolved_by = ? WHERE target_kind = 'card' AND comment_id = ? AND resolved_at IS NULL${gated ? " AND " + MINE : ""}`)
+      .bind(i.now, resolution, i.actorId, c.id, ...(gated ? [i.actorId, i.operationId] : []));
+  const replyCount = (delta: 1 | -1) =>
+    db.prepare(`UPDATE comments SET reply_count = MAX(0, reply_count + ?) WHERE id = ? AND ${MINE}`).bind(delta, c.root_id, i.actorId, i.operationId);
+  const toVisible = (extra = "") =>
+    db.prepare(`UPDATE comments SET status = 'visible', moderated_by = ?, moderated_at = ? WHERE id = ? AND status = 'held'${extra}`).bind(i.actorId, i.now, c.id);
+
+  let writes: D1PreparedStatement[];
+  let next: string;
+  if (i.action === "flag") {
+    if (c.status === "visible" && (await conflictOnDuplicate(() => holdVisible(db, c.id, "ai", i.actorId, "ai", i.operationId, i.now, i.reason)))) return { id: c.id, status: "held" };
+    // 已經不是公開的（已在待審、已移除）：只記下 AI 的意見，不改狀態。
+    const now = await db.prepare("SELECT status FROM comments WHERE id = ?").bind(c.id).first<{ status: string }>();
+    next = now?.status ?? c.status;
+    await conflictOnDuplicate(() => auditStmt(db, entry("flag", { status: next }, { status: next })).run());
+    await bumpOp(db, "comment_moderation", "flag", "success");
+    return { id: c.id, status: next };
+  } else if (i.action === "release") {
+    if (c.status !== "held") throw new HttpError(409, "moderation_conflict");
+    next = "visible";
+    writes = [toVisible(), auditStmtIfChanged(db, entry("release", { status: "held", holdReason: c.hold_reason }, { status: "visible" })), closeReports("released", true)];
+    if (c.root_id) writes.push(replyCount(1));
+  } else if (i.action === "remove") {
+    if (c.status !== "visible" && c.status !== "held") throw new HttpError(409, "moderation_conflict");
+    next = "removed";
+    writes = [
+      db.prepare("UPDATE comments SET status = 'removed', deleted_at = ?, moderated_by = ?, moderated_at = ?, moderation_reason = ? WHERE id = ? AND status = ?").bind(i.now, i.actorId, i.now, i.reason, c.id, c.status),
+      auditStmtIfChanged(db, entry("remove", { status: c.status }, { status: "removed" })),
+      closeReports("removed", true),
+      db.prepare(`INSERT OR IGNORE INTO community_notifications (event_key, member_id, kind, path, created_at, card_id, extra, delivered) SELECT ?, ?, 'comment_removed', ?, ?, ?, json_object('reason', ?), 1 WHERE ${MINE}`)
+        .bind("removed:" + c.id, c.member_id, "/cards/" + c.card_id, i.now, c.card_id, i.reason, i.actorId, i.operationId),
+    ];
+    if (c.root_id && c.status === "visible") writes.push(replyCount(-1));
+  } else if (c.status === "held" && c.hold_reason === "reports") {
+    // 駁回檢舉：因檢舉被摺疊的一併放行。
+    next = "visible";
+    writes = [toVisible(" AND hold_reason = 'reports'"), auditStmtIfChanged(db, entry("dismiss", { status: "held", holdReason: "reports" }, { status: "visible" })), closeReports("dismissed", true)];
+    if (c.root_id) writes.push(replyCount(1));
+  } else {
+    // 只結案檢舉、不改狀態：沒有可輸的條件式更新，稽核直接寫。
+    next = c.status;
+    await conflictOnDuplicate(() => db.batch([closeReports("dismissed", false), auditStmt(db, entry("dismiss", { status: c.status }, { status: c.status }))]));
+    await bumpOp(db, "comment_moderation", "dismiss", "success");
+    return { id: c.id, status: next };
+  }
+  const results = await conflictOnDuplicate(() => db.batch(writes));
+  if (!results[0].meta.changes) throw new HttpError(409, "moderation_conflict");
+  await bumpOp(db, "comment_moderation", i.action, "success");
+  return { id: c.id, status: next };
+}
+
+/** 禁言：只禁止留言。days 為 null＝永久。 */
+export async function setMute(db: D1Database, i: { memberId: string; days: 7 | 30 | null; reason: string; actorId: string; operationId: string; now: number }): Promise<{ until: number | null }> {
+  const until = i.days === null ? null : i.now + i.days * DAY;
+  await conflictOnDuplicate(() => db.batch([
+    db.prepare("INSERT INTO comment_mutes (member_id, until, reason, by_member_id, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(member_id) DO UPDATE SET until = excluded.until, reason = excluded.reason, by_member_id = excluded.by_member_id, created_at = excluded.created_at")
+      .bind(i.memberId, until, i.reason, i.actorId, i.now),
+    auditStmt(db, { subjectKind: "member", subjectId: i.memberId, actorMemberId: i.actorId, actorKind: "human", action: "mute", reason: i.reason, after: { until }, operationId: i.operationId, now: i.now }),
+  ]));
+  await bumpOp(db, "comment_moderation", "mute", "success");
+  return { until };
+}
+
+export async function clearMute(db: D1Database, i: { memberId: string; reason: string; actorId: string; operationId: string; now: number }): Promise<void> {
+  await conflictOnDuplicate(() => db.batch([
+    db.prepare("DELETE FROM comment_mutes WHERE member_id = ?").bind(i.memberId),
+    auditStmtIfChanged(db, { subjectKind: "member", subjectId: i.memberId, actorMemberId: i.actorId, actorKind: "human", action: "unmute", reason: i.reason, operationId: i.operationId, now: i.now }),
+  ]));
+  await bumpOp(db, "comment_moderation", "unmute", "success");
+}
+
+export async function listKeywords(db: D1Database): Promise<{ id: string; pattern: string; createdAt: number }[]> {
+  return (await db.prepare("SELECT id, pattern, created_at AS createdAt FROM comment_keywords ORDER BY created_at DESC, id").all<{ id: string; pattern: string; createdAt: number }>()).results;
+}
+
+export async function addKeyword(db: D1Database, i: { pattern: unknown; actorId: string; operationId: string; now: number }): Promise<void> {
+  const pattern = typeof i.pattern === "string" ? i.pattern.trim() : "";
+  if (!pattern || [...pattern].length > 100) throw new HttpError(400, "invalid_arguments");
+  const id = crypto.randomUUID();
+  await conflictOnDuplicate(() => db.batch([
+    db.prepare("INSERT OR IGNORE INTO comment_keywords (id, pattern, created_by, created_at) VALUES (?, ?, ?, ?)").bind(id, pattern, i.actorId, i.now),
+    auditStmtIfChanged(db, { subjectKind: "comment_keyword", subjectId: id, actorMemberId: i.actorId, actorKind: "human", action: "add", after: { pattern }, operationId: i.operationId, now: i.now }),
+  ]));
+  await bumpOp(db, "comment_moderation", "keyword", "success");
+}
+
+export async function removeKeyword(db: D1Database, i: { id: string; actorId: string; operationId: string; now: number }): Promise<void> {
+  const row = await db.prepare("SELECT pattern FROM comment_keywords WHERE id = ?").bind(i.id).first<{ pattern: string }>();
+  if (!row) throw new HttpError(404, "keyword not found");
+  await conflictOnDuplicate(() => db.batch([
+    db.prepare("DELETE FROM comment_keywords WHERE id = ?").bind(i.id),
+    auditStmtIfChanged(db, { subjectKind: "comment_keyword", subjectId: i.id, actorMemberId: i.actorId, actorKind: "human", action: "remove", before: { pattern: row.pattern }, operationId: i.operationId, now: i.now }),
+  ]));
+  await bumpOp(db, "comment_moderation", "keyword", "success");
+}
+
+// ---- 佇列與統計 -------------------------------------------------------------------
+
+export type QueueTab = "held" | "reported" | "removed";
+const QUEUE_PAGE = 20;
+const TABS: Record<QueueTab, { where: string; order: string }> = {
+  held: { where: "c.status = 'held'", order: "c.created_at DESC" },
+  reported: { where: "c.status = 'visible' AND EXISTS (SELECT 1 FROM comment_reports r WHERE r.target_kind = 'card' AND r.comment_id = c.id AND r.resolved_at IS NULL)", order: "open_reports DESC, c.created_at DESC" },
+  removed: { where: "c.status = 'removed'", order: "c.moderated_at DESC" },
+};
+
+/** 審核佇列：自己的留言不出現；沒做年齡驗證的人看不到成人卡上的留言。 */
+export async function moderationQueue(db: D1Database, viewerId: string, tab: QueueTab, page: number) {
+  const age = Number((await memberNsfw(db, viewerId)).ageVerifiedAt !== null);
+  const t = TABS[tab];
+  const from = `FROM comments c JOIN cards k ON k.id = c.card_id JOIN members m ON m.id = c.member_id WHERE ${t.where} AND c.member_id <> ?1 AND (k.rating IS NOT 'R' OR ?2)`;
+  const [total, rows] = await db.batch([
+    db.prepare(`SELECT COUNT(*) AS n ${from}`).bind(viewerId, age),
+    db.prepare(`SELECT c.id, c.card_id, c.content, c.status, c.hold_reason, c.created_at, c.moderated_at, c.moderation_reason, m.handle, m.display_name, k.names,
+      (SELECT num FROM card_numbers n WHERE n.provider = k.provider AND n.source_role_id = k.source_role_id) AS card_number,
+      (SELECT COUNT(*) FROM comment_reports r WHERE r.target_kind = 'card' AND r.comment_id = c.id AND r.resolved_at IS NULL) AS open_reports
+      ${from} ORDER BY ${t.order} LIMIT ?3 OFFSET ?4`).bind(viewerId, age, QUEUE_PAGE, (page - 1) * QUEUE_PAGE),
+  ]);
+  type Row = { id: string; card_id: string; content: string; status: string; hold_reason: string | null; created_at: number; moderated_at: number | null; moderation_reason: string | null; handle: string; display_name: string | null; names: string; card_number: number | null };
+  const items = rows.results as Row[];
+  // 待處理的分頁看未結的檢舉；已移除的分頁看當時全部的檢舉。
+  const reports = items.length
+    ? (await db.prepare(`SELECT comment_id, reason, COUNT(*) AS n FROM comment_reports WHERE target_kind = 'card' AND comment_id IN (SELECT value FROM json_each(?)) AND (resolved_at IS NULL OR ?) GROUP BY comment_id, reason`)
+        .bind(JSON.stringify(items.map((r) => r.id)), Number(tab === "removed")).all<{ comment_id: string; reason: string; n: number }>()).results
+    : [];
+  return {
+    total: (total.results[0] as { n: number }).n,
+    items: items.map((r) => {
+      const mine = reports.filter((x) => x.comment_id === r.id);
+      return {
+        id: r.id,
+        target: { kind: "card" as const, id: String(r.card_id), title: pickLocale(JSON.parse(r.names) as Localized, "zh-Hant"), cardNumber: r.card_number },
+        author: { handle: r.handle, displayName: r.display_name?.trim() || r.handle },
+        content: r.content,
+        status: r.status,
+        holdReason: r.hold_reason,
+        reports: { total: mine.reduce((a, x) => a + x.n, 0), byReason: Object.fromEntries(mine.map((x) => [x.reason, x.n])) as Record<string, number> },
+        createdAt: r.created_at,
+        moderatedAt: r.moderated_at,
+        moderationReason: r.moderation_reason,
+        suggestedBy: r.hold_reason === "ai" ? ("ai" as const) : null,
+      };
+    }),
+  };
+}
+
+const HOLD_KEYS = ["keyword", "new_account_link", "too_many_links", "duplicate", "recent_removal", "reports", "ai"] as const;
+
+export async function moderationStats(db: D1Database, now: number) {
+  const since = now - 7 * DAY;
+  const [held, open, removed, handled, reasons] = await db.batch([
+    db.prepare("SELECT COUNT(*) AS n FROM comments WHERE status = 'held'"),
+    db.prepare("SELECT COUNT(DISTINCT comment_id) AS n FROM comment_reports WHERE resolved_at IS NULL"),
+    db.prepare("SELECT COUNT(*) AS n FROM comments WHERE status = 'removed' AND moderated_at > ?").bind(since),
+    // 公開且有處理時間＝被放行過；已移除＝被移除。待審中的 moderated_at 是攔下的時間，不算處理。
+    db.prepare("SELECT moderated_at - created_at AS ms FROM comments WHERE status IN ('visible','removed') AND moderated_at > ? ORDER BY moderated_at DESC LIMIT 500").bind(since),
+    // 每一次攔下都有一筆稽核（發表時的規則、檢舉摺疊、AI 標記），依當時的原因分組。
+    db.prepare("SELECT json_extract(after_json, '$.holdReason') AS reason, COUNT(*) AS n FROM audit_log WHERE subject_kind = 'comment' AND action IN ('hold','flag') AND created_at > ? GROUP BY reason").bind(since),
+  ]);
+  const n = (r: D1Result) => (r.results[0] as { n: number }).n;
+  const ms = (handled.results as { ms: number }[]).map((r) => r.ms).sort((a, b) => a - b);
+  const mid = ms.length >> 1;
+  const holdReasons7d = Object.fromEntries(HOLD_KEYS.map((k) => [k, 0])) as Record<(typeof HOLD_KEYS)[number], number>;
+  for (const r of reasons.results as { reason: string | null; n: number }[]) if (r.reason && r.reason in holdReasons7d) holdReasons7d[r.reason as keyof typeof holdReasons7d] = r.n;
+  return {
+    held: n(held),
+    openReports: n(open),
+    removed7d: n(removed),
+    medianHandleMs7d: ms.length ? (ms.length % 2 ? ms[mid] : Math.round((ms[mid - 1] + ms[mid]) / 2)) : null,
+    holdReasons7d,
+  };
 }

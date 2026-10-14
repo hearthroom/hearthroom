@@ -17,7 +17,7 @@ const CARD = `SELECT c.*,(SELECT num FROM card_numbers WHERE provider=c.provider
  LEFT JOIN member_connections ac ON ac.provider=c.provider AND ac.external_id=CAST(c.author_num_id AS TEXT)
  LEFT JOIN member_identities ai ON ai.provider=c.provider AND ai.external_id=CAST(c.author_num_id AS TEXT)`;
 const reasonOf = (v:unknown) => { if(typeof v!=='string'||!v.trim()||v.length>2000)throw new HttpError(400,'moderation_reason_required');return v.trim(); };
-const operationOf = (v:unknown) => { if(typeof v!=='string'||!/^[a-zA-Z0-9-]{16,80}$/.test(v))throw new HttpError(400,'invalid_arguments');return v; };
+export const operationOf = (v:unknown) => { if(typeof v!=='string'||!/^[a-zA-Z0-9-]{16,80}$/.test(v))throw new HttpError(400,'invalid_arguments');return v; };
 async function roleOf(db:D1Database,id:string):Promise<StaffRole>{return (await db.prepare('SELECT role FROM reviewers WHERE member_id=? AND revoked_at IS NULL').bind(id).first<{role:StaffRole}>())?.role ?? 'reviewer';}
 async function manager(db:D1Database,id:string){if(await roleOf(db,id)==='reviewer')throw new HttpError(403,'moderation_manager_required');}
 async function cardOf(db:D1Database,id:string){const row=await db.prepare(CARD+' WHERE c.id=?').bind(id).first<ManagedCard>();if(!row)throw new HttpError(404,'card not found');return row;}
@@ -40,12 +40,14 @@ moderationRoutes.use('/v1/moderation/*',bodyLimit({maxSize:16000}));
 moderationRoutes.use('/v1/moderation/*',async(c,next)=>{
  c.header('Cache-Control','private, no-store');
  await next();
+ // 留言審核有自己的計數（hearthroom_comment_moderation_total，見 comment-moderation-routes.ts）。
+ if(/^\/v1\/moderation\/(comment|settings$|members\/[^/]+\/comment-mute$)/.test(c.req.path))return;
  const op=c.req.path.endsWith('/vote')?'vote':c.req.path.endsWith('/resolve')?'resolve':c.req.path.endsWith('/tags')?'tags':c.req.path.endsWith('/fandom')?'fandom':c.req.path.endsWith('/compensation')?'compensation':c.req.path.endsWith('/staff')?'staff':c.req.method==='POST'&&c.req.path.endsWith('/packs')?'packs':c.req.method==='POST'?'propose':'read';
  const outcome=c.res.status<400?'success':c.res.status<500?'denied':'error';
  try{await c.env.DB.prepare('INSERT INTO moderation_metrics VALUES(?,?,1) ON CONFLICT(operation,outcome) DO UPDATE SET value=value+1').bind(op,outcome).run();}catch{console.warn('Moderation request metric unavailable');}
 });
 export async function reviewSummary(db:D1Database,member:{id:string}){
- if(!await isReviewer(db,member.id))return {reviewer:false,pending:0,cases:0,reviews:0};
+ if(!await isReviewer(db,member.id))return {reviewer:false,pending:0,cases:0,reviews:0,comments:0};
  const role=await roleOf(db,member.id);const age=(await memberNsfw(db,member.id)).ageVerifiedAt!==null;
  const cases=await db.prepare(`SELECT count(*) n FROM moderation_cases k
  LEFT JOIN cards c ON c.provider=k.provider AND c.source_role_id=k.source_role_id
@@ -57,7 +59,9 @@ export async function reviewSummary(db:D1Database,member:{id:string}){
  AND NOT EXISTS(SELECT 1 FROM review_stamps st WHERE st.submission_id=s.id AND st.member_id=?)
  AND NOT EXISTS(SELECT 1 FROM member_identities i WHERE i.member_id=? AND i.provider=c.provider AND i.external_id=CAST(c.author_num_id AS TEXT))
  AND NOT EXISTS(SELECT 1 FROM member_connections i WHERE i.owner_member_id=? AND i.provider=c.provider AND i.external_id=CAST(c.author_num_id AS TEXT))`).bind(Number(age),member.id,Date.now()-45*60*1000,member.id,member.id,member.id).first<{n:number}>();
- return {reviewer:true,role,cases:cases?.n??0,reviews:reviews?.n??0,pending:(cases?.n??0)+(reviews?.n??0)};
+ // 待審留言另外算，不混進卡片審核的徽章數（pending）。
+ const comments=await db.prepare("SELECT count(*) n FROM comments c JOIN cards k ON k.id=c.card_id WHERE c.status='held' AND c.member_id<>? AND (k.rating IS NOT 'R' OR ?)").bind(member.id,Number(age)).first<{n:number}>();
+ return {reviewer:true,role,cases:cases?.n??0,reviews:reviews?.n??0,pending:(cases?.n??0)+(reviews?.n??0),comments:comments?.n??0};
 }
 moderationRoutes.get('/v1/moderation/summary',async c=>c.json(await reviewSummary(c.env.DB,await requireMember(c))));
 moderationRoutes.get('/v1/moderation/cases',async c=>{
