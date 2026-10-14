@@ -1,4 +1,5 @@
 import { moderationMetrics } from "./moderation";
+import { opsMetrics } from "./ops-metrics";
 import { bodyLimit } from "hono/body-limit";
 import { Hono } from "hono";
 import { listCards, toCard, type CardRow } from "./cards";
@@ -31,7 +32,7 @@ libraryRoutes.get('/metrics', async c => {
   const suki = await c.env.DB.prepare('SELECT operation,outcome,value FROM suki_metrics ORDER BY operation,outcome').all<{operation:string;outcome:string;value:number}>().catch(() => ({ results: [] as {operation:string;outcome:string;value:number}[] }));
   lines.push('# HELP hearthroom_suki_operations_total Desk pet Suki: visits, recall opt-in changes, recall notices written, cravings met.','# TYPE hearthroom_suki_operations_total counter',
     ...suki.results.filter(r=>/^(visit|recall_on|recall_off|recall|craving)$/.test(r.operation)&&/^(success|sent|card_error|met|error)$/.test(r.outcome)).map(r=>`hearthroom_suki_operations_total{operation="${r.operation}",outcome="${r.outcome}"} ${r.value}`));
-  return c.text('# HELP hearthroom_library_requests_total Community library requests.\n# TYPE hearthroom_library_requests_total counter\n' + lines.join('\n') + '\n' + await moderationMetrics(c.env.DB), 200, { 'Content-Type': 'text/plain; version=0.0.4', 'Cache-Control': 'no-store' });
+  return c.text('# HELP hearthroom_library_requests_total Community library requests.\n# TYPE hearthroom_library_requests_total counter\n' + lines.join('\n') + '\n' + await moderationMetrics(c.env.DB) + await opsMetrics(c.env.DB), 200, { 'Content-Type': 'text/plain; version=0.0.4', 'Cache-Control': 'no-store' });
 });
 const kinds = ["favorites", "following"] as const;
 const offsetOf = (raw?: string) => Math.min(100000, Math.max(0, Math.floor(Number(raw) || 0)));
