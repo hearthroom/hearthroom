@@ -4,7 +4,7 @@
  * 只追加。回傳一條 prepared statement，呼叫端把它放進跟業務寫入同一個 db.batch：
  * 業務成功但稽核沒寫，等於這次操作沒人知道是誰做的。operation_id 讓連點與重試只留一筆。
  */
-export const AUDIT_SUBJECTS = ["comment", "comment_report", "comment_keyword", "member", "community_settings"] as const;
+export const AUDIT_SUBJECTS = ["comment", "comment_report", "comment_keyword", "member", "community_settings", "blog_post", "blog_column"] as const;
 export type AuditSubject = (typeof AUDIT_SUBJECTS)[number];
 export type ActorKind = "human" | "ai" | "system";
 

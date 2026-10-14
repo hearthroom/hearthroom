@@ -10,6 +10,13 @@ const METRICS = {
     operations: ["hold", "release", "remove", "mute", "unmute", "report", "flag", "dismiss", "keyword", "settings"],
     outcomes: ["success", "denied", "error"],
   },
+  blog: {
+    name: "hearthroom_blog_operations_total",
+    help: "Official blog: saves, publishing, pinning, comment switch, restores, column changes and image uploads.",
+    label: "operation",
+    operations: ["save", "publish", "unpublish", "pin", "comments", "restore", "column", "image"],
+    outcomes: ["success", "denied", "error"],
+  },
 } as const;
 export type OpsMetric = keyof typeof METRICS;
 
