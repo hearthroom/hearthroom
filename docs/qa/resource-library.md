@@ -31,6 +31,45 @@ Harbor reuses `harbor_contract_authoring_total` (counter, `op=list|upload_comple
 - Multi-file upload, fixed provider/folder, per-file progress, failure-only retry, overwrite notice, provider quota failure.
 - zh-Hant/en at desktop and 390px; all five locale dictionaries validated; keyboard dialog focus containment and Escape.
 
+### Batch upload authorization regression — 2026-10-14
+
+Acceptance: long-running uploads obtain current credentials for the original account
+before each API request. A 401 permits one credential renewal; unchanged or rejected
+replacement credentials stop instead of looping. Manual failed-only retry keeps the
+same files, destination, upload intent and completion progress. Sign-out or an account
+change must not redirect the queue to a different account.
+
+Regression coverage: `web/test/resource-client.test.ts` exercises authorization expiry
+at intent, completion, folder assignment and multipart fallback; a completion retry
+must reuse stored bytes and preserve the authored path. `web/test/resources.test.ts`
+exercises the failed-only retry button, original file/folder retention, account changes
+between files and during credential renewal, and invalidation of a rejected token.
+`web/test/managed-auth.test.ts` checks that a renewed managed token belongs to the
+original account even when the page still has a stale profile from another tab.
+
+Browser checkpoint: select two synthetic PNGs into one folder, let the first finish,
+expire authorization before the second completes, then press failed-only retry after
+authorization recovers. Both files should finish at the original paths, with one byte
+upload per file. Repeat with an account change and verify no upload to the new account.
+Native Chrome and the in-app browser are unavailable in the current runtime, so this
+browser checkpoint remains unverified; component/API-client tests are separate evidence.
+
+HTTP/MCP/Moonloom: no API/schema or external-client capability changes; this repairs the
+browser's use of existing authenticated endpoints. Observability: no new server work
+or metrics; existing API success/rejection metrics remain applicable. No user-facing
+copy or locale keys change. No production write, release or deployment is included.
+
+Verification: focused Red/Green covers the expiry/retry, account-change and ownership
+checks. Final focused pack: 41 passed. Script checks: 23 passed; Worker suite: 706
+passed; complete web suite with `--maxWorkers=2`: 807 passed, one optional real-card
+fixture suite skipped (`REAL_CARDS_DIR` unset). Web build, including typecheck, passes.
+The default-parallel final run passed all assertions but exited nonzero on an unrelated
+unhandled `localhost:3000/v1/e` beacon from `updates.test.ts`; this is existing asynchronous
+test-environment debt, and the unchanged full web set passed when concurrency was reduced.
+Initial sandbox loopback/log permissions and missing shared dependencies were resolved
+using approved local test execution and a lockfile install confined to this worktree.
+Existing build warnings cover unresolved font paths, deprecated tooling and chunk sizes.
+
 ## Execution evidence — 2026-09-20
 
 - Component regression tests exercise single/multiple providers, stale responses, failed pagination, URL sort restoration, server search, page selection reset, expired auth and failed-only upload retry. Client tests cover issuer isolation, unknown quota and resuming completion without duplicating the upload.
