@@ -46,6 +46,17 @@ describe("運營設定", () => {
   });
 });
 
+describe("運營設定只認自己的鍵", () => {
+  it("toString、__proto__ 這類繼承來的名字一律當未知的鍵", async () => {
+    for (const patch of [{ toString: 1 }, JSON.parse('{"__proto__": 1}')]) {
+      await expect(writeSettings(env.DB, patch, { memberId: "m-admin", kind: "human" }, crypto.randomUUID(), 8)).rejects.toThrow(/invalid_settings/);
+    }
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM community_settings").first<{ n: number }>())!.n).toBe(0);
+    await env.DB.prepare("INSERT INTO community_settings VALUES ('toString','3',NULL,1)").run();
+    expect(await readSettings(env.DB)).toEqual({ commentNewAccountDays: null, commentMaxLinks: null, commentReportFoldThreshold: null });
+  });
+});
+
 describe("AI 審核帳號", () => {
   it("審核人加上代理標記才算", async () => {
     const human = await makeReviewer(41001);

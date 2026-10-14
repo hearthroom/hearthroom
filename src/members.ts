@@ -387,10 +387,17 @@ export function providerOf(c: Ctx): ProviderId {
   return requireConfigured(c.env, parseProvider(c.req.header("X-Provider")));
 }
 
-export async function requireReviewer(c: Ctx): Promise<Member> {
+/** 審核人。AI 審核帳號預設擋下（只做留言審核，那邊明確傳 allowAgent）。 */
+export async function requireReviewer(c: Ctx, opts: { allowAgent?: boolean } = {}): Promise<Member> {
   const member = await requireMember(c);
   if (!(await isReviewer(c.env.DB, member.id))) throw new HttpError(403, "not a reviewer");
+  if (!opts.allowAgent && (await isReviewAgent(c.env.DB, member.id))) throw new HttpError(403, "agent_not_allowed");
   return member;
+}
+
+/** 有站方版務權限的人：審核人，但不是 AI 審核帳號。 */
+export async function isHumanReviewer(db: D1Database, memberId: string): Promise<boolean> {
+  return (await isReviewer(db, memberId)) && !(await isReviewAgent(db, memberId));
 }
 
 export async function saveMemberId(db:D1Database,member:Member):Promise<string> {

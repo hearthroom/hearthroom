@@ -124,13 +124,14 @@ export async function decide(
   const replyCount = (delta: 1 | -1) =>
     db.prepare(`UPDATE comments SET reply_count = MAX(0, reply_count + ?) WHERE id = ? AND ${MINE}`).bind(delta, c.root_id, auditId);
   const toVisible = (extra = "") =>
-    db.prepare(`UPDATE comments SET status = 'visible', moderated_by = ?, moderated_at = ? WHERE id = ? AND status = 'held'${extra}`).bind(i.actorId, i.now, c.id);
+    // 回到公開就清掉攔下的原因：之後再被攔（例如檢舉摺疊）不會帶著上一次的原因。
+    db.prepare(`UPDATE comments SET status = 'visible', hold_reason = NULL, moderation_reason = NULL, moderated_by = ?, moderated_at = ? WHERE id = ? AND status = 'held'${extra}`).bind(i.actorId, i.now, c.id);
 
   let writes: D1PreparedStatement[];
   let next: string;
   if (i.action === "flag") {
     if (c.status === "visible" && (await conflictOnDuplicate(() => holdVisible(db, c.id, "ai", i.actorId, "ai", i.operationId, i.now, i.reason)))) return { id: c.id, status: "held" };
-    // 已經不是公開的（已在待審、已移除）：只記下 AI 的意見，不改狀態。
+    // 已經不是公開的（已在待審、已移除）：只記下 AI 的意見（稽核），不改狀態；待審佇列從稽核讀出這次攔下之後的 AI 建議。
     const now = await db.prepare("SELECT status FROM comments WHERE id = ?").bind(c.id).first<{ status: string }>();
     next = now?.status ?? c.status;
     await conflictOnDuplicate(() => auditStmt(db, entry("flag", { status: next }, { status: next })).run());
@@ -232,12 +233,14 @@ export async function moderationQueue(db: D1Database, viewerId: string, tab: Que
   const from = `FROM comments c JOIN cards k ON k.id = c.card_id JOIN members m ON m.id = c.member_id WHERE ${t.where} AND c.member_id <> ?1 AND (k.rating IS NOT 'R' OR ?2)`;
   const [total, rows] = await db.batch([
     db.prepare(`SELECT COUNT(*) AS n ${from}`).bind(viewerId, age),
+    // ai_reason：這次攔下之後（攔下時間起算）AI 最近一次的標記理由；只看待審中的，放行過的舊標記不算。
     db.prepare(`SELECT c.id, c.card_id, c.content, c.status, c.hold_reason, c.created_at, c.moderated_at, c.moderation_reason, m.handle, m.display_name, k.names,
+      (SELECT a.reason FROM audit_log a WHERE c.status = 'held' AND a.subject_kind = 'comment' AND a.subject_id = c.id AND a.action = 'flag' AND a.actor_kind = 'ai' AND a.created_at >= COALESCE(c.moderated_at, c.created_at) ORDER BY a.created_at DESC LIMIT 1) AS ai_reason,
       (SELECT num FROM card_numbers n WHERE n.provider = k.provider AND n.source_role_id = k.source_role_id) AS card_number,
       (SELECT COUNT(*) FROM comment_reports r WHERE r.target_kind = 'card' AND r.comment_id = c.id AND r.resolved_at IS NULL) AS open_reports
       ${from} ORDER BY ${t.order} LIMIT ?3 OFFSET ?4`).bind(viewerId, age, QUEUE_PAGE, (page - 1) * QUEUE_PAGE),
   ]);
-  type Row = { id: string; card_id: string; content: string; status: string; hold_reason: string | null; created_at: number; moderated_at: number | null; moderation_reason: string | null; handle: string; display_name: string | null; names: string; card_number: number | null };
+  type Row = { id: string; card_id: string; content: string; status: string; hold_reason: string | null; created_at: number; moderated_at: number | null; moderation_reason: string | null; ai_reason: string | null; handle: string; display_name: string | null; names: string; card_number: number | null };
   const items = rows.results as Row[];
   // 待處理的分頁看未結的檢舉；已移除的分頁看當時全部的檢舉。
   const reports = items.length
@@ -258,8 +261,8 @@ export async function moderationQueue(db: D1Database, viewerId: string, tab: Que
         reports: { total: mine.reduce((a, x) => a + x.n, 0), byReason: Object.fromEntries(mine.map((x) => [x.reason, x.n])) as Record<string, number> },
         createdAt: r.created_at,
         moderatedAt: r.moderated_at,
-        moderationReason: r.moderation_reason,
-        suggestedBy: r.hold_reason === "ai" ? ("ai" as const) : null,
+        moderationReason: r.moderation_reason ?? r.ai_reason,
+        suggestedBy: r.ai_reason !== null ? ("ai" as const) : null,
       };
     }),
   };
@@ -271,7 +274,7 @@ export async function moderationStats(db: D1Database, now: number) {
   const since = now - 7 * DAY;
   const [held, open, removed, handled, reasons] = await db.batch([
     db.prepare("SELECT COUNT(*) AS n FROM comments WHERE status = 'held'"),
-    db.prepare("SELECT COUNT(DISTINCT comment_id) AS n FROM comment_reports WHERE resolved_at IS NULL"),
+    db.prepare("SELECT COUNT(DISTINCT r.comment_id) AS n FROM comment_reports r JOIN comments c ON c.id = r.comment_id WHERE r.resolved_at IS NULL AND c.status IN ('visible','held')"),
     db.prepare("SELECT COUNT(*) AS n FROM comments WHERE status = 'removed' AND moderated_at > ?").bind(since),
     // 公開且有處理時間＝被放行過；已移除＝被移除。待審中的 moderated_at 是攔下的時間，不算處理。
     db.prepare("SELECT moderated_at - created_at AS ms FROM comments WHERE status IN ('visible','removed') AND moderated_at > ? ORDER BY moderated_at DESC LIMIT 500").bind(since),

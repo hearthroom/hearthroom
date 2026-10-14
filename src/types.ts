@@ -38,6 +38,8 @@ export class HttpError extends Error {
     readonly status: 400 | 401 | 403 | 404 | 409 | 410 | 429 | 502 | 503,
     message: string,
     readonly detail?: import("./sync-error").SyncDetail,
+    /** 跟 error 並列放進回應本體的欄位（例如禁言的到期時間）。 */
+    readonly extra?: Record<string, unknown>,
   ) {
     super(message);
   }

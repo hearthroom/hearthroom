@@ -200,3 +200,120 @@ describe("統計與指標", () => {
     expect(metrics).toContain('hearthroom_comment_moderation_total{action="release",outcome="success"} 1');
   });
 });
+
+const del = (token: string, id: string) => SELF.fetch(`https://c.test/v1/comments/${id}`, { method: "DELETE", headers: bearer(token) });
+const queue = async (tab: string) => (await json(await SELF.fetch(`https://c.test/v1/moderation/comments?tab=${tab}`, { headers: bearer("mod") }))).items as any[];
+const rowOf = (id: string) => env.DB.prepare("SELECT status, deleted_at, hold_reason, moderation_reason FROM comments WHERE id=?").bind(id).first<any>();
+
+describe("AI 審核帳號只有留言審核的權限", () => {
+  it("不能刪別人的留言；看留言時也沒有刪除鍵", async () => {
+    const id = await say("fan", "普通留言");
+    expect((await json(await list("agent"))).comments[0].canDelete).toBe(false);
+    const res = await del("agent", id);
+    expect(res.status).toBe(403);
+    expect(await rowOf(id)).toMatchObject({ status: "visible", deleted_at: null });
+    expect(await count("SELECT COUNT(*) AS n FROM audit_log WHERE subject_id=?", id)).toBe(0);
+  });
+
+  it("不能領卡片審核、蓋章、看卡片審核佇列與案件；留言審核照常放行、標記", async () => {
+    const agentPost = (path: string, body: unknown) => SELF.fetch(`https://c.test${path}`, { method: "POST", headers: { "Content-Type": "application/json", ...bearer("agent") }, body: JSON.stringify(body) });
+    for (const res of [
+      await agentPost("/v1/review/s-1/claim", {}),
+      await agentPost("/v1/review/s-1/stamp", { verdict: "approve", note: "", generation: "g" }),
+      await SELF.fetch("https://c.test/v1/review/queue", { headers: bearer("agent") }),
+      await SELF.fetch("https://c.test/v1/moderation/cases", { headers: bearer("agent") }),
+    ]) {
+      expect(res.status).toBe(403);
+      expect((await json(res)).error).toBe("agent_not_allowed");
+    }
+    await env.DB.prepare("INSERT INTO comment_keywords VALUES ('k1','違禁','test',1)").run();
+    const held = (await json(await post("fan", { content: "違禁" }))).commentId;
+    expect((await decide("agent", held, "release")).status).toBe(200);
+    const id = await say("fan", "看起來可疑");
+    expect((await decide("agent", id, "flag", "疑似廣告")).status).toBe(200);
+    expect((await SELF.fetch("https://c.test/v1/review/queue", { headers: bearer("mod") })).status).toBe(200);
+  });
+});
+
+describe("AI 的建議只在待審時出現", () => {
+  it("AI 標記一則已經被規則攔下的留言：待審佇列看得到 AI 建議與理由，原本的攔截原因保留", async () => {
+    await env.DB.prepare("INSERT INTO comment_keywords VALUES ('k1','違禁','test',1)").run();
+    const id = (await json(await post("fan", { content: "違禁" }))).commentId;
+    expect(await json(await decide("agent", id, "flag", "像是廣告"))).toEqual({ id, status: "held" });
+    expect((await queue("held"))[0]).toMatchObject({ id, holdReason: "keyword", suggestedBy: "ai", moderationReason: "像是廣告" });
+  });
+
+  it("AI 標記後被放行，之後又因檢舉被摺疊：不再顯示 AI 建議；放行與駁回都清掉攔截原因", async () => {
+    const id = await say("fan", "正常的話");
+    await decide("agent", id, "flag", "疑似廣告");
+    expect((await decide("mod", id, "release")).status).toBe(200);
+    expect(await rowOf(id)).toMatchObject({ status: "visible", hold_reason: null, moderation_reason: null });
+    await env.DB.prepare("INSERT INTO community_settings VALUES ('commentReportFoldThreshold','1',NULL,1)").run();
+    expect((await json(await report("other", id, { reason: "spam" }))).folded).toBe(true);
+    expect((await queue("held"))[0]).toMatchObject({ id, holdReason: "reports", suggestedBy: null, moderationReason: null });
+    expect((await decide("mod", id, "dismiss", "沒問題")).status).toBe(200);
+    expect(await rowOf(id)).toMatchObject({ status: "visible", hold_reason: null, moderation_reason: null });
+  });
+});
+
+describe("留言被刪掉時檢舉一起結案", () => {
+  it("留言者刪掉被檢舉的頂層：頂層與回覆的檢舉都結案，統計不再算它們", async () => {
+    const root = await say("fan", "頂層");
+    const reply = await say("author-token", "回覆", { rootId: root });
+    await report("other", root, { reason: "spam" });
+    await report("other", reply, { reason: "abuse" });
+    expect((await json(await SELF.fetch("https://c.test/v1/moderation/comments/stats", { headers: bearer("mod") }))).openReports).toBe(2);
+    expect((await del("fan", root)).status).toBe(204);
+    expect(await count("SELECT COUNT(*) AS n FROM comment_reports WHERE resolved_at IS NOT NULL AND resolution='deleted'")).toBe(2);
+    expect((await json(await SELF.fetch("https://c.test/v1/moderation/comments/stats", { headers: bearer("mod") }))).openReports).toBe(0);
+  });
+
+  it("統計只算還看得到或待審的留言上的未結檢舉", async () => {
+    const id = await say("fan", "留言");
+    await report("other", id, { reason: "spam" });
+    await env.DB.prepare("UPDATE comments SET status='removed', deleted_at=1 WHERE id=?").bind(id).run();
+    expect((await json(await SELF.fetch("https://c.test/v1/moderation/comments/stats", { headers: bearer("mod") }))).openReports).toBe(0);
+  });
+});
+
+describe("刪除只生效一次", () => {
+  // 後到的那一個若在刪除完成後才讀，看到的是「已經不在」（404）；真的交錯時是衝突（409）。兩種都不能是 500。
+  it("兩個請求同時刪同一則回覆：一個成功、另一個回已不在或衝突，回覆數只減一次、稽核只有一筆", async () => {
+    for (let round = 1; round <= 3; round++) {
+      const root = await say("fan", "頂層 " + round);
+      const reply = await say("other", "回覆 " + round, { rootId: root });
+      await say("author-token", "再一則 " + round, { rootId: root });
+      const codes = (await Promise.all([del("mod", reply), del("mod", reply)])).map((r) => r.status).sort();
+      expect(codes[0]).toBe(204);
+      expect([404, 409]).toContain(codes[1]);
+      expect(await count("SELECT reply_count AS n FROM comments WHERE id=?", root)).toBe(1);
+      expect(await count("SELECT COUNT(*) AS n FROM audit_log WHERE subject_id=?", reply)).toBe(1);
+    }
+  });
+});
+
+describe("放行回覆的通知時間", () => {
+  it("通知的時間是放行的時間，不是發表的時間", async () => {
+    const root = await say("fan", "頂層");
+    await env.DB.prepare("INSERT INTO comment_keywords VALUES ('k1','違禁','test',1)").run();
+    const reply = (await json(await post("other", { content: "違禁回覆", rootId: root, parentId: root }))).commentId;
+    await env.DB.prepare("UPDATE comments SET created_at = created_at - 3600000 WHERE id=?").bind(reply).run();
+    await decide("mod", reply, "release");
+    const r = await env.DB.prepare("SELECT moderated_at FROM comments WHERE id=?").bind(reply).first<{ moderated_at: number }>();
+    expect(await count("SELECT created_at AS n FROM community_notifications WHERE kind='comment_reply'")).toBe(r!.moderated_at);
+  });
+});
+
+describe("禁言的回應帶到期時間", () => {
+  it("限期禁言回到期時間；永久禁言回 null", async () => {
+    const handle = testHandle(FAN);
+    const mute = (days: number | null) => SELF.fetch(`https://c.test/v1/moderation/members/${handle}/comment-mute`, { method: "PUT", headers: { "Content-Type": "application/json", ...bearer("mod") }, body: JSON.stringify({ days, reason: "洗版", operationId: crypto.randomUUID() }) });
+    const until = (await json(await mute(7))).until as number;
+    let res = await post("fan", { content: "還能說？" });
+    expect(res.status).toBe(403);
+    expect(await json(res)).toEqual({ error: "comment_muted", until });
+    await mute(null);
+    res = await post("fan", { content: "還能說？" });
+    expect(await json(res)).toEqual({ error: "comment_muted", until: null });
+  });
+});
