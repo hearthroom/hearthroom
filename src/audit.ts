@@ -21,9 +21,18 @@ export interface AuditEntry {
   now: number;
 }
 
-export function auditStmt(db: D1Database, e: AuditEntry): D1PreparedStatement {
+const AUDIT_COLUMNS = "(id, subject_kind, subject_id, actor_member_id, actor_kind, action, reason, before_json, after_json, operation_id, created_at)";
+
+function auditValues(e: AuditEntry): unknown[] {
   if (!(AUDIT_SUBJECTS as readonly string[]).includes(e.subjectKind)) throw new Error(`unknown audit subject: ${e.subjectKind}`);
-  return db
-    .prepare("INSERT INTO audit_log (id, subject_kind, subject_id, actor_member_id, actor_kind, action, reason, before_json, after_json, operation_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .bind(crypto.randomUUID(), e.subjectKind, e.subjectId, e.actorMemberId, e.actorKind, e.action, e.reason ?? "", JSON.stringify(e.before ?? {}), JSON.stringify(e.after ?? {}), e.operationId, e.now);
+  return [crypto.randomUUID(), e.subjectKind, e.subjectId, e.actorMemberId, e.actorKind, e.action, e.reason ?? "", JSON.stringify(e.before ?? {}), JSON.stringify(e.after ?? {}), e.operationId, e.now];
+}
+
+export function auditStmt(db: D1Database, e: AuditEntry): D1PreparedStatement {
+  return db.prepare(`INSERT INTO audit_log ${AUDIT_COLUMNS} VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(...auditValues(e));
+}
+
+/** 只在同一個 batch 裡前一條語句真的改到列時才寫（SQLite changes()）；條件式更新輸了，稽核就不留。 */
+export function auditStmtIfChanged(db: D1Database, e: AuditEntry): D1PreparedStatement {
+  return db.prepare(`INSERT INTO audit_log ${AUDIT_COLUMNS} SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE changes() > 0`).bind(...auditValues(e));
 }
