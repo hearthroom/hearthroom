@@ -67,6 +67,8 @@ import { type Env, HttpError } from "./types";
 import { serveSandbox } from "./sandbox";
 import { listSaves, putSave, removeSave } from "./saves";
 import { commentCard, countTop, deleteComment, listReplies, listTop, postComment, setLike, type Viewer } from "./comments";
+import { reportComment } from "./comment-moderation";
+import { readSettings } from "./community-settings";
 import { clearScore, readScore, setScore } from "./card-scores";
 import { SVG_WRAP_LIMIT, TOUCH_ICON_SIZE, allowedImageUrl, cardManifest, iconSize, signShortcutKey, svgWrap, verifyShortcutKey } from "./shortcut";
 import { buildSearchName, buildSearchText, RoleGone, upstream, ZONES, type Zone, CREATION_METHOD, type CommunityStatus, type UpstreamRole } from "./upstream";
@@ -982,6 +984,14 @@ app.delete("/v1/comments/:id/like", async (c) => {
   const member = await requireMember(c);
   await setLike(c.env.DB, c.req.param("id"), member.id, false, Date.now());
   return c.body(null, 204);
+});
+
+app.post("/v1/comments/:id/report", async (c) => {
+  const member = await requireMember(c);
+  const body = (await c.req.json().catch(() => ({}))) as { reason?: unknown; note?: unknown };
+  const out = await reportComment(c.env.DB, { commentId: c.req.param("id"), targetKind: "card", reporterId: member.id, reason: body.reason, note: body.note, now: Date.now() }, await readSettings(c.env.DB));
+  note(c, { event: "comment_report", detail: out.folded ? "folded" : "recorded" });
+  return c.json({ ok: true, folded: out.folded }, 200, { "Cache-Control": "no-store" });
 });
 
 /** 評分（src/card-scores.ts）：讀不用登入，評與收回要登入。門跟留言一樣：只有在榜的卡、成人卡要過門。 */
