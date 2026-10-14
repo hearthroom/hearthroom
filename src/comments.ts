@@ -121,7 +121,8 @@ export async function listTop(db: D1Database, card: CommentCard, viewer: Viewer,
   const rows = tops!.results as Row[];
   const comments: CommentView[] = rows.map((r) => view(r, viewer, author));
   // 回覆預覽：讚多的在前，同讚先到先排。一次查完這一頁所有頂層的回覆再分組，不逐則查。
-  const withReplies = rows.filter((r) => r.reply_count > 0).map((r) => r.id);
+  // 登入的人還要查自己被攔下的回覆（不計入 reply_count），所以登入時整頁都查；訪客只查有公開回覆的。
+  const withReplies = rows.filter((r) => viewer.memberId || r.reply_count > 0).map((r) => r.id);
   if (withReplies.length) {
     const holes = withReplies.map((_, i) => `?${i + 2}`).join(",");
     const replies = await db
