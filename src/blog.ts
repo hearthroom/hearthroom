@@ -1,6 +1,5 @@
 import { auditStmt, auditStmtIfChanged, type ActorKind } from "./audit";
 import { bumpOp } from "./ops-metrics";
-import { isReviewAgent } from "./members";
 import { HttpError, type Env } from "./types";
 
 /**
@@ -36,10 +35,16 @@ export type StateChange = { status?: "published" | "unpublished"; publishAt?: nu
 export const PAGE_SIZE = 12;
 const PINNED_MAX = 3;
 
+/**
+ * 寫作權限的唯一定義：manager／owner 審核人，不含 AI 帳號（審核人身分在，代理標記也沒撤）。
+ * 寫成 SQL 片段，讓留言列表一次判斷整頁留言者是不是官方；canWritePost 也走這裡。`member` 是 SQL 運算式。
+ */
+export const writerSql = (member: string) =>
+  `EXISTS (SELECT 1 FROM reviewers wr WHERE wr.member_id = ${member} AND wr.revoked_at IS NULL AND wr.role IN ('manager','owner')
+    AND NOT EXISTS (SELECT 1 FROM review_agents wa WHERE wa.member_id = wr.member_id AND wa.revoked_at IS NULL))`;
+
 export async function canWritePost(db: D1Database, memberId: string): Promise<boolean> {
-  const r = await db.prepare("SELECT role FROM reviewers WHERE member_id = ? AND revoked_at IS NULL").bind(memberId).first<{ role: string }>();
-  if (!r || (r.role !== "manager" && r.role !== "owner")) return false;
-  return !(await isReviewAgent(db, memberId));
+  return !!(await db.prepare(`SELECT ${writerSql("?1")} AS ok`).bind(memberId).first<{ ok: number }>())?.ok;
 }
 
 export const isPublic = (p: { status: string; publishAt: number | null }, now: number) =>
@@ -380,6 +385,12 @@ export async function publicPost(db: D1Database, columnSlug: string, slug: strin
 export async function postBySlug(db: D1Database, columnSlug: string, slug: string): Promise<Post | null> {
   const r = await db.prepare(`${POST_SELECT} WHERE col.slug = ? AND p.slug = ?`).bind(columnSlug, slug).first<PostRow>();
   return r ? toPost(r) : null;
+}
+
+/** 公開的那一篇（依 id）；未公開或不存在是 null。 */
+export async function livePost(db: D1Database, id: string, now: number): Promise<Post | null> {
+  const r = await postRow(db, id);
+  return r && isPublic({ status: r.status, publishAt: r.publish_at }, now) ? toPost(r) : null;
 }
 
 /** 短網址：公開文章的欄目與 slug。 */
