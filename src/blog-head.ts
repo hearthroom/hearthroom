@@ -60,7 +60,7 @@ export async function postMeta(db: D1Database, column: string, slug: string, now
   const modified = new Date(post.updatedAt).toISOString();
   return {
     lang: post.locale, title, url, type: "article",
-    description: post.shareDescription || post.excerpt || oneLine(plainText(post.bodyMd)),
+    description: post.shareDescription || post.excerpt || oneLine(plainText(post.bodyMd.slice(0, 2000))),
     image: image ?? siteOgImage("default", post.locale),
     ...(image ? {} : { imageSize: { width: 1200, height: 630 } }),
     article: {
