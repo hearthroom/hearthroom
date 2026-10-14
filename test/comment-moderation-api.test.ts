@@ -35,8 +35,8 @@ const post = (token: string, body: Record<string, unknown>) =>
 const say = async (token: string, content: string, extra: Record<string, unknown> = {}) => (await json(await post(token, { content, ...extra }))).commentId as string;
 const report = (token: string, id: string, body: Record<string, unknown>) =>
   SELF.fetch(`https://c.test/v1/comments/${id}/report`, { method: "POST", headers: { "Content-Type": "application/json", ...bearer(token) }, body: JSON.stringify(body) });
-const decide = (token: string, id: string, action: string, reason = "理由") =>
-  SELF.fetch(`https://c.test/v1/moderation/comments/${id}/decision`, { method: "POST", headers: { "Content-Type": "application/json", ...bearer(token) }, body: JSON.stringify({ action, reason, operationId: crypto.randomUUID() }) });
+const decide = (token: string, id: string, action: string, reason = "理由", operationId: string = crypto.randomUUID()) =>
+  SELF.fetch(`https://c.test/v1/moderation/comments/${id}/decision`, { method: "POST", headers: { "Content-Type": "application/json", ...bearer(token) }, body: JSON.stringify({ action, reason, operationId }) });
 const count = async (sql: string, ...binds: unknown[]) => (await env.DB.prepare(sql).bind(...binds).first<{ n: number }>())!.n;
 
 describe("處理", () => {
@@ -64,6 +64,38 @@ describe("處理", () => {
     expect(await count("SELECT reply_count AS n FROM comments WHERE id=?", root)).toBe(1);
     expect(await count("SELECT COUNT(*) AS n FROM audit_log WHERE subject_id=? AND action='release'", reply)).toBe(1);
     expect(await count("SELECT COUNT(*) AS n FROM community_notifications WHERE kind='comment_reply'")).toBe(1);
+  });
+
+  // 兩個請求是否真的交錯取決於排程，所以多跑幾輪；正確的實作每一輪都過。
+  it("同一個操作編號連點放行：只生效一次，第二次什麼都不寫", async () => {
+    await env.DB.prepare("INSERT INTO comment_keywords VALUES ('k1','違禁','test',1)").run();
+    for (let round = 1; round <= 4; round++) {
+      const root = await say("fan", "頂層 " + round);
+      const reply = (await json(await post("other", { content: "違禁回覆 " + round, rootId: root, parentId: root }))).commentId;
+      const op = crypto.randomUUID();
+      const codes = (await Promise.all([decide("mod", reply, "release", "理由", op), decide("mod", reply, "release", "理由", op)])).map((r) => r.status).sort();
+      expect(codes).toEqual([200, 409]);
+      expect(await count("SELECT reply_count AS n FROM comments WHERE id=?", root)).toBe(1);
+      expect(await count("SELECT COUNT(*) AS n FROM audit_log WHERE subject_id=? AND action='release'", reply)).toBe(1);
+      expect(await count("SELECT COUNT(*) AS n FROM community_notifications WHERE kind='comment_reply'")).toBe(round);
+    }
+  });
+
+  it("同一個操作編號連點移除：回覆數只減一次，移除通知只有一則", async () => {
+    for (let round = 1; round <= 3; round++) { // 每輪 fan 留兩則，3 輪剛好在每分鐘 6 則的上限內
+      // 上一輪的移除放到 30 天前，不然「近 30 天被移除過」會把這一輪的回覆先攔下。
+      await env.DB.prepare("UPDATE comments SET moderated_at = 0 WHERE status = 'removed'").run();
+      const root = await say("fan", "頂層 " + round);
+      const reply = await say("other", "回覆 " + round, { rootId: root, parentId: root });
+      await say("fan", "再一則 " + round, { rootId: root, parentId: root });
+      expect(await count("SELECT reply_count AS n FROM comments WHERE id=?", root)).toBe(2);
+      const op = crypto.randomUUID();
+      const codes = (await Promise.all([decide("mod", reply, "remove", "廣告", op), decide("mod", reply, "remove", "廣告", op)])).map((r) => r.status).sort();
+      expect(codes).toEqual([200, 409]);
+      expect(await count("SELECT reply_count AS n FROM comments WHERE id=?", root)).toBe(1);
+      expect(await count("SELECT COUNT(*) AS n FROM audit_log WHERE subject_id=? AND action='remove'", reply)).toBe(1);
+      expect(await count("SELECT COUNT(*) AS n FROM community_notifications WHERE kind='comment_removed'")).toBe(round);
+    }
   });
 
   it("移除要理由；留言者收到站內通知；未結檢舉一起結案", async () => {

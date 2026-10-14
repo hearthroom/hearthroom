@@ -102,7 +102,8 @@ export type Decision = "release" | "remove" | "dismiss" | "flag";
 
 /**
  * 審核人對一則留言的決定。改狀態的動作是條件式 UPDATE（狀態要跟讀到的一樣）＋同一個 batch 的後續寫入：
- * 稽核用 changes() 跟在 UPDATE 後面，其餘寫入以「這次的稽核列存在」為條件，所以並發時輸的那一方什麼都不寫，回 409。
+ * 稽核用 changes() 跟在 UPDATE 後面，其餘寫入以「這一次呼叫的稽核列（自帶的 id）存在」為條件，所以並發時輸的那一方
+ * 什麼都不寫，回 409。不能用操作編號找稽核列：同一個操作編號連點時，輸的那一方會找到贏的那一方寫的列。
  */
 export async function decide(
   db: D1Database,
@@ -113,14 +114,15 @@ export async function decide(
   if (!c || c.status === "deleted") throw new HttpError(404, "comment not found");
   if (c.member_id === i.actorId) throw new HttpError(403, "moderation_self_review");
   if (c.rating === "R" && (await memberNsfw(db, i.actorId)).ageVerifiedAt === null) throw new HttpError(403, "age_verification_required");
+  const auditId = crypto.randomUUID();
   const entry = (action: string, before: unknown, after: unknown): AuditEntry =>
-    ({ subjectKind: "comment", subjectId: c.id, actorMemberId: i.actorId, actorKind: i.actorKind, action, reason: i.reason, before, after, operationId: i.operationId, now: i.now });
-  const MINE = "EXISTS (SELECT 1 FROM audit_log WHERE actor_member_id = ? AND operation_id = ?)";
+    ({ id: auditId, subjectKind: "comment", subjectId: c.id, actorMemberId: i.actorId, actorKind: i.actorKind, action, reason: i.reason, before, after, operationId: i.operationId, now: i.now });
+  const MINE = "EXISTS (SELECT 1 FROM audit_log WHERE id = ?)";
   const closeReports = (resolution: "released" | "removed" | "dismissed", gated: boolean) =>
     db.prepare(`UPDATE comment_reports SET resolved_at = ?, resolution = ?, resolved_by = ? WHERE target_kind = 'card' AND comment_id = ? AND resolved_at IS NULL${gated ? " AND " + MINE : ""}`)
-      .bind(i.now, resolution, i.actorId, c.id, ...(gated ? [i.actorId, i.operationId] : []));
+      .bind(i.now, resolution, i.actorId, c.id, ...(gated ? [auditId] : []));
   const replyCount = (delta: 1 | -1) =>
-    db.prepare(`UPDATE comments SET reply_count = MAX(0, reply_count + ?) WHERE id = ? AND ${MINE}`).bind(delta, c.root_id, i.actorId, i.operationId);
+    db.prepare(`UPDATE comments SET reply_count = MAX(0, reply_count + ?) WHERE id = ? AND ${MINE}`).bind(delta, c.root_id, auditId);
   const toVisible = (extra = "") =>
     db.prepare(`UPDATE comments SET status = 'visible', moderated_by = ?, moderated_at = ? WHERE id = ? AND status = 'held'${extra}`).bind(i.actorId, i.now, c.id);
 
@@ -147,7 +149,7 @@ export async function decide(
       auditStmtIfChanged(db, entry("remove", { status: c.status }, { status: "removed" })),
       closeReports("removed", true),
       db.prepare(`INSERT OR IGNORE INTO community_notifications (event_key, member_id, kind, path, created_at, card_id, extra, delivered) SELECT ?, ?, 'comment_removed', ?, ?, ?, json_object('reason', ?), 1 WHERE ${MINE}`)
-        .bind("removed:" + c.id, c.member_id, "/cards/" + c.card_id, i.now, c.card_id, i.reason, i.actorId, i.operationId),
+        .bind("removed:" + c.id, c.member_id, "/cards/" + c.card_id, i.now, c.card_id, i.reason, auditId),
     ];
     if (c.root_id && c.status === "visible") writes.push(replyCount(-1));
   } else if (c.status === "held" && c.hold_reason === "reports") {
