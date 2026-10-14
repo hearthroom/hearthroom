@@ -11,6 +11,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useSession } from "@/lib/session";
 import { accountToken, connectAccount } from "@/lib/connections";
+import { dropManagedToken } from "@/lib/managed-auth";
 import { PROVIDERS, providerName, type ProviderId } from "@/lib/provider";
 import {
   resourceClient,
@@ -177,8 +178,17 @@ async function client(id = provider.value) {
   if (!id) throw new Error(t("resource.choose"));
   const identity = session.profile?.identities.find((i) => i.provider === id);
   if (!identity) throw new Error(t("auth.expired"));
-  const token = await accountToken(id, identity.externalId);
-  if (!token) throw new ApiError(401, t("auth.expired"));
+  const account = identity.externalId;
+  const sameAccount = () => session.profile?.identities.some(i => i.provider === id && i.externalId === account);
+  const token = async (rejected?: string) => {
+    if (!sameAccount()) throw new ApiError(401, t("auth.expired"));
+    if (rejected) dropManagedToken(id, rejected);
+    const value = await accountToken(id, account, { verifyManaged: true });
+    // A sign-out/account change can also happen while token renewal is in flight.
+    if (!value || !sameAccount()) throw new ApiError(401, t("auth.expired"));
+    return value;
+  };
+  await token();
   return resourceClient(id, token);
 }
 async function remember() {
