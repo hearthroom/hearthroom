@@ -104,6 +104,15 @@ const SITE_CODE_KEY: Record<string, string> = {
   comment_rate_limited: "comment.error.rateLimited",
   comment_too_long: "comment.error.tooLong",
   comment_required: "comment.error.required",
+  comment_muted: "comment.error.muted",
+  invalid_report_reason: "error.invalidArguments",
+  cannot_report_own_comment: "comment.error.reportOwn",
+  // 留言審核（/v1/moderation 底下的留言佇列、禁言、關鍵詞、運營設定）
+  moderation_reason_required: "moderation.error.moderation_reason_required",
+  moderation_conflict: "moderation.error.moderation_conflict",
+  agent_not_allowed: "moderation.error.agent_not_allowed",
+  community_admin_required: "moderation.settings.readOnly",
+  invalid_settings: "error.invalidArguments",
   hosting_requires_uploaded_media: "workspace.uploadMedia",
   submission_pending: "workspace.alreadyPending",
   hosting_unavailable: "workspace.submitUnavailable",
@@ -444,7 +453,7 @@ export interface ReviewDetail {
 /** 精選：呼叫者在供應商那邊是不是本站的社群代表，以及本站精選名額用了多少。老供應商沒有這條路時是 null。 */
 export interface FeaturedStatus { admin: boolean; featuredUsed: number; featuredQuota: number }
 
-export async function fetchReviewMe(token: string, provider = currentProvider()): Promise<{ reviewer: boolean; pending?:number; reviews?:number; cases?:number; role?:"reviewer"|"manager"|"owner"; featured?: FeaturedStatus | null }> {
+export async function fetchReviewMe(token: string, provider = currentProvider()): Promise<{ reviewer: boolean; pending?:number; reviews?:number; cases?:number; comments?:number; role?:"reviewer"|"manager"|"owner"; featured?: FeaturedStatus | null }> {
   return json(await fetch(`${COMMUNITY_API}/review/me`, { headers: { ...from(), "X-Provider": provider, ...authHeaders(token) } }));
 }
 
@@ -717,6 +726,9 @@ export interface Comment {
   canDelete: boolean;
   /** 留言者給這張卡的星數；沒評過是 null。舊版回應沒有這一欄。 */
   score?: number | null;
+  /** held＝只有本人看得到、等審核；removed＝頂層被移除但還有回覆，只留佔位（content 是空的）。 */
+  status: "visible" | "held" | "removed";
+  removed: boolean;
   replies?: Comment[];
 }
 
@@ -741,9 +753,9 @@ export async function fetchReplies(cardId: string, rootId: string, page: number,
   return json<{ total: number; replies: Comment[] }>(await fetch(url, { headers: { ...headers, ...commentHeaders(token) } }));
 }
 
-export async function createComment(cardId: string, body: { content: string; parentId?: string; rootId?: string }, token: string): Promise<{ commentId: string }> {
+export async function createComment(cardId: string, body: { content: string; parentId?: string; rootId?: string }, token: string): Promise<{ commentId: string; status: "visible" | "held" }> {
   const { url } = await commentUrl(cardId);
-  return json<{ commentId: string }>(
+  return json<{ commentId: string; status: "visible" | "held" }>(
     await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", ...commentHeaders(token) }, body: JSON.stringify(body) }),
   );
 }
@@ -755,6 +767,62 @@ export async function deleteComment(commentId: string, token: string): Promise<v
 export async function likeComment(commentId: string, like: boolean, token: string): Promise<void> {
   await json(await fetch(`${COMMUNITY_API}/comments/${encodeURIComponent(commentId)}/like`, { method: like ? "PUT" : "DELETE", headers: commentHeaders(token) }));
 }
+
+export const REPORT_REASONS = ["spam", "abuse", "sexual", "privacy", "other"] as const;
+export type ReportReason = (typeof REPORT_REASONS)[number];
+
+export async function reportComment(commentId: string, body: { reason: ReportReason; note: string }, token: string): Promise<{ ok: boolean; folded: boolean }> {
+  return json(await fetch(`${COMMUNITY_API}/comments/${encodeURIComponent(commentId)}/report`, { method: "POST", headers: { "Content-Type": "application/json", ...commentHeaders(token) }, body: JSON.stringify(body) }));
+}
+
+// ---- 留言審核：審核人（含 AI 審核帳號）處理留言；權限由服務端判 ----------------------
+
+export type CommentQueueTab = "held" | "reported" | "removed";
+export interface QueuedComment {
+  id: string;
+  target: { kind: "card"; id: string; title: string; cardNumber: number | null };
+  author: { handle: string; displayName: string };
+  content: string;
+  status: string;
+  holdReason: string | null;
+  reports: { total: number; byReason: Record<string, number> };
+  createdAt: number;
+  moderatedAt: number | null;
+  moderationReason: string | null;
+  suggestedBy: "ai" | null;
+}
+export interface CommentStats { held: number; openReports: number; removed7d: number; medianHandleMs7d: number | null; holdReasons7d: Record<string, number> }
+/** 沒設（null）＝那條規則不啟用。 */
+export interface CommentSettings { commentNewAccountDays: number | null; commentMaxLinks: number | null; commentReportFoldThreshold: number | null }
+export interface CommentKeyword { id: string; pattern: string; createdAt: number }
+
+async function staffRequest<T>(path: string, token: string, method = "GET", body?: unknown): Promise<T> {
+  const res = await fetch(`${COMMUNITY_API}/moderation${path}`, {
+    method,
+    headers: { ...(body === undefined ? {} : { "Content-Type": "application/json" }), ...from(), ...authHeaders(token) },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (res.status === 204) return undefined as T;
+  return json<T>(res);
+}
+
+export const fetchCommentQueue = (tab: CommentQueueTab, page: number, token: string) =>
+  staffRequest<{ total: number; items: QueuedComment[] }>(`/comments?tab=${tab}&page=${page}`, token);
+export const fetchCommentStats = (token: string) => staffRequest<CommentStats>("/comments/stats", token);
+export const decideComment = (id: string, body: { action: "release" | "remove" | "dismiss" | "flag"; reason: string; operationId: string }, token: string) =>
+  staffRequest<{ id: string; status: string }>(`/comments/${encodeURIComponent(id)}/decision`, token, "POST", body);
+export const muteMember = (handle: string, body: { days: 7 | 30 | null; reason: string; operationId: string }, token: string) =>
+  staffRequest<{ until: number | null }>(`/members/${encodeURIComponent(handle)}/comment-mute`, token, "PUT", body);
+export const unmuteMember = (handle: string, body: { reason: string; operationId: string }, token: string) =>
+  staffRequest<void>(`/members/${encodeURIComponent(handle)}/comment-mute`, token, "DELETE", body);
+export const fetchKeywords = (token: string) => staffRequest<{ items: CommentKeyword[] }>("/comment-keywords", token);
+export const addKeyword = (pattern: string, operationId: string, token: string) =>
+  staffRequest<{ items: CommentKeyword[] }>("/comment-keywords", token, "POST", { pattern, operationId });
+export const removeKeyword = (id: string, operationId: string, token: string) =>
+  staffRequest<{ items: CommentKeyword[] }>(`/comment-keywords/${encodeURIComponent(id)}`, token, "DELETE", { operationId });
+export const fetchSettings = (token: string) => staffRequest<{ settings: CommentSettings; canEdit: boolean }>("/settings", token);
+export const saveSettings = (settings: CommentSettings, operationId: string, token: string) =>
+  staffRequest<{ settings: CommentSettings; canEdit: boolean }>("/settings", token, "PUT", { settings, operationId });
 
 // ---- 評分：本站自己的資料，一位成員對一張卡一份 1–5 星 ----------------------------
 

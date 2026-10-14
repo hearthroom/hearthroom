@@ -302,6 +302,31 @@ select.input { height: var(--h-md); }
 .toast:not([hidden]) { animation: toast var(--dur-slow) var(--ease) both; }
 @keyframes toast { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
+/* ---- 帶表單的對話框（檢舉留言、移除原因、禁言）：跟確認框同一個樣子，窄螢幕從底部升起 ---- */
+
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 105;
+  display: grid; place-items: center; padding: var(--s-5);
+  background: rgba(16, 16, 24, 0.45);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  animation: fade var(--dur) var(--ease);
+}
+.modal {
+  width: min(420px, 100%); max-height: calc(100dvh - 2 * var(--s-5)); overflow-y: auto;
+  padding: var(--s-5) var(--s-5) var(--s-4);
+  display: grid; gap: var(--s-3);
+  box-shadow: 0 0 0 1px var(--line), var(--shadow-md);
+}
+.modal__title { font-size: 16px; font-weight: 600; line-height: 1.4; }
+.modal__actions { display: flex; justify-content: flex-end; gap: var(--s-2); margin-top: var(--s-1); }
+.modal .input { width: 100%; }
+.modal textarea.input { resize: vertical; min-height: 72px; padding: 10px 12px; line-height: 1.6; }
+@media (max-width: 480px) {
+  .modal-backdrop { place-items: end center; padding: var(--s-3); padding-bottom: calc(var(--s-3) + env(safe-area-inset-bottom)); }
+  .modal__actions { flex-direction: column-reverse; }
+  .modal__actions .btn { width: 100%; height: var(--h-lg); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 1ms !important;
