@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import CommunityAvatar from "@/components/CommunityAvatar.vue";
 import CommunityName from "@/components/CommunityName.vue";
-import { computed, ref, watch } from "vue";
+import ReportCommentDialog from "@/components/ReportCommentDialog.vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import { createComment, deleteComment, fetchComments, fetchReplies, likeComment, type Comment } from "@/lib/api";
@@ -29,7 +30,13 @@ const loading = ref(true);
 const error = ref("");
 const draft = ref("");
 const sending = ref(false);
-const submittedHidden = ref(false);
+/** 送出、檢舉之後的一句提示：說完就走 */
+const toast = ref("");
+let toastTimer: ReturnType<typeof setTimeout> | undefined;
+function say(text: string) { toast.value = text; clearTimeout(toastTimer); toastTimer = setTimeout(() => { toast.value = ""; }, 4000); }
+onBeforeUnmount(() => clearTimeout(toastTimer));
+/** 正在檢舉哪一則 */
+const reporting = ref<Comment | null>(null);
 /** 正在回覆哪一則（根評論或它底下的回覆）。 */
 const replyTo = ref<{ root: Comment; target: Comment } | null>(null);
 const replyDraft = ref("");
@@ -79,22 +86,16 @@ async function submit(root?: Comment, target?: Comment) {
     const created = await createComment(props.cardId, { content: text, parentId: target?.commentId, rootId: root?.commentId }, token);
     if (root) { replyDraft.value = ""; replyTo.value = null; delete expanded.value[root.commentId]; } else draft.value = "";
     await load(true);
-    // 審核中的留言列表裡看不到——說一聲，不然像是沒送出去
-    let visible = comments.value.some((c) => c.commentId === created.commentId || c.replies?.some((r) => r.commentId === created.commentId));
-    if (root && !visible) {
-      // 列表裡的回覆預覽只放讚數前幾則；新回覆零讚擠不進去，不代表沒過審，翻回覆串本身再判。
-      // 根評論已經不在第一頁的話，判不出來——那就不下「審核中」的結論
-      const fresh = comments.value.find((c) => c.commentId === root.commentId);
-      if (!fresh) visible = true;
-      else {
-        do {
-          await showAllReplies(fresh);
-          visible = repliesOf(fresh).some((r) => r.commentId === created.commentId);
-        } while (!visible && expanded.value[fresh.commentId]?.hasMore);
-      }
+    // 列表裡的回覆預覽只放讚數前幾則；新回覆零讚擠不進去，翻回覆串本身把它找出來，留在原位（審核中的也是，只有本人看得到）
+    const fresh = root && comments.value.find((c) => c.commentId === root.commentId);
+    if (fresh && !fresh.replies?.some((r) => r.commentId === created.commentId)) {
+      do await showAllReplies(fresh);
+      while (!repliesOf(fresh).some((r) => r.commentId === created.commentId) && expanded.value[fresh.commentId]?.hasMore);
     }
-    submittedHidden.value = !visible;
-    track("comment_post", { detail: root ? "comment_reply" : "comment_root", subject: props.roleId, ok: visible });
+    const held = created.status === "held";
+    // 審核中的留言別人看不到——說一聲，不然像是已經公開了
+    if (held) say(t("comment.submitted"));
+    track("comment_post", { detail: root ? "comment_reply" : "comment_root", subject: props.roleId, ok: !held });
   } catch (err) {
     track("comment_post", { detail: root ? "comment_reply" : "comment_root", subject: props.roleId, ok: false });
     error.value = err instanceof Error ? err.message : t("state.actionFailed");
@@ -115,6 +116,17 @@ async function toggleLike(c: Comment) {
     track("comment_like", { detail: c.isLiked ? "like_on" : "like_off", subject: props.roleId });
   } catch { c.isLiked = !c.isLiked; c.likeCount += c.isLiked ? 1 : -1; }
 }
+
+function report(c: Comment) {
+  if (!session.me) return router.push(lp(loginPath(route.fullPath)));
+  reporting.value = c;
+}
+function reported() {
+  reporting.value = null;
+  say(t("comment.reportThanks"));
+}
+/** 別人的公開留言才能檢舉 */
+const reportable = (c: Comment) => !c.isOwner && c.status === "visible";
 
 async function remove(c: Comment) {
   if (!(await confirmDialog({ message: t("comment.confirmDelete"), confirmText: t("dialog.delete"), danger: true }))) return;
@@ -159,7 +171,6 @@ watch([() => props.cardId, () => session.me?.accountNumId], () => load(true), { 
     </div>
     <RouterLink v-else-if="session.ready" class="btn cmt__login" :to="lp(loginPath(route.fullPath))">{{ $t("comment.login") }}</RouterLink>
 
-    <p v-if="submittedHidden" class="notice" role="status">{{ $t("comment.submitted") }}</p>
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
 
     <div v-if="loading && !comments.length" class="cmt__ghosts"><div v-for="i in 4" :key="i" class="ghost" /></div>
@@ -167,24 +178,33 @@ watch([() => props.cardId, () => session.me?.accountNumId], () => load(true), { 
 
     <ul v-else class="cmt__list">
       <li v-for="c in comments" :key="c.commentId" class="cmt__item">
-        <CommunityAvatar :handle="c.handle" :src="c.accountAvatar" :name="c.accountNickName" class="cmt__face" />
+        <CommunityAvatar v-if="!c.removed" :handle="c.handle" :src="c.accountAvatar" :name="c.accountNickName" class="cmt__face" />
         <div class="cmt__body">
+          <!-- 被移除的頂層只留一行說明；底下的回覆照常 -->
+          <p v-if="c.removed" class="cmt__removed">{{ $t("comment.removed") }}</p>
+          <template v-else>
           <div class="cmt__head">
             <CommunityName :handle="c.handle" :name="c.accountNickName" class="cmt__name" />
             <span v-if="c.isCreator" class="cmt__badge">{{ $t("comment.creator") }}</span>
             <span v-if="c.isPinned" class="cmt__badge cmt__badge--pin">{{ $t("comment.pinned") }}</span>
+            <span v-if="c.status === 'held'" class="cmt__badge cmt__badge--held">{{ $t("comment.held") }}</span>
             <span v-if="c.score" class="cmt__stars" role="img" :aria-label="$t('score.stars', { n: c.score })">{{ "★".repeat(c.score) }}<span class="cmt__stars-off">{{ "★".repeat(5 - c.score) }}</span></span>
             <span class="subtle">{{ relativeTime(Date.parse(c.createTime)) }}</span>
           </div>
           <p class="cmt__text">{{ c.content }}</p>
           <div class="cmt__actions">
-            <button class="cmt__act" :class="{ 'is-on': c.isLiked }" @click="toggleLike(c)">
-              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6S2.5 10.2 2.5 6.4A2.9 2.9 0 0 1 8 4.9a2.9 2.9 0 0 1 5.5 1.5c0 3.8-5.5 7.2-5.5 7.2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" /></svg>
-              {{ c.likeCount || "" }}
-            </button>
-            <button v-if="session.me" class="cmt__act" @click="replyTo = { root: c, target: c }; replyDraft = ''">{{ $t("comment.reply") }}</button>
+            <!-- 審核中的還沒公開：不能按讚、不能回覆 -->
+            <template v-if="c.status !== 'held'">
+              <button class="cmt__act" :class="{ 'is-on': c.isLiked }" @click="toggleLike(c)">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6S2.5 10.2 2.5 6.4A2.9 2.9 0 0 1 8 4.9a2.9 2.9 0 0 1 5.5 1.5c0 3.8-5.5 7.2-5.5 7.2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" /></svg>
+                {{ c.likeCount || "" }}
+              </button>
+              <button v-if="session.me" class="cmt__act" @click="replyTo = { root: c, target: c }; replyDraft = ''">{{ $t("comment.reply") }}</button>
+            </template>
             <button v-if="c.canDelete" class="cmt__act cmt__act--danger" @click="remove(c)">{{ $t("comment.delete") }}</button>
+            <button v-if="reportable(c)" class="cmt__act cmt__act--report" @click="report(c)">{{ $t("comment.report") }}</button>
           </div>
+          </template>
 
           <ul v-if="repliesOf(c).length" class="cmt__replies">
             <li v-for="r in repliesOf(c)" :key="r.commentId" class="cmt__reply">
@@ -193,16 +213,20 @@ watch([() => props.cardId, () => session.me?.accountNumId], () => load(true), { 
                 <div class="cmt__head">
                   <CommunityName :handle="r.handle" :name="r.accountNickName" class="cmt__name" />
                   <span v-if="r.isCreator" class="cmt__badge">{{ $t("comment.creator") }}</span>
+                  <span v-if="r.status === 'held'" class="cmt__badge cmt__badge--held">{{ $t("comment.held") }}</span>
                   <span class="subtle">{{ relativeTime(Date.parse(r.createTime)) }}</span>
                 </div>
                 <p class="cmt__text"><span v-if="r.replyToNickName && r.parentId !== c.commentId" class="cmt__to">@{{ r.replyToNickName }} </span>{{ r.content }}</p>
                 <div class="cmt__actions">
-                  <button class="cmt__act" :class="{ 'is-on': r.isLiked }" @click="toggleLike(r)">
-                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6S2.5 10.2 2.5 6.4A2.9 2.9 0 0 1 8 4.9a2.9 2.9 0 0 1 5.5 1.5c0 3.8-5.5 7.2-5.5 7.2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" /></svg>
-                    {{ r.likeCount || "" }}
-                  </button>
-                  <button v-if="session.me" class="cmt__act" @click="replyTo = { root: c, target: r }; replyDraft = ''">{{ $t("comment.reply") }}</button>
+                  <template v-if="r.status !== 'held'">
+                    <button class="cmt__act" :class="{ 'is-on': r.isLiked }" @click="toggleLike(r)">
+                      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6S2.5 10.2 2.5 6.4A2.9 2.9 0 0 1 8 4.9a2.9 2.9 0 0 1 5.5 1.5c0 3.8-5.5 7.2-5.5 7.2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" /></svg>
+                      {{ r.likeCount || "" }}
+                    </button>
+                    <button v-if="session.me" class="cmt__act" @click="replyTo = { root: c, target: r }; replyDraft = ''">{{ $t("comment.reply") }}</button>
+                  </template>
                   <button v-if="r.canDelete" class="cmt__act cmt__act--danger" @click="remove(r)">{{ $t("comment.delete") }}</button>
+                  <button v-if="reportable(r)" class="cmt__act cmt__act--report" @click="report(r)">{{ $t("comment.report") }}</button>
                 </div>
               </div>
             </li>
@@ -221,6 +245,8 @@ watch([() => props.cardId, () => session.me?.accountNumId], () => load(true), { 
     </ul>
 
     <button v-if="hasMore && !loading" class="btn btn--sm cmt__load" @click="more()">{{ $t("comment.loadMore") }}</button>
+    <ReportCommentDialog v-if="reporting" :comment-id="reporting.commentId" @close="reporting = null" @reported="reported" />
+    <div class="toast" role="status" :hidden="!toast">{{ toast }}</div>
   </section>
 </template>
 
@@ -249,7 +275,8 @@ watch([() => props.cardId, () => session.me?.accountNumId], () => load(true), { 
 .cmt__name { font-size: 13.5px; font-weight: 600; }
 a.cmt__name:hover { color: var(--accent-text); }
 .cmt__badge { padding: 1px 6px; border-radius: 5px; font-size: 11px; font-weight: 600; background: var(--accent-tint); color: var(--accent-text); }
-.cmt__badge--pin { background: var(--surface-2); color: var(--text-2); }
+.cmt__badge--pin, .cmt__badge--held { background: var(--surface-2); color: var(--text-2); }
+.cmt__removed { margin: 0; font-size: 13.5px; color: var(--text-3); }
 .cmt__text { margin: 0; font-size: 14px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
 .cmt__to { color: var(--accent-text); }
 .cmt__actions { display: flex; gap: var(--s-3); margin-top: 2px; }
@@ -259,6 +286,8 @@ a.cmt__name:hover { color: var(--accent-text); }
 .cmt__act.is-on { color: var(--accent-text); }
 .cmt__act.is-on svg path { fill: var(--accent-text); stroke: var(--accent-text); }
 .cmt__act--danger:hover { color: var(--danger); }
+/* 檢舉排在最後、靠右，跟讚與回覆分開，不會誤按 */
+.cmt__act--report { margin-left: auto; }
 .cmt__replies { margin-top: var(--s-2); gap: var(--s-3); }
 .cmt__reply { display: flex; gap: var(--s-2); }
 .cmt__more { width: fit-content; margin-top: 4px; padding: 0; background: none; border: 0; font-size: 12.5px; font-weight: 500; color: var(--accent-text); cursor: pointer; }

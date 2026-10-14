@@ -6,13 +6,18 @@ import ReviewBadge from '@/components/ReviewBadge.vue';
 const route = useRoute();
 const reviewer = useReviewer();
 const { lp } = useLocalePath();
-/** 前四個分頁對「作品」；「成員」對「人」（補充包、活動徽章）。發補充包跟審卡同一個權限等級，所以每個審核人都看得到。 */
+/**
+ * 前三個分頁對「作品」，「留言」對卡片底下的留言；「成員」對「人」（補充包、活動徽章）。發補充包跟審卡同一個權限等級，所以每個審核人都看得到。
+ * 「運營設定」每個審核人都看得到，只有應用管理員能改（服務端判）。
+ */
 const sections = [
   { key: 'reviews', path: '/review' },
   { key: 'cases', path: '/review/cases' },
   { key: 'cards', path: '/review/cards' },
+  { key: 'comments', path: '/review/comments' },
   { key: 'members', path: '/review/members' },
   { key: 'history', path: '/review/history' },
+  { key: 'settings', path: '/review/settings' },
 ] as const;
 </script>
 <template>
@@ -28,6 +33,7 @@ const sections = [
           {{ $t(`moderation.tab.${section.key}`) }}
           <ReviewBadge v-if="section.key === 'reviews'" :count="reviewer.pendingReviews" />
           <ReviewBadge v-if="section.key === 'cases'" :count="reviewer.pendingCases" />
+          <ReviewBadge v-if="section.key === 'comments'" :count="reviewer.pendingComments" />
         </a>
       </RouterLink>
     </nav>
@@ -41,6 +47,6 @@ const sections = [
 .management-nav__item { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: var(--s-2) var(--s-4); border-radius: var(--r-sm); color: var(--text-2); font-size: 14px; font-weight: 600; text-align: center; white-space: nowrap; }
 .management-nav__item:hover { color: var(--text); background: var(--surface); }
 .management-nav__item--active { color: var(--accent-text); background: var(--surface); box-shadow: 0 1px 3px var(--line); }
-/* 窄螢幕：分頁橫向捲動，五個分頁不會落單一格；內容捲到容器邊緣才消失 */
+/* 窄螢幕：分頁橫向捲動，分頁不會落單一格；內容捲到容器邊緣才消失 */
 @media (max-width: 600px) { .management-nav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } .management-nav::-webkit-scrollbar { display: none; } .management-nav__item { flex: 0 0 auto; padding-inline: var(--s-3); } }
 </style>

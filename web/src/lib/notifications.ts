@@ -88,6 +88,7 @@ export function noticeText(n: CommunityNotice): string {
     const key = (update ? "community.noticeText.review_update_rejected" : "community.noticeText.review_rejected") + (note ? "_note" : "");
     return t(key, { card, note });
   }
+  if (n.kind === "comment_removed" && noticeNote(extra.reason)) return t("community.noticeText.comment_removed", { reason: noticeNote(extra.reason) });
   if (n.kind === "report_shipped" && typeof extra.title === "string") return t("community.noticeText.report_shipped", { title: extra.title.replace(/[。.]$/, "") });
   if (n.kind === "comment_like" && actor && card)
     return count > 1 ? t("community.noticeText.comment_like_many", { actor, card, others: count - 1 }) : t("community.noticeText.comment_like", { actor, card });
