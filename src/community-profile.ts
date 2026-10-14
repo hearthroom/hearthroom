@@ -1,4 +1,5 @@
 import { memberProfile } from './members';
+import { imageReferenced } from './blog';
 import { HttpError, type Env } from './types';
 import { preservesOriginalAnimation } from './avatar-animation';
 import { AVATAR_MAX_BYTES } from '../shared/avatar';
@@ -6,10 +7,10 @@ import { TIP_LINKS_MAX, parseTipLink } from '../shared/tip-links';
 
 const RASTER_TYPES = new Set(['image/jpeg','image/png','image/webp','image/gif','image/apng']);
 
-/** Durable cleanup includes failed uploads; a live profile object is never collected. */
+/** Durable cleanup includes failed uploads; a live profile object or a blog image a post still references is never collected. */
 export async function cleanAvatars(env:Env, now=Date.now()) {
  if(!env.AVATARS)return;
- const rows=await env.DB.prepare(`SELECT key FROM avatar_cleanup WHERE delete_after<=? AND NOT EXISTS (SELECT 1 FROM members WHERE avatar_key=avatar_cleanup.key) LIMIT 50`).bind(now).all<{key:string}>();
+ const rows=await env.DB.prepare(`SELECT key FROM avatar_cleanup WHERE delete_after<=? AND NOT EXISTS (SELECT 1 FROM members WHERE avatar_key=avatar_cleanup.key) AND NOT (key LIKE 'blog/%' AND ${imageReferenced('avatar_cleanup.key')}) LIMIT 50`).bind(now).all<{key:string}>();
  for(const {key} of rows.results) {
   try {await env.AVATARS.delete(key);await env.DB.prepare('DELETE FROM avatar_cleanup WHERE key=?').bind(key).run();}
   catch { /* Keep the durable task for the next scheduled run. */ }
