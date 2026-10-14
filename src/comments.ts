@@ -13,7 +13,7 @@
  *   - 只有在榜（approved）的卡能讀寫留言。
  */
 import type { ProviderId } from "./providers";
-import { auditStmt } from "./audit";
+import { auditStmt, auditStmtIfChanged } from "./audit";
 import { holdReason, mutedUntil } from "./comment-moderation";
 import { readSettings } from "./community-settings";
 import { bumpOp } from "./ops-metrics";
@@ -75,6 +75,7 @@ export interface Viewer {
 function view(r: Row, viewer: Viewer, authorMemberId: string | null) {
   const mine = !!viewer.memberId && viewer.memberId === r.member_id;
   const removed = r.status === "removed" || r.status === "deleted";
+  // 被移除的佔位只說「這裡有過一則留言」，不留是誰寫的、評了幾星、多少讚。
   return {
     commentId: r.id,
     status: (r.status === "deleted" ? "removed" : r.status) as "visible" | "held" | "removed",
@@ -83,17 +84,17 @@ function view(r: Row, viewer: Viewer, authorMemberId: string | null) {
     parentId: r.parent_id ?? "",
     rootId: r.root_id ?? "",
     replyToNickName: r.reply_to_name,
-    likeCount: r.like_count,
+    likeCount: removed ? 0 : r.like_count,
     replyCount: r.reply_count,
     createTime: new Date(r.created_at).toISOString(),
-    accountNickName: r.display_name?.trim() || r.handle,
-    accountAvatar: r.avatar_url,
-    handle: r.handle,
+    accountNickName: removed ? "" : r.display_name?.trim() || r.handle,
+    accountAvatar: removed ? "" : r.avatar_url,
+    handle: removed ? "" : r.handle,
     isLiked: !removed && r.liked === 1,
     isOwner: mine,
-    isCreator: !!authorMemberId && authorMemberId === r.member_id,
+    isCreator: !removed && !!authorMemberId && authorMemberId === r.member_id,
     /** 留言者給這張卡的星數（card_scores）；沒評過是 null */
-    score: r.score ?? null,
+    score: removed ? null : r.score ?? null,
     canDelete: !removed && (mine || viewer.moderator || (!!viewer.memberId && viewer.memberId === authorMemberId)),
   };
 }
@@ -161,7 +162,7 @@ export async function postComment(
   if (!content) throw new HttpError(400, "comment_required");
   if ([...content].length > COMMENT_MAX_CHARS) throw new HttpError(400, "comment_too_long");
   const muted = await mutedUntil(db, input.memberId, input.now);
-  if (muted !== false) throw new HttpError(403, "comment_muted");
+  if (muted !== false) throw new HttpError(403, "comment_muted", undefined, { until: muted });
   const recent = await db
     .prepare("SELECT COUNT(*) AS n FROM comments WHERE member_id = ? AND created_at > ?")
     .bind(input.memberId, input.now - RATE_WINDOW_MS)
@@ -223,12 +224,19 @@ export async function deleteComment(db: D1Database, commentId: string, viewer: V
     isAuthor = author === viewer.memberId;
   }
   if (!viewer.moderator && !isOwner && !isAuthor) throw new HttpError(403, "not allowed to delete this comment");
-  const writes = [db.prepare("UPDATE comments SET deleted_at = ?1, status = 'deleted' WHERE (id = ?2 OR root_id = ?2) AND deleted_at IS NULL").bind(now, row.id)];
-  if (row.root_id && row.status === "visible") writes.push(db.prepare("UPDATE comments SET reply_count = MAX(0, reply_count - 1) WHERE id = ?").bind(row.root_id));
+  // 刪掉的留言（刪頂層連同回覆）上未結的檢舉一起結案，不留在佇列與統計裡。
+  // 之後的寫入用 changes() 串在刪除那條後面（順序不能換）：並發時輸的那一方沒刪到列，稽核與回覆數都不動。
+  const writes = [
+    db.prepare("UPDATE comment_reports SET resolved_at = ?1, resolution = 'deleted', resolved_by = ?2 WHERE target_kind = 'card' AND resolved_at IS NULL AND comment_id IN (SELECT id FROM comments WHERE id = ?3 OR root_id = ?3)").bind(now, viewer.memberId, row.id),
+    db.prepare("UPDATE comments SET deleted_at = ?1, status = 'deleted' WHERE (id = ?2 OR root_id = ?2) AND deleted_at IS NULL").bind(now, row.id),
+  ];
   if (!isOwner) {
-    writes.push(auditStmt(db, { subjectKind: "comment", subjectId: row.id, actorMemberId: viewer.memberId, actorKind: "human", action: viewer.moderator ? "delete_by_moderator" : "delete_by_author", before: { status: row.status }, after: { status: "deleted" }, operationId: `delete:${row.id}`, now }));
+    writes.push(auditStmtIfChanged(db, { subjectKind: "comment", subjectId: row.id, actorMemberId: viewer.memberId, actorKind: "human", action: viewer.moderator ? "delete_by_moderator" : "delete_by_author", before: { status: row.status }, after: { status: "deleted" }, operationId: `delete:${row.id}`, now }));
   }
-  await db.batch(writes);
+  if (row.root_id && row.status === "visible") writes.push(db.prepare("UPDATE comments SET reply_count = MAX(0, reply_count - 1) WHERE id = ? AND changes() > 0").bind(row.root_id));
+  const results = await db.batch(writes);
+  // 本人重複刪除當成已完成；別人的並發刪除回衝突（跟審核處理一致）。
+  if (!results[1].meta.changes && !isOwner) throw new HttpError(409, "comment already deleted");
 }
 
 /** 讚／收回讚。重複按不重複算：計數只在那一票真的新增或真的刪掉時才動。 */

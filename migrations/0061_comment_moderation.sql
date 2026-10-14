@@ -47,7 +47,7 @@ CREATE TABLE comment_reports (
  note TEXT NOT NULL DEFAULT '' CHECK(length(note) <= 300),
  created_at INTEGER NOT NULL,
  resolved_at INTEGER,
- resolution TEXT CHECK(resolution IN ('removed','dismissed','released')),
+ resolution TEXT CHECK(resolution IN ('removed','dismissed','released','deleted')),
  resolved_by TEXT,
  UNIQUE(target_kind, comment_id, reporter_member_id)
 );
@@ -67,7 +67,7 @@ CREATE TRIGGER community_comment_reply AFTER INSERT ON comments WHEN NEW.parent_
 END;
 CREATE TRIGGER community_comment_reply_release AFTER UPDATE OF status ON comments WHEN OLD.status='held' AND NEW.status='visible' AND NEW.parent_id IS NOT NULL BEGIN
  INSERT OR IGNORE INTO community_notifications(event_key,member_id,kind,path,created_at,actor_id,card_id,extra)
- SELECT 'comment:'||NEW.id,c.member_id,'comment_reply','/cards/'||NEW.card_id,NEW.created_at,NEW.member_id,NEW.card_id,json_object('comment',NEW.id)
+ SELECT 'comment:'||NEW.id,c.member_id,'comment_reply','/cards/'||NEW.card_id,COALESCE(NEW.moderated_at,NEW.created_at),NEW.member_id,NEW.card_id,json_object('comment',NEW.id)
  FROM comments c WHERE c.id=NEW.parent_id AND c.member_id<>NEW.member_id
  AND NOT EXISTS (SELECT 1 FROM community_preferences p WHERE p.member_id=c.member_id AND p.notifications=0);
 END;

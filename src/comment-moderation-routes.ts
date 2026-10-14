@@ -38,7 +38,7 @@ commentModerationRoutes.use("/v1/moderation/*", async (c, next) => {
 });
 
 async function staff(c: Ctx) {
-  const member = await requireReviewer(c);
+  const member = await requireReviewer(c, { allowAgent: true });
   const agent = await isReviewAgent(c.env.DB, member.id);
   return { member, agent, kind: agent ? ("ai" as const) : ("human" as const) };
 }
