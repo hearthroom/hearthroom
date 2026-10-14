@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { confirmDialog, confirmState, confirmTextMatches, settleConfirm } from "@/lib/confirm";
 import LookupField, { type LookupValue } from "./LookupField.vue";
+import { wrapTab } from "@/lib/focus-trap";
 
 const box = ref<HTMLElement | null>(null);
 /** 要照打的字：每次開新彈窗清空 */
@@ -34,14 +35,8 @@ watch(() => confirmState.current, async (cur) => {
 function onKey(e: KeyboardEvent) {
   if (!confirmState.current) return;
   if (e.key === "Escape") { e.preventDefault(); settleConfirm(false); return; }
-  // 焦點只在彈窗裡繞
-  if (e.key === "Tab" && box.value) {
-    const items = [...box.value.querySelectorAll<HTMLElement>("button, input, [tabindex='0']")];
-    if (!items.length) return;
-    const first = items[0]!, last = items[items.length - 1]!;
-    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-  }
+  // 焦點只在彈窗裡繞（沿用原本的範圍：停用的鍵也算一站）
+  wrapTab(e, box.value, "button, input, [tabindex='0']");
 }
 onMounted(() => {
   document.addEventListener("keydown", onKey);
