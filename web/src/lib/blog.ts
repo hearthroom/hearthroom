@@ -18,7 +18,7 @@ export interface PostCard {
 }
 export interface BlogPost extends Omit<PostCard, "commentCount"> {
   columnId: string; bodyMd: string; status: string; publishAt: number | null; commentsClosed: boolean; pinnedCommentId: string | null;
-  createdAt: number; updatedAt: number; official: true;
+  createdAt: number; updatedAt: number; contentUpdatedAt: number; official: true;
 }
 export interface PostPage { post: BlogPost; adjacent: { prev: PostCard | null; next: PostCard | null }; related: PostCard[] }
 

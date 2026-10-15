@@ -232,6 +232,25 @@ it('a state change that comes back with someone else\'s save does not become my 
   expect(host.querySelector('[data-conflict]')).not.toBeNull();
 });
 
+it('a replayed save that comes back with someone else\'s newer version does not become my save base while I typed more', async () => {
+  await mount('/review/blog/p1');
+  await vi.waitFor(() => expect(source()?.value).toBe('舊內容'));
+  type(source(), 'A 的第一版'); await nextTick();
+  // 重送被認成同一次，回來的卻是 B 存的第 5 版；回應前 A 又打了字
+  handle = (c) => {
+    if (c.method !== 'PUT') return undefined;
+    if (c.body.expectedVersion === 3) { type(source(), 'A 的第一版，又打了字'); return ok(post({ bodyMd: 'B 的內容', version: 5 })); }
+    return c.body.expectedVersion === 5 ? ok(post({ bodyMd: c.body.bodyMd, version: 6 })) : { status: 409, body: { error: 'blog_version_conflict', version: 5 } };
+  };
+  host.querySelector<HTMLButtonElement>('[data-action="save"]')!.click();
+  await vi.waitFor(() => expect(host.querySelector('[data-conflict]')).not.toBeNull());
+  expect(source().value).toBe('A 的第一版，又打了字');
+  host.querySelector<HTMLButtonElement>('[data-action="save"]')!.click();
+  await settle();
+  expect(calls.filter((c) => c.method === 'PUT').every((c) => c.body.expectedVersion !== 5)).toBe(true);
+  expect(host.querySelector('[data-conflict]')).not.toBeNull();
+});
+
 it('after the first save of a new post, leaving with new edits still asks', async () => {
   handle = (c) => c.method === 'POST' && c.path === '/v1/blog/admin/posts' ? ok(post({ id: 'p9', title: c.body.title, slug: c.body.slug, bodyMd: c.body.bodyMd, version: 1 }))
     : c.path === '/v1/blog/admin/posts/p9/revisions' ? ok({ items: [] }) : undefined;

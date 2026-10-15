@@ -80,6 +80,36 @@ describe("編輯", () => {
     expect(await listRevisions(env.DB, p.id)).toHaveLength(3);
   });
 
+  it("已發布的文章還原舊修訂：網址（欄目與 slug）不動，其餘照還原；草稿照舊連 slug 一起還原", async () => {
+    const actor = { memberId: editor, kind: "human" as const };
+    const other = (await saveColumn(env.DB, { slug: "guides", name: { "zh-Hant": "教學" }, description: {}, sort: 1, enabled: true }, actor, op(), 2)).id;
+    const p = await draft({ slug: "old-slug", title: "舊標題" });
+    const v2 = await savePost(env.DB, { id: p.id, expectedVersion: p.version, columnId: other, slug: "new-slug", locale: "zh-Hant", title: "新標題", excerpt: "", bodyMd: "新內容" }, actor, op(), 30);
+    const first = (await listRevisions(env.DB, p.id)).at(-1)!;
+    const asDraft = await restoreRevision(env.DB, p.id, first.id, actor, op(), 35);
+    expect([asDraft.slug, asDraft.columnId, asDraft.title]).toEqual(["old-slug", columnId, "舊標題"]);
+    const back = await savePost(env.DB, { id: p.id, expectedVersion: asDraft.version, columnId: other, slug: "new-slug", locale: "zh-Hant", title: v2.title, excerpt: "", bodyMd: "新內容" }, actor, op(), 36);
+    await setPostState(env.DB, p.id, { status: "published", publishAt: 5000 }, actor, op(), 5000);
+    const live = await restoreRevision(env.DB, p.id, first.id, actor, op(), 40);
+    expect([live.slug, live.columnId, live.title]).toEqual(["new-slug", other, "舊標題"]);
+    expect(live.version).toBe(back.version + 2);
+  });
+
+  it("公開的修改時間只看內容修訂：置頂、留言開關不動它；沒有修訂退回首次發布", async () => {
+    const actor = { memberId: editor, kind: "human" as const };
+    const p = await draft();
+    await setPostState(env.DB, p.id, { status: "published", publishAt: 1000 }, actor, op(), 1000);
+    expect((await publicPost(env.DB, "news", "hello", 2000))!.contentUpdatedAt).toBe(10);
+    await setPostState(env.DB, p.id, { pinned: true }, actor, op(), 3000);
+    await setPostState(env.DB, p.id, { commentsClosed: true }, actor, op(), 3001);
+    const pinned = (await publicPost(env.DB, "news", "hello", 4000))!;
+    expect([pinned.contentUpdatedAt, pinned.updatedAt]).toEqual([10, 3001]);
+    await savePost(env.DB, { id: p.id, expectedVersion: pinned.version, columnId, slug: "hello", locale: "zh-Hant", title: "改", excerpt: "", bodyMd: "" }, actor, op(), 5000);
+    expect((await publicPost(env.DB, "news", "hello", 6000))!.contentUpdatedAt).toBe(5000);
+    await env.DB.prepare("DELETE FROM blog_post_revisions WHERE post_id = ?").bind(p.id).run();
+    expect((await publicPost(env.DB, "news", "hello", 6000))!.contentUpdatedAt).toBe(1000);
+  });
+
   it("同時編輯用版本號擋覆蓋", async () => {
     const p = await draft();
     await savePost(env.DB, { id: p.id, expectedVersion: p.version, columnId, slug: "hello", locale: "zh-Hant", title: "A 先存", excerpt: "", bodyMd: "" }, { memberId: editor, kind: "human" }, op(), 31);

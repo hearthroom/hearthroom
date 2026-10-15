@@ -124,6 +124,13 @@ function suggestSlug(title: string) {
 }
 watch(() => draft.title, (title) => { if (!post.value && !slugTouched.value) draft.slug = title.trim() ? suggestSlug(title) : ''; });
 
+/** 回應帶著別人存的內容時，只收狀態、版本號留在原處並標成衝突：下一次存檔會被擋下，不會蓋掉別人的修改。 */
+function holdBase(prev: AdminPost, res: AdminPost) {
+  const { status, publishAt, firstPublishedAt, pinned, commentsClosed, pinnedCommentId } = res;
+  post.value = { ...prev, status, publishAt, firstPublishedAt, pinned, commentsClosed, pinnedCommentId };
+  conflict.value = true;
+}
+
 async function save() {
   if (saving.value || busy.value || uploading.value) return;
   const input = toInput(draft);
@@ -134,11 +141,15 @@ async function save() {
     const p = post.value;
     const res = await savePost(await token(), input, opFor(key), p?.id, p?.version);
     ops.delete(key);
-    post.value = res;
-    saved.value = JSON.stringify(fromPost(res));
-    // 存檔途中又打了字：留著，那些仍是沒存的修改
-    if (JSON.stringify(draft) === sent) Object.assign(draft, fromPost(res));
-    done.value = t('blog.admin.saved');
+    // 重送被認成同一次時，回來的可能是別人較新的版本；存檔途中我又打了字的話，不拿它當基準（見 holdBase）
+    if (res.version !== (p?.version ?? 0) + 1 && JSON.stringify(draft) !== sent) holdBase(p ?? { ...res, version: 0 }, res);
+    else {
+      post.value = res;
+      saved.value = JSON.stringify(fromPost(res));
+      // 存檔途中又打了字：留著，那些仍是沒存的修改
+      if (JSON.stringify(draft) === sent) Object.assign(draft, fromPost(res));
+      done.value = t('blog.admin.saved');
+    }
     if (!p) await router.replace(lp(`/review/blog/${res.id}`));
     void loadRevisions();
   } catch (e) {
@@ -177,9 +188,8 @@ async function change(c: StateChange, title: string, msg: string, danger = false
     // 只收狀態與版本號：編輯中的內容不動。中間有人存過內容的話，版本號留在原處、標成衝突，
     // 下一次存檔就會被擋下來，交給「載入最新版本／複製我的內容」
     const moved = res.version !== prev.version + 1 || JSON.stringify(fromPost(res)) !== JSON.stringify(fromPost(prev));
-    const { status, publishAt, firstPublishedAt, pinned, commentsClosed, pinnedCommentId } = res;
-    post.value = moved ? { ...prev, status, publishAt, firstPublishedAt, pinned, commentsClosed, pinnedCommentId } : res;
-    if (moved) conflict.value = true;
+    if (moved) holdBase(prev, res);
+    else post.value = res;
     done.value = t('blog.admin.saved');
   } catch (e) { error.value = message(e); } finally { busy.value = false; }
 }

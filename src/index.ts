@@ -68,7 +68,7 @@ import { type Env, HttpError } from "./types";
 import { serveSandbox } from "./sandbox";
 import { listSaves, putSave, removeSave } from "./saves";
 import { commentCard, countTop, deleteComment, listReplies, listTop, postComment, setLike, sortOf, type CommentTarget, type Viewer } from "./comments";
-import { livePost } from "./blog";
+import { livePost, publicPostById } from "./blog";
 import { reportComment } from "./comment-moderation";
 import { commentModerationRoutes } from "./comment-moderation-routes";
 import { blogRoutes } from "./blog-routes";
@@ -1691,10 +1691,6 @@ async function landingPage(c: Context<{ Bindings: Env; Variables: { ev: Pending 
  */
 const BLOG_PAGE = /^(?:\/(zh-Hans|en|ja|ko))?\/blog(?:\/([^/]+))?(?:\/([^/]+))?\/?$/;
 async function blogPage(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, url: URL, m: RegExpMatchArray): Promise<Response> {
-  const shell = await c.env.ASSETS.fetch(new Request(new URL("/", url).toString()));
-  if (!shell.ok) return shell;
-  const locale = m[1] ?? "zh-Hant";
-  note(c, { event: "page_html", refHost: refHostOf(c.req.header("Referer"), url.host), locale, subject: m[3] ?? m[2] ?? "", detail: "blog" });
   // 網址編碼壞掉＝找不到；資料庫讀取出錯不吞掉，照一般錯誤路徑回 5xx（爬蟲不會把暫時的錯當成文章下架）
   const decode = (part: string | undefined): string | undefined | null => {
     if (part === undefined) return undefined;
@@ -1702,6 +1698,19 @@ async function blogPage(c: Context<{ Bindings: Env; Variables: { ev: Pending } }
   };
   const column = decode(m[2]);
   const slug = decode(m[3]);
+  // 短網址 /blog/p/<id>：公開文章 302 到正式網址（保留語言前綴）；不是公開的照下面的 404
+  if (column === "p" && slug) {
+    const target = await publicPostById(c.env.DB, slug, Date.now());
+    if (target) {
+      const res = c.redirect(`${m[1] ? `/${m[1]}` : ""}/blog/${encodeURIComponent(target.column)}/${encodeURIComponent(target.slug)}`, 302);
+      res.headers.set("Cache-Control", `public, max-age=${PAGE_TTL}`);
+      return res;
+    }
+  }
+  const shell = await c.env.ASSETS.fetch(new Request(new URL("/", url).toString()));
+  if (!shell.ok) return shell;
+  const locale = m[1] ?? "zh-Hant";
+  note(c, { event: "page_html", refHost: refHostOf(c.req.header("Referer"), url.host), locale, subject: m[3] ?? m[2] ?? "", detail: "blog" });
   const meta = column === null || slug === null ? null
     : column && slug ? await postMeta(c.env.DB, column, slug, Date.now())
     : await blogIndexMeta(c.env.DB, locale, column, blogUrl(locale, column));

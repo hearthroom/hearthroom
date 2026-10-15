@@ -125,6 +125,34 @@ describe("部落格分享資訊", () => {
   });
 });
 
+describe("短網址與停用欄目", () => {
+  it("/blog/p/:id：公開文章 302 到 canonical（保留語言前綴）；草稿與未到時間 404＋noindex", async () => {
+    const live = await post({ slug: "live", locale: "en" }, 1000);
+    for (const [path, to] of [[`/blog/p/${live.id}`, "/blog/news/live"], [`/en/blog/p/${live.id}`, "/en/blog/news/live"], [`/ja/blog/p/${live.id}`, "/ja/blog/news/live"]] as const) {
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(new Request(`https://c.test${path}`, { redirect: "manual" }), testEnv, ctx);
+      await waitOnExecutionContext(ctx);
+      expect(res.status).toBe(302);
+      expect(res.headers.get("location")).toBe(to);
+    }
+    for (const id of [(await post({ slug: "d" }, null)).id, (await post({ slug: "s" }, Date.now() + 86_400_000)).id, "nope"]) {
+      const r = await get(`/blog/p/${id}`);
+      expect(r.status).toBe(404);
+      expect(r.text).toContain("noindex");
+    }
+  });
+
+  it("停用欄目的列表頁 404＋noindex、沒有分享標籤；裡面的單篇仍可開", async () => {
+    await post({}, 1000);
+    await env.DB.prepare("UPDATE blog_columns SET enabled = 0 WHERE id = ?").bind(columnId).run();
+    const col = await get("/blog/news");
+    expect(col.status).toBe(404);
+    expect(col.text).toContain('name="robots" content="noindex');
+    expect(col.text).not.toContain('property="og:title"');
+    expect((await get("/blog/news/hello")).status).toBe(200);
+  });
+});
+
 describe("部落格 Atom", () => {
   it("只列公開文章，未到時間、草稿、撤下的都沒有；entry 連結是 canonical", async () => {
     await post({ slug: "live", title: "公開的", excerpt: "摘要一" }, 1000);
@@ -140,6 +168,28 @@ describe("部落格 Atom", () => {
     expect(text).toContain(`<link href="https://${PRIMARY_HOST}/blog/news/live"/>`);
     for (const hidden of ["未來的", "草稿的", "撤下的"]) expect(text).not.toContain(hidden);
     expect((await get("/en/blog.atom")).text).toContain('xml:lang="en"');
+  });
+
+  it("標題與摘要裡 XML 1.0 不允許的控制字元被拿掉，feed 仍有該篇", async () => {
+    await post({ slug: "ctl", title: "a\u000Bb\u0000c", excerpt: "x\u001Fy\uFFFEz" }, 1000);
+    const { text } = await get("/blog.atom");
+    expect(text).toContain("<title>abc</title>");
+    expect(text).toContain("<summary>xyz</summary>");
+    // eslint-disable-next-line no-control-regex
+    expect(text).not.toMatch(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/);
+  });
+
+  it("置頂不會動 Atom 的 <updated> 與 article:modified_time；存內容才會", async () => {
+    const p = await post({}, 1000);
+    const before = { feed: (await get("/blog.atom")).text, page: (await get("/blog/news/hello")).text };
+    await setPostState(env.DB, p.id, { pinned: true }, actor(), op(), 9_000_000);
+    const feed = (await get("/blog.atom")).text;
+    expect(feed).toBe(before.feed);
+    expect(feed).toContain(`<updated>${new Date(10).toISOString()}</updated>`);
+    const page = (await get("/blog/news/hello")).text;
+    expect(page).toContain(`<meta property="article:modified_time" content="${new Date(10).toISOString()}">`);
+    expect(page).toContain(`"dateModified":"${new Date(10).toISOString()}"`);
+    expect(page).toBe(before.page);
   });
 
   it("最多 20 篇，標題裡的符號被轉義", async () => {

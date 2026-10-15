@@ -22,6 +22,8 @@ export type Post = {
   coverUrl: string | null; bodyMd: string; shareTitle: string | null; shareDescription: string | null; shareCoverUrl: string | null;
   campaignId: string | null; status: PostStatus; publishAt: number | null; firstPublishedAt: number | null; pinned: boolean;
   commentsClosed: boolean; pinnedCommentId: string | null; authorMemberId: string; version: number; createdAt: number; updatedAt: number;
+  /** 對外的「修改時間」：最新一筆內容修訂的時間（置頂、留言開關不算）；沒有修訂退回首次發布。updatedAt 只給管理端。 */
+  contentUpdatedAt: number;
   /** 編輯器回存時要帶回的原始 key（coverUrl／shareCoverUrl 是由它算出來的公開網址）。 */
   coverKey: string | null; shareCoverKey: string | null;
 };
@@ -64,11 +66,12 @@ type PostRow = {
   cover_key: string | null; body_md: string; share_title: string | null; share_description: string | null; share_cover_key: string | null;
   campaign_id: string | null; status: PostStatus; publish_at: number | null; first_published_at: number | null; pinned: number;
   comments_closed: number; pinned_comment_id: string | null; version: number; created_at: number; updated_at: number;
+  content_updated_at: number | null;
 };
 type CardRow = Pick<PostRow, "id" | "column_slug" | "slug" | "title" | "excerpt" | "cover_key" | "locale" | "first_published_at" | "pinned" | "campaign_id" | "body_md"> & { comment_count: number };
 type ColumnRow = { id: string; slug: string; name: string; description: string; sort: number; enabled: number };
 
-const POST_SELECT = "SELECT p.*, col.slug AS column_slug FROM blog_posts p JOIN blog_columns col ON col.id = p.column_id";
+const POST_SELECT = "SELECT p.*, col.slug AS column_slug, (SELECT MAX(r.created_at) FROM blog_post_revisions r WHERE r.post_id = p.id) AS content_updated_at FROM blog_posts p JOIN blog_columns col ON col.id = p.column_id";
 // ponytail: 卡片要算閱讀時長，所以連內文一起讀（一頁 12 篇）；嫌重時改成儲存時算好存一欄。
 const CARD_SELECT = `SELECT p.id, col.slug AS column_slug, p.slug, p.title, p.excerpt, p.cover_key, p.locale, p.first_published_at, p.pinned, p.campaign_id, p.body_md,
   (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id AND c.root_id IS NULL AND c.deleted_at IS NULL AND c.status = 'visible') AS comment_count
@@ -86,6 +89,7 @@ const toPost = (r: PostRow): Post => ({
   shareCoverUrl: imageUrl(r.share_cover_key), campaignId: r.campaign_id, status: r.status, publishAt: r.publish_at,
   firstPublishedAt: r.first_published_at, pinned: !!r.pinned, commentsClosed: !!r.comments_closed, pinnedCommentId: r.pinned_comment_id,
   authorMemberId: r.author_member_id, version: r.version, createdAt: r.created_at, updatedAt: r.updated_at,
+  contentUpdatedAt: r.content_updated_at ?? r.first_published_at ?? r.created_at,
   coverKey: r.cover_key, shareCoverKey: r.share_cover_key,
 });
 const toCard = (r: CardRow): PostCard => ({
@@ -243,8 +247,10 @@ export async function restoreRevision(db: D1Database, postId: string, revisionId
   if (!rev) throw new HttpError(404, "blog_revision_not_found");
   const m = JSON.parse(rev.meta_json) as Record<string, unknown>;
   const pick = <T>(key: string, fallback: T): T => (key in m ? m[key] : fallback) as T;
+  // 已發布（含排程）的文章網址不跟著還原動，其餘照還原
+  const keepUrl = before.status === "published";
   const c: Content = {
-    column_id: pick("columnId", before.column_id), slug: pick("slug", before.slug), locale: pick("locale", before.locale), title: rev.title,
+    column_id: keepUrl ? before.column_id : pick("columnId", before.column_id), slug: keepUrl ? before.slug : pick("slug", before.slug), locale: pick("locale", before.locale), title: rev.title,
     excerpt: pick("excerpt", before.excerpt), body_md: rev.body_md, cover_key: pick("coverKey", before.cover_key), share_title: pick("shareTitle", before.share_title),
     share_description: pick("shareDescription", before.share_description), share_cover_key: pick("shareCoverKey", before.share_cover_key), campaign_id: before.campaign_id,
   };
