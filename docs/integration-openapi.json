@@ -9015,8 +9015,6 @@
                             "type": "string",
                             "enum": [
                               "protect",
-                              "assist",
-                              "lines",
                               "coauthor"
                             ]
                           },
@@ -9031,6 +9029,7 @@
                             "type": "string",
                             "enum": [
                               "default",
+                              "vivid",
                               "guided",
                               "card",
                               "custom"
@@ -19332,8 +19331,6 @@
             "type": "string",
             "enum": [
               "protect",
-              "assist",
-              "lines",
               "coauthor"
             ]
           },
@@ -19341,6 +19338,7 @@
             "type": "string",
             "enum": [
               "default",
+              "vivid",
               "guided",
               "card",
               "custom"
@@ -20089,8 +20087,6 @@
             "type": "string",
             "enum": [
               "protect",
-              "assist",
-              "lines",
               "coauthor"
             ]
           },
@@ -20098,6 +20094,7 @@
             "type": "string",
             "enum": [
               "default",
+              "vivid",
               "guided",
               "card",
               "custom"
