@@ -283,3 +283,23 @@ it('a reviewer who is not a manager sees who the blog tab is for, not a raw erro
   expect(host.textContent).not.toContain('blog_write_forbidden');
   expect(host.querySelector('.rblog-columns')).toBeNull();
 });
+
+it('restoring a revision says readers see it at once when the post is live, and only that it is saved otherwise', async () => {
+  const revision = { id: 'r1', editorHandle: 'ed', title: '開站了', bodyMd: '更舊的內容', createdAt: 1 };
+  const restoreMessage = async (live: boolean) => {
+    handle = (c) => c.path === '/v1/blog/admin/posts/p1' && c.method === 'GET' ? ok(post(live ? { status: 'published', publishAt: 1, firstPublishedAt: 1 } : {}))
+      : c.path === '/v1/blog/admin/posts/p1/revisions' ? ok({ items: [revision] })
+        : c.path === '/v1/blog/admin/posts/p1/revisions/r1' ? ok(revision) : undefined;
+    await mount('/review/blog/p1');
+    await vi.waitFor(() => expect(host.querySelector('.bed-rev')).not.toBeNull());
+    host.querySelector<HTMLButtonElement>('.bed-rev')!.click();
+    await vi.waitFor(() => expect(host.querySelector('[data-action="restore"]')).not.toBeNull());
+    host.querySelector<HTMLButtonElement>('[data-action="restore"]')!.click();
+    await vi.waitFor(() => expect(confirm()).not.toBeNull());
+    const text = document.querySelector('[role=alertdialog]')!.textContent;
+    app.unmount(); document.body.innerHTML = '';
+    return text;
+  };
+  expect(await restoreMessage(true)).toContain(t('blog.admin.restoreConfirmLive'));
+  expect(await restoreMessage(false)).toContain(t('blog.admin.restoreConfirm'));
+});

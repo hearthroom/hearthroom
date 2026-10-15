@@ -69,7 +69,7 @@ export interface PostInput {
   columnId: string; slug: string; locale: string; title: string; excerpt: string; bodyMd: string; coverKey: string | null;
   shareTitle: string | null; shareDescription: string | null; shareCoverKey: string | null; campaignId: string | null;
 }
-export type StateChange = { status: "published"; publishAt?: number } | { status: "unpublished" } | { pinned: boolean } | { commentsClosed: boolean };
+export type StateChange = { status: "published"; publishAt?: number } | { status: "unpublished" } | { pinned: boolean } | { commentsClosed: boolean } | { pinnedCommentId: string | null };
 export interface Revision { id: string; editorHandle: string; title: string; createdAt: number }
 
 /** 表單上對應錯誤欄位的標籤；沒列到的欄位講通用的那句。 */
