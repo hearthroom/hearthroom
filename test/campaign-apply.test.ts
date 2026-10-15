@@ -177,6 +177,20 @@ describe("提交", () => {
     expect(await count("SELECT count(*) AS n FROM share_contents")).toBe(2);
   });
 
+  it("操作編號只能重送同一種動作、同一個位置；內容稽核的編號用戶端送不出來", async () => {
+    const opId = op();
+    const a = await json(await submit(form({ operationId: opId })));
+    await env.DB.prepare("UPDATE share_placements SET review_status = 'needs_info' WHERE id = ?").bind(a.placementId).run();
+    expect(await code(await resubmit(a.placementId, { note: "補", operationId: opId }))).toBe("409 campaign_operation_repeated");
+    const b = await json(await submit(form({ url: "https://x.test/b" })));
+    await env.DB.prepare("UPDATE share_placements SET review_status = 'needs_info' WHERE id = ?").bind(b.placementId).run();
+    const re = op();
+    expect((await resubmit(b.placementId, { note: "補", operationId: re })).status).toBe(200);
+    await env.DB.prepare("UPDATE share_placements SET review_status = 'needs_info' WHERE id = ?").bind(a.placementId).run();
+    expect(await code(await resubmit(a.placementId, { note: "補", operationId: re }))).toBe("409 campaign_operation_repeated");
+    expect(await count("SELECT count(*) AS n FROM audit_log WHERE operation_id LIKE '%:content'")).toBe(2);
+  });
+
   it("短碼撞到就重抽", async () => {
     const now = Date.now();
     await env.DB.prepare("INSERT INTO share_contents (id, campaign_id, member_id, recipient_account_no, title, share_code, created_at, updated_at) VALUES ('c0', ?, ?, 1, 't', 'AAAAAAAA', ?, ?)").bind(campaignId, other, now, now).run();
