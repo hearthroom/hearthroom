@@ -15,8 +15,9 @@ import { campaignErrorText } from "../src/lib/campaign";
 vi.mock("../src/lib/session", () => ({ useSession: () => ({ me: { accountNumId: 7 }, profile: {}, ready: true, accessToken: async () => "synthetic" }) }));
 vi.mock("../src/lib/api", async (original) => ({
   ...(await original<object>()),
-  fetchReviewMe: async () => ({ reviewer: true, pending: 0, reviews: 0, cases: 0, comments: 0, role: "reviewer" }),
+  fetchReviewMe: async () => reviewMe,
 }));
+let reviewMe: Record<string, unknown>;
 import { router as siteRouter } from "../src/router";
 
 const MIN = 60_000, DAY = 86_400_000;
@@ -45,6 +46,7 @@ let payGate: Promise<void> | null;
 
 beforeEach(() => {
   i18n.global.locale.value = "zh-Hant";
+  reviewMe = { reviewer: true, pending: 0, reviews: 0, cases: 0, comments: 0, role: "reviewer" };
   calls = []; canEdit = true; payableItems = [payable("s1", 300), payable("s2", 800), payable("s3", 100)]; history = [];
   reconcile = { status: 200, body: { items: [] } }; reconcileGate = null; replies = {}; payGate = null;
   vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit = {}) => {
@@ -100,6 +102,15 @@ it("hides the payout tab from reviewers who cannot pay, AI accounts included, an
   expect(host.querySelector('.management-nav a[href="/review/campaign"]')).not.toBeNull();
   expect(paths("/v1/moderation/campaign/payable")).toHaveLength(0);
   expect(paths("/v1/moderation/campaign/payouts", "POST")).toHaveLength(0);
+});
+
+it("an app admin who is not a reviewer sees only the blog tab: campaign and payout routes need a reviewer on the server", async () => {
+  reviewMe = { reviewer: false, blogWriter: true };
+  await mount("/review/blog");
+  await vi.waitFor(() => expect(host.querySelector('.management-nav a[href="/review/blog"]')).not.toBeNull());
+  await vi.waitFor(() => expect(paths("/v1/moderation/campaigns").length).toBeGreaterThan(0));
+  await nextTick();
+  expect([...host.querySelectorAll('.management-nav a')].map((a) => a.getAttribute("href"))).toEqual(["/review/blog"]);
 });
 
 it("shows the payout tab to an app admin, with the platform summary at the top", async () => {
