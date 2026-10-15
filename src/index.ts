@@ -53,7 +53,8 @@ import { cardThumbUrl, landingZone } from "../shared/card-thumb";
 import { PRIMARY_HOST, siteRootOf } from "../shared/site-hosts";
 import { draftStateOf, loadMine, type MineFilter } from "./mine";
 import { tagNamesFor } from "../shared/tag-catalog";
-import { providerOf, requestIdentity, reviewerRole, isHumanReviewer, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
+import { bearerOf, blogWriterHint } from "./community-admin";
+import { providerOf, requestIdentity, reviewerRole, isHumanReviewer, isReviewAgent, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
 import { configuredProviders, hasChat, parseProvider, requireConfigured, DEFAULT_PROVIDER, PROVIDER_NAMES, type ProviderId, reviewEnabled } from "./providers";
 import { providerApiBaseFor } from "./providers";
 import { WEEKLY_LIMIT, registeredThisWeek, openPack } from "./quota";
@@ -1212,15 +1213,19 @@ app.get("/v1/review/me", async (c) => {
   const summary = await reviewSummary(c.env.DB, member);
   // 精選開關要不要出現：問供應商「這個人能不能代表本站」。只對審核人問——別人不會看到管理面板。
   let featured: CommunityStatus | null = null;
+  const bearer = bearerOf(c), provider = providerOf(c);
   if (summary.reviewer) {
-    const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1] ?? "";
     try {
-      featured = await upstream.fetchCommunityStatus(c.env, bearer, providerOf(c));
+      featured = await upstream.fetchCommunityStatus(c.env, bearer, provider);
     } catch {
       featured = null;
     }
   }
-  return c.json({ ...summary, featured }, 200, { "Cache-Control": "private, no-store" });
+  // 部落格入口：應用 owner／admin 就有，不必是審核人。審核人剛問過供應商，直接用那個答案；其他人走一小時的快取。
+  const blogWriter = summary.reviewer
+    ? featured?.admin === true && !(await isReviewAgent(c.env.DB, member.id))
+    : await blogWriterHint(c.env, member.id, bearer, provider);
+  return c.json({ ...summary, featured, blogWriter }, 200, { "Cache-Control": "private, no-store" });
 });
 
 /**

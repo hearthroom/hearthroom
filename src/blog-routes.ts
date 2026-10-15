@@ -2,12 +2,13 @@ import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { openAuth, sealAuth } from "./account-auth";
 import {
-  adjacentPosts, adminPost, adminPosts, adminView, canWritePost, getRevision, IMAGE_MAX_BYTES, imageServable, listColumns, listRevisions, postBySlug, publicPost,
+  adjacentPosts, adminPost, adminPosts, adminView, getRevision, IMAGE_MAX_BYTES, imageServable, listColumns, listRevisions, postBySlug, publicPost,
   publicPostById, publicPosts, publicView, relatedPosts, restoreRevision, saveColumn, savePost, setPostState, uploadImage,
   type Actor, type ColumnInput, type Post, type PostInput, type StateChange,
 } from "./blog";
 import { blogFeed } from "./blog-head";
-import { requireMember } from "./members";
+import { bearerOf, canWriteBlog } from "./community-admin";
+import { providerOf, requireMember } from "./members";
 import { operationOf } from "./moderation";
 import { bumpOp } from "./ops-metrics";
 import { HttpError, type Env } from "./types";
@@ -57,10 +58,10 @@ blogRoutes.use("/v1/blog/admin/*", async (c, next) => {
   if (op) await bumpOp(c.env.DB, "blog", op, c.res.status < 500 ? "denied" : "error");
 });
 
-/** 寫作權限：manager／owner 審核人，不含 AI 帳號，所以稽核的 actor_kind 一律是 human。 */
+/** 寫作權限：供應商那邊本站應用的 owner／admin，不含 AI 帳號，所以稽核的 actor_kind 一律是 human。 */
 async function writer(c: Ctx): Promise<Actor> {
   const member = await requireMember(c);
-  if (!(await canWritePost(c.env.DB, member.id))) throw new HttpError(403, "blog_write_forbidden");
+  if (!(await canWriteBlog(c.env, member.id, bearerOf(c), providerOf(c)))) throw new HttpError(403, "blog_write_forbidden");
   return { memberId: member.id, kind: "human" };
 }
 const admin = async (c: Ctx, post: Post) => c.json(await adminView(c.env.DB, post));

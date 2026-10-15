@@ -56,7 +56,7 @@ export function suggestSlug(title: string, now = new Date()): string {
 }
 export const postPath = (p: { columnSlug: string; slug: string }) => `/blog/${p.columnSlug}/${p.slug}`;
 
-// ---- 管理（/v1/blog/admin）：manager／owner 才進得去，權限由服務端判 ----------------------
+// ---- 管理（/v1/blog/admin）：本站應用的 owner／admin 才進得去，權限由服務端判 --------------
 
 export const POST_LOCALES = ["zh-Hant", "zh-Hans", "en", "ja", "ko"] as const;
 export type PostStatus = "draft" | "pending_review" | "published" | "unpublished";

@@ -4,7 +4,7 @@ import { readSettings, writeSettings, type CommunitySettings } from "./community
 import { addKeyword, clearMute, conflictOnDuplicate, decide, listKeywords, moderationQueue, moderationStats, removeKeyword, setMute, type Decision } from "./comment-moderation";
 import { operationOf } from "./moderation";
 import { bumpOp } from "./ops-metrics";
-import { upstream } from "./upstream";
+import { appAdminOf, bearerOf } from "./community-admin";
 import { HttpError, type Env } from "./types";
 
 /**
@@ -122,13 +122,7 @@ commentModerationRoutes.delete("/v1/moderation/comment-keywords/:id", async (c) 
 
 /** 能不能改運營設定：問供應商這個人是不是本站的應用管理員。問不到就當不是。 */
 async function communityAdmin(c: Ctx): Promise<boolean> {
-  const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1];
-  if (!bearer) return false;
-  try {
-    return (await upstream.fetchCommunityStatus(c.env, bearer, providerOf(c)))?.admin === true;
-  } catch {
-    return false;
-  }
+  return appAdminOf(c.env, bearerOf(c), providerOf(c)).catch(() => false);
 }
 
 commentModerationRoutes.get("/v1/moderation/settings", async (c) => {

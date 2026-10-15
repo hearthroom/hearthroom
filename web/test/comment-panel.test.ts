@@ -23,7 +23,7 @@ vi.mock("../src/lib/api", async (original) => ({ ...(await original<object>()), 
 vi.mock("../src/lib/session", () => ({ useSession: () => ({ me: { accountNumId: 7, avatar: "" }, ready: true, accessToken: async () => "synthetic" }) }));
 vi.mock("../src/lib/community-appearance", () => ({ usePublicAppearance: () => ref(null) }));
 vi.mock("../src/lib/track", () => ({ track: () => {}, currentSurface: () => "web" }));
-const staff = vi.hoisted(() => ({ reviewer: false as boolean | null, role: "reviewer" as string, setPostState: vi.fn(async () => ({})) }));
+const staff = vi.hoisted(() => ({ reviewer: false as boolean | null, role: "reviewer" as string, blogWriter: false, setPostState: vi.fn(async () => ({})) }));
 vi.mock("../src/lib/review", () => ({ useReviewer: () => staff }));
 vi.mock("../src/lib/blog", async (original) => ({ ...(await original<object>()), setPostState: (...a: unknown[]) => staff.setPostState(...a) }));
 
@@ -32,7 +32,7 @@ import CommentPanel from "../src/components/CommentPanel.vue";
 let app: App, host: HTMLElement;
 beforeEach(async () => {
   i18n.global.locale.value = "zh-Hant";
-  Object.assign(staff, { reviewer: false, role: "reviewer" });
+  Object.assign(staff, { reviewer: false, role: "reviewer", blogWriter: false });
   api.list = [];
   api.fetchComments.mockReset().mockImplementation(async () => ({ total: api.list.length, comments: api.list, isRoleCreator: false }));
   host = document.body.appendChild(document.createElement("div"));
@@ -165,7 +165,7 @@ it("closes the composer when the post is closed while someone is writing", async
 });
 
 it("lets a blog writer pin a public comment on a post and unpin it again", async () => {
-  Object.assign(staff, { reviewer: true, role: "manager" });
+  Object.assign(staff, { reviewer: false, blogWriter: true });
   let pinned: string | null = null;
   api.list = [comment("c1"), comment("held", { isOwner: true, status: "held" })];
   api.fetchComments.mockImplementation(async () => ({ total: 2, comments: api.list, isRoleCreator: false, pinnedCommentId: pinned }));
@@ -181,16 +181,16 @@ it("lets a blog writer pin a public comment on a post and unpin it again", async
   await vi.waitFor(() => expect(host.querySelector(".cmt__badge--pin")).toBeNull());
 });
 
-it("offers no pin to readers, plain reviewers, or on card comments", async () => {
+it("offers no pin to readers, reviewers who cannot write the blog, or on card comments", async () => {
   api.list = [comment("c1")];
   await mount(postTarget());
   expect(buttons(host, t("comment.pin"))).toHaveLength(0);
   app.unmount(); host.innerHTML = "";
-  Object.assign(staff, { reviewer: true, role: "reviewer" });
+  Object.assign(staff, { reviewer: true, role: "owner", blogWriter: false });
   await mount(postTarget());
   expect(buttons(host, t("comment.pin"))).toHaveLength(0);
   app.unmount(); host.innerHTML = "";
-  Object.assign(staff, { reviewer: true, role: "owner" });
+  Object.assign(staff, { reviewer: true, role: "owner", blogWriter: true });
   await mount();
   expect(buttons(host, t("comment.pin"))).toHaveLength(0);
 });
