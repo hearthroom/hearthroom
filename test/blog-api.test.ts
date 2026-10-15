@@ -179,6 +179,65 @@ describe("文章生命週期", () => {
   });
 });
 
+describe("關聯活動", () => {
+  const DAY = 86400_000;
+  const campaign = async (slug: string, status: string, startsAt: number, endsAt: number) => {
+    const id = crypto.randomUUID(), now = Date.now();
+    await env.DB.prepare(
+      `INSERT INTO campaigns (id, slug, title, starts_at, ends_at, timezone, tiers, status, created_by, created_at, updated_at)
+       VALUES (?, ?, '{"zh-Hant":"開站分享"}', ?, ?, 'Asia/Tokyo', '{}', ?, 'test', ?, ?)`,
+    ).bind(id, slug, startsAt, endsAt, status, now, now).run();
+    return id;
+  };
+  const live = async (slug: string, campaignId: string | null) => {
+    const p = await newPost({ slug, campaignId });
+    expect((await state(p.id, { status: "published", publishAt: Date.now() - 1000 })).status).toBe(200);
+    return p;
+  };
+
+  it("公開文章與卡片帶活動摘要，不帶原始 campaignId；草稿活動與不存在的活動是 null；管理端仍有 campaignId", async () => {
+    const now = Date.now();
+    const open = await campaign("launch", "active", now - DAY, now + DAY);
+    const draft = await campaign("secret", "draft", now - DAY, now + DAY);
+    const withCampaign = await live("with", open);
+    await live("draft", draft);
+    await live("ghost", "no-such-campaign");
+    await live("plain", null);
+
+    const read = await json(await call("/v1/blog/posts/news/with"));
+    expect(read.post.campaign).toEqual({ slug: "launch", title: { "zh-Hant": "開站分享" }, phase: "open", startsAt: now - DAY, endsAt: now + DAY, timezone: "Asia/Tokyo" });
+    expect(read.post).not.toHaveProperty("campaignId");
+    expect(JSON.stringify(read)).not.toContain(open);
+    for (const slug of ["draft", "ghost", "plain"]) {
+      const other = await json(await call(`/v1/blog/posts/news/${slug}`));
+      expect(other.post.campaign).toBeNull();
+      expect(other.post).not.toHaveProperty("campaignId");
+      expect(JSON.stringify(other)).not.toContain("secret");
+      for (const card of [...other.related, other.adjacent.prev, other.adjacent.next].filter(Boolean)) expect(card).not.toHaveProperty("campaignId");
+    }
+
+    const list = await json(await call("/v1/blog/posts"));
+    const cards = [...list.pinned, ...list.items];
+    expect(cards).toHaveLength(4);
+    for (const card of cards) expect(card).not.toHaveProperty("campaignId");
+    expect(Object.fromEntries(cards.map((c: any) => [c.slug, c.campaign?.slug ?? null]))).toEqual({ with: "launch", draft: null, ghost: null, plain: null });
+    expect(cards.find((c: any) => c.slug === "with").campaign).toMatchObject({ phase: "open", timezone: "Asia/Tokyo" });
+    expect(JSON.stringify(list)).not.toContain("secret");
+
+    const admin = await json(await call(`/v1/blog/admin/posts/${withCampaign.id}`, { token: "editor" }));
+    expect(admin.campaignId).toBe(open);
+  });
+
+  it("卡片的活動階段：未開始、進行中、已結束", async () => {
+    const now = Date.now();
+    await live("a", await campaign("soon", "active", now + DAY, now + 2 * DAY));
+    await live("b", await campaign("done", "ended", now - 2 * DAY, now - DAY));
+    await live("c", await campaign("late", "active", now - 2 * DAY, now - DAY));
+    const list = await json(await call("/v1/blog/posts"));
+    expect(Object.fromEntries(list.items.map((c: any) => [c.slug, c.campaign.phase]))).toEqual({ a: "upcoming", b: "ended", c: "ended" });
+  });
+});
+
 describe("預覽", () => {
   it("草稿用預覽碼讀得到且不快取；過期、竄改、換一篇都 404", async () => {
     const p = await newPost();

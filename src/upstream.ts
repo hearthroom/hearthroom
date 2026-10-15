@@ -404,5 +404,111 @@ async function setFeatured(env: Env, bearer: string, roleId: string, featured: b
 }
 
 
-export const upstream = { fetchMe, setNickname, fetchRole, fetchMyRoles, fetchContentHashes, fetchDraftVersions, readForReview, readSealedForReview, fetchCommunityStatus, setFeatured };
+/** 本站應用的活動點數池（Provider 是唯一來源）。usageScope／maxPayout 在平台設定前是空值，這裡轉成 null。 */
+export interface CampaignPool {
+  balance: number;
+  paidTotal: number;
+  enabled: boolean;
+  usageScope: "all" | "agent_only" | null;
+  validityDays: number | null;
+  maxPayout: number | null;
+  configured: boolean;
+  updatedAt: string | null;
+}
+
+/**
+ * 讀點數池，用操作者自己的令牌（只在這一個呼叫裡用）。Provider 判斷他是不是本站應用的 owner／admin／viewer：
+ * 401/403 → 不是應用管理員；404 → 這家 Provider 沒有點數池（回 null）；其他失敗或 10 秒逾時 → 502。
+ */
+async function fetchCampaignPool(env: Env, bearer: string, provider: ProviderId = DEFAULT_PROVIDER): Promise<CampaignPool | null> {
+  const unavailable = () => new HttpError(502, "campaign_pool_unavailable");
+  let res: Response;
+  try {
+    res = await fetch(apiUrl(env, provider, "/open/v1/campaign-pool"), {
+      headers: { Authorization: `Bearer ${bearer}`, "User-Agent": UA },
+      signal: AbortSignal.timeout(10000),
+    });
+  } catch {
+    throw unavailable();
+  }
+  if (res.status === 401 || res.status === 403) throw new HttpError(403, "community_admin_required");
+  if (res.status === 404) return null;
+  if (!res.ok) throw unavailable();
+  const b = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+  if (!b || typeof b !== "object" || !Number.isSafeInteger(b.balance) || !Number.isSafeInteger(b.paidTotal)) throw unavailable();
+  const positive = (v: unknown) => (Number.isSafeInteger(v) && (v as number) > 0 ? (v as number) : null);
+  return {
+    balance: b.balance as number,
+    paidTotal: b.paidTotal as number,
+    enabled: b.enabled === true,
+    usageScope: b.usageScope === "all" || b.usageScope === "agent_only" ? b.usageScope : null,
+    validityDays: positive(b.validityDays),
+    maxPayout: positive(b.maxPayout),
+    configured: b.configured === true,
+    updatedAt: typeof b.updatedAt === "string" ? b.updatedAt : null,
+  };
+}
+
+
+/**
+ * 從點數池發一筆獎勵，用操作者自己的令牌（只在這一個呼叫裡用，不落地、不進日誌）。key 是本站發放紀錄的 id，
+ * 同一把 key 同一份本體再送，Provider 回原結果（replayed:true），所以重試不會重複入帳。
+ * 結果分四種：入帳；池不足（沒寫入，補足後同一把 key 再送）；被拒（Provider 這些回應一律沒寫入，回代碼）；
+ * 不知道（5xx、斷線、逾時、本體看不懂——可能已入帳，只能用同一把 key 重試或查詢）。
+ */
+export type PayResult = { kind: "paid"; entryId: string; paidAt: string; replayed: boolean } | { kind: "insufficient" } | { kind: "rejected"; code: string } | { kind: "unknown" };
+export type PayoutLookup = { kind: "paid"; entryId: string; paidAt: string } | { kind: "absent" } | { kind: "unknown" };
+const UNKNOWN = { kind: "unknown" } as const;
+const REJECTS = [400, 401, 403, 404, 409];
+// 只認 snake_case 代碼；其他字（含 CDN 的挑戰頁、自由文字）當看不懂，不往外傳。
+const errorCodeOf = (b: unknown) => {
+  const v = (b as { error?: unknown } | null)?.error;
+  return typeof v === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(v) ? v : null;
+};
+const entryOf = (b: unknown) => {
+  const r = b as { entryId?: unknown; paidAt?: unknown } | null;
+  return r && typeof r.entryId === "string" && r.entryId && typeof r.paidAt === "string" ? { entryId: r.entryId, paidAt: r.paidAt } : null;
+};
+
+async function payCampaign(env: Env, bearer: string, body: { key: string; accountNo: number; amount: number; campaignRef: string; contentRef: string }, provider: ProviderId = DEFAULT_PROVIDER): Promise<PayResult> {
+  const url = apiUrl(env, provider, "/open/v1/campaign-pool/payouts");
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${bearer}`, "User-Agent": UA, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10000),
+    });
+    const b: unknown = await res.json().catch(() => null);
+    if (res.status === 200) {
+      const e = entryOf(b);
+      const replayed = e && (b as { replayed?: unknown }).replayed;
+      return e && typeof replayed === "boolean" ? { kind: "paid", ...e, replayed } : UNKNOWN;
+    }
+    const code = errorCodeOf(b);
+    if (!code || !REJECTS.includes(res.status)) return UNKNOWN;
+    if (res.status === 409 && code === "pool_insufficient") return { kind: "insufficient" };
+    return { kind: "rejected", code };
+  } catch {
+    return UNKNOWN;
+  }
+}
+
+/** 查一把 key 在 Provider 有沒有入帳（對帳用）。404 not_found → 沒有這筆；其餘看不懂的一律 unknown。 */
+async function getCampaignPayout(env: Env, bearer: string, key: string, provider: ProviderId = DEFAULT_PROVIDER): Promise<PayoutLookup> {
+  const url = apiUrl(env, provider, `/open/v1/campaign-pool/payouts/${encodeURIComponent(key)}`);
+  try {
+    const res = await fetch(url, { method: "GET", headers: { Authorization: `Bearer ${bearer}`, "User-Agent": UA }, signal: AbortSignal.timeout(10000) });
+    const b: unknown = await res.json().catch(() => null);
+    if (res.status === 200) {
+      const e = entryOf(b);
+      return e ? { kind: "paid", ...e } : UNKNOWN;
+    }
+    return res.status === 404 && errorCodeOf(b) === "not_found" ? { kind: "absent" } : UNKNOWN;
+  } catch {
+    return UNKNOWN;
+  }
+}
+
+export const upstream = { fetchMe, setNickname, fetchRole, fetchMyRoles, fetchContentHashes, fetchDraftVersions, readForReview, readSealedForReview, fetchCommunityStatus, setFeatured, fetchCampaignPool, payCampaign, getCampaignPayout };
 export type Upstream = typeof upstream;

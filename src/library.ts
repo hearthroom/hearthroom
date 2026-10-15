@@ -100,9 +100,17 @@ libraryRoutes.put('/v1/me/conversations', bodyLimit({ maxSize: 2048 }), async c 
   const valid = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
   if (!valid(body?.roleId) || !valid(body?.conversationId)) throw new HttpError(400, 'invalid_arguments');
   const now = Date.now();
-  await c.env.DB.prepare(`INSERT INTO member_conversations(member_id,provider,role_id,conversation_id,created_at,updated_at)
-    VALUES(?,?,?,?,?,?) ON CONFLICT(member_id,provider,role_id) DO UPDATE SET conversation_id=excluded.conversation_id,updated_at=excluded.updated_at`)
-    .bind(member.id, member.provider, body.roleId, body.conversationId, now, now).run();
+  // 一次往返：原本的 upsert，加上活動歸因的首玩時間與當天活躍日。沒有歸因的人兩條都不寫列
+  // （UPDATE 比不到列；INSERT 的 EXISTS 為假）。日序 = UTC 日序，見 campaign_active_days。
+  const db = c.env.DB;
+  await db.batch([
+    db.prepare(`INSERT INTO member_conversations(member_id,provider,role_id,conversation_id,created_at,updated_at)
+      VALUES(?,?,?,?,?,?) ON CONFLICT(member_id,provider,role_id) DO UPDATE SET conversation_id=excluded.conversation_id,updated_at=excluded.updated_at`)
+      .bind(member.id, member.provider, body.roleId, body.conversationId, now, now),
+    db.prepare("UPDATE campaign_attributions SET first_play_at = ? WHERE member_id = ? AND first_play_at IS NULL").bind(now, member.id),
+    db.prepare("INSERT OR IGNORE INTO campaign_active_days (member_id, day) SELECT ?, ? WHERE EXISTS (SELECT 1 FROM campaign_attributions WHERE member_id = ?)")
+      .bind(member.id, Math.floor(now / 86_400_000), member.id),
+  ]);
   return c.json({ saved: true });
 });
 

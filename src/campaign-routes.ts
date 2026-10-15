@@ -1,0 +1,316 @@
+import { Hono, type Context } from "hono";
+import { bodyLimit } from "hono/body-limit";
+import { IMAGE_MAX_BYTES, imageErrorAs, storeRasterImage } from "./blog";
+import { bindAttribution, countVisit } from "./campaign-attribution";
+import { myContents, resubmitPlacement, submitPlacement } from "./campaign-apply";
+import { EVIDENCE_MAX_BYTES, readEvidence, uploadEvidence } from "./campaign-evidence";
+import { contentDetail, decidePlacement, reviewQueue } from "./campaign-review";
+import { campaignStats } from "./campaign-stats";
+import { autoPayout, BATCH_MAX, batchPayout, cancelPayout, checkPayout, listPayable, listPayouts, reconcilePayouts, requestPayout, retryPayout, type Payer } from "./campaign-payout";
+import { queuePush } from "./community/push";
+import { campaignPhase, getCampaign, listCampaigns, saveCampaign, setCampaignStatus, type Actor, type Campaign, type CampaignInput } from "./campaign";
+import { providerOf, requireMember } from "./members";
+import { operationOf } from "./moderation";
+import { bumpOp } from "./ops-metrics";
+import { bearerOf, communityAdmin, humanOnly, requireCommunityAdmin, staff } from "./staff";
+import { upstream } from "./upstream";
+import { HttpError, type Env } from "./types";
+
+/**
+ * 分享獎勵活動的路由。規則在 campaign.ts；這裡只管身分、參數與回應。
+ * 管理：審核人可讀；寫入要真人且 Provider 回報是本站應用管理員。Cache-Control 由 moderationRoutes 統一設成 private, no-store。
+ * 公開：只回非草稿活動的摘要與規則，public, max-age=60。
+ */
+export const campaignRoutes = new Hono<{ Bindings: Env }>();
+type Ctx = Context<{ Bindings: Env }>;
+
+const PUBLIC = { "Cache-Control": "public, max-age=60" };
+// 五語介紹各最多 20000 字（CJK 一字 3 bytes），moderationRoutes 的 16 KB 不夠，這裡自己設。
+const settingsLimit = bodyLimit({ maxSize: 512 * 1024, onError: (c) => c.json({ error: "campaign_invalid", field: "body" }, 400) });
+
+const bodyOf = async (c: Ctx) => {
+  const b = await c.req.json().catch(() => null);
+  return (b && typeof b === "object" && !Array.isArray(b) ? b : {}) as Record<string, unknown>;
+};
+
+// 成功由 campaign.ts 在寫入後記；被拒與出錯在這裡依狀態碼記，一處涵蓋所有提早拋出的錯。讀取不計。
+campaignRoutes.use("/v1/moderation/*", async (c, next) => {
+  await next();
+  if (c.res.status < 400 || c.req.method === "GET" || !c.req.path.startsWith("/v1/moderation/campaigns")) return;
+  await bumpOp(c.env.DB, "campaign", "settings", c.res.status < 500 ? "denied" : "error");
+});
+
+/** 寫入閘門：審核人、不是 AI 帳號、Provider 說是本站應用管理員。稽核的 actor_kind 因此一律是 human。 */
+async function editor(c: Ctx): Promise<Actor> {
+  const s = await staff(c);
+  humanOnly(s.agent);
+  await requireCommunityAdmin(c);
+  return { memberId: s.member.id, kind: "human" };
+}
+
+// ---- 公開 ---------------------------------------------------------------------
+
+/** 明列允許的欄位：門檻、保留天數、建立者、橫幅 key、版本與點數池都不在這裡。 */
+const summaryView = (c: Campaign, now: number) => ({
+  slug: c.slug, title: c.title, phase: campaignPhase(c, now), startsAt: c.startsAt, endsAt: c.endsAt, timezone: c.timezone, bannerUrl: c.bannerUrl,
+});
+const detailView = (c: Campaign, now: number) => ({
+  ...summaryView(c, now), intro: c.intro, submitDeadline: c.submitDeadline, payoutDeadline: c.payoutDeadline, tiers: c.tiers, extraPlacementAmount: c.extraPlacementAmount,
+});
+
+campaignRoutes.get("/v1/campaigns", async (c) => {
+  const now = Date.now();
+  return c.json({ items: (await listCampaigns(c.env.DB, { includeDraft: false })).map((x) => summaryView(x, now)) }, 200, PUBLIC);
+});
+
+campaignRoutes.get("/v1/campaigns/:slug", async (c) => {
+  const slug = c.req.param("slug");
+  const campaign = await getCampaign(c.env.DB, slug);
+  // getCampaign 也認 id；公開網址只認 slug。
+  if (!campaign || campaign.slug !== slug || campaign.status === "draft") return c.json({ error: "campaign_not_found" }, 404, PUBLIC);
+  return c.json(detailView(campaign, Date.now()), 200, PUBLIC);
+});
+
+// ---- 截圖（私有）--------------------------------------------------------------
+
+// 所有回應（含錯誤）都不快取；上傳記 evidence_upload、讀取記 evidence_view，依狀態碼分成功／被拒／出錯。
+campaignRoutes.use("/v1/campaign/evidence/*", async (c, next) => {
+  await next();
+  c.header("Cache-Control", "private, no-store");
+  const s = c.res.status;
+  await bumpOp(c.env.DB, "campaign", c.req.method === "POST" ? "evidence_upload" : "evidence_view", s < 400 ? "success" : s < 500 ? "denied" : "error");
+});
+
+campaignRoutes.post("/v1/campaign/evidence", bodyLimit({ maxSize: EVIDENCE_MAX_BYTES + 16384, onError: (c) => c.json({ error: "evidence_invalid" }, 400) }), async (c) => {
+  const member = await requireMember(c);
+  const form = await c.req.formData().catch(() => {
+    throw new HttpError(400, "evidence_invalid");
+  });
+  return c.json(await uploadEvidence(c.env, member.id, form.get("file"), Date.now()));
+});
+
+campaignRoutes.get("/v1/campaign/evidence/:id", async (c) => {
+  // 訪客跟別人一樣回 404，不回 401：不透露這張截圖存在。
+  const viewer = c.req.header("Authorization") ? (await requireMember(c)).id : null;
+  const obj = await readEvidence(c.env, viewer, c.req.param("id"), Date.now());
+  return new Response(obj.body, {
+    headers: { "Content-Type": obj.httpMetadata?.contentType ?? "application/octet-stream", "X-Content-Type-Options": "nosniff", "Content-Disposition": "inline" },
+  });
+});
+
+// ---- 申請（本人）---------------------------------------------------------------
+
+// 不在 /v1/moderation 底下，沒有那邊的 16 KB 上限，自己設；說明最多 1000 字，32 KB 綽綽有餘。
+const applyLimit = bodyLimit({ maxSize: 32 * 1024, onError: (c) => c.json({ error: "share_invalid", field: "body" }, 400) });
+const PRIVATE = { "Cache-Control": "private, no-store" };
+
+// 提交、重送與審核決定依狀態碼記成功／被拒／出錯（重送原結果也算成功）。
+const applyMetric = (operation: "submit" | "resubmit" | "decide") => async (c: Ctx, next: () => Promise<void>) => {
+  await next();
+  c.header("Cache-Control", "private, no-store");
+  const s = c.res.status;
+  await bumpOp(c.env.DB, "campaign", operation, s < 400 ? "success" : s < 500 ? "denied" : "error");
+};
+
+campaignRoutes.post("/v1/campaigns/:slug/placements", applyMetric("submit"), applyLimit, async (c) => {
+  const member = await requireMember(c);
+  const b = await bodyOf(c);
+  return c.json(await submitPlacement(c.env.DB, member, c.req.param("slug"), b, operationOf(b.operationId), Date.now()));
+});
+
+campaignRoutes.put("/v1/campaign/placements/:id", applyMetric("resubmit"), applyLimit, async (c) => {
+  const member = await requireMember(c);
+  const b = await bodyOf(c);
+  return c.json(await resubmitPlacement(c.env.DB, member, c.req.param("id"), b, operationOf(b.operationId), Date.now()));
+});
+
+campaignRoutes.get("/v1/me/campaign/contents", async (c) => {
+  const member = await requireMember(c);
+  return c.json({ items: await myContents(c.env.DB, member.id, { slug: c.req.query("campaign") || undefined }) }, 200, PRIVATE);
+});
+
+// ---- 歸因 ---------------------------------------------------------------------
+
+// 不需登入，所以只做一次條件式寫入；碼不存在、格式不對、本體過大、被限流都一樣回 204，不透露碼存不存在。
+// 限流以連線 IP 為鍵（每分鐘 30 次，wrangler.toml 的 VISIT_LIMIT）；IP 只交給限流器，不記錄也不存。
+// 沒有綁定（本機、測試、分叉）就不限。
+campaignRoutes.post("/v1/campaign/visits", bodyLimit({ maxSize: 1024, onError: (c) => c.body(null, 204) }), async (c) => {
+  const allowed = await c.env.VISIT_LIMIT?.limit({ key: c.req.header("cf-connecting-ip") || "anon" });
+  if (allowed && !allowed.success) return c.body(null, 204);
+  await countVisit(c.env.DB, (await bodyOf(c)).s, Date.now());
+  return c.body(null, 204);
+});
+
+campaignRoutes.post("/v1/me/campaign/attribution", bodyLimit({ maxSize: 1024, onError: (c) => c.json({ error: "invalid_arguments" }, 400) }), async (c) => {
+  const member = await requireMember(c);
+  return c.json(await bindAttribution(c.env.DB, member.id, await bodyOf(c), Date.now()), 200, PRIVATE);
+});
+
+// ---- 管理 ---------------------------------------------------------------------
+
+campaignRoutes.get("/v1/moderation/campaigns", async (c) => {
+  const s = await staff(c);
+  const items = await listCampaigns(c.env.DB, { includeDraft: true });
+  return c.json({ items, canEdit: !s.agent && (await communityAdmin(c)) });
+});
+
+campaignRoutes.post("/v1/moderation/campaigns/banner", bodyLimit({ maxSize: IMAGE_MAX_BYTES + 16384, onError: (c) => c.json({ error: "campaign_image_invalid" }, 400) }), async (c) => {
+  await editor(c);
+  const form = await c.req.formData().catch(() => {
+    throw new HttpError(400, "campaign_image_invalid");
+  });
+  const stored = await storeRasterImage(c.env, form.get("file"), Date.now()).catch(imageErrorAs("campaign"));
+  await bumpOp(c.env.DB, "campaign", "settings", "success");
+  return c.json(stored);
+});
+
+campaignRoutes.post("/v1/moderation/campaigns", settingsLimit, async (c) => {
+  const actor = await editor(c);
+  const { id: _, expectedVersion: __, operationId, ...input } = await bodyOf(c);
+  return c.json(await saveCampaign(c.env.DB, input as CampaignInput, actor, operationOf(operationId), Date.now()));
+});
+
+campaignRoutes.put("/v1/moderation/campaigns/:id", settingsLimit, async (c) => {
+  const actor = await editor(c);
+  const { operationId, ...input } = await bodyOf(c);
+  return c.json(await saveCampaign(c.env.DB, { ...(input as CampaignInput), id: c.req.param("id") }, actor, operationOf(operationId), Date.now()));
+});
+
+campaignRoutes.post("/v1/moderation/campaigns/:id/status", settingsLimit, async (c) => {
+  const actor = await editor(c);
+  const b = await bodyOf(c);
+  if (b.status !== "active" && b.status !== "ended") throw new HttpError(400, "campaign_invalid", undefined, { field: "status" });
+  return c.json(await setCampaignStatus(c.env.DB, c.req.param("id"), b.status, actor, operationOf(b.operationId), Date.now()));
+});
+
+// ---- 審核（審核員與 AI 帳號）----------------------------------------------------
+// 請求大小受 moderationRoutes 的 16 KB 上限；actor_kind 一律由 staff() 推出。
+
+campaignRoutes.get("/v1/moderation/campaign/placements", async (c) => {
+  await staff(c);
+  const page = Math.max(1, Math.floor(Number(c.req.query("page")) || 1));
+  return c.json(await reviewQueue(c.env.DB, { status: c.req.query("status") || undefined, slug: c.req.query("campaign") || undefined, page }));
+});
+
+campaignRoutes.get("/v1/moderation/campaign/contents/:id", async (c) => {
+  await staff(c);
+  return c.json(await contentDetail(c.env.DB, c.req.param("id")));
+});
+
+campaignRoutes.post("/v1/moderation/campaign/placements/:id/decision", applyMetric("decide"), async (c) => {
+  const s = await staff(c);
+  const b = await bodyOf(c);
+  const op = operationOf(b.operationId);
+  const result = await decidePlacement(c.env.DB, c.req.param("id")!, { memberId: s.member.id, kind: s.kind }, b, op, Date.now());
+  // 真人應用管理員核准就直接發；AI 帳號與一般審核員的核准停在待發放。
+  // 版本沒動＝這次決定什麼都沒寫（同檔位同計數再核准一次），不因此發錢；要發走發放路由。重放的決定版本已前進，照樣補發。
+  const wrote = result.placement.version !== b.expectedVersion;
+  const paid = b.decision === "approve" && wrote && result.placement.reviewStatus === "approved" && !s.agent && (await communityAdmin(c))
+    ? await autoPayout(payerOf(c, s.member.id), result.placement.id, op) : { payout: null };
+  queuePush(c);
+  return c.json({ ...result, ...paid });
+});
+
+/**
+ * 活動統計看板：審核員與 AI 帳號可讀。點數池只給真人應用管理員（同 canEdit），其他人不問 Provider；
+ * 問不到就是 pool: null，其他數字照樣回。活動用 slug，沒給或不存在都是 404。
+ */
+campaignRoutes.get("/v1/moderation/campaign/stats", async (c) => {
+  const s = await staff(c);
+  const slug = c.req.query("campaign");
+  const campaign = slug ? await getCampaign(c.env.DB, slug) : null;
+  if (!campaign || campaign.slug !== slug) throw new HttpError(404, "campaign_not_found");
+  // 管理員判斷與點數池都跟 D1 查詢並行；catch 要立刻接上，否則失敗會在 batch 期間變成未處理的 rejection。communityAdmin 問不到時回 false，不會 reject。
+  const pool = (s.agent ? Promise.resolve(false) : communityAdmin(c))
+    .then((admin) => (admin ? upstream.fetchCampaignPool(c.env, bearerOf(c), providerOf(c)) : null))
+    .catch(() => null);
+  return c.json(await campaignStats(c.env.DB, campaign, Date.now(), pool));
+});
+
+// ---- 發放（只有真人應用管理員）-----------------------------------------------------
+// 請求大小受 moderationRoutes 的 16 KB 上限。令牌只交給 Provider，不落地、不進日誌。
+
+const payerOf = (c: Ctx, memberId: string): Payer => ({ env: c.env, bearer: bearerOf(c), provider: providerOf(c), memberId, now: Date.now });
+
+/** 發放閘門：審核人 → 不是 AI 帳號 → Provider 說是本站應用管理員。真正的授權仍由 Provider 判斷。 */
+async function payer(c: Ctx): Promise<Payer> {
+  const s = await staff(c);
+  humanOnly(s.agent);
+  await requireCommunityAdmin(c);
+  return payerOf(c, s.member.id);
+}
+
+// 送出的結果（成功／池不足／被拒／不知道）在 campaign-payout.ts 記；這裡補記提早被擋下的請求。
+campaignRoutes.use("/v1/moderation/campaign/*", async (c, next) => {
+  await next();
+  if (c.req.method === "GET" || c.res.status < 400 || !/\/payouts?(\/|$)/.test(c.req.path)) return;
+  const operation = /\/payouts\/(reconcile|[^/]+\/check)$/.test(c.req.path) ? "reconcile" : "payout";
+  await bumpOp(c.env.DB, "campaign", operation, c.res.status < 500 ? "denied" : "error");
+});
+
+campaignRoutes.get("/v1/moderation/campaign/payouts", async (c) => {
+  await payer(c);
+  const page = Math.max(1, Math.floor(Number(c.req.query("page")) || 1));
+  return c.json(await listPayouts(c.env.DB, { status: c.req.query("status") || undefined, slug: c.req.query("campaign") || undefined, page }));
+});
+
+campaignRoutes.get("/v1/moderation/campaign/payable", async (c) => {
+  await payer(c);
+  const page = Math.max(1, Math.floor(Number(c.req.query("page")) || 1));
+  return c.json(await listPayable(c.env.DB, { slug: c.req.query("campaign") || undefined, page }, Date.now()));
+});
+
+campaignRoutes.post("/v1/moderation/campaign/contents/:id/payout", async (c) => {
+  const x = await payer(c);
+  const b = await bodyOf(c);
+  const result = await requestPayout(x, c.req.param("id"), operationOf(b.operationId));
+  queuePush(c);
+  return c.json(result);
+});
+
+campaignRoutes.post("/v1/moderation/campaign/payouts/batch", async (c) => {
+  const x = await payer(c);
+  const b = await bodyOf(c);
+  const ids = b.contentIds;
+  if (!Array.isArray(ids) || ids.length < 1 || ids.length > BATCH_MAX || ids.some((v) => typeof v !== "string" || !v) || new Set(ids).size !== ids.length) {
+    throw new HttpError(400, "share_invalid", undefined, { field: "contentIds" });
+  }
+  const result = await batchPayout(x, ids as string[], operationOf(b.operationId));
+  queuePush(c);
+  return c.json(result);
+});
+
+campaignRoutes.post("/v1/moderation/campaign/payouts/reconcile", async (c) => {
+  const result = await reconcilePayouts(await payer(c));
+  queuePush(c);
+  return c.json(result);
+});
+
+campaignRoutes.post("/v1/moderation/campaign/payouts/:id/retry", async (c) => {
+  const x = await payer(c);
+  const b = await bodyOf(c);
+  const result = await retryPayout(x, c.req.param("id"), operationOf(b.operationId));
+  queuePush(c);
+  return c.json(result);
+});
+
+campaignRoutes.post("/v1/moderation/campaign/payouts/:id/cancel", async (c) => {
+  const x = await payer(c);
+  const b = await bodyOf(c);
+  const reason = typeof b.reason === "string" ? b.reason.trim() : "";
+  if (!reason || [...reason].length > 500) throw new HttpError(400, "share_invalid", undefined, { field: "reason" });
+  return c.json(await cancelPayout(x, c.req.param("id"), reason, operationOf(b.operationId)));
+});
+
+campaignRoutes.post("/v1/moderation/campaign/payouts/:id/check", async (c) => {
+  const result = await checkPayout(await payer(c), c.req.param("id"));
+  queuePush(c);
+  return c.json(result);
+});
+
+/** 點數池：Provider 的值原樣轉出，只給真人應用管理員。這家 Provider 沒有點數池時回 configured:false。 */
+campaignRoutes.get("/v1/moderation/campaign-pool", async (c) => {
+  humanOnly((await staff(c)).agent);
+  await requireCommunityAdmin(c);
+  return c.json((await upstream.fetchCampaignPool(c.env, bearerOf(c), providerOf(c))) ?? { configured: false });
+});
