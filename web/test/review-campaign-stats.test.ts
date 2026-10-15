@@ -311,3 +311,13 @@ it("links to the stats from the campaign queue", async () => {
   await vi.waitFor(() => expect(host.querySelector("a[data-link=stats]")).not.toBeNull());
   expect(host.querySelector("a[data-link=stats]")!.getAttribute("href")).toBe("/en/review/campaign/stats");
 });
+
+it("says the daily spend chart groups by UTC, in every locale", async () => {
+  await mount("/en/review/campaign/stats");
+  await ready();
+  expect(text('[data-block="spend"]')).toContain(t("campaign.stats.spend.byDay"));
+  for (const code of ["en", "zh-Hant", "zh-Hans", "ja", "ko"]) {
+    const messages = (await import(`../src/locales/${code}.json`)).default as Record<string, string>;
+    expect(messages["campaign.stats.spend.byDay"], code).toContain("UTC");
+  }
+});

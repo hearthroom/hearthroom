@@ -124,6 +124,15 @@ it("hides the form before the campaign starts and after it ends", async () => {
   expect(host.textContent).toContain(t("campaign.page.notOpen.ended"));
 });
 
+it("groups the thousands in every point amount", async () => {
+  detail = campaign({ tiers: { light: 10000 }, extraPlacementAmount: 12000 });
+  await mount();
+  const rules = $("[data-rules]")!.textContent!;
+  expect(rules).toContain(t("campaign.page.points", { n: "10,000" }));
+  expect(rules).toContain(t("campaign.page.extra", { n: "12,000" }));
+  expect($('[data-field="requestedTier"]')!.textContent).toContain(t("campaign.page.points", { n: "10,000" }));
+});
+
 it("reads every amount from the API and only offers tiers that have one", async () => {
   await mount();
   const rules = $("[data-rules]")!.textContent!;

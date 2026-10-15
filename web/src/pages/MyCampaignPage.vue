@@ -14,7 +14,7 @@ import CampaignShareLinks from "@/components/CampaignShareLinks.vue";
 import EvidencePicker from "@/components/EvidencePicker.vue";
 import EvidenceViewer from "@/components/EvidenceViewer.vue";
 import {
-  CampaignError, DEFAULT_TIMEZONE, TIERS, campaignErrorText, epochToZoned, fetchCampaign, fetchMyContents, fetchPublicCampaigns, fieldLabel,
+  CampaignError, DEFAULT_TIMEZONE, TIERS, campaignErrorText, epochToZoned, fetchCampaign, fetchMyContents, fetchPublicCampaigns, fieldLabel, formatPoints,
   isWebUrl, localized, resubmitPlacement, zonedToEpoch, zoneName,
   type CampaignSummary, type ContentView, type PlacementView, type PublicCampaign, type ResubmitBody, type Tier,
 } from "@/lib/campaign";
@@ -73,7 +73,7 @@ const groups = computed(() => {
 const tzOf = (slug: string) => (campaigns.value[slug] ? campaigns.value[slug]!.timezone || DEFAULT_TIMEZONE : null);
 /** 時區不明時用看的人自己的時區顯示，時刻本身還是對的。 */
 const at = (ms: number, slug: string) => new Intl.DateTimeFormat(locale.value, { timeZone: tzOf(slug) ?? undefined, dateStyle: "medium", timeStyle: "short" }).format(ms);
-const points = (n: number) => t("campaign.page.points", { n });
+const points = formatPoints;
 const hasReason = (p: PlacementView) => !!p.reviewReason && (p.reviewStatus === "needs_info" || p.reviewStatus === "rejected");
 
 /** 伺服器說補件截止了的活動 */
