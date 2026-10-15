@@ -1,6 +1,7 @@
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { IMAGE_MAX_BYTES, imageErrorAs, storeRasterImage } from "./blog";
+import { myContents, resubmitPlacement, submitPlacement } from "./campaign-apply";
 import { EVIDENCE_MAX_BYTES, readEvidence, uploadEvidence } from "./campaign-evidence";
 import { campaignPhase, getCampaign, listCampaigns, saveCampaign, setCampaignStatus, type Actor, type Campaign, type CampaignInput } from "./campaign";
 import { providerOf, requireMember } from "./members";
@@ -90,6 +91,37 @@ campaignRoutes.get("/v1/campaign/evidence/:id", async (c) => {
   return new Response(obj.body, {
     headers: { "Content-Type": obj.httpMetadata?.contentType ?? "application/octet-stream", "X-Content-Type-Options": "nosniff", "Content-Disposition": "inline" },
   });
+});
+
+// ---- 申請（本人）---------------------------------------------------------------
+
+// 不在 /v1/moderation 底下，沒有那邊的 16 KB 上限，自己設；說明最多 1000 字，32 KB 綽綽有餘。
+const applyLimit = bodyLimit({ maxSize: 32 * 1024, onError: (c) => c.json({ error: "share_invalid", field: "body" }, 400) });
+const PRIVATE = { "Cache-Control": "private, no-store" };
+
+// 提交與重送依狀態碼記成功／被拒／出錯（重送原結果也算成功）。
+const applyMetric = (operation: "submit" | "resubmit") => async (c: Ctx, next: () => Promise<void>) => {
+  await next();
+  c.header("Cache-Control", "private, no-store");
+  const s = c.res.status;
+  await bumpOp(c.env.DB, "campaign", operation, s < 400 ? "success" : s < 500 ? "denied" : "error");
+};
+
+campaignRoutes.post("/v1/campaigns/:slug/placements", applyMetric("submit"), applyLimit, async (c) => {
+  const member = await requireMember(c);
+  const b = await bodyOf(c);
+  return c.json(await submitPlacement(c.env.DB, member, c.req.param("slug"), b, operationOf(b.operationId), Date.now()));
+});
+
+campaignRoutes.put("/v1/campaign/placements/:id", applyMetric("resubmit"), applyLimit, async (c) => {
+  const member = await requireMember(c);
+  const b = await bodyOf(c);
+  return c.json(await resubmitPlacement(c.env.DB, member, c.req.param("id"), b, operationOf(b.operationId), Date.now()));
+});
+
+campaignRoutes.get("/v1/me/campaign/contents", async (c) => {
+  const member = await requireMember(c);
+  return c.json({ items: await myContents(c.env.DB, member.id, { slug: c.req.query("campaign") || undefined }) }, 200, PRIVATE);
 });
 
 // ---- 管理 ---------------------------------------------------------------------
