@@ -6,6 +6,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { RouterLink } from 'vue-router';
 import { useI18n } from 'vue-i18n';
+import { ApiError } from '@/lib/api';
 import { columnName, displayStatus, fetchAdminColumns, fetchAdminPosts, POST_LOCALES, saveColumn, type AdminPostRow, type BlogColumn } from '@/lib/blog';
 import { LOCALES } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
@@ -27,6 +28,8 @@ const items = ref<AdminPostRow[]>([]);
 const total = ref(0);
 const loading = ref(true);
 const error = ref('');
+/** 不是 manager／owner：整頁只說這一句（服務端回 blog_write_forbidden） */
+const forbidden = ref(false);
 const columns = ref<BlogColumn[]>([]);
 const hasNext = computed(() => page.value * PAGE < total.value);
 const localeLabel = (code: string) => LOCALES.find((l) => l.code === code)?.label ?? code;
@@ -47,10 +50,14 @@ async function load() {
     const res = await fetchAdminPosts(await token(), { status: status.value, column: column.value, page: page.value });
     if (gen !== generation) return;
     items.value = res.items; total.value = res.total;
-  } catch (e) { if (gen === generation) error.value = e instanceof Error ? e.message : t('state.loadFailed'); } finally { if (gen === generation) loading.value = false; }
+  } catch (e) {
+    if (gen !== generation) return;
+    if (e instanceof ApiError && e.code === 'blog_write_forbidden') forbidden.value = true;
+    else error.value = e instanceof Error ? e.message : t('state.loadFailed');
+  } finally { if (gen === generation) loading.value = false; }
 }
 async function loadColumns() {
-  try { columns.value = (await fetchAdminColumns(await token())).items; } catch (e) { error.value = e instanceof Error ? e.message : t('state.loadFailed'); }
+  try { columns.value = (await fetchAdminColumns(await token())).items; } catch (e) { if (!(e instanceof ApiError && e.code === 'blog_write_forbidden')) error.value = e instanceof Error ? e.message : t('state.loadFailed'); }
 }
 
 const blank = (src: Partial<Record<string, string>> = {}) => Object.fromEntries(POST_LOCALES.map((l) => [l, src[l] ?? '']));
@@ -77,7 +84,10 @@ onMounted(() => { document.title = pageTitle(t('moderation.tab.blog')); void loa
 </script>
 
 <template>
-  <section class="rblog" :aria-label="t('moderation.tab.blog')">
+  <section v-if="forbidden" class="rblog" :aria-label="t('moderation.tab.blog')">
+    <p class="panel rblog-empty muted" data-forbidden>{{ t('blog.admin.managersOnly') }}</p>
+  </section>
+  <section v-else class="rblog" :aria-label="t('moderation.tab.blog')">
     <div class="rblog-bar">
       <div class="seg rblog-status">
         <button v-for="s in STATUSES" :key="s" type="button" class="seg__item" :class="{ 'seg__item--on': status === s }" :aria-pressed="status === s" @click="status = s">{{ s ? t(`blog.admin.status.${s}`) : t('blog.all') }}</button>

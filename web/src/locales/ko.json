@@ -2110,5 +2110,6 @@
   "blog.admin.saveFirst": "변경 사항을 저장한 뒤 게시해 주세요",
   "blog.admin.back": "글 목록으로",
   "blog.admin.noRevisions": "아직 수정 기록이 없어요",
-  "blog.admin.revisionBy": "{name} · {date}"
+  "blog.admin.revisionBy": "{name} · {date}",
+  "blog.admin.managersOnly": "블로그는 매니저와 운영자만 사용할 수 있어요."
 }

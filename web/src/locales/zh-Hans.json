@@ -2110,5 +2110,6 @@
   "blog.admin.saveFirst": "先保存修改，再发布",
   "blog.admin.back": "返回文章列表",
   "blog.admin.noRevisions": "还没有修订记录",
-  "blog.admin.revisionBy": "{name} · {date}"
+  "blog.admin.revisionBy": "{name} · {date}",
+  "blog.admin.managersOnly": "博客只有管理员和站长能使用。"
 }

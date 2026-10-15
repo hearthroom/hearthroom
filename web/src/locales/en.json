@@ -2110,5 +2110,6 @@
   "blog.admin.saveFirst": "Save your changes before publishing",
   "blog.admin.back": "Back to posts",
   "blog.admin.noRevisions": "No revisions yet",
-  "blog.admin.revisionBy": "{name} · {date}"
+  "blog.admin.revisionBy": "{name} · {date}",
+  "blog.admin.managersOnly": "Only managers and owners can use the blog."
 }
