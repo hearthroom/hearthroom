@@ -205,7 +205,7 @@ onBeforeUnmount(() => { alive = false; document.removeEventListener('keydown', o
       <p v-else-if="!items.length" class="panel cmod-empty muted">{{ t('moderation.comments.empty') }}</p>
       <article v-for="item in items" :key="item.id" class="panel cmod-item" :data-comment="item.id">
         <div class="cmod-item__head">
-          <RouterLink class="cmod-item__card" :to="lp(`/cards/${item.target.id}`)">{{ item.target.title }}</RouterLink>
+          <RouterLink class="cmod-item__card" :to="lp(item.target.kind === 'post' ? `/blog/p/${item.target.id}` : `/cards/${item.target.id}`)">{{ item.target.title }}</RouterLink>
           <time class="subtle">{{ dateTime(item.createdAt) }}</time>
         </div>
         <RouterLink class="subtle cmod-item__author" :to="lp(`/review/members/${item.author.handle}`)">{{ item.author.displayName }} · @{{ item.author.handle }}</RouterLink>

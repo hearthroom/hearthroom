@@ -108,6 +108,10 @@ describe("編輯", () => {
 });
 
 describe("欄目", () => {
+  it("slug 不能是 p：/blog/p/<id> 是文章短網址", async () => {
+    await expect(saveColumn(env.DB, { slug: "p", name: { "zh-Hant": "短" }, description: {}, sort: 1, enabled: true }, { memberId: editor, kind: "human" }, op(), 4)).rejects.toMatchObject({ status: 400, message: "blog_invalid", extra: { field: "slug" } });
+  });
+
   it("停用欄目：文章網址還能開，欄目不在公開列表", async () => {
     const p = await draft();
     await setPostState(env.DB, p.id, { status: "published", publishAt: 1 }, { memberId: editor, kind: "human" }, op(), 2);

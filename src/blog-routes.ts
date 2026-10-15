@@ -2,7 +2,7 @@ import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { openAuth, sealAuth } from "./account-auth";
 import {
-  adjacentPosts, adminPost, adminPosts, adminView, canWritePost, IMAGE_MAX_BYTES, imageServable, listColumns, listRevisions, postBySlug, publicPost,
+  adjacentPosts, adminPost, adminPosts, adminView, canWritePost, getRevision, IMAGE_MAX_BYTES, imageServable, listColumns, listRevisions, postBySlug, publicPost,
   publicPostById, publicPosts, publicView, relatedPosts, restoreRevision, saveColumn, savePost, setPostState, uploadImage,
   type Actor, type ColumnInput, type Post, type PostInput, type StateChange,
 } from "./blog";
@@ -142,6 +142,11 @@ blogRoutes.post("/v1/blog/admin/posts/:id/state", async (c) => {
 blogRoutes.get("/v1/blog/admin/posts/:id/revisions", async (c) => {
   await writer(c);
   return c.json({ items: await listRevisions(c.env.DB, c.req.param("id")) });
+});
+
+blogRoutes.get("/v1/blog/admin/posts/:id/revisions/:rev", async (c) => {
+  await writer(c);
+  return c.json(await getRevision(c.env.DB, c.req.param("id"), c.req.param("rev")));
 });
 
 blogRoutes.post("/v1/blog/admin/posts/:id/revisions/:rev/restore", async (c) => {
