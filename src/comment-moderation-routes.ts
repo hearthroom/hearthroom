@@ -19,7 +19,8 @@ const DECISIONS: readonly string[] = ["release", "remove", "dismiss", "flag"];
 /** 這個請求算哪一種操作（對應 hearthroom_comment_moderation_total 的 action）；讀取不計。 */
 async function operationFor(c: Ctx): Promise<string | null> {
   const path = c.req.path;
-  if (path.endsWith("/decision")) {
+  // 只認留言的決定路由：分享活動也有 /decision，由它自己的指標記。
+  if (path.startsWith("/v1/moderation/comments/") && path.endsWith("/decision")) {
     const action = ((await c.req.json().catch(() => ({}))) as { action?: unknown }).action;
     return typeof action === "string" && DECISIONS.includes(action) ? action : null;
   }
