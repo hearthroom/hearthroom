@@ -89,6 +89,7 @@ onBeforeUnmount(() => { alive = false; });
         <option value="">{{ t('campaign.queue.allCampaigns') }}</option>
         <option v-for="c in campaigns" :key="c.slug" :value="c.slug">{{ localized(c.title, locale) || c.slug }}</option>
       </select>
+      <RouterLink class="btn btn--sm rcq-stats" data-link="stats" :to="lp('/review/campaign/stats' + (campaign ? `?campaign=${encodeURIComponent(campaign)}` : ''))">{{ t('campaign.stats.link') }}</RouterLink>
     </div>
 
     <p v-if="error" class="notice notice--error" role="alert">{{ error }} <button class="btn btn--sm" :disabled="loading" @click="load">{{ t('review.refresh') }}</button></p>
@@ -134,7 +135,7 @@ onBeforeUnmount(() => { alive = false; });
 .rcq-chip--warn { background: var(--gold-soft); color: var(--warning-text); }
 .rcq-pager { display: flex; gap: var(--s-2); justify-content: center; }
 @media (max-width: 760px) {
-  .rcq-filter, .rcq-pager .btn, .rcq-tabs .seg__item { min-height: 44px; }
+  .rcq-filter, .rcq-pager .btn, .rcq-tabs .seg__item, .rcq-stats { min-height: 44px; }
   .rcq-filter { flex: 1; }
 }
 </style>
