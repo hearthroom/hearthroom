@@ -9,7 +9,7 @@ import { can } from "./lib/provider";
 import { updateMarkdownTwin } from "./lib/markdown-twin";
 import { isPlayHost } from "./lib/site";
 import { setSurface } from "./lib/track";
-import { refFromQuery, rememberShareRef } from "./lib/share-ref";
+import { campaignShareFromQuery, noteCampaignShare, refFromQuery, rememberShareRef } from "./lib/share-ref";
 
 /**
  * 語言放在網址路徑裡，不是 localStorage。
@@ -68,7 +68,7 @@ const pages: RouteRecordRaw[] = [
     },
   },
   { path: "blog/:column/:slug", component: () => import("./pages/BlogPostPage.vue") },
-  // 分享獎勵活動頁：訪客看得到規則，申請要登入（頁內提示，登入後帶回原頁，?s= 一起保留）
+  // 分享獎勵活動頁：訪客看得到規則，申請要登入（頁內提示，登入後帶回原頁；?s= 進站時已記下並從網址拿掉）
   { path: "campaign/:slug", component: () => import("./pages/CampaignPage.vue") },
   // 站內玩卡：舞台整頁接管（bare = 不套站台頁首頁尾）。遊客進得來、看得到開場，送出時才請他登入
   // （owner 2026-10-10，見 PlayPage）；續玩、審核、作者試玩由 PlayPage 自己要求登入。
@@ -147,11 +147,16 @@ export function withLocale(path: string, locale: string): string {
 
 // 分享連結的 ?ref=：沒登入的訪客記下來（註冊後自動帶入，lib/share-ref.ts），然後從網址拿掉——
 // 不然他再轉發這張卡，帶出去的還是原分享者的碼。登入中的人本來就不是新註冊，不記。
+// 活動分享短碼 ?s=：合法的才是我們的，不論登入與否都記下並送一次訪客計數，同樣從網址拿掉；
+// 之後的登入連結（例如活動頁的 returnTo）不再帶 s，靠瀏覽器的紀錄綁定。
 router.beforeEach((to) => {
-  if (!("ref" in to.query)) return true;
+  const share = campaignShareFromQuery(to.query.s);
+  if (!("ref" in to.query) && !share) return true;
   const code = refFromQuery(to.query.ref);
   if (code && signedInHint() === null) rememberShareRef(code);
+  if (share) noteCampaignShare(share);
   const { ref: _ref, ...query } = to.query;
+  if (share) delete query.s;
   return { path: to.path, query, hash: to.hash, replace: true };
 });
 

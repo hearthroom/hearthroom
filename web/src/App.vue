@@ -29,7 +29,7 @@ import CoachTour from "@/components/CoachTour.vue";
 import SukiPet from "@/components/SukiPet.vue";
 import { useUpdates } from "@/lib/updates";
 import { footerGroups, footerLegal, type FooterContext } from "@/lib/footer-nav";
-import { watchShareRefBinding } from "@/lib/share-ref";
+import { watchCampaignShareBinding, watchShareRefBinding } from "@/lib/share-ref";
 
 const { lp, locale } = useLocalePath();
 // 頁首與頁尾的品牌名跟著語言走（shared/site-name.ts）：中文介面是綺夢社，其他語言是 Hearthroom。副標只進分頁標題。
@@ -62,6 +62,8 @@ function refreshReview(){ if(session.me && document.visibilityState==='visible')
 watch(() => session.me?.accountNumId ?? null, (id) => { if (id) void notifications.refresh(locale.value); });
 // 點了分享連結之後在這裡註冊的人：登入後替他帶入分享者的推薦碼（lib/share-ref.ts）。
 watchShareRefBinding();
+// 點了活動分享連結的人：登入後送一次歸因綁定，伺服器決定算不算新玩家。
+watchCampaignShareBinding();
 onMounted(() => { session.restore(); useAppearance().init(); reviewTimer=setInterval(refreshReview,60000); window.addEventListener('focus',refreshReview); document.addEventListener('visibilitychange',refreshReview); });
 onBeforeUnmount(()=>{clearInterval(reviewTimer);window.removeEventListener('focus',refreshReview);document.removeEventListener('visibilitychange',refreshReview);document.removeEventListener('keydown',onSlash);});
 
