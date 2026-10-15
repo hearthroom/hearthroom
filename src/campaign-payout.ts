@@ -201,7 +201,7 @@ export async function retryPayout(x: Payer, id: string, op: string): Promise<Pay
   try {
     const [upd] = await db.batch([
       db.prepare("UPDATE share_payouts SET status = 'pending', error = NULL, attempts = attempts + 1, checked_absent_at = NULL, updated_at = ? WHERE id = ? AND status = ? AND attempts = ?").bind(now, id, r.status, r.attempts),
-      auditStmtIfChanged(db, { subjectKind: "share_payout", subjectId: id, actorMemberId: x.memberId, actorKind: "human", action: "retry", before: { status: r.status, attempts: r.attempts }, after: { attempts: r.attempts + 1 }, operationId: op, now }),
+      auditStmtIfChanged(db, { subjectKind: "share_payout", subjectId: id, actorMemberId: x.memberId, actorKind: "human", action: "retry", before: { status: r.status, attempts: r.attempts }, after: { status: "pending", attempts: r.attempts + 1 }, operationId: op, now }),
     ]);
     changed = upd!.meta.changes;
   } catch (e) {
@@ -281,10 +281,10 @@ export async function checkPayout(x: Payer, id: string): Promise<{ result: Check
   return { result, payout: await current(x.env.DB, id) };
 }
 
-/** 對帳：一次最多 20 筆建立超過 10 分鐘的 pending，還沒查無過的優先（舊的查無列不佔名額），逐筆查（Worker 的子請求有上限）。 */
+/** 對帳：一次最多 20 筆建立、最後一次送出都超過 10 分鐘的 pending（剛重試的還在路上），還沒查無過的優先（舊的查無列不佔名額），逐筆查（Worker 的子請求有上限）。 */
 export async function reconcilePayouts(x: Payer): Promise<{ items: { result: CheckResult; payout: PayoutView }[] }> {
   const db = x.env.DB, op = crypto.randomUUID();
-  const rows = (await db.prepare(`SELECT ${COLUMNS} WHERE p.status = 'pending' AND p.created_at <= ? ORDER BY p.checked_absent_at IS NOT NULL, p.created_at, p.id LIMIT ?`).bind(x.now() - TEN_MIN, BATCH_MAX).all<Row>()).results;
+  const rows = (await db.prepare(`SELECT ${COLUMNS} WHERE p.status = 'pending' AND p.created_at <= ?1 AND p.updated_at <= ?1 ORDER BY p.checked_absent_at IS NOT NULL, p.created_at, p.id LIMIT ?2`).bind(x.now() - TEN_MIN, BATCH_MAX).all<Row>()).results;
   const items = [];
   for (const r of rows) items.push({ result: await checkRow(x, r, `${op}:${r.id}`), payout: await current(db, r.id) });
   return { items };

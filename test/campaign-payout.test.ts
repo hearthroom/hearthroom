@@ -513,6 +513,19 @@ describe("修正一：同一把 key 的舊結果與重試", () => {
     expect(await code(await pay(c))).toBe("409 share_payout_in_progress");
   });
 
+  it("對帳跳過剛送過的列（剛重試的舊列不搶名額）；重試的稽核記下回到 pending", async () => {
+    const c = await content(owner, OWNER);
+    pool.lose = true;
+    const v = await json(await pay(c));
+    await env.DB.prepare("UPDATE share_payouts SET created_at = ? WHERE id = ?").bind(Date.now() - 60 * MIN, v.id).run();
+    expect((await json(await reconcile())).items).toHaveLength(0);
+    expect(pool.checked).toEqual([]);
+    await env.DB.prepare("UPDATE share_payouts SET status = 'blocked_insufficient' WHERE id = ?").bind(v.id).run();
+    pool.lose = true;
+    await retry(v.id);
+    expect((await audits(v.id)).find((a: any) => a.action === "retry")?.after_json).toContain('"status":"pending"');
+  });
+
   it("I2 對帳：先查還沒查過的，舊的查無列不佔名額；重複查無只留一筆稽核", async () => {
     const now = Date.now();
     for (let i = 0; i < 20; i++) {
