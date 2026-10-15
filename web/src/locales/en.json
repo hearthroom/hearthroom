@@ -2378,5 +2378,8 @@
   "campaign.error.pool_insufficient": "The points pool is short. Top it up, then retry.",
   "campaign.payouts.uncertain": "The result is unclear and it may already have gone out. Check it in Payout history.",
   "campaign.payouts.seeHistory": "This content is no longer in To pay. See Payout history for the result.",
-  "campaign.payouts.pendingNote": "Processing. Use Check result in Payout history to see whether it arrived."
+  "campaign.payouts.pendingNote": "Processing. Use Check result in Payout history to see whether it arrived.",
+  "campaign.nav": "Share campaign",
+  "campaign.banner.cta": "Learn more",
+  "campaign.banner.dismiss": "Close"
 }

@@ -2378,5 +2378,8 @@
   "campaign.error.pool_insufficient": "点数池不足，补足后重试。",
   "campaign.payouts.uncertain": "结果不确定，可能已经送出，请到发放记录查询结果",
   "campaign.payouts.seeHistory": "这份内容已经离开待发放，结果请看发放记录",
-  "campaign.payouts.pendingNote": "处理中，可以在发放记录按“查询结果”确认是否到账"
+  "campaign.payouts.pendingNote": "处理中，可以在发放记录按“查询结果”确认是否到账",
+  "campaign.nav": "分享活动",
+  "campaign.banner.cta": "了解活动",
+  "campaign.banner.dismiss": "关闭"
 }

@@ -79,6 +79,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
         <RouterLink :to="lp('/developers')" class="menu__item" role="menuitem"><AccountIcon name="code" />{{ $t("footer.developers") }}</RouterLink>
         <RouterLink :to="`${lp('/updates')}?from=menu`" class="menu__item" role="menuitem"><AccountIcon name="spark" />{{ $t("nav.updates") }}<NewMark k="menu.updates" /></RouterLink>
         <RouterLink :to="lp('/blog')" class="menu__item" role="menuitem"><AccountIcon name="news" />{{ $t("blog.title") }}</RouterLink>
+        <RouterLink :to="lp('/me/campaign')" class="menu__item" role="menuitem"><AccountIcon name="gift" />{{ $t("campaign.mine.title") }}</RouterLink>
       </div>
       <div class="menu__group">
         <button class="menu__item" role="menuitem" @click="track('logout'); session.logout()"><AccountIcon name="logout" />{{ $t("nav.logout") }}</button>
