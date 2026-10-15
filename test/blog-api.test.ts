@@ -4,7 +4,8 @@ import worker from "../src/index";
 import { sealAuth } from "../src/account-auth";
 import { cleanAvatars } from "../src/community-profile";
 import type { Env } from "../src/types";
-import { bearer, identities, makeAgent, makeMember, makeReviewer, resetDb, restoreUpstream } from "./helpers";
+import { appAdmins, bearer, identities, makeAgent, makeMember, makeReviewer, resetDb, restoreUpstream } from "./helpers";
+import { upstream } from "../src/upstream";
 
 // 部落格 API：寫作權限、版本衝突、定時發布、預覽碼、短網址、圖片上傳與清理、指標、稽核。
 const EDITOR = 60001, MEMBER = 60002, REVIEWER = 60003, AGENT = 60004;
@@ -46,12 +47,14 @@ beforeEach(async () => {
   objects.clear();
   vi.clearAllMocks();
   identities({ editor: EDITOR, member: MEMBER, reviewer: REVIEWER, agent: AGENT });
-  const editor = await makeReviewer(EDITOR);
-  await env.DB.prepare("UPDATE reviewers SET role='manager' WHERE member_id=?").bind(editor).run();
+  // 寫部落格看供應商的應用團隊（owner／admin），不看本站的審核角色：editor 只是一般成員，卻是應用管理員；
+  // reviewer 是本站 owner，卻不是應用管理員；AI 帳號就算是應用管理員也不能寫。
+  appAdmins("editor", "agent");
+  await makeMember(EDITOR);
   await makeMember(MEMBER);
-  await makeReviewer(REVIEWER);
-  const agent = await makeAgent(AGENT);
-  await env.DB.prepare("UPDATE reviewers SET role='owner' WHERE member_id=?").bind(agent).run();
+  const owner = await makeReviewer(REVIEWER);
+  await env.DB.prepare("UPDATE reviewers SET role='owner' WHERE member_id=?").bind(owner).run();
+  await makeAgent(AGENT);
   const col = await call("/v1/blog/admin/columns", { method: "POST", token: "editor", body: { slug: "news", name: { "zh-Hant": "最新消息" }, description: {}, sort: 0, enabled: true, operationId: op() } });
   columnId = (await json(col)).id;
 });
@@ -76,6 +79,13 @@ describe("權限", () => {
     }
     const metrics = await (await call("/metrics")).text();
     expect(metrics).toContain('hearthroom_blog_operations_total{operation="save",outcome="denied"}');
+  });
+
+  it("供應商問不到時回 503，不說成沒有權限", async () => {
+    upstream.fetchCommunityStatus = async () => { throw new Error("offline"); };
+    const r = await call("/v1/blog/admin/posts", { token: "editor" });
+    expect(r.status).toBe(503);
+    expect((await json(r)).error).toBe("community_admin_unavailable");
   });
 });
 
@@ -241,5 +251,21 @@ describe("圖片", () => {
     }
     const metrics = await (await call("/metrics")).text();
     expect(metrics).toContain('hearthroom_blog_operations_total{operation="image",outcome="success"} 3');
+  });
+});
+
+describe("誰看得到部落格入口", () => {
+  it("/v1/review/me 的 blogWriter 跟寫入權限同一個來源：應用管理員才有，AI 帳號沒有；結果快取一小時", async () => {
+    let asked = 0;
+    const real = upstream.fetchCommunityStatus;
+    upstream.fetchCommunityStatus = async (...a) => { asked++; return real(...a); };
+    const me = async (token: string) => json(await call("/v1/review/me", { token }));
+    expect(await me("editor")).toMatchObject({ reviewer: false, blogWriter: true });
+    expect(await me("member")).toMatchObject({ reviewer: false, blogWriter: false });
+    expect(await me("reviewer")).toMatchObject({ reviewer: true, role: "owner", blogWriter: false });
+    expect(await me("agent")).toMatchObject({ blogWriter: false });
+    const before = asked;
+    await me("member"); await me("editor");
+    expect(asked).toBe(before);
   });
 });

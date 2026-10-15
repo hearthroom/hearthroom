@@ -2116,5 +2116,5 @@
   "blog.admin.back": "返回文章列表",
   "blog.admin.noRevisions": "還沒有修訂紀錄",
   "blog.admin.revisionBy": "{name} · {date}",
-  "blog.admin.managersOnly": "部落格只有管理員和站長能使用。"
+  "blog.admin.managersOnly": "部落格由這個應用的所有者和管理員維護，成員在 HarperHarbor 開發者控制台的「團隊」裡設定。"
 }
