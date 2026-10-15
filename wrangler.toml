@@ -107,3 +107,9 @@ crons = ["17 * * * *"]
 [[r2_buckets]]
 binding = "AVATARS"
 bucket_name = "hearthroom-avatars"
+
+# 分享活動的截圖（src/campaign-evidence.ts）。私有 bucket：只經 /v1/campaign/evidence/:id 給上傳者本人與審核員讀。
+# 絕不能加公開路由、自訂網域或開 r2.dev。部署前要先建好這個 bucket（已於 2026-10-15 建立）。
+[[r2_buckets]]
+binding = "EVIDENCE"
+bucket_name = "hearthroom-campaign-evidence"
