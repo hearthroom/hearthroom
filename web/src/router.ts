@@ -89,6 +89,8 @@ const pages: RouteRecordRaw[] = [
       // 分享活動：佇列與內容詳情。同樣要在 :id 之前
       { path: "campaign", component: () => import("./pages/ReviewCampaignPage.vue"), meta: { managementTab: "campaign" } },
       { path: "campaign/:id", component: () => import("./pages/ReviewCampaignDetailPage.vue"), meta: { managementTab: "campaign" } },
+      // 發放：只有應用管理員看得到分頁（canEdit），其他人直接打網址看到一句說明；服務端每次都再判
+      { path: "payouts", component: () => import("./pages/ReviewPayoutsPage.vue"), meta: { managementTab: "payouts" } },
       // 部落格：文章列表＋欄目、編輯器。要在 :id（卡片審核詳情）之前，不然 blog 會被當成審核編號
       { path: "blog", component: () => import("./pages/ReviewBlogPage.vue"), meta: { managementTab: "blog" } },
       // 新文章是 blog/new：跟既有文章同一條記錄，第一次存好換成 blog/<id> 時編輯器的離開提醒還掛著

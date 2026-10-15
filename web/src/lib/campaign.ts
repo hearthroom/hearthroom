@@ -123,6 +123,8 @@ const CAMPAIGN_CODES = new Set([
   "evidence_not_found", "share_self_review", "share_version_conflict", "share_already_decided", "agent_not_allowed", "community_admin_required", "share_self_payout",
   "share_payout_not_found", "campaign_not_payable", "campaign_payout_closed", "share_nothing_due", "share_payout_in_progress", "share_payout_not_retryable",
   "share_payout_not_cancellable", "share_payout_not_pending", "share_payout_stale",
+  // 不是請求的錯誤：發放紀錄上記的原因（點數池不足而排隊）
+  "pool_insufficient",
 ]);
 
 function messageOf(status: number, code: string, field: string): string {

@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { RouterLink, RouterView, useRoute } from 'vue-router';
 import { useReviewer } from '@/lib/review';
+import { useSession } from '@/lib/session';
+import { fetchCampaigns } from '@/lib/campaign';
 import { useLocalePath } from '@/lib/use-locale';
 import ReviewBadge from '@/components/ReviewBadge.vue';
 const route = useRoute();
 const reviewer = useReviewer();
+const session = useSession();
 const { lp } = useLocalePath();
 /**
  * 前三個分頁對「作品」，「留言」對卡片底下的留言；「成員」對「人」（補充包、活動徽章）。發補充包跟審卡同一個權限等級，所以每個審核人都看得到。
- * 「分享活動」審分享獎勵的申請，每個審核人（含 AI 帳號）都看得到；發放另外由應用管理員處理。
+ * 「分享活動」審分享獎勵的申請，每個審核人（含 AI 帳號）都看得到。
+ * 「發放」只給真人應用管理員：canEdit 由活動列表帶回，進工作台時讀一次，讀不到就當沒有（服務端仍逐次檢查）。
  * 「運營設定」每個審核人都看得到，只有應用管理員能改（服務端判）。
  * 「部落格」只給 manager／owner（寫文章的權限，服務端同樣再判一次）。
  */
@@ -23,7 +27,16 @@ const sections = [
   { key: 'history', path: '/review/history' },
   { key: 'settings', path: '/review/settings' },
 ] as const;
-const visible = computed(() => (reviewer.role === 'manager' || reviewer.role === 'owner' ? [...sections, { key: 'blog', path: '/review/blog' } as const] : sections));
+const canPay = ref(false);
+onMounted(async () => {
+  try { const token = await session.accessToken(); if (token) canPay.value = (await fetchCampaigns(token)).canEdit; } catch { /* 讀不到就不顯示發放分頁 */ }
+});
+const visible = computed(() => {
+  const list: { key: string; path: string }[] = [...sections];
+  if (canPay.value) list.splice(list.findIndex((s) => s.key === 'campaign') + 1, 0, { key: 'payouts', path: '/review/payouts' });
+  if (reviewer.role === 'manager' || reviewer.role === 'owner') list.push({ key: 'blog', path: '/review/blog' });
+  return list;
+});
 </script>
 <template>
   <div class="page community-management">
