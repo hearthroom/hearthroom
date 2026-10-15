@@ -13,7 +13,7 @@ import BlogPostCard from "@/components/BlogPostCard.vue";
 import CommentPanel from "@/components/CommentPanel.vue";
 import NotFoundPage from "@/pages/NotFoundPage.vue";
 import { ApiError } from "@/lib/api";
-import { columnName, fetchColumns, fetchPost, postPath, type BlogColumn, type PostPage } from "@/lib/blog";
+import { allColumns, columnName, fetchColumns, fetchPost, groupOfColumn, postPath, type BlogGroup, type PostPage } from "@/lib/blog";
 import { dateOnly } from "@/lib/format";
 import { pageTitle } from "@/lib/i18n";
 import { renderDoc } from "@/lib/markdown-toc";
@@ -29,7 +29,7 @@ const slug = computed(() => String(route.params.slug ?? ""));
 const preview = computed(() => (typeof route.query.preview === "string" && route.query.preview) || undefined);
 
 const data = ref<PostPage | null>(null);
-const columns = ref<BlogColumn[]>([]);
+const groups = ref<BlogGroup[]>([]);
 const loading = ref(true);
 const missing = ref(false);
 const failed = ref(false);
@@ -37,7 +37,8 @@ const failed = ref(false);
 const post = computed(() => data.value?.post ?? null);
 const rendered = computed(() => renderDoc(post.value?.bodyMd ?? ""));
 const longRead = computed(() => rendered.value.toc.length >= 3);
-const column = computed(() => (post.value ? columnName(columns.value.find((c) => c.slug === post.value!.columnSlug), locale.value, post.value.columnSlug) : ""));
+const column = computed(() => (post.value ? columnName(allColumns(groups.value).find((c) => c.slug === post.value!.columnSlug), locale.value, post.value.columnSlug) : ""));
+const postGroup = computed(() => (post.value ? groupOfColumn(groups.value, post.value.columnSlug) : undefined));
 const published = computed(() => post.value?.firstPublishedAt ?? post.value?.publishAt ?? null);
 /** 跟發布不是同一天才說「更新於」：同一天改個錯字不必多一行 */
 const updated = computed(() => {
@@ -45,7 +46,7 @@ const updated = computed(() => {
   const day = dateOnly(post.value.contentUpdatedAt / 1000);
   return day === dateOnly(published.value / 1000) ? null : day;
 });
-const columnOf = (s: string) => columnName(columns.value.find((c) => c.slug === s), locale.value);
+const columnOf = (s: string) => columnName(allColumns(groups.value).find((c) => c.slug === s), locale.value);
 
 const article = ref<HTMLElement | null>(null);
 const endEl = ref<HTMLElement | null>(null);
@@ -136,7 +137,7 @@ async function share() {
 
 onMounted(() => {
   if (window.matchMedia?.("(max-width: 900px)").matches) tocOpen.value = false;
-  fetchColumns().then((r) => { columns.value = r.items ?? []; }).catch(() => {});
+  fetchColumns().then((r) => { groups.value = r.items ?? []; }).catch(() => {});
 });
 watch([columnSlug, slug, preview], () => { void load(); }, { immediate: true });
 onBeforeUnmount(() => { headingObserver?.disconnect(); endObserver?.disconnect(); clearTimeout(toastTimer); });
@@ -160,7 +161,15 @@ onBeforeUnmount(() => { headingObserver?.disconnect(); endObserver?.disconnect()
 
     <template v-else>
       <header class="blog-post__head">
-        <RouterLink :to="lp(`/blog/${post.columnSlug}`)" class="blog-post__column">{{ column }}</RouterLink>
+        <nav class="blog-post__crumbs" :aria-label="t('blog.breadcrumb')">
+          <RouterLink :to="lp('/blog')">{{ t("blog.title") }}</RouterLink>
+          <template v-if="postGroup">
+            <span aria-hidden="true">›</span>
+            <RouterLink :to="lp(`/blog/g/${postGroup.slug}`)">{{ columnName(postGroup, locale) }}</RouterLink>
+          </template>
+          <span aria-hidden="true">›</span>
+          <RouterLink :to="lp(`/blog/${post.columnSlug}`)" class="blog-post__column">{{ column }}</RouterLink>
+        </nav>
         <h1 class="blog-post__title">{{ post.title }}</h1>
         <p class="blog-post__meta">
           <span class="blog-post__official">{{ t("blog.official") }}</span>
@@ -225,7 +234,10 @@ onBeforeUnmount(() => { headingObserver?.disconnect(); endObserver?.disconnect()
 .blog-post { max-width: 1100px; display: grid; gap: var(--s-6); }
 .blog-post__preview { margin: 0; background: var(--gold-soft); color: var(--text); }
 .blog-post__head { display: grid; gap: var(--s-3); max-width: 80ch; }
-.blog-post__column { justify-self: start; font-size: 13px; font-weight: 600; color: var(--accent-text); }
+.blog-post__crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--text-3); }
+.blog-post__crumbs a { color: var(--text-3); }
+.blog-post__crumbs a:hover { color: var(--text); }
+.blog-post__crumbs .blog-post__column { font-weight: 600; color: var(--accent-text); }
 .blog-post__title { margin: 0; font-size: clamp(26px, 3.4vw, 36px); line-height: 1.25; letter-spacing: -0.01em; overflow-wrap: anywhere; }
 .blog-post__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--s-2); margin: 0; font-size: 13px; color: var(--text-3); }
 .blog-post__meta > * + *::before { content: "·"; margin-right: var(--s-2); }

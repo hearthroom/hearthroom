@@ -21,7 +21,12 @@ const card = (id: string, extra: Record<string, unknown> = {}) => ({
   id, columnSlug: "news", slug: `post-${id}`, title: `標題 ${id}`, excerpt: `摘要 ${id}`, coverUrl: null, locale: "zh-Hant",
   firstPublishedAt: Date.UTC(2026, 9, 10), pinned: false, campaignId: null, readMinutes: 3, commentCount: 0, ...extra,
 });
-const columns = { items: [{ id: "c1", slug: "news", name: { "zh-Hant": "公告" }, description: {}, sort: 0, enabled: true }] };
+const columns = { items: [
+  { id: "g1", slug: "official", name: { "zh-Hant": "官方消息" }, description: {}, sort: 0, enabled: true, parentId: null,
+    columns: [{ id: "c1", slug: "news", name: { "zh-Hant": "公告" }, description: {}, sort: 0, enabled: true, parentId: "g1" }, { id: "c2", slug: "events", name: { "zh-Hant": "活動" }, description: {}, sort: 1, enabled: true, parentId: "g1" }] },
+  { id: "g2", slug: "creators", name: { "zh-Hant": "創作指南" }, description: {}, sort: 1, enabled: true, parentId: null,
+    columns: [{ id: "c3", slug: "guides", name: { "zh-Hant": "寫卡教程" }, description: {}, sort: 0, enabled: true, parentId: "g2" }] },
+] };
 let routes: Record<string, unknown>;
 const fetched: string[] = [];
 
@@ -57,8 +62,9 @@ it("lists the first pinned post as the hero and the rest as a card grid, with th
   expect(root.querySelector(".blog__hero")!.textContent).toContain("標題 p1");
   const grid = [...root.querySelectorAll(".blog__grid .post-card__title")].map((e) => e.textContent);
   expect(grid).toEqual(["標題 p2", "標題 a", "標題 b"]);
-  const tabs = [...root.querySelectorAll(".blog__tabs a")].map((a) => a.textContent?.trim());
-  expect(tabs).toEqual([t("blog.all"), "公告"]);
+  const tabs = [...root.querySelectorAll(".blog__tabs--groups a")].map((a) => a.textContent?.trim());
+  expect(tabs).toEqual([t("blog.all"), "官方消息", "創作指南"]);
+  expect(root.querySelector(".blog__tabs--columns")).toBeNull();
   expect(root.querySelector(".blog__hero")!.textContent).toContain(t("blog.readMinutes", { n: 3 }));
   expect(root.querySelector(".blog__hero a")!.getAttribute("href")).toBe("/blog/news/post-p1");
   expect([...root.querySelectorAll("button")].some((b) => b.textContent?.trim() === t("comment.loadMore"))).toBe(true);
@@ -149,4 +155,28 @@ it("records reaching the end once, and a copied link as a share", async () => {
   await vi.waitFor(() => expect(tracked).toContainEqual({ event: "blog_share", data: { detail: "share_clipboard", subject: "hello" } }));
   expect(writeText).toHaveBeenCalledWith(`${location.origin}/blog/news/hello`);
   expect(root.textContent).toContain(t("blog.copied"));
+});
+
+it("a group page lists that group's posts, with its columns as a second row of tabs", async () => {
+  routes["/v1/blog/posts"] = { total: 1, pinned: [], items: [card("a")] };
+  const root = await mount(BlogListPage, "/blog/g/official", "/blog/g/:group");
+  expect(fetched.some((u) => u.includes("/v1/blog/posts?group=official&page=1"))).toBe(true);
+  expect(root.querySelector(".blog__tabs--groups .blog__tab--on")!.textContent?.trim()).toBe("官方消息");
+  const cols = [...root.querySelectorAll(".blog__tabs--columns a")].map((a) => a.textContent?.trim());
+  expect(cols).toEqual([t("blog.all"), "公告", "活動"]);
+});
+
+it("a column page highlights the group it belongs to", async () => {
+  routes["/v1/blog/posts"] = { total: 0, pinned: [], items: [] };
+  const root = await mount(BlogListPage, "/blog/guides", "/blog/:column?");
+  expect(fetched.some((u) => u.includes("column=guides"))).toBe(true);
+  expect(root.querySelector(".blog__tabs--groups .blog__tab--on")!.textContent?.trim()).toBe("創作指南");
+  expect(root.querySelector(".blog__tabs--columns .blog__tab--on")!.textContent?.trim()).toBe("寫卡教程");
+});
+
+it("the post page shows where it lives: blog › group › column", async () => {
+  routes["/v1/blog/posts/news/hello"] = post();
+  const root = await mount(BlogPostPage, "/blog/news/hello", "/blog/:column/:slug");
+  const crumbs = [...root.querySelectorAll(".blog-post__crumbs a")].map((a) => [a.textContent?.trim(), a.getAttribute("href")]);
+  expect(crumbs).toEqual([[t("blog.title"), "/blog"], ["官方消息", "/blog/g/official"], ["公告", "/blog/news"]]);
 });

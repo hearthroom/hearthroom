@@ -53,6 +53,8 @@ const pages: RouteRecordRaw[] = [
   { path: "guide", component: () => import("./pages/GuidePage.vue") },
   { path: "updates", component: () => import("./pages/UpdatesPage.vue") },
   // 官方部落格：/blog 全部、/blog/<欄目>、/blog/<欄目>/<文章>。/blog/p/<id> 是短網址，問到正式網址就換過去，問不到是 404。
+  // 分組頁 /blog/g/<分組>：放在 blog/:column? 前面，不然 g 會被當成欄目
+  { path: "blog/g/:group", component: () => import("./pages/BlogListPage.vue") },
   { path: "blog/:column?", component: () => import("./pages/BlogListPage.vue") },
   {
     path: "blog/p/:id", component: () => import("./pages/NotFoundPage.vue"),
