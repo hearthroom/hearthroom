@@ -62,6 +62,13 @@ binding = "IMAGES"
 binding = "EVENTS"
 dataset = "hearthroom_events"
 
+# 分享碼訪客計數（/v1/campaign/visits）不需登入，以連線 IP 為鍵限流，超過就靜默不計。
+# namespace_id 是帳號內自選的整數，跟同帳號其他 Worker 的限流器不能撞號。
+[[ratelimits]]
+name = "VISIT_LIMIT"
+namespace_id = "6401"
+simple = { limit = 30, period = 60 }
+
 [vars]
 # HarperHarbor is the sole account, hosting and play service.
 PROVIDER_API_BASE_HARBOR = "https://api.harperharbor.com"
