@@ -32,7 +32,7 @@ const FLAGS = ['duplicateLocation', 'duplicateImage', 'burst'] as const satisfie
 const one = (v: unknown) => (typeof v === 'string' ? v : '');
 const status = computed(() => SEGMENTS.find((s) => s.status === one(route.query.status))?.status);
 const campaign = computed(() => one(route.query.campaign));
-const page = computed(() => Math.max(1, Math.floor(Number(route.query.page)) || 1));
+const page = computed(() => { const n = Number(one(route.query.page)); return n >= 1 && Number.isSafeInteger(n) ? n : 1; });
 function go(next: { status?: string; campaign?: string; page?: number }) {
   const q = { status: status.value, campaign: campaign.value, page: 1, ...next };
   void router.replace({ query: { ...(q.status ? { status: q.status } : {}), ...(q.campaign ? { campaign: q.campaign } : {}), ...(q.page > 1 ? { page: String(q.page) } : {}) } });
@@ -70,7 +70,8 @@ const titleOf = (slug: string) => { const c = bySlug.value.get(slug); return c ?
 /** 用活動自己的時區顯示；活動讀不到時用看的人的時區，時刻本身還是對的 */
 const at = (ms: number, slug: string) => new Intl.DateTimeFormat(locale.value, { timeZone: bySlug.value.has(slug) ? bySlug.value.get(slug)!.timezone || DEFAULT_TIMEZONE : undefined, dateStyle: 'medium', timeStyle: 'short' }).format(ms);
 
-watch(() => [status.value, campaign.value, page.value], () => { void load(); });
+// 換分段、活動或頁碼：舊的列先拿掉，免得新資料到之前點進上一段的申請
+watch(() => [status.value, campaign.value, page.value], () => { items.value = []; total.value = 0; void load(); });
 onMounted(() => {
   document.title = pageTitle(t('moderation.tab.campaign'));
   void load(); void loadCampaigns();
@@ -133,7 +134,7 @@ onBeforeUnmount(() => { alive = false; });
 .rcq-chip--warn { background: var(--gold-soft); color: var(--warning-text); }
 .rcq-pager { display: flex; gap: var(--s-2); justify-content: center; }
 @media (max-width: 760px) {
-  .rcq-filter, .rcq-pager .btn { min-height: 44px; }
+  .rcq-filter, .rcq-pager .btn, .rcq-tabs .seg__item { min-height: 44px; }
   .rcq-filter { flex: 1; }
 }
 </style>

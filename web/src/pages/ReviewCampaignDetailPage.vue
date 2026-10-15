@@ -5,7 +5,7 @@
  * 決定都在同一個對話框裡做：通過（檔位預設上次核准、沒有就是申請的檔位；「算一個有效位置」預設照目前的值）、退回補件、不通過
  * （後兩個要理由，最多 500 字，以字元計，跟服務端一樣）。已通過的位置只能「調整檔位」：同一個對話框，只開放檔位與有效位置。
  * 每開一次對話框配一個 operationId，送失敗重按沿用；每次決定帶這個位置讀到的版本號，別人先處理過會回 share_version_conflict，
- * 這時關掉對話框、說一聲並重新載入，不自動覆蓋。補件截止（活動設定的 submitDeadline）之後不出現「退回補件」。
+ * 這時（或回 share_already_decided）關掉對話框、說一聲並重新載入，不自動覆蓋。補件截止（活動設定的 submitDeadline）之後不出現「退回補件」。
  * AI 審核帳號也能做決定（服務端允許）；真人應用管理員通過時服務端會一併發放，畫面依 canEdit 說明通過之後誰發獎勵。
  * 申請人只以 handle 出現：畫面上不放成員 id 或收款帳號。
  */
@@ -14,7 +14,7 @@ import { RouterLink, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import EvidenceViewer from '@/components/EvidenceViewer.vue';
 import {
-  DEFAULT_TIMEZONE, TIERS, campaignErrorText, decide, fetchCampaigns, fetchContentDetail, localized,
+  DEFAULT_TIMEZONE, TIERS, campaignErrorText, decide, fetchCampaigns, fetchContentDetail, isWebUrl, localized,
   type Campaign, type ContentDetail, type DecisionBody, type DecisionResult, type Flags, type Tier,
 } from '@/lib/campaign';
 import { ApiError } from '@/lib/api';
@@ -149,7 +149,7 @@ async function submit() {
     await refocus(d.placement.id);
   } catch (e) {
     const code = e instanceof ApiError ? e.code : '';
-    if (code === 'share_version_conflict') {
+    if (code === 'share_version_conflict' || code === 'share_already_decided') {
       // 別人先處理了：不在舊資料上重送，關掉、說一聲、讀最新的
       conflict.value = campaignErrorText(e);
       dialog.value = null;
@@ -191,7 +191,7 @@ onBeforeUnmount(() => { alive = false; document.removeEventListener('keydown', o
         <p class="eyebrow">{{ campaignTitle }}</p>
         <h2 class="rcd-head__title">{{ data.content.title }}</h2>
         <dl class="rcd-facts">
-          <div><dt>{{ t('campaign.detail.applicant') }}</dt><dd><RouterLink :to="lp(`/review/members/${data.content.applicant.handle}`)">@{{ data.content.applicant.handle }}</RouterLink></dd></div>
+          <div><dt>{{ t('campaign.detail.applicant') }}</dt><dd><RouterLink :to="lp(`/review/members/${encodeURIComponent(data.content.applicant.handle)}`)">@{{ data.content.applicant.handle }}</RouterLink></dd></div>
           <div><dt>{{ t('campaign.detail.submittedAt') }}</dt><dd>{{ at(data.content.createdAt) }}</dd></div>
           <div v-if="data.content.cardId !== null"><dt>{{ t('campaign.share.field.cardId') }}</dt><dd><RouterLink :to="lp(`/cards/${data.content.cardId}`)">#{{ data.content.cardId }}</RouterLink></dd></div>
         </dl>
@@ -208,7 +208,7 @@ onBeforeUnmount(() => { alive = false; document.removeEventListener('keydown', o
           <span class="chip">{{ t(`campaign.review.${p.reviewStatus}`) }}</span>
         </div>
         <dl class="rcd-facts">
-          <div v-if="p.url"><dt>{{ t('campaign.share.field.url') }}</dt><dd><a :href="p.url" target="_blank" rel="noopener noreferrer">{{ p.url }}</a></dd></div>
+          <div v-if="p.url"><dt>{{ t('campaign.share.field.url') }}</dt><dd><a v-if="isWebUrl(p.url)" :href="p.url" target="_blank" rel="noopener noreferrer">{{ p.url }}</a><span v-else>{{ p.url }}</span></dd></div>
           <div><dt>{{ t('campaign.share.field.publishedAt') }}</dt><dd>{{ at(p.publishedAt) }}</dd></div>
           <div><dt>{{ t('campaign.share.field.requestedTier') }}</dt><dd>{{ t(`campaign.tier.${p.requestedTier}`) }}</dd></div>
           <div v-if="p.approvedTier"><dt>{{ t('campaign.share.field.tier') }}</dt><dd>{{ t(`campaign.tier.${p.approvedTier}`) }}<template v-if="!p.countsAsPlacement"> · {{ t('campaign.detail.notCounted') }}</template></dd></div>
@@ -324,5 +324,6 @@ onBeforeUnmount(() => { alive = false; document.removeEventListener('keydown', o
   .rcd-facts > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
   .rcd-sum { grid-template-columns: minmax(0, 1fr); }
   .rcd-place__actions .btn { flex: 1; min-height: 44px; }
+  .rcd-dialog select.input { min-height: 44px; }
 }
 </style>

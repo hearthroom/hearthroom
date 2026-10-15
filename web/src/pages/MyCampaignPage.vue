@@ -15,7 +15,7 @@ import EvidencePicker from "@/components/EvidencePicker.vue";
 import EvidenceViewer from "@/components/EvidenceViewer.vue";
 import {
   CampaignError, DEFAULT_TIMEZONE, TIERS, campaignErrorText, epochToZoned, fetchCampaign, fetchMyContents, fetchPublicCampaigns, fieldLabel,
-  localized, resubmitPlacement, zonedToEpoch, zoneName,
+  isWebUrl, localized, resubmitPlacement, zonedToEpoch, zoneName,
   type CampaignSummary, type ContentView, type PlacementView, type PublicCampaign, type ResubmitBody, type Tier,
 } from "@/lib/campaign";
 import { ApiError } from "@/lib/api";
@@ -121,7 +121,7 @@ function build(p: PlacementView, tz: string | null): Omit<ResubmitBody, "operati
   formError.value =
     !location ? need("location")
     : publishedAt === null ? need("publishedAt")
-    : url && !/^https?:\/\/[^\s]+$/i.test(url) ? t("campaign.apply.badUrl")
+    : url && !isWebUrl(url) ? t("campaign.apply.badUrl")
     : !url && !p.evidence.length && !newIds.value.length ? t("campaign.apply.needProof")
     : "";
   if (formError.value) return null;

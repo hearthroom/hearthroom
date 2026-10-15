@@ -9,7 +9,7 @@ import { computed, nextTick, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import EvidencePicker from "@/components/EvidencePicker.vue";
 import {
-  CampaignError, DEFAULT_TIMEZONE, PLATFORMS, TIERS, campaignErrorText, epochToZoned, fieldLabel, submitPlacement, zonedToEpoch, zoneName,
+  CampaignError, DEFAULT_TIMEZONE, PLATFORMS, TIERS, campaignErrorText, epochToZoned, fieldLabel, isWebUrl, submitPlacement, zonedToEpoch, zoneName,
   type ApplyResult, type ContentView, type Platform, type PublicCampaign, type SubmitBody, type Tier,
 } from "@/lib/campaign";
 import { useSession } from "@/lib/session";
@@ -61,7 +61,7 @@ function build(): Omit<SubmitBody, "operationId"> | null {
   if (!location) errors.location = need("location");
   const publishedAt = zonedToEpoch(form.publishedAt, tz.value);
   if (publishedAt === null) errors.publishedAt = need("publishedAt");
-  if (url && !/^https?:\/\/[^\s]+$/i.test(url)) errors.url = t("campaign.apply.badUrl");
+  if (url && !isWebUrl(url)) errors.url = t("campaign.apply.badUrl");
   if (!url && !evidenceIds.value.length) errors.evidence = t("campaign.apply.needProof");
   if (Object.keys(errors).length) return null;
   const base = {
