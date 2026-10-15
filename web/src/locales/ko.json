@@ -2116,5 +2116,5 @@
   "blog.admin.back": "글 목록으로",
   "blog.admin.noRevisions": "아직 수정 기록이 없어요",
   "blog.admin.revisionBy": "{name} · {date}",
-  "blog.admin.managersOnly": "블로그는 매니저와 운영자만 사용할 수 있어요."
+  "blog.admin.managersOnly": "블로그는 이 앱의 소유자와 관리자가 운영하며, 구성원은 HarperHarbor 개발자 콘솔의 '팀'에서 설정해요."
 }

@@ -17,7 +17,7 @@
  */
 import type { ProviderId } from "./providers";
 import { auditStmtIfChanged } from "./audit";
-import { writerSql } from "./blog";
+import { officialSql } from "./blog";
 import { holdReason, mutedUntil } from "./comment-moderation";
 import { readSettings } from "./community-settings";
 import { bumpOp } from "./ops-metrics";
@@ -119,7 +119,7 @@ export type CommentView = ReturnType<typeof view> & { replies?: ReturnType<typeo
 const selectFor = (t: CommentTarget) => `SELECT c.id, c.card_id, c.member_id, c.parent_id, c.root_id, c.content, c.reply_to_name, c.like_count, c.reply_count, c.created_at, c.status,
   m.handle, m.display_name, m.avatar_url,
   EXISTS (SELECT 1 FROM comment_likes l WHERE l.comment_id = c.id AND l.member_id = ?1) AS liked,
-  ${t.kind === "post" ? `NULL AS score, ${writerSql("c.member_id")} AS official` : "(SELECT s.score FROM card_scores s WHERE s.card_id = c.card_id AND s.member_id = c.member_id) AS score"}
+  ${t.kind === "post" ? `NULL AS score, ${officialSql("c.member_id")} AS official` : "(SELECT s.score FROM card_scores s WHERE s.card_id = c.card_id AND s.member_id = c.member_id) AS score"}
   FROM comments c JOIN members m ON m.id = c.member_id`;
 
 /** 看得到的留言：公開的，加上本人自己被攔下的（?1 是看的人）；頂層被移除但還有回覆時留佔位。 */

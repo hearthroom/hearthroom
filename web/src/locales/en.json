@@ -2116,5 +2116,5 @@
   "blog.admin.back": "Back to posts",
   "blog.admin.noRevisions": "No revisions yet",
   "blog.admin.revisionBy": "{name} · {date}",
-  "blog.admin.managersOnly": "Only managers and owners can use the blog."
+  "blog.admin.managersOnly": "The blog is run by this app's owners and admins, who are set under Team in the HarperHarbor developer console."
 }

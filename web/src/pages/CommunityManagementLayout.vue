@@ -10,7 +10,7 @@ const { lp } = useLocalePath();
 /**
  * 前三個分頁對「作品」，「留言」對卡片底下的留言；「成員」對「人」（補充包、活動徽章）。發補充包跟審卡同一個權限等級，所以每個審核人都看得到。
  * 「運營設定」每個審核人都看得到，只有應用管理員能改（服務端判）。
- * 「部落格」只給 manager／owner（寫文章的權限，服務端同樣再判一次）。
+ * 「部落格」給供應商那邊本站應用的 owner／admin（不必是審核人；寫入時服務端每次再問一次）。
  */
 const sections = [
   { key: 'reviews', path: '/review' },
@@ -21,7 +21,9 @@ const sections = [
   { key: 'history', path: '/review/history' },
   { key: 'settings', path: '/review/settings' },
 ] as const;
-const visible = computed(() => (reviewer.role === 'manager' || reviewer.role === 'owner' ? [...sections, { key: 'blog', path: '/review/blog' } as const] : sections));
+const blog = { key: 'blog', path: '/review/blog' } as const;
+// 不是審核人的應用管理員只看得到部落格；其他分頁要審核人身分。
+const visible = computed(() => [...(reviewer.reviewer === false ? [] : sections), ...(reviewer.blogWriter ? [blog] : [])]);
 </script>
 <template>
   <div class="page community-management">

@@ -34,6 +34,11 @@ export function restoreUpstream(): void {
   restoreHostedFixture();
 }
 
+/** 這些令牌的主人在供應商那邊是本站應用的 owner／admin（部落格、運營設定、發點數都看這個）。 */
+export function appAdmins(...tokens: string[]): void {
+  upstream.fetchCommunityStatus = async (_env, token) => ({ admin: tokens.includes(token), featuredUsed: 0, featuredQuota: 50 });
+}
+
 // ---- 審核的假上游 ----------------------------------------------------------------
 
 /** 記錄每次「用作者的 token 讀整份設定」：測試才驗得出提交真的讀了、而且是拿作者的 token 讀的。 */

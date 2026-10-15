@@ -2116,5 +2116,5 @@
   "blog.admin.back": "記事一覧に戻る",
   "blog.admin.noRevisions": "変更履歴はまだありません",
   "blog.admin.revisionBy": "{name} · {date}",
-  "blog.admin.managersOnly": "ブログはマネージャーとオーナーだけが使えます。"
+  "blog.admin.managersOnly": "ブログはこのアプリのオーナーと管理者が運営していて、メンバーは HarperHarbor 開発者コンソールの「チーム」で設定します。"
 }

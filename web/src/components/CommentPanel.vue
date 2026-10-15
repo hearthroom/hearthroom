@@ -69,8 +69,8 @@ const mutedUntil = ref<number | null | undefined>(undefined);
 const mutedText = computed(() => mutedUntil.value === null ? t("comment.error.mutedPermanent") : t("comment.error.mutedUntil", { date: dateTime(mutedUntil.value ?? 0) }));
 /** 不能發表也不能回覆：文章關了留言，或讀者被禁言 */
 const blocked = computed(() => closed.value || mutedUntil.value !== undefined);
-/** 文章的寫作者（manager／owner）能把一則公開的頂層留言置頂；伺服器會再擋一次 */
-const canPin = computed(() => isPost.value && !!reviewer.reviewer && (reviewer.role === "manager" || reviewer.role === "owner"));
+/** 能寫部落格的人（應用 owner／admin）能把一則公開的頂層留言置頂；伺服器會再擋一次 */
+const canPin = computed(() => isPost.value && reviewer.blogWriter);
 const pinning = ref(false);
 async function togglePin(c: Comment) {
   if (on.value.kind !== "post" || pinning.value) return;
