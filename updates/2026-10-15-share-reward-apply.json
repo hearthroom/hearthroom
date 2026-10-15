@@ -1,7 +1,7 @@
 {
   "tier": "feature",
   "audience": "everyone",
-  "try": "/mine",
+  "try": "/me/campaign",
   "draft": true,
   "title": {
     "zh-Hant": "分享獎勵現在可以在活動頁直接申請",

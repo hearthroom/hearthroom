@@ -188,6 +188,13 @@ export async function fetchCampaign(slug: string): Promise<PublicCampaign> {
   if (!res.ok) return fail(res);
   return (await res.json()) as PublicCampaign;
 }
+export type CampaignSummary = Pick<PublicCampaign, "slug" | "title" | "phase" | "startsAt" | "endsAt" | "timezone" | "bannerUrl">;
+/** 公開的活動列表（不含草稿），不帶令牌。 */
+export async function fetchPublicCampaigns(): Promise<{ items: CampaignSummary[] }> {
+  const res = await fetch(`${COMMUNITY_API}/campaigns`, { headers: { "X-From": currentSurface() } });
+  if (!res.ok) return fail(res);
+  return (await res.json()) as { items: CampaignSummary[] };
+}
 
 export const fetchCampaigns = (token: string) => request<{ items: Campaign[]; canEdit: boolean }>(token, "/moderation/campaigns");
 /** 沒有 id 是新活動；有 id 要帶上次讀到的版本號，別人先存過會回 campaign_version_conflict。 */

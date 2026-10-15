@@ -266,3 +266,29 @@ it("shows the 404 page for a missing campaign", async () => {
   await mount();
   expect(host.textContent).toContain(t("notFound.title"));
 });
+
+it("tells a guest the campaign is not open instead of asking them to sign in", async () => {
+  session.me = null;
+  detail = campaign({ phase: "upcoming" });
+  await mount();
+  expect(host.textContent).toContain(t("campaign.page.notOpen.upcoming"));
+  expect(host.textContent).not.toContain(t("campaign.page.signIn"));
+  expect($("[data-signin]")).toBeNull();
+  app!.unmount(); app = null; host.remove();
+  detail = campaign({ phase: "ended" });
+  await mount();
+  expect(host.textContent).toContain(t("campaign.page.notOpen.ended"));
+  expect($("[data-signin]")).toBeNull();
+});
+
+it("clears the done notice when the next submit starts", async () => {
+  await mount();
+  fillNew();
+  await submit();
+  expect(host.textContent).toContain(t("campaign.apply.done"));
+  submitReplies = [{ status: 429, body: { error: "campaign_rate_limited" } }];
+  fillNew();
+  await submit();
+  expect($("[data-form-error]")).not.toBeNull();
+  expect(host.textContent).not.toContain(t("campaign.apply.done"));
+});
