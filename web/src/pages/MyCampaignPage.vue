@@ -18,6 +18,7 @@ import {
   localized, resubmitPlacement, zonedToEpoch, zoneName,
   type CampaignSummary, type ContentView, type PlacementView, type PublicCampaign, type ResubmitBody, type Tier,
 } from "@/lib/campaign";
+import { ApiError } from "@/lib/api";
 import { pageTitle } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
@@ -34,7 +35,7 @@ async function token() {
 
 const contents = ref<ContentView[] | null>(null);
 const loadError = ref("");
-/** 活動公開資料；null 是讀不到 */
+/** 活動公開資料；null 是 404（不存在或改回草稿）。其他失敗不記，下次重新讀。 */
 const campaigns = ref<Record<string, PublicCampaign | null>>({});
 const openCampaign = ref<CampaignSummary | null>(null);
 const now = ref(Date.now());
@@ -47,10 +48,10 @@ async function load() {
     const { items } = await fetchMyContents(await token());
     const missing = [...new Set(items.map((c) => c.campaignSlug))].filter((s) => !(s in campaigns.value));
     // 活動資料先到再畫，補件按鈕才不會在截止後先閃一下
-    const read = await Promise.all(missing.map((s) => fetchCampaign(s).catch(() => null)));
+    const read = await Promise.all(missing.map((s) => fetchCampaign(s).catch((e) => (e instanceof ApiError && e.status === 404 ? null : undefined))));
     if (!items.length && !openCampaign.value) openCampaign.value = (await fetchPublicCampaigns().catch(() => ({ items: [] }))).items.find((c) => c.phase === "open") ?? null;
     if (mine !== seq) return;
-    missing.forEach((s, i) => { campaigns.value[s] = read[i]!; });
+    missing.forEach((s, i) => { if (read[i] !== undefined) campaigns.value[s] = read[i]!; });
     now.value = Date.now();
     contents.value = items;
   } catch {
@@ -68,8 +69,10 @@ const groups = computed(() => {
     return { slug, campaign, items, title: campaign ? localized(campaign.title, locale.value) || slug : slug };
   });
 });
-const tzOf = (slug: string) => campaigns.value[slug]?.timezone || DEFAULT_TIMEZONE;
-const at = (ms: number, slug: string) => new Intl.DateTimeFormat(locale.value, { timeZone: tzOf(slug), dateStyle: "medium", timeStyle: "short" }).format(ms);
+/** 活動讀不到就不知道它的時區：回 null，不猜。 */
+const tzOf = (slug: string) => (campaigns.value[slug] ? campaigns.value[slug]!.timezone || DEFAULT_TIMEZONE : null);
+/** 時區不明時用看的人自己的時區顯示，時刻本身還是對的。 */
+const at = (ms: number, slug: string) => new Intl.DateTimeFormat(locale.value, { timeZone: tzOf(slug) ?? undefined, dateStyle: "medium", timeStyle: "short" }).format(ms);
 const points = (n: number) => t("campaign.page.points", { n });
 const hasReason = (p: PlacementView) => !!p.reviewReason && (p.reviewStatus === "needs_info" || p.reviewStatus === "rejected");
 
@@ -92,7 +95,8 @@ const resent = ref("");
 
 function open(p: PlacementView, slug: string) {
   editing.value = { placement: p, slug };
-  Object.assign(form, { location: p.location, publishedAt: epochToZoned(p.publishedAt, tzOf(slug)), url: p.url ?? "", tier: p.requestedTier, note: "" });
+  const tz = tzOf(slug);
+  Object.assign(form, { location: p.location, publishedAt: tz ? epochToZoned(p.publishedAt, tz) : "", url: p.url ?? "", tier: p.requestedTier, note: "" });
   newIds.value = [];
   formError.value = "";
   resent.value = "";
@@ -100,17 +104,20 @@ function open(p: PlacementView, slug: string) {
 }
 function collapse() { editing.value = null; }
 
+/** 還有位置在審：已核准欄才說「審核中」，全部未通過就是 —。 */
+const reviewing = (c: ContentView) => c.placements.some((p) => p.reviewStatus === "submitted" || p.reviewStatus === "resubmitted" || p.reviewStatus === "needs_info");
+
 /** 活動讀得到就只列有金額的檔位（目前申請的一定在）；讀不到就全列。 */
 function tierOptions(slug: string, current: Tier) {
   const c = campaigns.value[slug];
   return c ? TIERS.filter((k) => k === current || typeof c.tiers[k] === "number") : [...TIERS];
 }
 
-/** 只帶改過的欄位；連結清空送 null。驗不過回 null 並說哪裡不對。 */
-function build(p: PlacementView, tz: string): Omit<ResubmitBody, "operationId"> | null {
+/** 只帶改過的欄位；連結清空送 null；時區不明時發布時間不能改、也不送。驗不過回 null 並說哪裡不對。 */
+function build(p: PlacementView, tz: string | null): Omit<ResubmitBody, "operationId"> | null {
   const need = (f: string) => t("campaign.error.share_invalidField", { field: fieldLabel(f, "share") });
   const location = form.location.trim(), url = form.url.trim(), note = form.note.trim();
-  const publishedAt = zonedToEpoch(form.publishedAt, tz);
+  const publishedAt = tz ? zonedToEpoch(form.publishedAt, tz) : p.publishedAt;
   formError.value =
     !location ? need("location")
     : publishedAt === null ? need("publishedAt")
@@ -120,7 +127,7 @@ function build(p: PlacementView, tz: string): Omit<ResubmitBody, "operationId"> 
   if (formError.value) return null;
   const body: Omit<ResubmitBody, "operationId"> = {};
   if (location !== p.location) body.location = location;
-  if (form.publishedAt !== epochToZoned(p.publishedAt, tz)) body.publishedAt = publishedAt!;
+  if (tz && form.publishedAt !== epochToZoned(p.publishedAt, tz)) body.publishedAt = publishedAt!;
   if (url !== (p.url ?? "")) body.url = url || null;
   if (form.tier && form.tier !== p.requestedTier) body.requestedTier = form.tier;
   if (note) body.note = note;
@@ -196,7 +203,8 @@ async function send() {
               <strong class="num">{{ points(c.approvedAmount) }}</strong>
               <span class="mine-share__sub">{{ t(`campaign.tier.${c.approvedTier}`) }}</span>
             </template>
-            <strong v-else>{{ t("campaign.mine.pending") }}</strong>
+            <strong v-else-if="reviewing(c)">{{ t("campaign.mine.pending") }}</strong>
+            <strong v-else>{{ t("campaign.payout.none") }}</strong>
           </div>
           <div class="mine-share__col" data-col="paid">
             <span class="mine-share__label">{{ t("campaign.mine.paid") }}</span>
@@ -234,8 +242,8 @@ async function send() {
                 <div class="field" data-field="publishedAt">
                   <label :for="`rs-time-${p.id}`">{{ t("campaign.share.field.publishedAt") }}</label>
                   <div class="mine-share__time">
-                    <input :id="`rs-time-${p.id}`" v-model="form.publishedAt" class="input mine-share__short" type="datetime-local" required :aria-describedby="`rs-zone-${p.id}`" />
-                    <span :id="`rs-zone-${p.id}`" class="subtle">{{ zoneName(tzOf(g.slug), locale) }}</span>
+                    <input :id="`rs-time-${p.id}`" v-model="form.publishedAt" class="input mine-share__short" type="datetime-local" required :disabled="!tzOf(g.slug)" :aria-describedby="`rs-zone-${p.id}`" />
+                    <span v-if="tzOf(g.slug)" :id="`rs-zone-${p.id}`" class="subtle">{{ zoneName(tzOf(g.slug)!, locale) }}</span>
                   </div>
                 </div>
                 <fieldset class="field mine-share__group-field" data-field="requestedTier">
