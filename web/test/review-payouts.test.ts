@@ -8,7 +8,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createApp, h, nextTick, type App } from "vue";
 import { createPinia } from "pinia";
 import { createMemoryHistory, createRouter, RouterView, type Router } from "vue-router";
-import { i18n } from "../src/lib/i18n";
+import { i18n, loadLocale } from "../src/lib/i18n";
 import { confirmState, settleConfirm } from "../src/lib/confirm";
 import { campaignErrorText } from "../src/lib/campaign";
 
@@ -32,7 +32,7 @@ const payout = (id: string, extra: Record<string, unknown> = {}) => ({
 });
 
 type Call = { method: string; path: string; body: Record<string, unknown> | null };
-type Reply = { status: number; body: unknown };
+type Reply = { status: number; body: unknown } | { network: true };
 let calls: Call[];
 let canEdit: boolean;
 let payableItems: ReturnType<typeof payable>[];
@@ -40,17 +40,23 @@ let history: ReturnType<typeof payout>[];
 let reconcile: Reply;
 let reconcileGate: Promise<void> | null;
 let replies: Record<string, Reply[]>;
+/** 設了就讓下一次單筆發放等到它放行 */
+let payGate: Promise<void> | null;
 
 beforeEach(() => {
   i18n.global.locale.value = "zh-Hant";
   calls = []; canEdit = true; payableItems = [payable("s1", 300), payable("s2", 800), payable("s3", 100)]; history = [];
-  reconcile = { status: 200, body: { items: [] } }; reconcileGate = null; replies = {};
+  reconcile = { status: 200, body: { items: [] } }; reconcileGate = null; replies = {}; payGate = null;
   vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit = {}) => {
     const method = init.method ?? "GET";
     const body = typeof init.body === "string" ? JSON.parse(init.body) : null;
     calls.push({ method, path: url, body });
     const json = (status: number, b: unknown) => new Response(JSON.stringify(b), { status, headers: { "Content-Type": "application/json" } });
-    const next = (key: string) => { const r = replies[key]?.shift() ?? { status: 500, body: { error: "boom" } }; return json(r.status, r.body); };
+    const next = (key: string) => {
+      const r = replies[key]?.shift() ?? { status: 500, body: { error: "boom" } };
+      if ("network" in r) throw new TypeError("Failed to fetch");
+      return json(r.status, r.body);
+    };
     if (url === "/v1/moderation/campaigns") return json(200, { items: [campaign()], canEdit });
     if (url === "/v1/moderation/campaign-pool") return json(200, { configured: true, enabled: true, usageScope: "all", validityDays: null, maxPayout: 1000, balance: 54321, paidTotal: 0, updatedAt: null });
     if (url.startsWith("/v1/moderation/campaign/payable")) return json(200, { total: payableItems.length, items: payableItems });
@@ -59,7 +65,7 @@ beforeEach(() => {
     if (url.startsWith("/v1/moderation/campaign/payouts?") || url === "/v1/moderation/campaign/payouts") return json(200, { total: history.length, items: history });
     const m = /^\/v1\/moderation\/campaign\/payouts\/[^/]+\/(retry|cancel|check)$/.exec(url);
     if (m) return next(m[1]!);
-    if (/^\/v1\/moderation\/campaign\/contents\/[^/]+\/payout$/.test(url)) return next("pay");
+    if (/^\/v1\/moderation\/campaign\/contents\/[^/]+\/payout$/.test(url)) { if (payGate) await payGate; return next("pay"); }
     return json(404, { error: "not_found" });
   }));
 });
@@ -82,6 +88,9 @@ async function button(sel: string) {
 }
 function type(el: HTMLTextAreaElement, value: string) { el.value = value; el.dispatchEvent(new Event("input")); }
 const dialog = () => document.querySelector<HTMLFormElement>("[role=dialog]");
+const checkbox = (id: string) => row(`[data-content="${id}"] input[type=checkbox]`) as HTMLInputElement;
+function tick(id: string) { const box = checkbox(id); box.checked = true; box.dispatchEvent(new Event("change")); }
+async function confirmYes() { await vi.waitFor(() => expect(confirmState.current).not.toBeNull()); settleConfirm(true); }
 
 it("hides the payout tab from reviewers who cannot pay, AI accounts included, and says so on a direct visit", async () => {
   canEdit = false;
@@ -137,6 +146,7 @@ it("confirms a batch with the count and total points, sends exactly the selected
     { contentId: "s2", payout: payout("y2", { contentId: "s2", status: "blocked_insufficient", error: "pool_insufficient" }) },
     { contentId: "s3", error: "share_self_payout" },
   ] } }];
+  payableItems = [payable("s3", 100), payable("s1", 300), payable("s2", 800)];
   await mount("/review/payouts");
   await vi.waitFor(() => expect(row('[data-content="s3"]')).not.toBeNull());
   for (const id of ["s1", "s2", "s3"]) { const box = row(`[data-content="${id}"] input[type=checkbox]`) as HTMLInputElement; box.checked = true; box.dispatchEvent(new Event("change")); }
@@ -154,6 +164,94 @@ it("confirms a batch with the count and total points, sends exactly the selected
   expect(row('[data-content="s1"]')?.textContent).toContain(t("campaign.status.paid"));
   expect(row('[data-content="s2"]')?.textContent).toContain(t("campaign.status.blocked_insufficient"));
   expect(paths("/v1/moderation/campaign/payable").length).toBeGreaterThanOrEqual(2);
+  // 已經離開待發放的列：指向發放紀錄，不能再勾也不能再發
+  expect(row('[data-content="s1"]')!.textContent).toContain(t("campaign.payouts.seeHistory"));
+  expect(checkbox("s1").disabled).toBe(true);
+  expect((row('[data-content="s1"] [data-action="pay"]') as HTMLButtonElement).disabled).toBe(true);
+  expect(row('[data-content="s3"]')!.textContent).not.toContain(t("campaign.payouts.seeHistory"));
+});
+
+it("treats a pay with an unknown outcome as possibly sent: neutral text, same operation id, never batched", async () => {
+  replies.pay = [{ network: true }, { status: 200, body: payout("y1", { contentId: "s1", status: "pending", error: "provider_timeout" }) }];
+  await mount("/review/payouts");
+  (await button('[data-content="s1"] [data-action="pay"]')).click();
+  // 其實已經送到了：重新載入時 s1 不在待發放裡
+  payableItems = [payable("s2", 800), payable("s3", 100)];
+  await confirmYes();
+  await vi.waitFor(() => expect(row('[data-content="s1"]')?.textContent).toContain(t("campaign.payouts.uncertain")));
+  expect(row('[data-content="s1"] .rpo-result--bad')).toBeNull();
+  expect(row('[data-content="s1"]')!.textContent).not.toContain("Failed to fetch");
+  expect(row('[data-content="s1"]')!.textContent).toContain(t("campaign.payouts.seeHistory"));
+  expect(checkbox("s1").disabled).toBe(true);
+  // 單筆重按沿用同一個 operationId，服務端認得出是同一次
+  const again = row('[data-content="s1"] [data-action="pay"]') as HTMLButtonElement;
+  expect(again.disabled).toBe(false);
+  again.click();
+  await confirmYes();
+  await vi.waitFor(() => expect(paths("/v1/moderation/campaign/contents/s1/payout", "POST")).toHaveLength(2));
+  const [a, b] = paths("/v1/moderation/campaign/contents/s1/payout", "POST").map((c) => c.body!.operationId);
+  expect(b).toBe(a);
+  // 回來是處理中：指向查詢結果，不是紅字的碼
+  await vi.waitFor(() => expect(row('[data-content="s1"]')?.textContent).toContain(t("campaign.payouts.pendingNote")));
+  expect(row('[data-content="s1"] .rpo-result--bad')).toBeNull();
+});
+
+it("keeps a row whose single pay failed uncertainly out of any batch, even while it is still listed", async () => {
+  replies.pay = [{ network: true }];
+  await mount("/review/payouts");
+  (await button('[data-content="s1"] [data-action="pay"]')).click();
+  await confirmYes();
+  await vi.waitFor(() => expect(row('[data-content="s1"]')?.textContent).toContain(t("campaign.payouts.uncertain")));
+  await vi.waitFor(() => expect(paths("/v1/moderation/campaign/payable").length).toBeGreaterThanOrEqual(3));
+  expect(checkbox("s1").disabled).toBe(true);
+  expect(row('[data-content="s1"]')!.textContent).not.toContain(t("campaign.payouts.seeHistory"));
+});
+
+it("retries a batch whose outcome is unknown with the same operation id", async () => {
+  replies.batch = [{ network: true }, { status: 200, body: { items: [{ contentId: "s1", payout: payout("y1", { contentId: "s1", status: "paid" }) }, { contentId: "s2", payout: payout("y2", { contentId: "s2", status: "paid" }) }] } }];
+  await mount("/review/payouts");
+  await vi.waitFor(() => expect(row('[data-content="s2"]')).not.toBeNull());
+  tick("s1"); tick("s2"); await nextTick();
+  (await button('[data-action="pay-selected"]')).click();
+  await confirmYes();
+  await vi.waitFor(() => expect(host.querySelector("[data-batch-note]")?.textContent).toContain(t("campaign.payouts.uncertain")));
+  expect(host.querySelector("[data-batch-note]")!.classList.contains("notice--error")).toBe(false);
+  await vi.waitFor(() => expect((row('[data-action="pay-selected"]') as HTMLButtonElement).disabled).toBe(false));
+  row('[data-action="pay-selected"]')!.click();
+  await confirmYes();
+  await vi.waitFor(() => expect(paths("/v1/moderation/campaign/payouts/batch", "POST")).toHaveLength(2));
+  const [a, b] = paths("/v1/moderation/campaign/payouts/batch", "POST").map((c) => c.body!);
+  expect(b!.operationId).toBe(a!.operationId);
+  expect(b!.contentIds).toEqual(["s1", "s2"]);
+});
+
+it("leaves a row out of the batch while its single pay is in flight", async () => {
+  let release!: () => void;
+  payGate = new Promise((r) => { release = r; });
+  replies.pay = [{ status: 200, body: payout("y1", { contentId: "s1", status: "paid" }) }];
+  await mount("/review/payouts");
+  await vi.waitFor(() => expect(row('[data-content="s2"]')).not.toBeNull());
+  tick("s1"); tick("s2"); await nextTick();
+  (await button('[data-content="s1"] [data-action="pay"]')).click();
+  await confirmYes();
+  await vi.waitFor(() => expect(paths("/v1/moderation/campaign/contents/s1/payout", "POST")).toHaveLength(1));
+  await vi.waitFor(() => expect(checkbox("s1").disabled).toBe(true));
+  row('[data-action="pay-selected"]')!.click();
+  await vi.waitFor(() => expect(confirmState.current).not.toBeNull());
+  expect(confirmState.current!.message).toBe(t("campaign.payouts.confirm", { count: 1, points: (800).toLocaleString("zh-Hant") }));
+  settleConfirm(false);
+  release();
+});
+
+it("uses English plural forms", async () => {
+  await loadLocale("en");
+  i18n.global.locale.value = "en";
+  history = [payout("q1", { status: "blocked_insufficient", attempts: 1 })];
+  await mount("/en/review/payouts?view=history");
+  await vi.waitFor(() => expect(row('[data-payout="q1"]')?.textContent).toContain("Sent once"));
+  i18n.global.locale.value = "en";
+  expect(i18n.global.t("campaign.payouts.confirm", { count: 1, points: "300" }, 1)).toBe("Pay 1 reward, 300 points in total?");
+  expect(i18n.global.t("campaign.payouts.reconciled", { count: 1 }, 1)).toContain("1 payment ");
 });
 
 it("caps the selection at 20", async () => {
@@ -277,11 +375,14 @@ it.each([
   ["campaign_payout_closed", "已過發獎截止"],
   ["share_self_payout", "不能發放給自己"],
   ["pool_insufficient", "點數池不足，補足後重試"],
-])("every payout error has a next step: %s", (code, text) => {
+])("every payout error has a next step: %s", async (code, text) => {
   i18n.global.locale.value = "zh-Hant";
   expect(campaignErrorText(code)).toContain(text);
   for (const locale of ["zh-Hans", "en", "ja", "ko"]) {
+    await loadLocale(locale);
     i18n.global.locale.value = locale as typeof i18n.global.locale.value;
+    expect(i18n.global.te(`campaign.error.${code}`, locale)).toBe(true);
+    expect(campaignErrorText(code)).not.toContain(text);
     expect(campaignErrorText(code)).not.toBe(code);
     expect(campaignErrorText(code)).not.toContain("(");
   }
