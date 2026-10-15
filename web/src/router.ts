@@ -85,7 +85,7 @@ const pages: RouteRecordRaw[] = [
       { path: "settings", component: () => import("./pages/ReviewSettingsPage.vue"), meta: { managementTab: "settings" } },
       // 部落格：文章列表＋欄目、編輯器。要在 :id（卡片審核詳情）之前，不然 blog 會被當成審核編號
       { path: "blog", component: () => import("./pages/ReviewBlogPage.vue"), meta: { managementTab: "blog" } },
-      { path: "blog/new", component: () => import("./pages/ReviewBlogEditorPage.vue"), meta: { managementTab: "blog" } },
+      // 新文章是 blog/new：跟既有文章同一條記錄，第一次存好換成 blog/<id> 時編輯器的離開提醒還掛著
       { path: "blog/:id", component: () => import("./pages/ReviewBlogEditorPage.vue"), meta: { managementTab: "blog" } },
       { path: "manage", redirect: (to) => ({ path: withLocale("/review/cases", localeOf(to)), query: to.query, hash: to.hash }) },
       { path: ":id", component: () => import("./pages/ReviewDetailPage.vue"), meta: { managementTab: "reviews" } },
