@@ -2,7 +2,7 @@ import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import worker from "../src/index";
 import { upstream } from "../src/upstream";
-import { bearer, identities, makeAgent, makeMember, makeReviewer, resetDb, restoreUpstream } from "./helpers";
+import { appAdmins, bearer, identities, makeAgent, makeMember, makeReviewer, resetDb, restoreUpstream } from "./helpers";
 
 // 待發放清單：有應發金額、沒有進行中發放、活動還能發的內容；閘門同發放。
 const ADMIN = 65001, MOD = 65003, AGENT = 65004, OWNER = 65005;
@@ -45,7 +45,7 @@ const payout = (contentId: string, amount: number, status: string) =>
 beforeEach(async () => {
   await resetDb();
   identities({ admin: ADMIN, mod: MOD, agent: AGENT, owner: OWNER });
-  upstream.fetchCommunityStatus = async (_env, token) => ({ admin: token === "admin" || token === "agent", featuredUsed: 0, featuredQuota: 50 });
+  appAdmins("admin", "agent");
   await makeReviewer(ADMIN);
   await makeReviewer(MOD);
   await makeAgent(AGENT);

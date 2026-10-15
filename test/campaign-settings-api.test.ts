@@ -4,7 +4,7 @@ import worker from "../src/index";
 import { cleanAvatars } from "../src/community-profile";
 import { upstream } from "../src/upstream";
 import type { Env } from "../src/types";
-import { bearer, identities, makeAgent, makeMember, makeReviewer, resetDb, restoreUpstream } from "./helpers";
+import { appAdmins, bearer, identities, makeAgent, makeMember, makeReviewer, resetDb, restoreUpstream } from "./helpers";
 
 // 活動設定 API：審核人可讀、應用管理員可寫、AI 帳號不能寫；公開 API 只給摘要與規則；點數池唯讀轉出 Provider 的值。
 const ADMIN = 70001, MOD = 70002, AGENT = 70003, MEMBER = 70004;
@@ -52,7 +52,7 @@ beforeEach(async () => {
   objects.clear();
   vi.clearAllMocks();
   identities({ admin: ADMIN, mod: MOD, agent: AGENT, member: MEMBER });
-  upstream.fetchCommunityStatus = async (_env, token) => ({ admin: token === "admin" || token === "agent", featuredUsed: 0, featuredQuota: 50 });
+  appAdmins("admin", "agent");
   await makeReviewer(ADMIN);
   await makeReviewer(MOD);
   await makeAgent(AGENT);
@@ -87,6 +87,14 @@ describe("權限", () => {
     expect(await count("SELECT COUNT(*) AS n FROM campaigns")).toBe(0);
     const metrics = await (await call("/metrics")).text();
     expect(metrics).toContain('hearthroom_campaign_operations_total{operation="settings",outcome="denied"}');
+  });
+
+  it("問不到供應商：寫入 503 community_admin_unavailable、不寫入；列表照常讀，canEdit 是 false", async () => {
+    upstream.fetchCommunityStatus = async () => { throw new Error("offline"); };
+    const r = await create("admin", { slug: "launch", title: { "zh-Hant": "開站分享" } });
+    expect([r.status, (await json(r)).error]).toEqual([503, "community_admin_unavailable"]);
+    expect(await count("SELECT COUNT(*) AS n FROM campaigns")).toBe(0);
+    expect(await json(await call("/v1/moderation/campaigns", { token: "admin" }))).toEqual({ items: [], canEdit: false });
   });
 });
 

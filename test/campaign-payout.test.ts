@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
 import { upstream, type PayResult } from "../src/upstream";
 import { requestPayout } from "../src/campaign-payout";
-import { bearer, identities, makeAgent, makeMember, makeReviewer, resetDb, restoreUpstream, testHandle } from "./helpers";
+import { appAdmins, bearer, identities, makeAgent, makeMember, makeReviewer, resetDb, restoreUpstream, testHandle } from "./helpers";
 
 // 發放、重試、取消、對帳。Provider 用記憶體裡的點數池模擬：同一把 key 再送回 replayed:true。
 const ADMIN = 64001, MOD = 64003, AGENT = 64004, OWNER = 64005, OTHER = 64006;
@@ -117,7 +117,7 @@ const decide = (id: string, body: Record<string, unknown>, token = ADMIN_TOKEN) 
 beforeEach(async () => {
   await resetDb();
   identities({ [ADMIN_TOKEN]: ADMIN, mod: MOD, agent: AGENT, owner: OWNER, other: OTHER });
-  upstream.fetchCommunityStatus = async (_env, token) => ({ admin: token === ADMIN_TOKEN || token === "agent", featuredUsed: 0, featuredQuota: 50 });
+  appAdmins(ADMIN_TOKEN, "agent");
   admin = await makeReviewer(ADMIN);
   await makeReviewer(MOD);
   await makeAgent(AGENT);
@@ -321,6 +321,15 @@ describe("閘門", () => {
     expect((await pay(c, "")).status).toBe(401);
     expect(pool.sent).toEqual([]);
     expect(await metrics()).toContain('hearthroom_campaign_operations_total{operation="payout",outcome="denied"}');
+  });
+
+  it("問不到供應商誰是應用管理員：發放、批次、列表、對帳、點數池都 503 community_admin_unavailable，不放行、不送出", async () => {
+    const c = await content(owner, OWNER);
+    upstream.fetchCommunityStatus = async () => { throw new Error("offline"); };
+    const rs = [await pay(c), await batch([c]), await list(""), await reconcile(), await call("/v1/moderation/campaign/payable", { token: ADMIN_TOKEN }), await call("/v1/moderation/campaign-pool", { token: ADMIN_TOKEN })];
+    for (const r of rs) expect(await code(r)).toBe("503 community_admin_unavailable");
+    expect(pool.sent).toEqual([]);
+    expect(await payoutRows(c)).toEqual([]);
   });
 
   it("發獎截止後 409 campaign_payout_closed（發放與重試都是）；對帳照樣能補記", async () => {
