@@ -1,10 +1,11 @@
 <script setup lang="ts">
 /**
  * 社群管理的「運營設定」：每個審核人都看得到現在的設定，只有應用管理員能改（canEdit 由服務端判）。
- * 每一格留空＝那條規則不啟用；程式不替站方選預設數字。計畫 4 會在這頁加活動設定的區塊。
+ * 每一格留空＝那條規則不啟用；程式不替站方選預設數字。活動設定在 CampaignSettingsPanel，自己讀自己的權限。
  */
 import { onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import CampaignSettingsPanel from '@/components/CampaignSettingsPanel.vue';
 import { fetchSettings, saveSettings, type CommentSettings } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { pageTitle } from '@/lib/i18n';
@@ -70,6 +71,7 @@ onMounted(() => { document.title = pageTitle(t('moderation.title')); void load()
       </div>
       <button v-if="canEdit" class="btn btn--primary settings-save" :disabled="saving">{{ t('settings.save') }}</button>
     </form>
+    <CampaignSettingsPanel />
   </section>
 </template>
 

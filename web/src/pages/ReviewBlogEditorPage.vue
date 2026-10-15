@@ -18,6 +18,7 @@ import {
   restoreRevision, savePost, setPostState, uploadBlogImage, type AdminPost, type BlogColumn, type PostInput, type Revision, type StateChange,
 } from '@/lib/blog';
 import { ApiError } from '@/lib/api';
+import { fetchCampaigns, localized, type Campaign } from '@/lib/campaign';
 import { confirmDialog } from '@/lib/confirm';
 import { dateTime } from '@/lib/format';
 import { LOCALES, pageTitle } from '@/lib/i18n';
@@ -49,6 +50,9 @@ const draft = reactive<Draft>(empty());
 const saved = ref(JSON.stringify(draft));
 const dirty = computed(() => JSON.stringify(draft) !== saved.value);
 const columns = ref<BlogColumn[]>([]);
+/** 「關聯活動」選單的選項；讀不到不擋編輯，已存的關聯照樣留著 */
+const campaigns = ref<Campaign[]>([]);
+const campaignLabel = (c: Campaign) => t('blog.admin.campaignOption', { title: localized(c.title, String(locale.value)) || c.slug, status: t(`campaign.status.${c.status}`) });
 const revisions = ref<Revision[]>([]);
 const opened = ref<(Revision & { bodyMd: string }) | null>(null);
 const loading = ref(true);
@@ -100,8 +104,11 @@ async function load() {
   try {
     const access = await token();
     const id = route.params.id && route.params.id !== 'new' ? String(route.params.id) : '';
-    const [cols, p, revs] = await Promise.all([fetchAdminColumns(access), id ? fetchAdminPost(access, id) : null, id ? fetchRevisions(access, id) : null]);
+    const [cols, p, revs, camps] = await Promise.all([
+      fetchAdminColumns(access), id ? fetchAdminPost(access, id) : null, id ? fetchRevisions(access, id) : null, fetchCampaigns(access).catch(() => null),
+    ]);
     columns.value = cols.items;
+    campaigns.value = camps?.items ?? [];
     revisions.value = revs?.items ?? [];
     if (p) apply(p);
     else {
@@ -396,7 +403,11 @@ watch(() => route.params.id, (id) => { if (/\/review\/blog\/[^/]+$/.test(route.p
           </fieldset>
           <label class="field">
             <span>{{ t('blog.admin.campaign') }}</span>
-            <input v-model="draft.campaignId" class="input" maxlength="64" autocapitalize="off" spellcheck="false" />
+            <select v-model="draft.campaignId" class="input" data-field="campaign">
+              <option value="">{{ t('blog.admin.noCampaign') }}</option>
+              <option v-for="c in campaigns" :key="c.id" :value="c.id">{{ campaignLabel(c) }}</option>
+              <option v-if="draft.campaignId && !campaigns.some((c) => c.id === draft.campaignId)" :value="draft.campaignId">{{ draft.campaignId }}</option>
+            </select>
           </label>
           <label v-if="post && post.status !== 'published'" class="field">
             <span>{{ t('blog.admin.scheduleAt', { zone }) }}</span>

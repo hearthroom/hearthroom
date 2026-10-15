@@ -1,4 +1,5 @@
 import { auditStmt, auditStmtIfChanged, type ActorKind } from "./audit";
+import { campaignPhase, type CampaignStatus } from "./campaign";
 import { bumpOp } from "./ops-metrics";
 import { HttpError, type Env } from "./types";
 
@@ -27,7 +28,9 @@ export type Post = {
   /** 編輯器回存時要帶回的原始 key（coverUrl／shareCoverUrl 是由它算出來的公開網址）。 */
   coverKey: string | null; shareCoverKey: string | null;
 };
-export type PostCard = Pick<Post, "id" | "columnSlug" | "slug" | "title" | "excerpt" | "coverUrl" | "locale" | "firstPublishedAt" | "pinned" | "campaignId"> & { readMinutes: number; commentCount: number };
+/** 公開回應裡的關聯活動：只在活動存在且不是草稿時有，其餘是 null。原始 campaignId 只給管理端。 */
+export type CampaignBrief = { slug: string; title: Localized; phase: "upcoming" | "open" | "ended"; startsAt: number | null; endsAt: number | null; timezone: string | null };
+export type PostCard = Pick<Post, "id" | "columnSlug" | "slug" | "title" | "excerpt" | "coverUrl" | "locale" | "firstPublishedAt" | "pinned"> & { readMinutes: number; commentCount: number; campaign: CampaignBrief | null };
 export type PostInput = {
   columnId: string; slug: string; locale: Locale; title: string; excerpt: string; bodyMd: string;
   coverKey?: string | null; shareTitle?: string | null; shareDescription?: string | null; shareCoverKey?: string | null; campaignId?: string | null;
@@ -68,14 +71,17 @@ type PostRow = {
   comments_closed: number; pinned_comment_id: string | null; version: number; created_at: number; updated_at: number;
   content_updated_at: number | null;
 };
-type CardRow = Pick<PostRow, "id" | "column_slug" | "slug" | "title" | "excerpt" | "cover_key" | "locale" | "first_published_at" | "pinned" | "campaign_id" | "body_md"> & { comment_count: number };
+type CampaignRow = { cmp_slug: string | null; cmp_title: string | null; cmp_status: CampaignStatus | null; cmp_starts_at: number | null; cmp_ends_at: number | null; cmp_timezone: string | null };
+type CardRow = Pick<PostRow, "id" | "column_slug" | "slug" | "title" | "excerpt" | "cover_key" | "locale" | "first_published_at" | "pinned" | "body_md"> & { comment_count: number } & CampaignRow;
 type ColumnRow = { id: string; slug: string; name: string; description: string; sort: number; enabled: number };
 
 const POST_SELECT = "SELECT p.*, col.slug AS column_slug, (SELECT MAX(r.created_at) FROM blog_post_revisions r WHERE r.post_id = p.id) AS content_updated_at FROM blog_posts p JOIN blog_columns col ON col.id = p.column_id";
 // ponytail: 卡片要算閱讀時長，所以連內文一起讀（一頁 12 篇）；嫌重時改成儲存時算好存一欄。
-const CARD_SELECT = `SELECT p.id, col.slug AS column_slug, p.slug, p.title, p.excerpt, p.cover_key, p.locale, p.first_published_at, p.pinned, p.campaign_id, p.body_md,
+// 關聯活動用 LEFT JOIN 一起讀（列表不逐篇查）；草稿活動當作沒有。
+const CAMPAIGN_COLUMNS = "cmp.slug AS cmp_slug, cmp.title AS cmp_title, cmp.status AS cmp_status, cmp.starts_at AS cmp_starts_at, cmp.ends_at AS cmp_ends_at, cmp.timezone AS cmp_timezone";
+const CARD_SELECT = `SELECT p.id, col.slug AS column_slug, p.slug, p.title, p.excerpt, p.cover_key, p.locale, p.first_published_at, p.pinned, p.body_md, ${CAMPAIGN_COLUMNS},
   (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id AND c.root_id IS NULL AND c.deleted_at IS NULL AND c.status = 'visible') AS comment_count
-  FROM blog_posts p JOIN blog_columns col ON col.id = p.column_id`;
+  FROM blog_posts p JOIN blog_columns col ON col.id = p.column_id LEFT JOIN campaigns cmp ON cmp.id = p.campaign_id AND cmp.status <> 'draft'`;
 /** 已公開（?1 是現在）。欄目啟不啟用另外判斷：列表要看，單篇與前後篇不看。 */
 const LIVE = "p.status = 'published' AND p.publish_at IS NOT NULL AND p.publish_at <= ?1";
 
@@ -93,9 +99,14 @@ const toPost = (r: PostRow): Post => ({
   contentUpdatedAt: Math.max(r.content_updated_at ?? 0, r.first_published_at ?? r.created_at),
   coverKey: r.cover_key, shareCoverKey: r.share_cover_key,
 });
-const toCard = (r: CardRow): PostCard => ({
+const toBrief = (r: CampaignRow, now: number): CampaignBrief | null => {
+  if (r.cmp_slug === null || r.cmp_status === null || r.cmp_status === "draft") return null;
+  const phase = campaignPhase({ status: r.cmp_status, startsAt: r.cmp_starts_at, endsAt: r.cmp_ends_at }, now) as CampaignBrief["phase"];
+  return { slug: r.cmp_slug, title: JSON.parse(r.cmp_title ?? "{}"), phase, startsAt: r.cmp_starts_at, endsAt: r.cmp_ends_at, timezone: r.cmp_timezone };
+};
+const toCard = (now: number) => (r: CardRow): PostCard => ({
   id: r.id, columnSlug: r.column_slug, slug: r.slug, title: r.title, excerpt: r.excerpt, coverUrl: imageUrl(r.cover_key), locale: r.locale,
-  firstPublishedAt: r.first_published_at, pinned: !!r.pinned, campaignId: r.campaign_id, readMinutes: readMinutes(r.body_md), commentCount: r.comment_count,
+  firstPublishedAt: r.first_published_at, pinned: !!r.pinned, readMinutes: readMinutes(r.body_md), commentCount: r.comment_count, campaign: toBrief(r, now),
 });
 const toColumn = (r: ColumnRow): Column => ({ id: r.id, slug: r.slug, name: JSON.parse(r.name), description: JSON.parse(r.description), sort: r.sort, enabled: !!r.enabled });
 
@@ -391,7 +402,7 @@ export async function publicPosts(db: D1Database, opts: { columnSlug?: string; p
     db.prepare(`SELECT COUNT(*) AS n FROM blog_posts p JOIN blog_columns col ON col.id = p.column_id WHERE ${rest}`).bind(opts.now, column, skip),
     db.prepare(`${CARD_SELECT} WHERE ${rest} ORDER BY p.publish_at DESC, p.id DESC LIMIT ?4 OFFSET ?5`).bind(opts.now, column, skip, PAGE_SIZE, (page - 1) * PAGE_SIZE),
   ]);
-  return { total: (count!.results[0] as { n: number }).n, pinned: pinned.map(toCard), items: (items!.results as CardRow[]).map(toCard) };
+  return { total: (count!.results[0] as { n: number }).n, pinned: pinned.map(toCard(opts.now)), items: (items!.results as CardRow[]).map(toCard(opts.now)) };
 }
 
 /** 單篇：欄目停用也能開（舊連結不失效），只看公開判定。 */
@@ -430,21 +441,22 @@ export async function adjacentPosts(db: D1Database, post: Post, now: number): Pr
   const one = (cmp: "<" | ">", dir: "DESC" | "ASC") =>
     db.prepare(`${CARD_SELECT} WHERE ${LIVE} AND p.column_id = ?2 AND (p.publish_at ${cmp} ?3 OR (p.publish_at = ?3 AND p.id ${cmp} ?4)) ORDER BY p.publish_at ${dir}, p.id ${dir} LIMIT 1`).bind(now, post.columnId, post.publishAt, post.id);
   const [prev, next] = await db.batch<CardRow>([one("<", "DESC"), one(">", "ASC")]);
-  const card = (r: D1Result<CardRow> | undefined) => (r?.results[0] ? toCard(r.results[0]) : null);
+  const card = (r: D1Result<CardRow> | undefined) => (r?.results[0] ? toCard(now)(r.results[0]) : null);
   return { prev: card(prev), next: card(next) };
 }
 
 /** 同欄目最新的幾篇（排除自己）。 */
 export async function relatedPosts(db: D1Database, post: Post, now: number, limit = 3): Promise<PostCard[]> {
   const rows = await db.prepare(`${CARD_SELECT} WHERE ${LIVE} AND p.column_id = ?2 AND p.id <> ?3 ORDER BY p.publish_at DESC, p.id DESC LIMIT ?4`).bind(now, post.columnId, post.id, limit).all<CardRow>();
-  return rows.results.map(toCard);
+  return rows.results.map(toCard(now));
 }
 
 // ---- 對外形狀 -----------------------------------------------------------------
 
-/** 公開回應不帶成員 id 與原始 key：作者一律是官方。 */
-export function publicView({ authorMemberId: _a, coverKey: _c, shareCoverKey: _s, ...p }: Post) {
-  return { ...p, official: true as const, readMinutes: readMinutes(p.bodyMd) };
+/** 公開回應不帶成員 id、原始 key 與原始活動 id：作者一律是官方，活動換成摘要（草稿活動是 null）。 */
+export async function publicView(db: D1Database, { authorMemberId: _a, coverKey: _c, shareCoverKey: _s, campaignId, ...p }: Post, now: number) {
+  const r = campaignId ? await db.prepare(`SELECT ${CAMPAIGN_COLUMNS} FROM campaigns cmp WHERE cmp.id = ?`).bind(campaignId).first<CampaignRow>() : null;
+  return { ...p, official: true as const, readMinutes: readMinutes(p.bodyMd), campaign: r ? toBrief(r, now) : null };
 }
 
 /** 管理回應：作者換成公開 ID（handle），不給成員 id。 */
