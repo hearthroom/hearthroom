@@ -2235,6 +2235,7 @@
   "campaign.error.share_payout_not_cancellable": "이 지급은 이미 전송됐을 수 있어요. 먼저 결과를 확인해 주세요.",
   "campaign.error.share_payout_not_pending": "처리 중인 지급만 입금 여부를 확인할 수 있어요.",
   "campaign.error.share_payout_stale": "등급이나 금액이 바뀌었어요. 취소한 뒤 다시 지급해 주세요.",
+  "campaign.error.network": "연결이 끊겨서 결과가 확실하지 않아요. 잠시 후 새로고침해서 다시 확인해 주세요.",
   "campaign.evidence.add": "스크린샷 추가",
   "campaign.evidence.hint": "업로드하기 전에 공유와 관련 없는 개인 정보는 가려 주세요. 전체 채팅 기록이나 멤버 목록은 필요하지 않아요.",
   "campaign.evidence.uploading": "업로드 중…",
@@ -2297,8 +2298,8 @@
   "campaign.review.submitted": "제출됨",
   "campaign.review.needs_info": "보완 필요",
   "campaign.review.resubmitted": "다시 제출됨",
-  "campaign.review.approved": "승인",
-  "campaign.review.rejected": "반려",
+  "campaign.review.approved": "승인됨",
+  "campaign.review.rejected": "반려됨",
   "campaign.mine.resubmit": "자료 보완하기",
   "campaign.mine.closed": "보완 제출 기간이 지났어요",
   "campaign.mine.empty": "아직 제출한 공유가 없어요",
@@ -2379,7 +2380,7 @@
   "campaign.payouts.uncertain": "결과가 확실하지 않아요. 이미 전송됐을 수 있으니 지급 기록에서 결과를 확인해 주세요",
   "campaign.payouts.seeHistory": "이 콘텐츠는 지급 대기에서 빠졌어요. 결과는 지급 기록에서 확인할 수 있어요",
   "campaign.payouts.pendingNote": "처리 중이에요. 지급 기록의 ‘결과 확인’으로 지급 여부를 볼 수 있어요",
-  "campaign.nav": "공유 이벤트",
+  "campaign.nav": "공유 캠페인",
   "campaign.banner.cta": "자세히 보기",
   "campaign.banner.dismiss": "닫기"
 }

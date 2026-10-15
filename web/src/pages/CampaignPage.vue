@@ -12,7 +12,7 @@ import CampaignShareLinks from "@/components/CampaignShareLinks.vue";
 import NotFoundPage from "@/pages/NotFoundPage.vue";
 import { ApiError } from "@/lib/api";
 import {
-  DEFAULT_TIMEZONE, TIERS, campaignErrorText, fetchCampaign, fetchMyContents, formatPeriod, localized,
+  TIERS, campaignErrorText, fetchCampaign, fetchMyContents, formatPeriod, localized,
   type ApplyResult, type ContentView, type PublicCampaign,
 } from "@/lib/campaign";
 import { pageTitle } from "@/lib/i18n";
@@ -36,7 +36,8 @@ const loading = ref(true);
 const title = computed(() => (campaign.value ? localized(campaign.value.title, locale.value) || campaign.value.slug : ""));
 const intro = computed(() => renderDoc(campaign.value ? localized(campaign.value.intro, locale.value) : "").html);
 const period = computed(() => (campaign.value ? formatPeriod(campaign.value, locale.value) : ""));
-const at = (ms: number) => new Intl.DateTimeFormat(locale.value, { timeZone: campaign.value?.timezone || DEFAULT_TIMEZONE, dateStyle: "medium", timeStyle: "short" }).format(ms);
+// 截止時間跟活動期間同一個格式：活動自己的時區，後面帶時區名稱
+const at = (ms: number) => formatPeriod({ startsAt: ms, endsAt: null, timezone: campaign.value?.timezone ?? null }, locale.value);
 const tiers = computed(() => TIERS.filter((k) => typeof campaign.value?.tiers[k] === "number").map((k) => ({ key: k, amount: campaign.value!.tiers[k]! })));
 const signedIn = computed(() => !!session.me);
 

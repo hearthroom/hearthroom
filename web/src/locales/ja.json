@@ -2235,6 +2235,7 @@
   "campaign.error.share_payout_not_cancellable": "この付与はすでに送信された可能性があります。先に結果を確認してください。",
   "campaign.error.share_payout_not_pending": "入金状況を確認できるのは処理中の付与だけです。",
   "campaign.error.share_payout_stale": "段階か金額が変わりました。取り消してから付与し直してください。",
+  "campaign.error.network": "接続が切れたため、結果がはっきりしません。しばらくしてから更新して、もう一度確認してください。",
   "campaign.evidence.add": "スクリーンショットを追加",
   "campaign.evidence.hint": "アップロード前に、共有と関係のない個人情報は隠してください。チャット履歴全体やメンバー一覧は不要です。",
   "campaign.evidence.uploading": "アップロード中…",
@@ -2297,7 +2298,7 @@
   "campaign.review.submitted": "提出済み",
   "campaign.review.needs_info": "追加情報が必要",
   "campaign.review.resubmitted": "再提出済み",
-  "campaign.review.approved": "承認",
+  "campaign.review.approved": "承認済み",
   "campaign.review.rejected": "不承認",
   "campaign.mine.resubmit": "情報を追加",
   "campaign.mine.closed": "追加提出の受付は終了しました",
@@ -2379,7 +2380,7 @@
   "campaign.payouts.uncertain": "結果がはっきりしません。すでに送信された可能性があるので、付与履歴で結果を確認してください",
   "campaign.payouts.seeHistory": "この内容は未付与から外れました。結果は付与履歴で確認できます",
   "campaign.payouts.pendingNote": "処理中です。付与履歴の「結果を確認」で付与されたか確かめられます",
-  "campaign.nav": "シェア企画",
+  "campaign.nav": "シェアキャンペーン",
   "campaign.banner.cta": "詳しく見る",
   "campaign.banner.dismiss": "閉じる"
 }

@@ -171,6 +171,23 @@ it("confirms a batch with the count and total points, sends exactly the selected
   expect(row('[data-content="s3"]')!.textContent).not.toContain(t("campaign.payouts.seeHistory"));
 });
 
+it("shows a batch item that failed with internal_error as uncertain, not as a definite failure", async () => {
+  replies.batch = [{ status: 200, body: { items: [
+    { contentId: "s1", error: "internal_error" },
+    { contentId: "s2", error: "share_self_payout" },
+  ] } }];
+  await mount("/review/payouts");
+  await vi.waitFor(() => expect(row('[data-content="s2"]')).not.toBeNull());
+  tick("s1"); tick("s2");
+  await nextTick();
+  (await button('[data-action="pay-selected"]')).click();
+  await confirmYes();
+  await vi.waitFor(() => expect(row('[data-content="s2"]')?.textContent).toContain("不能發放給自己"));
+  expect(row('[data-content="s1"]')!.textContent).toContain(t("campaign.payouts.uncertain"));
+  expect(row('[data-content="s1"] .rpo-result--bad')).toBeNull();
+  expect(row('[data-content="s2"] .rpo-result--bad')).not.toBeNull();
+});
+
 it("treats a pay with an unknown outcome as possibly sent: neutral text, same operation id, never batched", async () => {
   replies.pay = [{ network: true }, { status: 200, body: payout("y1", { contentId: "s1", status: "pending", error: "provider_timeout" }) }];
   await mount("/review/payouts");
