@@ -404,5 +404,51 @@ async function setFeatured(env: Env, bearer: string, roleId: string, featured: b
 }
 
 
-export const upstream = { fetchMe, setNickname, fetchRole, fetchMyRoles, fetchContentHashes, fetchDraftVersions, readForReview, readSealedForReview, fetchCommunityStatus, setFeatured };
+/** 本站應用的活動點數池（Provider 是唯一來源）。usageScope／maxPayout 在平台設定前是空值，這裡轉成 null。 */
+export interface CampaignPool {
+  balance: number;
+  paidTotal: number;
+  enabled: boolean;
+  usageScope: "all" | "agent_only" | null;
+  validityDays: number | null;
+  maxPayout: number | null;
+  configured: boolean;
+  updatedAt: string | null;
+}
+
+/**
+ * 讀點數池，用操作者自己的令牌（只在這一個呼叫裡用）。Provider 判斷他是不是本站應用的 owner／admin／viewer：
+ * 401/403 → 不是應用管理員；404 → 這家 Provider 沒有點數池（回 null）；其他失敗或 10 秒逾時 → 502。
+ */
+async function fetchCampaignPool(env: Env, bearer: string, provider: ProviderId = DEFAULT_PROVIDER): Promise<CampaignPool | null> {
+  const unavailable = () => new HttpError(502, "campaign_pool_unavailable");
+  let res: Response;
+  try {
+    res = await fetch(apiUrl(env, provider, "/open/v1/campaign-pool"), {
+      headers: { Authorization: `Bearer ${bearer}`, "User-Agent": UA },
+      signal: AbortSignal.timeout(10000),
+    });
+  } catch {
+    throw unavailable();
+  }
+  if (res.status === 401 || res.status === 403) throw new HttpError(403, "community_admin_required");
+  if (res.status === 404) return null;
+  if (!res.ok) throw unavailable();
+  const b = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+  if (!b || typeof b !== "object" || !Number.isSafeInteger(b.balance) || !Number.isSafeInteger(b.paidTotal)) throw unavailable();
+  const positive = (v: unknown) => (Number.isSafeInteger(v) && (v as number) > 0 ? (v as number) : null);
+  return {
+    balance: b.balance as number,
+    paidTotal: b.paidTotal as number,
+    enabled: b.enabled === true,
+    usageScope: b.usageScope === "all" || b.usageScope === "agent_only" ? b.usageScope : null,
+    validityDays: positive(b.validityDays),
+    maxPayout: positive(b.maxPayout),
+    configured: b.configured === true,
+    updatedAt: typeof b.updatedAt === "string" ? b.updatedAt : null,
+  };
+}
+
+
+export const upstream = { fetchMe, setNickname, fetchRole, fetchMyRoles, fetchContentHashes, fetchDraftVersions, readForReview, readSealedForReview, fetchCommunityStatus, setFeatured, fetchCampaignPool };
 export type Upstream = typeof upstream;

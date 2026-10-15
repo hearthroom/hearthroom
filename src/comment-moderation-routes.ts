@@ -1,10 +1,10 @@
 import { Hono, type Context } from "hono";
-import { isReviewAgent, memberByHandle, providerOf, requireReviewer } from "./members";
+import { memberByHandle } from "./members";
 import { readSettings, writeSettings, type CommunitySettings } from "./community-settings";
 import { addKeyword, clearMute, conflictOnDuplicate, decide, listKeywords, moderationQueue, moderationStats, removeKeyword, setMute, type Decision } from "./comment-moderation";
 import { operationOf } from "./moderation";
 import { bumpOp } from "./ops-metrics";
-import { upstream } from "./upstream";
+import { communityAdmin, humanOnly, staff } from "./staff";
 import { HttpError, type Env } from "./types";
 
 /**
@@ -37,14 +37,6 @@ commentModerationRoutes.use("/v1/moderation/*", async (c, next) => {
   if (op) await bumpOp(c.env.DB, "comment_moderation", op, c.res.status < 500 ? "denied" : "error");
 });
 
-async function staff(c: Ctx) {
-  const member = await requireReviewer(c, { allowAgent: true });
-  const agent = await isReviewAgent(c.env.DB, member.id);
-  return { member, agent, kind: agent ? ("ai" as const) : ("human" as const) };
-}
-function humanOnly(agent: boolean) {
-  if (agent) throw new HttpError(403, "agent_not_allowed");
-}
 const bodyOf = async (c: Ctx) => (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
 const reasonOf = (v: unknown) => (typeof v === "string" ? v.trim().slice(0, 2000) : "");
 function requiredReason(v: unknown): string {
@@ -119,17 +111,6 @@ commentModerationRoutes.delete("/v1/moderation/comment-keywords/:id", async (c) 
   await removeKeyword(c.env.DB, { id: c.req.param("id"), actorId: s.member.id, operationId: operationOf(b.operationId), now: Date.now() });
   return c.json({ items: await listKeywords(c.env.DB) });
 });
-
-/** 能不能改運營設定：問供應商這個人是不是本站的應用管理員。問不到就當不是。 */
-async function communityAdmin(c: Ctx): Promise<boolean> {
-  const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1];
-  if (!bearer) return false;
-  try {
-    return (await upstream.fetchCommunityStatus(c.env, bearer, providerOf(c)))?.admin === true;
-  } catch {
-    return false;
-  }
-}
 
 commentModerationRoutes.get("/v1/moderation/settings", async (c) => {
   const s = await staff(c);

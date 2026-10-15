@@ -72,6 +72,7 @@ import { livePost, publicPostById } from "./blog";
 import { reportComment } from "./comment-moderation";
 import { commentModerationRoutes } from "./comment-moderation-routes";
 import { blogRoutes } from "./blog-routes";
+import { campaignRoutes } from "./campaign-routes";
 import { readSettings } from "./community-settings";
 import { clearScore, readScore, setScore } from "./card-scores";
 import { SVG_WRAP_LIMIT, TOUCH_ICON_SIZE, allowedImageUrl, cardManifest, iconSize, signShortcutKey, svgWrap, verifyShortcutKey } from "./shortcut";
@@ -874,6 +875,7 @@ app.post("/v1/blog/posts/:postId/comments", async (c) => {
 });
 
 app.route("/", communityRoutes);
+app.route("/", campaignRoutes);
 app.route("/", blogRoutes);
 app.route("/", libraryRoutes);
 app.route("/", sukiRoutes);
