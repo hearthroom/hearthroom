@@ -47,11 +47,13 @@ let campaigns: ReturnType<typeof campaign>[];
 let queue: ReturnType<typeof queueItem>[];
 let content: ReturnType<typeof detail>;
 let decisions: { status: number; body: unknown }[];
+/** 設了就讓下一次讀佇列等到它放行 */
+let queueGate: Promise<void> | null;
 const origCreate = URL.createObjectURL, origRevoke = URL.revokeObjectURL;
 
 beforeEach(() => {
   i18n.global.locale.value = "zh-Hant";
-  calls = []; campaigns = [campaign(), campaign({ id: "c2", slug: "spring", title: { "zh-Hant": "春季活動" } })]; queue = [queueItem("p1")]; content = detail(); decisions = [];
+  calls = []; campaigns = [campaign(), campaign({ id: "c2", slug: "spring", title: { "zh-Hant": "春季活動" } })]; queue = [queueItem("p1")]; content = detail(); decisions = []; queueGate = null;
   URL.createObjectURL = vi.fn(() => "blob:mock") as typeof URL.createObjectURL;
   URL.revokeObjectURL = vi.fn();
   vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit = {}) => {
@@ -60,7 +62,7 @@ beforeEach(() => {
     calls.push({ method, path: url, body });
     const json = (status: number, b: unknown) => new Response(JSON.stringify(b), { status, headers: { "Content-Type": "application/json" } });
     if (url === "/v1/moderation/campaigns") return json(200, { items: campaigns, canEdit: false });
-    if (url.startsWith("/v1/moderation/campaign/placements?") || url === "/v1/moderation/campaign/placements") return json(200, { total: queue.length, items: queue });
+    if (url.startsWith("/v1/moderation/campaign/placements?") || url === "/v1/moderation/campaign/placements") { if (queueGate) await queueGate; return json(200, { total: queue.length, items: queue }); }
     if (url.startsWith("/v1/moderation/campaign/contents/")) return json(200, content);
     if (url.endsWith("/decision")) { const r = decisions.shift() ?? { status: 500, body: { error: "boom" } }; return json(r.status, r.body); }
     if (url.startsWith("/v1/campaign/evidence/")) return new Response(new Blob(["x"]), { status: 200 });
@@ -226,4 +228,42 @@ it("shows the applicant only by handle, opens links safely and links a duplicate
   expect(host.querySelector('[data-evidence="e2"][data-state="purged"]')).not.toBeNull();
   expect(host.innerHTML).not.toContain("mem-secret-1");
   expect(host.innerHTML).not.toContain("987654");
+});
+
+it("shows a link that is not http or https as plain text instead of a live link", async () => {
+  content = detail([placement("p1", { url: "javascript:alert(1)" })]);
+  await mount("/review/campaign/s1");
+  await vi.waitFor(() => expect(host.querySelector('[data-placement="p1"]')).not.toBeNull());
+  expect(host.querySelector('a[href^="javascript"]')).toBeNull();
+  expect(host.querySelector('[data-placement="p1"]')!.textContent).toContain("javascript:alert(1)");
+});
+
+it("when the placement was already decided, closes the dialog, says so and reloads", async () => {
+  decisions = [{ status: 409, body: { error: "share_already_decided" } }];
+  await mount("/review/campaign/s1");
+  const box = await openDecision("p1", "approve");
+  box.requestSubmit();
+  await vi.waitFor(() => expect(host.querySelector("[role=alert]")?.textContent).toContain(t("campaign.error.share_already_decided")));
+  expect(dialog()).toBeNull();
+  await vi.waitFor(() => expect(detailCalls()).toHaveLength(2));
+});
+
+it("reads an out-of-range page as the first page, and clears old rows while another segment loads", async () => {
+  await mount("/review/campaign?page=1e400");
+  await vi.waitFor(() => expect(host.querySelector('[data-placement="p1"]')).not.toBeNull());
+  expect(queueCalls()[0]).toBe("/v1/moderation/campaign/placements?page=1");
+  let release!: () => void;
+  queueGate = new Promise((r) => { release = r; });
+  [...host.querySelectorAll<HTMLButtonElement>(".seg__item")].find((b) => b.textContent === t("campaign.queue.approved"))!.click();
+  await vi.waitFor(() => expect(queueCalls().at(-1)).toBe("/v1/moderation/campaign/placements?status=approved&page=1"));
+  expect(host.querySelector('[data-placement="p1"]')).toBeNull();
+  release();
+  await vi.waitFor(() => expect(host.querySelector('[data-placement="p1"]')).not.toBeNull());
+});
+
+it("encodes the applicant handle in the member link", async () => {
+  content = detail();
+  content.content.applicant.handle = "a/b";
+  await mount("/review/campaign/s1");
+  await vi.waitFor(() => expect(host.querySelector('a[href="/review/members/a%2Fb"]')).not.toBeNull());
 });
