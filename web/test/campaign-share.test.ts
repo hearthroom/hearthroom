@@ -113,7 +113,7 @@ describe("登入後綁定", () => {
     expect(pendingCampaignShare()).toBeNull();
   });
 
-  it("4xx 清掉；網路錯誤與 5xx 留著下次再試", async () => {
+  it("4xx 清掉；網路錯誤、5xx 與 401／403／429 留著下次再試", async () => {
     rememberCampaignShare("AB12CD34", clicked - 1000);
     reply = () => { throw new TypeError("Failed to fetch"); };
     expect(await bindCampaignShare(async () => "tok")).toBe("retry");
@@ -121,6 +121,11 @@ describe("登入後綁定", () => {
     reply = () => json(503, { error: "temporarily_unavailable" });
     expect(await bindCampaignShare(async () => "tok")).toBe("retry");
     expect(pendingCampaignShare()?.code).toBe("AB12CD34");
+    for (const status of [401, 403, 429]) {
+      reply = () => json(status, { error: "x" });
+      expect(await bindCampaignShare(async () => "tok")).toBe("retry");
+      expect(pendingCampaignShare()?.code).toBe("AB12CD34");
+    }
     reply = () => json(400, { error: "invalid_arguments" });
     expect(await bindCampaignShare(async () => "tok")).toBe("done");
     expect(pendingCampaignShare()).toBeNull();

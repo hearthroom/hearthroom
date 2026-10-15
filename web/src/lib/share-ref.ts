@@ -231,7 +231,10 @@ export type CampaignShareOutcome = "none" | "no_token" | "bound" | "done" | "ret
 
 let binding: Promise<CampaignShareOutcome> | null = null;
 
-/** 登入後送一次綁定。伺服器有結論（200，不論綁上與否；或 4xx）就清掉紀錄；網路錯誤與 5xx 留著下次再試。 */
+/**
+ * 登入後送一次綁定。伺服器有結論（200，不論綁上與否；或其他 4xx）就清掉紀錄；網路錯誤、5xx，
+ * 以及令牌過期或暫時被擋（401／403／429，同推薦碼的處理）都留著下次再試，免得默默少算一位新玩家。
+ */
 export function bindCampaignShare(token: () => Promise<string | null>): Promise<CampaignShareOutcome> {
   if (!binding) binding = attemptCampaignShare(token).finally(() => { binding = null; });
   return binding;
@@ -248,7 +251,7 @@ async function attemptCampaignShare(token: () => Promise<string | null>): Promis
       headers: { Authorization: `Bearer ${t}`, "X-Provider": currentProvider(), "Content-Type": "application/json" },
       body: JSON.stringify({ s: share.code, firstSeenAt: share.at }),
     });
-    if (res.status >= 500) return "retry";
+    if (res.status >= 500 || res.status === 401 || res.status === 403 || res.status === 429) return "retry";
     forgetCampaignShare();
     const body = res.ok ? ((await res.json().catch(() => null)) as { bound?: boolean } | null) : null;
     return body?.bound ? "bound" : "done";
