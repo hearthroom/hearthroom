@@ -66,7 +66,7 @@ function onPick(e: Event) {
   input.value = "";
 }
 const onPaste = (e: ClipboardEvent) => {
-  const files = [...(e.clipboardData?.files ?? [])].filter((f) => f.type.startsWith("image/"));
+  const files = [...(e.clipboardData?.files ?? [])];
   if (!files.length) return;
   e.preventDefault();
   add(files);
@@ -78,7 +78,12 @@ function remove(item: Item) {
   items.value = items.value.filter((i) => i !== item);
   overflowed.value = false;
 }
-onBeforeUnmount(() => { alive = false; for (const i of items.value) URL.revokeObjectURL(i.preview); });
+onBeforeUnmount(() => {
+  alive = false;
+  // 上傳到一半就離開：讓父層的提交鈕不要永遠停用
+  if (busy.value) emit("update:busy", false);
+  for (const i of items.value) URL.revokeObjectURL(i.preview);
+});
 </script>
 
 <template>
@@ -90,7 +95,7 @@ onBeforeUnmount(() => { alive = false; for (const i of items.value) URL.revokeOb
           <img :src="i.preview" alt="" />
           <div v-if="i.state === 'uploading'" class="ghost ev-tile__cover" role="status"><span>{{ t("campaign.evidence.uploading") }}</span></div>
         </div>
-        <p v-if="i.state === 'failed'" class="notice notice--error ev-tile__error" role="alert">{{ t("campaign.evidence.failed") }}：{{ i.error }}</p>
+        <p v-if="i.state === 'failed'" class="notice notice--error ev-tile__error" role="alert"><span>{{ t("campaign.evidence.failed") }}</span><span>{{ i.error }}</span></p>
         <div class="ev-tile__actions">
           <button v-if="i.state === 'failed'" type="button" class="btn btn--sm" data-action="retry" @click="enqueue(i)">{{ t("campaign.evidence.retry") }}</button>
           <button type="button" class="btn btn--sm btn--ghost" data-action="remove" :disabled="i.state === 'uploading'" @click="remove(i)">{{ t("campaign.evidence.remove") }}</button>
@@ -99,7 +104,7 @@ onBeforeUnmount(() => { alive = false; for (const i of items.value) URL.revokeOb
     </div>
     <div class="ev-picker__bar">
       <label class="btn btn--sm" :aria-disabled="full">
-        <input type="file" accept="image/*" multiple hidden :disabled="full" @change="onPick" />
+        <input type="file" class="sr-only" accept="image/*" multiple :disabled="full" @change="onPick" />
         {{ t("campaign.evidence.add") }}
       </label>
       <span class="ev-picker__count subtle">{{ total }} / {{ MAX_EVIDENCE }}</span>
@@ -118,10 +123,11 @@ onBeforeUnmount(() => { alive = false; for (const i of items.value) URL.revokeOb
 .ev-tile__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .ev-tile__cover { position: absolute; inset: 0; display: grid; place-items: center; border-radius: 0; background: color-mix(in srgb, var(--surface) 70%, transparent); font-size: 12px; color: var(--text-2); }
 .ev-tile__cover span { position: relative; z-index: 1; }
-.ev-tile__error { margin: 0; padding: var(--s-2) var(--s-3); font-size: 12.5px; overflow-wrap: anywhere; }
+.ev-tile__error { display: grid; gap: var(--s-1); margin: 0; padding: var(--s-2) var(--s-3); font-size: 12.5px; overflow-wrap: anywhere; }
 .ev-tile__actions { display: flex; flex-wrap: wrap; gap: var(--s-1); }
 .ev-picker__bar { display: flex; align-items: center; gap: var(--s-3); }
-.ev-picker__bar .btn { cursor: pointer; }
+.ev-picker__bar .btn { position: relative; cursor: pointer; }
+.ev-picker__bar .btn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 .ev-picker__bar .btn[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; }
 .ev-picker__count { font-size: 13px; }
 @media (max-width: 760px) { .ev-tile__actions .btn, .ev-picker__bar .btn { min-height: 44px; } }
