@@ -2,6 +2,7 @@ import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
 import { pushLine, PUSH_LOCALES } from "../src/community/push";
+import { upstream } from "../src/upstream";
 import { bearer, identities, makeAgent, makeMember, makeReviewer, resetDb, restoreUpstream, testHandle } from "./helpers";
 
 // 審核端：佇列、內容明細（重複標示）、決定與通知。
@@ -60,6 +61,8 @@ const notes = (memberId: string) => env.DB.prepare("SELECT event_key, kind, path
 beforeEach(async () => {
   await resetDb();
   identities({ owner: OWNER, other: OTHER, reviewer: REVIEWER, agent: AGENT, member: MEMBER });
+  // 真人核准後會問 Provider 是不是應用管理員（是才自動發放）；這裡的審核員都不是，也不打真的網路。
+  upstream.fetchCommunityStatus = async () => ({ admin: false, featuredUsed: 0, featuredQuota: 50 });
   owner = await makeMember(OWNER);
   other = await makeMember(OTHER);
   await makeMember(MEMBER);
