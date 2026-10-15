@@ -130,14 +130,14 @@ const contentRows = computed<EffectRow[]>(() => stats.value!.effect.topContents.
           <div class="cs-scroll">
             <table class="cs-table">
               <caption>{{ t('campaign.stats.byTier') }}</caption>
-              <thead><tr><th scope="col" /><th scope="col">{{ t('campaign.stats.funnel.submitted') }}</th><th scope="col">{{ t('campaign.stats.funnel.approved') }}</th></tr></thead>
+              <thead><tr><th scope="col"><span class="sr-only">{{ t('campaign.stats.rowHeader') }}</span></th><th scope="col">{{ t('campaign.stats.funnel.submitted') }}</th><th scope="col">{{ t('campaign.stats.funnel.approved') }}</th></tr></thead>
               <tbody><tr v-for="r in tierRows" :key="r.key" :data-row="`tier.${r.key}`"><th scope="row">{{ r.label }}</th><td>{{ int(r.submitted) }}</td><td>{{ int(r.approved) }}</td></tr></tbody>
             </table>
           </div>
           <div class="cs-scroll">
             <table class="cs-table">
               <caption>{{ t('campaign.stats.byPlatform') }}</caption>
-              <thead><tr><th scope="col" /><th scope="col">{{ t('campaign.stats.funnel.submitted') }}</th><th scope="col">{{ t('campaign.stats.funnel.approved') }}</th></tr></thead>
+              <thead><tr><th scope="col"><span class="sr-only">{{ t('campaign.stats.rowHeader') }}</span></th><th scope="col">{{ t('campaign.stats.funnel.submitted') }}</th><th scope="col">{{ t('campaign.stats.funnel.approved') }}</th></tr></thead>
               <tbody><tr v-for="r in platformRows" :key="r.key" :data-row="`platform.${r.key}`"><th scope="row">{{ r.label }}</th><td>{{ int(r.submitted) }}</td><td>{{ int(r.approved) }}</td></tr></tbody>
             </table>
           </div>
@@ -189,9 +189,9 @@ const contentRows = computed<EffectRow[]>(() => stats.value!.effect.topContents.
         <dl class="cs-stats cs-big">
           <div class="stat" data-stat="attributed"><dt>{{ t('campaign.stats.effect.attributed') }}</dt><dd>{{ int(stats.effect.attributed) }}</dd></div>
           <div class="stat" data-stat="d7Rate"><dt>{{ t('campaign.stats.effect.d7Rate') }}</dt><dd>{{ rate(stats.effect.d7) }}</dd></div>
-          <div class="stat" data-stat="costPerD7"><dt>{{ t('campaign.stats.effect.costPerD7') }}</dt><dd>{{ points(stats.effect.costPerD7) }}</dd></div>
+          <div class="stat" data-stat="costPerD7"><dt>{{ t('campaign.stats.effect.costPerD7') }}</dt><dd>{{ points(stats.effect.costPerD7) }}</dd><dd class="subtle cs-cost-note">{{ t('campaign.stats.effect.d7CostNote') }}</dd></div>
         </dl>
-        <p class="subtle cs-note">{{ t('campaign.stats.effect.visitors', { visitors: int(stats.effect.visitors), firstPlay: int(stats.effect.firstPlay) }) }}</p>
+        <p class="subtle cs-note" data-visitors>{{ t('campaign.stats.effect.visitors', { visitors: int(stats.effect.visitors), attributed: int(stats.effect.attributed), firstPlay: int(stats.effect.firstPlay) }) }}</p>
         <div class="cs-pair">
           <div v-for="c in retention" :key="c.key" class="cs-card" :data-retention="c.key">
             <h3 class="cs-h3">{{ t(`campaign.stats.effect.${c.key}`) }}</h3>
@@ -199,6 +199,7 @@ const contentRows = computed<EffectRow[]>(() => stats.value!.effect.topContents.
             <p class="cs-card__ratio">{{ ratio(c.r) }}</p>
             <p class="subtle">{{ t(`campaign.stats.effect.${c.key}Note`) }}</p>
             <p class="subtle" :data-cost="c.key">{{ t('campaign.stats.effect.costEach', { cost: points(c.cost) }) }}</p>
+            <p v-if="c.key === 'd30'" class="subtle">{{ t('campaign.stats.effect.d30CostNote') }}</p>
           </div>
         </div>
 
@@ -208,7 +209,7 @@ const contentRows = computed<EffectRow[]>(() => stats.value!.effect.topContents.
               <caption>{{ table.title }}</caption>
               <thead>
                 <tr>
-                  <th scope="col" />
+                  <th scope="col"><span class="sr-only">{{ t('campaign.stats.rowHeader') }}</span></th>
                   <th scope="col">{{ t('campaign.stats.effect.col.visitors') }}</th>
                   <th scope="col">{{ t('campaign.stats.effect.col.attributed') }}</th>
                   <th scope="col">{{ t('campaign.stats.effect.col.firstPlay') }}</th>
@@ -260,6 +261,7 @@ const contentRows = computed<EffectRow[]>(() => stats.value!.effect.topContents.
 .cs-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--s-4); margin: 0; }
 .cs-stats dd { margin: 0; }
 .cs-big dd { font-size: 28px; }
+.cs-big .cs-cost-note { font-size: 12px; }
 .cs-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--s-4); }
 .cs-card { background: var(--surface-2); border-radius: var(--r-md); padding: var(--s-4); display: grid; gap: var(--s-1); min-width: 0; align-content: start; }
 .cs-card .cs-h3 { margin: 0; }

@@ -175,6 +175,21 @@ it("shows the three headline numbers, with whole-point cost", async () => {
   expect(text('[data-stat="costPerD7"]')).not.toContain("123.");
 });
 
+it("labels the cost as provisional, splits the visitor sentence into separate counts and names the row-header column", async () => {
+  await mount("/en/review/campaign/stats");
+  await ready();
+  expect(text('[data-stat="costPerD7"]')).toContain(t("campaign.stats.effect.d7CostNote"));
+  expect(text('[data-retention="d30"]')).toContain(t("campaign.stats.effect.d30CostNote"));
+  expect(text("[data-visitors]")).toBe(t("campaign.stats.effect.visitors", { visitors: "900", attributed: "120", firstPlay: "80" }));
+  const heads = [...host.querySelectorAll("thead tr > th:first-child")];
+  expect(heads.length).toBeGreaterThan(0);
+  for (const th of heads) {
+    if (th.textContent?.trim() === t("campaign.stats.authors.card")) continue;
+    expect(th.classList.contains("sr-only") || th.querySelector(".sr-only")).toBeTruthy();
+    expect(th.textContent?.trim()).toBe(t("campaign.stats.rowHeader"));
+  }
+});
+
 it("shows retained / eligible for D7 and D30 and a dash when nobody is eligible", async () => {
   await mount("/en/review/campaign/stats");
   await ready();
