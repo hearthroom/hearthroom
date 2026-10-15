@@ -35,8 +35,16 @@ it("code is inline for one line and a fenced block across lines", () => {
   expect(applyMarkdown(at("a\nb", 0, 3), "code").value).toBe("```\na\nb\n```");
 });
 
-it("table goes in as its own block with blank lines around it", () => {
+it("table goes in as its own block with blank lines around it, with the cursor in the first cell", () => {
   const r = applyMarkdown(at("intro\nmore", 5), "table");
   expect(r.value).toBe(`intro\n\n${MARKDOWN_TABLE}\n\nmore`);
-  expect(r.value.slice(r.start, r.end)).toBe(MARKDOWN_TABLE);
+  expect(r.start).toBe("intro\n\n| ".length);
+  expect(r.end).toBe(r.start);
+});
+
+it("line actions leave the cursor at the end of the block, so typing on does not replace what was there", () => {
+  for (const action of ["h2", "h3", "quote", "ul", "ol"] as const) {
+    const r = applyMarkdown(at("first line", 2), action);
+    expect([action, r.start, r.end]).toEqual([action, r.value.length, r.value.length]);
+  }
 });
