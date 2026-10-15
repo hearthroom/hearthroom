@@ -5,6 +5,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createApp, defineComponent, h, nextTick, type App } from "vue";
 import { createMemoryHistory, createRouter } from "vue-router";
+import { dateOnly } from "../src/lib/format";
 import { i18n } from "../src/lib/i18n";
 
 const tracked = vi.hoisted(() => [] as { event: string; data: Record<string, unknown> }[]);
@@ -74,7 +75,7 @@ const post = (extra: Record<string, unknown> = {}) => ({
   post: {
     id: "p9", columnId: "c1", columnSlug: "news", slug: "hello", locale: "zh-Hant", title: "開站公告", excerpt: "摘要", coverUrl: null,
     bodyMd: "## 第一節\n\n內文 <script>alert(1)</script>\n\n## 第二節\n\n### 小節\n\n結尾", status: "published", publishAt: 1, firstPublishedAt: Date.UTC(2026, 9, 10),
-    pinned: false, commentsClosed: false, pinnedCommentId: null, updatedAt: Date.UTC(2026, 9, 10), createdAt: 1, version: 1, official: true, readMinutes: 2, ...extra,
+    pinned: false, commentsClosed: false, pinnedCommentId: null, updatedAt: Date.UTC(2026, 9, 20), contentUpdatedAt: Date.UTC(2026, 9, 10), createdAt: 1, version: 1, official: true, readMinutes: 2, ...extra,
   },
   adjacent: { prev: card("old"), next: null },
   related: [card("r1")],
@@ -94,6 +95,28 @@ it("renders the post with a table of contents and escapes HTML in the body", asy
   expect(root.querySelector(".cmt-stub")!.getAttribute("data-post")).toBe("p9");
   expect(root.textContent).not.toContain(t("blog.preview"));
   expect(tracked).toContainEqual({ event: "blog_view", data: { subject: "hello" } });
+});
+
+it("labels a post updated by its latest content save, not by a pin or comment switch", async () => {
+  routes["/v1/blog/posts/news/hello"] = post();
+  expect((await mount(BlogPostPage, "/blog/news/hello", "/blog/:column/:slug")).textContent).not.toContain(t("blog.updated", { date: "" }).trim());
+  app.unmount(); host.remove();
+  routes["/v1/blog/posts/news/hello"] = post({ contentUpdatedAt: Date.UTC(2026, 9, 15) });
+  expect((await mount(BlogPostPage, "/blog/news/hello", "/blog/:column/:slug")).textContent).toContain(t("blog.updated", { date: dateOnly(Date.UTC(2026, 9, 15) / 1000) }));
+});
+
+it("shows a decorative monogram on a card without a cover: the column name, else the first character of the title", async () => {
+  routes["/v1/blog/posts"] = { total: 2, pinned: [card("p1", { pinned: true })], items: [card("a", { title: "你好世界" }), card("b", { coverUrl: "/v1/blog/images/x.webp" })] };
+  const root = await mount(BlogListPage, "/blog", "/blog/:column?");
+  const monos = [...root.querySelectorAll(".post-card__mono")];
+  expect(monos.map((m) => m.textContent)).toEqual(["公告", "公告"]);
+  expect(monos.every((m) => m.getAttribute("aria-hidden") === "true")).toBe(true);
+  expect(root.querySelector(".blog__hero .post-card__mono")).not.toBeNull();
+  expect(root.querySelectorAll(".post-card__cover img")).toHaveLength(1);
+  expect(root.querySelector(".post-card__cover img")!.getAttribute("alt")).toBe("");
+  routes["/v1/blog/posts"] = { total: 1, pinned: [], items: [card("c", { columnSlug: "ghost", title: "你好世界" })] };
+  app.unmount(); host.remove();
+  expect((await mount(BlogListPage, "/blog", "/blog/:column?")).querySelector(".post-card__mono")!.textContent).toBe("你");
 });
 
 it("shows the preview notice and sends the token when the link carries one", async () => {

@@ -9,6 +9,8 @@ import { postPath, type PostCard } from "@/lib/blog";
 import { useLocalePath } from "@/lib/use-locale";
 
 defineProps<{ post: PostCard; column: string; hero?: boolean }>();
+/** 沒有封面時疊在色塊上的字：欄目名稱，沒有就取標題第一個字。 */
+const monogram = (post: PostCard, column: string) => column || Array.from(post.title)[0] || "";
 const { lp } = useLocalePath();
 </script>
 
@@ -17,6 +19,7 @@ const { lp } = useLocalePath();
     <RouterLink :to="lp(postPath(post))" class="post-card__link">
       <div class="post-card__cover" :style="{ '--h': hueFrom(post.title) }">
         <img v-if="post.coverUrl" :src="post.coverUrl" alt="" :loading="hero ? 'eager' : 'lazy'" />
+        <span v-else class="post-card__mono" aria-hidden="true">{{ monogram(post, column) }}</span>
         <div v-if="$slots.badge" class="post-card__badge"><slot name="badge" /></div>
       </div>
       <div class="post-card__text">
@@ -43,6 +46,12 @@ const { lp } = useLocalePath();
 :root[data-mode="dark"] .post-card__cover { background: hsl(var(--h, 220) 22% 16%); }
 .post-card__cover img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform var(--dur-slow) var(--ease); }
 .post-card__link:hover .post-card__cover img { transform: scale(1.02); }
+/* 佔位比真封面輕：字號降一階、不透明度壓低，裝飾用（aria-hidden），顏色走文字 token 所以亮暗模式都讀得到 */
+.post-card__mono {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: var(--s-4);
+  font-size: 28px; font-weight: 700; line-height: 1.2; color: var(--text-2); opacity: 0.35; overflow: hidden; white-space: nowrap;
+}
+.post-card--hero .post-card__mono { font-size: clamp(32px, 5vw, 48px); }
 .post-card__badge { position: absolute; top: var(--s-3); left: var(--s-3); display: flex; gap: var(--s-2); }
 .post-card__text { display: grid; gap: var(--s-1); min-width: 0; }
 .post-card__meta { display: flex; flex-wrap: wrap; gap: 0 var(--s-2); margin: 0; font-size: 12.5px; color: var(--text-3); }
