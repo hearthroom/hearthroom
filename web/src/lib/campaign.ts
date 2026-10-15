@@ -177,6 +177,18 @@ const query = (q: Record<string, string | number | undefined>) => {
   return s ? `?${s}` : "";
 };
 
+/** 公開活動頁讀到的：草稿與不存在都是 404 campaign_not_found。門檻、保留天數、點數池不在這裡。 */
+export interface PublicCampaign {
+  slug: string; title: Localized; phase: "upcoming" | "open" | "ended"; startsAt: number | null; endsAt: number | null; timezone: string | null; bannerUrl: string | null;
+  intro: Localized; submitDeadline: number | null; payoutDeadline: number | null; tiers: Partial<Record<Tier, number>>; extraPlacementAmount: number | null;
+}
+/** 不帶令牌：訪客也看得到活動頁。 */
+export async function fetchCampaign(slug: string): Promise<PublicCampaign> {
+  const res = await fetch(`${COMMUNITY_API}/campaigns/${enc(slug)}`, { headers: { "X-From": currentSurface() } });
+  if (!res.ok) return fail(res);
+  return (await res.json()) as PublicCampaign;
+}
+
 export const fetchCampaigns = (token: string) => request<{ items: Campaign[]; canEdit: boolean }>(token, "/moderation/campaigns");
 /** 沒有 id 是新活動；有 id 要帶上次讀到的版本號，別人先存過會回 campaign_version_conflict。 */
 export const saveCampaign = (token: string, input: CampaignInput, operationId: string, id?: string, expectedVersion?: number) =>

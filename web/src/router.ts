@@ -67,6 +67,8 @@ const pages: RouteRecordRaw[] = [
     },
   },
   { path: "blog/:column/:slug", component: () => import("./pages/BlogPostPage.vue") },
+  // 分享獎勵活動頁：訪客看得到規則，申請要登入（頁內提示，登入後帶回原頁，?s= 一起保留）
+  { path: "campaign/:slug", component: () => import("./pages/CampaignPage.vue") },
   // 站內玩卡：舞台整頁接管（bare = 不套站台頁首頁尾）。遊客進得來、看得到開場，送出時才請他登入
   // （owner 2026-10-10，見 PlayPage）；續玩、審核、作者試玩由 PlayPage 自己要求登入。
   { path: "play/:roleId", component: () => import("./pages/PlayPage.vue"), meta: { bare: true, preloadStage: true } },
