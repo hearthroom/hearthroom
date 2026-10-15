@@ -280,7 +280,7 @@ const HOLD_KEYS = ["keyword", "new_account_link", "too_many_links", "duplicate",
 
 export async function moderationStats(db: D1Database, now: number) {
   const since = now - 7 * DAY;
-  const [held, open, removed, handled, reasons] = await db.batch([
+  const [held, open, removed, handled, reasons, holds, reports] = await db.batch([
     db.prepare("SELECT COUNT(*) AS n FROM comments WHERE status = 'held'"),
     db.prepare("SELECT COUNT(DISTINCT r.comment_id) AS n FROM comment_reports r JOIN comments c ON c.id = r.comment_id WHERE r.resolved_at IS NULL AND c.status IN ('visible','held')"),
     db.prepare("SELECT COUNT(*) AS n FROM comments WHERE status = 'removed' AND moderated_at > ?").bind(since),
@@ -288,11 +288,16 @@ export async function moderationStats(db: D1Database, now: number) {
     db.prepare("SELECT moderated_at - created_at AS ms FROM comments WHERE status IN ('visible','removed') AND moderated_at > ? ORDER BY moderated_at DESC LIMIT 500").bind(since),
     // 每一次攔下都有一筆稽核（發表時的規則、檢舉摺疊、AI 標記），依當時的原因分組。
     db.prepare("SELECT json_extract(after_json, '$.holdReason') AS reason, COUNT(*) AS n FROM audit_log WHERE subject_kind = 'comment' AND action IN ('hold','flag') AND created_at > ? GROUP BY reason").bind(since),
+    // 攔截率：近 7 天新留言中「曾被攔下」的比例。放行會清掉 hold_reason，所以看攔下的稽核（同上，每次攔下都有一筆），不看欄位。
+    db.prepare(`SELECT COUNT(*) AS total, COALESCE(SUM(EXISTS (SELECT 1 FROM audit_log a WHERE a.subject_kind = 'comment' AND a.subject_id = c.id AND a.action IN ('hold','flag'))), 0) AS held
+      FROM comments c WHERE c.created_at > ?`).bind(since),
+    db.prepare("SELECT COUNT(*) AS n FROM comment_reports WHERE created_at > ?").bind(since),
   ]);
   const n = (r: D1Result) => (r.results[0] as { n: number }).n;
   const ms = (handled.results as { ms: number }[]).map((r) => r.ms).sort((a, b) => a - b);
   const mid = ms.length >> 1;
   const holdReasons7d = Object.fromEntries(HOLD_KEYS.map((k) => [k, 0])) as Record<(typeof HOLD_KEYS)[number], number>;
+  const fresh = holds.results[0] as { total: number; held: number };
   for (const r of reasons.results as { reason: string | null; n: number }[]) if (r.reason && r.reason in holdReasons7d) holdReasons7d[r.reason as keyof typeof holdReasons7d] = r.n;
   return {
     held: n(held),
@@ -300,5 +305,7 @@ export async function moderationStats(db: D1Database, now: number) {
     removed7d: n(removed),
     medianHandleMs7d: ms.length ? (ms.length % 2 ? ms[mid] : Math.round((ms[mid - 1] + ms[mid]) / 2)) : null,
     holdReasons7d,
+    holdRate7d: fresh.total ? fresh.held / fresh.total : null,
+    reports7d: n(reports),
   };
 }

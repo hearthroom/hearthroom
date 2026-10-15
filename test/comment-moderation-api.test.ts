@@ -199,6 +199,21 @@ describe("統計與指標", () => {
     expect(metrics).toContain('hearthroom_comment_moderation_total{action="hold",outcome="success"} 1');
     expect(metrics).toContain('hearthroom_comment_moderation_total{action="release",outcome="success"} 1');
   });
+
+  it("攔截率：近 7 天新留言中曾被攔下的比例（放行過的也算）；近 7 天檢舉數", async () => {
+    const stats = async () => json(await SELF.fetch("https://c.test/v1/moderation/comments/stats", { headers: bearer("mod") }));
+    expect(await stats()).toMatchObject({ holdRate7d: null, reports7d: 0 });
+    await env.DB.prepare("INSERT INTO comment_keywords VALUES ('k1','違禁','test',1)").run();
+    const released = (await json(await post("fan", { content: "違禁一" }))).commentId;
+    await decide("mod", released, "release"); // 放行後 hold_reason 清空，仍算曾被攔下
+    const plain = await say("fan", "普通");
+    const old = (await json(await post("fan", { content: "違禁二" }))).commentId;
+    await env.DB.prepare("UPDATE comments SET created_at = ? WHERE id = ?").bind(Date.now() - 8 * 86_400_000, old).run();
+    expect((await report("other", plain, { reason: "spam" })).status).toBe(200);
+    expect((await report("mod", plain, { reason: "abuse" })).status).toBe(200);
+    await env.DB.prepare("UPDATE comment_reports SET created_at = ? WHERE reporter_member_id = (SELECT member_id FROM member_identities WHERE external_id = ?)").bind(Date.now() - 8 * 86_400_000, String(MOD)).run();
+    expect(await stats()).toMatchObject({ holdRate7d: 0.5, reports7d: 1 });
+  });
 });
 
 const del = (token: string, id: string) => SELF.fetch(`https://c.test/v1/comments/${id}`, { method: "DELETE", headers: bearer(token) });

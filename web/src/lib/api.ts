@@ -805,7 +805,8 @@ export interface QueuedComment {
   moderationReason: string | null;
   suggestedBy: "ai" | null;
 }
-export interface CommentStats { held: number; openReports: number; removed7d: number; medianHandleMs7d: number | null; holdReasons7d: Record<string, number> }
+/** holdRate7d：近 7 天新留言中曾被攔下的比例，沒有新留言時 null；reports7d：近 7 天的檢舉數。 */
+export interface CommentStats { held: number; openReports: number; removed7d: number; medianHandleMs7d: number | null; holdReasons7d: Record<string, number>; holdRate7d: number | null; reports7d: number }
 /** 沒設（null）＝那條規則不啟用。 */
 export interface CommentSettings { commentNewAccountDays: number | null; commentMaxLinks: number | null; commentReportFoldThreshold: number | null }
 export interface CommentKeyword { id: string; pattern: string; createdAt: number }
