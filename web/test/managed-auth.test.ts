@@ -5,6 +5,30 @@ import {persist,restorePersisted,refresh,revokeSession} from '@/lib/oauth';
 
 beforeEach(()=>{resetManagedAuthForTest();localStorage.clear();sessionStorage.clear();});
 afterEach(()=>vi.unstubAllGlobals());
+it.each([2, 99])('checks managed credential ownership for an account-bound upload (actual account %s)',async(actual)=>{
+  const {accountToken,forgetVerifiedAccount}=await import('@/lib/connections');
+  forgetVerifiedAccount('harbor');
+  vi.stubGlobal('fetch',vi.fn(async(url:string)=>{
+    if(url.endsWith('/config'))return Response.json({managed:true});
+    if(url.endsWith('/token'))return Response.json({accessToken:'renewed-upload-token',expiresAt:Date.now()+3600000});
+    return Response.json({accountNumId:actual});
+  }));
+  expect(await accountToken('harbor',2,{verifyManaged:true})).toBe(actual===2?'renewed-upload-token':null);
+  expect(fetch).toHaveBeenCalledWith('https://api.harperharbor.com/open/v1/me',expect.anything());
+});
+it('renews a managed token rejected by the ownership check before resuming uploads',async()=>{
+  const {accountToken,forgetVerifiedAccount}=await import('@/lib/connections');
+  forgetVerifiedAccount('harbor');
+  let issued=0;
+  vi.stubGlobal('fetch',vi.fn(async(url:string,init?:RequestInit)=>{
+    if(url.endsWith('/config'))return Response.json({managed:true});
+    if(url.endsWith('/token'))return Response.json({accessToken:issued++?'current-upload-token':'expired-upload-token',expiresAt:Date.now()+3600000});
+    return new Headers(init?.headers).get('Authorization')==='Bearer current-upload-token'
+      ?Response.json({accountNumId:2}):new Response('{}',{status:401});
+  }));
+  expect(await accountToken('harbor',2,{verifyManaged:true})).toBe('current-upload-token');
+  expect(issued).toBe(2);
+});
 it('restores server-held provider authorization without local credentials and keeps access tokens in memory',async()=>{
   vi.stubGlobal('fetch',vi.fn(async(url:string)=>{
     if(url==='/v1/auth/config')return Response.json({managed:true});
