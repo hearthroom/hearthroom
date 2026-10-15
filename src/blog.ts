@@ -31,6 +31,8 @@ export type Post = {
 };
 export type PostCard = Pick<Post, "id" | "columnSlug" | "slug" | "title" | "excerpt" | "coverUrl" | "locale" | "firstPublishedAt" | "pinned" | "campaignId"> & { readMinutes: number; commentCount: number };
 export type PostInput = {
+  /** 編輯器的自動儲存：同一人十分鐘內連續的自動儲存併進同一筆修訂，修訂紀錄才不會被幾百個半成品淹沒 */
+  autosave?: boolean;
   columnId: string; slug: string; locale: Locale; title: string; excerpt: string; bodyMd: string;
   coverKey?: string | null; shareTitle?: string | null; shareDescription?: string | null; shareCoverKey?: string | null; campaignId?: string | null;
 };
@@ -205,17 +207,27 @@ const auditView = (r: { title: string; slug: string; column_id: string; version:
  * 寫入內容＋一筆修訂＋稽核，同一個 batch。更新是條件式（版本號沒變才寫），修訂與稽核用 changes() 串在後面：
  * 輸掉的那一方三條都不留。
  */
-async function writeContent(db: D1Database, before: PostRow | null, c: Content, actor: Actor, operationId: string, now: number, action: "create" | "save" | "restore"): Promise<Post> {
+/** 自動儲存併進前一筆修訂的時間窗 */
+const AUTOSAVE_MERGE_MS = 10 * 60_000;
+
+async function writeContent(db: D1Database, before: PostRow | null, c: Content, actor: Actor, operationId: string, now: number, action: "create" | "save" | "restore", auto = false): Promise<Post> {
   const id = before?.id ?? crypto.randomUUID();
   const version = (before?.version ?? 0) + 1;
-  const meta = JSON.stringify({ slug: c.slug, excerpt: c.excerpt, shareTitle: c.share_title, shareDescription: c.share_description, shareCoverKey: c.share_cover_key, coverKey: c.cover_key, locale: c.locale, columnId: c.column_id });
+  const meta = JSON.stringify({ slug: c.slug, excerpt: c.excerpt, shareTitle: c.share_title, shareDescription: c.share_description, shareCoverKey: c.share_cover_key, coverKey: c.cover_key, locale: c.locale, columnId: c.column_id, ...(auto ? { auto: true } : {}) });
+  // 前一筆也是同一人、十分鐘內的自動儲存：改寫那一筆，不另起一版（手動儲存與還原一律另起）
+  const mergeInto = auto && before
+    ? await db.prepare("SELECT id FROM blog_post_revisions WHERE post_id = ? AND editor_member_id = ? AND created_at > ? AND json_extract(meta_json, '$.auto') = 1 AND version = (SELECT MAX(version) FROM blog_post_revisions WHERE post_id = ?)")
+      .bind(id, actor.memberId, now - AUTOSAVE_MERGE_MS, id).first<{ id: string }>()
+    : null;
   const values = CONTENT_COLUMNS.map((k) => c[k]);
   const audit = { subjectKind: "blog_post" as const, subjectId: id, actorMemberId: actor.memberId, actorKind: actor.kind, action, before: before ? auditView(before) : {}, after: auditView({ ...c, version }), operationId, now };
   const revision = "INSERT INTO blog_post_revisions (id, post_id, editor_member_id, title, body_md, meta_json, version, created_at)";
   const writes = before
     ? [
         db.prepare(`UPDATE blog_posts SET ${CONTENT_COLUMNS.map((k) => `${k} = ?`).join(", ")}, version = version + 1, updated_at = ? WHERE id = ? AND version = ?`).bind(...values, now, id, before.version),
-        db.prepare(`${revision} SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE changes() > 0`).bind(crypto.randomUUID(), id, actor.memberId, c.title, c.body_md, meta, version, now),
+        mergeInto
+          ? db.prepare("UPDATE blog_post_revisions SET title = ?, body_md = ?, meta_json = ?, version = ?, created_at = ? WHERE id = ? AND changes() > 0").bind(c.title, c.body_md, meta, version, now, mergeInto.id)
+          : db.prepare(`${revision} SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE changes() > 0`).bind(crypto.randomUUID(), id, actor.memberId, c.title, c.body_md, meta, version, now),
         auditStmtIfChanged(db, audit),
       ]
     : [
@@ -241,7 +253,7 @@ export async function savePost(db: D1Database, input: PostInput & { id?: string;
   const before = await postRow(db, input.id);
   if (!before) throw new HttpError(404, "blog_post_not_found");
   if (before.version !== input.expectedVersion) await conflict(db, before.id);
-  return writeContent(db, before, c, actor, operationId, now, "save");
+  return writeContent(db, before, c, actor, operationId, now, "save", input.autosave === true);
 }
 
 export async function restoreRevision(db: D1Database, postId: string, revisionId: string, actor: Actor, operationId: string, now: number): Promise<Post> {
