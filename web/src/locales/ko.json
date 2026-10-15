@@ -2233,5 +2233,14 @@
   "campaign.error.share_payout_not_retryable": "이 지급은 이미 끝나서 다시 시도할 수 없어요.",
   "campaign.error.share_payout_not_cancellable": "이 지급은 지금 취소할 수 없어요.",
   "campaign.error.share_payout_not_pending": "처리 중인 지급만 입금 여부를 확인할 수 있어요.",
-  "campaign.error.share_payout_stale": "대기 중인 이 지급은 지금 지급할 금액보다 많아요. 취소한 뒤 다시 지급해 주세요."
+  "campaign.error.share_payout_stale": "대기 중인 이 지급은 지금 지급할 금액보다 많아요. 취소한 뒤 다시 지급해 주세요.",
+  "campaign.evidence.add": "스크린샷 추가",
+  "campaign.evidence.hint": "업로드하기 전에 공유와 관련 없는 개인 정보는 가려 주세요. 전체 채팅 기록이나 멤버 목록은 필요하지 않아요.",
+  "campaign.evidence.uploading": "업로드 중…",
+  "campaign.evidence.failed": "이 파일은 올라가지 않았어요",
+  "campaign.evidence.retry": "다시 시도",
+  "campaign.evidence.remove": "삭제",
+  "campaign.evidence.limit": "건당 최대 6장",
+  "campaign.evidence.purged": "보관 기간이 지났어요",
+  "campaign.evidence.open": "크게 보기"
 }
