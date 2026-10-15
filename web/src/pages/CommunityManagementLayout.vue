@@ -9,6 +9,7 @@ const reviewer = useReviewer();
 const { lp } = useLocalePath();
 /**
  * 前三個分頁對「作品」，「留言」對卡片底下的留言；「成員」對「人」（補充包、活動徽章）。發補充包跟審卡同一個權限等級，所以每個審核人都看得到。
+ * 「分享活動」審分享獎勵的申請，每個審核人（含 AI 帳號）都看得到；發放另外由應用管理員處理。
  * 「運營設定」每個審核人都看得到，只有應用管理員能改（服務端判）。
  * 「部落格」只給 manager／owner（寫文章的權限，服務端同樣再判一次）。
  */
@@ -17,6 +18,7 @@ const sections = [
   { key: 'cases', path: '/review/cases' },
   { key: 'cards', path: '/review/cards' },
   { key: 'comments', path: '/review/comments' },
+  { key: 'campaign', path: '/review/campaign' },
   { key: 'members', path: '/review/members' },
   { key: 'history', path: '/review/history' },
   { key: 'settings', path: '/review/settings' },
