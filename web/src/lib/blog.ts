@@ -125,8 +125,11 @@ export const fetchAdminPosts = (token: string, q: { status?: string; column?: st
   admin<{ total: number; items: AdminPostRow[] }>(token, `/posts?${new URLSearchParams({ ...(q.status ? { status: q.status } : {}), ...(q.column ? { column: q.column } : {}), ...(q.group ? { group: q.group } : {}), page: String(q.page) })}`);
 export const fetchAdminPost = (token: string, id: string) => admin<AdminPost>(token, `/posts/${encodeURIComponent(id)}`);
 /** 沒有 id 是新文章；有 id 要帶上次讀到的版本號，別人先存過會回 blog_version_conflict。 */
-export const savePost = (token: string, input: PostInput, operationId: string, id?: string, expectedVersion?: number) =>
-  id ? admin<AdminPost>(token, `/posts/${encodeURIComponent(id)}`, "PUT", { ...input, expectedVersion, operationId }) : admin<AdminPost>(token, "/posts", "POST", { ...input, operationId });
+/** autosave：編輯器自動存的；服務端把同一人連續的自動儲存併成一筆修訂 */
+export const savePost = (token: string, input: PostInput, operationId: string, id?: string, expectedVersion?: number, autosave = false) => {
+  const flag = autosave ? { autosave: true } : {};
+  return id ? admin<AdminPost>(token, `/posts/${encodeURIComponent(id)}`, "PUT", { ...input, expectedVersion, operationId, ...flag }) : admin<AdminPost>(token, "/posts", "POST", { ...input, operationId, ...flag });
+};
 export const setPostState = (token: string, id: string, change: StateChange, operationId: string) =>
   admin<AdminPost>(token, `/posts/${encodeURIComponent(id)}/state`, "POST", { change, operationId });
 export const fetchRevisions = (token: string, id: string) => admin<{ items: Revision[] }>(token, `/posts/${encodeURIComponent(id)}/revisions`);

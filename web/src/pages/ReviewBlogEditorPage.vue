@@ -114,6 +114,8 @@ function apply(p: AdminPost) {
   saved.value = JSON.stringify(draft);
   conflict.value = false;
   schedule.value = p.status === 'published' && p.publishAt && p.publishAt > Date.now() ? toLocalInput(p.publishAt) : '';
+  // 打開既有文章：網址代號還是標題建議的那個，就繼續跟著標題；手動改過的保持原樣
+  slugTouched.value = p.slug !== suggestSlug(p.title);
 }
 function toLocalInput(ms: number) {
   const d = new Date(ms - new Date(ms).getTimezoneOffset() * 60_000);
@@ -145,8 +147,9 @@ async function loadRevisions() {
   try { revisions.value = (await fetchRevisions(await token(), post.value.id)).items; } catch { /* 側欄讀不到不擋編輯 */ }
 }
 
-// 改過一次網址代號就不再跟著標題走
-watch(() => draft.title, (title) => { if (!post.value && !slugTouched.value) draft.slug = title.trim() ? suggestSlug(title) : ''; });
+// 網址代號跟著標題走：自動儲存早早就把新文章建起來，所以不能只看「還沒存過」；
+// 改過網址代號、或文章發布過（網址已經對外）就不再跟
+watch(() => draft.title, (title) => { if (!slugTouched.value && !post.value?.firstPublishedAt) draft.slug = title.trim() ? suggestSlug(title) : ''; });
 
 /** 回應帶著別人存的內容時，只收狀態、版本號留在原處並標成衝突：下一次存檔會被擋下，不會蓋掉別人的修改。 */
 function holdBase(prev: AdminPost, res: AdminPost) {
@@ -155,15 +158,23 @@ function holdBase(prev: AdminPost, res: AdminPost) {
   conflict.value = true;
 }
 
-async function save(opts: { auto?: boolean } = {}) {
-  if (saving.value || busy.value || uploading.value) return;
+/** 正在送的那次存檔：發布、更新要等它回來，用它存好的版本，不另外再送一次 */
+let inflight: Promise<void> | null = null;
+/** 頁面已經離開：在途的存檔回來後不再換網址、不再排下一次自動儲存 */
+let alive = true;
+function save(opts: { auto?: boolean } = {}): Promise<void> {
+  if (saving.value || busy.value || uploading.value) return inflight ?? Promise.resolve();
+  inflight = doSave(opts).finally(() => { inflight = null; });
+  return inflight;
+}
+async function doSave(opts: { auto?: boolean }) {
   const input = toInput(draft);
   const sent = JSON.stringify(draft);
   const key = `save:${JSON.stringify(input)}`;
   saving.value = true; error.value = ''; done.value = '';
   try {
     const p = post.value;
-    const res = await savePost(await token(), input, opFor(key), p?.id, p?.version);
+    const res = await savePost(await token(), input, opFor(key), p?.id, p?.version, !!opts.auto);
     ops.delete(key);
     // 重送被認成同一次時，回來的可能是別人較新的版本；存檔途中我又打了字的話，不拿它當基準（見 holdBase）
     if (res.version !== (p?.version ?? 0) + 1 && JSON.stringify(draft) !== sent) holdBase(p ?? { ...res, version: 0 }, res);
@@ -175,8 +186,9 @@ async function save(opts: { auto?: boolean } = {}) {
     }
     lastSaved.value = { at: Date.now(), auto: !!opts.auto };
     saveFailed.value = false;
-    if (!p) await router.replace(lp(`/review/blog/${res.id}`));
-    void loadRevisions();
+    if (!p && alive) await router.replace(lp(`/review/blog/${res.id}`));
+    // 修訂抽屜開著才重讀：自動儲存很頻繁，沒在看就不必每次拉一份
+    if (revOpen.value) void loadRevisions();
   } catch (e) {
     if (e instanceof ApiError && e.code === 'blog_version_conflict') conflict.value = true;
     // 自動儲存遇到暫時的問題（斷線、服務忙）：頂部改成「沒存上，再試一次」。
@@ -237,12 +249,15 @@ const closeMenu = () => menu.value?.removeAttribute('open');
 async function update() {
   closeMenu();
   if (!checkReady()) return;
+  if (inflight) await inflight;
   await save();
 }
 /** 發布（at 有值是定時）：還沒存過或有沒存的修改就先存，存成功才發布 */
 async function publishAt(at: number | null) {
   closeMenu();
   if (!checkReady()) return;
+  // 自動儲存正在送：等它回來；回來後還有沒存的修改（或根本還沒存過）就再存一次，存好才發布
+  if (inflight) await inflight;
   if (!post.value || dirty.value) {
     await save();
     if (!post.value || dirty.value || conflict.value || error.value) return;
@@ -383,6 +398,7 @@ let autoTimer: ReturnType<typeof setTimeout> | undefined;
 let refusedDraft = '';
 function scheduleAutosave() {
   clearTimeout(autoTimer);
+  if (!alive) return;
   // 衝突中不存：交給「載入最新版本／複製我的內容」；欄目、標題、網址沒齊也不存（新文章要齊了才建得起來）
   if (loading.value || !autosaves.value || !dirty.value || conflict.value || missing.value.length || JSON.stringify(draft) === refusedDraft) return;
   autoTimer = setTimeout(() => {
@@ -392,7 +408,7 @@ function scheduleAutosave() {
   }, AUTOSAVE_MS);
 }
 watch(() => JSON.stringify(draft), scheduleAutosave);
-onBeforeUnmount(() => clearTimeout(autoTimer));
+onBeforeUnmount(() => { alive = false; clearTimeout(autoTimer); });
 
 // ---- 離開前提醒：站內換頁與關分頁都攔 ----
 

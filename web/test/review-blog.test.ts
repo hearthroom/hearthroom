@@ -544,3 +544,89 @@ it('an autosave the server refuses (taken address) says why and waits for an edi
     await vi.waitFor(() => expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(2));
   } finally { vi.useRealTimers(); }
 });
+
+it('publish now from the menu while an autosave is in flight waits for it, then asks to publish', async () => {
+  await mount('/review/blog/p1');
+  await vi.waitFor(() => expect(source()?.value).toBe('舊內容'));
+  let release!: () => void;
+  handle = (c) => {
+    if (c.method === 'PUT') return { status: 200, body: post({ bodyMd: c.body.bodyMd, version: 4 }), wait: new Promise<void>((r) => { release = r; }) };
+    if (c.path === '/v1/blog/admin/posts/p1/state') return ok(post({ bodyMd: '新的', status: 'published', publishAt: 1, version: 5 }));
+    return undefined;
+  };
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  try {
+    type(source(), '新的'); await nextTick();
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_MS + 10);
+    await vi.waitFor(() => expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(1));
+  } finally { vi.useRealTimers(); }
+  host.querySelector<HTMLElement>('[data-action="publish-menu"]')!.click();
+  host.querySelector<HTMLButtonElement>('[data-action="publish-now"]')!.click();
+  await settle();
+  release();
+  await vi.waitFor(() => expect(confirm()).not.toBeNull());
+  confirm().click();
+  await vi.waitFor(() => expect(calls.some((c) => c.path === '/v1/blog/admin/posts/p1/state')).toBe(true));
+  expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(1);
+});
+
+it('a new post keeps its address following the title after the first autosave, until the address is edited', async () => {
+  let n = 0;
+  handle = (c) => c.method === 'POST' && c.path === '/v1/blog/admin/posts' ? ok(post({ id: 'p9', title: c.body.title, slug: c.body.slug, bodyMd: c.body.bodyMd, version: ++n }))
+    : c.method === 'PUT' ? ok(post({ id: 'p9', title: c.body.title, slug: c.body.slug, bodyMd: c.body.bodyMd, version: ++n }))
+      : c.path === '/v1/blog/admin/posts/p9/revisions' ? ok({ items: [] }) : undefined;
+  await mount('/review/blog/new?column=c1');
+  await vi.waitFor(() => expect(source()).not.toBeNull());
+  const title = host.querySelector<HTMLInputElement>('#bed-f-title')!;
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  try {
+    title.value = 'Hello'; title.dispatchEvent(new Event('input')); await nextTick();
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_MS + 10);
+    await vi.waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/v1/blog/admin/posts')).toBe(true));
+    await vi.advanceTimersByTimeAsync(0);
+    title.value = 'Hello world'; title.dispatchEvent(new Event('input')); await nextTick();
+    expect(host.querySelector<HTMLInputElement>('#bed-f-slug')!.value).toBe('hello-world');
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_MS + 10);
+    await vi.waitFor(() => expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(1));
+    expect(calls.find((c) => c.method === 'PUT')!.body).toMatchObject({ slug: 'hello-world', autosave: true });
+    const slug = host.querySelector<HTMLInputElement>('#bed-f-slug')!;
+    slug.value = 'mine'; slug.dispatchEvent(new Event('input')); await nextTick();
+    title.value = 'Hello again'; title.dispatchEvent(new Event('input')); await nextTick();
+    expect(slug.value).toBe('mine');
+  } finally { vi.useRealTimers(); }
+});
+
+it('a manual save is not marked as an autosave', async () => {
+  await mount('/review/blog/p1');
+  await vi.waitFor(() => expect(source()?.value).toBe('舊內容'));
+  handle = (c) => (c.method === 'PUT' ? ok(post({ bodyMd: c.body.bodyMd, version: 4 })) : undefined);
+  type(source(), '手動'); await nextTick();
+  saveNow();
+  await vi.waitFor(() => expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(1));
+  expect(calls.find((c) => c.method === 'PUT')!.body.autosave).toBeUndefined();
+});
+
+it('leaving while a new post\'s first autosave is in flight does not pull you back or save again', async () => {
+  let release!: () => void;
+  handle = (c) => c.method === 'POST' && c.path === '/v1/blog/admin/posts' ? { status: 200, body: post({ id: 'p9', title: c.body.title, slug: c.body.slug, bodyMd: c.body.bodyMd, version: 1 }), wait: new Promise<void>((r) => { release = r; }) }
+    : c.path === '/v1/blog/admin/posts/p9/revisions' ? ok({ items: [] }) : undefined;
+  await mount('/review/blog/new?column=c1');
+  await vi.waitFor(() => expect(source()).not.toBeNull());
+  const title = host.querySelector<HTMLInputElement>('#bed-f-title')!;
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  try {
+    title.value = 'Hello'; title.dispatchEvent(new Event('input')); await nextTick();
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_MS + 10);
+    await vi.waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/v1/blog/admin/posts')).toBe(true));
+  } finally { vi.useRealTimers(); }
+  type(source(), '還沒存的字'); await nextTick();
+  const leaving = router.push('/review/blog');
+  await vi.waitFor(() => expect(confirm()).not.toBeNull());
+  confirm().click();
+  await leaving;
+  expect(router.currentRoute.value.path).toBe('/review/blog');
+  release();
+  await settle(); await new Promise((r) => setTimeout(r, AUTOSAVE_MS + 200)); await settle();
+  expect(router.currentRoute.value.path).toBe('/review/blog');
+  expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(0);
+}, 10_000);

@@ -312,3 +312,28 @@ describe("同一個操作編號重送", () => {
     await expect(saveColumn(env.DB, { slug: "x", name: { "zh-Hant": "x" }, description: {}, sort: 0, enabled: true, parentId: null }, actor(), id, 71)).rejects.toMatchObject({ status: 409, message: "blog_operation_repeated" });
   });
 });
+
+describe("自動儲存的修訂", () => {
+  const me = () => ({ memberId: editor, kind: "human" as const });
+  const save = (p: { id: string; version: number }, bodyMd: string, now: number, autosave: boolean, who = me()) =>
+    savePost(env.DB, { id: p.id, expectedVersion: p.version, columnId, slug: "hello", locale: "zh-Hant", title: "開站了", excerpt: "", bodyMd, autosave }, who, op(), now);
+
+  it("同一人連續的自動儲存併成一版；手動儲存、隔了十分鐘、換人存都另起一版", async () => {
+    let p = await draft();
+    p = await save(p, "一", 100, true);
+    p = await save(p, "一二", 200, true);
+    p = await save(p, "一二三", 300, true);
+    expect((await listRevisions(env.DB, p.id)).length).toBe(2);
+    const latest = (await listRevisions(env.DB, p.id))[0]!;
+    expect((await env.DB.prepare("SELECT body_md FROM blog_post_revisions WHERE id = ?").bind(latest.id).first<{ body_md: string }>())!.body_md).toBe("一二三");
+    p = await save(p, "手動", 400, false);
+    p = await save(p, "手動後自動", 500, true);
+    expect((await listRevisions(env.DB, p.id)).length).toBe(4);
+    p = await save(p, "隔很久", 500 + 11 * 60_000, true);
+    expect((await listRevisions(env.DB, p.id)).length).toBe(5);
+    const other = await makeReviewer(50009);
+    p = await save(p, "別人", 500 + 11 * 60_000 + 1, true, { memberId: other, kind: "human" });
+    expect((await listRevisions(env.DB, p.id)).length).toBe(6);
+    expect(p.version).toBe(8);
+  });
+});
