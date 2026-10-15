@@ -2233,5 +2233,14 @@
   "campaign.error.share_payout_not_retryable": "这笔发放已经结束，不能再重试。",
   "campaign.error.share_payout_not_cancellable": "这笔发放现在不能取消。",
   "campaign.error.share_payout_not_pending": "只有处理中的发放可以查询到账状况。",
-  "campaign.error.share_payout_stale": "这笔排队中的发放比现在应发的金额多，请取消后重新发放。"
+  "campaign.error.share_payout_stale": "这笔排队中的发放比现在应发的金额多，请取消后重新发放。",
+  "campaign.evidence.add": "添加截图",
+  "campaign.evidence.hint": "上传前请遮住和分享无关的个人资料，不需要整段聊天记录或成员名单。",
+  "campaign.evidence.uploading": "上传中…",
+  "campaign.evidence.failed": "这张没传上去",
+  "campaign.evidence.retry": "再试一次",
+  "campaign.evidence.remove": "移除",
+  "campaign.evidence.limit": "每笔最多 6 张",
+  "campaign.evidence.purged": "已过保留期限",
+  "campaign.evidence.open": "查看大图"
 }

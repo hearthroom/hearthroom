@@ -2233,5 +2233,14 @@
   "campaign.error.share_payout_not_retryable": "この付与は完了しているため、再試行できません。",
   "campaign.error.share_payout_not_cancellable": "この付与は今は取り消せません。",
   "campaign.error.share_payout_not_pending": "入金状況を確認できるのは処理中の付与だけです。",
-  "campaign.error.share_payout_stale": "この待機中の付与は現在の付与額より多いため、取り消してから付与し直してください。"
+  "campaign.error.share_payout_stale": "この待機中の付与は現在の付与額より多いため、取り消してから付与し直してください。",
+  "campaign.evidence.add": "スクリーンショットを追加",
+  "campaign.evidence.hint": "アップロード前に、共有と関係のない個人情報は隠してください。チャット履歴全体やメンバー一覧は不要です。",
+  "campaign.evidence.uploading": "アップロード中…",
+  "campaign.evidence.failed": "アップロードできませんでした",
+  "campaign.evidence.retry": "もう一度試す",
+  "campaign.evidence.remove": "削除",
+  "campaign.evidence.limit": "1件につき最大6枚",
+  "campaign.evidence.purged": "保存期間を過ぎました",
+  "campaign.evidence.open": "拡大して見る"
 }
