@@ -16,20 +16,24 @@ function wrap({ value, start, end }: Edit, before: string, after: string, placeh
   return { value: value.slice(0, start) + before + picked + after + value.slice(end), start: start + before.length, end: start + before.length + picked.length };
 }
 
-/** 選取範圍碰到的每一行加前綴；同一類的舊前綴先拿掉（標題換級、清單換種類不會疊在一起） */
+/**
+ * 選取範圍碰到的每一行加前綴；同一類的舊前綴先拿掉（標題換級、清單換種類不會疊在一起）。
+ * 游標放在這段的最後面、不選取：選著整段的話，接著打字會把那幾行整個蓋掉。
+ */
 function prefixLines({ value, start, end }: Edit, prefix: (i: number) => string, strip: RegExp): Edit {
   const from = lineStart(value, start), to = lineEnd(value, end);
   const block = value.slice(from, to).split("\n").map((l, i) => prefix(i) + l.replace(strip, "")).join("\n");
-  return { value: value.slice(0, from) + block + value.slice(to), start: from, end: from + block.length };
+  const at = from + block.length;
+  return { value: value.slice(0, from) + block + value.slice(to), start: at, end: at };
 }
 
-/** 自成一段的區塊：前後各留一個空行（已經有就不重複） */
-function block({ value, start, end }: Edit, text: string): Edit {
+/** 自成一段的區塊：前後各留一個空行（已經有就不重複）。游標放在 caret 指定的位置（相對區塊開頭），不選取 */
+function block({ value, start, end }: Edit, text: string, caret: number): Edit {
   const before = value.slice(0, start), after = value.slice(end);
   const lead = !before || before.endsWith("\n\n") ? "" : before.endsWith("\n") ? "\n" : "\n\n";
   const tail = !after ? "" : after.startsWith("\n\n") ? "" : after.startsWith("\n") ? "\n" : "\n\n";
   const at = before.length + lead.length;
-  return { value: before + lead + text + tail + after, start: at, end: at + text.length };
+  return { value: before + lead + text + tail + after, start: at + caret, end: at + caret };
 }
 
 const HEADING = /^#{1,6}\s+/, LIST = /^\s*(?:[-*+]|\d+\.)\s+/, QUOTE = /^>\s?/;
@@ -47,7 +51,7 @@ export function applyMarkdown(e: Edit, action: Exclude<MarkdownAction, "image">,
     case "quote": return prefixLines(e, () => "> ", QUOTE);
     case "ul": return prefixLines(e, () => "- ", LIST);
     case "ol": return prefixLines(e, (i) => `${i + 1}. `, LIST);
-    case "table": return block(e, MARKDOWN_TABLE);
+    case "table": return block(e, MARKDOWN_TABLE, "| ".length);
     case "code": return e.value.slice(e.start, e.end).includes("\n") ? wrap(e, "```\n", "\n```", placeholder) : wrap(e, "`", "`", placeholder);
   }
 }
