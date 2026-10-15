@@ -163,6 +163,45 @@ it('ids 依選檔順序，不看誰先傳完', async () => {
   expect(p.ids.value).toEqual(['ev-2', 'ev-1']);
 });
 
+it('檔案輸入可以用鍵盤聚焦（不是 hidden），標籤在聚焦時有外框樣式', async () => {
+  const p = picker(); await p.mount();
+  const input = host.querySelector<HTMLInputElement>('input[type=file]')!;
+  expect(input.hasAttribute('hidden')).toBe(false);
+  expect(input.classList.contains('sr-only')).toBe(true);
+  expect(input.disabled).toBe(false);
+});
+
+it('上傳中卸載：父層收到 busy=false', async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  const base = globalThis.fetch;
+  vi.stubGlobal('fetch', vi.fn(async (...a: Parameters<typeof fetch>) => { await gate; return base(...a); }));
+  const p = picker(); await p.mount();
+  await pick([png('a.png')]);
+  expect(p.busy[p.busy.length - 1]).toBe(true);
+  app!.unmount(); app = null;
+  expect(p.busy[p.busy.length - 1]).toBe(false);
+  release();
+});
+
+it('貼上非圖片檔：跟拖放一樣說明被擋的原因', async () => {
+  const p = picker(); await p.mount();
+  const ev = new Event('paste', { bubbles: true, cancelable: true }) as Event & { clipboardData?: unknown };
+  ev.clipboardData = { files: [new File(['x'], 'a.txt', { type: 'text/plain' })] };
+  host.querySelector('.ev-picker')!.dispatchEvent(ev);
+  await settle();
+  expect(uploads()).toHaveLength(0);
+  expect(host.textContent).toContain(t('campaign.error.evidence_invalid'));
+});
+
+it('失敗的原因另起一行，不寫死全形冒號', async () => {
+  failing = { 'bad.png': 400 };
+  const p = picker(); await p.mount();
+  await pick([png('bad.png')]);
+  expect(host.textContent).not.toContain('：');
+  expect(host.querySelector('.ev-tile__error')!.querySelectorAll('span')).toHaveLength(2);
+});
+
 it('卸載時釋放所有本機預覽', async () => {
   const p = picker(); await p.mount();
   await pick([png('a.png'), png('b.png')]);
@@ -203,6 +242,7 @@ it('檢視器：點開放大，Esc 關閉、焦點回到縮圖；卸載時釋放
   await settle();
   const dialog = document.body.querySelector('.modal-backdrop .modal.panel[role=dialog]')!;
   expect(dialog.querySelector('img')!.getAttribute('src')).toBe(created[1]);
+  expect(dialog.getAttribute('aria-label')).toBe(t('campaign.evidence.open'));
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
   await settle();
   expect(document.body.querySelector('.modal-backdrop')).toBeNull();

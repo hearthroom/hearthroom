@@ -2240,7 +2240,7 @@
   "campaign.evidence.failed": "This one didn't upload",
   "campaign.evidence.retry": "Try again",
   "campaign.evidence.remove": "Remove",
-  "campaign.evidence.limit": "Up to 6 per entry",
+  "campaign.evidence.limit": "Up to 6 per submission",
   "campaign.evidence.purged": "Past retention period",
   "campaign.evidence.open": "View full size"
 }
