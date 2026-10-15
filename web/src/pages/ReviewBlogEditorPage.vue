@@ -14,8 +14,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { RouterLink, onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import {
-  columnName, createPreview, displayStatus, fetchAdminColumns, fetchAdminPost, fetchRevision, fetchRevisions, imageUrlOf, POST_LOCALES,
-  restoreRevision, savePost, setPostState, uploadBlogImage, type AdminPost, type BlogColumn, type PostInput, type Revision, type StateChange, suggestSlug,
+  allColumns, columnName, createPreview, displayStatus, fetchAdminColumns, fetchAdminPost, fetchRevision, fetchRevisions, imageUrlOf, POST_LOCALES,
+  restoreRevision, savePost, setPostState, uploadBlogImage, type AdminPost, type BlogGroup, type PostInput, type Revision, type StateChange, suggestSlug,
 } from '@/lib/blog';
 import { ApiError } from '@/lib/api';
 import { confirmDialog } from '@/lib/confirm';
@@ -48,7 +48,8 @@ const draft = reactive<Draft>(empty());
 /** 最後一次跟服務端對齊時的內容；跟它不一樣就是有沒存的修改 */
 const saved = ref(JSON.stringify(draft));
 const dirty = computed(() => JSON.stringify(draft) !== saved.value);
-const columns = ref<BlogColumn[]>([]);
+const groups = ref<BlogGroup[]>([]);
+const columns = computed(() => allColumns(groups.value));
 const revisions = ref<Revision[]>([]);
 const opened = ref<(Revision & { bodyMd: string }) | null>(null);
 const loading = ref(true);
@@ -65,10 +66,32 @@ const schedule = ref('');
 const previewUrl = ref('');
 const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 const source = ref<HTMLTextAreaElement | null>(null);
+/** 最後一次存好的時間，以及是不是自動存的（頂部顯示「已自動儲存 · 時間」） */
+const lastSaved = ref<{ at: number; auto: boolean } | null>(null);
+/** 自動儲存沒存上：不跳錯誤橫幅，頂部的儲存狀態改成可以點的「沒存上，再試一次」 */
+const saveFailed = ref(false);
+/** 手機上右側設定欄收成底部抽屜 */
+const sideOpen = ref(false);
+const revOpen = ref(false);
+const menu = ref<HTMLDetailsElement | null>(null);
+/** 按了發布或更新而必填沒填：標出來 */
+const showMissing = ref(false);
+const missing = computed(() => (['columnId', 'title', 'slug'] as const).filter((f) => !String(draft[f]).trim()));
+const isMissing = (f: string) => showMissing.value && (missing.value as readonly string[]).includes(f);
 
 const rendered = computed(() => renderDoc(draft.bodyMd).html);
 const openedHtml = computed(() => (opened.value ? renderDoc(opened.value.bodyMd).html : ''));
 const status = computed(() => (post.value ? displayStatus(post.value) : 'draft'));
+/** 已發布（含排程中）：主按鈕是「更新」，不自動儲存 */
+const live = computed(() => post.value?.status === 'published');
+const timeOf = (ms: number) => new Intl.DateTimeFormat(String(locale.value), { hour: '2-digit', minute: '2-digit' }).format(ms);
+const saveState = computed(() => {
+  if (saving.value) return t('blog.admin.saving');
+  if (saveFailed.value) return t('blog.admin.saveFailedRetry');
+  if (dirty.value) return t('blog.admin.unsavedShort');
+  if (lastSaved.value) return t(lastSaved.value.auto ? 'blog.admin.autoSavedAt' : 'blog.admin.savedAt', { time: timeOf(lastSaved.value.at) });
+  return '';
+});
 const localeLabel = (code: string) => LOCALES.find((l) => l.code === code)?.label ?? code;
 const message = (e: unknown, fallback = 'moderation.error.retry') => (e instanceof Error ? e.message : t(fallback));
 
@@ -101,12 +124,15 @@ async function load() {
     const access = await token();
     const id = route.params.id && route.params.id !== 'new' ? String(route.params.id) : '';
     const [cols, p, revs] = await Promise.all([fetchAdminColumns(access), id ? fetchAdminPost(access, id) : null, id ? fetchRevisions(access, id) : null]);
-    columns.value = cols.items;
+    groups.value = cols.items;
     revisions.value = revs?.items ?? [];
     if (p) apply(p);
     else {
       post.value = null;
-      Object.assign(draft, empty(), { columnId: cols.items[0]?.id ?? '' });
+      // 從列表的某個欄目點「新文章」會帶 ?column=；只認真的欄目（不是分組、也還存在）
+      const q = route.query.column;
+      const pre = typeof q === 'string' && allColumns(cols.items).some((c) => c.id === q) ? q : '';
+      Object.assign(draft, empty(), { columnId: pre });
       saved.value = JSON.stringify(draft);
       slugTouched.value = false;
     }
@@ -127,7 +153,7 @@ function holdBase(prev: AdminPost, res: AdminPost) {
   conflict.value = true;
 }
 
-async function save() {
+async function save(opts: { auto?: boolean } = {}) {
   if (saving.value || busy.value || uploading.value) return;
   const input = toInput(draft);
   const sent = JSON.stringify(draft);
@@ -144,12 +170,14 @@ async function save() {
       saved.value = JSON.stringify(fromPost(res));
       // 存檔途中又打了字：留著，那些仍是沒存的修改
       if (JSON.stringify(draft) === sent) Object.assign(draft, fromPost(res));
-      done.value = t('blog.admin.saved');
     }
+    lastSaved.value = { at: Date.now(), auto: !!opts.auto };
+    saveFailed.value = false;
     if (!p) await router.replace(lp(`/review/blog/${res.id}`));
     void loadRevisions();
   } catch (e) {
     if (e instanceof ApiError && e.code === 'blog_version_conflict') conflict.value = true;
+    else if (opts.auto && !(e instanceof ApiError && e.code === 'blog_invalid')) saveFailed.value = true;
     else error.value = message(e);
   } finally { saving.value = false; }
 }
@@ -189,13 +217,42 @@ async function change(c: StateChange, title: string, msg: string, danger = false
     done.value = t('blog.admin.saved');
   } catch (e) { error.value = message(e); } finally { busy.value = false; }
 }
-const publish = () => {
-  const at = scheduleAt.value;
-  return at
-    ? change({ status: 'published', publishAt: at }, t('blog.admin.schedule'), t('blog.admin.scheduleConfirm', { date: `${dateTime(at)} (${zone})` }))
-    : change({ status: 'published' }, t('blog.admin.publish'), t('blog.admin.publishConfirm'));
-};
-const unpublish = () => change({ status: 'unpublished' }, t('blog.admin.unpublish'), t('blog.admin.unpublishConfirm'), true);
+/** 必填沒填就不送：標紅、打開設定欄（手機）、焦點放到第一個缺的欄位 */
+function checkReady(): boolean {
+  if (!missing.value.length) return true;
+  showMissing.value = true;
+  sideOpen.value = true;
+  void nextTick(() => document.getElementById(`bed-f-${missing.value[0]}`)?.focus());
+  return false;
+}
+const closeMenu = () => menu.value?.removeAttribute('open');
+/** 已公開或排程中的「更新」；也是 ⌘S */
+async function update() {
+  closeMenu();
+  if (!checkReady()) return;
+  await save();
+}
+/** 發布（at 有值是定時）：還沒存過或有沒存的修改就先存，存成功才發布 */
+async function publishAt(at: number | null) {
+  closeMenu();
+  if (!checkReady()) return;
+  if (!post.value || dirty.value) {
+    await save();
+    if (!post.value || dirty.value || conflict.value || error.value) return;
+  }
+  if (at) await change({ status: 'published', publishAt: at }, t('blog.admin.schedule'), t('blog.admin.scheduleConfirm', { date: `${dateTime(at)} (${zone})` }));
+  else await change({ status: 'published' }, t('blog.admin.publish'), t('blog.admin.publishConfirm'));
+}
+const publish = () => publishAt(scheduleAt.value);
+/** 「定時發布…」：打開設定欄並把焦點放到發布時間 */
+function openSchedule() {
+  closeMenu();
+  sideOpen.value = true;
+  void nextTick(() => document.getElementById('bed-f-schedule')?.focus());
+}
+const primary = () => (live.value ? update() : publish());
+const primaryLabel = computed(() => (live.value ? t('blog.admin.update') : scheduleAt.value ? t('blog.admin.schedule') : t('blog.admin.publish')));
+const unpublish = () => { closeMenu(); return change({ status: 'unpublished' }, t('blog.admin.unpublish'), t('blog.admin.unpublishConfirm'), true); };
 const pin = (on: boolean) => change({ pinned: on }, t(on ? 'blog.admin.pin' : 'blog.admin.unpin'), t(on ? 'blog.admin.pinConfirm' : 'blog.admin.unpinConfirm'));
 const comments = (close: boolean) => change({ commentsClosed: close }, t(close ? 'blog.admin.closeComments' : 'blog.admin.openComments'), t(close ? 'blog.admin.closeCommentsConfirm' : 'blog.admin.openCommentsConfirm'), close);
 
@@ -208,7 +265,12 @@ async function makePreview() {
   } catch (e) { error.value = message(e); } finally { busy.value = false; }
 }
 
-// ---- 修訂紀錄 ----
+// ---- 修訂紀錄（右側抽屜） ----
+
+function openRevisions() {
+  revOpen.value = true;
+  void loadRevisions();
+}
 
 async function openRevision(r: Revision) {
   if (!post.value) return;
@@ -225,6 +287,7 @@ async function restore() {
     ops.delete(key);
     apply(res);
     opened.value = null;
+    revOpen.value = false;
     done.value = t('blog.admin.saved');
     void loadRevisions();
   } catch (e) { error.value = message(e); } finally { busy.value = false; }
@@ -285,19 +348,55 @@ onBeforeRouteLeave(ask);
 // 同一條記錄換到另一篇（或回到新文章）也要問；第一次存好換成自己的網址不問
 onBeforeRouteUpdate((to) => (to.params.id === post.value?.id ? true : ask()));
 const guard = (e: BeforeUnloadEvent) => { if (dirty.value) { e.preventDefault(); e.returnValue = ''; } };
-onMounted(() => { document.title = pageTitle(t('moderation.tab.blog')); window.addEventListener('beforeunload', guard); void load(); });
-onBeforeUnmount(() => window.removeEventListener('beforeunload', guard));
+/** ⌘S／Ctrl＋S 儲存（已公開的是更新）；Esc 關抽屜 */
+function onKey(e: KeyboardEvent) {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') { e.preventDefault(); void (live.value ? update() : save()); return; }
+  if (e.key === 'Escape' && revOpen.value) { revOpen.value = false; return; }
+  if (e.key === 'Escape' && sideOpen.value) sideOpen.value = false;
+}
+onMounted(() => {
+  document.title = pageTitle(t('moderation.tab.blog'));
+  window.addEventListener('beforeunload', guard);
+  window.addEventListener('keydown', onKey);
+  void load();
+});
+onBeforeUnmount(() => { window.removeEventListener('beforeunload', guard); window.removeEventListener('keydown', onKey); });
 // 新文章第一次存好會換到它自己的網址：那一篇已經在編輯器裡，不必重讀
 watch(() => route.params.id, (id) => { if (/\/review\/blog\/[^/]+$/.test(route.path) && (!id || id !== post.value?.id)) void load(); });
 </script>
 
 <template>
   <section class="bed" :aria-label="t('moderation.tab.blog')" :aria-busy="loading">
-    <div class="bed-bar">
-      <RouterLink class="btn btn--sm btn--ghost" :to="lp('/review/blog')">{{ t('blog.admin.back') }}</RouterLink>
-      <span class="chip bed-status">{{ t(`blog.admin.status.${status}`) }}</span>
-      <span v-if="post?.publishAt" class="subtle bed-when">{{ t('blog.admin.publishedAt', { date: dateTime(post.publishAt) }) }}</span>
-    </div>
+    <header class="bed-top">
+      <RouterLink class="btn btn--sm btn--ghost" :to="lp('/review/blog')">← {{ t('blog.admin.back') }}</RouterLink>
+      <span class="chip bed-status">{{ status === 'scheduled' && post?.publishAt ? t('blog.admin.scheduledFor', { date: dateTime(post.publishAt) }) : t(`blog.admin.status.${status}`) }}</span>
+      <button v-if="saveFailed" type="button" class="btn btn--sm btn--ghost bed-state bed-state--failed" data-save-state @click="save()">{{ saveState }}</button>
+      <span v-else class="subtle bed-state" data-save-state role="status">{{ saveState }}</span>
+      <span class="bed-top__spacer" />
+      <div class="seg bed-pane">
+        <button type="button" class="seg__item" :class="{ 'seg__item--on': pane === 'edit' }" :aria-pressed="pane === 'edit'" @click="pane = 'edit'">{{ t('blog.admin.edit') }}</button>
+        <button type="button" class="seg__item" :class="{ 'seg__item--on': pane === 'preview' }" :aria-pressed="pane === 'preview'" @click="pane = 'preview'">{{ t('blog.admin.preview') }}</button>
+      </div>
+      <button type="button" class="btn btn--sm bed-settings-toggle" data-action="open-settings" :aria-expanded="sideOpen" @click="sideOpen = !sideOpen">{{ t('blog.admin.openSettings') }}</button>
+      <div class="bed-primary">
+        <button type="button" class="btn btn--primary" data-action="primary" :disabled="saving || busy || uploading > 0 || loading" @click="primary">{{ primaryLabel }}</button>
+        <details ref="menu" class="bed-menu">
+          <summary class="btn btn--primary bed-menu__toggle" data-action="publish-menu" :aria-label="t('blog.admin.publishOptions')">▾</summary>
+          <div class="panel bed-menu__pop" role="menu">
+            <template v-if="!post || status === 'draft' || status === 'unpublished'">
+              <button type="button" role="menuitem" data-action="publish-now" @click="publishAt(null)">{{ t('blog.admin.publishNow') }}</button>
+              <button type="button" role="menuitem" data-action="schedule" @click="openSchedule">{{ t('blog.admin.scheduleEllipsis') }}</button>
+            </template>
+            <template v-else-if="status === 'scheduled'">
+              <button type="button" role="menuitem" data-action="publish-now" @click="publishAt(null)">{{ t('blog.admin.publishNow') }}</button>
+              <button type="button" role="menuitem" data-action="reschedule" :disabled="!scheduleAt || scheduleAt === post.publishAt" @click="publishAt(scheduleAt)">{{ t('blog.admin.reschedule') }}</button>
+              <button type="button" role="menuitem" data-action="cancel-schedule" @click="unpublish">{{ t('blog.admin.cancelSchedule') }}</button>
+            </template>
+            <button v-else type="button" role="menuitem" data-action="unpublish" @click="unpublish">{{ t('blog.admin.unpublish') }}</button>
+          </div>
+        </details>
+      </div>
+    </header>
 
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
     <p v-if="done && !error" class="notice" role="status">{{ done }}</p>
@@ -310,149 +409,175 @@ watch(() => route.params.id, (id) => { if (/\/review\/blog\/[^/]+$/.test(route.p
     </div>
     <p v-if="!loading && !columns.length" class="notice">{{ t('blog.admin.needColumn') }}</p>
 
-    <template v-if="loading">
-      <div class="ghost bed-ghost--title" />
-      <div class="ghost bed-ghost--body" />
-    </template>
-    <template v-else>
-      <input v-model="draft.title" class="input bed-title" maxlength="120" :placeholder="t('blog.admin.postTitle')" :aria-label="t('blog.admin.postTitle')" />
-
-      <div class="bed-actions">
-        <button type="button" class="btn btn--primary" data-action="save" :disabled="saving || busy || uploading > 0 || !columns.length || !draft.title.trim()" @click="save">{{ t('blog.admin.save') }}</button>
-        <template v-if="post">
-          <button v-if="post.status === 'published'" type="button" class="btn" data-action="unpublish" :disabled="busy || saving" @click="unpublish">{{ t('blog.admin.unpublish') }}</button>
-          <button v-else type="button" class="btn" data-action="publish" :disabled="busy || saving || dirty" :title="dirty ? t('blog.admin.saveFirst') : undefined" @click="publish">{{ scheduleAt ? t('blog.admin.schedule') : t('blog.admin.publish') }}</button>
-          <button type="button" class="btn" data-action="pin" :disabled="busy || saving" @click="pin(!post.pinned)">{{ post.pinned ? t('blog.admin.unpin') : t('blog.admin.pin') }}</button>
-          <button type="button" class="btn" data-action="comments" :disabled="busy || saving" @click="comments(!post.commentsClosed)">{{ post.commentsClosed ? t('blog.admin.openComments') : t('blog.admin.closeComments') }}</button>
+    <div class="bed-body">
+      <div class="bed-main">
+        <template v-if="loading">
+          <div class="ghost bed-ghost--title" />
+          <div class="ghost bed-ghost--body" />
+        </template>
+        <template v-else>
+          <input id="bed-f-title" v-model="draft.title" class="bed-title" maxlength="120" :placeholder="t('blog.admin.postTitle')" :aria-label="t('blog.admin.postTitle')" :aria-invalid="isMissing('title') || undefined" />
+          <slot name="toolbar" />
+          <div class="bed-split" :class="`bed-split--${pane}`">
+            <textarea ref="source" v-model="draft.bodyMd" class="input bed-source" data-source spellcheck="false" maxlength="60000" :aria-label="t('blog.admin.body')"
+                      @paste="onPaste" @drop="onDrop" @dragover.prevent />
+            <!-- renderDoc 不吃 HTML（html:false），跟文章頁同一份渲染 -->
+            <article class="bed-preview" :aria-label="t('blog.admin.preview')" v-html="rendered" />
+          </div>
         </template>
       </div>
-      <p v-if="post && dirty && post.status !== 'published'" class="subtle bed-hint">{{ t('blog.admin.saveFirst') }}</p>
 
-      <div class="seg bed-pane">
-        <button type="button" class="seg__item" :class="{ 'seg__item--on': pane === 'edit' }" :aria-pressed="pane === 'edit'" @click="pane = 'edit'">{{ t('blog.admin.edit') }}</button>
-        <button type="button" class="seg__item" :class="{ 'seg__item--on': pane === 'preview' }" :aria-pressed="pane === 'preview'" @click="pane = 'preview'">{{ t('blog.admin.preview') }}</button>
-      </div>
-      <div class="bed-split" :class="`bed-split--${pane}`">
-        <textarea ref="source" v-model="draft.bodyMd" class="input bed-source" data-source spellcheck="false" maxlength="60000" :aria-label="t('blog.admin.body')"
-                  @paste="onPaste" @drop="onDrop" @dragover.prevent />
-        <!-- renderDoc 不吃 HTML（html:false），跟文章頁同一份渲染 -->
-        <article class="panel bed-preview" :aria-label="t('blog.admin.preview')" v-html="rendered" />
-      </div>
+      <div v-if="sideOpen" class="bed-scrim" @click="sideOpen = false" />
+      <aside class="panel bed-side" :class="{ 'bed-side--open': sideOpen }" :aria-label="t('blog.admin.openSettings')">
+        <div class="bed-side__head">
+          <h2>{{ t('blog.admin.openSettings') }}</h2>
+          <button type="button" class="btn btn--sm btn--ghost bed-side__close" @click="sideOpen = false">{{ t('blog.admin.close') }}</button>
+        </div>
+        <label class="field" :class="{ 'field--invalid': isMissing('columnId') }">
+          <span>{{ t('blog.admin.column') }} <small class="subtle">{{ t('blog.admin.required') }}</small></span>
+          <select id="bed-f-columnId" v-model="draft.columnId" class="input" :aria-invalid="isMissing('columnId') || undefined">
+            <option value="" disabled>{{ t('blog.admin.column') }}</option>
+            <optgroup v-for="g in groups" :key="g.id" :label="columnName(g, String(locale))">
+              <option v-for="c in g.columns" :key="c.id" :value="c.id">{{ columnName(c, String(locale)) }}{{ c.enabled && g.enabled ? '' : ` (${t('blog.admin.hidden')})` }}</option>
+            </optgroup>
+          </select>
+        </label>
+        <label v-if="!live || status === 'scheduled'" class="field">
+          <span>{{ t('blog.admin.scheduleAt', { zone }) }}</span>
+          <input id="bed-f-schedule" v-model="schedule" class="input" type="datetime-local" />
+          <span class="subtle">{{ t('blog.admin.scheduleHint') }}</span>
+        </label>
+        <label class="field" :class="{ 'field--invalid': isMissing('slug') }">
+          <span>{{ t('blog.admin.slug') }} <small class="subtle">{{ t('blog.admin.required') }}</small></span>
+          <input id="bed-f-slug" v-model="draft.slug" class="input" maxlength="80" pattern="[a-z0-9][a-z0-9\-]*" autocapitalize="off" spellcheck="false" :aria-invalid="isMissing('slug') || undefined" @input="slugTouched = true" />
+          <span class="subtle">{{ t('blog.admin.slugHint') }}</span>
+        </label>
+        <label class="field">
+          <span>{{ t('blog.admin.locale') }}</span>
+          <select v-model="draft.locale" class="input">
+            <option v-for="l in POST_LOCALES" :key="l" :value="l">{{ localeLabel(l) }}</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>{{ t('blog.admin.excerpt') }} <small class="subtle">{{ draft.excerpt.length }}/300</small></span>
+          <textarea v-model="draft.excerpt" class="input" rows="3" maxlength="300" />
+        </label>
+        <div class="field">
+          <span class="bed-label">{{ t('blog.admin.cover') }}</span>
+          <img v-if="draft.coverKey" class="bed-cover" :src="imageUrlOf(draft.coverKey)!" alt="" />
+          <span class="bed-row">
+            <label class="btn btn--sm">{{ t('blog.admin.upload') }}<input type="file" accept="image/*" class="bed-file" :disabled="busy" @change="uploadCover($event, 'coverKey')" /></label>
+            <button v-if="draft.coverKey" type="button" class="btn btn--sm btn--ghost" @click="draft.coverKey = null">{{ t('blog.admin.removeImage') }}</button>
+          </span>
+        </div>
 
-      <div class="bed-lower">
-        <form class="panel bed-settings" @submit.prevent="save">
-          <h2>{{ t('blog.admin.settings') }}</h2>
+        <details v-if="post" class="bed-fold">
+          <summary>{{ t('blog.admin.settings') }}</summary>
+          <div class="bed-row">
+            <button type="button" class="btn btn--sm" data-action="pin" :disabled="busy || saving" @click="pin(!post.pinned)">{{ post.pinned ? t('blog.admin.unpin') : t('blog.admin.pin') }}</button>
+            <button type="button" class="btn btn--sm" data-action="comments" :disabled="busy || saving" @click="comments(!post.commentsClosed)">{{ post.commentsClosed ? t('blog.admin.openComments') : t('blog.admin.closeComments') }}</button>
+          </div>
+        </details>
+        <details class="bed-fold">
+          <summary>{{ t('blog.admin.share') }}</summary>
           <label class="field">
-            <span>{{ t('blog.admin.column') }}</span>
-            <select v-model="draft.columnId" class="input">
-              <option v-for="c in columns" :key="c.id" :value="c.id">{{ columnName(c, String(locale)) }}{{ c.enabled ? '' : ` (${t('blog.admin.hidden')})` }}</option>
-            </select>
+            <span>{{ t('blog.admin.shareTitle') }}</span>
+            <input v-model="draft.shareTitle" class="input" maxlength="120" :placeholder="draft.title" />
           </label>
           <label class="field">
-            <span>{{ t('blog.admin.slug') }}</span>
-            <input v-model="draft.slug" class="input" maxlength="80" pattern="[a-z0-9][a-z0-9\-]*" autocapitalize="off" spellcheck="false" @input="slugTouched = true" />
-            <span class="subtle">{{ t('blog.admin.slugHint') }}</span>
-          </label>
-          <label class="field">
-            <span>{{ t('blog.admin.locale') }}</span>
-            <select v-model="draft.locale" class="input">
-              <option v-for="l in POST_LOCALES" :key="l" :value="l">{{ localeLabel(l) }}</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>{{ t('blog.admin.excerpt') }}</span>
-            <textarea v-model="draft.excerpt" class="input" rows="3" maxlength="300" />
+            <span>{{ t('blog.admin.shareDescription') }}</span>
+            <textarea v-model="draft.shareDescription" class="input" rows="2" maxlength="300" :placeholder="draft.excerpt" />
           </label>
           <div class="field">
-            <span class="bed-label">{{ t('blog.admin.cover') }}</span>
-            <img v-if="draft.coverKey" class="bed-cover" :src="imageUrlOf(draft.coverKey)!" alt="" />
+            <span class="bed-label">{{ t('blog.admin.shareCover') }}</span>
+            <img v-if="draft.shareCoverKey" class="bed-cover" :src="imageUrlOf(draft.shareCoverKey)!" alt="" />
             <span class="bed-row">
-              <label class="btn btn--sm">{{ t('blog.admin.upload') }}<input type="file" accept="image/*" class="bed-file" :disabled="busy" @change="uploadCover($event, 'coverKey')" /></label>
-              <button v-if="draft.coverKey" type="button" class="btn btn--sm btn--ghost" @click="draft.coverKey = null">{{ t('blog.admin.removeImage') }}</button>
+              <label class="btn btn--sm">{{ t('blog.admin.upload') }}<input type="file" accept="image/*" class="bed-file" :disabled="busy" @change="uploadCover($event, 'shareCoverKey')" /></label>
+              <button v-if="draft.shareCoverKey" type="button" class="btn btn--sm btn--ghost" @click="draft.shareCoverKey = null">{{ t('blog.admin.removeImage') }}</button>
             </span>
           </div>
-          <fieldset class="bed-group">
-            <legend>{{ t('blog.admin.share') }}</legend>
-            <label class="field">
-              <span>{{ t('blog.admin.shareTitle') }}</span>
-              <input v-model="draft.shareTitle" class="input" maxlength="120" :placeholder="draft.title" />
-            </label>
-            <label class="field">
-              <span>{{ t('blog.admin.shareDescription') }}</span>
-              <textarea v-model="draft.shareDescription" class="input" rows="2" maxlength="300" :placeholder="draft.excerpt" />
-            </label>
-            <div class="field">
-              <span class="bed-label">{{ t('blog.admin.shareCover') }}</span>
-              <img v-if="draft.shareCoverKey" class="bed-cover" :src="imageUrlOf(draft.shareCoverKey)!" alt="" />
-              <span class="bed-row">
-                <label class="btn btn--sm">{{ t('blog.admin.upload') }}<input type="file" accept="image/*" class="bed-file" :disabled="busy" @change="uploadCover($event, 'shareCoverKey')" /></label>
-                <button v-if="draft.shareCoverKey" type="button" class="btn btn--sm btn--ghost" @click="draft.shareCoverKey = null">{{ t('blog.admin.removeImage') }}</button>
-              </span>
-            </div>
-          </fieldset>
+        </details>
+        <details class="bed-fold">
+          <summary>{{ t('blog.admin.campaign') }}</summary>
           <label class="field">
-            <span>{{ t('blog.admin.campaign') }}</span>
+            <span class="sr-only">{{ t('blog.admin.campaign') }}</span>
             <input v-model="draft.campaignId" class="input" maxlength="64" autocapitalize="off" spellcheck="false" />
           </label>
-          <label v-if="post && post.status !== 'published'" class="field">
-            <span>{{ t('blog.admin.scheduleAt', { zone }) }}</span>
-            <input v-model="schedule" class="input" type="datetime-local" />
-            <span class="subtle">{{ t('blog.admin.scheduleHint') }}</span>
-          </label>
-        </form>
+        </details>
+        <details v-if="post" class="bed-fold">
+          <summary>{{ t('blog.admin.previewLink') }}</summary>
+          <button type="button" class="btn btn--sm" :disabled="busy" @click="makePreview">{{ t('blog.admin.makePreview') }}</button>
+          <template v-if="previewUrl">
+            <code class="bed-link">{{ previewUrl }}</code>
+            <button type="button" class="btn btn--sm" @click="copy(previewUrl, 'blog.copied')">{{ t('blog.copyLink') }}</button>
+          </template>
+        </details>
+        <button v-if="post" type="button" class="btn btn--sm btn--ghost bed-revs-open" data-action="open-revisions" @click="openRevisions">{{ t('blog.admin.revisions') }} →</button>
+      </aside>
+    </div>
 
-        <aside class="bed-side">
-          <section v-if="post" class="panel bed-box">
-            <h2>{{ t('blog.admin.previewLink') }}</h2>
-            <button type="button" class="btn btn--sm" :disabled="busy" @click="makePreview">{{ t('blog.admin.makePreview') }}</button>
-            <template v-if="previewUrl">
-              <code class="bed-link">{{ previewUrl }}</code>
-              <button type="button" class="btn btn--sm" @click="copy(previewUrl, 'blog.copied')">{{ t('blog.copyLink') }}</button>
-            </template>
-          </section>
-          <section v-if="post" class="panel bed-box">
+    <Teleport to="body">
+      <div v-if="revOpen" class="bed-drawer-backdrop" @click.self="revOpen = false">
+        <section class="panel bed-drawer" role="dialog" aria-modal="true" :aria-label="t('blog.admin.revisions')">
+          <div class="bed-side__head">
             <h2>{{ t('blog.admin.revisions') }}</h2>
-            <p v-if="!revisions.length" class="subtle">{{ t('blog.admin.noRevisions') }}</p>
-            <ul v-else class="bed-revs">
-              <li v-for="r in revisions" :key="r.id">
-                <button type="button" class="bed-rev" :class="{ 'bed-rev--on': opened?.id === r.id }" :aria-pressed="opened?.id === r.id" @click="openRevision(r)">
-                  <span class="bed-rev__title">{{ r.title }}</span>
-                  <span class="subtle">{{ t('blog.admin.revisionBy', { name: r.editorHandle, date: dateTime(r.createdAt) }) }}</span>
-                </button>
-              </li>
-            </ul>
-            <div v-if="opened" class="bed-opened">
-              <h3>{{ opened.title }}</h3>
-              <article class="bed-preview bed-preview--rev" v-html="openedHtml" />
-              <button type="button" class="btn btn--sm btn--danger" data-action="restore" :disabled="busy" @click="restore">{{ t('blog.admin.restore') }}</button>
-            </div>
-          </section>
-        </aside>
+            <button type="button" class="btn btn--sm btn--ghost" @click="revOpen = false">{{ t('blog.admin.close') }}</button>
+          </div>
+          <p v-if="!revisions.length" class="subtle">{{ t('blog.admin.noRevisions') }}</p>
+          <ul v-else class="bed-revs">
+            <li v-for="r in revisions" :key="r.id">
+              <button type="button" class="bed-rev" :class="{ 'bed-rev--on': opened?.id === r.id }" :aria-pressed="opened?.id === r.id" @click="openRevision(r)">
+                <span class="bed-rev__title">{{ r.title }}</span>
+                <span class="subtle">{{ t('blog.admin.revisionBy', { name: r.editorHandle, date: dateTime(r.createdAt) }) }}</span>
+              </button>
+            </li>
+          </ul>
+          <div v-if="opened" class="bed-opened">
+            <h3>{{ opened.title }}</h3>
+            <article class="bed-preview bed-preview--rev" v-html="openedHtml" />
+            <button type="button" class="btn btn--sm btn--danger" data-action="restore" :disabled="busy" @click="restore">{{ t('blog.admin.restore') }}</button>
+          </div>
+        </section>
       </div>
-    </template>
+    </Teleport>
   </section>
 </template>
 
 <style scoped>
-.bed { display: grid; gap: var(--s-4); min-width: 0; }
-.bed-bar { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.bed { display: grid; gap: var(--s-3); min-width: 0; }
+.bed-top { position: sticky; top: var(--header-h); z-index: 20; display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; padding: var(--s-2) 0; background: var(--bg); }
+.bed-top__spacer { flex: 1; }
 .bed-status { cursor: default; }
-.bed-when { font-size: 13px; }
+.bed-state { font-size: 13px; }
+.bed-state--failed { color: var(--danger); }
+.bed-pane { flex: none; }
+.bed-settings-toggle { display: none; }
+.bed-primary { display: inline-flex; position: relative; }
+.bed-primary > .btn { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.bed-menu { position: relative; }
+.bed-menu__toggle { list-style: none; border-top-left-radius: 0; border-bottom-left-radius: 0; padding: 0 10px; margin-left: 1px; cursor: pointer; }
+.bed-menu__toggle::-webkit-details-marker { display: none; }
+.bed-menu__pop { position: absolute; right: 0; top: calc(100% + 4px); z-index: 40; display: grid; min-width: 180px; padding: var(--s-1); }
+.bed-menu__pop button { min-height: 40px; padding: 0 var(--s-3); border: 0; border-radius: var(--r-sm); background: transparent; color: var(--text); font: inherit; font-size: 14px; text-align: start; cursor: pointer; }
+.bed-menu__pop button:hover:not(:disabled) { background: var(--surface-2); }
+.bed-menu__pop button:disabled { color: var(--text-3); cursor: default; }
 .bed-conflict { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; justify-content: space-between; }
 .bed-conflict__actions { display: flex; gap: var(--s-2); flex-wrap: wrap; }
+.bed-body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--s-5); align-items: start; }
+.bed-main { display: grid; gap: var(--s-3); min-width: 0; }
 .bed-ghost--title { height: 48px; }
-.bed-ghost--body { height: 360px; }
-.bed-title { width: 100%; height: auto; padding: var(--s-3) var(--s-4); font-size: 20px; font-weight: 600; }
-.bed-actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
-.bed-hint { margin: calc(-1 * var(--s-2)) 0 0; font-size: 13px; }
-.bed-pane { display: none; justify-self: start; }
-.bed-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s-3); min-height: 420px; }
-.bed-source { width: 100%; height: auto; min-height: 420px; padding: var(--s-3) var(--s-4); resize: vertical; font: 14px/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-.bed-preview { padding: var(--s-4) var(--s-5); min-width: 0; overflow: auto; max-height: 720px; font-size: 15px; line-height: 1.8; overflow-wrap: anywhere; }
-.bed-preview :deep(h1), .bed-preview :deep(h2) { font-size: 20px; margin: var(--s-5) 0 var(--s-3); }
-.bed-preview :deep(h3) { font-size: 17px; margin: var(--s-4) 0 var(--s-2); }
+.bed-ghost--body { height: 420px; }
+.bed-title { width: 100%; padding: var(--s-2) 0; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--text); font: inherit; font-size: 28px; font-weight: 700; line-height: 1.3; outline: none; }
+.bed-title:focus { border-bottom-color: var(--accent); }
+.bed-title[aria-invalid='true'] { border-bottom-color: var(--danger); }
+.bed-split { display: grid; min-height: 60vh; }
+.bed-split--edit .bed-preview, .bed-split--preview .bed-source { display: none; }
+.bed-source { width: 100%; height: auto; min-height: 60vh; padding: var(--s-3) var(--s-4); resize: vertical; font: 15px/1.75 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.bed-preview { padding: var(--s-2) 0; min-width: 0; font-size: 16px; line-height: 1.8; overflow-wrap: anywhere; }
+.bed-preview :deep(h1), .bed-preview :deep(h2) { font-size: 22px; margin: var(--s-5) 0 var(--s-3); }
+.bed-preview :deep(h3) { font-size: 18px; margin: var(--s-4) 0 var(--s-2); }
 .bed-preview :deep(:first-child) { margin-top: 0; }
-.bed-preview :deep(p), .bed-preview :deep(ul), .bed-preview :deep(ol), .bed-preview :deep(blockquote), .bed-preview :deep(pre) { margin: 0 0 var(--s-3); }
+.bed-preview :deep(p), .bed-preview :deep(ul), .bed-preview :deep(ol), .bed-preview :deep(blockquote), .bed-preview :deep(pre), .bed-preview :deep(table) { margin: 0 0 var(--s-3); }
 .bed-preview :deep(ul), .bed-preview :deep(ol) { padding-left: 1.4em; }
 .bed-preview :deep(a) { color: var(--accent-text); text-decoration: underline; }
 .bed-preview :deep(img) { display: block; max-width: 100%; height: auto; border-radius: var(--r-md); }
@@ -460,40 +585,48 @@ watch(() => route.params.id, (id) => { if (/\/review\/blog\/[^/]+$/.test(route.p
 .bed-preview :deep(pre) { padding: var(--s-3); overflow-x: auto; border-radius: var(--r-sm); background: var(--surface-2); }
 .bed-preview :deep(pre code) { padding: 0; background: none; }
 .bed-preview :deep(blockquote) { padding: var(--s-2) var(--s-3); border-left: 3px solid var(--accent); background: var(--accent-tint); color: var(--text-2); }
-.bed-lower { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 340px); gap: var(--s-4); align-items: start; }
-.bed-settings { padding: var(--s-5); display: grid; min-width: 0; }
-.bed-settings h2, .bed-box h2 { font-size: 17px; margin-bottom: var(--s-3); }
-.bed-settings .field { margin-bottom: var(--s-4); }
-.bed-settings .field > span:first-child, .bed-label { font-size: 13px; font-weight: 600; }
-.bed-settings .input { width: 100%; }
-.bed-settings textarea.input { height: auto; padding: 10px 12px; line-height: 1.6; resize: vertical; }
-.bed-group { border: 0; margin: 0 0 var(--s-2); padding: 0; min-width: 0; }
-.bed-group legend { font-size: 15px; font-weight: 600; margin-bottom: var(--s-3); }
+.bed-preview :deep(table) { border-collapse: collapse; }
+.bed-preview :deep(th), .bed-preview :deep(td) { padding: 6px 10px; border: 1px solid var(--line); }
+.bed-side { position: sticky; top: calc(var(--header-h) + 64px); display: grid; gap: var(--s-4); padding: var(--s-4); max-height: calc(100vh - var(--header-h) - 80px); overflow-y: auto; min-width: 0; }
+.bed-side__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }
+.bed-side__head h2 { font-size: 16px; margin: 0; }
+.bed-side__close { display: none; }
+.bed-side .field { display: grid; gap: 6px; }
+.bed-side .field > span:first-child, .bed-label { font-size: 13px; font-weight: 600; }
+.bed-side .input { width: 100%; }
+.bed-side textarea.input { height: auto; padding: 8px 12px; line-height: 1.6; resize: vertical; }
+.field--invalid .input { border-color: var(--danger); }
+.bed-fold { display: grid; gap: var(--s-3); border-top: 1px solid var(--line); padding-top: var(--s-3); }
+.bed-fold summary { font-size: 13px; font-weight: 600; cursor: pointer; }
 .bed-row { display: flex; gap: var(--s-2); flex-wrap: wrap; }
 .bed-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .bed-row .btn { position: relative; cursor: pointer; }
-.bed-cover { display: block; max-width: 100%; max-height: 180px; border-radius: var(--r-sm); object-fit: cover; }
-.bed-side { display: grid; gap: var(--s-4); min-width: 0; }
-.bed-box { padding: var(--s-4); display: grid; gap: var(--s-2); min-width: 0; }
-.bed-box > .btn { justify-self: start; }
+.bed-cover { display: block; max-width: 100%; max-height: 160px; border-radius: var(--r-sm); object-fit: cover; }
 .bed-link { display: block; padding: 10px 12px; border-radius: var(--r-sm); background: var(--surface-2); font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; user-select: all; }
-.bed-revs { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-1); max-height: 320px; overflow-y: auto; }
+.bed-revs-open { justify-self: start; }
+.bed-scrim { display: none; }
+.bed-drawer-backdrop { position: fixed; inset: 0; z-index: 90; display: flex; justify-content: flex-end; background: rgba(0, 0, 0, 0.32); }
+.bed-drawer { width: min(440px, 100%); height: 100%; border-radius: 0; display: grid; align-content: start; gap: var(--s-3); padding: var(--s-4); overflow-y: auto; }
+.bed-revs { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-1); }
 .bed-rev { display: grid; gap: 2px; width: 100%; padding: var(--s-2) var(--s-3); border: 0; border-radius: var(--r-sm); background: transparent; color: var(--text); text-align: start; font: inherit; font-size: 13px; cursor: pointer; }
 .bed-rev:hover, .bed-rev--on { background: var(--surface-2); }
 .bed-rev__title { font-weight: 600; overflow-wrap: anywhere; }
 .bed-opened { display: grid; gap: var(--s-2); padding-top: var(--s-2); border-top: 1px solid var(--line); }
 .bed-opened h3 { font-size: 15px; }
 .bed-opened > .btn { justify-self: start; }
-.bed-preview--rev { padding: 0; max-height: 280px; font-size: 14px; }
+.bed-preview--rev { padding: 0; font-size: 14px; }
+@media (max-width: 899px) {
+  .bed-body { grid-template-columns: minmax(0, 1fr); }
+  .bed-settings-toggle { display: inline-flex; }
+  .bed-side { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 85; max-height: 80vh; border-radius: 24px 24px 0 0; padding-bottom: calc(var(--s-4) + env(safe-area-inset-bottom)); transform: translateY(100%); visibility: hidden; transition: transform var(--dur) var(--ease), visibility var(--dur); }
+  .bed-side--open { transform: none; visibility: visible; }
+  .bed-side__close { display: inline-flex; }
+  .bed-scrim { display: block; position: fixed; inset: 0; z-index: 84; background: rgba(0, 0, 0, 0.32); }
+}
 @media (max-width: 760px) {
-  .bed-pane { display: inline-flex; }
-  .bed-split { grid-template-columns: minmax(0, 1fr); min-height: 0; }
-  .bed-split--edit .bed-preview, .bed-split--preview .bed-source { display: none; }
-  .bed-source { min-height: 55vh; }
-  .bed-preview { max-height: none; padding: var(--s-4); }
-  .bed-lower { grid-template-columns: minmax(0, 1fr); }
-  .bed-settings { padding: var(--s-4); }
+  .bed-top { gap: var(--s-1); }
+  .bed-pane { order: 10; width: 100%; }
+  .bed-title { font-size: 22px; }
   .bed .btn, .bed .input:not(textarea) { min-height: 44px; }
-  .bed-actions .btn { flex: 1 1 auto; }
 }
 </style>
