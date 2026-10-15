@@ -95,15 +95,15 @@ describe("編輯", () => {
     expect(live.version).toBe(back.version + 2);
   });
 
-  it("公開的修改時間只看內容修訂：置頂、留言開關不動它；沒有修訂退回首次發布", async () => {
+  it("公開的修改時間只看內容修訂：置頂、留言開關不動它；不早於首次發布", async () => {
     const actor = { memberId: editor, kind: "human" as const };
     const p = await draft();
     await setPostState(env.DB, p.id, { status: "published", publishAt: 1000 }, actor, op(), 1000);
-    expect((await publicPost(env.DB, "news", "hello", 2000))!.contentUpdatedAt).toBe(10);
+    expect((await publicPost(env.DB, "news", "hello", 2000))!.contentUpdatedAt).toBe(1000); // 草稿先存（10），首發（1000）較晚
     await setPostState(env.DB, p.id, { pinned: true }, actor, op(), 3000);
     await setPostState(env.DB, p.id, { commentsClosed: true }, actor, op(), 3001);
     const pinned = (await publicPost(env.DB, "news", "hello", 4000))!;
-    expect([pinned.contentUpdatedAt, pinned.updatedAt]).toEqual([10, 3001]);
+    expect([pinned.contentUpdatedAt, pinned.updatedAt]).toEqual([1000, 3001]);
     await savePost(env.DB, { id: p.id, expectedVersion: pinned.version, columnId, slug: "hello", locale: "zh-Hant", title: "改", excerpt: "", bodyMd: "" }, actor, op(), 5000);
     expect((await publicPost(env.DB, "news", "hello", 6000))!.contentUpdatedAt).toBe(5000);
     await env.DB.prepare("DELETE FROM blog_post_revisions WHERE post_id = ?").bind(p.id).run();

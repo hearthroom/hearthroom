@@ -185,10 +185,10 @@ describe("部落格 Atom", () => {
     await setPostState(env.DB, p.id, { pinned: true }, actor(), op(), 9_000_000);
     const feed = (await get("/blog.atom")).text;
     expect(feed).toBe(before.feed);
-    expect(feed).toContain(`<updated>${new Date(10).toISOString()}</updated>`);
+    expect(feed).toContain(`<updated>${new Date(1000).toISOString()}</updated>`);
     const page = (await get("/blog/news/hello")).text;
-    expect(page).toContain(`<meta property="article:modified_time" content="${new Date(10).toISOString()}">`);
-    expect(page).toContain(`"dateModified":"${new Date(10).toISOString()}"`);
+    expect(page).toContain(`<meta property="article:modified_time" content="${new Date(1000).toISOString()}">`);
+    expect(page).toContain(`"dateModified":"${new Date(1000).toISOString()}"`);
     expect(page).toBe(before.page);
   });
 
