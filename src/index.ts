@@ -73,6 +73,7 @@ import { reportComment } from "./comment-moderation";
 import { commentModerationRoutes } from "./comment-moderation-routes";
 import { blogRoutes } from "./blog-routes";
 import { campaignRoutes } from "./campaign-routes";
+import { campaignMaintenance } from "./campaign-evidence";
 import { readSettings } from "./community-settings";
 import { clearScore, readScore, setScore } from "./card-scores";
 import { SVG_WRAP_LIMIT, TOUCH_ICON_SIZE, allowedImageUrl, cardManifest, iconSize, signShortcutKey, svgWrap, verifyShortcutKey } from "./shortcut";
@@ -1871,6 +1872,8 @@ export default {
     ctx.waitUntil(sukiRecall(env).catch(() => { console.warn("Suki recall unavailable"); return 0; })
       .then(() => dispatchPush(env)).catch(() => { console.warn("push dispatch unavailable"); }));
     ctx.waitUntil(cleanAvatars(env));
+    // 分享活動的截圖：未掛上的過期刪除、保留期到了刪物件
+    ctx.waitUntil(campaignMaintenance(env, Date.now()).catch(() => { console.warn("campaign maintenance unavailable"); }));
     // 更新說明：登記這個 build 的說明、台北晚上八點後建當天的 Discord 彙整
     ctx.waitUntil(maintainUpdates(env, Date.now()).catch(() => { console.warn("updates maintenance unavailable"); }));
     ctx.waitUntil(

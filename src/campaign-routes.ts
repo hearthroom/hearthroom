@@ -1,8 +1,9 @@
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { IMAGE_MAX_BYTES, imageErrorAs, storeRasterImage } from "./blog";
+import { EVIDENCE_MAX_BYTES, readEvidence, uploadEvidence } from "./campaign-evidence";
 import { campaignPhase, getCampaign, listCampaigns, saveCampaign, setCampaignStatus, type Actor, type Campaign, type CampaignInput } from "./campaign";
-import { providerOf } from "./members";
+import { providerOf, requireMember } from "./members";
 import { operationOf } from "./moderation";
 import { bumpOp } from "./ops-metrics";
 import { bearerOf, communityAdmin, humanOnly, staff } from "./staff";
@@ -62,6 +63,33 @@ campaignRoutes.get("/v1/campaigns/:slug", async (c) => {
   // getCampaign 也認 id；公開網址只認 slug。
   if (!campaign || campaign.slug !== slug || campaign.status === "draft") return c.json({ error: "campaign_not_found" }, 404, PUBLIC);
   return c.json(detailView(campaign, Date.now()), 200, PUBLIC);
+});
+
+// ---- 截圖（私有）--------------------------------------------------------------
+
+// 所有回應（含錯誤）都不快取；上傳記 evidence_upload、讀取記 evidence_view，依狀態碼分成功／被拒／出錯。
+campaignRoutes.use("/v1/campaign/evidence/*", async (c, next) => {
+  await next();
+  c.header("Cache-Control", "private, no-store");
+  const s = c.res.status;
+  await bumpOp(c.env.DB, "campaign", c.req.method === "POST" ? "evidence_upload" : "evidence_view", s < 400 ? "success" : s < 500 ? "denied" : "error");
+});
+
+campaignRoutes.post("/v1/campaign/evidence", bodyLimit({ maxSize: EVIDENCE_MAX_BYTES + 16384, onError: (c) => c.json({ error: "evidence_invalid" }, 400) }), async (c) => {
+  const member = await requireMember(c);
+  const form = await c.req.formData().catch(() => {
+    throw new HttpError(400, "evidence_invalid");
+  });
+  return c.json(await uploadEvidence(c.env, member.id, form.get("file"), Date.now()));
+});
+
+campaignRoutes.get("/v1/campaign/evidence/:id", async (c) => {
+  // 訪客跟別人一樣回 404，不回 401：不透露這張截圖存在。
+  const viewer = c.req.header("Authorization") ? (await requireMember(c)).id : null;
+  const obj = await readEvidence(c.env, viewer, c.req.param("id"), Date.now());
+  return new Response(obj.body, {
+    headers: { "Content-Type": obj.httpMetadata?.contentType ?? "application/octet-stream", "X-Content-Type-Options": "nosniff", "Content-Disposition": "inline" },
+  });
 });
 
 // ---- 管理 ---------------------------------------------------------------------
