@@ -75,11 +75,15 @@ const NOTIFY = `INSERT OR IGNORE INTO community_notifications (event_key, member
 /**
  * 把一次 Provider 結果寫回去，一個 batch：條件式 UPDATE → 稽核（changes() 串接）→ 通知（以這一筆稽核存在為條件，event_key 每筆發放每種只一次）。
  * 並發的重試與對帳都拿到「入帳」時只有一個改得到列，只留一筆稽核、只通知一次。
- * rejectFails：這次被拒能不能證明這把 key 從沒入帳。第一次送出，或上一次是池不足（Provider 明確沒寫入）才算；
- * 處理中（上一次結果未知）的那筆被拒不能證明什麼，維持 pending 只記代碼，要靠對帳查無才能取消。
+ * 每次送出都從 pending 出發（重試先把列改回 pending），r.attempts 是這一次送出的次數：
+ * 入帳以外的結果只在列仍是 pending 且次數還是這一次時才寫，晚回來的舊結果不會在較新的送出還沒回來時把列移出 pending
+ * （移出就放開了「同內容只能有一筆」的唯一索引，別人可以另開一筆再發）。入帳不看次數：Provider 說付了就是付了。
+ * rejectFails：這次被拒能不能證明這把 key 從沒入帳。第一次送出，或重試前是池不足（Provider 明確沒寫入）才算；
+ * 處理中（上一次結果未知）的那筆被拒不能證明什麼，idempotency_conflict 更表示 Provider 手上有這把 key：
+ * 這些都維持 pending 只記代碼，要靠對帳查無才能取消。
  */
-async function settle(x: Payer, r: Row, res: PayResult, op: string, from: string[], rejectFails: boolean, metric: "payout" | "reconcile") {
-  const db = x.env.DB, now = x.now(), auditId = crypto.randomUUID(), fromJson = JSON.stringify(from);
+async function settle(x: Payer, r: Row, res: PayResult, op: string, rejectFails: boolean, metric: "payout" | "reconcile") {
+  const db = x.env.DB, now = x.now(), auditId = crypto.randomUUID();
   const audit = (action: string, extra: { reason?: string; after?: unknown } = {}) =>
     ({ id: auditId, subjectKind: "share_payout", subjectId: r.id, actorMemberId: x.memberId, actorKind: "human", action, before: { status: r.status }, operationId: `${op}:settle`, now, ...extra }) as const;
   const notify = (kind: "share_paid" | "share_queued") => db.prepare(NOTIFY).bind(`share:payout:${r.id}:${kind}`, r.member_id, kind, now, auditId, r.member_id);
@@ -92,18 +96,18 @@ async function settle(x: Payer, r: Row, res: PayResult, op: string, from: string
     ];
   } else if (res.kind === "insufficient") {
     writes = [
-      db.prepare("UPDATE share_payouts SET status = 'blocked_insufficient', error = 'pool_insufficient', updated_at = ? WHERE id = ? AND status IN (SELECT value FROM json_each(?))").bind(now, r.id, fromJson),
+      db.prepare("UPDATE share_payouts SET status = 'blocked_insufficient', error = 'pool_insufficient', updated_at = ? WHERE id = ? AND status = 'pending' AND attempts = ?").bind(now, r.id, r.attempts),
       auditStmtIfChanged(db, audit("insufficient", { after: { status: "blocked_insufficient" } })),
       notify("share_queued"),
     ];
-  } else if (res.kind === "rejected" && rejectFails) {
+  } else if (res.kind === "rejected" && rejectFails && res.code !== "idempotency_conflict") {
     writes = [
-      db.prepare("UPDATE share_payouts SET status = 'failed', error = ?, settled_at = ?, updated_at = ? WHERE id = ? AND status IN (SELECT value FROM json_each(?))").bind(res.code, now, now, r.id, fromJson),
+      db.prepare("UPDATE share_payouts SET status = 'failed', error = ?, settled_at = ?, updated_at = ? WHERE id = ? AND status = 'pending' AND attempts = ?").bind(res.code, now, now, r.id, r.attempts),
       auditStmtIfChanged(db, audit("failed", { reason: res.code, after: { status: "failed" } })),
     ];
   } else if (res.kind === "rejected") {
     writes = [
-      db.prepare("UPDATE share_payouts SET error = ? WHERE id = ? AND status = 'pending'").bind(res.code, r.id),
+      db.prepare("UPDATE share_payouts SET error = ? WHERE id = ? AND status = 'pending' AND attempts = ?").bind(res.code, r.id, r.attempts),
       auditStmtIfChanged(db, audit("rejected", { reason: res.code, after: { status: "pending" } })),
     ];
   } else {
@@ -171,11 +175,15 @@ export async function requestPayout(x: Payer, contentId: string, op: string): Pr
     throw new HttpError(409, "share_payout_in_progress");
   }
   const row = (await load(db, id))!;
-  await settle(x, row, await send(x, row), op, ["pending"], true, "payout");
+  await settle(x, row, await send(x, row), op, true, "payout");
   return current(db, id);
 }
 
-/** 重試：只限 pending 或池不足；同一把 key、同一個金額與帳號（絕不重算），次數加一，先前的查無作廢。 */
+/**
+ * 重試：只限 pending 或池不足；同一把 key、同一個金額與帳號（絕不重算）。送出前先把列改回 pending、次數加一、先前的查無作廢：
+ * 結果不知道時列就停在 pending，要等對帳查無才能取消，不會留在「池不足」被直接取消而漏記一筆已入帳的錢。
+ * 條件含讀到的狀態與次數，同一筆同時兩次重試只有一個送得出去。
+ */
 export async function retryPayout(x: Payer, id: string, op: string): Promise<PayoutView> {
   const db = x.env.DB, now = x.now();
   const prior = await replayed(db, x.memberId, op, "retry");
@@ -192,7 +200,7 @@ export async function retryPayout(x: Payer, id: string, op: string): Promise<Pay
   let changed = 0;
   try {
     const [upd] = await db.batch([
-      db.prepare("UPDATE share_payouts SET attempts = attempts + 1, checked_absent_at = NULL, updated_at = ? WHERE id = ? AND status = ?").bind(now, id, r.status),
+      db.prepare("UPDATE share_payouts SET status = 'pending', error = NULL, attempts = attempts + 1, checked_absent_at = NULL, updated_at = ? WHERE id = ? AND status = ? AND attempts = ?").bind(now, id, r.status, r.attempts),
       auditStmtIfChanged(db, { subjectKind: "share_payout", subjectId: id, actorMemberId: x.memberId, actorKind: "human", action: "retry", before: { status: r.status, attempts: r.attempts }, after: { attempts: r.attempts + 1 }, operationId: op, now }),
     ]);
     changed = upd!.meta.changes;
@@ -205,7 +213,7 @@ export async function retryPayout(x: Payer, id: string, op: string): Promise<Pay
     throw new HttpError(409, "share_payout_not_retryable");
   }
   const row = (await load(db, id))!;
-  await settle(x, row, await send(x, row), op, OPEN, r.status === "blocked_insufficient", "payout");
+  await settle(x, row, await send(x, row), op, r.status === "blocked_insufficient", "payout");
   return current(db, id);
 }
 
@@ -244,20 +252,20 @@ export type CheckResult = "paid" | "absent" | "unknown";
 
 /**
  * 向 Provider 查一筆 pending：入帳了就照發放的規則記 paid；查無就記下時間（取消要用）；不知道就不動。
- * 查無只有在最近一次送出已超過 10 分鐘時才記：剛送出的那次 Provider 可能還在處理。
+ * 查無只有在最近一次送出已超過 10 分鐘時才記：剛送出的那次 Provider 可能還在處理。已記過的不再記（重試會清掉它）。
  * 只讀與條件式寫入，重複查沒有副作用，所以操作編號由伺服器產生。
  */
 async function checkRow(x: Payer, r: Row, op: string): Promise<CheckResult> {
   const db = x.env.DB;
   const got = await upstream.getCampaignPayout(x.env, x.bearer, r.id, x.provider).catch(() => ({ kind: "unknown" }) as const);
   if (got.kind === "paid") {
-    await settle(x, r, { kind: "paid", entryId: got.entryId, paidAt: got.paidAt, replayed: false }, op, ["pending"], false, "reconcile");
+    await settle(x, r, { kind: "paid", entryId: got.entryId, paidAt: got.paidAt, replayed: false }, op, false, "reconcile");
     return "paid";
   }
   if (got.kind === "absent") {
     const now = x.now();
     await db.batch([
-      db.prepare("UPDATE share_payouts SET checked_absent_at = ? WHERE id = ? AND status = 'pending' AND updated_at <= ?").bind(now, r.id, now - TEN_MIN),
+      db.prepare("UPDATE share_payouts SET checked_absent_at = ? WHERE id = ? AND status = 'pending' AND checked_absent_at IS NULL AND updated_at <= ?").bind(now, r.id, now - TEN_MIN),
       auditStmtIfChanged(db, { subjectKind: "share_payout", subjectId: r.id, actorMemberId: x.memberId, actorKind: "human", action: "absent", after: { checkedAbsentAt: now }, operationId: op, now }),
     ]);
   }
@@ -273,10 +281,10 @@ export async function checkPayout(x: Payer, id: string): Promise<{ result: Check
   return { result, payout: await current(x.env.DB, id) };
 }
 
-/** 對帳：一次最多 20 筆建立超過 10 分鐘的 pending，逐筆查（Worker 的子請求有上限）。 */
+/** 對帳：一次最多 20 筆建立超過 10 分鐘的 pending，還沒查無過的優先（舊的查無列不佔名額），逐筆查（Worker 的子請求有上限）。 */
 export async function reconcilePayouts(x: Payer): Promise<{ items: { result: CheckResult; payout: PayoutView }[] }> {
   const db = x.env.DB, op = crypto.randomUUID();
-  const rows = (await db.prepare(`SELECT ${COLUMNS} WHERE p.status = 'pending' AND p.created_at <= ? ORDER BY p.created_at, p.id LIMIT ?`).bind(x.now() - TEN_MIN, BATCH_MAX).all<Row>()).results;
+  const rows = (await db.prepare(`SELECT ${COLUMNS} WHERE p.status = 'pending' AND p.created_at <= ? ORDER BY p.checked_absent_at IS NOT NULL, p.created_at, p.id LIMIT ?`).bind(x.now() - TEN_MIN, BATCH_MAX).all<Row>()).results;
   const items = [];
   for (const r of rows) items.push({ result: await checkRow(x, r, `${op}:${r.id}`), payout: await current(db, r.id) });
   return { items };

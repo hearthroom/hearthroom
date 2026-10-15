@@ -445,6 +445,94 @@ describe("取消與對帳", () => {
   });
 });
 
+describe("修正一：同一把 key 的舊結果與重試", () => {
+  it("C1 池不足的那筆重試後結果未知（其實已入帳）：先變回 pending，不能立刻取消；對帳補記 paid 後沒有可發的", async () => {
+    const c = await content(owner, OWNER);
+    pool.balance = 0;
+    const v = await json(await pay(c));
+    expect(v.status).toBe("blocked_insufficient");
+    pool.balance = 5000;
+    pool.dropAfterPay = true;
+    const r = await json(await retry(v.id));
+    expect(r).toMatchObject({ status: "pending", attempts: 2 });
+    expect(await code(await cancel(v.id))).toBe("409 share_payout_not_cancellable");
+    await backdate(v.id, 11 * MIN);
+    expect(await code(await cancel(v.id))).toBe("409 share_payout_not_cancellable");
+    expect((await json(await check(v.id))).payout).toMatchObject({ status: "paid", providerEntryId: pool.entries.get(v.id)!.entryId });
+    expect(await code(await pay(c))).toBe("409 share_nothing_due");
+    expect(pool.entries.size).toBe(1);
+  });
+
+  it("I1 舊的那次送出晚回池不足：較新的一次（同一把 key）還在送，這筆維持 pending、不放開唯一索引", async () => {
+    const c = await content(owner, OWNER);
+    let n = 0, open1!: () => void, open2!: () => void;
+    const g1 = new Promise<void>((r) => { open1 = r; setTimeout(r, 3000); }), g2 = new Promise<void>((r) => { open2 = r; setTimeout(r, 3000); });
+    upstream.payCampaign = async (): Promise<PayResult> => {
+      const me = ++n;
+      if (me === 1) { await g1; return { kind: "insufficient" }; }
+      await g2;
+      return { kind: "unknown" };
+    };
+    const wait = async (k: number) => { for (let i = 0; i < 300 && n < k; i++) await new Promise((r) => setTimeout(r, 5)); expect(n).toBe(k); };
+    const a = pay(c);
+    await wait(1);
+    const id = (await payoutRows(c))[0].id;
+    const b = retry(id);
+    await wait(2);
+    open1();
+    const ra = await json(await a);
+    expect(ra).toMatchObject({ id, status: "pending", attempts: 2 });
+    expect(await code(await pay(c))).toBe("409 share_payout_in_progress");
+    expect(await notes(owner)).toEqual([]);
+    open2();
+    expect((await json(await b)).status).toBe("pending");
+    expect((await payoutRows(c))[0]).toMatchObject({ status: "pending", attempts: 2 });
+  });
+
+  it("I1 同一筆同時兩次重試：只有一個送得出去（次數只加一）", async () => {
+    const c = await content(owner, OWNER);
+    pool.lose = true;
+    const v = await json(await pay(c));
+    let release!: () => void;
+    pool.gate = new Promise<void>((r) => { release = r; setTimeout(r, 3000); });
+    const x = retry(v.id), y = retry(v.id);
+    await Promise.race([x, y]);
+    release();
+    expect((await Promise.all([x, y])).map((r) => r.status).sort()).toEqual([200, 409]);
+    expect(pool.sent).toHaveLength(2);
+    expect((await payoutRows(c))[0]).toMatchObject({ status: "paid", attempts: 2 });
+  });
+
+  it("M1 池不足那筆重試回 idempotency_conflict：Provider 手上有這把 key，不改成 failed，記下代碼", async () => {
+    const c = await content(owner, OWNER);
+    pool.balance = 0;
+    const v = await json(await pay(c));
+    pool.reject = "idempotency_conflict";
+    const r = await json(await retry(v.id));
+    expect(r).toMatchObject({ status: "pending", error: "idempotency_conflict" });
+    expect(await code(await pay(c))).toBe("409 share_payout_in_progress");
+  });
+
+  it("I2 對帳：先查還沒查過的，舊的查無列不佔名額；重複查無只留一筆稽核", async () => {
+    const now = Date.now();
+    for (let i = 0; i < 20; i++) {
+      const c = await content(owner, OWNER);
+      await env.DB.prepare("INSERT INTO share_payouts (id, content_id, amount, target_total, status, requested_by, attempts, checked_absent_at, created_at, updated_at) VALUES (?, ?, 3000, 3000, 'pending', ?, 1, ?, ?, ?)")
+        .bind(crypto.randomUUID(), c, admin, now - 20 * MIN, now - 60 * MIN - i, now - 60 * MIN - i).run();
+    }
+    const c = await content(owner, OWNER);
+    pool.lose = true;
+    const v = await json(await pay(c));
+    await backdate(v.id, 11 * MIN);
+    const first = (await json(await reconcile())).items;
+    expect(first).toHaveLength(20);
+    expect(first[0]).toMatchObject({ result: "absent", payout: { id: v.id } });
+    expect((await json(await reconcile())).items.find((x: any) => x.payout.id === v.id)).toBeUndefined();
+    await check(v.id);
+    expect((await audits(v.id)).filter((a: any) => a.action === "absent")).toHaveLength(1);
+  });
+});
+
 describe("核准後自動發放", () => {
   it("真人管理員核准即發；不是管理員的審核員與 AI 帳號核准都不發", async () => {
     const a = await content(owner, OWNER, { tier: null });
