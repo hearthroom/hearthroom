@@ -4,6 +4,7 @@ import { IMAGE_MAX_BYTES, imageErrorAs, storeRasterImage } from "./blog";
 import { myContents, resubmitPlacement, submitPlacement } from "./campaign-apply";
 import { EVIDENCE_MAX_BYTES, readEvidence, uploadEvidence } from "./campaign-evidence";
 import { contentDetail, decidePlacement, reviewQueue } from "./campaign-review";
+import { autoPayout, BATCH_MAX, batchPayout, cancelPayout, checkPayout, listPayouts, reconcilePayouts, requestPayout, retryPayout, type Payer } from "./campaign-payout";
 import { queuePush } from "./community/push";
 import { campaignPhase, getCampaign, listCampaigns, saveCampaign, setCampaignStatus, type Actor, type Campaign, type CampaignInput } from "./campaign";
 import { providerOf, requireMember } from "./members";
@@ -180,7 +181,86 @@ campaignRoutes.get("/v1/moderation/campaign/contents/:id", async (c) => {
 campaignRoutes.post("/v1/moderation/campaign/placements/:id/decision", applyMetric("decide"), async (c) => {
   const s = await staff(c);
   const b = await bodyOf(c);
-  const result = await decidePlacement(c.env.DB, c.req.param("id")!, { memberId: s.member.id, kind: s.kind }, b, operationOf(b.operationId), Date.now());
+  const op = operationOf(b.operationId);
+  const result = await decidePlacement(c.env.DB, c.req.param("id")!, { memberId: s.member.id, kind: s.kind }, b, op, Date.now());
+  // 真人應用管理員核准就直接發；AI 帳號與一般審核員的核准停在待發放。
+  const paid = b.decision === "approve" && result.placement.reviewStatus === "approved" && !s.agent && (await communityAdmin(c))
+    ? await autoPayout(payerOf(c, s.member.id), result.placement.id, op) : { payout: null };
+  queuePush(c);
+  return c.json({ ...result, ...paid });
+});
+
+// ---- 發放（只有真人應用管理員）-----------------------------------------------------
+// 請求大小受 moderationRoutes 的 16 KB 上限。令牌只交給 Provider，不落地、不進日誌。
+
+const payerOf = (c: Ctx, memberId: string): Payer => ({ env: c.env, bearer: bearerOf(c)!, provider: providerOf(c), memberId, now: Date.now });
+
+/** 發放閘門：審核人 → 不是 AI 帳號 → Provider 說是本站應用管理員。真正的授權仍由 Provider 判斷。 */
+async function payer(c: Ctx): Promise<Payer> {
+  const s = await staff(c);
+  humanOnly(s.agent);
+  if (!(await communityAdmin(c))) throw new HttpError(403, "community_admin_required");
+  return payerOf(c, s.member.id);
+}
+
+// 送出的結果（成功／池不足／被拒／不知道）在 campaign-payout.ts 記；這裡補記提早被擋下的請求。
+campaignRoutes.use("/v1/moderation/campaign/*", async (c, next) => {
+  await next();
+  if (c.req.method === "GET" || c.res.status < 400 || !/\/payouts?(\/|$)/.test(c.req.path)) return;
+  const operation = /\/payouts\/(reconcile|[^/]+\/check)$/.test(c.req.path) ? "reconcile" : "payout";
+  await bumpOp(c.env.DB, "campaign", operation, c.res.status < 500 ? "denied" : "error");
+});
+
+campaignRoutes.get("/v1/moderation/campaign/payouts", async (c) => {
+  await payer(c);
+  const page = Math.max(1, Math.floor(Number(c.req.query("page")) || 1));
+  return c.json(await listPayouts(c.env.DB, { status: c.req.query("status") || undefined, slug: c.req.query("campaign") || undefined, page }));
+});
+
+campaignRoutes.post("/v1/moderation/campaign/contents/:id/payout", async (c) => {
+  const x = await payer(c);
+  const b = await bodyOf(c);
+  const result = await requestPayout(x, c.req.param("id"), operationOf(b.operationId));
+  queuePush(c);
+  return c.json(result);
+});
+
+campaignRoutes.post("/v1/moderation/campaign/payouts/batch", async (c) => {
+  const x = await payer(c);
+  const b = await bodyOf(c);
+  const ids = b.contentIds;
+  if (!Array.isArray(ids) || ids.length < 1 || ids.length > BATCH_MAX || ids.some((v) => typeof v !== "string" || !v) || new Set(ids).size !== ids.length) {
+    throw new HttpError(400, "share_invalid", undefined, { field: "contentIds" });
+  }
+  const result = await batchPayout(x, ids as string[], operationOf(b.operationId));
+  queuePush(c);
+  return c.json(result);
+});
+
+campaignRoutes.post("/v1/moderation/campaign/payouts/reconcile", async (c) => {
+  const result = await reconcilePayouts(await payer(c));
+  queuePush(c);
+  return c.json(result);
+});
+
+campaignRoutes.post("/v1/moderation/campaign/payouts/:id/retry", async (c) => {
+  const x = await payer(c);
+  const b = await bodyOf(c);
+  const result = await retryPayout(x, c.req.param("id"), operationOf(b.operationId));
+  queuePush(c);
+  return c.json(result);
+});
+
+campaignRoutes.post("/v1/moderation/campaign/payouts/:id/cancel", async (c) => {
+  const x = await payer(c);
+  const b = await bodyOf(c);
+  const reason = typeof b.reason === "string" ? b.reason.trim() : "";
+  if (!reason || [...reason].length > 500) throw new HttpError(400, "share_invalid", undefined, { field: "reason" });
+  return c.json(await cancelPayout(x, c.req.param("id"), reason, operationOf(b.operationId)));
+});
+
+campaignRoutes.post("/v1/moderation/campaign/payouts/:id/check", async (c) => {
+  const result = await checkPayout(await payer(c), c.req.param("id"));
   queuePush(c);
   return c.json(result);
 });
