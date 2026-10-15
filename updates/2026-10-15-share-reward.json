@@ -4,17 +4,17 @@
   "try": "/blog",
   "draft": true,
   "title": {
-    "zh-Hant": "部落格文章現在會顯示分享活動的期間與申請入口",
-    "zh-Hans": "博客文章现在会显示分享活动的期间和申请入口",
-    "en": "Blog posts can now show a sharing campaign with its dates and a link to apply",
-    "ja": "ブログ記事にシェアキャンペーンの期間と申し込み先が表示されるようになりました",
-    "ko": "블로그 글에 공유 이벤트 기간과 신청 링크가 표시돼요"
+    "zh-Hant": "部落格文章會告訴你活動進行到哪了",
+    "zh-Hans": "博客文章会告诉你活动进行到哪了",
+    "en": "Blog posts now show where a campaign stands",
+    "ja": "ブログ記事でキャンペーンの状況がわかるようになりました",
+    "ko": "블로그 글에서 이벤트 진행 상황을 볼 수 있어요"
   },
   "body": {
-    "zh-Hant": "應用管理員可以在運營設定建立分享活動，再把它關聯到部落格文章。",
-    "zh-Hans": "应用管理员可以在运营设置里创建分享活动，并把它关联到博客文章。",
-    "en": "App admins can create sharing campaigns in the operations settings and link them to blog posts.",
-    "ja": "アプリ管理者は運営設定でシェアキャンペーンを作成し、ブログ記事に関連付けられます。",
-    "ko": "앱 관리자는 운영 설정에서 공유 이벤트를 만들고 블로그 글에 연결할 수 있어요."
+    "zh-Hant": "活動相關的文章會標出活動是即將開始、進行中還是已結束，附上起訖日期和活動連結。",
+    "zh-Hans": "活动相关的文章会标出活动是即将开始、进行中还是已结束，附上起止日期和活动链接。",
+    "en": "Posts about a campaign now say whether it is coming up, open or over, with its dates and a link to it.",
+    "ja": "キャンペーンに関する記事に、開始前・開催中・終了のいずれかと、期間、キャンペーンへのリンクが表示されます。",
+    "ko": "이벤트 관련 글에 예정, 진행 중, 종료 중 어느 상태인지와 기간, 이벤트 링크가 함께 표시돼요."
   }
 }
