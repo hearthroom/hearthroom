@@ -25,9 +25,16 @@ describe("發放金額", () => {
     expect(payoutAmount([placed(null, { reviewStatus: "submitted" }), placed(null, { reviewStatus: "rejected" })], money, 0)).toEqual({ tier: null, target: 0, due: 0 });
     expect(payoutAmount([placed("light")], money, 3000)).toEqual({ tier: "light", target: 500, due: 0 });
   });
+  it("核准的位置都不算有效位置時沒有可發金額（沒有任何一次有效發布）", () => {
+    expect(payoutAmount([placed("video", { countsAsPlacement: false })], money, 0)).toEqual({ tier: "video", target: 0, due: 0 });
+  });
 });
 
 describe("位置正規化", () => {
+  it("不同連接埠是不同位置", () => {
+    expect(locationKey("forum", "x", "https://example.com:8080/t/1")).not.toBe(locationKey("forum", "x", "https://example.com/t/1"));
+    expect(locationKey("forum", "x", "https://example.com:443/t/1")).toBe(locationKey("forum", "x", "https://example.com/t/1"));
+  });
   it("追蹤參數、大小寫、結尾斜線、片段不影響網址的 key", () => {
     const base = locationKey("forum", "x", "https://example.com/t/123?page=2");
     for (const u of [

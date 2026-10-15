@@ -38,12 +38,13 @@ export type CampaignInput = {
 
 export type PlacementForPay = { reviewStatus: string; approvedTier: Tier | null; countsAsPlacement: boolean };
 
-/** 目標金額＝最高檔金額＋追加金額×(算數的核准位置數−1)；due 是還沒發的部分，不會是負數。全專案只有這一份。 */
+/** 目標金額＝最高檔金額＋追加金額×(算數的核准位置數−1)；沒有任何算數的位置就是 0。due 是還沒發的部分，不會是負數。全專案只有這一份。 */
 export function payoutAmount(placements: PlacementForPay[], campaign: Pick<Campaign, "tiers" | "extraPlacementAmount">, paidTotal: number): { tier: Tier | null; target: number; due: number } {
   const approved = placements.filter((p) => p.reviewStatus === "approved" && p.approvedTier);
   if (!approved.length) return { tier: null, target: 0, due: 0 };
   const tier = approved.map((p) => p.approvedTier!).reduce((a, b) => (tierRank(b) > tierRank(a) ? b : a));
   const count = approved.filter((p) => p.countsAsPlacement).length;
+  if (!count) return { tier, target: 0, due: 0 };
   const target = (campaign.tiers[tier] ?? 0) + (campaign.extraPlacementAmount ?? 0) * Math.max(count - 1, 0);
   return { tier, target, due: Math.max(target - paidTotal, 0) };
 }
@@ -52,7 +53,7 @@ export function payoutAmount(placements: PlacementForPay[], campaign: Pick<Campa
 const TRACKING = /^(utm_.*|fbclid|gclid|spm|from|share_source|share_medium|share_from|share_plat|share_tag|vd_source|igshid|si)$/i;
 
 /**
- * 判斷「同一個位置」的 key（重複標示用）。有網址：主機小寫去 www.、去追蹤參數、片段與結尾斜線，其餘參數排序；
+ * 判斷「同一個位置」的 key（重複標示用）。有網址：主機（含非預設連接埠）小寫去 www.、去追蹤參數、片段與結尾斜線，其餘參數排序；
  * 路徑大小寫保留（影片編號之類分大小寫）。沒網址或解析失敗：平台＋正規化後的位置名。
  */
 export function locationKey(platform: string, location: string, url: string | null): string {
@@ -62,7 +63,7 @@ export function locationKey(platform: string, location: string, url: string | nu
       if (u.protocol === "http:" || u.protocol === "https:") {
         const params = [...u.searchParams].filter(([k]) => !TRACKING.test(k)).sort(([a, x], [b, y]) => (a === b ? (x < y ? -1 : x > y ? 1 : 0) : a < b ? -1 : 1));
         const qs = new URLSearchParams(params).toString();
-        return `url:${u.hostname.toLowerCase().replace(/^www\./, "")}${u.pathname.replace(/\/+$/, "")}${qs ? `?${qs}` : ""}`;
+        return `url:${u.host.toLowerCase().replace(/^www\./, "")}${u.pathname.replace(/\/+$/, "")}${qs ? `?${qs}` : ""}`;
       }
     } catch {
       // 不是網址就退回位置名
