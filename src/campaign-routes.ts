@@ -5,6 +5,7 @@ import { bindAttribution, countVisit } from "./campaign-attribution";
 import { myContents, resubmitPlacement, submitPlacement } from "./campaign-apply";
 import { EVIDENCE_MAX_BYTES, readEvidence, uploadEvidence } from "./campaign-evidence";
 import { contentDetail, decidePlacement, reviewQueue } from "./campaign-review";
+import { campaignStats } from "./campaign-stats";
 import { autoPayout, BATCH_MAX, batchPayout, cancelPayout, checkPayout, listPayable, listPayouts, reconcilePayouts, requestPayout, retryPayout, type Payer } from "./campaign-payout";
 import { queuePush } from "./community/push";
 import { campaignPhase, getCampaign, listCampaigns, saveCampaign, setCampaignStatus, type Actor, type Campaign, type CampaignInput } from "./campaign";
@@ -204,6 +205,20 @@ campaignRoutes.post("/v1/moderation/campaign/placements/:id/decision", applyMetr
     ? await autoPayout(payerOf(c, s.member.id), result.placement.id, op) : { payout: null };
   queuePush(c);
   return c.json({ ...result, ...paid });
+});
+
+/**
+ * 活動統計看板：審核員與 AI 帳號可讀。點數池只給真人應用管理員（同 canEdit），其他人不問 Provider；
+ * 問不到就是 pool: null，其他數字照樣回。活動用 slug，沒給或不存在都是 404。
+ */
+campaignRoutes.get("/v1/moderation/campaign/stats", async (c) => {
+  const s = await staff(c);
+  const slug = c.req.query("campaign");
+  const campaign = slug ? await getCampaign(c.env.DB, slug) : null;
+  if (!campaign || campaign.slug !== slug) throw new HttpError(404, "campaign_not_found");
+  const pool = !s.agent && (await communityAdmin(c)) ? upstream.fetchCampaignPool(c.env, bearerOf(c)!, providerOf(c)).catch(() => null) : Promise.resolve(null);
+  // 先發出去、跟 D1 查詢並行；catch 要立刻接上，否則失敗會在 batch 期間變成未處理的 rejection。
+  return c.json(await campaignStats(c.env.DB, campaign, Date.now(), pool));
 });
 
 // ---- 發放（只有真人應用管理員）-----------------------------------------------------
