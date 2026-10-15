@@ -248,10 +248,10 @@ export async function restoreRevision(db: D1Database, postId: string, revisionId
   if (!rev) throw new HttpError(404, "blog_revision_not_found");
   const m = JSON.parse(rev.meta_json) as Record<string, unknown>;
   const pick = <T>(key: string, fallback: T): T => (key in m ? m[key] : fallback) as T;
-  // 已發布（含排程）的文章網址不跟著還原動，其餘照還原
+  // 已發布（含排程）的文章網址（欄目、slug、語言前綴）不跟著還原動，其餘照還原
   const keepUrl = before.status === "published";
   const c: Content = {
-    column_id: keepUrl ? before.column_id : pick("columnId", before.column_id), slug: keepUrl ? before.slug : pick("slug", before.slug), locale: pick("locale", before.locale), title: rev.title,
+    column_id: keepUrl ? before.column_id : pick("columnId", before.column_id), slug: keepUrl ? before.slug : pick("slug", before.slug), locale: keepUrl ? before.locale : pick("locale", before.locale), title: rev.title,
     excerpt: pick("excerpt", before.excerpt), body_md: rev.body_md, cover_key: pick("coverKey", before.cover_key), share_title: pick("shareTitle", before.share_title),
     share_description: pick("shareDescription", before.share_description), share_cover_key: pick("shareCoverKey", before.share_cover_key), campaign_id: before.campaign_id,
   };
