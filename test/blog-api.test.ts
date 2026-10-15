@@ -271,3 +271,52 @@ describe("誰看得到部落格入口", () => {
     expect(asked).toBe(before);
   });
 });
+
+describe("分組", () => {
+  const post = (body: Record<string, unknown>) => call("/v1/blog/admin/columns", { method: "POST", token: "editor", body: { description: {}, sort: 1, enabled: true, operationId: op(), ...body } });
+
+  it("公開列表可以只看一個分組；分組與欄目都帶時以欄目為準", async () => {
+    const other = await json(await post({ slug: "creators", name: { "zh-Hant": "創作指南" }, parentId: null }));
+    const guides = await json(await post({ slug: "guides", name: { "zh-Hant": "寫卡教程" }, parentId: other.id }));
+    const a = await newPost();
+    const b = await newPost({ columnId: guides.id, slug: "how-to" });
+    for (const p of [a, b]) await state(p.id, { status: "published" });
+    const slugs = async (q: string) => (await json(await call(`/v1/blog/posts?${q}`))).items.map((p: any) => p.slug);
+    expect(await slugs("group=creators")).toEqual(["how-to"]);
+    expect(await slugs("group=official")).toEqual(["hello"]);
+    expect(await slugs("group=official&column=guides")).toEqual(["how-to"]);
+    expect(await slugs("group=nope")).toEqual([]);
+  });
+
+  it("管理列表可以依分組 id 篩選", async () => {
+    const other = await json(await post({ slug: "creators", name: { "zh-Hant": "創作指南" }, parentId: null }));
+    const guides = await json(await post({ slug: "guides", name: { "zh-Hant": "寫卡教程" }, parentId: other.id }));
+    await newPost();
+    await newPost({ columnId: guides.id, slug: "how-to" });
+    const rows = await json(await call(`/v1/blog/admin/posts?group=${other.id}`, { token: "editor" }));
+    expect(rows.items.map((p: any) => p.slug)).toEqual(["how-to"]);
+  });
+
+  it("把有文章的欄目移到別的分組：網址不變，新分組列得到它", async () => {
+    const other = await json(await post({ slug: "creators", name: { "zh-Hant": "創作指南" }, parentId: null }));
+    const p = await newPost();
+    await state(p.id, { status: "published" });
+    const moved = await call(`/v1/blog/admin/columns/${columnId}`, { method: "PUT", token: "editor", body: { slug: "news", name: { "zh-Hant": "最新消息" }, description: {}, sort: 0, enabled: true, parentId: other.id, operationId: op() } });
+    expect(moved.status).toBe(200);
+    expect((await call("/v1/blog/posts/news/hello")).status).toBe(200);
+    expect((await json(await call("/v1/blog/posts?group=creators"))).items.map((x: any) => x.slug)).toEqual(["hello"]);
+  });
+
+  it("刪除：空的可以刪，有東西 409；沒有權限 403；計入 column 指標", async () => {
+    const empty = await json(await post({ slug: "empty", name: { "zh-Hant": "空" }, parentId: groupId }));
+    await newPost();
+    const del = (id: string, token = "editor") => call(`/v1/blog/admin/columns/${id}`, { method: "DELETE", token, body: { operationId: op() } });
+    expect((await del(empty.id, "member")).status).toBe(403);
+    expect((await del(columnId)).status).toBe(409);
+    expect((await json(await del(groupId))).error).toBe("blog_column_not_empty");
+    const ok = await del(empty.id);
+    expect([ok.status, (await json(ok)).id]).toEqual([200, empty.id]);
+    expect((await json(await call("/v1/blog/admin/columns", { token: "editor" }))).items[0].columns.map((c: any) => c.slug)).toEqual(["news"]);
+    expect(await (await call("/metrics")).text()).toContain('hearthroom_blog_operations_total{operation="column",outcome="denied"}');
+  });
+});
