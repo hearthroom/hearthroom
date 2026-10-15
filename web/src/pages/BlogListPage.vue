@@ -7,7 +7,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute } from "vue-router";
 import BlogPostCard from "@/components/BlogPostCard.vue";
-import { columnName, fetchColumns, fetchPosts, type BlogColumn, type PostCard } from "@/lib/blog";
+import { allColumns, columnName, fetchColumns, fetchPosts, groupOfColumn, type BlogGroup, type PostCard } from "@/lib/blog";
 import { pageTitle } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
 
@@ -15,8 +15,11 @@ const { t } = useI18n();
 const { lp, locale } = useLocalePath();
 const route = useRoute();
 
+const group = computed(() => (typeof route.params.group === "string" && route.params.group) || undefined);
 const column = computed(() => (typeof route.params.column === "string" && route.params.column) || undefined);
-const columns = ref<BlogColumn[]>([]);
+const groups = ref<BlogGroup[]>([]);
+/** 目前所在的分組：分組頁就是那一組；欄目頁是欄目所屬的那一組 */
+const activeGroup = computed(() => (group.value ? groups.value.find((g) => g.slug === group.value) : column.value ? groupOfColumn(groups.value, column.value) : undefined));
 const pinned = ref<PostCard[]>([]);
 const items = ref<PostCard[]>([]);
 const total = ref(0);
@@ -28,7 +31,7 @@ const hero = computed(() => pinned.value[0] ?? null);
 const rest = computed(() => [...pinned.value.slice(1), ...items.value]);
 const hasMore = computed(() => items.value.length < total.value);
 const empty = computed(() => !loading.value && !failed.value && !hero.value && !rest.value.length);
-const nameOf = (slug: string) => columnName(columns.value.find((c) => c.slug === slug), locale.value);
+const nameOf = (slug: string) => columnName(allColumns(groups.value).find((c) => c.slug === slug), locale.value);
 
 /** 換欄目時上一欄的回應晚到就丟掉，不蓋掉新的 */
 let seq = 0;
@@ -38,7 +41,7 @@ async function load(reset = false) {
   loading.value = true;
   failed.value = false;
   try {
-    const res = await fetchPosts(column.value, page.value);
+    const res = await fetchPosts({ group: group.value, column: column.value }, page.value);
     if (mine !== seq) return;
     if (page.value === 1) { pinned.value = res.pinned ?? []; items.value = res.items ?? []; }
     else items.value = [...items.value, ...(res.items ?? [])];
@@ -53,9 +56,9 @@ function more() { page.value += 1; void load(); }
 
 onMounted(() => {
   document.title = pageTitle(t("blog.title"));
-  fetchColumns().then((r) => { columns.value = r.items ?? []; }).catch(() => {});
+  fetchColumns().then((r) => { groups.value = r.items ?? []; }).catch(() => {});
 });
-watch(column, () => load(true), { immediate: true });
+watch([group, column], () => load(true), { immediate: true });
 watch(locale, () => { document.title = pageTitle(t("blog.title")); });
 </script>
 
@@ -63,9 +66,13 @@ watch(locale, () => { document.title = pageTitle(t("blog.title")); });
   <div class="page blog" :aria-busy="loading && !!(hero || rest.length)">
     <header class="blog__head">
       <h1>{{ t("blog.title") }}</h1>
-      <nav v-if="columns.length" class="blog__tabs" :aria-label="t('blog.columns')">
-        <RouterLink :to="lp('/blog')" class="blog__tab" :class="{ 'blog__tab--on': !column }" :aria-current="!column ? 'page' : undefined">{{ t("blog.all") }}</RouterLink>
-        <RouterLink v-for="c in columns" :key="c.id" :to="lp(`/blog/${c.slug}`)" class="blog__tab" :class="{ 'blog__tab--on': column === c.slug }" :aria-current="column === c.slug ? 'page' : undefined">{{ columnName(c, locale) }}</RouterLink>
+      <nav v-if="groups.length" class="blog__tabs blog__tabs--groups" :aria-label="t('blog.columns')">
+        <RouterLink :to="lp('/blog')" class="blog__tab" :class="{ 'blog__tab--on': !activeGroup }" :aria-current="!activeGroup ? 'page' : undefined">{{ t("blog.all") }}</RouterLink>
+        <RouterLink v-for="g in groups" :key="g.id" :to="lp(`/blog/g/${g.slug}`)" class="blog__tab" :class="{ 'blog__tab--on': activeGroup?.id === g.id }" :aria-current="group === g.slug ? 'page' : undefined">{{ columnName(g, locale) }}</RouterLink>
+      </nav>
+      <nav v-if="activeGroup" class="blog__tabs blog__tabs--columns" :aria-label="columnName(activeGroup, locale)">
+        <RouterLink :to="lp(`/blog/g/${activeGroup.slug}`)" class="blog__tab" :class="{ 'blog__tab--on': !column }" :aria-current="!column ? 'page' : undefined">{{ t("blog.all") }}</RouterLink>
+        <RouterLink v-for="c in activeGroup.columns" :key="c.id" :to="lp(`/blog/${c.slug}`)" class="blog__tab" :class="{ 'blog__tab--on': column === c.slug }" :aria-current="column === c.slug ? 'page' : undefined">{{ columnName(c, locale) }}</RouterLink>
       </nav>
     </header>
 
@@ -105,6 +112,8 @@ watch(locale, () => { document.title = pageTitle(t("blog.title")); });
 }
 .blog__tab:hover { color: var(--text); }
 .blog__tab--on { color: var(--accent-text); background: var(--accent-tint); }
+.blog__tabs--columns { padding-top: var(--s-2); border-top: 1px solid var(--line); }
+.blog__tabs--columns .blog__tab { height: 28px; font-size: 12.5px; }
 .blog__grid { display: grid; gap: var(--s-6) var(--s-5); grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 600px) { .blog__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 960px) { .blog__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
