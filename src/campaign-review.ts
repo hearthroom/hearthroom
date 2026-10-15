@@ -145,7 +145,7 @@ const current = async (db: D1Database, id: string): Promise<DecisionResult> => (
  * 收款帳號是不是這個人自己的 Harbor 帳號：登入身分或連結過來的帳號。
  * 內容記在申請時的成員底下，連結或解除連結之後成員 id 可能不同，收款帳號才是錢實際去的地方。
  */
-const ownsAccount = async (db: D1Database, memberId: string, accountNo: number) =>
+export const ownsAccount = async (db: D1Database, memberId: string, accountNo: number) =>
   !!(await db.prepare(
     `SELECT 1 AS ok WHERE EXISTS (SELECT 1 FROM member_identities WHERE member_id = ?1 AND provider = 'harbor' AND external_id = ?2)
        OR EXISTS (SELECT 1 FROM member_connections WHERE owner_member_id = ?1 AND provider = 'harbor' AND external_id = ?2)`,
@@ -161,7 +161,7 @@ async function replayed(db: D1Database, actorId: string, operationId: string, pl
 
 /**
  * 審核決定。條件式 UPDATE（版本與狀態都要符合）→ 稽核（changes() 串接）→ 通知（以這一次的稽核列存在為條件），同一個 batch：
- * 並發的第二個決定改不到列，什麼都不寫，回 409 share_version_conflict。發放由 Task 6 接上，這裡 payout 一律 null。
+ * 並發的第二個決定改不到列，什麼都不寫，回 409 share_version_conflict。核准後的自動發放由路由接上（campaign-payout.ts 的 autoPayout），這裡 payout 一律 null。
  * 指標（decide 的成功／被拒／出錯）由路由依狀態碼記。
  */
 export async function decidePlacement(db: D1Database, id: string, actor: Reviewer, body: Record<string, unknown>, operationId: string, now: number): Promise<DecisionResult> {
