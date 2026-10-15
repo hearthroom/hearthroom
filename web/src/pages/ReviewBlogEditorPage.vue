@@ -221,7 +221,7 @@ async function openRevision(r: Revision) {
 async function restore() {
   const r = opened.value;
   if (!post.value || !r || busy.value) return;
-  if (!(await confirmDialog({ title: t('blog.admin.restore'), message: t('blog.admin.restoreConfirm'), confirmText: t('blog.admin.restore'), danger: true }))) return;
+  if (!(await confirmDialog({ title: t('blog.admin.restore'), message: t(status.value === 'published' ? 'blog.admin.restoreConfirmLive' : 'blog.admin.restoreConfirm'), confirmText: t('blog.admin.restore'), danger: true }))) return;
   const key = `restore:${r.id}`;
   busy.value = true; error.value = ''; done.value = '';
   try {
@@ -347,7 +347,7 @@ watch(() => route.params.id, (id) => { if (/\/review\/blog\/[^/]+$/.test(route.p
         <form class="panel bed-settings" @submit.prevent="save">
           <h2>{{ t('blog.admin.settings') }}</h2>
           <label class="field">
-            <span>{{ t('blog.admin.columns') }}</span>
+            <span>{{ t('blog.admin.column') }}</span>
             <select v-model="draft.columnId" class="input">
               <option v-for="c in columns" :key="c.id" :value="c.id">{{ columnName(c, String(locale)) }}{{ c.enabled ? '' : ` (${t('blog.admin.hidden')})` }}</option>
             </select>

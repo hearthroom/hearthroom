@@ -12,6 +12,8 @@ import { useSession } from "@/lib/session";
 import { confirmDialog } from "@/lib/confirm";
 import { track } from "@/lib/track";
 import { loginPath } from "@/lib/login-return";
+import { useReviewer } from "@/lib/review";
+import { setPostState } from "@/lib/blog";
 
 /**
  * 卡片：本站的卡 id（留言掛在本站的卡上，不看這張卡住在哪一家供應商），roleId 只給埋點用。
@@ -26,6 +28,7 @@ const route = useRoute();
 const router = useRouter();
 const { lp } = useLocalePath();
 const { t } = useI18n();
+const reviewer = useReviewer();
 
 const comments = ref<Comment[]>([]);
 const total = ref(0);
@@ -61,6 +64,25 @@ const pinnedId = ref<string | null>(null);
 /** 送出時才知道文章剛被關了留言：跟一開始就關著一樣收起發表區 */
 const closedLate = ref(false);
 const closed = computed(() => on.value.kind === "post" && (!!on.value.commentsClosed || closedLate.value));
+/** 文章的寫作者（manager／owner）能把一則公開的頂層留言置頂；伺服器會再擋一次 */
+const canPin = computed(() => isPost.value && !!reviewer.reviewer && (reviewer.role === "manager" || reviewer.role === "owner"));
+const pinning = ref(false);
+async function togglePin(c: Comment) {
+  if (on.value.kind !== "post" || pinning.value) return;
+  pinning.value = true;
+  error.value = "";
+  try {
+    const token = await session.accessToken();
+    if (!token) throw new Error(t("auth.expired"));
+    await setPostState(token, on.value.postId, { pinnedCommentId: pinnedId.value === c.commentId ? null : c.commentId }, crypto.randomUUID());
+    // 置頂的那則排在第一頁最上面：重讀一次讓順序跟讀者看到的一樣
+    await load(true);
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : t("state.actionFailed");
+  } finally {
+    pinning.value = false;
+  }
+}
 function sortBy(next: CommentSort) {
   if (sort.value === next) return;
   sort.value = next;
@@ -226,11 +248,12 @@ watch([targetKey, () => session.me?.accountNumId], () => { closedLate.value = fa
           <div class="cmt__actions">
             <!-- 審核中的還沒公開：不能按讚、不能回覆 -->
             <template v-if="c.status !== 'held'">
-              <button class="cmt__act" :class="{ 'is-on': c.isLiked }" @click="toggleLike(c)">
+              <button class="cmt__act" :class="{ 'is-on': c.isLiked }" :aria-label="$t('comment.like')" :aria-pressed="c.isLiked" @click="toggleLike(c)">
                 <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6S2.5 10.2 2.5 6.4A2.9 2.9 0 0 1 8 4.9a2.9 2.9 0 0 1 5.5 1.5c0 3.8-5.5 7.2-5.5 7.2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" /></svg>
                 {{ c.likeCount || "" }}
               </button>
               <button v-if="session.me && !closed && c.status === 'visible'" class="cmt__act" @click="replyTo = { root: c, target: c }; replyDraft = ''">{{ $t("comment.reply") }}</button>
+              <button v-if="canPin && c.status === 'visible'" class="cmt__act" :disabled="pinning" @click="togglePin(c)">{{ $t(pinnedId === c.commentId ? "comment.unpin" : "comment.pin") }}</button>
             </template>
             <button v-if="c.canDelete" class="cmt__act cmt__act--danger" @click="remove(c)">{{ $t("comment.delete") }}</button>
             <button v-if="reportable(c)" class="cmt__act cmt__act--report" @click="report(c)">{{ $t("comment.report") }}</button>
@@ -251,7 +274,7 @@ watch([targetKey, () => session.me?.accountNumId], () => { closedLate.value = fa
                 <p class="cmt__text"><span v-if="r.replyToNickName && r.parentId !== c.commentId" class="cmt__to">@{{ r.replyToNickName }} </span>{{ r.content }}</p>
                 <div class="cmt__actions">
                   <template v-if="r.status !== 'held'">
-                    <button class="cmt__act" :class="{ 'is-on': r.isLiked }" @click="toggleLike(r)">
+                    <button class="cmt__act" :class="{ 'is-on': r.isLiked }" :aria-label="$t('comment.like')" :aria-pressed="r.isLiked" @click="toggleLike(r)">
                       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6S2.5 10.2 2.5 6.4A2.9 2.9 0 0 1 8 4.9a2.9 2.9 0 0 1 5.5 1.5c0 3.8-5.5 7.2-5.5 7.2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" /></svg>
                       {{ r.likeCount || "" }}
                     </button>
