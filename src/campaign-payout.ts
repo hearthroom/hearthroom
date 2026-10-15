@@ -1,5 +1,5 @@
 import { auditStmt, auditStmtIfChanged } from "./audit";
-import { canActivate, getCampaign, payoutAmount, type Campaign, type Tier } from "./campaign";
+import { canActivate, getCampaign, listCampaigns, payoutAmount, type Campaign, type Tier } from "./campaign";
 import { ownsAccount } from "./campaign-review";
 import { bumpOp } from "./ops-metrics";
 import type { ProviderId } from "./providers";
@@ -353,4 +353,43 @@ export async function listPayouts(db: D1Database, q: { status?: string; slug?: s
       createdAt: r.created_at, updatedAt: r.updated_at, settledAt: r.settled_at,
     })),
   };
+}
+
+/**
+ * 待發放清單（應用管理員）：有核准位置、還有應發金額、沒有 pending／池不足發放、活動還能發（payable 通過）的內容。
+ * 舊的在前，每頁 20 筆。跟發放列表一樣不回成員 id、收款帳號與經手人，申請人只以 handle 出現。
+ * ponytail: 候選內容全部讀進記憶體用 payoutAmount 算完再分頁（已發完的也會被讀到）；量大時在 share_contents 存一欄應發金額，改成 SQL 篩選與分頁。
+ */
+export async function listPayable(db: D1Database, q: { slug?: string; page: number }, now: number) {
+  const open = (await listCampaigns(db, { includeDraft: false })).filter((c) => {
+    if (q.slug !== undefined && c.slug !== q.slug) return false;
+    try {
+      payable(c, now);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  if (!open.length) return { total: 0, items: [] };
+  const byId = new Map(open.map((c) => [c.id, c]));
+  const candidates = `SELECT s.id FROM share_contents s WHERE s.campaign_id IN (SELECT value FROM json_each(?1))
+    AND EXISTS (SELECT 1 FROM share_placements p WHERE p.content_id = s.id AND p.review_status = 'approved')
+    AND NOT EXISTS (SELECT 1 FROM share_payouts o WHERE o.content_id = s.id AND o.status IN ('pending', 'blocked_insufficient'))`;
+  const ids = JSON.stringify([...byId.keys()]);
+  const [contents, placements, paid] = await db.batch([
+    db.prepare(`SELECT s.id, s.campaign_id, s.title, m.handle FROM share_contents s JOIN members m ON m.id = s.member_id WHERE s.id IN (${candidates}) ORDER BY s.created_at, s.id`).bind(ids),
+    db.prepare(`SELECT content_id, review_status, approved_tier, counts_as_placement FROM share_placements WHERE review_status = 'approved' AND content_id IN (${candidates})`).bind(ids),
+    db.prepare(`SELECT content_id, sum(amount) AS n FROM share_payouts WHERE status = 'paid' AND content_id IN (${candidates}) GROUP BY content_id`).bind(ids),
+  ]);
+  type P = { content_id: string; review_status: string; approved_tier: Tier | null; counts_as_placement: number };
+  const byContent = new Map<string, P[]>();
+  for (const p of placements!.results as P[]) byContent.set(p.content_id, [...(byContent.get(p.content_id) ?? []), p]);
+  const paidOf = new Map((paid!.results as { content_id: string; n: number }[]).map((r) => [r.content_id, r.n]));
+  const due = (contents!.results as { id: string; campaign_id: string; title: string; handle: string }[]).flatMap((s) => {
+    const campaign = byId.get(s.campaign_id)!;
+    const paidTotal = paidOf.get(s.id) ?? 0;
+    const owe = payoutAmount((byContent.get(s.id) ?? []).map((p) => ({ reviewStatus: p.review_status, approvedTier: p.approved_tier, countsAsPlacement: !!p.counts_as_placement })), campaign, paidTotal);
+    return owe.due > 0 ? [{ contentId: s.id, contentTitle: s.title, campaignSlug: campaign.slug, applicant: { handle: s.handle }, target: owe.target, paidTotal, due: owe.due }] : [];
+  });
+  return { total: due.length, items: due.slice((q.page - 1) * PAGE, q.page * PAGE) };
 }

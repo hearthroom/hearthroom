@@ -162,3 +162,10 @@ export function withShareRef(url: string, code: string | null): string {
   u.searchParams.set("ref", code);
   return u.href;
 }
+
+/** 活動分享連結：有推薦碼先帶 ?ref=，再帶分享短碼 ?s=（記錄歸因在之後的計畫）。 */
+export function withCampaignShare(url: string, refCode: string | null, shareCode: string): string {
+  const u = new URL(withShareRef(url, refCode));
+  u.searchParams.set("s", shareCode);
+  return u.href;
+}
