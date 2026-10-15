@@ -31,6 +31,67 @@ Harbor reuses `harbor_contract_authoring_total` (counter, `op=list|upload_comple
 - Multi-file upload, fixed provider/folder, per-file progress, failure-only retry, overwrite notice, provider quota failure.
 - zh-Hant/en at desktop and 390px; all five locale dictionaries validated; keyboard dialog focus containment and Escape.
 
+### Batch upload authorization regression — 2026-10-14
+
+Acceptance: long-running uploads obtain current credentials for the original account
+before each API request. A 401 permits one credential renewal; unchanged or rejected
+replacement credentials stop instead of looping. Manual failed-only retry keeps the
+same files, destination, upload intent and completion progress. Sign-out or an account
+change must not redirect the queue to a different account.
+
+Regression coverage: `web/test/resource-client.test.ts` exercises authorization expiry
+at intent, completion, folder assignment and multipart fallback; a completion retry
+must reuse stored bytes and preserve the authored path. `web/test/resources.test.ts`
+exercises the failed-only retry button, original file/folder retention, account changes
+between files and during credential renewal, and invalidation of a rejected token.
+`web/test/managed-auth.test.ts` checks that a renewed managed token belongs to the
+original account even when the page still has a stale profile from another tab.
+
+Browser checkpoint: select two synthetic PNGs into one folder, let the first finish,
+expire authorization before the second completes, then press failed-only retry after
+authorization recovers. Both files should finish at the original paths, with one byte
+upload per file. Repeat with an account change and verify no upload to the new account.
+Chrome DevTools browser validation now passes in an isolated test context, using the
+actual ResourcesPage, Pinia session, managed authorization and resource client, with
+only account/token, media API and storage services replaced by local mocks.
+The fixture injects two synthetic PNGs into the actual file input; native file chooser
+selection and real production OAuth/storage are not claimed as covered.
+
+| Browser case | Result | Observable evidence |
+| --- | --- | --- |
+| Second completion returns 401 | PASS | Both files complete; two intents and two PUTs; second completion reuses its original upload ID with renewed authorization |
+| Completion fails and sign-in temporarily expires | PASS | Page retains one success and one failure; after mock sign-in recovery, the actual failed-only retry button completes the second file without another PUT or repeating the first completion |
+| Renewed token belongs to another account | PASS | Second file remains failed, including after pressing retry; no completion uses the other account's token |
+| English at 390px width | PASS | Automatic renewal completes both files; no horizontal document overflow; completion status and controls inspected in a screenshot |
+
+Browser console errors are limited to the deliberately injected HTTP 401/503 responses;
+no JavaScript runtime errors were observed. Synthetic request counters and screenshots
+were captured as local verification artifacts, without production accounts or content.
+
+HTTP/MCP/Moonloom: no API/schema or external-client capability changes; this repairs the
+browser's use of existing authenticated endpoints. Observability: no new server work
+or metrics; existing API success/rejection metrics remain applicable. No user-facing
+resource-page copy or locale keys change; a five-language update note describes the fix.
+The owner authorized CI deployment after verification; no user-data repair is included.
+
+Verification: focused Red/Green covers the expiry/retry, account-change and ownership
+checks. Final focused pack: 41 passed. Script checks: 23 passed; Worker suite: 706
+passed; complete web suite with `--maxWorkers=2`: 807 passed, one optional real-card
+fixture suite skipped (`REAL_CARDS_DIR` unset). Web build, including typecheck, passes.
+The default-parallel final run passed all assertions but exited nonzero on an unrelated
+unhandled `localhost:3000/v1/e` beacon from `updates.test.ts`; this is existing asynchronous
+test-environment debt, and the unchanged full web set passed when concurrency was reduced.
+Initial sandbox loopback/log permissions and missing shared dependencies were resolved
+using approved local test execution and a lockfile install confined to this worktree.
+Existing build warnings cover unresolved font paths, deprecated tooling and chunk sizes.
+
+Release-source verification after rebasing onto current main: 23 script checks, 804
+Worker tests and 958 web tests pass with default parallelism; one optional real-card
+fixture suite remains skipped. The current main already includes the sendBeacon test
+isolation fix. Full typecheck and full pinned-stage/web build pass. Browser checks above
+exercise the same executable changes; subsequent receipt/update-note edits add no runtime
+behavior. Deployment and public-asset readback are separate release evidence.
+
 ## Execution evidence — 2026-09-20
 
 - Component regression tests exercise single/multiple providers, stale responses, failed pagination, URL sort restoration, server search, page selection reset, expired auth and failed-only upload retry. Client tests cover issuer isolation, unknown quota and resuming completion without duplicating the upload.

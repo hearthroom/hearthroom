@@ -109,6 +109,8 @@ const SITE_CODE_KEY: Record<string, string> = {
   invalid_report_reason: "error.invalidArguments",
   cannot_report_own_comment: "comment.error.reportOwn",
   blog_comments_closed: "comment.closed",
+  // 問不到 HarperHarbor 這個人是不是應用管理員：不是沒權限，是暫時確認不了
+  community_admin_unavailable: "state.serverBusy",
   // 留言審核（/v1/moderation 底下的留言佇列、禁言、關鍵詞、運營設定）
   moderation_reason_required: "moderation.error.moderation_reason_required",
   moderation_conflict: "moderation.error.moderation_conflict",
@@ -459,7 +461,7 @@ export interface ReviewDetail {
 /** 精選：呼叫者在供應商那邊是不是本站的社群代表，以及本站精選名額用了多少。老供應商沒有這條路時是 null。 */
 export interface FeaturedStatus { admin: boolean; featuredUsed: number; featuredQuota: number }
 
-export async function fetchReviewMe(token: string, provider = currentProvider()): Promise<{ reviewer: boolean; pending?:number; reviews?:number; cases?:number; comments?:number; role?:"reviewer"|"manager"|"owner"; featured?: FeaturedStatus | null }> {
+export async function fetchReviewMe(token: string, provider = currentProvider()): Promise<{ reviewer: boolean; pending?:number; reviews?:number; cases?:number; comments?:number; role?:"reviewer"|"manager"|"owner"; featured?: FeaturedStatus | null; blogWriter?: boolean }> {
   return json(await fetch(`${COMMUNITY_API}/review/me`, { headers: { ...from(), "X-Provider": provider, ...authHeaders(token) } }));
 }
 
@@ -528,6 +530,8 @@ export interface SiteMe {
   handle: string;
   memberSince: number;
   reviewer: boolean;
+  /** 審核人的角色；不是審核人就是 null（舊回應沒有這欄） */
+  reviewerRole?: "reviewer" | "manager" | "owner" | null;
   identities: { provider: string; externalId: number; linkedAt: number; founding?: boolean }[];
   /** 成人內容開關（要先驗過年齡） */
   showNsfw: boolean;
@@ -758,7 +762,7 @@ async function commentUrl(on: CommentOn, tail = "", query = ""): Promise<{ url: 
 
 export async function fetchComments(on: CommentOn, page: number, token?: string, sort?: CommentSort) {
   const { url, headers } = await commentUrl(on, "", sort ? `page=${page}&sort=${sort}` : `page=${page}`);
-  return json<{ total: number; comments: Comment[]; isRoleCreator: boolean; pinnedCommentId?: string | null }>(await fetch(url, { headers: { ...headers, ...commentHeaders(token) } }));
+  return json<{ total: number; comments: Comment[]; isRoleCreator: boolean; pinnedCommentId?: string | null; mutedUntil?: number | null }>(await fetch(url, { headers: { ...headers, ...commentHeaders(token) } }));
 }
 
 export async function fetchReplies(on: CommentOn, rootId: string, page: number, token?: string) {

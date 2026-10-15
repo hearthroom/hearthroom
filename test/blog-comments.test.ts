@@ -1,7 +1,7 @@
 import { approveFixtureResponse } from "./hosted-fixture";
 import { SELF, env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { bearer, identities, makeMember, makeReviewer, ratingBody, resetDb, restoreUpstream, rolesOnMainSite } from "./helpers";
+import { appAdmins, bearer, identities, makeMember, makeReviewer, ratingBody, resetDb, restoreUpstream, rolesOnMainSite } from "./helpers";
 
 // 文章留言：沿用卡片留言與計畫 2 的審核；只有公開文章有留言區，關閉留言只擋寫，置頂留言讀取時判斷。
 const AUTHOR = 61001, EDITOR = 61002, FAN = 61003, OTHER = 61004, MOD = 61005;
@@ -28,7 +28,8 @@ const revision = async () => (await env.DB.prepare("SELECT comment_revision AS r
 beforeEach(async () => {
   await resetDb();
   identities({ "author-token": AUTHOR, editor: EDITOR, fan: FAN, other: OTHER, mod: MOD });
-  await env.DB.prepare("UPDATE reviewers SET role='manager' WHERE member_id=?").bind(await makeReviewer(EDITOR)).run();
+  await makeReviewer(EDITOR);
+  appAdmins("editor");
   await makeReviewer(MOD);
   await makeMember(FAN);
   await makeMember(OTHER);
@@ -168,12 +169,15 @@ describe("文章留言", () => {
     expect([missing.status, (await json(missing)).error]).toEqual([404, "blog_post_not_found"]);
   });
 
-  it("寫作權限者的留言標成官方", async () => {
+  it("寫過或改過文章的人留言標成官方；本站 owner 沒寫過文章就不是", async () => {
+    const owner = await makeReviewer(OTHER);
+    await env.DB.prepare("UPDATE reviewers SET role='owner' WHERE member_id=?").bind(owner).run();
     await say("editor", "官方回應");
     await say("fan", "讀者");
+    await say("other", "站方審核");
     const body = await json(await list());
     const byContent = Object.fromEntries(body.comments.map((c: any) => [c.content, c.official]));
-    expect(byContent).toEqual({ 官方回應: true, 讀者: false });
+    expect(byContent).toEqual({ 官方回應: true, 讀者: false, 站方審核: false });
   });
 });
 

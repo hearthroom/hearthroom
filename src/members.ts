@@ -325,11 +325,16 @@ export async function viewerAllowsNsfw(
 }
 
 export async function isReviewer(db: D1Database, memberId: string): Promise<boolean> {
+  return (await reviewerRole(db, memberId)) !== null;
+}
+
+/** 審核人的角色；不是（或已撤銷）就是 null。登入狀態帶著它，前端不必等審核摘要就能排出管理分頁。 */
+export async function reviewerRole(db: D1Database, memberId: string): Promise<"reviewer" | "manager" | "owner" | null> {
   const row = await db
-    .prepare("SELECT 1 AS ok FROM reviewers WHERE member_id = ? AND revoked_at IS NULL")
+    .prepare("SELECT role FROM reviewers WHERE member_id = ? AND revoked_at IS NULL")
     .bind(memberId)
-    .first<{ ok: number }>();
-  return !!row;
+    .first<{ role: "reviewer" | "manager" | "owner" }>();
+  return row?.role ?? null;
 }
 
 /** 這個成員在某家供應商上的公開 ID；沒綁就是 null。 */

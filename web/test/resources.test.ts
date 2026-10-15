@@ -11,19 +11,31 @@ const mocks = vi.hoisted(() => ({
   folder: vi.fn(),
   upload: vi.fn(),
   token: vi.fn(async () => "token"),
+  drop: vi.fn(),
+  uploadToken: vi.fn(),
+  credentials: vi.fn(),
 }));
+vi.mock("../src/lib/managed-auth", () => ({ dropManagedToken: mocks.drop }));
 vi.mock("../src/lib/connections", () => ({
   accountToken: mocks.token,
   connectAccount: vi.fn(),
 }));
 vi.mock("../src/lib/resource-client", () => ({
-  resourceClient: (provider: string) => ({
-    list: (q: unknown) => mocks.list(provider, q),
-    folders: mocks.folders,
-    remove: mocks.remove,
-    folder: mocks.folder,
-    upload: mocks.upload,
-  }),
+  resourceClient: (provider: string, token: string | ((rejected?: string) => Promise<string | null>)) => {
+    mocks.credentials(token);
+    return {
+      list: (q: unknown) => mocks.list(provider, q),
+      folders: mocks.folders,
+      remove: mocks.remove,
+      folder: mocks.folder,
+      upload: async (...args: unknown[]) => {
+        const value = typeof token === "function" ? await token() : token;
+        if (!value) throw new Error("no credentials");
+        mocks.uploadToken(value);
+        return mocks.upload(...args);
+      },
+    };
+  },
 }));
 const state = reactive({
   profile: { identities: [{ provider: "harbor", externalId: 2 }] },
@@ -78,6 +90,7 @@ beforeEach(() => {
   sessionStorage.clear();
   state.profile.identities = [{ provider: "harbor", externalId: 2 }];
   mocks.list.mockImplementation(async () => page());
+  mocks.token.mockResolvedValue("token");
 });
 afterEach(() => {
   app?.unmount();
@@ -214,6 +227,60 @@ it("retries only failed upload entries", async () => {
   await flush();
   expect(mocks.upload).toHaveBeenCalledTimes(3);
   expect(mocks.upload.mock.calls[2][0].name).toBe("b.png");
+});
+
+it("obtains current credentials for failed-only retry while preserving the original file and folder", async () => {
+  mocks.folders.mockResolvedValueOnce([{ folderId: "f1", name: "1014", imageCount: 0 }] as any);
+  await mount("/resources?folder=f1");
+  const files = [new File(["a"], "a.png", { type: "image/png" }), new File(["b"], "b.png", { type: "image/png" })];
+  mocks.upload.mockResolvedValueOnce("ok").mockRejectedValueOnce(new Error("expired")).mockResolvedValueOnce("ok");
+  const input = root.querySelector<HTMLInputElement>("input[type=file]")!;
+  Object.defineProperty(input, "files", { value: files });
+  input.dispatchEvent(new Event("change"));
+  await flush();
+  mocks.token.mockClear().mockResolvedValue("renewed");
+  [...root.querySelectorAll<HTMLButtonElement>("button")].find(b => b.textContent?.trim() === "重試失敗檔案")!.click();
+  await flush();
+  expect(mocks.token).toHaveBeenCalledWith("harbor", 2, { verifyManaged: true });
+  expect(mocks.upload).toHaveBeenCalledTimes(3);
+  expect(mocks.uploadToken).toHaveBeenLastCalledWith("renewed");
+  expect(mocks.upload.mock.calls[2][0]).toBe(mocks.upload.mock.calls[1][0]);
+  expect(mocks.upload.mock.calls[2][1]).toEqual(["f1"]);
+});
+
+it("does not resume an upload under a different linked account", async () => {
+  await mount();
+  let finish!: () => void;
+  mocks.upload.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+  const input = root.querySelector<HTMLInputElement>("input[type=file]")!;
+  Object.defineProperty(input, "files", { value: [new File(["a"], "a.png", { type: "image/png" }), new File(["b"], "b.png", { type: "image/png" })] });
+  input.dispatchEvent(new Event("change"));
+  await flush();
+  state.profile.identities = [{ provider: "harbor", externalId: 99 }];
+  finish();
+  await flush();
+  expect(mocks.upload).toHaveBeenCalledTimes(1);
+  expect(root.querySelector(".upload-list")?.textContent).toContain("登入已失效");
+});
+
+it("invalidates only the rejected credential before requesting the same account again", async () => {
+  await mount();
+  const credentials = mocks.credentials.mock.calls.at(-1)![0];
+  mocks.token.mockResolvedValueOnce("renewed");
+  await expect(credentials("expired")).resolves.toBe("renewed");
+  expect(mocks.drop).toHaveBeenCalledWith("harbor", "expired");
+  expect(mocks.token).toHaveBeenLastCalledWith("harbor", 2, { verifyManaged: true });
+});
+
+it("discards credentials when the account changes during renewal", async () => {
+  await mount();
+  const credentials = mocks.credentials.mock.calls.at(-1)![0];
+  let finish!: (value: string) => void;
+  mocks.token.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  const pending = credentials();
+  state.profile.identities = [{ provider: "harbor", externalId: 99 }];
+  finish("other-account-token");
+  await expect(pending).rejects.toMatchObject({ status: 401 });
 });
 
 it("uploads a thousand directory files with authored paths after one overwrite confirmation", async () => {

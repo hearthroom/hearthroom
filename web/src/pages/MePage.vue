@@ -107,7 +107,7 @@ onMounted(() => {
       <RouterLink :to="lp('/wallet')" class="me__link"><AccountIcon name="wallet" />{{ $t("nav.wallet") }}<AccountIcon name="arrow" class="me__chevron" /></RouterLink>
       <RouterLink :to="lp('/me/referral')" class="me__link"><AccountIcon name="gift" />{{ $t("referral.title") }}<AccountIcon name="arrow" class="me__chevron" /></RouterLink>
       <RouterLink :to="lp('/me/campaign')" class="me__link"><AccountIcon name="spark" />{{ $t("campaign.mine.title") }}<AccountIcon name="arrow" class="me__chevron" /></RouterLink>
-      <RouterLink v-if="reviewerStore.reviewer" :to="lp('/review')" class="me__link"><AccountIcon name="check" />{{ $t("nav.review") }}<AccountIcon name="arrow" class="me__chevron" /></RouterLink>
+      <RouterLink v-if="reviewerStore.reviewer || reviewerStore.blogWriter" :to="lp(reviewerStore.reviewer ? '/review' : '/review/blog')" class="me__link"><AccountIcon name="check" />{{ $t("nav.review") }}<AccountIcon name="arrow" class="me__chevron" /></RouterLink>
       <RouterLink :to="lp('/settings')" class="me__link"><AccountIcon name="settings" />{{ $t("nav.settings") }}<AccountIcon name="arrow" class="me__chevron" /></RouterLink>
     </nav>
     <button type="button" class="me__link me__logout" @click="session.logout()"><AccountIcon name="logout" />{{ $t('nav.logout') }}</button>

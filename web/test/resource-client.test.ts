@@ -4,6 +4,93 @@ import { i18n } from "../src/lib/i18n";
 const response = (data: unknown) =>
   new Response(JSON.stringify({ code: 0, data }), { status: 200 });
 afterEach(() => vi.unstubAllGlobals());
+describe("renewable resource authorization", () => {
+  it.each(["uploadIntent", "uploadComplete", "folder/addItems", "upload"])(
+    "renews a rejected token at %s without repeating stored bytes",
+    async (rejectedPath) => {
+      let token = "expired";
+      const credentials = vi.fn(async (rejected?: string) => {
+        if (rejected) token = "renewed";
+        return token;
+      });
+      const fetcher = vi.fn(async (url: string, init: RequestInit) => {
+        if (url.endsWith("uploadIntent") && rejectedPath === "upload")
+          return new Response("{}", { status: 404 });
+        if (url.endsWith(rejectedPath) && new Headers(init.headers).get("Authorization") === "Bearer expired")
+          return new Response("{}", { status: 401 });
+        if (url.endsWith("uploadIntent"))
+          return response({ uploadId: "u", uploadUrl: "https://storage.test/u" });
+        return response({ imageId: "i", imageUrl: "https://assets.test/1014/a.png" });
+      });
+      const send = vi.fn(function (this: any) { this.onload(); });
+      vi.stubGlobal("fetch", fetcher);
+      vi.stubGlobal("XMLHttpRequest", class {
+        status = 200; upload = {}; open() {} setRequestHeader() {} onload = () => {}; send = send;
+      });
+      const c = resourceClient("harbor", credentials);
+      const file = new File(["x"], "a.png", { type: "image/png" });
+      await expect(c.upload(file, ["folder"], () => {}, "1014")).resolves.toBe("https://assets.test/1014/a.png");
+      expect(credentials).toHaveBeenCalledWith("expired");
+      expect(send).toHaveBeenCalledTimes(rejectedPath === "upload" ? 0 : 1);
+      const retried = fetcher.mock.calls.filter(([url]) => url.endsWith(rejectedPath));
+      expect(retried).toHaveLength(2);
+      expect(new Headers(retried[1][1].headers).get("Authorization")).toBe("Bearer renewed");
+      if (rejectedPath === "uploadComplete") {
+        expect(retried[1][1].body).toBe(retried[0][1].body);
+        expect(JSON.parse(retried[1][1].body as string)).toMatchObject({ uploadId: "u", relativePath: "1014/a.png", folderIds: ["folder"] });
+      }
+    },
+  );
+  it("gets current credentials for each request in a long-lived client", async () => {
+    let token = "first";
+    const fetcher = vi.fn(async () => response({ folders: [] }));
+    vi.stubGlobal("fetch", fetcher);
+    const c = resourceClient("harbor", async () => token);
+    await c.folders();
+    token = "second";
+    await c.folders();
+    expect(fetcher.mock.calls.map(([, init]) => new Headers(init.headers).get("Authorization"))).toEqual(["Bearer first", "Bearer second"]);
+  });
+  it("bounds renewal and leaves completion resumable when authentication is unavailable", async () => {
+    let token: string | null = "expired";
+    const fetcher = vi.fn(async (url: string) => url.endsWith("uploadIntent")
+      ? response({ uploadId: "u", uploadUrl: "https://storage.test/u" })
+      : token === "renewed" ? response({ imageId: "i", imageUrl: "https://assets.test/a.png" }) : new Response("{}", { status: 401 }));
+    const send = vi.fn(function (this: any) { this.onload(); });
+    vi.stubGlobal("fetch", fetcher);
+    vi.stubGlobal("XMLHttpRequest", class {
+      status = 200; upload = {}; open() {} setRequestHeader() {} onload = () => {}; send = send;
+    });
+    const credentials = vi.fn(async (rejected?: string) => { if (rejected) token = null; return token; });
+    const c = resourceClient("harbor", credentials), file = new File(["x"], "a.png", { type: "image/png" });
+    await expect(c.upload(file, [], () => {})).rejects.toMatchObject({ status: 401 });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    token = "renewed";
+    await expect(c.upload(file, [], () => {})).resolves.toBe("https://assets.test/a.png");
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(fetcher.mock.calls.filter(([url]) => url.endsWith("uploadIntent"))).toHaveLength(1);
+  });
+  it("does not loop when replacement credentials are also rejected", async () => {
+    const fetcher = vi.fn(async () => new Response("{}", { status: 401 }));
+    vi.stubGlobal("fetch", fetcher);
+    await expect(resourceClient("harbor", async (rejected) => rejected ? "renewed" : "expired").folders()).rejects.toMatchObject({ status: 401 });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+  it("does not send requests after sign-out", async () => {
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    await expect(resourceClient("harbor", async () => null).folders()).rejects.toMatchObject({ status: 401 });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it.each([401, 403, 503])("does not replay %s when no replacement token is available", async (status) => {
+    const fetcher = vi.fn(async () => new Response("{}", { status }));
+    const credentials = vi.fn(async () => "unchanged");
+    vi.stubGlobal("fetch", fetcher);
+    await expect(resourceClient("harbor", credentials).folders()).rejects.toMatchObject({ status });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(credentials).toHaveBeenCalledTimes(status === 401 ? 2 : 1);
+  });
+});
 describe("provider-bound resources", () => {
   it("normalizes Harbor folder IDs and preserves authored directory paths in completion", async () => {
     const fetcher = vi.fn(async (url: string) => {

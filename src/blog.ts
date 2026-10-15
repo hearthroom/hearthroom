@@ -4,9 +4,9 @@ import { bumpOp } from "./ops-metrics";
 import { HttpError, type Env } from "./types";
 
 /**
- * 官方部落格（開業活動設計 §6）。寫的人＝manager／owner 審核人（不含 AI 帳號）。
+ * 官方部落格（開業活動設計 §6）。寫的人＝供應商那邊本站應用的 owner／admin（不含 AI 帳號，見 community-admin.ts）。
  * 公開判定只在 isPublic 一處：已發布且到了發布時間。定時發布靠讀取時判斷，不開排程。
- * 權限在路由層檢查（canWritePost）；這裡的寫入函式假設呼叫端已經確認過。
+ * 權限在路由層檢查（community-admin.ts 的 canWriteBlog）；這裡的寫入函式假設呼叫端已經確認過。
  */
 export const LOCALES = ["zh-Hant", "zh-Hans", "en", "ja", "ko"] as const;
 export type Locale = (typeof LOCALES)[number];
@@ -41,15 +41,16 @@ export const PAGE_SIZE = 12;
 const PINNED_MAX = 3;
 
 /**
- * 寫作權限的唯一定義：manager／owner 審核人，不含 AI 帳號（審核人身分在，代理標記也沒撤）。
- * 寫成 SQL 片段，讓留言列表一次判斷整頁留言者是不是官方；canWritePost 也走這裡。`member` 是 SQL 運算式。
+ * 留言上的「官方」徽章：寫過或改過文章的人。寫作權限本身看供應商的應用團隊（community-admin.ts），
+ * 那問不進 SQL；能寫文章的人一定先過了那一關，所以「碰過文章」就是一份不用另外維護的官方名單。
+ * 寫成 SQL 片段，讓留言列表一次判斷整頁留言者。`member` 是 SQL 運算式。
+ * ponytail: 離開應用團隊的人徽章還在；要收回就得在退出團隊時通知本站，或改成記驗證時間。
  */
-export const writerSql = (member: string) =>
-  `EXISTS (SELECT 1 FROM reviewers wr WHERE wr.member_id = ${member} AND wr.revoked_at IS NULL AND wr.role IN ('manager','owner')
-    AND NOT EXISTS (SELECT 1 FROM review_agents wa WHERE wa.member_id = wr.member_id AND wa.revoked_at IS NULL))`;
+export const officialSql = (member: string) =>
+  `(EXISTS (SELECT 1 FROM blog_posts op WHERE op.author_member_id = ${member}) OR EXISTS (SELECT 1 FROM blog_post_revisions orv WHERE orv.editor_member_id = ${member}))`;
 
-export async function canWritePost(db: D1Database, memberId: string): Promise<boolean> {
-  return !!(await db.prepare(`SELECT ${writerSql("?1")} AS ok`).bind(memberId).first<{ ok: number }>())?.ok;
+export async function isOfficialWriter(db: D1Database, memberId: string): Promise<boolean> {
+  return !!(await db.prepare(`SELECT ${officialSql("?1")} AS ok`).bind(memberId).first<{ ok: number }>())?.ok;
 }
 
 export const isPublic = (p: { status: string; publishAt: number | null }, now: number) =>

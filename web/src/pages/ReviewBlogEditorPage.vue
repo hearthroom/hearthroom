@@ -15,7 +15,7 @@ import { RouterLink, onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRoute
 import { useI18n } from 'vue-i18n';
 import {
   columnName, createPreview, displayStatus, fetchAdminColumns, fetchAdminPost, fetchRevision, fetchRevisions, imageUrlOf, POST_LOCALES,
-  restoreRevision, savePost, setPostState, uploadBlogImage, type AdminPost, type BlogColumn, type PostInput, type Revision, type StateChange,
+  restoreRevision, savePost, setPostState, uploadBlogImage, type AdminPost, type BlogColumn, type PostInput, type Revision, type StateChange, suggestSlug,
 } from '@/lib/blog';
 import { ApiError } from '@/lib/api';
 import { fetchCampaigns, localized, type Campaign } from '@/lib/campaign';
@@ -124,11 +124,7 @@ async function loadRevisions() {
   try { revisions.value = (await fetchRevisions(await token(), post.value.id)).items; } catch { /* 側欄讀不到不擋編輯 */ }
 }
 
-/** 新文章的網址代號從標題建議：英數字留下、其餘變連字號；全是中日韓文字就用日期。改過一次就不再跟著標題走。 */
-function suggestSlug(title: string) {
-  const s = title.normalize('NFKD').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60).replace(/-+$/, '');
-  return s || `post-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`;
-}
+// 改過一次網址代號就不再跟著標題走
 watch(() => draft.title, (title) => { if (!post.value && !slugTouched.value) draft.slug = title.trim() ? suggestSlug(title) : ''; });
 
 /** 回應帶著別人存的內容時，只收狀態、版本號留在原處並標成衝突：下一次存檔會被擋下，不會蓋掉別人的修改。 */
@@ -228,7 +224,7 @@ async function openRevision(r: Revision) {
 async function restore() {
   const r = opened.value;
   if (!post.value || !r || busy.value) return;
-  if (!(await confirmDialog({ title: t('blog.admin.restore'), message: t('blog.admin.restoreConfirm'), confirmText: t('blog.admin.restore'), danger: true }))) return;
+  if (!(await confirmDialog({ title: t('blog.admin.restore'), message: t(status.value === 'published' ? 'blog.admin.restoreConfirmLive' : 'blog.admin.restoreConfirm'), confirmText: t('blog.admin.restore'), danger: true }))) return;
   const key = `restore:${r.id}`;
   busy.value = true; error.value = ''; done.value = '';
   try {
@@ -354,7 +350,7 @@ watch(() => route.params.id, (id) => { if (/\/review\/blog\/[^/]+$/.test(route.p
         <form class="panel bed-settings" @submit.prevent="save">
           <h2>{{ t('blog.admin.settings') }}</h2>
           <label class="field">
-            <span>{{ t('blog.admin.columns') }}</span>
+            <span>{{ t('blog.admin.column') }}</span>
             <select v-model="draft.columnId" class="input">
               <option v-for="c in columns" :key="c.id" :value="c.id">{{ columnName(c, String(locale)) }}{{ c.enabled ? '' : ` (${t('blog.admin.hidden')})` }}</option>
             </select>

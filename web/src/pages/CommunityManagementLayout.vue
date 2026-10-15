@@ -15,7 +15,7 @@ const { lp } = useLocalePath();
  * 「分享活動」審分享獎勵的申請，每個審核人（含 AI 帳號）都看得到。
  * 「發放」只給真人應用管理員：canEdit 由活動列表帶回，進工作台時讀一次，讀不到就當沒有（服務端仍逐次檢查）。
  * 「運營設定」每個審核人都看得到，只有應用管理員能改（服務端判）。
- * 「部落格」只給 manager／owner（寫文章的權限，服務端同樣再判一次）。
+ * 「部落格」給供應商那邊本站應用的 owner／admin（不必是審核人；寫入時服務端每次再問一次）。
  */
 const sections = [
   { key: 'reviews', path: '/review' },
@@ -33,10 +33,12 @@ onMounted(async () => {
 });
 // 工作台各頁共用的活動列表只活到離開工作台
 onBeforeUnmount(clearCampaignsCache);
+const blog = { key: 'blog', path: '/review/blog' } as const;
+// 不是審核人的應用管理員只看得到部落格：分享活動與發放的服務端閘門都要審核人身分，給了分頁也打不開。
 const visible = computed(() => {
-  const list: { key: string; path: string }[] = [...sections];
-  if (canPay.value) list.splice(list.findIndex((s) => s.key === 'campaign') + 1, 0, { key: 'payouts', path: '/review/payouts' });
-  if (reviewer.role === 'manager' || reviewer.role === 'owner') list.push({ key: 'blog', path: '/review/blog' });
+  const list: { key: string; path: string }[] = reviewer.reviewer === false ? [] : [...sections];
+  if (canPay.value && list.length) list.splice(list.findIndex((s) => s.key === 'campaign') + 1, 0, { key: 'payouts', path: '/review/payouts' });
+  if (reviewer.blogWriter) list.push(blog);
   return list;
 });
 </script>
