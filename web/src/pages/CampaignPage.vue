@@ -154,13 +154,14 @@ async function onDone(_result: ApplyResult) {
 
       <section class="panel campaign__section" aria-labelledby="campaign-apply-h">
         <h2 id="campaign-apply-h" class="campaign__h2">{{ t("campaign.apply.title") }}</h2>
-        <!-- 登入狀態還在確認時先不說「請登入」，免得已登入的人看到一閃 -->
-        <template v-if="!signedIn">
+        <!-- 登入狀態還在確認時先不說「請登入」，免得已登入的人看到一閃；沒開放的活動登入了也不能交，就直接說沒開放 -->
+        <p v-if="campaign.phase !== 'open'" class="campaign__rule">{{ t(`campaign.page.notOpen.${campaign.phase}`) }}</p>
+        <template v-else-if="!signedIn">
           <p v-if="session.ready" class="campaign__rule">{{ t("campaign.page.signIn") }}</p>
           <RouterLink v-if="session.ready" class="btn btn--primary campaign__signin" data-signin :to="lp(loginPath(route.fullPath))">{{ t("nav.login") }}</RouterLink>
         </template>
-        <CampaignApplyForm v-else-if="campaign.phase === 'open'" :key="formKey" :campaign="campaign" :contents="contents" @done="onDone" />
-        <p v-else class="campaign__rule">{{ t(`campaign.page.notOpen.${campaign.phase}`) }}</p>
+        <!-- @submit 落到表單根節點的原生 submit：下一次送出一開始就收掉上一次的「已收到」 -->
+        <CampaignApplyForm v-else :key="formKey" :campaign="campaign" :contents="contents" @submit="done = false" @done="onDone" />
       </section>
 
       <section v-if="signedIn" ref="shareEl" class="panel campaign__section" data-share-links aria-labelledby="campaign-share-h">

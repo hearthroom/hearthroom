@@ -38,6 +38,7 @@ const pages: RouteRecordRaw[] = [
   { path: "me/community", component: () => import("./pages/CommunityPage.vue"), meta: { auth: true } },
   { path: "me/notifications", component: () => import("./pages/NotificationsPage.vue"), meta: { auth: true } },
   { path: "me/referral", component: () => import("./pages/ReferralPage.vue"), meta: { auth: true } },
+  { path: "me/campaign", component: () => import("./pages/MyCampaignPage.vue"), meta: { auth: true } },
   { path: "me", component: () => import("./pages/MePage.vue"), meta: { auth: true } },
   { path: "login", component: () => import("./pages/LoginPage.vue") },
   // optimisticAuth：這個瀏覽器上次是登入的，就先開頁（畫上次那份）、身分在背景確認（見下面的守衛）
