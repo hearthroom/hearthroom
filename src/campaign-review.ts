@@ -20,7 +20,7 @@ const invalid = (field: string): never => { throw new HttpError(400, "share_inva
  * 同內容裡 location_key 相同的其他位置；同雜湊且掛在其他位置的截圖（跨內容跨人）；
  * 本人在這個活動、這筆提交前 24 小時內（不含這筆）的提交數達到門檻（門檻 N 標第 N+1 筆，沒設門檻不標）。
  */
-const FLAGS = `
+export const FLAGS = `
   EXISTS (SELECT 1 FROM share_placements o WHERE o.content_id = p.content_id AND o.location_key = p.location_key AND o.id <> p.id) AS dup_location,
   EXISTS (SELECT 1 FROM share_evidence e JOIN share_evidence o ON o.sha256 = e.sha256 AND o.placement_id IS NOT NULL AND o.placement_id <> p.id WHERE e.placement_id = p.id) AS dup_image,
   (c.flag_burst_threshold IS NOT NULL AND (
