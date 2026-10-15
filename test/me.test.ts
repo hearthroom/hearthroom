@@ -50,4 +50,13 @@ describe("GET /v1/me", () => {
     expect(body.reviewer).toBe(true);
     expect(body.handle).toBe(testHandle(10001));
   });
+
+  it("審核人的角色跟著身分一起回，不是審核人就是 null", async () => {
+    expect(((await (await me("other-token")).json()) as { reviewerRole: unknown }).reviewerRole).toBeNull();
+    await makeReviewer(10001);
+    await env.DB.prepare("UPDATE reviewers SET role='manager'").run();
+    expect(((await (await me()).json()) as { reviewerRole: unknown }).reviewerRole).toBe("manager");
+    await env.DB.prepare("UPDATE reviewers SET revoked_at=1").run();
+    expect(((await (await me()).json()) as { reviewer: boolean; reviewerRole: unknown })).toMatchObject({ reviewer: false, reviewerRole: null });
+  });
 });

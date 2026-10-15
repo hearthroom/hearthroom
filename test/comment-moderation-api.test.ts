@@ -317,3 +317,17 @@ describe("禁言的回應帶到期時間", () => {
     expect(await json(res)).toEqual({ error: "comment_muted", until: null });
   });
 });
+
+describe("留言列表告訴被禁言的人", () => {
+  it("被禁言的本人在列表上拿到到期時間（永久是 null）；別人與訪客沒有這個欄位", async () => {
+    const handle = testHandle(FAN);
+    const mute = (days: number | null) => SELF.fetch(`https://c.test/v1/moderation/members/${handle}/comment-mute`, { method: "PUT", headers: { "Content-Type": "application/json", ...bearer("mod") }, body: JSON.stringify({ days, reason: "洗版", operationId: crypto.randomUUID() }) });
+    expect("mutedUntil" in (await json(await list("fan")))).toBe(false);
+    const until = (await json(await mute(7))).until as number;
+    expect((await json(await list("fan"))).mutedUntil).toBe(until);
+    expect("mutedUntil" in (await json(await list("other")))).toBe(false);
+    expect("mutedUntil" in (await json(await list()))).toBe(false);
+    await mute(null);
+    expect((await json(await list("fan"))).mutedUntil).toBeNull();
+  });
+});

@@ -528,6 +528,8 @@ export interface SiteMe {
   handle: string;
   memberSince: number;
   reviewer: boolean;
+  /** 審核人的角色；不是審核人就是 null（舊回應沒有這欄） */
+  reviewerRole?: "reviewer" | "manager" | "owner" | null;
   identities: { provider: string; externalId: number; linkedAt: number; founding?: boolean }[];
   /** 成人內容開關（要先驗過年齡） */
   showNsfw: boolean;
@@ -758,7 +760,7 @@ async function commentUrl(on: CommentOn, tail = "", query = ""): Promise<{ url: 
 
 export async function fetchComments(on: CommentOn, page: number, token?: string, sort?: CommentSort) {
   const { url, headers } = await commentUrl(on, "", sort ? `page=${page}&sort=${sort}` : `page=${page}`);
-  return json<{ total: number; comments: Comment[]; isRoleCreator: boolean; pinnedCommentId?: string | null }>(await fetch(url, { headers: { ...headers, ...commentHeaders(token) } }));
+  return json<{ total: number; comments: Comment[]; isRoleCreator: boolean; pinnedCommentId?: string | null; mutedUntil?: number | null }>(await fetch(url, { headers: { ...headers, ...commentHeaders(token) } }));
 }
 
 export async function fetchReplies(on: CommentOn, rootId: string, page: number, token?: string) {

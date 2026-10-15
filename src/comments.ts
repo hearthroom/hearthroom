@@ -128,7 +128,7 @@ const TOP_SHOWN = "((c.deleted_at IS NULL AND (c.status = 'visible' OR (c.status
 
 export async function listTop(
   db: D1Database, target: CommentTarget, viewer: Viewer, page: number, sort: CommentSort = "new",
-): Promise<{ total: number; comments: CommentView[]; isRoleCreator: boolean; pinnedCommentId?: string | null }> {
+): Promise<{ total: number; comments: CommentView[]; isRoleCreator: boolean; pinnedCommentId?: string | null; mutedUntil?: number | null }> {
   const author = target.kind === "card" ? await cardAuthorMemberId(db, target.card) : null;
   const { col, id } = targetOf(target);
   const SELECT = selectFor(target);
@@ -164,7 +164,10 @@ export async function listTop(
   }
   const total = (count!.results[0] as { n: number }).n;
   const isRoleCreator = !!viewer.memberId && viewer.memberId === author;
-  return post ? { total, comments, isRoleCreator, pinnedCommentId: pin?.id ?? null } : { total, comments, isRoleCreator };
+  // 被禁言的本人：前端據此收起發表與回覆，不必等送出才被擋。只回給本人，別人看不到誰被禁言。
+  const muted = viewer.memberId ? await mutedUntil(db, viewer.memberId, Date.now()) : false;
+  const mutedField = muted === false ? {} : { mutedUntil: muted };
+  return post ? { total, comments, isRoleCreator, pinnedCommentId: pin?.id ?? null, ...mutedField } : { total, comments, isRoleCreator, ...mutedField };
 }
 
 export async function listReplies(db: D1Database, target: CommentTarget, rootId: string, viewer: Viewer, page: number) {

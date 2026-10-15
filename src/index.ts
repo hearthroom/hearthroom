@@ -53,7 +53,7 @@ import { cardThumbUrl, landingZone } from "../shared/card-thumb";
 import { PRIMARY_HOST, siteRootOf } from "../shared/site-hosts";
 import { draftStateOf, loadMine, type MineFilter } from "./mine";
 import { tagNamesFor } from "../shared/tag-catalog";
-import { providerOf, requestIdentity, isReviewer, isHumanReviewer, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
+import { providerOf, requestIdentity, reviewerRole, isHumanReviewer, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
 import { configuredProviders, hasChat, parseProvider, requireConfigured, DEFAULT_PROVIDER, PROVIDER_NAMES, type ProviderId, reviewEnabled } from "./providers";
 import { providerApiBaseFor } from "./providers";
 import { WEEKLY_LIMIT, registeredThisWeek, openPack } from "./quota";
@@ -816,7 +816,8 @@ app.put("/v1/me/profile", bodyLimit({maxSize: AVATAR_MAX_BYTES + 16384, onError:
   // 本站是暱稱的來源：改名後寫回 Harbor，控制台的「我的用戶」才看得到名字。
   const bearer = c.req.header("Authorization")?.match(/^Bearer\s+(\S+)$/)?.[1];
   if (member.provider === "harbor" && bearer && profile?.displayName) syncNickname(c, bearer, profile.displayName);
-  return c.json({...profile, reviewer: await isReviewer(c.env.DB, member.id)}, 200, {"Cache-Control":"no-store"});
+  const role = await reviewerRole(c.env.DB, member.id);
+  return c.json({...profile, reviewer: role !== null, reviewerRole: role}, 200, {"Cache-Control":"no-store"});
 });
 
 app.get('/v1/avatars/:handle/:file',async c=>{
@@ -883,10 +884,10 @@ app.get("/v1/me", async (c) => {
   const timings: string[] = [];
   const member = await requireMember(c, (phase, duration) => timings.push(`${phase};dur=${duration.toFixed(1)}`));
   const started = performance.now();
-  const [profile, reviewer] = await Promise.all([memberProfile(c.env.DB, member.id), isReviewer(c.env.DB, member.id)]);
+  const [profile, role] = await Promise.all([memberProfile(c.env.DB, member.id), reviewerRole(c.env.DB, member.id)]);
   if (!profile) throw new HttpError(404, "member not found");
   timings.push(`profile;dur=${(performance.now() - started).toFixed(1)}`);
-  return c.json({ ...profile, reviewer }, 200, { "Cache-Control": "no-store", "Server-Timing": timings.join(", ") });
+  return c.json({ ...profile, reviewer: role !== null, reviewerRole: role }, 200, { "Cache-Control": "no-store", "Server-Timing": timings.join(", ") });
 });
 
 /**

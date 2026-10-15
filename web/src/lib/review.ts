@@ -25,10 +25,12 @@ export const useReviewer = defineStore("reviewer", () => {
   const pendingCases = ref(0);
   /** 待審留言；不混進 pending（卡片審核的徽章數）。 */
   const pendingComments = ref(0);
-  const role = ref<"reviewer"|"manager"|"owner">("reviewer");
+  const checkedRole = ref<"reviewer"|"manager"|"owner">("reviewer");
+  /** 審核查詢回來前先用登入狀態帶的角色（部落格分頁才不會晚一拍出現），回來之後以查詢為準。 */
+  const role = computed(() => (reviewer.value === null ? session.profile?.reviewerRole ?? "reviewer" : checkedRole.value));
   let generation = 0;
 
-  function resetCounts() { featured.value = null; featuredProvider.value = null; pending.value = 0; pendingReviews.value = 0; pendingCases.value = 0; pendingComments.value = 0; role.value = "reviewer"; }
+  function resetCounts() { featured.value = null; featuredProvider.value = null; pending.value = 0; pendingReviews.value = 0; pendingCases.value = 0; pendingComments.value = 0; checkedRole.value = "reviewer"; }
 
   async function refresh(): Promise<boolean> {
     const requestGeneration = ++generation;
@@ -52,7 +54,7 @@ export const useReviewer = defineStore("reviewer", () => {
         pendingReviews.value = result.reviews ?? 0;
         pendingCases.value = result.cases ?? 0;
         pendingComments.value = result.comments ?? 0;
-        role.value = result.role ?? "reviewer";
+        checkedRole.value = result.role ?? "reviewer";
       } else resetCounts();
     } catch {
       if (requestGeneration === generation && provider === currentProvider()) { reviewer.value = false; resetCounts(); }
