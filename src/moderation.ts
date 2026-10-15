@@ -36,12 +36,14 @@ const publicCase=(r:CaseRow,memberId:string)=>({id:r.id,cardNumber:r.card_number
 const projection=(r:ManagedCard,lang:string)=>({id:String(r.id),provider:r.provider,featured:r.featured_at!=null,name:pickLocale(JSON.parse(r.names) as Localized,lang),tags:JSON.parse(r.tags) as string[],fandom:r.fandom??'',fandomId:r.fandom_qid??null,status:r.status,boardHidden:!!r.board_hidden,publicBlocked:!!r.public_blocked,version:r.approved_version_id||r.reviewed_hash});
 async function mutate<T>(run:()=>Promise<T>):Promise<T>{try{return await run();}catch(e){if(e instanceof HttpError)throw e;if(/moderation_conflict|UNIQUE constraint/.test(String(e)))throw new HttpError(409,'moderation_conflict');throw e;}}
 
-moderationRoutes.use('/v1/moderation/*',bodyLimit({maxSize:16000}));
+// 分享活動的設定（五語介紹）與橫幅上傳超過 16 KB，大小上限在 campaign-routes.ts 自己設。
+const moderationBodyLimit=bodyLimit({maxSize:16000});
+moderationRoutes.use('/v1/moderation/*',(c,next)=>c.req.path.startsWith('/v1/moderation/campaign')?next():moderationBodyLimit(c,next));
 moderationRoutes.use('/v1/moderation/*',async(c,next)=>{
  c.header('Cache-Control','private, no-store');
  await next();
- // 留言審核有自己的計數（hearthroom_comment_moderation_total，見 comment-moderation-routes.ts）。
- if(/^\/v1\/moderation\/(comment|settings$|members\/[^/]+\/comment-mute$)/.test(c.req.path))return;
+ // 留言審核與分享活動有自己的計數（hearthroom_comment_moderation_total、hearthroom_campaign_operations_total）。
+ if(/^\/v1\/moderation\/(comment|settings$|members\/[^/]+\/comment-mute$|campaign)/.test(c.req.path))return;
  const op=c.req.path.endsWith('/vote')?'vote':c.req.path.endsWith('/resolve')?'resolve':c.req.path.endsWith('/tags')?'tags':c.req.path.endsWith('/fandom')?'fandom':c.req.path.endsWith('/compensation')?'compensation':c.req.path.endsWith('/staff')?'staff':c.req.method==='POST'&&c.req.path.endsWith('/packs')?'packs':c.req.method==='POST'?'propose':'read';
  const outcome=c.res.status<400?'success':c.res.status<500?'denied':'error';
  try{await c.env.DB.prepare('INSERT INTO moderation_metrics VALUES(?,?,1) ON CONFLICT(operation,outcome) DO UPDATE SET value=value+1').bind(op,outcome).run();}catch{console.warn('Moderation request metric unavailable');}
