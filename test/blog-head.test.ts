@@ -29,7 +29,8 @@ beforeEach(async () => {
   await resetDb();
   editor = await makeReviewer(50001);
   await env.DB.prepare("UPDATE reviewers SET role='manager' WHERE member_id=?").bind(editor).run();
-  columnId = (await saveColumn(env.DB, { slug: "news", name: { "zh-Hant": "最新消息", en: "News" }, description: { "zh-Hant": "站上的新消息" }, sort: 0, enabled: true }, actor(), op(), 1)).id;
+  const group = (await saveColumn(env.DB, { slug: "official", name: { "zh-Hant": "官方消息", en: "News" }, description: { "zh-Hant": "官方的消息" }, sort: 0, enabled: true, parentId: null }, actor(), op(), 1)).id;
+  columnId = (await saveColumn(env.DB, { slug: "news", name: { "zh-Hant": "最新消息", en: "News" }, description: { "zh-Hant": "站上的新消息" }, sort: 0, enabled: true, parentId: group }, actor(), op(), 1)).id;
 });
 
 describe("部落格分享資訊", () => {

@@ -33,7 +33,8 @@ beforeEach(async () => {
   await makeReviewer(MOD);
   await makeMember(FAN);
   await makeMember(OTHER);
-  const col = await json(await send("/v1/blog/admin/columns", "editor", "POST", { slug: "news", name: { "zh-Hant": "最新消息" }, description: {}, sort: 0, enabled: true, operationId: op() }));
+  const group = await json(await send("/v1/blog/admin/columns", "editor", "POST", { slug: "official", name: { "zh-Hant": "官方消息" }, description: {}, sort: 0, enabled: true, parentId: null, operationId: op() }));
+  const col = await json(await send("/v1/blog/admin/columns", "editor", "POST", { slug: "news", name: { "zh-Hant": "最新消息" }, description: {}, sort: 0, enabled: true, parentId: group.id, operationId: op() }));
   const created = await json(await send("/v1/blog/admin/posts", "editor", "POST", { columnId: col.id, slug: "hello", locale: "zh-Hant", title: "開站了", excerpt: "", bodyMd: "內容", operationId: op() }));
   postId = created.id;
   expect((await state({ status: "published" })).status).toBe(200);
@@ -159,7 +160,7 @@ describe("文章留言", () => {
   });
 
   it("留言列表跟單篇文章路徑同形：slug 叫 comments 的文章照常讀得到", async () => {
-    const col = (await json(await send("/v1/blog/columns", null))).items[0].id;
+    const col = (await json(await send("/v1/blog/columns", null))).items[0].columns[0].id;
     const other = await json(await send("/v1/blog/admin/posts", "editor", "POST", { columnId: col, slug: "comments", locale: "zh-Hant", title: "留言規則", excerpt: "", bodyMd: "內容", operationId: op() }));
     expect((await send(`/v1/blog/admin/posts/${other.id}/state`, "editor", "POST", { change: { status: "published" }, operationId: op() })).status).toBe(200);
     const r = await send("/v1/blog/posts/news/comments", null);

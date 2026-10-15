@@ -2,7 +2,7 @@ import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { openAuth, sealAuth } from "./account-auth";
 import {
-  adjacentPosts, adminPost, adminPosts, adminView, getRevision, IMAGE_MAX_BYTES, imageServable, listColumns, listRevisions, postBySlug, publicPost,
+  adjacentPosts, adminPost, adminPosts, adminView, getRevision, IMAGE_MAX_BYTES, imageServable, columnTree, listRevisions, postBySlug, publicPost,
   publicPostById, publicPosts, publicView, relatedPosts, restoreRevision, saveColumn, savePost, setPostState, uploadImage,
   type Actor, type ColumnInput, type Post, type PostInput, type StateChange,
 } from "./blog";
@@ -68,7 +68,7 @@ const admin = async (c: Ctx, post: Post) => c.json(await adminView(c.env.DB, pos
 
 // ---- 公開 ---------------------------------------------------------------------
 
-blogRoutes.get("/v1/blog/columns", async (c) => c.json({ items: await listColumns(c.env.DB, { includeDisabled: false }) }, 200, PUBLIC));
+blogRoutes.get("/v1/blog/columns", async (c) => c.json({ items: await columnTree(c.env.DB, { admin: false }) }, 200, PUBLIC));
 
 blogRoutes.get("/v1/blog/posts", async (c) =>
   c.json(await publicPosts(c.env.DB, { columnSlug: c.req.query("column") || undefined, page: page(c), now: Date.now() }), 200, PUBLIC));
@@ -168,7 +168,7 @@ blogRoutes.post("/v1/blog/admin/posts/:id/preview", async (c) => {
 
 blogRoutes.get("/v1/blog/admin/columns", async (c) => {
   await writer(c);
-  return c.json({ items: await listColumns(c.env.DB, { includeDisabled: true }) });
+  return c.json({ items: await columnTree(c.env.DB, { admin: true }) });
 });
 
 blogRoutes.post("/v1/blog/admin/columns", async (c) => {

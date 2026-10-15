@@ -1,6 +1,6 @@
 import { PRIMARY_HOST } from "../shared/site-hosts";
 import { siteName } from "../shared/site-name";
-import { LOCALES, listColumns, publicPost, recentPosts, type Column, type Locale, type Post } from "./blog";
+import { LOCALES, columnTree, publicPost, recentPosts, type Column, type Locale, type Post } from "./blog";
 import { oneLine, siteOgImage, type PageMeta } from "./head";
 import type { Env } from "./types";
 
@@ -29,7 +29,7 @@ export async function blogIndexMeta(db: D1Database, lang: string, column: string
   const l = asLocale(lang);
   const base = { lang: l, url, type: "website" as const, image: siteOgImage("default", l), imageSize: { width: 1200, height: 630 } };
   if (!column) return { ...base, title: `${BLOG_WORD[l]} · ${siteName(l)}`, description: BLOG_DESCRIPTION[l] };
-  const found: Column | undefined = (await listColumns(db, { includeDisabled: false })).find((c) => c.slug === column);
+  const found: Column | undefined = (await columnTree(db, { admin: false })).flatMap((g) => g.columns).find((c) => c.slug === column);
   if (!found) return null;
   return { ...base, title: `${pick(found.name, l) || found.slug} · ${siteName(l)}`, description: pick(found.description, l) || BLOG_DESCRIPTION[l] };
 }
