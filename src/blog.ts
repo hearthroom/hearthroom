@@ -425,19 +425,20 @@ export async function columnTree(db: D1Database, opts: { admin: boolean }): Prom
 // ---- 公開讀取 -----------------------------------------------------------------
 
 /**
- * 公開列表：停用欄目的文章不列（選停用欄目回空列表）。置頂的最多 3 篇另列在 pinned，
- * items 是其餘公開文章依發布時間新到舊分頁；total 是 items 這一群的總數。
+ * 公開列表：看得到的欄目（VISIBLE_COLUMN）裡已公開的文章。columnSlug 只看那一欄；groupSlug 只看那一組；
+ * 兩個都給時以欄目為準。置頂的最多 3 篇另列在 pinned，其餘依發布時間新到舊分頁；total 是 items 那一群的總數。
  */
-export async function publicPosts(db: D1Database, opts: { columnSlug?: string; page: number; now: number }): Promise<{ total: number; pinned: PostCard[]; items: PostCard[] }> {
-  const where = `${LIVE} AND ${VISIBLE_COLUMN} AND (?2 IS NULL OR col.slug = ?2)`;
+export async function publicPosts(db: D1Database, opts: { columnSlug?: string; groupSlug?: string; page: number; now: number }): Promise<{ total: number; pinned: PostCard[]; items: PostCard[] }> {
   const column = opts.columnSlug ?? null;
-  const pinned = (await db.prepare(`${CARD_SELECT} WHERE ${where} AND p.pinned = 1 ORDER BY p.publish_at DESC, p.id DESC LIMIT ${PINNED_MAX}`).bind(opts.now, column).all<CardRow>()).results;
+  const group = column ? null : opts.groupSlug ?? null;
+  const where = `${LIVE} AND ${VISIBLE_COLUMN} AND (?2 IS NULL OR col.slug = ?2) AND (?3 IS NULL OR col.parent_id = (SELECT id FROM blog_columns WHERE slug = ?3 AND parent_id IS NULL))`;
+  const pinned = (await db.prepare(`${CARD_SELECT} WHERE ${where} AND p.pinned = 1 ORDER BY p.publish_at DESC, p.id DESC LIMIT ${PINNED_MAX}`).bind(opts.now, column, group).all<CardRow>()).results;
   const skip = JSON.stringify(pinned.map((r) => r.id));
   const page = Math.max(1, Math.floor(opts.page) || 1);
-  const rest = `${where} AND p.id NOT IN (SELECT value FROM json_each(?3))`;
+  const rest = `${where} AND p.id NOT IN (SELECT value FROM json_each(?4))`;
   const [count, items] = await db.batch<CardRow & { n: number }>([
-    db.prepare(`SELECT COUNT(*) AS n FROM blog_posts p JOIN blog_columns col ON col.id = p.column_id WHERE ${rest}`).bind(opts.now, column, skip),
-    db.prepare(`${CARD_SELECT} WHERE ${rest} ORDER BY p.publish_at DESC, p.id DESC LIMIT ?4 OFFSET ?5`).bind(opts.now, column, skip, PAGE_SIZE, (page - 1) * PAGE_SIZE),
+    db.prepare(`SELECT COUNT(*) AS n FROM blog_posts p JOIN blog_columns col ON col.id = p.column_id WHERE ${rest}`).bind(opts.now, column, group, skip),
+    db.prepare(`${CARD_SELECT} WHERE ${rest} ORDER BY p.publish_at DESC, p.id DESC LIMIT ?5 OFFSET ?6`).bind(opts.now, column, group, skip, PAGE_SIZE, (page - 1) * PAGE_SIZE),
   ]);
   return { total: (count!.results[0] as { n: number }).n, pinned: pinned.map(toCard), items: (items!.results as CardRow[]).map(toCard) };
 }
@@ -508,19 +509,19 @@ export async function adminPost(db: D1Database, id: string) {
 const STATUSES: readonly string[] = ["draft", "pending_review", "published", "unpublished"];
 type AdminRow = Pick<PostRow, "id" | "column_id" | "column_slug" | "slug" | "locale" | "title" | "status" | "publish_at" | "first_published_at" | "pinned" | "comments_closed" | "version" | "updated_at"> & { author_handle: string; editor_handle: string };
 
-/** 管理列表：所有狀態，最近改過的在前。column 可以是欄目 id 或 slug。editorHandle 是最後一次存內容的人。 */
-export async function adminPosts(db: D1Database, opts: { status?: string; column?: string; page: number }) {
+/** 管理列表：所有狀態，最近改過的在前。column 是欄目 id 或 slug；group 是分組 id。editorHandle 是最後一次存內容的人。 */
+export async function adminPosts(db: D1Database, opts: { status?: string; column?: string; group?: string; page: number }) {
   const status = opts.status || null;
   if (status !== null && !STATUSES.includes(status)) invalid("status");
-  const where = "(?1 IS NULL OR p.status = ?1) AND (?2 IS NULL OR col.id = ?2 OR col.slug = ?2)";
+  const where = "(?1 IS NULL OR p.status = ?1) AND (?2 IS NULL OR col.id = ?2 OR col.slug = ?2) AND (?3 IS NULL OR col.parent_id = ?3)";
   const from = "FROM blog_posts p JOIN blog_columns col ON col.id = p.column_id";
   const page = Math.max(1, Math.floor(opts.page) || 1);
-  const binds = [status, opts.column || null];
+  const binds = [status, opts.column || null, opts.group || null];
   const [count, rows] = await db.batch<AdminRow & { n: number }>([
     db.prepare(`SELECT COUNT(*) AS n ${from} WHERE ${where}`).bind(...binds),
     db.prepare(`SELECT p.id, p.column_id, col.slug AS column_slug, p.slug, p.locale, p.title, p.status, p.publish_at, p.first_published_at, p.pinned, p.comments_closed, p.version, p.updated_at,
       COALESCE((SELECT handle FROM members WHERE id = p.author_member_id), '') AS author_handle,
-      COALESCE((SELECT m.handle FROM blog_post_revisions r JOIN members m ON m.id = r.editor_member_id WHERE r.post_id = p.id ORDER BY r.version DESC LIMIT 1), '') AS editor_handle ${from} WHERE ${where} ORDER BY p.updated_at DESC, p.id DESC LIMIT ?3 OFFSET ?4`).bind(...binds, PAGE_SIZE, (page - 1) * PAGE_SIZE),
+      COALESCE((SELECT m.handle FROM blog_post_revisions r JOIN members m ON m.id = r.editor_member_id WHERE r.post_id = p.id ORDER BY r.version DESC LIMIT 1), '') AS editor_handle ${from} WHERE ${where} ORDER BY p.updated_at DESC, p.id DESC LIMIT ?4 OFFSET ?5`).bind(...binds, PAGE_SIZE, (page - 1) * PAGE_SIZE),
   ]);
   return {
     total: (count!.results[0] as { n: number }).n,

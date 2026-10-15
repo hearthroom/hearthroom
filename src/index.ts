@@ -46,7 +46,7 @@ import {
   BEACON_DETAILS, BEACON_EVENTS, clientKind, emit, note, refHostOf, safeSubject, shapeTerm, surfaceOf,
   type EventFields, type Pending,
 } from "./analytics";
-import { blogIndexMeta, blogUrl, postMeta } from "./blog-head";
+import { blogGroupUrl, blogIndexMeta, blogUrl, postMeta } from "./blog-head";
 import { authorLine, downloadMeta, homeMeta, preloadImageTag, renderDefaultShareHead, renderHead, updatesMeta } from "./head";
 import { aliasTarget, HOST, canonicalUrl, isPlayHost } from "./site";
 import { cardThumbUrl, landingZone } from "../shared/card-thumb";
@@ -1717,9 +1717,11 @@ async function blogPage(c: Context<{ Bindings: Env; Variables: { ev: Pending } }
   if (!shell.ok) return shell;
   const locale = m[1] ?? "zh-Hant";
   note(c, { event: "page_html", refHost: refHostOf(c.req.header("Referer"), url.host), locale, subject: m[3] ?? m[2] ?? "", detail: "blog" });
+  // 分組頁 /blog/g/<分組>：分組不是文章，不走 postMeta
   const meta = column === null || slug === null ? null
+    : column === "g" && slug ? await blogIndexMeta(c.env.DB, locale, { group: slug }, blogGroupUrl(locale, slug))
     : column && slug ? await postMeta(c.env.DB, column, slug, Date.now())
-    : await blogIndexMeta(c.env.DB, locale, column, blogUrl(locale, column));
+    : await blogIndexMeta(c.env.DB, locale, { column }, blogUrl(locale, column));
   if (!meta) {
     const res = new HTMLRewriter().on("head", { element(e) { e.append('<meta name="robots" content="noindex, nofollow">', { html: true }); } }).transform(new Response(shell.body, { status: 404, headers: shell.headers }));
     res.headers.set("Cache-Control", "no-store");

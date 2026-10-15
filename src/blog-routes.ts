@@ -2,7 +2,7 @@ import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { openAuth, sealAuth } from "./account-auth";
 import {
-  adjacentPosts, adminPost, adminPosts, adminView, getRevision, IMAGE_MAX_BYTES, imageServable, columnTree, listRevisions, postBySlug, publicPost,
+  adjacentPosts, adminPost, adminPosts, adminView, getRevision, IMAGE_MAX_BYTES, imageServable, columnTree, deleteColumn, listRevisions, postBySlug, publicPost,
   publicPostById, publicPosts, publicView, relatedPosts, restoreRevision, saveColumn, savePost, setPostState, uploadImage,
   type Actor, type ColumnInput, type Post, type PostInput, type StateChange,
 } from "./blog";
@@ -71,7 +71,7 @@ const admin = async (c: Ctx, post: Post) => c.json(await adminView(c.env.DB, pos
 blogRoutes.get("/v1/blog/columns", async (c) => c.json({ items: await columnTree(c.env.DB, { admin: false }) }, 200, PUBLIC));
 
 blogRoutes.get("/v1/blog/posts", async (c) =>
-  c.json(await publicPosts(c.env.DB, { columnSlug: c.req.query("column") || undefined, page: page(c), now: Date.now() }), 200, PUBLIC));
+  c.json(await publicPosts(c.env.DB, { columnSlug: c.req.query("column") || undefined, groupSlug: c.req.query("group") || undefined, page: page(c), now: Date.now() }), 200, PUBLIC));
 
 /** 帶預覽碼（24 小時、只認那一篇）讀得到未公開的文章；碼不對就當沒帶，照公開規則。 */
 async function previewed(c: Ctx, token: string, column: string, slug: string, now: number): Promise<Post | null> {
@@ -113,7 +113,7 @@ blogRoutes.get("/v1/blog/images/:file", async (c) => {
 
 blogRoutes.get("/v1/blog/admin/posts", async (c) => {
   await writer(c);
-  return c.json(await adminPosts(c.env.DB, { status: c.req.query("status"), column: c.req.query("column"), page: page(c) }));
+  return c.json(await adminPosts(c.env.DB, { status: c.req.query("status"), column: c.req.query("column"), group: c.req.query("group"), page: page(c) }));
 });
 
 blogRoutes.get("/v1/blog/admin/posts/:id", async (c) => {
@@ -181,6 +181,12 @@ blogRoutes.put("/v1/blog/admin/columns/:id", async (c) => {
   const actor = await writer(c);
   const { operationId, ...input } = await bodyOf(c);
   return c.json(await saveColumn(c.env.DB, { ...(input as ColumnInput), id: c.req.param("id") }, actor, operationOf(operationId), Date.now()));
+});
+
+blogRoutes.delete("/v1/blog/admin/columns/:id", async (c) => {
+  const actor = await writer(c);
+  const { operationId } = await bodyOf(c);
+  return c.json(await deleteColumn(c.env.DB, c.req.param("id"), actor, operationOf(operationId), Date.now()));
 });
 
 blogRoutes.post("/v1/blog/admin/images", bodyLimit({ maxSize: IMAGE_MAX_BYTES + 16384, onError: (c) => c.json({ error: "blog_image_invalid" }, 400) }), async (c) => {
