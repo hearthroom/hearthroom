@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, defineAsyncComponent, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import DownloadBanner from "@/components/DownloadBanner.vue";
@@ -25,6 +25,9 @@ import { guestAdult, viewerAdult } from "@/lib/adult-consent";
 import type { CardPage, Sort } from "@/lib/types";
 import UpdateStrip from "@/components/UpdateStrip.vue";
 import { RATINGS, RATING_NAMES, type Rating } from "../../../shared/content-rating";
+
+// 橫幅只在有進行中的活動時才畫：活動的程式碼不擋首頁第一屏
+const CampaignBanner = defineAsyncComponent(() => import("@/components/CampaignBanner.vue"));
 
 const route = useRoute();
 const router = useRouter();
@@ -251,6 +254,8 @@ const ratingOptions = computed(() => {
     <MascotWelcome />
     <MascotHome v-if="showHome" @discover="toNewCards" />
     <DownloadBanner />
+    <!-- 活動橫幅不讓位、也不擋更新提示列；沒有進行中的活動就什麼都不畫 -->
+    <CampaignBanner />
     <UpdateStrip />
 
     <!--

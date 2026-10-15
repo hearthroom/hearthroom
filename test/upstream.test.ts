@@ -229,3 +229,63 @@ it("reads the landscape background into the public role only when the provider s
   expect(projectRole({...mainSiteRole, roleBackgroundLandscape: ""})).not.toHaveProperty("backgroundLandscapeUrl");
   expect(projectRole(mainSiteRole)).not.toHaveProperty("backgroundLandscapeUrl");
 });
+
+describe("活動點數池發放的 HTTP 形狀", () => {
+  const stub = (res: () => Response | Promise<Response>) => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => { calls.push({ url: String(url), init }); return res(); });
+    return calls;
+  };
+  const body = { key: "pay-1", accountNo: 63001, amount: 3000, campaignRef: "camp-1", contentRef: "content-1" };
+  const paid = { key: "pay-1", accountNo: 63001, amount: 3000, entryId: "entry-1", paidAt: "2026-10-15T00:00:00Z", expiresAt: null, usageScope: "all", replayed: false };
+
+  it("payCampaign 帶操作者令牌 POST /open/v1/campaign-pool/payouts，本體原樣、有逾時；200 → paid（含 replayed）", async () => {
+    const calls = stub(() => Response.json(paid));
+    expect(await upstream.payCampaign(env, "tok-1", body, "harbor")).toEqual({ kind: "paid", entryId: "entry-1", paidAt: "2026-10-15T00:00:00Z", replayed: false });
+    expect(calls[0]!.url).toBe(`${env.PROVIDER_API_BASE_HARBOR}/open/v1/campaign-pool/payouts`);
+    expect(calls[0]!.init!.method).toBe("POST");
+    const headers = calls[0]!.init!.headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer tok-1");
+    expect(headers["User-Agent"]).toContain("Personae");
+    expect(headers["Content-Type"]).toBe("application/json");
+    expect(JSON.parse(String(calls[0]!.init!.body))).toEqual(body);
+    expect(calls[0]!.init!.signal).toBeInstanceOf(AbortSignal);
+    stub(() => Response.json({ ...paid, replayed: true }));
+    expect(await upstream.payCampaign(env, "tok-1", body, "harbor")).toMatchObject({ kind: "paid", replayed: true });
+  });
+
+  it("payCampaign：池不足 → insufficient；Provider 沒寫入的拒絕 → rejected＋代碼；5xx、斷線、逾時、本體不是 JSON → unknown", async () => {
+    stub(() => Response.json({ error: "pool_insufficient" }, { status: 409 }));
+    expect(await upstream.payCampaign(env, "t", body, "harbor")).toEqual({ kind: "insufficient" });
+    for (const [s, code] of [[400, "invalid_request"], [401, "unauthorized"], [403, "forbidden"], [404, "account_not_found"], [409, "pool_not_configured"], [409, "pool_disabled"], [409, "payout_over_limit"], [409, "idempotency_conflict"]] as const) {
+      stub(() => Response.json({ error: code }, { status: s }));
+      expect([s, await upstream.payCampaign(env, "t", body, "harbor")]).toEqual([s, { kind: "rejected", code }]);
+    }
+    for (const res of [() => Response.json({ error: "temporarily_unavailable" }, { status: 503 }), () => new Response("boom", { status: 500 }), () => new Response("<html>", { status: 200 }),
+      () => Response.json({ ok: true }), () => new Response("<html>challenge</html>", { status: 403 }), () => Response.json({ error: "rate limited, try later" }, { status: 429 })]) {
+      stub(res);
+      expect(await upstream.payCampaign(env, "t", body, "harbor")).toEqual({ kind: "unknown" });
+    }
+    vi.stubGlobal("fetch", async () => { throw new TypeError("network down"); });
+    expect(await upstream.payCampaign(env, "t", body, "harbor")).toEqual({ kind: "unknown" });
+    vi.stubGlobal("fetch", async () => { throw new DOMException("timed out", "TimeoutError"); });
+    expect(await upstream.payCampaign(env, "t", body, "harbor")).toEqual({ kind: "unknown" });
+  });
+
+  it("getCampaignPayout 帶令牌 GET 並把 key 編進路徑；200 → paid、404 not_found → absent、其餘 → unknown", async () => {
+    const calls = stub(() => Response.json(paid));
+    expect(await upstream.getCampaignPayout(env, "tok-2", "a/b", "harbor")).toEqual({ kind: "paid", entryId: "entry-1", paidAt: "2026-10-15T00:00:00Z" });
+    expect(calls[0]!.url).toBe(`${env.PROVIDER_API_BASE_HARBOR}/open/v1/campaign-pool/payouts/a%2Fb`);
+    expect(calls[0]!.init!.method ?? "GET").toBe("GET");
+    expect((calls[0]!.init!.headers as Record<string, string>).Authorization).toBe("Bearer tok-2");
+    expect(calls[0]!.init!.signal).toBeInstanceOf(AbortSignal);
+    stub(() => Response.json({ error: "not_found" }, { status: 404 }));
+    expect(await upstream.getCampaignPayout(env, "t", "k", "harbor")).toEqual({ kind: "absent" });
+    for (const res of [() => new Response("nope", { status: 404 }), () => Response.json({ error: "forbidden" }, { status: 403 }), () => Response.json({ error: "temporarily_unavailable" }, { status: 503 }), () => new Response("x", { status: 200 })]) {
+      stub(res);
+      expect(await upstream.getCampaignPayout(env, "t", "k", "harbor")).toEqual({ kind: "unknown" });
+    }
+    vi.stubGlobal("fetch", async () => { throw new DOMException("timed out", "TimeoutError"); });
+    expect(await upstream.getCampaignPayout(env, "t", "k", "harbor")).toEqual({ kind: "unknown" });
+  });
+});

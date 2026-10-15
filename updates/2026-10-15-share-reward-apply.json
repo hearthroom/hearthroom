@@ -1,0 +1,20 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/me/campaign",
+  "draft": true,
+  "title": {
+    "zh-Hant": "分享獎勵現在可以在活動頁直接申請",
+    "zh-Hans": "分享奖励现在可以在活动页直接申请",
+    "en": "Share rewards can now be claimed right from the campaign page",
+    "ja": "シェア報酬をキャンペーンページから申請できるようになりました",
+    "ko": "이제 이벤트 페이지에서 공유 보상을 신청할 수 있어요"
+  },
+  "body": {
+    "zh-Hant": "送出的分享會出現在「我的分享申請」，審核和發獎進度都看得到。",
+    "zh-Hans": "提交的分享会出现在“我的分享申请”里，审核和发奖进度都看得到。",
+    "en": "Shares you submit appear in My share applications, where you can follow how review and payment are going.",
+    "ja": "送信したシェアは「マイシェア申請」に表示され、審査と報酬付与の進み具合を確認できます。",
+    "ko": "보낸 공유는 '내 공유 신청'에 표시되고 검토와 보상 지급 진행 상황을 볼 수 있어요."
+  }
+}

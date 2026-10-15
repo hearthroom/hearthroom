@@ -10,9 +10,11 @@
  */
 import { watch } from "vue";
 import { ApiError, fetchReferral, redeemReferral } from "./api";
+import { COMMUNITY_API } from "./config";
 import { accountToken } from "./connections";
 import { currentProvider, type ProviderId } from "./provider";
 import { useSession } from "./session";
+import { signedInHint } from "./signin-hint";
 
 const KEY = "hearthroom.shareRef";
 export const SHARE_REF_TTL = 30 * 24 * 60 * 60 * 1000;
@@ -161,4 +163,113 @@ export function withShareRef(url: string, code: string | null): string {
   const u = new URL(url);
   u.searchParams.set("ref", code);
   return u.href;
+}
+
+/** 活動分享連結：有推薦碼先帶 ?ref=，再帶分享短碼 ?s=（進站時記下並算歸因，見下方）。 */
+export function withCampaignShare(url: string, refCode: string | null, shareCode: string): string {
+  const u = new URL(withShareRef(url, refCode));
+  u.searchParams.set("s", shareCode);
+  return u.href;
+}
+
+// ---- 活動分享短碼 ?s= -----------------------------------------------------------
+/*
+ * 比照推薦碼：點進來先記下（算最後一個、放 30 天），登入後送一次綁定，伺服器決定算不算新玩家。
+ * 跟推薦碼不同的是登入中的人也記：老玩家點了也算這份內容的訪客，只是伺服器不會把他綁成新玩家。
+ * 記下時順手送一次訪客計數（同碼同 UTC 日一次）。只存碼與時間，不存網址或任何身分。
+ */
+const SHARE_KEY = "hearthroom.campaignShare";
+const VISITED_KEY = "hearthroom.campaignShare.visited";
+const SHARE_CODE = /^[A-Z0-9]{8}$/;
+const utcDay = (ms: number) => Math.floor(ms / 86_400_000);
+
+/** 網址上的 ?s=。不像分享碼的值不理，也不從網址拿掉（不是我們的參數）。 */
+export function campaignShareFromQuery(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const code = value.trim().toUpperCase();
+  return SHARE_CODE.test(code) ? code : null;
+}
+
+/** 碼算最後點的那個，時間留第一次點的：後來的點擊不能把「第一次來站」往後推過註冊時間。 */
+export function rememberCampaignShare(code: string, now = Date.now()): void {
+  const at = Math.min(pendingCampaignShare(now)?.at ?? now, now);
+  try { localStorage.setItem(SHARE_KEY, JSON.stringify({ code, at } satisfies Stored)); } catch { /* 存不了就不算 */ }
+}
+
+export function pendingCampaignShare(now = Date.now()): Stored | null {
+  try {
+    const raw = localStorage.getItem(SHARE_KEY);
+    if (!raw) return null;
+    const value = JSON.parse(raw) as Partial<Stored>;
+    if (typeof value.code === "string" && typeof value.at === "number" && now - value.at < SHARE_REF_TTL) return { code: value.code, at: value.at };
+    localStorage.removeItem(SHARE_KEY);
+  } catch { /* 壞掉的紀錄當沒有 */ }
+  return null;
+}
+
+export function forgetCampaignShare(): void {
+  try { localStorage.removeItem(SHARE_KEY); } catch { /* 無妨 */ }
+}
+
+/** 今天沒為這個碼送過就送一次訪客計數；送不出去就算了。紀錄只留今天的。 */
+function countVisitOnce(code: string, now: number): void {
+  const today = utcDay(now);
+  let seen: Record<string, number> = {};
+  try { seen = JSON.parse(localStorage.getItem(VISITED_KEY) || "{}") ?? {}; } catch { /* 壞掉當沒送過 */ }
+  if (seen[code] === today) return;
+  const kept = Object.fromEntries(Object.entries(seen).filter(([, d]) => d === today));
+  try { localStorage.setItem(VISITED_KEY, JSON.stringify({ ...kept, [code]: today })); } catch { /* 存不了頂多多算一次 */ }
+  try {
+    void fetch(`${COMMUNITY_API}/campaign/visits`, { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ s: code }) }).catch(() => {});
+  } catch { /* 無妨 */ }
+}
+
+/**
+ * 進站帶著合法的 ?s=：送一次訪客計數；沒登入的才記下碼（蓋掉之前的），登入中的人不是新玩家，同推薦碼。
+ * router.ts 接著把 s 從網址拿掉。
+ */
+export function noteCampaignShare(code: string, now = Date.now()): void {
+  if (signedInHint() === null) rememberCampaignShare(code, now);
+  countVisitOnce(code, now);
+}
+
+export type CampaignShareOutcome = "none" | "no_token" | "bound" | "done" | "retry";
+
+let binding: Promise<CampaignShareOutcome> | null = null;
+
+/**
+ * 登入後送一次綁定。伺服器有結論（200，不論綁上與否；或其他 4xx）就清掉紀錄；網路錯誤、5xx，
+ * 以及令牌過期或暫時被擋（401／403／429，同推薦碼的處理）都留著下次再試，免得默默少算一位新玩家。
+ */
+export function bindCampaignShare(token: () => Promise<string | null>): Promise<CampaignShareOutcome> {
+  if (!binding) binding = attemptCampaignShare(token).finally(() => { binding = null; });
+  return binding;
+}
+
+async function attemptCampaignShare(token: () => Promise<string | null>): Promise<CampaignShareOutcome> {
+  const share = pendingCampaignShare();
+  if (!share) return "none";
+  try {
+    const t = await token();
+    if (!t) return "no_token";
+    const res = await fetch(`${COMMUNITY_API}/me/campaign/attribution`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${t}`, "X-Provider": currentProvider(), "Content-Type": "application/json" },
+      body: JSON.stringify({ s: share.code, firstSeenAt: share.at }),
+    });
+    if (res.status >= 500 || res.status === 401 || res.status === 403 || res.status === 429) return "retry";
+    forgetCampaignShare();
+    const body = res.ok ? ((await res.json().catch(() => null)) as { bound?: boolean } | null) : null;
+    return body?.bound ? "bound" : "done";
+  } catch {
+    return "retry";
+  }
+}
+
+/** 掛在 App 上：每次有人登入（含開站恢復登入）就試著綁一次。沒有記下的碼就什麼都不做。 */
+export function watchCampaignShareBinding(): void {
+  const session = useSession();
+  watch(() => session.me?.accountNumId ?? null, (id) => {
+    if (id && pendingCampaignShare()) void bindCampaignShare(() => session.accessToken());
+  }, { immediate: true });
 }

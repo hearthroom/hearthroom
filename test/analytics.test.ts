@@ -224,6 +224,17 @@ describe("beacon 端點", () => {
     expect(seen("agent_onboard").map((e) => [e.detail, e.subject])).toEqual([["onboard_copied", "guide"], ["onboard_manual", "mine"]]);
   });
 
+  it("分享活動的三個事件收得下，來源記成 campaign，subject 是活動 slug", async () => {
+    await post([
+      { event: "campaign_view", subject: "launch", from: "campaign" },
+      { event: "campaign_apply", subject: "launch", from: "campaign" },
+      { event: "campaign_share", subject: "launch", from: "mine" },
+    ]);
+    expect(points).toHaveLength(3);
+    expect(seen("campaign_view").map((e) => [e.subject, e.from])).toEqual([["launch", "campaign"]]);
+    expect(seen("campaign_share")[0]!.from).toBe("mine");
+  });
+
   it("跨站來的一律靜默丟棄", async () => {
     const res = await post([{ event: "cta" }], { Origin: "https://evil.example" });
     expect(res.status).toBe(204);
@@ -296,6 +307,7 @@ describe("欄位過濾", () => {
   it("來源標記走白名單", () => {
     expect(surfaceOf("board")).toBe("board");
     expect(surfaceOf("blog")).toBe("blog");
+    expect(surfaceOf("campaign")).toBe("campaign");
     expect(surfaceOf("<script>")).toBe("direct");
     expect(surfaceOf(undefined)).toBe("direct");
   });
@@ -312,7 +324,8 @@ describe("欄位過濾", () => {
     for (const e of ["comment_post", "comment_like", "comment_delete", "comment_tab",
       "card_create", "card_edit", "wallet_view", "topup_click",
       "appearance", "locale_switch", "logout", "page_404",
-      "blog_view", "blog_read_end", "blog_share", "blog_cta"]) {
+      "blog_view", "blog_read_end", "blog_share", "blog_cta",
+      "campaign_view", "campaign_apply", "campaign_share"]) {
       expect(BEACON_EVENTS.has(e)).toBe(true);
     }
   });

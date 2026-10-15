@@ -9,7 +9,7 @@ import { can } from "./lib/provider";
 import { updateMarkdownTwin } from "./lib/markdown-twin";
 import { isPlayHost } from "./lib/site";
 import { setSurface } from "./lib/track";
-import { refFromQuery, rememberShareRef } from "./lib/share-ref";
+import { campaignShareFromQuery, noteCampaignShare, refFromQuery, rememberShareRef } from "./lib/share-ref";
 
 /**
  * 語言放在網址路徑裡，不是 localStorage。
@@ -38,6 +38,7 @@ const pages: RouteRecordRaw[] = [
   { path: "me/community", component: () => import("./pages/CommunityPage.vue"), meta: { auth: true } },
   { path: "me/notifications", component: () => import("./pages/NotificationsPage.vue"), meta: { auth: true } },
   { path: "me/referral", component: () => import("./pages/ReferralPage.vue"), meta: { auth: true } },
+  { path: "me/campaign", component: () => import("./pages/MyCampaignPage.vue"), meta: { auth: true } },
   { path: "me", component: () => import("./pages/MePage.vue"), meta: { auth: true } },
   { path: "login", component: () => import("./pages/LoginPage.vue") },
   // optimisticAuth：這個瀏覽器上次是登入的，就先開頁（畫上次那份）、身分在背景確認（見下面的守衛）
@@ -69,6 +70,8 @@ const pages: RouteRecordRaw[] = [
     },
   },
   { path: "blog/:column/:slug", component: () => import("./pages/BlogPostPage.vue") },
+  // 分享獎勵活動頁：訪客看得到規則，申請要登入（頁內提示，登入後帶回原頁；?s= 進站時已記下並從網址拿掉）
+  { path: "campaign/:slug", component: () => import("./pages/CampaignPage.vue") },
   // 站內玩卡：舞台整頁接管（bare = 不套站台頁首頁尾）。遊客進得來、看得到開場，送出時才請他登入
   // （owner 2026-10-10，見 PlayPage）；續玩、審核、作者試玩由 PlayPage 自己要求登入。
   { path: "play/:roleId", component: () => import("./pages/PlayPage.vue"), meta: { bare: true, preloadStage: true } },
@@ -85,6 +88,13 @@ const pages: RouteRecordRaw[] = [
       { path: "members/:handle", component: () => import("./pages/MembersPage.vue"), meta: { managementTab: "members" } },
       { path: "comments", component: () => import("./pages/ReviewCommentsPage.vue"), meta: { managementTab: "comments" } },
       { path: "settings", component: () => import("./pages/ReviewSettingsPage.vue"), meta: { managementTab: "settings" } },
+      // 分享活動：佇列與內容詳情。同樣要在 :id 之前
+      { path: "campaign", component: () => import("./pages/ReviewCampaignPage.vue"), meta: { managementTab: "campaign" } },
+      // 數據看板要在 :id 之前，不然 stats 會被當成內容編號
+      { path: "campaign/stats", component: () => import("./pages/ReviewCampaignStatsPage.vue"), meta: { managementTab: "campaign" } },
+      { path: "campaign/:id", component: () => import("./pages/ReviewCampaignDetailPage.vue"), meta: { managementTab: "campaign" } },
+      // 發放：只有應用管理員看得到分頁（canEdit），其他人直接打網址看到一句說明；服務端每次都再判
+      { path: "payouts", component: () => import("./pages/ReviewPayoutsPage.vue"), meta: { managementTab: "payouts" } },
       // 部落格：文章列表＋欄目、編輯器。要在 :id（卡片審核詳情）之前，不然 blog 會被當成審核編號
       { path: "blog", component: () => import("./pages/ReviewBlogPage.vue"), meta: { managementTab: "blog" } },
       // 新文章是 blog/new：跟既有文章同一條記錄，第一次存好換成 blog/<id> 時編輯器的離開提醒還掛著
@@ -141,11 +151,16 @@ export function withLocale(path: string, locale: string): string {
 
 // 分享連結的 ?ref=：沒登入的訪客記下來（註冊後自動帶入，lib/share-ref.ts），然後從網址拿掉——
 // 不然他再轉發這張卡，帶出去的還是原分享者的碼。登入中的人本來就不是新註冊，不記。
+// 活動分享短碼 ?s=：合法的才是我們的，不論登入與否都送一次訪客計數，碼只替沒登入的人記下（同 ref），同樣從網址拿掉；
+// 之後的登入連結（例如活動頁的 returnTo）不再帶 s，靠瀏覽器的紀錄綁定。
 router.beforeEach((to) => {
-  if (!("ref" in to.query)) return true;
+  const share = campaignShareFromQuery(to.query.s);
+  if (!("ref" in to.query) && !share) return true;
   const code = refFromQuery(to.query.ref);
   if (code && signedInHint() === null) rememberShareRef(code);
+  if (share) noteCampaignShare(share);
   const { ref: _ref, ...query } = to.query;
+  if (share) delete query.s;
   return { path: to.path, query, hash: to.hash, replace: true };
 });
 
@@ -226,14 +241,15 @@ router.beforeEach(async (to) => {
  * 已經不存在的按鈕上；main 有 tabindex=-1，能接焦點但不進 Tab 順序。
  */
 /** 路由 → 來源標記。API 請求帶著它，服務端才知道這次瀏覽是從哪一頁走過來的。 */
-function surfaceOf(path: string): string {
+export function surfaceOf(path: string): string {
   if (isPlayHost()) return path.startsWith("/login") || path.startsWith("/auth") ? "login" : "play";
   const bare = "/" + path.replace(/^\/(zh-Hans|en|ja|ko)(?=\/|$)/, "").replace(/^\//, "");
   if (bare === "/") return "board";
   if (bare.startsWith("/search")) return "search";
   if (bare.startsWith("/cards")) return "card";
   if (bare.startsWith("/authors")) return "author";
-  if (bare.startsWith("/mine")) return "mine";
+  if (bare.startsWith("/mine") || bare.startsWith("/me/campaign")) return "mine";
+  if (bare.startsWith("/campaign")) return "campaign";
   if (bare.startsWith("/create")) return "create";
   if (bare.startsWith("/wallet")) return "wallet";
   if (bare.startsWith("/play")) return "play";
