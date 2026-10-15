@@ -123,6 +123,15 @@ describe("上傳", () => {
     await env.DB.prepare("UPDATE share_evidence SET created_at = ? WHERE id = 'e0'").bind(now - DAY - 1).run();
     expect((await upload(png())).status).toBe(200);
   });
+  it("同時送出的上傳不能越過上限：59 張時並發兩張只成功一張、只存一次物件", async () => {
+    const now = Date.now();
+    await env.DB.batch(Array.from({ length: 59 }, (_, i) =>
+      env.DB.prepare("INSERT INTO share_evidence (id, member_id, r2_key, sha256, bytes, created_at) VALUES (?, ?, ?, 'h', 1, ?)").bind(`e${i}`, owner, `evidence/e${i}`, now - 1000)));
+    const results = await Promise.all([upload(png()), upload(png())]);
+    expect(results.map((r) => r.status).sort()).toEqual([200, 429]);
+    expect(bucket.put).toHaveBeenCalledOnce();
+    expect(await count("SELECT count(*) AS n FROM share_evidence WHERE member_id = ?", owner)).toBe(60);
+  });
 });
 
 describe("截圖只給本人與審核員", () => {
@@ -223,6 +232,22 @@ describe("排程清理", () => {
     expect(await (await call("/metrics")).text()).toContain('hearthroom_campaign_operations_total{operation="purge",outcome="success"} 2');
   });
 
+  it("物件刪了但寫入失敗：記 purge/error 並拋出，下一輪補上", async () => {
+    const id = await uploaded();
+    await attach(owner, await placement(owner, Date.now() - 10 * DAY, 5), [id]);
+    const failing = new Proxy(env.DB, {
+      get(t, k) {
+        if (k === "batch") return async () => { throw new Error("d1 down"); };
+        const v = Reflect.get(t, k);
+        return typeof v === "function" ? v.bind(t) : v;
+      },
+    });
+    await expect(campaignMaintenance(fixture({ DB: failing }), Date.now())).rejects.toThrow("d1 down");
+    expect(await (await call("/metrics")).text()).toContain('hearthroom_campaign_operations_total{operation="purge",outcome="error"} 1');
+    await campaignMaintenance(fixture(), Date.now());
+    expect(await count("SELECT count(*) AS n FROM share_evidence WHERE purged_at IS NOT NULL")).toBe(1);
+  });
+
   it("保留期還沒到、沒設發獎截止的活動都不刪", async () => {
     const id = await uploaded();
     await attach(owner, await placement(owner, Date.now(), 90), [id]);
@@ -243,7 +268,7 @@ describe("私有 bucket 的唯一入口", () => {
   it("src/ 裡只有 campaign-evidence.ts 讀 env.EVIDENCE", () => {
     const sources = import.meta.glob<string>("../src/**/*.ts", { query: "?raw", import: "default", eager: true });
     expect(Object.keys(sources).length).toBeGreaterThan(20);
-    const readers = Object.entries(sources).filter(([, text]) => /\.EVIDENCE\b/.test(text)).map(([path]) => path);
+    const readers = Object.entries(sources).filter(([, text]) => /\bEVIDENCE\b/.test(text)).map(([path]) => path);
     expect(readers).toEqual(["../src/campaign-evidence.ts"]);
   });
 });

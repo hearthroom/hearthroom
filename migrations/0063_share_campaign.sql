@@ -74,6 +74,7 @@ CREATE TABLE share_evidence (
 );
 CREATE INDEX share_evidence_placement ON share_evidence(placement_id);
 CREATE INDEX share_evidence_hash ON share_evidence(sha256);
+CREATE INDEX share_evidence_member ON share_evidence(member_id, created_at);
 CREATE INDEX share_evidence_unattached ON share_evidence(created_at) WHERE placement_id IS NULL;
 
 CREATE TABLE share_payouts (
