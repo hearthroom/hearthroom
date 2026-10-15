@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
  * 一篇官方文章：頁頭（欄目、標題、日期、閱讀時長、官方、封面）、內文、分享、上一篇／下一篇、相關文章、留言。
+ * 關聯了活動的文章，頁頭下與文末各放一個活動區塊（BlogCampaign）。
  *
  * 內文跟文件頁同一個渲染（markdown-toc.ts，不吃 HTML）。目錄三項以上才放：桌面在側欄跟著捲動，
  * 手機收在標題下面。網址帶 ?preview= 是編輯器的預覽連結：讀得到還沒公開的版本，頁首說一聲，
@@ -9,6 +10,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute } from "vue-router";
+import BlogCampaign from "@/components/BlogCampaign.vue";
 import BlogPostCard from "@/components/BlogPostCard.vue";
 import CommentPanel from "@/components/CommentPanel.vue";
 import NotFoundPage from "@/pages/NotFoundPage.vue";
@@ -179,6 +181,7 @@ onBeforeUnmount(() => { headingObserver?.disconnect(); endObserver?.disconnect()
         </p>
         <img v-if="post.coverUrl" :src="post.coverUrl" alt="" class="blog-post__cover" />
       </header>
+      <BlogCampaign v-if="post.campaign" :campaign="post.campaign" :subject="post.slug" at="top" />
 
       <div class="blog-post__layout" :class="{ 'blog-post__layout--toc': longRead }">
         <aside v-if="longRead" class="toc">
@@ -196,6 +199,7 @@ onBeforeUnmount(() => { headingObserver?.disconnect(); endObserver?.disconnect()
 
         <div class="blog-post__main">
           <article ref="article" class="blog-post__body" v-html="rendered.html" />
+          <BlogCampaign v-if="post.campaign" :campaign="post.campaign" :subject="post.slug" at="end" />
 
           <div ref="endEl" class="blog-post__share">
             <button type="button" class="btn btn--sm" @click="copyLink">{{ t("blog.copyLink") }}</button>

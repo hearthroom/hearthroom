@@ -20,6 +20,7 @@ import {
 import MarkdownToolbar from '@/components/MarkdownToolbar.vue';
 import { ApiError } from '@/lib/api';
 import { applyMarkdown, type MarkdownAction } from '@/lib/markdown-edit';
+import { fetchCampaigns, localized, type Campaign } from '@/lib/campaign';
 import { confirmDialog } from '@/lib/confirm';
 import { dateTime } from '@/lib/format';
 import { LOCALES, pageTitle } from '@/lib/i18n';
@@ -52,6 +53,9 @@ const saved = ref(JSON.stringify(draft));
 const dirty = computed(() => JSON.stringify(draft) !== saved.value);
 const groups = ref<BlogGroup[]>([]);
 const columns = computed(() => allColumns(groups.value));
+/** 「關聯活動」選單的選項；讀不到不擋編輯，已存的關聯照樣留著 */
+const campaigns = ref<Campaign[]>([]);
+const campaignLabel = (c: Campaign) => t('blog.admin.campaignOption', { title: localized(c.title, String(locale.value)) || c.slug, status: t(`campaign.status.${c.status}`) });
 const revisions = ref<Revision[]>([]);
 const opened = ref<(Revision & { bodyMd: string }) | null>(null);
 const loading = ref(true);
@@ -127,8 +131,11 @@ async function load() {
   try {
     const access = await token();
     const id = route.params.id && route.params.id !== 'new' ? String(route.params.id) : '';
-    const [cols, p, revs] = await Promise.all([fetchAdminColumns(access), id ? fetchAdminPost(access, id) : null, id ? fetchRevisions(access, id) : null]);
+    const [cols, p, revs, camps] = await Promise.all([
+      fetchAdminColumns(access), id ? fetchAdminPost(access, id) : null, id ? fetchRevisions(access, id) : null, fetchCampaigns(access).catch(() => null),
+    ]);
     groups.value = cols.items;
+    campaigns.value = camps?.items ?? [];
     revisions.value = revs?.items ?? [];
     if (p) apply(p);
     else {
@@ -571,7 +578,11 @@ watch(() => route.params.id, (id) => { if (/\/review\/blog\/[^/]+$/.test(route.p
           <summary>{{ t('blog.admin.campaign') }}</summary>
           <label class="field">
             <span class="sr-only">{{ t('blog.admin.campaign') }}</span>
-            <input v-model="draft.campaignId" class="input" maxlength="64" autocapitalize="off" spellcheck="false" />
+            <select v-model="draft.campaignId" class="input" data-field="campaign">
+              <option value="">{{ t('blog.admin.noCampaign') }}</option>
+              <option v-for="c in campaigns" :key="c.id" :value="c.id">{{ campaignLabel(c) }}</option>
+              <option v-if="draft.campaignId && !campaigns.some((c) => c.id === draft.campaignId)" :value="draft.campaignId">{{ draft.campaignId }}</option>
+            </select>
           </label>
         </details>
         <details v-if="post" class="bed-fold">

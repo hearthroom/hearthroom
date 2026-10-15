@@ -19,7 +19,7 @@ import BlogPostPage from "../src/pages/BlogPostPage.vue";
 
 const card = (id: string, extra: Record<string, unknown> = {}) => ({
   id, columnSlug: "news", slug: `post-${id}`, title: `標題 ${id}`, excerpt: `摘要 ${id}`, coverUrl: null, locale: "zh-Hant",
-  firstPublishedAt: Date.UTC(2026, 9, 10), pinned: false, campaignId: null, readMinutes: 3, commentCount: 0, ...extra,
+  firstPublishedAt: Date.UTC(2026, 9, 10), pinned: false, campaign: null, readMinutes: 3, commentCount: 0, ...extra,
 });
 const columns = { items: [
   { id: "g1", slug: "official", name: { "zh-Hant": "官方消息" }, description: {}, sort: 0, enabled: true, parentId: null,

@@ -1,14 +1,19 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { RouterLink, RouterView, useRoute } from 'vue-router';
 import { useReviewer } from '@/lib/review';
+import { useSession } from '@/lib/session';
+import { campaignsCached, clearCampaignsCache } from '@/lib/campaign';
 import { useLocalePath } from '@/lib/use-locale';
 import ReviewBadge from '@/components/ReviewBadge.vue';
 const route = useRoute();
 const reviewer = useReviewer();
+const session = useSession();
 const { lp } = useLocalePath();
 /**
  * 前三個分頁對「作品」，「留言」對卡片底下的留言；「成員」對「人」（補充包、活動徽章）。發補充包跟審卡同一個權限等級，所以每個審核人都看得到。
+ * 「分享活動」審分享獎勵的申請，每個審核人（含 AI 帳號）都看得到。
+ * 「發放」只給真人應用管理員：canEdit 由活動列表帶回，進工作台時讀一次，讀不到就當沒有（服務端仍逐次檢查）。
  * 「運營設定」每個審核人都看得到，只有應用管理員能改（服務端判）。
  * 「部落格」給供應商那邊本站應用的 owner／admin（不必是審核人；寫入時服務端每次再問一次）。
  */
@@ -17,13 +22,25 @@ const sections = [
   { key: 'cases', path: '/review/cases' },
   { key: 'cards', path: '/review/cards' },
   { key: 'comments', path: '/review/comments' },
+  { key: 'campaign', path: '/review/campaign' },
   { key: 'members', path: '/review/members' },
   { key: 'history', path: '/review/history' },
   { key: 'settings', path: '/review/settings' },
 ] as const;
+const canPay = ref(false);
+onMounted(async () => {
+  try { const token = await session.accessToken(); if (token) canPay.value = (await campaignsCached(token)).canEdit; } catch { /* 讀不到就不顯示發放分頁 */ }
+});
+// 工作台各頁共用的活動列表只活到離開工作台
+onBeforeUnmount(clearCampaignsCache);
 const blog = { key: 'blog', path: '/review/blog' } as const;
-// 不是審核人的應用管理員只看得到部落格；其他分頁要審核人身分。
-const visible = computed(() => [...(reviewer.reviewer === false ? [] : sections), ...(reviewer.blogWriter ? [blog] : [])]);
+// 不是審核人的應用管理員只看得到部落格：分享活動與發放的服務端閘門都要審核人身分，給了分頁也打不開。
+const visible = computed(() => {
+  const list: { key: string; path: string }[] = reviewer.reviewer === false ? [] : [...sections];
+  if (canPay.value && list.length) list.splice(list.findIndex((s) => s.key === 'campaign') + 1, 0, { key: 'payouts', path: '/review/payouts' });
+  if (reviewer.blogWriter) list.push(blog);
+  return list;
+});
 </script>
 <template>
   <div class="page community-management">

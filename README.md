@@ -85,7 +85,7 @@ The API and the web app are served by one Worker: `/v1/*` is handled by Hono, ot
 
 The chat stage is built into the SPA at build time. Changes to the stage go to its own repository; this repository only updates the pinned commit.
 
-Design notes and the reasoning behind individual decisions are in [docs/architecture.zh-Hant.md](docs/architecture.zh-Hant.md) (Traditional Chinese).
+Design notes and the reasoning behind individual decisions are in [docs/architecture.zh-Hant.md](docs/architecture.zh-Hant.md) (Traditional Chinese). Example Analytics Engine queries for the blog and campaign events are in [docs/analytics-reports.md](docs/analytics-reports.md).
 
 ## Development
 
