@@ -14,8 +14,10 @@ export type Localized = Partial<Record<Locale, string>>;
 export type Actor = { memberId: string; kind: ActorKind };
 export type PostStatus = "draft" | "pending_review" | "published" | "unpublished";
 
-export type Column = { id: string; slug: string; name: Localized; description: Localized; sort: number; enabled: boolean };
-export type ColumnInput = Omit<Column, "id"> & { id?: string };
+export type Column = { id: string; slug: string; name: Localized; description: Localized; sort: number; enabled: boolean; parentId: string | null };
+/** 不帶 parentId 視為分組（null）。建立後 parentId 只能換成另一個分組，不能讓分組變欄目或反過來。 */
+export type ColumnInput = Omit<Column, "id" | "parentId"> & { id?: string; parentId?: string | null };
+export type ColumnNode = Column & { postCount?: number; columns: (Column & { postCount?: number })[] };
 
 export type Post = {
   id: string; columnId: string; columnSlug: string; slug: string; locale: Locale; title: string; excerpt: string;
@@ -70,7 +72,7 @@ type PostRow = {
   content_updated_at: number | null;
 };
 type CardRow = Pick<PostRow, "id" | "column_slug" | "slug" | "title" | "excerpt" | "cover_key" | "locale" | "first_published_at" | "pinned" | "campaign_id" | "body_md"> & { comment_count: number };
-type ColumnRow = { id: string; slug: string; name: string; description: string; sort: number; enabled: number };
+type ColumnRow = { id: string; slug: string; name: string; description: string; sort: number; enabled: number; parent_id: string | null };
 
 const POST_SELECT = "SELECT p.*, col.slug AS column_slug, (SELECT MAX(r.created_at) FROM blog_post_revisions r WHERE r.post_id = p.id) AS content_updated_at FROM blog_posts p JOIN blog_columns col ON col.id = p.column_id";
 // ponytail: 卡片要算閱讀時長，所以連內文一起讀（一頁 12 篇）；嫌重時改成儲存時算好存一欄。
@@ -79,6 +81,8 @@ const CARD_SELECT = `SELECT p.id, col.slug AS column_slug, p.slug, p.title, p.ex
   FROM blog_posts p JOIN blog_columns col ON col.id = p.column_id`;
 /** 已公開（?1 是現在）。欄目啟不啟用另外判斷：列表要看，單篇與前後篇不看。 */
 const LIVE = "p.status = 'published' AND p.publish_at IS NOT NULL AND p.publish_at <= ?1";
+/** 公開列表看得到的欄目（別名 col）：是欄目、自己啟用、所屬分組也啟用。單篇不看這條（舊連結不失效）。 */
+export const VISIBLE_COLUMN = "col.enabled = 1 AND col.parent_id IS NOT NULL AND EXISTS (SELECT 1 FROM blog_columns grp WHERE grp.id = col.parent_id AND grp.enabled = 1)";
 
 /** 圖片 key 是 AVATARS bucket 的 blog/<uuid>.webp，公開網址由圖片路由服務。 */
 const IMAGE_KEY = /^blog\/[A-Za-z0-9-]{1,64}\.webp$/;
@@ -98,7 +102,7 @@ const toCard = (r: CardRow): PostCard => ({
   id: r.id, columnSlug: r.column_slug, slug: r.slug, title: r.title, excerpt: r.excerpt, coverUrl: imageUrl(r.cover_key), locale: r.locale,
   firstPublishedAt: r.first_published_at, pinned: !!r.pinned, campaignId: r.campaign_id, readMinutes: readMinutes(r.body_md), commentCount: r.comment_count,
 });
-const toColumn = (r: ColumnRow): Column => ({ id: r.id, slug: r.slug, name: JSON.parse(r.name), description: JSON.parse(r.description), sort: r.sort, enabled: !!r.enabled });
+const toColumn = (r: ColumnRow): Column => ({ id: r.id, slug: r.slug, name: JSON.parse(r.name), description: JSON.parse(r.description), sort: r.sort, enabled: !!r.enabled, parentId: r.parent_id });
 
 async function postRow(db: D1Database, id: string): Promise<PostRow | null> {
   return db.prepare(`${POST_SELECT} WHERE p.id = ?`).bind(id).first<PostRow>();
@@ -231,7 +235,7 @@ export async function savePost(db: D1Database, input: PostInput & { id?: string;
   const prior = await priorSubject(db, actor, operationId, "blog_post");
   if (prior) return mustPost(db, prior);
   const c = cleanPost(input);
-  if (!(await db.prepare("SELECT 1 AS ok FROM blog_columns WHERE id = ?").bind(c.column_id).first())) invalid("columnId");
+  if (!(await db.prepare("SELECT 1 AS ok FROM blog_columns WHERE id = ? AND parent_id IS NOT NULL").bind(c.column_id).first())) invalid("columnId");
   if (input.id === undefined) return writeContent(db, null, c, actor, operationId, now, "create");
   if (!Number.isInteger(input.expectedVersion)) invalid("expectedVersion");
   const before = await postRow(db, input.id);
@@ -329,31 +333,40 @@ export async function getRevision(db: D1Database, postId: string, revisionId: st
 
 // ---- 欄目 ---------------------------------------------------------------------
 
+/** p 留給文章短網址 /blog/p/<id>，g 留給分組頁 /blog/g/<分組>：同名欄目會被那兩條路由蓋掉 */
+const RESERVED_SLUGS = new Set(["p", "g"]);
+
 export async function saveColumn(db: D1Database, input: ColumnInput, actor: Actor, operationId: string, now: number): Promise<Column> {
   const prior = await priorSubject(db, actor, operationId, "blog_column");
   if (prior) return mustColumn(db, prior);
-  // p 留給文章短網址 /blog/p/<id>：同名欄目會被那條路由蓋掉
-  if (!isStr(input.slug, 40, 1) || !SLUG.test(input.slug) || input.slug === "p") invalid("slug");
+  if (!isStr(input.slug, 40, 1) || !SLUG.test(input.slug) || RESERVED_SLUGS.has(input.slug)) invalid("slug");
   const name = cleanLocalized(input.name, "name", 40, true);
   const description = cleanLocalized(input.description, "description", 300, false);
   if (!Number.isSafeInteger(input.sort)) invalid("sort");
   if (typeof input.enabled !== "boolean") invalid("enabled");
-  const values = [input.slug, JSON.stringify(name), JSON.stringify(description), input.sort, input.enabled ? 1 : 0];
-  const after = { slug: input.slug, name, description, sort: input.sort, enabled: input.enabled };
+  const parentId = input.parentId ?? null;
+  if (parentId !== null) {
+    const parent = isStr(parentId, 64, 1) ? await db.prepare("SELECT parent_id FROM blog_columns WHERE id = ?").bind(parentId).first<{ parent_id: string | null }>() : null;
+    if (!parent || parent.parent_id !== null) invalid("parentId");
+  }
+  const values = [input.slug, JSON.stringify(name), JSON.stringify(description), input.sort, input.enabled ? 1 : 0, parentId];
+  const after = { slug: input.slug, name, description, sort: input.sort, enabled: input.enabled, parentId };
   let id: string, writes: D1PreparedStatement[];
   if (input.id === undefined) {
     id = crypto.randomUUID();
     writes = [
-      db.prepare("INSERT INTO blog_columns (id, slug, name, description, sort, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(id, ...values, now, now),
+      db.prepare("INSERT INTO blog_columns (id, slug, name, description, sort, enabled, parent_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").bind(id, ...values, now, now),
       auditStmt(db, { subjectKind: "blog_column", subjectId: id, actorMemberId: actor.memberId, actorKind: actor.kind, action: "column_create", after, operationId, now }),
     ];
   } else {
     id = input.id;
     const before = await db.prepare("SELECT * FROM blog_columns WHERE id = ?").bind(id).first<ColumnRow>();
     if (!before) throw new HttpError(404, "blog_column_not_found");
+    // 分組與欄目不互換：分組底下的欄目會變三級，欄目裡的文章會掛到分組上
+    if ((before.parent_id === null) !== (parentId === null)) invalid("parentId");
     const { id: _, ...prev } = toColumn(before);
     writes = [
-      db.prepare("UPDATE blog_columns SET slug = ?, name = ?, description = ?, sort = ?, enabled = ?, updated_at = ? WHERE id = ?").bind(...values, now, id),
+      db.prepare("UPDATE blog_columns SET slug = ?, name = ?, description = ?, sort = ?, enabled = ?, parent_id = ?, updated_at = ? WHERE id = ?").bind(...values, now, id),
       auditStmtIfChanged(db, { subjectKind: "blog_column", subjectId: id, actorMemberId: actor.memberId, actorKind: actor.kind, action: "column_save", before: prev, after, operationId, now }),
     ];
   }
@@ -363,15 +376,50 @@ export async function saveColumn(db: D1Database, input: ColumnInput, actor: Acto
   return { id, ...after };
 }
 
+/**
+ * 刪一個空的分組或欄目：裡面有文章（欄目）或有欄目（分組）就回 409。條件寫在 DELETE 裡，
+ * 檢查與刪除之間有人新增文章也刪不掉；稽核用 changes() 串在後面，刪不掉就不留。
+ */
+export async function deleteColumn(db: D1Database, id: string, actor: Actor, operationId: string, now: number): Promise<{ id: string }> {
+  const prior = await priorSubject(db, actor, operationId, "blog_column");
+  if (prior) return { id: prior };
+  const before = await db.prepare("SELECT * FROM blog_columns WHERE id = ?").bind(id).first<ColumnRow>();
+  if (!before) throw new HttpError(404, "blog_column_not_found");
+  const { id: _, ...prev } = toColumn(before);
+  const done = await commit(db, [
+    db.prepare("DELETE FROM blog_columns WHERE id = ?1 AND NOT EXISTS (SELECT 1 FROM blog_posts WHERE column_id = ?1) AND NOT EXISTS (SELECT 1 FROM blog_columns WHERE parent_id = ?1)").bind(id),
+    auditStmtIfChanged(db, { subjectKind: "blog_column", subjectId: id, actorMemberId: actor.memberId, actorKind: actor.kind, action: "column_delete", before: prev, after: {}, operationId, now }),
+  ], actor, operationId, "blog_column", "blog_column_slug_taken");
+  if ("replay" in done) return { id: done.replay };
+  if (!done.changes) throw new HttpError(409, "blog_column_not_empty");
+  await bumpOp(db, "blog", "column", "success");
+  return { id };
+}
+
 async function mustColumn(db: D1Database, id: string): Promise<Column> {
   const r = await db.prepare("SELECT * FROM blog_columns WHERE id = ?").bind(id).first<ColumnRow>();
   if (!r) throw new HttpError(404, "blog_column_not_found");
   return toColumn(r);
 }
 
-export async function listColumns(db: D1Database, opts: { includeDisabled: boolean }): Promise<Column[]> {
-  const rows = await db.prepare(`SELECT * FROM blog_columns ${opts.includeDisabled ? "" : "WHERE enabled = 1"} ORDER BY sort, created_at, id`).all<ColumnRow>();
-  return rows.results.map(toColumn);
+/**
+ * 分組與欄目的樹，依 sort、建立時間排。公開：只列啟用的分組裡啟用的欄目，沒有欄目可看的分組不列。
+ * 管理：全列（含停用），每項帶文章數（含草稿），分組的數字是底下欄目的合計。
+ */
+export async function columnTree(db: D1Database, opts: { admin: boolean }): Promise<ColumnNode[]> {
+  const count = opts.admin ? "(SELECT COUNT(*) FROM blog_posts p WHERE p.column_id = c.id)" : "0";
+  const rows = (await db.prepare(`SELECT c.*, ${count} AS post_count FROM blog_columns c ORDER BY c.sort, c.created_at, c.id`).all<ColumnRow & { post_count: number }>()).results;
+  const shown = (r: ColumnRow) => opts.admin || r.enabled === 1;
+  const withCount = (r: ColumnRow & { post_count: number }): Column & { postCount?: number } => (opts.admin ? { ...toColumn(r), postCount: r.post_count } : toColumn(r));
+  return rows
+    .filter((g) => g.parent_id === null && shown(g))
+    .map((g) => {
+      const columns = rows.filter((c) => c.parent_id === g.id && shown(c)).map(withCount);
+      const node: ColumnNode = { ...toColumn(g), columns };
+      if (opts.admin) node.postCount = columns.reduce((n, c) => n + (c.postCount ?? 0), 0);
+      return node;
+    })
+    .filter((g) => opts.admin || g.columns.length > 0);
 }
 
 // ---- 公開讀取 -----------------------------------------------------------------
@@ -381,7 +429,7 @@ export async function listColumns(db: D1Database, opts: { includeDisabled: boole
  * items 是其餘公開文章依發布時間新到舊分頁；total 是 items 這一群的總數。
  */
 export async function publicPosts(db: D1Database, opts: { columnSlug?: string; page: number; now: number }): Promise<{ total: number; pinned: PostCard[]; items: PostCard[] }> {
-  const where = `${LIVE} AND col.enabled = 1 AND (?2 IS NULL OR col.slug = ?2)`;
+  const where = `${LIVE} AND ${VISIBLE_COLUMN} AND (?2 IS NULL OR col.slug = ?2)`;
   const column = opts.columnSlug ?? null;
   const pinned = (await db.prepare(`${CARD_SELECT} WHERE ${where} AND p.pinned = 1 ORDER BY p.publish_at DESC, p.id DESC LIMIT ${PINNED_MAX}`).bind(opts.now, column).all<CardRow>()).results;
   const skip = JSON.stringify(pinned.map((r) => r.id));
@@ -402,7 +450,7 @@ export async function publicPost(db: D1Database, columnSlug: string, slug: strin
 
 /** 最新的公開文章（Atom 用）：停用欄目的不列，與公開列表一致。 */
 export async function recentPosts(db: D1Database, now: number, limit: number): Promise<Post[]> {
-  const rows = await db.prepare(`${POST_SELECT} WHERE ${LIVE} AND col.enabled = 1 ORDER BY p.publish_at DESC, p.id DESC LIMIT ?2`).bind(now, limit).all<PostRow>();
+  const rows = await db.prepare(`${POST_SELECT} WHERE ${LIVE} AND ${VISIBLE_COLUMN} ORDER BY p.publish_at DESC, p.id DESC LIMIT ?2`).bind(now, limit).all<PostRow>();
   return rows.results.map(toPost);
 }
 

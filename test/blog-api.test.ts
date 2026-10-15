@@ -38,6 +38,7 @@ const op = () => crypto.randomUUID();
 const count = async (sql: string, ...b: unknown[]) => (await env.DB.prepare(sql).bind(...b).first<{ n: number }>())!.n;
 
 let columnId = "";
+let groupId = "";
 const newPost = async (over: Record<string, unknown> = {}) =>
   json(await call("/v1/blog/admin/posts", { method: "POST", token: "editor", body: { columnId, slug: "hello", locale: "zh-Hant", title: "開站了", excerpt: "第一篇", bodyMd: "內容", operationId: op(), ...over } }));
 const state = (id: string, change: Record<string, unknown>) => call(`/v1/blog/admin/posts/${id}/state`, { method: "POST", token: "editor", body: { change, operationId: op() } });
@@ -55,7 +56,8 @@ beforeEach(async () => {
   const owner = await makeReviewer(REVIEWER);
   await env.DB.prepare("UPDATE reviewers SET role='owner' WHERE member_id=?").bind(owner).run();
   await makeAgent(AGENT);
-  const col = await call("/v1/blog/admin/columns", { method: "POST", token: "editor", body: { slug: "news", name: { "zh-Hant": "最新消息" }, description: {}, sort: 0, enabled: true, operationId: op() } });
+  groupId = (await json(await call("/v1/blog/admin/columns", { method: "POST", token: "editor", body: { slug: "official", name: { "zh-Hant": "官方消息" }, description: {}, sort: 0, enabled: true, parentId: null, operationId: op() } }))).id;
+  const col = await call("/v1/blog/admin/columns", { method: "POST", token: "editor", body: { slug: "news", name: { "zh-Hant": "最新消息" }, description: {}, sort: 0, enabled: true, parentId: groupId, operationId: op() } });
   columnId = (await json(col)).id;
 });
 afterEach(() => restoreUpstream());
@@ -147,11 +149,11 @@ describe("文章生命週期", () => {
   });
 
   it("欄目：公開只列啟用的，管理列全部；欄目 slug 撞名 409", async () => {
-    const off = await call("/v1/blog/admin/columns", { method: "POST", token: "editor", body: { slug: "hidden", name: { "zh-Hant": "隱藏" }, description: {}, sort: 1, enabled: false, operationId: op() } });
+    const off = await call("/v1/blog/admin/columns", { method: "POST", token: "editor", body: { slug: "hidden", name: { "zh-Hant": "隱藏" }, description: {}, sort: 1, enabled: false, parentId: groupId, operationId: op() } });
     const hidden = await json(off);
-    expect((await json(await call("/v1/blog/columns"))).items.map((c: any) => c.slug)).toEqual(["news"]);
-    expect((await json(await call("/v1/blog/admin/columns", { token: "editor" }))).items).toHaveLength(2);
-    const dup = await call(`/v1/blog/admin/columns/${hidden.id}`, { method: "PUT", token: "editor", body: { slug: "news", name: { "zh-Hant": "隱藏" }, description: {}, sort: 1, enabled: false, operationId: op() } });
+    expect((await json(await call("/v1/blog/columns"))).items.map((g: any) => g.columns.map((c: any) => c.slug))).toEqual([["news"]]);
+    expect((await json(await call("/v1/blog/admin/columns", { token: "editor" }))).items[0].columns).toHaveLength(2);
+    const dup = await call(`/v1/blog/admin/columns/${hidden.id}`, { method: "PUT", token: "editor", body: { slug: "news", name: { "zh-Hant": "隱藏" }, description: {}, sort: 1, enabled: false, parentId: groupId, operationId: op() } });
     expect(dup.status).toBe(409);
     expect((await json(dup)).error).toBe("blog_column_slug_taken");
   });

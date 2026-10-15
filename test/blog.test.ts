@@ -1,16 +1,19 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import { adjacentPosts, isOfficialWriter, isPublic, listColumns, listRevisions, publicPost, publicPosts, relatedPosts, restoreRevision, saveColumn, savePost, setPostState } from "../src/blog";
+import { adjacentPosts, columnTree, deleteColumn, isOfficialWriter, isPublic, listRevisions, publicPost, publicPosts, relatedPosts, restoreRevision, saveColumn, savePost, setPostState } from "../src/blog";
 import { makeMember, makeReviewer, resetDb } from "./helpers";
 
 const op = () => crypto.randomUUID();
 let editor = "";
 let columnId = "";
+let groupId = "";
 beforeEach(async () => {
   await resetDb();
   editor = await makeReviewer(50001);
   await env.DB.prepare("UPDATE reviewers SET role='manager' WHERE member_id=?").bind(editor).run();
-  columnId = (await saveColumn(env.DB, { slug: "news", name: { "zh-Hant": "最新消息" }, description: {}, sort: 0, enabled: true }, { memberId: editor, kind: "human" }, op(), 1)).id;
+  const actor = { memberId: editor, kind: "human" as const };
+  groupId = (await saveColumn(env.DB, { slug: "official", name: { "zh-Hant": "官方消息" }, description: {}, sort: 0, enabled: true, parentId: null }, actor, op(), 1)).id;
+  columnId = (await saveColumn(env.DB, { slug: "news", name: { "zh-Hant": "最新消息" }, description: {}, sort: 0, enabled: true, parentId: groupId }, actor, op(), 1)).id;
 });
 const draft = (over = {}) => savePost(env.DB, { columnId, slug: "hello", locale: "zh-Hant", title: "開站了", excerpt: "第一篇", bodyMd: "# 你好\n\n內容", ...over }, { memberId: editor, kind: "human" }, op(), 10);
 
@@ -85,7 +88,7 @@ describe("編輯", () => {
 
   it("已發布的文章還原舊修訂：網址（欄目、slug、語言）不動，其餘照還原；草稿照舊連 slug 一起還原", async () => {
     const actor = { memberId: editor, kind: "human" as const };
-    const other = (await saveColumn(env.DB, { slug: "guides", name: { "zh-Hant": "教學" }, description: {}, sort: 1, enabled: true }, actor, op(), 2)).id;
+    const other = (await saveColumn(env.DB, { slug: "guides", name: { "zh-Hant": "教學" }, description: {}, sort: 1, enabled: true, parentId: groupId }, actor, op(), 2)).id;
     const p = await draft({ slug: "old-slug", title: "舊標題" });
     const v2 = await savePost(env.DB, { id: p.id, expectedVersion: p.version, columnId: other, slug: "new-slug", locale: "zh-Hant", title: "新標題", excerpt: "", bodyMd: "新內容" }, actor, op(), 30);
     const first = (await listRevisions(env.DB, p.id)).at(-1)!;
@@ -123,7 +126,7 @@ describe("編輯", () => {
     await draft();
     await expect(draft()).rejects.toMatchObject({ status: 409 });
     const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE subject_kind IN ('blog_post','blog_column')").first<{ n: number }>();
-    expect(n!.n).toBe(2);
+    expect(n!.n).toBe(3); // 夾具建了分組與欄目各一筆，加上這篇文章
   });
 
   it("封面只收本站 blog/ 的 key", async () => {
@@ -141,19 +144,73 @@ describe("編輯", () => {
 });
 
 describe("欄目", () => {
-  it("slug 不能是 p：/blog/p/<id> 是文章短網址", async () => {
-    await expect(saveColumn(env.DB, { slug: "p", name: { "zh-Hant": "短" }, description: {}, sort: 1, enabled: true }, { memberId: editor, kind: "human" }, op(), 4)).rejects.toMatchObject({ status: 400, message: "blog_invalid", extra: { field: "slug" } });
+  const actor = () => ({ memberId: editor, kind: "human" as const });
+  const column = (over: Record<string, unknown>) =>
+    saveColumn(env.DB, { slug: "x", name: { "zh-Hant": "x" }, description: {}, sort: 1, enabled: true, parentId: groupId, ...over } as never, actor(), op(), 4);
+
+  it("slug 不能是 p（短網址）或 g（分組頁）", async () => {
+    for (const slug of ["p", "g"]) await expect(column({ slug })).rejects.toMatchObject({ status: 400, message: "blog_invalid", extra: { field: "slug" } });
   });
 
-  it("停用欄目：文章網址還能開，欄目不在公開列表", async () => {
+  it("只有兩級：欄目的上級必須是分組；分組與欄目不能互換身分", async () => {
+    await expect(column({ slug: "deep", parentId: columnId })).rejects.toMatchObject({ status: 400, extra: { field: "parentId" } });
+    await expect(column({ slug: "lost", parentId: "nope" })).rejects.toMatchObject({ status: 400, extra: { field: "parentId" } });
+    await expect(column({ id: groupId, slug: "official", parentId: (await column({ slug: "g2", parentId: null })).id })).rejects.toMatchObject({ status: 400, extra: { field: "parentId" } });
+    await expect(column({ id: columnId, slug: "news", parentId: null })).rejects.toMatchObject({ status: 400, extra: { field: "parentId" } });
+    // 資料庫也守著：繞過應用層直接寫一樣被擋
+    await expect(env.DB.prepare("UPDATE blog_columns SET parent_id = ? WHERE id = ?").bind(columnId, groupId).run()).rejects.toThrow(/blog_column_parent_invalid/);
+  });
+
+  it("文章只能掛欄目：選分組存檔回 columnId；資料庫也擋", async () => {
+    await expect(draft({ columnId: groupId })).rejects.toMatchObject({ status: 400, extra: { field: "columnId" } });
     const p = await draft();
-    await setPostState(env.DB, p.id, { status: "published", publishAt: 1 }, { memberId: editor, kind: "human" }, op(), 2);
-    await saveColumn(env.DB, { id: columnId, slug: "news", name: { "zh-Hant": "最新消息" }, description: {}, sort: 0, enabled: false }, { memberId: editor, kind: "human" }, op(), 3);
+    await expect(env.DB.prepare("UPDATE blog_posts SET column_id = ? WHERE id = ?").bind(groupId, p.id).run()).rejects.toThrow(/blog_post_column_invalid/);
+  });
+
+  it("欄目可以移到別的分組，文章跟著走、網址不變", async () => {
+    const other = (await column({ slug: "creators", parentId: null })).id;
+    const p = await draft();
+    await setPostState(env.DB, p.id, { status: "published", publishAt: 1 }, actor(), op(), 2);
+    await column({ id: columnId, slug: "news", name: { "zh-Hant": "最新消息" }, sort: 0, parentId: other });
     expect((await publicPost(env.DB, "news", "hello", 5))?.id).toBe(p.id);
-    expect(await listColumns(env.DB, { includeDisabled: false })).toHaveLength(0);
-    expect(await listColumns(env.DB, { includeDisabled: true })).toHaveLength(1);
+    const tree = await columnTree(env.DB, { admin: true });
+    expect(tree.find((g) => g.id === other)!.columns.map((c) => c.slug)).toEqual(["news"]);
+  });
+
+  it("只能刪空的：有文章或有欄目回 409；刪除留稽核，同一操作編號重送只算一次", async () => {
+    await draft();
+    await expect(deleteColumn(env.DB, columnId, actor(), op(), 6)).rejects.toMatchObject({ status: 409, message: "blog_column_not_empty" });
+    await expect(deleteColumn(env.DB, groupId, actor(), op(), 6)).rejects.toMatchObject({ status: 409, message: "blog_column_not_empty" });
+    const empty = (await column({ slug: "empty" })).id;
+    const id = op();
+    expect(await deleteColumn(env.DB, empty, actor(), id, 7)).toEqual({ id: empty });
+    expect(await deleteColumn(env.DB, empty, actor(), id, 8)).toEqual({ id: empty });
+    const audits = await env.DB.prepare("SELECT action FROM audit_log WHERE subject_id = ?").bind(empty).all<{ action: string }>();
+    expect(audits.results.map((r) => r.action)).toEqual(["column_create", "column_delete"]);
+    await expect(deleteColumn(env.DB, "nope", actor(), op(), 9)).rejects.toMatchObject({ status: 404, message: "blog_column_not_found" });
+  });
+
+  it("公開的樹只列啟用的分組裡啟用的欄目，沒有欄目的分組不列；管理的樹全列並帶文章數", async () => {
+    await column({ slug: "off", enabled: false });
+    await column({ slug: "lonely", parentId: null });
+    await draft();
+    const pub = await columnTree(env.DB, { admin: false });
+    expect(pub.map((g) => [g.slug, g.columns.map((c) => c.slug)])).toEqual([["official", ["news"]]]);
+    expect(pub[0]).not.toHaveProperty("postCount");
+    const admin = await columnTree(env.DB, { admin: true });
+    expect(admin.map((g) => [g.slug, g.postCount, g.columns.map((c) => [c.slug, c.postCount])])).toEqual([
+      ["official", 1, [["news", 1], ["off", 0]]],
+      ["lonely", 0, []],
+    ]);
+  });
+
+  it("停用分組：底下的欄目與文章不在公開列表，單篇網址照常可開", async () => {
+    const p = await draft();
+    await setPostState(env.DB, p.id, { status: "published", publishAt: 1 }, actor(), op(), 2);
+    await column({ id: groupId, slug: "official", name: { "zh-Hant": "官方消息" }, sort: 0, enabled: false, parentId: null });
+    expect(await columnTree(env.DB, { admin: false })).toEqual([]);
     expect((await publicPosts(env.DB, { page: 1, now: 5 })).total).toBe(0);
-    expect((await publicPosts(env.DB, { columnSlug: "news", page: 1, now: 5 })).total).toBe(0);
+    expect((await publicPost(env.DB, "news", "hello", 5))?.id).toBe(p.id);
   });
 });
 
@@ -239,7 +296,7 @@ describe("同一個操作編號重送", () => {
     const n = await counts();
     expect((await saveColumn(env.DB, input, actor(), id, 51)).id).toBe(a.id);
     expect(await counts()).toEqual(n);
-    expect(await listColumns(env.DB, { includeDisabled: true })).toHaveLength(2);
+    expect(await columnTree(env.DB, { admin: true })).toHaveLength(2);
   });
 
   it("同時送出兩次：只留一次，兩邊都拿到同一篇", async () => {
@@ -252,6 +309,6 @@ describe("同一個操作編號重送", () => {
   it("編號已經用在別的東西上：回衝突", async () => {
     const id = op();
     await savePost(env.DB, body(), actor(), id, 70);
-    await expect(saveColumn(env.DB, { slug: "x", name: { "zh-Hant": "x" }, description: {}, sort: 0, enabled: true }, actor(), id, 71)).rejects.toMatchObject({ status: 409, message: "blog_operation_repeated" });
+    await expect(saveColumn(env.DB, { slug: "x", name: { "zh-Hant": "x" }, description: {}, sort: 0, enabled: true, parentId: null }, actor(), id, 71)).rejects.toMatchObject({ status: 409, message: "blog_operation_repeated" });
   });
 });
