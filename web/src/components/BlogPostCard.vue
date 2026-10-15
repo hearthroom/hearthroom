@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 部落格列表的一張文章卡：封面、欄目與日期、標題、摘要、閱讀時長。hero 是列表首屏那張大圖。
- * badge 插槽給之後的活動狀態標籤用，疊在封面左上角。
+ * badge 插槽疊在封面左上角；沒填時，關聯了活動的文章顯示活動狀態（未開始／進行中／已結束）。
  */
 import { RouterLink } from "vue-router";
 import { dateOnly, hueFrom } from "@/lib/format";
@@ -20,7 +20,9 @@ const { lp } = useLocalePath();
       <div class="post-card__cover" :style="{ '--h': hueFrom(post.title) }">
         <img v-if="post.coverUrl" :src="post.coverUrl" alt="" :loading="hero ? 'eager' : 'lazy'" />
         <span v-else class="post-card__mono" aria-hidden="true">{{ monogram(post, column) }}</span>
-        <div v-if="$slots.badge" class="post-card__badge"><slot name="badge" /></div>
+        <div v-if="$slots.badge || (post.campaign && post.campaign.phase !== 'draft')" class="post-card__badge">
+          <slot name="badge"><span v-if="post.campaign" class="post-card__phase" :class="`post-card__phase--${post.campaign.phase}`">{{ $t(`campaign.phase.${post.campaign.phase}`) }}</span></slot>
+        </div>
       </div>
       <div class="post-card__text">
         <p class="post-card__meta">
@@ -53,6 +55,9 @@ const { lp } = useLocalePath();
 }
 .post-card--hero .post-card__mono { font-size: clamp(32px, 5vw, 48px); }
 .post-card__badge { position: absolute; top: var(--s-3); left: var(--s-3); display: flex; gap: var(--s-2); }
+.post-card__phase { padding: 2px 10px; border-radius: var(--r-pill); font-size: 12px; font-weight: 600; background: var(--surface); color: var(--text-2); box-shadow: var(--shadow-sm); }
+.post-card__phase--open { color: var(--success); }
+.post-card__phase--upcoming { color: var(--accent-text); }
 .post-card__text { display: grid; gap: var(--s-1); min-width: 0; }
 .post-card__meta { display: flex; flex-wrap: wrap; gap: 0 var(--s-2); margin: 0; font-size: 12.5px; color: var(--text-3); }
 .post-card__meta span + span::before { content: "·"; margin-right: var(--s-2); }

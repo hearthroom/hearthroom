@@ -1,0 +1,20 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/blog",
+  "draft": true,
+  "title": {
+    "zh-Hant": "部落格文章現在會顯示分享活動的期間與申請入口",
+    "zh-Hans": "博客文章现在会显示分享活动的期间和申请入口",
+    "en": "Blog posts can now show a sharing campaign with its dates and a link to apply",
+    "ja": "ブログ記事にシェアキャンペーンの期間と申し込み先が表示されるようになりました",
+    "ko": "블로그 글에 공유 이벤트 기간과 신청 링크가 표시돼요"
+  },
+  "body": {
+    "zh-Hant": "應用管理員可以在運營設定建立分享活動，再把它關聯到部落格文章。",
+    "zh-Hans": "应用管理员可以在运营设置里创建分享活动，并把它关联到博客文章。",
+    "en": "App admins can create sharing campaigns in the operations settings and link them to blog posts.",
+    "ja": "アプリ管理者は運営設定でシェアキャンペーンを作成し、ブログ記事に関連付けられます。",
+    "ko": "앱 관리자는 운영 설정에서 공유 이벤트를 만들고 블로그 글에 연결할 수 있어요."
+  }
+}

@@ -16,6 +16,7 @@ vi.mock('../src/lib/api', async (original) => ({
   fetchKeywords: async () => ({ items: [] }), fetchSettings: async () => ({ settings: { commentNewAccountDays: null, commentMaxLinks: null, commentReportFoldThreshold: null }, canEdit: false }),
 }));
 vi.mock('../src/lib/moderation', () => ({ moderationRequest: mocks.moderation }));
+vi.mock('../src/lib/campaign', async (original) => ({ ...await original<object>(), fetchCampaigns: async () => ({ items: [], canEdit: false }) }));
 vi.mock('../src/pages/ReviewDetailPage.vue', () => ({ default: { template: '<h2>Review detail fixture</h2>' } }));
 import { router as siteRouter } from '../src/router';
 let app: App, host: HTMLElement, router: Router;

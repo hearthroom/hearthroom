@@ -12,9 +12,13 @@ import { currentSurface } from "./track";
 export type Localized = Partial<Record<string, string>>;
 export interface BlogColumn { id: string; slug: string; name: Localized; description: Localized; sort: number; enabled: boolean }
 
+/** 文章關聯的活動：只在活動存在且不是草稿時有。期間用活動自己的時區顯示。 */
+export interface CampaignBrief {
+  slug: string; title: Localized; phase: "draft" | "upcoming" | "open" | "ended"; startsAt: number | null; endsAt: number | null; timezone: string | null;
+}
 export interface PostCard {
   id: string; columnSlug: string; slug: string; title: string; excerpt: string; coverUrl: string | null; locale: string;
-  firstPublishedAt: number | null; pinned: boolean; campaignId: string | null; readMinutes: number; commentCount: number;
+  firstPublishedAt: number | null; pinned: boolean; readMinutes: number; commentCount: number; campaign: CampaignBrief | null;
 }
 export interface BlogPost extends Omit<PostCard, "commentCount"> {
   columnId: string; bodyMd: string; status: string; publishAt: number | null; commentsClosed: boolean; pinnedCommentId: string | null;

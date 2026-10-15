@@ -91,8 +91,8 @@ blogRoutes.get("/v1/blog/posts/:column/:slug", async (c) => {
   const post = (token ? await previewed(c, token, column, slug, now) : null) ?? (await publicPost(c.env.DB, column, slug, now));
   const headers = token ? { "Cache-Control": PRIVATE } : PUBLIC;
   if (!post) return c.json({ error: "blog_post_not_found" }, 404, headers);
-  const [adjacent, related] = await Promise.all([adjacentPosts(c.env.DB, post, now), relatedPosts(c.env.DB, post, now)]);
-  return c.json({ post: publicView(post), adjacent, related }, 200, headers);
+  const [adjacent, related, view] = await Promise.all([adjacentPosts(c.env.DB, post, now), relatedPosts(c.env.DB, post, now), publicView(c.env.DB, post, now)]);
+  return c.json({ post: view, adjacent, related }, 200, headers);
 });
 
 blogRoutes.get("/v1/blog/p/:id", async (c) => {
