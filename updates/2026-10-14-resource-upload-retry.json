@@ -1,0 +1,12 @@
+{
+  "tier": "fix",
+  "audience": "authors",
+  "try": "/resources",
+  "title": {
+    "zh-Hant": "我的資源批量上傳中斷後，重試會更新登入狀態並接續失敗檔案。",
+    "zh-Hans": "我的资源批量上传中断后，重试会更新登录状态并继续上传失败文件。",
+    "en": "Batch uploads in My resources now refresh sign-in when needed and retry only failed files.",
+    "ja": "マイリソースの一括アップロードは、ログイン状態を更新して失敗したファイルだけ再試行します。",
+    "ko": "내 리소스의 일괄 업로드는 필요할 때 로그인 상태를 갱신하고 실패한 파일만 다시 올립니다."
+  }
+}
