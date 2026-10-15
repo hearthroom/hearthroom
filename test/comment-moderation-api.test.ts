@@ -214,6 +214,15 @@ describe("統計與指標", () => {
     await env.DB.prepare("UPDATE comment_reports SET created_at = ? WHERE reporter_member_id = (SELECT member_id FROM member_identities WHERE external_id = ?)").bind(Date.now() - 8 * 86_400_000, String(MOD)).run();
     expect(await stats()).toMatchObject({ holdRate7d: 0.5, reports7d: 1 });
   });
+
+  it("攔截率：AI 對已移除的留言再標記一次，不算被攔下", async () => {
+    const stats = async () => json(await SELF.fetch("https://c.test/v1/moderation/comments/stats", { headers: bearer("mod") }));
+    const id = await say("fan", "普通");
+    expect((await decide("mod", id, "remove")).status).toBe(200);
+    expect((await decide("agent", id, "flag")).status).toBe(200);
+    expect(await count("SELECT COUNT(*) AS n FROM audit_log WHERE subject_id = ? AND action = 'flag'", id)).toBe(1);
+    expect((await stats()).holdRate7d).toBe(0);
+  });
 });
 
 const del = (token: string, id: string) => SELF.fetch(`https://c.test/v1/comments/${id}`, { method: "DELETE", headers: bearer(token) });

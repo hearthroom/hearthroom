@@ -289,7 +289,10 @@ export async function moderationStats(db: D1Database, now: number) {
     // 每一次攔下都有一筆稽核（發表時的規則、檢舉摺疊、AI 標記），依當時的原因分組。
     db.prepare("SELECT json_extract(after_json, '$.holdReason') AS reason, COUNT(*) AS n FROM audit_log WHERE subject_kind = 'comment' AND action IN ('hold','flag') AND created_at > ? GROUP BY reason").bind(since),
     // 攔截率：近 7 天新留言中「曾被攔下」的比例。放行會清掉 hold_reason，所以看攔下的稽核（同上，每次攔下都有一筆），不看欄位。
-    db.prepare(`SELECT COUNT(*) AS total, COALESCE(SUM(EXISTS (SELECT 1 FROM audit_log a WHERE a.subject_kind = 'comment' AND a.subject_id = c.id AND a.action IN ('hold','flag'))), 0) AS held
+    // 只算真的攔下的那幾筆（after 有 holdReason）：AI 對已在待審或已移除的留言再標記，只記意見，不算攔下。
+    // ponytail: 這條與下一條（近 7 天檢舉）依 created_at 掃整張表；量大時給 comments、comment_reports 補 created_at 索引。
+    db.prepare(`SELECT COUNT(*) AS total, COALESCE(SUM(EXISTS (SELECT 1 FROM audit_log a WHERE a.subject_kind = 'comment' AND a.subject_id = c.id AND a.action IN ('hold','flag')
+        AND json_extract(a.after_json, '$.holdReason') IS NOT NULL)), 0) AS held
       FROM comments c WHERE c.created_at > ?`).bind(since),
     db.prepare("SELECT COUNT(*) AS n FROM comment_reports WHERE created_at > ?").bind(since),
   ]);
