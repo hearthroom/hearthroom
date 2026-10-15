@@ -89,7 +89,8 @@ const toPost = (r: PostRow): Post => ({
   shareCoverUrl: imageUrl(r.share_cover_key), campaignId: r.campaign_id, status: r.status, publishAt: r.publish_at,
   firstPublishedAt: r.first_published_at, pinned: !!r.pinned, commentsClosed: !!r.comments_closed, pinnedCommentId: r.pinned_comment_id,
   authorMemberId: r.author_member_id, version: r.version, createdAt: r.created_at, updatedAt: r.updated_at,
-  contentUpdatedAt: r.content_updated_at ?? r.first_published_at ?? r.created_at,
+  // 草稿先存、之後才發布時，最後一版早於首發；對外的修改時間不早於首發時間。
+  contentUpdatedAt: Math.max(r.content_updated_at ?? 0, r.first_published_at ?? r.created_at),
   coverKey: r.cover_key, shareCoverKey: r.share_cover_key,
 });
 const toCard = (r: CardRow): PostCard => ({
