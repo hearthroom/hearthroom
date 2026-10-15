@@ -19,7 +19,7 @@ type Ctx = Context<{ Bindings: Env }>;
 
 const PUBLIC = { "Cache-Control": "public, max-age=60" };
 // 五語介紹各最多 20000 字（CJK 一字 3 bytes），moderationRoutes 的 16 KB 不夠，這裡自己設。
-const settingsLimit = bodyLimit({ maxSize: 512 * 1024 });
+const settingsLimit = bodyLimit({ maxSize: 512 * 1024, onError: (c) => c.json({ error: "campaign_invalid", field: "body" }, 400) });
 
 const bodyOf = async (c: Ctx) => {
   const b = await c.req.json().catch(() => null);

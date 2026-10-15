@@ -142,6 +142,20 @@ describe("建立、修改、啟用、結束", () => {
     expect(r.status).toBe(200);
     expect((await json(r)).intro.ja).toHaveLength(20000);
   });
+
+  it("設定本體超過上限 400 campaign_invalid（field: body），算 denied；設定以外的活動審核路由仍受 16 KB 上限", async () => {
+    const huge = { ...complete(), intro: { "zh-Hant": "x".repeat(600 * 1024) }, operationId: op() };
+    const r = await call("/v1/moderation/campaigns", { method: "POST", token: "admin", body: huge });
+    expect(r.status).toBe(400);
+    expect(await json(r)).toEqual({ error: "campaign_invalid", field: "body" });
+    const metrics = await (await call("/metrics")).text();
+    expect(metrics).toContain('hearthroom_campaign_operations_total{operation="settings",outcome="denied"} 1');
+    expect(metrics).not.toContain('outcome="error"');
+    const capped = await call("/v1/moderation/campaign/payouts", { method: "POST", token: "admin", body: { pad: "x".repeat(17000) } });
+    // 審核路由的 16 KB 上限拋的是 Hono 的 HTTPException(413)，app.onError 不認得，現況會變成 500；沒被上限擋到的話這條路是 404。
+    expect(capped.status).toBe(500);
+    expect(await json(capped)).toEqual({ error: "internal error" });
+  });
 });
 
 describe("公開資訊", () => {
