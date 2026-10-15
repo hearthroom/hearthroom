@@ -36,9 +36,9 @@ const publicCase=(r:CaseRow,memberId:string)=>({id:r.id,cardNumber:r.card_number
 const projection=(r:ManagedCard,lang:string)=>({id:String(r.id),provider:r.provider,featured:r.featured_at!=null,name:pickLocale(JSON.parse(r.names) as Localized,lang),tags:JSON.parse(r.tags) as string[],fandom:r.fandom??'',fandomId:r.fandom_qid??null,status:r.status,boardHidden:!!r.board_hidden,publicBlocked:!!r.public_blocked,version:r.approved_version_id||r.reviewed_hash});
 async function mutate<T>(run:()=>Promise<T>):Promise<T>{try{return await run();}catch(e){if(e instanceof HttpError)throw e;if(/moderation_conflict|UNIQUE constraint/.test(String(e)))throw new HttpError(409,'moderation_conflict');throw e;}}
 
-// 分享活動的設定（五語介紹）與橫幅上傳超過 16 KB，大小上限在 campaign-routes.ts 自己設。
+// 只有分享活動的設定路由（五語介紹、橫幅上傳）超過 16 KB，上限在 campaign-routes.ts 自己設；其他活動審核路由照樣受這個上限。
 const moderationBodyLimit=bodyLimit({maxSize:16000});
-moderationRoutes.use('/v1/moderation/*',(c,next)=>c.req.path.startsWith('/v1/moderation/campaign')?next():moderationBodyLimit(c,next));
+moderationRoutes.use('/v1/moderation/*',(c,next)=>/^\/v1\/moderation\/campaigns(?:\/|$)/.test(c.req.path)?next():moderationBodyLimit(c,next));
 moderationRoutes.use('/v1/moderation/*',async(c,next)=>{
  c.header('Cache-Control','private, no-store');
  await next();
