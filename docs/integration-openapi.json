@@ -80,6 +80,10 @@
     {
       "name": "Media library",
       "description": "Images, video, audio and fonts uploaded by the author."
+    },
+    {
+      "name": "Campaign pool",
+      "description": "An app's campaign reward budget. The platform funds it and sets the rules; the app's owners and admins pay rewards from it with their own token."
     }
   ],
   "security": [
@@ -10255,6 +10259,248 @@
           }
         }
       }
+    },
+    "/open/v1/campaign-pool": {
+      "get": {
+        "operationId": "getCampaignPool",
+        "tags": [
+          "Campaign pool"
+        ],
+        "summary": "Read the app's campaign pool",
+        "description": "Returns the credits left in the campaign pool of the app this token belongs to, the total paid out so far and the rules the platform set for it. Available to the app's owners, admins and viewers. `configured` is false until the platform has set a usage scope and a per-payout limit; payouts are refused until then.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Campaign pool.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignPool"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`forbidden` — the caller is not an owner, admin or viewer of this app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/campaign-pool/payouts": {
+      "post": {
+        "operationId": "createCampaignPayout",
+        "tags": [
+          "Campaign pool"
+        ],
+        "summary": "Pay a reward from the campaign pool",
+        "description": "Credits a player's account with `amount` credits taken from the campaign pool of the app this token belongs to. Only the app's owners and admins can pay. `accountNo` is the player's public account number. Reuse the same `key` when retrying; a key that already paid returns the original payout with `replayed: true`. Reusing a `key` with a different `accountNo`, `amount`, `campaignRef` or `contentRef` returns `idempotency_conflict`. Usage scope and expiry come from the platform's settings for this app and cannot be set by the caller.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampaignPayoutRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The payout. `replayed` is true when `key` had already paid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignPayout"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request` — `key` is not 1 to 128 letters, digits, `_` or `-`; `accountNo` or `amount` is not a positive integer; or a reference is longer than 128 characters.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`forbidden` — the caller is not an owner or admin of this app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`account_not_found` — no active account has this `accountNo`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`pool_not_configured` — the platform has not set the rules for this app yet; `pool_disabled` — payouts are paused for this app; `payout_over_limit` — `amount` is above the per-payout limit `maxPayout`; `pool_insufficient` — the pool cannot cover this payout, so retry with the same `key` after it is topped up; `idempotency_conflict` — this `key` was already used for a different recipient, amount or reference, so use a new `key`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/campaign-pool/payouts/{key}": {
+      "get": {
+        "operationId": "getCampaignPayout",
+        "tags": [
+          "Campaign pool"
+        ],
+        "summary": "Look up a campaign payout",
+        "description": "Returns the payout recorded for `key` in this app, with `replayed` false. Use it to settle a request whose outcome you did not see. Available to the app's owners, admins and viewers.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "description": "The payout `key` you sent when paying.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The payout.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignPayout"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request` — `key` is not 1 to 128 letters, digits, `_` or `-`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`forbidden` — the caller is not an owner, admin or viewer of this app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found` — no payout was recorded for this `key` in this app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -19933,6 +20179,153 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 200
+          }
+        }
+      },
+      "CampaignPool": {
+        "type": "object",
+        "required": [
+          "balance",
+          "paidTotal",
+          "enabled",
+          "usageScope",
+          "validityDays",
+          "maxPayout",
+          "configured",
+          "updatedAt"
+        ],
+        "properties": {
+          "balance": {
+            "type": "integer",
+            "description": "Credits left in the pool."
+          },
+          "paidTotal": {
+            "type": "integer",
+            "description": "Credits paid out of the pool so far."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether payouts are switched on. When false, payouts are refused with `pool_disabled`."
+          },
+          "usageScope": {
+            "type": "string",
+            "description": "What credits paid from this pool can be spent on: `all` for anything, `agent_only` for agent conversations only. Empty until the platform sets it."
+          },
+          "validityDays": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Days a paid reward stays valid. `null` means it does not expire."
+          },
+          "maxPayout": {
+            "type": "integer",
+            "description": "Largest `amount` one payout may carry, in credits. 0 until the platform sets it."
+          },
+          "configured": {
+            "type": "boolean",
+            "description": "True once the platform has set a usage scope and a per-payout limit. Payouts need it."
+          },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the pool or its rules last changed. `null` until the platform first funds or configures the pool."
+          }
+        }
+      },
+      "CampaignPayoutRequest": {
+        "type": "object",
+        "required": [
+          "key",
+          "accountNo",
+          "amount"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9_-]{1,128}$",
+            "description": "Your own payout identifier: 1 to 128 letters, digits, `_` or `-`. A key pays at most once."
+          },
+          "accountNo": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "description": "Public account number of the player to credit."
+          },
+          "amount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "description": "Credits to pay. A positive integer not above `maxPayout`."
+          },
+          "campaignRef": {
+            "type": "string",
+            "maxLength": 128,
+            "description": "Optional campaign label for your own records, up to 128 characters."
+          },
+          "contentRef": {
+            "type": "string",
+            "maxLength": 128,
+            "description": "Optional reference to the content the reward is for, up to 128 characters."
+          }
+        }
+      },
+      "CampaignPayout": {
+        "type": "object",
+        "required": [
+          "key",
+          "accountNo",
+          "amount",
+          "entryId",
+          "paidAt",
+          "expiresAt",
+          "usageScope",
+          "replayed"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "The payout `key`."
+          },
+          "accountNo": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Public account number of the player who was credited."
+          },
+          "amount": {
+            "type": "integer",
+            "description": "Credits paid."
+          },
+          "entryId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Identifier of the pool entry that recorded the payout."
+          },
+          "paidAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the credits were paid."
+          },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the paid credits expire. `null` when they do not."
+          },
+          "usageScope": {
+            "type": "string",
+            "description": "What the paid credits can be spent on: `all` or `agent_only`."
+          },
+          "replayed": {
+            "type": "boolean",
+            "description": "True when this response repeats an earlier payout of the same `key`; no new credits were paid."
           }
         }
       }
