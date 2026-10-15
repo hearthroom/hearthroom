@@ -28,6 +28,7 @@ const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16)
 export async function uploadEvidence(env: Env, memberId: string, file: unknown, now: number): Promise<{ id: string; sha256: string; bytes: number }> {
   if (!(file instanceof File) || !file.size || file.size > EVIDENCE_MAX_BYTES) throw new HttpError(400, "evidence_invalid");
   if (!env.IMAGES || !env.EVIDENCE) throw new HttpError(503, "evidence_unavailable");
+  // 先擋一次省下讀檔與驗證；真正的上限在下面的條件式 INSERT，並發的上傳才越不過去。
   const recent = await env.DB.prepare("SELECT count(*) AS n FROM share_evidence WHERE member_id = ? AND created_at > ?").bind(memberId, now - DAY).first<{ n: number }>();
   if ((recent?.n ?? 0) >= UPLOADS_PER_DAY) throw new HttpError(429, "evidence_rate_limited");
   const bytes = await file.arrayBuffer();
@@ -41,7 +42,10 @@ export async function uploadEvidence(env: Env, memberId: string, file: unknown, 
   }
   const id = crypto.randomUUID(), key = `evidence/${id}`, sha256 = hex(await crypto.subtle.digest("SHA-256", bytes));
   // 先寫索引列再存物件：物件存失敗就刪列，不會有指向空物件的列；反過來列寫失敗會留下沒人管的物件。
-  await env.DB.prepare("INSERT INTO share_evidence (id, member_id, r2_key, sha256, bytes, created_at) VALUES (?, ?, ?, ?, ?, ?)").bind(id, memberId, key, sha256, bytes.byteLength, now).run();
+  const inserted = await env.DB.prepare(
+    "INSERT INTO share_evidence (id, member_id, r2_key, sha256, bytes, created_at) SELECT ?1, ?2, ?3, ?4, ?5, ?6 WHERE (SELECT count(*) FROM share_evidence WHERE member_id = ?2 AND created_at > ?7) < ?8",
+  ).bind(id, memberId, key, sha256, bytes.byteLength, now, now - DAY, UPLOADS_PER_DAY).run();
+  if (!inserted.meta.changes) throw new HttpError(429, "evidence_rate_limited");
   try {
     await env.EVIDENCE.put(key, bytes, { httpMetadata: { contentType: format } });
   } catch {
@@ -122,9 +126,15 @@ export async function campaignMaintenance(env: Env, now: number): Promise<void> 
     await bumpOp(db, "campaign", "purge", "error");
     return;
   }
-  await db.batch(expired.flatMap((r) => [
-    db.prepare("UPDATE share_evidence SET purged_at = ? WHERE id = ? AND purged_at IS NULL").bind(now, r.id),
-    auditStmtIfChanged(db, { subjectKind: "share_evidence", subjectId: r.id, actorMemberId: null, actorKind: "system", action: "purge", operationId: `purge-${r.id}`, now }),
-  ]));
+  try {
+    await db.batch(expired.flatMap((r) => [
+      db.prepare("UPDATE share_evidence SET purged_at = ? WHERE id = ? AND purged_at IS NULL").bind(now, r.id),
+      auditStmtIfChanged(db, { subjectKind: "share_evidence", subjectId: r.id, actorMemberId: null, actorKind: "system", action: "purge", operationId: `purge-${r.id}`, now }),
+    ]));
+  } catch (e) {
+    // 物件已經刪了、列還沒標：下一輪再選到時刪除不存在的 key 照樣成功，就會補上 purged_at 與稽核。
+    await bumpOp(db, "campaign", "purge", "error");
+    throw e;
+  }
   await bumpOp(db, "campaign", "purge", "success", expired.length);
 }
