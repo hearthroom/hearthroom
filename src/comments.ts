@@ -17,7 +17,7 @@
  */
 import type { ProviderId } from "./providers";
 import { auditStmtIfChanged } from "./audit";
-import { writerSql } from "./blog";
+import { officialSql } from "./blog";
 import { holdReason, mutedUntil } from "./comment-moderation";
 import { readSettings } from "./community-settings";
 import { bumpOp } from "./ops-metrics";
@@ -119,7 +119,7 @@ export type CommentView = ReturnType<typeof view> & { replies?: ReturnType<typeo
 const selectFor = (t: CommentTarget) => `SELECT c.id, c.card_id, c.member_id, c.parent_id, c.root_id, c.content, c.reply_to_name, c.like_count, c.reply_count, c.created_at, c.status,
   m.handle, m.display_name, m.avatar_url,
   EXISTS (SELECT 1 FROM comment_likes l WHERE l.comment_id = c.id AND l.member_id = ?1) AS liked,
-  ${t.kind === "post" ? `NULL AS score, ${writerSql("c.member_id")} AS official` : "(SELECT s.score FROM card_scores s WHERE s.card_id = c.card_id AND s.member_id = c.member_id) AS score"}
+  ${t.kind === "post" ? `NULL AS score, ${officialSql("c.member_id")} AS official` : "(SELECT s.score FROM card_scores s WHERE s.card_id = c.card_id AND s.member_id = c.member_id) AS score"}
   FROM comments c JOIN members m ON m.id = c.member_id`;
 
 /** 看得到的留言：公開的，加上本人自己被攔下的（?1 是看的人）；頂層被移除但還有回覆時留佔位。 */
@@ -128,7 +128,7 @@ const TOP_SHOWN = "((c.deleted_at IS NULL AND (c.status = 'visible' OR (c.status
 
 export async function listTop(
   db: D1Database, target: CommentTarget, viewer: Viewer, page: number, sort: CommentSort = "new",
-): Promise<{ total: number; comments: CommentView[]; isRoleCreator: boolean; pinnedCommentId?: string | null }> {
+): Promise<{ total: number; comments: CommentView[]; isRoleCreator: boolean; pinnedCommentId?: string | null; mutedUntil?: number | null }> {
   const author = target.kind === "card" ? await cardAuthorMemberId(db, target.card) : null;
   const { col, id } = targetOf(target);
   const SELECT = selectFor(target);
@@ -164,7 +164,10 @@ export async function listTop(
   }
   const total = (count!.results[0] as { n: number }).n;
   const isRoleCreator = !!viewer.memberId && viewer.memberId === author;
-  return post ? { total, comments, isRoleCreator, pinnedCommentId: pin?.id ?? null } : { total, comments, isRoleCreator };
+  // 被禁言的本人：前端據此收起發表與回覆，不必等送出才被擋。只回給本人，別人看不到誰被禁言。
+  const muted = viewer.memberId ? await mutedUntil(db, viewer.memberId, Date.now()) : false;
+  const mutedField = muted === false ? {} : { mutedUntil: muted };
+  return post ? { total, comments, isRoleCreator, pinnedCommentId: pin?.id ?? null, ...mutedField } : { total, comments, isRoleCreator, ...mutedField };
 }
 
 export async function listReplies(db: D1Database, target: CommentTarget, rootId: string, viewer: Viewer, page: number) {

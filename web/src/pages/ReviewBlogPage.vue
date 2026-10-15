@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 社群管理的「部落格」：文章列表（依狀態、欄目篩選）與欄目管理。只給 manager／owner，服務端再判一次。
+ * 社群管理的「部落格」：文章列表（依狀態、欄目篩選）與欄目管理。只給本站應用的 owner／admin（HarperHarbor 團隊），服務端再判一次。
  * 欄目表單每打開一次配一個操作編號，送失敗重按沿用，成功後換新的。
  */
 import { computed, onMounted, ref, watch } from 'vue';
@@ -28,7 +28,7 @@ const items = ref<AdminPostRow[]>([]);
 const total = ref(0);
 const loading = ref(true);
 const error = ref('');
-/** 不是 manager／owner：整頁只說這一句（服務端回 blog_write_forbidden） */
+/** 不是應用 owner／admin：整頁只說這一句（服務端回 blog_write_forbidden） */
 const forbidden = ref(false);
 const columns = ref<BlogColumn[]>([]);
 const hasNext = computed(() => page.value * PAGE < total.value);

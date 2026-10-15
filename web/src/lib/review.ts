@@ -25,10 +25,14 @@ export const useReviewer = defineStore("reviewer", () => {
   const pendingCases = ref(0);
   /** 待審留言；不混進 pending（卡片審核的徽章數）。 */
   const pendingComments = ref(0);
-  const role = ref<"reviewer"|"manager"|"owner">("reviewer");
+  const checkedRole = ref<"reviewer"|"manager"|"owner">("reviewer");
+  /** 能寫官方部落格：供應商那邊本站應用的 owner／admin（伺服器判，不必是審核人） */
+  const blogWriter = ref(false);
+  /** 審核查詢回來前先用登入狀態帶的角色（部落格分頁才不會晚一拍出現），回來之後以查詢為準。 */
+  const role = computed(() => (reviewer.value === null ? session.profile?.reviewerRole ?? "reviewer" : checkedRole.value));
   let generation = 0;
 
-  function resetCounts() { featured.value = null; featuredProvider.value = null; pending.value = 0; pendingReviews.value = 0; pendingCases.value = 0; pendingComments.value = 0; role.value = "reviewer"; }
+  function resetCounts() { featured.value = null; featuredProvider.value = null; pending.value = 0; pendingReviews.value = 0; pendingCases.value = 0; pendingComments.value = 0; checkedRole.value = "reviewer"; blogWriter.value = false; }
 
   async function refresh(): Promise<boolean> {
     const requestGeneration = ++generation;
@@ -52,8 +56,9 @@ export const useReviewer = defineStore("reviewer", () => {
         pendingReviews.value = result.reviews ?? 0;
         pendingCases.value = result.cases ?? 0;
         pendingComments.value = result.comments ?? 0;
-        role.value = result.role ?? "reviewer";
+        checkedRole.value = result.role ?? "reviewer";
       } else resetCounts();
+      blogWriter.value = result.blogWriter === true;
     } catch {
       if (requestGeneration === generation && provider === currentProvider()) { reviewer.value = false; resetCounts(); }
     }
@@ -87,5 +92,5 @@ export const useReviewer = defineStore("reviewer", () => {
     else if (ready) rememberLayout(false);
   }, { immediate: true });
 
-  return { reviewer, likely, featured, featuredProvider, pending, pendingReviews, pendingCases, pendingComments, role, refresh };
+  return { reviewer, likely, blogWriter, featured, featuredProvider, pending, pendingReviews, pendingCases, pendingComments, role, refresh };
 });
