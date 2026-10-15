@@ -131,8 +131,12 @@ campaignRoutes.get("/v1/me/campaign/contents", async (c) => {
 
 // ---- 歸因 ---------------------------------------------------------------------
 
-// 不需登入，所以只做一次條件式寫入；碼不存在、格式不對、本體過大都一樣回 204，不透露碼存不存在。
+// 不需登入，所以只做一次條件式寫入；碼不存在、格式不對、本體過大、被限流都一樣回 204，不透露碼存不存在。
+// 限流以連線 IP 為鍵（每分鐘 30 次，wrangler.toml 的 VISIT_LIMIT）；IP 只交給限流器，不記錄也不存。
+// 沒有綁定（本機、測試、分叉）就不限。
 campaignRoutes.post("/v1/campaign/visits", bodyLimit({ maxSize: 1024, onError: (c) => c.body(null, 204) }), async (c) => {
+  const allowed = await c.env.VISIT_LIMIT?.limit({ key: c.req.header("cf-connecting-ip") || "anon" });
+  if (allowed && !allowed.success) return c.body(null, 204);
   await countVisit(c.env.DB, (await bodyOf(c)).s, Date.now());
   return c.body(null, 204);
 });

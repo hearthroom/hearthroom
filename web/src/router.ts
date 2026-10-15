@@ -149,7 +149,7 @@ export function withLocale(path: string, locale: string): string {
 
 // 分享連結的 ?ref=：沒登入的訪客記下來（註冊後自動帶入，lib/share-ref.ts），然後從網址拿掉——
 // 不然他再轉發這張卡，帶出去的還是原分享者的碼。登入中的人本來就不是新註冊，不記。
-// 活動分享短碼 ?s=：合法的才是我們的，不論登入與否都記下並送一次訪客計數，同樣從網址拿掉；
+// 活動分享短碼 ?s=：合法的才是我們的，不論登入與否都送一次訪客計數，碼只替沒登入的人記下（同 ref），同樣從網址拿掉；
 // 之後的登入連結（例如活動頁的 returnTo）不再帶 s，靠瀏覽器的紀錄綁定。
 router.beforeEach((to) => {
   const share = campaignShareFromQuery(to.query.s);

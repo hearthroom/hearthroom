@@ -4,7 +4,7 @@
  * 兩處放寬：埋點的資料集綁定是可選的（分叉的人多半不會配，那時 env.EVENTS 就是 undefined，
  * 型別上就逼呼叫端判空，而不是等執行期炸），開關是任意字串（產生器把它縮成了字面值 "true"）。
  */
-export type Env = Omit<Cloudflare.Env, "EVENTS" | "ANALYTICS_ENABLED" | "REVIEW_ENABLED" | "PUSH_VAPID_PUBLIC_KEY" | "PUSH_VAPID_SUBJECT"> & {
+export type Env = Omit<Cloudflare.Env, "EVENTS" | "VISIT_LIMIT" | "ANALYTICS_ENABLED" | "REVIEW_ENABLED" | "PUSH_VAPID_PUBLIC_KEY" | "PUSH_VAPID_SUBJECT"> & {
   AUTH_ENABLED?: string;
   AUTH_ALLOWED_ORIGINS?: string;
   AUTH_KEYRING?: string;
@@ -22,6 +22,8 @@ export type Env = Omit<Cloudflare.Env, "EVENTS" | "ANALYTICS_ENABLED" | "REVIEW_
   PUSH_VAPID_PRIVATE_KEY?: string;
   PUSH_VAPID_SUBJECT?: string;
   EVENTS?: AnalyticsEngineDataset;
+  /** 分享碼訪客計數的限流（wrangler.toml [[ratelimits]]）；沒綁就不限。 */
+  VISIT_LIMIT?: RateLimit;
   /** Hearthroom → Harbor issuer credential. */
   HOSTING_SERVICE_KEY?: string;
   /** Hearthroom 在 Harbor 的固定 OAuth 客戶端（公開識別，非密鑰）；設了就不再動態註冊。 */

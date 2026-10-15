@@ -50,11 +50,15 @@ describe("記下網址上的分享碼", () => {
     expect(campaignShareFromQuery(["AB12CD34"])).toBeNull();
   });
 
-  it("點了好幾個連結算最後一個，30 天後作廢", () => {
+  it("點了好幾個連結算最後一個，時間留第一次點的；30 天後作廢", () => {
     rememberCampaignShare("FIRST234", clicked);
     rememberCampaignShare("LAST2345", clicked + 1000);
-    expect(pendingCampaignShare(clicked + 2000)).toEqual({ code: "LAST2345", at: clicked + 1000 });
-    expect(pendingCampaignShare(clicked + 1000 + SHARE_REF_TTL)).toBeNull();
+    // 後來的點擊不能把第一次來站的時間往後推，否則點完才註冊的人會被當成老玩家
+    expect(pendingCampaignShare(clicked + 2000)).toEqual({ code: "LAST2345", at: clicked });
+    expect(pendingCampaignShare(clicked + SHARE_REF_TTL)).toBeNull();
+    // 舊紀錄過期了就重新起算
+    rememberCampaignShare("NEW23456", clicked + SHARE_REF_TTL + 5);
+    expect(pendingCampaignShare(clicked + SHARE_REF_TTL + 6)).toEqual({ code: "NEW23456", at: clicked + SHARE_REF_TTL + 5 });
     forgetCampaignShare();
     expect(pendingCampaignShare()).toBeNull();
   });
@@ -90,11 +94,15 @@ describe("記下網址上的分享碼", () => {
     expect(visitsSent()).toEqual(["AB12CD34"]);
   });
 
-  it("已登入也記（老玩家點了也算訪客）", async () => {
+  it("已登入只送計數不記碼（老玩家點了算訪客，不算新玩家），同推薦碼", async () => {
     localStorage.setItem("hearthroom.signedIn", "7");
     await router.push("/en/campaign/launch?s=QQ11WW22");
-    expect(pendingCampaignShare()?.code).toBe("QQ11WW22");
+    expect(router.currentRoute.value.query).toEqual({});
+    expect(pendingCampaignShare()).toBeNull();
     expect(visitsSent()).toEqual(["QQ11WW22"]);
+    noteCampaignShare("EE33RR44");
+    expect(pendingCampaignShare()).toBeNull();
+    expect(visitsSent()).toEqual(["QQ11WW22", "EE33RR44"]);
   });
 });
 

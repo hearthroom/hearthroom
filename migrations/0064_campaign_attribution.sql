@@ -9,7 +9,6 @@ CREATE TABLE campaign_attributions (
  first_play_at INTEGER,
  created_at INTEGER NOT NULL
 );
-CREATE INDEX campaign_attributions_content ON campaign_attributions(content_id);
 CREATE INDEX campaign_attributions_campaign ON campaign_attributions(campaign_id, registered_at);
 
 CREATE TABLE campaign_active_days (

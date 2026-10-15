@@ -14,6 +14,7 @@ import { COMMUNITY_API } from "./config";
 import { accountToken } from "./connections";
 import { currentProvider, type ProviderId } from "./provider";
 import { useSession } from "./session";
+import { signedInHint } from "./signin-hint";
 
 const KEY = "hearthroom.shareRef";
 export const SHARE_REF_TTL = 30 * 24 * 60 * 60 * 1000;
@@ -189,8 +190,10 @@ export function campaignShareFromQuery(value: unknown): string | null {
   return SHARE_CODE.test(code) ? code : null;
 }
 
+/** 碼算最後點的那個，時間留第一次點的：後來的點擊不能把「第一次來站」往後推過註冊時間。 */
 export function rememberCampaignShare(code: string, now = Date.now()): void {
-  try { localStorage.setItem(SHARE_KEY, JSON.stringify({ code, at: now } satisfies Stored)); } catch { /* 存不了就不算 */ }
+  const at = Math.min(pendingCampaignShare(now)?.at ?? now, now);
+  try { localStorage.setItem(SHARE_KEY, JSON.stringify({ code, at } satisfies Stored)); } catch { /* 存不了就不算 */ }
 }
 
 export function pendingCampaignShare(now = Date.now()): Stored | null {
@@ -221,9 +224,12 @@ function countVisitOnce(code: string, now: number): void {
   } catch { /* 無妨 */ }
 }
 
-/** 進站帶著合法的 ?s=：記下（蓋掉之前的）並送一次訪客計數。router.ts 接著把 s 從網址拿掉。 */
+/**
+ * 進站帶著合法的 ?s=：送一次訪客計數；沒登入的才記下碼（蓋掉之前的），登入中的人不是新玩家，同推薦碼。
+ * router.ts 接著把 s 從網址拿掉。
+ */
 export function noteCampaignShare(code: string, now = Date.now()): void {
-  rememberCampaignShare(code, now);
+  if (signedInHint() === null) rememberCampaignShare(code, now);
   countVisitOnce(code, now);
 }
 

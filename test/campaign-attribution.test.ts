@@ -8,10 +8,10 @@ const OWNER = 64001, FRESH = 64002;
 const MIN = 60_000, DAY = 86_400_000;
 const CODE = "AB12CD34", OTHER_CODE = "ZZ99YY88";
 
-async function call(path: string, init: { token?: string; body?: unknown; raw?: string } = {}) {
-  const headers: Record<string, string> = { "Content-Type": "application/json", ...(init.token ? bearer(init.token) : {}) };
+async function call(path: string, init: { token?: string; body?: unknown; raw?: string; headers?: Record<string, string>; env?: Record<string, unknown> } = {}) {
+  const headers: Record<string, string> = { "Content-Type": "application/json", ...(init.token ? bearer(init.token) : {}), ...init.headers };
   const ctx = createExecutionContext();
-  const res = await worker.fetch(new Request("https://c.test" + path, { method: "POST", headers, body: init.raw ?? JSON.stringify(init.body ?? {}) }), env, ctx);
+  const res = await worker.fetch(new Request("https://c.test" + path, { method: "POST", headers, body: init.raw ?? JSON.stringify(init.body ?? {}) }), { ...env, ...init.env } as typeof env, ctx);
   await waitOnExecutionContext(ctx);
   return res;
 }
@@ -113,17 +113,33 @@ describe("登入後綁定", () => {
 
 describe("訪客計數", () => {
   it("只對存在的碼累加，同碼同日累加；未知與格式不對的碼回 204 不寫", async () => {
+    // 先取日子再送：跨過 UTC 午夜時才不會一邊是昨天、一邊是今天
+    const day = Math.floor(Date.now() / DAY);
     for (const s of [CODE, CODE, OTHER_CODE, "NOPE0000", "bad", 12345678, null]) {
       const r = await visit(s);
       expect(r.status).toBe(204);
       expect(await r.text()).toBe("");
     }
-    const day = Math.floor(Date.now() / DAY);
     expect(await visits()).toEqual([{ share_code: CODE, day, visits: 2 }, { share_code: OTHER_CODE, day, visits: 1 }]);
   });
 
   it("不需登入；本體過大回 204 不寫", async () => {
     expect((await call("/v1/campaign/visits", { raw: JSON.stringify({ s: CODE, pad: "x".repeat(4096) }) })).status).toBe(204);
     expect(await visits()).toEqual([]);
+  });
+
+  it("限流拒絕：回 204 不寫；限流的鍵是連線 IP", async () => {
+    const keys: string[] = [];
+    const VISIT_LIMIT = { limit: async ({ key }: { key: string }) => (keys.push(key), { success: false }) };
+    const r = await call("/v1/campaign/visits", { body: { s: CODE }, headers: { "cf-connecting-ip": "203.0.113.9" }, env: { VISIT_LIMIT } });
+    expect(r.status).toBe(204);
+    expect(keys).toEqual(["203.0.113.9"]);
+    expect(await visits()).toEqual([]);
+  });
+
+  it("沒有限流綁定（本機、分叉）照常計數", async () => {
+    const day = Math.floor(Date.now() / DAY);
+    expect((await call("/v1/campaign/visits", { body: { s: CODE }, env: { VISIT_LIMIT: undefined } })).status).toBe(204);
+    expect(await visits()).toEqual([{ share_code: CODE, day, visits: 1 }]);
   });
 });
