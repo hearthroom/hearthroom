@@ -1,6 +1,7 @@
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { IMAGE_MAX_BYTES, imageErrorAs, storeRasterImage } from "./blog";
+import { bindAttribution, countVisit } from "./campaign-attribution";
 import { myContents, resubmitPlacement, submitPlacement } from "./campaign-apply";
 import { EVIDENCE_MAX_BYTES, readEvidence, uploadEvidence } from "./campaign-evidence";
 import { contentDetail, decidePlacement, reviewQueue } from "./campaign-review";
@@ -125,6 +126,19 @@ campaignRoutes.put("/v1/campaign/placements/:id", applyMetric("resubmit"), apply
 campaignRoutes.get("/v1/me/campaign/contents", async (c) => {
   const member = await requireMember(c);
   return c.json({ items: await myContents(c.env.DB, member.id, { slug: c.req.query("campaign") || undefined }) }, 200, PRIVATE);
+});
+
+// ---- 歸因 ---------------------------------------------------------------------
+
+// 不需登入，所以只做一次條件式寫入；碼不存在、格式不對、本體過大都一樣回 204，不透露碼存不存在。
+campaignRoutes.post("/v1/campaign/visits", bodyLimit({ maxSize: 1024, onError: (c) => c.body(null, 204) }), async (c) => {
+  await countVisit(c.env.DB, (await bodyOf(c)).s, Date.now());
+  return c.body(null, 204);
+});
+
+campaignRoutes.post("/v1/me/campaign/attribution", bodyLimit({ maxSize: 1024, onError: (c) => c.json({ error: "invalid_arguments" }, 400) }), async (c) => {
+  const member = await requireMember(c);
+  return c.json(await bindAttribution(c.env.DB, member.id, await bodyOf(c), Date.now()), 200, PRIVATE);
 });
 
 // ---- 管理 ---------------------------------------------------------------------
