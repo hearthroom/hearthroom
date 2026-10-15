@@ -32,6 +32,10 @@ type Call = { method: string; path: string; body: any };
 let calls: Call[];
 let handle: (c: Call) => { status: number; body: unknown } | undefined;
 const ok = (body: unknown) => ({ status: 200, body });
+const tree = () => ({ items: [
+  { id: 'g1', slug: 'official', name: { 'zh-Hant': '官方消息' }, description: {}, sort: 0, enabled: true, parentId: null, postCount: 3,
+    columns: [{ id: 'c1', slug: 'news', name: { 'zh-Hant': '公告' }, description: {}, sort: 0, enabled: true, parentId: 'g1', postCount: 3 }] },
+] });
 
 let app: App, host: HTMLElement, router: Router;
 async function mount(path: string) {
@@ -61,7 +65,7 @@ beforeEach(() => {
     const custom = handle(call);
     const res = custom
       ?? (path === '/v1/blog/admin/posts/p1' && method === 'GET' ? ok(post())
-        : path === '/v1/blog/admin/columns' ? ok({ items: [{ id: 'c1', slug: 'news', name: { 'zh-Hant': '公告' }, description: {}, sort: 0, enabled: true }] })
+        : path === '/v1/blog/admin/columns' ? ok(tree())
           : path === '/v1/blog/admin/posts/p1/revisions' ? ok({ items: [] })
             : path === '/v1/blog/admin/posts' ? ok({ total: 0, items: [] })
               : { status: 404, body: { error: 'not_found' } });
@@ -309,4 +313,63 @@ it('restoring a revision says readers see it at once when the post is live, and 
   };
   expect(await restoreMessage(true)).toContain(t('blog.admin.restoreConfirmLive'));
   expect(await restoreMessage(false)).toContain(t('blog.admin.restoreConfirm'));
+});
+
+const postListUrls = () => (fetch as unknown as { mock: { calls: [string][] } }).mock.calls.map((c) => c[0]).filter((u) => u.startsWith('/v1/blog/admin/posts?'));
+
+it('lists groups and columns with post counts on the left, and filters posts by what is picked', async () => {
+  await mount('/review/blog');
+  await vi.waitFor(() => expect(host.querySelector('[data-pick="column:news"]')).not.toBeNull());
+  expect(host.querySelector('[data-pick="all"]')!.textContent).toContain('3');
+  expect(host.querySelector('[data-pick="group:official"]')!.textContent).toContain('官方消息');
+  host.querySelector<HTMLButtonElement>('[data-pick="column:news"]')!.click();
+  await vi.waitFor(() => expect(postListUrls().pop()).toContain('column=c1'));
+  await settle();
+  expect(host.querySelector<HTMLAnchorElement>('[data-action="new-post"]')!.getAttribute('href')).toBe('/review/blog/new?column=c1');
+  host.querySelector<HTMLButtonElement>('[data-pick="group:official"]')!.click();
+  await vi.waitFor(() => expect(postListUrls().pop()).toContain('group=g1'));
+  await settle();
+  expect(host.querySelector<HTMLAnchorElement>('[data-action="new-post"]')!.getAttribute('href')).toBe('/review/blog/new');
+});
+
+it('with no columns yet, new post is disabled and says to create a group and a column first', async () => {
+  handle = (c) => (c.path === '/v1/blog/admin/columns' ? ok({ items: [] }) : undefined);
+  await mount('/review/blog');
+  await vi.waitFor(() => expect(host.textContent).toContain(t('blog.admin.noGroups')));
+  expect(host.querySelector('[data-action="new-post"]')!.getAttribute('aria-disabled')).toBe('true');
+  expect(host.textContent).toContain(t('blog.admin.needColumn'));
+});
+
+it('creates a group, then a column inside it, through the dialog', async () => {
+  await mount('/review/blog');
+  await vi.waitFor(() => expect(host.querySelector('[data-add-column="official"]')).not.toBeNull());
+  host.querySelector<HTMLButtonElement>('[data-action="new-group"]')!.click();
+  await settle();
+  const dialog = () => document.querySelector('[role=dialog]')!;
+  const fill = (sel: string, value: string) => { const el = dialog().querySelector<HTMLInputElement>(sel)!; el.value = value; el.dispatchEvent(new Event('input')); };
+  expect(dialog().querySelector('[data-field="parent"]')).toBeNull();
+  fill('[data-name="zh-Hant"]', '創作指南'); fill('[data-field="slug"]', 'creators');
+  handle = (c) => (c.path === '/v1/blog/admin/columns' && c.method === 'POST' ? ok({ id: 'new', ...c.body }) : undefined);
+  dialog().querySelector<HTMLButtonElement>('[data-action="save-column"]')!.click();
+  await vi.waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/v1/blog/admin/columns')).toBe(true));
+  expect(calls.find((c) => c.method === 'POST')!.body).toMatchObject({ slug: 'creators', parentId: null, name: { 'zh-Hant': '創作指南' } });
+  await vi.waitFor(() => expect(document.querySelector('[role=dialog]')).toBeNull());
+
+  host.querySelector<HTMLButtonElement>('[data-add-column="official"]')!.click();
+  await settle();
+  expect(dialog().querySelector<HTMLSelectElement>('[data-field="parent"]')!.value).toBe('g1');
+  fill('[data-name="zh-Hant"]', '活動'); fill('[data-field="slug"]', 'events');
+  dialog().querySelector<HTMLButtonElement>('[data-action="save-column"]')!.click();
+  await vi.waitFor(() => expect(calls.filter((c) => c.method === 'POST' && c.path === '/v1/blog/admin/columns')).toHaveLength(2));
+  expect(calls.filter((c) => c.method === 'POST').pop()!.body).toMatchObject({ slug: 'events', parentId: 'g1' });
+});
+
+it('deleting a column that still has posts says why it cannot be deleted', async () => {
+  await mount('/review/blog');
+  await vi.waitFor(() => expect(host.querySelector('[data-menu="news"]')).not.toBeNull());
+  handle = (c) => (c.method === 'DELETE' ? { status: 409, body: { error: 'blog_column_not_empty' } } : undefined);
+  host.querySelector<HTMLElement>('[data-menu="news"] [data-action="delete"]')!.click();
+  await vi.waitFor(() => expect(confirm()).not.toBeNull());
+  confirm().click();
+  await vi.waitFor(() => expect(host.textContent).toContain(t('blog.admin.columnNotEmpty')));
 });
