@@ -58,6 +58,18 @@ export interface PetOptions {
 
 const EXPRS: Expr[] = ["happy", "surprised", "pout", "shy", "sleepy", "dizzy", "wink", "peek"];
 
+/**
+ * 這一格每個表情要淡到多少。睡著時全部收掉：表情圖的眼睛都是睜著的（想睡那張是打哈欠、張嘴），
+ * 疊上去會蓋掉閉眼；睡著時頁面也一直算閒置，不能讓「閒太久會想睡」把哈欠臉帶回來。
+ * 醒著：正在演的表情留著，演完回到平常；閒超過 40 秒換成想睡。
+ */
+export function exprTargets(cur: Partial<Record<Expr, number>>, s: { sleeping: boolean; acting: boolean; idle: number }) {
+  const next = { ...cur };
+  if (s.sleeping || !s.acting) for (const k of EXPRS) next[k] = 0;
+  if (!s.sleeping && !s.acting && s.idle > 40) next.sleepy = 1;
+  return next;
+}
+
 export class SukiPet {
   readonly el: HTMLDivElement;
   private canvas: HTMLCanvasElement;
@@ -361,9 +373,9 @@ export class SukiPet {
   private frame(dt: number, now: number) {
     const p = this.rig.params;
     // 表情淡入淡出；演完回到平常
-    if (now > this.actUntil && !this.sleeping) for (const k of EXPRS) this.exprTarget[k] = 0;
-    const idle = (now - this.lastInput) / 1000;
-    if (idle > 40 && now > this.actUntil) { this.exprTarget.sleepy = 1; if (idle < 41) this.speak(this.line("sleepy"), 3000); }
+    const idle = (now - this.lastInput) / 1000, acting = now <= this.actUntil;
+    this.exprTarget = exprTargets(this.exprTarget, { sleeping: this.sleeping, acting, idle });
+    if (idle > 40 && idle < 41 && !acting && !this.sleeping) this.speak(this.line("sleepy"), 3000);
     for (const k of EXPRS) {
       const cur = this.expr[k] ?? 0, tgt = this.exprTarget[k] ?? 0;
       this.expr[k] = cur + (tgt - cur) * (1 - Math.exp(-dt * 14));
@@ -567,7 +579,6 @@ export class SukiPet {
     this.closeMenu();
     this.sleeping = true;
     this.sleepStart = performance.now();
-    this.exprTarget = { sleepy: 1 };
     this.zzzAt = performance.now() + 2500;
     // 抱著膝蓋坐著睡（這套造型有畫的話）；醒來、被拎起來就站起來
     this.startActivity("doze", Infinity);
