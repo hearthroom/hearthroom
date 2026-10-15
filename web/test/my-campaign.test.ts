@@ -114,11 +114,11 @@ it("shows approved and paid out in two separate columns", async () => {
   const paid = text('[data-share-content="c1"] [data-col="paid"]');
   expect(approved).toContain(t("campaign.mine.approved"));
   expect(approved).toContain(t("campaign.tier.original"));
-  expect(approved).toContain("3000");
+  expect(approved).toContain("3,000");
   expect(paid).toContain(t("campaign.mine.paid"));
   expect(paid).toContain(t("campaign.page.points", { n: 0 }));
   expect(paid).toContain("等待發放");
-  expect(paid).not.toContain("3000");
+  expect(paid).not.toContain("3,000");
 });
 
 it("says 審核中 before anything is approved and has a line for every payout state", async () => {

@@ -12,7 +12,7 @@ import CampaignShareLinks from "@/components/CampaignShareLinks.vue";
 import NotFoundPage from "@/pages/NotFoundPage.vue";
 import { ApiError } from "@/lib/api";
 import {
-  TIERS, campaignErrorText, fetchCampaign, fetchMyContents, formatPeriod, localized,
+  TIERS, campaignErrorText, fetchCampaign, fetchMyContents, formatNumber, formatPeriod, formatPoints, localized,
   type ApplyResult, type ContentView, type PublicCampaign,
 } from "@/lib/campaign";
 import { pageTitle } from "@/lib/i18n";
@@ -136,10 +136,10 @@ async function onDone(_result: ApplyResult) {
         <ul class="campaign__tiers">
           <li v-for="tier in tiers" :key="tier.key" class="campaign__tier">
             <span>{{ t(`campaign.tier.${tier.key}`) }}</span>
-            <strong class="num">{{ t("campaign.page.points", { n: tier.amount }) }}</strong>
+            <strong class="num">{{ formatPoints(tier.amount) }}</strong>
           </li>
         </ul>
-        <p v-if="campaign.extraPlacementAmount" class="campaign__rule">{{ t("campaign.page.extra", { n: campaign.extraPlacementAmount }) }}</p>
+        <p v-if="campaign.extraPlacementAmount" class="campaign__rule">{{ t("campaign.page.extra", { n: formatNumber(campaign.extraPlacementAmount) }) }}</p>
         <p class="campaign__rule">{{ t("campaign.page.highest") }}</p>
       </section>
 

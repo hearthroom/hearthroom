@@ -2420,7 +2420,7 @@
   "campaign.stats.review.noReasons": "却下された申請はまだありません。",
   "campaign.stats.spend.title": "支出",
   "campaign.stats.spend.paidTotal": "付与したポイント",
-  "campaign.stats.spend.byDay": "日ごとの付与",
+  "campaign.stats.spend.byDay": "日ごとの付与（UTC）",
   "campaign.stats.spend.noDays": "付与の記録はまだありません。",
   "campaign.stats.spend.pool": "ポイントプール",
   "campaign.stats.spend.balance": "残高",

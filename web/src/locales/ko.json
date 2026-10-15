@@ -2420,7 +2420,7 @@
   "campaign.stats.review.noReasons": "반려된 신청이 아직 없습니다.",
   "campaign.stats.spend.title": "지출",
   "campaign.stats.spend.paidTotal": "지급한 포인트",
-  "campaign.stats.spend.byDay": "일별 지급",
+  "campaign.stats.spend.byDay": "일별 지급 (UTC)",
   "campaign.stats.spend.noDays": "지급 기록이 아직 없습니다.",
   "campaign.stats.spend.pool": "포인트 풀",
   "campaign.stats.spend.balance": "잔액",

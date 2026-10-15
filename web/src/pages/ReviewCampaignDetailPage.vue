@@ -14,7 +14,7 @@ import { RouterLink, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import EvidenceViewer from '@/components/EvidenceViewer.vue';
 import {
-  DEFAULT_TIMEZONE, TIERS, campaignErrorText, campaignsCached, decide, fetchContentDetail, isWebUrl, localized,
+  DEFAULT_TIMEZONE, TIERS, campaignErrorText, campaignsCached, decide, fetchContentDetail, formatPoints, isWebUrl, localized,
   type Campaign, type ContentDetail, type DecisionBody, type DecisionResult, type Flags, type Tier,
 } from '@/lib/campaign';
 import { ApiError } from '@/lib/api';
@@ -75,7 +75,7 @@ const pastDeadline = computed(() => closed.value || (campaign.value?.submitDeadl
 const campaignTitle = computed(() => (campaign.value ? localized(campaign.value.title, locale.value) : '') || data.value?.content.campaignSlug || '');
 /** 用活動自己的時區顯示；活動讀不到時用看的人的時區，時刻本身還是對的 */
 const at = (ms: number) => new Intl.DateTimeFormat(locale.value, { timeZone: campaign.value ? campaign.value.timezone || DEFAULT_TIMEZONE : undefined, dateStyle: 'medium', timeStyle: 'short' }).format(ms);
-const points = (n: number) => t('campaign.page.points', { n });
+const points = formatPoints;
 const indexOf = (placementId: string) => (data.value?.placements.findIndex((p) => p.id === placementId) ?? -1) + 1;
 const actionsOf = (p: Placement): Kind[] | 'regrade' => {
   if (p.reviewStatus === 'approved') return 'regrade';

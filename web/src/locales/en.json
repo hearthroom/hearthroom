@@ -2420,7 +2420,7 @@
   "campaign.stats.review.noReasons": "No application has been rejected yet.",
   "campaign.stats.spend.title": "Spend",
   "campaign.stats.spend.paidTotal": "Points paid",
-  "campaign.stats.spend.byDay": "Paid per day",
+  "campaign.stats.spend.byDay": "Paid per day (UTC)",
   "campaign.stats.spend.noDays": "Nothing has been paid yet.",
   "campaign.stats.spend.pool": "Points pool",
   "campaign.stats.spend.balance": "Balance",

@@ -323,7 +323,7 @@ onBeforeUnmount(() => { alive = false; document.removeEventListener('keydown', o
             <div class="rpo-row__main">
               <h3><RouterLink :to="lp(`/review/campaign/${item.contentId}`)">{{ item.contentTitle }}</RouterLink></h3>
               <p class="subtle rpo-line">@{{ item.applicant.handle }} · {{ titleOf(item.campaignSlug) }}</p>
-              <dl class="rpo-sum">
+              <dl v-if="!gone.has(item.contentId)" class="rpo-sum">
                 <div><dt>{{ t('campaign.detail.target') }}</dt><dd class="num">{{ points(item.target) }}</dd></div>
                 <div><dt>{{ t('campaign.mine.paid') }}</dt><dd class="num">{{ points(item.paidTotal) }}</dd></div>
                 <div><dt>{{ t('campaign.detail.due') }}</dt><dd class="num">{{ points(item.due) }}</dd></div>

@@ -182,6 +182,27 @@ it("confirms a batch with the count and total points, sends exactly the selected
   expect(row('[data-content="s3"]')!.textContent).not.toContain(t("campaign.payouts.seeHistory"));
 });
 
+it("drops the old amounts from a row that left To pay after a definite payout, in single and batch pay", async () => {
+  replies.pay = [{ status: 200, body: payout("y1", { contentId: "s1", status: "paid" }) }];
+  replies.batch = [{ status: 200, body: { items: [{ contentId: "s2", payout: payout("y2", { contentId: "s2", status: "paid" }) }] } }];
+  await mount("/review/payouts");
+  await vi.waitFor(() => expect(row('[data-content="s1"] dl')?.textContent).toContain((350).toLocaleString("zh-Hant")));
+  (await button('[data-content="s1"] [data-action="pay"]')).click();
+  payableItems = [payable("s2", 800), payable("s3", 100)];
+  await confirmYes();
+  await vi.waitFor(() => expect(row('[data-content="s1"]')?.textContent).toContain(t("campaign.payouts.seeHistory")));
+  expect(row('[data-content="s1"]')!.textContent).toContain(t("campaign.status.paid"));
+  expect(row('[data-content="s1"] dl')).toBeNull();
+  expect(row('[data-content="s3"] dl')).not.toBeNull();
+  tick("s2");
+  await nextTick();
+  (await button('[data-action="pay-selected"]')).click();
+  payableItems = [payable("s3", 100)];
+  await confirmYes();
+  await vi.waitFor(() => expect(row('[data-content="s2"]')?.textContent).toContain(t("campaign.payouts.seeHistory")));
+  expect(row('[data-content="s2"] dl')).toBeNull();
+});
+
 it("shows a batch item that failed with internal_error as uncertain, not as a definite failure", async () => {
   replies.batch = [{ status: 200, body: { items: [
     { contentId: "s1", error: "internal_error" },
