@@ -167,6 +167,8 @@ async function drop(k: CommentKeyword) {
   try { keywords.value = (await removeKeyword(k.id, crypto.randomUUID(), await token())).items; } catch (e) { error.value = message(e, 'moderation.error.retry'); } finally { keywordBusy.value = false; }
 }
 
+/** 攔截率：一位小數的百分比 */
+const percent = computed(() => new Intl.NumberFormat(String(locale.value), { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 }));
 /** 處理時間中位數：一小時內講分鐘，兩天內講小時，再久講天；單位交給 Intl。 */
 function duration(ms: number | null): string {
   if (ms === null) return '—';
@@ -191,6 +193,8 @@ onBeforeUnmount(() => { alive = false; document.removeEventListener('keydown', o
       <div class="stat"><dt>{{ t('moderation.comments.stats.openReports') }}</dt><dd>{{ stats.openReports }}</dd></div>
       <div class="stat"><dt>{{ t('moderation.comments.stats.removed7d') }}</dt><dd>{{ stats.removed7d }}</dd></div>
       <div class="stat"><dt>{{ t('moderation.comments.stats.median') }}</dt><dd>{{ duration(stats.medianHandleMs7d) }}</dd></div>
+      <div class="stat"><dt>{{ t('moderation.comments.stats.holdRate') }}</dt><dd>{{ stats.holdRate7d == null ? '—' : percent.format(stats.holdRate7d) }}</dd></div>
+      <div class="stat"><dt>{{ t('moderation.comments.stats.reports7d') }}</dt><dd>{{ stats.reports7d ?? 0 }}</dd></div>
     </dl>
 
     <div ref="tabsBox" class="seg cmod-tabs">
@@ -272,7 +276,7 @@ onBeforeUnmount(() => { alive = false; document.removeEventListener('keydown', o
 
 <style scoped>
 .cmod { display: grid; gap: var(--s-4); min-width: 0; }
-.cmod-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-4); margin: 0; padding: var(--s-4) var(--s-5); }
+.cmod-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-4); margin: 0; padding: var(--s-4) var(--s-5); }
 .cmod-stats dd { margin: 0; }
 .cmod-tabs { justify-self: start; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
 .cmod-list { display: grid; gap: var(--s-3); }
