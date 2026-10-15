@@ -187,6 +187,8 @@ describe("決定", () => {
   it("拒絕要理由；通知帶理由；已拒絕不能再改", async () => {
     expect(await code(await decide(p, { decision: "reject" }))).toBe("400 share_invalid reason");
     expect(await code(await decide(p, { decision: "reject", reason: "x".repeat(501) }))).toBe("400 share_invalid reason");
+    // 長度以字元（code point）計：500 個 emoji 可以
+    expect(await code(await decide(p, { decision: "reject", reason: "😀".repeat(501) }))).toBe("400 share_invalid reason");
     expect(await code(await decide(p, { decision: "maybe" }))).toBe("400 share_invalid decision");
     expect(await code(await decide(p, { decision: "approve", tier: "gold" }))).toBe("400 share_invalid tier");
     expect(await code(await decide(p, { decision: "approve", expectedVersion: "1" }))).toBe("400 share_invalid expectedVersion");
@@ -196,6 +198,7 @@ describe("決定", () => {
     expect(n).toMatchObject({ kind: "share_rejected", path: "/me/campaign" });
     expect(JSON.parse(n.extra)).toEqual({ reason: "連結打不開" });
     expect(await code(await decide(p, { decision: "approve", expectedVersion: 2 }))).toBe("409 share_already_decided");
+    expect((await decide(await placement(c), { decision: "reject", reason: "😀".repeat(500) })).status).toBe(200);
     expect(await metrics()).toContain('hearthroom_campaign_operations_total{operation="decide",outcome="denied"}');
   });
 
@@ -224,6 +227,9 @@ describe("決定", () => {
     expect(JSON.parse(audit.before_json)).toMatchObject({ approvedTier: "original", countsAsPlacement: true });
     expect(JSON.parse(audit.after_json)).toMatchObject({ approvedTier: "guide", countsAsPlacement: false });
     expect((await notes(owner)).map((n: any) => n.kind)).toEqual(["share_approved"]);
+    // 再改一次沒給理由：保留上一次的理由；審核欄位是最後一位決定者
+    expect((await decide(p, { decision: "approve", countsAsPlacement: true, expectedVersion: 3 }, "agent")).status).toBe(200);
+    expect(await row(p)).toMatchObject({ review_reason: "其實是攻略", reviewed_kind: "ai", counts_as_placement: 1, version: 4 });
   });
 
   it("並發兩個決定只有一個生效：另一個 409 帶目前版本；稽核與通知各一筆", async () => {
@@ -270,6 +276,13 @@ describe("決定", () => {
     expect(await notes(owner)).toEqual([]);
     const self = await placement(await content(reviewer, REVIEWER));
     expect(await code(await decide(self, { decision: "approve" }))).toBe("403 share_self_review");
+    // 收款帳號是審核員自己的 Harbor 帳號：連結過來的帳號，或解除連結前留在原成員下的內容
+    await env.DB.prepare("INSERT INTO member_connections (provider, external_id, owner_member_id, linked_at) VALUES ('harbor', ?, ?, ?)").bind(String(OTHER), reviewer, Date.now()).run();
+    const linked = await placement(await content(other, OTHER));
+    expect(await code(await decide(linked, { decision: "approve" }))).toBe("403 share_self_review");
+    const unlinked = await placement(await content(other, REVIEWER));
+    expect(await code(await decide(unlinked, { decision: "approve" }))).toBe("403 share_self_review");
+    expect(await code(await decide(unlinked, { decision: "approve" }, "agent"))).not.toBe("403 share_self_review");
     expect(await code(await decide("nope", { decision: "approve" }))).toBe("404 share_placement_not_found");
   });
 
