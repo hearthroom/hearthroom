@@ -14,10 +14,12 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { RouterLink, onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import {
-  allColumns, columnName, createPreview, displayStatus, fetchAdminColumns, fetchAdminPost, fetchRevision, fetchRevisions, imageUrlOf, POST_LOCALES,
+  allColumns, AUTOSAVE_MS, columnName, createPreview, displayStatus, fetchAdminColumns, fetchAdminPost, fetchRevision, fetchRevisions, imageUrlOf, POST_LOCALES,
   restoreRevision, savePost, setPostState, uploadBlogImage, type AdminPost, type BlogGroup, type PostInput, type Revision, type StateChange, suggestSlug,
 } from '@/lib/blog';
+import MarkdownToolbar from '@/components/MarkdownToolbar.vue';
 import { ApiError } from '@/lib/api';
+import { applyMarkdown, type MarkdownAction } from '@/lib/markdown-edit';
 import { confirmDialog } from '@/lib/confirm';
 import { dateTime } from '@/lib/format';
 import { LOCALES, pageTitle } from '@/lib/i18n';
@@ -341,6 +343,50 @@ async function uploadCover(e: Event, field: 'coverKey' | 'shareCoverKey') {
   try { draft[field] = (await uploadBlogImage(await token(), file)).key; } catch { error.value = t('blog.admin.uploadFailed'); } finally { busy.value = false; }
 }
 
+// ---- 工具列與內文快捷鍵 ----
+
+const imagePicker = ref<HTMLInputElement | null>(null);
+function act(action: MarkdownAction) {
+  if (action === 'image') { imagePicker.value?.click(); return; }
+  const el = source.value;
+  if (!el) return;
+  const next = applyMarkdown({ value: draft.bodyMd, start: el.selectionStart, end: el.selectionEnd }, action, t('blog.admin.md.text'));
+  draft.bodyMd = next.value;
+  void nextTick(() => { el.focus(); el.setSelectionRange(next.start, next.end); });
+}
+function onPick(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const files = images(input.files);
+  input.value = '';
+  if (files.length) void insertImages(files);
+}
+/** 內文裡的 ⌘B／⌘I／⌘K（Windows 是 Ctrl） */
+function onSourceKey(e: KeyboardEvent) {
+  if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+  const map: Record<string, MarkdownAction> = { b: 'bold', i: 'italic', k: 'link' };
+  const action = map[e.key.toLowerCase()];
+  if (!action) return;
+  e.preventDefault();
+  act(action);
+}
+
+// ---- 自動儲存：只對草稿與已撤下的文章，停手 AUTOSAVE_MS 後存。公開或排程中的不自動存，免得半成品直接上線 ----
+
+const autosaves = computed(() => !post.value || post.value.status === 'draft' || post.value.status === 'unpublished');
+let autoTimer: ReturnType<typeof setTimeout> | undefined;
+function scheduleAutosave() {
+  clearTimeout(autoTimer);
+  // 衝突中不存：交給「載入最新版本／複製我的內容」；欄目、標題、網址沒齊也不存（新文章要齊了才建得起來）
+  if (loading.value || !autosaves.value || !dirty.value || conflict.value || missing.value.length) return;
+  autoTimer = setTimeout(() => {
+    // 手動存檔、狀態變更或圖片上傳中：晚一點再試，不搶
+    if (saving.value || busy.value || uploading.value) { scheduleAutosave(); return; }
+    void save({ auto: true }).finally(scheduleAutosave);
+  }, AUTOSAVE_MS);
+}
+watch(() => JSON.stringify(draft), scheduleAutosave);
+onBeforeUnmount(() => clearTimeout(autoTimer));
+
 // ---- 離開前提醒：站內換頁與關分頁都攔 ----
 
 const ask = async () => !dirty.value || (await confirmDialog({ message: t('blog.admin.unsaved'), confirmText: t('dialog.leave'), danger: true }));
@@ -417,10 +463,11 @@ watch(() => route.params.id, (id) => { if (/\/review\/blog\/[^/]+$/.test(route.p
         </template>
         <template v-else>
           <input id="bed-f-title" v-model="draft.title" class="bed-title" maxlength="120" :placeholder="t('blog.admin.postTitle')" :aria-label="t('blog.admin.postTitle')" :aria-invalid="isMissing('title') || undefined" />
-          <slot name="toolbar" />
+          <MarkdownToolbar v-show="pane === 'edit'" :disabled="uploading > 0" @act="act" />
+          <input ref="imagePicker" type="file" accept="image/*" multiple class="bed-file" tabindex="-1" aria-hidden="true" @change="onPick" />
           <div class="bed-split" :class="`bed-split--${pane}`">
             <textarea ref="source" v-model="draft.bodyMd" class="input bed-source" data-source spellcheck="false" maxlength="60000" :aria-label="t('blog.admin.body')"
-                      @paste="onPaste" @drop="onDrop" @dragover.prevent />
+                      @paste="onPaste" @drop="onDrop" @dragover.prevent @keydown="onSourceKey" />
             <!-- renderDoc 不吃 HTML（html:false），跟文章頁同一份渲染 -->
             <article class="bed-preview" :aria-label="t('blog.admin.preview')" v-html="rendered" />
           </div>

@@ -22,6 +22,7 @@ vi.mock('../src/lib/api', async (original) => {
   };
 });
 import { router as siteRouter } from '../src/router';
+import { AUTOSAVE_MS } from '../src/lib/blog';
 
 const post = (over: Record<string, unknown> = {}) => ({
   id: 'p1', columnId: 'c1', columnSlug: 'news', slug: 'hello', locale: 'zh-Hant', title: '開站了', excerpt: '', coverUrl: null, bodyMd: '舊內容',
@@ -30,7 +31,7 @@ const post = (over: Record<string, unknown> = {}) => ({
 });
 type Call = { method: string; path: string; body: any };
 let calls: Call[];
-let handle: (c: Call) => { status: number; body: unknown } | undefined;
+let handle: (c: Call) => { status: number; body: unknown; wait?: Promise<void> } | undefined;
 const ok = (body: unknown) => ({ status: 200, body });
 const tree = () => ({ items: [
   { id: 'g1', slug: 'official', name: { 'zh-Hant': '官方消息' }, description: {}, sort: 0, enabled: true, parentId: null, postCount: 3,
@@ -65,6 +66,7 @@ beforeEach(() => {
     const call = { method, path, body };
     calls.push(call);
     const custom = handle(call);
+    if (custom?.wait) await custom.wait;
     const res = custom
       ?? (path === '/v1/blog/admin/posts/p1' && method === 'GET' ? ok(post())
         : path === '/v1/blog/admin/columns' ? ok(tree())
@@ -434,4 +436,93 @@ it('revisions open in a drawer from the settings column', async () => {
   host.querySelector<HTMLButtonElement>('[data-action="open-revisions"]')!.click();
   await settle();
   expect(document.querySelector('[role=dialog] .bed-rev')).not.toBeNull();
+});
+
+it('saves a draft on its own after a pause in typing', async () => {
+  await mount('/review/blog/p1');
+  await vi.waitFor(() => expect(source()?.value).toBe('舊內容'));
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  try {
+    handle = (c) => (c.method === 'PUT' ? ok(post({ bodyMd: c.body.bodyMd, version: 4 })) : undefined);
+    type(source(), '新的內容'); await nextTick();
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_MS - 100);
+    expect(calls.some((c) => c.method === 'PUT')).toBe(false);
+    await vi.advanceTimersByTimeAsync(200);
+    await vi.waitFor(() => expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(1));
+    await vi.advanceTimersByTimeAsync(0);
+    const state = host.querySelector('[data-save-state]')!.textContent!.trim();
+    expect(state).not.toBe('');
+    expect(state).not.toContain(t('blog.admin.unsavedShort'));
+    expect(state).not.toContain(t('blog.admin.saving'));
+  } finally { vi.useRealTimers(); }
+});
+
+it('never saves a live post on its own; update does', async () => {
+  handle = (c) => (c.path === '/v1/blog/admin/posts/p1' && c.method === 'GET' ? ok(post({ status: 'published', publishAt: 1, firstPublishedAt: 1 }))
+    : c.method === 'PUT' ? ok(post({ status: 'published', publishAt: 1, firstPublishedAt: 1, bodyMd: c.body.bodyMd, version: 4 })) : undefined);
+  await mount('/review/blog/p1');
+  await vi.waitFor(() => expect(source()?.value).toBe('舊內容'));
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  try {
+    type(source(), '公開後再改'); await nextTick();
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_MS * 2);
+    expect(calls.some((c) => c.method === 'PUT')).toBe(false);
+    expect(host.querySelector('[data-save-state]')!.textContent).toContain(t('blog.admin.unsavedShort'));
+  } finally { vi.useRealTimers(); }
+  host.querySelector<HTMLButtonElement>('[data-action="primary"]')!.click();
+  await vi.waitFor(() => expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(1));
+});
+
+it('an autosave that hits someone else\'s save stops and shows the conflict, without retrying', async () => {
+  await mount('/review/blog/p1');
+  await vi.waitFor(() => expect(source()?.value).toBe('舊內容'));
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  try {
+    handle = (c) => (c.method === 'PUT' ? { status: 409, body: { error: 'blog_version_conflict', version: 9 } } : undefined);
+    type(source(), 'A 的修改'); await nextTick();
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_MS + 100);
+    await vi.waitFor(() => expect(host.querySelector('[data-conflict]')).not.toBeNull());
+    type(source(), 'A 又改了'); await nextTick();
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_MS * 3);
+    expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(1);
+  } finally { vi.useRealTimers(); }
+});
+
+it('publishing while an autosave is in flight waits for it and saves only once', async () => {
+  await mount('/review/blog/p1');
+  await vi.waitFor(() => expect(source()?.value).toBe('舊內容'));
+  let release!: () => void;
+  handle = (c) => {
+    if (c.method === 'PUT') return { status: 200, body: post({ bodyMd: c.body.bodyMd, version: 4 }), wait: new Promise<void>((r) => { release = r; }) };
+    if (c.path === '/v1/blog/admin/posts/p1/state') return ok(post({ bodyMd: '新的', status: 'published', publishAt: 1, version: 5 }));
+    return undefined;
+  };
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  try {
+    type(source(), '新的'); await nextTick();
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_MS + 10);
+    await vi.waitFor(() => expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(1));
+  } finally { vi.useRealTimers(); }
+  expect(host.querySelector<HTMLButtonElement>('[data-action="primary"]')!.disabled).toBe(true);
+  release();
+  await vi.waitFor(() => expect(host.querySelector<HTMLButtonElement>('[data-action="primary"]')!.disabled).toBe(false));
+  host.querySelector<HTMLButtonElement>('[data-action="primary"]')!.click();
+  await vi.waitFor(() => expect(confirm()).not.toBeNull());
+  confirm().click();
+  await vi.waitFor(() => expect(calls.some((c) => c.path === '/v1/blog/admin/posts/p1/state')).toBe(true));
+  expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(1);
+  expect(calls.find((c) => c.path === '/v1/blog/admin/posts/p1/state')!.body.change).toEqual({ status: 'published' });
+});
+
+it('the toolbar wraps the selection in bold and the shortcut does the same', async () => {
+  await mount('/review/blog/p1');
+  await vi.waitFor(() => expect(source()?.value).toBe('舊內容'));
+  source().setSelectionRange(0, 1);
+  host.querySelector<HTMLButtonElement>('[data-md="bold"]')!.click();
+  await nextTick();
+  expect(source().value).toBe('**舊**內容');
+  source().setSelectionRange(source().value.length - 2, source().value.length);
+  source().dispatchEvent(new KeyboardEvent('keydown', { key: 'i', metaKey: true, bubbles: true }));
+  await nextTick();
+  expect(source().value).toBe('**舊***內容*');
 });
