@@ -80,8 +80,8 @@ const CARD_SELECT = `SELECT p.id, col.slug AS column_slug, p.slug, p.title, p.ex
 const LIVE = "p.status = 'published' AND p.publish_at IS NOT NULL AND p.publish_at <= ?1";
 
 /** 圖片 key 是 AVATARS bucket 的 blog/<uuid>.webp，公開網址由圖片路由服務。 */
-const IMAGE_KEY = /^blog\/[A-Za-z0-9-]{1,64}\.webp$/;
-const imageUrl = (key: string | null) => (key ? `/v1/blog/images/${key.slice("blog/".length)}` : null);
+export const IMAGE_KEY = /^blog\/[A-Za-z0-9-]{1,64}\.webp$/;
+export const imageUrl = (key: string | null) => (key ? `/v1/blog/images/${key.slice("blog/".length)}` : null);
 
 const toPost = (r: PostRow): Post => ({
   id: r.id, columnId: r.column_id, columnSlug: r.column_slug, slug: r.slug, locale: r.locale, title: r.title, excerpt: r.excerpt,
@@ -112,7 +112,7 @@ async function mustPost(db: D1Database, id: string): Promise<Post> {
 
 const SLUG = /^[a-z0-9][a-z0-9-]*$/;
 const isStr = (v: unknown, max: number, min = 0): v is string => typeof v === "string" && v.length >= min && v.length <= max;
-const invalid = (field: string): never => { throw new HttpError(400, "blog_invalid", undefined, { field }); };
+const invalid = (field: string, code = "blog_invalid"): never => { throw new HttpError(400, code, undefined, { field }); };
 const optional = <T>(v: T | undefined) => (v === undefined ? null : v);
 
 /** 文章內容（存進文章列與修訂的部分）。欄位名就是資料表欄名。 */
@@ -145,14 +145,15 @@ function cleanPost(input: PostInput): Content {
   };
 }
 
-function cleanLocalized(v: unknown, field: string, max: number, required: boolean): Localized {
-  if (!v || typeof v !== "object" || Array.isArray(v)) invalid(field);
+/** 多語文字的唯一驗證（活動設定也用）；不合法丟 400 code，extra.field 是欄位名。 */
+export function cleanLocalized(v: unknown, field: string, max: number, required: boolean, code = "blog_invalid"): Localized {
+  if (!v || typeof v !== "object" || Array.isArray(v)) invalid(field, code);
   const out: Localized = {};
   for (const [k, s] of Object.entries(v as Record<string, unknown>)) {
-    if (!(LOCALES as readonly string[]).includes(k) || !isStr(s, max)) invalid(field);
+    if (!(LOCALES as readonly string[]).includes(k) || !isStr(s, max)) invalid(field, code);
     if ((s as string).trim()) out[k as Locale] = s as string;
   }
-  if (required && !out["zh-Hant"]) invalid(field);
+  if (required && !out["zh-Hant"]) invalid(field, code);
   return out;
 }
 
