@@ -24,12 +24,18 @@ const BLOG_DESCRIPTION: Record<Locale, string> = {
 const asLocale = (lang: string): Locale => (LOCALES as readonly string[]).includes(lang) ? (lang as Locale) : "en";
 const pick = (text: Partial<Record<Locale, string>>, lang: Locale) => text[lang] || text["zh-Hant"] || text.en || Object.values(text).find(Boolean) || "";
 
-/** /blog 與 /blog/:column。欄目不存在或已停用是 null（呼叫端回 404 + noindex）；停用欄目裡的單篇仍可開。 */
-export async function blogIndexMeta(db: D1Database, lang: string, column: string | undefined, url: string): Promise<PageMeta | null> {
+export const blogGroupUrl = (locale: string, group: string) => `${origin}${prefix(locale)}/blog/g/${encodeURIComponent(group)}`;
+
+/**
+ * /blog、/blog/<欄目>、/blog/g/<分組>。只認公開樹裡看得到的分組與欄目（停用的、或把分組 slug 當欄目用的都是 null，
+ * 呼叫端回 404＋noindex）；停用欄目或分組裡的單篇仍可開，那由 postMeta 管。
+ */
+export async function blogIndexMeta(db: D1Database, lang: string, target: { column?: string; group?: string }, url: string): Promise<PageMeta | null> {
   const l = asLocale(lang);
   const base = { lang: l, url, type: "website" as const, image: siteOgImage("default", l), imageSize: { width: 1200, height: 630 } };
-  if (!column) return { ...base, title: `${BLOG_WORD[l]} · ${siteName(l)}`, description: BLOG_DESCRIPTION[l] };
-  const found: Column | undefined = (await columnTree(db, { admin: false })).flatMap((g) => g.columns).find((c) => c.slug === column);
+  if (!target.column && !target.group) return { ...base, title: `${BLOG_WORD[l]} · ${siteName(l)}`, description: BLOG_DESCRIPTION[l] };
+  const tree = await columnTree(db, { admin: false });
+  const found: Column | undefined = target.group ? tree.find((g) => g.slug === target.group) : tree.flatMap((g) => g.columns).find((c) => c.slug === target.column);
   if (!found) return null;
   return { ...base, title: `${pick(found.name, l) || found.slug} · ${siteName(l)}`, description: pick(found.description, l) || BLOG_DESCRIPTION[l] };
 }

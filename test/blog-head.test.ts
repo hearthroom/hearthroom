@@ -202,3 +202,28 @@ describe("部落格 Atom", () => {
     expect(text).not.toContain("<title>t1</title>");
   });
 });
+
+describe("分組頁", () => {
+  it("/blog/g/<分組> 有分組名稱的標題與 canonical；不存在或停用 404＋noindex", async () => {
+    await post({}, 1000);
+    const ok = await get("/blog/g/official");
+    expect(ok.status).toBe(200);
+    expect(ok.text).toContain("<title>官方消息");
+    expect(ok.text).toContain(`<link rel="canonical" href="https://${PRIMARY_HOST}/blog/g/official">`);
+    const en = await get("/en/blog/g/official");
+    expect(en.text).toContain("<title>News");
+    for (const path of ["/blog/g/nope", "/blog/g/news"]) {
+      const r = await get(path);
+      expect([path, r.status]).toEqual([path, 404]);
+      expect(r.text).toContain('name="robots" content="noindex');
+    }
+    await env.DB.prepare("UPDATE blog_columns SET enabled = 0 WHERE slug = 'official'").run();
+    expect((await get("/blog/g/official")).status).toBe(404);
+    expect((await get("/blog/news")).status).toBe(404);
+    expect((await get("/blog/news/hello")).status).toBe(200);
+  });
+
+  it("分組的 slug 不是欄目頁：/blog/official 是 404", async () => {
+    expect((await get("/blog/official")).status).toBe(404);
+  });
+});
