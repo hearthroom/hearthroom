@@ -2378,5 +2378,8 @@
   "campaign.error.pool_insufficient": "포인트 풀이 부족해요. 채운 뒤 다시 시도해 주세요.",
   "campaign.payouts.uncertain": "결과가 확실하지 않아요. 이미 전송됐을 수 있으니 지급 기록에서 결과를 확인해 주세요",
   "campaign.payouts.seeHistory": "이 콘텐츠는 지급 대기에서 빠졌어요. 결과는 지급 기록에서 확인할 수 있어요",
-  "campaign.payouts.pendingNote": "처리 중이에요. 지급 기록의 ‘결과 확인’으로 지급 여부를 볼 수 있어요"
+  "campaign.payouts.pendingNote": "처리 중이에요. 지급 기록의 ‘결과 확인’으로 지급 여부를 볼 수 있어요",
+  "campaign.nav": "공유 이벤트",
+  "campaign.banner.cta": "자세히 보기",
+  "campaign.banner.dismiss": "닫기"
 }

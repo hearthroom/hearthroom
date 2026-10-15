@@ -2378,5 +2378,8 @@
   "campaign.error.pool_insufficient": "點數池不足，補足後重試。",
   "campaign.payouts.uncertain": "結果不確定，可能已經送出，請到發放紀錄查詢結果",
   "campaign.payouts.seeHistory": "這份內容已經離開待發放，結果請看發放紀錄",
-  "campaign.payouts.pendingNote": "處理中，可以在發放紀錄按「查詢結果」確認是否入帳"
+  "campaign.payouts.pendingNote": "處理中，可以在發放紀錄按「查詢結果」確認是否入帳",
+  "campaign.nav": "分享活動",
+  "campaign.banner.cta": "了解活動",
+  "campaign.banner.dismiss": "關閉"
 }
