@@ -184,7 +184,9 @@ campaignRoutes.post("/v1/moderation/campaign/placements/:id/decision", applyMetr
   const op = operationOf(b.operationId);
   const result = await decidePlacement(c.env.DB, c.req.param("id")!, { memberId: s.member.id, kind: s.kind }, b, op, Date.now());
   // 真人應用管理員核准就直接發；AI 帳號與一般審核員的核准停在待發放。
-  const paid = b.decision === "approve" && result.placement.reviewStatus === "approved" && !s.agent && (await communityAdmin(c))
+  // 版本沒動＝這次決定什麼都沒寫（同檔位同計數再核准一次），不因此發錢；要發走發放路由。重放的決定版本已前進，照樣補發。
+  const wrote = result.placement.version !== b.expectedVersion;
+  const paid = b.decision === "approve" && wrote && result.placement.reviewStatus === "approved" && !s.agent && (await communityAdmin(c))
     ? await autoPayout(payerOf(c, s.member.id), result.placement.id, op) : { payout: null };
   queuePush(c);
   return c.json({ ...result, ...paid });

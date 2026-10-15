@@ -118,6 +118,21 @@ async function settle(x: Payer, r: Row, res: PayResult, op: string, rejectFails:
   await bumpOp(db, "campaign", metric, res.kind === "paid" ? "success" : res.kind === "insufficient" ? "insufficient" : res.kind === "rejected" ? "denied" : "error");
 }
 
+/** 這份內容現在該拿多少（目標）、已發多少、還差多少。 */
+async function owed(db: D1Database, contentId: string, campaign: Campaign) {
+  const [ps, paid] = await db.batch([
+    db.prepare("SELECT review_status, approved_tier, counts_as_placement FROM share_placements WHERE content_id = ?").bind(contentId),
+    db.prepare("SELECT COALESCE(sum(amount), 0) AS n FROM share_payouts WHERE content_id = ? AND status = 'paid'").bind(contentId),
+  ]);
+  const paidTotal = (paid!.results[0] as { n: number }).n;
+  const { target, due } = payoutAmount(
+    (ps!.results as { review_status: string; approved_tier: Tier | null; counts_as_placement: number }[])
+      .map((p) => ({ reviewStatus: p.review_status, approvedTier: p.approved_tier, countsAsPlacement: !!p.counts_as_placement })),
+    campaign, paidTotal,
+  );
+  return { paidTotal, target, due };
+}
+
 const isUnique = (e: unknown, table: string) => new RegExp(`UNIQUE constraint failed: ${table}\\.`).test(String(e));
 
 /** 第一次發放：算出還差多少，開一筆 pending（同內容同時只能有一筆），再送 Provider。 */
@@ -140,16 +155,7 @@ export async function requestPayout(x: Payer, contentId: string, op: string): Pr
   payable(campaign, now);
   await notSelf(db, x.memberId, s.member_id, s.recipient_account_no);
 
-  const [ps, paid] = await db.batch([
-    db.prepare("SELECT review_status, approved_tier, counts_as_placement FROM share_placements WHERE content_id = ?").bind(contentId),
-    db.prepare("SELECT COALESCE(sum(amount), 0) AS n FROM share_payouts WHERE content_id = ? AND status = 'paid'").bind(contentId),
-  ]);
-  const paidTotal = (paid!.results[0] as { n: number }).n;
-  const { target, due } = payoutAmount(
-    (ps!.results as { review_status: string; approved_tier: Tier | null; counts_as_placement: number }[])
-      .map((p) => ({ reviewStatus: p.review_status, approvedTier: p.approved_tier, countsAsPlacement: !!p.counts_as_placement })),
-    campaign!, paidTotal,
-  );
+  const { paidTotal, target, due } = await owed(db, contentId, campaign!);
   if (due <= 0) throw new HttpError(409, "share_nothing_due");
 
   const id = crypto.randomUUID();
@@ -183,6 +189,9 @@ export async function requestPayout(x: Payer, contentId: string, op: string): Pr
  * 重試：只限 pending 或池不足；同一把 key、同一個金額與帳號（絕不重算）。送出前先把列改回 pending、次數加一、先前的查無作廢：
  * 結果不知道時列就停在 pending，要等對帳查無才能取消，不會留在「池不足」被直接取消而漏記一筆已入帳的錢。
  * 條件含讀到的狀態與次數，同一筆同時兩次重試只有一個送得出去。
+ * 池不足那筆在排隊時可能被降級、改成不算位置或調低檔位金額：送出前重算，存的金額超過現在還差的就拒絕（409 share_payout_stale），
+ * 要取消再重新發放；金額不改（同一把 key 必須同一份本體）。比現在還差的少（升級）照送，差額由下一次請求補。
+ * 從 pending 重試不重算：上一次結果未知、可能已入帳，只能原樣再送。
  */
 export async function retryPayout(x: Payer, id: string, op: string): Promise<PayoutView> {
   const db = x.env.DB, now = x.now();
@@ -194,8 +203,10 @@ export async function retryPayout(x: Payer, id: string, op: string): Promise<Pay
   const r = await load(db, id);
   if (!r) throw new HttpError(404, "share_payout_not_found");
   if (!OPEN.includes(r.status)) throw new HttpError(409, "share_payout_not_retryable");
-  payable(await getCampaign(db, r.campaign_id), now);
+  const campaign = await getCampaign(db, r.campaign_id);
+  payable(campaign, now);
   await notSelf(db, x.memberId, r.member_id, r.recipient_account_no);
+  if (r.status === "blocked_insufficient" && r.amount > (await owed(db, r.content_id, campaign!)).due) throw new HttpError(409, "share_payout_stale");
 
   let changed = 0;
   try {
