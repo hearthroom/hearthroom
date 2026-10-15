@@ -2233,5 +2233,14 @@
   "campaign.error.share_payout_not_retryable": "This payout is finished and can't be retried.",
   "campaign.error.share_payout_not_cancellable": "This payout can't be cancelled right now.",
   "campaign.error.share_payout_not_pending": "Only payouts in progress can be checked.",
-  "campaign.error.share_payout_stale": "This queued payout is more than what's owed now. Cancel it and pay again."
+  "campaign.error.share_payout_stale": "This queued payout is more than what's owed now. Cancel it and pay again.",
+  "campaign.evidence.add": "Add screenshots",
+  "campaign.evidence.hint": "Cover any personal details unrelated to your share before uploading. You don't need a whole chat log or member list.",
+  "campaign.evidence.uploading": "Uploading…",
+  "campaign.evidence.failed": "This one didn't upload",
+  "campaign.evidence.retry": "Try again",
+  "campaign.evidence.remove": "Remove",
+  "campaign.evidence.limit": "Up to 6 per entry",
+  "campaign.evidence.purged": "Past retention period",
+  "campaign.evidence.open": "View full size"
 }

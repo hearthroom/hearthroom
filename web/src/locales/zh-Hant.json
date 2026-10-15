@@ -2233,5 +2233,14 @@
   "campaign.error.share_payout_not_retryable": "這筆發放已經結束，不能再重試。",
   "campaign.error.share_payout_not_cancellable": "這筆發放現在不能取消。",
   "campaign.error.share_payout_not_pending": "只有處理中的發放可以查詢入帳狀況。",
-  "campaign.error.share_payout_stale": "這筆排隊中的發放比現在應發的金額多，請取消後重新發放。"
+  "campaign.error.share_payout_stale": "這筆排隊中的發放比現在應發的金額多，請取消後重新發放。",
+  "campaign.evidence.add": "加上截圖",
+  "campaign.evidence.hint": "上傳前請遮住和分享無關的個人資料，不需要整段聊天紀錄或成員名單。",
+  "campaign.evidence.uploading": "上傳中…",
+  "campaign.evidence.failed": "這張沒傳上去",
+  "campaign.evidence.retry": "再試一次",
+  "campaign.evidence.remove": "移除",
+  "campaign.evidence.limit": "每筆最多 6 張",
+  "campaign.evidence.purged": "已過保留期限",
+  "campaign.evidence.open": "查看大圖"
 }
