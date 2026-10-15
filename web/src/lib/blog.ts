@@ -10,7 +10,13 @@ import { currentSurface } from "./track";
 
 /** 欄目名稱的多語文字，鍵是 zh-Hant／zh-Hans／en／ja／ko。 */
 export type Localized = Partial<Record<string, string>>;
-export interface BlogColumn { id: string; slug: string; name: Localized; description: Localized; sort: number; enabled: boolean }
+/** 分組與欄目同一種形狀：parentId 是 null 的是分組。postCount 只有管理端的樹才有。 */
+export interface BlogColumn { id: string; slug: string; name: Localized; description: Localized; sort: number; enabled: boolean; parentId: string | null; postCount?: number }
+export interface BlogGroup extends BlogColumn { columns: BlogColumn[] }
+/** 後台左欄選了什麼 */
+export type TreePick = { kind: "all" } | { kind: "group" | "column"; id: string };
+/** 草稿停手多久自動儲存（毫秒） */
+export const AUTOSAVE_MS = 3000;
 
 export interface PostCard {
   id: string; columnSlug: string; slug: string; title: string; excerpt: string; coverUrl: string | null; locale: string;
@@ -31,10 +37,15 @@ async function get<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-export const fetchColumns = () => get<{ items: BlogColumn[] }>("/blog/columns");
+export const fetchColumns = () => get<{ items: BlogGroup[] }>("/blog/columns");
 
-export const fetchPosts = (column: string | undefined, page: number) =>
-  get<{ total: number; pinned: PostCard[]; items: PostCard[] }>(`/blog/posts?${column ? `column=${encodeURIComponent(column)}&` : ""}page=${page}`);
+export const fetchPosts = (filter: { column?: string; group?: string }, page: number) => {
+  const q = new URLSearchParams({ ...(filter.group ? { group: filter.group } : {}), ...(filter.column ? { column: filter.column } : {}), page: String(page) });
+  return get<{ total: number; pinned: PostCard[]; items: PostCard[] }>(`/blog/posts?${q}`);
+};
+
+export const allColumns = (groups: BlogGroup[]): BlogColumn[] => groups.flatMap((g) => g.columns);
+export const groupOfColumn = (groups: BlogGroup[], columnSlug: string): BlogGroup | undefined => groups.find((g) => g.columns.some((c) => c.slug === columnSlug));
 
 /** preview 是編輯器發的預覽碼：帶著它讀得到還沒公開的那一篇。 */
 export const fetchPost = (column: string, slug: string, preview?: string) =>
@@ -82,11 +93,12 @@ const FIELD_LABEL: Record<string, string> = {
   title: "blog.admin.postTitle", slug: "blog.admin.slug", columnId: "blog.admin.columns", excerpt: "blog.admin.excerpt", bodyMd: "blog.admin.body",
   shareTitle: "blog.admin.shareTitle", shareDescription: "blog.admin.shareDescription", campaignId: "blog.admin.campaign", name: "blog.admin.columnName",
   description: "blog.admin.columnDescription", sort: "blog.admin.sort", locale: "blog.admin.locale", coverKey: "blog.admin.cover",
-  shareCoverKey: "blog.admin.shareCover", publishAt: "blog.admin.schedule",
+  shareCoverKey: "blog.admin.shareCover", publishAt: "blog.admin.schedule", parentId: "blog.admin.parentGroup",
 };
 const CODE_MESSAGE: Record<string, string> = {
   blog_write_forbidden: "blog.admin.managersOnly", blog_version_conflict: "blog.admin.conflict", blog_slug_taken: "blog.admin.slugTaken", blog_column_slug_taken: "blog.admin.columnSlugTaken",
   blog_preview_unavailable: "blog.admin.previewUnavailable", blog_image_invalid: "blog.admin.uploadFailed", blog_image_unavailable: "blog.admin.uploadFailed",
+  blog_column_not_empty: "blog.admin.columnNotEmpty",
 };
 
 async function admin<T>(token: string, path: string, method = "GET", body?: unknown): Promise<T> {
@@ -109,8 +121,8 @@ async function admin<T>(token: string, path: string, method = "GET", body?: unkn
   return (await res.json()) as T;
 }
 
-export const fetchAdminPosts = (token: string, q: { status?: string; column?: string; page: number }) =>
-  admin<{ total: number; items: AdminPostRow[] }>(token, `/posts?${new URLSearchParams({ ...(q.status ? { status: q.status } : {}), ...(q.column ? { column: q.column } : {}), page: String(q.page) })}`);
+export const fetchAdminPosts = (token: string, q: { status?: string; column?: string; group?: string; page: number }) =>
+  admin<{ total: number; items: AdminPostRow[] }>(token, `/posts?${new URLSearchParams({ ...(q.status ? { status: q.status } : {}), ...(q.column ? { column: q.column } : {}), ...(q.group ? { group: q.group } : {}), page: String(q.page) })}`);
 export const fetchAdminPost = (token: string, id: string) => admin<AdminPost>(token, `/posts/${encodeURIComponent(id)}`);
 /** 沒有 id 是新文章；有 id 要帶上次讀到的版本號，別人先存過會回 blog_version_conflict。 */
 export const savePost = (token: string, input: PostInput, operationId: string, id?: string, expectedVersion?: number) =>
@@ -123,11 +135,12 @@ export const fetchRevision = (token: string, id: string, rev: string) =>
 export const restoreRevision = (token: string, id: string, rev: string, operationId: string) =>
   admin<AdminPost>(token, `/posts/${encodeURIComponent(id)}/revisions/${encodeURIComponent(rev)}/restore`, "POST", { operationId });
 export const createPreview = (token: string, id: string) => admin<{ token: string; url: string }>(token, `/posts/${encodeURIComponent(id)}/preview`, "POST", {});
-export const fetchAdminColumns = (token: string) => admin<{ items: BlogColumn[] }>(token, "/columns");
-export const saveColumn = (token: string, input: Omit<BlogColumn, "id"> & { id?: string }, operationId: string) => {
+export const fetchAdminColumns = (token: string) => admin<{ items: BlogGroup[] }>(token, "/columns");
+export const saveColumn = (token: string, input: Omit<BlogColumn, "id" | "postCount"> & { id?: string }, operationId: string) => {
   const { id, ...rest } = input;
   return id ? admin<BlogColumn>(token, `/columns/${encodeURIComponent(id)}`, "PUT", { ...rest, operationId }) : admin<BlogColumn>(token, "/columns", "POST", { ...rest, operationId });
 };
+export const deleteColumn = (token: string, id: string, operationId: string) => admin<{ id: string }>(token, `/columns/${encodeURIComponent(id)}`, "DELETE", { operationId });
 export function uploadBlogImage(token: string, file: File) {
   const form = new FormData();
   form.append("file", file);
