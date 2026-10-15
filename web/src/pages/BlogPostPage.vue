@@ -42,7 +42,7 @@ const published = computed(() => post.value?.firstPublishedAt ?? post.value?.pub
 /** 跟發布不是同一天才說「更新於」：同一天改個錯字不必多一行 */
 const updated = computed(() => {
   if (!post.value || !published.value) return null;
-  const day = dateOnly(post.value.updatedAt / 1000);
+  const day = dateOnly(post.value.contentUpdatedAt / 1000);
   return day === dateOnly(published.value / 1000) ? null : day;
 });
 const columnOf = (s: string) => columnName(columns.value.find((c) => c.slug === s), locale.value);
