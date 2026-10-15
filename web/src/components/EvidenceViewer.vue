@@ -81,7 +81,7 @@ async function close() {
 
     <Teleport to="body">
       <div v-if="opened" class="modal-backdrop" @click.self="close">
-        <div ref="box" class="modal panel ev-zoom" role="dialog" aria-modal="true">
+        <div ref="box" class="modal panel ev-zoom" role="dialog" aria-modal="true" :aria-label="t('campaign.evidence.open')">
           <img :src="urls[opened]!" alt="" class="ev-zoom__img" />
           <div class="modal__actions"><button type="button" class="btn" @click="close">{{ t("dialog.close") }}</button></div>
         </div>
