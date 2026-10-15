@@ -12,7 +12,7 @@ import { campaignPhase, getCampaign, listCampaigns, saveCampaign, setCampaignSta
 import { providerOf, requireMember } from "./members";
 import { operationOf } from "./moderation";
 import { bumpOp } from "./ops-metrics";
-import { bearerOf, communityAdmin, humanOnly, staff } from "./staff";
+import { bearerOf, communityAdmin, humanOnly, requireCommunityAdmin, staff } from "./staff";
 import { upstream } from "./upstream";
 import { HttpError, type Env } from "./types";
 
@@ -44,7 +44,7 @@ campaignRoutes.use("/v1/moderation/*", async (c, next) => {
 async function editor(c: Ctx): Promise<Actor> {
   const s = await staff(c);
   humanOnly(s.agent);
-  if (!(await communityAdmin(c))) throw new HttpError(403, "community_admin_required");
+  await requireCommunityAdmin(c);
   return { memberId: s.member.id, kind: "human" };
 }
 
@@ -220,9 +220,9 @@ campaignRoutes.get("/v1/moderation/campaign/stats", async (c) => {
   const slug = c.req.query("campaign");
   const campaign = slug ? await getCampaign(c.env.DB, slug) : null;
   if (!campaign || campaign.slug !== slug) throw new HttpError(404, "campaign_not_found");
-  // 管理員判斷與點數池都跟 D1 查詢並行；catch 要立刻接上，否則失敗會在 batch 期間變成未處理的 rejection。communityAdmin 本身不會 reject。
+  // 管理員判斷與點數池都跟 D1 查詢並行；catch 要立刻接上，否則失敗會在 batch 期間變成未處理的 rejection。communityAdmin 問不到時回 false，不會 reject。
   const pool = (s.agent ? Promise.resolve(false) : communityAdmin(c))
-    .then((admin) => (admin ? upstream.fetchCampaignPool(c.env, bearerOf(c)!, providerOf(c)) : null))
+    .then((admin) => (admin ? upstream.fetchCampaignPool(c.env, bearerOf(c), providerOf(c)) : null))
     .catch(() => null);
   return c.json(await campaignStats(c.env.DB, campaign, Date.now(), pool));
 });
@@ -230,13 +230,13 @@ campaignRoutes.get("/v1/moderation/campaign/stats", async (c) => {
 // ---- 發放（只有真人應用管理員）-----------------------------------------------------
 // 請求大小受 moderationRoutes 的 16 KB 上限。令牌只交給 Provider，不落地、不進日誌。
 
-const payerOf = (c: Ctx, memberId: string): Payer => ({ env: c.env, bearer: bearerOf(c)!, provider: providerOf(c), memberId, now: Date.now });
+const payerOf = (c: Ctx, memberId: string): Payer => ({ env: c.env, bearer: bearerOf(c), provider: providerOf(c), memberId, now: Date.now });
 
 /** 發放閘門：審核人 → 不是 AI 帳號 → Provider 說是本站應用管理員。真正的授權仍由 Provider 判斷。 */
 async function payer(c: Ctx): Promise<Payer> {
   const s = await staff(c);
   humanOnly(s.agent);
-  if (!(await communityAdmin(c))) throw new HttpError(403, "community_admin_required");
+  await requireCommunityAdmin(c);
   return payerOf(c, s.member.id);
 }
 
@@ -311,6 +311,6 @@ campaignRoutes.post("/v1/moderation/campaign/payouts/:id/check", async (c) => {
 /** 點數池：Provider 的值原樣轉出，只給真人應用管理員。這家 Provider 沒有點數池時回 configured:false。 */
 campaignRoutes.get("/v1/moderation/campaign-pool", async (c) => {
   humanOnly((await staff(c)).agent);
-  if (!(await communityAdmin(c))) throw new HttpError(403, "community_admin_required");
-  return c.json((await upstream.fetchCampaignPool(c.env, bearerOf(c)!, providerOf(c))) ?? { configured: false });
+  await requireCommunityAdmin(c);
+  return c.json((await upstream.fetchCampaignPool(c.env, bearerOf(c), providerOf(c))) ?? { configured: false });
 });
