@@ -316,6 +316,47 @@ export const fetchContentDetail = (token: string, id: string) => request<Content
 export const decide = (token: string, placementId: string, body: DecisionBody) =>
   request<DecisionResult>(token, `/moderation/campaign/placements/${enc(placementId)}/decision`, "POST", body);
 
+// ---- 數據看板（審核員，含 AI 帳號）----------------------------------------------------
+// 形狀照 src/campaign-stats.ts。點數池只有真人應用管理員讀得到，其他人是 null。
+
+export type StatsBucket = Platform | "multi";
+export type EffectBucket = StatsBucket | "unreviewed";
+export interface Retention { eligible: number; retained: number }
+export interface Effect {
+  visitors: number; attributed: number; firstPlay: number; d7: Retention; d30: Retention;
+  /** 付費點數除以留下的人，沒有人留下是 null；服務端不取整。 */
+  costPerD7: number | null; costPerD30: number | null;
+}
+export interface CampaignStats {
+  funnel: {
+    submitted: number; needsInfo: number; resubmitted: number; approved: number; rejected: number; paidContents: number;
+    byTier: Record<Tier, { submitted: number; approved: number }>;
+    byPlatform: Record<Platform, { submitted: number; approved: number }>;
+  };
+  review: {
+    pending: number; firstDecisionMedianMs: number | null; firstDecisionP90Ms: number | null; byActor: { human: number; ai: number };
+    rejectReasons: { reason: string; count: number }[]; duplicateRate: number;
+  };
+  spend: {
+    paidTotal: number; byTier: Record<Tier, number>; byPlatform: Record<StatsBucket, number>; byDay: { day: string; points: number }[];
+    pool: null | { balance: number; burn7d: number; daysLeft: number | null };
+  };
+  effect: Effect & { byPlatform: Record<EffectBucket, Effect>; topContents: (Effect & { contentId: string; title: string; handle: string })[] };
+  authors: { cardId: number; cardName: string; attributed: number; firstPlays: number }[];
+  generatedAt: number;
+}
+export const fetchCampaignStats = (token: string, slug: string) => request<CampaignStats>(token, `/moderation/campaign/stats${query({ campaign: slug })}`);
+
+/**
+ * 看板預設看哪個活動：進行中的第一個，沒有就已結束的第一個，再沒有就列表第一個；沒有活動回 ""。
+ * 進行中是狀態為進行中且現在落在活動期間內（沒設的一端不限）。
+ */
+export function defaultStatsCampaign(list: Campaign[], now = Date.now()): string {
+  const open = (c: Campaign) => c.status === "active" && (c.startsAt === null || c.startsAt <= now) && (c.endsAt === null || c.endsAt > now);
+  const done = (c: Campaign) => c.status === "ended" || (c.endsAt !== null && c.endsAt <= now);
+  return (list.find(open) ?? list.find(done) ?? list[0])?.slug ?? "";
+}
+
 // ---- 發放（真人＋應用管理員）---------------------------------------------------------
 // 形狀照 src/campaign-payout.ts。
 

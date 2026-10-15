@@ -88,6 +88,8 @@ const pages: RouteRecordRaw[] = [
       { path: "settings", component: () => import("./pages/ReviewSettingsPage.vue"), meta: { managementTab: "settings" } },
       // 分享活動：佇列與內容詳情。同樣要在 :id 之前
       { path: "campaign", component: () => import("./pages/ReviewCampaignPage.vue"), meta: { managementTab: "campaign" } },
+      // 數據看板要在 :id 之前，不然 stats 會被當成內容編號
+      { path: "campaign/stats", component: () => import("./pages/ReviewCampaignStatsPage.vue"), meta: { managementTab: "campaign" } },
       { path: "campaign/:id", component: () => import("./pages/ReviewCampaignDetailPage.vue"), meta: { managementTab: "campaign" } },
       // 發放：只有應用管理員看得到分頁（canEdit），其他人直接打網址看到一句說明；服務端每次都再判
       { path: "payouts", component: () => import("./pages/ReviewPayoutsPage.vue"), meta: { managementTab: "payouts" } },
