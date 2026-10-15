@@ -491,12 +491,13 @@ const IMAGE_GRACE = 24 * 3600_000;
 const INLINE_IMAGE = /\/v1\/blog\/images\/([A-Za-z0-9-]{1,64}\.webp)/g;
 
 /**
- * 上傳一張文章圖片：轉 WebP、最長邊 1600，存 AVATARS 的 blog/<uuid>.webp。
- * 先登記 24 小時後清理（沿用頭像的清理表與排程），文章存檔引用到它時才除名；沒被用上的自然被清掉。
+ * 存一張公開點陣圖：轉 WebP、最長邊 1600，存 AVATARS 的 blog/<uuid>.webp（部落格與活動橫幅共用）。
+ * 先登記 24 小時後清理（沿用頭像的清理表與排程），被文章或活動引用時清理會跳過；沒被用上的自然被清掉。
+ * 錯誤碼是中性的 image_invalid／image_unavailable，呼叫端用 imageErrorAs 換成自己的前綴。
  */
-export async function uploadImage(env: Env, file: unknown, now: number): Promise<{ key: string; url: string }> {
-  if (!(file instanceof File) || !file.size || file.size > IMAGE_MAX_BYTES || !RASTER.has(file.type)) throw new HttpError(400, "blog_image_invalid");
-  if (!env.AVATARS || !env.IMAGES) throw new HttpError(503, "blog_image_unavailable");
+export async function storeRasterImage(env: Env, file: unknown, now: number): Promise<{ key: string; url: string }> {
+  if (!(file instanceof File) || !file.size || file.size > IMAGE_MAX_BYTES || !RASTER.has(file.type)) throw new HttpError(400, "image_invalid");
+  if (!env.AVATARS || !env.IMAGES) throw new HttpError(503, "image_unavailable");
   let output: ArrayBuffer;
   try {
     const info = await env.IMAGES.info(file.stream());
@@ -504,22 +505,33 @@ export async function uploadImage(env: Env, file: unknown, now: number): Promise
     const out = await env.IMAGES.input(file.stream()).transform({ width: 1600, height: 1600, fit: "scale-down" }).output({ format: "image/webp", quality: 82, anim: true });
     output = await out.response().arrayBuffer();
   } catch {
-    throw new HttpError(400, "blog_image_invalid");
+    throw new HttpError(400, "image_invalid");
   }
   const key = `blog/${crypto.randomUUID()}.webp`;
   await env.DB.prepare("INSERT INTO avatar_cleanup (key, delete_after) VALUES (?, ?)").bind(key, now + IMAGE_GRACE).run();
   try {
     await env.AVATARS.put(key, output, { httpMetadata: { contentType: "image/webp" } });
   } catch {
-    throw new HttpError(503, "blog_image_unavailable");
+    throw new HttpError(503, "image_unavailable");
   }
-  await bumpOp(env.DB, "blog", "image", "success");
   return { key, url: imageUrl(key)! };
 }
 
-/** 這個 key（SQL 運算式）被某篇文章引用：封面、分享封面或內文。圖片路由與清理排程共用。 */
+/** storeRasterImage 的中性錯誤碼加上功能前綴（blog_image_invalid、campaign_image_unavailable…），其他錯照原樣拋。 */
+export const imageErrorAs = (prefix: string) => (e: unknown): never => {
+  throw e instanceof HttpError && (e.message === "image_invalid" || e.message === "image_unavailable") ? new HttpError(e.status, `${prefix}_${e.message}`) : e;
+};
+
+/** 上傳一張文章圖片。 */
+export async function uploadImage(env: Env, file: unknown, now: number): Promise<{ key: string; url: string }> {
+  const stored = await storeRasterImage(env, file, now).catch(imageErrorAs("blog"));
+  await bumpOp(env.DB, "blog", "image", "success");
+  return stored;
+}
+
+/** 這個 key（SQL 運算式）被引用：某篇文章的封面、分享封面或內文，或某個活動的橫幅。圖片路由與清理排程共用。 */
 export const imageReferenced = (key: string) =>
-  `EXISTS (SELECT 1 FROM blog_posts WHERE cover_key = ${key} OR share_cover_key = ${key} OR instr(body_md, '/v1/blog/images/' || substr(${key}, 6)) > 0)`;
+  `(EXISTS (SELECT 1 FROM blog_posts WHERE cover_key = ${key} OR share_cover_key = ${key} OR instr(body_md, '/v1/blog/images/' || substr(${key}, 6)) > 0) OR EXISTS (SELECT 1 FROM campaigns WHERE banner_key = ${key}))`;
 
 /** 圖片可以對外：被某篇文章引用，或上傳不到 24 小時。 */
 export async function imageServable(db: D1Database, key: string, now: number): Promise<boolean> {
