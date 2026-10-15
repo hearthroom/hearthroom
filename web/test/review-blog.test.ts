@@ -50,6 +50,8 @@ const settle = async () => { for (let i = 0; i < 6; i++) { await nextTick(); awa
 const source = () => host.querySelector<HTMLTextAreaElement>('textarea[data-source]')!;
 function type(el: HTMLTextAreaElement, value: string) { el.value = value; el.dispatchEvent(new Event('input')); }
 const confirm = () => document.querySelector<HTMLButtonElement>('[role=alertdialog] [data-confirm]')!;
+/** 只存不發：⌘S（草稿的主按鈕是「發布」） */
+const saveNow = () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', metaKey: true }));
 
 beforeEach(() => {
   i18n.global.locale.value = 'zh-Hant';
@@ -99,7 +101,7 @@ it('a save that hits a version conflict keeps my text and offers load-latest or 
   await vi.waitFor(() => expect(source()?.value).toBe('舊內容'));
   type(source(), '我的新內容'); await nextTick();
   handle = (c) => (c.method === 'PUT' ? { status: 409, body: { error: 'blog_version_conflict', version: 4 } } : undefined);
-  host.querySelector<HTMLButtonElement>('[data-action="save"]')!.click();
+  saveNow();
   await vi.waitFor(() => expect(host.querySelector('[data-conflict]')).not.toBeNull());
   const put = calls.find((c) => c.method === 'PUT')!;
   expect(put.body).toMatchObject({ expectedVersion: 3, bodyMd: '我的新內容' });
@@ -119,7 +121,7 @@ it('a save that hits a version conflict keeps my text and offers load-latest or 
   expect(host.querySelector('[data-conflict]')).toBeNull();
   handle = (c) => (c.method === 'PUT' ? ok(post({ bodyMd: c.body.bodyMd, version: 5 })) : undefined);
   type(source(), '再改一次'); await nextTick();
-  host.querySelector<HTMLButtonElement>('[data-action="save"]')!.click();
+  saveNow();
   await vi.waitFor(() => expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(2));
   expect(calls.filter((c) => c.method === 'PUT')[1]!.body.expectedVersion).toBe(4);
 });
@@ -162,7 +164,7 @@ it('pasting an image uploads it and inserts Markdown at the cursor, with a place
   el.dispatchEvent(paste);
   expect(paste.defaultPrevented).toBe(true);
   await vi.waitFor(() => expect(source().value).toContain(t('blog.admin.uploading')));
-  expect(host.querySelector<HTMLButtonElement>('[data-action="save"]')!.disabled).toBe(true);
+  expect(host.querySelector<HTMLButtonElement>('[data-action="primary"]')!.disabled).toBe(true);
   const upload = calls.find((c) => c.path === '/v1/blog/admin/images')!;
   expect(upload.method).toBe('POST');
   expect((upload.body as FormData).get('file')).toBeInstanceOf(File);
@@ -182,7 +184,7 @@ it('when one of several pasted images fails, its placeholder goes with its line 
   source().dispatchEvent(paste);
   await vi.waitFor(() => expect(host.textContent).toContain(t('blog.admin.uploadFailed')));
   await vi.waitFor(() => expect(source().value).toBe('舊![](/v1/blog/images/a.webp)內容'));
-  expect(host.querySelector<HTMLButtonElement>('[data-action="save"]')!.disabled).toBe(false);
+  expect(host.querySelector<HTMLButtonElement>('[data-action="primary"]')!.disabled).toBe(false);
 });
 
 it('a failed image upload removes the placeholder and says so', async () => {
@@ -201,7 +203,7 @@ it('a publish retry after a failure reuses the same operation id, and takes the 
   await vi.waitFor(() => expect(source()?.value).toBe('舊內容'));
   let attempts = 0;
   handle = (c) => (c.path === '/v1/blog/admin/posts/p1/state' ? (++attempts === 1 ? { status: 503, body: { error: 'busy' } } : ok(post({ status: 'published', publishAt: 10, version: 4 }))) : undefined);
-  const publish = () => host.querySelector<HTMLButtonElement>('[data-action="publish"]')!;
+  const publish = () => host.querySelector<HTMLButtonElement>('[data-action="primary"]')!;
   publish().click();
   await vi.waitFor(() => expect(confirm()).not.toBeNull());
   confirm().click();
@@ -214,11 +216,11 @@ it('a publish retry after a failure reuses the same operation id, and takes the 
   const [first, second] = calls.filter((c) => c.path === '/v1/blog/admin/posts/p1/state');
   expect(first!.body).toEqual({ change: { status: 'published' }, operationId: expect.stringMatching(/^[0-9a-f-]{36}$/) });
   expect(second!.body.operationId).toBe(first!.body.operationId);
-  await vi.waitFor(() => expect(host.querySelector('[data-action="unpublish"]')).not.toBeNull());
+  await vi.waitFor(() => expect(host.querySelector('[data-action="primary"]')!.textContent?.trim()).toBe(t('blog.admin.update')));
 
   handle = (c) => (c.method === 'PUT' ? ok(post({ status: 'published', bodyMd: c.body.bodyMd, version: 5 })) : undefined);
   type(source(), '發布後再改'); await nextTick();
-  host.querySelector<HTMLButtonElement>('[data-action="save"]')!.click();
+  saveNow();
   await vi.waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
   expect(calls.find((c) => c.method === 'PUT')!.body.expectedVersion).toBe(4);
 });
@@ -237,7 +239,7 @@ it('a state change that comes back with someone else\'s save does not become my 
   await vi.waitFor(() => expect(host.querySelector('[data-conflict]')).not.toBeNull());
   expect(host.querySelector('[data-action="pin"]')!.textContent).toContain(t('blog.admin.unpin'));
   expect(source().value).toBe('A 的修改');
-  host.querySelector<HTMLButtonElement>('[data-action="save"]')!.click();
+  saveNow();
   await settle();
   expect(calls.filter((c) => c.method === 'PUT').every((c) => c.body.expectedVersion !== 5)).toBe(true);
   expect(host.querySelector('[data-conflict]')).not.toBeNull();
@@ -253,10 +255,10 @@ it('a replayed save that comes back with someone else\'s newer version does not 
     if (c.body.expectedVersion === 3) { type(source(), 'A 的第一版，又打了字'); return ok(post({ bodyMd: 'B 的內容', version: 5 })); }
     return c.body.expectedVersion === 5 ? ok(post({ bodyMd: c.body.bodyMd, version: 6 })) : { status: 409, body: { error: 'blog_version_conflict', version: 5 } };
   };
-  host.querySelector<HTMLButtonElement>('[data-action="save"]')!.click();
+  saveNow();
   await vi.waitFor(() => expect(host.querySelector('[data-conflict]')).not.toBeNull());
   expect(source().value).toBe('A 的第一版，又打了字');
-  host.querySelector<HTMLButtonElement>('[data-action="save"]')!.click();
+  saveNow();
   await settle();
   expect(calls.filter((c) => c.method === 'PUT').every((c) => c.body.expectedVersion !== 5)).toBe(true);
   expect(host.querySelector('[data-conflict]')).not.toBeNull();
@@ -265,12 +267,12 @@ it('a replayed save that comes back with someone else\'s newer version does not 
 it('after the first save of a new post, leaving with new edits still asks', async () => {
   handle = (c) => c.method === 'POST' && c.path === '/v1/blog/admin/posts' ? ok(post({ id: 'p9', title: c.body.title, slug: c.body.slug, bodyMd: c.body.bodyMd, version: 1 }))
     : c.path === '/v1/blog/admin/posts/p9/revisions' ? ok({ items: [] }) : undefined;
-  await mount('/review/blog/new');
+  await mount('/review/blog/new?column=c1');
   await vi.waitFor(() => expect(source()).not.toBeNull());
   const title = host.querySelector<HTMLInputElement>('.bed-title')!;
   title.value = 'Hello'; title.dispatchEvent(new Event('input'));
   type(source(), '第一版'); await nextTick();
-  host.querySelector<HTMLButtonElement>('[data-action="save"]')!.click();
+  saveNow();
   await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/review/blog/p9'));
   expect(calls.find((c) => c.method === 'POST')!.body).toMatchObject({ title: 'Hello', slug: 'hello', bodyMd: '第一版' });
   type(source(), '第二版還沒存'); await nextTick();
@@ -302,10 +304,12 @@ it('restoring a revision says readers see it at once when the post is live, and 
       : c.path === '/v1/blog/admin/posts/p1/revisions' ? ok({ items: [revision] })
         : c.path === '/v1/blog/admin/posts/p1/revisions/r1' ? ok(revision) : undefined;
     await mount('/review/blog/p1');
-    await vi.waitFor(() => expect(host.querySelector('.bed-rev')).not.toBeNull());
-    host.querySelector<HTMLButtonElement>('.bed-rev')!.click();
-    await vi.waitFor(() => expect(host.querySelector('[data-action="restore"]')).not.toBeNull());
-    host.querySelector<HTMLButtonElement>('[data-action="restore"]')!.click();
+    await vi.waitFor(() => expect(host.querySelector('[data-action="open-revisions"]')).not.toBeNull());
+    host.querySelector<HTMLButtonElement>('[data-action="open-revisions"]')!.click();
+    await vi.waitFor(() => expect(document.querySelector('.bed-rev')).not.toBeNull());
+    document.querySelector<HTMLButtonElement>('.bed-rev')!.click();
+    await vi.waitFor(() => expect(document.querySelector('[data-action="restore"]')).not.toBeNull());
+    document.querySelector<HTMLButtonElement>('[data-action="restore"]')!.click();
     await vi.waitFor(() => expect(confirm()).not.toBeNull());
     const text = document.querySelector('[role=alertdialog]')!.textContent;
     app.unmount(); document.body.innerHTML = '';
@@ -372,4 +376,62 @@ it('deleting a column that still has posts says why it cannot be deleted', async
   await vi.waitFor(() => expect(confirm()).not.toBeNull());
   confirm().click();
   await vi.waitFor(() => expect(host.textContent).toContain(t('blog.admin.columnNotEmpty')));
+});
+
+it('shows the primary action that fits the post: publish for a draft, update once it is live', async () => {
+  await mount('/review/blog/p1');
+  await vi.waitFor(() => expect(host.querySelector('[data-action="primary"]')?.textContent?.trim()).toBe(t('blog.admin.publish')));
+  app.unmount(); document.body.innerHTML = '';
+  handle = (c) => (c.path === '/v1/blog/admin/posts/p1' && c.method === 'GET' ? ok(post({ status: 'published', publishAt: 1, firstPublishedAt: 1 })) : undefined);
+  await mount('/review/blog/p1');
+  await vi.waitFor(() => expect(host.querySelector('[data-action="primary"]')?.textContent?.trim()).toBe(t('blog.admin.update')));
+  host.querySelector<HTMLElement>('[data-action="publish-menu"]')!.click();
+  expect(host.querySelector('[data-action="unpublish"]')).not.toBeNull();
+});
+
+it('a new post preselects the column from the link only when it is a real column', async () => {
+  await mount('/review/blog/new?column=c1');
+  await vi.waitFor(() => expect(host.querySelector<HTMLSelectElement>('#bed-f-columnId')?.value).toBe('c1'));
+  app.unmount(); document.body.innerHTML = '';
+  await mount('/review/blog/new?column=g1');
+  await vi.waitFor(() => expect(host.querySelector('#bed-f-columnId')).not.toBeNull());
+  expect(host.querySelector<HTMLSelectElement>('#bed-f-columnId')!.value).toBe('');
+});
+
+it('the column picker only offers columns, grouped under their group', async () => {
+  await mount('/review/blog/p1');
+  await vi.waitFor(() => expect(host.querySelector('#bed-f-columnId optgroup')).not.toBeNull());
+  const group = host.querySelector('#bed-f-columnId optgroup')!;
+  expect(group.getAttribute('label')).toBe('官方消息');
+  expect([...group.querySelectorAll('option')].map((o) => o.value)).toEqual(['c1']);
+});
+
+it('publishing with a missing field sends nothing and marks the field', async () => {
+  handle = (c) => (c.path === '/v1/blog/admin/posts/p1' && c.method === 'GET' ? ok(post({ slug: '' })) : undefined);
+  await mount('/review/blog/p1');
+  await vi.waitFor(() => expect(host.querySelector('[data-action="primary"]')).not.toBeNull());
+  await settle();
+  host.querySelector<HTMLButtonElement>('[data-action="primary"]')!.click();
+  await settle();
+  expect(calls.some((c) => c.method !== 'GET')).toBe(false);
+  expect(host.querySelector('#bed-f-slug')!.getAttribute('aria-invalid')).toBe('true');
+});
+
+it('saving into a column someone just deleted says to check the column', async () => {
+  await mount('/review/blog/p1');
+  await vi.waitFor(() => expect(source()?.value).toBe('舊內容'));
+  handle = (c) => (c.method === 'PUT' ? { status: 400, body: { error: 'blog_invalid', field: 'columnId' } } : undefined);
+  type(source(), '改一下'); await nextTick();
+  saveNow();
+  await vi.waitFor(() => expect(host.textContent).toContain(t('blog.admin.invalid', { field: t('blog.admin.columns') })));
+});
+
+it('revisions open in a drawer from the settings column', async () => {
+  handle = (c) => (c.path === '/v1/blog/admin/posts/p1/revisions' ? ok({ items: [{ id: 'r1', editorHandle: 'ed', title: '開站了', createdAt: 1 }] }) : undefined);
+  await mount('/review/blog/p1');
+  await vi.waitFor(() => expect(host.querySelector('[data-action="open-revisions"]')).not.toBeNull());
+  expect(document.querySelector('.bed-rev')).toBeNull();
+  host.querySelector<HTMLButtonElement>('[data-action="open-revisions"]')!.click();
+  await settle();
+  expect(document.querySelector('[role=dialog] .bed-rev')).not.toBeNull();
 });
