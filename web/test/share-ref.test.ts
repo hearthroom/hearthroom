@@ -14,7 +14,7 @@ import { nextTick } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import { useSession } from "../src/lib/session";
 import { setProvider } from "../src/lib/provider";
-import { SHARE_REF_TTL, bindShareRef, ownReferralCode, pendingShareRef, refFromQuery, rememberShareRef, watchShareRefBinding, withShareRef } from "../src/lib/share-ref";
+import { SHARE_REF_TTL, bindShareRef, ownReferralCode, pendingShareRef, refFromQuery, rememberShareRef, watchShareRefBinding, withCampaignShare, withShareRef } from "../src/lib/share-ref";
 
 const HOUR = 60 * 60 * 1000;
 const clicked = Date.parse("2026-10-13T08:00:00Z");
@@ -118,6 +118,12 @@ describe("分享網址帶自己的碼", () => {
   it("有碼才帶，保留原本的網址", () => {
     expect(withShareRef("https://sukisuki.ai/en/cards/12", "MINE2345")).toBe("https://sukisuki.ai/en/cards/12?ref=MINE2345");
     expect(withShareRef("https://sukisuki.ai/cards/12", null)).toBe("https://sukisuki.ai/cards/12");
+  });
+
+  it("活動分享連結：有推薦碼先帶 ref 再帶 s；沒有推薦碼只帶 s；原本的參數留著", () => {
+    expect(withCampaignShare("https://sukisuki.ai/cards/12", "MINE2345", "AB12CD34")).toBe("https://sukisuki.ai/cards/12?ref=MINE2345&s=AB12CD34");
+    expect(withCampaignShare("https://sukisuki.ai/cards/12", null, "AB12CD34")).toBe("https://sukisuki.ai/cards/12?s=AB12CD34");
+    expect(withCampaignShare("https://sukisuki.ai/en/cards/12?tab=intro#top", "MINE2345", "AB12CD34")).toBe("https://sukisuki.ai/en/cards/12?tab=intro&ref=MINE2345&s=AB12CD34#top");
   });
 
   it("暫時讀不到下次再問；讀到了就不再問", async () => {

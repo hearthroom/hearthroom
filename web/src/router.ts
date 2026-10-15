@@ -224,14 +224,15 @@ router.beforeEach(async (to) => {
  * 已經不存在的按鈕上；main 有 tabindex=-1，能接焦點但不進 Tab 順序。
  */
 /** 路由 → 來源標記。API 請求帶著它，服務端才知道這次瀏覽是從哪一頁走過來的。 */
-function surfaceOf(path: string): string {
+export function surfaceOf(path: string): string {
   if (isPlayHost()) return path.startsWith("/login") || path.startsWith("/auth") ? "login" : "play";
   const bare = "/" + path.replace(/^\/(zh-Hans|en|ja|ko)(?=\/|$)/, "").replace(/^\//, "");
   if (bare === "/") return "board";
   if (bare.startsWith("/search")) return "search";
   if (bare.startsWith("/cards")) return "card";
   if (bare.startsWith("/authors")) return "author";
-  if (bare.startsWith("/mine")) return "mine";
+  if (bare.startsWith("/mine") || bare.startsWith("/me/campaign")) return "mine";
+  if (bare.startsWith("/campaign")) return "campaign";
   if (bare.startsWith("/create")) return "create";
   if (bare.startsWith("/wallet")) return "wallet";
   if (bare.startsWith("/play")) return "play";
