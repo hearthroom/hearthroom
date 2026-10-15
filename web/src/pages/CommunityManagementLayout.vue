@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import { RouterLink, RouterView, useRoute } from 'vue-router';
 import { useReviewer } from '@/lib/review';
 import { useLocalePath } from '@/lib/use-locale';
@@ -9,6 +10,7 @@ const { lp } = useLocalePath();
 /**
  * 前三個分頁對「作品」，「留言」對卡片底下的留言；「成員」對「人」（補充包、活動徽章）。發補充包跟審卡同一個權限等級，所以每個審核人都看得到。
  * 「運營設定」每個審核人都看得到，只有應用管理員能改（服務端判）。
+ * 「部落格」只給 manager／owner（寫文章的權限，服務端同樣再判一次）。
  */
 const sections = [
   { key: 'reviews', path: '/review' },
@@ -19,6 +21,7 @@ const sections = [
   { key: 'history', path: '/review/history' },
   { key: 'settings', path: '/review/settings' },
 ] as const;
+const visible = computed(() => (reviewer.role === 'manager' || reviewer.role === 'owner' ? [...sections, { key: 'blog', path: '/review/blog' } as const] : sections));
 </script>
 <template>
   <div class="page community-management">
@@ -28,7 +31,7 @@ const sections = [
       <p class="subtle">{{ $t('moderation.intro') }}</p>
     </header>
     <nav class="management-nav" :aria-label="$t('moderation.title')">
-      <RouterLink v-for="section in sections" :key="section.key" :to="lp(section.path)" custom v-slot="{ href, navigate }">
+      <RouterLink v-for="section in visible" :key="section.key" :to="lp(section.path)" custom v-slot="{ href, navigate }">
         <a :href="href" class="management-nav__item" :class="{ 'management-nav__item--active': route.meta.managementTab === section.key }" :aria-current="route.meta.managementTab === section.key ? 'page' : undefined" @click="navigate">
           {{ $t(`moderation.tab.${section.key}`) }}
           <ReviewBadge v-if="section.key === 'reviews'" :count="reviewer.pendingReviews" />

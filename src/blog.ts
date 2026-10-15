@@ -309,12 +309,23 @@ export async function listRevisions(db: D1Database, postId: string): Promise<{ i
   return rows.results.map((r) => ({ id: r.id, editorHandle: r.editor_handle, title: r.title, createdAt: r.created_at }));
 }
 
+/** 一個修訂當時的標題與內文（編輯器的修訂側欄點開看）。 */
+export async function getRevision(db: D1Database, postId: string, revisionId: string): Promise<{ id: string; editorHandle: string; title: string; bodyMd: string; createdAt: number }> {
+  const r = await db
+    .prepare("SELECT r.id, COALESCE(m.handle, '') AS editor_handle, r.title, r.body_md, r.created_at FROM blog_post_revisions r LEFT JOIN members m ON m.id = r.editor_member_id WHERE r.id = ? AND r.post_id = ?")
+    .bind(revisionId, postId)
+    .first<{ id: string; editor_handle: string; title: string; body_md: string; created_at: number }>();
+  if (!r) throw new HttpError(404, "blog_revision_not_found");
+  return { id: r.id, editorHandle: r.editor_handle, title: r.title, bodyMd: r.body_md, createdAt: r.created_at };
+}
+
 // ---- 欄目 ---------------------------------------------------------------------
 
 export async function saveColumn(db: D1Database, input: ColumnInput, actor: Actor, operationId: string, now: number): Promise<Column> {
   const prior = await priorSubject(db, actor, operationId, "blog_column");
   if (prior) return mustColumn(db, prior);
-  if (!isStr(input.slug, 40, 1) || !SLUG.test(input.slug)) invalid("slug");
+  // p 留給文章短網址 /blog/p/<id>：同名欄目會被那條路由蓋掉
+  if (!isStr(input.slug, 40, 1) || !SLUG.test(input.slug) || input.slug === "p") invalid("slug");
   const name = cleanLocalized(input.name, "name", 40, true);
   const description = cleanLocalized(input.description, "description", 300, false);
   if (!Number.isSafeInteger(input.sort)) invalid("sort");
@@ -439,9 +450,9 @@ export async function adminPost(db: D1Database, id: string) {
 }
 
 const STATUSES: readonly string[] = ["draft", "pending_review", "published", "unpublished"];
-type AdminRow = Pick<PostRow, "id" | "column_id" | "column_slug" | "slug" | "locale" | "title" | "status" | "publish_at" | "first_published_at" | "pinned" | "comments_closed" | "version" | "updated_at"> & { author_handle: string };
+type AdminRow = Pick<PostRow, "id" | "column_id" | "column_slug" | "slug" | "locale" | "title" | "status" | "publish_at" | "first_published_at" | "pinned" | "comments_closed" | "version" | "updated_at"> & { author_handle: string; editor_handle: string };
 
-/** 管理列表：所有狀態，最近改過的在前。column 可以是欄目 id 或 slug。 */
+/** 管理列表：所有狀態，最近改過的在前。column 可以是欄目 id 或 slug。editorHandle 是最後一次存內容的人。 */
 export async function adminPosts(db: D1Database, opts: { status?: string; column?: string; page: number }) {
   const status = opts.status || null;
   if (status !== null && !STATUSES.includes(status)) invalid("status");
@@ -452,13 +463,14 @@ export async function adminPosts(db: D1Database, opts: { status?: string; column
   const [count, rows] = await db.batch<AdminRow & { n: number }>([
     db.prepare(`SELECT COUNT(*) AS n ${from} WHERE ${where}`).bind(...binds),
     db.prepare(`SELECT p.id, p.column_id, col.slug AS column_slug, p.slug, p.locale, p.title, p.status, p.publish_at, p.first_published_at, p.pinned, p.comments_closed, p.version, p.updated_at,
-      COALESCE((SELECT handle FROM members WHERE id = p.author_member_id), '') AS author_handle ${from} WHERE ${where} ORDER BY p.updated_at DESC, p.id DESC LIMIT ?3 OFFSET ?4`).bind(...binds, PAGE_SIZE, (page - 1) * PAGE_SIZE),
+      COALESCE((SELECT handle FROM members WHERE id = p.author_member_id), '') AS author_handle,
+      COALESCE((SELECT m.handle FROM blog_post_revisions r JOIN members m ON m.id = r.editor_member_id WHERE r.post_id = p.id ORDER BY r.version DESC LIMIT 1), '') AS editor_handle ${from} WHERE ${where} ORDER BY p.updated_at DESC, p.id DESC LIMIT ?3 OFFSET ?4`).bind(...binds, PAGE_SIZE, (page - 1) * PAGE_SIZE),
   ]);
   return {
     total: (count!.results[0] as { n: number }).n,
     items: (rows!.results as AdminRow[]).map((r) => ({
       id: r.id, columnId: r.column_id, columnSlug: r.column_slug, slug: r.slug, locale: r.locale, title: r.title, status: r.status, publishAt: r.publish_at,
-      firstPublishedAt: r.first_published_at, pinned: !!r.pinned, commentsClosed: !!r.comments_closed, version: r.version, updatedAt: r.updated_at, authorHandle: r.author_handle,
+      firstPublishedAt: r.first_published_at, pinned: !!r.pinned, commentsClosed: !!r.comments_closed, version: r.version, updatedAt: r.updated_at, authorHandle: r.author_handle, editorHandle: r.editor_handle,
     })),
   };
 }
