@@ -216,8 +216,10 @@ campaignRoutes.get("/v1/moderation/campaign/stats", async (c) => {
   const slug = c.req.query("campaign");
   const campaign = slug ? await getCampaign(c.env.DB, slug) : null;
   if (!campaign || campaign.slug !== slug) throw new HttpError(404, "campaign_not_found");
-  const pool = !s.agent && (await communityAdmin(c)) ? upstream.fetchCampaignPool(c.env, bearerOf(c)!, providerOf(c)).catch(() => null) : Promise.resolve(null);
-  // 先發出去、跟 D1 查詢並行；catch 要立刻接上，否則失敗會在 batch 期間變成未處理的 rejection。
+  // 管理員判斷與點數池都跟 D1 查詢並行；catch 要立刻接上，否則失敗會在 batch 期間變成未處理的 rejection。communityAdmin 本身不會 reject。
+  const pool = (s.agent ? Promise.resolve(false) : communityAdmin(c))
+    .then((admin) => (admin ? upstream.fetchCampaignPool(c.env, bearerOf(c)!, providerOf(c)) : null))
+    .catch(() => null);
   return c.json(await campaignStats(c.env.DB, campaign, Date.now(), pool));
 });
 

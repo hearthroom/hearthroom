@@ -48,10 +48,12 @@ async function placement(contentId: string, o: { platform: string; requested: st
   );
   return id;
 }
-const decide = (placementId: string, at: number, kind: "human" | "ai", status: string, reason = "") =>
+const audit = (action: string, placementId: string, at: number, kind: "human" | "ai", status: string, reason = "") =>
   run(`INSERT INTO audit_log (id, subject_kind, subject_id, actor_member_id, actor_kind, action, reason, after_json, operation_id, created_at)
-       VALUES (?, 'share_placement', ?, 'reviewer', ?, 'decide', ?, ?, ?, ?)`,
-    crypto.randomUUID(), placementId, kind, reason, JSON.stringify({ reviewStatus: status }), crypto.randomUUID(), at);
+       VALUES (?, 'share_placement', ?, 'reviewer', ?, ?, ?, ?, ?, ?)`,
+    crypto.randomUUID(), placementId, kind, action, reason, JSON.stringify({ reviewStatus: status }), crypto.randomUUID(), at);
+const decide = (placementId: string, at: number, kind: "human" | "ai", status: string, reason = "") => audit("decide", placementId, at, kind, status, reason);
+const resubmit = (placementId: string, at: number) => audit("resubmit", placementId, at, "human", "resubmitted");
 const payout = (contentId: string, amount: number, status: string, settledAt: number | null) =>
   run("INSERT INTO share_payouts (id, content_id, amount, target_total, status, requested_by, created_at, updated_at, settled_at) VALUES (?, ?, ?, ?, ?, 'x', ?, ?, ?)",
     crypto.randomUUID(), contentId, amount, amount, status, NOW - 20 * DAY, NOW - 20 * DAY, settledAt);
@@ -94,6 +96,7 @@ beforeEach(async () => {
   // B：只有一個核准位置（bahamut 輕量）→ 檔位 light、平台 bahamut。pB1 與 pB2 位置相同（重複標示）。
   const pB1 = await placement(B, { platform: "bahamut", requested: "light", status: "approved", approved: "light", key: "bahamut:同一處", createdAt: T0 });
   await decide(pB1, T0 + 10 * HOUR, "human", "approved");
+  await resubmit(pB1, T0 + 5 * HOUR); // 補件 → 重送 → 核准
   await decide(pB1, T0 + 2 * HOUR, "human", "needs_info", "請補截圖"); // 第一次決定是較早的這筆
   const pB2 = await placement(B, { platform: "bahamut", requested: "light", status: "rejected", key: "bahamut:同一處", createdAt: T0 });
   await decide(pB2, T0 + 4 * HOUR, "human", "rejected", "重複投稿");
@@ -105,6 +108,7 @@ beforeEach(async () => {
   await decide(pB5, T0 + 7 * HOUR, "ai", "needs_info", "請補截圖");
   const pB6 = await placement(B, { platform: "other", requested: "light", status: "resubmitted", createdAt: T0 });
   await decide(pB6, T0 + 8 * HOUR, "human", "needs_info", "請補截圖");
+  await resubmit(pB6, T0 + 12 * HOUR);
   await placement(B, { platform: "other", requested: "light", status: "submitted", createdAt: T0 });
   const pB8 = await placement(B, { platform: "forum", requested: "light", status: "rejected", createdAt: T0 });
   await decide(pB8, T0 + 9 * HOUR, "ai", "rejected", "Another reason");
@@ -153,7 +157,8 @@ describe("活動統計", () => {
     expect(r.status).toBe(200);
     expect(r.headers.get("Cache-Control")).toBe("private, no-store");
     const { funnel } = await json(r);
-    expect(funnel).toMatchObject({ submitted: 10, needsInfo: 1, resubmitted: 1, approved: 3, rejected: 4, paidContents: 2 });
+    // needsInfo／resubmitted 是「曾經到過」：pB1、pB5、pB6 被要求補件過，pB1、pB6 重送過；approved／rejected 是現在的狀態。
+    expect(funnel).toMatchObject({ submitted: 10, needsInfo: 3, resubmitted: 2, approved: 3, rejected: 4, paidContents: 2 });
     expect(funnel.byTier).toEqual({ light: { submitted: 8, approved: 1 }, original: { submitted: 1, approved: 1 }, guide: { submitted: 1, approved: 1 }, video: { submitted: 0, approved: 0 } });
     expect(funnel.byPlatform).toEqual({
       ...zeros(PLATFORMS, { submitted: 0, approved: 0 }),
@@ -166,7 +171,8 @@ describe("活動統計", () => {
     // 九個第一次決定：1..9 小時。中位數＝第 ceil(4.5)=5 名，P90＝第 ceil(8.1)=9 名。
     expect(review.firstDecisionMedianMs).toBe(5 * HOUR);
     expect(review.firstDecisionP90Ms).toBe(9 * HOUR);
-    expect(review.byActor).toEqual({ human: 6, ai: 4 });
+    expect(review.byActor).toEqual({ human: 6, ai: 4 }); // 重送的稽核不算決定
+    expect(review.pending).toBe(2); // pB6 重送中、pB7 待審
     // 原文去頭尾空白後比對；同次數依字母排。補件理由不算。
     expect(review.rejectReasons).toEqual([{ reason: "重複投稿", count: 2 }, { reason: "Another reason", count: 1 }, { reason: "Bad link", count: 1 }]);
     expect(review.duplicateRate).toBe(0.2);
@@ -209,7 +215,7 @@ describe("活動統計", () => {
     const empty = { visitors: 0, attributed: 0, firstPlay: 0, d7: { eligible: 0, retained: 0 }, d30: { eligible: 0, retained: 0 }, costPerD7: null, costPerD30: null };
     const a = { visitors: 8, attributed: 2, firstPlay: 2, d7: { eligible: 2, retained: 1 }, d30: { eligible: 2, retained: 1 }, costPerD7: 5500, costPerD30: 5500 };
     const b = { visitors: 2, attributed: 2, firstPlay: 1, d7: { eligible: 1, retained: 1 }, d30: { eligible: 0, retained: 0 }, costPerD7: 500, costPerD30: null };
-    expect(effect.byPlatform).toEqual({ ...zeros(PLATFORMS, empty), multi: a, bahamut: b });
+    expect(effect.byPlatform).toEqual({ ...zeros(PLATFORMS, empty), multi: a, bahamut: b, unreviewed: empty });
     expect(effect.topContents).toEqual([
       { ...a, contentId: A, title: "攻略A", handle: expect.any(String) },
       { ...b, contentId: B, title: "影片B", handle: expect.any(String) },
@@ -221,10 +227,43 @@ describe("活動統計", () => {
     expect(authors).toEqual([{ cardId: 300001, cardName: "阿卡", attributed: 2, firstPlays: 1 }]);
   });
 
+  it("漏斗是到過的階段：待審 → 補件 → 重送 → 核准，每一階各算 1", async () => {
+    const cId = await campaign("walk");
+    const x = await content(cId, "走一遍", "WALK0001");
+    const p = await placement(x, { platform: "tieba", requested: "light", status: "approved", approved: "light", createdAt: NOW - 5 * DAY });
+    await decide(p, NOW - 5 * DAY + HOUR, "human", "needs_info", "請補截圖");
+    await resubmit(p, NOW - 5 * DAY + 2 * HOUR);
+    await decide(p, NOW - 5 * DAY + 3 * HOUR, "human", "approved");
+    const { funnel, review } = await json(await stats("mod", "walk"));
+    expect(funnel).toMatchObject({ submitted: 1, needsInfo: 1, resubmitted: 1, approved: 1, rejected: 0 });
+    expect(review).toMatchObject({ pending: 0, firstDecisionMedianMs: HOUR, byActor: { human: 2, ai: 0 } });
+  });
+
+  it("成效依平台：沒有核准位置的內容歸「未核准」，各桶加起來等於總數", async () => {
+    const cId = (await env.DB.prepare("SELECT id FROM campaigns WHERE slug = 'launch'").first<string>("id"))!;
+    const C = await content(cId, "還沒審", "CCCC3333");
+    await placement(C, { platform: "tieba", requested: "light", status: "submitted", createdAt: NOW - 20 * DAY });
+    const m5 = await makeMember(66015);
+    await attribute(m5, C, "CCCC3333", cId, NOW - 20 * DAY, null);
+    await visits("CCCC3333", day(NOW) - 3, 1);
+    const { effect } = await json(await stats());
+    expect(effect.byPlatform.unreviewed).toEqual({ visitors: 1, attributed: 1, firstPlay: 0, d7: { eligible: 1, retained: 0 }, d30: { eligible: 0, retained: 0 }, costPerD7: null, costPerD30: null });
+    const buckets = Object.values(effect.byPlatform) as any[];
+    expect(buckets.reduce((a, e) => a + e.attributed, 0)).toBe(effect.attributed);
+    expect(buckets.reduce((a, e) => a + e.visitors, 0)).toBe(effect.visitors);
+    expect(buckets.reduce((a, e) => a + e.d7.eligible, 0)).toBe(effect.d7.eligible);
+  });
+
+  it("作者：卡片沒有中文名時名字是空字串，不會缺欄位", async () => {
+    await run("UPDATE cards SET names = '{}' WHERE id = 300001");
+    const { authors } = await json(await stats());
+    expect(authors[0].cardName).toBe("");
+  });
+
   it("沒有任何資料的活動：中位數與成本是 null，比率是 0", async () => {
     await campaign("empty");
     const b = await json(await stats("mod", "empty"));
-    expect(b.review).toEqual({ firstDecisionMedianMs: null, firstDecisionP90Ms: null, byActor: { human: 0, ai: 0 }, rejectReasons: [], duplicateRate: 0 });
+    expect(b.review).toEqual({ pending: 0, firstDecisionMedianMs: null, firstDecisionP90Ms: null, byActor: { human: 0, ai: 0 }, rejectReasons: [], duplicateRate: 0 });
     expect(b.effect).toMatchObject({ visitors: 0, attributed: 0, costPerD7: null, costPerD30: null, topContents: [] });
     expect(b.spend).toMatchObject({ paidTotal: 0, byDay: [] });
     expect(b.authors).toEqual([]);
