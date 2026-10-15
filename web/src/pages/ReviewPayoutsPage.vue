@@ -14,7 +14,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import {
-  DEFAULT_TIMEZONE, batchPayout, campaignErrorText, cancelPayout, checkPayout, fetchCampaignPool, fetchCampaigns, fetchPayable, fetchPayouts,
+  DEFAULT_TIMEZONE, batchPayout, campaignErrorText, cancelPayout, checkPayout, campaignsCached, fetchCampaignPool, fetchPayable, fetchPayouts,
   localized, reconcilePayouts, requestPayout, retryPayout,
   type Campaign, type CampaignPool, type PayableItem, type PayoutListItem, type PayoutStatus, type PayoutView,
 } from '@/lib/campaign';
@@ -116,10 +116,10 @@ async function loadPool() {
 /** 發放、重試、取消、查詢之後：兩個列表與額度一起更新 */
 const refresh = () => Promise.all([loadPayable(true), loadHistory(), loadPool()]);
 
-async function init() {
+async function init(fresh = false) {
   access.value = 'loading';
   try {
-    const res = await fetchCampaigns(await token());
+    const res = await campaignsCached(await token(), fresh);
     if (!alive) return;
     campaigns.value = res.items;
     access.value = res.canEdit ? 'ok' : 'denied';
@@ -154,6 +154,8 @@ const failure = (e: unknown): Result => ({ tone: 'bad', text: campaignErrorText(
 /** 請求送出去之後沒拿到明確的拒絕（斷線、5xx）：錢可能已經發了 */
 const uncertain = (e: unknown) => !(e instanceof ApiError) || e.status >= 500;
 const payFailure = (e: unknown, attempted: boolean): Result => (attempted && uncertain(e) ? { tone: 'neutral', text: t('campaign.payouts.uncertain') } : failure(e));
+/** 批次裡某一筆回 internal_error：服務端可能已經發了，跟斷線一樣不當成失敗，也不邀請再發一次 */
+const unknownOutcome = (): Result => ({ tone: 'neutral', sent: true, text: t('campaign.payouts.uncertain') });
 const sent = (contentId: string) => contentResult.get(contentId)?.sent === true;
 /**
  * 能不能放進批次：已經發出去的、已經離開待發放的、單筆發放還在送或還沒了結（留著 pay:<id> 的 operationId）的都不行。
@@ -204,7 +206,7 @@ async function paySelected() {
   try {
     await act(key, async (tk) => {
       const res = await batchPayout(tk, ids, opFor(key));
-      for (const it of res.items) contentResult.set(it.contentId, 'payout' in it ? outcome(it.payout) : failure(it.error));
+      for (const it of res.items) contentResult.set(it.contentId, 'payout' in it ? outcome(it.payout) : it.error === 'internal_error' ? unknownOutcome() : failure(it.error));
       selected.value = [];
     }, (e, attempted) => { batchNote.value = attempted && uncertain(e) ? { uncertain: true, text: t('campaign.payouts.uncertain') } : { uncertain: false, text: campaignErrorText(e) }; });
   } finally { busy.delete('batch'); }
@@ -275,7 +277,7 @@ onBeforeUnmount(() => { alive = false; document.removeEventListener('keydown', o
   <section class="rpo" :aria-label="t('moderation.tab.payouts')">
     <div v-if="access === 'loading'" class="ghost rpo-ghost" />
     <p v-else-if="access === 'denied'" class="panel rpo-empty muted">{{ t('campaign.payouts.adminOnly') }}</p>
-    <p v-else-if="access === 'error'" class="notice notice--error" role="alert">{{ accessError }} <button class="btn btn--sm" @click="init">{{ t('review.refresh') }}</button></p>
+    <p v-else-if="access === 'error'" class="notice notice--error" role="alert">{{ accessError }} <button class="btn btn--sm" @click="init(true)">{{ t('review.refresh') }}</button></p>
     <template v-else>
       <section class="panel rpo-pool" data-pool aria-labelledby="rpo-pool-h">
         <h2 id="rpo-pool-h">{{ t('campaign.pool.title') }}</h2>

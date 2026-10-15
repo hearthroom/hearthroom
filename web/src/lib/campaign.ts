@@ -150,6 +150,8 @@ function messageOf(status: number, code: string, field: string): string {
 export function campaignErrorText(e: unknown): string {
   if (typeof e === "string") return messageOf(0, e, "");
   if (e instanceof ApiError) return messageOf(e.status, e.code, e instanceof CampaignError ? e.field : "");
+  // fetch 斷線丟的 TypeError 是瀏覽器的英文訊息，不給人看
+  if (e instanceof TypeError) return i18n.global.t("campaign.error.network");
   if (e instanceof Error && e.message) return e.message;
   return i18n.global.t("state.requestFailed");
 }
@@ -201,12 +203,31 @@ export async function fetchPublicCampaigns(): Promise<{ items: CampaignSummary[]
 }
 
 export const fetchCampaigns = (token: string) => request<{ items: Campaign[]; canEdit: boolean }>(token, "/moderation/campaigns");
+type CampaignList = Awaited<ReturnType<typeof fetchCampaigns>>;
+let cachedList: { token: string; promise: Promise<CampaignList> } | null = null;
+/**
+ * 管理工作台各頁共用的活動列表：同一個令牌只讀一次。讀失敗不留著；fresh 是頁面明確要求重新載入；
+ * 設定寫入（saveCampaign、setCampaignStatus）與離開工作台會作廢。
+ */
+export function campaignsCached(token: string, fresh = false): Promise<CampaignList> {
+  if (fresh || cachedList?.token !== token) {
+    const promise = fetchCampaigns(token);
+    cachedList = { token, promise };
+    promise.catch(() => { if (cachedList?.promise === promise) cachedList = null; });
+  }
+  return cachedList!.promise;
+}
+export const clearCampaignsCache = () => { cachedList = null; };
 /** 沒有 id 是新活動；有 id 要帶上次讀到的版本號，別人先存過會回 campaign_version_conflict。 */
-export const saveCampaign = (token: string, input: CampaignInput, operationId: string, id?: string, expectedVersion?: number) =>
-  id ? request<Campaign>(token, `/moderation/campaigns/${enc(id)}`, "PUT", { ...input, expectedVersion, operationId })
-    : request<Campaign>(token, "/moderation/campaigns", "POST", { ...input, operationId });
-export const setCampaignStatus = (token: string, id: string, status: "active" | "ended", operationId: string) =>
-  request<Campaign>(token, `/moderation/campaigns/${enc(id)}/status`, "POST", { status, operationId });
+export const saveCampaign = (token: string, input: CampaignInput, operationId: string, id?: string, expectedVersion?: number) => {
+  clearCampaignsCache();
+  return (id ? request<Campaign>(token, `/moderation/campaigns/${enc(id)}`, "PUT", { ...input, expectedVersion, operationId })
+    : request<Campaign>(token, "/moderation/campaigns", "POST", { ...input, operationId })).finally(clearCampaignsCache);
+};
+export const setCampaignStatus = (token: string, id: string, status: "active" | "ended", operationId: string) => {
+  clearCampaignsCache();
+  return request<Campaign>(token, `/moderation/campaigns/${enc(id)}/status`, "POST", { status, operationId }).finally(clearCampaignsCache);
+};
 export function uploadCampaignBanner(token: string, file: File) {
   const form = new FormData();
   form.append("file", file);

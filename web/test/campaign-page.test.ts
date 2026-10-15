@@ -292,3 +292,12 @@ it("clears the done notice when the next submit starts", async () => {
   expect($("[data-form-error]")).not.toBeNull();
   expect(host.textContent).not.toContain(t("campaign.apply.done"));
 });
+
+it("shows the resubmission and payout deadlines in the campaign's own time zone, labelled like the period line", async () => {
+  await mount();
+  const dd = (label: string) => [...host.querySelectorAll(".campaign__dates > div")].find((d) => d.querySelector("dt")!.textContent === t(label))!.querySelector("dd")!.textContent!;
+  const zone = new Intl.DateTimeFormat("zh-Hant", { timeZone: "Asia/Tokyo", timeZoneName: "long" }).formatToParts(0).find((p) => p.type === "timeZoneName")!.value;
+  expect(dd("campaign.page.period")).toContain(`(${zone})`);
+  expect(dd("campaign.field.submitDeadline")).toContain(`(${zone})`);
+  expect(dd("campaign.field.payoutDeadline")).toContain(`(${zone})`);
+});

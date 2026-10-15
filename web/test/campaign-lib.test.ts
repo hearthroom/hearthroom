@@ -129,6 +129,9 @@ describe('錯誤文案', () => {
     expect(campaignErrorText('share_nothing_due')).toBe(t('campaign.error.share_nothing_due'));
     expect(campaignErrorText(new Error('網路斷了'))).toBe('網路斷了');
     expect(campaignErrorText(null)).toBe(t('state.requestFailed'));
+    // 斷線：瀏覽器的英文訊息不給人看
+    expect(campaignErrorText(new TypeError('Failed to fetch'))).toBe(t('campaign.error.network'));
+    expect(t('campaign.error.network')).toBe('連線中斷，結果不確定。請稍後重新整理再確認一次。');
   });
 });
 
@@ -138,5 +141,39 @@ describe('來源標記', () => {
     expect(surfaceOf('/zh-Hans/campaign/x')).toBe('campaign');
     expect(surfaceOf('/me/campaign')).toBe('mine');
     expect(surfaceOf('/en/me/campaign')).toBe('mine');
+  });
+});
+
+describe('活動列表共用讀取', () => {
+  const listCalls = () => calls.filter((c) => c.path === '/v1/moderation/campaigns' && c.method === 'GET');
+  beforeEach(() => { campaign.clearCampaignsCache(); reply = { status: 200, body: { items: [], canEdit: true } }; });
+
+  it('兩個使用者共用同一次請求；換令牌就重新讀', async () => {
+    const [a, b] = await Promise.all([campaign.campaignsCached('tk'), campaign.campaignsCached('tk')]);
+    expect(a).toBe(b);
+    await campaign.campaignsCached('tk');
+    expect(listCalls()).toHaveLength(1);
+    await campaign.campaignsCached('tk2');
+    expect(listCalls()).toHaveLength(2);
+  });
+
+  it('讀失敗不留著：下一次重讀；明確重新載入也重讀', async () => {
+    reply = { status: 500, body: { error: 'boom' } };
+    await expect(campaign.campaignsCached('tk')).rejects.toBeInstanceOf(CampaignError);
+    reply = { status: 200, body: { items: [], canEdit: true } };
+    await expect(campaign.campaignsCached('tk')).resolves.toMatchObject({ canEdit: true });
+    expect(listCalls()).toHaveLength(2);
+    await campaign.campaignsCached('tk', true);
+    expect(listCalls()).toHaveLength(3);
+  });
+
+  it('設定寫入後作廢，下一次讀到新的', async () => {
+    await campaign.campaignsCached('tk');
+    await campaign.setCampaignStatus('tk', 'c1', 'active', 'op1');
+    await campaign.campaignsCached('tk');
+    expect(listCalls()).toHaveLength(2);
+    await campaign.saveCampaign('tk', {} as campaign.CampaignInput, 'op2');
+    await campaign.campaignsCached('tk');
+    expect(listCalls()).toHaveLength(3);
   });
 });
