@@ -3,6 +3,8 @@ import { bodyLimit } from "hono/body-limit";
 import { IMAGE_MAX_BYTES, imageErrorAs, storeRasterImage } from "./blog";
 import { myContents, resubmitPlacement, submitPlacement } from "./campaign-apply";
 import { EVIDENCE_MAX_BYTES, readEvidence, uploadEvidence } from "./campaign-evidence";
+import { contentDetail, decidePlacement, reviewQueue } from "./campaign-review";
+import { queuePush } from "./community/push";
 import { campaignPhase, getCampaign, listCampaigns, saveCampaign, setCampaignStatus, type Actor, type Campaign, type CampaignInput } from "./campaign";
 import { providerOf, requireMember } from "./members";
 import { operationOf } from "./moderation";
@@ -99,8 +101,8 @@ campaignRoutes.get("/v1/campaign/evidence/:id", async (c) => {
 const applyLimit = bodyLimit({ maxSize: 32 * 1024, onError: (c) => c.json({ error: "share_invalid", field: "body" }, 400) });
 const PRIVATE = { "Cache-Control": "private, no-store" };
 
-// 提交與重送依狀態碼記成功／被拒／出錯（重送原結果也算成功）。
-const applyMetric = (operation: "submit" | "resubmit") => async (c: Ctx, next: () => Promise<void>) => {
+// 提交、重送與審核決定依狀態碼記成功／被拒／出錯（重送原結果也算成功）。
+const applyMetric = (operation: "submit" | "resubmit" | "decide") => async (c: Ctx, next: () => Promise<void>) => {
   await next();
   c.header("Cache-Control", "private, no-store");
   const s = c.res.status;
@@ -159,6 +161,28 @@ campaignRoutes.post("/v1/moderation/campaigns/:id/status", settingsLimit, async 
   const b = await bodyOf(c);
   if (b.status !== "active" && b.status !== "ended") throw new HttpError(400, "campaign_invalid", undefined, { field: "status" });
   return c.json(await setCampaignStatus(c.env.DB, c.req.param("id"), b.status, actor, operationOf(b.operationId), Date.now()));
+});
+
+// ---- 審核（審核員與 AI 帳號）----------------------------------------------------
+// 請求大小受 moderationRoutes 的 16 KB 上限；actor_kind 一律由 staff() 推出。
+
+campaignRoutes.get("/v1/moderation/campaign/placements", async (c) => {
+  await staff(c);
+  const page = Math.max(1, Math.floor(Number(c.req.query("page")) || 1));
+  return c.json(await reviewQueue(c.env.DB, { status: c.req.query("status") || undefined, slug: c.req.query("campaign") || undefined, page }));
+});
+
+campaignRoutes.get("/v1/moderation/campaign/contents/:id", async (c) => {
+  await staff(c);
+  return c.json(await contentDetail(c.env.DB, c.req.param("id")));
+});
+
+campaignRoutes.post("/v1/moderation/campaign/placements/:id/decision", applyMetric("decide"), async (c) => {
+  const s = await staff(c);
+  const b = await bodyOf(c);
+  const result = await decidePlacement(c.env.DB, c.req.param("id")!, { memberId: s.member.id, kind: s.kind }, b, operationOf(b.operationId), Date.now());
+  queuePush(c);
+  return c.json(result);
 });
 
 /** 點數池：Provider 的值原樣轉出，只給真人應用管理員。這家 Provider 沒有點數池時回 configured:false。 */
