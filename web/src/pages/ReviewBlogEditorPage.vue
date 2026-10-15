@@ -179,8 +179,13 @@ async function save(opts: { auto?: boolean } = {}) {
     void loadRevisions();
   } catch (e) {
     if (e instanceof ApiError && e.code === 'blog_version_conflict') conflict.value = true;
-    else if (opts.auto && !(e instanceof ApiError && e.code === 'blog_invalid')) saveFailed.value = true;
-    else error.value = message(e);
+    // 自動儲存遇到暫時的問題（斷線、服務忙）：頂部改成「沒存上，再試一次」。
+    // 伺服器拒收（格式不對、網址代號撞名）重試也沒用：說原因，等內容改過再自動存
+    else if (opts.auto && !(e instanceof ApiError && e.status < 500)) saveFailed.value = true;
+    else {
+      error.value = message(e);
+      if (opts.auto) refusedDraft = sent;
+    }
   } finally { saving.value = false; }
 }
 async function loadLatest() {
@@ -374,10 +379,12 @@ function onSourceKey(e: KeyboardEvent) {
 
 const autosaves = computed(() => !post.value || post.value.status === 'draft' || post.value.status === 'unpublished');
 let autoTimer: ReturnType<typeof setTimeout> | undefined;
+/** 伺服器拒收的那一份內容：沒改過就不再自動送 */
+let refusedDraft = '';
 function scheduleAutosave() {
   clearTimeout(autoTimer);
   // 衝突中不存：交給「載入最新版本／複製我的內容」；欄目、標題、網址沒齊也不存（新文章要齊了才建得起來）
-  if (loading.value || !autosaves.value || !dirty.value || conflict.value || missing.value.length) return;
+  if (loading.value || !autosaves.value || !dirty.value || conflict.value || missing.value.length || JSON.stringify(draft) === refusedDraft) return;
   autoTimer = setTimeout(() => {
     // 手動存檔、狀態變更或圖片上傳中：晚一點再試，不搶
     if (saving.value || busy.value || uploading.value) { scheduleAutosave(); return; }
