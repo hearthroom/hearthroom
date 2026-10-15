@@ -125,7 +125,7 @@ const BOT = /bot|crawler|spider|crawling|facebookexternalhit|slurp|bingpreview|d
 export const clientKind = (ua: string | undefined): "bot" | "server" => (ua && BOT.test(ua) ? "bot" : "server");
 
 /** 前端送来的来源标记。白名单挡住随手塞进来的任意字串。 */
-const SURFACES = new Set(["board", "search", "card", "author", "mine", "create", "wallet", "play", "game", "review", "updates", "blog", "direct", "404"]);
+const SURFACES = new Set(["board", "search", "card", "author", "mine", "create", "wallet", "play", "game", "review", "updates", "blog", "campaign", "direct", "404"]);
 export const surfaceOf = (raw: string | undefined) => (raw && SURFACES.has(raw) ? raw : "direct");
 
 /**
@@ -167,6 +167,8 @@ export const BEACON_EVENTS = new Set([
   "tip_open", "tip_click",
   // 官方部落格：進文章頁、讀到文末、分享、文內行動按鈕（subject 是文章 slug，不放成員 id）
   "blog_view", "blog_read_end", "blog_share", "blog_cta",
+  // 分享活動：進活動頁、送出申請、複製自己的分享連結（subject 是活動 slug，不放成員 id 或內容 id）
+  "campaign_view", "campaign_apply", "campaign_share",
 ]);
 
 /** beacon 事件的 detail 小分类。同样白名单，避免自由字串进 blob。 */

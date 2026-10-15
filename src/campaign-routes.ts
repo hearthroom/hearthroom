@@ -4,7 +4,7 @@ import { IMAGE_MAX_BYTES, imageErrorAs, storeRasterImage } from "./blog";
 import { myContents, resubmitPlacement, submitPlacement } from "./campaign-apply";
 import { EVIDENCE_MAX_BYTES, readEvidence, uploadEvidence } from "./campaign-evidence";
 import { contentDetail, decidePlacement, reviewQueue } from "./campaign-review";
-import { autoPayout, BATCH_MAX, batchPayout, cancelPayout, checkPayout, listPayouts, reconcilePayouts, requestPayout, retryPayout, type Payer } from "./campaign-payout";
+import { autoPayout, BATCH_MAX, batchPayout, cancelPayout, checkPayout, listPayable, listPayouts, reconcilePayouts, requestPayout, retryPayout, type Payer } from "./campaign-payout";
 import { queuePush } from "./community/push";
 import { campaignPhase, getCampaign, listCampaigns, saveCampaign, setCampaignStatus, type Actor, type Campaign, type CampaignInput } from "./campaign";
 import { providerOf, requireMember } from "./members";
@@ -217,6 +217,12 @@ campaignRoutes.get("/v1/moderation/campaign/payouts", async (c) => {
   await payer(c);
   const page = Math.max(1, Math.floor(Number(c.req.query("page")) || 1));
   return c.json(await listPayouts(c.env.DB, { status: c.req.query("status") || undefined, slug: c.req.query("campaign") || undefined, page }));
+});
+
+campaignRoutes.get("/v1/moderation/campaign/payable", async (c) => {
+  await payer(c);
+  const page = Math.max(1, Math.floor(Number(c.req.query("page")) || 1));
+  return c.json(await listPayable(c.env.DB, { slug: c.req.query("campaign") || undefined, page }, Date.now()));
 });
 
 campaignRoutes.post("/v1/moderation/campaign/contents/:id/payout", async (c) => {
