@@ -119,10 +119,10 @@ export async function contentDetail(db: D1Database, id: string) {
 
 export type Decision = "approve" | "reject" | "needs_info";
 type DRow = {
-  id: string; member_id: string; campaign_id: string; requested_tier: Tier; approved_tier: Tier | null; review_status: string; review_reason: string | null;
+  id: string; member_id: string; recipient_account_no: number; campaign_id: string; requested_tier: Tier; approved_tier: Tier | null; review_status: string; review_reason: string | null;
   reviewed_kind: string | null; reviewed_at: number | null; counts_as_placement: number; version: number;
 };
-const DECIDE_ROW = `SELECT p.id, s.member_id, s.campaign_id, p.requested_tier, p.approved_tier, p.review_status, p.review_reason, p.reviewed_kind, p.reviewed_at, p.counts_as_placement, p.version
+const DECIDE_ROW = `SELECT p.id, s.member_id, s.recipient_account_no, s.campaign_id, p.requested_tier, p.approved_tier, p.review_status, p.review_reason, p.reviewed_kind, p.reviewed_at, p.counts_as_placement, p.version
   FROM share_placements p JOIN share_contents s ON s.id = p.content_id WHERE p.id = ?`;
 
 /** 每種決定可以從哪些狀態做：已核准只能再核准（改檔位或是否算位置）；已拒絕不能再改；等補件的可以直接核准或拒絕。 */
@@ -140,6 +140,16 @@ const view = (r: DRow) => ({
 });
 export type DecisionResult = { placement: ReturnType<typeof view>; payout: null };
 const current = async (db: D1Database, id: string): Promise<DecisionResult> => ({ placement: view((await db.prepare(DECIDE_ROW).bind(id).first<DRow>())!), payout: null });
+
+/**
+ * 收款帳號是不是這個人自己的 Harbor 帳號：登入身分或連結過來的帳號。
+ * 內容記在申請時的成員底下，連結或解除連結之後成員 id 可能不同，收款帳號才是錢實際去的地方。
+ */
+const ownsAccount = async (db: D1Database, memberId: string, accountNo: number) =>
+  !!(await db.prepare(
+    `SELECT 1 AS ok WHERE EXISTS (SELECT 1 FROM member_identities WHERE member_id = ?1 AND provider = 'harbor' AND external_id = ?2)
+       OR EXISTS (SELECT 1 FROM member_connections WHERE owner_member_id = ?1 AND provider = 'harbor' AND external_id = ?2)`,
+  ).bind(memberId, String(accountNo)).first("ok")); // 字串比對：數字綁進 D1 可能變成 REAL，CAST 會得到 "123.0"
 
 /** 這個操作編號這個人用過：是同一個位置的決定就回目前狀態，否則是衝突。 */
 async function replayed(db: D1Database, actorId: string, operationId: string, placementId: string): Promise<boolean> {
@@ -159,14 +169,14 @@ export async function decidePlacement(db: D1Database, id: string, actor: Reviewe
   if (!Object.hasOwn(FROM, decision)) invalid("decision");
   if (!Number.isSafeInteger(body.expectedVersion)) invalid("expectedVersion");
   const reason = body.reason === undefined || body.reason === null ? "" : typeof body.reason === "string" ? body.reason.trim() : invalid("reason");
-  if (reason.length > 500 || (decision !== "approve" && !reason)) invalid("reason");
+  if ([...reason].length > 500 || (decision !== "approve" && !reason)) invalid("reason");
   if (decision === "approve" && body.tier !== undefined && !(TIERS as readonly unknown[]).includes(body.tier)) invalid("tier");
   if (decision === "approve" && body.countsAsPlacement !== undefined && typeof body.countsAsPlacement !== "boolean") invalid("countsAsPlacement");
 
   if (await replayed(db, actor.memberId, operationId, id)) return current(db, id);
   const p = await db.prepare(DECIDE_ROW).bind(id).first<DRow>();
   if (!p) throw new HttpError(404, "share_placement_not_found");
-  if (p.member_id === actor.memberId) throw new HttpError(403, "share_self_review");
+  if (p.member_id === actor.memberId || (await ownsAccount(db, actor.memberId, p.recipient_account_no))) throw new HttpError(403, "share_self_review");
   if (p.version !== body.expectedVersion) throw new HttpError(409, "share_version_conflict", undefined, { version: p.version });
   if (!FROM[decision].includes(p.review_status)) throw new HttpError(409, "share_already_decided");
   if (decision === "needs_info") {
@@ -183,13 +193,14 @@ export async function decidePlacement(db: D1Database, id: string, actor: Reviewe
   const status = STATUS_OF[decision];
   const version = p.version + 1;
   const before = { reviewStatus: p.review_status, approvedTier: p.approved_tier, countsAsPlacement: !!p.counts_as_placement, reviewReason: p.review_reason, version: p.version };
-  const after = { reviewStatus: status, approvedTier: tier, countsAsPlacement: !!counts, reviewReason: reason || null, version };
+  // 改檔位沒給理由就保留上一次的；審核人欄位是最後一位決定者（歷次在稽核）。
+  const after = { reviewStatus: status, approvedTier: tier, countsAsPlacement: !!counts, reviewReason: reason || (regrade ? p.review_reason : null), version };
   const auditId = crypto.randomUUID();
   const writes = [
     db.prepare(
       `UPDATE share_placements SET review_status = ?, approved_tier = ?, counts_as_placement = ?, review_reason = ?, reviewed_by = ?, reviewed_kind = ?, reviewed_at = ?, version = version + 1, updated_at = ?
        WHERE id = ? AND version = ? AND review_status IN (SELECT value FROM json_each(?))`,
-    ).bind(status, tier, counts, reason || null, actor.memberId, actor.kind, now, now, id, p.version, JSON.stringify(FROM[decision])),
+    ).bind(status, tier, counts, after.reviewReason, actor.memberId, actor.kind, now, now, id, p.version, JSON.stringify(FROM[decision])),
     auditStmtIfChanged(db, { id: auditId, subjectKind: "share_placement", subjectId: id, actorMemberId: actor.memberId, actorKind: actor.kind, action: "decide", reason, before, after, operationId, now }),
   ];
   // 改檔位不再通知一次「通過了」。理由只給補件與拒絕；不放金額、檔位或點數池。
