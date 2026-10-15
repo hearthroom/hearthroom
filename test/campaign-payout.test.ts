@@ -546,6 +546,51 @@ describe("修正一：同一把 key 的舊結果與重試", () => {
   });
 });
 
+describe("最終修正", () => {
+  it("I1 池不足那筆排隊時被降級：重試回 409 share_payout_stale、不送 Provider、維持排隊；取消後重新發放只發新的差額", async () => {
+    const c = await content(owner, OWNER, { tier: null });
+    const p = await placement(c, { status: "approved", tier: "video" });
+    pool.balance = 0;
+    const v = await json(await pay(c));
+    expect(v).toMatchObject({ status: "blocked_insufficient", amount: 10000 });
+    await env.DB.prepare("UPDATE share_placements SET approved_tier = 'light' WHERE id = ?").bind(p).run();
+    pool.balance = 1_000_000;
+    const sent = pool.sent.length;
+    expect(await code(await retry(v.id))).toBe("409 share_payout_stale");
+    expect(pool.sent).toHaveLength(sent);
+    expect((await payoutRows(c))[0]).toMatchObject({ status: "blocked_insufficient", attempts: 1, amount: 10000 });
+    await cancel(v.id);
+    const again = await json(await pay(c));
+    expect(again).toMatchObject({ status: "paid", amount: 500 });
+    expect(again.id).not.toBe(v.id);
+    expect(pool.sent.map((s) => s.amount)).toEqual([10000, 500]);
+  });
+
+  it("I1 排隊時被升級：重試照原金額送（同一把 key），差額由下一次請求補", async () => {
+    const c = await content(owner, OWNER, { tier: null });
+    const p = await placement(c, { status: "approved", tier: "original" });
+    pool.balance = 0;
+    const v = await json(await pay(c));
+    await env.DB.prepare("UPDATE share_placements SET approved_tier = 'guide' WHERE id = ?").bind(p).run();
+    pool.balance = 1_000_000;
+    expect(await json(await retry(v.id))).toMatchObject({ status: "paid", amount: 3000 });
+    expect(await json(await pay(c))).toMatchObject({ status: "paid", amount: 2000 });
+  });
+
+  it("M2 管理員再核准一次同檔位同計數（沒有寫入）：不自動發放", async () => {
+    const c = await content(owner, OWNER, { tier: null });
+    const p = await placement(c, { requested: "original" });
+    // 非管理員先核准：有可發的金額，但還沒發。
+    const first = await json(await decide(p, { decision: "approve" }, "mod"));
+    expect(first.placement.version).toBe(2);
+    const same = await json(await decide(p, { decision: "approve", expectedVersion: 2 }));
+    expect(same.placement.version).toBe(2);
+    expect(same.payout).toBeNull();
+    expect(pool.sent).toEqual([]);
+    expect(await count("SELECT count(*) AS n FROM share_payouts")).toBe(0);
+  });
+});
+
 describe("核准後自動發放", () => {
   it("真人管理員核准即發；不是管理員的審核員與 AI 帳號核准都不發", async () => {
     const a = await content(owner, OWNER, { tier: null });

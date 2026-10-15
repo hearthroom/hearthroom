@@ -185,11 +185,17 @@ function clean(input: CampaignInput): Editable {
 
 // ---- 寫入 ---------------------------------------------------------------------
 
-/** 同一個操作編號已經做過（連點、斷線重試）：回那一次的活動 id，呼叫端照原樣回現況、不再寫。 */
-async function priorSubject(db: D1Database, actor: Actor, operationId: string): Promise<string | null> {
-  const r = await db.prepare("SELECT subject_kind, subject_id FROM audit_log WHERE actor_member_id IS ? AND operation_id = ?").bind(actor.memberId, operationId).first<{ subject_kind: string; subject_id: string }>();
+type SettingsAction = "create" | "update" | "activate" | "end";
+
+/**
+ * 同一個操作編號已經做過（連點、斷線重試）：回那一次的活動 id，呼叫端照原樣回現況、不再寫。
+ * 只認同一個動作（建立／修改／啟用／結束）；修改與改狀態還要是同一個活動。拿去做別的事一律 409。
+ */
+async function priorSubject(db: D1Database, actor: Actor, operationId: string, action: SettingsAction, id?: string): Promise<string | null> {
+  const r = await db.prepare("SELECT subject_kind, subject_id, action FROM audit_log WHERE actor_member_id IS ? AND operation_id = ?").bind(actor.memberId, operationId)
+    .first<{ subject_kind: string; subject_id: string; action: string }>();
   if (!r) return null;
-  if (r.subject_kind !== "campaign") throw new HttpError(409, "campaign_operation_repeated");
+  if (r.subject_kind !== "campaign" || r.action !== action || (id !== undefined && r.subject_id !== id)) throw new HttpError(409, "campaign_operation_repeated");
   return r.subject_id;
 }
 
@@ -203,17 +209,17 @@ const conflict = async (db: D1Database, id: string): Promise<never> => {
  * 執行 batch，回最後的活動。並發的同一次重送會輸在稽核唯一鍵或版本條件上：先看是不是已經做過，是就回現況；
  * 不是才把 slug 衝突轉成 409、把條件式更新改到 0 列轉成版本衝突。
  */
-async function commit(db: D1Database, id: string, writes: D1PreparedStatement[], actor: Actor, operationId: string): Promise<Campaign> {
+async function commit(db: D1Database, id: string, writes: D1PreparedStatement[], actor: Actor, operationId: string, action: SettingsAction, scope?: string): Promise<Campaign> {
   try {
     const [first] = await db.batch(writes);
     if (!first!.meta.changes) {
-      const prior = await priorSubject(db, actor, operationId);
+      const prior = await priorSubject(db, actor, operationId, action, scope);
       if (prior) return mustCampaign(db, prior);
       await conflict(db, id);
     }
   } catch (e) {
     if (e instanceof HttpError || !/UNIQUE constraint failed/.test(String(e))) throw e;
-    const prior = await priorSubject(db, actor, operationId);
+    const prior = await priorSubject(db, actor, operationId, action, scope);
     if (prior) return mustCampaign(db, prior);
     if (/campaigns\.slug/.test(String(e))) throw new HttpError(409, "campaign_slug_taken");
     throw e;
@@ -229,7 +235,7 @@ const audit = (id: string, actor: Actor, action: string, before: Campaign | null
 
 /** 建立（沒有 id）或修改（帶 expectedVersion）。已啟用或已結束的活動，改完仍要符合啟用條件。 */
 export async function saveCampaign(db: D1Database, input: CampaignInput, actor: Actor, operationId: string, now: number): Promise<Campaign> {
-  const prior = await priorSubject(db, actor, operationId);
+  const prior = await priorSubject(db, actor, operationId, input.id === undefined ? "create" : "update", input.id);
   if (prior) return mustCampaign(db, prior);
   const c = clean(input);
   const values = EDITABLE.map((k) => c[k]);
@@ -239,7 +245,7 @@ export async function saveCampaign(db: D1Database, input: CampaignInput, actor: 
     return commit(db, id, [
       db.prepare(`INSERT INTO campaigns (id, ${EDITABLE.join(", ")}, created_by, created_at, updated_at) VALUES (?, ${EDITABLE.map(() => "?").join(", ")}, ?, ?, ?)`).bind(id, ...values, actor.memberId ?? actor.kind, now, now),
       auditStmt(db, audit(id, actor, "create", null, after, operationId, now)),
-    ], actor, operationId);
+    ], actor, operationId, "create");
   }
   if (!Number.isInteger(input.expectedVersion)) invalid("expectedVersion");
   const prev = await row(db, input.id);
@@ -253,12 +259,13 @@ export async function saveCampaign(db: D1Database, input: CampaignInput, actor: 
   return commit(db, prev.id, [
     db.prepare(`UPDATE campaigns SET ${EDITABLE.map((k) => `${k} = ?`).join(", ")}, version = version + 1, updated_at = ? WHERE id = ? AND version = ?`).bind(...values, now, prev.id, prev.version),
     auditStmtIfChanged(db, audit(prev.id, actor, "update", toCampaign(prev), after, operationId, now)),
-  ], actor, operationId);
+  ], actor, operationId, "update", prev.id);
 }
 
 /** 草稿 → 進行中（設定要完整）→ 已結束。結束是終點；已經是目標狀態就回現況、不寫。 */
 export async function setCampaignStatus(db: D1Database, id: string, status: "active" | "ended", actor: Actor, operationId: string, now: number): Promise<Campaign> {
-  const prior = await priorSubject(db, actor, operationId);
+  const action = status === "active" ? "activate" : "end";
+  const prior = await priorSubject(db, actor, operationId, action, id);
   if (prior) return mustCampaign(db, prior);
   const prev = await row(db, id);
   if (!prev || prev.id !== id) throw new HttpError(404, "campaign_not_found");
@@ -273,6 +280,6 @@ export async function setCampaignStatus(db: D1Database, id: string, status: "act
   const after = { ...before, status, version: before.version + 1, updatedAt: now };
   return commit(db, id, [
     db.prepare("UPDATE campaigns SET status = ?, version = version + 1, updated_at = ? WHERE id = ? AND version = ?").bind(status, now, id, before.version),
-    auditStmtIfChanged(db, audit(id, actor, status === "active" ? "activate" : "end", before, after, operationId, now)),
-  ], actor, operationId);
+    auditStmtIfChanged(db, audit(id, actor, action, before, after, operationId, now)),
+  ], actor, operationId, action, id);
 }

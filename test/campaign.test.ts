@@ -146,6 +146,31 @@ describe("活動設定", () => {
     expect(partial).toMatchObject({ startsAt: null, timezone: null, tiers: { light: 1 }, extraPlacementAmount: null });
   });
 
+  it("操作編號只重放同一個動作、同一個活動：拿去做別的事或別的活動一律 409", async () => {
+    const created = op();
+    const x = await saveCampaign(env.DB, input, actor(), created, 10);
+    const y = await saveCampaign(env.DB, { ...input, slug: "second" }, actor(), op(), 11);
+    const repeated = { status: 409, message: "campaign_operation_repeated" };
+    // 建立用過的編號：再建立是重放；拿去改狀態或修改不行。
+    expect((await saveCampaign(env.DB, input, actor(), created, 12)).id).toBe(x.id);
+    await expect(setCampaignStatus(env.DB, x.id, "active", actor(), created, 13)).rejects.toMatchObject(repeated);
+    await expect(saveCampaign(env.DB, { ...input, id: x.id, expectedVersion: 1 }, actor(), created, 14)).rejects.toMatchObject(repeated);
+    // 修改用過的編號：同一個活動是重放；別的活動、建立都不行。
+    const updated = op();
+    await saveCampaign(env.DB, { ...input, id: x.id, expectedVersion: 1, intro: {} }, actor(), updated, 20);
+    expect((await saveCampaign(env.DB, { ...input, id: x.id, expectedVersion: 1, intro: {} }, actor(), updated, 21)).version).toBe(2);
+    await expect(saveCampaign(env.DB, { ...input, slug: "second", id: y.id, expectedVersion: 1 }, actor(), updated, 22)).rejects.toMatchObject(repeated);
+    await expect(saveCampaign(env.DB, { ...input, slug: "third" }, actor(), updated, 23)).rejects.toMatchObject(repeated);
+    // 啟用用過的編號：同一個活動再啟用是重放；拿去結束、拿去啟用別的活動都不行。
+    const activated = op();
+    await setCampaignStatus(env.DB, x.id, "active", actor(), activated, 30);
+    expect((await setCampaignStatus(env.DB, x.id, "active", actor(), activated, 31)).status).toBe("active");
+    await expect(setCampaignStatus(env.DB, x.id, "ended", actor(), activated, 32)).rejects.toMatchObject(repeated);
+    await expect(setCampaignStatus(env.DB, y.id, "active", actor(), activated, 33)).rejects.toMatchObject(repeated);
+    expect((await getCampaign(env.DB, y.id))!.status).toBe("draft");
+    expect((await getCampaign(env.DB, x.id))!.status).toBe("active");
+  });
+
   it("草稿 → 進行中 → 已結束；結束後不能再啟用；設定不全不能啟用", async () => {
     const half = await saveCampaign(env.DB, { slug: "half", title: { "zh-Hant": "半成品" } }, actor(), op(), 5);
     await expect(setCampaignStatus(env.DB, half.id, "active", actor(), op(), 6)).rejects.toMatchObject({ status: 400, message: "campaign_invalid", extra: { field: "startsAt" } });
