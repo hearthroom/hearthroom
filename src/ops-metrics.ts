@@ -17,10 +17,19 @@ const METRICS = {
     operations: ["save", "publish", "unpublish", "pin", "comments", "restore", "column", "image"],
     outcomes: ["success", "denied", "error"],
   },
+  campaign: {
+    name: "hearthroom_campaign_operations_total",
+    help: "Share-reward campaign: settings, submissions, review decisions, payouts, reconciliation and evidence screenshots.",
+    label: "operation",
+    operations: ["settings", "submit", "resubmit", "decide", "payout", "reconcile", "evidence_upload", "evidence_view", "purge"],
+    // insufficient：點數池餘額不足，發放排隊（只有這個指標有）
+    outcomes: ["success", "denied", "error", "insufficient"],
+  },
 } as const;
 export type OpsMetric = keyof typeof METRICS;
 
-export async function bumpOp(db: D1Database, metric: OpsMetric, operation: string, outcome: "success" | "denied" | "error"): Promise<void> {
+/** outcome 由各指標自己的 outcomes 推出：insufficient 只在 campaign 合法。 */
+export async function bumpOp<M extends OpsMetric>(db: D1Database, metric: M, operation: string, outcome: (typeof METRICS)[M]["outcomes"][number]): Promise<void> {
   try {
     await db.prepare("INSERT INTO ops_metrics VALUES (?, ?, ?, 1) ON CONFLICT(metric, operation, outcome) DO UPDATE SET value = value + 1").bind(metric, operation, outcome).run();
   } catch {
