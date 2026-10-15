@@ -38,11 +38,13 @@ let list: ReturnType<typeof detail>[];
 let contents: ReturnType<typeof content>[];
 let putReplies: { status: number; body: unknown }[];
 let evSeq: number;
+/** 這些活動下一次讀詳情回 500 */
+let failOnce: Set<string>;
 const origCreate = URL.createObjectURL, origRevoke = URL.revokeObjectURL;
 
 beforeEach(() => {
   i18n.global.locale.value = "zh-Hant";
-  calls = []; details = { launch: detail("launch") }; list = []; contents = []; putReplies = []; evSeq = 0;
+  calls = []; details = { launch: detail("launch") }; list = []; contents = []; putReplies = []; evSeq = 0; failOnce = new Set();
   session.me = { accountNumId: 7 };
   URL.createObjectURL = vi.fn(() => "blob:mock") as typeof URL.createObjectURL;
   URL.revokeObjectURL = vi.fn();
@@ -54,6 +56,7 @@ beforeEach(() => {
     if (url === "/v1/me/campaign/contents") return json(200, { items: contents });
     if (url === "/v1/campaigns" && method === "GET") return json(200, { items: list });
     const slug = /^\/v1\/campaigns\/([^/]+)$/.exec(url)?.[1];
+    if (slug && method === "GET" && failOnce.delete(slug)) return json(500, { error: "boom" });
     if (slug && method === "GET") return details[slug] ? json(200, details[slug]) : json(404, { error: "campaign_not_found" });
     if (url === "/v1/campaign/evidence" && method === "POST") return json(200, { id: `ev-new-${++evSeq}`, sha256: "x", bytes: 1 });
     if (url.startsWith("/v1/campaign/evidence/")) return new Response(new Blob(["img"]), { status: 200 });
@@ -125,6 +128,33 @@ it("says 審核中 before anything is approved and has a line for every payout s
   expect(text('[data-share-content="c0"] [data-col="approved"]')).toContain("審核中");
   const expected = { none: "—", awaiting: "等待發放", processing: "處理中", queued: "發放排隊中", paid: "已入帳" };
   states.forEach((s, i) => expect(text(`[data-share-content="c${i}"] [data-col="paid"] [data-payout]`)).toBe(expected[s]));
+});
+
+it("shows — instead of 審核中 once every place was not approved", async () => {
+  contents = [content("c1", { placements: [placement("p1", { reviewStatus: "rejected", reviewReason: "x" }), placement("p2", { reviewStatus: "rejected", reviewReason: "y" })] })];
+  await mount();
+  const approved = text('[data-share-content="c1"] [data-col="approved"]');
+  expect(approved).toContain("—");
+  expect(approved).not.toContain("審核中");
+});
+
+it("reads a campaign again after a failure but keeps a missing one cached, and leaves the time alone without its time zone", async () => {
+  failOnce = new Set(["launch"]);
+  contents = [needsInfo(), content("c9", { campaignSlug: "gone" })];
+  await mount();
+  expect($('[data-campaign-group="launch"] h2')!.textContent).toContain("launch");
+  expect($('[data-campaign-group="launch"]')!.textContent).not.toContain(t("campaign.field.submitDeadline"));
+  await click('[data-placement="p1"] [data-action="resubmit"]');
+  // 不知道活動時區就不讓改發布時間，其他欄位照常
+  expect($<HTMLInputElement>('[data-field="publishedAt"] input')!.disabled).toBe(true);
+  expect($<HTMLInputElement>('[data-field="location"] input')!.disabled).toBe(false);
+  type('[data-field="location"] input', "新的吧");
+  await send();
+  expect(Object.keys(puts()[0]!.body!).sort()).toEqual(["location", "operationId"]);
+  // 成功後重新讀：失敗的那個再讀一次，404 的不再讀
+  expect(calls.filter((c) => c.path === "/v1/campaigns/launch")).toHaveLength(2);
+  expect(calls.filter((c) => c.path === "/v1/campaigns/gone")).toHaveLength(1);
+  expect($('[data-campaign-group="launch"] h2')!.textContent).toContain("活動 launch");
 });
 
 it("groups contents by campaign and reads each campaign once", async () => {
