@@ -526,3 +526,21 @@ it('the toolbar wraps the selection in bold and the shortcut does the same', asy
   await nextTick();
   expect(source().value).toBe('**舊***內容*');
 });
+
+it('an autosave the server refuses (taken address) says why and waits for an edit before trying again', async () => {
+  await mount('/review/blog/p1');
+  await vi.waitFor(() => expect(source()?.value).toBe('舊內容'));
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  try {
+    handle = (c) => (c.method === 'PUT' ? { status: 409, body: { error: 'blog_slug_taken' } } : undefined);
+    type(source(), '改一下'); await nextTick();
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_MS + 100);
+    await vi.waitFor(() => expect(host.textContent).toContain(t('blog.admin.slugTaken')));
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_MS * 3);
+    expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(1);
+    handle = (c) => (c.method === 'PUT' ? ok(post({ bodyMd: c.body.bodyMd, version: 4 })) : undefined);
+    type(source(), '改一下，再改'); await nextTick();
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_MS + 100);
+    await vi.waitFor(() => expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(2));
+  } finally { vi.useRealTimers(); }
+});
