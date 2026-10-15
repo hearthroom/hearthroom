@@ -94,3 +94,4 @@ CREATE TABLE share_payouts (
 );
 CREATE UNIQUE INDEX share_payouts_open ON share_payouts(content_id) WHERE status IN ('pending','blocked_insufficient');
 CREATE INDEX share_payouts_status ON share_payouts(status, created_at);
+CREATE INDEX share_payouts_content ON share_payouts(content_id, status);
