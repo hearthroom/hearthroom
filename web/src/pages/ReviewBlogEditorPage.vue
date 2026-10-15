@@ -15,7 +15,7 @@ import { RouterLink, onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRoute
 import { useI18n } from 'vue-i18n';
 import {
   columnName, createPreview, displayStatus, fetchAdminColumns, fetchAdminPost, fetchRevision, fetchRevisions, imageUrlOf, POST_LOCALES,
-  restoreRevision, savePost, setPostState, uploadBlogImage, type AdminPost, type BlogColumn, type PostInput, type Revision, type StateChange,
+  restoreRevision, savePost, setPostState, uploadBlogImage, type AdminPost, type BlogColumn, type PostInput, type Revision, type StateChange, suggestSlug,
 } from '@/lib/blog';
 import { ApiError } from '@/lib/api';
 import { confirmDialog } from '@/lib/confirm';
@@ -117,11 +117,7 @@ async function loadRevisions() {
   try { revisions.value = (await fetchRevisions(await token(), post.value.id)).items; } catch { /* 側欄讀不到不擋編輯 */ }
 }
 
-/** 新文章的網址代號從標題建議：英數字留下、其餘變連字號；全是中日韓文字就用日期。改過一次就不再跟著標題走。 */
-function suggestSlug(title: string) {
-  const s = title.normalize('NFKD').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60).replace(/-+$/, '');
-  return s || `post-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`;
-}
+// 改過一次網址代號就不再跟著標題走
 watch(() => draft.title, (title) => { if (!post.value && !slugTouched.value) draft.slug = title.trim() ? suggestSlug(title) : ''; });
 
 /** 回應帶著別人存的內容時，只收狀態、版本號留在原處並標成衝突：下一次存檔會被擋下，不會蓋掉別人的修改。 */

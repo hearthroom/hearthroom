@@ -5,7 +5,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { HttpError, type Env } from './types';
 import { apiBaseOf, parseProvider, requireConfigured, type ProviderId } from './providers';
 import { connectedMemberId } from './connections';
-import { confirmAdult, memberProfile, resolveMember, isReviewer } from './members';
+import { confirmAdult, memberProfile, resolveMember, reviewerRole } from './members';
 import { ADULT_CONSENT_VERSION } from '../shared/adult-consent';
 import { upstream } from './upstream';
 
@@ -386,7 +386,7 @@ accountAuthRoutes.post('/v1/auth/session',async c=>{
   // 成員資料回來後選出的身分若不是它（極少見：前端指定了別的供應商），再用選出的那個重換。
   const guess=body.token===true?tokenFor(session.provider,Number(session.external_id)):null;
   guess?.catch(()=>{});
-  const [profile,reviewer]=await Promise.all([memberProfile(c.env.DB,session.member_id),isReviewer(c.env.DB,session.member_id)]);
+  const [profile,role]=await Promise.all([memberProfile(c.env.DB,session.member_id),reviewerRole(c.env.DB,session.member_id)]);
   phases.push(`profile;dur=${Date.now()-started}`);
   const selected=profile!.identities.find(i=>i.provider===body.provider)??profile!.identities.find(i=>i.provider===session.provider);
   if(!selected)throw new HttpError(401,'site_session_required');
@@ -397,7 +397,7 @@ accountAuthRoutes.post('/v1/auth/session',async c=>{
   }
   // 各段耗時（從請求開始算的毫秒數，不含任何資料），給量測開頁用。
   c.header('Server-Timing',phases.join(', '));
-  return c.json({provider:selected.provider,me:{accountNumId:selected.externalId,nickName:profile!.displayName,avatar:profile!.avatarUrl},profile:{...profile!,reviewer},...(token===undefined?{}:{token})});
+  return c.json({provider:selected.provider,me:{accountNumId:selected.externalId,nickName:profile!.displayName,avatar:profile!.avatarUrl},profile:{...profile!,reviewer:role!==null,reviewerRole:role},...(token===undefined?{}:{token})});
 });
 accountAuthRoutes.post('/v1/auth/token',async c=>{
   const session=(await readSession(c))!,body=await c.req.json(),provider=providerOf(body.provider,c.env);

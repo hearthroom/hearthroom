@@ -63,4 +63,17 @@ describe("社群管理入口", () => {
     session.value = reactive({ me: null, profile: null, ready: false, accessToken: async () => null });
     expect(useReviewer().likely).toBe(false);
   });
+
+  it("角色也先照登入狀態給（部落格分頁不必等審核查詢），查詢回來再以它為準", async () => {
+    localStorage.clear();
+    session.value = reactive({ me: { accountNumId: 1, nickName: "", avatar: "" }, profile: { reviewer: true, reviewerRole: "manager" }, ready: true, accessToken: async () => "tok" });
+    let answer!: (v: { reviewer: boolean; role: string }) => void;
+    api.fetchReviewMe.mockImplementationOnce(() => new Promise((r) => { answer = r; }));
+    setActivePinia(createPinia());
+    const store = useReviewer();
+    expect(store.role).toBe("manager");
+    await vi.waitFor(() => expect(api.fetchReviewMe).toHaveBeenCalled());
+    answer({ reviewer: true, role: "owner" });
+    await vi.waitFor(() => expect(store.role).toBe("owner"));
+  });
 });
