@@ -202,3 +202,29 @@ it("names the like button for screen readers and reports whether it is on", asyn
   expect(like.getAttribute("aria-label")).toBe(t("comment.like"));
   expect(like.getAttribute("aria-pressed")).toBe("true");
 });
+
+it("a muted viewer sees until when they can comment again, with no composer and no reply", async () => {
+  const until = Date.UTC(2030, 0, 2, 3, 4);
+  api.list = [comment("c1")];
+  api.fetchComments.mockImplementation(async () => ({ total: 1, comments: api.list, isRoleCreator: false, mutedUntil: until }));
+  await mount();
+  const { dateTime } = await import("../src/lib/format");
+  expect(host.textContent).toContain(i18n.global.t("comment.error.mutedUntil", { date: dateTime(until) }));
+  expect(host.querySelector(".cmt__composer")).toBeNull();
+  expect(buttons(host, t("comment.reply"))).toHaveLength(0);
+  expect(host.textContent).toContain("text c1");
+});
+
+it("a permanent mute says so; a mute found on send folds the composer", async () => {
+  api.list = [comment("c1")];
+  await mount();
+  const { ApiError } = await import("../src/lib/api");
+  api.createComment.mockRejectedValue(new ApiError(403, "muted", "comment_muted"));
+  api.fetchComments.mockImplementation(async () => ({ total: 1, comments: api.list, isRoleCreator: false, mutedUntil: null }));
+  const box = host.querySelector<HTMLTextAreaElement>(".cmt__composer textarea")!;
+  box.value = "hello"; box.dispatchEvent(new Event("input")); await nextTick();
+  buttons(host, t("comment.submit"))[0]!.click();
+  await vi.waitFor(() => expect(host.textContent).toContain(t("comment.error.mutedPermanent")));
+  expect(host.querySelector(".cmt__composer")).toBeNull();
+  expect(buttons(host, t("comment.reply"))).toHaveLength(0);
+});
