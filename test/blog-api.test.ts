@@ -118,12 +118,22 @@ describe("文章生命週期", () => {
 
     const admin = await json(await call(`/v1/blog/admin/posts?status=published`, { token: "editor" }));
     expect(admin.total).toBe(1);
-    expect(admin.items[0]).toMatchObject({ id: created.id, status: "published" });
+    expect(admin.items[0]).toMatchObject({ id: created.id, status: "published", editorHandle: created.authorHandle });
     expect(admin.items[0].version).toBeGreaterThan(2);
     const revisions = await json(await call(`/v1/blog/admin/posts/${created.id}/revisions`, { token: "editor" }));
     expect(revisions.items).toHaveLength(2);
     const restored = await call(`/v1/blog/admin/posts/${created.id}/revisions/${revisions.items[1].id}/restore`, { method: "POST", token: "editor", body: { operationId: op() } });
     expect((await json(restored)).title).toBe("開站了");
+  });
+
+  it("單一修訂讀得到當時的內文；別篇的修訂 404", async () => {
+    const created = await newPost({ bodyMd: "第一版內文" });
+    const [rev] = (await json(await call(`/v1/blog/admin/posts/${created.id}/revisions`, { token: "editor" }))).items;
+    const one = await call(`/v1/blog/admin/posts/${created.id}/revisions/${rev.id}`, { token: "editor" });
+    expect(one.status).toBe(200);
+    expect(await json(one)).toMatchObject({ id: rev.id, title: "開站了", bodyMd: "第一版內文", editorHandle: rev.editorHandle });
+    expect((await call(`/v1/blog/admin/posts/other/revisions/${rev.id}`, { token: "editor" })).status).toBe(404);
+    expect((await call(`/v1/blog/admin/posts/${created.id}/revisions/${rev.id}`, { token: "member" })).status).toBe(403);
   });
 
   it("欄目：公開只列啟用的，管理列全部；欄目 slug 撞名 409", async () => {

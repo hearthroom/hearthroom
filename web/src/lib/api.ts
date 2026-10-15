@@ -793,7 +793,8 @@ export async function reportComment(commentId: string, body: { reason: ReportRea
 export type CommentQueueTab = "held" | "reported" | "removed";
 export interface QueuedComment {
   id: string;
-  target: { kind: "card"; id: string; title: string; cardNumber: number | null };
+  /** 卡片底下的留言，或部落格文章底下的留言（文章連到短網址 /blog/p/<id>）。 */
+  target: { kind: "card"; id: string; title: string; cardNumber: number | null } | { kind: "post"; id: string; title: string; column: string; slug: string };
   author: { handle: string; displayName: string };
   content: string;
   status: string;

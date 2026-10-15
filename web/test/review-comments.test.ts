@@ -75,6 +75,14 @@ it('removes a held comment only with a reason, and a retry reuses the same opera
   await vi.waitFor(() => expect(document.querySelector('[role=dialog]')).toBeNull());
 });
 
+it('links a blog post comment to the post short link, and a card comment to the card', async () => {
+  mocks.queue = [held, { ...held, id: 'c9', target: { kind: 'post', id: 'p7', title: '開站公告', column: 'news', slug: 'hello' } }];
+  await mount('/review/comments');
+  await vi.waitFor(() => expect(host.querySelector('[data-comment="c9"]')).not.toBeNull());
+  expect(host.querySelector('[data-comment="c9"] .cmod-item__card')!.getAttribute('href')).toBe('/blog/p/p7');
+  expect(host.querySelector('[data-comment="c1"] .cmod-item__card')!.getAttribute('href')).toBe('/cards/12');
+});
+
 it('returns focus to the button that opened the reason dialog, whichever way it closes', async () => {
   await mount('/review/comments');
   await vi.waitFor(() => expect(host.querySelector('[data-action="remove"]')).not.toBeNull());
