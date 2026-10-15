@@ -2420,7 +2420,7 @@
   "campaign.stats.review.noReasons": "還沒有未通過的申請。",
   "campaign.stats.spend.title": "支出",
   "campaign.stats.spend.paidTotal": "已發放點數",
-  "campaign.stats.spend.byDay": "每日發放",
+  "campaign.stats.spend.byDay": "每日發放（UTC）",
   "campaign.stats.spend.noDays": "還沒有發放紀錄。",
   "campaign.stats.spend.pool": "點數池",
   "campaign.stats.spend.balance": "餘額",

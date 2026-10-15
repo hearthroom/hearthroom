@@ -9,7 +9,7 @@ import { computed, nextTick, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import EvidencePicker from "@/components/EvidencePicker.vue";
 import {
-  CampaignError, DEFAULT_TIMEZONE, PLATFORMS, TIERS, campaignErrorText, epochToZoned, fieldLabel, isWebUrl, submitPlacement, zonedToEpoch, zoneName,
+  CampaignError, DEFAULT_TIMEZONE, PLATFORMS, TIERS, campaignErrorText, epochToZoned, fieldLabel, formatPoints, isWebUrl, submitPlacement, zonedToEpoch, zoneName,
   type ApplyResult, type ContentView, type Platform, type PublicCampaign, type SubmitBody, type Tier,
 } from "@/lib/campaign";
 import { useSession } from "@/lib/session";
@@ -138,7 +138,7 @@ async function submit() {
         <label v-for="k in tiers" :key="k" class="apply__tier">
           <input v-model="form.tier" type="radio" name="tier" :value="k" required :aria-invalid="bad('requestedTier')" />
           <span>{{ t(`campaign.tier.${k}`) }}</span>
-          <span class="apply__amount num">{{ t("campaign.page.points", { n: campaign.tiers[k] }) }}</span>
+          <span class="apply__amount num">{{ formatPoints(campaign.tiers[k]!) }}</span>
         </label>
       </div>
       <p v-if="errors.requestedTier" class="apply__error" role="alert">{{ errors.requestedTier }}</p>
