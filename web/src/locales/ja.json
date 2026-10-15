@@ -2378,5 +2378,8 @@
   "campaign.error.pool_insufficient": "ポイントプールが足りません。補充してから再試行してください。",
   "campaign.payouts.uncertain": "結果がはっきりしません。すでに送信された可能性があるので、付与履歴で結果を確認してください",
   "campaign.payouts.seeHistory": "この内容は未付与から外れました。結果は付与履歴で確認できます",
-  "campaign.payouts.pendingNote": "処理中です。付与履歴の「結果を確認」で付与されたか確かめられます"
+  "campaign.payouts.pendingNote": "処理中です。付与履歴の「結果を確認」で付与されたか確かめられます",
+  "campaign.nav": "シェア企画",
+  "campaign.banner.cta": "詳しく見る",
+  "campaign.banner.dismiss": "閉じる"
 }
