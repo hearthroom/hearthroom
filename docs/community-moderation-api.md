@@ -162,7 +162,7 @@ Response: `{ placement: { id, reviewStatus, approvedTier, countsAsPlacement, rev
 | 409 | `campaign_submit_closed` | `needs_info` after the campaign's submit deadline. Approve and reject still work. |
 | 409 | `campaign_operation_repeated` | The `operationId` was used for something else. |
 
-Replaying an `operationId` returns the same body without a second write; approving again with the same tier and count changes nothing.
+Replaying an `operationId` returns the same body without a second write; if that decision was an approval by a human community admin, the replay also completes its payout attempt. Approving again with the same tier and count changes nothing and does not pay: `version` stays the same and `payout` is `null`. Use the payout routes below to pay an approval that is still awaiting payout.
 
 ### Campaign settings (read)
 
@@ -193,7 +193,7 @@ How a payout behaves:
 
 - A request pays the amount currently due. Retry reuses the stored amount and recipient and never recomputes them.
 - `pending` means a send happened and its outcome is unknown. Use `check`, or `retry` with the same record; do not open a second payout. A `pending` payout can be cancelled only when it is at least 10 minutes old and a `check` has recorded that the provider has no such payment.
-- `blocked_insufficient` means the pool was short. Top up the pool, then `retry`, or `cancel` it.
+- `blocked_insufficient` means the pool was short. Top up the pool, then `retry`, or `cancel` it. If the content's grade or a tier amount changed while it was queued, so the stored amount is now more than is owed, `retry` gives 409 `share_payout_stale`: `cancel` it and request again, which pays the amount currently due. A queued payout smaller than what is now owed retries as is, and the next request pays the rest.
 - `failed` means the provider refused the send, with its code in `error`. A new payout request opens a new record.
 - `reconcile` checks up to 20 `pending` payouts older than 10 minutes. `check` and `reconcile` take no `operationId`.
 - A paid or queued payout sends the applicant a notice.
@@ -209,6 +209,7 @@ How a payout behaves:
 | 409 | `share_nothing_due` | Nothing is owed. |
 | 409 | `share_payout_in_progress` | The content already has an open payout. |
 | 409 | `share_payout_not_retryable` | Retry on anything other than `pending` or `blocked_insufficient`. |
+| 409 | `share_payout_stale` | Retry of a `blocked_insufficient` payout whose stored amount is more than is now owed. Cancel and request again. |
 | 409 | `share_payout_not_cancellable` | Cancel outside the rules above. |
 | 409 | `share_payout_not_pending` | Check on a payout that is not `pending`. |
 | 409 | `campaign_operation_repeated` | The `operationId` was used for something else. |
