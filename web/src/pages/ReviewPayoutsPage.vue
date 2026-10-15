@@ -19,6 +19,7 @@ import {
   type Campaign, type CampaignPool, type PayableItem, type PayoutListItem, type PayoutStatus, type PayoutView,
 } from '@/lib/campaign';
 import { confirmDialog } from '@/lib/confirm';
+import { ApiError } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { useLocalePath } from '@/lib/use-locale';
 import { pageTitle } from '@/lib/i18n';
@@ -58,16 +59,23 @@ const reconciled = ref('');
 const payable = reactive({ items: [] as PayableItem[], total: 0, loading: true, error: '' });
 const history = reactive({ items: [] as PayoutListItem[], total: 0, loading: true, error: '' });
 const selected = ref<string[]>([]);
-const batchError = ref('');
-/** 每一列最近一次動作的結果：待發放用內容 id，發放紀錄用發放 id */
-type Result = { text: string; ok: boolean };
+/** 整批送出失敗：結果不確定時是中性的提示，不是紅字 */
+const batchNote = ref<{ text: string; uncertain: boolean } | null>(null);
+/**
+ * 每一列最近一次動作的結果：待發放用內容 id，發放紀錄用發放 id。
+ * tone 只管顏色；sent 是「已經發出去或排進佇列」，這種列不能再勾、不能再發。
+ */
+type Result = { text: string; tone: 'ok' | 'bad' | 'neutral'; sent?: boolean };
+/** 待發放裡留著、但重新載入時已經不在待發放的列：結果要到發放紀錄看 */
+const gone = reactive(new Set<string>());
 const contentResult = reactive(new Map<string, Result>());
 const payoutResult = reactive(new Map<string, Result>());
 /** 進行中的動作（pay:<內容>、batch、retry:<發放>、check:<發放>） */
 const busy = reactive(new Set<string>());
 let alive = true, payableGen = 0, historyGen = 0;
 
-const ops = new Map<string, string>();
+/** reactive：畫面要看某一列有沒有還沒了結的單筆發放 */
+const ops = reactive(new Map<string, string>());
 const opFor = (key: string) => { let id = ops.get(key); if (!id) { id = crypto.randomUUID(); ops.set(key, id); } return id; };
 
 async function token() {
@@ -86,6 +94,8 @@ async function loadPayable(keep = false) {
     const fresh = new Map(res.items.map((i) => [i.contentId, i]));
     const kept = keep ? payable.items.filter((i) => fresh.has(i.contentId) || contentResult.has(i.contentId)).map((i) => fresh.get(i.contentId) ?? i) : [];
     const seen = new Set(kept.map((i) => i.contentId));
+    gone.clear();
+    for (const id of seen) if (!fresh.has(id)) gone.add(id);
     payable.items = [...kept, ...res.items.filter((i) => !seen.has(i.contentId))];
     payable.total = res.total;
     selected.value = selected.value.filter((id) => fresh.has(id));
@@ -120,7 +130,7 @@ async function init() {
   token().then(reconcilePayouts).then((res) => {
     if (!alive) return;
     const n = res.items.filter((i) => i.result === 'paid').length;
-    if (n > 0) reconciled.value = t('campaign.payouts.reconciled', { count: n });
+    if (n > 0) reconciled.value = t('campaign.payouts.reconciled', { count: n }, n);
     return refresh();
   }, () => {});
 }
@@ -132,50 +142,71 @@ const titleOf = (slug: string) => { const c = bySlug.value.get(slug); return c ?
 const at = (ms: number, slug: string) => new Intl.DateTimeFormat(locale.value, { timeZone: bySlug.value.has(slug) ? bySlug.value.get(slug)!.timezone || DEFAULT_TIMEZONE : undefined, dateStyle: 'medium', timeStyle: 'short' }).format(ms);
 const num = (n: number) => n.toLocaleString(String(locale.value));
 const points = (n: number) => t('campaign.page.points', { n: num(n) });
-/** 一筆發放的結果：狀態，加上紀錄上的原因（點數池不足、Provider 的碼）；失敗才算不好的結果 */
-const outcome = (p: PayoutView): Result => ({ ok: p.status !== 'failed', text: [t(`campaign.status.${p.status}`), p.error ? campaignErrorText(p.error) : ''].filter(Boolean).join(' · ') });
-const failure = (e: unknown): Result => ({ ok: false, text: campaignErrorText(e) });
-/** 這一列已經發出去（或排進佇列）了：不能再勾、不能再按 */
-const sent = (contentId: string) => contentResult.get(contentId)?.ok === true;
+/**
+ * 一筆發放的結果：狀態，加上紀錄上的原因（點數池不足、Provider 的碼）。
+ * 處理中是「送了、還不知道結果」：指向查詢結果，不把暫時的碼當成失敗講。失敗才是紅字。
+ */
+function outcome(p: PayoutView): Result {
+  if (p.status === 'pending') return { tone: 'neutral', sent: true, text: t('campaign.payouts.pendingNote') };
+  return { tone: p.status === 'failed' ? 'bad' : 'ok', sent: p.status !== 'failed', text: [t(`campaign.status.${p.status}`), p.error ? campaignErrorText(p.error) : ''].filter(Boolean).join(' · ') };
+}
+const failure = (e: unknown): Result => ({ tone: 'bad', text: campaignErrorText(e) });
+/** 請求送出去之後沒拿到明確的拒絕（斷線、5xx）：錢可能已經發了 */
+const uncertain = (e: unknown) => !(e instanceof ApiError) || e.status >= 500;
+const payFailure = (e: unknown, attempted: boolean): Result => (attempted && uncertain(e) ? { tone: 'neutral', text: t('campaign.payouts.uncertain') } : failure(e));
+const sent = (contentId: string) => contentResult.get(contentId)?.sent === true;
+/**
+ * 能不能放進批次：已經發出去的、已經離開待發放的、單筆發放還在送或還沒了結（留著 pay:<id> 的 operationId）的都不行。
+ * 那些列只能用單筆「發放」重按，它沿用同一個 operationId，服務端認得出是同一次，不會發兩次。
+ */
+const batchable = (id: string) => !sent(id) && !gone.has(id) && !ops.has(`pay:${id}`) && !busy.has(`pay:${id}`);
+/** 單筆發放：離開待發放的列只有還沒了結的那一次可以重按（同一個 operationId） */
+const payable1 = (id: string) => !sent(id) && (!gone.has(id) || ops.has(`pay:${id}`));
+const toneClass = (r?: Result) => (r ? `rpo-result--${r.tone}` : '');
 const canCancel = (p: PayoutListItem) => p.status === 'blocked_insufficient' || (p.status === 'pending' && p.checkedAbsentAt !== null && Date.now() - p.createdAt >= CANCEL_AFTER);
 
 const list = computed(() => (view.value === 'payable' ? payable : history));
 const hasNext = computed(() => page.value * PAGE < list.value.total);
-const picked = computed(() => payable.items.filter((i) => selected.value.includes(i.contentId)));
+const picked = computed(() => payable.items.filter((i) => selected.value.includes(i.contentId) && batchable(i.contentId)));
 const pickedPoints = computed(() => picked.value.reduce((s, i) => s + i.due, 0));
 function toggle(id: string, on: boolean) {
-  selected.value = on ? (selected.value.includes(id) || selected.value.length >= BATCH_MAX ? selected.value : [...selected.value, id]) : selected.value.filter((x) => x !== id);
+  selected.value = on ? (selected.value.includes(id) || picked.value.length >= BATCH_MAX ? selected.value : [...selected.value, id]) : selected.value.filter((x) => x !== id);
 }
 
 // ---- 動作 ----
-/** 跑一個寫入動作：成功丟掉 operationId，失敗留著給下一次重按；不論結果都重新載入 */
-async function act(key: string, run: (access: string) => Promise<void>, onError: (e: unknown) => void) {
+/**
+ * 跑一個寫入動作：成功丟掉 operationId，失敗留著給下一次重按；不論結果都重新載入。
+ * attempted：拿到令牌、請求真的送出去了（令牌過期這種失敗沒有送出任何東西）。
+ */
+async function act(key: string, run: (access: string) => Promise<void>, onError: (e: unknown, attempted: boolean) => void) {
   if (busy.has(key)) return;
   busy.add(key);
-  try { await run(await token()); ops.delete(key); } catch (e) { onError(e); } finally { busy.delete(key); }
+  let attempted = false;
+  try { const tk = await token(); attempted = true; await run(tk); ops.delete(key); } catch (e) { onError(e, attempted); } finally { busy.delete(key); }
   await refresh();
 }
-const confirmPay = (count: number, total: number, confirmText: string) => confirmDialog({ message: t('campaign.payouts.confirm', { count, points: num(total) }), confirmText });
+const confirmPay = (count: number, total: number, confirmText: string) => confirmDialog({ message: t('campaign.payouts.confirm', { count, points: num(total) }, count), confirmText });
 
 async function payOne(item: PayableItem) {
   if (!(await confirmPay(1, item.due, t('campaign.payouts.pay')))) return;
   const key = `pay:${item.contentId}`;
-  await act(key, async (tk) => { contentResult.set(item.contentId, outcome(await requestPayout(tk, item.contentId, opFor(key)))); }, (e) => contentResult.set(item.contentId, failure(e)));
+  await act(key, async (tk) => { contentResult.set(item.contentId, outcome(await requestPayout(tk, item.contentId, opFor(key)))); }, (e, attempted) => contentResult.set(item.contentId, payFailure(e, attempted)));
 }
 async function paySelected() {
   const rows = picked.value;
   if (!rows.length || busy.has('batch')) return;
   if (!(await confirmPay(rows.length, pickedPoints.value, t('campaign.payouts.paySelected')))) return;
-  const ids = rows.map((i) => i.contentId);
-  const key = `batch:${[...ids].sort().join(',')}`;
-  batchError.value = '';
+  // 同一組勾選不論勾的順序都是同一批：本體與 operationId 的鍵用同一個排序
+  const ids = rows.map((i) => i.contentId).sort();
+  const key = `batch:${ids.join(',')}`;
+  batchNote.value = null;
   busy.add('batch');
   try {
     await act(key, async (tk) => {
       const res = await batchPayout(tk, ids, opFor(key));
       for (const it of res.items) contentResult.set(it.contentId, 'payout' in it ? outcome(it.payout) : failure(it.error));
       selected.value = [];
-    }, (e) => { batchError.value = campaignErrorText(e); });
+    }, (e, attempted) => { batchNote.value = attempted && uncertain(e) ? { uncertain: true, text: t('campaign.payouts.uncertain') } : { uncertain: false, text: campaignErrorText(e) }; });
   } finally { busy.delete('batch'); }
 }
 const retry = (p: PayoutListItem) => {
@@ -184,7 +215,7 @@ const retry = (p: PayoutListItem) => {
 };
 const check = (p: PayoutListItem) => act(`check:${p.id}`, async (tk) => {
   const res = await checkPayout(tk, p.id);
-  payoutResult.set(p.id, res.result === 'paid' ? outcome(res.payout) : { ok: true, text: t(`campaign.payouts.${res.result}`) });
+  payoutResult.set(p.id, res.result === 'paid' ? outcome(res.payout) : { tone: 'neutral', text: t(`campaign.payouts.${res.result}`) });
 }, (e) => payoutResult.set(p.id, failure(e)));
 
 // ---- 取消對話框 ----
@@ -218,7 +249,7 @@ async function submitCancel() {
     ops.delete(key);
     await close();
     await refresh();
-  } catch (e) { d.error = campaignErrorText(e); } finally { d.busy = false; }
+  } catch (e) { d.error = campaignErrorText(e); void refresh(); } finally { d.busy = false; }
 }
 function onKey(e: KeyboardEvent) {
   if (!dialog.value) return;
@@ -277,14 +308,14 @@ onBeforeUnmount(() => { alive = false; document.removeEventListener('keydown', o
           <span class="subtle">{{ t('campaign.payouts.selected', { count: picked.length, points: num(pickedPoints) }) }}<template v-if="picked.length >= BATCH_MAX"> · {{ t('campaign.payouts.limit', { n: BATCH_MAX }) }}</template></span>
           <button data-action="pay-selected" class="btn btn--sm btn--primary" :disabled="!picked.length || busy.has('batch')" @click="paySelected">{{ t('campaign.payouts.paySelected') }}</button>
         </div>
-        <p v-if="batchError" class="notice notice--error" role="alert">{{ batchError }}</p>
+        <p v-if="batchNote" data-batch-note class="notice" :class="{ 'notice--error': !batchNote.uncertain }" :role="batchNote.uncertain ? 'status' : 'alert'">{{ batchNote.text }}</p>
         <div class="rpo-list" :aria-busy="payable.loading">
           <template v-if="payable.loading && !payable.items.length"><div v-for="n in 3" :key="n" class="ghost rpo-ghost--row" /></template>
           <p v-else-if="!payable.items.length && !payable.error" class="panel rpo-empty muted">{{ t('campaign.payouts.emptyPayable') }}</p>
           <article v-for="item in payable.items" :key="item.contentId" class="panel rpo-row" :data-content="item.contentId">
             <label class="rpo-check">
-              <input type="checkbox" :checked="selected.includes(item.contentId)" :aria-label="t('campaign.payouts.select', { title: item.contentTitle })"
-                :disabled="sent(item.contentId) || busy.has('batch') || (!selected.includes(item.contentId) && selected.length >= BATCH_MAX)"
+              <input type="checkbox" :checked="selected.includes(item.contentId) && batchable(item.contentId)" :aria-label="t('campaign.payouts.select', { title: item.contentTitle })"
+                :disabled="!batchable(item.contentId) || busy.has('batch') || (!picked.some((i) => i.contentId === item.contentId) && picked.length >= BATCH_MAX)"
                 @change="toggle(item.contentId, ($event.target as HTMLInputElement).checked)" />
             </label>
             <div class="rpo-row__main">
@@ -295,10 +326,11 @@ onBeforeUnmount(() => { alive = false; document.removeEventListener('keydown', o
                 <div><dt>{{ t('campaign.mine.paid') }}</dt><dd class="num">{{ points(item.paidTotal) }}</dd></div>
                 <div><dt>{{ t('campaign.detail.due') }}</dt><dd class="num">{{ points(item.due) }}</dd></div>
               </dl>
-              <p class="rpo-line rpo-result" :class="{ 'rpo-result--bad': contentResult.get(item.contentId)?.ok === false }" aria-live="polite">{{ contentResult.get(item.contentId)?.text }}</p>
+              <p class="rpo-line rpo-result" :class="toneClass(contentResult.get(item.contentId))" aria-live="polite">{{ contentResult.get(item.contentId)?.text }}</p>
+              <p v-if="gone.has(item.contentId)" class="subtle rpo-line">{{ t('campaign.payouts.seeHistory') }}</p>
             </div>
             <div class="rpo-actions">
-              <button data-action="pay" class="btn btn--sm" :disabled="sent(item.contentId) || busy.has(`pay:${item.contentId}`) || busy.has('batch')" @click="payOne(item)">{{ t('campaign.payouts.pay') }}</button>
+              <button data-action="pay" class="btn btn--sm" :disabled="!payable1(item.contentId) || busy.has(`pay:${item.contentId}`) || busy.has('batch')" @click="payOne(item)">{{ t('campaign.payouts.pay') }}</button>
             </div>
           </article>
         </div>
@@ -314,10 +346,10 @@ onBeforeUnmount(() => { alive = false; document.removeEventListener('keydown', o
               <span class="chip">{{ t(`campaign.status.${p.status}`) }}</span>
             </div>
             <p class="subtle rpo-line">@{{ p.applicant.handle }} · {{ titleOf(p.campaignSlug) }} · <time>{{ at(p.settledAt ?? p.createdAt, p.campaignSlug) }}</time></p>
-            <p class="rpo-line"><span class="num">{{ points(p.amount) }}</span> · <span class="subtle">{{ t('campaign.payouts.attempts', { n: p.attempts }) }}</span></p>
-            <p v-if="p.error" class="rpo-line rpo-result--bad">{{ campaignErrorText(p.error) }}</p>
+            <p class="rpo-line"><span class="num">{{ points(p.amount) }}</span> · <span class="subtle">{{ t('campaign.payouts.attempts', { n: p.attempts }, p.attempts) }}</span></p>
+            <p v-if="p.error" class="rpo-line" :class="p.status === 'pending' ? 'rpo-result--neutral' : 'rpo-result--bad'">{{ campaignErrorText(p.error) }}</p>
             <p v-if="p.status === 'failed'" class="subtle rpo-line">{{ t('campaign.payouts.payAgain') }}</p>
-            <p class="rpo-line rpo-result" :class="{ 'rpo-result--bad': payoutResult.get(p.id)?.ok === false }" aria-live="polite">{{ payoutResult.get(p.id)?.text }}</p>
+            <p class="rpo-line rpo-result" :class="toneClass(payoutResult.get(p.id))" aria-live="polite">{{ payoutResult.get(p.id)?.text }}</p>
           </div>
           <div class="rpo-actions">
             <button v-if="p.status === 'blocked_insufficient'" data-action="retry" class="btn btn--sm btn--primary" :disabled="busy.has(`retry:${p.id}`)" @click="retry(p)">{{ t('campaign.payouts.retry') }}</button>
@@ -383,8 +415,10 @@ onBeforeUnmount(() => { alive = false; document.removeEventListener('keydown', o
 .rpo-line { margin: 0; }
 .rpo-sum { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-3); margin: 0; }
 .rpo-result:empty { display: none; }
-.rpo-result { font-size: 14px; color: var(--success); }
-.rpo-result--bad { font-size: 14px; color: var(--danger); }
+.rpo-result, .rpo-result--bad, .rpo-result--neutral { font-size: 14px; }
+.rpo-result--ok { color: var(--success); }
+.rpo-result--bad { color: var(--danger); }
+.rpo-result--neutral { color: var(--text-2); }
 .rpo-actions { display: flex; flex-wrap: wrap; gap: var(--s-2); justify-content: flex-end; }
 .rpo-actions:empty { display: none; }
 .rpo-pager { display: flex; gap: var(--s-2); justify-content: center; }
