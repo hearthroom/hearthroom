@@ -2110,5 +2110,6 @@
   "blog.admin.saveFirst": "先儲存修改，再發布",
   "blog.admin.back": "返回文章列表",
   "blog.admin.noRevisions": "還沒有修訂紀錄",
-  "blog.admin.revisionBy": "{name} · {date}"
+  "blog.admin.revisionBy": "{name} · {date}",
+  "blog.admin.managersOnly": "部落格只有管理員和站長能使用。"
 }

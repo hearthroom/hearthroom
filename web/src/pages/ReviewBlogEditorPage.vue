@@ -4,13 +4,14 @@
  *
  * 存檔帶上次讀到的版本號；別人先存過（blog_version_conflict）就停下來給兩條路——載入最新版本或複製我的內容——
  * 不自動覆蓋任何一邊。發布、撤下、置頂、留言開關都會讓版本號前進，所以每個回應都拿來更新版本號，
- * 下一次存檔才不會被自己的狀態變更擋成衝突；但只更新狀態，不動編輯中的內容。
+ * 下一次存檔才不會被自己的狀態變更擋成衝突；但只更新狀態，不動編輯中的內容。狀態變更的回應若帶著別人存的內容
+ * （版本號跳了不只一號、或內容不同），不拿它當存檔基準，改走衝突那條路，免得下一次存檔蓋掉別人的修改。
  *
  * 操作編號：同一件事（同一份內容的存檔、同一個狀態變更、同一版還原）送失敗再按，沿用上一次的編號，
  * 服務端靠它認出重送；成功後丟掉。內容改過就是另一件事，換新的。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
-import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
+import { RouterLink, onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import {
   columnName, createPreview, displayStatus, fetchAdminColumns, fetchAdminPost, fetchRevision, fetchRevisions, imageUrlOf, POST_LOCALES,
@@ -52,6 +53,8 @@ const revisions = ref<Revision[]>([]);
 const opened = ref<(Revision & { bodyMd: string }) | null>(null);
 const loading = ref(true);
 const saving = ref(false);
+/** 還在上傳的圖片數：有的話不能存，不然佔位文字會被存進去 */
+const uploading = ref(0);
 const busy = ref(false);
 const conflict = ref(false);
 const error = ref('');
@@ -80,6 +83,7 @@ async function token() {
 
 /** 把服務端的版本放進編輯器（丟掉本地內容）。 */
 function apply(p: AdminPost) {
+  ops.clear();
   post.value = p;
   Object.assign(draft, fromPost(p));
   saved.value = JSON.stringify(draft);
@@ -95,7 +99,7 @@ async function load() {
   loading.value = true; error.value = ''; previewUrl.value = ''; opened.value = null;
   try {
     const access = await token();
-    const id = route.params.id ? String(route.params.id) : '';
+    const id = route.params.id && route.params.id !== 'new' ? String(route.params.id) : '';
     const [cols, p, revs] = await Promise.all([fetchAdminColumns(access), id ? fetchAdminPost(access, id) : null, id ? fetchRevisions(access, id) : null]);
     columns.value = cols.items;
     revisions.value = revs?.items ?? [];
@@ -121,7 +125,7 @@ function suggestSlug(title: string) {
 watch(() => draft.title, (title) => { if (!post.value && !slugTouched.value) draft.slug = title.trim() ? suggestSlug(title) : ''; });
 
 async function save() {
-  if (saving.value || busy.value) return;
+  if (saving.value || busy.value || uploading.value) return;
   const input = toInput(draft);
   const sent = JSON.stringify(draft);
   const key = `save:${JSON.stringify(input)}`;
@@ -167,10 +171,15 @@ async function change(c: StateChange, title: string, msg: string, danger = false
   const key = `state:${JSON.stringify(c)}`;
   busy.value = true; error.value = ''; done.value = '';
   try {
-    const res = await setPostState(await token(), post.value.id, c, opFor(key));
+    const prev = post.value;
+    const res = await setPostState(await token(), prev.id, c, opFor(key));
     ops.delete(key);
-    // 只收狀態與版本號：編輯中的內容不動
-    post.value = res;
+    // 只收狀態與版本號：編輯中的內容不動。中間有人存過內容的話，版本號留在原處、標成衝突，
+    // 下一次存檔就會被擋下來，交給「載入最新版本／複製我的內容」
+    const moved = res.version !== prev.version + 1 || JSON.stringify(fromPost(res)) !== JSON.stringify(fromPost(prev));
+    const { status, publishAt, firstPublishedAt, pinned, commentsClosed, pinnedCommentId } = res;
+    post.value = moved ? { ...prev, status, publishAt, firstPublishedAt, pinned, commentsClosed, pinnedCommentId } : res;
+    if (moved) conflict.value = true;
     done.value = t('blog.admin.saved');
   } catch (e) { error.value = message(e); } finally { busy.value = false; }
 }
@@ -221,22 +230,24 @@ let uploads = 0;
 async function insertImages(files: File[]) {
   const el = source.value;
   let at = el ? el.selectionStart : draft.bodyMd.length;
-  const marks = files.map((file) => ({ file, mark: `![${t('blog.admin.uploading')}](#upload-${++uploads})` }));
-  const text = marks.map((m) => m.mark).join('\n');
+  // 第二張起的佔位文字自帶前面那個換行：失敗時連換行一起拿掉
+  const marks = files.map((file, i) => ({ file, mark: `${i ? '\n' : ''}![${t('blog.admin.uploading')}](#upload-${++uploads})` }));
+  const text = marks.map((m) => m.mark).join('');
   draft.bodyMd = draft.bodyMd.slice(0, at) + text + draft.bodyMd.slice(el ? el.selectionEnd : at);
   at += text.length;
   await nextTick();
   el?.setSelectionRange(at, at);
+  uploading.value += marks.length;
   const access = await token().catch(() => '');
   await Promise.all(marks.map(async ({ file, mark }) => {
     try {
       if (!access) throw new Error();
       const { url } = await uploadBlogImage(access, file);
-      draft.bodyMd = draft.bodyMd.replace(mark, () => `![](${url})`);
+      draft.bodyMd = draft.bodyMd.replace(mark, () => `${mark.startsWith('\n') ? '\n' : ''}![](${url})`);
     } catch {
       draft.bodyMd = draft.bodyMd.replace(mark, '');
       error.value = t('blog.admin.uploadFailed');
-    }
+    } finally { uploading.value--; }
   }));
 }
 const images = (list: FileList | File[] | undefined | null) => [...(list ?? [])].filter((f) => f.type.startsWith('image/'));
@@ -263,8 +274,11 @@ async function uploadCover(e: Event, field: 'coverKey' | 'shareCoverKey') {
 
 // ---- 離開前提醒：站內換頁與關分頁都攔 ----
 
-onBeforeRouteLeave(async () => !dirty.value || (await confirmDialog({ message: t('blog.admin.unsaved'), confirmText: t('dialog.leave'), danger: true })));
-const guard = (e: BeforeUnloadEvent) => { if (dirty.value) e.preventDefault(); };
+const ask = async () => !dirty.value || (await confirmDialog({ message: t('blog.admin.unsaved'), confirmText: t('dialog.leave'), danger: true }));
+onBeforeRouteLeave(ask);
+// 同一條記錄換到另一篇（或回到新文章）也要問；第一次存好換成自己的網址不問
+onBeforeRouteUpdate((to) => (to.params.id === post.value?.id ? true : ask()));
+const guard = (e: BeforeUnloadEvent) => { if (dirty.value) { e.preventDefault(); e.returnValue = ''; } };
 onMounted(() => { document.title = pageTitle(t('moderation.tab.blog')); window.addEventListener('beforeunload', guard); void load(); });
 onBeforeUnmount(() => window.removeEventListener('beforeunload', guard));
 // 新文章第一次存好會換到它自己的網址：那一篇已經在編輯器裡，不必重讀
@@ -298,7 +312,7 @@ watch(() => route.params.id, (id) => { if (/\/review\/blog\/[^/]+$/.test(route.p
       <input v-model="draft.title" class="input bed-title" maxlength="120" :placeholder="t('blog.admin.postTitle')" :aria-label="t('blog.admin.postTitle')" />
 
       <div class="bed-actions">
-        <button type="button" class="btn btn--primary" data-action="save" :disabled="saving || busy || !columns.length || !draft.title.trim()" @click="save">{{ t('blog.admin.save') }}</button>
+        <button type="button" class="btn btn--primary" data-action="save" :disabled="saving || busy || uploading > 0 || !columns.length || !draft.title.trim()" @click="save">{{ t('blog.admin.save') }}</button>
         <template v-if="post">
           <button v-if="post.status === 'published'" type="button" class="btn" data-action="unpublish" :disabled="busy || saving" @click="unpublish">{{ t('blog.admin.unpublish') }}</button>
           <button v-else type="button" class="btn" data-action="publish" :disabled="busy || saving || dirty" :title="dirty ? t('blog.admin.saveFirst') : undefined" @click="publish">{{ scheduleAt ? t('blog.admin.schedule') : t('blog.admin.publish') }}</button>

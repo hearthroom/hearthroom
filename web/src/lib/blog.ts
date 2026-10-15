@@ -80,7 +80,7 @@ const FIELD_LABEL: Record<string, string> = {
   shareCoverKey: "blog.admin.shareCover", publishAt: "blog.admin.schedule",
 };
 const CODE_MESSAGE: Record<string, string> = {
-  blog_version_conflict: "blog.admin.conflict", blog_slug_taken: "blog.admin.slugTaken", blog_column_slug_taken: "blog.admin.columnSlugTaken",
+  blog_write_forbidden: "blog.admin.managersOnly", blog_version_conflict: "blog.admin.conflict", blog_slug_taken: "blog.admin.slugTaken", blog_column_slug_taken: "blog.admin.columnSlugTaken",
   blog_preview_unavailable: "blog.admin.previewUnavailable", blog_image_invalid: "blog.admin.uploadFailed", blog_image_unavailable: "blog.admin.uploadFailed",
 };
 

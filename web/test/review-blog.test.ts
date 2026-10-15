@@ -151,11 +151,27 @@ it('pasting an image uploads it and inserts Markdown at the cursor, with a place
   el.dispatchEvent(paste);
   expect(paste.defaultPrevented).toBe(true);
   await vi.waitFor(() => expect(source().value).toContain(t('blog.admin.uploading')));
+  expect(host.querySelector<HTMLButtonElement>('[data-action="save"]')!.disabled).toBe(true);
   const upload = calls.find((c) => c.path === '/v1/blog/admin/images')!;
   expect(upload.method).toBe('POST');
   expect((upload.body as FormData).get('file')).toBeInstanceOf(File);
   finish(ok({ key: 'blog/abc.webp', url: '/v1/blog/images/abc.webp' }));
   await vi.waitFor(() => expect(source().value).toBe('舊![](/v1/blog/images/abc.webp)內容'));
+});
+
+it('when one of several pasted images fails, its placeholder goes with its line break', async () => {
+  await mount('/review/blog/p1');
+  await vi.waitFor(() => expect(source()?.value).toBe('舊內容'));
+  let n = 0;
+  handle = (c) => (c.path === '/v1/blog/admin/images' ? (++n === 1 ? ok({ key: 'blog/a.webp', url: '/v1/blog/images/a.webp' }) : { status: 400, body: { error: 'blog_image_invalid' } }) : undefined);
+  source().setSelectionRange(1, 1);
+  const paste = new Event('paste', { bubbles: true, cancelable: true });
+  const png = (name: string) => new File(['x'], name, { type: 'image/png' });
+  Object.defineProperty(paste, 'clipboardData', { value: { files: [png('a.png'), png('b.png')], items: [], getData: () => '' } });
+  source().dispatchEvent(paste);
+  await vi.waitFor(() => expect(host.textContent).toContain(t('blog.admin.uploadFailed')));
+  await vi.waitFor(() => expect(source().value).toBe('舊![](/v1/blog/images/a.webp)內容'));
+  expect(host.querySelector<HTMLButtonElement>('[data-action="save"]')!.disabled).toBe(false);
 });
 
 it('a failed image upload removes the placeholder and says so', async () => {
@@ -194,4 +210,57 @@ it('a publish retry after a failure reuses the same operation id, and takes the 
   host.querySelector<HTMLButtonElement>('[data-action="save"]')!.click();
   await vi.waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
   expect(calls.find((c) => c.method === 'PUT')!.body.expectedVersion).toBe(4);
+});
+
+it('a state change that comes back with someone else\'s save does not become my save base', async () => {
+  await mount('/review/blog/p1');
+  await vi.waitFor(() => expect(source()?.value).toBe('舊內容'));
+  type(source(), 'A 的修改'); await nextTick();
+  // B 已經存到第 4 版；A 置頂，回來的是第 5 版、內容是 B 的
+  handle = (c) => c.path === '/v1/blog/admin/posts/p1/state' ? ok(post({ pinned: true, bodyMd: 'B 的內容', version: 5 }))
+    : c.method === 'PUT' ? (c.body.expectedVersion === 5 ? ok(post({ bodyMd: c.body.bodyMd, version: 6 })) : { status: 409, body: { error: 'blog_version_conflict', version: 5 } })
+      : undefined;
+  host.querySelector<HTMLButtonElement>('[data-action="pin"]')!.click();
+  await vi.waitFor(() => expect(confirm()).not.toBeNull());
+  confirm().click();
+  await vi.waitFor(() => expect(host.querySelector('[data-conflict]')).not.toBeNull());
+  expect(host.querySelector('[data-action="pin"]')!.textContent).toContain(t('blog.admin.unpin'));
+  expect(source().value).toBe('A 的修改');
+  host.querySelector<HTMLButtonElement>('[data-action="save"]')!.click();
+  await settle();
+  expect(calls.filter((c) => c.method === 'PUT').every((c) => c.body.expectedVersion !== 5)).toBe(true);
+  expect(host.querySelector('[data-conflict]')).not.toBeNull();
+});
+
+it('after the first save of a new post, leaving with new edits still asks', async () => {
+  handle = (c) => c.method === 'POST' && c.path === '/v1/blog/admin/posts' ? ok(post({ id: 'p9', title: c.body.title, slug: c.body.slug, bodyMd: c.body.bodyMd, version: 1 }))
+    : c.path === '/v1/blog/admin/posts/p9/revisions' ? ok({ items: [] }) : undefined;
+  await mount('/review/blog/new');
+  await vi.waitFor(() => expect(source()).not.toBeNull());
+  const title = host.querySelector<HTMLInputElement>('.bed-title')!;
+  title.value = 'Hello'; title.dispatchEvent(new Event('input'));
+  type(source(), '第一版'); await nextTick();
+  host.querySelector<HTMLButtonElement>('[data-action="save"]')!.click();
+  await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/review/blog/p9'));
+  expect(calls.find((c) => c.method === 'POST')!.body).toMatchObject({ title: 'Hello', slug: 'hello', bodyMd: '第一版' });
+  type(source(), '第二版還沒存'); await nextTick();
+  const leaving = router.push('/review/blog');
+  await vi.waitFor(() => expect(document.querySelector('[role=alertdialog]')?.textContent).toContain(t('blog.admin.unsaved')));
+  document.querySelector<HTMLButtonElement>('[role=alertdialog] [data-cancel]')!.click();
+  await leaving;
+  expect(router.currentRoute.value.path).toBe('/review/blog/p9');
+  // 換到另一篇也要問
+  const other = router.push('/review/blog/p1');
+  await vi.waitFor(() => expect(document.querySelector('[role=alertdialog]')?.textContent).toContain(t('blog.admin.unsaved')));
+  document.querySelector<HTMLButtonElement>('[role=alertdialog] [data-cancel]')!.click();
+  await other;
+  expect(router.currentRoute.value.path).toBe('/review/blog/p9');
+});
+
+it('a reviewer who is not a manager sees who the blog tab is for, not a raw error', async () => {
+  handle = (c) => (c.path.startsWith('/v1/blog/admin/') || c.path === '/v1/blog/admin/posts' ? { status: 403, body: { error: 'blog_write_forbidden' } } : undefined);
+  await mount('/review/blog');
+  await vi.waitFor(() => expect(host.textContent).toContain(t('blog.admin.managersOnly')));
+  expect(host.textContent).not.toContain('blog_write_forbidden');
+  expect(host.querySelector('.rblog-columns')).toBeNull();
 });
