@@ -1,4 +1,4 @@
-import { managedAuth, MANAGED_TOKEN_REUSE_MS } from './managed-auth';
+import { managedAuth, MANAGED_TOKEN_REUSE_MS, dropManagedToken } from './managed-auth';
 import {
   beginLogin,
   persist,
@@ -44,7 +44,8 @@ function verifyAccount(provider: ProviderId, token: string, expectedAccount: num
 }
 export async function accountToken(
   provider: ProviderId,
-  expectedAccount?: number
+  expectedAccount?: number,
+  options: { verifyManaged?: boolean } = {},
 ): Promise<string | null> {
   const managed=await managedAuth();
   // Managed mode reuses a server-issued token for a few minutes (managed-auth.ts); a grant replaced
@@ -53,8 +54,14 @@ export async function accountToken(
   // 託管模式的 token 是本站伺服器替這個成員換的：伺服器換發前後都核對過帳號仍歸他（issueToken），
   // 不必再跨洋問一次 /me。開「我的卡片」時這一趟串在讀清單前面，實測約 0.7 s（2026-09-26）。
   // 自架（非託管）模式的 token 存在瀏覽器裡，照舊核對。
-  if (!token || expectedAccount === undefined || managed) return token;
-  return (await verifyAccount(provider, token, expectedAccount)) ? token : null;
+  // A long-lived upload queue must also verify renewed managed tokens: another
+  // tab can replace the site session while this page still displays the old profile.
+  if (!token || expectedAccount === undefined || (managed && !options.verifyManaged)) return token;
+  if (await verifyAccount(provider, token, expectedAccount)) return token;
+  if (!managed || !options.verifyManaged) return null;
+  dropManagedToken(provider, token);
+  const renewed = (await refresh(provider))?.accessToken;
+  return renewed && renewed !== token && await verifyAccount(provider, renewed, expectedAccount) ? renewed : null;
 }
 async function result(res: Response) {
   const body = await res.json();

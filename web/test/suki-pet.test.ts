@@ -11,6 +11,7 @@ import { resolve } from "node:path";
 import { compose, Rig, type PetSkeleton, type PetSkin } from "../src/pet/puppet";
 import { feed, levelOf, LEVELS, visit } from "../../shared/suki-care";
 import { GUIDES, guideFor } from "../src/pet/guides";
+import { exprTargets } from "../src/pet/pet-ui";
 
 const dir = resolve("public/mascot/pet");
 const skeleton: PetSkeleton = JSON.parse(readFileSync(resolve(dir, "skeleton.json"), "utf8"));
@@ -76,6 +77,28 @@ describe("骨架與部件", () => {
     for (const id of ["eyeclosed", "mouthopen", "expr-happy", "expr-dizzy"]) expect(rig.opacity(rig.model.parts.find((p) => p.id === id)!)).toBe(0);
     rig.params.Expr_happy = 1;
     expect(rig.opacity(rig.model.parts.find((p) => p.id === "expr-happy")!)).toBe(1);
+  });
+
+  it("閉眼時眼白、眼珠、眼線收起來，只剩閉眼那層（底下是乾淨皮膚，眼角才不會露出睜眼的碎片）", () => {
+    for (const name of ["day", "night", "imp", "night-imp"]) {
+      const rig = new Rig(compose(skeleton, JSON.parse(readFileSync(resolve(dir, `skin-${name}.json`), "utf8")) as PetSkin));
+      const op = (id: string) => rig.opacity(rig.model.parts.find((p) => p.id === id)!);
+      expect(["eyewhite", "iris", "eyeline", "eyeclosed"].map(op), name).toEqual([1, 1, 1, 0]);
+      rig.params.EyeOpen = 0;
+      expect(["eyewhite", "iris", "eyeline", "eyeclosed"].map(op), name).toEqual([0, 0, 0, 1]);
+    }
+  });
+});
+
+describe("表情", () => {
+  it("睡著時不疊表情層：閒置再久也不換成打哈欠的臉（那張是睜眼張嘴），閉眼才露得出來", () => {
+    expect(exprTargets({ sleepy: 1 }, { sleeping: true, acting: false, idle: 600 })).toEqual({ happy: 0, surprised: 0, pout: 0, shy: 0, sleepy: 0, dizzy: 0, wink: 0, peek: 0 });
+    expect(exprTargets({ happy: 1 }, { sleeping: true, acting: true, idle: 5 }).happy).toBe(0);
+  });
+  it("醒著閒太久會想睡；正在演的表情不被蓋掉，演完回到平常", () => {
+    expect(exprTargets({}, { sleeping: false, acting: false, idle: 60 }).sleepy).toBe(1);
+    expect(exprTargets({ happy: 1 }, { sleeping: false, acting: true, idle: 60 })).toEqual({ happy: 1 });
+    expect(exprTargets({ happy: 1 }, { sleeping: false, acting: false, idle: 3 }).happy).toBe(0);
   });
 });
 

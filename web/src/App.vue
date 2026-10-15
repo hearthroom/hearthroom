@@ -99,7 +99,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
   <a class="skip" href="#main">{{ $t("nav.skip") }}</a>
 
   <header v-if="!route.meta.bare" class="header">
-    <div class="header__inner" :class="{ 'header__inner--nosearch': onSearchPage, 'header__inner--reviewer': reviewerStore.likely }">
+    <div class="header__inner" :class="{ 'header__inner--nosearch': onSearchPage, 'header__inner--reviewer': reviewerStore.likely || reviewerStore.blogWriter }">
       <RouterLink :to="lp('/')" class="brand" :aria-label="brandName">
         <!-- 看板娘蘇綺的頭像（docs/design/hearthroom-mascot）；固定配色，不跟主題換色 -->
         <img class="brand__mark" src="/mascot/suki-mark.webp" alt="" width="28" height="28" decoding="async" />
@@ -111,7 +111,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
         <RouterLink :to="lp('/library')" class="nav__item" active-class="nav__item--on">{{ $t("library.title") }}</RouterLink>
         <RouterLink v-if="session.me" :to="lp('/mine')" class="nav__item" active-class="nav__item--on">{{ $t("nav.mine") }}</RouterLink>
         <!-- 只有審核人看得到這顆：是不是審核人由本站決定，登入後問一次 -->
-        <RouterLink v-if="reviewerStore.likely" :to="lp('/review')" class="nav__item" active-class="nav__item--on">{{ $t("nav.review") }}<ReviewBadge /></RouterLink>
+        <RouterLink v-if="reviewerStore.likely || reviewerStore.blogWriter" :to="lp(reviewerStore.likely ? '/review' : '/review/blog')" class="nav__item" active-class="nav__item--on">{{ $t("nav.review") }}<ReviewBadge /></RouterLink>
       </nav>
 
       <form v-if="!onSearchPage" class="search" role="search" @submit.prevent="search">

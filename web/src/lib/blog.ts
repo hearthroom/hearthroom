@@ -53,9 +53,14 @@ export function columnName(column: BlogColumn | undefined, locale: string, fallb
   return column.name[locale] || column.name["zh-Hant"] || Object.values(column.name).find(Boolean) || column.slug;
 }
 
+/** 新文章的網址代號從標題建議：HTML 標籤先拿掉，英數字留下、其餘變連字號；什麼都不剩（全是中日韓文字）就用日期。 */
+export function suggestSlug(title: string, now = new Date()): string {
+  const s = title.replace(/<[^>]*>/g, ' ').normalize('NFKD').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60).replace(/-+$/, '');
+  return s || `post-${now.toISOString().slice(0, 10).replace(/-/g, '')}`;
+}
 export const postPath = (p: { columnSlug: string; slug: string }) => `/blog/${p.columnSlug}/${p.slug}`;
 
-// ---- 管理（/v1/blog/admin）：manager／owner 才進得去，權限由服務端判 ----------------------
+// ---- 管理（/v1/blog/admin）：本站應用的 owner／admin 才進得去，權限由服務端判 --------------
 
 export const POST_LOCALES = ["zh-Hant", "zh-Hans", "en", "ja", "ko"] as const;
 export type PostStatus = "draft" | "pending_review" | "published" | "unpublished";
@@ -73,7 +78,7 @@ export interface PostInput {
   columnId: string; slug: string; locale: string; title: string; excerpt: string; bodyMd: string; coverKey: string | null;
   shareTitle: string | null; shareDescription: string | null; shareCoverKey: string | null; campaignId: string | null;
 }
-export type StateChange = { status: "published"; publishAt?: number } | { status: "unpublished" } | { pinned: boolean } | { commentsClosed: boolean };
+export type StateChange = { status: "published"; publishAt?: number } | { status: "unpublished" } | { pinned: boolean } | { commentsClosed: boolean } | { pinnedCommentId: string | null };
 export interface Revision { id: string; editorHandle: string; title: string; createdAt: number }
 
 /** 表單上對應錯誤欄位的標籤；沒列到的欄位講通用的那句。 */

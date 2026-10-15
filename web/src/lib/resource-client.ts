@@ -52,14 +52,26 @@ export interface ResourcePage {
 }
 const numeric = (v: unknown): number | null =>
   typeof v === "number" && Number.isFinite(v) ? v : null;
-/** Immutable issuer + bearer pair. Never consult the global active provider mid-request. */
-export function resourceClient(provider: ProviderId, token: string) {
+/** Fixed issuer/account; renewable credentials keep the same resumable upload state. */
+export function resourceClient(provider: ProviderId, credentials: string | ((rejectedToken?: string) => Promise<string | null>)) {
   const base = apiBaseOf(provider);
-  const headers = { Authorization: `Bearer ${token}` };
+  async function authorizedFetch(path: string, init: RequestInit) {
+    const token = typeof credentials === "string" ? credentials : await credentials();
+    if (!token) throw new ApiError(401, describeApiError(401, ""));
+    const send = (bearer: string) => fetch(`${base}/open/v1/image/${path}`, {
+      ...init,
+      headers: { ...init.headers, Authorization: `Bearer ${bearer}` },
+    });
+    const response = await send(token);
+    if (response.status !== 401 || typeof credentials === "string") return response;
+    // Only rejected credentials trigger one renewal. Do not replay storage PUTs
+    // or discard upload intents/completion receipts while renewing authorization.
+    const renewed = await credentials(token);
+    return renewed && renewed !== token ? send(renewed) : response;
+  }
   async function request(path: string, body?: unknown) {
-    const r = await fetch(`${base}/open/v1/image/${path}`, {
+    const r = await authorizedFetch(path, {
       headers: {
-        ...headers,
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
       },
       ...(body === undefined
@@ -93,9 +105,8 @@ export function resourceClient(provider: ProviderId, token: string) {
     const rel = relativePath(file, prefix);
     if (provider === "harbor" && rel) form.append("relativePath", rel);
     for (const id of folderIds) form.append("folderIds", id);
-    const r = await fetch(`${base}/open/v1/image/upload`, {
+    const r = await authorizedFetch("upload", {
       method: "POST",
-      headers,
       body: form,
     });
     const b = await r.json().catch(() => ({}));

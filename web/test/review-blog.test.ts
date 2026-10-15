@@ -9,13 +9,13 @@ import { createMemoryHistory, createRouter, RouterView, type Router } from 'vue-
 import { i18n } from '../src/lib/i18n';
 import ConfirmDialog from '../src/components/ConfirmDialog.vue';
 
-const mocks = vi.hoisted(() => ({ role: 'manager' as string }));
+const mocks = vi.hoisted(() => ({ role: 'manager' as string, reviewer: true, writer: true }));
 vi.mock('../src/lib/session', () => ({ useSession: () => ({ me: { accountNumId: 7 }, profile: {}, ready: true, accessToken: async () => 'synthetic' }) }));
 vi.mock('../src/lib/api', async (original) => {
   const real = await original<typeof import('../src/lib/api')>();
   return {
     ...real,
-    fetchReviewMe: async () => ({ reviewer: true, pending: 0, reviews: 0, cases: 0, comments: 0, role: mocks.role }),
+    fetchReviewMe: async () => ({ reviewer: mocks.reviewer, pending: 0, reviews: 0, cases: 0, comments: 0, role: mocks.role, blogWriter: mocks.writer }),
     fetchCommentQueue: async () => ({ total: 0, items: [] }),
     fetchCommentStats: async () => ({ held: 0, openReports: 0, removed7d: 0, medianHandleMs7d: null, holdReasons7d: {} }),
     fetchKeywords: async () => ({ items: [] }),
@@ -49,7 +49,7 @@ const confirm = () => document.querySelector<HTMLButtonElement>('[role=alertdial
 
 beforeEach(() => {
   i18n.global.locale.value = 'zh-Hant';
-  mocks.role = 'manager';
+  mocks.role = 'manager'; mocks.reviewer = true; mocks.writer = true;
   calls = [];
   handle = () => undefined;
   vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit = {}) => {
@@ -70,17 +70,24 @@ beforeEach(() => {
 });
 afterEach(() => { app?.unmount(); document.body.innerHTML = ''; vi.unstubAllGlobals(); });
 
-it('shows the blog tab only to managers and owners', async () => {
-  mocks.role = 'reviewer';
+it('shows the blog tab to app owners and admins, whatever their review role', async () => {
+  mocks.role = 'owner'; mocks.writer = false;
   await mount('/review/comments');
   await settle();
   expect(host.querySelector('.management-nav a[href="/review/comments"]')).not.toBeNull();
   expect(host.querySelector('.management-nav a[href="/review/blog"]')).toBeNull();
   app.unmount(); document.body.innerHTML = '';
 
-  mocks.role = 'owner';
+  mocks.role = 'reviewer'; mocks.writer = true;
   await mount('/review/comments');
   await vi.waitFor(() => expect(host.querySelector('.management-nav a[href="/review/blog"]')?.textContent?.trim()).toBe(t('moderation.tab.blog')));
+});
+
+it('an app admin who is not a reviewer sees only the blog tab', async () => {
+  mocks.reviewer = false; mocks.writer = true;
+  await mount('/review/blog');
+  await vi.waitFor(() => expect(host.querySelector('.management-nav a[href="/review/blog"]')).not.toBeNull());
+  expect(host.querySelectorAll('.management-nav a')).toHaveLength(1);
 });
 
 it('a save that hits a version conflict keeps my text and offers load-latest or copy-mine', async () => {
@@ -276,10 +283,30 @@ it('after the first save of a new post, leaving with new edits still asks', asyn
   expect(router.currentRoute.value.path).toBe('/review/blog/p9');
 });
 
-it('a reviewer who is not a manager sees who the blog tab is for, not a raw error', async () => {
+it('someone who is not an app owner or admin sees who the blog is for, not a raw error', async () => {
   handle = (c) => (c.path.startsWith('/v1/blog/admin/') || c.path === '/v1/blog/admin/posts' ? { status: 403, body: { error: 'blog_write_forbidden' } } : undefined);
   await mount('/review/blog');
   await vi.waitFor(() => expect(host.textContent).toContain(t('blog.admin.managersOnly')));
   expect(host.textContent).not.toContain('blog_write_forbidden');
   expect(host.querySelector('.rblog-columns')).toBeNull();
+});
+
+it('restoring a revision says readers see it at once when the post is live, and only that it is saved otherwise', async () => {
+  const revision = { id: 'r1', editorHandle: 'ed', title: '開站了', bodyMd: '更舊的內容', createdAt: 1 };
+  const restoreMessage = async (live: boolean) => {
+    handle = (c) => c.path === '/v1/blog/admin/posts/p1' && c.method === 'GET' ? ok(post(live ? { status: 'published', publishAt: 1, firstPublishedAt: 1 } : {}))
+      : c.path === '/v1/blog/admin/posts/p1/revisions' ? ok({ items: [revision] })
+        : c.path === '/v1/blog/admin/posts/p1/revisions/r1' ? ok(revision) : undefined;
+    await mount('/review/blog/p1');
+    await vi.waitFor(() => expect(host.querySelector('.bed-rev')).not.toBeNull());
+    host.querySelector<HTMLButtonElement>('.bed-rev')!.click();
+    await vi.waitFor(() => expect(host.querySelector('[data-action="restore"]')).not.toBeNull());
+    host.querySelector<HTMLButtonElement>('[data-action="restore"]')!.click();
+    await vi.waitFor(() => expect(confirm()).not.toBeNull());
+    const text = document.querySelector('[role=alertdialog]')!.textContent;
+    app.unmount(); document.body.innerHTML = '';
+    return text;
+  };
+  expect(await restoreMessage(true)).toContain(t('blog.admin.restoreConfirmLive'));
+  expect(await restoreMessage(false)).toContain(t('blog.admin.restoreConfirm'));
 });

@@ -6,12 +6,14 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import { ApiError, createComment, deleteComment, fetchComments, fetchReplies, likeComment, type Comment, type CommentOn, type CommentSort } from "@/lib/api";
-import { hueFrom, relativeTime } from "@/lib/format";
+import { dateTime, hueFrom, relativeTime } from "@/lib/format";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
 import { confirmDialog } from "@/lib/confirm";
 import { track } from "@/lib/track";
 import { loginPath } from "@/lib/login-return";
+import { useReviewer } from "@/lib/review";
+import { setPostState } from "@/lib/blog";
 
 /**
  * 卡片：本站的卡 id（留言掛在本站的卡上，不看這張卡住在哪一家供應商），roleId 只給埋點用。
@@ -26,6 +28,7 @@ const route = useRoute();
 const router = useRouter();
 const { lp } = useLocalePath();
 const { t } = useI18n();
+const reviewer = useReviewer();
 
 const comments = ref<Comment[]>([]);
 const total = ref(0);
@@ -61,6 +64,30 @@ const pinnedId = ref<string | null>(null);
 /** 送出時才知道文章剛被關了留言：跟一開始就關著一樣收起發表區 */
 const closedLate = ref(false);
 const closed = computed(() => on.value.kind === "post" && (!!on.value.commentsClosed || closedLate.value));
+/** 讀者被禁言時，伺服器在列表上帶到期時間（null＝永久）；沒被禁言就是 undefined */
+const mutedUntil = ref<number | null | undefined>(undefined);
+const mutedText = computed(() => mutedUntil.value === null ? t("comment.error.mutedPermanent") : t("comment.error.mutedUntil", { date: dateTime(mutedUntil.value ?? 0) }));
+/** 不能發表也不能回覆：文章關了留言，或讀者被禁言 */
+const blocked = computed(() => closed.value || mutedUntil.value !== undefined);
+/** 能寫部落格的人（應用 owner／admin）能把一則公開的頂層留言置頂；伺服器會再擋一次 */
+const canPin = computed(() => isPost.value && reviewer.blogWriter);
+const pinning = ref(false);
+async function togglePin(c: Comment) {
+  if (on.value.kind !== "post" || pinning.value) return;
+  pinning.value = true;
+  error.value = "";
+  try {
+    const token = await session.accessToken();
+    if (!token) throw new Error(t("auth.expired"));
+    await setPostState(token, on.value.postId, { pinnedCommentId: pinnedId.value === c.commentId ? null : c.commentId }, crypto.randomUUID());
+    // 置頂的那則排在第一頁最上面：重讀一次讓順序跟讀者看到的一樣
+    await load(true);
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : t("state.actionFailed");
+  } finally {
+    pinning.value = false;
+  }
+}
 function sortBy(next: CommentSort) {
   if (sort.value === next) return;
   sort.value = next;
@@ -88,6 +115,7 @@ async function load(reset = false) {
     comments.value = reset || page.value === 1 ? got : [...comments.value, ...got];
     total.value = Number(res.total) || 0;
     pinnedId.value = res.pinnedCommentId ?? null;
+    mutedUntil.value = res.mutedUntil;
     emit("count", total.value);
   } catch (err) {
     error.value = err instanceof Error ? err.message : t("state.loadFailed");
@@ -122,6 +150,8 @@ async function submit(root?: Comment, target?: Comment) {
   } catch (err) {
     track("comment_post", { detail: root ? "comment_reply" : "comment_root", subject: subject.value, ok: false });
     if (err instanceof ApiError && err.code === "blog_comments_closed") { closedLate.value = true; replyTo.value = null; return; }
+    // 寫到一半被禁言：重讀一次拿到期時間，發表區跟著收起來
+    if (err instanceof ApiError && err.code === "comment_muted") { replyTo.value = null; await load(true); return; }
     error.value = err instanceof Error ? err.message : t("state.actionFailed");
   } finally {
     sending.value = false;
@@ -178,13 +208,14 @@ const repliesOf = (root: Comment) => expanded.value[root.commentId]?.replies ?? 
 const moreReplies = (root: Comment) => (expanded.value[root.commentId] ? expanded.value[root.commentId]!.hasMore : root.replyCount > repliesOf(root).length);
 
 const targetKey = computed(() => (on.value.kind === "post" ? `post:${on.value.postId}` : `card:${on.value.cardId}`));
-watch([targetKey, () => session.me?.accountNumId], () => { closedLate.value = false; void load(true); }, { immediate: true });
+watch([targetKey, () => session.me?.accountNumId], () => { closedLate.value = false; mutedUntil.value = undefined; void load(true); }, { immediate: true });
 </script>
 
 <template>
   <section class="cmt">
     <!-- 發表區：登入才能寫；沒登入放一顆登入鍵，不藏 -->
     <p v-if="closed" class="notice cmt__closed">{{ $t("comment.closed") }}</p>
+    <p v-else-if="mutedUntil !== undefined" class="notice cmt__closed" data-muted>{{ mutedText }}</p>
     <div v-else-if="session.me" class="cmt__composer">
       <img v-if="session.me.avatar" :src="session.me.avatar" alt="" class="cmt__face" />
       <div class="cmt__box">
@@ -226,11 +257,12 @@ watch([targetKey, () => session.me?.accountNumId], () => { closedLate.value = fa
           <div class="cmt__actions">
             <!-- 審核中的還沒公開：不能按讚、不能回覆 -->
             <template v-if="c.status !== 'held'">
-              <button class="cmt__act" :class="{ 'is-on': c.isLiked }" @click="toggleLike(c)">
+              <button class="cmt__act" :class="{ 'is-on': c.isLiked }" :aria-label="$t('comment.like')" :aria-pressed="c.isLiked" @click="toggleLike(c)">
                 <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6S2.5 10.2 2.5 6.4A2.9 2.9 0 0 1 8 4.9a2.9 2.9 0 0 1 5.5 1.5c0 3.8-5.5 7.2-5.5 7.2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" /></svg>
                 {{ c.likeCount || "" }}
               </button>
-              <button v-if="session.me && !closed && c.status === 'visible'" class="cmt__act" @click="replyTo = { root: c, target: c }; replyDraft = ''">{{ $t("comment.reply") }}</button>
+              <button v-if="session.me && !blocked && c.status === 'visible'" class="cmt__act" @click="replyTo = { root: c, target: c }; replyDraft = ''">{{ $t("comment.reply") }}</button>
+              <button v-if="canPin && c.status === 'visible'" class="cmt__act" :disabled="pinning" @click="togglePin(c)">{{ $t(pinnedId === c.commentId ? "comment.unpin" : "comment.pin") }}</button>
             </template>
             <button v-if="c.canDelete" class="cmt__act cmt__act--danger" @click="remove(c)">{{ $t("comment.delete") }}</button>
             <button v-if="reportable(c)" class="cmt__act cmt__act--report" @click="report(c)">{{ $t("comment.report") }}</button>
@@ -251,12 +283,12 @@ watch([targetKey, () => session.me?.accountNumId], () => { closedLate.value = fa
                 <p class="cmt__text"><span v-if="r.replyToNickName && r.parentId !== c.commentId" class="cmt__to">@{{ r.replyToNickName }} </span>{{ r.content }}</p>
                 <div class="cmt__actions">
                   <template v-if="r.status !== 'held'">
-                    <button class="cmt__act" :class="{ 'is-on': r.isLiked }" @click="toggleLike(r)">
+                    <button class="cmt__act" :class="{ 'is-on': r.isLiked }" :aria-label="$t('comment.like')" :aria-pressed="r.isLiked" @click="toggleLike(r)">
                       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6S2.5 10.2 2.5 6.4A2.9 2.9 0 0 1 8 4.9a2.9 2.9 0 0 1 5.5 1.5c0 3.8-5.5 7.2-5.5 7.2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" /></svg>
                       {{ r.likeCount || "" }}
                     </button>
                     <!-- 只有公開的頂層收得到回覆：被移除或自己待審中的頂層底下不給回 -->
-                    <button v-if="session.me && !closed && c.status === 'visible'" class="cmt__act" @click="replyTo = { root: c, target: r }; replyDraft = ''">{{ $t("comment.reply") }}</button>
+                    <button v-if="session.me && !blocked && c.status === 'visible'" class="cmt__act" @click="replyTo = { root: c, target: r }; replyDraft = ''">{{ $t("comment.reply") }}</button>
                   </template>
                   <button v-if="r.canDelete" class="cmt__act cmt__act--danger" @click="remove(r)">{{ $t("comment.delete") }}</button>
                   <button v-if="reportable(r)" class="cmt__act cmt__act--report" @click="report(r)">{{ $t("comment.report") }}</button>
@@ -266,7 +298,7 @@ watch([targetKey, () => session.me?.accountNumId], () => { closedLate.value = fa
           </ul>
           <button v-if="moreReplies(c)" class="cmt__more" @click="showAllReplies(c)">{{ expanded[c.commentId] ? $t("comment.loadMore") : $t("comment.viewReplies", { n: c.replyCount }) }}</button>
 
-          <div v-if="!closed && replyTo?.root.commentId === c.commentId" class="cmt__box cmt__box--reply">
+          <div v-if="!blocked && replyTo?.root.commentId === c.commentId" class="cmt__box cmt__box--reply">
             <textarea v-model="replyDraft" class="input cmt__input" :maxlength="MAX" :placeholder="$t('comment.replyTo', { name: replyTo!.target.accountNickName })" rows="2" autofocus />
             <div class="cmt__box-foot">
               <button class="btn btn--ghost btn--sm" @click="replyTo = null">{{ $t("comment.cancel") }}</button>

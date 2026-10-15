@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import { adjacentPosts, canWritePost, isPublic, listColumns, listRevisions, publicPost, publicPosts, relatedPosts, restoreRevision, saveColumn, savePost, setPostState } from "../src/blog";
-import { makeAgent, makeMember, makeReviewer, resetDb } from "./helpers";
+import { adjacentPosts, isOfficialWriter, isPublic, listColumns, listRevisions, publicPost, publicPosts, relatedPosts, restoreRevision, saveColumn, savePost, setPostState } from "../src/blog";
+import { makeMember, makeReviewer, resetDb } from "./helpers";
 
 const op = () => crypto.randomUUID();
 let editor = "";
@@ -14,14 +14,17 @@ beforeEach(async () => {
 });
 const draft = (over = {}) => savePost(env.DB, { columnId, slug: "hello", locale: "zh-Hant", title: "開站了", excerpt: "第一篇", bodyMd: "# 你好\n\n內容", ...over }, { memberId: editor, kind: "human" }, op(), 10);
 
-describe("權限", () => {
-  it("只有 manager／owner 能寫；一般審核人與 AI 帳號不能", async () => {
-    expect(await canWritePost(env.DB, editor)).toBe(true);
-    expect(await canWritePost(env.DB, await makeReviewer(50002))).toBe(false);
-    const agent = await makeAgent(50003);
-    await env.DB.prepare("UPDATE reviewers SET role='owner' WHERE member_id=?").bind(agent).run();
-    expect(await canWritePost(env.DB, agent)).toBe(false);
-    expect(await canWritePost(env.DB, await makeMember(50004))).toBe(false);
+describe("官方身分", () => {
+  it("寫過或改過文章的人是官方；只有審核角色、沒碰過文章的人不是", async () => {
+    expect(await isOfficialWriter(env.DB, editor)).toBe(false);
+    const p = await draft();
+    expect(await isOfficialWriter(env.DB, editor)).toBe(true);
+    const owner = await makeReviewer(50002);
+    await env.DB.prepare("UPDATE reviewers SET role='owner' WHERE member_id=?").bind(owner).run();
+    expect(await isOfficialWriter(env.DB, owner)).toBe(false);
+    await savePost(env.DB, { id: p.id, expectedVersion: p.version, columnId, slug: "hello", locale: "zh-Hant", title: "改標題", excerpt: "", bodyMd: "改過" }, { memberId: owner, kind: "human" }, op(), 20);
+    expect(await isOfficialWriter(env.DB, owner)).toBe(true);
+    expect(await isOfficialWriter(env.DB, await makeMember(50004))).toBe(false);
   });
 });
 
