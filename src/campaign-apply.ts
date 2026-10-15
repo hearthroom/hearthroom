@@ -55,11 +55,14 @@ function guardFailed(e: unknown): never {
   return attachFailed(e);
 }
 
-/** 同一個操作編號這個人做過：回那一次的位置 id。編號被別種操作用過不是重送，回衝突。 */
-async function priorPlacement(db: D1Database, memberId: string, operationId: string): Promise<string | null> {
-  const r = await db.prepare("SELECT subject_kind, subject_id FROM audit_log WHERE actor_member_id = ? AND operation_id = ?").bind(memberId, operationId).first<{ subject_kind: string; subject_id: string }>();
+/**
+ * 同一個操作編號這個人做過同一種動作（重送同一筆時也要是同一個位置）：回那一次的位置 id。
+ * 編號被別種操作或別的位置用過不是重送，回衝突（審核員本人也可能是申請人，審核決定也記在 share_placement 底下）。
+ */
+async function priorPlacement(db: D1Database, memberId: string, operationId: string, action: "submit" | "resubmit", placementId?: string): Promise<string | null> {
+  const r = await db.prepare("SELECT subject_kind, subject_id, action FROM audit_log WHERE actor_member_id = ? AND operation_id = ?").bind(memberId, operationId).first<{ subject_kind: string; subject_id: string; action: string }>();
   if (!r) return null;
-  if (r.subject_kind !== "share_placement") throw new HttpError(409, "campaign_operation_repeated");
+  if (r.subject_kind !== "share_placement" || r.action !== action || (placementId !== undefined && r.subject_id !== placementId)) throw new HttpError(409, "campaign_operation_repeated");
   return r.subject_id;
 }
 const contentOf = async (db: D1Database, placementId: string) => (await db.prepare("SELECT content_id FROM share_placements WHERE id = ?").bind(placementId).first<string>("content_id"))!;
@@ -76,7 +79,7 @@ export type ApplyResult = { placementId: string; content: ContentView };
 
 export async function submitPlacement(db: D1Database, member: Applicant, slug: string, body: Record<string, unknown>, operationId: string, now: number): Promise<ApplyResult> {
   if (member.provider !== "harbor") invalid("account");
-  const prior = await priorPlacement(db, member.id, operationId);
+  const prior = await priorPlacement(db, member.id, operationId, "submit");
   if (prior) return result(db, member.id, prior);
 
   const campaign = await getCampaign(db, slug);
@@ -119,7 +122,7 @@ export async function submitPlacement(db: D1Database, member: Applicant, slug: s
         db.prepare("INSERT INTO share_contents (id, campaign_id, member_id, recipient_account_no, card_id, title, share_code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
           .bind(contentId, campaign.id, member.id, member.externalId, cardId, title, code, now, now),
         // 衍生編號：同一次提交的兩筆稽核共用使用者的操作編號，唯一鍵不允許重複。
-        auditStmt(db, { ...actor, subjectKind: "share_content", subjectId: contentId, action: "create", after: { campaignId: campaign.id, title, cardId, shareCode: code }, operationId: `${operationId}-content` }),
+        auditStmt(db, { ...actor, subjectKind: "share_content", subjectId: contentId, action: "create", after: { campaignId: campaign.id, title, cardId, shareCode: code }, operationId: `${operationId}:content` }),
       );
     }
     writes.push(
@@ -136,7 +139,7 @@ export async function submitPlacement(db: D1Database, member: Applicant, slug: s
       return result(db, member.id, placementId);
     } catch (e) {
       // 並發的同一次重試輸在稽核唯一鍵（或截圖已被掛走、或剛好撞到上限）：先看是不是已經做過。
-      const again = await priorPlacement(db, member.id, operationId);
+      const again = await priorPlacement(db, member.id, operationId, "submit");
       if (again) return result(db, member.id, again);
       if (/UNIQUE constraint failed: share_contents\.share_code/.test(String(e)) && attempt < CODE_RETRIES) continue;
       guardFailed(e);
@@ -153,7 +156,7 @@ type PlacementRow = {
 
 /** 只有 needs_info 可改；平台不能改（換平台就是另一個位置）。截圖只能追加。 */
 export async function resubmitPlacement(db: D1Database, member: Applicant, id: string, body: Record<string, unknown>, operationId: string, now: number): Promise<ApplyResult> {
-  const prior = await priorPlacement(db, member.id, operationId);
+  const prior = await priorPlacement(db, member.id, operationId, "resubmit", id);
   if (prior) return result(db, member.id, prior);
   const p = await db.prepare(
     "SELECT p.id, p.content_id, p.platform, p.location, p.published_at, p.url, p.note, p.requested_tier, p.review_status, p.version, s.member_id, s.campaign_id FROM share_placements p JOIN share_contents s ON s.id = p.content_id WHERE p.id = ?",
@@ -186,7 +189,7 @@ export async function resubmitPlacement(db: D1Database, member: Applicant, id: s
       auditStmt(db, { subjectKind: "share_placement", subjectId: id, actorMemberId: member.id, actorKind: "human", action: "resubmit", before, after, operationId, now }),
     ]);
   } catch (e) {
-    const again = await priorPlacement(db, member.id, operationId);
+    const again = await priorPlacement(db, member.id, operationId, "resubmit", id);
     if (again) return result(db, member.id, again);
     guardFailed(e);
   }
