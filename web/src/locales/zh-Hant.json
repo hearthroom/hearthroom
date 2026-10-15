@@ -2235,6 +2235,7 @@
   "campaign.error.share_payout_not_cancellable": "這筆可能已經送出，請先查詢結果。",
   "campaign.error.share_payout_not_pending": "只有處理中的發放可以查詢入帳狀況。",
   "campaign.error.share_payout_stale": "檔位或金額改過了，請取消後重新發放。",
+  "campaign.error.network": "連線中斷，結果不確定。請稍後重新整理再確認一次。",
   "campaign.evidence.add": "加上截圖",
   "campaign.evidence.hint": "上傳前請遮住和分享無關的個人資料，不需要整段聊天紀錄或成員名單。",
   "campaign.evidence.uploading": "上傳中…",

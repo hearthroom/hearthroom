@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { RouterLink, RouterView, useRoute } from 'vue-router';
 import { useReviewer } from '@/lib/review';
 import { useSession } from '@/lib/session';
-import { fetchCampaigns } from '@/lib/campaign';
+import { campaignsCached, clearCampaignsCache } from '@/lib/campaign';
 import { useLocalePath } from '@/lib/use-locale';
 import ReviewBadge from '@/components/ReviewBadge.vue';
 const route = useRoute();
@@ -29,8 +29,10 @@ const sections = [
 ] as const;
 const canPay = ref(false);
 onMounted(async () => {
-  try { const token = await session.accessToken(); if (token) canPay.value = (await fetchCampaigns(token)).canEdit; } catch { /* 讀不到就不顯示發放分頁 */ }
+  try { const token = await session.accessToken(); if (token) canPay.value = (await campaignsCached(token)).canEdit; } catch { /* 讀不到就不顯示發放分頁 */ }
 });
+// 工作台各頁共用的活動列表只活到離開工作台
+onBeforeUnmount(clearCampaignsCache);
 const visible = computed(() => {
   const list: { key: string; path: string }[] = [...sections];
   if (canPay.value) list.splice(list.findIndex((s) => s.key === 'campaign') + 1, 0, { key: 'payouts', path: '/review/payouts' });

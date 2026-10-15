@@ -7,7 +7,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { DEFAULT_TIMEZONE, campaignErrorText, fetchCampaigns, fetchQueue, localized, type Campaign, type Flags, type QueueItem, type ReviewStatus } from '@/lib/campaign';
+import { DEFAULT_TIMEZONE, campaignErrorText, campaignsCached, fetchQueue, localized, type Campaign, type Flags, type QueueItem, type ReviewStatus } from '@/lib/campaign';
 import { useSession } from '@/lib/session';
 import { useLocalePath } from '@/lib/use-locale';
 import { pageTitle } from '@/lib/i18n';
@@ -62,7 +62,7 @@ async function load() {
 }
 /** 篩選用的活動列表；讀不到就只是沒有篩選，佇列照樣能用 */
 async function loadCampaigns() {
-  try { campaigns.value = (await fetchCampaigns(await token())).items; } catch { /* 篩選少一個不影響審核 */ }
+  try { campaigns.value = (await campaignsCached(await token())).items; } catch { /* 篩選少一個不影響審核 */ }
 }
 
 const bySlug = computed(() => new Map(campaigns.value.map((c) => [c.slug, c])));

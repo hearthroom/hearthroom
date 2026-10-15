@@ -49,11 +49,14 @@ let content: ReturnType<typeof detail>;
 let decisions: { status: number; body: unknown }[];
 /** 設了就讓下一次讀佇列等到它放行 */
 let queueGate: Promise<void> | null;
+/** 活動列表的回應狀態；不是 200 就讀失敗 */
+let campaignsStatus: number;
+let campaignsCanEdit: boolean;
 const origCreate = URL.createObjectURL, origRevoke = URL.revokeObjectURL;
 
 beforeEach(() => {
   i18n.global.locale.value = "zh-Hant";
-  calls = []; campaigns = [campaign(), campaign({ id: "c2", slug: "spring", title: { "zh-Hant": "春季活動" } })]; queue = [queueItem("p1")]; content = detail(); decisions = []; queueGate = null;
+  calls = []; campaigns = [campaign(), campaign({ id: "c2", slug: "spring", title: { "zh-Hant": "春季活動" } })]; queue = [queueItem("p1")]; content = detail(); decisions = []; queueGate = null; campaignsStatus = 200; campaignsCanEdit = false;
   URL.createObjectURL = vi.fn(() => "blob:mock") as typeof URL.createObjectURL;
   URL.revokeObjectURL = vi.fn();
   vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit = {}) => {
@@ -61,7 +64,7 @@ beforeEach(() => {
     const body = typeof init.body === "string" ? JSON.parse(init.body) : null;
     calls.push({ method, path: url, body });
     const json = (status: number, b: unknown) => new Response(JSON.stringify(b), { status, headers: { "Content-Type": "application/json" } });
-    if (url === "/v1/moderation/campaigns") return json(200, { items: campaigns, canEdit: false });
+    if (url === "/v1/moderation/campaigns") return campaignsStatus === 200 ? json(200, { items: campaigns, canEdit: campaignsCanEdit }) : json(campaignsStatus, { error: "boom" });
     if (url.startsWith("/v1/moderation/campaign/placements?") || url === "/v1/moderation/campaign/placements") { if (queueGate) await queueGate; return json(200, { total: queue.length, items: queue }); }
     if (url.startsWith("/v1/moderation/campaign/contents/")) return json(200, content);
     if (url.endsWith("/decision")) { const r = decisions.shift() ?? { status: 500, body: { error: "boom" } }; return json(r.status, r.body); }
@@ -82,6 +85,7 @@ async function mount(path: string) {
 const t = (k: string, p?: Record<string, unknown>) => i18n.global.t(k, p ?? {});
 const queueCalls = () => calls.filter((c) => c.path.startsWith("/v1/moderation/campaign/placements") && c.method === "GET").map((c) => c.path);
 const detailCalls = () => calls.filter((c) => c.path === "/v1/moderation/campaign/contents/s1");
+const campaignListCalls = () => calls.filter((c) => c.path === "/v1/moderation/campaigns" && c.method === "GET");
 const decisionCalls = () => calls.filter((c) => c.path.endsWith("/decision"));
 const dialog = () => document.querySelector<HTMLFormElement>("[role=dialog]");
 async function openDecision(placementId: string, action: string) {
@@ -266,4 +270,45 @@ it("encodes the applicant handle in the member link", async () => {
   content.content.applicant.handle = "a/b";
   await mount("/review/campaign/s1");
   await vi.waitFor(() => expect(host.querySelector('a[href="/review/members/a%2Fb"]')).not.toBeNull());
+});
+
+it("shares one campaign list read between the workspace layout and the page", async () => {
+  await mount("/review/campaign/s1");
+  await vi.waitFor(() => expect(host.querySelector('[data-placement="p1"] [data-action="approve"]')).not.toBeNull());
+  await new Promise((r) => setTimeout(r, 20));
+  expect(campaignListCalls()).toHaveLength(1);
+});
+
+it("does not keep a failed campaign list read: the next mount reads it again", async () => {
+  campaignsStatus = 500;
+  await mount("/review/campaign/s1");
+  await vi.waitFor(() => expect(host.querySelector('[data-placement="p1"] [data-action="approve"]')).not.toBeNull());
+  await vi.waitFor(() => expect(campaignListCalls().length).toBeGreaterThan(0));
+  app.unmount(); host.remove();
+  const before = campaignListCalls().length;
+  campaignsStatus = 200;
+  await mount("/review/campaign/s1");
+  await vi.waitFor(() => expect(campaignListCalls().length).toBeGreaterThan(before));
+  await vi.waitFor(() => expect(host.textContent).toContain("開業活動"));
+});
+
+it("tells an admin that rewards are closed, not that approving also pays, once the payout deadline has passed", async () => {
+  campaignsCanEdit = true;
+  campaigns = [campaign({ payoutDeadline: Date.now() - 1000 })];
+  await mount("/review/campaign/s1");
+  await vi.waitFor(() => expect(host.querySelector('[data-placement="p1"] [data-action="approve"]')).not.toBeNull());
+  await vi.waitFor(() => expect(campaignListCalls()).toHaveLength(1));
+  await new Promise((r) => setTimeout(r, 20));
+  const box = await openDecision("p1", "approve");
+  expect(box.textContent).toContain(t("campaign.error.campaign_payout_closed"));
+  expect(box.textContent).not.toContain(t("campaign.decide.payNow"));
+});
+
+it("keeps the pays-out hint for an admin while the payout deadline is still ahead", async () => {
+  campaignsCanEdit = true;
+  await mount("/review/campaign/s1");
+  await vi.waitFor(() => expect(host.querySelector('[data-placement="p1"] [data-action="approve"]')).not.toBeNull());
+  await new Promise((r) => setTimeout(r, 20));
+  const box = await openDecision("p1", "approve");
+  expect(box.textContent).toContain(t("campaign.decide.payNow"));
 });

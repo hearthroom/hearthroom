@@ -85,4 +85,10 @@ describe("頭像選單分組", () => {
     expect(last.textContent).toContain(i18n.global.t("nav.logout"));
     expect(menu.lastElementChild).toBe(last);
   });
+
+  it("分享活動用 spark 圖示（跟「我的」頁一致），gift 留給邀請", async () => {
+    const menu = await openMenu();
+    const icon = (href: string) => menu.querySelector(`a[href="${href}"] svg`)!.innerHTML;
+    expect(icon("/me/campaign")).toBe(icon("/updates?from=menu"));
+  });
 });

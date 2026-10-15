@@ -14,7 +14,7 @@ import { RouterLink, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import EvidenceViewer from '@/components/EvidenceViewer.vue';
 import {
-  DEFAULT_TIMEZONE, TIERS, campaignErrorText, decide, fetchCampaigns, fetchContentDetail, isWebUrl, localized,
+  DEFAULT_TIMEZONE, TIERS, campaignErrorText, campaignsCached, decide, fetchContentDetail, isWebUrl, localized,
   type Campaign, type ContentDetail, type DecisionBody, type DecisionResult, type Flags, type Tier,
 } from '@/lib/campaign';
 import { ApiError } from '@/lib/api';
@@ -54,14 +54,14 @@ async function token() {
   if (!value) throw new Error(t('auth.expired'));
   return value;
 }
-/** 活動列表只讀一次：補件截止、時區、名稱與 canEdit 都從這裡來。讀不到就當不知道，補件截止交給服務端把關。 */
-let campaignsOnce: Promise<void> | null = null;
-const loadCampaigns = () => (campaignsOnce ??= token().then(fetchCampaigns).then((r) => { campaigns.value = r; }, () => {}));
-async function load() {
+/** 活動列表與工作台共用一次讀取：補件截止、時區、名稱與 canEdit 都從這裡來。讀不到就當不知道（下次載入會重讀），補件截止交給服務端把關。 */
+const loadCampaigns = (fresh: boolean) => token().then((tk) => campaignsCached(tk, fresh)).then((r) => { campaigns.value = r; }, () => {});
+/** fresh：使用者按了重新整理 */
+async function load(fresh = false) {
   const gen = ++generation;
   loading.value = true; error.value = '';
   try {
-    const [detail] = await Promise.all([fetchContentDetail(await token(), id.value), loadCampaigns()]);
+    const [detail] = await Promise.all([fetchContentDetail(await token(), id.value), loadCampaigns(fresh)]);
     if (!alive || gen !== generation) return;
     data.value = detail;
     document.title = pageTitle(detail.content.title);
@@ -70,6 +70,7 @@ async function load() {
 
 const campaign = computed(() => campaigns.value?.items.find((c) => c.slug === data.value?.content.campaignSlug) ?? null);
 const canEdit = computed(() => campaigns.value?.canEdit ?? false);
+const payoutClosed = computed(() => campaign.value?.payoutDeadline != null && Date.now() >= campaign.value.payoutDeadline);
 const pastDeadline = computed(() => closed.value || (campaign.value?.submitDeadline != null && Date.now() >= campaign.value.submitDeadline));
 const campaignTitle = computed(() => (campaign.value ? localized(campaign.value.title, locale.value) : '') || data.value?.content.campaignSlug || '');
 /** 用活動自己的時區顯示；活動讀不到時用看的人的時區，時刻本身還是對的 */
@@ -181,7 +182,7 @@ onBeforeUnmount(() => { alive = false; document.removeEventListener('keydown', o
     <RouterLink class="rcd-back subtle" :to="lp('/review/campaign')">← {{ t('campaign.detail.back') }}</RouterLink>
 
     <p v-if="conflict" class="notice notice--error" role="alert">{{ conflict }}</p>
-    <p v-if="error" class="notice notice--error" role="alert">{{ error }} <button class="btn btn--sm" :disabled="loading" @click="load">{{ t('review.refresh') }}</button></p>
+    <p v-if="error" class="notice notice--error" role="alert">{{ error }} <button class="btn btn--sm" :disabled="loading" @click="load(true)">{{ t('review.refresh') }}</button></p>
     <p v-if="done" class="notice" role="status">{{ done }}</p>
 
     <template v-if="!data && loading"><div class="ghost rcd-ghost--head" /><div v-for="n in 2" :key="n" class="ghost rcd-ghost" /></template>
@@ -262,7 +263,7 @@ onBeforeUnmount(() => { alive = false; document.removeEventListener('keydown', o
               </select>
             </label>
             <label class="rcd-check"><input v-model="dialog.counts" type="checkbox" :disabled="dialog.busy" /> {{ t('campaign.decide.counts') }}</label>
-            <p class="subtle rcd-line">{{ t(canEdit ? 'campaign.decide.payNow' : 'campaign.decide.payLater') }}</p>
+            <p class="subtle rcd-line">{{ canEdit && payoutClosed ? t('campaign.error.campaign_payout_closed') : t(canEdit ? 'campaign.decide.payNow' : 'campaign.decide.payLater') }}</p>
           </template>
           <label v-else class="rcd-field">
             <span class="subtle">{{ t('campaign.decide.reason') }}</span>
