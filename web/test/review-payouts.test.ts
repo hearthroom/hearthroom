@@ -299,7 +299,7 @@ it("uses English plural forms", async () => {
   await mount("/en/review/payouts?view=history");
   await vi.waitFor(() => expect(row('[data-payout="q1"]')?.textContent).toContain("Sent once"));
   i18n.global.locale.value = "en";
-  expect(i18n.global.t("campaign.payouts.confirm", { count: 1, points: "300" }, 1)).toBe("Pay 1 reward, 300 points in total?");
+  expect(i18n.global.t("campaign.payouts.confirm", { count: 1, points: "300" }, 1)).toBe("Pay 1 reward, 300 credits in total?");
   expect(i18n.global.t("campaign.payouts.reconciled", { count: 1 }, 1)).toContain("1 payment ");
 });
 
