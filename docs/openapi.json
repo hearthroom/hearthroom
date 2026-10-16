@@ -10588,7 +10588,7 @@
         },
         "operationId": "getConversationResponseSettings",
         "summary": "Read conversation response preferences",
-        "description": "HarperHarbor only, advertised by responseSettingsVersion=1 on conversation start and messages. Requires ownership and current agent configuration access. Platform defaults are protect agency, default style, card perspective, auto length and natural pace; the card's author defaults (`responseDefaults` on the agent configuration) replace those per axis, and the player's overrides replace both. This call performs no inference and charges no credits.",
+        "description": "HarperHarbor only, advertised by responseSettingsVersion=1 on conversation start and messages. Requires ownership and current agent configuration access. Platform defaults are coauthor agency, default style, card perspective, auto length and natural pace; the card's author defaults (`responseDefaults` on the agent configuration) replace those per axis, and the player's overrides replace both. This call performs no inference and charges no credits.",
         "parameters": [
           {
             "name": "conversationId",
