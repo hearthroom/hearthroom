@@ -2547,7 +2547,7 @@
   "campaign.page.rewards.referral.cap": "上限 {cap} ポイント",
   "campaign.page.rewards.referral.rebate": "リンク経由の登録から {period}、チャージごとに {rebate}%",
   "campaign.page.cta.guest.title": "ログインで専用リンクをゲット",
-  "campaign.page.cta.friendGift": "友だちがリンクから登録すると {friendTotal} ポイント。",
+  "campaign.page.cta.friendGift": "リンクから登録した友だちは {friendTotal} ポイントもらえます。",
   "campaign.page.cta.inviteeBonus": "友だちは初回チャージで、さらに {inviteePercent}% 多くもらえます。",
   "campaign.page.cta.guest.desc": "アカウントがなくても、ボタンから作成できます。",
   "campaign.page.cta.guest.button": "ログイン／新規登録",
