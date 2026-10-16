@@ -12,8 +12,12 @@ const starters = vi.hoisted(() => ({ zh: { general: null as number | null, adult
 vi.mock("../../shared/starter-cards", () => ({ STARTER_CARDS: starters }));
 const session = vi.hoisted(() => ({ ready: true, me: null as null | { accountNumId: number }, profile: null as null | { memberSince: number; showNsfw: boolean } }));
 vi.mock("../src/lib/session", () => ({ useSession: () => session }));
-const guest = vi.hoisted(() => ({ loaded: true, available: true, showNsfw: false, ageVerified: false, adultConsent: false }));
-vi.mock("../src/lib/adult-consent", () => ({ guestAdult: guest, loadGuestAdult: async () => {}, viewerAdult: () => (session.me ? session.profile : guest) }));
+vi.mock("../src/lib/adult-consent", async () => {
+  const { reactive } = await import("vue");
+  const guest = reactive({ loaded: true, available: true, showNsfw: false, ageVerified: false, adultConsent: false });
+  return { guestAdult: guest, loadGuestAdult: async () => {}, viewerAdult: () => (session.me ? session.profile : guest) };
+});
+import { guestAdult as guest } from "../src/lib/adult-consent";
 vi.mock("../src/lib/track", () => ({ track: () => {}, currentSurface: () => "", setSurface: () => {} }));
 
 import CoachTour from "../src/components/CoachTour.vue";
@@ -22,7 +26,7 @@ describe("步驟", () => {
   const base = { adult: false, sandbox: false, prologue: true };
   it("一般卡：首頁 → 卡片頁（分級、介紹、評分、開始對話）→ 開場 → 開場選項", () => {
     expect(stepsOf(base)).toEqual(["card", "grade", "intro", "score", "play", "opening", "prologue"]);
-    expect(stepsOf({ ...base, adult: true })[0]).toBe("r18");
+    expect(stepsOf({ ...base, adult: true }).slice(0, 3)).toEqual(["card", "r18", "choose"]);
   });
   it("一般卡沒有開場選項：開場就是最後一步", () => {
     expect(nextStep("opening", { ...base, prologue: false })).toBeNull();
@@ -102,21 +106,43 @@ describe("走一遍", () => {
     expect(localStorage.getItem("hr-tour-done")).toBe("1");
   });
 
-  it("有成人版、還沒開：首頁先框 R18", async () => {
+  it("先介紹入門卡，第二步才介紹成人內容，關閉第二步仍可選一般卡", async () => {
     starters.zh.adult = 100002;
     await mount();
-    expect(title()).toBe(t("tour.r18.title"));
-    await press("tour.next");
     expect(title()).toBe(t("tour.card.title"));
+    await press("tour.next");
+    expect(router.currentRoute.value.path).toBe("/");
+    expect(title()).toBe(t("tour.r18.title"));
+    (document.querySelector(".coach__close") as HTMLButtonElement).click();
+    await settle();
+    expect(title()).toBe(t("tour.card.title"));
+    expect(localStorage.getItem("hr-tour-done")).toBeNull();
+    expect(router.currentRoute.value.path).toBe("/");
+    await press("tour.next");
+    expect(router.currentRoute.value.path).toBe("/cards/100001");
   });
 
-  it("在 R18 那一步開了成人內容：帶去成人版", async () => {
+  it("在 R18 第二步開啟成人內容：回到卡片提示，等使用者選卡才進成人版", async () => {
     starters.zh.adult = 100002;
     await mount();
+    await press("tour.next");
+    expect(title()).toBe(t("tour.r18.title"));
     guest.showNsfw = true;
+    await settle();
+    expect(title()).toBe(t("tour.card.title"));
+    expect(router.currentRoute.value.path).toBe("/");
+    await router.push("/cards/100002"); await settle();
+    expect(title()).toBe(t("tour.grade.title"));
+    expect(tourState.card).toBe(100002);
+  });
+
+  it("第二步上一步回到卡片介紹，不會離開首頁", async () => {
+    starters.zh.adult = 100002;
+    await mount();
     await press("tour.next");
-    await press("tour.next");
-    expect(router.currentRoute.value.path).toBe("/cards/100002");
+    await press("tour.prev");
+    expect(title()).toBe(t("tour.card.title"));
+    expect(router.currentRoute.value.path).toBe("/");
   });
 
   it("同層卡：對話頁只剩一步，按完成就結束", async () => {

@@ -2,9 +2,12 @@
 import CardTile from "./CardTile.vue";
 import MascotSay from "./MascotSay.vue";
 import type { CommunityCard } from "@/lib/types";
+import { computed } from "vue";
 
-defineProps<{
+const props = defineProps<{
   cards: CommunityCard[];
+  /** 僅新手引導時插入第一格，與榜單共用尺寸，不改寫榜單資料與名次。 */
+  starter?: CommunityCard | null;
   /** 完全沒東西可畫時才是 loading（骨架屏）；手上有舊資料時用 busy，舊卡留在原地變淡 */
   loading?: boolean;
   busy?: boolean;
@@ -20,17 +23,22 @@ defineProps<{
   emptyMascot?: { src: string; line: string };
 }>();
 
+const entries = computed(() => props.cards.map((card, i) => ({
+  card,
+  rank: props.ranked ? (props.rankOffset ?? 0) + i + 1 : undefined,
+})).filter(({ card }) => !props.starter || (card.num && props.starter.num ? card.num !== props.starter.num : card.id !== props.starter.id)));
+
 /** 首屏一排的張數上限：這幾張立刻載，其餘懶載入 */
 const EAGER = 6;
 </script>
 
 <template>
   <!-- 骨架屏而不是遮罩 spinner：版面不跳動，也看得出接下來會出現什麼 -->
-  <div v-if="loading" class="grid" aria-hidden="true">
+  <div v-if="loading && !starter" class="grid" aria-hidden="true">
     <div v-for="i in 12" :key="i" class="ghost ghost--card" />
   </div>
 
-  <div v-else-if="!cards.length" class="empty panel">
+  <div v-else-if="!cards.length && !starter" class="empty panel">
     <MascotSay v-if="emptyMascot" class="empty__mascot" :src="emptyMascot.src" :size="156" />
     <p class="empty__title">{{ emptyTitle ?? $t("board.empty.title") }}</p>
     <p class="empty__hint muted">{{ emptyHint ?? $t("board.empty.hint") }}</p>
@@ -39,10 +47,16 @@ const EAGER = 6;
 
   <div v-else class="grid" :aria-busy="busy || undefined">
     <CardTile
-      v-for="(card, i) in cards"
+      v-if="starter"
+      :card="starter"
+      data-tour="starter"
+      eager
+    />
+    <CardTile
+      v-for="({ card, rank }, i) in entries"
       :key="card.id"
       :card="card"
-      :rank="ranked ? (rankOffset ?? 0) + i + 1 : undefined"
+      :rank="rank"
       :show-zone="showZone"
       :show-trending="showTrending"
       :eager="i < EAGER"
