@@ -43,7 +43,9 @@ const FALLBACK: Record<Locale, string> = {
 /** 公開活動的分享資訊；草稿或不存在由呼叫端擋（回 404＋noindex）。 */
 export function campaignMeta(c: Campaign, lang: Locale, url: string): PageMeta {
   const title = pick(c.title, lang) || c.slug;
-  const description = oneLine(plainText(pick(c.intro, lang)), 160) || FALLBACK[lang];
+  // 只取介紹的第一段（跳過標題）：後面是檔位與小提醒，放進預覽只會變成一長串規則
+  const lead = pick(c.intro, lang).split(/\n\s*\n|\n(?=#)/).map((p) => p.replace(/^#{1,6}\s.*$/gm, "").trim()).find(Boolean) ?? "";
+  const description = oneLine(plainText(lead), 160) || FALLBACK[lang];
   const banner = c.bannerUrl ? `${origin}${c.bannerUrl}` : null;
   return {
     lang, url, type: "website",

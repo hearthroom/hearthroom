@@ -19,7 +19,7 @@ async function get(path: string, acceptLanguage?: string, host = "c.test") {
 
 const title = { "zh-Hant": "綺夢分享季", "zh-Hans": "绮梦分享季", en: "Hearthroom Share Season" };
 const intro = {
-  "zh-Hant": "## 分享好卡，帶朋友來玩\n把喜歡的卡分享到社群，**審核通過**就拿積分。",
+  "zh-Hant": "## 分享好卡，帶朋友來玩\n把喜歡的卡分享到社群，**審核通過**就拿積分。\n\n### 各檔怎麼認定\n- **輕量分享**：群組裡介紹",
   "zh-Hans": "## 分享好卡，带朋友来玩\n把喜欢的卡分享到社区，**审核通过**就拿积分。",
   en: "## Share a great card\nShare a card you love and earn credits.",
 };
@@ -42,7 +42,7 @@ describe("活動頁分享資訊", () => {
     expect(text).toContain('<html lang="zh-Hant">');
     expect(text).toContain("<title>綺夢分享季 · 綺夢社</title>");
     expect(text).toContain('<meta property="og:title" content="綺夢分享季 · 綺夢社">');
-    expect(text).toContain('<meta property="og:description" content="分享好卡，帶朋友來玩 把喜歡的卡分享到社群，審核通過就拿積分。">');
+    expect(text).toContain('<meta property="og:description" content="把喜歡的卡分享到社群，審核通過就拿積分。">');
     expect(text).toContain(`<meta property="og:image" content="https://${PRIMARY_HOST}/v1/blog/images/banner-1.webp">`);
     expect(text).toContain('<meta name="twitter:card" content="summary_large_image">');
     expect(text).toContain('<meta property="og:locale" content="zh_TW">');
@@ -67,7 +67,7 @@ describe("活動頁分享資訊", () => {
     expect(hans.text).toContain(`<link rel="canonical" href="https://${PRIMARY_HOST}/zh-Hans/campaign/share-season">`);
     const en = await get("/en/campaign/share-season/", "zh-CN");
     expect(en.text).toContain('<meta property="og:title" content="Hearthroom Share Season · Hearthroom">');
-    expect(en.text).toContain('<meta property="og:description" content="Share a great card Share a card you love and earn credits.">');
+    expect(en.text).toContain('<meta property="og:description" content="Share a card you love and earn credits.">');
     // 這個語言沒填的欄位退回繁中
     const ja = await get("/ja/campaign/share-season");
     expect(ja.text).toContain('<meta property="og:title" content="綺夢分享季 · Hearthroom">');

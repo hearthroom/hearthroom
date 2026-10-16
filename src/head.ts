@@ -72,6 +72,11 @@ export function preloadImageTag(url: string, priority: "high" | "auto" = "high")
   return `<link rel="preload" as="image" href="${esc(url)}"${priority === "high" ? ' fetchpriority="high"' : ""}>`;
 }
 
+/** 殼（web/index.html）自己帶了一份預設分享標籤給沒經過 Worker 的頁面；這裡要寫自己的，先拿掉殼的，免得同一個標籤出現兩次 */
+const stripShareTags = (r: HTMLRewriter) => r
+  .on('meta[property^="og:"]', { element: (e) => { e.remove(); } })
+  .on('meta[name^="twitter:"]', { element: (e) => { e.remove(); } });
+
 export function renderHead(page: Response, meta: PageMeta): Response {
   const description = oneLine(meta.description);
   const tags = [
@@ -92,7 +97,7 @@ export function renderHead(page: Response, meta: PageMeta): Response {
     meta.image ? `<meta name="twitter:image" content="${esc(meta.image)}">` : "",
   ].filter(Boolean).join("");
 
-  const res = new HTMLRewriter()
+  const res = stripShareTags(new HTMLRewriter())
     .on("html", { element: (e) => { e.setAttribute("lang", meta.lang); } })
     .on("title", { element: (e) => { e.setInnerContent(meta.title); } })
     .on('meta[name="description"]', { element: (e) => { e.setAttribute("content", description); } })
@@ -123,7 +128,7 @@ export function renderDefaultShareHead(page: Response, lang: string): Response {
     `<meta name="twitter:description" content="${esc(oneLine(meta.description))}">`,
     `<meta name="twitter:image" content="${esc(meta.image)}">`,
   ].join("");
-  const res = new HTMLRewriter()
+  const res = stripShareTags(new HTMLRewriter())
     .on("html", { element: (e) => { e.setAttribute("lang", lang); } })
     .on("title", { element: (e) => { e.setInnerContent(meta.title); } })
     .on('meta[name="description"]', { element: (e) => { e.setAttribute("content", oneLine(meta.description)); } })
