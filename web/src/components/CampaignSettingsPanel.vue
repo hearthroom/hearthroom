@@ -30,14 +30,14 @@ const TIMES = ['startsAt', 'endsAt', 'submitDeadline', 'payoutDeadline'] as cons
 type TimeKey = (typeof TIMES)[number];
 type Form = {
   slug: string; title: Record<Lc, string>; intro: Record<Lc, string>; bannerKey: string | null; timezone: string;
-  times: Record<TimeKey, string>; tiers: Record<Tier, Num>; extraPlacementAmount: Num; flagBurstThreshold: Num; evidenceRetentionDays: Num;
+  times: Record<TimeKey, string>; tiers: Record<Tier, Num>; extraPlacementAmount: Num; flagBurstThreshold: Num; evidenceRetentionDays: Num; featured: boolean;
 };
 const perLocale = (l: Localized = {}) => Object.fromEntries(POST_LOCALES.map((k) => [k, l[k] ?? ''])) as Record<Lc, string>;
 const num = (v: number | null | undefined): Num => (v ?? '');
 const empty = (): Form => ({
   slug: '', title: perLocale(), intro: perLocale(), bannerKey: null, timezone: DEFAULT_TIMEZONE,
   times: { startsAt: '', endsAt: '', submitDeadline: '', payoutDeadline: '' },
-  tiers: { light: '', original: '', guide: '', video: '' }, extraPlacementAmount: '', flagBurstThreshold: '', evidenceRetentionDays: '',
+  tiers: { light: '', original: '', guide: '', video: '' }, extraPlacementAmount: '', flagBurstThreshold: '', evidenceRetentionDays: '', featured: false,
 });
 const fromCampaign = (c: Campaign): Form => {
   const tz = c.timezone || DEFAULT_TIMEZONE;
@@ -45,7 +45,7 @@ const fromCampaign = (c: Campaign): Form => {
     slug: c.slug, title: perLocale(c.title), intro: perLocale(c.intro), bannerKey: c.bannerKey, timezone: tz,
     times: Object.fromEntries(TIMES.map((k) => [k, c[k] === null ? '' : epochToZoned(c[k]!, tz)])) as Record<TimeKey, string>,
     tiers: Object.fromEntries(TIERS.map((k) => [k, num(c.tiers[k])])) as Record<Tier, Num>,
-    extraPlacementAmount: num(c.extraPlacementAmount), flagBurstThreshold: num(c.flagBurstThreshold), evidenceRetentionDays: num(c.evidenceRetentionDays),
+    extraPlacementAmount: num(c.extraPlacementAmount), flagBurstThreshold: num(c.flagBurstThreshold), evidenceRetentionDays: num(c.evidenceRetentionDays), featured: c.featured,
   };
 };
 const compact = (l: Record<Lc, string>) => Object.fromEntries(Object.entries(l).filter(([, v]) => v.trim())) as Localized;
@@ -54,7 +54,7 @@ const toInput = (f: Form): CampaignInput => ({
   slug: f.slug.trim(), title: compact(f.title), intro: compact(f.intro), bannerKey: f.bannerKey, timezone: f.timezone,
   ...(Object.fromEntries(TIMES.map((k) => [k, zonedToEpoch(f.times[k], f.timezone)])) as Record<TimeKey, number | null>),
   tiers: Object.fromEntries(TIERS.filter((k) => f.tiers[k] !== '').map((k) => [k, Number(f.tiers[k])])),
-  extraPlacementAmount: orNull(f.extraPlacementAmount), flagBurstThreshold: orNull(f.flagBurstThreshold),
+  extraPlacementAmount: orNull(f.extraPlacementAmount), flagBurstThreshold: orNull(f.flagBurstThreshold), featured: f.featured,
   ...(f.evidenceRetentionDays === '' ? {} : { evidenceRetentionDays: Number(f.evidenceRetentionDays) }),
 });
 
@@ -304,6 +304,10 @@ onMounted(() => { void load(); });
         <span>{{ t('campaign.field.retention') }}</span>
         <input v-model="form.evidenceRetentionDays" class="input cset-short" type="number" inputmode="numeric" min="1" max="3650" step="1" data-field="evidenceRetentionDays" :disabled="locked" :aria-invalid="bad('evidenceRetentionDays') || undefined" />
       </label>
+      <div class="field">
+        <label class="cset-check"><input v-model="form.featured" type="checkbox" data-field="featured" :disabled="locked" aria-describedby="cset-featured-hint" />{{ t('campaign.field.featured') }}</label>
+        <span id="cset-featured-hint" class="subtle">{{ t('campaign.field.featuredHint') }}</span>
+      </div>
 
       <div v-if="canEdit" class="cset-actions">
         <button type="submit" class="btn btn--primary" data-action="save-campaign" :disabled="busy || !form.title['zh-Hant'].trim() || !form.slug.trim()">{{ t('campaign.settings.save') }}</button>
@@ -353,6 +357,8 @@ onMounted(() => { void load(); });
 .cset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0 var(--s-4); }
 .cset-group { border: 0; margin: 0; padding: 0; min-width: 0; }
 .cset-group legend { font-size: 13px; font-weight: 600; margin-bottom: var(--s-2); }
+.cset-check { display: flex; align-items: center; gap: var(--s-2); min-height: 44px; font-size: 14px; font-weight: 600; }
+.cset-check input { flex: none; width: 1.125rem; height: 1.125rem; accent-color: var(--accent); }
 .cset-err { font-size: 12.5px; color: var(--danger); }
 .cset-form [aria-invalid="true"] { border-color: var(--danger); }
 .cset-banner { display: block; max-width: 100%; max-height: 160px; border-radius: var(--r-sm); object-fit: cover; }

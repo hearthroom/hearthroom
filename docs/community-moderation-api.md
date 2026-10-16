@@ -168,6 +168,8 @@ Replaying an `operationId` returns the same body without a second write; if that
 
 `GET /v1/moderation/campaigns` lists all campaigns including drafts, with `canEdit`. The AI account can read it (`canEdit: false`). Writes (`POST /v1/moderation/campaigns`, `PUT /v1/moderation/campaigns/:id`, `POST .../:id/status`, `POST .../banner`) need a human community admin.
 
+Each campaign carries `featured: boolean` (recommend on the home page). It is optional on writes and defaults to `false`; a non-boolean value gives 400 `campaign_invalid` with `field: "featured"`. Like the other settings it is part of the whole-object write, so omitting it on `PUT` clears it, and the change is recorded in the audit log. It does not affect activation. The public `GET /v1/campaigns` summaries (and `GET /v1/campaigns/:slug`) include `featured`; the home board shows featured campaigns that are open or upcoming in its carousel.
+
 ## Share campaign payout
 
 Every payout route requires a human community admin. Check order: reviewer (401/403), then not an AI account (403 `agent_not_allowed`), then admin (403 `community_admin_required`). The caller's bearer token is forwarded only to the provider, which makes the final authorization decision. Money moves from a campaign pool; amounts come from the approved tier and what the content was already paid.

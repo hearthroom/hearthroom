@@ -20,7 +20,7 @@ import { router as siteRouter } from '../src/router';
 const campaign = (over: Record<string, unknown> = {}) => ({
   id: 'c1', slug: 'launch', title: { 'zh-Hant': '開站分享' }, intro: {}, bannerKey: null, bannerUrl: null,
   startsAt: Date.parse('2026-11-01T12:00Z'), endsAt: Date.parse('2026-11-30T12:00Z'), timezone: 'Asia/Taipei', submitDeadline: null, payoutDeadline: null,
-  tiers: { light: 11, original: 22, guide: 33 }, extraPlacementAmount: 4, flagBurstThreshold: null, evidenceRetentionDays: 90,
+  tiers: { light: 11, original: 22, guide: 33 }, extraPlacementAmount: 4, flagBurstThreshold: null, evidenceRetentionDays: 90, featured: false,
   status: 'draft', version: 2, createdAt: 1, updatedAt: 1, ...over,
 });
 type Call = { method: string; path: string; body: any };
@@ -115,10 +115,29 @@ it('a new campaign converts times in the chosen zone and leaves unset amounts un
   $('[data-action="save-campaign"]').click();
   await vi.waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/v1/moderation/campaigns')).toBe(true));
   const body = calls.find((c) => c.method === 'POST' && c.path === '/v1/moderation/campaigns')!.body;
-  expect(body).toMatchObject({ slug: 'autumn', title: { 'zh-Hant': '秋季分享' }, timezone: 'Asia/Tokyo', startsAt: Date.parse('2026-11-01T11:00Z'), endsAt: null, tiers: { light: 12 }, extraPlacementAmount: null, flagBurstThreshold: null });
+  expect(body).toMatchObject({ slug: 'autumn', title: { 'zh-Hant': '秋季分享' }, timezone: 'Asia/Tokyo', startsAt: Date.parse('2026-11-01T11:00Z'), endsAt: null, tiers: { light: 12 }, extraPlacementAmount: null, flagBurstThreshold: null, featured: false });
   expect(body).not.toHaveProperty('evidenceRetentionDays');
   expect(body).not.toHaveProperty('expectedVersion');
   expect(typeof body.operationId).toBe('string');
+});
+
+it('the recommend-on-home toggle marks the form dirty and goes out with the save', async () => {
+  handle = (c) => (c.method === 'PUT' ? ok(campaign({ featured: c.body.featured, version: 3 })) : undefined);
+  await mount();
+  $('[data-campaign="c1"] [data-action="edit"]').click();
+  await vi.waitFor(() => expect(field('slug')?.value).toBe('launch'));
+  const box = field('featured');
+  expect(box.checked).toBe(false);
+  expect(box.closest('label')!.textContent).toContain(t('campaign.field.featured'));
+  expect($('[data-action="activate"]').hasAttribute('disabled')).toBe(false);
+  box.click();
+  await nextTick();
+  expect($('[data-action="activate"]').hasAttribute('disabled')).toBe(true);
+  $('[data-action="save-campaign"]').click();
+  await vi.waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
+  expect(calls.find((c) => c.method === 'PUT')!.body).toMatchObject({ featured: true, expectedVersion: 2 });
+  await vi.waitFor(() => expect($('[data-action="activate"]').hasAttribute('disabled')).toBe(false));
+  expect(field('featured').checked).toBe(true);
 });
 
 it('a save that hits a version conflict keeps my edits and offers load-latest', async () => {

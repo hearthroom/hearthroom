@@ -176,14 +176,14 @@ describe("公開資訊", () => {
     expect(list.status).toBe(200);
     expect(list.headers.get("Cache-Control")).toBe("public, max-age=60");
     const items = (await json(list)).items;
-    expect(items).toEqual([{ slug: "launch", title: { "zh-Hant": "開站分享" }, phase: "open", startsAt: T0, endsAt: T0 + 10 * DAY, timezone: "Asia/Taipei", bannerUrl: null }]);
+    expect(items).toEqual([{ slug: "launch", title: { "zh-Hant": "開站分享" }, phase: "open", startsAt: T0, endsAt: T0 + 10 * DAY, timezone: "Asia/Taipei", bannerUrl: null, featured: false }]);
 
     const one = await call("/v1/campaigns/launch");
     expect(one.status).toBe(200);
     expect(one.headers.get("Cache-Control")).toBe("public, max-age=60");
     const detail = await json(one);
     expect(detail).toEqual({
-      slug: "launch", title: { "zh-Hant": "開站分享" }, phase: "open", startsAt: T0, endsAt: T0 + 10 * DAY, timezone: "Asia/Taipei", bannerUrl: null,
+      slug: "launch", title: { "zh-Hant": "開站分享" }, phase: "open", startsAt: T0, endsAt: T0 + 10 * DAY, timezone: "Asia/Taipei", bannerUrl: null, featured: false,
       intro: { "zh-Hant": "分享就有點數" }, submitDeadline: T0 + 12 * DAY, payoutDeadline: T0 + 20 * DAY,
       tiers: { light: 500, original: 3000, guide: 5000, video: 10000 }, extraPlacementAmount: 500,
     });
@@ -193,6 +193,37 @@ describe("公開資訊", () => {
       const r = await call(path);
       expect([path, r.status, (await json(r)).error]).toEqual([path, 404, "campaign_not_found"]);
     }
+  });
+});
+
+describe("推薦到首頁", () => {
+  it("建立時預設不推薦、可直接推薦；修改切換留一筆稽核；草稿與進行中都能改；公開列表與管理列表都帶 featured", async () => {
+    expect((await json(await create("admin", complete({ slug: "plain" })))).featured).toBe(false);
+    const c = await json(await create("admin", complete({ featured: true })));
+    expect(c).toMatchObject({ featured: true, version: 1 });
+    const created = await env.DB.prepare("SELECT after_json FROM audit_log WHERE subject_id = ? AND action = 'create'").bind(c.id).first<{ after_json: string }>();
+    expect(JSON.parse(created!.after_json).featured).toBe(true);
+
+    const off = await json(await save("admin", c.id, { ...complete(), featured: false, expectedVersion: 1 }));
+    expect(off).toMatchObject({ featured: false, version: 2 });
+    await status("admin", c.id, "active");
+    const on = await json(await save("admin", c.id, { ...complete(), featured: true, expectedVersion: 3 }));
+    expect(on).toMatchObject({ featured: true, status: "active", version: 4 });
+    const updates = await env.DB.prepare("SELECT before_json, after_json FROM audit_log WHERE subject_id = ? AND action = 'update' ORDER BY created_at, rowid").bind(c.id).all<{ before_json: string; after_json: string }>();
+    expect(updates.results.map((r) => [JSON.parse(r.before_json).featured, JSON.parse(r.after_json).featured])).toEqual([[true, false], [false, true]]);
+
+    const pub = (await json(await call("/v1/campaigns"))).items;
+    expect(pub).toEqual([expect.objectContaining({ slug: "launch", featured: true })]);
+    const mod = (await json(await call("/v1/moderation/campaigns", { token: "mod" }))).items;
+    expect(mod.map((x: { slug: string; featured: boolean }) => [x.slug, x.featured]).sort()).toEqual([["launch", true], ["plain", false]]);
+  });
+
+  it("不是布林值 400 campaign_invalid（field: featured），不寫入", async () => {
+    for (const featured of ["yes", 1, {}]) {
+      const r = await create("admin", complete({ featured }));
+      expect([String(featured), r.status, await json(r)]).toEqual([String(featured), 400, { error: "campaign_invalid", field: "featured" }]);
+    }
+    expect(await count("SELECT COUNT(*) AS n FROM campaigns")).toBe(0);
   });
 });
 

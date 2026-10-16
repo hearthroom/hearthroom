@@ -25,13 +25,15 @@ export type Campaign = {
   bannerKey: string | null; bannerUrl: string | null;
   startsAt: number | null; endsAt: number | null; timezone: string | null; submitDeadline: number | null; payoutDeadline: number | null;
   tiers: Partial<Record<Tier, number>>; extraPlacementAmount: number | null; flagBurstThreshold: number | null; evidenceRetentionDays: number;
+  /** 推薦到首頁：進行中或即將開始時出現在看板輪播。不影響啟用條件。 */
+  featured: boolean;
   status: CampaignStatus; version: number; createdAt: number; updatedAt: number;
 };
 /** 可編輯的欄位；沒給的視為清空（整份覆寫，跟部落格一樣）。 */
 export type CampaignInput = {
   id?: string; expectedVersion?: number; slug: string; title: Localized; intro?: Localized; bannerKey?: string | null;
   startsAt?: number | null; endsAt?: number | null; timezone?: string | null; submitDeadline?: number | null; payoutDeadline?: number | null;
-  tiers?: Partial<Record<Tier, number>>; extraPlacementAmount?: number | null; flagBurstThreshold?: number | null; evidenceRetentionDays?: number;
+  tiers?: Partial<Record<Tier, number>>; extraPlacementAmount?: number | null; flagBurstThreshold?: number | null; evidenceRetentionDays?: number; featured?: boolean;
 };
 
 // ---- 計算 ---------------------------------------------------------------------
@@ -113,16 +115,16 @@ export function canActivate(c: Campaign): { ok: true } | { ok: false; field: str
 type Row = {
   id: string; slug: string; title: string; intro: string; banner_key: string | null; starts_at: number | null; ends_at: number | null;
   timezone: string | null; submit_deadline: number | null; payout_deadline: number | null; tiers: string; extra_placement_amount: number | null;
-  flag_burst_threshold: number | null; evidence_retention_days: number; status: CampaignStatus; version: number; created_at: number; updated_at: number;
+  flag_burst_threshold: number | null; evidence_retention_days: number; featured: number; status: CampaignStatus; version: number; created_at: number; updated_at: number;
 };
-const EDITABLE = ["slug", "title", "intro", "banner_key", "starts_at", "ends_at", "timezone", "submit_deadline", "payout_deadline", "tiers", "extra_placement_amount", "flag_burst_threshold", "evidence_retention_days"] as const;
+const EDITABLE = ["slug", "title", "intro", "banner_key", "starts_at", "ends_at", "timezone", "submit_deadline", "payout_deadline", "tiers", "extra_placement_amount", "flag_burst_threshold", "evidence_retention_days", "featured"] as const;
 type Editable = Pick<Row, (typeof EDITABLE)[number]>;
 
 const toCampaign = (r: Row): Campaign => ({
   id: r.id, slug: r.slug, title: JSON.parse(r.title), intro: JSON.parse(r.intro), bannerKey: r.banner_key, bannerUrl: imageUrl(r.banner_key),
   startsAt: r.starts_at, endsAt: r.ends_at, timezone: r.timezone, submitDeadline: r.submit_deadline, payoutDeadline: r.payout_deadline,
   tiers: JSON.parse(r.tiers), extraPlacementAmount: r.extra_placement_amount, flagBurstThreshold: r.flag_burst_threshold,
-  evidenceRetentionDays: r.evidence_retention_days, status: r.status, version: r.version, createdAt: r.created_at, updatedAt: r.updated_at,
+  evidenceRetentionDays: r.evidence_retention_days, featured: r.featured === 1, status: r.status, version: r.version, createdAt: r.created_at, updatedAt: r.updated_at,
 });
 /** 稽核的改前改後：設定本身，不含時間戳與衍生的網址。 */
 const auditView = ({ id: _, bannerUrl: _u, createdAt: _c, updatedAt: _t, ...rest }: Campaign) => rest;
@@ -170,6 +172,8 @@ function clean(input: CampaignInput): Editable {
   if (tz !== null && (typeof tz !== "string" || tz.length > 64 || !validTimezone(tz))) invalid("timezone");
   const retention = input.evidenceRetentionDays ?? 90;
   if (!Number.isSafeInteger(retention) || retention < 1 || retention > 3650) invalid("evidenceRetentionDays");
+  const featured = input.featured ?? false;
+  if (typeof featured !== "boolean") invalid("featured");
   return {
     slug: input.slug,
     title: JSON.stringify(cleanLocalized(input.title, "title", 120, true, "campaign_invalid")),
@@ -179,7 +183,7 @@ function clean(input: CampaignInput): Editable {
     tiers: JSON.stringify(cleanTiers(input.tiers)),
     extra_placement_amount: nullableInt(input.extraPlacementAmount, "extraPlacementAmount", (n) => n >= 0),
     flag_burst_threshold: nullableInt(input.flagBurstThreshold, "flagBurstThreshold", (n) => n >= 1),
-    evidence_retention_days: retention,
+    evidence_retention_days: retention, featured: featured ? 1 : 0,
   };
 }
 
