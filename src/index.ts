@@ -47,6 +47,8 @@ import {
   type EventFields, type Pending,
 } from "./analytics";
 import { blogGroupUrl, blogIndexMeta, blogUrl, postMeta } from "./blog-head";
+import { campaignLocale, campaignMeta, campaignUrl } from "./campaign-head";
+import { getCampaign } from "./campaign";
 import { authorLine, downloadMeta, homeMeta, preloadImageTag, renderDefaultShareHead, renderHead, updatesMeta } from "./head";
 import { aliasTarget, HOST, canonicalUrl, isPlayHost } from "./site";
 import { cardThumbUrl, landingZone } from "../shared/card-thumb";
@@ -1741,8 +1743,36 @@ async function blogPage(c: Context<{ Bindings: Env; Variables: { ev: Pending } }
   return res;
 }
 
+/**
+ * 活動頁 /campaign/:slug：分享預覽的標題、簡介、圖片（campaign-head.ts）。草稿與不存在回殼＋noindex＋404，照部落格的處理。
+ * 沒有語言前綴時語言看抓取器的 Accept-Language，所以回應帶 Vary。
+ */
+const CAMPAIGN_PAGE = /^(?:\/(zh-Hans|en|ja|ko))?\/campaign\/([a-z0-9-]{1,40})\/?$/;
+async function campaignPage(c: Context<{ Bindings: Env; Variables: { ev: Pending } }>, url: URL, m: RegExpMatchArray): Promise<Response> {
+  const shell = await c.env.ASSETS.fetch(new Request(new URL("/", url).toString()));
+  if (!shell.ok) return shell;
+  const slug = m[2]!;
+  const locale = campaignLocale(m[1], c.req.header("Accept-Language"));
+  note(c, { event: "page_html", refHost: refHostOf(c.req.header("Referer"), url.host), locale, subject: slug, detail: "campaign" });
+  const campaign = await getCampaign(c.env.DB, slug);
+  if (!campaign || campaign.slug !== slug || campaign.status === "draft") {
+    const res = new HTMLRewriter().on("head", { element(e) { e.append('<meta name="robots" content="noindex, nofollow">', { html: true }); } }).transform(new Response(shell.body, { status: 404, headers: shell.headers }));
+    res.headers.set("Cache-Control", "no-store");
+    res.headers.set("X-Robots-Tag", "noindex, nofollow");
+    res.headers.delete("etag");
+    res.headers.delete("last-modified");
+    return res;
+  }
+  const res = renderHead(shell, campaignMeta(campaign, locale, campaignUrl(m[1], slug)));
+  res.headers.set("Cache-Control", `public, max-age=${PAGE_TTL}`);
+  res.headers.append("Vary", "Accept-Language");
+  return res;
+}
+
 app.get("*", async (c) => {
   const url = new URL(c.req.url);
+  const campaignMatch = url.pathname.match(CAMPAIGN_PAGE);
+  if (campaignMatch) return campaignPage(c, url, campaignMatch);
   const landing = url.pathname.match(LANDING);
   if (landing && siteRootOf(url.hostname) && !isPlayHost(url.host)) {
     const locale = landing[1] ?? "zh-Hant";
