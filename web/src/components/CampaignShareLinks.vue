@@ -44,7 +44,7 @@ onBeforeUnmount(() => clearTimeout(timer));
   <ul class="share-links">
     <li v-for="c in items" :key="c.id" class="share-links__item" :data-share-link="c.id">
       <strong class="share-links__title">{{ c.title }}</strong>
-      <span class="share-links__url mono" data-url>{{ linkOf(c) }}</span>
+      <span class="share-links__url" data-url>{{ linkOf(c) }}</span>
       <button type="button" class="btn btn--sm share-links__copy" data-action="copy" @click="copy(c)">
         {{ copied === c.id ? t("campaign.share.copied") : t("campaign.share.copy") }}
       </button>
@@ -53,13 +53,21 @@ onBeforeUnmount(() => clearTimeout(timer));
 </template>
 
 <style scoped>
-.share-links { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-3); }
+.share-links { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); }
 .share-links__item {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s-1) var(--s-3); align-items: center;
-  padding: var(--s-3) var(--s-4); border-radius: var(--r-md); background: var(--surface-2);
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s-1) var(--s-4); align-items: center;
+  padding: var(--s-3) var(--s-4); border-radius: var(--r-sm); background: var(--surface-2);
 }
-.share-links__title { font-size: 14px; overflow-wrap: anywhere; }
-.share-links__url { grid-column: 1; font-size: 12px; color: var(--text-2); overflow-wrap: anywhere; }
+.share-links__title { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+/* 不用全站的 .mono：那是單字頭像的圓底，不是等寬字 */
+.share-links__url {
+  grid-column: 1; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.5;
+  color: var(--text-2); word-break: break-all;
+}
 .share-links__copy { grid-column: 2; grid-row: 1 / span 2; }
+@media (max-width: 480px) {
+  .share-links__item { grid-template-columns: minmax(0, 1fr); }
+  .share-links__copy { grid-column: 1; grid-row: auto; justify-self: start; margin-top: var(--s-1); }
+}
 @media (max-width: 760px) { .share-links__copy { min-height: 44px; } }
 </style>
