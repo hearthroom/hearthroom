@@ -474,6 +474,41 @@ export async function publicPost(db: D1Database, columnSlug: string, slug: strin
 }
 
 /** 最新的公開文章（Atom 用）：停用欄目的不列，與公開列表一致。 */
+// ---- 閱讀數與喜歡 ---------------------------------------------------------------
+
+/** 閱讀數滿這個數才公開；後台一律看精確數字。 */
+export const VIEWS_PUBLIC_MIN = 50;
+const LIVE_BY_ID = `SELECT p.id FROM blog_posts p JOIN blog_columns col ON col.id = p.column_id WHERE p.id = ?2 AND ${LIVE} AND ${VISIBLE_COLUMN}`;
+export type Engagement = { views: number | null; likes: number; liked: boolean };
+
+async function engagement(db: D1Database, postId: string, memberId: string | null): Promise<Engagement> {
+  const r = (await db.prepare("SELECT view_count, like_count, EXISTS (SELECT 1 FROM blog_post_likes WHERE post_id = ?1 AND member_id = ?2) AS liked FROM blog_posts WHERE id = ?1")
+    .bind(postId, memberId).first<{ view_count: number; like_count: number; liked: number }>())!;
+  return { views: r.view_count >= VIEWS_PUBLIC_MIN ? r.view_count : null, likes: r.like_count, liked: !!r.liked };
+}
+
+/**
+ * 文章頁進來一次：count 為真才加一（同一個瀏覽器一天只送一次真，由前台判斷）。不公開的文章回 null。
+ * ponytail: 沒有伺服器端去重，腳本能灌數字；數字只是展示，被灌再加 KV 一天過期的 IP 雜湊去重。
+ */
+export async function recordView(db: D1Database, postId: string, count: boolean, memberId: string | null, now: number): Promise<Engagement | null> {
+  if (!(await db.prepare(LIVE_BY_ID).bind(now, postId).first())) return null;
+  if (count) await db.prepare("UPDATE blog_posts SET view_count = view_count + 1 WHERE id = ?").bind(postId).run();
+  return engagement(db, postId, memberId);
+}
+
+/** 喜歡／收回：一個 batch，計數只在那一票真的新增或刪掉時才動，同時按也不會多算。不公開的文章回 null。 */
+export async function setPostLike(db: D1Database, postId: string, memberId: string, like: boolean, now: number): Promise<{ likes: number; liked: boolean } | null> {
+  if (!(await db.prepare(LIVE_BY_ID).bind(now, postId).first())) return null;
+  await db.batch(like
+    ? [db.prepare("INSERT OR IGNORE INTO blog_post_likes (post_id, member_id, created_at) VALUES (?, ?, ?)").bind(postId, memberId, now),
+       db.prepare("UPDATE blog_posts SET like_count = like_count + 1 WHERE id = ? AND changes() > 0").bind(postId)]
+    : [db.prepare("DELETE FROM blog_post_likes WHERE post_id = ? AND member_id = ?").bind(postId, memberId),
+       db.prepare("UPDATE blog_posts SET like_count = MAX(0, like_count - 1) WHERE id = ? AND changes() > 0").bind(postId)]);
+  const { likes, liked } = await engagement(db, postId, memberId);
+  return { likes, liked };
+}
+
 export async function recentPosts(db: D1Database, now: number, limit: number): Promise<Post[]> {
   const rows = await db.prepare(`${POST_SELECT} WHERE ${LIVE} AND ${VISIBLE_COLUMN} ORDER BY p.publish_at DESC, p.id DESC LIMIT ?2`).bind(now, limit).all<PostRow>();
   return rows.results.map(toPost);

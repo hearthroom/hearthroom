@@ -1,9 +1,10 @@
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { openAuth, sealAuth } from "./account-auth";
+import { clientKind } from "./analytics";
 import {
   adjacentPosts, adminPost, adminPosts, adminView, getRevision, IMAGE_MAX_BYTES, imageServable, columnTree, deleteColumn, listRevisions, postBySlug, publicPost,
-  publicPostById, publicPosts, publicView, relatedPosts, restoreRevision, saveColumn, savePost, setPostState, uploadImage,
+  publicPostById, publicPosts, publicView, recordView, relatedPosts, restoreRevision, saveColumn, savePost, setPostLike, setPostState, uploadImage,
   type Actor, type ColumnInput, type Post, type PostInput, type StateChange,
 } from "./blog";
 import { blogFeed } from "./blog-head";
@@ -101,6 +102,42 @@ blogRoutes.get("/v1/blog/p/:id", async (c) => {
   if (!target) throw new HttpError(404, "blog_post_not_found");
   return c.json(target, 200, PUBLIC);
 });
+
+// ---- 閱讀數與喜歡（不快取：回應裡有「我按過沒有」） --------------------------------
+
+/** 讀者身分：帶得到就是會員，token 過期或沒帶就當訪客（跟讀留言一樣，不因此失敗）。 */
+async function readerOf(c: Ctx): Promise<string | null> {
+  if (!c.req.header("Authorization")) return null;
+  try {
+    return (await requireMember(c)).id;
+  } catch (err) {
+    if (err instanceof HttpError && err.status === 401) return null;
+    throw err;
+  }
+}
+const NO_STORE = { "Cache-Control": PRIVATE };
+
+blogRoutes.post("/v1/blog/posts/:id/view", async (c) => {
+  const count = (await bodyOf(c)).count === true && clientKind(c.req.header("User-Agent")) !== "bot";
+  const out = await recordView(c.env.DB, c.req.param("id"), count, await readerOf(c), Date.now());
+  return out ? c.json(out, 200, NO_STORE) : c.json({ error: "blog_post_not_found" }, 404, NO_STORE);
+});
+
+for (const [method, like] of [["put", true], ["delete", false]] as const) {
+  blogRoutes[method]("/v1/blog/posts/:id/like", async (c) => {
+    const operation = like ? "like" : "unlike";
+    try {
+      const member = await requireMember(c);
+      const out = await setPostLike(c.env.DB, c.req.param("id"), member.id, like, Date.now());
+      if (!out) throw new HttpError(404, "blog_post_not_found");
+      await bumpOp(c.env.DB, "blog", operation, "success");
+      return c.json(out, 200, NO_STORE);
+    } catch (err) {
+      await bumpOp(c.env.DB, "blog", operation, err instanceof HttpError && err.status < 500 ? "denied" : "error");
+      throw err;
+    }
+  });
+}
 
 blogRoutes.get("/v1/blog/images/:file", async (c) => {
   const key = `blog/${c.req.param("file")}`;
