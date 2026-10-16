@@ -193,7 +193,7 @@ async function onDone(_result: ApplyResult) {
       <section v-if="signedIn" ref="shareEl" class="panel campaign__section" data-share-links aria-labelledby="campaign-share-h">
         <div class="campaign__row">
           <h2 id="campaign-share-h" class="campaign__h2">{{ t("campaign.share.title") }}</h2>
-          <RouterLink class="campaign__mine" data-mine :to="lp('/me/campaign')">
+          <RouterLink class="campaign__mine" data-mine :to="`${lp('/campaigns')}?tab=mine`">
             {{ t("campaign.page.mine") }}
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8 5.5l4.5 4.5L8 14.5" /></svg>
           </RouterLink>

@@ -38,7 +38,8 @@ const pages: RouteRecordRaw[] = [
   { path: "me/community", component: () => import("./pages/CommunityPage.vue"), meta: { auth: true } },
   { path: "me/notifications", component: () => import("./pages/NotificationsPage.vue"), meta: { auth: true } },
   { path: "me/referral", component: () => import("./pages/ReferralPage.vue"), meta: { auth: true } },
-  { path: "me/campaign", component: () => import("./pages/MyCampaignPage.vue"), meta: { auth: true } },
+  // 舊的「我的分享申請」：現在是活動中心的「我參加的」頁籤。通知與舊書籤還指著這裡
+  { path: "me/campaign", redirect: (to) => ({ path: withLocale("/campaigns", localeOf(to)), query: { ...to.query, tab: "mine" }, hash: to.hash }) },
   { path: "me", component: () => import("./pages/MePage.vue"), meta: { auth: true } },
   { path: "login", component: () => import("./pages/LoginPage.vue") },
   // optimisticAuth：這個瀏覽器上次是登入的，就先開頁（畫上次那份）、身分在背景確認（見下面的守衛）
@@ -72,6 +73,8 @@ const pages: RouteRecordRaw[] = [
   { path: "blog/:column/:slug", component: () => import("./pages/BlogPostPage.vue") },
   // 分享獎勵活動頁：訪客看得到規則，申請要登入（頁內提示，登入後帶回原頁；?s= 進站時已記下並從網址拿掉）
   { path: "campaign/:slug", component: () => import("./pages/CampaignPage.vue") },
+  // 活動中心：全部活動照階段分頁籤，加上自己的申請（?tab=mine，那一格自己請人登入）
+  { path: "campaigns", component: () => import("./pages/CampaignsPage.vue") },
   // 站內玩卡：舞台整頁接管（bare = 不套站台頁首頁尾）。遊客進得來、看得到開場，送出時才請他登入
   // （owner 2026-10-10，見 PlayPage）；續玩、審核、作者試玩由 PlayPage 自己要求登入。
   { path: "play/:roleId", component: () => import("./pages/PlayPage.vue"), meta: { bare: true, preloadStage: true } },
@@ -248,7 +251,8 @@ export function surfaceOf(path: string): string {
   if (bare.startsWith("/search")) return "search";
   if (bare.startsWith("/cards")) return "card";
   if (bare.startsWith("/authors")) return "author";
-  if (bare.startsWith("/mine") || bare.startsWith("/me/campaign")) return "mine";
+  if (bare.startsWith("/mine")) return "mine";
+  // 活動頁與活動中心（含「我參加的」）都算活動
   if (bare.startsWith("/campaign")) return "campaign";
   if (bare.startsWith("/create")) return "create";
   if (bare.startsWith("/wallet")) return "wallet";

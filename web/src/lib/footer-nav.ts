@@ -53,9 +53,9 @@ export function footerGroups(ctx: FooterContext): FooterGroup[] {
 
   const community: FooterLink[] = [{ id: "blog", label: "blog.title", to: "/blog" }];
   if (ctx.discordInvite) community.push({ id: "discord", label: "community.join", href: ctx.discordInvite, icon: "discord" });
-  // 活動有期限，頁尾不追著它的開關跑：一律進「我的分享申請」，那一頁在沒有申請時會帶人去進行中的活動
+  // 活動有期限，頁尾不追著它的開關跑：一律進活動中心，那一頁自己挑有活動的頁籤
   community.push(
-    { id: "campaign", label: "campaign.nav", to: "/me/campaign" },
+    { id: "campaign", label: "campaign.hub.title", to: "/campaigns" },
     { id: "github", label: "footer.githubShort", href: ctx.repoUrl, icon: "github" },
     { id: "issues", label: "footer.issues", href: `${ctx.repoUrl}/issues` },
   );

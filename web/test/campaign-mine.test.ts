@@ -1,8 +1,8 @@
 /**
- * 我的分享申請 /me/campaign：依活動分組；「已核准」與「已入帳」分兩欄；五種發放狀態的字；
+ * 活動中心「我參加的」：依活動分組；「已核准」與「已入帳」分兩欄；五種發放狀態的字；
  * 需要補件的位置可以補充資料，送出的本體只帶改過的欄位與新截圖，失敗重按沿用 operationId；
  * 補件截止後（畫面時間到了或伺服器回 campaign_submit_closed）不能重送；畫面上沒有點數池、餘額、審核人；
- * 活動讀不到時只顯示代號；沒有內容時連到進行中的活動；未登入導去登入。
+ * 活動讀不到時只顯示代號；沒有內容時連到進行中的活動；未登入時請他登入，登入後回到這個頁籤；舊網址轉過來。
  */
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createApp, nextTick, type App } from "vue";
@@ -14,7 +14,7 @@ const session = vi.hoisted(() => ({ me: null as null | { accountNumId: number },
 vi.mock("../src/lib/session", () => ({ useSession: () => session }));
 vi.mock("../src/lib/share-ref", async (original) => ({ ...(await original<typeof import("../src/lib/share-ref")>()), currentReferralCode: async () => null }));
 
-import MyCampaignPage from "../src/pages/MyCampaignPage.vue";
+import CampaignMine from "../src/components/CampaignMine.vue";
 
 const DAY = 86_400_000;
 const detail = (slug: string, extra: Record<string, unknown> = {}) => ({
@@ -79,10 +79,10 @@ afterEach(() => {
 
 const settle = async () => { for (let i = 0; i < 10; i++) { await nextTick(); await new Promise((r) => setTimeout(r, 0)); } };
 async function mount() {
-  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/me/campaign", component: { render: () => null } }, { path: "/:p(.*)*", component: { render: () => null } }] });
-  await router.push("/me/campaign"); await router.isReady();
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/campaigns", component: { render: () => null } }, { path: "/:p(.*)*", component: { render: () => null } }] });
+  await router.push("/campaigns?tab=mine"); await router.isReady();
   host = document.body.appendChild(document.createElement("div"));
-  app = createApp(MyCampaignPage).use(router).use(i18n);
+  app = createApp(CampaignMine).use(router).use(i18n);
   app.mount(host);
   await settle();
   return host;
@@ -300,11 +300,26 @@ it("links to the first open campaign when there is nothing yet, and shows only t
   expect($("[data-join]")).toBeNull();
 });
 
-it("sends a signed-out visitor to sign in and back", async () => {
+it("asks a signed-out visitor to sign in and comes back to this tab", async () => {
   session.me = null;
+  await mount();
+  expect(text("[data-signin-prompt]")).toContain(t("campaign.hub.signIn"));
+  expect($<HTMLAnchorElement>("[data-signin]")!.getAttribute("href")).toBe(`/login?returnTo=${encodeURIComponent("/campaigns?tab=mine")}`);
+  expect(calls.some((c) => c.path === "/v1/me/campaign/contents")).toBe(false);
+});
+
+it("says nothing about signing in while the session is still loading", async () => {
+  session.me = null; session.ready = false;
+  try {
+    await mount();
+    expect($("[data-signin-prompt]")!.textContent!.trim()).toBe("");
+  } finally { session.ready = true; }
+});
+
+it("sends the old address to the tab, keeping the language and the query", async () => {
   const { router } = await import("../src/router");
   await router.push("/"); await router.isReady();
-  await router.push("/me/campaign");
-  expect(router.currentRoute.value.path).toBe("/login");
-  expect(router.currentRoute.value.query.returnTo).toBe("/me/campaign");
+  await router.push("/en/me/campaign?from=notice");
+  expect(router.currentRoute.value.path).toBe("/en/campaigns");
+  expect(router.currentRoute.value.query).toEqual({ from: "notice", tab: "mine" });
 });
