@@ -2209,6 +2209,8 @@
   "campaign.field.extra": "每多一个有效位置加发",
   "campaign.field.burst": "一天内提交超过几笔时标示",
   "campaign.field.retention": "截图保留天数（发奖截止后起算）",
+  "campaign.field.featured": "推荐到首页",
+  "campaign.field.featuredHint": "进行中或即将开始时，会出现在首页看板的轮播里。",
   "campaign.field.unset": "留空＝不设置",
   "campaign.tier.light": "轻量分享",
   "campaign.tier.original": "原创帖子",

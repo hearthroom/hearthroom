@@ -2209,6 +2209,8 @@
   "campaign.field.extra": "每多一個有效位置加發",
   "campaign.field.burst": "一天內提交超過幾筆時標示",
   "campaign.field.retention": "截圖保留天數（發獎截止後起算）",
+  "campaign.field.featured": "推薦到首頁",
+  "campaign.field.featuredHint": "進行中或即將開始時，會出現在首頁看板的輪播裡。",
   "campaign.field.unset": "留空＝不設定",
   "campaign.tier.light": "輕量分享",
   "campaign.tier.original": "原創貼文",

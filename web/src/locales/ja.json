@@ -2209,6 +2209,8 @@
   "campaign.field.extra": "有効な掲載先が 1 つ増えるごとの追加報酬",
   "campaign.field.burst": "1 日の提出がこの件数を超えたら印を付ける",
   "campaign.field.retention": "スクリーンショットの保存日数（報酬付与の締め切りから数えます）",
+  "campaign.field.featured": "ホームでおすすめする",
+  "campaign.field.featuredHint": "開催中または開始前のあいだ、ホームのボード上部のカルーセルに表示されます。",
   "campaign.field.unset": "空欄なら未設定",
   "campaign.tier.light": "かんたんシェア",
   "campaign.tier.original": "オリジナル投稿",

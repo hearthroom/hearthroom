@@ -2209,6 +2209,8 @@
   "campaign.field.extra": "Bonus for each extra valid placement",
   "campaign.field.burst": "Flag when one person submits more than this in a day",
   "campaign.field.retention": "Days to keep screenshots (counted from the rewards deadline)",
+  "campaign.field.featured": "Feature on the home page",
+  "campaign.field.featuredHint": "While open or upcoming, it appears in the carousel at the top of the home board.",
   "campaign.field.unset": "Leave blank if not set",
   "campaign.tier.light": "Quick share",
   "campaign.tier.original": "Original post",

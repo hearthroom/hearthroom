@@ -2209,6 +2209,8 @@
   "campaign.field.extra": "유효한 게시 위치가 하나 늘 때마다 추가 지급",
   "campaign.field.burst": "하루 제출이 이 개수를 넘으면 표시",
   "campaign.field.retention": "스크린샷 보관 일수 (보상 지급 마감일부터)",
+  "campaign.field.featured": "홈에 추천",
+  "campaign.field.featuredHint": "진행 중이거나 곧 시작할 때 홈 보드 상단 캐러셀에 표시돼요.",
   "campaign.field.unset": "비워 두면 설정 안 함",
   "campaign.tier.light": "가벼운 공유",
   "campaign.tier.original": "직접 쓴 게시글",
