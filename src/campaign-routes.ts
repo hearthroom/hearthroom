@@ -55,7 +55,7 @@ const summaryView = (c: Campaign, now: number) => ({
   slug: c.slug, title: c.title, phase: campaignPhase(c, now), startsAt: c.startsAt, endsAt: c.endsAt, timezone: c.timezone, bannerUrl: c.bannerUrl, featured: c.featured,
 });
 const detailView = (c: Campaign, now: number) => ({
-  ...summaryView(c, now), intro: c.intro, submitDeadline: c.submitDeadline, payoutDeadline: c.payoutDeadline, tiers: c.tiers, extraPlacementAmount: c.extraPlacementAmount,
+  ...summaryView(c, now), intro: c.intro, submitDeadline: c.submitDeadline, payoutDeadline: c.payoutDeadline, tiers: c.tiers, extraPlacementAmount: c.extraPlacementAmount, lightLimit: c.lightLimit,
 });
 
 campaignRoutes.get("/v1/campaigns", async (c) => {

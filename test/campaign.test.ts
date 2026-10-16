@@ -58,7 +58,7 @@ describe("位置正規化", () => {
 const ready: Campaign = {
   id: "c1", slug: "launch", title: { "zh-Hant": "開業分享" }, intro: {}, bannerKey: null, bannerUrl: null,
   startsAt: 100, endsAt: 200, timezone: "Asia/Taipei", submitDeadline: 300, payoutDeadline: 400,
-  ...money, flagBurstThreshold: null, evidenceRetentionDays: 90, featured: false, status: "draft", version: 1, createdAt: 1, updatedAt: 1,
+  ...money, lightLimit: null, flagBurstThreshold: null, evidenceRetentionDays: 90, featured: false, status: "draft", version: 1, createdAt: 1, updatedAt: 1,
 };
 
 describe("啟用條件", () => {

@@ -421,3 +421,17 @@ it("sends only the chosen proof: a screenshot-only share sends no link", async (
   expect(posts()).toHaveLength(0);
   expect($('[data-field="evidence"] .apply__shots [role="alert"]')!.textContent).toBe(t("campaign.apply.needProof"));
 });
+
+it("shows the per-person quick share limit, and explains it when the server turns one down", async () => {
+  detail = campaign({ lightLimit: 10 });
+  submitReplies = [{ status: 409, body: { error: "campaign_light_limit" } }];
+  await mount();
+  expect($("[data-light-limit]")!.textContent).toContain(t("campaign.page.lightLimit", { n: 10 }));
+  await fillNew();
+  await submit();
+  expect($("[data-form-error]")!.textContent).toContain(t("campaign.error.campaign_light_limit"));
+  app!.unmount(); app = null; host.remove();
+  detail = campaign({ lightLimit: null });
+  await mount();
+  expect($("[data-light-limit]")).toBeNull();
+});
