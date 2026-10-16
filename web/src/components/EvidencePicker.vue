@@ -115,11 +115,12 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.ev-picker { display: grid; gap: var(--s-3); min-width: 0; }
+/* 可以拖放、貼上：畫成一塊虛線的放置區 */
+.ev-picker { display: grid; gap: var(--s-3); min-width: 0; padding: var(--s-4); border: 1px dashed var(--border-strong); border-radius: var(--r-sm); }
 .ev-picker__hint { margin: 0; font-size: 13px; }
 .ev-picker__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: var(--s-3); }
 .ev-tile { display: grid; gap: var(--s-2); align-content: start; min-width: 0; }
-.ev-tile__thumb { position: relative; aspect-ratio: 1; border-radius: var(--r-md); overflow: hidden; background: var(--surface-2); }
+.ev-tile__thumb { position: relative; aspect-ratio: 1; border-radius: var(--r-sm); overflow: hidden; background: var(--surface-2); }
 .ev-tile__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .ev-tile__cover { position: absolute; inset: 0; display: grid; place-items: center; border-radius: 0; background: color-mix(in srgb, var(--surface) 70%, transparent); font-size: 12px; color: var(--text-2); }
 .ev-tile__cover span { position: relative; z-index: 1; }

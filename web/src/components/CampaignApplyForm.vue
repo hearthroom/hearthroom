@@ -189,7 +189,7 @@ async function submit() {
     </div>
 
     <p v-if="formError" class="notice notice--error" role="alert" data-form-error>{{ formError }}</p>
-    <button type="submit" class="btn btn--primary apply__submit" :disabled="busy || uploading" :aria-busy="busy || undefined">{{ t("campaign.apply.submit") }}</button>
+    <button type="submit" class="btn btn--primary btn--lg apply__submit" :disabled="busy || uploading" :aria-busy="busy || undefined">{{ t("campaign.apply.submit") }}</button>
   </form>
 </template>
 
@@ -202,7 +202,8 @@ async function submit() {
   display: inline-flex; align-items: center; gap: var(--s-2); min-height: var(--h-md); padding: 0 var(--s-3);
   border-radius: var(--r-pill); background: var(--surface-2); font-size: 14px; cursor: pointer;
 }
-.apply__choice:has(input:checked), .apply__tier:has(input:checked) { background: var(--accent-tint); color: var(--accent-text); }
+.apply__choice input, .apply__tier input { margin: 0; accent-color: var(--accent); }
+.apply__choice:has(input:checked), .apply__tier:has(input:checked) { background: var(--accent-soft); color: var(--accent-text); box-shadow: inset 0 0 0 1px var(--accent); }
 .apply__amount { color: var(--text-2); font-size: 13px; }
 .apply__tier:has(input:checked) .apply__amount { color: inherit; }
 .apply__short { max-width: 280px; }
@@ -211,9 +212,13 @@ async function submit() {
 .apply__hint { margin: 0; font-size: 13px; color: var(--text-3); }
 .apply__error { margin: 0; font-size: 13px; color: var(--danger); }
 .apply [aria-invalid="true"] { border-color: var(--danger); }
-.apply__submit { justify-self: start; }
+.apply__submit { justify-self: start; min-width: 160px; }
 @media (max-width: 760px) {
   .apply__choice, .apply__tier, .apply__submit { min-height: 44px; }
   .apply__short { max-width: none; }
+  .apply__submit { justify-self: stretch; }
+  /* 手機上檔位排成一欄，金額靠右：四個膠囊換行會參差不齊 */
+  .apply__tiers { display: grid; }
+  .apply__amount { margin-left: auto; }
 }
 </style>
