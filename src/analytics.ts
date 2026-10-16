@@ -166,7 +166,7 @@ export const BEACON_EVENTS = new Set([
   // 要看的是哪些平台真的有人點，作者自己的收入在那個平台上看
   "tip_open", "tip_click",
   // 官方部落格：進文章頁、讀到文末、分享、文內行動按鈕（subject 是文章 slug，不放成員 id）
-  "blog_view", "blog_read_end", "blog_share", "blog_cta",
+  "blog_view", "blog_read_end", "blog_share", "blog_cta", "blog_like",
   // 分享活動：進活動頁、送出申請、複製自己的分享連結（subject 是活動 slug，不放成員 id 或內容 id）
   "campaign_view", "campaign_apply", "campaign_share",
 ]);

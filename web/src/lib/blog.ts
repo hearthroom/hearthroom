@@ -43,6 +43,39 @@ async function get<T>(path: string): Promise<T> {
 
 export const fetchColumns = () => get<{ items: BlogGroup[] }>("/blog/columns");
 
+// ---- 閱讀數與喜歡 ---------------------------------------------------------------
+
+/** views 未滿公開門檻時是 null（伺服器判斷），畫面就不顯示閱讀數。 */
+export interface Engagement { views: number | null; likes: number; liked: boolean }
+const reader = (token: string | null): Record<string, string> => ({
+  "Content-Type": "application/json", "X-From": currentSurface(), "X-Provider": currentProvider(), ...(token ? { Authorization: `Bearer ${token}` } : {}),
+});
+async function readerCall<T>(path: string, method: string, token: string | null, body?: unknown): Promise<T> {
+  const res = await fetch(`${COMMUNITY_API}/blog/posts/${path}`, { method, headers: reader(token), body: body === undefined ? undefined : JSON.stringify(body) });
+  if (!res.ok) {
+    const code = ((await res.json().catch(() => ({}))) as { error?: string }).error ?? "";
+    throw new ApiError(res.status, describeApiError(res.status, code), code);
+  }
+  return (await res.json()) as T;
+}
+/** 進文章頁一次；count 只有這個瀏覽器今天第一次才是真（markViewed）。 */
+export const viewPost = (postId: string, count: boolean, token: string | null) =>
+  readerCall<Engagement>(`${encodeURIComponent(postId)}/view`, "POST", token, { count });
+export const likePost = (postId: string, like: boolean, token: string) =>
+  readerCall<{ likes: number; liked: boolean }>(`${encodeURIComponent(postId)}/like`, like ? "PUT" : "DELETE", token);
+/** 這個瀏覽器今天算過這篇了沒，順手記下今天；讀寫失敗（無痕、被封鎖）一律當沒算過。 */
+export function markViewed(postId: string, today: string): boolean {
+  const key = `hr.blog.viewed.${postId}`;
+  try {
+    if (localStorage.getItem(key) === today) return false;
+    localStorage.setItem(key, today);
+  } catch {
+    // 照算
+  }
+  return true;
+}
+
+
 export const fetchPosts = (filter: { column?: string; group?: string }, page: number) => {
   const q = new URLSearchParams({ ...(filter.group ? { group: filter.group } : {}), ...(filter.column ? { column: filter.column } : {}), page: String(page) });
   return get<{ total: number; pinned: PostCard[]; items: PostCard[] }>(`/blog/posts?${q}`);
