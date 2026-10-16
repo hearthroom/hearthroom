@@ -58,32 +58,6 @@ beforeEach(async () => {
 afterEach(() => { restoreUpstream(); vi.restoreAllMocks(); });
 
 describe("提交", () => {
-  it("輕量分享有每人上限：滿了的下一筆輕量回 409，被拒的不佔名額，其他檔位照收（owner 2026-10-17：防止找一堆群發）", async () => {
-    await env.DB.prepare("UPDATE campaigns SET light_limit = 2 WHERE id = ?").bind(campaignId).run();
-    const light = (location: string) => form({ requestedTier: "light", location, url: `https://tieba.baidu.com/p/${location}` });
-    const a = await json(await submit(light("a")));
-    expect((await submit(light("b"))).status).toBe(200);
-    expect(await code(await submit(light("c")))).toBe("409 campaign_light_limit");
-    // 別人不受影響，其他檔位照收
-    expect((await submit(light("c"), "other")).status).toBe(200);
-    expect((await submit(form({ requestedTier: "original", location: "c", url: "https://tieba.baidu.com/p/c" }))).status).toBe(200);
-    // 被拒的那筆讓出名額
-    await env.DB.prepare("UPDATE share_placements SET review_status = 'rejected' WHERE id = ?").bind(a.placementId).run();
-    expect((await submit(light("d"))).status).toBe(200);
-    expect(await code(await submit(light("e")))).toBe("409 campaign_light_limit");
-  });
-
-  it("補件時改成輕量分享也算進上限；活動沒設上限就不擋", async () => {
-    await env.DB.prepare("UPDATE campaigns SET light_limit = 1 WHERE id = ?").bind(campaignId).run();
-    expect((await submit(form({ requestedTier: "light" }))).status).toBe(200);
-    const b = await json(await submit(form({ requestedTier: "original", location: "b", url: "https://tieba.baidu.com/p/b" })));
-    await env.DB.prepare("UPDATE share_placements SET review_status = 'needs_info' WHERE id = ?").bind(b.placementId).run();
-    expect(await code(await resubmit(b.placementId, { requestedTier: "light" }))).toBe("409 campaign_light_limit");
-    expect((await resubmit(b.placementId, { requestedTier: "guide" })).status).toBe(200);
-    await env.DB.prepare("UPDATE campaigns SET light_limit = NULL WHERE id = ?").bind(campaignId).run();
-    expect((await submit(form({ requestedTier: "light", location: "c", url: "https://tieba.baidu.com/p/c" }))).status).toBe(200);
-  });
-
   it("新內容＋截圖：內容、位置、截圖、兩筆稽核同時寫入；收款帳號是登入的公開帳號", async () => {
     const [shot] = await evidence(owner);
     const r = await submit(form({ url: null, evidenceIds: [shot], content: { title: " 我的卡片介紹 " } }));

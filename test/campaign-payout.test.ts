@@ -129,6 +129,38 @@ beforeEach(async () => {
 afterEach(() => { restoreUpstream(); vi.restoreAllMocks(); });
 
 describe("發放", () => {
+  it("群聊分享（輕量）每人每週上限：同一週超過上限的不發，下一週重新算；其他檔位不受影響（owner 2026-10-17）", async () => {
+    await env.DB.prepare("UPDATE campaigns SET light_limit = 2 WHERE id = ?").bind(campaignId).run();
+    // 台北時間的週一 00:00 起算：10/25（日）23:30 還是第一週，10/26（一）00:30 是下一週
+    const sun = Date.UTC(2026, 9, 25, 15, 30), mon = Date.UTC(2026, 9, 25, 16, 30), wed = Date.UTC(2026, 9, 21, 4, 0);
+    let reviewed = 1_000;
+    const light = async (contentId: string, publishedAt: number) => {
+      const id = await placement(contentId, { status: "approved", tier: "light" });
+      await env.DB.prepare("UPDATE share_placements SET published_at = ?, reviewed_at = ? WHERE id = ?").bind(publishedAt, reviewed++, id).run();
+    };
+    const a = await content(owner, OWNER, { tier: null, title: "A" });
+    await light(a, wed); await light(a, sun); await light(a, wed);
+    const b = await content(owner, OWNER, { tier: null, title: "B" });
+    await light(b, wed);
+    const c = await content(owner, OWNER, { tier: null, title: "C" });
+    await light(c, mon);
+    const big = await content(owner, OWNER, { title: "原創" });
+    const payable = async () => (await json(await call("/v1/moderation/campaign/payable", { token: ADMIN_TOKEN }))).items as any[];
+    const items = await payable();
+    const due = Object.fromEntries(items.map((i) => [i.contentTitle, i.due]));
+    // A 有三個位置都在第一週，只算先核准的兩個；B 在第一週已經沒有名額；C 在下一週
+    expect(due).toEqual({ A: 1000, C: 500, 原創: 3000 });
+    expect(await code(await pay(b))).toBe("409 share_nothing_due");
+    expect((await json(await pay(a))).amount).toBe(1000);
+    expect((await json(await pay(big))).amount).toBe(3000);
+    // 申請人自己看到的核准金額也是封頂後的
+    const mine = (await json(await call(`/v1/me/campaign/contents?campaign=c${campaignId.slice(0, 8)}`, { token: "owner" }))).items as any[];
+    expect(Object.fromEntries(mine.map((m) => [m.title, m.approvedAmount]))).toMatchObject({ A: 1000, B: 0, C: 500 });
+    // 沒設上限就不封頂
+    await env.DB.prepare("UPDATE campaigns SET light_limit = NULL WHERE id = ?").bind(campaignId).run();
+    expect(Object.fromEntries((await payable()).map((i) => [i.contentTitle, i.due]))).toMatchObject({ B: 500 });
+  });
+
   it("正常發放：D1 記成 paid、Provider 收到正確的 key／帳號／金額、通知入帳、稽核 request 與 paid；同一個操作編號重送不再呼叫 Provider", async () => {
     const c = await content(owner, OWNER);
     const opId = op();

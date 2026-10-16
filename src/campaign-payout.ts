@@ -1,5 +1,5 @@
 import { auditStmt, auditStmtIfChanged } from "./audit";
-import { canActivate, getCampaign, listCampaigns, payoutAmount, type Campaign, type Tier } from "./campaign";
+import { canActivate, getCampaign, listCampaigns, memberLightCaps, payoutAmount, type Campaign, type Tier } from "./campaign";
 import { ownsAccount } from "./campaign-review";
 import { bumpOp } from "./ops-metrics";
 import type { ProviderId } from "./providers";
@@ -120,15 +120,18 @@ async function settle(x: Payer, r: Row, res: PayResult, op: string, rejectFails:
 
 /** 這份內容現在該拿多少（目標）、已發多少、還差多少。 */
 async function owed(db: D1Database, contentId: string, campaign: Campaign) {
-  const [ps, paid] = await db.batch([
+  const [ps, paid, owner] = await db.batch([
     db.prepare("SELECT review_status, approved_tier, counts_as_placement FROM share_placements WHERE content_id = ?").bind(contentId),
     db.prepare("SELECT COALESCE(sum(amount), 0) AS n FROM share_payouts WHERE content_id = ? AND status = 'paid'").bind(contentId),
+    db.prepare("SELECT member_id FROM share_contents WHERE id = ?").bind(contentId),
   ]);
   const paidTotal = (paid!.results[0] as { n: number }).n;
+  const memberId = (owner!.results[0] as { member_id: string } | undefined)?.member_id;
+  const caps = memberId ? await memberLightCaps(db, campaign, [memberId]) : new Map<string, number>();
   const { target, due } = payoutAmount(
     (ps!.results as { review_status: string; approved_tier: Tier | null; counts_as_placement: number }[])
       .map((p) => ({ reviewStatus: p.review_status, approvedTier: p.approved_tier, countsAsPlacement: !!p.counts_as_placement })),
-    campaign, paidTotal,
+    campaign, paidTotal, caps.get(contentId),
   );
   return { paidTotal, target, due };
 }
@@ -377,7 +380,7 @@ export async function listPayable(db: D1Database, q: { slug?: string; page: numb
     AND NOT EXISTS (SELECT 1 FROM share_payouts o WHERE o.content_id = s.id AND o.status IN ('pending', 'blocked_insufficient'))`;
   const ids = JSON.stringify([...byId.keys()]);
   const [contents, placements, paid] = await db.batch([
-    db.prepare(`SELECT s.id, s.campaign_id, s.title, m.handle FROM share_contents s JOIN members m ON m.id = s.member_id WHERE s.id IN (${candidates}) ORDER BY s.created_at, s.id`).bind(ids),
+    db.prepare(`SELECT s.id, s.campaign_id, s.member_id, s.title, m.handle FROM share_contents s JOIN members m ON m.id = s.member_id WHERE s.id IN (${candidates}) ORDER BY s.created_at, s.id`).bind(ids),
     db.prepare(`SELECT content_id, review_status, approved_tier, counts_as_placement FROM share_placements WHERE review_status = 'approved' AND content_id IN (${candidates})`).bind(ids),
     db.prepare(`SELECT content_id, sum(amount) AS n FROM share_payouts WHERE status = 'paid' AND content_id IN (${candidates}) GROUP BY content_id`).bind(ids),
   ]);
@@ -385,10 +388,18 @@ export async function listPayable(db: D1Database, q: { slug?: string; page: numb
   const byContent = new Map<string, P[]>();
   for (const p of placements!.results as P[]) byContent.set(p.content_id, [...(byContent.get(p.content_id) ?? []), p]);
   const paidOf = new Map((paid!.results as { content_id: string; n: number }[]).map((r) => [r.content_id, r.n]));
-  const due = (contents!.results as { id: string; campaign_id: string; title: string; handle: string }[]).flatMap((s) => {
+  type C = { id: string; campaign_id: string; member_id: string; title: string; handle: string };
+  const rows = contents!.results as C[];
+  // 群聊分享每週上限：每個活動、這一頁出現的人各算一次
+  const caps = new Map<string, number>();
+  for (const [cid, campaign] of byId) {
+    const members = [...new Set(rows.filter((r) => r.campaign_id === cid).map((r) => r.member_id))];
+    for (const [k, v] of await memberLightCaps(db, campaign, members)) caps.set(k, v);
+  }
+  const due = rows.flatMap((s) => {
     const campaign = byId.get(s.campaign_id)!;
     const paidTotal = paidOf.get(s.id) ?? 0;
-    const owe = payoutAmount((byContent.get(s.id) ?? []).map((p) => ({ reviewStatus: p.review_status, approvedTier: p.approved_tier, countsAsPlacement: !!p.counts_as_placement })), campaign, paidTotal);
+    const owe = payoutAmount((byContent.get(s.id) ?? []).map((p) => ({ reviewStatus: p.review_status, approvedTier: p.approved_tier, countsAsPlacement: !!p.counts_as_placement })), campaign, paidTotal, caps.get(s.id));
     return owe.due > 0 ? [{ contentId: s.id, contentTitle: s.title, campaignSlug: campaign.slug, applicant: { handle: s.handle }, target: owe.target, paidTotal, due: owe.due }] : [];
   });
   return { total: due.length, items: due.slice((q.page - 1) * PAGE, q.page * PAGE) };

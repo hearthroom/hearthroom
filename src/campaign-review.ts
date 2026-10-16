@@ -1,5 +1,5 @@
 import { auditStmtIfChanged, type ActorKind } from "./audit";
-import { getCampaign, payoutAmount, TIERS, type Tier } from "./campaign";
+import { getCampaign, memberLightCaps, payoutAmount, TIERS, type Tier } from "./campaign";
 import { HttpError } from "./types";
 
 /**
@@ -61,7 +61,7 @@ export async function reviewQueue(db: D1Database, q: { status?: string; slug?: s
 
 // ---- 內容明細 -----------------------------------------------------------------
 
-type ContentRow = { id: string; campaign_id: string; member_id: string; slug: string; tiers: string; extra_placement_amount: number | null; title: string; card_id: number | null; share_code: string; created_at: number; handle: string };
+type ContentRow = { id: string; campaign_id: string; member_id: string; slug: string; tiers: string; extra_placement_amount: number | null; light_limit: number | null; timezone: string | null; title: string; card_id: number | null; share_code: string; created_at: number; handle: string };
 type PRow = FlagRow & {
   id: string; platform: string; location: string; location_key: string; url: string | null; published_at: number; note: string; requested_tier: Tier; approved_tier: Tier | null;
   review_status: string; review_reason: string | null; reviewed_kind: string | null; reviewed_at: number | null; counts_as_placement: number; version: number; created_at: number;
@@ -69,7 +69,7 @@ type PRow = FlagRow & {
 
 export async function contentDetail(db: D1Database, id: string) {
   const s = await db.prepare(
-    "SELECT s.id, s.campaign_id, s.member_id, c.slug, c.tiers, c.extra_placement_amount, s.title, s.card_id, s.share_code, s.created_at, m.handle FROM share_contents s JOIN campaigns c ON c.id = s.campaign_id JOIN members m ON m.id = s.member_id WHERE s.id = ?",
+    "SELECT s.id, s.campaign_id, s.member_id, c.slug, c.tiers, c.extra_placement_amount, c.light_limit, c.timezone, s.title, s.card_id, s.share_code, s.created_at, m.handle FROM share_contents s JOIN campaigns c ON c.id = s.campaign_id JOIN members m ON m.id = s.member_id WHERE s.id = ?",
   ).bind(id).first<ContentRow>();
   if (!s) throw new HttpError(404, "share_content_not_found");
   const [placements, evidence, images, payouts, history] = await db.batch([
@@ -92,6 +92,7 @@ export async function contentDetail(db: D1Database, id: string) {
   type PayRow = { id: string; amount: number; target_total: number; status: string; attempts: number; error: string | null; created_at: number; settled_at: number | null };
   const pays = payouts!.results as PayRow[];
   const paidTotal = pays.filter((x) => x.status === "paid").reduce((a, x) => a + x.amount, 0);
+  const caps = await memberLightCaps(db, { id: s.campaign_id, lightLimit: s.light_limit, timezone: s.timezone }, [s.member_id]);
   return {
     content: { id: s.id, campaignSlug: s.slug, title: s.title, cardId: s.card_id, shareCode: s.share_code, applicant: { handle: s.handle }, createdAt: s.created_at },
     placements: ps.map((p) => ({
@@ -107,7 +108,7 @@ export async function contentDetail(db: D1Database, id: string) {
     })),
     payout: payoutAmount(
       ps.map((p) => ({ reviewStatus: p.review_status, approvedTier: p.approved_tier, countsAsPlacement: !!p.counts_as_placement })),
-      { tiers: JSON.parse(s.tiers), extraPlacementAmount: s.extra_placement_amount }, paidTotal,
+      { tiers: JSON.parse(s.tiers), extraPlacementAmount: s.extra_placement_amount }, paidTotal, caps.get(s.id),
     ),
     paidTotal,
     payouts: pays.map((x) => ({ id: x.id, amount: x.amount, targetTotal: x.target_total, status: x.status, attempts: x.attempts, error: x.error, createdAt: x.created_at, settledAt: x.settled_at })),
