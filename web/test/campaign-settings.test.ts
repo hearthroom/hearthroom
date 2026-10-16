@@ -30,14 +30,14 @@ let canEdit: boolean;
 let pool: unknown;
 const ok = (body: unknown) => ({ status: 200, body });
 
-let app: App, host: HTMLElement;
-async function mount() {
+let app: App, host: HTMLElement, router: ReturnType<typeof createRouter>;
+async function mount(path = '/review/settings') {
   host = document.body.appendChild(document.createElement('div'));
-  const router = createRouter({ history: createMemoryHistory(), routes: siteRouter.options.routes });
-  await router.push('/review/settings');
+  router = createRouter({ history: createMemoryHistory(), routes: siteRouter.options.routes });
+  await router.push(path);
   app = createApp({ render: () => [h(RouterView), h(ConfirmDialog)] }).use(createPinia()).use(router).use(i18n);
   app.mount(host);
-  await vi.waitFor(() => expect(host.querySelector('[data-campaign="c1"]')).not.toBeNull());
+  if (path === '/review/settings') await vi.waitFor(() => expect(host.querySelector('[data-campaign="c1"]')).not.toBeNull());
 }
 const t = (k: string, p?: Record<string, unknown>) => i18n.global.t(k, p ?? {});
 const $ = <T extends Element = HTMLElement>(sel: string) => host.querySelector<T & HTMLElement>(sel)!;
@@ -119,6 +119,47 @@ it('a new campaign converts times in the chosen zone and leaves unset amounts un
   expect(body).not.toHaveProperty('evidenceRetentionDays');
   expect(body).not.toHaveProperty('expectedVersion');
   expect(typeof body.operationId).toBe('string');
+});
+
+it('a new campaign moves to its own address after the first save without reloading', async () => {
+  handle = (c) => (c.method === 'POST' && c.path === '/v1/moderation/campaigns' ? ok(campaign({ id: 'c2', version: 1 })) : undefined);
+  await mount();
+  $('[data-action="new-campaign"]').click();
+  await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/review/settings/campaigns/new'));
+  await vi.waitFor(() => expect(host.querySelector('[data-campaign-form]')).not.toBeNull());
+  fill(field('slug'), 'autumn');
+  fill(field('title'), '秋季分享');
+  const lists = () => calls.filter((c) => c.method === 'GET' && c.path === '/v1/moderation/campaigns').length;
+  const before = lists();
+  await nextTick();
+  $('[data-action="save-campaign"]').click();
+  await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/review/settings/campaigns/c2'));
+  await nextTick();
+  expect(lists()).toBe(before);
+  expect(document.querySelector('[role=alertdialog]')).toBeNull();
+  expect(host.querySelector('[data-action="activate"]')).not.toBeNull();
+});
+
+it('leaving the editor with unsaved changes asks first, and staying keeps the edits', async () => {
+  await mount();
+  $('[data-campaign="c1"] [data-action="edit"]').click();
+  await vi.waitFor(() => expect(field('slug')?.value).toBe('launch'));
+  fill(field('title'), '還沒存');
+  $('[data-action="back"]').click();
+  await vi.waitFor(() => expect(document.querySelector('[role=alertdialog]')).not.toBeNull());
+  document.querySelector<HTMLButtonElement>('[role=alertdialog] [data-cancel]')!.click();
+  await vi.waitFor(() => expect(document.querySelector('[role=alertdialog]')).toBeNull());
+  expect(router.currentRoute.value.path).toBe('/review/settings/campaigns/c1');
+  expect(field('title').value).toBe('還沒存');
+  $('[data-action="back"]').click();
+  await confirm();
+  await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/review/settings'));
+});
+
+it('an unknown campaign address says it cannot be found', async () => {
+  await mount('/review/settings/campaigns/missing');
+  await vi.waitFor(() => expect(host.querySelector('[data-campaign-editor] [role=alert]')?.textContent).toContain(t('state.notFound')));
+  expect(host.querySelector('[data-campaign-form]')).toBeNull();
 });
 
 it('the recommend-on-home toggle marks the form dirty and goes out with the save', async () => {

@@ -2179,7 +2179,7 @@
   "campaign.settings.empty": "No campaigns yet. Your first one will show up here.",
   "campaign.settings.edit": "Edit",
   "campaign.settings.view": "View",
-  "campaign.settings.close": "Close",
+  "campaign.settings.back": "Back to campaigns",
   "campaign.settings.save": "Save campaign",
   "campaign.settings.saved": "Campaign saved",
   "campaign.settings.saveFirst": "Save your changes before starting or ending the campaign.",
