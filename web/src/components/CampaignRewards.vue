@@ -4,7 +4,8 @@
  * 以及這一屏的主要動作——訪客登入、會員複製自己的專屬連結。手機上這塊是第一屏的終點（設計：約戰 UIUX M2）。
  *
  * 推薦規則讀不到、推薦關著、或分成都是 0 時，整個推薦格不出，標題改成「分享拿積分」；單一數值是 0 的那一行也不出。
- * 專屬連結＝活動頁網址＋自己的推薦碼（?ref=），登入就給，不必先提交分享（owner 2026-10-16）。
+ * 專屬連結＝首頁網址＋自己的推薦碼（?ref=），登入就給，不必先提交分享（owner 2026-10-16）。
+ * 連到首頁不連活動頁：看到連結的是沒來過的朋友，要先看到網站本身（owner 2026-10-17）；首頁帶 ?ref= 時分享預覽是邀請版（src/campaign-head.ts）。
  * 推薦碼讀不到（舊登入沒授權推薦、服務暫時不通）就給不帶碼的網址，分享照樣能用，只是推薦獎勵算不到。
  */
 import { computed, onBeforeUnmount, ref, watch } from "vue";
@@ -42,7 +43,7 @@ watch(() => session.me?.accountNumId ?? null, async (id) => {
   refCode.value = code;
   ready.value = true;
 }, { immediate: true });
-const link = computed(() => withShareRef(new URL(lp(`/campaign/${props.campaign.slug}`), location.origin).href, refCode.value));
+const link = computed(() => withShareRef(new URL(lp("/"), location.origin).href, refCode.value));
 
 const copied = ref(false);
 let timer: ReturnType<typeof setTimeout> | undefined;

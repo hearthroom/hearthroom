@@ -246,7 +246,7 @@ it("builds share links with the referral code and share code, and only s= withou
   contents = [content("c1")];
   await mount();
   const link = $("[data-share-link] [data-url]")!.textContent!.trim();
-  const page = `${location.origin}/campaign/launch`;
+  const page = `${location.origin}/`;
   expect(link).toBe(`${page}?ref=MINE2345&s=SC1`);
   $<HTMLButtonElement>('[data-share-link] [data-action="copy"]')!.click();
   await settle();
@@ -263,7 +263,7 @@ it("gives a signed-in visitor their invite link before any share, even before th
   detail = campaign({ phase: "upcoming" });
   await mount();
   const input = $<HTMLInputElement>("[data-invite-link] input")!;
-  expect(input.value).toBe(`${location.origin}/campaign/launch?ref=MINE2345`);
+  expect(input.value).toBe(`${location.origin}/?ref=MINE2345`);
   $<HTMLButtonElement>('[data-action="copy-invite"]')!.click();
   await settle();
   expect(navigator.clipboard.writeText).toHaveBeenCalledWith(input.value);
