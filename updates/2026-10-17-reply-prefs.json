@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/library",
+  "title": {
+    "zh-Hant": "回覆偏好移到對話框上方，排在模型後面；破甲強度也搬進了回覆偏好。",
+    "zh-Hans": "回复偏好移到对话框上方，排在模型后面；破甲强度也搬进了回复偏好。",
+    "en": "Reply preferences now sit above the message box right after the model, and bypass strength has moved into them.",
+    "ja": "返信の好みが入力欄の上、モデルのすぐ後ろに並び、突破強度もそこに移りました。",
+    "ko": "답변 취향이 입력창 위 모델 바로 뒤로 옮겨졌고, 돌파 강도도 그 안으로 들어갔어요."
+  },
+  "body": {
+    "zh-Hant": "搶話預設改為允許搶話，想讓自己的角色只由自己決定，在回覆偏好選「防搶話」。",
+    "zh-Hans": "抢话默认改为允许抢话，想让自己的角色只由自己决定，在回复偏好选「防抢话」。",
+    "en": "AI writing for your character is now allowed by default, and you can pick “Don’t write for me” in reply preferences to keep your character to yourself.",
+    "ja": "キャラクターの代筆が既定で許可になり、自分だけで動かしたいときは返信の好みで「代筆しない」を選べます。",
+    "ko": "이제 기본값으로 AI가 내 캐릭터도 대신 쓰며, 직접만 움직이고 싶다면 답변 취향에서 「대필하지 않음」을 고르면 돼요."
+  }
+}
