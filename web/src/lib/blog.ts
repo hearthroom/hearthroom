@@ -43,6 +43,21 @@ async function get<T>(path: string): Promise<T> {
 
 export const fetchColumns = () => get<{ items: BlogGroup[] }>("/blog/columns");
 
+// ---- 首頁輪播 -----------------------------------------------------------------
+
+/** 置頂文章上首頁輪播的期限：首次發布後幾天內 */
+const HOME_POST_DAYS = 30;
+/**
+ * 首頁輪播的文章卡：置頂中、30 天內首次發布、關聯的活動不在輪播裡（免得同一件事出現兩張），取最新的一篇。
+ * 置頂文章由公開列表的 pinned 給（最多三篇）。
+ */
+export function homePost(pinned: PostCard[], campaignSlugs: string[], now: number): PostCard | null {
+  const since = now - HOME_POST_DAYS * 86_400_000;
+  return pinned
+    .filter((p) => (p.firstPublishedAt ?? 0) >= since && !(p.campaign && campaignSlugs.includes(p.campaign.slug)))
+    .sort((a, b) => (b.firstPublishedAt ?? 0) - (a.firstPublishedAt ?? 0))[0] ?? null;
+}
+
 // ---- 閱讀數與喜歡 ---------------------------------------------------------------
 
 /** views 未滿公開門檻時是 null（伺服器判斷），畫面就不顯示閱讀數。 */
