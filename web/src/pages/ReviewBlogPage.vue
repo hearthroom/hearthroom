@@ -66,6 +66,19 @@ const heading = computed(() => {
 });
 const newPostTo = computed(() => lp(picked.value.kind === 'column' ? `/review/blog/new?column=${encodeURIComponent(pickedId.value)}` : '/review/blog/new'));
 
+/** 新增欄目要掛在哪個分組：選了分組就是它，否則第一個 */
+const emptyColumnParent = computed(() => (picked.value.kind === 'group' ? pickedId.value : groups.value[0]?.id ?? null));
+/** 列表空的時候說明為什麼空、下一步做什麼：先建分組、再建欄目、篩選太窄、或直接寫一篇 */
+const empty = computed<{ title?: string; text: string; action?: 'group' | 'column' | 'post' | 'all' }>(() => {
+  if (!treeLoaded.value) return { text: t('blog.empty') };
+  if (!groups.value.length) return { text: t('blog.admin.noGroups'), action: 'group' };
+  const groupItem = picked.value.kind === 'group' ? groups.value.find((g) => g.id === pickedId.value) : undefined;
+  if (!columns.value.length || (groupItem && !groupItem.columns.length)) return { text: t('blog.admin.noColumns'), action: 'column' };
+  if (status.value) return { text: t('blog.admin.statusEmpty'), action: 'all' };
+  if (picked.value.kind === 'column') return { text: t('blog.admin.columnEmpty'), action: 'post' };
+  return { title: t('blog.empty'), text: t('blog.admin.pickColumnHint'), action: 'post' };
+});
+
 async function token() {
   const value = await session.accessToken();
   if (!value) throw new Error(t('auth.expired'));
@@ -149,44 +162,50 @@ onMounted(() => { document.title = pageTitle(t('moderation.tab.blog')); void loa
 
 <template>
   <section v-if="forbidden" class="rblog" :aria-label="t('moderation.tab.blog')">
-    <p class="panel rblog-empty muted" data-forbidden>{{ t('blog.admin.managersOnly') }}</p>
+    <p class="panel rblog-forbidden muted" data-forbidden>{{ t('blog.admin.managersOnly') }}</p>
   </section>
   <section v-else class="rblog" :aria-label="t('moderation.tab.blog')">
     <aside class="panel rblog-side" :class="{ 'rblog-side--open': treeOpen }">
       <button type="button" class="rblog-side__toggle" :aria-expanded="treeOpen" @click="treeOpen = !treeOpen">
-        <span>{{ heading }}</span><span aria-hidden="true">▾</span>
+        <span class="rblog-side__current">{{ heading }}</span><span class="rblog-side__caret" aria-hidden="true">▾</span>
       </button>
       <BlogColumnTree :groups="groups" :picked="picked" :total="allCount"
                       @pick="pick" @add-group="openDialog('group')" @add-column="(id) => openDialog('column', null, id)"
                       @edit="(item, kind) => openDialog(kind, item, item.parentId)" @move="move" @remove="remove" />
     </aside>
 
-    <div class="rblog-main">
+    <div class="panel rblog-main">
+      <!-- 標題跟左欄選取的是同一個名字：畫面上不重複，只留給螢幕閱讀器當這一區的名稱 -->
+      <h2 class="sr-only">{{ heading }}</h2>
       <div class="rblog-bar">
-        <h2 class="rblog-heading">{{ heading }}</h2>
-        <RouterLink v-if="columns.length" class="btn btn--primary rblog-new" :to="newPostTo" data-action="new-post">{{ t('blog.admin.new') }}</RouterLink>
-        <span v-else class="btn btn--primary rblog-new" aria-disabled="true" data-action="new-post">{{ t('blog.admin.new') }}</span>
-      </div>
-      <p v-if="treeLoaded && !columns.length" class="subtle rblog-hint">{{ t('blog.admin.needColumn') }}</p>
-      <div class="seg rblog-status">
-        <button v-for="s in STATUSES" :key="s" type="button" class="seg__item" :class="{ 'seg__item--on': status === s }" :aria-pressed="status === s" @click="status = s">{{ s ? t(`blog.admin.status.${s}`) : t('blog.all') }}</button>
+        <div class="seg rblog-status">
+          <button v-for="s in STATUSES" :key="s" type="button" class="seg__item" :class="{ 'seg__item--on': status === s }" :aria-pressed="status === s" @click="status = s">{{ s ? t(`blog.admin.status.${s}`) : t('blog.all') }}</button>
+        </div>
+        <div class="rblog-bar__end">
+          <p v-if="treeLoaded && !columns.length" id="rblog-need-column" class="subtle rblog-hint">{{ t('blog.admin.needColumn') }}</p>
+          <RouterLink v-if="columns.length" class="btn btn--primary rblog-new" :to="newPostTo" data-action="new-post">{{ t('blog.admin.new') }}</RouterLink>
+          <span v-else class="btn btn--primary rblog-new" aria-disabled="true" :aria-describedby="treeLoaded ? 'rblog-need-column' : undefined" data-action="new-post">{{ t('blog.admin.new') }}</span>
+        </div>
       </div>
 
-      <p v-if="error" class="notice notice--error" role="alert">{{ error }} <button class="btn btn--sm" :disabled="loading" @click="retry">{{ t('blog.retry') }}</button></p>
+      <p v-if="error" class="notice notice--error rblog-error" role="alert">{{ error }} <button class="btn btn--sm" :disabled="loading" @click="retry">{{ t('blog.retry') }}</button></p>
 
       <div class="rblog-list" :aria-busy="loading">
-        <template v-if="loading && !items.length"><div v-for="n in 3" :key="n" class="ghost rblog-ghost" /></template>
-        <div v-else-if="treeLoaded && !groups.length" class="panel rblog-empty">
-          <p class="muted">{{ t('blog.admin.noGroups') }}</p>
-          <button type="button" class="btn btn--primary" @click="openDialog('group')">{{ t('blog.admin.newGroup') }}</button>
+        <template v-if="loading && !items.length"><div v-for="n in 3" :key="n" class="rblog-ghost"><div class="ghost" /><div class="ghost" /></div></template>
+        <div v-else-if="!items.length" class="rblog-empty">
+          <p v-if="empty.title" class="rblog-empty__title">{{ empty.title }}</p>
+          <p class="muted rblog-empty__text">{{ empty.text }}</p>
+          <button v-if="empty.action === 'group'" type="button" class="btn btn--primary" @click="openDialog('group')">{{ t('blog.admin.newGroup') }}</button>
+          <button v-else-if="empty.action === 'column'" type="button" class="btn btn--primary" @click="openDialog('column', null, emptyColumnParent)">{{ t('blog.admin.newColumn') }}</button>
+          <RouterLink v-else-if="empty.action === 'post'" class="btn btn--primary" :to="newPostTo">{{ t('blog.admin.new') }}</RouterLink>
+          <button v-else-if="empty.action === 'all'" type="button" class="btn" @click="status = ''">{{ t('blog.admin.showAll') }}</button>
         </div>
-        <p v-else-if="!items.length" class="panel rblog-empty muted">{{ picked.kind === 'column' ? t('blog.admin.columnEmpty') : t('blog.empty') }}</p>
-        <RouterLink v-for="p in items" :key="p.id" class="panel rblog-item" :to="lp(`/review/blog/${p.id}`)" :data-post="p.id">
+        <RouterLink v-for="p in items" :key="p.id" class="rblog-item" :to="lp(`/review/blog/${p.id}`)" :data-post="p.id">
           <div class="rblog-item__head">
             <span class="rblog-item__title">{{ p.title }}</span>
             <span class="rblog-item__chips">
-              <span class="chip" :class="`rblog-chip--${displayStatus(p)}`">{{ t(`blog.admin.status.${displayStatus(p)}`) }}</span>
-              <span v-if="p.pinned" class="chip">{{ t('blog.admin.pinned') }}</span>
+              <span v-if="p.pinned" class="chip rblog-chip">{{ t('blog.admin.pinned') }}</span>
+              <span class="chip rblog-chip" :class="`rblog-chip--${displayStatus(p)}`">{{ t(`blog.admin.status.${displayStatus(p)}`) }}</span>
             </span>
           </div>
           <p class="subtle rblog-item__meta">
@@ -209,31 +228,63 @@ onMounted(() => { document.title = pageTitle(t('moderation.tab.blog')); void loa
 
 <style scoped>
 .rblog { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: var(--s-5); align-items: start; min-width: 0; }
-.rblog-side { position: sticky; top: calc(var(--header-h) + var(--s-3)); padding: var(--s-3); max-height: calc(100vh - var(--header-h) - var(--s-6)); overflow-y: auto; }
+/* 左欄自己捲動，長樹也用得了；「⋯」選單是固定定位，不會被這裡的 overflow 裁掉 */
+.rblog-side { position: sticky; top: calc(var(--header-h) + var(--s-3)); padding: var(--s-2); max-height: calc(100vh - var(--header-h) - var(--s-6)); overflow-y: auto; overscroll-behavior: contain; }
 .rblog-side__toggle { display: none; }
-.rblog-main { display: grid; gap: var(--s-3); min-width: 0; }
-.rblog-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; }
-.rblog-heading { margin: 0; font-size: 18px; min-width: 0; overflow-wrap: anywhere; }
+.rblog-forbidden { margin: 0; padding: var(--s-5); grid-column: 1 / -1; }
+
+/* 右邊是一整塊：上面一條工具列，底下一列一列的文章，分頁在最下面 */
+.rblog-main { display: grid; min-width: 0; overflow: hidden; }
+.rblog-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2) var(--s-3); flex-wrap: wrap; padding: var(--s-3) var(--s-4); border-bottom: 1px solid var(--line); }
+.rblog-status { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.rblog-status::-webkit-scrollbar { display: none; }
+.rblog-bar__end { display: flex; align-items: center; gap: var(--s-3); margin-inline-start: auto; min-width: 0; }
+.rblog-hint { margin: 0; font-size: 13px; text-align: end; }
 .rblog-new[aria-disabled='true'] { opacity: 0.5; pointer-events: none; }
-.rblog-hint { margin: calc(-1 * var(--s-2)) 0 0; font-size: 13px; text-align: end; }
-.rblog-status { justify-self: start; }
-.rblog-list { display: grid; gap: var(--s-2); }
-.rblog-ghost { height: 84px; border-radius: var(--r-lg); }
-.rblog-empty { padding: var(--s-6); display: grid; gap: var(--s-3); justify-items: start; }
-.rblog-item { display: grid; gap: 4px; padding: var(--s-3) var(--s-4); color: var(--text); }
-.rblog-item:hover { border-color: var(--line-strong); }
+.rblog-error { margin: var(--s-3) var(--s-4) 0; }
+
+.rblog-list { display: grid; }
+.rblog-ghost { display: grid; gap: var(--s-2); padding: var(--s-4); }
+.rblog-ghost + .rblog-ghost { border-top: 1px solid var(--line); }
+.rblog-ghost .ghost { height: 14px; width: 60%; border-radius: var(--r-sm); }
+.rblog-ghost .ghost + .ghost { height: 12px; width: 36%; }
+
+.rblog-empty { display: grid; justify-items: center; gap: var(--s-2); padding: var(--s-7) var(--s-5); text-align: center; }
+.rblog-empty__title { font-size: 15px; font-weight: 600; color: var(--text); }
+.rblog-empty__text { max-width: 36em; font-size: 14px; line-height: 1.6; }
+.rblog-empty .btn { margin-top: var(--s-2); }
+
+.rblog-item { display: grid; gap: var(--s-1); padding: var(--s-3) var(--s-4); color: var(--text); transition: background var(--dur) var(--ease); }
+.rblog-item + .rblog-item { border-top: 1px solid var(--line); }
+.rblog-item:hover { background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
+.rblog-item:focus-visible { outline-offset: -2px; }
+.rblog-item:hover .rblog-item__title { color: var(--accent-text); }
 .rblog-item__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }
-.rblog-item__title { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.rblog-item__title { font-weight: 600; min-width: 0; overflow-wrap: anywhere; transition: color var(--dur) var(--ease); }
 .rblog-item__chips { display: flex; gap: var(--s-1); flex: none; }
 .rblog-item__meta { margin: 0; font-size: 13px; }
-.rblog-chip--published { color: var(--success); }
-.rblog-chip--scheduled { color: var(--accent-text); }
-.rblog-pager { display: flex; justify-content: center; gap: var(--s-2); }
+.rblog-chip { height: 22px; padding: 0 var(--s-2); cursor: default; }
+.rblog-chip:hover { color: var(--text-2); background: var(--surface-2); }
+.rblog-chip--published, .rblog-chip--published:hover { color: var(--success); background: var(--success-soft); }
+.rblog-chip--scheduled, .rblog-chip--scheduled:hover { color: var(--accent-text); background: var(--accent-tint); }
+.rblog-pager { display: flex; justify-content: center; gap: var(--s-2); padding: var(--s-3); border-top: 1px solid var(--line); }
+
 @media (max-width: 767px) {
   .rblog { grid-template-columns: minmax(0, 1fr); gap: var(--s-3); }
-  .rblog-side { position: static; max-height: none; padding: var(--s-2); }
-  .rblog-side__toggle { display: flex; width: 100%; min-height: 44px; align-items: center; justify-content: space-between; gap: var(--s-2); padding: 0 var(--s-3); border: 0; background: transparent; color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
+  .rblog-side { position: static; max-height: none; overflow: visible; padding: var(--s-1); }
+  .rblog-side--open { padding-bottom: var(--s-2); }
+  .rblog-side__toggle { display: flex; width: 100%; min-height: 44px; align-items: center; justify-content: space-between; gap: var(--s-2); padding: 0 var(--s-3); border: 0; border-radius: var(--r-md); background: transparent; color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
+  .rblog-side__current { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rblog-side__caret { flex: none; color: var(--text-3); transition: transform var(--dur) var(--ease); }
+  .rblog-side--open .rblog-side__caret { transform: rotate(180deg); }
+  .rblog-side--open .rblog-side__toggle { margin-bottom: var(--s-1); }
   .rblog-side:not(.rblog-side--open) :deep(.btree) { display: none; }
+  .rblog-bar { padding: var(--s-3); }
+  .rblog-bar__end { flex: 1 1 100%; justify-content: space-between; }
+  .rblog-hint { text-align: start; }
   .rblog-bar .btn { min-height: 44px; }
+  .rblog-bar__end .rblog-new { margin-inline-start: auto; }
+  .rblog-item { padding: var(--s-3); }
+  .rblog-item__head { align-items: flex-start; }
 }
 </style>
