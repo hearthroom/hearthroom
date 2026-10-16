@@ -196,7 +196,7 @@ async function onDone(_result: ApplyResult) {
               </span>
               <span v-if="shortPeriod" class="campaign__short num">{{ shortPeriod }}</span>
             </div>
-            <h1 class="campaign__title">{{ title }}</h1>
+            <h1 class="campaign__title" :class="{ 'campaign__title--long': [...title].length > 12 }">{{ title }}</h1>
             <dl class="campaign__dates">
               <div v-if="period"><dt>{{ t("campaign.page.period") }}</dt><dd>{{ period }}</dd></div>
               <div v-if="campaign.submitDeadline !== null"><dt>{{ t("campaign.field.submitDeadline") }}</dt><dd>{{ at(campaign.submitDeadline) }}</dd></div>
@@ -397,7 +397,7 @@ async function onDone(_result: ApplyResult) {
 .campaign__phase--open { background: var(--success-soft); color: var(--success); }
 .campaign__phase--upcoming { background: var(--accent-soft); color: var(--accent-text); }
 .campaign__short { display: none; font-size: 13px; color: var(--text-2); }
-.campaign__title { margin: 0; font-size: 40px; font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.campaign__title { margin: 0; font-size: 40px; font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; overflow-wrap: anywhere; text-wrap: balance; }
 .campaign__dates {
   justify-self: stretch; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-2); margin: var(--s-1) 0 0;
 }
@@ -514,6 +514,8 @@ async function onDone(_result: ApplyResult) {
   .campaign__head-body--bare { padding: var(--s-4); }
   .campaign__wave { width: 96px; height: 120px; margin: calc(-1 * var(--s-2)) 0 calc(-1 * var(--s-4)); }
   .campaign__title { font-size: 28px; }
+  /* 英日韓的活動名較長（Hearthroom シェアシーズン），手機上縮一階，盡量一行放完、不留單字在第二行 */
+  .campaign__title--long { font-size: 23px; }
   .campaign__dates { display: none; }
   .campaign__short { display: inline; }
   .campaign__section { padding: var(--s-4); gap: var(--s-3); }

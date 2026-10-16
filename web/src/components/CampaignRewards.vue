@@ -91,11 +91,12 @@ onBeforeUnmount(() => clearTimeout(timer));
           <span v-if="ref$ && friendTotal(ref$) > 0" class="rewards__desc num">{{ t("campaign.page.cta.friendGift", { friendTotal: formatNumber(friendTotal(ref$)) }) }}</span>
           <span v-if="ref$ && ref$.inviteePercent > 0" class="rewards__desc num">{{ t("campaign.page.cta.inviteeBonus", { inviteePercent: ref$.inviteePercent }) }}</span>
           <span v-if="!ref$" class="rewards__desc">{{ t("campaign.page.cta.shareOnlyHint") }}</span>
-          <span class="rewards__desc">{{ t("campaign.page.cta.guest.desc") }}</span>
         </div>
         <img class="rewards__pose" src="/mascot/campaign/pose-share-phone.webp" alt="" width="72" height="100" decoding="async" />
       </div>
       <RouterLink class="btn btn--primary btn--lg rewards__btn" data-signin :to="loginTo">{{ t("campaign.page.cta.guest.button") }}</RouterLink>
+      <!-- 「還沒有帳號也沒關係」放在按鈕下：英日的說明較長，放上面會把按鈕擠出手機第一屏 -->
+      <span class="rewards__desc rewards__desc--under">{{ t("campaign.page.cta.guest.desc") }}</span>
     </div>
 
     <div v-else-if="signedIn" class="rewards__cta" data-invite-link :aria-busy="!ready">
@@ -130,16 +131,17 @@ onBeforeUnmount(() => clearTimeout(timer));
 .rewards__stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-2); }
 .rewards__stats--one { grid-template-columns: minmax(0, 1fr); }
 .rewards__stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: var(--s-3); border-radius: var(--r-md); background: var(--surface-2); }
-.rewards__label { font-size: 12.5px; font-weight: 600; color: var(--text-2); }
-/* 「500–10,000 積分」不拆行：數字斷開就看不出是一個範圍 */
-.rewards__value { font-size: 22px; font-weight: 700; line-height: 1.3; color: var(--accent-text); white-space: nowrap; }
-.rewards__cap { font-size: 12px; line-height: 1.5; color: var(--text-2); }
+.rewards__label { font-size: 12.5px; font-weight: 600; color: var(--text-2); text-wrap: balance; }
+/* 數字本身不拆開（keep-all：「500–10,000」整段一起換行），英日的單位放不下時換到下一行 */
+.rewards__value { font-size: 22px; font-weight: 700; line-height: 1.3; color: var(--accent-text); word-break: keep-all; overflow-wrap: normal; }
+.rewards__cap { font-size: 12px; line-height: 1.5; color: var(--text-2); text-wrap: pretty; }
 .rewards__cta { display: grid; gap: var(--s-3); }
 .rewards__row { display: flex; align-items: center; gap: var(--s-3); }
 .rewards__row--end { align-items: flex-end; }
 .rewards__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .rewards__cta-title { font-size: 15px; font-weight: 650; }
 .rewards__desc { font-size: 13px; line-height: 1.6; color: var(--text-2); }
+.rewards__desc--under { margin-top: calc(-1 * var(--s-1)); text-align: center; }
 .rewards__pose { flex: none; width: 72px; height: 100px; object-fit: contain; }
 .rewards__pose--sm { width: 56px; height: 78px; }
 .rewards__link-label { font-size: 13px; font-weight: 600; }
@@ -155,6 +157,8 @@ onBeforeUnmount(() => clearTimeout(timer));
   .rewards { padding: var(--s-4); gap: var(--s-3); }
   .rewards__h { font-size: 16px; }
   .rewards__value { font-size: 18px; }
+  /* 這一列的高度由立繪撐著：手機縮到跟已登入一樣，英日說明較長時按鈕才留在第一屏 */
+  .rewards__pose { width: 56px; height: 78px; }
 }
 @media (prefers-reduced-motion: reduce) { .rewards * { transition: none !important; } }
 </style>
