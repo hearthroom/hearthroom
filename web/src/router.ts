@@ -91,6 +91,8 @@ const pages: RouteRecordRaw[] = [
       { path: "members/:handle", component: () => import("./pages/MembersPage.vue"), meta: { managementTab: "members" } },
       { path: "comments", component: () => import("./pages/ReviewCommentsPage.vue"), meta: { managementTab: "comments" } },
       { path: "settings", component: () => import("./pages/ReviewSettingsPage.vue"), meta: { managementTab: "settings" } },
+      // 活動的新增與編輯：新活動是 campaigns/new，第一次存好換成 campaigns/<id>
+      { path: "settings/campaigns/:id", component: () => import("./pages/ReviewCampaignEditPage.vue"), meta: { managementTab: "settings" } },
       // 分享活動：佇列與內容詳情。同樣要在 :id 之前
       { path: "campaign", component: () => import("./pages/ReviewCampaignPage.vue"), meta: { managementTab: "campaign" } },
       // 數據看板要在 :id 之前，不然 stats 會被當成內容編號
