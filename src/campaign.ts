@@ -29,7 +29,7 @@ export type Campaign = {
   bannerKey: string | null; bannerUrl: string | null;
   startsAt: number | null; endsAt: number | null; timezone: string | null; submitDeadline: number | null; payoutDeadline: number | null;
   tiers: Partial<Record<Tier, number>>; extraPlacementAmount: number | null; flagBurstThreshold: number | null; evidenceRetentionDays: number;
-  /** 每人最多幾個輕量分享（申請或核准為輕量、沒被拒的位置）；null＝不限 */
+  /** 群聊分享（輕量）每人每週最多發放幾個位置；null＝不限（見 lightCaps） */
   lightLimit: number | null;
   /** 推薦到首頁：進行中或即將開始時出現在看板輪播。不影響啟用條件。 */
   featured: boolean;
@@ -46,15 +46,65 @@ export type CampaignInput = {
 
 export type PlacementForPay = { reviewStatus: string; approvedTier: Tier | null; countsAsPlacement: boolean };
 
-/** 目標金額＝最高檔金額＋追加金額×(算數的核准位置數−1)；沒有任何算數的位置就是 0。due 是還沒發的部分，不會是負數。全專案只有這一份。 */
-export function payoutAmount(placements: PlacementForPay[], campaign: Pick<Campaign, "tiers" | "extraPlacementAmount">, paidTotal: number): { tier: Tier | null; target: number; due: number } {
+/**
+ * 目標金額＝最高檔金額＋追加金額×(算數的核准位置數−1)；沒有任何算數的位置就是 0。due 是還沒發的部分，不會是負數。全專案只有這一份。
+ * cap 是群聊分享（輕量）每週上限算下來，這份內容最多能算幾個位置（lightCaps）；沒給就不封頂。
+ */
+export function payoutAmount(placements: PlacementForPay[], campaign: Pick<Campaign, "tiers" | "extraPlacementAmount">, paidTotal: number, cap?: number): { tier: Tier | null; target: number; due: number } {
   const approved = placements.filter((p) => p.reviewStatus === "approved" && p.approvedTier);
   if (!approved.length) return { tier: null, target: 0, due: 0 };
   const tier = approved.map((p) => p.approvedTier!).reduce((a, b) => (tierRank(b) > tierRank(a) ? b : a));
-  const count = approved.filter((p) => p.countsAsPlacement).length;
+  const counted = approved.filter((p) => p.countsAsPlacement).length;
+  const count = cap === undefined ? counted : Math.min(counted, cap);
   if (!count) return { tier, target: 0, due: 0 };
   const target = (campaign.tiers[tier] ?? 0) + (campaign.extraPlacementAmount ?? 0) * Math.max(count - 1, 0);
   return { tier, target, due: Math.max(target - paidTotal, 0) };
+}
+
+// ---- 群聊分享（輕量）每週上限 ------------------------------------------------------
+/*
+ * owner 2026-10-17：輕量那一檔一則就給積分，會有人找一堆群洗；提交照收、審核照做，但發放每人每週最多 light_limit 個。
+ * 週＝分享貼出的時間（published_at）在活動時區的週一 00:00 起算。同一週裡照核准先後（reviewed_at）給名額，
+ * 已發過的通常先核准，名額不會被晚核准的倒搶。只封頂最高檔是輕量的內容；升級成原創以上的內容不算。
+ */
+const DAY_MS = 86_400_000;
+function tzOffset(ms: number, tz: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).formatToParts(ms);
+  const n = (type: string) => Number(parts.find((p) => p.type === type)!.value);
+  return Date.UTC(n("year"), n("month") - 1, n("day"), n("hour"), n("minute"), n("second")) - Math.floor(ms / 1000) * 1000;
+}
+/** 週一起算的週序號（1970-01-01 是週四，所以位移 3 天） */
+export const weekOf = (ms: number, tz: string) => Math.floor((Math.floor((ms + tzOffset(ms, tz)) / DAY_MS) + 3) / 7);
+
+export type PlacementForCap = PlacementForPay & { contentId: string; publishedAt: number; reviewedAt: number | null; id: string };
+/** 每份最高檔是輕量的內容，最多能算幾個位置；沒在表裡的內容不封頂。 */
+export function lightCaps(placements: PlacementForCap[], limit: number | null, tz: string): Map<string, number> {
+  const caps = new Map<string, number>();
+  if (limit === null) return caps;
+  const approved = placements.filter((p) => p.reviewStatus === "approved" && p.approvedTier);
+  const top = new Map<string, Tier>();
+  for (const p of approved) { const t = top.get(p.contentId); if (!t || tierRank(p.approvedTier!) > tierRank(t)) top.set(p.contentId, p.approvedTier!); }
+  for (const [id, t] of top) if (t === "light") caps.set(id, 0);
+  const used = new Map<number, number>();
+  const order = approved.filter((p) => caps.has(p.contentId) && p.countsAsPlacement)
+    .sort((a, b) => (a.reviewedAt ?? 0) - (b.reviewedAt ?? 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  for (const p of order) {
+    const w = weekOf(p.publishedAt, tz);
+    if ((used.get(w) ?? 0) >= limit) continue;
+    used.set(w, (used.get(w) ?? 0) + 1);
+    caps.set(p.contentId, caps.get(p.contentId)! + 1);
+  }
+  return caps;
+}
+/** 從資料庫讀這些人在這個活動的核准位置，算出每份內容的上限。活動沒設上限就是空表（不封頂）。 */
+export async function memberLightCaps(db: D1Database, campaign: Pick<Campaign, "id" | "lightLimit" | "timezone">, memberIds: string[]): Promise<Map<string, number>> {
+  if (campaign.lightLimit === null || !memberIds.length) return new Map();
+  const rows = (await db.prepare(
+    `SELECT p.id, p.content_id, p.published_at, p.reviewed_at, p.review_status, p.approved_tier, p.counts_as_placement FROM share_placements p
+     JOIN share_contents s ON s.id = p.content_id WHERE s.campaign_id = ? AND s.member_id IN (SELECT value FROM json_each(?)) AND p.review_status = 'approved'`,
+  ).bind(campaign.id, JSON.stringify(memberIds)).all<{ id: string; content_id: string; published_at: number; reviewed_at: number | null; review_status: string; approved_tier: Tier | null; counts_as_placement: number }>()).results;
+  return lightCaps(rows.map((r) => ({ id: r.id, contentId: r.content_id, publishedAt: r.published_at, reviewedAt: r.reviewed_at, reviewStatus: r.review_status, approvedTier: r.approved_tier, countsAsPlacement: !!r.counts_as_placement })),
+    campaign.lightLimit, campaign.timezone || "Asia/Taipei");
 }
 
 /** 分享連結常見的追蹤參數：同一個網址帶不同來源參數仍是同一個位置。 */

@@ -1,6 +1,6 @@
 import { auditStmt } from "./audit";
 import { attachEvidence, attachFailed } from "./campaign-evidence";
-import { campaignPhase, getCampaign, locationKey, payoutAmount, PLATFORMS, TIERS, type Campaign, type Tier } from "./campaign";
+import { campaignPhase, getCampaign, locationKey, memberLightCaps, payoutAmount, PLATFORMS, TIERS, type Campaign, type Tier } from "./campaign";
 import { HttpError } from "./types";
 
 /**
@@ -108,7 +108,6 @@ export async function submitPlacement(db: D1Database, member: Applicant, slug: s
     if (!own) throw new HttpError(404, "share_content_not_found");
   }
   if (cardId !== null && !(await db.prepare("SELECT 1 AS ok FROM cards WHERE id = ?").bind(cardId).first("ok"))) invalid("cardId");
-  await checkLightLimit(db, campaign, member.id, requestedTier, null);
 
   const placementId = crypto.randomUUID();
   const contentId = fresh ? crypto.randomUUID() : (body.contentId as string);
@@ -148,19 +147,6 @@ export async function submitPlacement(db: D1Database, member: Applicant, slug: s
   }
 }
 
-/**
- * 輕量分享每人上限：這個人在這個活動裡，申請或核准為輕量、還沒被拒的位置（不算 except 那一筆）已經到上限就擋。
- * 只在這一筆要申請輕量時才查。並發的兩筆可能一起越過一格，上限是防洗量不是記帳，不值得為它鎖。
- */
-async function checkLightLimit(db: D1Database, campaign: Campaign, memberId: string, tier: Tier, except: string | null): Promise<void> {
-  if (tier !== "light" || campaign.lightLimit === null) return;
-  const used = await db.prepare(
-    `SELECT count(*) AS n FROM share_placements p JOIN share_contents s ON s.id = p.content_id
-     WHERE s.member_id = ? AND s.campaign_id = ? AND p.review_status != 'rejected' AND COALESCE(p.approved_tier, p.requested_tier) = 'light' AND p.id != ?`,
-  ).bind(memberId, campaign.id, except ?? "").first<number>("n");
-  if ((used ?? 0) >= campaign.lightLimit) throw new HttpError(409, "campaign_light_limit");
-}
-
 // ---- 補件重送 -----------------------------------------------------------------
 
 type PlacementRow = {
@@ -186,7 +172,6 @@ export async function resubmitPlacement(db: D1Database, member: Applicant, id: s
   const note = body.note === undefined ? p.note : body.note === null ? "" : text(body.note, "note", 0, 1000);
   const requestedTier = body.requestedTier === undefined ? p.requested_tier : oneOf(body.requestedTier, TIERS, "requestedTier");
   const evidenceIds = evidenceIdsOf(body.evidenceIds);
-  await checkLightLimit(db, campaign, member.id, requestedTier, id);
   if (!url && !evidenceIds.length) {
     const kept = await db.prepare("SELECT count(*) AS n FROM share_evidence WHERE placement_id = ? AND purged_at IS NULL").bind(id).first<number>("n");
     if (!kept) invalid("evidence");
@@ -223,7 +208,7 @@ export type ContentView = {
   approvedTier: Tier | null; approvedAmount: number; paidTotal: number; payoutState: PayoutState; placements: PlacementView[];
 };
 
-type ContentRow = { id: string; slug: string; tiers: string; extra_placement_amount: number | null; title: string; card_id: number | null; share_code: string };
+type ContentRow = { id: string; campaign_id: string; slug: string; tiers: string; extra_placement_amount: number | null; light_limit: number | null; timezone: string | null; title: string; card_id: number | null; share_code: string };
 type PRow = { id: string; content_id: string; platform: string; location: string; url: string | null; published_at: number; requested_tier: Tier; approved_tier: Tier | null; review_status: string; review_reason: string | null; counts_as_placement: number; created_at: number };
 type PayRow = { content_id: string; status: string; amount: number };
 
@@ -241,7 +226,7 @@ function payoutStateOf(payouts: PayRow[], target: number, due: number): PayoutSt
  */
 export async function myContents(db: D1Database, memberId: string, filter: { slug?: string; contentId?: string }): Promise<ContentView[]> {
   const contents = (await db.prepare(
-    `SELECT s.id, c.slug, c.tiers, c.extra_placement_amount, s.title, s.card_id, s.share_code FROM share_contents s JOIN campaigns c ON c.id = s.campaign_id
+    `SELECT s.id, s.campaign_id, c.slug, c.tiers, c.extra_placement_amount, c.light_limit, c.timezone, s.title, s.card_id, s.share_code FROM share_contents s JOIN campaigns c ON c.id = s.campaign_id
      WHERE s.member_id = ?1 AND (?2 IS NULL OR c.slug = ?2) AND (?3 IS NULL OR s.id = ?3) ORDER BY s.created_at DESC, s.id`,
   ).bind(memberId, filter.slug ?? null, filter.contentId ?? null).all<ContentRow>()).results;
   if (!contents.length) return [];
@@ -257,13 +242,18 @@ export async function myContents(db: D1Database, memberId: string, filter: { slu
   const shots = groupBy(evidence!.results as { id: string; placement_id: string }[], (e) => e.placement_id);
   const byContent = groupBy(placements!.results as PRow[], (p) => p.content_id);
   const paysOf = groupBy(payouts!.results as PayRow[], (p) => p.content_id);
+  // 群聊分享每週上限：照活動分開算（同一個人可能參加好幾個活動）
+  const caps = new Map<string, number>();
+  for (const c of new Map(contents.map((x) => [x.campaign_id, x])).values()) {
+    for (const [k, v] of await memberLightCaps(db, { id: c.campaign_id, lightLimit: c.light_limit, timezone: c.timezone }, [memberId])) caps.set(k, v);
+  }
   return contents.map((s) => {
     const ps = byContent.get(s.id) ?? [];
     const pays = paysOf.get(s.id) ?? [];
     const paidTotal = pays.filter((x) => x.status === "paid").reduce((a, x) => a + x.amount, 0);
     const { tier, target, due } = payoutAmount(
       ps.map((p) => ({ reviewStatus: p.review_status, approvedTier: p.approved_tier, countsAsPlacement: !!p.counts_as_placement })),
-      { tiers: JSON.parse(s.tiers), extraPlacementAmount: s.extra_placement_amount }, paidTotal,
+      { tiers: JSON.parse(s.tiers), extraPlacementAmount: s.extra_placement_amount }, paidTotal, caps.get(s.id),
     );
     return {
       id: s.id, campaignSlug: s.slug, title: s.title, cardId: s.card_id, shareCode: s.share_code,
