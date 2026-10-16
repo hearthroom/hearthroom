@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/library",
+  "title": {
+    "zh-Hant": "長篇故事的記性變好了，誰做了什麼、事情的先後和現在在哪裡都不容易記混。",
+    "zh-Hans": "长篇故事的记性变好了，谁做了什么、事情的先后和现在在哪里都不容易记混。",
+    "en": "Long stories now keep track of who did what, what happened first and where you are, even after many turns.",
+    "ja": "長い物語の記憶力が上がり、誰が何をしたか、出来事の順番、今いる場所を取り違えにくくなりました。",
+    "ko": "긴 이야기의 기억력이 좋아져서 누가 무엇을 했는지, 일이 일어난 순서, 지금 있는 곳을 덜 헷갈려요."
+  },
+  "body": {
+    "zh-Hant": "約好但還沒做的事也會記成還沒發生，聊得越久差別越明顯。",
+    "zh-Hans": "约好但还没做的事也会记成还没发生，聊得越久差别越明显。",
+    "en": "Plans you have made but not yet carried out stay plans, and the difference grows the longer you play.",
+    "ja": "約束しただけのことはまだ起きていない予定として残り、長く遊ぶほど違いがはっきりします。",
+    "ko": "약속만 하고 아직 하지 않은 일은 계획으로 남고, 오래 플레이할수록 차이가 커져요."
+  }
+}
