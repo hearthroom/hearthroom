@@ -88,8 +88,16 @@ describe("首頁輪播", () => {
     expect($<HTMLImageElement>('[data-slide="upcoming-one"] img')!.getAttribute("src")).toBe("https://img.example/b.png");
   });
 
+  it("有活動時先停在第一個活動，蘇綺排在輪換裡（owner 2026-10-17：活動比歡迎卡重要）", async () => {
+    await mount();
+    expect(shown()).toBe(1);
+    expect(slides()[1]!.getAttribute("aria-hidden")).toBeNull();
+    expect(slides()[0]!.getAttribute("aria-hidden")).toBe("true");
+  });
+
   it("沒在畫面上的張讀屏跳過、Tab 走不進去；圓點說第幾張", async () => {
     await mount();
+    dot(0).click(); await nextTick();
     expect(shown()).toBe(0);
     expect(slides()[0]!.getAttribute("aria-hidden")).toBeNull();
     expect(slides()[1]!.getAttribute("aria-hidden")).toBe("true");

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
  * 首頁看板頂端的輪播：第一張是原本的蘇綺（插槽，內容不動），後面接推薦到首頁的活動。
+ * 有活動時一開始停在第一個活動、蘇綺排在輪換裡：活動比歡迎卡重要（owner 2026-10-17）。
  *
  * 活動從公開列表挑：推薦到首頁、進行中或即將開始，進行中的在前，最多三個（featuredCampaigns）。
  * 一個都沒有就只畫插槽，外層全部 display: contents，跟沒有輪播時一模一樣；活動的程式碼等首頁畫好才下載。
@@ -64,13 +65,17 @@ const on = computed(() => slides.value.length > 0 || !!post.value);
 const offset = computed(() => (props.hero ? 1 : 0));
 const count = computed(() => offset.value + slides.value.length + (post.value ? 1 : 0));
 
+const pause = reactive({ hover: false, focus: false, hidden: false, touched: false });
+/** 起始那張：有活動就是第一個活動，沒有就是蘇綺（或文章） */
+const first = computed(() => (slides.value.length ? offset.value : 0));
 const index = ref(0);
-// 蘇綺出現或收起來時張數的對應會錯開一張：回到第一張
-watch(() => props.hero, () => { index.value = 0; });
-watch(count, (n) => { if (index.value >= n) index.value = 0; });
+// 活動晚一步讀到：還沒被碰過就跳到活動那張
+watch(first, (i) => { if (!pause.touched) index.value = i; });
+// 蘇綺出現或收起來時張數的對應會錯開一張：回到起始那張
+watch(() => props.hero, () => { index.value = first.value; });
+watch(count, (n) => { if (index.value >= n) index.value = first.value; });
 const go = (i: number) => { index.value = (i + count.value) % count.value; };
 
-const pause = reactive({ hover: false, focus: false, hidden: false, touched: false });
 const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 const running = computed(() => count.value > 1 && !reduced && !pause.touched && !pause.hover && !pause.focus && !pause.hidden);
 let timer: ReturnType<typeof setTimeout> | undefined;
