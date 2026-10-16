@@ -50,7 +50,7 @@ watch(eligible, async (now) => {
   const adult = viewerAdult(session);
   shape.adult = hasAdultStarter(locale.value) && (!!session.me || guestAdult.available) && !!adult && !adult.showNsfw;
   if (!eligible.value) return;
-  go(shape.adult ? "r18" : "card");
+  go("card");
 }, { immediate: true });
 
 function go(step: TourStep | null) {
@@ -62,7 +62,11 @@ function go(step: TourStep | null) {
 function next() {
   const step = tourState.step;
   if (!step) return;
-  if (step === "card") {
+  if (step === "card" && shape.adult) {
+    go("r18");
+    return;
+  }
+  if (step === "card" || step === "choose") {
     tourState.card = starterFor(locale.value, !!viewerAdult(session)?.showNsfw) ?? 0;
     go(firstCardStep());
     void router.push(lp(`/cards/${tourState.card}`));
@@ -96,11 +100,22 @@ function finish(event: "tour_done" | "tour_skip") {
   persist();
 }
 
+/** 成人內容是可選的介紹：關閉提示仍可選一般卡，不會把整段引導結束。 */
+function close() {
+  if (tourState.step === "r18") go("choose");
+  else finish("tour_skip");
+}
+
+// 成人確認成功才回到卡片；取消或驗證失敗都留在原步驟，不替使用者開啟。
+watch(() => !!viewerAdult(session)?.showNsfw, (enabled) => {
+  if (enabled && tourState.step === "r18") go("choose");
+});
+
 // 他直接點了框起來的東西（入門卡、「開始對話」）而不是「下一步」：一樣算往下走。
 watch(() => route.path, (path) => {
   const step = tourState.step;
   const card = Number(/\/cards\/(\d+)\/?$/.exec(path)?.[1] ?? 0);
-  if ((step === "r18" || step === "card") && card && (card === starterFor(locale.value, false) || card === starterFor(locale.value, true))) {
+  if ((step === "r18" || step === "card" || step === "choose") && card && (card === starterFor(locale.value, false) || card === starterFor(locale.value, true))) {
     tourState.card = card;
     go(firstCardStep());
   }
@@ -178,6 +193,7 @@ const bubbleStyle = computed(() => {
   return below ? { top: `${Math.min(r.bottom + PAD + 12, window.innerHeight - 200)}px` } : { bottom: `${Math.min(window.innerHeight - r.top + PAD + 12, window.innerHeight - 200)}px` };
 });
 const step = computed(() => tourState.step);
+const copyStep = computed(() => step.value === "choose" ? "card" : step.value);
 /** 首頁與卡片頁由看板娘帶；進了對話頁（舞台）就是作者的地方，泡泡維持原樣（docs/design/hearthroom-mascot）。 */
 const withMascot = computed(() => page.value === "home" || page.value === "card");
 </script>
@@ -188,9 +204,9 @@ const withMascot = computed(() => page.value === "home" || page.value === "card"
     <section class="coach__bubble panel" :class="{ 'coach__bubble--mascot': withMascot }" :style="bubbleStyle" role="dialog" aria-labelledby="coach-title">
       <!-- 首頁與卡片頁：蘇綺站在泡泡左邊，泡泡的尖角指向她，像她在說這段話 -->
       <img v-if="withMascot" class="coach__mascot" src="/mascot/suki-wave.webp" alt="" decoding="async" />
-      <button type="button" class="coach__close" :aria-label="$t('tour.skip')" @click="finish('tour_skip')">×</button>
-      <h2 id="coach-title" class="coach__title">{{ $t(`tour.${step}.title`) }}</h2>
-      <p class="coach__body">{{ $t(`tour.${step}.body`) }}</p>
+      <button type="button" class="coach__close" :aria-label="$t('tour.skip')" @click="close">×</button>
+      <h2 id="coach-title" class="coach__title">{{ $t(`tour.${copyStep}.title`) }}</h2>
+      <p class="coach__body">{{ $t(`tour.${copyStep}.body`) }}</p>
       <div class="coach__actions">
         <button v-if="!isFirst(step, shape)" type="button" class="btn btn--ghost" @click="prev">{{ $t("tour.prev") }}</button>
         <button type="button" class="btn btn--primary" @click="next">{{ $t(isLast(step, shape) ? "tour.done" : "tour.next") }}</button>
