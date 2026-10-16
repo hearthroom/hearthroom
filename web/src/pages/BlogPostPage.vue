@@ -13,12 +13,14 @@ import { RouterLink, useRoute } from "vue-router";
 import BlogCampaign from "@/components/BlogCampaign.vue";
 import BlogPostCard from "@/components/BlogPostCard.vue";
 import CommentPanel from "@/components/CommentPanel.vue";
+import GuestSignInSheet from "@/components/GuestSignInSheet.vue";
 import NotFoundPage from "@/pages/NotFoundPage.vue";
 import { ApiError } from "@/lib/api";
-import { allColumns, columnName, fetchColumns, fetchPost, groupOfColumn, postPath, type BlogGroup, type PostPage } from "@/lib/blog";
+import { allColumns, columnName, fetchColumns, fetchPost, groupOfColumn, likePost, markViewed, postPath, viewPost, type BlogGroup, type Engagement, type PostPage } from "@/lib/blog";
 import { dateOnly } from "@/lib/format";
 import { pageTitle } from "@/lib/i18n";
 import { renderDoc } from "@/lib/markdown-toc";
+import { useSession } from "@/lib/session";
 import { track } from "@/lib/track";
 import { useLocalePath } from "@/lib/use-locale";
 
@@ -96,7 +98,10 @@ async function load() {
     if (mine !== seq) return;
     data.value = res;
     document.title = pageTitle(res.post.title);
-    if (!preview.value) track("blog_view", { subject: res.post.slug });
+    if (!preview.value) {
+      track("blog_view", { subject: res.post.slug });
+      void refreshStats(res.post.id);
+    }
     await nextTick();
     observe();
   } catch (err) {
@@ -115,6 +120,45 @@ const shareUrl = computed(() => (post.value ? `${location.origin}${lp(postPath(p
 const toast = ref("");
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 function say(text: string) { toast.value = text; clearTimeout(toastTimer); toastTimer = setTimeout(() => { toast.value = ""; }, 3000); }
+
+// ---- 閱讀數與喜歡 ---------------------------------------------------------------
+
+const session = useSession();
+const stats = ref<Engagement | null>(null);
+const signInOpen = ref(false);
+const statsOf = (): Engagement => stats.value ?? { views: null, likes: 0, liked: false };
+async function refreshStats(id: string) {
+  stats.value = null;
+  // 本地日期（sv 地區格式剛好是 YYYY-MM-DD）：同一個瀏覽器同一篇一天只記一次
+  const count = markViewed(id, new Date().toLocaleDateString("sv"));
+  try {
+    stats.value = await viewPost(id, count, session.me ? await session.accessToken() : null);
+  } catch {
+    // 讀不到就不顯示閱讀數；喜歡鈕照常可按
+  }
+}
+const viewsText = computed(() => {
+  const n = stats.value?.views;
+  return n == null ? "" : t("blog.views", { n: new Intl.NumberFormat(locale.value, { notation: "compact", maximumFractionDigits: 1 }).format(n) });
+});
+async function toggleLike() {
+  const p = post.value;
+  if (!p) return;
+  if (!session.me) { signInOpen.value = true; return; }
+  // 樂觀更新：先變，失敗再還原
+  const before = statsOf();
+  const next = !before.liked;
+  stats.value = { ...before, liked: next, likes: Math.max(0, before.likes + (next ? 1 : -1)) };
+  const token = await session.accessToken();
+  if (!token) { stats.value = before; signInOpen.value = true; return; }
+  try {
+    stats.value = { ...statsOf(), ...(await likePost(p.id, next, token)) };
+    track("blog_like", { detail: next ? "on" : "off", subject: p.slug });
+  } catch {
+    stats.value = before;
+    say(t("blog.likeFailed"));
+  }
+}
 
 async function copyLink() {
   if (!post.value) return;
@@ -178,6 +222,7 @@ onBeforeUnmount(() => { headingObserver?.disconnect(); endObserver?.disconnect()
           <time v-if="published" :datetime="new Date(published).toISOString()">{{ dateOnly(published / 1000) }}</time>
           <span v-if="updated">{{ t("blog.updated", { date: updated }) }}</span>
           <span>{{ t("blog.readMinutes", { n: post.readMinutes }) }}</span>
+          <span v-if="viewsText">{{ viewsText }}</span>
         </p>
         <img v-if="post.coverUrl" :src="post.coverUrl" alt="" class="blog-post__cover" />
       </header>
@@ -202,6 +247,13 @@ onBeforeUnmount(() => { headingObserver?.disconnect(); endObserver?.disconnect()
           <BlogCampaign v-if="post.campaign" :campaign="post.campaign" :subject="post.slug" at="end" />
 
           <div ref="endEl" class="blog-post__share">
+            <button
+              v-if="!preview" type="button" class="btn btn--sm blog-like" :class="{ 'blog-like--on': stats?.liked }" data-action="like"
+              :aria-pressed="stats?.liked ? 'true' : 'false'" :aria-label="t('blog.likeLabel', { n: stats?.likes ?? 0 })" @click="toggleLike"
+            >
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6S2.5 10.2 2.5 6.4A2.9 2.9 0 0 1 8 4.9a2.9 2.9 0 0 1 5.5 1.5c0 3.8-5.5 7.2-5.5 7.2z" /></svg>
+              <span>{{ stats?.likes ? stats.likes : t("blog.like") }}</span>
+            </button>
             <button type="button" class="btn btn--sm" @click="copyLink">{{ t("blog.copyLink") }}</button>
             <button v-if="canShare" type="button" class="btn btn--sm" @click="share">{{ t("blog.share") }}</button>
           </div>
@@ -231,6 +283,7 @@ onBeforeUnmount(() => { headingObserver?.disconnect(); endObserver?.disconnect()
     </template>
 
     <div class="toast" role="status" :hidden="!toast">{{ toast }}</div>
+    <GuestSignInSheet v-if="signInOpen" :return-to="route.fullPath" @close="signInOpen = false" />
   </div>
 </template>
 
@@ -284,6 +337,10 @@ onBeforeUnmount(() => { headingObserver?.disconnect(); endObserver?.disconnect()
 .blog-post__body :deep(hr) { border: 0; border-top: 1px solid var(--line); margin: var(--s-6) 0; }
 
 .blog-post__share { display: flex; flex-wrap: wrap; gap: var(--s-2); padding-top: var(--s-4); box-shadow: 0 -1px 0 var(--line); }
+.blog-like { display: inline-flex; align-items: center; gap: var(--s-1); font-variant-numeric: tabular-nums; }
+.blog-like svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linejoin: round; }
+.blog-like--on { color: var(--accent-text); }
+.blog-like--on svg { fill: currentColor; }
 .blog-post__adjacent { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); }
 .blog-post__step { display: grid; gap: 2px; padding: var(--s-3) var(--s-4); border: 1px solid var(--line); border-radius: var(--r-md); color: inherit; min-width: 0; }
 .blog-post__step:hover { border-color: var(--line-strong); }
