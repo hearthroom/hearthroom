@@ -72,7 +72,8 @@ const pages: RouteRecordRaw[] = [
   },
   { path: "blog/:column/:slug", component: () => import("./pages/BlogPostPage.vue") },
   // 分享獎勵活動頁：訪客看得到規則，申請要登入（頁內提示，登入後帶回原頁；?s= 進站時已記下並從網址拿掉）
-  { path: "campaign/:slug", component: () => import("./pages/CampaignPage.vue") },
+  // petQuietOnPhone：手機上桌寵進來不說招呼，泡泡才不會蓋住「登入／註冊」與「複製連結」
+  { path: "campaign/:slug", component: () => import("./pages/CampaignPage.vue"), meta: { petQuietOnPhone: true } },
   // 活動中心：全部活動照階段分頁籤，加上自己的申請（?tab=mine，那一格自己請人登入）
   { path: "campaigns", component: () => import("./pages/CampaignsPage.vue") },
   // 站內玩卡：舞台整頁接管（bare = 不套站台頁首頁尾）。遊客進得來、看得到開場，送出時才請他登入
