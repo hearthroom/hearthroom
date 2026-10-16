@@ -38,6 +38,8 @@ export interface PetOptions {
   reducedMotion?: boolean;
   /** 手機：預設收在右邊、長按開選單、讓路給鍵盤與往下捲 */
   mobile?: boolean;
+  /** 這一頁進來時不說開場的招呼與每日口味（頁面主要按鈕在她的泡泡底下時）；預設照常說 */
+  quietGreeting?: () => boolean;
   /** 選單上的常用動作（接著上次、擲一張、搜尋…），由網站提供 */
   menu?: () => MenuItem[];
   /** 每天第一次來擲的「今天的幸運類型」 */
@@ -158,8 +160,10 @@ export class SukiPet {
     else this.place({ x: innerWidth - cssW - 24, y: innerHeight - cssH - 8 });
     void this.el.offsetWidth;
     requestAnimationFrame(() => { this.el.classList.remove("suki-pet--placing"); this.el.classList.add("suki-pet--pop"); });
-    if (!this.tucked) this.greet();
-    this.daily();
+    // 這一頁不說話：招呼與每日口味都留到下一頁（每日那句沒說就不算說過）
+    const quiet = this.opts.quietGreeting?.() ?? false;
+    if (!this.tucked && !quiet) this.greet();
+    if (!quiet) this.daily();
     void this.opts.careVisit?.().then((got) => {
       if (!got) return;
       this.level = got.level;

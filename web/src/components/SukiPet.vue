@@ -115,6 +115,8 @@ async function start() {
     label: t("mascot.name"),
     height: mobile ? 132 : 220,
     mobile,
+    // 手機上活動頁的主要按鈕剛好在她招呼泡泡的位置（約戰 QA 2026-10-17）：那幾頁進來時不招呼，她照常在
+    quietGreeting: () => mobile && route.meta.petQuietOnPhone === true,
     reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
     menu,
     dailyTag,
