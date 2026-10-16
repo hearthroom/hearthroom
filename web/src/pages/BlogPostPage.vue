@@ -132,6 +132,8 @@ async function refreshStats(id: string) {
   // 本地日期（sv 地區格式剛好是 YYYY-MM-DD）：同一個瀏覽器同一篇一天只記一次
   const count = markViewed(id, new Date().toLocaleDateString("sv"));
   try {
+    // 整頁載入時登入狀態可能還在恢復：先等它，否則會員看不到自己按過的喜歡
+    if (!session.ready) await session.restore();
     stats.value = await viewPost(id, count, session.me ? await session.accessToken() : null);
   } catch {
     // 讀不到就不顯示閱讀數；喜歡鈕照常可按
