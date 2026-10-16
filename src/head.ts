@@ -61,10 +61,16 @@ const OG_LOCALE: Record<string, string> = { "zh-Hant": "zh_TW", "zh-Hans": "zh_C
 const SITE_OG_LANGS = new Set(["zh-Hant", "zh-Hans", "en", "ja", "ko"]);
 export type SiteOgKind = "default" | "download" | "updates";
 
+/**
+ * 換了圖就把版本加一：Discord、LINE、微信照網址快取預覽圖，檔名不變的話會一直顯示舊圖。
+ * default v2（2026-10-17）：圖上那句從「角色卡的開放社群：榜單、搜尋與作者頁」換成「挑一張角色卡，今晚的故事由你決定」。
+ */
+const OG_VERSION: Partial<Record<SiteOgKind, number>> = { default: 2 };
 /** 站台自己的分享圖；不認得的語言一律用英文版。 */
 export function siteOgImage(kind: SiteOgKind, lang: string): string {
   const locale = SITE_OG_LANGS.has(lang) ? lang : "en";
-  return `https://${PRIMARY_HOST}/og/${kind}-${locale}.jpg`;
+  const v = OG_VERSION[kind];
+  return `https://${PRIMARY_HOST}/og/${kind}-${locale}.jpg${v ? `?v=${v}` : ""}`;
 }
 
 /** 頁面主圖一進 HTML 就開始下載（見 PageMeta.preloadImage）。 */

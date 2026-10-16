@@ -75,7 +75,7 @@ describe("活動頁分享資訊", () => {
 
   it("沒有橫幅用站台預設分享圖", async () => {
     const { text } = await get("/zh-Hans/campaign/plain");
-    expect(text).toContain(`<meta property="og:image" content="https://${PRIMARY_HOST}/og/default-zh-Hans.jpg">`);
+    expect(text).toContain(`<meta property="og:image" content="https://${PRIMARY_HOST}/og/default-zh-Hans.jpg?v=2">`);
   });
 
   it("草稿與不存在的活動：SPA 殼＋noindex＋404，沒有分享標籤", async () => {
@@ -94,7 +94,7 @@ describe("帶推薦碼的首頁分享預覽（專屬連結）", () => {
     expect(hant.status).toBe(200);
     expect(hant.text).toContain('<meta property="og:title" content="朋友邀你來綺夢社：和 AI 角色一起寫故事">');
     expect(hant.text).toMatch(/<meta property="og:description" content="戀愛、冒險[^"]*朋友的連結註冊[^"]*">/);
-    expect(hant.text).toContain(`<meta property="og:image" content="https://${PRIMARY_HOST}/og/default-zh-Hant.jpg">`);
+    expect(hant.text).toContain(`<meta property="og:image" content="https://${PRIMARY_HOST}/og/default-zh-Hant.jpg?v=2">`);
     expect(hant.text).toContain(`<link rel="canonical" href="https://${PRIMARY_HOST}/">`);
     expect(hant.headers.get("vary")).toContain("Accept-Language");
     expect((await get("/?ref=K7XQ2M", "zh-CN", PRIMARY_HOST)).text).toContain('<meta property="og:title" content="朋友邀你来绮梦社：和 AI 角色一起写故事">');
