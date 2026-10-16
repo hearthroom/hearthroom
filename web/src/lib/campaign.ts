@@ -126,7 +126,7 @@ const SETTINGS_MESSAGE: Record<string, string> = {
 };
 /** 申請、截圖、審核、發放的碼：每個都有 campaign.error.<碼>。頁面要講得更細的另外處理，這裡是通用的一句。 */
 const CAMPAIGN_CODES = new Set([
-  "campaign_not_found", "campaign_not_open", "campaign_light_limit", "share_content_not_found", "evidence_not_attachable", "campaign_rate_limited", "campaign_operation_repeated",
+  "campaign_not_found", "campaign_not_open", "share_content_not_found", "evidence_not_attachable", "campaign_rate_limited", "campaign_operation_repeated",
   "share_placement_not_found", "share_not_editable", "campaign_submit_closed", "evidence_invalid", "evidence_rate_limited", "evidence_unavailable", "evidence_purged",
   "evidence_not_found", "share_self_review", "share_version_conflict", "share_already_decided", "agent_not_allowed", "community_admin_required", "share_self_payout",
   "share_payout_not_found", "campaign_not_payable", "campaign_payout_closed", "share_nothing_due", "share_payout_in_progress", "share_payout_not_retryable",
@@ -195,7 +195,7 @@ const query = (q: Record<string, string | number | undefined>) => {
 export interface PublicCampaign {
   slug: string; title: Localized; phase: "upcoming" | "open" | "ended"; startsAt: number | null; endsAt: number | null; timezone: string | null; bannerUrl: string | null; featured: boolean;
   intro: Localized; submitDeadline: number | null; payoutDeadline: number | null; tiers: Partial<Record<Tier, number>>; extraPlacementAmount: number | null;
-  /** 每人最多幾個輕量分享；null＝不限 */
+  /** 群聊分享（輕量）每人每週最多發放幾個；null＝不限 */
   lightLimit?: number | null;
 }
 /** 不帶令牌：訪客也看得到活動頁。 */
