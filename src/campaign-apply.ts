@@ -242,7 +242,7 @@ export async function myContents(db: D1Database, memberId: string, filter: { slu
   const shots = groupBy(evidence!.results as { id: string; placement_id: string }[], (e) => e.placement_id);
   const byContent = groupBy(placements!.results as PRow[], (p) => p.content_id);
   const paysOf = groupBy(payouts!.results as PayRow[], (p) => p.content_id);
-  // 群聊分享每週上限：照活動分開算（同一個人可能參加好幾個活動）
+  // 隨手分享每週上限：照活動分開算（同一個人可能參加好幾個活動）
   const caps = new Map<string, number>();
   for (const c of new Map(contents.map((x) => [x.campaign_id, x])).values()) {
     for (const [k, v] of await memberLightCaps(db, { id: c.campaign_id, lightLimit: c.light_limit, timezone: c.timezone }, [memberId])) caps.set(k, v);

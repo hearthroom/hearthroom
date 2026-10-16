@@ -390,7 +390,7 @@ export async function listPayable(db: D1Database, q: { slug?: string; page: numb
   const paidOf = new Map((paid!.results as { content_id: string; n: number }[]).map((r) => [r.content_id, r.n]));
   type C = { id: string; campaign_id: string; member_id: string; title: string; handle: string };
   const rows = contents!.results as C[];
-  // 群聊分享每週上限：每個活動、這一頁出現的人各算一次
+  // 隨手分享每週上限：每個活動、這一頁出現的人各算一次
   const caps = new Map<string, number>();
   for (const [cid, campaign] of byId) {
     const members = [...new Set(rows.filter((r) => r.campaign_id === cid).map((r) => r.member_id))];
