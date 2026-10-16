@@ -78,17 +78,17 @@ describe("頭像選單分組", () => {
     expect(groups.length).toBe(4);
     expect(hrefs(groups[0])).toEqual(["/wallet"]);
     expect(hrefs(groups[1])).toContain("/mine");
-    // 更新紀錄、部落格、分享活動跟設定、開發者文件同一組：都是「關於這個站」而不是「我的東西」
-    expect(hrefs(groups[2])).toEqual(["/settings", "/developers", "/updates?from=menu", "/blog", "/me/campaign"]);
+    // 更新紀錄、部落格、活動中心跟設定、開發者文件同一組：都是「關於這個站」而不是「我的東西」
+    expect(hrefs(groups[2])).toEqual(["/settings", "/developers", "/updates?from=menu", "/blog", "/campaigns"]);
     const last = groups[groups.length - 1];
     expect(last.querySelectorAll("a")).toHaveLength(0);
     expect(last.textContent).toContain(i18n.global.t("nav.logout"));
     expect(menu.lastElementChild).toBe(last);
   });
 
-  it("分享活動用 spark 圖示（跟「我的」頁一致），gift 留給邀請", async () => {
+  it("活動中心用 spark 圖示（跟「我的」頁一致），gift 留給邀請", async () => {
     const menu = await openMenu();
     const icon = (href: string) => menu.querySelector(`a[href="${href}"] svg`)!.innerHTML;
-    expect(icon("/me/campaign")).toBe(icon("/updates?from=menu"));
+    expect(icon("/campaigns")).toBe(icon("/updates?from=menu"));
   });
 });

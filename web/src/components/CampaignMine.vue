@@ -1,15 +1,15 @@
 <script setup lang="ts">
 /**
- * 我的分享申請 /me/campaign：自己送出的分享，依活動分組。每份內容一張卡：分享連結、「已核准」與「已入帳」兩欄
+ * 活動中心「我參加的」（/campaigns?tab=mine）：自己送出的分享，依活動分組。每份內容一張卡：分享連結、「已核准」與「已入帳」兩欄
  * （spec §3.2 要分開，免得把核准的金額當成已經拿到）、每個位置的審核狀態，理由只在需要補件或未通過時顯示。
  * 需要補件的位置可以補充資料：平台不能改，送出時只帶改過的欄位與新截圖；同樣的內容失敗後重按沿用同一個 operationId。
  * 補件截止（活動公開資料的 submitDeadline）後不給重送；伺服器回 campaign_submit_closed 也一樣收起。
  * 活動讀不到（例如改回草稿）就只顯示代號，不顯示截止，補件交給伺服器把關。
- * 這頁不顯示點數池、餘額、審核人與發放錯誤碼。
+ * 這裡不顯示點數池、餘額、審核人與發放錯誤碼。沒登入的人看到一句說明和登入按鈕，登入後回到這個頁籤。
  */
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { RouterLink } from "vue-router";
+import { RouterLink, useRoute } from "vue-router";
 import CampaignShareLinks from "@/components/CampaignShareLinks.vue";
 import EvidencePicker from "@/components/EvidencePicker.vue";
 import EvidenceViewer from "@/components/EvidenceViewer.vue";
@@ -19,13 +19,14 @@ import {
   type CampaignSummary, type ContentView, type PlacementView, type PublicCampaign, type ResubmitBody, type Tier,
 } from "@/lib/campaign";
 import { ApiError } from "@/lib/api";
-import { pageTitle } from "@/lib/i18n";
+import { loginPath } from "@/lib/login-return";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
 
 const { t } = useI18n();
 const { lp, locale } = useLocalePath();
 const session = useSession();
+const route = useRoute();
 
 async function token() {
   const tk = await session.accessToken();
@@ -59,11 +60,10 @@ async function load() {
   }
 }
 watch(() => session.me?.accountNumId ?? null, (id) => { if (id) void load(); }, { immediate: true });
-onMounted(() => { document.title = pageTitle(t("campaign.mine.title")); });
 
 const groups = computed(() => {
   const by = new Map<string, ContentView[]>();
-  for (const c of contents.value ?? []) by.set(c.campaignSlug, [...(by.get(c.campaignSlug) ?? []), c]);
+  for (const c of (session.me ? contents.value : null) ?? []) by.set(c.campaignSlug, [...(by.get(c.campaignSlug) ?? []), c]);
   return [...by].map(([slug, items]) => {
     const campaign = campaigns.value[slug] ?? null;
     return { slug, campaign, items, title: campaign ? localized(campaign.title, locale.value) || slug : slug };
@@ -163,10 +163,17 @@ async function send() {
 </script>
 
 <template>
-  <div class="page mine-share">
-    <h1 class="display mine-share__title">{{ t("campaign.mine.title") }}</h1>
+  <div class="mine-share">
+    <!-- 登入狀態還在確認時先不說「請登入」，免得已登入的人看到一閃 -->
+    <div v-if="!session.me" class="mine-share__signin" data-signin-prompt>
+      <template v-if="session.ready">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="4.25" y="8.75" width="11.5" height="8" rx="2" /><path d="M7 8.75V6.5a3 3 0 0 1 6 0v2.25" /></svg>
+        <span>{{ t("campaign.hub.signIn") }}</span>
+        <RouterLink class="btn btn--primary" data-signin :to="lp(loginPath(route.fullPath))">{{ t("nav.login") }}</RouterLink>
+      </template>
+    </div>
 
-    <p v-if="loadError" class="notice notice--error" role="alert">
+    <p v-else-if="loadError" class="notice notice--error" role="alert">
       {{ loadError }}
       <button type="button" class="btn btn--sm" @click="load()">{{ t("campaign.page.retry") }}</button>
     </p>
@@ -283,11 +290,17 @@ async function send() {
 </template>
 
 <style scoped>
-.mine-share { max-width: 800px; display: grid; gap: var(--s-5); }
-.mine-share__title { margin: 0; font-size: 28px; line-height: 1.3; }
+.mine-share { display: grid; gap: var(--s-5); }
+.mine-share__signin {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); padding: var(--s-4);
+  border-radius: var(--r-lg); background: var(--surface-2); font-size: 14px; line-height: 1.6;
+}
+.mine-share__signin:empty { display: none; }
+.mine-share__signin svg { flex: none; width: 20px; height: 20px; fill: none; stroke: var(--accent-text); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.mine-share__signin > span { flex: 1 1 200px; min-width: 0; font-weight: 500; }
 .mine-share__skeleton { display: grid; gap: var(--s-4); }
 .mine-share__skeleton-card { height: 160px; border-radius: var(--r-lg); }
-.mine-share__empty { display: grid; gap: var(--s-3); justify-items: start; }
+.mine-share__empty { display: grid; gap: var(--s-3); justify-items: start; padding: var(--s-5); }
 .mine-share__empty p { margin: 0; }
 
 .mine-share__group { display: grid; gap: var(--s-3); }
@@ -299,7 +312,8 @@ async function send() {
 .mine-share__deadline dt { color: var(--text-3); }
 .mine-share__deadline dd { margin: 0; }
 
-.mine-share__content { display: grid; gap: var(--s-4); }
+/* .panel 本身沒有內距：每張卡自己補，桌機 24、手機 16 */
+.mine-share__content { display: grid; gap: var(--s-4); padding: var(--s-5); min-width: 0; }
 .mine-share__cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); }
 .mine-share__col { display: grid; gap: var(--s-1); align-content: start; padding: var(--s-3) var(--s-4); border-radius: var(--r-md); background: var(--surface-2); }
 .mine-share__col strong { font-size: 18px; }
@@ -332,7 +346,8 @@ async function send() {
 
 @media (max-width: 760px) {
   .mine-share__cols { grid-template-columns: 1fr; }
+  .mine-share__content, .mine-share__empty { padding: var(--s-4); }
   .mine-share__short { max-width: none; }
-  .mine-share__tier, .mine-share__open, .mine-share__actions .btn { min-height: 44px; }
+  .mine-share__tier, .mine-share__open, .mine-share__actions .btn, .mine-share__signin .btn { min-height: 44px; }
 }
 </style>

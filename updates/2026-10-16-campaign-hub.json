@@ -1,0 +1,20 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/campaigns",
+  "draft": true,
+  "title": {
+    "zh-Hant": "活動有了自己的入口",
+    "zh-Hans": "活动有了自己的入口",
+    "en": "Campaigns now have a page of their own",
+    "ja": "キャンペーンをまとめて見られるページができました",
+    "ko": "캠페인을 한곳에서 볼 수 있어요"
+  },
+  "body": {
+    "zh-Hant": "頭像選單和頁尾的「活動中心」列出進行中、即將開始和已結束的活動，還有你參加過的；推薦的活動也會出現在首頁看板的輪播裡。",
+    "zh-Hans": "头像菜单和页脚的「活动中心」列出进行中、即将开始和已结束的活动，还有你参加过的；推荐的活动也会出现在首页看板的轮播里。",
+    "en": "Campaigns in the avatar menu and the footer lists open, upcoming and past campaigns plus the ones you joined, and featured campaigns rotate on the home board.",
+    "ja": "アバターメニューとフッターの「キャンペーン」で開催中・開始前・終了したキャンペーンと参加履歴を確認でき、おすすめのキャンペーンはホームでも紹介されます。",
+    "ko": "프로필 메뉴와 하단의 캠페인에서 진행 중, 예정, 종료된 캠페인과 참여 내역을 볼 수 있고, 추천 캠페인은 홈 화면에서도 소개돼요."
+  }
+}
