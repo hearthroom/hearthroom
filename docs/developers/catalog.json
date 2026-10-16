@@ -1931,5 +1931,13 @@
   "d76df754c98d0": "When the paid credits expire. `null` when they do not.",
   "dd458c5fc21be": "What the paid credits can be spent on: `all` or `agent_only`.",
   "d9b13182e63b7": "True when this response repeats an earlier payout of the same `key`; no new credits were paid.",
-  "d3c1a0e7b5f42": "`invalid_request` — `key` is not 1 to 128 letters, digits, `_` or `-`."
+  "d3c1a0e7b5f42": "`invalid_request` — `key` is not 1 to 128 letters, digits, `_` or `-`.",
+  "d064da9d471c6": "Public referral and signup reward terms",
+  "d1383fda7b7d2": "Returns the current referral and signup reward rules for pages that signed-out visitors can see. No sign-in needed, and any Authorization header is ignored. Show these values instead of hard-coding reward numbers: they can change. The response holds no account data and may be cached for 5 minutes.",
+  "d1df09f9b5a9f": "Reward terms.",
+  "d6f32dc0782ea": "Reward rules anyone can read. All rewards are credits usable for agent conversations only.",
+  "d5f76dac96588": "Whether referral rewards are being granted right now. The numbers still describe the configured rules when this is false.",
+  "da3bfaf27d3bc": "Credits every new account receives at sign-up, whether or not a referral code is used. 0 when not offered.",
+  "dd330a1c38aab": "How many days the sign-up credits stay valid.",
+  "d532dc79dde46": "`referral_disabled` — reward terms are not available right now."
 }
