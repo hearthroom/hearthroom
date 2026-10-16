@@ -8,6 +8,7 @@ import { computed, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute } from "vue-router";
 import CampaignApplyForm from "@/components/CampaignApplyForm.vue";
+import CampaignInviteLink from "@/components/CampaignInviteLink.vue";
 import CampaignShareLinks from "@/components/CampaignShareLinks.vue";
 import NotFoundPage from "@/pages/NotFoundPage.vue";
 import { ApiError } from "@/lib/api";
@@ -203,6 +204,8 @@ async function onDone(_result: ApplyResult) {
           {{ contentsError }}
           <button type="button" class="btn btn--sm" @click="loadMine()">{{ t("campaign.page.retry") }}</button>
         </p>
+        <CampaignInviteLink :slug="campaign.slug" />
+        <h3 v-if="contents.length" class="campaign__h3">{{ t("campaign.share.perContent") }}</h3>
         <CampaignShareLinks v-if="contents.length" :items="contents" />
         <p v-else-if="!contentsError" class="campaign__state">
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8.5 11.5l3-3M9.25 6.25l1.1-1.1a3 3 0 0 1 4.25 4.25l-1.1 1.1M10.75 13.75l-1.1 1.1a3 3 0 0 1-4.25-4.25l1.1-1.1" /></svg>
@@ -257,6 +260,7 @@ async function onDone(_result: ApplyResult) {
 /* ---- 區塊 ---- */
 .campaign__section { display: grid; gap: var(--s-4); padding: var(--s-5); min-width: 0; }
 .campaign__h2 { margin: 0; font-size: 18px; font-weight: 650; line-height: 1.4; }
+.campaign__h3 { margin: var(--s-2) 0 0; font-size: 15px; font-weight: 650; line-height: 1.4; }
 .campaign__row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2) var(--s-4); }
 .campaign__mine { display: inline-flex; align-items: center; gap: 2px; font-size: 14px; font-weight: 500; color: var(--accent-text); }
 .campaign__mine svg { width: 16px; height: 16px; }

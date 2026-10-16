@@ -267,8 +267,24 @@ export const fetchCampaignPool = (token: string) => request<CampaignPool>(token,
 // ---- 申請（本人）-----------------------------------------------------------------
 // 形狀照 src/campaign-apply.ts。
 
-export const PLATFORMS = ["qq_group", "tieba", "bahamut", "moments", "video", "forum", "other"] as const;
+export const PLATFORMS = ["qq_group", "moments", "tieba", "xiaohongshu", "bilibili", "douyin", "weibo", "bahamut", "discord", "dcard", "ptt", "threads", "facebook", "youtube", "x", "reddit", "tiktok", "video", "forum", "other"] as const;
 export type Platform = (typeof PLATFORMS)[number];
+/**
+ * 表單先列的平台依介面語言：繁中區是巴哈、Discord、Dcard、PTT 這類，簡中區是 QQ、貼吧、小紅書、抖音這類
+ * （owner 2026-10-16）。其餘平台收在「其他平台」群組裡，跨區分享的人照樣選得到；video、forum 只留給舊資料。
+ */
+const PLATFORMS_BY_LOCALE: Record<string, readonly Platform[]> = {
+  "zh-Hant": ["bahamut", "discord", "dcard", "ptt", "threads", "facebook", "youtube"],
+  "zh-Hans": ["qq_group", "moments", "tieba", "xiaohongshu", "bilibili", "douyin", "weibo"],
+};
+const PLATFORMS_GLOBAL: readonly Platform[] = ["discord", "x", "reddit", "youtube", "tiktok"];
+const LEGACY_PLATFORMS: readonly Platform[] = ["video", "forum"];
+/** 這個語言先列的平台，以及收在後面的其他平台（「其他」永遠在最後）。 */
+export function platformsFor(locale: string): { primary: Platform[]; more: Platform[] } {
+  const primary = [...(PLATFORMS_BY_LOCALE[locale] ?? PLATFORMS_GLOBAL)];
+  const more = PLATFORMS.filter((p) => p !== "other" && !primary.includes(p) && !LEGACY_PLATFORMS.includes(p));
+  return { primary, more: [...more, "other"] };
+}
 export type ReviewStatus = "submitted" | "resubmitted" | "needs_info" | "approved" | "rejected";
 export type PayoutState = "none" | "awaiting" | "processing" | "queued" | "paid";
 

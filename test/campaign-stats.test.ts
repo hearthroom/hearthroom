@@ -1,6 +1,7 @@
 import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import worker from "../src/index";
+import { PLATFORMS } from "../src/campaign";
 import { upstream } from "../src/upstream";
 import { appAdmins, bearer, identities, makeAgent, makeMember, makeReviewer, resetDb, restoreUpstream } from "./helpers";
 
@@ -149,7 +150,6 @@ beforeEach(async () => {
 afterEach(() => restoreUpstream());
 
 const zeros = (keys: readonly string[], v: unknown) => Object.fromEntries(keys.map((k) => [k, v]));
-const PLATFORMS = ["qq_group", "tieba", "bahamut", "moments", "video", "forum", "other"] as const;
 
 describe("活動統計", () => {
   it("漏斗：位置數依狀態、依申請／核准檔位、依平台；有 paid 發放的內容數", async () => {
