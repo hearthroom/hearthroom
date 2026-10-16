@@ -3,11 +3,11 @@
   "audience": "everyone",
   "try": "/campaign/share-season",
   "title": {
-    "zh-Hant": "綺夢分享季 10 月 17 日開跑，把喜歡的卡分享出去就能拿點數。",
-    "zh-Hans": "绮梦分享季 10 月 17 日开跑，把喜欢的卡分享出去就能拿点数。",
-    "en": "Hearthroom Share Season starts on October 17, so sharing the cards you love now earns you credits.",
-    "ja": "Hearthroom シェアシーズンが10月17日開幕、好きなカードのシェアでポイントがもらえます。",
-    "ko": "Hearthroom 공유 시즌이 10월 17일에 시작되며, 좋아하는 카드를 공유하면 포인트를 받아요."
+    "zh-Hant": "綺夢分享季 10 月 17 日開跑，介紹綺夢社或分享喜歡的卡都能拿積分。",
+    "zh-Hans": "绮梦分享季 10 月 17 日开跑，介绍绮梦社或分享喜欢的卡都能拿积分。",
+    "en": "Hearthroom Share Season starts on October 17, so telling people about Hearthroom or a card you love earns you credits.",
+    "ja": "シェアシーズンが10月17日開幕、サイトや好きなカードの紹介でポイントがもらえます。",
+    "ko": "Hearthroom 공유 시즌 10월 17일 시작, 사이트나 카드를 소개하면 포인트를 받아요."
   },
   "body": {
     "zh-Hant": "朋友用你的專屬連結註冊後，他第一年每筆儲值你都有分成；分享後在活動頁交上連結或截圖，審核通過後點數入帳。",
