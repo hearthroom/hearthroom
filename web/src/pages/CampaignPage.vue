@@ -301,7 +301,7 @@ async function onDone(_result: ApplyResult) {
               <li>
                 <span class="campaign__no num">2</span>
                 <div>
-                  <strong>{{ t("campaign.page.step2") }}</strong><span class="campaign__cap">{{ t("campaign.page.step2Desc", { site }) }}</span>
+                  <strong>{{ t("campaign.page.step2", { site }) }}</strong><span class="campaign__cap">{{ t("campaign.page.step2Desc", { site }) }}</span>
                   <ul class="campaign__chips" data-platform-chips>
                     <li v-for="p in chips" :key="p">{{ t(`campaign.platform.${p}`) }}</li>
                     <li>{{ t("campaign.page.platformOther") }}</li>
