@@ -213,10 +213,24 @@ onMounted(() => { void load(); });
     <p v-if="error" class="notice notice--error" role="alert">{{ error }} <button type="button" class="btn btn--sm" @click="load">{{ t('blog.retry') }}</button></p>
     <p v-if="!loading && !error && !canEdit" class="notice" data-campaign-read-only>{{ t('moderation.settings.readOnly') }}</p>
 
+    <section v-if="canEdit" class="cset-pool" data-pool aria-labelledby="cset-pool-h">
+      <h3 id="cset-pool-h">{{ t('campaign.pool.title') }}</h3>
+      <p v-if="poolError" class="notice notice--error" role="alert">{{ poolError }}</p>
+      <div v-else-if="!pool" class="ghost cset-ghost cset-ghost--pool" />
+      <p v-else-if="!pool.configured" class="notice" data-pool-missing>{{ t('campaign.pool.notConfigured') }}</p>
+      <dl v-else class="cset-pool__list">
+        <div class="cset-pool__balance"><dt>{{ t('campaign.pool.balance') }}</dt><dd class="num">{{ amount(pool.balance) }}</dd></div>
+        <div><dt>{{ t('campaign.pool.enabled') }}</dt><dd>{{ pool.enabled ? t('campaign.pool.on') : t('campaign.pool.off') }}</dd></div>
+        <div><dt>{{ t('campaign.pool.usageLabel') }}</dt><dd>{{ pool.usageScope ? t(`campaign.pool.usage.${pool.usageScope}`) : t('campaign.pool.unset') }}</dd></div>
+        <div><dt>{{ t('campaign.pool.validity') }}</dt><dd>{{ pool.validityDays ? t('campaign.pool.days', { n: pool.validityDays }) : t('campaign.pool.forever') }}</dd></div>
+        <div><dt>{{ t('campaign.pool.maxPayout') }}</dt><dd class="num">{{ pool.maxPayout ? amount(pool.maxPayout) : t('campaign.pool.noLimit') }}</dd></div>
+      </dl>
+    </section>
+
     <template v-if="loading && !items.length"><div v-for="n in 2" :key="n" class="ghost cset-ghost" /></template>
     <p v-else-if="!items.length && !error" class="subtle">{{ t('campaign.settings.empty') }}</p>
     <ul v-else class="cset-list">
-      <li v-for="c in items" :key="c.id" class="cset-row" :data-campaign="c.id">
+      <li v-for="c in items" :key="c.id" class="cset-row" :class="{ 'cset-row--open': open && base?.id === c.id }" :data-campaign="c.id">
         <span class="cset-row__name">{{ nameOf(c) }}</span>
         <span class="chip cset-status" :class="`cset-status--${c.status}`">{{ t(`campaign.status.${c.status}`) }}</span>
         <span class="subtle cset-row__period">{{ periodOf(c) }}</span>
@@ -237,6 +251,7 @@ onMounted(() => { void load(); });
         <button type="button" class="btn btn--sm" data-action="load-latest" :disabled="busy" @click="loadLatest">{{ t('campaign.loadLatest') }}</button>
       </div>
 
+      <div class="cset-sec">
       <div class="seg cset-lang" role="group" :aria-label="t('campaign.field.language')">
         <button v-for="l in POST_LOCALES" :key="l" type="button" class="seg__item" :class="{ 'seg__item--on': lang === l }" :aria-pressed="lang === l" @click="lang = l">{{ localeLabel(l) }}</button>
       </div>
@@ -264,6 +279,9 @@ onMounted(() => { void load(); });
           <button v-if="form.bannerKey" type="button" class="btn btn--sm btn--ghost" :disabled="locked" @click="form.bannerKey = null">{{ t('campaign.field.removeBanner') }}</button>
         </span>
       </div>
+      </div>
+
+      <div class="cset-sec">
 
       <label class="field">
         <span>{{ t('campaign.field.timezone') }}</span>
@@ -272,7 +290,7 @@ onMounted(() => { void load(); });
         </select>
         <span class="subtle">{{ t('campaign.field.timezoneHint') }}</span>
       </label>
-      <div class="cset-grid">
+      <div class="cset-grid cset-grid--2">
         <label v-for="k in TIMES" :key="k" class="field">
           <span>{{ t(`campaign.field.${k}`) }}</span>
           <input v-model="form.times[k]" class="input" type="datetime-local" :data-field="k" :disabled="locked" :aria-invalid="bad(k) || undefined" />
@@ -281,9 +299,11 @@ onMounted(() => { void load(); });
         </label>
       </div>
 
-      <fieldset class="cset-group">
+      </div>
+
+      <fieldset class="cset-sec cset-group">
         <legend>{{ t('campaign.field.tiers') }}</legend>
-        <div class="cset-grid">
+        <div class="cset-grid cset-grid--4">
           <label v-for="k in TIERS" :key="k" class="field">
             <span>{{ t(`campaign.tier.${k}`) }}</span>
             <input v-model="form.tiers[k]" class="input" type="number" inputmode="numeric" min="1" step="1" :data-field="`tiers.${k}`" :placeholder="t('campaign.field.unset')" :disabled="locked" :aria-invalid="bad(`tiers.${k}`) || undefined" />
@@ -291,6 +311,8 @@ onMounted(() => { void load(); });
           </label>
         </div>
       </fieldset>
+
+      <div class="cset-sec cset-grid">
       <label class="field">
         <span>{{ t('campaign.field.extra') }}</span>
         <input v-model="form.extraPlacementAmount" class="input cset-short" type="number" inputmode="numeric" min="0" step="1" data-field="extraPlacementAmount" :placeholder="t('campaign.field.unset')" :disabled="locked" :aria-invalid="bad('extraPlacementAmount') || undefined" />
@@ -304,6 +326,7 @@ onMounted(() => { void load(); });
         <span>{{ t('campaign.field.retention') }}</span>
         <input v-model="form.evidenceRetentionDays" class="input cset-short" type="number" inputmode="numeric" min="1" max="3650" step="1" data-field="evidenceRetentionDays" :disabled="locked" :aria-invalid="bad('evidenceRetentionDays') || undefined" />
       </label>
+      </div>
       <div class="field">
         <label class="cset-check"><input v-model="form.featured" type="checkbox" data-field="featured" :disabled="locked" aria-describedby="cset-featured-hint" />{{ t('campaign.field.featured') }}</label>
         <span id="cset-featured-hint" class="subtle">{{ t('campaign.field.featuredHint') }}</span>
@@ -317,63 +340,77 @@ onMounted(() => { void load(); });
       <p v-if="canEdit && base && base.status !== 'ended' && dirty" class="subtle">{{ t('campaign.settings.saveFirst') }}</p>
     </form>
 
-    <section v-if="canEdit" class="cset-pool" data-pool aria-labelledby="cset-pool-h">
-      <h3 id="cset-pool-h">{{ t('campaign.pool.title') }}</h3>
-      <p v-if="poolError" class="notice notice--error" role="alert">{{ poolError }}</p>
-      <div v-else-if="!pool" class="ghost cset-ghost" />
-      <p v-else-if="!pool.configured" class="notice" data-pool-missing>{{ t('campaign.pool.notConfigured') }}</p>
-      <dl v-else class="cset-pool__list">
-        <dt>{{ t('campaign.pool.enabled') }}</dt><dd>{{ pool.enabled ? t('campaign.pool.on') : t('campaign.pool.off') }}</dd>
-        <dt>{{ t('campaign.pool.usageLabel') }}</dt><dd>{{ pool.usageScope ? t(`campaign.pool.usage.${pool.usageScope}`) : t('campaign.pool.unset') }}</dd>
-        <dt>{{ t('campaign.pool.validity') }}</dt><dd>{{ pool.validityDays ? t('campaign.pool.days', { n: pool.validityDays }) : t('campaign.pool.forever') }}</dd>
-        <dt>{{ t('campaign.pool.maxPayout') }}</dt><dd>{{ pool.maxPayout ? amount(pool.maxPayout) : t('campaign.pool.noLimit') }}</dd>
-        <dt>{{ t('campaign.pool.balance') }}</dt><dd class="num">{{ amount(pool.balance) }}</dd>
-      </dl>
-    </section>
   </section>
 </template>
 
 <style scoped>
-.cset { padding: var(--s-5); display: grid; gap: var(--s-4); min-width: 0; }
+.cset { padding: var(--s-5); display: grid; gap: var(--s-4); min-width: 0; align-content: start; }
 .cset-head, .cset-form__head { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
 .cset-head h2 { font-size: 17px; margin: 0; margin-right: auto; }
-.cset-form__head h3 { font-size: 15px; margin: 0; }
+.cset-form__head h3 { font-size: 16px; margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .cset-close { margin-left: auto; }
-.cset-ghost { height: 44px; border-radius: var(--r-sm); }
-.cset-list { list-style: none; margin: 0; padding: 0; display: grid; }
-.cset-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1) var(--s-3); padding: var(--s-3) 0; border-top: 1px solid var(--line); }
-.cset-row:first-child { border-top: 0; }
-.cset-row__name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
-.cset-row__period { flex: 1 1 200px; }
+.cset-ghost { height: 56px; border-radius: var(--r-md); }
+.cset-ghost--pool { height: 96px; }
+/* 活動列：名稱與狀態在上、期間在下，編輯鈕貼右；開著的那列用強調色底標出來 */
+.cset-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-1); }
+.cset-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 2px var(--s-3);
+  padding: var(--s-3) var(--s-3); border-radius: var(--r-md);
+  transition: background var(--dur) var(--ease);
+}
+.cset-row:hover { background: var(--surface-2); }
+.cset-row--open, .cset-row--open:hover { background: var(--accent-tint); }
+.cset-row__name { grid-column: 1; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.cset-row .cset-status { grid-column: 2; grid-row: 1; }
+.cset-row__period { grid-column: 1 / 3; grid-row: 2; font-variant-numeric: tabular-nums; }
+.cset-row .btn { grid-column: 3; grid-row: 1 / 3; }
 .cset-status { cursor: default; height: 22px; }
 .cset-status:hover { background: var(--surface-2); color: var(--text-2); }
 .cset-status--active, .cset-status--active:hover { background: var(--success-soft); color: var(--success); }
-.cset-form { display: grid; gap: var(--s-1); padding-top: var(--s-4); border-top: 1px solid var(--line); min-width: 0; }
-.cset-form .field { margin-bottom: var(--s-4); min-width: 0; }
+.cset-form {
+  display: grid; gap: var(--s-4); padding: var(--s-4); min-width: 0;
+  background: color-mix(in srgb, var(--surface-2) 55%, var(--surface));
+  border: 1px solid var(--line); border-radius: var(--r-md);
+}
+/* 表單分組：基本資料、時間、金額檔位、其他規則；組與組之間一條髮絲線 */
+.cset-sec { display: grid; gap: var(--s-4); min-width: 0; }
+.cset-sec + .cset-sec { padding-top: var(--s-4); border-top: 1px solid var(--line); }
+.cset-form .field { margin-bottom: 0; gap: 6px; min-width: 0; }
 .cset-form .field > span:first-child, .cset-label { font-size: 13px; font-weight: 600; }
 .cset-form .input { width: 100%; }
 .cset-form .cset-short { max-width: 280px; }
-.cset-lang { justify-self: start; max-width: 100%; overflow-x: auto; margin-bottom: var(--s-3); }
-.cset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0 var(--s-4); }
+.cset-lang { justify-self: start; max-width: 100%; overflow-x: auto; }
+.cset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--s-4); }
+.cset-grid .cset-short { max-width: none; }
+/* 四個時間二乘二（datetime-local 太窄會溢出）；四個檔位寬螢幕一列四格：都不讓最後一格落單 */
+.cset-grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.cset-grid--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 1240px) { .cset-grid--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .cset-grid--2, .cset-grid--4 { grid-template-columns: minmax(0, 1fr); } }
 .cset-group { border: 0; margin: 0; padding: 0; min-width: 0; }
-.cset-group legend { font-size: 13px; font-weight: 600; margin-bottom: var(--s-2); }
+.cset-group legend { font-size: 13px; font-weight: 600; margin-bottom: var(--s-2); padding: 0; }
 .cset-check { display: flex; align-items: center; gap: var(--s-2); min-height: 44px; font-size: 14px; font-weight: 600; }
 .cset-check input { flex: none; width: 1.125rem; height: 1.125rem; accent-color: var(--accent); }
 .cset-err { font-size: 12.5px; color: var(--danger); }
 .cset-form [aria-invalid="true"] { border-color: var(--danger); }
-.cset-banner { display: block; max-width: 100%; max-height: 160px; border-radius: var(--r-sm); object-fit: cover; }
+.cset-banner { display: block; max-width: 100%; max-height: 160px; border-radius: var(--r-sm); object-fit: cover; box-shadow: 0 0 0 1px var(--line); }
 .cset-row-actions { display: flex; gap: var(--s-2); flex-wrap: wrap; }
 .cset-row-actions .btn { position: relative; cursor: pointer; }
 .cset-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .cset-conflict { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); }
-.cset-actions { display: flex; gap: var(--s-2); flex-wrap: wrap; }
-.cset-pool { display: grid; gap: var(--s-3); padding-top: var(--s-4); border-top: 1px solid var(--line); }
-.cset-pool h3 { font-size: 15px; margin: 0; }
-.cset-pool__list { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--s-2) var(--s-4); margin: 0; font-size: 14px; }
-.cset-pool__list dt { color: var(--text-3); }
-.cset-pool__list dd { margin: 0; }
+.cset-actions { display: flex; gap: var(--s-2); flex-wrap: wrap; padding-top: var(--s-4); border-top: 1px solid var(--line); }
+/* 點數池：餘額是這一塊的主角，其餘規則排成兩欄小字 */
+.cset-pool { display: grid; gap: var(--s-3); padding: var(--s-4); background: var(--surface-2); border-radius: var(--r-md); }
+.cset-pool h3 { font-size: 13px; font-weight: 600; color: var(--text-2); margin: 0; }
+.cset-pool__list { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: var(--s-3) var(--s-4); margin: 0; }
+.cset-pool__list > div { min-width: 0; }
+.cset-pool__list dt { font-size: 12px; color: var(--text-3); }
+.cset-pool__list dd { margin: 0; font-size: 14px; font-weight: 500; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.cset-pool__balance { grid-column: 1 / -1; }
+.cset-pool__balance dd { font-size: 28px; font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; }
 @media (max-width: 760px) {
   .cset { padding: var(--s-4); }
+  .cset-form { padding: var(--s-3); }
   .cset-form .input, .cset-actions .btn { min-height: 44px; }
 }
 </style>

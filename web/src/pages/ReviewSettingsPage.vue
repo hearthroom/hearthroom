@@ -60,9 +60,13 @@ onMounted(() => { document.title = pageTitle(t('moderation.title')); void load()
 
 <template>
   <section class="settings-page" :aria-label="t('moderation.tab.settings')">
-    <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
-    <p v-if="done" class="notice" role="status">{{ done }}</p>
-    <form class="panel settings-block" :aria-busy="loading" @submit.prevent="save">
+    <div v-if="error || done" class="settings-notices">
+      <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
+      <p v-if="done" class="notice" role="status">{{ done }}</p>
+    </div>
+    <!-- DOM 順序＝窄螢幕的堆疊順序：活動在上；寬螢幕左右兩欄，評論設定貼頂 -->
+    <CampaignSettingsPanel class="settings-main" />
+    <form class="panel settings-block settings-aside" :aria-busy="loading" @submit.prevent="save">
       <h2>{{ t('moderation.settings.comments') }}</h2>
       <p v-if="!loading && !canEdit" class="notice" data-read-only>{{ t('moderation.settings.readOnly') }}</p>
       <div v-for="f in fields" :key="f.key" class="field">
@@ -71,17 +75,24 @@ onMounted(() => { document.title = pageTitle(t('moderation.title')); void load()
       </div>
       <button v-if="canEdit" class="btn btn--primary settings-save" :disabled="saving">{{ t('settings.save') }}</button>
     </form>
-    <CampaignSettingsPanel />
   </section>
 </template>
 
 <style scoped>
-.settings-page { display: grid; gap: var(--s-4); max-width: 640px; }
+/* 寬螢幕：活動（編輯表單欄位多）佔主欄，評論設定是右側窄欄；窄螢幕堆成單欄 */
+.settings-page { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: var(--s-4) var(--s-5); align-items: start; }
+.settings-notices { grid-column: 1 / -1; display: grid; gap: var(--s-2); }
+.settings-aside { position: sticky; top: calc(var(--header-h) + var(--s-4)); }
 .settings-block { padding: var(--s-5); display: grid; gap: var(--s-1); min-width: 0; }
 .settings-block h2 { font-size: 17px; margin-bottom: var(--s-3); }
 .settings-block .field { margin-bottom: var(--s-4); }
 .settings-block .field > label { font-weight: 500; line-height: 1.5; }
-.settings-block .input { width: 100%; max-width: 200px; }
+.settings-block .input { width: 100%; font-variant-numeric: tabular-nums; }
 .settings-save { justify-self: start; }
+@media (max-width: 860px) {
+  .settings-page { grid-template-columns: minmax(0, 1fr); }
+  .settings-aside { position: static; }
+  .settings-block .input { max-width: 280px; }
+}
 @media (max-width: 760px) { .settings-block { padding: var(--s-4); } .settings-block .input, .settings-save { min-height: 44px; } }
 </style>
