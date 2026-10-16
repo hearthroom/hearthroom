@@ -19,7 +19,7 @@ import { useLocalePath } from "@/lib/use-locale";
 import { useReviewer } from "@/lib/review";
 import { useSession } from "@/lib/session";
 import { SITE } from "@/lib/site";
-import { siteName } from "../../shared/site-name";
+import { siteLockup, siteName } from "../../shared/site-name";
 import { installPrompt, openInstall } from "@/lib/pwa";
 import { shouldShowDownloadEntry } from "@/lib/download";
 import { isPlayHost } from "@/lib/site";
@@ -34,6 +34,8 @@ import { watchCampaignShareBinding, watchShareRefBinding } from "@/lib/share-ref
 const { lp, locale } = useLocalePath();
 // 頁首與頁尾的品牌名跟著語言走（shared/site-name.ts）：中文介面是綺夢社，其他語言是 Hearthroom。副標只進分頁標題。
 const brandName = computed(() => siteName(String(locale.value)));
+/** 頁尾寫品牌全名（中文是「綺夢社・AI寢物語」），頁首空間小只放主名 */
+const footerName = computed(() => siteLockup(String(locale.value)) ?? brandName.value);
 // iOS 與我們自己的 App 裡不需要「下載 App」入口（lib/download.ts）。
 const showDownloadEntry = shouldShowDownloadEntry({ ua: navigator.userAgent, touchPoints: navigator.maxTouchPoints || 0 });
 const session = useSession();
@@ -133,9 +135,10 @@ onMounted(() => document.addEventListener("keydown", onSlash));
         </RouterLink>
         <!-- R18 開關只在首頁：它管的是榜單列出什麼，看卡片、寫卡片的時候不該在頁首晃（owner 2026-10-02） -->
         <AdultToggle v-if="route.path === lp('/')" />
-        <!-- 開源站：倉庫入口放頁首，不只頁尾 -->
-        <a :href="SITE.repoUrl" target="_blank" rel="noopener" class="gh" :aria-label="$t('footer.github')" :title="$t('footer.github')">
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" /></svg>
+        <!-- 頁首放 Discord：玩家要找的是社群，不是程式碼；GitHub 留在頁尾的社群欄（owner 2026-10-17）。
+             邀請連結跟頁尾「加入 Discord」同一條，讀不到就不顯示 -->
+        <a v-if="discordInvite" :href="discordInvite" target="_blank" rel="noopener noreferrer" class="gh" data-header-discord :aria-label="$t('community.join')" :title="$t('community.join')">
+          <CommunityIcon name="discord" />
         </a>
         <AppearanceMenu />
         <LocaleSwitch />
@@ -170,7 +173,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
   <footer v-if="SITE.repoUrl && !route.meta.bare" class="footer">
     <div class="footer__inner">
       <div class="footer__about">
-        <p class="footer__name">{{ brandName }}</p>
+        <p class="footer__name">{{ footerName }}</p>
         <p class="footer__tagline">{{ $t("footer.tagline") }}</p>
       </div>
       <nav class="footer__groups" :aria-label="$t('footer.links')">
@@ -271,7 +274,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
 .search-go svg { width: 18px; height: 18px; }
 .gh { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 34px; height: 34px; border-radius: var(--r-pill); color: var(--text-2); }
 .gh:hover { background: var(--surface-2); color: var(--text); }
-.gh svg { width: 18px; height: 18px; fill: currentColor; }
+.gh :deep(svg), .gh svg { width: 18px; height: 18px; }
 
 /* 頁尾：左邊是站名與一句話，右邊是分組連結，最底下一條放授權。手機上分組排成兩欄，不摺疊——每組就幾個連結，收起來反而多點一下。 */
 .footer { padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); border-top: 1px solid var(--border); margin-top: var(--s-7); }
@@ -328,7 +331,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
   .account { min-width: 0; }
   .account > * { flex: none; }
 }
-/* 頁首擠的時候誰先讓位（owner 2026-10-11）：GitHub 第一個走——頁尾每頁都有同一條連結，少它不少功能。
+/* 頁首擠的時候誰先讓位（owner 2026-10-11）：社群連結（現在是 Discord）第一個走——頁尾每頁都有同一條連結，少它不少功能。
    平板以下就收起來，把位置留給導覽與餘額。 */
 @media (max-width: 860px) {
   .gh { display: none; }
