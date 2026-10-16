@@ -567,7 +567,7 @@ export async function adminPost(db: D1Database, id: string) {
 }
 
 const STATUSES: readonly string[] = ["draft", "pending_review", "published", "unpublished"];
-type AdminRow = Pick<PostRow, "id" | "column_id" | "column_slug" | "slug" | "locale" | "title" | "status" | "publish_at" | "first_published_at" | "pinned" | "comments_closed" | "version" | "updated_at"> & { author_handle: string; editor_handle: string };
+type AdminRow = Pick<PostRow, "id" | "column_id" | "column_slug" | "slug" | "locale" | "title" | "status" | "publish_at" | "first_published_at" | "pinned" | "comments_closed" | "version" | "updated_at"> & { author_handle: string; editor_handle: string; view_count: number; like_count: number; comment_count: number };
 
 /** 管理列表：所有狀態，最近改過的在前。column 是欄目 id 或 slug；group 是分組 id。editorHandle 是最後一次存內容的人。 */
 export async function adminPosts(db: D1Database, opts: { status?: string; column?: string; group?: string; page: number }) {
@@ -579,7 +579,8 @@ export async function adminPosts(db: D1Database, opts: { status?: string; column
   const binds = [status, opts.column || null, opts.group || null];
   const [count, rows] = await db.batch<AdminRow & { n: number }>([
     db.prepare(`SELECT COUNT(*) AS n ${from} WHERE ${where}`).bind(...binds),
-    db.prepare(`SELECT p.id, p.column_id, col.slug AS column_slug, p.slug, p.locale, p.title, p.status, p.publish_at, p.first_published_at, p.pinned, p.comments_closed, p.version, p.updated_at,
+    db.prepare(`SELECT p.id, p.column_id, col.slug AS column_slug, p.slug, p.locale, p.title, p.status, p.publish_at, p.first_published_at, p.pinned, p.comments_closed, p.version, p.updated_at, p.view_count, p.like_count,
+      (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id AND c.root_id IS NULL AND c.deleted_at IS NULL AND c.status = 'visible') AS comment_count,
       COALESCE((SELECT handle FROM members WHERE id = p.author_member_id), '') AS author_handle,
       COALESCE((SELECT m.handle FROM blog_post_revisions r JOIN members m ON m.id = r.editor_member_id WHERE r.post_id = p.id ORDER BY r.version DESC LIMIT 1), '') AS editor_handle ${from} WHERE ${where} ORDER BY p.updated_at DESC, p.id DESC LIMIT ?4 OFFSET ?5`).bind(...binds, PAGE_SIZE, (page - 1) * PAGE_SIZE),
   ]);
@@ -588,6 +589,7 @@ export async function adminPosts(db: D1Database, opts: { status?: string; column
     items: (rows!.results as AdminRow[]).map((r) => ({
       id: r.id, columnId: r.column_id, columnSlug: r.column_slug, slug: r.slug, locale: r.locale, title: r.title, status: r.status, publishAt: r.publish_at,
       firstPublishedAt: r.first_published_at, pinned: !!r.pinned, commentsClosed: !!r.comments_closed, version: r.version, updatedAt: r.updated_at, authorHandle: r.author_handle, editorHandle: r.editor_handle,
+      viewCount: r.view_count, likeCount: r.like_count, commentCount: r.comment_count,
     })),
   };
 }
