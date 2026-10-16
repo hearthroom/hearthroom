@@ -39,6 +39,8 @@ export const localized = (l: Localized, locale: string) => l[locale] || l["zh-Ha
 export const formatNumber = (n: number) => new Intl.NumberFormat(String(i18n.global.locale.value)).format(n);
 export const formatPoints = (n: number) => i18n.global.t("campaign.page.points", { n: formatNumber(n) });
 /** 申請人填的連結只認 http(s)：表單用它擋，審核頁只在符合時才做成可點的連結（其他寫法照字面顯示）。 */
+/** 每筆申請最多附幾張截圖（伺服器 campaign-apply 也擋這個數） */
+export const EVIDENCE_MAX = 6;
 export const isWebUrl = (url: string) => /^https?:\/\/[^\s]+$/i.test(url);
 
 // ---- 時區 ---------------------------------------------------------------------

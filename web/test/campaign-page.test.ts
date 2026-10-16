@@ -2,11 +2,13 @@
  * 公開活動頁 /campaign/:slug：規則與金額讀 API、訪客看得到規則並帶回原頁登入、只有進行中＋登入才有申請表；
  * 申請表的本體（時區換算、新內容或既有內容）、連結或截圖至少一個、伺服器的欄位錯誤標在那一格、
  * 失敗重按沿用 operationId；我的分享連結帶推薦碼與分享短碼；進頁只記一次。
+ * 推薦數字讀 Harbor 公開的推薦規則，讀不到只講分享；平台是依語言的單選膠囊；證明是連結或截圖二選一。
  */
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createApp, nextTick, type App } from "vue";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { i18n } from "../src/lib/i18n";
+import { resetReferralTermsCache } from "../src/lib/referral-terms";
 
 const tracked = vi.hoisted(() => [] as { event: string; data: Record<string, unknown> }[]);
 vi.mock("../src/lib/track", () => ({ track: (event: string, data: Record<string, unknown> = {}) => tracked.push({ event, data }), currentSurface: () => "campaign", setSurface: () => {} }));
@@ -34,11 +36,15 @@ let detailStatus: number;
 let contents: ReturnType<typeof content>[];
 /** 送出申請的回應：依序取，用完回 200。 */
 let submitReplies: { status: number; body: unknown }[];
+/** Harbor 公開的推薦規則；null＝讀不到 */
+let terms: Record<string, unknown> | null;
+const liveTerms = () => ({ enabled: true, firstPercent: 20, firstCap: 24000, inviteePercent: 0, rebatePercent: 5, rebateDays: 365, bindDays: 7, welcomeCredits: 1000, welcomeDays: 30, signupWelcomeCredits: 1000, signupWelcomeDays: 30 });
 
 beforeEach(() => {
   i18n.global.locale.value = "zh-Hant";
   tracked.length = 0;
-  calls = []; detail = campaign(); detailStatus = 200; contents = []; submitReplies = [];
+  calls = []; detail = campaign(); detailStatus = 200; contents = []; submitReplies = []; terms = null;
+  resetReferralTermsCache();
   session.me = { accountNumId: 7 };
   ref$.code = "MINE2345";
   vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit = {}) => {
@@ -48,6 +54,7 @@ beforeEach(() => {
     const json = (status: number, b: unknown) => new Response(JSON.stringify(b), { status, headers: { "Content-Type": "application/json" } });
     if (url === "/v1/campaigns/launch" && method === "GET") return detail ? json(detailStatus, detailStatus === 200 ? detail : { error: "boom" }) : json(404, { error: "campaign_not_found" });
     if (url.startsWith("/v1/me/campaign/contents")) return json(200, { items: contents });
+    if (url.endsWith("/open/v1/referral/terms")) return terms ? json(200, terms) : json(404, { error: "not_found" });
     if (url === "/v1/campaigns/launch/placements") {
       const reply = submitReplies.shift();
       if (reply) return json(reply.status, reply.body);
@@ -81,10 +88,16 @@ function type(sel: string, value: string) {
 }
 const check = (sel: string) => { $<HTMLInputElement>(sel)!.click(); };
 async function submit() { $<HTMLFormElement>("form[data-apply]")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); await settle(); }
-function fillNew() {
+/** 平台膠囊：不在常用那排的先按「更多平台…」 */
+async function pick(platform: string) {
+  if (!$(`[data-platform="${platform}"]`)) { $<HTMLButtonElement>('[data-action="more-platforms"]')!.click(); await settle(); }
+  $<HTMLButtonElement>(`[data-platform="${platform}"]`)!.click();
+  await settle();
+}
+async function fillNew() {
   type('[data-field="title"] input', "我的攻略");
   check('[data-field="requestedTier"] input[value="guide"]');
-  type('[data-field="platform"] select', "tieba");
+  await pick("tieba");
   type('[data-field="location"] input', "某某吧");
   type('[data-field="publishedAt"] input', "2026-10-20T09:30");
   type('[data-field="url"] input', "https://tieba.example/p/1");
@@ -94,7 +107,7 @@ const posts = () => calls.filter((c) => c.method === "POST" && c.path === "/v1/c
 it("shows the form to a signed-in visitor while the campaign is open", async () => {
   await mount();
   expect($("h1")!.textContent).toContain("開站分享活動");
-  expect($("[data-phase]")!.textContent).toBe(t("campaign.phase.open"));
+  expect($("[data-phase]")!.textContent!.trim()).toBe(t("campaign.page.status.open"));
   expect($("form[data-apply]")).not.toBeNull();
   // 介紹不吃 HTML
   expect($(".campaign__intro")!.innerHTML).not.toContain("<b>");
@@ -105,8 +118,9 @@ it("lets a guest read the rules and sign in back to this page with ?s= kept", as
   session.me = null;
   await mount("/campaign/launch?s=AB12");
   expect($("form[data-apply]")).toBeNull();
-  expect(host.textContent).toContain(t("campaign.page.rules"));
+  expect(host.textContent).toContain(t("campaign.page.tiers.title"));
   expect(host.textContent).toContain(t("campaign.page.signIn"));
+  expect($("[data-signin-apply]")!.getAttribute("href")).toBe(`/login?returnTo=${encodeURIComponent("/campaign/launch?s=AB12")}`);
   expect($("[data-signin]")!.getAttribute("href")).toBe(`/login?returnTo=${encodeURIComponent("/campaign/launch?s=AB12")}`);
   expect(calls.some((c) => c.path.startsWith("/v1/me/"))).toBe(false);
 });
@@ -115,13 +129,14 @@ it("hides the form before the campaign starts and after it ends", async () => {
   detail = campaign({ phase: "upcoming" });
   await mount();
   expect($("form[data-apply]")).toBeNull();
-  expect(host.textContent).toContain(t("campaign.page.notOpen.upcoming"));
+  expect($('[data-state="upcoming"]')).not.toBeNull();
+  expect($("[data-invite-link] input")).not.toBeNull();
   expect($("[data-mine]")).not.toBeNull();
   app!.unmount(); app = null; host.remove();
   detail = campaign({ phase: "ended" });
   await mount();
   expect($("form[data-apply]")).toBeNull();
-  expect(host.textContent).toContain(t("campaign.page.notOpen.ended"));
+  expect($('[data-state="ended"]')).not.toBeNull();
 });
 
 it("groups the thousands in every point amount", async () => {
@@ -129,7 +144,7 @@ it("groups the thousands in every point amount", async () => {
   await mount();
   const rules = $("[data-rules]")!.textContent!;
   expect(rules).toContain(t("campaign.page.points", { n: "10,000" }));
-  expect(rules).toContain(t("campaign.page.extra", { n: "12,000" }));
+  expect(rules).toContain(t("campaign.page.extra", { extra: "12,000" }));
   expect($('[data-field="requestedTier"]')!.textContent).toContain(t("campaign.page.points", { n: "10,000" }));
 });
 
@@ -138,7 +153,7 @@ it("reads every amount from the API and only offers tiers that have one", async 
   const rules = $("[data-rules]")!.textContent!;
   expect(rules).toContain("50");
   expect(rules).toContain("300");
-  expect(rules).toContain(t("campaign.page.extra", { n: 20 }));
+  expect(rules).toContain(t("campaign.page.extra", { extra: 20 }));
   expect(rules).toContain(t("campaign.page.highest"));
   expect(rules).not.toContain(t("campaign.tier.video"));
   expect($('[data-field="requestedTier"] input[value="video"]')).toBeNull();
@@ -147,14 +162,14 @@ it("reads every amount from the API and only offers tiers that have one", async 
   detail = campaign({ tiers: { light: 77 }, extraPlacementAmount: null });
   await mount();
   expect($("[data-rules]")!.textContent).toContain("77");
-  expect($("[data-rules]")!.textContent).not.toContain(t("campaign.page.extra", { n: 20 }));
+  expect($("[data-rules]")!.textContent).not.toContain(t("campaign.page.extra", { extra: 20 }));
   expect(host.querySelectorAll('[data-field="requestedTier"] input').length).toBe(1);
 });
 
 it("submits a new share with publishedAt read in the campaign's time zone", async () => {
   await mount();
   expect($('[data-field="publishedAt"]')!.textContent).toContain("日本");
-  fillNew();
+  await fillNew();
   type('[data-field="cardId"] input', "12");
   type('[data-field="note"] textarea', "置頂了");
   await submit();
@@ -182,7 +197,7 @@ it("adds to an existing content with contentId and no title fields", async () =>
   expect($('[data-field="cardId"]')).toBeNull();
   type('[data-field="content"] select', "c2");
   check('[data-field="requestedTier"] input[value="light"]');
-  type('[data-field="platform"] select', "qq_group");
+  await pick("qq_group");
   type('[data-field="location"] input', "同好群");
   type('[data-field="url"] input', "https://example.com/x");
   await submit();
@@ -193,11 +208,11 @@ it("adds to an existing content with contentId and no title fields", async () =>
 
 it("blocks a submit that has neither a link nor a screenshot, and a link that is not http(s)", async () => {
   await mount();
-  fillNew();
+  await fillNew();
   type('[data-field="url"] input', "");
   await submit();
   expect(posts()).toHaveLength(0);
-  expect($('[data-field="evidence"] [role="alert"]')!.textContent).toBe(t("campaign.apply.needProof"));
+  expect($('[data-field="url"] [role="alert"]')!.textContent).toBe(t("campaign.apply.needProof"));
   type('[data-field="url"] input', "javascript:alert(1)");
   await submit();
   expect(posts()).toHaveLength(0);
@@ -207,7 +222,7 @@ it("blocks a submit that has neither a link nor a screenshot, and a link that is
 it("puts a share_invalid field error next to that field", async () => {
   submitReplies = [{ status: 400, body: { error: "share_invalid", field: "url" } }];
   await mount();
-  fillNew();
+  await fillNew();
   await submit();
   const err = $('[data-field="url"] [role="alert"]')!;
   expect(err.textContent).toContain(t("campaign.share.field.url"));
@@ -218,7 +233,7 @@ it("puts a share_invalid field error next to that field", async () => {
 it("shows other errors for the whole form and reuses the operationId when pressed again", async () => {
   submitReplies = [{ status: 429, body: { error: "campaign_rate_limited" } }];
   await mount();
-  fillNew();
+  await fillNew();
   await submit();
   expect($("[data-form-error]")!.textContent).toBe(t("campaign.error.campaign_rate_limited"));
   await submit();
@@ -261,7 +276,8 @@ it("gives a signed-in visitor their invite link before any share, even before th
 
 it("says what the share link list is for before the first share", async () => {
   await mount();
-  expect($("[data-share-links]")!.textContent).toContain(t("campaign.share.empty"));
+  expect($("[data-share-links]")!.textContent).toContain(t("campaign.page.mineHint"));
+  expect(host.querySelectorAll("[data-share-link]").length).toBe(0);
 });
 
 it("swallows a clipboard failure", async () => {
@@ -280,7 +296,7 @@ it("records campaign_view once per load, with the slug as subject, and not on re
   detailStatus = 200;
   $<HTMLButtonElement>('[data-action="retry"]')!.click();
   await settle();
-  fillNew();
+  await fillNew();
   await submit();
   expect(tracked.filter((e) => e.event === "campaign_view")).toEqual([{ event: "campaign_view", data: { subject: "launch" } }]);
 });
@@ -291,27 +307,27 @@ it("shows the 404 page for a missing campaign", async () => {
   expect(host.textContent).toContain(t("notFound.title"));
 });
 
-it("tells a guest the campaign is not open instead of asking them to sign in", async () => {
+it("lets a guest sign in for the invite link before the campaign opens, but not to submit", async () => {
   session.me = null;
   detail = campaign({ phase: "upcoming" });
   await mount();
-  expect(host.textContent).toContain(t("campaign.page.notOpen.upcoming"));
-  expect(host.textContent).not.toContain(t("campaign.page.signIn"));
-  expect($("[data-signin]")).toBeNull();
+  expect($('[data-state="upcoming"]')).not.toBeNull();
+  expect($("[data-signin-apply]")).toBeNull();
+  expect($("[data-signin]")).not.toBeNull();
   app!.unmount(); app = null; host.remove();
   detail = campaign({ phase: "ended" });
   await mount();
-  expect(host.textContent).toContain(t("campaign.page.notOpen.ended"));
-  expect($("[data-signin]")).toBeNull();
+  expect($('[data-state="ended"]')).not.toBeNull();
+  expect($("[data-signin-apply]")).toBeNull();
 });
 
 it("clears the done notice when the next submit starts", async () => {
   await mount();
-  fillNew();
+  await fillNew();
   await submit();
   expect(host.textContent).toContain(t("campaign.apply.done"));
   submitReplies = [{ status: 429, body: { error: "campaign_rate_limited" } }];
-  fillNew();
+  await fillNew();
   await submit();
   expect($("[data-form-error]")).not.toBeNull();
   expect(host.textContent).not.toContain(t("campaign.apply.done"));
@@ -324,4 +340,84 @@ it("shows the resubmission and payout deadlines in the campaign's own time zone,
   expect(dd("campaign.page.period")).toContain(`(${zone})`);
   expect(dd("campaign.field.submitDeadline")).toContain(`(${zone})`);
   expect(dd("campaign.field.payoutDeadline")).toContain(`(${zone})`);
+});
+
+it("shows referral rewards from Harbor's public terms and works the example from them", async () => {
+  terms = liveTerms();
+  detail = campaign({ tiers: { light: 500, original: 3000, guide: 5000, video: 10000 }, extraPlacementAmount: 500 });
+  session.me = null;
+  await mount();
+  const rewards = $("[data-rewards]")!.textContent!;
+  expect(rewards).toContain(t("campaign.page.rewards.title"));
+  expect(rewards).toContain(t("campaign.page.rewards.share.value", { min: "500", max: "10,000" }));
+  expect(rewards).toContain(t("campaign.page.rewards.referral.value", { first: 20 }));
+  expect(rewards).toContain(t("campaign.page.rewards.referral.cap", { cap: "24,000" }));
+  expect(rewards).toContain(t("campaign.page.rewards.referral.rebate", { rebate: 5, period: t("campaign.page.periodYear") }));
+  expect(rewards).toContain(t("campaign.page.cta.friendGift", { friendTotal: "2,000" }));
+  expect(rewards).not.toContain(t("campaign.page.cta.inviteeBonus", { inviteePercent: 0 }));
+  expect($("[data-calc-total]")!.textContent).toBe(t("campaign.page.points", { n: "10,500" }));
+  expect($("[data-notes]")!.textContent).toContain(t("campaign.page.notes.5", { friendDays: 30 }));
+  const termsCall = calls.find((c) => c.path.endsWith("/open/v1/referral/terms"))!;
+  expect(termsCall.method).toBe("GET");
+});
+
+it("talks only about sharing when the referral terms cannot be read", async () => {
+  detail = campaign({ tiers: { light: 500, original: 3000 }, extraPlacementAmount: 500 });
+  await mount();
+  expect($("[data-rewards] h2")!.textContent).toBe(t("campaign.page.rewards.titleShareOnly"));
+  expect($('[data-stat="referral"]')).toBeNull();
+  expect($("[data-calc-total]")!.textContent).toBe(t("campaign.page.points", { n: "4,000" }));
+  expect($("[data-notes]")!.textContent).not.toContain(t("campaign.page.notes.5", { friendDays: 30 }));
+});
+
+it("hides each referral line whose value is 0, and the whole block when referral is off", async () => {
+  terms = { ...liveTerms(), rebatePercent: 0, signupWelcomeCredits: 0, welcomeCredits: 0 };
+  await mount();
+  expect($('[data-stat="referral"]')).not.toBeNull();
+  expect($("[data-rebate]")).toBeNull();
+  expect($("[data-rewards]")!.textContent).not.toContain(t("campaign.page.cta.friendGift", { friendTotal: "0" }));
+  app!.unmount(); app = null; host.remove();
+  resetReferralTermsCache();
+  terms = { ...liveTerms(), signupWelcomeCredits: 0 };
+  await mount();
+  expect($("[data-rewards]")!.textContent).toContain(t("campaign.page.cta.friendGift", { friendTotal: "1,000" }));
+  app!.unmount(); app = null; host.remove();
+  resetReferralTermsCache();
+  terms = { ...liveTerms(), enabled: false };
+  await mount();
+  expect($('[data-stat="referral"]')).toBeNull();
+});
+
+it("lists this language's platforms first, opens the rest on demand, and moves with the arrow keys", async () => {
+  await mount();
+  const radios = () => [...host.querySelectorAll<HTMLButtonElement>('[role="radiogroup"] [role="radio"]')].map((b) => b.dataset.platform);
+  expect(radios()).toEqual(["bahamut", "discord", "dcard", "ptt", "threads", "facebook", "youtube", "other"]);
+  expect($('[data-platform="bahamut"]')!.tabIndex).toBe(0);
+  $<HTMLButtonElement>('[data-platform="bahamut"]')!.click();
+  await settle();
+  $<HTMLButtonElement>('[data-platform="bahamut"]')!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+  await settle();
+  expect($('[data-platform="discord"]')!.getAttribute("aria-checked")).toBe("true");
+  expect(document.activeElement).toBe($('[data-platform="discord"]'));
+  $<HTMLButtonElement>('[data-action="more-platforms"]')!.click();
+  await settle();
+  expect(radios()).toContain("xiaohongshu");
+  expect($('[data-action="more-platforms"]')).toBeNull();
+});
+
+it("asks for the platform name with the location when the platform is Other", async () => {
+  await mount();
+  await pick("other");
+  expect($('[data-field="location"] label')!.textContent).toBe(t("campaign.apply.otherPlatform"));
+  expect($('[data-field="location"]')!.textContent).toContain(t("campaign.apply.otherPlatformHint"));
+});
+
+it("sends only the chosen proof: a screenshot-only share sends no link", async () => {
+  await mount();
+  await fillNew();
+  check('input[name="proof"][value="shot"]');
+  await settle();
+  await submit();
+  expect(posts()).toHaveLength(0);
+  expect($('[data-field="evidence"] .apply__shots [role="alert"]')!.textContent).toBe(t("campaign.apply.needProof"));
 });

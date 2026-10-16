@@ -6,11 +6,10 @@
  */
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { campaignErrorText, uploadEvidence } from "@/lib/campaign";
+import { EVIDENCE_MAX, campaignErrorText, uploadEvidence } from "@/lib/campaign";
 import { useSession } from "@/lib/session";
 
 /** 服務端同樣會擋；這裡只是讓人早點知道。 */
-const MAX_EVIDENCE = 6;
 
 const props = defineProps<{ existing?: { id: string }[]; ids?: string[] }>();
 const emit = defineEmits<{ "update:ids": [ids: string[]]; "update:busy": [busy: boolean] }>();
@@ -20,7 +19,7 @@ const session = useSession();
 interface Item { key: number; file: File; preview: string; state: "uploading" | "done" | "failed"; id: string; error: string }
 const items = ref<Item[]>([]);
 const total = computed(() => (props.existing?.length ?? 0) + items.value.length);
-const full = computed(() => total.value >= MAX_EVIDENCE);
+const full = computed(() => total.value >= EVIDENCE_MAX);
 const overflowed = ref(false);
 const rejected = ref("");
 const busy = computed(() => items.value.some((i) => i.state === "uploading"));
@@ -52,7 +51,7 @@ function add(list: FileList | File[] | null | undefined) {
   const all = [...(list ?? [])];
   const images = all.filter((f) => f.type.startsWith("image/"));
   rejected.value = images.length < all.length ? campaignErrorText("evidence_invalid") : "";
-  const room = Math.max(0, MAX_EVIDENCE - total.value);
+  const room = Math.max(0, EVIDENCE_MAX - total.value);
   overflowed.value = images.length > room;
   for (const file of images.slice(0, room)) {
     items.value.push({ key: ++key, file, preview: URL.createObjectURL(file), state: "uploading", id: "", error: "" });
@@ -107,7 +106,7 @@ onBeforeUnmount(() => {
         <input type="file" class="sr-only" accept="image/*" multiple :disabled="full" @change="onPick" />
         {{ t("campaign.evidence.add") }}
       </label>
-      <span class="ev-picker__count subtle">{{ total }} / {{ MAX_EVIDENCE }}</span>
+      <span class="ev-picker__count subtle">{{ total }} / {{ EVIDENCE_MAX }}</span>
     </div>
     <p v-if="showLimit" class="subtle" role="status">{{ t("campaign.evidence.limit") }}</p>
     <p v-if="rejected" class="notice notice--error" role="alert">{{ rejected }}</p>
