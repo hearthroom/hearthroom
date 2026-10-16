@@ -78,9 +78,11 @@ onBeforeUnmount(() => clearTimeout(timer));
       </div>
       <div v-if="ref$" class="rewards__stat" data-stat="referral">
         <span class="rewards__label">{{ t("campaign.page.rewards.referral.label") }}</span>
+        <!-- 首儲與之後每筆一樣大：只把「之後每筆」寫成小字，看的人會以為只有首儲有分成（owner 2026-10-17） -->
         <b v-if="ref$.firstPercent > 0" class="rewards__value num">{{ t("campaign.page.rewards.referral.value", { first: ref$.firstPercent }) }}</b>
+        <b v-if="ref$.rebatePercent > 0 && ref$.rebateDays > 0" class="rewards__value num" data-rebate-value>{{ t("campaign.page.rewards.referral.rebateValue", { rebate: ref$.rebatePercent }) }}</b>
         <span v-if="ref$.firstPercent > 0 && ref$.firstCap > 0" class="rewards__cap num">{{ t("campaign.page.rewards.referral.cap", { cap: formatNumber(ref$.firstCap) }) }}</span>
-        <span v-if="ref$.rebatePercent > 0 && ref$.rebateDays > 0" class="rewards__cap num" data-rebate>{{ t("campaign.page.rewards.referral.rebate", { rebate: ref$.rebatePercent, period: period(ref$.rebateDays) }) }}</span>
+        <span v-if="ref$.rebatePercent > 0 && ref$.rebateDays > 0" class="rewards__cap num" data-rebate>{{ t("campaign.page.rewards.referral.rebate", { period: period(ref$.rebateDays) }) }}</span>
       </div>
     </div>
 

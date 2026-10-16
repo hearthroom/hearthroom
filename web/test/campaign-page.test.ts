@@ -352,7 +352,10 @@ it("shows referral rewards from Harbor's public terms and works the example from
   expect(rewards).toContain(t("campaign.page.rewards.share.value", { min: "500", max: "10,000" }));
   expect(rewards).toContain(t("campaign.page.rewards.referral.value", { first: 20 }));
   expect(rewards).toContain(t("campaign.page.rewards.referral.cap", { cap: "24,000" }));
-  expect(rewards).toContain(t("campaign.page.rewards.referral.rebate", { rebate: 5, period: t("campaign.page.periodYear") }));
+  // 之後每筆的比例跟首儲一樣是大字，不是藏在小字裡
+  expect($("[data-rebate-value]")!.textContent).toBe(t("campaign.page.rewards.referral.rebateValue", { rebate: 5 }));
+  expect($("[data-rebate-value]")!.className).toContain("rewards__value");
+  expect(rewards).toContain(t("campaign.page.rewards.referral.rebate", { period: t("campaign.page.periodYear") }));
   expect(rewards).toContain(t("campaign.page.cta.friendGift", { friendTotal: "2,000" }));
   expect(rewards).not.toContain(t("campaign.page.cta.inviteeBonus", { inviteePercent: 0 }));
   expect($("[data-calc-total]")!.textContent).toBe(t("campaign.page.points", { n: "10,500" }));
@@ -375,6 +378,7 @@ it("hides each referral line whose value is 0, and the whole block when referral
   await mount();
   expect($('[data-stat="referral"]')).not.toBeNull();
   expect($("[data-rebate]")).toBeNull();
+  expect($("[data-rebate-value]")).toBeNull();
   expect($("[data-rewards]")!.textContent).not.toContain(t("campaign.page.cta.friendGift", { friendTotal: "0" }));
   app!.unmount(); app = null; host.remove();
   resetReferralTermsCache();
