@@ -131,3 +131,39 @@ it("waits for the sign-in to come back before asking, so a member sees their own
   expect(views()[0]!.auth).toBe("Bearer tok");
   expect(likeBtn().getAttribute("aria-pressed")).toBe("true");
 });
+
+it("a tap before the sign-in comes back waits for it instead of asking to sign in", async () => {
+  session.ready = false;
+  let release!: () => void;
+  session.restore = () => new Promise<void>((r) => { release = () => { session.me = { accountNumId: 7 }; session.ready = true; r(); }; });
+  await mount();
+  likeBtn().click();
+  await settle();
+  expect(host.querySelector("[data-signin]")).toBeNull();
+  release();
+  await settle();
+  expect(calls.filter((c) => c.path.endsWith("/like")).map((c) => c.method)).toEqual(["PUT"]);
+});
+
+it("ignores a second tap while the first like is still being sent", async () => {
+  session.me = { accountNumId: 7 };
+  await mount();
+  likeBtn().click();
+  likeBtn().click();
+  await settle();
+  expect(calls.filter((c) => c.path.endsWith("/like")).map((c) => c.method)).toEqual(["PUT"]);
+  expect(likeBtn().getAttribute("aria-pressed")).toBe("true");
+});
+
+it("hides the like button when the post no longer takes views or likes", async () => {
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit = {}) => {
+    const path = url.split("?")[0]!.replace(/^.*\/v1/, "/v1");
+    calls.push({ method: init.method ?? "GET", path, body: null, auth: null });
+    if (path === "/v1/blog/posts/news/hello") return new Response(JSON.stringify(post));
+    if (path === "/v1/blog/columns") return new Response(JSON.stringify({ items: [] }));
+    return new Response(JSON.stringify({ error: "blog_post_not_found" }), { status: 404 });
+  }));
+  await mount();
+  expect(host.querySelector("h1")!.textContent).toBe("開站了");
+  expect(host.querySelector('[data-action="like"]')).toBeNull();
+});

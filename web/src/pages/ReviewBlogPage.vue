@@ -215,14 +215,14 @@ onMounted(() => { document.title = pageTitle(t('moderation.tab.blog')); void loa
           </p>
           <p class="subtle rblog-item__meta">{{ t('blog.admin.lastEdit', { name: p.editorHandle || p.authorHandle, date: dateTime(p.updatedAt) }) }}</p>
           <p class="rblog-item__stats" data-stats>
-            <span :aria-label="t('blog.admin.statViews', { n: fmt(p.viewCount) })" :title="t('blog.admin.statViews', { n: fmt(p.viewCount) })">
-              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" /><circle cx="8" cy="8" r="2" /></svg>{{ fmt(p.viewCount) }}
+            <span :title="t('blog.admin.statViews', { n: fmt(p.viewCount) })"><span class="sr-only">{{ t('blog.admin.statViews', { n: fmt(p.viewCount) }) }}</span>
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" /><circle cx="8" cy="8" r="2" /></svg><span aria-hidden="true">{{ fmt(p.viewCount) }}</span>
             </span>
-            <span :aria-label="t('blog.admin.statLikes', { n: fmt(p.likeCount) })" :title="t('blog.admin.statLikes', { n: fmt(p.likeCount) })">
-              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6S2.5 10.2 2.5 6.4A2.9 2.9 0 0 1 8 4.9a2.9 2.9 0 0 1 5.5 1.5c0 3.8-5.5 7.2-5.5 7.2z" /></svg>{{ fmt(p.likeCount) }}
+            <span :title="t('blog.admin.statLikes', { n: fmt(p.likeCount) })"><span class="sr-only">{{ t('blog.admin.statLikes', { n: fmt(p.likeCount) }) }}</span>
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6S2.5 10.2 2.5 6.4A2.9 2.9 0 0 1 8 4.9a2.9 2.9 0 0 1 5.5 1.5c0 3.8-5.5 7.2-5.5 7.2z" /></svg><span aria-hidden="true">{{ fmt(p.likeCount) }}</span>
             </span>
-            <span :aria-label="t('blog.admin.statComments', { n: fmt(p.commentCount) })" :title="t('blog.admin.statComments', { n: fmt(p.commentCount) })">
-              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v7.5H7l-3 2.5V11H2.5z" /></svg>{{ fmt(p.commentCount) }}
+            <span :title="t('blog.admin.statComments', { n: fmt(p.commentCount) })"><span class="sr-only">{{ t('blog.admin.statComments', { n: fmt(p.commentCount) }) }}</span>
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v7.5H7l-3 2.5V11H2.5z" /></svg><span aria-hidden="true">{{ fmt(p.commentCount) }}</span>
             </span>
           </p>
         </RouterLink>
