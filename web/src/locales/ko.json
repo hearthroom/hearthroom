@@ -2547,7 +2547,7 @@
   "campaign.page.rewards.referral.cap": "최대 {cap}포인트",
   "campaign.page.rewards.referral.rebate": "내 링크로 가입한 뒤 {period} 동안 충전할 때마다 {rebate}%",
   "campaign.page.cta.guest.title": "로그인하고 전용 링크 받기",
-  "campaign.page.cta.friendGift": "친구가 링크로 가입하면 {friendTotal}포인트를 받아요.",
+  "campaign.page.cta.friendGift": "내 링크로 가입한 친구는 {friendTotal}포인트를 받아요.",
   "campaign.page.cta.inviteeBonus": "친구는 첫 충전 때 {inviteePercent}%를 더 받아요.",
   "campaign.page.cta.guest.desc": "계정이 없어도 버튼을 누르면 바로 만들어져요.",
   "campaign.page.cta.guest.button": "로그인/가입",
