@@ -8,7 +8,7 @@ import { createMemoryHistory, createRouter } from "vue-router";
 import { i18n } from "../src/lib/i18n";
 
 const tracked = vi.hoisted(() => [] as { event: string; data: Record<string, unknown> }[]);
-const session = vi.hoisted(() => ({ me: null as null | { accountNumId: number }, accessToken: async () => "tok" }));
+const session = vi.hoisted(() => ({ me: null as null | { accountNumId: number }, ready: true, restore: async () => {}, accessToken: async () => "tok" }));
 vi.mock("../src/lib/track", () => ({ track: (event: string, data: Record<string, unknown> = {}) => tracked.push({ event, data }), currentSurface: () => "blog", setSurface: () => {} }));
 vi.mock("../src/lib/session", () => ({ useSession: () => session }));
 vi.mock("../src/components/CommentPanel.vue", () => ({ default: defineComponent({ render: () => h("div") }) }));
@@ -32,6 +32,8 @@ beforeEach(() => {
   tracked.length = 0;
   calls = [];
   session.me = null;
+  session.ready = true;
+  session.restore = async () => {};
   stats = { views: null, likes: 0, liked: false };
   likeStatus = 200;
   localStorage.clear();
@@ -118,4 +120,14 @@ it("likes at once for a member and rolls back when the request fails", async () 
   expect(likeBtn().getAttribute("aria-pressed")).toBe("true");
   expect(likeBtn().textContent).toContain("5");
   expect(host.textContent).toContain(t("blog.likeFailed"));
+});
+
+it("waits for the sign-in to come back before asking, so a member sees their own like after a reload", async () => {
+  session.ready = false;
+  session.restore = async () => { await new Promise((r) => setTimeout(r, 5)); session.me = { accountNumId: 7 }; session.ready = true; };
+  stats = { views: null, likes: 1, liked: true };
+  await mount();
+  await settle();
+  expect(views()[0]!.auth).toBe("Bearer tok");
+  expect(likeBtn().getAttribute("aria-pressed")).toBe("true");
 });
