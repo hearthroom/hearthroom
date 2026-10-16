@@ -7,7 +7,6 @@ import DownloadBanner from "@/components/DownloadBanner.vue";
 import MascotWelcome from "@/components/MascotWelcome.vue";
 import MascotHome from "@/components/MascotHome.vue";
 import { useMascotWelcome } from "@/lib/mascot-home";
-import CardTile from "@/components/CardTile.vue";
 import { tourState } from "@/lib/coach-tour";
 import { starterFor } from "@/lib/onboarding";
 import type { CommunityCard } from "@/lib/types";
@@ -32,11 +31,15 @@ const router = useRouter();
 const { locale, lp } = useLocalePath();
 const session = useSession();
 
-/** 新手引導在首頁那兩步時置頂的入門卡：開了成人內容就是成人版（R18 那一步可能剛開）。 */
+/** 入門卡只在首頁引導期間插入資訊流；開關變更時只採用最後一次請求。 */
 const starterCard = ref<CommunityCard | null>(null);
-watch(() => (tourState.step === "r18" || tourState.step === "card") ? starterFor(locale.value, !!viewerAdult(session)?.showNsfw) : null, (num) => {
-  if (!num) { starterCard.value = null; return; }
-  void fetchCard(String(num), contentLang(locale.value), { quiet: true }).then((card) => { starterCard.value = card; }, () => { starterCard.value = null; });
+let starterRequest = 0;
+watch(() => (tourState.step === "r18" || tourState.step === "card" || tourState.step === "choose") ? `${starterFor(locale.value, !!viewerAdult(session)?.showNsfw) ?? ""}:${contentLang(locale.value)}` : null, (key) => {
+  const request = ++starterRequest;
+  starterCard.value = null;
+  const [num, lang] = key?.split(":") ?? [];
+  if (!num) return;
+  void fetchCard(num, lang, { quiet: true }).then((card) => { if (request === starterRequest) starterCard.value = card; }, () => { if (request === starterRequest) starterCard.value = null; });
 }, { immediate: true });
 const { t } = useI18n();
 
@@ -287,12 +290,9 @@ const ratingOptions = computed(() => {
           </select>
         </label>
       </div>
-      <!-- 新手引導走到首頁那兩步：入門卡置頂，讓引導框得到（不擠進榜單，名次不動） -->
-      <div v-if="starterCard" class="starter" data-tour="starter">
-        <CardTile :card="starterCard" eager />
-      </div>
       <CardGrid
         :cards="page?.items ?? []"
+        :starter="offset === 0 ? starterCard : null"
         :loading="loading && !page"
         :busy="loading"
         :ranked="!tags.length"
@@ -344,10 +344,6 @@ const ratingOptions = computed(() => {
 .rating-filter select:hover { border-color: var(--line-strong); color: var(--text); }
 .more { margin-top: var(--s-6); padding-top: var(--s-5); border-top: 1px solid var(--line); }
 .more__title { margin: 0 0 var(--s-3); font-size: 15px; font-weight: 600; color: var(--text-2); }
-/* 置頂的入門卡跟榜單的卡同寬：照榜單的欄數取一欄 */
-.starter { width: calc((100% - var(--s-4)) / 2); margin-bottom: var(--s-5); }
-@media (min-width: 600px) { .starter { width: calc((100% - 2 * var(--s-4)) / 3); } }
-@media (min-width: 820px) { .starter { width: calc((100% - 3 * var(--s-4)) / 4); } }
 .ghosts { display: grid; gap: 6px; }
 .ghosts .ghost { height: 62px; }
 .empty { padding: var(--s-8) var(--s-5); text-align: center; }

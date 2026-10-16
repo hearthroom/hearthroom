@@ -1,7 +1,7 @@
 /**
  * 新手引導的步驟（owner 2026-10-10，照魅魔島：一頁一頁框出要點的地方，「下一步」自動跳頁）。
  *
- *   首頁    r18（這組有成人版、頁首有 R18 鈕、還沒開）→ card（置頂的入門卡）
+ *   首頁    card（資訊流第一格的入門卡）→ r18（可選）→ choose（回到卡片，等使用者選）
  *   卡片頁  grade（分級標示；沒有評級的卡略過）→ intro（作者寫的介紹；沒有就略過）
  *           → score（評分；不在榜就略過）→ play（「開始對話」鈕）
  *   對話頁  一般卡：opening（開場）→ prologue（開場選項；卡沒有就略過）
@@ -11,17 +11,18 @@
  */
 import { reactive } from "vue";
 
-export type TourStep = "r18" | "card" | "grade" | "intro" | "score" | "play" | "opening" | "prologue" | "stage";
+export type TourStep = "r18" | "card" | "choose" | "grade" | "intro" | "score" | "play" | "opening" | "prologue" | "stage";
 export type TourPage = "home" | "card" | "play";
 
 export const PAGE_OF: Record<TourStep, TourPage> = {
-  r18: "home", card: "home", grade: "card", intro: "card", score: "card", play: "card", opening: "play", prologue: "play", stage: "play",
+  r18: "home", card: "home", choose: "home", grade: "card", intro: "card", score: "card", play: "card", opening: "play", prologue: "play", stage: "play",
 };
 
 /** 每一步框的元件；null 是框不到（同層卡），提示貼底。對話頁的兩個是舞台公開給作者的 data-lt 標記。 */
 export const TARGET_OF: Record<TourStep, string | null> = {
   r18: "button.r18",
   card: '[data-tour="starter"]',
+  choose: '[data-tour="starter"]',
   grade: '[data-tour="card-grade"]',
   intro: '[data-tour="card-intro"]',
   score: '[data-tour="card-score"]',
@@ -32,7 +33,7 @@ export const TARGET_OF: Record<TourStep, string | null> = {
 };
 
 export interface TourShape {
-  /** 首頁要不要先指 R18 */
+  /** 介紹卡片後要不要再介紹 R18 */
   adult: boolean;
   /** 對話頁是同層卡嗎；還不知道（舞台還沒掛好）是 null */
   sandbox: boolean | null;
@@ -44,7 +45,7 @@ export interface TourShape {
 
 export function stepsOf(shape: TourShape): TourStep[] {
   const card = (["grade", "intro", "score"] as const).filter((s) => !shape.missing?.includes(s));
-  const head: TourStep[] = [...(shape.adult ? (["r18"] as const) : []), "card", ...card, "play"];
+  const head: TourStep[] = ["card", ...(shape.adult ? (["r18", "choose"] as const) : []), ...card, "play"];
   if (shape.sandbox === null) return [...head, "opening"];
   if (shape.sandbox) return [...head, "stage"];
   return [...head, "opening", ...(shape.prologue ? (["prologue"] as const) : [])];
@@ -80,5 +81,5 @@ export function loadProgress(): TourProgress | null {
   } catch { return null; }
 }
 
-/** 引導現在走到哪、帶的是哪張入門卡。首頁看到 r18／card 這兩步就把入門卡置頂畫出來。 */
+/** 引導現在走到哪、帶的是哪張入門卡。首頁的 card／r18／choose 步驟把入門卡插入資訊流第一格。 */
 export const tourState = reactive({ step: null as TourStep | null, card: 0 });
