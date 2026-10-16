@@ -22,10 +22,21 @@ const { t } = useI18n();
 const verified = computed(() => !!viewerAdult(session)?.ageVerified);
 const locked = ref(!verified.value && underageLocked());
 const agreed = ref(false);
-const birthdate = ref("");
+const birthYear = ref("");
+const birthMonth = ref("");
+const birthDay = ref("");
 const busy = ref(false);
 const error = ref(locked.value ? t("error.underage") : "");
 const today = new Date().toISOString().slice(0, 10);
+const birthdate = computed(() => {
+  if (!/^\d{4}$/.test(birthYear.value) || !/^\d{1,2}$/.test(birthMonth.value) || !/^\d{1,2}$/.test(birthDay.value)) return "";
+  const year = Number(birthYear.value), month = Number(birthMonth.value), day = Number(birthDay.value);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return "";
+  const iso = `${birthYear.value}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  return iso <= today ? iso : "";
+});
+const invalidDate = computed(() => !!birthYear.value && !!birthMonth.value && !!birthDay.value && !birthdate.value);
 const box = ref<HTMLFormElement | null>(null);
 const ready = computed(() => !locked.value && agreed.value && (verified.value || !!birthdate.value));
 
@@ -57,7 +68,7 @@ onMounted(async () => {
   restore = document.activeElement as HTMLElement | null;
   document.addEventListener("keydown", onKey);
   await nextTick();
-  box.value?.querySelector<HTMLElement>(verified.value ? 'input[type="checkbox"]' : 'input[type="date"]')?.focus();
+  box.value?.querySelector<HTMLElement>(verified.value ? 'input[type="checkbox"]' : 'input[autocomplete="bday-year"]')?.focus();
 });
 onBeforeUnmount(() => {
   document.removeEventListener("keydown", onKey);
@@ -75,11 +86,25 @@ onBeforeUnmount(() => {
           <li>{{ $t("adultConsent.offensive") }}</li>
           <li>{{ $t("adultConsent.noMinors") }}</li>
         </ul>
-        <label v-if="!verified" class="dlg__field">
-          <span>{{ $t("settings.content.birthdate") }}</span>
-          <input v-model="birthdate" type="date" class="input" :max="today" required />
-          <span class="subtle dlg__hint">{{ $t("settings.content.birthdateHint") }}</span>
-        </label>
+        <fieldset v-if="!verified" class="dlg__field" aria-describedby="birthdate-hint">
+          <legend>{{ $t("settings.content.birthdate") }}</legend>
+          <div class="dlg__date">
+            <label>
+              <span>{{ $t("settings.content.birthYear") }}</span>
+              <input v-model.trim="birthYear" type="text" inputmode="numeric" autocomplete="bday-year" maxlength="4" pattern="[0-9]{4}" class="input" :aria-invalid="invalidDate || undefined" required />
+            </label>
+            <label>
+              <span>{{ $t("settings.content.birthMonth") }}</span>
+              <input v-model.trim="birthMonth" type="text" inputmode="numeric" autocomplete="bday-month" maxlength="2" pattern="[0-9]{1,2}" class="input" :aria-invalid="invalidDate || undefined" required />
+            </label>
+            <label>
+              <span>{{ $t("settings.content.birthDay") }}</span>
+              <input v-model.trim="birthDay" type="text" inputmode="numeric" autocomplete="bday-day" maxlength="2" pattern="[0-9]{1,2}" class="input" :aria-invalid="invalidDate || undefined" required />
+            </label>
+          </div>
+          <p id="birthdate-hint" class="subtle dlg__hint">{{ $t("settings.content.birthdateHint") }}</p>
+          <p v-if="invalidDate" class="notice notice--error dlg__hint" role="alert">{{ $t("error.invalidBirthdate") }}</p>
+        </fieldset>
         <label class="dlg__agree">
           <input v-model="agreed" type="checkbox" />
           <span>{{ $t("adultConsent.agree") }}</span>
@@ -105,7 +130,11 @@ onBeforeUnmount(() => {
 .dlg__title { font-size: 16px; font-weight: 600; line-height: 1.4; margin: 0; }
 .dlg__msg { margin: 0; font-size: 14px; line-height: 1.6; color: var(--text-2); }
 .dlg__terms { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; font-size: 14px; line-height: 1.6; color: var(--text-2); }
-.dlg__field { display: grid; gap: 6px; font-size: 13px; color: var(--text-2); }
+.dlg__field { min-width: 0; margin: 0; padding: 0; border: 0; display: grid; gap: var(--s-2); font-size: 13px; color: var(--text-2); }
+.dlg__field legend { margin-bottom: var(--s-2); padding: 0; }
+.dlg__date { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: var(--s-2); }
+.dlg__date label { min-width: 0; display: grid; gap: var(--s-1); }
+.dlg__date .input { min-width: 0; height: var(--h-lg); font-size: 16px; text-align: center; font-variant-numeric: tabular-nums; }
 .dlg__field .input { width: 100%; }
 .dlg__hint { margin: 0; }
 .dlg__agree { display: flex; align-items: flex-start; gap: var(--s-2); font-size: 14px; line-height: 1.5; color: var(--text); cursor: pointer; }

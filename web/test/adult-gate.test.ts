@@ -47,6 +47,14 @@ async function mount(path = "/cards/x") {
 afterEach(() => { app?.unmount(); el?.remove(); app = null; el = null; document.body.innerHTML = ""; api.updateSiteSettings.mockClear(); api.updateGuestAdult.mockClear(); api.guestAvailable = true; forgetGuestAdult(); });
 const flush = async () => { for (let i = 0; i < 4; i++) await new Promise((r) => setTimeout(r, 0)); await nextTick(); };
 
+function enterBirthdate(value: string) {
+  const values = value.split("-");
+  for (const [index, part] of ["year", "month", "day"].entries()) {
+    const input = document.querySelector<HTMLInputElement>(`input[autocomplete="bday-${part}"]`)!;
+    input.value = values[index]; input.dispatchEvent(new Event("input"));
+  }
+}
+
 describe("AdultGate", () => {
   it("自架站沒登入（發不出遊客憑證）：要登入，登入後回到這張卡", async () => {
     session.me = null;
@@ -66,9 +74,8 @@ describe("AdultGate", () => {
     expect(el.textContent).not.toContain(i18n.global.t("card.gate.settingsHint"));
     el.querySelector<HTMLButtonElement>(".gate button.btn--primary")!.click();
     await flush();
-    const input = document.querySelector<HTMLInputElement>(".dlg input[type=date]")!;
     const box = document.querySelector<HTMLInputElement>(".dlg input[type=checkbox]")!;
-    input.value = "2000-01-01"; input.dispatchEvent(new Event("input"));
+    enterBirthdate("2000-01-01");
     box.checked = true; box.dispatchEvent(new Event("change"));
     await nextTick();
     document.querySelector("form.dlg")!.dispatchEvent(new Event("submit"));
@@ -85,10 +92,8 @@ describe("AdultGate", () => {
     el.querySelector<HTMLButtonElement>(".gate button.btn--primary")!.click();
     await flush();
     expect(api.updateSiteSettings).not.toHaveBeenCalled();
-    const input = document.querySelector<HTMLInputElement>(".dlg input[type=date]")!;
     const box = document.querySelector<HTMLInputElement>(".dlg input[type=checkbox]")!;
-    input.value = "2000-01-01";
-    input.dispatchEvent(new Event("input"));
+    enterBirthdate("2000-01-01");
     box.checked = true;
     box.dispatchEvent(new Event("change"));
     await nextTick();
@@ -105,7 +110,7 @@ describe("AdultGate", () => {
     const el = await mount();
     el.querySelector<HTMLButtonElement>(".gate button.btn--primary")!.click();
     await flush();
-    expect(document.querySelector(".dlg input[type=date]")).toBeNull();
+    expect(document.querySelector('.dlg input[autocomplete="bday-year"]')).toBeNull();
     const box = document.querySelector<HTMLInputElement>(".dlg input[type=checkbox]")!;
     box.checked = true;
     box.dispatchEvent(new Event("change"));
