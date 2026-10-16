@@ -201,7 +201,9 @@ it("prefills the resubmit form and sends only what changed", async () => {
   await click('[data-placement="p1"] [data-action="resubmit"]');
   const form = $("form[data-resubmit]")!;
   expect($<HTMLInputElement>('[data-field="location"] input')!.value).toBe("某某吧");
-  expect($<HTMLInputElement>('[data-field="publishedAt"] input')!.value).toBe("2026-10-03T12:00");
+  // 日期與時間分兩格：不支援 datetime-local 的瀏覽器才不會露出「2026-10-03T12:00」那個 T
+  expect($<HTMLInputElement>('[data-field="publishedAt"] input[type="date"]')!.value).toBe("2026-10-03");
+  expect($<HTMLInputElement>('[data-field="publishedAt"] input[type="time"]')!.value).toBe("12:00");
   expect($<HTMLInputElement>('[data-field="url"] input')!.value).toBe("https://tieba.example/p/1");
   expect($<HTMLInputElement>('[data-field="requestedTier"] input[value="original"]')!.checked).toBe(true);
   // 平台不能改
@@ -209,7 +211,8 @@ it("prefills the resubmit form and sends only what changed", async () => {
   expect(text('[data-field="platform"]')).toContain(t("campaign.platform.tieba"));
   // 已經掛著的截圖畫出來
   expect(form.querySelector('[data-evidence="ev-old"]')).not.toBeNull();
-  type('[data-field="publishedAt"] input', "2026-10-20T09:30");
+  type('[data-field="publishedAt"] input[type="date"]', "2026-10-20");
+  type('[data-field="publishedAt"] input[type="time"]', "09:30");
   await send();
   expect(puts()).toHaveLength(1);
   expect(puts()[0]!.path).toBe("/v1/campaign/placements/p1");

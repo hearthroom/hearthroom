@@ -99,7 +99,8 @@ async function fillNew() {
   check('[data-field="requestedTier"] input[value="guide"]');
   await pick("tieba");
   type('[data-field="location"] input', "某某吧");
-  type('[data-field="publishedAt"] input', "2026-10-20T09:30");
+  type('[data-field="publishedAt"] input[type="date"]', "2026-10-20");
+  type('[data-field="publishedAt"] input[type="time"]', "09:30");
   type('[data-field="url"] input', "https://tieba.example/p/1");
 }
 const posts = () => calls.filter((c) => c.method === "POST" && c.path === "/v1/campaigns/launch/placements");

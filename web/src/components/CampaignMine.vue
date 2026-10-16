@@ -11,6 +11,7 @@ import { computed, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute } from "vue-router";
 import CampaignShareLinks from "@/components/CampaignShareLinks.vue";
+import DateTimeField from "@/components/DateTimeField.vue";
 import EvidencePicker from "@/components/EvidencePicker.vue";
 import EvidenceViewer from "@/components/EvidenceViewer.vue";
 import {
@@ -249,7 +250,7 @@ async function send() {
                 <div class="field" data-field="publishedAt">
                   <label :for="`rs-time-${p.id}`">{{ t("campaign.share.field.publishedAt") }}</label>
                   <div class="mine-share__time">
-                    <input :id="`rs-time-${p.id}`" v-model="form.publishedAt" class="input mine-share__short" type="datetime-local" required :disabled="!tzOf(g.slug)" :aria-describedby="`rs-zone-${p.id}`" />
+                    <DateTimeField :id="`rs-time-${p.id}`" v-model="form.publishedAt" :disabled="!tzOf(g.slug)" :describedby="`rs-zone-${p.id}`" :date-label="t('campaign.apply.date')" :time-label="t('campaign.apply.time')" />
                     <span v-if="tzOf(g.slug)" :id="`rs-zone-${p.id}`" class="subtle">{{ zoneName(tzOf(g.slug)!, locale) }}</span>
                   </div>
                 </div>

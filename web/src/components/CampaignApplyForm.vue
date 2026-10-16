@@ -8,6 +8,7 @@
  */
 import { computed, nextTick, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import DateTimeField from "@/components/DateTimeField.vue";
 import EvidencePicker from "@/components/EvidencePicker.vue";
 import {
   CampaignError, DEFAULT_TIMEZONE, EVIDENCE_MAX, TIERS, campaignErrorText, epochToZoned, fieldLabel, formatPoints, isWebUrl, platformsFor, submitPlacement, zonedToEpoch, zoneName,
@@ -188,7 +189,7 @@ async function submit() {
     <div class="field" data-field="publishedAt">
       <label for="apply-time">{{ t("campaign.share.field.publishedAt") }}</label>
       <div class="apply__time">
-        <input id="apply-time" v-model="form.publishedAt" class="input apply__short" type="datetime-local" required :aria-invalid="bad('publishedAt')" aria-describedby="apply-time-zone apply-time-err" />
+        <DateTimeField id="apply-time" v-model="form.publishedAt" :invalid="!!bad('publishedAt')" describedby="apply-time-zone apply-time-err" :date-label="t('campaign.apply.date')" :time-label="t('campaign.apply.time')" />
         <span id="apply-time-zone" class="subtle">{{ zoneName(tz, locale) }}</span>
       </div>
       <p v-if="errors.publishedAt" id="apply-time-err" class="apply__error" role="alert">{{ errors.publishedAt }}</p>
