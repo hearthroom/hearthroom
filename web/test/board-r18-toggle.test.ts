@@ -100,6 +100,13 @@ async function tick(box: HTMLInputElement, value: string | boolean) {
   await nextTick();
 }
 
+async function enterBirthdate(value: string) {
+  const values = value.split("-");
+  for (const [index, part] of ["year", "month", "day"].entries()) {
+    await tick(document.querySelector<HTMLInputElement>(`input[autocomplete="bday-${part}"]`)!, values[index]);
+  }
+}
+
 beforeEach(() => {
   vi.stubGlobal("fetch", fakeFetch);
   calls.length = 0; bodies.length = 0;
@@ -124,7 +131,7 @@ describe("首頁 R18 開關", () => {
     expect(toggle()?.getAttribute("aria-checked")).toBe("false");
     toggle()!.click();
     await flush();
-    await tick(document.querySelector<HTMLInputElement>('.dlg input[type="date"]')!, "1990-01-01");
+    await enterBirthdate("1990-01-01");
     await tick(agree()!, true);
     const before = boardCalls().length;
     document.querySelector<HTMLFormElement>("form.dlg")!.dispatchEvent(new Event("submit", { cancelable: true }));
@@ -149,7 +156,7 @@ describe("首頁 R18 開關", () => {
     await mountBoard();
     toggle()!.click();
     await flush();
-    await tick(document.querySelector<HTMLInputElement>('.dlg input[type="date"]')!, `${new Date().getUTCFullYear() - 15}-01-01`);
+    await enterBirthdate(`${new Date().getUTCFullYear() - 15}-01-01`);
     await tick(agree()!, true);
     document.querySelector<HTMLFormElement>("form.dlg")!.dispatchEvent(new Event("submit", { cancelable: true }));
     await flush();
@@ -161,7 +168,7 @@ describe("首頁 R18 開關", () => {
     await flush();
     toggle()!.click();
     await flush();
-    await tick(document.querySelector<HTMLInputElement>('.dlg input[type="date"]')!, "1990-01-01");
+    await enterBirthdate("1990-01-01");
     await tick(agree()!, true);
     expect(confirmBtn()!.disabled, "鎖住期間不能換個日期再送").toBe(true);
     expect(document.querySelector(".dlg")?.textContent).toContain(i18n.global.t("error.underage"));
@@ -175,11 +182,11 @@ describe("首頁 R18 開關", () => {
     await flush();
     expect(bodies).toHaveLength(0);
     expect(document.querySelector(".dlg")?.textContent).toContain(i18n.global.t("adultConsent.noMinors"));
-    const input = document.querySelector<HTMLInputElement>('.dlg input[type="date"]');
+    const input = document.querySelector<HTMLInputElement>('.dlg input[autocomplete="bday-year"]');
     expect(input).not.toBeNull();
     expect(agree()).not.toBeNull();
 
-    await tick(input!, "1990-01-01");
+    await enterBirthdate("1990-01-01");
     expect(confirmBtn()!.disabled, "沒勾同意不能送").toBe(true);
     await tick(agree()!, true);
     expect(confirmBtn()!.disabled).toBe(false);
@@ -212,7 +219,7 @@ describe("首頁 R18 開關", () => {
     toggle()!.click();
     await flush();
     expect(bodies).toHaveLength(0);
-    expect(document.querySelector('.dlg input[type="date"]')).toBeNull();
+    expect(document.querySelector('.dlg input[autocomplete="bday-year"]')).toBeNull();
     expect(confirmBtn()!.disabled).toBe(true);
     await tick(agree()!, true);
     document.querySelector<HTMLFormElement>("form.dlg")!.dispatchEvent(new Event("submit", { cancelable: true }));
