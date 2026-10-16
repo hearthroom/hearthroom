@@ -11688,6 +11688,39 @@
         }
       }
     },
+    "/open/v1/referral/terms": {
+      "get": {
+        "operationId": "getReferralTerms",
+        "tags": [
+          "Identity"
+        ],
+        "summary": "Public referral and signup reward terms",
+        "description": "Returns the current referral and signup reward rules for pages that signed-out visitors can see. No sign-in needed, and any Authorization header is ignored. Show these values instead of hard-coding reward numbers: they can change. The response holds no account data and may be cached for 5 minutes.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Reward terms.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReferralPublicTerms"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`referral_disabled` — reward terms are not available right now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/open/v1/worldbook/{worldbookId}/unbind": {
       "post": {
         "operationId": "unbindWorldbook",
@@ -21397,6 +21430,69 @@
           }
         }
       },
+      "ReferralPublicTerms": {
+        "type": "object",
+        "description": "Reward rules anyone can read. All rewards are credits usable for agent conversations only.",
+        "required": [
+          "enabled",
+          "welcomeCredits",
+          "welcomeDays",
+          "firstPercent",
+          "firstCap",
+          "inviteePercent",
+          "rebatePercent",
+          "rebateDays",
+          "bindDays",
+          "signupWelcomeCredits",
+          "signupWelcomeDays"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether referral rewards are being granted right now. The numbers still describe the configured rules when this is false."
+          },
+          "welcomeCredits": {
+            "type": "integer",
+            "description": "Credits a new user receives when entering a code. Each sign-in identity receives them once, and disposable email addresses receive none."
+          },
+          "welcomeDays": {
+            "type": "integer",
+            "description": "How many days the welcome credits stay valid."
+          },
+          "firstPercent": {
+            "type": "number",
+            "description": "Percentage of the referred user's first top-up credited to the referrer as soon as the payment succeeds."
+          },
+          "firstCap": {
+            "type": "integer",
+            "description": "Maximum credits the referrer receives for one first top-up."
+          },
+          "inviteePercent": {
+            "type": "number",
+            "description": "Extra percentage the referred user receives on their own first top-up. 0 when not offered."
+          },
+          "rebatePercent": {
+            "type": "number",
+            "description": "Percentage of each later top-up by the referred user credited to the referrer as soon as the payment succeeds."
+          },
+          "rebateDays": {
+            "type": "integer",
+            "description": "How many days after binding the referred user's top-ups keep earning the referrer rewards."
+          },
+          "bindDays": {
+            "type": "integer",
+            "description": "How many days after sign-up a new account can still enter a code."
+          },
+          "signupWelcomeCredits": {
+            "type": "integer",
+            "description": "Credits every new account receives at sign-up, whether or not a referral code is used. 0 when not offered."
+          },
+          "signupWelcomeDays": {
+            "type": "integer",
+            "description": "How many days the sign-up credits stay valid."
+          }
+        }
+      },
       "ReferralSummary": {
         "type": "object",
         "required": [
@@ -22057,7 +22153,8 @@
     ],
     "guestReadableRoutes": [
       "GET /open/v1/role/detail",
-      "GET /open/v1/role/preview-page"
+      "GET /open/v1/role/preview-page",
+      "GET /open/v1/referral/terms"
     ],
     "guestNote": "Guest routes are matched on the route pattern (not the raw path). On a guest request the identity is empty. If a valid bearer is sent it is used normally.",
     "serviceKeyFormat": "HarperHarbor uses `hh_live_` followed by random characters. A personal API key is shown once at creation; only a short prefix is retrievable afterwards."
