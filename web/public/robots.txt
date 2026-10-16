@@ -4,3 +4,4 @@ Disallow: /auth/
 Disallow: /mine
 Disallow: /wallet
 Disallow: /create
+Sitemap: https://sukisuki.ai/sitemap.xml
