@@ -18,13 +18,15 @@ export interface Campaign {
   id: string; slug: string; title: Localized; intro: Localized; bannerKey: string | null; bannerUrl: string | null;
   startsAt: number | null; endsAt: number | null; timezone: string | null; submitDeadline: number | null; payoutDeadline: number | null;
   tiers: Partial<Record<Tier, number>>; extraPlacementAmount: number | null; flagBurstThreshold: number | null; evidenceRetentionDays: number;
+  /** 推薦到首頁：進行中或即將開始時出現在看板輪播。 */
+  featured: boolean;
   status: CampaignStatus; version: number; createdAt: number; updatedAt: number;
 }
 /** 整份覆寫：沒給的欄位服務端視為清空（保留天數沒給是服務端的預設）。 */
 export interface CampaignInput {
   slug: string; title: Localized; intro: Localized; bannerKey: string | null;
   startsAt: number | null; endsAt: number | null; timezone: string | null; submitDeadline: number | null; payoutDeadline: number | null;
-  tiers: Partial<Record<Tier, number>>; extraPlacementAmount: number | null; flagBurstThreshold: number | null; evidenceRetentionDays?: number;
+  tiers: Partial<Record<Tier, number>>; extraPlacementAmount: number | null; flagBurstThreshold: number | null; evidenceRetentionDays?: number; featured: boolean;
 }
 /** Provider 的點數池設定，只能看；configured 為 false 時其餘欄位不存在。 */
 export type CampaignPool =
@@ -102,6 +104,7 @@ const FIELD_LABEL: Record<string, string> = {
   startsAt: "campaign.field.startsAt", endsAt: "campaign.field.endsAt", timezone: "campaign.field.timezone",
   submitDeadline: "campaign.field.submitDeadline", payoutDeadline: "campaign.field.payoutDeadline", tiers: "campaign.field.tiers",
   extraPlacementAmount: "campaign.field.extra", flagBurstThreshold: "campaign.field.burst", evidenceRetentionDays: "campaign.field.retention",
+  featured: "campaign.field.featured",
 };
 /** 申請、審核、發放的 share_invalid 欄位。evidenceIds 與 evidence（沒連結也沒截圖）都講成同一格。 */
 const SHARE_FIELDS = ["content", "title", "cardId", "platform", "location", "publishedAt", "url", "note", "requestedTier", "evidence", "tier", "reason"] as const;
@@ -188,7 +191,7 @@ const query = (q: Record<string, string | number | undefined>) => {
 
 /** 公開活動頁讀到的：草稿與不存在都是 404 campaign_not_found。門檻、保留天數、點數池不在這裡。 */
 export interface PublicCampaign {
-  slug: string; title: Localized; phase: "upcoming" | "open" | "ended"; startsAt: number | null; endsAt: number | null; timezone: string | null; bannerUrl: string | null;
+  slug: string; title: Localized; phase: "upcoming" | "open" | "ended"; startsAt: number | null; endsAt: number | null; timezone: string | null; bannerUrl: string | null; featured: boolean;
   intro: Localized; submitDeadline: number | null; payoutDeadline: number | null; tiers: Partial<Record<Tier, number>>; extraPlacementAmount: number | null;
 }
 /** 不帶令牌：訪客也看得到活動頁。 */
@@ -197,7 +200,7 @@ export async function fetchCampaign(slug: string): Promise<PublicCampaign> {
   if (!res.ok) return fail(res);
   return (await res.json()) as PublicCampaign;
 }
-export type CampaignSummary = Pick<PublicCampaign, "slug" | "title" | "phase" | "startsAt" | "endsAt" | "timezone" | "bannerUrl">;
+export type CampaignSummary = Pick<PublicCampaign, "slug" | "title" | "phase" | "startsAt" | "endsAt" | "timezone" | "bannerUrl" | "featured">;
 /** 公開的活動列表（不含草稿），不帶令牌。 */
 export async function fetchPublicCampaigns(): Promise<{ items: CampaignSummary[] }> {
   const res = await fetch(`${COMMUNITY_API}/campaigns`, { headers: { "X-From": currentSurface() } });
