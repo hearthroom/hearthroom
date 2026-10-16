@@ -94,3 +94,12 @@ it("counts likes in the blog operations metric without identifiers", async () =>
   const rows = (await env.DB.prepare("SELECT operation, outcome, value FROM ops_metrics WHERE metric='blog' AND operation IN ('like','unlike') ORDER BY operation, outcome").all()).results;
   expect(rows).toEqual([{ operation: "like", outcome: "denied", value: 1 }, { operation: "like", outcome: "success", value: 1 }, { operation: "unlike", outcome: "success", value: 1 }]);
 });
+
+it("the admin list shows exact counts, ignoring the public threshold", async () => {
+  await env.DB.prepare("UPDATE blog_posts SET view_count=3 WHERE id=?").bind(postId).run();
+  await like("reader");
+  const said = await call(`/v1/blog/posts/${postId}/comments`, { method: "POST", token: "reader", body: { content: "好耶" } });
+  expect(said.status).toBeLessThan(300);
+  const { items } = await json(await call("/v1/blog/admin/posts", { token: "editor" }));
+  expect(items[0]).toMatchObject({ viewCount: 3, likeCount: 1, commentCount: 1 });
+});
