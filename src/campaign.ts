@@ -13,7 +13,11 @@ export type Tier = (typeof TIERS)[number];
 /** 檔位高低就是列舉順序：內容的檔位＝核准位置裡最高的一檔。 */
 export const tierRank = (t: Tier): number => TIERS.indexOf(t);
 
-export const PLATFORMS = ["qq_group", "tieba", "bahamut", "moments", "video", "forum", "other"] as const;
+/**
+ * 分享平台。清單在程式裡維護（0068 起資料庫只擋長度），申請時只收這裡的值。
+ * video、forum 是開幕前的舊選項，保留給既有資料與統計；表單改用 web 端依語言排的清單。
+ */
+export const PLATFORMS = ["qq_group", "moments", "tieba", "xiaohongshu", "bilibili", "douyin", "weibo", "bahamut", "discord", "dcard", "ptt", "threads", "facebook", "youtube", "x", "reddit", "tiktok", "video", "forum", "other"] as const;
 export type Platform = (typeof PLATFORMS)[number];
 
 export type Actor = { memberId: string | null; kind: ActorKind };

@@ -80,6 +80,14 @@ describe("提交", () => {
     expect(await metrics()).toContain('hearthroom_campaign_operations_total{operation="submit",outcome="success"} 1');
   });
 
+  it("依語言新增的平台（Dcard、小紅書）照樣收；只有截圖、沒有連結也算", async () => {
+    const first = await json(await submit(form({ platform: "dcard" })));
+    expect(first.content.placements.map((p: any) => p.platform)).toEqual(["dcard"]);
+    const r = await submit(form({ content: undefined, contentId: first.content.id, platform: "xiaohongshu", location: "小紅書筆記", url: undefined, evidenceIds: await evidence(owner) }));
+    expect(r.status).toBe(200);
+    expect((await json(r)).content.placements.map((p: any) => p.platform)).toEqual(["dcard", "xiaohongshu"]);
+  });
+
   it("沿用既有內容追加位置；別人的內容 404；cardId 必須是存在的卡", async () => {
     const first = await json(await submit(form()));
     const r = await submit(form({ content: undefined, contentId: first.content.id, platform: "qq_group", location: "同好群 123", url: undefined, evidenceIds: await evidence(owner) }));
@@ -123,7 +131,7 @@ describe("提交", () => {
       [{ url: "ftp://x.test/a" }, "url"],
       [{ url: "not a url" }, "url"],
       [{ url: `https://x.test/${"a".repeat(2000)}` }, "url"],
-      [{ platform: "weibo" }, "platform"],
+      [{ platform: "myspace" }, "platform"],
       [{ location: "   " }, "location"],
       [{ location: "x".repeat(201) }, "location"],
       [{ note: "x".repeat(1001) }, "note"],

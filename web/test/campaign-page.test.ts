@@ -244,6 +244,21 @@ it("builds share links with the referral code and share code, and only s= withou
   expect($("[data-share-link] [data-url]")!.textContent!.trim()).toBe(`${page}?s=SC1`);
 });
 
+it("gives a signed-in visitor their invite link before any share, even before the campaign opens", async () => {
+  detail = campaign({ phase: "upcoming" });
+  await mount();
+  const input = $<HTMLInputElement>("[data-invite-link] input")!;
+  expect(input.value).toBe(`${location.origin}/campaign/launch?ref=MINE2345`);
+  $<HTMLButtonElement>('[data-action="copy-invite"]')!.click();
+  await settle();
+  expect(navigator.clipboard.writeText).toHaveBeenCalledWith(input.value);
+  expect(tracked.filter((e) => e.event === "campaign_share")).toEqual([{ event: "campaign_share", data: { subject: "launch" } }]);
+  app!.unmount(); app = null; host.remove();
+  session.me = null;
+  await mount();
+  expect($("[data-invite-link]")).toBeNull();
+});
+
 it("says what the share link list is for before the first share", async () => {
   await mount();
   expect($("[data-share-links]")!.textContent).toContain(t("campaign.share.empty"));

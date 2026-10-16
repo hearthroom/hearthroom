@@ -9,7 +9,7 @@ import { computed, nextTick, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import EvidencePicker from "@/components/EvidencePicker.vue";
 import {
-  CampaignError, DEFAULT_TIMEZONE, PLATFORMS, TIERS, campaignErrorText, epochToZoned, fieldLabel, formatPoints, isWebUrl, submitPlacement, zonedToEpoch, zoneName,
+  CampaignError, DEFAULT_TIMEZONE, TIERS, campaignErrorText, epochToZoned, fieldLabel, formatPoints, isWebUrl, platformsFor, submitPlacement, zonedToEpoch, zoneName,
   type ApplyResult, type ContentView, type Platform, type PublicCampaign, type SubmitBody, type Tier,
 } from "@/lib/campaign";
 import { useSession } from "@/lib/session";
@@ -17,6 +17,8 @@ import { useSession } from "@/lib/session";
 const props = defineProps<{ campaign: PublicCampaign; contents: ContentView[] }>();
 const emit = defineEmits<{ done: [result: ApplyResult] }>();
 const { t, locale } = useI18n();
+/** 依介面語言先列這一區常用的平台，其他平台收在群組裡 */
+const platforms = computed(() => platformsFor(locale.value));
 const session = useSession();
 
 const tz = computed(() => props.campaign.timezone || DEFAULT_TIMEZONE);
@@ -148,7 +150,10 @@ async function submit() {
       <label for="apply-platform">{{ t("campaign.share.field.platform") }}</label>
       <select id="apply-platform" v-model="form.platform" class="input apply__short" required :aria-invalid="bad('platform')" aria-describedby="apply-platform-err">
         <option value="" disabled>{{ t("campaign.apply.choosePlatform") }}</option>
-        <option v-for="p in PLATFORMS" :key="p" :value="p">{{ t(`campaign.platform.${p}`) }}</option>
+        <option v-for="p in platforms.primary" :key="p" :value="p">{{ t(`campaign.platform.${p}`) }}</option>
+        <optgroup :label="t('campaign.apply.morePlatforms')">
+          <option v-for="p in platforms.more" :key="p" :value="p">{{ t(`campaign.platform.${p}`) }}</option>
+        </optgroup>
       </select>
       <p v-if="errors.platform" id="apply-platform-err" class="apply__error" role="alert">{{ errors.platform }}</p>
     </div>

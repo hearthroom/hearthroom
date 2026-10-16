@@ -3,17 +3,17 @@
   "audience": "everyone",
   "try": "/campaign/share-season",
   "title": {
-    "zh-Hant": "綺夢社分享季 10 月 17 日開跑，把喜歡的卡分享出去就能拿點數。",
-    "zh-Hans": "绮梦社分享季 10 月 17 日开跑，把喜欢的卡分享出去就能拿点数。",
+    "zh-Hant": "綺夢分享季 10 月 17 日開跑，把喜歡的卡分享出去就能拿點數。",
+    "zh-Hans": "绮梦分享季 10 月 17 日开跑，把喜欢的卡分享出去就能拿点数。",
     "en": "Hearthroom Share Season starts on October 17, so sharing the cards you love now earns you credits.",
     "ja": "Hearthroom シェアシーズンが10月17日開幕、好きなカードのシェアでポイントがもらえます。",
     "ko": "Hearthroom 공유 시즌이 10월 17일에 시작되며, 좋아하는 카드를 공유하면 포인트를 받아요."
   },
   "body": {
-    "zh-Hant": "分享後在活動頁交上連結或截圖，審核通過點數就會入帳，所有活動都收在頭像選單的「活動中心」，首頁看板也會輪播推薦的活動。",
-    "zh-Hans": "分享后在活动页交上链接或截图，审核通过点数就会到账，所有活动都收在头像菜单的“活动中心”，首页看板也会轮播推荐的活动。",
-    "en": "Submit a link or screenshot on the campaign page and the credits arrive once it is approved, with every campaign listed under Campaigns in your avatar menu and featured ones rotating on the home page.",
-    "ja": "シェアしたらキャンペーンページでリンクかスクリーンショットを送ると、審査後にポイントが届き、すべてのキャンペーンはアバターメニューの「キャンペーン」に、おすすめはホームのピックアップに並びます。",
-    "ko": "공유한 뒤 이벤트 페이지에서 링크나 스크린샷을 제출하면 심사 후 포인트가 들어오고, 모든 이벤트는 아바타 메뉴의 '캠페인'에서, 추천 이벤트는 홈 화면 하이라이트에서 볼 수 있어요."
+    "zh-Hant": "朋友用你的專屬連結註冊後，他第一年每筆儲值你都有分成；分享後在活動頁交上連結或截圖，審核通過後點數入帳。",
+    "zh-Hans": "朋友用你的专属链接注册后，他第一年每笔充值你都有分成；分享后在活动页交上链接或截图，审核通过后点数到账。",
+    "en": "Friends who sign up through your invite link earn you a share of each top-up in their first year, and share credits arrive once the link or screenshot you submit is approved.",
+    "ja": "専用リンクから登録した友だちが1年以内にチャージするたびに分配があり、シェアのポイントは提出したリンクかスクリーンショットの審査後に届きます。",
+    "ko": "내 전용 링크로 가입한 친구가 첫 1년 동안 충전할 때마다 보상을 나눠 받고, 공유 포인트는 제출한 링크나 스크린샷이 승인되면 들어와요."
   }
 }
