@@ -102,6 +102,7 @@ async function onDone(_result: ApplyResult) {
 }
 </script>
 
+
 <template>
   <NotFoundPage v-if="missing" />
   <div v-else class="page campaign" :aria-busy="loading && !!campaign">
@@ -111,36 +112,50 @@ async function onDone(_result: ApplyResult) {
     </p>
 
     <div v-else-if="!campaign" class="campaign__skeleton" aria-hidden="true">
-      <div class="ghost campaign__skeleton-banner" />
-      <div class="ghost campaign__skeleton-title" />
+      <div class="ghost campaign__skeleton-hero" />
       <div v-for="i in 4" :key="i" class="ghost campaign__skeleton-line" />
     </div>
 
     <template v-else>
-      <header class="campaign__head">
+      <!-- 沒有橫幅圖時頁頭本身就是一塊淡淡的強調色，不留一個等圖的空位 -->
+      <header class="panel campaign__hero" :class="{ 'campaign__hero--banner': campaign.bannerUrl }">
         <img v-if="campaign.bannerUrl" :src="campaign.bannerUrl" alt="" class="campaign__banner" />
-        <span class="campaign__phase" :class="`campaign__phase--${campaign.phase}`" data-phase>{{ t(`campaign.phase.${campaign.phase}`) }}</span>
-        <h1 class="campaign__title">{{ title }}</h1>
-        <dl class="campaign__dates">
-          <div v-if="period"><dt>{{ t("campaign.page.period") }}</dt><dd>{{ period }}</dd></div>
-          <div v-if="campaign.submitDeadline !== null"><dt>{{ t("campaign.field.submitDeadline") }}</dt><dd>{{ at(campaign.submitDeadline) }}</dd></div>
-          <div v-if="campaign.payoutDeadline !== null"><dt>{{ t("campaign.field.payoutDeadline") }}</dt><dd>{{ at(campaign.payoutDeadline) }}</dd></div>
-        </dl>
+        <div class="campaign__hero-body">
+          <span class="campaign__phase" :class="`campaign__phase--${campaign.phase}`" data-phase>{{ t(`campaign.phase.${campaign.phase}`) }}</span>
+          <h1 class="campaign__title">{{ title }}</h1>
+          <dl class="campaign__dates">
+            <div v-if="period"><dt>{{ t("campaign.page.period") }}</dt><dd>{{ period }}</dd></div>
+            <div v-if="campaign.submitDeadline !== null"><dt>{{ t("campaign.field.submitDeadline") }}</dt><dd>{{ at(campaign.submitDeadline) }}</dd></div>
+            <div v-if="campaign.payoutDeadline !== null"><dt>{{ t("campaign.field.payoutDeadline") }}</dt><dd>{{ at(campaign.payoutDeadline) }}</dd></div>
+          </dl>
+        </div>
       </header>
 
-      <!-- renderDoc 不吃 HTML，只有它的輸出可以 v-html -->
-      <div v-if="intro" class="campaign__intro" v-html="intro" />
+      <section v-if="intro" class="panel campaign__section">
+        <!-- renderDoc 不吃 HTML，只有它的輸出可以 v-html -->
+        <div class="campaign__intro" v-html="intro" />
+      </section>
 
       <section class="panel campaign__section" data-rules aria-labelledby="campaign-rules-h">
         <h2 id="campaign-rules-h" class="campaign__h2">{{ t("campaign.page.rules") }}</h2>
-        <ul class="campaign__tiers">
-          <li v-for="tier in tiers" :key="tier.key" class="campaign__tier">
-            <span>{{ t(`campaign.tier.${tier.key}`) }}</span>
-            <strong class="num">{{ formatPoints(tier.amount) }}</strong>
+        <ul class="campaign__tiers" :style="{ '--n': tiers.length }">
+          <li v-for="(tier, i) in tiers" :key="tier.key" class="campaign__tier">
+            <span class="campaign__tier-name">{{ t(`campaign.tier.${tier.key}`) }}</span>
+            <strong class="campaign__tier-amount">{{ formatPoints(tier.amount) }}</strong>
+            <!-- 由輕到重的檔位，一眼看出高低 -->
+            <span class="campaign__tier-level" aria-hidden="true"><i v-for="n in tiers.length" :key="n" :class="{ on: n <= i + 1 }" /></span>
           </li>
         </ul>
-        <p v-if="campaign.extraPlacementAmount" class="campaign__rule">{{ t("campaign.page.extra", { n: formatNumber(campaign.extraPlacementAmount) }) }}</p>
-        <p class="campaign__rule">{{ t("campaign.page.highest") }}</p>
+        <ul class="campaign__rules">
+          <li v-if="campaign.extraPlacementAmount">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.25" /><path d="M10 6.75v6.5M6.75 10h6.5" /></svg>
+            <span>{{ t("campaign.page.extra", { n: formatNumber(campaign.extraPlacementAmount) }) }}</span>
+          </li>
+          <li>
+            <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.25" /><path d="M10 13.5v-7M7 9.25l3-3 3 3" /></svg>
+            <span>{{ t("campaign.page.highest") }}</span>
+          </li>
+        </ul>
       </section>
 
       <section class="panel campaign__section" aria-labelledby="campaign-how-h">
@@ -150,17 +165,27 @@ async function onDone(_result: ApplyResult) {
           <li>{{ t("campaign.page.step2") }}</li>
           <li>{{ t("campaign.page.step3") }}</li>
         </ol>
-        <p class="campaign__notice">{{ t("campaign.page.notice") }}</p>
+        <p class="campaign__notice">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.25" /><path d="M10 9.25v4.25" /><circle cx="10" cy="6.6" r=".5" /></svg>
+          <span>{{ t("campaign.page.notice") }}</span>
+        </p>
       </section>
 
       <section class="panel campaign__section" aria-labelledby="campaign-apply-h">
         <h2 id="campaign-apply-h" class="campaign__h2">{{ t("campaign.apply.title") }}</h2>
         <!-- 登入狀態還在確認時先不說「請登入」，免得已登入的人看到一閃；沒開放的活動登入了也不能交，就直接說沒開放 -->
-        <p v-if="campaign.phase !== 'open'" class="campaign__rule">{{ t(`campaign.page.notOpen.${campaign.phase}`) }}</p>
-        <template v-else-if="!signedIn">
-          <p v-if="session.ready" class="campaign__rule">{{ t("campaign.page.signIn") }}</p>
-          <RouterLink v-if="session.ready" class="btn btn--primary campaign__signin" data-signin :to="lp(loginPath(route.fullPath))">{{ t("nav.login") }}</RouterLink>
-        </template>
+        <p v-if="campaign.phase !== 'open'" class="campaign__state">
+          <svg v-if="campaign.phase === 'upcoming'" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.25" /><path d="M10 6.25V10l2.5 1.75" /></svg>
+          <svg v-else viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.25" /><path d="M7 10.25l2 2 4-4.25" /></svg>
+          <span>{{ t(`campaign.page.notOpen.${campaign.phase}`) }}</span>
+        </p>
+        <div v-else-if="!signedIn" class="campaign__state campaign__state--action">
+          <template v-if="session.ready">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="4.25" y="8.75" width="11.5" height="8" rx="2" /><path d="M7 8.75V6.5a3 3 0 0 1 6 0v2.25" /></svg>
+            <span>{{ t("campaign.page.signIn") }}</span>
+            <RouterLink class="btn btn--primary campaign__signin" data-signin :to="lp(loginPath(route.fullPath))">{{ t("nav.login") }}</RouterLink>
+          </template>
+        </div>
         <!-- @submit 落到表單根節點的原生 submit：下一次送出一開始就收掉上一次的「已收到」 -->
         <CampaignApplyForm v-else :key="formKey" :campaign="campaign" :contents="contents" @submit="done = false" @done="onDone" />
       </section>
@@ -168,57 +193,157 @@ async function onDone(_result: ApplyResult) {
       <section v-if="signedIn" ref="shareEl" class="panel campaign__section" data-share-links aria-labelledby="campaign-share-h">
         <div class="campaign__row">
           <h2 id="campaign-share-h" class="campaign__h2">{{ t("campaign.share.title") }}</h2>
-          <RouterLink class="campaign__mine" data-mine :to="lp('/me/campaign')">{{ t("campaign.page.mine") }}</RouterLink>
+          <RouterLink class="campaign__mine" data-mine :to="lp('/me/campaign')">
+            {{ t("campaign.page.mine") }}
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8 5.5l4.5 4.5L8 14.5" /></svg>
+          </RouterLink>
         </div>
-        <p v-if="done" class="notice" role="status">{{ t("campaign.apply.done") }}</p>
+        <p v-if="done" class="notice campaign__done" role="status">{{ t("campaign.apply.done") }}</p>
         <p v-if="contentsError" class="notice notice--error" role="alert">
           {{ contentsError }}
           <button type="button" class="btn btn--sm" @click="loadMine()">{{ t("campaign.page.retry") }}</button>
         </p>
         <CampaignShareLinks v-if="contents.length" :items="contents" />
-        <p v-else-if="!contentsError" class="campaign__rule muted">{{ t("campaign.share.empty") }}</p>
+        <p v-else-if="!contentsError" class="campaign__state">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8.5 11.5l3-3M9.25 6.25l1.1-1.1a3 3 0 0 1 4.25 4.25l-1.1 1.1M10.75 13.75l-1.1 1.1a3 3 0 0 1-4.25-4.25l1.1-1.1" /></svg>
+          <span>{{ t("campaign.share.empty") }}</span>
+        </p>
       </section>
     </template>
   </div>
 </template>
 
 <style scoped>
-.campaign { max-width: 800px; display: grid; gap: var(--s-5); }
-.campaign__head { display: grid; gap: var(--s-3); justify-items: start; }
-.campaign__banner { width: 100%; aspect-ratio: 16 / 6; object-fit: cover; border-radius: var(--r-lg); background: var(--surface-2); }
-.campaign__phase { padding: 1px 8px; border-radius: var(--r-pill); font-size: 12px; font-weight: 600; background: var(--surface-2); color: var(--text-2); }
+/*
+ * 圓角三階：面板 --r-lg、面板裡的塊（檔位、狀態、輸入框）--r-sm、按鈕與標籤 pill。
+ * 面板本身沒有內距（base.css .panel），每一塊在這裡補：桌機 24、手機 16。
+ */
+.campaign { max-width: 800px; display: grid; gap: var(--s-4); }
+.campaign svg { flex: none; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---- 頁頭 ---- */
+.campaign__hero { position: relative; overflow: hidden; isolation: isolate; }
+.campaign__hero:not(.campaign__hero--banner) {
+  background:
+    radial-gradient(70% 120% at 100% 0%, var(--accent-soft), transparent 70%),
+    linear-gradient(180deg, var(--accent-tint), var(--surface));
+}
+/* 右上角一圈淡淡的環，讓沒有圖的頁頭看起來是刻意的版面 */
+.campaign__hero:not(.campaign__hero--banner)::after {
+  content: ""; position: absolute; z-index: -1; top: -120px; right: -96px; width: 320px; height: 320px;
+  border-radius: var(--r-pill); border: 32px solid color-mix(in srgb, var(--accent) 7%, transparent); pointer-events: none;
+}
+.campaign__banner { display: block; width: 100%; aspect-ratio: 16 / 6; object-fit: cover; background: var(--surface-2); }
+.campaign__hero-body { display: grid; gap: var(--s-3); justify-items: start; padding: var(--s-6); }
+.campaign__phase {
+  display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px;
+  border-radius: var(--r-pill); font-size: 12px; font-weight: 600; background: var(--surface-2); color: var(--text-2);
+}
+.campaign__phase::before { content: ""; width: 6px; height: 6px; border-radius: var(--r-pill); background: currentColor; }
 .campaign__phase--open { background: var(--success-soft); color: var(--success); }
-.campaign__phase--upcoming { color: var(--accent-text); }
-.campaign__title { margin: 0; font-size: clamp(26px, 3.4vw, 36px); line-height: 1.25; overflow-wrap: anywhere; }
-.campaign__dates { display: grid; gap: var(--s-1); margin: 0; font-size: 14px; }
-.campaign__dates > div { display: flex; flex-wrap: wrap; gap: 0 var(--s-2); }
-.campaign__dates dt { color: var(--text-3); }
-.campaign__dates dd { margin: 0; }
+.campaign__phase--upcoming { background: var(--accent-soft); color: var(--accent-text); }
+.campaign__title { margin: 0; font-size: clamp(28px, 4vw, 40px); font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+/* 日期是一塊格線：期間最長，三項都在時獨佔一列，兩個截止並排 */
+.campaign__dates {
+  justify-self: stretch; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: var(--s-2) 0 0;
+  overflow: hidden; border-radius: var(--r-sm); background: var(--line); box-shadow: 0 0 0 1px var(--line);
+}
+.campaign__dates > div { min-width: 0; display: grid; gap: 2px; align-content: start; padding: var(--s-3) var(--s-4); background: var(--surface); }
+.campaign__dates > div:first-child:nth-last-child(odd) { grid-column: 1 / -1; }
+.campaign__hero--banner .campaign__dates > div { background: var(--surface-2); }
+.campaign__dates dt { font-size: 12px; color: var(--text-3); }
+.campaign__dates dd { margin: 0; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 
-.campaign__intro { font-size: 16px; line-height: 1.8; overflow-wrap: anywhere; }
-.campaign__intro :deep(h2) { font-size: 20px; margin: var(--s-5) 0 var(--s-2); }
-.campaign__intro :deep(h3) { font-size: 17px; margin: var(--s-4) 0 var(--s-2); }
-.campaign__intro :deep(:first-child) { margin-top: 0; }
+/* ---- 區塊 ---- */
+.campaign__section { display: grid; gap: var(--s-4); padding: var(--s-5); min-width: 0; }
+.campaign__h2 { margin: 0; font-size: 18px; font-weight: 650; line-height: 1.4; }
+.campaign__row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2) var(--s-4); }
+.campaign__mine { display: inline-flex; align-items: center; gap: 2px; font-size: 14px; font-weight: 500; color: var(--accent-text); }
+.campaign__mine svg { width: 16px; height: 16px; }
+.campaign__mine:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* ---- 介紹 ---- */
+.campaign__intro { font-size: 15px; line-height: 1.8; color: var(--text); overflow-wrap: anywhere; }
+.campaign__intro :deep(h2) { margin: var(--s-6) 0 var(--s-2); font-size: 22px; font-weight: 700; line-height: 1.35; }
+.campaign__intro :deep(h3) { margin: var(--s-5) 0 var(--s-2); font-size: 16px; font-weight: 650; line-height: 1.45; }
+.campaign__intro :deep(> :first-child) { margin-top: 0; }
+.campaign__intro :deep(> :last-child) { margin-bottom: 0; }
 .campaign__intro :deep(p), .campaign__intro :deep(ul), .campaign__intro :deep(ol) { margin: 0 0 var(--s-3); }
-.campaign__intro :deep(ul), .campaign__intro :deep(ol) { padding-left: 1.4em; }
+.campaign__intro :deep(p) { color: var(--text-2); }
+.campaign__intro :deep(ul), .campaign__intro :deep(ol) { padding-left: 1.25em; display: grid; gap: var(--s-2); }
+.campaign__intro :deep(li) { padding-left: 2px; color: var(--text-2); }
+.campaign__intro :deep(li::marker) { color: var(--accent); }
+.campaign__intro :deep(strong) { color: var(--text); font-weight: 650; }
 .campaign__intro :deep(a) { color: var(--accent-text); text-decoration: underline; text-underline-offset: 3px; }
-.campaign__intro :deep(img) { display: block; max-width: 100%; height: auto; border-radius: var(--r-md); }
+.campaign__intro :deep(img) { display: block; max-width: 100%; height: auto; border-radius: var(--r-sm); }
 
-.campaign__section { display: grid; gap: var(--s-3); }
-.campaign__h2 { margin: 0; font-size: 18px; }
-.campaign__row { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--s-2) var(--s-4); }
-.campaign__mine { font-size: 14px; color: var(--accent-text); }
-.campaign__rule, .campaign__notice { margin: 0; font-size: 14px; line-height: 1.6; }
-.campaign__notice { color: var(--text-2); }
-.campaign__tiers { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
-.campaign__tier { display: grid; gap: var(--s-1); padding: var(--s-3) var(--s-4); border-radius: var(--r-md); background: var(--surface-2); font-size: 14px; }
-.campaign__tier strong { font-size: 18px; }
-.campaign__steps { margin: 0; padding-left: 1.4em; display: grid; gap: var(--s-1); font-size: 14px; line-height: 1.6; }
-.campaign__signin { justify-self: start; }
+/* ---- 獎勵 ---- */
+.campaign__tiers { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-3); grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); }
+.campaign__tier {
+  display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; padding: var(--s-4);
+  border-radius: var(--r-sm); background: var(--surface-2);
+}
+.campaign__tier-name { font-size: 13px; font-weight: 500; color: var(--text-2); }
+/* keep-all：「3,000 ポイント」只在空格斷行，不把單位拆成兩半 */
+.campaign__tier-amount { font-size: 22px; font-weight: 700; line-height: 1.3; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; word-break: keep-all; overflow-wrap: anywhere; }
+/* 金額換行時檔位條仍對齊在卡片底部 */
+.campaign__tier-level { display: flex; gap: 4px; margin-top: auto; padding-top: var(--s-2); }
+.campaign__tier-level i { flex: 1; max-width: 20px; height: 4px; border-radius: var(--r-pill); background: var(--line-strong); }
+.campaign__tier-level i.on { background: var(--accent); }
+.campaign__rules { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); }
+.campaign__rules li { display: flex; align-items: flex-start; gap: var(--s-2); font-size: 14px; line-height: 1.6; color: var(--text-2); }
+.campaign__rules svg { margin-top: 1px; color: var(--accent-text); }
 
-.campaign__skeleton { display: grid; gap: var(--s-3); }
-.campaign__skeleton-banner { aspect-ratio: 16 / 6; border-radius: var(--r-lg); }
-.campaign__skeleton-title { width: 60%; height: 36px; }
-.campaign__skeleton-line { height: 18px; border-radius: var(--r-sm); }
-@media (max-width: 760px) { .campaign__signin, .campaign__mine { min-height: 44px; display: inline-flex; align-items: center; } }
+/* ---- 參加方式 ---- */
+.campaign__steps { list-style: none; margin: 0; padding: 0; counter-reset: step; display: grid; gap: var(--s-3); grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.campaign__steps li {
+  counter-increment: step; display: grid; gap: var(--s-3); align-content: start; padding: var(--s-4);
+  border-radius: var(--r-sm); background: var(--surface-2); font-size: 14px; line-height: 1.6;
+}
+.campaign__steps li::before {
+  content: counter(step); display: grid; place-items: center; width: 28px; height: 28px;
+  border-radius: var(--r-pill); background: var(--accent-soft); color: var(--accent-text);
+  font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.campaign__notice {
+  display: flex; align-items: flex-start; gap: var(--s-2); margin: 0; padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-sm); background: var(--gold-soft); color: var(--text); font-size: 13.5px; line-height: 1.6;
+}
+.campaign__notice svg { margin-top: 1px; color: var(--warning-text); }
+
+/* ---- 申請區與分享連結的狀態：說明一句，需要時配一個動作 ---- */
+.campaign__state {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); margin: 0; padding: var(--s-4);
+  border-radius: var(--r-sm); background: var(--surface-2); color: var(--text-2); font-size: 14px; line-height: 1.6;
+}
+.campaign__state:empty { display: none; }
+.campaign__state svg { color: var(--text-3); }
+.campaign__state > span { flex: 1 1 200px; min-width: 0; }
+.campaign__state--action svg { color: var(--accent-text); }
+.campaign__state--action > span { color: var(--text); font-weight: 500; }
+.campaign__signin { flex: none; }
+.campaign__done { background: var(--success-soft); color: var(--success); }
+
+.campaign__skeleton { display: grid; gap: var(--s-4); }
+.campaign__skeleton-hero { height: 240px; border-radius: var(--r-lg); }
+.campaign__skeleton-line { height: 120px; border-radius: var(--r-lg); }
+
+@media (max-width: 900px) {
+  .campaign__tiers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .campaign__hero-body { padding: var(--s-5) var(--s-4); }
+  .campaign__section { padding: var(--s-4); }
+  .campaign__dates { grid-template-columns: minmax(0, 1fr); }
+  .campaign__steps { grid-template-columns: minmax(0, 1fr); }
+  .campaign__steps li { grid-template-columns: 28px minmax(0, 1fr); align-items: center; }
+  .campaign__intro :deep(h2) { font-size: 20px; }
+  .campaign__tier { padding: var(--s-3); }
+  .campaign__tier-amount { font-size: 19px; }
+  .campaign__signin { min-height: var(--h-lg); }
+  .campaign__mine { min-height: 44px; }
+}
+@media (max-width: 480px) {
+  .campaign__signin { width: 100%; }
+}
 </style>
