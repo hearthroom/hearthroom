@@ -110,6 +110,7 @@ export function renderHead(page: Response, meta: PageMeta): Response {
  */
 export function renderDefaultShareHead(page: Response, lang: string): Response {
   const meta = defaultMeta(lang);
+  // 微信、QQ 不看 og:，讀的是 <title> 與 description：殼裡的也換成站名與說明，前端跑起來會再寫自己的標題
   const tags = [
     '<meta property="og:type" content="website">',
     `<meta property="og:title" content="${esc(meta.title)}">`,
@@ -122,7 +123,11 @@ export function renderDefaultShareHead(page: Response, lang: string): Response {
     `<meta name="twitter:description" content="${esc(oneLine(meta.description))}">`,
     `<meta name="twitter:image" content="${esc(meta.image)}">`,
   ].join("");
-  const res = new HTMLRewriter().on("head", { element: (e) => { e.append(tags, { html: true }); } }).transform(page);
+  const res = new HTMLRewriter()
+    .on("html", { element: (e) => { e.setAttribute("lang", lang); } })
+    .on("title", { element: (e) => { e.setInnerContent(meta.title); } })
+    .on('meta[name="description"]', { element: (e) => { e.setAttribute("content", oneLine(meta.description)); } })
+    .on("head", { element: (e) => { e.append(tags, { html: true }); } }).transform(page);
   res.headers.delete("etag");
   res.headers.delete("last-modified");
   return res;
@@ -161,12 +166,16 @@ const HOME_TAGLINE: Record<string, string> = {
   ja: "キャラクターカード ランキング",
   ko: "캐릭터 카드 랭킹",
 };
+/**
+ * 分享預覽的說明（首頁與沒有自己分享設定的頁面）。看的人多半沒來過：要一眼看懂這是什麼網站、為什麼值得點，
+ * 不是列功能（owner 2026-10-17）。約戰團隊會再改寫一版（docs/design/share-season-campaign）。
+ */
 export const HOME_DESCRIPTION: Record<string, string> = {
-  "zh-Hant": "角色卡的開放社群：榜單、搜尋與作者頁。",
-  "zh-Hans": "角色卡的开放社区：榜单、搜索与作者页。",
-  en: "An open community for character cards: rankings, search, and creator pages.",
-  ja: "キャラクターカードのオープンコミュニティ：ランキング、検索、作者ページ。",
-  ko: "캐릭터 카드의 오픈 커뮤니티: 랭킹, 검색, 작성자 페이지.",
+  "zh-Hant": "和 AI 角色一起寫故事：戀愛、冒險、世界模擬、玩法模擬，挑一張角色卡就能開聊，故事跟著你的選擇走。",
+  "zh-Hans": "和 AI 角色一起写故事：恋爱、冒险、世界模拟、玩法模拟，挑一张角色卡就能开聊，故事跟着你的选择走。",
+  en: "Write stories with AI characters: romance, adventure, world sims and game sims. Pick a character card and start chatting; the story follows your choices.",
+  ja: "AI キャラクターと物語をつくろう：恋愛、冒険、世界シミュレーター、ゲーム系まで。キャラクターカードを選べばすぐ会話でき、物語はあなたの選択で進みます。",
+  ko: "AI 캐릭터와 함께 쓰는 이야기: 연애, 모험, 세계 시뮬레이터, 게임 시뮬레이터까지. 캐릭터 카드를 고르면 바로 대화할 수 있고 이야기는 당신의 선택을 따라가요.",
 };
 export function defaultMeta(lang: string): { title: string; description: string; image: string } {
   const title = siteLockup(lang) ?? `${siteName(lang)} · ${HOME_TAGLINE[lang] ?? HOME_TAGLINE.en!}`;

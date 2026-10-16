@@ -47,7 +47,7 @@ import {
   type EventFields, type Pending,
 } from "./analytics";
 import { blogGroupUrl, blogIndexMeta, blogUrl, postMeta } from "./blog-head";
-import { campaignLocale, campaignMeta, campaignUrl } from "./campaign-head";
+import { campaignLocale, campaignMeta, campaignUrl, inviteMeta, isInviteLink } from "./campaign-head";
 import { getCampaign } from "./campaign";
 import { authorLine, downloadMeta, homeMeta, preloadImageTag, renderDefaultShareHead, renderHead, updatesMeta } from "./head";
 import { aliasTarget, HOST, canonicalUrl, isPlayHost } from "./site";
@@ -1775,17 +1775,21 @@ app.get("*", async (c) => {
   if (campaignMatch) return campaignPage(c, url, campaignMatch);
   const landing = url.pathname.match(LANDING);
   if (landing && siteRootOf(url.hostname) && !isPlayHost(url.host)) {
-    const locale = landing[1] ?? "zh-Hant";
+    // 專屬連結（?ref=）給沒來過的朋友看：換成邀請版預覽，語言照活動頁的規則（沒有前綴時看 Accept-Language，分不出來用簡體）
+    const invite = isInviteLink(url);
+    const locale = invite ? campaignLocale(landing[1], c.req.header("Accept-Language")) : landing[1] ?? "zh-Hant";
+    const home = new URL(landing[1] ? `/${landing[1]}` : "/", `https://${PRIMARY_HOST}`).toString();
     // 首頁的標題與分享預覽在這裡就寫進 <head>：不跑 JS 的爬蟲與連結預覽只看得到這份（src/head.ts）。
-    const meta = homeMeta(locale, new URL(locale === "zh-Hant" ? "/" : `/${locale}`, `https://${PRIMARY_HOST}`).toString());
+    const meta = invite ? inviteMeta(locale as Parameters<typeof inviteMeta>[0], home) : homeMeta(locale, new URL(locale === "zh-Hant" ? "/" : `/${locale}`, `https://${PRIMARY_HOST}`).toString());
     const filtered = LANDING_FILTERS.some((key) => url.searchParams.has(key));
     const page = filtered ? null : await landingPage(c, url, locale);
     note(c, { event: "page_html", refHost: refHostOf(c.req.header("Referer"), url.host), detail: page ? "landing" : "page" });
-    if (page) return renderHead(page, meta);
+    const vary = (r: Response) => { if (invite) r.headers.append("Vary", "Accept-Language"); return r; };
+    if (page) return vary(renderHead(page, meta));
     // 讀榜超時或帶著篩選：回純殼，<head> 一樣要有首頁的標題
     const shell = await c.env.ASSETS.fetch(new Request(new URL("/", url).toString()));
     if (!shell.ok) return shell;
-    return renderHead(shell, meta);
+    return vary(renderHead(shell, meta));
   }
   const blog = url.pathname.match(BLOG_PAGE);
   if (blog) return blogPage(c, url, blog);
@@ -1799,7 +1803,11 @@ app.get("*", async (c) => {
     const sitePage = !!siteRootOf(url.hostname) && !isPlayHost(url.host)
       && !SITE_API_PATH.test(url.pathname) && !SITE_PLAY_PATH.test(url.pathname) && !SITE_STATIC_PATH.test(url.pathname);
     if (!html || !sitePage) return passthrough;
-    return renderDefaultShareHead(passthrough, url.pathname.match(SITE_ROUTE_LOCALE)?.[1] ?? "zh-Hant");
+    // 沒有語言前綴的頁面照活動頁的規則：看抓取器的 Accept-Language 分繁簡，分不出來用簡體（owner 2026-10-17）
+    const prefix = url.pathname.match(SITE_ROUTE_LOCALE)?.[1];
+    const shared = renderDefaultShareHead(passthrough, campaignLocale(prefix, c.req.header("Accept-Language")));
+    if (!prefix) shared.headers.append("Vary", "Accept-Language");
+    return shared;
   }
   // 用 "/" 而不是 "/index.html"：資源層預設會把後者 301 到前者。
   // 不轉發原請求的 headers：If-None-Match 是對 /cards/x 那份內容的驗證器，拿去驗殼會拿到 304，

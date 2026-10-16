@@ -54,3 +54,23 @@ export function campaignMeta(c: Campaign, lang: Locale, url: string): PageMeta {
     ...(banner ? {} : { imageSize: { width: 1200, height: 630 } }),
   };
 }
+
+/**
+ * 專屬連結（首頁＋?ref=）的分享預覽。看到預覽的人是還沒來過的朋友：他不在乎分享的人拿多少積分，
+ * 要的是一眼看懂這是什麼網站、為什麼值得點（owner 2026-10-17）。所以標題講「朋友邀你、在這裡做什麼」，
+ * 簡介講有哪些玩法、一點進來就能玩、用朋友的連結註冊有新人積分；圖用站台的分享圖（蘇綺招手）。
+ * 新人積分的數字在 Harbor 的設定裡，這裡讀不到，所以不寫數字。
+ */
+const INVITE: Record<Locale, { title: string; description: string }> = {
+  "zh-Hant": { title: "朋友邀你來綺夢社：和 AI 角色一起寫故事", description: "戀愛、冒險、世界模擬、玩法模擬，挑一張角色卡就能開聊，故事跟著你的選擇走。用朋友的連結註冊，還送新人積分先玩。" },
+  "zh-Hans": { title: "朋友邀你来绮梦社：和 AI 角色一起写故事", description: "恋爱、冒险、世界模拟、玩法模拟，挑一张角色卡就能开聊，故事跟着你的选择走。用朋友的链接注册，还送新人积分先玩。" },
+  en: { title: "A friend invited you to Hearthroom: write stories with AI characters", description: "Romance, adventure, world sims and game sims. Pick a character card and start chatting; the story follows your choices. Sign up through your friend's link for welcome credits." },
+  ja: { title: "友だちから Hearthroom への招待：AI キャラクターと物語をつくろう", description: "恋愛、冒険、世界シミュレーター、ゲーム系まで。キャラクターカードを選べばすぐ会話でき、物語はあなたの選択で進みます。友だちのリンクから登録すると、はじめのポイントがもらえます。" },
+  ko: { title: "친구가 Hearthroom에 초대했어요: AI 캐릭터와 함께 쓰는 이야기", description: "연애, 모험, 세계 시뮬레이터, 게임 시뮬레이터까지. 캐릭터 카드를 고르면 바로 대화할 수 있고 이야기는 당신의 선택을 따라가요. 친구 링크로 가입하면 시작 포인트를 받아요." },
+};
+const REF_CODE = /^[A-Z0-9]{4,32}$/i;
+/** 首頁網址帶了像樣的推薦碼就是專屬連結 */
+export const isInviteLink = (url: URL) => REF_CODE.test(url.searchParams.get("ref") ?? "");
+export function inviteMeta(lang: Locale, url: string): PageMeta {
+  return { lang, url, type: "website", ...INVITE[lang], image: siteOgImage("default", lang), imageSize: { width: 1200, height: 630 } };
+}
