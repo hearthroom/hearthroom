@@ -48,6 +48,7 @@ const columns = computed(() => allColumns(groups.value));
 const allCount = computed(() => groups.value.reduce((n, g) => n + (g.postCount ?? 0), 0));
 const localeLabel = (code: string) => LOCALES.find((l) => l.code === code)?.label ?? code;
 const nameOf = (c: BlogColumn | undefined, fallback = '') => columnName(c, String(locale.value), fallback);
+const fmt = (n = 0) => new Intl.NumberFormat(String(locale.value)).format(n);
 
 const picked = computed<TreePick>(() => {
   const q = route.query;
@@ -213,6 +214,17 @@ onMounted(() => { document.title = pageTitle(t('moderation.tab.blog')); void loa
             <template v-if="p.publishAt"> · {{ t('blog.admin.publishedAt', { date: dateTime(p.publishAt) }) }}</template>
           </p>
           <p class="subtle rblog-item__meta">{{ t('blog.admin.lastEdit', { name: p.editorHandle || p.authorHandle, date: dateTime(p.updatedAt) }) }}</p>
+          <p class="rblog-item__stats" data-stats>
+            <span :aria-label="t('blog.admin.statViews', { n: fmt(p.viewCount) })" :title="t('blog.admin.statViews', { n: fmt(p.viewCount) })">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" /><circle cx="8" cy="8" r="2" /></svg>{{ fmt(p.viewCount) }}
+            </span>
+            <span :aria-label="t('blog.admin.statLikes', { n: fmt(p.likeCount) })" :title="t('blog.admin.statLikes', { n: fmt(p.likeCount) })">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6S2.5 10.2 2.5 6.4A2.9 2.9 0 0 1 8 4.9a2.9 2.9 0 0 1 5.5 1.5c0 3.8-5.5 7.2-5.5 7.2z" /></svg>{{ fmt(p.likeCount) }}
+            </span>
+            <span :aria-label="t('blog.admin.statComments', { n: fmt(p.commentCount) })" :title="t('blog.admin.statComments', { n: fmt(p.commentCount) })">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v7.5H7l-3 2.5V11H2.5z" /></svg>{{ fmt(p.commentCount) }}
+            </span>
+          </p>
         </RouterLink>
       </div>
       <div v-if="page > 1 || hasNext" class="rblog-pager">
@@ -265,6 +277,9 @@ onMounted(() => { document.title = pageTitle(t('moderation.tab.blog')); void loa
 .rblog-item__title { font-weight: 600; min-width: 0; overflow-wrap: anywhere; transition: color var(--dur) var(--ease); }
 .rblog-item__chips { display: flex; gap: var(--s-1); flex: none; }
 .rblog-item__meta { margin: 0; font-size: 13px; }
+.rblog-item__stats { display: flex; gap: var(--s-3); margin: 0; font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.rblog-item__stats span { display: inline-flex; align-items: center; gap: var(--s-1); }
+.rblog-item__stats svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linejoin: round; }
 .rblog-chip { height: 22px; padding: 0 var(--s-2); cursor: default; }
 .rblog-chip:hover { color: var(--text-2); background: var(--surface-2); }
 .rblog-chip--published, .rblog-chip--published:hover { color: var(--success); background: var(--success-soft); }
