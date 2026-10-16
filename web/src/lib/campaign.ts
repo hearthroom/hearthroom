@@ -208,6 +208,29 @@ export async function fetchPublicCampaigns(): Promise<{ items: CampaignSummary[]
   return (await res.json()) as { items: CampaignSummary[] };
 }
 
+/** 首頁輪播放的活動：推薦到首頁、進行中或即將開始；進行中的在前，再照開始時間（沒設的算最早），最多三個。 */
+export function featuredCampaigns<T extends CampaignSummary>(items: T[], max = 3): T[] {
+  const rank = (c: T) => (c.phase === "open" ? 0 : 1);
+  return items
+    .filter((c) => c.featured && (c.phase === "open" || c.phase === "upcoming"))
+    .sort((a, b) => rank(a) - rank(b) || (a.startsAt ?? -Infinity) - (b.startsAt ?? -Infinity))
+    .slice(0, max);
+}
+
+/** 活動中心的頁籤。前三個是公開列表照階段分，最後一個是自己的申請。 */
+export const HUB_TABS = ["open", "upcoming", "ended", "mine"] as const;
+export type HubTab = (typeof HUB_TABS)[number];
+/** 網址沒指定頁籤時：有進行中的看進行中，沒有就看即將開始，再沒有就看已結束。 */
+export const defaultHubTab = (items: CampaignSummary[]): HubTab =>
+  items.some((c) => c.phase === "open") ? "open" : items.some((c) => c.phase === "upcoming") ? "upcoming" : "ended";
+/** 某個頁籤的活動：進行中與即將開始照開始時間，先到的在前；已結束的照結束時間，最近結束的在前。 */
+export function hubList<T extends CampaignSummary>(items: T[], tab: Exclude<HubTab, "mine">): T[] {
+  const list = items.filter((c) => c.phase === tab);
+  return tab === "ended"
+    ? list.sort((a, b) => (b.endsAt ?? -Infinity) - (a.endsAt ?? -Infinity))
+    : list.sort((a, b) => (a.startsAt ?? -Infinity) - (b.startsAt ?? -Infinity));
+}
+
 export const fetchCampaigns = (token: string) => request<{ items: Campaign[]; canEdit: boolean }>(token, "/moderation/campaigns");
 type CampaignList = Awaited<ReturnType<typeof fetchCampaigns>>;
 let cachedList: { token: string; promise: Promise<CampaignList> } | null = null;

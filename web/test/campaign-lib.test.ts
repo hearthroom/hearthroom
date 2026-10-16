@@ -136,11 +136,11 @@ describe('錯誤文案', () => {
 });
 
 describe('來源標記', () => {
-  it('活動頁是 campaign，我的申請算在 mine', () => {
+  it('活動頁與活動中心都是 campaign', () => {
     expect(surfaceOf('/campaign/launch')).toBe('campaign');
     expect(surfaceOf('/zh-Hans/campaign/x')).toBe('campaign');
-    expect(surfaceOf('/me/campaign')).toBe('mine');
-    expect(surfaceOf('/en/me/campaign')).toBe('mine');
+    expect(surfaceOf('/campaigns')).toBe('campaign');
+    expect(surfaceOf('/en/campaigns')).toBe('campaign');
   });
 });
 
