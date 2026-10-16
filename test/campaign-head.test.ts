@@ -10,9 +10,9 @@ import { envWithAssets, resetDb } from "./helpers";
  */
 const testEnv = envWithAssets();
 
-async function get(path: string, acceptLanguage?: string) {
+async function get(path: string, acceptLanguage?: string, host = "c.test") {
   const ctx = createExecutionContext();
-  const res = await worker.fetch(new Request(`https://c.test${path}`, { headers: acceptLanguage ? { "Accept-Language": acceptLanguage } : {} }), testEnv, ctx);
+  const res = await worker.fetch(new Request(`https://${host}${path}`, { headers: acceptLanguage ? { "Accept-Language": acceptLanguage } : {} }), testEnv, ctx);
   await waitOnExecutionContext(ctx);
   return { status: res.status, text: await res.text(), headers: res.headers };
 }
@@ -84,6 +84,29 @@ describe("活動頁分享資訊", () => {
       expect(status, path).toBe(404);
       expect(text, path).toContain('<meta name="robots" content="noindex, nofollow">');
       expect(text, path).not.toContain('property="og:title"');
+    }
+  });
+});
+
+describe("帶推薦碼的首頁分享預覽（專屬連結）", () => {
+  it("?ref= 的首頁換成邀請版：說這是什麼網站、為什麼要點進來；語言規則跟活動頁一樣", async () => {
+    const hant = await get("/?ref=K7XQ2M", "zh-TW", PRIMARY_HOST);
+    expect(hant.status).toBe(200);
+    expect(hant.text).toContain('<meta property="og:title" content="朋友邀你來綺夢社：和 AI 角色一起寫故事">');
+    expect(hant.text).toMatch(/<meta property="og:description" content="戀愛、冒險[^"]*朋友的連結註冊[^"]*">/);
+    expect(hant.text).toContain(`<meta property="og:image" content="https://${PRIMARY_HOST}/og/default-zh-Hant.jpg">`);
+    expect(hant.text).toContain(`<link rel="canonical" href="https://${PRIMARY_HOST}/">`);
+    expect(hant.headers.get("vary")).toContain("Accept-Language");
+    expect((await get("/?ref=K7XQ2M", "zh-CN", PRIMARY_HOST)).text).toContain('<meta property="og:title" content="朋友邀你来绮梦社：和 AI 角色一起写故事">');
+    expect((await get("/?ref=K7XQ2M", undefined, PRIMARY_HOST)).text).toContain('<html lang="zh-Hans">');
+    expect((await get("/en/?ref=K7XQ2M", "zh-TW", PRIMARY_HOST)).text).toContain("A friend invited you to Hearthroom");
+  });
+
+  it("沒有推薦碼或推薦碼格式不對：照原本的首頁預覽", async () => {
+    for (const path of ["/", "/?ref=x"]) {
+      const { text } = await get(path, "zh-CN", PRIMARY_HOST);
+      expect(text, path).not.toContain("朋友邀你");
+      expect(text, path).toContain('<html lang="zh-Hant">');
     }
   });
 });

@@ -168,7 +168,7 @@ it("groups contents by campaign and reads each campaign once", async () => {
   expect(calls.filter((c) => c.path === "/v1/campaigns/launch")).toHaveLength(1);
   expect(calls.filter((c) => c.path === "/v1/campaigns/second")).toHaveLength(1);
   // 每份內容有自己的分享連結
-  expect($('[data-share-content="c2"] [data-share-link] [data-url]')!.textContent).toContain("/campaign/second?s=SC2");
+  expect($('[data-share-content="c2"] [data-share-link] [data-url]')!.textContent).toBe(`${location.origin}/?s=SC2`);
 });
 
 it("lists each place with its status, and the reason only when it needs more info or was not approved", async () => {

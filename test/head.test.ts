@@ -164,11 +164,13 @@ it.each([
   expect(html.match(/property="og:title"/g)).toHaveLength(1);
 });
 
+// 沒有語言前綴：看抓取器的 Accept-Language 分繁簡，分不出來用簡體（owner 2026-10-17）
 it.each([
-  ["/me", "zh-Hant", "綺夢社・AI寢物語"],
-  ["/en/me", "en", "Hearthroom · Character Board"],
-])("SPA 頁面的 HTML 殼有各語言的預設分享圖：%s", async (path, lang, title) => {
-  const response = await SELF.fetch(`https://${PRIMARY_HOST}${path}`);
+  ["/me", "zh-TW", "zh-Hant", "綺夢社・AI寢物語"],
+  ["/me", "", "zh-Hans", "绮梦社・AI寝物语"],
+  ["/en/me", "zh-TW", "en", "Hearthroom · Character Board"],
+])("SPA 頁面的 HTML 殼有各語言的預設分享圖：%s（%s）", async (path, acceptLanguage, lang, title) => {
+  const response = await SELF.fetch(`https://${PRIMARY_HOST}${path}`, { headers: acceptLanguage ? { "Accept-Language": acceptLanguage } : {} });
   expect(response.headers.get("content-type")).toContain("text/html");
   const html = await response.text();
   expect(html).toContain(`<meta property="og:title" content="${title}">`);
@@ -177,7 +179,9 @@ it.each([
   expect(html).toContain('<meta name="twitter:card" content="summary_large_image">');
   expect(html).toContain('<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">');
   expect(html).not.toContain('rel="canonical"');
-  expect(html).toContain("<title>Hearthroom</title>");
+  // 微信、QQ 讀 <title> 與 description：殼的也換成站名與說明
+  expect(html).toContain(`<title>${title}</title>`);
+  expect(html).toContain(`<html lang="${lang}"`);
 });
 
 it("靜態資源不會被加上分享標籤", async () => {

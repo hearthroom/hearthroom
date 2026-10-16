@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * 每份分享內容的專屬連結：活動頁網址＋推薦碼（?ref=，讀不到就不帶）＋分享短碼（?s=），可複製。
- * 連結指向那份內容所屬的活動頁，所以跨活動的清單也能用。複製記 campaign_share，subject 是活動 slug。
+ * 每份分享內容的專屬連結：首頁網址＋推薦碼（?ref=，讀不到就不帶）＋分享短碼（?s=），可複製。
+ * 連到首頁：看到連結的是沒來過的朋友（owner 2026-10-17）；?s= 在任何頁進站都會記下歸因。複製記 campaign_share，subject 是活動 slug。
  */
 import { onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -24,7 +24,7 @@ watch(() => session.me?.accountNumId ?? null, async (id) => {
   if ((session.me?.accountNumId ?? null) === id) refCode.value = code;
 }, { immediate: true });
 
-const linkOf = (c: ContentView) => withCampaignShare(new URL(lp(`/campaign/${c.campaignSlug}`), location.origin).href, refCode.value, c.shareCode);
+const linkOf = (c: ContentView) => withCampaignShare(new URL(lp("/"), location.origin).href, refCode.value, c.shareCode);
 
 const copied = ref("");
 let timer: ReturnType<typeof setTimeout> | undefined;
