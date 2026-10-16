@@ -9,6 +9,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createApp, h, type App } from "vue";
 import { createPinia } from "pinia";
 import { createMemoryHistory, createRouter, RouterView, type Router } from "vue-router";
+import { PLATFORMS } from "../src/lib/campaign";
 import { i18n } from "../src/lib/i18n";
 
 const mocks = vi.hoisted(() => ({ commentStats: null as unknown }));
@@ -30,7 +31,6 @@ const campaign = (slug: string, title: string, extra: Record<string, unknown> = 
 });
 const ended = (slug: string, title: string) => campaign(slug, title, { status: "ended", startsAt: Date.now() - 40 * DAY, endsAt: Date.now() - 10 * DAY });
 
-const PLATFORMS = ["qq_group", "tieba", "bahamut", "moments", "video", "forum", "other"] as const;
 const effect = (extra: Record<string, unknown> = {}) => ({ visitors: 0, attributed: 0, firstPlay: 0, d7: { eligible: 0, retained: 0 }, d30: { eligible: 0, retained: 0 }, costPerD7: null, costPerD30: null, ...extra });
 const stats = (extra: Record<string, unknown> = {}) => ({
   funnel: {
