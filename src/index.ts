@@ -73,6 +73,7 @@ import { livePost, publicPostById } from "./blog";
 import { reportComment } from "./comment-moderation";
 import { commentModerationRoutes } from "./comment-moderation-routes";
 import { blogRoutes } from "./blog-routes";
+import { sitemapXml } from "./sitemap";
 import { campaignRoutes } from "./campaign-routes";
 import { campaignMaintenance } from "./campaign-evidence";
 import { readSettings } from "./community-settings";
@@ -880,6 +881,8 @@ app.post("/v1/blog/posts/:postId/comments", async (c) => {
 app.route("/", communityRoutes);
 app.route("/", campaignRoutes);
 app.route("/", blogRoutes);
+app.get("/sitemap.xml", async (c) =>
+  c.body(await sitemapXml(c.env.DB, Date.now()), 200, { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" }));
 app.route("/", libraryRoutes);
 app.route("/", sukiRoutes);
 app.route("/", updatesRoutes);
