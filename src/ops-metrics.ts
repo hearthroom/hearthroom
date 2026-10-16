@@ -12,9 +12,9 @@ const METRICS = {
   },
   blog: {
     name: "hearthroom_blog_operations_total",
-    help: "Official blog: saves, publishing, pinning, comment switch, restores, column changes and image uploads.",
+    help: "Official blog: saves, publishing, pinning, comment switch, restores, column changes, image uploads and reader likes.",
     label: "operation",
-    operations: ["save", "publish", "unpublish", "pin", "comments", "restore", "column", "image"],
+    operations: ["save", "publish", "unpublish", "pin", "comments", "restore", "column", "image", "like", "unlike"],
     outcomes: ["success", "denied", "error"],
   },
   campaign: {
