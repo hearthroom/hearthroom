@@ -257,6 +257,10 @@ async function onDone(_result: ApplyResult) {
               <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.25" /><path d="M10 13.5v-7M7 9.25l3-3 3 3" /></svg>
               <span>{{ t("campaign.page.highest") }}</span>
             </li>
+            <li v-if="campaign.lightLimit && campaign.tiers.light" data-light-limit>
+              <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.25" /><path d="M6.75 10h6.5" /></svg>
+              <span>{{ t("campaign.page.lightLimit", { n: campaign.lightLimit }) }}</span>
+            </li>
           </ul>
         </section>
 

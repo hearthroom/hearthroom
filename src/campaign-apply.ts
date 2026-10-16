@@ -108,6 +108,7 @@ export async function submitPlacement(db: D1Database, member: Applicant, slug: s
     if (!own) throw new HttpError(404, "share_content_not_found");
   }
   if (cardId !== null && !(await db.prepare("SELECT 1 AS ok FROM cards WHERE id = ?").bind(cardId).first("ok"))) invalid("cardId");
+  await checkLightLimit(db, campaign, member.id, requestedTier, null);
 
   const placementId = crypto.randomUUID();
   const contentId = fresh ? crypto.randomUUID() : (body.contentId as string);
@@ -147,6 +148,19 @@ export async function submitPlacement(db: D1Database, member: Applicant, slug: s
   }
 }
 
+/**
+ * 輕量分享每人上限：這個人在這個活動裡，申請或核准為輕量、還沒被拒的位置（不算 except 那一筆）已經到上限就擋。
+ * 只在這一筆要申請輕量時才查。並發的兩筆可能一起越過一格，上限是防洗量不是記帳，不值得為它鎖。
+ */
+async function checkLightLimit(db: D1Database, campaign: Campaign, memberId: string, tier: Tier, except: string | null): Promise<void> {
+  if (tier !== "light" || campaign.lightLimit === null) return;
+  const used = await db.prepare(
+    `SELECT count(*) AS n FROM share_placements p JOIN share_contents s ON s.id = p.content_id
+     WHERE s.member_id = ? AND s.campaign_id = ? AND p.review_status != 'rejected' AND COALESCE(p.approved_tier, p.requested_tier) = 'light' AND p.id != ?`,
+  ).bind(memberId, campaign.id, except ?? "").first<number>("n");
+  if ((used ?? 0) >= campaign.lightLimit) throw new HttpError(409, "campaign_light_limit");
+}
+
 // ---- 補件重送 -----------------------------------------------------------------
 
 type PlacementRow = {
@@ -172,6 +186,7 @@ export async function resubmitPlacement(db: D1Database, member: Applicant, id: s
   const note = body.note === undefined ? p.note : body.note === null ? "" : text(body.note, "note", 0, 1000);
   const requestedTier = body.requestedTier === undefined ? p.requested_tier : oneOf(body.requestedTier, TIERS, "requestedTier");
   const evidenceIds = evidenceIdsOf(body.evidenceIds);
+  await checkLightLimit(db, campaign, member.id, requestedTier, id);
   if (!url && !evidenceIds.length) {
     const kept = await db.prepare("SELECT count(*) AS n FROM share_evidence WHERE placement_id = ? AND purged_at IS NULL").bind(id).first<number>("n");
     if (!kept) invalid("evidence");

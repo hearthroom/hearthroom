@@ -29,6 +29,8 @@ export type Campaign = {
   bannerKey: string | null; bannerUrl: string | null;
   startsAt: number | null; endsAt: number | null; timezone: string | null; submitDeadline: number | null; payoutDeadline: number | null;
   tiers: Partial<Record<Tier, number>>; extraPlacementAmount: number | null; flagBurstThreshold: number | null; evidenceRetentionDays: number;
+  /** 每人最多幾個輕量分享（申請或核准為輕量、沒被拒的位置）；null＝不限 */
+  lightLimit: number | null;
   /** 推薦到首頁：進行中或即將開始時出現在看板輪播。不影響啟用條件。 */
   featured: boolean;
   status: CampaignStatus; version: number; createdAt: number; updatedAt: number;
@@ -37,7 +39,7 @@ export type Campaign = {
 export type CampaignInput = {
   id?: string; expectedVersion?: number; slug: string; title: Localized; intro?: Localized; bannerKey?: string | null;
   startsAt?: number | null; endsAt?: number | null; timezone?: string | null; submitDeadline?: number | null; payoutDeadline?: number | null;
-  tiers?: Partial<Record<Tier, number>>; extraPlacementAmount?: number | null; flagBurstThreshold?: number | null; evidenceRetentionDays?: number; featured?: boolean;
+  tiers?: Partial<Record<Tier, number>>; extraPlacementAmount?: number | null; lightLimit?: number | null; flagBurstThreshold?: number | null; evidenceRetentionDays?: number; featured?: boolean;
 };
 
 // ---- 計算 ---------------------------------------------------------------------
@@ -118,16 +120,16 @@ export function canActivate(c: Campaign): { ok: true } | { ok: false; field: str
 
 type Row = {
   id: string; slug: string; title: string; intro: string; banner_key: string | null; starts_at: number | null; ends_at: number | null;
-  timezone: string | null; submit_deadline: number | null; payout_deadline: number | null; tiers: string; extra_placement_amount: number | null;
+  timezone: string | null; submit_deadline: number | null; payout_deadline: number | null; tiers: string; extra_placement_amount: number | null; light_limit: number | null;
   flag_burst_threshold: number | null; evidence_retention_days: number; featured: number; status: CampaignStatus; version: number; created_at: number; updated_at: number;
 };
-const EDITABLE = ["slug", "title", "intro", "banner_key", "starts_at", "ends_at", "timezone", "submit_deadline", "payout_deadline", "tiers", "extra_placement_amount", "flag_burst_threshold", "evidence_retention_days", "featured"] as const;
+const EDITABLE = ["slug", "title", "intro", "banner_key", "starts_at", "ends_at", "timezone", "submit_deadline", "payout_deadline", "tiers", "extra_placement_amount", "light_limit", "flag_burst_threshold", "evidence_retention_days", "featured"] as const;
 type Editable = Pick<Row, (typeof EDITABLE)[number]>;
 
 const toCampaign = (r: Row): Campaign => ({
   id: r.id, slug: r.slug, title: JSON.parse(r.title), intro: JSON.parse(r.intro), bannerKey: r.banner_key, bannerUrl: imageUrl(r.banner_key),
   startsAt: r.starts_at, endsAt: r.ends_at, timezone: r.timezone, submitDeadline: r.submit_deadline, payoutDeadline: r.payout_deadline,
-  tiers: JSON.parse(r.tiers), extraPlacementAmount: r.extra_placement_amount, flagBurstThreshold: r.flag_burst_threshold,
+  tiers: JSON.parse(r.tiers), extraPlacementAmount: r.extra_placement_amount, lightLimit: r.light_limit, flagBurstThreshold: r.flag_burst_threshold,
   evidenceRetentionDays: r.evidence_retention_days, featured: r.featured === 1, status: r.status, version: r.version, createdAt: r.created_at, updatedAt: r.updated_at,
 });
 /** 稽核的改前改後：設定本身，不含時間戳與衍生的網址。 */
@@ -186,6 +188,7 @@ function clean(input: CampaignInput): Editable {
     submit_deadline: time(input.submitDeadline, "submitDeadline"), payout_deadline: time(input.payoutDeadline, "payoutDeadline"),
     tiers: JSON.stringify(cleanTiers(input.tiers)),
     extra_placement_amount: nullableInt(input.extraPlacementAmount, "extraPlacementAmount", (n) => n >= 0),
+    light_limit: nullableInt(input.lightLimit, "lightLimit", (n) => n >= 1),
     flag_burst_threshold: nullableInt(input.flagBurstThreshold, "flagBurstThreshold", (n) => n >= 1),
     evidence_retention_days: retention, featured: featured ? 1 : 0,
   };

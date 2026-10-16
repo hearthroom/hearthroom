@@ -36,14 +36,14 @@ const TIMES = ['startsAt', 'endsAt', 'submitDeadline', 'payoutDeadline'] as cons
 type TimeKey = (typeof TIMES)[number];
 type Form = {
   slug: string; title: Record<Lc, string>; intro: Record<Lc, string>; bannerKey: string | null; timezone: string;
-  times: Record<TimeKey, string>; tiers: Record<Tier, Num>; extraPlacementAmount: Num; flagBurstThreshold: Num; evidenceRetentionDays: Num; featured: boolean;
+  times: Record<TimeKey, string>; tiers: Record<Tier, Num>; extraPlacementAmount: Num; lightLimit: Num; flagBurstThreshold: Num; evidenceRetentionDays: Num; featured: boolean;
 };
 const perLocale = (l: Localized = {}) => Object.fromEntries(POST_LOCALES.map((k) => [k, l[k] ?? ''])) as Record<Lc, string>;
 const num = (v: number | null | undefined): Num => (v ?? '');
 const empty = (): Form => ({
   slug: '', title: perLocale(), intro: perLocale(), bannerKey: null, timezone: DEFAULT_TIMEZONE,
   times: { startsAt: '', endsAt: '', submitDeadline: '', payoutDeadline: '' },
-  tiers: { light: '', original: '', guide: '', video: '' }, extraPlacementAmount: '', flagBurstThreshold: '', evidenceRetentionDays: '', featured: false,
+  tiers: { light: '', original: '', guide: '', video: '' }, extraPlacementAmount: '', lightLimit: '', flagBurstThreshold: '', evidenceRetentionDays: '', featured: false,
 });
 const fromCampaign = (c: Campaign): Form => {
   const tz = c.timezone || DEFAULT_TIMEZONE;
@@ -51,7 +51,7 @@ const fromCampaign = (c: Campaign): Form => {
     slug: c.slug, title: perLocale(c.title), intro: perLocale(c.intro), bannerKey: c.bannerKey, timezone: tz,
     times: Object.fromEntries(TIMES.map((k) => [k, c[k] === null ? '' : epochToZoned(c[k]!, tz)])) as Record<TimeKey, string>,
     tiers: Object.fromEntries(TIERS.map((k) => [k, num(c.tiers[k])])) as Record<Tier, Num>,
-    extraPlacementAmount: num(c.extraPlacementAmount), flagBurstThreshold: num(c.flagBurstThreshold), evidenceRetentionDays: num(c.evidenceRetentionDays), featured: c.featured,
+    extraPlacementAmount: num(c.extraPlacementAmount), lightLimit: num(c.lightLimit), flagBurstThreshold: num(c.flagBurstThreshold), evidenceRetentionDays: num(c.evidenceRetentionDays), featured: c.featured,
   };
 };
 const compact = (l: Record<Lc, string>) => Object.fromEntries(Object.entries(l).filter(([, v]) => v.trim())) as Localized;
@@ -60,7 +60,7 @@ const toInput = (f: Form): CampaignInput => ({
   slug: f.slug.trim(), title: compact(f.title), intro: compact(f.intro), bannerKey: f.bannerKey, timezone: f.timezone,
   ...(Object.fromEntries(TIMES.map((k) => [k, zonedToEpoch(f.times[k], f.timezone)])) as Record<TimeKey, number | null>),
   tiers: Object.fromEntries(TIERS.filter((k) => f.tiers[k] !== '').map((k) => [k, Number(f.tiers[k])])),
-  extraPlacementAmount: orNull(f.extraPlacementAmount), flagBurstThreshold: orNull(f.flagBurstThreshold), featured: f.featured,
+  extraPlacementAmount: orNull(f.extraPlacementAmount), lightLimit: orNull(f.lightLimit), flagBurstThreshold: orNull(f.flagBurstThreshold), featured: f.featured,
   ...(f.evidenceRetentionDays === '' ? {} : { evidenceRetentionDays: Number(f.evidenceRetentionDays) }),
 });
 
@@ -291,6 +291,11 @@ watch(() => route.params.id, (id) => { if (/\/review\/settings\/campaigns\/[^/]+
         <span>{{ t('campaign.field.extra') }}</span>
         <input v-model="form.extraPlacementAmount" class="input cset-short" type="number" inputmode="numeric" min="0" step="1" data-field="extraPlacementAmount" :placeholder="t('campaign.field.unset')" :disabled="locked" :aria-invalid="bad('extraPlacementAmount') || undefined" />
         <span v-if="bad('extraPlacementAmount')" class="cset-err" data-field-error="extraPlacementAmount">{{ t('campaign.error.fieldMissing', { field: fieldLabel('extraPlacementAmount') }) }}</span>
+      </label>
+      <label class="field">
+        <span>{{ t('campaign.field.lightLimit') }}</span>
+        <input v-model="form.lightLimit" class="input cset-short" type="number" inputmode="numeric" min="1" step="1" data-field="lightLimit" :placeholder="t('campaign.field.unset')" :disabled="locked" :aria-invalid="bad('lightLimit') || undefined" />
+        <span v-if="bad('lightLimit')" class="cset-err" data-field-error="lightLimit">{{ t('campaign.error.fieldMissing', { field: fieldLabel('lightLimit') }) }}</span>
       </label>
       <label class="field">
         <span>{{ t('campaign.field.burst') }}</span>

@@ -185,7 +185,7 @@ describe("公開資訊", () => {
     expect(detail).toEqual({
       slug: "launch", title: { "zh-Hant": "開站分享" }, phase: "open", startsAt: T0, endsAt: T0 + 10 * DAY, timezone: "Asia/Taipei", bannerUrl: null, featured: false,
       intro: { "zh-Hant": "分享就有點數" }, submitDeadline: T0 + 12 * DAY, payoutDeadline: T0 + 20 * DAY,
-      tiers: { light: 500, original: 3000, guide: 5000, video: 10000 }, extraPlacementAmount: 500,
+      tiers: { light: 500, original: 3000, guide: 5000, video: 10000 }, extraPlacementAmount: 500, lightLimit: null,
     });
     for (const leaked of ["id", "flagBurstThreshold", "evidenceRetentionDays", "createdBy", "bannerKey", "version", "status", "balance"]) expect(Object.keys(detail)).not.toContain(leaked);
 
