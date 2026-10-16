@@ -17,7 +17,7 @@ export type CampaignPhase = "draft" | "upcoming" | "open" | "ended";
 export interface Campaign {
   id: string; slug: string; title: Localized; intro: Localized; bannerKey: string | null; bannerUrl: string | null;
   startsAt: number | null; endsAt: number | null; timezone: string | null; submitDeadline: number | null; payoutDeadline: number | null;
-  tiers: Partial<Record<Tier, number>>; extraPlacementAmount: number | null; flagBurstThreshold: number | null; evidenceRetentionDays: number;
+  tiers: Partial<Record<Tier, number>>; extraPlacementAmount: number | null; lightLimit: number | null; flagBurstThreshold: number | null; evidenceRetentionDays: number;
   /** 推薦到首頁：進行中或即將開始時出現在看板輪播。 */
   featured: boolean;
   status: CampaignStatus; version: number; createdAt: number; updatedAt: number;
@@ -26,7 +26,7 @@ export interface Campaign {
 export interface CampaignInput {
   slug: string; title: Localized; intro: Localized; bannerKey: string | null;
   startsAt: number | null; endsAt: number | null; timezone: string | null; submitDeadline: number | null; payoutDeadline: number | null;
-  tiers: Partial<Record<Tier, number>>; extraPlacementAmount: number | null; flagBurstThreshold: number | null; evidenceRetentionDays?: number; featured: boolean;
+  tiers: Partial<Record<Tier, number>>; extraPlacementAmount: number | null; lightLimit: number | null; flagBurstThreshold: number | null; evidenceRetentionDays?: number; featured: boolean;
 }
 /** Provider 的點數池設定，只能看；configured 為 false 時其餘欄位不存在。 */
 export type CampaignPool =
@@ -105,7 +105,7 @@ const FIELD_LABEL: Record<string, string> = {
   slug: "campaign.field.slug", title: "campaign.field.title", intro: "campaign.field.intro", bannerKey: "campaign.field.banner",
   startsAt: "campaign.field.startsAt", endsAt: "campaign.field.endsAt", timezone: "campaign.field.timezone",
   submitDeadline: "campaign.field.submitDeadline", payoutDeadline: "campaign.field.payoutDeadline", tiers: "campaign.field.tiers",
-  extraPlacementAmount: "campaign.field.extra", flagBurstThreshold: "campaign.field.burst", evidenceRetentionDays: "campaign.field.retention",
+  extraPlacementAmount: "campaign.field.extra", lightLimit: "campaign.field.lightLimit", flagBurstThreshold: "campaign.field.burst", evidenceRetentionDays: "campaign.field.retention",
   featured: "campaign.field.featured",
 };
 /** 申請、審核、發放的 share_invalid 欄位。evidenceIds 與 evidence（沒連結也沒截圖）都講成同一格。 */
@@ -126,7 +126,7 @@ const SETTINGS_MESSAGE: Record<string, string> = {
 };
 /** 申請、截圖、審核、發放的碼：每個都有 campaign.error.<碼>。頁面要講得更細的另外處理，這裡是通用的一句。 */
 const CAMPAIGN_CODES = new Set([
-  "campaign_not_found", "campaign_not_open", "share_content_not_found", "evidence_not_attachable", "campaign_rate_limited", "campaign_operation_repeated",
+  "campaign_not_found", "campaign_not_open", "campaign_light_limit", "share_content_not_found", "evidence_not_attachable", "campaign_rate_limited", "campaign_operation_repeated",
   "share_placement_not_found", "share_not_editable", "campaign_submit_closed", "evidence_invalid", "evidence_rate_limited", "evidence_unavailable", "evidence_purged",
   "evidence_not_found", "share_self_review", "share_version_conflict", "share_already_decided", "agent_not_allowed", "community_admin_required", "share_self_payout",
   "share_payout_not_found", "campaign_not_payable", "campaign_payout_closed", "share_nothing_due", "share_payout_in_progress", "share_payout_not_retryable",
@@ -195,6 +195,8 @@ const query = (q: Record<string, string | number | undefined>) => {
 export interface PublicCampaign {
   slug: string; title: Localized; phase: "upcoming" | "open" | "ended"; startsAt: number | null; endsAt: number | null; timezone: string | null; bannerUrl: string | null; featured: boolean;
   intro: Localized; submitDeadline: number | null; payoutDeadline: number | null; tiers: Partial<Record<Tier, number>>; extraPlacementAmount: number | null;
+  /** 每人最多幾個輕量分享；null＝不限 */
+  lightLimit?: number | null;
 }
 /** 不帶令牌：訪客也看得到活動頁。 */
 export async function fetchCampaign(slug: string): Promise<PublicCampaign> {
