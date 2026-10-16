@@ -499,8 +499,10 @@ async function onDone(_result: ApplyResult) {
 }
 @media (max-width: 860px) {
   /* 一欄：右欄與內容欄都拆開，照 order 排成 頁頭 → 獎勵 → 內容 → 我的分享 → 小提醒 */
-  .campaign__grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: none; gap: var(--s-4); }
+  .campaign__grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: none; gap: var(--s-3); }
+  .campaign__head { gap: var(--s-2); }
   .campaign__side, .campaign__body { display: contents; }
+  .campaign__head, .campaign__side, .campaign__body { grid-area: auto; }
   .campaign__head { order: 1; }
   .campaign__rewards { order: 2; }
   .campaign__body > * { order: 3; }
