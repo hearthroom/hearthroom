@@ -2179,7 +2179,7 @@
   "campaign.settings.empty": "아직 이벤트가 없어요. 만들면 여기에 표시돼요.",
   "campaign.settings.edit": "편집",
   "campaign.settings.view": "보기",
-  "campaign.settings.close": "닫기",
+  "campaign.settings.back": "캠페인 목록으로 돌아가기",
   "campaign.settings.save": "이벤트 저장",
   "campaign.settings.saved": "이벤트를 저장했어요",
   "campaign.settings.saveFirst": "변경 사항을 저장해야 이벤트를 시작하거나 끝낼 수 있어요.",

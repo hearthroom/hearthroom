@@ -2179,7 +2179,7 @@
   "campaign.settings.empty": "還沒有活動，建立第一個活動就會出現在這裡。",
   "campaign.settings.edit": "編輯",
   "campaign.settings.view": "查看",
-  "campaign.settings.close": "收起",
+  "campaign.settings.back": "返回活動列表",
   "campaign.settings.save": "儲存活動",
   "campaign.settings.saved": "活動已儲存",
   "campaign.settings.saveFirst": "修改存好之後才能開始或結束活動。",

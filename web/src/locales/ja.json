@@ -2179,7 +2179,7 @@
   "campaign.settings.empty": "キャンペーンはまだありません。作成するとここに表示されます。",
   "campaign.settings.edit": "編集",
   "campaign.settings.view": "表示",
-  "campaign.settings.close": "閉じる",
+  "campaign.settings.back": "キャンペーン一覧に戻る",
   "campaign.settings.save": "キャンペーンを保存",
   "campaign.settings.saved": "キャンペーンを保存しました",
   "campaign.settings.saveFirst": "変更を保存してから、キャンペーンを開始または終了できます。",
