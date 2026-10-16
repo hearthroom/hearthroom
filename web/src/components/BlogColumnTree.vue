@@ -220,7 +220,7 @@ onBeforeUnmount(() => {
 .btree__menu { position: relative; }
 /* 位置由 place() 寫入 top／left；固定定位才不會被可捲動的左欄裁掉 */
 .btree__pop {
-  position: fixed; z-index: 45; display: grid; min-width: 160px; padding: var(--s-1);
+  position: fixed; z-index: 50; display: grid; min-width: 160px; padding: var(--s-1);
   background: var(--surface); border-radius: var(--r-md);
   box-shadow: 0 0 0 1px var(--line-strong), var(--shadow-md);
 }

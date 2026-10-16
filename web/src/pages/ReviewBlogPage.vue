@@ -230,6 +230,8 @@ onMounted(() => { document.title = pageTitle(t('moderation.tab.blog')); void loa
 .rblog { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: var(--s-5); align-items: start; min-width: 0; }
 /* 左欄自己捲動，長樹也用得了；「⋯」選單是固定定位，不會被這裡的 overflow 裁掉 */
 .rblog-side { position: sticky; top: calc(var(--header-h) + var(--s-3)); padding: var(--s-2); max-height: calc(100vh - var(--header-h) - var(--s-6)); overflow-y: auto; overscroll-behavior: contain; }
+/* 左欄是 sticky，自成一層：選單打開時把整欄抬到看板娘（z-index 45）之上，選單才不會被蓋住；仍低於彈窗與提示 */
+.rblog-side:has(.btree__menu[open]) { z-index: 50; }
 .rblog-side__toggle { display: none; }
 .rblog-forbidden { margin: 0; padding: var(--s-5); grid-column: 1 / -1; }
 
