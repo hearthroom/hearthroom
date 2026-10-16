@@ -29,7 +29,7 @@ export type Campaign = {
   bannerKey: string | null; bannerUrl: string | null;
   startsAt: number | null; endsAt: number | null; timezone: string | null; submitDeadline: number | null; payoutDeadline: number | null;
   tiers: Partial<Record<Tier, number>>; extraPlacementAmount: number | null; flagBurstThreshold: number | null; evidenceRetentionDays: number;
-  /** 群聊分享（輕量）每人每週最多發放幾個位置；null＝不限（見 lightCaps） */
+  /** 隨手分享（light）每人每週最多發放幾個位置；null＝不限（見 lightCaps） */
   lightLimit: number | null;
   /** 推薦到首頁：進行中或即將開始時出現在看板輪播。不影響啟用條件。 */
   featured: boolean;
@@ -48,7 +48,7 @@ export type PlacementForPay = { reviewStatus: string; approvedTier: Tier | null;
 
 /**
  * 目標金額＝最高檔金額＋追加金額×(算數的核准位置數−1)；沒有任何算數的位置就是 0。due 是還沒發的部分，不會是負數。全專案只有這一份。
- * cap 是群聊分享（輕量）每週上限算下來，這份內容最多能算幾個位置（lightCaps）；沒給就不封頂。
+ * cap 是隨手分享（light）每週上限算下來，這份內容最多能算幾個位置（lightCaps）；沒給就不封頂。
  */
 export function payoutAmount(placements: PlacementForPay[], campaign: Pick<Campaign, "tiers" | "extraPlacementAmount">, paidTotal: number, cap?: number): { tier: Tier | null; target: number; due: number } {
   const approved = placements.filter((p) => p.reviewStatus === "approved" && p.approvedTier);
@@ -61,7 +61,7 @@ export function payoutAmount(placements: PlacementForPay[], campaign: Pick<Campa
   return { tier, target, due: Math.max(target - paidTotal, 0) };
 }
 
-// ---- 群聊分享（輕量）每週上限 ------------------------------------------------------
+// ---- 隨手分享（light）每週上限 ------------------------------------------------------
 /*
  * owner 2026-10-17：輕量那一檔一則就給積分，會有人找一堆群洗；提交照收、審核照做，但發放每人每週最多 light_limit 個。
  * 週＝分享貼出的時間（published_at）在活動時區的週一 00:00 起算。同一週裡照核准先後（reviewed_at）給名額，

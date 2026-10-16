@@ -195,7 +195,7 @@ const query = (q: Record<string, string | number | undefined>) => {
 export interface PublicCampaign {
   slug: string; title: Localized; phase: "upcoming" | "open" | "ended"; startsAt: number | null; endsAt: number | null; timezone: string | null; bannerUrl: string | null; featured: boolean;
   intro: Localized; submitDeadline: number | null; payoutDeadline: number | null; tiers: Partial<Record<Tier, number>>; extraPlacementAmount: number | null;
-  /** 群聊分享（輕量）每人每週最多發放幾個；null＝不限 */
+  /** 隨手分享（light）每人每週最多發放幾個；null＝不限 */
   lightLimit?: number | null;
 }
 /** 不帶令牌：訪客也看得到活動頁。 */
