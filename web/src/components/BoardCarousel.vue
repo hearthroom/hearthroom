@@ -7,12 +7,15 @@
  * 幾張疊在同一格裡淡入淡出，高度由最高的那張決定（通常是蘇綺那張，活動卡比它高時蘇綺跟著撐滿）：換張時版面不跳。
  * 沒有蘇綺時活動卡自己撐高度，跟歡迎橫幅一樣高。
  *
+ * 活動之後最多再接一張文章：置頂中、30 天內發布的最新一篇（homePost），關聯的活動已經在輪播裡就不放。
+ *
  * 每 7 秒換一張。滑鼠在上面、焦點在裡面、分頁在背景時暫停；手指碰過就不再自己換（正在點蘇綺的選項時不被換走）；
  * 系統設定減少動態時不自己換。圓點與左右鍵（寬螢幕）可以手動換，手機可以左右滑。
  */
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink } from "vue-router";
+import type { PostCard } from "@/lib/blog";
 import type { CampaignSummary } from "@/lib/campaign";
 import { track } from "@/lib/track";
 import { useLocalePath } from "@/lib/use-locale";
@@ -27,6 +30,8 @@ const SWIPE = 40;
 
 const lib = shallowRef<CampaignLib | null>(null);
 const featured = ref<CampaignSummary[]>([]);
+const post = ref<PostCard | null>(null);
+const postColumn = ref("");
 onMounted(async () => {
   try {
     const m = await import("@/lib/campaign");
@@ -34,16 +39,30 @@ onMounted(async () => {
     featured.value = m.featuredCampaigns(items);
     lib.value = m;
   } catch { /* 讀不到就只有蘇綺 */ }
+  if (!props.campaigns) return;
+  try {
+    const b = await import("@/lib/blog");
+    const { pinned } = await b.fetchPosts({}, 1);
+    const pick = b.homePost(pinned, featured.value.map((c) => c.slug), Date.now());
+    if (!pick) return;
+    postPath.value = b.postPath(pick);
+    // 欄目名讀不到就寫「官方」，卡片照樣出現
+    postColumn.value = await b.fetchColumns()
+      .then(({ items }) => b.columnName(b.allColumns(items).find((c) => c.slug === pick.columnSlug), locale.value, ""))
+      .catch(() => "") || t("blog.official");
+    post.value = pick;
+  } catch { /* 讀不到就沒有文章卡 */ }
 });
+const postPath = ref("");
 
 const slides = computed(() => {
   const m = lib.value;
   if (!m || !props.campaigns) return [];
   return featured.value.map((c) => ({ slug: c.slug, phase: c.phase, bannerUrl: c.bannerUrl, title: m.localized(c.title, locale.value) || c.slug, period: m.formatPeriod(c, locale.value) }));
 });
-const on = computed(() => slides.value.length > 0);
+const on = computed(() => slides.value.length > 0 || !!post.value);
 const offset = computed(() => (props.hero ? 1 : 0));
-const count = computed(() => offset.value + slides.value.length);
+const count = computed(() => offset.value + slides.value.length + (post.value ? 1 : 0));
 
 const index = ref(0);
 // 蘇綺出現或收起來時張數的對應會錯開一張：回到第一張
@@ -127,6 +146,20 @@ const clicked = (slug: string) => track("cta", { detail: "carousel", subject: sl
           </span>
         </RouterLink>
       </div>
+      <div
+        v-if="post" class="carousel__slide" :class="{ 'carousel__slide--on': index === slides.length + offset }"
+        v-bind="slideAttrs(slides.length + offset)" :data-slide="`post:${post.slug}`"
+      >
+        <RouterLink class="carousel__card" :class="{ 'carousel__card--banner': post.coverUrl }" :to="lp(postPath)" @click="clicked(`post:${post.slug}`)">
+          <img v-if="post.coverUrl" class="carousel__img" :src="post.coverUrl" alt="" decoding="async" />
+          <svg v-else class="carousel__mark" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 4c1.6 9.6 10.4 18.4 20 20-9.6 1.6-18.4 10.4-20 20-1.6-9.6-10.4-18.4-20-20 9.6-1.6 18.4-10.4 20-20z" /></svg>
+          <span class="carousel__body">
+            <span class="carousel__phase carousel__phase--post">{{ postColumn }}</span>
+            <strong class="carousel__title">{{ post.title }}</strong>
+            <span class="btn btn--primary carousel__cta">{{ t("blog.carousel.read") }}</span>
+          </span>
+        </RouterLink>
+      </div>
     </div>
 
     <div v-if="on && count > 1" class="carousel__controls">
@@ -206,6 +239,8 @@ const clicked = (slug: string) => track("cta", { detail: "carousel", subject: sl
 .carousel__phase::before { content: ""; width: 6px; height: 6px; border-radius: var(--r-pill); background: currentColor; }
 .carousel__phase--open { background: var(--success-soft); color: var(--success); }
 .carousel__phase--upcoming { background: var(--accent-soft); color: var(--accent-text); }
+/* 文章卡標的是欄目，不是狀態：不帶狀態圓點 */
+.carousel__phase--post::before { display: none; }
 .carousel__card--banner .carousel__phase { background: rgba(255, 255, 255, 0.2); color: #fff; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 .carousel__title {
   font-size: 30px; font-weight: 800; line-height: 1.25; letter-spacing: -0.01em; overflow-wrap: anywhere;

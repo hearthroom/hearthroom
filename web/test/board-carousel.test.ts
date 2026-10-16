@@ -172,3 +172,45 @@ describe("首頁", () => {
     expect(boardSource).not.toContain("CampaignBanner");
   });
 });
+
+describe("blog post slide", () => {
+  const post = (over: Record<string, unknown> = {}) => ({
+    id: "p1", columnSlug: "news", slug: "hello", title: "開站了", excerpt: "", coverUrl: null, locale: "zh-Hant", firstPublishedAt: Date.now() - 86_400_000,
+    pinned: true, readMinutes: 1, commentCount: 0, campaign: null, ...over,
+  });
+  const columns = { items: [{ id: "g1", slug: "official", name: { "zh-Hant": "官方消息" }, description: {}, sort: 0, enabled: true, parentId: null,
+    columns: [{ id: "c1", slug: "news", name: { "zh-Hant": "公告" }, description: {}, sort: 0, enabled: true, parentId: "g1" }] }] };
+  const serve = (pinned: unknown[]) => vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+    const path = url.split("?")[0];
+    const body = path === "/v1/campaigns" ? { items: list } : path === "/v1/blog/posts" ? { total: 0, pinned, items: [] } : path === "/v1/blog/columns" ? columns : null;
+    return new Response(JSON.stringify(body ?? {}), { status: body ? 200 : 404, headers: { "Content-Type": "application/json" } });
+  }));
+
+  it("adds one slide for a fresh pinned post, after the campaigns, linking to the post", async () => {
+    serve([post()]);
+    await mount();
+    const slide = $('[data-slide="post:hello"]')!;
+    expect(slide).not.toBeNull();
+    expect(slides().at(-1)).toBe(slide);
+    expect(slide.querySelector("a")!.getAttribute("href")).toBe("/blog/news/hello");
+    expect(slide.textContent).toContain("公告");
+    expect(slide.textContent).toContain("開站了");
+    slide.querySelector("a")!.click();
+    expect(tracked).toContainEqual(["cta", { detail: "carousel", subject: "post:hello" }]);
+  });
+
+  it("shows the post alone when there are no featured campaigns", async () => {
+    list = [];
+    serve([post()]);
+    await mount();
+    expect($(".carousel--on")).not.toBeNull();
+    expect(slides()).toHaveLength(2);
+  });
+
+  it("leaves the carousel as it was when no post qualifies", async () => {
+    serve([post({ firstPublishedAt: Date.now() - 31 * 86_400_000 })]);
+    await mount();
+    expect($('[data-slide^="post:"]')).toBeNull();
+    expect(slides()).toHaveLength(3);
+  });
+});
