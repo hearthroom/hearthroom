@@ -2542,7 +2542,7 @@
   "campaign.page.rewards.referral.label": "好友来充值，你拿",
   "campaign.page.rewards.referral.value": "首充 {first}%",
   "campaign.page.rewards.referral.cap": "最高 {cap} 积分",
-  "campaign.page.rewards.referral.rebate": "用你的链接注册后 {period} 内每笔 {rebate}%",
+  "campaign.page.rewards.referral.rebate": "用你的链接注册后{period}内每笔 {rebate}%",
   "campaign.page.cta.guest.title": "登录就能拿到专属链接",
   "campaign.page.cta.friendGift": "好友用链接注册，他拿 {friendTotal} 积分。",
   "campaign.page.cta.inviteeBonus": "好友第一次充值，另外多拿 {inviteePercent}%。",

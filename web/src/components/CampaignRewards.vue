@@ -147,8 +147,12 @@ onBeforeUnmount(() => clearTimeout(timer));
 .rewards__actions { display: grid; gap: var(--s-2); }
 .rewards__actions--two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .rewards__btn { width: 100%; min-height: 48px; }
+/* 桌機在右欄（約 360 寬）：兩格並排放不下「500–10,000 積分」，改上下排 */
+@media (min-width: 861px) {
+  .rewards__stats { grid-template-columns: minmax(0, 1fr); }
+}
 @media (max-width: 760px) {
-  .rewards { padding: var(--s-4); gap: 14px; }
+  .rewards { padding: var(--s-4); gap: var(--s-3); }
   .rewards__h { font-size: 16px; }
   .rewards__value { font-size: 18px; }
 }

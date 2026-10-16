@@ -2542,7 +2542,7 @@
   "campaign.page.rewards.referral.label": "朋友來儲值，你拿",
   "campaign.page.rewards.referral.value": "首儲 {first}%",
   "campaign.page.rewards.referral.cap": "最高 {cap} 積分",
-  "campaign.page.rewards.referral.rebate": "用你的連結註冊後 {period} 內每筆 {rebate}%",
+  "campaign.page.rewards.referral.rebate": "用你的連結註冊後{period}內每筆 {rebate}%",
   "campaign.page.cta.guest.title": "登入就拿到你的專屬連結",
   "campaign.page.cta.friendGift": "朋友用連結註冊，他拿 {friendTotal} 積分。",
   "campaign.page.cta.inviteeBonus": "朋友第一次儲值，另外多拿 {inviteePercent}%。",
