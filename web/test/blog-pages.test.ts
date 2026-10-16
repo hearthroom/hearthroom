@@ -5,6 +5,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createApp, defineComponent, h, nextTick, type App } from "vue";
 import { createMemoryHistory, createRouter } from "vue-router";
+import { createPinia } from "pinia";
 import { dateOnly } from "../src/lib/format";
 import { i18n } from "../src/lib/i18n";
 
@@ -49,7 +50,8 @@ async function mount(component: object, path: string, pattern: string) {
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: pattern, component: { render: () => null } }, { path: "/:p(.*)*", component: { render: () => null } }] });
   await router.push(path); await router.isReady();
   host = document.body.appendChild(document.createElement("div"));
-  app = createApp(component).use(router).use(i18n);
+  // 文章頁讀登入狀態（喜歡鈕）：跟真正的 App 一樣裝上 pinia
+  app = createApp(component).use(createPinia()).use(router).use(i18n);
   app.mount(host);
   for (let i = 0; i < 6; i++) { await nextTick(); await new Promise((r) => setTimeout(r, 0)); }
   return host;
