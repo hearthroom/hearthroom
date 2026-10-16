@@ -55,6 +55,9 @@ it("lists public pages only, with each post under its own locale prefix", async 
   const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
   expect(locs).toContain(`${O}/`);
   expect(locs).toContain(`${O}/ko/updates`);
+  // 各語言首頁跟 canonical 一樣沒有結尾斜線
+  expect(locs).toContain(`${O}/en`);
+  expect(locs).not.toContain(`${O}/en/`);
   expect(locs).toContain(`${O}/blog/news/hello`);
   expect(locs).toContain(`${O}/en/blog/news/hello-en`);
   expect(locs).not.toContain(`${O}/blog/news/hello-en`);

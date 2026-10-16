@@ -91,6 +91,8 @@ let seq = 0;
 async function load() {
   const mine = ++seq;
   loading.value = true;
+  stats.value = null;
+  statsGone.value = false;
   missing.value = false;
   failed.value = false;
   try {
@@ -100,7 +102,7 @@ async function load() {
     document.title = pageTitle(res.post.title);
     if (!preview.value) {
       track("blog_view", { subject: res.post.slug });
-      void refreshStats(res.post.id);
+      void refreshStats(res.post.id, mine);
     }
     await nextTick();
     observe();
@@ -125,18 +127,22 @@ function say(text: string) { toast.value = text; clearTimeout(toastTimer); toast
 
 const session = useSession();
 const stats = ref<Engagement | null>(null);
+/** 伺服器說這篇不收閱讀與喜歡（欄目停用了，舊連結還開得到）：喜歡鈕不出現，免得怎麼按都失敗 */
+const statsGone = ref(false);
 const signInOpen = ref(false);
+const liking = ref(false);
 const statsOf = (): Engagement => stats.value ?? { views: null, likes: 0, liked: false };
-async function refreshStats(id: string) {
-  stats.value = null;
+async function refreshStats(id: string, mine: number) {
   // 本地日期（sv 地區格式剛好是 YYYY-MM-DD）：同一個瀏覽器同一篇一天只記一次
   const count = markViewed(id, new Date().toLocaleDateString("sv"));
   try {
     // 整頁載入時登入狀態可能還在恢復：先等它，否則會員看不到自己按過的喜歡
     if (!session.ready) await session.restore();
-    stats.value = await viewPost(id, count, session.me ? await session.accessToken() : null);
-  } catch {
-    // 讀不到就不顯示閱讀數；喜歡鈕照常可按
+    const res = await viewPost(id, count, session.me ? await session.accessToken() : null);
+    if (mine === seq) stats.value = res;
+  } catch (err) {
+    // 讀不到就不顯示閱讀數；喜歡鈕照常可按，除非這篇根本不收
+    if (mine === seq && err instanceof ApiError && err.status === 404) statsGone.value = true;
   }
 }
 const viewsText = computed(() => {
@@ -145,7 +151,17 @@ const viewsText = computed(() => {
 });
 async function toggleLike() {
   const p = post.value;
-  if (!p) return;
+  // 上一下還在送：不疊第二個請求，免得順序顛倒把自己的狀態弄錯
+  if (!p || liking.value) return;
+  liking.value = true;
+  try {
+    await sendLike(p);
+  } finally {
+    liking.value = false;
+  }
+}
+async function sendLike(p: NonNullable<typeof post.value>) {
+  if (!session.ready) await session.restore();
   if (!session.me) { signInOpen.value = true; return; }
   // 樂觀更新：先變，失敗再還原
   const before = statsOf();
@@ -154,7 +170,8 @@ async function toggleLike() {
   const token = await session.accessToken();
   if (!token) { stats.value = before; signInOpen.value = true; return; }
   try {
-    stats.value = { ...statsOf(), ...(await likePost(p.id, next, token)) };
+    const res = await likePost(p.id, next, token);
+    if (post.value?.id === p.id) stats.value = { ...statsOf(), ...res };
     track("blog_like", { detail: next ? "on" : "off", subject: p.slug });
   } catch {
     stats.value = before;
@@ -250,7 +267,7 @@ onBeforeUnmount(() => { headingObserver?.disconnect(); endObserver?.disconnect()
 
           <div ref="endEl" class="blog-post__share">
             <button
-              v-if="!preview" type="button" class="btn btn--sm blog-like" :class="{ 'blog-like--on': stats?.liked }" data-action="like"
+              v-if="!preview && !statsGone" type="button" class="btn btn--sm blog-like" :class="{ 'blog-like--on': stats?.liked }" data-action="like"
               :aria-pressed="stats?.liked ? 'true' : 'false'" :aria-label="t('blog.likeLabel', { n: stats?.likes ?? 0 })" @click="toggleLike"
             >
               <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.6S2.5 10.2 2.5 6.4A2.9 2.9 0 0 1 8 4.9a2.9 2.9 0 0 1 5.5 1.5c0 3.8-5.5 7.2-5.5 7.2z" /></svg>

@@ -639,8 +639,9 @@ it('each post in the list shows its reader counts: views, likes and comments', a
   await vi.waitFor(() => expect(host.querySelector('[data-post="p1"] [data-stats]')).not.toBeNull());
   const stats = [...host.querySelectorAll('[data-post="p1"] [data-stats] > span')];
   const fmt = (n: number) => new Intl.NumberFormat('zh-Hant').format(n);
-  expect(stats.map((s) => s.textContent!.trim())).toEqual([fmt(1234), '5', '2']);
-  expect(stats.map((s) => s.getAttribute('aria-label'))).toEqual([
+  // 畫面上是數字（讀屏略過），讀屏唸的是隱藏的完整說法：generic span 上的 aria-label 讀屏不唸
+  expect(stats.map((s) => s.querySelector('[aria-hidden="true"]:not(svg)')!.textContent!.trim())).toEqual([fmt(1234), '5', '2']);
+  expect(stats.map((s) => s.querySelector('.sr-only')!.textContent!.trim())).toEqual([
     t('blog.admin.statViews', { n: fmt(1234) }), t('blog.admin.statLikes', { n: '5' }), t('blog.admin.statComments', { n: '2' }),
   ]);
 });

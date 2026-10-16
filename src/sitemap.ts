@@ -19,7 +19,7 @@ export async function sitemapXml(db: D1Database, now: number): Promise<string> {
   const newest = (keep: (p: Post) => boolean) => Math.max(0, ...posts.filter(keep).map((p) => p.contentUpdatedAt)) || null;
   const out: string[] = [];
   for (const l of LOCALES) {
-    out.push(entry(`${origin}${prefix(l)}/`), entry(`${origin}${prefix(l)}/updates`), entry(blogUrl(l), newest(() => true)));
+    out.push(entry(`${origin}${prefix(l) || "/"}`), entry(`${origin}${prefix(l)}/updates`), entry(blogUrl(l), newest(() => true)));
     for (const g of tree) {
       const inGroup = new Set(g.columns.map((c) => c.slug));
       out.push(entry(blogGroupUrl(l, g.slug), newest((p) => inGroup.has(p.columnSlug))));
