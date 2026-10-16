@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, nextTick, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, useRoute, useRouter } from "vue-router";
+import BoardCarousel from "@/components/BoardCarousel.vue";
 import DownloadBanner from "@/components/DownloadBanner.vue";
 import MascotWelcome from "@/components/MascotWelcome.vue";
 import MascotHome from "@/components/MascotHome.vue";
@@ -25,9 +26,6 @@ import { guestAdult, viewerAdult } from "@/lib/adult-consent";
 import type { CardPage, Sort } from "@/lib/types";
 import UpdateStrip from "@/components/UpdateStrip.vue";
 import { RATINGS, RATING_NAMES, type Rating } from "../../../shared/content-rating";
-
-// 橫幅只在有進行中的活動時才畫：活動的程式碼不擋首頁第一屏
-const CampaignBanner = defineAsyncComponent(() => import("@/components/CampaignBanner.vue"));
 
 const route = useRoute();
 const router = useRouter();
@@ -191,6 +189,8 @@ const switchMode = (m: "following") => navigate({ mode: m, sort: undefined, tag:
 /** 已登入的人頂端放蘇綺面板；新訪客的歡迎橫幅還在時先放橫幅，一次只放一塊。翻到後面幾頁不放。 */
 const welcome = useMascotWelcome();
 const showHome = computed(() => !!session.me && session.ready && !welcome.visible.value && offset.value === 0);
+/** 輪播的第一張就是頂端這塊蘇綺；兩塊都不在時輪播只放活動 */
+const hasHero = computed(() => welcome.visible.value || showHome.value);
 const sortsEl = ref<HTMLElement | null>(null);
 /**
  * 面板上的「找新卡」：不在面板裡列卡，切到日榜（上榜 24 小時內）、捲到榜單那一列。
@@ -251,11 +251,12 @@ const ratingOptions = computed(() => {
 <template>
   <div class="page">
     <h1 class="sr-only">{{ $t("site.tagline") }}</h1>
-    <MascotWelcome />
-    <MascotHome v-if="showHome" @discover="toNewCards" />
+    <!-- 頂端輪播：第一張是蘇綺，後面接推薦到首頁的活動（翻到後面幾頁不放活動，同蘇綺面板）；沒有活動就只有蘇綺，跟以前一樣 -->
+    <BoardCarousel :hero="hasHero" :campaigns="offset === 0">
+      <MascotWelcome />
+      <MascotHome v-if="showHome" @discover="toNewCards" />
+    </BoardCarousel>
     <DownloadBanner />
-    <!-- 活動橫幅不讓位、也不擋更新提示列；沒有進行中的活動就什麼都不畫 -->
-    <CampaignBanner />
     <UpdateStrip />
 
     <!--
