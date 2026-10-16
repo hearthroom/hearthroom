@@ -113,6 +113,8 @@ export interface AdminPostRow {
   firstPublishedAt: number | null; pinned: boolean; commentsClosed: boolean; version: number; updatedAt: number; authorHandle: string;
   /** 最後一次存內容的人（公開 ID）；狀態變更不算 */
   editorHandle?: string;
+  /** 只有列表回：精確的閱讀數、喜歡數與看得到的留言數 */
+  viewCount?: number; likeCount?: number; commentCount?: number;
 }
 export interface AdminPost extends AdminPostRow {
   excerpt: string; bodyMd: string; coverKey: string | null; coverUrl: string | null; shareTitle: string | null; shareDescription: string | null;

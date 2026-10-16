@@ -630,3 +630,17 @@ it('leaving while a new post\'s first autosave is in flight does not pull you ba
   expect(router.currentRoute.value.path).toBe('/review/blog');
   expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(0);
 }, 10_000);
+
+it('each post in the list shows its reader counts: views, likes and comments', async () => {
+  const row = { id: 'p1', columnId: 'c1', columnSlug: 'news', slug: 'hello', locale: 'zh-Hant', title: '開站了', status: 'published', publishAt: 1, firstPublishedAt: 1,
+    pinned: false, commentsClosed: false, version: 3, updatedAt: 1, authorHandle: 'ed', editorHandle: 'ed', viewCount: 1234, likeCount: 5, commentCount: 2 };
+  handle = (c) => (c.path === '/v1/blog/admin/posts' ? ok({ total: 1, items: [row] }) : undefined);
+  await mount('/review/blog');
+  await vi.waitFor(() => expect(host.querySelector('[data-post="p1"] [data-stats]')).not.toBeNull());
+  const stats = [...host.querySelectorAll('[data-post="p1"] [data-stats] > span')];
+  const fmt = (n: number) => new Intl.NumberFormat('zh-Hant').format(n);
+  expect(stats.map((s) => s.textContent!.trim())).toEqual([fmt(1234), '5', '2']);
+  expect(stats.map((s) => s.getAttribute('aria-label'))).toEqual([
+    t('blog.admin.statViews', { n: fmt(1234) }), t('blog.admin.statLikes', { n: '5' }), t('blog.admin.statComments', { n: '2' }),
+  ]);
+});
