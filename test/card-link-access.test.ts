@@ -1,7 +1,8 @@
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { upsertCard } from '../src/cards';
-import { resetDb, restoreUpstream, role, rolesOnProviders } from './helpers';
+import { makeMember, resetDb, restoreUpstream, role, rolesOnProviders, testHandle } from './helpers';
+import { upstream } from '../src/upstream';
 
 beforeEach(async () => {
   await resetDb();
@@ -9,6 +10,45 @@ beforeEach(async () => {
 });
 afterEach(restoreUpstream);
 const read = (path: string) => SELF.fetch(`https://c.test${path}`);
+
+it('uses the connected community owner profile for a never-submitted preview without leaking private fields', async () => {
+  await makeMember(22);
+  const owner = await makeMember(33);
+  await env.DB.prepare('UPDATE members SET display_name=?,avatar_url=?,is_official=1 WHERE id=?')
+    .bind('Community owner', 'https://example.com/community.png', owner).run();
+  await env.DB.prepare("INSERT INTO member_connections VALUES ('harbor','22',?,1)").bind(owner).run();
+  const fetchRole = upstream.fetchRole;
+  upstream.fetchRole = async (...args) => ({ ...await fetchRole(...args), authorAvatar: '' });
+  const res = await read('/v1/cards/draft');
+  expect(res.status).toBe(200);
+  const card = await res.json() as any;
+  expect(card.author).toEqual({ handle: testHandle(33), official: true, accountNumId: 22,
+    name: 'Community owner', avatar: 'https://example.com/community.png' });
+  expect(JSON.stringify(card)).not.toContain(owner);
+  expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM cards').first()).toEqual({ n: 0 });
+});
+
+it.each([
+  { name: 'Community author', avatar: 'https://example.com/community.png', expectedName: 'Community author', expectedAvatar: 'https://example.com/community.png' },
+  { name: null, avatar: 'https://example.com/not-initialized.png', expectedName: '月光', expectedAvatar: 'https://assets.harperharbor.com/author.png' },
+  { name: 'Community author', avatar: '', expectedName: 'Community author', expectedAvatar: '' },
+])('matches registered profile fallback for $name / $avatar', async ({name, avatar, expectedName, expectedAvatar}) => {
+  const member = await makeMember(22);
+  await env.DB.prepare('UPDATE members SET display_name=?,avatar_url=? WHERE id=?').bind(name, avatar, member).run();
+  const res = await read('/v1/cards/draft');
+  expect(res.status).toBe(200);
+  expect((await res.json() as any).author).toEqual({handle:testHandle(22),official:false,accountNumId:22,name:expectedName,avatar:expectedAvatar});
+});
+
+it('does not borrow an unrelated author profile with the same external ID on another provider', async () => {
+  const unrelated = await makeMember(33);
+  await env.DB.prepare('UPDATE members SET display_name=?,avatar_url=?,is_official=1 WHERE id=?')
+    .bind('Other author','https://example.com/other.png',unrelated).run();
+  await env.DB.prepare("INSERT INTO member_connections VALUES ('lunatalk','22',?,1)").bind(unrelated).run();
+  const res = await read('/v1/cards/draft');
+  expect(res.status).toBe(200);
+  expect((await res.json() as any).author).toEqual({handle:null,official:false,accountNumId:22,name:'月光',avatar:'https://assets.harperharbor.com/author.png'});
+});
 
 it('lets a visitor open a never-submitted draft without selecting a provider', async () => {
   const res = await read('/v1/cards/draft');
