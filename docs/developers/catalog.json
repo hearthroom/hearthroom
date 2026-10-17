@@ -1939,5 +1939,6 @@
   "d5f76dac96588": "Whether referral rewards are being granted right now. The numbers still describe the configured rules when this is false.",
   "da3bfaf27d3bc": "Credits every new account receives at sign-up, whether or not a referral code is used. 0 when not offered.",
   "dd330a1c38aab": "How many days the sign-up credits stay valid.",
-  "d532dc79dde46": "`referral_disabled` — reward terms are not available right now."
+  "d532dc79dde46": "`referral_disabled` — reward terms are not available right now.",
+  "d63a66eb19cc3": "Platform chat discount relative to this lane's normal tier price. Already included in quoted and billed chat rates; do not apply it again. Omitted when not discounted. Independent of upstream discounts and bare API pricing; no scheduled end date."
 }
