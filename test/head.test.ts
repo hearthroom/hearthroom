@@ -205,7 +205,7 @@ it("站內 play 頁不會被加上站台分享圖", async () => {
 });
 
 it("siteOgImage 不認得的語言退回英文", () => {
-  expect(siteOgImage("updates", "fr")).toBe(`https://${PRIMARY_HOST}/og/updates-en.jpg`);
+  expect(siteOgImage("updates", "fr")).toBe(`https://${PRIMARY_HOST}/og/updates-en.jpg?v=3`);
 });
 
 it.each(['hearthroom.club','sukisuki.ai','sukisuki.chat'])('static asset routing invokes the metadata handler on %s',async host=>{
