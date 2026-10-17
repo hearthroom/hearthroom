@@ -1,3 +1,4 @@
+import { SITE_NAME } from "../../shared/site-name";
 import { buildPushPayload, type PushSubscription } from "@block65/webcrypto-web-push";
 import { HttpError, pickLocale, type Env, type Localized } from "../types";
 import { updateTitle } from "../updates";
@@ -63,7 +64,7 @@ const copy: Record<PushLocale, Copy> = {
     share: { share_needs_info: "你的分享申请需要补充资料", share_approved: "你的分享申请通过了", share_rejected: "你的分享申请没有通过", share_paid: "分享奖励已到账", share_queued: "分享奖励排队发放中" },
   },
   en: {
-    title: "HearthRoom", reply: "{actor} replied to your comment on {card}", replyPlain: "Someone replied to your comment",
+    title: SITE_NAME, reply: "{actor} replied to your comment on {card}", replyPlain: "Someone replied to your comment",
     work: "{actor} published or updated {card}", workNew: "{actor} published {card}", workUpdate: "{actor} updated {card}", workPlain: "An author you follow published or updated a work",
     approved: "{card} passed review", approvedUpdate: "Your update to {card} passed review",
     rejected: "{card} did not pass review this time", rejectedNote: "{card} did not pass review this time. The reviewer wrote: {note}",
@@ -76,7 +77,7 @@ const copy: Record<PushLocale, Copy> = {
     share: { share_needs_info: "Your share submission needs more information", share_approved: "Your share submission was approved", share_rejected: "Your share submission was not approved", share_paid: "Your share reward has arrived", share_queued: "Your share reward is in the queue" },
   },
   ja: {
-    title: "HearthRoom", reply: "{actor} さんが{card}へのコメントに返信しました", replyPlain: "コメントに返信がありました",
+    title: SITE_NAME, reply: "{actor} さんが{card}へのコメントに返信しました", replyPlain: "コメントに返信がありました",
     work: "{actor} さんが{card}を公開・更新しました", workNew: "{actor} さんが{card}を公開しました", workUpdate: "{actor} さんが{card}を更新しました", workPlain: "フォロー中の作者が作品を公開・更新しました",
     approved: "{card}が審査を通過しました", approvedUpdate: "{card}の更新が審査を通過しました",
     rejected: "{card}は今回審査を通過しませんでした", rejectedNote: "{card}は今回審査を通過しませんでした。審査担当者のコメント：{note}",
@@ -89,7 +90,7 @@ const copy: Record<PushLocale, Copy> = {
     share: { share_needs_info: "シェアの申請に追加の情報が必要です", share_approved: "シェアの申請が承認されました", share_rejected: "シェアの申請は承認されませんでした", share_paid: "シェア特典が付与されました", share_queued: "シェア特典は順番待ちです" },
   },
   ko: {
-    title: "HearthRoom", reply: "{actor} 님이 {card}에 남긴 내 댓글에 답글을 달았습니다", replyPlain: "내 댓글에 답글이 달렸습니다",
+    title: SITE_NAME, reply: "{actor} 님이 {card}에 남긴 내 댓글에 답글을 달았습니다", replyPlain: "내 댓글에 답글이 달렸습니다",
     work: "{actor} 님이 {card}을(를) 공개하거나 업데이트했습니다", workNew: "{actor} 님이 {card}을(를) 공개했습니다", workUpdate: "{actor} 님이 {card}을(를) 업데이트했습니다", workPlain: "팔로우하는 작가가 작품을 공개하거나 업데이트했습니다",
     approved: "{card}이(가) 심사를 통과했습니다", approvedUpdate: "{card}의 업데이트가 심사를 통과했습니다",
     rejected: "{card}이(가) 이번 심사를 통과하지 못했습니다", rejectedNote: "{card}이(가) 이번 심사를 통과하지 못했습니다. 검토자 의견: {note}",

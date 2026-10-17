@@ -34,7 +34,7 @@ self.addEventListener("push", (event) => {
   try { data = event.data ? event.data.json() : {}; } catch { /* 不是我們送的格式就顯示通用標題 */ }
   const path = typeof data.path === "string" && data.path.startsWith("/") ? data.path : "/me/community";
   event.waitUntil(
-    self.registration.showNotification(data.title || "HearthRoom", {
+    self.registration.showNotification(data.title || "SukiSuki", {
       body: data.body || "",
       tag: data.tag || path,
       data: { path },

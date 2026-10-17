@@ -5,6 +5,8 @@ import { useReviewer } from '@/lib/review';
 import { useSession } from '@/lib/session';
 import { campaignsCached, clearCampaignsCache } from '@/lib/campaign';
 import { useLocalePath } from '@/lib/use-locale';
+import { useI18n } from 'vue-i18n';
+import { siteName } from '../../../shared/site-name';
 import ReviewBadge from '@/components/ReviewBadge.vue';
 const route = useRoute();
 const reviewer = useReviewer();
@@ -41,11 +43,13 @@ const visible = computed(() => {
   if (reviewer.blogWriter) list.push(blog);
   return list;
 });
+const { locale } = useI18n();
+const brand = computed(() => siteName(String(locale.value)));
 </script>
 <template>
   <div class="page community-management">
     <header class="management-head">
-      <p class="eyebrow">HearthRoom</p>
+      <p class="eyebrow">{{ brand }}</p>
       <h1 class="display">{{ $t('moderation.title') }}</h1>
       <p class="subtle">{{ $t('moderation.intro') }}</p>
     </header>
