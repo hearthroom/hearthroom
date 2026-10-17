@@ -134,7 +134,8 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
           </li>
         </ul>
 
-        <div v-if="!empty" class="creator__say">
+        <!-- 活動結束後蘇綺在主按鈕下說過話了，導言不再出現；空狀態時進度卡已有她 -->
+        <div v-if="!empty && c.phase !== 'ended'" class="creator__say">
           <img src="/mascot/campaign/pose-got-points.webp" alt="" width="80" height="111" loading="lazy" decoding="async" />
           <p class="creator__bubble" data-lead><span class="creator__who">{{ t("mascot.name") }}</span><AmountText :text="t('creator.lead', { site, credits })" /></p>
         </div>
@@ -323,8 +324,8 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
 .creator__empty > img { width: 96px; height: 120px; object-fit: contain; }
 .creator__empty .btn { justify-self: stretch; justify-content: center; }
 
-/* ---- 怎麼參加：桌機姿勢在左一窄欄，氣泡與三步共用右側全寬（三步各自有夠寬的一欄）；手機上下排 ---- */
-.creator__how { grid-template-columns: 80px minmax(0, 1fr); grid-template-areas: "pose h" "pose say" "pose steps"; align-items: start; column-gap: var(--s-4); }
+/* ---- 怎麼參加：桌機姿勢在左一窄欄、標題與氣泡在右；三步在下面用整張卡的寬（每步標題一行放得下）；手機上下排 ---- */
+.creator__how { grid-template-columns: 80px minmax(0, 1fr); grid-template-areas: "pose h" "pose say" "steps steps"; align-items: start; column-gap: var(--s-4); }
 .creator__how > .creator__h2 { grid-area: h; }
 .creator__how-say { display: contents; }
 .creator__how-say > img { grid-area: pose; align-self: start; }
@@ -373,7 +374,7 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
   .creator__cell { padding: var(--s-2); }
   .creator__how--quiet .creator__how-say > img { display: none; }
   /* 沒有姿勢時氣泡不撐滿整列，跟字的寬度差不多 */
-  .creator__how--quiet .creator__bubble { max-width: 24em; }
+  .creator__how--quiet .creator__bubble { max-width: 24em; text-wrap: pretty; }
   .creator__notes { padding: 0 var(--s-4); }
   .creator__notes summary { min-height: 52px; }
 }
