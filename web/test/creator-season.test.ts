@@ -154,6 +154,8 @@ describe("我的進度", () => {
     await mount(CampaignPage);
     expect($("[data-empty]")!.textContent).toContain(t("creator.say.empty"));
     expect($("[data-rules] img")).toBeNull();
+    // 導言留著，只收姿勢
+    expect($("[data-lead]")).not.toBeNull();
   });
 });
 

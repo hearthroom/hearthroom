@@ -2675,8 +2675,10 @@
   "review.creator.status.paid": "已到账",
   "review.creator.status.failed": "发放失败",
   "review.creator.status.cancelled": "已取消",
-  "review.creator.done": "已到账 {paid} 笔，发放失败 {failed} 笔",
+  "review.creator.done": "已到账 {paid} 笔，未完成 {queued} 笔，发放失败 {failed} 笔",
   "review.creator.error.card_reward_self": "不能发给自己，请另一位管理员发",
   "review.creator.error.card_reward_in_progress": "这张卡已经在发放中",
-  "review.creator.error.card_reward_not_due": "这张卡不需要发放"
+  "review.creator.error.card_reward_not_due": "这张卡不需要发放",
+  "review.creator.error.internal_error": "服务器出错，请稍后重试",
+  "review.creator.error.card_reward_operation_repeated": "同一个操作已经提交过，刷新后再试"
 }
