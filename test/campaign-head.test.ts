@@ -88,6 +88,32 @@ describe("活動頁分享資訊", () => {
   });
 });
 
+describe("創作季（發卡獎勵活動）的分享資訊", () => {
+  const creator = (status = "active") => env.DB.prepare(
+    `INSERT INTO card_reward_campaigns (id, slug, title, starts_at, ends_at, payout_deadline, weekly_limit, reward, status, timezone, created_at, updated_at)
+     VALUES ('cs', 'creator-season', '{"zh-Hant":"綺夢社創作季","zh-Hans":"绮梦社创作季","en":"SukiSuki Creator Season"}', 1, 2, NULL, 6, 10000, ?, 'Asia/Taipei', 1, 1)`,
+  ).bind(status).run();
+
+  it("活動頁網址回 200 與分享標籤：活動名接站名、簡介是每張過審的卡送多少積分", async () => {
+    await creator();
+    const { status, text } = await get("/campaign/creator-season", "zh-TW");
+    expect(status).toBe(200);
+    expect(text).toContain('<meta property="og:title" content="綺夢社創作季 · 綺夢社">');
+    expect(text).toContain('<meta property="og:description" content="每張通過審核的卡，送你 10,000 積分">');
+    expect(text).toContain(`<meta property="og:image" content="https://${PRIMARY_HOST}/og/default-zh-Hant.jpg?v=2">`);
+    expect(text).not.toContain('name="robots"');
+    const en = await get("/en/campaign/creator-season");
+    expect(en.text).toContain('<meta property="og:description" content="10,000 credits for every card that passes review">');
+  });
+
+  it("草稿的創作季照樣 404＋noindex", async () => {
+    await creator("draft");
+    const { status, text } = await get("/campaign/creator-season");
+    expect(status).toBe(404);
+    expect(text).toContain('<meta name="robots" content="noindex, nofollow">');
+  });
+});
+
 describe("帶推薦碼的首頁分享預覽（專屬連結）", () => {
   it("?ref= 的首頁換成邀請版：說這是什麼網站、為什麼要點進來；語言規則跟活動頁一樣", async () => {
     const hant = await get("/?ref=K7XQ2M", "zh-TW", PRIMARY_HOST);

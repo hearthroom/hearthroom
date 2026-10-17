@@ -2674,5 +2674,9 @@
   "review.creator.status.blocked_insufficient": "プール残高不足で待機中",
   "review.creator.status.paid": "付与済み",
   "review.creator.status.failed": "失敗",
-  "review.creator.status.cancelled": "取り消し"
+  "review.creator.status.cancelled": "取り消し",
+  "review.creator.done": "付与 {paid}件、失敗 {failed}件",
+  "review.creator.error.card_reward_self": "自分には付与できません。別の管理者に依頼してください",
+  "review.creator.error.card_reward_in_progress": "このカードは付与処理中です",
+  "review.creator.error.card_reward_not_due": "このカードは付与対象ではありません"
 }

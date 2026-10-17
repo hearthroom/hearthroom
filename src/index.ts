@@ -47,7 +47,8 @@ import {
   type EventFields, type Pending,
 } from "./analytics";
 import { blogGroupUrl, blogIndexMeta, blogUrl, postMeta } from "./blog-head";
-import { campaignLocale, campaignMeta, campaignUrl, inviteMeta, isInviteLink } from "./campaign-head";
+import { campaignLocale, campaignMeta, campaignUrl, cardRewardMeta, inviteMeta, isInviteLink } from "./campaign-head";
+import { getRewardCampaign } from "./card-reward";
 import { getCampaign } from "./campaign";
 import { authorLine, downloadMeta, homeMeta, preloadImageTag, renderDefaultShareHead, renderHead, updatesMeta } from "./head";
 import { aliasTarget, HOST, canonicalUrl, isPlayHost } from "./site";
@@ -1761,6 +1762,14 @@ async function campaignPage(c: Context<{ Bindings: Env; Variables: { ev: Pending
   const locale = campaignLocale(m[1], c.req.header("Accept-Language"));
   note(c, { event: "page_html", refHost: refHostOf(c.req.header("Referer"), url.host), locale, subject: slug, detail: "campaign" });
   const campaign = await getCampaign(c.env.DB, slug);
+  // 分享活動沒有這個 slug 就找發卡獎勵活動（創作季），跟公開 API 同一個順序
+  const reward = !campaign || campaign.slug !== slug || campaign.status === "draft" ? await getRewardCampaign(c.env.DB, slug) : null;
+  if (reward?.status === "active") {
+    const res = renderHead(shell, cardRewardMeta(reward, locale, campaignUrl(m[1], slug)));
+    res.headers.set("Cache-Control", `public, max-age=${PAGE_TTL}`);
+    res.headers.append("Vary", "Accept-Language");
+    return res;
+  }
   if (!campaign || campaign.slug !== slug || campaign.status === "draft") {
     const res = new HTMLRewriter().on("head", { element(e) { e.append('<meta name="robots" content="noindex, nofollow">', { html: true }); } }).transform(new Response(shell.body, { status: 404, headers: shell.headers }));
     res.headers.set("Cache-Control", "no-store");

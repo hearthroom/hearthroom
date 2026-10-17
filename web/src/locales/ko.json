@@ -2674,5 +2674,9 @@
   "review.creator.status.blocked_insufficient": "풀 잔액 부족으로 대기 중",
   "review.creator.status.paid": "지급됨",
   "review.creator.status.failed": "실패",
-  "review.creator.status.cancelled": "취소됨"
+  "review.creator.status.cancelled": "취소됨",
+  "review.creator.done": "지급 {paid}건, 실패 {failed}건",
+  "review.creator.error.card_reward_self": "본인에게는 지급할 수 없어요. 다른 관리자에게 부탁하세요",
+  "review.creator.error.card_reward_in_progress": "이 카드는 이미 지급 중이에요",
+  "review.creator.error.card_reward_not_due": "이 카드는 지급 대상이 아니에요"
 }
