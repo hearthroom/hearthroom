@@ -70,7 +70,9 @@ async function mount(component: Parameters<typeof createApp>[0], path = "/campai
 }
 const t = (k: string, v: Record<string, unknown> = {}) => i18n.global.t(k, v);
 const $ = <T extends Element = HTMLElement>(sel: string) => host.querySelector<T>(sel);
-const text = (sel: string) => $(sel)?.textContent?.replace(/\s+/g, " ").trim() ?? "";
+/** 空白（含金額與單位之間的不斷行空格）一律當一格空白比 */
+const norm = (v: string) => v.replace(/\s+/g, " ").trim();
+const text = (sel: string) => norm($(sel)?.textContent ?? "");
 const links = () => [...host.querySelectorAll<HTMLAnchorElement>("[data-cta] a")].map((a) => [a.textContent!.trim(), a.getAttribute("href")]);
 
 describe("頁頭與規則卡", () => {
@@ -153,11 +155,11 @@ describe("入口", () => {
 
   it("我的卡片與編輯器：進行中才出現，整行連到活動頁，字讀活動設定", async () => {
     await mount(Entry("mine"), "/mine");
-    expect(text("[data-creator-entry]")).toContain(t("mine.campaign.publishReward", { end: "10月31日", credits: "10,000", limit: 6 }));
+    expect(text("[data-creator-entry]")).toContain(norm(t("mine.campaign.publishReward", { end: "10月31日", credits: "10,000", limit: 6 })));
     expect($<HTMLAnchorElement>("[data-creator-entry]")!.getAttribute("href")).toBe("/campaign/creator-season");
     app!.unmount(); host.remove();
     await mount(Entry("editor"), "/create");
-    expect(text("[data-creator-entry]")).toBe(t("editor.publish.reward", { end: "10月31日", credits: "10,000" }));
+    expect(text("[data-creator-entry]")).toBe(norm(t("editor.publish.reward", { end: "10月31日", credits: "10,000" })));
   });
 
   it("活動已結束或還沒開始：不出現", async () => {
