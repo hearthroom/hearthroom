@@ -797,6 +797,8 @@
   "play.entering": "Entering the chat…",
   "play.loadingSlow": "The first visit takes a little longer…",
   "play.backToCard": "Back to the card",
+  "play.backToReview": "Back to the review",
+  "play.claimFirst": "You don't hold the claim on this review right now, so claim it again on the review page to keep playing.",
   "nav.resources": "My resources",
   "nav.settings": "Settings",
   "settings.title": "Settings",

@@ -797,6 +797,8 @@
   "play.entering": "正在进入对话⋯",
   "play.loadingSlow": "第一次进入要多等一下⋯",
   "play.backToCard": "回到卡片",
+  "play.backToReview": "回到审核页",
+  "play.claimFirst": "你现在没有领着这份审核，回到审核页重新领取就能继续试玩。",
   "nav.resources": "我的资源",
   "nav.settings": "用户设置",
   "settings.title": "用户设置",
