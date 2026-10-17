@@ -8,7 +8,9 @@ For each root:
 
 - `hearthroom.club` and `sukisuki.ai` root and `www` use Custom Domains.
   `sukisuki.chat` and `sukisuki.pro` instead use root and wildcard Worker Routes,
-  with DNS-only CNAMEs for root, `www` and `*` pointing to `cf-cname.xingpingcn.top`.
+  with DNS-only CNAMEs for root, `www` and `*` pointing to `cf.090227.xyz`.
+  The former preferred target was `cf-cname.xingpingcn.top`; changing only these
+  three CNAME targets back provides a provider-only rollback.
   This preferred-ingress setup is experimental: official Routes documentation
   requires proxied DNS. Do not replace these CNAMEs with managed Custom Domains
   during deployment. Every `www` redirects to its own root.
