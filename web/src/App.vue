@@ -134,7 +134,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
           </svg>
         </RouterLink>
         <!-- R18 開關只在首頁：它管的是榜單列出什麼，看卡片、寫卡片的時候不該在頁首晃（owner 2026-10-02） -->
-        <AdultToggle v-if="route.path === lp('/')" />
+        <AdultToggle v-if="route.path.replace(/\/+$/, '') === lp('/').replace(/\/+$/, '')" />
         <!-- 頁首放 Discord：玩家要找的是社群，不是程式碼；GitHub 留在頁尾的社群欄（owner 2026-10-17）。
              邀請連結跟頁尾「加入 Discord」同一條，讀不到就不顯示 -->
         <a v-if="discordInvite" :href="discordInvite" target="_blank" rel="noopener noreferrer" class="gh" data-header-discord :aria-label="$t('community.join')" :title="$t('community.join')">
