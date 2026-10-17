@@ -1,9 +1,9 @@
 import { Hono, type Context } from "hono";
-import { autoReward, BATCH_MAX, batchReward, cancelReward, getRewardCampaign, listDue, listRewards, myProgress, reconcileRewards, requestReward, retryReward, type Payer } from "./card-reward";
+import { autoReward, BATCH_MAX, cardRewardDetail, batchReward, cancelReward, getRewardCampaign, listDue, listRewards, myProgress, reconcileRewards, requestReward, retryReward, type Payer } from "./card-reward";
 import { providerOf, requireMember } from "./members";
 import { operationOf } from "./moderation";
 import { bumpOp } from "./ops-metrics";
-import { quotaForMember, WEEKLY_LIMIT } from "./quota";
+import { quotaForMember } from "./quota";
 import { appAdminOf, bearerOf } from "./community-admin";
 import { humanOnly, requireCommunityAdmin, staff } from "./staff";
 import { HttpError, type Env } from "./types";
@@ -44,10 +44,6 @@ async function payer(c: Ctx): Promise<Payer> {
   return payerOf(c, s.member.id);
 }
 
-const publicView = (k: NonNullable<Awaited<ReturnType<typeof getRewardCampaign>>>) => ({
-  kind: "card_reward", slug: k.slug, title: k.title, startsAt: k.startsAt, endsAt: k.endsAt, payoutDeadline: k.payoutDeadline,
-  reward: k.reward, weeklyLimit: k.weeklyLimit, normalWeeklyLimit: WEEKLY_LIMIT,
-});
 
 async function activeCampaign(c: Ctx) {
   const k = await getRewardCampaign(c.env.DB, c.req.param("slug")!);
@@ -55,7 +51,7 @@ async function activeCampaign(c: Ctx) {
   return k;
 }
 
-cardRewardRoutes.get("/v1/card-rewards/:slug", async (c) => c.json(publicView(await activeCampaign(c)), 200, PUBLIC));
+cardRewardRoutes.get("/v1/card-rewards/:slug", async (c) => c.json(cardRewardDetail(await activeCampaign(c), Date.now()), 200, PUBLIC));
 
 cardRewardRoutes.get("/v1/card-rewards/:slug/me", async (c) => {
   const k = await activeCampaign(c);

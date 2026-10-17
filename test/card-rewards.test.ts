@@ -241,6 +241,15 @@ describe("活動資料與作者進度", () => {
     expect(byId.get(await cardIdOf("r3"))).toMatchObject({ review: "pending", reward: null });
   });
 
+  it("公開活動列表帶著創作季：種類、精選與排序值；活動頁網址 /v1/campaigns/:slug 也讀得到", async () => {
+    await env.DB.prepare("UPDATE card_reward_campaigns SET featured = 1, featured_rank = 2, timezone = 'Asia/Taipei'").run();
+    const list = (await (await get("/v1/campaigns")).json()) as any;
+    expect(list.items).toContainEqual(expect.objectContaining({ kind: "card_reward", slug: "creator-season", featured: true, featuredRank: 2, phase: "open", timezone: "Asia/Taipei", bannerUrl: null }));
+    const detail = (await (await get("/v1/campaigns/creator-season")).json()) as any;
+    expect(detail).toMatchObject({ kind: "card_reward", slug: "creator-season", phase: "open", reward: 10000, weeklyLimit: 6, normalWeeklyLimit: 3, timezone: "Asia/Taipei" });
+    expect(detail).not.toHaveProperty("id");
+  });
+
   it("沒登入不能看進度", async () => {
     expect((await get("/v1/card-rewards/creator-season/me")).status).toBe(401);
   });

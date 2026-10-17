@@ -1,5 +1,8 @@
 import { auditStmt, auditStmtIfChanged } from "./audit";
+import { imageUrl } from "./blog";
+import { campaignPhase } from "./campaign";
 import { ownsAccount } from "./campaign-review";
+import { WEEKLY_LIMIT } from "./quota";
 import { bumpOp } from "./ops-metrics";
 import type { ProviderId } from "./providers";
 import { upstream, type PayResult } from "./upstream";
@@ -28,10 +31,13 @@ const OPEN = ["pending", "blocked_insufficient"];
 
 // ---- 活動設定 -----------------------------------------------------------------
 
-type CampaignRow = { id: string; slug: string; title: string; starts_at: number; ends_at: number; payout_deadline: number | null; weekly_limit: number; reward: number; status: string };
+type CampaignRow = {
+  id: string; slug: string; title: string; starts_at: number; ends_at: number; payout_deadline: number | null; weekly_limit: number; reward: number; status: "draft" | "active";
+  timezone: string; banner_key: string | null; featured: number; featured_rank: number | null;
+};
 const campaignView = (r: CampaignRow) => ({
   id: r.id, slug: r.slug, title: JSON.parse(r.title) as Record<string, string>, startsAt: r.starts_at, endsAt: r.ends_at, payoutDeadline: r.payout_deadline,
-  weeklyLimit: r.weekly_limit, reward: r.reward, status: r.status,
+  weeklyLimit: r.weekly_limit, reward: r.reward, status: r.status, timezone: r.timezone, bannerUrl: imageUrl(r.banner_key), featured: r.featured === 1, featuredRank: r.featured_rank,
 });
 export type RewardCampaign = ReturnType<typeof campaignView>;
 
@@ -43,6 +49,16 @@ export async function getRewardCampaign(db: D1Database, slug: string): Promise<R
 export async function listRewardCampaigns(db: D1Database): Promise<RewardCampaign[]> {
   return (await db.prepare("SELECT * FROM card_reward_campaigns WHERE status = 'active' ORDER BY starts_at DESC").all<CampaignRow>()).results.map(campaignView);
 }
+
+/** 公開列表的一列（同分享活動的 summaryView，多 kind 與排序值）。 */
+export const cardRewardSummary = (k: RewardCampaign, now: number) => ({
+  kind: "card_reward" as const, slug: k.slug, title: k.title, phase: campaignPhase(k, now), startsAt: k.startsAt, endsAt: k.endsAt, timezone: k.timezone,
+  bannerUrl: k.bannerUrl, featured: k.featured, featuredRank: k.featuredRank,
+});
+/** 公開活動頁：規則卡要的數字。 */
+export const cardRewardDetail = (k: RewardCampaign, now: number) => ({
+  ...cardRewardSummary(k, now), payoutDeadline: k.payoutDeadline, reward: k.reward, weeklyLimit: k.weeklyLimit, normalWeeklyLimit: WEEKLY_LIMIT,
+});
 
 // ---- 誰該拿 -------------------------------------------------------------------
 
