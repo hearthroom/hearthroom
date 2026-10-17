@@ -1899,7 +1899,7 @@
   "d0f5ad405225b": "`forbidden` — 호출자가 이 앱의 소유자, 관리자, 뷰어가 아닙니다.",
   "d59960afa4b41": "`temporarily_unavailable` — 나중에 다시 시도하세요.",
   "dbb137b72e612": "캠페인 보상 풀에서 보상 지급",
-  "dc3b7f7a4403b": "이 토큰이 속한 앱의 캠페인 보상 풀에서 `amount` credits를 꺼내 플레이어 계정에 지급합니다. 앱의 소유자와 관리자만 지급할 수 있습니다. `accountNo`는 플레이어의 공개 계정 번호입니다. 재시도할 때는 같은 `key`를 다시 사용하세요. 이미 지급된 key는 원래 지급 결과를 `replayed: true`와 함께 반환합니다. 다른 `accountNo`, `amount`, `campaignRef`, `contentRef`로 같은 `key`를 다시 쓰면 `idempotency_conflict`를 반환합니다. 사용 범위와 만료는 이 앱에 대한 플랫폼 설정으로 정해지며 호출자가 지정할 수 없습니다.",
+  "dc3b7f7a4403b": "이 토큰이 속한 앱의 캠페인 보상 풀에서 `amount` credits를 꺼내 플레이어 계정에 지급합니다. 앱의 소유자와 관리자만 지급할 수 있습니다. `accountNo`는 플레이어의 공개 계정 번호입니다. 재시도할 때는 같은 `key`를 다시 사용하세요. 이미 지급된 key는 원래 지급 결과를 `replayed: true`와 함께 반환합니다. 다른 `accountNo`, `amount`, `campaignRef`, `contentRef`, `validityDays`로 같은 `key`를 다시 쓰면 `idempotency_conflict`를 반환합니다. 사용 범위는 이 앱에 대한 플랫폼 설정으로 정해집니다. 만료는 지급할 때마다 `validityDays`로 정하며, 생략하면 기한 없이 유효합니다.",
   "dfbf040724ca3": "지급 결과입니다. `key`로 이미 지급된 경우 `replayed`가 true입니다.",
   "de332a4d025db": "`invalid_request` — `key`가 1~128자의 영문자, 숫자, `_`, `-`가 아니거나, `accountNo` 또는 `amount`가 양의 정수가 아니거나, 참조가 128자를 넘습니다.",
   "d05cde8d97971": "`forbidden` — 호출자가 이 앱의 소유자 또는 관리자가 아닙니다.",
