@@ -43,7 +43,7 @@ describe("部落格分享資訊", () => {
     expect(text).toContain('<meta property="og:type" content="article">');
     expect(text).toContain(`<link rel="canonical" href="https://${PRIMARY_HOST}/en/blog/news/hello">`);
     expect(text).toContain('<html lang="en">');
-    expect(text).toContain(`<meta property="og:image" content="https://${PRIMARY_HOST}/og/default-en.jpg?v=2">`);
+    expect(text).toContain(`<meta property="og:image" content="https://${PRIMARY_HOST}/og/default-en.jpg?v=3">`);
     expect(text).toContain(`<meta property="article:published_time" content="${new Date(1000).toISOString()}">`);
     expect(text).toContain('<meta property="article:modified_time"');
     expect(headers.get("cache-control")).toBe("public, max-age=60");
@@ -118,7 +118,7 @@ describe("部落格分享資訊", () => {
     expect(home.status).toBe(200);
     expect(home.text).toContain("<title>部落格 · 綺夢社</title>");
     expect(home.text).toContain('<meta property="og:type" content="website">');
-    expect(home.text).toContain(`<meta property="og:image" content="https://${PRIMARY_HOST}/og/default-zh-Hant.jpg?v=2">`);
+    expect(home.text).toContain(`<meta property="og:image" content="https://${PRIMARY_HOST}/og/default-zh-Hant.jpg?v=3">`);
     const col = await get("/en/blog/news");
     expect(col.text).toContain("<title>News · SukiSuki</title>");
     expect(col.text).toContain(`<link rel="canonical" href="https://${PRIMARY_HOST}/en/blog/news">`);

@@ -335,7 +335,7 @@ describe("Atom、頁面與指標", () => {
     const html = await res.text();
     expect(html).toContain('<meta property="og:title" content="SukiSuki の更新履歴">');
     expect(html).toContain('<link rel="canonical" href="https://sukisuki.ai/ja/updates">');
-    expect(html).toContain('<meta property="og:image" content="https://sukisuki.ai/og/updates-ja.jpg">');
+    expect(html).toContain('<meta property="og:image" content="https://sukisuki.ai/og/updates-ja.jpg?v=3">');
     expect(html).toContain('<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">');
   });
 

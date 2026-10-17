@@ -5,6 +5,8 @@ import { SITE_NAME, siteName } from "../../shared/site-name";
 import en from "../src/locales/en.json";
 import ja from "../src/locales/ja.json";
 import ko from "../src/locales/ko.json";
+import zhHans from "../src/locales/zh-Hans.json";
+import zhHant from "../src/locales/zh-Hant.json";
 
 // 這兩條講的是 Hearthroom CLI 這個工具，工具名不跟站名走。
 const TOOL_NAME_KEYS = new Set(["guide.start.agent.lead", "guide.start.agent.cli"]);
@@ -24,6 +26,12 @@ describe("外語介面的站名只從 shared/site-name.ts 來", () => {
     expect(i18n.global.t("download.title")).toBe(`${siteName("ko")} 다운로드`);
     await applyLocale("ja");
     expect(i18n.global.t("pwa.install.title")).not.toContain("{site}");
+  });
+
+  it.each([["zh-Hant", zhHant], ["zh-Hans", zhHans], ["en", en], ["ja", ja], ["ko", ko]] as const)("%s 載入後沒有一句還留著 {site}", async (code, messages) => {
+    await applyLocale(code);
+    const left = Object.keys(messages).filter((key) => (i18n.global.getLocaleMessage(code) as Record<string, string>)[key]?.includes("{site}"));
+    expect(left).toEqual([]);
   });
 
   it("讀不到 TS 的靜態檔跟 SITE_NAME 一致", () => {
