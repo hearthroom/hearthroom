@@ -85,8 +85,8 @@ const count = computed(() => heroAt.value + (props.hero ? 1 : 0));
 const pause = reactive({ hover: false, focus: false, hidden: false, touched: false });
 /** 第一張就是第一個活動（沒有活動時是文章或蘇綺），永遠是 0 */
 const index = ref(0);
-// 活動或文章晚一步讀到、蘇綺出現或收起來：張數對應變了，回到第一張
-watch([() => slides.value.length, () => !!post.value, () => props.hero], () => { if (!pause.touched) index.value = 0; });
+// 活動或文章晚一步讀到、蘇綺出現或收起來：張數對應變了，回到第一張（碰過也一樣，否則序號會指到別張）
+watch([() => slides.value.length, () => !!post.value, () => props.hero], () => { index.value = 0; });
 watch(count, (n) => { if (index.value >= n) index.value = 0; });
 const go = (i: number) => { index.value = (i + count.value) % count.value; };
 
