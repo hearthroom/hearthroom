@@ -108,7 +108,8 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
           </template>
         </div>
 
-        <ul class="creator__list">
+        <!-- 結束後規則清單收起來（ui.md §4.5）：額度、截止都不再適用 -->
+        <ul v-if="c.phase !== 'ended'" class="creator__list">
           <li>
             <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3.25" y="4.25" width="13.5" height="12.5" rx="2.5" /><path d="M3.25 8.25h13.5M7 2.75v3M13 2.75v3" /></svg>
             <i18n-t keypath="creator.rules.limit" tag="span" scope="global">
@@ -160,8 +161,9 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
           <div v-for="i in 3" :key="i" class="ghost creator__ghost-row" />
         </div>
         <template v-else>
-          <div class="creator__cells">
-            <div class="creator__cell" data-cell="week">
+          <div class="creator__cells" :class="{ 'creator__cells--two': c.phase === 'ended' }">
+            <!-- 結束後不看本週額度（ui.md §4.5） -->
+            <div v-if="c.phase !== 'ended'" class="creator__cell" data-cell="week">
               <span class="creator__cell-label">{{ t("creator.mine.week") }}</span>
               <strong class="creator__cell-num num">{{ progress.quota.used }}/{{ progress.quota.limit }}</strong>
               <span class="creator__pips" aria-hidden="true"><i v-for="i in progress.quota.limit" :key="i" :class="{ on: i <= progress.quota.used }" /></span>
@@ -213,8 +215,8 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
     </aside>
 
     <div class="creator__body">
-      <!-- 怎麼參加：三步。手機上相鄰的卡不同時放蘇綺：未登入時這張緊接規則卡、空狀態時緊接有蘇綺的進度卡，這兩種都不放姿勢 -->
-      <section class="panel creator__card creator__how" :class="{ 'creator__how--quiet': !signedIn || empty }" aria-labelledby="creator-how-h">
+      <!-- 怎麼參加：三步，活動結束後不出（ui.md §4.5）。手機上相鄰的卡不同時放蘇綺：未登入時這張緊接規則卡、空狀態時緊接有蘇綺的進度卡，這兩種都不放姿勢 -->
+      <section v-if="c.phase !== 'ended'" class="panel creator__card creator__how" :class="{ 'creator__how--quiet': !signedIn || empty }" aria-labelledby="creator-how-h">
         <h2 id="creator-how-h" class="creator__h2">{{ t("creator.how.title") }}</h2>
         <div class="creator__say creator__how-say">
           <img src="/mascot/home/pose-write-2.webp" alt="" width="80" height="111" loading="lazy" decoding="async" />
@@ -291,6 +293,7 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
 
 /* ---- 我的進度 ---- */
 .creator__cells { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-2); }
+.creator__cells--two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 /* 右欄只有約 360 寬，三格各約 100：數字跟著格寬縮（最大 28），180,000 也放得下 */
 .creator__cell { min-width: 0; display: grid; gap: 2px; align-content: start; padding: var(--s-3); border-radius: var(--r-md); background: var(--surface-2); container-type: inline-size; }
 .creator__cell-label { font-size: 12px; color: var(--text-3); }
