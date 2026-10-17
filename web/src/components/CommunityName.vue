@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import {computed} from 'vue';
+import OfficialBadge from './OfficialBadge.vue';
 import CommunityIcon from './CommunityIcon.vue';
 import {usePublicAppearance,type EffectiveAppearance} from '@/lib/community-appearance';
-const props=defineProps<{handle?:string;name:string;appearance?:EffectiveAppearance|null;supporter?:boolean}>();
+const props=defineProps<{handle?:string;name:string;appearance?:EffectiveAppearance|null;supporter?:boolean;official?:boolean}>();
 const identity=usePublicAppearance(()=>props.appearance===undefined?props.handle:undefined);
 const style=computed(()=>(props.appearance??identity.value?.appearance)?.nameStyle??'none');
 const badge=computed(()=>props.supporter??identity.value?.badges.includes('server_booster'));
 </script>
-<template><span class="community-name"><span :class="'community-name--'+style">{{ name }}</span><span v-if="badge" class="community-name__supporter" :aria-label="$t('community.badges.server_booster')" :title="$t('community.badges.server_booster')" role="img"><CommunityIcon name="flame" /></span></span></template>
+<template><span class="community-name"><span :class="'community-name--'+style">{{ name }}</span><span v-if="badge" class="community-name__supporter" :aria-label="$t('community.badges.server_booster')" :title="$t('community.badges.server_booster')" role="img"><CommunityIcon name="flame" /></span><OfficialBadge v-if="official === true" /></span></template>
 <style scoped>
 .community-name{display:inline-flex;align-items:center;gap:var(--s-1);max-width:100%;min-width:0;vertical-align:baseline}
 .community-name>span:first-child{min-width:0;overflow-wrap:anywhere}
