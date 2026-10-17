@@ -54,6 +54,7 @@ import { can } from "@/lib/provider";
 import { useWorldbookDraft, type WorldbookDraft } from "@/lib/worldbook-draft";
 import ChatTestPanel from "@/components/editor/ChatTestPanel.vue";
 import ResourcePanel from "@/components/editor/ResourcePanel.vue";
+import CreatorSeasonEntry from "@/components/CreatorSeasonEntry.vue";
 import {
   LANGUAGES,
   scriptChoices,
@@ -1335,6 +1336,8 @@ async function exportCard(format: "png" | "json") {
           <div class="panel">
             <h2>{{ $t("editor.publish") }}</h2>
             <p class="muted">{{ $t("editor.publish.hint") }}</p>
+            <!-- 創作季進行中：送審這一刻提醒「本人作品」與獎勵，整行可點到活動頁 -->
+            <CreatorSeasonEntry where="editor" />
             <p v-if="dirty || isNew" class="subtle">{{ $t("editor.publish.saveFirst") }}</p>
             <button type="button" class="btn btn--primary" :disabled="!canPublish || saving" @click="publish">
               {{ $t("editor.publish.submit") }}

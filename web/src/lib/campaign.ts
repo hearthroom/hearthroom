@@ -258,6 +258,17 @@ export interface RewardProgress {
 }
 export const fetchRewardProgress = (token: string, slug: string) => request<RewardProgress>(token, `/card-rewards/${enc(slug)}/me`);
 
+// ---- 發卡獎勵：後台補發（應用管理員）。形狀照 src/card-reward.ts ----
+export type RewardStatus = "pending" | "paid" | "blocked_insufficient" | "failed" | "cancelled";
+export interface RewardView { id: string; cardId: number; amount: number; status: RewardStatus; error: string | null; attempts: number; createdAt: number; settledAt: number | null }
+export interface RewardDueItem { cardId: number; cardName: string; campaignSlug: string; author: { handle: string }; registeredAt: number; amount: number }
+export type RewardListItem = RewardView & { cardName: string; campaignSlug: string; author: { handle: string } };
+export const fetchRewardDue = (token: string, page = 1) => request<{ total: number; items: RewardDueItem[] }>(token, `/moderation/card-rewards/due${query({ page })}`);
+export const fetchRewardList = (token: string, q: { status?: RewardStatus; page?: number }) => request<{ total: number; items: RewardListItem[] }>(token, `/moderation/card-rewards/list${query(q)}`);
+export const batchReward = (token: string, cardIds: number[], operationId: string) =>
+  request<{ items: ({ cardId: number; reward: RewardView } | { cardId: number; error: string })[] }>(token, "/moderation/card-rewards/batch", "POST", { cardIds, operationId });
+export const retryReward = (token: string, id: string, operationId: string) => request<RewardView>(token, `/moderation/card-rewards/${enc(id)}/retry`, "POST", { operationId });
+
 /** 送審畫面的入口（我的卡片、編輯器）：進行中的發卡獎勵活動，沒有就 null。以伺服器算的階段為準，不靠前端時鐘。 */
 export async function openCardReward(): Promise<CardRewardCampaign | null> {
   const { items } = await fetchPublicCampaigns();

@@ -24,6 +24,7 @@ import { useSession } from '@/lib/session';
 import { useLocalePath } from '@/lib/use-locale';
 import { pageTitle } from '@/lib/i18n';
 import { wrapTab } from '@/lib/focus-trap';
+import CreatorRewardsPanel from '@/components/CreatorRewardsPanel.vue';
 
 const { t } = useI18n();
 const session = useSession();
@@ -292,6 +293,9 @@ onBeforeUnmount(() => { alive = false; document.removeEventListener('keydown', o
       </section>
 
       <p v-if="reconciled" class="notice" role="status">{{ reconciled }}</p>
+
+      <!-- 創作季（發卡獎勵）的待發放：補發與過審當下沒發成的 -->
+      <CreatorRewardsPanel />
 
       <div class="rpo-bar">
         <div class="seg rpo-tabs">

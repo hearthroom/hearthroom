@@ -43,12 +43,14 @@ let reconcileGate: Promise<void> | null;
 let replies: Record<string, Reply[]>;
 /** 設了就讓下一次單筆發放等到它放行 */
 let payGate: Promise<void> | null;
+/** 創作季待發放（CreatorRewardsPanel） */
+let creatorDue: { cardId: number; cardName: string; campaignSlug: string; author: { handle: string }; registeredAt: number; amount: number }[];
 
 beforeEach(() => {
   i18n.global.locale.value = "zh-Hant";
   reviewMe = { reviewer: true, pending: 0, reviews: 0, cases: 0, comments: 0, role: "reviewer" };
   calls = []; canEdit = true; payableItems = [payable("s1", 300), payable("s2", 800), payable("s3", 100)]; history = [];
-  reconcile = { status: 200, body: { items: [] } }; reconcileGate = null; replies = {}; payGate = null;
+  reconcile = { status: 200, body: { items: [] } }; reconcileGate = null; replies = {}; payGate = null; creatorDue = [];
   vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit = {}) => {
     const method = init.method ?? "GET";
     const body = typeof init.body === "string" ? JSON.parse(init.body) : null;
@@ -60,6 +62,9 @@ beforeEach(() => {
       return json(r.status, r.body);
     };
     if (url === "/v1/moderation/campaigns") return json(200, { items: [campaign()], canEdit });
+    if (url.startsWith("/v1/moderation/card-rewards/due")) return json(200, { total: creatorDue.length, items: creatorDue });
+    if (url.startsWith("/v1/moderation/card-rewards/list")) return json(200, { total: 0, items: [] });
+    if (url === "/v1/moderation/card-rewards/batch") return next("creatorBatch");
     if (url === "/v1/moderation/campaign-pool") return json(200, { configured: true, enabled: true, usageScope: "all", validityDays: null, maxPayout: 1000, balance: 54321, paidTotal: 0, updatedAt: null });
     if (url.startsWith("/v1/moderation/campaign/payable")) return json(200, { total: payableItems.length, items: payableItems });
     if (url === "/v1/moderation/campaign/payouts/reconcile") { if (reconcileGate) await reconcileGate; return json(reconcile.status, reconcile.body); }
@@ -435,4 +440,24 @@ it.each([
     expect(campaignErrorText(code)).not.toBe(code);
     expect(campaignErrorText(code)).not.toContain("(");
   }
+});
+
+it("創作季待發放：列出該補發的卡，確認筆數與總積分後一次發這一頁，每筆結果留在那一列", async () => {
+  creatorDue = [
+    { cardId: 101, cardName: "夜行偵探", campaignSlug: "creator-season", author: { handle: "aaaaaaaa" }, registeredAt: Date.UTC(2026, 9, 17), amount: 10000 },
+    { cardId: 102, cardName: "雨天書店", campaignSlug: "creator-season", author: { handle: "bbbbbbbb" }, registeredAt: Date.UTC(2026, 9, 17), amount: 10000 },
+  ];
+  replies.creatorBatch = [{ status: 200, body: { items: [
+    { cardId: 101, reward: { id: "r1", cardId: 101, amount: 10000, status: "paid", error: null, attempts: 1, createdAt: 1, settledAt: 2 } },
+    { cardId: 102, error: "card_reward_self" },
+  ] } }];
+  await mount("/review/payouts");
+  await vi.waitFor(() => expect(host.querySelector('[data-due="101"]')).not.toBeNull());
+  expect(host.querySelector("[data-creator-rewards]")!.textContent).toContain("夜行偵探");
+  host.querySelector<HTMLButtonElement>("[data-pay-page]")!.click();
+  await vi.waitFor(() => expect(confirmState.current).not.toBeNull());
+  expect(confirmState.current!.message).toBe(i18n.global.t("review.creator.confirm", { count: 2, points: "20,000" }));
+  settleConfirm(true);
+  await vi.waitFor(() => expect(paths("/v1/moderation/card-rewards/batch", "POST")).toHaveLength(1));
+  expect(calls.find((c) => c.path === "/v1/moderation/card-rewards/batch")!.body).toMatchObject({ cardIds: [101, 102], operationId: expect.any(String) });
 });
