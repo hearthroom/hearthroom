@@ -256,6 +256,17 @@ describe("活動資料與作者進度", () => {
     expect(((await res.json()) as any).error).toBe("campaign_slug_taken");
   });
 
+  it("創作季的橫幅讀得到：設定引用的圖算公開圖，列表帶 bannerUrl", async () => {
+    await env.AVATARS.put("blog/creator-season-1.webp", new Uint8Array([82, 73, 70, 70]), { httpMetadata: { contentType: "image/webp" } });
+    expect((await get("/v1/blog/images/creator-season-1.webp")).status).toBe(404);
+    await env.DB.prepare("UPDATE card_reward_campaigns SET banner_key = 'blog/creator-season-1.webp'").run();
+    const img = await get("/v1/blog/images/creator-season-1.webp");
+    expect(img.status).toBe(200);
+    expect(img.headers.get("Content-Type")).toBe("image/webp");
+    const list = (await (await get("/v1/campaigns")).json()) as any;
+    expect(list.items.find((c: any) => c.kind === "card_reward").bannerUrl).toBe("/v1/blog/images/creator-season-1.webp");
+  });
+
   it("沒登入不能看進度", async () => {
     expect((await get("/v1/card-rewards/creator-season/me")).status).toBe(401);
   });
