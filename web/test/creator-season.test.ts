@@ -93,6 +93,8 @@ describe("頁頭與規則卡", () => {
     expect($("[data-progress]")).toBeNull();
     expect(host.querySelectorAll("[data-notes] li")).toHaveLength(5);
     expect(text("[data-notes]")).toContain("10月31日 23:59（台北時間）");
+    // 資格看第一次過審：條款寫出起點
+    expect(text("[data-notes]")).toContain("10月17日 起第一次過審的作品都算");
   });
 
   it("最後 24 小時顯示今天截止；結束後主按鈕到我的卡片，蘇綺說截止前送審的照樣入帳", async () => {
