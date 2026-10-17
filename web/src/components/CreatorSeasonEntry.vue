@@ -7,6 +7,7 @@
 import { computed, onMounted, shallowRef } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink } from "vue-router";
+import AmountText from "@/components/AmountText.vue";
 import type { CardRewardCampaign } from "@/lib/campaign";
 import { useLocalePath } from "@/lib/use-locale";
 
@@ -36,7 +37,7 @@ const text = computed(() => {
 
 <template>
   <RouterLink v-if="campaign && text" class="entry" :class="`entry--${where}`" data-creator-entry :to="lp(`/campaign/${campaign.slug}`)">
-    <span class="entry__text">{{ text }}</span>
+    <span class="entry__text"><AmountText :text="text" /></span>
     <span v-if="where === 'mine'" class="entry__more">{{ t("creator.entry.details") }}<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8 5.5l4.5 4.5L8 14.5" /></svg></span>
   </RouterLink>
 </template>
@@ -47,4 +48,5 @@ const text = computed(() => {
 .entry__more { display: inline-flex; align-items: center; margin-left: 4px; color: var(--accent-text); font-weight: 600; white-space: nowrap; }
 .entry__more svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; vertical-align: middle; }
 .entry--editor { display: block; margin-top: var(--s-1); }
+.entry:lang(ko) { word-break: keep-all; }
 </style>
