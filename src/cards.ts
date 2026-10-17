@@ -45,6 +45,7 @@ export interface CardRow {
   featured_at: number | null;
   /** 作者的本站公開 ID（members.handle，0005 起），從身分表接上來的；作者還沒成為成員時是 null。 */
   author_handle?: string | null;
+  author_official?: number | null;
   /** 作者的打賞連結（members.tip_links 原文）；只有單卡頁輸出，見 cardTips */
   author_tip_links?: string | null;
   community_name?: string | null;
@@ -78,7 +79,7 @@ const AUTHOR_JOIN = `LEFT JOIN member_identities ai ON ai.provider = c.provider 
  */
 const UPDATED_AT = `COALESCE((SELECT COALESCE(r.decided_at, v.created_at) FROM hosting_versions v LEFT JOIN review_submissions r ON r.id = v.submission_id WHERE v.version_id = c.approved_version_id), c.registered_at)`;
 
-const CARD_COLUMNS = "c.*, CAST(c.id AS TEXT) AS id, " + UPDATED_AT + " AS updated_at, fe.labels AS fandom_labels, am.handle AS author_handle, am.tip_links AS author_tip_links, am.display_name AS community_name, CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url END AS community_avatar, cn.num AS num, (SELECT COUNT(*) FROM member_favorites mf WHERE mf.card_id=c.id) AS favorite_count";
+const CARD_COLUMNS = "c.*, CAST(c.id AS TEXT) AS id, " + UPDATED_AT + " AS updated_at, fe.labels AS fandom_labels, am.handle AS author_handle, am.is_official AS author_official, am.tip_links AS author_tip_links, am.display_name AS community_name, CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url END AS community_avatar, cn.num AS num, (SELECT COUNT(*) FROM member_favorites mf WHERE mf.card_id=c.id) AS favorite_count";
 
 /** 卡號長什麼樣：純數字。網址與搜尋框裡看到這種形狀就當卡號查，其餘當上游的卡片 ID。 */
 export const CARD_NUMBER = /^[1-9]\d{0,11}$/;
@@ -134,6 +135,7 @@ export function toCard(row: CardRow, lang: string) {
     fandomLabels: row.fandom_qid && row.fandom_labels ? (JSON.parse(row.fandom_labels) as Record<string, string>) : undefined,
     author: {
       handle: row.author_handle ?? null,
+      official: row.author_official === 1,
       accountNumId: row.author_num_id,
       name: row.community_name ?? row.author_name,
       avatar: row.community_avatar ?? row.author_avatar,
@@ -615,7 +617,7 @@ export function previewCard(role: UpstreamRole, lang: string, provider: Provider
     landscapeUrl: role.backgroundLandscapeUrl || null,
     slug: role.slug,
     tags: role.tags,
-    author: { handle: null, accountNumId: role.authorNumId, name: role.authorName, avatar: role.authorAvatar },
+    author: { handle: null as string | null, official: false, accountNumId: role.authorNumId, name: role.authorName, avatar: role.authorAvatar },
     talkNum: role.talkNum,
     followNum: role.followNum,
     trending: 0,
@@ -630,7 +632,7 @@ export async function getAuthor(db: D1Database, memberId: string, allowNsfw = fa
   const row = await db
     .prepare(
       `SELECT am.handle AS handle, MAX(COALESCE(am.display_name,c.author_name)) AS author_name, MAX(CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url ELSE c.author_avatar END) AS author_avatar,
-              MAX(am.bio) AS bio, MAX(am.tip_links) AS tip_links, COUNT(*) AS card_count, SUM(c.talk_num) AS talk_total, MIN(c.registered_at) AS joined_at,
+              MAX(am.is_official) AS is_official, MAX(am.bio) AS bio, MAX(am.tip_links) AS tip_links, COUNT(*) AS card_count, SUM(c.talk_num) AS talk_total, MIN(c.registered_at) AS joined_at,
               GROUP_CONCAT(DISTINCT c.provider) AS providers
        FROM cards c ${AUTHOR_JOIN}
        WHERE am.id = ? AND ${NOT_A_COPY("c")} AND c.${listed(allowNsfw)} AND c.provider='harbor'`,
@@ -638,6 +640,7 @@ export async function getAuthor(db: D1Database, memberId: string, allowNsfw = fa
     .bind(memberId)
     .first<{
       handle: string | null;
+      is_official: number;
       bio: string;
       tip_links: string | null;
       author_name: string;
@@ -648,7 +651,7 @@ export async function getAuthor(db: D1Database, memberId: string, allowNsfw = fa
       providers: string | null;
     }>();
   if (!row || !row.card_count) {
-    const member=await db.prepare("SELECT handle,display_name AS author_name,avatar_url AS author_avatar,bio,tip_links,created_at FROM members WHERE id=?").bind(memberId).first<{handle:string;author_name:string;author_avatar:string;bio:string;tip_links:string;created_at:number}>();
+    const member=await db.prepare("SELECT handle,display_name AS author_name,avatar_url AS author_avatar,is_official,bio,tip_links,created_at FROM members WHERE id=?").bind(memberId).first<{handle:string;author_name:string;author_avatar:string;is_official:number;bio:string;tip_links:string;created_at:number}>();
     return member?{...member,card_count:0,talk_total:0,joined_at:member.created_at,providers:[] as string[]}:null;
   }
   return { ...row, providers: (row.providers ?? "").split(",").filter(Boolean) };
@@ -799,6 +802,7 @@ export async function topFandoms(db: D1Database, zone: Zone | undefined, limit: 
 }
 
 export interface AuthorRow {
+  is_official?: number;
   handle: string | null;
   author_num_id: number;
   author_name: string;
@@ -826,7 +830,7 @@ export async function listAuthors(
     opts.sort === "cards" ? "card_count DESC, talk_total DESC" : opts.sort === "hot" ? "trending DESC, talk_total DESC" : "talk_total DESC, card_count DESC";
   const rows = await db
     .prepare(
-      `SELECT am.handle AS handle, c.author_num_id, MAX(COALESCE(am.display_name,c.author_name)) AS author_name, MAX(CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url ELSE c.author_avatar END) AS author_avatar,
+      `SELECT am.handle AS handle, MAX(am.is_official) AS is_official, c.author_num_id, MAX(COALESCE(am.display_name,c.author_name)) AS author_name, MAX(CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url ELSE c.author_avatar END) AS author_avatar,
               COUNT(*) AS card_count, SUM(c.talk_num) AS talk_total, SUM(MAX(c.hot_score, 0)) AS trending,
               MIN(c.registered_at) AS joined_at
        FROM cards c ${AUTHOR_JOIN} WHERE ${where.join(" AND ")}
@@ -840,6 +844,7 @@ export async function listAuthors(
 
 export const toAuthor = (a: AuthorRow) => ({
   handle: a.handle ?? null,
+  official: a.is_official === 1,
   accountNumId: a.author_num_id,
   name: a.author_name,
   avatar: a.author_avatar,

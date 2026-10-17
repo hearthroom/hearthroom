@@ -1,3 +1,4 @@
+import { changeOfficialAuthor } from '../official-authors';
 import { pendingReviewDeliveries, leaseReviewDelivery, checkReviewDelivery, finishReviewDelivery, reviewNotificationEligible } from './review-notifications';
 import { publicIdentities } from './public-cache';
 import { badgeCollection, setFeaturedBadges, createEventBadge, changeBadgeAward, badgeManagement } from './badges';
@@ -46,7 +47,8 @@ for (const path of [
   "/v1/community/media/*",
 ])
   app.use(path, async (c, next) => {
-    const operation = c.req.path.includes("/badges/manage") ? "badge_admin"
+    const operation = c.req.path.includes("/official/manage") ? "official_admin"
+      : c.req.path.includes("/badges/manage") ? "badge_admin"
       : c.req.path.includes("/badges") ? (c.req.method==="GET"?"badge_read":"badge_write")
       : c.req.path.startsWith("/internal/")
       ? "bridge"
@@ -104,6 +106,7 @@ app.get('/v1/me/community/badges',async c=>c.json(await badgeCollection(c.env,(a
 app.patch('/v1/me/community/badges/featured',async c=>{
  const member=await requireMember(c);const b=await c.req.json();await setFeaturedBadges(c.env,member.id,b.featured,b.public);return c.json(await badgeCollection(c.env,member.id));
 });
+app.post('/v1/me/community/official/manage',async c=>c.json(await changeOfficialAuthor(c,await c.req.json().catch(()=>{throw new HttpError(400,'official_input')}))));
 app.get('/v1/me/community/badges/manage',async c=>c.json(await badgeManagement(c.env,(await requireMember(c)).id)));
 app.post('/v1/me/community/badges/manage/definitions',async c=>{
  const member=await requireMember(c);await createEventBadge(c.env,member.id,await c.req.json());return c.json(await badgeManagement(c.env,member.id));

@@ -40,6 +40,7 @@ export interface CommunityCard {
   /** handle 是作者的本站公開 ID；作者還沒成為成員時是 null，畫成純文字。accountNumId 是上游的數字 ID，只給編輯器與快取鍵用。 */
   author: {
     handle: string | null; accountNumId: number; name: string; avatar: string;
+    official?: boolean;
     /** 作者的打賞連結，已照熟悉度排好；只有單卡頁帶（shared/tip-links.ts） */
     tips?: TipLink[];
   };
@@ -77,6 +78,7 @@ export interface CardPage {
 export type Sort = "day" | "week" | "month" | "hot" | "score" | "favorites" | "new" | "updated" | "random" | "relevance";
 
 export interface Author {
+  official?: boolean;
   bio?: string;
   /** 本站公開 ID（作者頁的網址）；null 表示還沒成為成員。 */
   handle: string | null;

@@ -18,7 +18,6 @@ import { contentLang, pageTitle } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
 import type { Author, CardPage } from "@/lib/types";
-import { providerName } from "@/lib/providers";
 
 const route = useRoute();
 const router = useRouter();
@@ -72,7 +71,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
       <CommunityAvatar :handle="author.handle ?? undefined" :src="author.avatar" :name="author.name" class="who__face" />
       <div class="who__text">
         <p class="eyebrow">{{ $t("author.eyebrow") }}</p>
-        <h1 class="who__name display"><CommunityName :handle="author.handle ?? undefined" :name="author.name" /></h1>
+        <h1 class="who__name display"><CommunityName :handle="author.handle ?? undefined" :name="author.name" :official="author.official" /></h1>
         <CommunityBadges v-if="author.handle" :handle="author.handle" />
         <p v-if="author.bio" class="who__bio">{{ author.bio }}</p>
         <!-- 打賞連結：每一條直接連到那個平台，錢在那邊付 -->
@@ -85,7 +84,6 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
         </ul>
         <p class="subtle who__id">
           <span class="mono">@{{ author.handle }}</span>
-          <span v-if="author.providers?.length"> · {{ $t("author.supports", { providers: author.providers.map(providerName).join("、") }) }}</span>
         </p>
       </div>
       <LibraryToggle v-if="author.handle && author.handle !== session.profile?.handle" kind="following" :target="author.handle" />

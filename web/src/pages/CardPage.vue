@@ -14,6 +14,7 @@
  */
 import { cardFandom } from "@/lib/fandom";
 import CommunityAvatar from "@/components/CommunityAvatar.vue";
+import OfficialBadge from "@/components/OfficialBadge.vue";
 import CommunityName from "@/components/CommunityName.vue";
 import LibraryToggle from "@/components/LibraryToggle.vue";
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
@@ -381,7 +382,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
           <div class="role__meta">
             <component :is="card.author.handle ? RouterLink : 'span'" :to="card.author.handle ? lp(`/authors/${card.author.handle}`) : undefined" class="role__by">
               <CommunityAvatar :handle="card.author.handle ?? undefined" :src="card.author.avatar" :name="card.author.name" class="role__by-avatar" />
-              <CommunityName :handle="card.author.handle ?? undefined" :name="card.author.name" />
+              <CommunityName :handle="card.author.handle ?? undefined" :name="card.author.name" :official="card.author.official" />
             </component>
             <TipMenu v-if="tips.length" :tips="tips" variant="pill" />
             <a v-if="score && score.count" class="role__score" href="#score" @click.prevent="side?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })">
@@ -487,7 +488,9 @@ watch(() => session.profile?.showNsfw, (now, before) => {
               <TipMenu :tips="tips" variant="block" />
             </div>
             <h2 v-if="more.length" id="more-h" class="role__more-title">
-              <span>{{ $t("card.moreBy", { name: card.author.name }) }}</span>
+              <i18n-t keypath="card.moreBy" tag="span">
+                <template #author>{{ card.author.name }}<OfficialBadge v-if="card.author.official === true" class="role__more-official" /></template>
+              </i18n-t>
               <RouterLink v-if="card.author.handle" :to="lp(`/authors/${card.author.handle}`)">{{ $t("card.moreAll") }}</RouterLink>
             </h2>
             <h2 v-else id="more-h" class="sr-only">{{ card.author.name }}</h2>
@@ -634,6 +637,7 @@ a.role__author-who:hover { color: var(--accent-text); }
 .role__author-who :deep(img), .role__author-who :deep(.role__author-avatar) { width: 40px; height: 40px; border-radius: var(--r-pill); object-fit: cover; flex: none; font-size: 15px; }
 .role__more-title { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s-2); margin: 0 var(--s-1) var(--s-2); font-size: 13px; font-weight: 600; color: var(--text-2); }
 .role__more-title span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.role__more-official { margin-inline-start: var(--s-1); }
 .role__more-title a { flex: none; font-size: 12.5px; color: var(--accent-text); }
 .role__mini { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: var(--s-3); align-items: center; padding: 6px; border-radius: var(--r-md); color: var(--text); transition: background var(--dur) var(--ease); }
 .role__mini:hover { background: var(--surface-2); }
