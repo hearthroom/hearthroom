@@ -1899,7 +1899,7 @@
   "d0f5ad405225b": "`forbidden`：呼び出し元はこのアプリのオーナー、管理者、閲覧者ではありません。",
   "d59960afa4b41": "`temporarily_unavailable`：あとで再試行してください。",
   "dbb137b72e612": "キャンペーン報酬プールから報酬を支払う",
-  "dc3b7f7a4403b": "このトークンが属するアプリのキャンペーン報酬プールから `amount` credits を取り出し、プレイヤーのアカウントに付与します。支払えるのはアプリのオーナーと管理者だけです。`accountNo` はプレイヤーの公開アカウント番号です。再試行するときは同じ `key` を使ってください。すでに支払い済みの key は元の支払い結果を `replayed: true` 付きで返します。別の `accountNo`、`amount`、`campaignRef`、`contentRef` で同じ `key` を使うと `idempotency_conflict` を返します。利用範囲と有効期限はこのアプリに対するプラットフォームの設定で決まり、呼び出し元は指定できません。",
+  "dc3b7f7a4403b": "このトークンが属するアプリのキャンペーン報酬プールから `amount` credits を取り出し、プレイヤーのアカウントに付与します。支払えるのはアプリのオーナーと管理者だけです。`accountNo` はプレイヤーの公開アカウント番号です。再試行するときは同じ `key` を使ってください。すでに支払い済みの key は元の支払い結果を `replayed: true` 付きで返します。別の `accountNo`、`amount`、`campaignRef`、`contentRef`、`validityDays` で同じ `key` を使うと `idempotency_conflict` を返します。利用範囲はこのアプリに対するプラットフォームの設定で決まります。有効期限は支払いごとに `validityDays` で指定し、省略すると無期限です。",
   "dfbf040724ca3": "支払い結果です。`key` がすでに支払い済みの場合、`replayed` は true になります。",
   "de332a4d025db": "`invalid_request`：`key` が 1〜128 文字の英字・数字・`_`・`-` ではない、`accountNo` または `amount` が正の整数ではない、または参照が 128 文字を超えています。",
   "d05cde8d97971": "`forbidden`：呼び出し元はこのアプリのオーナーまたは管理者ではありません。",

@@ -1899,7 +1899,7 @@
   "d0f5ad405225b": "`forbidden` — the caller is not an owner, admin or viewer of this app.",
   "d59960afa4b41": "`temporarily_unavailable` — retry later.",
   "dbb137b72e612": "Pay a reward from the campaign pool",
-  "dc3b7f7a4403b": "Credits a player's account with `amount` credits taken from the campaign pool of the app this token belongs to. Only the app's owners and admins can pay. `accountNo` is the player's public account number. Reuse the same `key` when retrying; a key that already paid returns the original payout with `replayed: true`. Reusing a `key` with a different `accountNo`, `amount`, `campaignRef` or `contentRef` returns `idempotency_conflict`. Usage scope and expiry come from the platform's settings for this app and cannot be set by the caller.",
+  "dc3b7f7a4403b": "Credits a player's account with `amount` credits taken from the campaign pool of the app this token belongs to. Only the app's owners and admins can pay. `accountNo` is the player's public account number. Reuse the same `key` when retrying; a key that already paid returns the original payout with `replayed: true`. Reusing a `key` with a different `accountNo`, `amount`, `campaignRef`, `contentRef` or `validityDays` returns `idempotency_conflict`. Usage scope comes from the platform's settings for this app; expiry is chosen per payout with `validityDays`, and leaving it out means the credits never expire.",
   "dfbf040724ca3": "The payout. `replayed` is true when `key` had already paid.",
   "de332a4d025db": "`invalid_request` — `key` is not 1 to 128 letters, digits, `_` or `-`; `accountNo` or `amount` is not a positive integer; or a reference is longer than 128 characters.",
   "d05cde8d97971": "`forbidden` — the caller is not an owner or admin of this app.",

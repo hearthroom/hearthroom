@@ -1899,7 +1899,7 @@
   "d0f5ad405225b": "`forbidden` — 调用者不是此应用的所有者、管理员或查看者。",
   "d59960afa4b41": "`temporarily_unavailable` — 请稍后重试。",
   "dbb137b72e612": "从活动奖励池发放奖励",
-  "dc3b7f7a4403b": "从此令牌所属应用的活动奖励池中取出 `amount` credits，存入玩家账户。只有应用的所有者和管理员可以发放。`accountNo` 是玩家的公开账号编号。重试时请复用同一个 `key`；已经发放过的 key 会返回原来的发放结果，并带上 `replayed: true`。用不同的 `accountNo`、`amount`、`campaignRef` 或 `contentRef` 复用同一个 `key`，会返回 `idempotency_conflict`。使用范围和有效期由平台为此应用设定，调用者不能指定。",
+  "dc3b7f7a4403b": "从此令牌所属应用的活动奖励池中取出 `amount` credits，存入玩家账户。只有应用的所有者和管理员可以发放。`accountNo` 是玩家的公开账号编号。重试时请复用同一个 `key`；已经发放过的 key 会返回原来的发放结果，并带上 `replayed: true`。用不同的 `accountNo`、`amount`、`campaignRef`、`contentRef` 或 `validityDays` 复用同一个 `key`，会返回 `idempotency_conflict`。使用范围由平台为此应用设定；有效期由每次发放的 `validityDays` 决定，不带就永不到期。",
   "dfbf040724ca3": "发放结果。`key` 已经发放过时，`replayed` 为 true。",
   "de332a4d025db": "`invalid_request` — `key` 不是 1 到 128 个字母、数字、`_` 或 `-`；`accountNo` 或 `amount` 不是正整数；或某个参照超过 128 个字符。",
   "d05cde8d97971": "`forbidden` — 调用者不是此应用的所有者或管理员。",
