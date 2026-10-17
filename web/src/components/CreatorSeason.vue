@@ -253,6 +253,8 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
 .creator__label { margin: 0; font-size: 12px; font-weight: 600; color: var(--text-3); }
 .creator__h2 { margin: 0; font-size: 20px; font-weight: 650; line-height: 1.4; }
 .creator__cap { display: block; margin: 0; font-size: 13px; line-height: 1.55; color: var(--text-2); }
+/* 日文照詞組斷行、不留單獨一個字在最後一行 */
+.creator__card, .creator__notes { word-break: auto-phrase; text-wrap: pretty; }
 .creator__row { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
 .creator__more { display: inline-flex; align-items: center; gap: 2px; min-height: 44px; font-size: 14px; font-weight: 600; color: var(--accent-text); }
 .creator__more svg { width: 16px; height: 16px; }
@@ -281,13 +283,14 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
 
 /* ---- 我的進度 ---- */
 .creator__cells { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-2); }
-.creator__cell { min-width: 0; display: grid; gap: 2px; align-content: start; padding: var(--s-3); border-radius: var(--r-md); background: var(--surface-2); }
+/* 右欄只有約 360 寬，三格各約 100：數字跟著格寬縮（最大 28），180,000 也放得下 */
+.creator__cell { min-width: 0; display: grid; gap: 2px; align-content: start; padding: var(--s-3); border-radius: var(--r-md); background: var(--surface-2); container-type: inline-size; }
 .creator__cell-label { font-size: 12px; color: var(--text-3); }
-.creator__cell-num { font-size: 28px; font-weight: 700; line-height: 1.2; white-space: nowrap; }
+.creator__cell-num { font-size: clamp(16px, 24cqi, 28px); font-weight: 700; line-height: 1.2; white-space: nowrap; }
 .creator__cell-num--paid { color: var(--success); }
 .creator__cell-sub { font-size: 12px; color: var(--text-2); }
-.creator__pips { display: inline-flex; flex-wrap: wrap; gap: 3px; margin: 2px 0; }
-.creator__pips i { width: 10px; height: 6px; border-radius: var(--r-pill); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-strong); }
+.creator__pips { display: flex; gap: 2px; margin: 2px 0; }
+.creator__pips i { flex: 0 1 10px; min-width: 4px; height: 6px; border-radius: var(--r-pill); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-strong); }
 .creator__pips i.on { background: var(--accent-grad); box-shadow: none; }
 .creator__ghosts { display: grid; gap: var(--s-2); }
 .creator__ghost-cell { height: 96px; border-radius: var(--r-md); }
@@ -348,7 +351,6 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
   .creator__big-num { font-size: 40px; }
   .creator__say > img { width: 64px; height: 89px; }
   .creator__cell { padding: var(--s-2); }
-  .creator__cell-num { font-size: 24px; }
   .creator__how--guest .creator__how-say > img { display: none; }
   .creator__notes { padding: 0 var(--s-4); }
   .creator__notes summary { min-height: 52px; }
