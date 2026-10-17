@@ -46,22 +46,29 @@ export async function listRewardCampaigns(db: D1Database): Promise<RewardCampaig
 
 // ---- 誰該拿 -------------------------------------------------------------------
 
-/** 卡的作品鍵與作者成員；跟 community_registration_usage 同一套對應。 */
-const CARD_WORK = `SELECT c.id AS card_id, c.author_num_id, c.names, c.background_url AS avatar_url,
+/** 卡的作品鍵與作者成員；跟 community_registration_usage 同一套對應。不篩審核狀態（作者進度要列審核中與被拒的）。 */
+const CARD_BASE = `SELECT c.id AS card_id, c.author_num_id, c.names, c.background_url AS avatar_url,
   COALESCE((SELECT w.source_provider||':'||w.source_role_id FROM work_copies cp JOIN works w ON w.id=cp.work_id WHERE cp.provider=c.provider AND cp.role_id=c.source_role_id), c.provider||':'||c.source_role_id) AS work_key,
   COALESCE((SELECT owner_member_id FROM member_connections WHERE provider=c.provider AND external_id=CAST(c.author_num_id AS TEXT)),
            (SELECT member_id FROM member_identities WHERE provider=c.provider AND external_id=CAST(c.author_num_id AS TEXT))) AS member_id
-  FROM cards c WHERE c.provider = 'harbor' AND (c.status = 'approved' OR c.approved_version_id IS NOT NULL)`;
+  FROM cards c WHERE c.provider = 'harbor'`;
+/** 作品第一次登記的時間。作品鍵是算出來的、沒有索引可用，所以只對篩過的少數卡算。 */
+const FIRST_AT = "(SELECT MIN(u.registered_at) FROM community_registration_usage u WHERE u.work_key = cw.work_key)";
+const LIVE = "('pending', 'blocked_insufficient', 'paid')";
 
 /**
- * 該發而還沒發的卡：審核通過過、作品第一次登記落在進行中活動的期間、還沒過發獎截止、沒有進行中或已入帳的發放。
- * ?1 現在時間，?2 限定一張卡（NULL＝全部）。
+ * 該發而還沒發的卡：審核通過過、沒被站方封鎖、作品第一次登記落在進行中活動的期間、還沒過發獎截止、沒有進行中或已入帳的發放
+ * （以作品認，也以卡認：作品對應改過的話作品鍵會變，卡號不會）。?1 現在時間，?2 限定一張卡（NULL＝全部）。
+ * 卡的 registered_at 不早於作品第一次登記（卡列在登記時建立），所以先用最早的活動開始時間篩掉舊卡，再算第一次登記。
  */
 const DUE = `SELECT x.card_id, x.author_num_id, x.names, x.work_key, x.member_id, x.first_at, k.id AS campaign_id, k.slug, k.reward
-  FROM (SELECT cw.*, (SELECT MIN(u.registered_at) FROM community_registration_usage u WHERE u.work_key = cw.work_key) AS first_at FROM (${CARD_WORK} AND (?2 IS NULL OR c.id = ?2)) cw) x
+  FROM (SELECT cw.*, ${FIRST_AT} AS first_at FROM (${CARD_BASE}
+    AND (c.status = 'approved' OR c.approved_version_id IS NOT NULL) AND c.public_blocked = 0 AND (?2 IS NULL OR c.id = ?2)
+    AND c.registered_at >= (SELECT MIN(starts_at) FROM card_reward_campaigns WHERE status = 'active')) cw) x
   JOIN card_reward_campaigns k ON k.status = 'active' AND k.starts_at <= x.first_at AND k.ends_at > x.first_at AND (k.payout_deadline IS NULL OR k.payout_deadline > ?1)
   WHERE x.member_id IS NOT NULL
-    AND NOT EXISTS (SELECT 1 FROM card_rewards r WHERE r.work_key = x.work_key AND r.status IN ('pending', 'blocked_insufficient', 'paid'))`;
+    AND NOT EXISTS (SELECT 1 FROM card_rewards r WHERE r.work_key = x.work_key AND r.status IN ${LIVE})
+    AND NOT EXISTS (SELECT 1 FROM card_rewards r WHERE r.card_id = x.card_id AND r.status IN ${LIVE})`;
 
 type Due = { card_id: number; author_num_id: number; names: string; work_key: string; member_id: string; first_at: number; campaign_id: string; slug: string; reward: number };
 
@@ -184,10 +191,12 @@ export async function autoReward(x: Payer, cardId: number, op: string): Promise<
   try {
     return { reward: await requestReward(x, cardId, `${op}:reward`) };
   } catch (e) {
-    if (!(e instanceof HttpError)) throw e;
-    if (e.message === "card_reward_not_due") return { reward: null };
-    await bumpOp(x.env.DB, "card_reward", "payout", e.status < 500 ? "denied" : "error");
-    return { reward: null, rewardError: e.message };
+    if (e instanceof HttpError && e.message === "card_reward_not_due") return { reward: null };
+    // 資料庫出錯也一樣不推翻過審：留了 pending 的由對帳收，沒留的卡還在待發放清單。
+    const known = e instanceof HttpError;
+    if (!known) console.error("card_reward_auto_failed", e instanceof Error ? e.message : "unknown");
+    await bumpOp(x.env.DB, "card_reward", "payout", known && e.status < 500 ? "denied" : "error");
+    return { reward: null, rewardError: known ? e.message : "internal_error" };
   }
 }
 
@@ -294,10 +303,13 @@ const cardName = (names: string) => {
 
 /** 待發放（應用管理員）：舊的在前，每頁 20 筆。作者只以 handle 出現，不回成員 id 與收款帳號。 */
 export async function listDue(db: D1Database, page: number, now: number) {
-  const rows = (await db.prepare(`SELECT d.*, m.handle FROM (${DUE}) d JOIN members m ON m.id = d.member_id ORDER BY d.first_at, d.card_id`).bind(now, null).all<Due & { handle: string }>()).results;
+  const [total, rows] = await db.batch([
+    db.prepare(`SELECT count(*) AS n FROM (${DUE})`).bind(now, null),
+    db.prepare(`SELECT d.*, m.handle FROM (${DUE}) d JOIN members m ON m.id = d.member_id ORDER BY d.first_at, d.card_id LIMIT ?3 OFFSET ?4`).bind(now, null, PAGE, (page - 1) * PAGE),
+  ]);
   return {
-    total: rows.length,
-    items: rows.slice((page - 1) * PAGE, page * PAGE).map((d) => ({ cardId: d.card_id, cardName: cardName(d.names), campaignSlug: d.slug, author: { handle: d.handle }, registeredAt: d.first_at, amount: d.reward })),
+    total: (total!.results[0] as { n: number }).n,
+    items: (rows!.results as (Due & { handle: string })[]).map((d) => ({ cardId: d.card_id, cardName: cardName(d.names), campaignSlug: d.slug, author: { handle: d.handle }, registeredAt: d.first_at, amount: d.reward })),
   };
 }
 
@@ -325,10 +337,9 @@ export async function listRewards(db: D1Database, q: { status?: string; page: nu
 export async function myProgress(db: D1Database, memberId: string, campaign: RewardCampaign) {
   type P = { card_id: number; names: string; avatar_url: string | null; status: string; approved_version_id: string | null; first_at: number; reward_status: string | null; amount: number | null };
   const rows = (await db.prepare(`SELECT x.card_id, x.names, x.avatar_url, c.status, c.approved_version_id, x.first_at,
-      (SELECT r.status FROM card_rewards r WHERE r.work_key = x.work_key AND r.status IN ('pending','blocked_insufficient','paid')) AS reward_status,
-      (SELECT r.amount FROM card_rewards r WHERE r.work_key = x.work_key AND r.status IN ('pending','blocked_insufficient','paid')) AS amount
-    FROM (SELECT cw.*, (SELECT MIN(u.registered_at) FROM community_registration_usage u WHERE u.work_key = cw.work_key) AS first_at
-          FROM (${CARD_WORK.replace(" AND (c.status = 'approved' OR c.approved_version_id IS NOT NULL)", "")}) cw WHERE cw.member_id = ?1) x
+      (SELECT r.status FROM card_rewards r WHERE r.work_key = x.work_key AND r.status IN ${LIVE}) AS reward_status,
+      (SELECT r.amount FROM card_rewards r WHERE r.work_key = x.work_key AND r.status IN ${LIVE}) AS amount
+    FROM (SELECT cw.*, ${FIRST_AT} AS first_at FROM (${CARD_BASE} AND c.registered_at >= ?2) cw WHERE cw.member_id = ?1) x
     JOIN cards c ON c.id = x.card_id
     WHERE x.first_at >= ?2 AND x.first_at < ?3 ORDER BY x.first_at DESC, x.card_id DESC`).bind(memberId, campaign.startsAt, campaign.endsAt).all<P>()).results;
   const items = rows.map((r) => ({
