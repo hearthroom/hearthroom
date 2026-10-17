@@ -17,7 +17,11 @@
           "https://sukisuki.chat",
           "https://www.sukisuki.chat",
           "https://play.sukisuki.chat",
-          "https://playground.sukisuki.chat"
+          "https://playground.sukisuki.chat",
+          "https://sukisuki.pro",
+          "https://www.sukisuki.pro",
+          "https://play.sukisuki.pro",
+          "https://playground.sukisuki.pro"
         ],
         "methods": [
           "GET",

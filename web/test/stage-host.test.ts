@@ -92,7 +92,7 @@ describe("sandboxOptions", () => {
   });
 });
 
-for (const root of ['sukisuki.ai', 'sukisuki.chat']) {
+for (const root of ['sukisuki.ai', 'sukisuki.chat', 'sukisuki.pro']) {
   it(`uses isolated per-card shells on ${root} and its card app`, async () => {
     const { sandboxOptions } = await import('../src/lib/stage-host');
     for (const host of [root, `www.${root}`, `play.${root}`]) {

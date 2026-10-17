@@ -48,7 +48,7 @@ export async function openAuth<T>(env:Env,purpose:string,payload:string):Promise
     return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:decode(p.iv),additionalData:bytes(purpose)},key,decode(p.data))));
   }catch{throw new HttpError(503,'auth_credentials_unavailable');}
 }
-function origins(env:Env):string[]{return (env.AUTH_ALLOWED_ORIGINS||'').split(',').map(s=>s.trim()).filter(Boolean);}
+function origins(env:Env):string[]{return [env.AUTH_ALLOWED_ORIGINS,env.AUTH_ADDITIONAL_ORIGINS].filter(Boolean).join(',').split(',').map(s=>s.trim()).filter(Boolean);}
 function enabled(env:Env){
   if(env.AUTH_ENABLED!=='true')throw new HttpError(503,'auth_not_enabled');
   ring(env);

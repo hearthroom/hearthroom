@@ -10,6 +10,8 @@ export type Env = Omit<Cloudflare.Env, "EVENTS" | "VISIT_LIMIT" | "ANALYTICS_ENA
   DRAFT_TRANSFER_CONTROL_CARD_NUM?: string;
   AUTH_ENABLED?: string;
   AUTH_ALLOWED_ORIGINS?: string;
+  /** Add explicit serving origins without replacing the existing encrypted allowlist. */
+  AUTH_ADDITIONAL_ORIGINS?: string;
   AUTH_KEYRING?: string;
   AUTH_METRICS_SECRET?: string;
   COMMUNITY_ENABLED?: string;

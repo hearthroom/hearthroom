@@ -5,13 +5,19 @@ import wrangler from '../../wrangler.toml?raw';
 import deployWorkflow from '../../.github/workflows/deploy.yml?raw';
 afterEach(() => vi.unstubAllGlobals());
 describe('official domain families', () => {
-  for (const root of ['hearthroom.club', 'sukisuki.ai', 'sukisuki.chat']) {
+  for (const root of ['hearthroom.club', 'sukisuki.ai', 'sukisuki.chat', 'sukisuki.pro']) {
     it(`keeps card apps on ${root} and deploys the matching routes`, () => {
       vi.stubGlobal('location', { hostname: root, origin: `https://${root}` });
       expect(playAppUrl('card-1', 'en')).toBe(`https://play.${root}/card-1/?lang=en`);
       expect(isPlayHost(`play.${root}`)).toBe(true);
       expect(isPlayHost(`play.${root}.evil.test`)).toBe(false);
-      expect(wrangler).toContain(`pattern = "${root}", custom_domain = true`);
+      if (root === 'sukisuki.chat' || root === 'sukisuki.pro') {
+        expect(wrangler).toContain(`pattern = "${root}/*", zone_name = "${root}"`);
+        expect(wrangler).not.toContain(`pattern = "${root}", custom_domain = true`);
+        expect(wrangler).not.toContain(`pattern = "www.${root}", custom_domain = true`);
+      } else {
+        expect(wrangler).toContain(`pattern = "${root}", custom_domain = true`);
+      }
       expect(wrangler).toContain(`pattern = "*.${root}/*", zone_name = "${root}"`);
     });
   }
@@ -19,7 +25,7 @@ describe('official domain families', () => {
 
 it('allows media reads and signed uploads from every official app origin without a wildcard', () => {
  const rule=cors.rules[0];
- for(const root of ['hearthroom.club','sukisuki.ai','sukisuki.chat'])
+ for(const root of ['hearthroom.club','sukisuki.ai','sukisuki.chat','sukisuki.pro'])
   for(const prefix of ['', 'www.', 'play.', 'playground.'])
    expect(rule.allowed.origins).toContain(`https://${prefix}${root}`);
  expect(rule.allowed.origins).not.toContain('*');
