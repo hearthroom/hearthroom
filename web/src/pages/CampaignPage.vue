@@ -8,6 +8,9 @@
  * 金額與時間全部讀 API，時間用活動自己的時區；推薦數字讀 Harbor 公開的推薦規則（lib/referral-terms），讀不到就只講分享。
  * 訪客看得到全部規則，申請區請他登入後回到這一頁（?s= 進站時已記在瀏覽器，登入後綁定，見 lib/share-ref.ts）。
  * 只有登入且活動進行中才有申請表。進頁成功記一次 campaign_view（同一個 slug 重新讀不再記）。
+ *
+ * 發卡獎勵活動（創作季，kind = card_reward）共用頁頭，中段換成 CreatorSeason（規則卡、我的進度、怎麼參加、條款）。
+ * 分享活動頁在條款上方多一行連到進行中的創作季。
  */
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -15,11 +18,12 @@ import { RouterLink, useRoute } from "vue-router";
 import CampaignApplyForm from "@/components/CampaignApplyForm.vue";
 import CampaignRewards from "@/components/CampaignRewards.vue";
 import CampaignShareLinks from "@/components/CampaignShareLinks.vue";
+import CreatorSeason from "@/components/CreatorSeason.vue";
 import NotFoundPage from "@/pages/NotFoundPage.vue";
 import { ApiError } from "@/lib/api";
 import {
-  DEFAULT_TIMEZONE, TIERS, campaignErrorText, fetchCampaign, fetchMyContents, formatNumber, formatPeriod, formatPoints, localized, platformsFor, zoneName,
-  type ApplyResult, type ContentView, type PublicCampaign,
+  DEFAULT_TIMEZONE, TIERS, campaignErrorText, fetchCampaign, fetchMyContents, formatNumber, formatPeriod, formatPoints, isCardReward, localized, openCardReward, platformsFor, zoneName,
+  type ApplyResult, type CardRewardCampaign, type ContentView, type PublicCampaign,
 } from "@/lib/campaign";
 import { pageTitle } from "@/lib/i18n";
 import { loginPath } from "@/lib/login-return";
@@ -36,16 +40,19 @@ const { lp, locale } = useLocalePath();
 const session = useSession();
 
 const slug = computed(() => String(route.params.slug ?? ""));
+/** 分享活動；發卡獎勵活動放在 creator。兩個最多一個有值，頁頭讀 head。 */
 const campaign = ref<PublicCampaign | null>(null);
+const creator = ref<CardRewardCampaign | null>(null);
+const head = computed(() => campaign.value ?? creator.value);
 const missing = ref(false);
 const failed = ref(false);
 const loading = ref(true);
 
-const title = computed(() => (campaign.value ? localized(campaign.value.title, locale.value) || campaign.value.slug : ""));
+const title = computed(() => (head.value ? localized(head.value.title, locale.value) || head.value.slug : ""));
 const intro = computed(() => renderDoc(campaign.value ? localized(campaign.value.intro, locale.value) : "").html);
 const signedIn = computed(() => !!session.me);
 const loginTo = computed(() => lp(loginPath(route.fullPath)));
-const tz = computed(() => campaign.value?.timezone || DEFAULT_TIMEZONE);
+const tz = computed(() => head.value?.timezone || DEFAULT_TIMEZONE);
 
 // ---- 日期：活動自己的時區 ---------------------------------------------------------
 const fmt = (opts: Intl.DateTimeFormatOptions) => (ms: number) => new Intl.DateTimeFormat(locale.value, { timeZone: tz.value, ...opts }).format(ms);
@@ -53,7 +60,7 @@ const md = (ms: number) => fmt({ month: "numeric", day: "numeric" })(ms);
 const mdhm = (ms: number) => fmt({ month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })(ms);
 /** 狀態膠囊旁的一行期間：只到月日 */
 const shortPeriod = computed(() => {
-  const c = campaign.value;
+  const c = head.value;
   if (!c || c.startsAt === null || c.endsAt === null) return "";
   return `${md(c.startsAt)} – ${md(c.endsAt)}`;
 });
@@ -67,7 +74,28 @@ const datesLine = computed(() => {
   const line = t("campaign.page.dates", { start: md(c.startsAt), end: md(c.endsAt), submitDeadline: md(c.submitDeadline), payBy: md(c.payoutDeadline) });
   return `${line}（${zoneName(tz.value, locale.value)}）`;
 });
-const startLabel = computed(() => (campaign.value?.startsAt != null ? mdhm(campaign.value.startsAt) : ""));
+const startLabel = computed(() => (head.value?.startsAt != null ? mdhm(head.value.startsAt) : ""));
+
+// ---- 創作季的頁頭：剩幾天、最後一天、期間（結束日是最後一天）、副標 ---------------------------------
+const DAY = 86_400_000;
+const creatorMd = (ms: number) => fmt({ month: "short", day: "numeric" })(ms);
+const creatorStatus = computed(() => {
+  const c = creator.value;
+  if (!c) return "";
+  if (c.phase === "upcoming") return startLabel.value ? t("campaign.page.status.upcoming", { date: startLabel.value }) : t("campaign.page.status.upcoming");
+  if (c.phase === "ended") return t("creator.status.ended");
+  const left = c.endsAt - Date.now();
+  return left <= DAY ? t("creator.status.lastDay") : t("creator.status.open", { days: Math.ceil(left / DAY) });
+});
+const creatorPeriod = computed(() => (creator.value ? t("creator.period", { start: creatorMd(creator.value.startsAt), end: creatorMd(creator.value.endsAt - 1) }) : ""));
+const creatorCredits = computed(() => (creator.value ? formatNumber(creator.value.reward) : ""));
+
+// ---- 分享活動頁連到進行中的創作季 ------------------------------------------------------
+const creatorLink = ref<CardRewardCampaign | null>(null);
+watch(() => campaign.value?.slug, (s) => {
+  creatorLink.value = null;
+  if (s) void openCardReward().then((c) => { if (campaign.value?.slug === s) creatorLink.value = c; }).catch(() => {});
+});
 
 // ---- 檔位、推薦、算算看 ----------------------------------------------------------
 const tiers = computed(() => TIERS.filter((k) => typeof campaign.value?.tiers[k] === "number").map((k) => ({ key: k, amount: campaign.value!.tiers[k]! })));
@@ -122,12 +150,14 @@ async function load() {
   try {
     const res = await fetchCampaign(slug.value);
     if (mine !== seq) return;
-    campaign.value = res;
+    campaign.value = isCardReward(res) ? null : res;
+    creator.value = isCardReward(res) ? res : null;
     document.title = pageTitle(title.value);
     if (viewed !== res.slug) { viewed = res.slug; track("campaign_view", { subject: res.slug }); }
   } catch (err) {
     if (mine !== seq) return;
     campaign.value = null;
+    creator.value = null;
     if (err instanceof ApiError && err.status === 404) missing.value = true;
     else failed.value = true;
   } finally {
@@ -179,7 +209,7 @@ async function onDone(_result: ApplyResult) {
       <button type="button" class="btn btn--sm" data-action="retry" @click="load()">{{ t("campaign.page.retry") }}</button>
     </p>
 
-    <div v-else-if="!campaign" class="campaign__skeleton" aria-hidden="true">
+    <div v-else-if="!head" class="campaign__skeleton" aria-hidden="true">
       <div class="ghost campaign__skeleton-hero" />
       <div v-for="i in 3" :key="i" class="ghost campaign__skeleton-line" />
     </div>
@@ -187,25 +217,34 @@ async function onDone(_result: ApplyResult) {
     <div v-else class="campaign__grid">
       <!-- ① 頁頭：標題不疊在橫幅上，橫幅可以沒有 -->
       <header class="campaign__head">
-        <img v-if="campaign.bannerUrl" :src="campaign.bannerUrl" alt="" class="campaign__banner" width="720" height="270" fetchpriority="high" />
-        <div class="campaign__head-body" :class="{ 'campaign__head-body--bare': !campaign.bannerUrl }">
+        <img v-if="head.bannerUrl" :src="head.bannerUrl" alt="" class="campaign__banner" width="720" height="270" fetchpriority="high" />
+        <div class="campaign__head-body" :class="{ 'campaign__head-body--bare': !head.bannerUrl }">
           <div class="campaign__head-text">
             <div class="campaign__status">
-              <span class="campaign__phase" :class="`campaign__phase--${campaign.phase}`" data-phase>
-                {{ campaign.phase === "upcoming" && startLabel ? t("campaign.page.status.upcoming", { date: startLabel }) : t(`campaign.page.status.${campaign.phase}`) }}
+              <span class="campaign__phase" :class="`campaign__phase--${head.phase}`" data-phase>
+                <template v-if="creator">{{ creatorStatus }}</template>
+                <template v-else>{{ head.phase === "upcoming" && startLabel ? t("campaign.page.status.upcoming", { date: startLabel }) : t(`campaign.page.status.${head.phase}`) }}</template>
               </span>
-              <span v-if="shortPeriod" class="campaign__short num">{{ shortPeriod }}</span>
+              <span v-if="creator" class="campaign__period num" data-period>{{ creatorPeriod }}</span>
+              <span v-else-if="shortPeriod" class="campaign__short num">{{ shortPeriod }}</span>
             </div>
             <h1 class="campaign__title" :class="{ 'campaign__title--long': [...title].length > 12 }">{{ title }}</h1>
-            <dl class="campaign__dates">
+            <template v-if="creator">
+              <p class="campaign__subtitle">{{ t("creator.subtitle", { credits: creatorCredits }) }}</p>
+              <p class="campaign__bubble campaign__lead"><span class="campaign__who">{{ t("mascot.name") }}</span>{{ t("creator.lead", { site, credits: creatorCredits }) }}</p>
+            </template>
+            <dl v-else-if="campaign" class="campaign__dates">
               <div v-if="period"><dt>{{ t("campaign.page.period") }}</dt><dd>{{ period }}</dd></div>
               <div v-if="campaign.submitDeadline !== null"><dt>{{ t("campaign.field.submitDeadline") }}</dt><dd>{{ at(campaign.submitDeadline) }}</dd></div>
               <div v-if="campaign.payoutDeadline !== null"><dt>{{ t("campaign.field.payoutDeadline") }}</dt><dd>{{ at(campaign.payoutDeadline) }}</dd></div>
             </dl>
           </div>
-          <img v-if="!campaign.bannerUrl" class="campaign__wave" src="/mascot/home/pose-wave.webp" alt="" width="140" height="175" />
+          <img v-if="!head.bannerUrl" class="campaign__wave" src="/mascot/home/pose-wave.webp" alt="" width="140" height="175" />
         </div>
       </header>
+
+      <CreatorSeason v-if="creator" :campaign="creator" :login-to="loginTo" />
+      <template v-else-if="campaign">
 
       <!-- 右欄（桌機跟著捲動）；手機上拆開，②接在頁頭後、⑧接在提交區後 -->
       <aside class="campaign__side">
@@ -349,6 +388,13 @@ async function onDone(_result: ApplyResult) {
           <CampaignApplyForm v-else :key="formKey" :campaign="campaign" :contents="contents" @submit="done = false" @done="onDone" />
         </section>
 
+        <!-- 進行中的創作季：條款上方一行連結 -->
+        <RouterLink v-if="creatorLink" class="campaign__link-row" data-creator-link :to="lp(`/campaign/${creatorLink.slug}`)">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.75l1.9 4.6 4.85.4-3.7 3.15 1.15 4.85L10 13.2l-4.2 2.55 1.15-4.85-3.7-3.15 4.85-.4z" /></svg>
+          <span>{{ t("campaign.page.creatorLink", { credits: formatNumber(creatorLink.reward) }) }}</span>
+          <svg class="campaign__link-go" viewBox="0 0 20 20" aria-hidden="true"><path d="M8 5.5l4.5 4.5L8 14.5" /></svg>
+        </RouterLink>
+
         <!-- ⑨ 參加前看一下 -->
         <details class="panel campaign__notes" data-notes>
           <summary>
@@ -360,6 +406,7 @@ async function onDone(_result: ApplyResult) {
           </ul>
         </details>
       </div>
+      </template>
     </div>
   </div>
 </template>
@@ -401,6 +448,16 @@ async function onDone(_result: ApplyResult) {
 .campaign__phase--open { background: var(--success-soft); color: var(--success); }
 .campaign__phase--upcoming { background: var(--accent-soft); color: var(--accent-text); }
 .campaign__short { display: none; font-size: 13px; color: var(--text-2); }
+/* 創作季：期間一行，桌機手機都出（只到月日，帶時區說明） */
+.campaign__period { font-size: 13px; color: var(--text-2); }
+.campaign__subtitle { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.5; color: var(--text-2); }
+.campaign__lead { justify-self: stretch; }
+.campaign__link-row {
+  display: flex; align-items: center; gap: var(--s-2); min-height: 44px; padding: 0 var(--s-1);
+  font-size: 14px; font-weight: 600; line-height: 1.5; color: var(--accent-text); text-decoration: none;
+}
+.campaign__link-row:hover span { text-decoration: underline; text-underline-offset: 3px; }
+.campaign__link-go { margin-left: auto; }
 .campaign__title { margin: 0; font-size: 40px; font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; overflow-wrap: anywhere; text-wrap: balance; }
 .campaign__dates {
   justify-self: stretch; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-2); margin: var(--s-1) 0 0;
@@ -518,6 +575,7 @@ async function onDone(_result: ApplyResult) {
   .campaign__head-body--bare { padding: var(--s-4); }
   .campaign__wave { width: 96px; height: 120px; margin: calc(-1 * var(--s-2)) 0 calc(-1 * var(--s-4)); }
   .campaign__title { font-size: 28px; }
+  .campaign__subtitle { font-size: 15px; }
   /* 英日韓的活動名較長（Hearthroom シェアシーズン），手機上縮一階，盡量一行放完、不留單字在第二行 */
   .campaign__title--long { font-size: 23px; }
   .campaign__dates { display: none; }
