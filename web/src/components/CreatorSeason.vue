@@ -209,8 +209,8 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
     </aside>
 
     <div class="creator__body">
-      <!-- 怎麼參加：三步。未登入的手機上這張緊接規則卡，不放姿勢（兩張相鄰的卡不同時放蘇綺） -->
-      <section class="panel creator__card creator__how" :class="{ 'creator__how--guest': !signedIn }" aria-labelledby="creator-how-h">
+      <!-- 怎麼參加：三步。手機上相鄰的卡不同時放蘇綺：未登入時這張緊接規則卡、空狀態時緊接有蘇綺的進度卡，這兩種都不放姿勢 -->
+      <section class="panel creator__card creator__how" :class="{ 'creator__how--quiet': !signedIn || empty }" aria-labelledby="creator-how-h">
         <h2 id="creator-how-h" class="creator__h2">{{ t("creator.how.title") }}</h2>
         <div class="creator__say creator__how-say">
           <img src="/mascot/home/pose-write-2.webp" alt="" width="80" height="111" loading="lazy" decoding="async" />
@@ -316,7 +316,10 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
 .creator__empty > img { width: 96px; height: 120px; object-fit: contain; }
 .creator__empty .btn { justify-self: stretch; justify-content: center; }
 
-/* ---- 怎麼參加 ---- */
+/* ---- 怎麼參加：桌機姿勢與氣泡在卡片左側一欄、三步在右；窄了改上下 ---- */
+.creator__how { grid-template-columns: minmax(180px, 220px) minmax(0, 1fr); align-items: start; column-gap: var(--s-5); }
+.creator__how > .creator__h2 { grid-column: 1 / -1; }
+.creator__how-say { flex-direction: column; align-items: flex-start; }
 .creator__steps { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-4); grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .creator__steps > li { display: flex; align-items: flex-start; gap: var(--s-3); min-width: 0; }
 .creator__steps strong { display: block; font-size: 15px; line-height: 1.45; }
@@ -337,6 +340,10 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
 @media (max-width: 1020px) {
   .creator__steps { grid-template-columns: minmax(0, 1fr); }
 }
+@media (max-width: 760px) {
+  .creator__how { grid-template-columns: minmax(0, 1fr); }
+  .creator__how-say { flex-direction: row; align-items: flex-end; }
+}
 @media (max-width: 860px) {
   /* 一欄：右欄與左欄都拆開，照 order 排成 頁頭(1) → 規則卡 → 我的進度 → 怎麼參加 → 條款 */
   .creator__side, .creator__body { display: contents; }
@@ -352,7 +359,7 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
   .creator__big-num { font-size: 40px; }
   .creator__say > img { width: 64px; height: 89px; }
   .creator__cell { padding: var(--s-2); }
-  .creator__how--guest .creator__how-say > img { display: none; }
+  .creator__how--quiet .creator__how-say > img { display: none; }
   .creator__notes { padding: 0 var(--s-4); }
   .creator__notes summary { min-height: 52px; }
 }
