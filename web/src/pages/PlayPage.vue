@@ -45,6 +45,8 @@ const routeId = computed(() => String(route.params.roleId || ""));
 const roleId = shallowRef("");
 const Stage = shallowRef<Component | null>(null);
 const error = shallowRef("");
+/** 審核試玩打不開是因為沒領著（含領取過了時效）或這輪已結束：回審核頁就能處理，不是舞台壞了 */
+const backToReview = shallowRef(false);
 /** 遊客按了送出：在原地請他登入 */
 const signInOpen = shallowRef(false);
 
@@ -81,6 +83,7 @@ watch(roleId, () => { document.title = pageTitle(t("play.title")); }, { immediat
 const playApp = isPlayHost();
 const cardNumber = shallowRef<string>("");
 const cardPageUrl = computed(() => `https://${communityHost()}/${locale.value === "zh-Hant" ? "" : `${locale.value}/`}${cardNumber.value ? `cards/${cardNumber.value}` : ""}`);
+const reviewPath = computed(() => `/review/${encodeURIComponent(String(route.query.review ?? ""))}`);
 if (playApp) {
   onBeforeUnmount(() => applyCardHead(null, String(locale.value)));
   // 卡片頁按了「加到主畫面」帶 ?install=1 過來：把提示卡拿出來
@@ -128,6 +131,7 @@ onMounted(() => {
     roleId.value = "";
     cardNumber.value = "";
     error.value = "";
+    backToReview.value = false;
     registerPlayCard(null);
     try {
       void preloadStage();
@@ -179,8 +183,12 @@ onMounted(() => {
       if (stale()) return;
       Stage.value = stage;
       track("play_open", { subject: roleId.value });
-    } catch {
-      if (!stale()) error.value = t("play.loadFailed");
+    } catch (err) {
+      if (stale()) return;
+      // lib/api 的 ApiError：伺服器原文在 code，message 已換成「請求失敗」
+      const { status, code } = (err ?? {}) as { status?: number; code?: string };
+      backToReview.value = typeof route.query.review === "string" && (code === "claim this submission first" || status === 410);
+      error.value = !backToReview.value ? t("play.loadFailed") : status === 410 ? t("review.inactive") : t("play.claimFirst");
     }
   }, { immediate: true });
 });
@@ -193,7 +201,9 @@ watch(locale, () => { void remergeStageMessages(); });
     <component :is="Stage" v-if="Stage" :key="roleId" :role-id="roleId" />
     <div v-else-if="error" class="play__state">
       <p class="play__error" role="alert">{{ error }}</p>
-      <a v-if="error && playApp" class="btn" :href="cardPageUrl">{{ $t("play.backToCard") }}</a>
+      <a v-if="backToReview && playApp" class="btn" :href="`https://${communityHost()}${lp(reviewPath)}`">{{ $t("play.backToReview") }}</a>
+      <RouterLink v-else-if="backToReview" class="btn" :to="lp(reviewPath)">{{ $t("play.backToReview") }}</RouterLink>
+      <a v-else-if="error && playApp" class="btn" :href="cardPageUrl">{{ $t("play.backToCard") }}</a>
       <RouterLink v-else-if="error" class="btn" :to="lp(cardNumber ? `/cards/${cardNumber}` : '/')">{{ $t("play.backToCard") }}</RouterLink>
     </div>
     <Transition name="play-cover">
