@@ -2660,7 +2660,7 @@
   "editor.publish.reward": "ご自身の作品を{end}までに提出すると、審査通過後に{credits}⁠ポイントもらえます。",
   "campaign.page.creatorLink": "創作シーズンも開催中：審査を通過した作品1枚につき{credits}⁠ポイント",
   "review.creator.title": "創作シーズン：未付与",
-  "review.creator.lead": "期間中に提出され、審査は通過したが未付与のカード（公開前に通過したものと、通過時に付与できなかったもの）。",
+  "review.creator.lead": "審査は通過したがまだ付与されていないカード（公開前に通過したものと、通過時に付与できなかったもの）。",
   "review.creator.payPage": "このページを付与（{n}件）",
   "review.creator.confirm": "{count}件、合計{points}⁠ポイントを付与しますか？",
   "review.creator.empty": "未付与のカードはありません",

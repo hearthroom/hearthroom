@@ -2660,7 +2660,7 @@
   "editor.publish.reward": "직접 만든 작품을 {end}까지 제출하면 심사 통과 후 {credits}⁠포인트를 드려요.",
   "campaign.page.creatorLink": "창작 시즌도 진행 중: 심사를 통과한 작품 1장당 {credits}⁠포인트",
   "review.creator.title": "창작 시즌: 지급 대기",
-  "review.creator.lead": "이벤트 기간에 제출되어 심사를 통과했지만 아직 지급되지 않은 카드(출시 전에 통과한 것과 통과 시 지급되지 않은 것).",
+  "review.creator.lead": "심사를 통과했지만 아직 지급되지 않은 카드(출시 전에 통과한 것과 통과 시 지급되지 않은 것).",
   "review.creator.payPage": "이 페이지 지급({n}건)",
   "review.creator.confirm": "{count}건, 총 {points}⁠포인트를 지급할까요?",
   "review.creator.empty": "지급 대기 중인 카드가 없어요",
