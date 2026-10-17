@@ -1,17 +1,18 @@
 <script setup lang="ts">
 /**
- * 首頁看板頂端的輪播：第一張是原本的蘇綺（插槽，內容不動），後面接推薦到首頁的活動。
- * 有活動時一開始停在第一個活動、蘇綺排在輪換裡：活動比歡迎卡重要（owner 2026-10-17）。
+ * 首頁看板頂端的輪播：推薦到首頁的活動在前，原本的蘇綺（插槽，內容不動）固定排最後。
+ * 一開始停在第一個活動：活動比歡迎卡重要（owner 2026-10-17：分享季 → 創作季 → 蘇綺卡）。
  *
- * 活動從公開列表挑：推薦到首頁、進行中或即將開始，進行中的在前，最多三個（featuredCampaigns）。
+ * 活動從公開列表挑：推薦到首頁、進行中或即將開始，照活動設定的排序值，最多三個（featuredCampaigns）。
  * 一個都沒有就只畫插槽，外層全部 display: contents，跟沒有輪播時一模一樣；活動的程式碼等首頁畫好才下載。
  * 幾張疊在同一格裡淡入淡出，高度由最高的那張決定（通常是蘇綺那張，活動卡比它高時蘇綺跟著撐滿）：換張時版面不跳。
  * 沒有蘇綺時活動卡自己撐高度，跟歡迎橫幅一樣高。
  *
  * 活動之後最多再接一張文章：置頂中、30 天內發布的最新一篇（homePost），關聯的活動已經在輪播裡就不放。
  *
- * 每 7 秒換一張。滑鼠在上面、焦點在裡面、分頁在背景時暫停；手指碰過就不再自己換（正在點蘇綺的選項時不被換走）；
- * 系統設定減少動態時不自己換。圓點與左右鍵（寬螢幕）可以手動換，手機可以左右滑。
+ * 每 7 秒換一張，進度條顯示這張還剩多久。滑鼠在上面、焦點在裡面、分頁在背景時暫停，進度停住不歸零；
+ * 手指碰過之後 10 秒內不自己換（正在點蘇綺的選項時不被換走），之後恢復；系統設定減少動態時不自己換。
+ * 進度條與左右鍵（寬螢幕）可以手動換，手機可以左右滑。
  */
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -27,6 +28,8 @@ const { lp, locale } = useLocalePath();
 
 type CampaignLib = typeof import("@/lib/campaign");
 const INTERVAL = 7000;
+/** 手指最後一次碰到之後多久恢復自己換 */
+const TOUCH_RESUME = 10_000;
 const SWIPE = 40;
 
 const lib = shallowRef<CampaignLib | null>(null);
@@ -59,35 +62,68 @@ const postPath = ref("");
 const slides = computed(() => {
   const m = lib.value;
   if (!m || !props.campaigns) return [];
-  return featured.value.map((c) => ({ slug: c.slug, phase: c.phase, bannerUrl: c.bannerUrl, title: m.localized(c.title, locale.value) || c.slug, period: m.formatPeriod(c, locale.value) }));
+  return featured.value.map((c) => {
+    const title = m.localized(c.title, locale.value) || c.slug;
+    return { slug: c.slug, phase: c.phase, bannerUrl: c.bannerUrl, title, parts: titleParts(title), period: m.formatShortPeriod(c, locale.value) };
+  });
 });
+/**
+ * 活動名兩行時在品牌名後的空格斷（「SukiSuki／創作シーズン」）：品牌名與活動名各自不換行。
+ * 只在兩段都夠短時這樣做，太長的照一般規則換行，不讓一段字撐出卡片。
+ */
+function titleParts(title: string): string[] {
+  const at = title.indexOf(" ");
+  if (at <= 0) return [title];
+  const parts = [title.slice(0, at), title.slice(at + 1)];
+  return parts.every((p) => [...p].length <= 16) ? parts : [title];
+}
 const on = computed(() => slides.value.length > 0 || !!post.value);
-const offset = computed(() => (props.hero ? 1 : 0));
-const count = computed(() => offset.value + slides.value.length + (post.value ? 1 : 0));
+/** 蘇綺那張排在最後：活動、文章之後 */
+const heroAt = computed(() => slides.value.length + (post.value ? 1 : 0));
+const count = computed(() => heroAt.value + (props.hero ? 1 : 0));
 
 const pause = reactive({ hover: false, focus: false, hidden: false, touched: false });
-/** 起始那張：有活動就是第一個活動，沒有就是蘇綺（或文章） */
-const first = computed(() => (slides.value.length ? offset.value : 0));
+/** 第一張就是第一個活動（沒有活動時是文章或蘇綺），永遠是 0 */
 const index = ref(0);
-// 活動晚一步讀到：還沒被碰過就跳到活動那張
-watch(first, (i) => { if (!pause.touched) index.value = i; });
-// 蘇綺出現或收起來時張數的對應會錯開一張：回到起始那張
-watch(() => props.hero, () => { index.value = first.value; });
-watch(count, (n) => { if (index.value >= n) index.value = first.value; });
+// 活動或文章晚一步讀到、蘇綺出現或收起來：張數對應變了，回到第一張
+watch([() => slides.value.length, () => !!post.value, () => props.hero], () => { if (!pause.touched) index.value = 0; });
+watch(count, (n) => { if (index.value >= n) index.value = 0; });
 const go = (i: number) => { index.value = (i + count.value) % count.value; };
 
 const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-const running = computed(() => count.value > 1 && !reduced && !pause.touched && !pause.hover && !pause.focus && !pause.hidden);
+const auto = computed(() => count.value > 1 && !reduced);
+const running = computed(() => auto.value && !pause.touched && !pause.hover && !pause.focus && !pause.hidden);
+/**
+ * 這張還剩多久：暫停時記下剩下的，恢復時接著倒數（進度條停住不歸零，見 CSS 的 animation-play-state）。
+ * 換張（自己換或手動換）都重新給滿 7 秒，進度條換到新的那一段從頭填。
+ */
 let timer: ReturnType<typeof setTimeout> | undefined;
-// 手動換張也重新計時：剛換上的那張一樣看滿 7 秒
-watch([running, index], () => {
+/** 現在這張還剩多久；startedAt 是這次開始倒數的時刻，沒在倒數時是 null */
+let remaining = INTERVAL, startedAt: number | null = null;
+function arm() {
   clearTimeout(timer);
-  if (running.value) timer = setTimeout(() => go(index.value + 1), INTERVAL);
-}, { immediate: true });
+  startedAt = Date.now();
+  timer = setTimeout(() => go(index.value + 1), remaining);
+}
+function hold() {
+  clearTimeout(timer);
+  if (startedAt !== null) remaining = Math.max(0, remaining - (Date.now() - startedAt));
+  startedAt = null;
+}
+watch(index, () => { hold(); remaining = INTERVAL; if (running.value) arm(); });
+watch(running, (now) => { if (now) arm(); else hold(); }, { immediate: true });
+
+let touchTimer: ReturnType<typeof setTimeout> | undefined;
+/** 手指碰到：先停，最後一次碰到之後 10 秒恢復 */
+function touched() {
+  pause.touched = true;
+  clearTimeout(touchTimer);
+  touchTimer = setTimeout(() => { pause.touched = false; }, TOUCH_RESUME);
+}
 
 const onVisibility = () => { pause.hidden = document.hidden; };
 onMounted(() => { onVisibility(); document.addEventListener("visibilitychange", onVisibility); });
-onBeforeUnmount(() => { clearTimeout(timer); document.removeEventListener("visibilitychange", onVisibility); });
+onBeforeUnmount(() => { clearTimeout(timer); clearTimeout(touchTimer); document.removeEventListener("visibilitychange", onVisibility); });
 
 const root = ref<HTMLElement | null>(null);
 function onFocusOut(e: FocusEvent) {
@@ -103,12 +139,13 @@ function inScroller(el: EventTarget | null): boolean {
 }
 let start: { x: number; y: number; scroller: boolean } | null = null;
 function onTouchStart(e: TouchEvent) {
-  pause.touched = true;
+  touched();
   const p = e.touches[0];
   start = p && on.value ? { x: p.clientX, y: p.clientY, scroller: inScroller(e.target) } : null;
 }
 function onTouchEnd(e: TouchEvent) {
   const p = e.changedTouches[0];
+  touched();
   if (!start || !p || start.scroller) { start = null; return; }
   const dx = p.clientX - start.x, dy = p.clientY - start.y;
   start = null;
@@ -133,27 +170,24 @@ const clicked = (slug: string) => track("cta", { detail: "carousel", subject: sl
     @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd"
   >
     <div class="carousel__track" :aria-live="on ? (running ? 'off' : 'polite') : undefined">
-      <div v-show="hero" class="carousel__slide carousel__hero" :class="{ 'carousel__slide--on': index === 0 }" v-bind="slideAttrs(0)">
-        <slot />
-      </div>
       <div
-        v-for="(c, i) in slides" :key="c.slug" class="carousel__slide" :class="{ 'carousel__slide--on': index === i + offset }"
-        v-bind="slideAttrs(i + offset)" :data-slide="c.slug"
+        v-for="(c, i) in slides" :key="c.slug" class="carousel__slide" :class="{ 'carousel__slide--on': index === i }"
+        v-bind="slideAttrs(i)" :data-slide="c.slug"
       >
         <RouterLink class="carousel__card" :class="{ 'carousel__card--banner': c.bannerUrl }" :to="lp(`/campaign/${c.slug}`)" @click="clicked(c.slug)">
           <img v-if="c.bannerUrl" class="carousel__img" :src="c.bannerUrl" alt="" decoding="async" />
           <svg v-else class="carousel__mark" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 4c1.6 9.6 10.4 18.4 20 20-9.6 1.6-18.4 10.4-20 20-1.6-9.6-10.4-18.4-20-20 9.6-1.6 18.4-10.4 20-20z" /></svg>
           <span class="carousel__body">
             <span class="carousel__phase" :class="`carousel__phase--${c.phase}`">{{ t(`campaign.phase.${c.phase}`) }}</span>
-            <strong class="carousel__title">{{ c.title }}</strong>
+            <strong class="carousel__title"><template v-for="(part, k) in c.parts" :key="k"><template v-if="k">{{ " " }}</template><span :class="{ carousel__part: c.parts.length > 1 }">{{ part }}</span></template></strong>
             <span v-if="c.period" class="carousel__period">{{ c.period }}</span>
             <span class="btn btn--primary carousel__cta">{{ t("campaign.carousel.cta") }}</span>
           </span>
         </RouterLink>
       </div>
       <div
-        v-if="post" class="carousel__slide" :class="{ 'carousel__slide--on': index === slides.length + offset }"
-        v-bind="slideAttrs(slides.length + offset)" :data-slide="`post:${post.slug}`"
+        v-if="post" class="carousel__slide" :class="{ 'carousel__slide--on': index === slides.length }"
+        v-bind="slideAttrs(slides.length)" :data-slide="`post:${post.slug}`"
       >
         <RouterLink class="carousel__card" :class="{ 'carousel__card--banner': post.coverUrl }" :to="lp(postPath)" @click="clicked(`post:${post.slug}`)">
           <img v-if="post.coverUrl" class="carousel__img" :src="post.coverUrl" alt="" decoding="async" />
@@ -165,17 +199,22 @@ const clicked = (slug: string) => track("cta", { detail: "carousel", subject: sl
           </span>
         </RouterLink>
       </div>
+      <div v-show="hero" class="carousel__slide carousel__hero" :class="{ 'carousel__slide--on': index === heroAt }" v-bind="slideAttrs(heroAt)">
+        <slot />
+      </div>
     </div>
 
     <div v-if="on && count > 1" class="carousel__controls">
       <button type="button" class="btn btn--ghost btn--icon btn--sm carousel__arrow" :aria-label="t('campaign.carousel.prev')" data-prev @click="go(index - 1)">
         <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M12 5.5L7.5 10l4.5 4.5" /></svg>
       </button>
-      <div class="carousel__dots">
+      <!-- 每張一段進度條：看過的填滿，現在這張 7 秒內填滿（暫停時停住），還沒到的空著 -->
+      <div class="carousel__dots" :class="{ 'carousel__dots--auto': auto, 'carousel__dots--paused': !running }">
         <button
-          v-for="n in count" :key="n" type="button" class="carousel__dot" :class="{ 'carousel__dot--on': index === n - 1 }"
+          v-for="n in count" :key="n" type="button" class="carousel__dot"
+          :class="{ 'carousel__dot--on': index === n - 1, 'carousel__dot--seen': n - 1 < index }"
           :aria-label="label(n - 1)" :aria-current="index === n - 1 ? 'true' : undefined" data-dot @click="go(n - 1)"
-        />
+        ><span :key="index === n - 1 ? `on-${index}` : 'off'" class="carousel__bar" /></button>
       </div>
       <button type="button" class="btn btn--ghost btn--icon btn--sm carousel__arrow" :aria-label="t('campaign.carousel.next')" data-next @click="go(index + 1)">
         <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8 5.5l4.5 4.5L8 14.5" /></svg>
@@ -198,8 +237,8 @@ const clicked = (slug: string) => track("cta", { detail: "carousel", subject: sl
 .carousel--on .carousel__slide--on { z-index: 1; opacity: 1; visibility: visible; transition: opacity var(--dur-slow) var(--ease), visibility 0s; }
 /* 蘇綺自己的下邊距交給輪播 */
 .carousel--on .carousel__hero > :slotted(*) { margin-bottom: 0; }
-/* 沒有蘇綺那張時活動卡自己撐高度（跟歡迎橫幅一樣高） */
-.carousel--bare .carousel__slide { min-height: 220px; }
+/* 每張一樣高（桌機 220、手機 176）：換張時版面不跳；蘇綺那張比較高時大家跟著撐滿 */
+.carousel--on .carousel__slide { min-height: 220px; }
 
 .carousel__card {
   position: relative; overflow: hidden; isolation: isolate;
@@ -232,11 +271,12 @@ const clicked = (slug: string) => track("cta", { detail: "carousel", subject: sl
 .carousel__card--banner::before {
   content: ""; position: absolute; inset: 0; z-index: -1;
   background:
-    linear-gradient(90deg, rgba(14, 10, 18, 0.78) 0%, rgba(14, 10, 18, 0.5) 42%, rgba(14, 10, 18, 0) 72%),
+    linear-gradient(90deg, rgba(14, 10, 18, 0.78) 0%, rgba(14, 10, 18, 0.5) 40%, rgba(14, 10, 18, 0) 66%),
     linear-gradient(0deg, rgba(14, 10, 18, 0.4) 0%, rgba(14, 10, 18, 0) 55%);
 }
 
-.carousel__body { max-width: min(560px, 60%); padding: var(--s-5) 3.5%; display: grid; gap: var(--s-2); justify-items: start; }
+/* 文字區：桌機左側 560 寬、垂直置中，每張一樣；右半是橫幅的安全框（蘇綺的臉），不放字、不壓暗 */
+.carousel__body { width: min(560px, 60%); padding: var(--s-5) 3.5%; display: grid; gap: var(--s-2); justify-items: start; }
 .carousel__phase {
   display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px;
   border-radius: var(--r-pill); font-size: 12px; font-weight: 600; background: var(--surface-2); color: var(--text-2);
@@ -247,10 +287,12 @@ const clicked = (slug: string) => track("cta", { detail: "carousel", subject: sl
 /* 文章卡標的是欄目，不是狀態：不帶狀態圓點 */
 .carousel__phase--post::before { display: none; }
 .carousel__card--banner .carousel__phase { background: rgba(255, 255, 255, 0.2); color: #fff; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+/* strict：長音符與小假名不落行首；品牌名與活動名各自不換行（carousel__part），兩行時在中間的空格斷 */
 .carousel__title {
-  font-size: 30px; font-weight: 800; line-height: 1.25; letter-spacing: -0.01em; overflow-wrap: anywhere;
+  font-size: 30px; font-weight: 800; line-height: 1.25; letter-spacing: -0.01em; overflow-wrap: anywhere; line-break: strict;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
+.carousel__part { white-space: nowrap; }
 .carousel__period { font-size: 14px; color: var(--text-2); font-variant-numeric: tabular-nums; }
 .carousel__card--banner .carousel__period { color: rgba(255, 255, 255, 0.86); }
 .carousel__cta { margin-top: var(--s-2); height: var(--h-lg); padding: 0 var(--s-5); font-size: 15px; font-weight: 600; }
@@ -258,21 +300,26 @@ const clicked = (slug: string) => track("cta", { detail: "carousel", subject: sl
 
 .carousel__controls { display: flex; align-items: center; justify-content: center; gap: var(--s-1); margin-top: var(--s-2); }
 .carousel__arrow svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+/* 進度條：每張一段 28×4。看過的填滿；現在這段在 7 秒內填滿（跟換張的計時同長），暫停時停住；不自己換時現在這段直接填滿 */
 .carousel__dots { display: flex; }
-.carousel__dot { width: 24px; height: 24px; padding: 0; display: grid; place-items: center; border: 0; background: transparent; cursor: pointer; }
-.carousel__dot::before {
-  content: ""; width: 6px; height: 6px; border-radius: var(--r-pill); background: var(--border-strong);
-  transition: width var(--dur) var(--ease), background var(--dur) var(--ease);
-}
+.carousel__dot { position: relative; width: 36px; height: 24px; padding: 0; display: grid; place-items: center; border: 0; background: transparent; cursor: pointer; }
+.carousel__dot::before { content: ""; width: 28px; height: 4px; border-radius: var(--r-pill); background: var(--border-strong); transition: background var(--dur) var(--ease); }
 .carousel__dot:hover::before { background: var(--text-3); }
-.carousel__dot--on::before, .carousel__dot--on:hover::before { width: 18px; background: var(--accent); }
+.carousel__bar { position: absolute; top: 50%; left: 4px; width: 0; height: 4px; border-radius: var(--r-pill); background: var(--accent); transform: translateY(-50%); pointer-events: none; }
+.carousel__dot--seen .carousel__bar, .carousel__dot--on .carousel__bar { width: 28px; }
+.carousel__dots--auto .carousel__dot--on .carousel__bar { animation: carousel-fill 7s linear forwards; }
+.carousel__dots--paused .carousel__dot--on .carousel__bar { animation-play-state: paused; }
+@keyframes carousel-fill { from { width: 0; } to { width: 28px; } }
 
 /* 手機：跟蘇綺面板同一個斷點。字縮一階，左右鍵收起來（用滑的） */
+@media (prefers-reduced-motion: reduce) { .carousel__dots--auto .carousel__dot--on .carousel__bar { animation: none; } }
+
 @media (max-width: 760px) {
-  .carousel--bare .carousel__slide { min-height: 176px; }
-  .carousel__body { max-width: none; padding: var(--s-4); gap: var(--s-1); }
+  .carousel--on .carousel__slide { min-height: 176px; }
+  /* 文字區從左 16 到卡寬 55%、一律貼底 16：每張的字在同一個位置，右邊留給橫幅的安全框 */
+  .carousel__body { width: 55%; max-width: none; box-sizing: border-box; padding: var(--s-4); padding-right: 0; gap: var(--s-1); }
   .carousel__mark { display: none; }
-  .carousel__card--banner::before { background: linear-gradient(0deg, rgba(14, 10, 18, 0.82) 0%, rgba(14, 10, 18, 0.45) 60%, rgba(14, 10, 18, 0.2) 100%); }
+  .carousel__card--banner::before { background: linear-gradient(90deg, rgba(14, 10, 18, 0.82) 0%, rgba(14, 10, 18, 0.55) 40%, rgba(14, 10, 18, 0) 66%); }
   .carousel__card { justify-content: flex-end; }
   .carousel__card:not(.carousel__card--banner)::before { right: -110px; width: 260px; border-width: 28px; }
   .carousel__card:not(.carousel__card--banner)::after { right: -50px; width: 140px; }
@@ -283,6 +330,7 @@ const clicked = (slug: string) => track("cta", { detail: "carousel", subject: sl
   .carousel__cta { margin-top: var(--s-1); height: var(--h-sm); padding: 0 var(--s-4); font-size: 13px; }
   .carousel__arrow { display: none; }
   .carousel__controls { margin-top: var(--s-1); }
-  .carousel__dot { width: 20px; height: 28px; }
+  .carousel__dot { width: 32px; height: 28px; }
+  .carousel__bar { left: 2px; }
 }
 </style>

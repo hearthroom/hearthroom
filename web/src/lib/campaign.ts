@@ -193,18 +193,30 @@ const query = (q: Record<string, string | number | undefined>) => {
 
 /** 公開活動頁讀到的：草稿與不存在都是 404 campaign_not_found。門檻、保留天數、點數池不在這裡。 */
 export interface PublicCampaign {
+  /** share＝分享獎勵活動；舊版回應沒有這一欄，當成 share */
+  kind?: "share";
   slug: string; title: Localized; phase: "upcoming" | "open" | "ended"; startsAt: number | null; endsAt: number | null; timezone: string | null; bannerUrl: string | null; featured: boolean;
+  /** 首頁輪播的順序，小的在前；null 排在有值的後面 */
+  featuredRank?: number | null;
   intro: Localized; submitDeadline: number | null; payoutDeadline: number | null; tiers: Partial<Record<Tier, number>>; extraPlacementAmount: number | null;
   /** 隨手分享（light）每人每週最多發放幾個；null＝不限 */
   lightLimit?: number | null;
 }
+/** 發卡獎勵活動（創作季）：活動期間的每週額度、每張過審的卡的積分。形狀照 src/card-reward.ts 的 cardRewardDetail。 */
+export interface CardRewardCampaign {
+  kind: "card_reward";
+  slug: string; title: Localized; phase: "upcoming" | "open" | "ended"; startsAt: number; endsAt: number; timezone: string; bannerUrl: string | null; featured: boolean;
+  featuredRank: number | null; payoutDeadline: number | null; reward: number; weeklyLimit: number; normalWeeklyLimit: number;
+}
+export type AnyCampaign = PublicCampaign | CardRewardCampaign;
+export const isCardReward = (c: { kind?: string } | null | undefined): c is CardRewardCampaign => c?.kind === "card_reward";
 /** 不帶令牌：訪客也看得到活動頁。 */
-export async function fetchCampaign(slug: string): Promise<PublicCampaign> {
+export async function fetchCampaign(slug: string): Promise<AnyCampaign> {
   const res = await fetch(`${COMMUNITY_API}/campaigns/${enc(slug)}`, { headers: { "X-From": currentSurface() } });
   if (!res.ok) return fail(res);
-  return (await res.json()) as PublicCampaign;
+  return (await res.json()) as AnyCampaign;
 }
-export type CampaignSummary = Pick<PublicCampaign, "slug" | "title" | "phase" | "startsAt" | "endsAt" | "timezone" | "bannerUrl" | "featured">;
+export type CampaignSummary = Pick<PublicCampaign, "slug" | "title" | "phase" | "startsAt" | "endsAt" | "timezone" | "bannerUrl" | "featured" | "featuredRank"> & { kind?: "share" | "card_reward" };
 /** 公開的活動列表（不含草稿），不帶令牌。 */
 export async function fetchPublicCampaigns(): Promise<{ items: CampaignSummary[] }> {
   const res = await fetch(`${COMMUNITY_API}/campaigns`, { headers: { "X-From": currentSurface() } });
@@ -212,13 +224,45 @@ export async function fetchPublicCampaigns(): Promise<{ items: CampaignSummary[]
   return (await res.json()) as { items: CampaignSummary[] };
 }
 
-/** 首頁輪播放的活動：推薦到首頁、進行中或即將開始；進行中的在前，再照開始時間（沒設的算最早），最多三個。 */
+/**
+ * 首頁輪播放的活動：推薦到首頁、進行中或即將開始，最多三個。先照活動設定的排序值（沒設的排後面），
+ * 再進行中的在前，再照開始時間（沒設的算最早）。順序不靠上架時間（owner 2026-10-17：分享季 → 創作季）。
+ */
 export function featuredCampaigns<T extends CampaignSummary>(items: T[], max = 3): T[] {
-  const rank = (c: T) => (c.phase === "open" ? 0 : 1);
+  const order = (c: T) => c.featuredRank ?? Infinity;
+  const phase = (c: T) => (c.phase === "open" ? 0 : 1);
   return items
     .filter((c) => c.featured && (c.phase === "open" || c.phase === "upcoming"))
-    .sort((a, b) => rank(a) - rank(b) || (a.startsAt ?? -Infinity) - (b.startsAt ?? -Infinity))
+    .sort((a, b) => order(a) - order(b) || phase(a) - phase(b) || (a.startsAt ?? -Infinity) - (b.startsAt ?? -Infinity))
     .slice(0, max);
+}
+
+/**
+ * 首頁輪播的期間：只到月日，結束日是最後一天（結束時刻前 1 毫秒），不帶年份、時間與時區名稱，手機上一行放得下。
+ * 完整期間與時區在活動頁（formatPeriod）。只有一頭的活動只顯示那一天。
+ */
+export function formatShortPeriod(c: { startsAt: number | null; endsAt: number | null; timezone: string | null }, locale: string): string {
+  const f = new Intl.DateTimeFormat(locale, { timeZone: c.timezone || DEFAULT_TIMEZONE, month: "numeric", day: "numeric" });
+  const end = c.endsAt === null ? null : c.endsAt - 1;
+  if (c.startsAt !== null && end !== null) return end > c.startsAt ? f.formatRange(c.startsAt, end) : f.format(c.startsAt);
+  return [c.startsAt, end].filter((v): v is number => v !== null).map((v) => f.format(v)).join(" – ");
+}
+
+// ---- 發卡獎勵（創作季）：作者自己的進度 ----------------------------------------------------
+
+export type RewardReview = "pending" | "approved" | "rejected";
+export interface RewardProgressItem { cardId: number; name: string; avatarUrl: string | null; submittedAt: number; review: RewardReview; reward: { status: "paid" | "pending"; amount: number } | null }
+export interface RewardProgress {
+  quota: { limit: number; used: number; weekStart: number; weekEnd: number; packRemaining: number };
+  approvedCount: number; pendingCount: number; creditsPaid: number; items: RewardProgressItem[];
+}
+export const fetchRewardProgress = (token: string, slug: string) => request<RewardProgress>(token, `/card-rewards/${enc(slug)}/me`);
+
+/** 送審畫面的入口（我的卡片、編輯器）：進行中的發卡獎勵活動，沒有就 null。以伺服器算的階段為準，不靠前端時鐘。 */
+export async function openCardReward(): Promise<CardRewardCampaign | null> {
+  const { items } = await fetchPublicCampaigns();
+  const open = items.find((c) => c.kind === "card_reward" && c.phase === "open");
+  return open ? ((await fetchCampaign(open.slug)) as CardRewardCampaign) : null;
 }
 
 /** 活動中心的頁籤。前三個是公開列表照階段分，最後一個是自己的申請。 */
