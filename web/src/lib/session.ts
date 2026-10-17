@@ -8,6 +8,8 @@ import {useProviderUpstream} from './config';
 import { PROVIDERS } from "./provider";
 import { defineStore } from "pinia";
 import { computed, ref, watch } from "vue";
+import { i18n } from "./i18n";
+import { siteName } from "../../../shared/site-name";
 import { fetchMe, fetchSiteMe, fetchWallet, setLoginViewer, setNsfwViewer, setViewerHiddenTags } from "./api";
 import type { Me, SiteMe, Wallet } from "./api";
 import {
@@ -53,7 +55,7 @@ export const useSession = defineStore("session", () => {
   const profile = ref<SiteMe | null>(null);
   const ready = ref(false);
   watch([me, () => profile.value?.handle, () => profile.value?.showNsfw, () => profile.value?.ageVerified, () => profile.value?.adultConsent, () => profile.value?.hiddenTags?.join(',')], clearLibraryCache, {flush:'sync'});
-  const displayName = computed(() => profile.value?.displayName || profile.value?.handle || "HearthRoom");
+  const displayName = computed(() => profile.value?.displayName || profile.value?.handle || siteName(String(i18n.global.locale.value)));
   const avatarUrl = computed(() => profile.value?.avatarUrl || "");
 
   async function loadWallet(accessToken: string) {
