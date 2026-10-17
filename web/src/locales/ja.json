@@ -2659,7 +2659,7 @@
   "creator.notes.4": "ポイントはキャラクターとの会話にだけ使え、付与から90日間有効です。",
   "creator.notes.5": "審査を通過した時点でポイントが付与され、ウォレットの履歴で確認できます。",
   "creator.entry.details": "詳細",
-  "mine.campaign.publishReward": "{end}までに提出したカードは、審査を通過すると1枚につき{credits}⁠ポイントもらえます。期間中は提出枠も週{limit}枚に増えます。",
+  "mine.campaign.publishReward": "{end}までに提出したカードは、審査を通過すると1枚につき{credits}⁠ポイントもらえます。",
   "editor.publish.reward": "ご自身の作品を{end}までに提出すると、審査通過後に{credits}⁠ポイントもらえます。",
   "campaign.page.creatorLink": "創作シーズンも開催中：審査を通過した作品1枚につき{credits}⁠ポイント",
   "review.creator.title": "創作シーズン：未付与",
