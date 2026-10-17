@@ -13748,6 +13748,12 @@
             "type": "string",
             "description": "i18n key for the promotion label."
           },
+          "chatDiscountPercent": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99,
+            "description": "Platform chat discount relative to this lane's normal tier price. Already included in quoted and billed chat rates; do not apply it again. Omitted when not discounted. Independent of upstream discounts and bare API pricing; no scheduled end date."
+          },
           "providerDiscountPercent": {
             "type": "integer",
             "description": "Upstream provider's current discount in percent (no end date)."
