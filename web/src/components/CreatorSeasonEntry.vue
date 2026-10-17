@@ -42,7 +42,7 @@ const text = computed(() => {
 </template>
 
 <style scoped>
-.entry { display: inline; font-size: 12.5px; line-height: 1.6; color: var(--text-3); text-decoration: none; }
+.entry { display: inline; font-size: 12.5px; line-height: 1.6; color: var(--text-3); text-decoration: none; word-break: auto-phrase; text-wrap: pretty; }
 .entry:hover .entry__text { text-decoration: underline; text-underline-offset: 3px; }
 .entry__more { display: inline-flex; align-items: center; margin-left: 4px; color: var(--accent-text); font-weight: 600; white-space: nowrap; }
 .entry__more svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; vertical-align: middle; }
