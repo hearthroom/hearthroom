@@ -14,7 +14,7 @@ const TOOL_NAME_KEYS = new Set(["guide.start.agent.lead", "guide.start.agent.cli
 describe("外語介面的站名只從 shared/site-name.ts 來", () => {
   it.each([["en", en], ["ja", ja], ["ko", ko]] as const)("%s 的字串不寫死舊站名", (_code, messages) => {
     const hardcoded = Object.entries(messages as Record<string, string>)
-      .filter(([key, text]) => !TOOL_NAME_KEYS.has(key) && text.includes("Hearthroom"))
+      .filter(([key, text]) => !TOOL_NAME_KEYS.has(key) && /hearth\s*room/i.test(text))
       .map(([key]) => key);
     expect(hardcoded).toEqual([]);
   });

@@ -5,6 +5,7 @@ import { syncAppearance, saveAppearance, appearanceMedia } from './appearance';
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { HttpError, pickLocale, type Env } from "../types";
+import { siteName } from "../../shared/site-name";
 import { hasSubscription, pushConfigured, pushLine, pushLocale, queuePush, removeSubscription, saveSubscription } from "./push";
 import { requireMember, memberByHandle, memberNsfw } from "../members";
 import { getCard, isAdult } from "../cards";
@@ -511,7 +512,7 @@ app.post("/internal/community/:operation", async (c) => {
       summaries = JSON.parse(card.summaries);
     const language = b.lang === "en" ? "en" : "zh";
     return c.json({
-      title: String(names[language] || names.zh || "HearthRoom").slice(0, 100),
+      title: String(names[language] || names.zh || siteName(language === "en" ? "en" : "zh-Hant")).slice(0, 100),
       summary: String(summaries[language] || summaries.zh || "").slice(0, 300),
       url: site(c.env) + "/cards/" + b.card,
     });
