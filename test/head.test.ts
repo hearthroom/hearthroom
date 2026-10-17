@@ -49,7 +49,7 @@ describe("分享預覽", () => {
   it("語言前綴決定 <html lang> 與用哪個語言的名字", async () => {
     const { html } = await page("/en/cards/r-1");
     expect(html).toContain('<html lang="en">');
-    expect(html).toContain("<title>Night Detective · Hearthroom</title>");
+    expect(html).toContain("<title>Night Detective · SukiSuki</title>");
     expect(html).toContain('<meta property="og:locale" content="en_US">');
   });
 
@@ -70,7 +70,7 @@ describe("分享預覽", () => {
     await makeMember(7);
     const { status, html } = await page(`/ja/authors/${testHandle(7)}`);
     expect(status).toBe(200);
-    expect(html).toContain("<title>月光 · Hearthroom</title>");
+    expect(html).toContain("<title>月光 · SukiSuki</title>");
     expect(html).toContain('<meta property="og:description" content="作品 1 · 会話 0">');
     // 作者頁的分享圖不是頁面主圖，不搶頻寬
     expect(html).not.toContain('rel="preload"');
@@ -100,9 +100,9 @@ describe("分享預覽", () => {
 it.each([
   ['', '下載綺夢社', 'zh_TW'],
   ['/zh-Hans', '下载绮梦社', 'zh_CN'],
-  ['/en', 'Download Hearthroom', 'en_US'],
-  ['/ja', 'Hearthroom をダウンロード', 'ja_JP'],
-  ['/ko', 'Hearthroom 다운로드', 'ko_KR'],
+  ['/en', 'Download SukiSuki', 'en_US'],
+  ['/ja', 'SukiSuki をダウンロード', 'ja_JP'],
+  ['/ko', 'SukiSuki 다운로드', 'ko_KR'],
 ])('serves localized download metadata in the initial HTML: %s', async (prefix, title, locale) => {
   const {html,headers,status}=await page(`${prefix}/download/?ref=discord`);
   expect(status).toBe(200);
@@ -119,7 +119,7 @@ it.each([
 
 it('trailing slashes do not lose the card-specific preview',async()=>{
   const {html}=await page('/en/cards/r-1/');
-  expect(html).toContain('<meta property="og:title" content="Night Detective · Hearthroom">');
+  expect(html).toContain('<meta property="og:title" content="Night Detective · SukiSuki">');
   expect(html).toContain(`content="https://${PRIMARY_HOST}/en/cards/${(await getCard(env.DB,'r-1'))!.id}"`);
 });
 
@@ -148,8 +148,8 @@ it('does not expose restricted card details to sharing crawlers',async()=>{
 it.each([
   ['/', '綺夢社・AI寢物語', 'zh-Hant', 'zh_TW', `https://${PRIMARY_HOST}/`],
   ['/zh-Hans/', '绮梦社・AI寝物语', 'zh-Hans', 'zh_CN', `https://${PRIMARY_HOST}/zh-Hans`],
-  ['/en/', 'Hearthroom · Character Board', 'en', 'en_US', `https://${PRIMARY_HOST}/en`],
-  ['/ja?sort=hot', 'Hearthroom · キャラクターカード ランキング', 'ja', 'ja_JP', `https://${PRIMARY_HOST}/ja`],
+  ['/en/', 'SukiSuki · Character Board', 'en', 'en_US', `https://${PRIMARY_HOST}/en`],
+  ['/ja?sort=hot', 'SukiSuki · キャラクターカード ランキング', 'ja', 'ja_JP', `https://${PRIMARY_HOST}/ja`],
 ])('首頁的 <head> 帶著各語言的站名與副標，不跑 JS 的爬蟲也看得到：%s', async (path, title, lang, locale, canonical) => {
   const response = await SELF.fetch(`https://${PRIMARY_HOST}${path}`, { headers: { 'User-Agent': 'bingbot' } });
   expect(response.status).toBe(200);
@@ -168,7 +168,7 @@ it.each([
 it.each([
   ["/me", "zh-TW", "zh-Hant", "綺夢社・AI寢物語"],
   ["/me", "", "zh-Hans", "绮梦社・AI寝物语"],
-  ["/en/me", "zh-TW", "en", "Hearthroom · Character Board"],
+  ["/en/me", "zh-TW", "en", "SukiSuki · Character Board"],
 ])("SPA 頁面的 HTML 殼有各語言的預設分享圖：%s（%s）", async (path, acceptLanguage, lang, title) => {
   const response = await SELF.fetch(`https://${PRIMARY_HOST}${path}`, { headers: acceptLanguage ? { "Accept-Language": acceptLanguage } : {} });
   expect(response.headers.get("content-type")).toContain("text/html");

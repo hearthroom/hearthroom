@@ -49,6 +49,12 @@ const FALLBACK: Record<string, string[]> = {
   default: ["en", "zh-Hant"],
 };
 
+/** 翻譯裡的 {site} 在載入時換成這個語言的站名：站名只有 shared/site-name.ts 一個出處，翻譯者不用知道它叫什麼。 */
+function withSiteName(messages: Record<string, string>, locale: string): Record<string, string> {
+  const name = siteName(locale);
+  return Object.fromEntries(Object.entries(messages).map(([key, text]) => [key, text.replaceAll("{site}", name)]));
+}
+
 export const i18n = createI18n({
   legacy: false,
   locale: SOURCE_LOCALE,
@@ -56,7 +62,7 @@ export const i18n = createI18n({
   // 缺 key 在開發時要吵，正式環境安靜地走回退鏈就好。
   missingWarn: import.meta.env.DEV,
   fallbackWarn: import.meta.env.DEV,
-  messages: { [SOURCE_LOCALE]: zhHant },
+  messages: { [SOURCE_LOCALE]: withSiteName(zhHant, SOURCE_LOCALE) },
 });
 
 const loaded = new Set([SOURCE_LOCALE]);
@@ -65,7 +71,7 @@ const loaded = new Set([SOURCE_LOCALE]);
 export async function loadLocale(code: string): Promise<void> {
   if (loaded.has(code) || !LOCALE_CODES.includes(code)) return;
   const messages = (await import(`../locales/${code}.json`)).default;
-  i18n.global.setLocaleMessage(code, messages);
+  i18n.global.setLocaleMessage(code, withSiteName(messages, code));
   loaded.add(code);
 }
 

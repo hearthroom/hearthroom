@@ -120,7 +120,7 @@ describe("部落格分享資訊", () => {
     expect(home.text).toContain('<meta property="og:type" content="website">');
     expect(home.text).toContain(`<meta property="og:image" content="https://${PRIMARY_HOST}/og/default-zh-Hant.jpg?v=2">`);
     const col = await get("/en/blog/news");
-    expect(col.text).toContain("<title>News · Hearthroom</title>");
+    expect(col.text).toContain("<title>News · SukiSuki</title>");
     expect(col.text).toContain(`<link rel="canonical" href="https://${PRIMARY_HOST}/en/blog/news">`);
     expect((await get("/blog/nope")).status).toBe(404);
   });

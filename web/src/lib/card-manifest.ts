@@ -10,7 +10,7 @@
  */
 import { setInstallTarget } from "./pwa";
 import { isPlayHost } from "./site";
-import { siteName } from "../../../shared/site-name";
+import { SITE_NAME, siteName } from "../../../shared/site-name";
 
 export interface CardHead {
   id: string;
@@ -24,7 +24,7 @@ export interface CardHead {
 export const SITE_HEAD = {
   manifest: "/manifest.webmanifest",
   touchIcon: "/icons/apple-touch-icon.png",
-  title: "Hearthroom",
+  title: SITE_NAME,
 } as const;
 
 /**

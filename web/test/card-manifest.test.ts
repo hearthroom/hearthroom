@@ -49,7 +49,7 @@ describe("card manifest head swap", () => {
     expect(q('meta[name="apple-mobile-web-app-title"]')).toBe("绮梦社");
     applyCardHead(null, "en");
     expect(q('link[rel="manifest"]')).toBe(SITE_HEAD.manifest);
-    expect(q('meta[name="apple-mobile-web-app-title"]')).toBe("Hearthroom");
+    expect(q('meta[name="apple-mobile-web-app-title"]')).toBe("SukiSuki");
   });
 
   it("adult card with a key: manifest and touch icon carry the key so the browser gets through", () => {
