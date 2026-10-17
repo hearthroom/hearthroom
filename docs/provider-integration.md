@@ -167,7 +167,7 @@ and `sourceRoleId` remain separate provider locators for playing and editing.
 | `PUT` / `DELETE /v1/comments/:id/like` | Member. One like per member per comment; repeats are no-ops. |
 | `GET /v1/cards/:cardId/platforms` | Available copies of a numbered card, including unlisted cards, after community age gating, moderation and upstream accessibility checks. `playable` distinguishes storage from an actual runtime. |
 
-Community publication permits three distinct works per community per UTC week (Monday reset), shared across every connected provider. Copies map to the original work and do not add usage; registering a mapped copy separately fails with `publication_use_original`. Unlisting does not erase usage/history. The database enforces the limit within the publication transaction, including concurrent submissions. Existing listed cards may be refreshed without new usage.
+Community publication permits three distinct works per community per UTC week (Monday reset), shared across every connected provider. During an active card-reward campaign (`card_reward_campaigns`, migration `0070`) the limit at the moment of registration is the campaign's `weekly_limit` instead. Copies map to the original work and do not add usage; registering a mapped copy separately fails with `publication_use_original`. Unlisting does not erase usage/history. The database enforces the limit within the publication transaction, including concurrent submissions. Existing listed cards may be refreshed without new usage.
 
 Authors save cards to HarperHarbor. Additional hosting destinations and cross-service
 synchronization are retired. Publication remains a separate community review action.
