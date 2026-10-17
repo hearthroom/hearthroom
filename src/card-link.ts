@@ -62,14 +62,16 @@ export async function linkPreview(env:Env,id:string,link:Awaited<ReturnType<type
     .bind(source.provider,source.roleId).first<{public_blocked:number}>();
   if (blocked && blocked.public_blocked) throw new HttpError(404,'card not found');
   const num = link.row?.num ?? await ensureCardNumber(env.DB,source.provider,source.roleId);
-  const author=await env.DB.prepare(`SELECT handle,is_official FROM members WHERE id=COALESCE(
+  const author=await env.DB.prepare(`SELECT handle,is_official,display_name,
+    CASE WHEN display_name IS NOT NULL THEN avatar_url END AS community_avatar FROM members WHERE id=COALESCE(
     (SELECT owner_member_id FROM member_connections WHERE provider=? AND external_id=?),
     (SELECT member_id FROM member_identities WHERE provider=? AND external_id=?))`)
-    .bind(source.provider,String(role.authorNumId),source.provider,String(role.authorNumId)).first<{handle:string;is_official:number}>();
+    .bind(source.provider,String(role.authorNumId),source.provider,String(role.authorNumId)).first<{handle:string;is_official:number;display_name:string|null;community_avatar:string|null}>();
   const preview=previewCard(role,lang,source.provider,num);
   return {
     ...preview,
-    author:{...preview.author,handle:author?.handle??null,official:author?.is_official===1},
+    author:{...preview.author,handle:author?.handle??null,official:author?.is_official===1,
+      name:author?.display_name??preview.author.name,avatar:author?.community_avatar??preview.author.avatar},
     sourceRoleId:source.roleId,
     ...(link.row ? {num:link.row.num,status:link.row.status,rating:link.row.rating??null} : {}),
   };
