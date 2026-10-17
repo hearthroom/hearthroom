@@ -11,6 +11,10 @@ CREATE TABLE card_reward_campaigns (
  weekly_limit INTEGER NOT NULL CHECK (weekly_limit BETWEEN 1 AND 100),
  reward INTEGER NOT NULL CHECK (reward > 0),
  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('draft','active')),
+ timezone TEXT NOT NULL DEFAULT 'Asia/Taipei',  -- IANA 名稱，只用來顯示
+ banner_key TEXT,                               -- AVATARS 的 blog/ 前綴（公開圖），同 campaigns.banner_key
+ featured INTEGER NOT NULL DEFAULT 0 CHECK (featured IN (0,1)),  -- 推薦到首頁輪播
+ featured_rank INTEGER,                         -- 首頁輪播的順序，小的在前；NULL 排最後
  created_at INTEGER NOT NULL,
  updated_at INTEGER NOT NULL
 );
@@ -43,10 +47,14 @@ CREATE INDEX card_rewards_member ON card_rewards(member_id, created_at);
 CREATE INDEX card_rewards_campaign ON card_rewards(campaign_id, status);
 
 -- 第一期（owner 2026-10-17）：台北 10-17 00:00 到 11-01 00:00，每週 6 張，每張 10000。期間內送審的卡不管何時過審都給，不設發獎截止。
-INSERT INTO card_reward_campaigns (id, slug, title, starts_at, ends_at, payout_deadline, weekly_limit, reward, status, created_at, updated_at)
+INSERT INTO card_reward_campaigns (id, slug, title, starts_at, ends_at, payout_deadline, weekly_limit, reward, status, timezone, featured, featured_rank, created_at, updated_at)
 VALUES ('creator-season-1', 'creator-season',
- '{"zh-Hant":"綺夢社創作季","zh-Hans":"绮梦社创作季","en":"Hearthroom Creator Season","ja":"Hearthroom 創作シーズン","ko":"Hearthroom 창작 시즌"}',
- 1792166400000, 1793462400000, NULL, 6, 10000, 'active', 1792166400000, 1792166400000);
+ '{"zh-Hant":"綺夢社創作季","zh-Hans":"绮梦社创作季","en":"SukiSuki Creator Season","ja":"SukiSuki 創作シーズン","ko":"Hearthroom 창작 시즌"}',
+ 1792166400000, 1793462400000, NULL, 6, 10000, 'active', 'Asia/Taipei', 1, 2, 1792166400000, 1792166400000);
+
+-- 首頁輪播的順序（owner 2026-10-17）：分享季 → 創作季 → 蘇綺卡。分享季的活動也要有排序值。
+ALTER TABLE campaigns ADD COLUMN featured_rank INTEGER;
+UPDATE campaigns SET featured_rank = 1 WHERE slug = 'share-season';
 
 -- 週額度改讀活動設定：登記那一刻落在某個活動期間就用它的 weekly_limit，否則 3（同 quota.ts 的 weeklyLimitAt）。
 -- 其餘條件與 0043 相同。
