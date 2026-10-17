@@ -61,7 +61,6 @@ onMounted(() => { void load(); });
         <div class="cset-pool__balance"><dt>{{ t('campaign.pool.balance') }}</dt><dd class="num">{{ amount(pool.balance) }}</dd></div>
         <div><dt>{{ t('campaign.pool.enabled') }}</dt><dd>{{ pool.enabled ? t('campaign.pool.on') : t('campaign.pool.off') }}</dd></div>
         <div><dt>{{ t('campaign.pool.usageLabel') }}</dt><dd>{{ pool.usageScope ? t(`campaign.pool.usage.${pool.usageScope}`) : t('campaign.pool.unset') }}</dd></div>
-        <div><dt>{{ t('campaign.pool.validity') }}</dt><dd>{{ pool.validityDays ? t('campaign.pool.days', { n: pool.validityDays }) : t('campaign.pool.forever') }}</dd></div>
         <div><dt>{{ t('campaign.pool.maxPayout') }}</dt><dd class="num">{{ pool.maxPayout ? amount(pool.maxPayout) : t('campaign.pool.noLimit') }}</dd></div>
       </dl>
     </section>

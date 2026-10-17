@@ -65,7 +65,7 @@ beforeEach(() => {
     if (url.startsWith("/v1/moderation/card-rewards/due")) return json(200, { total: creatorDue.length, items: creatorDue });
     if (url.startsWith("/v1/moderation/card-rewards/list")) return json(200, { total: 0, items: [] });
     if (url === "/v1/moderation/card-rewards/batch") return next("creatorBatch");
-    if (url === "/v1/moderation/campaign-pool") return json(200, { configured: true, enabled: true, usageScope: "all", validityDays: null, maxPayout: 1000, balance: 54321, paidTotal: 0, updatedAt: null });
+    if (url === "/v1/moderation/campaign-pool") return json(200, { configured: true, enabled: true, usageScope: "all", maxPayout: 1000, balance: 54321, paidTotal: 0, updatedAt: null });
     if (url.startsWith("/v1/moderation/campaign/payable")) return json(200, { total: payableItems.length, items: payableItems });
     if (url === "/v1/moderation/campaign/payouts/reconcile") { if (reconcileGate) await reconcileGate; return json(reconcile.status, reconcile.body); }
     if (url === "/v1/moderation/campaign/payouts/batch") return next("batch");

@@ -75,7 +75,7 @@ beforeEach(async () => {
   poolCalls = 0;
   upstream.fetchCampaignPool = async () => {
     poolCalls++;
-    return { balance: 70000, paidTotal: 0, enabled: true, usageScope: "all", validityDays: null, maxPayout: null, configured: true, updatedAt: null };
+    return { balance: 70000, paidTotal: 0, enabled: true, usageScope: "all", maxPayout: null, configured: true, updatedAt: null };
   };
   await makeReviewer(ADMIN);
   await makeReviewer(MOD);

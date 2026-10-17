@@ -1919,7 +1919,7 @@
   "db209eb6cfc1b": "Credits paid out of the pool so far.",
   "daf91daf7f742": "Whether payouts are switched on. When false, payouts are refused with `pool_disabled`.",
   "ded1b719eba4d": "What credits paid from this pool can be spent on: `all` for anything, `agent_only` for agent conversations only. Empty until the platform sets it.",
-  "d84675f3d21ed": "Days a paid reward stays valid. `null` means it does not expire.",
+  "d3a2eb973d972": "Optional. Days until the paid credits expire, from 1 to 3650. Leave it out for credits that never expire. Re-sending a key must carry the same value.",
   "d5606936bf6cc": "Largest `amount` one payout may carry, in credits. 0 until the platform sets it.",
   "d626f2c71cd60": "True once the platform has set a usage scope and a per-payout limit. Payouts need it.",
   "df5cb88327909": "When the pool or its rules last changed. `null` until the platform first funds or configures the pool.",

@@ -230,7 +230,7 @@ describe("推薦到首頁", () => {
 
 describe("點數池", () => {
   it("只給應用管理員；Provider 的值原樣轉出；Provider 沒有這條路時回 configured:false", async () => {
-    const pool = { balance: 120000, paidTotal: 3000, enabled: true, usageScope: "agent_only" as const, validityDays: 30, maxPayout: 20000, configured: true, updatedAt: "2026-10-15T00:00:00Z" };
+    const pool = { balance: 120000, paidTotal: 3000, enabled: true, usageScope: "agent_only" as const, maxPayout: 20000, configured: true, updatedAt: "2026-10-15T00:00:00Z" };
     let seen = "";
     upstream.fetchCampaignPool = async (_env, token) => { seen = token; return pool; };
     expect((await call("/v1/moderation/campaign-pool", { token: "mod" })).status).toBe(403);
@@ -252,8 +252,9 @@ describe("點數池", () => {
     };
 
     it("帶操作者令牌打 /open/v1/campaign-pool，有逾時；未設定的值轉成 null", async () => {
-      const calls = stub(() => Response.json({ balance: 0, paidTotal: 0, enabled: false, usageScope: "", validityDays: null, maxPayout: 0, configured: false, updatedAt: null }));
-      expect(await upstream.fetchCampaignPool(env, "tok-1", "harbor")).toEqual({ balance: 0, paidTotal: 0, enabled: false, usageScope: null, validityDays: null, maxPayout: null, configured: false, updatedAt: null });
+      const calls = stub(() => Response.json({ balance: 0, paidTotal: 0, enabled: false, usageScope: "", maxPayout: 0, configured: false, updatedAt: null }));
+      // 點數池只是額度，沒有有效期（每筆發放自己決定）
+      expect(await upstream.fetchCampaignPool(env, "tok-1", "harbor")).toEqual({ balance: 0, paidTotal: 0, enabled: false, usageScope: null, maxPayout: null, configured: false, updatedAt: null });
       expect(calls[0]!.url).toBe(`${env.PROVIDER_API_BASE_HARBOR}/open/v1/campaign-pool`);
       const headers = calls[0]!.init!.headers as Record<string, string>;
       expect(headers.Authorization).toBe("Bearer tok-1");
