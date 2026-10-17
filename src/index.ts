@@ -1,3 +1,5 @@
+import { transferGateRoutes, isTransferHeld } from './draft-transfer-gate';
+import { bumpOp } from './ops-metrics';
 import { accountAuthRoutes, accountAuthMaintenance, syncNickname } from './account-auth';
 import { snapshot } from './snapshot-cache';
 import { cardLink, linkPreview } from './card-link';
@@ -162,7 +164,13 @@ app.use('/v1/*',async(c,next)=>{
 });
 app.route("/", accountAuthRoutes);
 
-app.onError((err, c) => {
+app.route("/", transferGateRoutes);
+
+app.onError(async (err, c) => {
+  if(isTransferHeld(err)){
+    await bumpOp(c.env.DB,"draft_transfer_gate","admission","denied");
+    return c.json({error:"draft_transfer_held"},409);
+  }
   const ev = c.get("ev") as Pending | undefined;
   if (err instanceof HttpError) {
     if(c.req.path==='/v1/me/card-sync')console.error('card_sync_failed',{code:err.message.startsWith('sync_')?err.message:'sync_identity_failed',...err.detail});

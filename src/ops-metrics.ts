@@ -3,6 +3,13 @@
  * 表裡多出來的列（舊版本、手動寫入）不會變成 Prometheus 標籤。
  */
 const METRICS = {
+  draft_transfer_gate: {
+    name: "hearthroom_draft_transfer_gate_total",
+    help: "Durable scoped transfer barrier transitions and rejected admission.",
+    label: "operation",
+    operations: ["transition", "admission"],
+    outcomes: ["success", "denied", "error"],
+  },
   comment_moderation: {
     name: "hearthroom_comment_moderation_total",
     help: "Comment moderation: holds, releases, removals, mutes, reports, AI flags, keyword and settings changes.",

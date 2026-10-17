@@ -1,3 +1,4 @@
+import { isTransferHeld } from './draft-transfer-gate';
 import { type Env, HttpError } from './types';
 import { apiBaseOf, type ProviderId } from './providers';
 import { getCard, upsertCard } from './cards';
@@ -151,6 +152,7 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  if(!stored?.submission_id)throw new HttpError(409,'submission_pending');
  return receiptOf(stored);
  } catch(error) {
+  if(isTransferHeld(error))throw error;
   await db.prepare("UPDATE hosting_versions SET state='failed' WHERE version_id=? AND submission_id IS NULL").bind(version.version_id).run();
   throw error;
  }
