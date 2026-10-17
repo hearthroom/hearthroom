@@ -320,7 +320,7 @@
   "mascot.pet.guide.developers.q1": "有現成工具嗎？",
   "mascot.pet.guide.developers.a1": "有命令列工具，AI 助手照著設定就能幫你寫卡、傳卡。",
   "mascot.pet.guide.updates.hello": "網站最近改了什麼都在這～",
-  "mascot.pet.guide.download.hello": "想把綺夢社裝進手機看這裡。",
+  "mascot.pet.guide.download.hello": "想把{site}裝進手機看這裡。",
   "mascot.pet.guide.download.q1": "iPhone 怎麼裝？",
   "mascot.pet.guide.download.a1": "用 Safari 打開網站，按分享，再選「加入主畫面」。",
   "mascot.pet.guide.review.hello": "審核辛苦了！",

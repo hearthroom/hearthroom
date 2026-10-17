@@ -205,7 +205,7 @@ describe("機器人送出彙整", () => {
     expect(p.digests).toEqual([{ day: "2026-10-05", locale: "en" }, { day: "2026-10-05", locale: "ja" }]);
     const job = await call("update-project", { day: "2026-10-05", locale: "en", channel: CHANNEL });
     expect(job.messageId).toBeNull();
-    expect(job.digest.heading).toBe("What's new on Hearthroom, Oct 5");
+    expect(job.digest.heading).toBe("What's new on SukiSuki, Oct 5");
     expect(job.digest.url).toBe("https://sukisuki.ai/en/updates?from=discord&day=2026-10-05");
     expect(job.digest.items).toEqual([
       { tier: "highlight", title: "EN 標題 2026-10-05-hl", url: "https://sukisuki.ai/en/updates?from=discord#2026-10-05-hl" },
@@ -333,7 +333,7 @@ describe("Atom、頁面與指標", () => {
     const res = await get("/ja/updates", {}, envWithAssets({}) as Env);
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain('<meta property="og:title" content="Hearthroom の更新履歴">');
+    expect(html).toContain('<meta property="og:title" content="SukiSuki の更新履歴">');
     expect(html).toContain('<link rel="canonical" href="https://sukisuki.ai/ja/updates">');
     expect(html).toContain('<meta property="og:image" content="https://sukisuki.ai/og/updates-ja.jpg">');
     expect(html).toContain('<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">');

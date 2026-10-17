@@ -1,5 +1,5 @@
 import { PRIMARY_HOST } from "../shared/site-hosts";
-import { siteName } from "../shared/site-name";
+import { SITE_NAME, siteName } from "../shared/site-name";
 import { LOCALES, columnTree, publicPost, recentPosts, type Column, type Locale, type Post } from "./blog";
 import { oneLine, siteOgImage, type PageMeta } from "./head";
 import type { Env } from "./types";
@@ -17,9 +17,9 @@ const BLOG_WORD: Record<Locale, string> = { "zh-Hant": "部落格", "zh-Hans": "
 const BLOG_DESCRIPTION: Record<Locale, string> = {
   "zh-Hant": "綺夢社官方部落格：新功能介紹、活動消息與創作心得。",
   "zh-Hans": "绮梦社官方博客：新功能介绍、活动消息与创作心得。",
-  en: "The official Hearthroom blog: new features, event news, and tips for making cards.",
-  ja: "Hearthroom 公式ブログ：新機能の紹介、イベントのお知らせ、制作のヒント。",
-  ko: "Hearthroom 공식 블로그: 새 기능 소개, 이벤트 소식, 카드 제작 팁.",
+  en: `The official ${SITE_NAME} blog: new features, event news, and tips for making cards.`,
+  ja: `${SITE_NAME} 公式ブログ：新機能の紹介、イベントのお知らせ、制作のヒント。`,
+  ko: `${SITE_NAME} 공식 블로그: 새 기능 소개, 이벤트 소식, 카드 제작 팁.`,
 };
 const asLocale = (lang: string): Locale => (LOCALES as readonly string[]).includes(lang) ? (lang as Locale) : "en";
 const pick = (text: Partial<Record<Locale, string>>, lang: Locale) => text[lang] || text["zh-Hant"] || text.en || Object.values(text).find(Boolean) || "";
