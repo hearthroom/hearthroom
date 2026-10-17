@@ -101,8 +101,12 @@ onMounted(() => { void load(); });
 .cset-status--active, .cset-status--active:hover { background: var(--success-soft); color: var(--success); }
 .cset-pool { display: grid; gap: var(--s-3); padding: var(--s-4); background: var(--surface-2); border-radius: var(--r-md); }
 .cset-pool h3 { font-size: 13px; font-weight: 600; color: var(--text-2); margin: 0; }
-/* 餘額佔一整列，其餘三項（開關、用途、單筆上限）固定三欄，手機上也不留空格 */
+/* 餘額佔一整列，其餘三項（開關、用途、單筆上限）寬螢幕三欄；手機兩欄、最後一項跨整列，不留空格也不擠到字斷在詞中 */
 .cset-pool__list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-3) var(--s-4); margin: 0; }
+@media (max-width: 600px) {
+  .cset-pool__list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cset-pool__list > div:last-child { grid-column: 1 / -1; }
+}
 .cset-pool__list > div { min-width: 0; }
 .cset-pool__list dt { font-size: 12px; color: var(--text-3); }
 .cset-pool__list dd { margin: 0; font-size: 14px; font-weight: 500; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
