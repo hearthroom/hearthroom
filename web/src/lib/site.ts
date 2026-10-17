@@ -13,7 +13,6 @@ import { PRIMARY_HOST, siteRootOf, isCardAppHost } from '../../../shared/site-ho
  * 標語與描述不在這裡——那些是使用者讀得到的文案，住在 locales/。
  */
 export const SITE = {
-  name: "Hearthroom",
   /** OAuth 授權頁上顯示給使用者的應用名稱。 */
   clientName: "Hearthroom",
   /** 原始碼位置。頁尾的 GitHub 連結與授權連結都從這裡長出來；留空就整個頁尾不顯示。 */

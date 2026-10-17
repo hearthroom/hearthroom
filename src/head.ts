@@ -64,8 +64,9 @@ export type SiteOgKind = "default" | "download" | "updates";
 /**
  * 換了圖就把版本加一：Discord、LINE、微信照網址快取預覽圖，檔名不變的話會一直顯示舊圖。
  * default v2（2026-10-17）：圖上那句從「角色卡的開放社群：榜單、搜尋與作者頁」換成「挑一張角色卡，今晚的故事由你決定」。
+ * 三種都 v3（2026-10-17）：en/ja/ko 圖上的站名從 Hearthroom 換成 SukiSuki；中文圖沒變，跟著換網址只是多抓一次。
  */
-const OG_VERSION: Partial<Record<SiteOgKind, number>> = { default: 2 };
+const OG_VERSION: Partial<Record<SiteOgKind, number>> = { default: 3, download: 3, updates: 3 };
 /** 站台自己的分享圖；不認得的語言一律用英文版。 */
 export function siteOgImage(kind: SiteOgKind, lang: string): string {
   const locale = SITE_OG_LANGS.has(lang) ? lang : "en";
