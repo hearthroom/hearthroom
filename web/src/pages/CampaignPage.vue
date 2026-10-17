@@ -461,6 +461,8 @@ async function onDone(_result: ApplyResult) {
 .campaign__period { font-size: 13px; color: var(--text-2); }
 .campaign__subtitle { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.5; color: var(--text-2); word-break: auto-phrase; text-wrap: pretty; }
 .campaign__lead { justify-self: stretch; }
+/* 沒有橫幅時頁頭本身就是淡強調色，氣泡改用面板底色才分得出來 */
+.campaign__head-body--bare .campaign__lead { background: var(--surface); }
 .campaign__link-row {
   display: flex; align-items: center; gap: var(--s-2); min-height: 44px; padding: 0 var(--s-1);
   font-size: 14px; font-weight: 600; line-height: 1.5; color: var(--accent-text); text-decoration: none; word-break: auto-phrase; text-wrap: pretty;
@@ -578,7 +580,7 @@ async function onDone(_result: ApplyResult) {
   .campaign__rewards { order: 2; }
   .campaign__body > * { order: 3; }
   .campaign__mine-card { order: 4; }
-  .campaign__body > .campaign__notes { order: 5; }
+  .campaign__body > .campaign__notes, .campaign__body > .campaign__link-row { order: 5; }
 }
 @media (max-width: 760px) {
   .campaign__head-body { padding: 0 var(--s-1); }

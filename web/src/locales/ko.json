@@ -2659,7 +2659,7 @@
   "creator.notes.4": "포인트는 캐릭터 대화에만 쓸 수 있고, 지급 후 90일간 유효해요.",
   "creator.notes.5": "심사를 통과하는 즉시 포인트가 지급되고, 지갑 내역에서 확인할 수 있어요.",
   "creator.entry.details": "자세히",
-  "mine.campaign.publishReward": "{end}까지 제출한 카드는 심사를 통과하면 장당 {credits}⁠포인트를 드려요. 주간 제출 한도도 {limit}장으로 늘었어요.",
+  "mine.campaign.publishReward": "{end}까지 제출한 카드는 심사를 통과하면 장당 {credits}⁠포인트를 드려요.",
   "editor.publish.reward": "직접 만든 작품을 {end}까지 제출하면 심사 통과 후 {credits}⁠포인트를 드려요.",
   "campaign.page.creatorLink": "창작 시즌도 진행 중: 심사를 통과한 작품 1장당 {credits}⁠포인트",
   "review.creator.title": "창작 시즌: 지급 대기",
