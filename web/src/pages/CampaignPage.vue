@@ -239,7 +239,6 @@ async function onDone(_result: ApplyResult) {
             <h1 class="campaign__title" :class="{ 'campaign__title--long': [...title].length > 12 }"><template v-for="(part, k) in titleParts" :key="k"><template v-if="k">{{ " " }}</template><span :class="{ campaign__part: titleParts.length > 1 }">{{ part }}</span></template></h1>
             <template v-if="creator">
               <p class="campaign__subtitle"><AmountText :text="t('creator.subtitle', { credits: creatorCredits })" /></p>
-              <p class="campaign__bubble campaign__lead"><span class="campaign__who">{{ t("mascot.name") }}</span><AmountText :text="t('creator.lead', { site, credits: creatorCredits })" /></p>
             </template>
             <dl v-else-if="campaign" class="campaign__dates">
               <div v-if="period"><dt>{{ t("campaign.page.period") }}</dt><dd>{{ period }}</dd></div>
@@ -461,10 +460,7 @@ async function onDone(_result: ApplyResult) {
 /* 創作季：期間一行，桌機手機都出（只到月日，帶時區說明） */
 .campaign__period { font-size: 13px; color: var(--text-2); }
 .campaign__subtitle { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.5; color: var(--text-2); word-break: auto-phrase; text-wrap: pretty; }
-.campaign__lead { justify-self: stretch; text-wrap: pretty; word-break: auto-phrase; }
-.campaign:lang(ko) .campaign__lead, .campaign:lang(ko) .campaign__subtitle { word-break: keep-all; }
-/* 沒有橫幅時頁頭本身就是淡強調色，氣泡改用面板底色才分得出來 */
-.campaign__head-body--bare .campaign__lead { background: var(--surface); }
+.campaign:lang(ko) .campaign__subtitle { word-break: keep-all; }
 .campaign__link-row {
   display: flex; align-items: center; gap: var(--s-2); min-height: 44px; padding: 0 var(--s-1);
   font-size: 14px; font-weight: 600; line-height: 1.5; color: var(--accent-text); text-decoration: none; word-break: auto-phrase; text-wrap: pretty;

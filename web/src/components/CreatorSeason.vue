@@ -16,6 +16,7 @@ import { hueFrom } from "@/lib/format";
 import { daysUntilReset, remaining } from "@/lib/quota";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
+import { siteName } from "../../../shared/site-name";
 
 const props = defineProps<{ campaign: CardRewardCampaign; loginTo: string }>();
 const { t } = useI18n();
@@ -25,6 +26,7 @@ const session = useSession();
 const signedIn = computed(() => !!session.me);
 const c = computed(() => props.campaign);
 const credits = computed(() => formatNumber(c.value.reward));
+const site = computed(() => siteName(locale.value));
 const total = computed(() => formatNumber(c.value.reward * c.value.weeklyLimit));
 /** 活動時區的月日（10月31日、Oct 31）；結束日是最後一天：結束時刻前 1 毫秒 */
 const md = (ms: number) => new Intl.DateTimeFormat(locale.value, { timeZone: c.value.timezone, month: "short", day: "numeric" }).format(ms);
@@ -134,7 +136,7 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
 
         <div v-if="!empty" class="creator__say">
           <img src="/mascot/campaign/pose-got-points.webp" alt="" width="80" height="111" loading="lazy" decoding="async" />
-          <p class="creator__bubble"><span class="creator__who">{{ t("mascot.name") }}</span>{{ t("creator.say.rules") }}</p>
+          <p class="creator__bubble" data-lead><span class="creator__who">{{ t("mascot.name") }}</span><AmountText :text="t('creator.lead', { site, credits })" /></p>
         </div>
       </section>
 
@@ -293,7 +295,8 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
 .creator__cell-label { font-size: 12px; color: var(--text-3); }
 .creator__cell-num { font-size: clamp(16px, 24cqi, 28px); font-weight: 700; line-height: 1.2; white-space: nowrap; }
 .creator__cell-num--paid { color: var(--success); }
-.creator__cell-sub { font-size: 12px; color: var(--text-2); }
+/* 小字跟著格寬縮、一行放完（「3 日後にリセット」不拆兩行） */
+.creator__cell-sub { font-size: clamp(10px, 11.5cqi, 12px); color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .creator__pips { display: flex; gap: 2px; margin: 2px 0; }
 .creator__pips i { flex: 0 1 10px; min-width: 4px; height: 6px; border-radius: var(--r-pill); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-strong); }
 .creator__pips i.on { background: var(--accent-grad); box-shadow: none; }
@@ -320,10 +323,13 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
 .creator__empty > img { width: 96px; height: 120px; object-fit: contain; }
 .creator__empty .btn { justify-self: stretch; justify-content: center; }
 
-/* ---- 怎麼參加：桌機姿勢與氣泡在卡片左側一欄、三步在右；窄了改上下 ---- */
-.creator__how { grid-template-columns: minmax(180px, 220px) minmax(0, 1fr); align-items: start; column-gap: var(--s-5); }
-.creator__how > .creator__h2 { grid-column: 1 / -1; }
-.creator__how-say { flex-direction: column; align-items: flex-start; }
+/* ---- 怎麼參加：桌機姿勢在左一窄欄，氣泡與三步共用右側全寬（三步各自有夠寬的一欄）；手機上下排 ---- */
+.creator__how { grid-template-columns: 80px minmax(0, 1fr); grid-template-areas: "pose h" "pose say" "pose steps"; align-items: start; column-gap: var(--s-4); }
+.creator__how > .creator__h2 { grid-area: h; }
+.creator__how-say { display: contents; }
+.creator__how-say > img { grid-area: pose; align-self: start; }
+.creator__how-say > .creator__bubble { grid-area: say; justify-self: start; }
+.creator__how .creator__steps { grid-area: steps; }
 .creator__steps { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-4); grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .creator__steps > li { display: flex; align-items: flex-start; gap: var(--s-3); min-width: 0; }
 .creator__steps strong { display: block; font-size: 15px; line-height: 1.45; }
@@ -345,8 +351,10 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
   .creator__steps { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 760px) {
-  .creator__how { grid-template-columns: minmax(0, 1fr); }
-  .creator__how-say { flex-direction: row; align-items: flex-end; }
+  .creator__how { grid-template-columns: minmax(0, 1fr); grid-template-areas: none; }
+  .creator__how > .creator__h2, .creator__how .creator__steps { grid-area: auto; }
+  .creator__how-say { display: flex; flex-direction: row; align-items: flex-end; }
+  .creator__how-say > img, .creator__how-say > .creator__bubble { grid-area: auto; }
 }
 @media (max-width: 860px) {
   /* 一欄：右欄與左欄都拆開，照 order 排成 頁頭(1) → 規則卡 → 我的進度 → 怎麼參加 → 條款 */
@@ -364,6 +372,8 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
   .creator__say > img { width: 64px; height: 89px; }
   .creator__cell { padding: var(--s-2); }
   .creator__how--quiet .creator__how-say > img { display: none; }
+  /* 沒有姿勢時氣泡不撐滿整列，跟字的寬度差不多 */
+  .creator__how--quiet .creator__bubble { max-width: 24em; }
   .creator__notes { padding: 0 var(--s-4); }
   .creator__notes summary { min-height: 52px; }
 }

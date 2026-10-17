@@ -59,7 +59,9 @@ function close(source: "close" | "browse") {
   content: ""; position: absolute; inset: 0; z-index: -1;
   background: linear-gradient(90deg, var(--welcome-bg) 0%, var(--welcome-bg) 42%, color-mix(in srgb, var(--welcome-bg) 0%, transparent) 64%);
 }
-.welcome__text { max-width: 460px; padding: var(--s-6) var(--s-6) var(--s-5); display: grid; gap: var(--s-2); }
+/* 文字左緣與垂直位置跟首頁輪播的活動卡一致（左 3.5%、垂直置中；手機貼底） */
+.welcome { display: flex; flex-direction: column; justify-content: center; }
+.welcome__text { max-width: 460px; padding: var(--s-5) 3.5%; display: grid; gap: var(--s-2); }
 .welcome__title { margin: 0; font-size: 24px; font-weight: 800; line-height: 1.35; }
 .welcome__body { margin: 0; font-size: 15px; line-height: 1.6; color: #5c4650; }
 .welcome__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-top: var(--s-3); }
@@ -80,7 +82,7 @@ function close(source: "close" | "browse") {
 
 /* 手機：字縮一階、人物往右推，臉留在右邊三分之一 */
 @media (max-width: 640px) {
-  .welcome { min-height: 176px; }
+  .welcome { min-height: 176px; justify-content: flex-end; }
   .welcome__art { right: -150px; }
   .welcome::before { background: linear-gradient(90deg, var(--welcome-bg) 0%, var(--welcome-bg) 50%, color-mix(in srgb, var(--welcome-bg) 0%, transparent) 76%); }
   .welcome__text { max-width: 62%; padding: var(--s-4); gap: var(--s-1); }
