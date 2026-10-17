@@ -1,4 +1,4 @@
-import { SITE_NAME } from "../../shared/site-name";
+import { SITE_NAME, siteName } from "../../shared/site-name";
 import { buildPushPayload, type PushSubscription } from "@block65/webcrypto-web-push";
 import { HttpError, pickLocale, type Env, type Localized } from "../types";
 import { updateTitle } from "../updates";
@@ -38,7 +38,7 @@ type Copy = {
 };
 const copy: Record<PushLocale, Copy> = {
   "zh-Hant": {
-    title: "HearthRoom", reply: "{actor} 回覆了你在{card}的留言", replyPlain: "有人回覆你的留言",
+    title: siteName("zh-Hant"), reply: "{actor} 回覆了你在{card}的留言", replyPlain: "有人回覆你的留言",
     work: "{actor} 發佈或更新了{card}", workNew: "{actor} 發佈了{card}", workUpdate: "{actor} 更新了{card}", workPlain: "追蹤的作者有新作品或更新",
     approved: "{card}審核通過了", approvedUpdate: "{card}的更新審核通過了",
     rejected: "{card}這次沒有通過審核", rejectedNote: "{card}這次沒有通過審核，審核員說：{note}",
@@ -51,7 +51,7 @@ const copy: Record<PushLocale, Copy> = {
     share: { share_needs_info: "你的分享申請需要補充資料", share_approved: "你的分享申請通過了", share_rejected: "你的分享申請沒有通過", share_paid: "分享獎勵已入帳", share_queued: "分享獎勵排隊發放中" },
   },
   "zh-Hans": {
-    title: "HearthRoom", reply: "{actor} 回复了你在{card}的评论", replyPlain: "有人回复你的评论",
+    title: siteName("zh-Hans"), reply: "{actor} 回复了你在{card}的评论", replyPlain: "有人回复你的评论",
     work: "{actor} 发布或更新了{card}", workNew: "{actor} 发布了{card}", workUpdate: "{actor} 更新了{card}", workPlain: "关注的作者有新作品或更新",
     approved: "{card}审核通过了", approvedUpdate: "{card}的更新审核通过了",
     rejected: "{card}这次没有通过审核", rejectedNote: "{card}这次没有通过审核，审核员说：{note}",
