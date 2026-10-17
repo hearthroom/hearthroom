@@ -1,12 +1,13 @@
 /**
- * 首頁看板輪播：第一張是蘇綺（插槽），後面接推薦到首頁、進行中或即將開始的活動（進行中在前，最多三個）。
- * 沒有推薦的活動就只有蘇綺，沒有任何輪播的外框與控制；每 7 秒換一張，滑鼠停在上面暫停，系統要求減少動態就不自己換。
+ * 首頁看板輪播：推薦到首頁、進行中或即將開始的活動在前（照排序值，最多三個），蘇綺（插槽）固定最後。
+ * 沒有推薦的活動就只有蘇綺，沒有任何輪播的外框與控制；每 7 秒換一張，滑鼠停在上面暫停（剩下的時間保留），
+ * 手指碰過 10 秒後恢復，系統要求減少動態就不自己換。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp, nextTick, type App } from "vue";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { i18n } from "../src/lib/i18n";
-import { featuredCampaigns, type CampaignSummary } from "../src/lib/campaign";
+import { featuredCampaigns, formatShortPeriod, type CampaignSummary } from "../src/lib/campaign";
 import BoardCarousel from "../src/components/BoardCarousel.vue";
 import boardSource from "../src/pages/BoardPage.vue?raw";
 
@@ -30,6 +31,33 @@ describe("featuredCampaigns", () => {
     ];
     expect(featuredCampaigns(list).map((c) => c.slug)).toEqual(["now-early", "now-late", "sooner"]);
     expect(featuredCampaigns(list, 9).map((c) => c.slug)).toEqual(["now-early", "now-late", "sooner", "soon"]);
+  });
+
+  it("有排序值的照排序值排在前面（分享季 → 創作季），沒有的照原本規則排在後面", () => {
+    const list = [
+      item("plain-early", { startsAt: 0 }),
+      item("creator", { featuredRank: 2, startsAt: 3 * DAY }),
+      item("share", { featuredRank: 1, startsAt: 4 * DAY }),
+    ];
+    expect(featuredCampaigns(list).map((c) => c.slug)).toEqual(["share", "creator", "plain-early"]);
+  });
+});
+
+describe("formatShortPeriod", () => {
+  // 分享季：台北 10-17 00:00 到 11-17 00:00；創作季：10-17 00:00 到 11-01 00:00
+  const share = { startsAt: Date.UTC(2026, 9, 16, 16), endsAt: Date.UTC(2026, 10, 16, 16), timezone: "Asia/Taipei" };
+  const creator = { startsAt: Date.UTC(2026, 9, 16, 16), endsAt: Date.UTC(2026, 9, 31, 16), timezone: "Asia/Taipei" };
+  it("只到月日，結束日是最後一天，不帶年份、時間與時區名稱", () => {
+    const zh = formatShortPeriod(share, "zh-Hant");
+    expect(zh).toMatch(/10\/17/);
+    expect(zh).toMatch(/11\/16/);
+    expect(zh).not.toMatch(/2026|11\/17|:|台北/);
+    expect(formatShortPeriod(creator, "en")).toMatch(/10\/17.*10\/31/);
+    expect(formatShortPeriod(creator, "ja")).not.toMatch(/11/);
+  });
+  it("只有開始或只有結束：只顯示那一天", () => {
+    expect(formatShortPeriod({ ...creator, endsAt: null }, "zh-Hant")).toBe("10/17");
+    expect(formatShortPeriod({ ...creator, startsAt: null }, "zh-Hant")).toBe("10/31");
   });
 });
 
@@ -77,22 +105,32 @@ describe("首頁輪播", () => {
     expect($(".hero-x")).not.toBeNull();
   });
 
-  it("蘇綺在第一張，進行中的活動排在即將開始的前面；整張連到活動頁", async () => {
+  it("活動在前、蘇綺固定最後，進行中的活動排在即將開始的前面；整張連到活動頁", async () => {
     await mount();
     expect($("[role=region]")!.getAttribute("aria-roledescription")).toBe("carousel");
     expect(slides()).toHaveLength(3);
-    expect(slides()[0]!.querySelector(".hero-x")).not.toBeNull();
-    expect(slides().slice(1).map((s) => s.dataset.slide)).toEqual(["open-one", "upcoming-one"]);
+    expect(slides()[2]!.querySelector(".hero-x")).not.toBeNull();
+    expect(slides().slice(0, 2).map((s) => s.dataset.slide)).toEqual(["open-one", "upcoming-one"]);
     expect($<HTMLAnchorElement>('[data-slide="open-one"] a')!.getAttribute("href")).toBe("/campaign/open-one");
     expect($('[data-slide="open-one"]')!.textContent).toContain(i18n.global.t("campaign.carousel.cta"));
     expect($<HTMLImageElement>('[data-slide="upcoming-one"] img')!.getAttribute("src")).toBe("https://img.example/b.png");
   });
 
-  it("有活動時先停在第一個活動，蘇綺排在輪換裡（owner 2026-10-17：活動比歡迎卡重要）", async () => {
+  it("有活動時先停在第一個活動，蘇綺排在輪換的最後（owner 2026-10-17：活動比歡迎卡重要）", async () => {
     await mount();
-    expect(shown()).toBe(1);
-    expect(slides()[1]!.getAttribute("aria-hidden")).toBeNull();
-    expect(slides()[0]!.getAttribute("aria-hidden")).toBe("true");
+    expect(shown()).toBe(0);
+    expect(slides()[0]!.getAttribute("aria-hidden")).toBeNull();
+    expect(slides()[2]!.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("輪播上的期間只到月日（手機不截斷）；品牌名與活動名各自不換行", async () => {
+    list = [item("creator", { title: { ja: "SukiSuki 創作シーズン" }, startsAt: Date.UTC(2026, 9, 16, 16), endsAt: Date.UTC(2026, 9, 31, 16) })];
+    i18n.global.locale.value = "ja" as never;
+    await mount();
+    const slide = $('[data-slide="creator"]')!;
+    expect([...slide.querySelectorAll(".carousel__part")].map((e) => e.textContent)).toEqual(["SukiSuki", "創作シーズン"]);
+    expect(slide.querySelector(".carousel__title")!.textContent).toBe("SukiSuki 創作シーズン");
+    expect(slide.querySelector(".carousel__period")!.textContent).not.toMatch(/2026|:|台湾|11/);
   });
 
   it("沒在畫面上的張讀屏跳過、Tab 走不進去；圓點說第幾張", async () => {
@@ -135,7 +173,7 @@ describe("首頁輪播", () => {
     expect($(".carousel--on")).toBeNull();
   });
 
-  it("每 7 秒換一張；滑鼠停在上面時不換", async () => {
+  it("每 7 秒換一張；滑鼠停在上面時不換，移開後接著剩下的時間（不重新計 7 秒）", async () => {
     await mount();
     vi.useFakeTimers();
     dot(1).click(); await nextTick();
@@ -144,30 +182,49 @@ describe("首頁輪播", () => {
     expect(shown()).toBe(0);
     vi.advanceTimersByTime(1); await nextTick();
     expect(shown()).toBe(1);
+    vi.advanceTimersByTime(3000); await nextTick();
     $(".carousel")!.dispatchEvent(new MouseEvent("mouseenter")); await nextTick();
+    expect($(".carousel__dots--paused")).not.toBeNull();
     vi.advanceTimersByTime(20_000); await nextTick();
     expect(shown()).toBe(1);
     $(".carousel")!.dispatchEvent(new MouseEvent("mouseleave")); await nextTick();
-    vi.advanceTimersByTime(7000); await nextTick();
+    vi.advanceTimersByTime(3999); await nextTick();
+    expect(shown()).toBe(1);
+    vi.advanceTimersByTime(1); await nextTick();
     expect(shown()).toBe(2);
   });
 
-  it("系統要求減少動態：不自己換", async () => {
+  it("進度條：看過的填滿、現在這段在填、後面的空著", async () => {
+    await mount();
+    dot(1).click(); await nextTick();
+    const dots = [...host.querySelectorAll<HTMLElement>("[data-dot]")];
+    expect(dots.map((d) => (d.classList.contains("carousel__dot--seen") ? "seen" : d.classList.contains("carousel__dot--on") ? "on" : "-"))).toEqual(["seen", "on", "-"]);
+    expect($(".carousel__dots--auto")).not.toBeNull();
+  });
+
+  it("系統要求減少動態：不自己換，進度條不跑", async () => {
     vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("reduce"), media: q, addEventListener() {}, removeEventListener() {} }));
     await mount();
     vi.useFakeTimers();
     dot(1).click(); await nextTick();
     vi.advanceTimersByTime(30_000); await nextTick();
     expect(shown()).toBe(1);
+    expect($(".carousel__dots--auto")).toBeNull();
   });
 
-  it("手指碰過就不再自己換", async () => {
+  it("手指碰過先停，最後一次碰到之後 10 秒恢復自己換", async () => {
     await mount();
     vi.useFakeTimers();
     $(".carousel")!.dispatchEvent(new TouchEvent("touchstart", { touches: [] }));
     dot(1).click(); await nextTick();
-    vi.advanceTimersByTime(30_000); await nextTick();
+    vi.advanceTimersByTime(9999); await nextTick();
     expect(shown()).toBe(1);
+    $(".carousel")!.dispatchEvent(new TouchEvent("touchend", { changedTouches: [] }));
+    vi.advanceTimersByTime(9999); await nextTick();
+    expect(shown()).toBe(1);
+    vi.advanceTimersByTime(1); await nextTick();
+    vi.advanceTimersByTime(7000); await nextTick();
+    expect(shown()).toBe(2);
   });
 });
 
@@ -194,12 +251,13 @@ describe("blog post slide", () => {
     return new Response(JSON.stringify(body ?? {}), { status: body ? 200 : 404, headers: { "Content-Type": "application/json" } });
   }));
 
-  it("adds one slide for a fresh pinned post, after the campaigns, linking to the post", async () => {
+  it("adds one slide for a fresh pinned post, after the campaigns and before Suki, linking to the post", async () => {
     serve([post()]);
     await mount();
     const slide = $('[data-slide="post:hello"]')!;
     expect(slide).not.toBeNull();
-    expect(slides().at(-1)).toBe(slide);
+    expect(slides().at(-2)).toBe(slide);
+    expect(slides().at(-1)!.querySelector(".hero-x")).not.toBeNull();
     expect(slide.querySelector("a")!.getAttribute("href")).toBe("/blog/news/hello");
     expect(slide.textContent).toContain("公告");
     expect(slide.textContent).toContain("開站了");
