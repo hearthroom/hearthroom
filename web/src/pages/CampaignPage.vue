@@ -18,6 +18,7 @@ import { RouterLink, useRoute } from "vue-router";
 import CampaignApplyForm from "@/components/CampaignApplyForm.vue";
 import CampaignRewards from "@/components/CampaignRewards.vue";
 import CampaignShareLinks from "@/components/CampaignShareLinks.vue";
+import AmountText from "@/components/AmountText.vue";
 import CreatorSeason from "@/components/CreatorSeason.vue";
 import NotFoundPage from "@/pages/NotFoundPage.vue";
 import { ApiError } from "@/lib/api";
@@ -237,8 +238,8 @@ async function onDone(_result: ApplyResult) {
             </div>
             <h1 class="campaign__title" :class="{ 'campaign__title--long': [...title].length > 12 }"><template v-for="(part, k) in titleParts" :key="k"><template v-if="k">{{ " " }}</template><span :class="{ campaign__part: titleParts.length > 1 }">{{ part }}</span></template></h1>
             <template v-if="creator">
-              <p class="campaign__subtitle">{{ t("creator.subtitle", { credits: creatorCredits }) }}</p>
-              <p class="campaign__bubble campaign__lead"><span class="campaign__who">{{ t("mascot.name") }}</span>{{ t("creator.lead", { site, credits: creatorCredits }) }}</p>
+              <p class="campaign__subtitle"><AmountText :text="t('creator.subtitle', { credits: creatorCredits })" /></p>
+              <p class="campaign__bubble campaign__lead"><span class="campaign__who">{{ t("mascot.name") }}</span><AmountText :text="t('creator.lead', { site, credits: creatorCredits })" /></p>
             </template>
             <dl v-else-if="campaign" class="campaign__dates">
               <div v-if="period"><dt>{{ t("campaign.page.period") }}</dt><dd>{{ period }}</dd></div>
@@ -398,7 +399,7 @@ async function onDone(_result: ApplyResult) {
         <!-- 進行中的創作季：條款上方一行連結 -->
         <RouterLink v-if="creatorLink" class="campaign__link-row" data-creator-link :to="lp(`/campaign/${creatorLink.slug}`)">
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.75l1.9 4.6 4.85.4-3.7 3.15 1.15 4.85L10 13.2l-4.2 2.55 1.15-4.85-3.7-3.15 4.85-.4z" /></svg>
-          <span>{{ t("campaign.page.creatorLink", { credits: formatNumber(creatorLink.reward) }) }}</span>
+          <span><AmountText :text="t('campaign.page.creatorLink', { credits: formatNumber(creatorLink.reward) })" /></span>
           <svg class="campaign__link-go" viewBox="0 0 20 20" aria-hidden="true"><path d="M8 5.5l4.5 4.5L8 14.5" /></svg>
         </RouterLink>
 
@@ -460,7 +461,8 @@ async function onDone(_result: ApplyResult) {
 /* 創作季：期間一行，桌機手機都出（只到月日，帶時區說明） */
 .campaign__period { font-size: 13px; color: var(--text-2); }
 .campaign__subtitle { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.5; color: var(--text-2); word-break: auto-phrase; text-wrap: pretty; }
-.campaign__lead { justify-self: stretch; }
+.campaign__lead { justify-self: stretch; text-wrap: pretty; word-break: auto-phrase; }
+.campaign:lang(ko) .campaign__lead, .campaign:lang(ko) .campaign__subtitle { word-break: keep-all; }
 /* 沒有橫幅時頁頭本身就是淡強調色，氣泡改用面板底色才分得出來 */
 .campaign__head-body--bare .campaign__lead { background: var(--surface); }
 .campaign__link-row {
