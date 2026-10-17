@@ -67,7 +67,8 @@ async function payPage() {
     batchOp = null;
     // 已入帳的會從待發放消失，所以先留一行總結；沒發成的列還在，結果標在那一列
     const paid = res.items.filter((r) => "reward" in r && r.reward.status === "paid").length;
-    done.value = t("review.creator.done", { paid, failed: res.items.length - paid });
+    const queued = res.items.filter((r) => "reward" in r && r.reward.status !== "paid").length;
+    done.value = t("review.creator.done", { paid, queued, failed: res.items.length - paid - queued });
     for (const r of res.items) results.value[r.cardId] = "reward" in r ? (r.reward.status === "paid" ? t("campaign.payout.paid") : t(`review.creator.status.${r.reward.status}`)) : t("review.creator.failed", { error: errorLabel(r.error) });
   } catch (e) {
     due.error = campaignErrorText(e);

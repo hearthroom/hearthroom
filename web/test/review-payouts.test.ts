@@ -461,6 +461,6 @@ it("創作季待發放：列出該補發的卡，確認筆數與總積分後一�
   await vi.waitFor(() => expect(paths("/v1/moderation/card-rewards/batch", "POST")).toHaveLength(1));
   expect(calls.find((c) => c.path === "/v1/moderation/card-rewards/batch")!.body).toMatchObject({ cardIds: [101, 102], operationId: expect.any(String) });
   // 已入帳的會離開清單：先留一行總結；失敗的代碼轉成看得懂的話
-  await vi.waitFor(() => expect(host.querySelector("[data-batch-done]")!.textContent).toBe(i18n.global.t("review.creator.done", { paid: 1, failed: 1 })));
+  await vi.waitFor(() => expect(host.querySelector("[data-batch-done]")!.textContent).toBe(i18n.global.t("review.creator.done", { paid: 1, queued: 0, failed: 1 })));
   expect(host.querySelector('[data-due="102"]')!.textContent).toContain(i18n.global.t("review.creator.error.card_reward_self"));
 });

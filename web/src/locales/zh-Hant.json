@@ -2675,8 +2675,10 @@
   "review.creator.status.paid": "已入帳",
   "review.creator.status.failed": "發放失敗",
   "review.creator.status.cancelled": "已取消",
-  "review.creator.done": "已入帳 {paid} 筆，發放失敗 {failed} 筆",
+  "review.creator.done": "已入帳 {paid} 筆，未完成 {queued} 筆，發放失敗 {failed} 筆",
   "review.creator.error.card_reward_self": "不能發給自己，請另一位管理員發",
   "review.creator.error.card_reward_in_progress": "這張卡已經在發放中",
-  "review.creator.error.card_reward_not_due": "這張卡不需要發放"
+  "review.creator.error.card_reward_not_due": "這張卡不需要發放",
+  "review.creator.error.internal_error": "伺服器出錯，請稍後重試",
+  "review.creator.error.card_reward_operation_repeated": "同一個操作已經送過，重新整理後再試"
 }
