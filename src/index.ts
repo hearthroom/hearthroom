@@ -1933,6 +1933,11 @@ export default {
     if (!(await numericSchemaReady(env.DB))) return Response.json({error:'maintenance'}, {
       status:503, headers:{'Retry-After':'30','Cache-Control':'no-store'},
     });
+    // The maintenance controller opens its own fail-closed primary session.
+    // A generic request session has no withSession API and must not replace its binding.
+    if (new URL(request.url).pathname === "/internal/community/draft-transfer-gate") {
+      return app.fetch(request, env, ctx);
+    }
     const d1 = withD1Session(request, env);
     return d1.finish(await app.fetch(request, d1.env, ctx));
   },
