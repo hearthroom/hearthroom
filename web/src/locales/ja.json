@@ -797,6 +797,8 @@
   "play.entering": "会話に入っています…",
   "play.loadingSlow": "初回は少し時間がかかります…",
   "play.backToCard": "カードに戻る",
+  "play.backToReview": "審査ページに戻る",
+  "play.claimFirst": "このカードは今あなたが担当していないため、審査ページで担当し直すと続けて試せます。",
   "nav.resources": "マイリソース",
   "nav.settings": "ユーザー設定",
   "settings.title": "ユーザー設定",
