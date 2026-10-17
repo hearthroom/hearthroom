@@ -11,6 +11,7 @@ import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink } from "vue-router";
 import { campaignErrorText, fetchRewardProgress, formatNumber, type CardRewardCampaign, type RewardProgress, type RewardProgressItem } from "@/lib/campaign";
+import AmountText from "@/components/AmountText.vue";
 import { hueFrom } from "@/lib/format";
 import { daysUntilReset, remaining } from "@/lib/quota";
 import { useSession } from "@/lib/session";
@@ -127,7 +128,7 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
           </li>
           <li>
             <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="4.25" y="2.75" width="11.5" height="14.5" rx="2" /><path d="M7 6.25h6M7 10h1M10 10h1M13 10h0M7 13.25h1M10 13.25h1M13 13.25h0" /></svg>
-            <span>{{ t("creator.rules.calc", { limit: c.weeklyLimit, total }) }}</span>
+            <span><AmountText :text="t('creator.rules.calc', { limit: c.weeklyLimit, total })" /></span>
           </li>
         </ul>
 
@@ -219,7 +220,7 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
         <ol class="creator__steps">
           <li><span class="creator__no num">1</span><div><strong>{{ t("creator.how.step1") }}</strong><span class="creator__cap">{{ t("creator.how.step1Desc") }}</span></div></li>
           <li><span class="creator__no num">2</span><div><strong>{{ t("creator.how.step2") }}</strong><span class="creator__cap">{{ t("creator.how.step2Desc", { end, limit: c.weeklyLimit }) }}</span></div></li>
-          <li><span class="creator__no num">3</span><div><strong>{{ t("creator.how.step3") }}</strong><span class="creator__cap">{{ t("creator.how.step3Desc", { credits }) }}</span></div></li>
+          <li><span class="creator__no num">3</span><div><strong>{{ t("creator.how.step3") }}</strong><span class="creator__cap"><AmountText :text="t('creator.how.step3Desc', { credits })" /></span></div></li>
         </ol>
       </section>
 
@@ -256,6 +257,7 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
 .creator__cap { display: block; margin: 0; font-size: 13px; line-height: 1.55; color: var(--text-2); }
 /* 日文照詞組斷行、不留單獨一個字在最後一行 */
 .creator__card, .creator__notes { word-break: auto-phrase; text-wrap: pretty; }
+.creator:lang(ko) .creator__card, .creator:lang(ko) .creator__notes, .creator:lang(ko) .creator__bubble { word-break: keep-all; }
 .creator__row { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
 .creator__more { display: inline-flex; align-items: center; gap: 2px; min-height: 44px; font-size: 14px; font-weight: 600; color: var(--accent-text); }
 .creator__more svg { width: 16px; height: 16px; }
@@ -275,7 +277,9 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
 
 .creator__say { display: flex; align-items: flex-end; gap: var(--s-3); }
 .creator__say > img { flex: none; width: 80px; height: 111px; object-fit: contain; }
+/* 氣泡短：平均分行，不留一兩個字在最後一行；日文照詞組斷、韓文只在空格斷 */
 .creator__bubble {
+  text-wrap: balance; word-break: auto-phrase;
   margin: 0; padding: var(--s-2) var(--s-3); border-radius: var(--r-lg) var(--r-lg) var(--r-lg) 4px;
   background: color-mix(in srgb, var(--accent) 10%, var(--surface)); font-size: 14px; line-height: 1.55;
 }
