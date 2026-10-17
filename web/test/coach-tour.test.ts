@@ -190,6 +190,23 @@ describe("走一遍", () => {
     expect(title()).toBeNull();
   });
 
+  it("捲動時框下一格畫面就跟上，用 transform 移動（不等輪詢、不重畫整片遮罩）", async () => {
+    let top = 300;
+    const spy = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      return this.matches('[data-tour="starter"]') ? new DOMRect(40, top, 200, 100) : new DOMRect(0, 0, 0, 0);
+    });
+    try {
+      await mount();
+      const hole = document.querySelector<HTMLElement>(".coach__hole")!;
+      expect(hole.style.transform).toBe("translate(32px, 292px)");
+      top = 120;
+      window.dispatchEvent(new Event("scroll"));
+      await wait(40); await nextTick();
+      expect(hole.style.transform).toBe("translate(32px, 112px)");
+      expect(hole.style.top).toBe("");
+    } finally { spy.mockRestore(); }
+  });
+
   it("這個語言沒設入門卡、或是老成員：不出現", async () => {
     starters.zh.general = null;
     await mount();

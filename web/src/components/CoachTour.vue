@@ -175,14 +175,24 @@ function measure() {
   }
   rect.value = el.getBoundingClientRect();
 }
-onMounted(() => { measure(); timer = setInterval(measure, 200); });
-onBeforeUnmount(() => clearInterval(timer));
+// 輪詢接頁面內容的變化；捲動要當格跟上（瀏覽器每格畫面最多送一次 scroll），只靠輪詢框會一跳一跳地追，整片遮罩跟著閃
+onMounted(() => {
+  measure(); timer = setInterval(measure, 200);
+  addEventListener("scroll", measure, { capture: true, passive: true });
+  addEventListener("resize", measure);
+});
+onBeforeUnmount(() => {
+  clearInterval(timer);
+  removeEventListener("scroll", measure, { capture: true });
+  removeEventListener("resize", measure);
+});
 
 const visible = computed(() => !!tourState.step && page.value === PAGE_OF[tourState.step] && !dialogOpen.value
   && (TARGET_OF[tourState.step] === null || !!rect.value));
 const PAD = 8;
+/** 用 transform 移動：只動合成層，不必每格重畫那片 9999px 的遮罩陰影 */
 const hole = computed(() => rect.value && {
-  top: `${rect.value.top - PAD}px`, left: `${rect.value.left - PAD}px`,
+  transform: `translate(${rect.value.left - PAD}px, ${rect.value.top - PAD}px)`,
   width: `${rect.value.width + PAD * 2}px`, height: `${rect.value.height + PAD * 2}px`,
 });
 /** 框在上半部就把說明放在框的下面，反之放上面；框不到（同層卡）就放在頁首底下，不蓋住卡自己底部的按鈕。 */
@@ -219,9 +229,9 @@ const withMascot = computed(() => page.value === "home" || page.value === "card"
 /* 層級：在舞台（最高 100）之上，在年齡聲明與確認框之下（那兩個開著時引導先收起來） */
 .coach { position: fixed; inset: 0; z-index: 101; pointer-events: none; }
 .coach__hole {
-  position: fixed; border-radius: var(--r-md);
+  position: fixed; top: 0; left: 0; border-radius: var(--r-md);
   box-shadow: 0 0 0 9999px rgba(16, 16, 24, 0.55), 0 0 0 3px var(--accent);
-  transition: top var(--dur) var(--ease), left var(--dur) var(--ease), width var(--dur) var(--ease), height var(--dur) var(--ease);
+  will-change: transform;
 }
 .coach__bubble {
   position: fixed; left: 50%; transform: translateX(-50%);
