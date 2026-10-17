@@ -272,7 +272,7 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
 .creator__actions { display: grid; gap: var(--s-2); margin-top: var(--s-1); }
 .creator__actions .btn { justify-content: center; min-height: 44px; }
 .creator__full { margin: 0; font-size: 13px; line-height: 1.55; color: var(--text-2); text-align: center; }
-.creator__line { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--text-2); }
+.creator__line { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--text-2); text-wrap: balance; }
 .creator__list { list-style: none; margin: var(--s-1) 0 0; padding: var(--s-3) 0 0; border-top: 1px solid var(--line); display: grid; gap: 6px; }
 .creator__list li { display: flex; align-items: flex-start; gap: var(--s-2); font-size: 13px; line-height: 1.6; }
 .creator__list svg { margin-top: 1px; color: var(--accent-text); }
@@ -333,7 +333,7 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
 .creator__how .creator__steps { grid-area: steps; }
 .creator__steps { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-4); grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .creator__steps > li { display: flex; align-items: flex-start; gap: var(--s-3); min-width: 0; }
-.creator__steps strong { display: block; font-size: 15px; line-height: 1.45; }
+.creator__steps strong { display: block; font-size: 15px; line-height: 1.45; text-wrap: balance; }
 .creator__no {
   flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--r-pill);
   background: var(--accent-soft); color: var(--accent-text); font-size: 13px; font-weight: 700;
