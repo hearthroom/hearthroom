@@ -77,6 +77,9 @@ import { commentModerationRoutes } from "./comment-moderation-routes";
 import { blogRoutes } from "./blog-routes";
 import { sitemapXml } from "./sitemap";
 import { campaignRoutes } from "./campaign-routes";
+import { cardRewardRoutes, payerOf as rewardPayerOf } from "./card-reward-routes";
+import { autoReward } from "./card-reward";
+import { communityAdmin } from "./staff";
 import { campaignMaintenance } from "./campaign-evidence";
 import { readSettings } from "./community-settings";
 import { clearScore, readScore, setScore } from "./card-scores";
@@ -882,6 +885,7 @@ app.post("/v1/blog/posts/:postId/comments", async (c) => {
 
 app.route("/", communityRoutes);
 app.route("/", campaignRoutes);
+app.route("/", cardRewardRoutes);
 app.route("/", blogRoutes);
 app.get("/sitemap.xml", async (c) =>
   c.body(await sitemapXml(c.env.DB, Date.now()), 200, { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" }));
@@ -1293,12 +1297,17 @@ app.post("/v1/review/:id/stamp", async (c) => {
   if(typeof body.generation!=='string'||!body.generation)throw new HttpError(409,'claim changed');
   const result = await stampSubmission(c.env.DB, { submissionId: c.req.param("id"), memberId: member.id, verdict, note: noteText, now: Date.now(), generation:body.generation });
   note(c, { event: "review_stamp", subject: result.submission.source_role_id, detail: verdict === "reject" ? "reject" : result.cardStatus === "approved" ? "approved" : "approve" });
+  // 創作季：真人應用管理員審過就當場發（見 card-reward.ts）；不在活動裡的卡、已經發過的卡不動，沒發成的留在待發放清單。
+  // 審核人一律是真人（requireReviewer 擋掉 AI 帳號），還要 Provider 說是應用管理員，點數池才收他的令牌。
+  const paid = result.submission.status === "approved" && (await communityAdmin(c))
+    ? await autoReward(rewardPayerOf(c, member.id), Number(result.submission.card_id), crypto.randomUUID()) : { reward: null };
   queuePush(c);
   return c.json({
     id: result.submission.id,
     status: result.submission.status,
     cardStatus: result.cardStatus,
     stamps: { approve: result.approvals, required: result.required },
+    ...paid,
   });
 });
 

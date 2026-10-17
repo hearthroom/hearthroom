@@ -44,8 +44,8 @@ CREATE INDEX card_rewards_campaign ON card_rewards(campaign_id, status);
 
 -- 第一期（owner 2026-10-17）：台北 10-17 00:00 到 11-01 00:00，每週 6 張，每張 10000。期間內送審的卡不管何時過審都給，不設發獎截止。
 INSERT INTO card_reward_campaigns (id, slug, title, starts_at, ends_at, payout_deadline, weekly_limit, reward, status, created_at, updated_at)
-VALUES ('creation-season-1', 'creation-season-1',
- '{"zh-Hant":"創作季","zh-Hans":"创作季","en":"Creation Season","ja":"創作シーズン","ko":"창작 시즌"}',
+VALUES ('creator-season-1', 'creator-season',
+ '{"zh-Hant":"綺夢社創作季","zh-Hans":"绮梦社创作季","en":"Hearthroom Creator Season","ja":"Hearthroom 創作シーズン","ko":"Hearthroom 창작 시즌"}',
  1792166400000, 1793462400000, NULL, 6, 10000, 'active', 1792166400000, 1792166400000);
 
 -- 週額度改讀活動設定：登記那一刻落在某個活動期間就用它的 weekly_limit，否則 3（同 quota.ts 的 weeklyLimitAt）。
