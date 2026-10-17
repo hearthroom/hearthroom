@@ -319,6 +319,8 @@ const clicked = (slug: string) => track("cta", { detail: "carousel", subject: sl
   /* 文字區從左 16 到卡寬 55%、一律貼底 16：每張的字在同一個位置，右邊留給橫幅的安全框 */
   .carousel__body { width: 55%; max-width: none; box-sizing: border-box; padding: var(--s-4); padding-right: 0; gap: var(--s-1); }
   .carousel__mark { display: none; }
+  /* 手機卡比較窄：橫幅取偏右的位置，蘇綺留在畫面裡 */
+  .carousel__img { object-position: 70% 50%; }
   .carousel__card--banner::before { background: linear-gradient(90deg, rgba(14, 10, 18, 0.82) 0%, rgba(14, 10, 18, 0.55) 40%, rgba(14, 10, 18, 0) 66%); }
   .carousel__card { justify-content: flex-end; }
   .carousel__card:not(.carousel__card--banner)::before { right: -110px; width: 260px; border-width: 28px; }
