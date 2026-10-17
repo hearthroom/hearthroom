@@ -132,6 +132,30 @@ describe("審核通過就發", () => {
   });
 });
 
+describe("發放出錯不推翻過審", () => {
+  it("寫發放紀錄時資料庫出錯：蓋章照樣成功，回 rewardError，卡留在待發放", async () => {
+    await submit("r1");
+    await env.DB.prepare("ALTER TABLE card_rewards RENAME TO card_rewards_gone").run();
+    try {
+      const stamped = await approve("r1", "admin-token");
+      expect(stamped).toMatchObject({ status: "approved", reward: null, rewardError: "internal_error" });
+    } finally {
+      await env.DB.prepare("ALTER TABLE card_rewards_gone RENAME TO card_rewards").run();
+    }
+    expect(((await (await get("/v1/moderation/card-rewards/due", "admin-token")).json()) as any).total).toBe(1);
+  });
+});
+
+describe("被下架的卡不發", () => {
+  it("站方封鎖公開的卡不在待發放，也不能發", async () => {
+    await submit("r1");
+    await approve("r1", "mod-token");
+    await env.DB.prepare("UPDATE cards SET public_blocked = 1 WHERE source_role_id = 'r1'").run();
+    expect(((await (await get("/v1/moderation/card-rewards/due", "admin-token")).json()) as any).total).toBe(0);
+    expect((await post(`/v1/moderation/card-rewards/cards/${await cardIdOf("r1")}/pay`, "admin-token", { operationId: op() })).status).toBe(409);
+  });
+});
+
 describe("同一張卡只給一次", () => {
   it("已經發過的卡再要求發放 409；下架重發、再審過也不再發", async () => {
     await submit("r1");
