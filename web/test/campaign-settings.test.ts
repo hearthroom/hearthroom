@@ -246,8 +246,8 @@ it('shows the platform settings read-only, or says the platform has not opened r
   await vi.waitFor(() => expect(host.querySelector('[data-pool]')).not.toBeNull());
   const shown = $('[data-pool]').textContent!;
   expect(shown).toContain(t('campaign.pool.usage.agent_only'));
-  // 點數池只是額度：不顯示有效期
-  expect(shown).not.toContain(t('campaign.pool.validity'));
+  // 點數池只是額度：只列餘額、開關、用途、單筆上限四項，沒有有效期
+  expect($('[data-pool]').querySelectorAll('dt')).toHaveLength(4);
   expect(shown).toContain('5,000');
   expect(shown).toContain('120,000');
   app.unmount(); document.body.innerHTML = '';
