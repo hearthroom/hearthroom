@@ -34,7 +34,7 @@ async function campaign(over: { startsAt?: number; endsAt?: number; reward?: num
   const now = Date.now();
   await env.DB.prepare(
     `INSERT INTO card_reward_campaigns (id, slug, title, starts_at, ends_at, payout_deadline, weekly_limit, reward, status, created_at, updated_at)
-     VALUES (?, 'creator-season', '{"zh-Hant":"綺夢社創作季"}', ?, ?, NULL, 6, ?, 'active', 0, 0)`,
+     VALUES (?, 'creator-season', '{"zh-Hant":"綺夢創作季"}', ?, ?, NULL, 6, ?, 'active', 0, 0)`,
   ).bind(campaignId, over.startsAt ?? now - DAY, over.endsAt ?? now + DAY, over.reward ?? 10000).run();
 }
 

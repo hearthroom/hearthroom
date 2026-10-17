@@ -21,7 +21,7 @@ const START = Date.UTC(2026, 9, 16, 16), END = Date.UTC(2026, 9, 31, 16);
 const NOW = Date.UTC(2026, 9, 27, 4); // 台北 10-27 中午：還有 4 天多
 
 const creator = (extra: Record<string, unknown> = {}) => ({
-  kind: "card_reward", slug: "creator-season", title: { "zh-Hant": "綺夢社創作季" }, phase: "open", startsAt: START, endsAt: END, timezone: "Asia/Taipei",
+  kind: "card_reward", slug: "creator-season", title: { "zh-Hant": "綺夢創作季" }, phase: "open", startsAt: START, endsAt: END, timezone: "Asia/Taipei",
   bannerUrl: null, featured: true, featuredRank: 2, payoutDeadline: null, reward: 10000, weeklyLimit: 6, normalWeeklyLimit: 3, ...extra,
 });
 const share = () => ({
@@ -78,7 +78,7 @@ const links = () => [...host.querySelectorAll<HTMLAnchorElement>("[data-cta] a")
 describe("頁頭與規則卡", () => {
   it("訪客：副標、蘇綺的導言帶站名、還有幾天、期間的結束日是最後一天；大數字讀活動設定；請他登入後回到這頁", async () => {
     await mount(CampaignPage);
-    expect(text("h1")).toBe("綺夢社創作季");
+    expect(text("h1")).toBe("綺夢創作季");
     expect(text("[data-phase]")).toBe(t("creator.status.open", { days: 5 }));
     expect(text("[data-period]")).toBe("10月17日 – 10月31日（台北時間）");
     expect(host.textContent).toContain(t("creator.subtitle", { credits: "10,000" }));

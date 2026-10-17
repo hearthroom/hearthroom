@@ -2658,7 +2658,7 @@
   "creator.entry.details": "活動說明",
   "mine.campaign.publishReward": "{end}前送審的卡，通過後每張送你 {credits} 積分，每週額度也提高到 {limit} 張。",
   "editor.publish.reward": "{end}前送審的本人作品，過審就送你 {credits} 積分。",
-  "campaign.page.creatorLink": "綺夢社創作季同步進行：每張過審的作品送你 {credits} 積分",
+  "campaign.page.creatorLink": "綺夢創作季同步進行：每張過審的作品送你 {credits} 積分",
   "review.creator.title": "創作季待發放",
   "review.creator.lead": "已經過審、還沒入帳的卡：上線前就過審的，和過審時發放失敗的。",
   "review.creator.payPage": "發放這一頁（{n} 筆）",
