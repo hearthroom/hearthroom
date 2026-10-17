@@ -38,6 +38,20 @@ beforeEach(async () => {
 });
 afterEach(restoreUpstream);
 
+describe("遷移 0071：中文活動名去掉「社」", () => {
+  it("只改還是原名的第一期，外語名與其他欄位不動", async () => {
+    await env.DB.prepare(
+      `INSERT INTO card_reward_campaigns (id, slug, title, starts_at, ends_at, payout_deadline, weekly_limit, reward, status, created_at, updated_at)
+       VALUES ('creator-season-1', 'creator-season', '{"zh-Hant":"綺夢社創作季","zh-Hans":"绮梦社创作季","en":"SukiSuki Creator Season"}', 1, 2, NULL, 6, 10000, 'active', 0, 0)`,
+    ).run();
+    const m = (env.TEST_MIGRATIONS as { name: string; queries: string[] }[]).find((x) => x.name.startsWith("0071_"))!;
+    for (const q of m.queries) await env.DB.prepare(q).run();
+    const row = (await env.DB.prepare("SELECT title, reward FROM card_reward_campaigns WHERE id = 'creator-season-1'").first<{ title: string; reward: number }>())!;
+    expect(JSON.parse(row.title)).toEqual({ "zh-Hant": "綺夢創作季", "zh-Hans": "绮梦创作季", en: "SukiSuki Creator Season" });
+    expect(row.reward).toBe(10000);
+  });
+});
+
 describe("台北時間換算", () => {
   it("第一期的起訖在台北是 10-17 00:00 與 11-01 00:00", () => {
     const fmt = (t: number) => new Date(t).toLocaleString("sv-SE", { timeZone: "Asia/Taipei" });
