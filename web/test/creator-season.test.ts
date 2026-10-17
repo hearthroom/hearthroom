@@ -84,7 +84,7 @@ describe("頁頭與規則卡", () => {
     expect(host.textContent).toContain(t("creator.subtitle", { credits: "10,000" }));
     expect(host.textContent).toContain("綺夢社才剛開張");
     // 金額和單位包成不換行的一段（「10,000 積／分」不會出現）
-    expect(norm($(".campaign__lead .amount")!.textContent!)).toBe("10,000 積分");
+    expect(norm($("[data-lead] .amount")!.textContent!)).toBe("10,000 積分");
     expect(norm($(".campaign__subtitle .amount")!.textContent!)).toBe("10,000 積分");
     expect(text(".creator__big")).toBe("10,000 積分");
     expect(text("[data-rules]")).toContain("每週能送審 6 張（平常 3 張）");
