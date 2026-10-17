@@ -100,7 +100,7 @@ describe("創作季（發卡獎勵活動）的分享資訊", () => {
     expect(status).toBe(200);
     expect(text).toContain('<meta property="og:title" content="綺夢社創作季 · 綺夢社">');
     expect(text).toContain('<meta property="og:description" content="每張通過審核的卡，送你 10,000 積分">');
-    expect(text).toContain(`<meta property="og:image" content="https://${PRIMARY_HOST}/og/default-zh-Hant.jpg?v=2">`);
+    expect(text).toContain(`<meta property="og:image" content="https://${PRIMARY_HOST}/og/default-zh-Hant.jpg?v=3">`);
     expect(text).not.toContain('name="robots"');
     const en = await get("/en/campaign/creator-season");
     expect(en.text).toContain('<meta property="og:description" content="10,000 credits for every card that passes review">');
