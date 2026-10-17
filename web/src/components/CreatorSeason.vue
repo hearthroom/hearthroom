@@ -238,7 +238,7 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
         <ul>
           <li>{{ t("creator.notes.1") }}</li>
           <li>{{ t("creator.notes.2") }}</li>
-          <li>{{ t("creator.notes.3", { end }) }}</li>
+          <li>{{ t("creator.notes.3", { start, end }) }}</li>
           <li>{{ t("creator.notes.4") }}</li>
           <li>{{ t("creator.notes.5") }}</li>
         </ul>
