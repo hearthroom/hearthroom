@@ -1,13 +1,18 @@
 # Official domain integration
 
-Hearthroom serves `hearthroom.club`, `sukisuki.ai` and `sukisuki.chat` directly.
+Hearthroom serves `hearthroom.club`, `sukisuki.ai`, `sukisuki.chat` and `sukisuki.pro` directly.
 The new domains keep their own origin and browser session. Search canonical URLs
 continue to use `hearthroom.club`. The hostname contract is `shared/site-hosts.ts`.
 
 For each root:
 
-- Root and `www` are Hearthroom custom domains; `www` redirects to its own root.
-- A proxied wildcard `AAAA 100::` and `*.<root>/*` Worker route serve isolated
+- `hearthroom.club` and `sukisuki.ai` root and `www` use Custom Domains.
+  `sukisuki.chat` and `sukisuki.pro` instead use root and wildcard Worker Routes,
+  with DNS-only CNAMEs for root, `www` and `*` pointing to `cf-cname.xingpingcn.top`.
+  This preferred-ingress setup is experimental: official Routes documentation
+  requires proxied DNS. Do not replace these CNAMEs with managed Custom Domains
+  during deployment. Every `www` redirects to its own root.
+- The wildcard DNS record and `*.<root>/*` Worker route serve isolated
   `c<roleId>.<root>` sandboxes and `play.<root>` installed card apps.
 - `playground.<root>` is a Moonstage custom domain with a more specific zone
   route. It must take precedence over Hearthroom's wildcard route.
@@ -16,6 +21,20 @@ For each root:
 - Provider OAuth registers the callback from the actual browser origin.
   Discord keeps its registered canonical callback and binds the return origin
   into the server-stored state digest before returning the one-time receipt.
+
+`AUTH_ALLOWED_ORIGINS` remains the existing encrypted allowlist.
+`AUTH_ADDITIONAL_ORIGINS` adds only `https://sukisuki.pro`,
+`https://www.sukisuki.pro` and `https://play.sukisuki.pro`; exact matching,
+same-origin CSRF checks and private/no-store responses remain in force. Add the
+three corresponding `/auth/callback` URLs to the existing Harbor OAuth client;
+do not create a replacement client or move existing grants.
+
+Keep `cli.<root>/*` on hearthroom-cli-site, `playground.<root>/*` on
+moonstage-playground, and `downloads.<root>/*` without a Worker (R2). The new
+`.pro` zone needs these precise exceptions before exposing those hostnames.
+Quick preferred-ingress rollback: change root, www and wildcard to proxied
+AAAA 100:: while retaining the root and wildcard Routes. No database migration
+or Worker code rollback is needed for a DNS-only rollback.
 
 `harperharbor-assets-cors.json` is the R2 CORS contract for the HarperHarbor
 media bucket. Apply through the Cloudflare API using existing operator credentials;
