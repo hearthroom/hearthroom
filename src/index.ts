@@ -59,7 +59,7 @@ import { bearerOf, blogWriterHint } from "./community-admin";
 import { providerOf, requestIdentity, reviewerRole, isHumanReviewer, isReviewAgent, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
 import { configuredProviders, hasChat, parseProvider, requireConfigured, DEFAULT_PROVIDER, PROVIDER_NAMES, type ProviderId, reviewEnabled } from "./providers";
 import { providerApiBaseFor } from "./providers";
-import { WEEKLY_LIMIT, registeredThisWeek, openPack } from "./quota";
+import { weeklyLimitAt, registeredThisWeek, openPack } from "./quota";
 import {
   CLAIM_TTL_MS, STAMPS_REQUIRED, claim as claimSubmission, getSubmission, hasStamped, listQueue,
   release as releaseSubmission, stamp as stampSubmission,
@@ -1172,7 +1172,7 @@ app.post("/v1/cards", async (c) => {
   let packId: string | null = null;
   if (!existing) {
     const thisWeek = await registeredThisWeek(c.env.DB, me.accountNumId, now, provider);
-    if (!thisWeek.has(`${provider}:${roleId}`) && thisWeek.size >= WEEKLY_LIMIT) {
+    if (!thisWeek.has(`${provider}:${roleId}`) && thisWeek.size >= (await weeklyLimitAt(c.env.DB, now))) {
       packId = await openPack(c.env.DB, memberId);
       if (!packId) {
         note(c, { event: "register", subject: roleId, detail: "quota" });
