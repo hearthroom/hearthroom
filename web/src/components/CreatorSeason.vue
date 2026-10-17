@@ -135,9 +135,9 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
           </li>
         </ul>
 
-        <!-- 活動結束後蘇綺在主按鈕下說過話了，導言不再出現；空狀態時進度卡已有她 -->
-        <div v-if="!empty && c.phase !== 'ended'" class="creator__say">
-          <img src="/mascot/campaign/pose-got-points.webp" alt="" width="80" height="111" loading="lazy" decoding="async" />
+        <!-- 活動結束後蘇綺在主按鈕下說過話了，導言不再出現。空狀態時進度卡已有她的姿勢，這裡只收姿勢、導言留著 -->
+        <div v-if="c.phase !== 'ended'" class="creator__say">
+          <img v-if="!empty" src="/mascot/campaign/pose-got-points.webp" alt="" width="80" height="111" loading="lazy" decoding="async" />
           <p class="creator__bubble" data-lead><span class="creator__who">{{ t("mascot.name") }}</span><AmountText :text="t('creator.lead', { site, credits })" /></p>
         </div>
       </section>
@@ -220,7 +220,8 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
         <h2 id="creator-how-h" class="creator__h2">{{ t("creator.how.title") }}</h2>
         <div class="creator__say creator__how-say">
           <img src="/mascot/home/pose-write-2.webp" alt="" width="80" height="111" loading="lazy" decoding="async" />
-          <p class="creator__bubble"><span class="creator__who">{{ t("mascot.name") }}</span>{{ t("creator.say.how") }}</p>
+          <!-- 還沒開始時規則卡下已經有蘇綺說「先寫起來」，這裡不再說「積分馬上進錢包」 -->
+          <p v-if="c.phase !== 'upcoming'" class="creator__bubble"><span class="creator__who">{{ t("mascot.name") }}</span>{{ t("creator.say.how") }}</p>
         </div>
         <ol class="creator__steps">
           <li><span class="creator__no num">1</span><div><strong>{{ t("creator.how.step1") }}</strong><span class="creator__cap">{{ t("creator.how.step1Desc") }}</span></div></li>
