@@ -158,7 +158,8 @@ async function load() {
     void loadOriginality();
     document.title = pageTitle(`${t("review.detail.title")} · ${data.value.detail.document.roleName}`);
   } catch (err) {
-    needsClaim.value=err instanceof ApiError && err.status===409 && err.message==="claim this submission first";
+    // 伺服器原文在 code；message 是給人看的「請求失敗」
+    needsClaim.value=err instanceof ApiError && err.status===409 && err.code==="claim this submission first";
     error.value = needsClaim.value ? t("review.claimFirst") : err instanceof ApiError && err.status===410 ? t("review.inactive") : err instanceof Error ? err.message : t("state.loadFailed");
   } finally {
     loading.value = false;

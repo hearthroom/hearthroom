@@ -40,7 +40,9 @@ vi.mock("../src/lib/api", () => ({
   fetchCardSaves: vi.fn(async () => ({})),
   putCardSave: vi.fn(async () => {}),
   deleteCardSave: vi.fn(async () => {}),
+  fetchReviewDetail: vi.fn(),
 }));
+import { fetchReviewDetail } from "../src/lib/api";
 
 let app: App | null = null;
 let router: Router;
@@ -50,7 +52,7 @@ const flush = async () => {
   await nextTick();
 };
 
-async function mount(path: string) {
+async function mount(path: string, stage = true) {
   const pinia = createPinia();
   setActivePinia(pinia);
   const session = useSession();
@@ -72,7 +74,7 @@ async function mount(path: string) {
   app = createApp({ template: "<RouterView />" }).use(pinia).use(i18n).use(router);
   app.mount(root);
   // 套件是動態載入的（三個 import 串起來），冷的 CI 主機上固定等幾個 tick 不夠，等到畫布真的掛上為止
-  await waitForStage();
+  if (stage) await waitForStage();
   await flush();
 }
 
@@ -93,6 +95,23 @@ afterEach(() => {
 });
 
 describe("/play/:roleId", () => {
+  it("審核試玩沒領著（或領取過了時效）：說要回審核頁重新領取，按鈕帶回審核頁，不說「稍後再試」", async () => {
+    // 跟 lib/api 的 ApiError 一樣：伺服器原文在 code，message 已經是在地化的「請求失敗」
+    vi.mocked(fetchReviewDetail).mockRejectedValueOnce(Object.assign(new Error(i18n.global.t("state.requestFailed")), { status: 409, code: "claim this submission first" }));
+    await mount("/play/100221?review=s-1", false);
+    await vi.waitFor(() => expect(root.textContent).toContain(i18n.global.t("play.claimFirst")));
+    expect(root.textContent).not.toContain(i18n.global.t("play.loadFailed"));
+    const back = [...root.querySelectorAll("a")].find((a) => a.textContent?.trim() === i18n.global.t("play.backToReview"));
+    expect(back?.getAttribute("href")).toBe("/review/s-1");
+  });
+
+  it("審核這輪已結束：講結束了，一樣帶回審核頁", async () => {
+    vi.mocked(fetchReviewDetail).mockRejectedValueOnce(Object.assign(new Error(i18n.global.t("state.requestFailed")), { status: 410, code: "review no longer active" }));
+    await mount("/play/100221?review=s-2", false);
+    await vi.waitFor(() => expect(root.textContent).toContain(i18n.global.t("review.inactive")));
+    expect([...root.querySelectorAll("a")].some((a) => a.getAttribute("href") === "/review/s-2")).toBe(true);
+  });
+
   it("動態載入套件、以本站的 token 與 API 位址安裝，畫布拿到路由上的 roleId", async () => {
     await mount("/play/role-9");
     expect(installMoonStage).toHaveBeenCalledTimes(1);
