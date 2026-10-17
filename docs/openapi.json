@@ -22043,6 +22043,13 @@
       },
       "CampaignPayoutRequest": {
         "type": "object",
+        "example": {
+          "key": "creator-season-1-card-100001",
+          "accountNo": 10001,
+          "amount": 10000,
+          "campaignRef": "creator-season-1",
+          "contentRef": "card-123"
+        },
         "required": [
           "key",
           "accountNo",
