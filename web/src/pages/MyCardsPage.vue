@@ -195,7 +195,7 @@ watch(()=>route.query.fresh, fresh=>{
           </template>
         </p>
         <!-- 創作季進行中：額度下方一行，整行可點到活動頁 -->
-        <CreatorSeasonEntry where="mine" />
+        <CreatorSeasonEntry where="mine" class="head__entry" />
       </div>
       <div v-if="can('editor')" class="head__actions">
         <AgentOnboard from="mine" class="head__agent" />
@@ -337,6 +337,9 @@ watch(()=>route.query.fresh, fresh=>{
   .quota { grid-area: quota; margin-top: calc(-1 * var(--s-1)); }
   .head__create { grid-area: create; }
   .head__agent { grid-area: agent; display: flex; margin-top: var(--s-1); }
+  /* 創作季進行中：額度下面多一列，整列寬（沒有這一行時不留空列） */
+  .head:has(.head__entry) { grid-template-areas: "title create" "quota quota" "entry entry" "agent agent"; }
+  .head__entry { grid-area: entry; margin-top: calc(-1 * var(--s-1)); }
   .head__agent :deep(.onboard__pill) { flex: 1; justify-content: center; }
   .tools__search { flex: 1 1 100%; }
   .tools__seg { flex: 1 1 100%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }

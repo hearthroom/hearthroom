@@ -49,6 +49,12 @@ const failed = ref(false);
 const loading = ref(true);
 
 const title = computed(() => (head.value ? localized(head.value.title, locale.value) || head.value.slug : ""));
+/** 活動名兩行時在品牌名後的空格斷（「SukiSuki／創作シーズン」），兩段都夠短才這樣分（同首頁輪播） */
+const titleParts = computed(() => {
+  const at = title.value.indexOf(" ");
+  const parts = at > 0 ? [title.value.slice(0, at), title.value.slice(at + 1)] : [title.value];
+  return parts.length > 1 && parts.every((p) => [...p].length <= 16) ? parts : [title.value];
+});
 const intro = computed(() => renderDoc(campaign.value ? localized(campaign.value.intro, locale.value) : "").html);
 const signedIn = computed(() => !!session.me);
 const loginTo = computed(() => lp(loginPath(route.fullPath)));
@@ -62,7 +68,8 @@ const mdhm = (ms: number) => fmt({ month: "numeric", day: "numeric", hour: "2-di
 const shortPeriod = computed(() => {
   const c = head.value;
   if (!c || c.startsAt === null || c.endsAt === null) return "";
-  return `${md(c.startsAt)} – ${md(c.endsAt)}`;
+  // 結束日是最後一天（結束時刻前 1 毫秒），跟首頁輪播一致
+  return `${md(c.startsAt)} – ${md(c.endsAt - 1)}`;
 });
 /** 桌機頁頭的三格：期間完整、兩個截止 */
 const period = computed(() => (campaign.value ? formatPeriod(campaign.value, locale.value) : ""));
@@ -228,7 +235,7 @@ async function onDone(_result: ApplyResult) {
               <span v-if="creator" class="campaign__period num" data-period>{{ creatorPeriod }}</span>
               <span v-else-if="shortPeriod" class="campaign__short num">{{ shortPeriod }}</span>
             </div>
-            <h1 class="campaign__title" :class="{ 'campaign__title--long': [...title].length > 12 }">{{ title }}</h1>
+            <h1 class="campaign__title" :class="{ 'campaign__title--long': [...title].length > 12 }"><template v-for="(part, k) in titleParts" :key="k"><template v-if="k">{{ " " }}</template><span :class="{ campaign__part: titleParts.length > 1 }">{{ part }}</span></template></h1>
             <template v-if="creator">
               <p class="campaign__subtitle">{{ t("creator.subtitle", { credits: creatorCredits }) }}</p>
               <p class="campaign__bubble campaign__lead"><span class="campaign__who">{{ t("mascot.name") }}</span>{{ t("creator.lead", { site, credits: creatorCredits }) }}</p>
@@ -423,6 +430,8 @@ async function onDone(_result: ApplyResult) {
   display: grid; gap: var(--s-6); align-items: start;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
   grid-template-areas: "head side" "body side";
+  /* 右欄比頁頭高時，多出來的高度給第二列：左欄的內容緊接在頁頭下面，不留一大段空白 */
+  grid-template-rows: auto 1fr;
 }
 .campaign__head { grid-area: head; display: grid; gap: var(--s-3); min-width: 0; }
 .campaign__side { grid-area: side; display: grid; gap: var(--s-4); position: sticky; top: calc(var(--header-h, 64px) + var(--s-4)); min-width: 0; }
@@ -450,15 +459,16 @@ async function onDone(_result: ApplyResult) {
 .campaign__short { display: none; font-size: 13px; color: var(--text-2); }
 /* 創作季：期間一行，桌機手機都出（只到月日，帶時區說明） */
 .campaign__period { font-size: 13px; color: var(--text-2); }
-.campaign__subtitle { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.5; color: var(--text-2); }
+.campaign__subtitle { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.5; color: var(--text-2); word-break: auto-phrase; text-wrap: pretty; }
 .campaign__lead { justify-self: stretch; }
 .campaign__link-row {
   display: flex; align-items: center; gap: var(--s-2); min-height: 44px; padding: 0 var(--s-1);
-  font-size: 14px; font-weight: 600; line-height: 1.5; color: var(--accent-text); text-decoration: none;
+  font-size: 14px; font-weight: 600; line-height: 1.5; color: var(--accent-text); text-decoration: none; word-break: auto-phrase; text-wrap: pretty;
 }
 .campaign__link-row:hover span { text-decoration: underline; text-underline-offset: 3px; }
 .campaign__link-go { margin-left: auto; }
-.campaign__title { margin: 0; font-size: 40px; font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; overflow-wrap: anywhere; text-wrap: balance; }
+.campaign__title { margin: 0; font-size: 40px; font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; overflow-wrap: anywhere; text-wrap: balance; line-break: strict; word-break: auto-phrase; }
+.campaign__part { white-space: nowrap; }
 .campaign__dates {
   justify-self: stretch; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-2); margin: var(--s-1) 0 0;
 }
