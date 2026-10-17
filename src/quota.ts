@@ -11,6 +11,15 @@ import type { ProviderId } from "./providers";
  * 同一張卡撤了再登不多算一次，登記三張撤掉再登三張則算六張。
  */
 export const WEEKLY_LIMIT = 3;
+
+/**
+ * 某一刻的每週上限：落在發卡獎勵活動（card_reward_campaigns）期間就用活動的設定，否則 WEEKLY_LIMIT。
+ * 跟資料庫觸發器 community_weekly_limit（0070 遷移）同一條規則；開始那一刻算期間內，結束那一刻不算。
+ */
+export async function weeklyLimitAt(db: D1Database, at: number): Promise<number> {
+  const row = await db.prepare("SELECT MAX(weekly_limit) AS n FROM card_reward_campaigns WHERE status = 'active' AND starts_at <= ?1 AND ends_at > ?1").bind(at).first<{ n: number | null }>();
+  return row?.n ?? WEEKLY_LIMIT;
+}
 /** 一包最多發幾次；跟 0043 遷移的 CHECK 一致。 */
 export const PACK_MAX = 100;
 export const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -72,14 +81,15 @@ export async function quotaFor(db: D1Database, authorNumId: number, now: number,
 /** 同 quotaFor，但從社群成員出發（管理端看某個作者的額度用這個）。 */
 export async function quotaForMember(db: D1Database, memberId: string, now: number): Promise<Quota> {
   const { start, end } = weekWindow(now);
-  const [thisWeek, packed, remaining] = await Promise.all([
+  const [thisWeek, packed, remaining, limit] = await Promise.all([
     db.prepare("SELECT DISTINCT work_key FROM community_registration_usage WHERE member_id=? AND registered_at>=? AND registered_at<?").bind(memberId, start, end).all<{ work_key: string }>().then((r) => r.results),
     // 這週靠補充包登的張數：從「不同的卡」裡扣掉，剩下的才是免費額度用了幾張
     db.prepare("SELECT COUNT(*) AS n FROM card_registrations r JOIN registration_packs p ON p.id=r.pack_id WHERE p.member_id=? AND r.registered_at>=? AND r.registered_at<?").bind(memberId, start, end).first<{ n: number }>(),
     packRemaining(db, memberId),
+    weeklyLimitAt(db, now),
   ]);
   const used = Math.max(0, thisWeek.length - (packed?.n ?? 0));
-  return { limit: WEEKLY_LIMIT, used: Math.min(used, WEEKLY_LIMIT), weekStart: start, weekEnd: end, packRemaining: remaining };
+  return { limit, used: Math.min(used, limit), weekStart: start, weekEnd: end, packRemaining: remaining };
 }
 
 export async function recordRegistration(db: D1Database, authorNumId: number, roleId: string, now: number, provider: ProviderId = "harbor"): Promise<void> {
