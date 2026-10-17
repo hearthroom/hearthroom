@@ -1,0 +1,10 @@
+{
+  "tier": "fix",
+  "title": {
+    "zh-Hant": "從其他平台搬來的卡片以前可能整頁點不動，現在按鈕和輸入框都能正常點了。",
+    "zh-Hans": "从其他平台搬来的卡片以前可能整页点不动，现在按钮和输入框都能正常点了。",
+    "en": "Some cards brought over from other platforms left the whole page unclickable, and now they respond as usual.",
+    "ja": "他のプラットフォームから移したカードで、ページ全体が押せなくなる問題を直しました。",
+    "ko": "다른 플랫폼에서 옮겨 온 카드에서 페이지 전체가 눌리지 않던 문제를 고쳤습니다."
+  }
+}
