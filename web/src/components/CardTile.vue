@@ -110,11 +110,11 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
         <span v-if="showZone" class="card__by">{{ zoneLabel(card.zone) }}</span>
         <RouterLink v-else-if="card.author.handle" :to="lp(`/authors/${card.author.handle}`)" class="card__by card__by--link">
           <CommunityAvatar :handle="card.author.handle ?? undefined" :src="card.author.avatar" :name="card.author.name" class="card__face" />
-          <CommunityName :handle="card.author.handle ?? undefined" :name="card.author.name" class="card__author" />
+          <CommunityName :handle="card.author.handle ?? undefined" :name="card.author.name" :official="card.author.official" class="card__author" />
         </RouterLink>
         <span v-else class="card__by">
           <CommunityAvatar :handle="card.author.handle ?? undefined" :src="card.author.avatar" :name="card.author.name" class="card__face" />
-          <CommunityName :handle="card.author.handle ?? undefined" :name="card.author.name" class="card__author" />
+          <CommunityName :handle="card.author.handle ?? undefined" :name="card.author.name" :official="card.author.official" class="card__author" />
         </span>
         <span class="card__num" :class="{ 'card__num--up': showTrending && card.trending > 0 }" :title="$t('card.talkCount', { n: compact(card.talkNum) })">
           <span class="sr-only">{{ $t("card.talkCount", { n: compact(card.talkNum) }) }}</span>

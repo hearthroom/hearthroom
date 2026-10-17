@@ -706,6 +706,7 @@ app.get("/v1/authors/:handle", async (c) => {
   if (allowNsfw) c.header("Cache-Control", "private, no-store");
   return c.json({
     handle: author.handle,
+    official: author.is_official === 1,
     name: author.author_name,
     avatar: author.author_avatar,
     bio: author.bio,
