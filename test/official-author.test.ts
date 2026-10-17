@@ -24,7 +24,7 @@ it('denies reviewers/managers and upstream outages and emits admin outcome metri
  await env.DB.prepare("INSERT INTO reviewers(member_id,granted_at,granted_by,role) VALUES (?,0,'test','manager')").bind(actor).run();
  expect((await write(true,undefined,'ordinary')).status).toBe(403);appAdmins();expect((await write(true)).status).toBe(403);
  upstream.fetchCommunityStatus=async()=>{throw new Error('unavailable')};expect((await write(true)).status).toBe(503);
- const metrics=await (await SELF.fetch('https://c.test/metrics')).text();expect(metrics).toContain('operation="official_admin",outcome="denied"');expect(metrics).not.toContain(target);
+ const metrics=await (await SELF.fetch('https://c.test/metrics')).text();expect(metrics).toContain('operation="official_admin",outcome="denied"');expect(metrics).toContain('operation="official_admin",outcome="error"');expect(metrics).not.toContain(target);
 });
 it('ignores self-profile official forgery and never exposes internal member IDs',async()=>{
  const response=await SELF.fetch('https://c.test/v1/me/profile',{method:'PUT',headers:{...bearer('ordinary'),'Content-Type':'application/json'},body:JSON.stringify({displayName:'Official',official:true,is_official:1})});expect(response.status).toBe(200);
