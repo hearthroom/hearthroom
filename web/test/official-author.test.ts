@@ -1,7 +1,10 @@
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { createApp, nextTick, reactive, h, type App } from 'vue';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { i18n, applyLocale } from '../src/lib/i18n';
+// Public appearance is ancillary to the explicit official prop. Keep this unit
+// fixture local instead of leaving an actual HTTP request alive at teardown.
+vi.mock('../src/lib/community', () => ({ communityRequest: async () => ({ members: { abcdefgh: { badges: [] } } }) }));
 import CommunityName from '../src/components/CommunityName.vue';
 import CardTile from '../src/components/CardTile.vue';
 let app:App|undefined, el:HTMLDivElement;
