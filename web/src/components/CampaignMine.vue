@@ -51,9 +51,10 @@ async function load() {
     const missing = [...new Set(items.map((c) => c.campaignSlug))].filter((s) => !(s in campaigns.value));
     // 活動資料先到再畫，補件按鈕才不會在截止後先閃一下
     const read = await Promise.all(missing.map((s) => fetchCampaign(s).catch((e) => (e instanceof ApiError && e.status === 404 ? null : undefined))));
-    if (!items.length && !openCampaign.value) openCampaign.value = (await fetchPublicCampaigns().catch(() => ({ items: [] }))).items.find((c) => c.phase === "open") ?? null;
+    if (!items.length && !openCampaign.value) openCampaign.value = (await fetchPublicCampaigns().catch(() => ({ items: [] }))).items.find((c) => c.phase === "open" && c.kind !== "card_reward") ?? null;
     if (mine !== seq) return;
-    missing.forEach((s, i) => { if (read[i] !== undefined) campaigns.value[s] = read[i]!; });
+    // 這裡的 slug 都來自分享申請，一定是分享活動
+    missing.forEach((s, i) => { if (read[i] !== undefined) campaigns.value[s] = read[i] as PublicCampaign | null; });
     now.value = Date.now();
     contents.value = items;
   } catch {

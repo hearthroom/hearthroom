@@ -8,6 +8,7 @@ import { useLocalePath } from "@/lib/use-locale";
 import { groupWorks, workKey, type WorkspaceCard } from "@/lib/card-workspace";
 import MyCardTile from "@/components/MyCardTile.vue";
 import AgentOnboard from "@/components/AgentOnboard.vue";
+import CreatorSeasonEntry from "@/components/CreatorSeasonEntry.vue";
 
 import { useSession } from "@/lib/session";
 import { connectionMessage } from "@/lib/distribution";
@@ -193,6 +194,8 @@ watch(()=>route.query.fresh, fresh=>{
             <span v-if="packLeft > 0" class="quota__packs" data-quota-packs>{{ $t("mine.quota.packs", { n: packLeft }) }}</span>
           </template>
         </p>
+        <!-- 創作季進行中：額度下方一行，整行可點到活動頁 -->
+        <CreatorSeasonEntry where="mine" />
       </div>
       <div v-if="can('editor')" class="head__actions">
         <AgentOnboard from="mine" class="head__agent" />
