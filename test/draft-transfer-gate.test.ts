@@ -140,3 +140,25 @@ it('rejects direct reward, moderation and replacement writes before any durable 
  const triggers=await db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'draft_transfer_hold_%'").all<{name:string}>();
  expect(triggers.results.length).toBe(63);
 });
+
+import worker from '../src/index';
+
+it('opens the control primary from the original binding through the full Worker fetch path',async()=>{
+ const constraints:string[]=[];
+ const db={prepare:env.DB.prepare.bind(env.DB),withSession(constraint:string){constraints.push(constraint);return env.DB.withSession(constraint as any);}} as unknown as D1Database;
+ await env.DB.prepare("INSERT INTO card_numbers(num,provider,source_role_id) VALUES(9000091,'harbor','full-worker-control')").run();
+ const values={...env,DB:db,DRAFT_TRANSFER_CONTROL_SECRET:'s'.repeat(32),DRAFT_TRANSFER_CONTROL_SCOPE:'test-db',DRAFT_TRANSFER_CONTROL_CARD_NUM:'9000091'};
+ const response=await worker.fetch(new Request('https://local/internal/community/draft-transfer-gate',{method:'POST',headers:{Authorization:'Bearer '+'s'.repeat(32),'Content-Type':'application/json'},body:JSON.stringify({scope:'test-db',provider:'harbor',sourceRoleId:'full-worker-control',cardNum:9000091,operation:'full-worker-operation',generation:1,action:'held',requestId:'full-worker-request'})}),values as any,{} as ExecutionContext);
+ expect(response.status).toBe(200);
+ expect(await response.json()).toMatchObject({phase:'held',blockers:[]});
+ expect(constraints).toEqual(['first-primary']);
+});
+
+it('keeps control primary failures closed through the full Worker fetch path',async()=>{
+ const open=vi.fn(()=>{throw new Error('primary unavailable');});
+ const values={...env,DB:{prepare:env.DB.prepare.bind(env.DB),withSession:open} as unknown as D1Database,DRAFT_TRANSFER_CONTROL_SECRET:'s'.repeat(32),DRAFT_TRANSFER_CONTROL_SCOPE:'test-db',DRAFT_TRANSFER_CONTROL_CARD_NUM:'100216'};
+ const response=await worker.fetch(new Request('https://local/internal/community/draft-transfer-gate',{method:'POST',headers:{Authorization:'Bearer '+'s'.repeat(32),'Content-Type':'application/json'},body:'{}'}),values as any,{} as ExecutionContext);
+ expect(response.status).toBe(503);
+ expect(await response.json()).toEqual({error:'draft_transfer_control_error'});
+ expect(open).toHaveBeenCalledExactlyOnceWith('first-primary');
+});
