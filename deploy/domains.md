@@ -34,6 +34,10 @@ same-origin CSRF checks and private/no-store responses remain in force. Add the
 three corresponding `/auth/callback` URLs to the existing Harbor OAuth client;
 do not create a replacement client or move existing grants.
 
+For `.chat` and `.pro`, `cli` also uses a DNS-only CNAME to its root family's
+preferred target. Roll back CLI alone by replacing that CNAME with proxied
+AAAA 100::, while retaining its exact Worker route.
+
 Keep `cli.<root>/*` on hearthroom-cli-site, `playground.<root>/*` on
 moonstage-playground, and `downloads.<root>/*` without a Worker (R2). The new
 `.pro` zone needs these precise exceptions before exposing those hostnames.
