@@ -113,8 +113,9 @@ describe("審核通過就發", () => {
   it("活動開始前送審、撤回，活動開始後才第一次過審上架：照發", async () => {
     await submit("r1");
     // 這個作品第一次登記、送審都在活動開始之前，審核中就撤回
-    await env.DB.prepare("UPDATE card_registrations SET registered_at = ? WHERE source_role_id = 'r1'").bind(Date.now() - 2 * DAY).run();
-    await env.DB.prepare("UPDATE review_submissions SET submitted_at = ? WHERE card_id = (SELECT id FROM cards WHERE source_role_id = 'r1')").bind(Date.now() - 2 * DAY).run();
+    const before = Date.now() - 2 * DAY; // 登記與送審同一刻（同一個請求寫的）
+    await env.DB.prepare("UPDATE card_registrations SET registered_at = ? WHERE source_role_id = 'r1'").bind(before).run();
+    await env.DB.prepare("UPDATE review_submissions SET submitted_at = ? WHERE card_id = (SELECT id FROM cards WHERE source_role_id = 'r1')").bind(before).run();
     expect((await SELF.fetch(`https://c.test/v1/cards/${await cardIdOf("r1")}`, { method: "DELETE", headers: bearer("author-token") })).status).toBe(204);
     await submit("r1");
     expect((await approve("r1", "admin-token")).reward).toMatchObject({ status: "paid", amount: 10000 });
@@ -122,8 +123,9 @@ describe("審核通過就發", () => {
 
   it("送審在活動開始前、過審在活動開始後：照發", async () => {
     await submit("r1");
-    await env.DB.prepare("UPDATE card_registrations SET registered_at = ? WHERE source_role_id = 'r1'").bind(Date.now() - 2 * DAY).run();
-    await env.DB.prepare("UPDATE review_submissions SET submitted_at = ? WHERE card_id = (SELECT id FROM cards WHERE source_role_id = 'r1')").bind(Date.now() - 2 * DAY).run();
+    const before = Date.now() - 2 * DAY; // 登記與送審同一刻（同一個請求寫的）
+    await env.DB.prepare("UPDATE card_registrations SET registered_at = ? WHERE source_role_id = 'r1'").bind(before).run();
+    await env.DB.prepare("UPDATE review_submissions SET submitted_at = ? WHERE card_id = (SELECT id FROM cards WHERE source_role_id = 'r1')").bind(before).run();
     expect((await approve("r1", "admin-token")).reward).toMatchObject({ status: "paid" });
   });
 
@@ -139,9 +141,30 @@ describe("審核通過就發", () => {
     expect(await rewards()).toEqual([]);
   });
 
+  it("舊制上架的卡（沒有託管版本紀錄）活動前就過審過，下架重發再過審：不發", async () => {
+    await submit("r1");
+    await approve("r1", "mod-token");
+    const cardId = await cardIdOf("r1");
+    await env.DB.prepare("UPDATE review_submissions SET submitted_at = ?, decided_at = ? WHERE card_id = ?").bind(Date.now() - 3 * DAY, Date.now() - 2 * DAY, cardId).run();
+    // 2026-09-20 以前的上架沒有 hosting_versions 列
+    await env.DB.prepare("UPDATE hosting_versions SET submission_id = NULL WHERE source_role_id = 'r1'").run();
+    expect((await SELF.fetch(`https://c.test/v1/cards/${cardId}`, { method: "DELETE", headers: bearer("author-token") })).status).toBe(204);
+    await submit("r1");
+    expect(await cardIdOf("r1")).toBe(cardId);
+    expect((await approve("r1", "admin-token")).reward).toBeNull();
+  });
+
+  it("審核制度之前就直接上架過的卡（只有登記、沒有送審紀錄），再送審過審：不發", async () => {
+    // 這筆登記在審核制度開始（2026-09-07）之前：那時登記就是上架
+    await env.DB.prepare("INSERT INTO card_registrations (provider, author_num_id, source_role_id, registered_at) VALUES ('harbor', ?, 'r1', ?)").bind(AUTHOR, Date.UTC(2026, 8, 5)).run();
+    await submit("r1");
+    expect((await approve("r1", "admin-token")).reward).toBeNull();
+  });
+
   it("期間內送審、活動結束後才過審的照發", async () => {
     await submit("r1");
-    await env.DB.prepare("UPDATE card_reward_campaigns SET ends_at = ?").bind(Date.now() - 1).run();
+    await env.DB.prepare("UPDATE review_submissions SET submitted_at = ? WHERE card_id = (SELECT id FROM cards WHERE source_role_id = 'r1')").bind(Date.now() - DAY).run();
+    await env.DB.prepare("UPDATE card_reward_campaigns SET ends_at = ?").bind(Date.now() - DAY / 2).run();
     expect((await approve("r1", "admin-token")).reward).toMatchObject({ status: "paid" });
   });
 
@@ -296,6 +319,21 @@ describe("活動資料與作者進度", () => {
     expect(img.headers.get("Content-Type")).toBe("image/webp");
     const list = (await (await get("/v1/campaigns")).json()) as any;
     expect(list.items.find((c: any) => c.kind === "card_reward").bannerUrl).toBe("/v1/blog/images/creator-season-1.webp");
+  });
+
+  it("進度：活動前就上架過的卡不列；還沒上架過、活動結束前送審的卡列成審核中", async () => {
+    await submit("r1");
+    await approve("r1", "mod-token");
+    const old = await cardIdOf("r1");
+    await env.DB.prepare("UPDATE review_submissions SET submitted_at = ?, decided_at = ? WHERE card_id = ?").bind(Date.now() - 3 * DAY, Date.now() - 2 * DAY, old).run();
+    expect((await SELF.fetch(`https://c.test/v1/cards/${old}`, { method: "DELETE", headers: bearer("author-token") })).status).toBe(204);
+    await submit("r1");
+    await submit("r2");
+    // r2 在活動開始前就送審了，還在審：之後過審也算，所以列出來
+    await env.DB.prepare("UPDATE review_submissions SET submitted_at = ? WHERE card_id = (SELECT id FROM cards WHERE source_role_id = 'r2')").bind(Date.now() - 2 * DAY).run();
+    const me = (await (await get("/v1/card-rewards/creator-season/me", "author-token")).json()) as any;
+    expect(me.items.map((i: any) => i.cardId)).toEqual([await cardIdOf("r2")]);
+    expect(me.items[0]).toMatchObject({ review: "pending" });
   });
 
   it("沒登入不能看進度", async () => {

@@ -69,13 +69,20 @@ const CARD_BASE = `SELECT c.id AS card_id, c.author_num_id, c.names, c.backgroun
            (SELECT member_id FROM member_identities WHERE provider=c.provider AND external_id=CAST(c.author_num_id AS TEXT))) AS member_id
   FROM cards c WHERE c.provider = 'harbor'`;
 /**
- * 這張卡（同一個上游角色，下架重發也算同一張）的初次上架送審，依過審時間排序。卡下架時 cards 列會刪掉，
- * 送審紀錄靠 hosting_versions 對回角色；只看過審的初審（kind first），改版重審（re）不算上架。
+ * 這張卡的初審（kind first）過審紀錄，依過審時間排序。卡號（cards.id＝card_numbers）以上游角色為鍵，下架重發不換號，
+ * 所以同一張卡歷次的送審都掛在同一個 card_id 上；過審的送審在下架時不會被刪。不經 hosting_versions：
+ * 那張表 2026-09-20 才有，之前上架過的卡沒有對應列。改版重審（kind re）不算上架。
  */
-const FIRST_LISTING = `FROM review_submissions s JOIN hosting_versions v ON v.submission_id = s.id
-  WHERE s.kind = 'first' AND s.status = 'approved' AND v.provider = cw.provider AND v.source_role_id = cw.source_role_id`;
-/** 第一次過審上架的時間（資格的起點，owner 2026-10-17）；從沒過審是 NULL。 */
-const LISTED_AT = `(SELECT MIN(s.decided_at) ${FIRST_LISTING})`;
+const FIRST_LISTING = `FROM review_submissions s WHERE s.card_id = cw.card_id AND s.kind = 'first' AND s.status = 'approved'`;
+/**
+ * 審核制度開始之前，登記就等於上架、沒有送審紀錄。這種卡的「第一次上架」是那時的登記時間，不然下架重發一次就會被當成新上架。
+ * 時間點是正式站第一筆送審（2026-09-07 16:22 台北）；用固定值而不是查最早一筆送審：撤回會刪掉審核中的送審，查出來的值會往後移。
+ */
+export const REVIEW_ERA_START = 1788769346472;
+const PRE_REVIEW_LISTING = `(SELECT MIN(r.registered_at) FROM card_registrations r WHERE r.provider = cw.provider AND r.source_role_id = cw.source_role_id
+  AND r.registered_at < ${REVIEW_ERA_START})`;
+/** 第一次過審上架的時間（資格的起點，owner 2026-10-17）；從沒上架過是 NULL。 */
+const LISTED_AT = `COALESCE(MIN((SELECT MIN(s.decided_at) ${FIRST_LISTING}), ${PRE_REVIEW_LISTING}), (SELECT MIN(s.decided_at) ${FIRST_LISTING}), ${PRE_REVIEW_LISTING})`;
 /** 那一次上架是什麼時候送審的（資格的終點：活動結束前送審，之後才過審也算）。 */
 const LISTED_SUBMITTED = `(SELECT s.submitted_at ${FIRST_LISTING} ORDER BY s.decided_at LIMIT 1)`;
 const LIVE = "('pending', 'blocked_insufficient', 'paid')";
@@ -357,7 +364,8 @@ export async function listRewards(db: D1Database, q: { status?: string; page: nu
 
 /**
  * 這期活動裡作者的卡，新的在上；每張的審核狀態與獎勵。算進來的是：第一次過審上架在活動開始之後、那次送審在活動結束之前；
- * 還沒上架過的（審核中、未通過）看這張卡目前的送審是不是在活動結束之前（之後過審就符合資格）。
+ * 還沒上架過的（審核中、未通過）看這張卡最近一次初審送審是不是在活動結束之前（之後過審就符合資格）；
+ * 送審在活動開始前也算（資格看第一次過審，不看送審，owner 2026-10-17），所以活動前送審、被退回的卡也會列成「未通過」。
  * 活動開始前就上架過的卡不列（下架重發也不再給）。已過審而還沒發的 reward 是 null，畫面顯示「已通過」。
  */
 export async function myProgress(db: D1Database, memberId: string, campaign: RewardCampaign) {
