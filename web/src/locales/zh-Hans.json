@@ -2658,7 +2658,7 @@
   "creator.entry.details": "活动说明",
   "mine.campaign.publishReward": "{end}前提交的卡，审核通过后每张送你 {credits} 积分，每周额度也提高到 {limit} 张。",
   "editor.publish.reward": "{end}前提交的本人作品，过审就送你 {credits} 积分。",
-  "campaign.page.creatorLink": "绮梦社创作季同步进行中：每张过审的作品送你 {credits} 积分",
+  "campaign.page.creatorLink": "绮梦创作季同步进行中：每张过审的作品送你 {credits} 积分",
   "review.creator.title": "创作季待发放",
   "review.creator.lead": "已经过审、还没到账的卡：上线前就过审的，和过审时发放失败的。",
   "review.creator.payPage": "发放这一页（{n} 笔）",
