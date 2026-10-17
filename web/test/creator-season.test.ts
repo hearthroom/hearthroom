@@ -103,7 +103,7 @@ describe("頁頭與規則卡", () => {
     expect(text("[data-cta]")).toContain(t("creator.say.ended", { end: "10月31日" }));
   });
 
-  it("登入、額度還有：寫一張新卡與從我的卡片送審；額度用完：一行狀態，主按鈕換成從我的卡片送審", async () => {
+  it("登入、額度還有：寫一張新卡與從我的卡片送審；額度用完：主按鈕換成從我的卡片送審，一行說明在它下面", async () => {
     session.me = { accountNumId: 7 };
     await mount(CampaignPage);
     expect(links()).toEqual([[t("creator.cta.write"), "/create"], [t("creator.cta.fromMine"), "/mine"]]);
@@ -112,6 +112,9 @@ describe("頁頭與規則卡", () => {
     await mount(CampaignPage);
     expect($("[data-quota-full]")!.textContent).toContain("本週額度已用完");
     expect(links()).toEqual([[t("creator.cta.fromMine"), "/mine"], [t("creator.cta.write"), "/create"]]);
+    // 主按鈕在原本的位置，說明在它下面
+    const kids = [...$("[data-cta]")!.children];
+    expect(kids.indexOf($("[data-quota-full]")!)).toBe(1);
   });
 });
 
