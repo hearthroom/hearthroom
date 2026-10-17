@@ -3,7 +3,7 @@ import { hasAdultStarter, starterFor } from "../src/lib/onboarding";
 
 describe("configured onboarding cards", () => {
   it.each(["zh-Hant", "zh-Hans"])("%s follows the viewer's R18 choice", (locale) => {
-    expect(starterFor(locale, false)).toBe(100218);
+    expect(starterFor(locale, false)).toBe(100216);
     expect(starterFor(locale, true)).toBe(100076);
     expect(hasAdultStarter(locale)).toBe(true);
   });

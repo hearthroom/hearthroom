@@ -43,7 +43,7 @@ async function mount() {
 const starterLink = () => root.querySelector('[data-tour="starter"] .card__link')?.getAttribute("href");
 it("injects the selected starter into the actual board grid only during the tour", async () => {
   await mount();
-  expect(starterLink()).toBe("/cards/100218");
+  expect(starterLink()).toBe("/cards/100216");
   expect(root.querySelector('[data-tour="starter"]')?.parentElement?.classList.contains("grid")).toBe(true);
   tourState.step = "choose"; await flush();
   guestAdult.showNsfw = true; await flush();
@@ -53,10 +53,10 @@ it("injects the selected starter into the actual board grid only during the tour
 });
 it("ignores a late general response after the viewer enables adult content", async () => {
   const general = deferred();
-  vi.mocked(api.fetchCard).mockImplementation(async id => id === "100218" ? general.promise : card(Number(id)));
+  vi.mocked(api.fetchCard).mockImplementation(async id => id === "100216" ? general.promise : card(Number(id)));
   await mount();
   guestAdult.showNsfw = true; await flush();
   expect(starterLink()).toBe("/cards/100076");
-  general.resolve(card(100218)); await flush();
+  general.resolve(card(100216)); await flush();
   expect(starterLink()).toBe("/cards/100076");
 });
