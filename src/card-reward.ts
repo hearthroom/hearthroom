@@ -63,30 +63,39 @@ export const cardRewardDetail = (k: RewardCampaign, now: number) => ({
 // ---- 誰該拿 -------------------------------------------------------------------
 
 /** 卡的作品鍵與作者成員；跟 community_registration_usage 同一套對應。不篩審核狀態（作者進度要列審核中與被拒的）。 */
-const CARD_BASE = `SELECT c.id AS card_id, c.author_num_id, c.names, c.background_url AS avatar_url,
+const CARD_BASE = `SELECT c.id AS card_id, c.author_num_id, c.names, c.background_url AS avatar_url, c.provider, c.source_role_id,
   COALESCE((SELECT w.source_provider||':'||w.source_role_id FROM work_copies cp JOIN works w ON w.id=cp.work_id WHERE cp.provider=c.provider AND cp.role_id=c.source_role_id), c.provider||':'||c.source_role_id) AS work_key,
   COALESCE((SELECT owner_member_id FROM member_connections WHERE provider=c.provider AND external_id=CAST(c.author_num_id AS TEXT)),
            (SELECT member_id FROM member_identities WHERE provider=c.provider AND external_id=CAST(c.author_num_id AS TEXT))) AS member_id
   FROM cards c WHERE c.provider = 'harbor'`;
-/** 作品第一次登記的時間。作品鍵是算出來的、沒有索引可用，所以只對篩過的少數卡算。 */
-const FIRST_AT = "(SELECT MIN(u.registered_at) FROM community_registration_usage u WHERE u.work_key = cw.work_key)";
+/**
+ * 這張卡（同一個上游角色，下架重發也算同一張）的初次上架送審，依過審時間排序。卡下架時 cards 列會刪掉，
+ * 送審紀錄靠 hosting_versions 對回角色；只看過審的初審（kind first），改版重審（re）不算上架。
+ */
+const FIRST_LISTING = `FROM review_submissions s JOIN hosting_versions v ON v.submission_id = s.id
+  WHERE s.kind = 'first' AND s.status = 'approved' AND v.provider = cw.provider AND v.source_role_id = cw.source_role_id`;
+/** 第一次過審上架的時間（資格的起點，owner 2026-10-17）；從沒過審是 NULL。 */
+const LISTED_AT = `(SELECT MIN(s.decided_at) ${FIRST_LISTING})`;
+/** 那一次上架是什麼時候送審的（資格的終點：活動結束前送審，之後才過審也算）。 */
+const LISTED_SUBMITTED = `(SELECT s.submitted_at ${FIRST_LISTING} ORDER BY s.decided_at LIMIT 1)`;
 const LIVE = "('pending', 'blocked_insufficient', 'paid')";
 
 /**
- * 該發而還沒發的卡：審核通過過、沒被站方封鎖、作品第一次登記落在進行中活動的期間、還沒過發獎截止、沒有進行中或已入帳的發放
- * （以作品認，也以卡認：作品對應改過的話作品鍵會變，卡號不會）。?1 現在時間，?2 限定一張卡（NULL＝全部）。
- * 卡的 registered_at 不早於作品第一次登記（卡列在登記時建立），所以先用最早的活動開始時間篩掉舊卡，再算第一次登記。
+ * 該發而還沒發的卡：審核通過過、沒被站方封鎖、**第一次過審上架**在活動開始之後、那次上架的送審在活動結束之前、
+ * 還沒過發獎截止、沒有進行中或已入帳的發放（以作品認，也以卡認）。登記、送審、撤回的時間不看（owner 2026-10-17）。
+ * ?1 現在時間，?2 限定一張卡（NULL＝全部）。
+ * 卡的 registered_at 是這張卡列第一次過審的時間，不早於第一次上架，所以先用最早的活動開始時間篩掉舊卡。
  */
-const DUE = `SELECT x.card_id, x.author_num_id, x.names, x.work_key, x.member_id, x.first_at, k.id AS campaign_id, k.slug, k.reward
-  FROM (SELECT cw.*, ${FIRST_AT} AS first_at FROM (${CARD_BASE}
+const DUE = `SELECT x.card_id, x.author_num_id, x.names, x.work_key, x.member_id, x.listed_at, k.id AS campaign_id, k.slug, k.reward
+  FROM (SELECT cw.*, ${LISTED_AT} AS listed_at, ${LISTED_SUBMITTED} AS listed_submitted FROM (${CARD_BASE}
     AND (c.status = 'approved' OR c.approved_version_id IS NOT NULL) AND c.public_blocked = 0 AND (?2 IS NULL OR c.id = ?2)
     AND c.registered_at >= (SELECT MIN(starts_at) FROM card_reward_campaigns WHERE status = 'active')) cw) x
-  JOIN card_reward_campaigns k ON k.status = 'active' AND k.starts_at <= x.first_at AND k.ends_at > x.first_at AND (k.payout_deadline IS NULL OR k.payout_deadline > ?1)
+  JOIN card_reward_campaigns k ON k.status = 'active' AND k.starts_at <= x.listed_at AND k.ends_at > x.listed_submitted AND (k.payout_deadline IS NULL OR k.payout_deadline > ?1)
   WHERE x.member_id IS NOT NULL
     AND NOT EXISTS (SELECT 1 FROM card_rewards r WHERE r.work_key = x.work_key AND r.status IN ${LIVE})
     AND NOT EXISTS (SELECT 1 FROM card_rewards r WHERE r.card_id = x.card_id AND r.status IN ${LIVE})`;
 
-type Due = { card_id: number; author_num_id: number; names: string; work_key: string; member_id: string; first_at: number; campaign_id: string; slug: string; reward: number };
+type Due = { card_id: number; author_num_id: number; names: string; work_key: string; member_id: string; listed_at: number; campaign_id: string; slug: string; reward: number };
 
 // ---- 發放紀錄 -----------------------------------------------------------------
 
@@ -321,11 +330,11 @@ const cardName = (names: string) => {
 export async function listDue(db: D1Database, page: number, now: number) {
   const [total, rows] = await db.batch([
     db.prepare(`SELECT count(*) AS n FROM (${DUE})`).bind(now, null),
-    db.prepare(`SELECT d.*, m.handle FROM (${DUE}) d JOIN members m ON m.id = d.member_id ORDER BY d.first_at, d.card_id LIMIT ?3 OFFSET ?4`).bind(now, null, PAGE, (page - 1) * PAGE),
+    db.prepare(`SELECT d.*, m.handle FROM (${DUE}) d JOIN members m ON m.id = d.member_id ORDER BY d.listed_at, d.card_id LIMIT ?3 OFFSET ?4`).bind(now, null, PAGE, (page - 1) * PAGE),
   ]);
   return {
     total: (total!.results[0] as { n: number }).n,
-    items: (rows!.results as (Due & { handle: string })[]).map((d) => ({ cardId: d.card_id, cardName: cardName(d.names), campaignSlug: d.slug, author: { handle: d.handle }, registeredAt: d.first_at, amount: d.reward })),
+    items: (rows!.results as (Due & { handle: string })[]).map((d) => ({ cardId: d.card_id, cardName: cardName(d.names), campaignSlug: d.slug, author: { handle: d.handle }, listedAt: d.listed_at, amount: d.reward })),
   };
 }
 
@@ -347,19 +356,24 @@ export async function listRewards(db: D1Database, q: { status?: string; page: nu
 // ---- 作者自己的進度 -------------------------------------------------------------
 
 /**
- * 這期活動裡作者送審過的卡（作品第一次登記落在期間內），新的在上；每張的審核狀態與獎勵。
- * 已過審而還沒發的（上線前送審、等補發）reward 是 null，畫面顯示「已通過」。
+ * 這期活動裡作者的卡，新的在上；每張的審核狀態與獎勵。算進來的是：第一次過審上架在活動開始之後、那次送審在活動結束之前；
+ * 還沒上架過的（審核中、未通過）看這張卡目前的送審是不是在活動結束之前（之後過審就符合資格）。
+ * 活動開始前就上架過的卡不列（下架重發也不再給）。已過審而還沒發的 reward 是 null，畫面顯示「已通過」。
  */
 export async function myProgress(db: D1Database, memberId: string, campaign: RewardCampaign) {
-  type P = { card_id: number; names: string; avatar_url: string | null; status: string; approved_version_id: string | null; first_at: number; reward_status: string | null; amount: number | null };
-  const rows = (await db.prepare(`SELECT x.card_id, x.names, x.avatar_url, c.status, c.approved_version_id, x.first_at,
+  type P = { card_id: number; names: string; avatar_url: string | null; status: string; approved_version_id: string | null; submitted_at: number; reward_status: string | null; amount: number | null };
+  const rows = (await db.prepare(`SELECT x.card_id, x.names, x.avatar_url, c.status, c.approved_version_id,
+      COALESCE(x.listed_submitted, x.current_submitted) AS submitted_at,
       (SELECT r.status FROM card_rewards r WHERE r.work_key = x.work_key AND r.status IN ${LIVE}) AS reward_status,
       (SELECT r.amount FROM card_rewards r WHERE r.work_key = x.work_key AND r.status IN ${LIVE}) AS amount
-    FROM (SELECT cw.*, ${FIRST_AT} AS first_at FROM (${CARD_BASE} AND c.registered_at >= ?2) cw WHERE cw.member_id = ?1) x
+    FROM (SELECT cw.*, ${LISTED_AT} AS listed_at, ${LISTED_SUBMITTED} AS listed_submitted,
+            (SELECT MAX(s.submitted_at) FROM review_submissions s WHERE s.card_id = cw.card_id AND s.kind = 'first') AS current_submitted
+          FROM (${CARD_BASE}) cw WHERE cw.member_id = ?1) x
     JOIN cards c ON c.id = x.card_id
-    WHERE x.first_at >= ?2 AND x.first_at < ?3 ORDER BY x.first_at DESC, x.card_id DESC`).bind(memberId, campaign.startsAt, campaign.endsAt).all<P>()).results;
+    WHERE (x.listed_at >= ?2 AND x.listed_submitted < ?3) OR (x.listed_at IS NULL AND x.current_submitted < ?3)
+    ORDER BY submitted_at DESC, x.card_id DESC`).bind(memberId, campaign.startsAt, campaign.endsAt).all<P>()).results;
   const items = rows.map((r) => ({
-    cardId: r.card_id, name: cardName(r.names), avatarUrl: r.avatar_url, submittedAt: r.first_at,
+    cardId: r.card_id, name: cardName(r.names), avatarUrl: r.avatar_url, submittedAt: r.submitted_at,
     review: r.status === "approved" || r.approved_version_id ? "approved" : r.status === "rejected" ? "rejected" : "pending",
     reward: r.reward_status ? { status: r.reward_status === "paid" ? "paid" : "pending", amount: r.amount! } : null,
   }));

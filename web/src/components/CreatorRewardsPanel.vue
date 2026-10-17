@@ -114,7 +114,7 @@ async function retry(r: RewardListItem) {
     <ul v-else class="crp__list">
       <li v-for="i in due.items" :key="i.cardId" :data-due="i.cardId">
         <span class="crp__name">{{ i.cardName || `#${i.cardId}` }}</span>
-        <span class="crp__meta num">@{{ i.author.handle }} · {{ date(i.registeredAt) }}</span>
+        <span class="crp__meta num">@{{ i.author.handle }} · {{ date(i.listedAt) }}</span>
         <span class="crp__amount num">{{ formatNumber(i.amount) }}</span>
         <span v-if="results[i.cardId]" class="crp__result">{{ results[i.cardId] }}</span>
       </li>
