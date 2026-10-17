@@ -299,6 +299,8 @@ export async function saveCampaign(db: D1Database, input: CampaignInput, actor: 
   const prior = await priorSubject(db, actor, operationId, input.id === undefined ? "create" : "update", input.id);
   if (prior) return mustCampaign(db, prior);
   const c = clean(input);
+  // 發卡獎勵活動（創作季）跟分享活動共用 /campaign/:slug：同名會讓其中一個找不到
+  if (await db.prepare("SELECT 1 AS ok FROM card_reward_campaigns WHERE slug = ?").bind(c.slug).first("ok")) throw new HttpError(409, "campaign_slug_taken");
   const values = EDITABLE.map((k) => c[k]);
   if (input.id === undefined) {
     const id = crypto.randomUUID();

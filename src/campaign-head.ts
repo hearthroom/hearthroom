@@ -2,6 +2,7 @@ import { PRIMARY_HOST } from "../shared/site-hosts";
 import { SITE_NAME, siteName } from "../shared/site-name";
 import { plainText } from "./blog-head";
 import type { Campaign } from "./campaign";
+import type { RewardCampaign } from "./card-reward";
 import { oneLine, siteOgImage, type PageMeta } from "./head";
 
 /**
@@ -52,6 +53,26 @@ export function campaignMeta(c: Campaign, lang: Locale, url: string): PageMeta {
     title: `${title} · ${siteName(lang)}`,
     description,
     // 橫幅是 16:6，預覽會從中間裁；沒有橫幅用站台的 1200×630 預設圖
+    image: banner ?? siteOgImage("default", lang),
+    ...(banner ? {} : { imageSize: { width: 1200, height: 630 } }),
+  };
+}
+
+/** 創作季（發卡獎勵活動）的簡介：活動頁的副標（文案定稿 copy.md 一、首屏），金額讀活動設定 */
+const CARD_REWARD: Record<Locale, (credits: string) => string> = {
+  "zh-Hant": (n) => `每張通過審核的卡，送你 ${n} 積分`,
+  "zh-Hans": (n) => `每张审核通过的卡，送你 ${n} 积分`,
+  en: (n) => `${n} credits for every card that passes review`,
+  ja: (n) => `審査通過で1枚${n}ポイント`,
+  ko: (n) => `심사를 통과한 카드 1장당 ${n}포인트`,
+};
+export function cardRewardMeta(k: RewardCampaign, lang: Locale, url: string): PageMeta {
+  const title = pick(k.title, lang) || k.slug;
+  const banner = k.bannerUrl ? `${origin}${k.bannerUrl}` : null;
+  return {
+    lang, url, type: "website",
+    title: `${title} · ${siteName(lang)}`,
+    description: CARD_REWARD[lang](new Intl.NumberFormat("en-US").format(k.reward)),
     image: banner ?? siteOgImage("default", lang),
     ...(banner ? {} : { imageSize: { width: 1200, height: 630 } }),
   };

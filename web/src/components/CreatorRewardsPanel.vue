@@ -14,7 +14,7 @@ import {
 import { confirmDialog } from "@/lib/confirm";
 import { useSession } from "@/lib/session";
 
-const { t, locale } = useI18n();
+const { t, te, locale } = useI18n();
 const session = useSession();
 
 const due = reactive({ items: [] as RewardDueItem[], total: 0, loading: true, error: "" });
@@ -22,6 +22,10 @@ const open = ref<RewardListItem[]>([]);
 /** 這次批次每張卡的結果（cardId → 已入帳／錯誤代碼） */
 const results = ref<Record<number, string>>({});
 const busy = ref(false);
+/** 上一次批次的總結（已入帳幾筆、失敗幾筆） */
+const done = ref("");
+/** 服務端的代碼轉成看得懂的話；不認得的照原樣 */
+const errorLabel = (code: string) => { const k = `review.creator.error.${code}`; return te(k) ? t(k) : code; };
 /** 失敗重按沿用同一個操作編號（服務端認成同一次），成功就丟掉 */
 let batchOp: { key: string; id: string } | null = null;
 
@@ -61,7 +65,10 @@ async function payPage() {
   try {
     const res = await batchReward(await token(), ids, batchOp.id);
     batchOp = null;
-    for (const r of res.items) results.value[r.cardId] = "reward" in r ? (r.reward.status === "paid" ? t("campaign.payout.paid") : t(`review.creator.status.${r.reward.status}`)) : t("review.creator.failed", { error: r.error });
+    // 已入帳的會從待發放消失，所以先留一行總結；沒發成的列還在，結果標在那一列
+    const paid = res.items.filter((r) => "reward" in r && r.reward.status === "paid").length;
+    done.value = t("review.creator.done", { paid, failed: res.items.length - paid });
+    for (const r of res.items) results.value[r.cardId] = "reward" in r ? (r.reward.status === "paid" ? t("campaign.payout.paid") : t(`review.creator.status.${r.reward.status}`)) : t("review.creator.failed", { error: errorLabel(r.error) });
   } catch (e) {
     due.error = campaignErrorText(e);
   } finally {
@@ -99,6 +106,7 @@ async function retry(r: RewardListItem) {
         {{ t("review.creator.payPage", { n: due.items.length }) }}
       </button>
     </div>
+    <p v-if="done" class="notice" role="status" data-batch-done>{{ done }}</p>
     <p v-if="due.error" class="notice notice--error" role="alert">{{ due.error }}</p>
     <div v-if="due.loading && !due.items.length" class="ghost crp__ghost" aria-hidden="true" />
     <p v-else-if="!due.items.length" class="crp__cap">{{ t("review.creator.empty") }}</p>

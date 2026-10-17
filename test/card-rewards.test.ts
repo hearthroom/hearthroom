@@ -250,6 +250,12 @@ describe("活動資料與作者進度", () => {
     expect(detail).not.toHaveProperty("id");
   });
 
+  it("分享活動不能用創作季的 slug（兩種活動共用 /campaign/:slug）", async () => {
+    const res = await post("/v1/moderation/campaigns", "admin-token", { slug: "creator-season", title: { "zh-Hant": "撞名" }, operationId: op() });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as any).error).toBe("campaign_slug_taken");
+  });
+
   it("沒登入不能看進度", async () => {
     expect((await get("/v1/card-rewards/creator-season/me")).status).toBe(401);
   });
