@@ -53,7 +53,7 @@ beforeEach(() => {
   i18n.global.locale.value = 'zh-Hant';
   calls = [];
   canEdit = true;
-  pool = { configured: true, enabled: true, usageScope: 'agent_only', validityDays: null, maxPayout: 5000, balance: 120000, paidTotal: 0, updatedAt: null };
+  pool = { configured: true, enabled: true, usageScope: 'agent_only', maxPayout: 5000, balance: 120000, paidTotal: 0, updatedAt: null };
   handle = () => undefined;
   vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit = {}) => {
     const method = init.method ?? 'GET';
@@ -246,7 +246,8 @@ it('shows the platform settings read-only, or says the platform has not opened r
   await vi.waitFor(() => expect(host.querySelector('[data-pool]')).not.toBeNull());
   const shown = $('[data-pool]').textContent!;
   expect(shown).toContain(t('campaign.pool.usage.agent_only'));
-  expect(shown).toContain(t('campaign.pool.forever'));
+  // 點數池只是額度：不顯示有效期
+  expect(shown).not.toContain(t('campaign.pool.validity'));
   expect(shown).toContain('5,000');
   expect(shown).toContain('120,000');
   app.unmount(); document.body.innerHTML = '';
