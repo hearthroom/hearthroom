@@ -109,10 +109,32 @@ describe("審核通過就發", () => {
     expect(((await (await get("/v1/moderation/card-rewards/due", "admin-token")).json()) as any).items).toEqual([]);
   });
 
-  it("活動期間外送審的卡不發", async () => {
+  // 資格看卡片「第一次過審上架」的時間（owner 2026-10-17）：登記、送審、撤回的時間都不看。
+  it("活動開始前送審、撤回，活動開始後才第一次過審上架：照發", async () => {
     await submit("r1");
-    // 這個作品第一次登記在活動開始之前
+    // 這個作品第一次登記、送審都在活動開始之前，審核中就撤回
     await env.DB.prepare("UPDATE card_registrations SET registered_at = ? WHERE source_role_id = 'r1'").bind(Date.now() - 2 * DAY).run();
+    await env.DB.prepare("UPDATE review_submissions SET submitted_at = ? WHERE card_id = (SELECT id FROM cards WHERE source_role_id = 'r1')").bind(Date.now() - 2 * DAY).run();
+    expect((await SELF.fetch(`https://c.test/v1/cards/${await cardIdOf("r1")}`, { method: "DELETE", headers: bearer("author-token") })).status).toBe(204);
+    await submit("r1");
+    expect((await approve("r1", "admin-token")).reward).toMatchObject({ status: "paid", amount: 10000 });
+  });
+
+  it("送審在活動開始前、過審在活動開始後：照發", async () => {
+    await submit("r1");
+    await env.DB.prepare("UPDATE card_registrations SET registered_at = ? WHERE source_role_id = 'r1'").bind(Date.now() - 2 * DAY).run();
+    await env.DB.prepare("UPDATE review_submissions SET submitted_at = ? WHERE card_id = (SELECT id FROM cards WHERE source_role_id = 'r1')").bind(Date.now() - 2 * DAY).run();
+    expect((await approve("r1", "admin-token")).reward).toMatchObject({ status: "paid" });
+  });
+
+  it("活動開始前就已經過審上架過的卡，下架重發再過審：不發", async () => {
+    await submit("r1");
+    await approve("r1", "mod-token");
+    // 第一次過審上架在活動開始之前
+    await env.DB.prepare("UPDATE review_submissions SET submitted_at = ?, decided_at = ? WHERE card_id = (SELECT id FROM cards WHERE source_role_id = 'r1')").bind(Date.now() - 3 * DAY, Date.now() - 2 * DAY).run();
+    await env.DB.prepare("UPDATE card_registrations SET registered_at = ? WHERE source_role_id = 'r1'").bind(Date.now() - 3 * DAY).run();
+    expect((await SELF.fetch(`https://c.test/v1/cards/${await cardIdOf("r1")}`, { method: "DELETE", headers: bearer("author-token") })).status).toBe(204);
+    await submit("r1");
     expect((await approve("r1", "admin-token")).reward).toBeNull();
     expect(await rewards()).toEqual([]);
   });
@@ -121,6 +143,14 @@ describe("審核通過就發", () => {
     await submit("r1");
     await env.DB.prepare("UPDATE card_reward_campaigns SET ends_at = ?").bind(Date.now() - 1).run();
     expect((await approve("r1", "admin-token")).reward).toMatchObject({ status: "paid" });
+  });
+
+  it("活動結束後才送審的不發", async () => {
+    await submit("r1");
+    // 這次送審在活動結束之後
+    await env.DB.prepare("UPDATE card_reward_campaigns SET ends_at = ?").bind(Date.now() - DAY).run();
+    await env.DB.prepare("UPDATE review_submissions SET submitted_at = ? WHERE card_id = (SELECT id FROM cards WHERE source_role_id = 'r1')").bind(Date.now() - DAY / 2).run();
+    expect((await approve("r1", "admin-token")).reward).toBeNull();
   });
 
   it("管理員不能發給自己：自己的卡停在待發放，由另一位管理員發", async () => {

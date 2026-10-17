@@ -261,7 +261,7 @@ export const fetchRewardProgress = (token: string, slug: string) => request<Rewa
 // ---- 發卡獎勵：後台補發（應用管理員）。形狀照 src/card-reward.ts ----
 export type RewardStatus = "pending" | "paid" | "blocked_insufficient" | "failed" | "cancelled";
 export interface RewardView { id: string; cardId: number; amount: number; status: RewardStatus; error: string | null; attempts: number; createdAt: number; settledAt: number | null }
-export interface RewardDueItem { cardId: number; cardName: string; campaignSlug: string; author: { handle: string }; registeredAt: number; amount: number }
+export interface RewardDueItem { cardId: number; cardName: string; campaignSlug: string; author: { handle: string }; listedAt: number; amount: number }
 export type RewardListItem = RewardView & { cardName: string; campaignSlug: string; author: { handle: string } };
 export const fetchRewardDue = (token: string, page = 1) => request<{ total: number; items: RewardDueItem[] }>(token, `/moderation/card-rewards/due${query({ page })}`);
 export const fetchRewardList = (token: string, q: { status?: RewardStatus; page?: number }) => request<{ total: number; items: RewardListItem[] }>(token, `/moderation/card-rewards/list${query(q)}`);

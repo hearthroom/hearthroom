@@ -444,8 +444,8 @@ it.each([
 
 it("創作季待發放：列出該補發的卡，確認筆數與總積分後一次發這一頁，每筆結果留在那一列", async () => {
   creatorDue = [
-    { cardId: 101, cardName: "夜行偵探", campaignSlug: "creator-season", author: { handle: "aaaaaaaa" }, registeredAt: Date.UTC(2026, 9, 17), amount: 10000 },
-    { cardId: 102, cardName: "雨天書店", campaignSlug: "creator-season", author: { handle: "bbbbbbbb" }, registeredAt: Date.UTC(2026, 9, 17), amount: 10000 },
+    { cardId: 101, cardName: "夜行偵探", campaignSlug: "creator-season", author: { handle: "aaaaaaaa" }, listedAt: Date.UTC(2026, 9, 17), amount: 10000 },
+    { cardId: 102, cardName: "雨天書店", campaignSlug: "creator-season", author: { handle: "bbbbbbbb" }, listedAt: Date.UTC(2026, 9, 17), amount: 10000 },
   ];
   replies.creatorBatch = [{ status: 200, body: { items: [
     { cardId: 101, reward: { id: "r1", cardId: 101, amount: 10000, status: "paid", error: null, attempts: 1, createdAt: 1, settledAt: 2 } },
