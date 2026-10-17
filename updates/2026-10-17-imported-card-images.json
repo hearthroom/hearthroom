@@ -1,0 +1,10 @@
+{
+  "tier": "fix",
+  "title": {
+    "zh-Hant": "從其他平台搬來的卡片以前有些圖片顯示不出來，現在會正常顯示了。",
+    "zh-Hans": "从其他平台搬来的卡片以前有些图片显示不出来，现在会正常显示了。",
+    "en": "Some pictures in cards brought over from other platforms used to stay blank, and now they show up.",
+    "ja": "他のプラットフォームから移したカードで、一部の画像が表示されない問題を直しました。",
+    "ko": "다른 플랫폼에서 옮겨 온 카드에서 일부 이미지가 보이지 않던 문제를 고쳤습니다."
+  }
+}
