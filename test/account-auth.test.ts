@@ -29,6 +29,28 @@ async function request(path: string, body?: unknown, extra: Record<string,string
 beforeEach(async()=>{ await resetDb(); cookies={}; envOverride={HARBOR_CLIENT_ID:''}; });
 afterEach(()=>vi.restoreAllMocks());
 
+it('adds exact pro auth origins without replacing the existing allowlist or CSRF checks', async()=>{
+  envOverride.AUTH_ADDITIONAL_ORIGINS='https://sukisuki.pro,https://www.sukisuki.pro,https://play.sukisuki.pro';
+  expect((await request('config')).status).toBe(200);
+  const www=await worker.fetch(new Request('https://www.sukisuki.pro/v1/auth/config'),authEnv(),context);
+  expect(www.status).toBe(301);
+  expect(www.headers.get('location')).toBe('https://sukisuki.pro/v1/auth/config');
+  for(const host of ['sukisuki.pro','play.sukisuki.pro']){
+    const r=await worker.fetch(new Request(`https://${host}/v1/auth/config`),authEnv(),context);
+    expect(r.status).toBe(200);
+    expect(r.headers.get('cache-control')).toBe('private, no-store');
+    expect(await r.json()).toEqual({managed:true});
+    const cross=await worker.fetch(new Request(`https://${host}/v1/auth/start`,{
+      method:'POST',headers:{Origin:origin,'X-Hearthroom-Request':'1','Content-Type':'application/json'},body:'{}',
+    }),authEnv(),context);
+    expect(cross.status).toBe(403);
+  }
+  for(const host of ['sukisuki.pro.evil.test','evil.sukisuki.pro','c1.sukisuki.pro']){
+    const r=await worker.fetch(new Request(`https://${host}/v1/auth/config`),authEnv(),context);
+    expect([403,404]).toContain(r.status);
+  }
+});
+
 it('advertises managed auth only with complete configuration and rejects cross-origin starts', async()=>{
   expect(await (await request('config')).json()).toEqual({managed:true});
   const r=await request('start',{provider:'harbor',returnTo:'/me'},{Origin:'https://attacker.test'});
