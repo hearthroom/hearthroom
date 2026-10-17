@@ -106,6 +106,10 @@ describe("頁頭與規則卡", () => {
     expect(text("[data-phase]")).toBe(t("creator.status.ended"));
     expect(links()).toEqual([[t("creator.cta.ended"), "/mine"]]);
     expect(text("[data-cta]")).toContain(t("creator.say.ended", { end: "10月31日" }));
+    // 結束後：沒有規則清單、沒有怎麼參加、沒有導言氣泡
+    expect($("[data-rules] .creator__list")).toBeNull();
+    expect($(".creator__how")).toBeNull();
+    expect($("[data-lead]")).toBeNull();
   });
 
   it("登入、額度還有：寫一張新卡與從我的卡片送審；額度用完：主按鈕換成從我的卡片送審，一行說明在它下面", async () => {
@@ -150,6 +154,18 @@ describe("我的進度", () => {
     await mount(CampaignPage);
     expect($("[data-empty]")!.textContent).toContain(t("creator.say.empty"));
     expect($("[data-rules] img")).toBeNull();
+  });
+});
+
+describe("活動結束後的進度", () => {
+  it("不看本週額度：只剩這期過審與已入帳兩格", async () => {
+    session.me = { accountNumId: 7 };
+    detail = creator({ phase: "ended" });
+    vi.setSystemTime(END + DAY);
+    progress = { ...progress, approvedCount: 1, items: [item(7, "approved", { status: "paid", amount: 10000 })] };
+    await mount(CampaignPage);
+    expect($('[data-cell="week"]')).toBeNull();
+    expect(host.querySelectorAll(".creator__cells--two .creator__cell")).toHaveLength(2);
   });
 });
 
