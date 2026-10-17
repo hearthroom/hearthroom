@@ -31,7 +31,7 @@ export interface CampaignInput {
 /** Provider 的點數池設定，只能看；configured 為 false 時其餘欄位不存在。 */
 export type CampaignPool =
   | { configured: false }
-  | { configured: true; enabled: boolean; usageScope: "all" | "agent_only" | null; validityDays: number | null; maxPayout: number | null; balance: number; paidTotal: number; updatedAt: string | null };
+  | { configured: true; enabled: boolean; usageScope: "all" | "agent_only" | null; maxPayout: number | null; balance: number; paidTotal: number; updatedAt: string | null };
 
 /** 活動在這個語言的名字；沒有就退回正體，再退回任何一個。 */
 export const localized = (l: Localized, locale: string) => l[locale] || l["zh-Hant"] || Object.values(l).find(Boolean) || "";

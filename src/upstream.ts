@@ -404,13 +404,15 @@ async function setFeatured(env: Env, bearer: string, roleId: string, featured: b
 }
 
 
-/** 本站應用的活動點數池（Provider 是唯一來源）。usageScope／maxPayout 在平台設定前是空值，這裡轉成 null。 */
+/**
+ * 本站應用的活動點數池（Provider 是唯一來源）。usageScope／maxPayout 在平台設定前是空值，這裡轉成 null。
+ * 池子只是額度，沒有有效期：發出去的點數幾天到期由每次發放決定，本站的發放都不帶（＝永久）。
+ */
 export interface CampaignPool {
   balance: number;
   paidTotal: number;
   enabled: boolean;
   usageScope: "all" | "agent_only" | null;
-  validityDays: number | null;
   maxPayout: number | null;
   configured: boolean;
   updatedAt: string | null;
@@ -442,7 +444,6 @@ async function fetchCampaignPool(env: Env, bearer: string, provider: ProviderId 
     paidTotal: b.paidTotal as number,
     enabled: b.enabled === true,
     usageScope: b.usageScope === "all" || b.usageScope === "agent_only" ? b.usageScope : null,
-    validityDays: positive(b.validityDays),
     maxPayout: positive(b.maxPayout),
     configured: b.configured === true,
     updatedAt: typeof b.updatedAt === "string" ? b.updatedAt : null,

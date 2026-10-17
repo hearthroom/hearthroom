@@ -20282,7 +20282,6 @@
           "paidTotal",
           "enabled",
           "usageScope",
-          "validityDays",
           "maxPayout",
           "configured",
           "updatedAt"
@@ -20303,13 +20302,6 @@
           "usageScope": {
             "type": "string",
             "description": "What credits paid from this pool can be spent on: `all` for anything, `agent_only` for agent conversations only. Empty until the platform sets it."
-          },
-          "validityDays": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "description": "Days a paid reward stays valid. `null` means it does not expire."
           },
           "maxPayout": {
             "type": "integer",
@@ -20365,6 +20357,12 @@
             "type": "string",
             "maxLength": 128,
             "description": "Optional reference to the content the reward is for, up to 128 characters."
+          },
+          "validityDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3650,
+            "description": "Optional. Days until the paid credits expire, from 1 to 3650. Leave it out for credits that never expire. Re-sending a key must carry the same value."
           }
         }
       },
