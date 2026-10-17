@@ -93,9 +93,10 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
             <RouterLink class="btn btn--primary btn--lg" :to="lp('/create')">{{ t("creator.cta.write") }}</RouterLink>
             <p class="creator__cap">{{ t("creator.say.upcoming", { start }) }}</p>
           </template>
+          <!-- 額度用完：主按鈕換成從我的卡片送審（位置不變），一行說明在它下面，再接寫一張新卡 -->
           <template v-else-if="quotaFull">
-            <p class="creator__full" data-quota-full>{{ t("creator.cta.quotaFull", { reset: resetText }) }}</p>
             <RouterLink class="btn btn--primary btn--lg" :to="lp('/mine')">{{ t("creator.cta.fromMine") }}</RouterLink>
+            <p class="creator__full" data-quota-full>{{ t("creator.cta.quotaFull", { reset: resetText }) }}</p>
             <RouterLink class="btn btn--ghost btn--lg" :to="lp('/create')">{{ t("creator.cta.write") }}</RouterLink>
           </template>
           <template v-else>
@@ -265,7 +266,7 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
 .creator__big-num { font-size: 48px; font-weight: 800; letter-spacing: -0.02em; }
 .creator__actions { display: grid; gap: var(--s-2); margin-top: var(--s-1); }
 .creator__actions .btn { justify-content: center; min-height: 44px; }
-.creator__full { margin: 0; min-height: 44px; display: flex; align-items: center; padding: 0 var(--s-3); border-radius: var(--r-md); background: var(--surface-2); font-size: 14px; color: var(--text-2); }
+.creator__full { margin: 0; font-size: 13px; line-height: 1.55; color: var(--text-2); text-align: center; }
 .creator__line { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--text-2); }
 .creator__list { list-style: none; margin: var(--s-1) 0 0; padding: var(--s-3) 0 0; border-top: 1px solid var(--line); display: grid; gap: 6px; }
 .creator__list li { display: flex; align-items: flex-start; gap: var(--s-2); font-size: 13px; line-height: 1.6; }
