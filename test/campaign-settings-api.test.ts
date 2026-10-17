@@ -176,14 +176,15 @@ describe("公開資訊", () => {
     expect(list.status).toBe(200);
     expect(list.headers.get("Cache-Control")).toBe("public, max-age=60");
     const items = (await json(list)).items;
-    expect(items).toEqual([{ slug: "launch", title: { "zh-Hant": "開站分享" }, phase: "open", startsAt: T0, endsAt: T0 + 10 * DAY, timezone: "Asia/Taipei", bannerUrl: null, featured: false }]);
+    // 公開列表兩種活動共用：kind 分辨，featuredRank 是首頁輪播的順序（遷移設定）
+    expect(items).toEqual([{ kind: "share", slug: "launch", title: { "zh-Hant": "開站分享" }, phase: "open", startsAt: T0, endsAt: T0 + 10 * DAY, timezone: "Asia/Taipei", bannerUrl: null, featured: false, featuredRank: null }]);
 
     const one = await call("/v1/campaigns/launch");
     expect(one.status).toBe(200);
     expect(one.headers.get("Cache-Control")).toBe("public, max-age=60");
     const detail = await json(one);
     expect(detail).toEqual({
-      slug: "launch", title: { "zh-Hant": "開站分享" }, phase: "open", startsAt: T0, endsAt: T0 + 10 * DAY, timezone: "Asia/Taipei", bannerUrl: null, featured: false,
+      kind: "share", slug: "launch", title: { "zh-Hant": "開站分享" }, phase: "open", startsAt: T0, endsAt: T0 + 10 * DAY, timezone: "Asia/Taipei", bannerUrl: null, featured: false,
       intro: { "zh-Hant": "分享就有點數" }, submitDeadline: T0 + 12 * DAY, payoutDeadline: T0 + 20 * DAY,
       tiers: { light: 500, original: 3000, guide: 5000, video: 10000 }, extraPlacementAmount: 500, lightLimit: null,
     });

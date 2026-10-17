@@ -14,6 +14,7 @@ import { operationOf } from "./moderation";
 import { bumpOp } from "./ops-metrics";
 import { bearerOf, communityAdmin, humanOnly, requireCommunityAdmin, staff } from "./staff";
 import { upstream } from "./upstream";
+import { cardRewardDetail, cardRewardSummary, getRewardCampaign, listRewardCampaigns } from "./card-reward";
 import { HttpError, type Env } from "./types";
 
 /**
@@ -58,17 +59,36 @@ const detailView = (c: Campaign, now: number) => ({
   ...summaryView(c, now), intro: c.intro, submitDeadline: c.submitDeadline, payoutDeadline: c.payoutDeadline, tiers: c.tiers, extraPlacementAmount: c.extraPlacementAmount, lightLimit: c.lightLimit,
 });
 
+/**
+ * 公開列表也帶發卡獎勵活動（創作季，card-reward.ts），活動頁、活動中心、首頁輪播共用同一份；kind 分辨兩種。
+ * featuredRank 是首頁輪播的順序，由遷移設定（設定頁沒有這一欄），所以另外讀，不進 Campaign 與它的稽核。
+ */
 campaignRoutes.get("/v1/campaigns", async (c) => {
   const now = Date.now();
-  return c.json({ items: (await listCampaigns(c.env.DB, { includeDraft: false })).map((x) => summaryView(x, now)) }, 200, PUBLIC);
+  const [shares, ranks, rewards] = await Promise.all([
+    listCampaigns(c.env.DB, { includeDraft: false }),
+    c.env.DB.prepare("SELECT slug, featured_rank FROM campaigns WHERE featured_rank IS NOT NULL").all<{ slug: string; featured_rank: number }>(),
+    listRewardCampaigns(c.env.DB),
+  ]);
+  const rank = new Map(ranks.results.map((r) => [r.slug, r.featured_rank]));
+  return c.json({
+    items: [
+      ...shares.map((x) => ({ kind: "share", ...summaryView(x, now), featuredRank: rank.get(x.slug) ?? null })),
+      ...rewards.map((x) => cardRewardSummary(x, now)),
+    ],
+  }, 200, PUBLIC);
 });
 
 campaignRoutes.get("/v1/campaigns/:slug", async (c) => {
   const slug = c.req.param("slug");
   const campaign = await getCampaign(c.env.DB, slug);
-  // getCampaign 也認 id；公開網址只認 slug。
-  if (!campaign || campaign.slug !== slug || campaign.status === "draft") return c.json({ error: "campaign_not_found" }, 404, PUBLIC);
-  return c.json(detailView(campaign, Date.now()), 200, PUBLIC);
+  // getCampaign 也認 id；公開網址只認 slug。分享活動沒有這個 slug 就找發卡獎勵活動。
+  if (!campaign || campaign.slug !== slug || campaign.status === "draft") {
+    const reward = await getRewardCampaign(c.env.DB, slug);
+    if (reward?.status === "active") return c.json(cardRewardDetail(reward, Date.now()), 200, PUBLIC);
+    return c.json({ error: "campaign_not_found" }, 404, PUBLIC);
+  }
+  return c.json({ kind: "share", ...detailView(campaign, Date.now()) }, 200, PUBLIC);
 });
 
 // ---- 截圖（私有）--------------------------------------------------------------
