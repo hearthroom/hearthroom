@@ -116,7 +116,7 @@ watch(() => [props.provider, props.externalId], () => load(true), { immediate: t
           <span v-else class="subtle">{{ $t("linked.balanceUnknown") }}</span>
         </p>
         <p v-if="wallet?.tempScore" class="subtle">{{ $t("wallet.temp", { n: whole(wallet.tempScore) }) }}</p>
-        <a class="btn btn--primary btn--lg balance__cta" href="https://console.harperharbor.com/me/wallet" target="_blank" rel="noopener" @click="track('topup_click')">{{ $t("wallet.topUp") }} ↗</a>
+        <a class="btn btn--primary btn--lg balance__cta" href="https://console.harperharbor.com/me/billing" target="_blank" rel="noopener" @click="track('topup_click')">{{ $t("wallet.topUp") }} ↗</a>
       </section>
 
       <WalletInvite :provider="provider" :external-id="externalId" />

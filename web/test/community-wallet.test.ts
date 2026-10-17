@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { createApp, nextTick } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
-import { i18n } from '../src/lib/i18n';
+import { i18n, loadLocale } from '../src/lib/i18n';
 import { useSession } from '../src/lib/session';
 import { currentProvider, setProvider } from '../src/lib/provider';
 import WalletPage from '../src/pages/WalletPage.vue';
@@ -112,4 +112,22 @@ it('統計讀不到：圖和最近消耗不顯示，流水照常', async () => {
   expect(page.querySelector('.usage')).toBeNull();
   expect(page.querySelector('[data-testid="wallet-spent"]')).toBeNull();
   expect(page.querySelectorAll('.row')).toHaveLength(2);
+});
+
+
+it.each(['zh-Hant', 'zh-Hans', 'en', 'ja', 'ko'] as const)('top up opens Console billing directly in %s', async (locale) => {
+  const previousLocale = i18n.global.locale.value;
+  try {
+    await loadLocale(locale);
+    i18n.global.locale.value = locale;
+    mocks.summary.mockResolvedValue(summary); mocks.referral.mockResolvedValue(referral());
+    const page = await mountWallet();
+    const topUp = page.querySelector<HTMLAnchorElement>('.balance__cta')!;
+    expect(topUp.textContent).toContain(t('wallet.topUp'));
+    expect(topUp.href).toBe('https://console.harperharbor.com/me/billing');
+    expect(topUp.target).toBe('_blank');
+    expect(topUp.relList.contains('noopener')).toBe(true);
+  } finally {
+    i18n.global.locale.value = previousLocale;
+  }
 });
