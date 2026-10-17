@@ -1,5 +1,5 @@
 import { PRIMARY_HOST } from "../shared/site-hosts";
-import { siteName } from "../shared/site-name";
+import { SITE_NAME, siteName } from "../shared/site-name";
 import { plainText } from "./blog-head";
 import type { Campaign } from "./campaign";
 import { oneLine, siteOgImage, type PageMeta } from "./head";
@@ -35,9 +35,9 @@ const pick = (text: Partial<Record<string, string>>, lang: Locale) => text[lang]
 const FALLBACK: Record<Locale, string> = {
   "zh-Hant": "向朋友介紹綺夢社或分享喜歡的卡就能拿積分，朋友用你的連結註冊還有推薦分成。",
   "zh-Hans": "向朋友介绍绮梦社或分享喜欢的卡就能拿积分，朋友用你的链接注册还有推荐分成。",
-  en: "Tell friends about Hearthroom or share a card you love to earn credits, and get a cut when they join through your link.",
-  ja: "Hearthroom の紹介やお気に入りカードのシェアでポイントがもらえ、リンクから登録した友だちのチャージでも特典があります。",
-  ko: "Hearthroom을 소개하거나 좋아하는 카드를 공유하면 포인트를 받고, 내 링크로 가입한 친구가 충전하면 보상도 나눠 받아요.",
+  en: `Tell friends about ${SITE_NAME} or share a card you love to earn credits, and get a cut when they join through your link.`,
+  ja: `${SITE_NAME} の紹介やお気に入りカードのシェアでポイントがもらえ、リンクから登録した友だちのチャージでも特典があります。`,
+  ko: `${SITE_NAME}를 소개하거나 좋아하는 카드를 공유하면 포인트를 받고, 내 링크로 가입한 친구가 충전하면 보상도 나눠 받아요.`,
 };
 
 /** 公開活動的分享資訊；草稿或不存在由呼叫端擋（回 404＋noindex）。 */
@@ -66,9 +66,9 @@ export function campaignMeta(c: Campaign, lang: Locale, url: string): PageMeta {
 const INVITE: Record<Locale, { title: string; description: string }> = {
   "zh-Hant": { title: "朋友邀你來綺夢社：和 AI 角色一起寫故事", description: "戀愛、冒險、世界模擬、玩法模擬，挑一張角色卡就能開聊，故事跟著你的選擇走。用朋友的連結註冊，還送新人積分先玩。" },
   "zh-Hans": { title: "朋友邀你来绮梦社：和 AI 角色一起写故事", description: "恋爱、冒险、世界模拟、玩法模拟，挑一张角色卡就能开聊，故事跟着你的选择走。用朋友的链接注册，还送新人积分先玩。" },
-  en: { title: "A friend invited you to Hearthroom: write stories with AI characters", description: "Romance, adventure, world sims and game sims. Pick a character card and start chatting; the story follows your choices. Sign up through your friend's link for welcome credits." },
-  ja: { title: "友だちから Hearthroom への招待：AI キャラクターと物語をつくろう", description: "恋愛、冒険、世界シミュレーター、ゲーム系まで。キャラクターカードを選べばすぐ会話でき、物語はあなたの選択で進みます。友だちのリンクから登録すると、はじめのポイントがもらえます。" },
-  ko: { title: "친구가 Hearthroom에 초대했어요: AI 캐릭터와 함께 쓰는 이야기", description: "연애, 모험, 세계 시뮬레이터, 게임 시뮬레이터까지. 캐릭터 카드를 고르면 바로 대화할 수 있고 이야기는 당신의 선택을 따라가요. 친구 링크로 가입하면 시작 포인트를 받아요." },
+  en: { title: `A friend invited you to ${SITE_NAME}: write stories with AI characters`, description: "Romance, adventure, world sims and game sims. Pick a character card and start chatting; the story follows your choices. Sign up through your friend's link for welcome credits." },
+  ja: { title: `友だちから ${SITE_NAME} への招待：AI キャラクターと物語をつくろう`, description: "恋愛、冒険、世界シミュレーター、ゲーム系まで。キャラクターカードを選べばすぐ会話でき、物語はあなたの選択で進みます。友だちのリンクから登録すると、はじめのポイントがもらえます。" },
+  ko: { title: `친구가 ${SITE_NAME}에 초대했어요: AI 캐릭터와 함께 쓰는 이야기`, description: "연애, 모험, 세계 시뮬레이터, 게임 시뮬레이터까지. 캐릭터 카드를 고르면 바로 대화할 수 있고 이야기는 당신의 선택을 따라가요. 친구 링크로 가입하면 시작 포인트를 받아요." },
 };
 const REF_CODE = /^[A-Z0-9]{4,32}$/i;
 /** 首頁網址帶了像樣的推薦碼就是專屬連結 */

@@ -1,5 +1,5 @@
 import { PRIMARY_HOST } from "../shared/site-hosts";
-import { siteLockup, siteName } from "../shared/site-name";
+import { SITE_NAME, siteLockup, siteName } from "../shared/site-name";
 /**
  * 分享預覽：把下載頁／卡片／作者的標題、簡介、圖片寫進 HTML 的 <head>。
  *
@@ -148,9 +148,9 @@ export function renderDefaultShareHead(page: Response, lang: string): Response {
 const DOWNLOAD_COPY: Record<string, {title:string;description:string}> = {
   "zh-Hant": {title:"下載綺夢社",description:"綺夢社的 Android App 與瀏覽器安裝指南：下載最新版 APK，查看手機安裝步驟與 App 更新方式。"},
   "zh-Hans": {title:"下载绮梦社",description:"绮梦社的 Android App 与浏览器安装指南：下载最新版 APK，查看手机安装步骤与 App 更新方式。"},
-  en: {title:"Download Hearthroom",description:"Get the latest Hearthroom Android APK, follow the installation guide, and learn how app updates work. Browser installation options are included."},
-  ja: {title:"Hearthroom をダウンロード",description:"Hearthroom の最新 Android APK とインストールガイド。スマートフォンへの導入、アプリの更新、ブラウザからの利用方法を確認できます。"},
-  ko: {title:"Hearthroom 다운로드",description:"Hearthroom 최신 Android APK와 설치 가이드입니다. 휴대폰 설치 단계, 앱 업데이트 및 브라우저 설치 방법을 확인하세요."},
+  en: {title:`Download ${SITE_NAME}`,description:`Get the latest ${SITE_NAME} Android APK, follow the installation guide, and learn how app updates work. Browser installation options are included.`},
+  ja: {title:`${SITE_NAME} をダウンロード`,description:`${SITE_NAME} の最新 Android APK とインストールガイド。スマートフォンへの導入、アプリの更新、ブラウザからの利用方法を確認できます。`},
+  ko: {title:`${SITE_NAME} 다운로드`,description:`${SITE_NAME} 최신 Android APK와 설치 가이드입니다. 휴대폰 설치 단계, 앱 업데이트 및 브라우저 설치 방법을 확인하세요.`},
 };
 export function downloadMeta(lang:string,url:string):PageMeta {
   return {lang,...(DOWNLOAD_COPY[lang] ?? DOWNLOAD_COPY.en!),url,type:"website",image:siteOgImage("download", lang),imageSize:{width:1200,height:630}};
@@ -160,9 +160,9 @@ export function downloadMeta(lang:string,url:string):PageMeta {
 const UPDATES_COPY: Record<string, {title:string;description:string}> = {
   "zh-Hant": {title:"綺夢社更新紀錄",description:"綺夢社每次上線了什麼新功能、修好了哪些問題，都記在這裡，每一項都附上去哪裡試。"},
   "zh-Hans": {title:"绮梦社更新记录",description:"绮梦社每次上线了什么新功能、修好了哪些问题，都记在这里，每一项都附上去哪里试。"},
-  en: {title:"Hearthroom updates",description:"Every new feature and fix that went live on Hearthroom, with a link to try each one."},
-  ja: {title:"Hearthroom の更新履歴",description:"Hearthroom に追加された新機能と修正の一覧です。それぞれ試せる場所へのリンクも載せています。"},
-  ko: {title:"Hearthroom 업데이트 기록",description:"Hearthroom에 새로 추가된 기능과 수정 사항을 모았습니다. 항목마다 바로 써 볼 수 있는 링크가 있습니다."},
+  en: {title:`${SITE_NAME} updates`,description:`Every new feature and fix that went live on ${SITE_NAME}, with a link to try each one.`},
+  ja: {title:`${SITE_NAME} の更新履歴`,description:`${SITE_NAME} に追加された新機能と修正の一覧です。それぞれ試せる場所へのリンクも載せています。`},
+  ko: {title:`${SITE_NAME} 업데이트 기록`,description:`${SITE_NAME}에 새로 추가된 기능과 수정 사항을 모았습니다. 항목마다 바로 써 볼 수 있는 링크가 있습니다.`},
 };
 export function updatesMeta(lang:string,url:string):PageMeta {
   return {lang,...(UPDATES_COPY[lang] ?? UPDATES_COPY.en!),url,type:"website",image:siteOgImage("updates", lang),imageSize:{width:1200,height:630}};

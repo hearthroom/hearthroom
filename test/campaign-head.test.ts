@@ -17,7 +17,7 @@ async function get(path: string, acceptLanguage?: string, host = "c.test") {
   return { status: res.status, text: await res.text(), headers: res.headers };
 }
 
-const title = { "zh-Hant": "綺夢分享季", "zh-Hans": "绮梦分享季", en: "Hearthroom Share Season" };
+const title = { "zh-Hant": "綺夢分享季", "zh-Hans": "绮梦分享季", en: "SukiSuki Share Season" };
 const intro = {
   "zh-Hant": "## 分享好卡，帶朋友來玩\n把喜歡的卡分享到社群，**審核通過**就拿積分。\n\n### 各檔怎麼認定\n- **輕量分享**：群組裡介紹",
   "zh-Hans": "## 分享好卡，带朋友来玩\n把喜欢的卡分享到社区，**审核通过**就拿积分。",
@@ -66,11 +66,11 @@ describe("活動頁分享資訊", () => {
     expect(hans.text).toContain('<meta property="og:title" content="绮梦分享季 · 绮梦社">');
     expect(hans.text).toContain(`<link rel="canonical" href="https://${PRIMARY_HOST}/zh-Hans/campaign/share-season">`);
     const en = await get("/en/campaign/share-season/", "zh-CN");
-    expect(en.text).toContain('<meta property="og:title" content="Hearthroom Share Season · Hearthroom">');
+    expect(en.text).toContain('<meta property="og:title" content="SukiSuki Share Season · SukiSuki">');
     expect(en.text).toContain('<meta property="og:description" content="Share a card you love and earn credits.">');
     // 這個語言沒填的欄位退回繁中
     const ja = await get("/ja/campaign/share-season");
-    expect(ja.text).toContain('<meta property="og:title" content="綺夢分享季 · Hearthroom">');
+    expect(ja.text).toContain('<meta property="og:title" content="綺夢分享季 · SukiSuki">');
   });
 
   it("沒有橫幅用站台預設分享圖", async () => {
@@ -99,7 +99,7 @@ describe("帶推薦碼的首頁分享預覽（專屬連結）", () => {
     expect(hant.headers.get("vary")).toContain("Accept-Language");
     expect((await get("/?ref=K7XQ2M", "zh-CN", PRIMARY_HOST)).text).toContain('<meta property="og:title" content="朋友邀你来绮梦社：和 AI 角色一起写故事">');
     expect((await get("/?ref=K7XQ2M", undefined, PRIMARY_HOST)).text).toContain('<html lang="zh-Hans">');
-    expect((await get("/en/?ref=K7XQ2M", "zh-TW", PRIMARY_HOST)).text).toContain("A friend invited you to Hearthroom");
+    expect((await get("/en/?ref=K7XQ2M", "zh-TW", PRIMARY_HOST)).text).toContain("A friend invited you to SukiSuki");
   });
 
   it("沒有推薦碼或推薦碼格式不對：照原本的首頁預覽", async () => {

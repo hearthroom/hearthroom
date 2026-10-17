@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { UPDATES, UPDATES_BUILD } from "./generated/updates";
 import { PRIMARY_HOST } from "../shared/site-hosts";
+import { SITE_NAME } from "../shared/site-name";
 import { UPDATE_LOCALES, pickUpdateText, type UpdateEntry, type UpdateItem, type UpdateLocale, type UpdateState, type UpdatesResponse } from "../shared/updates";
 import { requireMember } from "./members";
 import { HttpError, type Env } from "./types";
@@ -295,9 +296,9 @@ export async function maintainUpdates(env: Env, now: number): Promise<void> {
 const DIGEST_COPY: Record<UpdateLocale, { heading: (m: number, d: number) => string; fixes: string; more: string }> = {
   "zh-Hant": { heading: (m, d) => `綺夢社 ${m}/${d} 的更新`, fixes: "修正", more: "看全部更新" },
   "zh-Hans": { heading: (m, d) => `绮梦社 ${m}/${d} 的更新`, fixes: "修复", more: "查看全部更新" },
-  en: { heading: (m, d) => `What's new on Hearthroom, ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][m - 1]} ${d}`, fixes: "Fixes", more: "See all updates" },
-  ja: { heading: (m, d) => `Hearthroom ${m}月${d}日の更新`, fixes: "修正", more: "すべての更新を見る" },
-  ko: { heading: (m, d) => `Hearthroom ${m}월 ${d}일 업데이트`, fixes: "수정", more: "전체 업데이트 보기" },
+  en: { heading: (m, d) => `What's new on ${SITE_NAME}, ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][m - 1]} ${d}`, fixes: "Fixes", more: "See all updates" },
+  ja: { heading: (m, d) => `${SITE_NAME} ${m}月${d}日の更新`, fixes: "修正", more: "すべての更新を見る" },
+  ko: { heading: (m, d) => `${SITE_NAME} ${m}월 ${d}일 업데이트`, fixes: "수정", more: "전체 업데이트 보기" },
 };
 
 async function renderDigest(day: string, ids: string[], locale: UpdateLocale) {
@@ -456,9 +457,9 @@ export async function updateBridge(env: Env, op: string, b: Record<string, unkno
 const FEED_TITLE: Record<UpdateLocale, string> = {
   "zh-Hant": "綺夢社更新紀錄",
   "zh-Hans": "绮梦社更新记录",
-  en: "Hearthroom updates",
-  ja: "Hearthroom の更新履歴",
-  ko: "Hearthroom 업데이트 기록",
+  en: `${SITE_NAME} updates`,
+  ja: `${SITE_NAME} の更新履歴`,
+  ko: `${SITE_NAME} 업데이트 기록`,
 };
 const xml = (s: string) => s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[ch]!);
 
