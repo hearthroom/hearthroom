@@ -12,7 +12,7 @@ import zhHant from "../src/locales/zh-Hant.json";
 const TOOL_NAME_KEYS = new Set(["guide.start.agent.lead", "guide.start.agent.cli"]);
 
 describe("外語介面的站名只從 shared/site-name.ts 來", () => {
-  it.each([["en", en], ["ja", ja], ["ko", ko]] as const)("%s 的字串不寫死舊站名", (_code, messages) => {
+  it.each([["zh-Hant", zhHant], ["zh-Hans", zhHans], ["en", en], ["ja", ja], ["ko", ko]] as const)("%s 的字串不寫死舊站名", (_code, messages) => {
     const hardcoded = Object.entries(messages as Record<string, string>)
       .filter(([key, text]) => !TOOL_NAME_KEYS.has(key) && /hearth\s*room/i.test(text))
       .map(([key]) => key);
@@ -46,11 +46,12 @@ describe("外語介面的站名只從 shared/site-name.ts 來", () => {
   });
 });
 
-describe("中文介面看到的字不變", () => {
+describe("中文介面代入中文站名", () => {
   it("{site} 在中文代入綺夢社／绮梦社", async () => {
     await applyLocale("zh-Hant");
     expect(i18n.global.t("mascot.pet.guide.download.hello")).toBe("想把綺夢社裝進手機看這裡。");
     await applyLocale("zh-Hans");
     expect(i18n.global.t("mascot.pet.guide.download.hello")).toBe("想把绮梦社装进手机就看这里。");
+    expect(i18n.global.t("card.featured")).toBe("绮梦社精选卡");
   });
 });
