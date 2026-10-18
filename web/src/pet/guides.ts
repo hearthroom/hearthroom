@@ -13,7 +13,7 @@ export interface GuideDef {
 const is = (re: RegExp) => (path: string) => re.test(path);
 
 export const GUIDES: GuideDef[] = [
-  { id: "board", match: is(/^\/$/), topics: 3 },
+  { id: "board", match: is(/^\/$/), topics: 4 },
   { id: "search", match: is(/^\/search$/), topics: 2 },
   { id: "editor", match: is(/^\/(create|cards\/[^/]+\/edit)$/), topics: 3 },
   { id: "card", match: is(/^\/cards\/[^/]+$/), topics: 3 },

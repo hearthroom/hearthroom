@@ -40,6 +40,13 @@ const METRICS = {
     // insufficient：點數池餘額不足，發放排隊
     outcomes: ["success", "denied", "error", "insufficient"],
   },
+  card_heat: {
+    name: "hearthroom_card_heat_sync_total",
+    help: "Hourly card heat sync: batch reads from the provider.",
+    label: "operation",
+    operations: ["batch"],
+    outcomes: ["success", "error"],
+  },
 } as const;
 export type OpsMetric = keyof typeof METRICS;
 
