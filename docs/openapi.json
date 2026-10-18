@@ -13132,6 +13132,19 @@
           "lastUpdateTime"
         ],
         "properties": {
+          "finishReason": {
+            "type": "string",
+            "enum": [
+              "",
+              "stop",
+              "length",
+              "content_filter",
+              "refusal",
+              "interrupted",
+              "user_stop"
+            ],
+            "description": "Optional bounded termination category. Empty while running; stop only for a completed answer. length, content_filter and refusal explain an interrupted or failed reply. user_stop takes precedence over upstream reasons. Live operationStatus, replay and operation history carry the same value. Recovery remains governed by allowedActions; this field never starts another model call."
+          },
           "operationId": {
             "type": "string",
             "description": "Server operation id."
