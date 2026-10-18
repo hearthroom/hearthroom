@@ -1947,5 +1947,12 @@
   "d907e34634164": "How many days the welcome credits stay valid; 0 means permanent (the current newcomer welcome gift).",
   "deb06756ca65f": "Platform-funded credits for the original referrer of each eligible new-user binding during the inviter promotion; 0 outside the promotion. Independent of the ongoing newcomer welcome gift and the application campaign pool. Valid for inviterDays days (0 means permanent); replaying or switching the binding does not issue another gift.",
   "d821fec22b74e": "Optional bounded termination category. Empty while running; stop only for a completed answer. length, content_filter and refusal explain an interrupted or failed reply. user_stop takes precedence over upstream reasons. Live operationStatus, replay and operation history carry the same value. Recovery remains governed by allowedActions; this field never starts another model call.",
-  "da673476946a1": "Credits spent on this card by everyone except its author, summed across all published versions. Refreshed about hourly."
+  "da673476946a1": "Credits spent on this card by everyone except its author, summed across all published versions. Refreshed about hourly.",
+  "de33717bf23c5": "Read the heat of several role cards at once",
+  "d78c5ae62790e": "Batch read for scheduled sync. Guest-readable: no Authorization header is required. Returns the heat (see `RoleDetail.heat`) of each requested card that an anonymous reader can see; private, deleted, taken-down or unknown ids are left out of the result rather than reported as errors. At most 200 ids per request.",
+  "d2a95b10e6683": "Role ids (`characterRoleId`).",
+  "dce86e0f3b6e2": "Heat by role id.",
+  "d4d6d46512c61": "Map from role id to heat. Only readable cards appear.",
+  "df207900f9c85": "Malformed body, an id that is not a UUID, or more than 200 ids.",
+  "d5d76a7280cc8": "Credits spent on this card by everyone except its author, summed across all published versions of the work. Staging versions are not counted."
 }
