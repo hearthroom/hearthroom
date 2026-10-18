@@ -6932,6 +6932,170 @@
         }
       }
     },
+    "/open/v1/player/background": {
+      "post": {
+        "operationId": "uploadPlayerBackground",
+        "tags": [
+          "Player settings"
+        ],
+        "summary": "Upload this card's background image",
+        "description": "Stores the caller's own background image for one card and switches that card's preference to it (`backgroundMode` = `custom`, `backgroundCustomUrl` = the returned `url`). JPEG, PNG or WebP, at most 10 MB after base64 decoding; the declared type and the actual bytes must both match. Each account keeps one image per card: uploading again deletes the previous one. Other preference keys are untouched.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlayerBackgroundUploadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stored; the card's preference now points at this image.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerBackgroundUploadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found` — the card does not exist or is not playable for this account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`file_too_large`, or `quota_exceeded` when the account's media storage is full.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "`unsupported_media_type`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/player/background/delete": {
+      "post": {
+        "operationId": "deletePlayerBackground",
+        "tags": [
+          "Player settings"
+        ],
+        "summary": "Delete this card's background image",
+        "description": "Deletes the caller's uploaded background image for one card and clears `backgroundCustomUrl` in that card's preference. `backgroundMode` is not changed; save the mode the player picked with savePlayerPreference. Succeeds when there is no image.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlayerBackgroundDeleteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Deleted, or there was nothing to delete.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerBackgroundDeleteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/open/v1/player/role-settings": {
       "get": {
         "operationId": "getPlayerRoleSettings",
@@ -16292,6 +16456,77 @@
             "type": "object",
             "additionalProperties": true,
             "description": "Keys to merge."
+          }
+        }
+      },
+      "PlayerBackgroundUploadRequest": {
+        "type": "object",
+        "description": "Background image upload for one card.",
+        "required": [
+          "roleId",
+          "contentType",
+          "image"
+        ],
+        "properties": {
+          "roleId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Card id."
+          },
+          "contentType": {
+            "type": "string",
+            "enum": [
+              "image/jpeg",
+              "image/png",
+              "image/webp"
+            ],
+            "description": "Declared image type."
+          },
+          "image": {
+            "type": "string",
+            "format": "byte",
+            "description": "Image bytes, standard base64."
+          }
+        }
+      },
+      "PlayerBackgroundUploadResponse": {
+        "type": "object",
+        "description": "Uploaded background image.",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Public URL of the stored image. It is not listed anywhere else; keep it to this player."
+          }
+        }
+      },
+      "PlayerBackgroundDeleteRequest": {
+        "type": "object",
+        "description": "Card whose background image is deleted.",
+        "required": [
+          "roleId"
+        ],
+        "properties": {
+          "roleId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Card id."
+          }
+        }
+      },
+      "PlayerBackgroundDeleteResponse": {
+        "type": "object",
+        "description": "Deletion result.",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "Always `true`."
           }
         }
       },
