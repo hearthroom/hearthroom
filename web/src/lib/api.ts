@@ -951,7 +951,7 @@ export async function fetchWallet(token: string, provider: ProviderId = currentP
 }
 
 /** 推薦：自己的推薦碼、規則（數字由服務決定，畫面不寫死）、邀請成果；不含任何被邀請人的身分。 */
-export interface ReferralTerms { welcomeCredits: number; welcomeDays: number; firstPercent: number; firstCap: number; inviteePercent: number; rebatePercent: number; rebateDays: number; bindDays: number }
+export interface ReferralTerms { inviterCredits?: number; inviterDays?: number; inviterStartAt?: string; inviterEndAt?: string; welcomeCredits: number; welcomeDays: number; firstPercent: number; firstCap: number; inviteePercent: number; rebatePercent: number; rebateDays: number; bindDays: number }
 export interface ReferralSummary {
   enabled: boolean; code: string; terms: ReferralTerms; referred: boolean; welcomeCredits: number;
   canRedeem: boolean; redeemUntil?: string; registeredAt: string; invited: number; purchased: number; earned: number;

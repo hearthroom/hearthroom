@@ -7,6 +7,7 @@ import { apiBaseOf, currentProvider, type ProviderId } from "./provider";
 
 export interface ReferralTerms {
   enabled: boolean;
+  inviterCredits?: number; inviterDays?: number; inviterStartAt?: string; inviterEndAt?: string;
   firstPercent: number; firstCap: number; inviteePercent: number;
   rebatePercent: number; rebateDays: number; bindDays: number;
   welcomeCredits: number; welcomeDays: number;
@@ -37,6 +38,10 @@ function normalize(raw: unknown): ReferralTerms | null {
   const r = raw as Record<string, unknown>;
   return {
     enabled: r.enabled === true,
+    ...(typeof r.inviterCredits === "number" ? { inviterCredits: num(r.inviterCredits) } : {}),
+    ...(typeof r.inviterDays === "number" ? { inviterDays: num(r.inviterDays) } : {}),
+    ...(typeof r.inviterStartAt === "string" ? { inviterStartAt: r.inviterStartAt } : {}),
+    ...(typeof r.inviterEndAt === "string" ? { inviterEndAt: r.inviterEndAt } : {}),
     firstPercent: num(r.firstPercent), firstCap: num(r.firstCap), inviteePercent: num(r.inviteePercent),
     rebatePercent: num(r.rebatePercent), rebateDays: num(r.rebateDays), bindDays: num(r.bindDays),
     welcomeCredits: num(r.welcomeCredits), welcomeDays: num(r.welcomeDays),

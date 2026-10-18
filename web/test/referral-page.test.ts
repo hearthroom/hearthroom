@@ -98,3 +98,20 @@ it('copies an invite link that carries the code as a share reference', async () 
   for (let i = 0; i < 5; i++) await Promise.resolve();
   expect(write).toHaveBeenCalledWith(`${location.origin}/?ref=K7M2Q9XA`);
 });
+
+it('shows the platform inviter promotion separately from the newcomer gift', async () => {
+ mocks.summary.mockResolvedValue(page({ terms: { ...terms, inviterCredits: 1000, inviterEndAt: '2099-11-17T00:00:00+08:00' } }));
+ await mount();
+ expect(root.querySelector('[data-testid="inviter-bonus"]')?.textContent).toContain('1,000');
+ expect(root.querySelector('[data-testid="inviter-bonus"]')?.textContent).not.toMatch(/30 (days|天)/);
+});
+it('hides expired inviter promotion while keeping the newcomer gift', async () => {
+ mocks.summary.mockResolvedValue(page({ terms: { ...terms, inviterCredits: 1000, inviterEndAt: '2000-11-17T00:00:00+08:00' } }));
+ await mount();expect(root.querySelector('[data-testid="inviter-bonus"]')).toBeNull();
+ expect(root.textContent).toContain('1,000');
+});
+
+it('explains permanent newcomer credits without a zero-day expiry', async () => {
+ mocks.summary.mockResolvedValue(page({ terms: { ...terms, welcomeDays: 0 } }));
+ await mount();expect(root.textContent).toContain(String(i18n.global.t('referral.rule.welcomePermanent', { credits: '1,000' })));expect(root.textContent).not.toMatch(/0 (days|天)/);
+});
