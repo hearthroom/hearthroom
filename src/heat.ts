@@ -21,8 +21,8 @@ const HEAT_CALLS = 44;
 export async function syncHeat(env: Env, batchSize = HEAT_BATCH): Promise<{ batches: number; failed: number; updated: number; skipped: number; ms: number }> {
   const started = Date.now();
   const rows = (
-    await env.DB.prepare("SELECT id, approved_hosted_role_id AS hosted, heat FROM cards WHERE provider='harbor' AND approved_hosted_role_id IS NOT NULL ORDER BY id")
-      .all<{ id: number; hosted: string; heat: number }>()
+    await env.DB.prepare("SELECT approved_hosted_role_id AS hosted FROM cards WHERE provider='harbor' AND status='approved' AND approved_hosted_role_id IS NOT NULL ORDER BY id")
+      .all<{ hosted: string }>()
   ).results;
   const capacity = HEAT_CALLS * batchSize;
   if (rows.length > capacity) console.warn("heat sync: more cards than one run can read; the rest wait", { cards: rows.length, capacity });
@@ -40,13 +40,14 @@ export async function syncHeat(env: Env, batchSize = HEAT_BATCH): Promise<{ batc
       console.error("heat sync batch failed");
       continue;
     }
-    for (const row of chunk) {
-      const heat = heats[row.hosted];
-      if (heat !== undefined && heat !== row.heat) writes.push(env.DB.prepare("UPDATE cards SET heat=? WHERE id=? AND approved_hosted_role_id=?").bind(heat, row.id, row.hosted));
-    }
+    // 一批一句更新（不是一張卡一句）：上千張同時變動時，整輪的寫入仍只有幾十句。只寫數字真的變了的。
+    writes.push(
+      env.DB.prepare("UPDATE cards SET heat=j.value FROM json_each(?) j WHERE cards.provider='harbor' AND cards.approved_hosted_role_id=j.key AND cards.heat<>j.value")
+        .bind(JSON.stringify(Object.fromEntries(chunk.filter((r) => heats[r.hosted] !== undefined).map((r) => [r.hosted, heats[r.hosted]])))),
+    );
   }
-  if (writes.length) await env.DB.batch(writes);
+  const updated = writes.length ? (await env.DB.batch(writes)).reduce((n, r) => n + (r.meta.changes ?? 0), 0) : 0;
   if (batches > failed) await bumpOp(env.DB, "card_heat", "batch", "success", batches - failed);
   if (failed) await bumpOp(env.DB, "card_heat", "batch", "error", failed);
-  return { batches, failed, updated: writes.length, skipped: Math.max(0, rows.length - capacity), ms: Date.now() - started };
+  return { batches, failed, updated, skipped: Math.max(0, rows.length - capacity), ms: Date.now() - started };
 }

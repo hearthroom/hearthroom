@@ -6225,6 +6225,77 @@
         }
       }
     },
+    "/open/v1/role/heat": {
+      "post": {
+        "operationId": "getRoleHeats",
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Read the heat of several role cards at once",
+        "description": "Batch read for scheduled sync. Guest-readable: no Authorization header is required. Returns the heat (see `RoleDetail.heat`) of each requested card that an anonymous reader can see; private, deleted, taken-down or unknown ids are left out of the result rather than reported as errors. At most 200 ids per request.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "roleIds"
+                ],
+                "properties": {
+                  "roleIds": {
+                    "type": "array",
+                    "maxItems": 200,
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "description": "Role ids (`characterRoleId`)."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Heat by role id.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "heat"
+                  ],
+                  "properties": {
+                    "heat": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "integer",
+                        "format": "int64",
+                        "minimum": 0
+                      },
+                      "description": "Map from role id to heat. Only readable cards appear."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed body, an id that is not a UUID, or more than 200 ids.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/open/v1/role/mine": {
       "get": {
         "operationId": "listMyRoles",
@@ -15563,6 +15634,12 @@
               "responseDefaults": {
                 "$ref": "#/components/schemas/ResponseDefaults",
                 "description": "Author only; absent when the card has none."
+              },
+              "heat": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0,
+                "description": "Credits spent on this card by everyone except its author, summed across all published versions of the work. Staging versions are not counted."
               }
             }
           }

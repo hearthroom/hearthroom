@@ -21,7 +21,7 @@ it('shows only the explicit official flag and follows all five UI languages',asy
 });
 it('carries the server author flag into the home card without removing statistics or the author link',async()=>{
  await applyLocale('en');const router=createRouter({history:createMemoryHistory(),routes:[{path:'/:locale(zh-Hans|en|ja|ko)?/:p(.*)*',component:{template:'<div />'}}]});await router.push('/en/');
- const card=reactive({id:'100001',roleId:'r',zone:'en',name:'A story',summary:'',tags:[],avatarUrl:null,backgroundUrl:null,author:{handle:'abcdefgh',accountNumId:1,name:'Suki',avatar:'',official:true},talkNum:199,trending:0});
+ const card=reactive({id:'100001',roleId:'r',zone:'en',name:'A story',summary:'',tags:[],avatarUrl:null,backgroundUrl:null,author:{handle:'abcdefgh',accountNumId:1,name:'Suki',avatar:'',official:true},talkNum:12,trending:0,heat:199});
  mount(CardTile,{card},router);await nextTick();expect(el.querySelector('.card__by .official-badge')?.textContent).toBe('Official');expect(el.querySelector('.card__by')?.getAttribute('href')).toBe('/en/authors/abcdefgh');expect(el.textContent).toContain('199');
  card.author.official=false;await nextTick();expect(el.querySelector('.official-badge')).toBeNull();
 });
