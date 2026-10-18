@@ -329,6 +329,24 @@ async function fetchRole(env: Env, roleId: string, provider: ProviderId = DEFAUL
 }
 
 /**
+ * 一批卡的熱度（作者以外的人扣掉的點數），用封存版 id 查。匿名讀；Harbor 只回匿名讀得到的卡，
+ * 沒回的就是讀不到（私有、已刪、下架），呼叫端保留原值，下榜由逐張同步決定。
+ */
+async function fetchHeats(env: Env, roleIds: string[], provider: ProviderId = DEFAULT_PROVIDER): Promise<Record<string, number>> {
+  const res = await fetch(apiUrl(env, provider, "/open/v1/role/heat"), {
+    method: "POST",
+    headers: { "User-Agent": UA, "Content-Type": "application/json" },
+    body: JSON.stringify({ roleIds }),
+  });
+  const body = await readJson(res, "role heat");
+  const out: Record<string, number> = {};
+  for (const [id, n] of Object.entries((body.heat ?? {}) as Record<string, unknown>)) {
+    if (typeof n === "number" && Number.isFinite(n) && n >= 0) out[id] = Math.floor(n);
+  }
+  return out;
+}
+
+/**
  * 餵給 FTS 的一團字：四語名稱 + 四語簡介 + 標籤 + 開場白，一個索引覆蓋所有語言。
  * 開場白截在四千字：它是搜尋的線索，不是要被整段索引的正文。
  */
@@ -511,5 +529,5 @@ async function getCampaignPayout(env: Env, bearer: string, key: string, provider
   }
 }
 
-export const upstream = { fetchMe, setNickname, fetchRole, fetchMyRoles, fetchContentHashes, fetchDraftVersions, readForReview, readSealedForReview, fetchCommunityStatus, setFeatured, fetchCampaignPool, payCampaign, getCampaignPayout };
+export const upstream = { fetchMe, setNickname, fetchRole, fetchHeats, fetchMyRoles, fetchContentHashes, fetchDraftVersions, readForReview, readSealedForReview, fetchCommunityStatus, setFeatured, fetchCampaignPool, payCampaign, getCampaignPayout };
 export type Upstream = typeof upstream;

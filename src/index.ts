@@ -1,3 +1,4 @@
+import { HEAT_CRON, syncHeat } from "./heat";
 import { transferGateRoutes, isTransferHeld } from './draft-transfer-gate';
 import { bumpOp } from './ops-metrics';
 import { accountAuthRoutes, accountAuthMaintenance, syncNickname } from './account-auth';
@@ -1941,8 +1942,21 @@ export default {
     const d1 = withD1Session(request, env);
     return d1.finish(await app.fetch(request, d1.env, ctx));
   },
-  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
+  async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext) {
     if (!(await numericSchemaReady(env.DB))) return;
+    // 熱度有自己的排程（wrangler.toml）：一次執行的子請求額度全給 Harbor 的批次讀。
+    if (event.cron === HEAT_CRON) {
+      ctx.waitUntil(
+        syncHeat(env).then((r) => {
+          console.log("heat sync done", r);
+          emit(env, ctx, { event: "heat_sync", resultCount: r.updated, status: r.failed, durationMs: r.ms, client: "server", outcome: r.failed || r.skipped ? "partial" : "ok" });
+        }).catch(() => {
+          console.warn("heat sync unavailable");
+          emit(env, ctx, { event: "heat_sync", client: "server", outcome: "error" });
+        }),
+      );
+      return;
+    }
     ctx.waitUntil(accountAuthMaintenance(env).catch(() => { console.warn('Account authorization maintenance unavailable'); }));
     ctx.waitUntil(communityMaintenance(env).catch(() => { console.warn("Community maintenance unavailable"); }));
     // Backstop for notifications created outside a request hook (triggers fired by the sync job, reminders).

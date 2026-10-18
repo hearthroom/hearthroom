@@ -31,6 +31,8 @@ export interface CardRow {
   follow_num: number;
   talk_num_prev: number;
   hot_score: number;
+  /** 熱度（0074 起）：作者以外的人在這張卡上扣掉的點數，每小時從 Harbor 批次同步。 */
+  heat: number;
   registered_at: number;
   board_hidden: number;
   public_blocked: number;
@@ -144,6 +146,7 @@ export function toCard(row: CardRow, lang: string) {
     followNum: row.follow_num,
     favoriteCount: row.favorite_count ?? 0,
     trending: Math.max(0, row.hot_score),
+    heat: row.heat ?? 0,
     registeredAt: row.registered_at,
     updatedAt: row.updated_at ?? row.registered_at,
     syncedAt: row.last_synced_at,
@@ -416,10 +419,9 @@ export async function listCards(db: D1Database, opts: ListOptions) {
   }
   const filtered = Boolean(opts.favoritedBy !== undefined || opts.followedBy !== undefined || opts.q || opts.fandom || opts.tags?.length || opts.tagGroups?.length || opts.authorMemberId !== undefined || opts.since !== undefined || !!rating);
 
-  // hot 用「這個同步窗口的對話增量」，不是累積數——累積數等於 top，排出來永遠是老卡。
-  // 三種排序都對應一個索引，沒有一種需要現算。相關度見 searchClause；沒有搜尋字就退回 hot。
-  // 榜的口徑照魅魔島：日／週／月榜與最熱都按累積對話數（窗口由 since 決定），最新按上榜時間，推薦隨機。
-  // 舊的 hot_score（同步窗口增量）不再當排序鍵，只留給前端顯示「正在被聊」。
+  // 日／週／月榜與最熱都按累計熱度（owner 2026-10-18；窗口由 since 決定），一樣多比對話數、再比上榜時間；
+  // 最新按上榜時間，推薦隨機。相關度見 searchClause；沒有搜尋字就退回熱度。
+  // 舊的 hot_score（同步窗口增量）不當排序鍵，只留在 API 的 trending 欄位。
   const run = async (mode: "and" | "any") => {
     const search = searchClause(mode);
     const whereSql = (search ? [...where, search.where] : where).join(" AND ");
@@ -433,7 +435,7 @@ export async function listCards(db: D1Database, opts: ListOptions) {
     else if (opts.sort === "relevance" && search) {
       orderBy = `${search.relevance.sql}, c.talk_num DESC, c.follow_num DESC, c.registered_at DESC`;
       orderBinds.push(...search.relevance.binds);
-    } else orderBy = "c.talk_num DESC, c.follow_num DESC, c.registered_at DESC";
+    } else orderBy = "c.heat DESC, c.talk_num DESC, c.registered_at DESC";
     // 多撈一筆就知道還有沒有下一頁，不必數完整組結果。
     return db
       .prepare(`SELECT ${CARD_COLUMNS} FROM ${search?.from ?? "cards c"} ${AUTHOR_JOIN} WHERE ${whereSql} ORDER BY ${orderBy} LIMIT ? OFFSET ?`)

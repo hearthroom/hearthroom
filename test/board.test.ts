@@ -25,6 +25,7 @@ async function seed(f: {
   talkPrev?: number;
   followNum?: number;
   registeredAt?: number;
+  heat?: number;
 }) {
   const r = role({
     roleId: f.roleId ?? `role-${f.id}`,
@@ -55,7 +56,7 @@ async function seed(f: {
       buildSearchName(r), buildSearchText(r), buildSearchBody(r), f.registeredAt ?? Date.now(), 0,
     )
     .run();
-  await env.DB.prepare("UPDATE cards SET provider='harbor',approved_hosted_role_id=? WHERE id=?").bind(r.roleId,num).run();
+  await env.DB.prepare("UPDATE cards SET provider='harbor',approved_hosted_role_id=?,heat=? WHERE id=?").bind(r.roleId,f.heat ?? 0,num).run();
 }
 
 const list = async (query = "") => {
@@ -865,5 +866,30 @@ describe("組合探索", () => {
     expect(body.hasNext).toBe(true);
     const next = await SELF.fetch("https://c.test/v1/tags?zone=zh&q=西幻&limit=1&offset=1");
     expect((await next.json() as any).items.map((x: any) => x.tag)).toEqual(["西幻冒險"]);
+  });
+});
+
+// 熱度（owner 2026-10-18）：日／週／月榜的範圍不變，跟最熱一樣改依累計熱度排；一樣多比對話數，再比上榜時間。
+describe("榜單依熱度排", () => {
+  const DAY = 86400_000;
+  beforeEach(async () => {
+    const now = Date.now();
+    await seed({ id: "a", heat: 500, talkNum: 10, registeredAt: now - 20 * DAY });
+    await seed({ id: "b", heat: 500, talkNum: 30, registeredAt: now - 25 * DAY });
+    await seed({ id: "c", heat: 900, talkNum: 1, registeredAt: now - 5 * DAY });
+    await seed({ id: "d", heat: 0, talkNum: 999, registeredAt: now - 2 * DAY });
+    await seed({ id: "e", heat: 500, talkNum: 30, registeredAt: now - 3 * DAY });
+  });
+
+  it("窗口內依熱度、對話數、上榜時間排；最熱（hot／舊名 top）同樣依熱度", async () => {
+    expect(ids((await list("?sort=month")).body)).toEqual(["c", "e", "b", "a", "d"]);
+    expect(ids((await list("?sort=hot")).body)).toEqual(["c", "e", "b", "a", "d"]);
+    expect(ids((await list("?sort=top")).body)).toEqual(["c", "e", "b", "a", "d"]);
+    expect(ids((await list("?sort=week")).body)).toEqual(["c", "e", "d"]);
+  });
+
+  it("卡片回應帶熱度", async () => {
+    const items = (await list("?sort=month")).body.items;
+    expect(items.map((i) => i.heat)).toEqual([900, 500, 500, 500, 0]);
   });
 });

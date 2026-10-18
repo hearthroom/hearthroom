@@ -110,9 +110,10 @@ id = "179537be15bb4fbc8d42b99728142d25"
 binding = "ASSET_ARCHIVE"
 id = "cf47eb790d1f4f4a9d563a596b268c5a"
 
-# 每小時同步一批卡片的名稱、封面與熱度信號。
+# 17 分：每小時同步一批卡片的名稱、封面與對話數，以及其他維護。
+# 47 分：整批讀所有卡片的熱度（src/heat.ts），獨立一次執行，不跟上面搶子請求額度。
 [triggers]
-crons = ["17 * * * *"]
+crons = ["17 * * * *", "47 * * * *"]
 
 # Community-owned avatars; provision this bucket before deploying this revision.
 [[r2_buckets]]
