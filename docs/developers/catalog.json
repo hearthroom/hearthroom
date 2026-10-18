@@ -1940,5 +1940,10 @@
   "da3bfaf27d3bc": "Credits every new account receives at sign-up, whether or not a referral code is used. 0 when not offered.",
   "dd330a1c38aab": "How many days the sign-up credits stay valid.",
   "d532dc79dde46": "`referral_disabled` — reward terms are not available right now.",
-  "d63a66eb19cc3": "Platform chat discount relative to this lane's normal tier price. Already included in quoted and billed chat rates; do not apply it again. Omitted when not discounted. Independent of upstream discounts and bare API pricing; no scheduled end date."
+  "d63a66eb19cc3": "Platform chat discount relative to this lane's normal tier price. Already included in quoted and billed chat rates; do not apply it again. Omitted when not discounted. Independent of upstream discounts and bare API pricing; no scheduled end date.",
+  "d2f6dd25f2e78": "Inclusive start of the inviter promotion, when configured.",
+  "d63547f6ac8eb": "Exclusive end of the inviter promotion, when configured.",
+  "d527a47e22397": "Validity in days of the separate inviter promotion credit, measured from its issuance; independent of welcomeDays. 0 means permanent credits with no expiry.",
+  "d907e34634164": "How many days the welcome credits stay valid; 0 means permanent (the current newcomer welcome gift).",
+  "deb06756ca65f": "Platform-funded credits for the original referrer of each eligible new-user binding during the inviter promotion; 0 outside the promotion. Independent of the ongoing newcomer welcome gift and the application campaign pool. Valid for inviterDays days (0 means permanent); replaying or switching the binding does not issue another gift."
 }

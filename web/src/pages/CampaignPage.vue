@@ -141,7 +141,7 @@ onBeforeUnmount(() => ro?.disconnect());
 // ---- 參加前看一下 ------------------------------------------------------------------
 const notes = computed(() => {
   const list = [t("campaign.page.notes.1"), t("campaign.page.notes.2"), t("campaign.page.notes.3"), t("campaign.page.notes.4")];
-  if (referral.value) list.push(t("campaign.page.notes.5", { friendDays: referral.value.welcomeDays }));
+  if (referral.value) list.push(t(referral.value.welcomeDays === 0 ? "campaign.page.notes.5Permanent" : "campaign.page.notes.5", { friendDays: referral.value.welcomeDays }));
   list.push(t("campaign.page.notes.6"));
   return list;
 });

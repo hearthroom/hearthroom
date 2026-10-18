@@ -17837,7 +17837,10 @@
           },
           "language": {
             "type": "string",
-            "enum": ["zh-Hant", "zh-Hans"],
+            "enum": [
+              "zh-Hant",
+              "zh-Hans"
+            ],
             "description": "Card language. Only `zh-Hant` and `zh-Hans` can be swapped, and only on a card whose language is one of them: the original text moves to the new script, which the play page converts from. Other values, or any value on a card in another language, return `invalid_arguments`."
           },
           "roleDesc": {
@@ -21408,7 +21411,7 @@
           },
           "welcomeDays": {
             "type": "integer",
-            "description": "How many days the welcome credits stay valid."
+            "description": "How many days the welcome credits stay valid; 0 means permanent (the current newcomer welcome gift)."
           },
           "firstPercent": {
             "type": "number",
@@ -21433,6 +21436,24 @@
           "bindDays": {
             "type": "integer",
             "description": "How many days after sign-up a new account can still enter a code."
+          },
+          "inviterCredits": {
+            "type": "integer",
+            "description": "Platform-funded credits for the original referrer of each eligible new-user binding during the inviter promotion; 0 outside the promotion. Independent of the ongoing newcomer welcome gift and the application campaign pool. Valid for inviterDays days (0 means permanent); replaying or switching the binding does not issue another gift."
+          },
+          "inviterStartAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Inclusive start of the inviter promotion, when configured."
+          },
+          "inviterEndAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Exclusive end of the inviter promotion, when configured."
+          },
+          "inviterDays": {
+            "type": "integer",
+            "description": "Validity in days of the separate inviter promotion credit, measured from its issuance; independent of welcomeDays. 0 means permanent credits with no expiry."
           }
         }
       },
