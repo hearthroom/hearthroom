@@ -1,0 +1,20 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/",
+  "title": {
+    "zh-Hant": "榜單改依熱度排序，熱度是其他玩家在這張卡上用掉的積分。",
+    "zh-Hans": "榜单改按热度排序，热度是其他玩家在这张卡上用掉的积分。",
+    "en": "The Board now ranks cards by heat, the credits other players have spent on them.",
+    "ja": "ランキングが、他のプレイヤーが使ったポイントで決まる熱量順になりました。",
+    "ko": "랭킹이 다른 플레이어가 그 카드에 쓴 포인트, 화력 순으로 바뀌었어요."
+  },
+  "body": {
+    "zh-Hant": "卡片頁現在並列顯示對話數與熱度。",
+    "zh-Hans": "卡片页现在同时显示对话数和热度。",
+    "en": "Card pages now show heat next to the chat count.",
+    "ja": "カードページでも会話数と並んで熱量が見られます。",
+    "ko": "카드 페이지에서도 대화 수와 함께 화력을 볼 수 있어요."
+  },
+  "draft": true
+}
