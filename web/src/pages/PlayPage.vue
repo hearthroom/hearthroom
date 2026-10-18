@@ -31,6 +31,7 @@ import { registerPlayCard } from "@/lib/play-social";
 import PlayComments from "@/components/PlayComments.vue";
 import GuestSignInSheet from "@/components/GuestSignInSheet.vue";
 import PlayLoading from "@/components/PlayLoading.vue";
+import AdultGate from "@/components/AdultGate.vue";
 import { readPlayIntro, type PlayIntro } from "@/lib/play-intro";
 import { stageContentSeq } from "@/lib/stage-ready";
 import { displayName } from "@/lib/display-name";
@@ -47,6 +48,12 @@ const Stage = shallowRef<Component | null>(null);
 const error = shallowRef("");
 /** 審核試玩打不開是因為沒領著（含領取過了時效）或這輪已結束：回審核頁就能處理，不是舞台壞了 */
 const backToReview = shallowRef(false);
+/**
+ * 成人內容的卡、看的人還沒打開（讀卡回 403 adult_content）：畫卡片頁那道門，不是「載不進來」。
+ * 在門上打開了就把 retry 加一，整條開卡流程重跑一次。
+ */
+const gated = shallowRef(false);
+const retry = shallowRef(0);
 /** 遊客按了送出：在原地請他登入 */
 const signInOpen = shallowRef(false);
 
@@ -60,7 +67,7 @@ const COVER_MAX_MS = 22_000;
 const intro = shallowRef<PlayIntro | null>(readPlayIntro(routeId.value));
 const readyBaseline = shallowRef(stageContentSeq.value);
 const coverExpired = shallowRef(false);
-const covering = computed(() => !error.value && !coverExpired.value && stageContentSeq.value <= readyBaseline.value);
+const covering = computed(() => !error.value && !gated.value && !coverExpired.value && stageContentSeq.value <= readyBaseline.value);
 let coverTimer: ReturnType<typeof setTimeout> | undefined;
 function resetCover() {
   readyBaseline.value = stageContentSeq.value;
@@ -120,7 +127,7 @@ onBeforeUnmount(() => { generation++; registerPlayCard(null); });
 onMounted(() => {
   const app = getCurrentInstance()?.appContext.app;
   if (!app) return;
-  watch([routeId, () => route.query.provider, () => route.query.mode, () => route.query.review, () => route.query.resume], async () => {
+  watch([routeId, () => route.query.provider, () => route.query.mode, () => route.query.review, () => route.query.resume, retry], async () => {
     if (route.fullPath === canonicalNavigation) return;
     const request = ++generation;
     const stale = () => request !== generation;
@@ -131,6 +138,7 @@ onMounted(() => {
     roleId.value = "";
     cardNumber.value = "";
     error.value = "";
+    gated.value = false;
     backToReview.value = false;
     registerPlayCard(null);
     try {
@@ -187,6 +195,8 @@ onMounted(() => {
       if (stale()) return;
       // lib/api 的 ApiError：伺服器原文在 code，message 已換成「請求失敗」
       const { status, code } = (err ?? {}) as { status?: number; code?: string };
+      // 還沒解析出卡號：門下的「回到卡片」用網址上的 ID，卡片頁自己會換成卡號
+      if (status === 403 && code === "adult_content") { gated.value = true; cardNumber.value ||= routeId.value; return; }
       backToReview.value = typeof route.query.review === "string" && (code === "claim this submission first" || status === 410);
       error.value = !backToReview.value ? t("play.loadFailed") : status === 410 ? t("review.inactive") : t("play.claimFirst");
     }
@@ -199,12 +209,13 @@ watch(locale, () => { void remergeStageMessages(); });
 <template>
   <div class="play">
     <component :is="Stage" v-if="Stage" :key="roleId" :role-id="roleId" />
-    <div v-else-if="error" class="play__state">
-      <p class="play__error" role="alert">{{ error }}</p>
+    <div v-else-if="error || gated" class="play__state">
+      <AdultGate v-if="gated" @enabled="retry++" />
+      <p v-else class="play__error" role="alert">{{ error }}</p>
       <a v-if="backToReview && playApp" class="btn" :href="`https://${communityHost()}${lp(reviewPath)}`">{{ $t("play.backToReview") }}</a>
       <RouterLink v-else-if="backToReview" class="btn" :to="lp(reviewPath)">{{ $t("play.backToReview") }}</RouterLink>
-      <a v-else-if="error && playApp" class="btn" :href="cardPageUrl">{{ $t("play.backToCard") }}</a>
-      <RouterLink v-else-if="error" class="btn" :to="lp(cardNumber ? `/cards/${cardNumber}` : '/')">{{ $t("play.backToCard") }}</RouterLink>
+      <a v-else-if="playApp" class="btn" :href="cardPageUrl">{{ $t("play.backToCard") }}</a>
+      <RouterLink v-else class="btn" :to="lp(cardNumber ? `/cards/${cardNumber}` : '/')">{{ $t("play.backToCard") }}</RouterLink>
     </div>
     <Transition name="play-cover">
       <PlayLoading v-if="covering" :name="intro?.name" :art="intro?.art" :backdrop="intro?.backdrop" />
