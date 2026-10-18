@@ -391,6 +391,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
               <span class="subtle">{{ $t("score.count", { n: score.count }) }}</span>
             </a>
             <span v-if="card.talkNum" class="subtle">{{ $t("card.talkCount", { n: compact(card.talkNum) }) }}</span>
+            <span v-if="(card.heat ?? 0) > 0" class="subtle role__heat">{{ $t("card.heatCount", { n: compact(card.heat!) }) }}</span>
           </div>
           <!-- 一句話簡介；舊卡的簡介常常是一整段，頁首只露出三行，全文在下面的介紹或卡片的說明裡 -->
           <p v-if="card.summary" class="role__tagline" :title="card.summary">{{ card.summary }}</p>
@@ -453,9 +454,10 @@ watch(() => session.profile?.showNsfw, (now, before) => {
           <section class="panel role__info" :aria-label="$t('card.info')">
             <dl class="role__stats">
               <div class="stat"><dt>{{ $t("card.stat.talk") }}</dt><dd>{{ compact(card.talkNum) }}</dd></div>
+              <div class="stat" :title="$t('card.stat.heatHint')"><dt aria-describedby="card-heat-hint">{{ $t("card.stat.heat") }}</dt><dd>{{ (card.heat ?? 0) > 0 ? compact(card.heat!) : "—" }}</dd></div>
               <div class="stat"><dt>{{ $t("card.stat.follow") }}</dt><dd>{{ compact(card.favoriteCount ?? 0) }}</dd></div>
-              <div class="stat"><dt>{{ $t("card.stat.trending") }}</dt><dd :class="{ up: card.trending > 0 }">{{ card.trending > 0 ? `+${compact(card.trending)}` : "—" }}</dd></div>
             </dl>
+            <span id="card-heat-hint" class="sr-only">{{ $t("card.stat.heatHint") }}</span>
             <dl class="role__kv">
               <template v-if="card.num">
                 <dt>{{ $t("card.id") }}</dt>
@@ -615,9 +617,11 @@ a.role__by:hover { color: var(--accent-text); }
 #comments { scroll-margin-top: calc(var(--header-h) + var(--s-4)); }
 
 .role__info { display: grid; gap: var(--s-3); padding: var(--s-4); }
-.role__stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-2); margin: 0; padding-bottom: var(--s-3); box-shadow: 0 1px 0 var(--line); text-align: center; }
+/* 三格的標籤與數字各佔同一列（subgrid），同列以基線對齊：「3.4萬」的萬字走中日韓字型，單獨排會比「1200」低一點 */
+.role__stats { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: auto auto; align-items: baseline; gap: 0 var(--s-2); margin: 0; padding-bottom: var(--s-3); box-shadow: 0 1px 0 var(--line); text-align: center; }
+.role__stats .stat { display: grid; grid-row: span 2; grid-template-rows: subgrid; }
 .role__stats .stat dd { font-size: 17px; }
-.role__stats .stat dd.up { color: var(--accent-text); }
+.role__heat { white-space: nowrap; }
 .role__kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px var(--s-4); margin: 0; font-size: 13.5px; }
 .role__kv dt { color: var(--text-3); }
 .role__kv dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
