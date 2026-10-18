@@ -14,6 +14,16 @@ export function compact(n: number): string {
   return new Intl.NumberFormat(locale(), { notation: "compact", maximumFractionDigits: 1 }).format(n);
 }
 
+/**
+ * 卡片磚上的縮寫：跟 compact 一樣，但整數部分到三位數以上就不帶小數（1235萬、124万；1.2M 不變）。
+ * 磚很窄，大數字多一位小數只會把作者名擠掉，卻不多帶資訊。
+ */
+export function compactTile(n: number): string {
+  const nf = new Intl.NumberFormat(locale(), { notation: "compact", maximumFractionDigits: 1 });
+  const whole = nf.formatToParts(n).find((p) => p.type === "integer")?.value ?? "";
+  return whole.length >= 3 ? new Intl.NumberFormat(locale(), { notation: "compact", maximumFractionDigits: 0 }).format(n) : nf.format(n);
+}
+
 const MINUTE = 60_000;
 const HOUR = 3_600_000;
 const DAY = 86_400_000;

@@ -297,7 +297,6 @@ const ratingOptions = computed(() => {
         :busy="loading"
         :ranked="!tags.length"
         :rank-offset="page?.offset ?? 0"
-        :show-trending="WINDOWED.has(sort)"
         :empty-title="$t(tags.length ? 'board.empty.search.title' : 'board.empty.title')"
         :empty-hint="$t(tags.length ? 'board.empty.search.hint' : 'board.empty.hint')"
       />

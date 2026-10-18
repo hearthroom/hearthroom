@@ -11,7 +11,6 @@ const props = defineProps<{
   /** 完全沒東西可畫時才是 loading（骨架屏）；手上有舊資料時用 busy，舊卡留在原地變淡 */
   loading?: boolean;
   busy?: boolean;
-  showTrending?: boolean;
   /** 榜單模式：卡片帶名次。作者主頁這種非排名場景不給。 */
   ranked?: boolean;
   rankOffset?: number;
@@ -58,7 +57,6 @@ const EAGER = 6;
       :card="card"
       :rank="rank"
       :show-zone="showZone"
-      :show-trending="showTrending"
       :eager="i < EAGER"
     />
   </div>
