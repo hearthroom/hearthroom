@@ -436,3 +436,20 @@ it("states the weekly cap on group shares when the campaign has one", async () =
   await mount();
   expect($("[data-light-limit]")).toBeNull();
 });
+
+
+it("shows the extra inviter reward below the share amount and emphasizes only its amount", async () => {
+  terms = { ...liveTerms(), welcomeDays: 0, inviterCredits: 1000, inviterDays: 0, inviterEndAt: "2099-11-17T00:00:00+08:00" };
+  await mount();
+  const note = $('[data-stat="share"] [data-inviter-bonus]')!;
+  expect(note.textContent).toBe("活動期間每成功邀請一個好友註冊，分享人還可額外獲得 1,000 積分獎勵");
+  expect(note.querySelector("strong")?.textContent).toBe("1,000 積分");
+  expect($('[data-stat="referral"] [data-inviter-bonus]')).toBeNull();
+});
+
+it("removes the inviter reward note after the promotion ends", async () => {
+  terms = { ...liveTerms(), welcomeDays: 0, inviterCredits: 1000, inviterDays: 0, inviterEndAt: "2000-11-17T00:00:00+08:00" };
+  await mount();
+  expect($("[data-inviter-bonus]")).toBeNull();
+  expect($("[data-stat=share]")).not.toBeNull();
+});

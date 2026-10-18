@@ -29,6 +29,7 @@ const provider = currentProvider();
 const externalId = computed(() => session.profile?.identities.find((i) => i.provider === provider)?.externalId ?? session.me?.accountNumId);
 
 const data = ref<ReferralSummary | null>(null);
+const inviterBonus = computed(() => !!data.value?.enabled && (data.value?.terms.inviterCredits ?? 0) > 0 && Date.parse(data.value?.terms.inviterEndAt ?? "") > Date.now());
 const loadError = ref("");
 const needsConsent = ref(false);
 
@@ -140,7 +141,8 @@ onMounted(() => {
         <section class="panel referral__card">
           <h2>{{ $t("referral.rulesTitle") }}</h2>
           <ul class="referral__rules">
-            <li v-if="data.terms.welcomeCredits > 0">{{ $t("referral.rule.welcome", { credits: whole(data.terms.welcomeCredits), days: data.terms.welcomeDays }) }}</li>
+            <li v-if="inviterBonus" data-testid="inviter-bonus">{{ $t("referral.rule.inviter", { credits: whole(data.terms.inviterCredits ?? 0), end: dateTime(data.terms.inviterEndAt!) }) }}</li>
+            <li v-if="data.terms.welcomeCredits > 0">{{ $t(data.terms.welcomeDays === 0 ? "referral.rule.welcomePermanent" : "referral.rule.welcome", { credits: whole(data.terms.welcomeCredits), days: data.terms.welcomeDays }) }}</li>
             <li>{{ $t("referral.rule.first", { percent: data.terms.firstPercent, cap: whole(data.terms.firstCap) }) }}</li>
             <li v-if="data.terms.rebatePercent > 0">{{ $t("referral.rule.rebate", { rate: data.terms.rebatePercent, days: data.terms.rebateDays }) }}</li>
             <li v-if="data.terms.inviteePercent > 0">{{ $t("referral.rule.invitee", { percent: data.terms.inviteePercent }) }}</li>
