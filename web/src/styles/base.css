@@ -185,6 +185,8 @@ select.input { height: var(--h-md); }
 @supports (appearance: base-select) {
   @media (hover: hover) and (pointer: fine) {
     select, ::picker(select) { appearance: base-select; }
+    /* 新外觀的按鈕是 flex，預設不置中：文字會貼著上緣 */
+    select { align-items: center; }
     /* 箭頭跟搜尋頁的一樣是細線折角，不用預設的實心三角 */
     select::picker-icon {
       content: ""; align-self: center; width: 6px; height: 6px; color: var(--text-3);
@@ -193,14 +195,15 @@ select.input { height: var(--h-md); }
     }
     select:open::picker-icon { translate: 0 1px; rotate: 225deg; }
     ::picker(select) {
-      margin-block: 6px; padding: 6px;
+      margin-block: 6px; padding: 4px;
       color: var(--text); background: var(--surface);
       border: 0; border-radius: var(--r-md);
       box-shadow: 0 0 0 1px var(--line), var(--shadow-md);
     }
+    /* 清單寬度盡量貼著按鈕：留白收緊、字級跟按鈕一樣 */
     select option {
-      gap: 8px; padding: 8px 10px; border-radius: var(--r-sm);
-      font-size: 13.5px; color: var(--text); cursor: pointer;
+      gap: 6px; padding: 7px 10px 7px 8px; border-radius: var(--r-sm);
+      font-size: 13px; color: var(--text); cursor: pointer;
     }
     select option:hover, select option:focus-visible { background: var(--surface-2); outline: none; }
     select option:checked { font-weight: 600; }
