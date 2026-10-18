@@ -1954,5 +1954,22 @@
   "dce86e0f3b6e2": "Heat by role id.",
   "d4d6d46512c61": "Map from role id to heat. Only readable cards appear.",
   "df207900f9c85": "Malformed body, an id that is not a UUID, or more than 200 ids.",
-  "d5d76a7280cc8": "Credits spent on this card by everyone except its author, summed across all published versions of the work. Staging versions are not counted."
+  "d5d76a7280cc8": "Credits spent on this card by everyone except its author, summed across all published versions of the work. Staging versions are not counted.",
+  "d838eb1d357e5": "Upload this card's background image",
+  "d9b5e2b7b8c37": "Stores the caller's own background image for one card and switches that card's preference to it (`backgroundMode` = `custom`, `backgroundCustomUrl` = the returned `url`). JPEG, PNG or WebP, at most 10 MB after base64 decoding; the declared type and the actual bytes must both match. Each account keeps one image per card: uploading again deletes the previous one. Other preference keys are untouched.",
+  "dea904c425b59": "Stored; the card's preference now points at this image.",
+  "d43a0007d6969": "`invalid_request`.",
+  "daff2791f0629": "`not_found` — the card does not exist or is not playable for this account.",
+  "df7a3858488a9": "`file_too_large`, or `quota_exceeded` when the account's media storage is full.",
+  "dad60b44342c8": "`unsupported_media_type`.",
+  "d9869747c07a4": "Delete this card's background image",
+  "d69d09cb6389a": "Deletes the caller's uploaded background image for one card and clears `backgroundCustomUrl` in that card's preference. `backgroundMode` is not changed; save the mode the player picked with savePlayerPreference. Succeeds when there is no image.",
+  "d0ebe985400f0": "Deleted, or there was nothing to delete.",
+  "d1d458ca00943": "Background image upload for one card.",
+  "dcb3c50c674f2": "Declared image type.",
+  "ddf5b00cc84f0": "Image bytes, standard base64.",
+  "de8c20c2a9c3c": "Uploaded background image.",
+  "db3b2dba55f18": "Public URL of the stored image. It is not listed anywhere else; keep it to this player.",
+  "ddac7247284d1": "Card whose background image is deleted.",
+  "d206d6ecb67a8": "Deletion result."
 }
