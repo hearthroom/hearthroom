@@ -1,0 +1,10 @@
+{
+  "tier": "fix",
+  "title": {
+    "zh-Hant": "開場白底部不再多出一行原樣的程式碼文字。",
+    "zh-Hans": "开场白底部不再多出一行原样的代码文字。",
+    "en": "Openings no longer end with a stray line of raw code.",
+    "ja": "開幕メッセージの末尾に、コードの文字がそのまま出なくなりました。",
+    "ko": "오프닝 끝에 코드 문자가 그대로 나오던 문제를 고쳤어요."
+  }
+}
