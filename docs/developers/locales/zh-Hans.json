@@ -280,7 +280,7 @@
   "d65b459a99574": "`conversation_limit_reached` — 角色卡已有 `limit`（20）个未删除对话；不创建新对话，也不变更旧对话。",
   "df62e13c34b47": "`internal` — 无法计算归档数量（`retryable: true`）。`save` 缺少或不是布尔值时，返回空响应体的 500。",
   "d219ae23e8159": "打开（或继续）与角色的当前对话",
-  "de40e159cac3c": "同步操作。返回（调用方账号、`roleId`）组合的 CURRENT 对话；不存在时以原子操作创建。新建对话会将角色问候语插入为第一则 AI 消息（`isFirst:true`）；`greetingIndex` 可为第一则消息选择替代问候语。现有对话不插入任何内容（`historyConversation:true`）。此端点不生成回复，也不进行流式传输：发送消息、重新生成与续写皆通过 `POST /open/v1/conversation/ws-ticket`（`x-websocket`）说明的 WebSocket 运行。副作用：增加角色聊天计数与每日任务进度。`roleInfo` 依 `language` 头部本地化，并清空 `roleDetailDesc`／`roleDetailDescEn`／`roleDetailDescJa`／`roleDetailDescKo`；`roleWelcome` 与 `defaultRelay` 的 `{{char}}`／`{{user}}` 占位符会被替换。头像／背景主机依语言重写。可选的 `X-XMLV3-Feature-Level` 头部（正整数，默认 1）声明客户端的 XMLV3 渲染器等级，并于 `xmlV3Compatibility` 原样返回。注意：处理程序以未检查的类型断言读取 `roleId`；请求体未含字符串 `roleId` 时，返回 HTTP 500 与空响应体（panic 恢复），而非 400。",
+  "de40e159cac3c": "同步操作。返回（调用方账号、`roleId`）组合的 CURRENT 对话；不存在时以原子操作创建。新建对话会将角色问候语插入为第一则 AI 消息（`isFirst:true`）；`greetingIndex` 可为第一则消息选择替代问候语。现有对话以 `historyConversation:true` 返回；尚无任何消息时会在此时插入问候语，否则不插入任何内容。此端点不生成回复，也不进行流式传输：发送消息、重新生成与续写皆通过 `POST /open/v1/conversation/ws-ticket`（`x-websocket`）说明的 WebSocket 运行。副作用：增加角色聊天计数与每日任务进度。`roleInfo` 依 `language` 头部本地化，并清空 `roleDetailDesc`／`roleDetailDescEn`／`roleDetailDescJa`／`roleDetailDescKo`；`roleWelcome` 与 `defaultRelay` 的 `{{char}}`／`{{user}}` 占位符会被替换。头像／背景主机依语言重写。可选的 `X-XMLV3-Feature-Level` 头部（正整数，默认 1）声明客户端的 XMLV3 渲染器等级，并于 `xmlV3Compatibility` 原样返回。注意：处理程序以未检查的类型断言读取 `roleId`；请求体未含字符串 `roleId` 时，返回 HTTP 500 与空响应体（panic 恢复），而非 400。",
   "dfa4da5ffa357": "将 `roleInfo` 与问候语本地化。全局中间件会范式此头部，缺少或无法识别时改用 `en`。",
   "da666ec162d01": "客户端 XMLV3 渲染器功能等级（最新为 4）。用于计算 `xmlV3Compatibility`。",
   "d59c676e429f7": "已打开或继续对话。",
