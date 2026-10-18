@@ -330,6 +330,13 @@ watch(q, (v) => { draft.value = v; });
 }
 .search__select:hover { background: var(--surface-2); border-color: var(--border-strong); }
 .search__select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* 彈出清單用站內樣式（styles/base.css）；箭頭已經由外框畫了 */
+@supports (appearance: base-select) {
+  @media (hover: hover) and (pointer: fine) {
+    .search__select { appearance: base-select; }
+    .search__select::picker-icon { display: none; }
+  }
+}
 .search__select-wrap:focus-within { color: var(--text); }
 .search__filters { padding: var(--s-4); margin-bottom: var(--s-4); }
 .search__filters p { margin-bottom: var(--s-2); font-size: 13px; }
