@@ -3,7 +3,7 @@ import CommunityAvatar from "@/components/CommunityAvatar.vue";
 import CommunityName from "@/components/CommunityName.vue";
 import { computed, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
-import { compact, hueFrom, relativeTime } from "@/lib/format";
+import { compact, compactTile, hueFrom, relativeTime } from "@/lib/format";
 import { zoneLabel } from "@/lib/i18n";
 import { titleLayout } from "@/lib/title-layout";
 import { useLocalePath } from "@/lib/use-locale";
@@ -15,7 +15,6 @@ import RatingMark from "./RatingMark.vue";
 const props = defineProps<{
   card: CommunityCard;
   rank?: number;
-  showTrending?: boolean;
   showZone?: boolean;
   /** 首屏那幾張不要懶載入：它們就是最大內容繪製 */
   eager?: boolean;
@@ -116,12 +115,12 @@ const moreTags = computed(() => Math.max(0, props.card.tags.length - TAGS_SHOWN)
           <CommunityAvatar :handle="card.author.handle ?? undefined" :src="card.author.avatar" :name="card.author.name" class="card__face" />
           <CommunityName :handle="card.author.handle ?? undefined" :name="card.author.name" :official="card.author.official" class="card__author" />
         </span>
-        <span class="card__num" :class="{ 'card__num--up': showTrending && card.trending > 0 }" :title="$t('card.talkCount', { n: compact(card.talkNum) })">
-          <span class="sr-only">{{ $t("card.talkCount", { n: compact(card.talkNum) }) }}</span>
+        <span v-if="(card.heat ?? 0) > 0" class="card__num" :title="$t('card.heatCount', { n: compact(card.heat!) })">
+          <span class="sr-only">{{ $t("card.heatCount", { n: compact(card.heat!) }) }}</span>
           <svg viewBox="0 0 16 16" aria-hidden="true">
-            <path d="M3 3.5h10a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 1-1.5 1.5H7.5L4.5 14v-2.5H3A1.5 1.5 0 0 1 1.5 10V5A1.5 1.5 0 0 1 3 3.5z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
+            <path d="M8 14.5c2.6 0 4.5-1.8 4.5-4.3 0-2.2-1.4-3.6-2.6-5-.3 1-.9 1.7-1.6 2C8.4 5 7.6 3.1 6.2 1.8c-.1 2.2-1.3 3.4-2.4 4.8-.8 1-1.3 2.2-1.3 3.6 0 2.5 2.1 4.3 5.5 4.3z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
           </svg>
-          <span aria-hidden="true">{{ showTrending && card.trending > 0 ? `+${compact(card.trending)}` : compact(card.talkNum) }}</span>
+          <span aria-hidden="true">{{ compactTile(card.heat!) }}</span>
         </span>
       </div>
     </div>
@@ -231,5 +230,4 @@ a.tag:hover { background: var(--accent-soft); color: var(--accent-text); }
 .card__updated svg { width: 11px; height: 11px; }
 .card__num { display: inline-flex; align-items: center; gap: 3px; flex: none; font-variant-numeric: tabular-nums; }
 .card__num svg { width: 13px; height: 13px; }
-.card__num--up { color: var(--accent-text); font-weight: 600; }
 </style>
