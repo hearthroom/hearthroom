@@ -1945,5 +1945,6 @@
   "d63547f6ac8eb": "Exclusive end of the inviter promotion, when configured.",
   "d527a47e22397": "Validity in days of the separate inviter promotion credit, measured from its issuance; independent of welcomeDays. 0 means permanent credits with no expiry.",
   "d907e34634164": "How many days the welcome credits stay valid; 0 means permanent (the current newcomer welcome gift).",
-  "deb06756ca65f": "Platform-funded credits for the original referrer of each eligible new-user binding during the inviter promotion; 0 outside the promotion. Independent of the ongoing newcomer welcome gift and the application campaign pool. Valid for inviterDays days (0 means permanent); replaying or switching the binding does not issue another gift."
+  "deb06756ca65f": "Platform-funded credits for the original referrer of each eligible new-user binding during the inviter promotion; 0 outside the promotion. Independent of the ongoing newcomer welcome gift and the application campaign pool. Valid for inviterDays days (0 means permanent); replaying or switching the binding does not issue another gift.",
+  "d821fec22b74e": "Optional bounded termination category. Empty while running; stop only for a completed answer. length, content_filter and refusal explain an interrupted or failed reply. user_stop takes precedence over upstream reasons. Live operationStatus, replay and operation history carry the same value. Recovery remains governed by allowedActions; this field never starts another model call."
 }
