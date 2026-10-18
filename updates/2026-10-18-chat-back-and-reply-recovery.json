@@ -1,0 +1,10 @@
+{
+  "tier": "fix",
+  "title": {
+    "zh-Hant": "對話頁按返回會先關面板，重新進入也會自動補齊回覆。",
+    "zh-Hans": "聊天页按返回会先关闭面板，重新进入也会自动补全回复。",
+    "en": "Back closes open panels first, and reopening a chat restores the full reply automatically.",
+    "ja": "戻る操作でパネルが先に閉じ、チャットに戻ったときも返信が自動で復元されます。",
+    "ko": "뒤로 가기는 패널을 먼저 닫고, 대화에 다시 들어오면 답변이 자동으로 복원됩니다."
+  }
+}
