@@ -1,0 +1,17 @@
+{
+  "tier": "fix",
+  "title": {
+    "zh-Hant": "沙箱裡，從其他平台匯入的卡不再在頁首下方空出一條。",
+    "zh-Hans": "沙箱里，从其他平台导入的卡不再在页首下方空出一条。",
+    "en": "Cards imported from other platforms no longer leave a blank strip under the header in sandbox mode.",
+    "ja": "サンドボックスで、取り込んだカードのヘッダー下に空白が出なくなりました。",
+    "ko": "샌드박스에서 다른 서비스에서 가져온 카드의 헤더 아래 빈 줄이 사라졌어요."
+  },
+  "body": {
+    "zh-Hant": "開場白和長訊息的右側，也會留出跟傳統模式一樣的空隙。",
+    "zh-Hans": "开场白和长消息的右侧，也会留出跟传统模式一样的空隙。",
+    "en": "Openings and long messages also keep the same right-hand margin as in classic mode.",
+    "ja": "開幕メッセージや長い文章の右側にも、従来モードと同じ余白が残ります。",
+    "ko": "오프닝과 긴 메시지도 오른쪽에 기존 모드와 같은 여백이 남아요."
+  }
+}

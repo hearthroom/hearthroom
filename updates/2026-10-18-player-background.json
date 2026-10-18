@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/library",
+  "title": {
+    "zh-Hant": "對話背景可以換成模糊的原圖、純色或自己上傳的圖片。",
+    "zh-Hans": "聊天背景可以换成模糊的原图、纯色或自己上传的图片。",
+    "en": "Chat backgrounds can now be blurred, swapped for a solid color, or replaced with your own image.",
+    "ja": "チャットの背景を、ぼかした元の画像、単色、自分でアップロードした画像に変えられます。",
+    "ko": "대화 배경을 흐리게 한 원본, 단색, 직접 올린 이미지로 바꿀 수 있어요."
+  },
+  "body": {
+    "zh-Hant": "在對話頁的「更換背景」設定，每張卡分開記住，換裝置也還在。",
+    "zh-Hans": "在聊天页的「更换背景」设置，每张卡分别记住，换设备也还在。",
+    "en": "Set it from “Background” on the chat page, separately for each card, and it follows you to other devices.",
+    "ja": "チャット画面の「背景を変更」からカードごとに設定でき、別の端末でもそのまま使えます。",
+    "ko": "대화 화면의 「배경 변경」에서 카드마다 따로 정하고, 다른 기기에서도 그대로 유지돼요."
+  }
+}
