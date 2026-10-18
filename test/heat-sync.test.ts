@@ -53,4 +53,30 @@ describe("熱度同步", () => {
     expect(metrics).toContain('hearthroom_card_heat_sync_total{operation="batch",outcome="success"} 2');
     expect(metrics).toContain('hearthroom_card_heat_sync_total{operation="batch",outcome="error"} 1');
   });
+
+  it("上千張一起變動也寫得進去（每批一句更新，不是每張卡一句）", async () => {
+    const stmts = [];
+    for (let i = 0; i < 1100; i++) {
+      const rid = `bulk-${i}`;
+      stmts.push(env.DB.prepare("INSERT INTO card_numbers(provider,source_role_id) VALUES('harbor',?)").bind(rid));
+      stmts.push(env.DB.prepare(`INSERT INTO cards(id,source_role_id,author_num_id,registered_at,last_synced_at,zone,provider,status,approved_hosted_role_id)
+        VALUES((SELECT num FROM card_numbers WHERE provider='harbor' AND source_role_id=?),?,1,0,0,'zh','harbor','approved',?)`).bind(rid, rid, `h-${rid}`));
+    }
+    await env.DB.batch(stmts);
+    upstream.fetchHeats = async (_env, ids) => Object.fromEntries(ids.map((id) => [id, 7]));
+    expect(await syncHeat(env)).toMatchObject({ batches: 6, failed: 0, updated: 1100 });
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM cards WHERE heat=7").first<{ n: number }>())!.n).toBe(1100);
+    // 沒變的不再寫
+    expect(await syncHeat(env)).toMatchObject({ updated: 0 });
+  });
+
+  it("只同步已過審的卡", async () => {
+    await card("ok", "h-ok", 0);
+    await card("rejected", "h-rejected", 0);
+    await env.DB.prepare("UPDATE cards SET status='rejected' WHERE source_role_id='rejected'").run();
+    const asked: string[] = [];
+    upstream.fetchHeats = async (_env, ids) => { asked.push(...ids); return Object.fromEntries(ids.map((id) => [id, 9])); };
+    await syncHeat(env);
+    expect(asked).toEqual(["h-ok"]);
+  });
 });
