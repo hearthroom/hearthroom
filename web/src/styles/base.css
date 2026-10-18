@@ -177,6 +177,38 @@ textarea.input, select.input { height: auto; }
 textarea.input { min-height: 140px; padding: var(--s-3); resize: vertical; line-height: 1.7; }
 select.input { height: var(--h-md); }
 
+/*
+ * 下拉選單（owner 2026-10-18）：系統的藍色清單不跟網站的主題，改用可定制 select 畫成站內浮層
+ * （跟 AccountMenu 的 .menu 同一套）。只給滑鼠：手機的系統選擇器本來就順手；
+ * 還不支援的瀏覽器（Safari、Firefox）照用系統清單。
+ */
+@supports (appearance: base-select) {
+  @media (hover: hover) and (pointer: fine) {
+    select, ::picker(select) { appearance: base-select; }
+    /* 箭頭跟搜尋頁的一樣是細線折角，不用預設的實心三角 */
+    select::picker-icon {
+      content: ""; align-self: center; width: 6px; height: 6px; color: var(--text-3);
+      border-inline-end: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+      translate: 0 -2px; rotate: 45deg; transition: rotate var(--dur) var(--ease), translate var(--dur) var(--ease);
+    }
+    select:open::picker-icon { translate: 0 1px; rotate: 225deg; }
+    ::picker(select) {
+      margin-block: 6px; padding: 6px;
+      color: var(--text); background: var(--surface);
+      border: 0; border-radius: var(--r-md);
+      box-shadow: 0 0 0 1px var(--line), var(--shadow-md);
+    }
+    select option {
+      gap: 8px; padding: 8px 10px; border-radius: var(--r-sm);
+      font-size: 13.5px; color: var(--text); cursor: pointer;
+    }
+    select option:hover, select option:focus-visible { background: var(--surface-2); outline: none; }
+    select option:checked { font-weight: 600; }
+    select option::checkmark { color: var(--accent); }
+    select option:disabled { color: var(--text-3); cursor: default; }
+  }
+}
+
 .field { display: grid; gap: var(--s-2); margin-bottom: var(--s-5); }
 .field > label { font-size: 13px; font-weight: 600; }
 .field__foot { display: flex; justify-content: space-between; gap: var(--s-3); }
