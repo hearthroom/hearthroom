@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "audience": "authors",
+  "title": {
+    "zh-Hant": "編輯角色卡時，對話測試不會再停在別張卡，卡片載入失敗時也會顯示看得懂的提示。",
+    "zh-Hans": "编辑角色卡时，对话测试不会再停在别的卡上，卡片加载失败时也会显示看得懂的提示。",
+    "en": "While editing a character, Try it out no longer sticks on another card and tells you when a card didn’t load.",
+    "ja": "キャラクター編集の会話テストが別のカードで止まらなくなり、読み込めないときも案内が出ます。",
+    "ko": "캐릭터 편집의 대화 테스트가 다른 카드에 멈추지 않고, 카드를 못 불러오면 알기 쉬운 안내가 나옵니다."
+  }
+}
