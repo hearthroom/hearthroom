@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "title": {
+    "zh-Hant": "模糊背景現在會停在一張畫面，動圖不再持續播放。",
+    "zh-Hans": "模糊背景现在会停在一帧画面，动图不再持续播放。",
+    "en": "Blurred backgrounds now use a still frame instead of playing animations.",
+    "ja": "ぼかした背景は静止画になり、アニメーションの再生が止まります。",
+    "ko": "흐린 배경은 정지 이미지로 표시되어 움직이지 않아요."
+  }
+}
