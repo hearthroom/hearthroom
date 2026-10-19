@@ -13386,6 +13386,105 @@
           }
         }
       }
+    },
+    "/open/v1/app/rewards/events": {
+      "post": {
+        "operationId": "reportAppRewardEvents",
+        "tags": [
+          "Rewards"
+        ],
+        "summary": "Report application reward events",
+        "description": "Application servers report events with a `client_credentials` application token and the `rewards.report` scope. Each request contains 1 to 100 events, with at most 600 events per minute per client. Each event is validated independently; an invalid event does not discard valid events in the same batch. Accounts and agent configurations must belong to the application’s data namespaces: the application itself or a tenant with an OAuth client whose billing attribution points to the application. An `author_reply` account must own the agent configuration. A `share_open` event identifies the sharer through `refCode`, never `accountNo`; its optional `viewerAccountNo` must not be the sharer. Events more than 48 hours old or more than 5 minutes in the future are rejected. The reward business day uses receipt time and the application’s calendar. Events are retained for 45 days; `visitorHash` and `viewerAccountNo` are removed after 7 days. Comment text, IP addresses and unlisted fields are not accepted.",
+        "security": [
+          {
+            "appToken": [
+              "rewards.report"
+            ]
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppRewardEventsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Per-event results.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppRewardEventsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request` — the request must contain 1 to 100 events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing, invalid or non-application bearer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`insufficient_scope` — the application token was not granted `rewards.report`; `required_scope` is `rewards.report`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`rewards_disabled` — the app this token belongs to does not run rewards.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` — more than 600 events per minute for this client; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -13408,6 +13507,18 @@
         "type": "apiKey",
         "in": "header",
         "name": "X-Hosting-Key"
+      },
+      "appToken": {
+        "type": "oauth2",
+        "description": "Application access token issued by `/oauth/token` with `grant_type=client_credentials` and the `rewards.report` scope; user access tokens and personal API keys are refused.",
+        "flows": {
+          "clientCredentials": {
+            "tokenUrl": "/oauth/token",
+            "scopes": {
+              "rewards.report": "Report application reward events"
+            }
+          }
+        }
       }
     },
     "schemas": {
@@ -23790,11 +23901,16 @@
       "RewardClaimResponse": {
         "type": "object",
         "required": [
-          "claim"
+          "claim",
+          "replayed"
         ],
         "properties": {
           "claim": {
             "$ref": "#/components/schemas/RewardClaim"
+          },
+          "replayed": {
+            "type": "boolean",
+            "description": "True when this response repeats an earlier request with the same `requestId`; nothing new was claimed."
           }
         }
       },
@@ -24101,7 +24217,18 @@
           },
           "type": {
             "type": "string",
-            "description": "Kind of task, for example `turns` (chat a number of turns) or `share_open` (someone else opened a link the caller shared). Map it to your own copy."
+            "enum": [
+              "turns",
+              "new_work_turns",
+              "comment",
+              "rating",
+              "share_open",
+              "active_days",
+              "author_replies",
+              "share_open_distinct",
+              "daily_all"
+            ],
+            "description": "Kind of task: `turns` (chat a number of turns), `new_work_turns` (chat a number of turns with a work first opened today that is not the caller's own), `comment` (comment on a work), `rating` (rate a work), `share_open` (someone else opened a link the caller shared), `active_days` (active on a number of days this week), `author_replies` (reply a number of times this week as the author of a work), `share_open_distinct` (a number of different people opened links the caller shared this week) or `daily_all` (every daily task claimed today). Map it to your own copy."
           },
           "progress": {
             "type": "integer",
@@ -24140,6 +24267,24 @@
           "period": {
             "type": "string",
             "description": "Period this task counts in. Send it back unchanged when claiming."
+          },
+          "minTextUnits": {
+            "type": "object",
+            "required": [
+              "cjk",
+              "latin"
+            ],
+            "description": "Present on `comment` tasks. The comment must have at least `cjk` characters when written mainly in Chinese, Japanese or Korean, or `latin` characters otherwise.",
+            "properties": {
+              "cjk": {
+                "type": "integer",
+                "description": "Minimum length, in characters, of a comment written mainly in Chinese, Japanese or Korean."
+              },
+              "latin": {
+                "type": "integer",
+                "description": "Minimum length, in characters, of a comment written in any other language."
+              }
+            }
           }
         }
       },
@@ -24473,6 +24618,503 @@
               "other"
             ],
             "description": "Where the credits came from: `welcome` — sign-up gift; `event` — campaign credits; `checkin`, `task`, `newcomer` or `referral` — rewards; `other` — anything else."
+          }
+        }
+      },
+      "AppRewardEventsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "events"
+        ],
+        "properties": {
+          "events": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/AppRewardEvent"
+            }
+          }
+        }
+      },
+      "AppRewardEvent": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/AppRewardCommentPosted"
+          },
+          {
+            "$ref": "#/components/schemas/AppRewardCommentRemoved"
+          },
+          {
+            "$ref": "#/components/schemas/AppRewardRatingSet"
+          },
+          {
+            "$ref": "#/components/schemas/AppRewardAuthorReply"
+          },
+          {
+            "$ref": "#/components/schemas/AppRewardShareOpen"
+          },
+          {
+            "$ref": "#/components/schemas/AppRewardShareLinkCreated"
+          },
+          {
+            "$ref": "#/components/schemas/AppRewardBackgroundChanged"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "comment_posted": "#/components/schemas/AppRewardCommentPosted",
+            "comment_removed": "#/components/schemas/AppRewardCommentRemoved",
+            "rating_set": "#/components/schemas/AppRewardRatingSet",
+            "author_reply": "#/components/schemas/AppRewardAuthorReply",
+            "share_open": "#/components/schemas/AppRewardShareOpen",
+            "share_link_created": "#/components/schemas/AppRewardShareLinkCreated",
+            "background_changed": "#/components/schemas/AppRewardBackgroundChanged"
+          }
+        }
+      },
+      "AppRewardCommentPosted": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "eventId",
+          "type",
+          "accountNo",
+          "occurredAt",
+          "workRoleId",
+          "attrs"
+        ],
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "\\S",
+            "description": "Event identifier unique within the application; resending it returns `duplicate` without another write."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "comment_posted"
+            ]
+          },
+          "accountNo": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "description": "Public account number of the acting user, never an internal account UUID."
+          },
+          "workRoleId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Agent configuration UUID; required for every event type except `background_changed`."
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Event timestamp; the accepted window is from 48 hours before receipt to 5 minutes after receipt."
+          },
+          "attrs": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "commentId",
+              "textUnits",
+              "script"
+            ],
+            "properties": {
+              "commentId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "\\S"
+              },
+              "textUnits": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0,
+                "description": "Comment length counted by the application: one unit per Chinese, Japanese or Korean character, or per English character; no comment text is sent."
+              },
+              "script": {
+                "type": "string",
+                "enum": [
+                  "cjk",
+                  "latin"
+                ],
+                "description": "Comment script determined by the application: `cjk` or `latin`."
+              }
+            }
+          }
+        }
+      },
+      "AppRewardCommentRemoved": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "eventId",
+          "type",
+          "accountNo",
+          "occurredAt",
+          "workRoleId",
+          "attrs"
+        ],
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "\\S",
+            "description": "Event identifier unique within the application; resending it returns `duplicate` without another write."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "comment_removed"
+            ]
+          },
+          "accountNo": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "description": "Public account number of the acting user, never an internal account UUID."
+          },
+          "workRoleId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Agent configuration UUID; required for every event type except `background_changed`."
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Event timestamp; the accepted window is from 48 hours before receipt to 5 minutes after receipt."
+          },
+          "attrs": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "commentId"
+            ],
+            "properties": {
+              "commentId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "\\S"
+              }
+            }
+          }
+        }
+      },
+      "AppRewardRatingSet": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "eventId",
+          "type",
+          "accountNo",
+          "occurredAt",
+          "workRoleId"
+        ],
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "\\S",
+            "description": "Event identifier unique within the application; resending it returns `duplicate` without another write."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "rating_set"
+            ]
+          },
+          "accountNo": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "description": "Public account number of the acting user, never an internal account UUID."
+          },
+          "workRoleId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Agent configuration UUID; required for every event type except `background_changed`."
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Event timestamp; the accepted window is from 48 hours before receipt to 5 minutes after receipt."
+          },
+          "attrs": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": false,
+            "properties": {}
+          }
+        }
+      },
+      "AppRewardAuthorReply": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "eventId",
+          "type",
+          "accountNo",
+          "occurredAt",
+          "workRoleId",
+          "attrs"
+        ],
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "\\S",
+            "description": "Event identifier unique within the application; resending it returns `duplicate` without another write."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "author_reply"
+            ]
+          },
+          "accountNo": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "description": "Public account number of the acting user, never an internal account UUID."
+          },
+          "workRoleId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Agent configuration UUID; required for every event type except `background_changed`."
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Event timestamp; the accepted window is from 48 hours before receipt to 5 minutes after receipt."
+          },
+          "attrs": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "commentId"
+            ],
+            "properties": {
+              "commentId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "\\S"
+              }
+            }
+          }
+        }
+      },
+      "AppRewardShareOpen": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "eventId",
+          "type",
+          "refCode",
+          "occurredAt",
+          "workRoleId",
+          "attrs"
+        ],
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "\\S",
+            "description": "Event identifier unique within the application; resending it returns `duplicate` without another write."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "share_open"
+            ]
+          },
+          "refCode": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "\\S",
+            "description": "Referral code that resolves to the sharer; `share_open` must not include `accountNo`."
+          },
+          "workRoleId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Agent configuration UUID; required for every event type except `background_changed`."
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Event timestamp; the accepted window is from 48 hours before receipt to 5 minutes after receipt."
+          },
+          "attrs": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "visitorHash"
+            ],
+            "properties": {
+              "visitorHash": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "pattern": "\\S",
+                "description": "Application-generated visitor hash, never a raw IP address; removed after 7 days."
+              },
+              "viewerAccountNo": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "description": "Optional public account number of the viewer; it must differ from the sharer and is removed after 7 days."
+              }
+            }
+          }
+        }
+      },
+      "AppRewardShareLinkCreated": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "eventId",
+          "type",
+          "accountNo",
+          "occurredAt",
+          "workRoleId"
+        ],
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "\\S",
+            "description": "Event identifier unique within the application; resending it returns `duplicate` without another write."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "share_link_created"
+            ]
+          },
+          "accountNo": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "description": "Public account number of the acting user, never an internal account UUID."
+          },
+          "workRoleId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Agent configuration UUID; required for every event type except `background_changed`."
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Event timestamp; the accepted window is from 48 hours before receipt to 5 minutes after receipt."
+          },
+          "attrs": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": false,
+            "properties": {}
+          }
+        }
+      },
+      "AppRewardBackgroundChanged": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "eventId",
+          "type",
+          "accountNo",
+          "occurredAt"
+        ],
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "\\S",
+            "description": "Event identifier unique within the application; resending it returns `duplicate` without another write."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "background_changed"
+            ]
+          },
+          "accountNo": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "description": "Public account number of the acting user, never an internal account UUID."
+          },
+          "workRoleId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Agent configuration UUID; required for every event type except `background_changed`."
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Event timestamp; the accepted window is from 48 hours before receipt to 5 minutes after receipt."
+          },
+          "attrs": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": false,
+            "properties": {}
+          }
+        }
+      },
+      "AppRewardEventsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "results"
+        ],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppRewardEventResult"
+            },
+            "description": "One result per input event, in input order; `accepted` is stored, `duplicate` was already stored, `rejected_stale` is outside the time window, and `rejected_invalid` fails validation."
+          }
+        }
+      },
+      "AppRewardEventResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "eventId",
+          "status"
+        ],
+        "properties": {
+          "eventId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "duplicate",
+              "rejected_stale",
+              "rejected_invalid"
+            ]
           }
         }
       }
