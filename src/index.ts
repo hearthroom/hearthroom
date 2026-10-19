@@ -1054,7 +1054,10 @@ app.delete("/v1/comments/:id", async (c) => {
   const target = await c.env.DB.prepare("SELECT member_id, card_id, post_id FROM comments WHERE id = ? AND deleted_at IS NULL").bind(c.req.param("id")).first<{ member_id: string; card_id: string; post_id: string | null }>();
   const now = Date.now();
   await deleteComment(c.env.DB, c.req.param("id"), { memberId: member.id, moderator: await isHumanReviewer(c.env.DB, member.id) }, now);
-  if (target && !target.post_id) await reportCommentRemoved(c.env.DB, { cardId: String(target.card_id), memberId: target.member_id, commentId: c.req.param("id"), now });
+  if (target && !target.post_id) {
+    await reportCommentRemoved(c.env.DB, { cardId: String(target.card_id), memberId: target.member_id, commentId: c.req.param("id"), now });
+    c.executionCtx.waitUntil(flushRewardEvents(c.env, now).catch(() => undefined));
+  }
   return c.body(null, 204);
 });
 
@@ -1093,6 +1096,8 @@ app.put("/v1/cards/:id/score", async (c) => {
   const now = Date.now();
   await setScore(c.env.DB, card, member.id, body.score, now);
   await reportRating(c.env.DB, { cardId: String(card.id), memberId: member.id, now });
+  // 跟留言一樣當場送：新手「留言或評分」那天，評完回簽到頁就該能領，不等每小時的排程
+  c.executionCtx.waitUntil(flushRewardEvents(c.env, now).catch(() => undefined));
   note(c, { event: "card_score", subject: card.id, detail: `set_${body.score}` });
   return c.body(null, 204);
 });

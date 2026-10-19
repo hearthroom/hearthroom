@@ -192,12 +192,14 @@ rewardEventRoutes.post("/v1/me/share/created", bodyLimit({ maxSize: 512, onError
   const body = (await c.req.json().catch(() => ({}))) as { roleId?: unknown };
   const roleId = typeof body.roleId === "string" && body.roleId.length <= 64 ? body.roleId : null;
   if (!roleId) return c.body(null, 204);
-  const card = await c.env.DB.prepare("SELECT id FROM cards WHERE source_role_id = ? AND provider = 'harbor'").bind(roleId).first<{ id: string }>();
+  // 卡片頁拿到的是託管後的 roleId（approved_hosted_role_id）；報的一律是原卡的 roleId，跟留言、評分同一個
+  const card = await c.env.DB.prepare("SELECT source_role_id FROM cards WHERE provider = 'harbor' AND (source_role_id = ?1 OR approved_hosted_role_id = ?1)").bind(roleId).first<{ source_role_id: string }>();
   const accountNo = await harborAccountNo(c.env.DB, member.id);
   if (!card || !accountNo) return c.body(null, 204);
   const now = Date.now();
+  const workRoleId = card.source_role_id;
   // 新手第 6 階段每個帳號只算一次；同一張卡一天報一次就夠
-  await enqueueRewardEvent(c.env.DB, { eventId: `share_link_created:${accountNo}:${roleId}:${businessDay(now)}`, type: "share_link_created", accountNo, workRoleId: roleId, occurredAt: new Date(now).toISOString(), attrs: {} }, now);
+  await enqueueRewardEvent(c.env.DB, { eventId: `share_link_created:${accountNo}:${workRoleId}:${businessDay(now)}`, type: "share_link_created", accountNo, workRoleId, occurredAt: new Date(now).toISOString(), attrs: {} }, now);
   c.executionCtx.waitUntil(flushRewardEvents(c.env, now).catch(() => undefined));
   return c.body(null, 204);
 });
