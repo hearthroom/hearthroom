@@ -30,26 +30,28 @@ watch(() => line.value.kind, async (now, before) => {
 
 <template>
   <section v-if="line.kind !== 'hidden' && mine" class="plan-row panel settle">
-    <div class="plan-row__main">
-      <p class="plan-row__title">{{ mine.remainingDays <= 1 ? t("plan.row.title.last") : t("plan.row.title", { n: whole(mine.remainingDays) }, mine.remainingDays) }}</p>
-      <p class="plan-row__sub">
-        <span v-if="line.bonusCredits > 0">{{ t("plan.row.bonusPart", { bonus: whole(line.bonusCredits) }) }}</span>
-        <span>{{ t("plan.row.makeup", { left: whole(makeupLeft) }, makeupLeft) }}</span>
-      </p>
-    </div>
+    <p class="plan-row__title">{{ mine.remainingDays <= 1 ? t("plan.row.title.last") : t("plan.row.title", { n: whole(mine.remainingDays) }, mine.remainingDays) }}</p>
     <PlanToday class="plan-row__today" :line="line" :claiming="plans.claiming" @claim="plans.claim()" />
+    <p class="plan-row__sub">
+      <span v-if="line.bonusCredits > 0">{{ t("plan.row.bonusPart", { bonus: whole(line.bonusCredits) }) }}</span>
+      <span>{{ t("plan.row.makeup", { left: whole(makeupLeft) }, makeupLeft) }}</span>
+    </p>
     <span class="sr-only" role="status">{{ spoken }}</span>
   </section>
 </template>
 
 <style scoped>
-.plan-row { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--s-2) var(--s-3); padding:var(--s-3) var(--s-4); }
-.plan-row__main { min-width:0; display:grid; gap:2px; }
+/* One row: title left, today's state right; the second line spans both (ui.md §3.2).
+   Narrow phones: today's state drops under the title, left-aligned, then the second line. */
+.plan-row { display:grid; grid-template-columns:minmax(0, 1fr) auto; align-items:center; gap:2px var(--s-3); padding:var(--s-3) var(--s-4); }
 .plan-row__title { margin:0; font-size:14px; font-weight:600; color:var(--text); }
-.plan-row__sub { margin:0; display:flex; flex-wrap:wrap; gap:0 var(--s-1); font-size:12px; color:var(--text-3); }
-.plan-row__sub > span + span::before { content:"· "; }
-.plan-row__today { margin-left:auto; }
+.plan-row__today { justify-self:end; }
+.plan-row__sub { grid-column:1 / -1; margin:0; display:flex; flex-wrap:wrap; gap:0 var(--s-1); font-size:12px; color:var(--text-3); }
+/* The separator ends the previous part, so a wrapped line never starts with it. */
+.plan-row__sub > span:not(:last-child)::after { content:" ·"; }
+:lang(ko) .plan-row { word-break:keep-all; }
 @media (max-width: 380px) {
-  .plan-row__today { margin-left:0; justify-content:flex-start; }
+  .plan-row { grid-template-columns:minmax(0, 1fr); }
+  .plan-row__today { justify-self:start; justify-content:flex-start; }
 }
 </style>
