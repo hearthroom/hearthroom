@@ -11721,7 +11721,17 @@
             }
           },
           "403": {
-            "description": "`forbidden` — the application token was not granted `rewards.report`.",
+            "description": "`insufficient_scope` — the application token was not granted `rewards.report`; `required_scope` is `rewards.report`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`rewards_disabled` — the app this token belongs to does not run rewards.",
             "content": {
               "application/json": {
                 "schema": {
