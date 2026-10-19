@@ -1,6 +1,6 @@
 import { nextTick } from "vue";
 import { preloadStage } from "./lib/stage-preload";
-import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router";
+import { createRouter, createWebHistory, type RouteLocationNormalized, type RouteRecordRaw } from "vue-router";
 import { LOCALE_CODES, SOURCE_LOCALE, applyLocale, detectLocale, pageTitle, updateHreflang } from "./lib/i18n";
 import { applyCardHead } from "./lib/card-manifest";
 import { useSession } from "./lib/session";
@@ -40,7 +40,7 @@ const pages: RouteRecordRaw[] = [
   { path: "me/referral", component: () => import("./pages/ReferralPage.vue"), meta: { auth: true } },
   // 舊的「我的分享申請」：現在是活動中心的「我參加的」頁籤。通知與舊書籤還指著這裡
   { path: "me/campaign", redirect: (to) => ({ path: withLocale("/campaigns", localeOf(to)), query: { ...to.query, tab: "mine" }, hash: to.hash }) },
-  { path: "me", component: () => import("./pages/MePage.vue"), meta: { auth: true } },
+  { path: "me", component: () => import("./pages/MePage.vue"), meta: { auth: true, keepScrollOnQuery: true } },
   { path: "login", component: () => import("./pages/LoginPage.vue") },
   // optimisticAuth：這個瀏覽器上次是登入的，就先開頁（畫上次那份）、身分在背景確認（見下面的守衛）
   { path: "mine", component: () => import("./pages/MyCardsPage.vue"), meta: { auth: true, optimisticAuth: true } },
@@ -137,8 +137,15 @@ export const router = createRouter({
           children: pages,
         },
       ],
-  scrollBehavior: (_to, _from, saved) => saved ?? { top: 0 },
+  scrollBehavior: scrollFor,
 });
+
+/** 換頁面回頂端、返回鍵回原位；頁面標了 keepScrollOnQuery 時，同一頁只改網址參數（切分區、排序）不動捲動位置。 */
+export function scrollFor(to: RouteLocationNormalized, from: RouteLocationNormalized, saved: { left: number; top: number } | null) {
+  if (saved) return saved;
+  if (to.path === from.path && to.meta.keepScrollOnQuery) return false;
+  return { top: 0 };
+}
 
 const isLocaleCode = (v: unknown): v is string => typeof v === "string" && LOCALE_CODES.includes(v);
 
