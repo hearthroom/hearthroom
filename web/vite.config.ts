@@ -40,7 +40,8 @@ export default defineConfig({
   server: {
     port: 8850,
     // 本地開發時把 /v1 打到 wrangler dev；正式環境同一個 Worker 服務兩者，不需要代理。
-    proxy: { "/v1": "http://127.0.0.1:8787" },
+    // 同時開兩組（例如假上游一組、接本機 Harbor 一組）時用 HEARTHROOM_WORKER 指到另一個 wrangler dev。
+    proxy: { "/v1": process.env.HEARTHROOM_WORKER || "http://127.0.0.1:8787" },
   },
   build: {
     outDir: "dist", emptyOutDir: true,

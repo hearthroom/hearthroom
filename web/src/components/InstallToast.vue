@@ -4,10 +4,23 @@
  * 兩種樣子：有原生安裝框的（Chromium 系）給「安裝／以後再說」；iOS Safari 沒有 API，給步驟與「知道了」。
  * 對象是卡片（卡片頁按了「加到主畫面」）時標題換成卡名；步驟一樣。
  */
-import { nextTick, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { acceptInstall, dismissInstall, installPrompt } from "@/lib/pwa";
 import { isPlayHost } from "@/lib/site";
 import { track } from "@/lib/track";
+import { newcomerPrompt } from "@/lib/newcomer-prompt";
+import { tourState } from "@/lib/coach-tour";
+import { newcomerTour } from "@/lib/newcomer-tour";
+import { petSpeaking } from "@/pet/events";
+
+/**
+ * 一次只有一個提示（美術總監最終 r1 M6、r2 M6，手機桌機都一樣）：新手提示卡、首次導覽、新手七日導覽在畫面上時收起；
+ * 桌寵正在說話時先不出現，但已經出現了就不跟著她的每一句話收放，免得閃。
+ */
+const guiding = computed(() => newcomerPrompt.showing || tourState.step !== null || newcomerTour.day > 0);
+const appeared = ref(false);
+const showing = computed(() => installPrompt.visible && !guiding.value && (appeared.value || !petSpeaking.value));
+watch(showing, (v) => { if (v) appeared.value = true; });
 
 /**
  * 卡片 App 網域上，提示卡要壓過舞台與作者卡片的所有浮層——作者的樣式可以把 z-index 開到任意大，
@@ -16,7 +29,7 @@ import { track } from "@/lib/track";
  */
 const overStage = isPlayHost();
 const el = ref<HTMLElement | null>(null);
-watch(() => installPrompt.visible, async (v) => {
+watch(showing, async (v) => {
   if (!overStage) return;
   await nextTick();
   const node = el.value as (HTMLElement & { showPopover?: () => void; hidePopover?: () => void }) | null;
@@ -30,7 +43,7 @@ function onLater() { track("pwa_install_later"); dismissInstall(); }
 
 <template>
   <Transition name="install">
-    <section v-if="installPrompt.visible" ref="el" class="install" :class="{ 'install--over-stage': overStage }" :popover="overStage ? 'manual' : undefined" role="region" :aria-label="$t('pwa.install.title')">
+    <section v-if="showing" ref="el" class="install" :class="{ 'install--over-stage': overStage }" :popover="overStage ? 'manual' : undefined" role="region" :aria-label="$t('pwa.install.title')">
       <div class="install__row">
         <span class="install__tile" aria-hidden="true">
           <img v-if="installPrompt.target === 'card' && installPrompt.icon" :src="installPrompt.icon" alt="" />

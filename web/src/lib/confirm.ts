@@ -19,6 +19,8 @@ export interface ConfirmOptions {
   cancelText?: string;
   /** 破壞性動作：確認鍵用警示色，焦點先落在取消鍵 */
   danger?: boolean;
+  /** 焦點先落在取消鍵（不是危險操作，但預設應該留在原處，例如「直接簽到」會讓連續天數退回） */
+  focusCancel?: boolean;
   /** 只有一顆「知道了」，沒有取消 */
   single?: boolean;
   /**
