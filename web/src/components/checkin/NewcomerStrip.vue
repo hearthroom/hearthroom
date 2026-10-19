@@ -44,20 +44,26 @@ function go() { if (view.value) startNewcomerTour(view.value.day, router, lp); }
 </template>
 
 <style scoped>
-.ns { position:relative; display:grid; grid-template-columns:44px minmax(0,1fr) auto 20px; grid-template-areas:"face text go chev" "bar bar bar bar"; align-items:center; gap:var(--s-2) var(--s-3); padding:var(--s-3) var(--s-3) var(--s-2) var(--s-4); margin-bottom:var(--s-4); transition:background var(--dur) var(--ease); }
+/*
+ * 文字欄至少 160 寬；放不下時按鈕換到下一列、滿寬（ui.md §6.14）。用 flex 換行做：
+ * 文字欄的伸展權重遠大於按鈕，同一列時多出來的寬都給文字；按鈕獨自一列時才撐滿。
+ */
+.ns { position:relative; container-type:inline-size; display:flex; flex-wrap:wrap; align-items:center; gap:var(--s-2) var(--s-3); padding:var(--s-3) var(--s-3) var(--s-2) var(--s-4); margin-bottom:var(--s-4); transition:background var(--dur) var(--ease); }
 .ns:hover { background:var(--surface-2); }
 .ns__link { position:absolute; inset:0; z-index:1; border-radius:inherit; }
-.ns__face { grid-area:face; width:44px; height:44px; border-radius:var(--r-pill); object-fit:cover; background:var(--accent-tint); }
-.ns__text { grid-area:text; display:grid; gap:2px; min-width:0; }
+.ns__face { flex:none; width:44px; height:44px; border-radius:var(--r-pill); object-fit:cover; background:var(--accent-tint); }
+.ns__text { flex:9999 1 160px; min-width:160px; display:grid; gap:2px; }
 .ns__eyebrow { font-size:12px; color:var(--text-2); }
 .ns__goal { font-size:14px; font-weight:600; line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; text-wrap:pretty; }
 .ns__next { font-weight:400; color:var(--text-3); }
-.ns__go { grid-area:go; position:relative; z-index:2; height:var(--h-lg); }
-.ns__chev { grid-area:chev; font-size:20px; color:var(--text-3); text-align:center; }
-.ns__bar { grid-area:bar; display:grid; grid-template-columns:repeat(7, 1fr); gap:3px; }
+.ns__go { flex:1 0 auto; position:relative; z-index:2; height:var(--h-lg); min-height:44px; }
+.ns__chev { flex:none; width:20px; font-size:20px; color:var(--text-3); text-align:center; }
+.ns__bar { flex:1 1 100%; display:grid; grid-template-columns:repeat(7, 1fr); gap:3px; }
 .ns__bar i { height:4px; border-radius:var(--r-pill); background:var(--line-strong); }
 .ns__bar i.on { background:color-mix(in srgb, var(--text-3) 60%, transparent); }
 .ns__bar i.today { background:var(--accent-btn); }
 :lang(ko) .ns__goal { word-break:keep-all; }
+/* 窄卡：箭頭收起（整張卡仍是連結），按鈕一定換列 */
+@container (max-width: 340px) { .ns__chev { display:none; } .ns__go { flex-basis:100%; } }
 :lang(zh) .ns__goal, :lang(ja) .ns__goal { word-break:auto-phrase; }
 </style>
