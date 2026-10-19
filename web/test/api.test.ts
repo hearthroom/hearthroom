@@ -241,6 +241,15 @@ it('normalizes Harper wallet balances without treating reserved credits as spend
   try {expect(await fetchWallet('fixture')).toEqual({score:80,tempScore:40,plans:[],expiries:[]});}finally{setProvider('lunatalk')}
 });
 
+it('Harper wallet in the contract shape (score, tempScore, expiries) is taken as is, earliest batch first',async()=>{
+  const {setProvider}=await import('../src/lib/provider');
+  const {fetchWallet}=await import('../src/lib/api');
+  setProvider('harbor');
+  const expiries=[{amount:150,expiresAt:'2026-10-23T04:00:00+08:00',kind:'checkin'},{amount:300,expiresAt:'2026-10-22T04:00:00+08:00',kind:'task'}];
+  vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({score:100,tempScore:450,plans:[],expiries}))));
+  try {expect(await fetchWallet('fixture')).toEqual({score:100,tempScore:450,plans:[],expiries:[expiries[1],expiries[0]]});}finally{setProvider('lunatalk')}
+});
+
 it('Harper wallet: time-limited credits and their batches, earliest first, capped by what is spendable',async()=>{
   const {setProvider}=await import('../src/lib/provider');
   const {fetchWallet}=await import('../src/lib/api');

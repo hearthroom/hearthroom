@@ -128,7 +128,7 @@ export function newcomerView(p: RewardsPanel): NewcomerView | null {
   const n = p.newcomer;
   if (!n || !n.active) return null;
   const done = n.stages.filter((s) => s.done).length;
-  const left = Math.max(0, Math.ceil((new Date(n.deadline).getTime() - new Date(p.serverNow).getTime()) / 86_400_000));
+  const left = n.deadline ? Math.max(0, Math.ceil((new Date(n.deadline).getTime() - new Date(p.serverNow).getTime()) / 86_400_000)) : 0;
   const todayDone = n.today.status === "claimed";
   const total = n.stages.length || 7;
   return { day: Math.min(total, todayDone ? done : done + 1), done, left, todayDone, grand: !todayDone && done === total - 1, finished: done >= total };
@@ -192,7 +192,3 @@ export function clearRequestId(scope: string): void {
   try { sessionStorage.removeItem(REQ_PREFIX + scope); } catch { /* ignore */ }
 }
 
-/** 這件事是不是已經送過一次、還沒確認（重新整理或斷線後再送）。用來分辨「自己的重送」和「別的裝置先簽了」。 */
-export function hasRequestId(scope: string): boolean {
-  try { return !!sessionStorage.getItem(REQ_PREFIX + scope); } catch { return false; }
-}

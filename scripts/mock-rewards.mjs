@@ -152,7 +152,7 @@ function panel(now) {
     else if (broken) { const filled = S.streak % 7 === 0 ? 7 : S.streak % 7; status = i < filled ? "claimed" : i < pos ? "missed" : i === pos ? "today" : "future"; }
     else status = i < pos ? "claimed" : i === pos ? "today" : "future";
     if (S.madeUp.includes(base + i)) status = "made_up";
-    return { day: i + 1, chest, status };
+    return { day: addDays(today, i - pos), chest, status };
   });
   const todayChests = claimedToday ? [] : broken && !repairable ? [cycleChest(7 * Math.floor(S.streak / 7) + 1)] : [cycleChest(nextStreak), milestoneOf(nextStreak)].filter(Boolean);
   const msTarget = (() => { const s = claimedToday ? S.streak : nextStreak - 1; let d = s + 1; while (!milestoneOf(d)) d++; return { day: d, chest: milestoneOf(d), inDays: d - s }; })();
@@ -204,8 +204,15 @@ export async function handleRewards({ m, path, url, body, json, res }) {
   if (m === "POST" && path === "/open/v1/me/rewards/checkin") {
     if (S.delay) await new Promise((r) => setTimeout(r, S.delay));
     if (S.fail) { json(res, 503, { error: "service_unavailable" }); return true; }
-    if (S.elsewhere) { S.elsewhere = false; const r = checkinNow(now); json(res, 200, { ...r, replayed: true }); return true; }
-    if (S.lastDay === businessDay(now)) { json(res, 200, { claims: S.todayClaims.map(({ at: _a, rewardKind: _k, ...c }) => c), streak: S.streak, replayed: true }); return true; }
+    // 今天已經用別的 requestId 簽過（另一台裝置）：409 already_claimed 附原結果（契約）；同一個 requestId 重送才是 replayed
+    if (S.elsewhere) { S.elsewhere = false; const r = checkinNow(now); json(res, 409, { error: "already_claimed", claims: r.claims }); return true; }
+    if (S.lastDay === businessDay(now)) {
+      const claims = S.todayClaims.map(({ at: _a, rewardKind: _k, ...c }) => c);
+      if (body.requestId && body.requestId === S.lastRequestId) json(res, 200, { claims, streak: S.streak, replayed: true });
+      else json(res, 409, { error: "already_claimed", claims });
+      return true;
+    }
+    S.lastRequestId = body.requestId;
     json(res, 200, checkinNow(now)); return true;
   }
   if (m === "POST" && path === "/open/v1/me/rewards/makeup") {
@@ -239,10 +246,10 @@ export async function handleRewards({ m, path, url, body, json, res }) {
   return false;
 }
 
-/** 錢包：限時積分的總額與逐筆明細（V0.2c），跟著情境走。 */
+/** 錢包：限時積分的總額與逐筆明細（契約形狀 score／tempScore／expiries），跟著情境走。 */
 export function walletExtras() {
   const expiries = S.expiring.map((e) => ({ ...e, kind: "checkin" }));
-  return { expiring: expiries.reduce((s, e) => s + e.amount, 0), expiries };
+  return { tempScore: expiries.reduce((s, e) => s + e.amount, 0), expiries };
 }
 
 setPreset("normal");
