@@ -22,7 +22,7 @@ import { useLocalePath } from "@/lib/use-locale";
 import CreditIcon from "./CreditIcon.vue";
 import SukiCarry from "./SukiCarry.vue";
 
-export interface StageOutcome { claims: ClaimResult[]; recap: boolean; streak?: number }
+export interface StageOutcome { claims: ClaimResult[]; recap: boolean; streak?: number; replayed?: boolean }
 export type StageMood = "win" | "miss" | "ok";
 
 const props = defineProps<{
