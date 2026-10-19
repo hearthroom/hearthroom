@@ -2229,7 +2229,7 @@
   "dc94cf243c820": "Whether the caller can buy another plan now.",
   "d257769eb3d83": "Why another plan cannot be bought now: `not_on_sale`; `plan_limit` — buying one more would pass `maxDays`; `checkout_in_progress` — an earlier purchase is still being paid or credited. Null when `canPurchase` is true.",
   "ddf2b602a1dd2": "`available` — the account has never bought this plan, so the next one is its first; `active` — the plan covering today is the first; `used` — the first plan was already bought, including when it ran out, was followed by another or was refunded; `unavailable` — the current version has no first-plan bonus.",
-  "d5ea081b429bd": "Makeup passes per month: the plan's number while it is active, otherwise the app's.",
+  "d5ea081b429bd": "Makeup passes per month that the plan gives (for example 3), whether or not a plan is active. How many are left this month is `checkin.makeup.left` in `getMyRewards`.",
   "d132f1322aef7": "Present only while a plan is active, for example `plan_month`.",
   "da4ec2eeb9ee8": "Server time, for countdowns.",
   "d7a136dab063c": "One entry per plan; empty when none exists.",
@@ -2245,5 +2245,6 @@
   "d76e57e80c49c": "On `granted`: the part of `credits` that is the first-plan bonus.",
   "d247df91447a5": "On `granted`: true when today had been claimed before.",
   "deda643cd4fe0": "Plans",
-  "d17f7d9b915e9": "Extra credits per day while the first plan is active; 0 for `unavailable`."
+  "d17f7d9b915e9": "Extra credits per day while the first plan is active; 0 for `unavailable`.",
+  "d84faf80d5191": "Only on `plan_limit`: the first business day another plan can be bought; null otherwise."
 }
