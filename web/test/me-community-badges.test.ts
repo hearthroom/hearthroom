@@ -6,9 +6,11 @@ import {i18n,applyLocale} from '../src/lib/i18n';
 const mock=vi.hoisted(()=>({request:vi.fn(),confirm:vi.fn(async()=>true)}));
 vi.mock('../src/lib/community',async original=>({...await original<object>(),communityRequest:mock.request}));
 vi.mock('../src/lib/confirm',()=>({confirmDialog:mock.confirm}));
+// 主頁其他區塊（作者數據、活動、作品）不在這支測試的範圍：給空資料，別真的連網
+vi.mock('../src/lib/api',async original=>({...await original<object>(),fetchAuthor:async()=>({cardCount:0,talkTotal:0}),fetchBoard:async()=>({items:[],total:0,hasNext:false,limit:23,offset:0,sort:'new'})}));
+vi.mock('../src/lib/campaign',async original=>({...await original<object>(),fetchPublicCampaigns:async()=>({items:[]})}));
 vi.mock('../src/lib/session',()=>({useSession:()=>({me:{},displayName:'Fixture',avatarUrl:'',profile:{handle:'fixture',memberSince:0},accessToken:async()=>'fixture'})}));
 vi.mock('../src/lib/review',()=>({useReviewer:()=>({reviewer:false})}));
-vi.mock('../src/components/CommunityProfile.vue',()=>({default:{template:'<div />'}}));
 vi.mock('../src/components/ConnectedAccounts.vue',()=>({default:{template:'<div />'}}));
 import MePage from '../src/pages/MePage.vue';
 import CommunityPage from '../src/pages/CommunityPage.vue';
@@ -28,10 +30,12 @@ beforeEach(async()=>{
  el=document.createElement('div');document.body.append(el);app=createApp(RouterView).use(router).use(i18n).use(createPinia());app.mount(el);await settle();
 });
 afterEach(()=>{app?.unmount();el.remove();});
-it('keeps details off the profile while exposing a compact community entry',()=>{
- const header=el.querySelector('.me__who')!;
+// 主頁改版（2026-10-19）：社區狀態讀一次放進資料頭（等級、「Discord 已連結」、展示中的徽章），不再是一列輪詢的小條
+it('keeps details off the profile while showing level, link state and featured badges in the header',()=>{
+ const header=el.querySelector('.hero')!;
  expect(header.textContent).toContain('Level 0');
- expect(header.querySelectorAll('.community-badges svg')).toHaveLength(2);
+ expect(header.querySelectorAll('.hero__featured .med')).toHaveLength(1);
+ expect(header.textContent).toContain('First approved work');
  expect(header.querySelector('a[href="/me/community"]')).not.toBeNull();
  expect(el.querySelector('.community')).toBeNull();expect(el.querySelector('progress')).toBeNull();
  expect(el.querySelector('a[href="https://discord.gg/fixture"]')).toBeNull();
@@ -39,13 +43,13 @@ it('keeps details off the profile while exposing a compact community entry',()=>
  expect(header.textContent).not.toContain(i18n.global.t('community.unreadCount',{count:1}));
 });
 it('opens settings through the profile entry and refreshes badges after unlinking',async()=>{
- el.querySelector<HTMLAnchorElement>('a[href="/me/community"]')!.click();await settle();
+ el.querySelector<HTMLAnchorElement>('.hero a[href="/me/community"]')!.click();await settle();
  expect(router.currentRoute.value.path).toBe('/me/community');expect(el.querySelector('progress')).not.toBeNull();
  expect(el.querySelector('a[href="https://discord.gg/fixture"]')).toBeNull();
  const unlink=[...el.querySelectorAll('button')].find(b=>b.textContent.trim()===i18n.global.t('community.unlink'))!;
  unlink.click();await settle();el.querySelector<HTMLAnchorElement>('.community-page__back')!.click();await settle();
- expect(el.querySelector('.me__who')!.textContent).not.toContain('Level 0');
- expect(el.querySelector('.me__who')!.textContent).toContain(i18n.global.t('community.badges.first_work'));
+ expect(el.querySelector('.hero')!.textContent).not.toContain('Level 0');
+ expect(el.querySelector('.hero')!.textContent).toContain('First approved work');
 });
 it.each(['synced','pending','failed','denied','cleanup'])('does not offer a redundant invitation in the %s state',async(state)=>{
  view.link.state=state;await router.push('/me/community');await settle();

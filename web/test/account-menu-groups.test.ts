@@ -76,8 +76,10 @@ describe("頭像選單分組", () => {
     const menu = await openMenu();
     const groups = [...menu.querySelectorAll(".menu__group")];
     expect(groups.length).toBe(4);
-    expect(hrefs(groups[0])).toEqual(["/wallet"]);
+    // 主頁改版（2026-10-19）後「我的」頁不再列整串入口：邀請獎勵跟積分同組，徽章收藏跟我的卡片同組，任何頁面兩步就到
+    expect(hrefs(groups[0])).toEqual(["/wallet", "/me/referral"]);
     expect(hrefs(groups[1])).toContain("/mine");
+    expect(hrefs(groups[1])).toContain("/me/badges");
     // 更新紀錄、部落格、活動中心跟設定、開發者文件同一組：都是「關於這個站」而不是「我的東西」
     expect(hrefs(groups[2])).toEqual(["/settings", "/developers", "/updates?from=menu", "/blog", "/campaigns"]);
     const last = groups[groups.length - 1];
