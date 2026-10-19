@@ -18,8 +18,11 @@
  *   elsewhere    另一台裝置先簽了：簽到回 replayed
  *   expiring     有限時積分明天到期
  *   empty        沒有任何紀錄與限時積分
- * tier 強制下一次開箱的級數（1..6），方便拍各級與「差一點」。
+ * tier 強制下一次開箱的級數（1..6），方便拍各級；graze=near 再挑一個讓第 6 級緊鄰停點的 stripSeed（差一點中頭獎、蘇綺懊惱），
+ * graze=none 挑一個完全不擦過的。滾輪用的是網站自己的編排（web/src/lib/reel/v1.ts），所以畫面一定對得上。
  */
+let reel = null;
+const reelReady = import("../web/src/lib/reel/v1.ts").then((m) => { reel = m; }).catch(() => { /* 舊版 Node 讀不了 .ts：graze 失效，其餘照常 */ });
 const TZ_OFFSET_H = 8;
 const DAY = 86_400_000;
 
@@ -58,7 +61,7 @@ const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed
 const u32 = () => Math.floor(rnd() * 0xffffffff) >>> 0;
 
 function freshState(preset = "normal") {
-  return { preset, streak: 8, lastDay: null, missed: 0, makeupLeft: 1, pity: 4, history: [], todayClaims: [], forceTier: null, tasks: {}, newcomer: null, delay: 0, fail: false, pending: false, expiring: [], elsewhere: false, madeUp: [] };
+  return { graze: null, preset, streak: 8, lastDay: null, missed: 0, makeupLeft: 1, pity: 4, history: [], todayClaims: [], forceTier: null, tasks: {}, newcomer: null, delay: 0, fail: false, pending: false, expiring: [], elsewhere: false, madeUp: [] };
 }
 let S = freshState();
 
@@ -67,6 +70,7 @@ export function setPreset(preset, opts = {}) {
   const today = businessDay(now);
   S = freshState(preset);
   S.forceTier = opts.tier ? Number(opts.tier) : null;
+  S.graze = opts.graze || null;
   const yesterday = addDays(today, -1);
   const at = (streak, lastDay) => { S.streak = streak; S.lastDay = lastDay; };
   switch (preset) {
@@ -107,9 +111,14 @@ function draw(chest, now = Date.now(), tier = null) {
   const prize = box.prizes[t - 1];
   if (PLAN.pity.chests.includes(chest)) S.pity = (prize.credits ?? PLAN.pity.threshold) >= PLAN.pity.threshold ? 0 : S.pity + 1;
   const credits = prize.credits ?? (prize.item ? 300 : 0);
+  let stripSeed = u32();
+  if (S.graze && reel) {
+    const want = (tr) => (S.graze === "near" ? tr.nearMissBig : tr.grazes.length === 0);
+    for (let tries = 0; tries < 5000 && !want(reel.buildTrack({ prizes: box.prizes, tier: t, seed: stripSeed })); tries++) stripSeed = u32();
+  }
   const out = {
     rewardKey: `${chest}:${businessDay(now)}:${u32()}`, status: "granted", chest, prizeIndex: t - 1, tier: t, planVersion: PLAN.version,
-    stripSeed: u32(), stripVersion: 1, duplicate: false, pityRemaining: Math.max(PLAN.pity.every - S.pity, 1),
+    stripSeed, stripVersion: 1, duplicate: false, pityRemaining: Math.max(PLAN.pity.every - S.pity, 1),
   };
   if (prize.item) Object.assign(out, { item: prize.item, duplicate: S.history.some((h) => h.item === prize.item) });
   if (!prize.item || out.duplicate) Object.assign(out, { credits, expiresAt: expiresAt(credits, now) });
@@ -196,7 +205,7 @@ function taskList(today, now) {
 /** 回傳 true 表示這支處理了請求。 */
 export async function handleRewards({ m, path, url, body, json, res }) {
   const now = Date.now();
-  if (path === "/__rewards") { setPreset(url.searchParams.get("preset") || body.preset || "normal", { tier: url.searchParams.get("tier") || body.tier }); json(res, 200, { preset: S.preset }); return true; }
+  if (path === "/__rewards") { await reelReady; setPreset(url.searchParams.get("preset") || body.preset || "normal", { tier: url.searchParams.get("tier") || body.tier, graze: url.searchParams.get("graze") || body.graze }); json(res, 200, { preset: S.preset }); return true; }
   let mm;
   if ((mm = path.match(/^\/open\/v1\/apps\/([^/]+)\/rewards\/plan$/))) { json(res, 200, PLAN); return true; }
   if (!path.startsWith("/open/v1/me/rewards")) return false;
