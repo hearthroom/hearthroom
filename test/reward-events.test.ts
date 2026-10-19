@@ -5,7 +5,7 @@
  *   - 先寫進待送清單，背景送出；沒設應用憑證（B4 前）就留在清單裡，超過 Harbor 收的 48 小時就丟掉並計數
  */
 import { env, SELF } from "cloudflare:test";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { bearer, identities, makeMember, makeReviewer, resetDb, restoreUpstream } from "./helpers";
 import { flushRewardEvents, rewardTransport, scriptOf, visitorHash } from "../src/reward-events";
 import { opsMetrics } from "../src/ops-metrics";
@@ -70,6 +70,35 @@ describe("分享連結被打開", () => {
     const c = await visitorHash(env, "203.0.113.9", "UA", monday + 3 * 86_400_000);
     expect(a).not.toBe(b);
     expect(b).toBe(c);
+  });
+});
+
+describe("評分馬上送出", () => {
+  it("評分之後跟留言一樣當場送，不等每小時的排程（QA ⚠️20）", async () => {
+    await makeMember(20001);
+    await harborCard("200001", "role-1", 20002);
+    const creds = env as unknown as { HARBOR_REWARDS_CLIENT_ID: string; HARBOR_REWARDS_CLIENT_SECRET: string };
+    creds.HARBOR_REWARDS_CLIENT_ID = "cid"; creds.HARBOR_REWARDS_CLIENT_SECRET = "sec";
+    const sent: string[] = [];
+    rewardTransport.token = async () => "app-token";
+    rewardTransport.send = async (_env, _t, events) => { sent.push(...events.map((e) => e.type)); return { ok: true, status: 200, results: events.map((e) => ({ eventId: e.eventId, status: "accepted" as const })) }; };
+    try {
+      await SELF.fetch("https://c.test/v1/cards/200001/score", { method: "PUT", headers: { ...bearer("fan"), "Content-Type": "application/json" }, body: JSON.stringify({ score: 4 }) });
+      await vi.waitFor(() => expect(sent).toContain("rating_set"));
+    } finally { creds.HARBOR_REWARDS_CLIENT_ID = ""; creds.HARBOR_REWARDS_CLIENT_SECRET = ""; }
+  });
+});
+
+describe("產生分享連結：託管後的卡", () => {
+  it("網頁送託管後的 roleId 也認得，報原卡的 roleId（跟留言、評分一樣）", async () => {
+    // 接本機 Harbor 實測（QA ⚠️19）：分享選單送的是 approved_hosted_role_id，以前只比 source_role_id，查不到就默默 204
+    await makeMember(20001);
+    await harborCard("200077", "role-src", 20002);
+    await env.DB.prepare("UPDATE cards SET approved_hosted_role_id = 'role-hosted' WHERE id = 200077").run();
+    await SELF.fetch("https://c.test/v1/me/share/created", { method: "POST", headers: { ...bearer("fan"), "Content-Type": "application/json" }, body: JSON.stringify({ roleId: "role-hosted" }) });
+    const sent = (await outbox()).filter((e) => e.type === "share_link_created");
+    expect(sent).toHaveLength(1);
+    expect(sent[0].body).toMatchObject({ type: "share_link_created", accountNo: 20001, workRoleId: "role-src" });
   });
 });
 
