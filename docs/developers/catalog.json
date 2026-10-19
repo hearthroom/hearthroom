@@ -2161,7 +2161,7 @@
   "dbc338c839431": "One result per input event, in input order; `accepted` is stored, `duplicate` was already stored, `rejected_stale` is outside the time window, and `rejected_invalid` fails validation.",
   "d22297891db14": "Per-event results.",
   "d7bbc22fa50a6": "`invalid_request` — the request must contain 1 to 100 events.",
-  "dc4b1aeab1c12": "`forbidden` — the application token was not granted `rewards.report`.",
+  "dc4b1aeab1c12": "`insufficient_scope` — the application token was not granted `rewards.report`; `required_scope` is `rewards.report`.",
   "d9d49800bf5c9": "`rate_limited` — more than 600 events per minute for this client; retry later.",
   "dcc3dbaea3438": "Comment script determined by the application: `cjk` or `latin`.",
   "de7ecbbb443cd": "`unauthorized` — missing, invalid or non-application bearer."

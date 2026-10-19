@@ -2161,7 +2161,7 @@
   "dbc338c839431": "结果按输入顺序逐条返回：`accepted` 表示已保存，`duplicate` 表示先前已保存，`rejected_stale` 表示超出时间范围，`rejected_invalid` 表示验证未通过。",
   "d22297891db14": "逐条事件结果。",
   "d7bbc22fa50a6": "`invalid_request`：请求须包含 1 至 100 条事件。",
-  "dc4b1aeab1c12": "`forbidden`：应用令牌没有 `rewards.report` 权限。",
+  "dc4b1aeab1c12": "`insufficient_scope`：应用令牌没有 `rewards.report` 权限；`required_scope` 为 `rewards.report`。",
   "d9d49800bf5c9": "`rate_limited`：此客户端每分钟超过 600 条事件，请稍后重试。",
   "dcc3dbaea3438": "应用根据评论的主要文字判断 `cjk` 或 `latin`。",
   "de7ecbbb443cd": "`unauthorized`：未提供令牌、令牌无效，或使用的不是应用令牌。"

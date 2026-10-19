@@ -2161,7 +2161,7 @@
   "dbc338c839431": "結果は入力順に 1 件ずつ返ります。`accepted` は保存済み、`duplicate` は以前に保存済み、`rejected_stale` は時間範囲外、`rejected_invalid` は検証不合格を表します。",
   "d22297891db14": "イベントごとの結果です。",
   "d7bbc22fa50a6": "`invalid_request`：リクエストには 1〜100 件のイベントが必要です。",
-  "dc4b1aeab1c12": "`forbidden`：アプリトークンに `rewards.report` スコープがありません。",
+  "dc4b1aeab1c12": "`insufficient_scope`：アプリトークンに `rewards.report` スコープがありません。`required_scope` は `rewards.report` です。",
   "d9d49800bf5c9": "`rate_limited`：このクライアントのイベントが 1 分間で 600 件を超えています。時間をおいて再試行してください。",
   "dcc3dbaea3438": "アプリがコメントの主な文字種から `cjk` または `latin` を判定します。",
   "de7ecbbb443cd": "`unauthorized`：トークンがないか、無効であるか、アプリトークンではありません。"
