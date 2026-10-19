@@ -47,7 +47,7 @@ export interface ClaimResult {
 }
 
 export type TrackStatus = "claimed" | "made_up" | "missed" | "today" | "future";
-export interface TrackCell { day: number; chest: string; status: TrackStatus }
+export interface TrackCell { day: string; chest: string; status: TrackStatus }
 
 export type TaskStatus = "locked" | "claimable" | "claimed" | "pending" | "not_granted" | "unavailable";
 export interface RewardTask {
@@ -64,7 +64,7 @@ export interface NewcomerStage { stage: number; credits?: number; chest?: string
 export interface Newcomer {
   active: boolean;
   stage: number;
-  deadline: string;
+  deadline: string | null;
   today: { stage: number; goal: string; progress: number; target: number; status: TaskStatus };
   stages: NewcomerStage[];
 }
@@ -119,7 +119,8 @@ export class RewardsError extends Error {
     message: string,
     readonly code: string,
     readonly reason = "",
-    readonly original: ClaimResult | CheckinResponse | null = null,
+    /** already_claimed 附上的原結果：簽到與補簽是 claims，任務與新手是 claim */
+    readonly claims: ClaimResult[] = [],
   ) {
     super(message);
   }
@@ -130,9 +131,9 @@ const authHeaders = (token: string): Record<string, string> => ({ Authorization:
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(`${UPSTREAM_API}/open/v1${path}`, init);
   if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string; reason?: string; result?: ClaimResult | CheckinResponse; claim?: ClaimResult };
+    const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string; reason?: string; claims?: ClaimResult[]; claim?: ClaimResult };
     const code = body.error ?? "";
-    throw new RewardsError(res.status, describeApiError(res.status, code), code, body.reason ?? "", body.result ?? body.claim ?? null);
+    throw new RewardsError(res.status, describeApiError(res.status, code), code, body.reason ?? "", body.claims ?? (body.claim ? [body.claim] : []));
   }
   return (await res.json()) as T;
 }

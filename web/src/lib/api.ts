@@ -952,11 +952,13 @@ export async function savePlayerPersona(patch: Partial<PlayerPersona>, token: st
 export async function fetchWallet(token: string, provider: ProviderId = currentProvider()): Promise<Wallet> {
   const raw = await json<Wallet & {available?:number;expiring?:number;expiries?:ExpiryBatch[]}>(await fetch(`${provider === currentProvider() ? UPSTREAM_API : apiBaseOf(provider)}/open/v1/me/wallet`, {headers:authHeaders(token)}));
   if (provider !== 'harbor') return raw;
-  // 能用的是 available（已扣掉凍結中的）。凍結先吃最早到期的限時積分，所以限時那一份以能用的為上限。
-  const available = raw.available ?? 0;
+  const expiriesSorted = () => [...(raw.expiries ?? [])].sort((a, b) => new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime());
+  // 契約形狀（score／tempScore／expiries，hearthroom openapi）：照收
+  if (typeof raw.available !== 'number') return { score: raw.score ?? 0, tempScore: raw.tempScore ?? 0, plans: raw.plans ?? [], expiries: expiriesSorted() };
+  // Harbor 現行形狀：能用的是 available（已扣掉凍結中的）。凍結先吃最早到期的限時積分，所以限時那一份以能用的為上限。
+  const available = raw.available;
   const tempScore = Math.min(raw.expiring ?? 0, available);
-  const expiries = [...(raw.expiries ?? [])].sort((a, b) => new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime());
-  return { score: available - tempScore, tempScore, plans: [], expiries };
+  return { score: available - tempScore, tempScore, plans: [], expiries: expiriesSorted() };
 }
 
 /** 推薦：自己的推薦碼、規則（數字由服務決定，畫面不寫死）、邀請成果；不含任何被邀請人的身分。 */
