@@ -127,5 +127,10 @@ export const useCheckin = defineStore("checkin", () => {
 
   function reset() { panel.value = null; plan.value = null; error.value = null; disabled.value = false; }
 
-  return { panel, plan, fetchedAt, loading, error, disabled, load, ensurePlan, checkin, makeup, claimTask, claimNewcomer, claimableTasks, canCheckIn, reset };
+  /** 領完（開箱舞台關掉、任務領好）：面板與頁首的餘額一起重讀。領的當下不讀，餘額才不會比滾輪先揭曉 */
+  async function settle(): Promise<void> {
+    await Promise.all([load(), session.refreshWallet?.()]);
+  }
+
+  return { panel, plan, fetchedAt, loading, error, disabled, load, settle, ensurePlan, checkin, makeup, claimTask, claimNewcomer, claimableTasks, canCheckIn, reset };
 });
