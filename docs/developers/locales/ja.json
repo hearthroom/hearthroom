@@ -2244,5 +2244,6 @@
   "d233e1e8b94bd": "`granted` のとき：その日の credits（特典を含む）。",
   "d76e57e80c49c": "`granted` のとき：`credits` のうち最初のプランの特典の分。",
   "d247df91447a5": "`granted` のとき：今日すでに受け取っていたなら true。",
-  "deda643cd4fe0": "期間プラン"
+  "deda643cd4fe0": "期間プラン",
+  "d17f7d9b915e9": "最初のプランが有効なあいだ毎日追加される credits。`unavailable` のときは 0。"
 }

@@ -2244,5 +2244,6 @@
   "d233e1e8b94bd": "`granted` 时：当天的 credits，含加赠。",
   "d76e57e80c49c": "`granted` 时：`credits` 中属于第一张方案加赠的部分。",
   "d247df91447a5": "`granted` 时：今天之前就已领过时为 true。",
-  "deda643cd4fe0": "期间方案"
+  "deda643cd4fe0": "期间方案",
+  "d17f7d9b915e9": "第一张方案有效期间每天额外加赠的 credits；`unavailable` 时为 0。"
 }
