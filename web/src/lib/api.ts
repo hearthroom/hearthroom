@@ -996,6 +996,8 @@ export interface ScoreRecord {
   rewardKind?: string;
   /** 限時積分入帳的到期時刻 */
   expiresAt?: string;
+  /** 月卡的列：daily 每日、bonus 首張加贈；退款收回它們的那一列帶同樣的值（record 是 refund） */
+  planKind?: "daily" | "bonus" | string;
 }
 export interface ScoreRecordPage {
   total: number;

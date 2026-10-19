@@ -146,6 +146,8 @@ export const BEACON_EVENTS = new Set([
   "card_create", "card_edit", "card_import", "card_export",
   // 钱包与变现
   "wallet_view", "topup_click",
+  // 月卡入口（開到 Console 帳單頁）：detail 是從哪按的（wallet 積分頁、canvas 畫布積分不夠、newcomer 新手第 7 天）
+  "plan_click",
   // 邀請獎勵入口（積分頁）：detail 分辨是去填碼、看自己的碼、複製推薦碼，還是讀不到資料時的普通入口
   "invite_click",
   // 偏好（纯客户端，没有请求）
@@ -185,6 +187,8 @@ export const BEACON_DETAILS = new Set([
   // 卡片檔案格式：匯入匯出的載體，看得出作者手上的卡多半長什麼樣
   "png", "json",
   "invite_redeem", "invite_mine", "invite_copy", "invite_fallback",
+  // 月卡入口的位置
+  "wallet", "canvas", "newcomer",
   // 設定指令：剪貼簿寫入成功，或拿不到剪貼簿、讀者要自己選取
   "onboard_copied", "onboard_manual",
   // 更新說明：提示列的三種結果，與更新頁、「去試試」的來源

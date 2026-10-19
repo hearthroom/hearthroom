@@ -262,6 +262,11 @@ describe("beacon 端點", () => {
     for (const e of events) expect(seen(e)).toHaveLength(1);
   });
 
+  it("月卡入口記得是從哪按的：積分頁、畫布、新手第 7 天", async () => {
+    await post(["wallet", "canvas", "newcomer"].map((detail) => ({ event: "plan_click", detail })));
+    expect(seen("plan_click").map((e) => e.detail)).toEqual(["wallet", "canvas", "newcomer"]);
+  });
+
   it("外觀記的是哪一套：類別進 detail，實際選擇進 subject", async () => {
     await post([{ event: "appearance", detail: "theme", subject: "violet" }]);
     const [ev] = seen("appearance");
