@@ -165,6 +165,8 @@ watch(petEnabled, (on) => { if (on) void start(); else stop(); });
 /** 作者工作區（編輯器）是滿版的，右下角是試聊的輸入框：進來時她先收到邊上 */
 const WORKSPACE = new Set(["editor"]);
 function enter(path: string) {
+  // 頁面自己有蘇綺插圖的（簽到頁）：她整頁退場，離開就回來。由路由決定，因為她比頁面晚載入
+  pet.value?.on({ type: "away", on: route.meta.petAway === true });
   const g = guide(path);
   if (g && WORKSPACE.has(g.id)) pet.value?.tuckAside();
   pet.value?.setGuide(g);

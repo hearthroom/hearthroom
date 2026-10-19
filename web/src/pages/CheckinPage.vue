@@ -22,8 +22,8 @@ import { whole } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
 import { currentReferralCode, withShareRef } from "@/lib/share-ref";
-import { suki } from "@/pet/events";
 import { startNewcomerTour } from "@/lib/newcomer-tour";
+import { boxKindOf, preloadPoses } from "@/lib/checkin-art";
 
 const store = useCheckin();
 const session = useSession();
@@ -40,22 +40,19 @@ let toastTimer = 0;
 function say(text: string) { toast.value = text; window.clearTimeout(toastTimer); toastTimer = window.setTimeout(() => { toast.value = ""; }, 2600); }
 
 // ---- 開箱舞台 ----
-interface StageRun { id: number; chests: string[]; request: () => Promise<StageOutcome>; checkin: boolean; trigger: HTMLElement | null; after?: (o: StageOutcome | null) => void }
+interface StageRun { id: number; chests: string[]; request: () => Promise<StageOutcome>; checkin: boolean; source: "checkin" | "makeup" | "task" | "newcomer"; makeupDay?: string; trigger: HTMLElement | null; after?: (o: StageOutcome | null, seen: boolean) => void }
 const stage = shallowRef<StageRun | null>(null);
 let runs = 0;
 let lastOutcome: StageOutcome | null = null;
 function openStage(run: Omit<StageRun, "id" | "trigger">) {
   lastOutcome = null;
   stage.value = { ...run, id: ++runs, trigger: document.activeElement as HTMLElement | null };
-  suki({ type: "stage", on: true });
 }
-async function closeStage(mood: StageMood | null) {
+async function closeStage(_mood: StageMood | null, seen: boolean) {
   const run = stage.value;
   stage.value = null;
-  suki({ type: "stage", on: false });
-  if (mood) suki({ type: "cheer", mood });
   await refresh();
-  run?.after?.(lastOutcome);
+  run?.after?.(lastOutcome, seen);
   await nextTick();
   run?.trigger?.focus?.();
 }
@@ -66,6 +63,7 @@ function onOpen() {
   openStage({
     chests: p.checkin.todayChests,
     checkin: true,
+    source: "checkin",
     request: async () => {
       const r = await store.checkin();
       return { claims: r.claims, recap: r.elsewhere, streak: r.streak };
@@ -91,6 +89,8 @@ function onMakeup() {
   openStage({
     chests: [p.checkin.track.find((c) => c.status === "missed")?.chest ?? "daily"],
     checkin: false,
+    source: "makeup",
+    makeupDay: day,
     request: async () => {
       try {
         const r = await store.makeup(day);
@@ -101,7 +101,8 @@ function onMakeup() {
       }
     },
     // 補簽其實上一次就成功了（逾時後重試拿到 already_claimed）：回應裡沒有新的天數，用剛重讀的面板
-    after: (o) => { const n = o && !o.replayed ? o.streak : store.panel?.checkin.streak; if (n) say(t("checkin.makeup.done", { n })); },
+    // 舞台已經講了補簽、軌道也更新了：只有中途關掉舞台（已入帳但沒看到結果）才補一則 toast（ui.md §6.11）
+    after: (o, seen) => { if (seen) return; const n = o && !o.replayed ? o.streak : store.panel?.checkin.streak; if (n) say(t("checkin.makeup.done", { n })); },
   });
 }
 
@@ -110,7 +111,7 @@ const claiming = ref(new Set<string>());
 const failed = ref(new Set<string>());
 async function claim(task: RewardTask, quiet = false): Promise<number | null> {
   if (task.reward.chest) {
-    openStage({ chests: [task.reward.chest], checkin: false, request: async () => ({ claims: [await store.claimTask(task)], recap: false }) });
+    openStage({ chests: [task.reward.chest], checkin: false, source: "task", request: async () => ({ claims: [await store.claimTask(task)], recap: false }) });
     return 0;
   }
   claiming.value = new Set([...claiming.value, task.id]);
@@ -144,7 +145,7 @@ async function copyShareLink() {
 // ---- 新手七日 ----
 function guide(day: number) { startNewcomerTour(day, router, lp); }
 function grand() {
-  openStage({ chests: ["newcomer"], checkin: false, request: async () => ({ claims: [await store.claimNewcomer()], recap: false }) });
+  openStage({ chests: ["newcomer"], checkin: false, source: "newcomer", request: async () => ({ claims: [await store.claimNewcomer()], recap: false }) });
 }
 
 // ---- 開箱紀錄 ----
@@ -168,7 +169,12 @@ async function loadDraws(more = false) {
   }
 }
 
-async function refresh() { await Promise.all([store.load(), loadDraws()]); }
+async function refresh() {
+  await Promise.all([store.load(), loadDraws()]);
+  // 開箱要用的圖在頁面載入時就預載：按下之後不再等圖（美術總監最終 r1 M7）
+  const kinds = [...new Set((store.panel?.checkin.todayChests ?? ["daily"]).map(boxKindOf))];
+  void preloadPoses(kinds);
+}
 function onVisible() { if (document.visibilityState === "visible" && !stage.value) void store.load(); }
 // 新手七日只畫一份：手機排在任務前面，桌機放右欄
 const deskQuery = typeof matchMedia === "function" ? matchMedia("(min-width: 761px)") : null;
@@ -241,7 +247,7 @@ onBeforeUnmount(() => { window.clearInterval(ticker); window.clearTimeout(toastT
     <p class="checkin__foot subtle">{{ t("checkin.footer.reset") }} · <RouterLink :to="lp('/checkin/odds')" class="link">{{ t("checkin.footer.odds") }}</RouterLink></p>
 
     <CheckinStage
-      v-if="stage" :key="stage.id" :chests="stage.chests" :plan="store.plan" :request="stage.request" :checkin="stage.checkin" :pity="panel?.pityRemaining"
+      v-if="stage" :key="stage.id" :chests="stage.chests" :plan="store.plan" :request="stage.request" :checkin="stage.checkin" :source="stage.source" :makeup-day="stage.makeupDay" :pity="panel?.pityRemaining"
       @settled="(o) => (lastOutcome = o)" @close="closeStage"
     />
     <div class="toast" role="status" :hidden="!toast">{{ toast }}</div>

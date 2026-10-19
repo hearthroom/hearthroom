@@ -22,7 +22,7 @@ const props = defineProps<{
   failed: Set<string>;
 }>();
 const emit = defineEmits<{ claim: [task: RewardTask]; claimAll: [tasks: RewardTask[]]; copyLink: [] }>();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const { lp } = useLocalePath();
 
 const rows = computed(() => props.tasks.map((task) => ({ task, view: taskView(task) })).filter((r): r is { task: RewardTask; view: TaskView } => !!r.view));
@@ -33,7 +33,10 @@ const copied = ref(false);
 const DEST: Record<string, string> = { chat: "/library", tryNew: "/", comment: "/library", rate: "/library", reply: "/mine" };
 const titleOf = (r: { task: RewardTask; view: TaskView }) => {
   if (r.view.chest && r.task.reward.chest) { const c = chestTitle(r.task.reward.chest, props.plan); return t(c.key, c.params ?? {}); }
-  return t(r.view.title, { n: r.task.target, min: r.task.minTextUnits ?? r.task.target });
+  // 字數門檻依介面語言挑：中日韓介面的人多半用中日韓文字留言
+  const cjk = /^(zh|ja|ko)/.test(String(locale.value));
+  const min = r.task.minTextUnits ? (cjk ? r.task.minTextUnits.cjk : r.task.minTextUnits.latin) : r.task.target;
+  return t(r.view.title, { n: r.task.target, min });
 };
 const rowTitle = (r: { task: RewardTask; view: TaskView }) => glueUnits(r.view.chest ? t(r.view.title, { n: r.task.target }) : titleOf(r));
 const progressOf = (r: { task: RewardTask; view: TaskView }) => t(r.view.progress, { cur: whole(r.task.progress), max: whole(r.task.target) }, r.task.target);
@@ -113,7 +116,7 @@ defineExpose({ copied });
 .task--claimable .task__icon { background:var(--surface); }
 .task__icon svg { width:18px; height:18px; }
 .task__main { min-width:0; display:grid; gap:6px; }
-.task__title { font-size:14px; font-weight:600; line-height:1.4; text-wrap:balance; word-break:keep-all; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere; }
+.task__title { font-size:14px; font-weight:600; line-height:1.4; text-wrap:balance; word-break:keep-all; overflow-wrap:anywhere; }
 .task__title :deep(*) { white-space:nowrap; }
 .task__progress { font-size:12px; color:var(--text-2); font-variant-numeric:tabular-nums; }
 .task__more { font-size:12px; justify-self:start; }
@@ -134,4 +137,6 @@ defineExpose({ copied });
 .task__lock svg { width:16px; height:16px; }
 @keyframes spin { to { transform:rotate(360deg); } }
 :lang(ko) .task__title { word-break:keep-all; }
+/* 中日文照詞斷行：「回合」「記得」不從中間斷（ui.md §6.13）；不支援的瀏覽器忽略 */
+:lang(zh) .task__title, :lang(ja) .task__title { word-break:auto-phrase; }
 </style>

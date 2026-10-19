@@ -16,7 +16,8 @@ export const NEWCOMER_TOUR: Record<number, NewcomerStep[]> = {
   2: [{ id: "2.resume", page: "home", target: '[data-tour="home-resume"]' }],
   3: [{ id: "3.roll", page: "home", target: '[data-tour="home-roll"]' }, { id: "3.tags", page: "home", target: "nav.discovery-tags" }],
   4: [{ id: "4.score", page: "card", target: '[data-tour="card-score"]' }, { id: "4.comment", page: "card", target: '[data-tour="card-comments"]' }],
-  5: [{ id: "5.background", page: "play", target: null }, { id: "5.length", page: "play", target: null }],
+  // 遊玩畫布不認識導覽，第一期不框：一句話講兩個設定的名稱與位置（ui.md §15.8）
+  5: [{ id: "5.canvas", page: "play", target: null }],
   6: [{ id: "6.share", page: "card", target: '[data-tour="card-share"]' }],
   7: [{ id: "7.balance", page: "any", target: ".acct__credits" }, { id: "7.temp", page: "wallet", target: '[data-tour="wallet-balance"]' }, { id: "7.records", page: "wallet", target: '[data-tour="wallet-records"]' }],
 };
@@ -32,6 +33,16 @@ export function pageOf(path: string): NewcomerPage | null {
   if (/^\/cards\/[^/]+$/.test(p)) return "card";
   if (/^\/play\/[^/]+$/.test(p)) return "play";
   if (p === "/wallet") return "wallet";
+  return null;
+}
+
+/**
+ * 框不到真的元素時怎麼講（ui.md §15.8）。card：還沒到卡片頁，泡泡說東西在卡片頁、按鈕帶到榜單第一張卡，
+ * 到了才開始框；canvas：遊玩畫布裡的設定，只講名稱與位置，按「知道了」收起。null：照常框。
+ */
+export function awayMode(step: NewcomerStep, here: NewcomerPage | null): "card" | "canvas" | null {
+  if (step.page === "play") return "canvas";
+  if (step.page === "card" && here !== "card") return "card";
   return null;
 }
 
