@@ -6,7 +6,7 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { newcomerView } from "@/lib/checkin";
-import { whole } from "@/lib/format";
+import { glueUnits, whole } from "@/lib/format";
 import { NEWCOMER_BADGE } from "@/lib/checkin-art";
 import type { RewardsPanel } from "@/lib/rewards";
 
@@ -15,7 +15,7 @@ const emit = defineEmits<{ guide: [day: number]; grand: [] }>();
 const { t } = useI18n();
 const view = computed(() => newcomerView(props.panel));
 const n = computed(() => props.panel.newcomer!);
-const goalOf = (day: number) => t(`newcomer.goal.${day}`, { n: n.value.today.target }, n.value.today.target);
+const goalOf = (day: number) => glueUnits(t(`newcomer.goal.${day}`, { n: n.value.today.target }, n.value.today.target));
 const todayRatio = computed(() => (n.value.today.target ? Math.min(1, n.value.today.progress / n.value.today.target) : 0));
 </script>
 

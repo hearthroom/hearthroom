@@ -14,6 +14,7 @@ import { startNewcomerTour } from "@/lib/newcomer-tour";
 import { tourDone } from "@/lib/onboarding";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
+import { glueUnits } from "@/lib/format";
 import { suki } from "@/pet/events";
 
 const store = useCheckin();
@@ -78,7 +79,7 @@ function onKey(e: KeyboardEvent) { if (e.key === "Escape") void later(); }
   >
     <span class="nudge__title">{{ t("newcomer.prompt.title", { n: view.day }) }}</span>
     <p class="nudge__line">{{ t(`newcomer.suki.${view.day}`) }}</p>
-    <strong class="nudge__goal">{{ t(`newcomer.goal.${view.day}`, { n: target }, target) }}</strong>
+    <strong class="nudge__goal">{{ glueUnits(t(`newcomer.goal.${view.day}`, { n: target }, target)) }}</strong>
     <button type="button" class="btn btn--primary nudge__btn" @click="go">{{ t("newcomer.prompt.go") }}</button>
     <button type="button" class="btn btn--ghost nudge__btn" @click="later">{{ t("newcomer.prompt.later") }}</button>
   </section>

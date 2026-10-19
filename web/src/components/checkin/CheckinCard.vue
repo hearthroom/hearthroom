@@ -36,7 +36,7 @@ const tasks = computed(() => (store.claimableTasks ? t("me.checkin.tasks", { n: 
     <img class="ck__suki" src="/mascot/home/pose-wave.webp" alt="" width="56" height="56" decoding="async" />
     <span class="ck__text">
       <strong>{{ firstLine }}</strong>
-      <span class="ck__status">{{ status }}<template v-if="tasks"> {{ tasks }}</template></span>
+      <span class="ck__status"><span>{{ status }}</span><span v-if="tasks" class="ck__tasks">&nbsp;{{ tasks }}</span></span>
     </span>
     <span class="btn" :class="store.canCheckIn ? 'btn--primary' : ''">{{ store.canCheckIn ? t("me.checkin.cta.open") : t("me.checkin.cta.view") }}</span>
   </RouterLink>
@@ -46,8 +46,10 @@ const tasks = computed(() => (store.claimableTasks ? t("me.checkin.tasks", { n: 
 .ck { width:100%; min-height:72px; display:grid; grid-template-columns:56px minmax(0,1fr) auto; align-items:center; gap:var(--s-3); padding:var(--s-2) var(--s-4) var(--s-2) var(--s-2); color:inherit; text-decoration:none; transition:background var(--dur) var(--ease); }
 .ck:hover { background:var(--surface-2); }
 .ck__suki { width:56px; height:56px; border-radius:var(--r-md); object-fit:cover; object-position:50% 12%; background:var(--accent-tint); }
-.ck__text { display:grid; gap:2px; min-width:0; }
+.ck__text { display:grid; gap:2px; min-width:0; container-type:inline-size; }
 .ck__text strong { font-size:15px; font-weight:600; }
 .ck__status { font-size:13px; color:var(--text-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .ck .btn { pointer-events:none; }
+/* 單行放不下時先拿掉「· N 項任務可領取」，不用省略號截斷（ui.md §6.13） */
+@container (max-width: 260px) { .ck__tasks { display:none; } }
 </style>
