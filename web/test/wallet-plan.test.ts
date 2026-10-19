@@ -63,13 +63,14 @@ it("持卡：剩幾天、最後一天、今天已領的總數、首張加贈、�
   expect(root.querySelector("[data-testid=wallet-plan-pitch]")).toBeNull();
 });
 
-it("沒卡、從沒買過：前往儲值下方一行入口，上限用首次購買每天都領的量", async () => {
+it("沒卡、從沒買過：前往儲值下方一行入口，寫組成（立即與首次購買的每天量），不寫合計", async () => {
   mine = none;
   const root = await mount();
   expect(root.querySelector("[data-testid=wallet-plan]")).toBeNull();
   const pitch = root.querySelector("[data-testid=wallet-plan-pitch]")!;
   expect(flat(pitch.textContent)).toContain("30,000");
-  expect(flat(pitch.textContent)).toContain("最多 60,000");
+  expect(flat(pitch.textContent)).toContain("1,000");
+  expect(flat(pitch.textContent)).not.toMatch(/最多|60,000/);
   expect(flat(pitch.textContent)).not.toMatch(/角色對話/);
   expect(pitch.getAttribute("href")).toBe(offer.purchaseUrl);
 });

@@ -147,7 +147,7 @@ export const BEACON_EVENTS = new Set([
   // 钱包与变现
   "wallet_view", "topup_click",
   // 月卡入口（開到 Console 帳單頁）：detail 是從哪按的（wallet 積分頁、newcomer 新手第 7 天）。
-  // 畫布積分不夠的那條路記不到：連結由畫布自己畫，宿主收不到點擊（月卡任務審查 N1）
+  // 畫布積分不夠的那條路不在這裡：它先到 /go/plan，記成 credits_shortfall_click（detail 是 plan）
   "plan_click",
   // 邀請獎勵入口（積分頁）：detail 分辨是去填碼、看自己的碼、複製推薦碼，還是讀不到資料時的普通入口
   "invite_click",
