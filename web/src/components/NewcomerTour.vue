@@ -30,6 +30,9 @@ function measure() {
   dialogOpen.value = !!document.querySelector(".dlg-backdrop, .sheet-backdrop, .stage-wrap");
   const s = step.value;
   const onPage = !!s && (s.page === "any" || s.page === pageOf(route.path));
+  // 頁面自己有蘇綺的地方（簽到頁），框不到的那幾天把泡泡放在剛按的「帶我去」旁邊，不蓋頁面標題
+  const anchor = s && away.value && ownSuki.value ? document.querySelector<HTMLElement>("#newcomer .nc__cta") : null;
+  if (anchor) { rect.value = anchor.getBoundingClientRect(); return; }
   const el = s?.target && onPage ? document.querySelector<HTMLElement>(s.target) : null;
   if (!el) { rect.value = null; return; }
   if (scrolledFor !== s!.id) { scrolledFor = s!.id; el.scrollIntoView({ block: "center", behavior: "smooth" }); }
@@ -54,6 +57,8 @@ function go(index: number) {
 }
 // 框不到真的元素（ui.md §15.8）：卡片頁的那幾天先帶到榜單第一張卡；遊玩畫布只講位置
 const away = computed(() => (step.value ? awayMode(step.value, here.value) : null));
+// 頁面上已經有蘇綺插圖（簽到頁）：導覽只出泡泡，不再帶一個蘇綺（美術總監最終 r2 H4）
+const ownSuki = computed(() => route.meta.petAway === true);
 const copyKey = computed(() => {
   if (!step.value) return "";
   return away.value === "card" ? `newcomer.tour.away.${newcomerTour.day}` : `newcomer.tour.${step.value.id}`;
@@ -78,7 +83,7 @@ function close() { track("newcomer_tour_skip", { detail: step.value?.id ?? "" })
 
 <template>
   <CoachSpot
-    v-if="visible && step" :rect="away ? null : rect" :title="t(`${copyKey}.title`)" :body="t(`${copyKey}.body`)" :action="action"
-    :mascot="here !== 'play'" :first="newcomerTour.index === 0" :last="newcomerTour.index >= steps.length - 1" @prev="prev" @next="onNext" @close="close"
+    v-if="visible && step" :rect="rect" :frame="!away" :title="t(`${copyKey}.title`)" :body="t(`${copyKey}.body`)" :action="action"
+    :mascot="here !== 'play' && !ownSuki" :first="newcomerTour.index === 0" :last="newcomerTour.index >= steps.length - 1" @prev="prev" @next="onNext" @close="close"
   />
 </template>

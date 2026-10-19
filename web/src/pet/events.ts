@@ -2,6 +2,11 @@
  * 網站 → 桌寵的事件。這個檔很小、不帶桌寵本體：各頁面 import 它丟事件，不會把桌寵的程式拉進首屏。
  * 桌寵沒載入（被關掉、在玩卡頁）時事件沒人接，就什麼都不發生。
  */
+import { ref } from "vue";
+
+/** 她正在說話（泡泡在畫面上）：其他浮層（安裝提示）先等她說完 */
+export const petSpeaking = ref(false);
+
 export type SukiEvent =
   | { type: "favorite" } | { type: "searchEmpty" } | { type: "searching" } | { type: "roll" }
   | { type: "notifications"; count: number } | { type: "update" } | { type: "theme"; dark: boolean }

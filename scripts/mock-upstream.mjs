@@ -15,7 +15,7 @@
 import http from "node:http";
 import fs from "node:fs";
 import pathMod from "node:path";
-import { handleRewards, walletExtras } from "./mock-rewards.mjs";
+import { handleRewards, mockAccountNumId, walletExtras } from "./mock-rewards.mjs";
 const CARDS = process.env.FIXTURES_DIR || new URL("./fixtures/", import.meta.url).pathname;
 const PORT = Number(process.env.PORT || 8899);
 const images = new Map(); const folders = new Map(); let imgSeq = 1;
@@ -40,7 +40,7 @@ http.createServer(async (req, res) => {
   if (path === "/__rewards" || /^\/open\/v1\/apps\/[^/]+\/rewards\/plan$/.test(path)) { await handleRewards({ m, path, url, body, json, res }); return; }
   const auth = req.headers.authorization || "";
   if (!auth.startsWith("Bearer ")) return json(res, 401, { error: "unauthorized", message: "A valid bearer token is required." });
-  if (path === "/open/v1/me") return json(res, 200, { accountNumId: 424242, nickName: "測試作者", avatar: "" });
+  if (path === "/open/v1/me") return json(res, 200, { accountNumId: mockAccountNumId(), nickName: "測試作者", avatar: "" });
   if (path === "/open/v1/tag/canonical") return json(res, 200, { language: url.searchParams.get("language"), dimensions: [
     { dimension: "genre", tags: [{ slug: "romance", name: "戀愛", dimension: "genre", visibility: "public" }, { slug: "mystery", name: "推理", dimension: "genre", visibility: "public" }, { slug: "fantasy", name: "西幻", dimension: "genre", visibility: "public" }] },
     { dimension: "setting", tags: [{ slug: "campus", name: "校園", dimension: "setting", visibility: "public" }, { slug: "frontier", name: "邊境", dimension: "setting", visibility: "public" }] },
