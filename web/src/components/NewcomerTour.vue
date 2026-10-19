@@ -22,6 +22,7 @@ const step = computed(() => currentStep());
 const steps = computed(() => NEWCOMER_TOUR[newcomerTour.day] ?? []);
 const here = computed(() => pageOf(route.path));
 const rect = ref<DOMRect | null>(null);
+const clearRect = ref<DOMRect | null>(null);
 const dialogOpen = ref(false);
 let timer: ReturnType<typeof setInterval> | undefined;
 let scrolledFor = "";
@@ -35,6 +36,7 @@ function measure() {
   if (anchor) { rect.value = anchor.getBoundingClientRect(); return; }
   const el = s?.target && onPage ? document.querySelector<HTMLElement>(s.target) : null;
   if (!el) { rect.value = null; return; }
+  clearRect.value = (s?.clear && document.querySelector<HTMLElement>(s.clear)?.getBoundingClientRect()) || null;
   if (scrolledFor !== s!.id) { scrolledFor = s!.id; el.scrollIntoView({ block: "center", behavior: "smooth" }); }
   rect.value = el.getBoundingClientRect();
 }
@@ -85,7 +87,7 @@ function close() { track("newcomer_tour_skip", { detail: step.value?.id ?? "" })
 
 <template>
   <CoachSpot
-    v-if="visible && step" :rect="rect" :frame="!away" :title="t(`${copyKey}.title`)" :body="t(`${copyKey}.body`)" :action="action"
+    v-if="visible && step" :rect="rect" :clear-below="clearRect" :frame="!away" :title="t(`${copyKey}.title`)" :body="t(`${copyKey}.body`)" :action="action"
     :mascot="here !== 'play' && !ownSuki" :first="newcomerTour.index === 0" :last="newcomerTour.index >= steps.length - 1" @prev="prev" @next="onNext" @close="close"
   />
 </template>
