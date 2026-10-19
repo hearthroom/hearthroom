@@ -74,7 +74,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
       </RouterLink>
       <div class="menu__group">
         <RouterLink :to="lp('/wallet')" class="menu__item" role="menuitem"><AccountIcon name="wallet" />{{ $t("nav.wallet") }}</RouterLink>
-        <RouterLink v-if="!checkin.disabled" :to="lp('/checkin')" class="menu__item" role="menuitem"><AccountIcon name="gift" />{{ $t("nav.checkin") }}<span v-if="checkin.canCheckIn" class="menu__dot"><span class="sr-only">{{ $t("nav.checkin.dot") }}</span></span></RouterLink>
+        <RouterLink v-if="!checkin.disabled" :to="lp('/checkin')" class="menu__item" role="menuitem"><AccountIcon name="calendar" />{{ $t("nav.checkin") }}<span v-if="checkin.canCheckIn" class="menu__dot"><span class="sr-only">{{ $t("nav.checkin.dot") }}</span></span></RouterLink>
         <RouterLink :to="lp('/me/referral')" class="menu__item" role="menuitem"><AccountIcon name="gift" />{{ $t("referral.title") }}</RouterLink>
       </div>
       <div class="menu__group">
