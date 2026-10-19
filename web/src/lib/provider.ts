@@ -12,7 +12,7 @@ export const DEFAULT_PROVIDER: ProviderId = "harbor";
 
 const STORE_KEY = "hearthroom.provider";
 // Fixed retired scope, retained only to remove credentials from browser storage.
-const RETIRED_CREDENTIAL_SCOPE = "\x6c\x75\x6e\x61\x74\x61\x6c\x6b";
+export const RETIRED_CREDENTIAL_SCOPE = "\x6c\x75\x6e\x61\x74\x61\x6c\x6b";
 
 /** Legacy mirrors follow the last-selected issuer; scoped credentials remain independent. */
 const CREDENTIAL_KEYS = [
