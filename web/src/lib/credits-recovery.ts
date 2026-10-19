@@ -6,11 +6,12 @@
  */
 import type { PeriodPlan, RewardsPanel } from "./rewards";
 import type { RouteLocationNormalizedLoaded, Router } from "vue-router";
-import { purchaseLink } from "./period-plan";
 import { track } from "./track";
 
 /** 從「積分不夠」那張卡點出去的連結都帶這個 from，落地頁才數得到是從這裡來的 */
 export const SHORTFALL_FROM = "canvas_shortfall";
+/** 月卡那條路先到這一頁記點擊，再轉去 Console；Console 的網址不帶任何應用參數 */
+export const PLAN_GO_PATH = "/go/plan";
 
 export interface RecoveryOptions {
   origin: string;
@@ -28,7 +29,7 @@ export function creditsRecovery(panel: RewardsPanel | null, shortfall: { needed:
     .reduce((sum, task) => sum + (task.reward.credits ?? 0), 0);
   const links: { id: string; label: string; href: string }[] = [];
   if (left > 0) links.push({ id: "tasks", label: o.t("credits.recovery.taskLeft", { n: o.whole(left) }), href: `${o.origin}${o.lp("/checkin")}?from=${SHORTFALL_FROM}#tasks` });
-  if (o.plan?.offer?.onSale && o.plan.canPurchase !== false) links.push({ id: "plan", label: o.t("plan.canvas.action"), href: purchaseLink(o.plan.offer) });
+  if (o.plan?.offer?.onSale && o.plan.canPurchase !== false) links.push({ id: "plan", label: o.t("plan.canvas.action"), href: `${o.origin}${o.lp(PLAN_GO_PATH)}?from=${SHORTFALL_FROM}` });
   else links.push({ id: "topup", label: o.t("credits.recovery.topup"), href: o.topUp });
   return {
     title: shortfall ? o.t("credits.recovery.title") : undefined,
