@@ -12,7 +12,7 @@
  * 寫法：請求裡只寫一列待送清單（快、不會因為 Harbor 慢而拖慢留言），之後在背景與排程裡整批送。
  * 這把憑證只能上報、不能發點；沒設（B4 上線前、本機、分叉）就留在清單裡，超過 Harbor 收的時間窗就丟掉並計數。
  *
- * 隱私：不存 IP 原值，不送 IP。訪客只留匿名雜湊（IP 前綴＋UA，以每週換的鑰匙做 HMAC），7 天後清掉。
+ * 隱私：不存 IP 原值，不送 IP。訪客只留匿名雜湊（IP 前綴＋UA，以 SHARE_VISITOR_SECRET 衍生、每週換的鑰匙做 HMAC），7 天後清掉。
  */
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -73,26 +73,45 @@ export async function harborRoleId(db: D1Database, cardId: string): Promise<stri
 /** 字數：中日韓一字一單位，英文以字元計；空白不算（Harbor 用它判斷留言是否達門檻）。 */
 export const textUnits = (s: string): number => [...s.replace(/\s+/g, "")].length;
 
-export async function reportComment(db: D1Database, input: { cardId: string; memberId: string; commentId: string; content: string; reply: boolean; byAuthor: boolean; now: number }): Promise<void> {
-  const [accountNo, workRoleId] = await Promise.all([harborAccountNo(db, input.memberId), harborRoleId(db, input.cardId)]);
-  if (!accountNo || !workRoleId) return;
-  const occurredAt = new Date(input.now).toISOString();
-  await enqueueRewardEvent(db, { eventId: `comment_posted:${input.commentId}`, type: "comment_posted", accountNo, workRoleId, occurredAt, attrs: { commentId: input.commentId, textUnits: textUnits(input.content) } }, input.now);
-  if (input.reply && input.byAuthor) await enqueueRewardEvent(db, { eventId: `author_reply:${input.commentId}`, type: "author_reply", accountNo, workRoleId, occurredAt, attrs: { commentId: input.commentId } }, input.now);
+/**
+ * 上報失敗不能讓留言、評分、刪除、審核失敗：那些寫入已經成功了，回錯誤只會讓人重送一次。
+ * 查不到身分、寫不進清單都只計數，不往外丟。
+ */
+async function safely(db: D1Database, type: RewardEventType, run: () => Promise<void>): Promise<void> {
+  try { await run(); } catch { await bumpOp(db, "reward_events", type, "error"); }
+}
+
+/** 留言公開了（直接公開，或待審後放行）：報留言；作者在自己的卡下回覆另報一筆，Harbor 會再核對作者。 */
+export async function reportComment(db: D1Database, input: { cardId: string; memberId: string; commentId: string; content: string; reply: boolean; now: number }): Promise<void> {
+  await safely(db, "comment_posted", async () => {
+    const [accountNo, card] = await Promise.all([
+      harborAccountNo(db, input.memberId),
+      db.prepare("SELECT source_role_id, author_num_id FROM cards WHERE id = ? AND provider = 'harbor'").bind(input.cardId).first<{ source_role_id: string; author_num_id: number }>(),
+    ]);
+    if (!accountNo || !card) return;
+    const workRoleId = card.source_role_id;
+    const occurredAt = new Date(input.now).toISOString();
+    await enqueueRewardEvent(db, { eventId: `comment_posted:${input.commentId}`, type: "comment_posted", accountNo, workRoleId, occurredAt, attrs: { commentId: input.commentId, textUnits: textUnits(input.content) } }, input.now);
+    if (input.reply && Number(card.author_num_id) === accountNo) await enqueueRewardEvent(db, { eventId: `author_reply:${input.commentId}`, type: "author_reply", accountNo, workRoleId, occurredAt, attrs: { commentId: input.commentId } }, input.now);
+  });
 }
 
 export async function reportCommentRemoved(db: D1Database, input: { cardId: string | null; memberId: string; commentId: string; now: number }): Promise<void> {
   if (!input.cardId) return;
-  const [accountNo, workRoleId] = await Promise.all([harborAccountNo(db, input.memberId), harborRoleId(db, input.cardId)]);
-  if (!accountNo || !workRoleId) return;
-  await enqueueRewardEvent(db, { eventId: `comment_removed:${input.commentId}`, type: "comment_removed", accountNo, workRoleId, occurredAt: new Date(input.now).toISOString(), attrs: { commentId: input.commentId } }, input.now);
+  await safely(db, "comment_removed", async () => {
+    const [accountNo, workRoleId] = await Promise.all([harborAccountNo(db, input.memberId), harborRoleId(db, input.cardId!)]);
+    if (!accountNo || !workRoleId) return;
+    await enqueueRewardEvent(db, { eventId: `comment_removed:${input.commentId}`, type: "comment_removed", accountNo, workRoleId, occurredAt: new Date(input.now).toISOString(), attrs: { commentId: input.commentId } }, input.now);
+  });
 }
 
 export async function reportRating(db: D1Database, input: { cardId: string; memberId: string; now: number }): Promise<void> {
-  const [accountNo, workRoleId] = await Promise.all([harborAccountNo(db, input.memberId), harborRoleId(db, input.cardId)]);
-  if (!accountNo || !workRoleId) return;
-  // 同一張卡一天報一次就夠：Harbor 只認「第一次評分」
-  await enqueueRewardEvent(db, { eventId: `rating_set:${input.cardId}:${accountNo}:${businessDay(input.now)}`, type: "rating_set", accountNo, workRoleId, occurredAt: new Date(input.now).toISOString(), attrs: {} }, input.now);
+  await safely(db, "rating_set", async () => {
+    const [accountNo, workRoleId] = await Promise.all([harborAccountNo(db, input.memberId), harborRoleId(db, input.cardId)]);
+    if (!accountNo || !workRoleId) return;
+    // 同一張卡一天報一次就夠：Harbor 只認「第一次評分」
+    await enqueueRewardEvent(db, { eventId: `rating_set:${input.cardId}:${accountNo}:${businessDay(input.now)}`, type: "rating_set", accountNo, workRoleId, occurredAt: new Date(input.now).toISOString(), attrs: {} }, input.now);
+  });
 }
 
 // ---- 分享連結被打開 --------------------------------------------------------------
@@ -105,13 +124,6 @@ function weekKey(now: number): string {
   return monday.toISOString().slice(0, 10);
 }
 
-let fallbackSecret: string | null = null;
-/** 沒設 SHARE_VISITOR_SECRET（本機、測試）就用這個 isolate 的隨機鑰匙：雜湊照樣不可逆。 */
-function secretOf(env: Env): string {
-  if (env.SHARE_VISITOR_SECRET) return env.SHARE_VISITOR_SECRET;
-  fallbackSecret ??= crypto.randomUUID();
-  return fallbackSecret;
-}
 
 async function hmacHex(key: string, data: string): Promise<string> {
   const k = await crypto.subtle.importKey("raw", new TextEncoder().encode(key), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
@@ -123,7 +135,7 @@ async function hmacHex(key: string, data: string): Promise<string> {
 const ipPrefix = (ip: string) => (ip.includes(":") ? ip.split(":").slice(0, 4).join(":") : ip.split(".").slice(0, 3).join("."));
 
 export async function visitorHash(env: Env, ip: string, ua: string, now: number): Promise<string> {
-  const week = await hmacHex(secretOf(env), `share-visitor:${weekKey(now)}`);
+  const week = await hmacHex(env.SHARE_VISITOR_SECRET ?? "", `share-visitor:${weekKey(now)}`);
   return (await hmacHex(week, `${ipPrefix(ip)}|${ua}`)).slice(0, 32);
 }
 
@@ -135,7 +147,8 @@ rewardEventRoutes.post("/v1/share/open", bodyLimit({ maxSize: 512, onError: (c) 
   const ref = typeof body.ref === "string" && REF_CODE.test(body.ref) ? body.ref : null;
   if (!ref) { await bumpOp(c.env.DB, "reward_events", "share_open", "dropped"); return c.body(null, 204); }
   const ua = c.req.header("User-Agent") ?? "";
-  if (!ua || BOT_UA.test(ua)) { await bumpOp(c.env.DB, "reward_events", "share_open", "dropped"); return c.body(null, 204); }
+  // 沒設訪客鑰匙就不算：每個 isolate 各用一把隨機鑰匙的話，同一個人會被算成好幾個（部署要設 SHARE_VISITOR_SECRET）
+  if (!c.env.SHARE_VISITOR_SECRET || !ua || BOT_UA.test(ua)) { await bumpOp(c.env.DB, "reward_events", "share_open", "dropped"); return c.body(null, 204); }
   const now = Date.now();
   const day = businessDay(now);
   const hash = await visitorHash(c.env, c.req.header("cf-connecting-ip") ?? "", ua, now);
@@ -219,7 +232,11 @@ export async function flushRewardEvents(env: Env, now: number): Promise<FlushRes
   }
   const byType = new Map<string, number>();
   for (const r of due.results) byType.set(r.type, (byType.get(r.type) ?? 0) + 1);
-  if (result.ok || (result.status >= 400 && result.status < 500 && result.status !== 401 && result.status !== 408 && result.status !== 429)) {
+  // 令牌被拒：丟掉手上的，下一輪重新換（客戶端被撤銷或輪替密鑰之後）
+  if (result.status === 401 || result.status === 403) cached = null;
+  // 只有「這批本身不收」（400、413、422…）才不重送；沒開獎勵（404）、權限或令牌（401／403）、限流、伺服器錯誤都是設定或暫時的事，留著等它好
+  const retryable = !result.ok && (result.status === 0 || result.status >= 500 || [401, 403, 404, 408, 429].includes(result.status));
+  if (!retryable) {
     await db.batch(due.results.map((r) => db.prepare("UPDATE reward_event_outbox SET sent_at = ?, attempts = attempts + 1 WHERE event_id = ?").bind(now, r.event_id)));
     for (const [type, n] of byType) await bumpOp(db, "reward_events", type, result.ok ? "sent" : "rejected", n);
     if (result.ok) out.sent = due.results.length; else out.rejected = due.results.length;
