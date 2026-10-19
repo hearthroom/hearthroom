@@ -287,18 +287,21 @@ export function noteShareOpen(code: string): void {
   }).catch(() => undefined);
   if (signedInHint() === null) { void send(null); return; }
   void (async () => {
-    const session = useSession();
-    if (!session.ready) await session.restore().catch(() => undefined);
-    await send(session.me ? await session.accessToken().catch(() => null) : null);
+    let token: string | null = null;
+    try {
+      const session = useSession();
+      if (!session.ready) await session.restore();
+      token = session.me ? await session.accessToken() : null;
+    } catch { token = null; }
+    await send(token);
   })();
 }
 
 /** 應用獎勵：登入的人產生了一張卡的分享連結（新手七日第 6 天）。不是卡（文章、活動）就由伺服器略過。 */
 export async function noteShareLinkCreated(roleId: string | undefined): Promise<void> {
   if (!roleId) return;
-  const session = useSession();
-  if (!session.me) return;
-  const token = await session.accessToken().catch(() => null);
+  let token: string | null = null;
+  try { const session = useSession(); token = session.me ? await session.accessToken() : null; } catch { token = null; }
   if (!token) return;
   await fetch(`${COMMUNITY_API}/me/share/created`, {
     method: "POST", keepalive: true,

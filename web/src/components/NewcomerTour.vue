@@ -27,7 +27,8 @@ let scrolledFor = "";
 function measure() {
   dialogOpen.value = !!document.querySelector(".dlg-backdrop, .sheet-backdrop, .stage-wrap");
   const s = step.value;
-  const el = s?.target ? document.querySelector<HTMLElement>(s.target) : null;
+  const onPage = !!s && (s.page === "any" || s.page === pageOf(route.path));
+  const el = s?.target && onPage ? document.querySelector<HTMLElement>(s.target) : null;
   if (!el) { rect.value = null; return; }
   if (scrolledFor !== s!.id) { scrolledFor = s!.id; el.scrollIntoView({ block: "center", behavior: "smooth" }); }
   rect.value = el.getBoundingClientRect();
@@ -39,7 +40,8 @@ onMounted(() => {
 });
 onBeforeUnmount(() => { clearInterval(timer); removeEventListener("scroll", measure, { capture: true }); removeEventListener("resize", measure); });
 
-const visible = computed(() => !!step.value && !dialogOpen.value && (step.value.page === "any" || step.value.page === here.value || !step.value.target));
+// 不在那一頁（卡片頁、遊玩畫布不知道是哪一張，帶不過去）：泡泡照樣出現、貼在頁首底下講，不會按了沒反應
+const visible = computed(() => !!step.value && !dialogOpen.value);
 function go(index: number) {
   newcomerTour.index = index;
   const s = currentStep();
