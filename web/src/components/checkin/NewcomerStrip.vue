@@ -36,7 +36,7 @@ function go() { if (view.value) startNewcomerTour(view.value.day, router, lp); }
     <img class="ns__face" src="/mascot/suki-avatar.webp" alt="" width="44" height="44" decoding="async" />
     <span class="ns__text">
       <span class="ns__eyebrow">{{ t("newcomer.home.title", { n: view.day }) }} · {{ t("newcomer.home.progress", { done: view.done }) }}</span>
-      <strong v-if="!view.todayDone" class="ns__goal">{{ goal }}</strong>
+      <strong v-if="!view.todayDone" class="ns__goal">{{ view.claimable ? t("newcomer.home.claimable") : goal }}</strong>
       <span v-else class="ns__goal"><strong>{{ t("newcomer.today.done") }}</strong><span v-if="tomorrow" class="ns__next"> {{ t("newcomer.tomorrow", { goal: tomorrow }) }}</span></span>
     </span>
     <!-- 目標做到了還沒領：只留一個領取入口，帶到簽到頁的新手區塊領（PM 2026-10-19） -->

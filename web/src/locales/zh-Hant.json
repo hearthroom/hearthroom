@@ -2885,6 +2885,7 @@
   "newcomer.home.title": "新手七日・第 {n} 天",
   "newcomer.home.progress": "{done}/7",
   "newcomer.home.go": "帶我去",
+  "newcomer.home.claimable": "今天的目標已完成",
   "newcomer.home.aria": "新手七日第 {n} 天，已完成 {done}/7 天，查看全部目標",
   "newcomer.tour.1.board.title": "榜單",
   "newcomer.tour.1.board.body": "日榜是最近 24 小時上榜的卡，最熱是全站的卡一起比。",

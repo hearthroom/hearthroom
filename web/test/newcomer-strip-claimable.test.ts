@@ -30,6 +30,7 @@ it("offers one claim entry that goes to the newcomer block", async () => {
   expect(go?.tagName).toBe("A");
   expect(go?.getAttribute("href")).toBe("/checkin#newcomer");
   expect(go?.textContent?.trim()).toBe(i18n.global.t("task.cta.claim"));
+  expect(root.querySelector(".ns__goal")?.textContent?.trim()).toBe(i18n.global.t("newcomer.home.claimable"));
 });
 
 it("keeps the guide button while the goal is not reached", async () => {
