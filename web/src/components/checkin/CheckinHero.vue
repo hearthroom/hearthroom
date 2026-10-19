@@ -24,6 +24,8 @@ const chip = computed(() => streakChip(props.panel));
 const nodes = computed(() => trackNodes(props.panel));
 const milestone = computed(() => milestoneView(props.panel, props.plan));
 const pity = computed(() => pityView(props.panel.pityRemaining));
+/** 保底講的是金額門檻（獎表的 pity.threshold），不是級名：大獎、頭獎在不同寶箱裡的金額不一樣 */
+const pityAmount = computed(() => whole(props.plan?.pity?.threshold ?? 0));
 const pityRatio = computed(() => {
   const every = props.plan?.pity?.every;
   return every && pity.value ? Math.min(1, Math.max(0, (every - pity.value.n) / every)) : 0;
@@ -134,9 +136,9 @@ const ctaLabel = computed(() => (state.value === "two" ? t("checkin.cta.openTwo"
       </button>
     </div>
 
-    <div v-if="pity && state !== 'first'" class="hero__pity">
-      <span class="meter" role="progressbar" :aria-valuenow="Math.round(pityRatio * 100)" aria-valuemin="0" aria-valuemax="100" :aria-label="t(pity.key, { n: pity.n })"><i :style="{ '--v': pityRatio }" /></span>
-      <span :class="{ 'hero__pity--next': pity.n === 1 }">{{ t(pity.key, { n: pity.n }) }}</span>
+    <div v-if="pity && plan?.pity && state !== 'first'" class="hero__pity">
+      <span class="meter" role="progressbar" :aria-valuenow="Math.round(pityRatio * 100)" aria-valuemin="0" aria-valuemax="100" :aria-label="t(pity.key, { n: pity.n, amount: pityAmount })"><i :style="{ '--v': pityRatio }" /></span>
+      <span :class="{ 'hero__pity--next': pity.n === 1 }">{{ t(pity.key, { n: pity.n, amount: pityAmount }) }}</span>
     </div>
 
     <hr class="hero__rule" />
@@ -164,7 +166,7 @@ const ctaLabel = computed(() => (state.value === "two" ? t("checkin.cta.openTwo"
 .hero__was { flex:none; font-size:12px; color:var(--text-2); white-space:nowrap; }
 .hero__bubble {
   position:relative; margin:0 0 6px auto; max-width:60%; padding:8px 12px; border-radius:16px;
-  background:#fff; color:#2a1d24; font-size:13.5px; line-height:1.45; box-shadow:0 4px 14px rgba(42,29,36,.14);
+  background:#fff; color:#2a1d24; font-size:13.5px; line-height:1.45; word-break:keep-all; overflow-wrap:anywhere; box-shadow:0 4px 14px rgba(42,29,36,.14);
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; text-wrap:balance;
   animation:bubble-in var(--dur) var(--ease) both;
 }

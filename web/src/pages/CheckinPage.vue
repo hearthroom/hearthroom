@@ -108,26 +108,30 @@ function onMakeup() {
 // ---- 任務 ----
 const claiming = ref(new Set<string>());
 const failed = ref(new Set<string>());
-async function claim(task: RewardTask): Promise<boolean> {
+async function claim(task: RewardTask, quiet = false): Promise<number | null> {
   if (task.reward.chest) {
     openStage({ chests: [task.reward.chest], checkin: false, request: async () => ({ claims: [await store.claimTask(task)], recap: false }) });
-    return true;
+    return 0;
   }
   claiming.value = new Set([...claiming.value, task.id]);
   try {
     const c = await store.claimTask(task);
     failed.value.delete(task.id);
-    say(t("task.claimed.toast", { amount: whole(c.credits ?? task.reward.credits ?? 0) }));
-    return true;
+    const amount = c.credits ?? task.reward.credits ?? 0;
+    if (!quiet) say(t("task.claimed.toast", { amount: whole(amount) }));
+    return amount;
   } catch {
     failed.value = new Set([...failed.value, task.id]);
-    return false;
+    return null;
   } finally {
     const next = new Set(claiming.value); next.delete(task.id); claiming.value = next;
   }
 }
+/** 全部領取：依序領，最後一個提示講加總（不是只講最後一項） */
 async function claimAll(tasks: RewardTask[]) {
-  for (const task of tasks) if (!(await claim(task))) break;
+  let sum = 0;
+  for (const task of tasks) { const got = await claim(task, true); if (got === null) break; sum += got; }
+  if (sum) say(t("task.claimed.toast", { amount: whole(sum) }));
   await refresh();
 }
 async function claimOne(task: RewardTask) { await claim(task); if (!task.reward.chest) await refresh(); }
