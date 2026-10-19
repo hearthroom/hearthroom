@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { RouterLink } from "vue-router";
 import { fetchScoreRecords, fetchScoreSummary, fetchWallet, type Wallet, type ScoreDay, type ScoreRecord } from "@/lib/api";
 import { clock, dayLabel, localDate, monthDayTime, whole } from "@/lib/format";
 import ExpiryStrip from "@/components/checkin/ExpiryStrip.vue";
@@ -10,10 +11,15 @@ import { track } from "@/lib/track";
 import { byWeek, lastDays, spentTotals } from "@/lib/score-usage";
 import UsageChart from "@/components/UsageChart.vue";
 import WalletInvite from "@/components/WalletInvite.vue";
+import PlanToday from "@/components/checkin/PlanToday.vue";
+import { useCheckin } from "@/lib/checkin-store";
+import { usePeriodPlans } from "@/lib/period-plan-store";
+import { firstDaily, planDate, planPrice, purchaseLink } from "@/lib/period-plan";
+import { useLocalePath } from "@/lib/use-locale";
 
 const props = defineProps<{ provider: ProviderId; externalId: number }>();
 const wallet = ref<Wallet | null>(null);
-const { t, te } = useI18n();
+const { t, te, locale } = useI18n();
 
 const PAGE = 30;
 const records = ref<ScoreRecord[]>([]);
@@ -53,10 +59,15 @@ const reason = (code: string) => (te(`wallet.reason.${code}`) ? t(`wallet.reason
  */
 const SOURCE: Record<string, string> = { checkin: "checkin", task: "task", newcomer: "newcomer", referral: "referral", welcome: "signup", event: "campaign", other: "grant" };
 const sourceOf = (kind?: string) => (kind && SOURCE[kind] ? t(`wallet.reason.${SOURCE[kind]}`) : "");
+/** 月卡的列（PM 2026-10-19 R3＝A）：每日、首張加贈，與退款收回它們的列。不認得的種類照服務給的分類。 */
+const PLAN_ITEM: Record<string, [string, string]> = { daily: ["planDaily", "refundPlanDaily"], bonus: ["planBonus", "refundPlanBonus"] };
+const planItemOf = (r: ScoreRecord) => (r.planKind && PLAN_ITEM[r.planKind] ? t(`wallet.reason.${PLAN_ITEM[r.planKind]![r.record === "refund" ? 1 : 0]}`) : "");
 /** 流水的項目名：獎勵入帳用來源的名字（簽到寶箱、任務獎勵…），其餘照服務給的分類。 */
-const itemOf = (r: ScoreRecord) => (r.recordType === "add" && r.rewardKind && SOURCE[r.rewardKind] ? sourceOf(r.rewardKind) : reason(r.record));
+const itemOf = (r: ScoreRecord) => planItemOf(r) || (r.recordType === "add" && r.rewardKind && SOURCE[r.rewardKind] ? sourceOf(r.rewardKind) : reason(r.record));
 /** 第二行：限時積分入帳寫到期時間（過了寫已到期）；到期那一筆寫是哪一種獎勵到期。 */
 function subOf(r: ScoreRecord): { text: string; off: boolean } | null {
+  // 月卡的積分不會到期：入帳列沒有第二行，和限時的寶箱一眼分得開；退回列寫是退款
+  if (planItemOf(r)) return r.record === "refund" ? { text: t("wallet.record.planRefund"), off: false } : null;
   if (r.recordType === "add" && r.expiresAt) {
     const off = Date.parse(r.expiresAt) <= Date.now();
     return { text: off ? t("wallet.record.expired") : t("wallet.record.expires", { datetime: monthDayTime(r.expiresAt) }), off };
@@ -105,7 +116,23 @@ async function loadSummary() {
   } catch { days.value = null; }
 }
 
+// ---- 月卡（ui.md §4）：持卡的人看今天那一行，沒卡的人在「前往儲值」下方有一行入口 ----
+const plans = usePeriodPlans();
+const checkin = useCheckin();
+const { lp } = useLocalePath();
+const mine = computed(() => (plans.mine?.active ? plans.mine : null));
+/** 今天簽到過沒有：簽到面板讀過才知道，沒讀過就照「簽到時一起領」寫（ui.md §4.2） */
+const planLine = computed(() => plans.line(checkin.panel ? checkin.panel.checkin.todayClaimed : null));
+const planLink = computed(() => purchaseLink(plans.offer));
+const pitch = computed(() => {
+  const o = plans.offer;
+  if (mine.value || !o?.onSale) return "";
+  const vars = { price: planPrice(o, locale.value), credits: whole(o.credits), dailyCredits: whole(o.dailyCredits), firstDaily: whole(firstDaily(o)) };
+  return t(plans.mine?.firstBonus.status === "available" && o.firstBonusDailyCredits > 0 ? "plan.wallet.pitchBonus" : "plan.wallet.pitch", vars);
+});
+
 async function refresh() {
+  void plans.load();
   try {
     const token = await accountToken(props.provider, props.externalId);
     if (!token) throw new Error(t('auth.expired'));
@@ -152,7 +179,21 @@ watch(() => [props.provider, props.externalId], () => load(true), { immediate: t
             </li>
           </ul>
         </div>
+        <div v-if="mine && planLine.kind !== 'hidden'" class="plan" data-testid="wallet-plan">
+          <div class="plan__head">
+            <span class="plan__title">{{ mine.remainingDays <= 1 ? $t("plan.row.title.last") : $t("plan.row.title", { n: whole(mine.remainingDays) }) }}</span>
+            <span v-if="mine.endsOn" class="plan__last">{{ $t("plan.wallet.lastDay", { date: planDate(mine.endsOn, locale) }) }}</span>
+          </div>
+          <div class="plan__today">
+            <PlanToday class="plan__line" :line="planLine" :claiming="plans.claiming" @claim="plans.claim().then((ok) => ok && refresh())" />
+            <RouterLink v-if="planLine.kind === 'withCheckin'" :to="lp('/checkin')" class="link plan__go">{{ $t("plan.wallet.goCheckin") }}</RouterLink>
+          </div>
+          <p v-if="planLine.bonusCredits > 0" class="plan__sub">{{ $t("plan.row.bonusPart", { bonus: whole(planLine.bonusCredits) }) }}</p>
+          <p v-if="checkin.panel" class="plan__sub">{{ $t("plan.row.makeup", { left: whole(checkin.panel.checkin.makeup.left) }) }}</p>
+          <a v-if="mine.canPurchase" class="link plan__more" :href="planLink" target="_blank" rel="noopener" @click="track('plan_click', { detail: 'wallet' })">{{ $t("plan.wallet.buyMore") }}</a>
+        </div>
         <a class="btn btn--primary btn--lg balance__cta" href="https://console.harperharbor.com/me/billing" target="_blank" rel="noopener" @click="track('topup_click')">{{ $t("wallet.topUp") }} ↗</a>
+        <a v-if="pitch" class="link plan__pitch" data-testid="wallet-plan-pitch" :href="planLink" target="_blank" rel="noopener" @click="track('plan_click', { detail: 'wallet' })">{{ pitch }}</a>
       </section>
 
       <WalletInvite :provider="provider" :external-id="externalId" />
@@ -273,6 +314,16 @@ watch(() => [props.provider, props.externalId], () => load(true), { immediate: t
 .row__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row__sub { font-size: 12px; color: var(--text-2); }
 .row__item--off .row__name, .row__item--off .row__sub { color: var(--text-3); }
+.plan { display: grid; gap: 4px; padding-top: var(--s-2); border-top: 1px solid var(--line); }
+.plan__head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px var(--s-2); }
+.plan__title { font-size: 14px; font-weight: 600; }
+.plan__last { font-size: 12px; color: var(--text-2); }
+.plan__today { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-3); }
+.plan__line { justify-content: flex-start; }
+.plan__go, .plan__more { display: inline-flex; align-items: center; min-height: 30px; font-size: 13px; }
+.plan__more { justify-self: start; }
+.balance .plan__sub { font-size: 12px; color: var(--text-3); }
+.plan__pitch { font-size: 13px; color: var(--text-2); text-wrap: pretty; }
 .expiring { display: grid; gap: var(--s-1); padding-top: var(--s-2); border-top: 1px solid var(--line); }
 .expiring__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }
 .expiring__title { font-size: 13px; font-weight: 600; }
