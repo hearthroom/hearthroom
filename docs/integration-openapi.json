@@ -23935,6 +23935,8 @@
           "today",
           "canPurchase",
           "purchaseBlockedReason",
+          "purchasableFrom",
+          "maxDays",
           "firstBonusDailyCredits",
           "firstBonus",
           "makeupPerMonth"
@@ -24015,6 +24017,18 @@
             ],
             "description": "Why another plan cannot be bought now: `not_on_sale`; `plan_limit` — buying one more would pass `maxDays`; `checkout_in_progress` — an earlier purchase is still being paid or credited. Null when `canPurchase` is true."
           },
+          "purchasableFrom": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "Only on `plan_limit`: the first business day another plan can be bought; null otherwise."
+          },
+          "maxDays": {
+            "type": "integer",
+            "description": "Most days an account can hold at once across stacked plans."
+          },
           "firstBonus": {
             "type": "object",
             "required": [
@@ -24040,7 +24054,7 @@
           },
           "makeupPerMonth": {
             "type": "integer",
-            "description": "Makeup passes per month: the plan's number while it is active, otherwise the app's."
+            "description": "Makeup passes per month that the plan gives (for example 3), whether or not a plan is active. How many are left this month is `checkin.makeup.left` in `getMyRewards`."
           },
           "badge": {
             "type": "string",
