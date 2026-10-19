@@ -15,6 +15,7 @@
 import http from "node:http";
 import fs from "node:fs";
 import pathMod from "node:path";
+import { handleRewards, walletExtras } from "./mock-rewards.mjs";
 const CARDS = process.env.FIXTURES_DIR || new URL("./fixtures/", import.meta.url).pathname;
 const PORT = Number(process.env.PORT || 8899);
 const images = new Map(); const folders = new Map(); let imgSeq = 1;
@@ -35,6 +36,8 @@ http.createServer(async (req, res) => {
   if (path.startsWith("/img/")) { const n = parseInt(path.slice(5), 10); if (!path.endsWith(".png")) { res.writeHead(200, { "content-type": "application/octet-stream", "access-control-allow-origin": "*" }); return res.end(Buffer.alloc(16)); } res.writeHead(200, { "content-type": "image/svg+xml", "access-control-allow-origin": "*" }); return res.end(`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="768"><rect width="100%" height="100%" fill="hsl(${(n * 47) % 360} 60% 70%)"/><text x="50%" y="50%" font-size="64" text-anchor="middle" fill="#fff">${n}</text></svg>`); }
   // 角色詳情是公開讀接口：Worker 登記時不帶 token 去讀它，放在鑑權前面
   if (path === "/open/v1/role/detail") { const r = roles.get(url.searchParams.get("roleId")); return r ? json(res, 200, { ...r, talkExample: JSON.stringify(r.talkExample ?? []) }) : json(res, 404, { error: "not_found" }); }
+  // 應用獎勵：公開方案免登入，其餘要 token；情境切換見 mock-rewards.mjs 開頭
+  if (path === "/__rewards" || /^\/open\/v1\/apps\/[^/]+\/rewards\/plan$/.test(path)) { await handleRewards({ m, path, url, body, json, res }); return; }
   const auth = req.headers.authorization || "";
   if (!auth.startsWith("Bearer ")) return json(res, 401, { error: "unauthorized", message: "A valid bearer token is required." });
   if (path === "/open/v1/me") return json(res, 200, { accountNumId: 424242, nickName: "測試作者", avatar: "" });
@@ -60,7 +63,9 @@ http.createServer(async (req, res) => {
   if (path === "/open/v1/conversation/ws-ticket") return json(res, 200, { ticket: "t-1", expiresIn: 60 });
   if (path.startsWith("/open/v1/conversation/memory")) return json(res, 200, { atoms: [] });
   if (path === "/open/v1/role/multiPassPreference" || path === "/open/v1/player/multi-pass") return json(res, 200, {});
-  if (path === "/open/v1/me/wallet") return json(res, 200, { score: 999596, tempScore: 0, plans: [{ tier: "member", expiresAt: Date.now() + 86400e3 * 30 }] });
+  if (path.startsWith("/open/v1/me/rewards") && await handleRewards({ m, path, url, body, json, res })) return;
+  // Harbor 的錢包形狀：available＝permanent＋expiring－reserved；expiries 是限時積分逐筆明細
+  if (path === "/open/v1/me/wallet") { const x = walletExtras(); return json(res, 200, { available: 999596 + x.expiring, permanent: 999596, reserved: 0, ...x }); }
   if (path === "/open/v1/me/score/records") return json(res, 200, { total: 2, size: 30, pages: 1, hasNextPage: false, records: [
     { id: 2, record: "chat", recordType: "sub", score: 1, createTime: new Date().toISOString() },
     { id: 1, record: "grant", recordType: "add", score: 10000, createTime: new Date(Date.now() - 3600e3).toISOString() },

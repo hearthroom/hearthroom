@@ -1,0 +1,13 @@
+{
+  "tier": "highlight",
+  "audience": "everyone",
+  "try": "/wallet",
+  "draft": true,
+  "title": {
+    "zh-Hant": "每天簽到開寶箱，做任務也能拿到聊天用的積分。",
+    "zh-Hans": "每天签到开宝箱，做任务也能拿到聊天用的积分。",
+    "en": "Check in daily to open a chest, and earn chat credits from tasks too.",
+    "ja": "毎日のチェックインで宝箱を開けて、ミッションでもチャット用のポイントがもらえます。",
+    "ko": "매일 출석하고 상자를 열면, 미션으로도 대화용 포인트를 받을 수 있어요."
+  }
+}
