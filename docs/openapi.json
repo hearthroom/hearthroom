@@ -23579,11 +23579,128 @@
           },
           "newcomer": {
             "type": "object",
-            "description": "Newcomer stage rules. Present but may be empty in this release."
+            "description": "Newcomer stage rules. An empty object when the app offers none.",
+            "properties": {
+              "windowDays": {
+                "type": "integer",
+                "description": "Business days, counted from the day the account joined, in which stages can be done."
+              },
+              "badge": {
+                "type": "string",
+                "description": "Item key granted with the last stage."
+              },
+              "stages": {
+                "type": "array",
+                "description": "Stages in order. One stage can be claimed per business day.",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "goal",
+                    "reward"
+                  ],
+                  "properties": {
+                    "goal": {
+                      "type": "string",
+                      "enum": [
+                        "turns",
+                        "return_turns",
+                        "new_work_turns",
+                        "comment_or_rating",
+                        "customize",
+                        "share_link",
+                        "final"
+                      ],
+                      "description": "Goal of the stage: `turns` (chat a number of turns today), `return_turns` (chat today with a work first opened on an earlier day), `new_work_turns` (chat today with a work first opened today that is not the caller's own), `comment_or_rating` (comment on or rate a work today that is not the caller's own), `customize` (change the chat background or the reply length today), `share_link` (create a share link today) or `final` (every earlier stage done). Map it to your own copy."
+                    },
+                    "target": {
+                      "type": "integer",
+                      "description": "Progress needed to finish. Present on `turns`, `return_turns` and `new_work_turns`."
+                    },
+                    "reward": {
+                      "type": "object",
+                      "description": "Exactly one of `credits` or `chest`.",
+                      "properties": {
+                        "credits": {
+                          "type": "integer",
+                          "description": "Credits paid."
+                        },
+                        "chest": {
+                          "type": "string",
+                          "description": "Chest key opened."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "referral": {
             "type": "object",
-            "description": "Referral reward rules. Present but may be empty in this release."
+            "description": "Referral rewards paid automatically. An empty object when the app offers none.",
+            "properties": {
+              "trial": {
+                "type": "object",
+                "required": [
+                  "credits",
+                  "perDay",
+                  "turns",
+                  "withinHours"
+                ],
+                "description": "Credits paid to the caller when someone who opened the caller's link signs in and chats `turns` turns with that work within `withinHours` hours. Paid automatically, for at most `perDay` people a business day.",
+                "properties": {
+                  "credits": {
+                    "type": "integer",
+                    "description": "Credits paid per person."
+                  },
+                  "perDay": {
+                    "type": "integer",
+                    "description": "Most people paid for per business day."
+                  },
+                  "turns": {
+                    "type": "integer",
+                    "description": "Turns the person needs to chat."
+                  },
+                  "withinHours": {
+                    "type": "integer",
+                    "description": "Hours after opening the link in which the turns count."
+                  }
+                }
+              },
+              "activation": {
+                "type": "object",
+                "required": [
+                  "credits",
+                  "withinDays",
+                  "days",
+                  "turns",
+                  "releaseAfterDays"
+                ],
+                "description": "Credits paid to the caller when an account the caller invited chats on `days` days with at least `turns` paid turns within `withinDays` days of signing up. Paid automatically `releaseAfterDays` days later.",
+                "properties": {
+                  "credits": {
+                    "type": "integer",
+                    "description": "Credits paid per invited account."
+                  },
+                  "withinDays": {
+                    "type": "integer",
+                    "description": "Days after signing up in which the activity counts."
+                  },
+                  "days": {
+                    "type": "integer",
+                    "description": "Days with chats needed."
+                  },
+                  "turns": {
+                    "type": "integer",
+                    "description": "Paid turns needed."
+                  },
+                  "releaseAfterDays": {
+                    "type": "integer",
+                    "description": "Days between reaching the goal and the payment."
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -24290,7 +24407,7 @@
       },
       "RewardNewcomer": {
         "type": "object",
-        "description": "Newcomer stages. Present but may be empty in this release.",
+        "description": "Newcomer stages of the caller.",
         "required": [
           "active",
           "stage",
@@ -24335,7 +24452,16 @@
               },
               "goal": {
                 "type": "string",
-                "description": "Goal key. Map it to your own copy."
+                "description": "Goal key. Map it to your own copy.",
+                "enum": [
+                  "turns",
+                  "return_turns",
+                  "new_work_turns",
+                  "comment_or_rating",
+                  "customize",
+                  "share_link",
+                  "final"
+                ]
               },
               "progress": {
                 "type": "integer",
@@ -24362,7 +24488,63 @@
           "stages": {
             "type": "array",
             "items": {
-              "type": "object"
+              "type": "object",
+              "required": [
+                "stage",
+                "goal",
+                "target",
+                "reward",
+                "status"
+              ],
+              "properties": {
+                "stage": {
+                  "type": "integer",
+                  "description": "Stage number, from 1."
+                },
+                "goal": {
+                  "type": "string",
+                  "enum": [
+                    "turns",
+                    "return_turns",
+                    "new_work_turns",
+                    "comment_or_rating",
+                    "customize",
+                    "share_link",
+                    "final"
+                  ],
+                  "description": "Goal key. Map it to your own copy."
+                },
+                "target": {
+                  "type": "integer",
+                  "description": "Progress needed to finish."
+                },
+                "reward": {
+                  "type": "object",
+                  "description": "Exactly one of `credits` or `chest`.",
+                  "properties": {
+                    "credits": {
+                      "type": "integer",
+                      "description": "Credits paid."
+                    },
+                    "chest": {
+                      "type": "string",
+                      "description": "Chest key opened."
+                    }
+                  }
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "locked",
+                    "claimable",
+                    "claimed",
+                    "pending",
+                    "not_granted",
+                    "unavailable"
+                  ],
+                  "description": "`locked` — not done yet; `claimable` — done, ready to claim; `claimed` — paid; `pending` — claimed, payment processing; `not_granted` — claimed but not paid; `unavailable` — not offered to this account."
+                }
+              }
             },
             "description": "Stages in order with their rewards."
           }
