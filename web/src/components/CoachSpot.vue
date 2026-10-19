@@ -11,7 +11,7 @@ import { isNight } from "@/lib/mascot-home";
  * action：框不到時只有一顆按鈕（例如「打開一張卡」「知道了」），取代上一步／下一步。
  * frame=false：rect 只拿來決定泡泡放在它上面或下面，不加遮罩、不框（ui.md §15.8、art.md §12）。
  */
-const props = withDefaults(defineProps<{ rect: DOMRect | null; title: string; body: string; mascot: boolean; first: boolean; last: boolean; action?: string; frame?: boolean }>(), { action: undefined, frame: true });
+const props = withDefaults(defineProps<{ rect: DOMRect | null; title: string; body: string; mascot: boolean; first: boolean; last: boolean; action?: string; frame?: boolean; clearBelow?: DOMRect | null }>(), { action: undefined, frame: true, clearBelow: null });
 /** 導覽的蘇綺衣服跟時段走，和桌寵、簽到頁一致：晚上換寢物語 */
 const mascotSrc = isNight(new Date()) ? "/mascot/home/pose-bedtime.webp" : "/mascot/suki-wave.webp";
 const emit = defineEmits<{ prev: []; next: []; close: [] }>();
@@ -28,7 +28,9 @@ const bubbleStyle = computed(() => {
   if (!r) return { top: `calc(64px + env(safe-area-inset-top))` };
   // 不框的時候 rect 是剛按的按鈕：泡泡優先放在它下面，不蓋住按鈕上方那段它在講的內容
   const below = props.frame ? r.top + r.height / 2 < window.innerHeight / 2 : r.bottom + 200 < window.innerHeight;
-  return below ? { top: `${Math.min(r.bottom + PAD + 12, window.innerHeight - 200)}px` } : { bottom: `${Math.min(window.innerHeight - r.top + PAD + 12, window.innerHeight - 200)}px` };
+  // 放在下方時，若目標正下方還有要讓開的東西（clearBelow），從它底下開始；放不下就維持原位
+  const under = Math.max(r.bottom + PAD + 12, props.clearBelow ? props.clearBelow.bottom + 12 : 0);
+  return below ? { top: `${under <= window.innerHeight - 200 ? under : Math.min(r.bottom + PAD + 12, window.innerHeight - 200)}px` } : { bottom: `${Math.min(window.innerHeight - r.top + PAD + 12, window.innerHeight - 200)}px` };
 });
 </script>
 
