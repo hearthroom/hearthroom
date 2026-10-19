@@ -84,6 +84,10 @@
     {
       "name": "Campaign pool",
       "description": "An app's campaign reward budget. The platform funds it and sets the rules; the app's owners and admins pay rewards from it with their own token."
+    },
+    {
+      "name": "Rewards",
+      "description": "Daily check-in, chests and tasks that pay credits from an app's campaign pool to its users."
     }
   ],
   "security": [
@@ -12491,6 +12495,897 @@
           }
         }
       }
+    },
+    "/open/v1/apps/{app}/rewards/plan": {
+      "get": {
+        "operationId": "getRewardPlan",
+        "tags": [
+          "Rewards"
+        ],
+        "summary": "Read an app's reward plan",
+        "description": "Returns the reward rules of the app named by `app`: chest prizes and their odds, the pity guarantee, the check-in track and the business-day clock. No sign-in needed. Odds are in basis points and add up to 10000 in each chest. Without `version` the current version is returned; pass the `planVersion` of a claim or draw to see the prizes as they were then. Show these values instead of hard-coding prizes or odds: each new version can change them. The response holds no account data and can be cached.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "app",
+            "in": "path",
+            "required": true,
+            "description": "The app's slug.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": false,
+            "description": "Plan version to return. Leave it out for the current version.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reward plan.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RewardPlan"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found` — no app has this slug, or its plan has no such `version`; `rewards_disabled` — the app does not run rewards.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/me/rewards": {
+      "get": {
+        "operationId": "getMyRewards",
+        "tags": [
+          "Rewards"
+        ],
+        "summary": "Read the caller's rewards panel",
+        "description": "Returns everything a rewards screen shows for the caller in the app this token belongs to: the check-in streak and track, today's chests and results, tasks, newcomer stages, referral progress and credits about to expire. Requires the `chat.play` scope and an OAuth token issued to an app; personal API keys are refused. Rewards belong to the app the token was issued to; a token of an app that does not run rewards gets `rewards_disabled`. Use `serverNow`, `nextResetAt` and `weekResetAt` for countdowns instead of assuming a time zone or reset hour. When `planVersion` differs from the `version` of the plan you hold, fetch the plan again. Reading the panel may also pay the caller's delayed rewards that have come due. At most 60 reads a minute per account.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Rewards panel.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RewardPanel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`forbidden` — the token was not granted `chat.play`, or it is a personal API key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`rewards_disabled` — the app this token belongs to does not run rewards.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` — more than 60 panel reads in a minute; retry shortly.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/me/rewards/checkin": {
+      "post": {
+        "operationId": "checkInRewards",
+        "tags": [
+          "Rewards"
+        ],
+        "summary": "Check in for today",
+        "description": "Checks the caller in for the current business day and opens today's chests: one chest, or two in order on a milestone day. Chests are drawn on the server; nothing in the request affects the result. Reuse the same `requestId` when retrying: a request that already succeeded returns the original result with `replayed: true`. Checking in again with a new `requestId` on the same day returns `already_claimed` with the original claims, and reusing a `requestId` for a different reward returns `idempotency_conflict`. A chest that cannot be paid yet comes back with `status: pending` and no draw fields; it is drawn and paid later. At most 30 claims a minute per account across all claim endpoints.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RewardClaimRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The check-in. `replayed` is true when `requestId` had already succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RewardCheckinResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request` — `requestId` is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`forbidden` — the token was not granted `chat.play`, or it is a personal API key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`rewards_disabled` — the app this token belongs to does not run rewards.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`already_claimed` — the caller already checked in today; the body also carries the original `claims`. `idempotency_conflict` — this `requestId` was already used for a different reward, so use a new one.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "claims": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/RewardClaim"
+                          },
+                          "description": "Only on `already_claimed`: the claims recorded the first time."
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` — more than 30 claims in a minute across the claim endpoints; retry shortly.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/me/rewards/makeup": {
+      "post": {
+        "operationId": "makeUpRewardCheckin",
+        "tags": [
+          "Rewards"
+        ],
+        "summary": "Repair a missed check-in day",
+        "description": "Uses one makeup pass to check in for a missed `day` and opens that day's chest, so the streak carries on. Only before today's check-in, and only for a day listed in the panel's `checkin.makeup.repairableDays`; `checkin.makeup.left` tells how many passes are left this month. Retries and conflicts follow the same `requestId` rules as check-in. At most 30 claims a minute per account across all claim endpoints.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RewardMakeupRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The repaired check-in. `replayed` is true when `requestId` had already succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RewardCheckinResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request` — `requestId` is missing, or `day` is not a `YYYY-MM-DD` date.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`forbidden` — the token was not granted `chat.play`, or it is a personal API key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`rewards_disabled` — the app this token belongs to does not run rewards.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`already_claimed` — this `day` was already checked in or repaired; the body also carries the original `claims`. `idempotency_conflict` — this `requestId` was already used for a different reward, so use a new one.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "claims": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/RewardClaim"
+                          },
+                          "description": "Only on `already_claimed`: the claims recorded the first time."
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`not_eligible`, with `reason`: `no_makeup_left` — no makeup pass is left this month; `not_repairable` — `day` is not one of `repairableDays`; `already_checked_in` — the caller already checked in today, so makeup is closed until the next business day.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "reason": {
+                          "type": "string",
+                          "enum": [
+                            "progress",
+                            "window_closed",
+                            "no_makeup_left",
+                            "not_repairable",
+                            "already_checked_in"
+                          ],
+                          "description": "Only on `not_eligible`: why the claim was refused."
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` — more than 30 claims in a minute across the claim endpoints; retry shortly.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/me/rewards/tasks/{taskId}/claim": {
+      "post": {
+        "operationId": "claimRewardTask",
+        "tags": [
+          "Rewards"
+        ],
+        "summary": "Claim a task reward",
+        "description": "Claims the reward of one finished task: credits, or a chest drawn on the server. Send the task's `period` from the panel. A task can be claimed for the current period, and for the period that just ended during the first 15 minutes after the reset, so a turn that finished just after the reset still counts for the day before. Retries and conflicts follow the same `requestId` rules as check-in. At most 30 claims a minute per account across all claim endpoints.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "description": "The task `id` from the panel.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RewardTaskClaimRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The claim.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RewardClaimResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request` — `requestId` or `period` is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`forbidden` — the token was not granted `chat.play`, or it is a personal API key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`rewards_disabled` — the app this token belongs to does not run rewards. `not_found` — the plan has no task with this `taskId`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`already_claimed` — this task was already claimed for this `period`; the body also carries the original `claim`. `idempotency_conflict` — this `requestId` was already used for a different reward, so use a new one.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "claim": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/RewardClaim"
+                            }
+                          ],
+                          "description": "Only on `already_claimed`: the claim recorded the first time."
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`not_eligible`, with `reason`: `progress` — the task is not finished; `window_closed` — `period` is neither the current period nor the one that just ended within its 15-minute grace.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "reason": {
+                          "type": "string",
+                          "enum": [
+                            "progress",
+                            "window_closed",
+                            "no_makeup_left",
+                            "not_repairable",
+                            "already_checked_in"
+                          ],
+                          "description": "Only on `not_eligible`: why the claim was refused."
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` — more than 30 claims in a minute across the claim endpoints; retry shortly.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/me/rewards/newcomer/claim": {
+      "post": {
+        "operationId": "claimRewardNewcomer",
+        "tags": [
+          "Rewards"
+        ],
+        "summary": "Claim today's newcomer stage",
+        "description": "Completes the caller's current newcomer stage once today's goal is met and pays its reward; the last stage opens the newcomer chest and grants a badge. At most one stage per business day, and only within the newcomer window given by `newcomer.deadline`. Retries and conflicts follow the same `requestId` rules as check-in. At most 30 claims a minute per account across all claim endpoints.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RewardClaimRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The claim.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RewardClaimResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request` — `requestId` is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`forbidden` — the token was not granted `chat.play`, or it is a personal API key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`rewards_disabled` — the app this token belongs to does not run rewards.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`already_claimed` — this stage was already claimed; the body also carries the original `claim`. `idempotency_conflict` — this `requestId` was already used for a different reward, so use a new one.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "claim": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/RewardClaim"
+                            }
+                          ],
+                          "description": "Only on `already_claimed`: the claim recorded the first time."
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`not_eligible`, with `reason`: `progress` — today's goal is not met; `window_closed` — the newcomer window has ended.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "reason": {
+                          "type": "string",
+                          "enum": [
+                            "progress",
+                            "window_closed",
+                            "no_makeup_left",
+                            "not_repairable",
+                            "already_checked_in"
+                          ],
+                          "description": "Only on `not_eligible`: why the claim was refused."
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` — more than 30 claims in a minute across the claim endpoints; retry shortly.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/me/rewards/draws": {
+      "get": {
+        "operationId": "listMyRewardDraws",
+        "tags": [
+          "Rewards"
+        ],
+        "summary": "List the caller's chest draws",
+        "description": "Lists the chests the caller opened in this app, newest first, kept for the plan's `drawRetentionDays` days. Each entry carries what is needed to show the result again: fetch the plan with `version` set to `planVersion`, and lay out the reel from `stripSeed` and `stripVersion`. Requires the `chat.play` scope and an OAuth token issued to an app; personal API keys are refused.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque `nextCursor` from a previous page. Malformed → 400 `invalid_cursor`."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Draw page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RewardDrawPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_cursor` — `cursor` is not a value this endpoint returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`forbidden` — the token was not granted `chat.play`, or it is a personal API key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`rewards_disabled` — the app this token belongs to does not run rewards.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/me/rewards/items": {
+      "get": {
+        "operationId": "listMyRewardItems",
+        "tags": [
+          "Rewards"
+        ],
+        "summary": "List the caller's reward items",
+        "description": "Lists the cosmetic items and badges the caller owns in this app, such as avatar frames won from chests and the newcomer badge. Map each `key` to your own name and artwork. Requires the `chat.play` scope and an OAuth token issued to an app; personal API keys are refused.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owned items.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RewardItemList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`forbidden` — the token was not granted `chat.play`, or it is a personal API key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`rewards_disabled` — the app this token belongs to does not run rewards.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -14412,6 +15307,14 @@
           "constant_lore_trim_fits": {
             "type": "boolean",
             "description": "Only on a first-turn `context_capacity_exceeded`: whether saving `trimConstantLore=true` lets the card play at the current tier. Absent on mid-conversation capacity errors."
+          },
+          "credits_needed": {
+            "type": "integer",
+            "description": "Only on `insufficient_credits`: the credits this turn needs before it can start. Absent when the refusal came without an estimate."
+          },
+          "credits_available": {
+            "type": "integer",
+            "description": "Only on `insufficient_credits`: the credits the wallet could set aside for it."
           }
         }
       },
@@ -20334,6 +21237,13 @@
               "$ref": "#/components/schemas/WalletPlan"
             },
             "description": "Currently held membership plans; may contain several tiers at once; empty when none."
+          },
+          "expiries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WalletExpiry"
+            },
+            "description": "Time-limited credits by expiry and source, soonest first, at most 10; batches with the same expiry and source are merged. The `expiring` total keeps its meaning."
           }
         }
       },
@@ -22498,6 +23408,1073 @@
             "description": "True when this response repeats an earlier payout of the same `key`; no new credits were paid."
           }
         }
+      },
+      "RewardPlan": {
+        "type": "object",
+        "description": "Public reward rules of one app at one version.",
+        "required": [
+          "version",
+          "updatedAt",
+          "timezone",
+          "dayStartHour",
+          "drawRetentionDays",
+          "pity",
+          "chests",
+          "checkin",
+          "tasks",
+          "newcomer",
+          "referral"
+        ],
+        "properties": {
+          "version": {
+            "type": "integer",
+            "description": "Plan version. Each change to the rules creates a new version; earlier versions stay readable."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When this version was created."
+          },
+          "timezone": {
+            "type": "string",
+            "description": "IANA time zone of the business day, for example `Asia/Taipei`."
+          },
+          "dayStartHour": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 23,
+            "description": "Hour in `timezone` when a new business day starts."
+          },
+          "drawRetentionDays": {
+            "type": "integer",
+            "description": "Days a chest draw stays in the draw history."
+          },
+          "pity": {
+            "$ref": "#/components/schemas/RewardPity"
+          },
+          "chests": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/RewardChest"
+            },
+            "description": "Chests by key. Keys are 1 to 24 lowercase letters, digits or `_`."
+          },
+          "checkin": {
+            "$ref": "#/components/schemas/RewardCheckinRules"
+          },
+          "tasks": {
+            "type": "object",
+            "description": "Task rules. Present but may be empty in this release."
+          },
+          "newcomer": {
+            "type": "object",
+            "description": "Newcomer stage rules. Present but may be empty in this release."
+          },
+          "referral": {
+            "type": "object",
+            "description": "Referral reward rules. Present but may be empty in this release."
+          }
+        }
+      },
+      "RewardPity": {
+        "type": "object",
+        "description": "Guarantee shared by the check-in chests: when `every` - 1 of them in a row paid less than `threshold` credits, the next one draws only from prizes of at least `threshold`, keeping their relative odds.",
+        "required": [
+          "threshold",
+          "every",
+          "chests"
+        ],
+        "properties": {
+          "threshold": {
+            "type": "integer",
+            "description": "Smallest prize, in credits, that counts as a big prize and restarts the count."
+          },
+          "every": {
+            "type": "integer",
+            "description": "Longest run of these chests without a big prize, the guaranteed one included."
+          },
+          "chests": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Keys of the chests that share the count. Other chests neither use nor change it."
+          }
+        }
+      },
+      "RewardChest": {
+        "type": "object",
+        "description": "One chest: its prizes and the announced average.",
+        "required": [
+          "prizes",
+          "expectedValue"
+        ],
+        "properties": {
+          "prizes": {
+            "type": "array",
+            "maxItems": 6,
+            "items": {
+              "$ref": "#/components/schemas/RewardPrize"
+            },
+            "description": "Prizes in slot order, at most 6. Their `bps` add up to 10000."
+          },
+          "expectedValue": {
+            "type": "number",
+            "description": "Average credits per opening from the odds alone, without the pity guarantee. Item prizes count as 0."
+          }
+        }
+      },
+      "RewardPrize": {
+        "type": "object",
+        "description": "One prize slot: credits or an item.",
+        "required": [
+          "tier",
+          "bps"
+        ],
+        "properties": {
+          "tier": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 6,
+            "description": "Slot number from 1 to 6, the same as `tier` in claims and draws."
+          },
+          "credits": {
+            "type": "integer",
+            "description": "Credits paid. Absent for an item prize."
+          },
+          "item": {
+            "type": "string",
+            "description": "Item key of an item prize. Absent for a credits prize."
+          },
+          "bps": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000,
+            "description": "Chance in basis points, out of 10000."
+          }
+        }
+      },
+      "RewardCheckinRules": {
+        "type": "object",
+        "description": "Daily check-in track and makeup passes.",
+        "required": [
+          "cycle",
+          "checkpointEvery",
+          "milestoneCycle",
+          "milestones",
+          "makeupPerMonth",
+          "makeupWindowDays"
+        ],
+        "properties": {
+          "cycle": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Chest key for each day of the check-in track, starting at day 1."
+          },
+          "checkpointEvery": {
+            "type": "integer",
+            "description": "After a missed day the streak drops to the last multiple of this number and today counts one more: with 7, a streak of 17 becomes 15."
+          },
+          "milestoneCycle": {
+            "type": "integer",
+            "description": "Length in days of the milestone cycle; milestones repeat every cycle."
+          },
+          "milestones": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RewardMilestone"
+            },
+            "description": "Extra chests opened on given days of each milestone cycle."
+          },
+          "makeupPerMonth": {
+            "type": "integer",
+            "description": "Makeup passes given each month."
+          },
+          "makeupWindowDays": {
+            "type": "integer",
+            "description": "How many days back a missed day can be repaired."
+          }
+        }
+      },
+      "RewardMilestone": {
+        "type": "object",
+        "required": [
+          "at",
+          "chest"
+        ],
+        "properties": {
+          "at": {
+            "type": "integer",
+            "description": "Day of the milestone cycle on which the chest opens."
+          },
+          "chest": {
+            "type": "string",
+            "description": "Chest key."
+          }
+        }
+      },
+      "RewardClaimRequest": {
+        "type": "object",
+        "example": {
+          "requestId": "checkin-2026-10-19-a1b2c3"
+        },
+        "required": [
+          "requestId"
+        ],
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "description": "Your own identifier for this request. Send the same value when retrying."
+          },
+          "deviceToken": {
+            "type": "string",
+            "description": "Optional. A random value your app creates once per install and keeps on the device. Only a keyed hash of it is stored."
+          }
+        }
+      },
+      "RewardMakeupRequest": {
+        "type": "object",
+        "example": {
+          "requestId": "makeup-2026-10-17-d4e5f6",
+          "day": "2026-10-17"
+        },
+        "required": [
+          "requestId",
+          "day"
+        ],
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "description": "Your own identifier for this request. Send the same value when retrying."
+          },
+          "day": {
+            "type": "string",
+            "format": "date",
+            "description": "Missed business day to repair, `YYYY-MM-DD`, from `repairableDays`."
+          },
+          "deviceToken": {
+            "type": "string",
+            "description": "Optional. A random value your app creates once per install and keeps on the device. Only a keyed hash of it is stored."
+          }
+        }
+      },
+      "RewardTaskClaimRequest": {
+        "type": "object",
+        "required": [
+          "requestId",
+          "period"
+        ],
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "description": "Your own identifier for this request. Send the same value when retrying."
+          },
+          "period": {
+            "type": "string",
+            "description": "The task's `period` from the panel, unchanged."
+          },
+          "deviceToken": {
+            "type": "string",
+            "description": "Optional. A random value your app creates once per install and keeps on the device. Only a keyed hash of it is stored."
+          }
+        }
+      },
+      "RewardClaim": {
+        "type": "object",
+        "description": "Outcome of one claim. A `pending` chest has not been drawn yet, so it carries none of the draw fields (`prizeIndex`, `tier`, `planVersion`, `stripSeed`, `stripVersion`, `credits`, `item`).",
+        "required": [
+          "rewardKey",
+          "status",
+          "duplicate"
+        ],
+        "properties": {
+          "rewardKey": {
+            "type": "string",
+            "description": "Key of the reward claimed, for example `checkin:2026-10-19`. An account claims each key at most once."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "granted",
+              "pending",
+              "not_granted"
+            ],
+            "description": "`granted` — paid; `pending` — accepted but not paid yet, shown as processing; `not_granted` — reviewed and not paid."
+          },
+          "releaseAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When a `pending` claim is expected to be paid. Absent when there is no date."
+          },
+          "chest": {
+            "type": "string",
+            "description": "Chest key, when the reward is a chest."
+          },
+          "prizeIndex": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "0-based slot of the prize drawn, in the chest's `prizes`."
+          },
+          "tier": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 6,
+            "description": "Slot number of the prize drawn, `prizeIndex` + 1."
+          },
+          "planVersion": {
+            "type": "integer",
+            "description": "Plan version the chest was drawn from."
+          },
+          "stripSeed": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 4294967295,
+            "description": "Random seed for laying out the reel animation. It is taken after the prize is drawn and does not affect it."
+          },
+          "stripVersion": {
+            "type": "integer",
+            "description": "Version of the reel layout algorithm to use with `stripSeed`."
+          },
+          "credits": {
+            "type": "integer",
+            "description": "Credits paid. For a duplicate item, the credits paid instead."
+          },
+          "item": {
+            "type": "string",
+            "description": "Item won, when the prize is an item. Still set for a duplicate."
+          },
+          "duplicate": {
+            "type": "boolean",
+            "description": "True when the item was already owned, so `credits` were paid instead."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the paid credits expire."
+          },
+          "pityRemaining": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Check-in chests until the pity guarantee applies; 1 means the next one is guaranteed."
+          }
+        }
+      },
+      "RewardCheckinResult": {
+        "type": "object",
+        "required": [
+          "claims",
+          "streak",
+          "replayed"
+        ],
+        "properties": {
+          "claims": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RewardClaim"
+            },
+            "description": "Claims made by this check-in, in opening order."
+          },
+          "streak": {
+            "type": "integer",
+            "description": "Check-in streak in days, today included."
+          },
+          "replayed": {
+            "type": "boolean",
+            "description": "True when this response repeats an earlier request with the same `requestId`; nothing new was claimed."
+          }
+        }
+      },
+      "RewardClaimResponse": {
+        "type": "object",
+        "required": [
+          "claim"
+        ],
+        "properties": {
+          "claim": {
+            "$ref": "#/components/schemas/RewardClaim"
+          }
+        }
+      },
+      "RewardPanel": {
+        "type": "object",
+        "description": "Everything a rewards screen shows for the caller.",
+        "required": [
+          "serverNow",
+          "businessDay",
+          "nextResetAt",
+          "weekResetAt",
+          "planVersion",
+          "checkin",
+          "pityRemaining",
+          "today",
+          "tasks",
+          "newcomer",
+          "referral",
+          "credits",
+          "hints"
+        ],
+        "properties": {
+          "serverNow": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Server time when the panel was read. Base countdowns on it, not on the device clock."
+          },
+          "businessDay": {
+            "type": "string",
+            "format": "date",
+            "description": "Current business day, `YYYY-MM-DD`."
+          },
+          "nextResetAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the next business day starts."
+          },
+          "weekResetAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the next business week starts. Weeks start on Monday."
+          },
+          "planVersion": {
+            "type": "integer",
+            "description": "Plan version in effect. Fetch the plan again when it differs from the `version` you hold."
+          },
+          "checkin": {
+            "$ref": "#/components/schemas/RewardCheckinPanel"
+          },
+          "pityRemaining": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Check-in chests until the pity guarantee applies; 1 means the next one is guaranteed."
+          },
+          "today": {
+            "type": "object",
+            "required": [
+              "claims"
+            ],
+            "properties": {
+              "claims": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/RewardClaim"
+                },
+                "description": "Every chest opened today, in the same shape as claim results: check-in chests, the all-daily-tasks chest and weekly chests."
+              }
+            }
+          },
+          "tasks": {
+            "type": "object",
+            "description": "Daily and weekly tasks. Present but may be empty in this release.",
+            "required": [
+              "daily",
+              "weekly",
+              "dailyAll"
+            ],
+            "properties": {
+              "daily": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/RewardTask"
+                },
+                "description": "Today's daily tasks."
+              },
+              "weekly": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/RewardTask"
+                },
+                "description": "This week's weekly tasks."
+              },
+              "dailyAll": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/RewardTask"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The chest for finishing every daily task. `null` when the plan has none."
+              }
+            }
+          },
+          "newcomer": {
+            "$ref": "#/components/schemas/RewardNewcomer"
+          },
+          "referral": {
+            "$ref": "#/components/schemas/RewardReferralPanel"
+          },
+          "credits": {
+            "type": "object",
+            "required": [
+              "expiring"
+            ],
+            "properties": {
+              "expiring": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/RewardExpiringCredits"
+                },
+                "description": "Time-limited credits by expiry, soonest first."
+              }
+            }
+          },
+          "hints": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Keys of one-time hints to show, for example `day7_offer`. Always empty in this release."
+          }
+        }
+      },
+      "RewardCheckinPanel": {
+        "type": "object",
+        "required": [
+          "streak",
+          "todayClaimed",
+          "todayChests",
+          "fallback",
+          "track",
+          "nextMilestone",
+          "makeup"
+        ],
+        "properties": {
+          "streak": {
+            "type": "integer",
+            "description": "Current check-in streak in days."
+          },
+          "todayClaimed": {
+            "type": "boolean",
+            "description": "Whether the caller has checked in today."
+          },
+          "todayChests": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Chest keys that today's check-in opens, in opening order: two on a milestone day."
+          },
+          "fallback": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Set when a day was missed and the caller has not checked in today; otherwise `null`. Without a makeup pass, checking in drops the streak from `from` to `checkpoint` and counts today as `to`, for example 17, 14 and 15.",
+            "required": [
+              "from",
+              "checkpoint",
+              "to"
+            ],
+            "properties": {
+              "from": {
+                "type": "integer",
+                "description": "Current streak."
+              },
+              "checkpoint": {
+                "type": "integer",
+                "description": "Streak kept after the drop: the last multiple of `checkpointEvery` at or below `from`."
+              },
+              "to": {
+                "type": "integer",
+                "description": "Streak after checking in today, `checkpoint` + 1."
+              }
+            }
+          },
+          "track": {
+            "type": "array",
+            "minItems": 7,
+            "maxItems": 7,
+            "items": {
+              "$ref": "#/components/schemas/RewardTrackDay"
+            },
+            "description": "The 7 days of the current track. After a missed day and before today's check-in, it still shows the old cycle with its `missed` days; once the caller checks in, the streak drops and the track restarts at day 1 of a new cycle. A day repaired with a makeup pass shows `made_up`."
+          },
+          "nextMilestone": {
+            "type": "object",
+            "description": "Next milestone chest. Milestones repeat every `milestoneCycle` days.",
+            "required": [
+              "day",
+              "chest",
+              "inDays"
+            ],
+            "properties": {
+              "day": {
+                "type": "integer",
+                "description": "Streak day on which it opens."
+              },
+              "chest": {
+                "type": "string",
+                "description": "Chest key."
+              },
+              "inDays": {
+                "type": "integer",
+                "description": "Days until it opens."
+              }
+            }
+          },
+          "makeup": {
+            "type": "object",
+            "required": [
+              "left",
+              "repairableDays"
+            ],
+            "properties": {
+              "left": {
+                "type": "integer",
+                "description": "Makeup passes left this month."
+              },
+              "repairableDays": {
+                "type": "array",
+                "description": "Missed days a makeup pass can still repair. Empty once the caller has checked in today.",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "day",
+                    "deadline"
+                  ],
+                  "properties": {
+                    "day": {
+                      "type": "string",
+                      "format": "date",
+                      "description": "Business day, `YYYY-MM-DD`."
+                    },
+                    "deadline": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "Last moment this day can be repaired."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "RewardTrackDay": {
+        "type": "object",
+        "required": [
+          "day",
+          "chest",
+          "status"
+        ],
+        "properties": {
+          "day": {
+            "type": "string",
+            "format": "date",
+            "description": "Business day, `YYYY-MM-DD`."
+          },
+          "chest": {
+            "type": "string",
+            "description": "Chest key of this day."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "claimed",
+              "made_up",
+              "missed",
+              "today",
+              "future"
+            ],
+            "description": "`claimed` — checked in; `made_up` — repaired with a makeup pass; `missed` — not checked in; `today` — today, not checked in yet; `future` — still to come."
+          }
+        }
+      },
+      "RewardTask": {
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "progress",
+          "target",
+          "reward",
+          "status",
+          "period"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Task identifier. Send it as `taskId` when claiming."
+          },
+          "type": {
+            "type": "string",
+            "description": "Kind of task, for example `turns` (chat a number of turns) or `share_open` (someone else opened a link the caller shared). Map it to your own copy."
+          },
+          "progress": {
+            "type": "integer",
+            "description": "Progress so far."
+          },
+          "target": {
+            "type": "integer",
+            "description": "Progress needed to finish."
+          },
+          "reward": {
+            "type": "object",
+            "description": "Exactly one of `credits` or `chest`.",
+            "properties": {
+              "credits": {
+                "type": "integer",
+                "description": "Credits paid."
+              },
+              "chest": {
+                "type": "string",
+                "description": "Chest key opened."
+              }
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "locked",
+              "claimable",
+              "claimed",
+              "pending",
+              "not_granted",
+              "unavailable"
+            ],
+            "description": "`locked` — not done yet; `claimable` — done, ready to claim; `claimed` — paid; `pending` — claimed, payment processing; `not_granted` — claimed but not paid; `unavailable` — not offered to this account."
+          },
+          "period": {
+            "type": "string",
+            "description": "Period this task counts in. Send it back unchanged when claiming."
+          }
+        }
+      },
+      "RewardNewcomer": {
+        "type": "object",
+        "description": "Newcomer stages. Present but may be empty in this release.",
+        "required": [
+          "active",
+          "stage",
+          "deadline",
+          "today",
+          "stages"
+        ],
+        "properties": {
+          "active": {
+            "type": "boolean",
+            "description": "Whether the caller has newcomer stages left to complete."
+          },
+          "stage": {
+            "type": "integer",
+            "description": "Stages completed so far."
+          },
+          "deadline": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the newcomer window closes. `null` when the account has none."
+          },
+          "today": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Today's goal. `null` when there is none.",
+            "required": [
+              "stage",
+              "goal",
+              "progress",
+              "target",
+              "status"
+            ],
+            "properties": {
+              "stage": {
+                "type": "integer",
+                "description": "Stage that today's goal belongs to."
+              },
+              "goal": {
+                "type": "string",
+                "description": "Goal key. Map it to your own copy."
+              },
+              "progress": {
+                "type": "integer",
+                "description": "Progress so far."
+              },
+              "target": {
+                "type": "integer",
+                "description": "Progress needed to finish."
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "locked",
+                  "claimable",
+                  "claimed",
+                  "pending",
+                  "not_granted",
+                  "unavailable"
+                ],
+                "description": "`locked` — not done yet; `claimable` — done, ready to claim; `claimed` — paid; `pending` — claimed, payment processing; `not_granted` — claimed but not paid; `unavailable` — not offered to this account."
+              }
+            }
+          },
+          "stages": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Stages in order with their rewards."
+          }
+        }
+      },
+      "RewardReferralPanel": {
+        "type": "object",
+        "description": "Results of the caller's shared links. Counts only; they never identify anyone. Present but may be empty in this release.",
+        "required": [
+          "openersToday",
+          "openersWeek",
+          "trialsToday",
+          "activations"
+        ],
+        "properties": {
+          "openersToday": {
+            "type": "integer",
+            "description": "People other than the caller who opened the caller's shared links today."
+          },
+          "openersWeek": {
+            "type": "integer",
+            "description": "Different people who opened the caller's shared links this week."
+          },
+          "trialsToday": {
+            "type": "integer",
+            "description": "People who signed in from the caller's link and finished a trial today that paid the caller a reward."
+          },
+          "activations": {
+            "type": "object",
+            "description": "Rewards for referred people who became regular users. These are paid automatically, without a claim.",
+            "required": [
+              "pending",
+              "grantedThisMonth",
+              "upcoming"
+            ],
+            "properties": {
+              "pending": {
+                "type": "integer",
+                "description": "Referred people who qualified and are waiting for their reward date."
+              },
+              "grantedThisMonth": {
+                "type": "integer",
+                "description": "Activation rewards paid this month."
+              },
+              "upcoming": {
+                "type": "array",
+                "description": "Activation rewards still to be paid, soonest first, at most 10.",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "releaseAt",
+                    "credits"
+                  ],
+                  "properties": {
+                    "releaseAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "When it will be paid."
+                    },
+                    "credits": {
+                      "type": "integer",
+                      "description": "Credits to be paid."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "RewardExpiringCredits": {
+        "type": "object",
+        "required": [
+          "amount",
+          "expiresAt"
+        ],
+        "properties": {
+          "amount": {
+            "type": "integer",
+            "description": "Credits."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When they expire."
+          }
+        }
+      },
+      "RewardDraw": {
+        "type": "object",
+        "description": "One chest draw.",
+        "required": [
+          "at",
+          "rewardKind",
+          "chest",
+          "prizeIndex",
+          "tier",
+          "planVersion",
+          "stripSeed",
+          "stripVersion",
+          "duplicate",
+          "pity",
+          "status"
+        ],
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the chest was drawn."
+          },
+          "rewardKind": {
+            "type": "string",
+            "description": "What the chest was for, for example `checkin`, `task` or `newcomer`."
+          },
+          "chest": {
+            "type": "string",
+            "description": "Chest key."
+          },
+          "prizeIndex": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "0-based slot of the prize drawn, in the chest's `prizes`."
+          },
+          "tier": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 6,
+            "description": "Slot number of the prize drawn, `prizeIndex` + 1."
+          },
+          "planVersion": {
+            "type": "integer",
+            "description": "Plan version the chest was drawn from."
+          },
+          "stripSeed": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 4294967295,
+            "description": "Random seed for laying out the reel animation. It is taken after the prize is drawn and does not affect it."
+          },
+          "stripVersion": {
+            "type": "integer",
+            "description": "Version of the reel layout algorithm to use with `stripSeed`."
+          },
+          "credits": {
+            "type": "integer",
+            "description": "Credits paid. For a duplicate item, the credits paid instead."
+          },
+          "item": {
+            "type": "string",
+            "description": "Item won, when the prize is an item. Still set for a duplicate."
+          },
+          "duplicate": {
+            "type": "boolean",
+            "description": "True when the item was already owned, so `credits` were paid instead."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the paid credits expire."
+          },
+          "pity": {
+            "type": "boolean",
+            "description": "True when the pity guarantee decided this draw."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "granted",
+              "pending",
+              "not_granted"
+            ],
+            "description": "`granted` — paid; `pending` — accepted but not paid yet, shown as processing; `not_granted` — reviewed and not paid."
+          }
+        }
+      },
+      "RewardDrawPage": {
+        "type": "object",
+        "required": [
+          "list",
+          "nextCursor"
+        ],
+        "properties": {
+          "list": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RewardDraw"
+            },
+            "description": "Draws, newest first."
+          },
+          "nextCursor": {
+            "type": "string",
+            "description": "Opaque cursor for the next page; empty string when there is none."
+          }
+        }
+      },
+      "RewardItemList": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "description": "Items and badges the caller owns.",
+            "items": {
+              "type": "object",
+              "required": [
+                "key",
+                "grantedAt"
+              ],
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "description": "Item or badge key."
+                },
+                "grantedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "When the caller received it."
+                }
+              }
+            }
+          }
+        }
+      },
+      "WalletExpiry": {
+        "type": "object",
+        "required": [
+          "amount",
+          "expiresAt",
+          "kind"
+        ],
+        "properties": {
+          "amount": {
+            "type": "integer",
+            "description": "Credits."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When they expire."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "welcome",
+              "event",
+              "checkin",
+              "task",
+              "newcomer",
+              "referral",
+              "other"
+            ],
+            "description": "Where the credits came from: `welcome` — sign-up gift; `event` — campaign credits; `checkin`, `task`, `newcomer` or `referral` — rewards; `other` — anything else."
+          }
+        }
       }
     }
   },
@@ -22511,7 +24488,8 @@
     "guestReadableRoutes": [
       "GET /open/v1/role/detail",
       "GET /open/v1/role/preview-page",
-      "GET /open/v1/referral/terms"
+      "GET /open/v1/referral/terms",
+      "GET /open/v1/apps/{app}/rewards/plan"
     ],
     "guestNote": "Guest routes are matched on the route pattern (not the raw path). On a guest request the identity is empty. If a valid bearer is sent it is used normally.",
     "serviceKeyFormat": "HarperHarbor uses `hh_live_` followed by random characters. A personal API key is shown once at creation; only a short prefix is retrievable afterwards."
@@ -22584,7 +24562,11 @@
       "expired_token": "OAuth token, device code grant: the device code expired; request a new one (400).",
       "rate_limited": "OAuth device authorization: too many codes from one address in an hour, or too many pending requests for the client; retry_after gives the seconds to wait (429).",
       "temporarily_unavailable": "OAuth token/revoke: storage failure (503).",
-      "invalid_request": "OAuth revoke: missing token (400)."
+      "invalid_request": "OAuth revoke: missing token (400).",
+      "already_claimed": "Rewards: this reward was already claimed; the body carries the original result (409).",
+      "not_eligible": "Rewards: the claim is not allowed yet or any more; `reason` tells why (422).",
+      "rewards_disabled": "Rewards: the app does not run rewards (404).",
+      "idempotency_conflict": "A request identifier or key was already used for a different request; use a new one (409)."
     }
   },
   "x-scrub": {
