@@ -47,3 +47,31 @@ describe("簽到送出", () => {
     expect(Object.keys(sessionStorage).some((k) => k.startsWith("hr.rewards.req."))).toBe(true);
   });
 });
+
+// 月卡代領：Harbor 在簽到的同一個請求裡先領月卡，成功與錯誤的回應都帶 periodPlan（p5-contract §1）。
+describe("簽到時一起領月卡", () => {
+  const granted = { status: "granted", day: "2026-10-20", credits: 500, replayed: false };
+
+  it("成功：回應帶著 periodPlan", async () => {
+    stub(() => json({ claims: [claim], streak: 9, replayed: false, periodPlan: granted }));
+    const r = await useCheckin().checkin();
+    expect(r.periodPlan).toEqual(granted);
+  });
+
+  it("今天已經在別的地方簽過：409 的信封也帶 periodPlan", async () => {
+    stub(() => json({ error: "already_claimed", claims: [claim], periodPlan: { ...granted, replayed: true } }, 409));
+    const r = await useCheckin().checkin();
+    expect(r.elsewhere).toBe(true);
+    expect(r.periodPlan).toEqual({ ...granted, replayed: true });
+  });
+
+  it("簽到失敗也讀得到月卡的結果：錯誤帶著 periodPlan", async () => {
+    stub(() => json({ error: "temporarily_unavailable", periodPlan: granted }, 503));
+    await expect(useCheckin().checkin()).rejects.toMatchObject({ code: "temporarily_unavailable", periodPlan: granted });
+  });
+
+  it("舊伺服器沒有這個欄位：periodPlan 是 undefined", async () => {
+    stub(() => json({ claims: [claim], streak: 9, replayed: false }));
+    expect((await useCheckin().checkin()).periodPlan).toBeUndefined();
+  });
+});
