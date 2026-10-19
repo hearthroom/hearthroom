@@ -1,0 +1,17 @@
+{
+  "tier": "fix",
+  "title": {
+    "zh-Hant": "手機上，聊天氣泡的另一側不再留那麼大的空白。",
+    "zh-Hans": "手机上，聊天气泡的另一侧不再留那么大的空白。",
+    "en": "On phones, chat bubbles no longer leave a wide gap on the opposite side.",
+    "ja": "スマホでは、チャットの吹き出しの反対側に大きな余白が残らなくなりました。",
+    "ko": "휴대폰에서 채팅 말풍선 반대쪽에 큰 여백이 남지 않아요."
+  },
+  "body": {
+    "zh-Hant": "AI 和你的訊息在手機上多出一些可讀寬度，電腦版不變。",
+    "zh-Hans": "AI 和你的消息在手机上多出一些可读宽度，电脑版不变。",
+    "en": "Messages from the AI and from you get a little more reading width on phones; desktop is unchanged.",
+    "ja": "AIとあなたのメッセージの読める幅が少し広がり、パソコンでは変わりません。",
+    "ko": "AI와 내 메시지의 읽을 수 있는 폭이 조금 넓어지고, 컴퓨터에서는 그대로예요."
+  }
+}
