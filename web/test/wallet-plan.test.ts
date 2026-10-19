@@ -10,6 +10,9 @@ vi.mock("../src/lib/connections", async (orig) => ({ ...(await orig<object>()), 
 import ServiceWallet from "../src/components/ServiceWallet.vue";
 import { forgetPeriodPlans } from "../src/lib/rewards";
 
+// 文案讓數字和單位用不換行空白黏在一起；比對時當成一般空白。
+const flat = (t: string | null | undefined) => (t ?? "").replace(/\u00a0/g, " ");
+
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 const offer = { id: "month", onSale: true, priceMicro: 5_000_000, currency: "USD", credits: 30000, days: 30, dailyCredits: 500, firstBonusDailyCredits: 500, maxDays: 180, makeupPerMonth: 3, purchaseUrl: "https://console.example/me/billing?plan=month" };
 const holder = { id: "month", businessDay: "2026-10-20", nextResetAt: "2026-10-20T20:00:00Z", active: true, endsOn: "2026-11-11", remainingDays: 23,
@@ -52,10 +55,10 @@ it("持卡：剩幾天、最後一天、今天已領的總數、首張加贈、�
   mine = holder;
   const root = await mount();
   const block = root.querySelector("[data-testid=wallet-plan]")!;
-  expect(block.textContent).toContain("月卡 · 剩 23 天");
-  expect(block.textContent).toContain("最後一天");
-  expect(block.textContent).toContain("今天已領 +1,000 積分");
-  expect(block.textContent).toContain("其中 500 是首購加贈");
+  expect(flat(block.textContent)).toContain("月卡 · 剩 23 天");
+  expect(flat(block.textContent)).toContain("最後一天");
+  expect(flat(block.textContent)).toContain("今天已領 +1,000 積分");
+  expect(flat(block.textContent)).toContain("其中 500 是首購加贈");
   expect(block.querySelector("a.plan__more")?.getAttribute("href")).toBe(offer.purchaseUrl);
   expect(root.querySelector("[data-testid=wallet-plan-pitch]")).toBeNull();
 });
@@ -65,10 +68,10 @@ it("沒卡、從沒買過：前往儲值下方一行入口，用首次購買的�
   const root = await mount();
   expect(root.querySelector("[data-testid=wallet-plan]")).toBeNull();
   const pitch = root.querySelector("[data-testid=wallet-plan-pitch]")!;
-  expect(pitch.textContent).toContain("30,000");
-  expect(pitch.textContent).toContain("1,000");
-  expect(pitch.textContent).toContain("最多 60,000");
-  expect(pitch.textContent).not.toMatch(/角色對話/);
+  expect(flat(pitch.textContent)).toContain("30,000");
+  expect(flat(pitch.textContent)).toContain("1,000");
+  expect(flat(pitch.textContent)).toContain("最多 60,000");
+  expect(flat(pitch.textContent)).not.toMatch(/角色對話/);
   expect(pitch.getAttribute("href")).toBe(offer.purchaseUrl);
 });
 
@@ -85,7 +88,7 @@ it("積分記錄：月卡每日、首張加贈與退回各有自己的名字；�
 it("不認得的月卡種類：用通用的入帳或退款名稱，不顯示原始代碼", async () => {
   mine = holder;
   const root = await mount();
-  const names = [...root.querySelectorAll(".row__name")].map((n) => n.textContent!.trim());
+  const names = [...root.querySelectorAll(".row__name")].map((n) => flat(n.textContent!).trim());
   expect(names).not.toContain("plan");
   expect(names).not.toContain("purchase");
   expect(names).toContain(i18n.global.t("wallet.reason.grant"));
