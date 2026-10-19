@@ -8,7 +8,7 @@ import {
   checkin as postCheckin, claimNewcomer as postNewcomer, claimTask as postTask, fetchPanel, fetchPlan, forgetCurrentPlan, makeup as postMakeup,
   RewardsError, type CheckinResponse, type ClaimResult, type RewardPlan, type RewardsPanel, type RewardTask,
 } from "./rewards";
-import { clearRequestId, hasRequestId, requestIdFor } from "./checkin";
+import { clearRequestId, requestIdFor } from "./checkin";
 import { useSession } from "./session";
 
 export const useCheckin = defineStore("checkin", () => {
@@ -64,11 +64,19 @@ export const useCheckin = defineStore("checkin", () => {
    */
   async function checkin(): Promise<CheckinResponse & { elsewhere: boolean }> {
     const scope = `checkin:${panel.value?.businessDay ?? "today"}`;
-    const ours = hasRequestId(scope);
-    const res = await postCheckin(await token(), requestIdFor(scope));
-    clearRequestId(scope);
-    // 伺服器說已經簽過、而這個分頁沒有送過：是別的裝置先簽了，舞台直接講結果，不轉滾輪
-    return { ...res, elsewhere: res.replayed && !ours };
+    try {
+      const res = await postCheckin(await token(), requestIdFor(scope));
+      clearRequestId(scope);
+      // replayed：同一個 requestId 之前已經成功（自己斷線後重送），結果照樣播
+      return { ...res, elsewhere: false };
+    } catch (e) {
+      // 今天已經用別的 requestId 簽過（另一台裝置、另一個分頁）：伺服器附上當時的結果，舞台直接講，不轉滾輪
+      if (e instanceof RewardsError && e.code === "already_claimed") {
+        clearRequestId(scope);
+        return { claims: e.claims, streak: panel.value?.checkin.streak ?? 0, replayed: true, elsewhere: true };
+      }
+      throw e;
+    }
   }
 
   async function makeup(day: string): Promise<CheckinResponse> {
@@ -86,7 +94,7 @@ export const useCheckin = defineStore("checkin", () => {
       return claim;
     } catch (e) {
       // 已經領過：伺服器附上原結果，當成功
-      if (e instanceof RewardsError && e.code === "already_claimed" && e.original && "status" in e.original) { clearRequestId(scope); return e.original as ClaimResult; }
+      if (e instanceof RewardsError && e.code === "already_claimed" && e.claims[0]) { clearRequestId(scope); return e.claims[0]; }
       throw e;
     }
   }

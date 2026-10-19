@@ -64,8 +64,8 @@ http.createServer(async (req, res) => {
   if (path.startsWith("/open/v1/conversation/memory")) return json(res, 200, { atoms: [] });
   if (path === "/open/v1/role/multiPassPreference" || path === "/open/v1/player/multi-pass") return json(res, 200, {});
   if (path.startsWith("/open/v1/me/rewards") && await handleRewards({ m, path, url, body, json, res })) return;
-  // Harbor 的錢包形狀：available＝permanent＋expiring－reserved；expiries 是限時積分逐筆明細
-  if (path === "/open/v1/me/wallet") { const x = walletExtras(); return json(res, 200, { available: 999596 + x.expiring, permanent: 999596, reserved: 0, ...x }); }
+  // 錢包照契約形狀（docs/openapi.json）：score 永久、tempScore 限時、expiries 限時積分逐筆明細
+  if (path === "/open/v1/me/wallet") return json(res, 200, { score: 999596, plans: [{ tier: "member", expiresAt: Date.now() + 86400e3 * 30 }], ...walletExtras() });
   if (path === "/open/v1/me/score/records") return json(res, 200, { total: 2, size: 30, pages: 1, hasNextPage: false, records: [
     { id: 2, record: "chat", recordType: "sub", score: 1, createTime: new Date().toISOString() },
     { id: 1, record: "grant", recordType: "add", score: 10000, createTime: new Date(Date.now() - 3600e3).toISOString() },
