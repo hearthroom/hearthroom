@@ -9,7 +9,7 @@ import { can } from "./lib/provider";
 import { updateMarkdownTwin } from "./lib/markdown-twin";
 import { isPlayHost } from "./lib/site";
 import { setSurface } from "./lib/track";
-import { campaignShareFromQuery, noteCampaignShare, refFromQuery, rememberShareRef } from "./lib/share-ref";
+import { campaignShareFromQuery, noteCampaignShare, refFromQuery, rememberShareRef, noteShareOpen } from "./lib/share-ref";
 
 /**
  * 語言放在網址路徑裡，不是 localStorage。
@@ -167,6 +167,7 @@ router.beforeEach((to) => {
   if (!("ref" in to.query) && !share) return true;
   const code = refFromQuery(to.query.ref);
   if (code && signedInHint() === null) rememberShareRef(code);
+  if (code) noteShareOpen(code);
   if (share) noteCampaignShare(share);
   const { ref: _ref, ...query } = to.query;
   if (share) delete query.s;
