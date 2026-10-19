@@ -52,7 +52,12 @@ describe("開箱時間軸", () => {
     expect(reactionOf(newRound(buildTrack({ prizes, tier: 6, seed: 1 }), false))).toBe("cheer");
     const near = newRound(buildTrack({ prizes, tier: 2, seed: 1, graze: { dist: 1, tier: 6, side: "L" } }), false);
     expect(reactionOf(near)).toBe("miss");
-    expect(stopSoundOf(near)).toBe("miss");
+    // owner 2026-10-19：差一點也照開到的級別播正常的獲獎音，可惜只交給閃光音與蘇綺的懊惱
+    expect(stopSoundOf(near)).toBe("neutral");
+    const nearRose = newRound(buildTrack({ prizes, tier: 4, seed: 1, graze: { dist: 1, tier: 6, side: "R" } }), false);
+    expect(nearRose.track.nearMissBig).toBe(true);
+    expect(stopSoundOf(nearRose)).toBe("rose");
+    expect(stopSoundOf(newRound(buildTrack({ prizes, tier: 5, seed: 1 }), false))).toBe("gold");
     expect(reactionOf(newRound(buildTrack({ prizes, tier: 2, seed: 1, graze: { none: true } }), false))).toBe("ok");
     expect(stopSoundOf(newRound(buildTrack({ prizes, tier: 3, seed: 1, graze: { none: true } }), false))).toBe("rose");
   });

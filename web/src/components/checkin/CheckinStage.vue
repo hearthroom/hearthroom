@@ -93,7 +93,11 @@ async function send() {
   timer = window.setTimeout(() => { slow.value = true; }, 600);
   const timeout = new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error("timeout")), 8000));
   try {
-    inflight ??= props.request().finally(() => { inflight = null; });
+    if (!inflight) {
+      inflight = props.request().finally(() => { inflight = null; });
+      // 逾時後關掉舞台、沒人再等它：吞掉之後的失敗，不在主控台留下未處理的錯誤
+      inflight.catch(() => undefined);
+    }
     const res = await Promise.race([inflight, timeout]);
     outcome.value = res;
     emit("settled", res);
