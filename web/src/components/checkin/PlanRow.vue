@@ -4,7 +4,7 @@
  * 月卡不是箱子：不進開箱舞台、不和箱子的結果排在一起、不用金色與 accent 底（ui.md §0.1）。
  * 補簽卡張數只照 Harbor 給的 makeup.left，前端不自己加。
  */
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import PlanToday from "./PlanToday.vue";
 import { whole } from "@/lib/format";
@@ -16,11 +16,15 @@ const { t } = useI18n();
 const line = computed(() => plans.line(props.checkedIn));
 const mine = computed(() => plans.mine);
 
-// 只在「簽到時一起領」或「領取」變成「已領」的當下朗讀；進頁時已經領過就不念
+// 只在「簽到時一起領」「領取」或補領中變成「已領」的當下朗讀；進頁時已經領過就不念。
+// 先清空再填：和上一次同一句（例如隔天又是同樣的數字）時讀屏器才會再念
 const spoken = ref("");
-watch(() => line.value.kind, (now, before) => {
+watch(() => line.value.kind, async (now, before) => {
   const l = line.value;
-  if (now === "claimed" && (before === "withCheckin" || before === "claim") && l.kind === "claimed") spoken.value = t("plan.row.aria.claimed", { daily: whole(l.credits) });
+  if (now !== "claimed" || !(before === "withCheckin" || before === "claim" || before === "waiting") || l.kind !== "claimed") return;
+  spoken.value = "";
+  await nextTick();
+  spoken.value = t("plan.row.aria.claimed", { daily: whole(l.credits) });
 });
 </script>
 
