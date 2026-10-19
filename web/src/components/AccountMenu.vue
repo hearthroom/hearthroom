@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AccountIcon from "@/components/AccountIcon.vue";
 import ReviewBadge from "@/components/ReviewBadge.vue";
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 import { compact, hueFrom, whole } from "@/lib/format";
 import { useLocalePath } from "@/lib/use-locale";
@@ -10,10 +10,15 @@ import { can } from "@/lib/provider";
 import { useReviewer } from "@/lib/review";
 import { track } from "@/lib/track";
 import NewMark from "@/components/NewMark.vue";
+import { useCheckin } from "@/lib/checkin-store";
 
 const session = useSession();
 // 窄螢幕把頁首那排導覽整排藏起來，這個選單就是手機上唯一的路——審核入口也得在這裡有一份。
 const reviewerStore = useReviewer();
+// 簽到：今天還沒簽，頭像與選單的「簽到」各一個點（頭像上跟審核佇列共用同一顆，ui.md §1.1、美術總監 Q8）
+const checkin = useCheckin();
+const reviewDot = computed(() => reviewerStore.reviewer && reviewerStore.pending > 0);
+watch(() => session.me?.accountNumId, (id) => { if (id && !checkin.panel && !checkin.disabled) void checkin.load(); }, { immediate: true });
 const { lp } = useLocalePath();
 const open = ref(false);
 /**
@@ -50,6 +55,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
 
     <button class="acct__btn" :aria-label="$t('nav.menu')" aria-haspopup="menu" :aria-expanded="open" @click="open = !open">
       <ReviewBadge dot />
+      <span v-if="checkin.canCheckIn && !reviewDot" class="acct__dot"><span class="sr-only">{{ $t("nav.checkin.dot") }}</span></span>
       <img v-if="session.avatarUrl" :src="session.avatarUrl" alt="" class="acct__face" />
       <span v-else class="acct__face mono" :style="{ '--h': hueFrom(session.displayName) }">{{ [...session.displayName][0] }}</span>
     </button>
@@ -67,6 +73,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
       </RouterLink>
       <div class="menu__group">
         <RouterLink :to="lp('/wallet')" class="menu__item" role="menuitem"><AccountIcon name="wallet" />{{ $t("nav.wallet") }}</RouterLink>
+        <RouterLink v-if="!checkin.disabled" :to="lp('/checkin')" class="menu__item" role="menuitem"><AccountIcon name="gift" />{{ $t("nav.checkin") }}<span v-if="checkin.canCheckIn" class="menu__dot"><span class="sr-only">{{ $t("nav.checkin.dot") }}</span></span></RouterLink>
       </div>
       <div class="menu__group">
         <RouterLink :to="lp('/mine')" class="menu__item" role="menuitem"><AccountIcon name="cards" />{{ $t("nav.mine") }}</RouterLink>
@@ -90,6 +97,9 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
 
 <style scoped>
 .acct { position: relative; display: flex; align-items: center; gap: var(--s-2); }
+.acct__dot, .menu__dot { width: 8px; height: 8px; border-radius: var(--r-pill); background: var(--accent); box-shadow: 0 0 0 2px var(--surface); }
+.acct__dot { position: absolute; right: 0; top: 0; }
+.menu__dot { margin-inline-start: auto; flex: none; }
 
 .acct__credits {
   display: inline-flex; align-items: center; gap: 5px;

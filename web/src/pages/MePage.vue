@@ -16,6 +16,7 @@ import CommunityBadgeList from "@/components/CommunityBadgeList.vue";
 import CommunityProfile from "@/components/CommunityProfile.vue";
 import AccountIcon from "@/components/AccountIcon.vue";
 import ConnectedAccounts from "@/components/ConnectedAccounts.vue";
+import CheckinCard from "@/components/checkin/CheckinCard.vue";
 import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink } from "vue-router";
@@ -84,6 +85,7 @@ onMounted(() => {
     </header>
 
     <div class="me__main">
+      <CheckinCard />
       <section class="me__workspace" aria-labelledby="workspace-title">
         <h2 id="workspace-title">{{ $t('me.workspace') }}</h2>
         <nav class="me__destinations" :aria-label="$t('me.workspace')">
