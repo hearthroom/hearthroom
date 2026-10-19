@@ -214,3 +214,11 @@ describe("領取的冪等鍵", () => {
     expect(requestIdFor("checkin:2026-10-20")).not.toBe(a);
   });
 });
+
+// 簽到頁（含機率公告）自己一個來源標記，事件不再被算成 404（B7 讀回）
+import { surfaceOf } from "../src/router";
+it("簽到頁的來源標記是 checkin", () => {
+  expect(surfaceOf("/checkin")).toBe("checkin");
+  expect(surfaceOf("/en/checkin/odds")).toBe("checkin");
+});
+
