@@ -913,10 +913,14 @@ export async function patchRole(roleId: string, patch: RoleDraft, token: string)
 // ---- 錢包：積分、會員、流水（都是呼叫者自己的；充值在原站完成）------------------
 
 export type PlanTier = "unlimited" | "member" | "trial";
+/** 一筆限時積分：剩下的量、到期時刻、來源類別（Harper V0.2c；`kind` 是給玩家看的來源，見錢包的來源表）。 */
+export interface ExpiryBatch { amount: number; expiresAt: string; kind?: string }
 export interface Wallet {
   score: number;
   tempScore: number;
   plans: { tier: PlanTier; expiresAt: number }[];
+  /** 限時積分逐筆明細，最早到期的在前；沒有就是空陣列。 */
+  expiries?: ExpiryBatch[];
 }
 
 // ---- 使用者設定：遊玩時的人設（上游帳號層級，所有卡共用）-------------------------
@@ -946,8 +950,13 @@ export async function savePlayerPersona(patch: Partial<PlayerPersona>, token: st
 }
 
 export async function fetchWallet(token: string, provider: ProviderId = currentProvider()): Promise<Wallet> {
-  const raw = await json<Wallet & {available?:number}>(await fetch(`${provider === currentProvider() ? UPSTREAM_API : apiBaseOf(provider)}/open/v1/me/wallet`, {headers:authHeaders(token)}));
-  return provider==='harbor' ? {score:raw.available ?? 0,tempScore:0,plans:[]} : raw;
+  const raw = await json<Wallet & {available?:number;expiring?:number;expiries?:ExpiryBatch[]}>(await fetch(`${provider === currentProvider() ? UPSTREAM_API : apiBaseOf(provider)}/open/v1/me/wallet`, {headers:authHeaders(token)}));
+  if (provider !== 'harbor') return raw;
+  // 能用的是 available（已扣掉凍結中的）。凍結先吃最早到期的限時積分，所以限時那一份以能用的為上限。
+  const available = raw.available ?? 0;
+  const tempScore = Math.min(raw.expiring ?? 0, available);
+  const expiries = [...(raw.expiries ?? [])].sort((a, b) => new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime());
+  return { score: available - tempScore, tempScore, plans: [], expiries };
 }
 
 /** 推薦：自己的推薦碼、規則（數字由服務決定，畫面不寫死）、邀請成果；不含任何被邀請人的身分。 */

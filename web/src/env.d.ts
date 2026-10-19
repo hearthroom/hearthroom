@@ -120,6 +120,8 @@ declare module "@/utils/display-rule-engine.js" {
 
 interface ImportMetaEnv {
   readonly VITE_HARBOR_API_BASE?: string;
+  /** 綺夢社在 Harbor 的應用租戶 slug（應用獎勵的 /apps/{app}/…）；預設 hearthroom。 */
+  readonly VITE_HARBOR_APP?: string;
 }
 interface ImportMeta {
   readonly env: ImportMetaEnv;
