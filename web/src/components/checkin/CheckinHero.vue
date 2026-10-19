@@ -203,7 +203,6 @@ span.hero__suki { width:auto; }
 @keyframes spin { to { transform:rotate(360deg); } }
 @keyframes bubble-in { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
 :lang(ko) .hero__title, :lang(ko) .hero__desc, :lang(ko) .hero__bubble { word-break:keep-all; }
-:lang(zh) .hero__bubble, :lang(ja) .hero__bubble { word-break:auto-phrase; }
 
 /*
  * 桌機：泡泡疊在蘇綺頭上、同一欄，抬頭列只有連簽，標題緊接在下（ui.md §6.13，1280×800 第一屏要看到任務前兩項）。

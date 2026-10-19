@@ -653,7 +653,6 @@ button { font:inherit; color:inherit; }
 .heart { position:absolute; left:0; top:0; width:20px; height:20px; opacity:0; color:var(--stage-rose); will-change:transform, opacity; }
 .heart--gold { color:var(--stage-gold); }
 :lang(ko) .bubble, :lang(ko) .st-error p { word-break:keep-all; }
-:lang(zh) .bubble, :lang(ja) .bubble { word-break:auto-phrase; }
 
 /* 依舞台可用高度分段（art.md §16、ui.md §6.2.1） */
 @container stage (max-height: 859px) and (min-width: 640px) {
