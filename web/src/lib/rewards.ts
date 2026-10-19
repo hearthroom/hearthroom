@@ -116,7 +116,13 @@ export interface DrawRecord {
   status: ClaimStatus;
 }
 
-export interface CheckinResponse { claims: ClaimResult[]; streak: number; replayed: boolean }
+/**
+ * 簽到時 Harbor 先代領月卡（期間方案），結果附在簽到的每一種回應上（p5-contract §1）。
+ * unavailable：月卡沒領到、簽到照常，稍後打 claimPlan 補領。舊伺服器不帶這個欄位。
+ */
+export interface PeriodPlanOutcome { status: "granted" | "revoked" | "none" | "unavailable"; day?: string; credits?: number; replayed?: boolean }
+
+export interface CheckinResponse { claims: ClaimResult[]; streak: number; replayed: boolean; periodPlan?: PeriodPlanOutcome }
 
 /** 錯誤碼是 Harbor 的穩定碼；畫面依碼分情況，不看訊息文字。 */
 export class RewardsError extends Error {
@@ -127,6 +133,8 @@ export class RewardsError extends Error {
     readonly reason = "",
     /** already_claimed 附上的原結果：簽到與補簽是 claims，任務與新手是 claim */
     readonly claims: ClaimResult[] = [],
+    /** 簽到的錯誤回應也帶月卡的代領結果 */
+    readonly periodPlan?: PeriodPlanOutcome,
   ) {
     super(message);
   }
@@ -137,9 +145,9 @@ const authHeaders = (token: string): Record<string, string> => ({ Authorization:
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(`${UPSTREAM_API}/open/v1${path}`, init);
   if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string; reason?: string; claims?: ClaimResult[]; claim?: ClaimResult };
+    const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string; reason?: string; claims?: ClaimResult[]; claim?: ClaimResult; periodPlan?: PeriodPlanOutcome };
     const code = body.error ?? "";
-    throw new RewardsError(res.status, describeApiError(res.status, code), code, body.reason ?? "", body.claims ?? (body.claim ? [body.claim] : []));
+    throw new RewardsError(res.status, describeApiError(res.status, code), code, body.reason ?? "", body.claims ?? (body.claim ? [body.claim] : []), body.periodPlan);
   }
   return (await res.json()) as T;
 }

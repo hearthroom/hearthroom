@@ -73,7 +73,7 @@ export const useCheckin = defineStore("checkin", () => {
       // 今天已經用別的 requestId 簽過（另一台裝置、另一個分頁）：伺服器附上當時的結果，舞台直接講，不轉滾輪
       if (e instanceof RewardsError && e.code === "already_claimed") {
         clearRequestId(scope);
-        return { claims: e.claims, streak: panel.value?.checkin.streak ?? 0, replayed: true, elsewhere: true };
+        return { claims: e.claims, streak: panel.value?.checkin.streak ?? 0, replayed: true, elsewhere: true, periodPlan: e.periodPlan };
       }
       throw e;
     }
