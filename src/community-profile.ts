@@ -4,6 +4,7 @@ import { HttpError, type Env } from './types';
 import { preservesOriginalAnimation } from './avatar-animation';
 import { AVATAR_MAX_BYTES } from '../shared/avatar';
 import { TIP_LINKS_MAX, parseTipLink } from '../shared/tip-links';
+import { isProfileCover } from '../shared/profile-covers';
 
 const RASTER_TYPES = new Set(['image/jpeg','image/png','image/webp','image/gif','image/apng']);
 
@@ -38,20 +39,22 @@ export function normalizeTipLinks(input:unknown):string[]|undefined {
 }
 
 export async function saveCommunityProfile(env:Env, memberId:string, request:Request) {
- let name:unknown, bio:unknown, tips:unknown, file:File|null=null, remove=false;
+ let name:unknown, bio:unknown, tips:unknown, cover:unknown, file:File|null=null, remove=false;
  if(request.headers.get('Content-Type')?.startsWith('multipart/form-data')) {
   const form=await request.formData().catch(()=>{throw new HttpError(400,'profile_invalid')});
-  name=form.get('displayName');bio=form.get('bio')??'';tips=form.get('tipLinks');remove=form.get('removeAvatar')==='true';
+  name=form.get('displayName');bio=form.get('bio')??'';tips=form.get('tipLinks');cover=form.get('cover')??undefined;remove=form.get('removeAvatar')==='true';
   const image=form.get('avatar');
   if(image!==null) {if(!(image instanceof File))throw new HttpError(400,'avatar_invalid');file=image;}
  } else {
   const input=await request.json().catch(()=>{throw new HttpError(400,'profile_invalid')}) as Record<string,unknown>;
   if(!input || 'avatarUrl' in input)throw new HttpError(400,'profile_invalid');
-  name=input.displayName;bio=input.bio??'';tips=input.tipLinks;
+  name=input.displayName;bio=input.bio??'';tips=input.tipLinks;cover=input.cover;
  }
  if(typeof name!=='string'||!name.trim()||name.trim().length>60||typeof bio!=='string'||bio.trim().length>500)throw new HttpError(400,'profile_invalid');
  if(file&&remove)throw new HttpError(400,'avatar_invalid');
  const tipLinks=normalizeTipLinks(tips);
+ // 封面只收目錄裡的場景；空字串是「不用封面」，不帶這欄的舊客戶端不動它
+ if(cover!==undefined&&cover!==''&&!isProfileCover(cover))throw new HttpError(400,'cover_invalid');
  const prior=await env.DB.prepare('SELECT handle,avatar_key,avatar_url FROM members WHERE id=?').bind(memberId).first<{handle:string;avatar_key:string;avatar_url:string}>();
  if(!prior)throw new HttpError(404,'member not found');
  let key=remove?'':prior.avatar_key;
@@ -81,7 +84,7 @@ export async function saveCommunityProfile(env:Env, memberId:string, request:Req
   try {await env.AVATARS.put(key,output,{httpMetadata:{contentType}});}
   catch {throw new HttpError(503,'avatar_unavailable');}
  }
- const updated=await env.DB.prepare(`UPDATE members SET display_name=?,bio=?,avatar_url=?,avatar_key=?,tip_links=COALESCE(?,tip_links),profile_edited_at=? WHERE id=? AND avatar_key=?`).bind(name.trim(),bio.trim(),url,key,tipLinks?JSON.stringify(tipLinks):null,Date.now(),memberId,prior.avatar_key).run();
+ const updated=await env.DB.prepare(`UPDATE members SET display_name=?,bio=?,avatar_url=?,avatar_key=?,tip_links=COALESCE(?,tip_links),cover=COALESCE(?,cover),profile_edited_at=? WHERE id=? AND avatar_key=?`).bind(name.trim(),bio.trim(),url,key,tipLinks?JSON.stringify(tipLinks):null,typeof cover==='string'?cover:null,Date.now(),memberId,prior.avatar_key).run();
  if(!updated.meta.changes)throw new HttpError(409,'profile_changed');
  if(prior.avatar_key && prior.avatar_key!==key)await env.DB.prepare('INSERT OR REPLACE INTO avatar_cleanup(key,delete_after) VALUES (?,?)').bind(prior.avatar_key,0).run();
  if(file||remove)await env.DB.prepare("UPDATE community_appearance_preferences SET avatar_source='site' WHERE member_id=?").bind(memberId).run();

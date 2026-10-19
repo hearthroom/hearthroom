@@ -155,7 +155,7 @@ describe("成人內容開關與年齡驗證", () => {
 
     res = await settings({ showNsfw: true, birthdate: adultBirthdate(), consentVersion: ADULT_CONSENT_VERSION });
     expect(res.status).toBe(200);
-    expect(await json(res)).toEqual({ showNsfw: true, ageVerified: true, adultConsent: true, hiddenTags: [] });
+    expect(await json(res)).toEqual({ showNsfw: true, ageVerified: true, adultConsent: true, hiddenTags: [], showStats: false });
     // 生日不落庫：成員表只有驗證時間；同意記版本與時間
     const cols = await env.DB.prepare("SELECT * FROM members WHERE id = ?").bind(`member-${VIEWER}`).first<Record<string, unknown>>();
     expect(Object.keys(cols!)).not.toContain("birthdate");
@@ -164,8 +164,8 @@ describe("成人內容開關與年齡驗證", () => {
     expect(cols!.adult_consented_at).toBeGreaterThan(0);
 
     // 關掉再開：年齡與同意都留著，不必再帶
-    expect(await json(await settings({ showNsfw: false }))).toEqual({ showNsfw: false, ageVerified: true, adultConsent: true, hiddenTags: [] });
-    expect(await json(await settings({ showNsfw: true }))).toEqual({ showNsfw: true, ageVerified: true, adultConsent: true, hiddenTags: [] });
+    expect(await json(await settings({ showNsfw: false }))).toEqual({ showNsfw: false, ageVerified: true, adultConsent: true, hiddenTags: [], showStats: false });
+    expect(await json(await settings({ showNsfw: true }))).toEqual({ showNsfw: true, ageVerified: true, adultConsent: true, hiddenTags: [], showStats: false });
     const me = await json(await SELF.fetch("https://c.test/v1/me", { headers: bearer("viewer-token") }));
     expect(me).toMatchObject({ showNsfw: true, ageVerified: true, adultConsent: true, hiddenTags: [] });
   });
@@ -196,7 +196,7 @@ describe("成人內容開關與年齡驗證", () => {
     expect((await json(res)).error).toBe("consent_required");
 
     res = await settings({ showNsfw: true, consentVersion: ADULT_CONSENT_VERSION });
-    expect(await json(res)).toEqual({ showNsfw: true, ageVerified: true, adultConsent: true, hiddenTags: [] });
+    expect(await json(res)).toEqual({ showNsfw: true, ageVerified: true, adultConsent: true, hiddenTags: [], showStats: false });
     const after = await json(await SELF.fetch("https://c.test/v1/cards?zone=all&nsfw=1&b=2", { headers: bearer("viewer-token") }));
     expect(ids(after)).toEqual(["role-adult", "role-safe"]);
   });
@@ -205,7 +205,7 @@ describe("成人內容開關與年齡驗證", () => {
     await makeMember(VIEWER);
     let res = await settings({ hiddenTags: ["womens-fiction", "r18g", "womens-fiction"] });
     expect(res.status).toBe(200);
-    expect(await json(res)).toEqual({ showNsfw: false, ageVerified: false, adultConsent: false, hiddenTags: ["r18g", "womens-fiction"] });
+    expect(await json(res)).toEqual({ showNsfw: false, ageVerified: false, adultConsent: false, hiddenTags: ["r18g", "womens-fiction"], showStats: false });
     const me = await json(await SELF.fetch("https://c.test/v1/me", { headers: bearer("viewer-token") }));
     expect(me.hiddenTags).toEqual(["r18g", "womens-fiction"]);
 
@@ -215,10 +215,10 @@ describe("成人內容開關與年齡驗證", () => {
     expect((await settings({ hiddenTags: "r18g" })).status).toBe(400);
     expect((await settings({})).status).toBe(400);
     // 沒動成人開關；清空也行
-    expect(await json(await settings({ hiddenTags: [] }))).toEqual({ showNsfw: false, ageVerified: false, adultConsent: false, hiddenTags: [] });
+    expect(await json(await settings({ hiddenTags: [] }))).toEqual({ showNsfw: false, ageVerified: false, adultConsent: false, hiddenTags: [], showStats: false });
     // 開成人開關時隱藏名單留著
     await settings({ hiddenTags: ["r18g"] });
-    expect(await json(await settings({ showNsfw: true, birthdate: adultBirthdate(), consentVersion: ADULT_CONSENT_VERSION }))).toEqual({ showNsfw: true, ageVerified: true, adultConsent: true, hiddenTags: ["r18g"] });
+    expect(await json(await settings({ showNsfw: true, birthdate: adultBirthdate(), consentVersion: ADULT_CONSENT_VERSION }))).toEqual({ showNsfw: true, ageVerified: true, adultConsent: true, hiddenTags: ["r18g"], showStats: false });
   });
 
   it("開了的人看得到：榜單、單卡、作者頁都帶成人內容，而且回應禁止瀏覽器共用快取", async () => {

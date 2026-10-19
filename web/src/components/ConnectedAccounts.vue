@@ -96,7 +96,8 @@ async function connect(provider: ProviderId) {
   error.value = "";
   busy.value = true;
   try {
-    await connectAccount(provider, lp("/me"));
+    // 授權完回到發起的那一頁（現在是設定頁的「登入與授權」）
+    await connectAccount(provider, route.fullPath);
   } catch (e) {
     error.value = connectionMessage(e);
     busy.value = false;

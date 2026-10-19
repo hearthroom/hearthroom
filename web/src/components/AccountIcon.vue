@@ -1,5 +1,5 @@
 <script setup lang="ts">
-defineProps<{ name: 'cards' | 'folder' | 'wallet' | 'settings' | 'arrow' | 'refresh' | 'external' | 'edit' | 'copy' | 'check' | 'logout' | 'calendar' | 'image' | 'gift' | 'bell' | 'shield' | 'code' | 'spark' | 'news' }>();
+defineProps<{ name: 'cards' | 'folder' | 'wallet' | 'settings' | 'arrow' | 'refresh' | 'external' | 'edit' | 'copy' | 'check' | 'logout' | 'calendar' | 'image' | 'gift' | 'bell' | 'shield' | 'code' | 'spark' | 'news' | 'share' | 'eye' | 'camera' | 'lock' | 'plus' | 'heart' | 'chat' | 'users' | 'upload' }>();
 </script>
 <template>
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
@@ -21,6 +21,15 @@ defineProps<{ name: 'cards' | 'folder' | 'wallet' | 'settings' | 'arrow' | 'refr
     <path v-else-if="name === 'code'" d="m8 8-4 4 4 4M16 8l4 4-4 4M14 5l-4 14"/>
     <path v-else-if="name === 'spark'" d="M12 3.5 13.8 9l5.7 1.8-5.7 1.8L12 18.5l-1.8-5.9-5.7-1.8L10.2 9ZM18.5 15.5l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7Z"/>
     <template v-else-if="name === 'news'"><path d="M6 3h9l4 4v14H6Z"/><path d="M14 3v5h5M9 12h7M9 16h5"/></template>
+    <template v-else-if="name === 'share'"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="m16 6-4-4-4 4M12 2v13"/></template>
+    <template v-else-if="name === 'eye'"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></template>
+    <template v-else-if="name === 'camera'"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3Z"/><circle cx="12" cy="13" r="3"/></template>
+    <template v-else-if="name === 'lock'"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></template>
+    <path v-else-if="name === 'plus'" d="M12 5v14M5 12h14"/>
+    <path v-else-if="name === 'heart'" d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7Z"/>
+    <path v-else-if="name === 'chat'" d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z"/>
+    <template v-else-if="name === 'users'"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></template>
+    <path v-else-if="name === 'upload'" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
     <template v-else-if="name === 'image'"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1"/><path d="m3 17 5-5 4 4 4-6 5 7"/></template>
   </svg>
 </template>

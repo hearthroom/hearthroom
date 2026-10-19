@@ -1,0 +1,18 @@
+{
+  "tier": "highlight",
+  "try": "/me",
+  "title": {
+    "zh-Hant": "「我的」改成個人主頁，可以換封面、在原地編輯資料，頭像也能自己裁切。",
+    "zh-Hans": "「我的」改成个人主页，可以换封面、在原地编辑资料，头像也能自己裁切。",
+    "en": "Me is now a profile page where you can pick a cover, edit in place and crop your photo.",
+    "ja": "マイページがプロフィールページになり、カバー選びやその場での編集、写真の切り抜きができます。",
+    "ko": "내 정보가 프로필 페이지로 바뀌어 커버를 고르고 그 자리에서 편집하고 사진을 잘라 쓸 수 있어요."
+  },
+  "body": {
+    "zh-Hant": "原本的入口都還在；卡片與遊玩服務的授權搬到使用者設定的「登入與授權」。",
+    "zh-Hans": "原本的入口都还在；卡片与游玩服务的授权搬到用户设置的「登录与授权」。",
+    "en": "Every link from the old page is still there, and service authorization moved to Settings under Sign-in and authorization.",
+    "ja": "これまでの入口はそのままで、サービスの認可はユーザー設定の「ログインと認可」に移りました。",
+    "ko": "기존 메뉴는 그대로 있고, 서비스 권한은 사용자 설정의 '로그인과 권한'으로 옮겼어요."
+  }
+}

@@ -10,6 +10,7 @@ import { can } from "@/lib/provider";
 import { useReviewer } from "@/lib/review";
 import { track } from "@/lib/track";
 import NewMark from "@/components/NewMark.vue";
+import CommunityIcon from "@/components/CommunityIcon.vue";
 
 const session = useSession();
 // 窄螢幕把頁首那排導覽整排藏起來，這個選單就是手機上唯一的路——審核入口也得在這裡有一份。
@@ -67,9 +68,11 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
       </RouterLink>
       <div class="menu__group">
         <RouterLink :to="lp('/wallet')" class="menu__item" role="menuitem"><AccountIcon name="wallet" />{{ $t("nav.wallet") }}</RouterLink>
+        <RouterLink :to="lp('/me/referral')" class="menu__item" role="menuitem"><AccountIcon name="gift" />{{ $t("referral.title") }}</RouterLink>
       </div>
       <div class="menu__group">
         <RouterLink :to="lp('/mine')" class="menu__item" role="menuitem"><AccountIcon name="cards" />{{ $t("nav.mine") }}</RouterLink>
+        <RouterLink :to="lp('/me/badges')" class="menu__item" role="menuitem"><CommunityIcon name="award" />{{ $t("badgeWall.title") }}</RouterLink>
         <RouterLink v-if="can('library')" :to="lp('/resources')" class="menu__item" role="menuitem"><AccountIcon name="folder" />{{ $t("nav.resources") }}<NewMark k="menu.resources" /></RouterLink>
         <RouterLink v-if="reviewerStore.reviewer || reviewerStore.blogWriter" :to="lp(reviewerStore.reviewer ? '/review' : '/review/blog')" class="menu__item" role="menuitem"><AccountIcon name="shield" />{{ $t("nav.review") }}<ReviewBadge /></RouterLink>
       </div>
