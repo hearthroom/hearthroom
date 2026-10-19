@@ -22986,7 +22986,7 @@
           "workRoleId": {
             "type": "string",
             "format": "uuid",
-            "description": "Agent configuration UUID; required for every event type except `background_changed`."
+            "description": "Agent configuration UUID; required for every event type except `background_changed` and `share_open` (a share from the home invite link names no card)."
           },
           "occurredAt": {
             "type": "string",
@@ -23060,7 +23060,7 @@
           "workRoleId": {
             "type": "string",
             "format": "uuid",
-            "description": "Agent configuration UUID; required for every event type except `background_changed`."
+            "description": "Agent configuration UUID; required for every event type except `background_changed` and `share_open` (a share from the home invite link names no card)."
           },
           "occurredAt": {
             "type": "string",
@@ -23117,7 +23117,7 @@
           "workRoleId": {
             "type": "string",
             "format": "uuid",
-            "description": "Agent configuration UUID; required for every event type except `background_changed`."
+            "description": "Agent configuration UUID; required for every event type except `background_changed` and `share_open` (a share from the home invite link names no card)."
           },
           "occurredAt": {
             "type": "string",
@@ -23168,7 +23168,7 @@
           "workRoleId": {
             "type": "string",
             "format": "uuid",
-            "description": "Agent configuration UUID; required for every event type except `background_changed`."
+            "description": "Agent configuration UUID; required for every event type except `background_changed` and `share_open` (a share from the home invite link names no card)."
           },
           "occurredAt": {
             "type": "string",
@@ -23200,7 +23200,6 @@
           "type",
           "refCode",
           "occurredAt",
-          "workRoleId",
           "attrs"
         ],
         "properties": {
@@ -23227,7 +23226,7 @@
           "workRoleId": {
             "type": "string",
             "format": "uuid",
-            "description": "Agent configuration UUID; required for every event type except `background_changed`."
+            "description": "Agent configuration UUID; required for every event type except `background_changed` and `share_open` (a share from the home invite link names no card)."
           },
           "occurredAt": {
             "type": "string",
@@ -23291,7 +23290,7 @@
           "workRoleId": {
             "type": "string",
             "format": "uuid",
-            "description": "Agent configuration UUID; required for every event type except `background_changed`."
+            "description": "Agent configuration UUID; required for every event type except `background_changed` and `share_open` (a share from the home invite link names no card)."
           },
           "occurredAt": {
             "type": "string",
@@ -23340,7 +23339,7 @@
           "workRoleId": {
             "type": "string",
             "format": "uuid",
-            "description": "Agent configuration UUID; required for every event type except `background_changed`."
+            "description": "Agent configuration UUID; required for every event type except `background_changed` and `share_open` (a share from the home invite link names no card)."
           },
           "occurredAt": {
             "type": "string",
