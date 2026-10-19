@@ -60,7 +60,7 @@ import { PRIMARY_HOST, siteRootOf } from "../shared/site-hosts";
 import { draftStateOf, loadMine, type MineFilter } from "./mine";
 import { tagNamesFor } from "../shared/tag-catalog";
 import { bearerOf, blogWriterHint } from "./community-admin";
-import { providerOf, requestIdentity, reviewerRole, isHumanReviewer, isReviewAgent, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags } from "./members";
+import { providerOf, requestIdentity, reviewerRole, isHumanReviewer, isReviewAgent, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags, updateMemberShowStats } from "./members";
 import { configuredProviders, hasChat, parseProvider, requireConfigured, DEFAULT_PROVIDER, PROVIDER_NAMES, type ProviderId, reviewEnabled } from "./providers";
 import { providerApiBaseFor } from "./providers";
 import { weeklyLimitAt, registeredThisWeek, openPack } from "./quota";
@@ -724,6 +724,7 @@ app.get("/v1/authors/:handle", async (c) => {
     talkTotal: author.talk_total ?? 0,
     joinedAt: author.joined_at,
     providers: author.providers,
+    cover: author.cover ?? "",
   });
 });
 
@@ -918,12 +919,21 @@ app.get("/v1/me", async (c) => {
  *     未滿 18 回 403 underage，什麼都不存。還要同意目前這一版聲明：沒同意過或同意的是舊版，
  *     要帶 consentVersion（shared/adult-consent.ts），不符回 400 consent_required。關只關開關，驗證與同意留著。
  *   - hiddenTags 不想看的類型：完整清單（目錄鍵），整份換掉。
- * 兩樣都沒給回 400。回應永遠是完整的現況（showNsfw、ageVerified、adultConsent、hiddenTags）。
+ *   - showStats 自己的主頁要不要顯示作品數、被對話、粉絲、關注（owner 2026-10-19，預設關）。
+ * 都沒給回 400。回應永遠是完整的現況（showNsfw、ageVerified、adultConsent、hiddenTags、showStats）。
  */
 app.post("/v1/me/settings", async (c) => {
   const member = await requireMember(c);
-  const body = (await c.req.json().catch(() => ({}))) as { showNsfw?: unknown; birthdate?: unknown; consentVersion?: unknown; hiddenTags?: unknown };
-  if (typeof body.showNsfw !== "boolean" && body.hiddenTags === undefined) throw new HttpError(400, "showNsfw_required");
+  const body = (await c.req.json().catch(() => ({}))) as { showNsfw?: unknown; birthdate?: unknown; consentVersion?: unknown; hiddenTags?: unknown; showStats?: unknown };
+  if (body.showStats !== undefined && typeof body.showStats !== "boolean") throw new HttpError(400, "showStats_invalid");
+  if (typeof body.showNsfw !== "boolean" && body.hiddenTags === undefined && body.showStats === undefined) throw new HttpError(400, "showNsfw_required");
+  let showStats: boolean;
+  if (typeof body.showStats === "boolean") {
+    showStats = await updateMemberShowStats(c.env.DB, member.id, body.showStats);
+    note(c, { event: "settings", detail: showStats ? "stats_on" : "stats_off" });
+  } else {
+    showStats = (await c.env.DB.prepare("SELECT show_stats FROM members WHERE id = ?").bind(member.id).first<{ show_stats: number }>())?.show_stats === 1;
+  }
   let hiddenTags: string[];
   if (body.hiddenTags !== undefined) {
     hiddenTags = await updateMemberHiddenTags(c.env.DB, member.id, body.hiddenTags);
@@ -941,7 +951,7 @@ app.post("/v1/me/settings", async (c) => {
     const current = await memberNsfw(c.env.DB, member.id);
     nsfw = { showNsfw: current.showNsfw && current.ageVerifiedAt !== null, ageVerified: current.ageVerifiedAt !== null, adultConsent: current.adultConsent };
   }
-  return c.json({ ...nsfw, hiddenTags }, 200, { "Cache-Control": "no-store" });
+  return c.json({ ...nsfw, hiddenTags, showStats }, 200, { "Cache-Control": "no-store" });
 });
 
 /**

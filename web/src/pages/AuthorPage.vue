@@ -6,6 +6,7 @@ import CommunityBadges from "@/components/CommunityBadges.vue";
 import LibraryToggle from "@/components/LibraryToggle.vue";
 import TipPlatformIcon from "@/components/TipPlatformIcon.vue";
 import { tipPlatform } from "../../../shared/tip-links";
+import { profileCover, profileCoverUrl } from "../../../shared/profile-covers";
 import { track } from "@/lib/track";
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -67,7 +68,11 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
   <div v-else class="page">
     <p v-if="error" class="notice notice--error" role="alert">{{ error }}</p>
 
-    <header v-else-if="author" class="who panel rise">
+    <!-- 作者選的主頁封面（站內場景圖），往下淡出成同色系，跟「我的」主頁同一張臉 -->
+    <div v-if="author && !error" class="cover" :style="{ '--hue': profileCover(author.cover).hue }" aria-hidden="true">
+      <img :src="profileCoverUrl(author.cover)" alt="" />
+    </div>
+    <header v-if="!error && author" class="who panel rise">
       <CommunityAvatar :handle="author.handle ?? undefined" :src="author.avatar" :name="author.name" class="who__face" />
       <div class="who__text">
         <p class="eyebrow">{{ $t("author.eyebrow") }}</p>
@@ -93,7 +98,7 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
         <div class="stat"><dt>{{ $t("author.stat.joined") }}</dt><dd>{{ relativeTime(author.joinedAt) }}</dd></div>
       </dl>
     </header>
-    <div v-else class="ghost who--ghost" aria-hidden="true" />
+    <div v-else-if="!error" class="ghost who--ghost" aria-hidden="true" />
 
     <BadgeShowcase v-if="author?.handle" :key="author.handle" :handle="author.handle" wall />
     <CardGrid
@@ -136,4 +141,10 @@ watch(() => session.profile?.showNsfw, (now, before) => { if (now !== before && 
 .who__name { font-size: clamp(20px, 2.6vw, 26px); }
 .who__id { margin: 4px 0 0; }
 .who__stats { display: flex; gap: var(--s-6); }
+.cover { position: relative; height: 160px; margin-bottom: calc(var(--s-6) * -1); border-radius: var(--r-lg) var(--r-lg) 0 0; overflow: hidden; }
+.cover img { width: 100%; height: 100%; object-fit: cover; object-position: right 40%; }
+.cover::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 40%, color-mix(in srgb, hsl(var(--hue) 44% 89%) 85%, transparent) 90%, hsl(var(--hue) 44% 89%)); }
+:root[data-mode="dark"] .cover::after { background: linear-gradient(180deg, transparent 40%, color-mix(in srgb, hsl(var(--hue) 24% 19%) 85%, transparent) 90%, hsl(var(--hue) 24% 19%)); }
+.cover + .who { position: relative; }
+@media (max-width: 640px) { .cover { height: 112px; } }
 </style>

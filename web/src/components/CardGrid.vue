@@ -34,6 +34,7 @@ const EAGER = 6;
 <template>
   <!-- 骨架屏而不是遮罩 spinner：版面不跳動，也看得出接下來會出現什麼 -->
   <div v-if="loading && !starter" class="grid" aria-hidden="true">
+    <slot name="lead" />
     <div v-for="i in 12" :key="i" class="ghost ghost--card" />
   </div>
 
@@ -45,6 +46,8 @@ const EAGER = 6;
   </div>
 
   <div v-else class="grid" :aria-busy="busy || undefined">
+    <!-- 主頁在第一格放「建立新卡」：跟卡片同尺寸，不算在卡片清單裡 -->
+    <slot name="lead" />
     <CardTile
       v-if="starter"
       :card="starter"
