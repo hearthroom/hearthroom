@@ -44,3 +44,15 @@ export function playAppUrl(roleId: string, locale: string, opts: { install?: boo
 
 /** Return from an installed card to the community in the same domain family. */
 export const communityHost = (hostname: string = location.hostname): string => siteRootOf(hostname) ?? PRIMARY_HOST;
+
+/**
+ * 從遊玩畫布連回主站頁面（簽到頁、月卡轉址頁）用的網址開頭與路徑。畫布可能跑在卡片 App 網域，
+ * 那裡只有對話頁與登入，路徑也用 ?lang= 而不是語言前綴；這時一律回主站，前綴照主站的規則（繁中不加）。
+ */
+export function mainSiteLinks(o: { hostname?: string; origin?: string; locale: string; lp: (path: string) => string }): { origin: string; lp: (path: string) => string } {
+  const hostname = o.hostname ?? location.hostname;
+  if (!isPlayHost(hostname)) return { origin: o.origin ?? location.origin, lp: o.lp };
+  const prefix = o.locale === "zh-Hant" ? "" : `/${o.locale}`;
+  return { origin: `https://${communityHost(hostname)}`, lp: (path) => `${prefix}${path}` };
+}
+
