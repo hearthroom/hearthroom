@@ -984,6 +984,10 @@ export interface ScoreRecord {
   recordType: "add" | "sub" | string;
   score: number;
   createTime: string;
+  /** 獎勵入帳與它的到期：是哪一種獎勵（checkin／task／newcomer／referral…），Harper V0.2c B3 起 */
+  rewardKind?: string;
+  /** 限時積分入帳的到期時刻 */
+  expiresAt?: string;
 }
 export interface ScoreRecordPage {
   total: number;

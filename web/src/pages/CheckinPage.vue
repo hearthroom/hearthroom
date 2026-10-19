@@ -1,0 +1,260 @@
+<script setup lang="ts">
+/**
+ * 簽到頁（ui.md §3）：簽到開箱、任務、新手七日、開箱紀錄。開箱舞台疊在這頁上面，
+ * 離開舞台後所有關鍵資訊（拿到什麼、幾號到期、連續幾天）都留在頁面上。
+ * 資料全部來自 Harbor 應用獎勵（lib/rewards）；這頁只畫、只送領取。
+ */
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
+import { useI18n } from "vue-i18n";
+import { RouterLink, useRouter } from "vue-router";
+import CheckinHero from "@/components/checkin/CheckinHero.vue";
+import CheckinStage, { type StageMood, type StageOutcome } from "@/components/checkin/CheckinStage.vue";
+import DrawHistory from "@/components/checkin/DrawHistory.vue";
+import ExpiryStrip from "@/components/checkin/ExpiryStrip.vue";
+import NewcomerCard from "@/components/checkin/NewcomerCard.vue";
+import TaskPanel from "@/components/checkin/TaskPanel.vue";
+import { useCheckin } from "@/lib/checkin-store";
+import { countdown, newcomerView } from "@/lib/checkin";
+import { fetchDraws, RewardsError, type DrawRecord, type RewardTask } from "@/lib/rewards";
+import { confirmDialog } from "@/lib/confirm";
+import { pageTitle } from "@/lib/i18n";
+import { whole } from "@/lib/format";
+import { useSession } from "@/lib/session";
+import { useLocalePath } from "@/lib/use-locale";
+import { currentReferralCode, withShareRef } from "@/lib/share-ref";
+import { suki } from "@/pet/events";
+import { startNewcomerTour } from "@/lib/newcomer-tour";
+
+const store = useCheckin();
+const session = useSession();
+const router = useRouter();
+const { t } = useI18n();
+const { lp } = useLocalePath();
+
+const now = ref(Date.now());
+let ticker = 0;
+const panel = computed(() => store.panel);
+const busy = ref(false);
+const toast = ref("");
+let toastTimer = 0;
+function say(text: string) { toast.value = text; window.clearTimeout(toastTimer); toastTimer = window.setTimeout(() => { toast.value = ""; }, 2600); }
+
+// ---- 開箱舞台 ----
+interface StageRun { id: number; chests: string[]; request: () => Promise<StageOutcome>; checkin: boolean; trigger: HTMLElement | null; after?: (o: StageOutcome | null) => void }
+const stage = shallowRef<StageRun | null>(null);
+let runs = 0;
+let lastOutcome: StageOutcome | null = null;
+function openStage(run: Omit<StageRun, "id" | "trigger">) {
+  lastOutcome = null;
+  stage.value = { ...run, id: ++runs, trigger: document.activeElement as HTMLElement | null };
+  suki({ type: "stage", on: true });
+}
+async function closeStage(mood: StageMood | null) {
+  const run = stage.value;
+  stage.value = null;
+  suki({ type: "stage", on: false });
+  if (mood) suki({ type: "cheer", mood });
+  await refresh();
+  run?.after?.(lastOutcome);
+  await nextTick();
+  run?.trigger?.focus?.();
+}
+
+function onOpen() {
+  const p = panel.value;
+  if (!p) return;
+  openStage({
+    chests: p.checkin.todayChests,
+    checkin: true,
+    request: async () => {
+      const r = await store.checkin();
+      return { claims: r.claims, recap: r.elsewhere, streak: r.streak };
+    },
+  });
+}
+async function onSignAnyway() {
+  const f = panel.value?.checkin.fallback;
+  if (!f) return;
+  const ok = await confirmDialog({
+    title: t("checkin.confirm.signAnyway.title"),
+    message: f.checkpoint === 0 ? t("checkin.confirm.signAnyway.body.zero") : t("checkin.confirm.signAnyway.body", { checkpoint: f.checkpoint }),
+    confirmText: t("checkin.confirm.signAnyway.ok"),
+    cancelText: t("checkin.confirm.signAnyway.cancel"),
+    focusCancel: true,
+  });
+  if (ok) onOpen();
+}
+function onMakeup() {
+  const p = panel.value;
+  const day = p?.checkin.makeup.repairableDays[0]?.day;
+  if (!p || !day) return;
+  openStage({
+    chests: [p.checkin.track.find((c) => c.status === "missed")?.chest ?? "daily"],
+    checkin: false,
+    request: async () => {
+      try {
+        const r = await store.makeup(day);
+        return { claims: r.claims, recap: false, streak: r.streak };
+      } catch (e) {
+        if (e instanceof RewardsError && e.code === "not_eligible") say(t("checkin.makeup.error"));
+        throw e;
+      }
+    },
+    after: (o) => { if (o?.streak) say(t("checkin.makeup.done", { n: o.streak })); },
+  });
+}
+
+// ---- 任務 ----
+const claiming = ref(new Set<string>());
+const failed = ref(new Set<string>());
+async function claim(task: RewardTask): Promise<boolean> {
+  if (task.reward.chest) {
+    openStage({ chests: [task.reward.chest], checkin: false, request: async () => ({ claims: [await store.claimTask(task)], recap: false }) });
+    return true;
+  }
+  claiming.value = new Set([...claiming.value, task.id]);
+  try {
+    const c = await store.claimTask(task);
+    failed.value.delete(task.id);
+    say(t("task.claimed.toast", { amount: whole(c.credits ?? task.reward.credits ?? 0) }));
+    return true;
+  } catch {
+    failed.value = new Set([...failed.value, task.id]);
+    return false;
+  } finally {
+    const next = new Set(claiming.value); next.delete(task.id); claiming.value = next;
+  }
+}
+async function claimAll(tasks: RewardTask[]) {
+  for (const task of tasks) if (!(await claim(task))) break;
+  await refresh();
+}
+async function claimOne(task: RewardTask) { await claim(task); if (!task.reward.chest) await refresh(); }
+async function copyShareLink() {
+  const me = session.me;
+  const code = me ? await currentReferralCode(me.accountNumId) : null;
+  try { await navigator.clipboard.writeText(withShareRef(location.origin + lp("/"), code)); } catch { /* 拿不到剪貼簿就算了，「更多分享方式」還在 */ }
+}
+
+// ---- 新手七日 ----
+function guide(day: number) { startNewcomerTour(day, router, lp); }
+function grand() {
+  openStage({ chests: ["newcomer"], checkin: false, request: async () => ({ claims: [await store.claimNewcomer()], recap: false }) });
+}
+
+// ---- 開箱紀錄 ----
+const draws = ref<DrawRecord[]>([]);
+const cursor = ref<string | null>(null);
+const drawsLoading = ref(false);
+const drawsError = ref("");
+async function loadDraws(more = false) {
+  drawsLoading.value = true;
+  drawsError.value = "";
+  try {
+    const token = await session.accessToken();
+    if (!token) return;
+    const res = await fetchDraws(token, more ? cursor.value ?? "" : "");
+    draws.value = more ? [...draws.value, ...res.list] : res.list;
+    cursor.value = res.nextCursor;
+  } catch (e) {
+    drawsError.value = e instanceof Error ? e.message : t("state.loadFailed");
+  } finally {
+    drawsLoading.value = false;
+  }
+}
+
+async function refresh() { await Promise.all([store.load(), loadDraws()]); }
+function onVisible() { if (document.visibilityState === "visible" && !stage.value) void store.load(); }
+// 新手七日只畫一份：手機排在任務前面，桌機放右欄
+const deskQuery = typeof matchMedia === "function" ? matchMedia("(min-width: 761px)") : null;
+const desk = ref(!!deskQuery?.matches);
+const onDesk = (e: MediaQueryListEvent) => { desk.value = e.matches; };
+const hasNewcomer = computed(() => !!panel.value && !!newcomerView(panel.value));
+const dailyReset = computed(() => {
+  const p = panel.value;
+  if (!p) return "";
+  const c = countdown(p.serverNow, p.nextResetAt, store.fetchedAt, now.value);
+  return t("task.reset.hours", { h: Math.max(1, c.h + (c.m > 0 ? 1 : 0)) });
+});
+const weeklyReset = computed(() => {
+  const p = panel.value;
+  if (!p) return "";
+  const days = Math.max(1, Math.ceil(countdown(p.serverNow, p.weekResetAt, store.fetchedAt, now.value).totalMs / 86_400_000));
+  return t("task.reset.days", { n: days }, days);
+});
+const expiring = computed(() => panel.value?.credits?.expiring ?? session.wallet?.expiries ?? []);
+const loadError = computed(() => (!panel.value && store.error ? store.error : null));
+function toTop() { window.scrollTo({ top: 0, behavior: "smooth" }); }
+
+onMounted(() => {
+  document.title = pageTitle(t("checkin.title"));
+  void refresh();
+  ticker = window.setInterval(() => { now.value = Date.now(); }, 30_000);
+  document.addEventListener("visibilitychange", onVisible);
+  deskQuery?.addEventListener("change", onDesk);
+});
+onBeforeUnmount(() => { window.clearInterval(ticker); window.clearTimeout(toastTimer); document.removeEventListener("visibilitychange", onVisible); deskQuery?.removeEventListener("change", onDesk); });
+</script>
+
+<template>
+  <div class="page checkin">
+    <header class="checkin__head">
+      <h1 class="display">{{ t("checkin.title") }}</h1>
+      <nav class="checkin__links">
+        <a href="#history" class="link">{{ t("checkin.link.history") }}</a>
+        <RouterLink :to="lp('/checkin/odds')" class="link">{{ t("checkin.link.odds") }}</RouterLink>
+      </nav>
+    </header>
+
+    <ExpiryStrip class="checkin__wide" :expiring="expiring" :now="now" />
+
+    <div v-if="loadError" class="checkin__wide panel checkin__error">
+      <p class="notice notice--error"><strong>{{ t("checkin.hero.error.title") }}</strong><br />{{ t("checkin.hero.error.body") }}</p>
+      <button type="button" class="btn" @click="refresh">{{ t("checkin.cta.reload") }}</button>
+    </div>
+    <div v-else-if="!panel" class="checkin__wide panel checkin__skel" aria-busy="true">
+      <span class="ghost" style="width:40%;height:26px" /><span class="ghost" style="width:70%;height:28px" />
+      <span class="ghost" style="width:100%;height:44px" /><span class="ghost" style="width:100%;height:40px" />
+    </div>
+    <CheckinHero
+      v-else class="checkin__wide" :panel="panel" :plan="store.plan" :fetched-at="store.fetchedAt" :now="now" :busy="busy || !!stage"
+      @open="onOpen" @makeup="onMakeup" @sign-anyway="onSignAnyway"
+    />
+
+    <div v-if="panel" class="checkin__cols">
+      <div class="checkin__col">
+        <NewcomerCard v-if="hasNewcomer && !desk" :panel="panel" :busy="!!stage" @guide="guide" @grand="grand" />
+        <TaskPanel kind="daily" :tasks="panel.tasks.daily" :chest="panel.tasks.dailyAll" :plan="store.plan" :reset-label="dailyReset" :claiming="claiming" :failed="failed" @claim="claimOne" @claim-all="claimAll" @copy-link="copyShareLink" />
+        <TaskPanel kind="weekly" :tasks="panel.tasks.weekly" :plan="store.plan" :reset-label="weeklyReset" :claiming="claiming" :failed="failed" @claim="claimOne" @claim-all="claimAll" @copy-link="copyShareLink" />
+      </div>
+      <div class="checkin__col">
+        <NewcomerCard v-if="hasNewcomer && desk" :panel="panel" :busy="!!stage" @guide="guide" @grand="grand" />
+        <DrawHistory id="history" :list="draws" :plan="store.plan" :more="!!cursor" :loading="drawsLoading" :error="drawsError" :now="now" @more="loadDraws(true)" @retry="loadDraws()" @top="toTop" />
+      </div>
+    </div>
+
+    <p class="checkin__foot subtle">{{ t("checkin.footer.reset") }} · <RouterLink :to="lp('/checkin/odds')" class="link">{{ t("checkin.footer.odds") }}</RouterLink></p>
+
+    <CheckinStage
+      v-if="stage" :key="stage.id" :chests="stage.chests" :plan="store.plan" :request="stage.request" :checkin="stage.checkin" :pity="panel?.pityRemaining"
+      @settled="(o) => (lastOutcome = o)" @close="closeStage"
+    />
+    <div class="toast" role="status" :hidden="!toast">{{ toast }}</div>
+  </div>
+</template>
+
+<style scoped>
+.checkin { max-width:1080px; display:grid; gap:var(--s-4); padding-top:var(--s-5); padding-bottom:var(--s-7); }
+.checkin__head { display:flex; align-items:center; justify-content:space-between; gap:var(--s-3); }
+.checkin__head h1 { margin:0; font-size:1.5rem; }
+.checkin__links { display:flex; gap:var(--s-1); }
+.checkin__links a { display:inline-flex; align-items:center; min-height:44px; padding:0 var(--s-2); font-size:14px; }
+.checkin__error { padding:var(--s-4); display:grid; gap:var(--s-3); justify-items:start; }
+.checkin__skel { padding:var(--s-4); display:grid; gap:var(--s-3); }
+.checkin__cols { display:grid; gap:var(--s-4); }
+.checkin__col { display:grid; gap:var(--s-4); align-content:start; min-width:0; }
+.checkin__foot { margin:0; text-align:center; }
+@media (min-width: 761px) {
+  .checkin__cols { grid-template-columns:minmax(0,1fr) 380px; gap:var(--s-5); align-items:start; }
+}
+</style>
