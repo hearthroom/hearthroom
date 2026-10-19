@@ -13,6 +13,7 @@ import { startNewcomerTour } from "@/lib/newcomer-tour";
 import { tourDone } from "@/lib/onboarding";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
+import { glueUnits } from "@/lib/format";
 
 const store = useCheckin();
 const session = useSession();
@@ -22,7 +23,7 @@ const { lp } = useLocalePath();
 
 const view = computed(() => (session.me && store.panel && tourDone() ? newcomerView(store.panel) : null));
 const target = computed(() => store.panel?.newcomer?.today.target ?? 1);
-const goal = computed(() => (view.value ? t(`newcomer.goal.${view.value.day}`, { n: target.value }, target.value) : ""));
+const goal = computed(() => (view.value ? glueUnits(t(`newcomer.goal.${view.value.day}`, { n: target.value }, target.value)) : ""));
 const tomorrow = computed(() => (view.value && view.value.day < 7 ? t(`newcomer.goal.${view.value.day + 1}`, { n: target.value }, target.value) : ""));
 function go() { if (view.value) startNewcomerTour(view.value.day, router, lp); }
 </script>

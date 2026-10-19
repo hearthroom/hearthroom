@@ -11,7 +11,7 @@ import { useI18n } from "vue-i18n";
 import { RouterLink } from "vue-router";
 import { buildTrack, type ReelCell } from "@/lib/reel/v1";
 import { newRound, phaseAt, posAt, reactionOf, skipAt, stopSoundOf, times, type Phase, type Round } from "@/lib/reel/timeline";
-import { buzz, canVibrate, hapticOn, playOpen, playShine, playStop, playTick, prepareAudio, setHaptic, setSound, soundOn } from "@/lib/reel/audio";
+import { buzz, canVibrate, hapticOn, playOpen, playShine, playStop, playTick, playTuck, prepareAudio, setHaptic, setSound, soundOn } from "@/lib/reel/audio";
 import { chestTitle } from "@/lib/checkin";
 import { boxKindOf, NEWCOMER_BADGE, poseUrl, preloadPoses, type CheckinPose } from "@/lib/checkin-art";
 import { fetchPlan, type ClaimResult, type RewardPlan } from "@/lib/rewards";
@@ -62,6 +62,10 @@ const carryEl = ref<{ box: HTMLElement | null; lid: HTMLElement | null } | null>
 const mascotEl = ref<HTMLElement | null>(null);
 const heartsEl = ref<HTMLElement | null>(null);
 const mainBtn = ref<HTMLButtonElement | null>(null);
+const resultEl = ref<HTMLElement | null>(null);
+/** 結果區放不下、要捲動時，底部加漸層提示還有內容（ui.md §6.12 第 3 步） */
+const overflowing = ref(false);
+function measureResult() { const el = resultEl.value; overflowing.value = !!el && el.scrollHeight > el.clientHeight + 1; }
 
 const current = computed(() => rounds.value[idx.value] ?? null);
 const chestKey = computed(() => current.value?.chest ?? props.chests[idx.value] ?? props.chests[0] ?? "daily");
@@ -114,7 +118,7 @@ async function send() {
 async function prepareRounds(res: StageOutcome) {
   if (res.recap) { step.value = "recap"; return; }
   const drawable = res.claims.filter((c) => c.status === "granted" && c.tier != null && c.stripSeed != null && c.chest);
-  if (!drawable.length) { step.value = "pending"; return; }
+  if (!drawable.length) { step.value = "pending"; playTuck(); void nextTick(() => mainBtn.value?.focus()); return; }
   const built = [];
   for (const c of drawable) {
     const plan = c.planVersion != null && props.plan?.version !== c.planVersion ? await fetchPlan(c.planVersion).catch(() => props.plan) : props.plan;
@@ -208,12 +212,14 @@ function frame(now: number) {
     playStop(stopSoundOf(r));
     buzz(r.track.tier >= 5 ? [40, 50, 40, 50, 120] : 25);
     done.value = [...done.value, idx.value];
-    void nextTick(() => mainBtn.value?.focus());
+    void nextTick(() => { mainBtn.value?.focus(); measureResult(); });
   }
   if (ph === "result" && t - tm.resultAt > 1600) { drawMascot(r, 1600, now); cancelAnimationFrame(raf); }
 }
 
 function idle(now: number) {
+  // 待發：她捧著關著的箱子，靜止（沒有結果就沒有反應）
+  if (step.value === "pending") return;
   const b = carryEl.value?.box;
   if (b && !reduced) b.style.transform = `scale(${1 + Math.sin(now / 520) * 0.02})`;
   if (mascotEl.value && !reduced) mascotEl.value.style.transform = `translate3d(0,${Math.sin(now / 700) * 2}px,0)`;
@@ -319,7 +325,8 @@ const ariaLine = (c: ClaimResult) => (cosmetic(c)
 const resultRows = computed(() => done.value.map((i) => rounds.value[i]).filter(Boolean));
 const sum = computed(() => resultRows.value.reduce((s, x) => s + (cosmetic(x.claim) ? 0 : prizeOf(x.claim)), 0));
 const twoDone = computed(() => rounds.value.length > 1 && done.value.length === rounds.value.length && showResult.value && lastRound.value);
-const otherClaims = computed(() => (outcome.value?.claims ?? []).filter((c) => !(c.status === "granted" && c.stripSeed != null)));
+/** 待發的箱子：整筆都待發時在舞台上講；兩箱裡有一箱待發時，跟另一箱的結果一起列 */
+const pendingClaims = computed(() => (step.value === "pending" || (showResult.value && lastRound.value)) ? (outcome.value?.claims ?? []).filter((c) => c.status === "pending") : []);
 const bubble = computed(() => {
   const cur = current.value;
   if (!cur || !showResult.value) return "";
@@ -428,7 +435,7 @@ defineExpose({ skip });
 
             <div class="st-title">{{ step === "recap" ? t("checkin.stage.recap.title") : titleOf(chestKey) }}</div>
 
-            <section class="result-zone">
+            <section ref="resultEl" class="result-zone" :class="{ more: overflowing }">
               <p v-if="step === 'waiting' && slow" class="st-wait">{{ t("checkin.stage.waiting") }}</p>
 
               <!-- 一箱：級名、大字金額、期限；兩箱的最後：兩份都列，加總 -->
@@ -456,10 +463,8 @@ defineExpose({ skip });
                 <div class="row row--sum"><span class="n">{{ t("checkin.result.total", { sum: whole(sum) }) }}</span></div>
               </div>
 
-              <!-- 已經簽過（另一台裝置）或還在處理中：不轉滾輪，直接講結果 -->
-              <!-- 寶箱還沒開（點數池補足後才抽）：講什麼時候、不用再按，不講原因（ui.md §10、copy.md §5.3） -->
-              <p v-if="step === 'pending'" class="st-note">{{ t("checkin.result.pendingNote") }}</p>
-              <div v-else-if="step === 'recap'" class="rows" role="status">
+              <!-- 已經簽過（另一台裝置）：不轉滾輪，直接講結果 -->
+              <div v-if="step === 'recap'" class="rows" role="status">
                 <div v-for="c in (outcome?.claims ?? []).filter((x) => x.status !== 'not_granted')" :key="c.rewardKey" class="row">
                   <span class="n">{{ titleOf(c.chest ?? chests[0] ?? 'daily') }}</span>
                   <span v-if="c.status === 'granted' && c.credits != null" class="a">{{ t("checkin.done.amount", { amount: whole(c.credits) }) }}</span>
@@ -468,16 +473,11 @@ defineExpose({ skip });
                   <span class="e">{{ expiryLine(c) }}</span>
                 </div>
               </div>
-              <div v-if="step === 'pending'" class="rows" role="status">
-                <div v-for="c in (outcome?.claims ?? []).filter((x) => x.status === 'pending')" :key="c.rewardKey" class="row">
-                  <span class="n">{{ titleOf(c.chest ?? chests[0] ?? 'daily') }}</span>
-                  <span class="br" />
-                  <span class="e">{{ c.releaseAt ? t("checkin.result.pending", { date: monthDayOf(c.releaseAt) }) : t("checkin.history.pending") }}</span>
-                </div>
-                <p v-if="checkin && outcome?.streak" class="r-more">{{ t("checkin.result.streak", { n: outcome.streak }) }}</p>
-              </div>
-              <div v-if="showResult && lastRound && otherClaims.length" class="rows">
-                <div v-for="c in otherClaims.filter((x) => x.status === 'pending')" :key="c.rewardKey" class="row"><span class="n">{{ titleOf(c.chest ?? 'daily') }}</span><span class="e">{{ expiryLine(c) }}</span></div>
+              <!-- 待發的箱子（還沒抽）：一張資訊卡，只講什麼時候、不用再按；沒有級別、金額、期限、連簽、保底（ui.md §6.10） -->
+              <div v-for="c in pendingClaims" :key="c.rewardKey" class="pend" role="status">
+                <span v-if="step !== 'pending'" class="pend__box">{{ titleOf(c.chest ?? 'daily') }}</span>
+                <strong class="pend__when">{{ c.releaseAt ? t("checkin.result.pending", { date: monthDayOf(c.releaseAt) }) : t("checkin.history.pending") }}</strong>
+                <span class="pend__note">{{ t("checkin.result.pendingNote") }}</span>
               </div>
             </section>
           </div>
@@ -490,7 +490,7 @@ defineExpose({ skip });
               </template>
               <button v-else-if="busy" type="button" class="ghost" @click="skip">{{ t("checkin.stage.skip") }}</button>
               <button v-else-if="step === 'recap'" ref="mainBtn" type="button" class="primary" @click="close">{{ t("checkin.stage.recap.ok") }}</button>
-              <button v-else-if="step === 'pending'" ref="mainBtn" type="button" class="primary" @click="close">{{ t("checkin.stage.collect") }}</button>
+              <button v-else-if="step === 'pending'" ref="mainBtn" type="button" class="primary" @click="close">{{ t("checkin.stage.recap.ok") }}</button>
               <button v-else-if="showResult" ref="mainBtn" type="button" class="primary" @click="next">{{ lastRound ? t("checkin.stage.collect") : t("checkin.stage.next") }}</button>
             </div>
             <span class="st-links">
@@ -536,7 +536,10 @@ button { font:inherit; color:inherit; }
 .st-error { flex:1 1 auto; display:grid; align-content:center; justify-items:center; gap:var(--s-2); padding:0 var(--s-6); text-align:center; }
 .st-error strong { font-size:18px; }
 .st-error p { margin:0; font-size:14px; line-height:1.6; opacity:.85; max-width:320px; text-wrap:pretty; }
-.st-note { margin:0; max-width:340px; font-size:13.5px; line-height:1.6; text-align:center; opacity:.9; text-wrap:balance; word-break:keep-all; overflow-wrap:anywhere; }
+.pend { width:min(100%, 420px); display:grid; gap:4px; padding:12px 14px; border-radius:12px; background:var(--stage-reel-bg); text-align:center; }
+.pend__box { font-size:13px; opacity:.85; }
+.pend__when { font-size:16px; font-weight:700; }
+.pend__note { font-size:13px; line-height:1.55; opacity:.82; text-wrap:balance; word-break:keep-all; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
 .st-wait { margin:0; font-size:12px; opacity:.8; text-align:center; }
 
 .core { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; justify-content:space-evenly; position:relative; z-index:2; }
@@ -587,7 +590,11 @@ button { font:inherit; color:inherit; }
 @keyframes bubble-in { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
 
 .result-zone { flex:0 1 clamp(104px, 18cqh, 190px); min-height:56px; overflow-y:auto; overscroll-behavior:contain; position:relative; z-index:2; padding:10px 16px 0; display:flex; flex-direction:column; align-items:center; gap:8px; }
-.stage[data-boxes="2"] .result-zone, .stage[data-badge] .result-zone { flex-basis:clamp(150px, 27cqh, 214px); }
+.stage[data-boxes="2"] .result-zone { flex-basis:clamp(150px, 27cqh, 214px); }
+/* 結果卡多一列（新住民徽章）：先讓蘇綺縮、讓出那一列，結果區不裁內容（ui.md §6.12） */
+.stage[data-badge] .result-zone { flex-basis:auto; flex-shrink:0; }
+.stage[data-badge] .mascot-zone { --mascot-h:min(22cqh, 150px); }
+.result-zone.more { -webkit-mask-image:linear-gradient(#000 calc(100% - 24px), transparent); mask-image:linear-gradient(#000 calc(100% - 24px), transparent); }
 .result { width:min(100%, 420px); text-align:center; animation:result-in .25s var(--ease) both; }
 @keyframes result-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
 .r-top { display:inline-flex; align-items:center; gap:8px; font-size:14px; opacity:.9; }
@@ -639,6 +646,7 @@ button { font:inherit; color:inherit; }
   .mascot-zone { --mascot-h:min(22cqh, 150px); }
 }
 @container stage (max-height: 619px) {
+  .r-badge small { display:none; }
   .mascot-zone { --mascot-h:96px; justify-content:flex-start; align-items:center; padding:0 16px; gap:10px; }
   .mascot { flex:0 0 auto; }
   .bubble { position:static; margin:0; flex:1 1 auto; min-width:0; max-width:none; width:auto; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }

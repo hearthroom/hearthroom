@@ -103,6 +103,12 @@ export function playOpen() {
   tone(1318, t + 0.5, 0.35, { peak: 0.05 });
 }
 
+/** 待發的箱子收下：只有緞帶的「嘶」，小一點（−6 dB），沒有啵也沒有停住聲（ui.md §6.10）。 */
+export function playTuck() {
+  if (!live()) return;
+  noise(ctx!.currentTime + 0.02, 0.3, { type: "bandpass", f0: 900, f1: 4200, q: 2, peak: 0.035, attack: 0.04 });
+}
+
 /** 棘輪喀噠：越快越輕（避免機關槍），越慢越清楚。speedNorm 0..1。 */
 export function playTick(speedNorm: number) {
   if (!live()) return;

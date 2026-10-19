@@ -8,7 +8,7 @@ import { useI18n } from "vue-i18n";
 import { RouterLink } from "vue-router";
 import CreditIcon from "./CreditIcon.vue";
 import { taskView, chestTitle, type TaskView } from "@/lib/checkin";
-import { whole } from "@/lib/format";
+import { glueUnits, whole } from "@/lib/format";
 import { useLocalePath } from "@/lib/use-locale";
 import type { RewardPlan, RewardTask } from "@/lib/rewards";
 
@@ -35,7 +35,7 @@ const titleOf = (r: { task: RewardTask; view: TaskView }) => {
   if (r.view.chest && r.task.reward.chest) { const c = chestTitle(r.task.reward.chest, props.plan); return t(c.key, c.params ?? {}); }
   return t(r.view.title, { n: r.task.target, min: r.task.minTextUnits ?? r.task.target });
 };
-const rowTitle = (r: { task: RewardTask; view: TaskView }) => (r.view.chest ? t(r.view.title, { n: r.task.target }) : titleOf(r));
+const rowTitle = (r: { task: RewardTask; view: TaskView }) => glueUnits(r.view.chest ? t(r.view.title, { n: r.task.target }) : titleOf(r));
 const progressOf = (r: { task: RewardTask; view: TaskView }) => t(r.view.progress, { cur: whole(r.task.progress), max: whole(r.task.target) }, r.task.target);
 const ratio = (task: RewardTask) => (task.target ? Math.min(1, task.progress / task.target) : 0);
 async function copy() {

@@ -7,7 +7,7 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink } from "vue-router";
 import { expiryNotice } from "@/lib/checkin";
-import { clock, whole } from "@/lib/format";
+import { hourMinute, whole } from "@/lib/format";
 import { useLocalePath } from "@/lib/use-locale";
 
 const props = defineProps<{ expiring: { amount: number; expiresAt: string }[]; now: number }>();
@@ -18,7 +18,7 @@ const notice = computed(() => expiryNotice(props.expiring, props.now));
 
 <template>
   <div v-if="notice" class="expiry notice" role="status">
-    <span class="expiry__text">{{ t(notice.key, { n: whole(notice.n), time: clock(notice.at) }) }}</span>
+    <span class="expiry__text">{{ t(notice.key, { n: whole(notice.n), time: hourMinute(notice.at) }) }}</span>
     <RouterLink :to="lp('/library')" class="btn btn--sm">{{ t("credits.expiry.action") }}</RouterLink>
   </div>
 </template>
