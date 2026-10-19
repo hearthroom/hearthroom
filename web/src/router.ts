@@ -275,6 +275,8 @@ export function surfaceOf(path: string): string {
   if (bare.startsWith("/wallet")) return "wallet";
   // 簽到頁與機率公告
   if (bare.startsWith("/checkin")) return "checkin";
+  // 月卡轉址頁（畫布積分不夠那張卡的月卡連結先到這裡）
+  if (bare.startsWith("/go/plan")) return "plan";
   if (bare.startsWith("/play")) return "play";
   if (bare.startsWith("/review")) return "review";
   if (bare.startsWith("/updates")) return "updates";
