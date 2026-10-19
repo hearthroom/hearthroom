@@ -59,7 +59,7 @@ export function prepareAudio(): void {
 
 const live = () => !!ctx && !!master && get().sound && !(typeof document !== "undefined" && document.hidden);
 
-interface ToneOpts { type?: OscillatorType; slideTo?: number; peak?: number; attack?: number; lowpass?: number; vibrato?: boolean }
+interface ToneOpts { type?: OscillatorType; slideTo?: number; peak?: number; attack?: number; lowpass?: number }
 function tone(freq: number, t0: number, dur: number, o: ToneOpts = {}) {
   const c = ctx!;
   const osc = c.createOscillator();
@@ -72,11 +72,6 @@ function tone(freq: number, t0: number, dur: number, o: ToneOpts = {}) {
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
   let node: AudioNode = osc;
   if (o.lowpass) { const f = c.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = o.lowpass; osc.connect(f); node = f; }
-  if (o.vibrato) {
-    const lfo = c.createOscillator(); const lg = c.createGain();
-    lfo.frequency.value = 7; lg.gain.value = freq * 0.02;
-    lfo.connect(lg); lg.connect(osc.frequency); lfo.start(t0); lfo.stop(t0 + dur + 0.05);
-  }
   node.connect(g); g.connect(master!);
   osc.start(t0); osc.stop(t0 + dur + 0.05);
 }
@@ -132,8 +127,8 @@ export function playShine(tier: number, speedNorm: number) {
   }
 }
 
-/** 停住：其餘單音、玫瑰紅三音和弦、金色短號角（≤2 秒）、懊惱兩音下行。 */
-export function playStop(kind: "neutral" | "rose" | "gold" | "miss") {
+/** 停住：第 1、2 級單音、第 3、4 級三音和弦、第 5、6 級短號角（≤2 秒）。 */
+export function playStop(kind: "neutral" | "rose" | "gold") {
   if (!live()) return;
   const t = ctx!.currentTime + 0.02;
   if (kind === "neutral") {
@@ -141,16 +136,13 @@ export function playStop(kind: "neutral" | "rose" | "gold" | "miss") {
     tone(1318, t, 0.4, { peak: 0.04 });
   } else if (kind === "rose") {
     [523, 659, 784].forEach((f, i) => { tone(f, t + i * 0.07, 0.8, { peak: 0.13 }); tone(f * 2, t + i * 0.07, 0.45, { peak: 0.03 }); });
-  } else if (kind === "gold") {
+  } else {
     [523, 659, 784, 1047].forEach((f, i) => {
       const dur = i === 3 ? 1.15 : 0.2;
       tone(f, t + i * 0.12, dur, { type: "sawtooth", lowpass: 2400, peak: 0.07, attack: 0.012 });
       tone(f, t + i * 0.12, dur, { type: "triangle", peak: 0.1, attack: 0.012 });
     });
     tone(2093, t + 0.5, 0.9, { peak: 0.04 });
-  } else {
-    tone(784, t, 0.2, { type: "triangle", slideTo: 740, peak: 0.16, vibrato: true });
-    tone(587, t + 0.2, 0.45, { type: "triangle", slideTo: 520, peak: 0.16, vibrato: true });
   }
 }
 

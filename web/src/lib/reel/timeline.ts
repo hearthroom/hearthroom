@@ -60,6 +60,9 @@ export function posAt(r: Round, t: number): number {
 
 /** 停住後蘇綺的反應：第 5、6 級歡呼；第 6 級緊鄰停點懊惱；其餘開心。 */
 export const reactionOf = (r: Round): "cheer" | "miss" | "ok" => (r.track.tier >= 5 ? "cheer" : r.track.nearMissBig ? "miss" : "ok");
-/** 停住那一聲：金色短號角、懊惱兩音下行、玫瑰紅三音、其餘單音。 */
-export const stopSoundOf = (r: Round): "gold" | "miss" | "rose" | "neutral" =>
-  r.track.tier >= 5 ? "gold" : r.track.nearMissBig ? "miss" : r.track.tier >= 3 ? "rose" : "neutral";
+/**
+ * 停住那一聲只看開到的級別：第 5、6 級短號角、第 3、4 級三音和弦、第 1、2 級單音。
+ * 差一點中頭獎也照級別播正常的獲獎音（owner 2026-10-19）：可惜只交給經過大獎時的閃光音與蘇綺的懊惱。
+ */
+export const stopSoundOf = (r: Round): "gold" | "rose" | "neutral" =>
+  r.track.tier >= 5 ? "gold" : r.track.tier >= 3 ? "rose" : "neutral";
