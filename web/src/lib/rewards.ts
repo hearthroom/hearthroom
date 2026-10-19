@@ -120,7 +120,7 @@ export interface DrawRecord {
  * 簽到時 Harbor 先代領月卡（期間方案），結果附在簽到的每一種回應上（p5-contract §1）。
  * unavailable：月卡沒領到、簽到照常，稍後打 claimPlan 補領。舊伺服器不帶這個欄位。
  */
-export interface PeriodPlanOutcome { status: "granted" | "revoked" | "none" | "unavailable"; day?: string; credits?: number; replayed?: boolean }
+export interface PeriodPlanOutcome { status: "granted" | "revoked" | "none" | "unavailable"; day?: string; credits?: number; bonusCredits?: number; replayed?: boolean }
 
 export interface CheckinResponse { claims: ClaimResult[]; streak: number; replayed: boolean; periodPlan?: PeriodPlanOutcome }
 
