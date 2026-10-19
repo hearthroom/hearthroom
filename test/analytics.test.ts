@@ -1,7 +1,7 @@
 import { SELF, createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
-import { BEACON_EVENTS, clientKind, refHostOf, safeSubject, shapeTerm, surfaceOf } from "../src/analytics";
+import { BEACON_DETAILS, BEACON_EVENTS, clientKind, refHostOf, safeSubject, shapeTerm, surfaceOf } from "../src/analytics";
 import { ALIAS_HOSTS, HOST, canonicalUrl, isSelfHost } from "../src/site";
 import { upsertCard } from "../src/cards";
 import { envWithAssets, resetDb, restoreUpstream, rolesOnProviders, role } from "./helpers";
@@ -328,6 +328,13 @@ describe("欄位過濾", () => {
       "campaign_view", "campaign_apply", "campaign_share"]) {
       expect(BEACON_EVENTS.has(e)).toBe(true);
     }
+  });
+
+  it("遊玩畫布「積分不夠」：卡片顯示與兩條路的落地都收（PM 2026-10-20，B7 讀回）", () => {
+    expect(BEACON_EVENTS.has("credits_shortfall_shown")).toBe(true);
+    expect(BEACON_EVENTS.has("credits_shortfall_click")).toBe(true);
+    expect(BEACON_DETAILS.has("checkin")).toBe(true);
+    expect(BEACON_DETAILS.has("plan")).toBe(true);
   });
 
   it("認得抓取器", () => {

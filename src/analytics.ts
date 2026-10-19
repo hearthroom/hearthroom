@@ -169,6 +169,9 @@ export const BEACON_EVENTS = new Set([
   "blog_view", "blog_read_end", "blog_share", "blog_cta", "blog_like",
   // 分享活動：進活動頁、送出申請、複製自己的分享連結（subject 是活動 slug，不放成員 id 或內容 id）
   "campaign_view", "campaign_apply", "campaign_share",
+  // 遊玩畫布「積分不夠」：卡片顯示一次記一次；兩條路的點擊在落地頁記（detail 是 checkin／plan）。
+  // 卡片是畫布畫的，宿主只給字和連結，所以只能這樣數；不帶任何帳號、卡或對話的識別
+  "credits_shortfall_shown", "credits_shortfall_click",
 ]);
 
 /** beacon 事件的 detail 小分类。同样白名单，避免自由字串进 blob。 */
@@ -186,6 +189,8 @@ export const BEACON_DETAILS = new Set([
   "onboard_copied", "onboard_manual",
   // 更新說明：提示列的三種結果，與更新頁、「去試試」的來源
   "shown", "dismissed", "clicked", "strip", "footer", "menu", "discord", "page", "spotlight", "notification", "direct",
+  // 積分不夠的兩條路：落到簽到頁（今日任務）或月卡入口
+  "checkin", "plan",
 ]);
 
 /**
