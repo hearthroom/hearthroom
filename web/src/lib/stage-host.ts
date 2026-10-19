@@ -31,6 +31,9 @@ import { isStandalone } from "@/lib/pwa";
 import { onStageSignOut, stageStorageScope } from "@/lib/stage-storage";
 import { playSocialHost } from "@/lib/play-social";
 import { markStageContentReady } from "@/lib/stage-ready";
+import { creditsRecovery } from "@/lib/credits-recovery";
+import { useCheckin } from "@/lib/checkin-store";
+import { whole } from "@/lib/format";
 import type { useSession } from "@/lib/session";
 
 type Session = ReturnType<typeof useSession>;
@@ -164,6 +167,15 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
         },
         // 舞台第一次畫出內容：對話頁收掉蓋在上面的載入畫面（lib/stage-ready）
         contentReady: () => markStageContentReady(),
+        // 積分不夠：今日任務還能拿多少、儲值（ui.md §7.2）。面板沒讀過或放久了就重讀，卡片跟著更新
+        creditsActions: (shortfall) => {
+          const checkin = useCheckin();
+          if (deps.session.me && !checkin.loading && (!checkin.panel || Date.now() - checkin.fetchedAt > 60_000)) void checkin.load();
+          return creditsRecovery(checkin.panel, shortfall, {
+            origin: location.origin, lp: deps.lp, t: (k, p) => i18n.global.t(k, p ?? {}), whole,
+            topUp: "https://console.harperharbor.com/me/billing",
+          });
+        },
       },
       nav: {
         // 卡片 App 網域上沒有站台可回：App 的入口就是這張卡自己（/<roleId>/），回到它就是「回到起點」
