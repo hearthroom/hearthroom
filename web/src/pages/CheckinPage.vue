@@ -249,7 +249,6 @@ onBeforeUnmount(() => { window.clearInterval(ticker); window.clearTimeout(toastT
       <h1 class="display">{{ t("checkin.title") }}</h1>
       <nav class="checkin__links">
         <a href="#history" class="link">{{ t("checkin.link.history") }}</a>
-        <RouterLink :to="lp('/checkin/odds')" class="link">{{ t("checkin.link.odds") }}</RouterLink>
       </nav>
     </header>
 
@@ -281,7 +280,7 @@ onBeforeUnmount(() => { window.clearInterval(ticker); window.clearTimeout(toastT
       </div>
     </div>
 
-    <p class="checkin__foot subtle">{{ t("checkin.footer.reset") }} · <RouterLink :to="lp('/checkin/odds')" class="link">{{ t("checkin.footer.odds") }}</RouterLink></p>
+    <p class="checkin__foot subtle">{{ t("checkin.footer.reset") }}</p>
 
     <CheckinStage
       v-if="stage" :key="stage.id" :chests="stage.chests" :plan="store.plan" :request="stage.request" :checkin="stage.checkin" :source="stage.source" :makeup-day="stage.makeupDay" :pity="panel?.pityRemaining"

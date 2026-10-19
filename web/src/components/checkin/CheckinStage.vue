@@ -543,8 +543,7 @@ defineExpose({ skip });
               <button v-else-if="showResult" ref="mainBtn" type="button" class="st-primary" @click="next">{{ lastRound ? t("checkin.stage.collect") : t("checkin.stage.next") }}</button>
             </div>
             <span class="st-links">
-              <RouterLink v-if="showResult && lastRound" :to="lp('/library')" class="odds" @click="close">{{ t("checkin.result.chat") }}</RouterLink>
-              <a :href="lp('/checkin/odds')" target="_blank" rel="noopener" class="odds">{{ t("checkin.stage.odds") }}</a>
+              <RouterLink v-if="showResult && lastRound" :to="lp('/library')" class="st-link" @click="close">{{ t("checkin.result.chat") }}</RouterLink>
             </span>
           </footer>
           <div ref="heartsEl" class="hearts" aria-hidden="true">
@@ -580,7 +579,7 @@ button { font:inherit; color:inherit; }
 .icon-btn { width:44px; height:44px; border-radius:50%; border:0; background:rgba(255,246,230,.08); display:grid; place-items:center; cursor:pointer; }
 .icon-btn svg { width:22px; height:22px; stroke:var(--stage-cream); fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
 .icon-btn--away { visibility:hidden; }
-.icon-btn:focus-visible, .st-primary:focus-visible, .st-ghost:focus-visible, .odds:focus-visible, .r-link:focus-visible { outline:2px solid var(--stage-cream); outline-offset:2px; }
+.icon-btn:focus-visible, .st-primary:focus-visible, .st-ghost:focus-visible, .st-link:focus-visible, .r-link:focus-visible { outline:2px solid var(--stage-cream); outline-offset:2px; }
 .st-title { flex:0 0 auto; min-height:20px; margin:4px 16px 0; font-size:15px; font-weight:600; letter-spacing:.02em; opacity:.92; text-align:center; position:relative; z-index:2; }
 .st-sub { flex:0 0 auto; margin:2px 16px 0; font-size:12px; text-align:center; opacity:.75; position:relative; z-index:2; }
 .st-error { flex:1 1 auto; display:grid; align-content:center; justify-items:center; gap:var(--s-2); padding:0 var(--s-6); text-align:center; }
@@ -691,7 +690,7 @@ button { font:inherit; color:inherit; }
 .st-foot { flex:0 0 auto; padding:8px 16px 6px; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100px; position:relative; z-index:3; }
 .btns { display:flex; gap:10px; min-height:48px; }
 .st-links { display:flex; gap:var(--s-2); }
-.odds { display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:0 12px; font-size:13px; color:var(--stage-cream); opacity:.75; text-decoration:underline; text-underline-offset:3px; }
+.st-link { display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:0 12px; font-size:13px; color:var(--stage-cream); opacity:.75; text-decoration:underline; text-underline-offset:3px; }
 .st-primary { min-width:200px; height:48px; padding:0 28px; border:0; border-radius:24px; background:var(--stage-rose); color:#fff; font-size:17px; font-weight:700; cursor:pointer; box-shadow:0 6px 18px rgba(229,80,110,.35); }
 .st-ghost { height:48px; color:var(--stage-cream); min-width:200px; padding:0 28px; border-radius:24px; border:1px solid rgba(255,246,230,.4); background:transparent; font-size:15px; cursor:pointer; }
 .st-primary, .st-ghost { white-space:nowrap; }

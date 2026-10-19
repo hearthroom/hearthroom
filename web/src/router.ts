@@ -51,7 +51,8 @@ const pages: RouteRecordRaw[] = [
   // petAway：這一頁的蘇綺是頁面插圖，桌寵整頁退場（美術總監最終 r1 H1）
   { path: "checkin", component: () => import("./pages/CheckinPage.vue"), meta: { auth: true, petAway: true } },
   // 機率公告不必登入：從舞台、簽到頁、錢包都連得到（ui.md §8）
-  { path: "checkin/odds", component: () => import("./pages/OddsPage.vue"), meta: { petQuiet: true } },
+  // 機率公告頁已拿掉（owner 2026-10-20：簽到免費，不是花錢開箱）；舊網址轉回簽到頁
+  { path: "checkin/odds", redirect: (to) => ({ path: `${to.params.locale ? `/${String(to.params.locale)}` : ""}/checkin` }) },
   { path: "go/plan", component: () => import("./pages/GoPlanPage.vue"), meta: { bare: true } },
   // 我的資源：作者的素材圖庫（上游圖床），拿網址寫進正則規則用
   { path: "resources", component: () => import("./pages/ResourcesPage.vue"), meta: { auth: true, feature: "library" } },
