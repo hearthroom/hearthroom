@@ -2,7 +2,8 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { fetchScoreRecords, fetchScoreSummary, fetchWallet, type Wallet, type ScoreDay, type ScoreRecord } from "@/lib/api";
-import { clock, dayLabel, localDate, whole } from "@/lib/format";
+import { clock, dayLabel, localDate, monthDayTime, whole } from "@/lib/format";
+import ExpiryStrip from "@/components/checkin/ExpiryStrip.vue";
 import { accountToken } from "@/lib/connections";
 import { providerName, type ProviderId } from "@/lib/provider";
 import { track } from "@/lib/track";
@@ -46,6 +47,25 @@ function more() { page.value += 1; load(); }
 const shown = computed(() => records.value.filter((r) => (kind.value === "all" ? true : r.recordType === kind.value)));
 /** 流水的項目：服務給的是分類代碼（chat、purchase…），換成使用者看得懂的名字；沒見過的代碼照原樣顯示。 */
 const reason = (code: string) => (te(`wallet.reason.${code}`) ? t(`wallet.reason.${code}`) : code);
+/**
+ * 限時積分的來源（Harper 的 kind／rewardKind）對到錢包已有的名字；同一種獎勵在錢包裡只有一個名字。
+ * 不認得的值不顯示原始代碼（copy.md §8.4 來源表）。
+ */
+const SOURCE: Record<string, string> = { checkin: "checkin", task: "task", newcomer: "newcomer", referral: "referral", welcome: "signup", event: "campaign", other: "grant" };
+const sourceOf = (kind?: string) => (kind && SOURCE[kind] ? t(`wallet.reason.${SOURCE[kind]}`) : "");
+/** 流水的項目名：獎勵入帳用來源的名字（簽到寶箱、任務獎勵…），其餘照服務給的分類。 */
+const itemOf = (r: ScoreRecord) => (r.recordType === "add" && r.rewardKind && SOURCE[r.rewardKind] ? sourceOf(r.rewardKind) : reason(r.record));
+/** 第二行：限時積分入帳寫到期時間（過了寫已到期）；到期那一筆寫是哪一種獎勵到期。 */
+function subOf(r: ScoreRecord): { text: string; off: boolean } | null {
+  if (r.recordType === "add" && r.expiresAt) {
+    const off = Date.parse(r.expiresAt) <= Date.now();
+    return { text: off ? t("wallet.record.expired") : t("wallet.record.expires", { datetime: monthDayTime(r.expiresAt) }), off };
+  }
+  if (r.record === "expire" && sourceOf(r.rewardKind)) return { text: t("wallet.record.expiredFrom", { source: sourceOf(r.rewardKind) }), off: false };
+  return null;
+}
+const expiries = computed(() => wallet.value?.expiries ?? []);
+const detailOpen = ref(false);
 
 /**
  * 最近 84 天的每日收支（剛好十二週）：上面的數字、長條圖，以及流水每一天的小計都從這裡來。
@@ -106,9 +126,10 @@ watch(() => [props.provider, props.externalId], () => load(true), { immediate: t
   <section class="wallet-service">
     <h2 class="wallet__title">{{ providerName(provider) }}</h2>
 
+    <ExpiryStrip :expiring="expiries" :now="Date.now()" />
     <!-- 第一排：手上有多少、怎麼拿到更多（儲值、邀請）、最近用了多少 -->
     <div class="overview">
-      <section class="panel balance">
+      <section class="panel balance" data-tour="wallet-balance">
         <p class="eyebrow">{{ $t("wallet.balance") }}</p>
         <p class="balance__num">
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5l1.9 4.1 4.5.5-3.3 3.1.9 4.4L8 11.4l-3.9 2.2.9-4.4L1.6 6.1l4.5-.5z" /></svg>
@@ -116,6 +137,21 @@ watch(() => [props.provider, props.externalId], () => load(true), { immediate: t
           <span v-else class="subtle">{{ $t("linked.balanceUnknown") }}</span>
         </p>
         <p v-if="wallet?.tempScore" class="subtle">{{ $t("wallet.temp", { n: whole(wallet.tempScore) }) }}</p>
+        <p v-if="wallet?.tempScore && expiries.length" class="subtle">{{ $t("wallet.tempEarliest", { datetime: monthDayTime(expiries[0].expiresAt) }) }}</p>
+        <!-- 限時積分明細：每一筆的金額、來源、到期時間（owner 2026-10-19，跟 Console 一致）；預設收起 -->
+        <div v-if="wallet?.tempScore && expiries.length" class="expiring">
+          <div class="expiring__head">
+            <span class="expiring__title">{{ $t("wallet.expiring.title") }}</span>
+            <button type="button" class="btn btn--ghost btn--sm" :aria-expanded="detailOpen" @click="detailOpen = !detailOpen">{{ detailOpen ? $t("wallet.expiring.hide") : $t("wallet.expiring.show") }}</button>
+          </div>
+          <ul v-if="detailOpen" class="expiring__list">
+            <li v-for="(e, i) in expiries" :key="`${e.expiresAt}-${i}`">
+              <strong>{{ $t("wallet.expiring.amount", { amount: whole(e.amount) }) }}</strong>
+              <span v-if="sourceOf(e.kind)" class="expiring__src">{{ sourceOf(e.kind) }}</span>
+              <span class="expiring__at">{{ $t("wallet.record.expires", { datetime: monthDayTime(e.expiresAt) }) }}</span>
+            </li>
+          </ul>
+        </div>
         <a class="btn btn--primary btn--lg balance__cta" href="https://console.harperharbor.com/me/billing" target="_blank" rel="noopener" @click="track('topup_click')">{{ $t("wallet.topUp") }} ↗</a>
       </section>
 
@@ -144,7 +180,7 @@ watch(() => [props.provider, props.externalId], () => load(true), { immediate: t
       <UsageChart :bars="bars" :weekly="range === 'week'" />
     </section>
 
-    <section class="panel history">
+    <section class="panel history" data-tour="wallet-records">
       <div class="panel__head">
         <h2 class="panel__title">{{ $t("wallet.records") }}<span v-if="total" class="history__n">{{ total }}</span></h2>
         <div class="seg">
@@ -171,7 +207,7 @@ watch(() => [props.provider, props.externalId], () => load(true), { immediate: t
           <ul class="ledger__rows">
             <li v-for="r in g.rows" :key="r.id" class="row">
               <span class="row__dot" :class="r.recordType === 'add' ? 'row__dot--add' : 'row__dot--sub'" aria-hidden="true">{{ r.recordType === "add" ? "+" : "−" }}</span>
-              <span class="row__item">{{ reason(r.record) }}</span>
+              <span class="row__item" :class="{ 'row__item--off': subOf(r)?.off }"><span class="row__name">{{ itemOf(r) }}</span><small v-if="subOf(r)" class="row__sub">{{ subOf(r)!.text }}</small></span>
               <span class="row__time subtle">{{ clock(r.createTime) }}</span>
               <span class="row__num" :class="r.recordType === 'add' ? 'row__num--add' : ''">{{ r.recordType === "add" ? "+" : "−" }}{{ whole(r.score) }}</span>
             </li>
@@ -233,7 +269,19 @@ watch(() => [props.provider, props.externalId], () => load(true), { immediate: t
 .row__dot { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 999px; font-size: 14px; font-weight: 700; }
 .row__dot--add { background: var(--success-soft); color: var(--success); }
 .row__dot--sub { background: var(--surface-2); color: var(--text-3); }
-.row__item { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row__item { display: grid; min-width: 0; }
+.row__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row__sub { font-size: 12px; color: var(--text-2); }
+.row__item--off .row__name, .row__item--off .row__sub { color: var(--text-3); }
+.expiring { display: grid; gap: var(--s-1); padding-top: var(--s-2); border-top: 1px solid var(--line); }
+.expiring__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }
+.expiring__title { font-size: 13px; font-weight: 600; }
+.expiring__list { list-style: none; margin: 0; padding: 0; max-height: 360px; overflow-y: auto; display: grid; }
+.expiring__list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--s-2); align-items: baseline; min-height: 44px; padding: var(--s-1) 0; border-top: 1px solid var(--line); }
+.expiring__list li:first-child { border-top: 0; }
+.expiring__list strong { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.expiring__src { font-size: 12px; color: var(--text-2); text-align: right; }
+.expiring__at { grid-column: 1 / -1; font-size: 12px; color: var(--text-2); }
 .row__time { font-variant-numeric: tabular-nums; }
 .row__num { min-width: 5em; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
 .row__num--add { color: var(--success); }

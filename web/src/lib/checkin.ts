@@ -191,3 +191,8 @@ export function requestIdFor(scope: string): string {
 export function clearRequestId(scope: string): void {
   try { sessionStorage.removeItem(REQ_PREFIX + scope); } catch { /* ignore */ }
 }
+
+/** 這件事是不是已經送過一次、還沒確認（重新整理或斷線後再送）。用來分辨「自己的重送」和「別的裝置先簽了」。 */
+export function hasRequestId(scope: string): boolean {
+  try { return !!sessionStorage.getItem(REQ_PREFIX + scope); } catch { return false; }
+}

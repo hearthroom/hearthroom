@@ -1,7 +1,7 @@
 {
   "tier": "highlight",
   "audience": "everyone",
-  "try": "/wallet",
+  "try": "/checkin",
   "draft": true,
   "title": {
     "zh-Hant": "每天簽到開寶箱，做任務也能拿到聊天用的積分。",

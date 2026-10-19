@@ -291,6 +291,8 @@ export class SukiPet {
       case "notice":
         if (e.mood === "party") this.kick("Die", 400);
         return this.act({ expr: e.mood === "party" ? "happy" : e.mood === "comfort" ? "shy" : "surprised", say: e.text, hop: e.mood === "party", ms: 5000, action: e.action });
+      case "stage": return this.hide(e.on, "stage");
+      case "cheer": return this.act({ expr: e.mood === "miss" ? "pout" : "happy", hop: e.mood === "win", ms: 2400 });
       case "daily": if (this.onceToday(`d.${e.key}`)) this.act({ expr: "wink", say: e.text, ms: 4500, action: e.action }); return;
       case "hint": if (!this.said.has(`hint:${e.text}`)) { this.said.add(`hint:${e.text}`); this.act({ expr: "wink", say: e.text, ms: 4500, action: e.action }); } return;
       case "adult": return this.act({ expr: e.on ? "wink" : "shy", say: this.line(e.on ? "adultOn" : "adultOff") });

@@ -26,6 +26,7 @@ import { isPlayHost } from "@/lib/site";
 import { loginPath } from "@/lib/login-return";
 import NewMark from "@/components/NewMark.vue";
 import CoachTour from "@/components/CoachTour.vue";
+import NewcomerTour from "@/components/NewcomerTour.vue";
 import SukiPet from "@/components/SukiPet.vue";
 import { useUpdates } from "@/lib/updates";
 import { footerGroups, footerLegal, type FooterContext } from "@/lib/footer-nav";
@@ -158,6 +159,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
   </nav>
   <main id="main" tabindex="-1" :class="{ 'site-main': !route.meta.bare, 'main--bare': route.meta.bare }"><RouterView /></main>
   <CoachTour />
+  <NewcomerTour />
   <!-- 桌寵兼嚮導：玩卡頁與沙盒（bare、卡片 App 網域）不出現，其他每一頁都在 -->
   <SukiPet v-if="!route.meta.bare && !isPlayHost()" />
   <ConfirmDialog />
