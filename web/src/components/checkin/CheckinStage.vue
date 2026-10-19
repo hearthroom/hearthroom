@@ -66,7 +66,7 @@ const mainBtn = ref<HTMLButtonElement | null>(null);
 const current = computed(() => rounds.value[idx.value] ?? null);
 const chestKey = computed(() => current.value?.chest ?? props.chests[idx.value] ?? props.chests[0] ?? "daily");
 const titleOf = (chest: string) => { const c = chestTitle(chest, props.plan); return t(c.key, c.params ?? {}); };
-const total = computed(() => Math.max(props.chests.length, rounds.value.length || 1));
+const total = computed(() => (rounds.value.length ? rounds.value.length : props.chests.length || 1));
 const busy = computed(() => step.value === "round" && (phase.value === "open" || phase.value === "spin" || phase.value === "hold"));
 const showResult = computed(() => step.value === "round" && phase.value === "result");
 const lastRound = computed(() => idx.value >= rounds.value.length - 1);
@@ -79,17 +79,22 @@ const poseSrc = computed(() => poseUrl(pose.value));
 
 // ---- 送出與回應 ----
 let pressedAt = 0;
+/** 送出中的那一次：逾時後再試一次時接著等它，不另送一次（同一件事不重複送） */
+let inflight: Promise<StageOutcome> | null = null;
 let posesReady: Promise<void> = Promise.resolve();
 let timer = 0;
 async function send() {
   step.value = "waiting";
+  // 按「再試一次」的那顆鍵會消失：焦點留在舞台上，鍵盤才不會掉到頁面
+  void nextTick(() => panelEl.value?.focus());
   slow.value = false;
   pressedAt = performance.now();
   window.clearTimeout(timer);
   timer = window.setTimeout(() => { slow.value = true; }, 600);
   const timeout = new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error("timeout")), 8000));
   try {
-    const res = await Promise.race([props.request(), timeout]);
+    inflight ??= props.request().finally(() => { inflight = null; });
+    const res = await Promise.race([inflight, timeout]);
     outcome.value = res;
     emit("settled", res);
     await prepareRounds(res);
@@ -114,12 +119,14 @@ async function prepareRounds(res: StageOutcome) {
     built.push({ claim: c, chest: c.chest!, plan, round: newRound(buildTrack({ prizes, tier: c.tier!, seed: c.stripSeed! >>> 0 }), reduced) });
   }
   if (!built.length) { step.value = "pending"; return; }
+  // 圖還沒載好之前不能進滾輪：時間軸要等 startRound 才開始算
+  startAt = Infinity;
+  await posesReady;
   rounds.value = built;
   idx.value = 0;
   done.value = [];
   step.value = "round";
   // 前搖：從按下起至少 1 秒才開蓋，回應再快也留一下
-  await posesReady;
   const wait = Math.max(0, 1000 - (performance.now() - pressedAt));
   await nextTick();
   startRound(wait);
@@ -127,7 +134,7 @@ async function prepareRounds(res: StageOutcome) {
 
 // ---- 每一輪：時間軸、聲音、觸覺 ----
 let raf = 0;
-let startAt = 0;
+let startAt = Infinity;
 let lastIdx = 0;
 let lastPos = 0;
 let lastFrame = 0;
@@ -164,7 +171,7 @@ const easeOut = (x: number) => 1 - Math.pow(1 - x, 3);
 function frame(now: number) {
   raf = requestAnimationFrame(frame);
   const cur = current.value;
-  if (!cur || step.value !== "round") { idle(now); return; }
+  if (!cur || step.value !== "round" || startAt === Infinity) { idle(now); return; }
   const r = cur.round;
   const t = now - startAt;
   if (t < 0) { idle(now); return; }
@@ -264,7 +271,8 @@ function skip() {
 function next() {
   if (lastRound.value) return close();
   idx.value += 1;
-  void nextTick(() => startRound(0));
+  startAt = Infinity;
+  void nextTick(() => { panelEl.value?.focus(); startRound(0); });
 }
 function moodOf(): StageMood | null {
   const list = rounds.value;
@@ -283,7 +291,8 @@ function toggleHaptic() { haptic.value = !haptic.value; setHaptic(haptic.value);
 function onKey(e: KeyboardEvent) {
   if (e.key === "Tab" && panelEl.value) { wrapTab(e, panelEl.value); return; }
   if (busy.value && (e.key === " " || e.key === "Enter" || e.key === "Escape")) { e.preventDefault(); skip(); return; }
-  if (e.key === "Escape") { e.preventDefault(); close(); }
+  // 等回應的時候 Esc 不做事（ui.md §6.4：結果出來才是關閉；要放棄等待用關閉鈕）
+  if (e.key === "Escape" && step.value !== "waiting") { e.preventDefault(); close(); }
 }
 function onBackdrop(e: MouseEvent) { if (e.target === root.value && !busy.value && step.value !== "waiting") close(); }
 
