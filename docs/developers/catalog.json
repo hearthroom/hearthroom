@@ -1971,5 +1971,10 @@
   "de8c20c2a9c3c": "Uploaded background image.",
   "db3b2dba55f18": "Public URL of the stored image. It is not listed anywhere else; keep it to this player.",
   "ddac7247284d1": "Card whose background image is deleted.",
-  "d206d6ecb67a8": "Deletion result."
+  "d206d6ecb67a8": "Deletion result.",
+  "d328c1c211963": "Authors this member follows.",
+  "d0f148ca7626c": "Members following this member.",
+  "d15366316d5e6": "Profile cover scene id from the built-in catalog (shared/profile-covers.ts); empty means the default scene.",
+  "d0a25aed9d0f3": "Profile cover scene id; empty means the default scene.",
+  "df86fabf7ee9d": "Whether the member's own profile shows works, chats, followers and following. Off by default."
 }

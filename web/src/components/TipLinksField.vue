@@ -15,13 +15,14 @@ import { TIP_LINKS_MAX, TIP_PLATFORMS, resolveTipInput, tipPlatform, type TipPar
 
 export interface TipRow { platform: TipPlatformId; value: string }
 
-const props = defineProps<{ modelValue: TipRow[]; disabled?: boolean }>();
+/** compact：主頁原地編輯用，平台清單收起來、按「新增」才攤開——全攤開會把資料頭拉得很長（owner 2026-10-19） */
+const props = defineProps<{ modelValue: TipRow[]; disabled?: boolean; compact?: boolean }>();
 const emit = defineEmits<{ "update:modelValue": [TipRow[]] }>();
 const { t, locale } = useI18n();
 
 /** 還沒加任何平台時直接攤開平台清單：第一眼就看得到能選什麼 */
 const picking = ref(false);
-const showPicker = computed(() => props.modelValue.length < TIP_LINKS_MAX && (picking.value || props.modelValue.length === 0));
+const showPicker = computed(() => props.modelValue.length < TIP_LINKS_MAX && (picking.value || (!props.compact && props.modelValue.length === 0)));
 const taken = computed(() => new Set(props.modelValue.map((r) => r.platform)));
 
 const rows = computed(() => props.modelValue.map((row) => ({ ...row, parsed: row.value.trim() ? resolveTipInput(row.platform, row.value) : null })));
@@ -94,7 +95,7 @@ function remove(i: number) {
           </button>
         </li>
       </ul>
-      <button v-if="modelValue.length" type="button" class="tips-field__ghost" @click="picking = false">{{ $t("tips.field.cancel") }}</button>
+      <button v-if="modelValue.length || compact" type="button" class="tips-field__ghost" @click="picking = false">{{ $t("tips.field.cancel") }}</button>
     </div>
     <button v-else-if="modelValue.length < TIP_LINKS_MAX" type="button" class="tips-field__add" @click="picking = true">{{ $t("tips.field.add") }}</button>
   </fieldset>

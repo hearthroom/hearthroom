@@ -3211,6 +3211,10 @@
             "items": {
               "$ref": "#/components/schemas/TipLink"
             }
+          },
+          "cover": {
+            "type": "string",
+            "description": "Profile cover scene id; empty means the default scene."
           }
         }
       },
@@ -3389,6 +3393,22 @@
             "items": {
               "type": "string"
             }
+          },
+          "cover": {
+            "type": "string",
+            "description": "Profile cover scene id from the built-in catalog (shared/profile-covers.ts); empty means the default scene."
+          },
+          "showStats": {
+            "type": "boolean",
+            "description": "Whether the member's own profile shows works, chats, followers and following. Off by default."
+          },
+          "followers": {
+            "type": "integer",
+            "description": "Members following this member."
+          },
+          "following": {
+            "type": "integer",
+            "description": "Authors this member follows."
           }
         }
       },
