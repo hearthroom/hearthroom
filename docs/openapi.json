@@ -5656,8 +5656,8 @@
         "tags": [
           "Identity"
         ],
-        "summary": "Points balance and membership plans",
-        "description": "Returns the caller's permanent points, temporary (time-limited) points and the list of currently held membership plans. Top-up is not available through the Open API; send the user to the main site. Service keys are rejected by the middleware (not on the allow-list).",
+        "summary": "Credits balance and activity",
+        "description": "Returns the caller's credits (spendable, permanent, time-limited and held by running turns), upcoming expiries, and the balance activity in this app, newest first. Top-up is not available through the Open API; send the user to the main site.",
         "security": [
           {
             "userToken": []
@@ -5694,7 +5694,29 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            },
+            "description": "Entries per page, 1 to 50."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque `nextCursor` from a previous page. Malformed → 400 `invalid_cursor`."
+          }
+        ]
       }
     },
     "/open/v1/models": {
@@ -20141,6 +20163,16 @@
             "format": "date-time",
             "nullable": true
           },
+          "rewardKind": {
+            "type": "string",
+            "enum": [
+              "checkin",
+              "task",
+              "newcomer",
+              "referral"
+            ],
+            "description": "Present on credits from app rewards: `checkin`, `task`, `newcomer` or `referral`."
+          },
           "planKind": {
             "type": "string",
             "enum": [
@@ -21591,26 +21623,34 @@
       "Wallet": {
         "type": "object",
         "required": [
-          "score",
-          "tempScore",
-          "plans"
+          "available",
+          "permanent",
+          "expiring",
+          "reserved",
+          "expiries",
+          "ledger",
+          "nextCursor"
         ],
         "properties": {
-          "score": {
+          "available": {
             "type": "integer",
             "format": "int64",
-            "description": "Permanent points balance."
+            "description": "Credits the caller can spend now: permanent plus time-limited, less what running turns hold."
           },
-          "tempScore": {
+          "permanent": {
             "type": "integer",
-            "description": "Time-limited points balance (0 when unavailable)."
+            "format": "int64",
+            "description": "Credits that never expire."
           },
-          "plans": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/WalletPlan"
-            },
-            "description": "Currently held membership plans; may contain several tiers at once; empty when none."
+          "expiring": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Time-limited credits in total."
+          },
+          "reserved": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Credits held by turns still running; released or charged when they finish."
           },
           "expiries": {
             "type": "array",
@@ -21618,28 +21658,17 @@
               "$ref": "#/components/schemas/WalletExpiry"
             },
             "description": "Time-limited credits by expiry and source, soonest first, at most 10; batches with the same expiry and source are merged. The `expiring` total keeps its meaning."
-          }
-        }
-      },
-      "WalletPlan": {
-        "type": "object",
-        "required": [
-          "tier",
-          "expiresAt"
-        ],
-        "properties": {
-          "tier": {
-            "type": "string",
-            "enum": [
-              "unlimited",
-              "member",
-              "trial"
-            ]
           },
-          "expiresAt": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Expiry as Unix epoch seconds (normalized from mixed second/millisecond storage)."
+          "ledger": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WalletLedgerEntry"
+            },
+            "description": "Balance activity in this app, newest first."
+          },
+          "nextCursor": {
+            "type": "string",
+            "description": "Opaque cursor for the next page of `ledger`; empty when there is none."
           }
         }
       },
@@ -25562,6 +25591,50 @@
               "rejected_stale",
               "rejected_invalid"
             ]
+          }
+        }
+      },
+      "WalletLedgerEntry": {
+        "type": "object",
+        "required": [
+          "id",
+          "at",
+          "reason",
+          "amount"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Entry identifier."
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the balance changed."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why the balance changed: `purchase`, `grant`, `campaign`, `chat`, `api`, `image`, `speech`, `video`, `refund`, `expire`, `adjust`, `redeem`, `rebate`, `referral` or `signup`. Map it to your own copy."
+          },
+          "amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Credits added (positive) or taken (negative)."
+          },
+          "rewardKind": {
+            "type": "string",
+            "enum": [
+              "checkin",
+              "task",
+              "newcomer",
+              "referral"
+            ],
+            "description": "Present on credits from app rewards: `checkin`, `task`, `newcomer` or `referral`."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When these reward credits expire. Absent on `expire` entries."
           }
         }
       },
