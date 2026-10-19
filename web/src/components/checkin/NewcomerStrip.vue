@@ -39,7 +39,9 @@ function go() { if (view.value) startNewcomerTour(view.value.day, router, lp); }
       <strong v-if="!view.todayDone" class="ns__goal">{{ goal }}</strong>
       <span v-else class="ns__goal"><strong>{{ t("newcomer.today.done") }}</strong><span v-if="tomorrow" class="ns__next"> {{ t("newcomer.tomorrow", { goal: tomorrow }) }}</span></span>
     </span>
-    <button v-if="!view.todayDone" type="button" class="btn ns__go" @click="go">{{ t("newcomer.home.go") }}</button>
+    <!-- 目標做到了還沒領：只留一個領取入口，帶到簽到頁的新手區塊領（PM 2026-10-19） -->
+    <RouterLink v-if="view.claimable" :to="lp('/checkin#newcomer')" class="btn btn--primary ns__go">{{ t("task.cta.claim") }}</RouterLink>
+    <button v-else-if="!view.todayDone" type="button" class="btn ns__go" @click="go">{{ t("newcomer.home.go") }}</button>
     <span class="ns__chev" aria-hidden="true">›</span>
     <span class="ns__bar" aria-hidden="true"><i v-for="i in 7" :key="i" :class="{ on: i <= view.done, today: i === view.day && !view.todayDone }" /></span>
   </div>
