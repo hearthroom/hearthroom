@@ -67,6 +67,8 @@ const u32 = () => Math.floor(rnd() * 0xffffffff) >>> 0;
 function freshState(preset = "normal") {
   return { graze: null, preset, streak: 8, lastDay: null, missed: 0, makeupLeft: 1, pity: 4, history: [], todayClaims: [], forceTier: null, tasks: {}, newcomer: null, delay: 0, fail: false, pending: false, expiring: [], elsewhere: false, madeUp: [] };
 }
+/** 新手七日每一階的目標（契約 53298e1 的列舉） */
+const NEWCOMER_GOALS = ["turns", "return_turns", "new_work_turns", "comment_or_rating", "customize", "share_link", "final"];
 let S = freshState();
 let account = 424242;
 /** 假的 /open/v1/me 用的帳號號碼 */
@@ -192,8 +194,8 @@ function panel(now) {
     tasks,
     newcomer: n ? {
       active: true, stage: n.done, deadline: iso(boundary(addDays(today, 14 - n.done))),
-      today: { stage: Math.min(7, n.done + 1), goal: `stage${Math.min(7, n.done + 1)}`, progress: n.grand ? 1 : n.todayDone ? 3 : 1, target: n.grand ? 1 : 3, status: n.todayDone ? "claimed" : n.grand ? "claimable" : "locked" },
-      stages: [1, 2, 3, 4, 5, 6, 7].map((s) => ({ stage: s, credits: s <= 2 ? 300 : s < 7 ? 200 : undefined, chest: s === 7 ? "newcomer" : undefined, done: s <= n.done })),
+      today: { stage: Math.min(7, n.done + 1), goal: NEWCOMER_GOALS[Math.min(7, n.done + 1) - 1], progress: n.grand ? 1 : n.todayDone ? 3 : 1, target: n.grand ? 1 : 3, status: n.todayDone ? "claimed" : n.grand ? "claimable" : "locked" },
+      stages: [1, 2, 3, 4, 5, 6, 7].map((s) => ({ stage: s, goal: NEWCOMER_GOALS[s - 1], target: [3, 3, 3, 1, 1, 1, 1][s - 1], reward: s < 7 ? { credits: s <= 2 ? 300 : 200 } : { chest: "newcomer" }, status: s <= n.done ? "claimed" : s === n.done + 1 && (n.todayDone || n.grand) ? (n.todayDone ? "claimed" : "claimable") : "locked" })),
     } : null,
     credits: { expiring: S.expiring },
     hints: [],

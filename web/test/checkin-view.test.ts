@@ -147,7 +147,8 @@ describe("新手七日", () => {
   const newcomer = {
     active: true, stage: 3, deadline: "2026-10-30T04:00:00+08:00",
     today: { stage: 4, goal: "comment_or_rating", progress: 0, target: 1, status: "locked" as const },
-    stages: [1, 2, 3, 4, 5, 6, 7].map((s) => ({ stage: s, credits: s < 7 ? 200 : undefined, chest: s === 7 ? "newcomer" : undefined, done: s <= 3 })),
+    // 契約 53298e1：每一階 {stage, goal, target, reward, status}
+    stages: [1, 2, 3, 4, 5, 6, 7].map((s) => ({ stage: s, goal: "turns" as const, target: 3, reward: s < 7 ? { credits: 200 } : { chest: "newcomer" }, status: (s <= 3 ? "claimed" : "locked") as "claimed" | "locked" | "pending" })),
   };
   it("第幾天、完成幾天、還剩幾天", () => {
     expect(newcomerView(panel({}, { newcomer }))).toMatchObject({ day: 4, done: 3, left: 10, todayDone: false, grand: false });
@@ -157,8 +158,12 @@ describe("新手七日", () => {
     expect(newcomerView(panel())).toBeNull();
   });
   it("完成六天、今天可以開大箱", () => {
-    const n = { ...newcomer, stage: 6, today: { ...newcomer.today, stage: 7, status: "claimable" as const }, stages: newcomer.stages.map((s) => ({ ...s, done: s.stage <= 6 })) };
+    const n = { ...newcomer, stage: 6, today: { ...newcomer.today, stage: 7, status: "claimable" as const }, stages: newcomer.stages.map((s) => ({ ...s, status: (s.stage <= 6 ? "claimed" : "locked") as "claimed" | "locked" })) };
     expect(newcomerView(panel({}, { newcomer: n }))).toMatchObject({ day: 7, done: 6, grand: true });
+  });
+  it("領了還在發放中的那一階也算完成", () => {
+    const n = { ...newcomer, stages: newcomer.stages.map((s) => ({ ...s, status: (s.stage <= 2 ? "claimed" : s.stage === 3 ? "pending" : "locked") as "claimed" | "locked" | "pending" })) };
+    expect(newcomerView(panel({}, { newcomer: n }))).toMatchObject({ day: 4, done: 3 });
   });
 });
 
