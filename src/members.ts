@@ -127,6 +127,13 @@ export interface MemberProfile {
   hiddenTags: string[];
   /** 打賞連結（標準網址，作者排的順序）；編輯表單用 */
   tipLinks: string[];
+  /** 主頁封面（shared/profile-covers.ts 的 id）；空字串＝沒選過 */
+  cover: string;
+  /** 自己的主頁要不要顯示作品數、被對話、粉絲、關注（預設關） */
+  showStats: boolean;
+  /** 關注我的人數、我關注的作者數 */
+  followers: number;
+  following: number;
 }
 
 /** 成員存的隱藏名單讀出來：壞掉的 JSON 當空；目錄裡已經拿掉的鍵不算（別顯示「已隱藏 N 類」卻找不到那一類）。 */
@@ -152,10 +159,10 @@ export function normalizeHiddenTags(input: unknown): string[] {
 
 /** 「我的」頁要的：公開 ID、加入時間、連結了哪些供應商帳號。沒有 token、沒有信箱。 */
 export async function memberProfile(db: D1Database, memberId: string): Promise<MemberProfile | null> {
-  type ProfileRow = { handle: string; display_name: string | null; avatar_url: string; bio: string; created_at: number; show_nsfw: number; age_verified_at: number | null; adult_consent_version: number | null; hidden_tags: string; tip_links: string };
+  type ProfileRow = { handle: string; display_name: string | null; avatar_url: string; bio: string; created_at: number; show_nsfw: number; age_verified_at: number | null; adult_consent_version: number | null; hidden_tags: string; tip_links: string; cover: string; show_stats: number; followers: number; following: number };
   type IdentityRow = { provider: string; external_id: string; linked_at: number };
   const [members, founding, ids] = await db.batch<ProfileRow | { provider: string } | IdentityRow>([
-    db.prepare("SELECT handle, display_name, avatar_url, bio, created_at, show_nsfw, age_verified_at, adult_consent_version, hidden_tags, tip_links FROM members WHERE id = ?").bind(memberId),
+    db.prepare("SELECT handle, display_name, avatar_url, bio, created_at, show_nsfw, age_verified_at, adult_consent_version, hidden_tags, tip_links, cover, show_stats, (SELECT COUNT(*) FROM member_follows WHERE author_id = members.id) AS followers, (SELECT COUNT(*) FROM member_follows WHERE member_id = members.id) AS following FROM members WHERE id = ?").bind(memberId),
     db.prepare("SELECT provider FROM member_identities WHERE member_id=?").bind(memberId),
     db.prepare("SELECT provider, external_id, linked_at FROM member_connections WHERE owner_member_id = ? UNION SELECT provider, external_id, linked_at FROM member_identities WHERE member_id = ? AND NOT EXISTS (SELECT 1 FROM member_connections c WHERE c.provider=member_identities.provider AND c.external_id=member_identities.external_id) ORDER BY linked_at").bind(memberId, memberId),
   ]);
@@ -173,6 +180,10 @@ export async function memberProfile(db: D1Database, memberId: string): Promise<M
     adultConsent: m.adult_consent_version === ADULT_CONSENT_VERSION,
     hiddenTags: parseHiddenTags(m.hidden_tags),
     tipLinks: readTipLinks(m.tip_links).map((l) => l.url),
+    cover: m.cover,
+    showStats: m.show_stats === 1,
+    followers: m.followers,
+    following: m.following,
   };
 }
 
@@ -419,4 +430,10 @@ function safeAvatar(value: unknown): string {
 export async function isReviewAgent(db: D1Database, memberId: string): Promise<boolean> {
   const row = await db.prepare("SELECT 1 AS ok FROM review_agents a JOIN reviewers r ON r.member_id = a.member_id WHERE a.member_id = ? AND a.revoked_at IS NULL AND r.revoked_at IS NULL").bind(memberId).first<{ ok: number }>();
   return !!row;
+}
+
+/** 自己主頁的數據開關；回傳存完的值。 */
+export async function updateMemberShowStats(db: D1Database, memberId: string, on: boolean): Promise<boolean> {
+  await db.prepare("UPDATE members SET show_stats = ? WHERE id = ?").bind(on ? 1 : 0, memberId).run();
+  return on;
 }

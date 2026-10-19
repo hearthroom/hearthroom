@@ -96,6 +96,8 @@ export interface Author {
   providers?: string[];
   /** 作者的打賞連結；只有單人主頁帶 */
   tips?: TipLink[];
+  /** 主頁封面（shared/profile-covers.ts 的 id）；只有單人主頁帶，空字串＝預設 */
+  cover?: string;
 }
 export type AuthorSort = "talk" | "cards" | "hot";
 

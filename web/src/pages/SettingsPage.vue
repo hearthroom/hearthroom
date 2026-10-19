@@ -11,6 +11,9 @@
  *
  * 不想看的類型（owner 2026-09-14）：勾起來的類型不會出現在榜單和搜尋裡。不分頁不分區——首頁還是一個池子，
  * 每個人自己拉窗簾。勾一下就存（跟成人開關一樣），存在成員上、換裝置跟著走；榜單排尾的「已隱藏 N 類」帶回這裡。
+ *
+ * 主頁顯示與登入授權（owner 2026-10-19 主頁改版）：「我的」頁只放名片與入口，開關類搬來這裡——
+ * 主頁數據開關（預設關）、卡片與遊玩服務的授權（原本在「我的」頁右欄），以及 Discord 社區、通知設定的入口。
  */
 import { computed, onMounted, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
@@ -24,6 +27,9 @@ import { TAG_CATALOG, tagLabel } from "../../../shared/tag-catalog";
 import AdultConsentDialog from "@/components/AdultConsentDialog.vue";
 import { petEnabled } from "@/pet/enabled";
 import { communityRequest } from "@/lib/community";
+import { RouterLink } from "vue-router";
+import AccountIcon from "@/components/AccountIcon.vue";
+import ConnectedAccounts from "@/components/ConnectedAccounts.vue";
 
 const session = useSession();
 
@@ -45,7 +51,7 @@ async function setRecall(on: boolean) {
   recallBusy.value = false;
 }
 const { t } = useI18n();
-const { locale } = useLocalePath();
+const { locale, lp } = useLocalePath();
 
 const NAME_MAX = 20;
 const DEFINE_MAX = 1000;
@@ -137,6 +143,25 @@ async function setNsfw(on: boolean, input?: HTMLInputElement) {
   }
 }
 
+// ---- 主頁數據開關 ----
+const showStats = computed(() => !!session.profile?.showStats);
+const statsBusy = ref(false);
+const statsError = ref("");
+async function setStats(on: boolean, input: HTMLInputElement) {
+  if (statsBusy.value) return;
+  statsError.value = "";
+  statsBusy.value = true;
+  try {
+    const result = await updateSiteSettings({ showStats: on }, await token());
+    if (session.profile) session.profile.showStats = result.showStats ?? on;
+  } catch (err) {
+    input.checked = showStats.value;
+    statsError.value = err instanceof ApiError || err instanceof Error ? err.message : t("state.saveFailed");
+  } finally {
+    statsBusy.value = false;
+  }
+}
+
 // ---- 不想看的類型 ----
 const hidden = computed(() => session.profile?.hiddenTags ?? []);
 const hiddenBusy = ref(false);
@@ -170,6 +195,32 @@ onMounted(() => {
     <header class="head">
       <h1 class="head__title display">{{ $t("settings.title") }}</h1>
     </header>
+
+    <section id="profile" class="panel content">
+      <p class="eyebrow">{{ $t("settings.profile.title") }}</p>
+      <RouterLink :to="{ path: lp('/me'), query: { edit: '1' } }" class="content__row content__link">
+        <span class="content__text"><strong>{{ $t("profile.editProfile") }}</strong><span class="subtle">{{ $t("settings.profile.edit") }}</span></span>
+        <AccountIcon name="arrow" />
+      </RouterLink>
+      <label class="content__row">
+        <span class="content__text"><strong>{{ $t("settings.profile.stats") }}</strong><span class="subtle">{{ $t("settings.profile.statsHint") }}</span></span>
+        <input type="checkbox" class="content__switch" :checked="showStats" :disabled="statsBusy" @change="setStats(($event.target as HTMLInputElement).checked, $event.target as HTMLInputElement)" />
+      </label>
+      <p v-if="statsError" class="notice notice--error" role="alert">{{ statsError }}</p>
+      <RouterLink :to="lp('/me/community')" class="content__row content__link">
+        <span class="content__text"><strong>{{ $t("community.title") }}</strong><span class="subtle">{{ $t("community.hint") }}</span></span>
+        <AccountIcon name="arrow" />
+      </RouterLink>
+      <RouterLink :to="lp('/me/notifications')" class="content__row content__link">
+        <span class="content__text"><strong>{{ $t("nav.notifications") }}</strong><span class="subtle">{{ $t("notifications.settings") }}</span></span>
+        <AccountIcon name="arrow" />
+      </RouterLink>
+    </section>
+
+    <section id="account" class="panel content" :aria-label="$t('settings.account.title')">
+      <p class="eyebrow">{{ $t("settings.account.title") }}</p>
+      <ConnectedAccounts />
+    </section>
 
     <section v-if="can('persona')" class="panel persona">
       <p class="eyebrow">{{ $t("settings.persona.title") }}</p>
@@ -270,6 +321,8 @@ onMounted(() => {
 .content__text { display: grid; gap: 2px; }
 .content__verified { color: var(--accent-text); }
 .content__switch { width: 22px; height: 22px; flex: none; accent-color: var(--accent); }
+.content__link { color: inherit; }
+.content__link svg { width: 16px; height: 16px; flex: none; color: var(--text-3); }
 .hidden { scroll-margin-top: calc(var(--header-h, 56px) + var(--s-3)); }
 .hidden__desc { margin: 0; }
 .hidden__chips { display: flex; flex-wrap: wrap; gap: 6px; }

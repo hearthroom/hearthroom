@@ -29,9 +29,14 @@ const connect = vi.hoisted(()=>vi.fn(async()=>undefined));
 vi.mock("../src/lib/connections",()=>({connectAccount:connect,accountToken:async()=>null}));
 vi.mock("../src/lib/review", () => ({ useReviewer: () => ({ reviewer: false }) }));
 vi.mock("../src/lib/track", () => ({ track: () => {}, currentSurface: () => "me", setSurface: () => {} }));
+// 主頁其他區塊的資料：給空的，別真的連網
+vi.mock("../src/lib/api", async (original) => ({ ...(await original<object>()), fetchAuthor: async () => ({ cardCount: 0, talkTotal: 0 }), fetchBoard: async () => ({ items: [], total: 0, hasNext: false, limit: 23, offset: 0, sort: "new" }), fetchPlayerPersona: async () => ({ nickName: "", userName: "", userSex: "", userDefine: "" }) }));
+vi.mock("../src/lib/campaign", async (original) => ({ ...(await original<object>()), fetchPublicCampaigns: async () => ({ items: [] }) }));
+vi.mock("../src/lib/community", async (original) => ({ ...(await original<object>()), communityRequest: async () => { throw new Error("offline"); } }));
 
 import LoginPage from "../src/pages/LoginPage.vue";
 import MePage from "../src/pages/MePage.vue";
+import SettingsPage from "../src/pages/SettingsPage.vue";
 
 let app: App | null = null;
 let el: HTMLElement | null = null;
@@ -44,6 +49,7 @@ async function mount(component: unknown, path: string): Promise<{ el: HTMLElemen
     routes: [
       { path: "/login", component: component as never },
       { path: "/me", component: component as never },
+      { path: "/settings", component: component as never },
       { path: "/:pathMatch(.*)*", component: { template: "<div />" } },
     ],
   });
@@ -91,24 +97,28 @@ describe("登入頁", () => {
 });
 
 describe("「我的」頁", () => {
-  it("顯示本站成員 ID 與連結的供應商帳號；入口連到我的卡片與公開作者頁", async () => {
+  it("顯示本站成員 ID；入口連到我的卡片、公開作者頁與設定", async () => {
     session.me = { accountNumId: 7, nickName: "月光", avatar: "" };
     const { el } = await mount(MePage, "/me");
     expect(el.querySelector(".me__handle")?.textContent).toBe("kxxoxfyb");
-    expect(el.textContent).toContain("HarperHarbor");
     expect(el.querySelector("h1")?.textContent).toBe("社區暱稱");
     expect(el.textContent).not.toContain(i18n.global.t("linked.account",{id:7}));
-    expect(el.textContent).toContain(i18n.global.t("services.emailUnavailable"));
     expect(el.querySelector('a[href*="/authors/kxxoxfyb"]')).not.toBeNull();
     expect(el.querySelector('a[href*="/mine"]')).not.toBeNull();
     expect(el.querySelector('a[href*="/settings"]')).not.toBeNull();
+    // 卡片與遊玩服務的授權搬到設定頁（主頁改版 2026-10-19）
+    expect(el.querySelector(".accounts")).toBeNull();
   });
+});
 
-  it("「重新授權」才會再向供應商走一次 OAuth", async () => {
+describe("設定頁的登入與授權", () => {
+  it("列出連結的供應商帳號；「重新授權」才會再向供應商走一次 OAuth，完成後回到設定頁", async () => {
     session.me = { accountNumId: 7, nickName: "月光", avatar: "" };
-    const { el } = await mount(MePage, "/me");
+    const { el } = await mount(SettingsPage, "/settings");
+    expect(el.textContent).toContain("HarperHarbor");
+    expect(el.textContent).toContain(i18n.global.t("services.emailUnavailable"));
     const btn = [...el.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.trim() === i18n.global.t("me.reauthorize"))!;
     btn.click();
-    expect(connect).toHaveBeenCalledWith("harbor","/me");
+    expect(connect).toHaveBeenCalledWith("harbor","/settings");
   });
 });

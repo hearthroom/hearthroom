@@ -634,7 +634,7 @@ export async function getAuthor(db: D1Database, memberId: string, allowNsfw = fa
   const row = await db
     .prepare(
       `SELECT am.handle AS handle, MAX(COALESCE(am.display_name,c.author_name)) AS author_name, MAX(CASE WHEN am.display_name IS NOT NULL THEN am.avatar_url ELSE c.author_avatar END) AS author_avatar,
-              MAX(am.is_official) AS is_official, MAX(am.bio) AS bio, MAX(am.tip_links) AS tip_links, COUNT(*) AS card_count, SUM(c.talk_num) AS talk_total, MIN(c.registered_at) AS joined_at,
+              MAX(am.is_official) AS is_official, MAX(am.bio) AS bio, MAX(am.cover) AS cover, MAX(am.tip_links) AS tip_links, COUNT(*) AS card_count, SUM(c.talk_num) AS talk_total, MIN(c.registered_at) AS joined_at,
               GROUP_CONCAT(DISTINCT c.provider) AS providers
        FROM cards c ${AUTHOR_JOIN}
        WHERE am.id = ? AND ${NOT_A_COPY("c")} AND c.${listed(allowNsfw)} AND c.provider='harbor'`,
@@ -644,6 +644,7 @@ export async function getAuthor(db: D1Database, memberId: string, allowNsfw = fa
       handle: string | null;
       is_official: number;
       bio: string;
+      cover: string;
       tip_links: string | null;
       author_name: string;
       author_avatar: string;
@@ -653,7 +654,7 @@ export async function getAuthor(db: D1Database, memberId: string, allowNsfw = fa
       providers: string | null;
     }>();
   if (!row || !row.card_count) {
-    const member=await db.prepare("SELECT handle,display_name AS author_name,avatar_url AS author_avatar,is_official,bio,tip_links,created_at FROM members WHERE id=?").bind(memberId).first<{handle:string;author_name:string;author_avatar:string;is_official:number;bio:string;tip_links:string;created_at:number}>();
+    const member=await db.prepare("SELECT handle,display_name AS author_name,avatar_url AS author_avatar,is_official,bio,cover,tip_links,created_at FROM members WHERE id=?").bind(memberId).first<{handle:string;author_name:string;author_avatar:string;is_official:number;bio:string;cover:string;tip_links:string;created_at:number}>();
     return member?{...member,card_count:0,talk_total:0,joined_at:member.created_at,providers:[] as string[]}:null;
   }
   return { ...row, providers: (row.providers ?? "").split(",").filter(Boolean) };
