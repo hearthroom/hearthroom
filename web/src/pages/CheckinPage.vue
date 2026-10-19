@@ -6,7 +6,7 @@
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import { useI18n } from "vue-i18n";
-import { RouterLink, useRouter } from "vue-router";
+import { RouterLink, useRoute, useRouter } from "vue-router";
 import CheckinHero from "@/components/checkin/CheckinHero.vue";
 import CheckinStage, { type StageMood, type StageOutcome } from "@/components/checkin/CheckinStage.vue";
 import DrawHistory from "@/components/checkin/DrawHistory.vue";
@@ -24,10 +24,12 @@ import { useLocalePath } from "@/lib/use-locale";
 import { currentReferralCode, withShareRef } from "@/lib/share-ref";
 import { startNewcomerTour } from "@/lib/newcomer-tour";
 import { boxKindOf, preloadPoses } from "@/lib/checkin-art";
+import { noteShortfallLanding } from "@/lib/credits-recovery";
 
 const store = useCheckin();
 const session = useSession();
 const router = useRouter();
+const route = useRoute();
 const { t } = useI18n();
 const { lp } = useLocalePath();
 
@@ -218,6 +220,8 @@ function toTop() { window.scrollTo({ top: 0, behavior: "smooth" }); }
 
 onMounted(() => {
   document.title = pageTitle(t("checkin.title"));
+  // 從畫布「積分不夠」那張卡點「今日任務」來的：記一次點擊（B7 讀回）
+  noteShortfallLanding(route, router, "checkin");
   void refresh();
   ticker = window.setInterval(() => { now.value = Date.now(); }, 30_000);
   document.addEventListener("visibilitychange", onVisible);
