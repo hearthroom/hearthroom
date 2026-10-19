@@ -94,13 +94,14 @@ function onMakeup() {
     request: async () => {
       try {
         const r = await store.makeup(day);
-        return { claims: r.claims, recap: false, streak: r.streak };
+        return { claims: r.claims, recap: false, streak: r.streak, replayed: r.replayed };
       } catch (e) {
         if (e instanceof RewardsError && e.code === "not_eligible") say(t("checkin.makeup.error"));
         throw e;
       }
     },
-    after: (o) => { if (o?.streak) say(t("checkin.makeup.done", { n: o.streak })); },
+    // 補簽其實上一次就成功了（逾時後重試拿到 already_claimed）：回應裡沒有新的天數，用剛重讀的面板
+    after: (o) => { const n = o && !o.replayed ? o.streak : store.panel?.checkin.streak; if (n) say(t("checkin.makeup.done", { n })); },
   });
 }
 
