@@ -31,7 +31,7 @@ import { isStandalone } from "@/lib/pwa";
 import { onStageSignOut, stageStorageScope } from "@/lib/stage-storage";
 import { playSocialHost } from "@/lib/play-social";
 import { markStageContentReady } from "@/lib/stage-ready";
-import { creditsRecovery } from "@/lib/credits-recovery";
+import { creditsRecovery, noteShortfallShown } from "@/lib/credits-recovery";
 import { useCheckin } from "@/lib/checkin-store";
 import { whole } from "@/lib/format";
 
@@ -174,6 +174,7 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
           const checkin = useCheckin();
           // 畫面每次重畫都會問一次：一分鐘最多讀一次，讀不到（獎勵沒開、限流）也不連續重試
           if (deps.session.me && !checkin.loading && !checkin.disabled && Date.now() - lastCreditsLoad > 60_000) { lastCreditsLoad = Date.now(); void checkin.load(); }
+          noteShortfallShown(shortfall);
           return creditsRecovery(checkin.panel, shortfall, {
             origin: location.origin, lp: deps.lp, t: (k, p) => i18n.global.t(k, p ?? {}), whole,
             topUp: "https://console.harperharbor.com/me/billing",
