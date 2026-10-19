@@ -43,13 +43,14 @@ const tasks = computed(() => (store.claimableTasks ? t("me.checkin.tasks", { n: 
 </template>
 
 <style scoped>
-.ck { width:100%; min-height:72px; display:grid; grid-template-columns:56px minmax(0,1fr) auto; align-items:center; gap:var(--s-3); padding:var(--s-2) var(--s-4) var(--s-2) var(--s-2); color:inherit; text-decoration:none; transition:background var(--dur) var(--ease); }
+/* 文字欄至少 140；放不下時按鈕換到下一列、滿寬 44（ui.md §6.14）。flex 換行的道理同首頁新手卡 */
+.ck { width:100%; min-height:72px; display:flex; flex-wrap:wrap; align-items:center; gap:var(--s-2) var(--s-3); padding:var(--s-2) var(--s-4) var(--s-2) var(--s-2); color:inherit; text-decoration:none; transition:background var(--dur) var(--ease); }
 .ck:hover { background:var(--surface-2); }
-.ck__suki { width:56px; height:56px; border-radius:var(--r-md); object-fit:cover; background:var(--accent-tint); }
-.ck__text { display:grid; gap:2px; min-width:0; container-type:inline-size; }
+.ck__suki { flex:none; width:56px; height:56px; border-radius:var(--r-md); object-fit:cover; background:var(--accent-tint); }
+.ck__text { flex:9999 1 140px; min-width:140px; display:grid; gap:2px; container-type:inline-size; }
 .ck__text strong { font-size:15px; font-weight:600; }
 .ck__status { font-size:13px; color:var(--text-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.ck .btn { pointer-events:none; }
+.ck .btn { flex:1 0 auto; min-height:44px; pointer-events:none; }
 /* 單行放不下時先拿掉「· N 項任務可領取」，不用省略號截斷（ui.md §6.13） */
 @container (max-width: 260px) { .ck__tasks { display:none; } }
 </style>

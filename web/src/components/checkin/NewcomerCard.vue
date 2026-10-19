@@ -77,7 +77,8 @@ const todayRatio = computed(() => (n.value.today.target ? Math.min(1, n.value.to
 .nc__goal { display:grid; gap:6px; min-width:0; align-self:center; }
 .nc__eyebrow { font-size:12px; color:var(--text-2); }
 .nc__text { font-size:14px; line-height:1.45; text-wrap:pretty; }
-.nc__cta { justify-self:start; min-height:44px; }
+/* 長字（en、ja、ko）時按鈕字換兩行，不超出卡片、不縮字（ui.md §6.14） */
+.nc__cta { justify-self:start; min-height:44px; max-width:100%; height:auto; padding-block:8px; white-space:normal; text-wrap:balance; }
 .nc__tomorrow { font-size:13px; color:var(--text-3); }
 :lang(ko) .nc__text, :lang(ko) .nc__rule { word-break:keep-all; }
 </style>
