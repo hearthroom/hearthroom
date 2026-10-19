@@ -11,7 +11,8 @@ import { useCheckin } from "@/lib/checkin-store";
 import { newcomerView } from "@/lib/checkin";
 import { loadPrompt, markPrompt, newcomerPrompt } from "@/lib/newcomer-prompt";
 import { startNewcomerTour } from "@/lib/newcomer-tour";
-import { tourDone } from "@/lib/onboarding";
+import { firstTourPending } from "@/lib/onboarding";
+import { tourState } from "@/lib/coach-tour";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
 import { glueUnits } from "@/lib/format";
@@ -20,10 +21,11 @@ import { suki } from "@/pet/events";
 const store = useCheckin();
 const session = useSession();
 const router = useRouter();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const { lp } = useLocalePath();
 
-const view = computed(() => (session.me && store.panel && tourDone() ? newcomerView(store.panel) : null));
+// 首次導覽在走或還會出現時先等它（導覽優先）；不會出現的語言或裝置不等
+const view = computed(() => (session.me && store.panel && !tourState.step && !firstTourPending(String(locale.value), session.profile?.memberSince) ? newcomerView(store.panel) : null));
 const target = computed(() => store.panel?.newcomer?.today.target ?? 1);
 const due = computed(() => !!view.value && !view.value.todayDone && !view.value.finished && newcomerPrompt.loaded && !newcomerPrompt.shown && !newcomerPrompt.later && !newcomerPrompt.thisVisit);
 const pos = ref<{ right: number; bottom: number } | null>(null);

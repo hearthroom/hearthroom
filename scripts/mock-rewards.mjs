@@ -12,6 +12,8 @@
  *   done         今天簽過了
  *   brokenCard   連續 17 天，昨天漏簽，有補簽卡可用
  *   brokenNoCard 連續 17 天，漏了兩天，補不回來
+ *   newcomer5／newcomer6 新手七日第 5、6 天（導覽：畫布設定、卡片頁分享）
+ *   allTasks     今日四項任務都可領，領完開全勤寶箱
  *   newcomer4    新手七日完成 3 天，今天第 4 天的目標
  *   newcomer7    新手七日完成 6 天，今天可以開新住民寶箱
  *   pending      點數池不足：領取回 pending（有 releaseAt，沒有抽獎欄位）
@@ -88,6 +90,9 @@ export function setPreset(preset, opts = {}) {
     case "brokenCard": at(17, addDays(today, -2)); break;
     case "brokenNoCard": at(17, addDays(today, -3)); break;
     case "newcomer4": at(3, yesterday); S.newcomer = { done: 3, todayDone: false }; break;
+    case "newcomer5": at(4, yesterday); S.newcomer = { done: 4, todayDone: false }; break;
+    case "newcomer6": at(5, yesterday); S.newcomer = { done: 5, todayDone: false }; break;
+    case "allTasks": at(8, yesterday); S.allTasks = true; break;
     case "newcomer7": at(6, yesterday); S.newcomer = { done: 6, todayDone: false, grand: true }; break;
     case "pending": at(8, yesterday); S.pending = true; break;
     case "slow": at(8, yesterday); S.delay = 2500; break;
@@ -201,7 +206,9 @@ function taskList(today, now) {
   // 新帳號（first、empty）今天什麼都還沒做：任務從 0 開始
   const fresh = S.preset === "first" || S.preset === "empty";
   const p = (n) => (fresh ? 0 : n);
-  const daily = [d("chat5", "turns", p(5), 5, { credits: 30 }), d("chat15", "turns", p(12), 15, { credits: 40 }), d("try_new", "new_work_turns", 0, 3, { credits: 30 }), d("share_open", "share_open", p(1), 1, { credits: 30 })];
+  // allTasks：今日四項都做完了，領完四項才看得到全勤寶箱
+  const f = (n, target) => (S.allTasks ? target : n);
+  const daily = [d("chat5", "turns", p(5), 5, { credits: 30 }), d("chat15", "turns", f(p(12), 15), 15, { credits: 40 }), d("try_new", "new_work_turns", f(0, 3), 3, { credits: 30 }), d("share_open", "share_open", p(1), 1, { credits: 30 })];
   const doneCount = daily.filter((t) => t.status === "claimed").length;
   const dailyAll = { id: "daily_all", type: "daily_all", progress: doneCount, target: daily.length, reward: { chest: "daily_all" }, status: S.tasks.daily_all ?? (doneCount === daily.length ? "claimable" : "locked"), period: today };
   const week = addDays(today, -((new Date(Date.parse(today)).getUTCDay() + 6) % 7));
