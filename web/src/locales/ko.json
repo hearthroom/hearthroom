@@ -2937,10 +2937,10 @@
   "checkin.suki.done": "오늘 건 다 열었어. 내일 또 봐~",
   "checkin.suki.done.night": "다 열었으니 이제 자자~",
   "checkin.suki.broken": "오늘 상자도 가져왔어~",
-  "checkin.suki.win.5": "대박! 오늘 운 좋을 줄 알았어~",
-  "checkin.suki.win.6": "잭팟! 상자 든 손이 떨려~",
+  "checkin.suki.win.5": "대박! 오늘 운 좋다~",
+  "checkin.suki.win.6": "잭팟! 손이 떨려~",
   "checkin.suki.miss.a": "아아, 진짜 아깝다!",
-  "checkin.suki.miss.b": "한 칸 차이였는데… 내일 또 해 보자~",
+  "checkin.suki.miss.b": "한 칸 차이… 내일 또 하자~",
   "checkin.suki.ok.a": "자, 이걸로 대화하러 가~",
   "checkin.suki.ok.b": "오늘 몫이야! 꼭 써~",
   "checkin.suki.ok.c": "헤헤, 오늘도 받았다~",
@@ -2985,5 +2985,5 @@
   "newcomer.tour.gotIt": "알겠어요",
   "checkin.suki.weekly": "이번 주도 수고했어. 자, 받아~",
   "checkin.suki.makeup": "놓쳤던 상자 되찾았어~",
-  "checkin.suki.newcomer": "7일 다 해냈어! 새 주민이 된 걸 환영해~"
+  "checkin.suki.newcomer": "7일 완주! 어서 와~"
 }
