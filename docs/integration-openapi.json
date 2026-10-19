@@ -88,6 +88,10 @@
     {
       "name": "Rewards",
       "description": "Daily check-in, chests and tasks that pay credits from an app's campaign pool to its users."
+    },
+    {
+      "name": "Plans",
+      "description": "One-time 30-day plans: credits on purchase, then an amount to claim each day. Not a subscription; plans never renew. Sold on the provider's own site; apps read the holding and claim the day."
     }
   ],
   "security": [
@@ -10921,7 +10925,7 @@
           "Rewards"
         ],
         "summary": "Check in for today",
-        "description": "Checks the caller in for the current business day and opens today's chests: one chest, or two in order on a milestone day. Chests are drawn on the server; nothing in the request affects the result. Reuse the same `requestId` when retrying: a request that already succeeded returns the original result with `replayed: true`. Checking in again with a new `requestId` on the same day returns `already_claimed` with the original claims, and reusing a `requestId` for a different reward returns `idempotency_conflict`. A chest that cannot be paid yet comes back with `status: pending` and no draw fields; it is drawn and paid later. At most 30 claims a minute per account across all claim endpoints.",
+        "description": "Checks the caller in for the current business day and opens today's chests: one chest, or two in order on a milestone day. Chests are drawn on the server; nothing in the request affects the result. Reuse the same `requestId` when retrying: a request that already succeeded returns the original result with `replayed: true`. Checking in again with a new `requestId` on the same day returns `already_claimed` with the original claims, and reusing a `requestId` for a different reward returns `idempotency_conflict`. A chest that cannot be paid yet comes back with `status: pending` and no draw fields; it is drawn and paid later. At most 30 claims a minute per account across all claim endpoints. If a plan covers today, its credits are claimed first in the same request, and every response after authentication carries `periodPlan`, errors included. A failed plan claim never stops the check-in.",
         "security": [
           {
             "userToken": []
@@ -10983,7 +10987,19 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "periodPlan": {
+                          "$ref": "#/components/schemas/PeriodPlanOutcome"
+                        }
+                      }
+                    }
+                  ]
                 }
               }
             }
@@ -11006,6 +11022,9 @@
                             "$ref": "#/components/schemas/RewardClaim"
                           },
                           "description": "Only on `already_claimed`: the claims recorded the first time."
+                        },
+                        "periodPlan": {
+                          "$ref": "#/components/schemas/PeriodPlanOutcome"
                         }
                       }
                     }
@@ -11029,7 +11048,19 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "periodPlan": {
+                          "$ref": "#/components/schemas/PeriodPlanOutcome"
+                        }
+                      }
+                    }
+                  ]
                 }
               }
             }
@@ -11742,6 +11773,230 @@
           },
           "429": {
             "description": "`rate_limited` — more than 600 events per minute for this client; retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/plans": {
+      "get": {
+        "operationId": "listPlans",
+        "tags": [
+          "Plans"
+        ],
+        "summary": "List the plans on offer",
+        "description": "Returns the plans and their rules. No sign-in needed; the response holds no account data and can be cached for 5 minutes. A plan is a one-time payment, not a subscription, and never renews: it adds `credits` at once, then `dailyCredits` can be claimed on each of its `days` business days. A day's credits that are not claimed that day are lost. Plans stack up to `maxDays`. Plan credits can only be spent on character chat. Purchases happen only at `purchaseUrl`; this API sells nothing. A plan that is no longer sold stays listed with `onSale: false` so holders can still read its rules.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Plans.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanList"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/me/plans": {
+      "get": {
+        "operationId": "listMyPlans",
+        "tags": [
+          "Plans"
+        ],
+        "summary": "Read the caller's plans",
+        "description": "Returns, for each plan, whether one covers today, its last day, today's credits and whether they were claimed, whether another can be bought, and the first-plan bonus. Plans belong to the account, so every app sees the same holding. At most 60 reads a minute per account.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The caller's plans.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyPlanList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`forbidden` — the token was not granted `chat.play`, or it is a personal API key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` — more than 60 reads in a minute; retry shortly.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`temporarily_unavailable` — retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/me/plans/{id}/claim": {
+      "post": {
+        "operationId": "claimMyPlanDay",
+        "tags": [
+          "Plans"
+        ],
+        "summary": "Claim today's plan credits",
+        "description": "Claims today's credits of the plan `id`, for example `month`. A business day is claimed once across all apps: claiming again, or after a check-in already claimed it, returns the first result with `replayed: true`. Reuse the same `requestId` when retrying. At most 30 claims a minute per account.",
+        "security": [
+          {
+            "userToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Plan key.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanClaimRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The claim.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanClaimResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request` — `requestId` is missing or too long.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — missing or invalid bearer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`forbidden` — the token was not granted `chat.play`, or it is a personal API key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`not_eligible` with `reason: no_active_plan` — no plan covers today, or `id` names no plan.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "reason": {
+                          "type": "string",
+                          "enum": [
+                            "no_active_plan"
+                          ],
+                          "description": "Only on `not_eligible`: why the claim was refused."
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` — more than 30 claims in a minute; retry shortly.",
             "content": {
               "application/json": {
                 "schema": {
@@ -18162,6 +18417,14 @@
             "type": "string",
             "format": "date-time",
             "nullable": true
+          },
+          "planKind": {
+            "type": "string",
+            "enum": [
+              "daily",
+              "bonus"
+            ],
+            "description": "Only on plan rows: `daily` — a day's credits; `bonus` — the first-plan bonus for that day. Refunds that take them back carry the same value."
           }
         }
       },
@@ -22289,6 +22552,9 @@
           "replayed": {
             "type": "boolean",
             "description": "True when this response repeats an earlier request with the same `requestId`; nothing new was claimed."
+          },
+          "periodPlan": {
+            "$ref": "#/components/schemas/PeriodPlanOutcome"
           }
         }
       },
@@ -23573,6 +23839,316 @@
               "rejected_stale",
               "rejected_invalid"
             ]
+          }
+        }
+      },
+      "Plan": {
+        "type": "object",
+        "description": "A plan on offer and its rules.",
+        "required": [
+          "id",
+          "onSale",
+          "priceMicro",
+          "currency",
+          "credits",
+          "days",
+          "dailyCredits",
+          "firstBonusDailyCredits",
+          "maxDays",
+          "makeupPerMonth",
+          "purchaseUrl"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Plan key, for example `month`."
+          },
+          "onSale": {
+            "type": "boolean",
+            "description": "False when the plan is no longer sold. Holders keep claiming their days."
+          },
+          "priceMicro": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Price in millionths of `currency` (5000000 is 5)."
+          },
+          "currency": {
+            "type": "string",
+            "description": "ISO 4217 code, for example `USD`."
+          },
+          "credits": {
+            "type": "integer",
+            "description": "Credits added at once when a plan is bought."
+          },
+          "days": {
+            "type": "integer",
+            "description": "Business days one plan covers, starting the day it begins."
+          },
+          "dailyCredits": {
+            "type": "integer",
+            "description": "Credits that can be claimed on each covered day."
+          },
+          "firstBonusDailyCredits": {
+            "type": "integer",
+            "description": "Extra credits on each day of the account's first plan, claimed together with `dailyCredits`. 0 when the current version has no first-plan bonus."
+          },
+          "maxDays": {
+            "type": "integer",
+            "description": "Most days an account can hold at once across stacked plans."
+          },
+          "makeupPerMonth": {
+            "type": "integer",
+            "description": "Makeup passes per month while a plan is active."
+          },
+          "purchaseUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "Page where a signed-in person buys the plan. Open it in a new tab."
+          }
+        }
+      },
+      "PlanList": {
+        "type": "object",
+        "required": [
+          "list"
+        ],
+        "properties": {
+          "list": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Plan"
+            },
+            "description": "Plans; empty when none exists."
+          }
+        }
+      },
+      "MyPlan": {
+        "type": "object",
+        "description": "The caller's holding of one plan.",
+        "required": [
+          "id",
+          "businessDay",
+          "nextResetAt",
+          "active",
+          "endsOn",
+          "remainingDays",
+          "today",
+          "canPurchase",
+          "purchaseBlockedReason",
+          "firstBonus",
+          "makeupPerMonth"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Plan key."
+          },
+          "businessDay": {
+            "type": "string",
+            "format": "date",
+            "description": "Today's business day for this plan."
+          },
+          "nextResetAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the next business day starts."
+          },
+          "active": {
+            "type": "boolean",
+            "description": "True when a plan covers today."
+          },
+          "endsOn": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "Last business day that can be claimed; null without a plan."
+          },
+          "remainingDays": {
+            "type": "integer",
+            "description": "Days left, today included; 0 without a plan."
+          },
+          "today": {
+            "type": "object",
+            "required": [
+              "status",
+              "credits",
+              "bonusCredits"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "claimable",
+                  "claimed",
+                  "revoked",
+                  "none"
+                ],
+                "description": "`claimable` — today's credits can be claimed; `claimed` — already claimed today; `revoked` — today's credits belonged to a refunded plan and were taken back; `none` — no plan covers today."
+              },
+              "credits": {
+                "type": "integer",
+                "description": "Today's whole amount, claimable or claimed, bonus included; 0 for `none`."
+              },
+              "bonusCredits": {
+                "type": "integer",
+                "description": "The part of `credits` that is the first-plan bonus; 0 when there is none."
+              }
+            }
+          },
+          "canPurchase": {
+            "type": "boolean",
+            "description": "Whether the caller can buy another plan now."
+          },
+          "purchaseBlockedReason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "not_on_sale",
+              "plan_limit",
+              "checkout_in_progress",
+              null
+            ],
+            "description": "Why another plan cannot be bought now: `not_on_sale`; `plan_limit` — buying one more would pass `maxDays`; `checkout_in_progress` — an earlier purchase is still being paid or credited. Null when `canPurchase` is true."
+          },
+          "firstBonus": {
+            "type": "object",
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "available",
+                  "active",
+                  "used",
+                  "unavailable"
+                ],
+                "description": "`available` — the account has never bought this plan, so the next one is its first; `active` — the plan covering today is the first; `used` — the first plan was already bought, including when it ran out, was followed by another or was refunded; `unavailable` — the current version has no first-plan bonus."
+              }
+            }
+          },
+          "makeupPerMonth": {
+            "type": "integer",
+            "description": "Makeup passes per month: the plan's number while it is active, otherwise the app's."
+          },
+          "badge": {
+            "type": "string",
+            "description": "Present only while a plan is active, for example `plan_month`."
+          }
+        }
+      },
+      "MyPlanList": {
+        "type": "object",
+        "required": [
+          "serverNow",
+          "list"
+        ],
+        "properties": {
+          "serverNow": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Server time, for countdowns."
+          },
+          "list": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MyPlan"
+            },
+            "description": "One entry per plan; empty when none exists."
+          }
+        }
+      },
+      "PlanClaimRequest": {
+        "type": "object",
+        "required": [
+          "requestId"
+        ],
+        "example": {
+          "requestId": "plan-2026-10-21-a1b2c3"
+        },
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "maxLength": 128,
+            "description": "Your own identifier for this request. Send the same value when retrying."
+          }
+        }
+      },
+      "PlanClaimResult": {
+        "type": "object",
+        "required": [
+          "day",
+          "credits",
+          "bonusCredits",
+          "status",
+          "replayed"
+        ],
+        "properties": {
+          "day": {
+            "type": "string",
+            "format": "date",
+            "description": "Business day claimed."
+          },
+          "credits": {
+            "type": "integer",
+            "description": "Credits for the day, bonus included."
+          },
+          "bonusCredits": {
+            "type": "integer",
+            "description": "The part of `credits` that is the first-plan bonus."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "granted",
+              "revoked"
+            ],
+            "description": "`granted` — the credits are in the wallet; `revoked` — they belonged to a refunded plan and were taken back."
+          },
+          "replayed": {
+            "type": "boolean",
+            "description": "True when today was already claimed, from any app or by a check-in; this is the first result."
+          }
+        }
+      },
+      "PeriodPlanOutcome": {
+        "type": "object",
+        "description": "What happened to today's plan credits during a check-in.",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "granted",
+              "revoked",
+              "none",
+              "unavailable"
+            ],
+            "description": "`granted` — today's credits are in the wallet; `revoked` — they belonged to a refunded plan; `none` — no plan covers today; `unavailable` — the plan claim failed while the check-in went ahead, so claim it later with `claimMyPlanDay`."
+          },
+          "day": {
+            "type": "string",
+            "format": "date",
+            "description": "Business day, on `granted` and `revoked`."
+          },
+          "credits": {
+            "type": "integer",
+            "description": "On `granted`: credits for the day, bonus included."
+          },
+          "bonusCredits": {
+            "type": "integer",
+            "description": "On `granted`: the part of `credits` that is the first-plan bonus."
+          },
+          "replayed": {
+            "type": "boolean",
+            "description": "On `granted`: true when today had been claimed before."
           }
         }
       }
