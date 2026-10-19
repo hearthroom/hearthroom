@@ -2244,5 +2244,6 @@
   "d233e1e8b94bd": "`granted` 時：當天的 credits，含加贈。",
   "d76e57e80c49c": "`granted` 時：`credits` 中屬於第一張方案加贈的部分。",
   "d247df91447a5": "`granted` 時：今天之前就已領過時為 true。",
-  "deda643cd4fe0": "期間方案"
+  "deda643cd4fe0": "期間方案",
+  "d17f7d9b915e9": "第一張方案有效期間每天額外加贈的 credits；`unavailable` 時為 0。"
 }

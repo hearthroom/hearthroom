@@ -2244,5 +2244,6 @@
   "d233e1e8b94bd": "On `granted`: credits for the day, bonus included.",
   "d76e57e80c49c": "On `granted`: the part of `credits` that is the first-plan bonus.",
   "d247df91447a5": "On `granted`: true when today had been claimed before.",
-  "deda643cd4fe0": "Plans"
+  "deda643cd4fe0": "Plans",
+  "d17f7d9b915e9": "Extra credits per day while the first plan is active; 0 for `unavailable`."
 }

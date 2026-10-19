@@ -23935,6 +23935,7 @@
           "today",
           "canPurchase",
           "purchaseBlockedReason",
+          "firstBonusDailyCredits",
           "firstBonus",
           "makeupPerMonth"
         ],
@@ -24017,7 +24018,8 @@
           "firstBonus": {
             "type": "object",
             "required": [
-              "status"
+              "status",
+              "dailyCredits"
             ],
             "properties": {
               "status": {
@@ -24029,6 +24031,10 @@
                   "unavailable"
                 ],
                 "description": "`available` — the account has never bought this plan, so the next one is its first; `active` — the plan covering today is the first; `used` — the first plan was already bought, including when it ran out, was followed by another or was refunded; `unavailable` — the current version has no first-plan bonus."
+              },
+              "dailyCredits": {
+                "type": "integer",
+                "description": "Extra credits per day while the first plan is active; 0 for `unavailable`."
               }
             }
           },
@@ -24039,6 +24045,10 @@
           "badge": {
             "type": "string",
             "description": "Present only while a plan is active, for example `plan_month`."
+          },
+          "firstBonusDailyCredits": {
+            "type": "integer",
+            "description": "Extra credits on each day of the account's first plan, claimed together with `dailyCredits`. 0 when the current version has no first-plan bonus."
           }
         }
       },

@@ -2244,5 +2244,6 @@
   "d233e1e8b94bd": "`granted`일 때: 그날의 credits(보너스 포함).",
   "d76e57e80c49c": "`granted`일 때: `credits` 중 첫 플랜 보너스에 해당하는 부분.",
   "d247df91447a5": "`granted`일 때: 오늘 이미 받았으면 true입니다.",
-  "deda643cd4fe0": "기간 플랜"
+  "deda643cd4fe0": "기간 플랜",
+  "d17f7d9b915e9": "첫 플랜이 유효한 동안 매일 추가되는 credits. `unavailable`이면 0입니다."
 }
