@@ -72,10 +72,16 @@ export interface MilestoneView { today: boolean; day: number; cur: number; max: 
 
 /** 里程碑條：從上一個存檔點到下一個。當天的箱子含里程碑箱時一律寫「今天」，不看 inDays 的邊界值。 */
 export function milestoneView(p: RewardsPanel, plan: PlanLike): MilestoneView | null {
-  const next = p.checkin.nextMilestone;
+  let next = p.checkin.nextMilestone;
   if (!next) return null;
-  const todayMilestone = p.checkin.todayChests.map((ch) => milestoneDays(ch, plan)).find((d) => d != null);
   const cur = streakChip(p).n;
+  // todayChests 是「今天簽到開的箱子」，簽完還留著（契約）：簽完就不再說「今天多開一個」，改指下一個里程碑
+  const claimed = p.checkin.todayClaimed;
+  const todayMilestone = claimed ? undefined : p.checkin.todayChests.map((ch) => milestoneDays(ch, plan)).find((d) => d != null);
+  if (claimed && next.day <= cur) {
+    const day = milestoneAfter(cur, plan);
+    if (day != null) next = { ...next, day, inDays: day - cur };
+  }
   const spacing = spacingOf(plan);
   const from = Math.max(0, next.day - spacing);
   const ratio = Math.min(1, Math.max(0, (cur - from) / (next.day - from || 1)));
@@ -83,6 +89,18 @@ export function milestoneView(p: RewardsPanel, plan: PlanLike): MilestoneView | 
   // 漏簽、補得回來：還沒選之前畫面一律照原本的天數講（ui.md §3.6），伺服器的 inDays 可能是照退回後算的
   const left = heroState(p) === "brokenCard" ? Math.max(1, next.day - cur) : next.inDays;
   return { today: false, day: next.day, cur, max: next.day, left, ratio };
+}
+
+/** 連簽 cur 天之後的下一個里程碑：方案的里程碑天數每 milestoneCycle 天重來一次 */
+function milestoneAfter(cur: number, plan: PlanLike): number | null {
+  const at = (plan?.checkin?.milestones ?? []).map((m) => m.at);
+  if (!at.length) return null;
+  const cycle = plan?.checkin?.milestoneCycle ?? Math.max(...at);
+  for (let k = 0; k * cycle <= cur + cycle; k++) {
+    const day = at.map((a) => a + k * cycle).filter((d) => d > cur).sort((a, b) => a - b)[0];
+    if (day != null) return day;
+  }
+  return null;
 }
 
 function spacingOf(plan: PlanLike): number {

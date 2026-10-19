@@ -25,7 +25,7 @@ export interface RewardPlan {
   dayStartHour: number;
   chests: Record<string, PlanChest>;
   pity?: { threshold: number; every: number; chests: string[] };
-  checkin?: { cycle: string[]; milestones?: { at: number; chest: string }[]; makeupPerMonth?: number; makeupWindowDays?: number };
+  checkin?: { cycle: string[]; milestones?: { at: number; chest: string }[]; milestoneCycle?: number; makeupPerMonth?: number; makeupWindowDays?: number };
 }
 
 export type ClaimStatus = "granted" | "pending" | "not_granted";
