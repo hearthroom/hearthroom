@@ -100,6 +100,13 @@ describe("里程碑", () => {
     expect(v?.today).toBe(true);
     expect(v?.day).toBe(14);
   });
+  // 契約：todayChests 是「今天簽到開的箱子」，簽完還留著（QA ⚠️18，接本機 Harbor）
+  it("里程碑那天簽完：指向下一個里程碑，不再寫「今天多開一個」", () => {
+    const done = { streak: 14, todayClaimed: true, todayChests: ["day7", "m14"] };
+    expect(milestoneView(panel({ ...done, nextMilestone: { day: 28, chest: "m28", inDays: 14 } }), plan)).toMatchObject({ today: false, day: 28, max: 28, left: 14 });
+    // 伺服器還指著今天那個（還有 0 天）：照方案往後推到下一個
+    expect(milestoneView(panel({ ...done, nextMilestone: { day: 14, chest: "m14", inDays: 0 } }), plan)).toMatchObject({ today: false, day: 28, max: 28, left: 14 });
+  });
   it("28 天後：條從上一個存檔點算起", () => {
     const v = milestoneView(panel({ streak: 30, nextMilestone: { day: 42, chest: "m14", inDays: 12 } }), plan);
     expect(v).toMatchObject({ cur: 30, max: 42, left: 12 });

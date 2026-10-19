@@ -178,7 +178,8 @@ function panel(now) {
     if (S.madeUp.includes(base + i)) status = "made_up";
     return { day: addDays(today, i - pos), chest, status };
   });
-  const todayChests = claimedToday ? [] : broken && !repairable ? [cycleChest(7 * Math.floor(S.streak / 7) + 1)] : [cycleChest(nextStreak), milestoneOf(nextStreak)].filter(Boolean);
+  // 契約：今天簽到開的箱子，簽完還留著
+  const todayChests = claimedToday ? [cycleChest(S.streak), milestoneOf(S.streak)].filter(Boolean) : broken && !repairable ? [cycleChest(7 * Math.floor(S.streak / 7) + 1)] : [cycleChest(nextStreak), milestoneOf(nextStreak)].filter(Boolean);
   const msTarget = (() => { const s = claimedToday ? S.streak : nextStreak - 1; let d = s + 1; while (!milestoneOf(d)) d++; return { day: d, chest: milestoneOf(d), inDays: d - s }; })();
   const tasks = taskList(today, now);
   const n = S.newcomer;
