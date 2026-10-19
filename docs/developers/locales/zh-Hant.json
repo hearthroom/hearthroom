@@ -2229,7 +2229,7 @@
   "dc94cf243c820": "呼叫者現在能不能再買一張方案。",
   "d257769eb3d83": "現在不能再買的原因：`not_on_sale`；`plan_limit` — 再買一張會超過 `maxDays`；`checkout_in_progress` — 上一筆購買還在付款或入帳中。`canPurchase` 為 true 時為 null。",
   "ddf2b602a1dd2": "`available` — 帳號從沒買過這個方案，下一張就是第一張；`active` — 今天涵蓋的這張就是第一張；`used` — 第一張已經買過，用完、接著又買了一張或已退款都算；`unavailable` — 目前的版本沒有第一張加贈。",
-  "d5ea081b429bd": "每月的補簽卡張數：方案有效期間用方案的數字，否則用應用的。",
+  "d5ea081b429bd": "方案給的每月補簽卡張數（例如 3），和目前有沒有方案無關。本月還剩幾張看 `getMyRewards` 的 `checkin.makeup.left`。",
   "d132f1322aef7": "只在方案有效期間出現，例如 `plan_month`。",
   "da4ec2eeb9ee8": "伺服器時間，用於倒數。",
   "d7a136dab063c": "每個方案一筆；沒有任何方案時為空。",
@@ -2245,5 +2245,6 @@
   "d76e57e80c49c": "`granted` 時：`credits` 中屬於第一張方案加贈的部分。",
   "d247df91447a5": "`granted` 時：今天之前就已領過時為 true。",
   "deda643cd4fe0": "期間方案",
-  "d17f7d9b915e9": "第一張方案有效期間每天額外加贈的 credits；`unavailable` 時為 0。"
+  "d17f7d9b915e9": "第一張方案有效期間每天額外加贈的 credits；`unavailable` 時為 0。",
+  "d84faf80d5191": "只在 `plan_limit` 時出現：最早可以再買的業務日；其他情況為 null。"
 }
