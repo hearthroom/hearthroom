@@ -13,6 +13,7 @@
  *   brokenCard   連續 17 天，昨天漏簽，有補簽卡可用
  *   brokenNoCard 連續 17 天，漏了兩天，補不回來
  *   newcomer5／newcomer6 新手七日第 5、6 天（導覽：畫布設定、卡片頁分享）
+ *   newcomerReached 新手七日第 4 天的目標做到了、還沒領（Harbor 要領取才入帳）
  *   allTasks     今日四項任務都可領，領完開全勤寶箱
  *   newcomer4    新手七日完成 3 天，今天第 4 天的目標
  *   newcomer7    新手七日完成 6 天，今天可以開新住民寶箱
@@ -92,6 +93,7 @@ export function setPreset(preset, opts = {}) {
     case "brokenCard": at(17, addDays(today, -2)); break;
     case "brokenNoCard": at(17, addDays(today, -3)); break;
     case "newcomer4": at(3, yesterday); S.newcomer = { done: 3, todayDone: false }; break;
+    case "newcomerReached": at(3, yesterday); S.newcomer = { done: 3, todayDone: false, reached: true }; break;
     case "newcomer5": at(4, yesterday); S.newcomer = { done: 4, todayDone: false }; break;
     case "newcomer6": at(5, yesterday); S.newcomer = { done: 5, todayDone: false }; break;
     case "allTasks": at(8, yesterday); S.allTasks = true; break;
@@ -194,8 +196,8 @@ function panel(now) {
     tasks,
     newcomer: n ? {
       active: true, stage: n.done, deadline: iso(boundary(addDays(today, 14 - n.done))),
-      today: { stage: Math.min(7, n.done + 1), goal: NEWCOMER_GOALS[Math.min(7, n.done + 1) - 1], progress: n.grand ? 1 : n.todayDone ? 3 : 1, target: n.grand ? 1 : 3, status: n.todayDone ? "claimed" : n.grand ? "claimable" : "locked" },
-      stages: [1, 2, 3, 4, 5, 6, 7].map((s) => ({ stage: s, goal: NEWCOMER_GOALS[s - 1], target: [3, 3, 3, 1, 1, 1, 1][s - 1], reward: s < 7 ? { credits: s <= 2 ? 300 : 200 } : { chest: "newcomer" }, status: s <= n.done ? "claimed" : s === n.done + 1 && (n.todayDone || n.grand) ? (n.todayDone ? "claimed" : "claimable") : "locked" })),
+      today: { stage: Math.min(7, n.done + 1), goal: NEWCOMER_GOALS[Math.min(7, n.done + 1) - 1], progress: n.grand ? 1 : n.todayDone || n.reached ? 3 : 1, target: n.grand ? 1 : 3, status: n.todayDone ? "claimed" : n.grand || n.reached ? "claimable" : "locked" },
+      stages: [1, 2, 3, 4, 5, 6, 7].map((s) => ({ stage: s, goal: NEWCOMER_GOALS[s - 1], target: [3, 3, 3, 1, 1, 1, 1][s - 1], reward: s < 7 ? { credits: s <= 2 ? 300 : 200 } : { chest: "newcomer" }, status: s <= n.done ? "claimed" : s === n.done + 1 && (n.todayDone || n.grand || n.reached) ? (n.todayDone ? "claimed" : "claimable") : "locked" })),
     } : null,
     credits: { expiring: S.expiring },
     hints: [],
@@ -261,7 +263,9 @@ export async function handleRewards({ m, path, url, body, json, res }) {
     const n = S.newcomer;
     if (!n) { json(res, 422, { error: "not_eligible", reason: "progress" }); return true; }
     if (n.grand) { n.done = 7; n.todayDone = true; const d = { ...draw("newcomer", now), item: "hearth_newcomer" }; S.history.unshift(d); json(res, 200, { claim: d }); return true; }
-    n.done += 1; n.todayDone = true;
+    // 跟 Harbor 一樣：今天的目標做到了才領得到
+    if (!n.reached || n.todayDone) { json(res, 422, { error: "not_eligible", reason: "progress" }); return true; }
+    n.done += 1; n.todayDone = true; n.reached = false;
     json(res, 200, { claim: { rewardKey: `newcomer:${n.done}`, status: "granted", credits: 200, expiresAt: expiresAt(200, now), duplicate: false } }); return true;
   }
   if (path === "/open/v1/me/rewards/draws") {
