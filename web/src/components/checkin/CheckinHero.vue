@@ -9,7 +9,8 @@ import { useI18n } from "vue-i18n";
 import CheckinTrack from "./CheckinTrack.vue";
 import CreditIcon from "./CreditIcon.vue";
 import { chestTitle, countdown, heroState, isMilestoneChest, milestoneView, pityView, streakChip, trackNodes } from "@/lib/checkin";
-import { poseUrl } from "@/lib/checkin-art";
+import { boxKindOf, poseUrl } from "@/lib/checkin-art";
+import SukiCarry from "./SukiCarry.vue";
 import { isNight } from "@/lib/mascot-home";
 import { monthDayOf, monthDayTime, whole } from "@/lib/format";
 import type { ClaimResult, RewardPlan, RewardsPanel } from "@/lib/rewards";
@@ -71,7 +72,7 @@ const sukiLine = computed(() => {
     default: return t("checkin.suki.broken");
   }
 });
-const pose = computed(() => poseUrl(state.value === "done" ? "wave" : "carry", new Date(props.now)));
+const pose = computed(() => poseUrl("wave", new Date(props.now)));
 
 /** 今天開到的簽到寶箱（任務寶箱不算），里程碑日兩份都列；沒發放的不列。 */
 const isCheckinChest = (c: ClaimResult) => !!c.chest && (props.plan?.checkin?.cycle.includes(c.chest) || isMilestoneChest(c.chest, props.plan) || c.rewardKey.startsWith("checkin"));
@@ -107,7 +108,8 @@ const ctaLabel = computed(() => (state.value === "two" ? t("checkin.cta.openTwo"
       </div>
     </div>
 
-    <img class="hero__suki" :src="pose" alt="" width="381" height="560" decoding="async" />
+    <SukiCarry v-if="state !== 'done'" class="hero__suki" :kind="boxKindOf(firstChest)" :now="now" />
+    <img v-else class="hero__suki" :src="pose" alt="" width="381" height="560" decoding="async" />
 
     <div class="hero__cta">
       <template v-if="state === 'done'">
@@ -173,7 +175,8 @@ const ctaLabel = computed(() => (state.value === "two" ? t("checkin.cta.openTwo"
 .hero__broken { margin-top:var(--s-2); padding:var(--s-3); border-radius:var(--r-md); background:var(--surface-2); font-size:13px; line-height:1.6; color:var(--text); }
 .hero__broken p { margin:0; text-wrap:pretty; }
 .hero__cards { display:inline-flex; margin-top:var(--s-2); height:24px; align-items:center; padding:0 10px; border-radius:var(--r-pill); background:var(--surface); color:var(--text-2); font-size:12px; white-space:nowrap; }
-.hero__suki { grid-area:suki; width:120px; height:168px; object-fit:contain; object-position:50% 100%; align-self:end; pointer-events:none; user-select:none; }
+.hero__suki { grid-area:suki; width:120px; height:168px; object-fit:contain; object-position:50% 100%; align-self:end; justify-self:center; pointer-events:none; user-select:none; }
+span.hero__suki { width:auto; }
 .hero__cta { grid-area:cta; display:grid; gap:var(--s-2); }
 .hero__main, .hero__alt { width:100%; }
 .hero__main { position:relative; }

@@ -5,6 +5,7 @@
  */
 import { useI18n } from "vue-i18n";
 import type { TrackNode } from "@/lib/checkin";
+import { boxKindOf, boxThumb } from "@/lib/checkin-art";
 
 defineProps<{ nodes: TrackNode[] }>();
 const { t } = useI18n();
@@ -33,7 +34,7 @@ const aria = (n: TrackNode) => {
           <svg v-if="node.state === 'done' || node.state === 'todayDone' || node.state === 'makeup'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg>
           <span v-else aria-hidden="true">{{ node.n }}</span>
         </span>
-        <svg v-if="node.better" class="track__gift" :class="{ 'track__gift--big': node.n === nodes.length }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="8" width="18" height="4" rx="1" /><path d="M5 12v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8M12 8v13M12 8S10.5 3 8 3a2.5 2.5 0 0 0 0 5M12 8s1.5-5 4-5a2.5 2.5 0 0 1 0 5" /></svg>
+        <img v-if="node.better" class="track__gift" :class="{ 'track__gift--big': node.n === nodes.length }" :src="boxThumb(boxKindOf(node.chest))" alt="" aria-hidden="true" />
       </li>
     </template>
   </ol>
@@ -58,8 +59,9 @@ const aria = (n: TrackNode) => {
   animation:track-ping 600ms var(--ease) 1;
 }
 .track__node--makeup .track__dot, .track__node--repairable .track__dot { background:transparent; color:var(--accent-text); outline:2px dashed var(--accent); outline-offset:-2px; }
-.track__gift { width:14px; height:14px; color:var(--text-3); }
-.track__gift--big { width:18px; height:18px; color:var(--accent-text); }
+/* 好箱子的提示用實際的箱子縮圖（美工四種箱子；第 7 天比第 3 天大，美術總監 §17） */
+.track__gift { width:auto; height:18px; }
+.track__gift--big { height:22px; }
 @keyframes track-ping { from { box-shadow:0 0 0 0 var(--accent-soft); } to { box-shadow:0 0 0 4px var(--accent-soft); } }
 @media (min-width: 761px) {
   .track__node { width:48px; } .track__node--big { width:52px; }

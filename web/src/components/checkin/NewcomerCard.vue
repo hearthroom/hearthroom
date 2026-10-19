@@ -7,6 +7,7 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { newcomerView } from "@/lib/checkin";
 import { whole } from "@/lib/format";
+import { NEWCOMER_BADGE } from "@/lib/checkin-art";
 import type { RewardsPanel } from "@/lib/rewards";
 
 const props = defineProps<{ panel: RewardsPanel; busy: boolean }>();
@@ -19,7 +20,11 @@ const todayRatio = computed(() => (n.value.today.target ? Math.min(1, n.value.to
 </script>
 
 <template>
-  <section v-if="view" id="newcomer" class="nc panel" aria-labelledby="nc-title">
+  <section v-if="view && view.finished" id="newcomer" class="nc nc--done panel">
+    <img :src="NEWCOMER_BADGE" alt="" width="48" height="48" />
+    <strong>{{ t("newcomer.finished") }}</strong>
+  </section>
+  <section v-else-if="view" id="newcomer" class="nc panel" aria-labelledby="nc-title">
     <header class="nc__head">
       <h2 id="nc-title">{{ t("newcomer.title") }}</h2>
       <span class="nc__left">{{ t("newcomer.left", { n: view.left }, view.left) }}</span>
@@ -53,6 +58,8 @@ const todayRatio = computed(() => (n.value.today.target ? Math.min(1, n.value.to
 
 <style scoped>
 .nc { padding:var(--s-4); display:grid; gap:var(--s-3); scroll-margin-top:calc(var(--header-h) + var(--s-4)); }
+.nc--done { display:flex; align-items:center; gap:var(--s-3); }
+.nc--done img { width:48px; height:48px; }
 .nc__head { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:baseline; gap:2px var(--s-3); }
 .nc__head h2 { margin:0; font-size:16px; font-weight:700; }
 .nc__left { font-size:12px; color:var(--text-3); white-space:nowrap; }
