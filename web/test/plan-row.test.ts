@@ -2,7 +2,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { createApp, nextTick } from "vue";
 import { createPinia } from "pinia";
-import { i18n } from "../src/lib/i18n";
+import { i18n, loadLocale } from "../src/lib/i18n";
 
 vi.mock("../src/lib/session", () => ({ useSession: () => ({ accessToken: async () => "tok", refreshWallet: async () => undefined }) }));
 import { usePeriodPlans } from "../src/lib/period-plan-store";
@@ -34,7 +34,7 @@ it("持卡、還沒簽到：剩幾天、簽到時一起領今天的總數、首�
   const text = (await mount(plan())).textContent!;
   expect(text).toContain("月卡 · 剩 23 天");
   expect(text).toContain("簽到時一起領 1,000 積分");
-  expect(text).toContain("其中 500 是首張加贈");
+  expect(text).toContain("其中 500 是首購加贈");
   expect(text).toContain("本月補簽卡剩 3 張");
   expect(text).not.toMatch(/45,000|角色對話|機率|寶箱/);
 });
@@ -48,5 +48,15 @@ it("最後一天換成「今天最後一天」；第二張起沒有加贈半句"
   const text = (await mount(plan({ remainingDays: 1, today: { status: "claimed", credits: 500, bonusCredits: 0 } }))).textContent!;
   expect(text).toContain("月卡 · 今天最後一天");
   expect(text).toContain("今天已領 +500 積分");
-  expect(text).not.toContain("首張加贈");
+  expect(text).not.toContain("首購加贈");
+});
+
+it("英文照單複數：剩 23 天與補簽卡張數", async () => {
+  await loadLocale("en");
+  const root = await mount(plan());
+  i18n.global.locale.value = "en";
+  await nextTick();
+  expect(root.textContent).toContain("23 days left");
+  expect(root.textContent).not.toContain("|");
+  i18n.global.locale.value = "zh-Hant";
 });
