@@ -608,7 +608,10 @@ button { font:inherit; color:inherit; }
 .odds { display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:0 12px; font-size:13px; color:var(--stage-cream); opacity:.75; text-decoration:underline; text-underline-offset:3px; }
 .primary { min-width:200px; height:48px; padding:0 28px; border:0; border-radius:24px; background:var(--stage-rose); color:#fff; font-size:17px; font-weight:700; cursor:pointer; box-shadow:0 6px 18px rgba(229,80,110,.35); }
 .ghost { height:48px; min-width:200px; padding:0 28px; border-radius:24px; border:1px solid rgba(255,246,230,.4); background:transparent; font-size:15px; cursor:pointer; }
-.st-error ~ .st-foot .ghost, .st-error ~ .st-foot .primary { min-width:0; flex:1 1 0; }
+.primary, .ghost { white-space:nowrap; }
+/* 錯誤時兩顆並排：放不下就各自一列，字不折行 */
+.st-error ~ .st-foot .btns { flex-wrap:wrap; justify-content:center; max-width:100%; }
+.st-error ~ .st-foot .ghost, .st-error ~ .st-foot .primary { min-width:0; flex:1 1 auto; padding:0 20px; }
 .hearts { position:absolute; left:50%; top:30%; width:0; height:0; pointer-events:none; z-index:1; }
 .heart { position:absolute; left:0; top:0; width:20px; height:20px; opacity:0; color:var(--stage-rose); will-change:transform, opacity; }
 .heart--gold { color:var(--stage-gold); }

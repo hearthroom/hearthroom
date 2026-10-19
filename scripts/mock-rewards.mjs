@@ -192,12 +192,15 @@ function panel(now) {
 function taskList(today, now) {
   const st = (id, progress, target) => S.tasks[id] ?? (progress >= target ? "claimable" : "locked");
   const d = (id, type, progress, target, reward) => ({ id, type, progress: Math.min(progress, target), target, reward, status: st(id, progress, target), period: today });
-  const daily = [d("chat5", "turns", 5, 5, { credits: 30 }), d("chat20", "turns", 12, 20, { credits: 40 }), d("try_new", "new_work_turns", 0, 3, { credits: 30 }), d("share_open", "share_open", 1, 1, { credits: 30 })];
+  // 新帳號（first、empty）今天什麼都還沒做：任務從 0 開始
+  const fresh = S.preset === "first" || S.preset === "empty";
+  const p = (n) => (fresh ? 0 : n);
+  const daily = [d("chat5", "turns", p(5), 5, { credits: 30 }), d("chat20", "turns", p(12), 20, { credits: 40 }), d("try_new", "new_work_turns", 0, 3, { credits: 30 }), d("share_open", "share_open", p(1), 1, { credits: 30 })];
   const doneCount = daily.filter((t) => t.status === "claimed").length;
   const dailyAll = { id: "daily_all", type: "daily_all", progress: doneCount, target: daily.length, reward: { chest: "daily_all" }, status: S.tasks.daily_all ?? (doneCount === daily.length ? "claimable" : "locked"), period: today };
   const week = addDays(today, -((new Date(Date.parse(today)).getUTCDay() + 6) % 7));
   const w = (id, type, progress, target, reward) => ({ id, type, progress: Math.min(progress, target), target, reward, status: S.tasks[id] ?? (progress >= target ? "claimable" : "locked"), period: week });
-  const weekly = [w("weekly_active", "active_days", 3, 5, { chest: "weekly_active" }), w("author_reply", "author_replies", 0, 3, { credits: 150 }), w("weekly_share", "share_open_distinct", 5, 5, { chest: "weekly_share" })];
+  const weekly = [w("weekly_active", "active_days", p(3), 5, { chest: "weekly_active" }), w("author_reply", "author_replies", 0, 3, { credits: 150 }), w("weekly_share", "share_open_distinct", p(5), 5, { chest: "weekly_share" })];
   if (S.preset === "first") weekly[1].status = "unavailable";
   return { daily, weekly, dailyAll };
 }
