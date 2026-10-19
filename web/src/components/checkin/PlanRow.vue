@@ -31,11 +31,12 @@ watch(() => line.value.kind, async (now, before) => {
 <template>
   <section v-if="line.kind !== 'hidden' && mine" class="plan-row panel settle">
     <p class="plan-row__title">{{ mine.remainingDays <= 1 ? t("plan.row.title.last") : t("plan.row.title", { n: whole(mine.remainingDays) }, mine.remainingDays) }}</p>
-    <PlanToday class="plan-row__today" :line="line" :claiming="plans.claiming" @claim="plans.claim()" />
-    <p class="plan-row__sub">
-      <span v-if="line.bonusCredits > 0">{{ t("plan.row.bonusPart", { bonus: whole(line.bonusCredits) }) }}</span>
-      <span>{{ t("plan.row.makeup", { left: whole(makeupLeft) }, makeupLeft) }}</span>
-    </p>
+    <div class="plan-row__today">
+      <PlanToday :line="line" :claiming="plans.claiming" @claim="plans.claim()" />
+      <!-- 「其中 500 是首購加贈」緊跟在今天的總數後面，讀者先看到 1,000 再看到它怎麼來（PM 2026-10-19） -->
+      <span v-if="line.bonusCredits > 0 && line.kind !== 'waiting'" class="plan-row__part">{{ t("plan.row.bonusPart", { bonus: whole(line.bonusCredits) }) }}</span>
+    </div>
+    <p class="plan-row__sub">{{ t("plan.row.makeup", { left: whole(makeupLeft) }, makeupLeft) }}</p>
     <span class="sr-only" role="status">{{ spoken }}</span>
   </section>
 </template>
@@ -45,13 +46,12 @@ watch(() => line.value.kind, async (now, before) => {
    Narrow phones: today's state drops under the title, left-aligned, then the second line. */
 .plan-row { display:grid; grid-template-columns:minmax(0, 1fr) auto; align-items:center; gap:2px var(--s-3); padding:var(--s-3) var(--s-4); }
 .plan-row__title { margin:0; font-size:14px; font-weight:600; color:var(--text); }
-.plan-row__today { justify-self:end; }
-.plan-row__sub { grid-column:1 / -1; margin:0; display:flex; flex-wrap:wrap; gap:0 var(--s-1); font-size:12px; color:var(--text-3); }
-/* The separator ends the previous part, so a wrapped line never starts with it. */
-.plan-row__sub > span:not(:last-child)::after { content:" ·"; }
+.plan-row__today { justify-self:end; display:grid; justify-items:end; gap:2px; }
+.plan-row__part { font-size:12px; color:var(--text-3); }
+.plan-row__sub { grid-column:1 / -1; margin:0; font-size:12px; color:var(--text-3); }
 :lang(ko) .plan-row { word-break:keep-all; }
 @media (max-width: 380px) {
   .plan-row { grid-template-columns:minmax(0, 1fr); }
-  .plan-row__today { justify-self:start; justify-content:flex-start; }
+  .plan-row__today { justify-self:start; justify-items:start; }
 }
 </style>

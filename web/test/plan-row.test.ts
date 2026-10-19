@@ -71,3 +71,11 @@ it("自動補領還在路上：月卡列照樣在，右側不畫按鈕也不畫�
   expect(root.querySelector("button")).toBeNull();
   expect(root.querySelector(".plan-row__today")?.textContent?.trim()).toBe("");
 });
+
+it("首購加贈那半句緊跟在今天的總數後面，補簽卡在最後（PM 2026-10-19）", async () => {
+  const text = (await mount(plan())).textContent!;
+  const total = text.indexOf("簽到時一起領 1,000 積分"), part = text.indexOf("其中 500 是首購加贈"), makeup = text.indexOf("本月補簽卡剩 3 張");
+  expect(total).toBeGreaterThan(-1);
+  expect(part).toBeGreaterThan(total);
+  expect(makeup).toBeGreaterThan(part);
+});
