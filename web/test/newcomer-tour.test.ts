@@ -27,6 +27,8 @@ it("day 1 ends on the card page's play button", () => {
   expect(NEWCOMER_TOUR[1].map((s) => s.id)).toEqual(["1.board", "1.tags", "1.play"]);
   const play = NEWCOMER_TOUR[1][2];
   expect(play.target).toBe('[data-tour="card-play"]');
+  // 桌機泡泡落在按鈕下方時，不蓋到緊接在下面的分級那一行（PM 2026-10-19）
+  expect(play.clear).toBe('[data-tour="card-grade"]');
   expect(awayMode(play, "home")).toBe("card");
   expect(awayMode(play, "card")).toBeNull();
 });

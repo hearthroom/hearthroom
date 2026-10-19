@@ -9,11 +9,12 @@ import { reactive } from "vue";
 import type { Router } from "vue-router";
 
 export type NewcomerPage = "home" | "card" | "play" | "wallet" | "any";
-export interface NewcomerStep { id: string; page: NewcomerPage; target: string | null }
+/** clear：泡泡放在目標下方時要讓開的東西（例如卡片頁按鈕正下方的分級那一行），泡泡改從它底下開始 */
+export interface NewcomerStep { id: string; page: NewcomerPage; target: string | null; clear?: string }
 
 export const NEWCOMER_TOUR: Record<number, NewcomerStep[]> = {
   // 第 1 天要聊滿回合：最後一步帶到卡片頁框「開始聊」（PM 2026-10-19）
-  1: [{ id: "1.board", page: "home", target: ".sorts" }, { id: "1.tags", page: "home", target: "nav.discovery-tags" }, { id: "1.play", page: "card", target: '[data-tour="card-play"]' }],
+  1: [{ id: "1.board", page: "home", target: ".sorts" }, { id: "1.tags", page: "home", target: "nav.discovery-tags" }, { id: "1.play", page: "card", target: '[data-tour="card-play"]', clear: '[data-tour="card-grade"]' }],
   2: [{ id: "2.resume", page: "home", target: '[data-tour="home-resume"]' }],
   3: [{ id: "3.roll", page: "home", target: '[data-tour="home-roll"]' }, { id: "3.tags", page: "home", target: "nav.discovery-tags" }],
   4: [{ id: "4.score", page: "card", target: '[data-tour="card-score"]' }, { id: "4.comment", page: "card", target: '[data-tour="card-comments"]' }],
