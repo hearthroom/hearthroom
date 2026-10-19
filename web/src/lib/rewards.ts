@@ -58,6 +58,8 @@ export interface RewardTask {
   reward: { credits?: number; chest?: string };
   status: TaskStatus;
   period: string;
+  /** 留言任務的字數門檻（Harper B4 補進契約） */
+  minTextUnits?: number;
 }
 
 export interface NewcomerStage { stage: number; credits?: number; chest?: string; done: boolean }
