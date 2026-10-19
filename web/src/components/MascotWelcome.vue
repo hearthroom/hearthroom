@@ -64,6 +64,8 @@ function close(source: "close" | "browse") {
 .welcome { display: flex; flex-direction: column; justify-content: center; }
 .welcome__text { max-width: 460px; padding: var(--s-5) 3.5%; display: grid; gap: var(--s-2); }
 .welcome__title { margin: 0; font-size: 24px; font-weight: 800; line-height: 1.35; }
+/* 中日文照詞斷行：日文「看板娘」不從中間斷（文案 r2） */
+:lang(zh) .welcome__title, :lang(ja) .welcome__title { word-break: auto-phrase; }
 .welcome__body { margin: 0; font-size: 15px; line-height: 1.6; color: #5c4650; }
 .welcome__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-top: var(--s-3); }
 .welcome__start { height: var(--h-lg); padding: 0 var(--s-5); font-size: 15px; font-weight: 600; }
