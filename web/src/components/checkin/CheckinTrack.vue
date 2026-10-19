@@ -45,12 +45,15 @@ const aria = (n: TrackNode) => {
 .track { list-style:none; margin:0; padding:0; display:flex; align-items:flex-start; }
 .track__node { flex:none; display:grid; justify-items:center; gap:4px; width:40px; }
 .track__node--big { width:44px; }
-.track__link { flex:1 1 0; min-width:2px; height:2px; margin:19px 1px 0; background:var(--line-strong); border-radius:2px; }
-.track__node--big + .track__link, .track__link:has(+ .track__node--big) { margin-top:21px; }
+/* 大小圓的圓心對齊同一條線：小圓往下 2px，連接線在圓心高度（美術總監最終 r1 L1） */
+.track__node:not(.track__node--big) { margin-top:2px; }
+.track__link { flex:1 1 0; min-width:2px; height:2px; margin:21px 1px 0; background:var(--line-strong); border-radius:2px; }
 .track__link--on { background:var(--accent); }
 .track__dot {
   display:flex; align-items:center; justify-content:center; width:40px; height:40px; border-radius:var(--r-pill);
-  background:var(--surface-2); color:var(--text-3); font-size:14px; font-weight:600; font-variant-numeric:tabular-nums;
+  background:var(--surface-2); color:var(--text-2); font-size:14px; font-weight:600; font-variant-numeric:tabular-nums;
+  /* 還沒到的格：邊線讓圓在深色卡上也看得見，數字用第二階字色（美術總監最終 r1 M2） */
+  box-shadow:inset 0 0 0 1px var(--line-strong);
 }
 .track__node--big .track__dot { width:44px; height:44px; }
 .track__dot svg { width:16px; height:16px; }
@@ -68,11 +71,11 @@ const aria = (n: TrackNode) => {
 @media (min-width: 761px) {
   .track__node { width:48px; } .track__node--big { width:52px; }
   .track__dot { width:48px; height:48px; font-size:15px; } .track__node--big .track__dot { width:52px; height:52px; }
-  .track__link { margin-top:23px; } .track__node--big + .track__link, .track__link:has(+ .track__node--big) { margin-top:25px; }
+  .track__link { margin-top:25px; }
 }
 @media (max-width: 359px) {
   .track__node { width:34px; } .track__node--big { width:38px; }
   .track__dot { width:34px; height:34px; font-size:13px; } .track__node--big .track__dot { width:38px; height:38px; }
-  .track__link { margin-top:16px; } .track__node--big + .track__link, .track__link:has(+ .track__node--big) { margin-top:18px; }
+  .track__link { margin-top:18px; }
 }
 </style>

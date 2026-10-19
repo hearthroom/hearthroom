@@ -32,9 +32,12 @@ const props = defineProps<{
   request: () => Promise<StageOutcome>;
   /** 簽到的結果卡底部要列連續天數與保底；任務箱不列 */
   checkin: boolean;
+  /** 哪一種開箱：蘇綺的話依箱種挑；補簽要在箱名下標出補的是哪一天 */
+  source?: "checkin" | "makeup" | "task" | "newcomer";
+  makeupDay?: string;
   pity?: number;
 }>();
-const emit = defineEmits<{ close: [mood: StageMood | null]; settled: [outcome: StageOutcome] }>();
+const emit = defineEmits<{ close: [mood: StageMood | null, seen: boolean]; settled: [outcome: StageOutcome] }>();
 const { t } = useI18n();
 const { lp } = useLocalePath();
 
@@ -82,7 +85,6 @@ const pose = computed<CheckinPose>(() => {
 const poseSrc = computed(() => poseUrl(pose.value));
 
 // ---- 送出與回應 ----
-let pressedAt = 0;
 /** 送出中的那一次：逾時後再試一次時接著等它，不另送一次（同一件事不重複送） */
 let inflight: Promise<StageOutcome> | null = null;
 let posesReady: Promise<void> = Promise.resolve();
@@ -92,7 +94,6 @@ async function send() {
   // 按「再試一次」的那顆鍵會消失：焦點留在舞台上，鍵盤才不會掉到頁面
   void nextTick(() => panelEl.value?.focus());
   slow.value = false;
-  pressedAt = performance.now();
   window.clearTimeout(timer);
   timer = window.setTimeout(() => { slow.value = true; }, 600);
   const timeout = new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error("timeout")), 8000));
@@ -134,10 +135,10 @@ async function prepareRounds(res: StageOutcome) {
   idx.value = 0;
   done.value = [];
   step.value = "round";
-  // 前搖：從按下起至少 1 秒才開蓋，回應再快也留一下
-  const wait = Math.max(0, 1000 - (performance.now() - pressedAt));
+  // 回應一到就開蓋：滾輪在開蓋後段起跑，按下到停住約 4.5–4.8 秒（美術總監最終 r1 M7、art.md §14.1）。
+  // 圖在簽到頁載入時就預載了，這裡通常不用等。
   await nextTick();
-  startRound(wait);
+  startRound(0);
 }
 
 // ---- 每一輪：時間軸、聲音、觸覺 ----
@@ -280,6 +281,7 @@ function skip() {
 }
 function next() {
   if (lastRound.value) return close();
+  overflowing.value = false;
   idx.value += 1;
   startAt = Infinity;
   void nextTick(() => { panelEl.value?.focus(); startRound(0); });
@@ -294,7 +296,8 @@ function moodOf(): StageMood | null {
 function close() {
   if (busy.value) return;
   cancelAnimationFrame(raf);
-  emit("close", step.value === "round" || step.value === "recap" || step.value === "pending" ? moodOf() : null);
+  // seen：結果真的出現過（中途關掉的話頁面要另外用 toast 講一聲）
+  emit("close", step.value === "round" || step.value === "recap" || step.value === "pending" ? moodOf() : null, done.value.length > 0 || step.value === "recap" || step.value === "pending");
 }
 function toggleSound() { sound.value = !sound.value; setSound(sound.value); }
 function toggleHaptic() { haptic.value = !haptic.value; setHaptic(haptic.value); }
@@ -334,9 +337,13 @@ const bubble = computed(() => {
   const pick = (keys: string[]) => keys[(cur.claim.stripSeed ?? 0) % keys.length];
   if (kind === "cheer") return t(cur.round.track.tier >= 6 ? "checkin.suki.win.6" : "checkin.suki.win.5");
   if (kind === "miss") return t(pick(["checkin.suki.miss.a", "checkin.suki.miss.b"]));
-  // 「今天的份」只說給今天簽到的寶箱；補簽、任務、新住民寶箱不用這句
-  const today = props.checkin && cur.claim.rewardKey.startsWith("checkin");
-  return t(night ? "checkin.suki.ok.night" : pick(today ? ["checkin.suki.ok.a", "checkin.suki.ok.b", "checkin.suki.ok.c"] : ["checkin.suki.ok.a", "checkin.suki.ok.c"]));
+  // 其餘依箱種挑句子（copy.md §9.2 末表）：講「今天」的句子只說給今天簽到的寶箱
+  const chest = cur.chest;
+  if (props.source === "makeup") return t("checkin.suki.makeup");
+  if (chest === "newcomer") return t("checkin.suki.newcomer");
+  if (chest.startsWith("weekly")) return t("checkin.suki.weekly");
+  if (night) return t("checkin.suki.ok.night");
+  return t(pick(props.source === "checkin" || props.checkin ? ["checkin.suki.ok.a", "checkin.suki.ok.b", "checkin.suki.ok.c"] : ["checkin.suki.ok.a", "checkin.suki.ok.c"]));
 });
 const pityAmount = computed(() => (props.plan?.pity ? whole(props.plan.pity.threshold) : ""));
 const pityOut = computed(() => outcome.value?.claims.find((c) => c.pityRemaining != null)?.pityRemaining ?? props.pity);
@@ -348,7 +355,8 @@ function amountSize(text: string): number {
   if (hit) return hit;
   const cw = pitch - 4;
   let size = cw * 0.34;
-  if (fitCtx) { fitCtx.font = `800 100px ${getComputedStyle(document.body).fontFamily}`; size = Math.min(cw * 0.34, (cw * 0.86) / fitCtx.measureText(text).width * 100); }
+  // 寬度最多佔格寬 78%：五位數（3,000、6,000）不貼邊（美術總監最終 r1 L2）
+  if (fitCtx) { fitCtx.font = `800 100px ${getComputedStyle(document.body).fontFamily}`; size = Math.min(cw * 0.34, (cw * 0.78) / fitCtx.measureText(text).width * 100); }
   size = Math.floor(size * 10) / 10;
   fitCache.set(text, size);
   return size;
@@ -407,7 +415,7 @@ defineExpose({ skip });
                 <SukiCarry v-if="pose === 'carry'" ref="carryEl" class="mascot__carry" :kind="boxKindOf(chestKey)" />
                 <img v-else class="mascot__pose" :src="poseSrc" alt="" draggable="false" />
               </div>
-              <p v-if="bubble" class="bubble">{{ bubble }}</p>
+              <p v-if="bubble" class="bubble" :class="{ 'bubble--high': pose === 'cheer' }">{{ bubble }}</p>
             </section>
 
             <section v-if="step === 'round'" ref="zoneEl" class="reel-zone">
@@ -434,6 +442,7 @@ defineExpose({ skip });
             </section>
 
             <div class="st-title">{{ step === "recap" ? t("checkin.stage.recap.title") : titleOf(chestKey) }}</div>
+            <div v-if="source === 'makeup' && makeupDay && step !== 'recap'" class="st-sub">{{ t("checkin.stage.makeupFor", { date: monthDayOf(makeupDay) }) }}</div>
 
             <section ref="resultEl" class="result-zone" :class="{ more: overflowing }">
               <p v-if="step === 'waiting' && slow" class="st-wait">{{ t("checkin.stage.waiting") }}</p>
@@ -485,13 +494,13 @@ defineExpose({ skip });
           <footer class="st-foot">
             <div class="btns">
               <template v-if="step === 'error'">
-                <button type="button" class="ghost" @click="close">{{ t("checkin.stage.error.later") }}</button>
-                <button ref="mainBtn" type="button" class="primary" @click="send">{{ t("checkin.stage.error.retry") }}</button>
+                <button type="button" class="st-ghost" @click="close">{{ t("checkin.stage.error.later") }}</button>
+                <button ref="mainBtn" type="button" class="st-primary" @click="send">{{ t("checkin.stage.error.retry") }}</button>
               </template>
-              <button v-else-if="busy" type="button" class="ghost" @click="skip">{{ t("checkin.stage.skip") }}</button>
-              <button v-else-if="step === 'recap'" ref="mainBtn" type="button" class="primary" @click="close">{{ t("checkin.stage.recap.ok") }}</button>
-              <button v-else-if="step === 'pending'" ref="mainBtn" type="button" class="primary" @click="close">{{ t("checkin.stage.recap.ok") }}</button>
-              <button v-else-if="showResult" ref="mainBtn" type="button" class="primary" @click="next">{{ lastRound ? t("checkin.stage.collect") : t("checkin.stage.next") }}</button>
+              <button v-else-if="busy" type="button" class="st-ghost" @click="skip">{{ t("checkin.stage.skip") }}</button>
+              <button v-else-if="step === 'recap'" ref="mainBtn" type="button" class="st-primary" @click="close">{{ t("checkin.stage.recap.ok") }}</button>
+              <button v-else-if="step === 'pending'" ref="mainBtn" type="button" class="st-primary" @click="close">{{ t("checkin.stage.recap.ok") }}</button>
+              <button v-else-if="showResult" ref="mainBtn" type="button" class="st-primary" @click="next">{{ lastRound ? t("checkin.stage.collect") : t("checkin.stage.next") }}</button>
             </div>
             <span class="st-links">
               <RouterLink v-if="showResult && lastRound" :to="lp('/library')" class="odds" @click="close">{{ t("checkin.result.chat") }}</RouterLink>
@@ -531,8 +540,9 @@ button { font:inherit; color:inherit; }
 .icon-btn { width:44px; height:44px; border-radius:50%; border:0; background:rgba(255,246,230,.08); display:grid; place-items:center; cursor:pointer; }
 .icon-btn svg { width:22px; height:22px; stroke:var(--stage-cream); fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
 .icon-btn--away { visibility:hidden; }
-.icon-btn:focus-visible, .primary:focus-visible, .ghost:focus-visible, .odds:focus-visible, .r-link:focus-visible { outline:2px solid var(--stage-cream); outline-offset:2px; }
+.icon-btn:focus-visible, .st-primary:focus-visible, .st-ghost:focus-visible, .odds:focus-visible, .r-link:focus-visible { outline:2px solid var(--stage-cream); outline-offset:2px; }
 .st-title { flex:0 0 auto; min-height:20px; margin:4px 16px 0; font-size:15px; font-weight:600; letter-spacing:.02em; opacity:.92; text-align:center; position:relative; z-index:2; }
+.st-sub { flex:0 0 auto; margin:2px 16px 0; font-size:12px; text-align:center; opacity:.75; position:relative; z-index:2; }
 .st-error { flex:1 1 auto; display:grid; align-content:center; justify-items:center; gap:var(--s-2); padding:0 var(--s-6); text-align:center; }
 .st-error strong { font-size:18px; }
 .st-error p { margin:0; font-size:14px; line-height:1.6; opacity:.85; max-width:320px; text-wrap:pretty; }
@@ -542,13 +552,20 @@ button { font:inherit; color:inherit; }
 .pend__note { font-size:13px; line-height:1.55; opacity:.82; text-wrap:balance; word-break:keep-all; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
 .st-wait { margin:0; font-size:12px; opacity:.8; text-align:center; }
 
-.core { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; justify-content:space-evenly; position:relative; z-index:2; }
+.core { flex:1 1 auto; min-height:0; overflow:hidden; display:flex; flex-direction:column; justify-content:space-evenly; position:relative; z-index:2; }
 .mascot-zone { --mascot-h:min(30cqh, 270px); flex:0 0 auto; height:var(--mascot-h); display:flex; justify-content:center; align-items:flex-end; position:relative; z-index:2; }
 .mascot { position:relative; height:var(--mascot-h); aspect-ratio:0.6804; will-change:transform; }
 .mascot__pose { position:absolute; left:50%; top:0; height:100%; width:auto; transform:translateX(-50%); display:block; user-select:none; pointer-events:none; }
 .mascot__carry { position:absolute; inset:0; height:100%; }
 .bubble { word-break:keep-all; overflow-wrap:anywhere; position:absolute; top:calc(var(--mascot-h) * .03); left:calc(50% + var(--mascot-h) * .10); width:max-content; max-width:min(60cqw, calc(50cqw - var(--mascot-h) * .10 - 8px)); margin:0; text-wrap:balance; background:#fff; color:#2a1d24; font-size:13.5px; line-height:1.35; font-weight:600; padding:6px 10px; border-radius:16px; z-index:4; animation:bubble-in var(--dur) var(--ease) both; }
+/* 歡呼時雙手舉高：泡泡移到頭頂上方再往外，不蓋她自己的手與蝴蝶結 */
 .bubble::after { content:""; position:absolute; left:10px; bottom:-6px; border:6px solid transparent; border-top-color:#fff; border-bottom:0; }
+/*
+ * 歡呼姿勢雙手舉高：泡泡不能蓋她的手與蝴蝶結，也不能超出舞台頂（美術總監最終 r1 M3）。
+ * 改放在她右肩外側、從腳底往上量（直放、橫放蘇綺都貼齊這一區的底），尖角朝左指向她。
+ */
+.bubble.bubble--high { top:auto; bottom:calc(var(--mascot-h) * .48); left:calc(50% + var(--mascot-h) * .28); max-width:min(60cqw, calc(50% - var(--mascot-h) * .28 - 8px)); }
+.bubble.bubble--high::after { left:-6px; bottom:10px; border:6px solid transparent; border-right-color:#fff; border-left:0; }
 
 .reel-zone { --cw:88px; --ch:104px; --gap:4px; --zone-h:calc(var(--ch) + 56px); position:relative; flex:0 0 auto; z-index:2; margin-top:1.5cqh; height:var(--zone-h); }
 @media (min-width: 640px) { .reel-zone { --cw:112px; --ch:128px; --gap:8px; } }
@@ -589,10 +606,9 @@ button { font:inherit; color:inherit; }
 @keyframes twinkle { 0%, 55%, 100% { transform:rotate(45deg) scale(0); opacity:0; } 25% { transform:rotate(45deg) scale(1); opacity:1; } }
 @keyframes bubble-in { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
 
-.result-zone { flex:0 1 clamp(104px, 18cqh, 190px); min-height:56px; overflow-y:auto; overscroll-behavior:contain; position:relative; z-index:2; padding:10px 16px 0; display:flex; flex-direction:column; align-items:center; gap:8px; }
+.result-zone { flex:1 1 clamp(104px, 18cqh, 190px); min-height:56px; overflow-y:auto; overscroll-behavior:contain; position:relative; z-index:2; padding:10px 16px 0; display:flex; flex-direction:column; align-items:center; gap:8px; }
 .stage[data-boxes="2"] .result-zone { flex-basis:clamp(150px, 27cqh, 214px); }
 /* 結果卡多一列（新住民徽章）：先讓蘇綺縮、讓出那一列，結果區不裁內容（ui.md §6.12） */
-.stage[data-badge] .result-zone { flex-basis:auto; flex-shrink:0; }
 .stage[data-badge] .mascot-zone { --mascot-h:min(22cqh, 150px); }
 .result-zone.more { -webkit-mask-image:linear-gradient(#000 calc(100% - 24px), transparent); mask-image:linear-gradient(#000 calc(100% - 24px), transparent); }
 .result { width:min(100%, 420px); text-align:center; animation:result-in .25s var(--ease) both; }
@@ -627,16 +643,17 @@ button { font:inherit; color:inherit; }
 .btns { display:flex; gap:10px; min-height:48px; }
 .st-links { display:flex; gap:var(--s-2); }
 .odds { display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:0 12px; font-size:13px; color:var(--stage-cream); opacity:.75; text-decoration:underline; text-underline-offset:3px; }
-.primary { min-width:200px; height:48px; padding:0 28px; border:0; border-radius:24px; background:var(--stage-rose); color:#fff; font-size:17px; font-weight:700; cursor:pointer; box-shadow:0 6px 18px rgba(229,80,110,.35); }
-.ghost { height:48px; min-width:200px; padding:0 28px; border-radius:24px; border:1px solid rgba(255,246,230,.4); background:transparent; font-size:15px; cursor:pointer; }
-.primary, .ghost { white-space:nowrap; }
+.st-primary { min-width:200px; height:48px; padding:0 28px; border:0; border-radius:24px; background:var(--stage-rose); color:#fff; font-size:17px; font-weight:700; cursor:pointer; box-shadow:0 6px 18px rgba(229,80,110,.35); }
+.st-ghost { height:48px; color:var(--stage-cream); min-width:200px; padding:0 28px; border-radius:24px; border:1px solid rgba(255,246,230,.4); background:transparent; font-size:15px; cursor:pointer; }
+.st-primary, .st-ghost { white-space:nowrap; }
 /* 錯誤時兩顆並排：放不下就各自一列，字不折行 */
 .st-error ~ .st-foot .btns { flex-wrap:wrap; justify-content:center; max-width:100%; }
-.st-error ~ .st-foot .ghost, .st-error ~ .st-foot .primary { min-width:0; flex:1 1 auto; padding:0 20px; }
+.st-error ~ .st-foot .st-ghost, .st-error ~ .st-foot .st-primary { min-width:0; flex:1 1 auto; padding:0 20px; }
 .hearts { position:absolute; left:50%; top:30%; width:0; height:0; pointer-events:none; z-index:1; }
 .heart { position:absolute; left:0; top:0; width:20px; height:20px; opacity:0; color:var(--stage-rose); will-change:transform, opacity; }
 .heart--gold { color:var(--stage-gold); }
 :lang(ko) .bubble, :lang(ko) .st-error p { word-break:keep-all; }
+:lang(zh) .bubble, :lang(ja) .bubble { word-break:auto-phrase; }
 
 /* 依舞台可用高度分段（art.md §16、ui.md §6.2.1） */
 @container stage (max-height: 859px) and (min-width: 640px) {
@@ -644,13 +661,16 @@ button { font:inherit; color:inherit; }
 }
 @container stage (max-height: 759px) {
   .mascot-zone { --mascot-h:min(22cqh, 150px); }
+  /* 讓位第一步：連簽與保底收起（簽到頁本來就看得到），art.md §16 */
+  .r-more { display:none; }
 }
 @container stage (max-height: 619px) {
   .r-badge small { display:none; }
   .mascot-zone { --mascot-h:96px; justify-content:flex-start; align-items:center; padding:0 16px; gap:10px; }
   .mascot { flex:0 0 auto; }
-  .bubble { position:static; margin:0; flex:1 1 auto; min-width:0; max-width:none; width:auto; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .bubble::after { display:none; }
+  /* 泡泡排在蘇綺旁邊，整句換行顯示，不截斷（ui.md r4：不用省略號） */
+  .bubble, .bubble.bubble--high { position:static; margin:0; flex:1 1 auto; min-width:0; max-width:none; width:auto; white-space:normal; text-wrap:pretty; }
+  .bubble::after, .bubble.bubble--high::after { display:none; }
   .r-exp { margin-top:0; }
   .r-more { display:none; }
   .result-zone { padding-top:2px; gap:4px; }
@@ -662,7 +682,7 @@ button { font:inherit; color:inherit; }
   .reel-zone { --cw:76px; --ch:88px; --gap:4px; --zone-h:calc(var(--ch) + 36px); }
   .st-foot { flex-direction:row; gap:8px; min-height:0; padding:6px 16px; }
   .btns { min-height:44px; }
-  .primary, .ghost { height:44px; min-width:160px; }
+  .st-primary, .st-ghost { height:44px; min-width:160px; }
   .r-amt { font-size:32px; }
 }
 @container stage (max-height: 519px) and (min-width: 640px) {
@@ -672,6 +692,9 @@ button { font:inherit; color:inherit; }
   .mascot-zone { display:flex; grid-area:mascot; height:auto; align-self:stretch; --mascot-h:min(76cqh, 300px); justify-content:center; align-items:flex-end; padding:0; gap:0; }
   .bubble { position:absolute; top:calc(var(--mascot-h) * .03); left:calc(50% + var(--mascot-h) * .10); flex:none; width:max-content; max-width:min(60cqw, calc(50% - var(--mascot-h) * .10 - 8px)); white-space:normal; overflow:visible; text-wrap:balance; }
   .bubble::after { display:block; }
+  /* 上面矮舞台那段把泡泡排進列裡；橫放蘇綺又有整欄高，歡呼的泡泡回到她右肩外側 */
+  .bubble.bubble--high { position:absolute; flex:none; width:max-content; top:auto; bottom:calc(var(--mascot-h) * .48); left:calc(50% + var(--mascot-h) * .28); max-width:min(60cqw, calc(50% - var(--mascot-h) * .28 - 8px)); }
+  .bubble.bubble--high::after { display:block; }
   .reel-zone { grid-area:reel; }
   .st-title { grid-area:title; }
   .result-zone { grid-area:result; min-height:0; }

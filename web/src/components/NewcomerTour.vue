@@ -7,14 +7,16 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import CoachSpot from "@/components/CoachSpot.vue";
-import { NEWCOMER_TOUR, currentStep, newcomerTour, pageOf, routeFor, stopNewcomerTour } from "@/lib/newcomer-tour";
+import { NEWCOMER_TOUR, awayMode, currentStep, newcomerTour, pageOf, routeFor, stopNewcomerTour } from "@/lib/newcomer-tour";
+import { fetchBoard } from "@/lib/api";
+import { contentLang, defaultZone } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
 import { track } from "@/lib/track";
 
 const route = useRoute();
 const router = useRouter();
 const { lp } = useLocalePath();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 const step = computed(() => currentStep());
 const steps = computed(() => NEWCOMER_TOUR[newcomerTour.day] ?? []);
@@ -50,6 +52,25 @@ function go(index: number) {
   const to = routeFor(s, here.value);
   if (to) void router.push(lp(to));
 }
+// 框不到真的元素（ui.md §15.8）：卡片頁的那幾天先帶到榜單第一張卡；遊玩畫布只講位置
+const away = computed(() => (step.value ? awayMode(step.value, here.value) : null));
+const copyKey = computed(() => {
+  if (!step.value) return "";
+  return away.value === "card" ? `newcomer.tour.away.${newcomerTour.day}` : `newcomer.tour.${step.value.id}`;
+});
+const action = computed(() => (away.value === "card" ? t("newcomer.tour.openCard") : away.value === "canvas" ? t("newcomer.tour.gotIt") : undefined));
+async function openCard() {
+  const page = await fetchBoard({ zone: defaultZone(locale.value), limit: 1, lang: contentLang(locale.value) }).catch(() => null);
+  const card = page?.items[0];
+  if (card) void router.push(lp(`/cards/${card.num ?? card.id}`));
+  else void router.push(lp("/"));
+}
+function onNext() {
+  if (away.value === "card") return void openCard();
+  // 「知道了」只收起泡泡；第 5 天完成與否看有沒有真的換背景或調篇幅
+  if (away.value === "canvas") { track("newcomer_tour_done", { detail: String(newcomerTour.day) }); return stopNewcomerTour(); }
+  next();
+}
 function next() { if (newcomerTour.index >= steps.value.length - 1) { track("newcomer_tour_done", { detail: String(newcomerTour.day) }); stopNewcomerTour(); } else go(newcomerTour.index + 1); }
 function prev() { if (newcomerTour.index > 0) go(newcomerTour.index - 1); }
 function close() { track("newcomer_tour_skip", { detail: step.value?.id ?? "" }); stopNewcomerTour(); }
@@ -57,7 +78,7 @@ function close() { track("newcomer_tour_skip", { detail: step.value?.id ?? "" })
 
 <template>
   <CoachSpot
-    v-if="visible && step" :rect="rect" :title="t(`newcomer.tour.${step.id}.title`)" :body="t(`newcomer.tour.${step.id}.body`)"
-    :mascot="here !== 'play'" :first="newcomerTour.index === 0" :last="newcomerTour.index >= steps.length - 1" @prev="prev" @next="next" @close="close"
+    v-if="visible && step" :rect="away ? null : rect" :title="t(`${copyKey}.title`)" :body="t(`${copyKey}.body`)" :action="action"
+    :mascot="here !== 'play'" :first="newcomerTour.index === 0" :last="newcomerTour.index >= steps.length - 1" @prev="prev" @next="onNext" @close="close"
   />
 </template>

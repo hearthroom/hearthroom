@@ -167,7 +167,7 @@ const ctaLabel = computed(() => (state.value === "two" ? t("checkin.cta.openTwo"
 .hero__bubble {
   position:relative; margin:0 0 6px auto; max-width:60%; padding:8px 12px; border-radius:16px;
   background:#fff; color:#2a1d24; font-size:13.5px; line-height:1.45; word-break:keep-all; overflow-wrap:anywhere; box-shadow:0 4px 14px rgba(42,29,36,.14);
-  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; text-wrap:balance;
+  text-wrap:balance;
   animation:bubble-in var(--dur) var(--ease) both;
 }
 .hero__bubble::after { content:""; position:absolute; right:44px; bottom:-6px; width:12px; height:12px; background:#fff; transform:rotate(45deg); border-radius:2px; }
@@ -203,19 +203,31 @@ span.hero__suki { width:auto; }
 @keyframes spin { to { transform:rotate(360deg); } }
 @keyframes bubble-in { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
 :lang(ko) .hero__title, :lang(ko) .hero__desc, :lang(ko) .hero__bubble { word-break:keep-all; }
+:lang(zh) .hero__bubble, :lang(ja) .hero__bubble { word-break:auto-phrase; }
 
+/*
+ * 桌機：泡泡疊在蘇綺頭上、同一欄，抬頭列只有連簽，標題緊接在下（ui.md §6.13，1280×800 第一屏要看到任務前兩項）。
+ * 側欄高＝泡泡預留 + 蘇綺，和左欄文字一起決定上半部高度；軌道與里程碑通欄在下。
+ */
 @media (min-width: 761px) {
   .hero {
     grid-template-columns:minmax(0,1fr) 200px; column-gap:var(--s-5); padding:var(--s-5) var(--s-6);
-    grid-template-areas:"head bubble" "text suki" "cta suki" "pity suki" "rule rule" "track track" "ms ms";
+    grid-template-areas:"head side" "text side" "cta side" "pity side" "rule rule" "track track" "ms ms";
   }
   .hero__head { display:contents; }
   .hero__streak { grid-area:head; align-self:start; }
-  .hero__bubble { grid-area:bubble; max-width:180px; margin:0 auto 0; justify-self:center; align-self:end; }
+  .hero__bubble { grid-area:side; align-self:start; max-width:200px; margin:0; justify-self:center; }
   .hero__bubble::after { left:50%; right:auto; margin-left:-6px; }
+  .hero__text { align-self:start; }
+  .hero__pity { margin-top:var(--s-1); align-self:start; }
   .hero__title { font-size:28px; }
   .hero__desc { font-size:15px; }
-  .hero__suki { width:200px; height:270px; align-self:center; }
+  .hero__suki { grid-area:side; width:200px; height:164px; margin-top:64px; align-self:end; }
+  .hero__milestone { grid-template-columns:minmax(120px,1fr) auto auto auto; }
+  .hero__milestone .meter { grid-row:1; }
+  .hero__ms-num { grid-column:2; grid-row:1; }
+  .hero__flag { grid-column:3; }
+  .hero__ms-left { grid-column:4; grid-row:1; }
   .hero__cta { justify-self:start; grid-auto-flow:column; }
   .hero__main, .hero__alt { width:auto; min-width:220px; }
   .hero__cta:has(.hero__results) { grid-auto-flow:row; justify-self:stretch; }
@@ -227,11 +239,11 @@ span.hero__suki { width:auto; }
 @media (max-width: 359px) {
   .hero__title { font-size:20px; }
 }
-@media (max-height: 560px) {
-  .hero__bubble { -webkit-line-clamp:1; white-space:nowrap; text-overflow:ellipsis; display:block; }
-}
+
 @media (min-width: 761px) and (max-height: 700px) {
   .hero { grid-template-columns:minmax(0,1fr) 250px; }
-  .hero__suki { width:102px; height:136px; }
+  /* 橫放：泡泡整句完整顯示，不截斷（美術總監最終 r1 M5） */
+  .hero__bubble { max-width:240px; }
+  .hero__suki { width:250px; height:136px; }
 }
 </style>

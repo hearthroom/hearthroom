@@ -1,4 +1,6 @@
 <script setup lang="ts">
+// 新手七日的桌寵提示卡在畫面上時先不出現：一次只有一個提示（美術總監最終 r1 M6）
+import { newcomerPrompt } from "@/lib/newcomer-prompt";
 /**
  * 「裝到主畫面」的提示卡。什麼時候出現由 lib/pwa.ts 決定，這裡只負責畫與回報按了什麼。
  * 兩種樣子：有原生安裝框的（Chromium 系）給「安裝／以後再說」；iOS Safari 沒有 API，給步驟與「知道了」。
@@ -30,7 +32,7 @@ function onLater() { track("pwa_install_later"); dismissInstall(); }
 
 <template>
   <Transition name="install">
-    <section v-if="installPrompt.visible" ref="el" class="install" :class="{ 'install--over-stage': overStage }" :popover="overStage ? 'manual' : undefined" role="region" :aria-label="$t('pwa.install.title')">
+    <section v-if="installPrompt.visible && !newcomerPrompt.showing" ref="el" class="install" :class="{ 'install--over-stage': overStage }" :popover="overStage ? 'manual' : undefined" role="region" :aria-label="$t('pwa.install.title')">
       <div class="install__row">
         <span class="install__tile" aria-hidden="true">
           <img v-if="installPrompt.target === 'card' && installPrompt.icon" :src="installPrompt.icon" alt="" />

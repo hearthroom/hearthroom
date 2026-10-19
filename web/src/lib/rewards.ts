@@ -58,8 +58,8 @@ export interface RewardTask {
   reward: { credits?: number; chest?: string };
   status: TaskStatus;
   period: string;
-  /** 留言任務的字數門檻（Harper B4 補進契約） */
-  minTextUnits?: number;
+  /** 留言任務的字數門檻：主要用中日韓文字寫的看 cjk，其餘看 latin（契約 4eafb70） */
+  minTextUnits?: { cjk: number; latin: number };
 }
 
 export interface NewcomerStage { stage: number; credits?: number; chest?: string; done: boolean }

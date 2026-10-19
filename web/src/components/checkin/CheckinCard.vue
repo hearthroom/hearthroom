@@ -33,7 +33,7 @@ const tasks = computed(() => (store.claimableTasks ? t("me.checkin.tasks", { n: 
 
 <template>
   <RouterLink v-if="!store.disabled" :to="lp('/checkin')" class="ck panel">
-    <img class="ck__suki" src="/mascot/home/pose-wave.webp" alt="" width="56" height="56" decoding="async" />
+    <img class="ck__suki" src="/mascot/suki-avatar.webp" alt="" width="56" height="56" decoding="async" />
     <span class="ck__text">
       <strong>{{ firstLine }}</strong>
       <span class="ck__status"><span>{{ status }}</span><span v-if="tasks" class="ck__tasks">&nbsp;{{ tasks }}</span></span>
@@ -45,7 +45,7 @@ const tasks = computed(() => (store.claimableTasks ? t("me.checkin.tasks", { n: 
 <style scoped>
 .ck { width:100%; min-height:72px; display:grid; grid-template-columns:56px minmax(0,1fr) auto; align-items:center; gap:var(--s-3); padding:var(--s-2) var(--s-4) var(--s-2) var(--s-2); color:inherit; text-decoration:none; transition:background var(--dur) var(--ease); }
 .ck:hover { background:var(--surface-2); }
-.ck__suki { width:56px; height:56px; border-radius:var(--r-md); object-fit:cover; object-position:50% 12%; background:var(--accent-tint); }
+.ck__suki { width:56px; height:56px; border-radius:var(--r-md); object-fit:cover; background:var(--accent-tint); }
 .ck__text { display:grid; gap:2px; min-width:0; container-type:inline-size; }
 .ck__text strong { font-size:15px; font-weight:600; }
 .ck__status { font-size:13px; color:var(--text-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }

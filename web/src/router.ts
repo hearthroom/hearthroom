@@ -48,7 +48,8 @@ const pages: RouteRecordRaw[] = [
   { path: "create", component: () => import("./pages/CardEditorPage.vue"), meta: { auth: true, feature: "editor" } },
   { path: "wallet", component: () => import("./pages/WalletPage.vue"), meta: { auth: true, petQuietOnPhone: true } },
   // 簽到相關頁：手機上桌寵不說話，泡泡會壓在軌道與里程碑上（ui.md §6.13）
-  { path: "checkin", component: () => import("./pages/CheckinPage.vue"), meta: { auth: true, petQuietOnPhone: true } },
+  // petAway：這一頁的蘇綺是頁面插圖，桌寵整頁退場（美術總監最終 r1 H1）
+  { path: "checkin", component: () => import("./pages/CheckinPage.vue"), meta: { auth: true, petAway: true } },
   // 機率公告不必登入：從舞台、簽到頁、錢包都連得到（ui.md §8）
   { path: "checkin/odds", component: () => import("./pages/OddsPage.vue"), meta: { petQuietOnPhone: true } },
   // 我的資源：作者的素材圖庫（上游圖床），拿網址寫進正則規則用
@@ -168,7 +169,7 @@ router.beforeEach((to) => {
   if (!("ref" in to.query) && !share) return true;
   const code = refFromQuery(to.query.ref);
   if (code && signedInHint() === null) rememberShareRef(code);
-  if (code) noteShareOpen(code);
+  if (code) noteShareOpen(code, /\/cards\/([^/?#]+)/.exec(to.path)?.[1] ?? null);
   if (share) noteCampaignShare(share);
   const { ref: _ref, ...query } = to.query;
   if (share) delete query.s;
