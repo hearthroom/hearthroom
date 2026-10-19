@@ -196,7 +196,7 @@ watch(() => [props.provider, props.externalId], () => load(true), { immediate: t
         <div v-if="mine && planLine.kind !== 'hidden'" class="plan" data-testid="wallet-plan">
           <div class="plan__head">
             <span class="plan__title">{{ mine.remainingDays <= 1 ? $t("plan.row.title.last") : $t("plan.row.title", { n: whole(mine.remainingDays) }, mine.remainingDays) }}</span>
-            <span v-if="mine.endsOn" class="plan__last">{{ $t("plan.wallet.lastDay", { date: planDate(mine.endsOn, locale) }) }}</span>
+            <span v-if="mine.endsOn && mine.remainingDays > 1" class="plan__last">{{ $t("plan.wallet.lastDay", { date: planDate(mine.endsOn, locale) }) }}</span>
           </div>
           <div class="plan__today">
             <PlanToday class="plan__line" :line="planLine" :claiming="plans.claiming" @claim="claimToday" />
@@ -337,7 +337,7 @@ watch(() => [props.provider, props.externalId], () => load(true), { immediate: t
 .plan__go, .plan__more { display: inline-flex; align-items: center; min-height: 30px; font-size: 13px; }
 .plan__more { justify-self: start; }
 .balance .plan__sub { font-size: 12px; color: var(--text-3); }
-.plan__pitch { font-size: 13px; color: var(--text-2); text-wrap: pretty; }
+.plan__pitch { font-size: 13px; color: var(--text-2); text-wrap: pretty; word-break: keep-all; overflow-wrap: anywhere; }
 .expiring { display: grid; gap: var(--s-1); padding-top: var(--s-2); border-top: 1px solid var(--line); }
 .expiring__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }
 .expiring__title { font-size: 13px; font-weight: 600; }

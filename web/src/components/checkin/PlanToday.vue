@@ -4,21 +4,27 @@
  * 簽到頁的月卡列與「積分與會員」共用；判斷在 lib/period-plan 的 todayLine。
  * 沒領到不用紅字也不用 toast：簽到本身是成功的。自動補領還在路上（waiting）時什麼都不畫。
  */
+import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { whole } from "@/lib/format";
 import type { TodayLine } from "@/lib/period-plan";
 
-defineProps<{ line: Exclude<TodayLine, { kind: "hidden" }>; claiming: boolean }>();
+const props = defineProps<{ line: Exclude<TodayLine, { kind: "hidden" }>; claiming: boolean }>();
 const emit = defineEmits<{ claim: [] }>();
 const { t } = useI18n();
+// 「+500」整段是強調色（ui.md §3.2）：譯文的「+」寫在變數外面，所以切開譯文，把緊貼在金額前的「+」一起放進強調段。
+const claimed = computed(() => {
+  const mark = "\u0000";
+  const [before = "", after = ""] = t("plan.row.claimed", { daily: mark }).split(mark);
+  const plus = before.endsWith("+") ? "+" : "";
+  return { before: plus ? before.slice(0, -1) : before, amount: `${plus}${whole(props.line.credits)}`, after };
+});
 </script>
 
 <template>
   <span class="plan-today">
     <span v-if="line.kind === 'withCheckin'" class="plan-today__text">{{ t("plan.row.withCheckin", { daily: whole(line.credits) }) }}</span>
-    <i18n-t v-else-if="line.kind === 'claimed'" keypath="plan.row.claimed" tag="span" class="plan-today__text" scope="global">
-      <template #daily><span class="plan-today__amount">{{ whole(line.credits) }}</span></template>
-    </i18n-t>
+    <span v-else-if="line.kind === 'claimed'" class="plan-today__text">{{ claimed.before }}<span class="plan-today__amount">{{ claimed.amount }}</span>{{ claimed.after }}</span>
     <template v-else-if="line.kind === 'claim'">
       <span v-if="line.missed" class="plan-today__missed">{{ t("plan.row.missed") }}</span>
       <button type="button" class="btn btn--sm plan-today__claim" :disabled="claiming" :aria-busy="claiming" @click="emit('claim')">
