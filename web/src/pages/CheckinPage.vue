@@ -40,13 +40,13 @@ let toastTimer = 0;
 function say(text: string) { toast.value = text; window.clearTimeout(toastTimer); toastTimer = window.setTimeout(() => { toast.value = ""; }, 2600); }
 
 // ---- 開箱舞台 ----
-interface StageRun { id: number; chests: string[]; request: () => Promise<StageOutcome>; checkin: boolean; source: "checkin" | "makeup" | "task" | "newcomer"; makeupDay?: string; trigger: HTMLElement | null; after?: (o: StageOutcome | null, seen: boolean) => void }
+interface StageRun { id: number; chests: string[]; request: () => Promise<StageOutcome>; checkin: boolean; source: "checkin" | "makeup" | "task" | "newcomer"; makeupDay?: string; trigger: HTMLElement | null; scrollY: number; after?: (o: StageOutcome | null, seen: boolean) => void }
 const stage = shallowRef<StageRun | null>(null);
 let runs = 0;
 let lastOutcome: StageOutcome | null = null;
-function openStage(run: Omit<StageRun, "id" | "trigger">) {
+function openStage(run: Omit<StageRun, "id" | "trigger" | "scrollY">) {
   lastOutcome = null;
-  stage.value = { ...run, id: ++runs, trigger: document.activeElement as HTMLElement | null };
+  stage.value = { ...run, id: ++runs, trigger: document.activeElement as HTMLElement | null, scrollY: window.scrollY };
 }
 async function closeStage(_mood: StageMood | null, seen: boolean) {
   const run = stage.value;
@@ -54,7 +54,10 @@ async function closeStage(_mood: StageMood | null, seen: boolean) {
   await refresh(true);
   run?.after?.(lastOutcome, seen);
   await nextTick();
-  run?.trigger?.focus?.();
+  // 關掉後回到打開前的位置：領完頁面上方會多出東西（到期條、已領的結果），焦點回原按鈕也不准捲，
+  // 不然頁面會多捲一個頁首高，「紀錄」「機率」被黏住的頁首蓋住（QA W7，接本機 Harbor 實測）
+  run?.trigger?.focus?.({ preventScroll: true });
+  if (run) window.scrollTo({ top: run.scrollY, behavior: "instant" as ScrollBehavior });
 }
 
 function onOpen() {
