@@ -78,13 +78,14 @@ describe("月卡持卡狀態", () => {
     expect(s.line(true)).toMatchObject({ kind: "claim", missed: true });
   });
 
-  it("簽到回 granted：不補領，今天那一行立刻是已領", async () => {
+  it("簽到回 granted：舞台關掉之前不揭曉；關掉後是已領，不補領", async () => {
     stub((url) => (url.endsWith("/me/plans") ? json({ serverNow: "x", list: [myPlan()] }) : undefined));
     const s = usePeriodPlans();
     await s.load();
     s.noteCheckin({ status: "granted", day: "2026-10-20", credits: 1000, bonusCredits: 500 });
-    expect(s.line(true).kind).toBe("claimed");
+    expect(s.line(true).kind).toBe("claim");
     await s.settle();
+    expect(s.line(true).kind).toBe("claimed");
     expect(calls.filter((c) => c.url.endsWith("/claim"))).toHaveLength(0);
   });
 
