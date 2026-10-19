@@ -272,6 +272,8 @@ export function surfaceOf(path: string): string {
   if (bare.startsWith("/campaign")) return "campaign";
   if (bare.startsWith("/create")) return "create";
   if (bare.startsWith("/wallet")) return "wallet";
+  // 簽到頁與機率公告
+  if (bare.startsWith("/checkin")) return "checkin";
   if (bare.startsWith("/play")) return "play";
   if (bare.startsWith("/review")) return "review";
   if (bare.startsWith("/updates")) return "updates";
