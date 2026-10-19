@@ -6,7 +6,7 @@
  * 畫面每一幀只是時間 t 的函數（lib/reel/timeline）。中途離開也不會漏領：回應到的那一刻已入帳。
  * 舞台上不寫任何說明「擦過」的字（owner 2026-10-19）。
  */
-import { computed, nextTick, onBeforeUnmount, ref, shallowRef } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink } from "vue-router";
 import { buildTrack, type ReelCell } from "@/lib/reel/v1";
@@ -69,6 +69,25 @@ const resultEl = ref<HTMLElement | null>(null);
 /** 結果區放不下、要捲動時，底部加漸層提示還有內容（ui.md §6.12 第 3 步） */
 const overflowing = ref(false);
 function measureResult() { const el = resultEl.value; overflowing.value = !!el && el.scrollHeight > el.clientHeight + 1; }
+// 結果出來之後內容還會變：徽章圖載入、進場動畫的位移（動畫中會多出可捲動的高度）。
+// 內容一變、動畫一停就重量，漸層不留在已經放得下的畫面上
+let resultSizes: ResizeObserver | null = null;
+let resultKids: MutationObserver | null = null;
+let resultWatched: HTMLElement | null = null;
+function watchResult(el: HTMLElement | null) {
+  resultSizes?.disconnect(); resultKids?.disconnect();
+  for (const ev of ["animationend", "transitionend"]) resultWatched?.removeEventListener(ev, measureResult);
+  resultWatched = el;
+  if (!el || typeof ResizeObserver === "undefined") return;
+  for (const ev of ["animationend", "transitionend"]) el.addEventListener(ev, measureResult);
+  const observeAll = () => { resultSizes!.observe(el); el.querySelectorAll("*").forEach((c) => resultSizes!.observe(c)); measureResult(); };
+  resultSizes = new ResizeObserver(measureResult);
+  resultKids = new MutationObserver(observeAll);
+  resultKids.observe(el, { childList: true, subtree: true });
+  observeAll();
+}
+watch(resultEl, watchResult);
+onBeforeUnmount(() => watchResult(null));
 
 const current = computed(() => rounds.value[idx.value] ?? null);
 const chestKey = computed(() => current.value?.chest ?? props.chests[idx.value] ?? props.chests[0] ?? "daily");
@@ -461,7 +480,7 @@ defineExpose({ skip });
                 <div v-if="isBadge(current.claim)" class="r-badge"><img :src="NEWCOMER_BADGE" alt="" width="48" height="48" /><span><strong>{{ t("newcomer.badge.name") }}</strong><small>{{ t("newcomer.badge.desc") }}</small></span></div>
                 <RouterLink v-if="cosmetic(current.claim)" :to="lp('/settings')" class="r-link">{{ t("checkin.result.cosmetic.equip") }}</RouterLink>
               </div>
-              <div v-else-if="twoDone" class="rows" role="status">
+              <div v-else-if="twoDone" class="rows rows--two" role="status">
                 <div v-for="x in resultRows" :key="x.claim.rewardKey" class="row">
                   <span class="n">{{ titleOf(x.chest) }}</span>
                   <span class="a">{{ cosmetic(x.claim) ? t("checkin.result.cosmetic.frame") : t("checkin.done.amount", { amount: whole(prizeOf(x.claim)) }) }}</span>
@@ -469,7 +488,12 @@ defineExpose({ skip });
                   <span class="t"><span class="dot" :class="`t${x.claim.tier}`" />{{ t(`checkin.result.tier.${x.claim.tier}`) }}</span>
                   <span class="e">{{ expiryLine(x.claim) }}</span>
                 </div>
-                <div class="row row--sum"><span class="n">{{ t("checkin.result.total", { sum: whole(sum) }) }}</span></div>
+                <!-- 矮畫面：上面兩列只留箱名與金額，級別與期限移到這裡，捲動才看到（美術總監最終 r2 H3） -->
+                <div v-for="x in resultRows" :key="`${x.claim.rewardKey}:more`" class="row-more">
+                  <span class="n">{{ titleOf(x.chest) }}</span>
+                  <span class="t"><span class="dot" :class="`t${x.claim.tier}`" />{{ t(`checkin.result.tier.${x.claim.tier}`) }}</span>
+                  <span class="e">{{ expiryLine(x.claim) }}</span>
+                </div>
               </div>
 
               <!-- 已經簽過（另一台裝置）：不轉滾輪，直接講結果 -->
@@ -489,6 +513,8 @@ defineExpose({ skip });
                 <span class="pend__note">{{ t("checkin.result.pendingNote") }}</span>
               </div>
             </section>
+            <!-- 兩箱的合計固定在按鈕正上方，不跟兩列一起捲走（美術總監最終 r2 H3） -->
+            <p v-if="twoDone" class="r-sum" role="status">{{ t("checkin.result.total", { sum: whole(sum) }) }}</p>
           </div>
 
           <footer class="st-foot">
@@ -557,14 +583,17 @@ button { font:inherit; color:inherit; }
 .mascot { position:relative; height:var(--mascot-h); aspect-ratio:0.6804; will-change:transform; }
 .mascot__pose { position:absolute; left:50%; top:0; height:100%; width:auto; transform:translateX(-50%); display:block; user-select:none; pointer-events:none; }
 .mascot__carry { position:absolute; inset:0; height:100%; }
-.bubble { word-break:keep-all; overflow-wrap:anywhere; position:absolute; top:calc(var(--mascot-h) * .03); left:calc(50% + var(--mascot-h) * .10); width:max-content; max-width:min(60cqw, calc(50cqw - var(--mascot-h) * .10 - 8px)); margin:0; text-wrap:balance; background:#fff; color:#2a1d24; font-size:13.5px; line-height:1.35; font-weight:600; padding:6px 10px; border-radius:16px; z-index:4; animation:bubble-in var(--dur) var(--ease) both; }
+/* 泡泡每行至少 7 個字（ui.md §6.12.1）：中日韓 120px、英文 150px */
+.stage { --bubble-min:120px; }
+.stage:lang(en) { --bubble-min:150px; }
+.bubble { min-width:var(--bubble-min); word-break:keep-all; overflow-wrap:anywhere; position:absolute; top:calc(var(--mascot-h) * .03); left:calc(50% + var(--mascot-h) * .10); width:max-content; max-width:min(60cqw, calc(50cqw - var(--mascot-h) * .10 - 8px)); margin:0; text-wrap:balance; background:#fff; color:#2a1d24; font-size:13.5px; line-height:1.35; font-weight:600; padding:6px 10px; border-radius:16px; z-index:4; animation:bubble-in var(--dur) var(--ease) both; }
 /* 歡呼時雙手舉高：泡泡移到頭頂上方再往外，不蓋她自己的手與蝴蝶結 */
 .bubble::after { content:""; position:absolute; left:10px; bottom:-6px; border:6px solid transparent; border-top-color:#fff; border-bottom:0; }
 /*
  * 歡呼姿勢雙手舉高：泡泡不能蓋她的手與蝴蝶結，也不能超出舞台頂（美術總監最終 r1 M3）。
  * 改放在她右肩外側、從腳底往上量（直放、橫放蘇綺都貼齊這一區的底），尖角朝左指向她。
  */
-.bubble.bubble--high { top:auto; bottom:calc(var(--mascot-h) * .48); left:calc(50% + var(--mascot-h) * .28); max-width:min(60cqw, calc(50% - var(--mascot-h) * .28 - 8px)); }
+.bubble.bubble--high { --bl:min(calc(50% + var(--mascot-h) * .28), calc(100% - var(--bubble-min) - 8px)); top:auto; bottom:calc(var(--mascot-h) * .48); left:var(--bl); max-width:calc(100% - var(--bl) - 8px); }
 .bubble.bubble--high::after { left:-6px; bottom:10px; border:6px solid transparent; border-right-color:#fff; border-left:0; }
 
 .reel-zone { --cw:88px; --ch:104px; --gap:4px; --zone-h:calc(var(--ch) + 56px); position:relative; flex:0 0 auto; z-index:2; margin-top:1.5cqh; height:var(--zone-h); }
@@ -609,6 +638,10 @@ button { font:inherit; color:inherit; }
 .result-zone { flex:1 1 clamp(104px, 18cqh, 190px); min-height:56px; overflow-y:auto; overscroll-behavior:contain; position:relative; z-index:2; padding:10px 16px 0; display:flex; flex-direction:column; align-items:center; gap:8px; }
 .stage[data-boxes="2"] .result-zone { flex-basis:clamp(150px, 27cqh, 214px); }
 /* 結果卡多一列（新住民徽章）：先讓蘇綺縮、讓出那一列，結果區不裁內容（ui.md §6.12） */
+/*
+ * 結果多一列徽章時依序讓位（ui.md §6.12）：先縮蘇綺，再收徽章第二行與縮圖，最後才讓結果區捲動。
+ * 每一段高度都要再寫一次：徽章規則比單一 class 的分段規則具體，寫在外面會把矮畫面的蘇綺撐回來。
+ */
 .stage[data-badge] .mascot-zone { --mascot-h:min(22cqh, 150px); }
 .result-zone.more { -webkit-mask-image:linear-gradient(#000 calc(100% - 24px), transparent); mask-image:linear-gradient(#000 calc(100% - 24px), transparent); }
 .result { width:min(100%, 420px); text-align:center; animation:result-in .25s var(--ease) both; }
@@ -636,8 +669,8 @@ button { font:inherit; color:inherit; }
 .row .br { flex-basis:100%; height:0; }
 .row .t { display:inline-flex; gap:6px; align-items:center; font-size:13px; white-space:nowrap; }
 .row .e { font-size:12px; opacity:.8; text-align:right; margin-left:auto; white-space:nowrap; }
-.row--sum { justify-content:center; font-weight:700; }
-.row--sum .n { flex:none; font-size:14px; opacity:1; }
+.row-more { display:none; }
+.r-sum { flex:0 0 auto; position:relative; z-index:2; margin:6px 16px 0; text-align:center; font-size:15px; font-weight:700; font-variant-numeric:tabular-nums; animation:result-in .25s var(--ease) both; }
 
 .st-foot { flex:0 0 auto; padding:8px 16px 6px; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100px; position:relative; z-index:3; }
 .btns { display:flex; gap:10px; min-height:48px; }
@@ -656,12 +689,14 @@ button { font:inherit; color:inherit; }
 
 /* 依舞台可用高度分段（art.md §16、ui.md §6.2.1） */
 @container stage (max-height: 859px) and (min-width: 640px) {
-  .mascot-zone { --mascot-h:min(17cqh, 130px); }
+  .mascot-zone, .stage[data-badge] .mascot-zone { --mascot-h:min(17cqh, 130px); }
 }
 @container stage (max-height: 759px) {
   .mascot-zone { --mascot-h:min(22cqh, 150px); }
   /* 讓位第一步：連簽與保底收起（簽到頁本來就看得到），art.md §16 */
   .r-more { display:none; }
+  .stage[data-badge] .mascot-zone { --mascot-h:min(18cqh, 120px); }
+  .stage[data-badge] .r-badge small { display:none; }
 }
 @container stage (max-height: 619px) {
   .r-badge small { display:none; }
@@ -675,6 +710,15 @@ button { font:inherit; color:inherit; }
   .result-zone { padding-top:2px; gap:4px; }
   .r-top { font-size:13px; } .r-amt { font-size:34px; margin-top:0; }
   .st-foot { min-height:0; }
+  .stage[data-badge] .mascot-zone { --mascot-h:80px; }
+  .stage[data-badge] .r-badge { margin-top:0; padding:3px 10px 3px 3px; }
+  .stage[data-badge] .r-badge img { width:36px; height:36px; }
+  .stage[data-badge] .r-amt { font-size:30px; }
+  .rows--two .row .br, .rows--two .row .t, .rows--two .row .e { display:none; }
+  .rows--two .row { padding:4px 12px; }
+  .row-more { display:flex; flex-wrap:wrap; gap:2px 8px; align-items:center; padding:0 12px; font-size:12px; opacity:.8; }
+  .row-more .n { flex:1 1 100%; }
+  .row-more .e { margin-left:auto; }
 }
 @container stage (max-height: 519px) {
   .mascot-zone { display:none; }
@@ -685,18 +729,20 @@ button { font:inherit; color:inherit; }
   .r-amt { font-size:32px; }
 }
 @container stage (max-height: 519px) and (min-width: 640px) {
-  .stage__in { display:grid; grid-template-columns:minmax(240px, 42%) 1fr; grid-template-rows:auto auto auto minmax(0, 1fr) auto; grid-template-areas:"head head" "mascot reel" "mascot title" "mascot result" "mascot foot"; }
+  .stage__in { display:grid; grid-template-columns:minmax(240px, 42%) 1fr; grid-template-rows:auto auto auto minmax(0, 1fr) auto auto; grid-template-areas:"head head" "mascot reel" "mascot title" "mascot result" "mascot sum" "mascot foot"; }
   .core { display:contents; }
   .st-head { grid-area:head; }
-  .mascot-zone { display:flex; grid-area:mascot; height:auto; align-self:stretch; --mascot-h:min(76cqh, 300px); justify-content:center; align-items:flex-end; padding:0; gap:0; }
-  .bubble { position:absolute; top:calc(var(--mascot-h) * .03); left:calc(50% + var(--mascot-h) * .10); flex:none; width:max-content; max-width:min(60cqw, calc(50% - var(--mascot-h) * .10 - 8px)); white-space:normal; overflow:visible; text-wrap:balance; }
-  .bubble::after { display:block; }
-  /* 上面矮舞台那段把泡泡排進列裡；橫放蘇綺又有整欄高，歡呼的泡泡回到她右肩外側 */
-  .bubble.bubble--high { position:absolute; flex:none; width:max-content; top:auto; bottom:calc(var(--mascot-h) * .48); left:calc(50% + var(--mascot-h) * .28); max-width:min(60cqw, calc(50% - var(--mascot-h) * .28 - 8px)); }
-  .bubble.bubble--high::after { display:block; }
+  /* 頭頂留兩行泡泡的高度（ui.md §6.12.1） */
+  .mascot-zone, .stage[data-badge] .mascot-zone { display:flex; grid-area:mascot; height:auto; align-self:stretch; --mascot-h:min(calc(100cqh - 124px), 300px); justify-content:center; align-items:flex-end; padding:0; gap:0; }
+  /* 橫放：泡泡在蘇綺頭頂正上方、尖角朝下，寬度不超出左欄，不往右蓋滾輪欄 */
+  .bubble, .bubble.bubble--high { position:absolute; flex:none; top:auto; bottom:calc(var(--mascot-h) + 8px); left:0; right:0; margin:0 auto; width:max-content; max-width:min(200px, calc(100% - 16px)); white-space:normal; overflow:visible; text-wrap:balance; text-align:center; }
+  .bubble::after, .bubble.bubble--high::after { display:block; left:50%; bottom:-6px; margin-left:-6px; border:6px solid transparent; border-top-color:#fff; border-bottom:0; }
+  .stage[data-badge] .r-badge img { width:32px; height:32px; }
+  .stage[data-badge] .r-amt { font-size:28px; }
   .reel-zone { grid-area:reel; }
   .st-title { grid-area:title; }
   .result-zone { grid-area:result; min-height:0; }
+  .r-sum { grid-area:sum; margin-top:2px; }
   .st-foot { grid-area:foot; }
 }
 .stage--reduced .cell.t6::before, .stage--reduced .cell .sp { animation:none; }

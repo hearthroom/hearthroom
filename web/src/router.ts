@@ -46,12 +46,12 @@ const pages: RouteRecordRaw[] = [
   { path: "mine", component: () => import("./pages/MyCardsPage.vue"), meta: { auth: true, optimisticAuth: true } },
   // 建立與編輯是同一頁：差別只有有沒有 roleId。
   { path: "create", component: () => import("./pages/CardEditorPage.vue"), meta: { auth: true, feature: "editor" } },
-  { path: "wallet", component: () => import("./pages/WalletPage.vue"), meta: { auth: true, petQuietOnPhone: true } },
+  { path: "wallet", component: () => import("./pages/WalletPage.vue"), meta: { auth: true, petQuiet: true } },
   // 簽到相關頁：手機上桌寵不說話，泡泡會壓在軌道與里程碑上（ui.md §6.13）
   // petAway：這一頁的蘇綺是頁面插圖，桌寵整頁退場（美術總監最終 r1 H1）
   { path: "checkin", component: () => import("./pages/CheckinPage.vue"), meta: { auth: true, petAway: true } },
   // 機率公告不必登入：從舞台、簽到頁、錢包都連得到（ui.md §8）
-  { path: "checkin/odds", component: () => import("./pages/OddsPage.vue"), meta: { petQuietOnPhone: true } },
+  { path: "checkin/odds", component: () => import("./pages/OddsPage.vue"), meta: { petQuiet: true } },
   // 我的資源：作者的素材圖庫（上游圖床），拿網址寫進正則規則用
   { path: "resources", component: () => import("./pages/ResourcesPage.vue"), meta: { auth: true, feature: "library" } },
   { path: "settings", component: () => import("./pages/SettingsPage.vue"), meta: { auth: true } },

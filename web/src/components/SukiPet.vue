@@ -116,7 +116,8 @@ async function start() {
     height: mobile ? 132 : 220,
     mobile,
     // 手機上活動頁的主要按鈕剛好在她招呼泡泡的位置（約戰 QA 2026-10-17）：那幾頁進來時不招呼，她照常在
-    quietGreeting: () => mobile && route.meta.petQuietOnPhone === true,
+    // petQuiet：不分手機桌機都不招呼（錢包、機率頁的泡泡會蓋到主按鈕與紀錄，美術總監最終 r2 M8）
+    quietGreeting: () => route.meta.petQuiet === true || (mobile && route.meta.petQuietOnPhone === true),
     reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
     menu,
     dailyTag,

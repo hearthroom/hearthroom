@@ -2,7 +2,9 @@
  * 假的 Harbor 應用獎勵（簽到、開箱、任務、新手七日），給本機開發、ui-sim-test 與 QA 走查用。
  * 形狀照 AppRewards 技術設計 V0.2d §10.2；規則只做到畫面需要的程度，不是 Harbor 的實作。
  *
- * 切換情境：GET /__rewards?preset=<名稱>[&tier=1..6][&graze=near]，或 POST /__rewards {preset, ...}。
+ * 切換情境：GET /__rewards?preset=<名稱>[&tier=1..6][&graze=near][&account=fresh]，或 POST /__rewards {preset, ...}。
+ *   account=fresh 換一個新帳號（/open/v1/me 的帳號號碼加一）：Worker 端「今天彈過提示卡沒」這類記在
+ *                 D1 的狀態跟著重來，不用動資料庫。不帶就沿用目前的帳號。
  *   first        從沒簽過（新帳號，含新手七日第 1 天）
  *   normal       連續 8 天，今天一般寶箱
  *   day3 / day7  今天是第 3、7 天
@@ -64,6 +66,9 @@ function freshState(preset = "normal") {
   return { graze: null, preset, streak: 8, lastDay: null, missed: 0, makeupLeft: 1, pity: 4, history: [], todayClaims: [], forceTier: null, tasks: {}, newcomer: null, delay: 0, fail: false, pending: false, expiring: [], elsewhere: false, madeUp: [] };
 }
 let S = freshState();
+let account = 424242;
+/** 假的 /open/v1/me 用的帳號號碼 */
+export const mockAccountNumId = () => account;
 
 export function setPreset(preset, opts = {}) {
   const now = Date.now();
@@ -71,6 +76,7 @@ export function setPreset(preset, opts = {}) {
   S = freshState(preset);
   S.forceTier = opts.tier ? Number(opts.tier) : null;
   S.graze = opts.graze || null;
+  if (opts.account === "fresh") account += 1;
   const yesterday = addDays(today, -1);
   const at = (streak, lastDay) => { S.streak = streak; S.lastDay = lastDay; };
   switch (preset) {
@@ -195,7 +201,7 @@ function taskList(today, now) {
   // 新帳號（first、empty）今天什麼都還沒做：任務從 0 開始
   const fresh = S.preset === "first" || S.preset === "empty";
   const p = (n) => (fresh ? 0 : n);
-  const daily = [d("chat5", "turns", p(5), 5, { credits: 30 }), d("chat20", "turns", p(12), 20, { credits: 40 }), d("try_new", "new_work_turns", 0, 3, { credits: 30 }), d("share_open", "share_open", p(1), 1, { credits: 30 })];
+  const daily = [d("chat5", "turns", p(5), 5, { credits: 30 }), d("chat15", "turns", p(12), 15, { credits: 40 }), d("try_new", "new_work_turns", 0, 3, { credits: 30 }), d("share_open", "share_open", p(1), 1, { credits: 30 })];
   const doneCount = daily.filter((t) => t.status === "claimed").length;
   const dailyAll = { id: "daily_all", type: "daily_all", progress: doneCount, target: daily.length, reward: { chest: "daily_all" }, status: S.tasks.daily_all ?? (doneCount === daily.length ? "claimable" : "locked"), period: today };
   const week = addDays(today, -((new Date(Date.parse(today)).getUTCDay() + 6) % 7));
@@ -208,7 +214,7 @@ function taskList(today, now) {
 /** 回傳 true 表示這支處理了請求。 */
 export async function handleRewards({ m, path, url, body, json, res }) {
   const now = Date.now();
-  if (path === "/__rewards") { await reelReady; setPreset(url.searchParams.get("preset") || body.preset || "normal", { tier: url.searchParams.get("tier") || body.tier, graze: url.searchParams.get("graze") || body.graze }); json(res, 200, { preset: S.preset }); return true; }
+  if (path === "/__rewards") { await reelReady; setPreset(url.searchParams.get("preset") || body.preset || "normal", { tier: url.searchParams.get("tier") || body.tier, graze: url.searchParams.get("graze") || body.graze, account: url.searchParams.get("account") || body.account }); json(res, 200, { preset: S.preset, accountNumId: account }); return true; }
   let mm;
   if ((mm = path.match(/^\/open\/v1\/apps\/([^/]+)\/rewards\/plan$/))) { json(res, 200, PLAN); return true; }
   if (!path.startsWith("/open/v1/me/rewards")) return false;

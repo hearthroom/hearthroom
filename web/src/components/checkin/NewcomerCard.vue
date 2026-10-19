@@ -41,7 +41,7 @@ const todayRatio = computed(() => (n.value.today.target ? Math.min(1, n.value.to
     </ol>
     <p class="nc__progress">{{ t("newcomer.progress", { n: view.done }) }}</p>
     <div class="nc__today">
-      <img class="nc__suki" src="/mascot/home/pose-wave.webp" alt="" width="64" height="89" decoding="async" />
+      <img class="nc__suki" src="/mascot/suki-avatar.webp" alt="" width="56" height="56" decoding="async" />
       <div class="nc__goal">
         <span class="nc__eyebrow">{{ view.todayDone ? t("newcomer.today.done") : t("newcomer.today") }}</span>
         <template v-if="!view.todayDone">
@@ -73,7 +73,7 @@ const todayRatio = computed(() => (n.value.today.target ? Math.min(1, n.value.to
 .nc__reward { font-size:11.5px; color:var(--text-3); text-align:center; line-height:1.3; overflow-wrap:anywhere; font-variant-numeric:tabular-nums; }
 .nc__progress { margin:0; font-size:12.5px; color:var(--text-2); }
 .nc__today { display:grid; grid-template-columns:64px minmax(0,1fr); gap:var(--s-3); align-items:end; padding:var(--s-3); border-radius:var(--r-md); background:var(--accent-tint); }
-.nc__suki { width:64px; height:89px; object-fit:contain; object-position:50% 100%; }
+.nc__suki { width:56px; height:56px; border-radius:var(--r-pill); object-fit:cover; background:var(--accent-tint); }
 .nc__goal { display:grid; gap:6px; min-width:0; align-self:center; }
 .nc__eyebrow { font-size:12px; color:var(--text-2); }
 .nc__text { font-size:14px; line-height:1.45; text-wrap:pretty; }
