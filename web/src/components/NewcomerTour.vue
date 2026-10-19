@@ -16,7 +16,7 @@ import { track } from "@/lib/track";
 const route = useRoute();
 const router = useRouter();
 const { lp } = useLocalePath();
-const { t, locale } = useI18n();
+const { t, te, locale } = useI18n();
 
 const step = computed(() => currentStep());
 const steps = computed(() => NEWCOMER_TOUR[newcomerTour.day] ?? []);
@@ -61,7 +61,9 @@ const away = computed(() => (step.value ? awayMode(step.value, here.value) : nul
 const ownSuki = computed(() => route.meta.petAway === true);
 const copyKey = computed(() => {
   if (!step.value) return "";
-  return away.value === "card" ? `newcomer.tour.away.${newcomerTour.day}` : `newcomer.tour.${step.value.id}`;
+  // 第 4、6 天有專門的「在卡片頁」說法；其他天（第 1 天最後一步）就用這一步自己的字，按鈕一樣是「打開一張卡」
+  const awayKey = `newcomer.tour.away.${newcomerTour.day}`;
+  return away.value === "card" && te(`${awayKey}.title`) ? awayKey : `newcomer.tour.${step.value.id}`;
 });
 const action = computed(() => (away.value === "card" ? t("newcomer.tour.openCard") : away.value === "canvas" ? t("newcomer.tour.gotIt") : undefined));
 async function openCard() {

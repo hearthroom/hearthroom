@@ -21,3 +21,13 @@ it("frames the real element on pages the tour can reach", () => {
   expect(awayMode(NEWCOMER_TOUR[1][0], "home")).toBeNull();
   expect(awayMode(NEWCOMER_TOUR[7][0], "card")).toBeNull();
 });
+
+// PM 2026-10-19（QA ⚠️17）：第 1 天的目標是聊滿回合，導覽停在標籤就斷了；第三步帶到卡片頁框「開始聊」
+it("day 1 ends on the card page's play button", () => {
+  expect(NEWCOMER_TOUR[1].map((s) => s.id)).toEqual(["1.board", "1.tags", "1.play"]);
+  const play = NEWCOMER_TOUR[1][2];
+  expect(play.target).toBe('[data-tour="card-play"]');
+  expect(awayMode(play, "home")).toBe("card");
+  expect(awayMode(play, "card")).toBeNull();
+});
+

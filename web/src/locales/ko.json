@@ -2891,6 +2891,8 @@
   "newcomer.tour.1.board.body": "일간은 최근 24시간 안에 올라온 카드이고, 인기는 사이트 전체 카드를 비교해요.",
   "newcomer.tour.1.tags.title": "장르 태그",
   "newcomer.tour.1.tags.body": "태그를 누르면 원하는 장르만 볼 수 있고, 여러 개를 고를 수 있어요.",
+  "newcomer.tour.1.play.title": "대화 시작하기",
+  "newcomer.tour.1.play.body": "이 버튼을 누르면 이야기가 시작되고, 내가 보낸 말에 답이 오면 1턴이에요.",
   "newcomer.tour.2.resume.title": "지난 이야기 이어 가기",
   "newcomer.tour.2.resume.body": "대화했던 카드가 여기 모여 있고, 누르면 멈춘 곳부터 이어져요.",
   "newcomer.tour.3.roll.title": "아무거나 한 장",
