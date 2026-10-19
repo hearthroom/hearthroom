@@ -124,7 +124,8 @@ export function countdown(serverNow: string, target: string, fetchedAt: number, 
   return { h: Math.floor(totalMin / 60), m: totalMin % 60, totalMs: totalMin * 60_000 };
 }
 
-export interface NewcomerView { day: number; done: number; left: number; todayDone: boolean; grand: boolean; finished: boolean }
+/** claimable：今天的目標做到了、還沒領（第 1–6 天要按「領取」才入帳；第 7 天是 grand，開大箱） */
+export interface NewcomerView { day: number; done: number; left: number; todayDone: boolean; claimable: boolean; grand: boolean; finished: boolean }
 
 export function newcomerView(p: RewardsPanel): NewcomerView | null {
   const n = p.newcomer;
@@ -133,7 +134,8 @@ export function newcomerView(p: RewardsPanel): NewcomerView | null {
   const left = n.deadline ? Math.max(0, Math.ceil((new Date(n.deadline).getTime() - new Date(p.serverNow).getTime()) / 86_400_000)) : 0;
   const todayDone = n.today.status === "claimed";
   const total = n.stages.length || 7;
-  return { day: Math.min(total, todayDone ? done : done + 1), done, left, todayDone, grand: !todayDone && done === total - 1, finished: done >= total };
+  const grand = !todayDone && done === total - 1;
+  return { day: Math.min(total, todayDone ? done : done + 1), done, left, todayDone, claimable: !grand && n.today.status === "claimable", grand, finished: done >= total };
 }
 
 const dayKey = (ms: number, timeZone: string) =>

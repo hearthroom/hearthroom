@@ -11,7 +11,7 @@ import { NEWCOMER_BADGE } from "@/lib/checkin-art";
 import { stageDone, type RewardsPanel } from "@/lib/rewards";
 
 const props = defineProps<{ panel: RewardsPanel; busy: boolean }>();
-const emit = defineEmits<{ guide: [day: number]; grand: [] }>();
+const emit = defineEmits<{ guide: [day: number]; grand: []; claim: [] }>();
 const { t } = useI18n();
 const view = computed(() => newcomerView(props.panel));
 const n = computed(() => props.panel.newcomer!);
@@ -48,6 +48,8 @@ const todayRatio = computed(() => (n.value.today.target ? Math.min(1, n.value.to
           <strong class="nc__text">{{ goalOf(view.day) }}</strong>
           <span v-if="!view.grand && n.today.target > 1" class="meter" role="progressbar" :aria-valuenow="n.today.progress" aria-valuemin="0" :aria-valuemax="n.today.target"><i :style="{ '--v': todayRatio }" /></span>
           <button v-if="view.grand" type="button" class="btn btn--primary nc__cta" :disabled="busy" @click="emit('grand')">{{ t("newcomer.cta.grand") }}</button>
+          <!-- 目標做到了還沒領：跟任務列一樣用「領取」鈕（Harbor 要領取才入帳） -->
+          <button v-else-if="view.claimable" type="button" class="btn btn--primary nc__cta" :disabled="busy" @click="emit('claim')">{{ t("task.cta.claim") }}</button>
           <button v-else type="button" class="btn nc__cta" @click="emit('guide', view.day)">{{ t("newcomer.cta.go") }}</button>
         </template>
         <span v-else-if="view.day < n.stages.length" class="nc__tomorrow">{{ t("newcomer.tomorrow", { goal: goalOf(view.day + 1) }) }}</span>
