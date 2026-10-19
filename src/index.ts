@@ -1042,7 +1042,7 @@ app.post("/v1/cards/:id/comments", async (c) => {
   note(c, { event: "comment_create", subject: card.id, detail: created.status === "held" ? "held" : body.rootId || body.parentId ? "reply" : "root" });
   // 應用獎勵：公開的留言才報（被擋下待審的不算）；作者在自己的卡下回覆另報一筆，Harbor 會再核對
   if (created.status === "visible" && typeof body.content === "string") {
-    await reportRewardComment(c.env.DB, { cardId: String(card.id), memberId: member.id, commentId: created.commentId, content: body.content, reply: !!(body.rootId || body.parentId), byAuthor: card.provider === "harbor" && member.provider === "harbor" && Number(card.authorNumId) === member.externalId, now });
+    await reportRewardComment(c.env.DB, { cardId: String(card.id), memberId: member.id, commentId: created.commentId, content: body.content, reply: !!(body.rootId || body.parentId), now });
     c.executionCtx.waitUntil(flushRewardEvents(c.env, now).catch(() => undefined));
   }
   queuePush(c);

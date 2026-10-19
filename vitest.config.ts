@@ -11,6 +11,7 @@ export default defineConfig({
         bindings: {
           TEST_MIGRATIONS: migrations,
           SHORTCUT_SECRET: "test-shortcut-secret",
+          SHARE_VISITOR_SECRET: "test-share-visitor-secret",
           // 第二家供應商只在測試裡設定：wrangler.toml 是正式部署的設定檔，
           // 在那裡加上位址就等於直接對線上開放這一家。
           PROVIDER_API_BASE_HARBOR: "https://api.harperharbor.com",

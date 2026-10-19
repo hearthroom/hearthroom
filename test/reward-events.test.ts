@@ -6,7 +6,7 @@
  */
 import { env, SELF } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { bearer, identities, makeMember, resetDb, restoreUpstream } from "./helpers";
+import { bearer, identities, makeMember, makeReviewer, resetDb, restoreUpstream } from "./helpers";
 import { flushRewardEvents, rewardTransport, visitorHash } from "../src/reward-events";
 import { opsMetrics } from "../src/ops-metrics";
 
@@ -20,7 +20,7 @@ async function harborCard(id: string, roleId: string, authorNumId: number) {
   await env.DB.prepare("INSERT INTO cards (id, source_role_id, author_num_id, registered_at, last_synced_at, provider) VALUES (?, ?, ?, 0, 0, 'harbor')").bind(id, roleId, authorNumId).run();
 }
 
-beforeEach(async () => { await resetDb(); identities({ fan: 20001, author: 20002 }); });
+beforeEach(async () => { await resetDb(); identities({ fan: 20001, author: 20002, mod: 30001 }); });
 afterEach(() => { restoreUpstream(); Object.assign(rewardTransport, realTransport); });
 
 describe("分享連結被打開", () => {
@@ -97,7 +97,47 @@ describe("留言、評分與分享連結", () => {
   });
 });
 
+describe("待審的留言", () => {
+  it("被擋下待審的不報；審核放行之後才報", async () => {
+    await makeMember(20001); await makeMember(20002); await makeReviewer(30001);
+    await harborCard("200001", "role-1", 20002);
+    await env.DB.prepare("INSERT INTO comment_keywords VALUES ('k1','違禁','test',1)").run();
+    const held = await json(await SELF.fetch("https://c.test/v1/cards/200001/comments", { method: "POST", headers: { ...bearer("fan"), "Content-Type": "application/json" }, body: JSON.stringify({ content: "違禁的留言" }) }));
+    expect(held.status).toBe("held");
+    expect((await outbox()).filter((r) => r.type === "comment_posted")).toHaveLength(0);
+    const res = await SELF.fetch(`https://c.test/v1/moderation/comments/${held.commentId}/decision`, { method: "POST", headers: { ...bearer("mod"), "Content-Type": "application/json" }, body: JSON.stringify({ action: "release", reason: "ok", operationId: crypto.randomUUID() }) });
+    expect(res.status).toBe(200);
+    const posted = (await outbox()).filter((r) => r.type === "comment_posted");
+    expect(posted).toHaveLength(1);
+    expect(posted[0].body).toMatchObject({ accountNo: 20001, workRoleId: "role-1", attrs: { commentId: held.commentId, textUnits: 5 } });
+  });
+});
+
+describe("訪客雜湊的鑰匙", () => {
+  it("沒設鑰匙就不算（跨 isolate 的雜湊對不上，會把人數灌大）", async () => {
+    const secret = (env as { SHARE_VISITOR_SECRET?: string }).SHARE_VISITOR_SECRET;
+    (env as { SHARE_VISITOR_SECRET?: string }).SHARE_VISITOR_SECRET = undefined;
+    try {
+      await open({ ref: "ABCD1234" });
+      expect(await outbox()).toHaveLength(0);
+      expect(await opsMetrics(env.DB)).toContain('hearthroom_reward_events_total{type="share_open",outcome="dropped"} 1');
+    } finally { (env as { SHARE_VISITOR_SECRET?: string }).SHARE_VISITOR_SECRET = secret; }
+  });
+});
+
 describe("送出", () => {
+  it("應用沒開獎勵或權限不對（403／404）：留著重試，不丟；格式不對（400）才不重送", async () => {
+    await open({ ref: "ABCD1234" });
+    const creds = { ...env, HARBOR_REWARDS_CLIENT_ID: "cid", HARBOR_REWARDS_CLIENT_SECRET: "sec" };
+    let tokens = 0;
+    rewardTransport.token = async () => { tokens++; return "app-token"; };
+    rewardTransport.send = async () => ({ ok: false, status: 404 });
+    expect(await flushRewardEvents(creds, Date.now())).toMatchObject({ retry: 1, rejected: 0 });
+    rewardTransport.send = async () => ({ ok: false, status: 400 });
+    expect(await flushRewardEvents(creds, Date.now() + 3_600_000)).toMatchObject({ rejected: 1 });
+    expect(tokens).toBe(2);
+  });
+
   it("沒設應用憑證：留在清單裡，不送", async () => {
     await open({ ref: "ABCD1234" });
     let called = 0;
