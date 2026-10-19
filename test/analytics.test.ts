@@ -308,6 +308,7 @@ describe("欄位過濾", () => {
     expect(surfaceOf("board")).toBe("board");
     expect(surfaceOf("blog")).toBe("blog");
     expect(surfaceOf("campaign")).toBe("campaign");
+    expect(surfaceOf("checkin")).toBe("checkin");
     expect(surfaceOf("<script>")).toBe("direct");
     expect(surfaceOf(undefined)).toBe("direct");
   });
