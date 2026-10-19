@@ -13,13 +13,14 @@ import { buildTrack, type ReelCell } from "@/lib/reel/v1";
 import { newRound, phaseAt, posAt, reactionOf, skipAt, stopSoundOf, times, type Phase, type Round } from "@/lib/reel/timeline";
 import { buzz, canVibrate, hapticOn, playOpen, playShine, playStop, playTick, prepareAudio, setHaptic, setSound, soundOn } from "@/lib/reel/audio";
 import { chestTitle } from "@/lib/checkin";
-import { poseUrl, preloadPoses, type CheckinPose } from "@/lib/checkin-art";
+import { boxKindOf, NEWCOMER_BADGE, poseUrl, preloadPoses, type CheckinPose } from "@/lib/checkin-art";
 import { fetchPlan, type ClaimResult, type RewardPlan } from "@/lib/rewards";
 import { isNight } from "@/lib/mascot-home";
 import { monthDayOf, monthDayTime, whole } from "@/lib/format";
 import { wrapTab } from "@/lib/focus-trap";
 import { useLocalePath } from "@/lib/use-locale";
 import CreditIcon from "./CreditIcon.vue";
+import SukiCarry from "./SukiCarry.vue";
 
 export interface StageOutcome { claims: ClaimResult[]; recap: boolean; streak?: number }
 export type StageMood = "win" | "miss" | "ok";
@@ -57,7 +58,7 @@ const panelEl = ref<HTMLElement | null>(null);
 const trackEl = ref<HTMLElement | null>(null);
 const reelEl = ref<HTMLElement | null>(null);
 const zoneEl = ref<HTMLElement | null>(null);
-const boxEl = ref<HTMLElement | null>(null);
+const carryEl = ref<{ box: HTMLElement | null; lid: HTMLElement | null } | null>(null);
 const mascotEl = ref<HTMLElement | null>(null);
 const heartsEl = ref<HTMLElement | null>(null);
 const mainBtn = ref<HTMLButtonElement | null>(null);
@@ -202,28 +203,21 @@ function frame(now: number) {
 }
 
 function idle(now: number) {
-  const b = boxEl.value;
+  const b = carryEl.value?.box;
   if (b && !reduced) b.style.transform = `scale(${1 + Math.sin(now / 520) * 0.02})`;
   if (mascotEl.value && !reduced) mascotEl.value.style.transform = `translate3d(0,${Math.sin(now / 700) * 2}px,0)`;
 }
 
+/** 開蓋：整疊在她手上抖兩下，蓋彈起（上移、轉、淡出），箱身與箱內留在手上；滾輪從箱口展開。 */
 function drawBox(t: number, openMs: number) {
-  const box = boxEl.value, reel = reelEl.value;
-  if (!box || !reel) return;
-  const lid = box.querySelector<HTMLElement>(".box-lid");
-  const body = box.querySelector<HTMLElement>(".box-body");
-  const light = box.querySelector<HTMLElement>(".box-light");
-  if (!openMs) { box.style.display = "none"; reel.style.opacity = String(easeOut(clamp01(t / 300))); reel.style.transform = "none"; return; }
+  const box = carryEl.value?.box, lid = carryEl.value?.lid, reel = reelEl.value;
+  if (!reel) return;
+  if (!openMs) { if (lid) lid.style.opacity = "0"; reel.style.opacity = String(easeOut(clamp01(t / 300))); reel.style.transform = "none"; return; }
   const u = clamp01(t / openMs);
   const shake = u < 0.42 ? Math.sin((u / 0.42) * Math.PI * 4) * 5 * (1 - (u / 0.42) * 0.3) : 0;
   const lu = clamp01((u - 0.5) / 0.5);
-  const bs = box.offsetWidth;
-  box.style.display = u >= 1 ? "none" : "block";
-  box.style.opacity = String(1 - clamp01((u - 0.8) / 0.2));
-  box.style.transform = `rotate(${shake}deg)`;
-  if (lid) { lid.style.transform = `translate3d(0,${-lu * bs * 0.7}px,0) rotate(${-lu * 30}deg)`; lid.style.opacity = String(1 - clamp01((lu - 0.6) / 0.4)); }
-  if (body) body.style.transform = `translate3d(0,${easeOut(clamp01((u - 0.75) / 0.25)) * 12}px,0)`;
-  if (light) { const gl = clamp01((u - 0.4) / 0.2) * (1 - clamp01((u - 0.7) / 0.3)); light.style.opacity = String(gl); light.style.transform = `scaleX(${0.6 + gl * 0.9})`; }
+  if (box) box.style.transform = `rotate(${shake}deg)`;
+  if (lid) { lid.style.transform = `translate3d(0,${-lu * 11}%,0) rotate(${-lu * 24}deg)`; lid.style.opacity = String(1 - clamp01((lu - 0.6) / 0.4)); }
   const ru = clamp01((u - 0.55) / 0.45);
   reel.style.opacity = String(easeOut(ru));
   reel.style.transform = `translate3d(0,${-(1 - easeOut(ru)) * 26}px,0) scaleX(${0.18 + 0.82 * easeOut(ru)})`;
@@ -295,19 +289,22 @@ function onBackdrop(e: MouseEvent) { if (e.target === root.value && !busy.value 
 
 // ---- 結果的字 ----
 const prizeOf = (c: ClaimResult) => c.credits ?? 0;
+/** 新住民寶箱附的徽章不是造型道具：結果卡在金額之外多一格徽章（ui.md §5） */
+const isBadge = (c: ClaimResult) => c.chest === "newcomer" || (!!c.item && c.item.startsWith("hearth_newcomer"));
+const cosmetic = (c: ClaimResult) => !!c.item && !c.duplicate && !isBadge(c);
 const daysLeft = (iso: string) => Math.floor((Date.parse(iso) - Date.now()) / 86_400_000);
 function expiryLine(c: ClaimResult): string {
   if (c.status === "pending") return c.releaseAt ? t("checkin.result.pending", { date: monthDayOf(c.releaseAt) }) : t("wallet.record.pending");
-  if (c.item && !c.duplicate) return t("checkin.result.cosmetic.added");
+  if (cosmetic(c)) return t("checkin.result.cosmetic.added");
   if (!c.expiresAt) return "";
   const days = daysLeft(c.expiresAt);
   return days < 1 ? t("checkin.result.expires.today", { datetime: monthDayTime(c.expiresAt) }) : t("checkin.result.expires", { datetime: monthDayTime(c.expiresAt), days }, days);
 }
-const ariaLine = (c: ClaimResult) => (c.item && !c.duplicate
+const ariaLine = (c: ClaimResult) => (cosmetic(c)
   ? t("checkin.result.aria.cosmetic", { type: t("checkin.result.cosmetic.frame"), name: t("checkin.result.cosmetic.frame") })
   : t("checkin.result.aria.credits", { amount: whole(prizeOf(c)), datetime: c.expiresAt ? monthDayTime(c.expiresAt) : "" }));
 const resultRows = computed(() => done.value.map((i) => rounds.value[i]).filter(Boolean));
-const sum = computed(() => resultRows.value.reduce((s, x) => s + (x.claim.item && !x.claim.duplicate ? 0 : prizeOf(x.claim)), 0));
+const sum = computed(() => resultRows.value.reduce((s, x) => s + (cosmetic(x.claim) ? 0 : prizeOf(x.claim)), 0));
 const twoDone = computed(() => rounds.value.length > 1 && done.value.length === rounds.value.length && showResult.value && lastRound.value);
 const otherClaims = computed(() => (outcome.value?.claims ?? []).filter((c) => !(c.status === "granted" && c.stripSeed != null)));
 const bubble = computed(() => {
@@ -320,10 +317,6 @@ const bubble = computed(() => {
   return t(night ? "checkin.suki.ok.night" : pick(["checkin.suki.ok.a", "checkin.suki.ok.b", "checkin.suki.ok.c"]));
 });
 const pityOut = computed(() => outcome.value?.claims.find((c) => c.pityRemaining != null)?.pityRemaining ?? props.pity);
-const boxKind = computed(() => {
-  const k = chestKey.value;
-  return k === "day3" || k === "day7" ? k : /^m\d+$/.test(k) ? "milestone" : "day";
-});
 
 // ---- 格子 ----
 const fitCtx = typeof document !== "undefined" ? document.createElement("canvas").getContext("2d") : null;
@@ -344,7 +337,7 @@ async function begin() {
   prepareAudio();
   document.documentElement.style.overflow = "hidden";
   raf = requestAnimationFrame(frame);
-  posesReady = preloadPoses();
+  posesReady = preloadPoses([...new Set(props.chests.map(boxKindOf))]);
   await send();
 }
 void (async () => {
@@ -388,12 +381,8 @@ defineExpose({ skip });
           <div v-else class="core">
             <section class="mascot-zone">
               <div ref="mascotEl" class="mascot">
-                <img class="mascot__pose" :src="poseSrc" alt="" draggable="false" />
-                <div v-show="step !== 'recap' && step !== 'pending' && (phase === 'idle' || phase === 'open')" ref="boxEl" class="box" :data-kind="boxKind" :class="{ 'box--painted': phase === 'idle' }" aria-hidden="true">
-                  <div class="box-body"><i /></div>
-                  <div class="box-lid"><i /><span class="bow" /></div>
-                  <div class="box-light" />
-                </div>
+                <SukiCarry v-if="pose === 'carry'" ref="carryEl" class="mascot__carry" :kind="boxKindOf(chestKey)" />
+                <img v-else class="mascot__pose" :src="poseSrc" alt="" draggable="false" />
               </div>
               <p v-if="bubble" class="bubble">{{ bubble }}</p>
             </section>
@@ -430,19 +419,20 @@ defineExpose({ skip });
               <div v-if="showResult && current && !twoDone" class="result" role="status">
                 <span class="sr-only">{{ ariaLine(current.claim) }}</span>
                 <div class="r-top" aria-hidden="true"><span class="dot" :class="`t${current.claim.tier}`" /><span>{{ t(`checkin.result.tier.${current.claim.tier}`) }}</span></div>
-                <div v-if="current.claim.item && !current.claim.duplicate" class="r-amt r-amt--cos" aria-hidden="true">{{ t("checkin.result.cosmetic.frame") }}</div>
+                <div v-if="cosmetic(current.claim)" class="r-amt r-amt--cos" aria-hidden="true">{{ t("checkin.result.cosmetic.frame") }}</div>
                 <div v-else class="r-amt" aria-hidden="true">{{ t("checkin.result.amount", { amount: whole(prizeOf(current.claim)) }) }}<small>{{ t("checkin.result.unit") }}</small></div>
                 <div class="r-exp">{{ current.claim.duplicate ? t("checkin.result.cosmetic.owned", { amount: whole(prizeOf(current.claim)) }) : expiryLine(current.claim) }}</div>
                 <div v-if="checkin && rounds.length === 1" class="r-more">
                   <span v-if="outcome?.streak">{{ t("checkin.result.streak", { n: outcome.streak }) }}</span>
                   <span v-if="pityOut">{{ pityOut === 1 ? t("checkin.result.pity.next") : t("checkin.result.pity", { n: pityOut }) }}</span>
                 </div>
-                <RouterLink v-if="current.claim.item && !current.claim.duplicate" :to="lp('/settings')" class="r-link">{{ t("checkin.result.cosmetic.equip") }}</RouterLink>
+                <div v-if="isBadge(current.claim)" class="r-badge"><img :src="NEWCOMER_BADGE" alt="" width="48" height="48" /><span><strong>{{ t("newcomer.badge.name") }}</strong><small>{{ t("newcomer.badge.desc") }}</small></span></div>
+                <RouterLink v-if="cosmetic(current.claim)" :to="lp('/settings')" class="r-link">{{ t("checkin.result.cosmetic.equip") }}</RouterLink>
               </div>
               <div v-else-if="twoDone" class="rows" role="status">
                 <div v-for="x in resultRows" :key="x.claim.rewardKey" class="row">
                   <span class="n">{{ titleOf(x.chest) }}</span>
-                  <span class="a">{{ x.claim.item && !x.claim.duplicate ? t("checkin.result.cosmetic.frame") : t("checkin.done.amount", { amount: whole(prizeOf(x.claim)) }) }}</span>
+                  <span class="a">{{ cosmetic(x.claim) ? t("checkin.result.cosmetic.frame") : t("checkin.done.amount", { amount: whole(prizeOf(x.claim)) }) }}</span>
                   <span class="br" />
                   <span class="t"><span class="dot" :class="`t${x.claim.tier}`" />{{ t(`checkin.result.tier.${x.claim.tier}`) }}</span>
                   <span class="e">{{ expiryLine(x.claim) }}</span>
@@ -526,24 +516,9 @@ button { font:inherit; color:inherit; }
 .mascot-zone { --mascot-h:min(30cqh, 270px); flex:0 0 auto; height:var(--mascot-h); display:flex; justify-content:center; align-items:flex-end; position:relative; z-index:2; }
 .mascot { position:relative; height:var(--mascot-h); aspect-ratio:0.6804; will-change:transform; }
 .mascot__pose { position:absolute; left:50%; top:0; height:100%; width:auto; transform:translateX(-50%); display:block; user-select:none; pointer-events:none; }
+.mascot__carry { position:absolute; inset:0; height:100%; }
 .bubble { position:absolute; top:calc(var(--mascot-h) * .03); left:calc(50% + var(--mascot-h) * .10); width:max-content; max-width:min(60cqw, calc(50cqw - var(--mascot-h) * .10 - 8px)); margin:0; text-wrap:balance; background:#fff; color:#2a1d24; font-size:13.5px; line-height:1.35; font-weight:600; padding:6px 10px; border-radius:16px; z-index:4; animation:bubble-in var(--dur) var(--ease) both; }
 .bubble::after { content:""; position:absolute; left:10px; bottom:-6px; border:6px solid transparent; border-top-color:#fff; border-bottom:0; }
-
-/* 箱子：分層插圖到位前用 CSS 畫，位置照捧箱圖量到的外框（技術美術 proto/README 第三輪） */
-.box { position:absolute; left:14.65%; top:33.7%; width:62.6%; height:42.1%; z-index:2; --c1:#C93A58; --c2:#DD5C76; --rb:#FFF1D6; }
-.box--painted { opacity:0; }
-.box[data-kind="day3"] { --c1:#B8324F; --c2:#CF4D69; --rb:#E7EBF7; }
-.box[data-kind="day7"] { --c1:#A52A47; --c2:#BE405C; --rb:var(--stage-gold); }
-.box[data-kind="milestone"] { --c1:#4B3F92; --c2:#6253B0; --rb:var(--stage-gold); }
-.box-body, .box-lid, .box-light { position:absolute; }
-.box-body { left:8%; right:8%; bottom:4%; height:58%; border-radius:10px; background:var(--c1); }
-.box-lid { left:2%; right:2%; top:20%; height:26%; border-radius:10px; background:var(--c2); transform-origin:92% 100%; }
-.box-body i, .box-lid i { position:absolute; left:44%; width:12%; top:0; bottom:0; background:var(--rb); }
-.box-lid .bow { position:absolute; left:50%; top:-34%; width:46%; height:46%; margin-left:-23%; }
-.box-lid .bow::before, .box-lid .bow::after { content:""; position:absolute; top:0; width:52%; height:100%; border-radius:50% 50% 50% 8%; background:var(--rb); }
-.box-lid .bow::before { left:0; transform:rotate(-18deg); }
-.box-lid .bow::after { right:0; transform:scaleX(-1) rotate(-18deg); }
-.box-light { left:12%; right:12%; top:41%; height:7%; border-radius:4px; background:linear-gradient(90deg, transparent, #FFF6C8 30%, #fff 50%, #FFF6C8 70%, transparent); opacity:0; }
 
 .reel-zone { --cw:88px; --ch:104px; --gap:4px; --zone-h:calc(var(--ch) + 56px); position:relative; flex:0 0 auto; z-index:2; margin-top:1.5cqh; height:var(--zone-h); }
 @media (min-width: 640px) { .reel-zone { --cw:112px; --ch:128px; --gap:8px; } }
@@ -598,6 +573,11 @@ button { font:inherit; color:inherit; }
 .r-amt small { font-size:16px; font-weight:600; opacity:.85; margin-left:4px; }
 .r-exp { font-size:14px; opacity:.85; margin-top:2px; }
 .r-more { display:flex; justify-content:center; flex-wrap:wrap; gap:4px 14px; margin-top:6px; font-size:12.5px; opacity:.75; }
+.r-badge { display:inline-flex; align-items:center; gap:10px; margin-top:8px; padding:6px 12px 6px 6px; border-radius:14px; background:rgba(255,246,230,.08); text-align:left; }
+.r-badge img { width:48px; height:48px; }
+.r-badge span { display:grid; gap:2px; }
+.r-badge strong { font-size:14px; }
+.r-badge small { font-size:12px; opacity:.8; }
 .r-link { display:inline-flex; min-height:44px; align-items:center; color:var(--stage-cream); text-decoration:underline; text-underline-offset:3px; font-size:13px; }
 .rows { width:min(100%, 420px); display:grid; gap:4px; }
 .row { display:flex; flex-wrap:wrap; align-items:center; column-gap:10px; padding:5px 12px; border-radius:12px; background:rgba(255,246,230,.07); text-align:left; animation:result-in .25s var(--ease) both; }
