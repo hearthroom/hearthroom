@@ -9,7 +9,7 @@ import { Driver } from "./driver";
 import type { SukiNews } from "../../../shared/suki-care";
 
 export type { SukiEvent } from "./events";
-import type { SukiEvent } from "./events";
+import { petSpeaking, type SukiEvent } from "./events";
 
 type Expr = "happy" | "surprised" | "pout" | "shy" | "sleepy" | "dizzy" | "wink" | "peek";
 
@@ -124,6 +124,8 @@ export class SukiPet {
     this.menuEl.hidden = true;
     this.menuEl.setAttribute("role", "menu");
     this.el.append(this.canvas, this.touch, this.bubble, this.menuEl);
+    // 泡泡開關的地方很多，統一從屬性看
+    new MutationObserver(() => { petSpeaking.value = !this.bubble.hidden && !this.hidden; }).observe(this.bubble, { attributes: true, attributeFilter: ["hidden"] });
     if (opts.mobile) this.el.classList.add("suki-pet--mobile");
   }
 
@@ -183,13 +185,15 @@ export class SukiPet {
     requestAnimationFrame(loop);
   }
 
-  stop() { this.stopped = true; this.el.remove(); }
+  stop() { this.stopped = true; this.el.remove(); petSpeaking.value = false; }
 
   /** 換頁時網站把這頁的用途交給她：第一次到這頁說一句，之後只在選單裡 */
   setGuide(g: PageGuide | null) {
     this.guide = g;
     this.closeMenu();
     if (!g || this.tucked || !this.ready) return;
+    // 主要按鈕剛好在她泡泡位置的那幾頁：介紹留在選單裡，不自己開口（美術總監最終 r2 M8）
+    if (this.opts.quietGreeting?.()) return;
     const todo = g.todo?.();
     if (todo && this.onceToday(`todo.${g.id}`)) return this.act({ say: todo, expr: "wink", ms: 3600 });
     if (g.hello && this.onceEver(`hello.${g.id}`)) this.act({ say: g.hello, expr: "happy", ms: 3600 });

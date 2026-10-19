@@ -73,9 +73,15 @@ const aria = (n: TrackNode) => {
   .track__dot { width:48px; height:48px; font-size:15px; } .track__node--big .track__dot { width:52px; height:52px; }
   .track__link { margin-top:25px; }
 }
-@media (max-width: 359px) {
+/* 窄手機：圓縮一階，連接線至少 4px，七個圓不擠在一起（美術總監最終 r2 L5） */
+@media (max-width: 400px) {
   .track__node { width:34px; } .track__node--big { width:38px; }
   .track__dot { width:34px; height:34px; font-size:13px; } .track__node--big .track__dot { width:38px; height:38px; }
-  .track__link { margin-top:18px; }
+  .track__link { min-width:4px; margin-top:18px; }
+}
+@media (max-width: 359px) {
+  .track__node { width:30px; } .track__node--big { width:34px; }
+  .track__dot { width:30px; height:30px; font-size:12px; } .track__node--big .track__dot { width:34px; height:34px; }
+  .track__link { margin-top:16px; }
 }
 </style>

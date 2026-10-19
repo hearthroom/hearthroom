@@ -5,14 +5,20 @@
  * 框起來的地方照樣能點，遮罩不擋操作。rect 是 null（框不到）時泡泡貼在頁首底下。
  */
 import { computed } from "vue";
+import { isNight } from "@/lib/mascot-home";
 
-/** action：框不到時只有一顆按鈕（例如「打開一張卡」「知道了」），取代上一步／下一步 */
-const props = defineProps<{ rect: DOMRect | null; title: string; body: string; mascot: boolean; first: boolean; last: boolean; action?: string }>();
+/**
+ * action：框不到時只有一顆按鈕（例如「打開一張卡」「知道了」），取代上一步／下一步。
+ * frame=false：rect 只拿來決定泡泡放在它上面或下面，不加遮罩、不框（ui.md §15.8、art.md §12）。
+ */
+const props = withDefaults(defineProps<{ rect: DOMRect | null; title: string; body: string; mascot: boolean; first: boolean; last: boolean; action?: string; frame?: boolean }>(), { action: undefined, frame: true });
+/** 導覽的蘇綺衣服跟時段走，和桌寵、簽到頁一致：晚上換寢物語 */
+const mascotSrc = isNight(new Date()) ? "/mascot/home/pose-bedtime.webp" : "/mascot/suki-wave.webp";
 const emit = defineEmits<{ prev: []; next: []; close: [] }>();
 
 const PAD = 8;
 /** 用 transform 移動：只動合成層，不必每格重畫那片 9999px 的遮罩陰影 */
-const hole = computed(() => props.rect && {
+const hole = computed(() => props.frame && props.rect && {
   transform: `translate(${props.rect.left - PAD}px, ${props.rect.top - PAD}px)`,
   width: `${props.rect.width + PAD * 2}px`, height: `${props.rect.height + PAD * 2}px`,
 });
@@ -20,7 +26,8 @@ const hole = computed(() => props.rect && {
 const bubbleStyle = computed(() => {
   const r = props.rect;
   if (!r) return { top: `calc(64px + env(safe-area-inset-top))` };
-  const below = r.top + r.height / 2 < window.innerHeight / 2;
+  // 不框的時候 rect 是剛按的按鈕：泡泡優先放在它下面，不蓋住按鈕上方那段它在講的內容
+  const below = props.frame ? r.top + r.height / 2 < window.innerHeight / 2 : r.bottom + 200 < window.innerHeight;
   return below ? { top: `${Math.min(r.bottom + PAD + 12, window.innerHeight - 200)}px` } : { bottom: `${Math.min(window.innerHeight - r.top + PAD + 12, window.innerHeight - 200)}px` };
 });
 </script>
@@ -30,7 +37,7 @@ const bubbleStyle = computed(() => {
     <div v-if="hole" class="coach__hole" :style="hole" />
     <section class="coach__bubble panel" :class="{ 'coach__bubble--mascot': mascot }" :style="bubbleStyle" role="dialog" aria-labelledby="coach-title">
       <!-- 蘇綺站在泡泡左邊，泡泡的尖角指向她，像她在說這段話 -->
-      <img v-if="mascot" class="coach__mascot" src="/mascot/suki-wave.webp" alt="" decoding="async" />
+      <img v-if="mascot" class="coach__mascot" :src="mascotSrc" alt="" decoding="async" />
       <button type="button" class="coach__close" :aria-label="$t('tour.skip')" @click="emit('close')">×</button>
       <h2 id="coach-title" class="coach__title">{{ title }}</h2>
       <p class="coach__body">{{ body }}</p>
@@ -84,7 +91,7 @@ const bubbleStyle = computed(() => {
 }
 .coach__mascot {
   position: absolute; left: calc(-1 * var(--mascot-w) - 6px); top: 50%; transform: translateY(-50%);
-  width: var(--mascot-w); height: auto; pointer-events: none;
+  width: var(--mascot-w); height: auto; max-height: 150px; object-fit: contain; pointer-events: none;
 }
 @media (max-width: 640px) {
   .coach__bubble--mascot { --mascot-w: 92px; }
