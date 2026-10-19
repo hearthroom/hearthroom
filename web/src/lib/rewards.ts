@@ -191,5 +191,60 @@ export const fetchDraws = (token: string, cursor = "") =>
 
 export const fetchItems = (token: string) => call<{ items: { key: string; grantedAt: string }[] }>("/me/rewards/items", { headers: authHeaders(token) });
 
+// ---- 月卡（期間方案）：Harbor 賣的一次性 30 天方案，不是應用的獎勵（p5-contract §1） ----
+// 方案屬於帳號，購買只在 Console；這裡只讀規則與持有狀態、送當天的領取。
+
+/** 販售中的方案與規則（免登入、可快取）。數字全部從這裡來，語系檔不寫。 */
+export interface PeriodPlan {
+  id: string;
+  onSale: boolean;
+  priceMicro: number;
+  currency: string;
+  credits: number;
+  days: number;
+  dailyCredits: number;
+  /** 帳號第一張月卡每天多給的量，和 dailyCredits 一起領 */
+  firstBonusDailyCredits: number;
+  maxDays: number;
+  makeupPerMonth: number;
+  purchaseUrl: string;
+}
+
+/** 自己的持卡狀態。today.credits 是今天的總數，bonusCredits 是其中屬於第一張加倍的部分。 */
+export interface MyPeriodPlan {
+  id: string;
+  businessDay: string;
+  nextResetAt: string;
+  active: boolean;
+  endsOn: string | null;
+  remainingDays: number;
+  today: { status: "claimable" | "claimed" | "revoked" | "none"; credits: number; bonusCredits: number };
+  canPurchase: boolean;
+  purchaseBlockedReason: "not_on_sale" | "plan_limit" | "checkout_in_progress" | null;
+  /** available：帳號還沒買過，下一張就是第一張；active：今天這張就是第一張；used；unavailable：版本沒有加倍 */
+  firstBonus: { status: "available" | "active" | "used" | "unavailable"; dailyCredits?: number };
+  firstBonusDailyCredits?: number;
+  makeupPerMonth: number;
+  badge?: string;
+}
+
+export interface PeriodPlanClaim { day: string; credits: number; bonusCredits: number; status: "granted" | "revoked"; replayed: boolean }
+
+let periodPlans: Promise<{ list: PeriodPlan[] }> | null = null;
+/** 公開的方案清單：一次載入用到底，失敗了下一次再讀。 */
+export function fetchPeriodPlans(): Promise<{ list: PeriodPlan[] }> {
+  if (!periodPlans) {
+    periodPlans = call<{ list: PeriodPlan[] }>("/plans");
+    periodPlans.catch(() => { periodPlans = null; });
+  }
+  return periodPlans;
+}
+export function forgetPeriodPlans(): void { periodPlans = null; }
+
+export const fetchMyPeriodPlans = (token: string) => call<{ serverNow: string; list: MyPeriodPlan[] }>("/me/plans", { headers: authHeaders(token) });
+
+export const claimPeriodPlan = (token: string, id: string, requestId: string) =>
+  post<PeriodPlanClaim>(`/me/plans/${encodeURIComponent(id)}/claim`, token, { requestId });
+
 /** 一般的領取失敗句（網路、伺服器、逾時）。等待與冪等由呼叫端處理。 */
 export const genericClaimError = (): string => i18n.global.t("checkin.stage.error.body");

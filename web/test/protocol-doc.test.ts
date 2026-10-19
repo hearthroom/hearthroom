@@ -19,13 +19,16 @@ const specPaths = new Set(Object.keys(spec.paths));
 function pathsIn(source: string): string[] {
   const found = new Set<string>();
   // 舞台端點表把前綴收成常數（`${V1}/conversation/start`）：先展開，否則只會撈到註解裡那個 /open/v1/...
-  const expanded = source.replace(/\$\{V1\}/g, "/open/v1");
+  // 獎勵與月卡的用戶端由 call()／post() 補上 /open/v1 前綴：先把第一個參數展開成完整路徑
+  const expanded = source.replace(/\$\{V1\}/g, "/open/v1").replace(/\b(call|post)<.*?>\(\s*([`"])\//g, "$1($2/open/v1/");
   const re = /(\/(?:open\/v1|oauth)\/[A-Za-z0-9_\-/.${}():]+)/g;
   for (const m of expanded.matchAll(re)) {
     let p = m[1]!;
-    if (p.includes("...")) continue; // 註解裡的「/open/v1/...」不是端點
+    if (p.includes("...") || expanded[m.index! + p.length] === "…") continue; // 註解裡的「/open/v1/...」「/open/v1/apps/{app}/…」不是端點
     p = p.replace(/\$\{encodeURIComponent\((\w+)\)\}/g, "{$1}").replace(/\$\{(\w+)\}/g, "{$1}").replace(/:(\w+)/g, "{$1}");
     p = p.replace(/[?#].*$/, "").replace(/[`'"),]+$/, "").replace(/\/+$/, "");
+    // 接在路徑尾巴的查詢字串插值（`…/plan${q}`、`…/draws${cursor ? … : ""}`）不是路徑的一段
+    p = p.replace(/\$\{\w*$/, "").replace(/([^/])\{\w+\}$/, "$1");
     found.add(p);
   }
   return [...found].sort();
@@ -41,6 +44,7 @@ const SOURCES: Record<string, { file: string; atLeast: number }> = {
   // 留言與審核讀取搬回本站之後，打上游的路徑變少是預期的（owner 2026-09-18）
   "站台前端 api.ts": { file: at("../src/lib/api.ts"), atLeast: 25 },
   "站台前端 oauth.ts": { file: at("../src/lib/oauth.ts"), atLeast: 3 },
+  "站台前端 rewards.ts（獎勵與月卡）": { file: at("../src/lib/rewards.ts"), atLeast: 11 },
   "站台伺服器 upstream.ts": { file: at("../../src/upstream.ts"), atLeast: 3 },
   "舞台端點表": { file: at("../../stage/src/config/request-url.js"), atLeast: 40 },
 };
