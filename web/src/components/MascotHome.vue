@@ -141,7 +141,7 @@ watch(() => session.me?.accountNumId, (now, before) => { if (before !== undefine
       <p class="home__greet">{{ greeting }}</p>
       <h2 class="home__ask">{{ $t(`mascot.home.ask.${slot}`) }}</h2>
       <div v-if="ready" class="home__intents" role="group">
-        <button v-for="k in intents" :key="k" type="button" class="home__intent" :class="{ 'home__intent--on': intent === k }" :aria-pressed="intent === k" @click="pick(k)">{{ label(k) }}</button>
+        <button v-for="k in intents" :key="k" type="button" class="home__intent" :class="{ 'home__intent--on': intent === k }" :aria-pressed="intent === k" :data-tour="`home-${k}`" @click="pick(k)">{{ label(k) }}</button>
       </div>
     </div>
 

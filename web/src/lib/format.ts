@@ -101,3 +101,15 @@ export function localDate(input: string | number | Date): string {
   const d = input instanceof Date ? input : new Date(typeof input === "number" ? (input > 1e12 ? input : input * 1000) : Date.parse(input));
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+
+/** 月日加時分（10/22 04:00）：期限一律寫日期加時間，簽到與錢包的到期都用這個。 */
+export function monthDayTime(input: string | number): string {
+  const ms = typeof input === "number" ? (input > 1e12 ? input : input * 1000) : Date.parse(input);
+  return new Intl.DateTimeFormat(locale(), { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(ms);
+}
+
+/** 只有月日，給「哪天會收到」這種不需要時刻的日期。 */
+export function monthDayOf(input: string | number): string {
+  const ms = typeof input === "number" ? (input > 1e12 ? input : input * 1000) : Date.parse(input);
+  return new Intl.DateTimeFormat(locale(), { month: "numeric", day: "numeric" }).format(ms);
+}
