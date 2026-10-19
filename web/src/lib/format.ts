@@ -113,3 +113,12 @@ export function monthDayOf(input: string | number): string {
   const ms = typeof input === "number" ? (input > 1e12 ? input : input * 1000) : Date.parse(input);
   return new Intl.DateTimeFormat(locale(), { month: "numeric", day: "numeric" }).format(ms);
 }
+
+/** 只有時分、一律 24 小時制（04:00，不是「凌晨4:00」）：到期條、錢包與結果卡寫法一致（ui.md §6.13）。 */
+export function hourMinute(input: string | number): string {
+  const ms = typeof input === "number" ? (input > 1e12 ? input : input * 1000) : Date.parse(input);
+  return new Intl.DateTimeFormat(locale(), { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(ms);
+}
+
+/** 數字與後面的單位黏在一起不斷行（「5 回合」「3 days」）：把中間的空白換成不換行空白。 */
+export const glueUnits = (text: string): string => text.replace(/(\d) (?=\S)/g, "$1\u00a0");
