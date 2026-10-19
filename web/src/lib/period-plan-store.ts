@@ -20,6 +20,8 @@ export const usePeriodPlans = defineStore("periodPlans", () => {
   const failed = ref(false);
   /** 這次簽到回來的代領結果 */
   const outcome = shallowRef<PeriodPlanOutcome | null>(null);
+  /** 簽到回應帶回來、還沒揭曉的結果：開箱舞台關掉（settle）才放進 outcome，月卡列不搶在舞台前更新 */
+  let pending: PeriodPlanOutcome | null = null;
   /** 自動補領也沒成功 */
   const missed = ref(false);
   const claiming = ref(false);
@@ -41,7 +43,7 @@ export const usePeriodPlans = defineStore("periodPlans", () => {
       if (own.status === "fulfilled") {
         const next = own.value.list[0] ?? null;
         // 換了業務日：昨天的簽到結果與補領失敗不再算數
-        if (next?.businessDay !== mine.value?.businessDay) { outcome.value = null; missed.value = false; retried = false; }
+        if (next?.businessDay !== mine.value?.businessDay) { outcome.value = null; missed.value = false; retried = false; pending = null; }
         mine.value = next;
         failed.value = false;
       } else {
@@ -53,9 +55,9 @@ export const usePeriodPlans = defineStore("periodPlans", () => {
     return inflight;
   }
 
-  /** 簽到回應帶的 periodPlan（成功或錯誤都有）。 */
+  /** 簽到回應帶的 periodPlan（成功或錯誤都有）。舞台關掉時由 settle 揭曉。 */
   function noteCheckin(o: PeriodPlanOutcome | undefined | null) {
-    if (o) outcome.value = o;
+    if (o) pending = o;
   }
 
   async function send(): Promise<boolean> {
@@ -76,6 +78,7 @@ export const usePeriodPlans = defineStore("periodPlans", () => {
 
   /** 舞台關掉、頁面重讀時呼叫：代領沒成功就安靜地補領一次，然後重讀。 */
   async function settle(): Promise<void> {
+    if (pending) { outcome.value = pending; pending = null; }
     if (outcome.value?.status === "unavailable" && !retried) {
       retried = true;
       const ok = await send();

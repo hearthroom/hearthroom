@@ -12,8 +12,10 @@ import CheckinStage, { type StageMood, type StageOutcome } from "@/components/ch
 import DrawHistory from "@/components/checkin/DrawHistory.vue";
 import ExpiryStrip from "@/components/checkin/ExpiryStrip.vue";
 import NewcomerCard from "@/components/checkin/NewcomerCard.vue";
+import PlanRow from "@/components/checkin/PlanRow.vue";
 import TaskPanel from "@/components/checkin/TaskPanel.vue";
 import { useCheckin } from "@/lib/checkin-store";
+import { usePeriodPlans } from "@/lib/period-plan-store";
 import { countdown, newcomerView } from "@/lib/checkin";
 import { fetchDraws, RewardsError, type DrawRecord, type RewardTask } from "@/lib/rewards";
 import { confirmDialog } from "@/lib/confirm";
@@ -27,6 +29,7 @@ import { boxKindOf, preloadPoses } from "@/lib/checkin-art";
 import { noteShortfallLanding } from "@/lib/credits-recovery";
 
 const store = useCheckin();
+const plans = usePeriodPlans();
 const session = useSession();
 const router = useRouter();
 const route = useRoute();
@@ -70,8 +73,15 @@ function onOpen() {
     checkin: true,
     source: "checkin",
     request: async () => {
-      const r = await store.checkin();
-      return { claims: r.claims, recap: r.elsewhere, streak: r.streak };
+      // 月卡由 Harbor 在同一個請求裡代領：成功與錯誤的回應都帶結果，舞台關掉後月卡列才更新（ui.md §3.1）
+      try {
+        const r = await store.checkin();
+        plans.noteCheckin(r.periodPlan);
+        return { claims: r.claims, recap: r.elsewhere, streak: r.streak };
+      } catch (e) {
+        if (e instanceof RewardsError) plans.noteCheckin(e.periodPlan);
+        throw e;
+      }
     },
   });
 }
@@ -191,12 +201,14 @@ async function loadDraws(more = false) {
 
 /** settle：剛領完東西，頁首的餘額一起重讀 */
 async function refresh(settle = false) {
-  await Promise.all([settle ? store.settle() : store.load(), loadDraws()]);
+  await Promise.all([settle ? store.settle() : store.load(), settle ? plans.settle() : plans.load(), loadDraws()]);
   // 開箱要用的圖在頁面載入時就預載：按下之後不再等圖（美術總監最終 r1 M7）
   const kinds = [...new Set((store.panel?.checkin.todayChests ?? ["daily"]).map(boxKindOf))];
   void preloadPoses(kinds);
 }
-function onVisible() { if (document.visibilityState === "visible" && !stage.value) void store.load(); }
+function onVisible() { if (document.visibilityState === "visible" && !stage.value) { void store.load(); void plans.load(); } }
+// 從 Console 買完卡回來：視窗取得焦點就重讀月卡（ui.md §3.3）
+function onFocus() { if (!stage.value) void plans.load(); }
 // 新手七日只畫一份：手機排在任務前面，桌機放右欄
 const deskQuery = typeof matchMedia === "function" ? matchMedia("(min-width: 761px)") : null;
 const desk = ref(!!deskQuery?.matches);
@@ -225,9 +237,10 @@ onMounted(() => {
   void refresh();
   ticker = window.setInterval(() => { now.value = Date.now(); }, 30_000);
   document.addEventListener("visibilitychange", onVisible);
+  window.addEventListener("focus", onFocus);
   deskQuery?.addEventListener("change", onDesk);
 });
-onBeforeUnmount(() => { window.clearInterval(ticker); window.clearTimeout(toastTimer); document.removeEventListener("visibilitychange", onVisible); deskQuery?.removeEventListener("change", onDesk); });
+onBeforeUnmount(() => { window.clearInterval(ticker); window.clearTimeout(toastTimer); document.removeEventListener("visibilitychange", onVisible); window.removeEventListener("focus", onFocus); deskQuery?.removeEventListener("change", onDesk); });
 </script>
 
 <template>
@@ -254,6 +267,7 @@ onBeforeUnmount(() => { window.clearInterval(ticker); window.clearTimeout(toastT
       v-else class="checkin__wide" :panel="panel" :plan="store.plan" :fetched-at="store.fetchedAt" :now="now" :busy="busy || !!stage"
       @open="onOpen" @makeup="onMakeup" @sign-anyway="onSignAnyway"
     />
+    <PlanRow v-if="panel" class="checkin__wide" :checked-in="panel.checkin.todayClaimed" :makeup-left="panel.checkin.makeup.left" />
 
     <div v-if="panel" class="checkin__cols">
       <div class="checkin__col">
