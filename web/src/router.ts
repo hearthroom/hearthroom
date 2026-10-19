@@ -52,6 +52,7 @@ const pages: RouteRecordRaw[] = [
   { path: "checkin", component: () => import("./pages/CheckinPage.vue"), meta: { auth: true, petAway: true } },
   // 機率公告不必登入：從舞台、簽到頁、錢包都連得到（ui.md §8）
   { path: "checkin/odds", component: () => import("./pages/OddsPage.vue"), meta: { petQuiet: true } },
+  { path: "go/plan", component: () => import("./pages/GoPlanPage.vue"), meta: { bare: true } },
   // 我的資源：作者的素材圖庫（上游圖床），拿網址寫進正則規則用
   { path: "resources", component: () => import("./pages/ResourcesPage.vue"), meta: { auth: true, feature: "library" } },
   { path: "settings", component: () => import("./pages/SettingsPage.vue"), meta: { auth: true } },
