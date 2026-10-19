@@ -4,7 +4,7 @@
 
 Hearthroom 編輯器只保留直式背景與選填橫式背景。直圖同時用於卡片圖片、PNG 匯出及聊天原本的頭像位置。原有頭像按鈕、事件與作者腳本的 DOM 不移除。圖片上傳保留原始位元組；GIF 在編輯器與播放器可播放，PNG/APNG 匯出保留原始圖片區塊，其餘格式匯出為 PNG 靜態畫面。JSON 匯出不依賴圖片取得成功。
 
-LunaTalk 的資料庫與服務不改。Hearthroom 儲存直圖時同步送既有 `roleAvatar` 與 `roleBackground`（包含清空），供既有 LunaTalk 客戶端相容；不再有獨立頭像輸入。
+Hearthroom 儲存直圖時同步送既有 `roleAvatar` 與 `roleBackground`（包含清空）；不再有獨立頭像輸入。
 HarperHarbor 移除 `role.avatar_asset_id`、不再保存 `externalMedia.avatar`；Hearthroom 移除 `cards.avatar_url`。會員／作者帳號頭像不在本次範圍。
 
 ## 相容與資料遷移
@@ -17,13 +17,13 @@ HarperHarbor 移除 `role.avatar_asset_id`、不再保存 `externalMedia.avatar`
 
 ## 上線順序與回復
 
-採兩階段發布，避免先遷移再換程式時讓舊服務讀取失敗。第一階段 Harbor migration 59 與 Hearthroom migration 0038 搬移直圖並停用獨立頭像，但保留相容欄位；先部署新版 API、worker 與 Hearthroom。讀回版本、健康與圖片來源並等待舊請求排空後，第二階段使用 Harbor migration 60 與 Hearthroom migration 0039 刪除欄位。LunaTalk schema 不變。
+採兩階段發布，避免先遷移再換程式時讓舊服務讀取失敗。第一階段 Harbor migration 59 與 Hearthroom migration 0038 搬移直圖並停用獨立頭像，但保留相容欄位；先部署新版 API、worker 與 Hearthroom。讀回版本、健康與圖片來源並等待舊請求排空後，第二階段使用 Harbor migration 60 與 Hearthroom migration 0039 刪除欄位。
 
 先推送被固定引用的 Moonstage commit，再發布 Hearthroom gitlink；所有部署來自已推送且驗證的來源，由 CI 執行。Harbor 部署保留遷移前備份，Hearthroom 使用 D1 Time Travel。第二階段的自動回退目標必須是已停用欄位的第一階段 binary／Worker。完整回退到舊的獨立頭像模型需備份，不能只換回早期程式。
 
 ## 契約與可觀測性
 
-HTTP 保留欄位名稱與授權規則，公開 OpenAPI 註明 Harbor 的別名語意與 LunaTalk 的保留範圍。Harbor 目前未掛載 MCP transport，未修改 LunaTalk MCP，因此本次不改 Moonloom；未宣稱提供新的 MCP 能力。
+HTTP 保留欄位名稱與授權規則，公開 OpenAPI 註明 Harbor 的別名語意。Harbor 目前未掛載 MCP transport；本次未修改公開 AI-client 指引，未宣稱提供新的 MCP 能力。
 
 不新增指標：此變更是既有圖片與文件路徑的投影，既有 HTTP 結果與匯出成功／失敗事件足以判斷錯誤。上線驗證需讀回 schema 欄位已移除、舊卡直圖、文件儲存／清空、聊天圖片、PNG 內嵌設定，以及 `/readyz` 和 `/metrics`；不得把卡片識別或 URL 放入指標標籤。
 

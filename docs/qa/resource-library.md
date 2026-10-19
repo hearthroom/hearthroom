@@ -11,9 +11,9 @@ Harbor additionally supports literal filename `q` (up to 200 characters) and `so
 The response includes `capabilities: {kinds, formats, maxFileBytes, search, sorts, overwrite}`.
 Search, ordering and total apply to the whole selected collection, before pagination; queries remain tenant/owner scoped. Referenced external assets are not hosted inventory.
 
-Providers that do not return capability metadata retain their existing resource listing and upload API, but the page does not invent format/size limits or advertise unsupported search/order controls. LunaTalk's deployed contract currently has no capability metadata; extending its independently operated service is outside this Harbor deployment. Its capacity and prefix are still read from its API.
+Providers that do not return capability metadata retain their existing resource listing and upload API, but the page does not invent format/size limits or advertise unsupported search/order controls.
 
-A client captures provider + token when created. It never changes the community session or global upstream. Numeric LunaTalk IDs and string Harbor IDs remain intact; Harbor deletes use `imageId` and LunaTalk uses `imageIds`.
+A client captures provider + token when created. It never changes the community session or global upstream. Harbor resource IDs remain strings; deletes use `imageId`.
 
 ## Parity and observability
 
@@ -119,7 +119,7 @@ Follow-up execution: the real page with synthetic provider data was checked on d
 
 需求：固定前綴加作者自訂的資料夾／檔名即可拼接網址；同路徑重傳更新內容、網址不變。
 驗收：兩站前綴常駐顯示且複製含結尾斜線；Harbor 空庫也有公開 UID 前綴；保留原始相對路徑、中文與多層目錄；跨資料夾同名互不覆蓋；1000 個檔案的上傳清單與庫存分頁可用。
-範圍：Harbor 固定 UID 命名空間、原子替換與公開網址解析，加上 Hearthroom 目錄上傳；不共用不同供應商的網域、不搬移既有檔案，也不更動 LunaTalk 的獨立後端。
+範圍：Harbor 固定 UID 命名空間、原子替換與公開網址解析，加上 Hearthroom 目錄上傳；不共用不同供應商的網域、不搬移既有檔案。
 
 Harbor advertises `relativePaths` and `overwrite`, and accepts an authored
 `relativePath` at completion or multipart upload. The first selected folder name

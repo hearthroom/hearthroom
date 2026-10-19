@@ -41,11 +41,11 @@ it('retains publication usage recorded before retirement',async()=>{
  await env.DB.prepare("INSERT INTO card_registrations(provider,author_num_id,source_role_id,registered_at) VALUES ('lunatalk',22,'legacy',?)").bind(Date.now()).run();
  await register('a');await register('b');expect((await register('c')).status).toBe(403);
 });
-// LunaTalk 下線後，從它搬過來的作品原作還記在 lunatalk；Harbor 上這一份就是現在唯一能動的原作。
+// 原作所在的服務下線後，歷史來源仍保留；Harbor 上這一份就是現在唯一能動的原作。
 // 以前會被當成「副本」：我的卡片把提交鈕停用（原作尚未載入），送審也回 publication_use_original。
 it('a copy whose original lives on a retired service is the original now', async () => {
  const member = await resolveMember(env.DB, 'harbor', 11, Date.now());
- await env.DB.prepare("INSERT INTO works(id,member_id,source_provider,source_role_id,created_at) VALUES ('w-old',?,'lunatalk','luna-1',?)").bind(member, Date.now()).run();
+ await env.DB.prepare("INSERT INTO works(id,member_id,source_provider,source_role_id,created_at) VALUES ('w-old',?,'lunatalk','retired-source',?)").bind(member, Date.now()).run();
  await env.DB.prepare("INSERT INTO work_copies(work_id,provider,external_id,role_id,status,updated_at) VALUES ('w-old','harbor',11,'a','published',?)").bind(Date.now()).run();
  myRolesOnUpstream({ harbor: [{ roleId: 'a', authorNumId: 11 }] as any });
  const mine = await (await SELF.fetch('https://c.test/v1/me/cards?fresh=1', { headers: headers('harbor') })).json() as any;

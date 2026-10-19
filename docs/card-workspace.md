@@ -46,13 +46,11 @@ still a distinct, private-only recovery path.
 
 ## Implementation and compatibility
 
-The card grid, hosting selector, account-specific playtest choices and private draft
-synchronization are implemented. HarperHarbor submissions use the immutable version
-contract. Pending/rejected updates preserve an already approved sealed revision; legacy
-approvals are never silently migrated. See the contract's rollout boundary for the exact
-implemented operations. An unsupported host can retain an editable copy but cannot be
-a public hosted copy of the approved revision. This release does not implement immutable
-cross-provider imports or remove LunaTalk's legacy integration.
+The card grid and HarperHarbor authoring use the immutable version contract.
+Pending/rejected updates preserve an already approved sealed revision; legacy approvals
+are never silently migrated. See the contract's rollout boundary for the exact
+implemented operations. Hearthroom connects only to HarperHarbor; cross-provider imports,
+host selection and draft synchronization are unavailable.
 
 Verification covers real PostgreSQL cloning/immutability/authorization/generation,
 Workers D1 review and withdrawal, full frontend tests/build, and Chrome UI journeys with

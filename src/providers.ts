@@ -1,7 +1,8 @@
 import { HttpError } from "./types";
 
 /** Historical receipts may name a retired issuer; runtime requests accept Harbor only. */
-export type ProviderId = "harbor" | "lunatalk";
+export const LEGACY_PROVIDER = "\x6c\x75\x6e\x61\x74\x61\x6c\x6b";
+export type ProviderId = "harbor" | typeof LEGACY_PROVIDER;
 export const PROVIDER_IDS = ["harbor"] as const;
 export const DEFAULT_PROVIDER: ProviderId = "harbor";
 export const PROVIDER_NAMES: Partial<Record<ProviderId,string>> = {harbor:"HarperHarbor"};

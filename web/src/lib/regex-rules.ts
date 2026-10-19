@@ -251,7 +251,7 @@ export interface MeimoRegexFile {
   regex_scripts?: TavernRegexScript[];
 }
 
-/** 本站自己存的文件（lunatalk.regexRules.v1）讀回來。欄位缺的補預設，壞條目丟掉。 */
+/** 本站自己匯出的規則文件讀回來。欄位缺的補預設，壞條目丟掉。 */
 function ruleSetFromNative(obj: Record<string, unknown>): RegexRuleSet | null {
   if (!Array.isArray(obj.rules)) return null;
   const rules: RegexRule[] = (obj.rules as Partial<RegexRule>[])

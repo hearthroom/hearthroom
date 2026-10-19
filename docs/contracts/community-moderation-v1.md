@@ -31,7 +31,7 @@ HearthRoom 首頁與手機帳號選單統一使用「社群管理」入口，顯
 
 `reviewers.role` 分 reviewer、manager、owner。既有審核員遷移後仍是 reviewer，不自動升權。這次提供角色檢查與管理員操作；招募、授權及撤銷的管理介面尚未包含在試作。首次 manager／owner 指派需另有明確授權及可稽核流程，不能直接把所有 reviewer 升級。
 
-本版沒有 LunaTalk 整合工作。沿用現有來源識別及相容 API，沒有替其他產品建立管理後台。
+沿用現有來源識別及相容 API，沒有替其他產品建立管理後台。
 
 部署前需要 migration `0025_community_moderation.sql`，再部署與之匹配的 Worker／前端。正式上線須遵守倉庫部署流程、完整測試、授權和正式站讀回。本機驗證不能替代實際 provider callback、正式權限及正式 D1 遷移的驗證。
 

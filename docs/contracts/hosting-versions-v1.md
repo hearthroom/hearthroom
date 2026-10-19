@@ -1,46 +1,42 @@
 # HearthRoom hosting version contract v1
 
-> Hearthroom retirement update: only HarperHarbor remains active. LunaTalk
-> protocol descriptions below are historical. Do not configure its issuer key or
-> restore cross-service hosting; see [the retirement runbook](../lunatalk-retirement.md).
+> Hearthroom connects only to HarperHarbor. Account linking and cross-provider draft
+> synchronization endpoints return `410 service_retired`. Retained staged-import
+> protocol requirements below do not enable a cross-provider authoring workflow.
 
 Decision accepted by the owner on 2026-09-19. **Implementation candidate; deployment evidence is recorded separately.** This supersedes the proposed portable SHA standard. The normative
-source is this file in HearthRoom; HarperHarbor keeps an identical contract copy.
+source for Hearthroom behavior is this file; HarperHarbor maintains its own protocol copy.
 
 ## Coordinated rollout (2026-09-22)
 
-Both LunaTalk and HarperHarbor implement seal, hidden transfer draft, stage and promote.
+HarperHarbor implements seal, hidden transfer draft, stage and promote.
 Every operation requires backend `X-Hosting-Key` plus owning-author authorization.
 HearthRoom persists operation/version identity before contacting a host and reads the
 exact sealed snapshot for review. Local database guards protect all dependencies and
-media uses retained immutable objects. LunaTalk also requires completed frozen vector
-and search indexes before returning a ready receipt; retries resume missing indexes
-within the existing shared embedding concurrency limit.
+media uses retained immutable objects.
 
-Cross-provider distribution copies the source snapshot into a hidden target draft,
+The retained staged-import protocol copies a source snapshot into a hidden target draft,
 stages an immutable candidate, reads back full content and image-byte SHA-256 values,
-then promotes only a matching candidate to the official version. Resource mappings,
-leases and receipts are durable; credentials are request-local. Uncertain or mismatched
-candidates never overwrite an immutable version. Saved destinations with expired
-credentials remain visible as retryable failures. Draft sync and version sync are
-independent operations.
+then promotes only a matching candidate to the official version. These protocol
+requirements do not advertise an enabled Hearthroom cross-provider workflow.
+Resource mappings, leases and receipts must be durable; credentials remain request-local.
+Uncertain or mismatched candidates must never overwrite an immutable version.
 
 The portable contract retains the source locale plus en/ja/ko translations, instructions,
 examples, output contract, greetings/prologue, ordered Lorebooks with entry priority,
 presentation rules/scripts, card format and image bytes. Unsupported extra locales or
 features fail explicitly instead of being silently dropped. No translation is generated.
 
-The public platform list checks access to every ready immutable replica of the approved
-version. It does not use draft visibility. Community withdrawal removes discovery;
+The public platform list checks access to ready HarperHarbor revisions of the approved
+version; historical replicas on unsupported providers are not advertised. It does not
+use draft visibility. Community withdrawal removes discovery;
 provider execution retains its established local ownership/deletion/takedown controls
 and does not call HearthRoom for every generation. Community delisting is not deletion
 of provider assets or existing conversations.
 
-Runtime configuration: HearthRoom uses `HOSTING_SERVICE_KEY` only for Harbor and
-`HOSTING_SERVICE_KEY_LUNATALK` only for LunaTalk. The latter matches LunaTalk’s
-`LUNATALK_HOSTING_SERVICE_KEY`; the former matches Harbor’s `HOSTING_SERVICE_KEY`.
-These are independent secrets. Providers never exchange credentials, and a missing
-provider key must never fall back to another provider’s secret.
+Runtime configuration: HearthRoom uses `HOSTING_SERVICE_KEY` for HarperHarbor; it
+matches Harbor’s `HOSTING_SERVICE_KEY`. A missing key disables hosting; no unrelated
+credential may substitute for it.
 Activate provider persistence/APIs before the issuer and migration. See
 [OpenAPI](hosting-versions-v1.openapi.json) for wire operations.
 
@@ -71,13 +67,13 @@ unreferenced snapshot garbage collection in this release.
 
 ## Outcome and scope
 
-HearthRoom owns works, version issuance, community review and publication. SaaS providers
-store immutable versions and supply execution and credits. A work stored on three hosts
-is still one work and consumes one distinct-work publication slot. Connecting another
-SaaS account does not increase the community account's publication allowance.
+HearthRoom owns works, version issuance, community review and publication. HarperHarbor
+stores immutable versions and supplies execution and credits. Historical copies of a
+work do not create additional distinct-work publication slots or increase the community
+account's publication allowance.
 
-Acceptance: one submitted version receives one HearthRoom review; every available host
-serves that exact version; changing a draft cannot change the approved version. The
+Acceptance: one submitted version receives one HearthRoom review; the available HarperHarbor
+revision serves that exact version; changing a draft cannot change the approved version. The
 community's existing three-work allowance remains community-account scoped. This contract
 does not change its time window or increase it per host.
 
@@ -106,9 +102,9 @@ communication, or through an equivalent issuer-authenticated, audience-bound ass
 The browser, author token, editable metadata and arbitrary external issuers cannot
 approve a version.
 
-## Save, seal, review and synchronize
+## Save, seal and review
 
-1. Saving writes editable drafts to the selected hosting services. Saving is not
+1. Saving writes editable drafts to HarperHarbor. Saving is not
    publication or a review request. Draft playback remains owner-authorized.
 2. Submitting to HearthRoom verifies community membership, linked account ownership,
    work ownership and the community quota. HearthRoom allocates a `versionId` for the
@@ -123,12 +119,7 @@ approve a version.
    may be temporarily retained by HearthRoom and removed at the end of review; the
    durable content stays on the SaaS. Author credentials must not be persisted merely
    to support this workflow.
-5. Adding a host transfers the sealed version, using an authenticated HearthRoom
-   operation plus the author's authorization for the target account. The host stores
-   a new immutable revision and returns a durable receipt. HearthRoom validates and
-   records that receipt before advertising the copy as ready. It does not ask the host
-   to perform another community review or call its legacy `/publish` workflow.
-6. Public play selects a ready copy of the approved version. Editing a draft creates
+5. Public play selects a ready copy of the approved version. Editing a draft creates
    neither a replacement of that revision nor automatic approval of the next version.
    A pending or rejected update leaves the older approved version available unless it
    was explicitly withdrawn, revoked, or taken down.
@@ -248,11 +239,9 @@ equivalent HearthRoom counter. These dedicated counters are specified, not curre
 MCP decision: issuer-only sealing/decision operations are backend trust operations and
 must not become general AI-client tools. Author-facing save, submit and synchronize
 actions should reuse the same owner/quota/review services if exposed by a provider MCP
-transport. HarperHarbor currently has no such transport; do not route the feature through
-the inherited LunaTalk gateway or claim delivered MCP parity. Moonloom guidance changes
-with the usable author-facing workflow, not before the API is implemented.
+transport. HarperHarbor currently has no such transport; do not claim delivered MCP parity.
+Public AI-client guidance changes with the usable author-facing workflow, not before
+the API is implemented.
 
-LunaTalk additionally emits `lunatalk_hosting_operations_total{operation,outcome}` with
-fixed seal/draft/stage/promote operations. Verify counts by operation/outcome only.
 Harbor's existing contract counter covers hosting seal/draft/stage/promote; durable
 transfer states and private migration receipts provide bounded recovery evidence.

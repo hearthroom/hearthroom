@@ -132,7 +132,7 @@ localStorage.setItem("hearthroom.oauth.access", JSON.stringify({ accessToken: "t
 
 1. リソースを作成し、ID を `wrangler.toml` に記入します：D1 データベース（`DB`）、KV ネームスペース 2 つ（`CACHE`、`ASSET_ARCHIVE`）、任意で Analytics Engine データセット（`EVENTS`。無効にするには `ANALYTICS_ENABLED = "false"`）。
 2. ドメインを設定します：`wrangler.toml` の `routes`、`src/site.ts` の `HOST`、`web/src/lib/site.ts` のサイト名。既に DNS レコードがあるホスト名にはカスタムドメインを付けられないため、パーキングレコードを先に削除します。 カードアプリは `play.<ドメイン>`、サンドボックスのシェルは `c<id>.<ドメイン>` で動き、どちらも同じワイルドカードルートで配信されるため、ゾーンにはプロキシされたワイルドカード DNS レコードが必要です。
-3. `[vars]` の `PROVIDER_API_BASE_HARBOR` と Web ビルドの `VITE_HARBOR_API_BASE` を設定します。Hearthroom は HarperHarbor のみ接続します。LunaTalk と地域別ゲートウェイは廃止されました。
+3. `[vars]` の `PROVIDER_API_BASE_HARBOR` と Web ビルドの `VITE_HARBOR_API_BASE` を設定します。Hearthroom は HarperHarbor のみ接続します。
 4. 審査を行うかを決めます：`[vars]` の `REVIEW_ENABLED = "true"` で申請にコミュニティ審査が必要になります。それ以外の値では審査なしで掲載されます。審査のためにプロバイダー側の鍵やアカウントは必要ありません。審査員は `node scripts/grant-reviewer.mjs <プロバイダーのアカウント ID>` で付与します。
 5. 任意で `wrangler secret put SHORTCUT_SECRET`（任意のランダム文字列）を設定します。成人向けコンテンツを有効にしたメンバーが成人向けカードをホーム画面に追加するための短期キーの署名に使います。未設定の場合、成人向けカードにはそのボタンが表示されません。
 6. デプロイします：

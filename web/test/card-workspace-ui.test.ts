@@ -11,7 +11,7 @@ vi.mock('../src/lib/api',async original=>({...await original<typeof import('../s
 vi.mock('../src/lib/connections',async original=>({...await original<typeof import('../src/lib/connections')>(),accountToken:mocks.token,connectAccount:mocks.connect}));
 vi.mock('../src/lib/confirm',()=>({confirmDialog:mocks.ask}));
 vi.mock('../src/lib/distribution',async original=>({...await original<typeof import('../src/lib/distribution')>(),copies:mocks.copies,synchronize:mocks.synchronize}));
-vi.mock('../src/lib/provider-switch',()=>({availableProviders:async()=>[{id:'lunatalk',name:'LunaTalk'},{id:'harbor',name:'HarperHarbor'}]}));
+vi.mock('../src/lib/provider-switch',()=>({availableProviders:async()=>[{id:'lunatalk',name:'Retired service'},{id:'harbor',name:'HarperHarbor'}]}));
 let app:App;let root:HTMLElement;
 const settle=async()=>{for(let i=0;i<30;i++)await Promise.resolve();await nextTick();};
 const fixture={name:'Sample lighthouse',summary:'A quiet port at dawn.',avatarUrl:'/fixture.png',zone:'en',talkNum:0,visibility:'private',registered:false,game:false,workId:'work',num:100021,detailId:'100021',sourceProvider:'harbor',sourceRoleId:'original'};
