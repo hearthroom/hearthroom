@@ -26,7 +26,7 @@ import { dropManagedToken } from "@/lib/managed-auth";
 import { restorePersisted } from "@/lib/oauth";
 import { forgetVerifiedAccount } from "@/lib/connections";
 import { applyLocale, contentLang, i18n } from "@/lib/i18n";
-import { isPlayHost } from "@/lib/site";
+import { isPlayHost, mainSiteLinks } from "@/lib/site";
 import { isStandalone } from "@/lib/pwa";
 import { onStageSignOut, stageStorageScope } from "@/lib/stage-storage";
 import { playSocialHost } from "@/lib/play-social";
@@ -175,8 +175,10 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
           // 畫面每次重畫都會問一次：一分鐘最多讀一次，讀不到（獎勵沒開、限流）也不連續重試
           if (deps.session.me && !checkin.loading && !checkin.disabled && Date.now() - lastCreditsLoad > 60_000) { lastCreditsLoad = Date.now(); void checkin.load(); }
           noteShortfallShown(shortfall);
+          // 畫布可能在卡片 App 網域上：那裡沒有簽到頁，連結一律回主站
+          const site = mainSiteLinks({ locale: String(i18n.global.locale.value), lp: deps.lp });
           return creditsRecovery(checkin.panel, shortfall, {
-            origin: location.origin, lp: deps.lp, t: (k, p) => i18n.global.t(k, p ?? {}), whole,
+            origin: site.origin, lp: site.lp, t: (k, p) => i18n.global.t(k, p ?? {}), whole,
             topUp: "https://console.harperharbor.com/me/billing",
           });
         },
