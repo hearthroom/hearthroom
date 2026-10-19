@@ -62,7 +62,11 @@ export interface RewardTask {
   minTextUnits?: { cjk: number; latin: number };
 }
 
-export interface NewcomerStage { stage: number; credits?: number; chest?: string; done: boolean }
+/** 新手七日的一階（契約 53298e1）。reward 裡 credits 與 chest 恰好一個。 */
+export type NewcomerGoal = "turns" | "return_turns" | "new_work_turns" | "comment_or_rating" | "customize" | "share_link" | "final";
+export interface NewcomerStage { stage: number; goal: NewcomerGoal; target: number; reward: { credits?: number; chest?: string }; status: TaskStatus }
+/** 這一階做完了：已發，或已領、還在發放中 */
+export const stageDone = (s: NewcomerStage): boolean => s.status === "claimed" || s.status === "pending";
 export interface Newcomer {
   active: boolean;
   stage: number;
