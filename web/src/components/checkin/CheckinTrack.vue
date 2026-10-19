@@ -16,7 +16,7 @@ const ARIA: Record<TrackNode["state"], string> = {
   today: "checkin.track.aria.today",
   todayDone: "checkin.track.aria.todayDone",
   future: "checkin.track.aria.future",
-  repairable: "checkin.track.aria.missed",
+  repairable: "checkin.track.aria.repairable",
 };
 const aria = (n: TrackNode) => {
   const key = ARIA[n.state];
@@ -34,7 +34,8 @@ const aria = (n: TrackNode) => {
           <svg v-if="node.state === 'done' || node.state === 'todayDone' || node.state === 'makeup'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg>
           <span v-else aria-hidden="true">{{ node.n }}</span>
         </span>
-        <img v-if="node.better" class="track__gift" :class="{ 'track__gift--big': node.n === nodes.length }" :src="boxThumb(boxKindOf(node.chest))" alt="" aria-hidden="true" />
+        <span v-if="node.state === 'repairable'" class="track__tag" aria-hidden="true">{{ t("checkin.track.repairable") }}</span>
+        <img v-else-if="node.better" class="track__gift" :class="{ 'track__gift--big': node.n === nodes.length }" :src="boxThumb(boxKindOf(node.chest))" alt="" aria-hidden="true" />
       </li>
     </template>
   </ol>
@@ -59,6 +60,7 @@ const aria = (n: TrackNode) => {
   animation:track-ping 600ms var(--ease) 1;
 }
 .track__node--makeup .track__dot, .track__node--repairable .track__dot { background:transparent; color:var(--accent-text); outline:2px dashed var(--accent); outline-offset:-2px; }
+.track__tag { font-size:12px; line-height:1; color:var(--accent-text); white-space:nowrap; }
 /* 好箱子的提示用實際的箱子縮圖（美工四種箱子；第 7 天比第 3 天大，美術總監 §17） */
 .track__gift { width:auto; height:18px; }
 .track__gift--big { height:22px; }

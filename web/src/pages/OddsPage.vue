@@ -31,7 +31,6 @@ const chests = computed(() => {
   });
 });
 const pct = (bps: number) => new Intl.NumberFormat(locale.value, { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(bps / 100) + "%";
-const pityTiers = computed(() => t("checkin.result.tier.5"));
 
 async function load() {
   error.value = false;
@@ -75,7 +74,7 @@ onMounted(() => { document.title = pageTitle(t("odds.title")); void load(); });
       <section class="panel odds__rules">
         <h2>{{ t("odds.rules.title") }}</h2>
         <ul>
-          <li v-if="plan.pity">{{ t("odds.rules.pity", { threshold: plan.pity.every - 1, tier: pityTiers }) }}</li>
+          <li v-if="plan.pity">{{ t("odds.rules.pity", { count: plan.pity.every - 1, amount: whole(plan.pity.threshold) }) }}</li>
           <li>{{ t("odds.rules.equal") }}</li>
           <li>{{ t("odds.rules.noBuy") }}</li>
           <li>{{ t("odds.rules.records", { days: plan.drawRetentionDays }) }}</li>

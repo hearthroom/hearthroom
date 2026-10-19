@@ -113,7 +113,7 @@ defineExpose({ copied });
 .task--claimable .task__icon { background:var(--surface); }
 .task__icon svg { width:18px; height:18px; }
 .task__main { min-width:0; display:grid; gap:6px; }
-.task__title { font-size:14px; font-weight:600; line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere; }
+.task__title { font-size:14px; font-weight:600; line-height:1.4; text-wrap:balance; word-break:keep-all; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere; }
 .task__title :deep(*) { white-space:nowrap; }
 .task__progress { font-size:12px; color:var(--text-2); font-variant-numeric:tabular-nums; }
 .task__more { font-size:12px; justify-self:start; }
