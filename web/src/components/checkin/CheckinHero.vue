@@ -165,7 +165,7 @@ const ctaLabel = computed(() => (state.value === "two" ? t("checkin.cta.openTwo"
 .hero__bubble {
   position:relative; margin:0 0 6px auto; max-width:60%; padding:8px 12px; border-radius:16px;
   background:#fff; color:#2a1d24; font-size:13.5px; line-height:1.45; box-shadow:0 4px 14px rgba(42,29,36,.14);
-  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; text-wrap:pretty;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; text-wrap:balance;
   animation:bubble-in var(--dur) var(--ease) both;
 }
 .hero__bubble::after { content:""; position:absolute; right:44px; bottom:-6px; width:12px; height:12px; background:#fff; transform:rotate(45deg); border-radius:2px; }

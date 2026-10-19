@@ -80,7 +80,9 @@ export function milestoneView(p: RewardsPanel, plan: PlanLike): MilestoneView | 
   const from = Math.max(0, next.day - spacing);
   const ratio = Math.min(1, Math.max(0, (cur - from) / (next.day - from || 1)));
   if (todayMilestone != null) return { today: true, day: todayMilestone, cur, max: todayMilestone, left: 0, ratio };
-  return { today: false, day: next.day, cur, max: next.day, left: next.inDays, ratio };
+  // 漏簽、補得回來：還沒選之前畫面一律照原本的天數講（ui.md §3.6），伺服器的 inDays 可能是照退回後算的
+  const left = heroState(p) === "brokenCard" ? Math.max(1, next.day - cur) : next.inDays;
+  return { today: false, day: next.day, cur, max: next.day, left, ratio };
 }
 
 function spacingOf(plan: PlanLike): number {

@@ -105,6 +105,14 @@ describe("里程碑", () => {
     expect(v).toMatchObject({ cur: 30, max: 42, left: 12 });
     expect(v!.ratio).toBeCloseTo(2 / 14);
   });
+  it("漏簽、補得回來：還沒選之前，天數照原本的算（17/28 → 再簽 11 天），不用退回後的", () => {
+    const p = panel({
+      streak: 17, fallback: { from: 17, checkpoint: 14, to: 15 }, nextMilestone: { day: 28, chest: "m28", inDays: 14 },
+      makeup: { left: 1, repairableDays: [{ day: "2026-10-19", deadline: "x" }] },
+    });
+    expect(milestoneView(p, plan)).toMatchObject({ cur: 17, max: 28, left: 11 });
+  });
+
   it("沒有下一個里程碑就不出現", () => {
     expect(milestoneView(panel({ nextMilestone: null }), plan)).toBeNull();
   });
