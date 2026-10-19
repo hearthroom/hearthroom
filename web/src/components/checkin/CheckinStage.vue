@@ -19,6 +19,9 @@ import { isNight } from "@/lib/mascot-home";
 import { monthDayOf, monthDayTime, whole } from "@/lib/format";
 import { wrapTab } from "@/lib/focus-trap";
 import { useLocalePath } from "@/lib/use-locale";
+import { usePeriodPlans } from "@/lib/period-plan-store";
+import { firstDaily, purchaseLink } from "@/lib/period-plan";
+import { track } from "@/lib/track";
 import CreditIcon from "./CreditIcon.vue";
 import SukiCarry from "./SukiCarry.vue";
 
@@ -331,6 +334,16 @@ function onBackdrop(e: MouseEvent) { if (e.target === root.value && !busy.value 
 // ---- 結果的字 ----
 const prizeOf = (c: ClaimResult) => c.credits ?? 0;
 /** 新住民寶箱附的徽章不是造型道具：結果卡在金額之外多一格徽章（ui.md §5） */
+/**
+ * 新手第 7 天大箱的結果卡底部，一行月卡提示（月卡任務 ui.md §5.3）：只給從沒買過月卡的帳號、方案在賣時。
+ * 大箱只開一次，所以這行自然只出現一次。字只講月卡本身，不和箱子扯在一起。
+ */
+const periodPlans = usePeriodPlans();
+const newcomerPlan = computed(() => {
+  const o = periodPlans.offer;
+  if (!o?.onSale || periodPlans.mine?.firstBonus.status !== "available") return null;
+  return { text: t("plan.newcomer.hint", { credits: whole(o.credits), firstDaily: whole(firstDaily(o)) }), href: purchaseLink(o) };
+});
 const isBadge = (c: ClaimResult) => c.chest === "newcomer" || (!!c.item && c.item.startsWith("hearth_newcomer"));
 const cosmetic = (c: ClaimResult) => !!c.item && !c.duplicate && !isBadge(c);
 const daysLeft = (iso: string) => Math.floor((Date.parse(iso) - Date.now()) / 86_400_000);
@@ -478,6 +491,7 @@ defineExpose({ skip });
                   <span v-if="pityOut && pityAmount">{{ pityOut === 1 ? t("checkin.result.pity.next", { amount: pityAmount }) : t("checkin.result.pity", { n: pityOut, amount: pityAmount }) }}</span>
                 </div>
                 <div v-if="isBadge(current.claim)" class="r-badge"><img :src="NEWCOMER_BADGE" alt="" width="48" height="48" /><span><strong>{{ t("newcomer.badge.name") }}</strong><small>{{ t("newcomer.badge.desc") }}</small></span></div>
+                <p v-if="isBadge(current.claim) && newcomerPlan" class="r-plan">{{ newcomerPlan.text }} <a :href="newcomerPlan.href" target="_blank" rel="noopener" class="r-link r-link--inline" @click="track('plan_click', { detail: 'newcomer' })">{{ t("plan.newcomer.link") }}</a></p>
                 <RouterLink v-if="cosmetic(current.claim)" :to="lp('/settings')" class="r-link">{{ t("checkin.result.cosmetic.equip") }}</RouterLink>
               </div>
               <div v-else-if="twoDone" class="rows rows--two" role="status">
@@ -661,6 +675,8 @@ button { font:inherit; color:inherit; }
 .r-badge span { display:grid; gap:2px; }
 .r-badge strong { font-size:14px; }
 .r-badge small { font-size:12px; opacity:.8; }
+.r-plan { margin:8px 0 0; font-size:12px; line-height:1.5; opacity:.85; text-wrap:pretty; }
+.r-link--inline { display:inline; min-height:0; font-size:inherit; }
 .r-link { display:inline-flex; min-height:44px; align-items:center; color:var(--stage-cream); text-decoration:underline; text-underline-offset:3px; font-size:13px; }
 .rows { width:min(100%, 420px); display:grid; gap:4px; }
 .row { display:flex; flex-wrap:wrap; align-items:center; column-gap:10px; padding:5px 12px; border-radius:12px; background:rgba(255,246,230,.07); text-align:left; animation:result-in .25s var(--ease) both; }

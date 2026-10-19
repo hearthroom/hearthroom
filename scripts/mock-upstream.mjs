@@ -16,6 +16,7 @@ import http from "node:http";
 import fs from "node:fs";
 import pathMod from "node:path";
 import { handleRewards, mockAccountNumId, walletExtras } from "./mock-rewards.mjs";
+import { handlePlans, planRecords } from "./mock-plans.mjs";
 const CARDS = process.env.FIXTURES_DIR || new URL("./fixtures/", import.meta.url).pathname;
 const PORT = Number(process.env.PORT || 8899);
 const images = new Map(); const folders = new Map(); let imgSeq = 1;
@@ -38,6 +39,8 @@ http.createServer(async (req, res) => {
   if (path === "/open/v1/role/detail") { const r = roles.get(url.searchParams.get("roleId")); return r ? json(res, 200, { ...r, talkExample: JSON.stringify(r.talkExample ?? []) }) : json(res, 404, { error: "not_found" }); }
   // 應用獎勵：公開方案免登入，其餘要 token；情境切換見 mock-rewards.mjs 開頭
   if (path === "/__rewards" || /^\/open\/v1\/apps\/[^/]+\/rewards\/plan$/.test(path)) { await handleRewards({ m, path, url, body, json, res }); return; }
+  // 月卡：方案清單免登入、情境切換見 mock-plans.mjs 開頭
+  if ((path === "/__plans" || path === "/open/v1/plans") && handlePlans({ m, path, url, body, json, res })) return;
   const auth = req.headers.authorization || "";
   if (!auth.startsWith("Bearer ")) return json(res, 401, { error: "unauthorized", message: "A valid bearer token is required." });
   if (path === "/open/v1/me") return json(res, 200, { accountNumId: mockAccountNumId(), nickName: "測試作者", avatar: "" });
@@ -64,9 +67,11 @@ http.createServer(async (req, res) => {
   if (path.startsWith("/open/v1/conversation/memory")) return json(res, 200, { atoms: [] });
   if (path === "/open/v1/role/multiPassPreference" || path === "/open/v1/player/multi-pass") return json(res, 200, {});
   if (path.startsWith("/open/v1/me/rewards") && await handleRewards({ m, path, url, body, json, res })) return;
+  if (path.startsWith("/open/v1/me/plans") && handlePlans({ m, path, url, body, json, res })) return;
   // 錢包照契約形狀（docs/openapi.json）：score 永久、tempScore 限時、expiries 限時積分逐筆明細
   if (path === "/open/v1/me/wallet") return json(res, 200, { score: 999596, plans: [{ tier: "member", expiresAt: Date.now() + 86400e3 * 30 }], ...walletExtras() });
-  if (path === "/open/v1/me/score/records") return json(res, 200, { total: 2, size: 30, pages: 1, hasNextPage: false, records: [
+  if (path === "/open/v1/me/score/records") return json(res, 200, { total: 2 + planRecords().length, size: 30, pages: 1, hasNextPage: false, records: [
+    ...planRecords(),
     { id: 2, record: "chat", recordType: "sub", score: 1, createTime: new Date().toISOString() },
     { id: 1, record: "grant", recordType: "add", score: 10000, createTime: new Date(Date.now() - 3600e3).toISOString() },
   ] });

@@ -127,9 +127,17 @@ const planLink = computed(() => purchaseLink(plans.offer));
 const pitch = computed(() => {
   const o = plans.offer;
   if (mine.value || !o?.onSale) return "";
-  const vars = { price: planPrice(o, locale.value), credits: whole(o.credits), dailyCredits: whole(o.dailyCredits), firstDaily: whole(firstDaily(o)) };
-  return t(plans.mine?.firstBonus.status === "available" && o.firstBonusDailyCredits > 0 ? "plan.wallet.pitchBonus" : "plan.wallet.pitch", vars);
+  // 首次購買才用加倍後的每天量；「最多」是每天都領到的上限（copy.md v2 的 {maxTotal}），持卡狀態讀不到時照一般的算
+  const first = plans.mine?.firstBonus.status === "available" && o.firstBonusDailyCredits > 0;
+  const daily = first ? firstDaily(o) : o.dailyCredits;
+  const vars = { price: planPrice(o, locale.value), credits: whole(o.credits), dailyCredits: whole(o.dailyCredits), firstDaily: whole(firstDaily(o)), maxTotal: whole(o.credits + daily * o.days) };
+  return t(first ? "plan.wallet.pitchBonus" : "plan.wallet.pitch", vars);
 });
+
+/** 錢包頁的「領取」：領到了就連餘額與流水一起重讀 */
+async function claimToday() {
+  if (await plans.claim()) { void refresh(); void load(true); }
+}
 
 async function refresh() {
   void plans.load();
@@ -181,15 +189,15 @@ watch(() => [props.provider, props.externalId], () => load(true), { immediate: t
         </div>
         <div v-if="mine && planLine.kind !== 'hidden'" class="plan" data-testid="wallet-plan">
           <div class="plan__head">
-            <span class="plan__title">{{ mine.remainingDays <= 1 ? $t("plan.row.title.last") : $t("plan.row.title", { n: whole(mine.remainingDays) }) }}</span>
+            <span class="plan__title">{{ mine.remainingDays <= 1 ? $t("plan.row.title.last") : $t("plan.row.title", { n: whole(mine.remainingDays) }, mine.remainingDays) }}</span>
             <span v-if="mine.endsOn" class="plan__last">{{ $t("plan.wallet.lastDay", { date: planDate(mine.endsOn, locale) }) }}</span>
           </div>
           <div class="plan__today">
-            <PlanToday class="plan__line" :line="planLine" :claiming="plans.claiming" @claim="plans.claim().then((ok) => ok && refresh())" />
+            <PlanToday class="plan__line" :line="planLine" :claiming="plans.claiming" @claim="claimToday" />
             <RouterLink v-if="planLine.kind === 'withCheckin'" :to="lp('/checkin')" class="link plan__go">{{ $t("plan.wallet.goCheckin") }}</RouterLink>
           </div>
           <p v-if="planLine.bonusCredits > 0" class="plan__sub">{{ $t("plan.row.bonusPart", { bonus: whole(planLine.bonusCredits) }) }}</p>
-          <p v-if="checkin.panel" class="plan__sub">{{ $t("plan.row.makeup", { left: whole(checkin.panel.checkin.makeup.left) }) }}</p>
+          <p v-if="checkin.panel" class="plan__sub">{{ $t("plan.row.makeup", { left: whole(checkin.panel.checkin.makeup.left) }, checkin.panel.checkin.makeup.left) }}</p>
           <a v-if="mine.canPurchase" class="link plan__more" :href="planLink" target="_blank" rel="noopener" @click="track('plan_click', { detail: 'wallet' })">{{ $t("plan.wallet.buyMore") }}</a>
         </div>
         <a class="btn btn--primary btn--lg balance__cta" href="https://console.harperharbor.com/me/billing" target="_blank" rel="noopener" @click="track('topup_click')">{{ $t("wallet.topUp") }} ↗</a>

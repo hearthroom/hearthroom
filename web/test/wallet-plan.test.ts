@@ -53,19 +53,20 @@ it("持卡：剩幾天、最後一天、今天已領的總數、首張加贈、�
   expect(block.textContent).toContain("月卡 · 剩 23 天");
   expect(block.textContent).toContain("最後一天");
   expect(block.textContent).toContain("今天已領 +1,000 積分");
-  expect(block.textContent).toContain("其中 500 是首張加贈");
+  expect(block.textContent).toContain("其中 500 是首購加贈");
   expect(block.querySelector("a.plan__more")?.getAttribute("href")).toBe(offer.purchaseUrl);
   expect(root.querySelector("[data-testid=wallet-plan-pitch]")).toBeNull();
 });
 
-it("沒卡、從沒買過：前往儲值下方一行入口，用首次購買的每天總量；不寫合計", async () => {
+it("沒卡、從沒買過：前往儲值下方一行入口，用首次購買的每天總量與每天都領的上限", async () => {
   mine = none;
   const root = await mount();
   expect(root.querySelector("[data-testid=wallet-plan]")).toBeNull();
   const pitch = root.querySelector("[data-testid=wallet-plan-pitch]")!;
   expect(pitch.textContent).toContain("30,000");
   expect(pitch.textContent).toContain("1,000");
-  expect(pitch.textContent).not.toMatch(/45,000|角色對話/);
+  expect(pitch.textContent).toContain("最多 60,000");
+  expect(pitch.textContent).not.toMatch(/角色對話/);
   expect(pitch.getAttribute("href")).toBe(offer.purchaseUrl);
 });
 
@@ -74,7 +75,7 @@ it("積分記錄：月卡每日、首張加贈與退回各有自己的名字；�
   const root = await mount();
   const rows = [...root.querySelectorAll(".row")].map((r) => r.querySelector(".row__item")!.textContent!.trim());
   expect(rows).toContain("月卡每日積分");
-  expect(rows).toContain("月卡首張加贈");
+  expect(rows).toContain("月卡首購加贈");
   expect(rows).toContain("月卡每日積分退回月卡已退款");
   expect(rows.find((r) => r.startsWith("簽到寶箱"))).toMatch(/到期/);
 });

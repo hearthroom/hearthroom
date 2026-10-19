@@ -33,9 +33,11 @@ import { playSocialHost } from "@/lib/play-social";
 import { markStageContentReady } from "@/lib/stage-ready";
 import { creditsRecovery, noteShortfallShown } from "@/lib/credits-recovery";
 import { useCheckin } from "@/lib/checkin-store";
+import { usePeriodPlans } from "@/lib/period-plan-store";
 import { whole } from "@/lib/format";
 
 let lastCreditsLoad = 0;
+let lastPlansLoad = 0;
 import type { useSession } from "@/lib/session";
 
 type Session = ReturnType<typeof useSession>;
@@ -177,9 +179,12 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
           noteShortfallShown(shortfall);
           // 畫布可能在卡片 App 網域上：那裡沒有簽到頁，連結一律回主站
           const site = mainSiteLinks({ locale: String(i18n.global.locale.value), lp: deps.lp });
+          const plans = usePeriodPlans();
+          if (deps.session.me && Date.now() - lastPlansLoad > 60_000) { lastPlansLoad = Date.now(); void plans.load(); }
           return creditsRecovery(checkin.panel, shortfall, {
             origin: site.origin, lp: site.lp, t: (k, p) => i18n.global.t(k, p ?? {}), whole,
             topUp: "https://console.harperharbor.com/me/billing",
+            plan: { offer: plans.offer, canPurchase: plans.loaded && !plans.failed ? (plans.mine?.canPurchase ?? true) : null },
           });
         },
       },

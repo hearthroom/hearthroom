@@ -27,10 +27,10 @@ watch(() => line.value.kind, (now, before) => {
 <template>
   <section v-if="line.kind !== 'hidden' && mine" class="plan-row panel settle">
     <div class="plan-row__main">
-      <p class="plan-row__title">{{ mine.remainingDays <= 1 ? t("plan.row.title.last") : t("plan.row.title", { n: whole(mine.remainingDays) }) }}</p>
+      <p class="plan-row__title">{{ mine.remainingDays <= 1 ? t("plan.row.title.last") : t("plan.row.title", { n: whole(mine.remainingDays) }, mine.remainingDays) }}</p>
       <p class="plan-row__sub">
         <span v-if="line.bonusCredits > 0">{{ t("plan.row.bonusPart", { bonus: whole(line.bonusCredits) }) }}</span>
-        <span>{{ t("plan.row.makeup", { left: whole(makeupLeft) }) }}</span>
+        <span>{{ t("plan.row.makeup", { left: whole(makeupLeft) }, makeupLeft) }}</span>
       </p>
     </div>
     <PlanToday class="plan-row__today" :line="line" :claiming="plans.claiming" @claim="plans.claim()" />
