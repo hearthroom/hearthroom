@@ -44,14 +44,16 @@ watch(() => line.value.kind, async (now, before) => {
 <style scoped>
 /* One row: title left, today's state right; the second line spans both (ui.md §3.2).
    Narrow phones: today's state drops under the title, left-aligned, then the second line. */
-.plan-row { display:grid; grid-template-columns:minmax(0, 1fr) auto; align-items:center; gap:2px var(--s-3); padding:var(--s-3) var(--s-4); }
+/* The title keeps its own width; today's state and its note take the rest and wrap inside it. */
+.plan-row { display:grid; grid-template-columns:max-content minmax(0, 1fr); align-items:center; gap:2px var(--s-3); padding:var(--s-3) var(--s-4); }
 .plan-row__title { margin:0; font-size:14px; font-weight:600; color:var(--text); }
 .plan-row__today { justify-self:end; display:grid; justify-items:end; gap:2px; }
-.plan-row__part { font-size:12px; color:var(--text-3); }
+.plan-row__part { font-size:12px; color:var(--text-3); text-align:right; }
 .plan-row__sub { grid-column:1 / -1; margin:0; font-size:12px; color:var(--text-3); }
 :lang(ko) .plan-row { word-break:keep-all; }
 @media (max-width: 380px) {
   .plan-row { grid-template-columns:minmax(0, 1fr); }
   .plan-row__today { justify-self:start; justify-items:start; }
+  .plan-row__part { text-align:left; }
 }
 </style>
