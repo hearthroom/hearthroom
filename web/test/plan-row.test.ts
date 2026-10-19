@@ -8,6 +8,9 @@ vi.mock("../src/lib/session", () => ({ useSession: () => ({ accessToken: async (
 import { usePeriodPlans } from "../src/lib/period-plan-store";
 import PlanRow from "../src/components/checkin/PlanRow.vue";
 
+// 文案讓數字和單位用不換行空白黏在一起；比對時當成一般空白。
+const flat = (t: string | null | undefined) => (t ?? "").replace(/\u00a0/g, " ");
+
 let app: ReturnType<typeof createApp> | undefined;
 afterEach(() => app?.unmount());
 const plan = (over: Record<string, unknown> = {}) => ({
@@ -31,7 +34,7 @@ it("沒有卡：整列不出現", async () => {
 });
 
 it("持卡、還沒簽到：剩幾天、簽到時一起領今天的總數、首張加贈與補簽卡", async () => {
-  const text = (await mount(plan())).textContent!;
+  const text = flat((await mount(plan())).textContent);
   expect(text).toContain("月卡 · 剩 23 天");
   expect(text).toContain("簽到時一起領 1,000 積分");
   expect(text).toContain("其中 500 是首購加贈");
@@ -41,11 +44,11 @@ it("持卡、還沒簽到：剩幾天、簽到時一起領今天的總數、首�
 
 it("今天已簽到但還沒領到：給領取按鈕", async () => {
   const root = await mount(plan(), true);
-  expect(root.querySelector("button")?.textContent).toContain("領取 1,000 積分");
+  expect(flat(root.querySelector("button")?.textContent)).toContain("領取 1,000 積分");
 });
 
 it("最後一天換成「今天最後一天」；第二張起沒有加贈半句", async () => {
-  const text = (await mount(plan({ remainingDays: 1, today: { status: "claimed", credits: 500, bonusCredits: 0 } }))).textContent!;
+  const text = flat((await mount(plan({ remainingDays: 1, today: { status: "claimed", credits: 500, bonusCredits: 0 } }))).textContent);
   expect(text).toContain("月卡 · 今天最後一天");
   expect(text).toContain("今天已領 +500 積分");
   expect(text).not.toContain("首購加贈");
@@ -56,8 +59,8 @@ it("英文照單複數：剩 23 天與補簽卡張數", async () => {
   const root = await mount(plan());
   i18n.global.locale.value = "en";
   await nextTick();
-  expect(root.textContent).toContain("23 days left");
-  expect(root.textContent).not.toContain("|");
+  expect(flat(root.textContent)).toContain("23 days left");
+  expect(flat(root.textContent)).not.toContain("|");
   i18n.global.locale.value = "zh-Hant";
 });
 
@@ -73,7 +76,7 @@ it("自動補領還在路上：月卡列照樣在，右側不畫按鈕也不畫�
 });
 
 it("首購加贈那半句緊跟在今天的總數後面，補簽卡在最後（PM 2026-10-19）", async () => {
-  const text = (await mount(plan())).textContent!;
+  const text = flat((await mount(plan())).textContent);
   const total = text.indexOf("簽到時一起領 1,000 積分"), part = text.indexOf("其中 500 是首購加贈"), makeup = text.indexOf("本月補簽卡剩 3 張");
   expect(total).toBeGreaterThan(-1);
   expect(part).toBeGreaterThan(total);

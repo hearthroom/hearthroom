@@ -42,18 +42,16 @@ watch(() => line.value.kind, async (now, before) => {
 </template>
 
 <style scoped>
-/* One row: title left, today's state right; the second line spans both (ui.md §3.2).
-   Narrow phones: today's state drops under the title, left-aligned, then the second line. */
-/* The title keeps its own width; today's state and its note take the rest and wrap inside it. */
-.plan-row { display:grid; grid-template-columns:max-content minmax(0, 1fr); align-items:center; gap:2px var(--s-3); padding:var(--s-3) var(--s-4); }
-.plan-row__title { margin:0; font-size:14px; font-weight:600; color:var(--text); }
-.plan-row__today { justify-self:end; display:grid; justify-items:end; gap:2px; }
-.plan-row__part { font-size:12px; color:var(--text-3); text-align:right; }
-.plan-row__sub { grid-column:1 / -1; margin:0; font-size:12px; color:var(--text-3); }
-:lang(ko) .plan-row { word-break:keep-all; }
+/* Title left, today's state right on one line; when the state does not fit beside the title it
+   drops under it as a whole block (ui.md §3.2), so no line inside it breaks mid-word. The makeup
+   line always takes its own line. Narrow phones let the block's lines wrap. */
+.plan-row { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:2px var(--s-3); padding:var(--s-3) var(--s-4); }
+.plan-row__title { margin:0; font-size:14px; font-weight:600; color:var(--text); white-space:nowrap; }
+.plan-row__today { display:grid; justify-items:start; gap:2px; max-width:100%; white-space:nowrap; }
+.plan-row__part { font-size:12px; color:var(--text-3); }
+.plan-row__sub { flex-basis:100%; margin:0; font-size:12px; color:var(--text-3); }
+:lang(ko) .plan-row, :lang(ja) .plan-row { word-break:keep-all; }
 @media (max-width: 380px) {
-  .plan-row { grid-template-columns:minmax(0, 1fr); }
-  .plan-row__today { justify-self:start; justify-items:start; }
-  .plan-row__part { text-align:left; }
+  .plan-row__today { white-space:normal; }
 }
 </style>
