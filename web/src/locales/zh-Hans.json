@@ -2862,7 +2862,7 @@
   "newcomer.left": "剩 {n} 天",
   "newcomer.progress": "已完成 {n}/7 天",
   "newcomer.reward": "+{amount}",
-  "newcomer.reward.grand": "宝箱+徽章",
+  "newcomer.reward.grand": "宝箱",
   "newcomer.today": "今天的目标",
   "newcomer.today.done": "今天的目标完成了",
   "newcomer.tomorrow": "明天：{goal}",
