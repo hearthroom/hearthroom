@@ -18456,7 +18456,7 @@
               "daily",
               "bonus"
             ],
-            "description": "Only on plan rows: `daily` — a day's credits; `bonus` — the first-purchase bonus for that day. Refunds that take them back carry the same value."
+            "description": "Only on plan rows: `daily` — a day's credits; `bonus` — that day's first-purchase bonus. Refunds that take them back carry the same value."
           }
         }
       },
@@ -23963,7 +23963,7 @@
           },
           "firstBonusDailyCredits": {
             "type": "integer",
-            "description": "Extra credits on each day of the plan from an account's first purchase, claimed together with `dailyCredits`. 0 when the current version has no first-purchase bonus."
+            "description": "Extra credits each day while the account's first purchase of this plan is active, claimed together with `dailyCredits`. 0 when the current version has no first-purchase bonus."
           },
           "maxDays": {
             "type": "integer",
@@ -24117,11 +24117,11 @@
                   "used",
                   "unavailable"
                 ],
-                "description": "`available` — the account has never bought this plan, so its next purchase is the first; `active` — the plan covering today is the first purchase; `used` — the first purchase was already made, including when it ran out, was followed by another or was refunded; `unavailable` — the current version has no first-purchase bonus."
+                "description": "`available` — the account has never bought this plan, so its next purchase is a first purchase; `active` — the plan covering today is the account's first purchase; `used` — the first purchase has already been made, including when it ran out, was followed by another or was refunded; `unavailable` — the current version has no first-purchase bonus."
               },
               "dailyCredits": {
                 "type": "integer",
-                "description": "Extra credits per day while the plan from the first purchase is active; 0 for `unavailable`."
+                "description": "Extra credits per day while the first purchase is active; 0 for `unavailable`."
               }
             }
           },
@@ -24135,7 +24135,7 @@
           },
           "firstBonusDailyCredits": {
             "type": "integer",
-            "description": "Extra credits on each day of the plan from an account's first purchase, claimed together with `dailyCredits`. 0 when the current version has no first-purchase bonus."
+            "description": "Extra credits each day while the account's first purchase of this plan is active, claimed together with `dailyCredits`. 0 when the current version has no first-purchase bonus."
           }
         }
       },
