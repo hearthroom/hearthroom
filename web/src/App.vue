@@ -28,6 +28,7 @@ import NewMark from "@/components/NewMark.vue";
 import CoachTour from "@/components/CoachTour.vue";
 import NewcomerTour from "@/components/NewcomerTour.vue";
 import SukiPet from "@/components/SukiPet.vue";
+import { watchCheckinNudges } from "@/lib/checkin-nudges";
 import { useUpdates } from "@/lib/updates";
 import { footerGroups, footerLegal, type FooterContext } from "@/lib/footer-nav";
 import { watchCampaignShareBinding, watchShareRefBinding } from "@/lib/share-ref";
@@ -43,6 +44,7 @@ const session = useSession();
 const reviewerStore = useReviewer();
 const route = useRoute();
 const router = useRouter();
+watchCheckinNudges(router, (p) => lp(p));
 
 const discordInvite = ref<string|null>(null);
 const footerCtx = computed<FooterContext>(() => ({

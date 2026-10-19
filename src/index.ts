@@ -12,6 +12,7 @@ import { communityRoutes } from "./community/routes";
 import { dispatchPush, queuePush } from "./community/push";
 import { libraryRoutes } from "./library";
 import { sukiRoutes, sukiRecall } from "./suki";
+import { rewardRoutes } from "./rewards";
 import { maintainUpdates, updatesRoutes } from "./updates";
 import { hostGateway, hostingKey, submitHosted, hostingDecision, beginHostedEdit } from "./hosting";
 import { saveCommunityProfile, cleanAvatars } from "./community-profile";
@@ -900,6 +901,7 @@ app.get("/sitemap.xml", async (c) =>
   c.body(await sitemapXml(c.env.DB, Date.now()), 200, { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" }));
 app.route("/", libraryRoutes);
 app.route("/", sukiRoutes);
+app.route("/", rewardRoutes);
 app.route("/", updatesRoutes);
 
 app.get("/v1/me", async (c) => {
