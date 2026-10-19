@@ -2885,6 +2885,7 @@
   "newcomer.home.title": "はじめての7日間・{n}日目",
   "newcomer.home.progress": "{done}/7",
   "newcomer.home.go": "案内を見る",
+  "newcomer.home.claimable": "今日の目標を達成",
   "newcomer.home.aria": "はじめての7日間 {n}日目、{done}/7日達成、すべての目標を見る",
   "newcomer.tour.1.board.title": "ランキング",
   "newcomer.tour.1.board.body": "日間は24時間以内に載ったカード、人気はサイト全体のカードのランキングです。",

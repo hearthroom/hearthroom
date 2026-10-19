@@ -2885,6 +2885,7 @@
   "newcomer.home.title": "First 7 days · Day {n}",
   "newcomer.home.progress": "{done}/7",
   "newcomer.home.go": "Show me",
+  "newcomer.home.claimable": "Today's goal complete",
   "newcomer.home.aria": "First 7 days, day {n}, {done} of 7 done, see all goals",
   "newcomer.tour.1.board.title": "The board",
   "newcomer.tour.1.board.body": "Today shows cards that joined the board in the last 24 hours, and Hot ranks every card on the site.",

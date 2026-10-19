@@ -2885,6 +2885,7 @@
   "newcomer.home.title": "첫 7일 · {n}일째",
   "newcomer.home.progress": "{done}/7",
   "newcomer.home.go": "안내 받기",
+  "newcomer.home.claimable": "오늘의 목표 달성",
   "newcomer.home.aria": "첫 7일 {n}일째, {done}/7일 완료, 전체 목표 보기",
   "newcomer.tour.1.board.title": "랭킹",
   "newcomer.tour.1.board.body": "일간은 최근 24시간 안에 올라온 카드이고, 인기는 사이트 전체 카드를 비교해요.",
