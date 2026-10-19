@@ -14,7 +14,7 @@
  *
  * 隱私：不存 IP 原值，不送 IP。訪客只留匿名雜湊（IP 前綴＋UA，以 SHARE_VISITOR_SECRET 衍生、每週換的鑰匙做 HMAC），7 天後清掉。
  */
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { requireMember } from "./members";
 import { bumpOp } from "./ops-metrics";
@@ -154,23 +154,28 @@ export async function visitorHash(env: Env, ip: string, ua: string, now: number)
 }
 
 rewardEventRoutes.post("/v1/share/open", bodyLimit({ maxSize: 512, onError: (c) => c.body(null, 204) }), async (c) => {
-  // 不需登入、不透露碼存不存在：什麼情況都回 204
+  // 不需登入、不透露碼存不存在：什麼情況都回 204，資料庫出錯也一樣（只記一筆 error 計數）
   const allowed = await c.env.VISIT_LIMIT?.limit({ key: c.req.header("cf-connecting-ip") || "anon" });
   if (allowed && !allowed.success) return c.body(null, 204);
+  await safely(c.env.DB, "share_open", () => recordShareOpen(c)).catch(() => undefined);
+  return c.body(null, 204);
+});
+
+async function recordShareOpen(c: Context<{ Bindings: Env }>): Promise<void> {
   const body = (await c.req.json().catch(() => ({}))) as { ref?: unknown; card?: unknown };
   const ref = typeof body.ref === "string" && REF_CODE.test(body.ref) ? body.ref : null;
-  if (!ref) { await bumpOp(c.env.DB, "reward_events", "share_open", "dropped"); return c.body(null, 204); }
+  if (!ref) { await bumpOp(c.env.DB, "reward_events", "share_open", "dropped"); return; }
   // 被分享的那張卡（網址上的卡號或 id）有就帶上（推廣第 3 層要看在那張卡試玩）；首頁的邀請連結沒有卡，照樣報（Harper 2026-10-19）
   const card = typeof body.card === "string" && /^[A-Za-z0-9-]{1,64}$/.test(body.card) ? body.card : null;
   const workRoleId = card ? await shareCardRoleId(c.env.DB, card) : null;
   const ua = c.req.header("User-Agent") ?? "";
   // 沒設訪客鑰匙就不算：每個 isolate 各用一把隨機鑰匙的話，同一個人會被算成好幾個（部署要設 SHARE_VISITOR_SECRET）
-  if (!c.env.SHARE_VISITOR_SECRET || !ua || BOT_UA.test(ua)) { await bumpOp(c.env.DB, "reward_events", "share_open", "dropped"); return c.body(null, 204); }
+  if (!c.env.SHARE_VISITOR_SECRET || !ua || BOT_UA.test(ua)) { await bumpOp(c.env.DB, "reward_events", "share_open", "dropped"); return; }
   const now = Date.now();
   const day = businessDay(now);
   const hash = await visitorHash(c.env, c.req.header("cf-connecting-ip") ?? "", ua, now);
   const fresh = await c.env.DB.prepare("INSERT OR IGNORE INTO share_opens (ref_code, day, visitor_hash, created_at) VALUES (?, ?, ?, ?)").bind(ref, day, hash, now).run();
-  if (!fresh.meta.changes) { await bumpOp(c.env.DB, "reward_events", "share_open", "dropped"); return c.body(null, 204); }
+  if (!fresh.meta.changes) { await bumpOp(c.env.DB, "reward_events", "share_open", "dropped"); return; }
   // 登入的訪客帶上自己的帳號，Harbor 才擋得掉「自己打開自己的連結」
   let viewer: number | null = null;
   if (c.req.header("Authorization")) {
@@ -180,8 +185,7 @@ rewardEventRoutes.post("/v1/share/open", bodyLimit({ maxSize: 512, onError: (c) 
   if (viewer) attrs.viewerAccountNo = viewer;
   await enqueueRewardEvent(c.env.DB, { eventId: `share_open:${ref}:${day}:${hash}`, type: "share_open", refCode: ref, ...(workRoleId ? { workRoleId } : {}), occurredAt: new Date(now).toISOString(), attrs }, now);
   c.executionCtx.waitUntil(flushRewardEvents(c.env, now).catch(() => undefined));
-  return c.body(null, 204);
-});
+}
 
 rewardEventRoutes.post("/v1/me/share/created", bodyLimit({ maxSize: 512, onError: (c) => c.body(null, 204) }), async (c) => {
   const member = await requireMember(c);

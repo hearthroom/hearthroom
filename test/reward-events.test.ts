@@ -22,7 +22,7 @@ async function harborCard(id: string, roleId: string, authorNumId: number) {
 
 beforeEach(async () => {
   await resetDb(); identities({ fan: 20001, author: 20002, mod: 30001 });
-  // 契約：share_open 一定要帶被分享的卡（workRoleId），從首頁分享的連結不算
+  // 被分享的卡：帶了卡號就報 workRoleId（選填，首頁的邀請連結沒有卡）
   await env.DB.prepare("INSERT INTO cards (id, source_role_id, author_num_id, registered_at, last_synced_at, provider) VALUES ('200009', 'role-share', 1, 0, 0, 'harbor')").run();
 });
 afterEach(() => { restoreUpstream(); Object.assign(rewardTransport, realTransport); });
@@ -70,6 +70,18 @@ describe("分享連結被打開", () => {
     const c = await visitorHash(env, "203.0.113.9", "UA", monday + 3 * 86_400_000);
     expect(a).not.toBe(b);
     expect(b).toBe(c);
+  });
+});
+
+describe("分享連結被打開：公開端點出錯也不透露", () => {
+  it("資料庫寫不進去時照樣回 204，不回 500", async () => {
+    await env.DB.prepare("ALTER TABLE share_opens RENAME TO share_opens_gone").run();
+    try {
+      const r = await open({ ref: "ABCD1234" });
+      expect(r.status).toBe(204);
+    } finally {
+      await env.DB.prepare("ALTER TABLE share_opens_gone RENAME TO share_opens").run();
+    }
   });
 });
 
