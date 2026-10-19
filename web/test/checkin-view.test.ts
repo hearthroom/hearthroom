@@ -161,6 +161,11 @@ describe("新手七日", () => {
     const n = { ...newcomer, stage: 6, today: { ...newcomer.today, stage: 7, status: "claimable" as const }, stages: newcomer.stages.map((s) => ({ ...s, status: (s.stage <= 6 ? "claimed" : "locked") as "claimed" | "locked" })) };
     expect(newcomerView(panel({}, { newcomer: n }))).toMatchObject({ day: 7, done: 6, grand: true });
   });
+  it("今天的目標達成、還沒領（Harbor 要領取才入帳）：可領取，不是已完成，也不是大箱", () => {
+    const n = { ...newcomer, today: { ...newcomer.today, progress: 1, status: "claimable" as const } };
+    expect(newcomerView(panel({}, { newcomer: n }))).toMatchObject({ day: 4, claimable: true, todayDone: false, grand: false });
+    expect(newcomerView(panel({}, { newcomer }))).toMatchObject({ claimable: false });
+  });
   it("領了還在發放中的那一階也算完成", () => {
     const n = { ...newcomer, stages: newcomer.stages.map((s) => ({ ...s, status: (s.stage <= 2 ? "claimed" : s.stage === 3 ? "pending" : "locked") as "claimed" | "locked" | "pending" })) };
     expect(newcomerView(panel({}, { newcomer: n }))).toMatchObject({ day: 4, done: 3 });
