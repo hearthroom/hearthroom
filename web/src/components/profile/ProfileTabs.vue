@@ -45,7 +45,10 @@ function go(next: Partial<{ tab: Tab; page: number; sort: 'new' | 'hot' }>) {
   const nextSort = nextTab === 'works' ? next.sort ?? (next.tab && next.tab !== tab.value ? 'new' : sort.value) : 'new';
   const nextPage = next.page ?? 1;
   void router.replace({ query: { ...route.query, tab: nextTab === 'works' ? undefined : nextTab, page: nextPage > 1 ? String(nextPage) : undefined, sort: nextSort === 'hot' ? 'hot' : undefined } });
+  // 切分區不動捲動位置（路由 keepScrollOnQuery）；翻頁時分頁鈕在底下，捲回分區列的頂端，但已經看得到就不動
+  if (next.page && area.value && area.value.getBoundingClientRect().top < 0) area.value.scrollIntoView({ block: 'start' });
 }
+const area = ref<HTMLElement | null>(null);
 defineExpose({ go });
 
 const cards = ref<CommunityCard[]>([]), chats = ref<ConversationSummary[]>([]);
@@ -86,7 +89,7 @@ const createTo = computed(() => lp(can('editor') ? '/create' : '/mine'));
 </script>
 
 <template>
-  <section class="tabs-area" :aria-label="$t('profile.tabs.label')">
+  <section ref="area" class="tabs-area" :aria-label="$t('profile.tabs.label')">
     <div role="tablist" class="tabbar" :aria-label="$t('profile.tabs.label')">
       <button v-for="k in TABS" :key="k" role="tab" type="button" class="tab" :class="{ 'tab--on': tab === k }" :aria-selected="tab === k" @click="go({ tab: k })">
         <span class="tab__icon"><AccountIcon :name="k === 'works' ? 'cards' : k === 'saved' ? 'heart' : k === 'recent' ? 'chat' : k === 'following' ? 'users' : 'spark'" /></span>
@@ -152,7 +155,7 @@ const createTo = computed(() => lp(can('editor') ? '/create' : '/mine'));
 </template>
 
 <style scoped>
-.tabs-area { display: grid; gap: var(--s-4); min-width: 0; }
+.tabs-area { scroll-margin-top: calc(var(--header-h) + 48px); display: grid; gap: var(--s-4); min-width: 0; }
 .tabbar { position: sticky; top: calc(var(--header-h) + 8px); z-index: 3; display: flex; gap: 4px; padding: 6px; overflow-x: auto; border-radius: var(--r-lg); background: color-mix(in srgb, var(--surface-2) 84%, transparent); backdrop-filter: saturate(180%) blur(16px); box-shadow: 0 0 0 1px var(--line); scrollbar-width: none; container-type: inline-size; }
 .tabbar::-webkit-scrollbar { display: none; }
 .tab { display: inline-flex; flex: none; align-items: center; gap: 8px; height: 44px; padding: 0 14px 0 10px; border: 0; border-radius: var(--r-md); background: none; font: inherit; font-size: 14.5px; font-weight: 500; color: var(--text-2); white-space: nowrap; cursor: pointer; }
