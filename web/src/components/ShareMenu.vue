@@ -15,6 +15,7 @@ import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { confirmDialog } from "@/lib/confirm";
 import { track } from "@/lib/track";
+import { noteShareLinkCreated } from "@/lib/share-ref";
 
 const props = defineProps<{
   /** 要分享出去的網址（絕對路徑）。 */
@@ -91,6 +92,7 @@ async function pickTarget(target: Target, e: MouseEvent) {
   if (target.kind === "qr" && !handheld) {
     e.preventDefault();
     track("share", { detail: `share_${target.id}`, subject: props.subject });
+    void noteShareLinkCreated(props.subject);
     const { default: make } = await import("qrcode-generator");
     const code = make(0, "M");
     code.addData(props.url);
@@ -113,6 +115,7 @@ async function pickTarget(target: Target, e: MouseEvent) {
     return;
   }
   track("share", { detail: `share_${target.id}`, subject: props.subject });
+  void noteShareLinkCreated(props.subject);
   pasted.value = target.id;
   clearTimeout(resetPasted);
   resetPasted = setTimeout(() => { pasted.value = ""; close(); }, target.kind === "open" ? 1200 : 2400);
@@ -159,6 +162,7 @@ function close(focusBack = false) {
 
 function go(id: string) {
   track("share", { detail: `share_${id}`, subject: props.subject });
+  void noteShareLinkCreated(props.subject);
   close();
 }
 
@@ -168,6 +172,7 @@ async function copy() {
   try {
     await navigator.clipboard.writeText(props.url);
     track("share", { detail: "share_clipboard", subject: props.subject });
+    void noteShareLinkCreated(props.subject);
     copied.value = true;
     clearTimeout(resetCopied);
     resetCopied = setTimeout(() => { copied.value = false; close(); }, 1200);
@@ -183,6 +188,7 @@ async function systemShare() {
   try {
     await navigator.share({ title: props.title, url: props.url });
     track("share", { detail: "share_web", subject: props.subject });
+    void noteShareLinkCreated(props.subject);
   } catch (e) {
     // 使用者在系統面板上按了取消：什麼都不做，不要再彈第二層東西出來
     track("share", { detail: (e as DOMException).name === "AbortError" ? "share_abort" : "share_failed", subject: props.subject, ok: false });

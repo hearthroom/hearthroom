@@ -34,6 +34,13 @@ const DONE_KEY = "hr-tour-done";
 export function tourDone(): boolean {
   try { return localStorage.getItem(DONE_KEY) === "1"; } catch { return true; }
 }
+/**
+ * 首次導覽還會不會出現：這台裝置沒看完、這個語言有入門卡、而且是新用戶（和 CoachTour 的條件一致）。
+ * 新手七日的入口等它走完再出來；不會出現的就不等，不然沒有入門卡的語言永遠看不到新手七日。
+ */
+export function firstTourPending(locale: string, memberSince: number | undefined, now = Date.now()): boolean {
+  return !tourDone() && !!starterFor(locale, false) && isNewMember(memberSince, now);
+}
 export function finishTour(): void {
   try { localStorage.setItem(DONE_KEY, "1"); } catch { /* 存不了的瀏覽器讀也讀不到，tourDone 已經當看過 */ }
 }

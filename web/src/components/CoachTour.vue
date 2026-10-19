@@ -14,6 +14,7 @@ import { PAGE_OF, TARGET_OF, isFirst, isLast, loadProgress, nextStep, prevStep, 
 import { finishTour, hasAdultStarter, isNewMember, starterFor, tourDone } from "@/lib/onboarding";
 import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
+import CoachSpot from "@/components/CoachSpot.vue";
 import { track } from "@/lib/track";
 
 const session = useSession();
@@ -189,19 +190,6 @@ onBeforeUnmount(() => {
 
 const visible = computed(() => !!tourState.step && page.value === PAGE_OF[tourState.step] && !dialogOpen.value
   && (TARGET_OF[tourState.step] === null || !!rect.value));
-const PAD = 8;
-/** 用 transform 移動：只動合成層，不必每格重畫那片 9999px 的遮罩陰影 */
-const hole = computed(() => rect.value && {
-  transform: `translate(${rect.value.left - PAD}px, ${rect.value.top - PAD}px)`,
-  width: `${rect.value.width + PAD * 2}px`, height: `${rect.value.height + PAD * 2}px`,
-});
-/** 框在上半部就把說明放在框的下面，反之放上面；框不到（同層卡）就放在頁首底下，不蓋住卡自己底部的按鈕。 */
-const bubbleStyle = computed(() => {
-  const r = rect.value;
-  if (!r) return { top: `calc(64px + env(safe-area-inset-top))` };
-  const below = r.top + r.height / 2 < window.innerHeight / 2;
-  return below ? { top: `${Math.min(r.bottom + PAD + 12, window.innerHeight - 200)}px` } : { bottom: `${Math.min(window.innerHeight - r.top + PAD + 12, window.innerHeight - 200)}px` };
-});
 const step = computed(() => tourState.step);
 const copyStep = computed(() => step.value === "choose" ? "card" : step.value);
 /** 首頁與卡片頁由看板娘帶；進了對話頁（舞台）就是作者的地方，泡泡維持原樣（docs/design/hearthroom-mascot）。 */
@@ -209,64 +197,8 @@ const withMascot = computed(() => page.value === "home" || page.value === "card"
 </script>
 
 <template>
-  <div v-if="visible && step" class="coach" aria-live="polite">
-    <div v-if="hole" class="coach__hole" :style="hole" />
-    <section class="coach__bubble panel" :class="{ 'coach__bubble--mascot': withMascot }" :style="bubbleStyle" role="dialog" aria-labelledby="coach-title">
-      <!-- 首頁與卡片頁：蘇綺站在泡泡左邊，泡泡的尖角指向她，像她在說這段話 -->
-      <img v-if="withMascot" class="coach__mascot" src="/mascot/suki-wave.webp" alt="" decoding="async" />
-      <button type="button" class="coach__close" :aria-label="$t('tour.skip')" @click="close">×</button>
-      <h2 id="coach-title" class="coach__title">{{ $t(`tour.${copyStep}.title`) }}</h2>
-      <p class="coach__body">{{ $t(`tour.${copyStep}.body`) }}</p>
-      <div class="coach__actions">
-        <button v-if="!isFirst(step, shape)" type="button" class="btn btn--ghost" @click="prev">{{ $t("tour.prev") }}</button>
-        <button type="button" class="btn btn--primary" @click="next">{{ $t(isLast(step, shape) ? "tour.done" : "tour.next") }}</button>
-      </div>
-    </section>
-  </div>
+  <CoachSpot
+    v-if="visible && step" :rect="rect" :title="$t(`tour.${copyStep}.title`)" :body="$t(`tour.${copyStep}.body`)"
+    :mascot="withMascot" :first="isFirst(step, shape)" :last="isLast(step, shape)" @prev="prev" @next="next" @close="close"
+  />
 </template>
-
-<style scoped>
-/* 層級：在舞台（最高 100）之上，在年齡聲明與確認框之下（那兩個開著時引導先收起來） */
-.coach { position: fixed; inset: 0; z-index: 101; pointer-events: none; }
-.coach__hole {
-  position: fixed; top: 0; left: 0; border-radius: var(--r-md);
-  box-shadow: 0 0 0 9999px rgba(16, 16, 24, 0.55), 0 0 0 3px var(--accent);
-  will-change: transform;
-}
-.coach__bubble {
-  position: fixed; left: 50%; transform: translateX(-50%);
-  width: min(380px, calc(100% - 2 * var(--s-4)));
-  padding: var(--s-4); display: grid; gap: var(--s-2);
-  pointer-events: auto; box-shadow: 0 0 0 1px var(--line), var(--shadow-md);
-}
-.coach__close {
-  position: absolute; top: var(--s-2); right: var(--s-2);
-  width: 32px; height: 32px; border: 0; border-radius: var(--r-pill);
-  background: transparent; color: var(--text-3); font-size: 20px; line-height: 1; cursor: pointer;
-}
-.coach__title { margin: 0; padding-right: var(--s-6); font-size: 16px; font-weight: 600; line-height: 1.4; }
-.coach__body { margin: 0; font-size: 14px; line-height: 1.6; color: var(--text-2); }
-.coach__actions { display: flex; justify-content: flex-end; gap: var(--s-2); margin-top: var(--s-1); }
-/*
- * 看板娘說話：她站在泡泡外的左邊（整個人露出來，不被框住），泡泡往右挪出她的位置，
- * 左邊一個小尖角指向她。泡泡本身的大小、文字、按鈕都不變。
- */
-.coach__bubble--mascot {
-  --mascot-w: 132px;
-  overflow: visible;
-  width: min(360px, calc(100% - 2 * var(--s-4) - var(--mascot-w)));
-  transform: translateX(calc(-50% + var(--mascot-w) / 2));
-}
-.coach__bubble--mascot::before {
-  content: ""; position: absolute; left: -8px; top: 34px; width: 14px; height: 14px;
-  background: var(--surface); transform: rotate(45deg);
-  box-shadow: -1px 1px 0 0 var(--line);
-}
-.coach__mascot {
-  position: absolute; left: calc(-1 * var(--mascot-w) - 6px); top: 50%; transform: translateY(-50%);
-  width: var(--mascot-w); height: auto; pointer-events: none;
-}
-@media (max-width: 640px) {
-  .coach__bubble--mascot { --mascot-w: 92px; }
-}
-</style>

@@ -18,6 +18,7 @@ import ProfileWallet from '@/components/profile/ProfileWallet.vue';
 import ProfileCreatorBand from '@/components/profile/ProfileCreatorBand.vue';
 import ProfileTabs from '@/components/profile/ProfileTabs.vue';
 import ProfileRail from '@/components/profile/ProfileRail.vue';
+import CheckinCard from '@/components/checkin/CheckinCard.vue';
 import { useSession } from '@/lib/session';
 import { useLocalePath } from '@/lib/use-locale';
 import { pageTitle } from '@/lib/i18n';
@@ -73,6 +74,8 @@ onMounted(() => { document.title = pageTitle(t('me.title')); });
     <ProfileHero ref="hero" :community="community" :badges="badges" :author="author" :start-editing="startEditing" @saved="saved" @tab="(k) => tabs?.go({ tab: k as 'works' | 'following' })">
       <template #aside><ProfileWallet /></template>
     </ProfileHero>
+    <!-- 簽到入口（簽到第一期）：主頁改版後放在個人頁頭下面一列 -->
+    <CheckinCard />
     <ProfileCreatorBand />
     <div class="me__grid">
       <ProfileTabs ref="tabs" class="me__main" :badges="badges" :counts="{ works: author?.cardCount ?? null, following: session.profile?.following ?? null }" />

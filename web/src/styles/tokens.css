@@ -57,6 +57,9 @@
   --bronze: #cf8d55;
   --success: #1f9d55;
   --success-soft: rgba(31, 157, 85, 0.12);
+  /* 獎項第 5、6 級的色點（舞台外的結果卡、紀錄、機率頁）。--gold* 只給名次，這階只給獎項；
+     淺色壓深到白底 3.6:1、sepia 底 3.3:1，色點才看得見（美術總監 art.md §10，目標 3:1） */
+  --prize-gold: #b07f0a;
   /* 提醒（可以照做、但要知道後果）：金色當字太淡，壓深到白底上過 4.5:1 */
   --warning-text: #8a5a00;
   --danger: #c22f2b;
@@ -123,6 +126,8 @@
   --ambient-3: rgba(56, 189, 248, 0.10);
 
   --gold-soft: rgba(242, 176, 30, 0.18);
+  /* 深色用刺繡金 #F2C14E（深色面板上 10:1） */
+  --prize-gold: #f2c14e;
   --success: #3ddc84;
   --success-soft: rgba(61, 220, 132, 0.16);
   --danger: #ff6b66;

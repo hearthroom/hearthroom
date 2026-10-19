@@ -401,7 +401,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
             <div class="role__cta">
               <CardPlatforms class="role__platforms" :card-id="card.id" :provider="card.provider" :card-number="card.num" :pending="platformsRequest" :intro="playIntro" />
               <LibraryToggle v-if="listed" kind="favorites" :target="card.id" @count="card.favoriteCount = $event" />
-              <ShareMenu :url="shareUrl" :title="card.name" :subject="card.roleId" />
+              <ShareMenu data-tour="card-share" :url="shareUrl" :title="card.name" :subject="card.roleId" />
             </div>
           </div>
           <!-- 分級標示緊貼開始對話（遊戲軟體分級管理辦法第 11、12 條：標識與情節名稱放在說明或起始處旁）。
@@ -443,7 +443,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
           <section v-if="showComments && listed" id="comments" class="role__comments-wrap" aria-labelledby="comments-h">
             <h2 id="comments-h" class="role__h2">{{ $t("card.tab.comments") }}<span v-if="commentCount" class="role__h2-n">{{ commentCount }}</span></h2>
             <div class="panel role__comments">
-              <CommentPanel v-if="confirmed || card.rating !== 'R'" :key="card.id" :card-id="card.id" :role-id="card.roleId" :my-score="score?.mine ?? null" @count="commentCount = $event" />
+              <CommentPanel v-if="confirmed || card.rating !== 'R'" :key="card.id" data-tour="card-comments" :card-id="card.id" :role-id="card.roleId" :my-score="score?.mine ?? null" @count="commentCount = $event" />
             </div>
           </section>
         </div>
