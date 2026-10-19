@@ -4,7 +4,7 @@
  * 斷簽時在選擇之前只講「現在幾天、補或不補會變幾天」，數字與軌道照還沒斷的樣子畫（美術總監 r1 擋 1）。
  * 今天簽過之後主按鈕的位置換成今天的結果列，重新整理、換裝置都在（持久落點）。
  */
-import { computed } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import CheckinTrack from "./CheckinTrack.vue";
 import CreditIcon from "./CreditIcon.vue";
@@ -45,6 +45,33 @@ const title = computed(() => {
   }
 });
 const maxOf = (chest: string) => Math.max(0, ...(props.plan?.chests[chest]?.prizes ?? []).map((p) => p.credits ?? 0));
+/*
+ * 說明不設行數上限（ui.md §6.14）：在標題下面排得進三行就照原樣；超過三行就改跨滿寬、排在蘇綺與標題下方。
+ * 只在卡片寬度或字變了的時候重量一次，量的時候先回到原排版，才不會兩種排版來回跳。
+ */
+const heroEl = ref<HTMLElement | null>(null);
+const descEl = ref<HTMLElement | null>(null);
+const wideDesc = ref(false);
+let measuredWidth = -1;
+async function fitDesc(force = false) {
+  const hero = heroEl.value;
+  if (!hero) return;
+  const width = hero.clientWidth;
+  if (!force && width === measuredWidth) return;
+  measuredWidth = width;
+  wideDesc.value = false;
+  await nextTick();
+  const el = descEl.value;
+  if (!el) return;
+  const line = parseFloat(getComputedStyle(el).lineHeight) || 20;
+  wideDesc.value = el.getBoundingClientRect().height > line * 3 + 2;
+}
+let heroSize: ResizeObserver | null = null;
+onMounted(() => {
+  void fitDesc(true);
+  if (typeof ResizeObserver !== "undefined" && heroEl.value) { heroSize = new ResizeObserver(() => void fitDesc()); heroSize.observe(heroEl.value); }
+});
+onBeforeUnmount(() => heroSize?.disconnect());
 const desc = computed(() => {
   switch (state.value) {
     case "first": return t("checkin.hero.first.desc");
@@ -55,6 +82,7 @@ const desc = computed(() => {
     default: return "";
   }
 });
+watch(desc, () => void fitDesc(true));
 const brokenText = computed(() => {
   const f = fallback.value;
   if (!f) return "";
@@ -89,7 +117,7 @@ const ctaLabel = computed(() => (state.value === "two" ? t("checkin.cta.openTwo"
 </script>
 
 <template>
-  <section class="hero panel" :class="`hero--${state}`" aria-labelledby="checkin-hero-title">
+  <section ref="heroEl" class="hero panel" :class="[`hero--${state}`, { 'hero--wide-desc': wideDesc }]" aria-labelledby="checkin-hero-title">
     <div class="hero__head">
       <span class="hero__streak">
       <span class="hero__chip">
@@ -103,12 +131,13 @@ const ctaLabel = computed(() => (state.value === "two" ? t("checkin.cta.openTwo"
 
     <div class="hero__text">
       <h2 id="checkin-hero-title" class="hero__title display">{{ title }}</h2>
-      <p v-if="desc" class="hero__desc">{{ desc }}</p>
       <div v-if="broken" class="hero__broken">
         <p>{{ brokenText }}</p>
         <span v-if="state === 'brokenCard'" class="hero__cards">{{ t("checkin.makeup.cards", { n: panel.checkin.makeup.left }, panel.checkin.makeup.left) }}</span>
       </div>
     </div>
+
+    <p v-if="desc" ref="descEl" class="hero__desc">{{ desc }}</p>
 
     <SukiCarry v-if="state !== 'done'" class="hero__suki" :kind="boxKindOf(firstChest)" :now="now" />
     <img v-else class="hero__suki" :src="pose" alt="" width="381" height="560" decoding="async" />
@@ -159,6 +188,7 @@ const ctaLabel = computed(() => (state.value === "two" ? t("checkin.cta.openTwo"
   grid-template-areas:"head head" "text suki" "cta cta" "pity pity" "rule rule" "track track" "ms ms";
   padding:var(--s-4); overflow:hidden;
 }
+.hero:has(.hero__desc) { grid-template-areas:"head head" "text suki" "desc suki" "cta cta" "pity pity" "rule rule" "track track" "ms ms"; }
 .hero__head { grid-area:head; display:flex; align-items:flex-end; gap:var(--s-2); min-height:26px; min-width:0; }
 .hero__streak { flex:none; display:flex; align-items:center; gap:var(--s-2); align-self:flex-end; }
 .hero__chip { flex:none; display:inline-flex; align-items:center; gap:4px; height:26px; padding:0 10px; border-radius:var(--r-pill); background:var(--accent-tint); color:var(--accent-text); font-size:13px; font-weight:600; white-space:nowrap; }
@@ -172,8 +202,9 @@ const ctaLabel = computed(() => (state.value === "two" ? t("checkin.cta.openTwo"
 }
 .hero__bubble::after { content:""; position:absolute; right:44px; bottom:-6px; width:12px; height:12px; background:#fff; transform:rotate(45deg); border-radius:2px; }
 .hero__text { grid-area:text; min-width:0; align-self:center; }
+.hero:has(.hero__desc) .hero__text { align-self:end; }
 .hero__title { margin:0; font-size:22px; letter-spacing:-.02em; text-wrap:balance; overflow-wrap:anywhere; }
-.hero__desc { margin:var(--s-1) 0 0; color:var(--text-2); font-size:13px; line-height:1.6; text-wrap:pretty; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.hero__desc { grid-area:desc; align-self:start; min-width:0; margin:calc(var(--s-1) - var(--s-3)) 0 0; color:var(--text-2); font-size:13px; line-height:1.6; text-wrap:pretty; }
 .hero__broken { margin-top:var(--s-2); padding:var(--s-3); border-radius:var(--r-md); background:var(--surface-2); font-size:13px; line-height:1.6; color:var(--text); }
 .hero__broken p { margin:0; text-wrap:pretty; }
 .hero__cards { display:inline-flex; margin-top:var(--s-2); height:24px; align-items:center; padding:0 10px; border-radius:var(--r-pill); background:var(--surface); color:var(--text-2); font-size:12px; white-space:nowrap; }
@@ -213,11 +244,12 @@ span.hero__suki { width:auto; }
     grid-template-columns:minmax(0,1fr) 200px; column-gap:var(--s-5); padding:var(--s-5) var(--s-6);
     grid-template-areas:"head side" "text side" "cta side" "pity side" "rule rule" "track track" "ms ms";
   }
+  .hero:has(.hero__desc) { grid-template-areas:"head side" "text side" "desc side" "cta side" "pity side" "rule rule" "track track" "ms ms"; }
   .hero__head { display:contents; }
   .hero__streak { grid-area:head; align-self:start; }
   .hero__bubble { grid-area:side; align-self:start; max-width:200px; margin:0; justify-self:center; }
   .hero__bubble::after { left:50%; right:auto; margin-left:-6px; }
-  .hero__text { align-self:start; }
+  .hero__text, .hero:has(.hero__desc) .hero__text { align-self:start; }
   .hero__pity { margin-top:var(--s-1); align-self:start; }
   .hero__title { font-size:28px; }
   .hero__desc { font-size:15px; }
@@ -230,6 +262,9 @@ span.hero__suki { width:auto; }
   .hero__cta { justify-self:start; grid-auto-flow:column; }
   .hero__main, .hero__alt { width:auto; min-width:220px; }
   .hero__cta:has(.hero__results) { grid-auto-flow:row; justify-self:stretch; }
+}
+@media (max-width: 760px) {
+  .hero.hero--wide-desc { grid-template-areas:"head head" "text suki" "desc desc" "cta cta" "pity pity" "rule rule" "track track" "ms ms"; }
 }
 @media (max-width: 760px) and (max-height: 700px) {
   .hero { grid-template-columns:minmax(0,1fr) 96px; }

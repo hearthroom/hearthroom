@@ -107,16 +107,20 @@ defineExpose({ copied });
 .tasks__head h2 { margin:0; font-size:16px; font-weight:700; display:flex; align-items:baseline; gap:var(--s-2); }
 .tasks__count { font-size:13px; font-weight:500; color:var(--text-3); font-variant-numeric:tabular-nums; }
 .tasks__reset { margin-left:auto; font-size:12px; color:var(--text-3); }
-.tasks__list { list-style:none; margin:0 calc(-1 * var(--s-2)); padding:0; display:grid; }
-.task { display:grid; grid-template-columns:36px minmax(0,1fr) 88px; gap:var(--s-3); align-items:center; min-height:64px; padding:var(--s-3) var(--s-2); border-radius:var(--r-md); }
+.tasks__list { list-style:none; margin:0 calc(-1 * var(--s-2)); padding:0; display:grid; container-type:inline-size; }
+/* 右欄至少 88，按鈕字長（ja「リンクをコピー」）就跟著寬，不壓到進度條與標題 */
+.task { display:grid; grid-template-columns:36px minmax(0,1fr) minmax(88px, max-content); gap:var(--s-3); align-items:center; min-height:64px; padding:var(--s-3) var(--s-2); border-radius:var(--r-md); }
 .task + .task { border-top:1px solid var(--line); }
+/* 沒有按鈕的列（鎖頭、已領）右欄只要內容寬，標題多拿一點：320 寬時「コンプリート宝箱」不會剩一個「箱」（ui.md §6.14） */
+.task:not(:has(.btn)) { grid-template-columns:36px minmax(0,1fr) auto; }
 .task--claimable { background:var(--accent-tint); border-top-color:transparent; }
 .task--claimable + .task { border-top-color:transparent; }
 .task__icon { display:flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:var(--r-sm); background:var(--accent-tint); color:var(--accent-text); }
 .task--claimable .task__icon { background:var(--surface); }
 .task__icon svg { width:18px; height:18px; }
 .task__main { min-width:0; display:grid; gap:6px; }
-.task__title { font-size:14px; font-weight:600; line-height:1.4; text-wrap:balance; word-break:keep-all; overflow-wrap:anywhere; }
+/* 最多三行，再放不下才省略（ui.md §6.14） */
+.task__title { font-size:14px; font-weight:600; line-height:1.4; text-wrap:balance; word-break:keep-all; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
 .task__title :deep(*) { white-space:nowrap; }
 .task__progress { font-size:12px; color:var(--text-2); font-variant-numeric:tabular-nums; }
 .task__more { font-size:12px; justify-self:start; }
@@ -137,6 +141,18 @@ defineExpose({ copied });
 .task__lock svg { width:16px; height:16px; }
 @keyframes spin { to { transform:rotate(360deg); } }
 :lang(ko) .task__title { word-break:keep-all; }
+/*
+ * 窄卡（320 寬手機）：標題欄不縮，獎勵與按鈕換到標題下面一列、靠右（ui.md §6.14）。
+ * 並排時 ja、en 的按鈕字長，標題只剩約 80 寬，會被截。
+ */
+@container (max-width: 300px) {
+  .task, .task:not(:has(.btn)) { grid-template-columns:36px minmax(0,1fr); grid-template-areas:"icon main" ". side"; row-gap:var(--s-2); }
+  .task__icon { grid-area:icon; align-self:start; }
+  .task__main { grid-area:main; }
+  .task__side { grid-area:side; display:flex; align-items:center; justify-content:flex-end; gap:var(--s-3); }
+  /* 只有鎖頭或「已領取」的列不必多一列 */
+  .task:not(:has(.btn)) { grid-template-columns:36px minmax(0,1fr) auto; grid-template-areas:"icon main side"; }
+}
 /* 中日文照詞斷行：「回合」「記得」不從中間斷（ui.md §6.13）；不支援的瀏覽器忽略 */
 :lang(zh) .task__title, :lang(ja) .task__title { word-break:auto-phrase; }
 </style>
