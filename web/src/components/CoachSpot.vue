@@ -75,25 +75,23 @@ const bubbleStyle = computed(() => {
 .coach__body { margin: 0; font-size: 14px; line-height: 1.6; color: var(--text-2); }
 .coach__actions { display: flex; justify-content: flex-end; gap: var(--s-2); margin-top: var(--s-1); }
 /*
- * 看板娘說話：她站在泡泡外的左邊（整個人露出來，不被框住），泡泡往右挪出她的位置，
- * 左邊一個小尖角指向她。泡泡本身的大小、文字、按鈕都不變。
+ * 看板娘說話：她坐在泡泡左邊、泡泡裡面，字往右讓出她的位置。
+ * 以前站在泡泡外，會蓋到旁邊頁面的字（卡片頁的分級說明、評論標題），PM 2026-10-19 改成一律在泡泡裡。
  */
 .coach__bubble--mascot {
-  --mascot-w: 132px;
-  overflow: visible;
-  width: min(360px, calc(100% - 2 * var(--s-4) - var(--mascot-w)));
-  transform: translateX(calc(-50% + var(--mascot-w) / 2));
-}
-.coach__bubble--mascot::before {
-  content: ""; position: absolute; left: -8px; top: 34px; width: 14px; height: 14px;
-  background: var(--surface); transform: rotate(45deg);
-  box-shadow: -1px 1px 0 0 var(--line);
+  --mascot-w: 84px;
+  width: min(440px, calc(100% - 2 * var(--s-4)));
+  padding-left: calc(var(--s-4) + var(--mascot-w) + var(--s-3));
+  min-height: calc(var(--mascot-w) * 1.2 + 2 * var(--s-4));
 }
 .coach__mascot {
-  position: absolute; left: calc(-1 * var(--mascot-w) - 6px); top: 50%; transform: translateY(-50%);
-  width: var(--mascot-w); height: auto; max-height: 150px; object-fit: contain; pointer-events: none;
+  position: absolute; left: var(--s-3); top: var(--s-4);
+  width: var(--mascot-w); height: auto; max-height: calc(var(--mascot-w) * 1.4); object-fit: contain; pointer-events: none;
 }
+.coach__bubble--mascot .coach__actions { margin-left: calc(-1 * (var(--mascot-w) + var(--s-3))); }
 @media (max-width: 640px) {
-  .coach__bubble--mascot { --mascot-w: 92px; }
+  .coach__bubble--mascot { --mascot-w: 56px; padding-left: calc(var(--s-4) + var(--mascot-w) + var(--s-2)); }
+  .coach__bubble--mascot .coach__actions { margin-left: calc(-1 * (var(--mascot-w) + var(--s-2))); }
 }
+:lang(ko) .coach__title, :lang(ko) .coach__body { word-break: keep-all; }
 </style>
