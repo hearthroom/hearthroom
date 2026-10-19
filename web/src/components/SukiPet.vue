@@ -116,7 +116,8 @@ async function start() {
     height: mobile ? 132 : 220,
     mobile,
     // 手機上活動頁的主要按鈕剛好在她招呼泡泡的位置（約戰 QA 2026-10-17）：那幾頁進來時不招呼，她照常在
-    quietGreeting: () => mobile && route.meta.petQuietOnPhone === true,
+    // petQuiet：不分手機桌機都不招呼（錢包、機率頁的泡泡會蓋到主按鈕與紀錄，美術總監最終 r2 M8）
+    quietGreeting: () => route.meta.petQuiet === true || (mobile && route.meta.petQuietOnPhone === true),
     reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
     menu,
     dailyTag,
@@ -165,6 +166,8 @@ watch(petEnabled, (on) => { if (on) void start(); else stop(); });
 /** 作者工作區（編輯器）是滿版的，右下角是試聊的輸入框：進來時她先收到邊上 */
 const WORKSPACE = new Set(["editor"]);
 function enter(path: string) {
+  // 頁面自己有蘇綺插圖的（簽到頁）：她整頁退場，離開就回來。由路由決定，因為她比頁面晚載入
+  pet.value?.on({ type: "away", on: route.meta.petAway === true });
   const g = guide(path);
   if (g && WORKSPACE.has(g.id)) pet.value?.tuckAside();
   pet.value?.setGuide(g);

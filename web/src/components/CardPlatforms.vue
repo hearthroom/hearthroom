@@ -78,7 +78,7 @@ watch(
       if (!identity || !p.playable) continue;
       // 登入的這一家（Harbor 的錢包餘額就是 available）：頁首早就讀過同一個帳號的餘額，直接用，不再依序問一次「我是誰」和錢包
       if (p.provider === 'harbor' && p.provider === currentProvider() && session.me?.accountNumId === identity.externalId) {
-        if (session.wallet) balances.value[p.provider] = session.wallet.score;
+        if (session.wallet) balances.value[p.provider] = session.wallet.score + session.wallet.tempScore;
         continue;
       }
       balances.value[p.provider] = await connectedBalance(p.provider, identity.externalId);

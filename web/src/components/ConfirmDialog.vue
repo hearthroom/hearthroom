@@ -28,7 +28,7 @@ watch(() => confirmState.current, async (cur) => {
   fieldPick.value = { label: cur.field?.initial ?? "", ...(cur.field?.initialId ? { id: cur.field.initialId } : {}) };
   await nextTick();
   // 要照打的字：焦點直接進打字框。其他破壞性動作先站在取消鍵上：按錯 Enter 也不會刪掉東西
-  const pick = cur.requireText ? "[data-typed]" : cur.danger && !cur.single ? "[data-cancel]" : "[data-confirm]";
+  const pick = cur.requireText ? "[data-typed]" : (cur.danger || cur.focusCancel) && !cur.single ? "[data-cancel]" : "[data-confirm]";
   box.value?.querySelector<HTMLElement>(pick)?.focus();
 });
 

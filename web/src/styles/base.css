@@ -122,6 +122,22 @@ h1, h2, h3, p, dl, dd { margin: 0; }
   box-shadow: 0 0 0 1px var(--line), var(--shadow-sm);
 }
 
+/* ---- 細進度條：簽到、任務、新手七日、保底、里程碑共用（ui.md §2，美術總監 art.md §10 同意新增） ----
+ * 進行中用 accent；完成與已領一律中性（不用綠色，一屏只有一個強調色的重心）。
+ * 寬度只動 transform，aria 由用的地方加 role="progressbar"。
+ */
+.meter {
+  position: relative; overflow: hidden; height: 6px; border-radius: var(--r-pill);
+  background: var(--surface-2);
+}
+.panel .meter { background: color-mix(in srgb, var(--line-strong) 40%, var(--surface-2)); }
+.meter > i {
+  position: absolute; inset: 0; border-radius: inherit; background: var(--accent-btn);
+  transform-origin: left center; transform: scaleX(var(--v, 0));
+  transition: transform var(--dur-slow) var(--ease);
+}
+.meter--done > i { background: color-mix(in srgb, var(--text-3) 60%, transparent); }
+
 /* ---- 控件 ---------------------------------------------------------------- */
 
 .btn {

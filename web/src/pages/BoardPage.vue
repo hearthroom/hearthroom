@@ -18,6 +18,8 @@ import { takeInlineBoard } from "@/lib/board-inline";
 import { rememberCards } from "@/lib/card-memory";
 import { contentLang, defaultZone } from "@/lib/i18n";
 import DiscoveryTags from "@/components/DiscoveryTags.vue";
+import NewcomerStrip from "@/components/checkin/NewcomerStrip.vue";
+import NewcomerNudge from "@/components/checkin/NewcomerNudge.vue";
 import { selectedTags } from "@/lib/discovery";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
@@ -255,6 +257,9 @@ const ratingOptions = computed(() => {
   <div class="page">
     <h1 class="sr-only">{{ $t("site.tagline") }}</h1>
     <!-- 頂端輪播：第一張是蘇綺，後面接推薦到首頁的活動（翻到後面幾頁不放活動，同蘇綺面板）；沒有活動就只有蘇綺，跟以前一樣 -->
+    <!-- 新手七日：常駐卡在最頂端（不是榜單裡、不是第五個選項）；每天第一次進來桌寵另外彈一張提示 -->
+    <NewcomerStrip v-if="offset === 0" />
+    <NewcomerNudge v-if="offset === 0" />
     <BoardCarousel :hero="hasHero" :campaigns="offset === 0">
       <MascotWelcome />
       <MascotHome v-if="showHome" @discover="toNewCards" />

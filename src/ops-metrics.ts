@@ -47,6 +47,13 @@ const METRICS = {
     operations: ["batch"],
     outcomes: ["success", "error"],
   },
+  reward_events: {
+    name: "hearthroom_reward_events_total",
+    help: "App reward events reported to Harbor: queued, sent, rejected, retried (error), expired, or dropped (bots, repeat visitors).",
+    label: "type",
+    operations: ["share_open", "share_link_created", "comment_posted", "comment_removed", "author_reply", "rating_set"],
+    outcomes: ["queued", "sent", "rejected", "error", "expired", "dropped"],
+  },
 } as const;
 export type OpsMetric = keyof typeof METRICS;
 

@@ -29,7 +29,8 @@ function close(source: "close" | "browse") {
     <img class="welcome__art" src="/mascot/suki-banner.webp" alt="" width="1500" height="600" decoding="async" />
     <div class="welcome__text">
       <h2 class="welcome__title">{{ $t("mascot.welcome.title") }}</h2>
-      <p class="welcome__body">{{ $t("mascot.welcome.body") }}</p>
+      <!-- 這個語言還沒有入門卡：改說從榜單最上面開始，補了入門卡就自動換回來 -->
+      <p class="welcome__body">{{ $t(starter ? "mascot.welcome.body" : "mascot.welcome.bodyBoard") }}</p>
       <div class="welcome__actions">
         <RouterLink v-if="starter" class="btn btn--primary welcome__start" :to="lp(`/cards/${starter}`)" @click="track('mascot_welcome', { detail: 'start' })">{{ $t("mascot.welcome.start") }}</RouterLink>
         <button type="button" class="btn welcome__browse" @click="close('browse')">{{ $t("mascot.welcome.browse") }}</button>
@@ -63,6 +64,8 @@ function close(source: "close" | "browse") {
 .welcome { display: flex; flex-direction: column; justify-content: center; }
 .welcome__text { max-width: 460px; padding: var(--s-5) 3.5%; display: grid; gap: var(--s-2); }
 .welcome__title { margin: 0; font-size: 24px; font-weight: 800; line-height: 1.35; }
+/* 中日文照詞斷行：日文「看板娘」不從中間斷（文案 r2） */
+:lang(zh) .welcome__title, :lang(ja) .welcome__title { word-break: auto-phrase; }
 .welcome__body { margin: 0; font-size: 15px; line-height: 1.6; color: #5c4650; }
 .welcome__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-top: var(--s-3); }
 .welcome__start { height: var(--h-lg); padding: 0 var(--s-5); font-size: 15px; font-weight: 600; }

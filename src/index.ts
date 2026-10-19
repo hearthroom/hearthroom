@@ -12,6 +12,8 @@ import { communityRoutes } from "./community/routes";
 import { dispatchPush, queuePush } from "./community/push";
 import { libraryRoutes } from "./library";
 import { sukiRoutes, sukiRecall } from "./suki";
+import { rewardRoutes } from "./rewards";
+import { rewardEventRoutes, reportComment as reportRewardComment, reportCommentRemoved, reportRating, rewardEventMaintenance, flushRewardEvents } from "./reward-events";
 import { maintainUpdates, updatesRoutes } from "./updates";
 import { hostGateway, hostingKey, submitHosted, hostingDecision, beginHostedEdit } from "./hosting";
 import { saveCommunityProfile, cleanAvatars } from "./community-profile";
@@ -901,6 +903,8 @@ app.get("/sitemap.xml", async (c) =>
   c.body(await sitemapXml(c.env.DB, Date.now()), 200, { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" }));
 app.route("/", libraryRoutes);
 app.route("/", sukiRoutes);
+app.route("/", rewardRoutes);
+app.route("/", rewardEventRoutes);
 app.route("/", updatesRoutes);
 
 app.get("/v1/me", async (c) => {
@@ -1043,15 +1047,27 @@ app.post("/v1/cards/:id/comments", async (c) => {
   const member = await requireMember(c);
   const card = await commentCardFor(c);
   const body = (await c.req.json().catch(() => ({}))) as { content?: unknown; parentId?: unknown; rootId?: unknown };
-  const created = await postComment(c.env.DB, { target: { kind: "card", card }, memberId: member.id, content: body.content, parentId: body.parentId, rootId: body.rootId, now: Date.now() });
+  const now = Date.now();
+  const created = await postComment(c.env.DB, { target: { kind: "card", card }, memberId: member.id, content: body.content, parentId: body.parentId, rootId: body.rootId, now });
   note(c, { event: "comment_create", subject: card.id, detail: created.status === "held" ? "held" : body.rootId || body.parentId ? "reply" : "root" });
+  // 應用獎勵：公開的留言才報（被擋下待審的不算）；作者在自己的卡下回覆另報一筆，Harbor 會再核對
+  if (created.status === "visible" && typeof body.content === "string") {
+    await reportRewardComment(c.env.DB, { cardId: String(card.id), memberId: member.id, commentId: created.commentId, content: body.content, reply: !!(body.rootId || body.parentId), now });
+    c.executionCtx.waitUntil(flushRewardEvents(c.env, now).catch(() => undefined));
+  }
   queuePush(c);
   return c.json(created, 201);
 });
 
 app.delete("/v1/comments/:id", async (c) => {
   const member = await requireMember(c);
-  await deleteComment(c.env.DB, c.req.param("id"), { memberId: member.id, moderator: await isHumanReviewer(c.env.DB, member.id) }, Date.now());
+  const target = await c.env.DB.prepare("SELECT member_id, card_id, post_id FROM comments WHERE id = ? AND deleted_at IS NULL").bind(c.req.param("id")).first<{ member_id: string; card_id: string; post_id: string | null }>();
+  const now = Date.now();
+  await deleteComment(c.env.DB, c.req.param("id"), { memberId: member.id, moderator: await isHumanReviewer(c.env.DB, member.id) }, now);
+  if (target && !target.post_id) {
+    await reportCommentRemoved(c.env.DB, { cardId: String(target.card_id), memberId: target.member_id, commentId: c.req.param("id"), now });
+    c.executionCtx.waitUntil(flushRewardEvents(c.env, now).catch(() => undefined));
+  }
   return c.body(null, 204);
 });
 
@@ -1087,7 +1103,11 @@ app.put("/v1/cards/:id/score", async (c) => {
   const member = await requireMember(c);
   const card = await commentCardFor(c);
   const body = (await c.req.json().catch(() => ({}))) as { score?: unknown };
-  await setScore(c.env.DB, card, member.id, body.score, Date.now());
+  const now = Date.now();
+  await setScore(c.env.DB, card, member.id, body.score, now);
+  await reportRating(c.env.DB, { cardId: String(card.id), memberId: member.id, now });
+  // 跟留言一樣當場送：新手「留言或評分」那天，評完回簽到頁就該能領，不等每小時的排程
+  c.executionCtx.waitUntil(flushRewardEvents(c.env, now).catch(() => undefined));
   note(c, { event: "card_score", subject: card.id, detail: `set_${body.score}` });
   return c.body(null, 204);
 });
@@ -1974,6 +1994,8 @@ export default {
     ctx.waitUntil(sukiRecall(env).catch(() => { console.warn("Suki recall unavailable"); return 0; })
       .then(() => dispatchPush(env)).catch(() => { console.warn("push dispatch unavailable"); }));
     ctx.waitUntil(cleanAvatars(env));
+    // 應用獎勵：送出待送的事件、清掉過期的訪客雜湊
+    ctx.waitUntil(rewardEventMaintenance(env, Date.now()).catch(() => { console.warn("reward events maintenance unavailable"); }));
     // 分享活動的截圖：未掛上的過期刪除、保留期到了刪物件
     ctx.waitUntil(campaignMaintenance(env, Date.now()).catch(() => { console.warn("campaign maintenance unavailable"); }));
     // 更新說明：登記這個 build 的說明、台北晚上八點後建當天的 Discord 彙整

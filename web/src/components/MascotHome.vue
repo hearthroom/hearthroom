@@ -27,11 +27,28 @@ import { track } from "@/lib/track";
 import { greetingOf, isNight, poseOf, sceneOf, slotOf, type HomeIntent } from "@/lib/mascot-home";
 import type { CommunityCard } from "@/lib/types";
 import CoverImg from "@/components/CoverImg.vue";
+import { useCheckin } from "@/lib/checkin-store";
+import { newcomerView } from "@/lib/checkin";
 
 const emit = defineEmits<{ discover: [] }>();
 const session = useSession();
 const { t } = useI18n();
 const { locale, lp } = useLocalePath();
+
+/**
+ * 問候下面一顆簽到 chip（PM 裁定 Q7）：只講使用者自己的狀態，不是第五個選項。
+ * 新手七日講今天的目標；還沒簽講簽到；簽過但有任務可領講任務；都沒有就不出現。
+ */
+const checkin = useCheckin();
+const checkinChip = computed(() => {
+  const p = checkin.panel;
+  if (!session.me || !p) return null;
+  const nc = newcomerView(p);
+  if (nc && !nc.todayDone) return { to: "/checkin#newcomer", text: t("mascot.home.checkin.newcomer", { goal: t(`newcomer.goal.${nc.day}`, { n: p.newcomer!.today.target }, p.newcomer!.today.target) }) };
+  if (!p.checkin.todayClaimed) return { to: "/checkin", text: t("mascot.home.checkin.todo") };
+  if (checkin.claimableTasks) return { to: "/checkin#tasks", text: t("mascot.home.checkin.claimable", { n: checkin.claimableTasks }, checkin.claimableTasks) };
+  return null;
+});
 
 const now = new Date();
 const slot = slotOf(now);
@@ -139,9 +156,10 @@ watch(() => session.me?.accountNumId, (now, before) => { if (before !== undefine
 
     <div class="home__lead">
       <p class="home__greet">{{ greeting }}</p>
+      <RouterLink v-if="checkinChip" :to="lp(checkinChip.to)" class="home__chip">{{ checkinChip.text }}<span aria-hidden="true"> ›</span></RouterLink>
       <h2 class="home__ask">{{ $t(`mascot.home.ask.${slot}`) }}</h2>
       <div v-if="ready" class="home__intents" role="group">
-        <button v-for="k in intents" :key="k" type="button" class="home__intent" :class="{ 'home__intent--on': intent === k }" :aria-pressed="intent === k" @click="pick(k)">{{ label(k) }}</button>
+        <button v-for="k in intents" :key="k" type="button" class="home__intent" :class="{ 'home__intent--on': intent === k }" :aria-pressed="intent === k" :data-tour="`home-${k}`" @click="pick(k)">{{ label(k) }}</button>
       </div>
     </div>
 
@@ -216,6 +234,13 @@ watch(() => session.me?.accountNumId, (now, before) => { if (before !== undefine
 .home__greet { margin: 0; font-size: 14px; color: var(--sub); }
 .home__ask { margin: 0; font-size: 30px; font-weight: 800; line-height: 1.25; }
 .home__intents { display: grid; grid-template-columns: repeat(2, max-content); gap: var(--s-2); margin-top: var(--s-1); }
+.home__chip {
+  justify-self: start; display: inline-flex; align-items: center; max-width: 100%; min-height: 32px; padding: 0 12px;
+  border-radius: var(--r-pill); background: var(--chip); color: var(--fg); font-size: 13px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-decoration: none;
+  box-shadow: inset 0 0 0 1px rgba(42, 29, 36, 0.08);
+}
+.home__chip:hover { background: var(--chip-on); color: var(--chip-on-fg); }
 .home__intent {
   height: 40px; padding: 0 16px; border: 0; border-radius: var(--r-pill); cursor: pointer; text-align: left;
   font-size: 14px; font-weight: 600; background: var(--chip); color: var(--fg);

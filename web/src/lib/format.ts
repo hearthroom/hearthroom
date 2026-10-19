@@ -101,3 +101,24 @@ export function localDate(input: string | number | Date): string {
   const d = input instanceof Date ? input : new Date(typeof input === "number" ? (input > 1e12 ? input : input * 1000) : Date.parse(input));
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+
+/** 月日加時分（10/22 04:00）：期限一律寫日期加時間，簽到與錢包的到期都用這個。 */
+export function monthDayTime(input: string | number): string {
+  const ms = typeof input === "number" ? (input > 1e12 ? input : input * 1000) : Date.parse(input);
+  return new Intl.DateTimeFormat(locale(), { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(ms);
+}
+
+/** 只有月日，給「哪天會收到」這種不需要時刻的日期。 */
+export function monthDayOf(input: string | number): string {
+  const ms = typeof input === "number" ? (input > 1e12 ? input : input * 1000) : Date.parse(input);
+  return new Intl.DateTimeFormat(locale(), { month: "numeric", day: "numeric" }).format(ms);
+}
+
+/** 只有時分、一律 24 小時制（04:00，不是「凌晨4:00」）：到期條、錢包與結果卡寫法一致（ui.md §6.13）。 */
+export function hourMinute(input: string | number): string {
+  const ms = typeof input === "number" ? (input > 1e12 ? input : input * 1000) : Date.parse(input);
+  return new Intl.DateTimeFormat(locale(), { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(ms);
+}
+
+/** 數字與後面的單位黏在一起不斷行（「5 回合」「3 days」）：把中間的空白換成不換行空白。 */
+export const glueUnits = (text: string): string => text.replace(/(\d) (?=\S)/g, "$1\u00a0");
