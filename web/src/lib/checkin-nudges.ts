@@ -5,6 +5,7 @@
  * 一天最多一次由桌寵自己管（daily 事件）；在簽到頁上就不說，人已經在那裡了。
  */
 import { watch } from "vue";
+import { getActivePinia } from "pinia";
 import type { Router } from "vue-router";
 import { i18n } from "./i18n";
 import { expiryNotice, newcomerView } from "./checkin";
@@ -12,6 +13,8 @@ import { useCheckin } from "./checkin-store";
 import { suki } from "../pet/events";
 
 export function watchCheckinNudges(router: Router, lp: (p: string) => string): void {
+  // 沒有 pinia（只掛殼的測試、嵌入別處）就不提醒，不讓整個 App 掛不起來
+  if (!getActivePinia()) return;
   const store = useCheckin();
   const t = i18n.global.t;
   watch(() => store.panel, (p) => {

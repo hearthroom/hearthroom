@@ -34,6 +34,8 @@ import { markStageContentReady } from "@/lib/stage-ready";
 import { creditsRecovery } from "@/lib/credits-recovery";
 import { useCheckin } from "@/lib/checkin-store";
 import { whole } from "@/lib/format";
+
+let lastCreditsLoad = 0;
 import type { useSession } from "@/lib/session";
 
 type Session = ReturnType<typeof useSession>;
@@ -170,7 +172,8 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
         // 積分不夠：今日任務還能拿多少、儲值（ui.md §7.2）。面板沒讀過或放久了就重讀，卡片跟著更新
         creditsActions: (shortfall) => {
           const checkin = useCheckin();
-          if (deps.session.me && !checkin.loading && (!checkin.panel || Date.now() - checkin.fetchedAt > 60_000)) void checkin.load();
+          // 畫面每次重畫都會問一次：一分鐘最多讀一次，讀不到（獎勵沒開、限流）也不連續重試
+          if (deps.session.me && !checkin.loading && !checkin.disabled && Date.now() - lastCreditsLoad > 60_000) { lastCreditsLoad = Date.now(); void checkin.load(); }
           return creditsRecovery(checkin.panel, shortfall, {
             origin: location.origin, lp: deps.lp, t: (k, p) => i18n.global.t(k, p ?? {}), whole,
             topUp: "https://console.harperharbor.com/me/billing",

@@ -81,9 +81,15 @@ export const useCheckin = defineStore("checkin", () => {
 
   async function makeup(day: string): Promise<CheckinResponse> {
     const scope = `makeup:${day}`;
-    const res = await postMakeup(await token(), requestIdFor(scope), day);
-    clearRequestId(scope);
-    return res;
+    try {
+      const res = await postMakeup(await token(), requestIdFor(scope), day);
+      clearRequestId(scope);
+      return res;
+    } catch (e) {
+      // 那一天已經補過（例如上一次逾時了其實有成功）：伺服器附上原結果，當成功
+      if (e instanceof RewardsError && e.code === "already_claimed") { clearRequestId(scope); return { claims: e.claims, streak: panel.value?.checkin.streak ?? 0, replayed: true }; }
+      throw e;
+    }
   }
 
   async function claimTask(task: RewardTask): Promise<ClaimResult> {
@@ -101,9 +107,14 @@ export const useCheckin = defineStore("checkin", () => {
 
   async function claimNewcomer(): Promise<ClaimResult> {
     const scope = `newcomer:${panel.value?.businessDay ?? "today"}`;
-    const { claim } = await postNewcomer(await token(), requestIdFor(scope));
-    clearRequestId(scope);
-    return claim;
+    try {
+      const { claim } = await postNewcomer(await token(), requestIdFor(scope));
+      clearRequestId(scope);
+      return claim;
+    } catch (e) {
+      if (e instanceof RewardsError && e.code === "already_claimed" && e.claims[0]) { clearRequestId(scope); return e.claims[0]; }
+      throw e;
+    }
   }
 
   const claimableTasks = computed(() => {
