@@ -2161,7 +2161,7 @@
   "dbc338c839431": "결과는 입력 순서대로 하나씩 반환해요. `accepted`는 저장됨, `duplicate`는 이전에 저장됨, `rejected_stale`은 허용 시간 범위 밖, `rejected_invalid`는 검증 실패를 뜻해요.",
   "d22297891db14": "이벤트별 결과예요.",
   "d7bbc22fa50a6": "`invalid_request`: 요청에는 1~100개의 이벤트가 필요해요.",
-  "dc4b1aeab1c12": "`forbidden`: 앱 토큰에 `rewards.report` 범위가 없어요.",
+  "dc4b1aeab1c12": "`insufficient_scope`: 앱 토큰에 `rewards.report` 범위가 없어요. `required_scope`는 `rewards.report`예요.",
   "d9d49800bf5c9": "`rate_limited`: 이 클라이언트의 이벤트가 분당 600개를 넘었어요. 잠시 후 다시 시도하세요.",
   "dcc3dbaea3438": "앱이 댓글의 주된 문자 유형에 따라 `cjk` 또는 `latin`을 판단해요.",
   "de7ecbbb443cd": "`unauthorized`: 토큰이 없거나 유효하지 않거나 앱 토큰이 아니에요."

@@ -2161,7 +2161,7 @@
   "dbc338c839431": "結果依輸入順序逐筆回傳：`accepted` 表示已儲存，`duplicate` 表示先前已儲存，`rejected_stale` 表示超出時間範圍，`rejected_invalid` 表示驗證未通過。",
   "d22297891db14": "逐筆事件結果。",
   "d7bbc22fa50a6": "`invalid_request`：請求須包含 1 至 100 筆事件。",
-  "dc4b1aeab1c12": "`forbidden`：應用權杖沒有 `rewards.report` 權限。",
+  "dc4b1aeab1c12": "`insufficient_scope`：應用權杖沒有 `rewards.report` 權限；`required_scope` 為 `rewards.report`。",
   "d9d49800bf5c9": "`rate_limited`：此客戶端每分鐘超過 600 筆事件，請稍後再試。",
   "dcc3dbaea3438": "應用依留言的主要文字判定 `cjk` 或 `latin`。",
   "de7ecbbb443cd": "`unauthorized`：未提供權杖、權杖無效，或使用的不是應用權杖。"
