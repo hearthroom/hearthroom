@@ -144,6 +144,21 @@ async function copyShareLink() {
 
 // ---- 新手七日 ----
 function guide(day: number) { startNewcomerTour(day, router, lp); }
+/** 新手第 1–6 天：目標做到了按「領取」，積分直接入帳，不開舞台（第 7 天才開大箱） */
+const newcomerClaiming = ref(false);
+async function claimNewcomerDay() {
+  if (newcomerClaiming.value) return;
+  newcomerClaiming.value = true;
+  try {
+    const c = await store.claimNewcomer();
+    if (c.credits != null) say(t("task.claimed.toast", { amount: whole(c.credits) }));
+    await refresh(true);
+  } catch {
+    say(t("task.error.claim"));
+  } finally {
+    newcomerClaiming.value = false;
+  }
+}
 function grand() {
   openStage({ chests: ["newcomer"], checkin: false, source: "newcomer", request: async () => ({ claims: [await store.claimNewcomer()], recap: false }) });
 }
@@ -235,12 +250,12 @@ onBeforeUnmount(() => { window.clearInterval(ticker); window.clearTimeout(toastT
 
     <div v-if="panel" class="checkin__cols">
       <div class="checkin__col">
-        <NewcomerCard v-if="hasNewcomer && !desk" :panel="panel" :busy="!!stage" @guide="guide" @grand="grand" />
+        <NewcomerCard v-if="hasNewcomer && !desk" :panel="panel" :busy="!!stage || newcomerClaiming" @guide="guide" @grand="grand" @claim="claimNewcomerDay" />
         <TaskPanel kind="daily" :tasks="panel.tasks.daily" :chest="panel.tasks.dailyAll" :plan="store.plan" :reset-label="dailyReset" :claiming="claiming" :failed="failed" @claim="claimOne" @claim-all="claimAll" @copy-link="copyShareLink" />
         <TaskPanel kind="weekly" :tasks="panel.tasks.weekly" :plan="store.plan" :reset-label="weeklyReset" :claiming="claiming" :failed="failed" @claim="claimOne" @claim-all="claimAll" @copy-link="copyShareLink" />
       </div>
       <div class="checkin__col">
-        <NewcomerCard v-if="hasNewcomer && desk" :panel="panel" :busy="!!stage" @guide="guide" @grand="grand" />
+        <NewcomerCard v-if="hasNewcomer && desk" :panel="panel" :busy="!!stage || newcomerClaiming" @guide="guide" @grand="grand" @claim="claimNewcomerDay" />
         <DrawHistory id="history" :list="draws" :plan="store.plan" :more="!!cursor" :loading="drawsLoading" :error="drawsError" :now="now" @more="loadDraws(true)" @retry="loadDraws()" @top="toTop" />
       </div>
     </div>
