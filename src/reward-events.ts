@@ -70,6 +70,13 @@ export async function harborRoleId(db: D1Database, cardId: string): Promise<stri
   return row?.source_role_id ?? null;
 }
 
+/** 留言主要用哪種文字（契約的 script）：中日韓字比拉丁字母多就是 cjk，Harbor 依它挑字數門檻。 */
+export function scriptOf(text: string): "cjk" | "latin" {
+  const cjk = (text.match(/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af\uf900-\ufaff]/g) ?? []).length;
+  const latin = (text.match(/[A-Za-z\u00c0-\u024f]/g) ?? []).length;
+  return cjk > 0 && cjk >= latin ? "cjk" : "latin";
+}
+
 /** 字數：中日韓一字一單位，英文以字元計；空白不算（Harbor 用它判斷留言是否達門檻）。 */
 export const textUnits = (s: string): number => [...s.replace(/\s+/g, "")].length;
 
@@ -91,7 +98,7 @@ export async function reportComment(db: D1Database, input: { cardId: string; mem
     if (!accountNo || !card) return;
     const workRoleId = card.source_role_id;
     const occurredAt = new Date(input.now).toISOString();
-    await enqueueRewardEvent(db, { eventId: `comment_posted:${input.commentId}`, type: "comment_posted", accountNo, workRoleId, occurredAt, attrs: { commentId: input.commentId, textUnits: textUnits(input.content) } }, input.now);
+    await enqueueRewardEvent(db, { eventId: `comment_posted:${input.commentId}`, type: "comment_posted", accountNo, workRoleId, occurredAt, attrs: { commentId: input.commentId, textUnits: textUnits(input.content), script: scriptOf(input.content) } }, input.now);
     if (input.reply && Number(card.author_num_id) === accountNo) await enqueueRewardEvent(db, { eventId: `author_reply:${input.commentId}`, type: "author_reply", accountNo, workRoleId, occurredAt, attrs: { commentId: input.commentId } }, input.now);
   });
 }
@@ -115,6 +122,13 @@ export async function reportRating(db: D1Database, input: { cardId: string; memb
 }
 
 // ---- 分享連結被打開 --------------------------------------------------------------
+
+/** 網址上的卡（卡號或卡片 id）→ Harbor 的 roleId；不是 Harbor 的卡回 null。 */
+async function shareCardRoleId(db: D1Database, card: string): Promise<string | null> {
+  const row = await db.prepare(`SELECT source_role_id FROM cards WHERE provider = 'harbor' AND (id = ?1
+      OR source_role_id = (SELECT source_role_id FROM card_numbers WHERE provider = 'harbor' AND num = CAST(?1 AS INTEGER)))`).bind(card).first<{ source_role_id: string }>();
+  return row?.source_role_id ?? null;
+}
 
 /** 每週一 04:00（台北）換鑰匙：跨週無法串起同一個訪客。 */
 function weekKey(now: number): string {
@@ -143,9 +157,12 @@ rewardEventRoutes.post("/v1/share/open", bodyLimit({ maxSize: 512, onError: (c) 
   // 不需登入、不透露碼存不存在：什麼情況都回 204
   const allowed = await c.env.VISIT_LIMIT?.limit({ key: c.req.header("cf-connecting-ip") || "anon" });
   if (allowed && !allowed.success) return c.body(null, 204);
-  const body = (await c.req.json().catch(() => ({}))) as { ref?: unknown };
+  const body = (await c.req.json().catch(() => ({}))) as { ref?: unknown; card?: unknown };
   const ref = typeof body.ref === "string" && REF_CODE.test(body.ref) ? body.ref : null;
   if (!ref) { await bumpOp(c.env.DB, "reward_events", "share_open", "dropped"); return c.body(null, 204); }
+  // 被分享的那張卡（網址上的卡號或 id）有就帶上（推廣第 3 層要看在那張卡試玩）；首頁的邀請連結沒有卡，照樣報（Harper 2026-10-19）
+  const card = typeof body.card === "string" && /^[A-Za-z0-9-]{1,64}$/.test(body.card) ? body.card : null;
+  const workRoleId = card ? await shareCardRoleId(c.env.DB, card) : null;
   const ua = c.req.header("User-Agent") ?? "";
   // 沒設訪客鑰匙就不算：每個 isolate 各用一把隨機鑰匙的話，同一個人會被算成好幾個（部署要設 SHARE_VISITOR_SECRET）
   if (!c.env.SHARE_VISITOR_SECRET || !ua || BOT_UA.test(ua)) { await bumpOp(c.env.DB, "reward_events", "share_open", "dropped"); return c.body(null, 204); }
@@ -161,7 +178,7 @@ rewardEventRoutes.post("/v1/share/open", bodyLimit({ maxSize: 512, onError: (c) 
   }
   const attrs: Record<string, string | number> = { visitorHash: hash };
   if (viewer) attrs.viewerAccountNo = viewer;
-  await enqueueRewardEvent(c.env.DB, { eventId: `share_open:${ref}:${day}:${hash}`, type: "share_open", refCode: ref, occurredAt: new Date(now).toISOString(), attrs }, now);
+  await enqueueRewardEvent(c.env.DB, { eventId: `share_open:${ref}:${day}:${hash}`, type: "share_open", refCode: ref, ...(workRoleId ? { workRoleId } : {}), occurredAt: new Date(now).toISOString(), attrs }, now);
   c.executionCtx.waitUntil(flushRewardEvents(c.env, now).catch(() => undefined));
   return c.body(null, 204);
 });
@@ -201,15 +218,19 @@ export const rewardTransport = {
     cached = { token: body.access_token, until: Date.now() + (body.expires_in ?? 3600) * 1000 };
     return cached.token;
   },
-  async send(env: Env, token: string, events: RewardEvent[]): Promise<{ ok: boolean; status: number }> {
+  async send(env: Env, token: string, events: RewardEvent[]): Promise<SendResult> {
     const res = await fetch(`${env.PROVIDER_API_BASE_HARBOR}/open/v1/app/rewards/events`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ events }),
     });
-    return { ok: res.ok, status: res.status };
+    const body = res.ok ? ((await res.json().catch(() => ({}))) as { results?: SendResult["results"] }) : {};
+    return { ok: res.ok, status: res.status, results: body.results };
   },
 };
+
+/** Harbor 逐筆回結果：accepted 收下、duplicate 先前收過、rejected_stale 超出時間窗、rejected_invalid 格式不合 */
+export interface SendResult { ok: boolean; status: number; results?: { eventId: string; status: string }[] }
 
 export interface FlushResult { sent: number; rejected: number; retry: number; expired: number }
 
@@ -224,7 +245,7 @@ export async function flushRewardEvents(env: Env, now: number): Promise<FlushRes
   const due = await db.prepare("SELECT event_id, type, body, attempts FROM reward_event_outbox WHERE sent_at IS NULL AND next_at <= ? ORDER BY created_at LIMIT ?").bind(now, BATCH).all<{ event_id: string; type: string; body: string; attempts: number }>();
   if (!due.results.length) return out;
   const events = due.results.map((r) => JSON.parse(r.body) as RewardEvent);
-  let result: { ok: boolean; status: number };
+  let result: SendResult;
   try {
     result = await rewardTransport.send(env, await rewardTransport.token(env), events);
   } catch {
@@ -238,8 +259,20 @@ export async function flushRewardEvents(env: Env, now: number): Promise<FlushRes
   const retryable = !result.ok && (result.status === 0 || result.status >= 500 || [401, 403, 404, 408, 429].includes(result.status));
   if (!retryable) {
     await db.batch(due.results.map((r) => db.prepare("UPDATE reward_event_outbox SET sent_at = ?, attempts = attempts + 1 WHERE event_id = ?").bind(now, r.event_id)));
-    for (const [type, n] of byType) await bumpOp(db, "reward_events", type, result.ok ? "sent" : "rejected", n);
-    if (result.ok) out.sent = due.results.length; else out.rejected = due.results.length;
+    // 逐筆結果：收下或先前收過算送出，其餘算不收；沒有逐筆結果時整批照狀態碼算
+    const verdict = new Map((result.results ?? []).map((x) => [x.eventId, x.status]));
+    const tally = new Map<string, { sent: number; rejected: number }>();
+    for (const r of due.results) {
+      const v = verdict.get(r.event_id);
+      const sent = result.ok && (v === undefined || v === "accepted" || v === "duplicate");
+      const t = tally.get(r.type) ?? { sent: 0, rejected: 0 };
+      if (sent) { t.sent++; out.sent++; } else { t.rejected++; out.rejected++; }
+      tally.set(r.type, t);
+    }
+    for (const [type, t] of tally) {
+      if (t.sent) await bumpOp(db, "reward_events", type, "sent", t.sent);
+      if (t.rejected) await bumpOp(db, "reward_events", type, "rejected", t.rejected);
+    }
     return out;
   }
   // 暫時不通：照次數退避（1、2、4…最多 60 分鐘）

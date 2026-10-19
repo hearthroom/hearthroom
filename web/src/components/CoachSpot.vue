@@ -6,7 +6,8 @@
  */
 import { computed } from "vue";
 
-const props = defineProps<{ rect: DOMRect | null; title: string; body: string; mascot: boolean; first: boolean; last: boolean }>();
+/** action：框不到時只有一顆按鈕（例如「打開一張卡」「知道了」），取代上一步／下一步 */
+const props = defineProps<{ rect: DOMRect | null; title: string; body: string; mascot: boolean; first: boolean; last: boolean; action?: string }>();
 const emit = defineEmits<{ prev: []; next: []; close: [] }>();
 
 const PAD = 8;
@@ -34,8 +35,11 @@ const bubbleStyle = computed(() => {
       <h2 id="coach-title" class="coach__title">{{ title }}</h2>
       <p class="coach__body">{{ body }}</p>
       <div class="coach__actions">
-        <button v-if="!first" type="button" class="btn btn--ghost" @click="emit('prev')">{{ $t("tour.prev") }}</button>
-        <button type="button" class="btn btn--primary" @click="emit('next')">{{ $t(last ? "tour.done" : "tour.next") }}</button>
+        <button v-if="action" type="button" class="btn btn--primary" @click="emit('next')">{{ action }}</button>
+        <template v-else>
+          <button v-if="!first" type="button" class="btn btn--ghost" @click="emit('prev')">{{ $t("tour.prev") }}</button>
+          <button type="button" class="btn btn--primary" @click="emit('next')">{{ $t(last ? "tour.done" : "tour.next") }}</button>
+        </template>
       </div>
     </section>
   </div>

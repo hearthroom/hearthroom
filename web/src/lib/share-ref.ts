@@ -279,11 +279,12 @@ export function watchCampaignShareBinding(): void {
  * 本站伺服器記匿名訪客、同一人同一天只算一次，再報給 Harbor（src/reward-events.ts）。
  * 這個瀏覽器有登入就等身分載好、帶上 token：Harbor 才擋得掉「自己打開自己的連結」。
  */
-export function noteShareOpen(code: string): void {
+export function noteShareOpen(code: string, card: string | null = null): void {
   const send = (token: string | null) => fetch(`${COMMUNITY_API}/share/open`, {
     method: "POST", keepalive: true,
     headers: { "Content-Type": "application/json", "X-Provider": currentProvider(), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: JSON.stringify({ ref: code }),
+    // 被分享的那張卡（網址上的卡號或 id）：Harbor 只認卡片的分享，首頁的邀請連結伺服器會略過
+    body: JSON.stringify(card ? { ref: code, card } : { ref: code }),
   }).catch(() => undefined);
   if (signedInHint() === null) { void send(null); return; }
   void (async () => {

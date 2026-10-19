@@ -7,20 +7,24 @@
 import { env, SELF } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { bearer, identities, makeMember, makeReviewer, resetDb, restoreUpstream } from "./helpers";
-import { flushRewardEvents, rewardTransport, visitorHash } from "../src/reward-events";
+import { flushRewardEvents, rewardTransport, scriptOf, visitorHash } from "../src/reward-events";
 import { opsMetrics } from "../src/ops-metrics";
 
 const json = async (r: Response) => (await r.json()) as any;
 const outbox = async () => (await env.DB.prepare("SELECT event_id, type, body, sent_at FROM reward_event_outbox ORDER BY created_at, event_id").all<{ event_id: string; type: string; body: string; sent_at: number | null }>()).results.map((r) => ({ ...r, body: JSON.parse(r.body) }));
-const open = (body: unknown, headers: Record<string, string> = {}) =>
-  SELF.fetch("https://c.test/v1/share/open", { method: "POST", headers: { "Content-Type": "application/json", "cf-connecting-ip": "203.0.113.9", "User-Agent": "Mozilla/5.0 (iPhone)", ...headers }, body: JSON.stringify(body) });
+const open = (body: Record<string, unknown>, headers: Record<string, string> = {}) =>
+  SELF.fetch("https://c.test/v1/share/open", { method: "POST", headers: { "Content-Type": "application/json", "cf-connecting-ip": "203.0.113.9", "User-Agent": "Mozilla/5.0 (iPhone)", ...headers }, body: JSON.stringify({ card: "200009", ...body }) });
 const realTransport = { ...rewardTransport };
 
 async function harborCard(id: string, roleId: string, authorNumId: number) {
   await env.DB.prepare("INSERT INTO cards (id, source_role_id, author_num_id, registered_at, last_synced_at, provider) VALUES (?, ?, ?, 0, 0, 'harbor')").bind(id, roleId, authorNumId).run();
 }
 
-beforeEach(async () => { await resetDb(); identities({ fan: 20001, author: 20002, mod: 30001 }); });
+beforeEach(async () => {
+  await resetDb(); identities({ fan: 20001, author: 20002, mod: 30001 });
+  // 契約：share_open 一定要帶被分享的卡（workRoleId），從首頁分享的連結不算
+  await env.DB.prepare("INSERT INTO cards (id, source_role_id, author_num_id, registered_at, last_synced_at, provider) VALUES ('200009', 'role-share', 1, 0, 0, 'harbor')").run();
+});
 afterEach(() => { restoreUpstream(); Object.assign(rewardTransport, realTransport); });
 
 describe("分享連結被打開", () => {
@@ -30,7 +34,7 @@ describe("分享連結被打開", () => {
     const rows = await outbox();
     expect(rows).toHaveLength(1);
     expect(rows[0].type).toBe("share_open");
-    expect(rows[0].body).toMatchObject({ type: "share_open", refCode: "ABCD1234", attrs: { visitorHash: expect.stringMatching(/^[0-9a-f]{32}$/) } });
+    expect(rows[0].body).toMatchObject({ type: "share_open", refCode: "ABCD1234", workRoleId: "role-share", attrs: { visitorHash: expect.stringMatching(/^[0-9a-f]{32}$/) } });
     expect(rows[0].body.accountNo).toBeUndefined();
     expect(JSON.stringify(rows)).not.toContain("203.0.113.9");
     const stored = await env.DB.prepare("SELECT * FROM share_opens").all();
@@ -46,8 +50,16 @@ describe("分享連結被打開", () => {
     expect(await opsMetrics(env.DB)).toContain('hearthroom_reward_events_total{type="share_open",outcome="dropped"} 2');
   });
 
+  it("沒有卡（首頁的邀請連結）或卡不在 Harbor：照樣報，只是不帶 workRoleId", async () => {
+    await SELF.fetch("https://c.test/v1/share/open", { method: "POST", headers: { "Content-Type": "application/json", "cf-connecting-ip": "203.0.113.9", "User-Agent": "Mozilla/5.0" }, body: JSON.stringify({ ref: "ABCD1234" }) });
+    await open({ ref: "WXYZ9876", card: "999999" });
+    const rows = await outbox();
+    expect(rows).toHaveLength(2);
+    for (const r of rows) expect(r.body.workRoleId).toBeUndefined();
+  });
+
   it("登入的訪客帶上自己的帳號，讓 Harbor 擋掉分享者本人", async () => {
-    await SELF.fetch("https://c.test/v1/share/open", { method: "POST", headers: { ...bearer("fan"), "Content-Type": "application/json", "cf-connecting-ip": "203.0.113.9", "User-Agent": "Mozilla/5.0" }, body: JSON.stringify({ ref: "ABCD1234" }) });
+    await SELF.fetch("https://c.test/v1/share/open", { method: "POST", headers: { ...bearer("fan"), "Content-Type": "application/json", "cf-connecting-ip": "203.0.113.9", "User-Agent": "Mozilla/5.0" }, body: JSON.stringify({ ref: "ABCD1234", card: "200009" }) });
     expect((await outbox())[0].body.attrs.viewerAccountNo).toBe(20001);
   });
 
@@ -70,7 +82,7 @@ describe("留言、評分與分享連結", () => {
     const types = (await outbox()).map((r) => [r.type, r.body.accountNo]);
     expect(types).toEqual(expect.arrayContaining([["comment_posted", 20001], ["comment_posted", 20002], ["author_reply", 20002]]));
     const first = (await outbox()).find((r) => r.type === "comment_posted" && r.body.accountNo === 20001)!;
-    expect(first.body).toMatchObject({ workRoleId: "role-1", attrs: { commentId: top.commentId, textUnits: 9 } });
+    expect(first.body).toMatchObject({ workRoleId: "role-1", attrs: { commentId: top.commentId, textUnits: 9, script: "cjk" } });
   });
 
   it("刪留言報 comment_removed；評分報 rating_set", async () => {
@@ -147,6 +159,16 @@ describe("送出", () => {
     expect((await outbox())[0].sent_at).toBeNull();
   });
 
+  it("Harbor 逐筆回結果：收下與重複算送出，不收的算 rejected，都不再送", async () => {
+    await open({ ref: "ABCD1234" });
+    await open({ ref: "ABCD1234" }, { "cf-connecting-ip": "198.51.100.7" });
+    const creds = { ...env, HARBOR_REWARDS_CLIENT_ID: "cid", HARBOR_REWARDS_CLIENT_SECRET: "sec" };
+    rewardTransport.token = async () => "app-token";
+    rewardTransport.send = async (_e, _t, events) => ({ ok: true, status: 200, results: [{ eventId: events[0].eventId, status: "accepted" }, { eventId: events[1].eventId, status: "rejected_invalid" }] });
+    expect(await flushRewardEvents(creds, Date.now())).toMatchObject({ sent: 1, rejected: 1 });
+    expect((await outbox()).every((r) => r.sent_at)).toBe(true);
+  });
+
   it("有憑證：一批送出、記下送出時間；Harbor 暫時不通就留著重試", async () => {
     await open({ ref: "ABCD1234" });
     await open({ ref: "ABCD1234" }, { "cf-connecting-ip": "198.51.100.7" });
@@ -169,5 +191,14 @@ describe("送出", () => {
     const later = Date.now() + 48 * 3_600_000;
     expect(await flushRewardEvents({ ...env, HARBOR_REWARDS_CLIENT_ID: "cid", HARBOR_REWARDS_CLIENT_SECRET: "sec" }, later)).toMatchObject({ expired: 1, sent: 0 });
     expect(await opsMetrics(env.DB)).toContain('hearthroom_reward_events_total{type="share_open",outcome="expired"} 1');
+  });
+});
+
+describe("留言的文字種類", () => {
+  it("中日韓字多就是 cjk，其餘 latin", () => {
+    expect(scriptOf("很好玩的卡 nice")).toBe("cjk");
+    expect(scriptOf("這張卡")).toBe("cjk");
+    expect(scriptOf("this card is great 好")).toBe("latin");
+    expect(scriptOf("재밌어요")).toBe("cjk");
   });
 });
