@@ -327,8 +327,11 @@ const bubble = computed(() => {
   const pick = (keys: string[]) => keys[(cur.claim.stripSeed ?? 0) % keys.length];
   if (kind === "cheer") return t(cur.round.track.tier >= 6 ? "checkin.suki.win.6" : "checkin.suki.win.5");
   if (kind === "miss") return t(pick(["checkin.suki.miss.a", "checkin.suki.miss.b"]));
-  return t(night ? "checkin.suki.ok.night" : pick(["checkin.suki.ok.a", "checkin.suki.ok.b", "checkin.suki.ok.c"]));
+  // 「今天的份」只說給今天簽到的寶箱；補簽、任務、新住民寶箱不用這句
+  const today = props.checkin && cur.claim.rewardKey.startsWith("checkin");
+  return t(night ? "checkin.suki.ok.night" : pick(today ? ["checkin.suki.ok.a", "checkin.suki.ok.b", "checkin.suki.ok.c"] : ["checkin.suki.ok.a", "checkin.suki.ok.c"]));
 });
+const pityAmount = computed(() => (props.plan?.pity ? whole(props.plan.pity.threshold) : ""));
 const pityOut = computed(() => outcome.value?.claims.find((c) => c.pityRemaining != null)?.pityRemaining ?? props.pity);
 
 // ---- 格子 ----
@@ -367,7 +370,7 @@ defineExpose({ skip });
     <div ref="root" class="stage-wrap" @click="onBackdrop">
       <div
         ref="panelEl" class="stage" role="dialog" aria-modal="true" :aria-label="t('checkin.stage.aria')" tabindex="-1"
-        :data-step="step" :data-phase="phase" :data-boxes="total" :class="{ 'stage--reduced': reduced }" @keydown="onKey"
+        :data-step="step" :data-phase="phase" :data-boxes="total" :data-badge="chests.includes('newcomer') ? '1' : null" :class="{ 'stage--reduced': reduced }" @keydown="onKey"
       >
         <div class="stage__in">
           <header class="st-head">
@@ -437,7 +440,7 @@ defineExpose({ skip });
                 <div class="r-exp">{{ current.claim.duplicate ? t("checkin.result.cosmetic.owned", { amount: whole(prizeOf(current.claim)) }) : expiryLine(current.claim) }}</div>
                 <div v-if="checkin && rounds.length === 1" class="r-more">
                   <span v-if="outcome?.streak">{{ t("checkin.result.streak", { n: outcome.streak }) }}</span>
-                  <span v-if="pityOut">{{ pityOut === 1 ? t("checkin.result.pity.next") : t("checkin.result.pity", { n: pityOut }) }}</span>
+                  <span v-if="pityOut && pityAmount">{{ pityOut === 1 ? t("checkin.result.pity.next", { amount: pityAmount }) : t("checkin.result.pity", { n: pityOut, amount: pityAmount }) }}</span>
                 </div>
                 <div v-if="isBadge(current.claim)" class="r-badge"><img :src="NEWCOMER_BADGE" alt="" width="48" height="48" /><span><strong>{{ t("newcomer.badge.name") }}</strong><small>{{ t("newcomer.badge.desc") }}</small></span></div>
                 <RouterLink v-if="cosmetic(current.claim)" :to="lp('/settings')" class="r-link">{{ t("checkin.result.cosmetic.equip") }}</RouterLink>
@@ -454,7 +457,9 @@ defineExpose({ skip });
               </div>
 
               <!-- 已經簽過（另一台裝置）或還在處理中：不轉滾輪，直接講結果 -->
-              <div v-else-if="step === 'recap' || step === 'pending'" class="rows" role="status">
+              <!-- 寶箱還沒開（點數池補足後才抽）：講什麼時候、不用再按，不講原因（ui.md §10、copy.md §5.3） -->
+              <p v-if="step === 'pending'" class="st-note">{{ t("checkin.result.pendingNote") }}</p>
+              <div v-else-if="step === 'recap'" class="rows" role="status">
                 <div v-for="c in (outcome?.claims ?? []).filter((x) => x.status !== 'not_granted')" :key="c.rewardKey" class="row">
                   <span class="n">{{ titleOf(c.chest ?? chests[0] ?? 'daily') }}</span>
                   <span v-if="c.status === 'granted' && c.credits != null" class="a">{{ t("checkin.done.amount", { amount: whole(c.credits) }) }}</span>
@@ -462,6 +467,14 @@ defineExpose({ skip });
                   <span v-if="c.tier" class="t"><span class="dot" :class="`t${c.tier}`" />{{ t(`checkin.result.tier.${c.tier}`) }}</span>
                   <span class="e">{{ expiryLine(c) }}</span>
                 </div>
+              </div>
+              <div v-if="step === 'pending'" class="rows" role="status">
+                <div v-for="c in (outcome?.claims ?? []).filter((x) => x.status === 'pending')" :key="c.rewardKey" class="row">
+                  <span class="n">{{ titleOf(c.chest ?? chests[0] ?? 'daily') }}</span>
+                  <span class="br" />
+                  <span class="e">{{ c.releaseAt ? t("checkin.result.pending", { date: monthDayOf(c.releaseAt) }) : t("checkin.history.pending") }}</span>
+                </div>
+                <p v-if="checkin && outcome?.streak" class="r-more">{{ t("checkin.result.streak", { n: outcome.streak }) }}</p>
               </div>
               <div v-if="showResult && lastRound && otherClaims.length" class="rows">
                 <div v-for="c in otherClaims.filter((x) => x.status === 'pending')" :key="c.rewardKey" class="row"><span class="n">{{ titleOf(c.chest ?? 'daily') }}</span><span class="e">{{ expiryLine(c) }}</span></div>
@@ -523,6 +536,7 @@ button { font:inherit; color:inherit; }
 .st-error { flex:1 1 auto; display:grid; align-content:center; justify-items:center; gap:var(--s-2); padding:0 var(--s-6); text-align:center; }
 .st-error strong { font-size:18px; }
 .st-error p { margin:0; font-size:14px; line-height:1.6; opacity:.85; max-width:320px; text-wrap:pretty; }
+.st-note { margin:0; max-width:340px; font-size:13.5px; line-height:1.6; text-align:center; opacity:.9; text-wrap:balance; word-break:keep-all; overflow-wrap:anywhere; }
 .st-wait { margin:0; font-size:12px; opacity:.8; text-align:center; }
 
 .core { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; justify-content:space-evenly; position:relative; z-index:2; }
@@ -530,7 +544,7 @@ button { font:inherit; color:inherit; }
 .mascot { position:relative; height:var(--mascot-h); aspect-ratio:0.6804; will-change:transform; }
 .mascot__pose { position:absolute; left:50%; top:0; height:100%; width:auto; transform:translateX(-50%); display:block; user-select:none; pointer-events:none; }
 .mascot__carry { position:absolute; inset:0; height:100%; }
-.bubble { position:absolute; top:calc(var(--mascot-h) * .03); left:calc(50% + var(--mascot-h) * .10); width:max-content; max-width:min(60cqw, calc(50cqw - var(--mascot-h) * .10 - 8px)); margin:0; text-wrap:balance; background:#fff; color:#2a1d24; font-size:13.5px; line-height:1.35; font-weight:600; padding:6px 10px; border-radius:16px; z-index:4; animation:bubble-in var(--dur) var(--ease) both; }
+.bubble { word-break:keep-all; overflow-wrap:anywhere; position:absolute; top:calc(var(--mascot-h) * .03); left:calc(50% + var(--mascot-h) * .10); width:max-content; max-width:min(60cqw, calc(50cqw - var(--mascot-h) * .10 - 8px)); margin:0; text-wrap:balance; background:#fff; color:#2a1d24; font-size:13.5px; line-height:1.35; font-weight:600; padding:6px 10px; border-radius:16px; z-index:4; animation:bubble-in var(--dur) var(--ease) both; }
 .bubble::after { content:""; position:absolute; left:10px; bottom:-6px; border:6px solid transparent; border-top-color:#fff; border-bottom:0; }
 
 .reel-zone { --cw:88px; --ch:104px; --gap:4px; --zone-h:calc(var(--ch) + 56px); position:relative; flex:0 0 auto; z-index:2; margin-top:1.5cqh; height:var(--zone-h); }
@@ -573,7 +587,7 @@ button { font:inherit; color:inherit; }
 @keyframes bubble-in { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
 
 .result-zone { flex:0 1 clamp(104px, 18cqh, 190px); min-height:56px; overflow-y:auto; overscroll-behavior:contain; position:relative; z-index:2; padding:10px 16px 0; display:flex; flex-direction:column; align-items:center; gap:8px; }
-.stage[data-boxes="2"] .result-zone { flex-basis:clamp(150px, 27cqh, 214px); }
+.stage[data-boxes="2"] .result-zone, .stage[data-badge] .result-zone { flex-basis:clamp(150px, 27cqh, 214px); }
 .result { width:min(100%, 420px); text-align:center; animation:result-in .25s var(--ease) both; }
 @keyframes result-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
 .r-top { display:inline-flex; align-items:center; gap:8px; font-size:14px; opacity:.9; }

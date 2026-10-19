@@ -4,10 +4,17 @@
   "try": "/checkin",
   "draft": true,
   "title": {
-    "zh-Hant": "每天簽到開寶箱，做任務也能拿到聊天用的積分。",
-    "zh-Hans": "每天签到开宝箱，做任务也能拿到聊天用的积分。",
-    "en": "Check in daily to open a chest, and earn chat credits from tasks too.",
-    "ja": "毎日のチェックインで宝箱を開けて、ミッションでもチャット用のポイントがもらえます。",
-    "ko": "매일 출석하고 상자를 열면, 미션으로도 대화용 포인트를 받을 수 있어요."
+    "zh-Hant": "新增每日簽到，每天開一個寶箱，裡面是聊天用的積分。",
+    "zh-Hans": "新增每日签到，每天开一个宝箱，里面是聊天用的积分。",
+    "en": "Daily check-in is here: open a chest every day for credits to spend on chats.",
+    "ja": "毎日のチェックインを追加、宝箱からチャットに使えるポイントがもらえます。",
+    "ko": "매일 출석 체크가 추가되어, 날마다 상자를 열고 대화용 포인트를 받을 수 있어요."
+  },
+  "body": {
+    "zh-Hant": "每日和每週任務也能拿到積分；簽到和任務的積分有使用期限，到期時間在「積分與會員」查得到。",
+    "zh-Hans": "每日和每周任务也能拿到积分；签到和任务的积分有使用期限，到期时间可以在“积分与会员”查看。",
+    "en": "Daily and weekly tasks earn credits too, and you can see when they expire under Credits & membership.",
+    "ja": "デイリーとウィークリーのミッションでもポイントがもらえ、有効期限は「ポイントと会員」で確認できます。",
+    "ko": "일일·주간 미션으로도 포인트를 받을 수 있고, 유효 기간은 '포인트 및 멤버십'에서 확인할 수 있어요."
   }
 }
