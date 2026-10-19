@@ -20,6 +20,8 @@ const records = [
   { id: 2, record: "plan", recordType: "add", score: 500, createTime: "2026-10-20T01:00:00Z", planKind: "bonus" },
   { id: 3, record: "refund", recordType: "sub", score: 500, createTime: "2026-10-20T02:00:00Z", planKind: "daily" },
   { id: 4, record: "campaign", recordType: "add", score: 90, createTime: "2026-10-20T01:00:00Z", rewardKind: "checkin", expiresAt: "2026-11-20T01:00:00Z" },
+  { id: 5, record: "plan", recordType: "add", score: 30000, createTime: "2026-10-20T00:30:00Z", planKind: "purchase" },
+  { id: 6, record: "refund", recordType: "sub", score: 30000, createTime: "2026-10-20T03:00:00Z", planKind: "purchase" },
 ];
 
 let app: ReturnType<typeof createApp> | undefined;
@@ -78,4 +80,14 @@ it("積分記錄：月卡每日、首張加贈與退回各有自己的名字；�
   expect(rows).toContain("月卡首購加贈");
   expect(rows).toContain("月卡每日積分退回月卡已退款");
   expect(rows.find((r) => r.startsWith("簽到寶箱"))).toMatch(/到期/);
+});
+
+it("不認得的月卡種類：用通用的入帳或退款名稱，不顯示原始代碼", async () => {
+  mine = holder;
+  const root = await mount();
+  const names = [...root.querySelectorAll(".row__name")].map((n) => n.textContent!.trim());
+  expect(names).not.toContain("plan");
+  expect(names).not.toContain("purchase");
+  expect(names).toContain(i18n.global.t("wallet.reason.grant"));
+  expect(names).toContain(i18n.global.t("wallet.reason.refund"));
 });

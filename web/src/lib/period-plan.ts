@@ -10,16 +10,21 @@ export const FALLBACK_PURCHASE_URL = "https://console.harperharbor.com/me/billin
 
 export type TodayLine =
   | { kind: "hidden" }
-  /** withCheckin：還沒簽到，簽到時一起領；claimed：今天已領；claim：給「領取」按鈕（missed：剛才的代領沒成功） */
-  | { kind: "withCheckin" | "claimed" | "claim"; credits: number; bonusCredits: number; missed: boolean };
+  /**
+   * withCheckin：還沒簽到，簽到時一起領；claimed：今天已領；claim：給「領取」按鈕（missed：剛才沒領到）；
+   * waiting：代領沒成功、自動補領還在路上，右側先不畫（ui.md §3.3 P4）
+   */
+  | { kind: "withCheckin" | "claimed" | "claim" | "waiting"; credits: number; bonusCredits: number; missed: boolean };
 
 export interface TodayContext {
   /** 今天簽到過了沒有；null＝不知道（錢包頁沒讀簽到面板） */
   checkedIn: boolean | null;
   /** 這次簽到回來的代領結果，會蓋過還沒重讀的 /me/plans */
   outcome?: PeriodPlanOutcome | null;
-  /** 簽到回 unavailable、自動重試一次也失敗 */
+  /** 簽到回 unavailable、自動補領一次也失敗；或手動領取失敗 */
   missed?: boolean;
+  /** 自動補領還在路上 */
+  retrying?: boolean;
 }
 
 /** 簽到頁的月卡列與錢包頁共用的「今天那一行」。 */
@@ -32,6 +37,7 @@ export function todayLine(plan: MyPeriodPlan | null | undefined, ctx: TodayConte
   if (outcome?.status === "granted") return { kind: "claimed", credits: outcome.credits ?? today.credits, bonusCredits: outcome.bonusCredits ?? today.bonusCredits, missed: false };
   const amount = { credits: today.credits, bonusCredits: today.bonusCredits };
   if (today.status === "claimed") return { kind: "claimed", ...amount, missed: false };
+  if (ctx.retrying) return { kind: "waiting", ...amount, missed: false };
   if (ctx.missed) return { kind: "claim", ...amount, missed: true };
   if (ctx.checkedIn === true) return { kind: "claim", ...amount, missed: false };
   return { kind: "withCheckin", ...amount, missed: false };

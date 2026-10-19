@@ -2,7 +2,7 @@
 /**
  * 月卡「今天那一行」：簽到時一起領／今天已領／領取按鈕（ui.md §3.3 P2–P5、§4.2）。
  * 簽到頁的月卡列與「積分與會員」共用；判斷在 lib/period-plan 的 todayLine。
- * 沒領到不用紅字也不用 toast：簽到本身是成功的。
+ * 沒領到不用紅字也不用 toast：簽到本身是成功的。自動補領還在路上（waiting）時什麼都不畫。
  */
 import { useI18n } from "vue-i18n";
 import { whole } from "@/lib/format";
@@ -19,7 +19,7 @@ const { t } = useI18n();
     <i18n-t v-else-if="line.kind === 'claimed'" keypath="plan.row.claimed" tag="span" class="plan-today__text" scope="global">
       <template #daily><span class="plan-today__amount">{{ whole(line.credits) }}</span></template>
     </i18n-t>
-    <template v-else>
+    <template v-else-if="line.kind === 'claim'">
       <span v-if="line.missed" class="plan-today__missed">{{ t("plan.row.missed") }}</span>
       <button type="button" class="btn btn--sm plan-today__claim" :disabled="claiming" :aria-busy="claiming" @click="emit('claim')">
         <span v-if="claiming" class="plan-today__spin" aria-hidden="true" />
