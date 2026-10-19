@@ -11856,7 +11856,7 @@
           "Plans"
         ],
         "summary": "Read the caller's plans",
-        "description": "Returns, for each plan, whether one covers today, its last day, today's credits and whether they were claimed, whether another can be bought, and the first-plan bonus. Plans belong to the account, so every app sees the same holding. At most 60 reads a minute per account.",
+        "description": "Returns, for each plan, whether one covers today, its last day, today's credits and whether they were claimed, whether another can be bought, and the first-purchase bonus. Plans belong to the account, so every app sees the same holding. At most 60 reads a minute per account.",
         "security": [
           {
             "userToken": []
@@ -18456,7 +18456,7 @@
               "daily",
               "bonus"
             ],
-            "description": "Only on plan rows: `daily` — a day's credits; `bonus` — the first-plan bonus for that day. Refunds that take them back carry the same value."
+            "description": "Only on plan rows: `daily` — a day's credits; `bonus` — the first-purchase bonus for that day. Refunds that take them back carry the same value."
           }
         }
       },
@@ -23963,7 +23963,7 @@
           },
           "firstBonusDailyCredits": {
             "type": "integer",
-            "description": "Extra credits on each day of the account's first plan, claimed together with `dailyCredits`. 0 when the current version has no first-plan bonus."
+            "description": "Extra credits on each day of the plan from an account's first purchase, claimed together with `dailyCredits`. 0 when the current version has no first-purchase bonus."
           },
           "maxDays": {
             "type": "integer",
@@ -24069,7 +24069,7 @@
               },
               "bonusCredits": {
                 "type": "integer",
-                "description": "The part of `credits` that is the first-plan bonus; 0 when there is none."
+                "description": "The part of `credits` that is the first-purchase bonus; 0 when there is none."
               }
             }
           },
@@ -24117,11 +24117,11 @@
                   "used",
                   "unavailable"
                 ],
-                "description": "`available` — the account has never bought this plan, so the next one is its first; `active` — the plan covering today is the first; `used` — the first plan was already bought, including when it ran out, was followed by another or was refunded; `unavailable` — the current version has no first-plan bonus."
+                "description": "`available` — the account has never bought this plan, so its next purchase is the first; `active` — the plan covering today is the first purchase; `used` — the first purchase was already made, including when it ran out, was followed by another or was refunded; `unavailable` — the current version has no first-purchase bonus."
               },
               "dailyCredits": {
                 "type": "integer",
-                "description": "Extra credits per day while the first plan is active; 0 for `unavailable`."
+                "description": "Extra credits per day while the plan from the first purchase is active; 0 for `unavailable`."
               }
             }
           },
@@ -24135,7 +24135,7 @@
           },
           "firstBonusDailyCredits": {
             "type": "integer",
-            "description": "Extra credits on each day of the account's first plan, claimed together with `dailyCredits`. 0 when the current version has no first-plan bonus."
+            "description": "Extra credits on each day of the plan from an account's first purchase, claimed together with `dailyCredits`. 0 when the current version has no first-purchase bonus."
           }
         }
       },
@@ -24197,7 +24197,7 @@
           },
           "bonusCredits": {
             "type": "integer",
-            "description": "The part of `credits` that is the first-plan bonus."
+            "description": "The part of `credits` that is the first-purchase bonus."
           },
           "status": {
             "type": "string",
@@ -24241,7 +24241,7 @@
           },
           "bonusCredits": {
             "type": "integer",
-            "description": "On `granted`: the part of `credits` that is the first-plan bonus."
+            "description": "On `granted`: the part of `credits` that is the first-purchase bonus."
           },
           "replayed": {
             "type": "boolean",
