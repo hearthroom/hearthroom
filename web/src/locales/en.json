@@ -3067,7 +3067,7 @@
   "checkin.suki.newcomer": "Seven days done! Welcome in~",
   "plan.row.title": "30-Day Pass · {n} day left | 30-Day Pass · {n} days left",
   "plan.row.title.last": "30-Day Pass · last day today",
-  "plan.row.withCheckin": "+{daily} credits when you check in",
+  "plan.row.withCheckin": "+{daily} at check-in",
   "plan.row.claimed": "+{daily} credits claimed today",
   "plan.row.claim": "Claim {daily} credits",
   "plan.row.missed": "Didn't go through",
