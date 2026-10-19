@@ -2891,6 +2891,8 @@
   "newcomer.tour.1.board.body": "日間は24時間以内に載ったカード、人気はサイト全体のカードのランキングです。",
   "newcomer.tour.1.tags.title": "ジャンルタグ",
   "newcomer.tour.1.tags.body": "タグを押すと好きなジャンルだけ表示でき、いくつでも選べます。",
+  "newcomer.tour.1.play.title": "会話をはじめる",
+  "newcomer.tour.1.play.body": "このボタンで物語が始まり、送ったメッセージに返事が来ると1ターンです。",
   "newcomer.tour.2.resume.title": "この前の続き",
   "newcomer.tour.2.resume.body": "会話したカードがここに並び、押すと前回の続きから再開できます。",
   "newcomer.tour.3.roll.title": "サイコロで決める",
