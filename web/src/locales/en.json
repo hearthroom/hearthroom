@@ -2937,10 +2937,10 @@
   "checkin.suki.done": "That's today's chest. See you tomorrow~",
   "checkin.suki.done.night": "All done. Get some sleep~",
   "checkin.suki.broken": "Here's today's chest~",
-  "checkin.suki.win.5": "A big win! I knew today was lucky~",
-  "checkin.suki.win.6": "The jackpot! My hands are shaking~",
+  "checkin.suki.win.5": "Big win! Lucky day~",
+  "checkin.suki.win.6": "Jackpot! My hands are shaking~",
   "checkin.suki.miss.a": "Aaah, so close!",
-  "checkin.suki.miss.b": "One spot off… let's try again tomorrow~",
+  "checkin.suki.miss.b": "One spot off… tomorrow, then~",
   "checkin.suki.ok.a": "Here, go use it on a chat~",
   "checkin.suki.ok.b": "Today's share! Don't forget to use it~",
   "checkin.suki.ok.c": "Hehe, got something again today~",
@@ -2985,5 +2985,5 @@
   "newcomer.tour.gotIt": "Got it",
   "checkin.suki.weekly": "Nice week. Here you go~",
   "checkin.suki.makeup": "Got the chest you missed back~",
-  "checkin.suki.newcomer": "All seven days done. Welcome, new resident~"
+  "checkin.suki.newcomer": "Seven days done! Welcome in~"
 }

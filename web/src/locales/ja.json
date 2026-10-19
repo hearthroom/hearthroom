@@ -2937,10 +2937,10 @@
   "checkin.suki.done": "今日の分はおしまい。また明日～",
   "checkin.suki.done.night": "開けたし、もう寝よっか～",
   "checkin.suki.broken": "今日の宝箱も持ってきたよ～",
-  "checkin.suki.win.5": "大当たり！今日はツイてると思ってた～",
-  "checkin.suki.win.6": "特賞！箱を持つ手が震えてる～",
+  "checkin.suki.win.5": "大当たり！今日ツイてる～",
+  "checkin.suki.win.6": "特賞！手が震えてる～",
   "checkin.suki.miss.a": "あああ、あとちょっとだったのに！",
-  "checkin.suki.miss.b": "1マスずれただけ……また明日ね～",
+  "checkin.suki.miss.b": "1マス差……また明日ね～",
   "checkin.suki.ok.a": "はい、これでおしゃべりしてきて～",
   "checkin.suki.ok.b": "今日の分！ちゃんと使ってね～",
   "checkin.suki.ok.c": "えへへ、今日もゲット～",
@@ -2985,5 +2985,5 @@
   "newcomer.tour.gotIt": "わかりました",
   "checkin.suki.weekly": "今週もおつかれさま、はいどうぞ～",
   "checkin.suki.makeup": "逃した宝箱、取り戻したよ～",
-  "checkin.suki.newcomer": "7日間クリア！新しい住人さん、ようこそ～"
+  "checkin.suki.newcomer": "7日間クリア！ようこそ～"
 }
