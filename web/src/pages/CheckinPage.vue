@@ -51,7 +51,7 @@ function openStage(run: Omit<StageRun, "id" | "trigger">) {
 async function closeStage(_mood: StageMood | null, seen: boolean) {
   const run = stage.value;
   stage.value = null;
-  await refresh();
+  await refresh(true);
   run?.after?.(lastOutcome, seen);
   await nextTick();
   run?.trigger?.focus?.();
@@ -133,9 +133,9 @@ async function claimAll(tasks: RewardTask[]) {
   let sum = 0;
   for (const task of tasks) { const got = await claim(task, true); if (got === null) break; sum += got; }
   if (sum) say(t("task.claimed.toast", { amount: whole(sum) }));
-  await refresh();
+  await refresh(true);
 }
-async function claimOne(task: RewardTask) { await claim(task); if (!task.reward.chest) await refresh(); }
+async function claimOne(task: RewardTask) { await claim(task); if (!task.reward.chest) await refresh(true); }
 async function copyShareLink() {
   const me = session.me;
   const code = me ? await currentReferralCode(me.accountNumId) : null;
@@ -169,8 +169,9 @@ async function loadDraws(more = false) {
   }
 }
 
-async function refresh() {
-  await Promise.all([store.load(), loadDraws()]);
+/** settle：剛領完東西，頁首的餘額一起重讀 */
+async function refresh(settle = false) {
+  await Promise.all([settle ? store.settle() : store.load(), loadDraws()]);
   // 開箱要用的圖在頁面載入時就預載：按下之後不再等圖（美術總監最終 r1 M7）
   const kinds = [...new Set((store.panel?.checkin.todayChests ?? ["daily"]).map(boxKindOf))];
   void preloadPoses(kinds);
@@ -221,7 +222,7 @@ onBeforeUnmount(() => { window.clearInterval(ticker); window.clearTimeout(toastT
 
     <div v-if="loadError" class="checkin__wide panel checkin__error">
       <p class="notice notice--error"><strong>{{ t("checkin.hero.error.title") }}</strong><br />{{ t("checkin.hero.error.body") }}</p>
-      <button type="button" class="btn" @click="refresh">{{ t("checkin.cta.reload") }}</button>
+      <button type="button" class="btn" @click="refresh()">{{ t("checkin.cta.reload") }}</button>
     </div>
     <div v-else-if="!panel" class="checkin__wide panel checkin__skel" aria-busy="true">
       <span class="ghost" style="width:40%;height:26px" /><span class="ghost" style="width:70%;height:28px" />
