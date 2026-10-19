@@ -134,7 +134,7 @@ localStorage.setItem("hearthroom.oauth.access", JSON.stringify({ accessToken: "t
 
 1. 建立資源並將 ID 填入 `wrangler.toml`：一個 D1 資料庫（`DB`）、兩個 KV 命名空間（`CACHE`、`ASSET_ARCHIVE`），以及選用的 Analytics Engine 資料集（`EVENTS`；設定 `ANALYTICS_ENABLED = "false"` 可停用）。
 2. 設定網域：`wrangler.toml` 的 `routes`、`src/site.ts` 的 `HOST`、`web/src/lib/site.ts` 的站名。已有 DNS 記錄的主機名無法綁定自訂網域，須先刪除停放記錄。 卡片 App 在 `play.<網域>`、沙箱殼在 `c<id>.<網域>`，都由同一條萬用路由服務，zone 要有一筆代理的萬用 DNS 記錄。
-3. 在 `[vars]` 設定 `PROVIDER_API_BASE_HARBOR`，網頁建置使用 `VITE_HARBOR_API_BASE`。綺夢社僅連接 HarperHarbor；LunaTalk 與區域閘道已退役。
+3. 在 `[vars]` 設定 `PROVIDER_API_BASE_HARBOR`，網頁建置使用 `VITE_HARBOR_API_BASE`。綺夢社僅連接 HarperHarbor。
 4. 決定要不要審核：`[vars]` 中的 `REVIEW_ENABLED = "true"` 表示提交要經社群審核；其他值則不經審核直接上榜。審核不需要在供應商那邊持有任何金鑰或帳號。以 `node scripts/grant-reviewer.mjs <供應商帳號 ID>` 授權審核人。
 5. 選用的 `wrangler secret put SHORTCUT_SECRET`（任意隨機字串）：用來簽發短效鑰匙，讓開了成人內容的成員也能把成人卡加到主畫面；不設的話成人卡就沒有這個按鈕。
 6. 部署：

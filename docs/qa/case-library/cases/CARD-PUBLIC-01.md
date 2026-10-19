@@ -14,7 +14,7 @@ states: [guest, linked, cross-provider, direct-link, not-found, adult-gate]
 2. 以另一平台的本機測試身分登入並連接來源平台，重新開啟同一連結，確認仍顯示同一張卡與簡介。
 3. 檢查「用哪家玩」列出來源與可用副本；切換選項，確認有對應可用的遊玩動作。此案例不送出聊天或觸發付費推論。
 4. 以本站卡 ID／卡號開啟同一卡片，確認簡介與平台清單一致。
-5. 分別測試 LunaTalk 與 Harbor 卡，並在桌面與窄版 viewport 確認簡介、平台名稱及按鈕可讀可操作。
+5. 測試 Harbor 卡，並在桌面與窄版 viewport 確認簡介、平台名稱及按鈕可讀可操作。
 
 critical_payloads: 卡片標題、簡介、支援平台、可用的遊玩動作。
 

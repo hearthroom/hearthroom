@@ -3,7 +3,7 @@
   "info": {
     "title": "HearthRoom immutable hosting protocol",
     "version": "1.1.0",
-    "description": "HearthRoom issues immutable review versions. HarperHarbor and LunaTalk support source sealing and staged cross-provider replication; only verified immutable candidates may bind the shared version identity."
+    "description": "HearthRoom issues immutable review versions. HarperHarbor supports source sealing and staged import operations; only verified immutable candidates may bind the shared version identity. Hearthroom connects only to HarperHarbor; retained import operations do not imply an enabled cross-provider authoring workflow."
   },
   "paths": {
     "/open/v1/hosting/seal": {

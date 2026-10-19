@@ -5,8 +5,8 @@ import {claim,stamp} from '../src/review';
 export const frozenFixtureRoles=new Map<string,UpstreamRole>();
 const originalGateway={...hostGateway};
 export function hostedFixture(){
- const settings=env as unknown as {HOSTING_SERVICE_KEY?:string;HOSTING_SERVICE_KEY_LUNATALK?:string;REVIEW_ENABLED?:string};
- settings.HOSTING_SERVICE_KEY='fixture-harbor';settings.HOSTING_SERVICE_KEY_LUNATALK='fixture-luna';settings.REVIEW_ENABLED='true';
+ const settings=env as unknown as {HOSTING_SERVICE_KEY?:string;REVIEW_ENABLED?:string};
+ settings.HOSTING_SERVICE_KEY='fixture-harbor';settings.REVIEW_ENABLED='true';
  hostGateway.read=async(e,_token,id,provider='harbor')=>structuredClone(frozenFixtureRoles.get(id)??await upstream.fetchRole(e,id,provider));
  hostGateway.seal=async(e,token,id,workId,versionId,provider='harbor')=>{
   const hostedRevisionId='frozen-'+versionId;
@@ -17,8 +17,8 @@ export function hostedFixture(){
 }
 export function restoreHostedFixture(){
  Object.assign(hostGateway,originalGateway);frozenFixtureRoles.clear();
- const settings=env as unknown as {HOSTING_SERVICE_KEY?:string;HOSTING_SERVICE_KEY_LUNATALK?:string;REVIEW_ENABLED?:string};
- delete settings.HOSTING_SERVICE_KEY;delete settings.HOSTING_SERVICE_KEY_LUNATALK;settings.REVIEW_ENABLED='false';
+ const settings=env as unknown as {HOSTING_SERVICE_KEY?:string;REVIEW_ENABLED?:string};
+ delete settings.HOSTING_SERVICE_KEY;settings.REVIEW_ENABLED='false';
 }
 /** Exercise the real submission and review services before reading a public fixture. */
 export async function approveFixtureResponse(response:Response):Promise<Response>{

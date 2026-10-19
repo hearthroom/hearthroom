@@ -15,7 +15,7 @@ migrations/   D1 schema
 
 ## 它是什麼、不是什麼
 
-這是一個**第三方客戶端**。角色卡本身住在 [LunaTalk](https://lunatalk.ai) 上，
+這是一個**第三方客戶端**。角色卡本身住在 [HarperHarbor](https://www.harperharbor.com) 上，
 本專案透過它的開放 API 讀取公開資料，不隸屬於它，也沒有任何特殊權限——你能拿到的
 API 存取範圍，跟這個服務拿到的一模一樣。
 

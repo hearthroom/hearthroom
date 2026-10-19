@@ -31,16 +31,6 @@ The editor, failure/retry hints and personal-card status cover all five locales.
 No historical-version browser or garbage collector is added. Retained revisions are
 still needed by pinned conversations and review-authority records.
 
-## LunaTalk decision
-
-LunaTalk keeps its existing flow. Its current card writer requires public cards to
-become private before patching (`public_role_requires_clone`) and keeps review as
-`waitReview` on the mutable role. Its own comments explain that a review job writes
-visibility back by role ID. Supporting A/B safely would require changes to that
-backend's review writeback and gameplay reads, not just removing the editor's
-unpublish call. Given the planned retirement, that is outside this increment.
-No existing LunaTalk approval is treated as a sealed HarperHarbor approval.
-
 ## Verification
 
 - Added failing D1 tests, then implemented: pending edit retirement, retained A,
@@ -88,9 +78,10 @@ No existing LunaTalk approval is treated as a sealed HarperHarbor approval.
 ## Parity and observability
 
 The HTTP owner endpoint uses the same issuer service and D1 guards as review decisions.
-HarperHarbor has no deployed authoring MCP transport, so no inherited LunaTalk MCP
-wiring or Moonloom change is claimed. Backend issuer operations are not general tools.
-The normative hosting Markdown/OpenAPI copies are identical in both repositories.
+HarperHarbor has no deployed authoring MCP transport, so no new MCP
+wiring or public AI-client guidance change is claimed. Backend issuer operations are not general tools.
+Hearthroom’s hosting Markdown/OpenAPI documents describe its current client boundary;
+HarperHarbor maintains its own protocol copy.
 
 Resubmission uses the existing Prometheus counter
 `harbor_contract_authoring_total{op="hosting_seal",result="ok|rejected|error"}`;

@@ -1,6 +1,6 @@
 # Provider integration notes
 
-Hearthroom is a community-maintained, open-source character-card board. The site itself stores **no cards, runs no models and keeps no passwords**: accounts, card content and conversations live with a *provider*. The site owns what belongs to the community: who listed which card, how far it got in review and who stamped it, and the comments under each card. The only card content it ever holds is the review copy an author submits, and that copy is deleted when the review ends. Hearthroom uses HarperHarbor for identity, agent configuration hosting and conversations. LunaTalk integration is permanently retired.
+Hearthroom is a community-maintained, open-source character-card board. The site itself stores **no cards, runs no models and keeps no passwords**: accounts, card content and conversations live with a *provider*. The site owns what belongs to the community: who listed which card, how far it got in review and who stamped it, and the comments under each card. The only card content it ever holds is the review copy an author submits, and that copy is deleted when the review ends. Hearthroom uses HarperHarbor for identity, agent configuration hosting and conversations.
 
 This page has two parts:
 
@@ -135,7 +135,7 @@ linking and synchronization endpoints return 410 `service_retired`.
 
 A HearthRoom member has one community handle, display name, bio and avatar. The name and avatar are seeded once from the first verified sign-in and can then be edited independently. Uploaded community avatars are processed and stored in HearthRoom's own R2 bucket. Changing the platform used for an action never changes that community profile.
 
-HarperHarbor is the only active account service. Community identity and existing social records remain in Hearthroom. Retired LunaTalk records do not provide sign-in or play access.
+HarperHarbor is the only active account service. Community identity and existing social records remain in Hearthroom. Historical records for unsupported services do not provide sign-in or play access.
 
 These are **HearthRoom community endpoints** under `/v1`, separate from the provider Open API:
 

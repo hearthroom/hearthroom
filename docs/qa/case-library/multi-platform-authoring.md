@@ -57,8 +57,7 @@ Read back the target after each acknowledged document and order change. Retrying
 known partial result reuses the mapped book and replaces its actual current entries.
 An unknown write result still uses the existing target-version conflict protection.
 Harper's reorder moves listed entries to the front, so bounded chunks are prepended
-from last to first. LunaTalk assigns absolute positions and receives the complete
-order in one request within its 2,000-entry limit. Never truncate a book to meet a limit.
+from last to first. Never truncate a book to meet a limit.
 
 Regression cases use synthetic entries: default enum validation, 475-entry creation
 and replacement, failure after two successful chunks followed by retry, both ordering
@@ -109,7 +108,7 @@ an exact client-operation probe can resolve the missing operation.
 Chrome regression with a synthetic insufficient-credit response reproduced two
 messages in the old player. The updated player shows one error, restores the
 original draft, and stops waiting. All five billing hints refer to the current
-platform instead of directing every provider's users to LunaTalk. The player
+platform. The player
 build and all 1,836 trusted player tests pass. Tests use no production messages,
 credentials, account mutations or model calls.
 

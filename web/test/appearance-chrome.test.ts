@@ -1,6 +1,6 @@
 /**
  * 對話頁把系統狀態列（theme-color）塗成卡片頂欄色。
- * iOS Safari 對既有標籤改 content 不會重新染色，所以要換掉整個 <meta>（LunaTalk mobile 同一招）；
+ * iOS Safari 對既有標籤改 content 不會重新染色，所以要換掉整個 <meta>；
  * body 也塗成同色；站台跟著系統切深淺時不能把它蓋回紙色。
  */
 import { afterEach, beforeEach, expect, it, vi } from "vitest";

@@ -69,8 +69,8 @@ function apply(): void {
 
 /**
  * 換掉整個 <meta name="theme-color">，不改它的 content：iOS Safari 對既有標籤改屬性不保證重新染色，
- * 開頁之後就不再變（2026-09-26 owner iPhone 實測：改 content 無效）。LunaTalk mobile 的
- * utils/theme-color.js 用同一招（移除舊的、插入新的），動態換色在 iOS 上可行。
+ * 開頁之後就不再變（2026-09-26 owner iPhone 實測：改 content 無效）。
+ * 移除舊標籤、插入新標籤，動態換色在 iOS 上可行。
  */
 function replaceThemeColor(color: string): void {
   const old = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
