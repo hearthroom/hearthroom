@@ -1,4 +1,4 @@
-import { PROVIDERS, type ProviderId } from './provider';
+import { PROVIDERS, RETIRED_CREDENTIAL_SCOPE, type ProviderId } from './provider';
 import type { TokenPair } from './oauth';
 import { clearStageStorage } from './stage-storage';
 
@@ -49,7 +49,7 @@ export function clearLegacyCredentials(){
   try {
     for(const key of ['hearthroom.oauth.access','hearthroom.oauth.refresh','hearthroom.oauth.grant_client']){
       localStorage.removeItem(key);
-      for(const id of ['harbor','\x6c\x75\x6e\x61\x74\x61\x6c\x6b'])localStorage.removeItem(`${key}.${id}`);
+      for(const id of ['harbor',RETIRED_CREDENTIAL_SCOPE])localStorage.removeItem(`${key}.${id}`);
     }
   }catch{/* Storage may be disabled; managed credentials are never written here. */}
 }

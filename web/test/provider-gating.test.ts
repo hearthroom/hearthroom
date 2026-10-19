@@ -52,7 +52,7 @@ describe("路由擋下那一家沒有的頁", () => {
       expect(can(match.meta.feature as never)).toBe(true);
     });
 
-    it(`${path}：無效供應商選擇保留目前可用能力`, () => {
+    it(`${path}：傳入已停用的供應商後，圖庫能力仍可用`, () => {
       setProvider("lunatalk");
       expect(can(router.resolve(path).meta.feature as never)).toBe(true);
     });
