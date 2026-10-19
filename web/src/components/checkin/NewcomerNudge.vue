@@ -27,7 +27,8 @@ const { lp } = useLocalePath();
 // 首次導覽在走或還會出現時先等它（導覽優先）；不會出現的語言或裝置不等
 const view = computed(() => (session.me && store.panel && !tourState.step && !firstTourPending(String(locale.value), session.profile?.memberSince) ? newcomerView(store.panel) : null));
 const target = computed(() => store.panel?.newcomer?.today.target ?? 1);
-const due = computed(() => !!view.value && !view.value.todayDone && !view.value.finished && newcomerPrompt.loaded && !newcomerPrompt.shown && !newcomerPrompt.later && !newcomerPrompt.thisVisit);
+// 達標未領也不彈：首頁常駐卡已經有「領取」，只留一個入口
+const due = computed(() => !!view.value && !view.value.todayDone && !view.value.claimable && !view.value.finished && newcomerPrompt.loaded && !newcomerPrompt.shown && !newcomerPrompt.later && !newcomerPrompt.thisVisit);
 const pos = ref<{ right: number; bottom: number } | null>(null);
 let timer = 0;
 let follow = 0;
