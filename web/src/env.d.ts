@@ -18,6 +18,7 @@ declare module "moonstage/stage" {
       themeColor?(color: string | null): void;
       /** 對話頁第一次畫出內容：收掉蓋在上面的載入畫面（lib/stage-ready）。 */
       contentReady?(): void;
+      creditsActions?(shortfall: { needed: number; available: number } | null): { title?: string; body?: string; links: Array<{ id: string; label: string; href: string }> } | null;
     };
     storage: { get(key: string): string | null; set(key: string, value: string): void; remove(key: string): void };
     nav: { back(): void; toEntry(): void; toLogin(returnTo?: string): void; canBack?(): boolean };
