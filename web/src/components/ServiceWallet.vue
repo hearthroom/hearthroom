@@ -61,7 +61,13 @@ const SOURCE: Record<string, string> = { checkin: "checkin", task: "task", newco
 const sourceOf = (kind?: string) => (kind && SOURCE[kind] ? t(`wallet.reason.${SOURCE[kind]}`) : "");
 /** 月卡的列（PM 2026-10-19 R3＝A）：每日、首張加贈，與退款收回它們的列。不認得的種類照服務給的分類。 */
 const PLAN_ITEM: Record<string, [string, string]> = { daily: ["planDaily", "refundPlanDaily"], bonus: ["planBonus", "refundPlanBonus"] };
-const planItemOf = (r: ScoreRecord) => (r.planKind && PLAN_ITEM[r.planKind] ? t(`wallet.reason.${PLAN_ITEM[r.planKind]![r.record === "refund" ? 1 : 0]}`) : "");
+function planItemOf(r: ScoreRecord): string {
+  if (!r.planKind) return "";
+  const known = PLAN_ITEM[r.planKind];
+  if (known) return t(`wallet.reason.${known[r.record === "refund" ? 1 : 0]}`);
+  // 不認得的月卡種類：用通用的入帳或退款名稱，不露出原始代碼（ui.md §4.5）
+  return t(r.record === "refund" ? "wallet.reason.refund" : "wallet.reason.grant");
+}
 /** 流水的項目名：獎勵入帳用來源的名字（簽到寶箱、任務獎勵…），其餘照服務給的分類。 */
 const itemOf = (r: ScoreRecord) => planItemOf(r) || (r.recordType === "add" && r.rewardKind && SOURCE[r.rewardKind] ? sourceOf(r.rewardKind) : reason(r.record));
 /** 第二行：限時積分入帳寫到期時間（過了寫已到期）；到期那一筆寫是哪一種獎勵到期。 */

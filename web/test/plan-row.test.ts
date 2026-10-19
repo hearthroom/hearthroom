@@ -60,3 +60,14 @@ it("英文照單複數：剩 23 天與補簽卡張數", async () => {
   expect(root.textContent).not.toContain("|");
   i18n.global.locale.value = "zh-Hant";
 });
+
+it("自動補領還在路上：月卡列照樣在，右側不畫按鈕也不畫字（P4）", async () => {
+  const pinia = createPinia();
+  i18n.global.locale.value = "zh-Hant";
+  app = createApp(PlanRow, { checkedIn: true, makeupLeft: 3 }).use(pinia).use(i18n);
+  usePeriodPlans(pinia).$patch({ mine: plan() as never, loaded: true, retrying: true });
+  const root = document.createElement("div"); app.mount(root); await nextTick();
+  expect(root.querySelector(".plan-row")).not.toBeNull();
+  expect(root.querySelector("button")).toBeNull();
+  expect(root.querySelector(".plan-row__today")?.textContent?.trim()).toBe("");
+});

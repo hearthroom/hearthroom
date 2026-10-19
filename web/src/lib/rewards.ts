@@ -221,19 +221,27 @@ export interface MyPeriodPlan {
   today: { status: "claimable" | "claimed" | "revoked" | "none"; credits: number; bonusCredits: number };
   canPurchase: boolean;
   purchaseBlockedReason: "not_on_sale" | "plan_limit" | "checkout_in_progress" | null;
+  /** plan_limit 時最早可以再買的業務日 */
+  purchasableFrom?: string | null;
+  maxDays?: number;
   /** available：帳號還沒買過，下一張就是第一張；active：今天這張就是第一張；used；unavailable：版本沒有加倍 */
   firstBonus: { status: "available" | "active" | "used" | "unavailable"; dailyCredits?: number };
   firstBonusDailyCredits?: number;
+  /** 方案的張數，不是剩下的；剩幾張只看簽到面板的 makeup.left */
   makeupPerMonth: number;
   badge?: string;
 }
 
 export interface PeriodPlanClaim { day: string; credits: number; bonusCredits: number; status: "granted" | "revoked"; replayed: boolean }
 
+/** 契約說公開清單可以快取 5 分鐘：停售或購買網址改了，最晚 5 分鐘後畫面跟上 */
+const PERIOD_PLANS_TTL = 5 * 60_000;
 let periodPlans: Promise<{ list: PeriodPlan[] }> | null = null;
-/** 公開的方案清單：一次載入用到底，失敗了下一次再讀。 */
+let periodPlansAt = 0;
+/** 公開的方案清單（免登入）。失敗了下一次再讀。 */
 export function fetchPeriodPlans(): Promise<{ list: PeriodPlan[] }> {
-  if (!periodPlans) {
+  if (!periodPlans || Date.now() - periodPlansAt > PERIOD_PLANS_TTL) {
+    periodPlansAt = Date.now();
     periodPlans = call<{ list: PeriodPlan[] }>("/plans");
     periodPlans.catch(() => { periodPlans = null; });
   }
