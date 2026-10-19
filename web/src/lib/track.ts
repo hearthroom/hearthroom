@@ -59,6 +59,16 @@ export function track(event: string, data: Omit<Event, "event"> = {}): void {
 }
 
 /**
+ * 記一筆並立刻送出。只給接著就要離開頁面的地方用（例如記完就轉址）：
+ * 排隊等閒置才送的那一筆，頁面一走就可能送不出去，iOS 尤其。
+ */
+export function trackNow(event: string, data: Omit<Event, "event"> = {}): void {
+  if (optedOut) return;
+  queue.push({ event, ...data, from: surface, locale: document.documentElement.lang || "" });
+  flush();
+}
+
+/**
  * 页面要走了就把手上的送出去。
  * 用 visibilitychange 而不是 unload：切到背景、锁萤幕、关分页都会触发，而 unload 在 iOS 上经常不发。
  */
