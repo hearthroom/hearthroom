@@ -7,3 +7,26 @@ CREATE TABLE checkin_prompts (
   later_day TEXT,
   updated_at INTEGER NOT NULL
 );
+
+-- 上報給 Harbor 的獎勵事件：請求裡只寫一列，背景與排程整批送出（src/reward-events.ts）。
+-- body 是要送的整筆事件；送出後兩天清掉，送不出去的超過 47 小時丟掉（Harbor 不收 48 小時前的事件）。
+CREATE TABLE reward_event_outbox (
+  event_id   TEXT PRIMARY KEY,
+  type       TEXT NOT NULL,
+  body       TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  next_at    INTEGER NOT NULL,
+  attempts   INTEGER NOT NULL DEFAULT 0,
+  sent_at    INTEGER
+);
+CREATE INDEX idx_reward_event_outbox_due ON reward_event_outbox (next_at) WHERE sent_at IS NULL;
+
+-- 分享連結被打開：同一個訪客同一天只算一次。訪客只有匿名雜湊（IP 前綴＋UA、每週換鑰匙），不存 IP，7 天後清掉。
+CREATE TABLE share_opens (
+  ref_code     TEXT NOT NULL,
+  day          TEXT NOT NULL,
+  visitor_hash TEXT NOT NULL,
+  created_at   INTEGER NOT NULL,
+  PRIMARY KEY (ref_code, day, visitor_hash)
+);
+CREATE INDEX idx_share_opens_created ON share_opens (created_at);

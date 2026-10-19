@@ -3,6 +3,7 @@ import type { CommunitySettings } from "./community-settings";
 import { memberNsfw } from "./members";
 import { bumpOp } from "./ops-metrics";
 import { HttpError, pickLocale, type Localized } from "./types";
+import { reportCommentRemoved } from "./reward-events";
 
 /**
  * 留言審核（開業活動設計 §7）：大部分留言直接公開，命中風險規則的先攔下、只給本人看。
@@ -172,6 +173,8 @@ export async function decide(
   const results = await conflictOnDuplicate(() => db.batch(writes));
   if (!results[0].meta.changes) throw new HttpError(409, "moderation_conflict");
   await bumpOp(db, "comment_moderation", i.action, "success");
+  // 應用獎勵：被移除的卡片留言報給 Harbor（已發的獎勵不收回，只是之後不再算這則）
+  if (i.action === "remove" && !c.post_id) await reportCommentRemoved(db, { cardId: String(c.card_id), memberId: c.member_id, commentId: c.id, now: i.now });
   return { id: c.id, status: next };
 }
 
