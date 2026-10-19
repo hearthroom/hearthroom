@@ -273,3 +273,36 @@ export function watchCampaignShareBinding(): void {
     if (id && pendingCampaignShare()) void bindCampaignShare(() => session.accessToken());
   }, { immediate: true });
 }
+
+/**
+ * 應用獎勵：分享連結被打開（每日任務「有人打開你分享的連結」、每週「5 個人打開」、推廣分層）。
+ * 本站伺服器記匿名訪客、同一人同一天只算一次，再報給 Harbor（src/reward-events.ts）。
+ * 這個瀏覽器有登入就等身分載好、帶上 token：Harbor 才擋得掉「自己打開自己的連結」。
+ */
+export function noteShareOpen(code: string): void {
+  const send = (token: string | null) => fetch(`${COMMUNITY_API}/share/open`, {
+    method: "POST", keepalive: true,
+    headers: { "Content-Type": "application/json", "X-Provider": currentProvider(), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify({ ref: code }),
+  }).catch(() => undefined);
+  if (signedInHint() === null) { void send(null); return; }
+  void (async () => {
+    const session = useSession();
+    if (!session.ready) await session.restore().catch(() => undefined);
+    await send(session.me ? await session.accessToken().catch(() => null) : null);
+  })();
+}
+
+/** 應用獎勵：登入的人產生了一張卡的分享連結（新手七日第 6 天）。不是卡（文章、活動）就由伺服器略過。 */
+export async function noteShareLinkCreated(roleId: string | undefined): Promise<void> {
+  if (!roleId) return;
+  const session = useSession();
+  if (!session.me) return;
+  const token = await session.accessToken().catch(() => null);
+  if (!token) return;
+  await fetch(`${COMMUNITY_API}/me/share/created`, {
+    method: "POST", keepalive: true,
+    headers: { "Content-Type": "application/json", "X-Provider": currentProvider(), Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ roleId }),
+  }).catch(() => undefined);
+}
