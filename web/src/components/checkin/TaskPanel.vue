@@ -33,7 +33,7 @@ const copied = ref(false);
 const DEST: Record<string, string> = { chat: "/library", tryNew: "/", comment: "/library", rate: "/library", reply: "/mine" };
 const titleOf = (r: { task: RewardTask; view: TaskView }) => {
   if (r.view.chest && r.task.reward.chest) { const c = chestTitle(r.task.reward.chest, props.plan); return t(c.key, c.params ?? {}); }
-  return t(r.view.title, { n: r.task.target, min: r.task.target });
+  return t(r.view.title, { n: r.task.target, min: r.task.minTextUnits ?? r.task.target });
 };
 const rowTitle = (r: { task: RewardTask; view: TaskView }) => (r.view.chest ? t(r.view.title, { n: r.task.target }) : titleOf(r));
 const progressOf = (r: { task: RewardTask; view: TaskView }) => t(r.view.progress, { cur: whole(r.task.progress), max: whole(r.task.target) }, r.task.target);
