@@ -26,6 +26,7 @@
  * tier 強制下一次開箱的級數（1..6），方便拍各級；graze=near 再挑一個讓第 6 級緊鄰停點的 stripSeed（差一點中頭獎、蘇綺懊惱），
  * graze=none 挑一個完全不擦過的。滾輪用的是網站自己的編排（web/src/lib/reel/v1.ts），所以畫面一定對得上。
  */
+import { periodPlanForCheckin } from "./mock-plans.mjs";
 let reel = null;
 const reelReady = import("../web/src/lib/reel/v1.ts").then((m) => { reel = m; }).catch(() => { /* 舊版 Node 讀不了 .ts：graze 失效，其餘照常 */ });
 const TZ_OFFSET_H = 8;
@@ -233,17 +234,19 @@ export async function handleRewards({ m, path, url, body, json, res }) {
   if (m === "GET" && path === "/open/v1/me/rewards") { json(res, 200, panel(now)); return true; }
   if (m === "POST" && path === "/open/v1/me/rewards/checkin") {
     if (S.delay) await new Promise((r) => setTimeout(r, S.delay));
-    if (S.fail) { json(res, 503, { error: "service_unavailable" }); return true; }
+    // Harbor 先代領月卡再簽到，之後的每一種回應都帶 periodPlan（契約 checkInRewards；月卡情境見 mock-plans.mjs）
+    const periodPlan = periodPlanForCheckin(now);
+    if (S.fail) { json(res, 503, { error: "service_unavailable", periodPlan }); return true; }
     // 今天已經用別的 requestId 簽過（另一台裝置）：409 already_claimed 附原結果（契約）；同一個 requestId 重送才是 replayed
-    if (S.elsewhere) { S.elsewhere = false; const r = checkinNow(now); json(res, 409, { error: "already_claimed", claims: r.claims }); return true; }
+    if (S.elsewhere) { S.elsewhere = false; const r = checkinNow(now); json(res, 409, { error: "already_claimed", claims: r.claims, periodPlan }); return true; }
     if (S.lastDay === businessDay(now)) {
       const claims = S.todayClaims.map(({ at: _a, rewardKind: _k, ...c }) => c);
-      if (body.requestId && body.requestId === S.lastRequestId) json(res, 200, { claims, streak: S.streak, replayed: true });
-      else json(res, 409, { error: "already_claimed", claims });
+      if (body.requestId && body.requestId === S.lastRequestId) json(res, 200, { claims, streak: S.streak, replayed: true, periodPlan });
+      else json(res, 409, { error: "already_claimed", claims, periodPlan });
       return true;
     }
     S.lastRequestId = body.requestId;
-    json(res, 200, checkinNow(now)); return true;
+    json(res, 200, { ...checkinNow(now), periodPlan }); return true;
   }
   if (m === "POST" && path === "/open/v1/me/rewards/makeup") {
     if (S.makeupLeft < 1) { json(res, 422, { error: "not_eligible", reason: "no_makeup_left" }); return true; }

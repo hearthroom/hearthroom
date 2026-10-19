@@ -51,3 +51,19 @@ describe("積分不夠的計數", () => {
   });
 });
 
+// 月卡上線後第二條路換成月卡（任務 2026-10-19-month-card-surfaces ui.md §5.2）；買不了就退回儲值
+describe("第二條路：月卡", () => {
+  const offer = { onSale: true, purchaseUrl: "https://console.example/me/billing?plan=month" };
+  it("有在賣、這個帳號買得了：月卡，開到 Console 的月卡分段", () => {
+    const r = creditsRecovery(null, null, { ...opts, plan: { offer, canPurchase: true } });
+    expect(r.links).toEqual([{ id: "plan", label: "plan.canvas.action{}", href: "https://console.example/me/billing?plan=month" }]);
+  });
+  it("還不知道買不買得了（持卡狀態沒讀到）：照方案有沒有在賣", () => {
+    expect(creditsRecovery(null, null, { ...opts, plan: { offer, canPurchase: null } }).links.map((l) => l.id)).toEqual(["plan"]);
+  });
+  it("停售、疊到上限、沒有方案：退回儲值", () => {
+    expect(creditsRecovery(null, null, { ...opts, plan: { offer: { ...offer, onSale: false }, canPurchase: true } }).links.map((l) => l.id)).toEqual(["topup"]);
+    expect(creditsRecovery(null, null, { ...opts, plan: { offer, canPurchase: false } }).links.map((l) => l.id)).toEqual(["topup"]);
+    expect(creditsRecovery(null, null, { ...opts, plan: { offer: null, canPurchase: null } }).links.map((l) => l.id)).toEqual(["topup"]);
+  });
+});

@@ -1,0 +1,20 @@
+{
+  "draft": true,
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/wallet",
+  "title": {
+    "zh-Hant": "有月卡的人，簽到時會一起領今天的月卡積分，也看得到月卡還剩幾天。",
+    "zh-Hans": "有月卡的人，签到时会一起领今天的月卡积分，也能看到月卡还剩几天。",
+    "en": "With a 30-Day Pass, checking in also claims today's pass credits, and you can see how many days are left.",
+    "ja": "30日パスがあれば、チェックインで今日のパスのポイントも一緒に受け取れ、残り日数も確認できます。",
+    "ko": "30일 패스가 있으면 출석 체크 때 오늘 패스 포인트도 함께 받고, 남은 날도 볼 수 있어요."
+  },
+  "body": {
+    "zh-Hant": "每天的月卡積分會列在積分記錄裡；還沒有月卡的人，可以從「積分與會員」看月卡怎麼拿。",
+    "zh-Hans": "每天的月卡积分会列在积分记录里；还没有月卡的人，可以从「积分与会员」看月卡怎么拿。",
+    "en": "Each day's pass credits appear in your credit records, and without a pass the credits page shows what it gives.",
+    "ja": "毎日のパスのポイントはポイント履歴に表示され、まだパスがない場合は「ポイントと会員」で内容を確認できます。",
+    "ko": "매일 받는 패스 포인트는 포인트 기록에 표시되고, 아직 패스가 없다면 '포인트 및 멤버십'에서 혜택을 볼 수 있어요."
+  }
+}
