@@ -222,3 +222,9 @@ it("簽到頁的來源標記是 checkin", () => {
   expect(surfaceOf("/en/checkin/odds")).toBe("checkin");
 });
 
+
+// 月卡轉址頁（/go/plan）也有自己的來源標記，點擊事件不會被算成 404
+it("月卡轉址頁的來源標記是 plan", () => {
+  expect(surfaceOf("/go/plan")).toBe("plan");
+  expect(surfaceOf("/ja/go/plan")).toBe("plan");
+});
