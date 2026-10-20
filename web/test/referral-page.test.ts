@@ -126,6 +126,11 @@ it('shows each invite status and credited amount without exposing friend identit
   await mount();
   const rows = root.querySelectorAll('[data-testid="referral-invite"]');
   expect(rows).toHaveLength(3);
+  const boundAt = '2026-10-20T08:00:00Z';
+  const joined = new Intl.DateTimeFormat('en', {month:'numeric',day:'numeric'}).format(Date.parse(boundAt));
+  expect(rows[0]?.querySelector('time')?.textContent).toBe(String(i18n.global.t('referral.invites.joined', {date:joined})));
+  expect(rows[0]?.querySelector('time')?.getAttribute('datetime')).toBe(boundAt);
+  expect(rows[0]?.querySelector('[data-testid="invite-waiting"]')?.textContent).toContain(new Intl.DateTimeFormat('en', {dateStyle:'medium',timeStyle:'short'}).format(Date.parse('2026-10-27T08:00:00Z')));
   expect(rows[0]?.querySelector('[data-testid="invite-credited"]')?.textContent).toContain('3,000');
   expect(rows[0]?.querySelector('[data-testid="invite-waiting"]')).not.toBeNull();
   expect(rows[0]?.querySelector('[data-testid="invite-pending"]')).toBeNull();
