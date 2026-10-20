@@ -3076,7 +3076,7 @@
   "referral.invites.joined": "{date} 加入",
   "referral.invites.waiting": "还没开聊・{firstChatBy} 前",
   "referral.invites.done": "已开聊",
-  "referral.invites.expired": "已截止",
+  "referral.invites.expired": "期限内没有开聊",
   "referral.invites.credited": "+{credited} 积分",
   "referral.invites.none": "尚未到账",
   "referral.invites.pending": "待到账 {pending} 积分・预计 {pendingUntil}",

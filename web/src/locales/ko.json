@@ -3076,7 +3076,7 @@
   "referral.invites.joined": "{date} 가입",
   "referral.invites.waiting": "아직 대화 전・{firstChatBy}까지",
   "referral.invites.done": "대화 시작함",
-  "referral.invites.expired": "기한이 지났어요",
+  "referral.invites.expired": "기한 안에 대화하지 않았어요",
   "referral.invites.credited": "+{credited} 포인트",
   "referral.invites.none": "아직 지급 전",
   "referral.invites.pending": "지급 대기 {pending} 포인트・{pendingUntil} 예정",

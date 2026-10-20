@@ -3076,7 +3076,7 @@
   "referral.invites.joined": "Joined {date}",
   "referral.invites.waiting": "Hasn't chatted yet · by {firstChatBy}",
   "referral.invites.done": "Started chatting",
-  "referral.invites.expired": "Deadline passed",
+  "referral.invites.expired": "Didn't chat by the deadline",
   "referral.invites.credited": "+{credited} credits",
   "referral.invites.none": "Not credited yet",
   "referral.invites.pending": "{pending} credits pending · expected {pendingUntil}",
