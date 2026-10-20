@@ -1,0 +1,19 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/library",
+  "title": {
+    "zh-Hant": "模型更新：MiMo V2.6 上架，MiMo V2.5 下架",
+    "zh-Hans": "模型更新：MiMo V2.6 上线，MiMo V2.5 下线",
+    "en": "Model update: MiMo V2.6 is available and MiMo V2.5 is retired",
+    "ja": "モデル更新：MiMo V2.6 が登場、MiMo V2.5 は提供終了",
+    "ko": "모델 업데이트: MiMo V2.6 출시 및 MiMo V2.5 제공 종료"
+  },
+  "body": {
+    "zh-Hant": "MiMo V2.6 Pro、DeepSeek V4 Flash 0423、DeepSeek V4.1 Flash 1017 也已上架。",
+    "zh-Hans": "MiMo V2.6 Pro、DeepSeek V4 Flash 0423、DeepSeek V4.1 Flash 1017 也已上线。",
+    "en": "MiMo V2.6 Pro, DeepSeek V4 Flash 0423 and DeepSeek V4.1 Flash 1017 are also available.",
+    "ja": "MiMo V2.6 Pro、DeepSeek V4 Flash 0423、DeepSeek V4.1 Flash 1017 も選べるようになりました。",
+    "ko": "MiMo V2.6 Pro, DeepSeek V4 Flash 0423, DeepSeek V4.1 Flash 1017도 선택할 수 있습니다."
+  }
+}
