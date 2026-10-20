@@ -157,6 +157,18 @@ export function downloadMeta(lang:string,url:string):PageMeta {
   return {lang,...(DOWNLOAD_COPY[lang] ?? DOWNLOAD_COPY.en!),url,type:"website",image:siteOgImage("download", lang),imageSize:{width:1200,height:630}};
 }
 
+/** 寫卡指南介紹 AI 工具與網頁編輯器兩條創作路徑。 */
+const GUIDE_COPY: Record<string, { title: string; description: string }> = {
+  "zh-Hant": { title: "寫卡指南 · 綺夢社", description: "綺夢社的寫卡指南教你用 AI 工具或網頁編輯器，把角色與故事的想法寫成能對話、能試玩的角色卡。" },
+  "zh-Hans": { title: "写卡指南 · 绮梦社", description: "绮梦社的写卡指南带你用 AI 工具或网页编辑器，把角色和故事的想法做成可以聊天、试玩的角色卡。" },
+  en: { title: `Card authoring guide · ${SITE_NAME}`, description: `The ${SITE_NAME} card authoring guide helps you turn a character or story idea into a playable card with AI tools or the web editor.` },
+  ja: { title: `カード作成ガイド · ${SITE_NAME}`, description: `${SITE_NAME} のカード作成ガイドでは、AI ツールやウェブエディターで、キャラクターや物語のアイデアを会話して遊べるカードにする方法を紹介します。` },
+  ko: { title: `카드 작성 가이드 · ${SITE_NAME}`, description: `${SITE_NAME} 카드 작성 가이드는 AI 도구나 웹 편집기로 캐릭터와 이야기 아이디어를 직접 대화하며 즐길 수 있는 카드로 만드는 방법을 알려 줘요.` },
+};
+export function guideMeta(lang: string, url: string): PageMeta {
+  return { lang, ...(GUIDE_COPY[lang] ?? GUIDE_COPY.en!), url, type: "website", image: siteOgImage("default", lang), imageSize: { width: 1200, height: 630 } };
+}
+
 /** 更新頁的分享預覽：說明這一頁是什麼，不列內容（內容每天在變）。 */
 const UPDATES_COPY: Record<string, {title:string;description:string}> = {
   "zh-Hant": {title:"綺夢社更新紀錄",description:"綺夢社每次上線了什麼新功能、修好了哪些問題，都記在這裡，每一項都附上去哪裡試。"},
