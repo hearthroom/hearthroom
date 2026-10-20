@@ -71,7 +71,11 @@ describe("reward requests from the checkin store", () => {
 
   it.each(["getItem", "setItem"] as const)("still sends one stable token when storage %s throws", async (method) => {
     localStorage.clear();
-    vi.spyOn(localStorage, method).mockImplementation(() => { throw new Error("storage unavailable"); });
+    const storage = localStorage;
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => { if (method === "getItem") throw new Error("storage unavailable"); return storage.getItem(key); },
+      setItem: (key: string, value: string) => { if (method === "setItem") throw new Error("storage unavailable"); storage.setItem(key, value); },
+    });
     const api = await import("../src/lib/rewards");
     await api.fetchPanel("access");
     await api.checkin("access", "request");
