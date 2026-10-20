@@ -1,0 +1,13 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/library",
+  "draft": true,
+  "title": {
+    "zh-Hant": "流式輸出可以在回覆偏好中關閉，整段生成完才顯示。",
+    "zh-Hans": "流式输出可以在回复偏好中关闭，整段生成完才显示。",
+    "en": "Streaming can be turned off in reply preferences to show each reply once it is complete.",
+    "ja": "返信設定でストリーミング出力をオフにすると、返信は完成後にまとめて表示されます。",
+    "ko": "답장 설정에서 스트리밍 출력을 끄면 완성된 답장이 한 번에 표시됩니다."
+  }
+}
