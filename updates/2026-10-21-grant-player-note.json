@@ -1,6 +1,6 @@
 {
   "tier": "feature",
-  "draft": true,
+  "draft": false,
   "try": "/wallet",
   "title": {
     "zh-Hant": "積分記錄會顯示平台贈送的原因。",
