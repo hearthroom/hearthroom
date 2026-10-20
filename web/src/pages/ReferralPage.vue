@@ -16,7 +16,7 @@ import { beginLogin } from "@/lib/oauth";
 import { currentProvider } from "@/lib/provider";
 import { useSession } from "@/lib/session";
 import { pageTitle } from "@/lib/i18n";
-import { dateOnly, dateTime, whole } from "@/lib/format";
+import { dateOnly, dateTime, monthDayOf, whole } from "@/lib/format";
 import { withShareRef } from "@/lib/share-ref";
 import { useLocalePath } from "@/lib/use-locale";
 
@@ -146,7 +146,7 @@ onMounted(() => {
           <p v-if="(data.invitesTotal ?? 0) > data.invites.length" class="subtle" data-testid="invites-total">{{ $t("referral.invites.total", { total: whole(data.invitesTotal ?? 0), shown: whole(data.invites.length) }) }}</p>
           <ul v-if="data.invites.length" class="referral__invites">
             <li v-for="(invite, index) in data.invites" :key="index" class="referral__invite" data-testid="referral-invite">
-              <time :datetime="invite.boundAt">{{ $t("referral.invites.joined", { date: dateTime(invite.boundAt) }) }}</time>
+              <time :datetime="invite.boundAt">{{ $t("referral.invites.joined", { date: monthDayOf(invite.boundAt) }) }}</time>
               <span :data-testid="`invite-${invite.firstChat}`">{{ $t(`referral.invites.${invite.firstChat}`, { firstChatBy: dateTime(invite.firstChatBy) }) }}</span>
               <div class="referral__invite-amounts">
                 <strong class="num" data-testid="invite-credited">{{ $t(invite.credited > 0 ? "referral.invites.credited" : "referral.invites.none", { credited: whole(invite.credited) }) }}</strong>
@@ -204,6 +204,10 @@ onMounted(() => {
 <style scoped>
 .referral { max-width: 1080px; display: grid; gap: var(--s-5); align-content: start; }
 h1 { font-size: 1.5rem; margin: 0; }
+.referral:lang(ko) { word-break: keep-all; }
+@supports (word-break: auto-phrase) {
+  .referral:lang(ja) { word-break: auto-phrase; }
+}
 .referral__lead { margin: var(--s-2) 0 0; color: var(--text-2); }
 .referral__card { padding: var(--s-5); display: grid; gap: var(--s-3); align-content: start; min-width: 0; }
 .referral__card h2 { margin: 0; font-size: 16px; font-weight: 650; }
