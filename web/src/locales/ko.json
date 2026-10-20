@@ -1320,7 +1320,7 @@
   "workspace.unknown": "상태 확인 불가",
   "workspace.updatePending": "새 버전을 검토 중이며, 게시된 버전은 계속 플레이할 수 있어요.",
   "workspace.updateRejected": "새 버전이 반려되었으며, 게시된 버전은 계속 플레이할 수 있어요.",
-  "workspace.draftChanged": "수정했지만 아직 제출하지 않았습니다. 플레이어에게는 게시된 버전이 보입니다.",
+  "workspace.draftChanged": "제출하지 않은 수정 있음 · 공개 버전은 그대로",
   "workspace.uploadMedia": "검토를 요청하기 전에 표지와 배경을 다시 업로드해 주세요.",
   "workspace.alreadyPending": "이미 검토를 기다리는 카드예요.",
   "workspace.submitUnavailable": "검토를 요청하지 못했어요. 잠시 후 다시 시도해 주세요.",

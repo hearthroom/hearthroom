@@ -1320,7 +1320,7 @@
   "workspace.unknown": "状态待确认",
   "workspace.updatePending": "新版正在审核，已发布版本仍可游玩。",
   "workspace.updateRejected": "新版未通过审核，已发布版本仍可游玩。",
-  "workspace.draftChanged": "改过还没提交审核，玩家看到的仍是已发布那一版。",
+  "workspace.draftChanged": "有未送审的修改・线上为已发布版本",
   "workspace.uploadMedia": "请先重新上传卡片的封面与背景，再提交审核。",
   "workspace.alreadyPending": "这张卡片已在等待审核。",
   "workspace.submitUnavailable": "这次未能提交审核，请稍后再试。",
