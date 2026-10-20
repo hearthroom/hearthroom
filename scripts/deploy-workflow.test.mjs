@@ -40,3 +40,15 @@ test('guide HTML reaches the Worker before the static SPA shell in every locale'
     }
   }
 });
+
+test('all site page entrypoints reach the Worker for the initial localized manifest', () => {
+  const config = readFileSync(new URL('../wrangler.toml', import.meta.url), 'utf8');
+  const routes = /run_worker_first\s*=\s*\[([\s\S]*?)\]/.exec(config)?.[1] ?? '';
+  const patterns = [...routes.matchAll(/"([^"]+)"/g)].map(match => match[1]);
+  const router = readFileSync(new URL('../web/src/router.ts', import.meta.url), 'utf8');
+  const pages = router.slice(router.indexOf('const pages:'), router.indexOf('const playAppPages'));
+  const paths = new Set(['/', ...[...pages.matchAll(/^  \{ path: "([a-z][^"]*)"/gm)].map(match => `/${match[1].replace(/:[^/]+/g, "example")}`)]);
+  for (const path of paths) {
+    assert.ok(patterns.some(pattern => pattern.endsWith('*') ? path.startsWith(pattern.slice(0, -1)) : path === pattern), `${path} bypasses manifest localization`);
+  }
+});
