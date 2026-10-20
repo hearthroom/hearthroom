@@ -3076,7 +3076,7 @@
   "referral.invites.joined": "{date} に参加",
   "referral.invites.waiting": "まだチャット前・{firstChatBy} まで",
   "referral.invites.done": "チャット開始済み",
-  "referral.invites.expired": "期限切れ",
+  "referral.invites.expired": "期限内にチャットしませんでした",
   "referral.invites.credited": "+{credited} ポイント",
   "referral.invites.none": "まだ付与されていません",
   "referral.invites.pending": "付与待ち {pending} ポイント・{pendingUntil} 予定",
