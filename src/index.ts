@@ -94,6 +94,7 @@ import { evaluateRating, questionnaireFor, RATINGS, RatingAnswersError, type Rat
 import { topFandoms } from "./cards";
 import { wikidata } from "./wikidata";
 import { withD1Session } from "./d1-session";
+import { renderSiteManifest } from "./site-manifest";
 
 const app = new Hono<{ Bindings: Env; Variables: { ev: Pending } }>();
 
@@ -157,6 +158,25 @@ app.use("*", async (c, next) => {
   url.host = target;
   url.port = "";
   return c.redirect(url.toString(), 301);
+});
+
+// Every site HTML path, including fallbacks and error shells, gets its installation
+// identity in the initial response. Card-app and sandbox identities stay separate.
+app.use("*", async (c, next) => {
+  await next();
+  const url = new URL(c.req.url);
+  const siteHost = siteRootOf(url.hostname) || url.hostname === "localhost" || url.hostname === "127.0.0.1";
+  if (c.req.method !== "GET" || !siteHost || isPlayHost(url.host)
+    || SITE_API_PATH.test(url.pathname) || SITE_STATIC_PATH.test(url.pathname)
+    || !c.res.headers.get("Content-Type")?.toLowerCase().includes("text/html")) return;
+  const response = renderSiteManifest(c.res, url.pathname, c.req.header("Accept-Language") ?? "");
+  c.res = response;
+  // Hono merges the old response headers when assigning c.res. Apply the
+  // transformed body's validators and language variation after that merge.
+  c.header("ETag", undefined);
+  c.header("Last-Modified", undefined);
+  const vary = response.headers.get("Vary");
+  if (vary) c.header("Vary", vary);
 });
 
 app.route("/", moderationRoutes);
