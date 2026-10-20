@@ -12,7 +12,10 @@ import { i18n } from "../src/lib/i18n";
 import { useSession } from "../src/lib/session";
 
 const {recordConversation,clearLibraryCache} = vi.hoisted(() => ({recordConversation:vi.fn(async () => {}),clearLibraryCache:vi.fn()}));
-vi.mock('../src/lib/library', () => ({recordConversation,clearLibraryCache}));
+vi.mock('../src/lib/library', () => ({
+  recordConversation, clearLibraryCache,
+  libraryRequest: vi.fn(async () => ({ cardNumber: 100009, provider: 'harbor', roleId: 'role-9' })),
+}));
 vi.mock('../src/lib/play-authorization',()=>({ensurePlayAuthorization:async()=>true}));
 const installMoonStage = vi.fn(async () => {});
 const mergeStageMessages = vi.fn();
@@ -149,4 +152,23 @@ describe("/play/:roleId", () => {
     expect(installMoonStage.mock.calls.length).toBe(installs);
     expect(root.querySelector<HTMLElement>(".stage-stub")?.dataset.role).toBe("role-2");
   });
+  it.each(['?provider=harbor', '?resume=local-resume&provider=harbor'])(
+    'keeps the current player mounted when an overlay pop revisits the same route: %s',
+    async (query) => {
+      await mount(`/play/100009${query}`);
+      const player = root.querySelector('.stage-stub');
+      expect(player).not.toBeNull();
+      // A same-document overlay traversal gives Vue Router a new route object,
+      // with the same card and query values. The player's local state must survive.
+      await router.replace({
+        path: router.currentRoute.value.path,
+        query: { ...router.currentRoute.value.query },
+        force: true,
+      });
+      await flush();
+      expect(root.querySelector('.stage-stub')).toBe(player);
+    },
+  );
+
+
 });
