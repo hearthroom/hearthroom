@@ -3097,5 +3097,7 @@
   "campaign.field.posterHint": "この言語のポスターがないときは、上のバナーを使います。",
   "campaign.field.posterAlt": "画像の説明（スクリーンリーダー用）",
   "campaign.field.posterAltHint": "画像内の文字をすべて一文で書いてください。",
-  "campaign.field.removePoster": "文字入りポスターを削除"
+  "campaign.field.removePoster": "文字入りポスターを削除",
+  "referral.leadFriendOnly": "友だちを招待しよう。リンクから登録した友だちに {friend} ポイントが届き、友だちがチャージするとあなたにも一部が入ります。",
+  "referral.rule.bindFriendOnly": "友だちがリンクから登録、またはコードを入力すると、友だちに {credits} ポイント（無期限）"
 }

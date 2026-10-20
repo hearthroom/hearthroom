@@ -3097,5 +3097,7 @@
   "campaign.field.posterHint": "If this language has no text poster, the banner above is used.",
   "campaign.field.posterAlt": "Image description (for screen readers)",
   "campaign.field.posterAltHint": "Write everything shown in the image as one sentence.",
-  "campaign.field.removePoster": "Remove text poster"
+  "campaign.field.removePoster": "Remove text poster",
+  "referral.leadFriendOnly": "Invite a friend to play: they get {friend} credits when they sign up with your link, and you earn a share when they top up.",
+  "referral.rule.bindFriendOnly": "When a friend signs up with your link or enters your code, they get {credits} credits that never expire"
 }

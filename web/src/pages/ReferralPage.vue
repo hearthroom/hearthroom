@@ -30,6 +30,7 @@ const externalId = computed(() => session.profile?.identities.find((i) => i.prov
 
 const data = ref<ReferralSummary | null>(null);
 const inviterBonus = computed(() => !!data.value?.enabled && (data.value?.terms.inviterCredits ?? 0) > 0 && Date.parse(data.value?.terms.inviterEndAt ?? "") > Date.now());
+const friendOnly = computed(() => !!data.value?.enabled && data.value.terms.inviterCredits === 0 && data.value.terms.firstChatCredits === 0 && data.value.terms.welcomeCredits > 0);
 const promotionEnd = computed(() => data.value?.terms.inviterEndAt ? new Intl.DateTimeFormat(locale.value, { timeZone: "Asia/Taipei", dateStyle: "medium", timeStyle: "short" }).format(Date.parse(data.value.terms.inviterEndAt) - 1) : "");
 const loadError = ref("");
 const needsConsent = ref(false);
@@ -104,6 +105,7 @@ onMounted(() => {
     <header>
       <h1 class="display">{{ $t("referral.title") }}</h1>
       <p v-if="inviterBonus && data?.terms.firstChatCredits !== undefined" class="referral__lead">{{ $t(data?.terms.inviterCredits === data?.terms.welcomeCredits ? "referral.lead" : "referral.leadSplit", { inviter: whole(data?.terms.inviterCredits ?? 0), friend: whole(data?.terms.welcomeCredits ?? 0), bind: whole(data?.terms.inviterCredits ?? 0), first: whole(data?.terms.firstChatCredits ?? 0) }) }}</p>
+      <p v-else-if="friendOnly" class="referral__lead">{{ $t("referral.leadFriendOnly", { friend: whole(data!.terms.welcomeCredits) }) }}</p>
     </header>
 
     <section v-if="needsConsent" class="panel referral__card">
@@ -167,6 +169,7 @@ onMounted(() => {
               <li>{{ $t("referral.rule.permanent") }}</li>
               <li>{{ $t("referral.rule.period", { end: promotionEnd }) }}</li>
             </template>
+            <li v-else-if="friendOnly">{{ $t(data.terms.welcomeDays === 0 ? "referral.rule.bindFriendOnly" : "referral.rule.welcome", { credits: whole(data.terms.welcomeCredits), days: data.terms.welcomeDays }) }}</li>
             <li v-else-if="inviterBonus" data-testid="inviter-bonus">{{ $t("referral.rule.inviter", { credits: whole(data.terms.inviterCredits ?? 0), end: dateTime(data.terms.inviterEndAt!) }) }}</li>
             <li v-if="data.terms.welcomeCredits > 0 && data.terms.firstChatCredits === undefined">{{ $t(data.terms.welcomeDays === 0 ? "referral.rule.welcomePermanent" : "referral.rule.welcome", { credits: whole(data.terms.welcomeCredits), days: data.terms.welcomeDays }) }}</li>
             <li>{{ $t("referral.rule.first", { percent: data.terms.firstPercent, cap: whole(data.terms.firstCap) }) }}</li>
