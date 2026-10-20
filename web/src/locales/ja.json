@@ -1320,7 +1320,7 @@
   "workspace.unknown": "状態を確認できません",
   "workspace.updatePending": "更新版は審査中です。公開済みの版は引き続き遊べます。",
   "workspace.updateRejected": "更新版は承認されませんでした。公開済みの版は引き続き遊べます。",
-  "workspace.draftChanged": "変更がまだ未申請です。プレイヤーには公開中の版が表示されます。",
+  "workspace.draftChanged": "未申請の変更あり・公開中は前回の版",
   "workspace.uploadMedia": "審査に提出する前に、カバーと背景をアップロードし直してください。",
   "workspace.alreadyPending": "このカードはすでに審査待ちです。",
   "workspace.submitUnavailable": "審査に提出できませんでした。しばらくしてから再試行してください。",
