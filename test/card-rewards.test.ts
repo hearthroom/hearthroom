@@ -273,6 +273,31 @@ describe("上線前已過審的卡補發", () => {
 });
 
 describe("活動資料與作者進度", () => {
+  it("作者已收金額加上獨立補額的 paid，pending 不計入，原獎勵不變", async () => {
+    await submit("r1");
+    await approve("r1", "admin-token");
+    const original = (await env.DB.prepare("SELECT * FROM card_rewards").first<any>())!;
+    await env.DB.prepare(`INSERT INTO card_reward_topups
+      (id, reward_id, target_amount, amount, status, requested_by, created_at)
+      VALUES ('topup-fixture', ?, 20000, 10000, 'pending', ?, ?)`)
+      .bind(original.id, original.requested_by, Date.now()).run();
+    const progress = async () => (await (await get("/v1/card-rewards/creator-season/me", "author-token")).json()) as any;
+    expect((await progress()).creditsPaid).toBe(10000);
+    await expect(env.DB.prepare("UPDATE card_reward_topups SET amount=9000 WHERE id='topup-fixture'").run()).rejects.toThrow('card_reward_topup_immutable');
+    await expect(env.DB.prepare(`INSERT INTO card_reward_topups (id,reward_id,target_amount,amount,status,requested_by,created_at)
+      SELECT 'duplicate-fixture',reward_id,target_amount,amount,status,requested_by,created_at FROM card_reward_topups WHERE id='topup-fixture'`).run()).rejects.toThrow();
+    await env.DB.prepare("UPDATE card_reward_topups SET status='paid', provider_entry_id='provider-topup-fixture', settled_at=? WHERE id='topup-fixture'").bind(Date.now()).run();
+    const paid = await progress();
+    expect(paid.creditsPaid).toBe(20000);
+    expect(paid.items.find((i: any) => i.cardId === original.card_id).reward).toEqual({ status: "paid", amount: 20000 });
+    expect(await env.DB.prepare("SELECT * FROM card_rewards WHERE id=?").bind(original.id).first()).toEqual(original);
+    expect((await rewards())[0].amount).toBe(10000);
+    await expect(env.DB.prepare("UPDATE card_reward_topups SET status='pending' WHERE id='topup-fixture'").run()).rejects.toThrow('card_reward_topup_immutable');
+    const metrics = await (await get('/metrics')).text();
+    expect(metrics).toContain('hearthroom_card_reward_operations_total{operation="topup_request",outcome="success"} 1');
+    expect(metrics).toContain('hearthroom_card_reward_operations_total{operation="topup",outcome="success"} 1');
+  });
+
   it("公開活動設定：每張金額、活動每週額度、平常額度、期間", async () => {
     const res = await get("/v1/card-rewards/creator-season");
     expect(res.status).toBe(200);

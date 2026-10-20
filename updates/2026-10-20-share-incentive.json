@@ -1,0 +1,20 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/me/referral",
+  "draft": true,
+  "title": {
+    "zh-Hant": "邀朋友註冊與開聊都有積分，分享和寫卡的獎勵也加碼了。",
+    "zh-Hans": "邀好友注册和开聊都有积分，分享和写卡的奖励也加码了。",
+    "en": "Inviting a friend now earns credits twice, at sign-up and at their first chat, and sharing and card writing pay more.",
+    "ja": "友だちの登録とチャット開始でポイントがもらえ、シェアとカード作成の特典も増えました。",
+    "ko": "친구가 가입하고 대화를 시작하면 포인트를 받고, 공유와 카드 작성 보상도 늘었어요."
+  },
+  "body": {
+    "zh-Hant": "邀請頁會一位一位顯示朋友的進度，和你已經收到的積分。",
+    "zh-Hans": "邀请页会一位一位显示好友的进度，和你已经收到的积分。",
+    "en": "The invite page shows each friend's progress and the credits you have received.",
+    "ja": "招待ページで、友だちごとの状況と受け取ったポイントを確認できます。",
+    "ko": "초대 페이지에서 친구별 진행 상황과 받은 포인트를 볼 수 있어요."
+  }
+}

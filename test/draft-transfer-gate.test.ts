@@ -18,6 +18,23 @@ it('durably fences target identity and writers while preserving unrelated cards 
 import { controlTransferGate, transferGateRoutes } from '../src/draft-transfer-gate';
 import { opsMetrics } from '../src/ops-metrics';
 
+it('includes a pending reward correction in the held work inventory and fences its writes', async () => {
+ const db=env.DB;
+ await db.prepare("INSERT INTO members(id,handle,created_at) VALUES('gate-topup-author','gatetopupauthor',0),('gate-topup-admin','gatetopupadmin',0)").run();
+ await db.prepare("INSERT INTO card_numbers(num,provider,source_role_id) VALUES(9000081,'harbor','gate-topup-role')").run();
+ await db.prepare("INSERT INTO card_reward_campaigns(id,slug,starts_at,ends_at,weekly_limit,reward,created_at,updated_at) VALUES('gate-topup-campaign','gate-topup-campaign',0,1,6,20000,0,0)").run();
+ await db.prepare(`INSERT INTO card_rewards(id,campaign_id,work_key,card_id,member_id,recipient_account_no,amount,status,requested_by,created_at,updated_at)
+ VALUES('gate-original','gate-topup-campaign','harbor:gate-topup-role',9000081,'gate-topup-author',1,10000,'paid','gate-topup-admin',0,0)`).run();
+ await db.prepare(`INSERT INTO card_reward_topups(id,reward_id,target_amount,amount,requested_by,created_at)
+ VALUES('gate-topup','gate-original',20000,10000,'gate-topup-admin',0)`).run();
+ const b={scope:'test-db',provider:'harbor',sourceRoleId:'gate-topup-role',cardNum:9000081,operation:'gate-topup-operation',generation:1};
+ const state=await controlTransferGate(db,'test-db',{...b,action:'held',requestId:'gate-topup-hold'});
+ expect(state).toMatchObject({counts:{card_reward_topups:1},blockers:expect.arrayContaining(['card_reward_topups'])});
+ await expect(db.prepare("UPDATE card_reward_topups SET error='changed' WHERE id='gate-topup'").run()).rejects.toThrow('draft_transfer_held');
+ await expect(db.prepare("DELETE FROM card_reward_topups WHERE id='gate-topup'").run()).rejects.toThrow('draft_transfer_held');
+ await expect(db.prepare("INSERT INTO card_reward_topups SELECT 'gate-topup-other',reward_id,target_amount,amount,status,provider_entry_id,error,requested_by,created_at,settled_at FROM card_reward_topups WHERE id='gate-topup'").run()).rejects.toThrow('draft_transfer_held');
+});
+
 it('binds durable transitions to exact operation, generation and primary closure, replays without unlocking',async()=>{
  const db=env.DB;
  await db.prepare("INSERT INTO card_numbers(num,provider,source_role_id) VALUES(9000011,'harbor','control-target')").run();
@@ -138,7 +155,8 @@ it('rejects direct reward, moderation and replacement writes before any durable 
  ])await expect(db.prepare(sql).run()).rejects.toThrow('draft_transfer_held');
  await expect(db.prepare("INSERT OR REPLACE INTO draft_transfer_gate_events SELECT * FROM draft_transfer_gate_events WHERE request_id='request-direct'").run()).rejects.toThrow('draft_transfer_gate_conflict');
  const triggers=await db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'draft_transfer_hold_%'").all<{name:string}>();
- expect(triggers.results.length).toBe(63);
+ // 22 guarded tables, including the independent reward correction ledger.
+ expect(triggers.results.length).toBe(66);
 });
 
 import worker from '../src/index';

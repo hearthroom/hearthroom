@@ -1,3 +1,4 @@
+import { deviceToken } from "./reward-device";
 import type { Rating, RatingAnswers, Topic } from "../../../shared/content-rating";
 import { COMMUNITY_API, UPSTREAM_API } from "./config";
 import { apiBaseOf, currentProvider, type ProviderId } from "./provider";
@@ -968,10 +969,15 @@ export async function fetchWallet(token: string, provider: ProviderId = currentP
 }
 
 /** 推薦：自己的推薦碼、規則（數字由服務決定，畫面不寫死）、邀請成果；不含任何被邀請人的身分。 */
-export interface ReferralTerms { inviterCredits?: number; inviterDays?: number; inviterStartAt?: string; inviterEndAt?: string; welcomeCredits: number; welcomeDays: number; firstPercent: number; firstCap: number; inviteePercent: number; rebatePercent: number; rebateDays: number; bindDays: number }
+export interface ReferralTerms { firstChatCredits?: number; firstChatDays?: number; inviterCredits?: number; inviterDays?: number; inviterStartAt?: string; inviterEndAt?: string; welcomeCredits: number; welcomeDays: number; firstPercent: number; firstCap: number; inviteePercent: number; rebatePercent: number; rebateDays: number; bindDays: number }
+export interface ReferralInvite {
+  boundAt: string; firstChat: "waiting" | "done" | "expired"; firstChatBy: string;
+  credited: number; pending: number; pendingUntil: string | null;
+}
 export interface ReferralSummary {
   enabled: boolean; code: string; terms: ReferralTerms; referred: boolean; welcomeCredits: number;
   canRedeem: boolean; redeemUntil?: string; registeredAt: string; invited: number; purchased: number; earned: number;
+  invites?: ReferralInvite[]; invitesTotal?: number;
 }
 export async function fetchReferral(token: string, provider: ProviderId = currentProvider()): Promise<ReferralSummary> {
   return json<ReferralSummary>(await fetch(`${apiBaseOf(provider)}/open/v1/me/referral`, { headers: authHeaders(token) }));
@@ -982,7 +988,7 @@ export async function fetchReferral(token: string, provider: ProviderId = curren
  */
 export async function redeemReferral(token: string, code: string, provider: ProviderId = currentProvider(), via: "manual" | "link" = "manual"): Promise<ReferralSummary> {
   return json<ReferralSummary>(await fetch(`${apiBaseOf(provider)}/open/v1/me/referral/redeem`, {
-    method: "POST", headers: { ...authHeaders(token), "Content-Type": "application/json" }, body: JSON.stringify(via === "link" ? { code, via } : { code }),
+    method: "POST", headers: { ...authHeaders(token), "Content-Type": "application/json" }, body: JSON.stringify({ code, ...(via === "link" ? { via } : {}), deviceToken: deviceToken() }),
   }));
 }
 

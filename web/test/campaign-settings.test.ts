@@ -181,6 +181,20 @@ it('the recommend-on-home toggle marks the form dirty and goes out with the save
   expect(field('featured').checked).toBe(true);
 });
 
+it('editing one language poster preserves the others and saves accessible copy', async () => {
+  const posters = { 'zh-Hant': { key: 'blog/traditional.webp', alt: '原本的說明' }, en: { key: 'blog/english.webp', alt: 'English poster' } };
+  handle = c => c.method === 'GET' && c.path === '/v1/moderation/campaigns' ? ok({ items: [campaign({ posters })], canEdit: true })
+    : c.method === 'PUT' ? ok(campaign({ posters: c.body.posters, version: 3 })) : undefined;
+  await mount();
+  $('[data-campaign="c1"] [data-action="edit"]').click();
+  await vi.waitFor(() => expect(host.querySelector('[data-poster-alt]')).not.toBeNull());
+  fill($<HTMLInputElement>('[data-poster-alt]'), '圖上的全部獎勵說明');
+  await nextTick();
+  $('[data-action="save-campaign"]').click();
+  await vi.waitFor(() => expect(calls.some(c => c.method === 'PUT')).toBe(true));
+  expect(calls.find(c => c.method === 'PUT')!.body.posters).toEqual({ ...posters, 'zh-Hant': { key: 'blog/traditional.webp', alt: '圖上的全部獎勵說明' } });
+});
+
 it('a save that hits a version conflict keeps my edits and offers load-latest', async () => {
   await mount();
   $('[data-campaign="c1"] [data-action="edit"]').click();
