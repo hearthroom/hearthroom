@@ -52,7 +52,7 @@ function more() { page.value += 1; load(); }
 /** 收入／支出的篩選在手上這批裡做：流水是自己的，量不大，不值得為它多一條 API。 */
 const shown = computed(() => records.value.filter((r) => (kind.value === "all" ? true : r.recordType === kind.value)));
 /** 流水的項目：服務給的是分類代碼（chat、purchase…），換成使用者看得懂的名字；沒見過的代碼照原樣顯示。 */
-const reason = (code: string) => (te(`wallet.reason.${code}`) ? t(`wallet.reason.${code}`) : code);
+const reason = (code: string) => (te(`wallet.reason.${code}`) ? t(`wallet.reason.${code}`) : t("wallet.reason.other"));
 /**
  * 限時積分的來源（Harper 的 kind／rewardKind）對到錢包已有的名字；同一種獎勵在錢包裡只有一個名字。
  * 不認得的值不顯示原始代碼（copy.md §8.4 來源表）。
@@ -72,6 +72,7 @@ function planItemOf(r: ScoreRecord): string {
 const itemOf = (r: ScoreRecord) => planItemOf(r) || (r.recordType === "add" && r.rewardKind && SOURCE[r.rewardKind] ? sourceOf(r.rewardKind) : reason(r.record));
 /** 第二行：限時積分入帳寫到期時間（過了寫已到期）；到期那一筆寫是哪一種獎勵到期。 */
 function subOf(r: ScoreRecord): { text: string; off: boolean } | null {
+  if (r.record === "grant" && r.playerNote) return { text: r.playerNote, off: false };
   // 月卡的積分不會到期：入帳列沒有第二行，和限時的寶箱一眼分得開；退回列寫是退款
   if (planItemOf(r)) return r.record === "refund" ? { text: t("wallet.record.planRefund"), off: false } : null;
   if (r.recordType === "add" && r.expiresAt) {
@@ -326,7 +327,7 @@ watch(() => [props.provider, props.externalId], () => load(true), { immediate: t
 .row__dot--sub { background: var(--surface-2); color: var(--text-3); }
 .row__item { display: grid; min-width: 0; }
 .row__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.row__sub { font-size: 12px; color: var(--text-2); }
+.row__sub { font-size: 12px; color: var(--text-2); white-space: pre-wrap; overflow-wrap: anywhere; }
 .row__item--off .row__name, .row__item--off .row__sub { color: var(--text-3); }
 .plan { display: grid; gap: 4px; padding-top: var(--s-2); border-top: 1px solid var(--line); }
 .plan__head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px var(--s-2); }

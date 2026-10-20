@@ -18464,6 +18464,11 @@
               "bonus"
             ],
             "description": "Only on plan rows: `daily` — a day's credits; `bonus` — that day's first-purchase bonus. Refunds that take them back carry the same value."
+          },
+          "playerNote": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Optional original-language explanation for a platform grant. Historical grants may omit it. Internal operator notes are never returned."
           }
         }
       },
@@ -23987,6 +23992,11 @@
             "type": "string",
             "format": "date-time",
             "description": "When these reward credits expire. Absent on `expire` entries."
+          },
+          "playerNote": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Optional original-language explanation for a platform grant. Historical grants may omit it. Internal operator notes are never returned."
           }
         }
       },

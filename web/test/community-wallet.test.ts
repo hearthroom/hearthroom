@@ -24,7 +24,7 @@ it('shows both balances and histories without a global provider switch',async()=
   root=document.createElement('div');document.body.append(root);app=createApp(WalletPage).use(pinia).use(router).use(i18n);app.mount(root);
   for(let i=0;i<40;i++)await Promise.resolve();await nextTick();
   expect(root.textContent).not.toContain('111');expect(root.textContent).toContain('222');
-  expect(root.textContent).not.toContain('lunatalk entry');expect(root.textContent).toContain('harbor entry');
+  expect(root.textContent).not.toContain('lunatalk entry');expect(root.textContent).toContain(i18n.global.t('wallet.reason.other'));
   expect(root.querySelector('a[href*="provider="]')).toBeNull();
   for(const button of root.querySelectorAll('.seg button'))button.dispatchEvent(new MouseEvent('click',{bubbles:true}));
   expect(currentProvider()).toBe('harbor');
@@ -41,12 +41,12 @@ const summary = Array.from({ length: 84 }, (_, i) => ({ date: iso(83 - i), spent
 const referral = (over: Record<string, unknown> = {}) => ({ enabled: true, code: 'HH7Q2K', referred: false, welcomeCredits: 0, canRedeem: false, invited: 0, purchased: 0, earned: 0,
   terms: { welcomeCredits: 50, welcomeDays: 7, firstPercent: 10, firstCap: 1000, inviteePercent: 0, rebatePercent: 0, rebateDays: 0, bindDays: 7 }, ...over });
 
-async function mountWallet() {
+async function mountWallet(customRecords?: any[]) {
   setProvider('harbor');
   mocks.token.mockImplementation(async () => 'token');
   mocks.wallet.mockResolvedValue({ score: 6479, tempScore: 0, plans: [] });
   const now = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12).toISOString();
-  mocks.records.mockResolvedValue({ records: [
+  mocks.records.mockResolvedValue({ records: customRecords ?? [
     { id: 1, record: 'chat', score: 12, recordType: 'sub', createTime: now },
     { id: 2, record: 'referral', score: 100, recordType: 'add', createTime: now },
   ], total: 2 });
@@ -130,4 +130,17 @@ it.each(['zh-Hant', 'zh-Hans', 'en', 'ja', 'ko'] as const)('top up opens Console
   } finally {
     i18n.global.locale.value = previousLocale;
   }
+});
+
+it('平台發放顯示玩家說明，未知種類顯示其他入帳', async () => {
+  mocks.summary.mockResolvedValue([]); mocks.referral.mockResolvedValue(referral());
+  const records = [
+    { id: 1, record: 'grant', playerNote: '邀請獎勵補差額 <b>原文</b>', recordType: 'add', score: 2000, createTime: new Date().toISOString() },
+    { id: 2, record: 'future-credit', recordType: 'add', score: 10, createTime: new Date().toISOString() },
+  ];
+  const page = await mountWallet(records);
+  expect(page.textContent).toContain('邀請獎勵補差額 <b>原文</b>');
+  expect(page.querySelector('.ledger b')).toBeNull();
+  expect(page.textContent).toContain(t('wallet.reason.other'));
+  expect(page.textContent).not.toContain('future-credit');
 });
