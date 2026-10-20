@@ -10,7 +10,7 @@
  * 才在原地彈登入框（GuestSignInSheet）。這時候他最想玩，登入（＝註冊）完回到同一頁，草稿還在。
  * 遊客只走公開的路：上架中的卡、本站這一家。續玩紀錄、審核、作者試玩、別家供應商照舊要先登入。
  */
-import { computed, getCurrentInstance, onBeforeUnmount, onMounted, shallowRef, watch, type Component } from "vue";
+import { computed, getCurrentInstance, onBeforeUnmount, onMounted, ref, shallowRef, watch, type Component } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { playProvider } from '@/lib/play-context';
@@ -53,7 +53,9 @@ const backToReview = shallowRef(false);
  * 在門上打開了就把 retry 加一，整條開卡流程重跑一次。
  */
 const gated = shallowRef(false);
-const retry = shallowRef(0);
+// A shallow ref forces a multi-source watch to run even when its values are
+// unchanged. Overlay history pops must not restart this mounted player.
+const retry = ref(0);
 /** 遊客按了送出：在原地請他登入 */
 const signInOpen = shallowRef(false);
 
