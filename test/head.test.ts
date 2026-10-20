@@ -222,11 +222,11 @@ it.each(['hearthroom.club','sukisuki.ai','sukisuki.chat'])('static asset routing
 
 
 const GUIDE_PREVIEWS = [
-  ["", "zh-Hant", "zh_TW", "寫卡指南 · 綺夢社", "綺夢社的寫卡指南教你用 AI 工具或網頁編輯器，把角色與故事的想法寫成能對話、能試玩的角色卡。"],
-  ["/zh-Hans", "zh-Hans", "zh_CN", "写卡指南 · 绮梦社", "绮梦社的写卡指南带你用 AI 工具或网页编辑器，把角色和故事的想法做成可以聊天、试玩的角色卡。"],
-  ["/en", "en", "en_US", "Card authoring guide · SukiSuki", "The SukiSuki card authoring guide helps you turn a character or story idea into a playable card with AI tools or the web editor."],
-  ["/ja", "ja", "ja_JP", "カード作成ガイド · SukiSuki", "SukiSuki のカード作成ガイドでは、AI ツールやウェブエディターで、キャラクターや物語のアイデアを会話して遊べるカードにする方法を紹介します。"],
-  ["/ko", "ko", "ko_KR", "카드 작성 가이드 · SukiSuki", "SukiSuki 카드 작성 가이드는 AI 도구나 웹 편집기로 캐릭터와 이야기 아이디어를 직접 대화하며 즐길 수 있는 카드로 만드는 방법을 알려 줘요."],
+  ["", "zh-Hant", "zh_TW", "寫卡指南 · 綺夢社", "用 AI Agent 或網頁編輯器，把角色與故事的想法寫成能對話、能試玩的角色卡。"],
+  ["/zh-Hans", "zh-Hans", "zh_CN", "写卡指南 · 绮梦社", "用 AI Agent 或网页编辑器，把角色和故事的想法做成可以聊天、试玩的角色卡。"],
+  ["/en", "en", "en_US", "Card authoring guide · SukiSuki", "Turn a character or story idea into a playable card with an AI agent or the web editor."],
+  ["/ja", "ja", "ja_JP", "カード作成ガイド · SukiSuki", "AI エージェントやウェブエディターで、キャラクターや物語のアイデアを会話して遊べるカードにする方法を紹介します。"],
+  ["/ko", "ko", "ko_KR", "카드 작성 가이드 · SukiSuki", "AI 에이전트나 웹 편집기로 캐릭터와 이야기 아이디어를 플레이할 수 있는 카드로 만드는 방법을 안내합니다."],
 ];
 it.each(GUIDE_PREVIEWS)("guide sharing describes card authoring in its own language: %s", async (prefix, lang, locale, title, description) => {
   for (const suffix of ["", "/?way=web&ref=discord"]) {
