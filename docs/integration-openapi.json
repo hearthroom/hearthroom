@@ -9459,6 +9459,21 @@
                             "type": "null"
                           }
                         ]
+                      },
+                      "streaming": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "on",
+                              "off"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Conversation transport: on streams replies; off requests a complete upstream response. Defaults to on. Unsupported routes fall back to streaming. This preference does not change writing instructions."
                       }
                     }
                   }
@@ -13074,6 +13089,10 @@
           "hasContextUsage": {
             "type": "boolean",
             "description": "This provider supports diagnostics for this specific reply."
+          },
+          "nonStreaming": {
+            "type": "boolean",
+            "description": "Whether this operation requests a complete upstream response. Frozen for the operation; waiting and reconnecting do not impose a total duration limit."
           }
         }
       },
@@ -21117,6 +21136,15 @@
             "minLength": 1,
             "maxLength": 200,
             "description": "Optional refinement of the selected option for this axis only; where it differs from the option, the note takes precedence. Nonblank, at most 200 Unicode code points."
+          },
+          "streaming": {
+            "type": "string",
+            "enum": [
+              "on",
+              "off"
+            ],
+            "default": "on",
+            "description": "Conversation transport: on streams replies; off requests a complete upstream response. Defaults to on. Unsupported routes fall back to streaming. This preference does not change writing instructions."
           }
         }
       },
@@ -21185,6 +21213,13 @@
               }
             ],
             "description": "What applies when the player has chosen nothing: platform defaults with the card's author defaults on top. Show these for axes absent from overrides; resetting an axis returns to this value."
+          },
+          "streamingOnlyModels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Routes currently known to require streaming: model codes, or model@thinkingDepth for a specific thinking depth. Capability observations expire; the saved preference is retained."
           }
         }
       },
