@@ -1320,7 +1320,7 @@
   "workspace.unknown": "Status unavailable",
   "workspace.updatePending": "The update is under review; the published version remains playable.",
   "workspace.updateRejected": "The update was rejected; the published version remains playable.",
-  "workspace.draftChanged": "Edited but not submitted. Players still see the published version.",
+  "workspace.draftChanged": "Unsubmitted changes · Live version unchanged",
   "workspace.uploadMedia": "Upload the cover and backgrounds again before submitting for review.",
   "workspace.alreadyPending": "This card is already waiting for review.",
   "workspace.submitUnavailable": "The card could not be submitted; please try again later.",
