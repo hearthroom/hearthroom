@@ -2268,5 +2268,6 @@
   "dcdf1de07701a": "Deadline for a qualifying first conversation. Normally boundAt plus firstChatDays; eligible transition bindings use the new-rules launch plus the window.",
   "d509e33d98acd": "Credits already posted from this binding, including binding, first-conversation and transition adjustment rewards; excludes top-up commissions.",
   "d091dc720d030": "Credits from this binding awaiting settlement or review; 0 when none.",
-  "de1b566431691": "Expected settlement time, or null when no date is known or pending is 0. This key is always present; a positive pending amount may still have null while under review."
+  "de1b566431691": "Expected settlement time, or null when no date is known or pending is 0. This key is always present; a positive pending amount may still have null while under review.",
+  "d3c67950725a8": "Optional original-language explanation for a platform grant. Historical grants may omit it. Internal operator notes are never returned."
 }

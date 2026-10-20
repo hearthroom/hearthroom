@@ -1,0 +1,12 @@
+{
+  "tier": "feature",
+  "draft": true,
+  "try": "/wallet",
+  "title": {
+    "zh-Hant": "積分記錄會顯示平台贈送的原因。",
+    "zh-Hans": "积分记录会显示平台赠送的原因。",
+    "en": "Credit activity now shows why a platform gift was given.",
+    "ja": "ポイント履歴に、運営からの付与の理由が表示されるようになりました。",
+    "ko": "포인트 내역에 플랫폼 지급 사유가 표시돼요."
+  }
+}

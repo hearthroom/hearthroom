@@ -436,6 +436,7 @@
   "wallet.invite.details": "招待特典を見る",
   "wallet.invite.earned": "招待で {credits} ポイント獲得済み",
   "wallet.reason.purchase": "チャージ",
+  "wallet.reason.other": "その他の付与",
   "wallet.reason.grant": "ボーナス",
   "wallet.reason.campaign": "イベント報酬",
   "wallet.reason.chat": "キャラクターとの会話",

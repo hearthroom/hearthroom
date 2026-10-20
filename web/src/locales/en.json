@@ -436,6 +436,7 @@
   "wallet.invite.details": "See invite rewards",
   "wallet.invite.earned": "Invites have earned you {credits} credits",
   "wallet.reason.purchase": "Top-up",
+  "wallet.reason.other": "Other credit",
   "wallet.reason.grant": "Bonus",
   "wallet.reason.campaign": "Event reward",
   "wallet.reason.chat": "Character chat",
