@@ -27,3 +27,16 @@ test('CI archives the built assets on every deploy, after the Worker is live', (
   // 失敗要看得見：歸檔沒寫進去，下一次部署時開著的分頁就會壞，不能默默變綠。
   assert.doesNotMatch(step, /continue-on-error/);
 });
+
+
+test('guide HTML reaches the Worker before the static SPA shell in every locale', () => {
+  const config = readFileSync(new URL('../wrangler.toml', import.meta.url), 'utf8');
+  const routes = /run_worker_first\s*=\s*\[([\s\S]*?)\]/.exec(config)?.[1] ?? '';
+  const patterns = [...routes.matchAll(/"([^"]+)"/g)].map(match => match[1]);
+  for (const prefix of ['', '/zh-Hans', '/en', '/ja', '/ko']) {
+    for (const suffix of ['', '/']) {
+      const path = `${prefix}/guide${suffix}`;
+      assert.ok(patterns.some(pattern => pattern.endsWith('*') ? path.startsWith(pattern.slice(0, -1)) : path === pattern), `${path} bypasses the Worker metadata handler`);
+    }
+  }
+});
