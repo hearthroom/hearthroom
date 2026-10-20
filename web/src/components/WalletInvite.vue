@@ -26,6 +26,7 @@ const copied = ref(false);
 
 /** 還能填碼：服務說可以、而且還沒填過 */
 const canRedeem = computed(() => !!data.value?.canRedeem && !data.value.referred);
+const friendOnly = computed(() => !!data.value?.enabled && data.value.terms.inviterCredits === 0 && data.value.terms.firstChatCredits === 0 && data.value.terms.welcomeCredits > 0);
 const promotion = computed(() => data.value && inviteTotal({ ...data.value.terms, enabled: data.value.enabled }) > 0);
 
 onMounted(async () => {
@@ -64,6 +65,7 @@ async function copy() {
 
     <template v-else-if="data">
       <p v-if="promotion" class="invite__headline">{{ $t(data.terms.inviterCredits === data.terms.welcomeCredits ? "referral.lead" : "referral.leadSplit", { bind: whole(data.terms.inviterCredits ?? 0), inviter: whole(data.terms.inviterCredits ?? 0), friend: whole(data.terms.welcomeCredits), first: whole(data.terms.firstChatCredits ?? 0) }) }}</p>
+      <p v-else-if="friendOnly" class="invite__headline">{{ $t("referral.leadFriendOnly", { friend: whole(data.terms.welcomeCredits) }) }}</p>
       <div class="invite__code">
         <code data-testid="wallet-invite-code">{{ data.code }}</code>
         <button type="button" class="btn btn--sm" @click="copy">{{ copied ? $t("referral.copiedCode") : $t("referral.copyCode") }}</button>

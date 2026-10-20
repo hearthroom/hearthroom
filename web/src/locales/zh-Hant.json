@@ -3097,5 +3097,7 @@
   "campaign.field.posterHint": "沒有設定這個語言的文字海報時，使用上面的橫幅。",
   "campaign.field.posterAlt": "圖片說明（螢幕閱讀器用）",
   "campaign.field.posterAltHint": "把圖上的字完整寫成一句話。",
-  "campaign.field.removePoster": "移除文字海報"
+  "campaign.field.removePoster": "移除文字海報",
+  "referral.leadFriendOnly": "邀朋友來玩：朋友用你的連結註冊就拿 {friend} 積分，朋友儲值時你還有分成。",
+  "referral.rule.bindFriendOnly": "朋友用你的連結註冊或填寫你的推薦碼，朋友得 {credits} 積分，永久有效"
 }
