@@ -993,6 +993,7 @@ export async function redeemReferral(token: string, code: string, provider: Prov
 }
 
 export interface ScoreRecord {
+  playerNote?: string;
   id: number;
   record: string;
   recordType: "add" | "sub" | string;

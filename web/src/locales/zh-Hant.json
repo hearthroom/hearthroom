@@ -436,6 +436,7 @@
   "wallet.invite.details": "查看邀請獎勵",
   "wallet.invite.earned": "邀請已為你帶來 {credits} 積分",
   "wallet.reason.purchase": "儲值",
+  "wallet.reason.other": "其他入帳",
   "wallet.reason.grant": "平台贈送",
   "wallet.reason.campaign": "活動獎勵",
   "wallet.reason.chat": "角色對話",

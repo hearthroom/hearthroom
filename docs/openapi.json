@@ -5453,7 +5453,7 @@
           "Identity"
         ],
         "summary": "Points ledger",
-        "description": "Paginated list of the caller's points transactions, newest first, optionally filtered by a time window. Legacy handler: errors are `{\"error\": \"<db error text>\"}` with 400.",
+        "description": "Paginated list of the caller's points transactions, newest first, optionally filtered by a time window. Legacy handler: errors are `{\"error\": \"<db error text>\"}` with 400. HarperHarbor includes the account's app-scoped entries, period-plan gifts and platform grants; other apps' activity remains private.",
         "security": [
           {
             "userToken": []
@@ -20187,6 +20187,11 @@
               "bonus"
             ],
             "description": "Only on plan rows: `daily` — a day's credits; `bonus` — that day's first-purchase bonus. Refunds that take them back carry the same value."
+          },
+          "playerNote": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Optional original-language explanation for a platform grant. Historical grants may omit it. Internal operator notes are never returned."
           }
         }
       },
@@ -25710,6 +25715,11 @@
             "type": "string",
             "format": "date-time",
             "description": "When these reward credits expire. Absent on `expire` entries."
+          },
+          "playerNote": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Optional original-language explanation for a platform grant. Historical grants may omit it. Internal operator notes are never returned."
           }
         }
       },
