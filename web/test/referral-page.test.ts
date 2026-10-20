@@ -166,3 +166,12 @@ it('uses separate service amounts and keeps a pending invite without an invented
   expect(pending).toContain(String(i18n.global.t('referral.invites.pendingReview', { pending: '5,500' })));
   expect(root.textContent).not.toContain('Invalid Date');
 });
+
+it.each([0, 30])('keeps the friend gift after both inviter rewards become zero (welcomeDays=%s)', async (welcomeDays) => {
+  mocks.summary.mockResolvedValue(page({terms: {...terms, welcomeCredits:3000, welcomeDays, inviterCredits:0, firstChatCredits:0, firstChatDays:7, inviterEndAt:'2000-11-17T00:00:00Z'}}));
+  await mount();
+  expect(root.querySelector('.referral__lead')?.textContent).toBe(String(i18n.global.t('referral.leadFriendOnly',{friend:'3,000'})));
+  expect(root.querySelector('.referral__rules')?.textContent).toContain(String(i18n.global.t(welcomeDays===0?'referral.rule.bindFriendOnly':'referral.rule.welcome',{credits:'3,000',days:welcomeDays})));
+  expect(root.querySelector('.referral__rules')?.textContent).not.toContain(String(i18n.global.t('referral.rule.permanent')));
+  expect(root.querySelector('[data-testid="inviter-bonus"]')).toBeNull();
+});
