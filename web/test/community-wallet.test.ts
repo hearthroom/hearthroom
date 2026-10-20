@@ -96,10 +96,10 @@ it('其他人：邀請卡秀自己的推薦碼；活動沒開就不佔位', asyn
   expect(page.querySelector('[data-testid="wallet-invite-code"]')?.textContent).toBe('HH7Q2K');
   expect(page.querySelector('[data-testid="wallet-invite-redeem"]')).toBeNull();
   app.unmount(); root.remove();
-  // 之後每次儲值也有分成：邀請卡要講出來，不能讓人以為只有第一次才拿得到。
-  mocks.referral.mockResolvedValue(referral({ referred: true, terms: { welcomeCredits: 50, welcomeDays: 7, firstPercent: 20, firstCap: 1000, inviteePercent: 0, rebatePercent: 5, rebateDays: 365, bindDays: 7 } }));
+  // 新活動改以綁定與開聊兩筆獎勵作為邀請卡主文，金額由服務讀取。
+  mocks.referral.mockResolvedValue(referral({ referred: true, terms: { welcomeCredits: 3000, inviterCredits: 3000, firstChatCredits: 2000, firstChatDays: 7, inviterEndAt: "2099-11-17T00:00:00Z", welcomeDays: 0, firstPercent: 20, firstCap: 1000, inviteePercent: 0, rebatePercent: 5, rebateDays: 365, bindDays: 7 } }));
   page = await mountWallet();
-  expect(page.querySelector('[data-testid="wallet-invite"]')?.textContent).toContain(t('wallet.invite.shareEvery', { first: 20, rate: 5 }));
+  expect(page.querySelector('[data-testid="wallet-invite"]')?.textContent).toContain(t('referral.lead', { bind: '3,000', first: '2,000' }));
   app.unmount(); root.remove();
   mocks.referral.mockResolvedValue(referral({ enabled: false }));
   page = await mountWallet();

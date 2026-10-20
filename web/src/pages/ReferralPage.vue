@@ -20,7 +20,7 @@ import { dateOnly, dateTime, whole } from "@/lib/format";
 import { withShareRef } from "@/lib/share-ref";
 import { useLocalePath } from "@/lib/use-locale";
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const { lp } = useLocalePath();
 const route = useRoute();
 const router = useRouter();
@@ -30,6 +30,7 @@ const externalId = computed(() => session.profile?.identities.find((i) => i.prov
 
 const data = ref<ReferralSummary | null>(null);
 const inviterBonus = computed(() => !!data.value?.enabled && (data.value?.terms.inviterCredits ?? 0) > 0 && Date.parse(data.value?.terms.inviterEndAt ?? "") > Date.now());
+const promotionEnd = computed(() => data.value?.terms.inviterEndAt ? new Intl.DateTimeFormat(locale.value, { timeZone: "Asia/Taipei", dateStyle: "medium", timeStyle: "short" }).format(Date.parse(data.value.terms.inviterEndAt) - 1) : "");
 const loadError = ref("");
 const needsConsent = ref(false);
 
@@ -102,7 +103,7 @@ onMounted(() => {
   <div class="page referral">
     <header>
       <h1 class="display">{{ $t("referral.title") }}</h1>
-      <p class="referral__lead">{{ $t("referral.lead") }}</p>
+      <p v-if="inviterBonus && data?.terms.firstChatCredits !== undefined" class="referral__lead">{{ $t(data?.terms.inviterCredits === data?.terms.welcomeCredits ? "referral.lead" : "referral.leadSplit", { inviter: whole(data?.terms.inviterCredits ?? 0), friend: whole(data?.terms.welcomeCredits ?? 0), bind: whole(data?.terms.inviterCredits ?? 0), first: whole(data?.terms.firstChatCredits ?? 0) }) }}</p>
     </header>
 
     <section v-if="needsConsent" class="panel referral__card">
@@ -138,11 +139,36 @@ onMounted(() => {
             </div>
           </section>
         </div>
+        <section v-if="data.invites" class="panel referral__card" data-testid="referral-invites">
+          <h2>{{ $t("referral.invites.title") }}</h2>
+          <p v-if="(data.invitesTotal ?? 0) > data.invites.length" class="subtle" data-testid="invites-total">{{ $t("referral.invites.total", { total: whole(data.invitesTotal ?? 0), shown: whole(data.invites.length) }) }}</p>
+          <ul v-if="data.invites.length" class="referral__invites">
+            <li v-for="(invite, index) in data.invites" :key="index" class="referral__invite" data-testid="referral-invite">
+              <time :datetime="invite.boundAt">{{ $t("referral.invites.joined", { date: dateTime(invite.boundAt) }) }}</time>
+              <span :data-testid="`invite-${invite.firstChat}`">{{ $t(`referral.invites.${invite.firstChat}`, { firstChatBy: dateTime(invite.firstChatBy) }) }}</span>
+              <div class="referral__invite-amounts">
+                <strong class="num" data-testid="invite-credited">{{ $t(invite.credited > 0 ? "referral.invites.credited" : "referral.invites.none", { credited: whole(invite.credited) }) }}</strong>
+                <span v-if="invite.pending > 0" class="subtle" data-testid="invite-pending">{{ $t(invite.pendingUntil ? "referral.invites.pending" : "referral.invites.pendingReview", { pending: whole(invite.pending), pendingUntil: invite.pendingUntil ? dateTime(invite.pendingUntil) : "" }) }}</span>
+              </div>
+            </li>
+          </ul>
+          <template v-else>
+            <h3>{{ $t("referral.invites.emptyTitle") }}</h3>
+            <p class="subtle">{{ $t("referral.invites.emptyBody") }}</p>
+            <button type="button" class="btn btn--lg referral__empty-copy" data-testid="invites-empty-copy" @click="copy('link')">{{ copied === "link" ? $t("referral.copiedLink") : $t("referral.copyLink") }}</button>
+          </template>
+        </section>
         <section class="panel referral__card">
           <h2>{{ $t("referral.rulesTitle") }}</h2>
           <ul class="referral__rules">
-            <li v-if="inviterBonus" data-testid="inviter-bonus">{{ $t("referral.rule.inviter", { credits: whole(data.terms.inviterCredits ?? 0), end: dateTime(data.terms.inviterEndAt!) }) }}</li>
-            <li v-if="data.terms.welcomeCredits > 0">{{ $t(data.terms.welcomeDays === 0 ? "referral.rule.welcomePermanent" : "referral.rule.welcome", { credits: whole(data.terms.welcomeCredits), days: data.terms.welcomeDays }) }}</li>
+            <template v-if="inviterBonus && data.terms.firstChatCredits !== undefined">
+              <li data-testid="inviter-bonus">{{ $t(data.terms.inviterCredits === data.terms.welcomeCredits ? "referral.rule.bind" : "referral.rule.bindSplit", { inviter: whole(data.terms.inviterCredits ?? 0), friend: whole(data.terms.welcomeCredits), credits: whole(data.terms.inviterCredits ?? 0) }) }}</li>
+              <li>{{ $t("referral.rule.chat", { days: data.terms.firstChatDays, credits: whole(data.terms.firstChatCredits) }) }}</li>
+              <li>{{ $t("referral.rule.permanent") }}</li>
+              <li>{{ $t("referral.rule.period", { end: promotionEnd }) }}</li>
+            </template>
+            <li v-else-if="inviterBonus" data-testid="inviter-bonus">{{ $t("referral.rule.inviter", { credits: whole(data.terms.inviterCredits ?? 0), end: dateTime(data.terms.inviterEndAt!) }) }}</li>
+            <li v-if="data.terms.welcomeCredits > 0 && data.terms.firstChatCredits === undefined">{{ $t(data.terms.welcomeDays === 0 ? "referral.rule.welcomePermanent" : "referral.rule.welcome", { credits: whole(data.terms.welcomeCredits), days: data.terms.welcomeDays }) }}</li>
             <li>{{ $t("referral.rule.first", { percent: data.terms.firstPercent, cap: whole(data.terms.firstCap) }) }}</li>
             <li v-if="data.terms.rebatePercent > 0">{{ $t("referral.rule.rebate", { rate: data.terms.rebatePercent, days: data.terms.rebateDays }) }}</li>
             <li v-if="data.terms.inviteePercent > 0">{{ $t("referral.rule.invitee", { percent: data.terms.inviteePercent }) }}</li>
@@ -192,6 +218,20 @@ h1 { font-size: 1.5rem; margin: 0; }
 .referral__controls { display: flex; gap: var(--s-2); }
 .referral__controls .input { flex: 1; min-width: 0; }
 .referral__error { color: var(--danger); margin: 0; }
+.referral__invites { list-style: none; margin: 0; padding: 0; }
+.referral__invite { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); align-items: start; gap: var(--s-3); padding: var(--s-3) 0; overflow-wrap: anywhere; font-size: 14px; }
+.referral__invite + .referral__invite { border-top: 1px solid var(--line); }
+.referral__invite time { color: var(--text-2); }
+.referral__invite-amounts { display: grid; gap: var(--s-1); text-align: end; }
+.referral__invite-amounts strong { font-weight: 600; white-space: nowrap; }
+.referral__card h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.referral__empty-copy { justify-self: start; }
+@media (max-width: 640px) {
+  .referral__tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .referral__tile:last-child { grid-column: 1 / -1; }
+  .referral__invite { grid-template-columns: minmax(0, 1fr); gap: var(--s-2); }
+  .referral__invite-amounts { text-align: start; }
+}
 @media (max-width: 700px) {
   .referral__grid { grid-template-columns: 1fr; }
   .referral__controls { flex-direction: column; }

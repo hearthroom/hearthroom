@@ -35,20 +35,21 @@ type Num = number | '';
 const TIMES = ['startsAt', 'endsAt', 'submitDeadline', 'payoutDeadline'] as const;
 type TimeKey = (typeof TIMES)[number];
 type Form = {
-  slug: string; title: Record<Lc, string>; intro: Record<Lc, string>; bannerKey: string | null; timezone: string;
+  slug: string; title: Record<Lc, string>; intro: Record<Lc, string>; bannerKey: string | null; posters: Record<Lc, { key: string; alt: string }>; timezone: string;
   times: Record<TimeKey, string>; tiers: Record<Tier, Num>; extraPlacementAmount: Num; lightLimit: Num; flagBurstThreshold: Num; evidenceRetentionDays: Num; featured: boolean;
 };
 const perLocale = (l: Localized = {}) => Object.fromEntries(POST_LOCALES.map((k) => [k, l[k] ?? ''])) as Record<Lc, string>;
+const posterForm = (p: Campaign['posters'] = {}) => Object.fromEntries(POST_LOCALES.map((l) => [l, { key: p[l]?.key ?? '', alt: p[l]?.alt ?? '' }])) as Form['posters'];
 const num = (v: number | null | undefined): Num => (v ?? '');
 const empty = (): Form => ({
-  slug: '', title: perLocale(), intro: perLocale(), bannerKey: null, timezone: DEFAULT_TIMEZONE,
+  slug: '', title: perLocale(), intro: perLocale(), bannerKey: null, posters: posterForm(), timezone: DEFAULT_TIMEZONE,
   times: { startsAt: '', endsAt: '', submitDeadline: '', payoutDeadline: '' },
   tiers: { light: '', original: '', guide: '', video: '' }, extraPlacementAmount: '', lightLimit: '', flagBurstThreshold: '', evidenceRetentionDays: '', featured: false,
 });
 const fromCampaign = (c: Campaign): Form => {
   const tz = c.timezone || DEFAULT_TIMEZONE;
   return {
-    slug: c.slug, title: perLocale(c.title), intro: perLocale(c.intro), bannerKey: c.bannerKey, timezone: tz,
+    slug: c.slug, title: perLocale(c.title), intro: perLocale(c.intro), bannerKey: c.bannerKey, posters: posterForm(c.posters), timezone: tz,
     times: Object.fromEntries(TIMES.map((k) => [k, c[k] === null ? '' : epochToZoned(c[k]!, tz)])) as Record<TimeKey, string>,
     tiers: Object.fromEntries(TIERS.map((k) => [k, num(c.tiers[k])])) as Record<Tier, Num>,
     extraPlacementAmount: num(c.extraPlacementAmount), lightLimit: num(c.lightLimit), flagBurstThreshold: num(c.flagBurstThreshold), evidenceRetentionDays: num(c.evidenceRetentionDays), featured: c.featured,
@@ -57,7 +58,7 @@ const fromCampaign = (c: Campaign): Form => {
 const compact = (l: Record<Lc, string>) => Object.fromEntries(Object.entries(l).filter(([, v]) => v.trim())) as Localized;
 const orNull = (v: Num) => (v === '' ? null : Number(v));
 const toInput = (f: Form): CampaignInput => ({
-  slug: f.slug.trim(), title: compact(f.title), intro: compact(f.intro), bannerKey: f.bannerKey, timezone: f.timezone,
+  slug: f.slug.trim(), title: compact(f.title), intro: compact(f.intro), bannerKey: f.bannerKey, posters: Object.fromEntries(Object.entries(f.posters).filter(([, p]) => p.key)), timezone: f.timezone,
   ...(Object.fromEntries(TIMES.map((k) => [k, zonedToEpoch(f.times[k], f.timezone)])) as Record<TimeKey, number | null>),
   tiers: Object.fromEntries(TIERS.filter((k) => f.tiers[k] !== '').map((k) => [k, Number(f.tiers[k])])),
   extraPlacementAmount: orNull(f.extraPlacementAmount), lightLimit: orNull(f.lightLimit), flagBurstThreshold: orNull(f.flagBurstThreshold), featured: f.featured,
@@ -192,6 +193,19 @@ async function uploadBanner(e: Event) {
   } catch (err) { formError.value = message(err); } finally { busy.value = false; }
 }
 
+async function uploadPoster(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0]; input.value = '';
+  if (!file) return;
+  const targetLocale = lang.value;
+  busy.value = true; formError.value = '';
+  try {
+    const res = await uploadCampaignBanner(await token(), file);
+    form.value.posters[targetLocale].key = res.key;
+  } catch (err) { formError.value = message(err); } finally { busy.value = false; }
+}
+const posterPreview = computed(() => form.value.posters[lang.value].key ? `/v1/blog/images/${form.value.posters[lang.value].key.slice(5)}` : '');
+
 const ask = async () => !dirty.value || (await confirmDialog({ message: t('blog.admin.unsaved'), confirmText: t('dialog.leave'), danger: true }));
 onBeforeRouteLeave(ask);
 // 換到另一個活動（或回到新活動）也要問；第一次存好換成自己的網址不問
@@ -252,6 +266,20 @@ watch(() => route.params.id, (id) => { if (/\/review\/settings\/campaigns\/[^/]+
           <label class="btn btn--sm">{{ t('campaign.field.upload') }}<input type="file" accept="image/*" class="cset-file" :disabled="locked" @change="uploadBanner" /></label>
           <button v-if="form.bannerKey" type="button" class="btn btn--sm btn--ghost" :disabled="locked" @click="form.bannerKey = null">{{ t('campaign.field.removeBanner') }}</button>
         </span>
+      </div>
+      <div class="field" data-poster-settings>
+        <span class="cset-label">{{ t('campaign.field.poster') }} · {{ localeLabel(lang) }}</span>
+        <span class="subtle">{{ t('campaign.field.posterHint') }}</span>
+        <img v-if="posterPreview" class="cset-banner" :src="posterPreview" :alt="form.posters[lang].alt" />
+        <span v-if="canEdit" class="cset-row-actions">
+          <label class="btn btn--sm">{{ t('campaign.field.upload') }}<input type="file" accept="image/*" class="cset-file" :disabled="locked" @change="uploadPoster" /></label>
+          <button v-if="form.posters[lang].key" type="button" class="btn btn--sm btn--ghost" :disabled="locked" data-remove-poster @click="form.posters[lang] = { key: '', alt: '' }">{{ t('campaign.field.removePoster') }}</button>
+        </span>
+        <label v-if="form.posters[lang].key" class="field">
+          <span>{{ t('campaign.field.posterAlt') }}</span>
+          <textarea v-model="form.posters[lang].alt" class="input" data-poster-alt maxlength="1000" required :disabled="locked" />
+          <span class="subtle">{{ t('campaign.field.posterAltHint') }}</span>
+        </label>
       </div>
       </div>
 

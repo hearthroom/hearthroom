@@ -176,6 +176,13 @@ describe("活動結束後的進度", () => {
 describe("入口", () => {
   const Entry = (where: "mine" | "editor") => defineComponent({ render: () => h(CreatorSeasonEntry, { where }) });
 
+  it("does not describe the normal weekly quota as an increase in the next season", async () => {
+    list = [creator({ weeklyLimit: 3, reward: 20000 })];
+    detail = creator({ weeklyLimit: 3, reward: 20000 });
+    await mount(Entry("mine"), "/mine");
+    expect(text("[data-creator-entry]")).toContain(norm(t("mine.campaign.publishRewardSame", { end: "10月31日", credits: "20,000" })));
+  });
+
   it("我的卡片與編輯器：進行中才出現，整行連到活動頁，字讀活動設定", async () => {
     await mount(Entry("mine"), "/mine");
     expect(text("[data-creator-entry]")).toContain(norm(t("mine.campaign.publishReward", { end: "10月31日", credits: "10,000", limit: 6 })));

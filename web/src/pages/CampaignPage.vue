@@ -29,7 +29,7 @@ import {
 import { pageTitle } from "@/lib/i18n";
 import { loginPath } from "@/lib/login-return";
 import { renderDoc } from "@/lib/markdown-toc";
-import { CALC_FIRST_TOPUP, CALC_LATER_TOPUP, calcExample, fetchReferralTerms, friendTotal, referralShown, type ReferralTerms } from "@/lib/referral-terms";
+import { CALC_FIRST_TOPUP, CALC_LATER_TOPUP, calcExample, fetchReferralTerms, inviteTotal, referralShown, type ReferralTerms } from "@/lib/referral-terms";
 import { useSession } from "@/lib/session";
 import { track } from "@/lib/track";
 import { useLocalePath } from "@/lib/use-locale";
@@ -56,6 +56,7 @@ const titleParts = computed(() => {
   const parts = at > 0 ? [title.value.slice(0, at), title.value.slice(at + 1)] : [title.value];
   return parts.length > 1 && parts.every((p) => [...p].length <= 16) ? parts : [title.value];
 });
+const poster = computed(() => head.value?.posterUrls?.[locale.value]);
 const intro = computed(() => renderDoc(campaign.value ? localized(campaign.value.intro, locale.value) : "").html);
 const signedIn = computed(() => !!session.me);
 const loginTo = computed(() => lp(loginPath(route.fullPath)));
@@ -117,6 +118,7 @@ const calc = computed(() => {
   if (typeof base !== "number") return null;
   return calcExample(base, campaign.value?.extraPlacementAmount ?? 0, terms.value);
 });
+const invitation = computed(() => inviteTotal(terms.value));
 const extra = computed(() => campaign.value?.extraPlacementAmount ?? 0);
 
 // ---- 怎麼參加：依語言的平台 ---------------------------------------------------------
@@ -225,7 +227,7 @@ async function onDone(_result: ApplyResult) {
     <div v-else class="campaign__grid">
       <!-- ① 頁頭：標題不疊在橫幅上，橫幅可以沒有 -->
       <header class="campaign__head">
-        <img v-if="head.bannerUrl" :src="head.bannerUrl" alt="" class="campaign__banner" width="720" height="270" fetchpriority="high" />
+        <img v-if="poster || head.bannerUrl" :src="poster?.url || head.bannerUrl!" :alt="poster?.alt || ''" class="campaign__banner" width="720" height="270" fetchpriority="high" />
         <div class="campaign__head-body" :class="{ 'campaign__head-body--bare': !head.bannerUrl }">
           <div class="campaign__head-text">
             <div class="campaign__status">
@@ -286,6 +288,13 @@ async function onDone(_result: ApplyResult) {
             </div>
           </div>
           <ul class="campaign__tiers" :style="{ '--n': tiers.length }">
+            <li v-if="invitation > 0 && terms" class="campaign__tier" data-invite-tier>
+              <div class="campaign__tier-text">
+                <strong class="campaign__tier-name">{{ t("campaign.tier.invite") }}</strong>
+                <span class="campaign__cap">{{ t(terms.inviterCredits === terms.welcomeCredits ? "campaign.tierDesc.invite" : "campaign.tierDesc.inviteSplit", { bind: formatNumber(terms.inviterCredits ?? 0), inviter: formatNumber(terms.inviterCredits ?? 0), friend: formatNumber(terms.welcomeCredits), first: formatNumber(terms.firstChatCredits ?? 0) }) }}</span>
+              </div>
+              <span class="campaign__tier-amount num">{{ formatPoints(invitation) }}</span>
+            </li>
             <li v-for="tier in tiers" :key="tier.key" class="campaign__tier" :class="{ 'campaign__tier--top': tier.key === topTier?.key }">
               <div class="campaign__tier-text">
                 <strong class="campaign__tier-name">{{ t(`campaign.tier.${tier.key}`) }}</strong>
@@ -324,6 +333,10 @@ async function onDone(_result: ApplyResult) {
               <div class="campaign__calc-row">
                 <span><span class="campaign__calc-label">{{ t("campaign.page.calc.row1") }}</span><span class="campaign__cap">{{ t("campaign.page.calc.row1Formula", { base: formatNumber(calc.base), extra: formatNumber(extra) }) }}</span></span>
                 <strong>{{ formatNumber(calc.share) }}</strong>
+              </div>
+              <div v-if="calc.invite && terms" class="campaign__calc-row" data-calc-invite>
+                <span><span class="campaign__calc-label">{{ t("campaign.page.calc.rowInvite") }}</span><span class="campaign__cap">{{ t("campaign.page.calc.rowInviteFormula", { bind: formatNumber(terms.inviterCredits ?? 0), first: formatNumber(terms.firstChatCredits ?? 0) }) }}</span></span>
+                <strong>{{ formatNumber(calc.invite) }}</strong>
               </div>
               <div v-if="calc.first" class="campaign__calc-row">
                 <span><span class="campaign__calc-label">{{ t("campaign.page.calc.row2", { amount: formatNumber(CALC_FIRST_TOPUP) }) }}</span><span class="campaign__cap">{{ t("campaign.page.calc.row2Formula", { first: referral!.firstPercent }) }}</span></span>

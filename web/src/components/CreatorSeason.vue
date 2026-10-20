@@ -112,7 +112,7 @@ const monogram = (name: string) => Array.from(name.trim())[0] ?? "";
         <ul v-if="c.phase !== 'ended'" class="creator__list">
           <li>
             <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3.25" y="4.25" width="13.5" height="12.5" rx="2.5" /><path d="M3.25 8.25h13.5M7 2.75v3M13 2.75v3" /></svg>
-            <i18n-t keypath="creator.rules.limit" tag="span" scope="global">
+            <i18n-t :keypath="c.weeklyLimit === c.normalWeeklyLimit ? 'creator.rules.limitSame' : 'creator.rules.limit'" tag="span" scope="global">
               <template #count><strong>{{ t("creator.rules.limitCount", { limit: c.weeklyLimit }) }}</strong></template>
               <template #normal>{{ c.normalWeeklyLimit }}</template>
             </i18n-t>

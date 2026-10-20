@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { createApp, nextTick } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
-import { i18n } from '../src/lib/i18n';
+import { i18n, loadLocale } from '../src/lib/i18n';
 import { useSession } from '../src/lib/session';
 import { setProvider } from '../src/lib/provider';
 import { ApiError } from '../src/lib/api';
@@ -19,6 +19,7 @@ afterEach(() => { app?.unmount(); root?.remove(); vi.clearAllMocks(); });
 
 async function mount(path = '/me/referral') {
   setProvider('harbor');
+  await loadLocale('en');
   i18n.global.locale.value = 'en';
   mocks.token.mockResolvedValue('token-harbor');
   const pinia = createPinia(); setActivePinia(pinia);
@@ -114,4 +115,54 @@ it('hides expired inviter promotion while keeping the newcomer gift', async () =
 it('explains permanent newcomer credits without a zero-day expiry', async () => {
  mocks.summary.mockResolvedValue(page({ terms: { ...terms, welcomeDays: 0 } }));
  await mount();expect(root.textContent).toContain(String(i18n.global.t('referral.rule.welcomePermanent', { credits: '1,000' })));expect(root.textContent).not.toMatch(/0 (days|天)/);
+});
+
+it('shows each invite status and credited amount without exposing friend identity', async () => {
+  mocks.summary.mockResolvedValue(page({ invitesTotal: 53, invites: [
+    { boundAt: '2026-10-20T08:00:00Z', firstChat: 'waiting', firstChatBy: '2026-10-27T08:00:00Z', credited: 3000, pending: 0, pendingUntil: null, email: 'private@example.test' },
+    { boundAt: '2026-10-19T08:00:00Z', firstChat: 'done', firstChatBy: '2026-10-26T08:00:00Z', credited: 5000, pending: 2000, pendingUntil: '2026-10-23T08:00:00Z' },
+    { boundAt: '2026-10-10T08:00:00Z', firstChat: 'expired', firstChatBy: '2026-10-17T08:00:00Z', credited: 1000, pending: 0, pendingUntil: null },
+  ] }));
+  await mount();
+  const rows = root.querySelectorAll('[data-testid="referral-invite"]');
+  expect(rows).toHaveLength(3);
+  expect(rows[0]?.querySelector('[data-testid="invite-credited"]')?.textContent).toContain('3,000');
+  expect(rows[0]?.querySelector('[data-testid="invite-waiting"]')).not.toBeNull();
+  expect(rows[0]?.querySelector('[data-testid="invite-pending"]')).toBeNull();
+  expect(rows[1]?.querySelector('[data-testid="invite-done"]')).not.toBeNull();
+  expect(rows[1]?.querySelector('[data-testid="invite-pending"]')?.textContent).toContain('2,000');
+  expect(rows[2]?.querySelector('[data-testid="invite-expired"]')).not.toBeNull();
+  expect(root.querySelector('[data-testid="invites-total"]')?.textContent).toContain('53');
+  expect(root.textContent).not.toContain('private@example.test');
+});
+
+it('offers a copy-link action for an empty invite list and handles an older API without one', async () => {
+  const write = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, 'clipboard', { value: { writeText: write }, configurable: true });
+  mocks.summary.mockResolvedValue(page({ invites: [], invitesTotal: 0 }));
+  await mount();
+  const copy = root.querySelector('[data-testid="invites-empty-copy"]') as HTMLButtonElement;
+  expect(copy).not.toBeNull();
+  copy.click();
+  await Promise.resolve();
+  expect(write).toHaveBeenCalledWith(`${location.origin}/?ref=K7M2Q9XA`);
+});
+
+it('does not claim there are no invites when the service omits the new list', async () => {
+  mocks.summary.mockResolvedValue(page());
+  await mount();
+  expect(root.querySelector('[data-testid="referral-invites"]')).toBeNull();
+});
+
+it('uses separate service amounts and keeps a pending invite without an invented date', async () => {
+  mocks.summary.mockResolvedValue(page({ terms: { ...terms, inviterCredits: 4000, welcomeCredits: 3000, firstChatCredits: 1500, firstChatDays: 9, inviterEndAt: '2099-11-17T00:00:00Z' }, invites: [
+    { boundAt: '2026-10-20T08:00:00Z', firstChat: 'done', firstChatBy: '2026-10-29T08:00:00Z', credited: 0, pending: 5500, pendingUntil: null },
+  ], invitesTotal: 1 }));
+  await mount();
+  expect(root.querySelector('.referral__lead')?.textContent).toContain('4,000');
+  expect(root.querySelector('.referral__lead')?.textContent).toContain('3,000');
+  expect(root.querySelector('.referral__lead')?.textContent).toContain('1,500');
+  const pending = root.querySelector('[data-testid="invite-pending"]')?.textContent;
+  expect(pending).toContain(String(i18n.global.t('referral.invites.pendingReview', { pending: '5,500' })));
+  expect(root.textContent).not.toContain('Invalid Date');
 });

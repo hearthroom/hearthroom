@@ -64,7 +64,7 @@ const slides = computed(() => {
   if (!m || !props.campaigns) return [];
   return featured.value.map((c) => {
     const title = m.localized(c.title, locale.value) || c.slug;
-    return { slug: c.slug, phase: c.phase, bannerUrl: c.bannerUrl, title, parts: titleParts(title), period: m.formatShortPeriod(c, locale.value) };
+    return { slug: c.slug, phase: c.phase, bannerUrl: c.bannerUrl, poster: c.posterUrls?.[locale.value], title, parts: titleParts(title), period: m.formatShortPeriod(c, locale.value) };
   });
 });
 /**
@@ -174,10 +174,10 @@ const clicked = (slug: string) => track("cta", { detail: "carousel", subject: sl
         v-for="(c, i) in slides" :key="c.slug" class="carousel__slide" :class="{ 'carousel__slide--on': index === i }"
         v-bind="slideAttrs(i)" :data-slide="c.slug"
       >
-        <RouterLink class="carousel__card" :class="{ 'carousel__card--banner': c.bannerUrl }" :to="lp(`/campaign/${c.slug}`)" @click="clicked(c.slug)">
-          <img v-if="c.bannerUrl" class="carousel__img" :src="c.bannerUrl" alt="" decoding="async" />
+        <RouterLink class="carousel__card" :class="{ 'carousel__card--banner': !c.poster && c.bannerUrl, 'carousel__card--poster': !!c.poster }" :to="lp(`/campaign/${c.slug}`)" @click="clicked(c.slug)">
+          <img v-if="c.poster || c.bannerUrl" class="carousel__img" :src="c.poster?.url || c.bannerUrl!" :alt="c.poster?.alt || ''" decoding="async" />
           <svg v-else class="carousel__mark" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 4c1.6 9.6 10.4 18.4 20 20-9.6 1.6-18.4 10.4-20 20-1.6-9.6-10.4-18.4-20-20 9.6-1.6 18.4-10.4 20-20z" /></svg>
-          <span class="carousel__body">
+          <span v-if="!c.poster" class="carousel__body">
             <span class="carousel__phase" :class="`carousel__phase--${c.phase}`">{{ t(`campaign.phase.${c.phase}`) }}</span>
             <strong class="carousel__title"><template v-for="(part, k) in c.parts" :key="k"><template v-if="k">{{ " " }}</template><span :class="{ carousel__part: c.parts.length > 1 }">{{ part }}</span></template></strong>
             <span v-if="c.period" class="carousel__period">{{ c.period }}</span>
@@ -247,19 +247,19 @@ const clicked = (slug: string) => track("cta", { detail: "carousel", subject: sl
   color: var(--text); text-decoration: none;
 }
 /* 沒有橫幅圖：強調色從左邊淡進來，右邊一組同心環當主視覺，空出來的那一側是刻意的 */
-.carousel__card:not(.carousel__card--banner) {
+.carousel__card:not(.carousel__card--banner):not(.carousel__card--poster) {
   background:
     radial-gradient(42% 90% at 82% 50%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%),
     linear-gradient(100deg, color-mix(in srgb, var(--accent) 14%, var(--surface)) 0%, var(--accent-tint) 38%, var(--surface) 100%);
 }
-.carousel__card:not(.carousel__card--banner)::before,
-.carousel__card:not(.carousel__card--banner)::after {
+.carousel__card:not(.carousel__card--banner):not(.carousel__card--poster)::before,
+.carousel__card:not(.carousel__card--banner):not(.carousel__card--poster)::after {
   content: ""; position: absolute; z-index: -1; top: 50%; border-radius: var(--r-pill); pointer-events: none; transform: translateY(-50%);
 }
-.carousel__card:not(.carousel__card--banner)::before {
+.carousel__card:not(.carousel__card--banner):not(.carousel__card--poster)::before {
   right: 4%; width: 440px; aspect-ratio: 1; border: 44px solid color-mix(in srgb, var(--accent) 9%, transparent);
 }
-.carousel__card:not(.carousel__card--banner)::after {
+.carousel__card:not(.carousel__card--banner):not(.carousel__card--poster)::after {
   right: calc(4% + 96px); width: 248px; aspect-ratio: 1; border: 2px solid color-mix(in srgb, var(--accent) 22%, transparent);
   background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 14%, transparent), transparent);
 }
@@ -267,6 +267,7 @@ const clicked = (slug: string) => track("cta", { detail: "carousel", subject: sl
 
 /* 有橫幅圖：圖鋪滿，左邊與下緣壓暗讓白字讀得到 */
 .carousel__img { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; object-fit: cover; background: var(--surface-2); }
+.carousel__card--poster .carousel__img { object-position: 50% 50%; }
 .carousel__card--banner { color: #fff; }
 .carousel__card--banner::before {
   content: ""; position: absolute; inset: 0; z-index: -1;
@@ -323,8 +324,8 @@ const clicked = (slug: string) => track("cta", { detail: "carousel", subject: sl
   .carousel__img { object-position: 70% 50%; }
   .carousel__card--banner::before { background: linear-gradient(90deg, rgba(14, 10, 18, 0.82) 0%, rgba(14, 10, 18, 0.55) 40%, rgba(14, 10, 18, 0) 66%); }
   .carousel__card { justify-content: flex-end; }
-  .carousel__card:not(.carousel__card--banner)::before { right: -110px; width: 260px; border-width: 28px; }
-  .carousel__card:not(.carousel__card--banner)::after { right: -50px; width: 140px; }
+  .carousel__card:not(.carousel__card--banner):not(.carousel__card--poster)::before { right: -110px; width: 260px; border-width: 28px; }
+  .carousel__card:not(.carousel__card--banner):not(.carousel__card--poster)::after { right: -50px; width: 140px; }
   .carousel__phase { height: 22px; }
   .carousel__title { font-size: 18px; }
   /* 期間在手機上只佔一行，太長的時區名稱收成省略號 */

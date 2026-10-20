@@ -642,7 +642,7 @@ export async function uploadImage(env: Env, file: unknown, now: number): Promise
 
 /** 這個 key（SQL 運算式）被引用：某篇文章的封面、分享封面或內文，或某個活動的橫幅。圖片路由與清理排程共用。 */
 export const imageReferenced = (key: string) =>
-  `(EXISTS (SELECT 1 FROM blog_posts WHERE cover_key = ${key} OR share_cover_key = ${key} OR instr(body_md, '/v1/blog/images/' || substr(${key}, 6)) > 0) OR EXISTS (SELECT 1 FROM campaigns WHERE banner_key = ${key}) OR EXISTS (SELECT 1 FROM card_reward_campaigns WHERE banner_key = ${key}))`;
+  `(EXISTS (SELECT 1 FROM blog_posts WHERE cover_key = ${key} OR share_cover_key = ${key} OR instr(body_md, '/v1/blog/images/' || substr(${key}, 6)) > 0) OR EXISTS (SELECT 1 FROM campaigns WHERE banner_key = ${key}) OR EXISTS (SELECT 1 FROM card_reward_campaigns WHERE banner_key = ${key}) OR EXISTS (SELECT 1 FROM campaigns c,json_each(c.posters) p WHERE json_extract(p.value,'$.key')=${key}) OR EXISTS (SELECT 1 FROM card_reward_campaigns c,json_each(c.posters) p WHERE json_extract(p.value,'$.key')=${key}))`;
 
 /** 圖片可以對外：被某篇文章引用，或上傳不到 24 小時。 */
 export async function imageServable(db: D1Database, key: string, now: number): Promise<boolean> {

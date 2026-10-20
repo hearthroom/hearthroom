@@ -12,7 +12,7 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink } from "vue-router";
 import { formatNumber, TIERS, type PublicCampaign } from "@/lib/campaign";
-import { friendTotal, referralShown, type ReferralTerms } from "@/lib/referral-terms";
+import { referralShown, type ReferralTerms } from "@/lib/referral-terms";
 import { useSession } from "@/lib/session";
 import { currentReferralCode, withShareRef } from "@/lib/share-ref";
 import { track } from "@/lib/track";
@@ -75,9 +75,6 @@ onBeforeUnmount(() => clearTimeout(timer));
         <span class="rewards__label">{{ t("campaign.page.rewards.share.label") }}</span>
         <b class="rewards__value num">{{ t("campaign.page.rewards.share.value", range) }}</b>
         <span class="rewards__cap">{{ t("campaign.page.rewards.share.desc") }}</span>
-        <i18n-t v-if="(terms?.inviterCredits ?? 0) > 0 && Date.parse(terms?.inviterEndAt ?? '') > Date.now()" keypath="campaign.page.rewards.inviter" tag="span" class="rewards__cap" data-inviter-bonus>
-          <template #reward><strong class="rewards__inviter-amount num">{{ t("campaign.page.rewards.inviterAmount", { credits: formatNumber(terms?.inviterCredits ?? 0) }) }}</strong></template>
-        </i18n-t>
       </div>
       <div v-if="ref$" class="rewards__stat" data-stat="referral">
         <span class="rewards__label">{{ t("campaign.page.rewards.referral.label") }}</span>
@@ -94,7 +91,7 @@ onBeforeUnmount(() => clearTimeout(timer));
       <div class="rewards__row">
         <div class="rewards__text">
           <strong class="rewards__cta-title">{{ t("campaign.page.cta.guest.title") }}</strong>
-          <span v-if="ref$ && friendTotal(ref$) > 0" class="rewards__desc num">{{ t("campaign.page.cta.friendGift", { friendTotal: formatNumber(friendTotal(ref$)) }) }}</span>
+          <span v-if="ref$ && ref$.welcomeCredits > 0" class="rewards__desc num">{{ t("campaign.page.cta.friendGift", { credits: formatNumber(ref$.welcomeCredits) }) }}</span>
           <span v-if="ref$ && ref$.inviteePercent > 0" class="rewards__desc num">{{ t("campaign.page.cta.inviteeBonus", { inviteePercent: ref$.inviteePercent }) }}</span>
           <span v-if="!ref$" class="rewards__desc">{{ t("campaign.page.cta.shareOnlyHint") }}</span>
         </div>
@@ -123,7 +120,7 @@ onBeforeUnmount(() => clearTimeout(timer));
           {{ t("campaign.share.more") }}
         </button>
       </div>
-      <span v-if="ref$ && friendTotal(ref$) > 0" class="rewards__desc num">{{ t("campaign.page.cta.friendGift", { friendTotal: formatNumber(friendTotal(ref$)) }) }}</span>
+      <span v-if="ref$ && ref$.welcomeCredits > 0" class="rewards__desc num">{{ t("campaign.page.cta.friendGift", { credits: formatNumber(ref$.welcomeCredits) }) }}</span>
       <span v-if="ref$ && ref$.inviteePercent > 0" class="rewards__desc num">{{ t("campaign.page.cta.inviteeBonus", { inviteePercent: ref$.inviteePercent }) }}</span>
       <span class="rewards__desc">{{ t("campaign.page.cta.member.desc") }}</span>
     </div>
@@ -141,7 +138,6 @@ onBeforeUnmount(() => clearTimeout(timer));
 /* 數字本身不拆開（keep-all：「500–10,000」整段一起換行），英日的單位放不下時換到下一行 */
 .rewards__value { font-size: 22px; font-weight: 700; line-height: 1.3; color: var(--accent-text); word-break: keep-all; overflow-wrap: normal; }
 .rewards__cap { font-size: 12px; line-height: 1.5; color: var(--text-2); text-wrap: pretty; }
-.rewards__inviter-amount { color: var(--danger); font-weight: 650; white-space: nowrap; }
 .rewards__cta { display: grid; gap: var(--s-3); }
 .rewards__row { display: flex; align-items: center; gap: var(--s-3); }
 .rewards__row--end { align-items: flex-end; }

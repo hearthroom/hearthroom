@@ -61,6 +61,10 @@ export const gateInventory = [
     "EXISTS(SELECT 1 FROM draft_transfer_gate_nodes WHERE node IN ('c:'||t.card_id,'r:'||t.work_key))"
   ],
   [
+    "card_reward_topups",
+    "EXISTS(SELECT 1 FROM card_rewards r WHERE r.id=t.reward_id AND EXISTS(SELECT 1 FROM draft_transfer_gate_nodes WHERE node IN ('c:'||r.card_id,'r:'||r.work_key)))"
+  ],
+  [
     "moderation_state",
     "EXISTS(SELECT 1 FROM draft_transfer_gate_nodes WHERE node IN ('r:'||t.provider||':'||t.source_role_id))"
   ],

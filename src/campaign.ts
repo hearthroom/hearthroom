@@ -1,3 +1,4 @@
+import { cleanPosters, posterUrls, type Posters } from "./campaign-posters";
 import { auditStmt, auditStmtIfChanged, type ActorKind } from "./audit";
 import { cleanLocalized, IMAGE_KEY, imageUrl, type Localized } from "./blog";
 import { bumpOp } from "./ops-metrics";
@@ -24,7 +25,7 @@ export type Actor = { memberId: string | null; kind: ActorKind };
 export type CampaignStatus = "draft" | "active" | "ended";
 
 export type Campaign = {
-  id: string; slug: string; title: Localized; intro: Localized;
+  id: string; slug: string; title: Localized; intro: Localized; posters?: Posters; posterUrls?: ReturnType<typeof posterUrls>;
   /** 編輯器回存時帶回的原始 key；bannerUrl 由它算出。 */
   bannerKey: string | null; bannerUrl: string | null;
   startsAt: number | null; endsAt: number | null; timezone: string | null; submitDeadline: number | null; payoutDeadline: number | null;
@@ -37,7 +38,7 @@ export type Campaign = {
 };
 /** 可編輯的欄位；沒給的視為清空（整份覆寫，跟部落格一樣）。 */
 export type CampaignInput = {
-  id?: string; expectedVersion?: number; slug: string; title: Localized; intro?: Localized; bannerKey?: string | null;
+  id?: string; expectedVersion?: number; slug: string; title: Localized; intro?: Localized; posters?: Posters; bannerKey?: string | null;
   startsAt?: number | null; endsAt?: number | null; timezone?: string | null; submitDeadline?: number | null; payoutDeadline?: number | null;
   tiers?: Partial<Record<Tier, number>>; extraPlacementAmount?: number | null; lightLimit?: number | null; flagBurstThreshold?: number | null; evidenceRetentionDays?: number; featured?: boolean;
 };
@@ -170,20 +171,20 @@ export function canActivate(c: Campaign): { ok: true } | { ok: false; field: str
 
 type Row = {
   id: string; slug: string; title: string; intro: string; banner_key: string | null; starts_at: number | null; ends_at: number | null;
-  timezone: string | null; submit_deadline: number | null; payout_deadline: number | null; tiers: string; extra_placement_amount: number | null; light_limit: number | null;
+  posters: string; timezone: string | null; submit_deadline: number | null; payout_deadline: number | null; tiers: string; extra_placement_amount: number | null; light_limit: number | null;
   flag_burst_threshold: number | null; evidence_retention_days: number; featured: number; status: CampaignStatus; version: number; created_at: number; updated_at: number;
 };
-const EDITABLE = ["slug", "title", "intro", "banner_key", "starts_at", "ends_at", "timezone", "submit_deadline", "payout_deadline", "tiers", "extra_placement_amount", "light_limit", "flag_burst_threshold", "evidence_retention_days", "featured"] as const;
+const EDITABLE = ["slug", "title", "intro", "posters", "banner_key", "starts_at", "ends_at", "timezone", "submit_deadline", "payout_deadline", "tiers", "extra_placement_amount", "light_limit", "flag_burst_threshold", "evidence_retention_days", "featured"] as const;
 type Editable = Pick<Row, (typeof EDITABLE)[number]>;
 
 const toCampaign = (r: Row): Campaign => ({
-  id: r.id, slug: r.slug, title: JSON.parse(r.title), intro: JSON.parse(r.intro), bannerKey: r.banner_key, bannerUrl: imageUrl(r.banner_key),
+  id: r.id, slug: r.slug, title: JSON.parse(r.title), intro: JSON.parse(r.intro), posters: JSON.parse(r.posters), posterUrls: posterUrls(JSON.parse(r.posters)), bannerKey: r.banner_key, bannerUrl: imageUrl(r.banner_key),
   startsAt: r.starts_at, endsAt: r.ends_at, timezone: r.timezone, submitDeadline: r.submit_deadline, payoutDeadline: r.payout_deadline,
   tiers: JSON.parse(r.tiers), extraPlacementAmount: r.extra_placement_amount, lightLimit: r.light_limit, flagBurstThreshold: r.flag_burst_threshold,
   evidenceRetentionDays: r.evidence_retention_days, featured: r.featured === 1, status: r.status, version: r.version, createdAt: r.created_at, updatedAt: r.updated_at,
 });
 /** 稽核的改前改後：設定本身，不含時間戳與衍生的網址。 */
-const auditView = ({ id: _, bannerUrl: _u, createdAt: _c, updatedAt: _t, ...rest }: Campaign) => rest;
+const auditView = ({ id: _, bannerUrl: _u, posterUrls: _p, createdAt: _c, updatedAt: _t, ...rest }: Campaign) => rest;
 
 const row = (db: D1Database, idOrSlug: string) => db.prepare("SELECT * FROM campaigns WHERE id = ?1 OR slug = ?1 ORDER BY id = ?1 DESC LIMIT 1").bind(idOrSlug).first<Row>();
 
@@ -234,6 +235,7 @@ function clean(input: CampaignInput): Editable {
     slug: input.slug,
     title: JSON.stringify(cleanLocalized(input.title, "title", 120, true, "campaign_invalid")),
     intro: JSON.stringify(cleanLocalized(input.intro ?? {}, "intro", 20000, false, "campaign_invalid")),
+    posters: JSON.stringify(cleanPosters(input.posters)),
     banner_key: banner, starts_at: time(input.startsAt, "startsAt"), ends_at: time(input.endsAt, "endsAt"), timezone: tz,
     submit_deadline: time(input.submitDeadline, "submitDeadline"), payout_deadline: time(input.payoutDeadline, "payoutDeadline"),
     tiers: JSON.stringify(cleanTiers(input.tiers)),

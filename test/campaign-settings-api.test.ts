@@ -63,6 +63,22 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it("saves locale-specific posters and exposes only their public URLs and accessible copy", async () => {
+  const posters = { "zh-Hant": { key: "blog/poster-fixture.webp", alt: "邀請朋友來玩" } };
+  const created = await json(await create("admin", complete({ posters })));
+  expect(created.posters).toEqual(posters);
+  await status("admin", created.id, "active");
+  const publicView = await json(await call('/v1/campaigns/launch'));
+  expect(publicView.posterUrls["zh-Hant"]).toEqual({ url: '/v1/blog/images/poster-fixture.webp', alt: "邀請朋友來玩" });
+  expect(publicView.posters).toBeUndefined();
+  objects.set('blog/poster-fixture.webp', new ArrayBuffer(8));
+  await env.DB.prepare("INSERT INTO avatar_cleanup(key,delete_after) VALUES ('blog/poster-fixture.webp',0)").run();
+  await cleanAvatars(fixture(), Date.now());
+  expect(objects.has('blog/poster-fixture.webp')).toBe(true);
+  expect((await call('/v1/blog/images/poster-fixture.webp')).status).toBe(200);
+  expect((await create("admin", complete({ slug: "invalid-poster", posters: { "zh-Hant": { key: "../private", alt: "" } } }))).status).toBe(400);
+});
+
 describe("權限", () => {
   it("非審核人一律 403；AI 帳號寫入 403 agent_not_allowed；不是應用管理員的審核人只讀", async () => {
     const writes: [string, string][] = [

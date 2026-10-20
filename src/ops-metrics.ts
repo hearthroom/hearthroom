@@ -36,7 +36,7 @@ const METRICS = {
     name: "hearthroom_card_reward_operations_total",
     help: "Card-publish reward campaign: payouts to authors of approved cards and reconciliation with the provider.",
     label: "operation",
-    operations: ["payout", "reconcile"],
+    operations: ["payout", "reconcile", "topup_request", "topup"],
     // insufficient：點數池餘額不足，發放排隊
     outcomes: ["success", "denied", "error", "insufficient"],
   },

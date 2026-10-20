@@ -23,6 +23,19 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("reward requests from the checkin store", () => {
+  it.each(["manual", "link"] as const)("referral binding via %s shares the reward installation token", async (via) => {
+    const rewards = await import("../src/lib/rewards");
+    const api = await import("../src/lib/api");
+    await api.redeemReferral("invite-access", "FRIEND42", "harbor", via);
+    await rewards.fetchPanel("invite-access");
+    const req = requests.find((r) => r.path.endsWith("/me/referral/redeem"))!;
+    expect(req.body.deviceToken).toBe(install);
+    expect(req.body.code).toBe("FRIEND42");
+    expect(req.body.via).toBe(via === "link" ? "link" : undefined);
+    expect(req.headers.get("Authorization")).toBe("Bearer invite-access");
+    expect(requests.find((r) => r.path.endsWith("/me/rewards"))!.headers.get("X-Device-Token")).toBe(req.body.deviceToken);
+  });
+
   it.each(["panel", "checkin", "makeup", "task", "newcomer"])("%s carries the installation token", async (action) => {
     const { useCheckin } = await import("../src/lib/checkin-store");
     const store = useCheckin();

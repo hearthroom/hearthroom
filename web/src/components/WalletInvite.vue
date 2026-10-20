@@ -14,6 +14,7 @@ import { accountToken } from "@/lib/connections";
 import { whole } from "@/lib/format";
 import type { ProviderId } from "@/lib/provider";
 import { track } from "@/lib/track";
+import { inviteTotal } from "@/lib/referral-terms";
 import { useLocalePath } from "@/lib/use-locale";
 import AccountIcon from "@/components/AccountIcon.vue";
 
@@ -25,6 +26,7 @@ const copied = ref(false);
 
 /** 還能填碼：服務說可以、而且還沒填過 */
 const canRedeem = computed(() => !!data.value?.canRedeem && !data.value.referred);
+const promotion = computed(() => data.value && inviteTotal({ ...data.value.terms, enabled: data.value.enabled }) > 0);
 
 onMounted(async () => {
   try {
@@ -61,7 +63,7 @@ async function copy() {
     </template>
 
     <template v-else-if="data">
-      <p class="invite__headline">{{ data.terms.rebatePercent > 0 && data.terms.rebateDays > 0 ? $t("wallet.invite.shareEvery", { first: data.terms.firstPercent, rate: data.terms.rebatePercent }) : $t("wallet.invite.share", { percent: data.terms.firstPercent }) }}</p>
+      <p v-if="promotion" class="invite__headline">{{ $t(data.terms.inviterCredits === data.terms.welcomeCredits ? "referral.lead" : "referral.leadSplit", { bind: whole(data.terms.inviterCredits ?? 0), inviter: whole(data.terms.inviterCredits ?? 0), friend: whole(data.terms.welcomeCredits), first: whole(data.terms.firstChatCredits ?? 0) }) }}</p>
       <div class="invite__code">
         <code data-testid="wallet-invite-code">{{ data.code }}</code>
         <button type="button" class="btn btn--sm" @click="copy">{{ copied ? $t("referral.copiedCode") : $t("referral.copyCode") }}</button>
@@ -72,7 +74,6 @@ async function copy() {
     </template>
 
     <template v-else>
-      <p class="invite__headline">{{ $t("referral.lead") }}</p>
       <RouterLink :to="lp('/me/referral')" class="btn btn--lg invite__cta" @click="track('invite_click', { detail: 'invite_fallback' })">{{ $t("wallet.invite.details") }}</RouterLink>
     </template>
   </section>

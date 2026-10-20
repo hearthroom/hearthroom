@@ -46,3 +46,10 @@ it("works the example from the campaign and referral settings, capping the first
   expect(calcExample(3000, 500, null)).toEqual({ base: 3000, extra: 1000, share: 4000, first: null, rebate: null, total: 4000 });
   expect(calcExample(3000, 0, terms({ enabled: false })).total).toBe(3000);
 });
+
+it("adds the two invitation rewards to the example only during the promotion", () => {
+  const promotion = terms({ inviterCredits: 3000, firstChatCredits: 2000, firstChatDays: 7, inviterStartAt: '2000-10-17T00:00:00Z', inviterEndAt: '2099-11-17T00:00:00Z' });
+  expect(calcExample(6000, 1000, promotion)).toMatchObject({ invite: 5000, total: 19500 });
+  expect(calcExample(6000, 1000, { ...promotion, inviterEndAt: '2000-11-17T00:00:00Z' })).toMatchObject({ total: 14500 });
+  expect(calcExample(6000, 1000, { ...promotion, enabled: false })).toMatchObject({ total: 8000 });
+});

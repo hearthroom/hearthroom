@@ -7,7 +7,7 @@ import { apiBaseOf, currentProvider, type ProviderId } from "./provider";
 
 export interface ReferralTerms {
   enabled: boolean;
-  inviterCredits?: number; inviterDays?: number; inviterStartAt?: string; inviterEndAt?: string;
+  firstChatCredits?: number; firstChatDays?: number; inviterCredits?: number; inviterDays?: number; inviterStartAt?: string; inviterEndAt?: string;
   firstPercent: number; firstCap: number; inviteePercent: number;
   rebatePercent: number; rebateDays: number; bindDays: number;
   welcomeCredits: number; welcomeDays: number;
@@ -38,6 +38,8 @@ function normalize(raw: unknown): ReferralTerms | null {
   const r = raw as Record<string, unknown>;
   return {
     enabled: r.enabled === true,
+    ...(typeof r.firstChatCredits === "number" ? { firstChatCredits: num(r.firstChatCredits) } : {}),
+    ...(typeof r.firstChatDays === "number" ? { firstChatDays: num(r.firstChatDays) } : {}),
     ...(typeof r.inviterCredits === "number" ? { inviterCredits: num(r.inviterCredits) } : {}),
     ...(typeof r.inviterDays === "number" ? { inviterDays: num(r.inviterDays) } : {}),
     ...(typeof r.inviterStartAt === "string" ? { inviterStartAt: r.inviterStartAt } : {}),
@@ -57,13 +59,20 @@ export function referralShown(t: ReferralTerms | null): t is ReferralTerms {
 /** 朋友透過連結註冊一共拿到的點數：新帳號禮＋推薦禮。 */
 export const friendTotal = (t: ReferralTerms) => t.signupWelcomeCredits + t.welcomeCredits;
 
+/** 兩筆邀請獎勵只在服務明示新規則與活動期間時呈現；舊服務不推算。 */
+export function inviteTotal(t: { enabled: boolean; inviterCredits?: number; firstChatCredits?: number; inviterStartAt?: string; inviterEndAt?: string } | null): number {
+  if (!t?.enabled || t.firstChatCredits === undefined || Date.parse(t.inviterEndAt ?? "") <= Date.now() || !Number.isFinite(Date.parse(t.inviterEndAt ?? ""))) return 0;
+  if (t.inviterStartAt && Date.parse(t.inviterStartAt) > Date.now()) return 0;
+  return (t.inviterCredits ?? 0) + t.firstChatCredits;
+}
+
 /**
  * 「算算看」的固定情境：一篇原創貼文貼到 3 個群，朋友第一次儲值 30,000 點、之後再儲值 10,000 點。
  * 金額照活動與推薦設定算；沒有推薦時只算分享那一列。
  */
 export const CALC_FIRST_TOPUP = 30_000;
 export const CALC_LATER_TOPUP = 10_000;
-export interface CalcExample { base: number; extra: number; share: number; first: number | null; rebate: number | null; total: number }
+export interface CalcExample { base: number; extra: number; share: number; invite?: number; first: number | null; rebate: number | null; total: number }
 export function calcExample(base: number, extraPerPlacement: number, terms: ReferralTerms | null): CalcExample {
   const extra = extraPerPlacement * 2;
   const share = base + extra;
@@ -71,5 +80,6 @@ export function calcExample(base: number, extraPerPlacement: number, terms: Refe
   const firstRaw = Math.floor((CALC_FIRST_TOPUP * terms.firstPercent) / 100);
   const first = terms.firstCap > 0 ? Math.min(firstRaw, terms.firstCap) : firstRaw;
   const rebate = Math.floor((CALC_LATER_TOPUP * terms.rebatePercent) / 100);
-  return { base, extra, share, first, rebate, total: share + first + rebate };
+  const invite = inviteTotal(terms);
+  return { base, extra, share, ...(invite > 0 ? { invite } : {}), first, rebate, total: share + first + rebate + invite };
 }
