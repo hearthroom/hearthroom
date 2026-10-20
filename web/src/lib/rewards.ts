@@ -142,6 +142,20 @@ export class RewardsError extends Error {
 
 const authHeaders = (token: string): Record<string, string> => ({ Authorization: `Bearer ${token}` });
 
+let installToken: string | undefined;
+/** 隨機安裝識別不含帳號或裝置資訊；儲存不可用時，同一頁的請求仍共用一個值。 */
+function deviceToken(): string {
+  if (installToken) return installToken;
+  const key = "hr.rewards.device";
+  try {
+    const saved = localStorage.getItem(key);
+    if (saved && /^[A-Za-z0-9_.-]{16,128}$/.test(saved)) return (installToken = saved);
+  } catch { /* 儲存被封鎖，改用本頁的隨機值。 */ }
+  installToken = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
+  try { localStorage.setItem(key, installToken); } catch { /* 保留記憶體中的值。 */ }
+  return installToken;
+}
+
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(`${UPSTREAM_API}/open/v1${path}`, init);
   if (!res.ok) {
@@ -172,19 +186,19 @@ export function fetchPlan(version?: number): Promise<RewardPlan> {
 /** 面板的 planVersion 和手上的方案不同時呼叫，下一次讀到新版。 */
 export function forgetCurrentPlan(): void { planCache.delete("current"); }
 
-export const fetchPanel = (token: string) => call<RewardsPanel>("/me/rewards", { headers: authHeaders(token) });
+export const fetchPanel = (token: string) => call<RewardsPanel>("/me/rewards", { headers: { ...authHeaders(token), "X-Device-Token": deviceToken() } });
 
-export const checkin = (token: string, requestId: string, deviceToken?: string) =>
-  post<CheckinResponse>("/me/rewards/checkin", token, { requestId, ...(deviceToken ? { deviceToken } : {}) });
+export const checkin = (token: string, requestId: string, device = deviceToken()) =>
+  post<CheckinResponse>("/me/rewards/checkin", token, { requestId, deviceToken: device });
 
-export const makeup = (token: string, requestId: string, day: string, deviceToken?: string) =>
-  post<CheckinResponse>("/me/rewards/makeup", token, { requestId, day, ...(deviceToken ? { deviceToken } : {}) });
+export const makeup = (token: string, requestId: string, day: string, device = deviceToken()) =>
+  post<CheckinResponse>("/me/rewards/makeup", token, { requestId, day, deviceToken: device });
 
-export const claimTask = (token: string, taskId: string, period: string, requestId: string, deviceToken?: string) =>
-  post<{ claim: ClaimResult }>(`/me/rewards/tasks/${encodeURIComponent(taskId)}/claim`, token, { requestId, period, ...(deviceToken ? { deviceToken } : {}) });
+export const claimTask = (token: string, taskId: string, period: string, requestId: string, device = deviceToken()) =>
+  post<{ claim: ClaimResult }>(`/me/rewards/tasks/${encodeURIComponent(taskId)}/claim`, token, { requestId, period, deviceToken: device });
 
-export const claimNewcomer = (token: string, requestId: string, deviceToken?: string) =>
-  post<{ claim: ClaimResult }>("/me/rewards/newcomer/claim", token, { requestId, ...(deviceToken ? { deviceToken } : {}) });
+export const claimNewcomer = (token: string, requestId: string, device = deviceToken()) =>
+  post<{ claim: ClaimResult }>("/me/rewards/newcomer/claim", token, { requestId, deviceToken: device });
 
 export const fetchDraws = (token: string, cursor = "") =>
   call<{ list: DrawRecord[]; nextCursor: string | null }>(`/me/rewards/draws${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { headers: authHeaders(token) });
