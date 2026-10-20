@@ -11727,7 +11727,7 @@
           "Identity"
         ],
         "summary": "Referral code, rules and results",
-        "description": "Returns the caller's own referral code, the current reward rules and how many people the caller has referred. The code is created on first request and never changes. Results contain counts and credit totals only; they never identify the people referred. `canRedeem` tells whether the caller may still enter someone else's code, and `redeemUntil` until when. Show `terms` to users instead of hard-coding reward numbers: the values can change. Requires the `referral` scope.",
+        "description": "Returns the caller's own referral code, the current reward rules and how many people the caller has referred. The code is created on first request and never changes. Results include aggregate counts and credits plus anonymous per-binding progress in invites (newest first, at most 50) and invitesTotal. They never identify the friends referred. pendingUntil is always present on each invite and may be null, including for a positive amount awaiting review. `canRedeem` tells whether the caller may still enter someone else's code, and `redeemUntil` until when. Show `terms` to users instead of hard-coding reward numbers: the values can change. Requires the `referral` scope.",
         "security": [
           {
             "userToken": []
@@ -11784,7 +11784,7 @@
           "Identity"
         ],
         "summary": "Enter a referral code",
-        "description": "Binds the caller to the account that owns `code`. Only new accounts can do this: within `terms.bindDays` days of sign-up and before their first top-up. A binding is permanent, with one exception: a binding made with `via` set to `link` can be replaced once by a code the user enters, within one day of binding and before their first top-up. Sending the same code again returns success without changing anything; sending a different code afterwards returns `referral_already_bound`. Codes are case-insensitive and surrounding spaces are ignored. On success the caller may receive `terms.welcomeCredits` credits at once, usable for agent conversations only and valid for `terms.welcomeDays` days; `welcomeCredits` in the response shows what was actually received (0 when none was available). Unless the code came from a share link the user opened before signing up, ask the user to confirm before calling this: the referrer receives rewards from the caller's later purchases. Requires the `referral` scope. Returns the caller's referral page after binding.",
+        "description": "Binds the caller to the account that owns `code`. Only new accounts can do this: within `terms.bindDays` days of sign-up and before their first top-up. A binding is permanent, with one exception: a binding made with `via` set to `link` can be replaced once by a code the user enters, within one day of binding and before their first top-up. Sending the same code again returns success without changing anything; sending a different code afterwards returns `referral_already_bound`. Codes are case-insensitive and surrounding spaces are ignored. On success the caller may receive `terms.welcomeCredits` credits at once, usable for agent conversations only and valid for `terms.welcomeDays` days (0 means permanent); `welcomeCredits` in the response shows what was actually received (0 when none was available). Unless the code came from a share link the user opened before signing up, ask the user to confirm before calling this: the referrer receives rewards from the caller's later purchases. Requires the `referral` scope. Returns the caller's referral page after binding.",
         "security": [
           {
             "userToken": []
@@ -11812,6 +11812,13 @@
                     ],
                     "default": "manual",
                     "description": "`manual` (default) when the user entered the code; `link` when your app carries the code from a share link the user opened before this account was created. Send `link` only when `registeredAt` is later than that visit."
+                  },
+                  "deviceToken": {
+                    "type": "string",
+                    "minLength": 16,
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9_.-]{16,128}$",
+                    "description": "Optional random per-install identifier, shared with the rewards panel X-Device-Token header and all reward claims. Send it on both manual and via=link bindings so same-device checks can run at issuance; a server forwarding a browser binding must forward the browser value. If unavailable, omit this field rather than sending an empty string. Only a keyed hash is stored."
                   }
                 }
               }
@@ -23040,7 +23047,9 @@
           "inviteePercent",
           "rebatePercent",
           "rebateDays",
-          "bindDays"
+          "bindDays",
+          "firstChatCredits",
+          "firstChatDays"
         ],
         "properties": {
           "welcomeCredits": {
@@ -23092,6 +23101,16 @@
           "inviterDays": {
             "type": "integer",
             "description": "Validity in days of the separate inviter promotion credit, measured from its issuance; independent of welcomeDays. 0 means permanent credits with no expiry."
+          },
+          "firstChatCredits": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Credits the original referrer receives when the referred friend completes their first successful, charged conversation within firstChatDays of binding. 0 outside the inviter promotion or when this reward is disabled. Eligibility uses the binding time within inviterStartAt (inclusive) and inviterEndAt (exclusive)."
+          },
+          "firstChatDays": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Days after binding in which the friend must complete their first successful, charged conversation. Returned even when firstChatCredits is 0. Eligible transition bindings use the new-rules launch plus this window; use each invite firstChatBy rather than calculating a deadline."
           }
         }
       },
@@ -23109,7 +23128,9 @@
           "rebateDays",
           "bindDays",
           "signupWelcomeCredits",
-          "signupWelcomeDays"
+          "signupWelcomeDays",
+          "firstChatCredits",
+          "firstChatDays"
         ],
         "properties": {
           "enabled": {
@@ -23122,7 +23143,7 @@
           },
           "welcomeDays": {
             "type": "integer",
-            "description": "How many days the welcome credits stay valid."
+            "description": "How many days the welcome credits stay valid; 0 means permanent (the current newcomer welcome gift)."
           },
           "firstPercent": {
             "type": "number",
@@ -23155,6 +23176,34 @@
           "signupWelcomeDays": {
             "type": "integer",
             "description": "How many days the sign-up credits stay valid."
+          },
+          "inviterCredits": {
+            "type": "integer",
+            "description": "Platform-funded credits for the original referrer of each eligible new-user binding during the inviter promotion; 0 outside the promotion. Independent of the ongoing newcomer welcome gift and the application campaign pool. Valid for inviterDays days (0 means permanent); replaying or switching the binding does not issue another gift."
+          },
+          "inviterStartAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Inclusive start of the inviter promotion, when configured."
+          },
+          "inviterEndAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Exclusive end of the inviter promotion, when configured."
+          },
+          "inviterDays": {
+            "type": "integer",
+            "description": "Validity in days of the separate inviter promotion credit, measured from its issuance; independent of welcomeDays. 0 means permanent credits with no expiry."
+          },
+          "firstChatCredits": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Credits the original referrer receives when the referred friend completes their first successful, charged conversation within firstChatDays of binding. 0 outside the inviter promotion or when this reward is disabled. Eligibility uses the binding time within inviterStartAt (inclusive) and inviterEndAt (exclusive)."
+          },
+          "firstChatDays": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Days after binding in which the friend must complete their first successful, charged conversation. Returned even when firstChatCredits is 0. Eligible transition bindings use the new-rules launch plus this window; use each invite firstChatBy rather than calculating a deadline."
           }
         }
       },
@@ -23170,7 +23219,10 @@
           "registeredAt",
           "invited",
           "purchased",
-          "earned"
+          "earned",
+          "pending",
+          "invites",
+          "invitesTotal"
         ],
         "properties": {
           "enabled": {
@@ -23216,7 +23268,30 @@
           },
           "earned": {
             "type": "integer",
-            "description": "Credits the caller has received as a referrer so far."
+            "description": "All referral credits already posted to the caller: binding rewards, first-conversation rewards, transition adjustments and top-up commissions. Pending credits are excluded."
+          },
+          "pending": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Total referral credits whose conditions have been met but which are still awaiting settlement or review; 0 when none."
+          },
+          "nextRewardAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Next expected settlement time, when available. Omitted when no date is known; it does not include an invented date for rewards under review."
+          },
+          "invites": {
+            "type": "array",
+            "maxItems": 50,
+            "description": "Bindings to the caller code, newest boundAt first, at most 50. Always present, including [] when empty. No friend identifiers or personal details are returned.",
+            "items": {
+              "$ref": "#/components/schemas/ReferralInvite"
+            }
+          },
+          "invitesTotal": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Total bindings to the caller code; may exceed the number returned in invites."
           }
         }
       },
@@ -25969,6 +26044,58 @@
           "replayed": {
             "type": "boolean",
             "description": "On `granted`: true when today had been claimed before."
+          }
+        }
+      },
+      "ReferralInvite": {
+        "type": "object",
+        "description": "One anonymous friend binding. Contains progress and reward amounts, never the friend identity.",
+        "additionalProperties": false,
+        "required": [
+          "boundAt",
+          "firstChat",
+          "firstChatBy",
+          "credited",
+          "pending",
+          "pendingUntil"
+        ],
+        "properties": {
+          "boundAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the friend bound the caller code; not necessarily their sign-up time."
+          },
+          "firstChat": {
+            "type": "string",
+            "enum": [
+              "waiting",
+              "done",
+              "expired"
+            ],
+            "description": "waiting: no qualifying first conversation yet and still within the window; done: qualifying first conversation completed; expired: the deadline passed without one."
+          },
+          "firstChatBy": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Deadline for a qualifying first conversation. Normally boundAt plus firstChatDays; eligible transition bindings use the new-rules launch plus the window."
+          },
+          "credited": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Credits already posted from this binding, including binding, first-conversation and transition adjustment rewards; excludes top-up commissions."
+          },
+          "pending": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Credits from this binding awaiting settlement or review; 0 when none."
+          },
+          "pendingUntil": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Expected settlement time, or null when no date is known or pending is 0. This key is always present; a positive pending amount may still have null while under review."
           }
         }
       }
