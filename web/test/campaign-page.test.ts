@@ -357,7 +357,7 @@ it("shows referral rewards from Harbor's public terms and works the example from
   expect($("[data-rebate-value]")!.textContent).toBe(t("campaign.page.rewards.referral.rebateValue", { rebate: 5 }));
   expect($("[data-rebate-value]")!.className).toContain("rewards__value");
   expect(rewards).toContain(t("campaign.page.rewards.referral.rebate", { period: t("campaign.page.periodYear") }));
-  expect(rewards).toContain(t("campaign.page.cta.friendGift", { friendTotal: "2,000" }));
+  expect(rewards).toContain(t("campaign.page.cta.friendGift", { credits: "1,000" }));
   expect(rewards).not.toContain(t("campaign.page.cta.inviteeBonus", { inviteePercent: 0 }));
   expect($("[data-calc-total]")!.textContent).toBe(t("campaign.page.points", { n: "10,500" }));
   expect($("[data-notes]")!.textContent).toContain(t("campaign.page.notes.5", { friendDays: 30 }));
@@ -380,12 +380,12 @@ it("hides each referral line whose value is 0, and the whole block when referral
   expect($('[data-stat="referral"]')).not.toBeNull();
   expect($("[data-rebate]")).toBeNull();
   expect($("[data-rebate-value]")).toBeNull();
-  expect($("[data-rewards]")!.textContent).not.toContain(t("campaign.page.cta.friendGift", { friendTotal: "0" }));
+  expect($("[data-rewards]")!.textContent).not.toContain(t("campaign.page.cta.friendGift", { credits: "1,000" }));
   app!.unmount(); app = null; host.remove();
   resetReferralTermsCache();
   terms = { ...liveTerms(), signupWelcomeCredits: 0 };
   await mount();
-  expect($("[data-rewards]")!.textContent).toContain(t("campaign.page.cta.friendGift", { friendTotal: "1,000" }));
+  expect($("[data-rewards]")!.textContent).toContain(t("campaign.page.cta.friendGift", { credits: "1,000" }));
   app!.unmount(); app = null; host.remove();
   resetReferralTermsCache();
   terms = { ...liveTerms(), enabled: false };
@@ -438,13 +438,17 @@ it("states the weekly cap on group shares when the campaign has one", async () =
 });
 
 
-it("shows the extra inviter reward below the share amount and emphasizes only its amount", async () => {
-  terms = { ...liveTerms(), welcomeDays: 0, inviterCredits: 1000, inviterDays: 0, inviterEndAt: "2099-11-17T00:00:00+08:00" };
+it("puts the two-step invitation reward first in the tier list and in the example", async () => {
+  terms = { ...liveTerms(), welcomeCredits: 3000, inviterCredits: 3000, firstChatCredits: 2000, firstChatDays: 7, inviterStartAt: "2000-10-17T00:00:00Z", inviterEndAt: "2099-11-17T00:00:00Z" };
   await mount();
-  const note = $('[data-stat="share"] [data-inviter-bonus]')!;
-  expect(note.textContent).toBe("活動期間每成功邀請一個好友註冊，分享人還可額外獲得 1,000 積分獎勵");
-  expect(note.querySelector("strong")?.textContent).toBe("1,000 積分");
-  expect($('[data-stat="referral"] [data-inviter-bonus]')).toBeNull();
+  const tier = $('[data-invite-tier]')!;
+  expect(tier).not.toBeNull();
+  expect(tier.parentElement!.firstElementChild).toBe(tier);
+  expect(tier.textContent).toContain("5,000");
+  expect(tier.textContent).toContain("3,000");
+  expect(tier.textContent).toContain("2,000");
+  expect($('[data-calc-invite]')?.textContent).toContain("5,000");
+  expect($('[data-inviter-bonus]')).toBeNull();
 });
 
 it("removes the inviter reward note after the promotion ends", async () => {

@@ -1,3 +1,4 @@
+import { posterUrls } from "./campaign-posters";
 import { auditStmt, auditStmtIfChanged } from "./audit";
 import { imageUrl } from "./blog";
 import { campaignPhase } from "./campaign";
@@ -33,11 +34,11 @@ const OPEN = ["pending", "blocked_insufficient"];
 
 type CampaignRow = {
   id: string; slug: string; title: string; starts_at: number; ends_at: number; payout_deadline: number | null; weekly_limit: number; reward: number; status: "draft" | "active";
-  timezone: string; banner_key: string | null; featured: number; featured_rank: number | null;
+  posters: string; timezone: string; banner_key: string | null; featured: number; featured_rank: number | null;
 };
 const campaignView = (r: CampaignRow) => ({
   id: r.id, slug: r.slug, title: JSON.parse(r.title) as Record<string, string>, startsAt: r.starts_at, endsAt: r.ends_at, payoutDeadline: r.payout_deadline,
-  weeklyLimit: r.weekly_limit, reward: r.reward, status: r.status, timezone: r.timezone, bannerUrl: imageUrl(r.banner_key), featured: r.featured === 1, featuredRank: r.featured_rank,
+  posterUrls: posterUrls(JSON.parse(r.posters)), weeklyLimit: r.weekly_limit, reward: r.reward, status: r.status, timezone: r.timezone, bannerUrl: imageUrl(r.banner_key), featured: r.featured === 1, featuredRank: r.featured_rank,
 });
 export type RewardCampaign = ReturnType<typeof campaignView>;
 
@@ -53,7 +54,7 @@ export async function listRewardCampaigns(db: D1Database): Promise<RewardCampaig
 /** 公開列表的一列（同分享活動的 summaryView，多 kind 與排序值）。 */
 export const cardRewardSummary = (k: RewardCampaign, now: number) => ({
   kind: "card_reward" as const, slug: k.slug, title: k.title, phase: campaignPhase(k, now), startsAt: k.startsAt, endsAt: k.endsAt, timezone: k.timezone,
-  bannerUrl: k.bannerUrl, featured: k.featured, featuredRank: k.featuredRank,
+  bannerUrl: k.bannerUrl, ...(Object.keys(k.posterUrls).length ? { posterUrls: k.posterUrls } : {}), featured: k.featured, featuredRank: k.featuredRank,
 });
 /** 公開活動頁：規則卡要的數字。 */
 export const cardRewardDetail = (k: RewardCampaign, now: number) => ({
@@ -373,7 +374,8 @@ export async function myProgress(db: D1Database, memberId: string, campaign: Rew
   const rows = (await db.prepare(`SELECT x.card_id, x.names, x.avatar_url, c.status, c.approved_version_id,
       COALESCE(x.listed_submitted, x.current_submitted) AS submitted_at,
       (SELECT r.status FROM card_rewards r WHERE r.work_key = x.work_key AND r.status IN ${LIVE}) AS reward_status,
-      (SELECT r.amount FROM card_rewards r WHERE r.work_key = x.work_key AND r.status IN ${LIVE}) AS amount
+      (SELECT r.amount + CASE WHEN r.status='paid' THEN COALESCE((SELECT SUM(t.amount) FROM card_reward_topups t WHERE t.reward_id=r.id AND t.status='paid'),0) ELSE 0 END
+       FROM card_rewards r WHERE r.work_key = x.work_key AND r.status IN ${LIVE}) AS amount
     FROM (SELECT cw.*, ${LISTED_AT} AS listed_at, ${LISTED_SUBMITTED} AS listed_submitted,
             (SELECT MAX(s.submitted_at) FROM review_submissions s WHERE s.card_id = cw.card_id AND s.kind = 'first') AS current_submitted
           FROM (${CARD_BASE}) cw WHERE cw.member_id = ?1) x

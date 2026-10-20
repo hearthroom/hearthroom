@@ -170,6 +170,10 @@ Replaying an `operationId` returns the same body without a second write; if that
 
 Each campaign carries `featured: boolean` (recommend on the home page). It is optional on writes and defaults to `false`; a non-boolean value gives 400 `campaign_invalid` with `field: "featured"`. Like the other settings it is part of the whole-object write, so omitting it on `PUT` clears it, and the change is recorded in the audit log. It does not affect activation. The public `GET /v1/campaigns` summaries (and `GET /v1/campaigns/:slug`) include `featured`; the home board shows featured campaigns that are open or upcoming in its carousel.
 
+`posters` optionally maps an exact UI locale (`zh-Hant`, `zh-Hans`, `en`, `ja`, `ko`) to `{ key, alt }`. Upload images through the existing `POST .../banner` route, then save the returned `blog/<file>.webp` key together with a nonempty image description (at most 1,000 characters). Invalid locales, keys or descriptions give 400 `campaign_invalid` with `field: "posters"`. This is also a whole-object setting: omitting it clears the map; preserve other languages when editing one. The same admin, version, operation ID and audit rules apply.
+
+Public activity responses expose only `posterUrls[locale] = { url, alt }`, omitting the map when empty. The home carousel and activity page select only the current locale's poster; a missing locale uses the original banner. A poster replaces the carousel's HTML overlay and its description becomes the image's accessible text. Open Graph previews continue using the original banner. Referenced posters are retained by image cleanup. Creator campaign posters use the same public shape; creator settings currently require an authorized configuration migration.
+
 ## Share campaign payout
 
 Every payout route requires a human community admin. Check order: reviewer (401/403), then not an AI account (403 `agent_not_allowed`), then admin (403 `community_admin_required`). The caller's bearer token is forwarded only to the provider, which makes the final authorization decision. Money moves from a campaign pool; amounts come from the approved tier and what the content was already paid.

@@ -53,7 +53,7 @@ async function editor(c: Ctx): Promise<Actor> {
 
 /** 明列允許的欄位：門檻、保留天數、建立者、橫幅 key、版本與點數池都不在這裡。 */
 const summaryView = (c: Campaign, now: number) => ({
-  slug: c.slug, title: c.title, phase: campaignPhase(c, now), startsAt: c.startsAt, endsAt: c.endsAt, timezone: c.timezone, bannerUrl: c.bannerUrl, featured: c.featured,
+  slug: c.slug, title: c.title, phase: campaignPhase(c, now), startsAt: c.startsAt, endsAt: c.endsAt, timezone: c.timezone, bannerUrl: c.bannerUrl, ...(Object.keys(c.posterUrls ?? {}).length ? { posterUrls: c.posterUrls } : {}), featured: c.featured,
 });
 const detailView = (c: Campaign, now: number) => ({
   ...summaryView(c, now), intro: c.intro, submitDeadline: c.submitDeadline, payoutDeadline: c.payoutDeadline, tiers: c.tiers, extraPlacementAmount: c.extraPlacementAmount, lightLimit: c.lightLimit,

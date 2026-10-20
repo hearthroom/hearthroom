@@ -31,7 +31,7 @@ const text = computed(() => {
   // 結束日是最後一天（結束時刻前 1 毫秒），用活動的時區
   const end = new Intl.DateTimeFormat(locale.value, { timeZone: c.timezone, month: "short", day: "numeric" }).format(c.endsAt - 1);
   const credits = format.value(c.reward);
-  return props.where === "mine" ? t("mine.campaign.publishReward", { end, credits, limit: c.weeklyLimit }) : t("editor.publish.reward", { end, credits });
+  return props.where === "mine" ? t(c.weeklyLimit === c.normalWeeklyLimit ? "mine.campaign.publishRewardSame" : "mine.campaign.publishReward", { end, credits, limit: c.weeklyLimit }) : t("editor.publish.reward", { end, credits });
 });
 </script>
 

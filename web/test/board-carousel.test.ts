@@ -62,6 +62,7 @@ describe("formatShortPeriod", () => {
 });
 
 let list: CampaignSummary[];
+let mountedRouter: ReturnType<typeof createRouter>;
 let app: App | null = null, host: HTMLElement;
 const settle = async () => { for (let i = 0; i < 8; i++) { await nextTick(); await new Promise((r) => setTimeout(r, 0)); } };
 
@@ -74,7 +75,8 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); app?.unmount(); app = null; host?.remove(); vi.unstubAllGlobals(); });
 
 async function mount(props = "hero campaigns") {
-  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/:p(.*)*", component: { render: () => null } }] });
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/:locale(en|ja|ko|zh-Hans)/:p(.*)*", component: { render: () => null } }, { path: "/:p(.*)*", component: { render: () => null } }] });
+  mountedRouter = router;
   await router.push("/"); await router.isReady();
   host = document.body.appendChild(document.createElement("div"));
   const [hero, campaigns] = [props.includes("hero"), props.includes("campaigns")];
@@ -88,6 +90,22 @@ const shown = () => slides().findIndex((s) => s.classList.contains("carousel__sl
 const dot = (n: number) => host.querySelectorAll<HTMLButtonElement>("[data-dot]")[n]!;
 
 describe("首頁輪播", () => {
+  it("shows only the exact-language poster with accessible copy, then falls back to the original banner", async () => {
+    list = [item("poster", { bannerUrl: "https://img.example/original.webp", posterUrls: { "zh-Hant": { url: "https://img.example/poster.webp", alt: "邀請朋友，分享拿積分" } } })];
+    await mount();
+    const card = $('[data-slide="poster"] .carousel__card')!;
+    expect(card.classList.contains("carousel__card--poster")).toBe(true);
+    expect(card.querySelector("img")?.getAttribute("src")).toBe("https://img.example/poster.webp");
+    expect(card.querySelector("img")?.getAttribute("alt")).toBe("邀請朋友，分享拿積分");
+    expect(card.querySelector(".carousel__body")).toBeNull();
+    i18n.global.locale.value = "en";
+    await mountedRouter.push("/en/");
+    await nextTick();
+    expect(card.classList.contains("carousel__card--poster")).toBe(false);
+    expect(card.querySelector("img")?.getAttribute("src")).toBe("https://img.example/original.webp");
+    expect(card.querySelector(".carousel__body")).not.toBeNull();
+  });
+
   it("沒有推薦的活動：只有蘇綺，沒有輪播的外框、圓點與左右鍵", async () => {
     list = [item("a", { featured: false }), item("b", { phase: "ended" })];
     await mount();

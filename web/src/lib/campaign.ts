@@ -14,8 +14,11 @@ export type Tier = (typeof TIERS)[number];
 export type CampaignStatus = "draft" | "active" | "ended";
 export type CampaignPhase = "draft" | "upcoming" | "open" | "ended";
 
+export type CampaignPosters = Record<string, { key: string; alt: string }>;
+export type CampaignPosterUrls = Record<string, { url: string; alt: string }>;
+
 export interface Campaign {
-  id: string; slug: string; title: Localized; intro: Localized; bannerKey: string | null; bannerUrl: string | null;
+  id: string; slug: string; title: Localized; intro: Localized; bannerKey: string | null; bannerUrl: string | null; posters?: CampaignPosters; posterUrls?: CampaignPosterUrls;
   startsAt: number | null; endsAt: number | null; timezone: string | null; submitDeadline: number | null; payoutDeadline: number | null;
   tiers: Partial<Record<Tier, number>>; extraPlacementAmount: number | null; lightLimit: number | null; flagBurstThreshold: number | null; evidenceRetentionDays: number;
   /** 推薦到首頁：進行中或即將開始時出現在看板輪播。 */
@@ -24,7 +27,7 @@ export interface Campaign {
 }
 /** 整份覆寫：沒給的欄位服務端視為清空（保留天數沒給是服務端的預設）。 */
 export interface CampaignInput {
-  slug: string; title: Localized; intro: Localized; bannerKey: string | null;
+  slug: string; title: Localized; intro: Localized; posters?: CampaignPosters; bannerKey: string | null;
   startsAt: number | null; endsAt: number | null; timezone: string | null; submitDeadline: number | null; payoutDeadline: number | null;
   tiers: Partial<Record<Tier, number>>; extraPlacementAmount: number | null; lightLimit: number | null; flagBurstThreshold: number | null; evidenceRetentionDays?: number; featured: boolean;
 }
@@ -193,6 +196,7 @@ const query = (q: Record<string, string | number | undefined>) => {
 
 /** 公開活動頁讀到的：草稿與不存在都是 404 campaign_not_found。門檻、保留天數、點數池不在這裡。 */
 export interface PublicCampaign {
+  posterUrls?: CampaignPosterUrls;
   /** share＝分享獎勵活動；舊版回應沒有這一欄，當成 share */
   kind?: "share";
   slug: string; title: Localized; phase: "upcoming" | "open" | "ended"; startsAt: number | null; endsAt: number | null; timezone: string | null; bannerUrl: string | null; featured: boolean;
@@ -205,7 +209,7 @@ export interface PublicCampaign {
 /** 發卡獎勵活動（創作季）：活動期間的每週額度、每張過審的卡的積分。形狀照 src/card-reward.ts 的 cardRewardDetail。 */
 export interface CardRewardCampaign {
   kind: "card_reward";
-  slug: string; title: Localized; phase: "upcoming" | "open" | "ended"; startsAt: number; endsAt: number; timezone: string; bannerUrl: string | null; featured: boolean;
+  slug: string; title: Localized; phase: "upcoming" | "open" | "ended"; startsAt: number; endsAt: number; timezone: string; bannerUrl: string | null; posterUrls?: CampaignPosterUrls; featured: boolean;
   featuredRank: number | null; payoutDeadline: number | null; reward: number; weeklyLimit: number; normalWeeklyLimit: number;
 }
 export type AnyCampaign = PublicCampaign | CardRewardCampaign;
@@ -216,7 +220,7 @@ export async function fetchCampaign(slug: string): Promise<AnyCampaign> {
   if (!res.ok) return fail(res);
   return (await res.json()) as AnyCampaign;
 }
-export type CampaignSummary = Pick<PublicCampaign, "slug" | "title" | "phase" | "startsAt" | "endsAt" | "timezone" | "bannerUrl" | "featured" | "featuredRank"> & { kind?: "share" | "card_reward" };
+export type CampaignSummary = Pick<PublicCampaign, "slug" | "title" | "phase" | "startsAt" | "endsAt" | "timezone" | "bannerUrl" | "posterUrls" | "featured" | "featuredRank"> & { kind?: "share" | "card_reward" };
 /** 公開的活動列表（不含草稿），不帶令牌。 */
 export async function fetchPublicCampaigns(): Promise<{ items: CampaignSummary[] }> {
   const res = await fetch(`${COMMUNITY_API}/campaigns`, { headers: { "X-From": currentSurface() } });

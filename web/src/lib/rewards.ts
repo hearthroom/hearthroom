@@ -5,6 +5,7 @@
  * 規則、進度、抽獎、發點全在 Harbor；這裡只讀面板、送領取，畫面依回應畫。
  * 獎表與機率只從公開方案端點讀，語系檔與程式不寫任何機率或金額（LunaTalk 三端各存一份的教訓）。
  */
+import { deviceToken } from "./reward-device";
 import { UPSTREAM_API } from "./config";
 import { i18n } from "./i18n";
 import { describeApiError } from "./api";
@@ -142,19 +143,6 @@ export class RewardsError extends Error {
 
 const authHeaders = (token: string): Record<string, string> => ({ Authorization: `Bearer ${token}` });
 
-let installToken: string | undefined;
-/** 隨機安裝識別不含帳號或裝置資訊；儲存不可用時，同一頁的請求仍共用一個值。 */
-function deviceToken(): string {
-  if (installToken) return installToken;
-  const key = "hr.rewards.device";
-  try {
-    const saved = localStorage.getItem(key);
-    if (saved && /^[A-Za-z0-9_.-]{16,128}$/.test(saved)) return (installToken = saved);
-  } catch { /* 儲存被封鎖，改用本頁的隨機值。 */ }
-  installToken = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
-  try { localStorage.setItem(key, installToken); } catch { /* 保留記憶體中的值。 */ }
-  return installToken;
-}
 
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(`${UPSTREAM_API}/open/v1${path}`, init);
