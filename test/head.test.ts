@@ -219,3 +219,59 @@ it.each(['hearthroom.club','sukisuki.ai','sukisuki.chat'])('static asset routing
     expect(html).toContain('<meta name="twitter:image"');
   }
 });
+
+
+const GUIDE_PREVIEWS = [
+  ["", "zh-Hant", "zh_TW", "寫卡指南 · 綺夢社", "綺夢社的寫卡指南教你用 AI 工具或網頁編輯器，把角色與故事的想法寫成能對話、能試玩的角色卡。"],
+  ["/zh-Hans", "zh-Hans", "zh_CN", "写卡指南 · 绮梦社", "绮梦社的写卡指南带你用 AI 工具或网页编辑器，把角色和故事的想法做成可以聊天、试玩的角色卡。"],
+  ["/en", "en", "en_US", "Card authoring guide · SukiSuki", "The SukiSuki card authoring guide helps you turn a character or story idea into a playable card with AI tools or the web editor."],
+  ["/ja", "ja", "ja_JP", "カード作成ガイド · SukiSuki", "SukiSuki のカード作成ガイドでは、AI ツールやウェブエディターで、キャラクターや物語のアイデアを会話して遊べるカードにする方法を紹介します。"],
+  ["/ko", "ko", "ko_KR", "카드 작성 가이드 · SukiSuki", "SukiSuki 카드 작성 가이드는 AI 도구나 웹 편집기로 캐릭터와 이야기 아이디어를 직접 대화하며 즐길 수 있는 카드로 만드는 방법을 알려 줘요."],
+];
+it.each(GUIDE_PREVIEWS)("guide sharing describes card authoring in its own language: %s", async (prefix, lang, locale, title, description) => {
+  for (const suffix of ["", "/?way=web&ref=discord"]) {
+    const ctx = createExecutionContext();
+    const response = await worker.fetch(new Request(`https://${PRIMARY_HOST}${prefix}/guide${suffix}`, {
+      headers: { "User-Agent": "facebookexternalhit/1.1", "Accept-Language": lang === "en" ? "ja" : "en" },
+    }), testEnv, ctx);
+    await waitOnExecutionContext(ctx);
+    const html = await response.text();
+    const canonical = `https://${PRIMARY_HOST}${prefix}/guide`;
+    expect(response.status).toBe(200);
+    expect(html).toContain(`<html lang="${lang}">`);
+    expect(html).toContain(`<title>${title}</title>`);
+    expect(html).toContain(`<meta name="description" content="${description}">`);
+    expect(html).toContain(`<link rel="canonical" href="${canonical}">`);
+    for (const [key, value] of Object.entries({ title, description, url: canonical, locale, image: siteOgImage("default", lang) })) {
+      expect(html).toContain(`<meta property="og:${key}" content="${value}">`);
+      expect(html.match(new RegExp(`property="og:${key}"`, "g"))).toHaveLength(1);
+    }
+    for (const [key, value] of Object.entries({ card: "summary_large_image", title, description, image: siteOgImage("default", lang) })) {
+      expect(html).toContain(`<meta name="twitter:${key}" content="${value}">`);
+      expect(html.match(new RegExp(`name="twitter:${key}"`, "g"))).toHaveLength(1);
+    }
+    expect(html).toContain('<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">');
+    expect(html).toContain('<div id="app"></div>');
+    expect(response.headers.get("etag")).toBeNull();
+    expect(response.headers.get("last-modified")).toBeNull();
+  }
+});
+
+it("guide metadata does not apply to play hosts, static files or guide subpaths", async () => {
+  for (const url of [`https://play.${PRIMARY_HOST}/guide`, `https://${PRIMARY_HOST}/guide.md`, `https://${PRIMARY_HOST}/guide/extra`]) {
+    const ctx = createExecutionContext();
+    const response = await worker.fetch(new Request(url), testEnv, ctx);
+    await waitOnExecutionContext(ctx);
+    const html = await response.text();
+    expect(html).not.toContain('content="寫卡指南 · 綺夢社"');
+    expect(html).not.toContain(`<meta property="og:url" content="https://${PRIMARY_HOST}/guide">`);
+  }
+});
+
+it.each(["/guide", "/guide/", "/en/guide"])("asset routing runs guide metadata before serving the SPA: %s", async path => {
+  const response = await SELF.fetch(`https://${PRIMARY_HOST}${path}`, { headers: { "User-Agent": "Discordbot" } });
+  const html = await response.text();
+  expect(response.status).toBe(200);
+  expect(html).toContain(path.startsWith("/en") ? '<meta property="og:title" content="Card authoring guide · SukiSuki">' : '<meta property="og:title" content="寫卡指南 · 綺夢社">');
+  expect(html.match(/property="og:title"/g)).toHaveLength(1);
+});

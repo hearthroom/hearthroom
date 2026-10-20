@@ -55,7 +55,7 @@ import { blogGroupUrl, blogIndexMeta, blogUrl, postMeta } from "./blog-head";
 import { campaignLocale, campaignMeta, campaignUrl, cardRewardMeta, inviteMeta, isInviteLink } from "./campaign-head";
 import { getRewardCampaign } from "./card-reward";
 import { getCampaign } from "./campaign";
-import { authorLine, downloadMeta, homeMeta, preloadImageTag, renderDefaultShareHead, renderHead, updatesMeta } from "./head";
+import { authorLine, downloadMeta, guideMeta, homeMeta, preloadImageTag, renderDefaultShareHead, renderHead, updatesMeta } from "./head";
 import { aliasTarget, HOST, canonicalUrl, isPlayHost } from "./site";
 import { cardThumbUrl, landingZone } from "../shared/card-thumb";
 import { PRIMARY_HOST, siteRootOf } from "../shared/site-hosts";
@@ -1656,7 +1656,7 @@ export async function syncBatch(env: Env): Promise<{ ok: number; failed: number;
  * 靜態資源層回應，不經過 Worker。找不到的卡回 404 狀態，但內容仍是 index.html——
  * 前端會畫自己的 404 頁，而抓取器與搜尋引擎得到正確的狀態碼。
  */
-const PAGE = /^(?:\/(zh-Hans|en|ja|ko))?\/(download|updates|cards|authors)(?:\/([^/]+))?\/?$/;
+const PAGE = /^(?:\/(zh-Hans|en|ja|ko))?\/(download|updates|guide|cards|authors)(?:\/([^/]+))?\/?$/;
 const PAGE_TTL = 60;
 const SITE_ROUTE_LOCALE = /^\/(zh-Hans|en|ja|ko)(?:\/|$)/;
 const SITE_API_PATH = /^\/(?:v1|api)(?:\/|$)/;
@@ -1851,7 +1851,9 @@ app.get("*", async (c) => {
   const m = url.pathname.match(PAGE);
   // 不是要注入的頁面就原樣交回資源層——靜態檔給檔案本身，其餘走它的 SPA 回退。
   // 一律回殼的話，/assets/x.js 會拿到一份 HTML，整站直接掛。
-  if (!m || (m[2] === "download" || m[2] === "updates" ? m[3] !== undefined : !m[3])) {
+  const standalone = m?.[2] === "download" || m?.[2] === "updates" || m?.[2] === "guide";
+  if (!m || (standalone ? m[3] !== undefined : !m[3])
+    || (m[2] === "guide" && (!siteRootOf(url.hostname) || isPlayHost(url.host)))) {
     const passthrough = await c.env.ASSETS.fetch(c.req.raw);
     note(c, { event: "page_html", refHost: refHostOf(c.req.header("Referer"), url.host), detail: "page" });
     const html = (passthrough.headers.get("content-type") ?? "").toLowerCase().includes("text/html");
@@ -1882,6 +1884,11 @@ app.get("*", async (c) => {
     subject: m[3] ?? "",
     detail: m[2],
   });
+  if (m[2] === "guide") {
+    const res = renderHead(shell, guideMeta(locale, self));
+    res.headers.set("Cache-Control", `public, max-age=${PAGE_TTL}`);
+    return res;
+  }
   if (m[2] === "download") {
     const res = renderHead(shell, downloadMeta(locale, self));
     res.headers.set("Cache-Control", `public, max-age=${PAGE_TTL}`);
