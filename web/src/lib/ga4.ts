@@ -1,10 +1,21 @@
 import { appShell, gaCampaign, gaEvent, gaPage } from "./ga4-payload";
 import { analyticsIdentity, validClientId, type AnalyticsIdentity } from "../../../shared/ga4";
 import { SITE_HOSTS } from "../../../shared/site-hosts";
+import { captureGa4Source, ga4SignupVia } from "./ga4-attribution";
 
 const MEASUREMENT_ID = "G-K82Q2QC7P4";
 type Command = IArguments;
 type Data = { detail?: string; subject?: string; ok?: boolean };
+/** This is a candidate only; Google must independently resolve the same ID. */
+function linkerCandidate(href: string): string | null {
+  try {
+    const token = new URL(href).searchParams.get("_gl")?.match(/(?:^|\*)_ga\*([^*]+)/)?.[1];
+    if (!token || token.length > 128) return null;
+    const base64 = token.replace(/-/g, "+").replace(/_/g, "/").replace(/\./g, "=");
+    const value = atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, "="));
+    return validClientId(value) ? value : null;
+  } catch { return null; }
+}
 declare global { interface Window { hearthroomGaData?: Command[]; "ga-disable-G-K82Q2QC7P4"?: boolean } }
 
 /** Only validated pseudonyms and route templates leave this adapter. */
@@ -20,6 +31,10 @@ export function createGa4() {
   let landingUrl = "";
   let accountGeneration = 0;
   let onClientId: ((clientId: string) => void) | undefined;
+  let sessionId: string | undefined;
+  let linkerPending = false;
+  let pendingView = false;
+  const pendingEvents: { event: string; data: Data }[] = [];
   const commands: Command[] = [];
   const allowed = () => {
     const gpc = typeof navigator === "undefined" || (navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl === true;
@@ -46,16 +61,32 @@ export function createGa4() {
     send("js", new Date());
     send("set", { ...page, allow_google_signals: false, allow_ad_personalization_signals: false });
     send("set", "linker", { domains: [...SITE_HOSTS], accept_incoming: true });
-    const linked = new URL(landingUrl || location.href).searchParams.has("_gl");
+    const linked = linkerCandidate(landingUrl || location.href);
     send("config", MEASUREMENT_ID, { ...page, ...gaCampaign(landingUrl || location.href), ...(clientId && !linked ? { client_id: clientId } : {}), send_page_view: false,
       cookie_expires: 390 * 86400, cookie_update: false, cookie_flags: "SameSite=Lax;Secure",
       ...(new URL(landingUrl || location.href).searchParams.get("ga_debug") === "1" ? { debug_mode: true } : {}),
       ignore_referrer: /https:\/\/console\.harperharbor\.com\//.test(document.referrer),
       allow_google_signals: false, allow_ad_personalization_signals: false });
-    if (linked) send("get", MEASUREMENT_ID, "client_id", (value: unknown) => {
-      if (!allowed() || !validClientId(value)) return;
-      clientId = value;
-      onClientId?.(value);
+    if (linked) {
+      linkerPending = true;
+      const settle = (value: unknown) => {
+        if (!linkerPending) return;
+        clearTimeout(timer);
+        if (allowed()) {
+          if (validClientId(value) && value === linked) { clientId = value; onClientId?.(value); }
+          else send("config", MEASUREMENT_ID, { client_id: clientId, send_page_view: false,
+            cookie_expires: 390 * 86400, cookie_update: false, cookie_flags: "SameSite=Lax;Secure" });
+        }
+        linkerPending = false;
+        if (pendingView) { pendingView = false; tracker.pageView(); }
+        for (const event of pendingEvents.splice(0)) tracker.track(event.event, event.data);
+      };
+      const timer = setTimeout(() => settle(null), 3000);
+      send("get", MEASUREMENT_ID, "client_id", settle);
+    }
+    send("get", MEASUREMENT_ID, "session_id", (value: unknown) => {
+      const text = typeof value === "number" && Number.isSafeInteger(value) ? String(value) : typeof value === "string" ? value : "";
+      if (allowed() && /^[1-9][0-9]{0,19}$/.test(text)) sessionId = text;
     });
     const script = document.createElement("script");
     script.async = true;
@@ -76,7 +107,7 @@ export function createGa4() {
       user_id: identity?.userId ?? null, user_properties: { payer_type: identity?.payerType ?? null } };
   };
 
-  return {
+  const tracker = {
     start(value: boolean, options: { clientId?: string; landingUrl?: string; onClientId?: (clientId: string) => void } = {}) {
       enabled = value;
       clientId = validClientId(options.clientId) ? options.clientId : undefined;
@@ -103,15 +134,18 @@ export function createGa4() {
         const url = new URL(href);
         if (url.origin !== "https://console.harperharbor.com" || url.pathname !== "/me/billing") return href;
         url.searchParams.delete("ga_client_id"); url.searchParams.delete("ga_source_app");
+        url.searchParams.delete("ga_session_id");
         if (allowed() && clientId) {
           url.searchParams.set("ga_client_id", clientId);
           url.searchParams.set("ga_source_app", "hearthroom");
+          if (sessionId) url.searchParams.set("ga_session_id", sessionId);
         }
         return url.href;
       } catch { return href; }
     },
     pageView() {
       if (!initialize()) return;
+      if (linkerPending) { pendingView = true; return; }
       const page = params();
       if (!page || location.href === lastNavigation) return;
       referrer = lastLocation || document.referrer;
@@ -123,6 +157,7 @@ export function createGa4() {
     },
     track(event: string, data: Data = {}) {
       if (!initialize()) return;
+      if (linkerPending) { if (pendingEvents.length < 20) pendingEvents.push({ event, data }); return; }
       const page = params();
       if (!page) return;
       const mapped = gaEvent(event, data, String(page.page_type));
@@ -131,6 +166,7 @@ export function createGa4() {
     /** Read-only snapshots for deterministic outbound contract tests. */
     commands: () => commands.map(command => Array.from(command)),
   };
+  return tracker;
 }
 
 const ga4 = createGa4();
@@ -140,17 +176,7 @@ export function startGa4() { ready = initializeGa4(); return ready; }
 async function initializeGa4() {
   const optedOut = (navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl === true;
   const landingUrl = location.href;
-  const campaign = gaCampaign(landingUrl);
-  const source = String(campaign.campaign_source ?? "");
-  if (["invite", "card_share", "campaign_share"].includes(source)) {
-    signupVia = source;
-    try { sessionStorage.setItem("hearthroom.ga4.signupVia", source); } catch { /* Optional attribution. */ }
-  } else {
-    try {
-      const saved = sessionStorage.getItem("hearthroom.ga4.signupVia") ?? "none";
-      signupVia = ["invite", "card_share", "campaign_share"].includes(saved) ? saved : "none";
-    } catch { signupVia = "none"; }
-  }
+  captureGa4Source(landingUrl);
   if (!gaPage(landingUrl)) return;
   try {
     const response = await fetch("/v1/analytics/session", { method: "POST", credentials: "same-origin", cache: "no-store",
@@ -176,7 +202,6 @@ export function refreshGa4Account(account: number | null, read: () => Promise<un
   identityReady = ready.then(() => ga4.refreshIdentity(account, read));
   return identityReady;
 }
-let signupVia = "none";
 export async function recordGa4Login(token: () => Promise<string | null>) {
   await ready;
   await identityReady;
@@ -190,7 +215,7 @@ export async function recordGa4Login(token: () => Promise<string | null>) {
       first = response.ok && (await response.json() as { first?: boolean }).first === true;
     }
   } catch { /* If registration cannot be verified, report a login only. */ }
-  ga4.track(first ? "ga_sign_up" : "ga_login", { detail: signupVia });
+  ga4.track(first ? "ga_sign_up" : "ga_login", { detail: ga4SignupVia() });
 }
 /** Decorate on the actual click so async initialization and GPC changes are respected. */
 export function decorateGa4Checkout(event: MouseEvent) {

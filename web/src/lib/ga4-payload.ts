@@ -80,6 +80,9 @@ export function gaEvent(event: string, data: EventData, page: string): GaEvent |
   if (data.ok === false) return null;
   const detail = data.detail ?? "";
   const make = (name: string, params: Params = {}): GaEvent => ({ name, params });
+  if (event === "campaign_share") return make("share", { method: "clipboard", content_type: "campaign" });
+  if (event === "invite_click" && detail === "invite_copy") return make("share", { method: "clipboard", content_type: "invite" });
+  if (event === "pwa_card_install_click") return make("pwa_install", { outcome: "click", where: "card" });
   if (event === "ga_login") return make("login", { method: "harper" });
   if (event === "ga_sign_up") return make("sign_up", { method: "harper", signup_via: ["invite", "card_share", "campaign_share"].includes(detail) ? detail : "none" });
   if (event === "topup_click" || event === "plan_click") {
@@ -94,10 +97,10 @@ export function gaEvent(event: string, data: EventData, page: string): GaEvent |
   if (event === "tour_begin" || event === "newcomer_tour_begin") return make("tutorial_begin", {
     tour: event === "tour_begin" ? "coach" : "newcomer", ...(event === "newcomer_tour_begin" && /^[1-7]$/.test(detail) ? { day: Number(detail) } : {}),
   });
-  if (event === "share") {
+  if (event === "share" || event === "blog_share") {
     const method = detail.replace(/^share_/, "");
     if (!["web", "clipboard", "manual", "line", "x", "facebook", "telegram", "whatsapp", "reddit", "threads", "bluesky", "weibo", "discord", "qq", "wechat"].includes(method)) return null;
-    const content = page === "blog" ? "blog" : page === "campaign" ? "campaign" : ["card", "play"].includes(page) ? "card" : "invite";
+    const content = event === "blog_share" || page === "blog" ? "blog" : page === "campaign" ? "campaign" : ["card", "play"].includes(page) ? "card" : "invite";
     return make("share", { method, content_type: content });
   }
   if (["tour_done", "newcomer_tour_done"].includes(event)) {
