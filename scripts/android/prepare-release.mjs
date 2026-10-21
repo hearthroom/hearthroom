@@ -1,6 +1,7 @@
 import {readFileSync,writeFileSync,mkdirSync,readdirSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {createManifest,buildNotes,downloadBase,locales} from './release.mjs';
+import {resolveReleaseBaseline} from './release-baseline.mjs';
 const git=(...args)=>execFileSync('git',args,{encoding:'utf8'}).trim();
 const repo=process.env.GITHUB_REPOSITORY;
 const run=Number(process.env.GITHUB_RUN_NUMBER);
@@ -25,8 +26,8 @@ if(existing){
  let files;
  if(previous){
   if(!/^[a-f0-9]{40}$/.test(previous.sourceSha)||previous.versionCode>=versionCode)throw Error('Stale or invalid previous release.');
-  git('merge-base','--is-ancestor',previous.sourceSha,sourceSha);
-  files=git('diff','--name-only','--diff-filter=AM',previous.sourceSha,sourceSha,'--','android/changes').split('\n').filter(Boolean);
+  const baseline=resolveReleaseBaseline(previous.sourceSha,sourceSha);
+  files=git('diff','--name-only','--diff-filter=AM',baseline,sourceSha,'--','android/changes').split('\n').filter(Boolean);
  }else files=readdirSync('android/changes').filter(n=>n.endsWith('.json')).map(n=>'android/changes/'+n);
  const notes=buildNotes(files.map(f=>JSON.parse(readFileSync(f))));
  const apk=readFileSync('android/app/build/outputs/apk/release/app-release.apk');
