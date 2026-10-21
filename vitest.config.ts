@@ -21,6 +21,8 @@ export default defineConfig({
           PROVIDER_API_BASE_HARBOR: "https://api.harperharbor.com",
           // 測試預設不審核（大多數測試走登記即上榜）；審核測試自己打開。
           REVIEW_ENABLED: "false",
+          // 正式發布可開啟 GA；測試明確預設停用，需要時由個案開啟。
+          GA4_ENABLED: "false",
         },
       },
     }),
