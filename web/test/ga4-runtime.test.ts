@@ -241,6 +241,7 @@ it("uses global identity settings and explicitly clears them on logout, without 
  ga.identity(null);
  expect(ga.commands().at(-1)).toEqual(["set",{user_id:null,user_properties:{payer_type:null}}]);
  vi.stubGlobal("location",new URL("https://sukisuki.ai/checkin")); ga.pageView(); ga.track("topup_click");
+ expect(ga.commands().filter(c=>c[0]==="set" && (c[1] as {user_id?:unknown})?.user_id===null)).toHaveLength(1);
  for(const command of ga.commands().filter(c=>c[0]==="event")) {
   expect(command[2]).not.toHaveProperty("user_id"); expect(command[2]).not.toHaveProperty("user_properties");
  }
