@@ -85,6 +85,8 @@ async function clientId(provider:ProviderId=currentProvider()): Promise<string> 
 export async function beginLogin(returnTo: string, options: {provider?:ProviderId; linkFrom?:ProviderId} = {}): Promise<void> {
   const provider=options.provider ?? currentProvider();
   if(await managedAuth()){
+    // 按下登入就是互動登入：之前沒走完的靜默嘗試（例如中途按了返回）不能讓這次的拒絕變成安靜返回
+    takeSilentFlow();
     // 回呼失敗時「重新登入」要回到同一頁：伺服器那份流程失敗就沒了，這裡自己也記一份。
     sessionStorage.setItem(STORE.returnTo, safeReturnTo(returnTo));
     const result=await authRequest<{url:string}>("start",{provider,linkFrom:options.linkFrom,returnTo:safeReturnTo(returnTo),locale:String(i18n.global.locale.value)});
