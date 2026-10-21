@@ -1,0 +1,118 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createGa4 } from "../src/lib/ga4";
+
+beforeEach(() => {
+  vi.stubGlobal("location", new URL("https://sukisuki.ai/cards/123?ref=PRIVATE&q=SECRET"));
+  Object.defineProperty(document, "referrer", { configurable: true, value: "https://example.com/private?q=SECRET" });
+  document.title = "PRIVATE CARD TITLE";
+  document.head.querySelectorAll("script[data-hearthroom-ga4]").forEach(el => el.remove());
+  vi.stubGlobal("navigator", { userAgent: "Test", globalPrivacyControl: false, doNotTrack: "0" });
+  const append = document.head.appendChild.bind(document.head);
+  vi.spyOn(document.head, "appendChild").mockImplementation((node) => {
+    // Inspect the loader without executing Google's script during unit tests.
+    if (node instanceof HTMLScriptElement) node.type = "text/plain";
+    return append(node);
+  });
+});
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+describe("GA4 runtime", () => {
+  it("queues consent and sanitized config before loading, sends one manual view", () => {
+    const ga = createGa4();
+    ga.start(true);
+    ga.pageView();
+    ga.pageView();
+    const commands = ga.commands();
+    expect(commands[0]).toEqual(["consent", "default", { analytics_storage: "granted", ad_storage: "denied", ad_user_data: "denied", ad_personalization: "denied" }]);
+    expect(commands.find(c => c[0] === "config")?.[2]).toMatchObject({ send_page_view: false, page_location: "https://sukisuki.ai/cards/_", page_title: "card", allow_google_signals: false, cookie_expires: 33696000, cookie_update: false });
+    expect(commands.filter(c => c[1] === "page_view")).toHaveLength(1);
+    expect(JSON.stringify(commands)).not.toMatch(/PRIVATE|SECRET|123/);
+    const script = document.querySelector<HTMLScriptElement>("script[data-hearthroom-ga4]")!;
+    expect(script.src).toContain("https://www.googletagmanager.com/gtag/js?id=G-K82Q2QC7P4");
+    expect(script.referrerPolicy).toBe("no-referrer");
+  });
+
+  it("does nothing when disabled, on GPC, or on a sandbox host", () => {
+    for (const mode of ["disabled", "gpc", "sandbox"]) {
+      vi.stubGlobal("navigator", { globalPrivacyControl: mode === "gpc" });
+      vi.stubGlobal("location", new URL(mode === "sandbox" ? "https://c123.sukisuki.ai/" : "https://sukisuki.ai/"));
+      const ga = createGa4();
+      ga.start(mode !== "disabled"); ga.pageView(); ga.track("topup_click");
+      expect(ga.commands()).toEqual([]);
+      expect(document.querySelector("script[data-hearthroom-ga4]")).toBeNull();
+    }
+  });
+
+  it("honors GPC even after initialization and ignores arbitrary events", () => {
+    const ga = createGa4(); ga.start(true); ga.pageView();
+    const before = ga.commands().length;
+    ga.track("share", { detail: "share_clipboard", subject: "PRIVATE" });
+    expect(ga.commands().at(-1)).toEqual(["event", "share", expect.objectContaining({ content_type: "card", method: "clipboard", page_location: "https://sukisuki.ai/cards/_" })]);
+    ga.track("private-event", { detail: "PRIVATE" });
+    expect(ga.commands()).toHaveLength(before + 1);
+    vi.stubGlobal("navigator", { globalPrivacyControl: true });
+    ga.track("topup_click"); ga.pageView();
+    expect(ga.commands()).toHaveLength(before + 1);
+  });
+
+  it("refreshes the sanitized context on SPA navigation and treats DNT independently", () => {
+    const ga = createGa4(); ga.start(true); ga.pageView();
+    vi.stubGlobal("navigator", { doNotTrack: "1" });
+    vi.stubGlobal("location", new URL("https://sukisuki.ai/en/wallet?private=SECRET"));
+    ga.pageView(); ga.track("plan_click", { detail: "wallet" });
+    expect(ga.commands().at(-1)).toEqual(["event", "begin_checkout", expect.objectContaining({ page_type: "wallet", item_category: "plan", entry: "wallet", page_referrer: "https://sukisuki.ai/cards/_" })]);
+    expect(JSON.stringify(ga.commands())).not.toMatch(/PRIVATE|SECRET/);
+  });
+
+  it("uses only a validated server pseudonym and clears it when the account logs out", () => {
+    const ga = createGa4(); ga.start(true, { clientId: "1234.5678" });
+    ga.identity({ userId: "ga1_" + "a".repeat(64), payerType: "plan" });
+    ga.track("topup_click");
+    expect(ga.commands().find(c => c[0] === "config")?.[2]).toMatchObject({ client_id: "1234.5678" });
+    expect(ga.commands().at(-1)?.[2]).toMatchObject({ user_id: "ga1_" + "a".repeat(64), user_properties: { payer_type: "plan" } });
+    ga.identity(null); ga.track("topup_click");
+    expect(ga.commands().at(-1)?.[2]).toMatchObject({ user_id: null, user_properties: { payer_type: null } });
+    ga.identity({ userId: "raw-account-id", payerType: "topup" }); ga.track("topup_click");
+    expect(JSON.stringify(ga.commands())).not.toContain("raw-account-id");
+  });
+
+  it("decorates only trusted Console billing links and removes analytics on GPC", () => {
+    const ga = createGa4(); ga.start(true, { clientId: "1234.5678" });
+    expect(ga.checkoutUrl("https://console.harperharbor.com/me/billing?plan=month"))
+      .toBe("https://console.harperharbor.com/me/billing?plan=month&ga_client_id=1234.5678&ga_source_app=hearthroom");
+    expect(ga.checkoutUrl("https://attacker.example/me/billing")).toBe("https://attacker.example/me/billing");
+    vi.stubGlobal("navigator", { globalPrivacyControl: true });
+    expect(ga.checkoutUrl("https://console.harperharbor.com/me/billing?ga_client_id=1234.5678&ga_source_app=hearthroom&plan=month"))
+      .toBe("https://console.harperharbor.com/me/billing?plan=month");
+  });
+
+  it("does not attach a late identity response after logout", async () => {
+    const ga = createGa4(); ga.start(true);
+    let finish!: (value: unknown) => void;
+    const pending = ga.refreshIdentity(123, () => new Promise(resolve => { finish = resolve; }));
+    await ga.refreshIdentity(null, async () => null);
+    finish({ userId: "ga1_" + "b".repeat(64), payerType: "topup" });
+    await pending; ga.track("topup_click");
+    expect(ga.commands().at(-1)?.[2]).toMatchObject({ user_id: null });
+  });
+  it("counts a second card route without disclosing either card number", () => {
+    const ga = createGa4(); ga.start(true); ga.pageView();
+    vi.stubGlobal("location", new URL("https://sukisuki.ai/cards/456")); ga.pageView();
+    expect(ga.commands().filter(c => c[1] === "page_view")).toHaveLength(2);
+    expect(ga.commands().filter(c => c[1] === "page_view").map(c => c[2])).toEqual([
+      expect.objectContaining({ page_location: "https://sukisuki.ai/cards/_" }),
+      expect.objectContaining({ page_location: "https://sukisuki.ai/cards/_" }),
+    ]);
+  });
+  it("lets Google validate linker data and synchronizes only the resulting numeric client ID", () => {
+    const ga = createGa4(); const synchronized = vi.fn();
+    ga.start(true, { clientId: "1.2", landingUrl: "https://sukisuki.ai/?_gl=PRIVATE", onClientId: synchronized });
+    expect(ga.commands().find(c => c[0] === "config")?.[2]).not.toHaveProperty("client_id");
+    const get = ga.commands().find(c => c[0] === "get")!;
+    (get[3] as (id: unknown) => void)("PRIVATE");
+    expect(synchronized).not.toHaveBeenCalled();
+    (get[3] as (id: unknown) => void)("1234.5678");
+    expect(synchronized).toHaveBeenCalledWith("1234.5678");
+    expect(ga.checkoutUrl("https://console.harperharbor.com/me/billing")).toContain("ga_client_id=1234.5678");
+  });
+});

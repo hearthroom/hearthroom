@@ -47,9 +47,9 @@ export async function fetchConversations(token: string, language: string, page =
     `conversations?pageNum=${page}&lang=${encodeURIComponent(language)}`, token);
 }
 
-export async function recordConversation(token: string, provider: ProviderId, roleId: string, conversationId: string): Promise<void> {
+export async function recordConversation(token: string, provider: ProviderId, roleId: string, conversationId: string): Promise<{ first?: boolean }> {
   clearLibraryCache();
-  try { await read(await fetch(`${COMMUNITY_API}/me/conversations`, {
+  try { return await read<{ first?: boolean }>(await fetch(`${COMMUNITY_API}/me/conversations`, {
     method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'X-Provider': provider, 'Content-Type': 'application/json' },
     body: JSON.stringify({ roleId, conversationId }),
   })); } finally { clearLibraryCache(); }

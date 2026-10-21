@@ -52,7 +52,8 @@ describe("首玩與活躍日", () => {
   it("沒有歸因不多寫：兩張表都沒有新列，對話照常記錄", async () => {
     const r = await put("plain");
     expect(r.status).toBe(200);
-    expect(await r.json()).toEqual({ saved: true });
+    // The additive first-conversation claim does not write campaign attribution.
+    expect(await r.json()).toEqual({ saved: true, first: true });
     expect(await days(plain)).toEqual([]);
     expect(await count("campaign_active_days")).toBe(0);
     expect(await firstPlay()).toBeNull();

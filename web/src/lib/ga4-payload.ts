@@ -27,12 +27,13 @@ function route(url: URL): { path: string; type: string } | null {
     "/me/badges": "me", "/me/community": "me", "/me/notifications": "me", "/me/referral": "me",
     "/create": "editor", "/wallet": "wallet", "/checkin": "checkin", "/go/plan": "plan",
     "/resources": "resources", "/settings": "settings", "/developers": "developers", "/download": "download",
-    "/guide": "guide", "/updates": "updates", "/campaigns": "campaign", "/login": "login", "/auth/callback": "login",
+    "/guide": "guide", "/privacy": "privacy", "/updates": "updates", "/campaigns": "campaign", "/login": "login", "/auth/callback": "login",
   };
   return fixed[bare] ? { path: prefix + bare, type: fixed[bare] } : { path: "/404", type: "404" };
 }
 
-export function gaPage(href: string, referrer = ""): Params | null {
+export interface GaPage { page_location: string; page_title: string; page_type: string; page_referrer: string }
+export function gaPage(href: string, referrer = ""): GaPage | null {
   try {
     const url = new URL(href);
     if (url.protocol !== "https:" || !siteRootOf(url.hostname)) return null;
@@ -79,7 +80,8 @@ export function gaEvent(event: string, data: EventData, page: string): GaEvent |
   if (data.ok === false) return null;
   const detail = data.detail ?? "";
   const make = (name: string, params: Params = {}): GaEvent => ({ name, params });
-  if (event === "login_done") return make("login", { method: "harper" });
+  if (event === "ga_login") return make("login", { method: "harper" });
+  if (event === "ga_sign_up") return make("sign_up", { method: "harper", signup_via: ["invite", "card_share", "campaign_share"].includes(detail) ? detail : "none" });
   if (event === "topup_click" || event === "plan_click") {
     const entry = page === "wallet" ? "wallet" : page === "checkin" ? "newcomer" : "profile";
     return make("begin_checkout", { item_category: event === "plan_click" ? "plan" : "topup", entry });
@@ -87,10 +89,14 @@ export function gaEvent(event: string, data: EventData, page: string): GaEvent |
   if (event === "credits_shortfall_click" && detail === "plan") return make("begin_checkout", { item_category: "plan", entry: "shortfall" });
   if (event === "credits_shortfall_shown" || event === "credits_shortfall_click") return make("credits_shortfall", { action: event.endsWith("shown") ? "shown" : "click" });
   if (event === "checkin_claim" && ["daily", "newcomer", "task"].includes(detail)) return make(event, { kind: detail });
-  if (event === "chat_start") return make(event);
+  if (event === "chat_start" || event === "first_chat") return make(event);
+  if (event === "android_download") return make("file_download", { file_extension: "apk", file_name: "hearthroom-android" });
+  if (event === "tour_begin" || event === "newcomer_tour_begin") return make("tutorial_begin", {
+    tour: event === "tour_begin" ? "coach" : "newcomer", ...(event === "newcomer_tour_begin" && /^[1-7]$/.test(detail) ? { day: Number(detail) } : {}),
+  });
   if (event === "share") {
     const method = detail.replace(/^share_/, "");
-    if (!["web", "clipboard", "manual", "line", "x", "facebook", "telegram", "whatsapp", "reddit", "threads", "bluesky", "weibo"].includes(method)) return null;
+    if (!["web", "clipboard", "manual", "line", "x", "facebook", "telegram", "whatsapp", "reddit", "threads", "bluesky", "weibo", "discord", "qq", "wechat"].includes(method)) return null;
     const content = page === "blog" ? "blog" : page === "campaign" ? "campaign" : ["card", "play"].includes(page) ? "card" : "invite";
     return make("share", { method, content_type: content });
   }

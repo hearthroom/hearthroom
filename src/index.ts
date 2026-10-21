@@ -96,6 +96,7 @@ import { topFandoms } from "./cards";
 import { wikidata } from "./wikidata";
 import { withD1Session } from "./d1-session";
 import { renderSiteManifest } from "./site-manifest";
+import { analyticsRoutes } from "./ga4";
 
 const app = new Hono<{ Bindings: Env; Variables: { ev: Pending } }>();
 
@@ -187,6 +188,7 @@ app.use('/v1/*',async(c,next)=>{
   return next();
 });
 app.route("/", accountAuthRoutes);
+app.route("/", analyticsRoutes);
 
 app.route("/", transferGateRoutes);
 

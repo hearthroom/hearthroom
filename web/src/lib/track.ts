@@ -11,6 +11,7 @@
  * - 尊重拒绝。DNT 或 GPC 打开就整个关掉。
  */
 
+import { trackGa4 } from "./ga4";
 const ENDPOINT = "/v1/e";
 /** 一次请求最多送几条。服务端也有同样的上限，两边对齐。 */
 const BATCH = 20;
@@ -51,6 +52,7 @@ const idle: (cb: () => void) => void =
   typeof requestIdleCallback === "function" ? (cb) => requestIdleCallback(cb, { timeout: 2000 }) : (cb) => { setTimeout(cb, 300); };
 
 export function track(event: string, data: Omit<Event, "event"> = {}): void {
+  trackGa4(event, data);
   if (optedOut) return;
   queue.push({ event, ...data, from: surface, locale: document.documentElement.lang || "" });
   if (scheduled) return;
@@ -63,6 +65,7 @@ export function track(event: string, data: Omit<Event, "event"> = {}): void {
  * 排隊等閒置才送的那一筆，頁面一走就可能送不出去，iOS 尤其。
  */
 export function trackNow(event: string, data: Omit<Event, "event"> = {}): void {
+  trackGa4(event, data);
   if (optedOut) return;
   queue.push({ event, ...data, from: surface, locale: document.documentElement.lang || "" });
   flush();

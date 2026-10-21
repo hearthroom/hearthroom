@@ -9,6 +9,7 @@ import { completeLogin, pendingReturnTo } from "@/lib/oauth";
 import { loginPath } from "@/lib/login-return";
 import { useSession } from "@/lib/session";
 import { track } from "@/lib/track";
+import { recordGa4Login } from "@/lib/ga4";
 import { useLocalePath } from "@/lib/use-locale";
 
 const router = useRouter();
@@ -26,6 +27,7 @@ onMounted(async () => {
     setProvider(provider); useProviderUpstream();
     await session.adopt(token);
     track("login_done");
+    void recordGa4Login(() => session.accessToken());
     // 用 replace：回上一頁不該再回到帶著授權碼的網址。
     await router.replace(returnTo);
   } catch (err) {
