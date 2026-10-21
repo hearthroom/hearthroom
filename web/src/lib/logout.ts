@@ -5,13 +5,14 @@
  */
 import { confirmCheck } from "./confirm";
 import { i18n } from "./i18n";
-import { lineByOrigin } from "./route-lines";
+import { currentLine, lineByOrigin } from "./route-lines";
 import type { useSession } from "./session";
 import { track } from "./track";
 
 export async function logoutWithRoutes(session: ReturnType<typeof useSession>): Promise<void> {
   const t = i18n.global.t;
-  const others = session.otherLines.map(lineByOrigin).filter((l) => !!l);
+  const here = currentLine();
+  const others = session.otherLines.map(lineByOrigin).filter((l): l is NonNullable<typeof l> => !!l && l.n !== here?.n);
   if (!others.length) {
     track("logout");
     await session.logout();
@@ -25,7 +26,7 @@ export async function logoutWithRoutes(session: ReturnType<typeof useSession>): 
     focusCancel: true,
     check: {
       label: t("routes.logout.all"),
-      hint: `${t("routes.logout.scope")} ${others.map((l) => t("routes.lineHost", { line: t(`routes.name.${l.n}`), host: l.host })).join(t("routes.listSeparator"))}`,
+      hint: `${t("routes.logout.scope")}\n${others.map((l) => t("routes.lineHost", { line: t(`routes.name.${l.n}`), host: l.host })).join(t("routes.listSeparator"))}`,
       initial: true,
     },
   });

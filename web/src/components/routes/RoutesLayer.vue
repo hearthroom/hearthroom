@@ -177,7 +177,7 @@ onBeforeUnmount(() => {
   </Transition>
 
   <RoutesDialog v-if="routesState.dialogOpen" />
-  <div class="toast" role="status" :hidden="!arrivedText">{{ arrivedText }}</div>
+  <div class="toast routes-toast" role="status" :hidden="!arrivedText">{{ arrivedText }}</div>
 </template>
 
 <style scoped>
@@ -220,6 +220,14 @@ onBeforeUnmount(() => {
 .rprompt__close { flex: none; margin: -6px -6px 0 0; }
 .rprompt__close svg { width: 16px; height: 16px; }
 
+/* 手機上提示卡的按鈕是這張卡的主行動，點擊區 44；✕ 外觀不變，點擊區用偽元素擴到 44 */
+@media (max-width: 480px) {
+  .rprompt__actions .btn { height: var(--h-lg); }
+  .rprompt__close { position: relative; }
+  .rprompt__close::after { content: ""; position: absolute; inset: -7px; }
+}
+/* .toast 從 left:50% 起算，寬度只拿得到半個螢幕：「已切換到線路三（網域）」會被擠成兩行 */
+.routes-toast { width: max-content; max-width: calc(100vw - 2 * var(--s-4)); text-align: center; }
 .routes-prompt-enter-active { transition: opacity var(--dur-slow) var(--ease), transform var(--dur-slow) var(--ease); }
 .routes-prompt-leave-active { transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
 .routes-prompt-enter-from, .routes-prompt-leave-to { opacity: 0; transform: translateY(-8px); }

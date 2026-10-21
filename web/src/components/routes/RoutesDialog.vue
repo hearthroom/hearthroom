@@ -186,10 +186,12 @@ onMounted(async () => {
         </div>
 
         <p v-if="unsaved && !isCurrent && !sw.busy.value" class="notice routes__notice">{{ $t("routes.unsaved") }}</p>
+        <div class="routes__status">
         <p v-if="sw.failure.value" class="notice routes__notice" :class="{ 'notice--error': sw.failure.value !== 'start-unavailable' }" role="alert">{{ failureText }}</p>
         <p v-else-if="sw.busy.value" class="routes__step" role="status">{{ stepText }}<span v-if="sw.slow.value" class="routes__slow">{{ $t("routes.handoff.slow") }}</span></p>
         <p v-else-if="blocked && targetState === 'down'" class="routes__step" role="status">{{ $t("routes.pickWorking") }}</p>
         <p v-else-if="session.me && !isCurrent && !sw.withoutLogin.value && !allDown" class="routes__note">{{ $t("routes.loginNote") }}</p>
+        </div>
         <p v-if="sw.standalone" class="routes__note">{{ $t("routes.standaloneNote") }}</p>
 
         <div class="modal__actions routes__actions">
@@ -246,6 +248,10 @@ onMounted(async () => {
 .routes__speed { flex: none; display: inline-flex; align-items: center; gap: var(--s-2); color: var(--text); font-size: 13px; }
 .routes__ms { min-width: 64px; text-align: right; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .routes__row--down .routes__speed, .routes__row--down .routes__ms { color: var(--text-3); }
+/* 連不上的列選不了：單選圓換成淡的虛線，一眼看得出不能選（字不降透明，維持對比） */
+.routes__row--down[aria-disabled="true"] .routes__radio { box-shadow: none; border: 1.75px dashed var(--line-strong); }
+/* 狀態區預留兩行高：切換中多出進度與「需要久一點」時，置中的對話框不往上跳 */
+.routes__status { min-height: 40px; display: grid; align-content: start; }
 .routes__step, .routes__note { margin: 0; display: grid; gap: 2px; font-size: 13px; line-height: 1.5; color: var(--text-2); }
 .routes__note { font-size: 12px; color: var(--text-3); }
 .routes__slow { color: var(--text-3); }
