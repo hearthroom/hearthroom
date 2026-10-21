@@ -60,9 +60,10 @@ class UpdateClient {
         }
         throw new IOException("Download verification failed");
     }
-    /** True when a host delivered the exact APK; a host that fails or serves other bytes yields to the next. */
+    /** True when a host delivered the exact APK; a host that fails or serves other bytes yields to the next.
+     *  False when hosts answered but none with these bytes: the release itself may have changed. */
     private boolean fetch(UpdateManifest manifest,File target,Progress progress) throws Exception {
-        Exception last=null;
+        Exception last=null;boolean mismatch=false;
         for(String host:order()) {
             long bytes=0;long deadline=System.nanoTime()+120_000_000_000L;
             try(InputStream in=open("https://"+host+"/latest.apk");OutputStream out=new FileOutputStream(target)) {
@@ -73,9 +74,9 @@ class UpdateClient {
                 }
             } catch(Exception e){target.delete();if(cancelled)throw e;last=e;continue;}
             if(manifest.matches(target)){source=host;return true;}
-            target.delete();
-            return false;
+            target.delete();mismatch=true;
         }
+        if(mismatch)return false;
         throw last==null?new IOException("No download host"):last;
     }
     interface Progress {void update(int percent);}

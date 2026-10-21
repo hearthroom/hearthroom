@@ -40,6 +40,16 @@ public class UpdateClientTest {
             assertEquals("The manifest names .club, but the APK must come from the host that answered", "https://downloads.sukisuki.chat/latest.apk", client.requested.get(0));
         } finally { for (File f : dir.listFiles()) f.delete(); dir.delete(); }
     }
+    @Test public void aHostServingOtherBytesYieldsToTheNextHost() throws Exception {
+        Fixture client = new Fixture(Routes.downloadHosts("sukisuki.ai"));
+        client.bodies.put("https://downloads.sukisuki.ai/latest.json", manifest().getBytes(StandardCharsets.UTF_8));
+        client.bodies.put("https://downloads.sukisuki.ai/latest.apk", "stale apk!!".getBytes(StandardCharsets.UTF_8));
+        client.bodies.put("https://downloads.hearthroom.club/latest.apk", APK);
+        UpdateManifest update = client.check();
+        File dir = java.nio.file.Files.createTempDirectory("update-test").toFile();
+        try { assertTrue(update.matches(client.download(update, dir, percent -> {}))); }
+        finally { for (File f : dir.listFiles()) f.delete(); dir.delete(); }
+    }
     @Test public void allHostsBlockedIsOneFailure() {
         Fixture client = new Fixture(Routes.downloadHosts(null));
         assertThrows(IOException.class, client::check);

@@ -24,13 +24,16 @@ final class RoutePlanner {
     private static final Decision WAITING = new Decision(Kind.WAIT, null, false);
 
     private final List<String> enabled;
-    private final String current;
+    private final String current, link;
     private final boolean fixed;
     private final Map<String, Long> ok = new HashMap<>(), failed = new HashMap<>();
     private Decision decided;
 
-    RoutePlanner(List<String> enabled, String current, boolean fixed) {
+    RoutePlanner(List<String> enabled, String current, boolean fixed) { this(enabled, current, fixed, null); }
+    /** A followed link tries its own domain first, then the signed-in route; neither counts as switching. */
+    RoutePlanner(List<String> enabled, String current, boolean fixed, String link) {
         this.enabled = List.copyOf(enabled); this.current = current; this.fixed = fixed;
+        this.link = link == null || link.equals(current) ? null : link;
     }
     void result(String host, boolean reachable, long at) {
         if (ok.containsKey(host) || failed.containsKey(host)) return;
@@ -43,13 +46,17 @@ final class RoutePlanner {
         return decided;
     }
     private Decision evaluate(long now) {
+        if (link != null && enabled.contains(link)) {
+            if (ok.containsKey(link)) return new Decision(Kind.OPEN, link, false);
+            if (pending(link, now)) return WAITING;
+        }
         boolean usable = current != null && enabled.contains(current);
         if (usable && ok.containsKey(current)) return new Decision(Kind.OPEN, current, false);
         if (usable && pending(current, now)) return WAITING;
         if (current != null && fixed) return new Decision(Kind.CHOOSE, null, false);
         String best = null; long firstSuccess = Long.MAX_VALUE; boolean earlierPending = false, anyPending = false;
         for (String host : enabled) {
-            if (host.equals(current)) continue;
+            if (host.equals(current) || host.equals(link)) continue;
             if (ok.containsKey(host)) { if (best == null) best = host; firstSuccess = Math.min(firstSuccess, ok.get(host)); }
             else if (pending(host, now)) { anyPending = true; if (best == null) earlierPending = true; }
         }

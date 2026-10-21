@@ -112,7 +112,7 @@ public final class WebActivity extends Activity {
             showOrigin(url);
             if (cover.getVisibility() != View.VISIBLE) progress.setVisibility(View.VISIBLE);
         }
-        @Override public void onPageCommitVisible(WebView view, String url) { Ui.fadeOut(cover, 300); }
+        @Override public void onPageCommitVisible(WebView view, String url) { if (cover.getVisibility() == View.VISIBLE) revealWhenDrawn(view, url, 0); }
         @Override public void onPageFinished(WebView view, String url) {
             progress.setVisibility(View.GONE);
             CookieManager.getInstance().flush();
@@ -208,6 +208,20 @@ public final class WebActivity extends Activity {
             // The same page on the chosen route, in this same view.
             content.removeAllViews(); content.addView(web); web.loadUrl(WebPolicy.onRoute(destination, data.getStringExtra(RoutesActivity.HOST)));
         }
+    }
+    /**
+     * The site's first commit is an empty #app shell; keep the launch mark until the app has mounted
+     * content, so the player never sees a blank page. Pages without that shell reveal at once.
+     * Bounded (8 s), read-only, no bridge.
+     */
+    private void revealWhenDrawn(WebView view, String url, int attempt) {
+        if (!WebPolicy.isSite(url) || attempt >= 80) { Ui.fadeOut(cover, 300); return; }
+        view.evaluateJavascript("(function(){var a=document.getElementById('app');return a?a.childElementCount>0:!!(document.body&&document.body.childElementCount)})()", result -> {
+            if (web != view || isFinishing() || cover.getVisibility() != View.VISIBLE) return;
+            if (!"true".equals(result)) { cover.postDelayed(() -> revealWhenDrawn(view, url, attempt + 1), 100); return; }
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.VISUAL_STATE_CALLBACK)) WebViewCompat.postVisualStateCallback(view, 0, id -> Ui.fadeOut(cover, 300));
+            else Ui.fadeOut(cover, 300);
+        });
     }
     private void showPageError() { showMessage(R.string.web_load_failed, false); }
     private void showUnavailable() { destroyWeb(); showMessage(R.string.web_unavailable, true); }

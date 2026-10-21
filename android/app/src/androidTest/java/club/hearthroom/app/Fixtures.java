@@ -64,6 +64,7 @@ final class Fixtures implements Application.ActivityLifecycleCallbacks {
         context.getSharedPreferences("routes", Context.MODE_PRIVATE).edit().clear()
             .putString("current", current).putBoolean("fixed", fixed).putLong("background", System.currentTimeMillis()).commit();
         application.registerActivityLifecycleCallbacks(this);
+        instrumentation.setInTouchMode(true); // As a finger-driven phone; keyboard focus rings are not part of these screens.
         return this;
     }
     void stop() {

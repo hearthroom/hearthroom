@@ -30,7 +30,8 @@ public final class RoutesActivity extends Activity {
     static final int RESULT_UPDATES = RESULT_FIRST_USER;
     private final Handler main = new Handler(Looper.getMainLooper());
     private ExecutorService probes;
-    private final Map<String, Long> latency = new HashMap<>();
+    private final Map<String, Long> latency = new HashMap<>(), answered = new HashMap<>();
+    private long started;
     private final Map<String, View> rows = new HashMap<>();
     RouteProbe probe = new RouteProbe();
     private RouteStore store;
@@ -84,20 +85,24 @@ public final class RoutesActivity extends Activity {
     private void recheck() {
         if (probes != null) probes.shutdownNow();
         probes = Executors.newFixedThreadPool(Routes.HOSTS.size());
-        latency.clear(); int run = ++round;
+        latency.clear(); int run = ++round; started = android.os.SystemClock.uptimeMillis();
         findViewById(R.id.retry).setEnabled(false);
         for (String host : rows.keySet()) {
             render(host);
-            probes.execute(() -> { long ms = probe.probe(host); main.post(() -> { if (run != round || isFinishing()) return; latency.put(host, ms); render(host); settled(); }); });
+            probes.execute(() -> { long ms = probe.probe(host); main.post(() -> { if (run != round || isFinishing()) return; latency.put(host, ms); answered.put(host, android.os.SystemClock.uptimeMillis() - started); render(host); settled(); }); });
         }
         render(null);
     }
     private void settled() {
-        if (latency.size() < rows.size()) return;
-        findViewById(R.id.retry).setEnabled(true);
+        if (latency.size() == rows.size()) findViewById(R.id.retry).setEnabled(true);
+        if (findViewById(R.id.failure).getVisibility() != View.VISIBLE) return;
+        // From "nothing reachable": once a route answers, automatic mode opens it by the same rules as launch.
         String current = store.current();
-        // Retrying from "nothing reachable": the player's own route is back, so just open it.
-        if (findViewById(R.id.failure).getVisibility() == View.VISIBLE && current != null && reachable(current) && !store.fixed()) choose(current);
+        if (store.fixed()) { if (current != null && reachable(current)) choose(current); return; }
+        RoutePlanner planner = new RoutePlanner(routes.enabled(), current, false);
+        for (String host : latency.keySet()) planner.result(host, reachable(host), answered.get(host));
+        RoutePlanner.Decision d = planner.decide(latency.size() == rows.size() ? RoutePlanner.PROBE_TIMEOUT : android.os.SystemClock.uptimeMillis() - started);
+        if (d.kind == RoutePlanner.Kind.OPEN) { store.opened(d.host, d.switched); finishWith(d.host); }
     }
     private boolean reachable(String host) { Long ms = latency.get(host); return ms != null && ms >= 0; }
     private void render(String only) {
@@ -155,8 +160,8 @@ public final class RoutesActivity extends Activity {
     private void choose(String host) {
         if (host == null) return;
         store.opened(host, false);
-        setResult(RESULT_OK, new Intent().putExtra(HOST, host));
-        finish();
+        finishWith(host);
     }
+    private void finishWith(String host) { setResult(RESULT_OK, new Intent().putExtra(HOST, host)); finish(); }
     @Override protected void onDestroy() { if (probes != null) probes.shutdownNow(); main.removeCallbacksAndMessages(null); super.onDestroy(); }
 }

@@ -27,7 +27,7 @@ import java.util.concurrent.Executors;
 public final class MainActivity extends LauncherActivity {
     static final int ROUTES=7;
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
-    private final ExecutorService probes=Executors.newFixedThreadPool(Routes.HOSTS.size());
+    private ExecutorService probes;
     private final Handler main=new Handler(Looper.getMainLooper());
     private UpdateClient client;
     private RouteProbe probe=new RouteProbe();
@@ -74,8 +74,8 @@ public final class MainActivity extends LauncherActivity {
     }
     @Override protected void onNewIntent(Intent intent){
         super.onNewIntent(intent);
-        // A warm start from a shortcut or link: begin again from that intent.
-        if(launched||planner!=null||manual){finish();startActivity(new Intent(intent).setClass(this,MainActivity.class));}
+        // A warm start from a shortcut or link, possibly over the routes screen: begin again from that intent.
+        finish();startActivity(new Intent(intent).setClass(this,MainActivity.class));
     }
     private void route(Intent intent){
         Uri data=intent.getData();
@@ -90,12 +90,15 @@ public final class MainActivity extends LauncherActivity {
     // Route selection (S1, S5).
     private void startLaunch(){
         if(!online()){openRoutes(RoutesActivity.OFFLINE);return;}
-        String target=link!=null?WebPolicy.routeOf(link):store.current();
-        planner=new RoutePlanner(store.routes().enabled(),target,store.fixed());
+        planner=new RoutePlanner(store.routes().enabled(),store.current(),store.fixed(),link!=null?WebPolicy.routeOf(link):null);
         started=SystemClock.uptimeMillis();int run=++attempt;
+        // Each attempt gets its own threads so probes left over from an earlier attempt cannot delay these.
+        if(probes!=null)probes.shutdownNow();
+        probes=Executors.newFixedThreadPool(Routes.HOSTS.size());
         for(String host:store.routes().enabled())probes.execute(()->{
             long ms=probe.probe(host);
             main.post(()->{if(run!=attempt||!active())return;planner.result(host,ms>=0,SystemClock.uptimeMillis()-started);tick(run);});
+            main.postDelayed(()->tick(run),RoutePlanner.PREFERENCE_WINDOW);
         });
         main.postDelayed(()->tick(run),RoutePlanner.SHOW_WAITING);
         main.postDelayed(()->tick(run),RoutePlanner.SLOW);
@@ -155,7 +158,7 @@ public final class MainActivity extends LauncherActivity {
     private void later(){
         if(release!=null&&!manual)store.defer(release.versionCode,System.currentTimeMillis());
         if(launchUrl!=null)openSite();
-        else{manual=false;release=null;update.setVisibility(View.GONE);client.cancel();startLaunch();}
+        else{manual=false;release=null;update.setVisibility(View.GONE);client.cancel();client=new UpdateClient(Routes.downloadHosts(store.current()));startLaunch();}
     }
     private void check(){
         status.setText(R.string.checking);action.setVisibility(View.GONE);notes.setText("");
@@ -204,9 +207,9 @@ public final class MainActivity extends LauncherActivity {
     @Override protected void onSaveInstanceState(Bundle out){super.onSaveInstanceState(out);if(release!=null){out.putString("release",release.json);out.putString("launch",launchUrl);}out.putBoolean("permission",waitingPermission);}
     private void showError(){status.setText(R.string.update_failed);progress.setVisibility(View.GONE);action.setEnabled(true);action.setVisibility(View.VISIBLE);action.setText(R.string.retry);action.setOnClickListener(v->{if(release==null)check();else download();});}
     private void openSite(){
-        if(!active())return;launched=true;splash=false;client.cancel();worker.shutdownNow();probes.shutdownNow();
+        if(!active())return;launched=true;splash=false;client.cancel();worker.shutdownNow();if(probes!=null)probes.shutdownNow();
         if(inWebView){startActivity(new Intent(this,WebActivity.class).setData(getLaunchingUrl()));finish();}
         else launchTwa();
     }
-    @Override protected void onDestroy(){client.cancel();worker.shutdownNow();probes.shutdownNow();main.removeCallbacksAndMessages(null);super.onDestroy();}
+    @Override protected void onDestroy(){if(client!=null)client.cancel();worker.shutdownNow();if(probes!=null)probes.shutdownNow();main.removeCallbacksAndMessages(null);super.onDestroy();}
 }
