@@ -22,6 +22,11 @@ export const lineByNumber = (n: unknown): Line | undefined => LINES.find((l) => 
 
 /** 目前在哪條線路；www. 與 play. 算同一條。本機、預覽網域回 undefined。 */
 export function currentLine(hostname: string = location.hostname): Line | undefined {
+  // 本機開發：line3.localhost 當作線路三，走查與截圖用（瀏覽器把 *.localhost 解到本機）；正式建置沒有這條
+  if (import.meta.env.DEV) {
+    const dev = /^line([1-4])\.localhost$/.exec(hostname);
+    if (dev) return LINES.find((l) => l.n === Number(dev[1]));
+  }
   const root = siteRootOf(hostname);
   return root ? LINES.find((l) => l.host === root) : undefined;
 }
