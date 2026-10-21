@@ -87,6 +87,21 @@ it("calls the current line down only when both probes fail", async () => {
   expect(routesState.results[1]?.state).toBe("ok");
 });
 
+it("stops probing as soon as the player enters a play page mid-check", async () => {
+  vi.stubGlobal("location", loc("sukisuki.ai"));
+  let immersive = false;
+  const fetch = vi.fn(async (url: string) => {
+    // 目前線路很慢；第一次量完之前玩家點進了遊玩頁
+    if (url.startsWith("https://sukisuki.ai/")) { immersive = true; return new Response("[]"); }
+    return new Response(null);
+  });
+  vi.stubGlobal("fetch", fetch);
+  vi.spyOn(performance, "now").mockReturnValueOnce(0).mockReturnValueOnce(2600);
+  expect(await backgroundCheck(() => !immersive)).toBe(false);
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(fetch.mock.calls.some(([url]) => !String(url).startsWith("https://sukisuki.ai/"))).toBe(false);
+});
+
 it("remembers a dismissal on this domain for three days", () => {
   const now = Date.UTC(2026, 9, 22);
   expect(promptDismissed(now)).toBe(false);

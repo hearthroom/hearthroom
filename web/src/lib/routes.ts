@@ -9,7 +9,7 @@
  * 但「多久回來」與「有沒有回來」就是我們要的全部。
  */
 import { reactive } from "vue";
-import { LINES, currentLine, lineByNumber, type Line } from "./route-lines";
+import { LINES, currentLine, inAndroidApp, lineByNumber, type Line } from "./route-lines";
 import { authRequest, ManagedAuthUnavailable } from "./managed-auth";
 import { isStandalone } from "./pwa";
 import { isPlayHost } from "./site";
@@ -51,7 +51,7 @@ export { LINES, currentLine, lineByNumber, lineByOrigin, type Line } from "./rou
 export function routesAvailable(o: { hostname?: string; ua?: string } = {}): boolean {
   const hostname = o.hostname ?? location.hostname;
   const ua = o.ua ?? navigator.userAgent;
-  return !!currentLine(hostname) && !isPlayHost(hostname) && !/\bHearthroomApp\/[\d.]+\b/.test(ua);
+  return !!currentLine(hostname) && !isPlayHost(hostname) && !inAndroidApp(ua);
 }
 
 /**
@@ -117,8 +117,11 @@ export async function probeOnce(origin: string, timeoutMs: number = ROUTE_TUNING
  * 測兩次取快的那次：第一次常常包含建立連線，第二次才是之後瀏覽的速度。
  * 第一次就連不上就不再試，免得「連不上」要等兩倍時間才顯示。
  */
-export async function probeLine(origin: string, timeoutMs: number = ROUTE_TUNING.probeTimeoutMs, o: { retryDown?: boolean } = {}): Promise<number | null> {
+export async function probeLine(origin: string, timeoutMs: number = ROUTE_TUNING.probeTimeoutMs, o: { retryDown?: boolean; keepGoing?: () => boolean } = {}): Promise<number | null> {
+  const go = o.keepGoing ?? (() => true);
+  if (!go()) return null;
   const first = await probeOnce(origin, timeoutMs);
+  if (!go()) return first;
   if (first === null) return o.retryDown ? probeOnce(origin, timeoutMs) : null;
   const second = await probeOnce(origin, timeoutMs);
   return second === null ? first : Math.min(first, second);
@@ -178,7 +181,7 @@ function refreshRecommendation(): void {
   routesState.recommended = current ? recommend(current, latencyMap())?.n ?? 0 : 0;
 }
 
-async function measure(line: Line, o: { retryDown?: boolean } = {}): Promise<number | null> {
+async function measure(line: Line, o: { retryDown?: boolean; keepGoing?: () => boolean } = {}): Promise<number | null> {
   if (!(line.n in routesState.results)) routesState.results[line.n] = { state: "checking" };
   const ms = typeof navigator !== "undefined" && navigator.onLine === false ? null : await probeLine(line.origin, ROUTE_TUNING.probeTimeoutMs, o);
   routesState.results[line.n] = ms === null ? { state: "down" } : { state: "ok", ms };
@@ -201,13 +204,15 @@ export function measureAll(force = false): Promise<void> {
  * 開站後的背景檢查：先測目前線路，夠快就到此為止（一個請求都不多打）；慢才測其他三條。
  * 回傳是否該自動彈出提示卡。
  */
-export async function backgroundCheck(): Promise<boolean> {
+export async function backgroundCheck(keepGoing: () => boolean = () => true): Promise<boolean> {
   const current = currentLine();
   if (!current) return false;
   // 目前這條兩次都失敗才算連不上（ui.md §4.1），一次閃斷不該叫人換線
-  const mine = await measure(current, { retryDown: true });
-  if (!isSlow(mine)) return false;
-  await Promise.all(LINES.filter((l) => l.n !== current.n).map((l) => measure(l)));
+  const mine = await measure(current, { retryDown: true, keepGoing });
+  // 測到一半進了遊玩頁：剩下的一個都不打（每次測之前都問一次）
+  if (!keepGoing() || !isSlow(mine)) return false;
+  await Promise.all(LINES.filter((l) => l.n !== current.n).map((l) => measure(l, { keepGoing })));
+  if (!keepGoing()) return false;
   routesState.measuredAt = Date.now();
   return routesState.recommended > 0;
 }

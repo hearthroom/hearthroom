@@ -17,7 +17,7 @@
  */
 import { authRequest } from "./managed-auth";
 import { oauthBaseOf } from "./provider";
-import { currentLine } from "./route-lines";
+import { currentLine, inAndroidApp } from "./route-lines";
 
 export const SILENT_LOGIN_ENABLED = false;
 
@@ -47,7 +47,7 @@ export function markLoggedOut(now = Date.now()): void { write(LOGGED_OUT_KEY, St
 export function silentLoginAllowed(o: { immersive: boolean; now?: number; enabled?: boolean; ua?: string }): boolean {
   const now = o.now ?? Date.now();
   if (!(o.enabled ?? SILENT_LOGIN_ENABLED) || o.immersive || !currentLine()) return false;
-  if (/\bHearthroomApp\/[\d.]+\b/.test(o.ua ?? navigator.userAgent)) return false;
+  if (inAndroidApp(o.ua)) return false;
   if (now - read(LOGGED_OUT_KEY) < SILENT_TUNING.loggedOutDays * DAY) return false;
   return now - read(TRIED_KEY) >= SILENT_TUNING.everyDays * DAY;
 }
@@ -95,7 +95,7 @@ export function rememberSilentResult(result: string): void { write(RESULT_KEY, r
  * Harbor 剛明確說過「沒登入」或靜默登入成功過時不放：那時「在別條線路登入過」多半不成立，多一句只會干擾。
  */
 export function routeLoginHintVisible(o: { ua?: string } = {}): boolean {
-  if (!currentLine() || /\bHearthroomApp\/[\d.]+\b/.test(o.ua ?? navigator.userAgent)) return false;
+  if (!currentLine() || inAndroidApp(o.ua)) return false;
   let result = "";
   try { result = localStorage.getItem(RESULT_KEY) || ""; } catch { /* 沒有就當沒試過 */ }
   return !result;

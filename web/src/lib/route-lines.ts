@@ -31,3 +31,21 @@ export function currentLine(hostname: string = location.hostname): Line | undefi
   return root ? LINES.find((l) => l.host === root) : undefined;
 }
 
+/*
+ * 在不在 Android App 裡：App 有自己的線路畫面與記憶，網站在 App 裡不放任何線路入口、也不靜默登入。
+ * WebView 的 UA 帶 HearthroomApp；TWA 跑的是使用者的 Chrome，UA 沒有記號，只有第一次載入的
+ * referrer 是 android-app://<套件名>。之後站內換頁 referrer 就不見了，所以第一次看到時記在這個分頁裡。
+ */
+const APP_REFERRER = "android-app://club.hearthroom.app";
+const APP_KEY = "hearthroom.androidApp";
+export function rememberAndroidAppLaunch(referrer: string = document.referrer): void {
+  if (!referrer.startsWith(APP_REFERRER)) return;
+  try { sessionStorage.setItem(APP_KEY, "1"); } catch { /* 存不了就只有這一頁認得 */ }
+  launchedFromApp = true;
+}
+let launchedFromApp = false;
+export function inAndroidApp(ua: string = navigator.userAgent): boolean {
+  if (/\bHearthroomApp\/[\d.]+\b/.test(ua) || launchedFromApp) return true;
+  try { return sessionStorage.getItem(APP_KEY) === "1"; } catch { return false; }
+}
+
