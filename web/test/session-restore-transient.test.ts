@@ -43,3 +43,20 @@ it("does not forget who signed in on this browser when the server stays down", a
   expect(session.me).toBeNull();
   expect({ ...localStorage }).toEqual(before);
 });
+
+it.each([502, 503])('preserves a bearer session on proxy %i and supports a manual retry', async status => {
+  resetManagedAuthForTest(false);
+  localStorage.setItem('hearthroom.provider', 'harbor');
+  const saved = JSON.stringify({ accessToken: 'synthetic-token', expiresAt: Date.now() + 3_600_000 });
+  localStorage.setItem('hearthroom.oauth.access.harbor', saved);
+  vi.stubGlobal('fetch', vi.fn(async () => Response.json({ error: 'temporarily_unavailable' }, { status })));
+  const session = useSession();
+  await session.restore();
+  expect(session.restoreError).toBe(true);
+  expect(localStorage.getItem('hearthroom.oauth.access.harbor')).toBe(saved);
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/open/v1/me')
+    ? Response.json({ accountNumId: 22, nickName: 'fixture' }) : Response.json({})));
+  await session.retryRestore();
+  expect(session.restoreError).toBe(false);
+  expect(session.me?.accountNumId).toBe(22);
+});

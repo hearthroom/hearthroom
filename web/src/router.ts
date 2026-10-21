@@ -246,12 +246,12 @@ router.beforeEach(async (to) => {
   // 確認下來不是登入狀態就換到登入頁。只給會自己處理「身分還沒到」的頁面用。
   if (to.meta.optimisticAuth && !session.ready && signedInHint() !== null) {
     void session.restore().then(() => {
-      if (!session.me && router.currentRoute.value.fullPath === to.fullPath) void router.replace(login);
+      if (!session.me && !session.restoreError && router.currentRoute.value.fullPath === to.fullPath) void router.replace(login);
     });
     return true;
   }
   await session.restore();
-  if (session.me) return true;
+  if (session.me || session.restoreError) return true;
   return login;
 });
 
