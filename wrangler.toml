@@ -74,7 +74,15 @@ name = "VISIT_LIMIT"
 namespace_id = "6401"
 simple = { limit = 30, period = 60 }
 
+# All four transfer phases share one per-IP budget; blocked requests do not write D1.
+[[ratelimits]]
+name = "AUTH_ROUTE_LIMIT"
+namespace_id = "6402"
+simple = { limit = 120, period = 60 }
+
 [vars]
+# Keep off until Harbor prompt=none is deployed and independently verified.
+AUTH_SILENT_ENABLED = "false"
 # Preserve AUTH_ALLOWED_ORIGINS and add only the new domain's three app origins.
 AUTH_ADDITIONAL_ORIGINS = "https://sukisuki.pro,https://www.sukisuki.pro,https://play.sukisuki.pro"
 # HarperHarbor is the sole account, hosting and play service.

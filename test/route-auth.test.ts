@@ -6,7 +6,9 @@ import { resolveMember } from '../src/members';
 
 const source='https://sukisuki.ai', target='https://sukisuki.pro';
 const allowed=[source,target,'https://hearthroom.club','https://sukisuki.chat'];
+let routeLimit=vi.fn(async(_input:{key:string})=>({success:true}));
 const authEnv=()=>({...env,AUTH_ENABLED:'true',AUTH_ALLOWED_ORIGINS:allowed.join(','),
+  AUTH_ROUTE_LIMIT:{limit:routeLimit},
   AUTH_KEYRING:JSON.stringify({active:'test',keys:{test:'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='}}),AUTH_METRICS_SECRET:'test-only'});
 const context={waitUntil:(_p:Promise<unknown>)=>{},passThroughOnException(){}} as ExecutionContext;
 const hash=async(s:string)=>btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s))))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
@@ -49,7 +51,7 @@ async function issued(){
   expect(next.origin).toBe(target);expect(next.search).toBe('');
   return new URLSearchParams(next.hash.slice(1)).get('code')!;
 }
-beforeEach(async()=>{await resetDb();jars={};});
+beforeEach(async()=>{await resetDb();jars={};routeLimit=vi.fn(async(_input:{key:string})=>({success:true}));});
 afterEach(()=>vi.restoreAllMocks());
 
 it('hands off only an existing site session, preserves path and never contacts Harbor',async()=>{
@@ -187,4 +189,36 @@ it.each([false,true])('invalidates a redeemed session even when its cookie respo
   expect((await request(target,'/v1/auth/logout',{allRoutes})).status).toBe(200);
   jars[target]=late;
   expect((await request(target,'/v1/auth/session',{})).status).toBe(401);
+});
+
+it.each(['route-start','route-issue','route-redeem','prepare'])('rate limits %s before any auth metrics or handoff writes',async(operation)=>{
+  routeLimit.mockResolvedValue({success:false});
+  const path=operation==='prepare'?'/auth/route/prepare?request='+'a'.repeat(43):'/v1/auth/'+operation;
+  const response=await request(source,path,operation==='prepare'?undefined:{targetOrigin:target,request:'a'.repeat(43),code:'b'.repeat(43)}, {'CF-Connecting-IP':'192.0.2.42'});
+  expect(response.status).toBe(429);
+  expect(routeLimit).toHaveBeenCalledWith({key:'192.0.2.42'});
+  expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM account_auth_metrics').first<any>()).n).toBe(0);
+  expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM account_route_handoffs').first<any>()).n).toBe(0);
+});
+
+it.each(['route-issue','route-redeem','prepare'])('rejects malformed %s values without recording auth metrics',async(operation)=>{
+  const response=await request(source,operation==='prepare'?'/auth/route/prepare?request=bad':'/v1/auth/'+operation,operation==='prepare'?undefined:{request:'bad',code:'bad'});
+  expect(response.status).toBe(400);
+  expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM account_auth_metrics').first<any>()).n).toBe(0);
+});
+
+it.each(['route-start','route-issue','route-redeem','start','complete','session','token','logout','disconnect','adult'])('returns 400 for malformed JSON and nonobject %s bodies',async(operation)=>{
+  for(const body of ['{','null','[]','"text"','42']){
+    const response=await worker.fetch(new Request(source+'/v1/auth/'+operation,{method:'POST',headers:{Origin:source,'X-Hearthroom-Request':'1','Content-Type':'application/json'},body}),authEnv(),context);
+    expect(response.status,operation+' '+body).toBe(400);
+  }
+});
+
+it('retains a completed handoff receipt while another tab starts a switch before destination logout',async()=>{
+  await session();const code=await issued(),queuedLogout={...jars[target]};
+  expect((await request(target,'/v1/auth/route-redeem',{code})).status).toBe(200);
+  const late={...jars[target]};
+  await start(source,'https://sukisuki.chat');
+  jars[target]=queuedLogout;expect((await request(target,'/v1/auth/logout',{})).status).toBe(200);
+  jars[target]=late;expect((await request(target,'/v1/auth/session',{})).status).toBe(401);
 });
