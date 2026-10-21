@@ -31,6 +31,7 @@ export function createGa4() {
   let shell = "web";
   let clientId: string | undefined;
   let identity: AnalyticsIdentity | null = null;
+  let sentIdentity: AnalyticsIdentity | null = null;
   let landingUrl = "";
   let accountGeneration = 0;
   let onClientId: ((clientId: string) => void) | undefined;
@@ -58,15 +59,29 @@ export function createGa4() {
       shell = appShell({ twa, userAgent: navigator.userAgent, standalone: window.matchMedia?.("(display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone });
     } catch { shell = appShell({ userAgent: navigator.userAgent, referrer: document.referrer }); }
   }
-  function flush() { for (const event of pendingEvents.splice(0)) if (allowed()) emit(event); }
+  function flush() {
+    for (const event of pendingEvents.splice(0)) if (allowed()) emit(event);
+    if (allowed()) applyIdentity(identity);
+  }
   function enqueue(event: { name: string; params: Record<string, unknown>; page?: boolean }) {
     if (preparing || linkerPending) pendingEvents.push(event); else if (initialize()) emit(event);
   }
   // gtag consumes Arguments objects, matching the official dataLayer snippet.
   function send(..._args: unknown[]) { commands.push(arguments); }
+  function applyIdentity(value: AnalyticsIdentity | null) {
+    if (value?.userId === sentIdentity?.userId && value?.payerType === sentIdentity?.payerType) return;
+    send("set", { user_id: value?.userId ?? null, user_properties: { payer_type: value?.payerType ?? null } });
+    sentIdentity = value;
+  }
+  function assignIdentity(value: AnalyticsIdentity | null) {
+    identity = value;
+    if (initialized && !preparing && !linkerPending && allowed()) applyIdentity(identity);
+  }
   function emit(event: { name: string; params: Record<string, unknown>; page?: boolean }) {
-    if (event.page) send("set", event.params);
-    send("event", event.name, event.params);
+    const { user_id, user_properties, ...params } = event.params;
+    applyIdentity(analyticsIdentity({ userId: user_id, payerType: (user_properties as {payer_type?: unknown} | undefined)?.payer_type }));
+    if (event.page) send("set", params);
+    send("event", event.name, params);
   }
 
   function initialize(): boolean {
@@ -140,19 +155,19 @@ export function createGa4() {
       else if (!linkerPending) flush();
     },
     identity(value: unknown) {
-      identity = (navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl === true ? null : analyticsIdentity(value);
+      assignIdentity((navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl === true ? null : analyticsIdentity(value));
     },
     async refreshIdentity(account: number | null, read: () => Promise<unknown>) {
       const changed = account !== currentAccount;
       if (changed || !account || !allowed()) {
-        ++accountGeneration; identity = null; currentAccount = account; lastIdentityRead = -Infinity;
+        ++accountGeneration; assignIdentity(null); currentAccount = account; lastIdentityRead = -Infinity;
       }
       if (!account || !allowed() || !changed && Date.now() - lastIdentityRead < 60_000) return;
       lastIdentityRead = Date.now();
       const generation = ++accountGeneration;
       try {
         const value = await read();
-        if (generation === accountGeneration && allowed()) identity = analyticsIdentity(value);
+        if (generation === accountGeneration && allowed()) assignIdentity(analyticsIdentity(value));
       } catch { /* Missing analytics permissions do not affect sign-in. */ }
     },
     active: allowed,
