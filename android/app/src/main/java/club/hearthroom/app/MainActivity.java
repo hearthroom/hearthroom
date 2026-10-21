@@ -227,9 +227,11 @@ public final class MainActivity extends LauncherActivity {
         else launchTwa();
     }
     private Intent webIntent(){
-        return new Intent(this,WebActivity.class).setData(getLaunchingUrl())
+        Intent intent=new Intent(this,WebActivity.class).setData(getLaunchingUrl())
             .putExtra(WebActivity.WAITING_SHOWN,waitingShown)
             .putExtra(WebActivity.WAITING_TEXT,waitingStatus.getText().toString());
+        if(waitingShown)intent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION);
+        return intent;
     }
     @Override protected void onDestroy(){if(client!=null)client.cancel();worker.shutdownNow();if(probes!=null)probes.shutdownNow();main.removeCallbacksAndMessages(null);super.onDestroy();}
 }
