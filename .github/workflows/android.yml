@@ -57,7 +57,6 @@ jobs:
             mkdir -p android/diagnostics
             adb shell dumpsys webviewupdate > android/diagnostics/webview-provider.txt
             adb shell getprop ro.build.fingerprint > android/diagnostics/device.txt
-            trap 'adb logcat -d > android/diagnostics/logcat.txt' EXIT
             if adb shell pm path com.android.chrome | grep -q package:; then adb shell pm disable-user --user 0 com.android.chrome; fi
             ./android/gradlew -p android connectedDebugAndroidTest --console=plain
       - name: Save Android test evidence
