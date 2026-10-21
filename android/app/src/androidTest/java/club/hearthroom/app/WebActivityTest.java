@@ -30,26 +30,60 @@ public class WebActivityTest {
         filter.addCategory(Intent.CATEGORY_OPENABLE); filter.addDataType("*/*"); return filter;
     }
     private void ui(Runnable action) { InstrumentationRegistry.getInstrumentation().runOnMainSync(action); }
+    private volatile String fixtureUrl, fixturePage;
+    private android.webkit.WebResourceResponse fixtureResponse(android.webkit.WebResourceRequest request) {
+        if (!request.getUrl().toString().equals(fixtureUrl)) return null;
+        return new android.webkit.WebResourceResponse("text/html", "UTF-8", new java.io.ByteArrayInputStream(fixturePage.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+    private void installFixtureClient(WebView web, WebActivity host) {
+        web.setWebViewClient(host.new Client() {
+            @Override public android.webkit.WebResourceResponse shouldInterceptRequest(WebView view, android.webkit.WebResourceRequest request) {
+                return fixtureResponse(request);
+            }
+        });
+    }
     private WebView launch() throws Exception {
         WebActivity host = activity.launchActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://hearthroom.club/.well-known/assetlinks.json")));
         AtomicReference<WebView> view = new AtomicReference<>();
         ui(() -> view.set((WebView)((FrameLayout)host.findViewById(R.id.web_content)).getChildAt(0)));
-        assertNotNull(view.get()); return view.get();
+        assertNotNull(view.get()); ui(() -> installFixtureClient(view.get(),host)); return view.get();
     }
     private String js(WebView web, String script) throws Exception {
         CountDownLatch ready = new CountDownLatch(1); AtomicReference<String> result = new AtomicReference<>();
         ui(() -> web.evaluateJavascript(script, value -> {result.set(value); ready.countDown();}));
         boolean responded = ready.await(10, TimeUnit.SECONDS);
-        assertTrue("evaluateJavascript callback: " + script + "; finishing=" + activity.getActivity().isFinishing() + "; destroyed=" + activity.getActivity().isDestroyed(), responded); return result.get();
+        if (!responded) {
+            WebActivity host = activity.getActivity();
+            fail("evaluateJavascript callback: " + script + "; finishing=" + (host != null && host.isFinishing()) + "; destroyed=" + (host != null && host.isDestroyed()));
+        }
+        return result.get();
     }
     private void fixture(WebView web, String html) throws Exception {
-        ui(() -> web.loadDataWithBaseURL("https://hearthroom.club/test", html, "text/html", "UTF-8", "https://hearthroom.club/test"));
+        fixturePage = html;
+        fixtureUrl = "https://hearthroom.club/test?fixture=" + java.util.UUID.randomUUID();
+        ui(() -> web.loadUrl(fixtureUrl));
         long until = System.currentTimeMillis()+15000;
         while (System.currentTimeMillis()<until) {
-            if ("true".equals(js(web,"document.body && document.body.dataset.ready === 'yes'"))) return;
+            if ("true".equals(js(web,"location.href === " + org.json.JSONObject.quote(fixtureUrl) + " && document.readyState === 'complete' && document.body && document.body.dataset.ready === 'yes'"))) return;
             Thread.sleep(100);
         }
         fail("Fixture did not load");
+    }
+    private void clickFixtureButton(WebView web, String text) throws Exception {
+        long until = android.os.SystemClock.uptimeMillis() + 5000;
+        boolean[] uncovered = {false};
+        do {
+            ui(() -> {
+                View cover = web.getRootView().findViewById(R.id.launch_cover);
+                uncovered[0] = web.hasWindowFocus() && (cover == null || cover.getVisibility() == View.GONE);
+            });
+            if (uncovered[0]) break;
+            Thread.sleep(50);
+        } while (android.os.SystemClock.uptimeMillis() < until);
+        assertTrue("The fixture page must have window focus and no launch cover before a user gesture", uncovered[0]);
+        UiDevice device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
+        assertNotNull(device.wait(Until.findObject(By.text(text)),5000));
+        device.findObject(By.text(text)).click();
     }
     @Test public void waitingCoverKeepsSukiUntilThePageDraws() throws Exception {
         // A visible indeterminate spinner does not become idle: observe resume instead of startActivitySync.
@@ -73,6 +107,7 @@ public class WebActivityTest {
                 assertFalse("Only the text is hidden, preserving its layout space", host.findViewById(R.id.waiting_status).isShown());
                 assertFalse(host.findViewById(R.id.change_route).isShown());
                 engine.set((WebView)((FrameLayout)host.findViewById(R.id.web_content)).getChildAt(0));
+                installFixtureClient(engine.get(),host);
             });
             fixture(engine.get(), "<body data-ready='yes'><main>Ready</main></body>");
             long until = android.os.SystemClock.uptimeMillis() + 5000;
@@ -120,32 +155,29 @@ public class WebActivityTest {
     }
     @Test public void realEngineRetainsWebStateAndHasNoNativeBridge() throws Exception {
         WebView web = launch();
-        fixture(web, "<body data-ready='yes'><input id='entry'><script>sessionStorage.setItem('hr-test','kept')</script></body>");
+        fixture(web, "<body data-ready='yes'><input id='entry'><button onclick=\"history.pushState({},'', '/test/next')\">Next fixture</button><script>sessionStorage.setItem('hr-test','kept')</script></body>");
         assertEquals("\"kept\"", js(web,"sessionStorage.getItem('hr-test')"));
         assertEquals("true", js(web,"navigator.userAgent.includes('HearthroomApp/')"));
         assertEquals("\"undefined\"", js(web,"typeof window.Android"));
         assertEquals("true", js(web,"!!crypto.subtle && !!ReadableStream && CSS.supports('color','color-mix(in srgb,red,blue)')"));
         ui(() -> { assertFalse(web.getSettings().getAllowFileAccess()); assertFalse(web.getSettings().getAllowContentAccess()); });
-        assertEquals("true", js(web,"history.pushState({},'', '/test/next'); history.length >= 2"));
+        clickFixtureButton(web, "Next fixture");
+        assertEquals(js(web,"JSON.stringify({path:location.pathname,length:history.length,activated:navigator.userActivation.hasBeenActive})"), "true", js(web,"location.pathname === '/test/next' && history.length >= 2 && navigator.userActivation.hasBeenActive"));
         long historyUntil = android.os.SystemClock.uptimeMillis() + 5000;
         boolean[] backReady = {false};
         do {
-            ui(() -> backReady[0] = web.canGoBack() && "https://hearthroom.club/test/next".equals(web.getUrl()));
+            ui(() -> backReady[0] = web.canGoBack());
             if (backReady[0]) break;
             Thread.sleep(50);
         } while (android.os.SystemClock.uptimeMillis() < historyUntil);
         AtomicReference<String> historyState = new AtomicReference<>();
         ui(() -> historyState.set("nativeUrl=" + web.getUrl() + "; canGoBack=" + web.canGoBack() + "; index=" + web.copyBackForwardList().getCurrentIndex() + "; size=" + web.copyBackForwardList().getSize() + "; provider=" + WebView.getCurrentWebViewPackage().versionName));
         assertTrue("Native history after pushState: " + historyState.get() + "; js=" + js(web,"JSON.stringify({url:location.href,length:history.length})"), backReady[0]);
-        ui(() -> {
-            System.out.println("HISTORY before Back: canGoBack=" + web.canGoBack() + "; index=" + web.copyBackForwardList().getCurrentIndex() + "; size=" + web.copyBackForwardList().getSize() + "; url=" + web.getUrl());
-            activity.getActivity().onBackPressed();
-            System.out.println("HISTORY after Back: finishing=" + activity.getActivity().isFinishing());
-        });
+        ui(() -> activity.getActivity().onBackPressed());
         long backUntil = android.os.SystemClock.uptimeMillis() + 5000;
         boolean[] returned = {false};
         do {
-            ui(() -> returned[0] = "https://hearthroom.club/test".equals(web.getUrl()));
+            ui(() -> returned[0] = fixtureUrl.equals(web.getUrl()));
             if (returned[0]) break;
             Thread.sleep(50);
         } while (android.os.SystemClock.uptimeMillis() < backUntil);
@@ -207,12 +239,7 @@ public class WebActivityTest {
     }
     @Test public void exportClickReachesTheSystemSaveFlow() throws Exception {
         WebView web = launch();
-        AtomicReference<String> messageState = new AtomicReference<>("FixtureProbe not delivered");
-        ui(() -> androidx.webkit.WebViewCompat.addWebMessageListener(web,"FixtureProbe",WebPolicy.ORIGINS,(view,message,source,mainFrame,reply) -> {
-            messageState.set("source=" + source + "; main=" + mainFrame + "; nativeUrl=" + view.getUrl() + "; data=" + message.getData());
-            System.out.println("EXPORT message: " + messageState.get());
-        }));
-        fixture(web,"<body data-ready='yes'><button onclick=\"FixtureProbe.postMessage('before-export');var u=window.URL.createObjectURL(new Blob(['export via click']));var a=document.createElement('a');a.href=u;a.download='export.txt';a.click();window.URL.revokeObjectURL(u)\">Export fixture</button></body>");
+        fixture(web,"<body data-ready='yes'><button onclick=\"var u=window.URL.createObjectURL(new Blob(['export via click']));var a=document.createElement('a');a.href=u;a.download='export.txt';a.click();window.URL.revokeObjectURL(u)\">Export fixture</button></body>");
         File folder = new File(activity.getActivity().getCacheDir(),"updates"); folder.mkdirs();
         File output = new File(folder,"clicked-export.txt"); output.delete();
         assertEquals("\"object\"", js(web,"typeof window.HearthroomDownload"));
@@ -222,14 +249,12 @@ public class WebActivityTest {
         android.app.Instrumentation.ActivityMonitor monitor = instrumentation.addMonitor(saveFilter(),
             new android.app.Instrumentation.ActivityResult(android.app.Activity.RESULT_OK,new Intent().setData(target)),true);
         try {
-            UiDevice device = UiDevice.getInstance(instrumentation);
-            assertNotNull(device.wait(Until.findObject(By.text("Export fixture")),5000));
-            device.findObject(By.text("Export fixture")).click();
+            clickFixtureButton(web, "Export fixture");
             long until = System.currentTimeMillis()+10000;
             while(System.currentTimeMillis()<until && output.length()!=16) Thread.sleep(100);
             AtomicReference<String> nativeState = new AtomicReference<>();
             ui(() -> nativeState.set("provider=" + WebView.getCurrentWebViewPackage().versionName + "; nativeUrl=" + web.getUrl() + "; finishing=" + activity.getActivity().isFinishing()));
-            assertEquals(nativeState.get() + "; message=" + messageState.get() + "; " + js(web,"JSON.stringify({pending:!!window.__hrPendingBlob,origin:location.origin,main:window===window.top,blobMatches:window.__hrPendingBlob?window.__hrPendingBlob.url.startsWith('blob:https://hearthroom.club/'):null})"),1,monitor.getHits());
+            assertEquals(nativeState.get() + "; " + js(web,"JSON.stringify({pending:!!window.__hrPendingBlob,origin:location.origin,main:window===window.top,blobMatches:window.__hrPendingBlob?window.__hrPendingBlob.url.startsWith('blob:https://hearthroom.club/'):null})"),1,monitor.getHits());
             assertEquals("export via click",new String(Files.readAllBytes(output.toPath()),java.nio.charset.StandardCharsets.UTF_8));
         } finally { instrumentation.removeMonitor(monitor); output.delete(); }
     }
@@ -237,6 +262,8 @@ public class WebActivityTest {
         WebView web = launch(); WebActivity host = activity.getActivity();
         ui(() -> web.setWebViewClient(host.new Client() {
             @Override public android.webkit.WebResourceResponse shouldInterceptRequest(WebView view, android.webkit.WebResourceRequest request) {
+                android.webkit.WebResourceResponse fixture = fixtureResponse(request);
+                if (fixture != null) return fixture;
                 if (!"https".equals(request.getUrl().getScheme())) return null;
                 String html = "hearthroom.club".equals(request.getUrl().getHost())
                     ? "<body data-ready='yes'>Returned</body>"
@@ -258,6 +285,8 @@ public class WebActivityTest {
         WebView web = launch(); WebActivity host = activity.getActivity();
         ui(() -> web.setWebViewClient(host.new Client() {
             @Override public android.webkit.WebResourceResponse shouldInterceptRequest(WebView view, android.webkit.WebResourceRequest request) {
+                android.webkit.WebResourceResponse fixture = fixtureResponse(request);
+                if (fixture != null) return fixture;
                 if (!"https".equals(request.getUrl().getScheme())) return null;
                 return new android.webkit.WebResourceResponse("text/html","UTF-8",new java.io.ByteArrayInputStream("<body>Frame</body>".getBytes()));
             }
