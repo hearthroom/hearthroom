@@ -1,4 +1,4 @@
-import { apiBaseOf } from "./provider";
+import { apiBaseOf, oauthBaseOf } from "./provider";
 
 /** HarperHarbor API; self-hosted builds use VITE_HARBOR_API_BASE. */
 const DEFAULT_API: string = apiBaseOf("harbor");
@@ -17,7 +17,7 @@ export function useProviderUpstream(): string {
  * 這是邏輯識別字，不跟著實際打的網域走：授權伺服器只認這一個字串，同一顆 token 在主網域與
  * 備用網域都有效，切換網域不用重新登入。
  */
-export const oauthResource = (): string => `${apiBaseOf()}/open/v1`;
+export const oauthResource = (): string => `${oauthBaseOf()}/open/v1`;
 
 /** 本站自己的 API 與前端同源，所以是相對路徑，不需要處理 CORS。 */
 export const COMMUNITY_API = "/v1";
