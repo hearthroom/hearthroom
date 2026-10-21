@@ -7,7 +7,7 @@ const request = (extra: Record<string, string> = {}, host = "sukisuki.ai") => SE
   method: "POST", headers: { Origin: `https://${host}`, "X-Hearthroom-Request": "1", ...extra },
 });
 
-it("is disabled by default and never issues a cookie", async () => {
+it("supports disabled deployments without issuing a cookie", async () => {
   const response = await request();
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ enabled: false });
