@@ -14,6 +14,20 @@ const steps = job.split(/\n      - /).slice(1).map((text) => ({
 }));
 const index = (predicate) => steps.findIndex(predicate);
 
+test('the deployed web build receives explicit proxy rollout and rollback controls', () => {
+  assert.match(job, /VITE_HARBOR_API_TRANSPORT: \$\{\{ vars\.HARBOR_API_TRANSPORT \|\| 'proxy' \}\}/);
+  assert.match(job, /VITE_HARBOR_PROXY_HOSTS: \$\{\{ vars\.HARBOR_PROXY_HOSTS \|\| 'sukisuki.chat,sukisuki.pro' \}\}/);
+});
+
+test('Harbor proxy requests reach the Worker instead of the static SPA', () => {
+  const config = readFileSync(new URL('../wrangler.toml', import.meta.url), 'utf8');
+  const routes = /run_worker_first\s*=\s*\[([\s\S]*?)\]/.exec(config)?.[1] ?? '';
+  const patterns = [...routes.matchAll(/"([^"]+)"/g)].map(match => match[1]);
+  for (const path of ['/hh-api', '/hh-api/open/v1/me', '/hh-api/open/v1/conversation/ws']) {
+    assert.ok(patterns.some(pattern => pattern.endsWith('*') ? path.startsWith(pattern.slice(0, -1)) : path === pattern));
+  }
+});
+
 test('CI archives the built assets on every deploy, after the Worker is live', () => {
   const archive = index((s) => s.run.includes('npm run archive:assets'));
   assert.notEqual(archive, -1, 'no CI step runs npm run archive:assets');

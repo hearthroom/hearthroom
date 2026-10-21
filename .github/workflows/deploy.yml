@@ -25,6 +25,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CAN_DEPLOY: ${{ github.event_name != 'pull_request' && secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+      VITE_HARBOR_API_TRANSPORT: ${{ vars.HARBOR_API_TRANSPORT || 'proxy' }}
+      VITE_HARBOR_PROXY_HOSTS: ${{ vars.HARBOR_PROXY_HOSTS || 'sukisuki.chat,sukisuki.pro' }}
     steps:
       - uses: actions/checkout@v4
         with:
