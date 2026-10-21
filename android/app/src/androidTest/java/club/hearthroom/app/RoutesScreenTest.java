@@ -121,6 +121,18 @@ public class RoutesScreenTest {
         if (scroll != null) scroll.scroll(androidx.test.uiautomator.Direction.DOWN, 1f);
         f.screen("s3-bottom");
     }
+    @Test public void rotatingAnOpenScreenMovesTheFooterAndRestoresIt() {
+        RoutesActivity a = open(CLUB, null);
+        settled(a);
+        f.instrumentation.runOnMainSync(() -> a.setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE));
+        f.waitFor("landscape configuration", () -> a.getResources().getConfiguration().screenHeightDp < 480, 5000);
+        f.instrumentation.runOnMainSync(() -> assertSame("Landscape footer scrolls with routes", a.findViewById(R.id.column), a.findViewById(R.id.footer).getParent()));
+        f.screen("s3-rotated-landscape");
+        f.instrumentation.runOnMainSync(() -> a.setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT));
+        f.waitFor("portrait configuration", () -> a.getResources().getConfiguration().screenHeightDp >= 480, 5000);
+        f.instrumentation.runOnMainSync(() -> assertSame("Portrait footer returns below the scrollport", a.findViewById(R.id.routes_root), a.findViewById(R.id.footer).getParent()));
+        f.screen("s3-rotated-portrait");
+    }
     @Test public void retryingFromNothingReachableUsesTheAutomaticRules() {
         RoutesActivity a = open(CHAT, RoutesActivity.UNREACHABLE);
         f.waitFor("automatic choice", a::isFinishing, 4000);
