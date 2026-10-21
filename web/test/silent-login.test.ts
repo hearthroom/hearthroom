@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { resetManagedAuthForTest } from "@/lib/managed-auth";
 import { beginLogin, completeLogin, isSilentMiss } from "@/lib/oauth";
 import {
-  SILENT_LOGIN_ENABLED, SILENT_TUNING, markLoggedOut, rememberSilentResult, routeLoginHintVisible, silentLoginAllowed, trySilentLogin,
+  SILENT_LOGIN_ENABLED, SILENT_TUNING, markLoggedOut, silentLoginAllowed, trySilentLogin,
 } from "@/lib/silent-login";
 
 const DAY = 86_400_000;
@@ -80,8 +80,6 @@ it("returns quietly to the page when the silent attempt comes back signed out", 
   const complete = fetch.mock.calls.find(([url]) => url === "/v1/auth/complete");
   expect(JSON.parse(String(complete?.[1]?.body))).toEqual({ state: "s", error: "login_required" });
   expect(fetch.mock.calls.some(([url]) => url === "/v1/auth/cancel")).toBe(false);
-  // Harbor 給過明確答覆：登入頁那行「從其他線路切換」不再顯示
-  expect(routeLoginHintVisible({ ua: UA })).toBe(false);
 });
 
 it("adopts a silent success like any sign-in, and an unknown silent error still returns quietly", async () => {
@@ -92,7 +90,6 @@ it("adopts a silent success like any sign-in, and an unknown silent error still 
     : Response.json({ ok: true }));
   const done = await completeLogin(new URLSearchParams("code=c&state=s"));
   expect(isSilentMiss(done)).toBe(false);
-  expect(routeLoginHintVisible({ ua: UA })).toBe(false);
 
   localStorage.clear();
   server("fast");
@@ -118,14 +115,4 @@ it("an abandoned silent attempt does not turn a later interactive decline into a
 it("still treats a declined interactive login as an error", async () => {
   server("fast");
   await expect(completeLogin(new URLSearchParams("error=access_denied&state=s"))).rejects.toThrow("oauth_denied");
-});
-
-it("shows the login-page hint on official domains until Harbor has answered", () => {
-  expect(routeLoginHintVisible({ ua: UA })).toBe(true);
-  expect(routeLoginHintVisible({ ua: "Mozilla/5.0 HearthroomApp/1.2.0" })).toBe(false);
-  rememberSilentResult("granted");
-  expect(routeLoginHintVisible({ ua: UA })).toBe(false);
-  at("localhost");
-  localStorage.clear();
-  expect(routeLoginHintVisible({ ua: UA })).toBe(false);
 });

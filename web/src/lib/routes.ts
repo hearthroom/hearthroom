@@ -60,7 +60,11 @@ export function routesAvailable(o: { hostname?: string; ua?: string } = {}): boo
  * 離線沒得比；收掉過的三天內不彈。
  */
 export function autoPromptAllowed(o: { immersive: boolean }): boolean {
-  return routesAvailable() && !o.immersive && !isStandalone() && navigator.onLine !== false && !promptDismissed();
+  return backgroundCheckAllowed(o) && !isStandalone() && !promptDismissed();
+}
+/** 背景測速本身：收掉提示卡之後也照樣測，頁首圖示靠它；遊玩頁與離線不測。 */
+export function backgroundCheckAllowed(o: { immersive: boolean }): boolean {
+  return routesAvailable() && !o.immersive && navigator.onLine !== false;
 }
 
 export type Signal = 0 | 1 | 2 | 3;

@@ -1,6 +1,6 @@
 import { managedAuth, isManagedAuth, authRequest, managedToken, rememberManaged, restoreManaged, forgetManaged, managedLogout } from './managed-auth';
 import { safeReturnTo } from './login-return';
-import { rememberSilentResult, takeSilentFlow } from './silent-login';
+import { takeSilentFlow } from './silent-login';
 import { readCredential, writeCredential, removeCredential } from './credential-store';
 import { UPSTREAM_API } from "./config";
 import { apiBaseOf, oauthBaseOf, currentProvider, scopeOf, type ProviderId } from "./provider";
@@ -180,10 +180,8 @@ export async function completeLogin(query: URLSearchParams): Promise<{ token: To
       sessionStorage.removeItem(STORE.returnTo);
       try{
         const miss=await authRequest<{silent:boolean;authenticated:boolean;returnTo:string;error:string}>("complete",{state:query.get("state"),error:query.get("error")});
-        rememberSilentResult(String(miss.error||"miss"));
         return {silent:true,authenticated:false,returnTo:safeReturnTo(miss.returnTo)};
       }catch{
-        rememberSilentResult("miss");
         await authRequest("cancel",{}).catch(()=>{});
         return {silent:true,authenticated:false,returnTo:fallback};
       }
@@ -192,8 +190,7 @@ export async function completeLogin(query: URLSearchParams): Promise<{ token: To
     forgetManaged();
     const done=await authRequest<{ token: TokenPair; returnTo: string; provider:ProviderId; linkFrom?:ProviderId; silent?: boolean; authenticated?: boolean }>("complete",{code:query.get("code"),state:query.get("state")});
     sessionStorage.removeItem(STORE.returnTo);
-    if(done.silent&&done.authenticated===false){rememberSilentResult("consent_required");return {silent:true,authenticated:false,returnTo:safeReturnTo(done.returnTo)};}
-    if(done.silent)rememberSilentResult("granted");
+    if(done.silent&&done.authenticated===false)return {silent:true,authenticated:false,returnTo:safeReturnTo(done.returnTo)};
     return done;
   }
   const pending=JSON.parse(sessionStorage.getItem("hearthroom.oauth.pending") || "{}");

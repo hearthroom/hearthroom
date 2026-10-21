@@ -3151,7 +3151,6 @@
   "routes.prompt.later": "회선 안내 닫기",
   "routes.arrived": "{line} 전환 완료 ({host})",
   "routes.arrivedSignedOut": "이 회선에는 아직 로그인하지 않았어요.",
-  "routes.loginHint": "다른 회선에 이미 로그인했다면 해당 사이트의 ‘회선’에서 전환하면 로그인이 유지돼요.",
   "routes.logout.title": "로그아웃할까요?",
   "routes.logout.body": "이 회선에서 로그아웃해요.",
   "routes.logout.all": "다른 회선에서도 로그아웃",
