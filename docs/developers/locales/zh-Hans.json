@@ -2272,5 +2272,6 @@
   "dbd5d3615f700": "创建智能体配置",
   "d5624afa08837": "创建由 bearer 账号拥有的智能体配置；`visibility` 设为 `private` 时仅作者可访问，设为 `unlisted` 时可通过链接打开，省略 `visibility` 时默认为 `unlisted`。已授权客户端仍可按 scope 访问；创建不会公开发布或提交审核，CLI 的 `--create` 会发送 `private`。",
   "dd4e8e5e9fb1c": "`not_found`",
-  "d6e2a15c61061": "`temporarily_unavailable`"
+  "d6e2a15c61061": "`temporarily_unavailable`",
+  "d43e82bc212a8": "用于解析流式输出默认值的模型；省略时使用应用的默认模型，不会更改已保存的模型选择。"
 }

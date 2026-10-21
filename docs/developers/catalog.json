@@ -2272,5 +2272,6 @@
   "dbd5d3615f700": "Create an agent configuration",
   "d5624afa08837": "Creates an agent configuration owned by the bearer account. Set `visibility` to `private` for author-only access or `unlisted` for link access; omitted `visibility` defaults to `unlisted`. Authorized clients retain their scoped access. Creation does not publish or submit for review. The CLI sends `private` with `--create`.",
   "dd4e8e5e9fb1c": "`not_found`",
-  "d6e2a15c61061": "`temporarily_unavailable`"
+  "d6e2a15c61061": "`temporarily_unavailable`",
+  "d43e82bc212a8": "Selected model for resolving streaming defaults; omission uses the application default. Does not change the saved model selection."
 }
