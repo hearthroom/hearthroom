@@ -84,14 +84,16 @@ public final class WebActivity extends Activity {
             WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
             java.util.Set<String> origins = WebPolicy.ORIGINS;
             if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) WebViewCompat.addWebMessageListener(web, "HearthroomDownload", origins, (view, message, source, mainFrame, reply) -> {
+                if (BuildConfig.DEBUG) android.util.Log.i("HearthroomProbe", "message main=" + mainFrame + "; sourceAllowed=" + WebPolicy.isSite(source.toString()) + "; viewAllowed=" + WebPolicy.isSite(view.getUrl()) + "; sameHost=" + (WebPolicy.isSite(view.getUrl()) && source.getHost().equals(Uri.parse(view.getUrl()).getHost())));
                 if (!mainFrame || !WebPolicy.isSite(source.toString()) || !WebPolicy.isSite(view.getUrl()) || !source.getHost().equals(Uri.parse(view.getUrl()).getHost())) return;
                 try {
                     String raw = message.getData();
                     if (raw == null || raw.length() > 8192) return;
                     JSONObject data = new JSONObject(raw);
                     String url = data.getString("url");
+                    if (BuildConfig.DEBUG) android.util.Log.i("HearthroomProbe", "parsed blob=" + url.startsWith("blob:") + "; allowed=" + WebPolicy.canDownload(view.getUrl(), url));
                     if (url.startsWith("blob:") && WebPolicy.canDownload(view.getUrl(), url)) beginDownload(url, null, null, -1, data.optString("name"));
-                } catch (Exception ignored) { /* Malformed messages have no authority. */ }
+                } catch (Exception ignored) { if (BuildConfig.DEBUG) android.util.Log.i("HearthroomProbe", "message exception=" + ignored.getClass().getSimpleName()); /* Malformed messages have no authority. */ }
             });
             try (java.io.InputStream input = getResources().openRawResource(R.raw.download_hook)) {
                 java.io.ByteArrayOutputStream script = new java.io.ByteArrayOutputStream();
@@ -196,6 +198,7 @@ public final class WebActivity extends Activity {
         origin.setText(own ? "" : Uri.parse(url).getHost());
     }
     private void beginDownload(String url, String disposition, String mime, long size, String name) {
+        if (BuildConfig.DEBUG) android.util.Log.i("HearthroomProbe", "begin busy=" + (download != null) + "; web=" + (web != null) + "; allowed=" + (web != null && WebPolicy.canDownload(web.getUrl(), url)));
         if (download != null) return;
         if (web == null || !WebPolicy.canDownload(web.getUrl(), url) || size > WebPolicy.MAX_DOWNLOAD_BYTES) {
             toast(R.string.web_file_failed); return;
