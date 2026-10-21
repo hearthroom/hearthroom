@@ -28,7 +28,7 @@ async function retry() {
 <template>
   <div v-if="blocked" class="notice notice--error" role="alert">
     <span>{{ $t('state.serverBusy') }}</span>
-    <button type="button" class="btn btn--sm" :disabled="retrying" :aria-busy="retrying" @click="retry">{{ $t('linked.retry') }}</button>
+    <button type="button" class="btn btn--lg" :disabled="retrying" :aria-busy="retrying" @click="retry">{{ $t('linked.retry') }}</button>
   </div>
   <slot v-else />
 </template>
