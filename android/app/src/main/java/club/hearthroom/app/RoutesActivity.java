@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.Dialog;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
@@ -44,14 +45,10 @@ public final class RoutesActivity extends Activity {
         super.onCreate(state);
         setContentView(R.layout.routes);
         Ui.insets(findViewById(R.id.routes_root));
+        Ui.column(findViewById(R.id.column));
         View footer = findViewById(R.id.footer);
-        if (getResources().getConfiguration().screenHeightDp < 480) {
-            // On short windows the action belongs to the same scrollport as the route list.
-            ((ViewGroup) footer.getParent()).removeView(footer);
-            ((LinearLayout) findViewById(R.id.column)).addView(footer);
-            footer.setPadding(0, footer.getPaddingTop(), 0, footer.getPaddingBottom());
-            Ui.column(findViewById(R.id.column));
-        } else Ui.column(findViewById(R.id.column), footer);
+        footer.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> padFooter());
+        layoutFooter();
         store = new RouteStore(this);
         routes = store.routes();
         String reason = getIntent().getStringExtra(REASON);
@@ -87,6 +84,26 @@ public final class RoutesActivity extends Activity {
             rows.put(host, row); list.addView(row);
         }
         recheck();
+    }
+    @Override public void onConfigurationChanged(Configuration configuration) {
+        super.onConfigurationChanged(configuration);
+        layoutFooter();
+    }
+    private void layoutFooter() {
+        View footer = findViewById(R.id.footer);
+        LinearLayout parent = findViewById(getResources().getConfiguration().screenHeightDp < 480 ? R.id.column : R.id.routes_root);
+        if (footer.getParent() != parent) {
+            ((ViewGroup) footer.getParent()).removeView(footer);
+            parent.addView(footer);
+        }
+        padFooter();
+    }
+    private void padFooter() {
+        View footer = findViewById(R.id.footer);
+        float density = getResources().getDisplayMetrics().density;
+        int side = footer.getParent() == findViewById(R.id.column) ? 0
+            : Math.max((int) (24 * density), (int) ((footer.getWidth() - 480 * density) / 2));
+        if (footer.getPaddingLeft() != side) footer.setPadding(side, footer.getPaddingTop(), side, footer.getPaddingBottom());
     }
     /** Every row re-tests on its own and updates as soon as its answer arrives. */
     private void recheck() {
