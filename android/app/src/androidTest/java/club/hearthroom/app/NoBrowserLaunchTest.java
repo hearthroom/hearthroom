@@ -21,6 +21,10 @@ public class NoBrowserLaunchTest {
             Activity fallback=monitor.waitForActivityWithTimeout(10000);
             assertNotNull("The launcher must open its own WebView, not an external browser",fallback);
             instrumentation.runOnMainSync(fallback::finish);
-        } finally { instrumentation.removeMonitor(monitor); }
+        } finally {
+            instrumentation.removeMonitor(monitor);
+            // The live site registers a service worker; clear it so fixture pages in other tests stay ours.
+            instrumentation.runOnMainSync(()->{android.webkit.WebStorage.getInstance().deleteAllData();android.webkit.CookieManager.getInstance().removeAllCookies(null);});
+        }
     }
 }

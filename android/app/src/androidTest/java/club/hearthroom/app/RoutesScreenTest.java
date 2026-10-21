@@ -18,13 +18,15 @@ import static org.junit.Assert.*;
 /** The routes screen against controlled probes (design S2, S3, S3a). */
 public class RoutesScreenTest {
     private static final String AI = "sukisuki.ai", CLUB = "hearthroom.club", CHAT = "sukisuki.chat", PRO = "sukisuki.pro";
-    @Rule public ActivityTestRule<RoutesActivity> rule = new ActivityTestRule<>(RoutesActivity.class, false, false);
+    @Rule public ActivityTestRule<RoutesActivity> rule = new ActivityTestRule<>(RoutesActivity.class, true, false);
     private Fixtures f;
 
-    private RoutesActivity open(String current, String reason) {
+    private RoutesActivity open(String current, String reason) { return open(current, reason, false); }
+    private RoutesActivity open(String current, String reason, boolean allDown) {
         f = new Fixtures().start(current, false);
         f.store().visit(CLUB);
         f.probe.answer(AI, 120, true); f.probe.answer(CLUB, 340, true); f.probe.answer(CHAT, 60, false); f.probe.answer(PRO, 30_000, true);
+        if (allDown) for (String h : Routes.HOSTS) f.probe.answer(h, 60, false);
         return rule.launchActivity(new Intent().putExtra(RoutesActivity.REASON, reason));
     }
     @After public void cleanup() { if (f != null) f.stop(); }
@@ -54,7 +56,6 @@ public class RoutesScreenTest {
         RoutesActivity a = open(CLUB, null);
         settled(a);
         f.instrumentation.runOnMainSync(() -> row(a, AI).performClick());
-        f.screen("s3a-tapped");
         UiDevice device = UiDevice.getInstance(f.instrumentation);
         UiObject2 confirm = device.wait(Until.findObject(By.text(f.context.getString(R.string.switch_confirm))), 3000);
         assertNotNull("Switching to a route without sign-in is confirmed first", confirm);
@@ -82,8 +83,16 @@ public class RoutesScreenTest {
             assertEquals(View.VISIBLE, a.findViewById(R.id.pick_working).getVisibility());
         });
     }
+    @Test public void retryingFromNothingReachableUsesTheAutomaticRules() {
+        RoutesActivity a = open(CHAT, RoutesActivity.UNREACHABLE);
+        f.waitFor("automatic choice", a::isFinishing, 4000);
+        assertEquals(Activity.RESULT_OK, rule.getActivityResult().getResultCode());
+        assertEquals("First reachable in preference order", AI, rule.getActivityResult().getResultData().getStringExtra(RoutesActivity.HOST));
+        assertFalse("An outage does not turn automatic selection off", f.store().fixed());
+        assertEquals(AI, f.store().autoSwitched());
+    }
     @Test public void offlinePhonesAreToldToCheckTheirNetwork() {
-        RoutesActivity a = open(CLUB, RoutesActivity.OFFLINE);
+        RoutesActivity a = open(CLUB, RoutesActivity.OFFLINE, true);
         settled(a);
         f.instrumentation.runOnMainSync(() -> {
             assertEquals(f.context.getString(R.string.offline_title), ((TextView) a.findViewById(R.id.failure_title)).getText().toString());

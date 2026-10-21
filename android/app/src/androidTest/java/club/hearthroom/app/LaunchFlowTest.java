@@ -128,11 +128,13 @@ public class LaunchFlowTest {
         assertEquals(AI, f.store().current());
         assertTrue(f.store().visited(CHAT));
     }
-    @Test public void aLinkToAnUnreachableDomainKeepsItsPathOnTheWorkingRoute() {
-        setup(AI, false); allReachable(20); f.probe.answer(CHAT, 20, false);
+    @Test public void aLinkToAnUnreachableDomainOpensItsPathOnTheSignedInRoute() {
+        setup(CLUB, false); allReachable(20); f.probe.answer(CHAT, 20, false);
         launch(new Intent(Intent.ACTION_VIEW, Uri.parse("https://sukisuki.chat/cards/1")));
         opened(4000);
-        assertEquals("https://sukisuki.ai/cards/1", launchUrl());
+        assertEquals("Not the first route in preference order: the player's own", "https://hearthroom.club/cards/1", launchUrl());
+        assertEquals(CLUB, f.store().current());
+        assertNull(f.store().autoSwitched());
     }
     private String launchUrl() {
         try { java.lang.reflect.Field field = MainActivity.class.getDeclaredField("launchUrl"); field.setAccessible(true); return (String) field.get(f.launcher); }
