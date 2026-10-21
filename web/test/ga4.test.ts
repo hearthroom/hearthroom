@@ -65,3 +65,7 @@ describe("GA4 outbound privacy boundary", () => {
     expect(gaEvent(event, { detail, subject: "PRIVATE" }, page)).toEqual({ name, params });
   });
 });
+
+it("maps shortfall top-up to the checkout funnel", () => {
+ expect(gaEvent("credits_shortfall_click", {detail:"topup"}, "topup")).toEqual({name:"begin_checkout",params:{item_category:"topup",entry:"shortfall"}});
+});

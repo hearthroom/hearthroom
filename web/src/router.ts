@@ -54,6 +54,7 @@ const pages: RouteRecordRaw[] = [
   // 機率公告不必登入：從舞台、簽到頁、錢包都連得到（ui.md §8）
   // 機率公告頁已拿掉（owner 2026-10-20：簽到免費，不是花錢開箱）；舊網址轉回簽到頁
   { path: "checkin/odds", redirect: (to) => ({ path: `${to.params.locale ? `/${String(to.params.locale)}` : ""}/checkin` }) },
+  { path: "go/topup", component: () => import("./pages/GoPlanPage.vue"), meta: { bare: true } },
   { path: "go/plan", component: () => import("./pages/GoPlanPage.vue"), meta: { bare: true } },
   // 我的資源：作者的素材圖庫（上游圖床），拿網址寫進正則規則用
   { path: "resources", component: () => import("./pages/ResourcesPage.vue"), meta: { auth: true, feature: "library" } },
@@ -279,6 +280,7 @@ export function surfaceOf(path: string): string {
   // 簽到頁與機率公告
   if (bare.startsWith("/checkin")) return "checkin";
   // 月卡轉址頁（畫布積分不夠那張卡的月卡連結先到這裡）
+  if (bare.startsWith("/go/topup")) return "wallet";
   if (bare.startsWith("/go/plan")) return "plan";
   if (bare.startsWith("/play")) return "play";
   if (bare.startsWith("/review")) return "review";
@@ -291,7 +293,7 @@ export function surfaceOf(path: string): string {
 router.beforeEach((to) => { setSurface(surfaceOf(to.path)); });
 
 router.afterEach((to, from, failure) => {
-  if (!failure) ga4PageView();
+  if (!failure && to.path !== from.path) ga4PageView();
   if (to.path === from.path) return;
   void nextTick(() => document.querySelector<HTMLElement>("main")?.focus({ preventScroll: true }));
 });

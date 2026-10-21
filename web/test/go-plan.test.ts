@@ -5,11 +5,13 @@ import { createApp, nextTick } from "vue";
 import { createRouter, createMemoryHistory } from "vue-router";
 
 vi.mock("../src/lib/rewards", async (orig) => ({ ...(await orig<typeof import("../src/lib/rewards")>()), fetchPeriodPlans: vi.fn(async () => ({ list: [{ id: "month", onSale: true, purchaseUrl: "https://console.example/me/billing?plan=month" }] })) }));
+const ga = vi.hoisted(() => ({ wait: vi.fn(async () => {}), checkout: vi.fn((href: string) => href) }));
+vi.mock("../src/lib/ga4", async (orig) => ({ ...(await orig<typeof import("../src/lib/ga4")>()), waitForGa4: ga.wait, ga4CheckoutUrl: ga.checkout }));
 import GoPlanPage from "../src/pages/GoPlanPage.vue";
 import { trackNow } from "../src/lib/track";
 
 let app: ReturnType<typeof createApp> | undefined;
-afterEach(() => { app?.unmount(); vi.restoreAllMocks(); });
+afterEach(() => { app?.unmount(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 function beacons(spy: ReturnType<typeof vi.spyOn>) {
   return spy.mock.calls.map(([, blob]) => blob as Blob);
@@ -26,13 +28,12 @@ async function visit(path: string) {
   const spy = vi.spyOn(navigator, "sendBeacon").mockImplementation(() => { order.push("beacon"); return true; });
   const replace = vi.fn((url: string) => { order.push(`replace:${url}`); });
   vi.stubGlobal("location", { ...window.location, replace });
-  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/go/plan", component: GoPlanPage }] });
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/go/:kind", component: GoPlanPage }] });
   await router.push(path); await router.isReady();
   app = createApp(GoPlanPage).use(router);
   app.mount(document.createElement("div"));
   for (let i = 0; i < 5; i++) await nextTick();
   await new Promise((r) => setTimeout(r, 0));
-  vi.unstubAllGlobals();
   return { order, spy, replace };
 }
 
@@ -46,4 +47,19 @@ it("從積分不夠那張卡來：先送出點擊，再轉去月卡的購買頁"
 it("不是從那張卡來：不記，照樣轉址，網址不帶任何應用參數", async () => {
   const { order } = await visit("/go/plan");
   expect(order).toEqual(["replace:https://console.example/me/billing?plan=month"]);
+});
+
+it("waits for bounded analytics readiness before sending and redirecting", async () => {
+  let resolve!: () => void;
+  ga.wait.mockImplementationOnce(() => new Promise<void>(r => {resolve=r;}));
+  const {spy, replace} = await visit("/go/plan?from=canvas_shortfall");
+  expect(spy).not.toHaveBeenCalled(); expect(replace).not.toHaveBeenCalled();
+  resolve(); await new Promise(r => setTimeout(r, 0));
+  expect(spy).toHaveBeenCalledTimes(1); expect(replace).toHaveBeenCalledTimes(1);
+});
+it("top-up shortfall landing records topup and decorates the Console destination", async () => {
+  const {spy, replace} = await visit("/go/topup?from=canvas_shortfall");
+  expect(JSON.parse(await beacons(spy)[0]!.text())[0]).toMatchObject({event:"credits_shortfall_click", detail:"topup"});
+  expect(ga.checkout).toHaveBeenCalledWith("https://console.harperharbor.com/me/billing");
+  expect(replace).toHaveBeenCalledWith("https://console.harperharbor.com/me/billing");
 });
