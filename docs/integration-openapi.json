@@ -9473,7 +9473,7 @@
                             "type": "null"
                           }
                         ],
-                        "description": "Conversation transport: on streams replies; off requests a complete upstream response. Defaults to on. Unsupported routes fall back to streaming. This preference does not change writing instructions."
+                        "description": "Reply output: when on, content is returned incrementally; when off, the complete result is returned once generation finishes. On by default."
                       }
                     }
                   }
@@ -13092,7 +13092,7 @@
           },
           "nonStreaming": {
             "type": "boolean",
-            "description": "Whether this operation requests a complete upstream response. Frozen for the operation; waiting and reconnecting do not impose a total duration limit."
+            "description": "Whether this operation returns the complete result once generation finishes. Always false for Agent turns."
           }
         }
       },
@@ -21144,7 +21144,7 @@
               "off"
             ],
             "default": "on",
-            "description": "Conversation transport: on streams replies; off requests a complete upstream response. Defaults to on. Unsupported routes fall back to streaming. This preference does not change writing instructions."
+            "description": "Reply output: when on, content is returned incrementally; when off, the complete result is returned once generation finishes. On by default."
           }
         }
       },
@@ -21213,13 +21213,6 @@
               }
             ],
             "description": "What applies when the player has chosen nothing: platform defaults with the card's author defaults on top. Show these for axes absent from overrides; resetting an axis returns to this value."
-          },
-          "streamingOnlyModels": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Routes currently known to require streaming: model codes, or model@thinkingDepth for a specific thinking depth. Capability observations expire; the saved preference is retained."
           }
         }
       },
