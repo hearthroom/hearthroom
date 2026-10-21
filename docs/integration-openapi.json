@@ -6090,8 +6090,8 @@
         "tags": [
           "Roles"
         ],
-        "summary": "Create a private role card",
-        "description": "Creates a new role card owned by the bearer account with `roleVisibility=private` and `reviewStatus=not_submitted`. Only `roleName` is required; content fields are filled afterwards with `POST /role/{roleId}/document` and `PATCH /role/{roleId}/welcome`. `language` is normalized (`en`, `zh-Hant`, `zh-Hans`, `ja`, `ko`, `all`; common aliases such as `zh-TW`, `zh-CN`, `jp`, `kr` are accepted); when omitted the account's language is used, falling back to `zh-Hans`. The card language decides the per-field character limits enforced later (see `GET /role/validate`). `cardType` defaults to `story` and is stored as the card's `roleType`. `origin` is a self-declared creation source: only whitelisted values (currently `hearthroom`) are stored as the card's `creationMethod`; anything else falls back to `open_api`. The card is stored with platform scope `from=all`. `idempotencyKey` is accepted but not consumed by the create path (no deduplication is performed).",
+        "summary": "Create an agent configuration",
+        "description": "Creates an agent configuration owned by the bearer account. Set `visibility` to `private` for author-only access or `unlisted` for link access; omitted `visibility` defaults to `unlisted`. Authorized clients retain their scoped access. Creation does not publish or submit for review. The CLI sends `private` with `--create`.",
         "security": [
           {
             "userToken": []
@@ -6102,14 +6102,48 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RoleCreateRequest"
+                "type": "object",
+                "required": [
+                  "roleName"
+                ],
+                "properties": {
+                  "roleName": {
+                    "type": "string",
+                    "description": "Card name; trimmed; must be non-blank."
+                  },
+                  "language": {
+                    "type": "string",
+                    "description": "Card language. Recognized values and aliases are normalized to `en`, `zh-Hant`, `zh-Hans`, `ja`, `ko`, `all` (e.g. `zh-TW`, `zh-CN`, `jp`, `kr`); any other non-empty string is stored as given and treated as a non-English locale for limits. Defaults to the account language, then `zh-Hans`. Drives per-field character limits."
+                  },
+                  "cardType": {
+                    "type": "string",
+                    "default": "story",
+                    "description": "Stored as-is as the card's `roleType` (not validated). Values understood by validation/quality heuristics: `companion`, `story`, `game`, `generator`."
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "description": "Accepted for API symmetry; not used for deduplication on this route."
+                  },
+                  "origin": {
+                    "type": "string",
+                    "description": "Self-declared creation source. Whitelisted values (`hearthroom`) are stored as `creationMethod`; anything else falls back to `open_api`."
+                  },
+                  "visibility": {
+                    "type": "string",
+                    "enum": [
+                      "private",
+                      "unlisted"
+                    ],
+                    "default": "unlisted"
+                  }
+                }
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Created. `roleVisibility` is `private`, `reviewStatus` is `not_submitted`, `accountPermission` is `owner`.",
+            "description": "Success",
             "content": {
               "application/json": {
                 "schema": {
@@ -8487,7 +8521,7 @@
           "Worldbooks"
         ],
         "summary": "Update metadata, add/update/delete entries and bind a worldbook in one request",
-        "description": "Applies, in order: (1) `metadata` — a FULL replacement of the worldbook's name/description/iconUrl/tags/visibility when present (`name` becomes required; omitted description/iconUrl/tags are blanked and an omitted/unknown visibility becomes `private`; only when `metadata.textPatches.description` is used are the other metadata fields back-filled from the current values); (2) `entries` — a list of operations executed sequentially (consecutive `create`/`delete` ops are batched; any failure stops processing and earlier operations are NOT rolled back); (3) `binding` — binds the worldbook to a role, replacing that role's existing worldbook binding (a role carries a single active worldbook). At least one of the three sections must be present (`nothing to update`). The caller must own the worldbook for metadata/entry operations; binding requires the worldbook to be owned or public. Returns 503 when the worldbook service is unavailable (nothing written).",
+        "description": "Applies metadata, entry operations and binding in one transaction; an invalid operation rolls back the entire request. At most 200 entry operations are accepted per request. The caller must own the Lorebook and any agent configuration being bound. Metadata replaces name, description, iconUrl and tags; omitted visibility is preserved. The response returns `createdEntryIds` in create-operation order. Read the book-specific `entryContentMax` from the detail endpoint; the widest bound language applies. There is no idempotency deduplication: after an unknown outcome, read the entries before repeating creates.",
         "security": [
           {
             "userToken": []
@@ -8509,7 +8543,22 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/WorldbookDocumentRequest"
+                "type": "object",
+                "properties": {
+                  "metadata": {
+                    "$ref": "#/components/schemas/WorldBookPatchDocumentMetadata"
+                  },
+                  "entries": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/WorldBookPatchDocumentEntry"
+                    },
+                    "maxItems": 200
+                  },
+                  "binding": {
+                    "$ref": "#/components/schemas/WorldBookPatchDocumentBinding"
+                  }
+                }
               }
             }
           }
@@ -8520,13 +8569,44 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WorldBookPatchDocumentOutput"
+                  "type": "object",
+                  "properties": {
+                    "createdEntryIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "format": "uuid"
+                      }
+                    },
+                    "updatedCount": {
+                      "type": "integer"
+                    },
+                    "deletedCount": {
+                      "type": "integer"
+                    },
+                    "bound": {
+                      "type": "boolean"
+                    },
+                    "metadataUpdated": {
+                      "type": "boolean"
+                    },
+                    "worldbookId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "documentVersion": {
+                      "type": "string",
+                      "enum": [
+                        "worldbookPatch.v1"
+                      ]
+                    }
+                  }
                 }
               }
             }
           },
           "400": {
-            "description": "`invalid JSON body`, `nothing to update`, `name required` (metadata without name), `content required`, `content too long: max N chars` (N is the book's entry limit; `detail` gives `field`, `index` in `entries`, `max`, `actual` and `unit`), `accountId required`.",
+            "description": "`worldbook_limit_exceeded` reports `field`, `reason`, `index`, `max`, `actual` and `unit` for an operation-count limit. Other validation errors use `invalid_arguments` with `field`, `index` and `reason`; length errors also include `max`, `actual` and `unit`. Entry indices are zero-based; document-level fields use -1. Fix the indicated field or split the batch before resending.",
             "content": {
               "application/json": {
                 "schema": {
@@ -8546,17 +8626,7 @@
             }
           },
           "403": {
-            "description": "`permission_denied` (entry read for a deep patch on a foreign entry).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "`permission denied` (worldbook not owned), `record not found`, `invalid_worldbook_document_operation` (unknown `op`), `invalid_worldbook_category`, `invalid_worldbook_trigger_region`, `invalid triggerRegion`, `invalid targetType`, `target_required`, `invalid_field_patch`, or another error; `retryable: true`.",
+            "description": "`permission_denied`",
             "content": {
               "application/json": {
                 "schema": {
@@ -8566,7 +8636,17 @@
             }
           },
           "503": {
-            "description": "`worldbook_unavailable`.",
+            "description": "`temporarily_unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
             "content": {
               "application/json": {
                 "schema": {
@@ -12055,6 +12135,69 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/worldbook/limits": {
+      "get": {
+        "operationId": "getWorldbookUploadLimits",
+        "tags": [
+          "Worldbooks"
+        ],
+        "summary": "Read Lorebook upload limits",
+        "description": "Returns `maxOpsPerCall` (200 operations), `trialMaxEntries` (1000 entries), and `entryContentMaxByLanguage` (4000 characters for Chinese, 6000 for Japanese and Korean, 12000 for English). Limits count Unicode characters, not bytes. A document has no separate application-level byte limit; proxy limits may still apply. No authentication is required.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "maxOpsPerCall",
+                    "trialMaxEntries",
+                    "entryContentMaxByLanguage"
+                  ],
+                  "properties": {
+                    "maxOpsPerCall": {
+                      "type": "integer",
+                      "const": 200
+                    },
+                    "trialMaxEntries": {
+                      "type": "integer",
+                      "const": 1000
+                    },
+                    "entryContentMaxByLanguage": {
+                      "type": "object",
+                      "properties": {
+                        "zh-Hant": {
+                          "type": "integer",
+                          "const": 4000
+                        },
+                        "zh-Hans": {
+                          "type": "integer",
+                          "const": 4000
+                        },
+                        "ja": {
+                          "type": "integer",
+                          "const": 6000
+                        },
+                        "ko": {
+                          "type": "integer",
+                          "const": 6000
+                        },
+                        "en": {
+                          "type": "integer",
+                          "const": 12000
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
