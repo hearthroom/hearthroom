@@ -4,10 +4,10 @@
   "try": "/",
   "draft": true,
   "title": {
-    "zh-Hant": "連線慢時可以從「線路」換到較快的網域，已登入的話登入會一起帶過去。",
-    "zh-Hans": "连接慢时可以从「线路」换到较快的域名，已登录的话登录会一起带过去。",
-    "en": "When the connection is slow, Routes switches to a faster domain and keeps you signed in.",
-    "ja": "接続が遅いときは「ルート」から速いドメインへ切り替え、ログインも引き継げます。",
-    "ko": "연결이 느릴 때 ‘회선’에서 더 빠른 도메인으로 바꾸면 로그인도 함께 옮겨져요."
+    "zh-Hant": "「線路」清單可測速並切換網域，切換時也能保持登入。",
+    "zh-Hans": "“线路”列表支持测速和切换站点，切换时也能保持登录。",
+    "en": "Routes now lets you test connections and switch sites while staying signed in.",
+    "ja": "「ルート」で各サイトへの接続を計測し、ログインを保ったまま切り替えられます。",
+    "ko": "‘회선’에서 각 사이트의 연결을 측정하고 로그인 상태로 다른 회선을 선택할 수 있어요."
   }
 }
