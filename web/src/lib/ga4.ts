@@ -22,6 +22,9 @@ declare global { interface Window { hearthroomGaData?: Command[]; "ga-disable-G-
 export function createGa4() {
   let enabled = false;
   let initialized = false;
+  let preparing = false;
+  let currentAccount: number | null = null;
+  let lastIdentityRead = -Infinity;
   let lastLocation = "";
   let lastNavigation = "";
   let referrer = "";
@@ -33,15 +36,32 @@ export function createGa4() {
   let onClientId: ((clientId: string) => void) | undefined;
   let sessionId: string | undefined;
   let linkerPending = false;
+  let googleReady = false;
+  const readiness: (() => void)[] = [];
+  function notifyReady() { if (googleReady && !linkerPending) readiness.splice(0).forEach(resolve => resolve()); }
   const pendingEvents: { name: string; params: Record<string, unknown>; page?: boolean }[] = [];
   const commands: Command[] = [];
   const allowed = () => {
     const gpc = typeof navigator === "undefined" || (navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl === true;
     if (typeof window !== "undefined") window["ga-disable-G-K82Q2QC7P4"] = gpc || !enabled;
-    if (gpc) identity = null;
+    if (gpc) { identity = null; pendingEvents.length = 0; }
     return enabled && !gpc;
   };
-  const context = () => allowed() ? gaPage(location.href, referrer) : null;
+  const context = () => {
+    const active = allowed();
+    return (active || preparing && (navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl !== true) ? gaPage(location.href, referrer) : null;
+  };
+  function detectShell() {
+    try {
+      const twa = document.referrer === "android-app://club.hearthroom.app" || sessionStorage.getItem("hearthroom.ga4.twa") === "1";
+      if (twa) sessionStorage.setItem("hearthroom.ga4.twa", "1");
+      shell = appShell({ twa, userAgent: navigator.userAgent, standalone: window.matchMedia?.("(display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone });
+    } catch { shell = appShell({ userAgent: navigator.userAgent, referrer: document.referrer }); }
+  }
+  function flush() { for (const event of pendingEvents.splice(0)) if (allowed()) emit(event); }
+  function enqueue(event: { name: string; params: Record<string, unknown>; page?: boolean }) {
+    if (preparing || linkerPending) pendingEvents.push(event); else if (initialize()) emit(event);
+  }
   // gtag consumes Arguments objects, matching the official dataLayer snippet.
   function send(..._args: unknown[]) { commands.push(arguments); }
   function emit(event: { name: string; params: Record<string, unknown>; page?: boolean }) {
@@ -54,11 +74,7 @@ export function createGa4() {
     if (initialized) return true;
     const page = context();
     if (!page) return false;
-    try {
-      const twa = document.referrer === "android-app://club.hearthroom.app" || sessionStorage.getItem("hearthroom.ga4.twa") === "1";
-      if (twa) sessionStorage.setItem("hearthroom.ga4.twa", "1");
-      shell = appShell({ twa, userAgent: navigator.userAgent, standalone: window.matchMedia?.("(display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone });
-    } catch { shell = appShell({ userAgent: navigator.userAgent, referrer: document.referrer }); }
+    detectShell();
     window.hearthroomGaData = commands;
     send("consent", "default", { analytics_storage: "granted", ad_storage: "denied", ad_user_data: "denied", ad_personalization: "denied" });
     send("js", new Date());
@@ -66,8 +82,8 @@ export function createGa4() {
     send("set", "linker", { domains: [...SITE_HOSTS], accept_incoming: true });
     const linked = linkerCandidate(landingUrl || location.href);
     send("config", MEASUREMENT_ID, { ...page, ...gaCampaign(landingUrl || location.href), ...(clientId && !linked ? { client_id: clientId } : {}), send_page_view: false,
-      cookie_expires: 390 * 86400, cookie_update: false, cookie_flags: "SameSite=Lax;Secure",
-      ...(new URL(landingUrl || location.href).searchParams.get("ga_debug") === "1" ? { debug_mode: true } : {}),
+      cookie_expires: 390 * 86400, cookie_update: false, cookie_domain: "none", cookie_flags: "SameSite=Lax;Secure",
+      ...(import.meta.env.DEV && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) && new URL(landingUrl || location.href).searchParams.get("ga_debug") === "1" ? { debug_mode: true } : {}),
       ignore_referrer: /https:\/\/console\.harperharbor\.com\//.test(document.referrer),
       allow_google_signals: false, allow_ad_personalization_signals: false });
     if (linked) {
@@ -78,10 +94,11 @@ export function createGa4() {
         if (allowed()) {
           if (validClientId(value) && value === linked) { clientId = value; onClientId?.(value); }
           else send("config", MEASUREMENT_ID, { client_id: clientId, send_page_view: false,
-            cookie_expires: 390 * 86400, cookie_update: false, cookie_flags: "SameSite=Lax;Secure" });
+            cookie_expires: 390 * 86400, cookie_update: false, cookie_domain: "none", cookie_flags: "SameSite=Lax;Secure" });
         }
         linkerPending = false;
-        for (const event of pendingEvents.splice(0)) if (allowed()) emit(event);
+        flush();
+        notifyReady();
       };
       const timer = setTimeout(() => settle(null), 3000);
       send("get", MEASUREMENT_ID, "client_id", settle);
@@ -89,6 +106,7 @@ export function createGa4() {
     send("get", MEASUREMENT_ID, "session_id", (value: unknown) => {
       const text = typeof value === "number" && Number.isSafeInteger(value) ? String(value) : typeof value === "string" ? value : "";
       if (allowed() && /^[1-9][0-9]{0,19}$/.test(text)) sessionId = text;
+      googleReady = true; notifyReady();
     });
     const script = document.createElement("script");
     script.async = true;
@@ -110,27 +128,37 @@ export function createGa4() {
   };
 
   const tracker = {
+    prepare() { preparing = true; referrer = document.referrer; detectShell(); },
     start(value: boolean, options: { clientId?: string; landingUrl?: string; onClientId?: (clientId: string) => void } = {}) {
+      preparing = false;
       enabled = value;
       clientId = validClientId(options.clientId) ? options.clientId : undefined;
       landingUrl = options.landingUrl ?? location.href;
       onClientId = options.onClientId;
       referrer = document.referrer;
-      initialize();
+      if (!initialize()) pendingEvents.length = 0;
+      else if (!linkerPending) flush();
     },
     identity(value: unknown) {
       identity = (navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl === true ? null : analyticsIdentity(value);
     },
     async refreshIdentity(account: number | null, read: () => Promise<unknown>) {
+      const changed = account !== currentAccount;
+      if (changed || !account || !allowed()) {
+        ++accountGeneration; identity = null; currentAccount = account; lastIdentityRead = -Infinity;
+      }
+      if (!account || !allowed() || !changed && Date.now() - lastIdentityRead < 60_000) return;
+      lastIdentityRead = Date.now();
       const generation = ++accountGeneration;
-      identity = null;
-      if (!account || !allowed()) return;
       try {
         const value = await read();
         if (generation === accountGeneration && allowed()) identity = analyticsIdentity(value);
       } catch { /* Missing analytics permissions do not affect sign-in. */ }
     },
     active: allowed,
+    whenReady(): Promise<void> {
+      return !allowed() || googleReady && !linkerPending ? Promise.resolve() : new Promise(resolve => readiness.push(resolve));
+    },
     checkoutUrl(href: string): string {
       try {
         const url = new URL(href);
@@ -146,24 +174,22 @@ export function createGa4() {
       } catch { return href; }
     },
     pageView() {
-      if (!initialize()) return;
       const page = params();
-      if (!page || location.href === lastNavigation) return;
+      if (!page || location.pathname === lastNavigation) return;
       referrer = lastLocation || document.referrer;
       const view = params()!;
       const event = { name: "page_view", params: view, page: true };
-      if (linkerPending) pendingEvents.push(event); else emit(event);
+      enqueue(event);
       lastLocation = String(page.page_location);
-      lastNavigation = location.href;
+      lastNavigation = location.pathname;
     },
     track(event: string, data: Data = {}) {
-      if (!initialize()) return;
       const page = params();
       if (!page) return;
       const mapped = gaEvent(event, data, String(page.page_type));
       if (mapped) {
         const queued = { name: mapped.name, params: { ...page, ...mapped.params } };
-        if (linkerPending) pendingEvents.push(queued); else emit(queued);
+        enqueue(queued);
       }
     },
     /** Read-only snapshots for deterministic outbound contract tests. */
@@ -175,7 +201,17 @@ export function createGa4() {
 const ga4 = createGa4();
 // Release enables this only after property auto-collection settings and privacy copy are verified.
 let ready: Promise<void> = Promise.resolve();
-export function startGa4() { ready = initializeGa4(); return ready; }
+export function startGa4() {
+  ga4.prepare();
+  ready = initializeGa4().finally(() => { if (!ga4.active()) ga4.start(false); });
+  return ready;
+}
+/** Redirects wait for the same-origin bootstrap, bounded independently of network failure. */
+export async function waitForGa4() {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try { await Promise.race([ready.then(() => ga4.whenReady()), new Promise<void>(resolve => { timer = setTimeout(resolve, 3000); })]); }
+  finally { clearTimeout(timer); }
+}
 async function initializeGa4() {
   const optedOut = (navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl === true;
   const landingUrl = location.href;
@@ -193,7 +229,6 @@ async function initializeGa4() {
       void fetch("/v1/analytics/session", { method: "POST", credentials: "same-origin", cache: "no-store",
         headers: { "X-Hearthroom-Request": "1", "Content-Type": "application/json" }, body: JSON.stringify({ clientId }), signal: AbortSignal.timeout(3000) }).catch(() => {});
     } });
-    ga4.pageView();
   } catch { /* Analytics must never interrupt navigation or login. */ }
 }
 export const ga4PageView = () => ga4.pageView();

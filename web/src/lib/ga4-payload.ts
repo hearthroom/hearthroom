@@ -25,7 +25,7 @@ function route(url: URL): { path: string; type: string } | null {
   const fixed: Record<string, string> = {
     "/": "board", "/search": "search", "/library": "library", "/me": "me", "/mine": "mine",
     "/me/badges": "me", "/me/community": "me", "/me/notifications": "me", "/me/referral": "me",
-    "/create": "editor", "/wallet": "wallet", "/checkin": "checkin", "/go/plan": "plan",
+    "/create": "editor", "/wallet": "wallet", "/checkin": "checkin", "/go/plan": "plan", "/go/topup": "wallet",
     "/resources": "resources", "/settings": "settings", "/developers": "developers", "/download": "download",
     "/guide": "guide", "/privacy": "privacy", "/updates": "updates", "/campaigns": "campaign", "/login": "login", "/auth/callback": "login",
   };
@@ -89,7 +89,7 @@ export function gaEvent(event: string, data: EventData, page: string): GaEvent |
     const entry = page === "wallet" ? "wallet" : page === "checkin" ? "newcomer" : "profile";
     return make("begin_checkout", { item_category: event === "plan_click" ? "plan" : "topup", entry });
   }
-  if (event === "credits_shortfall_click" && detail === "plan") return make("begin_checkout", { item_category: "plan", entry: "shortfall" });
+  if (event === "credits_shortfall_click" && ["plan", "topup"].includes(detail)) return make("begin_checkout", { item_category: detail, entry: "shortfall" });
   if (event === "credits_shortfall_shown" || event === "credits_shortfall_click") return make("credits_shortfall", { action: event.endsWith("shown") ? "shown" : "click" });
   if (event === "checkin_claim" && ["daily", "newcomer", "task"].includes(detail)) return make(event, { kind: detail });
   if (event === "chat_start" || event === "first_chat") return make(event);

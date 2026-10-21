@@ -30,7 +30,8 @@ export function creditsRecovery(panel: RewardsPanel | null, shortfall: { needed:
   const links: { id: string; label: string; href: string }[] = [];
   if (left > 0) links.push({ id: "tasks", label: o.t("credits.recovery.taskLeft", { n: o.whole(left) }), href: `${o.origin}${o.lp("/checkin")}?from=${SHORTFALL_FROM}#tasks` });
   if (o.plan?.offer?.onSale && o.plan.canPurchase !== false) links.push({ id: "plan", label: o.t("plan.canvas.action"), href: `${o.origin}${o.lp(PLAN_GO_PATH)}?from=${SHORTFALL_FROM}` });
-  else links.push({ id: "topup", label: o.t("credits.recovery.topup"), href: o.topUp });
+  // A main-site landing owns analytics for both ordinary and cross-origin sandbox cards.
+  else links.push({ id: "topup", label: o.t("credits.recovery.topup"), href: `${o.origin}${o.lp("/go/topup")}?from=${SHORTFALL_FROM}` });
   return {
     title: shortfall ? o.t("credits.recovery.title") : undefined,
     body: shortfall ? o.t("credits.recovery.body", { need: o.whole(shortfall.needed), have: o.whole(shortfall.available) }) : undefined,
