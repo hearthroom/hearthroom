@@ -241,6 +241,7 @@ watch(locale, () => { void remergeStageMessages(); });
 .play-cover-leave-to { opacity: 0; }
 .play__toasts { position: fixed; left: 50%; top: calc(var(--s-4) + env(safe-area-inset-top, 0px)); transform: translateX(-50%); z-index: 1200; display: grid; gap: var(--s-2); pointer-events: none; }
 .play__toast { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-radius: var(--r-md); background: var(--surface); color: var(--text); box-shadow: var(--shadow-md); font-size: 14px; max-width: min(90vw, 480px); }
+.play__toast:lang(ko) { word-break: keep-all; overflow-wrap: anywhere; }
 .play__toast-icon { width: 20px; height: 20px; flex: 0 0 20px; }
 .play__toast--warning { border-left: 3px solid var(--warning-text); }
 .play__toast--error { border-left: 3px solid var(--danger); }
