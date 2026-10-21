@@ -17,7 +17,7 @@
  */
 import { currentProvider, providerName, setProvider, type ProviderId } from "@/lib/provider";
 import { useProviderUpstream, UPSTREAM_API } from "@/lib/config";
-import { restorePersisted, refresh } from "@/lib/oauth";
+import { restorePersisted } from "@/lib/oauth";
 import { accountToken } from "@/lib/connections";
 import { platformPath } from "@/lib/distribution";
 import { suki } from "@/pet/events";
@@ -510,9 +510,9 @@ function toggleTag(name: string) {
 async function loadValidation() {
   // 這一家沒有校驗端點：用保守預設，不去打
   if (!can('validation')) return;
-  const token = await session.accessToken();
-  if (!token || !roleId.value) return;
   try {
+    const token = await session.accessToken();
+    if (!token || !roleId.value) return;
     const report = await fetchRoleValidation(roleId.value, token);
     remoteLimits.value = report.tokenBudget?.limits ?? null;
     blockers.value = report.blockers ?? [];

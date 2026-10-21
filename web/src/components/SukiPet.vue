@@ -53,9 +53,11 @@ async function latestChat() {
   return got?.conversations?.[0] ?? null;
 }
 async function resume() {
-  const c = await latestChat();
-  if (!c) return pet.value?.say(line("noChat"));
-  location.href = platformPath(lp(`/play/${encodeURIComponent(c.cardNumber ?? c.conversationRoleId)}?resume=${encodeURIComponent(c.conversationId)}`), c.provider);
+  try {
+    const c = await latestChat();
+    if (!c) return pet.value?.say(line("noChat"));
+    location.href = platformPath(lp(`/play/${encodeURIComponent(c.cardNumber ?? c.conversationRoleId)}?resume=${encodeURIComponent(c.conversationId)}`), c.provider);
+  } catch { pet.value?.on({ type: "hint", text: t("state.serverBusy") }); }
 }
 async function roll() {
   pet.value?.on({ type: "roll" });
@@ -130,7 +132,7 @@ async function start() {
       return { news: got.news, level: levelOf(got.state.affection), recall: got.recall, state: got.state };
     },
     enableRecall: async () => {
-      const token = await session.accessToken();
+      const token = await session.accessToken().catch(() => null);
       if (!token) return;
       await communityRequest("/me/suki", token, "PATCH", { recall: true }).catch(() => null);
       // 召回走推播或 Discord 私訊：兩個都沒開的話，帶他去通知頁打開

@@ -48,7 +48,7 @@ watch(due, (now) => {
     if (!due.value || document.querySelector(".coach, .stage-wrap, .dlg-backdrop")) return;
     place();
     newcomerPrompt.showing = true;
-    const token = await session.accessToken();
+    const token = await session.accessToken().catch(() => null);
     if (token) void markPrompt(token, "shown");
   }, 1200);
 }, { immediate: true });
@@ -56,7 +56,7 @@ watch(due, (now) => {
 // 登入狀態常常比首頁晚到：等到有人登入再讀今天彈過了沒
 watch(() => session.me?.accountNumId, async (id) => {
   if (!id || newcomerPrompt.loaded) return;
-  const token = await session.accessToken();
+  const token = await session.accessToken().catch(() => null);
   if (token) await loadPrompt(token);
 }, { immediate: true });
 onMounted(() => { follow = window.setInterval(() => { if (newcomerPrompt.showing) place(); }, 500); });
@@ -69,7 +69,7 @@ function go() {
 async function later() {
   newcomerPrompt.showing = false;
   suki({ type: "cheer", mood: "ok" });
-  const token = await session.accessToken();
+  const token = await session.accessToken().catch(() => null);
   if (token) void markPrompt(token, "later");
 }
 function onKey(e: KeyboardEvent) { if (e.key === "Escape") void later(); }

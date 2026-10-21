@@ -20,7 +20,8 @@ const api = vi.hoisted(() => ({
   reportComment: vi.fn(async () => ({ ok: true, folded: false })),
 }));
 vi.mock("../src/lib/api", async (original) => ({ ...(await original<object>()), ...api, fetchComments: (...a: unknown[]) => api.fetchComments(...a) }));
-vi.mock("../src/lib/session", () => ({ useSession: () => ({ me: { accountNumId: 7, avatar: "" }, ready: true, accessToken: async () => "synthetic" }) }));
+const tokenFixture = vi.hoisted(() => ({ accessToken: vi.fn(async () => "synthetic") }));
+vi.mock("../src/lib/session", () => ({ useSession: () => ({ me: { accountNumId: 7, avatar: "" }, ready: true, accessToken: tokenFixture.accessToken }) }));
 vi.mock("../src/lib/community-appearance", () => ({ usePublicAppearance: () => ref(null) }));
 vi.mock("../src/lib/track", () => ({ track: () => {}, currentSurface: () => "web" }));
 const staff = vi.hoisted(() => ({ reviewer: false as boolean | null, role: "reviewer" as string, blogWriter: false, setPostState: vi.fn(async () => ({})) }));
@@ -33,6 +34,7 @@ let app: App, host: HTMLElement;
 beforeEach(async () => {
   i18n.global.locale.value = "zh-Hant";
   Object.assign(staff, { reviewer: false, role: "reviewer", blogWriter: false });
+  tokenFixture.accessToken.mockReset().mockResolvedValue("synthetic");
   api.list = [];
   api.fetchComments.mockReset().mockImplementation(async () => ({ total: api.list.length, comments: api.list, isRoleCreator: false }));
   host = document.body.appendChild(document.createElement("div"));
@@ -227,4 +229,20 @@ it("a permanent mute says so; a mute found on send folds the composer", async ()
   await vi.waitFor(() => expect(host.textContent).toContain(t("comment.error.mutedPermanent")));
   expect(host.querySelector(".cmt__composer")).toBeNull();
   expect(buttons(host, t("comment.reply"))).toHaveLength(0);
+});
+
+it("shows a temporary token failure without an unhandled like action or optimistic mutation", async () => {
+  api.list = [comment("c1")];
+  await mount();
+  const errors: unknown[] = [];
+  app.config.errorHandler = error => { errors.push(error); };
+  const { AuthUnavailable } = await import("../src/lib/oauth");
+  tokenFixture.accessToken.mockRejectedValue(new AuthUnavailable(t("state.serverBusy")));
+  const like = host.querySelector<HTMLButtonElement>('button[aria-pressed="false"]')!;
+  expect(like).not.toBeNull();
+  like.click();
+  await new Promise(resolve => setTimeout(resolve, 40));
+  expect(errors).toEqual([]);
+  expect(host.textContent).toContain(t("state.serverBusy"));
+  expect(like.getAttribute('aria-pressed')).toBe('false');
 });
