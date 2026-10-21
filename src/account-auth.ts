@@ -86,6 +86,20 @@ function routeValue(raw:unknown):string {
   if(typeof raw!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(raw))throw new HttpError(400,'auth_route_invalid');
   return raw;
 }
+async function authBody(c:C):Promise<Record<string,unknown>> {
+  let malformed=false;
+  const body:unknown=await c.req.json().catch(()=>{malformed=true;return {};});
+  if(malformed||body===null||typeof body!=='object'||Array.isArray(body))throw new HttpError(400,'auth_input_invalid');
+  return body as Record<string,unknown>;
+}
+const ROUTE_OPERATIONS=new Set(['route-start','route-issue','route-redeem']);
+async function limitRoute(c:C){
+  if(!c.env.AUTH_ROUTE_LIMIT)throw new HttpError(503,'auth_route_limit_unavailable');
+  let allowed:boolean;
+  try{allowed=(await c.env.AUTH_ROUTE_LIMIT.limit({key:c.req.header('CF-Connecting-IP')||'unknown'})).success;}
+  catch{throw new HttpError(503,'auth_route_limit_unavailable');}
+  if(!allowed)throw new HttpError(429,'auth_route_rate_limited');
+}
 export async function metric(env:Env,operation:string,provider:string,outcome:string){
   await env.DB.prepare('INSERT INTO account_auth_metrics VALUES(?,?,?,1) ON CONFLICT(operation,provider,outcome) DO UPDATE SET value=value+1').bind(operation,provider,outcome).run();
 }
@@ -242,35 +256,47 @@ accountAuthRoutes.onError((error,c)=>{
   return c.json({error:'auth_provider_unavailable'},503);
 });
 accountAuthRoutes.use('/v1/auth/*',async(c,next)=>{
-  const operation=c.req.path.split('/').pop()!;
-  if(!['start','complete','session','token','commit','cancel','logout','disconnect','route-start','route-issue','route-redeem'].includes(operation)||c.env.AUTH_ENABLED!=='true'){await next();return;}
-  try{await next();}finally{
-    const outcome=c.res.status>=500?'unavailable':c.res.status>=400?'denied':'ok';
-    try{await metric(c.env,operation,'site',outcome);}catch{console.warn('Account authorization metric unavailable');}
-  }
-});
-accountAuthRoutes.use('/v1/auth/*',async(c,next)=>{
   c.header('Cache-Control','private, no-store');c.header('Referrer-Policy','no-referrer');
   c.header('X-Content-Type-Options','nosniff');
   if(c.req.path==='/v1/auth/config'){await next();return;}
   enabled(c.env);originOf(c);
   if(c.req.method!=='POST'||c.req.header('Origin')!==new URL(c.req.url).origin||c.req.header('X-Hearthroom-Request')!=='1')throw new HttpError(403,'auth_origin_denied');
+  if(ROUTE_OPERATIONS.has(c.req.path.split('/').pop()!))await limitRoute(c);
   await next();
 });
 accountAuthRoutes.use('/v1/auth/*',bodyLimit({maxSize:16384,onError:c=>c.json({error:'auth_input_invalid'},400)}));
+accountAuthRoutes.use('/v1/auth/*',async(c,next)=>{
+  if(c.req.method==='POST'){
+    const body=await authBody(c),operation=c.req.path.split('/').pop()!;
+    // Reject malformed transfer inputs before the durable metric middleware as well
+    // as before session reads: garbage must not become a D1 write amplification path.
+    if(operation==='route-start')routeOrigin(body.targetOrigin,c.env);
+    if(operation==='route-issue')routeValue(body.request);
+    if(operation==='route-redeem')routeValue(body.code);
+  }
+  await next();
+});
+accountAuthRoutes.use('/v1/auth/*',async(c,next)=>{
+  const operation=c.req.path.split('/').pop()!;
+  if(!['start','complete','session','token','commit','cancel','logout','disconnect',...ROUTE_OPERATIONS].includes(operation)||c.env.AUTH_ENABLED!=='true'){await next();return;}
+  try{await next();}finally{
+    const outcome=c.res.status>=500?'unavailable':c.res.status>=400?'denied':'ok';
+    try{await metric(c.env,operation,'site',outcome);}catch{console.warn('Account authorization metric unavailable');}
+  }
+});
 accountAuthRoutes.get('/v1/auth/config',c=>{
   if(!c.env.AUTH_ENABLED||c.env.AUTH_ENABLED==='false')return c.json({managed:false});
   if(c.env.AUTH_ENABLED!=='true')throw new HttpError(503,'auth_configuration_unavailable');
   enabled(c.env);originOf(c);return c.json({managed:true});
 });
 accountAuthRoutes.post('/v1/auth/route-start',async c=>{
-  const session=(await readSession(c))!,body=await c.req.json();
+  const session=(await readSession(c))!,body=await authBody(c);
   const source=routeOrigin(originOf(c),c.env),target=routeOrigin(body.targetOrigin,c.env);
   if(source===target)throw new HttpError(400,'auth_route_denied');
   const request=random(),browser=random(),requestHash=await hash(request);
   const results=await c.env.DB.batch([
     c.env.DB.prepare('INSERT OR IGNORE INTO account_route_families SELECT token_hash,token_hash FROM account_sessions WHERE token_hash=?').bind(session.token_hash),
-    c.env.DB.prepare('DELETE FROM account_route_handoffs WHERE source_session=?').bind(session.token_hash),
+    c.env.DB.prepare('DELETE FROM account_route_handoffs WHERE source_session=? AND consumed_session IS NULL').bind(session.token_hash),
     c.env.DB.prepare(`INSERT INTO account_route_handoffs(request_hash,source_session,source_browser,source_origin,target_origin,return_to,expires_at)
       SELECT ?,token_hash,?,?,?,?,? FROM account_sessions WHERE token_hash=? AND expires_at>? RETURNING request_hash`)
       .bind(requestHash,await hash(browser),source,target,routePath(body.returnTo),Date.now()+ROUTE_TTL,session.token_hash,Date.now()),
@@ -282,6 +308,8 @@ accountAuthRoutes.post('/v1/auth/route-start',async c=>{
 });
 accountAuthRoutes.use('/auth/route/prepare',async(c,next)=>{
   c.header('Cache-Control','private, no-store');c.header('Referrer-Policy','no-referrer');
+  enabled(c.env);routeOrigin(originOf(c),c.env);
+  await limitRoute(c);routeValue(c.req.query('request'));
   try{await next();}finally{
     if(c.env.AUTH_ENABLED==='true')try{await metric(c.env,'route-prepare','site',c.res.status>=500?'unavailable':c.res.status>=400?'denied':'ok');}catch{console.warn('Account authorization metric unavailable');}
   }
@@ -299,7 +327,7 @@ accountAuthRoutes.get('/auth/route/prepare',async c=>{
   return c.redirect(source+'/auth/route/issue#'+new URLSearchParams({request}).toString(),302);
 });
 accountAuthRoutes.post('/v1/auth/route-issue',async c=>{
-  const body=await c.req.json(),requestHash=await hash(routeValue(body.request));
+  const body=await authBody(c),requestHash=await hash(routeValue(body.request));
   const browser=getCookie(c,ROUTE_SOURCE),session=await readSession(c,false);
   if(!browser||!session)throw new HttpError(400,'auth_route_invalid');
   const code=random();
@@ -314,7 +342,7 @@ accountAuthRoutes.post('/v1/auth/route-issue',async c=>{
   return c.json({url:target+'/auth/route/complete#'+new URLSearchParams({code}).toString()});
 });
 accountAuthRoutes.post('/v1/auth/route-redeem',async c=>{
-  const body=await c.req.json(),codeHash=await hash(routeValue(body.code)),browser=getCookie(c,ROUTE_TARGET);
+  const body=await authBody(c),codeHash=await hash(routeValue(body.code)),browser=getCookie(c,ROUTE_TARGET);
   if(!browser)throw new HttpError(400,'auth_route_invalid');
   const target=routeOrigin(originOf(c),c.env),browserHash=await hash(browser);
   const row=await c.env.DB.prepare('SELECT return_to,source_origin FROM account_route_handoffs WHERE code_hash=? AND target_browser=? AND target_origin=?')
@@ -348,8 +376,9 @@ accountAuthRoutes.post('/v1/auth/route-redeem',async c=>{
   return c.json({ok:true,returnTo:row.return_to});
 });
 accountAuthRoutes.post('/v1/auth/start',async c=>{
-  const body=await c.req.json(),provider=providerOf(body.provider,c.env),origin=originOf(c);
+  const body=await authBody(c),provider=providerOf(body.provider,c.env),origin=originOf(c);
   if(body.linkFrom)throw new HttpError(410,'service_retired');
+  if(body.silent===true&&c.env.AUTH_SILENT_ENABLED!=='true')throw new HttpError(503,'auth_silent_not_enabled');
   const browser=random(),state=random(),stateHash=await hash(state),verifier=random();
   const clientId=await registeredClient(c,provider,origin),redirectUri=origin+'/auth/callback';
   const flow:Flow={verifier,clientId,redirectUri,returnTo:safePath(body.returnTo),...(body.silent===true?{silent:true}:{})};
@@ -363,12 +392,12 @@ accountAuthRoutes.post('/v1/auth/start',async c=>{
   return c.json({url:url.toString()});
 });
 accountAuthRoutes.post('/v1/auth/complete',async c=>{
-  const body=await c.req.json();
+  const body=await authBody(c);
   if(typeof body.state!=='string'||body.state.length>128)throw new HttpError(400,'auth_state_invalid');
   const a=await attemptFor(c,body.state);
   const flow=await openAuth<Flow>(c.env,'attempt:'+a.state_hash,a.payload);
   if(body.error!==undefined){
-    if(!flow.silent||!SILENT_ERRORS.has(body.error)||body.code!==undefined)throw new HttpError(400,'auth_state_invalid');
+    if(!flow.silent||typeof body.error!=='string'||!SILENT_ERRORS.has(body.error)||body.code!==undefined)throw new HttpError(400,'auth_state_invalid');
     const ended=await c.env.DB.prepare("DELETE FROM account_auth_attempts WHERE state_hash=? AND phase='code' AND expires_at>? RETURNING state_hash").bind(a.state_hash,Date.now()).first();
     if(!ended)throw new HttpError(400,'auth_state_invalid');
     writeCookie(c,FLOW,'',0);
@@ -456,7 +485,7 @@ accountAuthRoutes.post('/v1/auth/cancel',async c=>{
  * 關：只關開關，驗證與同意留著，下次開不必再填。只收同源 POST（上面的中介層已擋）。
  */
 accountAuthRoutes.post('/v1/auth/adult',async c=>{
-  const body=await c.req.json().catch(()=>({})) as {showNsfw?:unknown;birthdate?:unknown;consentVersion?:unknown};
+  const body=await authBody(c);
   const current=await guestAdult(c);
   if(typeof body.showNsfw!=='boolean')return c.json(guestAdultView(current));
   // 只記改開關的結果（account_auth_metrics，operation=adult：on／off／underage／invalid）。讀現況是每個訪客開首頁都會問的，不記。
@@ -494,7 +523,7 @@ async function issueToken(c:C,session:Session,provider:ProviderId,externalId:num
 }
 accountAuthRoutes.post('/v1/auth/session',async c=>{
   const started=Date.now(),phases:string[]=[];
-  const session=(await readSession(c))!,body=await c.req.json();
+  const session=(await readSession(c))!,body=await authBody(c);
   phases.push(`session;dur=${Date.now()-started}`);
   // 前端要求時把授權一起帶回：開頁本來是 session 回來才去要 token，兩趟往返串在一起。
   // 換不到授權（供應商那邊斷了）不影響本站 session，token 就是 null，前端照舊處理。
@@ -528,13 +557,13 @@ accountAuthRoutes.post('/v1/auth/session',async c=>{
   return c.json({provider:selected.provider,me:{accountNumId:selected.externalId,nickName:profile!.displayName,avatar:profile!.avatarUrl},profile:{...profile!,reviewer:role!==null,reviewerRole:role},otherLines,...(token===undefined?{}:{token})});
 });
 accountAuthRoutes.post('/v1/auth/token',async c=>{
-  const session=(await readSession(c))!,body=await c.req.json(),provider=providerOf(body.provider,c.env);
+  const session=(await readSession(c))!,body=await authBody(c),provider=providerOf(body.provider,c.env);
   const profile=await memberProfile(c.env.DB,session.member_id),identity=profile?.identities.find(i=>i.provider===provider);
   if(!identity)throw new HttpError(403,'auth_connection_denied');
   return c.json(await issueToken(c,session,provider,identity.externalId));
 });
 accountAuthRoutes.post('/v1/auth/logout',async c=>{
-  const body=await c.req.json().catch(()=>({})),session=body.allRoutes===true?await readSession(c,false):null;
+  const body=await authBody(c),session=body.allRoutes===true?await readSession(c,false):null;
   const targetBrowser=getCookie(c,ROUTE_TARGET);
   if(targetBrowser){
     const targetHash=await hash(targetBrowser),origin=originOf(c);
@@ -561,7 +590,7 @@ accountAuthRoutes.post('/v1/auth/logout',async c=>{
   writeCookie(c,SESSION,'',0);return c.json({ok:true});
 });
 accountAuthRoutes.post('/v1/auth/disconnect',async c=>{
-  const session=(await readSession(c))!,body=await c.req.json(),provider=providerOf(body.provider,c.env);
+  const session=(await readSession(c))!,body=await authBody(c),provider=providerOf(body.provider,c.env);
   const profile=await memberProfile(c.env.DB,session.member_id),identity=profile?.identities.find(i=>i.provider===provider);
   if(!identity)throw new HttpError(403,'auth_connection_denied');
   const row=await c.env.DB.prepare('SELECT * FROM account_credentials WHERE provider=? AND external_id=?').bind(provider,String(identity.externalId)).first<Credential>();

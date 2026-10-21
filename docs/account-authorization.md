@@ -67,7 +67,7 @@ sum by (operation, outcome) (increase(hearthroom_auth_operations_total[15m]))
 
 ## 官方線路換手與靜默登入
 
-Migration `0079_route_handoffs.sql` 加入短期換手紀錄及本瀏覽器的線路 session 群組。官方來源直接讀 `android/routes.json`，且必須同時通過 `AUTH_ALLOWED_ORIGINS`／`AUTH_ADDITIONAL_ORIGINS`；不因萬用網域或 sandbox 路由而放寬。來源與目的站皆使用 HTTPS host-only cookie，沒有共用跨根網域 cookie。
+Migration `0079_route_handoffs.sql` 加入短期換手紀錄及本瀏覽器的線路 session 群組；`0080_route_handoff_receipts.sql` 保留已完成收據，改成每個來源 session 最多一個尚未完成的換手，兩份均須套用。官方來源直接讀 `android/routes.json`，且必須同時通過 `AUTH_ALLOWED_ORIGINS`／`AUTH_ADDITIONAL_ORIGINS`；不因萬用網域或 sandbox 路由而放寬。來源與目的站皆使用 HTTPS host-only cookie，沒有共用跨根網域 cookie。
 
 已登入者由同源 POST `route-start` 帶 `{targetOrigin,returnTo}` 開始，目的站 GET `/auth/route/prepare` 設 HttpOnly browser nonce，再回原站 `/auth/route/issue#request=…`。原站頁面清除 fragment 後，同源 POST `route-issue` 帶 `{request}`；後端驗證原 session 與來源流程 cookie，回目的站 `/auth/route/complete#code=…`。目的頁面同樣先清 fragment，才 POST `route-redeem` 帶 `{code}`；後端驗目的 browser nonce，交易內單次建立 session 並消耗換手碼，回 `{ok:true,returnTo}`。三個 POST 均位於 `/v1/auth/`、須帶 `X-Hearthroom-Request: 1` 與同源 Origin。失敗碼 `auth_route_invalid`（400）代表失效／不匹配／已消耗，`auth_route_denied`（400）代表目標非可用官方 origin，未登入 start 回 `site_session_required`（401），CSRF 回 `auth_origin_denied`（403），依賴失效回 503；UI 不盲目重發。
 
@@ -78,3 +78,9 @@ Migration `0079_route_handoffs.sql` 加入短期換手紀錄及本瀏覽器的�
 `start` 的 `{silent:true}` 只加 `prompt=none`，保留 PKCE、state、scope、resource 與既有回呼。UI 應先以總預算 1.5 秒探測 Harbor；不通就略過，禁止 iframe，並依產品頻率規範避免循環跳轉。Harbor 必須先支援既有 consent 與 membership gate；這不是 Worker 單獨可完成的行為。`complete` 接收原 state 與允許的 `error`（`login_required|consent_required|interaction_required|account_selection_required`），僅原 silent flow 可單次結束，回 `{silent:true,authenticated:false,error,returnTo}`。成功回應另帶 `{silent:true,authenticated:true}`；Worker 再驗本地會員已存在，silent 不建立會員、不走加入／獎勵流程。沒有本地會員時拒絕登入，將取得的上游憑證排入撤銷，須由使用者按登入走互動加入流程。
 
 沿用持久 counter `hearthroom_auth_operations_total` 與有驗證的 `/internal/auth/metrics`。新增 operation=`route-start|route-prepare|route-issue|route-redeem`、provider=`site`、outcome=`ok|denied|unavailable`；silent operation 的 outcome 為 `granted` 或上列固定拒絕碼。不輸出任何網域、會員、session 或換手碼作為標籤。這些瀏覽器端點不匯出至 MCP。
+
+`AUTH_ROUTE_LIMIT` 為原生 rate-limit binding（namespace `6402`）：四個換手階段共用每個連線 IP、每個 Cloudflare 節點 120 次／60 秒的預算；屬平台的近似限流，不是全域精確配額。IP 只用作該 binding 的短期限流鍵，不進 D1、日誌或自訂指標。未提供連線 IP 的本機／自架請求共用 `unknown` 鍵。缺 binding 或 binding 不可用時 fail closed 回 `503 auth_route_limit_unavailable`，超限回 `429 auth_route_rate_limited`。限流、JSON 物件檢查與換手識別格式檢查先於持久 auth counter 執行；格式錯、過大 body、CSRF 拒絕與超限不增加 D1 auth 指標（平台本身仍可統計流量）。所有 auth POST 的不合法 JSON、null、陣列或純量 body 均回 `400 auth_input_invalid`。
+
+Worker `AUTH_SILENT_ENABLED` 預設為 `false`，未明確設成 `true` 時，silent start 回 `503 auth_silent_not_enabled`，不註冊 client 或建立授權流程；互動登入不受影響。Harbor 子單上線且獨立讀回通過前，網站開關與 Worker 開關都保持關閉。
+
+prepare 的 `request` 識別仍在 query string：瀏覽器歷史、平台存取日誌、臨時 Tail 或 Logpush 可能保存它；no-store／no-referrer 不會移除平台存取日誌。它是 60 秒隨機流程識別，單靠它不能登入，仍須原站流程 cookie、來源 session 與目的 browser cookie，因此接受這項殘餘風險。禁止另加完整 URL／headers／body 日誌；部署者須核對 Workers Logs、Tail consumers 與 Logpush 的 URL 欄位／保存期，採最小必要保留。現有應用分析只記路由樣板，不寫 query。兩分頁同時開始時，後一次會取代尚未完成的前一次，前次可回 `auth_route_invalid`；已完成的收據保留至過期，不因新 start 被刪除，讓目的站登出仍能撤銷晚到的 session。
