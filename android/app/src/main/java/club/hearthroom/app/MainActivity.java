@@ -52,7 +52,13 @@ public final class MainActivity extends LauncherActivity {
         };
     }
     @Override protected void onCreate(Bundle state){
-        SplashScreen.installSplashScreen(this).setKeepOnScreenCondition(()->splash);
+        SplashScreen screen=SplashScreen.installSplashScreen(this);
+        screen.setKeepOnScreenCondition(()->splash);
+        // The same mark sits underneath, so leave at once; over the waiting screen, fade as the design asks.
+        screen.setOnExitAnimationListener(view->{
+            if(waiting.getVisibility()!=View.VISIBLE||!Ui.animations()){view.remove();return;}
+            view.getView().animate().alpha(0f).setDuration(200).withEndAction(view::remove);
+        });
         super.onCreate(state);if(isFinishing())return;
         store=new RouteStore(this);
         client=client!=null?client:new UpdateClient(Routes.downloadHosts(store.current()));
@@ -126,6 +132,7 @@ public final class MainActivity extends LauncherActivity {
     }
     private void showWaiting(int text,boolean offerRoutes){
         if(text!=0)waitingStatus.setText(text);
+        findViewById(R.id.launch_mark).setVisibility(View.GONE);
         // Under the system splash, show it fully: the splash's own exit fade is the crossfade into it.
         if(splash)waiting.setVisibility(View.VISIBLE);else Ui.fadeIn(waiting,200);
         splash=false;
@@ -161,7 +168,7 @@ public final class MainActivity extends LauncherActivity {
     }
 
     // Updates (S4).
-    private void showUpdatePanel(){splash=false;waiting.setVisibility(View.GONE);update.setVisibility(View.VISIBLE);}
+    private void showUpdatePanel(){splash=false;findViewById(R.id.launch_mark).setVisibility(View.GONE);waiting.setVisibility(View.GONE);update.setVisibility(View.VISIBLE);}
     private void later(){
         if(release!=null&&!manual)store.defer(release.versionCode,System.currentTimeMillis());
         if(launchUrl!=null)openSite();

@@ -65,6 +65,10 @@ final class Fixtures implements Application.ActivityLifecycleCallbacks {
             .putString("current", current).putBoolean("fixed", fixed).putLong("background", System.currentTimeMillis()).commit();
         application.registerActivityLifecycleCallbacks(this);
         instrumentation.setInTouchMode(true); // As a finger-driven phone; keyboard focus rings are not part of these screens.
+        // Portrait unless a run asks otherwise; UiAutomation can otherwise restore an earlier run's rotation.
+        if (!"landscape".equals(InstrumentationRegistry.getArguments().getString("orientation")))
+            instrumentation.getUiAutomation().setRotation(android.app.UiAutomation.ROTATION_FREEZE_0);
+        else instrumentation.getUiAutomation().setRotation(android.app.UiAutomation.ROTATION_FREEZE_90);
         return this;
     }
     void stop() {
@@ -95,7 +99,7 @@ final class Fixtures implements Application.ActivityLifecycleCallbacks {
     void screen(String name) {
         String prefix = InstrumentationRegistry.getArguments().getString("screens");
         if (prefix == null) return;
-        instrumentation.waitForIdleSync(); SystemClock.sleep(400);
+        SystemClock.sleep(500); // Not waitForIdleSync: an animating spinner never lets the main thread idle.
         Bitmap shot = instrumentation.getUiAutomation().takeScreenshot();
         File dir = context.getExternalFilesDir("screens");
         try (FileOutputStream out = new FileOutputStream(new File(dir, prefix + "-" + name + ".png"))) { shot.compress(Bitmap.CompressFormat.PNG, 100, out); }

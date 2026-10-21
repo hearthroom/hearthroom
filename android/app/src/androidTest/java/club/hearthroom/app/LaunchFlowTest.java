@@ -27,8 +27,10 @@ public class LaunchFlowTest {
         f.stop(); f.instrumentation.removeMonitor(web);
         if (routes != null) f.instrumentation.removeMonitor(routes);
     }
+    /** Not startActivitySync: the waiting spinner keeps the main thread busy, so "idle" may come late or never. */
     private void launch(Intent intent) {
-        f.instrumentation.startActivitySync((intent == null ? new Intent() : intent).setClass(f.context, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        f.context.startActivity(intent.setClass(f.context, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        f.waitFor("launcher", () -> f.launcher != null, 5000);
     }
     private void launch() { launch(new Intent(Intent.ACTION_MAIN)); }
     private void opened(long ms) {
@@ -96,7 +98,8 @@ public class LaunchFlowTest {
         launch();
         Activity screen = routes.waitForActivityWithTimeout(8000);
         assertNotNull(screen);
-        assertTrue(SystemClock.uptimeMillis() - start < 6000);
+        long took = SystemClock.uptimeMillis() - start;
+        assertTrue("Took " + took + " ms", took < 6000);
         assertEquals(RoutesActivity.UNREACHABLE, screen.getIntent().getStringExtra(RoutesActivity.REASON));
         f.waitFor("failure block", () -> screen.findViewById(R.id.failure).getVisibility() == View.VISIBLE, 2000);
         f.waitFor("rows settle", () -> screen.findViewById(R.id.retry).isEnabled(), 3000);
