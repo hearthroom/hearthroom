@@ -227,7 +227,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
           <ul>
             <li v-for="l in g.links" :key="l.id">
               <RouterLink v-if="'to' in l" :to="{ path: lp(l.to), query: l.query }">{{ $t(l.label, l.labelArgs ?? {}) }}<NewMark v-if="l.newMark" :k="l.newMark" /></RouterLink>
-              <a v-else-if="'action' in l && l.action === 'routes'" href="#" @click.prevent="openRoutesDialog()">{{ $t(l.label) }}<span v-if="l.detail" class="footer__detail">{{ $t(l.detail) }} {{ l.detailHost }}</span></a>
+              <a v-else-if="'action' in l && l.action === 'routes'" href="#" @click.prevent="openRoutesDialog()">{{ $t(l.label) }}<span v-if="l.detail" class="footer__detail">{{ $t(l.detail) }}</span><span v-if="l.detailHost" class="footer__host">{{ l.detailHost }}</span></a>
               <a v-else-if="'action' in l" href="#" @click.prevent="openInstall()">{{ $t(l.label) }}</a>
               <a v-else :href="l.href" target="_blank" rel="noopener noreferrer" :title="l.id === 'github' ? $t('footer.github') : undefined">
                 <CommunityIcon v-if="l.icon === 'discord'" name="discord" />
@@ -327,10 +327,11 @@ onMounted(() => document.addEventListener("keydown", onSlash));
 /* 訊號圖示借 .gh 的尺寸與樣子，但頁首擠的時候不跟 Discord 一起走：連線慢的時候它比 Discord 重要。
    沒有圓點：它只在看過並收掉提示卡之後才出現，出現本身就是訊號（美術總監 2026-10-22 #5） */
 .route-signal { padding: 0; border: 0; background: none; cursor: pointer; color: var(--text); }
-.footer__detail { color: var(--text-3); }
+.footer__detail { color: var(--text-2); }
+.footer__host { color: var(--text-3); }
 /* 手機上訊號圖示出現時，字標整個收起只留頭像：被截成「S」「綺..」像畫面壞了（走查 2026-10-22）。
    圖示只在連線慢的時候短暫出現，品牌頭像仍在 */
-@media (max-width: 480px) {
+@media (max-width: 430px) {
   .header__inner--signal .brand__name { display: none; }
 }
 

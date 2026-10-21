@@ -82,9 +82,15 @@ function cancel() {
   close();
 }
 
+/** 切換中鎖住按鈕寬度：「切換中」比「切換到線路三」短，不鎖的話旁邊的「取消」會跟著動 */
+const goBtn = ref<HTMLElement | null>(null);
+const goWidth = ref(0);
+watch(() => sw.busy.value, (busy) => { if (!busy) goWidth.value = 0; });
+
 function primary() {
   if (sw.busy.value || blocked.value || !target.value) return;
   if (isCurrent.value) { close(); return; }
+  goWidth.value = goBtn.value?.offsetWidth ?? 0;
   void sw.start(target.value);
 }
 
@@ -126,7 +132,7 @@ function onKey(e: KeyboardEvent) {
 }
 
 // 全部連不上：不預選任何一列（目前那列仍標「目前」）；回來之後預選目前那條
-watch(allDown, (down) => { if (down) selected.value = 0; else if (!target.value) selected.value = here?.n ?? 0; });
+watch(allDown, (down) => { if (down) selected.value = 0; else if (!target.value) selected.value = here?.n ?? 0; }, { immediate: true });
 // 某一列變成連不上時單獨說一聲；全部回來後再報一次摘要
 watch(() => LINES.map((l) => status(l).state === "down"), (now, before) => {
   now.forEach((down, i) => { if (down && before && !before[i]) live.value = `${name(LINES[i])} ${t("routes.down")}`; });
@@ -203,8 +209,13 @@ onMounted(async () => {
           </template>
           <template v-else>
             <button v-if="!isCurrent" type="button" class="btn btn--ghost" @click="cancel">{{ $t("dialog.cancel") }}</button>
-            <button type="button" class="btn btn--primary routes__go" :disabled="blocked && !sw.busy.value" :aria-busy="sw.busy.value || undefined" @click="primary">
-              <RouteSpinner v-if="sw.busy.value" />{{ primaryText }}
+            <!-- 選到還在測的那條：當成等待中（實心＋轉圈、aria-disabled），不用 disabled 的半透明；連不上才真的停用 -->
+            <button
+              ref="goBtn" type="button" class="btn btn--primary routes__go" :style="goWidth ? { width: `${goWidth}px` } : undefined"
+              :disabled="blocked && targetState === 'down' && !sw.busy.value" :aria-disabled="(blocked && targetState === 'checking') || undefined"
+              :aria-busy="sw.busy.value || undefined" @click="primary"
+            >
+              <RouteSpinner v-if="sw.busy.value || (blocked && targetState === 'checking')" />{{ primaryText }}
             </button>
           </template>
         </div>
@@ -217,7 +228,9 @@ onMounted(async () => {
 <style scoped>
 .routes { gap: var(--s-2); }
 .routes__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); min-height: var(--h-sm); }
-.routes__recheck { flex: none; gap: 6px; }
+/* 外觀 30 高（標題列放 44 會把標題撐開），點擊區外擴到 44；右緣對齊下面的數值欄 */
+.routes__recheck { flex: none; gap: 6px; position: relative; margin-inline-end: -12px; }
+.routes__recheck::after { content: ""; position: absolute; inset: -7px 0; }
 .routes__lead { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-2); }
 .routes__lead--alert { font-size: 14px; color: var(--text); }
 .routes__list { display: grid; margin: var(--s-2) calc(-1 * var(--s-2)); padding: var(--s-1) 0; border-block: 1px solid var(--line); transition: opacity var(--dur) var(--ease); }
@@ -249,14 +262,16 @@ onMounted(async () => {
 .routes__ms { min-width: 64px; text-align: right; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .routes__row--down .routes__speed, .routes__row--down .routes__ms { color: var(--text-3); }
 /* 連不上的列選不了：單選圓換成淡的虛線，一眼看得出不能選（字不降透明，維持對比） */
-.routes__row--down[aria-disabled="true"] .routes__radio { box-shadow: none; border: 1.75px dashed var(--line-strong); }
+.routes__row--down .routes__radio { box-shadow: none; border: 1.75px dashed var(--line-strong); }
 /* 狀態區預留兩行高：切換中多出進度與「需要久一點」時，置中的對話框不往上跳 */
-.routes__status { min-height: 40px; display: grid; align-content: start; }
+.routes__status { display: grid; align-content: start; }
+@media (min-width: 481px) { .routes__status { min-height: 40px; } }
 .routes__step, .routes__note { margin: 0; display: grid; gap: 2px; font-size: 13px; line-height: 1.5; color: var(--text-2); }
 .routes__note { font-size: 12px; color: var(--text-3); }
 .routes__slow { color: var(--text-3); }
 .routes__notice { margin: 0; font-size: 13px; }
 /* 切換中≠不可按：維持實心可讀，轉圈加鎖寬（全域 aria-busy 會把整顆調淡，這裡蓋回來） */
 .routes__go { gap: var(--s-2); min-width: 8em; }
-.routes__go[aria-busy="true"] { opacity: 1; }
+.routes__go[aria-busy="true"], .routes__go[aria-disabled="true"] { opacity: 1; }
+.routes__go[aria-disabled="true"] { cursor: progress; }
 </style>
