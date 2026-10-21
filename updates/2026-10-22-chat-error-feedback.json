@@ -1,0 +1,18 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "title": {
+    "zh-Hant": "聊天錯誤提示改用不透明底色，在亮色背景下也更容易閱讀。",
+    "zh-Hans": "聊天错误提示改用不透明底色，在明亮背景下也更容易阅读。",
+    "en": "Chat errors now have a solid background, making them easier to read over bright images.",
+    "ja": "チャットのエラー表示に背景色が付き、明るい画像の上でも読みやすくなりました。",
+    "ko": "채팅 오류 안내에 배경색을 더해 밝은 이미지 위에서도 읽기 쉬워졌어요."
+  },
+  "body": {
+    "zh-Hant": "內容受限時會說明已知原因，餘額不足時會列出預估費用、開始門檻與可用積分，並在輸入框預先提示。",
+    "zh-Hans": "内容受限时会说明已知原因，余额不足时会列出预计费用、开始门槛和可用积分，并在输入框提前提示。",
+    "en": "Content restrictions show known reasons, and credit alerts show the estimate, credits needed to start and available balance, with a warning before you send.",
+    "ja": "内容の制限は判明している理由を表示し、ポイント不足時には見積もり・開始に必要なポイント・残高を示すほか、入力欄でも送信前に不足をお知らせします。",
+    "ko": "콘텐츠 제한은 확인된 이유를 안내하고, 포인트가 부족하면 예상 비용과 시작에 필요한 포인트, 사용 가능한 잔액을 보여 주며 입력창에서도 보내기 전에 알려 줘요."
+  }
+}

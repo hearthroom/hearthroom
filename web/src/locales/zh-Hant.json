@@ -2985,9 +2985,9 @@
   "credits.expiry.date": "{n} 限時積分 {datetime} 到期",
   "credits.expiry.action": "去聊天",
   "wallet.tempEarliest": "最早一筆 {datetime} 到期",
-  "credits.recovery.title": "積分不夠聊這一輪",
-  "credits.recovery.body": "這一輪大約要 {need} 積分，目前有 {have}。",
-  "credits.recovery.taskLeft": "今日任務還能拿 {n} 積分",
+  "credits.recovery.title": "積分不足以開始這一輪",
+  "credits.recovery.body": "本輪預估 {min}–{max} 積分 · 開始需要 {max} 積分 · 目前可用 {have} 積分",
+  "credits.recovery.taskLeft": "查看今日任務（尚有 {n} 積分獎勵）",
   "credits.recovery.topup": "儲值",
   "wallet.reason.checkin": "簽到寶箱",
   "wallet.reason.task": "任務獎勵",
@@ -3066,7 +3066,7 @@
   "wallet.record.planRefund": "月卡已退款",
   "plan.meCard.claimed": "月卡已領 +{daily}",
   "plan.meCard.days": "月卡剩 {n} 天",
-  "plan.canvas.action": "購買月卡",
+  "plan.canvas.action": "查看月卡",
   "plan.newcomer.hint": "首次購買月卡，先拿 {credits} 積分，每天簽到再領 {firstDaily}",
   "plan.newcomer.link": "查看月卡 ↗",
   "referral.rule.bind": "朋友用你的連結註冊或填寫你的推薦碼，你和朋友各得 {credits} 積分",
@@ -3108,5 +3108,10 @@
   "privacy.analytics.p4": "我們會在你登入後向 Google 傳送另行產生的帳號代號，將同一帳號在不同裝置與付款網站上的使用紀錄連在一起；這個代號無法還原成原本的帳號編號，也不是電子郵件地址。",
   "privacy.analytics.p5": "付款完成時，我們會向 Google 傳送付款金額、幣別與購買類別（儲值或月卡），並標記帳號是否曾儲值或購買月卡；退款時也會傳送相關退款紀錄。",
   "privacy.analytics.p6": "我們不向 Google Analytics 傳送對話內容、卡片名稱、作者名稱、卡片編號、原本的帳號編號或電子郵件地址。",
-  "privacy.analytics.p7": "你的瀏覽器若開啟「全域隱私控制（GPC）」，我們不會設定上述分析用訪客 cookie，也不會向 Google Analytics 傳送分析資料。"
+  "privacy.analytics.p7": "你的瀏覽器若開啟「全域隱私控制（GPC）」，我們不會設定上述分析用訪客 cookie，也不會向 Google Analytics 傳送分析資料。",
+  "chat.balanceBelowEstimate": "目前可用 {have} 積分，低於本輪預估上限。",
+  "credits.recovery.estimate": "本輪預估 {min}–{max} 積分",
+  "credits.recovery.available": "目前可用 {have} 積分",
+  "credits.recovery.explanation": "回覆長度無法事先確定，開始時需有足以支付預估上限的積分。實際只扣使用的部分。",
+  "credits.recovery.required": "開始需要 {max} 積分"
 }

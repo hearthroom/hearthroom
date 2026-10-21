@@ -50,7 +50,7 @@ export function pushStageToast(text: string, kind = "info"): void {
   if (!text) return;
   const id = ++toastSeq;
   stageToasts.list.push({ id, text, kind });
-  setTimeout(() => { stageToasts.list = stageToasts.list.filter((t) => t.id !== id); }, 2800);
+  setTimeout(() => { stageToasts.list = stageToasts.list.filter((t) => t.id !== id); }, kind === "error" || kind === "warning" ? 5000 : 2800);
 }
 
 export interface StageDeps {
@@ -173,6 +173,11 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
         // 舞台第一次畫出內容：對話頁收掉蓋在上面的載入畫面（lib/stage-ready）
         contentReady: () => markStageContentReady(),
         // 積分不夠：今日任務還能拿多少、儲值（ui.md §7.2）。面板沒讀過或放久了就重讀，卡片跟著更新
+        availableCredits: () => {
+          const wallet = deps.session.wallet;
+          if (!wallet || !Number.isFinite(wallet.score) || !Number.isFinite(wallet.tempScore)) return null;
+          return wallet.score + wallet.tempScore;
+        },
         creditsActions: (shortfall) => {
           const checkin = useCheckin();
           // 畫面每次重畫都會問一次：一分鐘最多讀一次，讀不到（獎勵沒開、限流）也不連續重試
@@ -221,6 +226,7 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
       const path = deps.currentPath().split('?')[0] || '';
       const roleId = deps.currentRoleId?.() ?? path.match(/\/play\/([^/]+)\/?$/)?.[1];
       if (typeof conversationId !== 'string' || !conversationId || !roleId || activity?.roleId !== decodeURIComponent(roleId)) return;
+      void deps.session.refreshWallet?.();
       try {
         const token = await accessToken();
         if (!token) throw new Error('unauthorized');

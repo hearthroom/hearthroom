@@ -23,7 +23,7 @@ export interface RecoveryOptions {
   plan?: { offer: Pick<PeriodPlan, "onSale" | "purchaseUrl"> | null; canPurchase: boolean | null };
 }
 
-export function creditsRecovery(panel: RewardsPanel | null, shortfall: { needed: number; available: number } | null, o: RecoveryOptions) {
+export function creditsRecovery(panel: RewardsPanel | null, shortfall: { needed: number; available: number; minimum?: number } | null, o: RecoveryOptions) {
   const left = (panel?.tasks.daily ?? [])
     .filter((task) => task.status === "locked" || task.status === "claimable")
     .reduce((sum, task) => sum + (task.reward.credits ?? 0), 0);
@@ -32,9 +32,15 @@ export function creditsRecovery(panel: RewardsPanel | null, shortfall: { needed:
   if (o.plan?.offer?.onSale && o.plan.canPurchase !== false) links.push({ id: "plan", label: o.t("plan.canvas.action"), href: `${o.origin}${o.lp(PLAN_GO_PATH)}?from=${SHORTFALL_FROM}` });
   // A main-site landing owns analytics for both ordinary and cross-origin sandbox cards.
   else links.push({ id: "topup", label: o.t("credits.recovery.topup"), href: `${o.origin}${o.lp("/go/topup")}?from=${SHORTFALL_FROM}` });
+  const hasQuote = !!shortfall && typeof shortfall.minimum === 'number' && Number.isFinite(shortfall.minimum) && shortfall.minimum >= 0 && shortfall.minimum <= shortfall.needed && Number.isFinite(shortfall.needed) && shortfall.needed > 0 && Number.isFinite(shortfall.available) && shortfall.available >= 0;
   return {
-    title: shortfall ? o.t("credits.recovery.title") : undefined,
-    body: shortfall ? o.t("credits.recovery.body", { need: o.whole(shortfall.needed), have: o.whole(shortfall.available) }) : undefined,
+    title: hasQuote ? o.t("credits.recovery.title") : undefined,
+    body: hasQuote ? [
+      o.t("credits.recovery.estimate", {min:o.whole(shortfall!.minimum!),max:o.whole(shortfall!.needed)}),
+      o.t("credits.recovery.required", {max:o.whole(shortfall!.needed)}),
+      o.t("credits.recovery.available", {have:o.whole(shortfall!.available)}),
+      o.t("credits.recovery.explanation"),
+    ].join('\n') : undefined,
     links,
   };
 }
@@ -46,7 +52,7 @@ export function creditsRecovery(panel: RewardsPanel | null, shortfall: { needed:
  */
 const shownCards = new WeakSet<object>();
 let lastShownWithoutNumbers = 0;
-export function noteShortfallShown(shortfall: { needed: number; available: number } | null, now = Date.now()): void {
+export function noteShortfallShown(shortfall: { needed: number; available: number; minimum?: number } | null, now = Date.now()): void {
   if (shortfall) {
     if (shownCards.has(shortfall)) return;
     shownCards.add(shortfall);

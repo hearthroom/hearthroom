@@ -2985,9 +2985,9 @@
   "credits.expiry.date": "期間限定ポイント {n} の期限は {datetime} までです",
   "credits.expiry.action": "チャットする",
   "wallet.tempEarliest": "いちばん早い期限：{datetime}",
-  "credits.recovery.title": "このターンに必要なポイントが足りません",
-  "credits.recovery.body": "このターンには約 {need} ポイント必要で、今は {have} ポイントです。",
-  "credits.recovery.taskLeft": "デイリーミッションであと {n} ポイント",
+  "credits.recovery.title": "このターンを始めるためのポイントが不足しています",
+  "credits.recovery.body": "今回の見積もり：{min}–{max} ポイント · 開始に必要：{max} ポイント · 利用可能：{have} ポイント",
+  "credits.recovery.taskLeft": "今日のミッションを見る（残り報酬 {n} ポイント）",
   "credits.recovery.topup": "チャージ",
   "wallet.reason.checkin": "チェックイン宝箱",
   "wallet.reason.task": "ミッション報酬",
@@ -3066,7 +3066,7 @@
   "wallet.record.planRefund": "30日パス返金済み",
   "plan.meCard.claimed": "パス +{daily} 受け取り済み",
   "plan.meCard.days": "パス残り{n}日",
-  "plan.canvas.action": "30日パスを購入",
+  "plan.canvas.action": "月間パスを見る",
   "plan.newcomer.hint": "初回購入の30日パスなら、今すぐ {credits} ポイント、チェックインで毎日 {firstDaily}",
   "plan.newcomer.link": "30日パスを見る ↗",
   "referral.rule.bind": "友だちがリンクから登録、またはコードを入力すると、あなたと友だちに {credits} ポイントずつ",
@@ -3108,5 +3108,10 @@
   "privacy.analytics.p4": "ログイン後は、アカウント用に別途生成したコードを Google に送り、同じアカウントの利用記録を端末や決済サイトをまたいで関連付けます。このコードから元のアカウント番号を復元することはできず、メールアドレスでもありません。",
   "privacy.analytics.p5": "支払い完了時には、金額、通貨、購入区分（チャージまたは30日パス）を Google に送り、そのアカウントにチャージや30日パスの購入履歴があるかも伝えます。返金があった場合は、関連する返金記録も送ります。",
   "privacy.analytics.p6": "当サイトは Google Analytics に、会話の内容、カード名、作者名、カード番号、元のアカウント番号、メールアドレスを送りません。",
-  "privacy.analytics.p7": "ブラウザーでグローバル・プライバシー・コントロール（GPC）が有効な場合、当サイトは上記の分析用訪問者 cookie を設定せず、Google Analytics に分析データを送りません。"
+  "privacy.analytics.p7": "ブラウザーでグローバル・プライバシー・コントロール（GPC）が有効な場合、当サイトは上記の分析用訪問者 cookie を設定せず、Google Analytics に分析データを送りません。",
+  "chat.balanceBelowEstimate": "利用可能なポイントは {have} で、このターンの見積もり上限に届いていません。",
+  "credits.recovery.estimate": "今回の見積もり：{min}–{max} ポイント",
+  "credits.recovery.available": "利用可能：{have} ポイント",
+  "credits.recovery.explanation": "返信の長さは事前に確定しないため、開始時には見積もり上限分のポイントが必要です。実際に消費するのは使用した分だけです。",
+  "credits.recovery.required": "開始に必要：{max} ポイント"
 }

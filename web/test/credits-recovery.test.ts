@@ -13,9 +13,11 @@ const opts = { origin: "https://sukisuki.ai", lp: (p: string) => `/en${p}`, t, w
 
 describe("積分不夠的兩條路", () => {
   it("今日任務還沒領的積分加總；有數字就講這一輪要多少、目前有多少", () => {
-    const r = creditsRecovery(panel([task("a", 30, "claimed"), task("b", 40, "locked"), task("c", 30, "claimable"), task("d", 50, "unavailable")]), { needed: 300, available: 120 }, opts)!;
+    const r = creditsRecovery(panel([task("a", 30, "claimed"), task("b", 40, "locked"), task("c", 30, "claimable"), task("d", 50, "unavailable")]), { needed: 300, available: 120, minimum: 100 }, opts)!;
     expect(r.title).toBe("credits.recovery.title{}");
-    expect(r.body).toBe('credits.recovery.body{"need":"300","have":"120"}');
+    expect(r.body).toContain('credits.recovery.estimate{"min":"100","max":"300"}');
+    expect(r.body).toContain('credits.recovery.required{"max":"300"}');
+    expect(r.body).toContain('credits.recovery.available{"have":"120"}');
     expect(r.links).toEqual([
       { id: "tasks", label: 'credits.recovery.taskLeft{"n":"70"}', href: "https://sukisuki.ai/en/checkin?from=canvas_shortfall#tasks" },
       { id: "topup", label: "credits.recovery.topup{}", href: "https://sukisuki.ai/en/go/topup?from=canvas_shortfall" },
@@ -66,4 +68,14 @@ describe("第二條路：月卡", () => {
     expect(creditsRecovery(null, null, { ...opts, plan: { offer, canPurchase: false } }).links.map((l) => l.id)).toEqual(["topup"]);
     expect(creditsRecovery(null, null, { ...opts, plan: { offer: null, canPurchase: null } }).links.map((l) => l.id)).toEqual(["topup"]);
   });
+});
+
+
+it("只在同一次報價的三個數字都有效時，顯示範圍、開始門檻與餘額", () => {
+ const full = creditsRecovery(null, {needed:170,available:100,minimum:30}, opts)!;
+ expect(full.body).toContain('credits.recovery.estimate{"min":"30","max":"170"}');
+ expect(full.body).toContain('credits.recovery.required{"max":"170"}');
+ expect(full.body).toContain('credits.recovery.available{"have":"100"}');
+ expect(full.body).toContain('credits.recovery.explanation');
+ expect(creditsRecovery(null, {needed:170,available:100},opts)?.body).toBeUndefined();
 });

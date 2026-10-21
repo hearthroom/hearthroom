@@ -2985,9 +2985,9 @@
   "credits.expiry.date": "{n} 限时积分 {datetime} 到期",
   "credits.expiry.action": "去聊天",
   "wallet.tempEarliest": "最早一笔 {datetime} 到期",
-  "credits.recovery.title": "积分不够聊这一轮",
-  "credits.recovery.body": "这一轮大约要 {need} 积分，现在有 {have}。",
-  "credits.recovery.taskLeft": "今日任务还能拿 {n} 积分",
+  "credits.recovery.title": "积分不足以开始本轮",
+  "credits.recovery.body": "本轮预计 {min}–{max} 积分 · 开始需要 {max} 积分 · 当前可用 {have} 积分",
+  "credits.recovery.taskLeft": "查看今日任务（还有 {n} 积分奖励）",
   "credits.recovery.topup": "充值",
   "wallet.reason.checkin": "签到宝箱",
   "wallet.reason.task": "任务奖励",
@@ -3066,7 +3066,7 @@
   "wallet.record.planRefund": "月卡已退款",
   "plan.meCard.claimed": "月卡已领 +{daily}",
   "plan.meCard.days": "月卡剩 {n} 天",
-  "plan.canvas.action": "购买月卡",
+  "plan.canvas.action": "查看月卡",
   "plan.newcomer.hint": "首次购买月卡，先得 {credits} 积分，每天签到再领 {firstDaily}",
   "plan.newcomer.link": "查看月卡 ↗",
   "referral.rule.bind": "好友用你的链接注册或填写你的推荐码，你和好友各得 {credits} 积分",
@@ -3108,5 +3108,10 @@
   "privacy.analytics.p4": "我们会在你登录后向 Google 发送单独生成的账号代号，将同一账号在不同设备和付款网站上的使用记录关联起来；这个代号无法还原为原来的账号编号，也不是电子邮箱地址。",
   "privacy.analytics.p5": "我们会在付款完成时向 Google 发送金额、币种和购买类别（充值或月卡），并标记账号是否曾充值或购买月卡；发生退款时，也会发送相应的退款记录。",
   "privacy.analytics.p6": "我们不会向 Google Analytics 发送对话内容、卡片名称、作者名称、卡片编号、原来的账号编号或电子邮箱地址。",
-  "privacy.analytics.p7": "你的浏览器如果启用了“全局隐私控制（GPC）”，本站不会设置上述用于分析的访客 cookie，也不会向 Google Analytics 发送分析数据。"
+  "privacy.analytics.p7": "你的浏览器如果启用了“全局隐私控制（GPC）”，本站不会设置上述用于分析的访客 cookie，也不会向 Google Analytics 发送分析数据。",
+  "chat.balanceBelowEstimate": "当前可用 {have} 积分，低于本轮预计上限。",
+  "credits.recovery.estimate": "本轮预计 {min}–{max} 积分",
+  "credits.recovery.available": "当前可用 {have} 积分",
+  "credits.recovery.explanation": "回复长度无法提前确定，开始时需要有足以支付预计上限的积分。实际只扣使用的部分。",
+  "credits.recovery.required": "开始需要 {max} 积分"
 }
