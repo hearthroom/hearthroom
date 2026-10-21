@@ -149,6 +149,9 @@ it('avoids success hot rows with weighted sampling and never writes local 404 me
   await bumpHarborProxy(db, request('/open/v1/me'), 200);
   expect(bind.mock.calls.at(-1)?.[3]).toBe(100);
   random.mockReturnValue(0.5);
+  await bumpHarborProxy(db, request('/open/v1/conversation/ws', { headers: { Upgrade: 'websocket' } }), 101);
+  expect(bind.mock.calls.at(-1)?.[3]).toBe(1);
+  expect(bind.mock.calls.at(-1)?.[2]).toBe('1xx');
   await bumpHarborProxy(db, request('/open/v1/me'), 503);
   expect(bind.mock.calls.at(-1)?.[3]).toBe(1);
   prepare.mockClear();

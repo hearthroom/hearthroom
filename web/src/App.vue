@@ -148,6 +148,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
         <LocaleSwitch />
         <NotificationBell v-if="session.me" />
         <AccountMenu v-if="session.me" />
+        <button v-else-if="session.restoreError && !route.meta.auth" type="button" class="btn btn--lg" :disabled="!session.ready" :aria-busy="!session.ready" :title="$t('state.serverBusy')" @click="session.retryRestore()">{{ $t('linked.retry') }}</button>
         <RouterLink v-else-if="session.ready && !session.restoreError" class="btn btn--primary btn--sm" :to="lp(loginPath(route.fullPath))">
           {{ $t("nav.login") }}
         </RouterLink>

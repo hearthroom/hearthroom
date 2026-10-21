@@ -95,7 +95,7 @@ export async function bumpHarborProxy(db: D1Database, request: Request, status: 
   // Local path/host refusals are not upstream attempts. Successful streams and
   // reads use a weighted 1% sample to avoid a D1 write for every API request.
   if (!allowedHarborProxyRequest(request)) return;
-  const success = status < 300;
+  const success = status >= 200 && status < 300;
   if (success && Math.random() >= 0.01) return;
   const weight = success ? 100 : 1;
   const route = proxyRoute(new URL(request.url).pathname.slice('/hh-api'.length));

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { forgetSession, persist, refresh, restorePersisted } from "@/lib/oauth";
+import { AuthUnavailable, forgetSession, persist, refresh, restorePersisted } from "@/lib/oauth";
 
 /** 伺服器把 refresh token 當一次性的：用第二次就是重放，整個 session 直接作廢。 */
 function upstreamWithRotatingRefresh() {
@@ -101,7 +101,7 @@ describe("換發憑證", () => {
     localStorage.setItem("hearthroom.oauth.refresh", "R0");
     localStorage.setItem("hearthroom.oauth.client", "client-1");
 
-    expect(await refresh()).toBeNull();
+    await expect(refresh()).rejects.toBeInstanceOf(AuthUnavailable);
     expect(localStorage.getItem("hearthroom.oauth.refresh")).toBe("R0");
   });
 });
