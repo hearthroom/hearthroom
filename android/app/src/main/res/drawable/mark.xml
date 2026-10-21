@@ -1,0 +1,5 @@
+<!-- Red circle with the white bubble: what the system splash shows, continued while the site loads. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="160dp" android:height="160dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="@color/brand" android:pathData="M54,0A54,54 0,1 1,54,108A54,54 0,1 1,54,0Z" />
+    <group android:pivotX="54" android:pivotY="54" android:scaleX="1.5" android:scaleY="1.5"><path android:fillColor="#ffffff" android:pathData="M38.5,35.9H69.5A4.5,4.5 0,0 1,74,40.4V61.2A4.5,4.5 0,0 1,69.5,65.7H52.9L44.2,72.3V65.7H38.5A4.5,4.5 0,0 1,34,61.2V40.4A4.5,4.5 0,0 1,38.5,35.9Z" /></group>
+</vector>

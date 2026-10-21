@@ -1,0 +1,7 @@
+<!-- S3a: confirm a route this phone has not used, because it needs its own sign-in. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/sheet_root" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:background="@drawable/sheet" android:paddingHorizontal="24dp" android:paddingTop="24dp" android:paddingBottom="16dp">
+    <TextView android:id="@+id/sheet_title" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="18sp" android:fontFamily="sans-serif-medium" android:textColor="@color/text" />
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="@string/switch_body" android:textSize="14sp" android:textColor="@color/muted" />
+    <Button android:id="@+id/sheet_confirm" style="@style/PrimaryButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:text="@string/switch_confirm" />
+    <Button android:id="@+id/sheet_cancel" style="@style/TextButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/cancel" />
+</LinearLayout>

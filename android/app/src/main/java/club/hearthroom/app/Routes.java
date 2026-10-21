@@ -16,14 +16,17 @@ final class Routes {
     /** Existing installs only ever used this one; their sign-in lives there. */
     static final String LEGACY = "hearthroom.club";
     static final int MAX_BYTES = 16384;
-    static final Routes BUILT_IN = new Routes(HOSTS, Set.of(), Map.of());
+    static final Routes BUILT_IN = new Routes(null, HOSTS, Set.of(), Map.of());
 
+    private final String json;
     private final List<String> order;
     private final Set<String> disabled;
     private final Map<String, JSONObject> notes;
-    private Routes(List<String> order, Set<String> disabled, Map<String, JSONObject> notes) {
-        this.order = List.copyOf(order); this.disabled = Set.copyOf(disabled); this.notes = Map.copyOf(notes);
+    private Routes(String json, List<String> order, Set<String> disabled, Map<String, JSONObject> notes) {
+        this.json = json; this.order = List.copyOf(order); this.disabled = Set.copyOf(disabled); this.notes = Map.copyOf(notes);
     }
+    /** The validated source text, for storing; null for the built-in list. */
+    String json() { return json; }
     List<String> order() { return order; }
     Set<String> disabled() { return disabled; }
     List<String> enabled() { List<String> out = new ArrayList<>(); for (String h : order) if (!disabled.contains(h)) out.add(h); return out; }
@@ -54,7 +57,7 @@ final class Routes {
             }
             for (String host : HOSTS) if (!order.contains(host)) order.add(host);
             if (disabled.size() == HOSTS.size()) throw new IllegalArgumentException();
-            return new Routes(order, disabled, notes);
+            return new Routes(raw, order, disabled, notes);
         } catch (Exception e) { throw new IllegalArgumentException("Invalid route list", e); }
     }
 

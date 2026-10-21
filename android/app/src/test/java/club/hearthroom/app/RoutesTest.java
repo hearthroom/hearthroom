@@ -53,6 +53,11 @@ public class RoutesTest {
         rejected(list(route("sukisuki.ai").put("note", new JSONObject().put("en", "x".repeat(41)))));
         rejected("x".repeat(Routes.MAX_BYTES + 1));
     }
+    @Test public void thePublishedListIsOneTheAppAccepts() throws Exception {
+        // android/routes.json is uploaded as-is; whatever we publish must parse here or every client discards it.
+        String raw = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get("../routes.json")), java.nio.charset.StandardCharsets.UTF_8);
+        assertEquals(Routes.HOSTS, Routes.parse(raw).enabled());
+    }
     @Test public void upgradedInstallsStartWhereTheirExistingSignInLives() {
         assertEquals("hearthroom.club", Routes.initialCurrent(null, true));
         assertNull(Routes.initialCurrent(null, false));
