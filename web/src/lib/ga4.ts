@@ -101,21 +101,34 @@ export function createGa4() {
       ...(import.meta.env.DEV && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) && new URL(landingUrl || location.href).searchParams.get("ga_debug") === "1" ? { debug_mode: true } : {}),
       ignore_referrer: /https:\/\/console\.harperharbor\.com\//.test(document.referrer),
       allow_google_signals: false, allow_ad_personalization_signals: false });
+    let onScriptLoad: (() => void) | undefined;
+    let onScriptError: (() => void) | undefined;
     if (linked) {
       linkerPending = true;
+      let expired = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const configureClient = () => send("config", MEASUREMENT_ID, { client_id: clientId, send_page_view: false,
+        cookie_expires: 390 * 86400, cookie_update: false, cookie_domain: "none", cookie_flags: "SameSite=Lax;Secure" });
       const settle = (value: unknown) => {
-        if (!linkerPending) return;
+        if (!linkerPending && !expired) return;
+        const pending = linkerPending;
+        if (allowed() && validClientId(value) && value === linked) {
+          clientId = value;
+          // A fallback may already have run; restore Google's validated ID before persisting it.
+          if (!pending) configureClient();
+          expired = false;
+          onClientId?.(value);
+        } else if (!pending) return;
+        else if (allowed()) configureClient();
         clearTimeout(timer);
-        if (allowed()) {
-          if (validClientId(value) && value === linked) { clientId = value; onClientId?.(value); }
-          else send("config", MEASUREMENT_ID, { client_id: clientId, send_page_view: false,
-            cookie_expires: 390 * 86400, cookie_update: false, cookie_domain: "none", cookie_flags: "SameSite=Lax;Secure" });
-        }
+        if (!pending) return;
         linkerPending = false;
         flush();
         notifyReady();
       };
-      const timer = setTimeout(() => settle(null), 3000);
+      // Slow downloads must not consume the validation window or discard the get callback.
+      onScriptLoad = () => { if (linkerPending) timer = setTimeout(() => { expired = true; settle(null); }, 3000); };
+      onScriptError = () => settle(null);
       send("get", MEASUREMENT_ID, "client_id", settle);
     }
     send("get", MEASUREMENT_ID, "session_id", (value: unknown) => {
@@ -128,6 +141,8 @@ export function createGa4() {
     script.src = `https://www.googletagmanager.com/gtag/js?id=${MEASUREMENT_ID}&l=hearthroomGaData`;
     script.referrerPolicy = "no-referrer";
     script.dataset.hearthroomGa4 = "";
+    if (onScriptLoad) script.addEventListener("load", onScriptLoad, { once: true });
+    if (onScriptError) script.addEventListener("error", onScriptError, { once: true });
     document.head.appendChild(script);
     window.addEventListener("focus", allowed);
     initialized = true;
@@ -242,7 +257,7 @@ async function initializeGa4() {
     ga4.start(true, { clientId: session.clientId, landingUrl, onClientId: clientId => {
       if ((navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl === true) return;
       void fetch("/v1/analytics/session", { method: "POST", credentials: "same-origin", cache: "no-store",
-        headers: { "X-Hearthroom-Request": "1", "Content-Type": "application/json" }, body: JSON.stringify({ clientId }), signal: AbortSignal.timeout(3000) }).catch(() => {});
+        headers: { "X-Hearthroom-Request": "1", "Content-Type": "application/json" }, body: JSON.stringify({ clientId }), keepalive: true, signal: AbortSignal.timeout(3000) }).catch(() => {});
     } });
   } catch { /* Analytics must never interrupt navigation or login. */ }
 }
