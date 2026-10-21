@@ -29,8 +29,9 @@ watch(() => session.me, (me) => { if (me) routesState.arrivedSignedOut = false; 
 </template>
 
 <style scoped>
-.arrival { max-width: var(--page); margin: var(--s-3) auto 0; padding: 0 var(--s-5); }
-.arrival__box { margin: 0; display: flex; align-items: center; gap: var(--s-2); padding-block: var(--s-2); }
+/* #app 是直向 flex：不給寬度的話左右 auto 會把它縮成內容寬，看起來像 toast。跟內容區同寬、同邊距 */
+.arrival { width: 100%; max-width: var(--page); margin: var(--s-3) auto 0; padding: 0 var(--s-5); }
+.arrival__box { margin: 0; display: flex; align-items: center; gap: var(--s-2); padding-block: var(--s-2); box-shadow: inset 0 0 0 1px var(--line); }
 .arrival__text { flex: 1; min-width: 0; }
 .arrival__box svg { width: 16px; height: 16px; }
 @media (max-width: 640px) { .arrival { padding: 0 var(--s-4); } }
