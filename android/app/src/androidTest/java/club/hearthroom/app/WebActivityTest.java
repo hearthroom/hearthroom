@@ -222,9 +222,21 @@ public class WebActivityTest {
         WebView web = launch();
         fixture(web,"<body data-ready='yes'><button onclick='document.documentElement.requestFullscreen()'>Enter fullscreen</button></body>");
         UiDevice device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
-        assertNotNull(device.wait(Until.findObject(By.text("Enter fullscreen")),5000));
-        device.findObject(By.text("Enter fullscreen")).click();
-        Thread.sleep(500);
+        clickFixtureButton(web, "Enter fullscreen");
+        long enteringUntil = android.os.SystemClock.uptimeMillis() + 5000;
+        boolean[] nativeFullscreen = {false};
+        do {
+            ui(() -> {
+                FrameLayout content = activity.getActivity().findViewById(R.id.web_content);
+                View shown = content.getChildAt(content.getChildCount() - 1);
+                nativeFullscreen[0] = web.getVisibility() == View.GONE && shown != null && shown != web
+                    && shown.isAttachedToWindow() && shown.isShown() && shown.hasWindowFocus() && shown.hasFocus()
+                    && shown.getWidth() > 0 && shown.getHeight() > 0;
+            });
+            if (nativeFullscreen[0]) break;
+            Thread.sleep(50);
+        } while (android.os.SystemClock.uptimeMillis() < enteringUntil);
+        assertTrue("The native fullscreen input view must be attached, visible and focused before Back", nativeFullscreen[0]);
         assertEquals("true",js(web,"!!document.fullscreenElement"));
         device.pressBack();
         long requested = android.os.SystemClock.uptimeMillis();
