@@ -97,6 +97,7 @@ public class LaunchFlowTest {
         launch(new Intent(Intent.ACTION_VIEW, Uri.parse("hearthroom://webview")));
         f.waitFor("WebView handover", () -> destination.get() != null, 6000);
         assertTrue(destination.get().getBooleanExtra("waiting_shown", false));
+        assertTrue("The shared cover stays in place during Activity handover", (destination.get().getFlags() & Intent.FLAG_ACTIVITY_NO_ANIMATION) != 0);
         assertEquals(f.context.getString(R.string.launch_slow), destination.get().getStringExtra("waiting_text"));
     }
     @Test public void fixedRouteThatFailsAsksInsteadOfSwitching() {
