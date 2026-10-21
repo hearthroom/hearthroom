@@ -68,7 +68,7 @@ describe("GA4 runtime", () => {
     const read = vi.fn(async () => ({userId: "ga1_" + "b".repeat(64), payerType: "plan"}));
     await ga.refreshIdentity(123, read); await ga.refreshIdentity(123, read);
     expect(read).toHaveBeenCalledTimes(1);
-    ga.track("topup_click"); expect(ga.commands().at(-1)?.[2]).toMatchObject({user_id: "ga1_" + "b".repeat(64)});
+    ga.track("topup_click"); expect(ga.commands().filter(c=>c[0]==="set").at(-1)?.[1]).toMatchObject({user_id: "ga1_" + "b".repeat(64)});
     vi.spyOn(Date, "now").mockReturnValue(Date.now() + 60001);
     await ga.refreshIdentity(123, read); expect(read).toHaveBeenCalledTimes(2);
     await ga.refreshIdentity(456, read); expect(read).toHaveBeenCalledTimes(3);
@@ -105,7 +105,7 @@ describe("GA4 runtime", () => {
     ga.identity({ userId: "ga1_" + "a".repeat(64), payerType: "plan" });
     ga.track("topup_click");
     expect(ga.commands().find(c => c[0] === "config")?.[2]).toMatchObject({ client_id: "1234.5678" });
-    expect(ga.commands().at(-1)?.[2]).toMatchObject({ user_id: "ga1_" + "a".repeat(64), user_properties: { payer_type: "plan" } });
+    expect(ga.commands().filter(c=>c[0]==="set").at(-1)?.[1]).toMatchObject({ user_id: "ga1_" + "a".repeat(64), user_properties: { payer_type: "plan" } });
     ga.identity(null); ga.track("topup_click");
     expect(ga.commands().at(-1)?.[2]).not.toHaveProperty("user_id");
     expect(ga.commands().at(-1)?.[2]).not.toHaveProperty("user_properties");
@@ -231,4 +231,17 @@ it("records the real router's initial Traditional Chinese home navigation", asyn
   expect(window.hearthroomGaData?.filter(c=>c[1]==="page_view")).toHaveLength(1);
   await router.push("/?utm_source=discord#footer");
   expect(window.hearthroomGaData?.filter(c=>c[1]==="page_view")).toHaveLength(1);
+});
+
+it("uses global identity settings and explicitly clears them on logout, without identity event params", () => {
+ const ga=createGa4(); ga.start(true); ga.pageView();
+ expect(ga.commands().filter(c=>c[0]==="set").some(c=>JSON.stringify(c).includes("user_id"))).toBe(false);
+ ga.identity({userId:"ga1_"+"a".repeat(64),payerType:"plan"});
+ vi.stubGlobal("location",new URL("https://sukisuki.ai/wallet")); ga.pageView();
+ ga.identity(null);
+ expect(ga.commands().at(-1)).toEqual(["set",{user_id:null,user_properties:{payer_type:null}}]);
+ vi.stubGlobal("location",new URL("https://sukisuki.ai/checkin")); ga.pageView(); ga.track("topup_click");
+ for(const command of ga.commands().filter(c=>c[0]==="event")) {
+  expect(command[2]).not.toHaveProperty("user_id"); expect(command[2]).not.toHaveProperty("user_properties");
+ }
 });
