@@ -218,8 +218,13 @@ export const useSession = defineStore("session", () => {
 
   /** 剛充完值回來、或想看最新餘額時呼叫。 */
   async function refreshWallet() {
-    const t = await accessToken();
-    if (t) await loadWallet(t);
+    try {
+      const t = await accessToken();
+      if (t) await loadWallet(t);
+    } catch (error) {
+      // 餘額重讀不應中斷已完成動作的收尾；暫時失聯保留舊餘額。
+      if (!isTransient(error)) throw error;
+    }
   }
 
   /** 重新向供應商授權（真正開始 OAuth）。進站的「登入」一律先到本站的登入頁（/login），由那一頁呼叫這個。 */

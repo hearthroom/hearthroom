@@ -160,7 +160,9 @@ async function submit(root?: Comment, target?: Comment) {
 
 async function toggleLike(c: Comment) {
   if (!session.me) return router.push(lp(loginPath(route.fullPath)));
-  const token = await session.accessToken();
+  let token: string | null;
+  try { token = await session.accessToken(); }
+  catch (err) { error.value = err instanceof Error ? err.message : t("state.actionFailed"); return; }
   if (!token) return;
   // 樂觀更新：失敗再翻回來
   c.isLiked = !c.isLiked;
@@ -184,9 +186,9 @@ const reportable = (c: Comment) => !c.isOwner && c.status === "visible";
 
 async function remove(c: Comment) {
   if (!(await confirmDialog({ message: t("comment.confirmDelete"), confirmText: t("dialog.delete"), danger: true }))) return;
-  const token = await session.accessToken();
-  if (!token) return;
   try {
+    const token = await session.accessToken();
+    if (!token) return;
     await deleteComment(c.commentId, token);
     track("comment_delete", { subject: subject.value });
     await load(true);
