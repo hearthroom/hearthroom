@@ -2301,7 +2301,7 @@
                             },
                             "nonStreaming": {
                               "type": "boolean",
-                              "description": "Whether this operation returns the complete result once generation finishes. Always false for Agent turns."
+                              "description": "Whether this operation returns the complete result once generation finishes. Always false for Agent and world-mode turns."
                             }
                           }
                         }
@@ -2546,7 +2546,7 @@
                       },
                       "nonStreaming": {
                         "type": "boolean",
-                        "description": "Whether this operation returns the complete result once generation finishes. Always false for Agent turns."
+                        "description": "Whether this operation returns the complete result once generation finishes. Always false for Agent and world-mode turns."
                       }
                     }
                   }
@@ -11116,7 +11116,7 @@
                             "type": "null"
                           }
                         ],
-                        "description": "Reply output: when on, content is returned incrementally; when off, the complete result is returned once generation finishes. On by default."
+                        "description": "Reply output: when on, content is returned incrementally; when off, the complete result is returned once generation finishes. On by default. World-mode turns always return content incrementally."
                       }
                     }
                   }
@@ -14823,7 +14823,7 @@
           },
           "nonStreaming": {
             "type": "boolean",
-            "description": "Whether this operation returns the complete result once generation finishes. Always false for Agent turns."
+            "description": "Whether this operation returns the complete result once generation finishes. Always false for Agent and world-mode turns."
           }
         }
       },
@@ -22875,7 +22875,7 @@
               "off"
             ],
             "default": "on",
-            "description": "Reply output: when on, content is returned incrementally; when off, the complete result is returned once generation finishes. On by default."
+            "description": "Reply output: when on, content is returned incrementally; when off, the complete result is returned once generation finishes. On by default. World-mode turns always return content incrementally."
           }
         }
       },
