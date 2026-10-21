@@ -4,7 +4,7 @@
  */
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { resetManagedAuthForTest } from "@/lib/managed-auth";
-import { completeLogin, isSilentMiss } from "@/lib/oauth";
+import { beginLogin, completeLogin, isSilentMiss } from "@/lib/oauth";
 import {
   SILENT_LOGIN_ENABLED, SILENT_TUNING, markLoggedOut, rememberSilentResult, routeLoginHintVisible, silentLoginAllowed, trySilentLogin,
 } from "@/lib/silent-login";
@@ -105,6 +105,13 @@ it("a failed silent start leaves the next interactive login in this tab untouche
   vi.stubGlobal("fetch", vi.fn(async (url: string) => url === "/v1/auth/start" ? Response.json({ error: "auth_silent_not_enabled" }, { status: 503 }) : new Response(null)));
   await expect(trySilentLogin({ immersive: false, returnTo: "/", locale: "en", enabled: true })).rejects.toThrow();
   server("fast");
+  await expect(completeLogin(new URLSearchParams("error=access_denied&state=s"))).rejects.toThrow("oauth_denied");
+});
+
+it("an abandoned silent attempt does not turn a later interactive decline into a quiet return", async () => {
+  server("fast");
+  await trySilentLogin({ immersive: false, returnTo: "/", locale: "en", enabled: true });
+  await beginLogin("/cards/1");
   await expect(completeLogin(new URLSearchParams("error=access_denied&state=s"))).rejects.toThrow("oauth_denied");
 });
 

@@ -27,8 +27,8 @@ const { t } = useI18n();
 const here = currentLine();
 const available = routesAvailable();
 const sw = useRouteSwitch("routes_prompt");
-/** 遊玩頁（/play、卡片 App 網域）：沉浸中，不打擾 */
-const immersive = computed(() => !!route.meta.preloadStage);
+/** 遊玩頁（/play、卡片 App 網域）沉浸中不打擾；換線過場頁正在換線，也不必再測 */
+const immersive = computed(() => !!route.meta.preloadStage || !!route.meta.handoff);
 
 /** 卡片要推薦的那條：彈出時定下來，之後測速結果變了也不換（按下去失敗時要顯示的是它連不上） */
 const pick = ref<Line | undefined>();
