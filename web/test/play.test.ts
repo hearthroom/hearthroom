@@ -170,10 +170,6 @@ describe("/play/:roleId", () => {
       expect(root.querySelector('.stage-stub')).toBe(player);
     },
   );
-
-
-});
-
   it('mounts a polite toast region before messages arrive and marks errors as alerts', async () => {
     await mount('/play/100221');
     expect(root.querySelector('.play__toasts')?.getAttribute('aria-live')).toBe('polite');
@@ -186,3 +182,4 @@ describe("/play/:roleId", () => {
       expect(root.querySelector('.play__toast--info')?.getAttribute('role')).toBe('status');
     } finally { stageToasts.list = []; }
   });
+});
