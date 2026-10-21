@@ -105,6 +105,7 @@ async function run() {
     if (abandoned) return;
     clearTimeout(slowTimer);
     state.value = "failed";
+    document.title = pageTitle(mode === "issue" ? t("routes.handoff.issueFailTitle") : t("routes.handoff.completeFailTitle"));
     track("routes_handoff", { detail: `${mode}_failed`, subject: String(target.value?.n ?? ""), ok: false });
   }
 }

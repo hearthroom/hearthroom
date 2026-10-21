@@ -132,6 +132,6 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
 .dlg__check { display: flex; align-items: flex-start; gap: var(--s-2); min-height: var(--h-sm); font-size: 14px; line-height: 1.5; cursor: pointer; }
 .dlg__check input { flex: none; width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--accent-btn); }
 .dlg__check-text { display: grid; gap: 2px; }
-.dlg__check-hint { font-size: 12px; color: var(--text-3); }
+.dlg__check-hint { font-size: 12px; color: var(--text-3); white-space: pre-line; }
 .dlg__field-label { font-size: 13px; color: var(--text-2); }
 </style>

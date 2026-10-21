@@ -19,7 +19,7 @@ const base: FooterContext = {
   discordInvite: "https://discord.gg/example",
   showDownloadEntry: true,
   canInstallSite: true,
-  routeLine: "routes.name.3",
+  routeLine: { name: "routes.name.3", host: "sukisuki.chat" },
 };
 const ids = (ctx: FooterContext) => footerGroups(ctx).flatMap((g) => g.links.map((l) => l.id));
 
@@ -61,7 +61,7 @@ describe("頁尾分組", () => {
 
   it("「線路」在 App 組，後面帶目前線路名；本機或 App 裡沒有", () => {
     const routes = footerGroups(base).find((g) => g.id === "app")?.links.find((l) => l.id === "routes");
-    expect(routes).toMatchObject({ action: "routes", label: "routes.title", detail: "routes.name.3" });
+    expect(routes).toMatchObject({ action: "routes", label: "routes.title", detail: "routes.name.3", detailHost: "sukisuki.chat" });
     expect(ids({ ...base, routeLine: null })).not.toContain("routes");
   });
 

@@ -74,7 +74,7 @@ const hereDown = computed(() => !!hereLine && routesState.results[hereLine.n]?.s
 const footerCtx = computed<FooterContext>(() => ({
   repoUrl: SITE.repoUrl, license: SITE.license, discordInvite: discordInvite.value, showDownloadEntry,
   canInstallSite: installPrompt.available && installPrompt.target === "site",
-  routeLine: routesOn && hereLine ? `routes.name.${hereLine.n}` : null,
+  routeLine: routesOn && hereLine ? { name: `routes.name.${hereLine.n}`, host: hereLine.host } : null,
 }));
 const footerNav = computed(() => footerGroups(footerCtx.value));
 const legalNav = computed(() => footerLegal(footerCtx.value));
@@ -138,7 +138,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
   <a class="skip" href="#main">{{ $t("nav.skip") }}</a>
 
   <header v-if="!route.meta.bare" class="header">
-    <div class="header__inner" :class="{ 'header__inner--nosearch': onSearchPage, 'header__inner--reviewer': reviewerStore.likely || reviewerStore.blogWriter }">
+    <div class="header__inner" :class="{ 'header__inner--nosearch': onSearchPage, 'header__inner--reviewer': reviewerStore.likely || reviewerStore.blogWriter, 'header__inner--signal': showRouteSignal }">
       <RouterLink :to="lp('/')" class="brand" :aria-label="brandName">
         <!-- 看板娘蘇綺的頭像（docs/design/hearthroom-mascot）；固定配色，不跟主題換色 -->
         <img class="brand__mark" src="/mascot/suki-mark.webp" alt="" width="28" height="28" decoding="async" />
@@ -227,7 +227,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
           <ul>
             <li v-for="l in g.links" :key="l.id">
               <RouterLink v-if="'to' in l" :to="{ path: lp(l.to), query: l.query }">{{ $t(l.label, l.labelArgs ?? {}) }}<NewMark v-if="l.newMark" :k="l.newMark" /></RouterLink>
-              <a v-else-if="'action' in l && l.action === 'routes'" href="#" @click.prevent="openRoutesDialog()">{{ $t(l.label) }}<span v-if="l.detail" class="footer__detail">{{ $t(l.detail) }}</span></a>
+              <a v-else-if="'action' in l && l.action === 'routes'" href="#" @click.prevent="openRoutesDialog()">{{ $t(l.label) }}<span v-if="l.detail" class="footer__detail">{{ $t(l.detail) }} {{ l.detailHost }}</span></a>
               <a v-else-if="'action' in l" href="#" @click.prevent="openInstall()">{{ $t(l.label) }}</a>
               <a v-else :href="l.href" target="_blank" rel="noopener noreferrer" :title="l.id === 'github' ? $t('footer.github') : undefined">
                 <CommunityIcon v-if="l.icon === 'discord'" name="discord" />
@@ -328,6 +328,11 @@ onMounted(() => document.addEventListener("keydown", onSlash));
    沒有圓點：它只在看過並收掉提示卡之後才出現，出現本身就是訊號（美術總監 2026-10-22 #5） */
 .route-signal { padding: 0; border: 0; background: none; cursor: pointer; color: var(--text); }
 .footer__detail { color: var(--text-3); }
+/* 手機上訊號圖示出現時，字標整個收起只留頭像：被截成「S」「綺..」像畫面壞了（走查 2026-10-22）。
+   圖示只在連線慢的時候短暫出現，品牌頭像仍在 */
+@media (max-width: 480px) {
+  .header__inner--signal .brand__name { display: none; }
+}
 
 /* 頁尾：左邊是站名與一句話，右邊是分組連結，最底下一條放授權。手機上分組排成兩欄，不摺疊——每組就幾個連結，收起來反而多點一下。 */
 .footer { padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); border-top: 1px solid var(--border); margin-top: var(--s-7); }
