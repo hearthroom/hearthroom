@@ -6,10 +6,11 @@
  * 遊玩與聊天頁一律不彈也不測（owner 2026-10-22），進了那些頁就收起來。
  * 同一時間只有一個浮著的提示：它在的時候「加到主畫面」讓位（InstallToast 讀 promptShowing）。
  */
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import RoutesDialog from "./RoutesDialog.vue";
+// 清單只有點了入口才需要：拆成一包，不壓在每個人的第一屏上
+const RoutesDialog = defineAsyncComponent(() => import("./RoutesDialog.vue"));
 import RouteSpinner from "./RouteSpinner.vue";
 import SignalBars from "./SignalBars.vue";
 import { useRouteSwitch } from "./use-route-switch";
@@ -53,7 +54,7 @@ function scheduleCheck() {
   checked = true;
   const run = async () => {
     if (!autoPromptAllowed({ immersive: immersive.value })) return;
-    const worth = await backgroundCheck();
+    const worth = await backgroundCheck(() => !immersive.value);
     if (!worth || routesState.promptSeen || routesState.dialogOpen || !autoPromptAllowed({ immersive: immersive.value })) return;
     pick.value = lineByNumber(routesState.recommended);
     routesState.promptShowing = true;
@@ -140,15 +141,18 @@ onBeforeUnmount(() => {
   <Transition name="routes-prompt">
     <section
       v-if="routesState.promptShowing && pick && !immersive" class="rprompt" :style="{ top: `${top + 8}px` }"
-      role="status" aria-live="polite" :aria-label="$t('routes.title')" @keydown.esc.stop="later"
+      :aria-label="$t('routes.title')" @keydown.esc.stop="later"
     >
       <span class="rprompt__tile" aria-hidden="true"><SignalBars :level="signalOf(mine?.state === 'ok' ? mine.ms : null)" :down="mine?.state === 'down'" /></span>
       <div class="rprompt__text">
+        <!-- 只讓標題與說明被朗讀：按鈕與數字每變一次都報一次只會洗版 -->
+        <div role="status" aria-live="polite">
         <p class="rprompt__title">{{ pickDown ? $t("routes.prompt.failedTitle") : mine?.state === "down" ? $t("routes.prompt.downTitle") : $t("routes.prompt.slowTitle") }}</p>
         <p v-if="!pickDown" class="rprompt__body">
           <template v-if="mine?.state === 'ok'">{{ $t("routes.prompt.slowBody", { ms: formatLatency(mine.ms), line: name(pick.n) }) }}</template>
           <template v-else>{{ session.me ? $t("routes.prompt.downBody", { line: name(pick.n) }) : $t("routes.prompt.downBodyGuest", { line: name(pick.n) }) }}</template>
         </p>
+        </div>
         <div class="rprompt__pick" :class="{ 'rprompt__pick--locked': sw.busy.value, 'rprompt__pick--down': pickDown }">
           <span class="rprompt__name">{{ name(pick.n) }}<span class="rprompt__host">{{ pick.host }}</span></span>
           <span class="rprompt__ms">
