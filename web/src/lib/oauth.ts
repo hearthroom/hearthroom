@@ -1,5 +1,6 @@
 import { managedAuth, isManagedAuth, authRequest, managedToken, rememberManaged, restoreManaged, forgetManaged, managedLogout } from './managed-auth';
 import { safeReturnTo } from './login-return';
+import { rememberSilentResult, takeSilentFlow } from './silent-login';
 import { readCredential, writeCredential, removeCredential } from './credential-store';
 import { UPSTREAM_API } from "./config";
 import { apiBaseOf, oauthBaseOf, currentProvider, scopeOf, type ProviderId } from "./provider";
@@ -165,12 +166,23 @@ export function pendingReturnTo(): string {
   return safeReturnTo(sessionStorage.getItem(STORE.returnTo) || "/");
 }
 
-export async function completeLogin(query: URLSearchParams): Promise<{ token: TokenPair; returnTo: string; provider:ProviderId; linkFrom?:ProviderId }> {
+/** 靜默登入（lib/silent-login.ts）回來但沒登入：Harbor 那邊沒登入或還不是本站會員。不是錯誤，安靜地回原頁。 */
+export interface SilentMiss { silent: true; authenticated: false; returnTo: string }
+export async function completeLogin(query: URLSearchParams): Promise<{ token: TokenPair; returnTo: string; provider:ProviderId; linkFrom?:ProviderId; silent?: boolean } | SilentMiss> {
   if(await managedAuth()){
+    const silent=takeSilentFlow();
+    if(silent&&query.get("error")){
+      const miss=await authRequest<{silent:boolean;authenticated:boolean;returnTo:string;error:string}>("complete",{state:query.get("state"),error:query.get("error")});
+      rememberSilentResult(String(miss.error||"miss"));
+      sessionStorage.removeItem(STORE.returnTo);
+      return {silent:true,authenticated:false,returnTo:safeReturnTo(miss.returnTo)};
+    }
     if(query.get("error")){await authRequest("cancel",{});throw new Error("oauth_denied");}
     forgetManaged();
-    const done=await authRequest<{ token: TokenPair; returnTo: string; provider:ProviderId; linkFrom?:ProviderId }>("complete",{code:query.get("code"),state:query.get("state")});
+    const done=await authRequest<{ token: TokenPair; returnTo: string; provider:ProviderId; linkFrom?:ProviderId; silent?: boolean; authenticated?: boolean }>("complete",{code:query.get("code"),state:query.get("state")});
     sessionStorage.removeItem(STORE.returnTo);
+    if(done.silent&&done.authenticated===false){rememberSilentResult("consent_required");return {silent:true,authenticated:false,returnTo:safeReturnTo(done.returnTo)};}
+    if(silent)rememberSilentResult("granted");
     return done;
   }
   const pending=JSON.parse(sessionStorage.getItem("hearthroom.oauth.pending") || "{}");

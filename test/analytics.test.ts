@@ -344,6 +344,12 @@ describe("欄位過濾", () => {
     expect(BEACON_DETAILS.has("plan")).toBe(true);
   });
 
+  it("線路提示、清單與換手過場頁的結果都收，subject 只剩線路編號", () => {
+    for (const e of ["routes_prompt", "routes_dialog", "routes_handoff", "login_silent"]) expect(BEACON_EVENTS.has(e)).toBe(true);
+    for (const d of ["shown", "switch", "all", "dismissed", "opened", "switched", "failed", "arrived", "issue_failed", "complete_failed"]) expect(BEACON_DETAILS.has(d)).toBe(true);
+    expect(safeSubject("3")).toBe("3");
+  });
+
   it("認得抓取器", () => {
     expect(clientKind("Discordbot/2.0")).toBe("bot");
     expect(clientKind("Mozilla/5.0 (Macintosh)")).toBe("server");

@@ -37,9 +37,11 @@ export interface ConfirmOptions {
     initialId?: string;
     lookup?: (q: string) => Promise<{ id: string; label: string; description?: string }[]>;
   };
+  /** 一個勾選框（例如「同時登出其他線路」）：initial 是預設勾不勾，hint 是下面一行小字 */
+  check?: { label: string; hint?: string; initial: boolean };
 }
 
-interface Pending extends ConfirmOptions { resolve: (ok: boolean, text: string, id?: string) => void }
+interface Pending extends ConfirmOptions { resolve: (ok: boolean, text: string, id?: string, checked?: boolean) => void }
 
 export const confirmState = reactive<{ current: Pending | null }>({ current: null });
 
@@ -55,6 +57,12 @@ export function confirmForm(opts: ConfirmOptions & { field: NonNullable<ConfirmO
   return new Promise((resolve) => { confirmState.current = { ...opts, resolve: (ok, text, id) => resolve(ok ? { text, ...(id ? { id } : {}) } : null) }; });
 }
 
+/** 帶一個勾選框的確認：確認回勾選狀態，取消回 null。 */
+export function confirmCheck(opts: ConfirmOptions & { check: NonNullable<ConfirmOptions["check"]> }): Promise<{ checked: boolean } | null> {
+  confirmState.current?.resolve(false, "");
+  return new Promise((resolve) => { confirmState.current = { ...opts, resolve: (ok, _text, _id, checked) => resolve(ok ? { checked: !!checked } : null) }; });
+}
+
 /** 要求照打的字有沒有打對。 */
 export function confirmTextMatches(opts: Pick<ConfirmOptions, "requireText">, typed: string): boolean {
   if (!opts.requireText) return true;
@@ -65,10 +73,10 @@ export function confirmTextMatches(opts: Pick<ConfirmOptions, "requireText">, ty
  * 由彈窗元件呼叫：把答案交回去並關掉。
  * 有 requireText 的彈窗，確認時要帶使用者打的字；沒打對就當沒按——彈窗留著。
  */
-export function settleConfirm(ok: boolean, typed = "", text = "", id?: string): void {
+export function settleConfirm(ok: boolean, typed = "", text = "", id?: string, checked?: boolean): void {
   const c = confirmState.current;
   if (!c) return;
   if (ok && !confirmTextMatches(c, typed)) return;
   confirmState.current = null;
-  c.resolve(ok, text.trim(), id);
+  c.resolve(ok, text.trim(), id, checked);
 }
