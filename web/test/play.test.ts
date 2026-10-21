@@ -98,6 +98,7 @@ afterEach(() => {
 });
 
 describe("/play/:roleId", () => {
+
   it("審核試玩沒領著（或領取過了時效）：說要回審核頁重新領取，按鈕帶回審核頁，不說「稍後再試」", async () => {
     // 跟 lib/api 的 ApiError 一樣：伺服器原文在 code，message 已經是在地化的「請求失敗」
     vi.mocked(fetchReviewDetail).mockRejectedValueOnce(Object.assign(new Error(i18n.global.t("state.requestFailed")), { status: 409, code: "claim this submission first" }));
@@ -172,3 +173,16 @@ describe("/play/:roleId", () => {
 
 
 });
+
+  it('mounts a polite toast region before messages arrive and marks errors as alerts', async () => {
+    await mount('/play/100221');
+    expect(root.querySelector('.play__toasts')?.getAttribute('aria-live')).toBe('polite');
+    const { pushStageToast, stageToasts } = await import('../src/lib/stage-host');
+    try {
+      pushStageToast('Synthetic error', 'error');
+      pushStageToast('Synthetic update', 'info');
+      await nextTick();
+      expect(root.querySelector('.play__toast--error')?.getAttribute('role')).toBe('alert');
+      expect(root.querySelector('.play__toast--info')?.getAttribute('role')).toBe('status');
+    } finally { stageToasts.list = []; }
+  });

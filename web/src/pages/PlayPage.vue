@@ -224,7 +224,7 @@ watch(locale, () => { void remergeStageMessages(); });
     </Transition>
     <PlayComments />
     <GuestSignInSheet v-if="signInOpen" :return-to="route.fullPath" @close="signInOpen = false" />
-    <div class="play__toasts">
+    <div class="play__toasts" aria-live="polite">
       <div v-for="toast in stageToasts.list" :key="toast.id" class="play__toast" :class="`play__toast--${toast.kind}`" :role="toast.kind === 'error' ? 'alert' : 'status'" :aria-live="toast.kind === 'error' ? 'assertive' : 'polite'" aria-atomic="true">
         <svg v-if="toast.kind === 'error' || toast.kind === 'warning'" class="play__toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3 2 21h20L12 3Z"/><path d="M12 9v5m0 3v1"/></svg>
         <span>{{ toast.text }}</span>
