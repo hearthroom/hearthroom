@@ -103,6 +103,8 @@ const schedulePlace = () => { if (!frame) frame = requestAnimationFrame(place); 
 watch(() => routesState.promptShowing, async (on) => { if (on) { await nextTick(); place(); } });
 watch(() => route.fullPath, () => { void nextTick(schedulePlace); });
 onMounted(() => {
+  // 本機走查：從主控台直接擺出各種狀態（慢、連不上、全部連不上、切換中）
+  if (import.meta.env.DEV) (window as unknown as { __routes: unknown }).__routes = { state: routesState, open: openRoutesDialog, show: (n: number) => { pick.value = lineByNumber(n); routesState.recommended = n; routesState.promptShowing = true; } };
   window.addEventListener("scroll", schedulePlace, { passive: true });
   window.addEventListener("resize", schedulePlace);
 });
