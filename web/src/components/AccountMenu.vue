@@ -94,7 +94,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
       </div>
       <div class="menu__group">
         <RouterLink :to="lp('/settings')" class="menu__item" role="menuitem"><AccountIcon name="settings" />{{ $t("nav.settings") }}</RouterLink>
-        <button v-if="hereLine" type="button" class="menu__item" role="menuitem" @click="openRoutes"><SignalBars :level="3" />{{ $t("routes.title") }}<span class="menu__aside">{{ $t(`routes.name.${hereLine.n}`) }}</span></button>
+        <button v-if="hereLine" type="button" class="menu__item" role="menuitem" @click="openRoutes"><SignalBars :level="3" />{{ $t("routes.title") }}<span class="menu__aside">{{ $t(`routes.name.${hereLine.n}`) }}<span class="menu__aside-host">{{ hereLine.host }}</span></span></button>
         <!-- 開發者文件（相容供應商協議）：頁尾有，但登入的作者從頭像選單也走得到 -->
         <RouterLink :to="lp('/developers')" class="menu__item" role="menuitem"><AccountIcon name="code" />{{ $t("footer.developers") }}</RouterLink>
         <RouterLink :to="`${lp('/updates')}?from=menu`" class="menu__item" role="menuitem"><AccountIcon name="spark" />{{ $t("nav.updates") }}<NewMark k="menu.updates" /></RouterLink>
@@ -154,6 +154,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
 }
 .menu__item svg { width: 18px; height: 18px; color: var(--text-2); }
 .menu__item:hover { background: var(--surface-2); }
-.menu__aside { margin-inline-start: auto; padding-inline-start: var(--s-3); font-size: 13px; color: var(--text-2); white-space: nowrap; }
+.menu__aside { margin-inline-start: auto; padding-inline-start: var(--s-3); display: grid; text-align: right; font-size: 13px; line-height: 1.3; color: var(--text-2); white-space: nowrap; }
+.menu__aside-host { font-size: 12px; color: var(--text-3); }
 @keyframes fade { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 </style>

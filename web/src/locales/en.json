@@ -3176,5 +3176,5 @@
   "routes.logout.scope": "Only sign-ins linked by switching routes in this browser are included.",
   "routes.logout.keep": "Stay signed in",
   "routes.unsaved": "Unsaved changes will not carry over to the new route.",
-  "routes.lineHost": "{line} ({host})"
+  "routes.lineHost": "{line} ({host})"
 }

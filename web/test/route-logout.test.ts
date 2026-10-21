@@ -37,6 +37,14 @@ it("asks first, defaulting to all routes in this browser, and lists them by name
   expect(s.logout).toHaveBeenCalledWith({ allRoutes: true });
 });
 
+it("never lists the route being signed out, and goes back to one tap if nothing else is left", async () => {
+  vi.stubGlobal("location", { hostname: "sukisuki.ai", host: "sukisuki.ai", origin: "https://sukisuki.ai" });
+  const s = fakeSession(["https://sukisuki.ai"]);
+  await logoutWithRoutes(s);
+  expect(confirmState.current).toBeNull();
+  expect(s.logout).toHaveBeenCalledWith();
+});
+
 it("can sign out of just this route, or not at all", async () => {
   const s = fakeSession(["https://sukisuki.ai"]);
   let done = logoutWithRoutes(s);
