@@ -62,6 +62,14 @@ public class LaunchFlowTest {
         launch();
         f.waitFor("waiting screen", () -> f.launcher.findViewById(R.id.waiting).getVisibility() == View.VISIBLE, 2000);
         assertEquals(f.context.getString(R.string.launch_connecting), text(R.id.waiting_status));
+        f.instrumentation.runOnMainSync(() -> {
+            View name = f.launcher.findViewById(R.id.waiting_name), spinner = f.launcher.findViewById(R.id.waiting_spinner), status = f.launcher.findViewById(R.id.waiting_status);
+            int[] n = new int[2], p = new int[2], t = new int[2];
+            name.getLocationOnScreen(n); spinner.getLocationOnScreen(p); status.getLocationOnScreen(t);
+            assertTrue("Spinner is below the name", p[1] >= n[1] + name.getHeight());
+            assertTrue("Status has its own row below the spinner", t[1] >= p[1] + spinner.getHeight());
+            assertEquals("Spinner stays horizontally centered", n[0] + name.getWidth() / 2f, p[0] + spinner.getWidth() / 2f, 1f);
+        });
         f.screen("s1");
         f.waitFor("slow wording", () -> ((TextView) f.launcher.findViewById(R.id.waiting_status)).getText().toString().equals(f.context.getString(R.string.launch_slow)), 3000);
         assertTrue("Switching is offered once it is slow", visible(R.id.change_route));
