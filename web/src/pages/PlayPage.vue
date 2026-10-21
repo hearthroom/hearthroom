@@ -224,8 +224,11 @@ watch(locale, () => { void remergeStageMessages(); });
     </Transition>
     <PlayComments />
     <GuestSignInSheet v-if="signInOpen" :return-to="route.fullPath" @close="signInOpen = false" />
-    <div class="play__toasts" aria-live="polite">
-      <div v-for="toast in stageToasts.list" :key="toast.id" class="play__toast" :class="`play__toast--${toast.kind}`">{{ toast.text }}</div>
+    <div class="play__toasts">
+      <div v-for="toast in stageToasts.list" :key="toast.id" class="play__toast" :class="`play__toast--${toast.kind}`" :role="toast.kind === 'error' ? 'alert' : 'status'" :aria-live="toast.kind === 'error' ? 'assertive' : 'polite'" aria-atomic="true">
+        <svg v-if="toast.kind === 'error' || toast.kind === 'warning'" class="play__toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3 2 21h20L12 3Z"/><path d="M12 9v5m0 3v1"/></svg>
+        <span>{{ toast.text }}</span>
+      </div>
     </div>
   </div>
 </template>
@@ -237,7 +240,9 @@ watch(locale, () => { void remergeStageMessages(); });
 .play-cover-leave-active { transition: opacity 250ms ease-out; }
 .play-cover-leave-to { opacity: 0; }
 .play__toasts { position: fixed; left: 50%; top: calc(var(--s-4) + env(safe-area-inset-top, 0px)); transform: translateX(-50%); z-index: 1200; display: grid; gap: var(--s-2); pointer-events: none; }
-.play__toast { padding: var(--s-2) var(--s-4); border-radius: var(--r-md); background: var(--surface); color: var(--text); box-shadow: var(--shadow-2); font-size: 14px; max-width: min(90vw, 480px); }
+.play__toast { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-radius: var(--r-md); background: var(--surface); color: var(--text); box-shadow: var(--shadow-md); font-size: 14px; max-width: min(90vw, 480px); }
+.play__toast-icon { width: 20px; height: 20px; flex: 0 0 20px; }
+.play__toast--warning { border-left: 3px solid var(--warning-text); }
 .play__toast--error { border-left: 3px solid var(--danger); }
 .play__toast--success { border-left: 3px solid var(--accent); }
 </style>
