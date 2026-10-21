@@ -24,7 +24,7 @@ describe("GA4 runtime", () => {
     ga.pageView();
     const commands = ga.commands();
     expect(commands[0]).toEqual(["consent", "default", { analytics_storage: "granted", ad_storage: "denied", ad_user_data: "denied", ad_personalization: "denied" }]);
-    expect(commands.find(c => c[0] === "config")?.[2]).toMatchObject({ send_page_view: false, page_location: "https://sukisuki.ai/cards/_", page_title: "card", allow_google_signals: false, cookie_expires: 33696000, cookie_update: false });
+    expect(commands.find(c => c[0] === "config")?.[2]).toMatchObject({ send_page_view: false, page_location: "https://sukisuki.ai/cards/_", page_title: "card", allow_google_signals: false, cookie_expires: 33696000, cookie_update: false, cookie_domain: "none" });
     expect(commands.filter(c => c[1] === "page_view")).toHaveLength(1);
     expect(JSON.stringify(commands)).not.toMatch(/PRIVATE|SECRET|123/);
     const script = document.querySelector<HTMLScriptElement>("script[data-hearthroom-ga4]")!;
@@ -41,6 +41,42 @@ describe("GA4 runtime", () => {
       expect(ga.commands()).toEqual([]);
       expect(document.querySelector("script[data-hearthroom-ga4]")).toBeNull();
     }
+  });
+
+  it("captures sanitized startup snapshots and leaves page_view to router navigation", () => {
+    const ga = createGa4(); ga.prepare();
+    ga.pageView(); ga.track("share", { detail: "share_clipboard", subject: "PRIVATE" });
+    expect(ga.commands()).toEqual([]);
+    vi.stubGlobal("location", new URL("https://sukisuki.ai/wallet"));
+    ga.start(true, { clientId: "1.2" });
+    const events = ga.commands().filter(c => c[0] === "event");
+    expect(events.map(c => c[1])).toEqual(["page_view", "share"]);
+    expect(events.every(c => (c[2] as {page_type:string}).page_type === "card")).toBe(true);
+    expect(JSON.stringify(events)).not.toMatch(/PRIVATE|SECRET|123/);
+    ga.pageView();
+    expect(ga.commands().filter(c => c[1] === "page_view")).toHaveLength(2);
+  });
+  it("session before router sends no automatic view; query/hash changes add none", () => {
+    const ga = createGa4(); ga.prepare(); ga.start(true);
+    expect(ga.commands().filter(c => c[1] === "page_view")).toHaveLength(0);
+    ga.pageView();
+    vi.stubGlobal("location", new URL("https://sukisuki.ai/cards/123?other=1#new")); ga.pageView();
+    expect(ga.commands().filter(c => c[1] === "page_view")).toHaveLength(1);
+  });
+  it("throttles same-account focus refreshes for 60 seconds without losing identity", async () => {
+    const ga = createGa4(); ga.start(true);
+    const read = vi.fn(async () => ({userId: "ga1_" + "b".repeat(64), payerType: "plan"}));
+    await ga.refreshIdentity(123, read); await ga.refreshIdentity(123, read);
+    expect(read).toHaveBeenCalledTimes(1);
+    ga.track("topup_click"); expect(ga.commands().at(-1)?.[2]).toMatchObject({user_id: "ga1_" + "b".repeat(64)});
+    vi.spyOn(Date, "now").mockReturnValue(Date.now() + 60001);
+    await ga.refreshIdentity(123, read); expect(read).toHaveBeenCalledTimes(2);
+    await ga.refreshIdentity(456, read); expect(read).toHaveBeenCalledTimes(3);
+  });
+  it("does not enable debug from a production URL", () => {
+    vi.stubGlobal("location", new URL("https://sukisuki.ai/?ga_debug=1"));
+    const ga=createGa4(); ga.start(true);
+    expect(ga.commands().find(c=>c[0] === "config")?.[2]).not.toHaveProperty("debug_mode");
   });
 
   it("honors GPC even after initialization and ignores arbitrary events", () => {
@@ -121,7 +157,7 @@ describe("GA4 runtime", () => {
     const get = ga.commands().find(c => c[0] === "get" && c[2] === "client_id")!;
     (get[3] as (id: unknown) => void)("9999.8888");
     expect(synchronized).not.toHaveBeenCalled();
-    expect(ga.commands().filter(c => c[0] === "config").at(-1)?.[2]).toMatchObject({ client_id: "1.2", send_page_view: false });
+    expect(ga.commands().filter(c => c[0] === "config").at(-1)?.[2]).toMatchObject({ client_id: "1.2", send_page_view: false, cookie_domain: "none" });
     expect(ga.commands().filter(c => c[1] === "page_view")).toHaveLength(1);
   });
   it("gets session_id for checkout and removes it on GPC", () => {
@@ -143,4 +179,36 @@ describe("GA4 runtime", () => {
     expect(events.map(c=>c[1])).toEqual(["page_view", "share", "page_view"]);
     expect(events.map(c=>(c[2] as {page_type:string}).page_type)).toEqual(["card", "card", "wallet"]);
   });
+});
+
+it("bootstrap completing before router does not send an extra initial view", async () => {
+  vi.resetModules();
+  vi.stubGlobal("fetch", vi.fn(async () => ({ok:true, json:async()=>({enabled:true,clientId:"1.2"})})));
+  const api = await import("../src/lib/ga4");
+  await api.startGa4();
+  expect(window.hearthroomGaData?.filter(c=>c[1] === "page_view")).toHaveLength(0);
+  api.ga4PageView();
+  expect(window.hearthroomGaData?.filter(c=>c[1] === "page_view")).toHaveLength(1);
+});
+it("redirect readiness returns after at most three seconds even with a stalled session", async () => {
+  vi.useFakeTimers(); vi.resetModules();
+  let finish!: (value: unknown) => void;
+  vi.stubGlobal("fetch", vi.fn(() => new Promise(r=>{finish=r;})));
+  try {
+    const api = await import("../src/lib/ga4");
+    const bootstrap = api.startGa4();
+    let done = false; const waiting=api.waitForGa4().then(()=>{done=true;});
+    await vi.advanceTimersByTimeAsync(2999); expect(done).toBe(false);
+    await vi.advanceTimersByTimeAsync(1); await waiting; expect(done).toBe(true);
+    finish({ok:false}); await bootstrap;
+  } finally { vi.useRealTimers(); }
+});
+
+it("waits for Google readiness before redirecting a queued checkout", async () => {
+ const ga=createGa4(); ga.start(true,{clientId:"1.2"});
+ let done=false; const waiting=ga.whenReady().then(()=>{done=true;});
+ await Promise.resolve(); expect(done).toBe(false);
+ const get=ga.commands().find(c=>c[0]==="get"&&c[2]==="session_id")!;
+ (get[3] as (value:unknown)=>void)(1790000000);
+ await waiting; expect(done).toBe(true);
 });

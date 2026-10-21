@@ -18,7 +18,7 @@ describe("積分不夠的兩條路", () => {
     expect(r.body).toBe('credits.recovery.body{"need":"300","have":"120"}');
     expect(r.links).toEqual([
       { id: "tasks", label: 'credits.recovery.taskLeft{"n":"70"}', href: "https://sukisuki.ai/en/checkin?from=canvas_shortfall#tasks" },
-      { id: "topup", label: "credits.recovery.topup{}", href: "https://console.example/billing" },
+      { id: "topup", label: "credits.recovery.topup{}", href: "https://sukisuki.ai/en/go/topup?from=canvas_shortfall" },
     ]);
   });
   it("任務都領完了：只剩儲值；沒有數字：標題與內文交回畫布原本的字", () => {
