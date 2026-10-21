@@ -24,6 +24,11 @@ public class UpdateManifestTest {
         assertEquals("改善更新流程。", update.notes("zh-TW"));
         assertEquals("Improved updates.", update.notes("fr"));
     }
+    @Test public void everyOfficialDownloadHostIsAccepted() throws Exception {
+        for (String host : Routes.downloadHosts(null)) assertEquals("https://"+host+"/latest.apk", UpdateManifest.parse(valid().put("downloadUrl","https://"+host+"/latest.apk").toString()).downloadUrl);
+        rejected(valid().put("downloadUrl","https://downloads.evil.test/latest.apk"));
+        rejected(valid().put("downloadUrl","https://sukisuki.pro/latest.apk"));
+    }
     @Test public void rejectsOtherOriginsPathsAndPackages() throws Exception {
         for (String url : new String[]{"http://downloads.hearthroom.club/latest.apk", "https://evil.test/latest.apk", "https://downloads.hearthroom.club@evil.test/latest.apk", "https://downloads.hearthroom.club/other.apk", "https://downloads.hearthroom.club/latest.apk?x=1"}) rejected(valid().put("downloadUrl",url));
         rejected(valid().put("packageId", "other.app")); rejected(valid().put("channel", "beta"));

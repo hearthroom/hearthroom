@@ -6,7 +6,7 @@ import java.io.FileInputStream;
 import java.security.MessageDigest;
 import java.util.Locale;
 
-/** Untrusted release data is bounded and restricted to this one distribution channel. */
+/** Untrusted release data is bounded and restricted to the official download hosts. */
 public final class UpdateManifest {
     public final int versionCode;
     public final String versionName, downloadUrl, sha256, json;
@@ -23,7 +23,8 @@ public final class UpdateManifest {
         versionName=o.getString("versionName");
         if (!versionName.matches("[0-9]+\\.[0-9]+\\.[0-9]+")) throw new IllegalArgumentException();
         downloadUrl=o.getString("downloadUrl");
-        if (!"https://downloads.hearthroom.club/latest.apk".equals(downloadUrl)) throw new IllegalArgumentException();
+        // Every download host fronts the same bucket; the APK is fetched from whichever host answered.
+        if (Routes.downloadHosts(null).stream().noneMatch(h->("https://"+h+"/latest.apk").equals(downloadUrl))) throw new IllegalArgumentException();
         sha256=o.getString("sha256"); if (!sha256.matches("[0-9a-f]{64}")) throw new IllegalArgumentException();
         releaseNotes=o.getJSONObject("releaseNotes");
         if (releaseNotes.optString("en").trim().isEmpty()) throw new IllegalArgumentException();
@@ -36,12 +37,7 @@ public final class UpdateManifest {
         catch (Exception e) { throw new IllegalArgumentException("Invalid release manifest",e); }
     }
     public boolean isNewerThan(long installed) { return versionCode>installed; }
-    public String notes(String languageTag) {
-        Locale locale=Locale.forLanguageTag(languageTag);
-        String key=locale.getLanguage();
-        if (key.equals("zh")) key=(locale.getScript().equals("Hant") || locale.getCountry().equals("TW") || locale.getCountry().equals("HK") || locale.getCountry().equals("MO"))?"zh-Hant":"zh-Hans";
-        return releaseNotes.optString(key,releaseNotes.optString("en"));
-    }
+    public String notes(String languageTag) { return Locales.pick(releaseNotes,languageTag); }
     public boolean matches(File file) throws Exception {
         if (!file.isFile() || file.length()!=size) return false;
         MessageDigest digest=MessageDigest.getInstance("SHA-256");

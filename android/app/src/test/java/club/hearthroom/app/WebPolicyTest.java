@@ -9,7 +9,28 @@ public class WebPolicyTest {
         for (String url : new String[]{null, "javascript:alert(1)", "https://hearthroom.club@evil.test/", "https://hearthroom.club.evil.test/", "https://hearthroom.club:8443/", "file:///etc/passwd"})
             assertEquals(WebPolicy.HOME, WebPolicy.launchUrl(url));
     }
+    @Test public void everyOfficialRouteIsALaunchTarget() {
+        for (String root : Routes.BUILT_IN.order()) assertEquals("https://"+root+"/play/1?x=1#y", WebPolicy.launchUrl("https://"+root+"/play/1?x=1#y"));
+        assertEquals(WebPolicy.HOME, WebPolicy.launchUrl("https://www.sukisuki.pro/"));
+        assertEquals(WebPolicy.HOME, WebPolicy.launchUrl("https://play.sukisuki.pro/"));
+    }
+    @Test public void switchingRoutesKeepsThePath() {
+        assertEquals("https://sukisuki.chat/play/123?lang=en#top", WebPolicy.onRoute("https://hearthroom.club/play/123?lang=en#top", "sukisuki.chat"));
+        assertEquals("https://sukisuki.pro/", WebPolicy.onRoute("https://hearthroom.club", "sukisuki.pro"));
+        assertEquals("External pages are not carried over", "https://sukisuki.pro/", WebPolicy.onRoute("https://evil.test/x", "sukisuki.pro"));
+        assertEquals("sukisuki.chat", WebPolicy.routeOf("https://sukisuki.chat/cards/1"));
+        assertNull(WebPolicy.routeOf("https://play.sukisuki.chat/"));
+        assertNull(WebPolicy.routeOf("https://evil.test/"));
+    }
+    @Test public void cardAppHostsAreOwnPagesWithoutAppPrivileges() {
+        assertTrue(WebPolicy.isOwnHost("https://play.sukisuki.pro/app/1"));
+        assertTrue(WebPolicy.isOwnHost("https://sukisuki.pro/"));
+        assertFalse(WebPolicy.isOwnHost("https://c123.sukisuki.pro/"));
+        assertFalse(WebPolicy.isOwnHost("https://play.sukisuki.pro.evil.test/"));
+        assertFalse(WebPolicy.isSite("https://play.sukisuki.pro/"));
+    }
     @Test public void onlyExactCommunityOriginsGetAppPrivileges() {
+        assertTrue(WebPolicy.isSite("https://sukisuki.pro/"));
         assertTrue(WebPolicy.isSite("https://hearthroom.club/"));
         assertTrue(WebPolicy.isSite("https://sukisuki.chat/cards/1"));
         assertFalse(WebPolicy.isSite("https://c123.hearthroom.club/"));

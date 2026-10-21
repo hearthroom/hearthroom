@@ -68,7 +68,7 @@ public final class WebActivity extends Activity {
             settings.setSupportMultipleWindows(true);
             CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
             WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
-            java.util.Set<String> origins = java.util.Set.of("https://hearthroom.club", "https://sukisuki.ai", "https://sukisuki.chat");
+            java.util.Set<String> origins = WebPolicy.ORIGINS;
             if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) WebViewCompat.addWebMessageListener(web, "HearthroomDownload", origins, (view, message, source, mainFrame, reply) -> {
                 if (!mainFrame || !WebPolicy.isSite(source.toString()) || !WebPolicy.isSite(view.getUrl()) || !source.getHost().equals(Uri.parse(view.getUrl()).getHost())) return;
                 try {
@@ -176,7 +176,7 @@ public final class WebActivity extends Activity {
     }
 
     private void showOrigin(String url) {
-        boolean own = WebPolicy.isSite(url);
+        boolean own = WebPolicy.isOwnHost(url);
         findViewById(R.id.origin_bar).setVisibility(own ? View.GONE : View.VISIBLE);
         origin.setText(own ? "" : Uri.parse(url).getHost());
     }
