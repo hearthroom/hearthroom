@@ -171,3 +171,20 @@ it('does not reset the source absolute lifetime or accept a replaced source inte
   await env.DB.prepare('UPDATE account_sessions SET created_at=? WHERE token_hash=?').bind(Date.now()-181*86400000,original.tokenHash).run();
   expect((await request(target,'/v1/auth/route-redeem',{code})).status).toBe(400);
 });
+
+it.each([false,true])('fences a queued destination redemption after logout (allRoutes=%s)',async(allRoutes)=>{
+  await session();const code=await issued(),queued={...jars[target]};
+  expect((await request(target,'/v1/auth/logout',{allRoutes})).status).toBe(200);
+  jars[target]=queued;
+  expect((await request(target,'/v1/auth/route-redeem',{code})).status).toBe(400);
+  expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM account_sessions WHERE origin=?').bind(target).first<any>()).n).toBe(0);
+});
+
+it.each([false,true])('invalidates a redeemed session even when its cookie response arrives after logout (allRoutes=%s)',async(allRoutes)=>{
+  await session();const code=await issued(),queuedLogout={...jars[target]};
+  expect((await request(target,'/v1/auth/route-redeem',{code})).status).toBe(200);
+  const late={...jars[target]};jars[target]=queuedLogout;
+  expect((await request(target,'/v1/auth/logout',{allRoutes})).status).toBe(200);
+  jars[target]=late;
+  expect((await request(target,'/v1/auth/session',{})).status).toBe(401);
+});
