@@ -39,7 +39,8 @@ public class WebActivityTest {
     private String js(WebView web, String script) throws Exception {
         CountDownLatch ready = new CountDownLatch(1); AtomicReference<String> result = new AtomicReference<>();
         ui(() -> web.evaluateJavascript(script, value -> {result.set(value); ready.countDown();}));
-        assertTrue(ready.await(10, TimeUnit.SECONDS)); return result.get();
+        boolean responded = ready.await(10, TimeUnit.SECONDS);
+        assertTrue("evaluateJavascript callback: " + script + "; finishing=" + activity.getActivity().isFinishing() + "; destroyed=" + activity.getActivity().isDestroyed(), responded); return result.get();
     }
     private void fixture(WebView web, String html) throws Exception {
         ui(() -> web.loadDataWithBaseURL("https://hearthroom.club/test", html, "text/html", "UTF-8", "https://hearthroom.club/test"));
@@ -126,8 +127,30 @@ public class WebActivityTest {
         assertEquals("true", js(web,"!!crypto.subtle && !!ReadableStream && CSS.supports('color','color-mix(in srgb,red,blue)')"));
         ui(() -> { assertFalse(web.getSettings().getAllowFileAccess()); assertFalse(web.getSettings().getAllowContentAccess()); });
         assertEquals("true", js(web,"history.pushState({},'', '/test/next'); history.length >= 2"));
-        ui(() -> activity.getActivity().onBackPressed());
-        Thread.sleep(300);
+        long historyUntil = android.os.SystemClock.uptimeMillis() + 5000;
+        boolean[] backReady = {false};
+        do {
+            ui(() -> backReady[0] = web.canGoBack() && "https://hearthroom.club/test/next".equals(web.getUrl()));
+            if (backReady[0]) break;
+            Thread.sleep(50);
+        } while (android.os.SystemClock.uptimeMillis() < historyUntil);
+        AtomicReference<String> historyState = new AtomicReference<>();
+        ui(() -> historyState.set("nativeUrl=" + web.getUrl() + "; canGoBack=" + web.canGoBack() + "; index=" + web.copyBackForwardList().getCurrentIndex() + "; size=" + web.copyBackForwardList().getSize() + "; provider=" + WebView.getCurrentWebViewPackage().versionName));
+        assertTrue("Native history after pushState: " + historyState.get() + "; js=" + js(web,"JSON.stringify({url:location.href,length:history.length})"), backReady[0]);
+        ui(() -> {
+            System.out.println("HISTORY before Back: canGoBack=" + web.canGoBack() + "; index=" + web.copyBackForwardList().getCurrentIndex() + "; size=" + web.copyBackForwardList().getSize() + "; url=" + web.getUrl());
+            activity.getActivity().onBackPressed();
+            System.out.println("HISTORY after Back: finishing=" + activity.getActivity().isFinishing());
+        });
+        long backUntil = android.os.SystemClock.uptimeMillis() + 5000;
+        boolean[] returned = {false};
+        do {
+            ui(() -> returned[0] = "https://hearthroom.club/test".equals(web.getUrl()));
+            if (returned[0]) break;
+            Thread.sleep(50);
+        } while (android.os.SystemClock.uptimeMillis() < backUntil);
+        assertTrue("Back must return to the existing page", returned[0]);
+        assertFalse("Back from an in-page history entry must keep the Activity", activity.getActivity().isFinishing());
         assertEquals("\"kept\"", js(web,"sessionStorage.getItem('hr-test')"));
     }
     @Test public void blobExportSavesAllChunksWithoutAJavaScriptBridge() throws Exception {
@@ -184,7 +207,12 @@ public class WebActivityTest {
     }
     @Test public void exportClickReachesTheSystemSaveFlow() throws Exception {
         WebView web = launch();
-        fixture(web,"<body data-ready='yes'><button onclick=\"var u=window.URL.createObjectURL(new Blob(['export via click']));var a=document.createElement('a');a.href=u;a.download='export.txt';a.click();window.URL.revokeObjectURL(u)\">Export fixture</button></body>");
+        AtomicReference<String> messageState = new AtomicReference<>("FixtureProbe not delivered");
+        ui(() -> androidx.webkit.WebViewCompat.addWebMessageListener(web,"FixtureProbe",WebPolicy.ORIGINS,(view,message,source,mainFrame,reply) -> {
+            messageState.set("source=" + source + "; main=" + mainFrame + "; nativeUrl=" + view.getUrl() + "; data=" + message.getData());
+            System.out.println("EXPORT message: " + messageState.get());
+        }));
+        fixture(web,"<body data-ready='yes'><button onclick=\"FixtureProbe.postMessage('before-export');var u=window.URL.createObjectURL(new Blob(['export via click']));var a=document.createElement('a');a.href=u;a.download='export.txt';a.click();window.URL.revokeObjectURL(u)\">Export fixture</button></body>");
         File folder = new File(activity.getActivity().getCacheDir(),"updates"); folder.mkdirs();
         File output = new File(folder,"clicked-export.txt"); output.delete();
         assertEquals("\"object\"", js(web,"typeof window.HearthroomDownload"));
@@ -199,7 +227,9 @@ public class WebActivityTest {
             device.findObject(By.text("Export fixture")).click();
             long until = System.currentTimeMillis()+10000;
             while(System.currentTimeMillis()<until && output.length()!=16) Thread.sleep(100);
-            assertEquals(js(web,"JSON.stringify({pending:!!window.__hrPendingBlob,origin:location.origin,main:window===window.top,blobMatches:window.__hrPendingBlob?window.__hrPendingBlob.url.startsWith('blob:https://hearthroom.club/'):null})"),1,monitor.getHits());
+            AtomicReference<String> nativeState = new AtomicReference<>();
+            ui(() -> nativeState.set("provider=" + WebView.getCurrentWebViewPackage().versionName + "; nativeUrl=" + web.getUrl() + "; finishing=" + activity.getActivity().isFinishing()));
+            assertEquals(nativeState.get() + "; message=" + messageState.get() + "; " + js(web,"JSON.stringify({pending:!!window.__hrPendingBlob,origin:location.origin,main:window===window.top,blobMatches:window.__hrPendingBlob?window.__hrPendingBlob.url.startsWith('blob:https://hearthroom.club/'):null})"),1,monitor.getHits());
             assertEquals("export via click",new String(Files.readAllBytes(output.toPath()),java.nio.charset.StandardCharsets.UTF_8));
         } finally { instrumentation.removeMonitor(monitor); output.delete(); }
     }
