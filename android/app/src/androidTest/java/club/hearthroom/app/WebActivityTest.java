@@ -6,6 +6,7 @@ import android.provider.MediaStore;
 import android.net.Uri;
 import android.webkit.WebView;
 import android.widget.FrameLayout;
+import android.view.View;
 import androidx.core.content.FileProvider;
 import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.rule.ActivityTestRule;
@@ -30,7 +31,7 @@ public class WebActivityTest {
     }
     private void ui(Runnable action) { InstrumentationRegistry.getInstrumentation().runOnMainSync(action); }
     private WebView launch() throws Exception {
-        WebActivity host = activity.launchActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(WebPolicy.HOME)));
+        WebActivity host = activity.launchActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://hearthroom.club/.well-known/assetlinks.json")));
         AtomicReference<WebView> view = new AtomicReference<>();
         ui(() -> view.set((WebView)((FrameLayout)host.findViewById(R.id.web_content)).getChildAt(0)));
         assertNotNull(view.get()); return view.get();
@@ -48,6 +49,53 @@ public class WebActivityTest {
             Thread.sleep(100);
         }
         fail("Fixture did not load");
+    }
+    @Test public void waitingCoverKeepsSukiUntilThePageDraws() throws Exception {
+        WebActivity host = activity.launchActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://hearthroom.club/.well-known/assetlinks.json"))
+            .putExtra("waiting_shown", true).putExtra("waiting_text", "Connecting"));
+        AtomicReference<WebView> engine = new AtomicReference<>();
+        ui(() -> {
+            View waiting = host.findViewById(R.id.waiting);
+            assertNotNull("S1 carries over into the WebView cover", waiting);
+            assertTrue(waiting.isShown());
+            assertFalse("The connecting status is hidden but keeps its layout space", host.findViewById(R.id.waiting_status).isShown());
+            assertFalse(host.findViewById(R.id.change_route).isShown());
+            engine.set((WebView)((FrameLayout)host.findViewById(R.id.web_content)).getChildAt(0));
+        });
+        fixture(engine.get(), "<body data-ready='yes'><main>Ready</main></body>");
+        long until = android.os.SystemClock.uptimeMillis() + 5000;
+        while (android.os.SystemClock.uptimeMillis() < until) {
+            boolean[] hidden = {false};
+            ui(() -> hidden[0] = host.findViewById(R.id.launch_cover).getVisibility() == View.GONE);
+            if (hidden[0]) return;
+            Thread.sleep(50);
+        }
+        fail("The cover must fade when page content is drawn");
+    }
+    @Test public void quickLaunchKeepsTheMarkCover() {
+        WebActivity host = activity.launchActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://hearthroom.club/.well-known/assetlinks.json")));
+        ui(() -> {
+            View waiting = host.findViewById(R.id.waiting);
+            assertTrue("No S1 on a quick launch", waiting == null || !waiting.isShown());
+        });
+    }
+    @Test public void loadFailureUsesBrandedRecovery() throws Exception {
+        WebView web = launch();
+        fixture(web, "<body data-ready='yes'>Ready</body>");
+        WebActivity host = activity.getActivity();
+        ui(() -> {
+            try {
+                java.lang.reflect.Method method = WebActivity.class.getDeclaredMethod("showPageError");
+                method.setAccessible(true); method.invoke(host);
+            } catch (Exception e) { throw new AssertionError(e); }
+            View failure = host.findViewById(R.id.failure);
+            assertNotNull("S6 uses the S2 branded recovery block", failure);
+            assertTrue(failure.isShown());
+            assertEquals(host.getString(R.string.web_load_failed), ((android.widget.TextView)host.findViewById(R.id.failure_title)).getText().toString());
+            assertTrue(host.findViewById(R.id.retry).isShown());
+            assertEquals(host.getString(R.string.web_change_route), ((android.widget.TextView)host.findViewById(R.id.change_route)).getText().toString());
+        });
+        new Fixtures().screen("s6");
     }
     @Test public void realEngineRetainsWebStateAndHasNoNativeBridge() throws Exception {
         WebView web = launch();

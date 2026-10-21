@@ -23,6 +23,7 @@ import org.json.JSONObject;
 
 /** No general native JS interface; only an origin-scoped, main-frame Blob save request. */
 public final class WebActivity extends Activity {
+    static final String WAITING_SHOWN = "waiting_shown", WAITING_TEXT = "waiting_text";
     private static final int PICK_FILE = 41, SAVE_FILE = 42, ROUTES = 43;
     private WebView web;
     private FrameLayout content;
@@ -49,6 +50,17 @@ public final class WebActivity extends Activity {
         progress = findViewById(R.id.page_progress);
         origin = findViewById(R.id.page_origin);
         cover = findViewById(R.id.launch_cover);
+        if (getIntent().getBooleanExtra(WAITING_SHOWN, false)) {
+            findViewById(R.id.web_launch_mark).setVisibility(View.GONE);
+            View waiting = findViewById(R.id.waiting);
+            waiting.setVisibility(View.VISIBLE);
+            Ui.column(waiting);
+            String text = getIntent().getStringExtra(WAITING_TEXT);
+            if (text != null) ((TextView) findViewById(R.id.waiting_status)).setText(text);
+            // Keep the same measured height, including a wrapped S5 notice, so Suki never jumps.
+            findViewById(R.id.waiting_state).setVisibility(View.INVISIBLE);
+            findViewById(R.id.change_route).setVisibility(View.INVISIBLE);
+        }
         if (state != null) cover.setVisibility(View.GONE);
         findViewById(R.id.return_to_site).setOnClickListener(v -> back());
         destination = WebPolicy.launchUrl(getIntent().getDataString());
@@ -229,6 +241,10 @@ public final class WebActivity extends Activity {
         progress.setVisibility(View.GONE);
         cover.setVisibility(View.GONE);
         content.removeAllViews();
+        if (message == R.string.web_load_failed) {
+            showLoadFailure();
+            return;
+        }
         ScrollView scroll = new ScrollView(this);
         LinearLayout panel = new LinearLayout(this); panel.setOrientation(LinearLayout.VERTICAL);
         int padding = (int)(24 * getResources().getDisplayMetrics().density); panel.setPadding(padding,padding,padding,padding);
@@ -238,11 +254,6 @@ public final class WebActivity extends Activity {
             if (web == null) recreate();
             else { content.removeAllViews(); content.addView(web); web.loadUrl(WebPolicy.isHttps(destination) ? destination : WebPolicy.HOME); }
         });
-        if (!settings && web != null && WebPolicy.routeOf(destination) != null) {
-            // S6: an official route failed to load; another route may still work.
-            Button routes = new Button(this); routes.setText(R.string.web_change_route); routes.setAllCaps(false); panel.addView(routes);
-            routes.setOnClickListener(v -> startActivityForResult(new Intent(this, RoutesActivity.class).putExtra(RoutesActivity.REASON, RoutesActivity.FROM_WEB), ROUTES));
-        }
         if (settings) {
             Button update = new Button(this); update.setText(R.string.open_settings); update.setAllCaps(false); panel.addView(update);
             update.setOnClickListener(v -> { try { startActivity(new Intent(Settings.ACTION_SETTINGS)); } catch (ActivityNotFoundException ignored) {} });
@@ -250,6 +261,28 @@ public final class WebActivity extends Activity {
             browser.setOnClickListener(v -> openExternal(Uri.parse(WebPolicy.HOME)));
         }
         scroll.addView(panel); content.addView(scroll);
+    }
+    private void showLoadFailure() {
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout column = new LinearLayout(this);
+        column.setOrientation(LinearLayout.VERTICAL);
+        column.setPadding(0, (int) (24 * getResources().getDisplayMetrics().density), 0, 0);
+        Ui.column(column);
+        View panel = getLayoutInflater().inflate(R.layout.recovery, column, false);
+        panel.setVisibility(View.VISIBLE);
+        ((TextView) panel.findViewById(R.id.failure_title)).setText(R.string.web_load_failed);
+        panel.findViewById(R.id.retry).setOnClickListener(v -> {
+            if (web == null) recreate();
+            else { content.removeAllViews(); content.addView(web); web.loadUrl(WebPolicy.isHttps(destination) ? destination : WebPolicy.HOME); }
+        });
+        if (web != null && WebPolicy.routeOf(destination) != null) {
+            View routes = panel.findViewById(R.id.change_route);
+            routes.setVisibility(View.VISIBLE);
+            routes.setOnClickListener(v -> startActivityForResult(new Intent(this, RoutesActivity.class).putExtra(RoutesActivity.REASON, RoutesActivity.FROM_WEB), ROUTES));
+        }
+        column.addView(panel);
+        scroll.addView(column);
+        content.addView(scroll);
     }
     private void openExternal(Uri uri) {
         Intent intent = new Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE);
