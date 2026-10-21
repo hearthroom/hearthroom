@@ -168,21 +168,30 @@ export function pendingReturnTo(): string {
 
 /** 靜默登入（lib/silent-login.ts）回來但沒登入：Harbor 那邊沒登入或還不是本站會員。不是錯誤，安靜地回原頁。 */
 export interface SilentMiss { silent: true; authenticated: false; returnTo: string }
+export const isSilentMiss = (r: object): r is SilentMiss => "authenticated" in r && r.authenticated === false;
 export async function completeLogin(query: URLSearchParams): Promise<{ token: TokenPair; returnTo: string; provider:ProviderId; linkFrom?:ProviderId; silent?: boolean } | SilentMiss> {
   if(await managedAuth()){
     const silent=takeSilentFlow();
-    if(silent&&query.get("error")){
-      const miss=await authRequest<{silent:boolean;authenticated:boolean;returnTo:string;error:string}>("complete",{state:query.get("state"),error:query.get("error")});
-      rememberSilentResult(String(miss.error||"miss"));
+    if(silent!==null&&query.get("error")){
+      // Harbor 說沒登入（或任何其他答覆）：都是安靜地回原頁。伺服器不認得的錯誤碼會拒收，那時取消流程、照樣回原頁
+      const fallback=safeReturnTo(silent);
       sessionStorage.removeItem(STORE.returnTo);
-      return {silent:true,authenticated:false,returnTo:safeReturnTo(miss.returnTo)};
+      try{
+        const miss=await authRequest<{silent:boolean;authenticated:boolean;returnTo:string;error:string}>("complete",{state:query.get("state"),error:query.get("error")});
+        rememberSilentResult(String(miss.error||"miss"));
+        return {silent:true,authenticated:false,returnTo:safeReturnTo(miss.returnTo)};
+      }catch{
+        rememberSilentResult("miss");
+        await authRequest("cancel",{}).catch(()=>{});
+        return {silent:true,authenticated:false,returnTo:fallback};
+      }
     }
     if(query.get("error")){await authRequest("cancel",{});throw new Error("oauth_denied");}
     forgetManaged();
     const done=await authRequest<{ token: TokenPair; returnTo: string; provider:ProviderId; linkFrom?:ProviderId; silent?: boolean; authenticated?: boolean }>("complete",{code:query.get("code"),state:query.get("state")});
     sessionStorage.removeItem(STORE.returnTo);
     if(done.silent&&done.authenticated===false){rememberSilentResult("consent_required");return {silent:true,authenticated:false,returnTo:safeReturnTo(done.returnTo)};}
-    if(silent)rememberSilentResult("granted");
+    if(done.silent)rememberSilentResult("granted");
     return done;
   }
   const pending=JSON.parse(sessionStorage.getItem("hearthroom.oauth.pending") || "{}");

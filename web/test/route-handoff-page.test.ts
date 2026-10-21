@@ -47,7 +47,7 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); });
 
 it("destination: redeems, restores the new sign-in, then returns to the page with an arrival note", async () => {
-  at("sukisuki.chat", "/auth/route/complete", "#code=abc&from=1&to=%2Fcards%2F42");
+  at("sukisuki.chat", "/auth/route/complete", "#code=abc&from=1&to=L2NhcmRzLzQy");
   const replaceState = vi.spyOn(history, "replaceState");
   const fetch = vi.fn(async (url: string, init?: RequestInit) => {
     expect(url).toBe("/v1/auth/route-redeem");
@@ -57,7 +57,7 @@ it("destination: redeems, restores the new sign-in, then returns to the page wit
     return Response.json({ ok: true, returnTo: "/cards/42?tab=a" });
   });
   vi.stubGlobal("fetch", fetch);
-  const { router, unmount } = await mount("/auth/route/complete#code=abc&from=1&to=%2Fcards%2F42", "complete");
+  const { router, unmount } = await mount("/auth/route/complete#code=abc&from=1&to=L2NhcmRzLzQy", "complete");
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(session.retryRestore).toHaveBeenCalled();
   expect(router.currentRoute.value.fullPath).toBe("/cards/42?tab=a");
@@ -66,9 +66,9 @@ it("destination: redeems, restores the new sign-in, then returns to the page wit
 });
 
 it("destination: a refused code stays put with sign-in, back, and continue choices", async () => {
-  at("sukisuki.chat", "/auth/route/complete", "#code=abc&from=1&to=%2Fcards%2F42");
+  at("sukisuki.chat", "/auth/route/complete", "#code=abc&from=1&to=L2NhcmRzLzQy");
   vi.stubGlobal("fetch", vi.fn(async () => Response.json({ error: "auth_route_invalid" }, { status: 400 })));
-  const { el, router, unmount } = await mount("/auth/route/complete#code=abc&from=1&to=%2Fcards%2F42", "complete");
+  const { el, router, unmount } = await mount("/auth/route/complete#code=abc&from=1&to=L2NhcmRzLzQy", "complete");
   expect(el.textContent).toContain(i18n.global.t("routes.handoff.completeFailTitle"));
   const buttons = [...el.querySelectorAll("button")];
   expect(buttons.map((b) => b.textContent?.trim())).toEqual([
@@ -85,7 +85,7 @@ it("destination: a refused code stays put with sign-in, back, and continue choic
 
 it("source: issues the code and heads to the destination, carrying where it came from", async () => {
   at("sukisuki.ai", "/auth/route/issue", "#request=req");
-  sessionStorage.setItem("hearthroom.routes.pending", JSON.stringify({ target: 3, returnTo: "/en/cards/42", at: Date.now() }));
+  localStorage.setItem("hearthroom.routes.pending", JSON.stringify({ target: 3, returnTo: "/en/cards/42", at: Date.now() }));
   const fetch = vi.fn(async (url: string, init?: RequestInit) => {
     expect(url).toBe("/v1/auth/route-issue");
     expect(JSON.parse(String(init?.body))).toEqual({ request: "req" });
@@ -93,14 +93,36 @@ it("source: issues the code and heads to the destination, carrying where it came
   });
   vi.stubGlobal("fetch", fetch);
   const { unmount } = await mount("/auth/route/issue#request=req", "issue");
-  expect(replace).toHaveBeenCalledWith("https://sukisuki.chat/auth/route/complete#code=xyz&from=1&to=%2Fen%2Fcards%2F42");
-  expect(sessionStorage.getItem("hearthroom.routes.pending")).toBeNull();
+  expect(replace).toHaveBeenCalledWith("https://sukisuki.chat/auth/route/complete#code=xyz&from=1&to=L2VuL2NhcmRzLzQy");
+  expect(localStorage.getItem("hearthroom.routes.pending")).toBeNull();
+  unmount();
+});
+
+it("destination: a slow redeem that succeeds after 'continue' still restores the sign-in", async () => {
+  at("sukisuki.chat", "/auth/route/complete", "#code=abc&from=1&to=L3NlYXJjaD9xPWEmc29ydD1ob3Q");
+  let finish!: (r: Response) => void;
+  vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>((r) => { finish = r; })));
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  const view = mount("/auth/route/complete#code=abc&from=1&to=L3NlYXJjaD9xPWEmc29ydD1ob3Q", "complete");
+  await vi.advanceTimersByTimeAsync(9000);
+  const { el, router, unmount } = await view;
+  const skip = [...el.querySelectorAll("button")].find((b) => b.textContent?.trim() === i18n.global.t("routes.handoff.skipLogin"))!;
+  skip.click();
+  await vi.advanceTimersByTimeAsync(10);
+  expect(routesState.arrivedSignedOut).toBe(true);
+  // 查詢字串裡的 & 經過 # 也沒被切斷
+  expect(router.currentRoute.value.fullPath).toBe("/search?q=a&sort=hot");
+  finish(Response.json({ ok: true, returnTo: "/search?q=a&sort=hot" }));
+  await vi.advanceTimersByTimeAsync(10);
+  expect(session.retryRestore).toHaveBeenCalled();
+  expect(routesState.arrivedSignedOut).toBe(false);
+  vi.useRealTimers();
   unmount();
 });
 
 it("source: a failure offers a fresh handoff, switching without sign-in, or staying", async () => {
   at("sukisuki.ai", "/auth/route/issue", "#request=req");
-  sessionStorage.setItem("hearthroom.routes.pending", JSON.stringify({ target: 3, returnTo: "/cards/42", at: Date.now() }));
+  localStorage.setItem("hearthroom.routes.pending", JSON.stringify({ target: 3, returnTo: "/cards/42", at: Date.now() }));
   const fetch = vi.fn(async (url: string) => {
     if (url === "/v1/auth/route-issue") return Response.json({ error: "auth_route_invalid" }, { status: 400 });
     if (url === "/v1/auth/route-start") return Response.json({ url: "https://sukisuki.chat/auth/route/prepare?request=new" });

@@ -98,11 +98,11 @@ watchCampaignShareBinding();
  * 直接開另一個網域、這裡還沒登入：Harbor 那邊已登入的會員自動登回來（lib/silent-login.ts 把關快慢、頻率與登出）。
  * 過場頁與回呼頁不做；開關在 Harbor 支援之前是關的。
  */
-if (SILENT_LOGIN_ENABLED) watch(() => session.ready && !session.me && !session.restoreError, (signedOut) => {
+if (SILENT_LOGIN_ENABLED) void router.isReady().then(() => watch(() => session.ready && !session.me && !session.restoreError, (signedOut) => {
   if (!signedOut || /\/auth\//.test(route.path)) return;
   const returnTo = /\/login$/.test(route.path) ? safeReturnTo(route.query.returnTo) : route.fullPath;
   void trySilentLogin({ immersive: !!route.meta.preloadStage, returnTo, locale: String(locale.value) }).catch(() => {});
-});
+}, { immediate: true }));
 onMounted(() => { session.restore(); useAppearance().init(); reviewTimer=setInterval(refreshReview,60000); window.addEventListener('focus',refreshReview); document.addEventListener('visibilitychange',refreshReview); });
 onBeforeUnmount(()=>{clearInterval(reviewTimer);window.removeEventListener('focus',refreshReview);document.removeEventListener('visibilitychange',refreshReview);document.removeEventListener('keydown',onSlash);});
 
