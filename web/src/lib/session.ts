@@ -10,7 +10,7 @@ import { defineStore } from "pinia";
 import { computed, ref, watch } from "vue";
 import { i18n } from "./i18n";
 import { siteName } from "../../../shared/site-name";
-import { fetchMe, fetchSiteMe, fetchWallet, setLoginViewer, setNsfwViewer, setViewerHiddenTags } from "./api";
+import { ApiError, fetchMe, fetchSiteMe, fetchWallet, setLoginViewer, setNsfwViewer, setViewerHiddenTags } from "./api";
 import type { Me, SiteMe, Wallet } from "./api";
 import {
   beginLogin,
@@ -33,7 +33,7 @@ import {
  */
 /** 伺服器暫時回不了（5xx、429、網路斷一下）：不是登出，等一下再問就好。 */
 function isTransient(e: unknown): boolean {
-  return e instanceof ManagedAuthUnavailable || e instanceof TypeError;
+  return e instanceof ManagedAuthUnavailable || e instanceof TypeError || e instanceof ApiError && (e.status >= 500 || e.status === 429);
 }
 async function withTransientRetry<T>(call: () => Promise<T>): Promise<T> {
   for (let attempt = 0; ; attempt++) {
@@ -54,6 +54,7 @@ export const useSession = defineStore("session", () => {
   /** 本站的身分（公開 ID、連結的帳號）。登入後問一次就建好成員；讀不到不影響登入。 */
   const profile = ref<SiteMe | null>(null);
   const ready = ref(false);
+  const restoreError = ref(false);
   watch([me, () => profile.value?.handle, () => profile.value?.showNsfw, () => profile.value?.ageVerified, () => profile.value?.adultConsent, () => profile.value?.hiddenTags?.join(',')], clearLibraryCache, {flush:'sync'});
   const displayName = computed(() => profile.value?.displayName || profile.value?.handle || siteName(String(i18n.global.locale.value)));
   const avatarUrl = computed(() => profile.value?.avatarUrl || "");
@@ -123,6 +124,7 @@ export const useSession = defineStore("session", () => {
 
     const expected=generation;
     let unreachable = false;
+    restoreError.value = false;
     restoring = (async () => {
       try {
         if(await managedAuth()){
@@ -154,8 +156,11 @@ export const useSession = defineStore("session", () => {
         const pair = await refresh();
         if (pair && expected===generation) await adopt(pair,expected);
       } catch (e) {
-        if(expected===generation){token.value = null;me.value = null;}
         unreachable = isTransient(e);
+        if(expected===generation){
+          restoreError.value = unreachable;
+          if(!unreachable){token.value = null;me.value = null;}
+        }
       } finally {
         ready.value = true;
         // 記下這個瀏覽器目前是誰登入（或沒人）：「我的卡片」下次可以先開頁、身分在背景確認。
@@ -165,6 +170,12 @@ export const useSession = defineStore("session", () => {
       }
     })();
     return restoring;
+  }
+
+  function retryRestore(): Promise<void> {
+    if (restoring) return restoring;
+    ready.value = false;
+    return restore();
   }
 
   /** 每次用之前檢查有效期，過期就換新的；換不到就是真的登出了。 */
@@ -191,6 +202,7 @@ export const useSession = defineStore("session", () => {
     me.value = null;
     wallet.value = null;
     profile.value = null;
+    restoreError.value = false;
     setNsfwViewer(null);
     setLoginViewer(null);
     rememberSignedIn(null);
@@ -210,5 +222,5 @@ export const useSession = defineStore("session", () => {
   }
 
   /** 重新向供應商授權（真正開始 OAuth）。進站的「登入」一律先到本站的登入頁（/login），由那一頁呼叫這個。 */
-  return { displayName, avatarUrl, token, me, wallet, profile, ready, adopt, restore, accessToken, ensureProfile, refreshWallet, logout, login: beginLogin };
+  return { displayName, avatarUrl, token, me, wallet, profile, ready, restoreError, adopt, restore, retryRestore, accessToken, ensureProfile, refreshWallet, logout, login: beginLogin };
 });

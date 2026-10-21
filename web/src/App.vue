@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import SearchSuggest from "@/components/SearchSuggest.vue";
+import SessionConnectionGate from "@/components/SessionConnectionGate.vue";
 import { communityRequest } from "./lib/community";
 import CommunityIcon from "@/components/CommunityIcon.vue";
 import ReviewBadge from "@/components/ReviewBadge.vue";
@@ -147,7 +148,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
         <LocaleSwitch />
         <NotificationBell v-if="session.me" />
         <AccountMenu v-if="session.me" />
-        <RouterLink v-else-if="session.ready" class="btn btn--primary btn--sm" :to="lp(loginPath(route.fullPath))">
+        <RouterLink v-else-if="session.ready && !session.restoreError" class="btn btn--primary btn--sm" :to="lp(loginPath(route.fullPath))">
           {{ $t("nav.login") }}
         </RouterLink>
       </div>
@@ -159,7 +160,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
     <RouterLink :to="lp('/library')" :aria-current="route.path === lp('/library') ? 'page' : undefined">{{ $t('library.title') }}</RouterLink>
     <RouterLink :to="lp('/mine')" :aria-current="route.path === lp('/mine') ? 'page' : undefined">{{ $t('nav.mine') }}</RouterLink>
   </nav>
-  <main id="main" tabindex="-1" :class="{ 'site-main': !route.meta.bare, 'main--bare': route.meta.bare }"><RouterView /></main>
+  <main id="main" tabindex="-1" :class="{ 'site-main': !route.meta.bare, 'main--bare': route.meta.bare }"><SessionConnectionGate><RouterView /></SessionConnectionGate></main>
   <CoachTour />
   <NewcomerTour />
   <!-- 桌寵兼嚮導：玩卡頁與沙盒（bare、卡片 App 網域）不出現，其他每一頁都在 -->
