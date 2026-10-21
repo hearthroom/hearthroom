@@ -78,6 +78,30 @@ public class RoutePlannerTest {
         p.result(AI, false, 200);
         assertEquals(AI, p.decide(200).host);
     }
+    @Test public void aLinkOpensOnItsOwnDomainWhenReachable() {
+        RoutePlanner p = new RoutePlanner(ALL, CLUB, false, CHAT);
+        p.result(CLUB, true, 50); p.result(CHAT, true, 400);
+        RoutePlanner.Decision d = p.decide(400);
+        assertEquals(CHAT, d.host); assertFalse("Following a link is not a switch", d.switched);
+    }
+    @Test public void aLinkToAnUnreachableDomainFallsBackToTheSignedInRoute() {
+        RoutePlanner p = new RoutePlanner(ALL, CLUB, false, CHAT);
+        p.result(AI, true, 50); p.result(CLUB, true, 300); p.result(CHAT, false, 100);
+        RoutePlanner.Decision d = p.decide(300);
+        assertEquals(CLUB, d.host); assertFalse(d.switched);
+        RoutePlanner fixed = new RoutePlanner(ALL, CLUB, true, CHAT);
+        fixed.result(CHAT, false, 100); fixed.result(CLUB, true, 200);
+        assertEquals("A working fixed route is used, not the routes screen", CLUB, fixed.decide(200).host);
+    }
+    @Test public void aLinkAndTheSignedInRouteBothDownIsAnOrdinarySwitch() {
+        RoutePlanner p = new RoutePlanner(ALL, CLUB, false, CHAT);
+        p.result(AI, true, 50); p.result(CLUB, false, 60); p.result(CHAT, false, 70);
+        RoutePlanner.Decision d = p.decide(70);
+        assertEquals(AI, d.host); assertTrue(d.switched);
+        RoutePlanner fixed = new RoutePlanner(ALL, CLUB, true, CHAT);
+        fixed.result(CLUB, false, 60); fixed.result(CHAT, false, 70);
+        assertEquals(CHOOSE, fixed.decide(70).kind);
+    }
     @Test public void updatePromptsRespectTheThreeDayLater() {
         long day = 86_400_000L, now = 100 * day;
         assertTrue(UpdatePolicy.prompt(5, 4, 0, 0, now));
