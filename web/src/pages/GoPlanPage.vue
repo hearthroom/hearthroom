@@ -9,12 +9,13 @@ import { fetchPeriodPlans } from "@/lib/rewards";
 import { purchaseLink } from "@/lib/period-plan";
 import { SHORTFALL_FROM } from "@/lib/credits-recovery";
 import { trackNow } from "@/lib/track";
+import { ga4CheckoutUrl } from "@/lib/ga4";
 
 const route = useRoute();
 onMounted(async () => {
   if (route.query.from === SHORTFALL_FROM) trackNow("credits_shortfall_click", { detail: "plan" });
   const plan = await fetchPeriodPlans().then((r) => r.list[0]).catch(() => undefined);
-  location.replace(purchaseLink(plan));
+  location.replace(ga4CheckoutUrl(purchaseLink(plan)));
 });
 </script>
 

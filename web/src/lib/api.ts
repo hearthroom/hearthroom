@@ -521,7 +521,7 @@ export async function fetchReviewOriginality(id: string, token: string): Promise
 
 // ---- 上游開放 API（跨網域）---------------------------------------------------
 
-export interface Me { accountNumId: number; nickName: string; avatar: string; email?: string }
+export interface Me { accountNumId: number; nickName: string; avatar: string; email?: string; analytics?: import("../../../shared/ga4").AnalyticsIdentity }
 
 /** 登入者在本站的身分（不是供應商那邊的）：公開 ID、加入時間、連結了哪些供應商帳號。 */
 export interface SiteMe {

@@ -33,6 +33,8 @@ import { watchCheckinNudges } from "@/lib/checkin-nudges";
 import { useUpdates } from "@/lib/updates";
 import { footerGroups, footerLegal, type FooterContext } from "@/lib/footer-nav";
 import { watchCampaignShareBinding, watchShareRefBinding } from "@/lib/share-ref";
+import { refreshGa4Account } from "@/lib/ga4";
+import { fetchMe } from "@/lib/api";
 
 const { lp, locale } = useLocalePath();
 // 頁首與頁尾的品牌名跟著語言走（shared/site-name.ts）：中文介面是綺夢社，其他語言是 Hearthroom。副標只進分頁標題。
@@ -42,6 +44,15 @@ const footerName = computed(() => siteLockup(String(locale.value)) ?? brandName.
 // iOS 與我們自己的 App 裡不需要「下載 App」入口（lib/download.ts）。
 const showDownloadEntry = shouldShowDownloadEntry({ ua: navigator.userAgent, touchPoints: navigator.maxTouchPoints || 0 });
 const session = useSession();
+function refreshAnalytics() {
+  void refreshGa4Account(session.me?.accountNumId ?? null, async () => {
+    const token = await session.accessToken();
+    return token ? (await fetchMe(token)).analytics : null;
+  });
+}
+watch(() => session.me?.accountNumId ?? null, refreshAnalytics, { immediate: true });
+onMounted(() => window.addEventListener("focus", refreshAnalytics));
+onBeforeUnmount(() => window.removeEventListener("focus", refreshAnalytics));
 const reviewerStore = useReviewer();
 const route = useRoute();
 const router = useRouter();
@@ -199,7 +210,10 @@ onMounted(() => document.addEventListener("keydown", onSlash));
         </section>
       </nav>
       <div class="footer__legal">
-        <a v-for="l in legalNav" :key="l.id" :href="'href' in l ? l.href : undefined" target="_blank" rel="noopener noreferrer">{{ $t(l.label, l.labelArgs ?? {}) }}</a>
+        <template v-for="l in legalNav" :key="l.id">
+          <RouterLink v-if="'to' in l" :to="lp(l.to)">{{ $t(l.label, l.labelArgs ?? {}) }}</RouterLink>
+          <a v-else-if="'href' in l" :href="l.href" target="_blank" rel="noopener noreferrer">{{ $t(l.label, l.labelArgs ?? {}) }}</a>
+        </template>
       </div>
     </div>
   </footer>

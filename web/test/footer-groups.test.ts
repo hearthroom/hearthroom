@@ -64,7 +64,8 @@ describe("頁尾分組", () => {
   });
 
   it("授權在最底下那一條，不在分組裡", () => {
-    expect(footerLegal(base).map((l) => l.id)).toEqual(["license"]);
+    expect(footerLegal(base).map((l) => l.id)).toEqual(["privacy", "license"]);
+    expect(footerLegal(base)[0]).toMatchObject({ to: "/privacy", label: "login.privacy" });
     expect(ids(base)).not.toContain("license");
   });
 

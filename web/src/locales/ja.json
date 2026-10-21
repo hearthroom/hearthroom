@@ -3100,5 +3100,13 @@
   "campaign.field.posterAltHint": "画像内の文字をすべて一文で書いてください。",
   "campaign.field.removePoster": "文字入りポスターを削除",
   "referral.leadFriendOnly": "友だちを招待しよう。リンクから登録した友だちに {friend} ポイントが届き、友だちがチャージするとあなたにも一部が入ります。",
-  "referral.rule.bindFriendOnly": "友だちがリンクから登録、またはコードを入力すると、友だちに {credits} ポイント（無期限）"
+  "referral.rule.bindFriendOnly": "友だちがリンクから登録、またはコードを入力すると、友だちに {credits} ポイント（無期限）",
+  "privacy.analytics.title": "サイト分析（Google Analytics）",
+  "privacy.analytics.p1": "当サイトは Google Analytics を使い、訪問者がどこから来て、サイトをどのように使っているか、どの宣伝が登録・チャット・支払いにつながったかを調べます。",
+  "privacy.analytics.p2": "当サイトのドメインには、同じブラウザーからの再訪問を識別するため、訪問者コードを保存する cookie を設定します。この cookie の有効期間は設定時から最長13か月で、再訪問しても延長しません。",
+  "privacy.analytics.p3": "Google には訪問者コードと、閲覧したページの種類、ログイン、チャット、共有、支払いなどの利用記録を送ります。当サイトから HarperHarbor の決済サイトに進む際も訪問者コードを引き継ぎ、訪問から支払いまでの流れを把握します。",
+  "privacy.analytics.p4": "ログイン後は、アカウント用に別途生成したコードを Google に送り、同じアカウントの利用記録を端末や決済サイトをまたいで関連付けます。このコードから元のアカウント番号を復元することはできず、メールアドレスでもありません。",
+  "privacy.analytics.p5": "支払い完了時には、金額、通貨、購入区分（チャージまたは30日パス）を Google に送り、そのアカウントにチャージや30日パスの購入履歴があるかも伝えます。返金があった場合は、関連する返金記録も送ります。",
+  "privacy.analytics.p6": "当サイトは Google Analytics に、会話の内容、カード名、作者名、カード番号、元のアカウント番号、メールアドレスを送りません。",
+  "privacy.analytics.p7": "ブラウザーでグローバル・プライバシー・コントロール（GPC）が有効な場合、当サイトは上記の分析用訪問者 cookie を設定せず、Google Analytics に分析データを送りません。"
 }

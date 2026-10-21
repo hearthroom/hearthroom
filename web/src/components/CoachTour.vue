@@ -51,6 +51,7 @@ watch(eligible, async (now) => {
   const adult = viewerAdult(session);
   shape.adult = hasAdultStarter(locale.value) && (!!session.me || guestAdult.available) && !!adult && !adult.showNsfw;
   if (!eligible.value) return;
+  track("tour_begin");
   go("card");
 }, { immediate: true });
 

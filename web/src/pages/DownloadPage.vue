@@ -5,6 +5,7 @@ import {pageTitle} from '@/lib/i18n';
 import {androidDownloadUrl} from '@/lib/download';
 import {SITE} from '@/lib/site';
 import {installPrompt,openInstall} from '@/lib/pwa';
+import {track} from '@/lib/track';
 const {t}=useI18n();
 const apkUrl=androidDownloadUrl();
 watchEffect(()=>{document.title=pageTitle(t('download.title'))});
@@ -16,7 +17,7 @@ watchEffect(()=>{document.title=pageTitle(t('download.title'))});
       <img src="/icons/icon-192.png" alt="" width="72" height="72" />
       <h1>{{ $t('download.title') }}</h1>
       <p>{{ $t('download.intro') }}</p>
-      <a class="btn btn--primary download-action" :href="apkUrl">{{ $t('download.android') }}</a>
+      <a class="btn btn--primary download-action" :href="apkUrl" @click="track('android_download')">{{ $t('download.android') }}</a>
       <span class="download-requirement">{{ $t('download.requirement') }}</span>
     </header>
     <section class="download-section" aria-labelledby="install-title">

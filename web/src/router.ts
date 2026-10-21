@@ -8,6 +8,7 @@ import { can } from "./lib/provider";
 import { updateMarkdownTwin } from "./lib/markdown-twin";
 import { isPlayHost } from "./lib/site";
 import { setSurface } from "./lib/track";
+import { ga4PageView } from "./lib/ga4";
 import { campaignShareFromQuery, noteCampaignShare, refFromQuery, rememberShareRef, noteShareOpen } from "./lib/share-ref";
 
 /**
@@ -59,6 +60,7 @@ const pages: RouteRecordRaw[] = [
   { path: "developers", component: () => import("./pages/DevelopersPage.vue") },
   { path: "download", component: () => import("./pages/DownloadPage.vue") },
   { path: "guide", component: () => import("./pages/GuidePage.vue") },
+  { path: "privacy", component: () => import("./pages/PrivacyPage.vue") },
   { path: "updates", component: () => import("./pages/UpdatesPage.vue") },
   // 官方部落格：/blog 全部、/blog/<欄目>、/blog/<欄目>/<文章>。/blog/p/<id> 是短網址，問到正式網址就換過去，問不到是 404。
   // 分組頁 /blog/g/<分組>：放在 blog/:column? 前面，不然 g 會被當成欄目
@@ -286,7 +288,8 @@ export function surfaceOf(path: string): string {
 // 先於任何 API 請求設好：beforeEach 的下游就是頁面元件的 setup，那裡才開始 fetch
 router.beforeEach((to) => { setSurface(surfaceOf(to.path)); });
 
-router.afterEach((to, from) => {
+router.afterEach((to, from, failure) => {
+  if (!failure) ga4PageView();
   if (to.path === from.path) return;
   void nextTick(() => document.querySelector<HTMLElement>("main")?.focus({ preventScroll: true }));
 });

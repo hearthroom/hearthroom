@@ -5,6 +5,13 @@ import { allowedHarborProxyRequest, PROXY_ROUTES, proxyRoute } from './harbor-ap
  * 表裡多出來的列（舊版本、手動寫入）不會變成 Prometheus 標籤。
  */
 const METRICS = {
+  ga4_session: {
+    name: "hearthroom_ga4_session_total",
+    help: "First-party analytics session IDs issued, reused, or suppressed by GPC.",
+    label: "operation",
+    operations: ["session"],
+    outcomes: ["issued", "reused", "opted_out"],
+  },
   draft_transfer_gate: {
     name: "hearthroom_draft_transfer_gate_total",
     help: "Durable scoped transfer barrier transitions and rejected admission.",

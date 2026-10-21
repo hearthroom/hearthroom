@@ -1,4 +1,5 @@
 import { siteRootOf } from '../../../shared/site-hosts';
+import { track } from "./track";
 /**
  * 舞台（Moonstage）的宿主接線。
  *
@@ -213,6 +214,7 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
     const player = deps.player === undefined ? deps.session.me : deps.player;
     // 作者規則快取綁在這個帳號上（雜湊，不是帳號 ID）；沒登入就不存。登出時由 stage-storage 叫舞台清掉。
     const storageScope = await stageStorageScope(provider, player);
+    const startedConversations = new Set<string>();
     host.events.on('conversationActivity', async (payload: unknown) => {
       const activity = payload as { roleId?: unknown; conversationId?: unknown } | null;
       const conversationId = activity?.conversationId;
@@ -222,7 +224,12 @@ export function ensureStage(deps: StageDeps): Promise<Component> {
       try {
         const token = await accessToken();
         if (!token) throw new Error('unauthorized');
-        await recordConversation(token, provider, decodeURIComponent(roleId), conversationId);
+        const recorded = await recordConversation(token, provider, decodeURIComponent(roleId), conversationId);
+        if (!startedConversations.has(conversationId)) {
+          startedConversations.add(conversationId);
+          track("chat_start");
+          if (recorded?.first) track("first_chat");
+        }
       } catch { pushStageToast(i18n.global.t('library.recordFailed'), 'error'); }
     });
     await stage.installMoonStage(deps.app, {

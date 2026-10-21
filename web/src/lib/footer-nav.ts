@@ -77,5 +77,8 @@ export function footerGroups(ctx: FooterContext): FooterGroup[] {
 
 /** 最底下那一條：授權與之後的法律、站務連結。 */
 export function footerLegal(ctx: FooterContext): FooterLink[] {
-  return [{ id: "license", label: "footer.license", labelArgs: { name: ctx.license }, href: `${ctx.repoUrl}/blob/main/LICENSE` }];
+  return [
+    { id: "privacy", label: "login.privacy", to: "/privacy" },
+    { id: "license", label: "footer.license", labelArgs: { name: ctx.license }, href: `${ctx.repoUrl}/blob/main/LICENSE` },
+  ];
 }
