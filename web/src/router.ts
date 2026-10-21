@@ -293,7 +293,7 @@ export function surfaceOf(path: string): string {
 router.beforeEach((to) => { setSurface(surfaceOf(to.path)); });
 
 router.afterEach((to, from, failure) => {
-  if (!failure && to.path !== from.path) ga4PageView();
+  if (!failure) ga4PageView();
   if (to.path === from.path) return;
   void nextTick(() => document.querySelector<HTMLElement>("main")?.focus({ preventScroll: true }));
 });

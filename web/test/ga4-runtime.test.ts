@@ -107,7 +107,8 @@ describe("GA4 runtime", () => {
     expect(ga.commands().find(c => c[0] === "config")?.[2]).toMatchObject({ client_id: "1234.5678" });
     expect(ga.commands().at(-1)?.[2]).toMatchObject({ user_id: "ga1_" + "a".repeat(64), user_properties: { payer_type: "plan" } });
     ga.identity(null); ga.track("topup_click");
-    expect(ga.commands().at(-1)?.[2]).toMatchObject({ user_id: null, user_properties: { payer_type: null } });
+    expect(ga.commands().at(-1)?.[2]).not.toHaveProperty("user_id");
+    expect(ga.commands().at(-1)?.[2]).not.toHaveProperty("user_properties");
     ga.identity({ userId: "raw-account-id", payerType: "topup" }); ga.track("topup_click");
     expect(JSON.stringify(ga.commands())).not.toContain("raw-account-id");
   });
@@ -129,7 +130,7 @@ describe("GA4 runtime", () => {
     await ga.refreshIdentity(null, async () => null);
     finish({ userId: "ga1_" + "b".repeat(64), payerType: "topup" });
     await pending; ga.track("topup_click");
-    expect(ga.commands().at(-1)?.[2]).toMatchObject({ user_id: null });
+    expect(ga.commands().at(-1)?.[2]).not.toHaveProperty("user_id");
   });
   it("counts a second card route without disclosing either card number", () => {
     const ga = createGa4(); ga.start(true); ga.pageView();
@@ -211,4 +212,23 @@ it("waits for Google readiness before redirecting a queued checkout", async () =
  const get=ga.commands().find(c=>c[0]==="get"&&c[2]==="session_id")!;
  (get[3] as (value:unknown)=>void)(1790000000);
  await waiting; expect(done).toBe(true);
+});
+it("records the real router's initial Traditional Chinese home navigation", async () => {
+  vi.resetModules();
+  vi.stubGlobal("location", new URL("https://sukisuki.ai/"));
+  vi.stubGlobal("navigator", {userAgent:"Test",language:"zh-TW",languages:["zh-TW"],globalPrivacyControl:false});
+  vi.stubGlobal("fetch", vi.fn(async () => ({ok:true,json:async()=>({enabled:true,clientId:"1.2"})})));
+  const api=await import("../src/lib/ga4");
+  await api.startGa4();
+  vi.doMock("vue-router", async (orig) => {
+    const actual=await orig<typeof import("vue-router")>();
+    return {...actual,createWebHistory:actual.createMemoryHistory};
+  });
+  const {router}=await import("../src/router");
+  vi.doUnmock("vue-router");
+  await router.push("/"); await router.isReady();
+  expect(router.currentRoute.value.path).toBe("/");
+  expect(window.hearthroomGaData?.filter(c=>c[1]==="page_view")).toHaveLength(1);
+  await router.push("/?utm_source=discord#footer");
+  expect(window.hearthroomGaData?.filter(c=>c[1]==="page_view")).toHaveLength(1);
 });

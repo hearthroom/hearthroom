@@ -124,7 +124,7 @@ export function createGa4() {
     if (!page) return null;
     const locale = document.documentElement.lang;
     return { ...page, app_shell: shell, ui_locale: ["zh-Hant", "zh-Hans", "en", "ja", "ko"].includes(locale) ? locale : "zh-Hant",
-      user_id: identity?.userId ?? null, user_properties: { payer_type: identity?.payerType ?? null } };
+      ...(identity ? { user_id: identity.userId, user_properties: { payer_type: identity.payerType } } : {}) };
   };
 
   const tracker = {
