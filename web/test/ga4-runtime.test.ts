@@ -106,13 +106,30 @@ describe("GA4 runtime", () => {
   });
   it("lets Google validate linker data and synchronizes only the resulting numeric client ID", () => {
     const ga = createGa4(); const synchronized = vi.fn();
-    ga.start(true, { clientId: "1.2", landingUrl: "https://sukisuki.ai/?_gl=PRIVATE", onClientId: synchronized });
+    ga.start(true, { clientId: "1.2", landingUrl: "https://sukisuki.ai/?_gl=1*checksum*_ga*" + btoa("1234.5678"), onClientId: synchronized });
     expect(ga.commands().find(c => c[0] === "config")?.[2]).not.toHaveProperty("client_id");
-    const get = ga.commands().find(c => c[0] === "get")!;
-    (get[3] as (id: unknown) => void)("PRIVATE");
-    expect(synchronized).not.toHaveBeenCalled();
+    const get = ga.commands().find(c => c[0] === "get" && c[2] === "client_id")!;
     (get[3] as (id: unknown) => void)("1234.5678");
     expect(synchronized).toHaveBeenCalledWith("1234.5678");
     expect(ga.checkoutUrl("https://console.harperharbor.com/me/billing")).toContain("ga_client_id=1234.5678");
+  });
+  it("restores the Worker ID when Google rejects a stale linker and waits before emitting", () => {
+    const ga = createGa4(); const synchronized = vi.fn();
+    ga.start(true, { clientId: "1.2", landingUrl: "https://sukisuki.ai/?_gl=1*stale*_ga*" + btoa("1234.5678"), onClientId: synchronized });
+    ga.pageView();
+    expect(ga.commands().filter(c => c[1] === "page_view")).toHaveLength(0);
+    const get = ga.commands().find(c => c[0] === "get" && c[2] === "client_id")!;
+    (get[3] as (id: unknown) => void)("9999.8888");
+    expect(synchronized).not.toHaveBeenCalled();
+    expect(ga.commands().filter(c => c[0] === "config").at(-1)?.[2]).toMatchObject({ client_id: "1.2", send_page_view: false });
+    expect(ga.commands().filter(c => c[1] === "page_view")).toHaveLength(1);
+  });
+  it("gets session_id for checkout and removes it on GPC", () => {
+    const ga = createGa4(); ga.start(true, { clientId: "1234.5678" });
+    const get = ga.commands().find(c => c[0] === "get" && c[2] === "session_id")!;
+    (get[3] as (id: unknown) => void)(1790000000);
+    expect(ga.checkoutUrl("https://console.harperharbor.com/me/billing")).toContain("ga_session_id=1790000000");
+    vi.stubGlobal("navigator", { globalPrivacyControl: true });
+    expect(ga.checkoutUrl("https://console.harperharbor.com/me/billing?ga_session_id=1790000000")).not.toContain("ga_session_id");
   });
 });

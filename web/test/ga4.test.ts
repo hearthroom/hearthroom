@@ -56,4 +56,12 @@ describe("GA4 outbound privacy boundary", () => {
     expect(appShell({ standalone: true })).toBe("pwa");
     expect(appShell({})).toBe("web");
   });
+  it.each([
+    ["blog_share", "share_web", "blog", "share", { method: "web", content_type: "blog" }],
+    ["campaign_share", "", "me", "share", { method: "clipboard", content_type: "campaign" }],
+    ["invite_click", "invite_copy", "wallet", "share", { method: "clipboard", content_type: "invite" }],
+    ["pwa_card_install_click", "", "card", "pwa_install", { outcome: "click", where: "card" }],
+  ])("maps the natural %s caller", (event, detail, page, name, params) => {
+    expect(gaEvent(event, { detail, subject: "PRIVATE" }, page)).toEqual({ name, params });
+  });
 });

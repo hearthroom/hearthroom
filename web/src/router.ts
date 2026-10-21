@@ -9,6 +9,7 @@ import { updateMarkdownTwin } from "./lib/markdown-twin";
 import { isPlayHost } from "./lib/site";
 import { setSurface } from "./lib/track";
 import { ga4PageView } from "./lib/ga4";
+import { captureGa4Source } from "./lib/ga4-attribution";
 import { campaignShareFromQuery, noteCampaignShare, refFromQuery, rememberShareRef, noteShareOpen } from "./lib/share-ref";
 
 /**
@@ -175,6 +176,7 @@ export function withLocale(path: string, locale: string): string {
 // 活動分享短碼 ?s=：合法的才是我們的，不論登入與否都送一次訪客計數，碼只替沒登入的人記下（同 ref），同樣從網址拿掉；
 // 之後的登入連結（例如活動頁的 returnTo）不再帶 s，靠瀏覽器的紀錄綁定。
 router.beforeEach((to) => {
+  captureGa4Source(new URL(to.fullPath, location.origin).href);
   const share = campaignShareFromQuery(to.query.s);
   if (!("ref" in to.query) && !share) return true;
   const code = refFromQuery(to.query.ref);
