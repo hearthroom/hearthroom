@@ -1,0 +1,26 @@
+<!-- S1 waiting for a route, and S4 the release found by a previous background check. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/launch_root" android:layout_width="match_parent" android:layout_height="match_parent" android:background="@color/background">
+    <LinearLayout android:id="@+id/waiting" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:paddingHorizontal="24dp" android:visibility="invisible">
+        <Space android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="2" />
+        <ImageView android:layout_width="wrap_content" android:layout_height="140dp" android:layout_gravity="center_horizontal" android:adjustViewBounds="true" android:src="@drawable/suki_roll" android:importantForAccessibility="no" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:gravity="center" android:text="@string/app_name" android:textSize="22sp" android:fontFamily="sans-serif-medium" android:textColor="@color/text" />
+        <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center_horizontal" android:layout_marginTop="12dp" android:orientation="horizontal" android:gravity="center_vertical">
+            <ProgressBar android:id="@+id/waiting_spinner" style="?android:attr/progressBarStyleSmall" android:layout_width="18dp" android:layout_height="18dp" android:layout_marginEnd="8dp" android:indeterminateTint="@color/accent" />
+            <TextView android:id="@+id/waiting_status" android:gravity="center" android:layout_width="wrap_content" android:layout_height="wrap_content" android:maxWidth="432dp" android:text="@string/launch_connecting" android:textSize="15sp" android:textColor="@color/muted" android:accessibilityLiveRegion="polite" />
+        </LinearLayout>
+        <Space android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="3" />
+        <Button android:id="@+id/change_route" style="@style/TextButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center_horizontal" android:layout_marginBottom="16dp" android:text="@string/launch_change_route" android:visibility="invisible" />
+    </LinearLayout>
+    <LinearLayout android:id="@+id/update" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:paddingHorizontal="24dp" android:visibility="gone">
+        <ImageView android:layout_width="64dp" android:layout_height="64dp" android:layout_marginTop="48dp" android:layout_gravity="center_horizontal" android:src="@drawable/mark" android:importantForAccessibility="no" />
+        <TextView android:id="@+id/status" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:gravity="center" android:textSize="18sp" android:fontFamily="sans-serif-medium" android:textColor="@color/text" android:accessibilityLiveRegion="polite" />
+        <ScrollView android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:layout_marginTop="16dp">
+            <TextView android:id="@+id/notes" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="14sp" android:textColor="@color/muted" android:lineSpacingExtra="4dp" />
+        </ScrollView>
+        <FrameLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp">
+            <Button android:id="@+id/action" style="@style/PrimaryButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/download_update" android:visibility="gone" />
+            <ProgressBar android:id="@+id/progress" style="?android:attr/progressBarStyleHorizontal" android:layout_width="match_parent" android:layout_height="8dp" android:layout_gravity="center_vertical" android:max="100" android:progressTint="@color/accent_fill" android:visibility="gone" />
+        </FrameLayout>
+        <Button android:id="@+id/open_site" style="@style/TextButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="16dp" android:text="@string/update_later" />
+    </LinearLayout>
+</FrameLayout>

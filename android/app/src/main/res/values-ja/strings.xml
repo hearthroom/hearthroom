@@ -1,10 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Hearthroom</string>
-    <string name="installed_version">現在のバージョン %1$s</string>
     <string name="checking">更新を確認しています…</string>
     <string name="up_to_date">Hearthroom は最新です。</string>
-    <string name="check_again">もう一度確認</string>
     <string name="open_site">Hearthroom を開く</string>
     <string name="update_available">バージョン %1$s が利用できます</string>
     <string name="download_update">更新をダウンロード</string>
@@ -30,4 +28,40 @@
     <string name="web_file_failed">ファイルを保存または選択できませんでした。再試行してください。ダウンロードは 32 MB 以下にしてください。</string>
     <string name="web_saved">ファイルを保存しました。</string>
     <string name="shortcut_webview">アプリ内で開く</string>
+    <string name="route_1">ルート1</string>
+    <string name="route_2">ルート2</string>
+    <string name="route_3">ルート3</string>
+    <string name="route_4">ルート4</string>
+    <string name="launch_connecting">接続しています…</string>
+    <string name="launch_slow">接続が遅いため再試行中。ルートの切り替えも可能</string>
+    <string name="launch_change_route">ルート変更</string>
+    <string name="launch_switched">いつものルートに接続できないため、%1$sに切り替えました</string>
+    <string name="launch_switched_sign_in">いつものルートに接続できないため、%1$sに切り替えました。こちらは別途ログインが必要です</string>
+    <string name="routes_title">ルート</string>
+    <string name="routes_recheck">再チェック</string>
+    <string name="routes_back">戻る</string>
+    <string name="routes_auto">自動で選ぶ</string>
+    <string name="routes_auto_hint">今のルートに接続できないときは別のルートに切り替え、事前にお知らせします</string>
+    <string name="route_current">使用中</string>
+    <string name="route_switched_here">前回自動で切り替え</string>
+    <string name="route_visited">ログイン済み</string>
+    <string name="route_checking">確認中</string>
+    <string name="route_unreachable">接続不可</string>
+    <string name="route_latency">%1$d ms</string>
+    <string name="routes_sign_in_note">ルートごとにログインが分かれています。初めて使うルートでは再ログインが必要で、元のログインはそのまま残ります。</string>
+    <string name="routes_open">%1$sで開く</string>
+    <string name="routes_pick_working">今のルートは接続できません。接続できるルートを選んでください</string>
+    <string name="routes_version">バージョン %1$s</string>
+    <string name="unreachable_title">接続できません</string>
+    <string name="unreachable_body">どのルートにも接続できません。ネットワークが不安定か制限されている可能性があります。時間をおくか、別のネットワークでお試しください。</string>
+    <string name="offline_title">ネットワーク未接続</string>
+    <string name="offline_body">Wi-Fi もモバイルデータも接続されていません。</string>
+    <string name="offline_settings">ネットワーク設定</string>
+    <string name="switch_title">%1$sに切り替えますか？</string>
+    <string name="switch_body">このルートでは別途ログインが必要です。元のルートのログインは残るので、いつでも戻せます。</string>
+    <string name="switch_confirm">切り替えて開く</string>
+    <string name="cancel">キャンセル</string>
+    <string name="update_later">あとで</string>
+    <string name="shortcut_routes">ルート</string>
+    <string name="web_change_route">ルート変更</string>
 </resources>

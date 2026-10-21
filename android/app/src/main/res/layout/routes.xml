@@ -1,0 +1,38 @@
+<!-- S3 routes, with the S2 "nothing reachable" block on top when launched for that. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/routes_root" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:background="@color/background">
+    <LinearLayout android:id="@+id/bar" android:layout_width="match_parent" android:layout_height="56dp" android:orientation="horizontal" android:gravity="center_vertical" android:paddingHorizontal="4dp">
+        <ImageButton android:id="@+id/back" android:layout_width="48dp" android:layout_height="48dp" android:background="?android:attr/selectableItemBackgroundBorderless" android:src="@drawable/ic_back" android:contentDescription="@string/routes_back" />
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="8dp" android:text="@string/routes_title" android:textSize="18sp" android:fontFamily="sans-serif-medium" android:textColor="@color/text" android:accessibilityHeading="true" />
+        <ImageButton android:id="@+id/recheck" android:layout_width="48dp" android:layout_height="48dp" android:background="?android:attr/selectableItemBackgroundBorderless" android:src="@drawable/ic_refresh" android:contentDescription="@string/routes_recheck" />
+    </LinearLayout>
+    <ScrollView android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+        <LinearLayout android:id="@+id/column" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingHorizontal="24dp" android:paddingBottom="16dp">
+            <LinearLayout android:id="@+id/failure" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="8dp" android:paddingBottom="16dp" android:visibility="gone">
+                <ImageView android:layout_width="wrap_content" android:layout_height="96dp" android:layout_gravity="center_horizontal" android:adjustViewBounds="true" android:src="@drawable/suki_fail" android:importantForAccessibility="no" />
+                <TextView android:id="@+id/failure_title" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:gravity="center" android:textSize="18sp" android:fontFamily="sans-serif-medium" android:textColor="@color/text" android:accessibilityLiveRegion="polite" />
+                <TextView android:id="@+id/failure_body" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:gravity="center" android:textSize="14sp" android:textColor="@color/muted" />
+                <Button android:id="@+id/retry" style="@style/PrimaryButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="@string/retry" />
+                <Button android:id="@+id/network_settings" style="@style/TextButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/offline_settings" android:visibility="gone" />
+            </LinearLayout>
+            <LinearLayout android:id="@+id/auto_row" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:minHeight="56dp" android:paddingVertical="8dp" android:background="?android:attr/selectableItemBackground">
+                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/routes_auto" android:textSize="15sp" android:textColor="@color/text" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/routes_auto_hint" android:textSize="13sp" android:textColor="@color/muted" />
+                </LinearLayout>
+                <Switch android:id="@+id/auto" android:layout_width="wrap_content" android:layout_height="48dp" android:layout_marginStart="12dp" android:contentDescription="@string/routes_auto" android:thumbTint="@color/auto_thumb" android:trackTint="@color/auto_track" />
+            </LinearLayout>
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
+            <LinearLayout android:id="@+id/rows" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:divider="@drawable/divider" android:showDividers="middle" />
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="@string/routes_sign_in_note" android:textSize="14sp" android:textColor="@color/muted" />
+        </LinearLayout>
+    </ScrollView>
+    <LinearLayout android:id="@+id/footer" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingHorizontal="24dp" android:paddingTop="8dp">
+        <TextView android:id="@+id/pick_working" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="8dp" android:gravity="center" android:text="@string/routes_pick_working" android:textSize="13sp" android:textColor="@color/danger" android:visibility="gone" android:accessibilityLiveRegion="polite" />
+        <Button android:id="@+id/open" style="@style/PrimaryButton" android:layout_width="match_parent" android:layout_height="wrap_content" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+            <TextView android:id="@+id/version" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textSize="12sp" android:textColor="@color/muted" />
+            <Button android:id="@+id/check_updates" style="@style/TextButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/shortcut_updates" android:textSize="12sp" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

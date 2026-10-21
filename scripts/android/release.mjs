@@ -4,6 +4,8 @@ export const downloadBucket=JSON.parse(readFileSync(new URL('../../android/relea
 export const needsNativeRelease=paths=>paths.some(path=>/^android\/(app\/|gradle\/|changes\/|(?:build\.gradle|settings\.gradle|gradle\.properties|gradlew(?:\.bat)?)$)/.test(path));
 export const locales = ['en','zh-Hant','zh-Hans','ja','ko'];
 export const downloadBase = 'https://downloads.hearthroom.club';
+/** Every official site family has a download host on the same bucket; the app tries them in turn. */
+export const downloadHosts = ['sukisuki.ai','hearthroom.club','sukisuki.chat','sukisuki.pro'].map(root=>`downloads.${root}`);
 export function buildNotes(fragments) {
   if (!fragments.length) throw Error('Add an Android release-note fragment before publishing.');
   const result = Object.fromEntries(locales.map(locale => [locale, []]));
@@ -46,4 +48,18 @@ export async function publishLatest(input, io) {
 export function verifyAssetLinks(data, config) {
   const normalize=value=>String(value).replaceAll(':','').toUpperCase();
   if(!Array.isArray(data)||!data.some(entry=>entry.relation?.includes('delegate_permission/common.handle_all_urls')&&entry.target?.namespace==='android_app'&&entry.target.package_name===config.packageId&&entry.target.sha256_cert_fingerprints?.some(value=>normalize(value)===normalize(config.signingCertificateSha256))))throw Error('Website has not published the release signing identity.');
+}
+
+/**
+ * Uploads android/routes.json when it differs from what is live. The app's own unit test parses
+ * this exact file, so only the shape is checked here. Every download host must then serve it.
+ */
+export async function publishRoutes(data, io) {
+  let parsed;
+  try { parsed=JSON.parse(data.toString()); } catch { throw Error('routes.json is not JSON.'); }
+  if (parsed?.schemaVersion!==1 || !Array.isArray(parsed.routes)) throw Error('routes.json has an unknown shape.');
+  if ((await io.read(downloadHosts[0],'routes.json'))?.equals(data)) return false;
+  await io.write('routes.json',data,'application/json; charset=utf-8');
+  for (const host of downloadHosts) if (!(await io.read(host,'routes.json'))?.equals(data)) throw Error(`${host} does not serve the published route list.`);
+  return true;
 }

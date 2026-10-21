@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "routes": [
+    { "host": "sukisuki.ai" },
+    { "host": "hearthroom.club" },
+    { "host": "sukisuki.chat" },
+    { "host": "sukisuki.pro" }
+  ]
+}

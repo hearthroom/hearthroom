@@ -23,7 +23,7 @@ import org.json.JSONObject;
 
 /** No general native JS interface; only an origin-scoped, main-frame Blob save request. */
 public final class WebActivity extends Activity {
-    private static final int PICK_FILE = 41, SAVE_FILE = 42;
+    private static final int PICK_FILE = 41, SAVE_FILE = 42, ROUTES = 43;
     private WebView web;
     private FrameLayout content;
     private ProgressBar progress;
@@ -32,7 +32,7 @@ public final class WebActivity extends Activity {
     private PageDownload download;
     private String destination;
     private boolean pageFailed;
-    private View fullscreen;
+    private View fullscreen, cover;
     private WebChromeClient.CustomViewCallback fullscreenCallback;
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -48,6 +48,8 @@ public final class WebActivity extends Activity {
         content = findViewById(R.id.web_content);
         progress = findViewById(R.id.page_progress);
         origin = findViewById(R.id.page_origin);
+        cover = findViewById(R.id.launch_cover);
+        if (state != null) cover.setVisibility(View.GONE);
         findViewById(R.id.return_to_site).setOnClickListener(v -> back());
         destination = WebPolicy.launchUrl(getIntent().getDataString());
         try {
@@ -108,8 +110,9 @@ public final class WebActivity extends Activity {
             cancelDownload();
             destination = url;
             showOrigin(url);
-            progress.setVisibility(View.VISIBLE);
+            if (cover.getVisibility() != View.VISIBLE) progress.setVisibility(View.VISIBLE);
         }
+        @Override public void onPageCommitVisible(WebView view, String url) { Ui.fadeOut(cover, 300); }
         @Override public void onPageFinished(WebView view, String url) {
             progress.setVisibility(View.GONE);
             CookieManager.getInstance().flush();
@@ -201,12 +204,16 @@ public final class WebActivity extends Activity {
         } else if (request == SAVE_FILE && download != null) {
             if (result == RESULT_OK && data != null && data.getData() != null && "content".equals(data.getData().getScheme())) download.save(data.getData());
             else cancelDownload();
+        } else if (request == ROUTES && result == RESULT_OK && data != null && web != null && Routes.isRoute(data.getStringExtra(RoutesActivity.HOST))) {
+            // The same page on the chosen route, in this same view.
+            content.removeAllViews(); content.addView(web); web.loadUrl(WebPolicy.onRoute(destination, data.getStringExtra(RoutesActivity.HOST)));
         }
     }
     private void showPageError() { showMessage(R.string.web_load_failed, false); }
     private void showUnavailable() { destroyWeb(); showMessage(R.string.web_unavailable, true); }
     private void showMessage(int message, boolean settings) {
         progress.setVisibility(View.GONE);
+        cover.setVisibility(View.GONE);
         content.removeAllViews();
         ScrollView scroll = new ScrollView(this);
         LinearLayout panel = new LinearLayout(this); panel.setOrientation(LinearLayout.VERTICAL);
@@ -217,6 +224,11 @@ public final class WebActivity extends Activity {
             if (web == null) recreate();
             else { content.removeAllViews(); content.addView(web); web.loadUrl(WebPolicy.isHttps(destination) ? destination : WebPolicy.HOME); }
         });
+        if (!settings && web != null && WebPolicy.routeOf(destination) != null) {
+            // S6: an official route failed to load; another route may still work.
+            Button routes = new Button(this); routes.setText(R.string.web_change_route); routes.setAllCaps(false); panel.addView(routes);
+            routes.setOnClickListener(v -> startActivityForResult(new Intent(this, RoutesActivity.class).putExtra(RoutesActivity.REASON, RoutesActivity.FROM_WEB), ROUTES));
+        }
         if (settings) {
             Button update = new Button(this); update.setText(R.string.open_settings); update.setAllCaps(false); panel.addView(update);
             update.setOnClickListener(v -> { try { startActivity(new Intent(Settings.ACTION_SETTINGS)); } catch (ActivityNotFoundException ignored) {} });
