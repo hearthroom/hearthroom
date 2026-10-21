@@ -124,6 +124,7 @@ export interface TokenPair {
 
 /** 換發失敗時要不要把憑證丟掉——只有伺服器明確說「這張不算數」才丟。 */
 export class AuthExpired extends Error {}
+export class AuthUnavailable extends Error {}
 
 async function grantClientId(provider: ProviderId): Promise<string> {
   const saved = readCredential(STORE.grantClient, provider);
@@ -145,8 +146,8 @@ async function exchange(body: Record<string, string>, provider:ProviderId=curren
   if (!res.ok) {
     // 4xx 是「這張憑證不算數」，5xx 與斷網是「現在問不到」。只有前者該把人登出——
     // 把兩者混為一談，會讓一次網路抖動變成強制重新登入。
-    if (res.status >= 400 && res.status < 500) throw new AuthExpired(t("auth.credentialExpired", { status: res.status }));
-    throw new Error(t("auth.exchangeFailed", { status: res.status }));
+    if (res.status >= 400 && res.status < 500 && res.status !== 429) throw new AuthExpired(t("auth.credentialExpired", { status: res.status }));
+    throw new AuthUnavailable(t("auth.exchangeFailed", { status: res.status }));
   }
   const data = (await res.json()) as { access_token: string; refresh_token?: string; expires_in?: number };
 
@@ -222,14 +223,14 @@ export async function refresh(provider:ProviderId=currentProvider()): Promise<To
       persist(pair,provider); return pair;
     } catch (err) {
       // 只有伺服器明確拒絕才清掉憑證；網路問題留著，下次再試。
-      if (err instanceof AuthExpired) forgetSession(provider);
-      return null;
+      if (err instanceof AuthExpired) { forgetSession(provider); return null; }
+      throw err instanceof AuthUnavailable ? err : new AuthUnavailable(t('state.serverBusy'));
     } finally {
       inFlight.delete(provider);
     }
   })();
   inFlight.set(provider,task);
-  void task.finally(()=>inFlight.delete(provider));
+  void task.then(()=>inFlight.delete(provider),()=>inFlight.delete(provider));
   return task;
 }
 

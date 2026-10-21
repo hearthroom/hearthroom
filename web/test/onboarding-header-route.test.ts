@@ -5,7 +5,8 @@ import { i18n } from "../src/lib/i18n";
 import { tourState } from "../src/lib/coach-tour";
 import { guestAdult } from "../src/lib/adult-consent";
 
-vi.mock("../src/lib/session", () => ({ useSession: () => ({ ready: true, me: null, profile: null, restore: async () => {}, accessToken: async () => null }) }));
+const sessionFixture = vi.hoisted(() => ({ ready: true, restoreError: false, me: null, profile: null, restore: async () => {}, accessToken: async () => null, retryRestore: vi.fn() }));
+vi.mock("../src/lib/session", async () => { const { reactive } = await import("vue"); return { useSession: () => reactive(sessionFixture) }; });
 vi.mock("../src/lib/track", () => ({ track: () => {}, currentSurface: () => "board", setSurface: () => {} }));
 vi.mock("../src/lib/notifications", () => ({ useNotifications: () => ({ refresh: async () => {} }) }));
 vi.mock("../src/lib/review", () => ({ useReviewer: () => ({ refresh: async () => {} }) }));
@@ -32,6 +33,7 @@ let root: HTMLElement;
 let router: Router;
 const settle = async () => { await new Promise(r => setTimeout(r, 260)); await nextTick(); };
 beforeEach(() => {
+  sessionFixture.ready = true; sessionFixture.restoreError = false; sessionFixture.retryRestore.mockClear();
   localStorage.clear(); sessionStorage.clear(); tourState.step = null; tourState.card = 0;
   forgetGuestAdult();
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ showNsfw: false, ageVerified: false, adultConsent: false }), { headers: { "Content-Type": "application/json" } })));
@@ -60,4 +62,19 @@ it.each(["/", "/zh-Hans", "/zh-Hans/"])("%s keeps the real header adult target a
 it.each(["/cards/100216", "/zh-Hans/cards/100216", "/zh-Hans/cards/100216/"])("%s keeps the header adult toggle off non-home pages", async path => {
   await mount(path, path.startsWith("/zh-Hans") ? "zh-Hans" : "zh-Hant");
   expect(root.querySelector("button.r18")).toBeNull();
+});
+
+it("keeps a public-page retry entry during identity outages and its pending retry", async () => {
+  sessionFixture.restoreError = true;
+  await mount("/cards/100216", "zh-Hant");
+  const retry = () => root.querySelector<HTMLButtonElement>('header button[aria-busy]');
+  expect(retry()?.textContent).toBe(i18n.global.t("linked.retry"));
+  expect(root.querySelector('header a[href*="login"]')).toBeNull();
+  retry()!.click();
+  expect(sessionFixture.retryRestore).toHaveBeenCalledOnce();
+  // Mutate through the reactive instance used by the component.
+  const { useSession } = await import("../src/lib/session");
+  useSession().ready = false;
+  await nextTick();
+  expect(retry()?.disabled).toBe(true);
 });
