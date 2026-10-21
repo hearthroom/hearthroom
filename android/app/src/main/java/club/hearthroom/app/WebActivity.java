@@ -58,7 +58,7 @@ public final class WebActivity extends Activity {
             String text = getIntent().getStringExtra(WAITING_TEXT);
             if (text != null) ((TextView) findViewById(R.id.waiting_status)).setText(text);
             // Keep the same measured height, including a wrapped S5 notice, so Suki never jumps.
-            findViewById(R.id.waiting_state).setVisibility(View.INVISIBLE);
+            findViewById(R.id.waiting_status).setVisibility(View.INVISIBLE);
             findViewById(R.id.change_route).setVisibility(View.INVISIBLE);
         }
         if (state != null) cover.setVisibility(View.GONE);
