@@ -5,6 +5,12 @@ export const HARBOR_PROXY_PREFIX = '/hh-api';
 const HARBOR_ORIGIN = 'https://api.harperharbor.com';
 export const PROXY_ROUTES = ['conversation', 'media', 'profile', 'wallet', 'oauth', 'other'] as const;
 export type ProxyRoute = typeof PROXY_ROUTES[number];
+const FORWARDED_HEADERS = [
+  'Authorization', 'Content-Type', 'Accept', 'Accept-Language', 'User-Agent', 'Origin', 'language',
+  'X-Device-Token', 'X-Client-Platform', 'X-API-Version', 'X-From', 'Idempotency-Key', 'Last-Event-ID',
+  'Range', 'If-Match', 'If-None-Match', 'If-Modified-Since', 'If-Unmodified-Since',
+  'Upgrade', 'Connection', 'Sec-WebSocket-Key', 'Sec-WebSocket-Version', 'Sec-WebSocket-Protocol', 'Sec-WebSocket-Extensions',
+] as const;
 
 export function proxyRoute(path: string): ProxyRoute {
   if (path === '/oauth/token' || path === '/oauth/revoke') return 'oauth';
@@ -15,28 +21,39 @@ export function proxyRoute(path: string): ProxyRoute {
   return 'other';
 }
 
+export function allowedHarborProxyRequest(request: Request): boolean {
+  const incoming = new URL(request.url);
+  const path = incoming.pathname.slice(HARBOR_PROXY_PREFIX.length);
+  return !!siteRootOf(incoming.hostname) && incoming.pathname.startsWith(`${HARBOR_PROXY_PREFIX}/`)
+    && !/%2f|%5c|\\/i.test(path)
+    && (path.startsWith('/open/v1/') || path === '/oauth/token' || path === '/oauth/revoke');
+}
+
 /** Bearer-only public transport. Never expose Harbor's cookie-authenticated Console routes. */
 export async function proxyHarborApi(request: Request, env: Env): Promise<Response> {
   const incoming = new URL(request.url);
   const path = incoming.pathname.slice(HARBOR_PROXY_PREFIX.length);
-  if (!siteRootOf(incoming.hostname) || !incoming.pathname.startsWith(`${HARBOR_PROXY_PREFIX}/`)
-    || /%2f|%5c|\\/i.test(path)
-    || !(path.startsWith('/open/v1/') || path === '/oauth/token' || path === '/oauth/revoke')) {
+  if (!allowedHarborProxyRequest(request)) {
     return Response.json({ error: 'not_found' }, { status: 404 });
   }
   const client = request.headers.get('CF-Connecting-IP');
-  if (!env.HARBOR_EDGE_PROXY_SECRET || !client) {
+  if (!env.HARBOR_HEARTHROOM_PROXY_SECRET || !client) {
     return Response.json({ error: 'temporarily_unavailable' }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
   }
   const target = new URL(HARBOR_ORIGIN);
   target.pathname = path;
   target.search = incoming.search;
-  const headers = new Headers(request.headers);
-  // Site cookies belong to Hearthroom; the upstream uses the forwarded bearer.
-  // Discard caller-supplied provenance before attaching the authenticated claim.
-  for (const name of ['Host', 'Cookie', 'X-Real-IP', 'X-Forwarded-For', 'Forwarded', 'X-Harbor-Client-IP', 'X-Harbor-Edge-Secret']) headers.delete(name);
+  // Only documented browser/public-API headers cross this boundary. Site cookies,
+  // internal service keys and caller-supplied provenance are never copied.
+  const headers = new Headers();
+  for (const name of FORWARDED_HEADERS) {
+    const value = request.headers.get(name);
+    if (value !== null) headers.set(name, value);
+  }
+  const country = request.cf?.country;
+  if (typeof country === 'string' && /^[A-Z]{2}$/.test(country)) headers.set('CF-IPCountry', country);
   headers.set('X-Harbor-Client-IP', client);
-  headers.set('X-Harbor-Edge-Secret', env.HARBOR_EDGE_PROXY_SECRET);
+  headers.set('X-Harbor-Edge-Secret', env.HARBOR_HEARTHROOM_PROXY_SECRET);
   try {
     const upstream = await fetch(new Request(target, {
       method: request.method, headers, redirect: 'manual', signal: request.signal,
