@@ -222,3 +222,12 @@ it('retains a completed handoff receipt while another tab starts a switch before
   jars[target]=queuedLogout;expect((await request(target,'/v1/auth/logout',{})).status).toBe(200);
   jars[target]=late;expect((await request(target,'/v1/auth/session',{})).status).toBe(401);
 });
+
+it.each([false,true])('keeps destination browser binding stable across overlapping prepares (allRoutes=%s)',async(allRoutes)=>{
+  await session();const code=await issued(),beforeRedeem={...jars[target]};
+  expect((await request(target,'/v1/auth/route-redeem',{code})).status).toBe(200);
+  const late={...jars[target]};jars[target]=beforeRedeem;
+  await prepare(await start(source,target));
+  expect((await request(target,'/v1/auth/logout',{allRoutes})).status).toBe(200);
+  jars[target]=late;expect((await request(target,'/v1/auth/session',{})).status).toBe(401);
+});
