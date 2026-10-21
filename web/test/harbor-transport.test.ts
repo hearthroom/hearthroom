@@ -1,7 +1,13 @@
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { apiBaseOf, oauthBaseOf } from '../src/lib/provider';
 import { oauthResource, useProviderUpstream } from '../src/lib/config';
 
+// Deployment variables select the artifact's rollout. Individual test cases set
+// their own policy so both direct rollback and phase-two CI runs remain testable.
+beforeEach(() => {
+  vi.stubEnv('VITE_HARBOR_API_TRANSPORT', 'proxy');
+  vi.stubEnv('VITE_HARBOR_PROXY_HOSTS', 'sukisuki.chat,sukisuki.pro');
+});
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); useProviderUpstream(); });
 
 it('keeps a failed profile request on the proxy without a direct retry', async () => {
