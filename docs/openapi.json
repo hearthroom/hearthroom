@@ -11291,7 +11291,7 @@
                             "type": "null"
                           }
                         ],
-                        "description": "Reply output: when on, content is returned incrementally; when off, the complete result is returned once generation finishes. On by default. World-mode turns always return content incrementally."
+                        "description": "Reply output: when on, content is returned incrementally; when off, the complete result is returned once generation finishes. The default depends on the selected model; most models default to on. World-mode turns always return content incrementally."
                       }
                     }
                   },
@@ -23119,7 +23119,7 @@
               "off"
             ],
             "default": "on",
-            "description": "Reply output: when on, content is returned incrementally; when off, the complete result is returned once generation finishes. On by default. World-mode turns always return content incrementally."
+            "description": "Reply output: when on, content is returned incrementally; when off, the complete result is returned once generation finishes. The default depends on the selected model; most models default to on. World-mode turns always return content incrementally."
           }
         }
       },
