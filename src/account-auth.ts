@@ -316,7 +316,10 @@ accountAuthRoutes.use('/auth/route/prepare',async(c,next)=>{
 });
 accountAuthRoutes.get('/auth/route/prepare',async c=>{
   enabled(c.env);const target=routeOrigin(originOf(c),c.env),request=routeValue(c.req.query('request'));
-  const browser=random(),requestHash=await hash(request);
+  const existingBrowser=getCookie(c,ROUTE_TARGET);
+  // Overlapping transfers to this host share a browser fence for their short TTL.
+  // Rotating it on every prepare would hide earlier receipts from a later logout.
+  const browser=existingBrowser&&/^[A-Za-z0-9_-]{43}$/.test(existingBrowser)?existingBrowser:random(),requestHash=await hash(request);
   const row=await c.env.DB.prepare(`UPDATE account_route_handoffs SET target_browser=?
     WHERE request_hash=? AND target_origin=? AND target_browser IS NULL AND code_hash IS NULL AND expires_at>?
       AND EXISTS(SELECT 1 FROM account_sessions WHERE token_hash=source_session AND expires_at>?)
@@ -372,7 +375,8 @@ accountAuthRoutes.post('/v1/auth/route-redeem',async c=>{
   const created=results[0].results[0] as {expires_at:number}|undefined;
   if(!created)throw new HttpError(400,'auth_route_invalid');
   writeCookie(c,SESSION,raw,Math.max(0,Math.floor((created.expires_at-now)/1000)));
-  writeCookie(c,ROUTE_TARGET,'',0);
+  // Retain the short-lived browser fence until expiry or logout, including when
+  // another tab prepared a transfer while this session response was in flight.
   return c.json({ok:true,returnTo:row.return_to});
 });
 accountAuthRoutes.post('/v1/auth/start',async c=>{
