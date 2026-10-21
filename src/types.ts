@@ -4,13 +4,16 @@
  * 兩處放寬：埋點的資料集綁定是可選的（分叉的人多半不會配，那時 env.EVENTS 就是 undefined，
  * 型別上就逼呼叫端判空，而不是等執行期炸），開關是任意字串（產生器把它縮成了字面值 "true"）。
  */
-export type Env = Omit<Cloudflare.Env, "EVENTS" | "VISIT_LIMIT" | "ANALYTICS_ENABLED" | "GA4_ENABLED" | "REVIEW_ENABLED" | "PUSH_VAPID_PUBLIC_KEY" | "PUSH_VAPID_SUBJECT"> & {
+export type Env = Omit<Cloudflare.Env, "EVENTS" | "VISIT_LIMIT" | "AUTH_ROUTE_LIMIT" | "AUTH_SILENT_ENABLED" | "ANALYTICS_ENABLED" | "GA4_ENABLED" | "REVIEW_ENABLED" | "PUSH_VAPID_PUBLIC_KEY" | "PUSH_VAPID_SUBJECT"> & {
   DRAFT_TRANSFER_CONTROL_SECRET?: string;
   /** Worker secret, shared only with Harbor's runtime env; independent of Console. */
   HARBOR_HEARTHROOM_PROXY_SECRET?: string;
   DRAFT_TRANSFER_CONTROL_SCOPE?: string;
   DRAFT_TRANSFER_CONTROL_CARD_NUM?: string;
   AUTH_ENABLED?: string;
+  /** Enable only after Harbor prompt=none has deployed and passed live readback. */
+  AUTH_SILENT_ENABLED?: string;
+  AUTH_ROUTE_LIMIT?: RateLimit;
   AUTH_ALLOWED_ORIGINS?: string;
   /** Add explicit serving origins without replacing the existing encrypted allowlist. */
   AUTH_ADDITIONAL_ORIGINS?: string;

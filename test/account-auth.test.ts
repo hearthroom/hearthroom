@@ -7,7 +7,7 @@ import { accountAuthMaintenance, openAuth, sealAuth } from '../src/account-auth'
 import { ADULT_CONSENT_VERSION } from '../shared/adult-consent';
 
 const origin = 'https://hearthroom.club';
-const authEnv = () => ({ ...env, AUTH_ENABLED: 'true', AUTH_ALLOWED_ORIGINS: origin,
+const authEnv = () => ({ ...env, AUTH_ENABLED: 'true', AUTH_SILENT_ENABLED:'true', AUTH_ALLOWED_ORIGINS: origin,
   AUTH_KEYRING: JSON.stringify({ active: 'test', keys: { test: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=' } }),
   AUTH_METRICS_SECRET: 'metrics-test-only', ...envOverride });
 // 預設模擬沒設固定客戶端的自架部署（動態註冊路徑）；固定客戶端的測試自己設。
@@ -98,6 +98,13 @@ it('requests prompt=none with the existing PKCE, state and return path',async()=
   expect(url.searchParams.get('prompt')).toBe('none');
   expect(url.searchParams.get('code_challenge_method')).toBe('S256');
   expect(url.searchParams.get('state')).toBeTruthy();
+});
+it('keeps silent authorization disabled until explicitly enabled without blocking interactive login',async()=>{
+  const p=providers();envOverride.AUTH_SILENT_ENABLED='false';
+  expect((await request('start',{provider:'harbor',silent:true})).status).toBe(503);
+  expect(p.network).not.toHaveBeenCalled();
+  expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM account_auth_attempts').first<any>()).n).toBe(0);
+  expect((await request('start',{provider:'harbor'})).status).toBe(200);
 });
 it.each(['login_required','consent_required','interaction_required','account_selection_required'])('settles a silent %s without signup or upstream calls',async(error)=>{
   const p=providers(),response=await request('start',{provider:'harbor',silent:true,returnTo:'/me'});
