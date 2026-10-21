@@ -39,7 +39,7 @@ run_worker_first = [
   "/", "/metrics", "/library*", "/v1/*", "/search*", "/mine*", "/wallet*", "/create*", "/auth/*",
   # These SPA entrypoints also need the localized manifest in their initial HTML.
   "/me", "/me/*", "/login*", "/checkin*", "/go/*", "/resources*", "/settings*", "/developers*", "/campaigns*", "/play*",
-  "/guide", "/guide/", "/download", "/download/", "/updates", "/updates/", "/updates.atom", "/blog", "/blog/*", "/blog.atom", "/campaign/*", "/sitemap.xml", "/cards/*", "/authors/*", "/review*", "/internal/community/*", "/internal/auth/*",
+  "/guide", "/guide/", "/privacy", "/privacy/", "/download", "/download/", "/updates", "/updates/", "/updates.atom", "/blog", "/blog/*", "/blog.atom", "/campaign/*", "/sitemap.xml", "/cards/*", "/authors/*", "/review*", "/internal/community/*", "/internal/auth/*",
   # 站台 manifest 在卡片 App 網域（play.）上要 404，得先過 Worker（src/index.ts）
   "/manifest.webmanifest",
   # 各語言的首頁有兩種寫法：/en/ 進得了下面的萬用字元，/en（hreflang 給搜尋引擎的那個）進不了——

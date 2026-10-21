@@ -41,6 +41,8 @@ export type Env = Omit<Cloudflare.Env, "EVENTS" | "VISIT_LIMIT" | "ANALYTICS_ENA
   /** 分享連結訪客雜湊的鑰匙（每週由它衍生一把）；沒設就用 isolate 內的隨機鑰匙 */
   SHARE_VISITOR_SECRET?: string;
   ANALYTICS_ENABLED?: string;
+  /** GA4 is off until its resource settings and privacy notice are approved. */
+  GA4_ENABLED?: string;
   /** 社群審核開關："true" 才審；其餘退回「登記即上榜」，見 src/providers.ts。 */
   REVIEW_ENABLED?: string;
   /** 成人卡「加到主畫面」鑰匙的簽章密鑰（`wrangler secret put SHORTCUT_SECRET`）。沒設就不發鑰匙，見 src/shortcut.ts。 */

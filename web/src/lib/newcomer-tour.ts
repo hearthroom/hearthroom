@@ -6,6 +6,7 @@
  * 泡泡貼在頁首底下照樣講。
  */
 import { reactive } from "vue";
+import { track } from "./track";
 import type { Router } from "vue-router";
 
 export type NewcomerPage = "home" | "card" | "play" | "wallet" | "any";
@@ -58,6 +59,7 @@ export function routeFor(step: NewcomerStep, here: NewcomerPage | null): string 
 
 export function startNewcomerTour(day: number, router: Router, localePath: (p: string) => string = (p) => p): void {
   if (!NEWCOMER_TOUR[day]) return;
+  track("newcomer_tour_begin", { detail: String(day) });
   newcomerTour.day = day;
   newcomerTour.index = 0;
   const to = routeFor(NEWCOMER_TOUR[day][0], pageOf(router.currentRoute.value.path));

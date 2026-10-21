@@ -5,6 +5,8 @@ import { createPinia, setActivePinia } from "pinia";
 
 vi.mock("../src/lib/session", () => ({ useSession: () => ({ accessToken: async () => "tok" }) }));
 import { useCheckin } from "../src/lib/checkin-store";
+const tracking = vi.hoisted(() => vi.fn());
+vi.mock("../src/lib/track", () => ({ track: tracking }));
 
 const claim = { rewardKey: "checkin:2026-10-20", status: "granted", chest: "daily", tier: 2, stripSeed: 7, stripVersion: 1, planVersion: 3, credits: 90, duplicate: false };
 let sent: { requestId: string }[] = [];
@@ -13,7 +15,7 @@ function stub(handler: () => Response) {
 }
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
-beforeEach(() => { setActivePinia(createPinia()); sessionStorage.clear(); sent = []; });
+beforeEach(() => { setActivePinia(createPinia()); sessionStorage.clear(); sent = []; tracking.mockClear(); });
 afterEach(() => vi.unstubAllGlobals());
 
 describe("簽到送出", () => {
@@ -22,6 +24,7 @@ describe("簽到送出", () => {
     const r = await useCheckin().checkin();
     expect(r).toMatchObject({ streak: 9, elsewhere: false });
     expect(r.claims[0].credits).toBe(90);
+    expect(tracking).toHaveBeenCalledWith("checkin_claim", { detail: "daily" });
   });
 
   it("網路斷了：重送用同一個冪等鍵，成功後換新的", async () => {
@@ -32,6 +35,7 @@ describe("簽到送出", () => {
     const r = await store.checkin();
     expect(sent[0].requestId).toBe(sent[1].requestId);
     expect(r.elsewhere).toBe(false);
+    expect(tracking).not.toHaveBeenCalled();
   });
 
   it("今天已經在別的地方簽過：409 already_claimed 附原結果，當成回顧", async () => {
@@ -39,6 +43,7 @@ describe("簽到送出", () => {
     const r = await useCheckin().checkin();
     expect(r.elsewhere).toBe(true);
     expect(r.claims).toEqual([claim]);
+    expect(tracking).not.toHaveBeenCalled();
   });
 
   it("其他錯誤照常丟出，冪等鍵留著給重試", async () => {

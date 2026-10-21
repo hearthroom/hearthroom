@@ -10,6 +10,7 @@ import {
 } from "./rewards";
 import { clearRequestId, requestIdFor } from "./checkin";
 import { useSession } from "./session";
+import { track } from "./track";
 
 export const useCheckin = defineStore("checkin", () => {
   const session = useSession();
@@ -67,6 +68,7 @@ export const useCheckin = defineStore("checkin", () => {
     try {
       const res = await postCheckin(await token(), requestIdFor(scope));
       clearRequestId(scope);
+      if (!res.replayed) track("checkin_claim", { detail: "daily" });
       // replayed：同一個 requestId 之前已經成功（自己斷線後重送），結果照樣播
       return { ...res, elsewhere: false };
     } catch (e) {
@@ -84,6 +86,7 @@ export const useCheckin = defineStore("checkin", () => {
     try {
       const res = await postMakeup(await token(), requestIdFor(scope), day);
       clearRequestId(scope);
+      if (!res.replayed) track("checkin_claim", { detail: "daily" });
       return res;
     } catch (e) {
       // 那一天已經補過（例如上一次逾時了其實有成功）：伺服器附上原結果，當成功
@@ -97,6 +100,7 @@ export const useCheckin = defineStore("checkin", () => {
     try {
       const { claim } = await postTask(await token(), task.id, task.period, requestIdFor(scope));
       clearRequestId(scope);
+      if (!claim.duplicate) track("checkin_claim", { detail: "task" });
       return claim;
     } catch (e) {
       // 已經領過：伺服器附上原結果，當成功
@@ -110,6 +114,7 @@ export const useCheckin = defineStore("checkin", () => {
     try {
       const { claim } = await postNewcomer(await token(), requestIdFor(scope));
       clearRequestId(scope);
+      if (!claim.duplicate) track("checkin_claim", { detail: "newcomer" });
       return claim;
     } catch (e) {
       if (e instanceof RewardsError && e.code === "already_claimed" && e.claims[0]) { clearRequestId(scope); return e.claims[0]; }

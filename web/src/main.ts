@@ -10,6 +10,7 @@ import { installChunkReload } from "./lib/chunk-reload";
 // 要在任何 await 之前 import：beforeinstallprompt 發得很早，監聽器在模組頂層
 import { registerServiceWorker, startInstallPrompt } from "./lib/pwa";
 import { startTracking } from "./lib/track";
+import { startGa4, decorateGa4Checkout } from "./lib/ga4";
 import { resolveUpstream } from "./lib/config";
 import "./styles/base.css";
 
@@ -24,6 +25,9 @@ useProviderUpstream();
 installChunkReload(router);
 registerServiceWorker();
 void resolveUpstream().finally(() => {
+  void startGa4();
+  document.addEventListener("click", decorateGa4Checkout, true);
+  document.addEventListener("auxclick", decorateGa4Checkout, true);
   createApp(App).use(createPinia()).use(i18n).use(router).mount("#app");
   startTracking();
   startInstallPrompt();

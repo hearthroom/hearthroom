@@ -3100,5 +3100,13 @@
   "campaign.field.posterAltHint": "이미지에 있는 문구를 한 문장으로 모두 적어 주세요.",
   "campaign.field.removePoster": "문구 포스터 삭제",
   "referral.leadFriendOnly": "친구를 초대해 같이 놀아요. 내 링크로 가입한 친구는 {friend} 포인트를 받고, 친구가 충전하면 나도 일부를 받아요.",
-  "referral.rule.bindFriendOnly": "친구가 내 링크로 가입하거나 코드를 입력하면 친구는 기한 없는 {credits} 포인트를 받아요"
+  "referral.rule.bindFriendOnly": "친구가 내 링크로 가입하거나 코드를 입력하면 친구는 기한 없는 {credits} 포인트를 받아요",
+  "privacy.analytics.title": "웹사이트 분석 (Google Analytics)",
+  "privacy.analytics.p1": "저희는 Google Analytics로 방문자가 어떤 경로로 사이트를 찾고 어떻게 이용하는지, 어떤 홍보가 가입·채팅·결제로 이어지는지 살펴봅니다.",
+  "privacy.analytics.p2": "사이트 도메인에는 방문자 코드를 저장하는 쿠키를 설정해 같은 브라우저의 재방문을 알아봅니다. 이 쿠키의 유효기간은 처음 설정할 때 정해지며 최대 13개월이고, 다시 방문해도 늘어나지 않습니다.",
+  "privacy.analytics.p3": "Google에는 방문자 코드와 함께 열어 본 페이지의 유형, 로그인, 채팅, 공유, 결제 등의 이용 기록을 보냅니다. 이 사이트에서 HarperHarbor 결제 사이트로 이동할 때도 방문자 코드를 전달해 방문부터 결제까지의 흐름을 연결합니다.",
+  "privacy.analytics.p4": "로그인 후에는 계정용으로 별도 생성한 코드를 Google에 보내 같은 계정의 이용 기록을 여러 기기와 결제 사이트에 걸쳐 연결합니다. 이 코드로 원래 계정 번호를 복원할 수는 없으며, 이메일 주소도 아닙니다.",
+  "privacy.analytics.p5": "결제가 완료되면 결제 금액, 통화, 구매 유형(충전 또는 30일 패스)을 Google에 보내고, 해당 계정의 충전 또는 30일 패스 구매 이력 여부도 알립니다. 환불이 있으면 관련 환불 기록도 보냅니다.",
+  "privacy.analytics.p6": "저희는 Google Analytics에 대화 내용, 카드 이름, 작성자 이름, 카드 번호, 원래 계정 번호, 이메일 주소를 보내지 않습니다.",
+  "privacy.analytics.p7": "브라우저에서 글로벌 프라이버시 컨트롤(GPC)을 켠 경우, 저희는 위에서 설명한 분석용 방문자 쿠키를 설정하거나 Google Analytics에 분석 데이터를 보내지 않습니다."
 }
