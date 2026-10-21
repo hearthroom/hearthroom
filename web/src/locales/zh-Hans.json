@@ -3151,7 +3151,7 @@
   "routes.prompt.later": "关闭线路提示",
   "routes.arrived": "已切换到{line}（{host}）",
   "routes.arrivedSignedOut": "这条线路尚未登录。",
-  "routes.loginHint": "从已登录网站的“线路”菜单切换，即可保持登录。",
+  "routes.loginHint": "从已登录网站的“线路”切换，即可保持登录。",
   "routes.logout.title": "要退出登录吗？",
   "routes.logout.body": "将退出这条线路的登录。",
   "routes.logout.all": "同时退出其他线路",
