@@ -171,8 +171,16 @@ public class WebActivityTest {
         device.findObject(By.text("Enter fullscreen")).click();
         Thread.sleep(500);
         assertEquals("true",js(web,"!!document.fullscreenElement"));
-        device.pressBack(); Thread.sleep(500);
-        assertEquals("false",js(web,"!!document.fullscreenElement"));
+        device.pressBack();
+        long requested = android.os.SystemClock.uptimeMillis();
+        String fullscreen;
+        do {
+            fullscreen = js(web,"!!document.fullscreenElement");
+            if ("false".equals(fullscreen)) break;
+            Thread.sleep(50);
+        } while (android.os.SystemClock.uptimeMillis() - requested < 5000);
+        System.out.println("Fullscreen exit observed after " + (android.os.SystemClock.uptimeMillis() - requested) + " ms");
+        assertEquals("Back must finish the asynchronous fullscreen exit", "false", fullscreen);
     }
     @Test public void exportClickReachesTheSystemSaveFlow() throws Exception {
         WebView web = launch();
