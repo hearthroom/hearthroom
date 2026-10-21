@@ -97,8 +97,11 @@ public final class MainActivity extends LauncherActivity {
         probes=Executors.newFixedThreadPool(Routes.HOSTS.size());
         for(String host:store.routes().enabled())probes.execute(()->{
             long ms=probe.probe(host);
-            main.post(()->{if(run!=attempt||!active())return;planner.result(host,ms>=0,SystemClock.uptimeMillis()-started);tick(run);});
-            main.postDelayed(()->tick(run),RoutePlanner.PREFERENCE_WINDOW);
+            main.post(()->{
+                if(run!=attempt||!active())return;
+                planner.result(host,ms>=0,SystemClock.uptimeMillis()-started);tick(run);
+                main.postDelayed(()->tick(run),RoutePlanner.PREFERENCE_WINDOW); // Ends the preference window on time.
+            });
         });
         main.postDelayed(()->tick(run),RoutePlanner.SHOW_WAITING);
         main.postDelayed(()->tick(run),RoutePlanner.SLOW);
@@ -110,19 +113,22 @@ public final class MainActivity extends LauncherActivity {
         RoutePlanner.Decision d=planner.decide(now);
         if(d.kind==RoutePlanner.Kind.WAIT){if(now>=RoutePlanner.SHOW_WAITING)showWaiting(now>=RoutePlanner.SLOW?R.string.launch_slow:R.string.launch_connecting,now>=RoutePlanner.SLOW);return;}
         attempt++;
-        if(d.kind==RoutePlanner.Kind.OPEN&&d.switched){
-            // Switching changes which sign-in the player sees, so it is said before opening, never silently.
-            String name=Ui.routeName(this,d.host);
-            waitingStatus.setText(store.visited(d.host)?getString(R.string.launch_switched,name):getString(R.string.launch_switched_sign_in,name));
-            showWaiting(0,true);
-            int run2=attempt;main.postDelayed(()->{if(run2==attempt&&active())proceed(d.host,true);},RoutePlanner.SWITCH_NOTICE);
-        }else if(d.kind==RoutePlanner.Kind.OPEN)proceed(d.host,false);
+        if(d.kind==RoutePlanner.Kind.OPEN&&d.switched)announceSwitch(d.host);
+        else if(d.kind==RoutePlanner.Kind.OPEN)proceed(d.host,false);
         else openRoutes(d.kind==RoutePlanner.Kind.CHOOSE?RoutesActivity.FIXED_UNAVAILABLE:RoutesActivity.UNREACHABLE);
     }
+    /** Switching changes which sign-in the player sees, so it is said before opening, never silently. */
+    private void announceSwitch(String host){
+        String name=Ui.routeName(this,host);
+        waitingStatus.setText(store.visited(host)?getString(R.string.launch_switched,name):getString(R.string.launch_switched_sign_in,name));
+        waiting.setVisibility(View.VISIBLE);update.setVisibility(View.GONE);showWaiting(0,true);
+        int run=++attempt;main.postDelayed(()->{if(run==attempt&&active())proceed(host,true);},RoutePlanner.SWITCH_NOTICE);
+    }
     private void showWaiting(int text,boolean offerRoutes){
-        splash=false;
         if(text!=0)waitingStatus.setText(text);
-        Ui.fadeIn(waiting,200);
+        // Under the system splash, show it fully: the splash's own exit fade is the crossfade into it.
+        if(splash)waiting.setVisibility(View.VISIBLE);else Ui.fadeIn(waiting,200);
+        splash=false;
         if(offerRoutes)changeRoute.setVisibility(View.VISIBLE);
     }
     private boolean online(){
@@ -136,7 +142,8 @@ public final class MainActivity extends LauncherActivity {
     @Override protected void onActivityResult(int request,int result,Intent data){
         super.onActivityResult(request,result,data);
         if(request!=ROUTES)return;
-        if(result==RESULT_OK&&data!=null&&Routes.isRoute(data.getStringExtra(RoutesActivity.HOST)))proceed(data.getStringExtra(RoutesActivity.HOST),false);
+        String host=data==null?null:data.getStringExtra(RoutesActivity.HOST);
+        if(result==RESULT_OK&&Routes.isRoute(host)){if(data.getBooleanExtra(RoutesActivity.SWITCHED,false))announceSwitch(host);else proceed(host,false);}
         else if(result==RoutesActivity.RESULT_UPDATES){manual=true;showUpdatePanel();check();}
         else if(routesReason==null&&!manual)startLaunch(); // Back from "change route" on S1: keep connecting.
         else finish();

@@ -88,8 +88,8 @@ public class RoutesScreenTest {
         f.waitFor("automatic choice", a::isFinishing, 4000);
         assertEquals(Activity.RESULT_OK, rule.getActivityResult().getResultCode());
         assertEquals("First reachable in preference order", AI, rule.getActivityResult().getResultData().getStringExtra(RoutesActivity.HOST));
+        assertTrue("The launcher announces the switch before opening", rule.getActivityResult().getResultData().getBooleanExtra(RoutesActivity.SWITCHED, false));
         assertFalse("An outage does not turn automatic selection off", f.store().fixed());
-        assertEquals(AI, f.store().autoSwitched());
     }
     @Test public void offlinePhonesAreToldToCheckTheirNetwork() {
         RoutesActivity a = open(CLUB, RoutesActivity.OFFLINE, true);
