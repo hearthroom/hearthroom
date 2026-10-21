@@ -34,5 +34,8 @@ watch(() => session.me, (me) => { if (me) routesState.arrivedSignedOut = false; 
 .arrival__box { margin: 0; display: flex; align-items: center; gap: var(--s-2); padding-block: var(--s-2); box-shadow: inset 0 0 0 1px var(--line); }
 .arrival__text { flex: 1; min-width: 0; }
 .arrival__box svg { width: 16px; height: 16px; }
+/* 按鈕外觀是小的，點擊區撐到 44 */
+.arrival__box .btn { position: relative; }
+.arrival__box .btn::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: var(--h-lg); transform: translateY(-50%); }
 @media (max-width: 640px) { .arrival { padding: 0 var(--s-4); } }
 </style>

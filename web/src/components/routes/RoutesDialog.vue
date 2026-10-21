@@ -230,7 +230,7 @@ onMounted(async () => {
 .routes__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); min-height: var(--h-sm); }
 /* 外觀 30 高（標題列放 44 會把標題撐開），點擊區外擴到 44；右緣對齊下面的數值欄 */
 .routes__recheck { flex: none; gap: 6px; position: relative; margin-inline-end: -12px; }
-.routes__recheck::after { content: ""; position: absolute; inset: -7px 0; }
+.routes__recheck::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: var(--h-lg); transform: translateY(-50%); }
 .routes__lead { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-2); }
 .routes__lead--alert { font-size: 14px; color: var(--text); }
 .routes__list { display: grid; margin: var(--s-2) calc(-1 * var(--s-2)); padding: var(--s-1) 0; border-block: 1px solid var(--line); transition: opacity var(--dur) var(--ease); }
