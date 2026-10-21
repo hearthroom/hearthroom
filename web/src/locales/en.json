@@ -3103,10 +3103,10 @@
   "referral.rule.bindFriendOnly": "When a friend signs up with your link or enters your code, they get {credits} credits that never expire",
   "privacy.analytics.title": "Website analytics (Google Analytics)",
   "privacy.analytics.p1": "We use Google Analytics to understand how visitors find and use this site, and which promotions lead to sign-ups, chats and payments.",
-  "privacy.analytics.p2": "We set a cookie on our site's domains to store a visitor code and recognize return visits from the same browser. This cookie has a fixed expiry of up to 13 months from when it is set; returning to the site does not extend it.",
+  "privacy.analytics.p2": "We set a cookie on our site's domains to store a visitor code and recognize return visits from the same browser. This cookie has a fixed expiry of up to 13 months from when it is set; returning to the site does not extend it. Google Analytics also sets cookies on the site domain you are visiting to store the same visitor code.",
   "privacy.analytics.p3": "Google receives the visitor code, the types of pages viewed, and records of activity such as signing in, chatting, sharing and paying. When you go from this site to HarperHarbor to check out, the visitor code is also passed to the checkout site so we can connect a visit with a payment.",
   "privacy.analytics.p4": "After you sign in, we send Google a separate code generated for your account to link activity for that account across devices and the payment site. This code cannot be reversed to recover your original account number and is not your email address.",
   "privacy.analytics.p5": "When a payment is completed, we send Google the amount, currency and purchase category (a top-up or 30-Day Pass), and indicate whether the account has ever made a top-up or bought a 30-Day Pass. We also send records of related refunds.",
   "privacy.analytics.p6": "We do not send Google Analytics your conversation content, card names, author names, card numbers, original account number or email address.",
-  "privacy.analytics.p7": "If your browser has Global Privacy Control (GPC) enabled, we do not set the visitor cookie described above or send analytics data to Google Analytics."
+  "privacy.analytics.p7": "If your browser has Global Privacy Control (GPC) enabled, we do not set the visitor cookies described above or send analytics data to Google Analytics."
 }

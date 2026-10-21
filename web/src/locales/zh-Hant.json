@@ -3103,7 +3103,7 @@
   "referral.rule.bindFriendOnly": "朋友用你的連結註冊或填寫你的推薦碼，朋友得 {credits} 積分，永久有效",
   "privacy.analytics.title": "網站分析（Google Analytics）",
   "privacy.analytics.p1": "我們使用 Google Analytics 了解訪客從哪裡來、如何使用綺夢社，以及哪些推廣帶來註冊、聊天與付款。",
-  "privacy.analytics.p2": "我們會在綺夢社網域設定保存訪客代號的 cookie，協助辨識同一瀏覽器的回訪；這個 cookie 的期限自設定時起固定，最長 13 個月，不會因為再次造訪而延長。",
+  "privacy.analytics.p2": "我們會在綺夢社網域設定保存訪客代號的 cookie，協助辨識同一瀏覽器的回訪；這個 cookie 的期限自設定時起固定，最長 13 個月，不會因為再次造訪而延長。Google Analytics 也會在你目前瀏覽的本站網域設定 cookie，保存相同的訪客代號。",
   "privacy.analytics.p3": "Google 會收到訪客代號，以及瀏覽頁面類型、登入、聊天、分享與付款等使用事件；你從綺夢社前往 HarperHarbor 結帳時，訪客代號也會帶到結帳網站，讓我們了解從造訪到付款的過程。",
   "privacy.analytics.p4": "我們會在你登入後向 Google 傳送另行產生的帳號代號，將同一帳號在不同裝置與付款網站上的使用紀錄連在一起；這個代號無法還原成原本的帳號編號，也不是電子郵件地址。",
   "privacy.analytics.p5": "付款完成時，我們會向 Google 傳送付款金額、幣別與購買類別（儲值或月卡），並標記帳號是否曾儲值或購買月卡；退款時也會傳送相關退款紀錄。",

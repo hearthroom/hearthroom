@@ -3103,7 +3103,7 @@
   "referral.rule.bindFriendOnly": "好友用你的链接注册或填写你的推荐码，好友得 {credits} 积分，永久有效",
   "privacy.analytics.title": "网站分析（Google Analytics）",
   "privacy.analytics.p1": "我们使用 Google Analytics 了解访客从哪里找到本站、如何使用网站，以及哪些推广带来了注册、聊天和付款。",
-  "privacy.analytics.p2": "本站会在自己的域名下设置用于保存访客代号的 cookie，以识别同一浏览器的再次访问；这个 cookie 的有效期在设置时确定，最长 13 个月，再次访问不会延长有效期。",
+  "privacy.analytics.p2": "本站会在自己的域名下设置用于保存访客代号的 cookie，以识别同一浏览器的再次访问；这个 cookie 的有效期在设置时确定，最长 13 个月，再次访问不会延长有效期。Google Analytics 也会在你当前访问的本站域名下设置 cookie，保存同一个访客代号。",
   "privacy.analytics.p3": "Google 会收到访客代号、浏览的页面类型，以及登录、聊天、分享和付款等使用记录；你从本站前往 HarperHarbor 结账时，访客代号也会传到结账网站，帮助我们了解从访问到付款的过程。",
   "privacy.analytics.p4": "我们会在你登录后向 Google 发送单独生成的账号代号，将同一账号在不同设备和付款网站上的使用记录关联起来；这个代号无法还原为原来的账号编号，也不是电子邮箱地址。",
   "privacy.analytics.p5": "我们会在付款完成时向 Google 发送金额、币种和购买类别（充值或月卡），并标记账号是否曾充值或购买月卡；发生退款时，也会发送相应的退款记录。",
