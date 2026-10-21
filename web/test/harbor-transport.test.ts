@@ -45,7 +45,7 @@ it('renews and revokes through the proxy while keeping the canonical OAuth resou
   expect(calls).toEqual(['https://sukisuki.chat/hh-api/oauth/token', 'https://sukisuki.chat/hh-api/oauth/revoke']);
 });
 
-it.each(['sukisuki.chat', 'sukisuki.pro', 'play.sukisuki.chat', 'play.sukisuki.pro'])('uses absolute same-origin transport on %s while OAuth stays canonical', host => {
+it.each(['sukisuki.chat', 'sukisuki.pro', 'play.sukisuki.chat', 'play.sukisuki.pro', 'www.sukisuki.chat', 'www.sukisuki.pro'])('uses absolute same-origin transport on %s while OAuth stays canonical', host => {
   vi.stubGlobal('location', { origin: `https://${host}` });
   expect(apiBaseOf()).toBe(`https://${host}/hh-api`);
   expect(useProviderUpstream()).toBe(`https://${host}/hh-api`);
@@ -66,6 +66,15 @@ it('supports an explicit global direct switch and a second rollout phase', () =>
   vi.stubEnv('VITE_HARBOR_PROXY_HOSTS', 'sukisuki.ai,hearthroom.club,sukisuki.chat,sukisuki.pro');
   vi.stubGlobal('location', { origin: 'https://play.hearthroom.club' });
   expect(apiBaseOf()).toBe('https://play.hearthroom.club/hh-api');
+});
+
+it('requires explicit proxy opt-in and lets an empty host list disable every site', () => {
+  vi.stubGlobal('location', { origin: 'https://sukisuki.chat' });
+  vi.stubEnv('VITE_HARBOR_API_TRANSPORT', '');
+  expect(apiBaseOf()).toBe('https://api.harperharbor.com');
+  vi.stubEnv('VITE_HARBOR_API_TRANSPORT', 'proxy');
+  vi.stubEnv('VITE_HARBOR_PROXY_HOSTS', '');
+  expect(apiBaseOf()).toBe('https://api.harperharbor.com');
 });
 
 it('retains an explicit self-hosted upstream without routing it through the official proxy', async () => {

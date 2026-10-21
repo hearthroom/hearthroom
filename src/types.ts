@@ -6,8 +6,8 @@
  */
 export type Env = Omit<Cloudflare.Env, "EVENTS" | "VISIT_LIMIT" | "ANALYTICS_ENABLED" | "REVIEW_ENABLED" | "PUSH_VAPID_PUBLIC_KEY" | "PUSH_VAPID_SUBJECT"> & {
   DRAFT_TRANSFER_CONTROL_SECRET?: string;
-  /** Shared with Harbor's authenticated edge-IP middleware; never expose to the browser. */
-  HARBOR_EDGE_PROXY_SECRET?: string;
+  /** Worker secret, shared only with Harbor's runtime env; independent of Console. */
+  HARBOR_HEARTHROOM_PROXY_SECRET?: string;
   DRAFT_TRANSFER_CONTROL_SCOPE?: string;
   DRAFT_TRANSFER_CONTROL_CARD_NUM?: string;
   AUTH_ENABLED?: string;

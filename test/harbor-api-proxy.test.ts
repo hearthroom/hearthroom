@@ -2,10 +2,10 @@ import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:
 import { afterEach, expect, it, vi } from 'vitest';
 import worker from '../src/index';
 import { proxyHarborApi } from '../src/harbor-api-proxy';
-import { opsMetrics } from '../src/ops-metrics';
+import { bumpHarborProxy, opsMetrics } from '../src/ops-metrics';
 
 afterEach(() => vi.restoreAllMocks());
-const options = { ...env, HARBOR_EDGE_PROXY_SECRET: 'test-proxy-secret' };
+const options = { ...env, HARBOR_HEARTHROOM_PROXY_SECRET: 'test-proxy-secret' };
 const request = (path: string, init?: RequestInit) => new Request(`https://sukisuki.chat/hh-api${path}`, {
   ...init, headers: { 'CF-Connecting-IP': '203.0.113.7', ...init?.headers },
 });
@@ -21,6 +21,10 @@ it('forwards method, query, bearer and body to a fixed host, replacing proxy cla
     expect(req.headers.get('X-Harbor-Edge-Secret')).toBe('test-proxy-secret');
     expect(req.headers.has('Cookie')).toBe(false);
     expect(req.headers.has('X-Forwarded-For')).toBe(false);
+    expect(req.headers.has('X-Hosting-Key')).toBe(false);
+    expect(req.headers.has('X-Internal-Admin')).toBe(false);
+    expect(req.headers.get('language')).toBe('ja');
+    expect(req.headers.get('X-Device-Token')).toBe('synthetic-device');
     expect(req.redirect).toBe('manual');
     expect(await req.text()).toBe('{"synthetic":true}');
     return new Response('ok', { status: 201, headers: { 'Set-Cookie': 'foreign=value' } });
@@ -29,6 +33,7 @@ it('forwards method, query, bearer and body to a fixed host, replacing proxy cla
     method: 'PATCH', body: '{"synthetic":true}', headers: {
       Authorization: 'Bearer synthetic', 'Content-Type': 'application/json', Cookie: 'hr_auth=private',
       'X-Harbor-Client-IP': '1.2.3.4', 'X-Harbor-Edge-Secret': 'forged', 'X-Forwarded-For': '1.2.3.4',
+      'X-Hosting-Key': 'synthetic-private', 'X-Internal-Admin': 'synthetic-private', language: 'ja', 'X-Device-Token': 'synthetic-device',
     },
   }), options);
   expect(mock).toHaveBeenCalledTimes(1);
@@ -100,7 +105,7 @@ it('preserves a WebSocket upgrade and bidirectional messages', async () => {
 
 it('fails closed for missing trusted IP/secret, sandbox hosts and non-public API paths', async () => {
   const fetcher = vi.spyOn(globalThis, 'fetch');
-  expect((await proxyHarborApi(request('/open/v1/me'), { ...options, HARBOR_EDGE_PROXY_SECRET: '' })).status).toBe(503);
+  expect((await proxyHarborApi(request('/open/v1/me'), { ...options, HARBOR_HEARTHROOM_PROXY_SECRET: '' })).status).toBe(503);
   expect((await proxyHarborApi(new Request('https://sukisuki.chat/hh-api/open/v1/me'), options)).status).toBe(503);
   for (const path of ['/auth/session', '/metrics', '//evil.example/open/v1/me', '/open/v1/../admin', '/open/v1/%2f%2fevil.example']) {
     expect((await proxyHarborApi(request(path), options)).status).toBe(404);
@@ -120,6 +125,7 @@ it('does not follow upstream redirects or retry transport failures', async () =>
 });
 
 it('dispatches before D1 admission and records bounded Prometheus dimensions', async () => {
+  vi.spyOn(Math, 'random').mockReturnValue(0);
   vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('ok'));
   const ctx = createExecutionContext();
   const res = await worker.fetch(request('/open/v1/me'), options, ctx);
@@ -129,4 +135,26 @@ it('dispatches before D1 admission and records bounded Prometheus dimensions', a
   expect(metrics).toContain('hearthroom_harbor_proxy_requests_total{route="profile",status_class="2xx",websocket="false"}');
   expect(metrics).not.toContain('203.0.113.7');
   expect(metrics).not.toContain('synthetic');
+});
+
+it('avoids success hot rows with weighted sampling and never writes local 404 metrics', async () => {
+  const run = vi.fn().mockResolvedValue({});
+  const bind = vi.fn((..._values: unknown[]) => ({ run }));
+  const prepare = vi.fn(() => ({ bind }));
+  const db = { prepare } as unknown as D1Database;
+  const random = vi.spyOn(Math, 'random').mockReturnValue(0.5);
+  await bumpHarborProxy(db, request('/open/v1/me'), 200);
+  expect(prepare).not.toHaveBeenCalled();
+  random.mockReturnValue(0);
+  await bumpHarborProxy(db, request('/open/v1/me'), 200);
+  expect(bind.mock.calls.at(-1)?.[3]).toBe(100);
+  random.mockReturnValue(0.5);
+  await bumpHarborProxy(db, request('/open/v1/me'), 503);
+  expect(bind.mock.calls.at(-1)?.[3]).toBe(1);
+  prepare.mockClear();
+  const ctx = createExecutionContext();
+  const denied = await worker.fetch(request('/console/v1/me'), { ...options, DB: db }, ctx);
+  expect(denied.status).toBe(404);
+  await waitOnExecutionContext(ctx);
+  expect(prepare).not.toHaveBeenCalled();
 });

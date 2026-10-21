@@ -15,8 +15,9 @@ const steps = job.split(/\n      - /).slice(1).map((text) => ({
 const index = (predicate) => steps.findIndex(predicate);
 
 test('the deployed web build receives explicit proxy rollout and rollback controls', () => {
-  assert.match(job, /VITE_HARBOR_API_TRANSPORT: \$\{\{ vars\.HARBOR_API_TRANSPORT \|\| 'proxy' \}\}/);
-  assert.match(job, /VITE_HARBOR_PROXY_HOSTS: \$\{\{ vars\.HARBOR_PROXY_HOSTS \|\| 'sukisuki.chat,sukisuki.pro' \}\}/);
+  assert.match(job, /VITE_HARBOR_API_TRANSPORT: \$\{\{ vars\.HARBOR_API_TRANSPORT \|\| 'direct' \}\}/);
+  assert.match(job, /VITE_HARBOR_PROXY_HOSTS: \$\{\{ vars\.HARBOR_PROXY_HOSTS \}\}/);
+  assert.doesNotMatch(job, /HARBOR_HEARTHROOM_PROXY_SECRET/);
 });
 
 test('Harbor proxy requests reach the Worker instead of the static SPA', () => {

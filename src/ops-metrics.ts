@@ -1,4 +1,4 @@
-import { PROXY_ROUTES, proxyRoute } from './harbor-api-proxy';
+import { allowedHarborProxyRequest, PROXY_ROUTES, proxyRoute } from './harbor-api-proxy';
 
 /**
  * 各功能的操作計數，共用一張表、依 metric 分開輸出。每個 metric 列舉自己的合法值，
@@ -79,7 +79,7 @@ export async function opsMetrics(db: D1Database): Promise<string> {
       }
     }
   }
-  out.push('# HELP hearthroom_harbor_proxy_requests_total Harbor proxy responses by bounded route, HTTP status class and upgrade request.', '# TYPE hearthroom_harbor_proxy_requests_total counter');
+  out.push('# HELP hearthroom_harbor_proxy_requests_total Estimated proxy responses: 1 percent successful responses weighted by 100, all other upstream responses and valid-path errors counted.', '# TYPE hearthroom_harbor_proxy_requests_total counter');
   for (const r of rows.results) {
     const [route, ws] = r.operation.split(':');
     if (r.metric === 'harbor_proxy' && (PROXY_ROUTES as readonly string[]).includes(route)
@@ -92,11 +92,17 @@ export async function opsMetrics(db: D1Database): Promise<string> {
 
 /** Persist after headers/upgrade arrive; never wait for a long-lived stream to close. */
 export async function bumpHarborProxy(db: D1Database, request: Request, status: number): Promise<void> {
+  // Local path/host refusals are not upstream attempts. Successful streams and
+  // reads use a weighted 1% sample to avoid a D1 write for every API request.
+  if (!allowedHarborProxyRequest(request)) return;
+  const success = status < 300;
+  if (success && Math.random() >= 0.01) return;
+  const weight = success ? 100 : 1;
   const route = proxyRoute(new URL(request.url).pathname.slice('/hh-api'.length));
   const websocket = request.headers.get('Upgrade')?.toLowerCase() === 'websocket';
   const statusClass = `${Math.floor(status / 100)}xx`;
   try {
-    await db.prepare('INSERT INTO ops_metrics VALUES (?1, ?2, ?3, 1) ON CONFLICT(metric, operation, outcome) DO UPDATE SET value = value + 1')
-      .bind('harbor_proxy', `${route}:${websocket}`, statusClass).run();
+    await db.prepare('INSERT INTO ops_metrics VALUES (?1, ?2, ?3, ?4) ON CONFLICT(metric, operation, outcome) DO UPDATE SET value = value + ?4')
+      .bind('harbor_proxy', `${route}:${websocket}`, statusClass, weight).run();
   } catch { console.warn('Harbor proxy metric unavailable'); }
 }
