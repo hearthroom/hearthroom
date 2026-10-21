@@ -91,6 +91,46 @@ async function login(provider:string,id:number,linkFrom?:string){
 async function connection(path:string,provider:string,token:string,choice={}){
   return worker.fetch(new Request(origin+'/v1/me/connections'+path,{method:'POST',headers:{Origin:origin,Cookie:cookieHeader(),'X-Hearthroom-Request':'1','X-Provider':'harbor','Content-Type':'application/json'},body:JSON.stringify({provider,token,...choice})}),authEnv(),context);
 }
+it('requests prompt=none with the existing PKCE, state and return path',async()=>{
+  providers();
+  const response=await request('start',{provider:'harbor',silent:true,returnTo:'/en/cards/123?x=y#last'});
+  const url=new URL((await response.json() as any).url);
+  expect(url.searchParams.get('prompt')).toBe('none');
+  expect(url.searchParams.get('code_challenge_method')).toBe('S256');
+  expect(url.searchParams.get('state')).toBeTruthy();
+});
+it.each(['login_required','consent_required','interaction_required','account_selection_required'])('settles a silent %s without signup or upstream calls',async(error)=>{
+  const p=providers(),response=await request('start',{provider:'harbor',silent:true,returnTo:'/me'});
+  const url=new URL((await response.json() as any).url),state=url.searchParams.get('state');p.network.mockClear();
+  const done=await request('complete',{state,error});
+  expect(done.status).toBe(200);
+  expect(await done.json()).toEqual({silent:true,authenticated:false,error,returnTo:'/me'});
+  expect(p.network).not.toHaveBeenCalled();
+  expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM members').first<any>()).n).toBe(0);
+  expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM account_sessions').first<any>()).n).toBe(0);
+  expect((await request('complete',{state,error})).status).toBe(400);
+  const metrics=await worker.fetch(new Request(origin+'/internal/auth/metrics',{headers:{Authorization:'Bearer metrics-test-only'}}),authEnv(),context);
+  expect(await metrics.text()).toContain(`operation="silent",provider="site",outcome="${error}"} 1`);
+});
+it('does not accept an error callback for an interactive flow or for a different browser',async()=>{
+  providers();
+  let url=new URL((await (await request('start',{provider:'harbor'})).json() as any).url);
+  expect((await request('complete',{state:url.searchParams.get('state'),error:'login_required'})).status).toBe(400);
+  url=new URL((await (await request('start',{provider:'harbor',silent:true})).json() as any).url);cookies={};
+  expect((await request('complete',{state:url.searchParams.get('state'),error:'login_required'})).status).toBe(400);
+});
+it('silently restores an existing member but never creates a member on a successful upstream code',async()=>{
+  providers();await login('harbor',22);cookies={};
+  let url=new URL((await (await request('start',{provider:'harbor',silent:true})).json() as any).url);
+  const success=await request('complete',{state:url.searchParams.get('state'),code:'22'});
+  expect(success.status).toBe(200);expect(await success.json()).toMatchObject({silent:true,authenticated:true});
+  expect((await request('session',{})).status).toBe(200);cookies={};
+  url=new URL((await (await request('start',{provider:'harbor',silent:true})).json() as any).url);
+  const denied=await request('complete',{state:url.searchParams.get('state'),code:'99'});
+  expect(denied.status).toBe(200);expect(await denied.json()).toMatchObject({silent:true,authenticated:false,error:'consent_required'});
+  expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM members').first<any>()).n).toBe(1);
+  expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM account_credentials WHERE external_id='99'").first<any>()).n).toBe(0);
+});
 it('recovers the Harbor grant on a clean device without exposing another account',async()=>{
  const p=providers();await login('harbor',22);cookies={};await login('harbor',22);
  const a=await (await request('token',{provider:'harbor'})).json() as any;
