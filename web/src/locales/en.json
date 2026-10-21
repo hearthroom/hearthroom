@@ -2985,9 +2985,9 @@
   "credits.expiry.date": "{n} time-limited credits expire {datetime}",
   "credits.expiry.action": "Chat",
   "wallet.tempEarliest": "Earliest expires {datetime}",
-  "credits.recovery.title": "Not enough credits for this turn",
-  "credits.recovery.body": "This turn needs about {need} credits, and you have {have}.",
-  "credits.recovery.taskLeft": "{n} more credits from daily tasks",
+  "credits.recovery.title": "Not enough credits to start this turn",
+  "credits.recovery.body": "Estimated: {min}–{max} credits · Required to start: {max} credits · Available: {have} credits",
+  "credits.recovery.taskLeft": "View today’s tasks ({n} credits in remaining rewards)",
   "credits.recovery.topup": "Top up",
   "wallet.reason.checkin": "Check-in chest",
   "wallet.reason.task": "Task reward",
@@ -3066,7 +3066,7 @@
   "wallet.record.planRefund": "Pass refunded",
   "plan.meCard.claimed": "Pass +{daily} today",
   "plan.meCard.days": "Pass: {n} day left | Pass: {n} days left",
-  "plan.canvas.action": "Get 30-Day Pass",
+  "plan.canvas.action": "View monthly pass",
   "plan.newcomer.hint": "First purchase of a 30-Day Pass: {credits} credits now, plus {firstDaily} each day you check in",
   "plan.newcomer.link": "See 30-Day Pass ↗",
   "referral.rule.bind": "When a friend signs up with your link or enters your code, you each get {credits} credits",
@@ -3108,5 +3108,10 @@
   "privacy.analytics.p4": "After you sign in, we send Google a separate code generated for your account to link activity for that account across devices and the payment site. This code cannot be reversed to recover your original account number and is not your email address.",
   "privacy.analytics.p5": "When a payment is completed, we send Google the amount, currency and purchase category (a top-up or 30-Day Pass), and indicate whether the account has ever made a top-up or bought a 30-Day Pass. We also send records of related refunds.",
   "privacy.analytics.p6": "We do not send Google Analytics your conversation content, card names, author names, card numbers, original account number or email address.",
-  "privacy.analytics.p7": "If your browser has Global Privacy Control (GPC) enabled, we do not set the visitor cookies described above or send analytics data to Google Analytics."
+  "privacy.analytics.p7": "If your browser has Global Privacy Control (GPC) enabled, we do not set the visitor cookies described above or send analytics data to Google Analytics.",
+  "chat.balanceBelowEstimate": "Your {have} available credits are below this turn’s estimated maximum.",
+  "credits.recovery.estimate": "Estimated: {min}–{max} credits",
+  "credits.recovery.available": "Available: {have} credits",
+  "credits.recovery.explanation": "Reply length varies, so you need enough credits to cover the estimate’s upper limit before starting. Only actual usage is charged.",
+  "credits.recovery.required": "Required to start: {max} credits"
 }
