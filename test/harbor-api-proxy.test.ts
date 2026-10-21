@@ -161,3 +161,16 @@ it('avoids success hot rows with weighted sampling and never writes local 404 me
   await waitOnExecutionContext(ctx);
   expect(prepare).not.toHaveBeenCalled();
 });
+
+it('preserves GPC so the upstream profile omits optional analytics identity', async () => {
+  const upstream = vi.spyOn(globalThis, 'fetch').mockImplementation(async input => {
+    const gpc = (input as Request).headers.get('Sec-GPC') === '1';
+    return Response.json(gpc ? { ok: true } : { ok: true, analytics: { payerType: 'none' } });
+  });
+  const optedOut = await proxyHarborApi(request('/open/v1/me', { headers: { 'Sec-GPC': '1' } }), options);
+  expect(await optedOut.json()).toEqual({ ok: true });
+  expect((upstream.mock.calls[0]![0] as Request).headers.get('Sec-GPC')).toBe('1');
+  const ordinary = await proxyHarborApi(request('/open/v1/me'), options);
+  expect(await ordinary.json()).toHaveProperty('analytics');
+  expect((upstream.mock.calls[1]![0] as Request).headers.has('Sec-GPC')).toBe(false);
+});
