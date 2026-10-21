@@ -17,4 +17,5 @@ watchEffect(() => { document.title = pageTitle(t("privacy.analytics.title")); })
 .privacy-page { padding-block: var(--s-6); overflow-wrap: anywhere; }
 .privacy-page h1 { font-size: 22px; line-height: 1.4; }
 .privacy-page p { margin-block: var(--s-5); line-height: 1.8; }
+.privacy-page:lang(ko) { word-break: keep-all; }
 </style>

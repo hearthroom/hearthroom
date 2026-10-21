@@ -33,8 +33,7 @@ export function createGa4() {
   let onClientId: ((clientId: string) => void) | undefined;
   let sessionId: string | undefined;
   let linkerPending = false;
-  let pendingView = false;
-  const pendingEvents: { event: string; data: Data }[] = [];
+  const pendingEvents: { name: string; params: Record<string, unknown>; page?: boolean }[] = [];
   const commands: Command[] = [];
   const allowed = () => {
     const gpc = typeof navigator === "undefined" || (navigator as Navigator & { globalPrivacyControl?: boolean }).globalPrivacyControl === true;
@@ -45,6 +44,10 @@ export function createGa4() {
   const context = () => allowed() ? gaPage(location.href, referrer) : null;
   // gtag consumes Arguments objects, matching the official dataLayer snippet.
   function send(..._args: unknown[]) { commands.push(arguments); }
+  function emit(event: { name: string; params: Record<string, unknown>; page?: boolean }) {
+    if (event.page) send("set", event.params);
+    send("event", event.name, event.params);
+  }
 
   function initialize(): boolean {
     if (!allowed()) return false;
@@ -78,8 +81,7 @@ export function createGa4() {
             cookie_expires: 390 * 86400, cookie_update: false, cookie_flags: "SameSite=Lax;Secure" });
         }
         linkerPending = false;
-        if (pendingView) { pendingView = false; tracker.pageView(); }
-        for (const event of pendingEvents.splice(0)) tracker.track(event.event, event.data);
+        for (const event of pendingEvents.splice(0)) if (allowed()) emit(event);
       };
       const timer = setTimeout(() => settle(null), 3000);
       send("get", MEASUREMENT_ID, "client_id", settle);
@@ -145,23 +147,24 @@ export function createGa4() {
     },
     pageView() {
       if (!initialize()) return;
-      if (linkerPending) { pendingView = true; return; }
       const page = params();
       if (!page || location.href === lastNavigation) return;
       referrer = lastLocation || document.referrer;
       const view = params()!;
-      send("set", view);
-      send("event", "page_view", view);
+      const event = { name: "page_view", params: view, page: true };
+      if (linkerPending) pendingEvents.push(event); else emit(event);
       lastLocation = String(page.page_location);
       lastNavigation = location.href;
     },
     track(event: string, data: Data = {}) {
       if (!initialize()) return;
-      if (linkerPending) { if (pendingEvents.length < 20) pendingEvents.push({ event, data }); return; }
       const page = params();
       if (!page) return;
       const mapped = gaEvent(event, data, String(page.page_type));
-      if (mapped) send("event", mapped.name, { ...page, ...mapped.params });
+      if (mapped) {
+        const queued = { name: mapped.name, params: { ...page, ...mapped.params } };
+        if (linkerPending) pendingEvents.push(queued); else emit(queued);
+      }
     },
     /** Read-only snapshots for deterministic outbound contract tests. */
     commands: () => commands.map(command => Array.from(command)),
