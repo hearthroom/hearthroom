@@ -80,9 +80,9 @@ export async function connectedBalance(
   provider: ProviderId,
   expectedAccount: number
 ): Promise<number | null> {
-  const token = await accountToken(provider);
-  if (!token) return null;
   try {
+    const token = await accountToken(provider);
+    if (!token) return null;
     const me = await fetch(`${apiBaseOf(provider)}/open/v1/me`, {
       headers: { Authorization: `Bearer ${token}` },
     });
