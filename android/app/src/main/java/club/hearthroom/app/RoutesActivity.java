@@ -25,7 +25,7 @@ import java.util.concurrent.Executors;
  * the caller, which opens it; choosing a route by hand turns automatic selection off.
  */
 public final class RoutesActivity extends Activity {
-    static final String REASON = "reason", HOST = "host";
+    static final String REASON = "reason", HOST = "host", SWITCHED = "switched";
     static final String UNREACHABLE = "unreachable", OFFLINE = "offline", FIXED_UNAVAILABLE = "fixed", FROM_SHORTCUT = "shortcut", FROM_WEB = "web";
     static final int RESULT_UPDATES = RESULT_FIRST_USER;
     private final Handler main = new Handler(Looper.getMainLooper());
@@ -89,7 +89,8 @@ public final class RoutesActivity extends Activity {
         findViewById(R.id.retry).setEnabled(false);
         for (String host : rows.keySet()) {
             render(host);
-            probes.execute(() -> { long ms = probe.probe(host); main.post(() -> { if (run != round || isFinishing()) return; latency.put(host, ms); answered.put(host, android.os.SystemClock.uptimeMillis() - started); render(host); settled(); }); });
+            probes.execute(() -> { long ms = probe.probe(host); main.post(() -> { if (run != round || isFinishing()) return; latency.put(host, ms); answered.put(host, android.os.SystemClock.uptimeMillis() - started); render(host); settled();
+                main.postDelayed(() -> { if (run == round && !isFinishing()) settled(); }, RoutePlanner.PREFERENCE_WINDOW); }); });
         }
         render(null);
     }
@@ -102,7 +103,8 @@ public final class RoutesActivity extends Activity {
         RoutePlanner planner = new RoutePlanner(routes.enabled(), current, false);
         for (String host : latency.keySet()) planner.result(host, reachable(host), answered.get(host));
         RoutePlanner.Decision d = planner.decide(latency.size() == rows.size() ? RoutePlanner.PROBE_TIMEOUT : android.os.SystemClock.uptimeMillis() - started);
-        if (d.kind == RoutePlanner.Kind.OPEN) { store.opened(d.host, d.switched); finishWith(d.host); }
+        // The launcher announces a switch before opening, as at launch.
+        if (d.kind == RoutePlanner.Kind.OPEN) { setResult(RESULT_OK, new Intent().putExtra(HOST, d.host).putExtra(SWITCHED, d.switched)); finish(); }
     }
     private boolean reachable(String host) { Long ms = latency.get(host); return ms != null && ms >= 0; }
     private void render(String only) {
@@ -160,8 +162,7 @@ public final class RoutesActivity extends Activity {
     private void choose(String host) {
         if (host == null) return;
         store.opened(host, false);
-        finishWith(host);
+        setResult(RESULT_OK, new Intent().putExtra(HOST, host)); finish();
     }
-    private void finishWith(String host) { setResult(RESULT_OK, new Intent().putExtra(HOST, host)); finish(); }
     @Override protected void onDestroy() { if (probes != null) probes.shutdownNow(); main.removeCallbacksAndMessages(null); super.onDestroy(); }
 }
