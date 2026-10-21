@@ -31,7 +31,15 @@ describe('community developer documentation', () => {
       if (!node || typeof node !== 'object') return node;
       return Object.fromEntries(Object.entries(node).filter(([key]) => !['description', 'summary', 'x-harperharbor'].includes(key)).map(([key, value]) => [key, protocol(value)]));
     };
-    expect(protocol(integrationSpec.paths)).toEqual(protocol(sourceSpec.paths));
+    // Bulk-authoring endpoints publish the connected provider's wire shape.
+    // Other endpoints retain the canonical shape; prose remains vendor-neutral.
+    const bulkPaths = new Set(['/open/v1/role', '/open/v1/worldbook/{worldbookId}/document', '/open/v1/worldbook/limits']);
+    const expectedPaths = Object.fromEntries(Object.entries(sourceSpec.paths).map(([path, methods]) => [path,
+      Object.fromEntries(Object.entries(methods).map(([method, operation]) => [method,
+        bulkPaths.has(path) ? { ...operation, ...((operation as Record<string, unknown>)['x-harperharbor'] as object ?? {}) } : operation,
+      ])),
+    ]));
+    expect(protocol(integrationSpec.paths)).toEqual(protocol(expectedPaths));
     expect(protocol(integrationSpec.components)).toEqual(protocol(sourceSpec.components));
     // operationId is a stable client identifier, not reader-facing prose.
     const publicText = JSON.stringify(integrationSpec, (key, value) => key === 'operationId' ? undefined : value);
