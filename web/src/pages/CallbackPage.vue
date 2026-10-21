@@ -22,11 +22,13 @@ const retryTo = ref(lp(loginPath(pendingReturnTo())));
 onMounted(async () => {
   try {
     const completed = await completeLogin(new URLSearchParams(location.search));
+    // 靜默登入沒登入成功（Harbor 沒登入，或還不是本站會員）：不是錯誤，回原頁照常顯示登入鈕
+    if ("authenticated" in completed) { await router.replace(completed.returnTo); return; }
     const { token, returnTo, provider, linkFrom } = completed;
     if(linkFrom)throw new Error('auth_reauthorization_required');
     setProvider(provider); useProviderUpstream();
     await session.adopt(token);
-    track("login_done");
+    track(completed.silent ? "login_silent" : "login_done");
     void recordGa4Login(() => session.accessToken());
     // 用 replace：回上一頁不該再回到帶著授權碼的網址。
     await router.replace(returnTo);

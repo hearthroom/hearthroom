@@ -3,6 +3,8 @@ import { clearLibraryCache } from './library';
 import { clearStageStorage } from './stage-storage';
 import { rememberSignedIn, signedInHint } from './signin-hint';
 import { lastShown } from './mine-memory';
+import { lineByOrigin } from './route-lines';
+import { markLoggedOut } from './silent-login';
 import { currentProvider, setProvider, type ProviderId } from './provider';
 import {useProviderUpstream} from './config';
 import { PROVIDERS } from "./provider";
@@ -55,6 +57,11 @@ export const useSession = defineStore("session", () => {
   /** 本站的身分（公開 ID、連結的帳號）。登入後問一次就建好成員；讀不到不影響登入。 */
   const profile = ref<SiteMe | null>(null);
   const ready = ref(false);
+  /**
+   * 這個瀏覽器經換線帶過去、還登入著的其他線路（官方網址，不含目前這條）。
+   * 有的話登出時問一句要不要一起登出；各網域自己登入的不算（伺服器證明不了是同一個瀏覽器）。
+   */
+  const otherLines = ref<string[]>([]);
   const restoreError = ref(false);
   watch([me, () => profile.value?.handle, () => profile.value?.showNsfw, () => profile.value?.ageVerified, () => profile.value?.adultConsent, () => profile.value?.hiddenTags?.join(',')], clearLibraryCache, {flush:'sync'});
   const displayName = computed(() => profile.value?.displayName || profile.value?.handle || siteName(String(i18n.global.locale.value)));
@@ -130,8 +137,9 @@ export const useSession = defineStore("session", () => {
         if(await managedAuth()){
           // 授權跟著 session 一起回來：少一趟串在開頁路上的往返。放進授權暫存之後，
           // 下面的 refresh() 直接命中，不再另外問伺服器。
-          const site=await withTransientRetry(()=>authRequest<{provider:ProviderId;me:Me;profile:SiteMe;token?:TokenPair|null}>('session',{provider:currentProvider(),token:true}));
+          const site=await withTransientRetry(()=>authRequest<{provider:ProviderId;me:Me;profile:SiteMe;token?:TokenPair|null;otherLines?:unknown}>('session',{provider:currentProvider(),token:true}));
           if(expected!==generation)return;
+          otherLines.value=Array.isArray(site.otherLines)?site.otherLines.filter((o):o is string=>typeof o==='string'&&!!lineByOrigin(o)):[];
           if(site.token)rememberManaged(site.token,site.provider);
           setProvider(site.provider);useProviderUpstream();
           me.value=site.me;profile.value=site.profile;
@@ -196,8 +204,11 @@ export const useSession = defineStore("session", () => {
     return expected===generation?pair.accessToken:null;
   }
 
-  async function logout() {
+  async function logout(o: { allRoutes?: boolean } = {}) {
     generation++;
+    // 剛登出的網域不靜默登入，否則一登出馬上又被登回去（lib/silent-login.ts）
+    markLoggedOut();
+    otherLines.value = [];
     forgetManaged();
     token.value = null;
     me.value = null;
@@ -210,7 +221,7 @@ export const useSession = defineStore("session", () => {
     lastShown.clear();
     // 舞台存在這台裝置上的聊天快取（作者規則的定稿結果）：登出就刪，下一個用這台裝置的人讀不到。
     await clearStageStorage();
-    if(await managedAuth()){await managedLogout();location.reload();}
+    if(await managedAuth()){await managedLogout(o);location.reload();}
     else await Promise.all(PROVIDERS.map(provider => revokeSession(provider.id)));
   }
 
@@ -228,5 +239,5 @@ export const useSession = defineStore("session", () => {
   }
 
   /** 重新向供應商授權（真正開始 OAuth）。進站的「登入」一律先到本站的登入頁（/login），由那一頁呼叫這個。 */
-  return { displayName, avatarUrl, token, me, wallet, profile, ready, restoreError, adopt, restore, retryRestore, accessToken, ensureProfile, refreshWallet, logout, login: beginLogin };
+  return { displayName, avatarUrl, token, me, wallet, profile, ready, restoreError, otherLines, adopt, restore, retryRestore, accessToken, ensureProfile, refreshWallet, logout, login: beginLogin };
 });

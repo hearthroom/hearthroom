@@ -10,12 +10,14 @@ const typed = ref("");
 /** 選填的那一格：開新彈窗時填上預設值；有 lookup 的那種還帶著對上的編號 */
 const fieldText = ref("");
 const fieldPick = ref<LookupValue>({ label: "" });
+/** 勾選框：開新彈窗時回到預設值 */
+const checked = ref(false);
 const typedOk = computed(() => !!confirmState.current && confirmTextMatches(confirmState.current, typed.value));
 function confirm() {
   const cur = confirmState.current;
   if (!cur || !typedOk.value) return;
   if (cur.field?.lookup) settleConfirm(true, typed.value, fieldPick.value.label, fieldPick.value.id);
-  else settleConfirm(true, typed.value, fieldText.value);
+  else settleConfirm(true, typed.value, fieldText.value, undefined, cur.check ? checked.value : undefined);
 }
 /** 開啟前的焦點：關掉時還回去，鍵盤使用者不會掉到頁面開頭 */
 let restore: HTMLElement | null = null;
@@ -25,6 +27,7 @@ watch(() => confirmState.current, async (cur) => {
   restore = document.activeElement as HTMLElement | null;
   typed.value = "";
   fieldText.value = cur.field?.initial ?? "";
+  checked.value = cur.check?.initial ?? false;
   fieldPick.value = { label: cur.field?.initial ?? "", ...(cur.field?.initialId ? { id: cur.field.initialId } : {}) };
   await nextTick();
   // 要照打的字：焦點直接進打字框。其他破壞性動作先站在取消鍵上：按錯 Enter 也不會刪掉東西
@@ -67,6 +70,10 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
           <input v-else v-model="fieldText" class="input" type="text" autocomplete="off" data-field
                  :placeholder="confirmState.current.field.placeholder" :maxlength="confirmState.current.field.maxlength" @keydown.enter.prevent="confirm" />
           <span v-if="confirmState.current.field.hint" class="subtle">{{ confirmState.current.field.hint }}</span>
+        </label>
+        <label v-if="confirmState.current.check" class="dlg__check">
+          <input v-model="checked" type="checkbox" data-check />
+          <span class="dlg__check-text">{{ confirmState.current.check.label }}<span v-if="confirmState.current.check.hint" class="dlg__check-hint">{{ confirmState.current.check.hint }}</span></span>
         </label>
         <div class="dlg__actions">
           <button v-if="!confirmState.current.single" class="btn" data-cancel @click="settleConfirm(false)">
@@ -122,5 +129,9 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKey));
   .dlg__actions .btn { width: 100%; height: var(--h-lg); }
 }
 .dlg__field { display: grid; gap: 6px; text-align: left; }
+.dlg__check { display: flex; align-items: flex-start; gap: var(--s-2); min-height: var(--h-sm); font-size: 14px; line-height: 1.5; cursor: pointer; }
+.dlg__check input { flex: none; width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--accent-btn); }
+.dlg__check-text { display: grid; gap: 2px; }
+.dlg__check-hint { font-size: 12px; color: var(--text-3); }
 .dlg__field-label { font-size: 13px; color: var(--text-2); }
 </style>

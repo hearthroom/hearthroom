@@ -35,6 +35,12 @@ import { footerGroups, footerLegal, type FooterContext } from "@/lib/footer-nav"
 import { watchCampaignShareBinding, watchShareRefBinding } from "@/lib/share-ref";
 import { refreshGa4Account } from "@/lib/ga4";
 import { fetchMe } from "@/lib/api";
+import RoutesLayer from "@/components/routes/RoutesLayer.vue";
+import RouteArrivalNotice from "@/components/routes/RouteArrivalNotice.vue";
+import SignalBars from "@/components/routes/SignalBars.vue";
+import { currentLine, headerSignalVisible, openRoutesDialog, routesAvailable, routesState } from "@/lib/routes";
+import { SILENT_LOGIN_ENABLED, trySilentLogin } from "@/lib/silent-login";
+import { safeReturnTo } from "@/lib/login-return";
 
 const { lp, locale } = useLocalePath();
 // 頁首與頁尾的品牌名跟著語言走（shared/site-name.ts）：中文介面是綺夢社，其他語言是 Hearthroom。副標只進分頁標題。
@@ -59,9 +65,16 @@ const router = useRouter();
 watchCheckinNudges(router, (p) => lp(p));
 
 const discordInvite = ref<string|null>(null);
+/** 線路：只在官方網域、不在 Android App 裡（App 有自己的線路畫面）。頁尾與帳號選單是平時入口 */
+const routesOn = routesAvailable();
+const hereLine = currentLine();
+/** 頁首的訊號圖示只在「目前慢、而且有更快的」時出現，提示卡收掉後當持久落點；遊玩頁不放 */
+const showRouteSignal = computed(() => routesOn && !route.meta.preloadStage && headerSignalVisible());
+const hereDown = computed(() => !!hereLine && routesState.results[hereLine.n]?.state === "down");
 const footerCtx = computed<FooterContext>(() => ({
   repoUrl: SITE.repoUrl, license: SITE.license, discordInvite: discordInvite.value, showDownloadEntry,
   canInstallSite: installPrompt.available && installPrompt.target === "site",
+  routeLine: routesOn && hereLine ? `routes.name.${hereLine.n}` : null,
 }));
 const footerNav = computed(() => footerGroups(footerCtx.value));
 const legalNav = computed(() => footerLegal(footerCtx.value));
@@ -81,6 +94,15 @@ watch(() => session.me?.accountNumId ?? null, (id) => { if (id) void notificatio
 watchShareRefBinding();
 // 點了活動分享連結的人：登入後送一次歸因綁定，伺服器決定算不算新玩家。
 watchCampaignShareBinding();
+/**
+ * 直接開另一個網域、這裡還沒登入：Harbor 那邊已登入的會員自動登回來（lib/silent-login.ts 把關快慢、頻率與登出）。
+ * 過場頁與回呼頁不做；開關在 Harbor 支援之前是關的。
+ */
+if (SILENT_LOGIN_ENABLED) watch(() => session.ready && !session.me && !session.restoreError, (signedOut) => {
+  if (!signedOut || /\/auth\//.test(route.path)) return;
+  const returnTo = /\/login$/.test(route.path) ? safeReturnTo(route.query.returnTo) : route.fullPath;
+  void trySilentLogin({ immersive: !!route.meta.preloadStage, returnTo, locale: String(locale.value) }).catch(() => {});
+});
 onMounted(() => { session.restore(); useAppearance().init(); reviewTimer=setInterval(refreshReview,60000); window.addEventListener('focus',refreshReview); document.addEventListener('visibilitychange',refreshReview); });
 onBeforeUnmount(()=>{clearInterval(reviewTimer);window.removeEventListener('focus',refreshReview);document.removeEventListener('visibilitychange',refreshReview);document.removeEventListener('keydown',onSlash);});
 
@@ -148,6 +170,10 @@ onMounted(() => document.addEventListener("keydown", onSlash));
             <path d="M12.8 12.8 17 17" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
           </svg>
         </RouterLink>
+        <!-- 連線慢、而且有更快的線路：一顆訊號圖示，點了直接預選推薦的那條（ui.md §3.2） -->
+        <button v-if="showRouteSignal" type="button" class="gh route-signal" data-route-signal :aria-label="$t(hereDown ? 'routes.headerDownLabel' : 'routes.headerLabel')" :title="$t(hereDown ? 'routes.headerDownLabel' : 'routes.headerLabel')" @click="openRoutesDialog(routesState.recommended)">
+          <SignalBars :level="1" :down="hereDown" />
+        </button>
         <!-- R18 開關只在首頁：它管的是榜單列出什麼，看卡片、寫卡片的時候不該在頁首晃（owner 2026-10-02） -->
         <AdultToggle v-if="route.path.replace(/\/+$/, '') === lp('/').replace(/\/+$/, '')" />
         <!-- 頁首放 Discord：玩家要找的是社群，不是程式碼；GitHub 留在頁尾的社群欄（owner 2026-10-17）。
@@ -172,6 +198,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
     <RouterLink :to="lp('/library')" :aria-current="route.path === lp('/library') ? 'page' : undefined">{{ $t('library.title') }}</RouterLink>
     <RouterLink :to="lp('/mine')" :aria-current="route.path === lp('/mine') ? 'page' : undefined">{{ $t('nav.mine') }}</RouterLink>
   </nav>
+  <RouteArrivalNotice v-if="routesOn && !route.meta.bare" />
   <main id="main" tabindex="-1" :class="{ 'site-main': !route.meta.bare, 'main--bare': route.meta.bare }"><SessionConnectionGate><RouterView /></SessionConnectionGate></main>
   <CoachTour />
   <NewcomerTour />
@@ -182,6 +209,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
   <!-- 裝到主畫面的提示：對話與遊戲頁是全螢幕的，不在那裡打擾 -->
   <!-- 卡片 App 網域的頁全是 bare，但「加到主畫面」的提示卡就在那裡 -->
   <InstallToast v-if="(!route.meta.bare || isPlayHost()) && !route.meta.readingNotice" />
+  <RoutesLayer v-if="routesOn" />
 
   <!--
     社群維護的開源站：頁尾照開源專案的慣例，把人導去倉庫——回報問題、看原始碼、看授權都在那裡。
@@ -199,6 +227,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
           <ul>
             <li v-for="l in g.links" :key="l.id">
               <RouterLink v-if="'to' in l" :to="{ path: lp(l.to), query: l.query }">{{ $t(l.label, l.labelArgs ?? {}) }}<NewMark v-if="l.newMark" :k="l.newMark" /></RouterLink>
+              <a v-else-if="'action' in l && l.action === 'routes'" href="#" @click.prevent="openRoutesDialog()">{{ $t(l.label) }}<span v-if="l.detail" class="footer__detail">{{ $t(l.detail) }}</span></a>
               <a v-else-if="'action' in l" href="#" @click.prevent="openInstall()">{{ $t(l.label) }}</a>
               <a v-else :href="l.href" target="_blank" rel="noopener noreferrer" :title="l.id === 'github' ? $t('footer.github') : undefined">
                 <CommunityIcon v-if="l.icon === 'discord'" name="discord" />
@@ -295,6 +324,10 @@ onMounted(() => document.addEventListener("keydown", onSlash));
 .gh { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 34px; height: 34px; border-radius: var(--r-pill); color: var(--text-2); }
 .gh:hover { background: var(--surface-2); color: var(--text); }
 .gh :deep(svg), .gh svg { width: 18px; height: 18px; }
+/* 訊號圖示借 .gh 的尺寸與樣子，但頁首擠的時候不跟 Discord 一起走：連線慢的時候它比 Discord 重要。
+   沒有圓點：它只在看過並收掉提示卡之後才出現，出現本身就是訊號（美術總監 2026-10-22 #5） */
+.route-signal { padding: 0; border: 0; background: none; cursor: pointer; color: var(--text); }
+.footer__detail { color: var(--text-3); }
 
 /* 頁尾：左邊是站名與一句話，右邊是分組連結，最底下一條放授權。手機上分組排成兩欄，不摺疊——每組就幾個連結，收起來反而多點一下。 */
 .footer { padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); border-top: 1px solid var(--border); margin-top: var(--s-7); }
@@ -354,7 +387,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
 /* 頁首擠的時候誰先讓位（owner 2026-10-11）：社群連結（現在是 Discord）第一個走——頁尾每頁都有同一條連結，少它不少功能。
    平板以下就收起來，把位置留給導覽與餘額。 */
 @media (max-width: 860px) {
-  .gh { display: none; }
+  .gh:not(.route-signal) { display: none; }
 }
 /* 再擠才輪到餘額（帳號選單與積分頁都還看得到它）。門檻由實測定：字標＋搜尋、外觀、語言、
    五位數餘額、頭像一排要 418px，六位數多 8px；百萬以上已縮寫，不會更寬。 */

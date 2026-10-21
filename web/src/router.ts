@@ -120,6 +120,9 @@ const pages: RouteRecordRaw[] = [
     ],
   },
   { path: "auth/callback", component: () => import("./pages/CallbackPage.vue") },
+  // 換線路時帶著登入：原站與目的站各一個過場頁（伺服器那一跳 /auth/route/prepare 沒有畫面）
+  { path: "auth/route/issue", component: () => import("./pages/RouteHandoffPage.vue"), meta: { bare: true, handoff: "issue" } },
+  { path: "auth/route/complete", component: () => import("./pages/RouteHandoffPage.vue"), meta: { bare: true, handoff: "complete" } },
   // 404 也在語言前綴底下：/en/nope 要看到英文的 404，而不是被換回預設語言
   { path: ":pathMatch(.*)*", component: () => import("./pages/NotFoundPage.vue") },
 ];
@@ -196,7 +199,7 @@ router.beforeEach(async (to) => {
 
   // 卡片 App 網域：/<roleId> 補上結尾斜線——App 的範圍是 /<roleId>/，少了斜線就在範圍外
   if (isPlayHost() && to.meta.playApp && !to.path.endsWith("/")) {
-    return { path: `${to.path}/`, query: to.query, replace: true };
+    return { path: `${to.path}/`, query: to.query, hash: to.hash, replace: true };
   }
 
   // 第一次進站且沒指定語言時，照瀏覽器偏好轉一次。之後不再自動轉——
@@ -206,7 +209,8 @@ router.beforeEach(async (to) => {
     if (!isPlayHost() && !to.params.locale) {
       const detected = detectLocale();
       if (detected !== SOURCE_LOCALE) {
-        return { path: withLocale(to.path, detected), query: to.query, replace: true };
+        // hash 要跟著走：換線路的過場頁把一次性的單號放在 # 後面，丟了就換不過去
+        return { path: withLocale(to.path, detected), query: to.query, hash: to.hash, replace: true };
       }
     }
   }

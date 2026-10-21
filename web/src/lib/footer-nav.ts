@@ -19,6 +19,8 @@ export interface FooterContext {
   showDownloadEntry: boolean;
   /** 瀏覽器現在能把站台裝成 App（lib/pwa.ts 的 installPrompt，對象是站台） */
   canInstallSite: boolean;
+  /** 目前線路名稱的 i18n 鍵（lib/routes.ts）；不在官方網域或在 App 裡是 null，頁尾就沒有「線路」 */
+  routeLine: string | null;
 }
 
 interface LinkBase {
@@ -30,11 +32,13 @@ interface LinkBase {
   icon?: "discord" | "github";
   /** 「新」標記的鍵（shared/update-spotlights.ts） */
   newMark?: string;
+  /** 接在連結後面的淡色補充（i18n 鍵），例如目前在哪條線路 */
+  detail?: string;
 }
 export type FooterLink =
   | (LinkBase & { to: string; query?: Record<string, string> })
   | (LinkBase & { href: string })
-  | (LinkBase & { action: "install" });
+  | (LinkBase & { action: "install" | "routes" });
 
 export interface FooterGroup {
   id: string;
@@ -50,6 +54,8 @@ export function footerGroups(ctx: FooterContext): FooterGroup[] {
   if (ctx.showDownloadEntry) app.push({ id: "download", label: "download.footer", to: "/download" });
   else if (ctx.canInstallSite) app.push({ id: "install", label: "pwa.install.link", action: "install" });
   app.push({ id: "updates", label: "nav.updates", to: "/updates", query: { from: "footer" }, newMark: "menu.updates" });
+  // 線路（換網域）：游客唯一的平時入口，所以放頁尾；開的是線路清單，不是一頁
+  if (ctx.routeLine) app.push({ id: "routes", label: "routes.title", action: "routes", detail: ctx.routeLine });
 
   const community: FooterLink[] = [{ id: "blog", label: "blog.title", to: "/blog" }];
   if (ctx.discordInvite) community.push({ id: "discord", label: "community.join", href: ctx.discordInvite, icon: "discord" });

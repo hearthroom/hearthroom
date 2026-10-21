@@ -24,9 +24,15 @@ import { currentProvider, legalPage, PROVIDERS } from "@/lib/provider";
 import { availableProviders, chooseProvider, needsSwitchConfirm } from "@/lib/provider-switch";
 import { useSession } from "@/lib/session";
 import { isPlayHost } from "@/lib/site";
+import { routeLoginHintVisible } from "@/lib/silent-login";
 
 /** 看板娘只在站台本身出現；卡片 App 網域（play.*）上的登入頁不放（docs/design/hearthroom-mascot）。 */
 const withMascot = !isPlayHost();
+/**
+ * 各網域的登入各自獨立：在別條線路登入過的人，從那條的「線路」換過來才會帶著登入。
+ * 這行只是說明，不是連結——它說的入口在另一個網域上，這一頁沒有能點的東西（ui.md §7.1）。
+ */
+const routeHint = routeLoginHintVisible();
 
 const route = useRoute();
 const router = useRouter();
@@ -108,6 +114,7 @@ watch(() => [session.ready, session.me], () => {
           {{ $t("login.continueWith", { provider: p.name }) }}
         </button>
       </div>
+      <p v-if="routeHint" class="subtle login__routes">{{ $t("routes.loginHint") }}</p>
       <!-- 只有一家可選時，「換平台」的提醒沒有對象，反而像免責聲明。 -->
       <p v-if="providers.length > 1" class="subtle login__more">{{ $t("login.moreComing") }}</p>
 
@@ -148,6 +155,8 @@ watch(() => [session.ready, session.me], () => {
 .login__providers { display: grid; gap: var(--s-2); margin-top: var(--s-2); }
 .login__provider { width: 100%; }
 .login__more { margin: 0; }
+/* 比同意行高一階（--text-2），不然會被當成法律小字跳過；balance 讓 360 寬不剩兩個字一行（美術總監應改） */
+.login__routes { margin: 0; font-size: 13px; line-height: 1.6; color: var(--text-2); text-wrap: balance; }
 .login__legal { margin: 0; font-size: 12px; }
 .login__legal a { color: inherit; text-decoration: underline; }
 .login__confirm { margin-top: var(--s-2); padding: var(--s-3); border: 1px solid var(--line); border-radius: var(--r-2); background: var(--surface-2); display: grid; gap: var(--s-2); }

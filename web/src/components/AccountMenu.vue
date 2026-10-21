@@ -8,7 +8,9 @@ import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
 import { can } from "@/lib/provider";
 import { useReviewer } from "@/lib/review";
-import { track } from "@/lib/track";
+import { logoutWithRoutes } from "@/lib/logout";
+import { currentLine, openRoutesDialog, routesAvailable, routesState } from "@/lib/routes";
+import SignalBars from "@/components/routes/SignalBars.vue";
 import NewMark from "@/components/NewMark.vue";
 import CommunityIcon from "@/components/CommunityIcon.vue";
 import { useCheckin } from "@/lib/checkin-store";
@@ -33,6 +35,13 @@ const balance = computed(() => {
   return n >= 1_000_000 ? compact(n) : whole(n);
 });
 const root = ref<HTMLElement | null>(null);
+/** 線路：官方網域上才有（App 裡用 App 自己的線路畫面）；右側寫目前在哪條 */
+const hereLine = routesAvailable() ? currentLine() : undefined;
+function openRoutes() {
+  openRoutesDialog();
+  // 選單項目點完就消失了：關掉清單時焦點回到頭像
+  routesState.opener = root.value?.querySelector<HTMLElement>(".acct__btn") ?? null;
+}
 
 /** 點外面或按 Esc 就收起來。 */
 function onDocClick(e: MouseEvent) {
@@ -85,6 +94,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
       </div>
       <div class="menu__group">
         <RouterLink :to="lp('/settings')" class="menu__item" role="menuitem"><AccountIcon name="settings" />{{ $t("nav.settings") }}</RouterLink>
+        <button v-if="hereLine" type="button" class="menu__item" role="menuitem" @click="openRoutes"><SignalBars :level="3" />{{ $t("routes.title") }}<span class="menu__aside">{{ $t(`routes.name.${hereLine.n}`) }}</span></button>
         <!-- 開發者文件（相容供應商協議）：頁尾有，但登入的作者從頭像選單也走得到 -->
         <RouterLink :to="lp('/developers')" class="menu__item" role="menuitem"><AccountIcon name="code" />{{ $t("footer.developers") }}</RouterLink>
         <RouterLink :to="`${lp('/updates')}?from=menu`" class="menu__item" role="menuitem"><AccountIcon name="spark" />{{ $t("nav.updates") }}<NewMark k="menu.updates" /></RouterLink>
@@ -92,7 +102,7 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
         <RouterLink :to="lp('/campaigns')" class="menu__item" role="menuitem"><AccountIcon name="spark" />{{ $t("campaign.hub.title") }}</RouterLink>
       </div>
       <div class="menu__group">
-        <button class="menu__item" role="menuitem" @click="track('logout'); session.logout()"><AccountIcon name="logout" />{{ $t("nav.logout") }}</button>
+        <button class="menu__item" role="menuitem" @click="logoutWithRoutes(session)"><AccountIcon name="logout" />{{ $t("nav.logout") }}</button>
       </div>
     </div>
   </div>
@@ -144,5 +154,6 @@ onBeforeUnmount(() => { document.removeEventListener("click", onDocClick); docum
 }
 .menu__item svg { width: 18px; height: 18px; color: var(--text-2); }
 .menu__item:hover { background: var(--surface-2); }
+.menu__aside { margin-inline-start: auto; padding-inline-start: var(--s-3); font-size: 13px; color: var(--text-2); white-space: nowrap; }
 @keyframes fade { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 </style>

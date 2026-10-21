@@ -19,6 +19,7 @@ const base: FooterContext = {
   discordInvite: "https://discord.gg/example",
   showDownloadEntry: true,
   canInstallSite: true,
+  routeLine: "routes.name.3",
 };
 const ids = (ctx: FooterContext) => footerGroups(ctx).flatMap((g) => g.links.map((l) => l.id));
 
@@ -55,7 +56,13 @@ describe("頁尾分組", () => {
 
   it("兩種都不行時 App 那組還有更新紀錄，不會整組消失", () => {
     const app = footerGroups({ ...base, showDownloadEntry: false, canInstallSite: false }).find((g) => g.id === "app");
-    expect(app?.links.map((l) => l.id)).toEqual(["updates"]);
+    expect(app?.links.map((l) => l.id)).toEqual(["updates", "routes"]);
+  });
+
+  it("「線路」在 App 組，後面帶目前線路名；本機或 App 裡沒有", () => {
+    const routes = footerGroups(base).find((g) => g.id === "app")?.links.find((l) => l.id === "routes");
+    expect(routes).toMatchObject({ action: "routes", label: "routes.title", detail: "routes.name.3" });
+    expect(ids({ ...base, routeLine: null })).not.toContain("routes");
   });
 
   it("沒有 Discord 邀請時社群組照樣在，只少那一個", () => {
@@ -72,7 +79,7 @@ describe("頁尾分組", () => {
   it("所有標籤在五種語言都有翻譯", () => {
     const keys = new Set<string>(["footer.links"]);
     for (const ctx of [base, { ...base, showDownloadEntry: false }]) {
-      for (const g of footerGroups(ctx)) { keys.add(g.title); g.links.forEach((l) => keys.add(l.label)); }
+      for (const g of footerGroups(ctx)) { keys.add(g.title); g.links.forEach((l) => { keys.add(l.label); if (l.detail) keys.add(l.detail); }); }
       footerLegal(ctx).forEach((l) => keys.add(l.label));
     }
     for (const dict of [zhHant, zhHans, en, ja, ko] as Record<string, string>[])
