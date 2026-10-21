@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createManifest, buildNotes, publishLatest, verifyAssetLinks } from './release.mjs';
+import { createManifest, buildNotes, publishLatest, publishRoutes, downloadHosts, verifyAssetLinks } from './release.mjs';
 const notes={en:'First Android release.', 'zh-Hant':'首個 Android 版本。','zh-Hans':'首个 Android 版本。',ja:'Android 版を公開しました。',ko:'Android 첫 버전입니다.'};
 const input={apk:Buffer.from('signed-apk'),versionCode:2,versionName:'1.0.2',sourceSha:'a'.repeat(40),notes};
 test('manifest binds exact artifact and all locales',()=>{
@@ -42,4 +42,28 @@ test('release requires live origin association for the exact signing identity',(
  const valid=[{relation:['delegate_permission/common.handle_all_urls'],target:{namespace:'android_app',package_name:config.packageId,sha256_cert_fingerprints:['AA:BB']}}];
  assert.doesNotThrow(()=>verifyAssetLinks(valid,config));
  for(const data of [[],{},[{...valid[0],relation:[]}],[{...valid[0],target:{...valid[0].target,sha256_cert_fingerprints:['CC:DD']}}]])assert.throws(()=>verifyAssetLinks(data,config));
+});
+
+const routes=Buffer.from('{"schemaVersion":1,"routes":[{"host":"sukisuki.chat"}]}\n');
+function hosts(initial){
+ const calls=[];let stored=initial;
+ return {calls,read:async(host,key)=>{calls.push(`read:${host}/${key}`);return stored??null;},write:async(key,value)=>{calls.push('write:'+key);stored=value;}};
+}
+test('route list is published once and read back from every download host',async()=>{
+ const io=hosts(null);assert.equal(await publishRoutes(routes,io),true);
+ assert.deepEqual(io.calls.filter(c=>c.startsWith('write')),['write:routes.json']);
+ assert.deepEqual(io.calls.slice(-4),downloadHosts.map(h=>`read:${h}/routes.json`));
+ assert.deepEqual(downloadHosts,['downloads.sukisuki.ai','downloads.hearthroom.club','downloads.sukisuki.chat','downloads.sukisuki.pro']);
+});
+test('an unchanged route list is not rewritten',async()=>{
+ const io=hosts(routes);assert.equal(await publishRoutes(routes,io),false);
+ assert.ok(io.calls.every(c=>!c.startsWith('write')));
+});
+test('a host serving something else after publishing is a failure',async()=>{
+ const io=hosts(null);const read=io.read;let n=0;
+ io.read=async(h,k)=>++n===4?Buffer.from('stale'):read(h,k);
+ await assert.rejects(publishRoutes(routes,io));
+});
+test('malformed route lists never reach the bucket',async()=>{
+ for(const bad of ['not json','{"schemaVersion":2,"routes":[]}','{"schemaVersion":1}']){const io=hosts(null);await assert.rejects(publishRoutes(Buffer.from(bad),io));assert.ok(io.calls.every(c=>!c.startsWith('write')));}
 });

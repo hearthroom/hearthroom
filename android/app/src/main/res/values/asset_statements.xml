@@ -1,1 +1,5 @@
-<resources><string name="asset_statements" translatable="false">[{\"relation\":[\"delegate_permission/common.handle_all_urls\"],\"target\":{\"namespace\":\"web\",\"site\":\"https://hearthroom.club\"}}]</string></resources>
+<resources>
+<string name="asset_statements" translatable="false">[{\"relation\":[\"delegate_permission/common.handle_all_urls\"],\"target\":{\"namespace\":\"web\",\"site\":\"https://sukisuki.ai\"}},{\"relation\":[\"delegate_permission/common.handle_all_urls\"],\"target\":{\"namespace\":\"web\",\"site\":\"https://hearthroom.club\"}},{\"relation\":[\"delegate_permission/common.handle_all_urls\"],\"target\":{\"namespace\":\"web\",\"site\":\"https://sukisuki.chat\"}},{\"relation\":[\"delegate_permission/common.handle_all_urls\"],\"target\":{\"namespace\":\"web\",\"site\":\"https://sukisuki.pro\"}}]</string>
+<!-- Every official route may be the TWA origin; switching between them in one session keeps the browser UI hidden. -->
+<string-array name="trusted_origins" translatable="false"><item>https://sukisuki.ai</item><item>https://hearthroom.club</item><item>https://sukisuki.chat</item><item>https://sukisuki.pro</item></string-array>
+</resources>

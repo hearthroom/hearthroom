@@ -1,10 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Hearthroom</string>
-    <string name="installed_version">현재 버전 %1$s</string>
     <string name="checking">업데이트 확인 중…</string>
     <string name="up_to_date">Hearthroom이 최신 버전입니다.</string>
-    <string name="check_again">다시 확인</string>
     <string name="open_site">Hearthroom 열기</string>
     <string name="update_available">버전 %1$s을 사용할 수 있습니다</string>
     <string name="download_update">업데이트 다운로드</string>
@@ -30,4 +28,40 @@
     <string name="web_file_failed">파일을 저장하거나 선택하지 못했습니다. 다시 시도해 주세요. 다운로드는 32 MB 이하여야 합니다.</string>
     <string name="web_saved">파일을 저장했습니다.</string>
     <string name="shortcut_webview">앱 안에서 열기</string>
+    <string name="route_1">회선 1</string>
+    <string name="route_2">회선 2</string>
+    <string name="route_3">회선 3</string>
+    <string name="route_4">회선 4</string>
+    <string name="launch_connecting">연결 중…</string>
+    <string name="launch_slow">연결이 느려 다시 시도 중. 회선 변경도 가능</string>
+    <string name="launch_change_route">회선 변경</string>
+    <string name="launch_switched">기존 회선에 연결할 수 없어 %1$s(으)로 바꿨습니다</string>
+    <string name="launch_switched_sign_in">기존 회선에 연결할 수 없어 %1$s(으)로 바꿨습니다. 이 회선은 따로 로그인해야 합니다</string>
+    <string name="routes_title">회선</string>
+    <string name="routes_recheck">다시 확인</string>
+    <string name="routes_back">뒤로</string>
+    <string name="routes_auto">자동 선택</string>
+    <string name="routes_auto_hint">현재 회선에 연결할 수 없으면 다른 회선으로 바꾸고, 바꾸기 전에 알려 드립니다</string>
+    <string name="route_current">사용 중</string>
+    <string name="route_switched_here">지난번 자동 전환</string>
+    <string name="route_visited">로그인한 적 있음</string>
+    <string name="route_checking">확인 중</string>
+    <string name="route_unreachable">연결 불가</string>
+    <string name="route_latency">%1$d ms</string>
+    <string name="routes_sign_in_note">회선마다 로그인이 따로 유지됩니다. 처음 쓰는 회선은 한 번 더 로그인해야 하며, 기존 로그인은 그대로 남습니다.</string>
+    <string name="routes_open">%1$s(으)로 열기</string>
+    <string name="routes_pick_working">현재 회선에 연결할 수 없습니다. 연결되는 회선을 고르세요</string>
+    <string name="routes_version">버전 %1$s</string>
+    <string name="unreachable_title">연결할 수 없음</string>
+    <string name="unreachable_body">모든 회선에 연결할 수 없습니다. 네트워크가 불안정하거나 제한되었을 수 있습니다. 잠시 후 다시 시도하거나 다른 네트워크를 이용하세요.</string>
+    <string name="offline_title">네트워크에 연결되지 않음</string>
+    <string name="offline_body">Wi-Fi와 모바일 데이터가 모두 연결되어 있지 않습니다.</string>
+    <string name="offline_settings">네트워크 설정</string>
+    <string name="switch_title">%1$s(으)로 바꿀까요?</string>
+    <string name="switch_body">이 회선은 따로 로그인해야 합니다. 기존 회선의 로그인은 남아 있어 언제든 돌아갈 수 있습니다.</string>
+    <string name="switch_confirm">바꾸고 열기</string>
+    <string name="cancel">취소</string>
+    <string name="update_later">나중에</string>
+    <string name="shortcut_routes">회선</string>
+    <string name="web_change_route">회선 변경</string>
 </resources>

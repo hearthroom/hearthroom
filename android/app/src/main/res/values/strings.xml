@@ -1,10 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Hearthroom</string>
-    <string name="installed_version">Installed version %1$s</string>
     <string name="checking">Checking for updates…</string>
     <string name="up_to_date">Hearthroom is up to date.</string>
-    <string name="check_again">Check again</string>
     <string name="open_site">Open Hearthroom</string>
     <string name="update_available">Version %1$s is available</string>
     <string name="download_update">Download update</string>
@@ -30,4 +28,40 @@
     <string name="web_file_failed">The file could not be saved or selected. Try again; downloads must be 32 MB or smaller.</string>
     <string name="web_saved">File saved.</string>
     <string name="shortcut_webview">Open inside app</string>
+    <string name="route_1">Route 1</string>
+    <string name="route_2">Route 2</string>
+    <string name="route_3">Route 3</string>
+    <string name="route_4">Route 4</string>
+    <string name="launch_connecting">Connecting…</string>
+    <string name="launch_slow">Slow connection. Still trying, or switch routes.</string>
+    <string name="launch_change_route">Routes</string>
+    <string name="launch_switched">The usual route is unavailable. Switched to %1$s.</string>
+    <string name="launch_switched_sign_in">The usual route is unavailable. Switched to %1$s, which needs a separate sign-in.</string>
+    <string name="routes_title">Routes</string>
+    <string name="routes_recheck">Check routes again</string>
+    <string name="routes_back">Back</string>
+    <string name="routes_auto">Choose automatically</string>
+    <string name="routes_auto_hint">When the current route is unavailable, another one is used and you are told first.</string>
+    <string name="route_current">In use</string>
+    <string name="route_switched_here">Switched here automatically</string>
+    <string name="route_visited">Signed in before</string>
+    <string name="route_checking">Checking</string>
+    <string name="route_unreachable">Unavailable</string>
+    <string name="route_latency">%1$d ms</string>
+    <string name="routes_sign_in_note">Each route has its own sign-in. A route used for the first time needs one more sign-in; existing sign-ins are kept.</string>
+    <string name="routes_open">Open with %1$s</string>
+    <string name="routes_pick_working">The current route is unavailable. Pick one that works.</string>
+    <string name="routes_version">Version %1$s</string>
+    <string name="unreachable_title">No route available</string>
+    <string name="unreachable_body">No route can be reached. The network may be unstable or restricted. Try again later or on another network.</string>
+    <string name="offline_title">Phone is offline</string>
+    <string name="offline_body">Wi-Fi and mobile data are not connected.</string>
+    <string name="offline_settings">Network settings</string>
+    <string name="switch_title">Use %1$s?</string>
+    <string name="switch_body">This route needs its own sign-in. The sign-in on your current route is kept, and you can switch back at any time.</string>
+    <string name="switch_confirm">Switch and open</string>
+    <string name="cancel">Cancel</string>
+    <string name="update_later">Later</string>
+    <string name="shortcut_routes">Routes</string>
+    <string name="web_change_route">Routes</string>
 </resources>

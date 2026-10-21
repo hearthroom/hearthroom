@@ -4,5 +4,11 @@
         <TextView android:id="@+id/page_origin" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:padding="8dp" android:textSize="14sp" android:textColor="@color/text" android:breakStrategy="simple" />
     </LinearLayout>
     <ProgressBar android:id="@+id/page_progress" style="?android:attr/progressBarStyleHorizontal" android:layout_width="match_parent" android:layout_height="4dp" android:max="100" android:visibility="gone" />
-    <FrameLayout android:id="@+id/web_content" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" />
+    <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+        <FrameLayout android:id="@+id/web_content" android:layout_width="match_parent" android:layout_height="match_parent" />
+        <!-- Continues the launch mark until the page first draws, so there is no blank flash. -->
+        <FrameLayout android:id="@+id/launch_cover" android:layout_width="match_parent" android:layout_height="match_parent" android:background="@color/background" android:clickable="true" android:importantForAccessibility="noHideDescendants">
+            <ImageView android:layout_width="160dp" android:layout_height="160dp" android:layout_gravity="center" android:src="@drawable/mark" android:importantForAccessibility="no" />
+        </FrameLayout>
+    </FrameLayout>
 </LinearLayout>

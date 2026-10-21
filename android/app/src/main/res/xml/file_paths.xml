@@ -1,1 +1,1 @@
-<paths xmlns:android="http://schemas.android.com/apk/res/android"><cache-path name="updates" path="updates/" /></paths>
+<paths xmlns:android="http://schemas.android.com/apk/res/android"><cache-path name="updates" path="updates/" /><files-path name="twa_splash" path="twa_splash/" /></paths>
