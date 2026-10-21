@@ -35,6 +35,7 @@ not_found_handling = "single-page-application"
 # 「Worker 跑不跑得到」的唯一開關；漏掉的路徑在舊網域上會變成一個還能用的鏡像站。
 # 靜態檔在 /assets/ 底下，不在這個清單裡，所以不會多付一次 Worker 呼叫。
 run_worker_first = [
+  "/hh-api", "/hh-api/*",
   "/", "/metrics", "/library*", "/v1/*", "/search*", "/mine*", "/wallet*", "/create*", "/auth/*",
   # These SPA entrypoints also need the localized manifest in their initial HTML.
   "/me", "/me/*", "/login*", "/checkin*", "/go/*", "/resources*", "/settings*", "/developers*", "/campaigns*", "/play*",

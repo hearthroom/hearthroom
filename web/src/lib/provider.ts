@@ -101,6 +101,22 @@ export function setProvider(id: ProviderId): void {
 
 export function apiBaseOf(id: ProviderId = currentProvider()): string {
   if(!isProvider(id))throw new Error("unknown_provider");
+  const base = oauthBaseOf(id);
+  // Explicit self-hosted targets keep their own transport. Official rollout is
+  // host-scoped, with a build-time switch for a deliberate whole-site rollback.
+  if (base !== "https://api.harperharbor.com" || import.meta.env.VITE_HARBOR_API_TRANSPORT === "direct") return base;
+  if (typeof location === 'undefined' || !location.origin || location.origin === 'null') return base;
+  const origin = new URL(location.origin);
+  const hosts = (import.meta.env.VITE_HARBOR_PROXY_HOSTS ?? "sukisuki.chat,sukisuki.pro").split(",").map(h => h.trim()).filter(Boolean);
+  if (origin.protocol === "https:" && hosts.some(h => origin.hostname === h || origin.hostname === `play.${h}`)) {
+    return `${origin.origin}/hh-api`;
+  }
+  return base;
+}
+
+/** OAuth issuer/resource identifiers never follow the browser's transport proxy. */
+export function oauthBaseOf(id: ProviderId = currentProvider()): string {
+  if(!isProvider(id))throw new Error("unknown_provider");
   return API_BASE[id];
 }
 

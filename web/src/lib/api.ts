@@ -1,7 +1,7 @@
 import { deviceToken } from "./reward-device";
 import type { Rating, RatingAnswers, Topic } from "../../../shared/content-rating";
 import { COMMUNITY_API, UPSTREAM_API } from "./config";
-import { apiBaseOf, currentProvider, type ProviderId } from "./provider";
+import { apiBaseOf, oauthBaseOf, currentProvider, type ProviderId } from "./provider";
 import { hideParam } from "./hidden-tags";
 import { currentSurface } from "./track";
 import { i18n } from "./i18n";
@@ -1036,7 +1036,7 @@ export async function fetchScoreSummary(token: string, days = 30, provider: Prov
 }
 
 /** 原站的充值頁。本站不碰付款，只把人送過去。 */
-export const TOP_UP_URL = `${UPSTREAM_API.replace("api.", "")}/pages/mine/vippay`;
+export const TOP_UP_URL = `${oauthBaseOf().replace("api.", "")}/pages/mine/vippay`;
 
 // ---- 建卡工作台：上游的寫入面 ------------------------------------------------
 

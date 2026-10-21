@@ -2,7 +2,7 @@ import { managedAuth, isManagedAuth, authRequest, managedToken, rememberManaged,
 import { safeReturnTo } from './login-return';
 import { readCredential, writeCredential, removeCredential } from './credential-store';
 import { UPSTREAM_API } from "./config";
-import { apiBaseOf, currentProvider, scopeOf, type ProviderId } from "./provider";
+import { apiBaseOf, oauthBaseOf, currentProvider, scopeOf, type ProviderId } from "./provider";
 import { track } from "./track";
 import { i18n } from "./i18n";
 import { SITE } from "./site";
@@ -62,7 +62,7 @@ async function clientId(provider:ProviderId=currentProvider()): Promise<string> 
   const cached = localStorage.getItem(cacheKey);
   if (cached) return cached;
 
-  const res = await fetch(`${baseFor(provider)}/oauth/register`, {
+  const res = await fetch(`${oauthBaseOf(provider)}/oauth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -104,15 +104,14 @@ export async function beginLogin(returnTo: string, options: {provider?:ProviderI
     state,
     code_challenge: await s256(verifier),
     code_challenge_method: "S256",
-    resource: `${apiBaseOf(provider)}/open/v1`,
+    resource: `${oauthBaseOf(provider)}/open/v1`,
   });
   // Harbor 不給 scope 只會拿到唯讀，寫不了卡。
   const scope = scopeOf(provider);
   if (scope) params.set("scope", scope);
   // 登入／同意頁用玩家在這裡的介面語言（OIDC ui_locales）。
   params.set("ui_locales", String(i18n.global.locale.value));
-  // 走備用網域時，登入頁也要換成備用網域的（邊緣代理會把 Host 改寫，伺服器光看 Host 判不出來）
-  location.assign(`${baseFor(provider)}/oauth/authorize?${params}`);
+  location.assign(`${oauthBaseOf(provider)}/oauth/authorize?${params}`);
 }
 
 export interface TokenPair {
@@ -141,7 +140,7 @@ async function exchange(body: Record<string, string>, provider:ProviderId=curren
   const res = await fetch(`${baseFor(provider)}/oauth/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ ...body, client_id: grantClient, resource: `${apiBaseOf(provider)}/open/v1` }),
+    body: new URLSearchParams({ ...body, client_id: grantClient, resource: `${oauthBaseOf(provider)}/open/v1` }),
   });
   if (!res.ok) {
     // 4xx 是「這張憑證不算數」，5xx 與斷網是「現在問不到」。只有前者該把人登出——

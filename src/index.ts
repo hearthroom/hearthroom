@@ -1,6 +1,7 @@
 import { HEAT_CRON, syncHeat } from "./heat";
 import { transferGateRoutes, isTransferHeld } from './draft-transfer-gate';
-import { bumpOp } from './ops-metrics';
+import { bumpOp, bumpHarborProxy } from './ops-metrics';
+import { HARBOR_PROXY_PREFIX, proxyHarborApi } from './harbor-api-proxy';
 import { accountAuthRoutes, accountAuthMaintenance, syncNickname } from './account-auth';
 import { snapshot } from './snapshot-cache';
 import { cardLink, linkPreview } from './card-link';
@@ -1988,6 +1989,13 @@ async function numericSchemaReady(db: D1Database): Promise<boolean> {
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    const path = new URL(request.url).pathname;
+    // Transport is independent of the community schema, HTML transforms and cookies.
+    if (path === HARBOR_PROXY_PREFIX || path.startsWith(`${HARBOR_PROXY_PREFIX}/`)) {
+      const response = await proxyHarborApi(request, env);
+      ctx.waitUntil(bumpHarborProxy(env.DB, request, response.status));
+      return response;
+    }
     if (!(await numericSchemaReady(env.DB))) return Response.json({error:'maintenance'}, {
       status:503, headers:{'Retry-After':'30','Cache-Control':'no-store'},
     });

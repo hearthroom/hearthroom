@@ -1,3 +1,5 @@
+import { PROXY_ROUTES, proxyRoute } from './harbor-api-proxy';
+
 /**
  * 各功能的操作計數，共用一張表、依 metric 分開輸出。每個 metric 列舉自己的合法值，
  * 表裡多出來的列（舊版本、手動寫入）不會變成 Prometheus 標籤。
@@ -77,5 +79,24 @@ export async function opsMetrics(db: D1Database): Promise<string> {
       }
     }
   }
+  out.push('# HELP hearthroom_harbor_proxy_requests_total Harbor proxy responses by bounded route, HTTP status class and upgrade request.', '# TYPE hearthroom_harbor_proxy_requests_total counter');
+  for (const r of rows.results) {
+    const [route, ws] = r.operation.split(':');
+    if (r.metric === 'harbor_proxy' && (PROXY_ROUTES as readonly string[]).includes(route)
+      && /^(true|false)$/.test(ws ?? '') && r.operation === `${route}:${ws}` && /^[1-5]xx$/.test(r.outcome)) {
+      out.push(`hearthroom_harbor_proxy_requests_total{route="${route}",status_class="${r.outcome}",websocket="${ws}"} ${r.value}`);
+    }
+  }
   return out.join("\n") + "\n";
+}
+
+/** Persist after headers/upgrade arrive; never wait for a long-lived stream to close. */
+export async function bumpHarborProxy(db: D1Database, request: Request, status: number): Promise<void> {
+  const route = proxyRoute(new URL(request.url).pathname.slice('/hh-api'.length));
+  const websocket = request.headers.get('Upgrade')?.toLowerCase() === 'websocket';
+  const statusClass = `${Math.floor(status / 100)}xx`;
+  try {
+    await db.prepare('INSERT INTO ops_metrics VALUES (?1, ?2, ?3, 1) ON CONFLICT(metric, operation, outcome) DO UPDATE SET value = value + 1')
+      .bind('harbor_proxy', `${route}:${websocket}`, statusClass).run();
+  } catch { console.warn('Harbor proxy metric unavailable'); }
 }
