@@ -132,4 +132,15 @@ describe("GA4 runtime", () => {
     vi.stubGlobal("navigator", { globalPrivacyControl: true });
     expect(ga.checkoutUrl("https://console.harperharbor.com/me/billing?ga_session_id=1790000000")).not.toContain("ga_session_id");
   });
+  it("preserves every sanitized SPA context while linker validation is pending", () => {
+    const ga = createGa4();
+    ga.start(true, { clientId: "1.2", landingUrl: "https://sukisuki.ai/?_gl=1*stale*_ga*" + btoa("1234.5678") });
+    ga.pageView(); ga.track("share", { detail: "share_clipboard", subject: "PRIVATE" });
+    vi.stubGlobal("location", new URL("https://sukisuki.ai/wallet")); ga.pageView();
+    const get = ga.commands().find(c => c[0] === "get" && c[2] === "client_id")!;
+    (get[3] as (id: unknown) => void)("1234.5678");
+    const events=ga.commands().filter(c => c[0] === "event");
+    expect(events.map(c=>c[1])).toEqual(["page_view", "share", "page_view"]);
+    expect(events.map(c=>(c[2] as {page_type:string}).page_type)).toEqual(["card", "card", "wallet"]);
+  });
 });

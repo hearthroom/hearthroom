@@ -61,7 +61,7 @@ const pages: RouteRecordRaw[] = [
   { path: "developers", component: () => import("./pages/DevelopersPage.vue") },
   { path: "download", component: () => import("./pages/DownloadPage.vue") },
   { path: "guide", component: () => import("./pages/GuidePage.vue") },
-  { path: "privacy", component: () => import("./pages/PrivacyPage.vue") },
+  { path: "privacy", component: () => import("./pages/PrivacyPage.vue"), meta: { petAway: true, readingNotice: true } },
   { path: "updates", component: () => import("./pages/UpdatesPage.vue") },
   // 官方部落格：/blog 全部、/blog/<欄目>、/blog/<欄目>/<文章>。/blog/p/<id> 是短網址，問到正式網址就換過去，問不到是 404。
   // 分組頁 /blog/g/<分組>：放在 blog/:column? 前面，不然 g 會被當成欄目
