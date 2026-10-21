@@ -176,12 +176,12 @@ onMounted(() => document.addEventListener("keydown", onSlash));
   <CoachTour />
   <NewcomerTour />
   <!-- 桌寵兼嚮導：玩卡頁與沙盒（bare、卡片 App 網域）不出現，其他每一頁都在 -->
-  <SukiPet v-if="!route.meta.bare && !isPlayHost()" />
+  <SukiPet v-if="!route.meta.bare && !isPlayHost() && !route.meta.readingNotice" />
   <ConfirmDialog />
   <RatingDialog />
   <!-- 裝到主畫面的提示：對話與遊戲頁是全螢幕的，不在那裡打擾 -->
   <!-- 卡片 App 網域的頁全是 bare，但「加到主畫面」的提示卡就在那裡 -->
-  <InstallToast v-if="!route.meta.bare || isPlayHost()" />
+  <InstallToast v-if="(!route.meta.bare || isPlayHost()) && !route.meta.readingNotice" />
 
   <!--
     社群維護的開源站：頁尾照開源專案的慣例，把人導去倉庫——回報問題、看原始碼、看授權都在那裡。
