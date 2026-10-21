@@ -246,3 +246,61 @@ it("uses global identity settings and explicitly clears them on logout, without 
   expect(command[2]).not.toHaveProperty("user_id"); expect(command[2]).not.toHaveProperty("user_properties");
  }
 });
+it("does not discard a validated linker while Google's script takes over three seconds to load", async () => {
+ vi.useFakeTimers();
+ try {
+  const ga=createGa4(); const sync=vi.fn();
+  ga.start(true,{clientId:"1.2",landingUrl:"https://sukisuki.chat/?_gl=1*valid*_ga*"+btoa("1234.5678"),onClientId:sync});
+  ga.pageView();
+  await vi.advanceTimersByTimeAsync(6000);
+  expect(ga.commands().filter(c=>c[0]==="config")).toHaveLength(1);
+  const get=ga.commands().find(c=>c[0]==="get"&&c[2]==="client_id")!;
+  (get[3] as (value:unknown)=>void)("1234.5678");
+  expect(sync).toHaveBeenCalledExactlyOnceWith("1234.5678");
+  expect(ga.checkoutUrl("https://console.harperharbor.com/me/billing")).toContain("ga_client_id=1234.5678");
+ } finally {vi.useRealTimers();}
+});
+it("accepts a late Google-validated client after the post-load deadline and synchronizes only once", async () => {
+ vi.useFakeTimers();
+ try {
+  const ga=createGa4(); const sync=vi.fn();
+  ga.start(true,{clientId:"1.2",landingUrl:"https://sukisuki.chat/?_gl=1*valid*_ga*"+btoa("1234.5678"),onClientId:sync});
+  document.querySelector('script[data-hearthroom-ga4]')!.dispatchEvent(new Event('load'));
+  await vi.advanceTimersByTimeAsync(3001);
+  expect(ga.commands().filter(c=>c[0]==="config").at(-1)?.[2]).toMatchObject({client_id:"1.2"});
+  const get=ga.commands().find(c=>c[0]==="get"&&c[2]==="client_id")!;
+  (get[3] as (value:unknown)=>void)("1234.5678"); (get[3] as (value:unknown)=>void)("1234.5678");
+  expect(sync).toHaveBeenCalledExactlyOnceWith("1234.5678");
+  expect(ga.commands().filter(c=>c[0]==="config").at(-1)?.[2]).toMatchObject({client_id:"1234.5678",cookie_domain:"none",send_page_view:false});
+ } finally {vi.useRealTimers();}
+});
+it("does not persist a mismatched or GPC-blocked late linker result", async () => {
+ vi.useFakeTimers();
+ try {
+  for(const gpc of [false,true]) {
+   const ga=createGa4(); const sync=vi.fn();
+   vi.stubGlobal("navigator",{globalPrivacyControl:false});
+   ga.start(true,{clientId:"1.2",landingUrl:"https://sukisuki.chat/?_gl=1*valid*_ga*"+btoa("1234.5678"),onClientId:sync});
+   document.querySelectorAll('script[data-hearthroom-ga4]').item(document.querySelectorAll('script[data-hearthroom-ga4]').length-1)!.dispatchEvent(new Event('load'));
+   await vi.advanceTimersByTimeAsync(3001);
+   vi.stubGlobal("navigator",{globalPrivacyControl:gpc});
+   const get=ga.commands().find(c=>c[0]==="get"&&c[2]==="client_id")!;
+   (get[3] as (value:unknown)=>void)(gpc?"1234.5678":"9999.8888");
+   expect(sync).not.toHaveBeenCalled();
+  }
+ } finally {vi.useRealTimers();}
+});
+it("persists a delayed validated linker through a same-origin keepalive POST", async () => {
+ vi.useFakeTimers(); vi.resetModules();
+ try {
+  vi.stubGlobal("location",new URL("https://sukisuki.chat/guide?_gl=1*valid*_ga*"+btoa("1234.5678")));
+  const fetcher=vi.fn(async()=>({ok:true,json:async()=>({enabled:true,clientId:"1.2"})}));
+  vi.stubGlobal("fetch",fetcher);
+  const api=await import("../src/lib/ga4"); await api.startGa4();
+  await vi.advanceTimersByTimeAsync(6000);
+  const get=window.hearthroomGaData?.map(c=>Array.from(c)).find(c=>c[0]==="get"&&c[2]==="client_id")!;
+  (get[3] as (value:unknown)=>void)("1234.5678");
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  expect(fetcher).toHaveBeenLastCalledWith("/v1/analytics/session",expect.objectContaining({method:"POST",credentials:"same-origin",keepalive:true,body:JSON.stringify({clientId:"1234.5678"})}));
+ } finally {vi.useRealTimers();}
+});
