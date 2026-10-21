@@ -1,5 +1,7 @@
 <!-- S1 waiting for a route, and S4 the release found by a previous background check. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/launch_root" android:layout_width="match_parent" android:layout_height="match_parent" android:background="@color/background">
+    <!-- Holds the system splash's mark in place until the site's own cover takes over. -->
+    <ImageView android:id="@+id/launch_mark" android:layout_width="160dp" android:layout_height="160dp" android:layout_gravity="center" android:src="@drawable/mark" android:importantForAccessibility="no" />
     <LinearLayout android:id="@+id/waiting" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:paddingHorizontal="24dp" android:visibility="invisible">
         <Space android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="2" />
         <ImageView android:layout_width="wrap_content" android:layout_height="140dp" android:layout_gravity="center_horizontal" android:adjustViewBounds="true" android:src="@drawable/suki_roll" android:importantForAccessibility="no" />
