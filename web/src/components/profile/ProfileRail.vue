@@ -14,7 +14,7 @@ import { useSession } from '@/lib/session';
 import { useLocalePath } from '@/lib/use-locale';
 import { useNotifications } from '@/lib/notifications';
 import { useReviewer } from '@/lib/review';
-import { track } from '@/lib/track';
+import { logoutWithRoutes } from '@/lib/logout';
 import type { CommunityView } from '@/lib/community';
 import type { Author } from '@/lib/types';
 
@@ -65,7 +65,7 @@ const next = computed(() => steps.value.find((s) => !s.done) ?? null);
       <RouterLink v-if="handle" :to="lp(`/authors/${handle}`)" class="quick__row"><span class="quick__icon"><AccountIcon name="eye" /></span><span class="quick__label">{{ $t('me.publicPage') }}</span><AccountIcon name="arrow" class="quick__chevron" /></RouterLink>
       <RouterLink :to="lp('/settings')" class="quick__row"><span class="quick__icon"><AccountIcon name="settings" /></span><span class="quick__label">{{ $t('nav.settings') }}</span><AccountIcon name="arrow" class="quick__chevron" /></RouterLink>
       <hr class="quick__rule" />
-      <button type="button" class="quick__row quick__logout" @click="track('logout'); session.logout()"><span class="quick__icon quick__icon--plain"><AccountIcon name="logout" /></span><span class="quick__label">{{ $t('nav.logout') }}</span></button>
+      <button type="button" class="quick__row quick__logout" @click="logoutWithRoutes(session)"><span class="quick__icon quick__icon--plain"><AccountIcon name="logout" /></span><span class="quick__label">{{ $t('nav.logout') }}</span></button>
     </nav>
   </aside>
 </template>

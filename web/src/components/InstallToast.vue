@@ -12,12 +12,14 @@ import { newcomerPrompt } from "@/lib/newcomer-prompt";
 import { tourState } from "@/lib/coach-tour";
 import { newcomerTour } from "@/lib/newcomer-tour";
 import { petSpeaking } from "@/pet/events";
+import { routesState } from "@/lib/routes";
 
 /**
- * 一次只有一個提示（美術總監最終 r1 M6、r2 M6，手機桌機都一樣）：新手提示卡、首次導覽、新手七日導覽在畫面上時收起；
+ * 一次只有一個提示（美術總監最終 r1 M6、r2 M6，手機桌機都一樣）：新手提示卡、首次導覽、新手七日導覽、線路提示卡在畫面上時收起；
  * 桌寵正在說話時先不出現，但已經出現了就不跟著她的每一句話收放，免得閃。
  */
-const guiding = computed(() => newcomerPrompt.showing || tourState.step !== null || newcomerTour.day > 0);
+// 線路提示卡優先（連線慢的時候先解決連線）：它在畫面上時這張延後，收掉後照自己的規則出現
+const guiding = computed(() => newcomerPrompt.showing || tourState.step !== null || newcomerTour.day > 0 || routesState.promptShowing);
 const appeared = ref(false);
 const showing = computed(() => installPrompt.visible && !guiding.value && (appeared.value || !petSpeaking.value));
 watch(showing, (v) => { if (v) appeared.value = true; });

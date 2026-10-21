@@ -114,9 +114,10 @@ export async function managedToken(provider:ProviderId):Promise<TokenPair|null>{
   void request.finally(()=>{if(requests.get(provider)===request)requests.delete(provider);}).catch(()=>{});
   return request;
 }
-export async function managedLogout(){
+/** allRoutes：連同這個瀏覽器經換線帶過去的其他線路一起登出（不影響其他裝置） */
+export async function managedLogout(o:{allRoutes?:boolean}={}){
   loggedOut=true;forgetManaged();
-  await authRequest('logout',{});
+  await authRequest('logout',o.allRoutes?{allRoutes:true}:{});
   notifyOtherTabs('logout');
 }
 export async function disconnectManaged(provider:ProviderId){

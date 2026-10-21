@@ -175,6 +175,11 @@ export const BEACON_EVENTS = new Set([
   // 遊玩畫布「積分不夠」：卡片顯示一次記一次；兩條路的點擊在落地頁記（detail 是 checkin／plan）。
   // 卡片是畫布畫的，宿主只給字和連結，所以只能這樣數；不帶任何帳號、卡或對話的識別
   "credits_shortfall_shown", "credits_shortfall_click",
+  // 線路（換網域）：慢的時候的提示卡（detail 是 shown／switch／all／dismissed）、線路清單（opened／switched／failed）、
+  // 換手過場頁（arrived／issue_failed／complete_failed）。subject 只放線路編號 1–4，不放任何帳號或網址
+  "routes_prompt", "routes_dialog", "routes_handoff",
+  // 直接開另一個網域時，Harbor 那邊已登入而免按登入就進來了（對照 login_done 看靜默登入省掉多少次）
+  "login_silent",
 ]);
 
 /** beacon 事件的 detail 小分类。同样白名单，避免自由字串进 blob。 */
@@ -196,6 +201,8 @@ export const BEACON_DETAILS = new Set([
   "shown", "dismissed", "clicked", "strip", "footer", "menu", "discord", "page", "spotlight", "notification", "direct",
   // 積分不夠的兩條路：落到簽到頁（今日任務）或月卡入口
   "checkin", "plan",
+  // 線路：提示卡、清單與換手過場頁的結果
+  "switch", "all", "opened", "switched", "failed", "arrived", "issue_failed", "complete_failed",
 ]);
 
 /**
