@@ -535,6 +535,17 @@ accountAuthRoutes.post('/v1/auth/token',async c=>{
 });
 accountAuthRoutes.post('/v1/auth/logout',async c=>{
   const body=await c.req.json().catch(()=>({})),session=body.allRoutes===true?await readSession(c,false):null;
+  const targetBrowser=getCookie(c,ROUTE_TARGET);
+  if(targetBrowser){
+    const targetHash=await hash(targetBrowser),origin=originOf(c);
+    // Fence both transaction orders: logout first removes the handoff so a queued
+    // redemption cannot insert; redemption first leaves its receipt so logout can
+    // delete that new session even before its Set-Cookie reaches this browser.
+    await c.env.DB.batch([
+      c.env.DB.prepare('DELETE FROM account_sessions WHERE token_hash IN (SELECT consumed_session FROM account_route_handoffs WHERE target_origin=? AND target_browser=?)').bind(origin,targetHash),
+      c.env.DB.prepare('DELETE FROM account_route_handoffs WHERE target_origin=? AND target_browser=?').bind(origin,targetHash),
+    ]);
+  }
   await cancelAttempt(c,true);
   const raw=getCookie(c,SESSION);
   if(session)await c.env.DB.batch([
