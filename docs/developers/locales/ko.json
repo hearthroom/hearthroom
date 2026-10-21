@@ -2272,5 +2272,6 @@
   "dbd5d3615f700": "에이전트 설정 생성",
   "d5624afa08837": "bearer 계정이 소유하는 에이전트 설정을 만들어요. `visibility`를 `private`으로 설정하면 작성자만, `unlisted`로 설정하면 링크로 접근할 수 있으며 `visibility`를 생략하면 `unlisted`가 돼요. 승인된 클라이언트는 scope 범위에서 계속 접근할 수 있어요. 생성만으로 공개하거나 심사를 신청하지 않아요. CLI는 `--create`에서 `private`을 보내요.",
   "dd4e8e5e9fb1c": "`not_found`",
-  "d6e2a15c61061": "`temporarily_unavailable`"
+  "d6e2a15c61061": "`temporarily_unavailable`",
+  "d43e82bc212a8": "스트리밍 출력 기본값을 결정할 모델입니다. 생략하면 앱의 기본 모델을 사용하며, 저장된 모델 선택은 변경하지 않습니다."
 }

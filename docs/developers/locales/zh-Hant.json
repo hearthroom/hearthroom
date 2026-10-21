@@ -2272,5 +2272,6 @@
   "dbd5d3615f700": "建立智慧體設定",
   "d5624afa08837": "建立由 bearer 帳號擁有的智慧體設定；`visibility` 設為 `private` 時僅作者可存取，設為 `unlisted` 時可透過連結開啟，省略 `visibility` 時預設為 `unlisted`。已授權客戶端仍可依 scope 存取；建立不會公開發布或提交審核，CLI 的 `--create` 會送出 `private`。",
   "dd4e8e5e9fb1c": "`not_found`",
-  "d6e2a15c61061": "`temporarily_unavailable`"
+  "d6e2a15c61061": "`temporarily_unavailable`",
+  "d43e82bc212a8": "用於解析流式輸出預設值的模型；省略時使用應用的預設模型，不會變更已儲存的模型選擇。"
 }
