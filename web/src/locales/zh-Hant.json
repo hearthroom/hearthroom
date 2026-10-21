@@ -3151,7 +3151,6 @@
   "routes.prompt.later": "關閉線路提示",
   "routes.arrived": "已切換到{line}（{host}）",
   "routes.arrivedSignedOut": "這條線路尚未登入。",
-  "routes.loginHint": "從已登入網站的「線路」切換，即可保持登入。",
   "routes.logout.title": "要登出嗎？",
   "routes.logout.body": "將登出這條線路。",
   "routes.logout.all": "同時登出其他線路",

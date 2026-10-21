@@ -3151,7 +3151,6 @@
   "routes.prompt.later": "Dismiss route suggestion",
   "routes.arrived": "Switched to {line} ({host})",
   "routes.arrivedSignedOut": "This route is not signed in.",
-  "routes.loginHint": "To stay signed in here, switch from “Routes” on the site where you’re already signed in.",
   "routes.logout.title": "Sign out?",
   "routes.logout.body": "This route will be signed out.",
   "routes.logout.all": "Also sign out of other routes",

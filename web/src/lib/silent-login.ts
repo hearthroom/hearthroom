@@ -33,8 +33,6 @@ export const SILENT_TUNING = {
 const DAY = 86_400_000;
 const TRIED_KEY = "hearthroom.auth.silentTriedAt";
 const LOGGED_OUT_KEY = "hearthroom.auth.loggedOutAt";
-/** 上一次 Harbor 有沒有給出明確答覆（例如沒登入）：登入頁要不要多那一行說明看它 */
-const RESULT_KEY = "hearthroom.auth.silentResult";
 /** 這次授權是靜默的（回呼頁據此改走安靜的那條路），值是原本那一頁；只活在這個分頁 */
 const FLOW_KEY = "hearthroom.auth.silentFlow";
 
@@ -87,16 +85,4 @@ export function takeSilentFlow(): string | null {
     sessionStorage.removeItem(FLOW_KEY);
     return from;
   } catch { return null; }
-}
-export function rememberSilentResult(result: string): void { write(RESULT_KEY, result); }
-
-/**
- * 登入頁要不要多一行「已在其他線路登入？從該線路的『線路』切換即可保持登入」。
- * Harbor 剛明確說過「沒登入」或靜默登入成功過時不放：那時「在別條線路登入過」多半不成立，多一句只會干擾。
- */
-export function routeLoginHintVisible(o: { ua?: string } = {}): boolean {
-  if (!currentLine() || inAndroidApp(o.ua)) return false;
-  let result = "";
-  try { result = localStorage.getItem(RESULT_KEY) || ""; } catch { /* 沒有就當沒試過 */ }
-  return !result;
 }

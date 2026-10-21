@@ -35,3 +35,23 @@ it("does not probe on a play page opened directly, and starts once the player le
   await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
   app.unmount();
 });
+
+it("after the card was dismissed, still measures so the header icon can show, but no card", async () => {
+  vi.stubGlobal("location", { hostname: "sukisuki.ai", host: "sukisuki.ai", origin: "https://sukisuki.ai", protocol: "https:", pathname: "/", search: "", hash: "", href: "https://sukisuki.ai/" });
+  vi.stubGlobal("requestIdleCallback", (cb: () => void) => { setTimeout(cb, 0); return 1; });
+  const { dismissPrompt, headerSignalVisible, routesState } = await import("@/lib/routes");
+  dismissPrompt();
+  // 目前線路連不上，其他線路正常
+  const fetch = vi.fn(async (url: string) => { if (url.startsWith("https://sukisuki.ai/")) throw new TypeError("down"); return new Response(null); });
+  vi.stubGlobal("fetch", fetch);
+  const { default: RoutesLayer } = await import("@/components/routes/RoutesLayer.vue");
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/:p(.*)*", component: { render: () => null } }] });
+  const app = createApp(RoutesLayer).use(createPinia()).use(router).use(i18n);
+  app.mount(document.createElement("div"));
+  await router.push("/");
+  await vi.waitFor(() => expect(routesState.recommended).toBe(2));
+  expect(routesState.promptShowing).toBe(false);
+  expect(headerSignalVisible()).toBe(true);
+  app.unmount();
+  localStorage.clear();
+});
