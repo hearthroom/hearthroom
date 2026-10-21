@@ -6,16 +6,16 @@
  * 遊玩與聊天頁一律不彈也不測（owner 2026-10-22），進了那些頁就收起來。
  * 同一時間只有一個浮著的提示：它在的時候「加到主畫面」讓位（InstallToast 讀 promptShowing）。
  */
-import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-// 清單只有點了入口才需要：拆成一包，不壓在每個人的第一屏上
-const RoutesDialog = defineAsyncComponent(() => import("./RoutesDialog.vue"));
+// 跟主程式一起載入，不拆包：清單正是網路差（甚至離線）時要打開的，不能再靠一次下載（QA 2026-10-22）
+import RoutesDialog from "./RoutesDialog.vue";
 import RouteSpinner from "./RouteSpinner.vue";
 import SignalBars from "./SignalBars.vue";
 import { useRouteSwitch } from "./use-route-switch";
 import {
-  ROUTE_TUNING, autoPromptAllowed, backgroundCheck, currentLine, dismissPrompt, formatLatency, lineByNumber,
+  ROUTE_TUNING, autoPromptAllowed, backgroundCheck, backgroundCheckAllowed, currentLine, dismissPrompt, formatLatency, lineByNumber,
   openRoutesDialog, routesAvailable, routesState, signalOf, type Line,
 } from "@/lib/routes";
 import { useSession } from "@/lib/session";
@@ -53,7 +53,8 @@ function scheduleCheck() {
   if (checked || !available) return;
   checked = true;
   const run = async () => {
-    if (!autoPromptAllowed({ immersive: immersive.value })) return;
+    // 收掉提示卡的三天內也照樣測：不再彈卡，但仍慢時頁首圖示要在（ui.md §3.2 的持久落點，PM 2026-10-22）
+    if (!backgroundCheckAllowed({ immersive: immersive.value })) return;
     const worth = await backgroundCheck(() => !immersive.value);
     if (!worth || routesState.promptSeen || routesState.dialogOpen || !autoPromptAllowed({ immersive: immersive.value })) return;
     pick.value = lineByNumber(routesState.recommended);

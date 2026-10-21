@@ -378,6 +378,10 @@ select.input { height: var(--h-md); }
   .modal__actions .btn { width: 100%; height: var(--h-lg); }
 }
 
+/* 頁首的選單（帳號、語言）開著時桌寵讓位：桌寵（45）疊在頁首（30）的整個堆疊之上，
+   會蓋住選單項目、連「登出」都點不到（QA 2026-10-22）。跟它走開時同一個樣子 */
+body:has(.header [role="menu"]) .suki-pet { opacity: 0; pointer-events: none; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 1ms !important;

@@ -3151,7 +3151,6 @@
   "routes.prompt.later": "ルートの案内を閉じる",
   "routes.arrived": "{line}に切り替えました（{host}）",
   "routes.arrivedSignedOut": "このルートではまだログインしていません。",
-  "routes.loginHint": "他のルートでログイン済みの場合は、そのサイトの「ルート」から切り替えるとログインを引き継げます。",
   "routes.logout.title": "ログアウトしますか？",
   "routes.logout.body": "このルートからログアウトします。",
   "routes.logout.all": "他のルートからもログアウト",
