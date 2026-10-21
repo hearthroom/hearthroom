@@ -10965,6 +10965,16 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "model",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "description": "Selected model for resolving streaming defaults; omission uses the application default. Does not change the saved model selection."
+            }
           }
         ],
         "x-harperharbor": {
@@ -11284,6 +11294,11 @@
                         "description": "Reply output: when on, content is returned incrementally; when off, the complete result is returned once generation finishes. On by default. World-mode turns always return content incrementally."
                       }
                     }
+                  },
+                  "model": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "description": "Selected model for resolving streaming defaults; omission uses the application default. Does not change the saved model selection."
                   }
                 }
               }
