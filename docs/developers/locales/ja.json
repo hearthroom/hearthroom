@@ -2272,5 +2272,6 @@
   "dbd5d3615f700": "エージェント設定を作成",
   "d5624afa08837": "bearer アカウントが所有するエージェント設定を作成します。`visibility` を `private` にすると作者のみ、`unlisted` にするとリンクからアクセスでき、省略時の `visibility` は `unlisted` です。承認済みクライアントは scope の範囲内で引き続きアクセスできます。作成だけでは公開や審査申請は行いません。CLI は `--create` で `private` を送信します。",
   "dd4e8e5e9fb1c": "`not_found`",
-  "d6e2a15c61061": "`temporarily_unavailable`"
+  "d6e2a15c61061": "`temporarily_unavailable`",
+  "d43e82bc212a8": "ストリーミング出力の既定値を解決するモデル。省略時はアプリの既定モデルを使い、保存済みのモデル選択は変更しません。"
 }
