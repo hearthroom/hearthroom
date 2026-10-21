@@ -89,6 +89,8 @@ SYNC_BATCH_SIZE = "45"
 SYNC_CONCURRENCY = "6"
 # 埋點總開關。設成 "false" 就一行事件都不發，分叉或本機除錯時用。
 ANALYTICS_ENABLED = "true"
+# Release GA4 separately after the disabled deployment is read back.
+GA4_ENABLED = "false"
 # 社群審核開關。"true"＝作者提交後要經審核人蓋章才上榜：本站用作者自己的 token 讀一次整份設定
 # 存成審核單的快照，定案就刪（src/review-snapshot.ts）。其餘值退回「登記即上榜」，分叉自架不想審核的人用。
 REVIEW_ENABLED = "true"
