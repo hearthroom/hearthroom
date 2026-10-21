@@ -64,3 +64,17 @@ sum by (operation, outcome) (increase(hearthroom_auth_operations_total[15m]))
 ## 驗收邊界
 
 自動測試使用合成 OAuth 回應與本機 D1，涵蓋帳號隔離、跨設備、state/CSRF、加密綁定、交易回滾、並行換發、取消／登出晚到回應及撤銷重試。上線前仍需正式供應商、可見桌面／手機瀏覽器、兩設備恢復與 Console 撤銷的驗收；本機測試不代表已部署。
+
+## 官方線路換手與靜默登入
+
+Migration `0079_route_handoffs.sql` 加入短期換手紀錄及本瀏覽器的線路 session 群組。官方來源直接讀 `android/routes.json`，且必須同時通過 `AUTH_ALLOWED_ORIGINS`／`AUTH_ADDITIONAL_ORIGINS`；不因萬用網域或 sandbox 路由而放寬。來源與目的站皆使用 HTTPS host-only cookie，沒有共用跨根網域 cookie。
+
+已登入者由同源 POST `route-start` 帶 `{targetOrigin,returnTo}` 開始，目的站 GET `/auth/route/prepare` 設 HttpOnly browser nonce，再回原站 `/auth/route/issue#request=…`。原站頁面清除 fragment 後，同源 POST `route-issue` 帶 `{request}`；後端驗證原 session 與來源流程 cookie，回目的站 `/auth/route/complete#code=…`。目的頁面同樣先清 fragment，才 POST `route-redeem` 帶 `{code}`；後端驗目的 browser nonce，交易內單次建立 session 並消耗換手碼，回 `{ok:true,returnTo}`。三個 POST 均位於 `/v1/auth/`、須帶 `X-Hearthroom-Request: 1` 與同源 Origin。失敗碼 `auth_route_invalid`（400）代表失效／不匹配／已消耗，`auth_route_denied`（400）代表目標非可用官方 origin，未登入 start 回 `site_session_required`（401），CSRF 回 `auth_origin_denied`（403），依賴失效回 503；UI 不盲目重發。
+
+整段換手限時 60 秒；D1 只存隨機值的 SHA-256，不存 OAuth token。兌換不呼叫 Harbor，因此 Harbor 不通時仍可換線路；session 沿用來源建立時間，不重置 180 天絕對期限。重放、並行、來源登出／逾期／會員改綁都不能再登入。UI 不可把碼、nonce 或 fragment 送分析／錯誤回報。
+
+`session` 回應新增 `otherLines: string[]`，只列本瀏覽器經換手建立、仍有效的其他官方 HTTPS origin，順序跟官方 JSON 一致，不含目前線路。`logout` 的 `{allRoutes:true}` 登出這個換手群組，不影響其他設備；預設 `{}` 保留既有單線路登出語義，網站新對話框可預設勾選並明確傳 true。各線路獨立互動／靜默登入建立的 sessions 不會自行被認作同一群組。已在記憶體的 access token 不會被遠端抹除；既有期限與供應商撤銷規則仍適用。
+
+`start` 的 `{silent:true}` 只加 `prompt=none`，保留 PKCE、state、scope、resource 與既有回呼。UI 應先以總預算 1.5 秒探測 Harbor；不通就略過，禁止 iframe，並依產品頻率規範避免循環跳轉。Harbor 必須先支援既有 consent 與 membership gate；這不是 Worker 單獨可完成的行為。`complete` 接收原 state 與允許的 `error`（`login_required|consent_required|interaction_required|account_selection_required`），僅原 silent flow 可單次結束，回 `{silent:true,authenticated:false,error,returnTo}`。成功回應另帶 `{silent:true,authenticated:true}`；Worker 再驗本地會員已存在，silent 不建立會員、不走加入／獎勵流程。沒有本地會員時拒絕登入，將取得的上游憑證排入撤銷，須由使用者按登入走互動加入流程。
+
+沿用持久 counter `hearthroom_auth_operations_total` 與有驗證的 `/internal/auth/metrics`。新增 operation=`route-start|route-prepare|route-issue|route-redeem`、provider=`site`、outcome=`ok|denied|unavailable`；silent operation 的 outcome 為 `granted` 或上列固定拒絕碼。不輸出任何網域、會員、session 或換手碼作為標籤。這些瀏覽器端點不匯出至 MCP。

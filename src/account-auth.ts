@@ -8,12 +8,14 @@ import { connectedMemberId } from './connections';
 import { confirmAdult, memberProfile, resolveMember, reviewerRole } from './members';
 import { ADULT_CONSENT_VERSION } from '../shared/adult-consent';
 import { upstream } from './upstream';
+import routeManifest from '../android/routes.json';
 
 /** Token-mediating backend. Only short-lived access tokens cross the browser boundary. */
 type AuthContext={Bindings:Env;Variables:{ev:Pending}};
 type C = Context<AuthContext>;
 const DAY=86400000, ATTEMPT_TTL=10*60000, SESSION_IDLE=30*DAY, SESSION_MAX=180*DAY, SESSION_TOUCH=DAY;
 const SESSION='__Host-hr-session', FLOW='__Host-hr-auth';
+const ROUTE_SOURCE='__Host-hr-route-source', ROUTE_TARGET='__Host-hr-route-target', ROUTE_TTL=60000;
 // profile.write：把本站的顯示名稱寫回 Harbor 當暱稱（見 syncNickname）。加這項之前，Harbor 那邊的固定客戶端要先登記它，
 // 否則授權請求會因為超出客戶端的範圍被拒。
 const scopes:Partial<Record<ProviderId,string>>={harbor:'profile.read profile.write email.read role.read role.write chat.play referral'};
@@ -21,7 +23,8 @@ type Pair={accessToken:string;refreshToken:string;clientId:string;expiresAt:numb
 type Attempt={state_hash:string;browser_hash:string;origin:string;provider:ProviderId;source_session:string|null;payload:string;phase:string;expires_at:number};
 type Session={token_hash:string;member_id:string;provider:ProviderId;external_id:string;origin:string;created_at:number;expires_at:number};
 type Credential={provider:ProviderId;external_id:string;generation:string;payload:string;state:string;expires_at:number;refresh_started:number|null;updated_at:number};
-type Flow={verifier:string;clientId:string;redirectUri:string;returnTo:string;linkFrom?:ProviderId;pair?:Pair;externalId?:number;resultSession?:string};
+type Flow={verifier:string;clientId:string;redirectUri:string;returnTo:string;silent?:boolean;linkFrom?:ProviderId;pair?:Pair;externalId?:number;resultSession?:string};
+const SILENT_ERRORS=new Set(['login_required','consent_required','interaction_required','account_selection_required']);
 const bytes=(s:string)=>new TextEncoder().encode(s);
 const base64=(a:Uint8Array)=>btoa(String.fromCharCode(...a));
 const decode=(s:string)=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
@@ -69,6 +72,19 @@ function providerOf(value:unknown,env:Env):ProviderId {
 }
 function safePath(raw:unknown):string {
   return typeof raw==='string'&&/^\/(?![\/\\])/.test(raw)&&!/[\x00-\x20\\]/.test(raw)?raw:'/';
+}
+function routeOrigin(raw:unknown,env:Env):string {
+  const official=routeManifest.routes.some(r=>raw===`https://${r.host}`);
+  if(!official||typeof raw!=='string'||!origins(env).includes(raw))throw new HttpError(400,'auth_route_denied');
+  return raw;
+}
+function routePath(raw:unknown):string {
+  const path=safePath(raw);
+  return /^\/(?:zh-Hant\/|zh-Hans\/|en\/|ja\/|ko\/)?auth\/route(?:\/|[?#]|$)/.test(path)?'/':path;
+}
+function routeValue(raw:unknown):string {
+  if(typeof raw!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(raw))throw new HttpError(400,'auth_route_invalid');
+  return raw;
 }
 export async function metric(env:Env,operation:string,provider:string,outcome:string){
   await env.DB.prepare('INSERT INTO account_auth_metrics VALUES(?,?,?,1) ON CONFLICT(operation,provider,outcome) DO UPDATE SET value=value+1').bind(operation,provider,outcome).run();
@@ -227,7 +243,7 @@ accountAuthRoutes.onError((error,c)=>{
 });
 accountAuthRoutes.use('/v1/auth/*',async(c,next)=>{
   const operation=c.req.path.split('/').pop()!;
-  if(!['start','complete','session','token','commit','cancel','logout','disconnect'].includes(operation)||c.env.AUTH_ENABLED!=='true'){await next();return;}
+  if(!['start','complete','session','token','commit','cancel','logout','disconnect','route-start','route-issue','route-redeem'].includes(operation)||c.env.AUTH_ENABLED!=='true'){await next();return;}
   try{await next();}finally{
     const outcome=c.res.status>=500?'unavailable':c.res.status>=400?'denied':'ok';
     try{await metric(c.env,operation,'site',outcome);}catch{console.warn('Account authorization metric unavailable');}
@@ -247,27 +263,121 @@ accountAuthRoutes.get('/v1/auth/config',c=>{
   if(c.env.AUTH_ENABLED!=='true')throw new HttpError(503,'auth_configuration_unavailable');
   enabled(c.env);originOf(c);return c.json({managed:true});
 });
+accountAuthRoutes.post('/v1/auth/route-start',async c=>{
+  const session=(await readSession(c))!,body=await c.req.json();
+  const source=routeOrigin(originOf(c),c.env),target=routeOrigin(body.targetOrigin,c.env);
+  if(source===target)throw new HttpError(400,'auth_route_denied');
+  const request=random(),browser=random(),requestHash=await hash(request);
+  const results=await c.env.DB.batch([
+    c.env.DB.prepare('INSERT OR IGNORE INTO account_route_families SELECT token_hash,token_hash FROM account_sessions WHERE token_hash=?').bind(session.token_hash),
+    c.env.DB.prepare('DELETE FROM account_route_handoffs WHERE source_session=?').bind(session.token_hash),
+    c.env.DB.prepare(`INSERT INTO account_route_handoffs(request_hash,source_session,source_browser,source_origin,target_origin,return_to,expires_at)
+      SELECT ?,token_hash,?,?,?,?,? FROM account_sessions WHERE token_hash=? AND expires_at>? RETURNING request_hash`)
+      .bind(requestHash,await hash(browser),source,target,routePath(body.returnTo),Date.now()+ROUTE_TTL,session.token_hash,Date.now()),
+  ]);
+  if(!results[2].results.length)throw new HttpError(401,'site_session_required');
+  writeCookie(c,ROUTE_SOURCE,browser,ROUTE_TTL/1000);
+  const url=new URL(target+'/auth/route/prepare');url.searchParams.set('request',request);
+  return c.json({url:url.toString()});
+});
+accountAuthRoutes.use('/auth/route/prepare',async(c,next)=>{
+  c.header('Cache-Control','private, no-store');c.header('Referrer-Policy','no-referrer');
+  try{await next();}finally{
+    if(c.env.AUTH_ENABLED==='true')try{await metric(c.env,'route-prepare','site',c.res.status>=500?'unavailable':c.res.status>=400?'denied':'ok');}catch{console.warn('Account authorization metric unavailable');}
+  }
+});
+accountAuthRoutes.get('/auth/route/prepare',async c=>{
+  enabled(c.env);const target=routeOrigin(originOf(c),c.env),request=routeValue(c.req.query('request'));
+  const browser=random(),requestHash=await hash(request);
+  const row=await c.env.DB.prepare(`UPDATE account_route_handoffs SET target_browser=?
+    WHERE request_hash=? AND target_origin=? AND target_browser IS NULL AND code_hash IS NULL AND expires_at>?
+      AND EXISTS(SELECT 1 FROM account_sessions WHERE token_hash=source_session AND expires_at>?)
+    RETURNING source_origin`).bind(await hash(browser),requestHash,target,Date.now(),Date.now()).first<{source_origin:string}>();
+  if(!row)throw new HttpError(400,'auth_route_invalid');
+  const source=routeOrigin(row.source_origin,c.env);
+  writeCookie(c,ROUTE_TARGET,browser,ROUTE_TTL/1000);
+  return c.redirect(source+'/auth/route/issue#'+new URLSearchParams({request}).toString(),302);
+});
+accountAuthRoutes.post('/v1/auth/route-issue',async c=>{
+  const body=await c.req.json(),requestHash=await hash(routeValue(body.request));
+  const browser=getCookie(c,ROUTE_SOURCE),session=await readSession(c,false);
+  if(!browser||!session)throw new HttpError(400,'auth_route_invalid');
+  const code=random();
+  const row=await c.env.DB.prepare(`UPDATE account_route_handoffs SET code_hash=?
+    WHERE request_hash=? AND source_session=? AND source_browser=? AND source_origin=?
+      AND target_browser IS NOT NULL AND code_hash IS NULL AND expires_at>?
+      AND EXISTS(SELECT 1 FROM account_sessions WHERE token_hash=source_session AND expires_at>?)
+    RETURNING target_origin`).bind(await hash(code),requestHash,session.token_hash,await hash(browser),originOf(c),Date.now(),Date.now()).first<{target_origin:string}>();
+  if(!row)throw new HttpError(400,'auth_route_invalid');
+  const target=routeOrigin(row.target_origin,c.env);
+  writeCookie(c,ROUTE_SOURCE,'',0);
+  return c.json({url:target+'/auth/route/complete#'+new URLSearchParams({code}).toString()});
+});
+accountAuthRoutes.post('/v1/auth/route-redeem',async c=>{
+  const body=await c.req.json(),codeHash=await hash(routeValue(body.code)),browser=getCookie(c,ROUTE_TARGET);
+  if(!browser)throw new HttpError(400,'auth_route_invalid');
+  const target=routeOrigin(originOf(c),c.env),browserHash=await hash(browser);
+  const row=await c.env.DB.prepare('SELECT return_to,source_origin FROM account_route_handoffs WHERE code_hash=? AND target_browser=? AND target_origin=?')
+    .bind(codeHash,browserHash,target).first<{return_to:string;source_origin:string}>();
+  if(!row)throw new HttpError(400,'auth_route_invalid');
+  routeOrigin(row.source_origin,c.env);
+  const raw=random(),sessionHash=await hash(raw),old=getCookie(c,SESSION),now=Date.now();
+  // The conditional INSERT and receipt consumption are one D1 transaction. A missing,
+  // revoked, reassigned or expired source cannot create a destination session, including
+  // when logout races this request after its preliminary read.
+  const results=await c.env.DB.batch([
+    c.env.DB.prepare(`INSERT INTO account_sessions
+      SELECT ?,s.member_id,s.provider,s.external_id,h.target_origin,s.created_at,MIN(s.expires_at,?)
+      FROM account_route_handoffs h JOIN account_sessions s ON s.token_hash=h.source_session
+      WHERE h.code_hash=? AND h.target_browser=? AND h.target_origin=? AND h.consumed_session IS NULL AND h.expires_at>?
+        AND s.origin=h.source_origin AND s.provider='harbor' AND s.expires_at>? AND s.created_at>?
+        AND s.member_id=COALESCE(
+          (SELECT owner_member_id FROM member_connections WHERE provider=s.provider AND external_id=s.external_id),
+          (SELECT member_id FROM member_identities WHERE provider=s.provider AND external_id=s.external_id))
+      RETURNING expires_at`).bind(sessionHash,now+SESSION_IDLE,codeHash,browserHash,target,now,now,now-SESSION_MAX),
+    c.env.DB.prepare(`INSERT INTO account_route_families
+      SELECT ?,f.family_hash FROM account_route_handoffs h JOIN account_route_families f ON f.token_hash=h.source_session
+      WHERE h.code_hash=? AND EXISTS(SELECT 1 FROM account_sessions WHERE token_hash=?)`).bind(sessionHash,codeHash,sessionHash),
+    c.env.DB.prepare('UPDATE account_route_handoffs SET consumed_session=? WHERE code_hash=? AND EXISTS(SELECT 1 FROM account_sessions WHERE token_hash=?)').bind(sessionHash,codeHash,sessionHash),
+    c.env.DB.prepare('DELETE FROM account_sessions WHERE token_hash=? AND EXISTS(SELECT 1 FROM account_sessions WHERE token_hash=?)').bind(old?await hash(old):'',sessionHash),
+  ]);
+  const created=results[0].results[0] as {expires_at:number}|undefined;
+  if(!created)throw new HttpError(400,'auth_route_invalid');
+  writeCookie(c,SESSION,raw,Math.max(0,Math.floor((created.expires_at-now)/1000)));
+  writeCookie(c,ROUTE_TARGET,'',0);
+  return c.json({ok:true,returnTo:row.return_to});
+});
 accountAuthRoutes.post('/v1/auth/start',async c=>{
   const body=await c.req.json(),provider=providerOf(body.provider,c.env),origin=originOf(c);
   if(body.linkFrom)throw new HttpError(410,'service_retired');
   const browser=random(),state=random(),stateHash=await hash(state),verifier=random();
   const clientId=await registeredClient(c,provider,origin),redirectUri=origin+'/auth/callback';
-  const flow:Flow={verifier,clientId,redirectUri,returnTo:safePath(body.returnTo)};
+  const flow:Flow={verifier,clientId,redirectUri,returnTo:safePath(body.returnTo),...(body.silent===true?{silent:true}:{})};
   await c.env.DB.prepare('INSERT INTO account_auth_attempts VALUES(?,?,?,?,?,?,?,?)').bind(stateHash,await hash(browser),origin,provider,null,await sealAuth(c.env,'attempt:'+stateHash,flow),'code',Date.now()+ATTEMPT_TTL).run();
   writeCookie(c,FLOW,browser,ATTEMPT_TTL/1000);
   const url=new URL(apiBaseOf(c.env,provider)+'/oauth/authorize');
   // 玩家在這裡用的介面語言：Harbor 的登入／同意頁用它，也記成成員的語言。只收像語言標籤的值。
   const locale=typeof body.locale==='string'&&/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8}){0,2}$/.test(body.locale)?body.locale:'';
   url.search=new URLSearchParams({response_type:'code',client_id:clientId,redirect_uri:redirectUri,state,code_challenge:await hash(verifier),code_challenge_method:'S256',resource:apiBaseOf(c.env,provider)+'/open/v1',...(scopes[provider]!?{scope:scopes[provider]!}:{}),...(locale?{ui_locales:locale}:{})}).toString();
+  if(flow.silent)url.searchParams.set('prompt','none');
   return c.json({url:url.toString()});
 });
 accountAuthRoutes.post('/v1/auth/complete',async c=>{
   const body=await c.req.json();
-  if(typeof body.state!=='string'||typeof body.code!=='string'||body.code.length>4096||body.state.length>128)throw new HttpError(400,'auth_state_invalid');
+  if(typeof body.state!=='string'||body.state.length>128)throw new HttpError(400,'auth_state_invalid');
   const a=await attemptFor(c,body.state);
+  const flow=await openAuth<Flow>(c.env,'attempt:'+a.state_hash,a.payload);
+  if(body.error!==undefined){
+    if(!flow.silent||!SILENT_ERRORS.has(body.error)||body.code!==undefined)throw new HttpError(400,'auth_state_invalid');
+    const ended=await c.env.DB.prepare("DELETE FROM account_auth_attempts WHERE state_hash=? AND phase='code' AND expires_at>? RETURNING state_hash").bind(a.state_hash,Date.now()).first();
+    if(!ended)throw new HttpError(400,'auth_state_invalid');
+    writeCookie(c,FLOW,'',0);
+    await metric(c.env,'silent','site',body.error);
+    return c.json({silent:true,authenticated:false,error:body.error,returnTo:flow.returnTo});
+  }
+  if(typeof body.code!=='string'||!body.code||body.code.length>4096)throw new HttpError(400,'auth_state_invalid');
   const consumed=await c.env.DB.prepare("UPDATE account_auth_attempts SET phase='exchanging' WHERE state_hash=? AND phase='code' RETURNING state_hash").bind(a.state_hash).first();
   if(!consumed)throw new HttpError(400,'auth_state_invalid');
-  const flow=await openAuth<Flow>(c.env,'attempt:'+a.state_hash,a.payload);
   const pair=await exchange(c.env,a.provider,flow.clientId,{grant_type:'authorization_code',code:body.code,redirect_uri:flow.redirectUri,code_verifier:flow.verifier});
   const stored=await c.env.DB.prepare("UPDATE account_auth_attempts SET payload=? WHERE state_hash=? AND phase='exchanging' RETURNING state_hash").bind(await sealAuth(c.env,'attempt:'+a.state_hash,{...flow,pair}),a.state_hash).first();
   if(!stored){await queueRevocation(c.env,a.provider,pair,a.state_hash);throw new HttpError(400,'auth_state_invalid');}
@@ -279,7 +389,17 @@ accountAuthRoutes.post('/v1/auth/complete',async c=>{
     const confirmed=await c.env.DB.prepare("UPDATE account_auth_attempts SET phase='confirm',payload=? WHERE state_hash=? AND phase='exchanging' AND expires_at>? RETURNING state_hash").bind(await sealAuth(c.env,'attempt:'+a.state_hash,{...flow,pair,externalId:me.accountNumId}),a.state_hash,Date.now()).first();
     if(!confirmed)throw new HttpError(400,'auth_state_invalid');
   }else{
-    const member=await resolveMember(c.env.DB,a.provider,me.accountNumId,Date.now());
+    // Silent authorization only restores an existing community member. Even a provider
+    // regression returning a code for a new account must not create a member here.
+    const existing=flow.silent?await connectedMemberId(c.env.DB,a.provider,me.accountNumId):null;
+    if(flow.silent&&!existing){
+      await queueRevocation(c.env,a.provider,pair,a.state_hash);
+      await c.env.DB.prepare("DELETE FROM account_auth_attempts WHERE state_hash=? AND phase='exchanging'").bind(a.state_hash).run();
+      writeCookie(c,FLOW,'',0);
+      await metric(c.env,'silent','site','consent_required');
+      return c.json({silent:true,authenticated:false,error:'consent_required',returnTo:flow.returnTo});
+    }
+    const member=existing??await resolveMember(c.env.DB,a.provider,me.accountNumId,Date.now());
     const raw=random(),sessionHash=await hash(raw),old=getCookie(c,SESSION);
     const statements=await credentialStatements(c.env,a.provider,me.accountNumId,pair,{attempt:a,phase:'exchanging'});
     statements.push(
@@ -305,7 +425,8 @@ accountAuthRoutes.post('/v1/auth/complete',async c=>{
     writeCookie(c,SESSION,raw,SESSION_IDLE/1000);
     // Keep the receipt cookie until expiry: a concurrent logout must also invalidate this session.
   }
-  return c.json({token:publicPair(pair),provider:a.provider,returnTo:flow.returnTo,...(flow.linkFrom?{linkFrom:flow.linkFrom}:{})});
+  if(flow.silent)await metric(c.env,'silent','site','granted');
+  return c.json({token:publicPair(pair),provider:a.provider,returnTo:flow.returnTo,...(flow.linkFrom?{linkFrom:flow.linkFrom}:{}),...(flow.silent?{silent:true,authenticated:true}:{})});
 });
 accountAuthRoutes.post('/v1/auth/commit',async c=>{
   const a=await attemptFor(c);
@@ -386,7 +507,14 @@ accountAuthRoutes.post('/v1/auth/session',async c=>{
   // 成員資料回來後選出的身分若不是它（極少見：前端指定了別的供應商），再用選出的那個重換。
   const guess=body.token===true?tokenFor(session.provider,Number(session.external_id)):null;
   guess?.catch(()=>{});
-  const [profile,role]=await Promise.all([memberProfile(c.env.DB,session.member_id),reviewerRole(c.env.DB,session.member_id)]);
+  const [profile,role,family]=await Promise.all([
+    memberProfile(c.env.DB,session.member_id),reviewerRole(c.env.DB,session.member_id),
+    c.env.DB.prepare(`SELECT DISTINCT s.origin FROM account_sessions s JOIN account_route_families f ON f.token_hash=s.token_hash
+      WHERE f.family_hash=(SELECT family_hash FROM account_route_families WHERE token_hash=?)
+        AND s.member_id=? AND s.origin<>? AND s.expires_at>? AND s.created_at>?`)
+      .bind(session.token_hash,session.member_id,originOf(c),Date.now(),Date.now()-SESSION_MAX).all<{origin:string}>(),
+  ]);
+  const otherLines=routeManifest.routes.map(r=>`https://${r.host}`).filter(o=>origins(c.env).includes(o)&&family.results.some(row=>row.origin===o));
   phases.push(`profile;dur=${Date.now()-started}`);
   const selected=profile!.identities.find(i=>i.provider===body.provider)??profile!.identities.find(i=>i.provider===session.provider);
   if(!selected)throw new HttpError(401,'site_session_required');
@@ -397,7 +525,7 @@ accountAuthRoutes.post('/v1/auth/session',async c=>{
   }
   // 各段耗時（從請求開始算的毫秒數，不含任何資料），給量測開頁用。
   c.header('Server-Timing',phases.join(', '));
-  return c.json({provider:selected.provider,me:{accountNumId:selected.externalId,nickName:profile!.displayName,avatar:profile!.avatarUrl},profile:{...profile!,reviewer:role!==null,reviewerRole:role},...(token===undefined?{}:{token})});
+  return c.json({provider:selected.provider,me:{accountNumId:selected.externalId,nickName:profile!.displayName,avatar:profile!.avatarUrl},profile:{...profile!,reviewer:role!==null,reviewerRole:role},otherLines,...(token===undefined?{}:{token})});
 });
 accountAuthRoutes.post('/v1/auth/token',async c=>{
   const session=(await readSession(c))!,body=await c.req.json(),provider=providerOf(body.provider,c.env);
@@ -406,9 +534,19 @@ accountAuthRoutes.post('/v1/auth/token',async c=>{
   return c.json(await issueToken(c,session,provider,identity.externalId));
 });
 accountAuthRoutes.post('/v1/auth/logout',async c=>{
+  const body=await c.req.json().catch(()=>({})),session=body.allRoutes===true?await readSession(c,false):null;
   await cancelAttempt(c,true);
   const raw=getCookie(c,SESSION);
+  if(session)await c.env.DB.batch([
+    c.env.DB.prepare(`DELETE FROM account_route_handoffs WHERE source_session IN (
+      SELECT token_hash FROM account_route_families WHERE family_hash=COALESCE((SELECT family_hash FROM account_route_families WHERE token_hash=?),?))`)
+      .bind(session.token_hash,session.token_hash),
+    c.env.DB.prepare(`DELETE FROM account_sessions WHERE token_hash IN (
+      SELECT token_hash FROM account_route_families WHERE family_hash=COALESCE((SELECT family_hash FROM account_route_families WHERE token_hash=?),?))`)
+      .bind(session.token_hash,session.token_hash),
+  ]);
   if(raw)await c.env.DB.prepare('DELETE FROM account_sessions WHERE token_hash=?').bind(await hash(raw)).run();
+  writeCookie(c,ROUTE_SOURCE,'',0);writeCookie(c,ROUTE_TARGET,'',0);
   writeCookie(c,SESSION,'',0);return c.json({ok:true});
 });
 accountAuthRoutes.post('/v1/auth/disconnect',async c=>{
@@ -456,6 +594,8 @@ export async function accountAuthMaintenance(env:Env){
   const jobs=await env.DB.prepare("SELECT generation FROM account_auth_revocations WHERE provider='harbor' AND retry_at<=? ORDER BY retry_at LIMIT 50").bind(Date.now()).all<{generation:string}>();
   for(const job of jobs.results)await revokeQueued(env,job.generation);
   await env.DB.prepare('DELETE FROM account_sessions WHERE expires_at<=? OR created_at<=?').bind(Date.now(),Date.now()-SESSION_MAX).run();
+  await env.DB.prepare('DELETE FROM account_route_handoffs WHERE expires_at<=?').bind(Date.now()).run();
+  await env.DB.prepare('DELETE FROM account_route_families WHERE NOT EXISTS(SELECT 1 FROM account_sessions s WHERE s.token_hash=account_route_families.token_hash)').run();
   await metric(env,'cleanup','site','ok');
 }
 accountAuthRoutes.get('/internal/auth/metrics',async c=>{
