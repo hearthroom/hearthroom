@@ -35,7 +35,7 @@ const TRIED_KEY = "hearthroom.auth.silentTriedAt";
 const LOGGED_OUT_KEY = "hearthroom.auth.loggedOutAt";
 /** 上一次 Harbor 有沒有給出明確答覆（例如沒登入）：登入頁要不要多那一行說明看它 */
 const RESULT_KEY = "hearthroom.auth.silentResult";
-/** 這次授權是靜默的（回呼頁據此改走安靜的那條路）；只活在這個分頁 */
+/** 這次授權是靜默的（回呼頁據此改走安靜的那條路），值是原本那一頁；只活在這個分頁 */
 const FLOW_KEY = "hearthroom.auth.silentFlow";
 
 const read = (key: string): number => { try { return Number(localStorage.getItem(key)) || 0; } catch { return 0; } };
@@ -73,19 +73,20 @@ export async function trySilentLogin(o: { immersive: boolean; returnTo: string; 
   if (!silentLoginAllowed(o)) return "skipped";
   if (!(await harborReachable())) return "slow";
   write(TRIED_KEY, String(Date.now()));
-  try { sessionStorage.setItem(FLOW_KEY, "1"); } catch { /* 回呼頁讀不到就當一般登入的失敗處理，不會循環（已記嘗試） */ }
   const { url } = await authRequest<{ url: string }>("start", { provider: "harbor", silent: true, returnTo: o.returnTo, locale: o.locale });
+  // 拿到授權網址才標記：start 失敗（例如伺服器端開關沒開）留下的標記會讓這個分頁之後的一般登入走錯路
+  try { sessionStorage.setItem(FLOW_KEY, o.returnTo); } catch { /* 回呼頁讀不到就當一般登入的失敗處理，不會循環（已記嘗試） */ }
   location.assign(url);
   return "started";
 }
 
-/** 回呼頁：這次是不是靜默授權（讀了就清掉）。 */
-export function takeSilentFlow(): boolean {
+/** 回呼頁：這次是不是靜默授權（讀了就清掉）；是的話回原本那一頁，不是回 null。 */
+export function takeSilentFlow(): string | null {
   try {
-    const on = sessionStorage.getItem(FLOW_KEY) === "1";
+    const from = sessionStorage.getItem(FLOW_KEY);
     sessionStorage.removeItem(FLOW_KEY);
-    return on;
-  } catch { return false; }
+    return from;
+  } catch { return null; }
 }
 export function rememberSilentResult(result: string): void { write(RESULT_KEY, result); }
 

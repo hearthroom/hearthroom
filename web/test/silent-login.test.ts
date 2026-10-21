@@ -4,7 +4,7 @@
  */
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { resetManagedAuthForTest } from "@/lib/managed-auth";
-import { completeLogin } from "@/lib/oauth";
+import { completeLogin, isSilentMiss } from "@/lib/oauth";
 import {
   SILENT_LOGIN_ENABLED, SILENT_TUNING, markLoggedOut, rememberSilentResult, routeLoginHintVisible, silentLoginAllowed, trySilentLogin,
 } from "@/lib/silent-login";
@@ -82,6 +82,30 @@ it("returns quietly to the page when the silent attempt comes back signed out", 
   expect(fetch.mock.calls.some(([url]) => url === "/v1/auth/cancel")).toBe(false);
   // Harbor 給過明確答覆：登入頁那行「從其他線路切換」不再顯示
   expect(routeLoginHintVisible({ ua: UA })).toBe(false);
+});
+
+it("adopts a silent success like any sign-in, and an unknown silent error still returns quietly", async () => {
+  const fetch = server("fast");
+  await trySilentLogin({ immersive: false, returnTo: "/cards/42", locale: "en", enabled: true });
+  fetch.mockImplementation(async (url: string) => url === "/v1/auth/complete"
+    ? Response.json({ token: { accessToken: "a", expiresAt: Date.now() + 60_000 }, provider: "harbor", returnTo: "/cards/42", silent: true, authenticated: true })
+    : Response.json({ ok: true }));
+  const done = await completeLogin(new URLSearchParams("code=c&state=s"));
+  expect(isSilentMiss(done)).toBe(false);
+  expect(routeLoginHintVisible({ ua: UA })).toBe(false);
+
+  localStorage.clear();
+  server("fast");
+  await trySilentLogin({ immersive: false, returnTo: "/cards/7", locale: "en", enabled: true });
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => url === "/v1/auth/complete" ? Response.json({ error: "auth_state_invalid" }, { status: 400 }) : Response.json({ ok: true })));
+  expect(await completeLogin(new URLSearchParams("error=temporarily_unavailable&state=s"))).toEqual({ silent: true, authenticated: false, returnTo: "/cards/7" });
+});
+
+it("a failed silent start leaves the next interactive login in this tab untouched", async () => {
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => url === "/v1/auth/start" ? Response.json({ error: "auth_silent_not_enabled" }, { status: 503 }) : new Response(null)));
+  await expect(trySilentLogin({ immersive: false, returnTo: "/", locale: "en", enabled: true })).rejects.toThrow();
+  server("fast");
+  await expect(completeLogin(new URLSearchParams("error=access_denied&state=s"))).rejects.toThrow("oauth_denied");
 });
 
 it("still treats a declined interactive login as an error", async () => {
