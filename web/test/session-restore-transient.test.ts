@@ -60,3 +60,18 @@ it.each([502, 503])('preserves a bearer session on proxy %i and supports a manua
   expect(session.restoreError).toBe(false);
   expect(session.me?.accountNumId).toBe(22);
 });
+
+it.each([503, 'network'])('keeps an expired access session retryable when refresh has a %s failure', async failure => {
+  resetManagedAuthForTest(false);
+  localStorage.setItem('hearthroom.provider', 'harbor');
+  localStorage.setItem('hearthroom.oauth.refresh.harbor', 'synthetic-refresh');
+  localStorage.setItem('hearthroom.oauth.grant_client.harbor', 'synthetic-client');
+  vi.stubGlobal('fetch', vi.fn(async () => {
+    if (failure === 'network') throw new TypeError('synthetic offline');
+    return Response.json({ error: 'temporarily_unavailable' }, { status: failure });
+  }));
+  const session = useSession();
+  await session.restore();
+  expect(session.restoreError).toBe(true);
+  expect(localStorage.getItem('hearthroom.oauth.refresh.harbor')).toBe('synthetic-refresh');
+});

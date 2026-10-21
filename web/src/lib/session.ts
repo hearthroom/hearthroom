@@ -14,6 +14,7 @@ import { ApiError, fetchMe, fetchSiteMe, fetchWallet, setLoginViewer, setNsfwVie
 import type { Me, SiteMe, Wallet } from "./api";
 import {
   beginLogin,
+  AuthUnavailable,
   persist,
   refresh,
   restorePersisted,
@@ -33,7 +34,7 @@ import {
  */
 /** 伺服器暫時回不了（5xx、429、網路斷一下）：不是登出，等一下再問就好。 */
 function isTransient(e: unknown): boolean {
-  return e instanceof ManagedAuthUnavailable || e instanceof TypeError || e instanceof ApiError && (e.status >= 500 || e.status === 429);
+  return e instanceof ManagedAuthUnavailable || e instanceof AuthUnavailable || e instanceof TypeError || e instanceof ApiError && (e.status >= 500 || e.status === 429);
 }
 async function withTransientRetry<T>(call: () => Promise<T>): Promise<T> {
   for (let attempt = 0; ; attempt++) {
@@ -124,7 +125,6 @@ export const useSession = defineStore("session", () => {
 
     const expected=generation;
     let unreachable = false;
-    restoreError.value = false;
     restoring = (async () => {
       try {
         if(await managedAuth()){
@@ -162,6 +162,7 @@ export const useSession = defineStore("session", () => {
           if(!unreachable){token.value = null;me.value = null;}
         }
       } finally {
+        if (expected === generation && !unreachable) restoreError.value = false;
         ready.value = true;
         // 記下這個瀏覽器目前是誰登入（或沒人）：「我的卡片」下次可以先開頁、身分在背景確認。
         // 伺服器暫時連不上不代表登出，那時不動這個記號。
