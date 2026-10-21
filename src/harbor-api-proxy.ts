@@ -6,7 +6,7 @@ const HARBOR_ORIGIN = 'https://api.harperharbor.com';
 export const PROXY_ROUTES = ['conversation', 'media', 'profile', 'wallet', 'oauth', 'other'] as const;
 export type ProxyRoute = typeof PROXY_ROUTES[number];
 const FORWARDED_HEADERS = [
-  'Authorization', 'Content-Type', 'Accept', 'Accept-Language', 'User-Agent', 'Origin', 'language',
+  'Authorization', 'Content-Type', 'Accept', 'Accept-Language', 'User-Agent', 'Origin', 'Sec-GPC', 'language',
   'X-Device-Token', 'X-Client-Platform', 'X-API-Version', 'X-From', 'Idempotency-Key', 'Last-Event-ID',
   'Range', 'If-Match', 'If-None-Match', 'If-Modified-Since', 'If-Unmodified-Since',
   'Upgrade', 'Connection', 'Sec-WebSocket-Key', 'Sec-WebSocket-Version', 'Sec-WebSocket-Protocol', 'Sec-WebSocket-Extensions',
