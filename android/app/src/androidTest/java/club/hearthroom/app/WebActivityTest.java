@@ -51,26 +51,46 @@ public class WebActivityTest {
         fail("Fixture did not load");
     }
     @Test public void waitingCoverKeepsSukiUntilThePageDraws() throws Exception {
-        WebActivity host = activity.launchActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://hearthroom.club/.well-known/assetlinks.json"))
-            .putExtra("waiting_shown", true).putExtra("waiting_text", "Connecting"));
-        AtomicReference<WebView> engine = new AtomicReference<>();
+        // A visible indeterminate spinner does not become idle: observe resume instead of startActivitySync.
+        android.app.Instrumentation instrumentation = InstrumentationRegistry.getInstrumentation();
+        android.app.Instrumentation.ActivityMonitor monitor = instrumentation.addMonitor(WebActivity.class.getName(), null, false);
+        WebActivity host;
+        try {
+            instrumentation.getTargetContext().startActivity(new Intent(instrumentation.getTargetContext(), WebActivity.class)
+                .setData(Uri.parse("https://hearthroom.club/.well-known/assetlinks.json"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("waiting_shown", true).putExtra("waiting_text", "Connecting"));
+            host = (WebActivity) monitor.waitForActivityWithTimeout(5000);
+            assertNotNull(host);
+        } finally { instrumentation.removeMonitor(monitor); }
+        try {
+            AtomicReference<WebView> engine = new AtomicReference<>();
+            ui(() -> {
+                View waiting = host.findViewById(R.id.waiting);
+                assertNotNull("S1 carries over into the WebView cover", waiting);
+                assertTrue(waiting.isShown());
+                assertTrue("The cover keeps its progress indicator", host.findViewById(R.id.waiting_spinner).isShown());
+                assertFalse("Only the text is hidden, preserving its layout space", host.findViewById(R.id.waiting_status).isShown());
+                assertFalse(host.findViewById(R.id.change_route).isShown());
+                engine.set((WebView)((FrameLayout)host.findViewById(R.id.web_content)).getChildAt(0));
+            });
+            fixture(engine.get(), "<body data-ready='yes'><main>Ready</main></body>");
+            long until = android.os.SystemClock.uptimeMillis() + 5000;
+            while (android.os.SystemClock.uptimeMillis() < until) {
+                boolean[] hidden = {false};
+                ui(() -> hidden[0] = host.findViewById(R.id.launch_cover).getVisibility() == View.GONE);
+                if (hidden[0]) return;
+                Thread.sleep(50);
+            }
+            fail("The cover must fade when page content is drawn");
+        } finally { ui(host::finish); }
+    }
+    @Test public void nativeTextUsesPhraseWrappingOnSupportedAndroid() throws Exception {
+        org.junit.Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 33);
+        launch(); WebActivity host = activity.getActivity();
         ui(() -> {
-            View waiting = host.findViewById(R.id.waiting);
-            assertNotNull("S1 carries over into the WebView cover", waiting);
-            assertTrue(waiting.isShown());
-            assertFalse("The connecting status is hidden but keeps its layout space", host.findViewById(R.id.waiting_status).isShown());
-            assertFalse(host.findViewById(R.id.change_route).isShown());
-            engine.set((WebView)((FrameLayout)host.findViewById(R.id.web_content)).getChildAt(0));
+            for (android.widget.TextView text : new android.widget.TextView[]{new android.widget.TextView(host), new android.widget.Button(host), host.findViewById(R.id.waiting_status)})
+                assertEquals("Native text inherits phrase-based word wrapping", android.graphics.text.LineBreakConfig.LINE_BREAK_WORD_STYLE_PHRASE, text.getLineBreakWordStyle());
         });
-        fixture(engine.get(), "<body data-ready='yes'><main>Ready</main></body>");
-        long until = android.os.SystemClock.uptimeMillis() + 5000;
-        while (android.os.SystemClock.uptimeMillis() < until) {
-            boolean[] hidden = {false};
-            ui(() -> hidden[0] = host.findViewById(R.id.launch_cover).getVisibility() == View.GONE);
-            if (hidden[0]) return;
-            Thread.sleep(50);
-        }
-        fail("The cover must fade when page content is drawn");
     }
     @Test public void quickLaunchKeepsTheMarkCover() {
         WebActivity host = activity.launchActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://hearthroom.club/.well-known/assetlinks.json")));
