@@ -38,7 +38,7 @@ public final class MainActivity extends LauncherActivity {
     private TextView waitingStatus, status, notes;
     private Button action, changeRoute;
     private ProgressBar progress;
-    private boolean launched, waitingPermission, downloading, manual, inWebView, splash=true;
+    private boolean launched, waitingPermission, downloading, manual, inWebView, splash=true, waitingShown;
     private String link, launchUrl, routesReason;
     private long started;
     private int attempt;
@@ -47,7 +47,7 @@ public final class MainActivity extends LauncherActivity {
     @Override protected Uri getLaunchingUrl(){return Uri.parse(launchUrl!=null?launchUrl:WebPolicy.HOME);}
     @Override protected TwaLauncher.FallbackStrategy getFallbackStrategy(){
         return (context,builder,provider,completed)->{
-            context.startActivity(new Intent(context,WebActivity.class).setData(getLaunchingUrl()));
+            context.startActivity(webIntent());
             completed.run();
         };
     }
@@ -131,6 +131,7 @@ public final class MainActivity extends LauncherActivity {
         int run=++attempt;main.postDelayed(()->{if(run==attempt&&active())proceed(host,true);},RoutePlanner.SWITCH_NOTICE);
     }
     private void showWaiting(int text,boolean offerRoutes){
+        waitingShown=true;
         if(text!=0)waitingStatus.setText(text);
         findViewById(R.id.launch_mark).setVisibility(View.GONE);
         // Under the system splash, show it fully: the splash's own exit fade is the crossfade into it.
@@ -222,8 +223,13 @@ public final class MainActivity extends LauncherActivity {
     private void showError(){status.setText(R.string.update_failed);progress.setVisibility(View.GONE);action.setEnabled(true);action.setVisibility(View.VISIBLE);action.setText(R.string.retry);action.setOnClickListener(v->{if(release==null)check();else download();});}
     private void openSite(){
         if(!active())return;launched=true;splash=false;client.cancel();worker.shutdownNow();if(probes!=null)probes.shutdownNow();
-        if(inWebView){startActivity(new Intent(this,WebActivity.class).setData(getLaunchingUrl()));finish();}
+        if(inWebView){startActivity(webIntent());finish();}
         else launchTwa();
+    }
+    private Intent webIntent(){
+        return new Intent(this,WebActivity.class).setData(getLaunchingUrl())
+            .putExtra(WebActivity.WAITING_SHOWN,waitingShown)
+            .putExtra(WebActivity.WAITING_TEXT,waitingStatus.getText().toString());
     }
     @Override protected void onDestroy(){if(client!=null)client.cancel();worker.shutdownNow();if(probes!=null)probes.shutdownNow();main.removeCallbacksAndMessages(null);super.onDestroy();}
 }

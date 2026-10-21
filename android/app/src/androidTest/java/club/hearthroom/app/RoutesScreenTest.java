@@ -5,6 +5,8 @@ import android.content.Intent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
+import android.graphics.Color;
+import android.content.res.Configuration;
 import androidx.test.rule.ActivityTestRule;
 import androidx.test.uiautomator.By;
 import androidx.test.uiautomator.UiDevice;
@@ -81,7 +83,43 @@ public class RoutesScreenTest {
         f.instrumentation.runOnMainSync(() -> {
             assertFalse(a.findViewById(R.id.open).isEnabled());
             assertEquals(View.VISIBLE, a.findViewById(R.id.pick_working).getVisibility());
+            TextView button = a.findViewById(R.id.open);
+            boolean dark = (a.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+            assertEquals("Disabled text uses text-3", Color.parseColor(dark ? "#8c8c97" : "#6b6b76"), button.getCurrentTextColor());
         });
+        f.screen("s3-blocked");
+    }
+    @Test public void failureScreensHaveOnlyTheRetryPrimaryAction() {
+        RoutesActivity a = open(CLUB, RoutesActivity.UNREACHABLE, true);
+        settled(a);
+        assertFailureFooter(a);
+        f.screen("s2");
+    }
+    private void assertFailureFooter(RoutesActivity a) {
+        f.instrumentation.runOnMainSync(() -> {
+            assertEquals("No extra opening action on S2", View.GONE, a.findViewById(R.id.open).getVisibility());
+            assertEquals(View.GONE, a.findViewById(R.id.pick_working).getVisibility());
+            assertTrue(a.findViewById(R.id.version).isShown());
+        });
+    }
+    @Test public void footerFollowsAvailableHeight() {
+        RoutesActivity initial = open(CLUB, null);
+        if ("landscape".equals(androidx.test.platform.app.InstrumentationRegistry.getArguments().getString("orientation"))) {
+            f.instrumentation.runOnMainSync(() -> initial.setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE));
+            f.waitFor("short landscape Activity", () -> f.routes != null && f.routes.getResources().getConfiguration().screenHeightDp < 480, 5000);
+        }
+        RoutesActivity a = (RoutesActivity) f.routes;
+        settled(a);
+        f.instrumentation.runOnMainSync(() -> {
+            boolean shortScreen = a.getResources().getConfiguration().screenHeightDp < 480;
+            if ("landscape".equals(androidx.test.platform.app.InstrumentationRegistry.getArguments().getString("orientation"))) assertTrue("This run must exercise the short-screen layout", shortScreen);
+            assertSame(shortScreen ? a.findViewById(R.id.column) : a.findViewById(R.id.routes_root), a.findViewById(R.id.footer).getParent());
+        });
+        f.screen("s3-top");
+        UiDevice device = UiDevice.getInstance(f.instrumentation);
+        UiObject2 scroll = device.findObject(By.scrollable(true));
+        if (scroll != null) scroll.scroll(androidx.test.uiautomator.Direction.DOWN, 1f);
+        f.screen("s3-bottom");
     }
     @Test public void retryingFromNothingReachableUsesTheAutomaticRules() {
         RoutesActivity a = open(CHAT, RoutesActivity.UNREACHABLE);
@@ -98,6 +136,7 @@ public class RoutesScreenTest {
             assertEquals(f.context.getString(R.string.offline_title), ((TextView) a.findViewById(R.id.failure_title)).getText().toString());
             assertEquals(View.VISIBLE, a.findViewById(R.id.network_settings).getVisibility());
         });
+        assertFailureFooter(a);
         f.screen("s2-offline");
     }
 }
