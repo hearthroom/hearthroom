@@ -1,7 +1,7 @@
 {
-  "en": "The app opens without waiting for the update check; a new version is offered the next time you open it.\nIf the usual website address cannot be reached, the app switches to another official route and tells you first. Long-press the app icon and choose Routes to pick one yourself.\nUpdates can now download from any official route.",
-  "zh-Hant": "開啟 App 不再等待檢查更新，有新版本時會在下次開啟時提示。\n平常的網址連不上時，App 會換到另一條官方線路，換之前先告知。長按 App 圖示選「線路」可以自己挑。\n更新現在可以從任一條官方線路下載。",
-  "zh-Hans": "打开 App 不再等待检查更新，有新版本时会在下次打开时提示。\n平常的网址连不上时，App 会换到另一条官方线路，换之前先告知。长按 App 图标选「线路」可以自己挑。\n更新现在可以从任一条官方线路下载。",
-  "ja": "アプリは更新の確認を待たずに開くようになりました。新しいバージョンは次に開いたときにお知らせします。\nいつものアドレスに接続できないときは、別の公式ルートに切り替え、事前にお知らせします。アプリのアイコンを長押しして「ルート」を選ぶと自分で選べます。\n更新はどの公式ルートからでもダウンロードできるようになりました。",
-  "ko": "이제 앱이 업데이트 확인을 기다리지 않고 열립니다. 새 버전은 다음에 열 때 알려 드립니다.\n평소 주소에 연결할 수 없으면 다른 공식 회선으로 바꾸고, 바꾸기 전에 알려 드립니다. 앱 아이콘을 길게 눌러 '회선'을 고르면 직접 선택할 수 있습니다.\n이제 모든 공식 회선에서 업데이트를 내려받을 수 있습니다."
+  "en": "The app opens without waiting for the update check, with new versions offered on the next launch.\nAutomatic selection switches to another route when the current one is unavailable, with a notice before switching.\nLong-press the app icon and choose Routes to switch manually; each route needs its own sign-in.\nApp updates can also download from other official download addresses.",
+  "zh-Hant": "App 開啟時不再等待檢查更新，有新版會在下次開啟時提示。\n自動選擇會在目前線路連不上時改用其他線路，換線前會先告知；長按 App 圖示選「線路」也能手動切換，各線路需分別登入。\nApp 更新也能改從其他官方下載網址取得。",
+  "zh-Hans": "App 启动不再等待检查更新，有新版本会在下次打开时提示。\n自动选择会在当前线路连不上时切换至其他线路，切换前会先提示。\n长按 App 图标选择「线路」也能手动切换，各条线路需单独登录。\nApp 更新也能改从其他官方下载地址获取。",
+  "ja": "アプリは更新の確認を待たずに開き、新しいバージョンは次回の起動時にお知らせします。\n自動選択では現在のルートに接続できない場合に別のルートへ切り替え、事前にお知らせします。\nアプリのアイコンを長押しして「ルート」を選ぶと手動でも切り替えられます。\nログインはルートごとに必要です。\nアプリの更新は、ほかの公式ダウンロード先からも取得できます。",
+  "ko": "앱은 업데이트 확인을 기다리지 않고 열리며 새 버전은 다음 실행 때 안내해요.\n자동 선택은 현재 회선에 연결할 수 없으면 다른 회선으로 바꾸고 전환 전에 알려 드려요.\n앱 아이콘을 길게 눌러 '회선'을 선택하면 직접 회선을 바꿀 수 있어요.\n로그인은 회선마다 따로 필요해요.\n앱 업데이트는 다른 공식 다운로드 주소에서도 받을 수 있어요."
 }
