@@ -20,7 +20,7 @@ import java.util.concurrent.Executors;
 public final class MainActivity extends LauncherActivity {
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
     private final Handler main=new Handler(Looper.getMainLooper());
-    private UpdateClient client=new UpdateClient();
+    private UpdateClient client=new UpdateClient(Routes.downloadHosts(null));
     private UpdateManifest release;
     private TextView status, notes;
     private Button action;
