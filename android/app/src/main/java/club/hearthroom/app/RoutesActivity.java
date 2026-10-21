@@ -44,7 +44,14 @@ public final class RoutesActivity extends Activity {
         super.onCreate(state);
         setContentView(R.layout.routes);
         Ui.insets(findViewById(R.id.routes_root));
-        Ui.column(findViewById(R.id.column), findViewById(R.id.footer));
+        View footer = findViewById(R.id.footer);
+        if (getResources().getConfiguration().screenHeightDp < 480) {
+            // On short windows the action belongs to the same scrollport as the route list.
+            ((ViewGroup) footer.getParent()).removeView(footer);
+            ((LinearLayout) findViewById(R.id.column)).addView(footer);
+            footer.setPadding(0, footer.getPaddingTop(), 0, footer.getPaddingBottom());
+            Ui.column(findViewById(R.id.column));
+        } else Ui.column(findViewById(R.id.column), footer);
         store = new RouteStore(this);
         routes = store.routes();
         String reason = getIntent().getStringExtra(REASON);
@@ -129,8 +136,9 @@ public final class RoutesActivity extends Activity {
         boolean blocked = current == null || latency.containsKey(current) && !reachable(current);
         open.setText(current == null ? getString(R.string.open_site) : getString(R.string.routes_open, Ui.routeName(this, current)));
         open.setEnabled(current != null && reachable(current));
-        // The failure block already explains an unreachable current route.
+        // S2 has one primary action: retry. Keep only the version row in its footer.
         boolean failure = findViewById(R.id.failure).getVisibility() == View.VISIBLE;
+        open.setVisibility(failure ? View.GONE : View.VISIBLE);
         findViewById(R.id.pick_working).setVisibility(blocked && current != null && !failure ? View.VISIBLE : View.GONE);
     }
     private void tap(String host) {

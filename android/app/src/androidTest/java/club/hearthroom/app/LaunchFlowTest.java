@@ -81,6 +81,24 @@ public class LaunchFlowTest {
         assertEquals(AI, f.store().current());
         assertEquals(AI, f.store().autoSwitched());
     }
+    @Test public void slowLaunchPassesWaitingStateToWebView() {
+        setup(CHAT, false); allReachable(20); f.probe.answer(CHAT, 3600, true);
+        f.instrumentation.removeMonitor(web);
+        java.util.concurrent.atomic.AtomicReference<Intent> destination = new java.util.concurrent.atomic.AtomicReference<>();
+        web = new Instrumentation.ActivityMonitor() {
+            @Override public Instrumentation.ActivityResult onStartActivity(Intent intent) {
+                if (intent.getComponent() != null && WebActivity.class.getName().equals(intent.getComponent().getClassName())) {
+                    destination.set(intent); return new Instrumentation.ActivityResult(Activity.RESULT_CANCELED, null);
+                }
+                return null;
+            }
+        };
+        f.instrumentation.addMonitor(web);
+        launch(new Intent(Intent.ACTION_VIEW, Uri.parse("hearthroom://webview")));
+        f.waitFor("WebView handover", () -> destination.get() != null, 6000);
+        assertTrue(destination.get().getBooleanExtra("waiting_shown", false));
+        assertEquals(f.context.getString(R.string.launch_slow), destination.get().getStringExtra("waiting_text"));
+    }
     @Test public void fixedRouteThatFailsAsksInsteadOfSwitching() {
         setup(CHAT, true); allReachable(50); f.probe.answer(CHAT, 50, false);
         routes = f.instrumentation.addMonitor(RoutesActivity.class.getName(), null, false);

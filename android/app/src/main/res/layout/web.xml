@@ -8,7 +8,8 @@
         <FrameLayout android:id="@+id/web_content" android:layout_width="match_parent" android:layout_height="match_parent" />
         <!-- Continues the launch mark until the page first draws, so there is no blank flash. -->
         <FrameLayout android:id="@+id/launch_cover" android:layout_width="match_parent" android:layout_height="match_parent" android:background="@color/background" android:clickable="true" android:importantForAccessibility="noHideDescendants">
-            <ImageView android:layout_width="160dp" android:layout_height="160dp" android:layout_gravity="center" android:src="@drawable/mark" android:importantForAccessibility="no" />
+            <ImageView android:id="@+id/web_launch_mark" android:layout_width="160dp" android:layout_height="160dp" android:layout_gravity="center" android:src="@drawable/mark" android:importantForAccessibility="no" />
+            <include layout="@layout/launch_waiting" />
         </FrameLayout>
     </FrameLayout>
 </LinearLayout>

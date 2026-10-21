@@ -1,0 +1,9 @@
+<!-- S2 and S6 branded recovery: one primary retry action, optional secondary exits. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/failure" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="8dp" android:paddingBottom="16dp" android:visibility="gone">
+    <ImageView android:layout_width="wrap_content" android:layout_height="96dp" android:layout_gravity="center_horizontal" android:adjustViewBounds="true" android:src="@drawable/suki_fail" android:importantForAccessibility="no" />
+    <TextView android:id="@+id/failure_title" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:gravity="center" android:textSize="18sp" android:fontFamily="sans-serif-medium" android:textColor="@color/text" android:accessibilityLiveRegion="polite" />
+    <TextView android:id="@+id/failure_body" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:gravity="center" android:textSize="14sp" android:textColor="@color/muted" />
+    <Button android:id="@+id/retry" style="@style/PrimaryButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="@string/retry" />
+    <Button android:id="@+id/network_settings" style="@style/TextButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/offline_settings" android:visibility="gone" />
+    <Button android:id="@+id/change_route" style="@style/TextButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/web_change_route" android:visibility="gone" />
+</LinearLayout>

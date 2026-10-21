@@ -56,7 +56,16 @@ final class Fixtures implements Application.ActivityLifecycleCallbacks {
         @Override Routes routes() throws IOException { throw new IOException("Not served"); }
     }
     static String manifest(long versionCode) {
-        return "{\"schemaVersion\":1,\"channel\":\"stable\",\"packageId\":\"club.hearthroom.app\",\"versionCode\":" + versionCode + ",\"versionName\":\"1.0.99\",\"downloadUrl\":\"https://downloads.hearthroom.club/latest.apk\",\"sha256\":\"" + "0".repeat(64) + "\",\"size\":1,\"releaseNotes\":{\"en\":\"Opening the app no longer waits for the update check.\",\"zh-Hant\":\"開啟 App 不再等待檢查更新。\"}}";
+        String json = "{\"schemaVersion\":1,\"channel\":\"stable\",\"packageId\":\"club.hearthroom.app\",\"versionCode\":" + versionCode + ",\"versionName\":\"1.0.99\",\"downloadUrl\":\"https://downloads.hearthroom.club/latest.apk\",\"sha256\":\"" + "0".repeat(64) + "\",\"size\":1,\"releaseNotes\":{\"en\":\"Opening the app no longer waits for the update check.\",\"zh-Hant\":\"開啟 App 不再等待檢查更新。\"}}";
+        String notes = InstrumentationRegistry.getArguments().getString("notes");
+        if (notes != null) {
+            try {
+                org.json.JSONObject manifest = new org.json.JSONObject(json);
+                manifest.put("releaseNotes", new org.json.JSONObject(new String(java.nio.file.Files.readAllBytes(new File(notes).toPath()), java.nio.charset.StandardCharsets.UTF_8)));
+                return manifest.toString();
+            } catch (Exception e) { throw new AssertionError("Review release notes unavailable", e); }
+        }
+        return json;
     }
 
     Fixtures start(String current, boolean fixed) {
