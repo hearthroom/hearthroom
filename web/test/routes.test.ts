@@ -76,6 +76,17 @@ it("tests the other lines without credentials when the current one is down, and 
   expect(routesState.results[1]).toEqual({ state: "down" });
 });
 
+it("calls the current line down only when both probes fail", async () => {
+  vi.stubGlobal("location", loc("sukisuki.ai"));
+  let calls = 0;
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+    if (url.startsWith("https://sukisuki.ai/") && calls++ === 0) throw new TypeError("blip");
+    return new Response("[]");
+  }));
+  expect(await backgroundCheck()).toBe(false);
+  expect(routesState.results[1]?.state).toBe("ok");
+});
+
 it("remembers a dismissal on this domain for three days", () => {
   const now = Date.UTC(2026, 9, 22);
   expect(promptDismissed(now)).toBe(false);

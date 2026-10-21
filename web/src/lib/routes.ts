@@ -117,9 +117,9 @@ export async function probeOnce(origin: string, timeoutMs: number = ROUTE_TUNING
  * 測兩次取快的那次：第一次常常包含建立連線，第二次才是之後瀏覽的速度。
  * 第一次就連不上就不再試，免得「連不上」要等兩倍時間才顯示。
  */
-export async function probeLine(origin: string, timeoutMs: number = ROUTE_TUNING.probeTimeoutMs): Promise<number | null> {
+export async function probeLine(origin: string, timeoutMs: number = ROUTE_TUNING.probeTimeoutMs, o: { retryDown?: boolean } = {}): Promise<number | null> {
   const first = await probeOnce(origin, timeoutMs);
-  if (first === null) return null;
+  if (first === null) return o.retryDown ? probeOnce(origin, timeoutMs) : null;
   const second = await probeOnce(origin, timeoutMs);
   return second === null ? first : Math.min(first, second);
 }
@@ -178,9 +178,9 @@ function refreshRecommendation(): void {
   routesState.recommended = current ? recommend(current, latencyMap())?.n ?? 0 : 0;
 }
 
-async function measure(line: Line, timeoutMs?: number): Promise<number | null> {
+async function measure(line: Line, o: { retryDown?: boolean } = {}): Promise<number | null> {
   if (!(line.n in routesState.results)) routesState.results[line.n] = { state: "checking" };
-  const ms = typeof navigator !== "undefined" && navigator.onLine === false ? null : await probeLine(line.origin, timeoutMs);
+  const ms = typeof navigator !== "undefined" && navigator.onLine === false ? null : await probeLine(line.origin, ROUTE_TUNING.probeTimeoutMs, o);
   routesState.results[line.n] = ms === null ? { state: "down" } : { state: "ok", ms };
   refreshRecommendation();
   return ms;
@@ -204,7 +204,8 @@ export function measureAll(force = false): Promise<void> {
 export async function backgroundCheck(): Promise<boolean> {
   const current = currentLine();
   if (!current) return false;
-  const mine = await measure(current);
+  // 目前這條兩次都失敗才算連不上（ui.md §4.1），一次閃斷不該叫人換線
+  const mine = await measure(current, { retryDown: true });
   if (!isSlow(mine)) return false;
   await Promise.all(LINES.filter((l) => l.n !== current.n).map((l) => measure(l)));
   routesState.measuredAt = Date.now();
@@ -252,19 +253,24 @@ export class SwitchError extends Error {
   constructor(public readonly kind: SwitchFailure) { super(kind); }
 }
 
+/*
+ * 出發前記下要去哪條、從哪一頁出發，給原站的過場頁用。放 localStorage 而不是 sessionStorage：
+ * 主畫面 App 在瀏覽器新分頁開換手，新分頁讀不到原分頁的 sessionStorage。同網域的分頁共用一份，
+ * 同時換兩次的話後一次蓋前一次——伺服器那邊也是後一次取代前一次，兩邊一致。
+ */
 interface Pending { target: number; returnTo: string; at: number }
 function rememberPending(p: Pending): void {
-  try { sessionStorage.setItem(PENDING_KEY, JSON.stringify(p)); } catch { /* 過場頁讀不到就只給「回到目前頁」 */ }
+  try { localStorage.setItem(PENDING_KEY, JSON.stringify(p)); } catch { /* 過場頁讀不到就只給「回到目前頁」 */ }
 }
 /** 換手過場頁（原站那一頁）讀：使用者剛才要去哪條、從哪一頁出發。 */
 export function pendingSwitch(): Pending | null {
   try {
-    const p = JSON.parse(sessionStorage.getItem(PENDING_KEY) || "null") as Pending | null;
+    const p = JSON.parse(localStorage.getItem(PENDING_KEY) || "null") as Pending | null;
     return p && lineByNumber(p.target) && Date.now() - p.at < 10 * 60_000 ? p : null;
   } catch { return null; }
 }
 export function clearPendingSwitch(): void {
-  try { sessionStorage.removeItem(PENDING_KEY); } catch { /* ignore */ }
+  try { localStorage.removeItem(PENDING_KEY); } catch { /* ignore */ }
 }
 
 /** 已登入時先跟目前線路要一張換手單；回傳要前往的網址。 */

@@ -7,7 +7,7 @@
  * 同一時間只有一個浮著的提示：它在的時候「加到主畫面」讓位（InstallToast 讀 promptShowing）。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import RoutesDialog from "./RoutesDialog.vue";
 import RouteSpinner from "./RouteSpinner.vue";
@@ -21,6 +21,7 @@ import { useSession } from "@/lib/session";
 import { track } from "@/lib/track";
 
 const route = useRoute();
+const router = useRouter();
 const session = useSession();
 const { t } = useI18n();
 const here = currentLine();
@@ -63,11 +64,12 @@ function scheduleCheck() {
     ? requestIdleCallback(() => { void run(); }, { timeout: ROUTE_TUNING.idleTimeoutMs })
     : window.setTimeout(() => { void run(); }, 1200);
 }
-// 直接開在遊玩頁的人：不測；之後回到其他頁才開始看
-watch(immersive, (now) => {
+// 直接開在遊玩頁的人：不測；之後回到其他頁才開始看。等路由真的解析完才判斷——
+// 第一次導航完成之前 route 是空白的起點，看起來不像遊玩頁
+void router.isReady().then(() => watch(immersive, (now) => {
   if (now) { sw.cancel(); routesState.promptShowing = false; }
   else scheduleCheck();
-}, { immediate: true });
+}, { immediate: true }));
 
 function switchNow() {
   if (pick.value && !sw.busy.value) void sw.start(pick.value);
@@ -77,6 +79,8 @@ function showAll() {
   routesState.promptShowing = false;
   track("routes_prompt", { detail: "all", subject: String(pick.value?.n ?? "") });
   openRoutesDialog(pick.value && !pickDown.value ? pick.value.n : undefined);
+  // 提示卡收起來了，清單關掉時焦點回到內容區，不掉到頁面開頭
+  routesState.opener = document.querySelector<HTMLElement>("#main");
 }
 function later() {
   if (sw.busy.value) return;

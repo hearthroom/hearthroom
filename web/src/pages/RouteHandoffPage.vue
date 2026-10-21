@@ -21,7 +21,7 @@ import { authRequest } from "@/lib/managed-auth";
 import { loginPath, safeReturnTo } from "@/lib/login-return";
 import { pageTitle } from "@/lib/i18n";
 import {
-  ROUTE_TUNING, clearPendingSwitch, currentLine, lineByNumber, pendingSwitch, prepareSwitch, routesState, targetUrl, type Line,
+  ROUTE_TUNING, SwitchError, clearPendingSwitch, currentLine, lineByNumber, pendingSwitch, prepareSwitch, routesState, targetUrl, type Line,
 } from "@/lib/routes";
 import { useSession } from "@/lib/session";
 import { track } from "@/lib/track";
@@ -44,11 +44,23 @@ const pending = mode === "issue" ? pendingSwitch() : null;
 const target = computed<Line | undefined>(() => (mode === "issue" ? lineByNumber(pending?.target) : here));
 /** 目的站：從哪條線路來、原本在哪一頁（原站接在 # 後面帶過來） */
 const from = mode === "complete" ? lineByNumber(fragment.get("from")) : here;
-const returnTo = safeReturnTo(mode === "issue" ? pending?.returnTo : fragment.get("to"));
+/*
+ * 「回哪一頁」放在 # 裡要經過一次語言轉址：vue-router 會把 # 解碼再原樣放回，%26 變回 &，
+ * 查詢字串就被切斷。所以這一項用 base64url 包起來（只含 [A-Za-z0-9_-]，怎麼解碼都不變）。
+ */
+const packPath = (path: string) => btoa(String.fromCharCode(...new TextEncoder().encode(path))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+function unpackPath(raw: string | null): string | null {
+  if (!raw) return null;
+  try { return new TextDecoder().decode(Uint8Array.from(atob(raw.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0))); }
+  catch { return null; }
+}
+const returnTo = safeReturnTo(mode === "issue" ? pending?.returnTo : unpackPath(fragment.get("to")));
 
 const state = ref<"working" | "failed">("working");
 const slow = ref(false);
 const busy = ref(false);
+/** 原站「重新切換」又失敗了：換掉說明，不留一顆按了沒反應的按鈕 */
+const retryError = ref("");
 let abandoned = false;
 let slowTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -60,7 +72,7 @@ async function issue() {
   const { url } = await authRequest<{ url: string }>("route-issue", { request });
   if (typeof url !== "string" || !url.startsWith(`${target.value.origin}/auth/route/complete#`)) throw new Error("route_target_invalid");
   clearPendingSwitch();
-  const extra = new URLSearchParams({ ...(here ? { from: String(here.n) } : {}), to: returnTo });
+  const extra = new URLSearchParams({ ...(here ? { from: String(here.n) } : {}), to: packPath(returnTo) });
   if (!abandoned) location.replace(`${url}&${extra}`);
 }
 
@@ -68,7 +80,12 @@ async function complete() {
   const code = fragment.get("code");
   if (!code) throw new Error("route_code_missing");
   const done = await authRequest<{ ok: boolean; returnTo: string }>("route-redeem", { code });
-  if (abandoned) return;
+  if (abandoned) {
+    // 等太久按了「直接進入」，兌換卻在之後成功了：登入其實已經帶過來，照新登入恢復，收掉「沒帶過來」的說明
+    routesState.arrivedSignedOut = false;
+    await session.retryRestore();
+    return;
+  }
   // 開頁時的恢復登入是在兌換之前跑的（那時還沒有這個網域的登入）；等它結束再照新的登入恢復一次，
   // 回到原頁時頁首直接是登入狀態，不閃一下登入鈕。
   await session.restore();
@@ -96,11 +113,15 @@ async function run() {
 async function retry() {
   if (!target.value || busy.value) return;
   busy.value = true;
+  retryError.value = "";
   try {
     const url = await prepareSwitch(target.value, { withLogin: true, loc: parsePath(returnTo) });
     location.replace(url);
-  } catch {
+  } catch (e) {
     busy.value = false;
+    const kind = e instanceof SwitchError ? e.kind : "start-denied";
+    const args = { line: lineName(target.value), here: lineName(here) };
+    retryError.value = kind === "target-down" ? t("routes.error.targetDown", args) : kind === "start-unavailable" ? t("routes.error.startUnavailable") : t("routes.error.startDenied", args);
   }
 }
 function switchWithoutLogin() {
@@ -160,7 +181,7 @@ onBeforeUnmount(() => { abandoned = true; clearTimeout(slowTimer); });
 
     <template v-else-if="mode === 'issue'">
       <h1 class="handoff__title">{{ $t("routes.handoff.issueFailTitle") }}</h1>
-      <p class="handoff__body" role="alert">{{ $t("routes.handoff.issueFailBody", { line: lineName(here) }) }}</p>
+      <p class="handoff__body" role="alert">{{ retryError || $t("routes.handoff.issueFailBody", { line: lineName(here) }) }}</p>
       <div class="handoff__actions">
         <template v-if="target">
           <button type="button" class="btn btn--primary" :disabled="busy" :aria-busy="busy || undefined" @click="retry">{{ $t("routes.handoff.retry") }}</button>

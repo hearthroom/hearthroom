@@ -5,7 +5,7 @@ import { RouterLink, useRouter } from "vue-router";
 import { connectionMessage } from "@/lib/connection-ui";
 import { setProvider } from "@/lib/provider";
 import { useProviderUpstream } from "@/lib/config";
-import { completeLogin, pendingReturnTo } from "@/lib/oauth";
+import { completeLogin, isSilentMiss, pendingReturnTo } from "@/lib/oauth";
 import { loginPath } from "@/lib/login-return";
 import { useSession } from "@/lib/session";
 import { track } from "@/lib/track";
@@ -23,7 +23,7 @@ onMounted(async () => {
   try {
     const completed = await completeLogin(new URLSearchParams(location.search));
     // 靜默登入沒登入成功（Harbor 沒登入，或還不是本站會員）：不是錯誤，回原頁照常顯示登入鈕
-    if ("authenticated" in completed) { await router.replace(completed.returnTo); return; }
+    if (isSilentMiss(completed)) { await router.replace(completed.returnTo); return; }
     const { token, returnTo, provider, linkFrom } = completed;
     if(linkFrom)throw new Error('auth_reauthorization_required');
     setProvider(provider); useProviderUpstream();
