@@ -11,6 +11,7 @@ import { setSurface } from "./lib/track";
 import { ga4PageView } from "./lib/ga4";
 import { captureGa4Source } from "./lib/ga4-attribution";
 import { campaignShareFromQuery, noteCampaignShare, refFromQuery, rememberShareRef, noteShareOpen } from "./lib/share-ref";
+import { rememberAndroidAppLaunch } from "./lib/route-lines";
 
 /**
  * 語言放在網址路徑裡，不是 localStorage。
@@ -139,6 +140,8 @@ const playAppPages = [
   { path: "/:pathMatch(.*)*", component: () => import("./pages/NotFoundPage.vue"), meta: { bare: true } },
 ];
 
+// Vue Router 會在 createWebHistory 當下記住網址；先記下 TWA 身分並清掉導航 metadata。
+rememberAndroidAppLaunch();
 export const router = createRouter({
   history: createWebHistory(),
   routes: isPlayHost()

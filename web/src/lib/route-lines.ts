@@ -32,20 +32,45 @@ export function currentLine(hostname: string = location.hostname): Line | undefi
 }
 
 /*
- * 在不在 Android App 裡：App 有自己的線路畫面與記憶，網站在 App 裡不放任何線路入口、也不靜默登入。
+ * 在不在 Android App 裡：靜默登入與 standalone 開新分頁策略需要辨識 App；線路入口另外按 runtime 分流。
  * WebView 的 UA 帶 HearthroomApp；TWA 跑的是使用者的 Chrome，UA 沒有記號，只有第一次載入的
  * referrer 是 android-app://<套件名>。之後站內換頁 referrer 就不見了，所以第一次看到時記在這個分頁裡。
  */
 const APP_REFERRER = "android-app://club.hearthroom.app";
 const APP_KEY = "hearthroom.androidApp";
+const APP_QUERY = "_hr_app";
 export function rememberAndroidAppLaunch(referrer: string = document.referrer): void {
-  if (!referrer.startsWith(APP_REFERRER)) return;
+  // 跨網域後 referrer／sessionStorage 不會攜帶過來；此標記只選導航模式，不授予任何原生或登入權限。
+  let carried: URL | undefined;
+  if (location.search?.includes(APP_QUERY) && /\bAndroid\b/.test(navigator.userAgent)
+    && window.matchMedia("(display-mode: standalone)").matches && LINES.some(line => line.origin === location.origin)) {
+    const url = new URL(location.href);
+    if (url.searchParams.get(APP_QUERY) === "twa") carried = url;
+  }
+  if (!referrer.startsWith(APP_REFERRER) && !carried) return;
   try { sessionStorage.setItem(APP_KEY, "1"); } catch { /* 存不了就只有這一頁認得 */ }
   launchedFromApp = true;
+  if (carried) {
+    carried.searchParams.delete(APP_QUERY);
+    history.replaceState(history.state, "", `${carried.pathname}${carried.search}${carried.hash}`);
+  }
 }
 let launchedFromApp = false;
 export function inAndroidApp(ua: string = navigator.userAgent): boolean {
-  if (/\bHearthroomApp\/[\d.]+\b/.test(ua) || launchedFromApp) return true;
+  if (inAndroidWebView(ua) || launchedFromApp) return true;
   try { return sessionStorage.getItem(APP_KEY) === "1"; } catch { return false; }
+}
+
+export function inAndroidWebView(ua: string = navigator.userAgent): boolean {
+  return /\bHearthroomApp\/[\d.]+\b/.test(ua);
+}
+
+/** TWA 跨官方網域仍留在原視窗；一般瀏覽器、PWA、WebView 與外站 URL 都不加標記。 */
+export function appNavigationUrl(raw: string): string {
+  if (!inAndroidApp() || inAndroidWebView()) return raw;
+  const url = new URL(raw);
+  if (!LINES.some(line => line.origin === url.origin)) return raw;
+  url.searchParams.set(APP_QUERY, "twa");
+  return url.toString();
 }
 

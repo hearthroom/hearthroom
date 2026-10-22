@@ -4,6 +4,20 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class WebPolicyTest {
+    @Test public void routesMessagesRequireSameOfficialNativeOriginAndMainFrame() {
+        for (String root : Routes.HOSTS) {
+            String current = "https://" + root + "/editor?tab=draft#entry";
+            assertTrue(WebPolicy.canOpenRoutes(current, "https://" + root, true, "open"));
+            assertTrue(WebPolicy.canOpenRoutes(current, "https://" + root + ":443", true, "open"));
+            assertFalse(WebPolicy.canOpenRoutes(current, "https://" + root, false, "open"));
+            for (String other : Routes.HOSTS) if (!root.equals(other)) assertFalse(WebPolicy.canOpenRoutes(current, "https://" + other, true, "open"));
+            for (String bad : new String[]{null, "https://play." + root, "https://sandbox." + root, "http://" + root, "https://" + root + ":8443", "https://user@" + root, "https://" + root + ".example.test"}) {
+                assertFalse(WebPolicy.canOpenRoutes(current, bad, true, "open"));
+                assertFalse(WebPolicy.canOpenRoutes(bad, "https://" + root, true, "open"));
+            }
+            for (String bad : new String[]{null, "", "OPEN", "https://sukisuki.chat", "{\"action\":\"open\",\"host\":\"sukisuki.chat\"}"}) assertFalse(WebPolicy.canOpenRoutes(current, "https://" + root, true, bad));
+        }
+    }
     @Test public void launchLinksStayOnTheVerifiedOrigin() {
         assertEquals("https://hearthroom.club/cards/example?lang=en", WebPolicy.launchUrl("https://hearthroom.club/cards/example?lang=en"));
         for (String url : new String[]{null, "javascript:alert(1)", "https://hearthroom.club@evil.test/", "https://hearthroom.club.evil.test/", "https://hearthroom.club:8443/", "file:///etc/passwd"})

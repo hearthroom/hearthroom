@@ -9,7 +9,7 @@ final class WebPolicy {
     // This is not a claim that an old Chromium version receives security updates.
     static final int MIN_WEBVIEW_MAJOR = 111;
     static final int MAX_DOWNLOAD_BYTES = 32 * 1024 * 1024;
-    /** Exact top-level origins that receive the narrow native save bridge. Card apps and sandboxes do not. */
+    /** Exact origins for narrow native save/routes messages. Card apps and sandboxes do not qualify. */
     static final Set<String> ORIGINS = Set.of("https://" + Routes.HOSTS.get(0), "https://" + Routes.HOSTS.get(1), "https://" + Routes.HOSTS.get(2), "https://" + Routes.HOSTS.get(3));
     static String launchUrl(String url) { return routeOf(url) != null ? url : HOME; }
     /** The route a URL is on, or null when it is not one of the official roots. */
@@ -23,6 +23,11 @@ final class WebPolicy {
         return base + path + (uri.getRawQuery() == null ? "" : "?" + uri.getRawQuery()) + (uri.getRawFragment() == null ? "" : "#" + uri.getRawFragment());
     }
     static boolean isSite(String url) { return routeOf(url) != null; }
+    /** Message content never supplies a route or URL; use WebView's own current URL. */
+    static boolean canOpenRoutes(String currentUrl, String sourceOrigin, boolean mainFrame, String message) {
+        String current = routeOf(currentUrl), source = routeOf(sourceOrigin);
+        return mainFrame && "open".equals(message) && current != null && current.equals(source);
+    }
     /** Our own pages, including installed card apps on play.<root>: no external-origin bar, no extra privileges. */
     static boolean isOwnHost(String url) {
         if (!isHttps(url)) return false;

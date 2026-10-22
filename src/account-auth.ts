@@ -86,6 +86,14 @@ function routeValue(raw:unknown):string {
   if(typeof raw!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(raw))throw new HttpError(400,'auth_route_invalid');
   return raw;
 }
+function routePrepareNavigation(c:C):boolean {
+  if(c.req.method!=='GET'||c.req.path!=='/auth/route/prepare')return false;
+  const mode=c.req.header('Sec-Fetch-Mode'),destination=c.req.header('Sec-Fetch-Dest');
+  if(mode!==undefined||destination!==undefined)return mode==='navigate'&&destination==='document';
+  // Older browsers omit fetch metadata. Explicit HTML acceptance is required;
+  // API requests and iframe navigations keep their existing JSON contract.
+  return (c.req.header('Accept')||'').split(',').some(part=>part.split(';')[0].trim().toLowerCase()==='text/html');
+}
 async function authBody(c:C):Promise<Record<string,unknown>> {
   let malformed=false;
   const body:unknown=await c.req.json().catch(()=>{malformed=true;return {};});
@@ -252,6 +260,14 @@ accountAuthRoutes.use('/auth/callback',async(c,next)=>{
   c.header('Cache-Control','private, no-store');c.header('Referrer-Policy','no-referrer');
 });
 accountAuthRoutes.onError((error,c)=>{
+  // Never put the request, code or error details on the failure-page URL. The
+  // existing completion page can show failure without attempting redemption.
+  if(routePrepareNavigation(c)){
+    // Display context only: preserve the one known TWA marker, never arbitrary
+    // input or anything that authorizes a handoff.
+    const display=c.req.query('_hr_app')==='twa'?'?_hr_app=twa':'';
+    return c.redirect('/auth/route/complete'+display+'#failed=1',302);
+  }
   if(error instanceof HttpError)return c.json({error:error.message},error.status);
   return c.json({error:'auth_provider_unavailable'},503);
 });
@@ -311,7 +327,10 @@ accountAuthRoutes.use('/auth/route/prepare',async(c,next)=>{
   enabled(c.env);routeOrigin(originOf(c),c.env);
   await limitRoute(c);routeValue(c.req.query('request'));
   try{await next();}finally{
-    if(c.env.AUTH_ENABLED==='true')try{await metric(c.env,'route-prepare','site',c.res.status>=500?'unavailable':c.res.status>=400?'denied':'ok');}catch{console.warn('Account authorization metric unavailable');}
+    // onError may have replaced an error response with a page redirect. Keep
+    // the original failure outcome rather than recording the 302 as success.
+    const status=c.error?(c.error instanceof HttpError?c.error.status:503):c.res.status;
+    if(c.env.AUTH_ENABLED==='true')try{await metric(c.env,'route-prepare','site',status>=500?'unavailable':status>=400?'denied':'ok');}catch{console.warn('Account authorization metric unavailable');}
   }
 });
 accountAuthRoutes.get('/auth/route/prepare',async c=>{
