@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "title": {
+    "zh-Hant": "被內容限制擋下時，提示卡多了關閉流式輸出再重試、修改訊息與切換線路。",
+    "zh-Hans": "被内容限制拦下时，提示卡多了关闭流式输出再重试、修改消息和切换线路。",
+    "en": "Content restriction cards now offer to turn off streaming and retry, edit your message, or switch lanes.",
+    "ja": "内容の制限で止まったカードから、ストリーミングオフで再試行、メッセージ編集、回線変更を選べます。",
+    "ko": "콘텐츠 제한으로 멈췄을 때 스트리밍을 끄고 다시 시도하거나, 메시지를 수정하거나, 회선을 바꿀 수 있어요."
+  }
+}
