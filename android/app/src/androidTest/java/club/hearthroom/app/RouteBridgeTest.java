@@ -36,6 +36,7 @@ public class RouteBridgeTest {
     private final CountDownLatch heldStarted = new CountDownLatch(1);
     private final CountDownLatch heldResponse = new CountDownLatch(1);
     private Instrumentation.ActivityMonitor monitor;
+    private final StringBuffer navigationTrace = new StringBuffer();
 
     private void ui(Runnable action) { instrumentation.runOnMainSync(action); }
     @After public void cleanup() {
@@ -50,7 +51,21 @@ public class RouteBridgeTest {
         ui(() -> {
             web = (WebView) ((FrameLayout) host.findViewById(R.id.web_content)).getChildAt(0);
             web.setWebViewClient(host.new Client() {
+                @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                    navigationTrace.append("override ").append(request.getUrl()).append(" progress=").append(view.getProgress()).append('\n');
+                    return super.shouldOverrideUrlLoading(view, request);
+                }
+                @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap icon) {
+                    navigationTrace.append("started ").append(url).append(" progress=").append(view.getProgress()).append('\n');
+                    super.onPageStarted(view, url, icon);
+                }
+                @Override public void onPageFinished(WebView view, String url) {
+                    navigationTrace.append("finished ").append(url).append(" current=").append(view.getUrl()).append(" progress=").append(view.getProgress()).append('\n');
+                    super.onPageFinished(view, url);
+                }
                 @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                    if ("/attachment".equals(request.getUrl().getPath())) return new WebResourceResponse("application/octet-stream", "UTF-8", 200, "OK",
+                        java.util.Map.of("Content-Disposition", "attachment; filename=route-fixture.txt"), new ByteArrayInputStream("fixture download".getBytes(StandardCharsets.UTF_8)));
                     if (request.getUrl().toString().equals(heldUrl)) {
                         heldStarted.countDown();
                         try { heldResponse.await(10, TimeUnit.SECONDS); }
@@ -85,7 +100,7 @@ public class RouteBridgeTest {
         assertEquals("\"object\"", js("typeof window.HearthroomRoutes"));
         js("HearthroomRoutes.postMessage('open'); true");
         RoutesActivity routes = (RoutesActivity) monitor.waitForActivityWithTimeout(3000);
-        assertNotNull("The official main frame opens native Routes", routes);
+        assertNotNull("The official main frame opens native Routes; " + navigationTrace, routes);
         assertEquals(RoutesActivity.FROM_WEB, routes.getIntent().getStringExtra(RoutesActivity.REASON));
         return routes;
     }
@@ -213,5 +228,30 @@ public class RouteBridgeTest {
         }
         fixtures.waitFor("WebView returns to foreground", web::hasWindowFocus, 3000);
         cancel(openRoutes());
+    }
+    @Test public void httpsAttachmentDoesNotDisableRoutesOnTheExistingDocument() throws Exception {
+        launch(); page("hearthroom.club", "<a id='download' href='/attachment'>Download fixture</a><script>window.kept='draft'</script>");
+        String before = js("location.href");
+        android.content.IntentFilter save = new android.content.IntentFilter(Intent.ACTION_CREATE_DOCUMENT);
+        save.addCategory(Intent.CATEGORY_OPENABLE); save.addDataType("*/*");
+        Instrumentation.ActivityMonitor picker = instrumentation.addMonitor(save, new Instrumentation.ActivityResult(Activity.RESULT_CANCELED, null), true);
+        try {
+            js("document.getElementById('download').click(); true");
+            fixtures.waitFor("real HTTPS attachment reaches the native document picker", () -> picker.getHits() == 1, 5000);
+            fixtures.waitFor("download navigation settles", () -> web.getProgress() == 100, 3000);
+            assertEquals(before, js("location.href"));
+            assertEquals("\"draft\"", js("window.kept"));
+            cancel(openRoutes());
+        } finally { instrumentation.removeMonitor(picker); }
+    }
+    @Test public void replaceStateDuringInitialLoadingDoesNotDisableRoutes() throws Exception {
+        launch();
+        html = "<script>window.wasLoading=document.readyState==='loading';history.replaceState({}, '', '/editor/replaced?mode=draft#entry')</script><body data-ready='yes'>Ready</body>";
+        ui(() -> web.loadUrl("https://hearthroom.club/initial-document"));
+        fixtures.waitFor("document finishes loading", () -> web.getProgress() == 100 && "https://hearthroom.club/editor/replaced?mode=draft#entry".equals(web.getUrl()), 5000);
+        assertEquals("true", js("window.wasLoading"));
+        assertEquals("\"complete\"", js("document.readyState"));
+        cancel(openRoutes());
+        assertEquals("\"https://hearthroom.club/editor/replaced?mode=draft#entry\"", js("location.href"));
     }
 }
