@@ -8,6 +8,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import worker from "../src/index";
 import { envWithAssets, resetDb, restoreUpstream, role, rolesOnProviders } from "./helpers";
 import { getCard, upsertCard } from "../src/cards";
+import { BANNER_THUMB_WIDTH, cardThumbUrl } from "../shared/card-thumb";
+import { PRIMARY_HOST } from "../shared/site-hosts";
 
 const PORTRAIT = "https://assets.harperharbor.com/bg.png";
 const LANDSCAPE = "https://assets.harperharbor.com/landscape.png";
@@ -28,6 +30,9 @@ async function get(path: string, e: typeof env = envWithAssets()) {
 }
 const cardId = async (roleId = "r-1") => (await getCard(env.DB, roleId))!.id;
 const set = (sql: string, ...args: unknown[]) => env.DB.prepare(`UPDATE cards SET ${sql} WHERE source_role_id='r-1'`).bind(...args).run();
+// 有橫式背景時它是頁首橫幅、頁面最大的一張（LCP）：它搶先下載；直式封面照樣預載，但不搶頻寬
+const bannerPreload = `<link rel="preload" as="image" href="${cardThumbUrl(PRIMARY_HOST, LANDSCAPE, BANNER_THUMB_WIDTH)}" fetchpriority="high">`;
+const portraitPreload = `<link rel="preload" as="image" href="${cardThumbUrl(PRIMARY_HOST, PORTRAIT)}">`;
 const ogImage = (html: string) => html.match(/<meta property="og:image" content="([^"]+)">/)?.[1];
 
 describe("卡片頁的 og:image", () => {
@@ -39,8 +44,10 @@ describe("卡片頁的 og:image", () => {
     expect(html).toContain('<meta property="og:image:width" content="1200">');
     expect(html).toContain('<meta property="og:image:height" content="630">');
     expect(html).toContain('<meta name="twitter:card" content="summary_large_image">');
-    // 頁面主圖的預載仍是直式背景：預覽圖是給抓取器的，不是頁面上畫的那張
-    expect(html).toContain(`<link rel="preload" as="image" href="${PORTRAIT}" fetchpriority="high">`);
+    // 頁面預載的是頁面上畫的那兩張（橫幅與直式封面）的縮圖：預覽圖是給抓取器的，不是頁面上畫的那張
+    expect(html).toContain(bannerPreload);
+    expect(html).toContain(portraitPreload);
+    expect(html).not.toContain(`href="${SHARE}"`);
   });
 
   it("沒有分享圖：用橫式背景，不註明尺寸", async () => {
@@ -49,7 +56,8 @@ describe("卡片頁的 og:image", () => {
     expect(ogImage(html)).toBe(LANDSCAPE);
     expect(html).not.toContain("og:image:width");
     expect(html).toContain('<meta name="twitter:card" content="summary_large_image">');
-    expect(html).toContain(`<link rel="preload" as="image" href="${PORTRAIT}" fetchpriority="high">`);
+    expect(html).toContain(bannerPreload);
+    expect(html).toContain(portraitPreload);
   });
 
   it("兩張都沒有：用直式背景，不註明尺寸", async () => {

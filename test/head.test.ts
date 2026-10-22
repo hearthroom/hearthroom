@@ -5,6 +5,7 @@ import worker from "../src/index";
 import { authorLine, oneLine, siteOgImage } from "../src/head";
 import { envWithAssets, makeMember, resetDb, restoreUpstream, rolesOnProviders, role, testHandle } from "./helpers";
 import { getCard, upsertCard } from "../src/cards";
+import { cardThumbUrl } from "../shared/card-thumb";
 
 // 殼帶驗證器：測「改寫後要清 ETag／Last-Modified」那幾條
 const testEnv = envWithAssets({}, { etag: '"shell-v1"', "last-modified": "Mon, 01 Sep 2025 00:00:00 GMT" });
@@ -32,8 +33,10 @@ describe("分享預覽", () => {
     expect(html).toContain('<meta name="description" content="民國二十四年的上海，租界的雨從不停。">');
     expect(html).toContain('<meta property="og:title" content="夜行偵探 沈墨 · 綺夢社">');
     expect(html).toContain('<meta property="og:image" content="https://assets.harperharbor.com/bg.png">');
-    // 卡片圖是這頁最大的一張：HTML 一到就開始下載，不等 JS 讀完卡片資料
-    expect(html).toContain('<link rel="preload" as="image" href="https://assets.harperharbor.com/bg.png" fetchpriority="high">');
+    // 卡片圖是這頁最大的一張：HTML 一到就開始下載，不等 JS 讀完卡片資料。下載的是頁面上畫的那張縮圖，
+    // 跟前端 <img> 一字不差（shared/card-thumb.ts），不然 preload 了沒被用上、還多下載一次原圖
+    expect(html).toContain(`<link rel="preload" as="image" href="${cardThumbUrl(PRIMARY_HOST, "https://assets.harperharbor.com/bg.png")}" fetchpriority="high">`);
+    expect(html).not.toContain('href="https://assets.harperharbor.com/bg.png"');
     // canonical 一律指向正牌主機：搬家期間兩個網域並存，搜尋引擎要知道哪個才算數
     const card = await getCard(env.DB, 'r-1');
     expect(html).toContain(`<link rel="canonical" href="https://${PRIMARY_HOST}/cards/${card!.id}">`);

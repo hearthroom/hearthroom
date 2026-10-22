@@ -17,6 +17,13 @@ export const THUMB_SOURCES: Readonly<Record<string, string>> = {
  * still：只取第一格。動圖總面積超過轉換上限（例：110 格 1024×1792 的 WebP，err 9413）轉不了動的，
  * 縮好的第一格還是轉得出來；比退回好幾 MB 的原圖好——手機每一格都要全尺寸解碼，整頁會閃。
  */
+/**
+ * 卡片頁頂部橫幅的寬度：手機 390×230 的 3 倍密度約 1170 px，桌機寬 1440、高 320 px。
+ * 這是唯一多出來的一個尺寸（owner 2026-10-22 同意多一次轉換）：原圖常是 800 KB 以上的 JPEG，
+ * 又是卡片頁最大的一張（LCP）；縮成這個寬度、轉 AVIF／WebP 之後約 150 KB。
+ */
+export const BANNER_THUMB_WIDTH = 1280;
+
 export function cardThumbUrl(primaryHost: string, url: string, width = 360, still = false): string | null {
   let source: URL;
   try {
