@@ -25,6 +25,9 @@ import NotFoundPage from "@/pages/NotFoundPage.vue";
 import AdultGate from "@/components/AdultGate.vue";
 import CardScore from "@/components/CardScore.vue";
 import ReadmeView from "@/components/ReadmeView.vue";
+import CoverImg from "@/components/CoverImg.vue";
+import { cardThumb, thumbChain } from "@/lib/card-thumb";
+import { BANNER_THUMB_WIDTH } from "../../../shared/card-thumb";
 import { ApiError, fetchBoard, fetchCard, fetchCardPlatforms, fetchCardScore, fetchRoleDetail, saveCardScore, type CardPlatform, type CardScore as Score } from "@/lib/api";
 import { recallCard } from "@/lib/card-memory";
 import { renderReadme } from "@/lib/card-readme";
@@ -102,11 +105,23 @@ const copied = ref(false);
 const editedAt = ref<number | null>(null);
 
 const hue = computed(() => hueFrom(card.value?.name ?? ""));
-const broken = ref(false);
-const hasArt = computed(() => !!card.value?.avatarUrl && !broken.value);
-const bannerBroken = ref(false);
+/**
+ * 封面與橫幅都先用縮圖，載不了才一步步退回原圖（thumbChain）；第一個網址跟 Worker 預載的一字不差。
+ * 原圖常是好幾百 KB 的 JPEG：100257 的封面 708 KB、畫出來 92×123，橫幅 845 KB（2026-10-22 實測）。
+ * 封面跟首頁卡片同一個縮圖網址，邊緣已有快取，不多算一次轉換。
+ */
+const artStep = ref(0);
+const artUrls = computed(() => (card.value?.avatarUrl ? thumbChain(card.value.avatarUrl) : []));
+const hasArt = computed(() => artStep.value < artUrls.value.length);
+const bannerStep = ref(0);
+const bannerUrls = computed(() => (card.value?.landscapeUrl ? thumbChain(card.value.landscapeUrl, BANNER_THUMB_WIDTH) : []));
 /** 橫幅只用作者的橫式背景圖；分享圖上壓著標題字，跟頁面標題重複，不拿來用 */
-const banner = computed(() => (!bannerBroken.value && card.value?.landscapeUrl) || "");
+const banner = computed(() => bannerUrls.value[bannerStep.value] ?? "");
+/** 沒有橫幅時糊掉的氛圍底圖：糊 64 px、透明度 0.28，縮圖就夠；用封面同一個縮圖網址，瀏覽器已經有了 */
+const ambient = computed(() => {
+  const src = card.value?.backgroundUrl || card.value?.avatarUrl;
+  return src ? cardThumb(src) : "";
+});
 /** 在榜才有評分與評論（跟伺服器同一個條件） */
 const listed = computed(() => !card.value?.status || card.value.status === "approved");
 
@@ -292,7 +307,7 @@ watch(() => route.params.id, () => {
   const id = String(route.params.id ?? "");
   platformsRequest.value = /^[1-9]\d*$/.test(id) ? { id, request: fetchCardPlatforms(id) } : null;
   platformsRequest.value?.request.catch(() => {});
-  card.value = null; readme.value = ""; detailsPending.value = false; more.value = []; broken.value = false; bannerBroken.value = false; editedAt.value = null;
+  card.value = null; readme.value = ""; detailsPending.value = false; more.value = []; artStep.value = 0; bannerStep.value = 0; editedAt.value = null;
   commentCount.value = null; showComments.value = true; score.value = null; introOpen.value = false; confirmed.value = false;
   load();
 }, { immediate: true });
@@ -357,9 +372,9 @@ watch(() => session.profile?.showNsfw, (now, before) => {
     <template v-else-if="card">
       <!-- 頂部橫幅：作者的橫式背景圖，下緣淡進頁面底色。沒有橫式圖就把直式圖糊掉當氛圍 -->
       <div v-if="banner" class="role__banner" aria-hidden="true">
-        <img :src="banner" alt="" fetchpriority="high" @error="bannerBroken = true" />
+        <img :key="banner" :src="banner" alt="" fetchpriority="high" @error="bannerStep += 1" />
       </div>
-      <div v-else class="role__ambient" :style="{ backgroundImage: `url(${card.backgroundUrl || card.avatarUrl || ''})` }" aria-hidden="true" />
+      <div v-else class="role__ambient" :style="{ backgroundImage: `url(${ambient})` }" aria-hidden="true" />
 
       <!-- 社群審核影響榜單收錄，詳情連結仍可分享。 -->
       <p v-if="card.status && card.status !== 'approved'" class="notice role__own" role="status">
@@ -368,7 +383,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
 
       <header class="role__hero settle" :class="{ 'role__hero--plain': !banner }" :aria-busy="revalidating || undefined">
         <div class="role__art">
-          <img v-if="hasArt" :src="card.avatarUrl!" alt="" fetchpriority="high" @error="broken = true" />
+          <img v-if="hasArt" :key="artUrls[artStep]" :src="artUrls[artStep]" alt="" :fetchpriority="banner ? 'auto' : 'high'" @error="artStep += 1" />
           <div v-else class="role__void" :style="{ background: `linear-gradient(160deg, hsl(${hue} 45% 78%), hsl(${(hue + 40) % 360} 40% 62%))` }">
             <span>{{ [...shownName][0] }}</span>
           </div>
@@ -497,7 +512,7 @@ watch(() => session.profile?.showNsfw, (now, before) => {
             </h2>
             <h2 v-else id="more-h" class="sr-only">{{ card.author.name }}</h2>
             <RouterLink v-for="m in more" :key="m.id" :to="lp(`/cards/${m.num ?? m.id}`)" class="role__mini">
-              <img v-if="m.avatarUrl" :src="m.avatarUrl" alt="" loading="lazy" />
+              <CoverImg v-if="m.avatarUrl" :src="m.avatarUrl" loading="lazy" />
               <span v-else class="role__mini-void" :style="{ background: `hsl(${hueFrom(m.name)} 40% 62%)` }" />
               <span class="role__mini-text">
                 <strong>{{ displayName(m.name, locale) }}</strong>

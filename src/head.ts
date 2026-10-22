@@ -1,4 +1,5 @@
 import { PRIMARY_HOST } from "../shared/site-hosts";
+import { BANNER_THUMB_WIDTH, cardThumbUrl } from "../shared/card-thumb";
 import { SITE_NAME, siteLockup, siteName } from "../shared/site-name";
 /**
  * 分享預覽：把下載頁／卡片／作者的標題、簡介、圖片寫進 HTML 的 <head>。
@@ -24,11 +25,11 @@ export interface PageMeta {
   /** 文章型頁面：發布與修改時間（ISO 8601），另附 JSON-LD。 */
   article?: { published: string; modified: string; jsonLd: unknown };
   /**
-   * 頁面主圖的網址，一進 HTML 就開始下載。卡片頁最大的那張是直式封面，
+   * 頁面上的圖一進 HTML 就開始下載的 <link rel="preload">（見 cardArtPreloads）。
    * 不先講的話要等 JS 跑完、卡片資料回來才知道網址（實測 LCP 的載入延遲約 0.5 s）。
    * 跟分享預覽圖分開：預覽圖是給抓取器的 1.91:1，不是頁面上畫的那張。
    */
-  preloadImage?: string | null;
+  preload?: string;
 }
 
 const esc = (s: string) =>
@@ -74,9 +75,21 @@ export function siteOgImage(kind: SiteOgKind, lang: string): string {
   return `https://${PRIMARY_HOST}/og/${kind}-${locale}.jpg${v ? `?v=${v}` : ""}`;
 }
 
-/** 頁面主圖一進 HTML 就開始下載（見 PageMeta.preloadImage）。 */
+/** 頁面主圖一進 HTML 就開始下載（見 PageMeta.preload）。 */
 export function preloadImageTag(url: string, priority: "high" | "auto" = "high"): string {
   return `<link rel="preload" as="image" href="${esc(url)}"${priority === "high" ? ' fetchpriority="high"' : ""}>`;
+}
+
+/**
+ * 卡片頁一進 HTML 就下載的圖：頁首橫幅（作者的橫式背景）與直式封面，網址跟前端 <img> 用的縮圖一字不差。
+ * 有橫幅時它是這頁最大的一張（LCP），讓它先下載；封面照樣預載，但不搶頻寬。
+ * 原本預載的是直式封面原圖：100257 實測 708 KB 的 JPEG，畫出來只有 92×123，
+ * 還跟真正的 LCP（845 KB 的橫幅、要等卡片資料回來才開始下載）搶了好幾秒（2026-10-22）。
+ */
+export function cardArtPreloads(card: { avatarUrl?: string | null; landscapeUrl?: string | null }): string {
+  const banner = card.landscapeUrl ? cardThumbUrl(PRIMARY_HOST, card.landscapeUrl, BANNER_THUMB_WIDTH) ?? card.landscapeUrl : null;
+  const portrait = card.avatarUrl ? cardThumbUrl(PRIMARY_HOST, card.avatarUrl) ?? card.avatarUrl : null;
+  return (banner ? preloadImageTag(banner) : "") + (portrait ? preloadImageTag(portrait, banner ? "auto" : "high") : "");
 }
 
 /** 殼（web/index.html）自己帶了一份預設分享標籤給沒經過 Worker 的頁面；這裡要寫自己的，先拿掉殼的，免得同一個標籤出現兩次 */
@@ -95,7 +108,7 @@ export function renderHead(page: Response, meta: PageMeta): Response {
     `<meta property="og:locale" content="${OG_LOCALE[meta.lang] ?? "en_US"}">`,
     meta.image ? `<meta property="og:image" content="${esc(meta.image)}">` : "",
     meta.image && meta.imageSize ? `<meta property="og:image:width" content="${meta.imageSize.width}"><meta property="og:image:height" content="${meta.imageSize.height}">` : "",
-    meta.preloadImage ? preloadImageTag(meta.preloadImage) : "",
+    meta.preload ?? "",
     meta.article ? `<meta property="article:published_time" content="${esc(meta.article.published)}"><meta property="article:modified_time" content="${esc(meta.article.modified)}">` : "",
     meta.article ? `<script type="application/ld+json">${jsonLdText(meta.article.jsonLd)}</script>` : "",
     `<meta name="twitter:card" content="${meta.image ? "summary_large_image" : "summary"}">`,

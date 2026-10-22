@@ -56,7 +56,7 @@ import { blogGroupUrl, blogIndexMeta, blogUrl, postMeta } from "./blog-head";
 import { campaignLocale, campaignMeta, campaignUrl, cardRewardMeta, inviteMeta, isInviteLink } from "./campaign-head";
 import { getRewardCampaign } from "./card-reward";
 import { getCampaign } from "./campaign";
-import { authorLine, downloadMeta, guideMeta, homeMeta, preloadImageTag, renderDefaultShareHead, renderHead, updatesMeta } from "./head";
+import { authorLine, cardArtPreloads, downloadMeta, guideMeta, homeMeta, preloadImageTag, renderDefaultShareHead, renderHead, updatesMeta } from "./head";
 import { aliasTarget, HOST, canonicalUrl, isPlayHost } from "./site";
 import { cardThumbUrl, landingZone } from "../shared/card-thumb";
 import { PRIMARY_HOST, siteRootOf } from "../shared/site-hosts";
@@ -1940,9 +1940,10 @@ app.get("*", async (c) => {
       const card = toCard(row, l);
       // 開了成人內容的人（本站登入 cookie 認得出來）：跟一般卡一樣，卡片圖一進 HTML 就開始下載。
       // 只加這一行，不放標題與分享資訊；這份因人而異，任何快取都不能留。
-      if (card.avatarUrl && await viewerAllowsNsfw(c, { card: true })) {
+      const preload = cardArtPreloads(card);
+      if (preload && await viewerAllowsNsfw(c, { card: true })) {
         const res = new HTMLRewriter()
-          .on("head", { element(e) { e.append(preloadImageTag(card.avatarUrl!), { html: true }); } })
+          .on("head", { element(e) { e.append(preload, { html: true }); } })
           .transform(shell);
         res.headers.set("Cache-Control", "private, no-store");
         res.headers.set("Vary", "Cookie");
@@ -1961,7 +1962,7 @@ app.get("*", async (c) => {
       lang: locale, title: `${card.name} · ${siteName(locale)}`, description: card.summary, url: canonical, type: "profile",
       image: card.shareImageUrl || card.landscapeUrl || card.avatarUrl,
       ...(card.shareImageUrl ? { imageSize: { width: 1200, height: 630 } } : {}),
-      preloadImage: card.avatarUrl,
+      preload: cardArtPreloads(card),
     });
     res.headers.set("Cache-Control", `public, max-age=${PAGE_TTL}`);
     return res;
