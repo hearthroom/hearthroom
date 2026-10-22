@@ -78,13 +78,26 @@ export function llmsHeaders(): string {
   return rules.join("\n\n") + "\n";
 }
 
+/**
+ * 資源層 _headers 全文：上面的 charset 規則，加上沒有 hash 的靜態圖的快取。
+ * 資源層預設 max-age=0, must-revalidate：蘇綺的四十多張貼圖與骨架每換一頁都要再問一次
+ * （100257 實測 2026-10-22：熱快取 46 個請求）。檔名不帶 hash、改圖時檔名不變，所以只快取一小時，
+ * 過期後一天內先用舊的、背景再問：改了圖最多一個多小時後看到新的。
+ * _headers 只能有一份（資源層只讀根目錄這個檔），所以跟 charset 規則寫在一起。
+ */
+const STATIC_CACHE = "public, max-age=3600, stale-while-revalidate=86400";
+export function assetHeaders(): string {
+  const cache = ["/mascot/*", "/rating/*"].map(p => `${p}\n  Cache-Control: ${STATIC_CACHE}`);
+  return llmsHeaders() + "\n" + cache.join("\n\n") + "\n";
+}
+
 /** 建置時寫進 dist；dev server 直接從記憶體回，讓本機也能對 /en/guide.md 這種網址驗。 */
 export function llmsDocsPlugin(): Plugin {
   return {
     name: "hearthroom:llms-docs",
     generateBundle() {
       for (const d of llmsDocs()) this.emitFile({ type: "asset", fileName: d.path, source: d.content });
-      this.emitFile({ type: "asset", fileName: "_headers", source: llmsHeaders() });
+      this.emitFile({ type: "asset", fileName: "_headers", source: assetHeaders() });
     },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
