@@ -19,6 +19,8 @@ md.renderer.rules.image = (tokens, idx, options, env, self) => {
   if (!/^https:\/\//i.test(src)) return "";
   token.attrSet("loading", "lazy");
   token.attrSet("decoding", "async");
+  // Markdown 沒有寬高：載好之前由 ReadmeView 佔位，不然高 0 的圖全擠在首屏、延遲載入形同虛設
+  token.attrSet("data-pending", "");
   token.attrSet("referrerpolicy", "no-referrer");
   return defaultImage(tokens, idx, options, env, self);
 };
