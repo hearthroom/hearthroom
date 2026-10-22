@@ -6,11 +6,10 @@
  * class、loading 這些照樣傳到 <img>；全掛了換成同 class 的空 <span>，佔位樣式照用。
  */
 import { computed, ref, watch } from "vue";
-import { cardStill, cardThumb } from "@/lib/card-thumb";
+import { thumbChain } from "@/lib/card-thumb";
 
 const props = defineProps<{ src: string }>();
-/** 依序試的網址；不是我們能轉的來源時三個都是原圖，去重後只剩一個 */
-const urls = computed(() => [...new Set([cardThumb(props.src), cardStill(props.src), props.src])]);
+const urls = computed(() => thumbChain(props.src));
 const step = ref(0);
 watch(() => props.src, () => { step.value = 0; });
 </script>
