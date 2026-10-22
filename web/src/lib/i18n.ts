@@ -80,7 +80,12 @@ export async function applyLocale(code: string): Promise<void> {
   // 只等這個語言本身；回退鏈在背景載。每種語言都要求 100% 覆蓋（scripts/i18n-check），回退幾乎用不到，
   // 卻讓每次冷開都多等一個語言包、頁面程式碼才開始下載（2026-09-26 實測首頁多 0.2 s 以上）。
   await loadLocale(code);
-  for (const fallback of FALLBACK[code] ?? FALLBACK.default) void loadLocale(fallback).catch(() => {});
+  // 回退鏈只預載到已經在手上的那一份為止：簡體退到繁體（原文、打在主程式裡）一定找得到，
+  // 後面的英文包永遠用不到，冷開卻每次多下載 57 KB、跟卡片資料搶頻寬（2026-10-22 實測）。
+  for (const fallback of FALLBACK[code] ?? FALLBACK.default) {
+    if (loaded.has(fallback)) break;
+    void loadLocale(fallback).catch(() => {});
+  }
   i18n.global.locale.value = code as never;
 
   const def = LOCALES.find((l) => l.code === code);
