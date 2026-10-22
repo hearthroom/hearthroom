@@ -8,11 +8,16 @@ import { renderReadme } from "@/lib/card-readme";
 
 const props = defineProps<{ html?: string; source?: string }>();
 const out = computed(() => props.html ?? (props.source?.trim() ? renderReadme(props.source) : ""));
+
+/** 圖載好（或載失敗）就拿掉佔位，換回圖本身的大小。load／error 不冒泡，在外層用捕獲接 */
+function settle(e: Event) {
+  if (e.target instanceof HTMLImageElement) e.target.removeAttribute("data-pending");
+}
 </script>
 
 <template>
   <!-- eslint-disable-next-line vue/no-v-html -- 介紹只收 Markdown，不收內嵌 HTML（見 lib/card-readme.ts） -->
-  <div class="readme" v-html="out" />
+  <div class="readme" @load.capture="settle" @error.capture="settle" v-html="out" />
 </template>
 
 <style scoped>
@@ -27,6 +32,11 @@ const out = computed(() => props.html ?? (props.source?.trim() ? renderReadme(pr
 .readme :deep(ul), .readme :deep(ol) { margin: 0.5em 0; padding-left: 1.4em; }
 .readme :deep(a) { color: var(--accent-text); text-decoration: underline; text-underline-offset: 3px; }
 .readme :deep(img) { max-width: 100%; height: auto; border-radius: var(--r-md); }
+/*
+ * 還沒載好的圖先佔一塊 3:4（介紹圖多半是直式長圖）。延遲載入看的是圖離視窗多遠，
+ * 高 0 的圖全擠在一起就全部算「快看到了」；佔了位，捲不到的才真的延後（100257：九張 → 五張）。
+ */
+.readme :deep(img[data-pending]) { display: block; width: 100%; aspect-ratio: 3 / 4; background: var(--surface-2); }
 .readme :deep(blockquote) { margin: 1em 0; padding: 0.2em 1em; border-left: 3px solid var(--accent); border-radius: 0 var(--r-sm) var(--r-sm) 0; background: var(--surface-2); color: var(--text-2); }
 .readme :deep(code) { padding: 1px 6px; border-radius: 4px; background: var(--surface-2); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.88em; }
 .readme :deep(pre) { overflow-x: auto; padding: var(--s-3) var(--s-4); border-radius: var(--r-md); background: var(--surface-2); }
