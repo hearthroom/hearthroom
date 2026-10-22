@@ -70,3 +70,15 @@ describe('llms docs emitted at build', () => {
     for (const p of LLMS_DOC_PATHS) expect(p, p).not.toMatch(/^\//);
   });
 });
+
+describe('資源層 _headers 的快取規則', () => {
+  it('蘇綺與分級標章這些沒有 hash 的圖快取一小時，不再每換一頁都問一次', async () => {
+    const { assetHeaders } = await import('../build/llms-docs');
+    const headers = assetHeaders();
+    for (const path of ['/mascot/*', '/rating/*']) {
+      expect(headers, path).toContain(`${path}\n  Cache-Control: public, max-age=3600, stale-while-revalidate=86400`);
+    }
+    // charset 那幾條照樣在
+    expect(headers).toContain(llmsHeaders());
+  });
+});

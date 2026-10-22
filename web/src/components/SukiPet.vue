@@ -3,7 +3,7 @@
  * 桌寵兼嚮導蘇綺（設定集 docs/design/hearthroom-mascot「桌寵」各節）。
  *
  * 除了玩卡頁與沙盒（bare 路由、卡片 App 網域），站上每一頁都在，編輯頁與管理頁也算（owner 2026-10-13）。
- * 首屏畫完才載入（動態 import＋閒置時），不拖慢第一眼；可在設定裡關掉。
+ * 頁面載完（load 事件）、瀏覽器空閒才載入（動態 import），不拖慢第一眼；可在設定裡關掉。
  * 這裡只做「網站 → 她」的接線：她怎麼演在 pet/pet-ui.ts，各頁的用途在 pet/guides.ts。
  */
 import { onBeforeUnmount, onMounted, shallowRef, watch } from "vue";
@@ -156,11 +156,19 @@ async function start() {
 
 function stop() { pet.value?.stop(); pet.value = null; }
 
+// 她的貼圖四十多張、約 740 KB。只等閒置不夠：閒置的 3 秒時限一到，卡片頁的橫幅、封面都還在下載，
+// 她跟頁面最大的那張圖搶頻寬（100257 實測 2026-10-22）。所以先等 load，再等空閒
+function whenLoaded(go: () => void) {
+  if (document.readyState === "complete") go();
+  else window.addEventListener("load", go, { once: true });
+}
 onMounted(() => {
   if (!petEnabled.value) return;
   const go = () => void start();
-  if ("requestIdleCallback" in window) (window as Window & { requestIdleCallback: (f: () => void, o?: { timeout: number }) => void }).requestIdleCallback(go, { timeout: 3000 });
-  else setTimeout(go, 1500);
+  whenLoaded(() => {
+    if ("requestIdleCallback" in window) (window as Window & { requestIdleCallback: (f: () => void, o?: { timeout: number }) => void }).requestIdleCallback(go, { timeout: 3000 });
+    else setTimeout(go, 1500);
+  });
 });
 onBeforeUnmount(() => { disposed = true; stop(); });
 watch(petEnabled, (on) => { if (on) void start(); else stop(); });
