@@ -711,6 +711,58 @@
               }
             }
           }
+        },
+        "x-harperharbor": {
+          "description": "Without chatId, selects the owned conversation. With chatId, commits rollback and its stable-ID receipt atomically. Same ID and intent replay before Stop or history writes. Send historyEpoch and nextSeq together to reject an unseen intent after the displayed timeline advances. Requests without IDs keep legacy behavior; an echoed operationID alone does not provide replay protection. Incremental timeline snapshots may advance the client record only when both start fields exactly equal its currently read historyEpoch/nextSeq. A gap or missing origin requires an actual page-one history read; a newer terminal pair alone does not prove that intervening rows were read.",
+          "security": [
+            {
+              "userToken": []
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Committed response. Snapshot fields, when present, follow the exact-origin rule.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "success": {
+                        "type": "string",
+                        "enum": [
+                          "ok"
+                        ]
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "ok"
+                        ]
+                      },
+                      "operationID": {
+                        "type": "string"
+                      },
+                      "canonicalTimelineCommitted": {
+                        "type": "boolean",
+                        "const": true
+                      },
+                      "repairPending": {
+                        "type": "boolean",
+                        "const": false
+                      },
+                      "legacyCompatibility": {
+                        "type": "boolean"
+                      },
+                      "targetRowID": {
+                        "type": "integer",
+                        "format": "int64"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -848,6 +900,58 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/I18nError"
+                }
+              }
+            }
+          }
+        },
+        "x-harperharbor": {
+          "description": "Deletes an owned message and returns an atomic before/end snapshot. Optional clientOperationID makes the mutation durable and replay-safe; replay returns the original snapshot without touching later history. Incremental timeline snapshots may advance the client record only when both start fields exactly equal its currently read historyEpoch/nextSeq. A gap or missing origin requires an actual page-one history read; a newer terminal pair alone does not prove that intervening rows were read.",
+          "security": [
+            {
+              "userToken": []
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Committed response. Snapshot fields, when present, follow the exact-origin rule.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "success": {
+                        "type": "string",
+                        "enum": [
+                          "ok"
+                        ]
+                      },
+                      "historyEpoch": {
+                        "type": "integer",
+                        "format": "int64",
+                        "minimum": 0,
+                        "description": "HarperHarbor: history revision of the returned timeline."
+                      },
+                      "nextSeq": {
+                        "type": "integer",
+                        "format": "int64",
+                        "minimum": 1,
+                        "description": "HarperHarbor: next message sequence allocated by the conversation."
+                      },
+                      "startHistoryEpoch": {
+                        "type": "integer",
+                        "format": "int64",
+                        "minimum": 0,
+                        "description": "HarperHarbor: frozen history revision before this operation or mutation."
+                      },
+                      "startNextSeq": {
+                        "type": "integer",
+                        "format": "int64",
+                        "minimum": 0,
+                        "description": "HarperHarbor: frozen next message sequence before this operation or mutation. Legacy receipts without an origin return 0; do not adopt them as an incremental snapshot."
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -1644,7 +1748,7 @@
           }
         },
         "x-harperharbor": {
-          "description": "Returns stored messages, newest first, plus durable operation outcomes. Requires chat.play and conversation ownership. pageNum starts at 1 (page is accepted as an older alias); pageSize defaults to 50 and is limited to 100. chats contains public chat IDs, message text, thinking text, model, turnStatus and completion state. Partial output remains visible after interruption. HarperHarbor advertises responseSettingsVersion=1 for conversation response preferences.",
+          "description": "Returns stored messages, newest first, plus durable operation outcomes. Requires chat.play and conversation ownership. pageNum starts at 1 (page is accepted as an older alias); pageSize defaults to 50 and is limited to 100. chats contains public chat IDs, message text, thinking text, model, turnStatus and completion state. Partial output remains visible after interruption. HarperHarbor advertises responseSettingsVersion=1 for conversation response preferences. Incremental timeline snapshots may advance the client record only when both start fields exactly equal its currently read historyEpoch/nextSeq. A gap or missing origin requires an actual page-one history read; a newer terminal pair alone does not prove that intervening rows were read.",
           "security": [
             {
               "userToken": []
@@ -1871,6 +1975,30 @@
                               "items": {
                                 "type": "string"
                               }
+                            },
+                            "historyEpoch": {
+                              "type": "integer",
+                              "format": "int64",
+                              "minimum": 0,
+                              "description": "HarperHarbor: history revision of the returned timeline. Optional operation snapshot; absent for non-tail operations, a changed epoch or missing admission origin. Incremental timeline snapshots may advance the client record only when both start fields exactly equal its currently read historyEpoch/nextSeq. A gap or missing origin requires an actual page-one history read; a newer terminal pair alone does not prove that intervening rows were read."
+                            },
+                            "nextSeq": {
+                              "type": "integer",
+                              "format": "int64",
+                              "minimum": 1,
+                              "description": "HarperHarbor: next message sequence allocated by the conversation. Optional operation snapshot; absent for non-tail operations, a changed epoch or missing admission origin. Incremental timeline snapshots may advance the client record only when both start fields exactly equal its currently read historyEpoch/nextSeq. A gap or missing origin requires an actual page-one history read; a newer terminal pair alone does not prove that intervening rows were read."
+                            },
+                            "startHistoryEpoch": {
+                              "type": "integer",
+                              "format": "int64",
+                              "minimum": 0,
+                              "description": "HarperHarbor: frozen history revision before this operation or mutation. Optional operation snapshot; absent for non-tail operations, a changed epoch or missing admission origin. Incremental timeline snapshots may advance the client record only when both start fields exactly equal its currently read historyEpoch/nextSeq. A gap or missing origin requires an actual page-one history read; a newer terminal pair alone does not prove that intervening rows were read."
+                            },
+                            "startNextSeq": {
+                              "type": "integer",
+                              "format": "int64",
+                              "minimum": 0,
+                              "description": "HarperHarbor: frozen next message sequence before this operation or mutation. Legacy receipts without an origin return 0; do not adopt them as an incremental snapshot. Optional operation snapshot; absent for non-tail operations, a changed epoch or missing admission origin. Incremental timeline snapshots may advance the client record only when both start fields exactly equal its currently read historyEpoch/nextSeq. A gap or missing origin requires an actual page-one history read; a newer terminal pair alone does not prove that intervening rows were read."
                             }
                           }
                         }
@@ -1884,6 +2012,18 @@
                       "responseSettingsVersion": {
                         "type": "integer",
                         "const": 1
+                      },
+                      "historyEpoch": {
+                        "type": "integer",
+                        "format": "int64",
+                        "minimum": 0,
+                        "description": "HarperHarbor: history revision of the returned timeline."
+                      },
+                      "nextSeq": {
+                        "type": "integer",
+                        "format": "int64",
+                        "minimum": 1,
+                        "description": "HarperHarbor: next message sequence allocated by the conversation."
                       }
                     }
                   }
@@ -2152,7 +2292,7 @@
           }
         },
         "x-harperharbor": {
-          "description": "Lists durable send operations for the owned conversation. Requires chat.play. Returns operations and operationStatusAvailable=true. Each outcome includes public operation/message identifiers, state, outputDisposition, chargeCredits and settled. Wallet settlement can complete just after the terminal output state; poll again when settled=false.",
+          "description": "Lists durable send operations for the owned conversation. Requires chat.play. Returns operations and operationStatusAvailable=true. Each outcome includes public operation/message identifiers, state, outputDisposition, chargeCredits and settled. Wallet settlement can complete just after the terminal output state; poll again when settled=false. Incremental timeline snapshots may advance the client record only when both start fields exactly equal its currently read historyEpoch/nextSeq. A gap or missing origin requires an actual page-one history read; a newer terminal pair alone does not prove that intervening rows were read.",
           "security": [
             {
               "userToken": []
@@ -2302,6 +2442,30 @@
                             "nonStreaming": {
                               "type": "boolean",
                               "description": "Whether this operation returns the complete result once generation finishes. Always false for Agent and world-mode turns."
+                            },
+                            "historyEpoch": {
+                              "type": "integer",
+                              "format": "int64",
+                              "minimum": 0,
+                              "description": "HarperHarbor: history revision of the returned timeline. Optional operation snapshot; absent for non-tail operations, a changed epoch or missing admission origin. Incremental timeline snapshots may advance the client record only when both start fields exactly equal its currently read historyEpoch/nextSeq. A gap or missing origin requires an actual page-one history read; a newer terminal pair alone does not prove that intervening rows were read."
+                            },
+                            "nextSeq": {
+                              "type": "integer",
+                              "format": "int64",
+                              "minimum": 1,
+                              "description": "HarperHarbor: next message sequence allocated by the conversation. Optional operation snapshot; absent for non-tail operations, a changed epoch or missing admission origin. Incremental timeline snapshots may advance the client record only when both start fields exactly equal its currently read historyEpoch/nextSeq. A gap or missing origin requires an actual page-one history read; a newer terminal pair alone does not prove that intervening rows were read."
+                            },
+                            "startHistoryEpoch": {
+                              "type": "integer",
+                              "format": "int64",
+                              "minimum": 0,
+                              "description": "HarperHarbor: frozen history revision before this operation or mutation. Optional operation snapshot; absent for non-tail operations, a changed epoch or missing admission origin. Incremental timeline snapshots may advance the client record only when both start fields exactly equal its currently read historyEpoch/nextSeq. A gap or missing origin requires an actual page-one history read; a newer terminal pair alone does not prove that intervening rows were read."
+                            },
+                            "startNextSeq": {
+                              "type": "integer",
+                              "format": "int64",
+                              "minimum": 0,
+                              "description": "HarperHarbor: frozen next message sequence before this operation or mutation. Legacy receipts without an origin return 0; do not adopt them as an incremental snapshot. Optional operation snapshot; absent for non-tail operations, a changed epoch or missing admission origin. Incremental timeline snapshots may advance the client record only when both start fields exactly equal its currently read historyEpoch/nextSeq. A gap or missing origin requires an actual page-one history read; a newer terminal pair alone does not prove that intervening rows were read."
                             }
                           }
                         }
@@ -2402,7 +2566,7 @@
           }
         },
         "x-harperharbor": {
-          "description": "Returns one owned durable send operation. Requires chat.play. The operation identifier is not authority: a different account receives not_found.",
+          "description": "Returns one owned durable send operation. Requires chat.play. The operation identifier is not authority: a different account receives not_found. Incremental timeline snapshots may advance the client record only when both start fields exactly equal its currently read historyEpoch/nextSeq. A gap or missing origin requires an actual page-one history read; a newer terminal pair alone does not prove that intervening rows were read.",
           "security": [
             {
               "userToken": []
@@ -2547,6 +2711,30 @@
                       "nonStreaming": {
                         "type": "boolean",
                         "description": "Whether this operation returns the complete result once generation finishes. Always false for Agent and world-mode turns."
+                      },
+                      "historyEpoch": {
+                        "type": "integer",
+                        "format": "int64",
+                        "minimum": 0,
+                        "description": "HarperHarbor: history revision of the returned timeline. Optional operation snapshot; absent for non-tail operations, a changed epoch or missing admission origin. Incremental timeline snapshots may advance the client record only when both start fields exactly equal its currently read historyEpoch/nextSeq. A gap or missing origin requires an actual page-one history read; a newer terminal pair alone does not prove that intervening rows were read."
+                      },
+                      "nextSeq": {
+                        "type": "integer",
+                        "format": "int64",
+                        "minimum": 1,
+                        "description": "HarperHarbor: next message sequence allocated by the conversation. Optional operation snapshot; absent for non-tail operations, a changed epoch or missing admission origin. Incremental timeline snapshots may advance the client record only when both start fields exactly equal its currently read historyEpoch/nextSeq. A gap or missing origin requires an actual page-one history read; a newer terminal pair alone does not prove that intervening rows were read."
+                      },
+                      "startHistoryEpoch": {
+                        "type": "integer",
+                        "format": "int64",
+                        "minimum": 0,
+                        "description": "HarperHarbor: frozen history revision before this operation or mutation. Optional operation snapshot; absent for non-tail operations, a changed epoch or missing admission origin. Incremental timeline snapshots may advance the client record only when both start fields exactly equal its currently read historyEpoch/nextSeq. A gap or missing origin requires an actual page-one history read; a newer terminal pair alone does not prove that intervening rows were read."
+                      },
+                      "startNextSeq": {
+                        "type": "integer",
+                        "format": "int64",
+                        "minimum": 0,
+                        "description": "HarperHarbor: frozen next message sequence before this operation or mutation. Legacy receipts without an origin return 0; do not adopt them as an incremental snapshot. Optional operation snapshot; absent for non-tail operations, a changed epoch or missing admission origin. Incremental timeline snapshots may advance the client record only when both start fields exactly equal its currently read historyEpoch/nextSeq. A gap or missing origin requires an actual page-one history read; a newer terminal pair alone does not prove that intervening rows were read."
                       }
                     }
                   }
@@ -2817,6 +3005,58 @@
               }
             }
           }
+        },
+        "x-harperharbor": {
+          "description": "Manually edits the latest owned assistant message; returns its atomic before/end timeline snapshot. Incremental timeline snapshots may advance the client record only when both start fields exactly equal its currently read historyEpoch/nextSeq. A gap or missing origin requires an actual page-one history read; a newer terminal pair alone does not prove that intervening rows were read.",
+          "security": [
+            {
+              "userToken": []
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Committed response. Snapshot fields, when present, follow the exact-origin rule.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "message": {
+                        "type": "string",
+                        "enum": [
+                          "ok"
+                        ]
+                      },
+                      "historyEpoch": {
+                        "type": "integer",
+                        "format": "int64",
+                        "minimum": 0,
+                        "description": "HarperHarbor: history revision of the returned timeline."
+                      },
+                      "nextSeq": {
+                        "type": "integer",
+                        "format": "int64",
+                        "minimum": 1,
+                        "description": "HarperHarbor: next message sequence allocated by the conversation."
+                      },
+                      "startHistoryEpoch": {
+                        "type": "integer",
+                        "format": "int64",
+                        "minimum": 0,
+                        "description": "HarperHarbor: frozen history revision before this operation or mutation."
+                      },
+                      "startNextSeq": {
+                        "type": "integer",
+                        "format": "int64",
+                        "minimum": 0,
+                        "description": "HarperHarbor: frozen next message sequence before this operation or mutation. Legacy receipts without an origin return 0; do not adopt them as an incremental snapshot."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -2908,6 +3148,58 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ManualEditError"
+                }
+              }
+            }
+          }
+        },
+        "x-harperharbor": {
+          "description": "Manually edits the latest owned assistant message selected by chatId; empty chatId is a no-op without snapshot fields. Incremental timeline snapshots may advance the client record only when both start fields exactly equal its currently read historyEpoch/nextSeq. A gap or missing origin requires an actual page-one history read; a newer terminal pair alone does not prove that intervening rows were read.",
+          "security": [
+            {
+              "userToken": []
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Committed response. Snapshot fields, when present, follow the exact-origin rule.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "message": {
+                        "type": "string",
+                        "enum": [
+                          "ok"
+                        ]
+                      },
+                      "historyEpoch": {
+                        "type": "integer",
+                        "format": "int64",
+                        "minimum": 0,
+                        "description": "HarperHarbor: history revision of the returned timeline."
+                      },
+                      "nextSeq": {
+                        "type": "integer",
+                        "format": "int64",
+                        "minimum": 1,
+                        "description": "HarperHarbor: next message sequence allocated by the conversation."
+                      },
+                      "startHistoryEpoch": {
+                        "type": "integer",
+                        "format": "int64",
+                        "minimum": 0,
+                        "description": "HarperHarbor: frozen history revision before this operation or mutation."
+                      },
+                      "startNextSeq": {
+                        "type": "integer",
+                        "format": "int64",
+                        "minimum": 0,
+                        "description": "HarperHarbor: frozen next message sequence before this operation or mutation. Legacy receipts without an origin return 0; do not adopt them as an incremental snapshot."
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -4321,7 +4613,7 @@
           }
         },
         "x-harperharbor": {
-          "description": "Requires chat.play. Issues a random, single-use ticket with a 30-second lifetime. Connect to /open/v1/conversation/ws?protocolVersion=2 and send {\"type\":\"auth\",\"ticket\":\"...\"} as the first frame. Wait for ready before sending. The first turn contains conversationId, message and a stable clientOperationId; operationKind is send. Choose an available model from the provider catalog. Regenerate the latest assistant turn with rewrite; resume an interrupted Agent preparation with retry_generation and resumeFromOperationId. Continue-response remains unsupported. SSE-formatted WebSocket frames include streamMeta, accepted, messageMeta, answer/thinking deltas, operationStatus and done. Reconnect with resumeStreamId and lastEventId to replay durable chunks; mode=tryResume plus conversationId finds an active operation. Reusing a clientOperationId with different input returns a conflict. No bearer or ticket belongs in a URL. Automatic memory preparation emits compacting progress and compactDone/compactFailed phase events. Stop also cancels preparation. operationStatus includes phase, compacting, reasonCode and hasContextUsage. context_capacity_exceeded is terminal and not retryable without changing the input or context tier; history is retained. When a first turn does not fit, the error also carries required_context_tier/required_context_tokens (save it as the player's context and resend) and constant_lore_trim_fits (save trimConstantLore=true to play at the current tier with fewer constant lorebook entries). Completed memory jobs settle independently of the foreground answer. A reconnect replays replies but does not start another summary. Agent mode uses the saved /player/agent-mode preference or the per-turn agentMode override. Check runtimeEnabled and modelSupported for the selected model. Tool-capable paid models emit durable prepStep progress and agentTurn=true operation status. An interrupted preparation exposes reasonCode=agent_progress_preserved, state=failed_retryable and allowedActions including continue. Resume with a new clientOperationId, the same message, and resumeFromOperationId within 30 days; no second USER message is created. A different model may be sent: the saved progress continues on that model and the remaining work is charged at its rate. Stale or mismatched continuations fail closed; an empty resumeFromOperationId means a fresh turn. History edits invalidate continuations. Credits are reserved incrementally; each execution settles aggregate actual input/output/cache usage once, including usage before a user stop or upstream failure. Internal persistence failures are not charged. A continuation charges only new upstream work. Ordinary /v1/chat/completions remains a caller-managed tool API.",
+          "description": "Requires chat.play. Issues a random, single-use ticket with a 30-second lifetime. Connect to /open/v1/conversation/ws?protocolVersion=2 and send {\"type\":\"auth\",\"ticket\":\"...\"} as the first frame. Wait for ready before sending. The first turn contains conversationId, message and a stable clientOperationId; operationKind is send. Choose an available model from the provider catalog. Regenerate the latest assistant turn with rewrite; resume an interrupted Agent preparation with retry_generation and resumeFromOperationId. Continue-response remains unsupported. SSE-formatted WebSocket frames include streamMeta, accepted, messageMeta, answer/thinking deltas, operationStatus and done. Reconnect with resumeStreamId and lastEventId to replay durable chunks; mode=tryResume plus conversationId finds an active operation. Reusing a clientOperationId with different input returns a conflict. No bearer or ticket belongs in a URL. Automatic memory preparation emits compacting progress and compactDone/compactFailed phase events. Stop also cancels preparation. operationStatus includes phase, compacting, reasonCode and hasContextUsage. context_capacity_exceeded is terminal and not retryable without changing the input or context tier; history is retained. When a first turn does not fit, the error also carries required_context_tier/required_context_tokens (save it as the player's context and resend) and constant_lore_trim_fits (save trimConstantLore=true to play at the current tier with fewer constant lorebook entries). Completed memory jobs settle independently of the foreground answer. A reconnect replays replies but does not start another summary. Agent mode uses the saved /player/agent-mode preference or the per-turn agentMode override. Check runtimeEnabled and modelSupported for the selected model. Tool-capable paid models emit durable prepStep progress and agentTurn=true operation status. An interrupted preparation exposes reasonCode=agent_progress_preserved, state=failed_retryable and allowedActions including continue. Resume with a new clientOperationId, the same message, and resumeFromOperationId within 30 days; no second USER message is created. A different model may be sent: the saved progress continues on that model and the remaining work is charged at its rate. Stale or mismatched continuations fail closed; an empty resumeFromOperationId means a fresh turn. History edits invalidate continuations. Credits are reserved incrementally; each execution settles aggregate actual input/output/cache usage once, including usage before a user stop or upstream failure. Internal persistence failures are not charged. A continuation charges only new upstream work. Ordinary /v1/chat/completions remains a caller-managed tool API. Regenerate cleanup uses the same clientOperationId and frozen intent as generation; committed cleanup is replayed before further history writes. The historySnapshot event carries conversationId plus historyEpoch/nextSeq and startHistoryEpoch/startNextSeq. Cleanup precedes terminal metadata; the same exact-origin rule applies. Incremental timeline snapshots may advance the client record only when both start fields exactly equal its currently read historyEpoch/nextSeq. A gap or missing origin requires an actual page-one history read; a newer terminal pair alone does not prove that intervening rows were read.",
           "security": [
             {
               "userToken": []
@@ -4440,7 +4732,8 @@
               "operationStatus",
               "done",
               "error",
-              "noActiveStream"
+              "noActiveStream",
+              "historySnapshot"
             ]
           }
         }
@@ -14408,6 +14701,18 @@
           "clientOperationID": {
             "type": "string",
             "description": "Client-chosen idempotency id for the rollback (required with `rollbackMutationCapability:\"v1\"`)."
+          },
+          "historyEpoch": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "HarperHarbor: history revision of the returned timeline. Optional HarperHarbor fence: send historyEpoch and nextSeq together from the displayed timeline. An unseen intent on an advanced timeline conflicts; the same committed ID and intent replays its original result without trimming later rows."
+          },
+          "nextSeq": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "description": "HarperHarbor: next message sequence allocated by the conversation. Optional HarperHarbor fence: send historyEpoch and nextSeq together from the displayed timeline. An unseen intent on an advanced timeline conflicts; the same committed ID and intent replays its original result without trimming later rows."
           }
         }
       },
@@ -15068,6 +15373,30 @@
           "nonStreaming": {
             "type": "boolean",
             "description": "Whether this operation returns the complete result once generation finishes. Always false for Agent and world-mode turns."
+          },
+          "historyEpoch": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "HarperHarbor: history revision of the returned timeline. Optional; only supplied when the canonical assistant is still the tail and its admission epoch remains current. Incremental timeline snapshots may advance the client record only when both start fields exactly equal its currently read historyEpoch/nextSeq. A gap or missing origin requires an actual page-one history read; a newer terminal pair alone does not prove that intervening rows were read."
+          },
+          "nextSeq": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "description": "HarperHarbor: next message sequence allocated by the conversation. Optional; only supplied when the canonical assistant is still the tail and its admission epoch remains current. Incremental timeline snapshots may advance the client record only when both start fields exactly equal its currently read historyEpoch/nextSeq. A gap or missing origin requires an actual page-one history read; a newer terminal pair alone does not prove that intervening rows were read."
+          },
+          "startHistoryEpoch": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "HarperHarbor: frozen history revision before this operation or mutation. Optional; only supplied when the canonical assistant is still the tail and its admission epoch remains current. Incremental timeline snapshots may advance the client record only when both start fields exactly equal its currently read historyEpoch/nextSeq. A gap or missing origin requires an actual page-one history read; a newer terminal pair alone does not prove that intervening rows were read."
+          },
+          "startNextSeq": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "HarperHarbor: frozen next message sequence before this operation or mutation. Legacy receipts without an origin return 0; do not adopt them as an incremental snapshot. Optional; only supplied when the canonical assistant is still the tail and its admission epoch remains current. Incremental timeline snapshots may advance the client record only when both start fields exactly equal its currently read historyEpoch/nextSeq. A gap or missing origin requires an actual page-one history read; a newer terminal pair alone does not prove that intervening rows were read."
           }
         }
       },
@@ -15525,6 +15854,18 @@
               }
             },
             "description": "Only with `supportsOperationOutcome=true` and only when non-empty. Keyed by `operationId`."
+          },
+          "historyEpoch": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "HarperHarbor: history revision of the returned timeline."
+          },
+          "nextSeq": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "description": "HarperHarbor: next message sequence allocated by the conversation."
           }
         }
       },
@@ -15746,6 +16087,11 @@
           "chatId": {
             "type": "string",
             "description": "Message id to delete. Must be a JSON string."
+          },
+          "clientOperationID": {
+            "type": "string",
+            "maxLength": 128,
+            "description": "HarperHarbor optional stable mutation ID. The same ID and target replay the committed result without deleting later content; a different intent with that ID conflicts. Omit for legacy non-replay-protected behavior."
           }
         }
       },
