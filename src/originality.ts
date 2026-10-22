@@ -1,4 +1,4 @@
-import { TO_HANS } from "./originality-hans";
+import { TO_HANS } from "../shared/hant-hans";
 import { type Localized, pickLocale } from "./types";
 
 /**
