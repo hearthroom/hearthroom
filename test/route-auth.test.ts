@@ -56,6 +56,7 @@ beforeEach(async()=>{await resetDb();jars={};routeLimit=vi.fn(async(_input:{key:
 afterEach(()=>vi.restoreAllMocks());
 
 const navigationHeaders={'Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document',Accept:'text/html'};
+const legacySwNavigationHeaders={...navigationHeaders,'Sec-Fetch-Dest':'empty',Accept:'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'};
 function expectPrepareFailurePage(response:Response){
   expect(response.status).toBe(302);
   expect(response.headers.get('location')).toBe('/auth/route/complete#failed=1');
@@ -111,6 +112,8 @@ it.each([
   {},
   {Accept:'application/json'},
   {Accept:'text/html','Sec-Fetch-Mode':'cors','Sec-Fetch-Dest':'empty'},
+  {'Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'empty'},
+  {Accept:'application/json','Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'empty'},
   {Accept:'text/html','Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'iframe'},
   {Accept:'text/html','Sec-Fetch-Dest':'document'},
 ] as Record<string,string>[])('preserves JSON failure responses for API and non-top-level requests (%j)',async(headers)=>{
@@ -121,6 +124,22 @@ it.each([
 
 it('supports an HTML navigation from a browser without fetch metadata',async()=>{
   expectPrepareFailurePage(await request(target,'/auth/route/prepare?request=bad',undefined,{Accept:'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'}));
+});
+
+it.each(['bad','A'.repeat(43)])('shows the failure page for legacy SW HTML navigation while retaining its original metric (%s)',async(value)=>{
+  // Legacy SW fetch(event.request) produces the same headers for top-level and
+  // iframe navigation. Both must receive an HTML failure page in this case.
+  expectPrepareFailurePage(await request(target,'/auth/route/prepare?request='+value,undefined,legacySwNavigationHeaders));
+  const metrics=await env.DB.prepare("SELECT outcome,value FROM account_auth_metrics WHERE operation='route-prepare'").all<any>();
+  expect(metrics.results).toEqual(value==='bad'?[]:[{outcome:'denied',value:1}]);
+});
+
+it('preserves only the TWA display marker when legacy SW HTML navigation fails',async()=>{
+  const response=await request(target,'/auth/route/prepare?request=bad&_hr_app=twa&code=private-code&extra=discard',undefined,legacySwNavigationHeaders);
+  expect(response.status).toBe(302);
+  expect(response.headers.get('location')).toBe('/auth/route/complete?_hr_app=twa#failed=1');
+  expect(response.headers.get('cache-control')).toBe('private, no-store');
+  expect(response.headers.get('referrer-policy')).toBe('no-referrer');
 });
 
 it.each(['twa','webview','TWA','twa-extra',''])('preserves only the exact TWA display marker on a navigation failure (%s)',async(marker)=>{
