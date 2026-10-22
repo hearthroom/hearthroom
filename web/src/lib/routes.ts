@@ -9,7 +9,9 @@
  * 但「多久回來」與「有沒有回來」就是我們要的全部。
  */
 import { reactive } from "vue";
-import { LINES, currentLine, inAndroidApp, lineByNumber, type Line } from "./route-lines";
+import { LINES, appNavigationUrl, currentLine, inAndroidWebView, lineByNumber, type Line } from "./route-lines";
+import { confirmDialog } from "./confirm";
+import { i18n } from "./i18n";
 import { authRequest, ManagedAuthUnavailable } from "./managed-auth";
 import { isStandalone } from "./pwa";
 import { isPlayHost } from "./site";
@@ -45,13 +47,22 @@ const PENDING_KEY = "hearthroom.routes.pending";
 export { LINES, currentLine, lineByNumber, lineByOrigin, type Line } from "./route-lines";
 
 /**
- * 這裡能不能出現線路介面。不能的地方：本機與預覽網域、卡片 App 網域、Android App 內
- * （App 有自己的線路畫面）。已安裝的主畫面 App 可以看清單，但不自動彈（autoPromptAllowed）。
+ * 只在官方站顯示。TWA 沿用網站清單；新版 WebView 開原生清單，沒有該能力的舊版保留原行為。
  */
 export function routesAvailable(o: { hostname?: string; ua?: string } = {}): boolean {
   const hostname = o.hostname ?? location.hostname;
   const ua = o.ua ?? navigator.userAgent;
-  return !!currentLine(hostname) && !isPlayHost(hostname) && !inAndroidApp(ua);
+  return !!currentLine(hostname) && !isPlayHost(hostname) && (!inAndroidWebView(ua) || nativeRoutesAvailable(ua));
+}
+
+declare global {
+  interface Window { HearthroomRoutes?: { postMessage(message: string): void } }
+}
+/** 顯示能力而非授權：原生還會核實 main frame、來源及目前 WebView URL。 */
+export function nativeRoutesAvailable(ua: string = navigator.userAgent): boolean {
+  return inAndroidWebView(ua) && window.top === window
+    && LINES.some(line => line.origin === location.origin)
+    && typeof window.HearthroomRoutes?.postMessage === "function";
 }
 
 /**
@@ -64,7 +75,7 @@ export function autoPromptAllowed(o: { immersive: boolean }): boolean {
 }
 /** 背景測速本身：收掉提示卡之後也照樣測，頁首圖示靠它；遊玩頁與離線不測。 */
 export function backgroundCheckAllowed(o: { immersive: boolean }): boolean {
-  return routesAvailable() && !o.immersive && navigator.onLine !== false;
+  return routesAvailable() && !inAndroidWebView() && !o.immersive && navigator.onLine !== false;
 }
 
 export type Signal = 0 | 1 | 2 | 3;
@@ -226,7 +237,14 @@ export function headerSignalVisible(): boolean {
   return routesState.recommended > 0 && !routesState.promptShowing;
 }
 
-export function openRoutesDialog(preselect?: number, o: { autoStart?: boolean } = {}): void {
+export async function openRoutesDialog(preselect?: number, o: { autoStart?: boolean } = {}): Promise<void> {
+  if (nativeRoutesAvailable()) {
+    const page = location.href;
+    if (hasUnsavedWork() && !(await confirmDialog({ message: i18n.global.t("edit.discard"), confirmText: i18n.global.t("dialog.leave"), focusCancel: true }))) return;
+    // 確認期間可能已離開原頁；不要替新頁面開啟舊請求。
+    if (location.href === page && nativeRoutesAvailable()) window.HearthroomRoutes!.postMessage("open");
+    return;
+  }
   routesState.opener = (document.activeElement as HTMLElement | null) ?? null;
   routesState.preselect = preselect ?? currentLine()?.n ?? 0;
   routesState.autoStart = !!o.autoStart;
@@ -248,7 +266,7 @@ export function hasUnsavedWork(): boolean {
 
 /** 到目標線路同一個位置的網址：路徑、查詢、語言前綴、hash 都保留，網域一律是裸網域。 */
 export function targetUrl(line: Line, loc: Pick<Location, "pathname" | "search" | "hash"> = location): string {
-  return `${line.origin}${loc.pathname}${loc.search}${loc.hash}`;
+  return appNavigationUrl(`${line.origin}${loc.pathname}${loc.search}${loc.hash}`);
 }
 
 export type SwitchFailure =
@@ -288,7 +306,7 @@ export async function startHandoff(line: Line, returnTo: string): Promise<string
     const { url } = await authRequest<{ url: string }>("route-start", { targetOrigin: line.origin, returnTo });
     if (typeof url !== "string" || !url.startsWith(`${line.origin}/`)) throw new SwitchError("start-denied");
     rememberPending({ target: line.n, returnTo, at: Date.now() });
-    return url;
+    return appNavigationUrl(url);
   } catch (e) {
     if (e instanceof SwitchError) throw e;
     if (e instanceof ManagedAuthUnavailable || e instanceof TypeError) throw new SwitchError("start-unavailable");

@@ -83,6 +83,23 @@ it("destination: a refused code stays put with sign-in, back, and continue choic
   unmount();
 });
 
+it("prepare navigation failure: shows choices, clears its marker and can return without redeeming", async () => {
+  at("sukisuki.chat", "/auth/route/complete", "#failed=1");
+  vi.spyOn(history, "length", "get").mockReturnValue(2);
+  const back = vi.spyOn(history, "back").mockImplementation(() => {});
+  const replaceState = vi.spyOn(history, "replaceState");
+  const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
+  const { el, unmount } = await mount("/auth/route/complete#failed=1", "complete");
+  expect(el.textContent).toContain(i18n.global.t("routes.handoff.completeFailTitle"));
+  expect(fetch).not.toHaveBeenCalled();
+  expect(replaceState.mock.calls.some(call => call[2] === "/auth/route/complete")).toBe(true);
+  const returnButton = [...el.querySelectorAll("button")].find(b => b.textContent?.trim() === i18n.global.t("share.back"));
+  expect(returnButton).toBeDefined();
+  returnButton!.click();
+  expect(back).toHaveBeenCalledOnce();
+  unmount(); vi.restoreAllMocks();
+});
+
 it("source: issues the code and heads to the destination, carrying where it came from", async () => {
   at("sukisuki.ai", "/auth/route/issue", "#request=req");
   localStorage.setItem("hearthroom.routes.pending", JSON.stringify({ target: 3, returnTo: "/en/cards/42", at: Date.now() }));
@@ -95,6 +112,16 @@ it("source: issues the code and heads to the destination, carrying where it came
   const { unmount } = await mount("/auth/route/issue#request=req", "issue");
   expect(replace).toHaveBeenCalledWith("https://sukisuki.chat/auth/route/complete#code=xyz&from=1&to=L2VuL2NhcmRzLzQy");
   expect(localStorage.getItem("hearthroom.routes.pending")).toBeNull();
+  unmount();
+});
+
+it("TWA source: keeps the destination in the same app after the handoff", async () => {
+  at("sukisuki.ai", "/auth/route/issue", "#request=req");
+  sessionStorage.setItem("hearthroom.androidApp", "1");
+  localStorage.setItem("hearthroom.routes.pending", JSON.stringify({ target: 3, returnTo: "/en/cards/42", at: Date.now() }));
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json({ url: "https://sukisuki.chat/auth/route/complete#code=xyz" })));
+  const { unmount } = await mount("/auth/route/issue#request=req", "issue");
+  expect(replace).toHaveBeenCalledWith("https://sukisuki.chat/auth/route/complete?_hr_app=twa#code=xyz&from=1&to=L2VuL2NhcmRzLzQy");
   unmount();
 });
 

@@ -3,6 +3,7 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import worker from '../src/index';
 import { resetDb } from './helpers';
 import { resolveMember } from '../src/members';
+import type { Env } from '../src/types';
 
 const source='https://sukisuki.ai', target='https://sukisuki.pro';
 const allowed=[source,target,'https://hearthroom.club','https://sukisuki.chat'];
@@ -14,10 +15,10 @@ const context={waitUntil:(_p:Promise<unknown>)=>{},passThroughOnException(){}} a
 const hash=async(s:string)=>btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s))))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 let jars:Record<string,Record<string,string>>={};
 function cookie(origin:string){return Object.entries(jars[origin]??{}).map(([k,v])=>`${k}=${v}`).join('; ');}
-async function request(origin:string,path:string,body?:unknown,headers:Record<string,string>={}){
+async function request(origin:string,path:string,body?:unknown,headers:Record<string,string>={},overrides:Partial<Env>={}){
   const response=await worker.fetch(new Request(origin+path,{method:body===undefined?'GET':'POST',
     headers:{Origin:origin,'X-Hearthroom-Request':'1',Cookie:cookie(origin),'Content-Type':'application/json',...headers},
-    ...(body===undefined?{}:{body:JSON.stringify(body)})}),authEnv(),context);
+    ...(body===undefined?{}:{body:JSON.stringify(body)})}),{...authEnv(),...overrides},context);
   for(const c of response.headers.getSetCookie()){
     const pair=c.split(';')[0],i=pair.indexOf('=');
     (jars[origin]??={})[pair.slice(0,i)]=pair.slice(i+1);
@@ -53,6 +54,98 @@ async function issued(){
 }
 beforeEach(async()=>{await resetDb();jars={};routeLimit=vi.fn(async(_input:{key:string})=>({success:true}));});
 afterEach(()=>vi.restoreAllMocks());
+
+const navigationHeaders={'Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document',Accept:'text/html'};
+function expectPrepareFailurePage(response:Response){
+  expect(response.status).toBe(302);
+  expect(response.headers.get('location')).toBe('/auth/route/complete#failed=1');
+  expect(response.headers.get('cache-control')).toBe('private, no-store');
+  expect(response.headers.get('referrer-policy')).toBe('no-referrer');
+}
+
+it.each(['missing','malformed','unknown','expired','replayed'])('shows the handoff failure page for a %s top-level prepare request',async(reason)=>{
+  let path='/auth/route/prepare';
+  if(reason==='malformed')path+='?request=bad';
+  if(reason==='unknown')path+='?request='+'a'.repeat(43);
+  if(reason==='expired'||reason==='replayed'){
+    await session();const url=await start();path=url.pathname+url.search;
+    if(reason==='expired')await env.DB.prepare('UPDATE account_route_handoffs SET expires_at=?').bind(Date.now()-1).run();
+    else await prepare(url);
+  }
+  const response=await request(target,path,undefined,navigationHeaders);
+  expectPrepareFailurePage(response);
+  expect(await response.text()).not.toContain('auth_route_invalid');
+  const metrics=await env.DB.prepare("SELECT outcome,value FROM account_auth_metrics WHERE operation='route-prepare'").all<any>();
+  // Malformed traffic still stops before any durable metric write.
+  expect(metrics.results).toEqual(reason==='missing'||reason==='malformed'?[]:
+    reason==='replayed'?[{outcome:'ok',value:1},{outcome:'denied',value:1}].sort((a,b)=>a.outcome.localeCompare(b.outcome)):[{outcome:'denied',value:1}]);
+});
+
+it.each(['disabled','configuration','origin','rate-limit','limiter-missing','limiter-unavailable'])('shows the failure page when prepare is blocked by %s without adding prevalidation metric writes',async(reason)=>{
+  const overrides:Partial<Env>={};
+  if(reason==='disabled')overrides.AUTH_ENABLED='false';
+  if(reason==='configuration')overrides.AUTH_KEYRING='invalid';
+  if(reason==='origin')overrides.AUTH_ALLOWED_ORIGINS='';
+  if(reason==='rate-limit')routeLimit.mockResolvedValue({success:false});
+  if(reason==='limiter-missing')overrides.AUTH_ROUTE_LIMIT=undefined;
+  if(reason==='limiter-unavailable')routeLimit.mockRejectedValue(new Error('limiter unavailable'));
+  expectPrepareFailurePage(await request(reason==='origin'?source:target,'/auth/route/prepare?request='+'a'.repeat(43),undefined,navigationHeaders,overrides));
+  expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM account_auth_metrics').first<any>()).n).toBe(0);
+});
+
+it('keeps an unavailable prepare metric when navigation redirects to the failure page',async()=>{
+  await session();const url=await start();
+  await env.DB.prepare("CREATE TRIGGER route_prepare_failure BEFORE UPDATE OF target_browser ON account_route_handoffs BEGIN SELECT RAISE(ABORT,'test prepare unavailable'); END").run();
+  try{
+    expectPrepareFailurePage(await request(target,url.pathname+url.search,undefined,navigationHeaders));
+    const metrics=await env.DB.prepare("SELECT outcome,value FROM account_auth_metrics WHERE operation='route-prepare'").all<any>();
+    expect(metrics.results).toEqual([{outcome:'unavailable',value:1}]);
+    const exported=await request(source,'/internal/auth/metrics',undefined,{Authorization:'Bearer test-only'});
+    const text=await exported.text();
+    expect(text).toContain('hearthroom_auth_operations_total{operation="route-prepare",provider="site",outcome="unavailable"} 1');
+    expect(text).not.toContain(url.searchParams.get('request'));
+  }finally{await env.DB.prepare('DROP TRIGGER route_prepare_failure').run();}
+});
+
+it.each([
+  {},
+  {Accept:'application/json'},
+  {Accept:'text/html','Sec-Fetch-Mode':'cors','Sec-Fetch-Dest':'empty'},
+  {Accept:'text/html','Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'iframe'},
+  {Accept:'text/html','Sec-Fetch-Dest':'document'},
+] as Record<string,string>[])('preserves JSON failure responses for API and non-top-level requests (%j)',async(headers)=>{
+  const response=await request(target,'/auth/route/prepare?request=bad',undefined,headers);
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({error:'auth_route_invalid'});
+});
+
+it('supports an HTML navigation from a browser without fetch metadata',async()=>{
+  expectPrepareFailurePage(await request(target,'/auth/route/prepare?request=bad',undefined,{Accept:'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'}));
+});
+
+it.each(['twa','webview','TWA','twa-extra',''])('preserves only the exact TWA display marker on a navigation failure (%s)',async(marker)=>{
+  const response=await request(target,'/auth/route/prepare?'+new URLSearchParams({request:'bad',_hr_app:marker,code:'private-code',extra:'discard'}),undefined,navigationHeaders);
+  expect(response.status).toBe(302);
+  expect(response.headers.get('location')).toBe('/auth/route/complete'+(marker==='twa'?'?_hr_app=twa':'')+'#failed=1');
+  expect(response.headers.get('cache-control')).toBe('private, no-store');
+  expect(response.headers.get('referrer-policy')).toBe('no-referrer');
+});
+
+it('keeps the TWA display marker from changing API failure responses',async()=>{
+  const response=await request(target,'/auth/route/prepare?request=bad&_hr_app=twa',undefined,{Accept:'application/json'});
+  expect(response.status).toBe(400);
+  expect(response.headers.get('location')).toBeNull();
+  expect(await response.json()).toEqual({error:'auth_route_invalid'});
+});
+
+it('preserves the source redirect and ok metric for a successful top-level prepare',async()=>{
+  await session();const url=await start();
+  const response=await request(target,url.pathname+url.search,undefined,navigationHeaders);
+  expect(response.status).toBe(302);
+  expect(response.headers.get('location')).toBe(source+'/auth/route/issue#'+new URLSearchParams({request:url.searchParams.get('request')!}));
+  const metrics=await env.DB.prepare("SELECT outcome,value FROM account_auth_metrics WHERE operation='route-prepare'").all<any>();
+  expect(metrics.results).toEqual([{outcome:'ok',value:1}]);
+});
 
 it('hands off only an existing site session, preserves path and never contacts Harbor',async()=>{
   const original=await session();

@@ -26,6 +26,7 @@ import {
 import { useSession } from "@/lib/session";
 import { track } from "@/lib/track";
 import { useLocalePath } from "@/lib/use-locale";
+import { appNavigationUrl } from "@/lib/route-lines";
 
 const route = useRoute();
 const router = useRouter();
@@ -36,6 +37,8 @@ const mode = route.meta.handoff === "complete" ? "complete" : "issue";
 
 /** 讀完就從網址拿掉：碼不該留在網址列、歷史紀錄與之後的 referrer 裡 */
 const fragment = new URLSearchParams((route.hash || location.hash).replace(/^#/, ""));
+const prepareFailed = mode === "complete" && fragment.get("failed") === "1";
+const canGoBack = prepareFailed && history.length > 1;
 history.replaceState(history.state, "", `${location.pathname}${location.search}`);
 
 const here = currentLine();
@@ -73,7 +76,7 @@ async function issue() {
   if (typeof url !== "string" || !url.startsWith(`${target.value.origin}/auth/route/complete#`)) throw new Error("route_target_invalid");
   clearPendingSwitch();
   const extra = new URLSearchParams({ ...(here ? { from: String(here.n) } : {}), to: packPath(returnTo) });
-  if (!abandoned) location.replace(`${url}&${extra}`);
+  if (!abandoned) location.replace(appNavigationUrl(`${url}&${extra}`));
 }
 
 async function complete() {
@@ -143,7 +146,11 @@ function enterSignedOut() {
   void router.replace(returnTo);
 }
 function backToSource() {
-  if (from) location.replace(`${from.origin}${returnTo}`);
+  if (from) location.replace(appNavigationUrl(`${from.origin}${returnTo}`));
+}
+function backToPrevious() {
+  abandoned = true;
+  history.back();
 }
 function signIn() {
   abandoned = true;
@@ -198,6 +205,7 @@ onBeforeUnmount(() => { abandoned = true; clearTimeout(slowTimer); });
       <div class="handoff__actions">
         <button type="button" class="btn btn--primary" @click="signIn">{{ $t("nav.login") }}</button>
         <button v-if="from" type="button" class="btn" @click="backToSource">{{ $t("routes.handoff.backTo", { line: lineName(from) }) }}</button>
+        <button v-else-if="canGoBack" type="button" class="btn" @click="backToPrevious">{{ $t("share.back") }}</button>
         <button type="button" class="handoff__link" @click="enterSignedOut">{{ $t("routes.handoff.enter") }}</button>
       </div>
     </template>

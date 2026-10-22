@@ -1,5 +1,4 @@
 import "./lib/community-return";
-import { rememberAndroidAppLaunch } from "./lib/route-lines";
 import { currentProvider, setProvider } from "./lib/provider";
 import { useProviderUpstream } from "./lib/config";
 import { createPinia } from "pinia";
@@ -24,8 +23,6 @@ const selectedProvider = authoring ? new URLSearchParams(location.search).get('p
 setProvider(selectedProvider === 'harbor' ? selectedProvider : currentProvider());
 useProviderUpstream();
 installChunkReload(router);
-// 從 Android App（TWA）開進來的第一頁才看得到 App 的 referrer：先記下，線路入口在 App 裡不出現
-rememberAndroidAppLaunch();
 registerServiceWorker();
 void resolveUpstream().finally(() => {
   void startGa4();
