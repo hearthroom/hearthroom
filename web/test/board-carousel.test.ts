@@ -74,13 +74,13 @@ beforeEach(() => {
 });
 afterEach(() => { vi.useRealTimers(); app?.unmount(); app = null; host?.remove(); vi.unstubAllGlobals(); });
 
-async function mount(props = "hero campaigns") {
+async function mount(props = "hero campaigns", tourHero = false) {
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/:locale(en|ja|ko|zh-Hans)/:p(.*)*", component: { render: () => null } }, { path: "/:p(.*)*", component: { render: () => null } }] });
   mountedRouter = router;
   await router.push("/"); await router.isReady();
   host = document.body.appendChild(document.createElement("div"));
   const [hero, campaigns] = [props.includes("hero"), props.includes("campaigns")];
-  app = createApp({ components: { BoardCarousel }, data: () => ({ hero, campaigns }), template: `<BoardCarousel :hero="hero" :campaigns="campaigns"><aside class="hero-x">蘇綺</aside></BoardCarousel>` });
+  app = createApp({ components: { BoardCarousel }, data: () => ({ hero, campaigns, tourHero }), template: `<BoardCarousel :hero="hero" :campaigns="campaigns" :tour-hero="tourHero"><aside class="hero-x">蘇綺</aside></BoardCarousel>` });
   app.use(router).use(i18n).mount(host);
   await settle();
 }
@@ -90,6 +90,21 @@ const shown = () => slides().findIndex((s) => s.classList.contains("carousel__sl
 const dot = (n: number) => host.querySelectorAll<HTMLButtonElement>("[data-dot]")[n]!;
 
 describe("首頁輪播", () => {
+  it("keeps the hero visible while its tour target is being introduced, then resumes", async () => {
+    await mount("hero campaigns", true);
+    expect(shown()).toBe(2);
+    expect(slides()[2].hasAttribute("inert")).toBe(false);
+    dot(0).click(); await nextTick();
+    expect(shown()).toBe(2);
+    vi.useFakeTimers();
+    await vi.advanceTimersByTimeAsync(7100);
+    expect(shown()).toBe(2);
+    // Ending the step releases the carousel's normal controls and autoplay.
+    (app!._instance!.proxy as unknown as { tourHero: boolean }).tourHero = false;
+    await nextTick();
+    await vi.advanceTimersByTimeAsync(7100);
+    expect(shown()).toBe(0);
+  });
   it("shows only the exact-language poster with accessible copy, then falls back to the original banner", async () => {
     list = [item("poster", { bannerUrl: "https://img.example/original.webp", posterUrls: { "zh-Hant": { url: "https://img.example/poster.webp", alt: "邀請朋友，分享拿積分" } } })];
     await mount();
