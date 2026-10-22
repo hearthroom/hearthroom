@@ -83,7 +83,11 @@ const notifications = useNotifications();
 // 更新說明的摘要：首頁提示列與「新」標記用。閒置時才讀，不跟第一屏搶；換語言重讀。
 const updates = useUpdates();
 const idle = (cb: () => void) => (typeof requestIdleCallback === "function" ? requestIdleCallback(cb, { timeout: 3000 }) : setTimeout(cb, 1200));
-watch(locale, (l) => { if (!isPlayHost()) idle(() => { void updates.load(l); }); }, { immediate: true });
+// 等第一次導航把介面語言定下來再讀：路由還沒套用網址上的語言時，locale 是預設的繁體，
+// 會先讀一份繁體摘要、馬上又讀一份簡體（卡片頁實測 2026-10-22）
+void router.isReady().then(() => {
+  watch(locale, (l) => { if (!isPlayHost()) idle(() => { void updates.load(l); }); }, { immediate: true });
+});
 // 到了某則說明「去試試」的那一頁，就當作用過它的入口，那裡的「新」收起來
 router.afterEach((to) => { updates.visited(to.path); });
 let reviewTimer: ReturnType<typeof setInterval> | undefined;
