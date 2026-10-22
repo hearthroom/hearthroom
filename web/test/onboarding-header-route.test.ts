@@ -38,8 +38,9 @@ beforeEach(() => {
   forgetGuestAdult();
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ showNsfw: false, ageVerified: false, adultConsent: false }), { headers: { "Content-Type": "application/json" } })));
   Element.prototype.scrollIntoView = () => {};
+  vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue(new DOMRect(40, 100, 200, 44));
 });
-afterEach(() => { app?.unmount(); root?.remove(); vi.unstubAllGlobals(); });
+afterEach(() => { app?.unmount(); root?.remove(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 async function mount(path: string, locale: "zh-Hant" | "zh-Hans") {
   i18n.global.locale.value = locale;
   router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/:locale(zh-Hans)?", children: [{ path: "", component: Home }, { path: "cards/:id", component: Card }, { path: ":pathMatch(.*)*", component: { template: "<div />" } }] }] });

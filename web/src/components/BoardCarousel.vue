@@ -22,7 +22,7 @@ import type { CampaignSummary } from "@/lib/campaign";
 import { track } from "@/lib/track";
 import { useLocalePath } from "@/lib/use-locale";
 
-const props = defineProps<{ hero: boolean; campaigns: boolean }>();
+const props = defineProps<{ hero: boolean; campaigns: boolean; tourHero?: boolean }>();
 const { t } = useI18n();
 const { lp, locale } = useLocalePath();
 
@@ -88,11 +88,15 @@ const index = ref(0);
 // 活動或文章晚一步讀到、蘇綺出現或收起來：張數對應變了，回到第一張（碰過也一樣，否則序號會指到別張）
 watch([() => slides.value.length, () => !!post.value, () => props.hero], () => { index.value = 0; });
 watch(count, (n) => { if (index.value >= n) index.value = 0; });
-const go = (i: number) => { index.value = (i + count.value) % count.value; };
+// 導覽正在介紹蘇綺面板裡的按鈕時，讓目標留在可見的那張；活動晚到也一樣。
+watch([() => props.tourHero, heroAt, () => props.hero], () => {
+  if (props.tourHero && props.hero) index.value = heroAt.value;
+}, { immediate: true, flush: "post" });
+const go = (i: number) => { if (!props.tourHero || !props.hero) index.value = (i + count.value) % count.value; };
 
 const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 const auto = computed(() => count.value > 1 && !reduced);
-const running = computed(() => auto.value && !pause.touched && !pause.hover && !pause.focus && !pause.hidden);
+const running = computed(() => auto.value && !(props.tourHero && props.hero) && !pause.touched && !pause.hover && !pause.focus && !pause.hidden);
 /**
  * 這張還剩多久：暫停時記下剩下的，恢復時接著倒數（進度條停住不歸零，見 CSS 的 animation-play-state）。
  * 換張（自己換或手動換）都重新給滿 7 秒，進度條換到新的那一段從頭填。

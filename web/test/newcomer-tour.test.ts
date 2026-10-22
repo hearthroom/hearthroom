@@ -1,6 +1,10 @@
 import { expect, it } from "vitest";
 import { NEWCOMER_TOUR, awayMode } from "../src/lib/newcomer-tour";
 
+it("day 2 points to the always-available conversation library, outside the carousel", () => {
+  expect(NEWCOMER_TOUR[2][0].target).toBe('[data-tour="library"]');
+});
+
 // ui.md §15.8：導覽框不到真的元素時，泡泡怎麼講
 it("sends card-page days to a card when the person is elsewhere", () => {
   const [score] = NEWCOMER_TOUR[4];

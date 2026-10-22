@@ -147,7 +147,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
 
       <nav class="nav">
         <RouterLink :to="lp('/')" class="nav__item" :class="{ 'nav__item--on': route.path === lp('/') }">{{ $t("nav.board") }}</RouterLink>
-        <RouterLink :to="lp('/library')" class="nav__item" active-class="nav__item--on">{{ $t("library.title") }}</RouterLink>
+        <RouterLink :to="lp('/library')" data-tour="library" class="nav__item" active-class="nav__item--on">{{ $t("library.title") }}</RouterLink>
         <RouterLink v-if="session.me" :to="lp('/mine')" class="nav__item" active-class="nav__item--on">{{ $t("nav.mine") }}</RouterLink>
         <!-- 只有審核人看得到這顆：是不是審核人由本站決定，登入後問一次 -->
         <RouterLink v-if="reviewerStore.likely || reviewerStore.blogWriter" :to="lp(reviewerStore.likely ? '/review' : '/review/blog')" class="nav__item" active-class="nav__item--on">{{ $t("nav.review") }}<ReviewBadge /></RouterLink>
@@ -195,7 +195,7 @@ onMounted(() => document.addEventListener("keydown", onSlash));
 
   <nav v-if="!route.meta.bare && onTabPage" class="mobile-library-nav" :aria-label="$t('library.navigation')">
     <RouterLink :to="lp('/')" :aria-current="route.path === lp('/') ? 'page' : undefined">{{ $t('nav.board') }}</RouterLink>
-    <RouterLink :to="lp('/library')" :aria-current="route.path === lp('/library') ? 'page' : undefined">{{ $t('library.title') }}</RouterLink>
+    <RouterLink :to="lp('/library')" data-tour="library" :aria-current="route.path === lp('/library') ? 'page' : undefined">{{ $t('library.title') }}</RouterLink>
     <RouterLink :to="lp('/mine')" :aria-current="route.path === lp('/mine') ? 'page' : undefined">{{ $t('nav.mine') }}</RouterLink>
   </nav>
   <RouteArrivalNotice v-if="routesOn && !route.meta.bare" />

@@ -23,6 +23,7 @@ import NewcomerNudge from "@/components/checkin/NewcomerNudge.vue";
 import { selectedTags } from "@/lib/discovery";
 import { useLocalePath } from "@/lib/use-locale";
 import { useSession } from "@/lib/session";
+import { currentStep } from "@/lib/newcomer-tour";
 import { guestAdult, viewerAdult } from "@/lib/adult-consent";
 import type { CardPage, Sort } from "@/lib/types";
 import UpdateStrip from "@/components/UpdateStrip.vue";
@@ -196,6 +197,7 @@ const welcome = useMascotWelcome();
 const showHome = computed(() => !!session.me && session.ready && !welcome.visible.value && offset.value === 0);
 /** 輪播的第一張就是頂端這塊蘇綺；兩塊都不在時輪播只放活動 */
 const hasHero = computed(() => welcome.visible.value || showHome.value);
+const tourHero = computed(() => currentStep()?.target === '[data-tour="home-roll"]');
 const sortsEl = ref<HTMLElement | null>(null);
 /**
  * 面板上的「找新卡」：不在面板裡列卡，切到日榜（上榜 24 小時內）、捲到榜單那一列。
@@ -260,7 +262,7 @@ const ratingOptions = computed(() => {
     <!-- 新手七日：常駐卡在最頂端（不是榜單裡、不是第五個選項）；每天第一次進來桌寵另外彈一張提示 -->
     <NewcomerStrip v-if="offset === 0" />
     <NewcomerNudge v-if="offset === 0" />
-    <BoardCarousel :hero="hasHero" :campaigns="offset === 0">
+    <BoardCarousel :hero="hasHero" :campaigns="offset === 0" :tour-hero="tourHero">
       <MascotWelcome />
       <MascotHome v-if="showHome" @discover="toNewCards" />
     </BoardCarousel>

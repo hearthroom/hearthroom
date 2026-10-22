@@ -16,6 +16,7 @@ import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
 import CoachSpot from "@/components/CoachSpot.vue";
 import { track } from "@/lib/track";
+import { findTourTarget } from "@/lib/tour-target";
 
 const session = useSession();
 const route = useRoute();
@@ -169,7 +170,7 @@ function measure() {
   readStage();
   const step = tourState.step;
   const selector = step ? TARGET_OF[step] : null;
-  const el = selector ? document.querySelector<HTMLElement>(selector) : null;
+  const el = selector ? findTourTarget(selector) : null;
   if (!el) { rect.value = null; return; }
   if (scrolledFor !== step) {
     scrolledFor = step;
