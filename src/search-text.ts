@@ -1,4 +1,4 @@
-import { TO_HANS } from "./originality-hans";
+import { TO_HANS } from "../shared/hant-hans";
 import { JP_TO_HANT } from "./search-jp";
 import { ALIAS_GROUPS } from "./search-aliases";
 

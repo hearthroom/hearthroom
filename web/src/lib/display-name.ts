@@ -5,7 +5,7 @@ import { shallowRef } from "vue";
  *
  * 規則跟對話頁同一套（moonstage/display-script）：看得出是來源字形才轉、單字多義不動，
  * 所以同一個標題在榜單、卡片頁、對話頁寫法一致。字典約 470 KB（gzip），只有中文介面、
- * 標題有漢字時才載入，而且跟對話頁共用同一個檔——先逛榜單再開對話不會下載第二次。
+ * 標題裡真的有要換字形的字時才載入（見 mayConvert），而且跟對話頁共用同一個檔——先逛榜單再開對話不會下載第二次。
  * 載入前先顯示原標題；首屏網路停了、瀏覽器空閒時才下載，好了自動換成轉換後的寫法。
  *
  * 只轉顯示的字。依標題算出的東西（佔位色）、搜尋、分享出去的標題都用原文。
@@ -74,11 +74,44 @@ export function displayScriptReady(): Promise<void> {
   return load();
 }
 
+/**
+ * 字典之前先載一張逐字對照表（約 15 KB gzip）。轉換器只在「看得出是來源字形」時才換字，
+ * 標題裡沒有一個字落在表上（簡體介面看簡體標題、正體介面看繁體標題），轉出來就是原文，
+ * 不必為它下載字典（卡片頁實測：簡體標題的卡也照樣下載 486 KB）。
+ * 判斷錯的代價只是少換一次字，跟字典沒載好時一樣顯示原文。
+ */
+type Charsets = { hant: Set<string>; hans: Set<string> };
+const charsets = shallowRef<Charsets | null>(null);
+let charsetsPending: Promise<void> | null = null;
+
+function loadCharsets(): void {
+  charsetsPending ??= import("../../../shared/hant-hans").then(
+    ({ TO_HANS }) => {
+      const hans = new Set<string>();
+      for (const [hant, simple] of TO_HANS) if (hant !== simple) hans.add(simple);
+      charsets.value = { hant: new Set([...TO_HANS.keys()].filter((ch) => TO_HANS.get(ch) !== ch)), hans };
+    },
+    // 對照表載不到就照原本的做法：直接載字典
+    () => { charsets.value = { hant: new Set(), hans: new Set() }; void load(); },
+  );
+}
+
+/** 方向跟 moonstage 的 directionForLocale 同一套：繁體介面 s2t，其他中文介面 t2s */
+const toHant = (locale: string) => /^zh-(hant|tw|hk)/i.test(locale);
+
+function mayConvert(name: string, locale: string): boolean | null {
+  const sets = charsets.value;
+  if (!sets) { loadCharsets(); return null; }
+  const source = toHant(locale) ? sets.hans : sets.hant;
+  for (const ch of name) if (source.has(ch)) return true;
+  return false;
+}
+
 export function displayName(name: string, locale: string): string {
   if (!name || !/^zh/i.test(locale) || !HAS_HAN.test(name) || failed) return name;
   const mod = api.value;
   if (!mod) {
-    void load();
+    if (mayConvert(name, locale)) void load();
     return name;
   }
   const direction = mod.directionForLocale(locale);
