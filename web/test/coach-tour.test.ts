@@ -77,11 +77,12 @@ async function press(key: string) {
 beforeEach(() => {
   localStorage.clear(); sessionStorage.clear(); i18n.global.locale.value = "zh-Hant";
   Element.prototype.scrollIntoView = () => {};
+  vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue(new DOMRect(40, 100, 200, 44));
   starters.zh.general = 100001; starters.zh.adult = null;
   session.me = null; session.profile = null; guest.showNsfw = false; guest.available = true; sandboxPlay = false; plainCard = false;
   tourState.step = null; tourState.card = 0;
 });
-afterEach(() => { app?.unmount(); root?.remove(); app = undefined; });
+afterEach(() => { app?.unmount(); root?.remove(); app = undefined; vi.restoreAllMocks(); });
 
 describe("走一遍", () => {
   it("一般卡：框入門卡 → 下一步跳卡片頁 → 分級 → 介紹 → 評分 → 開始對話 → 下一步跳對話頁 → 開場 → 開場選項 → 完成", async () => {

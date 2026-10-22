@@ -12,6 +12,7 @@ import { fetchBoard } from "@/lib/api";
 import { contentLang, defaultZone } from "@/lib/i18n";
 import { useLocalePath } from "@/lib/use-locale";
 import { track } from "@/lib/track";
+import { findTourTarget } from "@/lib/tour-target";
 
 const route = useRoute();
 const router = useRouter();
@@ -33,14 +34,16 @@ function measure() {
   const onPage = !!s && (s.page === "any" || s.page === pageOf(route.path));
   // 頁面自己有蘇綺的地方（簽到頁），框不到的那幾天把泡泡放在剛按的「帶我去」旁邊，不蓋頁面標題
   const anchor = s && away.value && ownSuki.value ? document.querySelector<HTMLElement>("#newcomer .nc__cta") : null;
+  clearRect.value = null;
   if (anchor) { rect.value = anchor.getBoundingClientRect(); return; }
-  const el = s?.target && onPage ? document.querySelector<HTMLElement>(s.target) : null;
+  const el = s?.target && onPage ? findTourTarget(s.target) : null;
   if (!el) { rect.value = null; return; }
-  clearRect.value = (s?.clear && document.querySelector<HTMLElement>(s.clear)?.getBoundingClientRect()) || null;
+  clearRect.value = (s?.clear && findTourTarget(s.clear)?.getBoundingClientRect()) || null;
   if (scrolledFor !== s!.id) { scrolledFor = s!.id; el.scrollIntoView({ block: "center", behavior: "smooth" }); }
   rect.value = el.getBoundingClientRect();
 }
 onMounted(() => {
+  measure();
   timer = setInterval(measure, 200);
   addEventListener("scroll", measure, { capture: true, passive: true });
   addEventListener("resize", measure);
