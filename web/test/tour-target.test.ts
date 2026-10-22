@@ -11,7 +11,7 @@ it("chooses the rendered navigation link when desktop and phone share a target",
   expect(findTourTarget('[data-tour="library"]')).toBe(links[1]);
 });
 
-it.each(['inert', 'aria-hidden="true"', 'style="visibility:hidden"', 'style="opacity:0"'])("ignores an inactive carousel slide (%s) even when it retains geometry", (attrs) => {
+it.each(['inert', 'aria-hidden="true"', 'style="display:none"', 'style="visibility:hidden"', 'style="opacity:0"'])("ignores an inactive carousel slide (%s) even when it retains geometry", (attrs) => {
   document.body.innerHTML = `<div ${attrs}><button data-tour="home-roll">roll</button></div>`;
   vi.spyOn(document.querySelector("button")!, "getBoundingClientRect").mockReturnValue(new DOMRect(28, 325, 115, 32));
   expect(findTourTarget('[data-tour="home-roll"]')).toBeNull();
