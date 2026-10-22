@@ -1,0 +1,10 @@
+{
+  "tier": "fix",
+  "title": {
+    "zh-Hant": "重新整理後，已完成的倒回不會再次刪除後來的回覆。",
+    "zh-Hans": "刷新后，已完成的回退不会再次删除后来的回复。",
+    "en": "Refreshing a conversation no longer repeats a completed rewind or removes replies that came after it.",
+    "ja": "再読み込みしても完了した巻き戻しは繰り返されず、その後の返信も残ります。",
+    "ko": "새로고침해도 완료된 되돌리기가 반복되지 않아 이후 답변이 유지됩니다."
+  }
+}
