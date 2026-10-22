@@ -14,6 +14,8 @@ import android.widget.FrameLayout;
 import android.widget.TextView;
 import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.rule.ActivityTestRule;
+import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry;
+import androidx.test.runner.lifecycle.Stage;
 import org.junit.After;
 import org.junit.Rule;
 import org.junit.Test;
@@ -97,12 +99,28 @@ public class RouteBridgeTest {
         fail("Controlled HTTPS page did not load");
     }
     private RoutesActivity openRoutes() throws Exception {
+        Activity previous = fixtures.routes;
         assertEquals("\"object\"", js("typeof window.HearthroomRoutes"));
         js("HearthroomRoutes.postMessage('open'); true");
-        RoutesActivity routes = (RoutesActivity) monitor.waitForActivityWithTimeout(3000);
-        assertNotNull("The official main frame opens native Routes; " + navigationTrace, routes);
+        RoutesActivity routes = awaitCurrentRoutes(previous);
         assertEquals(RoutesActivity.FROM_WEB, routes.getIntent().getStringExtra(RoutesActivity.REASON));
         return routes;
+    }
+    private RoutesActivity awaitCurrentRoutes(Activity previous) {
+        AtomicReference<RoutesActivity> current = new AtomicReference<>();
+        // ActivityMonitor is notified at both create and resume; a second wait can return the
+        // previous instance's later resume notification. Select the actual foreground instance.
+        fixtures.waitFor("new foreground Routes; " + navigationTrace, () -> {
+            for (Activity candidate : ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED)) {
+                if (candidate instanceof RoutesActivity && candidate != previous && candidate == fixtures.routes
+                    && !candidate.isFinishing() && !candidate.isDestroyed() && candidate.hasWindowFocus()) {
+                    current.set((RoutesActivity) candidate);
+                    return true;
+                }
+            }
+            return false;
+        }, 3000);
+        return current.get();
     }
     private void cancel(RoutesActivity routes) {
         ui(() -> routes.findViewById(R.id.back).performClick());
@@ -163,8 +181,9 @@ public class RouteBridgeTest {
         denied("HearthroomRoutes.postMessage('https://sukisuki.chat'); true");
         denied("HearthroomRoutes.postMessage('OPEN'); true");
         int before = monitor.getHits();
+        Activity previous = fixtures.routes;
         js("HearthroomRoutes.postMessage('open'); HearthroomRoutes.postMessage('open'); true");
-        RoutesActivity routes = (RoutesActivity) monitor.waitForActivityWithTimeout(3000);
+        RoutesActivity routes = awaitCurrentRoutes(previous);
         assertNotNull(routes);
         SystemClock.sleep(300);
         assertEquals(before + 1, monitor.getHits());
