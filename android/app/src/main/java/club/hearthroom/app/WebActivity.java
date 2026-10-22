@@ -21,7 +21,7 @@ import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
 import org.json.JSONObject;
 
-/** No general native JS interface; only an origin-scoped, main-frame Blob save request. */
+/** No general native JS interface; only origin-scoped, main-frame save and routes requests. */
 public final class WebActivity extends Activity {
     static final String WAITING_SHOWN = "waiting_shown", WAITING_TEXT = "waiting_text";
     private static final int PICK_FILE = 41, SAVE_FILE = 42, ROUTES = 43;
@@ -33,6 +33,8 @@ public final class WebActivity extends Activity {
     private PageDownload download;
     private String destination;
     private boolean pageFailed;
+    private boolean resumed, navigating, routesOpen;
+    private String routesSource;
     private View fullscreen, cover;
     private WebChromeClient.CustomViewCallback fullscreenCallback;
 
@@ -64,6 +66,10 @@ public final class WebActivity extends Activity {
         if (state != null) cover.setVisibility(View.GONE);
         findViewById(R.id.return_to_site).setOnClickListener(v -> back());
         destination = WebPolicy.launchUrl(getIntent().getDataString());
+        if (state != null) {
+            routesOpen = state.getBoolean("routes_open", false);
+            routesSource = state.getString("routes_source");
+        }
         try {
             PackageInfo provider = WebView.getCurrentWebViewPackage();
             if (provider == null || !WebPolicy.supportsVersion(provider.versionName)) { showUnavailable(); return; }
@@ -93,6 +99,12 @@ public final class WebActivity extends Activity {
                     if (url.startsWith("blob:") && WebPolicy.canDownload(view.getUrl(), url)) beginDownload(url, null, null, -1, data.optString("name"));
                 } catch (Exception ignored) { /* Malformed messages have no authority. */ }
             });
+            WebViewCompat.addWebMessageListener(web, "HearthroomRoutes", origins, (view, message, source, mainFrame, reply) -> {
+                if (view != web || !resumed || navigating || pageFailed || routesOpen || isFinishing() || isDestroyed()) return;
+                try {
+                    if (WebPolicy.canOpenRoutes(view.getUrl(), source.toString(), mainFrame, message.getData())) openRoutes(view.getUrl());
+                } catch (IllegalStateException ignored) { /* Only a string message has authority. */ }
+            });
             try (java.io.InputStream input = getResources().openRawResource(R.raw.download_hook)) {
                 java.io.ByteArrayOutputStream script = new java.io.ByteArrayOutputStream();
                 byte[] buffer = new byte[4096]; int count;
@@ -111,13 +123,19 @@ public final class WebActivity extends Activity {
         @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
             if (!request.isForMainFrame()) return false; // Preserve iframe sandbox/origin rules.
             String url = request.getUrl().toString();
-            if (WebPolicy.isHttps(url)) return false;
+            if (WebPolicy.isHttps(url)) {
+                // A same-document fragment link does not produce a new document's finish callback.
+                String current = view.getUrl();
+                if (current == null || !url.split("#", 2)[0].equals(current.split("#", 2)[0])) navigating = true;
+                return false;
+            }
             if (url.startsWith("blob:") && WebPolicy.canDownload(view.getUrl(), url)) return false;
             String scheme = request.getUrl().getScheme();
             if (request.hasGesture() && ("mailto".equals(scheme) || "tel".equals(scheme))) openExternal(request.getUrl());
             return true; // No intent:, javascript:, local file or content navigation.
         }
         @Override public void onPageStarted(WebView view, String url, Bitmap icon) {
+            navigating = true;
             pageFailed = false;
             cancelDownload();
             destination = url;
@@ -126,6 +144,7 @@ public final class WebActivity extends Activity {
         }
         @Override public void onPageCommitVisible(WebView view, String url) { if (cover.getVisibility() == View.VISIBLE) revealWhenDrawn(view, url, 0); }
         @Override public void onPageFinished(WebView view, String url) {
+            if (url.equals(view.getUrl())) navigating = false;
             progress.setVisibility(View.GONE);
             CookieManager.getInstance().flush();
             if (!pageFailed && WebPolicy.isSite(url)) {
@@ -136,7 +155,7 @@ public final class WebActivity extends Activity {
             }
         }
         @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-            if (request.isForMainFrame()) { pageFailed = true; showPageError(); }
+            if (request.isForMainFrame()) { navigating = false; pageFailed = true; showPageError(); }
         }
         @Override public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
             handler.cancel(); // Never bypass certificate errors.
@@ -216,10 +235,26 @@ public final class WebActivity extends Activity {
         } else if (request == SAVE_FILE && download != null) {
             if (result == RESULT_OK && data != null && data.getData() != null && "content".equals(data.getData().getScheme())) download.save(data.getData());
             else cancelDownload();
-        } else if (request == ROUTES && result == RESULT_OK && data != null && web != null && Routes.isRoute(data.getStringExtra(RoutesActivity.HOST))) {
-            // The same page on the chosen route, in this same view.
-            content.removeAllViews(); content.addView(web); web.loadUrl(WebPolicy.onRoute(destination, data.getStringExtra(RoutesActivity.HOST)));
+        } else if (request == ROUTES) {
+            String source = routesSource;
+            boolean pending = routesOpen;
+            routesOpen = false; routesSource = null;
+            if (!pending || result != RESULT_OK || data == null || web == null || isFinishing() || isDestroyed()) return;
+            String chosen = data.getStringExtra(RoutesActivity.HOST);
+            // A page that navigated while the native screen was open must not be replaced by a stale result.
+            if (!Routes.isRoute(chosen) || source == null || !source.equals(web.getUrl()) || navigating) return;
+            if (chosen.equals(WebPolicy.routeOf(source)) && !pageFailed) return;
+            content.removeAllViews(); content.addView(web);
+            navigating = true;
+            web.loadUrl(WebPolicy.onRoute(source, chosen));
         }
+    }
+    private void openRoutes(String source) {
+        if (web == null || routesOpen || isFinishing() || isDestroyed() || !WebPolicy.isSite(source)) return;
+        routesSource = source; routesOpen = true;
+        try {
+            startActivityForResult(new Intent(this, RoutesActivity.class).putExtra(RoutesActivity.REASON, RoutesActivity.FROM_WEB), ROUTES);
+        } catch (ActivityNotFoundException e) { routesOpen = false; routesSource = null; }
     }
     /**
      * The site's first commit is an empty #app shell; keep the launch mark until the app has mounted
@@ -278,7 +313,7 @@ public final class WebActivity extends Activity {
         if (web != null && WebPolicy.routeOf(destination) != null) {
             View routes = panel.findViewById(R.id.change_route);
             routes.setVisibility(View.VISIBLE);
-            routes.setOnClickListener(v -> startActivityForResult(new Intent(this, RoutesActivity.class).putExtra(RoutesActivity.REASON, RoutesActivity.FROM_WEB), ROUTES));
+            routes.setOnClickListener(v -> openRoutes(web.getUrl()));
         }
         column.addView(panel);
         scroll.addView(column);
@@ -306,9 +341,9 @@ public final class WebActivity extends Activity {
     }
     private void back() { if (fullscreen != null) exitFullscreen(); else if (web != null && web.canGoBack()) web.goBack(); else finish(); }
     @Override public void onBackPressed() { back(); }
-    @Override protected void onSaveInstanceState(Bundle state) { super.onSaveInstanceState(state); if (web != null) web.saveState(state); }
-    @Override protected void onPause() { if (web != null) { web.onPause(); CookieManager.getInstance().flush(); } super.onPause(); }
-    @Override protected void onResume() { super.onResume(); if (web != null) web.onResume(); }
+    @Override protected void onSaveInstanceState(Bundle state) { super.onSaveInstanceState(state); state.putBoolean("routes_open", routesOpen); state.putString("routes_source", routesSource); if (web != null) web.saveState(state); }
+    @Override protected void onPause() { resumed = false; if (web != null) { web.onPause(); CookieManager.getInstance().flush(); } super.onPause(); }
+    @Override protected void onResume() { super.onResume(); resumed = true; if (web != null) web.onResume(); }
     private void cancelDownload() { if (download != null) { download.cancel(); download = null; } }
     private void destroyWeb() { exitFullscreen(); cancelDownload(); if (web != null) { content.removeView(web); web.destroy(); web = null; } }
     @Override protected void onDestroy() { if (fileChoice != null) fileChoice.onReceiveValue(null); destroyWeb(); super.onDestroy(); }

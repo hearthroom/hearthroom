@@ -65,7 +65,7 @@ const router = useRouter();
 watchCheckinNudges(router, (p) => lp(p));
 
 const discordInvite = ref<string|null>(null);
-/** 線路：只在官方網域、不在 Android App 裡（App 有自己的線路畫面）。頁尾與帳號選單是平時入口 */
+/** 線路：官方站的平時入口；TWA 用網站清單，具備橋接的 WebView 用原生清單。 */
 const routesOn = routesAvailable();
 const hereLine = currentLine();
 /** 頁首的訊號圖示只在「目前慢、而且有更快的」時出現，提示卡收掉後當持久落點；遊玩頁不放 */

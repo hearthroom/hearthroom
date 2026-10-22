@@ -5,13 +5,14 @@
  */
 import { computed, onBeforeUnmount, ref } from "vue";
 import { isStandalone } from "@/lib/pwa";
+import { inAndroidApp } from "@/lib/route-lines";
 import { ROUTE_TUNING, SwitchError, prepareSwitch, type Line, type SwitchFailure } from "@/lib/routes";
 import { useSession } from "@/lib/session";
 import { track } from "@/lib/track";
 
 export function useRouteSwitch(source: "routes_dialog" | "routes_prompt") {
   const session = useSession();
-  const standalone = isStandalone();
+  const standalone = isStandalone() && !inAndroidApp();
   const phase = ref<"idle" | "connecting" | "carrying">("idle");
   const failure = ref<SwitchFailure | null>(null);
   /** 目前線路自己發不出換手單：接下來的切換不帶登入（使用者按「仍然切換」才走） */
