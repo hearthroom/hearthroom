@@ -89,9 +89,15 @@ function routeValue(raw:unknown):string {
 function routePrepareNavigation(c:C):boolean {
   if(c.req.method!=='GET'||c.req.path!=='/auth/route/prepare')return false;
   const mode=c.req.header('Sec-Fetch-Mode'),destination=c.req.header('Sec-Fetch-Dest');
-  if(mode!==undefined||destination!==undefined)return mode==='navigate'&&destination==='document';
-  // Older browsers omit fetch metadata. Explicit HTML acceptance is required;
-  // API requests and iframe navigations keep their existing JSON contract.
+  if(mode!==undefined||destination!==undefined){
+    if(mode!=='navigate')return false;
+    if(destination==='document')return true;
+    if(destination!=='empty')return false;
+    // Installed older SWs re-fetch both top-level and iframe navigation as
+    // navigate/empty; they are indistinguishable here and both need an HTML
+    // failure page. Explicit iframe metadata and API fetches still get JSON.
+  }
+  // Require HTML for the legacy SW case and browsers without fetch metadata.
   return (c.req.header('Accept')||'').split(',').some(part=>part.split(';')[0].trim().toLowerCase()==='text/html');
 }
 async function authBody(c:C):Promise<Record<string,unknown>> {

@@ -7,7 +7,7 @@
 
   fetch 處理器不能是空的：Chrome 會把空的處理器當成沒有，安裝性檢查照樣不過。
 */
-const VERSION = "hr-sw-3";
+const VERSION = "hr-sw-4";
 // 資源層會把 /offline.html 轉成 /offline（307）；導覽請求不能用轉址過的回應回，所以直接用乾淨網址
 const OFFLINE_URL = "/offline";
 
@@ -59,6 +59,10 @@ self.addEventListener("notificationclick", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.mode !== "navigate") return;
+  // Re-fetching a navigation drops its document/iframe destination in Chromium.
+  // Let the browser preserve that metadata for the handoff's HTML/JSON boundary.
+  const url = new URL(event.request.url);
+  if (url.origin === self.location.origin && url.pathname === "/auth/route/prepare") return;
   event.respondWith(
     fetch(event.request).catch(async () => {
       const cached = await caches.match(OFFLINE_URL);
