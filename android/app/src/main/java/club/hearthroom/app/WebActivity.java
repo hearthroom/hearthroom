@@ -33,7 +33,7 @@ public final class WebActivity extends Activity {
     private PageDownload download;
     private String destination;
     private boolean pageFailed;
-    private boolean resumed, navigating, routesOpen;
+    private boolean resumed, routesOpen;
     private String routesSource;
     private View fullscreen, cover;
     private WebChromeClient.CustomViewCallback fullscreenCallback;
@@ -100,7 +100,9 @@ public final class WebActivity extends Activity {
                 } catch (Exception ignored) { /* Malformed messages have no authority. */ }
             });
             WebViewCompat.addWebMessageListener(web, "HearthroomRoutes", origins, (view, message, source, mainFrame, reply) -> {
-                if (view != web || !resumed || navigating || pageFailed || routesOpen || isFinishing() || isDestroyed()) return;
+                // Chromium completes downloads, 204s and cancelled navigations without a matching
+                // onPageFinished URL. Its native load progress still settles for those paths.
+                if (view != web || !resumed || view.getProgress() < 100 || pageFailed || routesOpen || isFinishing() || isDestroyed()) return;
                 try {
                     if (WebPolicy.canOpenRoutes(view.getUrl(), source.toString(), mainFrame, message.getData())) openRoutes(view.getUrl());
                 } catch (IllegalStateException ignored) { /* Only a string message has authority. */ }
@@ -123,19 +125,13 @@ public final class WebActivity extends Activity {
         @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
             if (!request.isForMainFrame()) return false; // Preserve iframe sandbox/origin rules.
             String url = request.getUrl().toString();
-            if (WebPolicy.isHttps(url)) {
-                // A same-document fragment link does not produce a new document's finish callback.
-                String current = view.getUrl();
-                if (current == null || !url.split("#", 2)[0].equals(current.split("#", 2)[0])) navigating = true;
-                return false;
-            }
+            if (WebPolicy.isHttps(url)) return false;
             if (url.startsWith("blob:") && WebPolicy.canDownload(view.getUrl(), url)) return false;
             String scheme = request.getUrl().getScheme();
             if (request.hasGesture() && ("mailto".equals(scheme) || "tel".equals(scheme))) openExternal(request.getUrl());
             return true; // No intent:, javascript:, local file or content navigation.
         }
         @Override public void onPageStarted(WebView view, String url, Bitmap icon) {
-            navigating = true;
             pageFailed = false;
             cancelDownload();
             destination = url;
@@ -144,7 +140,6 @@ public final class WebActivity extends Activity {
         }
         @Override public void onPageCommitVisible(WebView view, String url) { if (cover.getVisibility() == View.VISIBLE) revealWhenDrawn(view, url, 0); }
         @Override public void onPageFinished(WebView view, String url) {
-            if (url.equals(view.getUrl())) navigating = false;
             progress.setVisibility(View.GONE);
             CookieManager.getInstance().flush();
             if (!pageFailed && WebPolicy.isSite(url)) {
@@ -155,7 +150,7 @@ public final class WebActivity extends Activity {
             }
         }
         @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-            if (request.isForMainFrame()) { navigating = false; pageFailed = true; showPageError(); }
+            if (request.isForMainFrame()) { pageFailed = true; showPageError(); }
         }
         @Override public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
             handler.cancel(); // Never bypass certificate errors.
@@ -242,10 +237,9 @@ public final class WebActivity extends Activity {
             if (!pending || result != RESULT_OK || data == null || web == null || isFinishing() || isDestroyed()) return;
             String chosen = data.getStringExtra(RoutesActivity.HOST);
             // A page that navigated while the native screen was open must not be replaced by a stale result.
-            if (!Routes.isRoute(chosen) || source == null || !source.equals(web.getUrl()) || navigating) return;
+            if (!Routes.isRoute(chosen) || source == null || !source.equals(web.getUrl()) || web.getProgress() < 100) return;
             if (chosen.equals(WebPolicy.routeOf(source)) && !pageFailed) return;
             content.removeAllViews(); content.addView(web);
-            navigating = true;
             web.loadUrl(WebPolicy.onRoute(source, chosen));
         }
     }
