@@ -22,3 +22,11 @@ export function cardStill(url: string, width?: number): string {
   if (!onOurSite()) return url;
   return cardThumbUrl(PRIMARY_HOST, url, width, true) ?? url;
 }
+
+/**
+ * 依序試的網址：會動的縮圖 → 靜態縮圖（動圖太大轉不了動的）→ 原圖。
+ * 不是我們能轉的來源時三個都是原圖，去重後只剩一個。第一個跟 Worker 預載的一字不差（src/head.ts cardArtPreloads）。
+ */
+export function thumbChain(url: string, width?: number): string[] {
+  return [...new Set([cardThumb(url, width), cardStill(url, width), url])];
+}
