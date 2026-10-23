@@ -1,3 +1,6 @@
+import {managedWork} from './work-policy';
+import {fenceManagedEdit} from './work-fence';
+import {prepareManagedPublication} from './work-publication';
 import { isTransferHeld } from './draft-transfer-gate';
 import { type Env, HttpError } from './types';
 import { apiBaseOf, type ProviderId } from './providers';
@@ -62,11 +65,15 @@ const receiptOf=(r:VersionRow):Receipt=>({workId:r.work_id,versionId:r.version_i
 // Called before the editor writes any part of a draft. Retire the old review
 // first so a reviewer holding its snapshot cannot publish it during the save.
 // Keep the obligation durable across partial saves and browser/network failures.
-export async function beginHostedEdit(db:D1Database,memberId:string,roleId:string,now:number,provider:ProviderId='harbor'):Promise<{resubmit:boolean;ratingAnswers?:RatingAnswers;fandom?:string;fandomId?:string}> {
+export async function beginHostedEdit(db:D1Database,memberId:string,roleId:string,now:number,provider:ProviderId='harbor',env?:Env):Promise<{resubmit:boolean;ratingAnswers?:RatingAnswers;fandom?:string;fandomId?:string}> {
  await adoptRetiredWork(db,provider,roleId);
  const work=await db.prepare("SELECT id,member_id FROM works WHERE source_provider=? AND source_role_id=?").bind(provider,roleId).first<{id:string;member_id:string}>();
  if(!work)return {resubmit:false};
  if(work.member_id!==memberId)throw new HttpError(403,'not the author of this card');
+ if(await managedWork(db,provider,roleId)){
+  if(!env)throw new HttpError(503,'visibility_sync_pending');
+  await fenceManagedEdit(env,provider,roleId);
+ }
  await db.batch([
   db.prepare("UPDATE review_submissions SET status='superseded',claimed_by=NULL,claimed_at=NULL,decided_at=? WHERE status='pending' AND id IN (SELECT submission_id FROM hosting_versions WHERE work_id=?)").bind(now,work.id),
   db.prepare("DELETE FROM review_snapshots WHERE submission_id IN (SELECT s.id FROM review_submissions s JOIN hosting_versions v ON v.submission_id=s.id WHERE v.work_id=? AND s.status='superseded')").bind(work.id),
@@ -121,6 +128,7 @@ export async function submitHosted(env:Env,input:{provider?:ProviderId;memberId:
  const sealed=await hostGateway.read(env,input.token,receipt.hostedRevisionId,provider);
  if(sealed.authorNumId!==input.account||sealed.roleId!==receipt.hostedRevisionId)throw new HttpError(502,'hosting_receipt_invalid');
  const settings=await upstream.readForReview(env,input.token,receipt.hostedRevisionId,provider);
+ await prepareManagedPublication(env,provider,input.role.roleId,work.id,version.version_id,receipt.hostedRevisionId);
  const submissionId=crypto.randomUUID();
  const privateDoc=(settings.document??{}) as Record<string,unknown>;
  // Validate size before any registry write. Snapshot creation joins the submission

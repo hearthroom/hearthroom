@@ -1,5 +1,6 @@
+import {finalizeManagedReview} from './work-publication';
 import { dropSnapshotStatement } from "./review-snapshot";
-import { HttpError, type Localized, pickLocale } from "./types";
+import { HttpError, type Env, type Localized, pickLocale } from "./types";
 
 /**
  * 社群審核：審核單、共享佇列、蓋章。
@@ -158,8 +159,18 @@ export interface StampResult {
 export async function stamp(
   db: D1Database,
   input: { submissionId: string; memberId: string; verdict: "approve" | "reject"; note: string; now: number; generation?: string },
+  env?:Env,
 ): Promise<StampResult> {
   const row = await getSubmission(db, input.submissionId);
+  const managed=await db.prepare('SELECT 1 FROM hosting_versions v JOIN managed_work_access p ON p.work_id=v.work_id WHERE v.submission_id=?').bind(row.id).first();
+  if(managed&&await db.prepare('SELECT 1 FROM work_review_decisions WHERE submission_id=?').bind(row.id).first()){
+   if(input.verdict!=='approve')throw new HttpError(409,'submission already decided');
+   if(!env)throw new HttpError(503,'visibility_sync_pending');
+   await finalizeManagedReview(env,row.id);
+   const count=await db.prepare("SELECT count(*) n FROM review_stamps WHERE submission_id=? AND verdict='approve'").bind(row.id).first<{n:number}>();
+   return {submission:await getSubmission(db,row.id),cardStatus:'approved',approvals:count?.n??0,required:STAMPS_REQUIRED[row.kind]};
+  }
+
   if (row.status !== "pending") throw new HttpError(409, "submission already decided");
   if (!claimIsLive(row, input.now) || row.claimed_by !== input.memberId) throw new HttpError(409, "claim this submission first");
   if (input.generation!==undefined && input.generation!==row.claim_generation) throw new HttpError(409,'claim changed');
@@ -188,6 +199,8 @@ export async function stamp(
       db.prepare("UPDATE cards SET status = 'rejected' WHERE id = ? AND approved_version_id IS NULL").bind(row.card_id),
       dropSnapshotStatement(db, row.id),
     );
+  } else if (approvals >= required && managed) {
+    writes.push(db.prepare('INSERT OR IGNORE INTO work_review_decisions(submission_id,decided_at) VALUES(?,?)').bind(row.id,input.now));
   } else if (approvals >= required) {
     cardStatus = "approved";
     writes.push(db.prepare("UPDATE review_submissions SET status = 'approved', decided_at = ? WHERE id = ?").bind(input.now, row.id));
@@ -207,6 +220,10 @@ export async function stamp(
   try { await db.batch(writes); } catch (error) {
     if(error instanceof Error && error.message.includes('claim changed')) throw new HttpError(409,'claim changed');
     throw error;
+  }
+  if(managed&&input.verdict==='approve'&&approvals>=required){
+   if(!env)throw new HttpError(503,'visibility_sync_pending');
+   await finalizeManagedReview(env,row.id);
   }
   const finalCard = await db.prepare("SELECT status FROM cards WHERE id=?").bind(row.card_id).first<{status:CardStatus}>();
   return { submission: await getSubmission(db, row.id), cardStatus:finalCard?.status ?? cardStatus, approvals, required };
