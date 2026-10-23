@@ -1,14 +1,14 @@
 /**
  * 桌寵在手機上站哪裡（任務 2026-10-23 曲面屏點不到，規格 docs/studio/tasks/2026-10-23-pet-curved-screen/ui-v3.md）：
  *   - 左右永遠離邊至少 32px，safe-area 比 32 大就用 safe-area（橫式瀏海）
- *   - 收起＝靠在側邊探出：外框貼著螢幕邊，帶外露出 56px 可點；預設右側
+ *   - 收起＝靠在側邊探出：身體貼著牆、外框露出 82px；接觸區寬＝邊距帶＋CATCH_OUT、高跟她一樣，貼著螢幕邊；預設右側
  *   - 往內拖分「拉出來」與「沿邊上下拖」；站著推進邊上放開就縮回那一側
  *   - 舊版存的「貼左／右邊收起」與研發版的「收在底邊」讀回時改成探出；落在邊緣的舊位置往內收
  *   - 泡泡與選單整個落在邊距帶內
  */
 import { describe, expect, it } from "vitest";
 import {
-  BAND, PEEK_OUT, clampStand, nudgeAnchor, defaultPeek, fitShift, fromSaved, peekPos, peekRange, pullMode, pushedIn, sideOf, standOutPos, toSaved, wallHide, type Frame,
+  BAND, CATCH_OUT, PEEK_OUT, clampStand, peekCatch, nudgeAnchor, defaultPeek, fitShift, fromSaved, peekPos, peekRange, pullMode, pushedIn, sideOf, standOutPos, toSaved, wallHide, type Frame,
 } from "../src/pet/placement";
 
 const pet = { w: 88, h: 132 };
@@ -32,29 +32,32 @@ describe("手機邊距帶", () => {
 
 describe("靠在側邊探出", () => {
   for (const w of [360, 390, 412]) {
-    it(`寬 ${w}：右側外框貼著螢幕邊，帶外露出 56px，帶內那 32px 被牆擋住`, () => {
+    it(`寬 ${w}：右側探出外框露 82px、其餘躲在牆後；接觸區貼螢幕邊、帶外 CATCH_OUT、高 132`, () => {
       const f = phone(w);
       const p = peekPos(f, pet, "right", 400);
-      expect(p.x + pet.w).toBe(w);
       expect(w - BAND - p.x).toBe(PEEK_OUT);
-      expect(PEEK_OUT).toBeGreaterThanOrEqual(44);
-      expect(wallHide(f, pet, "right", p.x)).toBe(BAND);
+      expect(wallHide(f, pet, "right", p.x)).toBe(pet.w - PEEK_OUT);
+      const c = peekCatch(f, pet, "right", p.y);
+      expect(c).toEqual({ x: w - BAND - CATCH_OUT, y: p.y, w: BAND + CATCH_OUT, h: 132 });
+      // 帶外點得到的寬度＝接觸區與她露在牆外的外框取大的
+      expect(Math.max(c.w - BAND, w - BAND - p.x)).toBeGreaterThanOrEqual(CATCH_OUT);
     });
   }
 
   it("左側對稱", () => {
     const f = phone(390);
     const p = peekPos(f, pet, "left", 400);
-    expect(p.x).toBe(0);
     expect(p.x + pet.w - BAND).toBe(PEEK_OUT);
-    expect(wallHide(f, pet, "left", p.x)).toBe(BAND);
+    expect(wallHide(f, pet, "left", p.x)).toBe(pet.w - PEEK_OUT);
+    expect(peekCatch(f, pet, "left", p.y)).toEqual({ x: 0, y: p.y, w: BAND + CATCH_OUT, h: 132 });
   });
 
-  it("橫式瀏海：牆跟著 safe-area 往內，帶外仍露 56px", () => {
+  it("橫式瀏海：牆跟著 safe-area 往內，露出量與帶外接觸寬不變", () => {
     const f: Frame = { w: 844, h: 390, inset: { top: 0, right: 47, bottom: 21, left: 0 } };
     const p = peekPos(f, pet, "right", 100);
     expect(f.w - 47 - p.x).toBe(PEEK_OUT);
     expect(wallHide(f, pet, "right", p.x)).toBe(pet.w - PEEK_OUT);
+    expect(peekCatch(f, pet, "right", p.y).w).toBe(47 + CATCH_OUT);
   });
 
   it("沒存過位置：右側探出，高度照原型（約螢幕 57% 處）", () => {
@@ -159,22 +162,22 @@ describe("泡泡與選單", () => {
 
 describe("新手提示卡掛在她頭上", () => {
   const f = phone(390);
-  it("右側探出：卡片離右緣 32，尖角指著牆外那 56px 的中間（離邊 60）", () => {
+  it("右側探出：卡片離右緣 32，尖角指著她露在牆外那 82px 的中間（離邊 73）", () => {
     const p = peekPos(f, pet, "right", 400), a = nudgeAnchor(390, { left: p.x, right: p.x + pet.w }, 280);
     expect(a.right).toBe(BAND);
-    expect(390 - a.right - a.tail - 7).toBe(390 - 60);
+    expect(390 - a.right - a.tail - 7).toBe(390 - 73);
   });
   it("左側探出：卡片整張留在畫面裡、離左緣 32，尖角指著左邊露出的那一段", () => {
     const p = peekPos(f, pet, "left", 400), a = nudgeAnchor(390, { left: p.x, right: p.x + pet.w }, 280);
     expect(390 - a.right - 280).toBe(BAND);
-    expect(390 - a.right - a.tail - 7).toBe(60);
+    expect(390 - a.right - a.tail - 7).toBe(73);
   });
   it("手機的卡只有 195 寬：左右探出時尖角都留在卡片裡、指著她露出來的那段", () => {
     for (const side of ["left", "right"] as const) {
       const p = peekPos(f, pet, side, 400), a = nudgeAnchor(390, { left: p.x, right: p.x + pet.w }, 195);
       expect(a.tail).toBeLessThanOrEqual(195 - 30);
       expect(a.tail).toBeGreaterThanOrEqual(16);
-      expect(390 - a.right - a.tail - 7).toBe(side === "left" ? 60 : 390 - 60);
+      expect(390 - a.right - a.tail - 7).toBe(side === "left" ? 73 : 390 - 73);
     }
   });
   it("站在右邊的邊距帶上：尖角指著她的中線", () => {

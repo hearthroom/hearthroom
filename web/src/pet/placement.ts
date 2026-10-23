@@ -3,8 +3,9 @@
  *
  * 曲面（瀑布）屏會把畫面最外側約 20–30px 的觸控吃掉，直式時 safe-area 多半是 0，系統不會告訴我們。
  * 原本手機預設「貼著右邊只露 33px」，那條整條落在吃掉的範圍裡：點不到、拖不動（玩家 2026-10-23 回報）。
- * 所以左右一律留一條邊距帶（牆）。收起時她還是靠在側邊，但改成從牆後面探出來：
- * 外框貼著螢幕邊，帶外露出 56px 整塊都接點擊，帶內那段被側邊頁籤蓋住。
+ * 所以左右一律留一條邊距帶（牆）。收起時她還是靠在側邊，但改成從牆後面探出來（身體貼著牆，不透明的部分露出約 72px）；
+ * 探出時另有一塊透明接觸區（貼螢幕邊、帶外 CATCH_OUT，高度跟她一樣），落在邊距帶裡的手指也算點到、拖到
+ * （owner 2026-10-23：使用者不在乎是不是真的按在她身上；曲面屏只吃左右，所以只加寬、不加高）。
  * 這裡全是純函式（不碰 DOM），探出、拉出、放下、走路、讀回舊位置、轉向都走同一套夾邊。桌機不用這份。
  */
 
@@ -17,8 +18,14 @@ export type Side = "left" | "right";
 
 /** 左右邊距帶：曲面屏邊緣拒觸常見 16～30dp，再留一點餘量（--s-6） */
 export const BAND = 32;
-/** 探出時帶外露出、可點的寬度（過 44pt 最小點擊目標） */
-export const PEEK_OUT = 56;
+/** 探出時她的外框露在牆外的寬度（外框 88 寬，剩下的躲在牆後） */
+export const PEEK_OUT = 82;
+/**
+ * 探出時的接觸區：從螢幕邊算起蓋住邊距帶，再往內 CATCH_OUT；高度跟她的外框一樣。
+ * owner 2026-10-23 試過 96、48，定 32（整塊寬 64）；要再調只改這一個數字。她自己露在牆外的外框也整塊接點擊，
+ * 所以實際點得到的寬度取兩者大的那個。
+ */
+export const CATCH_OUT = 32;
 /** 往內拉多少 px 算整個拉出來 */
 export const PULL_FULL = 52;
 /** 站著時離底邊至少這麼遠 */
@@ -53,6 +60,12 @@ export function clampStand(f: Frame, s: Size, p: Point): Point {
 export function peekRange(f: Frame, s: Size) {
   const minY = f.inset.top + HEAD;
   return { minY, maxY: Math.max(minY, f.h - s.h - Math.max(f.inset.bottom, FOOT)) };
+}
+
+/** 探出在 y 時的接觸區（貼著 side 那一側的螢幕邊） */
+export function peekCatch(f: Frame, s: Size, side: Side, y: number) {
+  const b = bands(f), w = (side === "right" ? b.right : b.left) + CATCH_OUT;
+  return { x: side === "right" ? f.w - w : 0, y, w, h: s.h };
 }
 
 /** 靠在 side 那一側探出：牆外露出 PEEK_OUT */
