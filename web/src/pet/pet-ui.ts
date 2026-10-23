@@ -7,7 +7,7 @@
 import { compose, PetRenderer, Rig, type PetSkeleton, type PetSkin } from "./puppet";
 import { Driver } from "./driver";
 import {
-  bands, clampStand, defaultPeek, fitShift, fromSaved, peekCatch, peekPos, silhouettePath, PULL_FULL, pullMode, pushedIn, sideOf, standOutPos, standRange, toSaved, wallHide,
+  clampStand, defaultPeek, fitShift, fromSaved, peekCatch, peekPos, silhouettePath, PULL_FULL, pullMode, pushedIn, sideOf, standOutPos, standRange, toSaved,
   type Frame, type Inset, type Saved, type Side,
 } from "./placement";
 import type { SukiNews } from "../../../shared/suki-care";
@@ -144,7 +144,6 @@ export class SukiPet {
       this.tab = document.createElement("div");
       this.tab.className = "suki-pet__tab";
       this.tab.setAttribute("aria-hidden", "true");
-      this.tab.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3 5 8l5 5"/></svg>';
       // 探出時的接觸區：透明、比她大一圈，手指落在她附近就算點到、拖到
       this.catcher = document.createElement("div");
       this.catcher.className = "suki-pet__catch";
@@ -1169,16 +1168,13 @@ export class SukiPet {
   private layoutWall() {
     if (!this.opts.mobile) return;
     const f = this.viewport(), size = this.size(), s = Math.max(0, Math.min(1, this.peekS));
-    const hide = s < 1 ? wallHide(f, size, this.side, this.pos.x) : 0;
-    // 上下留整個視窗高：選單項目多的時候往上長得很高，不能被裁掉
-    this.el.style.clipPath = !hide ? "" : this.side === "right" ? `inset(-100vh ${hide}px -100vh -300px)` : `inset(-100vh -300px -100vh ${hide}px)`;
+    // 頁籤只在她站著時當「她住這一側」的細條；探出時收掉，她的身體直接貼著螢幕邊（owner 2026-10-24：中間不能有一條底色）
     const tab = this.tab;
     if (!tab) return;
-    const b = bands(f), band = this.side === "right" ? b.right : b.left;
-    const tw = band + (8 - band) * s, th = size.h + 8 + (56 - size.h - 8) * s;
+    const tw = 8 * s, th = 56;
+    tab.hidden = tw < 1;
     Object.assign(tab.style, { width: `${tw}px`, height: `${th}px`, transform: `translate(${this.side === "right" ? f.w - tw : 0}px, ${Math.round(this.pos.y + (size.h - th) / 2)}px)` });
     tab.classList.toggle("suki-pet__tab--left", this.side === "left");
-    tab.style.setProperty("--chev", String(1 - s));
     // 接觸區只在探出時有；站出來後回到只接她身上
     // 縮回的動畫走到一半才出現：還站在畫面中間時不先在邊上攔點擊
     const c = this.catcher!, on = this.tucked && !this.hidden && this.peekS < 0.5;
