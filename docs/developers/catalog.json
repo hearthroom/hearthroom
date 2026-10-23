@@ -2284,5 +2284,19 @@
   "dbaeacebe7a3a": "next message sequence allocated by the conversation. Optional fence: send historyEpoch and nextSeq together from the displayed timeline. An unseen intent on an advanced timeline conflicts; the same committed ID and intent replays its original result without trimming later rows.",
   "dac469a4a2a56": "Optional stable mutation ID. The same ID and target replay the committed result without deleting later content; a different intent with that ID conflicts. Omit for legacy non-replay-protected behavior.",
   "df54a12488b19": "Only on spending rows whose model is still offered: the model name as the model list shows it. Older rows and models no longer offered omit it.",
-  "d1ea1bef54d78": "Present with `modelName` when the model has a lane: the localized lane label from the model list, in the language of the `language` header."
+  "d1ea1bef54d78": "Present with `modelName` when the model has a lane: the localized lane label from the model list, in the language of the `language` header.",
+  "d8cd127194ab8": "Apply a fenced work access command",
+  "d53e94b358b7e": "Commit a prepared publication permit",
+  "ddfbe74e09aaa": "Durable policy state or operation receipt",
+  "de7a84d298539": "Issuer-only command. private, unlisted and restore additionally require the source author bearer with role.read and role.write. Any supplied bearer must own the source. Bind accepts trusted issuer approval history only. prepare validates complete source and sealed revision hashes without granting public access; commit consumes its epoch-bound permit. A cancellation may name permitId to revoke a publication that won before issuer finalization. Repeating the same operation returns its receipt; another intent with the same key conflicts. Ordinary content writes invalidate prepared permits. unlisted shares the latest saved source; public serves approved sealed revisions. Restoring identical approved content creates no new review or charge.",
+  "d4555a30c98a4": "Issuer-only commit. Revalidates complete content and policy epoch under the work lock. An intervening edit, cancellation, sharing change or restriction rejects the permit. A repeated committed operation returns its original receipt without granting again.",
+  "d28e59e3a5440": "Issuer-only durable readback. Read after an unknown result before retrying. A cancelled permit cannot be committed again; historical receipts do not override a newer policy epoch.",
+  "defe39582122b": "Issuer-only policy projection. This endpoint does not grant access to private agent configuration content.",
+  "ded051ca934fb": "Missing issuer credential or required author bearer",
+  "d6ff1eeea8e64": "Read a work access operation",
+  "da8e30fa32cd8": "Read issuer work access",
+  "d20a2d3f18583": "Service unavailable; operation outcome may be unknown",
+  "d29d3543c2056": "Source, policy or operation not found",
+  "d408d34e0b918": "Wrong author or insufficient scope",
+  "dad4696d9eee2": "work_access_conflict or role_not_passed_review; read back before retrying"
 }

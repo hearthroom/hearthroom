@@ -153,4 +153,5 @@ it('recovers dirty moderation before an author command whose Provider result is 
  expect(await reconcileWorkAccess(env)).toEqual({complete:1,pending:0});
  expect(change.mock.calls.at(-1)?.[3]).toMatchObject({action:'restrict',restriction:'suspended'});
  expect(await env.DB.prepare('SELECT restriction,moderation_revision,confirmed_moderation_revision FROM managed_work_access WHERE source_role_id=?').bind(draft.roleId).first()).toEqual({restriction:'suspended',moderation_revision:1,confirmed_moderation_revision:1});
+ expect(await opsMetrics(env.DB)).toContain('hearthroom_visibility_pending_operations 0');
 });

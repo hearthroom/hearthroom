@@ -101,13 +101,23 @@ export async function runWorkPolicyOperation(env:Env,provider:ProviderId,source:
  }
 }
 
+// A confirmed higher PG epoch makes older, still-unresolved commands incapable
+// of mutation. Preserve their intent for audit, but stop retrying or counting them.
+export function supersedeOlderWorkIntents(env:Env,receipt:WorkPolicyReceipt):D1PreparedStatement{
+ return env.DB.prepare(`UPDATE visibility_operations SET state='conflict',updated_at=?
+ WHERE work_id=? AND operation_id<>? AND state IN ('intent','pending') AND json_extract(command,'$.expectedEpoch')<?
+ AND EXISTS(SELECT 1 FROM managed_work_access WHERE work_id=? AND epoch>=? AND sync_state='complete')`)
+ .bind(Date.now(),receipt.workId,receipt.operationId,receipt.epoch,receipt.workId,receipt.epoch);
+}
+
 export async function projectWorkReceipt(env:Env,provider:ProviderId,receipt:WorkPolicyReceipt,approvedRole?:string|null,operation?:string,moderationRevision?:number):Promise<void>{
- const result=await env.DB.prepare(`INSERT INTO managed_work_access(work_id,provider,source_role_id,access,epoch,restriction,approved_role_id)
+ const projection=env.DB.prepare(`INSERT INTO managed_work_access(work_id,provider,source_role_id,access,epoch,restriction,approved_role_id)
  VALUES(?,?,?,?,?,?,?) ON CONFLICT(work_id) DO UPDATE SET access=excluded.access,epoch=excluded.epoch,restriction=excluded.restriction,
  approved_role_id=coalesce(excluded.approved_role_id,managed_work_access.approved_role_id),sync_state='complete',sync_operation_id=NULL,
  confirmed_moderation_revision=coalesce(?,managed_work_access.confirmed_moderation_revision)
  WHERE managed_work_access.epoch<=excluded.epoch AND (managed_work_access.sync_operation_id IS NULL OR managed_work_access.sync_operation_id=?) AND (? IS NULL OR managed_work_access.moderation_revision=?)`)
- .bind(receipt.workId,provider,receipt.sourceRoleId,receipt.access,receipt.epoch,receipt.restriction,approvedRole??null,moderationRevision??null,receipt.operationId,moderationRevision??null,moderationRevision??null).run();
+ .bind(receipt.workId,provider,receipt.sourceRoleId,receipt.access,receipt.epoch,receipt.restriction,approvedRole??null,moderationRevision??null,receipt.operationId,moderationRevision??null,moderationRevision??null);
+ const [result]=await env.DB.batch([projection,supersedeOlderWorkIntents(env,receipt)]);
  if(!result.meta.changes)throw new HttpError(409,'visibility_operation_conflict');
  if(operation)await bumpOp(env.DB,'work_access',operation,'success');
 }
