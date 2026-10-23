@@ -1,7 +1,7 @@
 import {type Env,HttpError} from './types';
 import type {ProviderId} from './providers';
 import {bumpOp} from './ops-metrics';
-import {managedWork,policyOperationId,projectWorkReceipt,runWorkPolicyOperation,workPolicyGateway,type WorkPolicyCommand,type WorkPolicyReceipt} from './work-policy';
+import {managedWork,policyOperationId,projectWorkReceipt,supersedeOlderWorkIntents,runWorkPolicyOperation,workPolicyGateway,type WorkPolicyCommand,type WorkPolicyReceipt} from './work-policy';
 
 export async function prepareManagedPublication(env:Env,provider:ProviderId,source:string,work:string,version:string,role:string):Promise<void>{
  const managed=await managedWork(env.DB,provider,source);if(!managed)return;
@@ -69,6 +69,7 @@ export async function finalizeManagedReview(env:Env,submission:string):Promise<v
   db.prepare(`UPDATE cards SET status='approved',reviewed_hash=?,registered_at=CASE WHEN ?='first' THEN ? ELSE registered_at END
    WHERE id=? AND EXISTS(SELECT 1 FROM review_submissions WHERE id=? AND status='approved')`).bind(row.content_hash,row.kind,row.decided_at,row.card_id,submission),
   db.prepare("DELETE FROM review_snapshots WHERE submission_id=? AND EXISTS(SELECT 1 FROM review_submissions WHERE id=? AND status='approved')").bind(submission,submission),
+  supersedeOlderWorkIntents(env,receipt),
  ]);
  if(!final[2].meta.changes)throw new HttpError(409,'visibility_operation_conflict');
  await bumpOp(db,'work_access','publish','success');
