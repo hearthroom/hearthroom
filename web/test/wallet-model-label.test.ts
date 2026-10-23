@@ -66,3 +66,30 @@ it("切換介面語言：重新讀一次，線路名跟著換", async () => {
   expect(languages.at(-1)).toBe("en");
   expect(rows(root)[0].sub).toBe("Gemini-4-Argon · Dew");
 });
+
+it("換語言時還在載入更多：晚到的舊頁不會接在新語言的清單後面", async () => {
+  let release: (r: Response) => void = () => undefined;
+  const page = (n: number, language: string) => ({ total: 60, size: 30, pages: 2, hasNextPage: n === 1,
+    records: Array.from({ length: 30 }, (_, i) => ({ id: n * 100 + i, record: "chat", recordType: "sub", score: 1, createTime: "2026-10-23T03:00:00Z", modelName: "Gemini-4-Argon", laneName: lanes[language] })) });
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.includes("/score/records")) {
+      const language = (init?.headers as Record<string, string>).language;
+      const n = Number(new URL(url).searchParams.get("pageNum"));
+      if (n === 2 && language === "zh-Hant") return new Promise<Response>((r) => { release = r; });
+      return json(page(n, language));
+    }
+    if (url.endsWith("/open/v1/me/wallet")) return json({ available: 1000, expiring: 0, expiries: [] });
+    if (url.endsWith("/open/v1/plans")) return json({ list: [] });
+    return json({ error: "not_found" }, 404);
+  }));
+  const root = await mount();
+  (root.querySelector(".history__more") as HTMLButtonElement).click();
+  await settle();
+  i18n.global.locale.value = "en";
+  await settle();
+  release(json(page(2, "zh-Hant")));
+  await settle();
+  const subs = rows(root).map((r) => r.sub);
+  expect(subs).toHaveLength(30);
+  expect(subs.every((s) => s === "Gemini-4-Argon · Dew")).toBe(true);
+});
