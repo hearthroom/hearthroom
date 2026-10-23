@@ -7,7 +7,7 @@
 import { compose, PetRenderer, Rig, type PetSkeleton, type PetSkin } from "./puppet";
 import { Driver } from "./driver";
 import {
-  clampStand, defaultPeek, fitShift, fromSaved, peekCatch, peekPos, silhouettePath, PULL_FULL, pullMode, pushedIn, sideOf, standOutPos, standRange, toSaved,
+  clampStand, defaultPeek, fitShift, tailShift, fromSaved, peekCatch, peekPos, silhouettePath, pullMode, pushedIn, sideOf, standOutPos, standRange, toSaved,
   type Frame, type Inset, type Saved, type Side,
 } from "./placement";
 import type { SukiNews } from "../../../shared/suki-care";
@@ -815,7 +815,7 @@ export class SukiPet {
     this.hidden = on;
     this.el.classList.toggle("suki-pet--away", on);
     this.tab?.classList.toggle("suki-pet__tab--away", on);
-    this.layoutWall();
+    this.layoutEdge();
     if (on) { this.bubble.hidden = true; this.closeMenu(); }
     else { if (this.opts.mobile) this.refit(); const next = this.queue.shift(); if (next) setTimeout(() => this.act(next), 500); }
   }
@@ -838,7 +838,7 @@ export class SukiPet {
     // 手機：推到邊上，那一側的頁籤亮起來（放開就縮回去）
     if (this.opts.mobile) {
       const near = pushedIn(this.viewport(), this.size(), this.pos.x);
-      if (near && near !== this.side) { this.side = near; this.layoutWall(); }
+      if (near && near !== this.side) { this.side = near; this.layoutEdge(); }
       this.tab?.classList.toggle("suki-pet__tab--near", !!near);
     }
   }
@@ -854,7 +854,9 @@ export class SukiPet {
       this.el.classList.add("suki-pet--held");
     }
     const f = this.viewport(), s = this.size();
-    if (d.mode === "pull") this.peekS = Math.max(0, Math.min(1, d.s0 + (this.side === "right" ? -dx : dx) / PULL_FULL));
+    // 拉的距離＝從探出到站好要走的距離：她跟著手指一比一移動
+    const travel = Math.abs(standOutPos(f, s, this.side, this.pos.y).x - peekPos(f, s, this.side, this.pos.y).x) || 1;
+    if (d.mode === "pull") this.peekS = Math.max(0, Math.min(1, d.s0 + (this.side === "right" ? -dx : dx) / travel));
     else this.pos.y = peekPos(f, s, this.side, d.y0 + dy).y;
     this.layoutPeek();
   }
@@ -974,7 +976,7 @@ export class SukiPet {
     // 泡泡往畫面中間那一側展開，不會被螢幕邊緣切掉
     const w = this.touch.clientWidth || 0;
     this.el.classList.toggle("suki-pet--right", p.x + w / 2 > innerWidth / 2);
-    this.layoutWall();
+    this.layoutEdge();
     this.fitPopups();
   }
   private save(p: { x: number; y: number }, peeking = false) {
@@ -1082,7 +1084,7 @@ export class SukiPet {
     this.slide = { from: this.peekS, to, t: 0, ms, back, done };
     this.el.classList.add("suki-pet--sliding");
   }
-  /** 從頁籤後滑出來、站直、跳一下、說一句 */
+  /** 從螢幕邊滑出來、站直、跳一下、說一句 */
   private pullOut() {
     this.tucked = false; this.el.classList.remove("suki-pet--tucked");
     this.standX = null;
@@ -1093,7 +1095,7 @@ export class SukiPet {
       if (this.guide) this.setGuide(this.guide);
     });
   }
-  /** 縮回 side 那一側：從現在站的地方滑回頁籤後面 */
+  /** 縮回 side 那一側：從現在站的地方滑回螢幕邊探頭 */
   private tuckTo(side: Side, silent = false) {
     this.tucked = true; this.el.classList.add("suki-pet--tucked");
     this.standX = this.pos.x; this.side = side;
@@ -1164,8 +1166,8 @@ export class SukiPet {
       this.tuckTo(sideOf(this.viewport(), this.size(), this.pos.x), true);
     }
   }
-  /** 牆：探出的部分只畫到邊距帶內側，其餘被頁籤蓋住；頁籤探出時蓋滿邊距帶，站出來後縮成細條 */
-  private layoutWall() {
+  /** 螢幕邊上的東西：站著時的細條頁籤、探出時的接觸區 */
+  private layoutEdge() {
     if (!this.opts.mobile) return;
     const f = this.viewport(), size = this.size(), s = Math.max(0, Math.min(1, this.peekS));
     // 頁籤只在她站著時當「她住這一側」的細條；探出時收掉，她的身體直接貼著螢幕邊（owner 2026-10-24：中間不能有一條底色）
@@ -1191,11 +1193,14 @@ export class SukiPet {
       el.style.left = ""; el.style.right = "";
       el.style.removeProperty("--tail-dx");
       if (el.hidden) continue;
-      const left = el.offsetLeft, dx = fitShift(f, this.pos.x + left, el.offsetWidth);
-      if (!dx) continue;
-      el.style.left = `${left + dx}px`; el.style.right = "auto";
-      // 尖角挪回原本指著她的地方（挪的量最多七十幾 px，泡泡比這寬，尖角不會跑出去）
-      el.style.setProperty("--tail-dx", `${-dx}px`);
+      const left = el.offsetLeft, width = el.offsetWidth, dx = fitShift(f, this.pos.x + left, width);
+      if (dx) { el.style.left = `${left + dx}px`; el.style.right = "auto"; }
+      if (el !== this.bubble) continue;
+      // 尖角（12px 寬）指著她留在螢幕裡那段的中間：探出時她有一半在螢幕外，泡泡又被挪回邊距帶
+      const pw = this.touch.clientWidth, rest = this.el.classList.contains("suki-pet--right") ? width - pw / 2 + 8 : pw / 2 - 8;
+      const her = (Math.max(this.pos.x, 0) + Math.min(this.pos.x + pw, f.w)) / 2;
+      const shift = tailShift(this.pos.x + left + dx, width, rest, her);
+      if (Math.abs(shift) >= 1) el.style.setProperty("--tail-dx", `${shift}px`);
     }
   }
 }

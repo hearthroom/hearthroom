@@ -30,8 +30,6 @@ export const PEEK_IN = 48;
  * owner 2026-10-23 試過 96、48，定 32（整塊寬 64）；要再調只改這一個數字。64 以外只接她畫出來的不透明處。
  */
 export const CATCH_OUT = 32;
-/** 往內拉多少 px 算整個拉出來 */
-export const PULL_FULL = 52;
 /** 站著時離底邊至少這麼遠 */
 const FOOT = 16;
 /** 探出時離頂端至少這麼遠（頁首的高度） */
@@ -90,13 +88,15 @@ export function standOutPos(f: Frame, s: Size, side: Side, y: number): Point {
 }
 
 /**
- * 探出時手指移動了 (dx, dy)：往內（離開牆）超過 8px 且大於垂直＝把她拉出來，其他＝沿邊上下拖。
+ * 探出時手指移動了 (dx, dy)：往內（離開螢幕邊）超過 8px 且大於垂直＝把她拉出來，其他＝沿邊上下拖。
  * 6px 以內還不算移動。不靠「從邊緣往內滑」：那是系統的返回手勢。
  */
 export function pullMode(side: Side, dx: number, dy: number): "pull" | "slide" | null {
   if (Math.hypot(dx, dy) < 6) return null;
   const inward = side === "right" ? -dx : dx;
-  return inward > 8 && inward > Math.abs(dy) ? "pull" : "slide";
+  // 主要往內但還不到 8px：先不決定，等下一筆
+  if (inward > Math.abs(dy)) return inward > 8 ? "pull" : null;
+  return "slide";
 }
 
 /** 站著拖到 x 放開：身體中線進到邊上就縮回那一側 */
@@ -169,6 +169,14 @@ export function silhouettePath(px: Uint8Array, w: number, h: number, o: { sx: nu
     }
   }
   return out.join(" ");
+}
+
+/**
+ * 泡泡左緣在 left、寬 width，尖角原本在離泡泡左緣 rest 的地方：要挪多少才指著 target（她留在螢幕裡那段的中間），
+ * 而且尖角留在泡泡裡（兩側各留 18，避開圓角）。泡泡被挪回邊距帶時，她可能在泡泡的範圍外，就貼著最近的那一側。
+ */
+export function tailShift(left: number, width: number, rest: number, target: number) {
+  return clamp(target - left, 18, width - 18) - rest;
 }
 
 /** 泡泡與選單左緣在視窗裡的位置是 left、寬 width：要往右挪多少才整個落在邊距帶內（放不下就靠左） */
