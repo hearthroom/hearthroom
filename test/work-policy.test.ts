@@ -155,3 +155,22 @@ it('recovers dirty moderation before an author command whose Provider result is 
  expect(await env.DB.prepare('SELECT restriction,moderation_revision,confirmed_moderation_revision FROM managed_work_access WHERE source_role_id=?').bind(draft.roleId).first()).toEqual({restriction:'suspended',moderation_revision:1,confirmed_moderation_revision:1});
  expect(await opsMetrics(env.DB)).toContain('hearthroom_visibility_pending_operations 0');
 });
+
+it('recovers an unknown prepare receipt before a submission exists without publishing it',async()=>{
+ const memberId=await makeMember(10007);const draft=role({roleId:'managed-prepare-recovery',authorNumId:10007});vi.spyOn(upstream,'fetchRole').mockResolvedValue(draft);
+ const submit=()=>submitHosted(env,{memberId,account:10007,role:draft,token:'fixture',rating:GENERAL_RATING,operationId:crypto.randomUUID(),now:Date.now()});
+ const initial=await submit();await beginHostedEdit(env.DB,memberId,draft.roleId,Date.now());
+ let prepared:WorkPolicyReceipt|null=null;
+ const change=vi.spyOn(workPolicyGateway,'change').mockImplementation(async(_e,_p,source,c)=>{
+  const receipt:WorkPolicyReceipt={sourceRoleId:source,workId:c.workId,operationId:c.operationId,access:'private',restriction:'none',epoch:1,state:c.action==='prepare'?'prepared':'complete',replayed:false};
+  if(c.action==='prepare'){prepared=receipt;throw new Error('prepare reply lost')};return receipt;
+ });
+ vi.spyOn(workPolicyGateway,'state').mockResolvedValue({sourceRoleId:draft.roleId,workId:initial.workId,operationId:'',access:'private',restriction:'none',epoch:1,state:'complete',replayed:false});
+ vi.spyOn(workPolicyGateway,'operation').mockImplementation(async(_e,_p,_s,_w,op)=>prepared?.operationId===op?prepared:null);
+ await enrollWorkAccess(env,{memberId,roleId:draft.roleId,operationId:crypto.randomUUID(),access:'private',token:'fixture'});
+ await expect(submit()).rejects.toThrow('visibility_sync_pending');
+ expect(await reconcileWorkAccess(env)).toEqual({complete:1,pending:0});
+ expect(change.mock.calls.filter(c=>c[3].action==='prepare')).toHaveLength(1);
+ expect(await opsMetrics(env.DB)).toContain('hearthroom_visibility_pending_operations 0');
+ expect(await env.DB.prepare('SELECT access FROM managed_work_access WHERE work_id=?').bind(initial.workId).first()).toEqual({access:'private'});
+});
