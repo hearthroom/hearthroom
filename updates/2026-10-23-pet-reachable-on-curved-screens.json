@@ -1,0 +1,18 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "title": {
+    "zh-Hant": "手機上的蘇綺改成從側邊探出頭，曲面螢幕也點得到、拉得出來。",
+    "zh-Hans": "手机上的苏绮改为从侧边探出头，曲面屏也能点到、拉出来。",
+    "en": "On phones, Suki now peeks out from the side, so you can tap her and pull her out even on curved screens.",
+    "ja": "スマホのスキは画面の横から顔を出すようになり、曲面ディスプレイでもタップして呼び出せます。",
+    "ko": "휴대폰에서 스키가 화면 옆에서 고개를 내밀어 곡면 화면에서도 눌러서 꺼낼 수 있어요."
+  },
+  "body": {
+    "zh-Hant": "找不到她或她卡住時，可以在設定的桌寵區塊按「叫她出來」。",
+    "zh-Hans": "找不到她或她卡住时，可以在设置的桌宠区块点「叫她出来」。",
+    "en": "If you can't find her or she gets stuck, use Bring her back in the desk pet section of Settings.",
+    "ja": "見つからないときや動かせないときは、設定のデスクペット欄の「呼び戻す」を押してください。",
+    "ko": "스키가 안 보이거나 움직이지 않으면 설정의 데스크 펫 항목에서 불러오기를 눌러 주세요."
+  }
+}

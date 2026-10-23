@@ -366,6 +366,8 @@
   "settings.pet.desc": "Suki stays in a corner of the site to keep you company and show you around each page. She doesn't appear while you play a card.",
   "settings.pet.recall": "Let her call you when she misses you",
   "settings.pet.recallDesc": "If you haven't visited for a day, she sends one push notification or Discord DM around the time you usually come by, at most once a day.",
+  "settings.pet.summon": "Bring her back",
+  "settings.pet.summonDesc": "If you can't find Suki or she's stuck, this puts her back in her usual spot.",
   "state.loading": "Loading…",
   "state.loadFailed": "Could not load",
   "state.actionFailed": "That didn’t work",
