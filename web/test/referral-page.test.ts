@@ -42,6 +42,14 @@ it('opens on the own code with results and rules read from the service', async (
   expect(mocks.token).toHaveBeenCalledWith('harbor', 7);
 });
 
+it.each([
+  [20, 0, 0, true], [0, 5, 0, true], [0, 0, 10, true], [0, 0, 0, false],
+])('shows the backfill rule for active purchase rewards (%i/%i/%i)', async (firstPercent, rebatePercent, inviteePercent, visible) => {
+  mocks.summary.mockResolvedValue(page({ terms: { ...terms, firstPercent, rebatePercent, inviteePercent } }));
+  await mount();
+  expect(root.textContent?.includes('Top-ups your friend made before entering your code count too')).toBe(visible);
+});
+
 it('lands an invite link on the entry tab with the code filled in, and applies it once', async () => {
   mocks.summary.mockResolvedValue(page());
   mocks.redeem.mockResolvedValue(page({ referred: true, canRedeem: false, welcomeCredits: 1000 }));
