@@ -5,7 +5,9 @@ import { expandTerm, hanziGlob, searchForm, searchTerms } from "./search-text";
 import { fandomLabel } from "./wikidata";
 import { TAG_CATALOG } from "../shared/tag-catalog";
 import { RATINGS, type Rating } from "../shared/content-rating";
-import { HttpError, type Localized, pickLocale } from "./types";
+import { HttpError, type Env, type Localized, pickLocale } from "./types";
+import {managedWork} from './work-policy';
+import {fenceManagedWork} from './work-fence';
 
 export interface CardRow {
   favorite_count?: number;
@@ -660,13 +662,27 @@ export async function getAuthor(db: D1Database, memberId: string, allowNsfw = fa
   return { ...row, providers: (row.providers ?? "").split(",").filter(Boolean) };
 }
 
-export async function unregister(db: D1Database, roleId: string, authorNumId: number, provider: ProviderId = "harbor") {
+export async function unregister(db: D1Database, roleId: string, authorNumId: number, provider: ProviderId = "harbor", env?:Env, token?:string) {
   const row = await db
-    .prepare("SELECT id, author_num_id FROM cards WHERE provider = ? AND (source_role_id = ? OR id = ?)")
+    .prepare("SELECT id, source_role_id, author_num_id FROM cards WHERE provider = ? AND (source_role_id = ? OR id = ?)")
     .bind(provider, roleId, roleId)
-    .first<{ id: string; author_num_id: number }>();
+    .first<{ id: string; source_role_id:string; author_num_id: number }>();
   if (!row) throw new HttpError(404, "card not registered");
   if (row.author_num_id !== authorNumId) throw new HttpError(403, "not the author of this card");
+  const managed=await managedWork(db,provider,row.source_role_id);
+  if(managed){
+    if(managed.access!=='private'||managed.sync_state!=='complete'){
+      if(!env||!token)throw new HttpError(503,'visibility_sync_pending');
+      await fenceManagedWork(env,provider,row.source_role_id,'withdraw:'+managed.epoch,'private',{token});
+    }
+    // Retain the stable card, relationships, heat, first publication and rewards.
+    await db.batch([
+      db.prepare("UPDATE review_submissions SET status='superseded',claimed_by=NULL,claimed_at=NULL WHERE card_id=? AND status='pending'").bind(row.id),
+      db.prepare("DELETE FROM review_snapshots WHERE submission_id IN(SELECT id FROM review_submissions WHERE card_id=? AND status='superseded')").bind(row.id),
+      db.prepare("UPDATE cards SET status='unshared' WHERE id=?").bind(row.id),
+    ]);
+    return;
+  }
   // 還在排隊的審核單一併作廢；蓋過章的紀錄留著（那是審核人做過的事，不隨卡片消失）。
   await db.batch([
     db.prepare("DELETE FROM review_snapshots WHERE submission_id IN (SELECT id FROM review_submissions WHERE card_id = ?)").bind(row.id),
