@@ -366,7 +366,7 @@
   "settings.pet.desc": "사이트 한쪽에서 함께하며 각 페이지를 안내합니다. 카드를 플레이하는 동안에는 표시되지 않습니다.",
   "settings.pet.recall": "보고 싶을 때 불러 주기",
   "settings.pet.recallDesc": "하루 넘게 오지 않으면 평소 들어오는 시간대에 푸시 알림이나 Discord DM을 한 번 보내요. 하루에 한 번까지예요.",
-  "settings.pet.summon": "불러오기",
+  "settings.pet.summon": "다시 부르기",
   "settings.pet.summonDesc": "스키가 안 보이거나 움직이지 않을 때 원래 자리로 돌려놓아요.",
   "state.loading": "불러오는 중…",
   "state.loadFailed": "불러오지 못했습니다",
