@@ -7,7 +7,7 @@
 import { compose, PetRenderer, Rig, type PetSkeleton, type PetSkin } from "./puppet";
 import { Driver } from "./driver";
 import {
-  bands, clampStand, defaultPeek, fitShift, fromSaved, peekCatch, peekPos, PULL_FULL, pullMode, pushedIn, sideOf, standOutPos, standRange, toSaved, wallHide,
+  bands, clampStand, defaultPeek, fitShift, fromSaved, peekCatch, peekPos, silhouettePath, PULL_FULL, pullMode, pushedIn, sideOf, standOutPos, standRange, toSaved, wallHide,
   type Frame, type Inset, type Saved, type Side,
 } from "./placement";
 import type { SukiNews } from "../../../shared/suki-care";
@@ -753,8 +753,9 @@ export class SukiPet {
     if (e.button !== 0) return;
     // 選單開著時點她：只是收起選單
     if (!this.menuEl.hidden) { e.preventDefault(); this.closeMenu(); this.dismissTap = true; return; }
-    // 點在透明處：不攔。手機探出時：離螢幕邊那一段（接觸區）整塊接，其餘只接她畫出來的不透明處（owner 2026-10-23）
-    if (this.opts.mobile && this.tucked) { if (e.currentTarget !== this.tab && !this.inCatch(e) && !this.opaqueAt(e)) return; }
+    // 點在透明處：不攔。手機探出時：離螢幕邊那一段（接觸區）整塊接，其餘只接她畫出來的不透明處（owner 2026-10-23）。
+    // 輪廓裁好之後透明處的點擊根本到不了這裡（落到底下的網頁）；還沒裁好的那一下，照畫面的像素判斷
+    if (this.opts.mobile && this.tucked) { if (!this.clipped && e.currentTarget !== this.tab && !this.inCatch(e) && !this.opaqueAt(e)) return; }
     else if (this.region(e) === null && !this.sleeping) return;
     this.touchedAt = performance.now();
     if (this.walk) { this.walk = null; this.rig.params.Jump = 0; this.el.classList.remove("suki-pet--walking"); }
@@ -1111,6 +1112,29 @@ export class SukiPet {
     this.place(pos); this.save(pos);
     this.act({ expr: "happy", say: this.line("untuck"), hop: true }, true);
   }
+  /**
+   * 探出時把她的外框照畫出來的輪廓裁掉透明處，那裡的點擊（含捲動）就落到底下的網頁（owner 2026-10-23）。
+   * 她會呼吸、揮手、眨眼，輪廓每 0.6 秒重描一次；只讀她外框那一塊。站出來就拿掉，回到原本的判斷。
+   */
+  private clipped = false;
+  private clipAt = 0;
+  private clipSide: Side = "right";
+  private updateClip(now: number) {
+    const want = this.tucked && this.peekS < 0.5 && !this.drag && !this.hidden;
+    if (!want) { if (this.clipped) { this.touch.style.clipPath = ""; this.clipped = false; } return; }
+    if (this.clipped && now - this.clipAt < 600 && this.clipSide === this.side) return;
+    this.clipAt = now; this.clipSide = this.side;
+    const cs = this.canvas.style, cw = parseFloat(cs.width), ch = parseFloat(cs.height), cl = -parseFloat(cs.left), ct = -parseFloat(cs.top);
+    const tw = this.touch.clientWidth, th = this.touch.clientHeight;
+    if (!cw || !ch || !tw || !th) return;
+    // 畫布左右留的邊一樣寬，翻面後她的外框還是對著同一塊
+    const { px, w, h } = this.view.readRect(cl / cw, ct / ch, (cl + tw) / cw, (ct + th) / ch);
+    if (!w || !h) return;
+    const d = silhouettePath(px, w, h, { sx: tw / w, sy: th / h, mirror: this.flip < 0, step: Math.max(1, Math.round(h / 44)), gap: Math.round(w / 44) });
+    this.touch.style.clipPath = d ? `path("${d}")` : "inset(50%)";
+    this.clipped = true;
+  }
+
   /** 手機每一格：拉出縮回的動畫、探出時看著頁面與揮手、左側翻面、站著閒置太久自己縮回 */
   private mobileFrame(dt: number, now: number) {
     const sl = this.slide;
@@ -1131,6 +1155,7 @@ export class SukiPet {
     const ft = this.side === "left" && this.peekS < 0.97 ? -1 : 1;
     this.flip = this.opts.reducedMotion || Math.abs(ft - this.flip) < 0.01 ? ft : this.flip + (ft - this.flip) * (1 - Math.exp(-dt * 16));
     this.canvas.style.transform = this.flip === 1 ? "" : `scaleX(${this.flip})`;
+    this.updateClip(now);
     // 站著 60 秒沒有人碰頁面：靜靜縮回比較近的一側（ui-v3.md §2.3，接在 40 秒的想睡之後）
     const busy = this.slide || this.drag || this.walk || this.activity || this.sleeping || this.hidden || this.jumpT >= 0 || now <= this.actUntil;
     if (!this.tucked && !busy && this.bubble.hidden && this.menuEl.hidden && now - this.lastInput > 60_000) {

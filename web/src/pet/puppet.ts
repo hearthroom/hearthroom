@@ -291,6 +291,20 @@ export class PetRenderer {
     gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
     return px[3] / 255;
   }
+  /** 畫布上 (u0, v0)–(u1, v1) 那一塊現在畫出來的像素（RGBA，由上到下逐列）；跟 alphaAt 一樣先畫再讀 */
+  readRect(u0: number, v0: number, u1: number, v1: number): { px: Uint8Array; w: number; h: number } {
+    this.draw();
+    const gl = this.gl, bw = gl.drawingBufferWidth, bh = gl.drawingBufferHeight;
+    const x0 = Math.max(0, Math.floor(u0 * bw)), x1 = Math.min(bw, Math.ceil(u1 * bw));
+    const y0 = Math.max(0, Math.floor(v0 * bh)), y1 = Math.min(bh, Math.ceil(v1 * bh));
+    const w = Math.max(0, x1 - x0), h = Math.max(0, y1 - y0);
+    const up = new Uint8Array(w * h * 4);
+    if (w && h) gl.readPixels(x0, bh - y1, w, h, gl.RGBA, gl.UNSIGNED_BYTE, up);
+    // GL 的列是由下往上
+    const px = new Uint8Array(w * h * 4);
+    for (let y = 0; y < h; y++) px.set(up.subarray((h - 1 - y) * w * 4, (h - y) * w * 4), y * w * 4);
+    return { px, w, h };
+  }
   draw() {
     const gl = this.gl, [W, H] = this.rig.model.size;
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
