@@ -37,6 +37,7 @@ it('opens on the own code with results and rules read from the service', async (
   expect(root.querySelector('[data-testid="referral-code"]')?.textContent).toBe('K7M2Q9XA');
   expect(root.textContent).toContain('1,500');
   expect(root.textContent).toContain('12,600');
+  expect(root.textContent).toContain('Top-ups your friend made before entering your code count too');
   expect(root.querySelector('form[data-testid="referral-form"]')).toBeNull();
   expect(mocks.token).toHaveBeenCalledWith('harbor', 7);
 });

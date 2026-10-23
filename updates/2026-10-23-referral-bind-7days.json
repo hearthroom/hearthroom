@@ -1,0 +1,13 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/me/referral",
+  "draft": true,
+  "title": {
+    "zh-Hant": "朋友填寫推薦碼前的儲值也會計入",
+    "zh-Hans": "好友填写推荐码前的充值也会计入",
+    "en": "Top-ups your friend made before entering your code count too",
+    "ja": "友だちがコードを入力する前のチャージも対象です",
+    "ko": "친구가 코드를 입력하기 전에 한 충전도 포함돼요"
+  }
+}
