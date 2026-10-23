@@ -1,3 +1,5 @@
+import {managedWork} from './work-policy';
+import {syncManagedRestriction} from './work-fence';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { requireReviewer, requireMember, isReviewer, memberNsfw, memberByHandle, memberProfile } from './members';
@@ -10,7 +12,7 @@ import { buildSearchName } from './upstream';
 export const moderationRoutes = new Hono<{ Bindings: Env }>();
 type Action = 'delist' | 'suspend' | 'restore_listing' | 'restore_public';
 type StaffRole = 'reviewer' | 'manager' | 'owner';
-interface CaseRow { card_number:number;rating:string|null;public_evidence:string;id:string; provider:string; source_role_id:string; version_id:string; title:string; author_member_id:string; action:Action; reason:string; created_by:string; status:string; created_at:number; decided_at:number|null; resolution:string|null }
+interface CaseRow { card_number:number;rating:string|null;public_evidence:string;id:string; provider:string; source_role_id:string; version_id:string; title:string; author_member_id:string; action:Action; reason:string; created_by:string; status:string; created_at:number; decided_at:number|null; resolution:string|null;resolved_by:string|null }
 interface ManagedCard { fandom:string;fandom_qid:string|null;featured_at:number|null; summaries:string;background_url:string|null;search_text:string;card_number:number;id:string; provider:string; source_role_id:string; approved_version_id:string|null; reviewed_hash:string; names:string; tags:string; status:string; board_hidden:number; public_blocked:number; rating:string|null; author_member_id:string }
 const CARD = `SELECT c.*,(SELECT num FROM card_numbers WHERE provider=c.provider AND source_role_id=c.source_role_id) AS card_number,COALESCE(w.member_id,ac.owner_member_id,ai.member_id,'') AS author_member_id FROM cards c
  LEFT JOIN works w ON w.source_provider=c.provider AND w.source_role_id=c.source_role_id
@@ -32,6 +34,10 @@ async function guardCase(db:D1Database,row:CaseRow,memberId:string){
  const card=await db.prepare(CARD+' WHERE c.provider=? AND c.source_role_id=?').bind(row.provider,row.source_role_id).first<ManagedCard>();
  if(card)await guardCard(db,card,memberId);
 }
+async function syncCase(env:Env,row:CaseRow){
+ if(row.provider==='harbor')await syncManagedRestriction(env,row.provider,row.source_role_id,'moderation:'+row.id+':'+row.status);
+}
+async function managedCase(db:D1Database,row:CaseRow){return row.provider==='harbor'&&await managedWork(db,row.provider,row.source_role_id);}
 const publicCase=(r:CaseRow,memberId:string)=>({id:r.id,cardNumber:r.card_number,action:r.action,title:r.title,reason:r.reason,status:r.status,createdAt:r.created_at,decidedAt:r.decided_at,version:r.version_id,createdByMe:r.created_by===memberId,resolution:r.resolution});
 const projection=(r:ManagedCard,lang:string)=>({id:String(r.id),provider:r.provider,featured:r.featured_at!=null,name:pickLocale(JSON.parse(r.names) as Localized,lang),tags:JSON.parse(r.tags) as string[],fandom:r.fandom??'',fandomId:r.fandom_qid??null,status:r.status,boardHidden:!!r.board_hidden,publicBlocked:!!r.public_blocked,version:r.approved_version_id||r.reviewed_hash});
 async function mutate<T>(run:()=>Promise<T>):Promise<T>{try{return await run();}catch(e){if(e instanceof HttpError)throw e;if(/moderation_conflict|UNIQUE constraint/.test(String(e)))throw new HttpError(409,'moderation_conflict');throw e;}}
@@ -102,7 +108,7 @@ moderationRoutes.post('/v1/moderation/cases',async c=>{
  if(!['delist','suspend','restore_listing','restore_public'].includes(action))throw new HttpError(400,'invalid_arguments');
  const card=await cardOf(db,String(body.cardId));await guardCard(db,card,member.id);
  const existing=await db.prepare('SELECT * FROM moderation_cases WHERE created_by=? AND operation_id=?').bind(member.id,op).first<CaseRow>();
- if(existing){if(existing.provider!==card.provider||existing.source_role_id!==card.source_role_id||existing.action!==action||existing.reason!==reason)throw new HttpError(409,'moderation_conflict');return c.json(publicCase(existing,member.id));}
+ if(existing){if(existing.provider!==card.provider||existing.source_role_id!==card.source_role_id||existing.action!==action||existing.reason!==reason)throw new HttpError(409,'moderation_conflict');await syncCase(c.env,existing);return c.json(publicCase(existing,member.id));}
  if(card.status!=='approved'||(action==='delist'&&card.board_hidden)||(action==='suspend'&&card.public_blocked)||(action==='restore_listing'&&!card.board_hidden)||(action==='restore_public'&&!card.public_blocked))throw new HttpError(409,'moderation_conflict');
  const frozen=card.approved_version_id?await db.prepare('SELECT public_role FROM hosting_versions WHERE version_id=?').bind(card.approved_version_id).first<{public_role:string}>():null;
  const published=frozen?JSON.parse(frozen.public_role):null;
@@ -114,14 +120,22 @@ moderationRoutes.post('/v1/moderation/cases',async c=>{
    db.prepare('INSERT INTO moderation_cases(id,provider,source_role_id,version_id,title,author_member_id,action,reason,created_by,operation_id,created_at,card_number,rating,public_evidence) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,card.provider,card.source_role_id,card.approved_version_id||card.reviewed_hash,pickLocale(JSON.parse(card.names),'zh-Hant'),card.author_member_id,action,reason,member.id,op,now,card.card_number,card.rating,evidence),
   db.prepare("INSERT INTO moderation_votes VALUES(?,?,'confirm',?,?)").bind(id,member.id,reason,now),
  ]));
- return c.json(publicCase(await caseOf(db,id),member.id),201);
+ const created=await caseOf(db,id);await syncCase(c.env,created);
+ return c.json(publicCase(created,member.id),201);
 });
 moderationRoutes.post('/v1/moderation/cases/:id/vote',async c=>{
  const member=await requireReviewer(c);const db=c.env.DB;const row=await caseOf(db,c.req.param('id'));await guardCase(db,row,member.id);
  const b=await c.req.json<Record<string,unknown>>();const reason=reasonOf(b.reason);
  if(b.vote!=='confirm'&&b.vote!=='oppose')throw new HttpError(400,'invalid_arguments');
+ const prior=await db.prepare('SELECT vote,reason FROM moderation_votes WHERE case_id=? AND member_id=?').bind(row.id,member.id).first<{vote:string;reason:string}>();
+ if(prior&&await managedCase(db,row)){
+  if(prior.vote!==b.vote||prior.reason!==reason)throw new HttpError(409,'moderation_conflict');
+  await syncCase(c.env,row);return c.json(publicCase(row,member.id));
+ }
+
  await mutate(()=>db.prepare('INSERT INTO moderation_votes VALUES(?,?,?,?,?)').bind(row.id,member.id,b.vote,reason,Date.now()).run());
- return c.json(publicCase(await caseOf(db,row.id),member.id));
+ const decided=await caseOf(db,row.id);await syncCase(c.env,decided);
+ return c.json(publicCase(decided,member.id));
 });
 moderationRoutes.post('/v1/moderation/cases/:id/resolve',async c=>{
  const member=await requireReviewer(c);const db=c.env.DB;await manager(db,member.id);
@@ -129,9 +143,14 @@ moderationRoutes.post('/v1/moderation/cases/:id/resolve',async c=>{
  if(row.created_by===member.id||await db.prepare('SELECT 1 FROM moderation_votes WHERE case_id=? AND member_id=?').bind(row.id,member.id).first())throw new HttpError(403,'moderation_independent_required');
  const b=await c.req.json<Record<string,unknown>>();const reason=reasonOf(b.reason);
  if(b.decision!=='confirm'&&b.decision!=='dismiss')throw new HttpError(400,'invalid_arguments');
+ if(row.status===(b.decision==='confirm'?'confirmed':'dismissed')&&row.resolved_by===member.id&&row.resolution===reason&&await managedCase(db,row)){
+  await syncCase(c.env,row);return c.json(publicCase(row,member.id));
+ }
+
  const result=await mutate(()=>db.prepare("UPDATE moderation_cases SET status=?,resolution=?,resolved_by=?,decided_at=? WHERE id=? AND status='disputed'").bind(b.decision==='confirm'?'confirmed':'dismissed',reason,member.id,Date.now(),row.id).run());
  if(!result.meta.changes)throw new HttpError(409,'moderation_conflict');
- return c.json(publicCase(await caseOf(db,row.id),member.id));
+ const decided=await caseOf(db,row.id);await syncCase(c.env,decided);
+ return c.json(publicCase(decided,member.id));
 });
 
 export async function moderationMetrics(db:D1Database):Promise<string>{

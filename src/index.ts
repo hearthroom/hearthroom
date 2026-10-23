@@ -63,6 +63,7 @@ import { PRIMARY_HOST, siteRootOf } from "../shared/site-hosts";
 import { draftStateOf, loadMine, type MineFilter } from "./mine";
 import { tagNamesFor } from "../shared/tag-catalog";
 import { bearerOf, blogWriterHint } from "./community-admin";
+import {reconcileWorkAccess} from './work-reconcile';
 import { providerOf, requestIdentity, reviewerRole, isHumanReviewer, isReviewAgent, memberByHandle, memberNsfw, memberProfile, missingMemberStatements, requireMember, requireReviewer, resolveMember, updateMemberNsfw, viewerAllowsNsfw, memberHiddenTags, updateMemberHiddenTags, updateMemberShowStats } from "./members";
 import { configuredProviders, hasChat, parseProvider, requireConfigured, DEFAULT_PROVIDER, PROVIDER_NAMES, type ProviderId, reviewEnabled } from "./providers";
 import { providerApiBaseFor } from "./providers";
@@ -1266,7 +1267,7 @@ app.post('/v1/cards/:roleId/edit',async(c)=>{
  const provider=providerOf(c);
  if(!hostingKey(c.env,provider))throw new HttpError(503,'hosting_unavailable');
  const memberId=await resolveMember(c.env.DB,provider,me.accountNumId,Date.now());
- const result=await beginHostedEdit(c.env.DB,memberId,c.req.param('roleId'),Date.now(),provider);
+ const result=await beginHostedEdit(c.env.DB,memberId,c.req.param('roleId'),Date.now(),provider,c.env);
  note(c,{event:'register',detail:result.resubmit?'review_superseded':'draft_edit'});
  return c.json(result,200,{'Cache-Control':'private, no-store'});
 });
@@ -1357,7 +1358,7 @@ app.post("/v1/review/:id/stamp", async (c) => {
   const noteText = typeof body.note === "string" ? body.note : "";
   if (verdict === "reject" && !noteText.trim()) throw new HttpError(400, "a rejection needs a note for the author");
   if(typeof body.generation!=='string'||!body.generation)throw new HttpError(409,'claim changed');
-  const result = await stampSubmission(c.env.DB, { submissionId: c.req.param("id"), memberId: member.id, verdict, note: noteText, now: Date.now(), generation:body.generation });
+  const result = await stampSubmission(c.env.DB, { submissionId: c.req.param("id"), memberId: member.id, verdict, note: noteText, now: Date.now(), generation:body.generation },c.env);
   note(c, { event: "review_stamp", subject: result.submission.source_role_id, detail: verdict === "reject" ? "reject" : result.cardStatus === "approved" ? "approved" : "approve" });
   // 創作季：真人應用管理員審過就當場發（見 card-reward.ts）；不在活動裡的卡、已經發過的卡不動，沒發成的留在待發放清單。
   // 審核人一律是真人（requireReviewer 擋掉 AI 帳號），還要 Provider 說是應用管理員，點數池才收他的令牌。
@@ -1518,7 +1519,7 @@ app.get("/v1/review/:id/detail", async (c) => {
 /** 作者自己撤銷登記。這是作品離開榜單的唯一途徑。 */
 app.delete("/v1/cards/:id", async (c) => {
   const me = await requireAuthor(c);
-  await unregister(c.env.DB, c.req.param("id"), me.accountNumId, providerOf(c));
+  await unregister(c.env.DB, c.req.param("id"), me.accountNumId, providerOf(c), c.env, bearerOf(c));
   note(c, { event: "unregister", subject: c.req.param("id") });
   return c.body(null, 204);
 });
@@ -2026,6 +2027,7 @@ export default {
       return;
     }
     ctx.waitUntil(accountAuthMaintenance(env).catch(() => { console.warn('Account authorization maintenance unavailable'); }));
+    ctx.waitUntil(reconcileWorkAccess(env).catch(() => { console.warn('Work access recovery unavailable'); }));
     ctx.waitUntil(communityMaintenance(env).catch(() => { console.warn("Community maintenance unavailable"); }));
     // Backstop for notifications created outside a request hook (triggers fired by the sync job, reminders).
     // 蘇綺的召回先寫進通知，同一輪就推出去

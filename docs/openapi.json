@@ -14329,6 +14329,248 @@
           }
         }
       }
+    },
+    "/open/v1/hosting/work-access/{sourceRoleId}": {
+      "get": {
+        "operationId": "readWorkAccess",
+        "summary": "Read issuer work access",
+        "description": "Issuer-only policy projection. This endpoint does not grant access to private agent configuration content.",
+        "tags": [
+          "Roles"
+        ],
+        "security": [
+          {
+            "HostingIssuerKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sourceRoleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Durable policy state or operation receipt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkAccessReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing issuer credential or required author bearer"
+          },
+          "403": {
+            "description": "Wrong author or insufficient scope"
+          },
+          "404": {
+            "description": "Source, policy or operation not found"
+          },
+          "409": {
+            "description": "work_access_conflict or role_not_passed_review; read back before retrying"
+          },
+          "503": {
+            "description": "Service unavailable; operation outcome may be unknown"
+          }
+        },
+        "x-capability": "work-access-v1"
+      },
+      "post": {
+        "operationId": "changeWorkAccess",
+        "summary": "Apply a fenced work access command",
+        "description": "Issuer-only command. private, unlisted and restore additionally require the source author bearer with role.read and role.write. Any supplied bearer must own the source. Bind accepts trusted issuer approval history only. prepare validates complete source and sealed revision hashes without granting public access; commit consumes its epoch-bound permit. A cancellation may name permitId to revoke a publication that won before issuer finalization. Repeating the same operation returns its receipt; another intent with the same key conflicts. Ordinary content writes invalidate prepared permits. unlisted shares the latest saved source; public serves approved sealed revisions. Restoring identical approved content creates no new review or charge.",
+        "tags": [
+          "Roles"
+        ],
+        "security": [
+          {
+            "HostingIssuerKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sourceRoleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Durable policy state or operation receipt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkAccessReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing issuer credential or required author bearer"
+          },
+          "403": {
+            "description": "Wrong author or insufficient scope"
+          },
+          "404": {
+            "description": "Source, policy or operation not found"
+          },
+          "409": {
+            "description": "work_access_conflict or role_not_passed_review; read back before retrying"
+          },
+          "503": {
+            "description": "Service unavailable; operation outcome may be unknown"
+          }
+        },
+        "x-capability": "work-access-v1",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkAccessCommand"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/open/v1/hosting/work-access/{sourceRoleId}/operations/{operationId}": {
+      "get": {
+        "operationId": "readWorkAccessOperation",
+        "summary": "Read a work access operation",
+        "description": "Issuer-only durable readback. Read after an unknown result before retrying. A cancelled permit cannot be committed again; historical receipts do not override a newer policy epoch.",
+        "tags": [
+          "Roles"
+        ],
+        "security": [
+          {
+            "HostingIssuerKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sourceRoleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "operationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Durable policy state or operation receipt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkAccessReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing issuer credential or required author bearer"
+          },
+          "403": {
+            "description": "Wrong author or insufficient scope"
+          },
+          "404": {
+            "description": "Source, policy or operation not found"
+          },
+          "409": {
+            "description": "work_access_conflict or role_not_passed_review; read back before retrying"
+          },
+          "503": {
+            "description": "Service unavailable; operation outcome may be unknown"
+          }
+        },
+        "x-capability": "work-access-v1"
+      }
+    },
+    "/open/v1/hosting/work-access/{sourceRoleId}/operations/{operationId}/commit": {
+      "post": {
+        "operationId": "commitWorkPublication",
+        "summary": "Commit a prepared publication permit",
+        "description": "Issuer-only commit. Revalidates complete content and policy epoch under the work lock. An intervening edit, cancellation, sharing change or restriction rejects the permit. A repeated committed operation returns its original receipt without granting again.",
+        "tags": [
+          "Roles"
+        ],
+        "security": [
+          {
+            "HostingIssuerKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sourceRoleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "operationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Durable policy state or operation receipt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkAccessReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing issuer credential or required author bearer"
+          },
+          "403": {
+            "description": "Wrong author or insufficient scope"
+          },
+          "404": {
+            "description": "Source, policy or operation not found"
+          },
+          "409": {
+            "description": "work_access_conflict or role_not_passed_review; read back before retrying"
+          },
+          "503": {
+            "description": "Service unavailable; operation outcome may be unknown"
+          }
+        },
+        "x-capability": "work-access-v1"
+      }
     }
   },
   "components": {
@@ -26740,6 +26982,129 @@
             ],
             "format": "date-time",
             "description": "Expected settlement time, or null when no date is known or pending is 0. This key is always present; a positive pending amount may still have null while under review."
+          }
+        }
+      },
+      "WorkAccessReceipt": {
+        "type": "object",
+        "required": [
+          "sourceRoleId",
+          "workId",
+          "access",
+          "restriction",
+          "epoch",
+          "state",
+          "replayed"
+        ],
+        "properties": {
+          "sourceRoleId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "workId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "access": {
+            "type": "string",
+            "enum": [
+              "private",
+              "unlisted",
+              "public"
+            ]
+          },
+          "restriction": {
+            "type": "string",
+            "enum": [
+              "none",
+              "delisted",
+              "suspended"
+            ]
+          },
+          "epoch": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "prepared",
+              "complete",
+              "cancelled"
+            ]
+          },
+          "replayed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "WorkAccessCommand": {
+        "type": "object",
+        "required": [
+          "workId",
+          "operationId",
+          "expectedEpoch",
+          "action"
+        ],
+        "properties": {
+          "workId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedEpoch": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "bind",
+              "private",
+              "unlisted",
+              "restore",
+              "prepare",
+              "cancel",
+              "restrict"
+            ]
+          },
+          "access": {
+            "type": "string",
+            "enum": [
+              "private",
+              "unlisted",
+              "public"
+            ]
+          },
+          "restriction": {
+            "type": "string",
+            "enum": [
+              "none",
+              "delisted",
+              "suspended"
+            ]
+          },
+          "versionRoleId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "approvedRoles": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "permitId": {
+            "type": "string",
+            "format": "uuid"
           }
         }
       }

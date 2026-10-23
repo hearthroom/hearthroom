@@ -1,3 +1,4 @@
+import {workPolicyGateway,type WorkPolicyReceipt} from '../src/work-policy';
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, afterEach, it, expect, vi } from 'vitest';
 import { GENERAL_RATING, resetDb, makeMember, makeReviewer, role, identities, bearer, restoreUpstream } from './helpers';
@@ -164,4 +165,25 @@ it('returns provider and durable featured state in workbench list and detail',as
  const list=await request('/cards');expect(list.status).toBe(200);
  expect((await list.json() as any).items[0]).toMatchObject({id:card,provider:'harbor',featured:true});
  expect((await request(`/cards/${card}`).then(r=>r.json()) as any).card).toMatchObject({provider:'harbor',featured:true});
+});
+
+it('requires PG restriction readback before suspension success and fences a later dismissal',async()=>{
+ const work=crypto.randomUUID();await env.DB.prepare('INSERT INTO works(id,member_id,source_provider,source_role_id,created_at) VALUES(?,?,?,?,?)').bind(work,'member-10001','harbor','reviewed',Date.now()).run();
+ await env.DB.prepare("INSERT INTO managed_work_access(work_id,provider,source_role_id,access,epoch,restriction,approved_role_id) VALUES(?,'harbor','reviewed','public',1,'none','approved-role')").bind(work).run();
+ let epoch=1;let restriction:'none'|'suspended'='none';let lose=true;const receipts=new Map<string,WorkPolicyReceipt>();
+ vi.spyOn(workPolicyGateway,'state').mockImplementation(async()=>({sourceRoleId:'reviewed',workId:work,operationId:'',access:'public',restriction,epoch,state:'complete',replayed:false}));
+ vi.spyOn(workPolicyGateway,'operation').mockImplementation(async(_env,_provider,_source,_work,op)=>receipts.get(op)??null);
+ const change=vi.spyOn(workPolicyGateway,'change').mockImplementation(async(_env,_provider,source,command)=>{
+  epoch++;restriction=command.restriction as 'none'|'suspended';const receipt:WorkPolicyReceipt={sourceRoleId:source,workId:work,operationId:command.operationId,access:'public',restriction,epoch,state:'complete',replayed:false};receipts.set(command.operationId,receipt);
+  if(lose){lose=false;throw new Error('reply lost after restriction')};return receipt;
+ });
+ const body={cardId:card,action:'suspend',reason:'A concrete suspension',operationId:crypto.randomUUID()};
+ expect((await request('/cases','r1',body)).status).toBe(503);
+ expect((await SELF.fetch('https://c.test/v1/cards/reviewed')).status).toBe(404);
+ const retry=await request('/cases','r1',body);expect(retry.status).toBe(200);const c=await retry.json() as {id:string};expect(change).toHaveBeenCalledTimes(1);
+ expect((await request(`/cases/${c.id}/vote`,'r2',{vote:'oppose',reason:'Needs discussion'})).status).toBe(200);
+ await env.DB.prepare("UPDATE reviewers SET role='manager' WHERE member_id='member-4'").run();
+ expect((await request(`/cases/${c.id}/resolve`,'manager',{decision:'dismiss',reason:'False positive'})).status).toBe(200);
+ expect(change).toHaveBeenCalledTimes(2);expect(restriction).toBe('none');
+ expect(await env.DB.prepare('SELECT restriction,sync_state FROM managed_work_access WHERE work_id=?').bind(work).first()).toEqual({restriction:'none',sync_state:'complete'});
 });
