@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "title": {
+    "zh-Hant": "有些電腦上，滑鼠在卡片邊緣移動時，卡片列表會整排一閃一閃，現在不會了。",
+    "zh-Hans": "有些电脑上，鼠标在卡片边缘移动时，卡片列表会整排一闪一闪，现在不会了。",
+    "en": "Moving the mouse along a card's edge no longer makes a whole row of cards flash on some computers.",
+    "ja": "一部のパソコンで、カードの端でマウスを動かすとカード一覧が列ごと点滅していた問題を直しました。",
+    "ko": "일부 컴퓨터에서 카드 가장자리에서 마우스를 움직이면 카드 목록 한 줄 전체가 깜빡이던 문제를 고쳤습니다."
+  }
+}
