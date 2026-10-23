@@ -30,20 +30,24 @@ const error = ref("");
 type Kind = "all" | "add" | "sub";
 const kind = ref<Kind>("all");
 
+/** 換語言或換帳號會從第一頁重讀；那之前送出、晚到的回應作廢，不接到新的清單後面。 */
+let loadSeq = 0;
 async function load(reset = false) {
   if (reset) { page.value = 1; records.value = []; }
+  const seq = ++loadSeq;
   loading.value = true;
   error.value = "";
   try {
     const token = await accountToken(props.provider, props.externalId);
     if (!token) throw new Error(t("auth.expired"));
     const res = await fetchScoreRecords(token, page.value, PAGE, props.provider, locale.value);
+    if (seq !== loadSeq) return;
     records.value = reset ? res.records : [...records.value, ...res.records];
     total.value = res.total;
   } catch (err) {
-    error.value = err instanceof Error ? err.message : t("state.loadFailed");
+    if (seq === loadSeq) error.value = err instanceof Error ? err.message : t("state.loadFailed");
   } finally {
-    loading.value = false;
+    if (seq === loadSeq) loading.value = false;
   }
 }
 const hasMore = computed(() => records.value.length < total.value);
