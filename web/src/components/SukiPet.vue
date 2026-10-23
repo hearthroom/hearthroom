@@ -290,6 +290,11 @@ watch(() => [session.wallet?.plans, pet.value] as const, ([plans, p]) => {
 .suki-pet__tab svg { width: 14px; height: 14px; opacity: var(--chev, 1); }
 .suki-pet__tab--near { box-shadow: 0 0 0 2px var(--accent), var(--shadow-md); color: var(--accent-text); }
 .suki-pet__tab--away, body:has(.header [role="menu"]) .suki-pet__tab { opacity: 0; pointer-events: none; }
+/* 探出時的接觸區：透明，比她大一圈，在頁籤與她之上（還在提示與安裝提示之下） */
+.suki-pet__catch { position: fixed; left: 0; top: 0; z-index: 47; touch-action: none; -webkit-tap-highlight-color: transparent; }
+.suki-pet__catch[hidden], body:has(.header [role="menu"]) .suki-pet__catch { display: none; }
+/* 泡泡或選單開著時她浮到接觸區上面，泡泡裡的按鈕與選單才按得到（泡泡其他地方照樣穿到接觸區，點了就是點她） */
+.suki-pet--mobile:has(.suki-pet__bubble:not([hidden])), .suki-pet--mobile:has(.suki-pet__menu:not([hidden])) { z-index: 48; }
 /* 探出時泡泡壓在她頭頂那一截：點到泡泡也要算點她（只有泡泡裡的按鈕自己接） */
 .suki-pet--mobile.suki-pet--tucked .suki-pet__bubble { pointer-events: none; }
 .suki-pet--mobile.suki-pet--tucked .suki-pet__go { pointer-events: auto; }
