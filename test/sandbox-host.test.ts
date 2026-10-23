@@ -48,6 +48,9 @@ describe("沙箱子網域", () => {
     expect(csp).toMatch(/frame-ancestors [^;]*https:\/\/hearthroom\.club https:\/\/www\.hearthroom\.club/);
     for (const origin of ["https://sukisuki.ai", "https://sukisuki.chat", "https://play.hearthroom.club"]) expect(csp).toContain(origin);
     expect(csp).toContain("script-src 'self' 'unsafe-inline' 'unsafe-eval' https:");
+    // No additional response policy may deny the host iframe's sharing/write delegation.
+    expect(page.headers.get("permissions-policy")).toBeNull();
+    expect(csp).not.toMatch(/(?:^|; )sandbox(?: |;|$)/);
     expect(page.headers.get("cache-control")).toBe("no-cache");
     expect(page.headers.get("etag")).toBe('"x"');
     const js = await get("https://c1.hearthroom.club/sandbox/sandbox.js");
