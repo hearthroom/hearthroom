@@ -7681,7 +7681,7 @@
           }
         },
         "x-harperharbor": {
-          "description": "Partially updates the caller's per-agent settings. Requires chat.play and access to the agent. Settings used by generation include userName, personaMode, userSex, userDefine, sandboxLevel, systemPrompt, customInstructions and selectModel. Unsupported settings are rejected; changing settings does not change an existing send intent.",
+          "description": "Partially updates the caller's per-agent settings. Requires chat.play and access to the agent. Settings used by generation include userName, personaMode, userSex, userDefine, sandboxLevel, systemPrompt, customInstructions and selectModel. Unsupported settings are rejected; changing settings does not change an existing send intent. customInstructions accepts at most 2000 UTF-16 code units before trimming; the legacy jailbreak alias uses the same limit.",
           "security": [
             {
               "userToken": []

@@ -543,7 +543,7 @@
   "d08aee9978e4f": "設定。",
   "d4e5598962919": "帳號查詢失敗；`{\"error\": \"<text>\"}`。",
   "dc08f0c33f2f8": "儲存個別角色卡的玩家設定",
-  "d5b20d172a7c0": "部分更新：每個欄位皆選填；本文未出現的欄位保留儲存值，出現的欄位（即使為空字串／false／空陣列）都會寫入。角色卡首次儲存時會建立資料列，省略欄位使用預設值（`speechSpeed` 1.0、`limitLevel` \"medium\"、`context` 1、`autoCompactEnabled` true，其餘為空白／false）。驗證：`systemPrompt` <= 2000 個字元；`userName` <= 20；`userDefine` <= 1000；`customInstructions` <= 1500 個字元（`language` 為 zh-Hans／zh-Hant 時為 500），且會去除首尾空白；`personaMode` 必須為列舉值之一。審核：`userName` + `userDefine` 任一變更時一起審核；變更後非空的 `customInstructions` 也會審核。伺服器不對 `selectModel`、`context`、`thinkingDepth`、`sandboxLevel`、`limitLevel`、`promptStrategy`、`templateStyle`、`roleSpeech` 進行列舉值驗證；請傳送 /models 提供的值。未提供 personaMode 時的推導：若出現 `userName`／`userSex`／`userDefine` 任一欄位，模式設為 `custom`；若皆未出現，模式維持不變。",
+  "d5b20d172a7c0": "部分更新：每個欄位皆選填；本文未出現的欄位保留儲存值，出現的欄位（即使為空字串／false／空陣列）都會寫入。角色卡首次儲存時會建立資料列，省略欄位使用預設值（`speechSpeed` 1.0、`limitLevel` \"medium\"、`context` 1、`autoCompactEnabled` true，其餘為空白／false）。驗證：`systemPrompt` <= 2000 個字元；`userName` <= 20；`userDefine` <= 1000；`customInstructions` 在去除首尾空白前最多 2000 個 UTF-16 碼元；`personaMode` 必須為列舉值之一。審核：`userName` + `userDefine` 任一變更時一起審核；變更後非空的 `customInstructions` 也會審核。伺服器不對 `selectModel`、`context`、`thinkingDepth`、`sandboxLevel`、`limitLevel`、`promptStrategy`、`templateStyle`、`roleSpeech` 進行列舉值驗證；請傳送 /models 提供的值。未提供 personaMode 時的推導：若出現 `userName`／`userSex`／`userDefine` 任一欄位，模式設為 `custom`；若皆未出現，模式維持不變。",
   "d7a8de51b7151": "`{\"success\": \"ok\"}`。",
   "d52ba8fcefe57": "JSON 格式錯誤、長度／列舉驗證失敗（本地化或固定文字）、審核拒絕，或資料庫錯誤。本文為 `{\"error\": \"<text>\"}`。",
   "db37860ceabf6": "`invalid JSON body`、`roleName is required`（本文層級檢查；本文為 `{\"error\": \"...\"}`），或服務回傳的 `invalid_arguments`（`{\"error\": \"invalid_arguments\", \"retryable\": false}`）。",
