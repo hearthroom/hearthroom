@@ -366,6 +366,8 @@
   "settings.pet.desc": "サイトの隅で一緒に過ごし、各ページを案内します。カードで遊んでいる間は表示されません。",
   "settings.pet.recall": "会いたくなったら呼んでもらう",
   "settings.pet.recallDesc": "1日以上来ていないとき、いつも来る時間帯にプッシュ通知か Discord の DM を1通送ります（1日1通まで）。",
+  "settings.pet.summon": "呼び戻す",
+  "settings.pet.summonDesc": "スキが見つからないときや動かせないときに、いつもの位置に戻します。",
   "state.loading": "読み込み中…",
   "state.loadFailed": "読み込めませんでした",
   "state.actionFailed": "操作に失敗しました",

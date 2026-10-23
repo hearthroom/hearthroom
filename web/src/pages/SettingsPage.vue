@@ -25,7 +25,7 @@ import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
 import { TAG_CATALOG, tagLabel } from "../../../shared/tag-catalog";
 import AdultConsentDialog from "@/components/AdultConsentDialog.vue";
-import { petEnabled } from "@/pet/enabled";
+import { petEnabled, summonPet } from "@/pet/enabled";
 import { communityRequest } from "@/lib/community";
 import { RouterLink } from "vue-router";
 import AccountIcon from "@/components/AccountIcon.vue";
@@ -290,6 +290,10 @@ onMounted(() => {
         </span>
         <input type="checkbox" class="content__switch" :checked="recall" :disabled="recallBusy" @change="setRecall(($event.target as HTMLInputElement).checked)" />
       </label>
+      <div class="content__row content__row--plain">
+        <span class="content__text subtle">{{ $t("settings.pet.summonDesc") }}</span>
+        <button type="button" class="btn btn--sm" @click="summonPet">{{ $t("settings.pet.summon") }}</button>
+      </div>
     </section>
 
     <section id="hidden" class="panel content hidden">
@@ -319,6 +323,7 @@ onMounted(() => {
 .content { padding: var(--s-4); display: grid; gap: var(--s-3); margin-top: var(--s-4); }
 .content__row { display: flex; align-items: center; justify-content: space-between; gap: var(--s-4); cursor: pointer; }
 .content__text { display: grid; gap: 2px; }
+.content__row--plain { cursor: default; }
 .content__verified { color: var(--accent-text); }
 .content__switch { width: 22px; height: 22px; flex: none; accent-color: var(--accent); }
 .content__link { color: inherit; }
