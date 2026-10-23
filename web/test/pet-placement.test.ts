@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  BAND, PEEK_OUT, clampStand, defaultPeek, fitShift, fromSaved, peekPos, peekRange, pullMode, pushedIn, sideOf, standOutPos, toSaved, wallHide, type Frame,
+  BAND, PEEK_OUT, clampStand, nudgeAnchor, defaultPeek, fitShift, fromSaved, peekPos, peekRange, pullMode, pushedIn, sideOf, standOutPos, toSaved, wallHide, type Frame,
 } from "../src/pet/placement";
 
 const pet = { w: 88, h: 132 };
@@ -155,4 +155,23 @@ describe("泡泡與選單", () => {
   it("往右溢出：往左挪", () => { expect(fitShift(f, 120, 260)).toBe(360 - 32 - 260 - 120); });
   it("本來就在帶內：不動", () => { expect(fitShift(f, 40, 200)).toBe(0); });
   it("比可用寬度還寬：靠左邊距帶", () => { expect(fitShift(f, 0, 320)).toBe(32); });
+});
+
+describe("新手提示卡掛在她頭上", () => {
+  const f = phone(390);
+  it("右側探出：卡片離右緣 32，尖角指著牆外那 56px 的中間（離邊 60）", () => {
+    const p = peekPos(f, pet, "right", 400), a = nudgeAnchor(390, { left: p.x, right: p.x + pet.w }, 280);
+    expect(a.right).toBe(BAND);
+    expect(390 - a.right - a.tail - 7).toBe(390 - 60);
+  });
+  it("左側探出：卡片整張留在畫面裡、離左緣 32，尖角指著左邊露出的那一段", () => {
+    const p = peekPos(f, pet, "left", 400), a = nudgeAnchor(390, { left: p.x, right: p.x + pet.w }, 280);
+    expect(390 - a.right - 280).toBe(BAND);
+    expect(390 - a.right - a.tail - 7).toBe(60);
+  });
+  it("站在右邊的邊距帶上：尖角指著她的中線", () => {
+    const p = standOutPos(f, pet, "right", 400), a = nudgeAnchor(390, { left: p.x, right: p.x + pet.w }, 280);
+    expect(a.right).toBe(BAND);
+    expect(390 - a.right - a.tail - 7).toBe(p.x + pet.w / 2);
+  });
 });
