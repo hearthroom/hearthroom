@@ -9,10 +9,10 @@ import {finishManagedWithdrawal} from './cards';
 // Bounded recovery of persisted intent. No identity or bearer is stored. A lost
 // author command is read back, but never newly authorized by the scheduler.
 export async function reconcileWorkAccess(env:Env,limit=10):Promise<{complete:number;pending:number}>{
- const rows=await env.DB.prepare(`SELECT p.work_id,p.provider,p.source_role_id,p.sync_operation_id,o.command,o.root_operation_id
+ const rows=await env.DB.prepare(`SELECT p.work_id,p.provider,p.source_role_id,p.sync_operation_id,p.moderation_revision,p.confirmed_moderation_revision,o.command,o.root_operation_id
  FROM managed_work_access p LEFT JOIN visibility_operations o ON o.work_id=p.work_id AND o.operation_id=p.sync_operation_id
  WHERE p.sync_state='changing' OR p.moderation_revision>p.confirmed_moderation_revision ORDER BY coalesce(o.updated_at,0),p.work_id LIMIT ?`)
- .bind(Math.max(1,Math.min(10,limit))).all<{work_id:string;provider:ProviderId;source_role_id:string;sync_operation_id:string;command:string|null;root_operation_id:string|null}>();
+ .bind(Math.max(1,Math.min(10,limit))).all<{work_id:string;provider:ProviderId;source_role_id:string;sync_operation_id:string;moderation_revision:number;confirmed_moderation_revision:number;command:string|null;root_operation_id:string|null}>();
  let complete=0,pending=0;
  for(const row of rows.results){
   try{
@@ -20,7 +20,7 @@ export async function reconcileWorkAccess(env:Env,limit=10):Promise<{complete:nu
     JOIN work_publication_permits g ON g.version_id=v.version_id WHERE v.work_id=? AND g.operation_id=? AND g.state='prepared'`)
     .bind(row.work_id,row.sync_operation_id).first<{submission_id:string}>();
    const saved=row.command?JSON.parse(row.command) as WorkPolicyCommand:null;
-   if(!saved||saved.action==='restrict'){await syncManagedRestriction(env,row.provider,row.source_role_id,'reconcile');}
+   if(row.moderation_revision>row.confirmed_moderation_revision||!saved||saved.action==='restrict'){await syncManagedRestriction(env,row.provider,row.source_role_id,'reconcile');}
    else if(decision){await finalizeManagedReview(env,decision.submission_id);}else{
     if(!row.command||!row.root_operation_id)throw new HttpError(503,'visibility_sync_pending');
     const command=JSON.parse(row.command) as WorkPolicyCommand;
