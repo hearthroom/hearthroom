@@ -1005,6 +1005,9 @@ export interface ScoreRecord {
   expiresAt?: string;
   /** 月卡的列：daily 每日、bonus 首張加贈；退款收回它們的那一列帶同樣的值（record 是 refund） */
   planKind?: "daily" | "bonus" | string;
+  /** 支出列當時扣點的模型與線路，名字跟模型選單一樣、依 language 標頭；目錄對不到的舊列沒有 */
+  modelName?: string;
+  laneName?: string;
 }
 export interface ScoreRecordPage {
   total: number;
@@ -1013,10 +1016,10 @@ export interface ScoreRecordPage {
   records: ScoreRecord[];
 }
 
-export async function fetchScoreRecords(token: string, page = 1, pageSize = 20, provider: ProviderId = currentProvider()): Promise<ScoreRecordPage> {
+export async function fetchScoreRecords(token: string, page = 1, pageSize = 20, provider: ProviderId = currentProvider(), lang = "zh-Hant"): Promise<ScoreRecordPage> {
   return json<ScoreRecordPage>(
     await fetch(`${provider === currentProvider() ? UPSTREAM_API : apiBaseOf(provider)}/open/v1/me/score/records?pageNum=${page}&pageSize=${pageSize}`, {
-      headers: authHeaders(token),
+      headers: { language: lang, ...authHeaders(token) },
     }),
   );
 }
