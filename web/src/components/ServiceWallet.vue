@@ -37,7 +37,7 @@ async function load(reset = false) {
   try {
     const token = await accountToken(props.provider, props.externalId);
     if (!token) throw new Error(t("auth.expired"));
-    const res = await fetchScoreRecords(token, page.value, PAGE, props.provider);
+    const res = await fetchScoreRecords(token, page.value, PAGE, props.provider, locale.value);
     records.value = reset ? res.records : [...records.value, ...res.records];
     total.value = res.total;
   } catch (err) {
@@ -73,6 +73,8 @@ const itemOf = (r: ScoreRecord) => planItemOf(r) || (r.recordType === "add" && r
 /** 第二行：限時積分入帳寫到期時間（過了寫已到期）；到期那一筆寫是哪一種獎勵到期。 */
 function subOf(r: ScoreRecord): { text: string; off: boolean } | null {
   if (r.record === "grant" && r.playerNote) return { text: r.playerNote, off: false };
+  // 對話支出：當時用的模型與線路，回頭對照每個模型花了多少
+  if (r.recordType === "sub" && r.modelName) return { text: r.laneName ? `${r.modelName} · ${r.laneName}` : r.modelName, off: false };
   // 月卡的積分不會到期：入帳列沒有第二行，和限時的寶箱一眼分得開；退回列寫是退款
   if (planItemOf(r)) return r.record === "refund" ? { text: t("wallet.record.planRefund"), off: false } : null;
   if (r.recordType === "add" && r.expiresAt) {
@@ -161,7 +163,8 @@ onMounted(() => {
   window.addEventListener("focus", refresh);
 });
 onBeforeUnmount(() => window.removeEventListener("focus", refresh));
-watch(() => [props.provider, props.externalId], () => load(true), { immediate: true });
+// 線路名依介面語言給，換語言就重讀一次
+watch(() => [props.provider, props.externalId, locale.value], () => load(true), { immediate: true });
 </script>
 
 <template>
