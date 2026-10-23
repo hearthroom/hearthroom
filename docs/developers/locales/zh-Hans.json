@@ -543,7 +543,7 @@
   "d08aee9978e4f": "设置。",
   "d4e5598962919": "账号查找失败；`{\"error\": \"<text>\"}`。",
   "dc08f0c33f2f8": "保存单个角色卡的玩家设置",
-  "d5b20d172a7c0": "部分更新：每个字段皆可选；请求体未出现的字段保留保存值，出现的字段（即使为空字符串／false／空数组）都会写入。角色卡首次保存时会创建数据行，省略字段使用默认值（`speechSpeed` 1.0、`limitLevel` \"medium\"、`context` 1、`autoCompactEnabled` true，其余为空白／false）。验证：`systemPrompt` <= 2000 个字符；`userName` <= 20；`userDefine` <= 1000；`customInstructions` <= 1500 个字符（`language` 为 zh-Hans／zh-Hant 时为 500），且会去除首尾空白；`personaMode` 必须为枚举值之一。审核：`userName` + `userDefine` 任一变更时一起审核；变更后非空的 `customInstructions` 也会审核。服务器不对 `selectModel`、`context`、`thinkingDepth`、`sandboxLevel`、`limitLevel`、`promptStrategy`、`templateStyle`、`roleSpeech` 进行枚举值验证；请发送 /models 提供的值。未提供 personaMode 时的推导：若出现 `userName`／`userSex`／`userDefine` 任一字段，模式设为 `custom`；若皆未出现，模式维持不变。",
+  "d5b20d172a7c0": "部分更新：每个字段皆可选；请求体未出现的字段保留保存值，出现的字段（即使为空字符串／false／空数组）都会写入。角色卡首次保存时会创建数据行，省略字段使用默认值（`speechSpeed` 1.0、`limitLevel` \"medium\"、`context` 1、`autoCompactEnabled` true，其余为空白／false）。验证：`systemPrompt` <= 2000 个字符；`userName` <= 20；`userDefine` <= 1000；`customInstructions` 在去除首尾空白前最多 2000 个 UTF-16 码元；`personaMode` 必须为枚举值之一。审核：`userName` + `userDefine` 任一变更时一起审核；变更后非空的 `customInstructions` 也会审核。服务器不对 `selectModel`、`context`、`thinkingDepth`、`sandboxLevel`、`limitLevel`、`promptStrategy`、`templateStyle`、`roleSpeech` 进行枚举值验证；请发送 /models 提供的值。未提供 personaMode 时的推导：若出现 `userName`／`userSex`／`userDefine` 任一字段，模式设为 `custom`；若皆未出现，模式维持不变。",
   "d7a8de51b7151": "`{\"success\": \"ok\"}`。",
   "d52ba8fcefe57": "JSON 格式错误、长度／枚举验证失败（本地化或固定文本）、审核拒绝，或数据库错误。响应体为 `{\"error\": \"<text>\"}`。",
   "db37860ceabf6": "`invalid JSON body`、`roleName is required`（请求体层级检查；响应体为 `{\"error\": \"...\"}`），或服务返回的 `invalid_arguments`（`{\"error\": \"invalid_arguments\", \"retryable\": false}`）。",
