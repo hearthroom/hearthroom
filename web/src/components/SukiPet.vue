@@ -285,7 +285,6 @@ watch(() => [session.wallet?.plans, pet.value] as const, ([plans, p]) => {
 .suki-pet__bubble::after { translate: var(--tail-dx, 0px) 0; }
 /* 手機：她站著時螢幕邊上的細條（她住這一側；推到邊上會亮）。探出時收掉，她的身體直接貼著螢幕邊 */
 .suki-pet__tab { position: fixed; left: 0; top: 0; z-index: 46; overflow: hidden; touch-action: none; border-radius: 14px 0 0 14px; background: color-mix(in srgb, var(--surface) 94%, transparent); box-shadow: 0 0 0 1px var(--line-strong), var(--shadow-md); transition: box-shadow 160ms var(--ease), opacity var(--dur-base, 250ms); -webkit-tap-highlight-color: transparent; }
-.suki-pet__tab[hidden] { display: none; }
 .suki-pet__tab--left { border-radius: 0 14px 14px 0; }
 .suki-pet__tab--near { box-shadow: 0 0 0 2px var(--accent), var(--shadow-md); }
 .suki-pet__tab--away, body:has(.header [role="menu"]) .suki-pet__tab { opacity: 0; pointer-events: none; }

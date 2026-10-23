@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  BAND, CATCH_OUT, PEEK_IN, clampStand, peekCatch, silhouettePath, nudgeAnchor, defaultPeek, fitShift, fromSaved, peekPos, peekRange, pullMode, pushedIn, sideOf, standOutPos, toSaved, type Frame,
+  BAND, CATCH_OUT, PEEK_IN, clampStand, peekCatch, silhouettePath, tailShift, nudgeAnchor, defaultPeek, fitShift, fromSaved, peekPos, peekRange, pullMode, pushedIn, sideOf, standOutPos, toSaved, type Frame,
 } from "../src/pet/placement";
 
 const pet = { w: 88, h: 132 };
@@ -85,7 +85,8 @@ describe("手勢", () => {
   it("探出時：往內（右側是往左）超過 8px 且大於垂直才是拉出來，其餘是沿邊拖，6px 內不算", () => {
     expect(pullMode("right", -4, 2)).toBeNull();
     expect(pullMode("right", -12, 3)).toBe("pull");
-    expect(pullMode("right", -7, 1)).toBe("slide");
+    // 往內 6–8px 還沒決定：手指一點一點動，第一筆超過 6px 的常落在這裡，不能因此被判成沿邊拖
+    expect(pullMode("right", -7, 1)).toBeNull();
     expect(pullMode("right", -10, 14)).toBe("slide");
     expect(pullMode("right", 12, 0)).toBe("slide");
     expect(pullMode("left", 12, 3)).toBe("pull");
@@ -149,6 +150,13 @@ describe("讀回存的位置", () => {
 
 describe("泡泡與選單", () => {
   const f = phone(360);
+  it("泡泡被挪回邊距帶後，尖角指著她留在螢幕裡的那段，而且留在泡泡裡", () => {
+    // 390 寬右側探出：泡泡挪到 [130, 358]，她在螢幕裡的是 [342, 390]，中間 366；尖角原本在離泡泡左緣 194
+    const shift = tailShift(130, 228, 194, 366);
+    expect(130 + 194 + shift).toBe(130 + 228 - 18);
+  });
+  it("指得到的話就正對著她", () => { expect(tailShift(100, 200, 120, 250)).toBe(30); });
+  it("在泡泡另一邊外面：貼著泡泡左邊", () => { expect(tailShift(100, 200, 120, 40)).toBe(18 - 120); });
   it("從她身上往左溢出：往右挪回邊距帶", () => { expect(fitShift(f, -30, 260)).toBe(62); });
   it("往右溢出：往左挪", () => { expect(fitShift(f, 120, 260)).toBe(360 - 32 - 260 - 120); });
   it("本來就在帶內：不動", () => { expect(fitShift(f, 40, 200)).toBe(0); });
