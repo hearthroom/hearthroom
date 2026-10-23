@@ -1,0 +1,11 @@
+{
+  "tier": "fix",
+  "audience": "everyone",
+  "title": {
+    "zh-Hant": "含簡體字的訊息被服務商前置檢查擋下時，提示卡可以轉成繁體再送出。",
+    "zh-Hans": "含简体字的消息被服务商前置检查拦下时，提示卡可以转成繁体再发送。",
+    "en": "When a provider's pre-check blocks a message with Simplified Chinese, the card can convert it to Traditional and resend.",
+    "ja": "簡体字のメッセージが提供元の事前チェックで止められたら、カードから繁体字に変換して再送信できます。",
+    "ko": "간체가 들어간 메시지가 제공업체의 사전 검사에서 막히면, 카드에서 번체로 바꿔 다시 보낼 수 있어요."
+  }
+}
