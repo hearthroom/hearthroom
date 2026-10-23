@@ -12,6 +12,7 @@ CREATE TABLE managed_work_access (
  sync_operation_id TEXT,
  moderation_revision INTEGER NOT NULL DEFAULT 0,
  confirmed_moderation_revision INTEGER NOT NULL DEFAULT 0,
+ reconcile_at INTEGER NOT NULL DEFAULT 0,
  UNIQUE(provider,source_role_id)
 );
 CREATE TABLE visibility_operations (
