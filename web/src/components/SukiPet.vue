@@ -295,6 +295,9 @@ watch(() => [session.wallet?.plans, pet.value] as const, ([plans, p]) => {
 .suki-pet__catch[hidden], body:has(.header [role="menu"]) .suki-pet__catch { display: none; }
 /* 泡泡或選單開著時她浮到接觸區上面，泡泡裡的按鈕與選單才按得到（泡泡其他地方照樣穿到接觸區，點了就是點她） */
 .suki-pet--mobile:has(.suki-pet__bubble:not([hidden])), .suki-pet--mobile:has(.suki-pet__menu:not([hidden])) { z-index: 48; }
+/* 探出時她整個容器不接點擊，只留裁成她輪廓的接觸塊、選單與泡泡裡的按鈕：透明處的點擊落到底下的網頁（owner 2026-10-23） */
+.suki-pet--mobile.suki-pet--tucked { pointer-events: none; }
+.suki-pet--mobile.suki-pet--tucked .suki-pet__hit, .suki-pet--mobile.suki-pet--tucked .suki-pet__menu { pointer-events: auto; }
 /* 探出時泡泡壓在她頭頂那一截：點到泡泡也要算點她（只有泡泡裡的按鈕自己接） */
 .suki-pet--mobile.suki-pet--tucked .suki-pet__bubble { pointer-events: none; }
 .suki-pet--mobile.suki-pet--tucked .suki-pet__go { pointer-events: auto; }

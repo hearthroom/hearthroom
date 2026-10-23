@@ -144,6 +144,36 @@ export function nudgeAnchor(vw: number, pet: { left: number; right: number }, ca
   return { right, tail: clamp(vw - right - head - 7, 16, width - 30) };
 }
 
+/**
+ * 她畫出來的輪廓，轉成 CSS `clip-path: path()`：探出時她外框的透明處裁掉，那裡的點擊就落到底下的網頁
+ * （瀏覽器判定點到誰時會照 clip-path 算）。每 step 列一條，不透明的連續段各成一個長方形，洞留空；
+ * 比 gap 欄還窄的縫併起來。px 是 RGBA、由上到下逐列；sx／sy 是每個像素在元素裡多寬多高；mirror 時左右鏡射。
+ */
+export function silhouettePath(px: Uint8Array, w: number, h: number, o: { sx: number; sy: number; mirror: boolean; step: number; gap: number }) {
+  const out: string[] = [];
+  const r = (v: number) => Math.round(v * 10) / 10;
+  for (let y0 = 0; y0 < h; y0 += o.step) {
+    const rows = Math.min(o.step, h - y0);
+    const runs: [number, number][] = [];
+    let start = -1;
+    for (let x = 0; x <= w; x++) {
+      let opaque = false;
+      if (x < w) for (let y = y0; y < y0 + rows && !opaque; y++) opaque = px[(y * w + x) * 4 + 3] > 25;
+      if (opaque && start < 0) start = x;
+      if (!opaque && start >= 0) {
+        const last = runs[runs.length - 1];
+        if (last && start - last[1] <= o.gap) last[1] = x; else runs.push([start, x]);
+        start = -1;
+      }
+    }
+    for (const [a, b] of runs) {
+      const left = o.mirror ? (w - b) * o.sx : a * o.sx;
+      out.push(`M${r(left)} ${r(y0 * o.sy)} h${r((b - a) * o.sx)} v${r(rows * o.sy)} h${-r((b - a) * o.sx)} z`);
+    }
+  }
+  return out.join(" ");
+}
+
 /** 泡泡與選單左緣在視窗裡的位置是 left、寬 width：要往右挪多少才整個落在邊距帶內（放不下就靠左） */
 export function fitShift(f: Frame, left: number, width: number) {
   const b = bands(f);
