@@ -671,16 +671,10 @@ export async function unregister(db: D1Database, roleId: string, authorNumId: nu
   if (row.author_num_id !== authorNumId) throw new HttpError(403, "not the author of this card");
   const managed=await managedWork(db,provider,row.source_role_id);
   if(managed){
-    if(managed.access!=='private'||managed.sync_state!=='complete'){
-      if(!env||!token)throw new HttpError(503,'visibility_sync_pending');
-      await fenceManagedWork(env,provider,row.source_role_id,'withdraw:'+managed.epoch,'private',{token});
-    }
-    // Retain the stable card, relationships, heat, first publication and rewards.
-    await db.batch([
-      db.prepare("UPDATE review_submissions SET status='superseded',claimed_by=NULL,claimed_at=NULL WHERE card_id=? AND status='pending'").bind(row.id),
-      db.prepare("DELETE FROM review_snapshots WHERE submission_id IN(SELECT id FROM review_submissions WHERE card_id=? AND status='superseded')").bind(row.id),
-      db.prepare("UPDATE cards SET status='unshared' WHERE id=?").bind(row.id),
-    ]);
+    if(!env||!token)throw new HttpError(503,'visibility_sync_pending');
+    // Even an already-private work may have a prepared publication in flight.
+    await fenceManagedWork(env,provider,row.source_role_id,'withdraw:'+managed.epoch,'private',{token});
+    await finishManagedWithdrawal(db,row.id);
     return;
   }
   // 還在排隊的審核單一併作廢；蓋過章的紀錄留著（那是審核人做過的事，不隨卡片消失）。
@@ -689,6 +683,15 @@ export async function unregister(db: D1Database, roleId: string, authorNumId: nu
     db.prepare("DELETE FROM review_submissions WHERE card_id = ? AND status = 'pending'").bind(row.id),
     db.prepare("DELETE FROM cards WHERE id = ?").bind(row.id),
   ]);
+}
+
+/** Only after a confirmed private receipt; never grants or changes PG access. */
+export async function finishManagedWithdrawal(db:D1Database,cardId:string):Promise<void>{
+ await db.batch([
+  db.prepare("UPDATE review_submissions SET status='superseded',claimed_by=NULL,claimed_at=NULL WHERE card_id=? AND status='pending'").bind(cardId),
+  db.prepare("DELETE FROM review_snapshots WHERE submission_id IN(SELECT id FROM review_submissions WHERE card_id=? AND status='superseded')").bind(cardId),
+  db.prepare("UPDATE cards SET status='unshared' WHERE id=?").bind(cardId),
+ ]);
 }
 
 /** 排程同步挑最久沒更新的一批。帶著審核狀態與已過審的內容版本，同步順手比對內容有沒有變。 */
