@@ -718,6 +718,8 @@ export class SukiPet {
     this.touch.addEventListener("pointerdown", this.down);
     this.tab?.addEventListener("pointerdown", this.down);
     this.catcher?.addEventListener("pointerdown", this.down);
+    // 選單開著時點到頁籤或接觸區只是收起選單：那一下的 pointerup 落在它們身上，不在她身上，記號要在這裡清
+    for (const t of [this.tab, this.catcher]) t?.addEventListener("pointerup", () => { this.dismissTap = false; });
     this.touch.addEventListener("contextmenu", (e) => { e.preventDefault(); if (!this.pressed) this.openMenu(); });
     // 系統接手手勢（長按選單、捲動、手機邊緣的返回）時會送 pointercancel：當作放手，不然她以為還被拎著
     this.touch.addEventListener("pointercancel", (e) => {
@@ -1134,7 +1136,8 @@ export class SukiPet {
     tab.classList.toggle("suki-pet__tab--left", this.side === "left");
     tab.style.setProperty("--chev", String(1 - s));
     // 接觸區只在探出時有；站出來後回到只接她身上
-    const c = this.catcher!, on = this.tucked && !this.hidden;
+    // 縮回的動畫走到一半才出現：還站在畫面中間時不先在邊上攔點擊
+    const c = this.catcher!, on = this.tucked && !this.hidden && this.peekS < 0.5;
     c.hidden = !on;
     if (on) { const r = peekCatch(f, size, this.side, this.pos.y); Object.assign(c.style, { width: `${r.w}px`, height: `${r.h}px`, transform: `translate(${r.x}px, ${Math.round(r.y)}px)` }); }
   }
