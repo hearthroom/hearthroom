@@ -754,7 +754,7 @@ export class SukiPet {
     // 選單開著時點她：只是收起選單
     if (!this.menuEl.hidden) { e.preventDefault(); this.closeMenu(); this.dismissTap = true; return; }
     // 點在透明處：不攔。手機探出時：離螢幕邊那一段（接觸區）整塊接，其餘只接她畫出來的不透明處（owner 2026-10-23）
-    if (this.opts.mobile && this.tucked) { if (!this.inCatch(e) && !this.opaqueAt(e)) return; }
+    if (this.opts.mobile && this.tucked) { if (e.currentTarget !== this.tab && !this.inCatch(e) && !this.opaqueAt(e)) return; }
     else if (this.region(e) === null && !this.sleeping) return;
     this.touchedAt = performance.now();
     if (this.walk) { this.walk = null; this.rig.params.Jump = 0; this.el.classList.remove("suki-pet--walking"); }

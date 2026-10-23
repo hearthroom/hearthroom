@@ -284,8 +284,9 @@ export class PetRenderer {
    */
   alphaAt(u: number, v: number): number {
     this.draw();
-    const gl = this.gl, c = this.canvas;
-    const x = Math.min(c.width - 1, Math.max(0, Math.floor(u * c.width))), y = Math.min(c.height - 1, Math.max(0, Math.floor((1 - v) * c.height)));
+    // 畫布緩衝區在記憶體吃緊的裝置上可能比 canvas.width 小：用實際的大小換算
+    const gl = this.gl, w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+    const x = Math.min(w - 1, Math.max(0, Math.floor(u * w))), y = Math.min(h - 1, Math.max(0, Math.floor((1 - v) * h)));
     const px = new Uint8Array(4);
     gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
     return px[3] / 255;
