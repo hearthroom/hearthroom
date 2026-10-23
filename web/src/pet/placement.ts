@@ -119,6 +119,17 @@ export function fromSaved(f: Frame, s: Size, v: Saved): { pos: Point; side: Side
   return { pos: clampStand(f, s, { x: v.x * f.w, y: v.y * f.h }), side: null };
 }
 
+/**
+ * 新手提示卡掛在她頭上（手機）：卡片外緣離螢幕邊至少一個邊距帶（曲面屏邊上點不到），放不下就往內收；
+ * 尖角（14px 寬）指著她露出來那一段的中間：探出時只有牆外那 56px，站著時是整個外框。回傳的都是離右緣的距離。
+ */
+export function nudgeAnchor(vw: number, pet: { left: number; right: number }, cardW: number) {
+  const width = Math.min(cardW, vw - BAND * 2);
+  const right = Math.min(Math.max(BAND, vw - pet.right), vw - BAND - width);
+  const head = (Math.max(pet.left, BAND) + Math.min(pet.right, vw - BAND)) / 2;
+  return { right, tail: clamp(vw - right - head - 7, 16, width - 30) };
+}
+
 /** 泡泡與選單左緣在視窗裡的位置是 left、寬 width：要往右挪多少才整個落在邊距帶內（放不下就靠左） */
 export function fitShift(f: Frame, left: number, width: number) {
   const b = bands(f);

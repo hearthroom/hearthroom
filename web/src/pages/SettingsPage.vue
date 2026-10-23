@@ -291,8 +291,8 @@ onMounted(() => {
         <input type="checkbox" class="content__switch" :checked="recall" :disabled="recallBusy" @change="setRecall(($event.target as HTMLInputElement).checked)" />
       </label>
       <div class="content__row content__row--plain">
-        <span class="content__text subtle">{{ $t("settings.pet.summonDesc") }}</span>
-        <button type="button" class="btn btn--sm" @click="summonPet">{{ $t("settings.pet.summon") }}</button>
+        <span class="content__text content__pretty subtle">{{ $t("settings.pet.summonDesc") }}</span>
+        <button type="button" class="btn btn--sm content__nowrap" @click="summonPet">{{ $t("settings.pet.summon") }}</button>
       </div>
     </section>
 
@@ -324,6 +324,8 @@ onMounted(() => {
 .content__row { display: flex; align-items: center; justify-content: space-between; gap: var(--s-4); cursor: pointer; }
 .content__text { display: grid; gap: 2px; }
 .content__row--plain { cursor: default; }
+.content__pretty { text-wrap: pretty; }
+.content__nowrap { white-space: nowrap; flex-shrink: 0; }
 .content__verified { color: var(--accent-text); }
 .content__switch { width: 22px; height: 22px; flex: none; accent-color: var(--accent); }
 .content__link { color: inherit; }
