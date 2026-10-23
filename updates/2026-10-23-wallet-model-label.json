@@ -1,0 +1,13 @@
+{
+  "tier": "feature",
+  "audience": "everyone",
+  "try": "/wallet",
+  "draft": true,
+  "title": {
+    "zh-Hant": "積分記錄的每筆對話支出會寫出當時用的模型與線路，方便對照每個模型花了多少積分。",
+    "zh-Hans": "积分记录的每笔对话支出会写出当时用的模型与线路，方便对照每个模型花了多少积分。",
+    "en": "Each chat charge in your credit history now shows the model and lane it used, so you can compare what each model costs.",
+    "ja": "ポイント履歴の会話の支出に使ったモデルと回線が表示され、モデルごとの消費を見比べられます。",
+    "ko": "포인트 내역의 대화 지출마다 그때 사용한 모델과 회선이 표시되어, 모델별로 쓴 포인트를 비교할 수 있습니다."
+  }
+}

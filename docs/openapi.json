@@ -20809,6 +20809,14 @@
             "type": "string",
             "maxLength": 200,
             "description": "Optional original-language explanation for a platform grant. Historical grants may omit it. Internal operator notes are never returned."
+          },
+          "modelName": {
+            "type": "string",
+            "description": "Only on spending rows whose model is still offered: the model name as the model list shows it. Older rows and models no longer offered omit it."
+          },
+          "laneName": {
+            "type": "string",
+            "description": "Present with `modelName` when the model has a lane: the localized lane label from the model list, in the language of the `language` header."
           }
         }
       },
