@@ -10242,7 +10242,7 @@
           "Identity"
         ],
         "summary": "Enter a referral code",
-        "description": "Binds the caller to the account that owns `code`. Only new accounts can do this: within `terms.bindDays` days of sign-up and before their first top-up. A binding is permanent, with one exception: a binding made with `via` set to `link` can be replaced once by a code the user enters, within one day of binding and before their first top-up. Sending the same code again returns success without changing anything; sending a different code afterwards returns `referral_already_bound`. Codes are case-insensitive and surrounding spaces are ignored. On success the caller may receive `terms.welcomeCredits` credits at once, usable for agent conversations only and valid for `terms.welcomeDays` days (0 means permanent); `welcomeCredits` in the response shows what was actually received (0 when none was available). Unless the code came from a share link the user opened before signing up, ask the user to confirm before calling this: the referrer receives rewards from the caller's later purchases. Requires the `referral` scope. Returns the caller's referral page after binding.",
+        "description": "Binds the caller to the account that owns `code`. Only new accounts can do this: within `terms.bindDays` days of sign-up, whether or not they have topped up. A binding is permanent, with one exception: a binding made with `via` set to `link` can be replaced once by a code the user enters, within one day of binding and before their first top-up. Sending the same code again returns success without changing anything; sending a different code afterwards returns `referral_already_bound`. Codes are case-insensitive and surrounding spaces are ignored. On success the caller may receive `terms.welcomeCredits` credits at once, usable for agent conversations only and valid for `terms.welcomeDays` days (0 means permanent); `welcomeCredits` in the response shows what was actually received (0 when none was available). Top-ups made after sign-up but before binding count toward the referrer's rewards. Unless the code came from a share link the user opened before signing up, ask the user to confirm before calling this: the referrer receives rewards from the caller's purchases. Requires the `referral` scope. Returns the caller's referral page after binding.",
         "security": [
           {
             "userToken": []
@@ -10325,7 +10325,7 @@
             }
           },
           "409": {
-            "description": "`referral_self` — the caller's own code, or an account the caller referred; `referral_already_bound` — the caller already has a referrer; `referral_window_closed` — the caller signed up more than `terms.bindDays` days ago or has already topped up.",
+            "description": "`referral_self` — the caller's own code, or an account the caller referred; `referral_already_bound` — the caller already has a referrer; `referral_window_closed` — the caller signed up more than `terms.bindDays` days ago.",
             "content": {
               "application/json": {
                 "schema": {
@@ -22106,7 +22106,7 @@
           },
           "firstPercent": {
             "type": "number",
-            "description": "Percentage of the referred user's first top-up credited to the referrer as soon as the payment succeeds."
+            "description": "Percentage of the referred user's first top-up credited to the referrer once the payment has succeeded and the referral is bound. A top-up made before binding still counts as the first."
           },
           "firstCap": {
             "type": "integer",
@@ -22114,7 +22114,7 @@
           },
           "inviteePercent": {
             "type": "number",
-            "description": "Extra percentage the referred user receives on their own first top-up. 0 when not offered."
+            "description": "Extra percentage the referred user receives on their own first top-up, including one made before binding. 0 when not offered."
           },
           "rebatePercent": {
             "type": "number",
@@ -22191,7 +22191,7 @@
           },
           "firstPercent": {
             "type": "number",
-            "description": "Percentage of the referred user's first top-up credited to the referrer as soon as the payment succeeds."
+            "description": "Percentage of the referred user's first top-up credited to the referrer once the payment has succeeded and the referral is bound. A top-up made before binding still counts as the first."
           },
           "firstCap": {
             "type": "integer",
@@ -22199,7 +22199,7 @@
           },
           "inviteePercent": {
             "type": "number",
-            "description": "Extra percentage the referred user receives on their own first top-up. 0 when not offered."
+            "description": "Extra percentage the referred user receives on their own first top-up, including one made before binding. 0 when not offered."
           },
           "rebatePercent": {
             "type": "number",
