@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  BAND, CATCH_OUT, PEEK_OUT, clampStand, peekCatch, nudgeAnchor, defaultPeek, fitShift, fromSaved, peekPos, peekRange, pullMode, pushedIn, sideOf, standOutPos, toSaved, wallHide, type Frame,
+  BAND, CATCH_OUT, PEEK_OUT, clampStand, peekCatch, silhouettePath, nudgeAnchor, defaultPeek, fitShift, fromSaved, peekPos, peekRange, pullMode, pushedIn, sideOf, standOutPos, toSaved, wallHide, type Frame,
 } from "../src/pet/placement";
 
 const pet = { w: 88, h: 132 };
@@ -184,5 +184,29 @@ describe("新手提示卡掛在她頭上", () => {
     const p = standOutPos(f, pet, "right", 400), a = nudgeAnchor(390, { left: p.x, right: p.x + pet.w }, 280);
     expect(a.right).toBe(BAND);
     expect(390 - a.right - a.tail - 7).toBe(p.x + pet.w / 2);
+  });
+});
+
+describe("探出時她的輪廓（透明處讓點擊落到網頁）", () => {
+  // 6×4 的 RGBA 圖，由上到下：第 0、1 列 x=1..2 不透明；第 2、3 列 x=0 與 x=4..5 不透明（中間是洞）
+  const w = 6, h = 4, px = new Uint8Array(w * h * 4);
+  const on = (x: number, y: number) => { px[(y * w + x) * 4 + 3] = 255; };
+  [[1, 0], [2, 0], [1, 1], [2, 1], [0, 2], [4, 2], [5, 2], [0, 3], [4, 3], [5, 3]].forEach(([x, y]) => on(x, y));
+  const rects = (d: string) => [...d.matchAll(/M([\d.]+) ([\d.]+) h([\d.]+) v([\d.]+)/g)].map((m) => m.slice(1).map(Number));
+
+  it("每一段不透明各成一塊，洞留空", () => {
+    const d = silhouettePath(px, w, h, { sx: 10, sy: 10, mirror: false, step: 2, gap: 0 });
+    expect(rects(d)).toEqual([[10, 0, 20, 20], [0, 20, 10, 20], [40, 20, 20, 20]]);
+  });
+  it("左側翻面：左右照畫面鏡射", () => {
+    const d = silhouettePath(px, w, h, { sx: 10, sy: 10, mirror: true, step: 2, gap: 0 });
+    expect(rects(d)).toEqual([[30, 0, 20, 20], [50, 20, 10, 20], [0, 20, 20, 20]]);
+  });
+  it("很窄的縫併起來（手指本來就點不進去）", () => {
+    const d = silhouettePath(px, w, h, { sx: 10, sy: 10, mirror: false, step: 2, gap: 3 });
+    expect(rects(d)).toEqual([[10, 0, 20, 20], [0, 20, 60, 20]]);
+  });
+  it("整片透明：沒有任何一塊", () => {
+    expect(silhouettePath(new Uint8Array(w * h * 4), w, h, { sx: 1, sy: 1, mirror: false, step: 2, gap: 0 })).toBe("");
   });
 });
