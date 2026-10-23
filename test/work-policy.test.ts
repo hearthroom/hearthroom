@@ -136,3 +136,21 @@ it('fences a delayed moderation intent against a newer dismissal even when proje
  expect(await reconcileWorkAccess(env)).toEqual({complete:1,pending:0});
  expect(change.mock.calls[1][3].restriction).toBe('none');
 });
+
+it('recovers dirty moderation before an author command whose Provider result is absent',async()=>{
+ const memberId=await makeMember(10006);const draft=role({roleId:'managed-priority',authorNumId:10006});vi.spyOn(upstream,'fetchRole').mockResolvedValue(draft);
+ await submitHosted(env,{memberId,account:10006,role:draft,token:'fixture',rating:GENERAL_RATING,operationId:crypto.randomUUID(),now:Date.now()});
+ const change=vi.spyOn(workPolicyGateway,'change').mockImplementation(async(_e,_p,source,c)=>{
+  if(c.action==='private')throw new Error('request never reached PG');
+  return {sourceRoleId:source,workId:c.workId,operationId:c.operationId,access:'unlisted',restriction:c.restriction??'none',epoch:c.action==='bind'?1:2,state:'complete',replayed:false};
+ });
+ vi.spyOn(workPolicyGateway,'operation').mockResolvedValue(null);
+ await enrollWorkAccess(env,{memberId,roleId:draft.roleId,operationId:crypto.randomUUID(),access:'unlisted',token:'fixture'});
+ await expect(unregister(env.DB,draft.roleId,10006,'harbor',env,'fixture')).rejects.toThrow('visibility_sync_pending');
+ // The moderation transaction committed, then its HTTP handler crashed before syncCase.
+ await env.DB.prepare('INSERT INTO moderation_state(provider,source_role_id) VALUES(?,?)').bind('harbor',draft.roleId).run();
+ await env.DB.prepare('UPDATE moderation_state SET public_blocked=1 WHERE source_role_id=?').bind(draft.roleId).run();
+ expect(await reconcileWorkAccess(env)).toEqual({complete:1,pending:0});
+ expect(change.mock.calls.at(-1)?.[3]).toMatchObject({action:'restrict',restriction:'suspended'});
+ expect(await env.DB.prepare('SELECT restriction,moderation_revision,confirmed_moderation_revision FROM managed_work_access WHERE source_role_id=?').bind(draft.roleId).first()).toEqual({restriction:'suspended',moderation_revision:1,confirmed_moderation_revision:1});
+});
