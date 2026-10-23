@@ -174,7 +174,7 @@ onMounted(() => {
             <li v-if="data.terms.welcomeCredits > 0 && data.terms.firstChatCredits === undefined">{{ $t(data.terms.welcomeDays === 0 ? "referral.rule.welcomePermanent" : "referral.rule.welcome", { credits: whole(data.terms.welcomeCredits), days: data.terms.welcomeDays }) }}</li>
             <li>{{ $t("referral.rule.first", { percent: data.terms.firstPercent, cap: whole(data.terms.firstCap) }) }}</li>
             <li v-if="data.terms.rebatePercent > 0">{{ $t("referral.rule.rebate", { rate: data.terms.rebatePercent, days: data.terms.rebateDays }) }}</li>
-            <li v-if="data.terms.rebatePercent > 0">{{ $t("referral.rule.beforeCode") }}</li>
+            <li v-if="data.terms.firstPercent > 0 || data.terms.rebatePercent > 0 || data.terms.inviteePercent > 0">{{ $t("referral.rule.beforeCode") }}</li>
             <li v-if="data.terms.inviteePercent > 0">{{ $t("referral.rule.invitee", { percent: data.terms.inviteePercent }) }}</li>
             <li>{{ $t("referral.rule.refund") }}</li>
             <li>{{ $t("referral.rule.scope") }}</li>
