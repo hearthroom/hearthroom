@@ -1119,18 +1119,21 @@ export class SukiPet {
   private clipped = false;
   private clipAt = 0;
   private clipSide: Side = "right";
+  private clipMirror = false;
   private updateClip(now: number) {
     const want = this.tucked && this.peekS < 0.5 && !this.drag && !this.hidden;
     if (!want) { if (this.clipped) { this.touch.style.clipPath = ""; this.clipped = false; } return; }
-    if (this.clipped && now - this.clipAt < 600 && this.clipSide === this.side) return;
-    this.clipAt = now; this.clipSide = this.side;
+    // 左側翻面是動畫：翻到一半就重描，不等 0.6 秒
+    const mirror = this.flip < 0;
+    if (this.clipped && now - this.clipAt < 600 && this.clipSide === this.side && this.clipMirror === mirror) return;
+    this.clipAt = now; this.clipSide = this.side; this.clipMirror = mirror;
     const cs = this.canvas.style, cw = parseFloat(cs.width), ch = parseFloat(cs.height), cl = -parseFloat(cs.left), ct = -parseFloat(cs.top);
     const tw = this.touch.clientWidth, th = this.touch.clientHeight;
     if (!cw || !ch || !tw || !th) return;
     // 畫布左右留的邊一樣寬，翻面後她的外框還是對著同一塊
     const { px, w, h } = this.view.readRect(cl / cw, ct / ch, (cl + tw) / cw, (ct + th) / ch);
     if (!w || !h) return;
-    const d = silhouettePath(px, w, h, { sx: tw / w, sy: th / h, mirror: this.flip < 0, step: Math.max(1, Math.round(h / 44)), gap: Math.round(w / 44) });
+    const d = silhouettePath(px, w, h, { sx: tw / w, sy: th / h, mirror, step: Math.max(1, Math.round(h / 44)), gap: Math.round(w / 44) });
     this.touch.style.clipPath = d ? `path("${d}")` : "inset(50%)";
     this.clipped = true;
   }
