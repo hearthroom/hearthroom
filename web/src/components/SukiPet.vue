@@ -297,10 +297,14 @@ watch(() => [session.wallet?.plans, pet.value] as const, ([plans, p]) => {
 .suki-pet--mobile:has(.suki-pet__bubble:not([hidden])), .suki-pet--mobile:has(.suki-pet__menu:not([hidden])) { z-index: 48; }
 /* 探出時她整個容器不接點擊，只留裁成她輪廓的接觸塊、選單與泡泡裡的按鈕：透明處的點擊落到底下的網頁（owner 2026-10-23） */
 .suki-pet--mobile.suki-pet--tucked { pointer-events: none; }
-.suki-pet--mobile.suki-pet--tucked .suki-pet__hit, .suki-pet--mobile.suki-pet--tucked .suki-pet__menu { pointer-events: auto; }
+.suki-pet--mobile.suki-pet--tucked:not(.suki-pet--away) .suki-pet__hit, .suki-pet--mobile.suki-pet--tucked:not(.suki-pet--away) .suki-pet__menu { pointer-events: auto; }
+/* 頁首選單開著時她整個隱形（base.css）：這幾塊自己開了 auto，要一起關，不然看不見的她會擋住選單裡的「登出」 */
+body:has(.header [role="menu"]) .suki-pet--mobile.suki-pet--tucked .suki-pet__hit,
+body:has(.header [role="menu"]) .suki-pet--mobile.suki-pet--tucked .suki-pet__menu,
+body:has(.header [role="menu"]) .suki-pet--mobile.suki-pet--tucked .suki-pet__go { pointer-events: none; }
 /* 探出時泡泡壓在她頭頂那一截：點到泡泡也要算點她（只有泡泡裡的按鈕自己接） */
 .suki-pet--mobile.suki-pet--tucked .suki-pet__bubble { pointer-events: none; }
-.suki-pet--mobile.suki-pet--tucked .suki-pet__go { pointer-events: auto; }
+.suki-pet--mobile.suki-pet--tucked:not(.suki-pet--away) .suki-pet__go { pointer-events: auto; }
 /* 量 safe-area 的探針：看不見、不佔位、不接點擊 */
 .suki-pet__inset { position: absolute; width: 0; height: 0; overflow: hidden; visibility: hidden; pointer-events: none; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
 @media (prefers-reduced-motion: reduce) { .suki-pet { transition: none; } .suki-pet__bubble--in, .suki-pet--pop .suki-pet__canvas, .suki-pet--pop .suki-pet__hit { animation: none; } }
