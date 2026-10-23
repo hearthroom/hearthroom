@@ -2,17 +2,17 @@
   "tier": "fix",
   "audience": "everyone",
   "title": {
-    "zh-Hant": "曲面螢幕的手機以前點不到邊上的蘇綺，現在她從側邊探出頭，點得到也拉得出來。",
-    "zh-Hans": "曲面屏手机以前点不到边上的苏绮，现在她从侧边探出头，点得到也拉得出来。",
-    "en": "Suki used to be out of reach at the edge of curved phone screens; now she peeks out from the side, easy to tap.",
-    "ja": "曲面ディスプレイのスマホで端のスキに触れなかった問題を直し、横から顔を出してタップで呼び出せます。",
-    "ko": "곡면 화면 휴대폰에서 가장자리의 스키를 누를 수 없던 문제를 고쳐, 이제 옆에서 고개를 내밀어요."
+    "zh-Hant": "曲面螢幕的手機以前點不到蘇綺，現在她從側邊探出頭，點她或往裡拉就會出來。",
+    "zh-Hans": "曲面屏手机以前点不到苏绮，现在她从侧边探出头，点她或往里拉就会出来。",
+    "en": "Suki was out of reach on curved phone screens; now she peeks out from the side and comes out when you tap or pull her.",
+    "ja": "曲面ディスプレイで触れなかったスキが、横から顔を出し、タップや引っぱりで出てくるようになりました。",
+    "ko": "곡면 화면 휴대폰에서 누르기 힘들던 스키가 이제 옆에서 고개를 내밀고, 누르거나 당기면 나와요."
   },
   "body": {
-    "zh-Hant": "找不到她或她卡住時，可以在設定的桌寵區塊按「叫她出來」。",
-    "zh-Hans": "找不到她或她卡住时，可以在设置的桌宠一栏点「叫她出来」。",
-    "en": "If you can't find her or she gets stuck, tap \"Bring her back\" in the Desk pet section of Settings.",
-    "ja": "見つからないときや動かせないときは、設定のデスクペット欄で「呼び戻す」を押してください。",
-    "ko": "스키가 안 보이거나 움직이지 않으면 설정의 데스크 펫 항목에서 '다시 부르기'를 눌러 주세요."
+    "zh-Hant": "找不到她或她卡住時，可以到設定的桌寵區塊按「叫她出來」。",
+    "zh-Hans": "找不到她或她卡住时，可以到设置的桌宠一栏点「叫她出来」。",
+    "en": "If you can't find her or she gets stuck, tap \"Bring Suki back\" in the Desk pet section of Settings.",
+    "ja": "見つからないときや動かせないときは、設定のデスクペット欄で「スキを呼び戻す」を押してください。",
+    "ko": "스키가 안 보이거나 움직이지 않으면 설정의 데스크 펫 항목에서 '스키 다시 부르기'를 눌러 주세요."
   }
 }

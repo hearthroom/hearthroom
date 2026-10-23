@@ -17,6 +17,7 @@ import { useSession } from "@/lib/session";
 import { useLocalePath } from "@/lib/use-locale";
 import { glueUnits } from "@/lib/format";
 import { suki } from "@/pet/events";
+import { nudgeAnchor } from "@/pet/placement";
 
 const store = useCheckin();
 const session = useSession();
@@ -29,7 +30,7 @@ const view = computed(() => (session.me && store.panel && !tourState.step && !fi
 const target = computed(() => store.panel?.newcomer?.today.target ?? 1);
 // 達標未領也不彈：首頁常駐卡已經有「領取」，只留一個入口
 const due = computed(() => !!view.value && !view.value.todayDone && !view.value.claimable && !view.value.finished && newcomerPrompt.loaded && !newcomerPrompt.shown && !newcomerPrompt.later && !newcomerPrompt.thisVisit);
-const pos = ref<{ right: number; bottom: number } | null>(null);
+const pos = ref<{ right: number; bottom: number; tail?: number } | null>(null);
 let timer = 0;
 let follow = 0;
 
@@ -38,7 +39,8 @@ function place() {
   const pet = document.querySelector<HTMLElement>(".suki-pet");
   const r = pet?.getBoundingClientRect();
   if (!r || !r.width) { pos.value = { right: 16, bottom: 16 }; return; }
-  pos.value = { right: Math.max(8, innerWidth - r.right), bottom: Math.max(8, innerHeight - r.top + 10) };
+  if (!pet!.classList.contains("suki-pet--mobile")) { pos.value = { right: Math.max(8, innerWidth - r.right), bottom: Math.max(8, innerHeight - r.top + 10) }; return; }
+  pos.value = { ...nudgeAnchor(innerWidth, r, 280), bottom: Math.max(8, innerHeight - r.top + 10) };
 }
 
 watch(due, (now) => {
@@ -77,7 +79,7 @@ function onKey(e: KeyboardEvent) { if (e.key === "Escape") void later(); }
 
 <template>
   <section
-    v-if="newcomerPrompt.showing && view" class="nudge panel" role="status" :style="pos ? { right: `${pos.right}px`, bottom: `${pos.bottom}px` } : {}"
+    v-if="newcomerPrompt.showing && view" class="nudge panel" role="status" :style="pos ? { right: `${pos.right}px`, bottom: `${pos.bottom}px`, ...(pos.tail === undefined ? {} : { '--tail': `${pos.tail}px` }) } : {}"
     :aria-label="t('newcomer.prompt.title', { n: view.day })" @keydown="onKey"
   >
     <span class="nudge__title">{{ t("newcomer.prompt.title", { n: view.day }) }}</span>
@@ -94,7 +96,7 @@ function onKey(e: KeyboardEvent) { if (e.key === "Escape") void later(); }
   position:fixed; z-index:45; width:280px; padding:var(--s-3) var(--s-4) var(--s-4); display:grid; gap:var(--s-2);
   box-shadow:0 0 0 1px var(--line), var(--shadow-md); animation:nudge-in var(--dur-slow) var(--ease) both;
 }
-.nudge::after { content:""; position:absolute; right:40px; bottom:-7px; width:14px; height:14px; background:var(--surface); transform:rotate(45deg); box-shadow:1px 1px 0 0 var(--line); }
+.nudge::after { content:""; position:absolute; right:var(--tail, 40px); bottom:-7px; width:14px; height:14px; background:var(--surface); transform:rotate(45deg); box-shadow:1px 1px 0 0 var(--line); }
 .nudge__title { font-size:12px; color:var(--text-2); }
 .nudge__line { margin:0; font-size:13px; line-height:1.55; color:var(--text); display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; text-wrap:pretty; }
 .nudge__goal { font-size:13px; line-height:1.45; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }

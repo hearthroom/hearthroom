@@ -367,7 +367,7 @@
   "settings.pet.recall": "她想你的時候叫你",
   "settings.pet.recallDesc": "一天以上沒來時，在你平常上站的時段寄一則推播或 Discord 私訊；一天最多一則。",
   "settings.pet.summon": "叫她出來",
-  "settings.pet.summonDesc": "找不到蘇綺或她卡住時，讓她回到預設位置。",
+  "settings.pet.summonDesc": "蘇綺不見、被關掉或卡住時，按下後她會回到預設位置。",
   "state.loading": "載入中…",
   "state.loadFailed": "載入失敗",
   "state.actionFailed": "操作失敗",
