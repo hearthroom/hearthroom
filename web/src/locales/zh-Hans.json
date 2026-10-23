@@ -366,6 +366,8 @@
   "settings.pet.desc": "她会待在网站角落陪你，带你熟悉每个页面；玩卡时不会出现。",
   "settings.pet.recall": "她想你的时候叫你",
   "settings.pet.recallDesc": "超过一天没来时，在你平时上线的时段发一条推送或 Discord 私信；一天最多一条。",
+  "settings.pet.summon": "叫她出来",
+  "settings.pet.summonDesc": "找不到苏绮或她卡住时，让她回到默认位置。",
   "state.loading": "加载中…",
   "state.loadFailed": "加载失败",
   "state.actionFailed": "操作失败",

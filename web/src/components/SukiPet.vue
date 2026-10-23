@@ -25,7 +25,7 @@ import { platformPath } from "@/lib/connection-ui";
 import { can } from "@/lib/provider";
 import { TAG_CATALOG, tagLabel } from "../../../shared/tag-catalog";
 import { guideFor } from "@/pet/guides";
-import { petEnabled } from "@/pet/enabled";
+import { petEnabled, takeSummon } from "@/pet/enabled";
 import type { MenuItem, PageGuide, SukiPet as Pet } from "@/pet/pet-ui";
 
 const route = useRoute();
@@ -152,6 +152,7 @@ async function start() {
   // 開發時方便在主控台看她的參數
   if (import.meta.env.DEV) (window as unknown as { __suki: Pet }).__suki = p;
   enter(route.path);
+  if (takeSummon()) p.on({ type: "summon" });
 }
 
 function stop() { pet.value?.stop(); pet.value = null; }
@@ -247,7 +248,7 @@ watch(() => [session.wallet?.plans, pet.value] as const, ([plans, p]) => {
 /* 換衣服的那一下：縮一下再彈回來，遮住換部件的瞬間 */
 .suki-pet--poof .suki-pet__canvas { animation: suki-poof 300ms cubic-bezier(.34,1.56,.64,1); transform-origin: 50% 90%; }
 @keyframes suki-poof { 45% { scale: .82 1.12; opacity: .35; } }
-.suki-pet--walking { transition: none; }
+.suki-pet--walking, .suki-pet--sliding { transition: none; }
 /* 第一次出現：先隱形放到位，再從原地彈出來 */
 .suki-pet--placing { transition: none !important; opacity: 0; }
 .suki-pet--pop .suki-pet__canvas, .suki-pet--pop .suki-pet__hit { animation: suki-pop var(--dur-slow, 500ms) cubic-bezier(.34,1.56,.64,1); transform-origin: 50% 100%; }
@@ -278,5 +279,18 @@ watch(() => [session.wallet?.plans, pet.value] as const, ([plans, p]) => {
 .suki-pet:not(.suki-pet--right) .suki-pet__bubble, .suki-pet:not(.suki-pet--right) .suki-pet__menu { right: auto; left: 8px; transform: none; }
 .suki-pet:not(.suki-pet--right) .suki-pet__bubble::after { left: calc(var(--pw, 120px) / 2 - 14px); transform: rotate(45deg); }
 @keyframes suki-in { from { opacity: 0; translate: 0 6px; scale: .96; } }
+/* 手機：左右各留一條邊距帶（曲面屏邊緣點不到，pet/placement.ts 的 BAND），泡泡與選單不伸進去；
+   超出時 JS 把泡泡挪回帶內，--tail-dx 讓尖角還指著她 */
+.suki-pet--mobile .suki-pet__bubble, .suki-pet--mobile .suki-pet__menu { max-width: min(260px, calc(100vw - max(32px, env(safe-area-inset-left, 0px)) - max(32px, env(safe-area-inset-right, 0px)))); }
+.suki-pet__bubble::after { translate: var(--tail-dx, 0px) 0; }
+/* 手機的側邊頁籤：她從它後面探出來（ui-v3.md §2.1）。蓋住邊距帶，在她之上、在提示與安裝提示之下 */
+.suki-pet__tab { position: fixed; left: 0; top: 0; z-index: 46; display: grid; place-items: center; overflow: hidden; touch-action: none; border-radius: 14px 0 0 14px; background: color-mix(in srgb, var(--surface) 94%, transparent); box-shadow: 0 0 0 1px var(--line-strong), var(--shadow-md); color: var(--text-3); transition: box-shadow 160ms var(--ease), opacity var(--dur-base, 250ms); -webkit-tap-highlight-color: transparent; }
+.suki-pet__tab--left { border-radius: 0 14px 14px 0; }
+.suki-pet__tab--left svg { scale: -1 1; }
+.suki-pet__tab svg { width: 14px; height: 14px; opacity: var(--chev, 1); }
+.suki-pet__tab--near { box-shadow: 0 0 0 2px var(--accent), var(--shadow-md); color: var(--accent-text); }
+.suki-pet__tab--away, body:has(.header [role="menu"]) .suki-pet__tab { opacity: 0; pointer-events: none; }
+/* 量 safe-area 的探針：看不見、不佔位、不接點擊 */
+.suki-pet__inset { position: absolute; width: 0; height: 0; overflow: hidden; visibility: hidden; pointer-events: none; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
 @media (prefers-reduced-motion: reduce) { .suki-pet { transition: none; } .suki-pet__bubble--in, .suki-pet--pop .suki-pet__canvas, .suki-pet--pop .suki-pet__hit { animation: none; } }
 </style>

@@ -20,7 +20,9 @@ export type SukiEvent =
   /** 做一次表情（新手提示按「晚點再說」時點頭）：win 開心跳一下、miss 嘟嘴、ok 開心 */
   | { type: "cheer"; mood: "win" | "miss" | "ok" }
   /** 頁面自己的提醒（我的卡片的額度、寫卡缺的欄位…），同一句這次造訪只說一次 */
-  | { type: "hint"; text: string; action?: { label: string; run: () => void } };
+  | { type: "hint"; text: string; action?: { label: string; run: () => void } }
+  /** 設定頁「叫她出來」：回到預設位置、拉出來打招呼 */
+  | { type: "summon" };
 
 /** 告訴她發生了什麼：`suki({ type: "favorite" })` */
 export function suki(e: SukiEvent): void {
