@@ -7,7 +7,7 @@
 import { compose, PetRenderer, Rig, type PetSkeleton, type PetSkin } from "./puppet";
 import { Driver } from "./driver";
 import {
-  bands, clampStand, defaultPeek, fitShift, fromSaved, peekPos, PULL_FULL, pullMode, pushedIn, sideOf, standOutPos, standRange, toSaved, wallHide,
+  bands, clampStand, defaultPeek, fitShift, fromSaved, peekCatch, peekPos, PULL_FULL, pullMode, pushedIn, sideOf, standOutPos, standRange, toSaved, wallHide,
   type Frame, type Inset, type Saved, type Side,
 } from "./placement";
 import type { SukiNews } from "../../../shared/suki-care";
@@ -145,6 +145,10 @@ export class SukiPet {
       this.tab.className = "suki-pet__tab";
       this.tab.setAttribute("aria-hidden", "true");
       this.tab.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3 5 8l5 5"/></svg>';
+      // 探出時的接觸區：透明、比她大一圈，手指落在她附近就算點到、拖到
+      this.catcher = document.createElement("div");
+      this.catcher.className = "suki-pet__catch";
+      this.catcher.setAttribute("aria-hidden", "true");
     }
     // 泡泡開關的地方很多，統一從屬性看
     new MutationObserver(() => { petSpeaking.value = !this.bubble.hidden && !this.hidden; }).observe(this.bubble, { attributes: true, attributeFilter: ["hidden"] });
@@ -176,6 +180,7 @@ export class SukiPet {
     await this.loadHit(`${base}/hit-${skin}.png`, skeleton.regions ?? []);
     parent.append(this.el);
     if (this.tab) parent.append(this.tab);
+    if (this.catcher) parent.append(this.catcher);
     this.bind();
     // 先在定位好的地方隱形放好（不走位移動畫），再從那裡彈出來，不會從左上角飛過去
     this.el.classList.add("suki-pet--placing");
@@ -209,7 +214,7 @@ export class SukiPet {
     requestAnimationFrame(loop);
   }
 
-  stop() { this.stopped = true; this.el.remove(); this.tab?.remove(); petSpeaking.value = false; }
+  stop() { this.stopped = true; this.el.remove(); this.tab?.remove(); this.catcher?.remove(); petSpeaking.value = false; }
 
   /** 換頁時網站把這頁的用途交給她：第一次到這頁說一句，之後只在選單裡 */
   setGuide(g: PageGuide | null) {
@@ -712,6 +717,7 @@ export class SukiPet {
 
     this.touch.addEventListener("pointerdown", this.down);
     this.tab?.addEventListener("pointerdown", this.down);
+    this.catcher?.addEventListener("pointerdown", this.down);
     this.touch.addEventListener("contextmenu", (e) => { e.preventDefault(); if (!this.pressed) this.openMenu(); });
     // 系統接手手勢（長按選單、捲動、手機邊緣的返回）時會送 pointercancel：當作放手，不然她以為還被拎著
     this.touch.addEventListener("pointercancel", (e) => {
@@ -806,6 +812,7 @@ export class SukiPet {
     this.hidden = on;
     this.el.classList.toggle("suki-pet--away", on);
     this.tab?.classList.toggle("suki-pet__tab--away", on);
+    this.layoutWall();
     if (on) { this.bubble.hidden = true; this.closeMenu(); }
     else { if (this.opts.mobile) this.refit(); const next = this.queue.shift(); if (next) setTimeout(() => this.act(next), 500); }
   }
@@ -1019,6 +1026,7 @@ export class SukiPet {
 
   // ---- 手機：靠在側邊探出（ui-v3.md）----
   private tab?: HTMLDivElement;
+  private catcher?: HTMLDivElement;
   private side: Side = "right";
   /** 0＝探出、1＝站出來；拉出、縮回時在兩者之間 */
   private peekS = 1;
@@ -1125,6 +1133,10 @@ export class SukiPet {
     Object.assign(tab.style, { width: `${tw}px`, height: `${th}px`, transform: `translate(${this.side === "right" ? f.w - tw : 0}px, ${Math.round(this.pos.y + (size.h - th) / 2)}px)` });
     tab.classList.toggle("suki-pet__tab--left", this.side === "left");
     tab.style.setProperty("--chev", String(1 - s));
+    // 接觸區只在探出時有；站出來後回到只接她身上
+    const c = this.catcher!, on = this.tucked && !this.hidden;
+    c.hidden = !on;
+    if (on) { const r = peekCatch(f, size, this.side, this.pos.y); Object.assign(c.style, { width: `${r.w}px`, height: `${r.h}px`, transform: `translate(${r.x}px, ${Math.round(r.y)}px)` }); }
   }
   /** 泡泡與選單的左右緣留在邊距帶內：她站在畫面中段時，往中間展開的泡泡會從另一邊溢出去 */
   private fitPopups() {
