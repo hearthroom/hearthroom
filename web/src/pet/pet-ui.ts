@@ -753,8 +753,9 @@ export class SukiPet {
     if (e.button !== 0) return;
     // 選單開著時點她：只是收起選單
     if (!this.menuEl.hidden) { e.preventDefault(); this.closeMenu(); this.dismissTap = true; return; }
-    // 點在透明處：不攔。手機探出時只露頭肩，露出的整塊都接（ui-v3.md §2.2）
-    if (this.region(e) === null && !this.sleeping && !(this.opts.mobile && this.tucked)) return;
+    // 點在透明處：不攔。手機探出時：離螢幕邊那一段（接觸區）整塊接，其餘只接她畫出來的不透明處（owner 2026-10-23）
+    if (this.opts.mobile && this.tucked) { if (!this.inCatch(e) && !this.opaqueAt(e)) return; }
+    else if (this.region(e) === null && !this.sleeping) return;
     this.touchedAt = performance.now();
     if (this.walk) { this.walk = null; this.rig.params.Jump = 0; this.el.classList.remove("suki-pet--walking"); }
     // 拉出、縮回到一半又被按住（連點兩下）：直接跳到那一段的終點，再從那裡接著算
@@ -1041,6 +1042,21 @@ export class SukiPet {
   private peekLook = false;
   private deskHome() { const r = this.box(); return { x: innerWidth - r.width - 24, y: innerHeight - r.height - 8 }; }
 
+  /** 點在探出時的接觸區裡（她的泡泡、選單開著時她浮在接觸區上面，接觸區收不到，要自己算） */
+  private inCatch(e: PointerEvent) {
+    const c = this.catcher;
+    if (!c || c.hidden) return false;
+    const r = c.getBoundingClientRect();
+    return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+  }
+  /** 那一點現在畫出來是不是她身上（探頭的歪身、左側翻面都照畫面算；部位圖是站姿，對不上） */
+  private opaqueAt(e: PointerEvent) {
+    const r = this.canvas.getBoundingClientRect();
+    if (!r.width || !r.height) return false;
+    let u = (e.clientX - r.left) / r.width;
+    if (this.flip < 0) u = 1 - u;
+    return this.view.alphaAt(u, (e.clientY - r.top) / r.height) > 0.1;
+  }
   /** 直接放在 side 那一側探出（沒有動畫）：進站、讀回、轉向時用 */
   private peekAt(side: Side, pos: { x: number; y: number }) {
     this.tucked = true; this.el.classList.add("suki-pet--tucked");

@@ -278,6 +278,18 @@ export class PetRenderer {
     gl.uniform1f(gl.getUniformLocation(this.prog, "a"), alpha);
     gl.drawElements(gl.TRIANGLES, m.idx.length, gl.UNSIGNED_SHORT, 0);
   }
+  /**
+   * 畫布上 (u, v)（0–1，左上為原點，畫布本身的座標，不含 CSS 翻面）那一點現在畫出來有多不透明。
+   * 先畫這一格再馬上讀，畫面不必保留（preserveDrawingBuffer 關著）；歪身、轉頭、表情都照實算。
+   */
+  alphaAt(u: number, v: number): number {
+    this.draw();
+    const gl = this.gl, c = this.canvas;
+    const x = Math.min(c.width - 1, Math.max(0, Math.floor(u * c.width))), y = Math.min(c.height - 1, Math.max(0, Math.floor((1 - v) * c.height)));
+    const px = new Uint8Array(4);
+    gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    return px[3] / 255;
+  }
   draw() {
     const gl = this.gl, [W, H] = this.rig.model.size;
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
