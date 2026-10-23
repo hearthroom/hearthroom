@@ -283,12 +283,11 @@ watch(() => [session.wallet?.plans, pet.value] as const, ([plans, p]) => {
    超出時 JS 把泡泡挪回帶內，--tail-dx 讓尖角還指著她 */
 .suki-pet--mobile .suki-pet__bubble, .suki-pet--mobile .suki-pet__menu { max-width: min(260px, calc(100vw - max(32px, env(safe-area-inset-left, 0px)) - max(32px, env(safe-area-inset-right, 0px)))); }
 .suki-pet__bubble::after { translate: var(--tail-dx, 0px) 0; }
-/* 手機的側邊頁籤：她從它後面探出來（ui-v3.md §2.1）。蓋住邊距帶，在她之上、在提示與安裝提示之下 */
-.suki-pet__tab { position: fixed; left: 0; top: 0; z-index: 46; display: grid; place-items: center; overflow: hidden; touch-action: none; border-radius: 14px 0 0 14px; background: color-mix(in srgb, var(--surface) 94%, transparent); box-shadow: 0 0 0 1px var(--line-strong), var(--shadow-md); color: var(--text-3); transition: box-shadow 160ms var(--ease), opacity var(--dur-base, 250ms); -webkit-tap-highlight-color: transparent; }
+/* 手機：她站著時螢幕邊上的細條（她住這一側；推到邊上會亮）。探出時收掉，她的身體直接貼著螢幕邊 */
+.suki-pet__tab { position: fixed; left: 0; top: 0; z-index: 46; overflow: hidden; touch-action: none; border-radius: 14px 0 0 14px; background: color-mix(in srgb, var(--surface) 94%, transparent); box-shadow: 0 0 0 1px var(--line-strong), var(--shadow-md); transition: box-shadow 160ms var(--ease), opacity var(--dur-base, 250ms); -webkit-tap-highlight-color: transparent; }
+.suki-pet__tab[hidden] { display: none; }
 .suki-pet__tab--left { border-radius: 0 14px 14px 0; }
-.suki-pet__tab--left svg { scale: -1 1; }
-.suki-pet__tab svg { width: 14px; height: 14px; opacity: var(--chev, 1); }
-.suki-pet__tab--near { box-shadow: 0 0 0 2px var(--accent), var(--shadow-md); color: var(--accent-text); }
+.suki-pet__tab--near { box-shadow: 0 0 0 2px var(--accent), var(--shadow-md); }
 .suki-pet__tab--away, body:has(.header [role="menu"]) .suki-pet__tab { opacity: 0; pointer-events: none; }
 /* 探出時的接觸區：透明，比她大一圈，在頁籤與她之上（還在提示與安裝提示之下） */
 .suki-pet__catch { position: fixed; left: 0; top: 0; z-index: 47; touch-action: none; -webkit-tap-highlight-color: transparent; }

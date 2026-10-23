@@ -3,9 +3,10 @@
  *
  * 曲面（瀑布）屏會把畫面最外側約 20–30px 的觸控吃掉，直式時 safe-area 多半是 0，系統不會告訴我們。
  * 原本手機預設「貼著右邊只露 33px」，那條整條落在吃掉的範圍裡：點不到、拖不動（玩家 2026-10-23 回報）。
- * 所以左右一律留一條邊距帶（牆）。收起時她還是靠在側邊，但改成從牆後面探出來（身體貼著牆，不透明的部分露出約 72px）；
- * 探出時另有一塊透明接觸區（貼螢幕邊、帶外 CATCH_OUT，高度跟她一樣），落在邊距帶裡的手指也算點到、拖到
- * （owner 2026-10-23：使用者不在乎是不是真的按在她身上；曲面屏只吃左右，所以只加寬、不加高）。
+ * 所以站著時左右一律留一條邊距帶。收起時她還是靠在側邊探出頭，身體直接貼著螢幕邊、伸到螢幕外
+ * （owner 2026-10-24：她和螢幕邊之間不能露出一條底色）；探出時另有一塊透明接觸區（貼螢幕邊、帶外 CATCH_OUT，
+ * 高度跟她一樣），落在邊距帶裡的手指也算點到、拖到（owner 2026-10-23：使用者不在乎是不是真的按在她身上；
+ * 曲面屏只吃左右，所以只加寬、不加高）。
  * 這裡全是純函式（不碰 DOM），探出、拉出、放下、走路、讀回舊位置、轉向都走同一套夾邊。桌機不用這份。
  */
 
@@ -18,13 +19,15 @@ export type Side = "left" | "right";
 
 /** 左右邊距帶：曲面屏邊緣拒觸常見 16～30dp，再留一點餘量（--s-6） */
 export const BAND = 32;
-/** 探出時她的外框露在牆外的寬度（外框 88 寬，剩下的躲在牆後） */
-export const PEEK_OUT = 82;
+/**
+ * 探出時她的外框留在螢幕裡的寬度（外框 88 寬，其餘伸到螢幕外）。她身上最寬約 60px、靠牆那側不是直線：
+ * 48 時 119 列裡有 116 列碰到螢幕邊、露出約 40px；56 只剩 64 列碰到、露出約 48；82 一列都碰不到
+ * （2026-10-24 白天造型探頭姿勢實量）。owner 要的是不露底色，所以取 48；要露多一點就改這個數字，代價是更多列離開螢幕邊。
+ */
+export const PEEK_IN = 48;
 /**
  * 探出時的接觸區：從螢幕邊算起蓋住邊距帶，再往內 CATCH_OUT；高度跟她的外框一樣。
- * owner 2026-10-23 試過 96、48，定 32（整塊寬 64）；要再調只改這一個數字。她自己露在牆外的外框（PEEK_OUT）
- * 也整塊接點擊、頁籤蓋著邊距帶，所以實際點得到的寬度取兩者大的那個：CATCH_OUT 不大於 PEEK_OUT 時接觸區不多接任何地方，
- * 留著是讓 owner 要再加寬時只改這個數字。
+ * owner 2026-10-23 試過 96、48，定 32（整塊寬 64）；要再調只改這一個數字。64 以外只接她畫出來的不透明處。
  */
 export const CATCH_OUT = 32;
 /** 往內拉多少 px 算整個拉出來 */
@@ -69,10 +72,10 @@ export function peekCatch(f: Frame, s: Size, side: Side, y: number) {
   return { x: side === "right" ? f.w - w : 0, y, w, h: s.h };
 }
 
-/** 靠在 side 那一側探出：牆外露出 PEEK_OUT */
+/** 靠在 side 那一側探出：外框留 PEEK_IN 在螢幕裡，其餘伸到螢幕外（貼的是螢幕邊，不是邊距帶） */
 export function peekPos(f: Frame, s: Size, side: Side, y: number): Point {
-  const b = bands(f), r = peekRange(f, s);
-  const x = side === "right" ? f.w - b.right - PEEK_OUT : b.left + PEEK_OUT - s.w;
+  const r = peekRange(f, s);
+  const x = side === "right" ? f.w - PEEK_IN : PEEK_IN - s.w;
   return { x, y: clamp(y, r.minY, r.maxY) };
 }
 
@@ -84,12 +87,6 @@ export function defaultPeek(f: Frame, s: Size): { pos: Point; side: Side } {
 export function standOutPos(f: Frame, s: Size, side: Side, y: number): Point {
   const r = standRange(f, s);
   return clampStand(f, s, { x: side === "right" ? r.maxX : r.minX, y });
-}
-
-/** 外框在 x 時有多寬被 side 那一側的牆擋住（要裁掉不畫） */
-export function wallHide(f: Frame, s: Size, side: Side, x: number) {
-  const b = bands(f);
-  return side === "right" ? Math.max(0, x + s.w - (f.w - b.right)) : Math.max(0, b.left - x);
 }
 
 /**
@@ -135,12 +132,12 @@ export function fromSaved(f: Frame, s: Size, v: Saved): { pos: Point; side: Side
 
 /**
  * 新手提示卡掛在她頭上（手機）：卡片外緣離螢幕邊至少一個邊距帶（曲面屏邊上點不到），放不下就往內收；
- * 尖角（14px 寬）指著她露出來那一段的中間：探出時只有牆外那 56px，站著時是整個外框。回傳的都是離右緣的距離。
+ * 尖角（14px 寬）指著她留在螢幕裡那一段的中間（探出時她伸到螢幕外），卡片邊上至少留 16。回傳的都是離右緣的距離。
  */
 export function nudgeAnchor(vw: number, pet: { left: number; right: number }, cardW: number) {
   const width = Math.min(cardW, vw - BAND * 2);
   const right = Math.min(Math.max(BAND, vw - pet.right), vw - BAND - width);
-  const head = (Math.max(pet.left, BAND) + Math.min(pet.right, vw - BAND)) / 2;
+  const head = (Math.max(pet.left, 0) + Math.min(pet.right, vw)) / 2;
   return { right, tail: clamp(vw - right - head - 7, 16, width - 30) };
 }
 
