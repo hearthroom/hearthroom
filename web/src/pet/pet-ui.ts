@@ -682,6 +682,8 @@ export class SukiPet {
       if (document.hidden) { hiddenAt = Date.now(); return; }
       if (hiddenAt && Date.now() - hiddenAt > 3_600_000) void this.opts.careVisit?.().then((got) => { if (got) { this.level = got.level; this.careNews(got.news); } }, () => undefined);
       if (performance.now() - this.lastInput > 60_000) this.act({ expr: "happy", say: this.line("welcomeBack") });
+      // 手機：回到這頁才開始算閒置，不然一回來說完歡迎就縮回去
+      if (this.opts.mobile) this.lastInput = performance.now();
     });
     addEventListener("offline", () => this.act({ expr: "pout", say: this.line("offline"), ms: 4000 }));
     // hover 提示：游標停在 data-suki 的東西上 0.7 秒，她說一句；同一種提示只說一次
@@ -747,8 +749,8 @@ export class SukiPet {
     if (this.region(e) === null && !this.sleeping && !(this.opts.mobile && this.tucked)) return;
     this.touchedAt = performance.now();
     if (this.walk) { this.walk = null; this.rig.params.Jump = 0; this.el.classList.remove("suki-pet--walking"); }
-    // 拉出、縮回到一半被按住：停在那裡，從那裡接著拖
-    if (this.slide) { this.slide = null; this.el.classList.remove("suki-pet--sliding"); }
+    // 拉出、縮回到一半又被按住（連點兩下）：直接跳到那一段的終點，再從那裡接著算
+    if (this.slide) this.finishSlide();
     e.preventDefault();
     try { this.touch.setPointerCapture(e.pointerId); } catch { /* 拿不到也照常拖 */ }
     const r = this.box();
@@ -837,7 +839,8 @@ export class SukiPet {
       const m = pullMode(this.side, dx, dy);
       if (!m) return;
       d.mode = m; d.moved = true;
-      clearTimeout(this.pressTimer); this.closeMenu();
+      // 長按開了選單之後才拉：一樣算拉，放開時要照拉的結果走
+      clearTimeout(this.pressTimer); this.closeMenu(); this.pressed = false;
       this.el.classList.add("suki-pet--held");
     }
     const f = this.viewport(), s = this.size();
@@ -978,7 +981,7 @@ export class SukiPet {
       if (!v) return null;
       if (this.opts.mobile) {
         const got = fromSaved(this.viewport(), this.size(), v);
-        if (!got.side) return got.pos;
+        if (!got.side) { this.side = sideOf(this.viewport(), this.size(), got.pos.x); return got.pos; }
         // 探出：照新格式存回去（舊版的貼邊收起、研發版的收在底邊就此改寫）
         this.peekAt(got.side, got.pos);
         this.save(got.pos, true);
@@ -1041,6 +1044,13 @@ export class SukiPet {
     const stand = this.standX ?? standOutPos(f, s, this.side, peek.y).x;
     this.place({ x: peek.x + (stand - peek.x) * this.peekS, y: peek.y });
   }
+  private finishSlide() {
+    const sl = this.slide!;
+    this.slide = null; this.peekS = sl.to;
+    this.el.classList.remove("suki-pet--sliding");
+    this.layoutPeek();
+    sl.done?.();
+  }
   private slideTo(to: number, ms: number, back: boolean, done?: () => void) {
     if (this.opts.reducedMotion) { this.peekS = to; this.layoutPeek(); done?.(); return; }
     this.slide = { from: this.peekS, to, t: 0, ms, back, done };
@@ -1082,9 +1092,8 @@ export class SukiPet {
       sl.t += dt * 1000;
       const k = Math.min(1, sl.t / sl.ms);
       this.peekS = sl.from + (sl.to - sl.from) * (sl.back ? easeBack(k) : easeIO(k));
-      if (k >= 1) { this.slide = null; this.peekS = sl.to; this.el.classList.remove("suki-pet--sliding"); }
-      this.layoutPeek();
-      if (k >= 1) sl.done?.();
+      if (k >= 1) this.finishSlide();
+      else this.layoutPeek();
     }
     // 探出時每隔約 9 秒揮一下手，提醒她在這裡
     const peeking = this.tucked && this.peekS < 0.5 && !this.drag && !this.hidden && !this.opts.reducedMotion;
@@ -1097,7 +1106,8 @@ export class SukiPet {
     this.flip = this.opts.reducedMotion || Math.abs(ft - this.flip) < 0.01 ? ft : this.flip + (ft - this.flip) * (1 - Math.exp(-dt * 16));
     this.canvas.style.transform = this.flip === 1 ? "" : `scaleX(${this.flip})`;
     // 站著 60 秒沒有人碰頁面：靜靜縮回比較近的一側（ui-v3.md §2.3，接在 40 秒的想睡之後）
-    if (!this.tucked && !this.slide && !this.drag && !this.walk && !this.sleeping && !this.hidden && this.bubble.hidden && this.menuEl.hidden && now - this.lastInput > 60_000) {
+    const busy = this.slide || this.drag || this.walk || this.activity || this.sleeping || this.hidden || this.jumpT >= 0 || now <= this.actUntil;
+    if (!this.tucked && !busy && this.bubble.hidden && this.menuEl.hidden && now - this.lastInput > 60_000) {
       this.tuckTo(sideOf(this.viewport(), this.size(), this.pos.x), true);
     }
   }
@@ -1106,7 +1116,8 @@ export class SukiPet {
     if (!this.opts.mobile) return;
     const f = this.viewport(), size = this.size(), s = Math.max(0, Math.min(1, this.peekS));
     const hide = s < 1 ? wallHide(f, size, this.side, this.pos.x) : 0;
-    this.el.style.clipPath = !hide ? "" : this.side === "right" ? `inset(-300px ${hide}px -300px -300px)` : `inset(-300px -300px -300px ${hide}px)`;
+    // 上下留整個視窗高：選單項目多的時候往上長得很高，不能被裁掉
+    this.el.style.clipPath = !hide ? "" : this.side === "right" ? `inset(-100vh ${hide}px -100vh -300px)` : `inset(-100vh -300px -100vh ${hide}px)`;
     const tab = this.tab;
     if (!tab) return;
     const b = bands(f), band = this.side === "right" ? b.right : b.left;
