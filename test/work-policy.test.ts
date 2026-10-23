@@ -123,6 +123,9 @@ it.each(['edit','withdraw'])('keeps %s cancellation pending until PG readback an
 });
 
 it('fences a delayed moderation intent against a newer dismissal even when projected restriction already matches',async()=>{
+ // This is a D1/gateway fixture; it must not depend on live Provider status.
+ const network=vi.spyOn(globalThis,'fetch').mockRejectedValue(new Error('Unexpected network in work policy fixture'));
+ vi.spyOn(workPolicyGateway,'operation').mockResolvedValue(null);
  const memberId=await makeMember(10005);const draft=role({roleId:'managed-moderation-aba',authorNumId:10005});vi.spyOn(upstream,'fetchRole').mockResolvedValue(draft);
  await submitHosted(env,{memberId,account:10005,role:draft,token:'fixture',rating:GENERAL_RATING,operationId:crypto.randomUUID(),now:Date.now()});
  const change=vi.spyOn(workPolicyGateway,'change').mockImplementation(async(_e,_p,source,c)=>({sourceRoleId:source,workId:c.workId,operationId:c.operationId,access:'private',restriction:c.restriction??'none',epoch:c.action==='bind'?1:2,state:'complete',replayed:false}));
@@ -135,6 +138,7 @@ it('fences a delayed moderation intent against a newer dismissal even when proje
  expect(change).toHaveBeenCalledTimes(1);
  expect(await reconcileWorkAccess(env)).toEqual({complete:1,pending:0});
  expect(change.mock.calls[1][3].restriction).toBe('none');
+ expect(network).not.toHaveBeenCalled();
 });
 
 it('recovers dirty moderation before an author command whose Provider result is absent',async()=>{
